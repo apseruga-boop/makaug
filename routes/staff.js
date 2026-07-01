@@ -8,8 +8,20 @@ const { parsePagination, toPagination } = require('../utils/pagination');
 const { publicLivePropertyStatusSql } = require('../utils/publicInventoryStatus');
 const { addLeadActivity } = require('../services/leadService');
 const { getProviderClient, getProviderMeta, getTaskModel } = require('../services/llmProvider');
+const { normalizeReviewChecklist } = require('../services/listingModerationService');
+const adminReviewRoutes = require('./admin');
 
 const router = express.Router();
+
+const {
+  buildAdminLivePreviewPayload,
+  loadPropertyReview,
+  updatePropertyEditableFields
+} = adminReviewRoutes;
+const {
+  SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID,
+  importExactSocialSourcePosts
+} = require('../services/socialPlatformPostDiscoveryService');
 
 router.use(requireStaffAccess);
 
@@ -17,6 +29,8 @@ const PENDING_REVIEW_STATUSES = ['pending', 'pending_review', 'test_pending_revi
 const FINAL_REVIEW_STATUSES = ['approved', 'live', 'published', 'sold', 'hidden', 'deleted', 'rejected', 'declined', 'fraud', 'archived'];
 const OPEN_LEAD_STATUSES = ['open', 'new', 'contacted', 'qualified'];
 const OPEN_AD_STATUSES = ['new', 'contacted', 'proposal_sent'];
+const STAFF_EXACT_SOCIAL_IMPORT_LIMIT = 500;
+const EXACT_SOCIAL_URL_PATTERN = /https?:\/\/[^\s<>"']*(?:tiktok\.com\/@[^/\s?#]+\/video\/\d+|youtube\.com\/watch\?[^ \n\r\t<>"']*v=|youtube\.com\/shorts\/|youtu\.be\/|instagram\.com\/(?:p|reel|tv)\/|facebook\.com\/.+\/(?:posts|videos|reel)|fb\.watch\/|(?:x|twitter)\.com\/[^/\s?#]+\/status\/\d+)/ig;
 
 function sqlList(values = []) {
   return values.map((value) => `'${String(value).replace(/'/g, "''")}'`).join(', ');
@@ -41,6 +55,11 @@ function staffProfile(user = {}) {
   return user.profile_data && typeof user.profile_data === 'object' && !Array.isArray(user.profile_data)
     ? user.profile_data
     : {};
+}
+
+function countExactSocialInputs({ posts = [], urls = [], rawText = '' } = {}) {
+  const rawMatches = String(rawText || '').match(EXACT_SOCIAL_URL_PATTERN) || [];
+  return posts.length + urls.length + rawMatches.length;
 }
 
 function publicStaffUser(user = {}) {
@@ -169,6 +188,7 @@ async function dashboardPayload(req) {
     adSummary,
     whatsappSummary,
     recentActivity,
+    moderatorPublicationRows,
     reviewRows,
     leadRows,
     adRows,
@@ -232,7 +252,25 @@ async function dashboardPayload(req) {
       [staffId]
     ),
     safeRows(
-      `SELECT p.id, p.title, p.listing_type, p.property_type, p.district, p.area, p.price, p.price_period,
+      `SELECT
+         e.actor_id,
+         COALESCE(NULLIF(TRIM(CONCAT(u.first_name, ' ', u.last_name)), ''), u.email, u.phone, 'Moderator') AS staff_name,
+         COUNT(*) FILTER (WHERE e.status_to IN ('approved','live','published'))::int AS approved_live,
+         COUNT(*) FILTER (
+           WHERE e.status_to IN ('approved','live','published')
+             AND e.created_at >= NOW() - INTERVAL '7 days'
+         )::int AS approved_live_7d,
+         MAX(e.created_at) AS last_published_at
+       FROM property_moderation_events e
+       JOIN users u ON u.id::text = e.actor_id AND u.role = 'moderator'
+       WHERE e.status_to IN ('approved','live','published')
+       GROUP BY e.actor_id, u.first_name, u.last_name, u.email, u.phone
+       ORDER BY approved_live DESC, last_published_at DESC NULLS LAST
+       LIMIT 10`
+    ),
+    safeRows(
+      `SELECT p.id, p.title, p.description, p.listing_type, p.property_type, p.district, p.area, p.address,
+              p.price, p.price_period, p.latitude, p.longitude, p.source, p.listed_via, p.extra_fields,
               p.status, p.moderation_stage, p.moderation_reason, p.created_at, p.updated_at,
               p.inquiry_reference, p.lister_name, p.lister_phone, p.lister_email, img.url AS primary_image_url
        FROM properties p
@@ -288,6 +326,7 @@ async function dashboardPayload(req) {
     advertising_inquiries: adRows,
     whatsapp_conversations: whatsappRows,
     recent_activity: recentActivity,
+    moderator_publications: moderatorPublicationRows,
     training: trainingGuide(),
     ai: {
       provider: getProviderMeta(),
@@ -300,6 +339,196 @@ router.get('/dashboard', async (req, res, next) => {
   try {
     await logStaffActivity(req, 'staff_dashboard_opened', { metadata: { role: req.userAuth?.role } });
     return res.json({ ok: true, data: await dashboardPayload(req) });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/properties/:id/review', async (req, res, next) => {
+  try {
+    const review = await loadPropertyReview(req.params.id);
+    if (!review) {
+      return res.status(404).json({ ok: false, error: 'Property not found' });
+    }
+    await logStaffActivity(req, 'staff_listing_review_opened', {
+      targetType: 'property',
+      targetId: review.id,
+      metadata: {
+        status: review.status || null,
+        found_online: review.extra_fields?.found_online_candidate === true || review.extra_fields?.sourced_inventory_candidate === true
+      }
+    });
+    return res.json({ ok: true, data: review });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/properties/:id/live-preview', async (req, res, next) => {
+  try {
+    const review = await loadPropertyReview(req.params.id);
+    if (!review) {
+      return res.status(404).json({ ok: false, error: 'Property not found' });
+    }
+    return res.json({
+      ok: true,
+      data: buildAdminLivePreviewPayload(review)
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.patch('/properties/:id/review', async (req, res, next) => {
+  try {
+    const existing = await db.query(
+      'SELECT id, status, moderation_checklist, extra_fields FROM properties WHERE id = $1 LIMIT 1',
+      [req.params.id]
+    );
+    if (!existing.rows.length) {
+      return res.status(404).json({ ok: false, error: 'Property not found' });
+    }
+
+    const listingPatch = req.body?.listing && typeof req.body.listing === 'object' ? req.body.listing : null;
+    if (listingPatch) {
+      await updatePropertyEditableFields({ propertyId: req.params.id, patch: listingPatch });
+    }
+
+    const checklist = req.body.checklist && typeof req.body.checklist === 'object'
+      ? normalizeReviewChecklist(req.body.checklist)
+      : normalizeReviewChecklist(existing.rows[0].moderation_checklist);
+    const notes = cleanText(req.body.notes || req.body.review_notes) || null;
+    const reason = cleanText(req.body.reason) || null;
+    const stage = cleanText(req.body.stage) || 'in_review';
+    const warningOverrides = req.body.warning_overrides && typeof req.body.warning_overrides === 'object'
+      ? req.body.warning_overrides
+      : (existing.rows[0].extra_fields?.review_warning_overrides || {});
+    const staffUserId = actorId(req);
+
+    const updated = await db.query(
+      `UPDATE properties
+       SET
+         moderation_stage = $2,
+         moderation_checklist = $3::jsonb,
+         moderation_notes = COALESCE($4::text, moderation_notes),
+         moderation_reason = COALESCE($5::text, moderation_reason),
+         reviewed_by = COALESCE($6::uuid, reviewed_by),
+         extra_fields = COALESCE(extra_fields, '{}'::jsonb)
+           || jsonb_build_object(
+             'review_warning_overrides', $7::jsonb,
+             'staff_review_saved_by', $8::text,
+             'staff_review_saved_at', NOW()
+           ),
+         updated_at = NOW()
+       WHERE id = $1
+       RETURNING id, status, moderation_stage, moderation_checklist, moderation_notes, moderation_reason,
+         reviewed_by, extra_fields, listing_type, title, description, district, area, address,
+         price, price_period, property_type, bedrooms, bathrooms, latitude, longitude, amenities, updated_at`,
+      [
+        req.params.id,
+        stage,
+        JSON.stringify(checklist),
+        notes,
+        reason,
+        staffUserId,
+        JSON.stringify(warningOverrides),
+        staffUserId
+      ]
+    );
+
+    await db.query(
+      `INSERT INTO property_moderation_events (property_id, actor_id, action, checklist, reason, notes, delivery)
+       VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7::jsonb)`,
+      [
+        req.params.id,
+        staffUserId,
+        listingPatch ? 'staff_listing_review_updated_with_listing_edits' : 'staff_listing_review_updated',
+        JSON.stringify(checklist),
+        reason,
+        notes,
+        JSON.stringify({
+          listing_edited: !!listingPatch,
+          warning_override_count: Object.keys(warningOverrides || {}).length
+        })
+      ]
+    );
+
+    await logStaffActivity(req, 'staff_listing_review_saved', {
+      targetType: 'property',
+      targetId: req.params.id,
+      metadata: {
+        stage,
+        listing_edited: !!listingPatch,
+        warning_override_count: Object.keys(warningOverrides || {}).length
+      }
+    });
+
+    return res.json({ ok: true, data: updated.rows[0] });
+  } catch (error) {
+    if (error.status) {
+      return res.status(error.status).json({
+        ok: false,
+        error: error.message,
+        details: error.details || undefined
+      });
+    }
+    return next(error);
+  }
+});
+
+router.post('/exact-social-source-posts/import', async (req, res, next) => {
+  try {
+    const posts = Array.isArray(req.body?.posts)
+      ? req.body.posts.slice(0, STAFF_EXACT_SOCIAL_IMPORT_LIMIT)
+      : (Array.isArray(req.body) ? req.body.slice(0, STAFF_EXACT_SOCIAL_IMPORT_LIMIT) : []);
+    const urls = Array.isArray(req.body?.urls)
+      ? req.body.urls.slice(0, STAFF_EXACT_SOCIAL_IMPORT_LIMIT)
+      : [];
+    const rawText = cleanText(req.body?.raw_text || req.body?.rawText || req.body?.text || '');
+    const dryRun = req.body?.dry_run === true || req.body?.dryRun === true;
+    const fetchOembed = req.body?.fetch_oembed !== false && req.body?.fetchOembed !== false;
+    const fetchPublicMetadata = req.body?.fetch_public_metadata !== false && req.body?.fetchPublicMetadata !== false;
+    const exactInputCount = countExactSocialInputs({ posts, urls, rawText });
+
+    if (!exactInputCount) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Paste at least one exact social post/video URL before importing.'
+      });
+    }
+    if (exactInputCount > STAFF_EXACT_SOCIAL_IMPORT_LIMIT) {
+      return res.status(400).json({
+        ok: false,
+        error: `Staff exact social import is capped at ${STAFF_EXACT_SOCIAL_IMPORT_LIMIT} posts per batch.`
+      });
+    }
+
+    const result = await importExactSocialSourcePosts({
+      db,
+      posts,
+      urls,
+      rawText,
+      dryRun,
+      fetchOembed,
+      fetchPublicMetadata
+    });
+
+    await logStaffActivity(req, 'staff_exact_social_source_posts_imported', {
+      targetType: 'source_intake',
+      metadata: {
+        batch_id: SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID,
+        dry_run: dryRun,
+        exact_input_count: exactInputCount,
+        exact_social_url_count: result.exact_social_url_count || 0,
+        metadata_fetch_count: result.metadata_fetch_count || 0,
+        created_properties: result.import_result?.created_properties || result.created_properties || 0,
+        existing_properties: result.import_result?.existing_properties || result.existing_properties || 0,
+        review_queue_properties: result.import_result?.review_queue_properties || result.review_queue_properties || 0,
+        source_review_count: result.import_result?.source_review_count || result.source_review_count || 0
+      }
+    });
+
+    return res.json({ ok: true, data: result });
   } catch (error) {
     return next(error);
   }

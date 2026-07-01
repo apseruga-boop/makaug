@@ -19,7 +19,7 @@ const DISTRICTS = [
 const UGANDA_REGIONS = ["Central Region","Western Region","Eastern Region","Northern Region","Greater Kampala Metropolitan Area"];
 const LOCATION_HINTS = [
   "Kampala","Entebbe","Mukono","Wakiso","Jinja","Mbarara","Gulu","Mbale","Arua","Lira","Masaka","Hoima","Masindi","Kabale","Fort Portal","Soroti","Iganga",
-  "Mukono Town","Kira","Nansana","Bweyogerere","Kira Town","Kasangati","Kireka","Naalya","Namugongo","Gayaza","Lugazi","Njeru","Seeta","Busega",
+  "Mukono Town","Kira","Nansana","Bweyogerere","Kira Town","Kasangati","Kireka","Naalya","Namugongo","Namasuba","Rahim Foods","Gayaza","Lugazi","Njeru","Seeta","Busega",
   "Makindye","Muyenga","Bugolobi","Kololo","Nakasero","Ntinda","Kyaliwajjala","Kisaasi","Bukoto","Najjera","Mutungo","Mbuya","Wandegeya","Kikoni",
   "Kamwokya","Kawempe","Rubaga","Najjanankumbi","Katwe","Kibuli","Lubowa","Buziga","Ggaba","Kansanga","Muyenga Tank Hill","Kampala Road",
   "Industrial Area","Nakawa","Luzira","Munyonyo","Kireka Namugongo Road","Bombo Road","Gayaza Road","Kyanja","Kyanja Ring Road","Kiwatule",
@@ -344,6 +344,7 @@ function getHierarchyPointForArea(district, area) {
 }
 
 const UG_AREA_PIN_OVERRIDES = [
+  { name: "Namasuba", district: "Wakiso", lat: 0.258, lng: 32.558, aliases: ["Namasuba", "Namasuba Kampala", "Namasuba Entebbe Road", "Rahim Foods", "Rahim Foods Namasuba"] },
   { name: "Ndejje", district: "Wakiso", lat: 0.244, lng: 32.553, aliases: ["Ndejje", "Ndejje Lubugumu"] },
   { name: "Munyonyo", district: "Kampala", lat: 0.236, lng: 32.623, aliases: ["Munyonyo", "Munyonjo", "Munyonyo Kampala", "Munyonyo Uganda"] },
   { name: "Bujjuko Akright Estate", district: "Wakiso", lat: 0.374, lng: 32.389, aliases: ["Bujjuko Akright", "Bujuuko Akright", "Akright", "Bujjuko", "Bujuuko"] },
@@ -5756,6 +5757,14 @@ async function apiRequest(path, options = {}) {
   return data;
 }
 
+function isAuthSessionFailure(error = {}) {
+  const status = Number(error.status || error.response?.status || 0);
+  const message = String(error.message || error.response?.error || "").toLowerCase();
+  return status === 401
+    || (status === 403 && /\b(invalid session|sign in|required|unauthori[sz]ed|forbidden)\b/.test(message))
+    || /\b(invalid session|session expired|sign in required|authentication required)\b/.test(message);
+}
+
 function getAnalyticsClientId() {
   try {
     const existing = localStorage.getItem(ANALYTICS_CLIENT_KEY);
@@ -7882,6 +7891,10 @@ async function renderFinderDashboard() {
       const res = await apiRequest("/api/property-seeker/dashboard");
       payload = res?.data || null;
     } catch (error) {
+      if (isAuthSessionFailure(error)) {
+        clearAuthState();
+        return;
+      }
       console.warn("Property seeker dashboard backend unavailable", error);
     }
   }
@@ -9519,6 +9532,112 @@ function renderStaffTraining(training = {}) {
     </section>`).join("");
 }
 
+function staffSocialIntakeExample() {
+  if (typeof adminSocialQuickPasteExample === "function") return adminSocialQuickPasteExample();
+  return [
+    "https://www.tiktok.com/@handle/video/7608944105338457364",
+    "title: 2 bedroom apartment for rent",
+    "location: Najjera, Wakiso",
+    "price: USh 1m/month",
+    "posted: 2026-05-20",
+    "phone: +256700000000"
+  ].join("\n");
+}
+
+function staffLoadSourceIntakeExample() {
+  const input = document.getElementById("staff-social-intake-input");
+  if (input) input.value = staffSocialIntakeExample();
+}
+
+function staffReadSocialIntakeText() {
+  const input = document.getElementById("staff-social-intake-input");
+  return input ? input.value.trim() : "";
+}
+
+function staffSetSocialIntakeBusy(busy = false) {
+  ["staff-social-intake-preview-btn", "staff-social-intake-queue-btn"].forEach((id) => {
+    const button = document.getElementById(id);
+    if (!button) return;
+    button.disabled = busy;
+    button.classList.toggle("opacity-60", busy);
+    button.classList.toggle("cursor-wait", busy);
+  });
+}
+
+function staffSocialIntakeUrlCount(text = "") {
+  return (String(text || "").match(/https?:\/\/[^\s<>"']+/gi) || []).length;
+}
+
+function staffSocialIntakeResultHtml(data = {}, { dryRun = false, metadataEnabled = true } = {}) {
+  const metadataNote = metadataEnabled
+    ? ""
+    : `<div class="mb-2 rounded-xl border border-amber-100 bg-amber-50 p-3 text-xs text-amber-900">Large batch mode: external metadata fetches were skipped for speed. Paste title, location, price, posted date, phone, and visible source text under each link before queueing.</div>`;
+  const resultHtml = typeof adminSocialQuickPasteResultHtml === "function"
+    ? adminSocialQuickPasteResultHtml(data, { dryRun })
+    : `<div class="rounded-xl border border-violet-200 bg-violet-50 p-3">${adminEscape(data.exact_social_url_count || 0)} exact social URLs processed.</div>`;
+  return `${metadataNote}${resultHtml}`;
+}
+
+async function staffSubmitSocialIntake({ dryRun = false } = {}) {
+  const raw = staffReadSocialIntakeText();
+  const resultEl = document.getElementById("staff-social-intake-result");
+  if (!raw) {
+    toast("Paste exact social post links first.");
+    return;
+  }
+  const urlCount = staffSocialIntakeUrlCount(raw);
+  const metadataEnabled = urlCount <= 20;
+  staffSetSocialIntakeBusy(true);
+  if (resultEl) {
+    resultEl.innerHTML = `<div class="rounded-xl border border-violet-100 bg-violet-50 p-3 text-violet-950">${dryRun ? "Previewing" : "Queueing"} exact social links...</div>`;
+  }
+  try {
+    const response = await apiRequest("/api/staff/exact-social-source-posts/import", {
+      method: "POST",
+      body: {
+        raw_text: raw,
+        dry_run: dryRun,
+        fetch_oembed: metadataEnabled,
+        fetch_public_metadata: metadataEnabled
+      }
+    });
+    const data = response?.data || {};
+    const importResult = data.import_result || data;
+    if (resultEl) {
+      resultEl.innerHTML = staffSocialIntakeResultHtml(data, { dryRun, metadataEnabled });
+    }
+    toast(dryRun ? "Source intake preview is ready." : "Source intake queued for moderation.");
+    if (!dryRun && (
+      importResult.created_properties
+      || importResult.review_queue_properties
+      || importResult.source_review_count
+      || importResult.existing_properties
+    )) {
+      await renderStaffDashboard();
+    }
+  } catch (error) {
+    if (resultEl) {
+      resultEl.innerHTML = `<div class="rounded-xl border border-red-100 bg-red-50 p-3 text-red-800">${adminEscape(error.message || "Source intake failed.")}</div>`;
+    }
+    if (isAuthSessionFailure(error)) {
+      clearAuthState();
+      toast("Staff session expired. Please sign in again.");
+    } else {
+      toast(`Source intake failed: ${error.message || "request failed"}`);
+    }
+  } finally {
+    staffSetSocialIntakeBusy(false);
+  }
+}
+
+function staffPreviewSocialIntake() {
+  return staffSubmitSocialIntake({ dryRun: true });
+}
+
+function staffQueueSocialIntake() {
+  return staffSubmitSocialIntake({ dryRun: false });
+}
+
 async function renderStaffDashboard() {
   const gate = document.getElementById("staff-auth-gate");
   const body = document.getElementById("staff-body");
@@ -9550,6 +9669,12 @@ async function renderStaffDashboard() {
     renderStaffPublications(data.moderator_publications || []);
     renderStaffTraining(data.training || {});
   } catch (error) {
+    if (isAuthSessionFailure(error)) {
+      clearAuthState();
+      toast("Staff session expired. Please sign in again.");
+      return;
+    }
+    ["staff-stat-pending", "staff-stat-approvals", "staff-stat-leads", "staff-stat-ads", "staff-stat-whatsapp"].forEach((id) => setTextById(id, "-"));
     renderStaffReviewQueue([]);
     renderStaffLeads([]);
     renderStaffAdvertising([]);
@@ -9872,21 +9997,36 @@ async function staffModerateListing(propertyId, status, options = {}) {
   try {
     await apiRequest(`/api/properties/${encodeURIComponent(propertyId)}/status`, {
       method: "PATCH",
-      body
+      body: {
+        ...body,
+        fast_admin_render: true,
+        manual_notification_only: ["approved", "rejected"].includes(cleanStatus)
+      }
     });
     let publicProofOk = false;
     if (cleanStatus === "approved") {
       try {
         const publicProof = await apiRequest(`/api/properties/${encodeURIComponent(propertyId)}`, { skipAuth: true });
         publicProofOk = String(publicProof?.data?.id || "") === String(propertyId);
+        if (publicProofOk) {
+          const publicProperty = mapRemotePropertyForUi(publicProof?.data || {});
+          publicProperty.status = "approved";
+          upsertPropertyForUi(publicProperty);
+        }
       } catch (_error) {
         publicProofOk = false;
       }
     }
-    await refreshPublicListingsFromApi({ silent: true });
-    await renderStaffDashboard();
     const panel = staffReviewPanelElement();
     if (panel && statusOptions.fromReview && cleanStatus !== "pending") panel.classList.add("hidden");
+    Promise.resolve()
+      .then(async () => {
+        await refreshPublicListingsFromApi({ silent: true });
+        await renderStaffDashboard();
+      })
+      .catch((error) => {
+        toast(`Dashboard refresh failed: ${error.message || "error"}`);
+      });
     toast(cleanStatus === "approved"
       ? (publicProofOk ? "Listing approved, sent live, and verified on the public API." : "Listing approved, but public API proof did not return yet.")
       : `Listing updated: ${cleanStatus}.`);
@@ -11894,6 +12034,14 @@ function adminDuplicateSourceWarningHtml(duplicateWarnings = []) {
 function adminSocialCaptureHelperScript() {
   return `(async function(){
   var clean=function(value){return String(value||"").replace(/\\s+/g," ").trim();};
+  var relevantText=function(node){
+    var raw=clean((node&&node.innerText)||"");
+    return raw
+      .replace(/\\b(?:Like|Comment|Share|Save|Follow|Following|For You|Explore|Log in|Sign up)\\b/gi," ")
+      .replace(/\\s+/g," ")
+      .trim()
+      .slice(0,1400);
+  };
   var normalize=function(href){
     try {
       var u=new URL(href,location.href);
@@ -11936,19 +12084,23 @@ function adminSocialCaptureHelperScript() {
   };
   var seen={};
   var rows=[];
-  Array.prototype.slice.call(document.querySelectorAll("a[href]")).forEach(function(anchor){
-    var url=normalize(anchor.href);
+  var pushRow=function(url,node){
     if (!url || seen[url]) return;
     seen[url]=true;
+    var text=relevantText(node);
+    rows.push(url+(text ? "\\nsource_visual_text: "+text : ""));
+  };
+  pushRow(normalize(location.href), document.querySelector("article,main,[data-e2e*=video]") || document.body);
+  Array.prototype.slice.call(document.querySelectorAll("a[href]")).forEach(function(anchor){
+    var url=normalize(anchor.href);
     var card=anchor.closest("article,[data-e2e*=video],[data-testid*=tweet],li,div") || anchor;
-    var text=clean(card.innerText || anchor.innerText || anchor.getAttribute("aria-label") || document.title || "").slice(0,220);
-    rows.push(url+(text ? " | "+text : ""));
+    pushRow(url, card);
   });
   if (!rows.length) {
     alert("No exact social post links found on this visible page. Open a video/post/grid source page first, then run the helper again.");
     return;
   }
-  var output=rows.join("\\n");
+  var output=rows.join("\\n\\n");
   try {
     await navigator.clipboard.writeText(output);
   } catch (error) {
@@ -11964,7 +12116,7 @@ function adminSocialCaptureHelperScript() {
     box.focus();
     box.select();
   }
-  alert("makaug copied "+rows.length+" exact social post link(s). Go back to King, click Paste Captured Links, and paste.");
+  alert("makaug copied "+rows.length+" exact social post block(s) with visible text where available. Go back to King, click Paste Captured Links, and paste.");
 })();`;
 }
 
@@ -11988,7 +12140,7 @@ function adminSocialCaptureHelperPanelHtml({ copiedLabel = "" } = {}) {
     <div class="flex items-start justify-between gap-3 flex-wrap">
       <div>
         <div class="font-black">One-click capture helper ready</div>
-        <div class="mt-1">Use this once to create a browser bookmark. After that, open TikTok, YouTube, Facebook, Instagram, or X source pages and click the bookmark. It copies visible exact post/video links so you can paste them into makaug.</div>
+        <div class="mt-1">Use this once to create a browser bookmark. After that, open TikTok, YouTube, Facebook, Instagram, or X source pages and click the bookmark. It copies visible exact post/video links plus nearby visible source text so you can paste them into makaug.</div>
         ${copiedLabel ? `<div class="mt-2 inline-flex rounded-full bg-indigo-100 px-2 py-1 text-[11px] font-bold text-indigo-800">${adminEscape(copiedLabel)}</div>` : ""}
       </div>
       <button type="button" onclick="adminOpenSocialQuickPastePanel()" class="border border-violet-200 bg-white text-violet-700 hover:bg-violet-50 px-3 py-2 rounded-lg text-xs font-bold">Paste Captured Links</button>
@@ -11996,7 +12148,7 @@ function adminSocialCaptureHelperPanelHtml({ copiedLabel = "" } = {}) {
     <div class="mt-3 grid md:grid-cols-4 gap-2">
       <div class="rounded-lg border border-indigo-100 bg-white p-2"><div class="font-bold">1. Save bookmark</div><div class="text-[11px] mt-1">Click Copy Bookmarklet, then create a browser bookmark named makaug Capture Posts and paste it into the bookmark URL.</div></div>
       <div class="rounded-lg border border-indigo-100 bg-white p-2"><div class="font-bold">2. Open source</div><div class="text-[11px] mt-1">Open a TikTok hashtag/profile, YouTube search/channel, Facebook group/page, Instagram tag/profile, or X search.</div></div>
-      <div class="rounded-lg border border-indigo-100 bg-white p-2"><div class="font-bold">3. Click bookmark</div><div class="text-[11px] mt-1">Scroll until useful posts are visible, then click makaug Capture Posts in the bookmarks bar. The helper copies exact links.</div></div>
+      <div class="rounded-lg border border-indigo-100 bg-white p-2"><div class="font-bold">3. Click bookmark</div><div class="text-[11px] mt-1">Scroll until useful posts are visible, then click makaug Capture Posts in the bookmarks bar. The helper copies exact links and visible text.</div></div>
       <div class="rounded-lg border border-indigo-100 bg-white p-2"><div class="font-bold">4. Paste here</div><div class="text-[11px] mt-1">Return to makaug, click Paste Captured Links, preview, then Queue Found Online for King review.</div></div>
     </div>
     <div class="mt-3 rounded-xl border border-indigo-100 bg-white p-3">
@@ -17538,6 +17690,8 @@ function adminReviewMoneyFromText(text = "") {
   if (billion) return Math.round(Number(billion[1]) * 1000000000);
   const million = raw.match(/(?:ugx|ush|ugshs|shs)?\s*([0-9]+(?:\.[0-9]+)?)\s*(?:m|million|millions)\b/i);
   if (million) return Math.round(Number(million[1]) * 1000000);
+  const thousand = raw.match(/(?:ugx|ush|ugshs|shs)?\s*([0-9]+(?:\.[0-9]+)?)\s*(?:k|thousand|thousands)\b(?:\s*(?:\/|per)?\s*(?:month|mo|monthly))?/i);
+  if (thousand) return Math.round(Number(thousand[1]) * 1000);
   const currency = raw.match(/\b(?:ugx|ush|ugshs|shs)\s*([0-9][0-9.]*)\b/i);
   if (currency) return Math.round(Number(currency[1]));
   const usd = raw.match(/\$\s*([0-9]+(?:\.[0-9]+)?)(?:\s*(?:\/|per)\s*(?:month|mo|monthly))?/i)
@@ -17551,6 +17705,11 @@ function adminReviewFirstNumber(text = "", pattern) {
   if (!match) return null;
   const value = Number(match[1]);
   return Number.isFinite(value) ? value : null;
+}
+
+function adminReviewBedroomCountFromText(text = "") {
+  const withoutRanges = String(text || "").replace(/\b\d{1,2}\s*(?:-|–|—|to)\s*\d{1,2}\s*(?:bed\s*rooms?|bedrooms?|beds?|bdrm|br)\b/ig, " ");
+  return adminReviewFirstNumber(withoutRanges, /(\d+)\s*[- ]?\s*(?:bed\s*rooms?|bedrooms?|beds?|bdrm|br)\b/i);
 }
 
 function adminReviewDetectedLocation(text = "", review = {}) {
@@ -17788,7 +17947,7 @@ function adminReviewBuildConciseDescription(review = {}, facts = {}) {
 function adminExtractReviewFacts(review = {}) {
   const text = adminReviewSourceText(review);
   const price = adminReviewMoneyFromText(text);
-  const bedrooms = adminReviewFirstNumber(text, /(\d+)\s*[- ]?\s*(?:bed\s*rooms?|bedrooms?|beds?|bdrm|br)\b/i);
+  const bedrooms = adminReviewBedroomCountFromText(text);
   const bathrooms = adminReviewFirstNumber(text, /(\d+)\s*[- ]?\s*(?:wash\s*rooms?|washrooms?|bath\s*rooms?|bathrooms?|baths?|toilets?)\b/i);
   const balconies = adminReviewFirstNumber(text, /(\d+)\s*balcon(?:y|ies)\b/i);
   const propertyType = adminReviewPropertyTypeFromText(text) || review.property_type || "";
@@ -19468,6 +19627,23 @@ async function adminSetListingStatus(localId, nextStatus, backendId = "", option
   }
 
   let statusResponse = null;
+  let ownerNotificationOpened = false;
+  const maybeOpenOwnerNotification = () => {
+    const waPayload = statusResponse?.notification?.whatsapp || {};
+    if (!["approved", "rejected"].includes(normalizedStatus)) return false;
+    if (!(waPayload.message || waPayload.manual_url || waPayload.phone || listing.lister_phone)) return false;
+    const fallbackMessage = normalizedStatus === "rejected"
+      ? buildAdminRejectionWhatsAppMessage(listing, moderationReason)
+      : "";
+    openAdminWhatsAppMessageModal({
+      title: normalizedStatus === "approved" ? "Listing is live: send approval WhatsApp" : "Send rejection WhatsApp",
+      listingLabel: statusResponse?.inquiry_reference || listing.inquiry_reference || listing.title || backendId || "-",
+      phone: waPayload.phone || statusResponse?.lister_phone || listing.lister_phone || "",
+      message: waPayload.message || fallbackMessage,
+      manualUrl: waPayload.manual_url || ""
+    });
+    return true;
+  };
   if (backendId) {
     try {
       if (isLiveApi && adminActiveReview?.id && String(adminActiveReview.id) === String(backendId)) {
@@ -19502,6 +19678,7 @@ async function adminSetListingStatus(localId, nextStatus, backendId = "", option
 	      adminRenderListingStatusLocally(listing, normalizedStatus, backendId || localId, {
 	        wasPending: wasPendingBeforeStatusUpdate
 	      });
+	      ownerNotificationOpened = maybeOpenOwnerNotification();
 	      if (normalizedStatus === "approved") {
 	        try {
 	          const detail = await apiRequest(`/api/properties/${encodeURIComponent(backendId)}`, {
@@ -19529,25 +19706,6 @@ async function adminSetListingStatus(localId, nextStatus, backendId = "", option
       return;
     }
   }
-
-  let ownerNotificationOpened = false;
-  const maybeOpenOwnerNotification = () => {
-    const waPayload = statusResponse?.notification?.whatsapp || {};
-    if (!["approved", "rejected"].includes(normalizedStatus)) return false;
-    if (!(waPayload.message || waPayload.manual_url || waPayload.phone || listing.lister_phone)) return false;
-    const fallbackMessage = normalizedStatus === "rejected"
-      ? buildAdminRejectionWhatsAppMessage(listing, moderationReason)
-      : "";
-    openAdminWhatsAppMessageModal({
-      title: normalizedStatus === "approved" ? "Listing is live: send approval WhatsApp" : "Send rejection WhatsApp",
-      listingLabel: statusResponse?.inquiry_reference || listing.inquiry_reference || listing.title || backendId || "-",
-      phone: waPayload.phone || statusResponse?.lister_phone || listing.lister_phone || "",
-      message: waPayload.message || fallbackMessage,
-      manualUrl: waPayload.manual_url || ""
-    });
-    return true;
-	  };
-	  ownerNotificationOpened = maybeOpenOwnerNotification();
 
 	  if (normalizedStatus === "approved") {
 	    setAdminWorkflowTab("live");
@@ -31917,13 +32075,16 @@ async function hydratePropertyDetailForUi(property) {
 async function fetchPublicPaginatedRows(path, options = {}) {
   const limit = Math.min(Math.max(Number(options.limit || 100), 1), 100);
   const maxPages = Math.min(Math.max(Number(options.maxPages || 50), 1), 200);
+  const hasSummaryParam = /[?&](include_summary|includeSummary|summary)=/i.test(path);
   const rows = [];
   let firstResponse = null;
   let page = 1;
   let totalPages = 1;
   do {
     const separator = path.includes("?") ? "&" : "?";
-    const response = await apiRequest(`${path}${separator}limit=${limit}&page=${page}`, { skipAuth: true });
+    const includeSummary = options.includeSummary !== false && page === 1;
+    const summaryParam = hasSummaryParam ? "" : `&include_summary=${includeSummary ? "1" : "0"}`;
+    const response = await apiRequest(`${path}${separator}limit=${limit}&page=${page}${summaryParam}`, { skipAuth: true });
     if (!firstResponse) firstResponse = response;
     rows.push(...(Array.isArray(response?.data) ? response.data : []));
     totalPages = Math.max(1, Number(response?.pagination?.totalPages || 1));
@@ -31936,14 +32097,15 @@ async function refreshPublicListingsFromApi({ silent = true } = {}) {
   if (publicListingsApiLoading) return false;
   publicListingsApiLoading = true;
   try {
-    const { rows: publicRows, firstResponse } = await fetchPublicPaginatedRows("/api/properties?status=approved&public_only=1", { limit: 100, maxPages: 200 });
+    const { rows: publicRows, firstResponse } = await fetchPublicPaginatedRows("/api/properties?status=approved&public_only=1", { limit: 100, maxPages: 20, includeSummary: true });
     const rows = Array.isArray(publicRows) ? publicRows.filter((p) => !adminRecordLooksLikeTest(p)) : [];
-    publicListingsApiStats = normalizeHeroOpportunityStats(firstResponse?.summary?.public_opportunities || firstResponse?.summary) || null;
-    const apiTotal = Number(publicListingsApiStats?.total ?? firstResponse?.pagination?.total ?? rows.length);
+    const nextStats = normalizeHeroOpportunityStats(firstResponse?.summary?.public_opportunities || firstResponse?.summary) || null;
+    if (nextStats) publicListingsApiStats = nextStats;
+    const apiTotal = Number(publicListingsApiStats?.total ?? (firstResponse?.pagination?.approximate ? rows.length : firstResponse?.pagination?.total) ?? rows.length);
     publicListingsApiTotal = Number.isFinite(apiTotal) ? apiTotal : rows.length;
     let featuredRows = [];
     try {
-      const featuredResponse = await apiRequest("/api/properties?status=approved&featured=true&limit=12&public_only=1&sort=featured", { skipAuth: true });
+      const featuredResponse = await apiRequest("/api/properties?status=approved&featured=true&limit=12&public_only=1&sort=featured&include_summary=0", { skipAuth: true });
       featuredRows = Array.isArray(featuredResponse?.data) ? featuredResponse.data.filter((p) => !adminRecordLooksLikeTest(p)) : [];
     } catch (featuredError) {
       console.warn("Unable to refresh featured listings", featuredError);
@@ -32990,6 +33152,14 @@ const UG_LOCATION_TREE = {
         { name: "Bwebajja", lat: 0.179, lng: 32.541 },
         { name: "Ndejje", lat: 0.244, lng: 32.553 },
         { name: "Lubugumu", lat: 0.239, lng: 32.554 }
+      ]
+    },
+    {
+      city: "Makindye-Ssabagabo",
+      neighborhoods: [
+        { name: "Namasuba", lat: 0.258, lng: 32.558 },
+        { name: "Seguku", lat: 0.247, lng: 32.555 },
+        { name: "Lubowa", lat: 0.235, lng: 32.566 }
       ]
     },
     {
