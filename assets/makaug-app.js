@@ -7227,14 +7227,18 @@ function refreshSavedUi(propertyId = "") {
   persistSavedIdsForCurrentUser();
   saveDashboardState();
   renderAll();
-  renderFinderDashboard();
-  renderStudentDashboard();
-  renderAgentDashboard();
   updateDetailSaveButton(propertyId || activeDetailPropertyId);
+}
+
+function canSyncSavedPropertiesForCurrentUser() {
+  if (!authState?.user) return false;
+  const mode = derivePortalMode(authState.user, authState.user.portal_mode);
+  return ["finder", "student", "agent"].includes(mode);
 }
 
 async function refreshSavedPropertiesFromServer({ silent = true } = {}) {
   if (!authState?.token) return false;
+  if (!canSyncSavedPropertiesForCurrentUser()) return false;
   try {
     const response = await apiRequest("/api/saved-properties");
     const ids = Array.isArray(response?.data?.ids) ? response.data.ids : [];
@@ -7316,6 +7320,7 @@ function continueSavePropertyAuth(mode = "signup") {
 
 async function syncSavedStateAfterAuth(pendingSaveId = "") {
   if (!authState?.token) return;
+  if (!pendingSaveId && !canSyncSavedPropertiesForCurrentUser()) return;
   try {
     if (pendingSaveId) {
       await syncSavedPropertyToServer(pendingSaveId, true);
@@ -8177,6 +8182,13 @@ async function renderFinderDashboard() {
 
   if (!authState?.user) {
     gate.classList.remove("hidden");
+    body.classList.add("hidden");
+    return;
+  }
+
+  const finderMode = derivePortalMode(authState.user, authState.user.portal_mode);
+  if (finderMode !== "finder") {
+    gate.classList.add("hidden");
     body.classList.add("hidden");
     return;
   }
@@ -32180,12 +32192,7 @@ function renderAll() {
   setPublicCategoryCount("sale", saleListings.length, { filtered: hasActiveListingFilter("sale") });
   setPublicCategoryCount("rent", rentListings.length, { filtered: hasActiveListingFilter("rent") });
   renderSaved();
-  renderFinderDashboard();
-  renderStudentDashboard();
-  renderAgentDashboard();
-  renderFieldDashboard();
-  renderStaffDashboard();
-  renderAdvertiserDashboard();
+  renderActiveAuthDashboard();
   ensureRevenuePlacements();
   syncPublicWhatsappLinks();
 }
