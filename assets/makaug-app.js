@@ -6059,6 +6059,13 @@ async function apiRequest(path, options = {}) {
   return data;
 }
 
+function isAuthSessionFailure(error = {}) {
+  const status = Number(error.status || error.response?.status || 0);
+  const message = String(error.message || error.response?.error || "").toLowerCase();
+  return /\b(invalid session|session expired|jwt expired|invalid token|token expired)\b/.test(message)
+    || (status === 401 && /\b(session|jwt|token|auth)\b/.test(message));
+}
+
 function getAnalyticsClientId() {
   try {
     const existing = localStorage.getItem(ANALYTICS_CLIENT_KEY);
@@ -8184,6 +8191,10 @@ async function renderFinderDashboard() {
       const res = await apiRequest("/api/property-seeker/dashboard");
       payload = res?.data || null;
     } catch (error) {
+      if (isAuthSessionFailure(error)) {
+        clearAuthState();
+        return;
+      }
       console.warn("Property seeker dashboard backend unavailable", error);
     }
   }
@@ -10265,8 +10276,20 @@ async function renderStaffDashboard() {
   } catch (error) {
     const staleAuthRequest = tokenAtStart !== (authState?.token || "")
       || userIdAtStart !== String(authState?.user?.id || authState?.user?.email || authState?.user?.phone || "");
-    const signInRequired = error?.status === 401 || error?.status === 403 || /sign in required|jwt|token/i.test(error?.message || "");
-    if (staleAuthRequest || (signInRequired && staffDashboardHasLiveData)) {
+    const authSessionFailure = isAuthSessionFailure(error);
+    const signInRequired = authSessionFailure || error?.status === 401 || error?.status === 403 || /sign in required|jwt|token/i.test(error?.message || "");
+    if (staleAuthRequest) {
+      return;
+    }
+    if (authSessionFailure) {
+      staffDashboardData = null;
+      staffDashboardHasLiveData = false;
+      staffDashboardAuthRetryCount = 0;
+      clearAuthState();
+      toast("Staff dashboard session expired. Please sign in again.");
+      return;
+    }
+    if (signInRequired && staffDashboardHasLiveData) {
       return;
     }
     const stillSignedInStaff = authState?.token

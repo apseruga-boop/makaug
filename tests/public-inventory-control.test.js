@@ -320,6 +320,7 @@ test('public properties API is cacheable and uses the fast public summary path',
   assert.match(serverSource, /publicInventoryCacheKeyVersion = 'public-inventory-cache-key-20260630'/);
   assert.match(serverSource, /publicHomepageFeaturedFastVersion = 'public-home-featured-fast-20260630'/);
   assert.match(serverSource, /publicHomepageSummaryFastVersion = 'public-home-summary-fast-20260630'/);
+  assert.match(htmlSource, /public-summary-stale-session-fix-20260701/);
   assert.match(serverSource, /\.\.\.PUBLIC_HTML_WARMUP_PATHS, \.\.\.PUBLIC_INVENTORY_WARMUP_PATHS/);
   assert.match(serverSource, /\/api\/properties\?status=approved&public_only=1&limit=1&page=1&include_summary=1/);
   assert.match(serverSource, /\/api\/properties\?status=approved&public_only=1&limit=8&page=1&include_summary=0/);

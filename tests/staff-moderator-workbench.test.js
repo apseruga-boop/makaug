@@ -91,6 +91,7 @@ function run() {
   assert(html.includes('staff-dashboard-auth-race-20260701'), 'index should cache-bust the staff dashboard auth race fix');
   assert(html.includes('staff-dashboard-hydration-20260701'), 'index should cache-bust the staff dashboard hydration guard');
   assert(html.includes('staff-dashboard-retry-20260701'), 'index should cache-bust the staff dashboard transient retry guard');
+  assert(html.includes('public-summary-stale-session-fix-20260701'), 'index should cache-bust stale-session public summary recovery');
   assert(html.includes('id="staff-bank-leads-list"'), 'staff dashboard should expose bank/mortgage leads');
   assert(html.includes('id="staff-review-queue"'), 'staff moderation queue container should exist');
   assert(html.includes('id="staff-ai-question"'), 'staff AI assistant UI should exist');
@@ -107,6 +108,7 @@ function run() {
   assert(app.includes('!authState?.token'), 'staff dashboard should not open the loaded shell without a real auth token');
   assert(app.includes('staleAuthRequest'), 'staff dashboard should suppress stale sign-in-required toasts');
   assert(app.includes('stillSignedInStaff'), 'staff dashboard should not show false sign-in-required toasts while staff auth is active');
+  assert(app.includes('function isAuthSessionFailure'), 'frontend should detect genuinely expired/invalid auth sessions');
   assert(app.includes('Staff dashboard session expired. Please sign in again.'), 'real expired staff sessions should return to sign-in instead of showing zeroed panels');
   assert(app.includes('function setStaffDashboardLoadingState'), 'staff dashboard should show loading instead of zero stats before hydration');
   assert(app.includes('transientStaffRequest'), 'staff dashboard should retry transient first-load API failures');
