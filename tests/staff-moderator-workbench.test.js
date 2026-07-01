@@ -97,6 +97,7 @@ function run() {
   assert(html.includes('public-summary-stale-session-fix-20260701'), 'index should cache-bust stale-session public summary recovery');
   assert(html.includes('staff-source-intake-20260701'), 'index should cache-bust staff source intake updates');
   assert(html.includes('staff-active-dashboard-20260701'), 'index should cache-bust active-dashboard hydration fixes');
+  assert(html.includes('staff-fast-dashboard-20260701'), 'index should cache-bust fast staff dashboard hydration');
   assert(html.includes('id="staff-bank-leads-list"'), 'staff dashboard should expose bank/mortgage leads');
   assert(html.includes('id="staff-review-queue"'), 'staff moderation queue container should exist');
   assert(html.includes('id="staff-ai-question"'), 'staff AI assistant UI should exist');
@@ -123,6 +124,10 @@ function run() {
   assert(app.includes('function canSyncSavedPropertiesForCurrentUser'), 'staff/admin sign-in should skip property-seeker saved-list sync');
   assert(app.includes('if (finderMode !== "finder")'), 'finder dashboard should not hydrate for staff/admin users');
   assert(app.includes('renderSaved();\n  renderActiveAuthDashboard();'), 'global rendering should only hydrate the active auth dashboard');
+  assert(app.includes('/api/staff/dashboard?fast=1'), 'staff dashboard should first request the fast payload');
+  assert(app.includes('function hydrateStaffDashboardPanels'), 'staff dashboard should hydrate heavy panels in the background');
+  assert(staffRoutes.includes('function dashboardFastPayload'), 'staff API should expose a fast dashboard payload');
+  assert(staffRoutes.includes("deferred_dashboard_endpoint: '/api/staff/dashboard?panels=1'"), 'fast dashboard payload should point to deferred panels');
   assert(app.includes('async function refreshAuthSession()'), 'frontend should refresh auth sessions explicitly');
   assert(app.includes('const tokenAtStart = authState.token'), 'auth refresh should capture the token it started with');
   assert(app.includes('if (tokenAtStart !== authState?.token) return;'), 'stale auth refreshes should not clear a newer staff login session');

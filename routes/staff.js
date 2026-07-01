@@ -425,6 +425,151 @@ function trainingGuide() {
   };
 }
 
+async function dashboardFastPayload(req) {
+  const staffId = actorId(req);
+  const [
+    listingSummary,
+    myModeration,
+    leadSummary,
+    adSummary,
+    whatsappSummary,
+    sourceSummary,
+    mortgageSummary,
+    paymentSummary
+  ] = await Promise.all([
+    safeOne(
+      `SELECT
+         COUNT(*)::int AS database_total,
+         COUNT(*) FILTER (WHERE ${staffVisiblePropertyWhere('p')})::int AS staff_visible_total,
+         COUNT(*) FILTER (WHERE ${pendingReviewWhere('p')})::int AS pending_review,
+         COUNT(*) FILTER (WHERE ${publicCustomerVisiblePropertyWhere('p')})::int AS live,
+         COUNT(*) FILTER (WHERE LOWER(COALESCE(p.status, '')) IN (${sqlList(STAFF_REMOVED_STATUSES)}))::int AS staff_removed,
+         COUNT(*) FILTER (WHERE ${staffVisiblePropertyWhere('p')} AND COALESCE(p.extra_fields->>'found_online', p.extra_fields->>'found_online_candidate', p.extra_fields->>'social_search_candidate', '') ~* '^(true|1|yes)$')::int AS found_online,
+         COUNT(*) FILTER (WHERE ${staffVisiblePropertyWhere('p')} AND LOWER(COALESCE(p.source, p.listed_via, '')) IN ('website','web'))::int AS website_submitted
+       FROM properties p`,
+      [],
+      { database_total: 0, staff_visible_total: 0, pending_review: 0, live: 0, staff_removed: 0, found_online: 0, website_submitted: 0 }
+    ),
+    safeOne(
+      `SELECT
+         COUNT(*)::int AS total_actions,
+         COUNT(*) FILTER (WHERE status_to IN ('approved','live','published'))::int AS approvals,
+         COUNT(*) FILTER (WHERE status_to = 'rejected')::int AS rejections,
+         COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '1 day')::int AS actions_24h
+       FROM property_moderation_events
+       WHERE actor_id = $1`,
+      [staffId],
+      { total_actions: 0, approvals: 0, rejections: 0, actions_24h: 0 }
+    ),
+    safeOne(
+      `SELECT
+         COUNT(*) FILTER (WHERE lead_status = ANY($1::text[]))::int AS open,
+         COUNT(*) FILTER (WHERE assigned_to_user_id = $2)::int AS assigned_to_me,
+         COUNT(*) FILTER (WHERE priority IN ('high','urgent') OR lead_score >= 50)::int AS hot,
+         COUNT(*) FILTER (WHERE next_follow_up_at < NOW() AND lead_status = 'open')::int AS overdue
+       FROM leads`,
+      [OPEN_LEAD_STATUSES, staffId],
+      { open: 0, assigned_to_me: 0, hot: 0, overdue: 0 }
+    ),
+    safeOne(
+      `SELECT
+         COUNT(*) FILTER (WHERE status = ANY($1::text[]))::int AS open_inquiries,
+         COUNT(*) FILTER (WHERE assigned_to_user_id = $2)::int AS assigned_to_me,
+         COUNT(*) FILTER (WHERE status = 'won')::int AS won_inquiries,
+         COALESCE(SUM(estimated_value_ugx) FILTER (WHERE status IN ('proposal_sent','won')), 0)::bigint AS staff_visible_pipeline_ugx
+       FROM advertising_inquiries`,
+      [OPEN_AD_STATUSES, staffId],
+      { open_inquiries: 0, assigned_to_me: 0, won_inquiries: 0, staff_visible_pipeline_ugx: 0 }
+    ),
+    safeOne(
+      `SELECT
+         COUNT(*) FILTER (WHERE status IN ('needs_human','escalated'))::int AS needs_human,
+         COUNT(*) FILTER (WHERE status IN ('open','ai_active','awaiting_customer','needs_human','escalated'))::int AS open,
+         COUNT(*) FILTER (WHERE last_message_at >= NOW() - INTERVAL '7 days')::int AS active_7d,
+         COUNT(*) FILTER (WHERE assigned_to = $1)::int AS assigned_to_me
+       FROM whatsapp_conversation_state`,
+      [staffId],
+      { needs_human: 0, open: 0, active_7d: 0, assigned_to_me: 0 }
+    ),
+    safeOne(
+      `SELECT
+         COUNT(*)::int AS total_sources,
+         COUNT(*) FILTER (WHERE status = 'active')::int AS active_sources,
+         COUNT(*) FILTER (WHERE platform ILIKE 'tiktok')::int AS tiktok_sources,
+         COUNT(*) FILTER (WHERE platform ILIKE 'youtube')::int AS youtube_sources,
+         COUNT(*) FILTER (WHERE platform ILIKE 'facebook')::int AS facebook_sources,
+         COUNT(*) FILTER (WHERE platform ILIKE 'x' OR platform ILIKE 'twitter')::int AS x_sources,
+         COUNT(*) FILTER (WHERE can_contact_directly = true)::int AS direct_contact_sources
+       FROM property_source_registry`,
+      [],
+      { total_sources: 0, active_sources: 0, tiktok_sources: 0, youtube_sources: 0, facebook_sources: 0, x_sources: 0, direct_contact_sources: 0 }
+    ),
+    safeOne(
+      `SELECT
+         COUNT(*)::int AS total,
+         COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days')::int AS last_7_days,
+         COUNT(*) FILTER (WHERE user_phone IS NOT NULL AND user_phone <> '')::int AS with_phone
+       FROM mortgage_enquiries`,
+      [],
+      { total: 0, last_7_days: 0, with_phone: 0 }
+    ),
+    safeOne(
+      `SELECT
+         (SELECT COUNT(*)::int FROM payment_links WHERE status IN ('created','pending','sent')) AS open_payment_links,
+         (SELECT COUNT(*)::int FROM invoices WHERE status IN ('draft','sent','unpaid','pending')) AS open_invoices,
+         (SELECT COUNT(*)::int FROM invoices WHERE status = 'paid') AS paid_invoices
+       `,
+      [],
+      { open_payment_links: 0, open_invoices: 0, paid_invoices: 0 }
+    )
+  ]);
+
+  return {
+    staff: publicStaffUser(req.userAuth),
+    partial: true,
+    deferred_dashboard_endpoint: '/api/staff/dashboard?panels=1',
+    summary: {
+      listings: listingSummary,
+      my_moderation: myModeration,
+      leads: leadSummary,
+      advertising: adSummary,
+      whatsapp: { ...whatsappSummary, bridge: { status: 'loading' } },
+      sources: sourceSummary,
+      duplicates: { possible_duplicates: 0 },
+      bank_leads: mortgageSummary,
+      payments: paymentSummary,
+      definitions: staffMetricDefinitions()
+    },
+    review_queue: [],
+    leads: [],
+    advertising_inquiries: [],
+    whatsapp_conversations: [],
+    source_intake: {
+      batch_id: SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID,
+      summary: sourceSummary,
+      possible_duplicates: 0,
+      monitor: staffSourceMonitorGuide(),
+      source_presets: STAFF_SOURCE_PRESETS,
+      source_registry: [],
+      queued_found_online: [],
+      exact_import_endpoint: '/api/staff/source-intake/exact-social/import',
+      sweep_endpoint: '/api/staff/source-intake/social-sweep'
+    },
+    bank_leads: { summary: mortgageSummary, rows: [] },
+    payments: {
+      summary: paymentSummary,
+      staff_payment_profile: publicStaffUser(req.userAuth).payment_profile,
+      note: 'Staff can save their payout details here. Payment confirmation, paid invoices, discounts, and refunds remain King/admin controlled.'
+    },
+    recent_activity: [],
+    training: trainingGuide(),
+    ai: {
+      provider: getProviderMeta(),
+      assistant_endpoint: '/api/staff/assistant/query'
+    }
+  };
+}
+
 async function dashboardPayload(req) {
   const staffId = actorId(req);
   const queueLimit = STAFF_DASHBOARD_QUEUE_LIMIT;
@@ -1289,8 +1434,10 @@ async function collectStaffContactRows(question = '') {
 
 router.get('/dashboard', async (req, res, next) => {
   try {
-    await logStaffActivity(req, 'staff_dashboard_opened', { metadata: { role: req.userAuth?.role } });
-    return res.json({ ok: true, data: await dashboardPayload(req) });
+    logStaffActivity(req, 'staff_dashboard_opened', { metadata: { role: req.userAuth?.role } })
+      .catch((error) => logger.warn('Staff dashboard activity log failed', { message: error.message }));
+    const fast = boolLike(req.query?.fast || req.query?.light);
+    return res.json({ ok: true, data: fast ? await dashboardFastPayload(req) : await dashboardPayload(req) });
   } catch (error) {
     return next(error);
   }

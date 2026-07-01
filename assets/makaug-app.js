@@ -9683,6 +9683,8 @@ let staffDashboardData = null;
 let staffDashboardRenderSeq = 0;
 let staffDashboardHasLiveData = false;
 let staffDashboardAuthRetryCount = 0;
+let staffDashboardPanelHydrationSeq = 0;
+let staffDashboardPanelHydrating = false;
 let staffAiLastCsv = "";
 let staffTrainingActive = "moderation";
 let staffTrainingScripts = [];
@@ -10041,6 +10043,71 @@ function renderStaffSourceIntake(data = {}) {
   }
 }
 
+function renderStaffDeferredPanelLoading() {
+  const panels = [
+    ["staff-review-queue", "Listing moderation queue loading..."],
+    ["staff-leads-list", "Lead desk loading..."],
+    ["staff-advertising-list", "Advertising desk loading..."],
+    ["staff-whatsapp-list", "WhatsApp conversations loading..."],
+    ["staff-bank-leads-list", "Bank leads loading..."],
+    ["staff-activity-list", "Recent work loading..."]
+  ];
+  panels.forEach(([id, label]) => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = staffEmpty(label);
+  });
+}
+
+function applyStaffDashboardData(data = {}, user = {}) {
+  staffDashboardData = data;
+  staffDashboardHasLiveData = true;
+  staffDashboardAuthRetryCount = 0;
+  const definitions = data.summary?.definitions || {};
+  setStaffStat("staff-stat-total", data.summary?.listings?.live, definitions, "total_properties");
+  setStaffStat("staff-stat-pending", data.summary?.listings?.pending_review, definitions, "pending_review");
+  setStaffStat("staff-stat-approvals", data.summary?.my_moderation?.approvals, definitions, "my_approvals");
+  setStaffStat("staff-stat-leads", data.summary?.leads?.open, definitions, "open_leads");
+  setStaffStat("staff-stat-ads", data.summary?.advertising?.open_inquiries, definitions, "ad_leads");
+  setStaffStat("staff-stat-whatsapp", data.summary?.whatsapp?.open, definitions, "whatsapp_human");
+  setStaffStat("staff-stat-duplicates", data.summary?.duplicates?.possible_duplicates, definitions, "source_duplicates");
+  setStaffStat("staff-stat-bank", data.summary?.bank_leads?.total, definitions, "bank_leads");
+  renderStaffProfileSettings(data.staff || user, data.payments || {});
+  renderStaffSourceIntake(data.source_intake || {});
+  renderStaffTraining(data.training || {});
+  if (data.partial) {
+    renderStaffDeferredPanelLoading();
+    return;
+  }
+  renderStaffReviewQueue(data.review_queue || []);
+  renderStaffLeads(data.leads || []);
+  renderStaffAdvertising(data.advertising_inquiries || []);
+  renderStaffWhatsapp(data.whatsapp_conversations || [], data.summary?.whatsapp || {});
+  renderStaffBankLeads(data.bank_leads || {});
+  renderStaffActivity(data.recent_activity || []);
+}
+
+async function hydrateStaffDashboardPanels(endpoint = "/api/staff/dashboard?panels=1", tokenAtStart = "", userIdAtStart = "") {
+  if (staffDashboardPanelHydrating) return;
+  staffDashboardPanelHydrating = true;
+  const seq = staffDashboardPanelHydrationSeq + 1;
+  staffDashboardPanelHydrationSeq = seq;
+  try {
+    const res = await apiRequest(endpoint || "/api/staff/dashboard?panels=1");
+    const sameUser = tokenAtStart === (authState?.token || "")
+      && userIdAtStart === String(authState?.user?.id || authState?.user?.email || authState?.user?.phone || "");
+    if (!sameUser || seq !== staffDashboardPanelHydrationSeq) return;
+    applyStaffDashboardData(res?.data || {}, authState?.user || {});
+  } catch (error) {
+    const sameUser = tokenAtStart === (authState?.token || "")
+      && userIdAtStart === String(authState?.user?.id || authState?.user?.email || authState?.user?.phone || "");
+    if (sameUser) {
+      setTextById("staff-source-monitor-status", "Live cards loaded. Heavy panels are still catching up.");
+    }
+  } finally {
+    if (seq === staffDashboardPanelHydrationSeq) staffDashboardPanelHydrating = false;
+  }
+}
+
 function staffUseSourcePreset(value = "") {
   const input = document.getElementById("staff-source-sweep-focus");
   const resolved = String(value || "").trim();
@@ -10269,32 +10336,19 @@ async function renderStaffDashboard() {
   setTextById("staff-dashboard-status", `Role: ${mapRoleLabel(user.role)} • ${user.email || user.phone || "staff account"}`);
   if (!staffDashboardHasLiveData) setStaffDashboardLoadingState();
   try {
-    const res = await apiRequest("/api/staff/dashboard");
+    const res = await apiRequest("/api/staff/dashboard?fast=1");
     if (tokenAtStart !== (authState?.token || "") || userIdAtStart !== String(authState?.user?.id || authState?.user?.email || authState?.user?.phone || "")) {
       return;
     }
     const data = res?.data || {};
-    staffDashboardData = data;
-    staffDashboardHasLiveData = true;
-    staffDashboardAuthRetryCount = 0;
-    const definitions = data.summary?.definitions || {};
-    setStaffStat("staff-stat-total", data.summary?.listings?.live, definitions, "total_properties");
-    setStaffStat("staff-stat-pending", data.summary?.listings?.pending_review, definitions, "pending_review");
-    setStaffStat("staff-stat-approvals", data.summary?.my_moderation?.approvals, definitions, "my_approvals");
-    setStaffStat("staff-stat-leads", data.summary?.leads?.open, definitions, "open_leads");
-    setStaffStat("staff-stat-ads", data.summary?.advertising?.open_inquiries, definitions, "ad_leads");
-    setStaffStat("staff-stat-whatsapp", data.summary?.whatsapp?.open, definitions, "whatsapp_human");
-    setStaffStat("staff-stat-duplicates", data.summary?.duplicates?.possible_duplicates, definitions, "source_duplicates");
-    setStaffStat("staff-stat-bank", data.summary?.bank_leads?.total, definitions, "bank_leads");
-    renderStaffProfileSettings(data.staff || user, data.payments || {});
-    renderStaffReviewQueue(data.review_queue || []);
-    renderStaffLeads(data.leads || []);
-    renderStaffAdvertising(data.advertising_inquiries || []);
-    renderStaffWhatsapp(data.whatsapp_conversations || [], data.summary?.whatsapp || {});
-    renderStaffSourceIntake(data.source_intake || {});
-    renderStaffBankLeads(data.bank_leads || {});
-    renderStaffActivity(data.recent_activity || []);
-    renderStaffTraining(data.training || {});
+    applyStaffDashboardData(data, user);
+    if (data.partial) {
+      window.setTimeout(() => {
+        if (currentPage === "staff-dashboard") {
+          hydrateStaffDashboardPanels(data.deferred_dashboard_endpoint || "/api/staff/dashboard?panels=1", tokenAtStart, userIdAtStart);
+        }
+      }, 50);
+    }
   } catch (error) {
     const staleAuthRequest = tokenAtStart !== (authState?.token || "")
       || userIdAtStart !== String(authState?.user?.id || authState?.user?.email || authState?.user?.phone || "");
