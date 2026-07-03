@@ -8472,22 +8472,31 @@ function renderBrokerDashboardBadges(broker = {}, stats = {}) {
 
 function getBrokerDashboardLocalListings(broker = {}) {
   const brokerId = String(broker.id || "");
-  const email = String(authState?.user?.email || broker.email || "").toLowerCase();
-  const digits = normalizeDigits(authState?.user?.phone || broker.phone || broker.whatsapp || "");
   return PROPERTIES.filter((p) => isBackendControlledListing(p)).filter((p) => {
-    const listingAgent = String(p.agent || p.agent_id || "");
-    const listingEmail = String(p.lister_email || p.email || "").toLowerCase();
-    const listingPhone = normalizeDigits(p.lister_phone || p.phone || "");
-    return (brokerId && listingAgent === brokerId)
-      || (email && listingEmail === email)
-      || (digits && listingPhone === digits);
+    return brokerDashboardListingBelongsToBroker(p, { id: brokerId });
   });
+}
+
+function brokerDashboardListingBelongsToBroker(listing = {}, broker = {}) {
+  const brokerId = String(broker?.id || "").trim();
+  if (!brokerId) return false;
+  const extra = listing?.extra_fields && typeof listing.extra_fields === "object" ? listing.extra_fields : {};
+  const listingAgent = String(listing.agent || listing.agent_id || extra.broker_agent_id || "").trim();
+  if (listingAgent !== brokerId) return false;
+  const listedVia = String(listing.listed_via || listing.source || extra.listed_via || extra.source || "").toLowerCase();
+  const explicitBrokerSubmission = extra.broker_submission === true
+    || String(extra.broker_submission || "").toLowerCase() === "true"
+    || String(extra.broker_agent_id || "").trim() === brokerId
+    || listedVia.includes("broker")
+    || String(listing.lister_type || "").toLowerCase() === "agent";
+  return explicitBrokerSubmission || listingAgent === brokerId;
 }
 
 function mergeBrokerDashboardListings(remoteListings = [], broker = {}) {
   const rows = [];
   const seen = new Set();
   remoteListings.map((item) => mapRemotePropertyForUi(item)).concat(getBrokerDashboardLocalListings(broker)).forEach((listing) => {
+    if (!brokerDashboardListingBelongsToBroker(listing, broker)) return;
     const id = String(listing.id || listing.backend_id || "");
     if (!id || seen.has(id)) return;
     seen.add(id);
@@ -8550,6 +8559,16 @@ function buildBrokerDashboardShareText(broker = {}, stats = {}) {
   ].filter(Boolean).join("\n");
 }
 
+function brokerShareHref(channel, shareUrl, shareText) {
+  const encodedUrl = encodeURIComponent(shareUrl || "");
+  const encodedText = encodeURIComponent(shareText || shareUrl || "");
+  if (channel === "whatsapp") return `https://wa.me/?text=${encodedText}`;
+  if (channel === "facebook") return `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`;
+  if (channel === "linkedin") return `https://www.linkedin.com/sharing/share-offsite/?url=${encodedUrl}`;
+  if (channel === "twitter" || channel === "x") return `https://twitter.com/intent/tweet?text=${encodedText}&url=${encodedUrl}`;
+  return "";
+}
+
 async function shareBrokerCard(channel = "native") {
   const broker = brokerDashboardCache?.broker;
   if (!broker) {
@@ -8564,8 +8583,14 @@ async function shareBrokerCard(channel = "native") {
       await navigator.share({ title: `${broker.name || "makaug broker"} on makaug.com`, text: shareText, url: shareUrl });
       return;
     }
-    if (channel === "whatsapp") {
-      window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, "_blank", "noopener,noreferrer");
+    if (["whatsapp", "facebook", "linkedin", "twitter", "x"].includes(channel)) {
+      const href = brokerShareHref(channel, shareUrl, shareText);
+      if (href) window.open(href, "_blank", "noopener,noreferrer");
+      return;
+    }
+    if (channel === "link") {
+      const copiedUrl = await copyTextToClipboard(shareUrl);
+      toast(copiedUrl ? "Broker profile link copied." : "Unable to copy broker profile link right now.");
       return;
     }
     const copied = await copyTextToClipboard(shareText);
@@ -8598,7 +8623,8 @@ function renderBrokerDashboardListingCard(p) {
   const saves = getPropertySaveCount(p.id);
   const leads = brokerListingLeadCount(p);
   const quality = brokerListingQualityScore(p);
-  const shouldBoost = String(p.status || "").toLowerCase() === "approved" && (views >= 25 || saves >= 5 || leads >= 2);
+  const isLiveListing = normalizeModerationStatus(p.status) === "approved";
+  const shouldBoost = isLiveListing && (views >= 25 || saves >= 5 || leads >= 2);
   const location = [p.area, p.district].filter(Boolean).join(", ") || "Location pending";
   return `
     <div class="border border-gray-200 rounded-2xl p-4 bg-white">
@@ -8626,7 +8652,9 @@ function renderBrokerDashboardListingCard(p) {
         <button onclick="openPropertyCardDetail(event, ${propertyIdArg(p.id)})" class="border border-green-200 text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-bold">Preview</button>
         <button onclick="editBrokerListing(${propertyIdArg(p.id)})" class="border border-gray-200 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-bold">Edit</button>
         <button onclick="shareBrokerListing(${propertyIdArg(p.id)})" class="border border-green-200 text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-bold">Share</button>
-        <button onclick="openBrokerBoostPlanner(${propertyIdArg(p.id)})" class="border border-amber-300 text-amber-800 hover:bg-amber-50 px-3 py-1.5 rounded-lg text-xs font-bold">Boost</button>
+        ${isLiveListing
+          ? `<button onclick="openBrokerBoostPlanner(${propertyIdArg(p.id)})" class="border border-amber-300 text-amber-800 hover:bg-amber-50 px-3 py-1.5 rounded-lg text-xs font-bold">Boost</button>`
+          : `<button type="button" onclick="toast('This listing can be boosted after makaug approves it.')" class="border border-gray-200 text-gray-400 bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-bold cursor-not-allowed">Boost after approval</button>`}
         <button onclick="requestBrokerListingRemoval(${propertyIdArg(p.id)})" class="border border-red-200 text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-lg text-xs font-bold">Request removal</button>
       </div>
     </div>`;
@@ -8883,51 +8911,127 @@ function renderBrokerWhatsAppCard(broker = {}, stats = {}) {
   if (!panel) return;
   const shareText = buildBrokerDashboardShareText(broker, stats);
   panel.innerHTML = `
-    <div class="text-xs font-black uppercase tracking-wide text-green-700">WhatsApp agent card</div>
-    <h2 class="text-xl font-black text-gray-900 mt-1">Ready-to-send broker card</h2>
-    <p class="text-sm text-gray-600 mt-1">Use this for WhatsApp, Facebook, LinkedIn, and direct referrals. It keeps your makaug profile, phone, areas, and live listing count together.</p>
+    <div class="text-xs font-black uppercase tracking-wide text-green-700">Shareable broker card</div>
+    <h2 class="text-xl font-black text-gray-900 mt-1">Ready-to-send profile link</h2>
+    <p class="text-sm text-gray-600 mt-1">Share this on WhatsApp, Facebook, LinkedIn, X, or direct messages. It keeps your makaug profile, phone, areas, and live listing count together.</p>
     <div id="broker-dashboard-whatsapp-share-card" class="mt-4 rounded-2xl border border-green-100 bg-green-50 p-4 text-sm whitespace-pre-line text-green-950">${adminEscape(shareText)}</div>
     <div class="grid sm:grid-cols-2 gap-2 mt-4">
       <button onclick="shareBrokerCard('whatsapp')" class="bg-green-700 hover:bg-green-600 text-white rounded-xl px-4 py-2 font-bold">Send on WhatsApp</button>
       <button onclick="shareBrokerCard('copy')" class="border border-green-200 text-green-800 hover:bg-green-50 rounded-xl px-4 py-2 font-bold">Copy card</button>
+      <button onclick="shareBrokerCard('facebook')" class="border border-blue-200 text-blue-800 hover:bg-blue-50 rounded-xl px-4 py-2 font-bold">Facebook</button>
+      <button onclick="shareBrokerCard('linkedin')" class="border border-blue-200 text-blue-800 hover:bg-blue-50 rounded-xl px-4 py-2 font-bold">LinkedIn</button>
+      <button onclick="shareBrokerCard('x')" class="border border-gray-200 text-gray-800 hover:bg-gray-50 rounded-xl px-4 py-2 font-bold">X</button>
+      <button onclick="shareBrokerCard('link')" class="border border-green-200 text-green-800 hover:bg-green-50 rounded-xl px-4 py-2 font-bold">Copy profile link</button>
     </div>`;
 }
 
-function renderBrokerBoostPanel(listingId = "") {
+const BROKER_BOOST_FORMATS = [
+  {
+    key: "category_top",
+    label: "Category top placement",
+    placement: "Top of matching rent/sale/land/category page",
+    guidePrice: 25000,
+    reachBase: 420,
+    reachMultiplier: 1.1
+  },
+  {
+    key: "homepage_sponsor",
+    label: "Homepage sponsored slot",
+    placement: "Homepage sponsor strip + matching category",
+    guidePrice: 35000,
+    reachBase: 700,
+    reachMultiplier: 1.45
+  },
+  {
+    key: "broker_profile_spotlight",
+    label: "Broker profile spotlight",
+    placement: "Find Brokers profile spotlight",
+    guidePrice: 20000,
+    reachBase: 260,
+    reachMultiplier: 0.9
+  },
+  {
+    key: "whatsapp_digest",
+    label: "WhatsApp demand digest",
+    placement: "Makaug follow-up/support digest",
+    guidePrice: 15000,
+    reachBase: 180,
+    reachMultiplier: 0.7
+  }
+];
+
+function getBrokerBoostFormat(formatKey = "") {
+  return BROKER_BOOST_FORMATS.find((item) => item.key === formatKey) || BROKER_BOOST_FORMATS[0];
+}
+
+function renderBrokerBoostPanel(listingId = "", formatKey = "") {
   const panel = document.getElementById("broker-boost-panel");
   if (!panel) return;
   const listings = brokerDashboardCache?.listings || [];
-  const selected = listings.find((item) => String(item.id) === String(listingId)) || listings.find((item) => String(item.status || "").toLowerCase() === "approved") || listings[0] || null;
+  const boostableListings = listings.filter((item) => normalizeModerationStatus(item.status) === "approved");
+  const selected = boostableListings.find((item) => String(item.id) === String(listingId)) || boostableListings[0] || null;
+  const selectedFormat = getBrokerBoostFormat(formatKey || document.getElementById("broker-boost-format-select")?.value || "");
   const views = selected ? getPropertyViewCount(selected.id) : 0;
   const leads = selected ? brokerListingLeadCount(selected) : 0;
-  const baseReach = Math.max(450, (views * 18) + (leads * 120) + 600);
-  const isLive = selected && String(selected.status || "").toLowerCase() === "approved";
+  const saves = selected ? getPropertySaveCount(selected.id) : 0;
+  const baseReach = Math.max(
+    selectedFormat.reachBase,
+    Math.round(((views * 18) + (saves * 35) + (leads * 120) + selectedFormat.reachBase) * selectedFormat.reachMultiplier)
+  );
+  if (!boostableListings.length) {
+    panel.innerHTML = `
+      <div class="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <div class="text-xs font-black uppercase tracking-wide text-amber-700">Advertising desk</div>
+          <h2 class="text-xl font-black text-gray-900 mt-1">Boost a broker listing</h2>
+          <p class="text-sm text-gray-600 mt-1">Boost is available only after makaug approves one of your listings and it is live on the public website.</p>
+        </div>
+        <button onclick="handleAdvertisePropertyCta(event)" class="border border-amber-300 text-amber-800 hover:bg-amber-50 px-3 py-2 rounded-lg text-xs font-bold">View public ad formats</button>
+      </div>
+      <div class="mt-4 rounded-2xl border border-amber-100 bg-amber-50 p-5">
+        <h3 class="font-black text-amber-950">No live broker listing available to boost yet.</h3>
+        <p class="text-sm text-amber-900 mt-1">Upload a property, wait for makaug review, then choose that approved listing here. In-review or rejected listings cannot be promoted.</p>
+        <div class="grid md:grid-cols-4 gap-3 mt-4">
+          ${BROKER_BOOST_FORMATS.map((format) => `
+            <div class="rounded-xl bg-white border border-amber-100 p-3">
+              <div class="text-xs font-black text-amber-800">${adminEscape(format.label)}</div>
+              <div class="text-sm text-gray-600 mt-1">${adminEscape(format.placement)}</div>
+              <div class="font-black text-amber-950 mt-2">UGX ${Number(format.guidePrice).toLocaleString("en-UG")}</div>
+            </div>`).join("")}
+        </div>
+      </div>`;
+    return;
+  }
   panel.innerHTML = `
     <div class="flex items-start justify-between gap-3 flex-wrap">
       <div>
         <div class="text-xs font-black uppercase tracking-wide text-amber-700">Advertising desk</div>
         <h2 class="text-xl font-black text-gray-900 mt-1">Boost a broker listing</h2>
-        <p class="text-sm text-gray-600 mt-1">Plan sponsored placement, preview where the ad sits, and prepare payments. Campaigns go live after payment and makaug approval.</p>
+        <p class="text-sm text-gray-600 mt-1">Choose one of your approved live listings, select a real ad format, and preview the guide price and estimated reach before payment.</p>
       </div>
-      <button onclick="handleAdvertisePropertyCta(event)" class="border border-amber-300 text-amber-800 hover:bg-amber-50 px-3 py-2 rounded-lg text-xs font-bold">Open public ad options</button>
+      <button onclick="handleAdvertisePropertyCta(event)" class="border border-amber-300 text-amber-800 hover:bg-amber-50 px-3 py-2 rounded-lg text-xs font-bold">View public ad formats</button>
     </div>
     <div class="grid lg:grid-cols-[0.9fr_1.1fr] gap-4 mt-4">
       <div class="rounded-2xl border border-gray-200 bg-gray-50 p-4">
         <label class="block text-xs font-black text-gray-600 mb-2">Property to boost</label>
-        <select id="broker-boost-listing-select" onchange="openBrokerBoostPlanner(this.value)" class="w-full min-h-[46px] rounded-xl border border-gray-200 px-3">
-          ${listings.length ? listings.map((item) => `<option value="${adminAttr(item.id)}" ${selected && String(item.id) === String(selected.id) ? "selected" : ""}>${adminEscape(item.title || "makaug listing")} - ${adminEscape(brokerListingStatusMeta(item.status).label)}</option>`).join("") : `<option>No listings yet</option>`}
+        <select id="broker-boost-listing-select" onchange="renderBrokerBoostPanel(this.value, document.getElementById('broker-boost-format-select')?.value || '')" class="w-full min-h-[46px] rounded-xl border border-gray-200 px-3">
+          ${boostableListings.map((item) => `<option value="${adminAttr(item.id)}" ${selected && String(item.id) === String(selected.id) ? "selected" : ""}>${adminEscape(item.title || "makaug listing")}</option>`).join("")}
+        </select>
+        <label class="block text-xs font-black text-gray-600 mt-3 mb-2">Ad format</label>
+        <select id="broker-boost-format-select" onchange="renderBrokerBoostPanel(document.getElementById('broker-boost-listing-select')?.value || '', this.value)" class="w-full min-h-[46px] rounded-xl border border-gray-200 px-3">
+          ${BROKER_BOOST_FORMATS.map((format) => `<option value="${adminAttr(format.key)}" ${format.key === selectedFormat.key ? "selected" : ""}>${adminEscape(format.label)}</option>`).join("")}
         </select>
         <div class="mt-3 grid grid-cols-2 gap-2 text-sm">
           <div class="rounded-xl bg-white border border-gray-100 p-3"><strong>${selected ? brokerMetric(views) : "0"}</strong><br><span class="text-xs text-gray-500">Views</span></div>
           <div class="rounded-xl bg-white border border-gray-100 p-3"><strong>${selected ? brokerMetric(leads) : "0"}</strong><br><span class="text-xs text-gray-500">Leads</span></div>
         </div>
-        <p class="text-xs text-gray-600 mt-3">${isLive ? "This listing can be prepared for boost once campaign payment is enabled." : "This listing must be approved before an ad can go live."}</p>
+        <p class="text-xs text-gray-600 mt-3">Only approved live listings are listed here. Edited listings return to review before ads can run.</p>
       </div>
       <div class="rounded-2xl border border-amber-100 bg-amber-50 p-4">
         <div class="grid md:grid-cols-3 gap-3">
           <div class="rounded-xl bg-white border border-amber-100 p-3">
             <div class="text-xs text-amber-800">Placement</div>
-            <div class="font-black text-amber-950">Homepage + category sponsor</div>
+            <div class="font-black text-amber-950">${adminEscape(selectedFormat.placement)}</div>
           </div>
           <div class="rounded-xl bg-white border border-amber-100 p-3">
             <div class="text-xs text-amber-800">Estimated reach</div>
@@ -8935,7 +9039,7 @@ function renderBrokerBoostPanel(listingId = "") {
           </div>
           <div class="rounded-xl bg-white border border-amber-100 p-3">
             <div class="text-xs text-amber-800">Starting guide</div>
-            <div class="font-black text-amber-950">UGX ${Number(35000).toLocaleString("en-UG")}</div>
+            <div class="font-black text-amber-950">UGX ${Number(selectedFormat.guidePrice).toLocaleString("en-UG")}</div>
           </div>
         </div>
         <div class="mt-4 rounded-2xl bg-white border border-amber-100 p-4">
@@ -8973,8 +9077,41 @@ function renderBrokerResourceGrid() {
     </button>`).join("");
 }
 
+function setBrokerDashboardActiveTab(targetHash = "#broker-overview-panel") {
+  document.querySelectorAll("#broker-dashboard-tabs a[href^='#broker-']").forEach((link) => {
+    const active = link.getAttribute("href") === targetHash;
+    link.classList.toggle("bg-green-700", active);
+    link.classList.toggle("text-white", active);
+    link.classList.toggle("bg-gray-50", !active);
+    link.classList.toggle("text-gray-700", !active);
+  });
+}
+
+function wireBrokerDashboardTabs() {
+  const tabs = document.getElementById("broker-dashboard-tabs");
+  if (!tabs || tabs.dataset.wired === "true") {
+    setBrokerDashboardActiveTab(window.location.hash && window.location.hash.startsWith("#broker-") ? window.location.hash : "#broker-overview-panel");
+    return;
+  }
+  tabs.dataset.wired = "true";
+  tabs.querySelectorAll("a[href^='#broker-']").forEach((link) => {
+    link.addEventListener("click", (event) => {
+      event.preventDefault();
+      const targetHash = link.getAttribute("href") || "#broker-overview-panel";
+      const target = document.querySelector(targetHash);
+      setBrokerDashboardActiveTab(targetHash);
+      if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+      try {
+        window.history.replaceState({ page: "broker-dashboard", source: "broker_dashboard_tab" }, "", `/broker-dashboard${targetHash}`);
+      } catch (_) {}
+    });
+  });
+  setBrokerDashboardActiveTab(window.location.hash && window.location.hash.startsWith("#broker-") ? window.location.hash : "#broker-overview-panel");
+}
+
 function openBrokerBoostPlanner(listingId = "") {
   renderBrokerBoostPanel(listingId);
+  setBrokerDashboardActiveTab("#broker-boost-panel");
   document.getElementById("broker-boost-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
@@ -9172,6 +9309,7 @@ async function renderAgentDashboard() {
     renderBrokerBoostPanel();
     renderBrokerQuickstartPanel();
     renderBrokerResourceGrid();
+    wireBrokerDashboardTabs();
     hydrateBrokerSettingsForm(fallbackBroker);
     return;
   }
@@ -9216,6 +9354,7 @@ async function renderAgentDashboard() {
   renderBrokerBoostPanel();
   renderBrokerQuickstartPanel();
   renderBrokerResourceGrid();
+  wireBrokerDashboardTabs();
   hydrateBrokerSettingsForm(broker);
 
   if (gridEl) {
@@ -31964,11 +32103,16 @@ async function shareBrokerBusinessCard(id, channel = "native") {
       return;
     }
     if (channel === "whatsapp") {
-      window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, "_blank", "noopener,noreferrer");
+      window.open(brokerShareHref("whatsapp", shareUrl, shareText), "_blank", "noopener,noreferrer");
       return;
     }
-    if (channel === "twitter") {
-      window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}`, "_blank", "noopener,noreferrer");
+    if (["facebook", "linkedin", "twitter", "x"].includes(channel)) {
+      window.open(brokerShareHref(channel, shareUrl, shareText), "_blank", "noopener,noreferrer");
+      return;
+    }
+    if (channel === "link") {
+      const copiedUrl = await copyTextToClipboard(shareUrl);
+      toast(copiedUrl ? translateListingLabel("Broker profile link copied.") : translateListingLabel("Unable to copy link right now."));
       return;
     }
     const copied = await copyTextToClipboard(shareText);
@@ -39818,6 +39962,11 @@ async function openBrokerProfile(id) {
   const remoteListings = Array.isArray(b.remote_listings) ? b.remote_listings.filter(isListingPublicVisible) : [];
   const list = remoteListings.length ? remoteListings : getPublicListings().filter((p) => String(p.agent || "") === String(id || ""));
   const photoSrc = publicImageSrc(b.photo || b.profile_photo_url, `https://ui-avatars.com/api/?name=${encodeURIComponent(b.name)}&background=dcfce7&color=166534&size=300`);
+  const status = String(b.status || "").toLowerCase();
+  const isApprovedBroker = status === "approved";
+  const statusLabel = isApprovedBroker ? "Approved makaug broker" : "Under makaug review";
+  const phoneDigits = String(b.phone || "").replace(/\s+/g, "");
+  const firstName = String(b.name || "broker").split(/\s+/)[0] || "broker";
   content.innerHTML = `
     <button onclick="showPage('brokers')" class="text-green-700 text-sm font-semibold mb-4 inline-flex items-center gap-2"><i class="fas fa-arrow-left"></i> Back to Brokers</button>
 
@@ -39837,7 +39986,7 @@ async function openBrokerProfile(id) {
               <p class="text-gray-500 mt-1">${b.company}</p>
 	              <div class="mt-2 flex flex-wrap gap-2">
 	                ${renderBrokerRegistrationBadge(b)}
-	                <span class="inline-flex items-center gap-1 bg-green-50 text-green-700 text-xs font-semibold px-2.5 py-1 rounded-full"><i class="fas fa-shield-halved"></i> Broker profile</span>
+	                <span class="inline-flex items-center gap-1 ${isApprovedBroker ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-800"} text-xs font-semibold px-2.5 py-1 rounded-full"><i class="fas fa-shield-halved"></i> ${statusLabel}</span>
 	              </div>
             </div>
             <div class="text-sm text-gray-600">
@@ -39852,12 +40001,12 @@ async function openBrokerProfile(id) {
 
 	          <div class="grid sm:grid-cols-2 gap-3 mt-5">
             <div class="bg-green-50 rounded-xl p-3 text-center">
-              <div class="text-2xl font-bold text-gray-900">${b.listings}</div>
+              <div class="text-2xl font-bold text-gray-900">${list.length}</div>
               <div class="text-xs text-gray-500">Active Listings</div>
             </div>
             <div class="bg-green-50 rounded-xl p-3 text-center">
-              <div class="text-2xl font-bold text-gray-900">${b.sales || 0}</div>
-              <div class="text-xs text-gray-500">Sales Completed</div>
+              <div class="text-2xl font-bold text-gray-900">${brokerMetric(getBrokerProfileViewCount(b.id))}</div>
+              <div class="text-xs text-gray-500">Profile Views</div>
             </div>
 	          </div>
 
@@ -39869,10 +40018,16 @@ async function openBrokerProfile(id) {
           </div>
 
           <div class="grid sm:grid-cols-2 gap-2 mt-6">
-            <a href="tel:${b.phone}" class="block bg-green-700 text-white text-center py-2.5 rounded-xl font-semibold">📞 Call ${b.name.split(" ")[0]}</a>
-            <a href="${adminAttr(buildWhatsAppUrl(b.whatsapp, buildBrokerContactWhatsappMessage(b)))}" target="_blank" rel="noopener noreferrer" class="block bg-green-500 text-white text-center py-2.5 rounded-xl font-semibold">📲 WhatsApp</a>
+            ${b.phone ? `<a href="tel:${adminAttr(phoneDigits)}" class="block bg-green-700 text-white text-center py-2.5 rounded-xl font-semibold">Call ${adminEscape(firstName)}</a>` : `<button type="button" class="block bg-gray-100 text-gray-400 text-center py-2.5 rounded-xl font-semibold cursor-not-allowed">Call unavailable</button>`}
+            ${b.whatsapp ? `<a href="${adminAttr(buildWhatsAppUrl(b.whatsapp, buildBrokerContactWhatsappMessage(b)))}" target="_blank" rel="noopener noreferrer" class="block bg-green-500 text-white text-center py-2.5 rounded-xl font-semibold">WhatsApp</a>` : `<button type="button" class="block bg-gray-100 text-gray-400 text-center py-2.5 rounded-xl font-semibold cursor-not-allowed">WhatsApp unavailable</button>`}
           </div>
-          <button type="button" onclick="shareBrokerBusinessCard(${adminListingIdArg(b.id)}, 'whatsapp')" class="w-full mt-2 border border-green-200 text-green-700 text-center py-2.5 rounded-xl font-semibold hover:bg-green-50">🔗 Share Broker Card</button>
+          <div class="grid sm:grid-cols-5 gap-2 mt-2">
+            <button type="button" onclick="shareBrokerBusinessCard(${adminListingIdArg(b.id)}, 'whatsapp')" class="border border-green-200 text-green-700 text-center py-2.5 rounded-xl font-semibold hover:bg-green-50">Share</button>
+            <button type="button" onclick="shareBrokerBusinessCard(${adminListingIdArg(b.id)}, 'facebook')" class="border border-blue-200 text-blue-800 text-center py-2.5 rounded-xl font-semibold hover:bg-blue-50">Facebook</button>
+            <button type="button" onclick="shareBrokerBusinessCard(${adminListingIdArg(b.id)}, 'linkedin')" class="border border-blue-200 text-blue-800 text-center py-2.5 rounded-xl font-semibold hover:bg-blue-50">LinkedIn</button>
+            <button type="button" onclick="shareBrokerBusinessCard(${adminListingIdArg(b.id)}, 'x')" class="border border-gray-200 text-gray-800 text-center py-2.5 rounded-xl font-semibold hover:bg-gray-50">X</button>
+            <button type="button" onclick="shareBrokerBusinessCard(${adminListingIdArg(b.id)}, 'link')" class="border border-green-200 text-green-700 text-center py-2.5 rounded-xl font-semibold hover:bg-green-50">Copy link</button>
+          </div>
         </div>
       </div>
     </div>

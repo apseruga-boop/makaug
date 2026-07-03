@@ -233,18 +233,20 @@ async function fetchBrokerAgentForUser(user) {
      LEFT JOIN LATERAL (
        SELECT COUNT(*)::int AS active_listings
        FROM properties p
-       WHERE p.agent_id = a.id AND p.status = 'approved'
+       WHERE (p.agent_id = a.id OR COALESCE(p.extra_fields, '{}'::jsonb)->>'broker_agent_id' = a.id::text)
+         AND p.status = 'approved'
      ) p ON true
      LEFT JOIN LATERAL (
        SELECT COUNT(*)::int AS pending_listings
        FROM properties p
-       WHERE p.agent_id = a.id AND p.status = 'pending'
+       WHERE (p.agent_id = a.id OR COALESCE(p.extra_fields, '{}'::jsonb)->>'broker_agent_id' = a.id::text)
+         AND p.status = 'pending'
      ) lp ON true
      LEFT JOIN LATERAL (
        SELECT COUNT(pi.*)::int AS lead_enquiries
        FROM properties p
        JOIN property_inquiries pi ON pi.property_id = p.id
-       WHERE p.agent_id = a.id
+       WHERE p.agent_id = a.id OR COALESCE(p.extra_fields, '{}'::jsonb)->>'broker_agent_id' = a.id::text
      ) li ON true
      WHERE a.user_id = $1
         OR ($2::text <> '' AND LOWER(COALESCE(a.email, '')) = LOWER($2))
@@ -258,12 +260,11 @@ async function fetchBrokerAgentForUser(user) {
 }
 
 async function fetchBrokerListings({ agent, user }) {
-  if (!agent?.id && !user?.id) return [];
-  const email = normalizeEmail(user?.email || agent?.email || '');
-  const digits = phoneDigits(user?.phone || agent?.phone || agent?.whatsapp || '');
+  if (!agent?.id) return [];
   const result = await db.query(
     `SELECT p.id, p.title, p.listing_type, p.district, p.area, p.price, p.price_period, p.status, p.created_at, p.updated_at,
-            p.inquiry_reference, p.lister_email, p.lister_phone, p.agent_id,
+            p.inquiry_reference, p.lister_email, p.lister_phone, p.agent_id, p.listed_via, p.source, p.extra_fields,
+            img.url AS primary_image_url,
             COALESCE(i.inquiry_count, 0) AS inquiry_count
      FROM properties p
      LEFT JOIN LATERAL (
@@ -271,12 +272,21 @@ async function fetchBrokerListings({ agent, user }) {
        FROM property_inquiries pi
        WHERE pi.property_id = p.id
      ) i ON true
-     WHERE ($1::uuid IS NOT NULL AND p.agent_id = $1)
-        OR ($2::text <> '' AND LOWER(COALESCE(p.lister_email, '')) = LOWER($2))
-        OR ($3::text <> '' AND regexp_replace(COALESCE(p.lister_phone, ''), '\\D', '', 'g') = $3)
+     LEFT JOIN LATERAL (
+       SELECT pi.url
+       FROM property_images pi
+       WHERE pi.property_id = p.id
+       ORDER BY pi.is_primary DESC, pi.sort_order ASC, pi.created_at ASC
+       LIMIT 1
+     ) img ON true
+     WHERE $1::uuid IS NOT NULL
+       AND (
+         p.agent_id = $1
+         OR COALESCE(p.extra_fields, '{}'::jsonb)->>'broker_agent_id' = $1::text
+       )
      ORDER BY p.created_at DESC
      LIMIT 100`,
-    [agent?.id || null, email, digits]
+    [agent.id]
   );
   return result.rows;
 }
@@ -505,17 +515,11 @@ router.get('/:id', async (req, res, next) => {
         WHERE p.agent_id = a.id AND p.status = 'approved'
       ) p ON true
       WHERE a.id = $1
-        AND a.status = 'approved'
         AND a.user_id IS NOT NULL
+        AND LOWER(COALESCE(a.status, 'pending')) NOT IN ('rejected', 'declined', 'suspended', 'deleted', 'removed', 'blocked')
         AND COALESCE(a.verification_reason, '') NOT ILIKE '%public social source onboarding%'
         AND COALESCE(a.verification_reason, '') NOT ILIKE '%source profile%'
         AND COALESCE(a.licence_number, '') !~* '^(SOCIAL|FOUND-ONLINE|TIKTOK|FACEBOOK|X)-'
-        AND (
-          SELECT COUNT(*)::int
-          FROM properties live_profile_listing
-          WHERE live_profile_listing.agent_id = a.id
-            AND live_profile_listing.status = 'approved'
-        ) >= ${PUBLIC_AGENT_MIN_LIVE_LISTINGS}
         AND COALESCE(a.full_name, '') NOT ILIKE '%QA TEST - DELETE%'
         AND COALESCE(a.full_name, '') NOT ILIKE '%SOFT LAUNCH TEST - DELETE%'
         AND COALESCE(a.company_name, '') NOT ILIKE '%QA TEST - DELETE%'
