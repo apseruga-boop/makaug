@@ -14399,7 +14399,23 @@ function renderAdminAuthFailureGate(gate, body, error) {
     <div class="text-4xl mb-3">🛡️</div>
     <h2 class="text-xl font-bold text-gray-800 mb-2">Reconnect King Dashboard</h2>
     <p class="text-sm text-gray-500 mb-5">${adminEscape(error?.message || "Admin session expired. Sign in again to reconnect live King dashboard data.")}</p>
-    <button onclick="openAuthSignIn('admin')" class="bg-gray-900 hover:bg-gray-800 text-white px-6 py-2.5 rounded-xl font-semibold">Sign In as Admin</button>`;
+    <div class="mx-auto max-w-md space-y-3">
+      <input id="admin-gate-api-key" type="password" class="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm" placeholder="ADMIN_API_KEY fallback">
+      <button type="button" onclick="saveAdminGateApiKeyAndRefresh()" class="w-full bg-emerald-700 hover:bg-emerald-600 text-white px-6 py-2.5 rounded-xl font-semibold">Reconnect with API key</button>
+      <button type="button" onclick="openAuthSignIn('admin')" class="w-full border border-gray-300 text-gray-700 hover:bg-gray-50 px-6 py-2.5 rounded-xl font-semibold">Sign In as Admin</button>
+    </div>`;
+}
+
+async function saveAdminGateApiKeyAndRefresh() {
+  const input = document.getElementById("admin-gate-api-key");
+  const next = (input?.value || "").trim();
+  if (!next) {
+    toast("Paste ADMIN_API_KEY first.");
+    return;
+  }
+  persistAdminApiKey(next);
+  await renderAdminDashboard({ source: "admin_api_key_gate" });
+  toast("Admin API key saved.");
 }
 
 async function renderAdminStaffControl() {
@@ -14519,9 +14535,21 @@ async function renderAdminDashboard(options = {}) {
   const body = document.getElementById("admin-body");
   if (!gate || !body) return;
 
-  if (!authState?.user || derivePortalMode(authState.user, authState.user.portal_mode) !== "admin") {
+  const adminUser = authState?.user && derivePortalMode(authState.user, authState.user.portal_mode) === "admin"
+    ? authState.user
+    : null;
+  if (!adminUser && !adminApiKey) {
     gate.classList.remove("hidden");
     body.classList.add("hidden");
+    gate.innerHTML = `
+      <div class="text-4xl mb-3">🛡️</div>
+      <h2 class="text-xl font-bold text-gray-800 mb-2">Reconnect King Dashboard</h2>
+      <p class="text-sm text-gray-500 mb-5">Sign in as admin or paste the live admin API key to reconnect King dashboard data.</p>
+      <div class="mx-auto max-w-md space-y-3">
+        <input id="admin-gate-api-key" type="password" class="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm" placeholder="ADMIN_API_KEY fallback">
+        <button type="button" onclick="saveAdminGateApiKeyAndRefresh()" class="w-full bg-emerald-700 hover:bg-emerald-600 text-white px-6 py-2.5 rounded-xl font-semibold">Reconnect with API key</button>
+        <button type="button" onclick="openAuthSignIn('admin')" class="w-full border border-gray-300 text-gray-700 hover:bg-gray-50 px-6 py-2.5 rounded-xl font-semibold">Sign In as Admin</button>
+      </div>`;
     return;
   }
 
@@ -14533,8 +14561,12 @@ async function renderAdminDashboard(options = {}) {
   const sourceEl = document.getElementById("admin-summary-note");
   const keyInput = document.getElementById("admin-api-key");
 
-  if (nameEl) nameEl.textContent = `${authState.user.first_name || "Admin"} ${authState.user.last_name || ""}`.trim();
-  if (statusEl) statusEl.textContent = `Role: ${mapRoleLabel(authState.user.role)} • ${authState.user.email || authState.user.phone || "-"}`;
+  if (nameEl) nameEl.textContent = adminUser
+    ? `${adminUser.first_name || "Admin"} ${adminUser.last_name || ""}`.trim()
+    : "King API Key";
+  if (statusEl) statusEl.textContent = adminUser
+    ? `Role: ${mapRoleLabel(adminUser.role)} • ${adminUser.email || adminUser.phone || "-"}`
+    : "Role: Admin API Key • live backend";
   if (keyInput && document.activeElement !== keyInput) keyInput.value = adminApiKey;
 
   adminDashboardRendering = true;

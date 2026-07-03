@@ -840,6 +840,7 @@ function run() {
   assert(frontendSource.includes('Run alert matching now'), 'setup status should include alert matcher proof action');
   assert(frontendSource.includes('Create payment fallback test'), 'setup status should include payment fallback proof action');
   assert(frontendSource.includes('renderAdminSetupStatus'), 'setup status should be wired to live admin API rendering');
+  assert(frontendSource.includes('saveAdminGateApiKeyAndRefresh') && frontendSource.includes('ADMIN_API_KEY fallback'), 'King dashboard should recover stale admin sessions with ADMIN_API_KEY fallback');
   assert(frontendSource.includes('/api/admin/setup-status'), 'setup status should call protected admin setup status API');
   assert(frontendSource.includes('makaug Go-Live Documentation'), 'admin docs should show launch documentation');
   assert(frontendSource.includes('Backend Traceability Matrix'), 'admin docs should link backend traceability matrix');

@@ -115,6 +115,8 @@ function run() {
   assert(app.includes('adminPendingQueueFilterButton("broker", "Broker", counts.broker)'), 'King review queue should expose a broker filter');
   assert(app.includes('renderAdminStaffControl'), 'King dashboard should render staff account control');
   assert(app.includes('/api/admin/staff/bootstrap-five'), 'King dashboard should call staff bootstrap API');
+  assert(app.includes('saveAdminGateApiKeyAndRefresh'), 'King dashboard should let a stale admin shell reconnect with ADMIN_API_KEY fallback');
+  assert(app.includes('Role: Admin API Key • live backend'), 'King dashboard API-key fallback should render live backend status');
   assert(app.includes('/api/staff/dashboard'), 'frontend should fetch staff dashboard API');
   assert(app.includes('staffDashboardRenderSeq'), 'staff dashboard should ignore stale first-load API responses');
   assert(app.includes('staffDashboardHasLiveData'), 'staff dashboard should not clear live data after a stale auth failure');
