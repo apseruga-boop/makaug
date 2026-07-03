@@ -80,14 +80,14 @@ const T = {
     askListingType: '🏠 What are you listing?\n1️⃣ House/Property for SALE\n2️⃣ House/Property for RENT\n3️⃣ Land/Plot\n4️⃣ Student accommodation\n5️⃣ Commercial property',
     askOwnership: '✅ Are you the owner of this property, or an agent listing on behalf of an owner?\n1️⃣ I am the owner\n2️⃣ I am an agent',
     askAgentNumber: 'Please send your makaug agent number (for example MKA-AG-12345). If you are not registered yet, reply SKIP.',
-    askFieldAgent: '🤝 Has a makaug.com Field Agent helped you with this listing?\n1️⃣ Yes\n2️⃣ No',
+    askFieldAgent: '🤝 Did a makaug.com Field Agent help you with this listing?\n1️⃣ Yes\n2️⃣ No\n\nIf not, reply 2. You can also type the property details and I will save them.',
     askFieldAgentDetails: 'Please send the Field Agent ID, for example FA-0001, so we can credit the right person.',
     askLandTitleAvailable: '📄 Is the land title available for this sale/listing?\n1️⃣ Yes, land title is available\n2️⃣ No / not yet\n3️⃣ Not sure / to confirm',
     askTitle: '✏️ Give your property a short title (e.g. "3-bedroom house in Ntinda Kampala"):',
-    askDistrict: '📍 Which district is the property in? (e.g. Kampala, Wakiso, Mukono, Jinja...)',
-    askArea: '🗺️ What area or neighbourhood? (e.g. Kololo, Ntinda, Bugolobi...)',
-    askPrice: '💰 What is your asking price in Uganda Shillings? (numbers only, e.g. 250000000)',
-    askBedrooms: '🛏 How many bedrooms does the property have? (Enter a number, or 0 if N/A)',
+    askDistrict: '📍 Which district is the property in? If there is more than one, list them all. (e.g. Kampala, Wakiso, Mukono, Jinja...)',
+    askArea: '🗺️ What area or neighbourhood? If there is more than one, list them all. (e.g. Kololo, Ntinda, Bugolobi...)',
+    askPrice: '💰 What is your asking price in Uganda Shillings? You can type numbers or a short phrase, e.g. 250000000 or 500000000 and above.',
+    askBedrooms: '🛏 How many bedrooms does the property have? Enter one number, 0 if N/A, or a list like 1,2,3,4.',
     askDescription: '📝 Describe your property in a few sentences (location, features, condition...)',
     askPhotos: '📸 Please send the *front/outside* photo first.',
     askPublicName: '👤 What public contact name should appear on the listing? (For example: Amina, Amina Properties, or Private Owner)',
@@ -100,7 +100,7 @@ const T = {
     otpSent: "📲 We've sent a 6-digit code to your phone via SMS. Please type that code here to verify:",
     otpSentEmail: "✉️ We've sent a 6-digit code to your email. Please type that code here to verify:",
     listingSubmitted: "🎉 *Your listing has been submitted!*\n\nOur team will review it and make it live within 24 hours.\n\n🔗 You'll receive a link to your listing once approved.\n\nReference: #{ref}\n\n✅ Next step: set up your profile to track listing views, saves, and enquiries.\n\nThank you for using makaug! 🏠🇺🇬",
-    invalidInput: "❓ Sorry, I didn't understand that. Please reply with one of the options above.",
+    invalidInput: "I want to keep this quick. Please reply with one of the options above, or type MENU to start again.",
     verifyOTP: 'Please type the 6-digit code we sent via SMS:',
     otpSuccess: '✅ Phone verified!',
     otpFailed: '❌ Incorrect code. Please try again or type RESEND for a new code.',
@@ -1263,7 +1263,7 @@ function stepReminderMessage(lang, step) {
   const code = resolveLangCode(lang);
   const prompt = stepPromptFor(code, step);
   const lead = {
-    en: 'I am here with you. We were at this step:',
+    en: 'I am here with you. Next step:',
     lg: 'Ndi wano naawe. Tubadde ku mutendera guno:',
     sw: 'Niko hapa na wewe. Tulikuwa kwenye hatua hii:',
     ac: 'An atye kany kwedi. Onongo watye i kabedo man:',
@@ -1272,6 +1272,21 @@ function stepReminderMessage(lang, step) {
     sm: 'Ndi wano naawe. Tubadde ku mutendera guno:'
   };
   return `${timeGreeting(code)} 👋 ${lead[code] || lead.en}\n\n${prompt}\n\n${t(code, 'menuHint')}`;
+}
+
+function photoStepReminderMessage(lang, step) {
+  const code = resolveLangCode(lang);
+  const prompt = stepPromptFor(code, step);
+  const messages = {
+    en: `Next: ${prompt}\n\n${t(code, 'menuHint')}`,
+    lg: `${stepReminderMessage(code, step)}`,
+    sw: `${stepReminderMessage(code, step)}`,
+    ac: `${stepReminderMessage(code, step)}`,
+    ny: `${stepReminderMessage(code, step)}`,
+    rn: `${stepReminderMessage(code, step)}`,
+    sm: `${stepReminderMessage(code, step)}`
+  };
+  return messages[code] || messages.en;
 }
 
 function friendlyUnknownReply(lang) {
@@ -1641,8 +1656,25 @@ function toSellerAreaTitle(value) {
     .trim();
 }
 
+function stripMakaugBrandLocationNoise(value) {
+  return normalizeInput(value)
+    .replace(/\b(?:in|at|around|near|from|on)\s+(?:https?:\/\/)?(?:www\.)?makaug(?:\.com)?\b/gi, ' ')
+    .replace(/\b(?:in|at|around|near|from|on)\s+https?:\/\/(?:www\.)?makaug\.com\b/gi, ' ')
+    .replace(/https?:\/\/\S+/gi, ' ')
+    .replace(/\b(?:www\.)?makaug(?:\.com)?\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function isBadSellerAreaHint(candidate) {
+  const clean = normalizeInput(candidate).toLowerCase();
+  if (!clean || clean.length < 2) return true;
+  if (/^(sale|rent|land|plot|property|house|home|uganda|website|whatsapp)$/i.test(clean)) return true;
+  return /\b(makaug|guide me|listing process|whatsapp listing|property platform|free property)\b/i.test(clean);
+}
+
 function parseSellerListingAreaHint(input) {
-  const clean = normalizeInput(input);
+  const clean = stripMakaugBrandLocationNoise(input);
   if (!clean) return null;
   const match = clean.match(/\b(?:in|at|around|near|from|on)\s+([a-z][a-z\s'-]{2,80})/i);
   if (!match?.[1]) return null;
@@ -1651,8 +1683,7 @@ function parseSellerListingAreaHint(input) {
     .replace(/[^a-z\s'-]/gi, ' ')
     .replace(/\s+/g, ' ')
     .trim();
-  if (!candidate || candidate.length < 2) return null;
-  if (/^(sale|rent|land|plot|property|house|home|uganda)$/i.test(candidate)) return null;
+  if (isBadSellerAreaHint(candidate)) return null;
   return toSellerAreaTitle(candidate);
 }
 
@@ -1684,6 +1715,94 @@ function extractSellerListingDraftHints(input, entities = {}) {
 
   if (Object.keys(hints).length) hints.whatsapp_listing_recovery = true;
   return hints;
+}
+
+function isNaturalListingDetailReply(input) {
+  const clean = normalizeInput(input);
+  const lower = clean.toLowerCase();
+  if (!clean || clean.length < 10 || isResumeControlReply(clean)) return false;
+  if (isAffirmativeReply(clean) || isNegativeReply(clean)) return false;
+  if (normalizeFieldAgentCode(clean)) return false;
+  if (/^\d+(?:\s*(?:,|and|&|-)\s*\d+)*\s*(?:bedrooms?|beds?)?$/i.test(clean)) return false;
+  if (/^\+?[0-9\s-]{7,}$/.test(clean)) return false;
+  return /\b(i\s+have|we\s+have|available|off[-\s]?plan|condos?|apartments?|flats?|houses?|homes?|bedrooms?|beds?|land|plots?|commercial|shops?|offices?|road|estate|for sale|for rent|rentals?)\b/i.test(lower);
+}
+
+function naturalListingTitleFromText(input) {
+  const clean = normalizeInput(input)
+    .replace(/^(?:i|we)\s+(?:have|have got|am listing|are listing|want to list|would like to list)\s+/i, '')
+    .replace(/^there\s+(?:is|are)\s+/i, '')
+    .replace(/\s+/g, ' ')
+    .replace(/[.?!]+$/g, '')
+    .trim();
+  const title = clean || normalizeInput(input);
+  return toSellerAreaTitle(title.slice(0, 90));
+}
+
+function buildNaturalListingDetailDraft(input, draft = {}) {
+  const clean = normalizeInput(input);
+  if (!isNaturalListingDetailReply(clean)) return null;
+
+  const hints = extractSellerListingDraftHints(clean, {});
+  const patch = {
+    ...hints,
+    whatsapp_natural_detail_captured: true,
+    whatsapp_natural_detail_captured_at: new Date().toISOString()
+  };
+
+  if (!normalizeInput(draft.title)) {
+    patch.title = naturalListingTitleFromText(clean);
+  }
+  if (!normalizeInput(draft.description) && clean.length >= 10) {
+    patch.description = clean.slice(0, 1000);
+  }
+  if (hints.area && !normalizeInput(draft.area)) {
+    patch.area = hints.area;
+  }
+
+  return patch;
+}
+
+function listingDetailSavedReply(lang, nextPrompt) {
+  const code = resolveLangCode(lang);
+  const messages = {
+    en: `Got it - I saved those property details and marked Field Agent as No.\n\n${nextPrompt}`,
+    lg: `Kale - nterese details za property era ntegedde nti tewali Field Agent.\n\n${nextPrompt}`,
+    sw: `Sawa - nimehifadhi maelezo hayo ya mali na kuweka Field Agent kuwa Hapana.\n\n${nextPrompt}`
+  };
+  return messages[code] || messages.en;
+}
+
+function parseBedroomDraft(input) {
+  const clean = normalizeInput(input);
+  const numbers = Array.from(clean.matchAll(/\d+/g))
+    .map((match) => Number(match[0]))
+    .filter((value) => Number.isFinite(value) && value >= 0 && value <= 50);
+  const positives = numbers.filter((value) => value > 0);
+  const bedrooms = positives.length ? Math.min(...positives) : 0;
+  const uniquePositives = [...new Set(positives)];
+  const hasMultipleOptions = uniquePositives.length > 1
+    || /\b(?:range|between|to|and|or|above|plus)\b/i.test(clean)
+    || /[,/-]/.test(clean);
+
+  return {
+    bedrooms,
+    ...(hasMultipleOptions ? {
+      bedroom_options_text: clean.slice(0, 120),
+      bedroom_options_min: positives.length ? Math.min(...positives) : null,
+      bedroom_options_max: positives.length ? Math.max(...positives) : null
+    } : {})
+  };
+}
+
+function savedDescriptionPrompt(lang) {
+  const code = resolveLangCode(lang);
+  const messages = {
+    en: `I saved your property description already.\n\n${t(code, 'askPhotos')}\n${photoNextPrompt(code, 0)}`,
+    lg: `${t(code, 'askPhotos')}\n${photoNextPrompt(code, 0)}`,
+    sw: `${t(code, 'askPhotos')}\n${photoNextPrompt(code, 0)}`
+  };
+  return messages[code] || messages.en;
 }
 
 function listingStartReply(lang, listingType, hints = {}) {
@@ -5787,7 +5906,7 @@ function isActionableStepReply(step, value = '') {
   if (currentStep === 'listing_type') return Boolean(mapListingTypeInput(clean));
   if (currentStep === 'ownership') return Boolean(mapListingTypeInput(clean)) || ['1', '2', 'owner', 'agent'].includes(clean);
   if (currentStep === 'ask_agent_number') return clean.length >= 2;
-  if (currentStep === 'ask_field_agent') return isAffirmativeReply(clean) || isNegativeReply(clean);
+  if (currentStep === 'ask_field_agent') return isAffirmativeReply(clean) || isNegativeReply(clean) || isNaturalListingDetailReply(clean);
   if (currentStep === 'ask_contact_method') return ['1', '2', 'phone', 'whatsapp', 'sms', 'call', 'email', 'mail', 'e-mail'].includes(clean);
   if (currentStep === 'search_type') return Boolean(mapSearchTypeInput(clean)) || isAnyAreaReply(clean);
   if (currentStep === 'search_area') return isAnyAreaReply(clean) || clean.length >= 2;
@@ -6101,7 +6220,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       });
     }
     const count = mediaPatch.photos.length;
-    const reply = `${tt(lang, 'photoReceived', { count })}\n\n${stepReminderMessage(lang, step)}`;
+    const reply = `${tt(lang, 'photoReceived', { count })}\n\n${photoStepReminderMessage(lang, step)}`;
     captureWhatsappLearningAsync({
       eventName: 'whatsapp_listing_media_attached',
       phone,
@@ -7134,6 +7253,25 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       if (shouldAskLandTitleAvailability(draft)) return respond(t(lang, 'askLandTitleAvailable'), 'ask_land_title_available');
       return respond(t(lang, 'askTitle'), 'title');
     }
+    const naturalDetailDraft = buildNaturalListingDetailDraft(cleanBody, draft);
+    if (naturalDetailDraft) {
+      const mergedDraft = {
+        ...draft,
+        ...naturalDetailDraft,
+        assisted_by_field_agent: false
+      };
+      await patchDraft(phone, mergedDraft);
+      if (shouldAskLandTitleAvailability(mergedDraft)) {
+        return respond(listingDetailSavedReply(lang, t(lang, 'askLandTitleAvailable')), 'ask_land_title_available');
+      }
+      if (!normalizeInput(mergedDraft.district)) {
+        return respond(listingDetailSavedReply(lang, t(lang, 'askDistrict')), 'district');
+      }
+      if (!normalizeInput(mergedDraft.area)) {
+        return respond(listingDetailSavedReply(lang, t(lang, 'askArea')), 'area');
+      }
+      return respond(listingDetailSavedReply(lang, t(lang, 'askPrice')), 'price');
+    }
     return respond(t(lang, 'invalidInput') + '\n\n' + t(lang, 'askFieldAgent'), 'ask_field_agent');
   }
 
@@ -7219,8 +7357,15 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
   // BEDROOMS
   if (step === 'bedrooms') {
-    const bedrooms = parseInt(cleanBody, 10) || 0;
-    await patchDraft(phone, { bedrooms });
+    const bedroomDraft = parseBedroomDraft(cleanBody);
+    await patchDraft(phone, bedroomDraft);
+    const existingDescription = normalizeInput(draft.description || draft.source_description_hint);
+    if (existingDescription.length >= 10) {
+      if (!normalizeInput(draft.description)) {
+        await patchDraft(phone, { description: existingDescription.slice(0, 1000) });
+      }
+      return respond(savedDescriptionPrompt(lang), 'photos');
+    }
     return respond(t(lang, 'askDescription'), 'description');
   }
 
@@ -7378,7 +7523,10 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
               whatsapp_agent_number_confirmed: true,
               verification_channel: 'agent_number',
               assisted_by_field_agent: d.assisted_by_field_agent === true,
-              field_agent_reference: normalizeFieldAgentCode(d.field_agent_reference) || null
+              field_agent_reference: normalizeFieldAgentCode(d.field_agent_reference) || null,
+              bedroom_options_text: d.bedroom_options_text || null,
+              bedroom_options_min: d.bedroom_options_min || null,
+              bedroom_options_max: d.bedroom_options_max || null
             },
             expiresAt
           ]
@@ -7513,7 +7661,10 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
             whatsapp_listing_flow: true,
             verification_channel: d.otp_channel || 'phone',
             assisted_by_field_agent: d.assisted_by_field_agent === true,
-            field_agent_reference: normalizeFieldAgentCode(d.field_agent_reference) || null
+            field_agent_reference: normalizeFieldAgentCode(d.field_agent_reference) || null,
+            bedroom_options_text: d.bedroom_options_text || null,
+            bedroom_options_min: d.bedroom_options_min || null,
+            bedroom_options_max: d.bedroom_options_max || null
           },
           expiresAt
         ]
