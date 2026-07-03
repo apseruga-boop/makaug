@@ -34168,6 +34168,20 @@ function syncSectionSearchShell(page) {
   if (!shell) return false;
   const shellInput = shell.querySelector(".section-search-text-input");
   const legacyInput = document.getElementById(config.queryId);
+  const routePayload = routeSearchHandoffPayload(config.key);
+  const routeKey = `${window.location.pathname || "/"}${window.location.search || ""}`;
+  if (routePayload && shell.dataset.routeQueryApplied !== routeKey) {
+    if (legacyInput && !legacyInput.value) legacyInput.value = routePayload.query || routePayload.area || "";
+    Object.entries(routePayload.filters || {}).forEach(([key, value]) => {
+      if (!value) return;
+      const field = config.filters.find((candidate) => candidate.key === key);
+      const source = field ? document.getElementById(field.id) : null;
+      if (source && !source.value && Array.from(source.options || []).some((option) => option.value === value)) {
+        source.value = value;
+      }
+    });
+    shell.dataset.routeQueryApplied = routeKey;
+  }
   if (shellInput && legacyInput && shellInput.value !== legacyInput.value) shellInput.value = legacyInput.value || "";
   config.filters.forEach((field) => {
     const source = document.getElementById(field.id);

@@ -154,6 +154,7 @@ const staffDashboardAuthRaceVersion = 'staff-dashboard-auth-race-20260701-staff-
 const brokerDashboardOwnershipShareVersion = 'broker-dashboard-ownership-share-20260703d';
 const whatsappMatchboardRouteLinksVersion = 'whatsapp-matchboard-route-links-20260703';
 const whatsappMatchboardLegacyHashVersion = 'whatsapp-matchboard-legacy-hash-route-20260703';
+const whatsappMatchboardQueryHandoffVersion = 'whatsapp-matchboard-query-handoff-20260703';
 const publicAppVersionSuffixes = [
   captureHelperUsabilityVersion,
   studentNearestUniversityVersion,
@@ -177,7 +178,8 @@ const publicAppVersionSuffixes = [
   staffDashboardAuthRaceVersion,
   brokerDashboardOwnershipShareVersion,
   whatsappMatchboardRouteLinksVersion,
-  whatsappMatchboardLegacyHashVersion
+  whatsappMatchboardLegacyHashVersion,
+  whatsappMatchboardQueryHandoffVersion
 ];
 let cachedIndexHtml = null;
 const publicHtmlCache = new Map();

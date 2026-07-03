@@ -49,6 +49,9 @@ test('direct category route query links prefill and run section search', () => {
   assert.match(appSource, /consumeHeroSearchHandoff\(page\) \|\| routeSearchHandoffPayload\(page\)/);
   assert.match(appSource, /setValue\("student-q-f", payload\.query\)/);
   assert.match(appSource, /setValue\("sale-location-f", payload\.query\)/);
+  assert.match(appSource, /const routePayload = routeSearchHandoffPayload\(config\.key\)/);
+  assert.match(appSource, /shell\.dataset\.routeQueryApplied !== routeKey/);
+  assert.match(appSource, /legacyInput\.value = routePayload\.query \|\| routePayload\.area \|\| ""/);
   assert.match(appSource, /filterStudents\(\)/);
   assert.match(appSource, /filterListings\("sale"\)/);
 });
