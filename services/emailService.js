@@ -188,6 +188,11 @@ let msGraphTokenCache = {
   expiresAt: 0
 };
 
+function toPositiveInt(value, fallback) {
+  const parsed = Number.parseInt(String(value || ''), 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
 function parseBoolean(value, fallback = false) {
   if (typeof value === 'boolean') return value;
   const text = String(value || '').trim().toLowerCase();
@@ -195,6 +200,32 @@ function parseBoolean(value, fallback = false) {
   if (['1', 'true', 'yes', 'y', 'on'].includes(text)) return true;
   if (['0', 'false', 'no', 'n', 'off'].includes(text)) return false;
   return fallback;
+}
+
+function emailProviderTimeoutMs(provider) {
+  const globalTimeout = process.env.EMAIL_SEND_TIMEOUT_MS;
+  if (provider === 'resend') return toPositiveInt(process.env.RESEND_EMAIL_TIMEOUT_MS || globalTimeout, 8000);
+  if (provider === 'webhook') return toPositiveInt(process.env.MAIL_WEBHOOK_TIMEOUT_MS || globalTimeout, 8000);
+  if (provider === 'ms_graph') return toPositiveInt(process.env.MS_GRAPH_EMAIL_TIMEOUT_MS || globalTimeout, 10000);
+  return toPositiveInt(globalTimeout, 10000);
+}
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = 10000, label = 'fetch') {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      throw new Error(`${label}_timeout_${timeoutMs}ms`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function emailMockModeEnabled() {
@@ -369,11 +400,11 @@ async function getMicrosoftGraphToken(config) {
     grant_type: 'client_credentials'
   });
 
-  const resp = await fetch(tokenUrl, {
+  const resp = await fetchWithTimeout(tokenUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body
-  });
+  }, emailProviderTimeoutMs('ms_graph'), 'ms_graph_token');
 
   if (!resp.ok) {
     const errText = await resp.text();
@@ -424,14 +455,14 @@ async function sendViaMicrosoftGraph({ to, subject, text, html, replyTo }) {
       payload.message.replyTo = [{ emailAddress: { address: replyTo } }];
     }
 
-    const resp = await fetch(endpoint, {
+    const resp = await fetchWithTimeout(endpoint, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify(payload)
-    });
+    }, emailProviderTimeoutMs('ms_graph'), 'ms_graph_send');
 
     if (!resp.ok) {
       const errorText = await resp.text();
@@ -472,6 +503,10 @@ function getSmtpTransporter() {
     host: config.host,
     port: config.port,
     secure: config.secure,
+    connectionTimeout: toPositiveInt(process.env.SMTP_CONNECTION_TIMEOUT_MS || process.env.EMAIL_SEND_TIMEOUT_MS, 6000),
+    greetingTimeout: toPositiveInt(process.env.SMTP_GREETING_TIMEOUT_MS || process.env.EMAIL_SEND_TIMEOUT_MS, 6000),
+    socketTimeout: toPositiveInt(process.env.SMTP_SOCKET_TIMEOUT_MS || process.env.EMAIL_SEND_TIMEOUT_MS, 10000),
+    dnsTimeout: toPositiveInt(process.env.SMTP_DNS_TIMEOUT_MS || process.env.EMAIL_SEND_TIMEOUT_MS, 5000),
     tls: {
       rejectUnauthorized: config.rejectUnauthorized
     }
@@ -536,14 +571,14 @@ async function sendViaResend({ to, subject, text, html, replyTo }) {
 
   if (replyTo) payload.reply_to = replyTo;
 
-  const resp = await fetch('https://api.resend.com/emails', {
+  const resp = await fetchWithTimeout('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`
     },
     body: JSON.stringify(payload)
-  });
+  }, emailProviderTimeoutMs('resend'), 'resend_send');
 
   if (!resp.ok) {
     const body = await resp.text();
@@ -571,11 +606,11 @@ async function sendViaWebhook({ to, subject, text, html, replyTo }) {
     from: getDefaultEmailFrom()
   };
 
-  const resp = await fetch(webhook, {
+  const resp = await fetchWithTimeout(webhook, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
-  });
+  }, emailProviderTimeoutMs('webhook'), 'mail_webhook_send');
 
   if (!resp.ok) {
     const body = await resp.text();
@@ -591,61 +626,52 @@ async function sendSupportEmail({ to, subject, text, html, replyTo }) {
   const safeText = String(text || '').trim();
   const safeHtml = html || buildBrandedEmailHtml({ subject: safeSubject, text: safeText });
   let lastProviderError = '';
+  const attempts = [];
 
   if (!safeText) {
     return { sent: false, reason: 'empty_body' };
   }
 
-  const msGraphResult = await sendViaMicrosoftGraph({
+  const sendArgs = {
     to: recipient,
     subject: safeSubject,
     text: safeText,
     html: safeHtml,
     replyTo
-  });
-  if (msGraphResult.sent) return msGraphResult;
-  if (msGraphResult.error) {
-    lastProviderError = String(msGraphResult.error || '');
-    logger.warn('Microsoft Graph email failed', msGraphResult);
-  }
+  };
 
-  const smtpResult = await sendViaSmtp({
-    to: recipient,
-    subject: safeSubject,
-    text: safeText,
-    html: safeHtml,
-    replyTo
-  });
-  if (smtpResult.sent) return smtpResult;
-  if (smtpResult.error) {
-    lastProviderError = String(smtpResult.error || lastProviderError || '');
-    logger.warn('SMTP email failed', smtpResult);
-  }
+  const senders = {
+    ms_graph: sendViaMicrosoftGraph,
+    smtp: sendViaSmtp,
+    resend: sendViaResend,
+    webhook: sendViaWebhook
+  };
 
-  const resendResult = await sendViaResend({
-    to: recipient,
-    subject: safeSubject,
-    text: safeText,
-    html: safeHtml,
-    replyTo
-  });
-  if (resendResult.sent) return resendResult;
-  if (resendResult.error) {
-    lastProviderError = String(resendResult.error || lastProviderError || '');
-    logger.warn('Resend email failed', resendResult);
-  }
-
-  const webhookResult = await sendViaWebhook({
-    to: recipient,
-    subject: safeSubject,
-    text: safeText,
-    html: safeHtml,
-    replyTo
-  });
-  if (webhookResult.sent) return webhookResult;
-  if (webhookResult.error) {
-    lastProviderError = String(webhookResult.error || lastProviderError || '');
-    logger.warn('Mail webhook failed', webhookResult);
+  for (const provider of emailProviderOrder()) {
+    const sender = senders[provider];
+    if (!sender) continue;
+    const startedAt = Date.now();
+    const result = await sender(sendArgs);
+    const durationMs = Date.now() - startedAt;
+    attempts.push({
+      provider,
+      durationMs,
+      sent: result.sent === true,
+      status: result.status || null,
+      reason: result.reason || null,
+      error: result.error ? String(result.error).slice(0, 220) : null
+    });
+    if (result.sent) {
+      return {
+        ...result,
+        durationMs,
+        attemptedProviders: attempts
+      };
+    }
+    if (result.error) {
+      lastProviderError = String(result.error || lastProviderError || '');
+      logger.warn(`${provider} email failed`, { ...result, durationMs });
+    }
   }
 
   if (emailMockModeEnabled()) {
@@ -654,7 +680,8 @@ async function sendSupportEmail({ to, subject, text, html, replyTo }) {
       sent: false,
       mocked: true,
       reason: 'email_mock_mode',
-      error: lastProviderError || null
+      error: lastProviderError || null,
+      attemptedProviders: attempts
     };
   }
 
@@ -662,7 +689,8 @@ async function sendSupportEmail({ to, subject, text, html, replyTo }) {
     sent: false,
     reason: 'no_working_email_provider',
     error: lastProviderError || 'no_working_email_provider',
-    setupAction: 'Configure a real email provider or fix the active provider credentials/domain verification.'
+    setupAction: 'Configure a real email provider or fix the active provider credentials/domain verification.',
+    attemptedProviders: attempts
   };
 }
 
@@ -951,11 +979,47 @@ function emailProviderConfigured() {
   );
 }
 
+function parseEmailProviderOrder() {
+  const configured = cleanText(process.env.EMAIL_PROVIDER_ORDER || process.env.EMAIL_DELIVERY_ORDER);
+  if (!configured) return null;
+  const allowed = new Set(['resend', 'ms_graph', 'smtp', 'webhook']);
+  const aliases = {
+    graph: 'ms_graph',
+    microsoft_graph: 'ms_graph',
+    mail_webhook: 'webhook'
+  };
+  const order = [];
+  configured
+    .split(',')
+    .map((item) => cleanText(item).toLowerCase())
+    .map((item) => aliases[item] || item)
+    .forEach((provider) => {
+      if (allowed.has(provider) && !order.includes(provider)) order.push(provider);
+    });
+  return order.length ? order : null;
+}
+
+function emailProviderOrder() {
+  const explicit = parseEmailProviderOrder();
+  if (explicit) return explicit;
+
+  const order = [];
+  if (String(process.env.RESEND_API_KEY || '').trim()) order.push('resend');
+  if (getMicrosoftGraphConfig()) order.push('ms_graph');
+  if (getSmtpConfig()) order.push('smtp');
+  if (String(process.env.MAIL_WEBHOOK_URL || '').trim()) order.push('webhook');
+  ['resend', 'ms_graph', 'smtp', 'webhook'].forEach((provider) => {
+    if (!order.includes(provider)) order.push(provider);
+  });
+  return order;
+}
+
 function emailProviderDiagnostic() {
   const smtp = getSmtpConfig();
   return {
     configured: emailProviderConfigured(),
     mockMode: emailMockModeEnabled(),
+    providerOrder: emailProviderOrder(),
     providers: {
       msGraph: Boolean(getMicrosoftGraphConfig()),
       smtp: Boolean(smtp && (!smtp.requireAuth || (smtp.user && smtp.pass))),

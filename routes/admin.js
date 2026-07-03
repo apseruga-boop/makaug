@@ -8772,6 +8772,8 @@ router.post('/setup-status/provider-test', async (req, res, next) => {
       base.deliveryProvider = delivery.provider || null;
       base.providerStatus = delivery.status || null;
       base.setupAction = delivery.setupAction || null;
+      base.durationMs = delivery.durationMs || null;
+      base.attemptedProviders = Array.isArray(delivery.attemptedProviders) ? delivery.attemptedProviders : [];
       base.failureReason = deliveryStatus === 'sent' || deliveryStatus === 'queued'
         ? null
         : (delivery.error || delivery.reason || delivery.setupAction || 'email_provider_test_failed');
