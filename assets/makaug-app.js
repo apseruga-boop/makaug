@@ -31534,6 +31534,33 @@ async function copyTextToClipboard(text) {
   }
 }
 
+function showCopyFallbackLink(text, label = "Link") {
+  const value = String(text || "").trim();
+  if (!value) return;
+  let panel = document.getElementById("copy-fallback-panel");
+  if (!panel) {
+    panel = document.createElement("div");
+    panel.id = "copy-fallback-panel";
+    panel.className = "fixed bottom-20 left-4 right-4 md:left-auto md:right-6 md:w-[420px] z-[10000] rounded-2xl border border-green-200 bg-white p-4 shadow-2xl";
+    document.body.appendChild(panel);
+  }
+  panel.innerHTML = `
+    <div class="flex items-start justify-between gap-3">
+      <div>
+        <div class="text-sm font-black text-gray-900">${adminEscape(label)}</div>
+        <div class="mt-1 text-xs text-gray-500">Copy this link and paste it into WhatsApp, Facebook, LinkedIn, X, or SMS.</div>
+      </div>
+      <button type="button" class="text-gray-400 hover:text-gray-700" onclick="this.closest('#copy-fallback-panel')?.remove()" aria-label="Close copy panel">&times;</button>
+    </div>
+    <input id="copy-fallback-input" readonly value="${adminAttr(value)}" class="mt-3 w-full rounded-xl border border-green-100 bg-green-50 px-3 py-2 text-sm text-gray-900" onclick="this.select()">
+  `;
+  const input = document.getElementById("copy-fallback-input");
+  if (input) {
+    input.focus();
+    input.select();
+  }
+}
+
 async function sharePropertyListing(id, channel = "native") {
   const property = findPropertyForUi(id);
   if (!property) return;
@@ -32130,11 +32157,21 @@ async function shareBrokerBusinessCard(id, channel = "native") {
     }
     if (channel === "link") {
       const copiedUrl = await copyTextToClipboard(shareUrl);
-      toast(copiedUrl ? translateListingLabel("Broker profile link copied.") : translateListingLabel("Unable to copy link right now."));
+      if (copiedUrl) {
+        toast(translateListingLabel("Broker profile link copied."));
+      } else {
+        showCopyFallbackLink(shareUrl, translateListingLabel("Broker profile link"));
+        toast(translateListingLabel("Copy the broker profile link from the box."));
+      }
       return;
     }
     const copied = await copyTextToClipboard(shareText);
-    toast(copied ? translateListingLabel("Broker card copied. Share it on WhatsApp.") : translateListingLabel("Unable to copy link right now."));
+    if (copied) {
+      toast(translateListingLabel("Broker card copied. Share it on WhatsApp."));
+    } else {
+      showCopyFallbackLink(shareText, translateListingLabel("Broker card text"));
+      toast(translateListingLabel("Copy the broker card from the box."));
+    }
   } catch (error) {
     toast(translateListingLabel("Unable to share right now."));
   }
