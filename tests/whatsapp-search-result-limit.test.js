@@ -13,7 +13,14 @@ assert(whatsappRouteSource.includes('አዲሶቹን {shown} አሳይቻለሁ'
 assert(whatsappRouteSource.includes('const visibleRows = Array.isArray(rows) ? rows.slice(0, WHATSAPP_PROPERTY_RESULT_LIMIT) : []'), 'Formatter should slice visible WhatsApp search rows to the shared cap');
 assert(whatsappRouteSource.includes('totalMatches > visibleRows.length'), 'Formatter should show a website link when more matches exist');
 assert(whatsappRouteSource.includes('whatsappSearchResultsUrl(searchType, location)'), 'More-results message should link to filtered website results');
-assert(whatsappRouteSource.includes('`${HOME_URL}/#page-sale${query ? `?${query}` : \'\'}'), 'More-results URLs should open the public listings page');
+assert(whatsappRouteSource.includes('function whatsappSearchResultsPath'), 'More-results URLs should choose a real public category route');
+assert(whatsappRouteSource.includes("student: '/student-accommodation'"), 'Student more-results URLs should open the student accommodation page');
+assert(whatsappRouteSource.includes("rent: '/to-rent'"), 'Rent more-results URLs should open the rent page');
+assert(whatsappRouteSource.includes("commercial: '/commercial'"), 'Commercial more-results URLs should open the commercial page');
+assert(whatsappRouteSource.includes("land: '/land'"), 'Land more-results URLs should open the land page');
+assert(whatsappRouteSource.includes('return `${HOME_URL}${whatsappSearchResultsPath(type)}${query ? `?${query}` : \'\'}'), 'More-results URLs should put filters on the route query string, not inside a hash fragment');
+assert(!whatsappRouteSource.includes('`${HOME_URL}/#page-sale${query ? `?${query}` : \'\'}'), 'More-results URLs must not use the broken hash-query homepage link');
+assert(whatsappRouteSource.includes('const url = whatsappSearchResultsUrl(searchType, area);'), 'No-match challenge links should use the same public route URL helper');
 assert(whatsappRouteSource.includes('am: {') && whatsappRouteSource.includes("filter: 'ማጣሪያ'"), 'Formatter should have Amharic result-card copy instead of English-only copy');
 assert(whatsappRouteSource.includes('price IS NULL OR ${safeAlias}.price >= $'), 'Public WhatsApp result filters should suppress implausibly tiny scraped prices');
 

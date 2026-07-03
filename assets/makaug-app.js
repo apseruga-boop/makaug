@@ -30036,8 +30036,34 @@ function consumeHeroSearchHandoff(page) {
   }
 }
 
+function routeSearchHandoffPayload(page) {
+  const targetPage = normalizePageKey(page);
+  if (!sectionSearchConfigFor(targetPage)) return null;
+  const qs = new URLSearchParams(window.location.search || "");
+  const query = normalizeInput(qs.get("q") || qs.get("query") || qs.get("search") || "");
+  const area = normalizeInput(qs.get("area") || qs.get("district") || qs.get("location") || qs.get("campus") || qs.get("university") || "");
+  const filters = {
+    propertyType: normalizeInput(qs.get("property_type") || qs.get("propertyType") || qs.get("room_type") || qs.get("commercial_type") || qs.get("land_title_type") || ""),
+    minPrice: normalizeInput(qs.get("min_price") || qs.get("minPrice") || ""),
+    maxPrice: normalizeInput(qs.get("max_price") || qs.get("maxPrice") || qs.get("budget") || ""),
+    bedrooms: normalizeInput(qs.get("bedrooms") || qs.get("beds") || ""),
+    amenities: normalizeInput(qs.get("amenities") || ""),
+    sort: normalizeInput(qs.get("sort") || "")
+  };
+  const hasFilters = Object.values(filters).some(Boolean);
+  if (!query && !area && !hasFilters) return null;
+  return {
+    page: targetPage,
+    query: query || area,
+    area,
+    filters,
+    radiusMiles: normalizeInput(qs.get("radiusMiles") || qs.get("radius_miles") || qs.get("radius") || "") || DEFAULT_NEAR_ME_RADIUS_MI,
+    source: "route_query"
+  };
+}
+
 function applyHeroSearchHandoff(page) {
-  const payload = consumeHeroSearchHandoff(page);
+  const payload = consumeHeroSearchHandoff(page) || routeSearchHandoffPayload(page);
   if (!payload) return false;
   const radiusValue = String(payload.radiusMiles || payload.radius || DEFAULT_NEAR_ME_RADIUS_MI);
   if (payload.nearState) {

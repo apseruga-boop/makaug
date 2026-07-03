@@ -1320,15 +1320,26 @@ function noMatchChallengeReply(lang, sessionData = {}) {
     : {};
   const area = normalizeInput(last.area || '');
   const searchType = normalizeInput(last.search_type || 'any');
-  const areaParam = area ? `&area=${encodeURIComponent(area)}` : '';
-  const typeParam = searchType && searchType !== 'any' ? `?listing_type=${encodeURIComponent(searchType)}${areaParam}` : (area ? `?area=${encodeURIComponent(area)}` : '');
-  const url = `${HOME_URL}/#page-sale${typeParam}`;
+  const url = whatsappSearchResultsUrl(searchType, area);
   const messages = {
     en: `You're right to challenge that. I may have filtered too narrowly, so I am sending you back to the live website results and saving this for admin review.\n\nOpen live makaug listings: ${url}\n\n${process.env.SUPPORT_EMAIL || 'info@makaug.com'}`,
     lg: `Oli mutuufu okukibuuzako. Nyinza okuba nga nsumbye filter nnyo, kale nkusindika ku live listings era nterese kino admin akirabe.\n\nGgulawo listings: ${url}\n\n${process.env.SUPPORT_EMAIL || 'info@makaug.com'}`,
     sw: `Uko sawa kuuliza hilo. Huenda nilichuja sana, kwa hiyo nakutuma kwenye matokeo ya live website na nimehifadhi hili kwa admin.\n\nFungua listings: ${url}\n\n${process.env.SUPPORT_EMAIL || 'info@makaug.com'}`
   };
   return `${messages[code] || messages.en}\n\n${t(code, 'menuHint')}`;
+}
+
+function whatsappSearchResultsPath(searchType = 'any') {
+  const routes = {
+    sale: '/for-sale',
+    rent: '/to-rent',
+    student: '/student-accommodation',
+    commercial: '/commercial',
+    land: '/land',
+    any: '/for-sale'
+  };
+  const type = normalizeListingType(searchType || 'any');
+  return routes[type] || routes.any;
 }
 
 function whatsappSearchResultsUrl(searchType = 'any', area = '') {
@@ -1338,7 +1349,7 @@ function whatsappSearchResultsUrl(searchType = 'any', area = '') {
   if (type && type !== 'any') params.set('listing_type', type);
   if (cleanArea && cleanArea.toLowerCase() !== 'any area') params.set('area', cleanArea);
   const query = params.toString();
-  return `${HOME_URL}/#page-sale${query ? `?${query}` : ''}`;
+  return `${HOME_URL}${whatsappSearchResultsPath(type)}${query ? `?${query}` : ''}`;
 }
 
 async function conversationalAssistantFallback({ phone, body, lang, step, intentResult, sessionData }) {

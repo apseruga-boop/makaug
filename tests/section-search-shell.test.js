@@ -41,6 +41,18 @@ test('section search route mount feeds analytics and backend probes', () => {
   assert.match(appSource, /\/api\/properties\/search\?\$\{params\.toString\(\)\}/);
 });
 
+test('direct category route query links prefill and run section search', () => {
+  assert.match(appSource, /function routeSearchHandoffPayload\(page\)/);
+  assert.match(appSource, /new URLSearchParams\(window\.location\.search \|\| ""\)/);
+  assert.match(appSource, /qs\.get\("area"\) \|\| qs\.get\("district"\) \|\| qs\.get\("location"\)/);
+  assert.match(appSource, /query: query \|\| area/);
+  assert.match(appSource, /consumeHeroSearchHandoff\(page\) \|\| routeSearchHandoffPayload\(page\)/);
+  assert.match(appSource, /setValue\("student-q-f", payload\.query\)/);
+  assert.match(appSource, /setValue\("sale-location-f", payload\.query\)/);
+  assert.match(appSource, /filterStudents\(\)/);
+  assert.match(appSource, /filterListings\("sale"\)/);
+});
+
 test('release probes assert section search shells on public routes', () => {
   assert.match(backendProbeSource, /frontend section search shell config exists/);
   assert.match(routeProbeSource, /missing section search shell/);
