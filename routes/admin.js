@@ -62,6 +62,7 @@ const {
   getDefaultEmailFrom,
   getSupportEmail,
   getSupportWhatsappUrl,
+  lookupResendDomainRecords,
   sendBrokerApprovalEmail,
   sendSupportEmail
 } = require('../services/emailService');
@@ -8689,6 +8690,16 @@ async function buildSetupStatus() {
 router.get('/setup-status', async (_req, res, next) => {
   try {
     return res.json({ ok: true, data: await buildSetupStatus() });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/setup-status/resend-domain-records', async (req, res, next) => {
+  try {
+    const domain = cleanText(req.query.domain);
+    const result = await lookupResendDomainRecords(domain);
+    return res.status(result.ok ? 200 : 502).json({ ok: result.ok, data: result });
   } catch (error) {
     return next(error);
   }

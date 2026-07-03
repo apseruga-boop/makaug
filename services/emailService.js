@@ -232,6 +232,107 @@ function extractEmailAddress(value) {
   return (match?.[1] || raw).trim().toLowerCase();
 }
 
+function getConfiguredResendDomain() {
+  const fromAddress = extractEmailAddress(getResendEmailFrom());
+  return fromAddress.includes('@') ? fromAddress.split('@').pop() : '';
+}
+
+async function fetchResendApi(path) {
+  const apiKey = String(process.env.RESEND_API_KEY || '').trim();
+  if (!apiKey) {
+    return { ok: false, status: 0, error: 'resend_api_key_missing' };
+  }
+
+  try {
+    const resp = await fetch(`https://api.resend.com${path}`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        Accept: 'application/json'
+      }
+    });
+    const text = await resp.text();
+    let data = null;
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch {}
+    return {
+      ok: resp.ok,
+      status: resp.status,
+      data,
+      error: resp.ok ? null : (data?.message || data?.error || text.slice(0, 300) || `resend_api_${resp.status}`)
+    };
+  } catch (error) {
+    return { ok: false, status: 0, error: error.message || 'resend_api_request_failed' };
+  }
+}
+
+function normalizeResendDomainRecord(record = {}, domain = '') {
+  const name = cleanText(record.name);
+  const type = cleanText(record.type).toUpperCase();
+  const fqdnName = name && domain && !name.endsWith(`.${domain}`) && !name.endsWith('.')
+    ? `${name}.${domain}`
+    : name;
+  return {
+    record: cleanText(record.record),
+    name,
+    fqdnName,
+    type,
+    value: String(record.value || '').trim(),
+    ttl: cleanText(record.ttl || 'Auto') || 'Auto',
+    priority: record.priority ?? null,
+    status: cleanText(record.status)
+  };
+}
+
+async function lookupResendDomainRecords(domainName = '') {
+  const domain = cleanText(domainName || getConfiguredResendDomain()).toLowerCase();
+  if (!domain) {
+    return { ok: false, configured: emailProviderConfigured(), error: 'resend_domain_missing' };
+  }
+  if (!String(process.env.RESEND_API_KEY || '').trim()) {
+    return { ok: false, configured: false, domain, error: 'resend_api_key_missing' };
+  }
+
+  const list = await fetchResendApi('/domains');
+  if (!list.ok) {
+    return { ok: false, configured: true, domain, status: list.status, error: list.error || 'resend_domain_list_failed' };
+  }
+  const domains = Array.isArray(list.data?.data) ? list.data.data : [];
+  const domainMeta = domains.find((candidate) => cleanText(candidate?.name).toLowerCase() === domain);
+  if (!domainMeta?.id) {
+    return {
+      ok: false,
+      configured: true,
+      domain,
+      error: 'resend_domain_not_found',
+      availableDomains: domains.map((candidate) => ({
+        name: cleanText(candidate?.name),
+        status: cleanText(candidate?.status),
+        region: cleanText(candidate?.region)
+      })).filter((candidate) => candidate.name)
+    };
+  }
+
+  const detail = await fetchResendApi(`/domains/${encodeURIComponent(domainMeta.id)}`);
+  if (!detail.ok) {
+    return { ok: false, configured: true, domain, id: domainMeta.id, status: detail.status, error: detail.error || 'resend_domain_lookup_failed' };
+  }
+  const domainData = detail.data || {};
+  return {
+    ok: true,
+    configured: true,
+    domain,
+    id: domainData.id || domainMeta.id,
+    status: cleanText(domainData.status || domainMeta.status),
+    region: cleanText(domainData.region || domainMeta.region),
+    capabilities: domainData.capabilities || domainMeta.capabilities || null,
+    records: (Array.isArray(domainData.records) ? domainData.records : [])
+      .map((record) => normalizeResendDomainRecord(record, domain))
+      .filter((record) => record.name && record.type && record.value)
+  };
+}
+
 function getMicrosoftGraphConfig() {
   const tenantId = String(process.env.MS_GRAPH_TENANT_ID || process.env.M365_TENANT_ID || '').trim();
   const clientId = String(process.env.MS_GRAPH_CLIENT_ID || process.env.AZURE_CLIENT_ID || '').trim();
@@ -991,6 +1092,7 @@ module.exports = {
   getSupportEmail,
   getSupportPhone,
   getSupportWhatsappUrl,
+  lookupResendDomainRecords,
   sendOtpEmail,
   sendSupportEmail,
   sendBrokerApprovalEmail,

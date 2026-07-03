@@ -1186,6 +1186,7 @@ function run() {
   assert(propertySeekerRoutes.includes("router.post('/mortgage-calculations'"), 'property finder backend should save mortgage calculations');
   assert(frontendSource.includes('Mortgage bank lead:'), 'CRM dashboard should expose bank-specific mortgage lead handoff metadata');
   assert(adminRoutes.includes("router.get('/setup-status'"), 'admin setup status API should exist');
+  assert(adminRoutes.includes("router.get('/setup-status/resend-domain-records'") && emailServiceSource.includes('lookupResendDomainRecords'), 'admin setup status should expose protected Resend DNS record diagnostics');
   assert(adminRoutes.includes("router.post('/setup-status/property-submission-test'"), 'admin setup status should run safe property submission proof');
   assert(adminRoutes.includes("router.post('/setup-status/provider-test'"), 'admin setup status should run provider proof');
   assert(adminRoutes.includes('sendPhoneOtp'), 'admin SMS provider proof should exercise real SMS delivery path');
