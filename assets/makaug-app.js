@@ -32776,6 +32776,26 @@ function pageForPublicRoute(path) {
   return PUBLIC_ROUTE_PAGE_MAP[normalizeRoutePath(path)] || "";
 }
 
+function normalizeLegacyHashPublicRoute() {
+  const hash = String(window.location.hash || "");
+  const match = hash.match(/^#page-([a-z0-9-]+)(?:\?(.+))?$/i);
+  if (!match) return "";
+  const page = normalizePageKey(match[1]);
+  const route = routeForPage(page);
+  if (!route || route === "/" || !pageForPublicRoute(route)) return "";
+  const merged = new URLSearchParams(window.location.search || "");
+  const hashParams = new URLSearchParams(match[2] || "");
+  hashParams.forEach((value, key) => {
+    if (!merged.has(key)) merged.set(key, value);
+  });
+  const query = merged.toString();
+  const nextPath = `${route}${query ? `?${query}` : ""}`;
+  try {
+    window.history.replaceState({ page, source: "legacy_hash_public_route" }, "", nextPath);
+  } catch (error) {}
+  return page;
+}
+
 const ADMIN_ROUTE_CONTROL_MAP = Object.freeze({
   "/admin": { page: "admin-dashboard", tab: "review", selector: "#king-control-map", label: "King Dashboard" },
   "/admin/dashboard": { page: "admin-dashboard", tab: "review", selector: "#king-control-map", label: "King Dashboard" },
@@ -33749,6 +33769,7 @@ async function openOwnerPreviewEdit(id) {
 }
 
 async function parseInitialDeepLink() {
+  normalizeLegacyHashPublicRoute();
   const path = (window.location.pathname || "/").replace(/\/+$/, "") || "/";
   const qs = new URLSearchParams(window.location.search || "");
 

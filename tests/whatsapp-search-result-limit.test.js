@@ -25,6 +25,8 @@ assert(!whatsappRouteSource.includes('`${HOME_URL}/#page-sale${query ? `?${query
 assert(whatsappRouteSource.includes('const url = whatsappSearchResultsUrl(searchType, area);'), 'No-match challenge links should use the same public route URL helper');
 assert(htmlSource.includes('whatsapp-matchboard-route-links-20260703'), 'Frontend cache version must be bumped for WhatsApp matchboard link routing');
 assert(serverSource.includes('whatsappMatchboardRouteLinksVersion'), 'Server-side public app suffix list must include the WhatsApp matchboard cache bust');
+assert(htmlSource.includes('whatsapp-matchboard-legacy-hash-route-20260703'), 'Frontend cache version must be bumped for legacy WhatsApp hash link routing');
+assert(serverSource.includes('whatsappMatchboardLegacyHashVersion'), 'Server-side public app suffix list must include the legacy WhatsApp hash cache bust');
 assert(whatsappRouteSource.includes('am: {') && whatsappRouteSource.includes("filter: 'ማጣሪያ'"), 'Formatter should have Amharic result-card copy instead of English-only copy');
 assert(whatsappRouteSource.includes('price IS NULL OR ${safeAlias}.price >= $'), 'Public WhatsApp result filters should suppress implausibly tiny scraped prices');
 

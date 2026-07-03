@@ -53,6 +53,13 @@ test('direct category route query links prefill and run section search', () => {
   assert.match(appSource, /filterListings\("sale"\)/);
 });
 
+test('legacy WhatsApp hash links are normalized to public category routes', () => {
+  assert.match(appSource, /function normalizeLegacyHashPublicRoute\(\)/);
+  assert.match(appSource, /\^#page-\(\[a-z0-9-\]\+\)\(\?:\\\?\(\.\+\)\)\?\$/);
+  assert.match(appSource, /window\.history\.replaceState\(\{ page, source: "legacy_hash_public_route" \}, "", nextPath\)/);
+  assert.match(appSource, /normalizeLegacyHashPublicRoute\(\);\s*const path = \(window\.location\.pathname/);
+});
+
 test('release probes assert section search shells on public routes', () => {
   assert.match(backendProbeSource, /frontend section search shell config exists/);
   assert.match(routeProbeSource, /missing section search shell/);
