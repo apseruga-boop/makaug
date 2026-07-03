@@ -660,6 +660,7 @@ function run() {
   assert(authRoutes.includes("const lastName = cleanText(req.body.last_name || req.body.second_name || req.body.surname)") && authRoutes.includes("Second name / surname is required"), 'signup OTP backend should require and accept broker second-name/surname fields');
   assert(authRoutes.includes("signup_otp_email_fallback_to_sms") && authRoutes.includes("Email signup OTP failed; falling back to SMS"), 'signup OTP backend should fall back to SMS and log when email delivery fails');
   assert(authRoutes.includes("signup_otp_delivery_failed_all_channels") && authRoutes.includes("Email verification could not be sent and SMS fallback is unavailable"), 'signup OTP backend should report a clear combined provider failure when email and SMS both fail');
+  assert(authRoutes.includes("otpDeliveryUnavailableResponse({ channel, purpose: 'signup', error })"), 'signup OTP backend should return retry guidance when the selected delivery channel is down');
   assert(authRoutes.includes('password_reset_otp_delivery_failed'), 'password reset OTP delivery failures should be logged with a clear type');
   assert(authRoutes.includes('retry_channels'), 'login/reset OTP delivery failures should return retry channel guidance');
   assert(authRoutes.includes("last_name is required"), 'auth register route should require surname before creating an account');

@@ -854,6 +854,9 @@ router.post('/request-signup-otp', async (req, res, next) => {
           payloadSummary: otpPayloadSummary,
           failureReason: error.message || 'signup_otp_request_failed'
         });
+        if (isOtpDeliveryFailure(error)) {
+          return res.status(503).json(otpDeliveryUnavailableResponse({ channel, purpose: 'signup', error }));
+        }
         throw error;
       }
 
