@@ -54,8 +54,10 @@ test('direct category route query links prefill and run section search', () => {
   assert.match(appSource, /function syncActiveRouteSearchHandoff\(source = "route_query_sync"\)/);
   assert.match(appSource, /syncActiveRouteSearchHandoff\("deep_link_route_query"\)/);
   assert.match(appSource, /startup_route_query_retry/);
+  assert.match(appSource, /public_inventory_route_query/);
+  assert.match(appSource, /shell\.dataset\.userEdited !== "1"/);
   assert.match(appSource, /const routeQuery = routePayload\.query \|\| routePayload\.area \|\| ""/);
-  assert.match(appSource, /if \(shellInput && !shellInput\.value\) shellInput\.value = routeQuery/);
+  assert.match(appSource, /if \(shellInput && \(!shellInput\.value \|\| options\.forceRouteQuery\)\) shellInput\.value = routeQuery/);
   assert.match(appSource, /filterStudents\(\)/);
   assert.match(appSource, /filterListings\("sale"\)/);
 });

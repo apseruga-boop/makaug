@@ -156,6 +156,7 @@ const whatsappMatchboardRouteLinksVersion = 'whatsapp-matchboard-route-links-202
 const whatsappMatchboardLegacyHashVersion = 'whatsapp-matchboard-legacy-hash-route-20260703';
 const whatsappMatchboardQueryHandoffVersion = 'whatsapp-matchboard-query-handoff-20260703';
 const whatsappMatchboardQueryHandoffRetryVersion = 'whatsapp-matchboard-query-handoff-retry-20260703';
+const whatsappMatchboardInventorySyncVersion = 'whatsapp-matchboard-inventory-sync-20260703';
 const publicAppVersionSuffixes = [
   captureHelperUsabilityVersion,
   studentNearestUniversityVersion,
@@ -181,7 +182,8 @@ const publicAppVersionSuffixes = [
   whatsappMatchboardRouteLinksVersion,
   whatsappMatchboardLegacyHashVersion,
   whatsappMatchboardQueryHandoffVersion,
-  whatsappMatchboardQueryHandoffRetryVersion
+  whatsappMatchboardQueryHandoffRetryVersion,
+  whatsappMatchboardInventorySyncVersion
 ];
 let cachedIndexHtml = null;
 const publicHtmlCache = new Map();

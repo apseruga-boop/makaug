@@ -34165,7 +34165,7 @@ function sectionSearchSelectMarkup(config, field) {
   return `<select id="${adminAttr(sectionSearchFieldId(config, field))}" data-section-search-field="${adminAttr(field.key)}" data-section-search-source="${adminAttr(field.id)}" aria-label="${adminAttr(field.label || source?.options?.[0]?.textContent || "Filter")}">${options}</select>`;
 }
 
-function syncSectionSearchShell(page) {
+function syncSectionSearchShell(page, options = {}) {
   const config = sectionSearchConfigFor(page);
   if (!config) return false;
   const shell = document.getElementById(sectionSearchShellId(config.key));
@@ -34174,10 +34174,13 @@ function syncSectionSearchShell(page) {
   const legacyInput = document.getElementById(config.queryId);
   const routePayload = routeSearchHandoffPayload(config.key);
   const routeKey = `${window.location.pathname || "/"}${window.location.search || ""}`;
-  if (routePayload && shell.dataset.routeQueryApplied !== routeKey) {
+  const canApplyRouteQuery = routePayload
+    && shell.dataset.userEdited !== "1"
+    && (options.forceRouteQuery || shell.dataset.routeQueryApplied !== routeKey);
+  if (canApplyRouteQuery) {
     const routeQuery = routePayload.query || routePayload.area || "";
-    if (legacyInput && !legacyInput.value) legacyInput.value = routeQuery;
-    if (shellInput && !shellInput.value) shellInput.value = routeQuery;
+    if (legacyInput && (!legacyInput.value || options.forceRouteQuery)) legacyInput.value = routeQuery;
+    if (shellInput && (!shellInput.value || options.forceRouteQuery)) shellInput.value = routeQuery;
     Object.entries(routePayload.filters || {}).forEach(([key, value]) => {
       if (!value) return;
       const field = config.filters.find((candidate) => candidate.key === key);
@@ -34206,7 +34209,7 @@ function syncSectionSearchShell(page) {
 function syncActiveRouteSearchHandoff(source = "route_query_sync") {
   const page = pageForPublicRoute(window.location.pathname || "/");
   if (!page || !routeSearchHandoffPayload(page)) return false;
-  if (!syncSectionSearchShell(page)) return false;
+  if (!syncSectionSearchShell(page, { forceRouteQuery: true })) return false;
   runSectionSearch(page, { source, backend: false });
   return true;
 }
@@ -34334,7 +34337,10 @@ function wireSectionSearchShell(config) {
   shell.dataset.sectionSearchWired = "1";
   const input = shell.querySelector(".section-search-text-input");
   if (input) {
-    input.addEventListener("input", () => runSectionSearch(config.key, { source: "section_shell_input", backend: false }));
+    input.addEventListener("input", () => {
+      shell.dataset.userEdited = "1";
+      runSectionSearch(config.key, { source: "section_shell_input", backend: false });
+    });
     wireInputTypeahead(input.id, () => config.key === "brokers" ? getBrokerSuggestionPool() : getLocationSuggestionPool(config.key === "students"), () => runSectionSearch(config.key, { source: "section_shell_typeahead" }));
   }
   shell.querySelectorAll("[data-section-search-field]").forEach((field) => {
@@ -40980,6 +40986,7 @@ function initializeMakaugApp() {
     if (loaded) {
       renderAll();
       resetMaps();
+      syncActiveRouteSearchHandoff("public_inventory_route_query");
     }
   });
   renderMortgageFinder();
