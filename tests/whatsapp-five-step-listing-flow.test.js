@@ -9,6 +9,10 @@ assert(
   'WhatsApp listing flow should accept shorthand prices like 250m'
 );
 assert(
+  source.includes('thousandMatch') && source.includes('* 1000'),
+  'WhatsApp listing flow should accept common rent shorthand like 800k'
+);
+assert(
   source.includes('function nextListingDraftStep'),
   'WhatsApp listing flow should advance by next missing field instead of fixed prompt order'
 );
@@ -27,6 +31,10 @@ assert(
 assert(
   source.includes('Object.assign(patch, bedroomDraft)'),
   'Natural seller details should capture bedroom ranges from combined listing messages'
+);
+assert(
+  source.includes("bedroomDraft && isDraftMissingValue(draft, 'bedrooms')"),
+  'Natural seller details must save bedrooms when the draft has null/empty bedrooms'
 );
 assert(
   source.includes("const fastReply = fastListingProgressReply(lang, patch, mergedDraft, 'Saved')"),

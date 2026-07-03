@@ -1701,6 +1701,11 @@ function parseListingPriceDraft(input = '') {
     const value = Math.round(Number(millionMatch[1]) * 1000000);
     if (value >= 10000) return value;
   }
+  const thousandMatch = clean.match(/\b(\d+(?:\.\d+)?)\s*(k|thousand)\b/i);
+  if (thousandMatch) {
+    const value = Math.round(Number(thousandMatch[1]) * 1000);
+    if (value >= 10000) return value;
+  }
   const billionMatch = clean.match(/\b(\d+(?:\.\d+)?)\s*(b|bn|bil|billion)\b/i);
   if (billionMatch) {
     const value = Math.round(Number(billionMatch[1]) * 1000000000);
@@ -1780,7 +1785,7 @@ function buildNaturalListingDetailDraft(input, draft = {}) {
     patch.price = price;
   }
   const bedroomDraft = parseBedroomDraft(clean);
-  if (bedroomDraft && !Number.isFinite(Number(draft.bedrooms))) {
+  if (bedroomDraft && isDraftMissingValue(draft, 'bedrooms')) {
     Object.assign(patch, bedroomDraft);
   }
 
