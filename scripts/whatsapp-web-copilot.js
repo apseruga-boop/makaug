@@ -266,9 +266,30 @@ function isClosedBrowserError(error) {
     .test(String(error?.message || error || ''));
 }
 
+function hasChromiumProfileLockFiles() {
+  return [
+    'SingletonLock',
+    'SingletonSocket',
+    'SingletonCookie'
+  ].some((fileName) => {
+    try {
+      return fs.existsSync(path.join(PROFILE_DIR, fileName));
+    } catch (_error) {
+      return false;
+    }
+  });
+}
+
 function isChromiumProfileLockError(error) {
+  const message = [
+    error?.message,
+    error?.stack,
+    error?.cause?.message,
+    String(error || '')
+  ].filter(Boolean).join('\n');
   return /profile appears to be in use|process_singleton|singletonlock|user data directory is already in use|chrome profile is in use|locked the profile/i
-    .test(String(error?.message || error || ''));
+    .test(message)
+    || (isClosedBrowserError(error) && hasChromiumProfileLockFiles());
 }
 
 async function launchPersistentContextWithProfileRetry(executablePath, options) {
