@@ -60,6 +60,8 @@ assert(agentScript.includes('login_qr_refresh: qrRefresh'), 'Non-ready heartbeat
 assert(agentScript.includes('login_screenshot_data_url: null'), 'Online heartbeats must clear stale login screenshots');
 assert(agentScript.includes('WHATSAPP_WEB_COPILOT_USER_AGENT') && agentScript.includes('Chrome/120.0.0.0'), 'Hosted browser must present a normal Chrome user agent for WhatsApp Web');
 assert(agentScript.includes('--disable-blink-features=AutomationControlled') && agentScript.includes("navigator, 'webdriver'"), 'Hosted browser must avoid the automated/headless browser rejection path');
+assert(agentScript.includes('isChromiumProfileLockError') && agentScript.includes('launchPersistentContextWithProfileRetry'), 'Hosted worker must retry while Render rolling deploys still hold the persistent WhatsApp profile lock');
+assert(agentScript.includes('WHATSAPP_WEB_COPILOT_PROFILE_LOCK_MAX_WAIT_MS') && agentScript.includes('WhatsApp Web profile is locked by another Chromium process'), 'Profile-lock retry must be bounded and visible in worker logs');
 
 assert(readiness.includes('hosted_agent_online') && readiness.includes('only_local_laptop_bridge_is_online'), 'Admin readiness must distinguish hosted 24/7 bridge from local-only bridge');
 assert(adminApp.includes('Hosted WhatsApp login screen') && adminApp.includes('login_screenshot_data_url'), 'Admin WhatsApp overview must render the hosted login screenshot from protected insights');

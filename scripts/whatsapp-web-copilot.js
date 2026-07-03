@@ -189,6 +189,16 @@ const RECENTLY_SENT_REPLY_TTL_MS = Math.min(
   30000,
   Math.max(5000, Number.isFinite(configuredRecentlySentReplyTtlMs) ? configuredRecentlySentReplyTtlMs : 15000)
 );
+const configuredProfileLockRetryMs = Number(process.env.WHATSAPP_WEB_COPILOT_PROFILE_LOCK_RETRY_MS || 10000);
+const PROFILE_LOCK_RETRY_MS = Math.min(
+  60000,
+  Math.max(1000, Number.isFinite(configuredProfileLockRetryMs) ? configuredProfileLockRetryMs : 10000)
+);
+const configuredProfileLockMaxWaitMs = Number(process.env.WHATSAPP_WEB_COPILOT_PROFILE_LOCK_MAX_WAIT_MS || 900000);
+const PROFILE_LOCK_MAX_WAIT_MS = Math.min(
+  1800000,
+  Math.max(30000, Number.isFinite(configuredProfileLockMaxWaitMs) ? configuredProfileLockMaxWaitMs : 900000)
+);
 
 function resolveChromeExecutablePath() {
   const candidates = [
@@ -254,6 +264,30 @@ function log(...args) {
 function isClosedBrowserError(error) {
   return /target page, context or browser has been closed|browser has been closed|context has been closed|page has been closed|session closed|target closed/i
     .test(String(error?.message || error || ''));
+}
+
+function isChromiumProfileLockError(error) {
+  return /profile appears to be in use|process_singleton|singletonlock|user data directory is already in use|chrome profile is in use|locked the profile/i
+    .test(String(error?.message || error || ''));
+}
+
+async function launchPersistentContextWithProfileRetry(executablePath, options) {
+  const startedAt = Date.now();
+  let attempt = 0;
+  while (true) {
+    attempt += 1;
+    try {
+      return await chromium.launchPersistentContext(PROFILE_DIR, options);
+    } catch (error) {
+      if (!isChromiumProfileLockError(error)) throw error;
+      const waitedMs = Date.now() - startedAt;
+      if (waitedMs >= PROFILE_LOCK_MAX_WAIT_MS) {
+        throw new Error(`WhatsApp Web profile is still locked after ${Math.round(waitedMs / 1000)}s: ${error.message || error}`);
+      }
+      log(`WhatsApp Web profile is locked by another Chromium process; waiting ${Math.round(PROFILE_LOCK_RETRY_MS / 1000)}s before launch retry ${attempt + 1}.`);
+      await sleep(PROFILE_LOCK_RETRY_MS);
+    }
+  }
 }
 
 function normalizeChatKey(value) {
@@ -2749,7 +2783,7 @@ async function main() {
       throw new Error(`Chrome executable not found. Checked configured path and common Linux Chromium paths; configured path was ${CHROME_PATH}`);
     }
     fs.mkdirSync(PROFILE_DIR, { recursive: true });
-    context = await chromium.launchPersistentContext(PROFILE_DIR, {
+    context = await launchPersistentContextWithProfileRetry(executablePath, {
       headless: HEADLESS_BROWSER,
       executablePath,
       userAgent: BROWSER_USER_AGENT,
