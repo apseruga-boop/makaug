@@ -1080,6 +1080,22 @@ async function getActiveChatSnapshot(page) {
       const digits = String(value || '').replace(/\D/g, '');
       return digits.length >= 7 ? digits : '';
     };
+    const phoneFromMessageDataId = (value) => {
+      const text = String(value || '');
+      const match = text.match(/(?:^|[_:-])(\d{9,16})@(?:c\.us|s\.whatsapp\.net)\b/i)
+        || text.match(/\b(\d{9,16})@(?:c\.us|s\.whatsapp\.net)\b/i);
+      return match?.[1] || '';
+    };
+    const dataIdForNode = (node) => node?.closest?.('[data-id]')?.getAttribute('data-id')
+      || node?.getAttribute?.('data-id')
+      || '';
+    const phoneFromNode = (node) => phoneFromMessageDataId(dataIdForNode(node));
+    const directionFromDataId = (value) => {
+      const text = String(value || '');
+      if (/^true_/.test(text)) return 'out';
+      if (/^false_/.test(text)) return 'in';
+      return '';
+    };
     const isTimestampOnlyText = (value) => /^\s*\d{1,2}:\d{2}\s*(?:AM|PM)?\s*$/i.test(String(value || '').trim());
     const parseCoords = (value) => {
       const raw = String(value || '');
@@ -1194,8 +1210,13 @@ async function getActiveChatSnapshot(page) {
         .replace(/^\[[^\]]+\]\s*/, '')
         .replace(/:\s*$/, '')
         .trim();
-      const nodeDigits = phoneLike(nodeSender);
-      if (nodeDigits) {
+      const nodeDirection = node.closest('.message-out')
+        ? 'out'
+        : node.closest('.message-in')
+          ? 'in'
+          : directionFromDataId(dataIdForNode(node));
+      const nodeDigits = phoneLike(nodeSender) || (nodeDirection === 'in' ? phoneFromNode(node) : '');
+      if (nodeDigits && nodeDirection !== 'out') {
         fallbackChatKey = nodeDigits;
         fallbackContactName = nodeSender;
       }
@@ -1205,10 +1226,20 @@ async function getActiveChatSnapshot(page) {
       .replace(/^\[[^\]]+\]\s*/, '')
       .replace(/:\s*$/, '')
       .trim();
+    const messageId = last.closest('[data-id]')?.getAttribute('data-id')
+      || last.getAttribute('data-id')
+      || '';
+    const dataIdDigits = phoneFromMessageDataId(messageId);
+    const dataIdDirection = directionFromDataId(messageId);
     const senderDigits = phoneLike(senderLabel);
     const headerDigits = phoneLike(headerTitle);
-    const resolvedChatKey = senderDigits || headerDigits || fallbackChatKey || headerTitle || senderLabel;
-    const contactName = senderDigits
+    const direction = last.closest('.message-out')
+      ? 'out'
+      : last.closest('.message-in')
+        ? 'in'
+        : dataIdDirection || 'unknown';
+    const resolvedChatKey = senderDigits || headerDigits || dataIdDigits || fallbackChatKey || headerTitle || senderLabel;
+    const contactName = senderDigits || dataIdDigits
       ? headerTitle
       : (headerDigits ? senderLabel : (fallbackContactName || headerTitle || senderLabel));
     const text = (last.innerText || last.textContent || '').trim();
@@ -1222,14 +1253,6 @@ async function getActiveChatSnapshot(page) {
         || ''
       ))
     ].filter(Boolean).join('|').slice(0, 500);
-    const messageId = last.closest('[data-id]')?.getAttribute('data-id')
-      || last.getAttribute('data-id')
-      || '';
-    const direction = last.closest('.message-out')
-      ? 'out'
-      : last.closest('.message-in')
-        ? 'in'
-        : 'unknown';
     const nonEmojiImages = Array.from(last.querySelectorAll('img')).filter((img) => {
       const src = img.getAttribute('src') || '';
       const alt = img.getAttribute('alt') || '';
@@ -1280,6 +1303,18 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
     const phoneLike = (value) => {
       const digits = String(value || '').replace(/\D/g, '');
       return digits.length >= 7 ? digits : '';
+    };
+    const phoneFromMessageDataId = (value) => {
+      const text = String(value || '');
+      const match = text.match(/(?:^|[_:-])(\d{9,16})@(?:c\.us|s\.whatsapp\.net)\b/i)
+        || text.match(/\b(\d{9,16})@(?:c\.us|s\.whatsapp\.net)\b/i);
+      return match?.[1] || '';
+    };
+    const directionFromDataId = (value) => {
+      const text = String(value || '');
+      if (/^true_/.test(text)) return 'out';
+      if (/^false_/.test(text)) return 'in';
+      return '';
     };
     const isTimestampOnlyText = (value) => /^\s*\d{1,2}:\d{2}\s*(?:AM|PM)?\s*$/i.test(String(value || '').trim());
     const parseCoords = (value) => {
@@ -1383,14 +1418,15 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
           .replace(/^\[[^\]]+\]\s*/, '')
           .replace(/:\s*$/, '')
           .trim();
+        const messageId = node.closest('[data-id]')?.getAttribute('data-id')
+          || node.getAttribute('data-id')
+          || '';
+        const dataIdDirection = directionFromDataId(messageId);
         const direction = node.closest('.message-out')
           ? 'out'
           : node.closest('.message-in')
             ? 'in'
-            : 'unknown';
-        const messageId = node.closest('[data-id]')?.getAttribute('data-id')
-          || node.getAttribute('data-id')
-          || '';
+            : dataIdDirection || 'unknown';
         const rawText = (node.innerText || node.textContent || '').trim();
         const mediaFingerprint = [
           nodes.indexOf(node),
@@ -1437,13 +1473,14 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
               : '');
         const senderDigits = phoneLike(senderLabel);
         const headerDigits = phoneLike(headerTitle);
-        const resolvedChatKey = senderDigits || headerDigits || lastInboundChatKey || headerTitle || senderLabel;
-        const contactName = senderDigits
+        const dataIdDigits = phoneFromMessageDataId(messageId);
+        const resolvedChatKey = senderDigits || headerDigits || dataIdDigits || lastInboundChatKey || headerTitle || senderLabel;
+        const contactName = senderDigits || dataIdDigits
           ? headerTitle
           : (headerDigits ? senderLabel : (lastInboundContactName || headerTitle || senderLabel));
         const inferredDirection = senderDigits ? 'in' : direction;
-        if (senderDigits) {
-          lastInboundChatKey = senderDigits;
+        if ((senderDigits || dataIdDigits) && inferredDirection === 'in') {
+          lastInboundChatKey = senderDigits || dataIdDigits;
           lastInboundContactName = senderLabel;
         }
         snapshots.push({
