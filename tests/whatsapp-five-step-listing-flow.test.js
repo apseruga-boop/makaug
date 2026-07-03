@@ -29,6 +29,10 @@ assert(
   'Natural seller details should capture price from combined listing messages'
 );
 assert(
+  source.includes('const bedroomDraft = parseBedroomDraft(clean);') && source.includes('if (bedroomDraft) Object.assign(hints, bedroomDraft);'),
+  'Initial listing hints should save bedrooms from the first seller message'
+);
+assert(
   source.includes('Object.assign(patch, bedroomDraft)'),
   'Natural seller details should capture bedroom ranges from combined listing messages'
 );

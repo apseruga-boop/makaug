@@ -1728,6 +1728,12 @@ function extractSellerListingDraftHints(input, entities = {}) {
   const area = parseSellerListingAreaHint(clean);
   if (area) hints.area = area;
 
+  const price = parseListingPriceDraft(clean);
+  if (price) hints.price = price;
+
+  const bedroomDraft = parseBedroomDraft(clean);
+  if (bedroomDraft) Object.assign(hints, bedroomDraft);
+
   const sizeMatch = clean.match(/\b(\d+(?:\.\d+)?)\s*(decimals?|acres?|hectares?|sqm|sq\s*m|square\s+meters?|square\s+metres?)\b/i);
   if (sizeMatch) hints.land_size_text = `${sizeMatch[1]} ${sizeMatch[2]}`.trim();
 
