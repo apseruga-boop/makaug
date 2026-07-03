@@ -86,8 +86,8 @@ const T = {
     askTitle: '✏️ Give your property a short title (e.g. "3-bedroom house in Ntinda Kampala"):',
     askDistrict: '📍 Which district is the property in? If there is more than one, list them all. (e.g. Kampala, Wakiso, Mukono, Jinja...)',
     askArea: '🗺️ What area or neighbourhood? If there is more than one, list them all. (e.g. Kololo, Ntinda, Bugolobi...)',
-    askPrice: '💰 What is your asking price in Uganda Shillings? You can type numbers or a short phrase, e.g. 250000000 or 500000000 and above.',
-    askBedrooms: '🛏 How many bedrooms does the property have? Enter one number, 0 if N/A, or a list like 1,2,3,4.',
+    askPrice: '💰 What is your asking price in Uganda Shillings? You can type 250000000, 250m, or 500000000 and above.',
+    askBedrooms: '🛏 How many bedrooms does the property have? Enter 3, 1-4, or a list like 1,2,3,4. Use 0 if N/A.',
     askDescription: '📝 Describe your property in a few sentences (location, features, condition...)',
     askPhotos: '📸 Please send the *front/outside* photo first.',
     askPublicName: '👤 What public contact name should appear on the listing? (For example: Amina, Amina Properties, or Private Owner)',
@@ -1685,6 +1685,35 @@ function parseSellerListingAreaHint(input) {
   return toSellerAreaTitle(candidate);
 }
 
+function firstDistrictFromText(input = '') {
+  const clean = normalizeInput(input).toLowerCase();
+  if (!clean) return '';
+  const exact = DISTRICTS.find((d) => d.toLowerCase() === clean);
+  if (exact) return exact;
+  return DISTRICTS.find((d) => new RegExp(`\\b${d.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(clean)) || '';
+}
+
+function parseListingPriceDraft(input = '') {
+  const clean = normalizeInput(input).toLowerCase().replace(/,/g, '');
+  if (!clean) return null;
+  const millionMatch = clean.match(/\b(\d+(?:\.\d+)?)\s*(m|mn|mil|million)\b/i);
+  if (millionMatch) {
+    const value = Math.round(Number(millionMatch[1]) * 1000000);
+    if (value >= 10000) return value;
+  }
+  const billionMatch = clean.match(/\b(\d+(?:\.\d+)?)\s*(b|bn|bil|billion)\b/i);
+  if (billionMatch) {
+    const value = Math.round(Number(billionMatch[1]) * 1000000000);
+    if (value >= 10000) return value;
+  }
+  const moneyMatch = clean.match(/\b(?:ugx|ush|price|asking|cost|rent|sale|selling|goes for|above|from|starting)\D{0,16}(\d{5,12})\b/i)
+    || clean.match(/\b(\d{5,12})\s*(?:ugx|ush|shillings?|and above|above|or more|onwards|from)\b/i)
+    || clean.match(/\b(\d{7,12})\b/);
+  if (!moneyMatch?.[1]) return null;
+  const value = parseInt(moneyMatch[1].replace(/\D/g, ''), 10);
+  return value >= 10000 ? value : null;
+}
+
 function extractSellerListingDraftHints(input, entities = {}) {
   const clean = normalizeInput(input);
   const hints = {};
@@ -1742,6 +1771,18 @@ function buildNaturalListingDetailDraft(input, draft = {}) {
     whatsapp_natural_detail_captured: true,
     whatsapp_natural_detail_captured_at: new Date().toISOString()
   };
+  const district = firstDistrictFromText(clean);
+  if (district && !normalizeInput(draft.district)) {
+    patch.district = district;
+  }
+  const price = parseListingPriceDraft(clean);
+  if (price && !Number(draft.price)) {
+    patch.price = price;
+  }
+  const bedroomDraft = parseBedroomDraft(clean);
+  if (bedroomDraft && !Number.isFinite(Number(draft.bedrooms))) {
+    Object.assign(patch, bedroomDraft);
+  }
 
   if (!normalizeInput(draft.title)) {
     patch.title = naturalListingTitleFromText(clean);
@@ -1768,11 +1809,16 @@ function listingDetailSavedReply(lang, nextPrompt) {
 
 function parseBedroomDraft(input) {
   const clean = normalizeInput(input);
+  const hasBedroomSignal = /\b(?:bedrooms?|beds?|br)\b/i.test(clean)
+    || /^\s*\d+\s*$/.test(clean)
+    || /\d+\s*(?:-|to|and|,)\s*\d+/.test(clean);
+  if (!hasBedroomSignal) return null;
   const numbers = Array.from(clean.matchAll(/\d+/g))
     .map((match) => Number(match[0]))
     .filter((value) => Number.isFinite(value) && value >= 0 && value <= 50);
+  if (!numbers.length) return null;
   const positives = numbers.filter((value) => value > 0);
-  const bedrooms = positives.length ? Math.min(...positives) : 0;
+  const bedrooms = positives.length ? Math.max(...positives) : 0;
   const uniquePositives = [...new Set(positives)];
   const hasMultipleOptions = uniquePositives.length > 1
     || /\b(?:range|between|to|and|or|above|plus)\b/i.test(clean)
@@ -1796,6 +1842,64 @@ function savedDescriptionPrompt(lang) {
     sw: `${t(code, 'askPhotos')}\n${photoNextPrompt(code, 0)}`
   };
   return messages[code] || messages.en;
+}
+
+function isDraftMissingValue(draft = {}, key) {
+  const value = draft[key];
+  if (value == null) return true;
+  if (typeof value === 'string') return !value.trim();
+  if (Array.isArray(value)) return value.length === 0;
+  return false;
+}
+
+function nextListingDraftStep(draft = {}) {
+  if (isDraftMissingValue(draft, 'listing_type')) return 'listing_type';
+  if (isDraftMissingValue(draft, 'lister_type')) return 'ownership';
+  if (draft.assisted_by_field_agent === undefined || draft.assisted_by_field_agent === null) return 'ask_field_agent';
+  if (draft.assisted_by_field_agent === true && isDraftMissingValue(draft, 'field_agent_reference')) return 'ask_field_agent_details';
+  if (isDraftMissingValue(draft, 'title')) return 'title';
+  if (isDraftMissingValue(draft, 'district')) return 'district';
+  if (isDraftMissingValue(draft, 'area')) return 'area';
+  if (isDraftMissingValue(draft, 'price')) return 'price';
+  if (draft.listing_type === 'rent' && isDraftMissingValue(draft, 'deposit_amount')) return 'ask_deposit';
+  if (draft.listing_type === 'rent' && isDraftMissingValue(draft, 'contract_months')) return 'ask_contract';
+  if (draft.listing_type === 'student' && isDraftMissingValue(draft, 'nearest_university')) return 'ask_university';
+  if (draft.listing_type === 'student' && isDraftMissingValue(draft, 'distance_to_uni_km')) return 'ask_distance';
+  if (isDraftMissingValue(draft, 'bedrooms')) return 'bedrooms';
+  if (isDraftMissingValue(draft, 'description')) return 'description';
+  if (!Array.isArray(draft.photos) || draft.photos.length < 5) return 'photos';
+  if (isDraftMissingValue(draft, 'lister_name') && isDraftMissingValue(draft, 'contact_display_name')) return 'ask_public_name';
+  if (isDraftMissingValue(draft, 'preferred_contact_channel')) return 'ask_contact_method';
+  if (isDraftMissingValue(draft, 'otp_identifier')) return 'ask_contact_value';
+  if (isDraftMissingValue(draft, 'national_id_number')) return 'ask_id_number';
+  if (isDraftMissingValue(draft, 'selfie_url')) return 'ask_selfie';
+  return 'verify_otp';
+}
+
+function savedListingFieldSummary(patch = {}) {
+  const saved = [];
+  if (patch.title) saved.push('title');
+  if (patch.district || patch.area) saved.push([patch.area, patch.district].filter(Boolean).join(', '));
+  if (patch.price) saved.push(`USh ${Number(patch.price).toLocaleString('en-UG')}`);
+  if (patch.bedroom_options_text) saved.push(patch.bedroom_options_text);
+  else if (Number.isFinite(Number(patch.bedrooms))) saved.push(`${patch.bedrooms} bedroom${Number(patch.bedrooms) === 1 ? '' : 's'}`);
+  return saved;
+}
+
+function fastListingProgressReply(lang, patch = {}, updatedDraft = {}, intro = 'Saved') {
+  const nextStep = nextListingDraftStep(updatedDraft);
+  const summary = savedListingFieldSummary(patch);
+  const savedLine = summary.length ? `${intro}: ${summary.join(' | ')}` : intro;
+  if (nextStep === 'photos') {
+    return {
+      nextStep,
+      message: `✅ ${savedLine}\n\n${t(lang, 'askPhotos')}\n${photoNextPrompt(lang, Array.isArray(updatedDraft.photos) ? updatedDraft.photos.length : 0)}`
+    };
+  }
+  return {
+    nextStep,
+    message: `✅ ${savedLine}\n\nNext: ${stepPromptFor(lang, nextStep)}`
+  };
 }
 
 function listingStartReply(lang, listingType, hints = {}) {
@@ -5722,7 +5826,11 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
   const globalRoute = contextualRoute || intentMenuRoute(intentResult?.intent);
   const globalIntentConfidence = contextualRoute ? 1 : Number(intentResult?.confidence || 0);
   const routeExplicitListingStart = async () => {
-    const draftHints = extractSellerListingDraftHints(cleanBody, intentResult?.entities || {});
+    const naturalDetailDraft = buildNaturalListingDetailDraft(cleanBody, draft) || {};
+    const draftHints = {
+      ...extractSellerListingDraftHints(cleanBody, intentResult?.entities || {}),
+      ...naturalDetailDraft
+    };
     const inferredListingType = draftHints.listing_type || inferListingTypeFromStartRequest(cleanBody, intentResult?.entities || {});
     const { listing_type: _listingTypeHint, ...draftHintPatch } = draftHints;
     const mediaPatch = isListingPhotoMedia(runtime.mediaType, mediaUrl)
@@ -6940,19 +7048,17 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     }
     const naturalDetailDraft = buildNaturalListingDetailDraft(cleanBody, draft);
     if (naturalDetailDraft) {
-      const mergedDraft = {
-        ...draft,
+      const patch = {
         ...naturalDetailDraft,
         assisted_by_field_agent: false
       };
-      await patchDraft(phone, mergedDraft);
-      if (!normalizeInput(mergedDraft.district)) {
-        return respond(listingDetailSavedReply(lang, t(lang, 'askDistrict')), 'district');
-      }
-      if (!normalizeInput(mergedDraft.area)) {
-        return respond(listingDetailSavedReply(lang, t(lang, 'askArea')), 'area');
-      }
-      return respond(listingDetailSavedReply(lang, t(lang, 'askPrice')), 'price');
+      const mergedDraft = {
+        ...draft,
+        ...patch
+      };
+      await patchDraft(phone, patch);
+      const fastReply = fastListingProgressReply(lang, patch, mergedDraft, 'Saved property details');
+      return respond(fastReply.message, fastReply.nextStep);
     }
     return respond(t(lang, 'invalidInput') + '\n\n' + t(lang, 'askFieldAgent'), 'ask_field_agent');
   }
@@ -6971,33 +7077,58 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
   // TITLE
   if (step === 'title') {
-    if (cleanBody.length < 5) return respond(t(lang, 'titleTooShort'), 'title');
-    await patchDraft(phone, { title: cleanBody });
-    return respond(t(lang, 'askDistrict'), 'district');
+    const naturalPatch = buildNaturalListingDetailDraft(cleanBody, draft) || {};
+    const patch = {
+      ...naturalPatch,
+      title: naturalPatch.title || cleanBody
+    };
+    if (normalizeInput(patch.title).length < 5) return respond(t(lang, 'titleTooShort'), 'title');
+    await patchDraft(phone, patch);
+    const mergedDraft = { ...draft, ...patch };
+    const fastReply = fastListingProgressReply(lang, patch, mergedDraft, 'Saved');
+    return respond(fastReply.message, fastReply.nextStep);
   }
 
   // DISTRICT
   if (step === 'district') {
-    const districtCandidate = DISTRICTS.find((d) => d.toLowerCase() === cleanBody.toLowerCase());
-    await patchDraft(phone, { district: districtCandidate || cleanBody });
-    return respond(t(lang, 'askArea'), 'area');
+    const naturalPatch = buildNaturalListingDetailDraft(cleanBody, draft) || {};
+    const districtCandidate = firstDistrictFromText(cleanBody) || DISTRICTS.find((d) => d.toLowerCase() === cleanBody.toLowerCase());
+    const patch = {
+      ...naturalPatch,
+      district: naturalPatch.district || districtCandidate || cleanBody
+    };
+    await patchDraft(phone, patch);
+    const mergedDraft = { ...draft, ...patch };
+    const fastReply = fastListingProgressReply(lang, patch, mergedDraft, 'Saved');
+    return respond(fastReply.message, fastReply.nextStep);
   }
 
   // AREA
   if (step === 'area') {
-    await patchDraft(phone, { area: cleanBody });
-    return respond(t(lang, 'askPrice'), 'price');
+    const naturalPatch = buildNaturalListingDetailDraft(cleanBody, draft) || {};
+    const patch = {
+      ...naturalPatch,
+      area: naturalPatch.area || stripMakaugBrandLocationNoise(cleanBody) || cleanBody
+    };
+    await patchDraft(phone, patch);
+    const mergedDraft = { ...draft, ...patch };
+    const fastReply = fastListingProgressReply(lang, patch, mergedDraft, 'Saved');
+    return respond(fastReply.message, fastReply.nextStep);
   }
 
   // PRICE
   if (step === 'price') {
-    const price = parseInt(cleanBody.replace(/[^0-9]/g, ''), 10);
+    const price = parseListingPriceDraft(cleanBody) || parseInt(cleanBody.replace(/[^0-9]/g, ''), 10);
     if (!price || price < 10000) return respond(t(lang, 'invalidPrice'), 'price');
-    await patchDraft(phone, { price });
+    const bedroomDraft = parseBedroomDraft(cleanBody) || {};
+    const patch = { price, ...bedroomDraft };
+    await patchDraft(phone, patch);
+    const mergedDraft = { ...draft, ...patch };
 
-    if (draft.listing_type === 'rent') return respond(t(lang, 'askDeposit'), 'ask_deposit');
-    if (draft.listing_type === 'student') return respond(t(lang, 'askUniversity'), 'ask_university');
-    return respond(t(lang, 'askBedrooms'), 'bedrooms');
+    if (mergedDraft.listing_type === 'rent' && isDraftMissingValue(mergedDraft, 'deposit_amount')) return respond(t(lang, 'askDeposit'), 'ask_deposit');
+    if (mergedDraft.listing_type === 'student' && isDraftMissingValue(mergedDraft, 'nearest_university')) return respond(t(lang, 'askUniversity'), 'ask_university');
+    const fastReply = fastListingProgressReply(lang, patch, mergedDraft, 'Saved');
+    return respond(fastReply.message, fastReply.nextStep);
   }
 
   // DEPOSIT (rent)
@@ -7028,23 +7159,36 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
   // BEDROOMS
   if (step === 'bedrooms') {
-    const bedroomDraft = parseBedroomDraft(cleanBody);
-    await patchDraft(phone, bedroomDraft);
-    const existingDescription = normalizeInput(draft.description || draft.source_description_hint);
+    const bedroomDraft = parseBedroomDraft(cleanBody) || { bedrooms: parseInt(cleanBody, 10) || 0 };
+    const descriptionPatch = cleanBody.length >= 24 && /\b(?:with|has|near|close|parking|security|kitchen|bathroom|condo|apartment|house|road)\b/i.test(cleanBody)
+      ? { description: cleanBody.slice(0, 1000) }
+      : {};
+    const patch = { ...bedroomDraft, ...descriptionPatch };
+    await patchDraft(phone, patch);
+    const mergedDraft = { ...draft, ...patch };
+    const existingDescription = normalizeInput(mergedDraft.description || mergedDraft.source_description_hint);
     if (existingDescription.length >= 10) {
-      if (!normalizeInput(draft.description)) {
+      if (!normalizeInput(mergedDraft.description)) {
         await patchDraft(phone, { description: existingDescription.slice(0, 1000) });
       }
       return respond(savedDescriptionPrompt(lang), 'photos');
     }
-    return respond(t(lang, 'askDescription'), 'description');
+    const fastReply = fastListingProgressReply(lang, patch, mergedDraft, 'Saved');
+    return respond(fastReply.message, fastReply.nextStep);
   }
 
   // DESCRIPTION
   if (step === 'description') {
     if (cleanBody.length < 10) return respond(t(lang, 'descriptionTooShort'), 'description');
-    await patchDraft(phone, { description: cleanBody });
-    return respond(`${t(lang, 'askPhotos')}\n${photoNextPrompt(lang, 0)}`, 'photos');
+    const naturalPatch = buildNaturalListingDetailDraft(cleanBody, draft) || {};
+    const patch = {
+      ...naturalPatch,
+      description: cleanBody.slice(0, 1000)
+    };
+    await patchDraft(phone, patch);
+    const mergedDraft = { ...draft, ...patch };
+    const fastReply = fastListingProgressReply(lang, patch, mergedDraft, 'Saved');
+    return respond(fastReply.message, fastReply.nextStep);
   }
 
   // PHOTOS

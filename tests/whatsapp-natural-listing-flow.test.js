@@ -24,7 +24,10 @@ assert(
 const fieldAgentIndex = whatsappRoute.indexOf("if (step === 'ask_field_agent')");
 const fieldAgentBlock = whatsappRoute.slice(fieldAgentIndex, whatsappRoute.indexOf("if (step === 'ask_field_agent_details')"));
 assert(fieldAgentBlock.includes('buildNaturalListingDetailDraft(cleanBody, draft)'), 'Field-agent step must save natural listing detail instead of repeating invalid input');
-assert(fieldAgentBlock.includes('listingDetailSavedReply(lang'), 'Field-agent natural detail path must acknowledge saved details before the next prompt');
+assert(
+  fieldAgentBlock.includes('listingDetailSavedReply(lang') || fieldAgentBlock.includes('fastListingProgressReply(lang'),
+  'Field-agent natural detail path must acknowledge saved details before the next prompt'
+);
 assert(fieldAgentBlock.includes("assisted_by_field_agent: false"), 'Natural detail path must default field-agent credit to No');
 
 assert(
