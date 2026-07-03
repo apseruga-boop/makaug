@@ -34208,10 +34208,9 @@ function syncSectionSearchShell(page, options = {}) {
 
 function syncActiveRouteSearchHandoff(source = "route_query_sync") {
   const page = pageForPublicRoute(window.location.pathname || "/");
-  if (!page || !routeSearchHandoffPayload(page)) return false;
-  if (!syncSectionSearchShell(page, { forceRouteQuery: true })) return false;
-  applyRouteQueryToVisibleSectionSearch(page, source);
-  return true;
+  if (!page || !routeQueryValueForSectionPage()) return false;
+  syncSectionSearchShell(page, { forceRouteQuery: true });
+  return applyRouteQueryToVisibleSectionSearch(page, source);
 }
 
 function routeQueryValueForSectionPage() {
