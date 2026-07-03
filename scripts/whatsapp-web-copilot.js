@@ -995,6 +995,7 @@ async function scanChatRows(page, { unreadOnly = true, limit = 20 } = {}) {
   return page.evaluate((options) => {
     const unreadOnlyRows = options?.unreadOnly !== false;
     const maxRows = Math.max(1, Math.min(50, Number(options?.limit || 20)));
+    const normalize = (value) => String(value || '').replace(/\s+/g, ' ').trim();
     const hasCallLogText = (value = '') => {
       const combined = String(value || '').replace(/\s+/g, ' ').trim();
       return (
@@ -1003,13 +1004,24 @@ async function scanChatRows(page, { unreadOnly = true, limit = 20 } = {}) {
       ) || /\bmissed\s+(?:voice|video)\s+call\b/i.test(combined);
     };
     const selectorGroups = [
+      '#pane-side [data-testid="cell-frame-container"]',
+      '#pane-side div[role="listitem"]',
+      '#pane-side div[role="row"]',
+      '[aria-label*="Chat list" i] [data-testid="cell-frame-container"]',
+      '[aria-label*="Chat list" i] div[role="listitem"]',
+      '[aria-label*="Chat list" i] div[role="row"]',
+      'div[role="grid"] div[role="row"]',
       '[data-testid="cell-frame-container"]',
       'div[role="listitem"]'
     ];
     let rows = [];
+    let rowSelector = '';
     for (const selector of selectorGroups) {
       rows = Array.from(document.querySelectorAll(selector));
-      if (rows.length) break;
+      if (rows.length) {
+        rowSelector = selector;
+        break;
+      }
     }
 
     return rows.map((row, index) => {
@@ -1025,13 +1037,20 @@ async function scanChatRows(page, { unreadOnly = true, limit = 20 } = {}) {
       const ariaLabel = row.getAttribute('aria-label') || '';
       const unread = !!row.querySelector('[aria-label*="unread"], [data-testid*="unread"], [data-icon*="unread"]')
         || /unread/i.test(ariaLabel);
-      const preview = rowLines.slice(1, 5).join(' ').trim();
       const timestampLabel = rowLines.find((line) => /^\d{1,2}:\d{2}\s*(?:AM|PM)?$/i.test(line)) || '';
+      const preview = rowLines
+        .filter((line) => line !== title && line !== timestampLabel)
+        .filter((line) => !/^\d+\s*(?:unread messages?|unread)$/i.test(line))
+        .filter((line) => !/^unread$/i.test(line))
+        .slice(0, 4)
+        .join(' ')
+        .trim();
       const callLog = hasCallLogText(`${preview} ${ariaLabel}`);
       return {
         index,
+        selector: rowSelector,
         title,
-        preview,
+        preview: normalize(preview),
         unread,
         timestampLabel,
         callLog
@@ -1054,8 +1073,71 @@ async function clickVisibleLocator(locator, timeoutMs = 900) {
   }
 }
 
-async function openChatByIndex(page, index) {
-  const selectors = ['[data-testid="cell-frame-container"]', 'div[role="listitem"]'];
+async function openChatRow(page, row = {}) {
+  const selectors = [
+    row.selector,
+    '#pane-side [data-testid="cell-frame-container"]',
+    '#pane-side div[role="listitem"]',
+    '#pane-side div[role="row"]',
+    '[aria-label*="Chat list" i] [data-testid="cell-frame-container"]',
+    '[aria-label*="Chat list" i] div[role="listitem"]',
+    '[aria-label*="Chat list" i] div[role="row"]',
+    'div[role="grid"] div[role="row"]',
+    '[data-testid="cell-frame-container"]',
+    'div[role="listitem"]'
+  ].filter(Boolean);
+  const openedInPage = await page.evaluate(({ selectors: rowSelectors, title, index }) => {
+    const normalize = (value) => String(value || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    const isVisible = (el) => {
+      if (!el) return false;
+      const style = window.getComputedStyle(el);
+      if (style.visibility === 'hidden' || style.display === 'none' || Number(style.opacity || 1) === 0) return false;
+      const rect = el.getBoundingClientRect();
+      return rect.width > 8 && rect.height > 8;
+    };
+    const clickCenter = (el) => {
+      const rect = el.getBoundingClientRect();
+      const x = rect.left + rect.width / 2;
+      const y = rect.top + rect.height / 2;
+      for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) {
+        el.dispatchEvent(new MouseEvent(type, {
+          bubbles: true,
+          cancelable: true,
+          clientX: x,
+          clientY: y,
+          view: window
+        }));
+      }
+    };
+    const wantedTitle = normalize(title);
+    for (const selector of rowSelectors) {
+      let matches = [];
+      try {
+        matches = Array.from(document.querySelectorAll(selector)).filter(isVisible);
+      } catch (_error) {
+        matches = [];
+      }
+      if (!matches.length) continue;
+      const exact = wantedTitle
+        ? matches.find((candidate) => normalize(candidate.innerText || candidate.textContent || '').includes(wantedTitle))
+        : null;
+      const candidate = exact || matches[index] || matches[0];
+      if (!candidate) continue;
+      clickCenter(candidate);
+      return true;
+    }
+    return false;
+  }, {
+    selectors,
+    title: row.title || '',
+    index: Math.max(0, Number(row.index || 0))
+  }).catch(() => false);
+  if (openedInPage) {
+    await page.waitForTimeout(160);
+    return true;
+  }
+
+  const index = Math.max(0, Number(row.index || 0));
   for (const selector of selectors) {
     const rows = page.locator(selector);
     const rowCount = await rows.count().catch(() => 0);
@@ -1068,6 +1150,33 @@ async function openChatByIndex(page, index) {
     }
   }
   return false;
+}
+
+async function openChatByIndex(page, index) {
+  return openChatRow(page, { index });
+}
+
+function unreadPreviewSnapshot(row = {}, source = 'unread_preview_fallback') {
+  const text = normalizeReplyText(row.preview || '');
+  if (!row.unread || !row.title || !text) return null;
+  if (/^(?:photo|image|video|voice message|sticker|gif)$/i.test(text)) return null;
+  return {
+    chatKey: row.title,
+    contactName: row.title,
+    text,
+    timestampLabel: row.timestampLabel || new Date().toISOString(),
+    messageId: `row-preview:${createMessageId(row.title, text, row.timestampLabel, 'text', source)}`,
+    direction: 'in',
+    mediaType: 'text',
+    mediaUrl: '',
+    mediaCount: 0,
+    mediaFingerprint: [
+      'unread-row-preview-fallback',
+      row.title,
+      row.timestampLabel || '',
+      text
+    ].join('|').slice(0, 500)
+  };
 }
 
 async function getActiveChatSnapshot(page) {
@@ -1853,10 +1962,11 @@ async function ingestUnreadChats(page) {
       if (result.processed || result.duplicate) continue;
     }
 
-    const opened = await openChatByIndex(page, row.index);
+    const opened = await openChatRow(page, row);
     if (!opened) continue;
 
     const snapshots = await getRecentIncomingSnapshots(page, 1);
+    let handledRow = false;
     for (const snapshot of snapshots) {
       const browserMessageKey = browserMessageKeyFor(snapshot, row);
       if (browserMessageKey && seenBrowserMessageIds.has(browserMessageKey)) continue;
@@ -1866,8 +1976,19 @@ async function ingestUnreadChats(page) {
       });
       const result = await ingestSnapshot({ snapshot: hydrated, row, source: 'unread_scan' });
       processed += result.processed || 0;
+      handledRow = handledRow || !!(result.processed || result.duplicate || result.queuedReply);
       if (result.queuedReply) {
         await processOutbox(page, { recipient: result.chatKey, maxSends: 1 });
+      }
+    }
+    if (!handledRow) {
+      const fallback = unreadPreviewSnapshot(row);
+      if (fallback) {
+        const result = await ingestSnapshot({ snapshot: fallback, row, source: 'unread_preview_fallback' });
+        processed += result.processed || 0;
+        if (result.queuedReply) {
+          await processOutbox(page, { recipient: result.chatKey, maxSends: 1 });
+        }
       }
     }
   }
@@ -1916,12 +2037,13 @@ async function ingestRecentChatsSweep(page, limit = RECENT_CHAT_SWEEP_LIMIT) {
     }
 
     if (openedRows >= RECENT_CHAT_SWEEP_OPEN_LIMIT) break;
-    const opened = await openChatByIndex(page, row.index);
+    const opened = await openChatRow(page, row);
     if (!opened) continue;
     openedRows += 1;
 
     const snapshots = await getRecentIncomingSnapshots(page, 1);
     let rowObserved = !snapshots.length;
+    let handledRow = false;
     for (const snapshot of snapshots) {
       const browserMessageKey = browserMessageKeyFor(snapshot, row);
       if (browserMessageKey && seenBrowserMessageIds.has(browserMessageKey)) {
@@ -1934,6 +2056,7 @@ async function ingestRecentChatsSweep(page, limit = RECENT_CHAT_SWEEP_LIMIT) {
       });
       const result = await ingestSnapshot({ snapshot: hydrated, row, source: 'recent_chat_sweep' });
       rowObserved = true;
+      handledRow = handledRow || !!(result.processed || result.duplicate || result.queuedReply);
       processed += result.processed || 0;
       if (result.queuedReply) {
         await processOutbox(page, { recipient: result.chatKey, maxSends: 1 });
@@ -1941,6 +2064,21 @@ async function ingestRecentChatsSweep(page, limit = RECENT_CHAT_SWEEP_LIMIT) {
       if (result.processed || result.queuedReply) {
         rememberRecentChatRow(rowKey);
         return finish(true);
+      }
+    }
+    if (!handledRow && row.unread) {
+      const fallback = unreadPreviewSnapshot(row, 'recent_unread_preview_fallback');
+      if (fallback) {
+        const result = await ingestSnapshot({ snapshot: fallback, row, source: 'recent_unread_preview_fallback' });
+        rowObserved = true;
+        processed += result.processed || 0;
+        if (result.queuedReply) {
+          await processOutbox(page, { recipient: result.chatKey, maxSends: 1 });
+        }
+        if (result.processed || result.queuedReply) {
+          rememberRecentChatRow(rowKey);
+          return finish(true);
+        }
       }
     }
     if (rowObserved) {
