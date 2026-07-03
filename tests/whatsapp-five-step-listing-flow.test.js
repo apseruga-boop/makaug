@@ -33,6 +33,10 @@ assert(
   'Listing field handlers should use the fast progress reply after saving data'
 );
 assert(
+  source.includes("const patch = { assisted_by_field_agent: false }") && source.includes("return respond(fastReply.message, fastReply.nextStep);"),
+  'Field-agent No reply should continue to the next missing field instead of restarting the old title loop'
+);
+assert(
   source.includes("const bedroomDraft = parseBedroomDraft(cleanBody) || { bedrooms: parseInt(cleanBody, 10) || 0 }"),
   'Bedroom step should preserve the old single-number path while supporting natural ranges'
 );

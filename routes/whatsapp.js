@@ -7043,8 +7043,11 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       return respond(t(lang, 'askFieldAgentDetails'), 'ask_field_agent_details');
     }
     if (isNegativeReply(cleanBody)) {
-      await patchDraft(phone, { assisted_by_field_agent: false });
-      return respond(t(lang, 'askTitle'), 'title');
+      const patch = { assisted_by_field_agent: false };
+      await patchDraft(phone, patch);
+      const mergedDraft = { ...draft, ...patch };
+      const fastReply = fastListingProgressReply(lang, patch, mergedDraft, 'Saved');
+      return respond(fastReply.message, fastReply.nextStep);
     }
     const naturalDetailDraft = buildNaturalListingDetailDraft(cleanBody, draft);
     if (naturalDetailDraft) {
@@ -7072,7 +7075,18 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       assisted_by_field_agent: true,
       field_agent_reference: fieldAgentReference
     });
-    return respond(t(lang, 'askTitle'), 'title');
+    const mergedDraft = {
+      ...draft,
+      assisted_by_field_agent: true,
+      field_agent_reference: fieldAgentReference
+    };
+    const fastReply = fastListingProgressReply(
+      lang,
+      { assisted_by_field_agent: true, field_agent_reference: fieldAgentReference },
+      mergedDraft,
+      'Saved'
+    );
+    return respond(fastReply.message, fastReply.nextStep);
   }
 
   // TITLE
