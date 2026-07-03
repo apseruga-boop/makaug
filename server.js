@@ -589,6 +589,11 @@ function authFromCookie(req) {
   }
 }
 
+function shouldServeAdminShellForApiKeyFallback(auth, pathname = '') {
+  const path = String(pathname || '').toLowerCase();
+  return Boolean(auth && (path === '/admin' || path.startsWith('/admin/') || path === '/king' || path.startsWith('/king/')));
+}
+
 function sendPublicIndex(req, res, next) {
   if (req.path.startsWith('/api/')) return next();
   if (isProtectedPath(req.path)) {
@@ -599,6 +604,18 @@ function sendPublicIndex(req, res, next) {
       return res.redirect(302, `/login?next=${encodeURIComponent(req.originalUrl || req.path)}`);
     }
     if (!roleCanAccessProtectedPath(auth, req.path)) {
+      if (shouldServeAdminShellForApiKeyFallback(auth, req.path)) {
+        try {
+          const html = readIndexHtml();
+          res.set('Cache-Control', 'no-store');
+          res.set('X-makaug-Admin-Api-Key-Fallback', '1');
+          return sendTextResponse(req, res, html, {
+            cacheControl: 'no-store'
+          });
+        } catch (error) {
+          return next(error);
+        }
+      }
       return res.status(403).send(renderProtectedLoginShell('/login?access=denied', {
         title: 'Access denied',
         message: 'This makaug area belongs to a different account type. Sign in with the right account to continue.'

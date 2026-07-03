@@ -32635,8 +32635,11 @@ function scrollAdminControlIntoView(selector) {
 async function openAdminControl(control, options = {}) {
   const target = typeof control === "string" ? adminControlForPath(control) : control;
   if (!target) return false;
-  if (!isSignedInAdminUser()) {
-    openAuthSignIn("admin");
+  if (!isSignedInAdminUser() && !adminApiKey) {
+    showPage("admin-dashboard", { history: false, source: options.source || "admin_api_key_fallback" });
+    renderAdminDashboard().catch((error) => {
+      console.warn("Admin API key fallback gate failed", error);
+    });
     return true;
   }
   if (target.page === "admin-docs") {
@@ -33609,7 +33612,7 @@ async function parseInitialDeepLink() {
 
   const adminControl = path === "/admin-dashboard" ? adminControlForPath("/admin") : adminControlForPath(path);
   if (adminControl) {
-    if (isSignedInAdminUser()) {
+    if (isSignedInAdminUser() || adminApiKey || authState?.user) {
       await openAdminControl(adminControl, { history: false, source: "deep_link", toast: false });
     } else {
       openAuthSignIn("admin");

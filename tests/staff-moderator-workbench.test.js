@@ -117,6 +117,9 @@ function run() {
   assert(app.includes('/api/admin/staff/bootstrap-five'), 'King dashboard should call staff bootstrap API');
   assert(app.includes('saveAdminGateApiKeyAndRefresh'), 'King dashboard should let a stale admin shell reconnect with ADMIN_API_KEY fallback');
   assert(app.includes('Role: Admin API Key • live backend'), 'King dashboard API-key fallback should render live backend status');
+  assert(app.includes('admin_api_key_fallback'), 'King dashboard should show the API-key reconnect gate when a signed-in non-admin opens /admin');
+  assert(server.includes('shouldServeAdminShellForApiKeyFallback'), 'server should not hard-403 the King shell before the API-key fallback can render');
+  assert(server.includes('X-makaug-Admin-Api-Key-Fallback'), 'server should mark the signed-in non-admin King shell fallback response');
   assert(app.includes('/api/staff/dashboard'), 'frontend should fetch staff dashboard API');
   assert(app.includes('staffDashboardRenderSeq'), 'staff dashboard should ignore stale first-load API responses');
   assert(app.includes('staffDashboardHasLiveData'), 'staff dashboard should not clear live data after a stale auth failure');
