@@ -41,6 +41,10 @@ assert(
   'Natural seller details must save bedrooms when the draft has null/empty bedrooms'
 );
 assert(
+  source.includes('const directBedroomDraft = parseBedroomDraft(cleanBody)') && source.includes('...(directBedroomDraft || {})'),
+  'Explicit listing-start routing must patch bedrooms from the first message before asking follow-up questions'
+);
+assert(
   source.includes("const fastReply = fastListingProgressReply(lang, patch, mergedDraft, 'Saved')"),
   'Listing field handlers should use the fast progress reply after saving data'
 );

@@ -5844,11 +5844,15 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     };
     const inferredListingType = draftHints.listing_type || inferListingTypeFromStartRequest(cleanBody, intentResult?.entities || {});
     const { listing_type: _listingTypeHint, ...draftHintPatch } = draftHints;
+    const directPrice = parseListingPriceDraft(cleanBody);
+    const directBedroomDraft = parseBedroomDraft(cleanBody);
     const mediaPatch = isListingPhotoMedia(runtime.mediaType, mediaUrl)
       ? appendIncomingListingPhotos(draft.photos || [], mediaUrl, runtime.mediaCount || 1)
       : { photos: draft.photos || [], added: 0 };
     const draftPatch = {
       ...draftHintPatch,
+      ...(directPrice ? { price: directPrice } : {}),
+      ...(directBedroomDraft || {}),
       ...(mediaPatch.added > 0 ? { photos: mediaPatch.photos } : {})
     };
     await patchSessionData(phone, {
