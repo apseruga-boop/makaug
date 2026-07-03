@@ -152,6 +152,7 @@ const kingLiveTabTrustedRowsVersion = 'king-live-tab-trusted-rows-20260630';
 const staffSourceMonitorGuideVersion = 'staff-source-monitor-guide-20260630';
 const staffDashboardAuthRaceVersion = 'staff-dashboard-auth-race-20260701-staff-dashboard-hydration-20260701-staff-dashboard-retry-20260701';
 const brokerDashboardOwnershipShareVersion = 'broker-dashboard-ownership-share-20260703d';
+const whatsappMatchboardRouteLinksVersion = 'whatsapp-matchboard-route-links-20260703';
 const publicAppVersionSuffixes = [
   captureHelperUsabilityVersion,
   studentNearestUniversityVersion,
@@ -173,7 +174,8 @@ const publicAppVersionSuffixes = [
   kingLiveTabTrustedRowsVersion,
   staffSourceMonitorGuideVersion,
   staffDashboardAuthRaceVersion,
-  brokerDashboardOwnershipShareVersion
+  brokerDashboardOwnershipShareVersion,
+  whatsappMatchboardRouteLinksVersion
 ];
 let cachedIndexHtml = null;
 const publicHtmlCache = new Map();

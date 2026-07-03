@@ -3,6 +3,8 @@ const fs = require('fs');
 const path = require('path');
 
 const whatsappRouteSource = fs.readFileSync(path.join(__dirname, '..', 'routes', 'whatsapp.js'), 'utf8');
+const htmlSource = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+const serverSource = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
 
 assert(whatsappRouteSource.includes('const WHATSAPP_PROPERTY_RESULT_LIMIT = 10'), 'WhatsApp property search should cap customer replies at 10 listings');
 assert(whatsappRouteSource.includes('const MIN_PUBLIC_WHATSAPP_PRICE_UGX = 10000'), 'WhatsApp public search should define a minimum plausible price guard');
@@ -21,6 +23,8 @@ assert(whatsappRouteSource.includes("land: '/land'"), 'Land more-results URLs sh
 assert(whatsappRouteSource.includes('return `${HOME_URL}${whatsappSearchResultsPath(type)}${query ? `?${query}` : \'\'}'), 'More-results URLs should put filters on the route query string, not inside a hash fragment');
 assert(!whatsappRouteSource.includes('`${HOME_URL}/#page-sale${query ? `?${query}` : \'\'}'), 'More-results URLs must not use the broken hash-query homepage link');
 assert(whatsappRouteSource.includes('const url = whatsappSearchResultsUrl(searchType, area);'), 'No-match challenge links should use the same public route URL helper');
+assert(htmlSource.includes('whatsapp-matchboard-route-links-20260703'), 'Frontend cache version must be bumped for WhatsApp matchboard link routing');
+assert(serverSource.includes('whatsappMatchboardRouteLinksVersion'), 'Server-side public app suffix list must include the WhatsApp matchboard cache bust');
 assert(whatsappRouteSource.includes('am: {') && whatsappRouteSource.includes("filter: 'ማጣሪያ'"), 'Formatter should have Amharic result-card copy instead of English-only copy');
 assert(whatsappRouteSource.includes('price IS NULL OR ${safeAlias}.price >= $'), 'Public WhatsApp result filters should suppress implausibly tiny scraped prices');
 
