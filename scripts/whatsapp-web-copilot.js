@@ -285,7 +285,8 @@ function isClosedBrowserError(error) {
 function hasChromiumProfileLockFiles() {
   return chromiumProfileLockFiles().some((filePath) => {
     try {
-      return fs.existsSync(filePath);
+      fs.lstatSync(filePath);
+      return true;
     } catch (_error) {
       return false;
     }
@@ -308,10 +309,11 @@ function clearChromiumProfileLockFiles() {
   let cleared = 0;
   for (const filePath of chromiumProfileLockFiles()) {
     try {
-      if (!fs.existsSync(filePath)) continue;
+      fs.lstatSync(filePath);
       fs.rmSync(filePath, { force: true, recursive: false });
       cleared += 1;
     } catch (error) {
+      if (error?.code === 'ENOENT') continue;
       log(`could not clear stale Chrome profile lock ${path.basename(filePath)}: ${error.message || error}`);
     }
   }
