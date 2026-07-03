@@ -1319,6 +1319,7 @@ function run() {
   assert(whatsappWebCopilotScript.includes('unreadPreviewSnapshot'), 'WhatsApp Web copilot must fall back to unread row previews when WhatsApp hides the active message DOM');
   assert(whatsappWebCopilotScript.includes('unread_preview_fallback'), 'WhatsApp Web unread-preview fallback must be tagged so stalled bot replies can be audited');
   assert(whatsappWebCopilotScript.includes('openChatRow'), 'WhatsApp Web copilot must reopen the exact unread row instead of relying only on a brittle selector index');
+  assert(whatsappWebCopilotScript.includes('setComposerTextWithDom'), 'WhatsApp Web copilot must recover outbound sends when a transient WhatsApp overlay blocks the reply composer click');
   assert(whatsappWebCopilotScript.includes('RECENT_CHAT_FAST_LANE_LIMIT'), 'WhatsApp Web copilot must check the newest recent-chat row every loop');
   assert(whatsappWebCopilotScript.includes('RECENT_CHAT_SWEEP_OPEN_LIMIT'), 'WhatsApp Web copilot must cap wider recent-chat openings');
   assert(whatsappWebCopilotScript.includes('shouldSkipRecentChatRow'), 'WhatsApp Web copilot must skip unchanged recent-chat rows briefly');

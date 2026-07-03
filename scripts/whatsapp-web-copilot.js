@@ -2189,6 +2189,68 @@ async function getReplyComposerText(page) {
   }, COMPOSER_SELECTORS);
 }
 
+async function setComposerTextWithDom(page, text) {
+  const result = await page.evaluate(({ selectors, message }) => {
+    const normalize = (value) => String(value || '').replace(/\s+/g, ' ').trim();
+    const isVisible = (el) => {
+      if (!el) return false;
+      const style = window.getComputedStyle(el);
+      if (style.visibility === 'hidden' || style.display === 'none' || Number(style.opacity || 1) === 0) return false;
+      const rect = el.getBoundingClientRect();
+      return rect.width > 8 && rect.height > 8;
+    };
+    const candidates = [];
+    for (const selector of selectors) {
+      try {
+        candidates.push(...Array.from(document.querySelectorAll(selector)).filter(isVisible));
+      } catch (_error) {
+        // Keep looking with the next selector.
+      }
+    }
+    const target = candidates[candidates.length - 1];
+    if (!target) return { ok: false, reason: 'composer_missing', text: '' };
+
+    target.focus();
+    const selection = window.getSelection?.();
+    const range = document.createRange?.();
+    if (selection && range) {
+      range.selectNodeContents(target);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+    document.execCommand?.('delete', false, null);
+    document.execCommand?.('insertText', false, message);
+
+    let current = normalize(target.innerText || target.textContent || '');
+    if (!current.includes(normalize(message).slice(0, 120))) {
+      target.textContent = message;
+      target.dispatchEvent(new InputEvent('input', {
+        bubbles: true,
+        cancelable: true,
+        inputType: 'insertText',
+        data: message
+      }));
+      target.dispatchEvent(new Event('change', { bubbles: true }));
+      current = normalize(target.innerText || target.textContent || '');
+    }
+
+    return {
+      ok: !!current && current.includes(normalize(message).slice(0, 120)),
+      reason: current ? null : 'text_not_inserted',
+      text: current
+    };
+  }, { selectors: COMPOSER_SELECTORS, message: String(text || '') }).catch((error) => ({
+    ok: false,
+    reason: error.message || String(error),
+    text: ''
+  }));
+
+  if (!result.ok) {
+    log(`DOM composer fallback failed: ${result.reason || 'unknown'}`);
+  }
+  return !!result.ok;
+}
+
 async function clickWhatsAppSend(page) {
   const clicked = await page.evaluate((selectors) => {
     for (const selector of selectors) {
@@ -2277,14 +2339,34 @@ async function waitForPostSendConfirmation(page, text, beforeState, timeoutMs = 
 
 async function replaceComposerText(page, text, timeoutMs = 1200) {
   const composer = await findReplyComposer(page, timeoutMs);
-  if (!composer) return false;
+  if (!composer) return setComposerTextWithDom(page, text);
 
-  await composer.click();
-  await composer.fill(String(text || '')).catch(async () => {
+  let focused = false;
+  try {
+    await composer.click({ timeout: Math.min(1500, Math.max(500, timeoutMs)) });
+    focused = true;
+  } catch (error) {
+    log(`reply composer click failed; trying DOM composer fallback: ${error.message || error}`);
+    if (await setComposerTextWithDom(page, text)) {
+      await page.waitForTimeout(10);
+      return true;
+    }
+    await composer.click({ timeout: 700, force: true }).then(() => {
+      focused = true;
+    }).catch(() => {});
+  }
+
+  try {
+    await composer.fill(String(text || ''), { timeout: 1500 });
+  } catch (_error) {
+    if (!focused && await setComposerTextWithDom(page, text)) {
+      await page.waitForTimeout(10);
+      return true;
+    }
     await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
     await page.keyboard.press('Backspace');
     await page.keyboard.type(String(text || ''), { delay: 1 });
-  });
+  }
   await page.waitForTimeout(10);
   return true;
 }
