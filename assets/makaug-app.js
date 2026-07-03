@@ -34210,7 +34210,36 @@ function syncActiveRouteSearchHandoff(source = "route_query_sync") {
   const page = pageForPublicRoute(window.location.pathname || "/");
   if (!page || !routeSearchHandoffPayload(page)) return false;
   if (!syncSectionSearchShell(page, { forceRouteQuery: true })) return false;
-  runSectionSearch(page, { source, backend: false });
+  applyRouteQueryToVisibleSectionSearch(page, source);
+  return true;
+}
+
+function routeQueryValueForSectionPage() {
+  const qs = new URLSearchParams(window.location.search || "");
+  return normalizeInput(
+    qs.get("q")
+    || qs.get("query")
+    || qs.get("search")
+    || qs.get("area")
+    || qs.get("district")
+    || qs.get("location")
+    || qs.get("campus")
+    || qs.get("university")
+    || ""
+  );
+}
+
+function applyRouteQueryToVisibleSectionSearch(page, source = "route_visible_query") {
+  const config = sectionSearchConfigFor(page);
+  const query = routeQueryValueForSectionPage();
+  if (!config || !query) return false;
+  const shell = document.getElementById(sectionSearchShellId(config.key));
+  if (!shell || shell.dataset.userEdited === "1") return false;
+  const shellInput = document.getElementById(`section-search-${config.key}-query`) || shell.querySelector(".section-search-text-input");
+  const legacyInput = document.getElementById(config.queryId);
+  if (shellInput && shellInput.value !== query) shellInput.value = query;
+  if (legacyInput && legacyInput.value !== query) legacyInput.value = query;
+  runSectionSearch(config.key, { source, backend: false });
   return true;
 }
 

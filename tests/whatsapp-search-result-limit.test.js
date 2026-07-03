@@ -33,6 +33,8 @@ assert(htmlSource.includes('whatsapp-matchboard-query-handoff-retry-20260703'), 
 assert(serverSource.includes('whatsappMatchboardQueryHandoffRetryVersion'), 'Server-side public app suffix list must include the WhatsApp query handoff retry cache bust');
 assert(htmlSource.includes('whatsapp-matchboard-inventory-sync-20260703'), 'Frontend cache version must be bumped for WhatsApp inventory refresh route sync');
 assert(serverSource.includes('whatsappMatchboardInventorySyncVersion'), 'Server-side public app suffix list must include the WhatsApp inventory refresh cache bust');
+assert(htmlSource.includes('whatsapp-matchboard-visible-query-sync-20260703'), 'Frontend cache version must be bumped for WhatsApp visible query sync');
+assert(serverSource.includes('whatsappMatchboardVisibleQuerySyncVersion'), 'Server-side public app suffix list must include the WhatsApp visible query cache bust');
 assert(whatsappRouteSource.includes('am: {') && whatsappRouteSource.includes("filter: 'ማጣሪያ'"), 'Formatter should have Amharic result-card copy instead of English-only copy');
 assert(whatsappRouteSource.includes('price IS NULL OR ${safeAlias}.price >= $'), 'Public WhatsApp result filters should suppress implausibly tiny scraped prices');
 

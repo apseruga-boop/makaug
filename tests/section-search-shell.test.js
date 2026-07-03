@@ -56,6 +56,9 @@ test('direct category route query links prefill and run section search', () => {
   assert.match(appSource, /startup_route_query_retry/);
   assert.match(appSource, /public_inventory_route_query/);
   assert.match(appSource, /shell\.dataset\.userEdited !== "1"/);
+  assert.match(appSource, /function applyRouteQueryToVisibleSectionSearch\(page, source = "route_visible_query"\)/);
+  assert.match(appSource, /document\.getElementById\(`section-search-\$\{config\.key\}-query`\)/);
+  assert.match(appSource, /runSectionSearch\(config\.key, \{ source, backend: false \}\)/);
   assert.match(appSource, /const routeQuery = routePayload\.query \|\| routePayload\.area \|\| ""/);
   assert.match(appSource, /if \(shellInput && \(!shellInput\.value \|\| options\.forceRouteQuery\)\) shellInput\.value = routeQuery/);
   assert.match(appSource, /filterStudents\(\)/);
