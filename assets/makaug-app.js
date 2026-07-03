@@ -26564,6 +26564,35 @@ function updateAccountAccessRoleFocus() {
     </div>` : "";
   }
   if (secondary) secondary.classList.toggle("hidden", accountAccessDrawerMode === "verify" || accountAccessDrawerMode === "forgot");
+  updateAccountAccessModeSwitches();
+}
+
+function isAccountAccessCreatingOrVerifying() {
+  return accountAccessDrawerMode === "create" || accountAccessDrawerMode === "verify";
+}
+
+function toggleAccountAccessMode() {
+  if (isAccountAccessCreatingOrVerifying()) {
+    showAccountAccessSignIn();
+    return;
+  }
+  showAccountAccessCreate();
+}
+
+function updateAccountAccessModeSwitches() {
+  const creating = isAccountAccessCreatingOrVerifying();
+  const label = creating ? accountAccessText("signIn") : accountAccessText("createAccount");
+  const secondaryLabel = creating ? "Already have an account? Sign in" : accountAccessText("createAccount");
+  const switchBtn = document.getElementById("account-access-mode-switch-btn");
+  if (switchBtn) {
+    switchBtn.textContent = label;
+    switchBtn.setAttribute("aria-label", creating ? "Sign in to an existing makaug.com account" : "Create a makaug.com account");
+  }
+  const secondaryBtn = document.getElementById("account-access-secondary-mode-btn");
+  if (secondaryBtn) {
+    secondaryBtn.textContent = secondaryLabel;
+    secondaryBtn.setAttribute("aria-label", creating ? "Sign in to an existing account" : "Create an account");
+  }
 }
 
 function applyAccountAccessTheme() {
@@ -26904,7 +26933,7 @@ function ensureAccountAccessDrawer() {
               <p class="text-xs uppercase tracking-wide text-green-700 font-bold" id="account-access-role-label">Property Finder</p>
               <h3 class="text-lg font-black text-gray-900" id="account-access-mode-label">Sign in</h3>
             </div>
-            <button type="button" onclick="showAccountAccessCreate()" class="text-sm font-bold text-green-700" data-auth-text="createAccount" data-auth-accent-link="1">Create an account</button>
+            <button id="account-access-mode-switch-btn" type="button" onclick="toggleAccountAccessMode()" class="text-sm font-bold text-green-700" data-auth-accent-link="1">Create an account</button>
           </div>
           <p id="account-access-role-body" class="text-sm text-gray-600 mt-2"></p>
           <div id="account-access-signin-wrap">
@@ -27067,7 +27096,7 @@ function ensureAccountAccessDrawer() {
             <button id="account-access-continue-btn" type="button" onclick="continueAccountAccess()" class="w-full min-h-[48px] bg-green-700 hover:bg-green-600 text-white py-3 rounded-xl font-bold">Continue</button>
           </div>
           <div id="account-access-secondary-actions" class="mt-4 flex flex-wrap gap-3 text-sm">
-            <button type="button" onclick="showAccountAccessCreate()" class="text-green-700 font-bold" data-auth-text="createAccount" data-auth-accent-link="1">Create an account</button>
+            <button id="account-access-secondary-mode-btn" type="button" onclick="toggleAccountAccessMode()" class="text-green-700 font-bold" data-auth-accent-link="1">Create an account</button>
             <button type="button" onclick="startAccountAccessForgotFlow()" class="text-gray-600 font-bold" data-auth-text="forgot">Forgot password?</button>
           </div>
         </div>
@@ -27863,21 +27892,26 @@ async function sendAccountAccessPasswordResetCode() {
     btn.textContent = "Sending...";
   }
   try {
-    await apiRequest("/api/auth/request-password-reset", {
+    const request = await apiRequest("/api/auth/request-password-reset", {
       method: "POST",
       body: isEmailReset
         ? { email, channel: "email", preferred_language: currentLang || "en" }
         : { phone, channel: "phone", preferred_language: currentLang || "en" }
     });
+    const resolvedChannel = request?.data?.channel === "phone" ? "phone" : (request?.data?.channel === "email" ? "email" : (isEmailReset ? "email" : "phone"));
     accountAccessForgotResetState = { channel: isEmailReset ? "email" : "phone", email, phone };
     document.getElementById("account-access-forgot-reset-fields")?.classList.remove("hidden");
     document.getElementById("account-access-forgot-method-wrap")?.classList.add("hidden");
     if (btn) btn.textContent = accountAccessText("resetPassword");
-    const channelLabel = isEmailReset ? "email" : "SMS/text";
-    toast(`We sent a password reset code by ${channelLabel}.`);
+    const channelLabel = resolvedChannel === "email" ? "email" : "SMS/text";
+    toast(request?.data?.message || `We sent a password reset code by ${channelLabel}.`);
     setTimeout(() => document.getElementById("account-access-reset-code")?.focus(), 30);
   } catch (error) {
-    toast(error.message || "Password reset request failed.");
+    const supportPhone = error.response?.support?.whatsapp || "0760112587";
+    const retry = Array.isArray(error.response?.retry_channels)
+      ? ` Try the other method, or WhatsApp makaug support on ${supportPhone}.`
+      : "";
+    toast(`${error.message || "Password reset request failed."}${retry}`);
   } finally {
     if (btn) {
       btn.disabled = false;

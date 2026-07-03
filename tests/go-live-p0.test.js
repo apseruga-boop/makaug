@@ -660,6 +660,8 @@ function run() {
   assert(authRoutes.includes("const lastName = cleanText(req.body.last_name || req.body.second_name || req.body.surname)") && authRoutes.includes("Second name / surname is required"), 'signup OTP backend should require and accept broker second-name/surname fields');
   assert(authRoutes.includes("signup_otp_email_fallback_to_sms") && authRoutes.includes("Email signup OTP failed; falling back to SMS"), 'signup OTP backend should fall back to SMS and log when email delivery fails');
   assert(authRoutes.includes("signup_otp_delivery_failed_all_channels") && authRoutes.includes("Email verification could not be sent and SMS fallback is unavailable"), 'signup OTP backend should report a clear combined provider failure when email and SMS both fail');
+  assert(authRoutes.includes('password_reset_otp_delivery_failed'), 'password reset OTP delivery failures should be logged with a clear type');
+  assert(authRoutes.includes('retry_channels'), 'login/reset OTP delivery failures should return retry channel guidance');
   assert(authRoutes.includes("last_name is required"), 'auth register route should require surname before creating an account');
   assert(authRoutes.includes("const preferredAudience = normalizeSignupAudience(req.body.audience"), 'password login should accept selected account audience for dashboard redirect');
   assert(authRoutes.includes("message: 'Signed in. Opening your makaug.com dashboard.'"), 'password login should return a dashboard handoff message');
@@ -675,6 +677,9 @@ function run() {
   assert(frontendSource.includes('Back to account type'), 'create-account flow should expose only a subtle Back to account type link before OTP');
   assert(frontendSource.includes('resetAccountAccessPasswordFromDrawer'), 'forgot password should run inside the shared auth drawer');
   assert(frontendSource.includes('id="account-access-forgot-wrap"'), 'forgot password should use inline drawer fields instead of prompt-only reset');
+  assert(frontendSource.includes('toggleAccountAccessMode'), 'account drawer should let existing brokers switch from create-account mode to sign in');
+  assert(frontendSource.includes('account-access-mode-switch-btn'), 'account drawer should expose a visible create/sign-in mode switch');
+  assert(frontendSource.includes('Already have an account? Sign in'), 'broker create flow should clearly show the existing-account sign-in path');
   assert(frontendSource.includes('portalModeForDashboardUrl'), 'auth success should understand backend dashboard redirect URLs');
   assert(frontendSource.includes('dashboardPageForPortalMode'), 'auth success should map dashboard redirects to mounted dashboard pages');
   assert(frontendSource.includes('window.location.href = targetRoute'), 'auth success should full-load protected dashboards when public HTML does not contain them');
@@ -1174,6 +1179,8 @@ function run() {
   assert(adminRoutes.includes("router.post('/setup-status/property-submission-test'"), 'admin setup status should run safe property submission proof');
   assert(adminRoutes.includes("router.post('/setup-status/provider-test'"), 'admin setup status should run provider proof');
   assert(adminRoutes.includes('sendPhoneOtp'), 'admin SMS provider proof should exercise real SMS delivery path');
+  assert(adminRoutes.includes('sendSupportEmail({') && adminRoutes.includes('provider_test_email'), 'admin email provider proof should exercise real outbound email delivery');
+  assert(adminRoutes.includes("base.deliveryChannel = 'email'"), 'admin email provider proof should report real delivery status');
   assert(adminRoutes.includes('SMS_TEST_PHONE'), 'admin SMS provider proof should support an explicit test phone');
   assert(adminRoutes.includes('AFRICASTALKING_USERNAME'), 'admin SMS setup status should require Africa\'s Talking username');
   assert(adminRoutes.includes('AFRICASTALKING_UESERNAME'), 'admin SMS setup status should warn about the misspelled Africa\'s Talking username key');

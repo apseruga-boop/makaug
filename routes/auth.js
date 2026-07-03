@@ -51,6 +51,35 @@ function isValidUgPhone(phone) {
   return /^\+256\d{9}$/.test(phone);
 }
 
+function isOtpDeliveryFailure(error) {
+  const message = String(error?.message || '').toLowerCase();
+  return message.includes('failed to send otp')
+    || message.includes('otp delivery')
+    || message.includes('delivery provider is not configured')
+    || message.includes('email is blocked')
+    || message.includes('sms delivery failed')
+    || message.includes('phone otp delivery');
+}
+
+function otpDeliveryUnavailableResponse({ channel = 'email', purpose = 'login', error } = {}) {
+  const isEmail = channel === 'email';
+  const reset = purpose === 'reset_password';
+  const supportWhatsapp = process.env.SUPPORT_WHATSAPP || process.env.WHATSAPP_SUPPORT_PHONE || '+256760112587';
+  const supportEmail = process.env.SUPPORT_EMAIL || 'info@makaug.com';
+  return {
+    ok: false,
+    error: isEmail
+      ? `${reset ? 'Password reset' : 'Verification'} email could not be sent right now. Try SMS/Text if your Uganda number is on the account, or contact makaug on WhatsApp.`
+      : `${reset ? 'Password reset' : 'Verification'} SMS could not be sent right now. Try email if your account has one, or contact makaug on WhatsApp.`,
+    retry_channels: ['email', 'phone'],
+    support: {
+      whatsapp: supportWhatsapp,
+      email: supportEmail
+    },
+    delivery_error: String(error?.message || 'otp_delivery_unavailable').slice(0, 180)
+  };
+}
+
 function isAdminOtpOverrideEnabled() {
   return parseBooleanLike(process.env.ADMIN_OTP_OVERRIDE_ENABLED, false);
 }
@@ -1418,13 +1447,30 @@ router.post('/request-otp', async (req, res, next) => {
       ? preferredLanguage
       : (exists.rows[0]?.preferred_language || 'en');
 
-    const otpIssue = await issueOtp({
-      purpose,
-      channel,
-      phone,
-      email,
-      preferredLanguage
-    });
+    let otpIssue = null;
+    try {
+      otpIssue = await issueOtp({
+        purpose,
+        channel,
+        phone,
+        email,
+        preferredLanguage
+      });
+    } catch (error) {
+      if (isOtpDeliveryFailure(error)) {
+        await logNotification(db, {
+          recipientPhone: phone,
+          recipientEmail: email,
+          channel: channel === 'email' ? 'email' : 'sms',
+          type: 'account_otp_delivery_failed',
+          status: 'failed',
+          payloadSummary: { purpose, requested_channel: channel },
+          failureReason: error.message || 'account_otp_delivery_failed'
+        });
+        return res.status(503).json(otpDeliveryUnavailableResponse({ channel, purpose, error }));
+      }
+      throw error;
+    }
 
     return res.json({
       ok: true,
@@ -1465,13 +1511,30 @@ router.post('/request-password-reset', async (req, res, next) => {
       ? preferredLanguageInput
       : (exists.rows[0]?.preferred_language || 'en');
 
-    const otpIssue = await issueOtp({
-      purpose: 'reset_password',
-      channel,
-      phone,
-      email,
-      preferredLanguage
-    });
+    let otpIssue = null;
+    try {
+      otpIssue = await issueOtp({
+        purpose: 'reset_password',
+        channel,
+        phone,
+        email,
+        preferredLanguage
+      });
+    } catch (error) {
+      if (isOtpDeliveryFailure(error)) {
+        await logNotification(db, {
+          recipientPhone: phone,
+          recipientEmail: email,
+          channel: channel === 'email' ? 'email' : 'sms',
+          type: 'password_reset_otp_delivery_failed',
+          status: 'failed',
+          payloadSummary: { purpose: 'reset_password', requested_channel: channel },
+          failureReason: error.message || 'password_reset_otp_delivery_failed'
+        });
+        return res.status(503).json(otpDeliveryUnavailableResponse({ channel, purpose: 'reset_password', error }));
+      }
+      throw error;
+    }
 
     return res.json({
       ok: true,

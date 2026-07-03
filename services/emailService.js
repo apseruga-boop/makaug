@@ -19,6 +19,15 @@ function getDefaultEmailFrom() {
   return `makaug.com <${getSupportEmail()}>`;
 }
 
+function getResendEmailFrom() {
+  const configured = cleanText(
+    process.env.RESEND_FROM
+      || process.env.RESEND_FROM_EMAIL
+      || process.env.RESEND_EMAIL_FROM
+  );
+  return configured || getDefaultEmailFrom();
+}
+
 function stripHtml(value) {
   return String(value || '').replace(/<[^>]*>/g, '').trim();
 }
@@ -408,7 +417,7 @@ async function sendViaResend({ to, subject, text, html, replyTo }) {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) return { sent: false, reason: 'resend_not_configured' };
 
-  const from = getDefaultEmailFrom();
+  const from = getResendEmailFrom();
 
   const payload = {
     from,
@@ -431,7 +440,11 @@ async function sendViaResend({ to, subject, text, html, replyTo }) {
 
   if (!resp.ok) {
     const body = await resp.text();
-    return { sent: false, provider: 'resend', status: resp.status, error: body };
+    const lowerBody = String(body || '').toLowerCase();
+    const setupAction = resp.status === 403 && (lowerBody.includes('domain') || lowerBody.includes('from') || lowerBody.includes('permission'))
+      ? 'Verify the Resend sending domain or set RESEND_FROM to a verified Resend sender.'
+      : null;
+    return { sent: false, provider: 'resend', status: resp.status, error: body, setupAction };
   }
 
   const data = await resp.json();

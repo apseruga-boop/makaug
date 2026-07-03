@@ -8706,16 +8706,56 @@ router.post('/setup-status/provider-test', async (req, res, next) => {
     };
     let log = null;
     if (provider === 'email') {
+      let delivery = { sent: false, reason: 'email_provider_missing' };
+      if (configured) {
+        delivery = await sendSupportEmail({
+          to: adminTestEmail(),
+          subject: 'makaug email provider test',
+          text: [
+            'makaug email provider test.',
+            'No action needed.',
+            `Created: ${new Date().toISOString()}`
+          ].join('\n')
+        });
+      }
+      const deliveryStatus = configured ? notificationStatusFromDelivery(delivery) : 'provider_missing';
       log = await logEmailEvent(db, {
         eventType: 'admin_provider_test_email',
         recipientEmail: adminTestEmail(),
         recipientRole: 'admin',
         templateKey: 'provider_test_email',
         subject: 'makaug email provider test',
-        status: configured ? 'queued' : 'provider_missing',
-        provider: configured ? 'configured' : null,
-        failureReason: configured ? null : 'email_provider_missing'
+        status: deliveryStatus,
+        provider: delivery.provider || (configured ? 'configured' : null),
+        providerMessageId: delivery.id || null,
+        failureReason: deliveryStatus === 'sent' || deliveryStatus === 'queued'
+          ? null
+          : (delivery.error || delivery.reason || delivery.setupAction || 'email_provider_test_failed'),
+        sentAt: delivery.sent ? new Date() : null
       });
+      await logNotification(db, {
+        recipientEmail: adminTestEmail(),
+        channel: 'email',
+        type: 'provider_test_email',
+        status: deliveryStatus,
+        payloadSummary: {
+          provider,
+          configured,
+          launch_proof: true,
+          delivery_provider: delivery.provider || null,
+          provider_status: delivery.status || null,
+          setup_action: delivery.setupAction || null
+        },
+        failureReason: deliveryStatus === 'sent' || deliveryStatus === 'queued'
+          ? null
+          : (delivery.error || delivery.reason || delivery.setupAction || 'email_provider_test_failed'),
+        sentAt: delivery.sent ? new Date() : null
+      });
+      base.status = deliveryStatus;
+      base.deliveryChannel = 'email';
+      base.deliveryProvider = delivery.provider || null;
+      base.providerStatus = delivery.status || null;
+      base.setupAction = delivery.setupAction || null;
     } else if (provider === 'whatsapp') {
       log = await logWhatsAppMessage(db, {
         recipientPhone: adminTestPhone(),
