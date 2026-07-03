@@ -1642,7 +1642,7 @@ function isNaturalSellerListingStatement(input) {
     return false;
   }
 
-  const propertyObject = '(?:property|house|home|land|plot|plots|farm|apartment|flat|room|rental|hostel|commercial|shop|office|building)';
+  const propertyObject = '(?:property|house|home|land|plot|plots|farm|apartment|flat|condo|condos|condominium|room|rental|hostel|commercial|shop|office|building)';
   return (
     new RegExp(`\\b(?:am|i am|i'm|im|we are|we're)\\s+selling\\b.{0,140}\\b${propertyObject}\\b`, 'i').test(text)
     || new RegExp(`\\b(?:selling|sell)\\s+(?:my|our|the|a|an)?\\s*.{0,100}\\b${propertyObject}\\b`, 'i').test(text)
@@ -1673,6 +1673,56 @@ function stripMakaugBrandLocationNoise(value) {
     .replace(/\b(?:www\.)?makaug(?:\.com)?\b/gi, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+const SELLER_LOCATION_HINTS = [
+  { area: 'Kololo', district: 'Kampala', pattern: /\bkololo\b/i },
+  { area: 'Mawanda Road', district: 'Kampala', pattern: /\bmawanda(?:\s+road)?\b/i },
+  { area: 'Entebbe', district: 'Wakiso', pattern: /\bentebbe\b/i },
+  { area: 'Ntinda', district: 'Kampala', pattern: /\bntinda\b/i },
+  { area: 'Bugolobi', district: 'Kampala', pattern: /\bbugolobi\b/i },
+  { area: 'Kyanja', district: 'Kampala', pattern: /\bkyanja\b/i },
+  { area: 'Naguru', district: 'Kampala', pattern: /\bnaguru\b/i },
+  { area: 'Nakasero', district: 'Kampala', pattern: /\bnakasero\b/i },
+  { area: 'Munyonyo', district: 'Kampala', pattern: /\bmunyonyo\b/i },
+  { area: 'Muyenga', district: 'Kampala', pattern: /\bmuyenga\b/i },
+  { area: 'Makindye', district: 'Kampala', pattern: /\bmakindye\b/i },
+  { area: 'Kansanga', district: 'Kampala', pattern: /\bkansanga\b/i },
+  { area: 'Kira', district: 'Wakiso', pattern: /\bkira\b/i },
+  { area: 'Najjera', district: 'Wakiso', pattern: /\bnajjera\b/i },
+  { area: 'Lubowa', district: 'Wakiso', pattern: /\blubowa\b/i },
+  { area: 'Seguku', district: 'Wakiso', pattern: /\bseguku\b/i },
+  { area: 'Kajjansi', district: 'Wakiso', pattern: /\bkajjansi\b/i },
+  { area: 'Mukono', district: 'Mukono', pattern: /\bmukono\b/i }
+];
+
+function uniqueNormalizedValues(values = []) {
+  const seen = new Set();
+  const output = [];
+  for (const value of values) {
+    const clean = normalizeInput(value);
+    const key = clean.toLowerCase();
+    if (!clean || seen.has(key)) continue;
+    seen.add(key);
+    output.push(clean);
+  }
+  return output;
+}
+
+function extractSellerKnownLocationHints(input = '') {
+  const clean = stripMakaugBrandLocationNoise(input);
+  if (!clean) return {};
+  const matchedLocations = SELLER_LOCATION_HINTS.filter((location) => location.pattern.test(clean));
+  const directDistricts = DISTRICTS.filter((district) => new RegExp(`\\b${district.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(clean));
+  const areas = uniqueNormalizedValues(matchedLocations.map((location) => location.area));
+  const districts = uniqueNormalizedValues([
+    ...matchedLocations.map((location) => location.district),
+    ...directDistricts
+  ]);
+  return {
+    ...(areas.length ? { area: areas.join(', ') } : {}),
+    ...(districts.length ? { district: districts.join(', ') } : {})
+  };
 }
 
 function isBadSellerAreaHint(candidate) {
@@ -1736,8 +1786,11 @@ function extractSellerListingDraftHints(input, entities = {}) {
   const listingType = inferListingTypeFromStartRequest(clean, entities);
   if (listingType) hints.listing_type = listingType;
 
+  const locationHints = extractSellerKnownLocationHints(clean);
   const area = parseSellerListingAreaHint(clean);
-  if (area) hints.area = area;
+  if (locationHints.area) hints.area = locationHints.area;
+  else if (area) hints.area = area;
+  if (locationHints.district) hints.district = locationHints.district;
 
   const price = parseListingPriceDraft(clean);
   if (price) hints.price = price;
@@ -1794,7 +1847,7 @@ function buildNaturalListingDetailDraft(input, draft = {}) {
     whatsapp_natural_detail_captured_at: new Date().toISOString()
   };
   const district = firstDistrictFromText(clean);
-  if (district && !normalizeInput(draft.district)) {
+  if (!patch.district && district && !normalizeInput(draft.district)) {
     patch.district = district;
   }
   const price = parseListingPriceDraft(clean);
@@ -1882,6 +1935,7 @@ function nextListingDraftStep(draft = {}) {
   if (isDraftMissingValue(draft, 'title')) return 'title';
   if (isDraftMissingValue(draft, 'district')) return 'district';
   if (isDraftMissingValue(draft, 'area')) return 'area';
+  if (!['land', 'commercial'].includes(normalizeInput(draft.listing_type)) && isDraftMissingValue(draft, 'bedrooms')) return 'bedrooms';
   if (isDraftMissingValue(draft, 'price')) return 'price';
   if (draft.listing_type === 'rent' && isDraftMissingValue(draft, 'deposit_amount')) return 'ask_deposit';
   if (draft.listing_type === 'rent' && isDraftMissingValue(draft, 'contract_months')) return 'ask_contract';
@@ -7202,9 +7256,18 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
   // PRICE
   if (step === 'price') {
-    const price = parseListingPriceDraft(cleanBody) || parseInt(cleanBody.replace(/[^0-9]/g, ''), 10);
-    if (!price || price < 10000) return respond(t(lang, 'invalidPrice'), 'price');
     const bedroomDraft = parseBedroomDraft(cleanBody) || {};
+    const directPrice = parseListingPriceDraft(cleanBody);
+    const compactDigits = cleanBody.replace(/[^0-9]/g, '');
+    const fallbackPrice = compactDigits.length >= 5 ? parseInt(compactDigits, 10) : null;
+    const price = directPrice || fallbackPrice;
+    if ((!price || price < 10000) && bedroomDraft && isDraftMissingValue(draft, 'bedrooms')) {
+      await patchDraft(phone, bedroomDraft);
+      const mergedDraft = { ...draft, ...bedroomDraft };
+      const fastReply = fastListingProgressReply(lang, bedroomDraft, mergedDraft, 'Saved bedrooms');
+      return respond(fastReply.message, fastReply.nextStep);
+    }
+    if (!price || price < 10000) return respond(t(lang, 'invalidPrice'), 'price');
     const patch = { price, ...bedroomDraft };
     await patchDraft(phone, patch);
     const mergedDraft = { ...draft, ...patch };
@@ -7258,14 +7321,14 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     const patch = { ...bedroomDraft, ...descriptionPatch };
     await patchDraft(phone, patch);
     const mergedDraft = { ...draft, ...patch };
+    const fastReply = fastListingProgressReply(lang, patch, mergedDraft, 'Saved');
     const existingDescription = normalizeInput(mergedDraft.description || mergedDraft.source_description_hint);
-    if (existingDescription.length >= 10) {
+    if (fastReply.nextStep === 'description' && existingDescription.length >= 10) {
       if (!normalizeInput(mergedDraft.description)) {
         await patchDraft(phone, { description: existingDescription.slice(0, 1000) });
       }
       return respond(savedDescriptionPrompt(lang), 'photos');
     }
-    const fastReply = fastListingProgressReply(lang, patch, mergedDraft, 'Saved');
     return respond(fastReply.message, fastReply.nextStep);
   }
 

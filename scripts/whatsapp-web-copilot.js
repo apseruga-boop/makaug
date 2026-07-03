@@ -182,7 +182,9 @@ const SEND_RETRY_CONFIRM_MS = Math.min(
   Math.max(300, Number.isFinite(configuredSendRetryConfirmMs) ? configuredSendRetryConfirmMs : 750)
 );
 const TRUST_SEND_ON_COMPOSER_CLEAR = !['0', 'false', 'no', 'off'].includes(
-  String(process.env.WHATSAPP_WEB_COPILOT_TRUST_SEND_ON_COMPOSER_CLEAR || 'true').trim().toLowerCase()
+  HEADLESS_BROWSER
+    ? String(process.env.WHATSAPP_WEB_COPILOT_TRUST_SEND_ON_COMPOSER_CLEAR || 'true').trim().toLowerCase()
+    : String(process.env.WHATSAPP_WEB_COPILOT_TRUST_SEND_ON_COMPOSER_CLEAR || 'false').trim().toLowerCase()
 );
 const configuredRecentlySentReplyTtlMs = Number(process.env.WHATSAPP_WEB_COPILOT_RECENTLY_SENT_REPLY_TTL_MS || 15000);
 const RECENTLY_SENT_REPLY_TTL_MS = Math.min(

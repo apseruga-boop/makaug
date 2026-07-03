@@ -25,6 +25,14 @@ assert(
   'Natural seller details should capture known districts from combined listing messages'
 );
 assert(
+  source.includes('const SELLER_LOCATION_HINTS') && source.includes("area: 'Kololo'") && source.includes("area: 'Mawanda Road'") && source.includes("area: 'Entebbe'"),
+  'Natural seller details should save known neighbourhoods from phrases like condos in Kololo, Mawanda Road and Entebbe'
+);
+assert(
+  source.includes('function extractSellerKnownLocationHints') && source.includes('locationHints.district'),
+  'Natural seller details should infer districts from known locations without asking the same location question again'
+);
+assert(
   source.includes('parseListingPriceDraft(clean)'),
   'Natural seller details should capture price from combined listing messages'
 );
@@ -59,6 +67,22 @@ assert(
 assert(
   source.includes("const bedroomDraft = parseBedroomDraft(cleanBody) || { bedrooms: parseInt(cleanBody, 10) || 0 }"),
   'Bedroom step should preserve the old single-number path while supporting natural ranges'
+);
+assert(
+  source.includes('condo|condos|condominium'),
+  'Natural seller listing detection should understand condo and condominium wording'
+);
+assert(
+  source.includes("if (!['land', 'commercial'].includes(normalizeInput(draft.listing_type)) && isDraftMissingValue(draft, 'bedrooms')) return 'bedrooms';"),
+  'House, apartment and condo listings should ask bedrooms after location before asking price'
+);
+assert(
+  source.includes("const compactDigits = cleanBody.replace(/[^0-9]/g, '')") && source.includes("fastListingProgressReply(lang, bedroomDraft, mergedDraft, 'Saved bedrooms')"),
+  'Price step should treat 1,2,3,4 as bedroom options instead of saving a bad small price'
+);
+assert(
+  source.includes("fastReply.nextStep === 'description' && existingDescription.length >= 10"),
+  'Bedroom step should only skip to photos from a saved natural description after price and other required fields are complete'
 );
 
 console.log('WhatsApp five-step listing flow checks passed');
