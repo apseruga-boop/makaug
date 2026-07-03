@@ -1897,6 +1897,30 @@ function savedListingFieldSummary(patch = {}) {
   return saved;
 }
 
+function inferBedroomDraftFromSavedText(draft = {}) {
+  const text = [
+    draft.title,
+    draft.description,
+    draft.source_description_hint,
+    draft.whatsapp_seller_statement
+  ].map((value) => normalizeInput(value)).filter(Boolean).join(' ');
+  return parseBedroomDraft(text);
+}
+
+function addInferredBedroomPatch(draft = {}, patch = {}) {
+  const merged = { ...draft, ...patch };
+  if (!isDraftMissingValue(merged, 'bedrooms')) {
+    return { patch, mergedDraft: merged };
+  }
+  const inferred = inferBedroomDraftFromSavedText(merged);
+  if (!inferred) return { patch, mergedDraft: merged };
+  const nextPatch = { ...patch, ...inferred };
+  return {
+    patch: nextPatch,
+    mergedDraft: { ...merged, ...inferred }
+  };
+}
+
 function fastListingProgressReply(lang, patch = {}, updatedDraft = {}, intro = 'Saved') {
   const nextStep = nextListingDraftStep(updatedDraft);
   const summary = savedListingFieldSummary(patch);
@@ -7058,9 +7082,10 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       return respond(t(lang, 'askFieldAgentDetails'), 'ask_field_agent_details');
     }
     if (isNegativeReply(cleanBody)) {
-      const patch = { assisted_by_field_agent: false };
+      let patch = { assisted_by_field_agent: false };
+      let mergedDraft = { ...draft, ...patch };
+      ({ patch, mergedDraft } = addInferredBedroomPatch(draft, patch));
       await patchDraft(phone, patch);
-      const mergedDraft = { ...draft, ...patch };
       const fastReply = fastListingProgressReply(lang, patch, mergedDraft, 'Saved');
       return respond(fastReply.message, fastReply.nextStep);
     }
@@ -7170,8 +7195,12 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
   // CONTRACT
   if (step === 'ask_contract') {
-    await patchDraft(phone, { contract_months: parseInt(cleanBody, 10) || 12 });
-    return respond(t(lang, 'askBedrooms'), 'bedrooms');
+    let patch = { contract_months: parseInt(cleanBody, 10) || 12 };
+    let mergedDraft = { ...draft, ...patch };
+    ({ patch, mergedDraft } = addInferredBedroomPatch(draft, patch));
+    await patchDraft(phone, patch);
+    const fastReply = fastListingProgressReply(lang, patch, mergedDraft, 'Saved');
+    return respond(fastReply.message, fastReply.nextStep);
   }
 
   // UNIVERSITY
@@ -7182,8 +7211,12 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
   // DISTANCE
   if (step === 'ask_distance') {
-    await patchDraft(phone, { distance_to_uni_km: parseFloat(cleanBody) || 1 });
-    return respond(t(lang, 'askBedrooms'), 'bedrooms');
+    let patch = { distance_to_uni_km: parseFloat(cleanBody) || 1 };
+    let mergedDraft = { ...draft, ...patch };
+    ({ patch, mergedDraft } = addInferredBedroomPatch(draft, patch));
+    await patchDraft(phone, patch);
+    const fastReply = fastListingProgressReply(lang, patch, mergedDraft, 'Saved');
+    return respond(fastReply.message, fastReply.nextStep);
   }
 
   // BEDROOMS

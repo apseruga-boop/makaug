@@ -45,11 +45,15 @@ assert(
   'Explicit listing-start routing must patch bedrooms from the first message before asking follow-up questions'
 );
 assert(
+  source.includes('function addInferredBedroomPatch') && (source.match(/addInferredBedroomPatch\(draft, patch\)/g) || []).length >= 3,
+  'Follow-up steps should infer saved bedroom text before repeating the bedroom prompt'
+);
+assert(
   source.includes("const fastReply = fastListingProgressReply(lang, patch, mergedDraft, 'Saved')"),
   'Listing field handlers should use the fast progress reply after saving data'
 );
 assert(
-  source.includes("const patch = { assisted_by_field_agent: false }") && source.includes("return respond(fastReply.message, fastReply.nextStep);"),
+  source.includes("let patch = { assisted_by_field_agent: false }") && source.includes("return respond(fastReply.message, fastReply.nextStep);"),
   'Field-agent No reply should continue to the next missing field instead of restarting the old title loop'
 );
 assert(
