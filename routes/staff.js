@@ -209,6 +209,18 @@ function pendingReviewWhere(alias = 'p') {
   `;
 }
 
+function brokerReviewWhere(alias = 'p') {
+  const prefix = alias ? `${alias}.` : '';
+  return `(
+    LOWER(COALESCE(${prefix}listed_via, '')) LIKE '%broker%'
+    OR LOWER(COALESCE(${prefix}source, '')) LIKE '%broker%'
+    OR LOWER(COALESCE(${prefix}lister_type, '')) IN ('agent', 'broker')
+    OR ${prefix}agent_id IS NOT NULL
+    OR COALESCE(${prefix}extra_fields->>'broker_submission', '') IN ('true', '1', 'yes')
+    OR NULLIF(${prefix}extra_fields->>'broker_agent_id', '') IS NOT NULL
+  )`;
+}
+
 function staffVisiblePropertyWhere(alias = 'p') {
   const prefix = alias ? `${alias}.` : '';
   return `
@@ -493,13 +505,14 @@ async function buildDashboardFastPayload(req) {
          COUNT(*)::int AS database_total,
          COUNT(*) FILTER (WHERE ${staffVisiblePropertyWhere('p')})::int AS staff_visible_total,
          COUNT(*) FILTER (WHERE ${pendingReviewWhere('p')})::int AS pending_review,
+         COUNT(*) FILTER (WHERE ${pendingReviewWhere('p')} AND ${brokerReviewWhere('p')})::int AS broker_pending_review,
          COUNT(*) FILTER (WHERE ${publicCustomerVisiblePropertyWhere('p')})::int AS live,
          COUNT(*) FILTER (WHERE LOWER(COALESCE(p.status, '')) IN (${sqlList(STAFF_REMOVED_STATUSES)}))::int AS staff_removed,
          COUNT(*) FILTER (WHERE ${staffVisiblePropertyWhere('p')} AND COALESCE(p.extra_fields->>'found_online', p.extra_fields->>'found_online_candidate', p.extra_fields->>'social_search_candidate', '') ~* '^(true|1|yes)$')::int AS found_online,
          COUNT(*) FILTER (WHERE ${staffVisiblePropertyWhere('p')} AND LOWER(COALESCE(p.source, p.listed_via, '')) IN ('website','web'))::int AS website_submitted
        FROM properties p`,
       [],
-      { database_total: 0, staff_visible_total: 0, pending_review: 0, live: 0, staff_removed: 0, found_online: 0, website_submitted: 0 }
+      { database_total: 0, staff_visible_total: 0, pending_review: 0, broker_pending_review: 0, live: 0, staff_removed: 0, found_online: 0, website_submitted: 0 }
     ),
     safeOne(
       `SELECT
@@ -633,6 +646,7 @@ async function dashboardPayload(req) {
     whatsappSummary,
     recentActivity,
     reviewRows,
+    brokerReviewRows,
     leadRows,
     adRows,
     whatsappRows,
@@ -712,7 +726,7 @@ async function dashboardPayload(req) {
               p.price, p.price_period, p.bedrooms, p.bathrooms, p.title_type,
               p.status, p.moderation_stage, p.moderation_reason, p.created_at, p.updated_at,
               p.inquiry_reference, p.lister_name, p.lister_phone, p.lister_email, p.source, p.listed_via,
-              p.extra_fields,
+              p.lister_type, p.agent_id, p.extra_fields,
               COALESCE(p.extra_fields->>'source_url', p.extra_fields->>'source_post_url', p.extra_fields->>'tiktok_url', p.extra_fields->>'youtube_url', p.extra_fields->>'video_url') AS source_url,
               COALESCE(p.extra_fields->>'source_platform', p.extra_fields->>'source_badge', p.source, p.listed_via) AS source_platform,
               0::int AS duplicate_count,
@@ -722,6 +736,26 @@ async function dashboardPayload(req) {
          SELECT url FROM property_images i WHERE i.property_id = p.id ORDER BY i.is_primary DESC, i.sort_order ASC, i.created_at ASC LIMIT 1
        ) img ON true
        WHERE ${pendingReviewWhere('p')}
+       ORDER BY COALESCE(p.updated_at, p.created_at) DESC
+       LIMIT $1`,
+      [queueLimit]
+    ),
+    safeRows(
+      `SELECT p.id, p.title, p.description, p.listing_type, p.property_type, p.district, p.area, p.address,
+              p.price, p.price_period, p.bedrooms, p.bathrooms, p.title_type,
+              p.status, p.moderation_stage, p.moderation_reason, p.created_at, p.updated_at,
+              p.inquiry_reference, p.lister_name, p.lister_phone, p.lister_email, p.source, p.listed_via,
+              p.lister_type, p.agent_id, p.extra_fields,
+              COALESCE(p.extra_fields->>'source_url', p.extra_fields->>'source_post_url', p.extra_fields->>'tiktok_url', p.extra_fields->>'youtube_url', p.extra_fields->>'video_url') AS source_url,
+              COALESCE(p.extra_fields->>'source_platform', p.extra_fields->>'source_badge', p.source, p.listed_via) AS source_platform,
+              0::int AS duplicate_count,
+              img.url AS primary_image_url
+       FROM properties p
+       LEFT JOIN LATERAL (
+         SELECT url FROM property_images i WHERE i.property_id = p.id ORDER BY i.is_primary DESC, i.sort_order ASC, i.created_at ASC LIMIT 1
+       ) img ON true
+       WHERE ${pendingReviewWhere('p')}
+         AND ${brokerReviewWhere('p')}
        ORDER BY COALESCE(p.updated_at, p.created_at) DESC
        LIMIT $1`,
       [queueLimit]
@@ -909,6 +943,7 @@ async function dashboardPayload(req) {
       definitions: staffMetricDefinitions()
     },
     review_queue: reviewRows,
+    broker_review_queue: brokerReviewRows,
     leads: leadRows,
     advertising_inquiries: adRows,
     whatsapp_conversations: whatsappRows,

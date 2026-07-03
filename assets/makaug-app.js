@@ -9723,6 +9723,7 @@ function setStaffDashboardLoadingState(message = "Staff dashboard loading...") {
   [
     "staff-stat-total",
     "staff-stat-pending",
+    "staff-stat-broker-pending",
     "staff-stat-approvals",
     "staff-stat-leads",
     "staff-stat-ads",
@@ -9821,6 +9822,39 @@ async function saveStaffProfile(event) {
   }
 }
 
+function staffReviewQueueCardHtml(item = {}, options = {}) {
+  const location = [item.area, item.district].filter(Boolean).join(", ") || "Location needs checking";
+  const price = item.price ? `UGX ${Number(item.price || 0).toLocaleString("en-UG")}` : "Price not stated";
+  const duplicateCount = Number(item.duplicate_count || 0) || 0;
+  const sourceUrl = String(item.source_url || "").trim();
+  const brokerBadge = adminIsBrokerSubmissionListing(item)
+    ? `<span class="inline-flex rounded-full bg-emerald-50 text-emerald-800 border border-emerald-100 px-2 py-0.5 text-[11px] font-black">Broker listing</span>`
+    : "";
+  const queueNote = options.brokerQueue
+    ? `<div class="mt-2 rounded-xl bg-emerald-50 border border-emerald-100 p-2 text-xs text-emerald-900">Broker-submitted listing. Check location, price, photos, and broker authority, then approve to publish.</div>`
+    : "";
+  return `
+    <article class="border border-gray-200 rounded-2xl p-4">
+      <div class="flex items-start justify-between gap-3">
+        <div class="min-w-0">
+          <div class="font-black text-gray-900">${adminEscape(item.title || "Untitled listing")} ${brokerBadge}</div>
+          <div class="text-xs text-gray-500 mt-1">${adminEscape(location)} • ${adminEscape(item.listing_type || item.property_type || "property")} • ${adminEscape(price)}</div>
+          <div class="text-xs text-gray-500 mt-1">Owner/contact: ${adminEscape(item.lister_name || item.lister_phone || item.lister_email || "not recorded")}</div>
+          <div class="text-xs text-gray-500 mt-1">Source: ${adminEscape(item.source_platform || item.source || item.listed_via || "website")}${sourceUrl ? ` • <a href="${adminAttr(sourceUrl)}" target="_blank" rel="noopener noreferrer" class="font-black text-blue-700 underline underline-offset-2">open evidence</a>` : ""}</div>
+          ${queueNote}
+          ${duplicateCount ? `<div class="mt-2 rounded-xl bg-red-50 border border-red-100 p-2 text-xs text-red-800"><strong>${staffNumber(duplicateCount)} possible duplicate${duplicateCount === 1 ? "" : "s"}.</strong> Compare before publishing.</div>` : ""}
+          ${item.moderation_reason ? `<div class="mt-2 rounded-xl bg-amber-50 border border-amber-100 p-2 text-xs text-amber-900">${adminEscape(item.moderation_reason)}</div>` : ""}
+        </div>
+        <span class="shrink-0 rounded-full bg-amber-50 text-amber-800 border border-amber-100 px-2.5 py-1 text-[11px] font-black">${adminEscape(item.status || item.moderation_stage || "pending")}</span>
+      </div>
+      <div class="mt-3 flex flex-wrap gap-2">
+        <button type="button" onclick="openStaffListingPreview(${propertyIdArg(item.id)})" class="bg-slate-900 hover:bg-slate-800 text-white px-3 py-2 rounded-lg text-xs font-black"><i class="fas fa-eye mr-1"></i>Preview & edit</button>
+        <button type="button" onclick="staffModerateListing(${propertyIdArg(item.id)}, 'rejected')" class="border border-red-200 text-red-700 hover:bg-red-50 px-3 py-2 rounded-lg text-xs font-black"><i class="fas fa-xmark mr-1"></i>Reject with reason</button>
+        <button type="button" onclick="staffModerateListing(${propertyIdArg(item.id)}, 'pending')" class="border border-gray-200 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-black"><i class="fas fa-rotate-left mr-1"></i>Keep pending</button>
+      </div>
+    </article>`;
+}
+
 function renderStaffReviewQueue(rows = []) {
   const wrap = document.getElementById("staff-review-queue");
   if (!wrap) return;
@@ -9828,31 +9862,17 @@ function renderStaffReviewQueue(rows = []) {
     wrap.innerHTML = staffEmpty("No listings are waiting for staff review.");
     return;
   }
-  wrap.innerHTML = rows.map((item) => {
-    const location = [item.area, item.district].filter(Boolean).join(", ") || "Location needs checking";
-    const price = item.price ? `UGX ${Number(item.price || 0).toLocaleString("en-UG")}` : "Price not stated";
-    const duplicateCount = Number(item.duplicate_count || 0) || 0;
-    const sourceUrl = String(item.source_url || "").trim();
-    return `
-      <article class="border border-gray-200 rounded-2xl p-4">
-        <div class="flex items-start justify-between gap-3">
-          <div class="min-w-0">
-            <div class="font-black text-gray-900">${adminEscape(item.title || "Untitled listing")}</div>
-            <div class="text-xs text-gray-500 mt-1">${adminEscape(location)} • ${adminEscape(item.listing_type || item.property_type || "property")} • ${adminEscape(price)}</div>
-            <div class="text-xs text-gray-500 mt-1">Owner/contact: ${adminEscape(item.lister_name || item.lister_phone || item.lister_email || "not recorded")}</div>
-            <div class="text-xs text-gray-500 mt-1">Source: ${adminEscape(item.source_platform || item.source || item.listed_via || "website")}${sourceUrl ? ` • <a href="${adminAttr(sourceUrl)}" target="_blank" rel="noopener noreferrer" class="font-black text-blue-700 underline underline-offset-2">open evidence</a>` : ""}</div>
-            ${duplicateCount ? `<div class="mt-2 rounded-xl bg-red-50 border border-red-100 p-2 text-xs text-red-800"><strong>${staffNumber(duplicateCount)} possible duplicate${duplicateCount === 1 ? "" : "s"}.</strong> Compare before publishing.</div>` : ""}
-            ${item.moderation_reason ? `<div class="mt-2 rounded-xl bg-amber-50 border border-amber-100 p-2 text-xs text-amber-900">${adminEscape(item.moderation_reason)}</div>` : ""}
-          </div>
-          <span class="shrink-0 rounded-full bg-amber-50 text-amber-800 border border-amber-100 px-2.5 py-1 text-[11px] font-black">${adminEscape(item.status || item.moderation_stage || "pending")}</span>
-        </div>
-        <div class="mt-3 flex flex-wrap gap-2">
-          <button type="button" onclick="openStaffListingPreview(${propertyIdArg(item.id)})" class="bg-slate-900 hover:bg-slate-800 text-white px-3 py-2 rounded-lg text-xs font-black"><i class="fas fa-eye mr-1"></i>Preview & edit</button>
-          <button type="button" onclick="staffModerateListing(${propertyIdArg(item.id)}, 'rejected')" class="border border-red-200 text-red-700 hover:bg-red-50 px-3 py-2 rounded-lg text-xs font-black"><i class="fas fa-xmark mr-1"></i>Reject with reason</button>
-          <button type="button" onclick="staffModerateListing(${propertyIdArg(item.id)}, 'pending')" class="border border-gray-200 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-black"><i class="fas fa-rotate-left mr-1"></i>Keep pending</button>
-        </div>
-      </article>`;
-  }).join("");
+  wrap.innerHTML = rows.map((item) => staffReviewQueueCardHtml(item)).join("");
+}
+
+function renderStaffBrokerReviewQueue(rows = []) {
+  const wrap = document.getElementById("staff-broker-review-queue");
+  if (!wrap) return;
+  if (!rows.length) {
+    wrap.innerHTML = staffEmpty("No broker listings are waiting for review.");
+    return;
+  }
+  wrap.innerHTML = rows.map((item) => staffReviewQueueCardHtml(item, { brokerQueue: true })).join("");
 }
 
 function renderStaffLeads(rows = []) {
@@ -10065,6 +10085,7 @@ function applyStaffDashboardData(data = {}, user = {}) {
   const definitions = data.summary?.definitions || {};
   setStaffStat("staff-stat-total", data.summary?.listings?.live, definitions, "total_properties");
   setStaffStat("staff-stat-pending", data.summary?.listings?.pending_review, definitions, "pending_review");
+  setStaffStat("staff-stat-broker-pending", data.summary?.listings?.broker_pending_review, definitions, "broker_pending_review");
   setStaffStat("staff-stat-approvals", data.summary?.my_moderation?.approvals, definitions, "my_approvals");
   setStaffStat("staff-stat-leads", data.summary?.leads?.open, definitions, "open_leads");
   setStaffStat("staff-stat-ads", data.summary?.advertising?.open_inquiries, definitions, "ad_leads");
@@ -10078,6 +10099,7 @@ function applyStaffDashboardData(data = {}, user = {}) {
     renderStaffDeferredPanelLoading();
     return;
   }
+  renderStaffBrokerReviewQueue(data.broker_review_queue || []);
   renderStaffReviewQueue(data.review_queue || []);
   renderStaffLeads(data.leads || []);
   renderStaffAdvertising(data.advertising_inquiries || []);
@@ -11772,6 +11794,21 @@ function adminIsFoundOnlineSourcedListing(row = {}) {
     || badge === "found online";
 }
 
+function adminIsBrokerSubmissionListing(row = {}) {
+  const extra = row?.extra_fields && typeof row.extra_fields === "object" ? row.extra_fields : {};
+  const source = String(row.source || extra.source || "").toLowerCase();
+  const listedVia = String(row.listed_via || extra.listed_via || "").toLowerCase();
+  const listerType = String(row.lister_type || extra.lister_type || "").toLowerCase();
+  return extra.broker_submission === true
+    || String(extra.broker_submission || "").toLowerCase() === "true"
+    || Boolean(extra.broker_agent_id)
+    || Boolean(row.agent_id)
+    || listerType === "agent"
+    || listerType === "broker"
+    || listedVia.includes("broker")
+    || source.includes("broker");
+}
+
 function adminSourcedCandidateSourceLinks(row = {}) {
   const extra = row?.extra_fields && typeof row.extra_fields === "object" ? row.extra_fields : {};
   const images = Array.isArray(row.images) ? row.images : [];
@@ -11801,20 +11838,28 @@ function adminSourcedInventoryCandidateBadge(row = {}) {
   return "";
 }
 
+function adminBrokerSubmissionBadge(row = {}) {
+  if (!adminIsBrokerSubmissionListing(row)) return "";
+  return `<span class="ml-2 inline-flex align-middle rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-black text-emerald-800">Broker listing</span>`;
+}
+
 function adminPendingQueueCounts(rows = []) {
   const source = Array.isArray(rows) ? rows : [];
   const foundOnlinePending = source.filter(adminIsFoundOnlineSourcedListing).length;
-  const student = source.filter((row) => !adminIsFoundOnlineSourcedListing(row) && normalizeType(row?.listing_type || row?.type) === "student").length;
+  const broker = source.filter(adminIsBrokerSubmissionListing).length;
+  const student = source.filter((row) => !adminIsFoundOnlineSourcedListing(row) && !adminIsBrokerSubmissionListing(row) && normalizeType(row?.listing_type || row?.type) === "student").length;
   return {
     all: source.length,
     found_online: foundOnlinePending,
     found_online_pending: foundOnlinePending,
+    broker,
     student,
   };
 }
 
 function adminPendingQueueFilterLabel(filter = adminPendingQueueFilter) {
   if (filter === "found_online") return "Found online";
+  if (filter === "broker") return "Broker listings";
   if (filter === "student") return "Student";
   return "All pending";
 }
@@ -11835,7 +11880,10 @@ function adminFilterPendingQueueRows(rows = []) {
   if (adminPendingQueueFilter === "found_online") {
     return source.filter(adminIsFoundOnlineSourcedListing).filter(adminIsPendingReviewSeedItem);
   }
-  if (adminPendingQueueFilter === "student") return source.filter((row) => !adminIsFoundOnlineSourcedListing(row) && normalizeType(row?.listing_type || row?.type) === "student");
+  if (adminPendingQueueFilter === "broker") {
+    return source.filter(adminIsBrokerSubmissionListing).filter(adminIsPendingReviewSeedItem);
+  }
+  if (adminPendingQueueFilter === "student") return source.filter((row) => !adminIsFoundOnlineSourcedListing(row) && !adminIsBrokerSubmissionListing(row) && normalizeType(row?.listing_type || row?.type) === "student");
   return source;
 }
 
@@ -11874,10 +11922,13 @@ function adminFoundOnlineSourceSummaryHtml(row = {}, options = {}) {
 function adminPendingQueueToolbarHtml(rows = [], filteredRows = [], visibleRows = filteredRows) {
   const counts = adminPendingQueueCounts(rows);
   const isFoundOnlineView = adminPendingQueueFilter === "found_online";
+  const isBrokerView = adminPendingQueueFilter === "broker";
   const visibleCount = Array.isArray(visibleRows) ? visibleRows.length : Number(visibleRows || 0);
   const hasMore = filteredRows.length > visibleCount;
   const statusText = isFoundOnlineView
     ? `${adminEscape(visibleCount)} of ${adminEscape(filteredRows.length)} found-online source property records shown. Approved, live, sold, hidden, rejected, and deleted records are excluded from this queue.`
+    : isBrokerView
+      ? `${adminEscape(visibleCount)} of ${adminEscape(filteredRows.length)} broker-submitted listings shown. These are agent listings waiting for King or staff approval before going public.`
     : `${adminEscape(visibleCount)} of ${adminEscape(filteredRows.length)} matching records shown from ${adminEscape(rows.length)} pending review records. Approved/live records move to Live & Featured and do not stay in Review Queue.`;
   return `
     <div class="mb-4 rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs text-blue-950">
@@ -11889,6 +11940,7 @@ function adminPendingQueueToolbarHtml(rows = [], filteredRows = [], visibleRows 
         <div class="flex gap-2 flex-wrap">
           ${adminPendingQueueFilterButton("all", "All", counts.all)}
           ${adminPendingQueueFilterButton("found_online", "Found online", counts.found_online)}
+          ${adminPendingQueueFilterButton("broker", "Broker", counts.broker)}
           ${adminPendingQueueFilterButton("student", "Student", counts.student)}
           ${hasMore ? `<button type="button" onclick="adminShowMorePendingQueueRows()" class="bg-white text-blue-700 hover:bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-lg text-xs font-black">Show more</button>` : ""}
         </div>
@@ -11897,7 +11949,7 @@ function adminPendingQueueToolbarHtml(rows = [], filteredRows = [], visibleRows 
 }
 
 function adminSetPendingQueueFilter(filter = "all") {
-  const allowed = new Set(["all", "found_online", "student"]);
+  const allowed = new Set(["all", "found_online", "broker", "student"]);
   adminPendingQueueFilter = allowed.has(String(filter)) ? String(filter) : "all";
   adminPendingQueueVisibleLimit = ADMIN_PENDING_QUEUE_RENDER_STEP;
   renderAdminPendingRows(adminCurrentPendingListings);
@@ -12212,14 +12264,17 @@ function renderAdminPendingRows(listings) {
     const publicUrl = String(p.url || (backendId ? `/property/${backendId}` : "") || "").trim();
     const featured = isFeaturedListing(p);
     const sourceBadge = adminSourcedInventoryCandidateBadge(p);
+    const brokerBadge = adminBrokerSubmissionBadge(p);
+    const listingBadges = `${sourceBadge}${brokerBadge}`;
     return `
       <div class="border border-gray-200 rounded-xl p-4 bg-white">
         <div class="flex justify-between items-start gap-3 flex-wrap">
           <div>
-            <div class="font-bold text-gray-800">${adminEscape(p.title || "Untitled listing")}${sourceBadge}</div>
+            <div class="font-bold text-gray-800">${adminEscape(p.title || "Untitled listing")}${listingBadges}</div>
             <div class="text-xs text-gray-500 mt-1">${adminEscape(locationText)}</div>
             <div class="text-xs text-gray-500 mt-1">${adminEscape(createdText)} • Ref: ${adminEscape(p.inquiry_reference || reviewId || "-")}</div>
             ${sourceBadge ? `<div class="text-xs text-blue-800 font-semibold mt-1">Location is required before approval. Other found-online checks can be reviewed and overridden by King.</div>` : ""}
+            ${brokerBadge ? `<div class="text-xs text-emerald-800 font-semibold mt-1">Broker submission: verify details, then approve to publish.</div>` : ""}
             ${sourceBadge ? adminFoundOnlineSourceSummaryHtml(p) : ""}
           </div>
           <span class="text-xs font-semibold px-2 py-1 rounded ${statusMeta.cls}">${statusMeta.label}</span>
@@ -21532,14 +21587,38 @@ function getLpExtraValues() {
 
 function parseLandSize(raw) {
   const text = (raw || "").trim();
-  if (!text) return { value: null, unit: null };
-  const num = parseFloatSafe(text);
+  if (!text) return { value: null, unit: null, dimensions_label: null };
   const lower = text.toLowerCase();
+  const dimensionMatch = lower.match(/(\d+(?:\.\d+)?)\s*(ft|feet|foot|m|meter|meters|metre|metres)?\s*(?:x|by|\*)\s*(\d+(?:\.\d+)?)\s*(ft|feet|foot|m|meter|meters|metre|metres)?/i);
+  if (dimensionMatch) {
+    const width = Number(dimensionMatch[1]);
+    const height = Number(dimensionMatch[3]);
+    const unitHint = `${dimensionMatch[2] || ""} ${dimensionMatch[4] || ""}`.toLowerCase();
+    const unit = /\bm|meter|metre/.test(unitHint) ? "sqm" : "sqft";
+    const sideUnit = unit === "sqm" ? "m" : "ft";
+    return {
+      value: Number((width * height).toFixed(2)),
+      unit,
+      dimensions_label: `${width} x ${height} ${sideUnit}`
+    };
+  }
+
+  let value = null;
+  if (/\bhalf\b|\b1\s*\/\s*2\b/.test(lower)) value = 0.5;
+  else if (/\bquarter\b|\b1\s*\/\s*4\b/.test(lower)) value = 0.25;
+  else if (/\bthree\s+quarters?\b|\b3\s*\/\s*4\b/.test(lower)) value = 0.75;
+  else {
+    const numberMatch = lower.match(/-?\d+(?:\.\d+)?/);
+    value = numberMatch ? Number(numberMatch[0]) : null;
+  }
+
   let unit = null;
   if (lower.includes("acre")) unit = "acres";
-  else if (lower.includes("hectare") || lower.includes("ha")) unit = "hectares";
-  else if (lower.includes("sqm") || lower.includes("m2")) unit = "sqm";
-  return { value: num, unit };
+  else if (lower.includes("hectare") || /\bha\b/.test(lower)) unit = "hectares";
+  else if (lower.includes("decimal")) unit = "decimals";
+  else if (lower.includes("sqm") || lower.includes("sq m") || lower.includes("m2")) unit = "sqm";
+  else if (lower.includes("sqft") || lower.includes("sq ft") || lower.includes("ft2")) unit = "sqft";
+  return { value: Number.isFinite(value) ? value : null, unit, dimensions_label: null };
 }
 
 function getLpPhotoChecklist(type) {
@@ -23703,11 +23782,24 @@ function brokerListingContactDetails() {
   };
 }
 
+function updateBrokerListingContextBanner() {
+  const banner = document.getElementById("lp-broker-listing-context");
+  if (!banner) return;
+  const show = isSignedInBrokerListing();
+  banner.classList.toggle("hidden", !show);
+  if (!show) return;
+  const details = brokerListingContactDetails();
+  setTextById("lp-broker-context-name", details.name || "your broker profile");
+  setTextById("lp-broker-context-contact", details.phone || details.email || "saved broker contact");
+}
+
 function prefillBrokerListingIdentity() {
   if (!isSignedInBrokerListing()) {
     document.getElementById("lp-broker-fast-track-note")?.classList.add("hidden");
+    updateBrokerListingContextBanner();
     return;
   }
+  updateBrokerListingContextBanner();
   const details = brokerListingContactDetails();
   const set = (id, value) => {
     const el = document.getElementById(id);
@@ -23976,6 +24068,9 @@ function buildListPropertyPayload(photoUploadUrls = lpPhotoUploadUrls) {
       ...extra,
       region: region || null,
       size_raw: sizeRaw || null,
+      land_size_value: landParsed.value,
+      land_size_unit: landParsed.unit,
+      land_dimensions_label: landParsed.dimensions_label || null,
       city: city || null,
       neighborhood: neighborhood || null,
       street_name: streetName || null,
@@ -24071,6 +24166,9 @@ function buildListPropertyPayload(photoUploadUrls = lpPhotoUploadUrls) {
     payload.land_title_available = extra.land_title_available || null;
     payload.land_size_value = landParsed.value;
     payload.land_size_unit = landParsed.unit;
+    payload.extra_fields.land_size_value = landParsed.value;
+    payload.extra_fields.land_size_unit = landParsed.unit;
+    payload.extra_fields.land_dimensions_label = landParsed.dimensions_label || null;
     payload.extra_fields.land_owner_confirmed = extra.owner_confirmed || null;
     payload.extra_fields.land_boundary_notes = extra.boundary_notes || null;
   }
@@ -24249,6 +24347,16 @@ function applySubmittedListingToLocal(payload, apiData = {}) {
   resetMaps();
 }
 
+function isBrokerSubmissionPayload(payload = {}) {
+  const extra = payload?.extra_fields && typeof payload.extra_fields === "object" ? payload.extra_fields : {};
+  return payload?.lister_type === "agent"
+    || String(payload?.listed_via || "").toLowerCase().includes("broker")
+    || String(payload?.source || "").toLowerCase().includes("broker")
+    || extra.broker_submission === true
+    || String(extra.broker_submission || "").toLowerCase() === "true"
+    || Boolean(extra.broker_agent_id);
+}
+
 function showListSubmissionSuccess(reference, payload, options = {}) {
   const successBox = document.getElementById("lp-success-box");
   const refEl = document.getElementById("lp-success-ref");
@@ -24269,6 +24377,10 @@ function showListSubmissionSuccess(reference, payload, options = {}) {
   const successSubEl = document.getElementById("lp-success-sub");
   const successRefLabelEl = document.getElementById("lp-success-ref-label");
   const modalRefLabelEl = document.getElementById("listing-submit-ref-label");
+  const nextOneEl = document.getElementById("listing-submit-next-1");
+  const nextTwoEl = document.getElementById("listing-submit-next-2");
+  const nextThreeEl = document.getElementById("listing-submit-next-3");
+  const brokerSubmission = isBrokerSubmissionPayload(payload);
   const contactPref = payload?.extra_fields?.verify?.contact_preference || "both";
   const ownerEmailSent = options.owner_email_sent || options.ownerNotification?.email?.sent === true;
   const ownerWhatsAppReady = !!(options.owner_whatsapp_url || options.ownerNotification?.whatsapp?.manual_url);
@@ -24284,13 +24396,29 @@ function showListSubmissionSuccess(reference, payload, options = {}) {
   if (ownerWhatsAppReady && !ownerEmailSent) {
     contactCopy = `${contactCopy} ${translateListingLabel("A WhatsApp confirmation message has also been prepared.")}`;
   }
+  if (brokerSubmission) {
+    contactCopy = translateListingLabel("Broker listing received. King and staff moderators can now see it in Broker listings review. Review target: within 1 hour during active moderator hours.");
+  }
   if (modalPillEl) modalPillEl.textContent = translateListingLabel("Submission Received");
   if (modalTitleEl) modalTitleEl.textContent = translateListingLabel("Your property has been submitted");
-  if (modalSubEl) modalSubEl.textContent = translateListingLabel("Thank you. Your property listing has been submitted to makaug for review. Our team will check the details and contact you if we need anything else.");
+  if (modalSubEl) modalSubEl.textContent = brokerSubmission
+    ? translateListingLabel("Thank you. Your broker listing has been sent to makaug review. It is not public yet; staff will check the details and approve it before it appears on the website.")
+    : translateListingLabel("Thank you. Your property listing has been submitted to makaug for review. Our team will check the details and contact you if we need anything else.");
   if (successTitleEl) successTitleEl.textContent = translateListingLabel("Your property has been submitted");
-  if (successSubEl) successSubEl.textContent = translateListingLabel("Thank you. Your property listing has been submitted to makaug for review.");
+  if (successSubEl) successSubEl.textContent = brokerSubmission
+    ? translateListingLabel("Thank you. Your broker listing has been sent to makaug review.")
+    : translateListingLabel("Thank you. Your property listing has been submitted to makaug for review.");
   if (successRefLabelEl) successRefLabelEl.textContent = translateListingLabel("Reference:");
   if (modalRefLabelEl) modalRefLabelEl.textContent = translateListingLabel("Reference");
+  if (nextOneEl) nextOneEl.textContent = brokerSubmission
+    ? translateListingLabel("Broker listings review checks price, location, photos, and agent authority.")
+    : translateListingLabel("makaug reviews the listing details, photos, identity, and location.");
+  if (nextTwoEl) nextTwoEl.textContent = brokerSubmission
+    ? translateListingLabel("King and staff dashboards show this under Broker listings review.")
+    : translateListingLabel("Admin will contact you if anything needs correction.");
+  if (nextThreeEl) nextThreeEl.textContent = brokerSubmission
+    ? translateListingLabel("Approved broker listings go public after review; target review time is within 1 hour during active moderator hours.")
+    : translateListingLabel("Approved listings appear publicly after review.");
   const resolvedReference = reference || payload?.inquiry_reference || generateListingInquiryRef();
   if (!lpInquiryReference) lpInquiryReference = resolvedReference;
   if (refEl) refEl.textContent = resolvedReference;
@@ -24322,14 +24450,14 @@ function showListSubmissionSuccess(reference, payload, options = {}) {
     statusEl.className = `text-xs mt-2 ${isOffline ? "text-amber-700" : "text-green-700"}`;
     statusEl.textContent = isOffline
       ? translateListingLabel("Submitted in offline mode. We will sync this listing once connection returns.")
-      : translateListingLabel("Status: Pending Review.");
+      : translateListingLabel(brokerSubmission ? "Status: Broker Review Pending." : "Status: Pending Review.");
   }
   if (modalStatusEl) {
     const isOffline = !!options.offline;
     modalStatusEl.className = `text-sm font-semibold mt-1 ${isOffline ? "text-amber-700" : "text-green-900"}`;
     modalStatusEl.textContent = isOffline
       ? translateListingLabel("Submitted in offline mode. We will sync this listing once connection returns.")
-      : translateListingLabel("Pending Review");
+      : translateListingLabel(brokerSubmission ? "Broker Review Pending" : "Pending Review");
   }
   if (successBox) successBox.classList.remove("hidden");
   if (document.getElementById("listing-submit-modal")) openModal("listing-submit-modal");
@@ -24388,7 +24516,9 @@ async function submitListProperty() {
     const ref = response?.data?.inquiry_reference || payload.inquiry_reference;
     showListSubmissionSuccess(ref, payload, { offline: false, ...(response?.data || {}) });
     setListWizardStep(4);
-    toast("Thanks. Listing submitted for review. We will contact you by WhatsApp or email within 24 hours.");
+    toast(isBrokerSubmissionPayload(payload)
+      ? "Broker listing submitted for review. Staff target: within 1 hour during active moderator hours."
+      : "Thanks. Listing submitted for review. We will contact you by WhatsApp or email within 24 hours.");
   } catch (error) {
     showListSubmissionError(error.message || "Could not submit listing. Please try again.");
     toast(error.message || "Could not submit listing. Please try again.");
@@ -25502,6 +25632,8 @@ function chooseListPropertyOnline(options = {}) {
   }
   if (!options.skipModalClose) closeModal("list-choice-modal");
   setListPropertyFormVisible(true);
+  updateBrokerListingContextBanner();
+  prefillBrokerListingIdentity();
   window.setTimeout(() => {
     document.getElementById("lp-title")?.focus?.();
   }, 80);
@@ -37279,8 +37411,8 @@ const LP_CONFIG = {
       { value: "Agricultural", label: "Agricultural" },
       { value: "Industrial", label: "Industrial" }
     ],
-    sizeLabel: "Land Size (acres/hectares)",
-    sizePlaceholder: "e.g. 0.5 acres",
+    sizeLabel: "Land size / plot dimensions",
+    sizePlaceholder: "e.g. 1 acre, half acre, 100 by 50 ft, 30 decimals",
     showSize: true,
     periodLabel: "Price Basis",
     periods: [
@@ -37301,7 +37433,7 @@ const LP_CONFIG = {
       { key: "road_access", label: "Road Access", type: "select", options: ["Tarmac", "Murram", "Earth Road"] },
       { key: "zoning", label: "Zoning", type: "select", options: ["Residential", "Commercial", "Mixed Use", "Agricultural"] },
       { key: "owner_confirmed", label: "Can you confirm you are the owner or authorised representative?", type: "select", options: [{ value: "yes", label: "Yes" }, { value: "agent", label: "Authorised broker/agent" }, { value: "no", label: "Not yet" }] },
-      { key: "boundary_notes", label: "Boundary / coordinates notes", type: "text", placeholder: "e.g. 30 acres, road frontage, survey points, nearest landmark" }
+      { key: "boundary_notes", label: "Boundary / coordinates notes", type: "text", placeholder: "e.g. road frontage, survey points, nearest landmark, plot shape" }
     ],
     previewExtras: [{ key: "title_type", label: "Title" }, { key: "land_title_available", label: "Land title" }, { key: "road_access", label: "Access" }, { key: "owner_confirmed", label: "Owner" }, { key: "boundary_notes", label: "Boundary notes" }],
     amenities: [
@@ -37697,6 +37829,7 @@ function setListType(type) {
   applyListPropertyTheme(selected);
   syncListChoiceCopy(selected);
   updateListPropertyWhatsAppLinks();
+  updateBrokerListingContextBanner();
 
   const titleEl = document.getElementById("lp-title");
   const areaEl = document.getElementById("lp-area");

@@ -376,6 +376,7 @@ function run() {
   assert(frontendSource.includes('Your property has been submitted'), 'success modal should use the go-live submission title');
   assert(frontendSource.includes('listing-submit-email-status'), 'success modal should show email confirmation status');
   assert(frontendSource.includes('listing-submit-whatsapp-status'), 'success modal should show WhatsApp confirmation status');
+  assert(frontendSource.includes('listing-submit-next-1') && frontendSource.includes('Broker Review Pending'), 'broker listing submissions should show clear broker-review status copy');
   assert(frontendSource.includes('List another property'), 'success modal should offer list-another action');
   assert(frontendSource.includes('Go to dashboard'), 'success modal should offer dashboard action');
   assert(frontendSource.includes('Email confirmation has been logged and will send when email is configured.'), 'success modal should explain provider-missing email fallback');
@@ -398,6 +399,8 @@ function run() {
   assert(whatsappMessageLogService.includes('INSERT INTO whatsapp_message_logs'), 'WhatsApp log service should persist WhatsApp logs when table exists');
   assert(whatsappRoutes.includes('Do not send a PDF'), 'WhatsApp identity prompt should say PDFs are not accepted');
   assert(whatsappRoutes.includes('isPhotoMediaForIdentity'), 'WhatsApp identity upload should validate photo-only media');
+  assert(frontendSource.includes('Land size / plot dimensions') && frontendSource.includes('100 by 50 ft') && frontendSource.includes('30 decimals'), 'land listing form should accept Uganda-style plot dimensions and land units');
+  assert(frontendSource.includes('function parseLandSize') && frontendSource.includes('dimensions_label') && frontendSource.includes('"sqft"'), 'land size parser should preserve plot dimensions like 100 by 50 ft');
 
   const aboutHtml = sanitizePublicHtml(sourceHtml, { pathname: '/about' });
   const mortgageHtml = sanitizePublicHtml(sourceHtml, { pathname: '/mortgage' });
@@ -725,6 +728,9 @@ function run() {
   assert(frontendSource.includes('id="account-access-create-broker-id-step"') && frontendSource.includes('Optional broker trust check') && frontendSource.includes('broker_identity_deferred'), 'broker account drawer should let agents defer National ID verification to the dashboard');
   assert(frontendSource.includes('function isValidBrokerNationalId') && frontendSource.includes('isValidBrokerNationalId(details.nin)'), 'broker account drawer should accept National ID numbers as well as strict NINs before moving to password');
   assert(frontendSource.includes('startBrokerOnlineListing') && frontendSource.includes('broker_fast_track') && frontendSource.includes('broker_dashboard'), 'signed-in broker dashboard should use the fast-track online listing path');
+  assert(frontendSource.includes('id="lp-broker-listing-context"') && frontendSource.includes('updateBrokerListingContextBanner'), 'signed-in broker listing form should show broker profile context before submission');
+  assert(frontendSource.includes('id="staff-broker-review-queue"') && frontendSource.includes('renderStaffBrokerReviewQueue'), 'staff dashboard should surface broker listings in their own review queue');
+  assert(frontendSource.includes('adminPendingQueueFilterButton("broker", "Broker", counts.broker)') && frontendSource.includes('adminBrokerSubmissionBadge'), 'King review queue should filter and badge broker submissions');
   assert(frontendSource.includes('id="broker-settings-panel"') && frontendSource.includes('openBrokerSettingsModal') && frontendSource.includes('Public broker card preview'), 'broker dashboard should expose broker settings in its own window and a public card preview');
   assert(frontendSource.includes('id="broker-leads-panel"') && frontendSource.includes('WhatsApp agent card') && frontendSource.includes('id="broker-boost-panel"') && frontendSource.includes('broker-dashboard-whatsapp-share-card'), 'broker dashboard should include lead centre, WhatsApp broker card sharing, and boost planning surfaces');
   assert(frontendSource.includes('broker-quick-list-panel') && frontendSource.includes('Fast-track listing upload') && frontendSource.includes('polishBrokerBioDraft'), 'broker dashboard should include fast-track upload guidance and AI-assisted profile copy tools');

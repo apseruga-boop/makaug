@@ -3001,6 +3001,16 @@
             <i class="fas fa-language"></i>
             <span>You can change language any time from the selector at the top bar.</span>
           </div>
+          <div id="lp-broker-listing-context" class="hidden mb-5 rounded-2xl border border-green-100 bg-green-50 p-4 text-sm text-green-950">
+            <div class="flex items-start gap-3">
+              <span class="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-green-800 text-white"><i class="fas fa-briefcase"></i></span>
+              <div>
+                <div class="font-black">Posting as broker: <span id="lp-broker-context-name">your broker profile</span></div>
+                <p class="mt-1 text-green-900">This listing will be attached to your broker account, sent to Broker listings review, and checked before it appears publicly.</p>
+                <p class="mt-1 text-xs text-green-800">Review target: within 1 hour during active moderator hours. Contact: <span id="lp-broker-context-contact">saved broker contact</span>.</p>
+              </div>
+            </div>
+          </div>
 
           <div class="mb-5">
             <label id="lp-listing-type-label" class="block text-sm font-semibold text-gray-700 mb-2">Listing Type *</label>
@@ -4377,7 +4387,7 @@
           </form>
         </div>
 
-        <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <button type="button" onclick="staffJumpToDesk('review')" class="text-left bg-white border border-gray-200 hover:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-200 rounded-2xl p-5 transition" title="Listings currently live on the public website.">
             <div class="text-sm text-gray-500">Live Properties</div>
             <div id="staff-stat-total" class="text-3xl font-black text-slate-900 mt-1">0</div>
@@ -4387,6 +4397,11 @@
             <div class="text-sm text-gray-500">Pending Review</div>
             <div id="staff-stat-pending" class="text-3xl font-black text-gray-900 mt-1">0</div>
             <p id="staff-stat-pending-help" class="mt-2 text-[11px] text-gray-500 line-clamp-3"></p>
+          </button>
+          <button type="button" onclick="staffJumpToDesk('review')" class="text-left bg-white border border-emerald-100 hover:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-200 rounded-2xl p-5 transition" title="Broker and agent listings waiting for moderation.">
+            <div class="text-sm text-gray-500">Broker Listings</div>
+            <div id="staff-stat-broker-pending" class="text-3xl font-black text-emerald-700 mt-1">0</div>
+            <p id="staff-stat-broker-pending-help" class="mt-2 text-[11px] text-gray-500 line-clamp-3">Agent/broker listings waiting for review.</p>
           </button>
           <button type="button" onclick="staffJumpToDesk('activity')" class="text-left bg-white border border-gray-200 hover:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-200 rounded-2xl p-5 transition" title="Listings approved by this staff account.">
             <div class="text-sm text-gray-500">My Approvals</div>
@@ -4425,6 +4440,13 @@
             <div class="flex items-center justify-between gap-3 mb-4">
               <h3 class="text-xl font-black text-gray-900">Listing moderation queue</h3>
               <span class="text-xs font-black text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-full px-3 py-1">Preview first, approve = goes live</span>
+            </div>
+            <div class="mb-5 rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
+              <div class="flex items-center justify-between gap-3 mb-3 flex-wrap">
+                <h3 class="text-lg font-black text-emerald-950">Broker listings review</h3>
+                <span class="text-xs font-black text-emerald-800 bg-white border border-emerald-100 rounded-full px-3 py-1">Agent submissions</span>
+              </div>
+              <div id="staff-broker-review-queue" class="space-y-3 text-sm"></div>
             </div>
             <div id="staff-review-queue" class="space-y-3 text-sm"></div>
           </div>
@@ -6283,9 +6305,9 @@
         <div class="bg-amber-50 border border-amber-100 rounded-xl p-4">
           <div class="text-sm font-bold text-amber-950">What happens next</div>
           <ul class="mt-2 text-sm text-amber-900 space-y-1.5 list-disc pl-5">
-            <li>makaug reviews the listing details, photos, identity, and location.</li>
-            <li>Admin will contact you if anything needs correction.</li>
-            <li>Approved listings appear publicly after review.</li>
+            <li id="listing-submit-next-1">makaug reviews the listing details, photos, identity, and location.</li>
+            <li id="listing-submit-next-2">Admin will contact you if anything needs correction.</li>
+            <li id="listing-submit-next-3">Approved listings appear publicly after review.</li>
           </ul>
         </div>
       </div>

@@ -2866,6 +2866,8 @@ router.get('/properties/review-queue', async (req, res, next) => {
          p.inquiry_reference,
          p.source,
          p.listed_via,
+         p.lister_type,
+         p.agent_id,
          p.lister_name,
          p.lister_phone,
          p.lister_email,

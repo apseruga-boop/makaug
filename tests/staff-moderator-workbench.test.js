@@ -41,6 +41,9 @@ function run() {
   assert(staffRoutes.includes("router.get('/dashboard'"), 'staff dashboard API route should exist');
   assert(staffRoutes.includes("router.patch('/profile'"), 'staff profile/settings save API should exist');
   assert(staffRoutes.includes("router.get('/properties/:id/preview'"), 'staff listing preview API should exist');
+  assert(staffRoutes.includes('brokerReviewWhere'), 'staff dashboard should classify broker-submitted review listings');
+  assert(staffRoutes.includes('broker_pending_review'), 'staff dashboard summary should count broker listings separately');
+  assert(staffRoutes.includes('broker_review_queue'), 'staff dashboard API should return a dedicated broker review queue');
   assert(staffRoutes.includes("router.patch('/properties/:id/review'"), 'staff listing preview save API should exist');
   assert(staffRoutes.includes("router.post('/source-intake/exact-social/import'"), 'staff social source import API should exist');
   assert(staffRoutes.includes("router.post('/source-intake/social-sweep'"), 'staff social sweep API should exist');
@@ -100,11 +103,16 @@ function run() {
   assert(html.includes('staff-fast-dashboard-20260701'), 'index should cache-bust fast staff dashboard hydration');
   assert(html.includes('id="staff-bank-leads-list"'), 'staff dashboard should expose bank/mortgage leads');
   assert(html.includes('id="staff-review-queue"'), 'staff moderation queue container should exist');
+  assert(html.includes('id="staff-broker-review-queue"'), 'staff dashboard should include a broker listings review queue');
+  assert(html.includes('id="staff-stat-broker-pending"'), 'staff dashboard should include a broker listing counter');
   assert(html.includes('id="staff-ai-question"'), 'staff AI assistant UI should exist');
   assert(html.includes('id="admin-staff-control"'), 'King dashboard should include staff operations control panel');
   assert(html.includes('adminBootstrapStaffAccounts()'), 'King dashboard should expose five-account bootstrap action');
   assert(app.includes('"staff-dashboard": "/staff-dashboard"'), 'frontend route map should include staff dashboard');
   assert(app.includes('renderStaffDashboard'), 'frontend should render staff dashboard');
+  assert(app.includes('renderStaffBrokerReviewQueue'), 'frontend should render the broker review queue separately');
+  assert(app.includes('adminIsBrokerSubmissionListing'), 'frontend should identify broker-submitted review rows');
+  assert(app.includes('adminPendingQueueFilterButton("broker", "Broker", counts.broker)'), 'King review queue should expose a broker filter');
   assert(app.includes('renderAdminStaffControl'), 'King dashboard should render staff account control');
   assert(app.includes('/api/admin/staff/bootstrap-five'), 'King dashboard should call staff bootstrap API');
   assert(app.includes('/api/staff/dashboard'), 'frontend should fetch staff dashboard API');
