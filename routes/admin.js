@@ -4390,12 +4390,12 @@ router.get('/staff', async (req, res, next) => {
            COUNT(*) FILTER (WHERE action ILIKE '%rejected%' OR status_to IN ('rejected','declined','fraud'))::int AS rejected_count,
            MAX(created_at) AS last_moderation_at
          FROM property_moderation_events
-         WHERE actor_id = u.id
+         WHERE actor_id::text = u.id::text
        ) m ON true
        LEFT JOIN LATERAL (
          SELECT COUNT(*)::int AS activity_count, MAX(created_at) AS last_activity_at
          FROM staff_activity_logs
-         WHERE staff_user_id = u.id
+         WHERE staff_user_id::text = u.id::text
        ) a ON true
        WHERE u.role = 'moderator'
           OR COALESCE(u.profile_data->>'staff_dashboard_enabled', '') ILIKE 'true'
