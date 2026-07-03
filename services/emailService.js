@@ -197,6 +197,12 @@ function parseBoolean(value, fallback = false) {
   return fallback;
 }
 
+function emailMockModeEnabled() {
+  const configured = String(process.env.EMAIL_MOCK_MODE || '').trim();
+  if (configured) return parseBoolean(configured, false);
+  return String(process.env.NODE_ENV || '').trim().toLowerCase() !== 'production';
+}
+
 function getSmtpConfig() {
   const host = String(process.env.SMTP_HOST || '').trim();
   if (!host) return null;
@@ -541,12 +547,21 @@ async function sendSupportEmail({ to, subject, text, html, replyTo }) {
     logger.warn('Mail webhook failed', webhookResult);
   }
 
-  logger.info('[EMAIL MOCK]', { to: recipient, subject: safeSubject, text: safeText });
+  if (emailMockModeEnabled()) {
+    logger.info('[EMAIL MOCK]', { to: recipient, subject: safeSubject, text: safeText });
+    return {
+      sent: false,
+      mocked: true,
+      reason: 'email_mock_mode',
+      error: lastProviderError || null
+    };
+  }
+
   return {
     sent: false,
-    mocked: true,
-    reason: 'no_email_provider_configured',
-    error: lastProviderError || null
+    reason: 'no_working_email_provider',
+    error: lastProviderError || 'no_working_email_provider',
+    setupAction: 'Configure a real email provider or fix the active provider credentials/domain verification.'
   };
 }
 
@@ -835,6 +850,22 @@ function emailProviderConfigured() {
   );
 }
 
+function emailProviderDiagnostic() {
+  const smtp = getSmtpConfig();
+  return {
+    configured: emailProviderConfigured(),
+    mockMode: emailMockModeEnabled(),
+    providers: {
+      msGraph: Boolean(getMicrosoftGraphConfig()),
+      smtp: Boolean(smtp && (!smtp.requireAuth || (smtp.user && smtp.pass))),
+      resend: Boolean(String(process.env.RESEND_API_KEY || '').trim()),
+      webhook: Boolean(String(process.env.MAIL_WEBHOOK_URL || '').trim())
+    },
+    fromDomain: extractEmailAddress(getDefaultEmailFrom()).split('@')[1] || '',
+    resendFromDomain: extractEmailAddress(getResendEmailFrom()).split('@')[1] || ''
+  };
+}
+
 function buildOtpEmailHtml({ subject, heading, otp, expiresMinutes, intro, footer }) {
   const safeSubject = escapeHtml(subject || 'Your makaug.com verification code');
   const safeHeading = escapeHtml(heading || 'Your verification code');
@@ -955,6 +986,7 @@ async function sendBrokerApprovalEmail({ to, firstName = 'there', agent = {}, te
 
 module.exports = {
   emailProviderConfigured,
+  emailProviderDiagnostic,
   getDefaultEmailFrom,
   getSupportEmail,
   getSupportPhone,

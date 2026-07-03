@@ -58,6 +58,7 @@ const {
 const { evaluateHostedWhatsappBridgeReadiness } = require('../services/whatsappBridgeReadiness');
 const {
   emailProviderConfigured: emailProviderConfiguredByService,
+  emailProviderDiagnostic,
   getDefaultEmailFrom,
   getSupportEmail,
   getSupportWhatsappUrl,
@@ -8558,6 +8559,7 @@ async function buildSetupStatus() {
     configured: providerConfigured(key),
     requiredEnv: providerEnvKeys(key),
     missingEnv: missingProviderEnv(key),
+    diagnostic: key === 'email' ? emailProviderDiagnostic() : null,
     warnings: key === 'sms' ? smsProviderWarnings() : []
   }));
   const llmMeta = getProviderMeta();
@@ -8704,7 +8706,8 @@ router.post('/setup-status/provider-test', async (req, res, next) => {
       configured,
       status: configured ? 'logged' : 'provider_missing',
       missingEnv: configured ? [] : missingProviderEnv(provider),
-      warnings: provider === 'sms' ? smsProviderWarnings() : []
+      warnings: provider === 'sms' ? smsProviderWarnings() : [],
+      diagnostic: provider === 'email' ? emailProviderDiagnostic() : null
     };
     let log = null;
     if (provider === 'email') {
@@ -8758,6 +8761,10 @@ router.post('/setup-status/provider-test', async (req, res, next) => {
       base.deliveryProvider = delivery.provider || null;
       base.providerStatus = delivery.status || null;
       base.setupAction = delivery.setupAction || null;
+      base.failureReason = deliveryStatus === 'sent' || deliveryStatus === 'queued'
+        ? null
+        : (delivery.error || delivery.reason || delivery.setupAction || 'email_provider_test_failed');
+      base.mocked = delivery.mocked === true;
     } else if (provider === 'whatsapp') {
       log = await logWhatsAppMessage(db, {
         recipientPhone: adminTestPhone(),

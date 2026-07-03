@@ -1191,6 +1191,9 @@ function run() {
   assert(adminRoutes.includes('sendPhoneOtp'), 'admin SMS provider proof should exercise real SMS delivery path');
   assert(adminRoutes.includes('sendSupportEmail({') && adminRoutes.includes('provider_test_email'), 'admin email provider proof should exercise real outbound email delivery');
   assert(adminRoutes.includes("base.deliveryChannel = 'email'"), 'admin email provider proof should report real delivery status');
+  assert(adminRoutes.includes('base.failureReason') && adminRoutes.includes('base.mocked'), 'admin email provider proof should expose failed/mock delivery instead of hiding it as logged');
+  assert(adminRoutes.includes('emailProviderDiagnostic'), 'admin setup status should expose safe email provider diagnostics');
+  assert(emailServiceSource.includes('EMAIL_MOCK_MODE') && emailServiceSource.includes('no_working_email_provider'), 'email service should not silently mock failed production email sends');
   assert(adminRoutes.includes('SMS_TEST_PHONE'), 'admin SMS provider proof should support an explicit test phone');
   assert(adminRoutes.includes('AFRICASTALKING_USERNAME'), 'admin SMS setup status should require Africa\'s Talking username');
   assert(adminRoutes.includes('AFRICASTALKING_UESERNAME'), 'admin SMS setup status should warn about the misspelled Africa\'s Talking username key');
