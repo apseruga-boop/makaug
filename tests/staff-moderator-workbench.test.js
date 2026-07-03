@@ -101,6 +101,7 @@ function run() {
   assert(html.includes('staff-source-intake-20260701'), 'index should cache-bust staff source intake updates');
   assert(html.includes('staff-active-dashboard-20260701'), 'index should cache-bust active-dashboard hydration fixes');
   assert(html.includes('staff-fast-dashboard-20260701'), 'index should cache-bust fast staff dashboard hydration');
+  assert(html.includes('king-api-fallback-staff-session-20260703'), 'index should cache-bust King API-key fallback for staff-session edge');
   assert(html.includes('id="staff-bank-leads-list"'), 'staff dashboard should expose bank/mortgage leads');
   assert(html.includes('id="staff-review-queue"'), 'staff moderation queue container should exist');
   assert(html.includes('id="staff-broker-review-queue"'), 'staff dashboard should include a broker listings review queue');
