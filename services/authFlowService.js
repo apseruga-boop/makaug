@@ -109,6 +109,15 @@ function parseBooleanLike(value, fallback = false) {
   return fallback;
 }
 
+async function generateMakaugAgentNumber(db) {
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const candidate = `MKA-AG-${String(Date.now()).slice(-5)}${Math.floor(Math.random() * 90 + 10)}`;
+    const existing = await db.query('SELECT 1 FROM agents WHERE makaug_agent_number = $1 LIMIT 1', [candidate]);
+    if (!existing.rows.length) return candidate;
+  }
+  return `MKA-AG-${Date.now()}`;
+}
+
 async function ensurePostVerificationRecords(db, user = {}) {
   if (!db || !user?.id) return;
   const profile = user.profile_data && typeof user.profile_data === 'object' ? user.profile_data : {};
@@ -169,8 +178,11 @@ async function ensurePostVerificationRecords(db, user = {}) {
     const brokerDocName = cleanText(profile.broker_identity_document_name);
     const brokerDocType = cleanText(profile.broker_identity_document_type);
     const nationalIdNumber = cleanText(profile.broker_national_id_number || profile.national_id_number).toUpperCase();
+    const brokerIdentityDeferred = parseBooleanLike(profile.broker_identity_deferred, !brokerDocUrl && !nationalIdNumber);
     const verificationReason = cleanText(profile.broker_verification_reason)
-      || 'Broker identity verification submitted during makaug.com account creation.';
+      || (brokerIdentityDeferred
+        ? 'Broker account created with ID verification deferred to dashboard/admin review.'
+        : 'Broker identity verification submitted during makaug.com account creation.');
     const resolvedLicence = cleanText(profile.area_licence_number || profile.agent_licence_number)
       || `PENDING-${String(user.id).slice(0, 8).toUpperCase()}`;
     const companyName = cleanText(profile.agent_company) || null;
@@ -181,7 +193,7 @@ async function ensurePostVerificationRecords(db, user = {}) {
         : null);
 
     const existing = await db.query(
-      `SELECT id
+      `SELECT id, makaug_agent_number
        FROM agents
        WHERE user_id = $1
           OR ($2::text <> '' AND LOWER(COALESCE(email, '')) = LOWER($2))
@@ -192,10 +204,13 @@ async function ensurePostVerificationRecords(db, user = {}) {
     );
 
     let brokerAgentId = existing.rows[0]?.id || null;
+    const makaugAgentNumber = cleanText(existing.rows[0]?.makaug_agent_number || profile.makaug_agent_number)
+      || await generateMakaugAgentNumber(db);
     if (brokerAgentId) {
       const updated = await db.query(
         `UPDATE agents
          SET user_id = $1,
+             makaug_agent_number = COALESCE(NULLIF(makaug_agent_number, ''), $19),
              full_name = COALESCE(NULLIF($2, ''), full_name),
              company_name = COALESCE($3, company_name),
              licence_number = COALESCE(NULLIF($4, ''), licence_number),
@@ -240,13 +255,15 @@ async function ensurePostVerificationRecords(db, user = {}) {
           dataRetentionNoticeAccepted,
           profilePhotoUrl,
           bio,
-          brokerAgentId
+          brokerAgentId,
+          makaugAgentNumber
         ]
       );
       brokerAgentId = updated.rows[0]?.id || brokerAgentId;
     } else {
       const inserted = await db.query(
         `INSERT INTO agents (
+          makaug_agent_number,
           full_name,
           company_name,
           licence_number,
@@ -271,9 +288,10 @@ async function ensurePostVerificationRecords(db, user = {}) {
           bio,
           user_id,
           status
-        ) VALUES ($1,$2,$3,'not_registered',2147483647,$4,$4,$5,$6,$7,$8,$9,$10,$11,CASE WHEN NULLIF($10, '') IS NOT NULL THEN NOW() ELSE NULL END,$12,$13,CASE WHEN $13 THEN NOW() ELSE NULL END,$14,CASE WHEN $14 THEN NOW() ELSE NULL END,$15,$16,$17,'pending')
+        ) VALUES ($1,$2,$3,$4,'not_registered',2147483647,$5,$5,$6,$7,$8,$9,$10,$11,$12,CASE WHEN NULLIF($11, '') IS NOT NULL THEN NOW() ELSE NULL END,$13,$14,CASE WHEN $14 THEN NOW() ELSE NULL END,$15,CASE WHEN $15 THEN NOW() ELSE NULL END,$16,$17,$18,'pending')
         RETURNING id`,
         [
+          makaugAgentNumber,
           fullName,
           companyName,
           resolvedLicence,
@@ -303,7 +321,8 @@ async function ensurePostVerificationRecords(db, user = {}) {
        WHERE id = $1`,
       [user.id, JSON.stringify({
         broker_review_status: 'pending_review',
-        broker_agent_id: brokerAgentId
+        broker_agent_id: brokerAgentId,
+        makaug_agent_number: makaugAgentNumber
       })]
     );
     return;

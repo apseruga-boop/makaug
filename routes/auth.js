@@ -854,13 +854,44 @@ router.post('/request-signup-otp', async (req, res, next) => {
            AND used = FALSE`,
         [email]
       );
-      otpIssue = await issueOtp({
-        purpose: 'signup',
-        channel: 'phone',
-        phone,
-        email,
-        preferredLanguage
-      });
+      try {
+        otpIssue = await issueOtp({
+          purpose: 'signup',
+          channel: 'phone',
+          phone,
+          email,
+          preferredLanguage
+        });
+      } catch (fallbackError) {
+        logger.error('Signup OTP email and SMS fallback both failed', {
+          email,
+          phone,
+          audience,
+          emailError: error.message,
+          smsError: fallbackError.message
+        });
+        await logNotification(db, {
+          recipientPhone: phone,
+          recipientEmail: email,
+          channel: 'in_app',
+          type: 'signup_otp_delivery_failed_all_channels',
+          status: 'failed',
+          payloadSummary: {
+            ...otpPayloadSummary,
+            attempted_channels: ['email', 'phone']
+          },
+          failureReason: `email:${error.message || 'failed'}; sms:${fallbackError.message || 'failed'}`
+        });
+        return res.status(503).json({
+          ok: false,
+          error: 'Email verification could not be sent and SMS fallback is unavailable. Please try again, choose SMS/Text with a valid Uganda number, or contact makaug on WhatsApp.',
+          retry_channels: ['email', 'phone'],
+          support: {
+            whatsapp: process.env.SUPPORT_WHATSAPP || process.env.WHATSAPP_SUPPORT_PHONE || '+256760112587',
+            email: process.env.SUPPORT_EMAIL || process.env.EMAIL_FROM || 'info@makaug.com'
+          }
+        });
+      }
       resolvedChannel = 'phone';
       emailFallbackToSms = true;
     }
@@ -1152,14 +1183,27 @@ router.post('/register', async (req, res, next) => {
              AND used = FALSE`,
           [email]
         );
-        otpIssue = await issueOtp({
-          purpose: 'signup',
-          channel: 'phone',
-          phone,
-          email,
-          preferredLanguage,
-          queryRunner: client
-        });
+        try {
+          otpIssue = await issueOtp({
+            purpose: 'signup',
+            channel: 'phone',
+            phone,
+            email,
+            preferredLanguage,
+            queryRunner: client
+          });
+        } catch (fallbackError) {
+          logger.error('Register signup OTP email and SMS fallback both failed', {
+            email,
+            phone,
+            audience,
+            emailError: error.message,
+            smsError: fallbackError.message
+          });
+          const deliveryError = new Error('Email verification could not be sent and SMS fallback is unavailable. Please try again, choose SMS/Text with a valid Uganda number, or contact makaug on WhatsApp.');
+          deliveryError.status = 503;
+          throw deliveryError;
+        }
         resolvedOtpChannel = 'phone';
         emailFallbackToSms = true;
       }

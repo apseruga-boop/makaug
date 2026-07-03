@@ -26015,16 +26015,16 @@ function accountAccessText(key) {
       otpPhone: "SMS / Text",
       detailsTitle: "Confirm contact details",
       preferencesTitle: "Quick preferences",
-      brokerIdTitle: "Verify broker identity",
+      brokerIdTitle: "Broker trust check",
       passwordTitle: "Create password",
       sendCode: "Send verification code",
       verifyCode: "Verify code",
       createFinal: "Create account",
       contactStepNote: "Add your first name, second name, email, and mobile number. We will send a code before you choose preferences.",
       preferencesStepNote: "Tell us what you are looking for so your dashboard starts useful.",
-      brokerIdStepNote: "Upload a photo of your National ID and enter the ID number. This is kept securely for broker review and fraud prevention.",
+      brokerIdStepNote: "Optional now: add your National ID details if you have them ready, or skip and complete them later from your broker dashboard.",
       passwordStepNote: "Create a password, confirm it, and accept the terms before opening your dashboard.",
-      brokerIdRequirement: "Broker accounts must add a National ID number and upload a clear ID photo before creating a password.",
+      brokerIdRequirement: "Broker ID can be added later from the dashboard. Verified contact and password are enough to open your broker account.",
       forgotTitle: "Reset password",
       resetIdentifier: "Email address or phone number",
       resetCode: "Reset code",
@@ -26527,7 +26527,7 @@ function updateAccountAccessProgress(step = "account") {
     details: "1 of 5: Details",
     verify: "2 of 5: Verify",
     preferences: "3 of 5: Broker details",
-    broker_id: "4 of 5: National ID",
+    broker_id: "4 of 5: Trust check",
     password: "5 of 5: Password"
   } : {
     details: "1 of 4: Details",
@@ -26629,9 +26629,9 @@ function updateAccountAccessBrokerIdentityState() {
   const details = getAccountAccessBrokerIdentityDetails();
   preview.classList.toggle("hidden", !details.fileName && !details.nin);
   preview.innerHTML = `
-    <div class="font-black text-green-950">Broker ID check</div>
-    <div class="mt-1">${details.nin ? `ID number: ${adminEscape(details.nin)}` : "Add your National ID number."}</div>
-    <div>${details.fileName ? `Photo ready: ${adminEscape(details.fileName)}` : "Upload a clear photo of the ID card."}</div>
+    <div class="font-black text-green-950">Broker trust check</div>
+    <div class="mt-1">${details.nin ? `ID number: ${adminEscape(details.nin)}` : "ID number can be added later."}</div>
+    <div>${details.fileName ? `Photo ready: ${adminEscape(details.fileName)}` : "ID photo can be added later from the dashboard."}</div>
   `;
 }
 
@@ -26672,14 +26672,10 @@ async function handleAccountAccessBrokerIdentitySelection(event) {
 function validateAccountAccessBrokerIdentityStep() {
   if (!isAccountAccessBrokerCreateFlow()) return true;
   const details = getAccountAccessBrokerIdentityDetails();
-  if (!details.nin || !isValidBrokerNationalId(details.nin)) {
-    toast("Enter the National ID number shown on your ID card.");
+  if (!details.nin && !details.dataUrl) return true;
+  if (details.nin && !isValidBrokerNationalId(details.nin)) {
+    toast("Enter a valid National ID number, or clear it and add it later from your dashboard.");
     document.getElementById("account-access-broker-id-number")?.focus();
-    return false;
-  }
-  if (!details.dataUrl) {
-    toast("Upload a clear photo of your National ID before creating a broker password.");
-    document.getElementById("account-access-broker-id-file")?.focus();
     return false;
   }
   return true;
@@ -26694,7 +26690,9 @@ function getAccountAccessCreatePasswordReadiness() {
   if (!accountAccessContactVerificationToken) missing.push(accountAccessText("verifiedRequirement"));
   if (isAccountAccessBrokerCreateFlow()) {
     const brokerIdentity = getAccountAccessBrokerIdentityDetails();
-    if (!isValidBrokerNationalId(brokerIdentity.nin) || !brokerIdentity.dataUrl) missing.push(accountAccessText("brokerIdRequirement"));
+    if (brokerIdentity.nin && !isValidBrokerNationalId(brokerIdentity.nin)) {
+      missing.push("Broker ID number looks invalid. Clear it or add a valid ID number before continuing.");
+    }
   }
   if (password.length < 8) missing.push(accountAccessText("passwordRequirement"));
   if (!confirmPassword || password !== confirmPassword) missing.push(accountAccessText("confirmRequirement"));
@@ -26965,22 +26963,22 @@ function ensureAccountAccessDrawer() {
             </div>
             <div id="account-access-create-broker-id-step" data-auth-create-step="broker_id" class="hidden space-y-3">
               <div class="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950">
-                <div class="font-black text-sm text-amber-950">Broker security check</div>
-                <p class="mt-1">Upload a clear photo of your National ID and enter the ID number/NIN. This protects property seekers and helps makaug review broker accounts before listings go live.</p>
+                <div class="font-black text-sm text-amber-950">Optional broker trust check</div>
+                <p class="mt-1">Add your National ID details now if they are ready, or skip this step and complete them later from your broker dashboard. Your account and dashboard access are not blocked here.</p>
               </div>
               <div class="grid sm:grid-cols-2 gap-3">
                 <label class="block">
-                  <span class="block text-xs font-bold text-gray-600 mb-1">National ID number / NIN</span>
+                  <span class="block text-xs font-bold text-gray-600 mb-1">National ID number / NIN <span class="font-semibold text-gray-400">(optional)</span></span>
                   <input id="account-access-broker-id-number" autocomplete="off" maxlength="32" oninput="updateAccountAccessBrokerIdentityState()" class="w-full min-h-[52px] border border-green-100 rounded-xl px-4 py-3 text-base uppercase" placeholder="CMxxxxxxxxxxxx">
                 </label>
                 <label class="block">
-                  <span class="block text-xs font-bold text-gray-600 mb-1">National ID photo</span>
+                  <span class="block text-xs font-bold text-gray-600 mb-1">National ID photo <span class="font-semibold text-gray-400">(optional)</span></span>
                   <input id="account-access-broker-id-file" type="file" accept="image/*" onchange="handleAccountAccessBrokerIdentitySelection(event)" class="w-full min-h-[52px] border border-green-100 rounded-xl px-4 py-3 text-sm bg-white">
                 </label>
               </div>
               <div id="account-access-broker-id-preview" class="hidden rounded-2xl border border-green-100 bg-green-50 p-3 text-xs text-green-900"></div>
               <div class="rounded-2xl border border-green-100 bg-green-50 p-3 text-xs text-green-950 space-y-1">
-                <p><strong>Your data is protected:</strong> we use this ID check only for broker review, safety, fraud prevention, and legal compliance.</p>
+                <p><strong>Your data is protected:</strong> if you add ID details, we use them only for broker review, safety, fraud prevention, and legal compliance.</p>
                 <p>You can request access, correction, export, or deletion. If your account is deleted, makaug deletes or anonymises broker ID data unless a legal retention duty applies.</p>
                 <p>Your broker listings still require makaug admin approval before they appear publicly.</p>
               </div>
@@ -27450,7 +27448,11 @@ async function submitAccountAccessContactOtp() {
     toast(message);
     setTimeout(() => document.getElementById("account-access-otp-code")?.focus(), 30);
   } catch (error) {
-    setAccountAccessFlowNote(`${error.message || "Could not send verification code."} If email does not arrive, choose SMS/Text and try again.`, "error");
+    const supportPhone = error.response?.support?.whatsapp || "0760112587";
+    const recovery = error.status === 503 || Array.isArray(error.response?.retry_channels)
+      ? `${error.message || "Could not send verification code."} You can retry Email, choose SMS/Text if your Uganda number is correct, or WhatsApp makaug support on ${supportPhone}.`
+      : `${error.message || "Could not send verification code."} Check your details and try the other verification method.`;
+    setAccountAccessFlowNote(recovery, "error");
     toast(error.message || "Could not send verification code.");
   } finally {
     if (btn) {
@@ -27634,15 +27636,19 @@ async function submitAccountAccessCreate() {
 	  const profileData = collectAccountAccessScreeningData();
 	  if (isAccountAccessBrokerCreateFlow()) {
 	    const brokerIdentity = getAccountAccessBrokerIdentityDetails();
+	    const hasBrokerIdentity = Boolean(brokerIdentity.nin || brokerIdentity.dataUrl);
 	    profileData.broker_national_id_number = brokerIdentity.nin;
 	    profileData.broker_identity_document_name = brokerIdentity.fileName;
 	    profileData.broker_identity_document_type = brokerIdentity.fileType;
 	    profileData.broker_identity_document_url = brokerIdentity.dataUrl;
-	    profileData.broker_identity_document_uploaded = "true";
-	    profileData.broker_identity_document_uploaded_at = new Date().toISOString();
-	    profileData.broker_verification_reason = "Broker account verification, property seeker safety, fraud prevention, and admin review before listings go live.";
-	    profileData.broker_privacy_consent_accepted = "true";
-	    profileData.broker_data_retention_notice_accepted = "true";
+	    profileData.broker_identity_document_uploaded = brokerIdentity.dataUrl ? "true" : "false";
+	    if (brokerIdentity.dataUrl) profileData.broker_identity_document_uploaded_at = new Date().toISOString();
+	    profileData.broker_identity_deferred = hasBrokerIdentity ? "false" : "true";
+	    profileData.broker_verification_reason = hasBrokerIdentity
+	      ? "Broker trust details supplied during account creation for admin review."
+	      : "Broker account created with ID verification deferred to the broker dashboard/admin review.";
+	    profileData.broker_privacy_consent_accepted = hasBrokerIdentity ? "true" : "false";
+	    profileData.broker_data_retention_notice_accepted = hasBrokerIdentity ? "true" : "false";
 	  }
   const roleLabel = accountAccessDrawerAudience === "agent"
     ? "Broker"
