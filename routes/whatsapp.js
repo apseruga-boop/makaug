@@ -2714,6 +2714,16 @@ function normalizeListingType(value) {
   return mapped || 'any';
 }
 
+function preserveExplicitSearchType(filters = {}, explicitSearchType = 'any') {
+  const cleanExplicit = normalizeListingType(explicitSearchType || 'any');
+  const safeFilters = filters && typeof filters === 'object' && !Array.isArray(filters) ? filters : {};
+  const parsedType = normalizeListingType(safeFilters.searchType || 'any');
+  return {
+    ...safeFilters,
+    searchType: cleanExplicit !== 'any' ? cleanExplicit : parsedType
+  };
+}
+
 function parseBedCount(text) {
   const clean = normalizeInput(text).toLowerCase();
   let m = clean.match(/\b(\d+)\s*[- ]?(?:bed|beds|bedroom|bedrooms|br)\b/i);
@@ -3253,13 +3263,17 @@ function listingMatchesSearchType(row, searchType) {
   const listingType = normalizeListingType(searchType || 'any');
   if (listingType === 'any') return true;
   if (listingType === 'student') {
+    const rowType = normalizeListingType(row.listing_type || 'any');
+    if (['land', 'sale', 'commercial'].includes(rowType)) return false;
     const haystack = [
       row.listing_type,
       row.title,
       row.property_type,
       row.description
     ].map((v) => normalizeInput(v).toLowerCase()).join(' ');
-    return row.listing_type === 'student' || /\b(student|hostel|dorm|campus)\b/i.test(haystack);
+    if (/\b(land|plot|acre|acres|decimal|decimals)\b/i.test(haystack)) return false;
+    return ['student', 'students'].includes(String(row.listing_type || '').toLowerCase())
+      || /\b(student|hostel|dorm|campus)\b/i.test(haystack);
   }
   return row.listing_type === listingType;
 }
@@ -3320,6 +3334,35 @@ function addWhatsappPublicListingFilter(values, alias = 'p') {
   return filters.length ? ` AND ${filters.join(' AND ')}` : '';
 }
 
+function whatsappStudentAccommodationSql(alias = 'p') {
+  const prefix = alias && /^[a-z_][a-z0-9_]*$/i.test(String(alias)) ? `${alias}.` : '';
+  const listingType = `LOWER(COALESCE(${prefix}listing_type, ''))`;
+  const title = `COALESCE(${prefix}title, '')`;
+  const description = `COALESCE(${prefix}description, '')`;
+  const propertyType = `COALESCE(${prefix}property_type, '')`;
+  const studentSignals = `(
+    ${listingType} IN ('student', 'students')
+    OR (
+      ${listingType} IN ('rent', 'rental', 'to_rent', '')
+      AND (
+        ${prefix}students_welcome = TRUE
+        OR ${title} ILIKE '%student%'
+        OR ${title} ILIKE '%hostel%'
+        OR ${description} ILIKE '%student%'
+        OR ${description} ILIKE '%hostel%'
+        OR ${propertyType} ILIKE '%hostel%'
+        OR ${propertyType} ILIKE '%student%'
+      )
+    )
+  )`;
+  const notLandOrSale = `(
+    ${listingType} NOT IN ('land', 'sale', 'commercial')
+    AND ${title} !~* '\\m(land|plot|acre|acres|decimal|decimals)\\M'
+    AND ${propertyType} !~* '\\m(land|plot|acre|acres|decimal|decimals)\\M'
+  )`;
+  return `(${studentSignals} AND ${notLandOrSale})`;
+}
+
 function findWebsitePublicListings(filters = {}, limit = 5) {
   void filters;
   void limit;
@@ -3363,15 +3406,7 @@ function buildWhatsappAffordableWhere(filters = {}, { includeBudget = true } = {
   const listingType = normalizeListingType(filters.searchType || 'any');
   if (listingType !== 'any') {
     if (listingType === 'student') {
-      where += ` AND (
-        p.listing_type = 'student'
-        OR p.students_welcome = TRUE
-        OR p.title ILIKE '%student%'
-        OR p.title ILIKE '%hostel%'
-        OR p.description ILIKE '%student%'
-        OR p.description ILIKE '%hostel%'
-        OR COALESCE(p.property_type, '') ILIKE '%hostel%'
-      )`;
+      where += ` AND ${whatsappStudentAccommodationSql('p')}`;
     } else {
       values.push(listingType);
       where += ` AND p.listing_type = $${values.length}`;
@@ -3536,15 +3571,7 @@ async function findPropertiesByNaturalFilters(filters = {}) {
   const listingType = normalizeListingType(filters.searchType || 'any');
   if (listingType !== 'any') {
     if (listingType === 'student') {
-      where += ` AND (
-        listing_type = 'student'
-        OR students_welcome = TRUE
-        OR title ILIKE '%student%'
-        OR title ILIKE '%hostel%'
-        OR description ILIKE '%student%'
-        OR description ILIKE '%hostel%'
-        OR COALESCE(property_type, '') ILIKE '%hostel%'
-      )`;
+      where += ` AND ${whatsappStudentAccommodationSql('')}`;
     } else {
       values.push(listingType);
       where += ` AND listing_type = $${values.length}`;
@@ -4674,19 +4701,12 @@ async function findPropertiesForWhatsapp(searchType, location) {
   let where = 'WHERE p.status = $1';
   where += addWhatsappPublicListingFilter(values, 'p');
 
-  if (searchType && searchType !== 'any') {
-    if (searchType === 'student') {
-      where += ` AND (
-        listing_type = 'student'
-        OR students_welcome = TRUE
-        OR title ILIKE '%student%'
-        OR title ILIKE '%hostel%'
-        OR description ILIKE '%student%'
-        OR description ILIKE '%hostel%'
-        OR COALESCE(property_type, '') ILIKE '%hostel%'
-      )`;
+  const listingType = normalizeListingType(searchType || 'any');
+  if (listingType && listingType !== 'any') {
+    if (listingType === 'student') {
+      where += ` AND ${whatsappStudentAccommodationSql('')}`;
     } else {
-      values.push(searchType);
+      values.push(listingType);
       where += ` AND listing_type = $${values.length}`;
     }
   }
@@ -4756,9 +4776,14 @@ async function findPropertiesNearWhatsapp(searchType, sharedLocation, radiusMile
   let where = 'WHERE p.status = $1 AND p.latitude IS NOT NULL AND p.longitude IS NOT NULL';
   where += addWhatsappPublicListingFilter(values, 'p');
 
-  if (searchType && searchType !== 'any') {
-    values.push(searchType);
-    where += ` AND listing_type = $${values.length}`;
+  const listingType = normalizeListingType(searchType || 'any');
+  if (listingType && listingType !== 'any') {
+    if (listingType === 'student') {
+      where += ` AND ${whatsappStudentAccommodationSql('')}`;
+    } else {
+      values.push(listingType);
+      where += ` AND listing_type = $${values.length}`;
+    }
   }
 
   const result = await db.query(
@@ -4812,15 +4837,7 @@ async function findPropertiesNearWhatsappWithFilters(baseSearchType, sharedLocat
   const listingType = normalizeListingType(f.searchType || baseSearchType || 'any');
   if (listingType && listingType !== 'any') {
     if (listingType === 'student') {
-      where += ` AND (
-        listing_type = 'student'
-        OR students_welcome = TRUE
-        OR title ILIKE '%student%'
-        OR title ILIKE '%hostel%'
-        OR description ILIKE '%student%'
-        OR description ILIKE '%hostel%'
-        OR COALESCE(property_type, '') ILIKE '%hostel%'
-      )`;
+      where += ` AND ${whatsappStudentAccommodationSql('')}`;
     } else {
       values.push(listingType);
       where += ` AND listing_type = $${values.length}`;
@@ -6809,9 +6826,9 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
   // SEARCH AREA
   if (step === 'search_area') {
-    const searchType = sessionData.search_type || 'any';
+    const searchType = normalizeListingType(sessionData.search_type || 'any');
     const pendingFilters = sessionData.pending_search_filters && typeof sessionData.pending_search_filters === 'object'
-      ? sessionData.pending_search_filters
+      ? preserveExplicitSearchType(sessionData.pending_search_filters, searchType)
       : null;
     if (!sharedLocation && isLocationPreviewWithoutCoordinates(runtime.mediaType, cleanBody)) {
       await patchSessionData(phone, {
@@ -6929,10 +6946,11 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       });
       if (parsed.hasSignal) naturalFilters = parsed;
     }
+    if (naturalFilters) naturalFilters = preserveExplicitSearchType(naturalFilters, searchType);
 
     if (naturalFilters && naturalFilters.area) {
       const rows = await findPropertiesByNaturalFilters(naturalFilters);
-      await patchSessionData(phone, { pending_search_filters: null });
+      await patchSessionData(phone, { pending_search_filters: null, search_type: naturalFilters.searchType || searchType || 'any' });
       await logPropertySearchRequest({
         userPhone: phone,
         searchType: naturalFilters.searchType || 'any',
@@ -6961,6 +6979,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
     if (cleanBody.length < 2) return respond(t(lang, 'askSearchArea'), 'search_area');
     const rows = await findPropertiesForWhatsapp(searchType, cleanBody);
+    await patchSessionData(phone, { pending_search_filters: null, search_type: searchType });
     await logPropertySearchRequest({
       userPhone: phone,
       searchType,
