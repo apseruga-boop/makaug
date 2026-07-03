@@ -199,6 +199,22 @@ const PROFILE_LOCK_MAX_WAIT_MS = Math.min(
   1800000,
   Math.max(30000, Number.isFinite(configuredProfileLockMaxWaitMs) ? configuredProfileLockMaxWaitMs : 900000)
 );
+const CLEAR_STALE_PROFILE_LOCKS = !['0', 'false', 'no', 'off'].includes(
+  String(process.env.WHATSAPP_WEB_COPILOT_CLEAR_STALE_PROFILE_LOCKS || 'true').trim().toLowerCase()
+);
+const configuredProfileLockStaleClearMs = Number(process.env.WHATSAPP_WEB_COPILOT_PROFILE_LOCK_STALE_CLEAR_MS || 120000);
+const PROFILE_LOCK_STALE_CLEAR_MS = Math.min(
+  900000,
+  Math.max(60000, Number.isFinite(configuredProfileLockStaleClearMs) ? configuredProfileLockStaleClearMs : 120000)
+);
+
+function chromiumProfileLockFiles() {
+  return [
+    'SingletonLock',
+    'SingletonSocket',
+    'SingletonCookie'
+  ].map((fileName) => path.join(PROFILE_DIR, fileName));
+}
 
 function resolveChromeExecutablePath() {
   const candidates = [
@@ -267,13 +283,9 @@ function isClosedBrowserError(error) {
 }
 
 function hasChromiumProfileLockFiles() {
-  return [
-    'SingletonLock',
-    'SingletonSocket',
-    'SingletonCookie'
-  ].some((fileName) => {
+  return chromiumProfileLockFiles().some((filePath) => {
     try {
-      return fs.existsSync(path.join(PROFILE_DIR, fileName));
+      return fs.existsSync(filePath);
     } catch (_error) {
       return false;
     }
@@ -292,9 +304,24 @@ function isChromiumProfileLockError(error) {
     || (isClosedBrowserError(error) && hasChromiumProfileLockFiles());
 }
 
+function clearChromiumProfileLockFiles() {
+  let cleared = 0;
+  for (const filePath of chromiumProfileLockFiles()) {
+    try {
+      if (!fs.existsSync(filePath)) continue;
+      fs.rmSync(filePath, { force: true, recursive: false });
+      cleared += 1;
+    } catch (error) {
+      log(`could not clear stale Chrome profile lock ${path.basename(filePath)}: ${error.message || error}`);
+    }
+  }
+  return cleared;
+}
+
 async function launchPersistentContextWithProfileRetry(executablePath, options) {
   const startedAt = Date.now();
   let attempt = 0;
+  let staleLocksCleared = false;
   while (true) {
     attempt += 1;
     try {
@@ -304,6 +331,18 @@ async function launchPersistentContextWithProfileRetry(executablePath, options) 
       const waitedMs = Date.now() - startedAt;
       if (waitedMs >= PROFILE_LOCK_MAX_WAIT_MS) {
         throw new Error(`WhatsApp Web profile is still locked after ${Math.round(waitedMs / 1000)}s: ${error.message || error}`);
+      }
+      if (
+        CLEAR_STALE_PROFILE_LOCKS
+        && !staleLocksCleared
+        && waitedMs >= PROFILE_LOCK_STALE_CLEAR_MS
+        && hasChromiumProfileLockFiles()
+      ) {
+        const cleared = clearChromiumProfileLockFiles();
+        staleLocksCleared = true;
+        log(`cleared ${cleared} stale Chrome profile lock file${cleared === 1 ? '' : 's'} after waiting ${Math.round(waitedMs / 1000)}s.`);
+        await sleep(1000);
+        continue;
       }
       log(`WhatsApp Web profile is locked by another Chromium process; waiting ${Math.round(PROFILE_LOCK_RETRY_MS / 1000)}s before launch retry ${attempt + 1}.`);
       await sleep(PROFILE_LOCK_RETRY_MS);
