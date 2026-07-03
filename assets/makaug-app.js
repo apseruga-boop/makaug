@@ -284,6 +284,14 @@ function findBrokerById(id) {
   return getBrokerDirectory().find((broker) => String(broker.id || "") === key) || null;
 }
 
+function findBrokerByIdIncludingLoadedProfile(id) {
+  const key = String(id || "");
+  if (!key) return null;
+  return findBrokerById(key)
+    || REMOTE_BROKERS.find((broker) => String(broker.id || "") === key)
+    || null;
+}
+
 function getFeaturedBrokers(list = getBrokerDirectory()) {
   const rows = Array.isArray(list) ? [...list] : [];
   rows.sort((a, b) => {
@@ -303,10 +311,17 @@ async function refreshBrokersFromApi({ silent = true } = {}) {
     const response = await apiRequest("/api/agents?status=approved&limit=100", { skipAuth: true });
     const rows = Array.isArray(response?.data) ? response.data : [];
     const existingById = new Map(REMOTE_BROKERS.map((broker) => [String(broker.id || ""), broker]));
-    REMOTE_BROKERS = rows.map(mapRemoteAgentForUi).filter((broker) => broker.id).map((broker) => {
+    const nextBrokers = rows.map(mapRemoteAgentForUi).filter((broker) => broker.id).map((broker) => {
       const existing = existingById.get(String(broker.id || ""));
       return existing?.remote_profile_loaded ? { ...broker, ...existing, listings: broker.listings || existing.listings } : broker;
     });
+    const nextIds = new Set(nextBrokers.map((broker) => String(broker.id || "")));
+    existingById.forEach((existing, id) => {
+      if (existing?.remote_profile_loaded && id && !nextIds.has(id)) {
+        nextBrokers.push(existing);
+      }
+    });
+    REMOTE_BROKERS = nextBrokers;
     remoteBrokersLoaded = true;
     populateBrokerFilterOptions();
     renderAll();
@@ -32093,8 +32108,11 @@ async function submitPropertyInquiry(id) {
 }
 
 async function shareBrokerBusinessCard(id, channel = "native") {
-  const broker = findBrokerById(id);
-  if (!broker) return;
+  const broker = findBrokerByIdIncludingLoadedProfile(id);
+  if (!broker) {
+    toast(translateListingLabel("Broker profile is still loading. Try again in a moment."));
+    return;
+  }
   const shareUrl = getBrokerShareUrl(broker);
   const shareText = `Broker Card: ${broker.name}\n${broker.company || ""}\n${broker.phone ? `Call: ${broker.phone}\n` : ""}${broker.whatsapp ? `WhatsApp: https://wa.me/${String(broker.whatsapp).replace(/\D/g, "")}\n` : ""}${shareUrl}`;
   try {
@@ -39936,7 +39954,7 @@ async function openBrokerProfile(id) {
         <div class="h-4 w-5/6 rounded bg-gray-100"></div>
       </div>
     </div>`;
-  let b = findBrokerById(id);
+  let b = findBrokerByIdIncludingLoadedProfile(id);
   if (!b || !b.remote_profile_loaded) {
     try {
       const loaded = await loadRemoteBrokerProfileForUi(id);
