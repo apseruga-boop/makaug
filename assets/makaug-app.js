@@ -33198,7 +33198,9 @@ async function loadPublicRouteFragment(nextUrl, page, options = {}) {
     setLang(currentLang, true, false);
     showPage(page, { history: false, source, scroll: options.scroll !== false });
     applyHeroSearchHandoff(page);
-    runSectionSearch(page, { source: `${source}_fragment` });
+    if (!syncActiveRouteSearchHandoff(`${source}_route_query`)) {
+      runSectionSearch(page, { source: `${source}_fragment` });
+    }
     return true;
   } catch (error) {
     if (!isCurrentPublicRouteLoad(loadToken, page)) return false;
@@ -33270,6 +33272,7 @@ function navigatePublicRoute(target, event, options = {}) {
   }
   showPage(page, { history: false, source: options.source || "spa_link" });
   applyHeroSearchHandoff(page);
+  syncActiveRouteSearchHandoff(`${options.source || "spa_link"}_route_query`);
   return false;
 }
 
@@ -33937,6 +33940,7 @@ async function parseInitialDeepLink() {
     }
     showPage(publicRoutePage, { history: false, source: "deep_link" });
     applyHeroSearchHandoff(publicRoutePage);
+    syncActiveRouteSearchHandoff("deep_link_route_query");
     return true;
   }
 
@@ -34171,7 +34175,9 @@ function syncSectionSearchShell(page) {
   const routePayload = routeSearchHandoffPayload(config.key);
   const routeKey = `${window.location.pathname || "/"}${window.location.search || ""}`;
   if (routePayload && shell.dataset.routeQueryApplied !== routeKey) {
-    if (legacyInput && !legacyInput.value) legacyInput.value = routePayload.query || routePayload.area || "";
+    const routeQuery = routePayload.query || routePayload.area || "";
+    if (legacyInput && !legacyInput.value) legacyInput.value = routeQuery;
+    if (shellInput && !shellInput.value) shellInput.value = routeQuery;
     Object.entries(routePayload.filters || {}).forEach(([key, value]) => {
       if (!value) return;
       const field = config.filters.find((candidate) => candidate.key === key);
@@ -34194,6 +34200,14 @@ function syncSectionSearchShell(page) {
     }
     if (Array.from(target.options).some((option) => option.value === source.value)) target.value = source.value;
   });
+  return true;
+}
+
+function syncActiveRouteSearchHandoff(source = "route_query_sync") {
+  const page = pageForPublicRoute(window.location.pathname || "/");
+  if (!page || !routeSearchHandoffPayload(page)) return false;
+  if (!syncSectionSearchShell(page)) return false;
+  runSectionSearch(page, { source, backend: false });
   return true;
 }
 
@@ -40982,6 +40996,7 @@ function initializeMakaugApp() {
   filterLand();
   wireSearchTypeahead();
   parseInitialDeepLink();
+  window.setTimeout(() => syncActiveRouteSearchHandoff("startup_route_query_retry"), 250);
   syncAgentRegistrationForm();
   toggleAgentFieldIdInput();
   setAuthSignInAudience(authSignInAudience);
