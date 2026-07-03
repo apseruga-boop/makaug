@@ -1096,6 +1096,7 @@ async function getActiveChatSnapshot(page) {
       if (/^false_/.test(text)) return 'in';
       return '';
     };
+    const isLikelyOutgoingSender = (value) => /^(?:you|me|makaug(?:\.com)?)$/i.test(String(value || '').trim());
     const isTimestampOnlyText = (value) => /^\s*\d{1,2}:\d{2}\s*(?:AM|PM)?\s*$/i.test(String(value || '').trim());
     const parseCoords = (value) => {
       const raw = String(value || '');
@@ -1237,7 +1238,7 @@ async function getActiveChatSnapshot(page) {
       ? 'out'
       : last.closest('.message-in')
         ? 'in'
-        : dataIdDirection || 'unknown';
+        : dataIdDirection || (senderLabel ? (isLikelyOutgoingSender(senderLabel) ? 'out' : 'in') : 'unknown');
     const resolvedChatKey = senderDigits || headerDigits || dataIdDigits || fallbackChatKey || headerTitle || senderLabel;
     const contactName = senderDigits || dataIdDigits
       ? headerTitle
@@ -1316,6 +1317,7 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
       if (/^false_/.test(text)) return 'in';
       return '';
     };
+    const isLikelyOutgoingSender = (value) => /^(?:you|me|makaug(?:\.com)?)$/i.test(String(value || '').trim());
     const isTimestampOnlyText = (value) => /^\s*\d{1,2}:\d{2}\s*(?:AM|PM)?\s*$/i.test(String(value || '').trim());
     const parseCoords = (value) => {
       const raw = String(value || '');
@@ -1426,7 +1428,7 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
           ? 'out'
           : node.closest('.message-in')
             ? 'in'
-            : dataIdDirection || 'unknown';
+            : dataIdDirection || (senderLabel ? (isLikelyOutgoingSender(senderLabel) ? 'out' : 'in') : 'unknown');
         const rawText = (node.innerText || node.textContent || '').trim();
         const mediaFingerprint = [
           nodes.indexOf(node),

@@ -1315,6 +1315,7 @@ function run() {
   assert(!whatsappWebCopilotScript.includes('bodySnippet'), 'WhatsApp Web readiness telemetry must not log raw chat/sidebar text');
   assert(whatsappWebCopilotScript.includes('phoneFromMessageDataId'), 'WhatsApp Web copilot must recover recipient phone numbers from WhatsApp message data-id when the visible chat title is a saved contact name');
   assert(whatsappWebCopilotScript.includes('@(?:c\\.us|s\\.whatsapp\\.net)'), 'WhatsApp Web copilot must parse c.us and s.whatsapp.net JIDs from message data-id values');
+  assert(whatsappWebCopilotScript.includes('isLikelyOutgoingSender'), 'WhatsApp Web copilot must not drop named incoming text bubbles when phone JIDs are hidden');
   assert(whatsappWebCopilotScript.includes('RECENT_CHAT_FAST_LANE_LIMIT'), 'WhatsApp Web copilot must check the newest recent-chat row every loop');
   assert(whatsappWebCopilotScript.includes('RECENT_CHAT_SWEEP_OPEN_LIMIT'), 'WhatsApp Web copilot must cap wider recent-chat openings');
   assert(whatsappWebCopilotScript.includes('shouldSkipRecentChatRow'), 'WhatsApp Web copilot must skip unchanged recent-chat rows briefly');
