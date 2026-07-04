@@ -1568,6 +1568,20 @@ async function uploadBackupStorageCanary() {
   });
 }
 
+async function uploadMediaStorageCanary() {
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const tinyPng = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lzv9WQAAAABJRU5ErkJggg==',
+    'base64'
+  );
+
+  return uploadBufferToS3({
+    key: `provider-tests/media-storage/${stamp}-admin-media-storage.png`,
+    bytes: tinyPng,
+    mimeType: 'image/png'
+  });
+}
+
 async function createSafeLaunchProperty(req, overrides = {}) {
   const reference = buildListingReference();
   const result = await db.query(
@@ -8810,6 +8824,33 @@ router.post('/setup-status/provider-test', async (req, res, next) => {
       base.status = deliveryStatus;
       base.deliveryChannel = 'sms';
       base.attempts = deliveryResult.attempts || [];
+    } else if (provider === 'media_storage') {
+      let canary = null;
+      if (configured) {
+        canary = await uploadMediaStorageCanary();
+        base.status = 'uploaded';
+        base.cloudRef = canary.internalRef;
+        base.publicUrl = canary.publicUrl || null;
+        base.bytes = canary.bytes;
+        base.sha256 = canary.sha256;
+      }
+      log = await logNotification(db, {
+        recipientEmail: adminTestEmail(),
+        channel: 'in_app',
+        type: 'provider_test_media_storage',
+        status: configured ? base.status : 'provider_missing',
+        payloadSummary: {
+          provider,
+          configured,
+          launch_proof: true,
+          cloud_ref: canary?.internalRef || null,
+          public_url: canary?.publicUrl || null,
+          key: canary?.key || null,
+          bytes: canary?.bytes || null,
+          sha256: canary?.sha256 || null
+        },
+        failureReason: configured ? null : 'media_storage_provider_missing'
+      });
     } else if (provider === 'backups') {
       let canary = null;
       if (configured) {
