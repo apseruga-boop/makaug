@@ -167,23 +167,37 @@ function evaluateHostedWhatsappBridgeReadiness(clients = [], options = {}) {
   const localOnlineClients = normalizedClients.filter((client) => (
     !isHostedWhatsappBridgeClient(client) &&
     isFreshBridgeClient(client, nowMs, freshSeconds) &&
-    normalizeStatus(client.status) === 'online'
+    normalizeStatus(client.status) === 'online' &&
+    !getBridgeReadinessBlocker(client)
   ));
 
   let ok = false;
   let status = 'offline';
   let reason = 'no_bridge_clients_seen';
   let selectedClient = null;
+  let hostedBlocker = '';
 
   if (readyHostedClients.length > 0) {
     ok = true;
     status = 'ready';
     reason = 'hosted_agent_online';
     selectedClient = readyHostedClients[0];
+  } else if (freshHostedClients.length > 0 && localOnlineClients.length > 0) {
+    ok = true;
+    status = 'degraded_local_fallback';
+    hostedBlocker = getBridgeReadinessBlocker(freshHostedClients[0]) || 'hosted_agent_not_ready';
+    reason = 'hosted_agent_blocked_local_fallback_online';
+    selectedClient = localOnlineClients[0];
   } else if (freshHostedClients.length > 0) {
     status = 'blocked';
     reason = getBridgeReadinessBlocker(freshHostedClients[0]) || 'hosted_agent_not_ready';
     selectedClient = freshHostedClients[0];
+  } else if (hostedClients.length > 0 && localOnlineClients.length > 0) {
+    ok = true;
+    status = 'degraded_local_fallback';
+    hostedBlocker = 'hosted_agent_stale_or_not_heartbeating';
+    reason = 'hosted_agent_stale_local_fallback_online';
+    selectedClient = localOnlineClients[0];
   } else if (hostedClients.length > 0) {
     status = 'stale';
     reason = 'hosted_agent_stale_or_not_heartbeating';
@@ -205,6 +219,7 @@ function evaluateHostedWhatsappBridgeReadiness(clients = [], options = {}) {
     hosted_fresh_count: freshHostedClients.length,
     hosted_online_count: readyHostedClients.length,
     local_online_count: localOnlineClients.length,
+    hosted_blocker: hostedBlocker || null,
     selected_client: selectedClient ? summarizeWhatsappBridgeClient(selectedClient) : null
   };
 }
