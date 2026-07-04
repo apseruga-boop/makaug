@@ -180,6 +180,84 @@ function normalizePublicOpportunitySummary(row = {}) {
   };
 }
 
+const PUBLIC_OPPORTUNITY_SUMMARY_CACHE_TTL_MS = Math.max(
+  parseInt(process.env.PUBLIC_OPPORTUNITY_SUMMARY_CACHE_TTL_MS || '60000', 10) || 60000,
+  5000
+);
+const publicOpportunitySummaryCache = new Map();
+const publicOpportunitySummaryInflight = new Map();
+
+function publicOpportunitySummaryCacheKey(where, values = []) {
+  return JSON.stringify({ where, values });
+}
+
+async function loadPublicOpportunitySummary(where, values = []) {
+  const cacheKey = publicOpportunitySummaryCacheKey(where, values);
+  const now = Date.now();
+  const cached = publicOpportunitySummaryCache.get(cacheKey);
+  if (cached && cached.expiresAt > now) return cached.summary;
+  if (publicOpportunitySummaryInflight.has(cacheKey)) {
+    return publicOpportunitySummaryInflight.get(cacheKey);
+  }
+  const opportunityBucketSql = publicOpportunityBucketSql('p');
+  const summaryPromise = db.query(
+    `SELECT
+       COUNT(*)::int AS total,
+       COUNT(*) FILTER (WHERE bucket = 'sale')::int AS sale,
+       COUNT(*) FILTER (WHERE bucket = 'rent')::int AS rent,
+       COUNT(*) FILTER (WHERE bucket = 'student')::int AS student,
+       COUNT(*) FILTER (WHERE bucket = 'commercial')::int AS commercial,
+       COUNT(*) FILTER (WHERE bucket = 'land')::int AS land,
+       COUNT(*) FILTER (WHERE bucket = 'other')::int AS other
+     FROM (
+       SELECT ${opportunityBucketSql} AS bucket
+       FROM properties p
+       ${where}
+     ) public_inventory`,
+    values
+  )
+    .then((summaryResult) => {
+      const summary = normalizePublicOpportunitySummary(summaryResult.rows[0] || {});
+      publicOpportunitySummaryCache.set(cacheKey, {
+        summary,
+        expiresAt: Date.now() + PUBLIC_OPPORTUNITY_SUMMARY_CACHE_TTL_MS
+      });
+      return summary;
+    })
+    .finally(() => {
+      publicOpportunitySummaryInflight.delete(cacheKey);
+    });
+  publicOpportunitySummaryInflight.set(cacheKey, summaryPromise);
+  return summaryPromise;
+}
+
+function includePublicOpportunitySummary(req) {
+  const raw = req.query.include_summary ?? req.query.includeSummary ?? req.query.summary;
+  if (raw === undefined || raw === null || cleanText(raw) === '') return true;
+  return parseBooleanLike(raw, true);
+}
+
+function approximatePagination({ page, limit, offset, rowCount, hasMore }) {
+  return {
+    total: offset + rowCount + (hasMore ? 1 : 0),
+    page,
+    limit,
+    totalPages: hasMore ? page + 1 : Math.max(page, 1),
+    approximate: true
+  };
+}
+
+function runPublicInventoryFollowup(task, label, context = {}) {
+  Promise.resolve()
+    .then(task)
+    .catch((error) => {
+      logger.warn(label, {
+        ...context,
+        message: error.message
+      });
+    });
+}
+
 const PUBLIC_AREA_PIN_OVERRIDES = [
   { name: 'Ndejje', district: 'Wakiso', latitude: 0.244, longitude: 32.553, aliases: ['Ndejje', 'Ndejje Lubugumu'] },
   { name: 'Munyonyo', district: 'Kampala', latitude: 0.236, longitude: 32.623, aliases: ['Munyonyo', 'Munyonjo', 'Munyonyo Kampala', 'Munyonyo Uganda'] },
@@ -1326,6 +1404,8 @@ async function listPropertiesHandler(req, res, next) {
     const hasRadiusSearch = searchLat != null && searchLng != null;
     const radiusKm = requestedRadiusKm || normalizeRadiusKm(requestedRadiusMiles ? requestedRadiusMiles * 1.609344 : null, DEFAULT_SEARCH_RADIUS_MILES);
     let distanceSql = 'NULL::numeric';
+    const summaryOnly = parseBooleanLike(req.query.summary_only || req.query.summaryOnly, false);
+    const shouldIncludeSummary = summaryOnly || includePublicOpportunitySummary(req);
 
     let adminAccess = false;
     if (requestingModerationData && !publicOnly) {
@@ -1488,26 +1568,21 @@ async function listPropertiesHandler(req, res, next) {
 
     const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
 
-    const opportunityBucketSql = publicOpportunityBucketSql('p');
-    const summaryResult = await db.query(
-      `SELECT
-         COUNT(*)::int AS total,
-         COUNT(*) FILTER (WHERE bucket = 'sale')::int AS sale,
-         COUNT(*) FILTER (WHERE bucket = 'rent')::int AS rent,
-         COUNT(*) FILTER (WHERE bucket = 'student')::int AS student,
-         COUNT(*) FILTER (WHERE bucket = 'commercial')::int AS commercial,
-         COUNT(*) FILTER (WHERE bucket = 'land')::int AS land,
-         COUNT(*) FILTER (WHERE bucket = 'other')::int AS other
-       FROM (
-         SELECT ${opportunityBucketSql} AS bucket
-         FROM properties p
-         ${where}
-       ) public_inventory`,
-      values
-    );
-    const opportunitySummary = normalizePublicOpportunitySummary(summaryResult.rows[0] || {});
-    const total = opportunitySummary.total;
-    if (total === 0) {
+    const opportunitySummary = shouldIncludeSummary
+      ? await loadPublicOpportunitySummary(where, values)
+      : null;
+    const total = opportunitySummary?.total ?? null;
+    if (summaryOnly) {
+      return res.json({
+        ok: true,
+        data: [],
+        summary: {
+          public_opportunities: opportunitySummary || null
+        },
+        pagination: toPagination(total || 0, page, limit)
+      });
+    }
+    if (shouldIncludeSummary && total === 0) {
       try {
         await db.query(
           `INSERT INTO property_search_requests (user_phone, payload)
@@ -1562,7 +1637,8 @@ async function listPropertiesHandler(req, res, next) {
       ? `${distanceSql} ASC NULLS LAST, p.created_at DESC`
       : (sortMap[sortBy] || sortMap.newest);
 
-    const listValues = [...values, limit, offset];
+    const listLimit = shouldIncludeSummary ? limit : limit + 1;
+    const listValues = [...values, listLimit, offset];
 
     const listResult = await db.query(
       `SELECT
@@ -1639,6 +1715,8 @@ async function listPropertiesHandler(req, res, next) {
       OFFSET $${values.length + 2}`,
       listValues
     );
+    const hasMoreWithoutSummary = !shouldIncludeSummary && listResult.rows.length > limit;
+    const responseRows = hasMoreWithoutSummary ? listResult.rows.slice(0, limit) : listResult.rows;
     if (hasRadiusSearch) {
       try {
         await db.query(
@@ -1683,7 +1761,7 @@ async function listPropertiesHandler(req, res, next) {
 
     return res.json({
       ok: true,
-      data: listResult.rows.map((row) => {
+      data: responseRows.map((row) => {
         const {
           admin_extra_fields: adminExtraFields,
           source: rowSource,
@@ -1778,9 +1856,17 @@ async function listPropertiesHandler(req, res, next) {
         }
       } : null,
       summary: {
-        public_opportunities: opportunitySummary
+        public_opportunities: opportunitySummary || null
       },
-      pagination: toPagination(total, page, limit)
+      pagination: shouldIncludeSummary
+        ? toPagination(total, page, limit)
+        : approximatePagination({
+          page,
+          limit,
+          offset,
+          rowCount: responseRows.length,
+          hasMore: hasMoreWithoutSummary
+        })
     });
   } catch (error) {
     return next(error);
@@ -3391,7 +3477,16 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
 
     let alertMatching = null;
     if (nextStatus === 'approved' && current.status !== 'approved') {
-      alertMatching = await matchListingToSavedSearches(db, { ...current, ...listing });
+      if (manualNotificationOnly) {
+        alertMatching = { deferred: true, reason: 'fast_manual_notification_response' };
+        runPublicInventoryFollowup(
+          () => matchListingToSavedSearches(db, { ...current, ...listing }),
+          'Deferred listing saved-search matching failed',
+          { property_id: listing.id }
+        );
+      } else {
+        alertMatching = await matchListingToSavedSearches(db, { ...current, ...listing });
+      }
     }
 
     return res.json({

@@ -13,6 +13,7 @@ const adminRouteSource = fs.readFileSync('routes/admin.js', 'utf8');
 const agentsRouteSource = fs.readFileSync('routes/agents.js', 'utf8');
 const propertiesRouteSource = fs.readFileSync('routes/properties.js', 'utf8');
 const publicInventoryStatusSource = fs.readFileSync('utils/publicInventoryStatus.js', 'utf8');
+const publicInventoryPerformanceMigration = fs.readFileSync('db/migrations/066_public_inventory_performance.sql', 'utf8');
 
 function functionSource(name) {
   const start = appSource.indexOf(`function ${name}(`);
@@ -75,8 +76,14 @@ test('admin status actions render queue count before heavyweight refresh', () =>
   assert.match(statusSource, /fast_admin_render: true/);
   assert.match(statusSource, /manual_notification_only: \["approved", "rejected"\]\.includes\(normalizedStatus\)/);
   assert.match(statusSource, /adminRenderListingStatusLocally\(listing, normalizedStatus, backendId \|\| localId/);
+  const modalIndex = statusSource.indexOf('openAdminWhatsAppMessageModal({');
+  const detailIndex = statusSource.indexOf('const detail = await apiRequest(`/api/properties/${encodeURIComponent(backendId)}`');
+  assert(modalIndex > -1, 'status flow should still open the owner WhatsApp modal');
+  assert(detailIndex > -1, 'status flow should still refresh public detail after approval');
+  assert(modalIndex < detailIndex, 'approval WhatsApp modal should open before public detail refresh');
   assert.match(statusSource, /window\.requestAnimationFrame\(refreshAfterStatus\)/);
   assert.match(propertiesRouteSource, /manual_notification_only/);
+  assert.match(propertiesRouteSource, /fast_manual_notification_response/);
   assert.match(propertiesRouteSource, /function buildManualOwnerStatusNotification/);
   assert.match(propertiesRouteSource, /buildOwnerStatusMessage/);
   assert.match(propertiesRouteSource, /getDirectWhatsAppUrl/);
@@ -114,18 +121,40 @@ test('anonymous public property APIs suppress launch seed QA listings', () => {
   assert.match(routeSource, /const publicOnly = parseBooleanLike\(req\.query\.public_only \|\| req\.query\.publicOnly, false\)/);
   assert.match(routeSource, /if \(publicOnly \|\| !adminAccess\) \{\s*addPublicLaunchSeedFilter\(filters, values\);/);
   assert.match(routeSource, /function publicOpportunityBucketSql/);
-  assert.match(routeSource, /summary: \{\s*public_opportunities: opportunitySummary\s*\}/);
+  assert.match(routeSource, /function includePublicOpportunitySummary\(req\)/);
+  assert.match(routeSource, /const summaryOnly = parseBooleanLike\(req\.query\.summary_only \|\| req\.query\.summaryOnly, false\)/);
+  assert.match(routeSource, /const shouldIncludeSummary = summaryOnly \|\| includePublicOpportunitySummary\(req\)/);
+  assert.match(routeSource, /if \(summaryOnly\) \{/);
+  assert.match(routeSource, /public_opportunities: opportunitySummary \|\| null/);
+  assert.match(routeSource, /approximatePagination\(\{/);
   assert.match(publicInventoryStatusSource, /PUBLIC_LIVE_PROPERTY_STATUSES = \['approved', 'live', 'published'\]/);
   assert.match(routeSource, /filters\.push\(publicLivePropertyStatusSql\('p'\)\)/);
   assert.match(routeSource, /else if \(publicOnly\) \{\s*filters\.push\(publicLivePropertyStatusSql\('p'\)\);/);
   assert.match(appSource, /function fetchPublicPaginatedRows\(path, options = \{\}\)/);
-  assert.match(appSource, /fetchPublicPaginatedRows\("\/api\/properties\?status=approved&public_only=1", \{ limit: 100, maxPages: 200 \}\)/);
-  assert.match(appSource, /publicListingsApiStats = normalizeHeroOpportunityStats\(firstResponse\?\.summary\?\.public_opportunities \|\| firstResponse\?\.summary\)/);
+  assert.match(appSource, /include_summary=\$\{includeSummary \? "1" : "0"\}/);
+  assert.match(appSource, /const PUBLIC_INITIAL_LISTING_LIMIT = 8/);
+  assert.match(appSource, /const PUBLIC_BACKGROUND_LISTING_MAX_PAGES = 2/);
+  assert.match(appSource, /async function refreshPublicOpportunitySummary/);
+  assert.match(appSource, /summary_only=1&include_summary=1&limit=1/);
+  assert.match(appSource, /limit = PUBLIC_INITIAL_LISTING_LIMIT, maxPages = 1, includeSummary = false/);
+  assert.doesNotMatch(appSource, /limit: 100, maxPages: 20, includeSummary: true/);
+  assert.match(publicInventoryPerformanceMigration, /idx_properties_public_live_created/);
+  assert.match(publicInventoryPerformanceMigration, /idx_properties_public_live_featured_created/);
+  assert.match(publicInventoryPerformanceMigration, /idx_property_images_duplicate_url_lookup/);
   assert.match(appSource, /student: \["student", "students", "student_accommodation", "studentAccommodation", "student_housing"\]/);
   assert.match(appSource, /const t = normalizeType\(p\?\.type \|\| p\?\.listing_type \|\| p\?\.category \|\| extra\.listing_type\)/);
   assert.match(routeSource, /const listingType = normalizeListingType\(req\.query\.listing_type \|\| req\.query\.type \|\| req\.query\.category\)/);
   assert.match(appSource, /if \(publicListingsApiStats\) \{\s*return \{ \.\.\.publicListingsApiStats \};\s*\}/);
   assert.match(routeSource, /isLaunchSeedListing\(property\) && !ownerCanPreview && !adminAccess/);
+});
+
+test('public app script preload matches the runtime version', () => {
+  const versionMatch = htmlSource.match(/window\.__makaugAppVersion = "([^"]+)"/);
+  assert.ok(versionMatch, 'Expected a public app version marker');
+  const preloadMatch = htmlSource.match(/<link rel="preload" href="\/assets\/makaug-app\.js\?v=([^"]+)" as="script">/);
+  assert.ok(preloadMatch, 'Expected a preloaded public app script');
+  assert.equal(decodeURIComponent(preloadMatch[1]), versionMatch[1]);
+  assert.match(htmlSource, /public-scale-fast-path-20260704/);
 });
 
 test('public opportunity summary and student rows normalize for public UI counts', () => {
@@ -299,4 +328,6 @@ test('public app cache version is bumped for controlled inventory rollout', () =
   assert.match(htmlSource, /public-inventory-summary-20260609/);
   assert.match(htmlSource, /king-live-public-parity-20260609/);
   assert.match(htmlSource, /public-opportunity-counts-20260629/);
+  assert.match(htmlSource, /public-inventory-performance-20260629/);
+  assert.match(htmlSource, /public-scale-fast-path-20260704/);
 });
