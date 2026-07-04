@@ -110,9 +110,12 @@ test('anonymous public property APIs suppress launch seed QA listings', () => {
   assert.match(routeSource, /const publicOnly = parseBooleanLike\(req\.query\.public_only \|\| req\.query\.publicOnly, false\)/);
   assert.match(routeSource, /if \(publicOnly \|\| !adminAccess\) \{\s*addPublicLaunchSeedFilter\(filters, values\);/);
   assert.match(appSource, /PUBLIC_LISTINGS_FAST_PAGE_LIMIT = 8/);
-  assert.match(appSource, /PUBLIC_LISTINGS_BACKGROUND_PAGE_LIMIT = 100/);
-  assert.match(appSource, /PUBLIC_LISTINGS_BACKGROUND_MAX_PAGES = 50/);
-  assert.match(appSource, /PUBLIC_OPPORTUNITY_SUMMARY_PATH = "\/api\/properties\?status=approved&public_only=1&limit=1&page=1&include_summary=1"/);
+  assert.match(appSource, /PUBLIC_LISTINGS_BACKGROUND_PAGE_LIMIT = 24/);
+  assert.match(appSource, /PUBLIC_LISTINGS_BACKGROUND_MAX_PAGES = 2/);
+  assert.match(appSource, /PUBLIC_OPPORTUNITY_SUMMARY_PATH = "\/api\/properties\?status=approved&public_only=1&limit=1&page=1&summary_only=1&include_summary=1"/);
+  assert.match(routeSource, /const summaryOnly = parseBooleanLike\(req\.query\.summary_only \|\| req\.query\.summaryOnly, false\)/);
+  assert.match(routeSource, /const includeSummary = summaryOnly \|\| parseBooleanLike/);
+  assert.match(routeSource, /if \(summaryOnly\) \{/);
   assert.match(appSource, /PUBLIC_CATEGORY_DEEP_HYDRATION_DELAY_MS = 8000/);
   assert.match(appSource, /const publicCategoryDeepHydrationTimers = new Map\(\)/);
   assert.match(appSource, /const publicActiveCategoryHydrationPromises = new Map\(\)/);
@@ -474,8 +477,11 @@ test('public app cache version is bumped for controlled inventory rollout', () =
   assert.match(htmlSource, /public-summary-prefetch-20260630/);
   assert.match(htmlSource, /public-category-focused-hydration-20260630/);
   assert.match(htmlSource, /public-category-deferred-hydration-20260630/);
-  assert.match(htmlSource, /window\.__makaugPublicSummaryPath = "\/api\/properties\?status=approved&public_only=1&limit=1&page=1&include_summary=1"/);
+  assert.match(htmlSource, /window\.__makaugAppVersion \+= "-public-scale-fast-path-20260704"/);
+  assert.match(htmlSource, /window\.__makaugPublicSummaryPath = "\/api\/properties\?status=approved&public_only=1&limit=1&page=1&summary_only=1&include_summary=1"/);
   assert.match(htmlSource, /window\.__makaugPublicSummaryPromise = fetch\(window\.__makaugPublicSummaryPath, \{ credentials: "same-origin" \}\)/);
+  assert.match(htmlSource, /preload\.href = "\/assets\/makaug-app\.js\?v=" \+ encodeURIComponent\(window\.__makaugAppVersion\)/);
+  assert.doesNotMatch(htmlSource, /<link rel="preload" href="\/assets\/makaug-app\.js\?v=/);
   assert.doesNotMatch(htmlSource, /DOMContentLoaded", loadMakaugApp/);
   assert.doesNotMatch(appSource, /DOMContentLoaded", initializeMakaugApp/);
   assert.match(serverSource, /publicInventoryPerformanceVersion = 'public-inventory-performance-20260629'/);
