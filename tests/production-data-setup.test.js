@@ -98,6 +98,13 @@ assert(
 );
 
 assert(
+  cloudReadinessScript.includes("const providerEnvNames = ['WHATSAPP_ACCESS_TOKEN', 'WHATSAPP_PHONE_NUMBER_ID', 'WHATSAPP_VERIFY_TOKEN']")
+    && cloudReadinessScript.includes('hasProviderSignal')
+    && cloudReadinessScript.includes('Meta WhatsApp Cloud API configuration is present.'),
+  'cloud readiness must block partial Meta WhatsApp Cloud API provider configuration'
+);
+
+assert(
   backupScript.includes("process.env.PG_DUMP_BIN || 'pg_dump'")
     && backupScript.includes("run('tar'")
     && backupScript.includes('DATA_BACKUP_LOCAL_PATHS')

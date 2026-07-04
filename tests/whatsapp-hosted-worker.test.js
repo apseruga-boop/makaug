@@ -23,6 +23,8 @@ assert(renderYaml.includes('WHATSAPP_WEB_COPILOT_PROFILE_DIR') && renderYaml.inc
 assert(renderYaml.includes('WHATSAPP_WEB_COPILOT_HEADLESS') && renderYaml.includes('value: "false"'), 'Render worker must run a visible browser under xvfb for WhatsApp linking');
 assert(renderYaml.includes('WHATSAPP_WEB_COPILOT_LOGIN_METHOD') && renderYaml.includes('WHATSAPP_WEB_COPILOT_PAIRING_PHONE'), 'Render worker must expose phone-number pairing as a QR fallback');
 assert(renderYaml.includes('WHATSAPP_WEB_BRIDGE_TOKEN') && renderYaml.includes('sync: false'), 'Bridge token must be prompted in Render, not committed');
+assert(renderYaml.includes('WHATSAPP_ACCESS_TOKEN') && renderYaml.includes('WHATSAPP_PHONE_NUMBER_ID') && renderYaml.includes('WHATSAPP_VERIFY_TOKEN'), 'Render worker must declare private Meta WhatsApp Cloud API env vars for provider mode');
+assert(renderYaml.includes('WHATSAPP_API_VERSION') && renderYaml.includes('v20.0'), 'Render worker must pin the tested Meta WhatsApp API version');
 assert(renderYaml.includes('WHATSAPP_WEB_COPILOT_PAIRING_PHONE') && renderYaml.includes('sync: false'), 'Phone pairing number must be configured as a private Render env var');
 assert(renderYaml.includes('WHATSAPP_WEB_COPILOT_HOSTED') && renderYaml.includes('makaug-whatsapp-web-prod'), 'Render worker must use hosted production identity');
 

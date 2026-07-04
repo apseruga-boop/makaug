@@ -143,6 +143,8 @@ function checkWhatsapp() {
   const mode = value('WHATSAPP_DELIVERY_MODE') || 'auto';
   const usesBridge = mode === 'web_bridge' || (mode === 'auto' && isTruthy('WHATSAPP_WEB_BRIDGE_ENABLED'));
   const usesProvider = mode === 'provider' || mode === 'auto';
+  const providerEnvNames = ['WHATSAPP_ACCESS_TOKEN', 'WHATSAPP_PHONE_NUMBER_ID', 'WHATSAPP_VERIFY_TOKEN'];
+  const hasProviderSignal = providerEnvNames.some(isSet);
 
   if (usesBridge) {
     const required = [
@@ -158,8 +160,14 @@ function checkWhatsapp() {
     }
   }
 
-  if (usesProvider && mode === 'provider') {
-    requireNames('whatsapp', ['WHATSAPP_ACCESS_TOKEN', 'WHATSAPP_PHONE_NUMBER_ID', 'WHATSAPP_VERIFY_TOKEN']);
+  if (usesProvider || hasProviderSignal) {
+    if (requireNames('whatsapp', providerEnvNames)) {
+      add('whatsapp', 'ok', 'Meta WhatsApp Cloud API configuration is present.');
+    }
+  }
+
+  if (mode === 'provider' && usesBridge) {
+    add('whatsapp', 'warning', 'WHATSAPP_DELIVERY_MODE=provider ignores the WhatsApp Web bridge fallback.');
   }
 
   if (!usesBridge && mode !== 'provider') {
