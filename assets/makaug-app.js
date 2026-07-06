@@ -763,6 +763,9 @@ let staffModerationRefreshTimer = null;
 const STAFF_MODERATION_WRITE_TIMEOUT_MS = 18000;
 const STAFF_DASHBOARD_PANEL_TIMEOUT_MS = 10000;
 const STAFF_MODERATION_PUBLIC_PROOF_TIMEOUT_MS = 6000;
+const STAFF_SOURCE_INTAKE_SUBMIT_TIMEOUT_MS = 7000;
+const STAFF_SOURCE_INTAKE_POLL_TIMEOUT_MS = 6000;
+const STAFF_SOURCE_INTAKE_POLL_MS = 2500;
 let adminCurrentPendingListings = [];
 let adminPendingQueueFilter = "all";
 const ADMIN_PENDING_QUEUE_RENDER_STEP = 150;
@@ -9852,6 +9855,7 @@ let staffAiLastCsv = "";
 let staffTrainingActive = "moderation";
 let staffTrainingScripts = [];
 let staffPreviewPreviousAdminReview = null;
+let staffSourceIntakePollTimer = null;
 
 function staffNumber(value) {
   return Number(value || 0).toLocaleString("en-UG");
@@ -10375,6 +10379,40 @@ function renderStaffSourceImportResult(data = {}, dryRun = true) {
   const wrap = document.getElementById("staff-source-import-result");
   if (!wrap) return;
   const result = data || {};
+  if (result.async_job) {
+    const summary = result.result_summary || {};
+    const status = String(result.status || "queued").toLowerCase();
+    const completed = status === "completed";
+    const failed = status === "failed";
+    const toneClass = failed
+      ? { box: "border-red-100 bg-red-50", text: "text-red-900" }
+      : completed
+        ? { box: "border-emerald-100 bg-emerald-50", text: "text-emerald-900" }
+        : { box: "border-amber-100 bg-amber-50", text: "text-amber-900" };
+    const title = failed
+      ? "Background import failed"
+      : completed
+        ? "Background import complete"
+        : "Background import running";
+    wrap.innerHTML = `
+      <div class="rounded-xl border ${toneClass.box} p-3 text-xs">
+        <div class="font-black ${toneClass.text}">${title}</div>
+        <div class="mt-1 ${toneClass.text}">${adminEscape(result.message || "Source intake job is being processed.")}</div>
+        <div class="mt-2 grid sm:grid-cols-2 gap-2 text-gray-700">
+          <div>Job ID: <strong>${adminEscape(result.job_id || "-")}</strong></div>
+          <div>Status: <strong>${adminEscape(result.status || "queued")}</strong></div>
+          <div>Batch inputs: <strong>${staffNumber(result.exact_input_count || 0)}</strong></div>
+          <div>Created properties: <strong>${staffNumber(summary.created_properties || 0)}</strong></div>
+          <div>Existing/duplicates blocked: <strong>${staffNumber(summary.existing_properties || 0)}</strong></div>
+          <div>Review queue rows: <strong>${staffNumber(summary.review_queue_properties || 0)}</strong></div>
+          <div>Low-signal source rows: <strong>${staffNumber(summary.low_signal_source_location_count || 0)}</strong></div>
+          <div>Source-review only: <strong>${staffNumber(summary.source_review_count || 0)}</strong></div>
+        </div>
+        ${result.error ? `<div class="mt-2 rounded-lg bg-white border border-red-100 p-2 text-red-800">${adminEscape(result.error)}</div>` : ""}
+        <div class="mt-2 text-gray-600">${completed ? "Refresh the queue when ready; the click path stayed async so the dashboard does not freeze." : "Keep working. makaug will poll this job without blocking the dashboard."}</div>
+      </div>`;
+    return;
+  }
   const importResult = result.import_result || result;
   const autoLiveCount = importResult.auto_live_properties || result.auto_live_properties || 0;
   const metadataNote = result.metadata_skipped_for_large_batch
@@ -10398,6 +10436,46 @@ function renderStaffSourceImportResult(data = {}, dryRun = true) {
     </div>`;
 }
 
+function scheduleStaffSourceJobPoll(jobId = "", attempt = 0) {
+  if (staffSourceIntakePollTimer) window.clearTimeout(staffSourceIntakePollTimer);
+  const id = String(jobId || "").trim();
+  if (!id || attempt > 40) return;
+  staffSourceIntakePollTimer = window.setTimeout(() => {
+    staffPollSourceIntakeJob(id, attempt + 1);
+  }, STAFF_SOURCE_INTAKE_POLL_MS);
+}
+
+async function staffPollSourceIntakeJob(jobId = "", attempt = 0) {
+  const id = String(jobId || "").trim();
+  if (!id) return;
+  try {
+    const res = await staffApiRequestWithTimeout(
+      `/api/staff/source-intake/jobs/${encodeURIComponent(id)}`,
+      {},
+      STAFF_SOURCE_INTAKE_POLL_TIMEOUT_MS,
+      "Staff source intake job status"
+    );
+    const data = res?.data || {};
+    renderStaffSourceImportResult(data, false);
+    const status = String(data.status || "").toLowerCase();
+    if (status === "completed") {
+      toast("Source import completed in the background.");
+      return;
+    }
+    if (status === "failed") {
+      toast(`Source import failed: ${data.error || "check job status"}`);
+      return;
+    }
+    scheduleStaffSourceJobPoll(id, attempt);
+  } catch (error) {
+    if (attempt < 8) {
+      scheduleStaffSourceJobPoll(id, attempt);
+    } else {
+      toast(`Source import status check timed out: ${error.message || "request failed"}`);
+    }
+  }
+}
+
 async function staffPreviewSourceImport() {
   const payload = staffSourceImportPayload(true);
   if (!payload.raw_text.trim()) {
@@ -10417,21 +10495,32 @@ async function staffPreviewSourceImport() {
 }
 
 async function staffQueueSourceImport() {
-  const ok = window.confirm("Queue these found-online source rows for shared staff moderation? Preview first if you have not checked duplicate counts.");
-  if (!ok) return;
   const payload = staffSourceImportPayload(false);
   if (!payload.raw_text.trim()) {
     toast("Paste exact social links or copied source text first.");
     return;
   }
+  payload.async_job = true;
+  renderStaffSourceImportResult({
+    async_job: true,
+    status: "queued",
+    exact_input_count: staffSourceImportUrlCount(payload.raw_text),
+    message: "Submitting background source import..."
+  }, false);
   try {
-    const res = await apiRequest("/api/staff/source-intake/exact-social/import", {
-      method: "POST",
-      body: payload
-    });
-    renderStaffSourceImportResult(res?.data || {}, false);
-    await renderStaffDashboard();
-    toast("Source rows queued into shared review.");
+    const res = await staffApiRequestWithTimeout(
+      "/api/staff/source-intake/exact-social/import",
+      {
+        method: "POST",
+        body: payload
+      },
+      STAFF_SOURCE_INTAKE_SUBMIT_TIMEOUT_MS,
+      "Staff source import submit"
+    );
+    const data = res?.data || {};
+    renderStaffSourceImportResult(data, false);
+    if (data.job_id) scheduleStaffSourceJobPoll(data.job_id, 0);
+    toast(data.job_id ? "Source import accepted in the background." : "Source rows queued into shared review.");
   } catch (error) {
     toast(`Source queue failed: ${error.message || "request failed"}`);
   }

@@ -225,6 +225,15 @@ function run() {
   assert(app.includes('Approve live after preview'), 'frontend should require preview before live approval');
   assert(app.includes('/api/staff/source-intake/exact-social/import'), 'frontend should call staff source intake import');
   assert(app.includes('/api/staff/source-intake/social-sweep'), 'frontend should call staff source sweep');
+  assert(staffRoutes.includes('const staffSourceIntakeJobs = new Map()'), 'staff source intake should keep bounded async job state');
+  assert(staffRoutes.includes("router.get('/source-intake/jobs/:jobId'"), 'staff source intake should expose a status endpoint for background imports');
+  assert(staffRoutes.includes('return res.status(202).json({ ok: true, data: publicStaffSourceIntakeJob(job) });'), 'staff source intake queue should return immediately for async jobs');
+  assert(app.includes('STAFF_SOURCE_INTAKE_SUBMIT_TIMEOUT_MS'), 'staff source intake submit should have a short timeout');
+  assert(app.includes('payload.async_job = true'), 'staff source queue action should request a background import job');
+  assert(app.includes('scheduleStaffSourceJobPoll(data.job_id'), 'staff source queue action should poll the background job');
+  const staffQueueSourceImportBody = app.slice(app.indexOf('async function staffQueueSourceImport'), app.indexOf('async function staffRunSourceSweep'));
+  assert(!staffQueueSourceImportBody.includes('window.confirm('), 'staff source queue action should not use a blocking native confirm');
+  assert(!staffQueueSourceImportBody.includes('await renderStaffDashboard()'), 'staff source queue action should not refresh heavy dashboard panels on the click path');
   assert(app.includes('non-listing construction/design/tutorial rows are hidden from active review'), 'staff dashboard should explain source-quality filtered rows');
   assert(app.includes('Copy CSV'), 'staff AI should render contact CSV copy control');
   assert(app.includes('function preferredAudienceForResolvedUser'), 'generic account drawer sign-in should resolve staff role from returned user');

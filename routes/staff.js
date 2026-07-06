@@ -46,6 +46,8 @@ const STAFF_DASHBOARD_QUEUE_SCAN_LIMIT = STAFF_DASHBOARD_QUEUE_LIMIT * 20;
 const STAFF_DASHBOARD_PANEL_SCAN_LIMIT = STAFF_DASHBOARD_PANEL_LIMIT * 20;
 const STAFF_EXACT_SOCIAL_IMPORT_LIMIT = 500;
 const STAFF_FAST_DASHBOARD_CACHE_TTL_MS = Math.max(5000, parseInt(process.env.STAFF_FAST_DASHBOARD_CACHE_TTL_MS || '60000', 10) || 60000);
+const STAFF_SOURCE_INTAKE_JOB_TTL_MS = Math.max(300000, parseInt(process.env.STAFF_SOURCE_INTAKE_JOB_TTL_MS || '3600000', 10) || 3600000);
+const STAFF_SOURCE_INTAKE_JOB_LIMIT = Math.max(10, parseInt(process.env.STAFF_SOURCE_INTAKE_JOB_LIMIT || '50', 10) || 50);
 const EXACT_SOCIAL_URL_PATTERN = /https?:\/\/[^\s<>"']*(?:tiktok\.com\/@[^/\s?#]+\/video\/\d+|youtube\.com\/watch\?[^ \n\r\t<>"']*v=|youtube\.com\/shorts\/|youtu\.be\/|instagram\.com\/(?:p|reel|tv)\/|facebook\.com\/.+\/(?:posts|videos|reel)|fb\.watch\/|(?:x|twitter)\.com\/[^/\s?#]+\/status\/\d+)/ig;
 const PUBLIC_SUPPRESSED_LISTING_MARKERS = ['SOFT LAUNCH TEST - DELETE', 'QA TEST - DELETE'];
 const PUBLIC_SUPPRESSED_DUMMY_TITLES = ['sdgsdgd', 'sgsgsgsgs'];
@@ -79,6 +81,92 @@ const STAFF_SOURCE_MONITOR_GUIDE = {
 };
 const staffFastDashboardCache = new Map();
 const staffFastDashboardRefreshes = new Map();
+const staffSourceIntakeJobs = new Map();
+
+function publicStaffSourceIntakeJob(job = {}) {
+  const result = job.result && typeof job.result === 'object' ? job.result : {};
+  const importResult = result.import_result && typeof result.import_result === 'object' ? result.import_result : result;
+  return {
+    async_job: true,
+    job_id: job.id || '',
+    type: job.type || 'source_intake',
+    status: job.status || 'queued',
+    created_at: job.createdAt || null,
+    started_at: job.startedAt || null,
+    finished_at: job.finishedAt || null,
+    exact_input_count: job.exactInputCount || result.exact_input_count || 0,
+    dry_run: job.dryRun === true,
+    message: job.message || '',
+    error: job.error || '',
+    result: job.status === 'completed' ? result : undefined,
+    result_summary: job.status === 'completed' ? {
+      created_properties: Number(importResult.created_properties || result.created_properties || 0),
+      existing_properties: Number(importResult.existing_properties || result.existing_properties || 0),
+      review_queue_properties: Number(importResult.review_queue_properties || result.review_queue_properties || 0),
+      source_review_count: Number(importResult.source_review_count || result.source_review_count || 0),
+      low_signal_source_location_count: Number(importResult.low_signal_source_location_count || result.low_signal_source_location_count || 0),
+      source_quality_suppressed_count: Number(importResult.source_quality_suppressed_count || result.source_quality_suppressed_count || 0),
+    } : undefined,
+  };
+}
+
+function pruneStaffSourceIntakeJobs(now = Date.now()) {
+  for (const [jobId, job] of staffSourceIntakeJobs.entries()) {
+    const created = new Date(job.createdAt || 0).getTime();
+    if (created && now - created > STAFF_SOURCE_INTAKE_JOB_TTL_MS) staffSourceIntakeJobs.delete(jobId);
+  }
+  while (staffSourceIntakeJobs.size > STAFF_SOURCE_INTAKE_JOB_LIMIT) {
+    const oldest = [...staffSourceIntakeJobs.entries()]
+      .sort((a, b) => new Date(a[1].createdAt || 0) - new Date(b[1].createdAt || 0))[0];
+    if (!oldest) break;
+    staffSourceIntakeJobs.delete(oldest[0]);
+  }
+}
+
+function createStaffSourceIntakeJob({ type = 'exact_social_import', exactInputCount = 0, dryRun = false } = {}) {
+  pruneStaffSourceIntakeJobs();
+  const id = `staff-source-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const job = {
+    id,
+    type,
+    status: 'queued',
+    createdAt: new Date().toISOString(),
+    startedAt: null,
+    finishedAt: null,
+    exactInputCount,
+    dryRun,
+    message: 'Source intake job accepted. You can keep using the dashboard while makaug imports in the background.',
+    result: null,
+    error: '',
+  };
+  staffSourceIntakeJobs.set(id, job);
+  return job;
+}
+
+function runStaffSourceIntakeJob(jobId, runner) {
+  setImmediate(async () => {
+    const job = staffSourceIntakeJobs.get(jobId);
+    if (!job) return;
+    job.status = 'running';
+    job.startedAt = new Date().toISOString();
+    job.message = 'Source intake is running in the background.';
+    try {
+      const result = await runner();
+      job.status = 'completed';
+      job.result = result;
+      job.finishedAt = new Date().toISOString();
+      job.message = 'Source intake completed. Review queue counts can be refreshed when you are ready.';
+    } catch (error) {
+      job.status = 'failed';
+      job.error = error.message || 'source_intake_failed';
+      job.finishedAt = new Date().toISOString();
+      job.message = 'Source intake failed. Check the error before retrying.';
+      logger.warn('Staff source intake background job failed', { job_id: jobId, message: job.error });
+    } finally {
+      pruneStaffSourceIntakeJobs();
+    }
+  });
+}
 
 function boolLike(value) {
   return ['true', '1', 'yes', 'y', 'on'].includes(String(value || '').trim().toLowerCase());
@@ -1753,6 +1841,11 @@ router.post('/source-intake/exact-social/import', async (req, res, next) => {
     const inputUrls = Array.isArray(req.body?.urls) ? req.body.urls : [];
     const rawText = cleanText(req.body?.raw_text || req.body?.rawText || req.body?.text || '');
     const dryRun = req.body?.dry_run !== false && req.body?.dryRun !== false;
+    const asyncJob = !dryRun && (
+      req.body?.async_job === true
+      || req.body?.asyncJob === true
+      || req.body?.background === true
+    );
     const exactInputCount = countExactSocialInputs({ posts: inputPosts, urls: inputUrls, rawText });
     if (!exactInputCount) {
       return res.status(400).json({
@@ -1768,7 +1861,7 @@ router.post('/source-intake/exact-social/import', async (req, res, next) => {
     }
     const fetchOembed = req.body?.fetch_oembed !== false && req.body?.fetchOembed !== false;
     const fetchPublicMetadata = req.body?.fetch_public_metadata !== false && req.body?.fetchPublicMetadata !== false;
-    const result = await importExactSocialSourcePosts({
+    const importPayload = {
       db,
       posts: inputPosts.slice(0, STAFF_EXACT_SOCIAL_IMPORT_LIMIT),
       urls: inputUrls.slice(0, STAFF_EXACT_SOCIAL_IMPORT_LIMIT),
@@ -1776,31 +1869,64 @@ router.post('/source-intake/exact-social/import', async (req, res, next) => {
       dryRun,
       fetchOembed,
       fetchPublicMetadata
-    });
-    const responseData = {
-      ...result,
-      exact_input_count: exactInputCount,
-      metadata_skipped_for_large_batch: !fetchOembed && !fetchPublicMetadata
     };
-    if (!dryRun) clearStaffFastDashboardCache();
-    await logStaffActivity(req, dryRun ? 'staff_social_import_previewed' : 'staff_social_import_queued', {
-      targetType: 'source_intake',
-      metadata: {
-        batch_id: SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID,
-        dry_run: dryRun,
+    const runImport = async () => {
+      const result = await importExactSocialSourcePosts(importPayload);
+      const responseData = {
+        ...result,
         exact_input_count: exactInputCount,
-        exact_social_url_count: result.exact_social_url_count || 0,
-        metadata_fetch_count: result.metadata_fetch_count || 0,
-        created_properties: result.created_properties || 0,
-        existing_properties: result.existing_properties || 0,
-        review_queue_properties: result.review_queue_properties || 0,
-        source_review_count: result.source_review_count || 0
-      }
-    });
-    return res.json({ ok: true, data: responseData });
+        metadata_skipped_for_large_batch: !fetchOembed && !fetchPublicMetadata
+      };
+      if (!dryRun) clearStaffFastDashboardCache();
+      await logStaffActivity(req, dryRun ? 'staff_social_import_previewed' : 'staff_social_import_queued', {
+        targetType: 'source_intake',
+        metadata: {
+          batch_id: SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID,
+          dry_run: dryRun,
+          async_job: asyncJob,
+          exact_input_count: exactInputCount,
+          exact_social_url_count: result.exact_social_url_count || 0,
+          metadata_fetch_count: result.metadata_fetch_count || 0,
+          created_properties: result.created_properties || 0,
+          existing_properties: result.existing_properties || 0,
+          review_queue_properties: result.review_queue_properties || 0,
+          source_review_count: result.source_review_count || 0
+        }
+      });
+      return responseData;
+    };
+    if (asyncJob) {
+      const job = createStaffSourceIntakeJob({
+        type: 'exact_social_import',
+        exactInputCount,
+        dryRun
+      });
+      runStaffSourceIntakeJob(job.id, runImport);
+      await logStaffActivity(req, 'staff_social_import_job_accepted', {
+        targetType: 'source_intake',
+        targetId: job.id,
+        metadata: {
+          batch_id: SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID,
+          dry_run: dryRun,
+          exact_input_count: exactInputCount,
+          metadata_fetch_enabled: fetchOembed || fetchPublicMetadata
+        }
+      });
+      return res.status(202).json({ ok: true, data: publicStaffSourceIntakeJob(job) });
+    }
+    return res.json({ ok: true, data: await runImport() });
   } catch (error) {
     return next(error);
   }
+});
+
+router.get('/source-intake/jobs/:jobId', async (req, res) => {
+  pruneStaffSourceIntakeJobs();
+  const job = staffSourceIntakeJobs.get(cleanText(req.params.jobId));
+  if (!job) {
+    return res.status(404).json({ ok: false, error: 'Source intake job not found or already expired.' });
+  }
+  return res.json({ ok: true, data: publicStaffSourceIntakeJob(job) });
 });
 
 router.post('/source-intake/social-sweep', async (req, res, next) => {
