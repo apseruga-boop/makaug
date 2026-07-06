@@ -761,6 +761,7 @@ let adminDashboardTabRefreshTimer = null;
 let adminLiveAuthFailure = null;
 let staffModerationRefreshTimer = null;
 const STAFF_MODERATION_WRITE_TIMEOUT_MS = 18000;
+const STAFF_DASHBOARD_PANEL_TIMEOUT_MS = 10000;
 const STAFF_MODERATION_PUBLIC_PROOF_TIMEOUT_MS = 6000;
 let adminCurrentPendingListings = [];
 let adminPendingQueueFilter = "all";
@@ -10278,7 +10279,12 @@ async function hydrateStaffDashboardPanels(endpoint = "/api/staff/dashboard?pane
   const seq = staffDashboardPanelHydrationSeq + 1;
   staffDashboardPanelHydrationSeq = seq;
   try {
-    const res = await apiRequest(endpoint || "/api/staff/dashboard?panels=1");
+    const res = await staffApiRequestWithTimeout(
+      endpoint || "/api/staff/dashboard?panels=1",
+      {},
+      STAFF_DASHBOARD_PANEL_TIMEOUT_MS,
+      "Staff dashboard panels"
+    );
     const sameUser = tokenAtStart === (authState?.token || "")
       && userIdAtStart === String(authState?.user?.id || authState?.user?.email || authState?.user?.phone || "");
     if (!sameUser || seq !== staffDashboardPanelHydrationSeq) return;
@@ -10287,7 +10293,7 @@ async function hydrateStaffDashboardPanels(endpoint = "/api/staff/dashboard?pane
     const sameUser = tokenAtStart === (authState?.token || "")
       && userIdAtStart === String(authState?.user?.id || authState?.user?.email || authState?.user?.phone || "");
     if (sameUser) {
-      setTextById("staff-source-monitor-status", "Live cards loaded. Heavy panels are still catching up.");
+      setTextById("staff-source-monitor-status", "Live cards loaded. Heavy panels are still catching up; continue with the visible queue and retry shortly.");
     }
   } finally {
     if (seq === staffDashboardPanelHydrationSeq) staffDashboardPanelHydrating = false;

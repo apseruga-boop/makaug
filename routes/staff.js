@@ -25,7 +25,10 @@ const {
   PROPERTY_SOURCE_REGISTRY_BATCH_ID,
   PROPERTY_SOURCE_REGISTRY_TARGET_COUNT
 } = require('../services/propertySourceRegistryService');
-const { sourceQualitySuppressedSql } = require('../utils/sourceContentQuality');
+const {
+  sourceQualitySuppressionForRecord,
+  sourceQualitySuppressedSql
+} = require('../utils/sourceContentQuality');
 
 const router = express.Router();
 
@@ -39,6 +42,8 @@ const OPEN_AD_STATUSES = ['new', 'contacted', 'proposal_sent'];
 const STAFF_CONTACT_EXPORT_LIMIT = 50;
 const STAFF_DASHBOARD_QUEUE_LIMIT = 12;
 const STAFF_DASHBOARD_PANEL_LIMIT = 8;
+const STAFF_DASHBOARD_QUEUE_SCAN_LIMIT = STAFF_DASHBOARD_QUEUE_LIMIT * 10;
+const STAFF_DASHBOARD_PANEL_SCAN_LIMIT = STAFF_DASHBOARD_PANEL_LIMIT * 10;
 const STAFF_EXACT_SOCIAL_IMPORT_LIMIT = 500;
 const STAFF_FAST_DASHBOARD_CACHE_TTL_MS = Math.max(5000, parseInt(process.env.STAFF_FAST_DASHBOARD_CACHE_TTL_MS || '60000', 10) || 60000);
 const EXACT_SOCIAL_URL_PATTERN = /https?:\/\/[^\s<>"']*(?:tiktok\.com\/@[^/\s?#]+\/video\/\d+|youtube\.com\/watch\?[^ \n\r\t<>"']*v=|youtube\.com\/shorts\/|youtu\.be\/|instagram\.com\/(?:p|reel|tv)\/|facebook\.com\/.+\/(?:posts|videos|reel)|fb\.watch\/|(?:x|twitter)\.com\/[^/\s?#]+\/status\/\d+)/ig;
@@ -81,6 +86,27 @@ function boolLike(value) {
 
 function safeJsonObject(value, fallback = {}) {
   return value && typeof value === 'object' && !Array.isArray(value) ? value : fallback;
+}
+
+function sourceQualitySuppressedFlagSql(alias = 'p') {
+  const prefix = alias ? `${alias}.` : '';
+  return `(
+    COALESCE(${prefix}extra_fields->'source_quality_review'->>'suppressed', '') ~* '^(true|1|yes)$'
+    OR COALESCE(${prefix}extra_fields->>'source_quality_suppressed', '') ~* '^(true|1|yes)$'
+  )`;
+}
+
+function rowSourceQualitySuppressed(row = {}) {
+  const extra = safeJsonObject(row.extra_fields, {});
+  const sourceQuality = safeJsonObject(extra.source_quality_review, {});
+  if (boolLike(sourceQuality.suppressed) || boolLike(extra.source_quality_suppressed)) return true;
+  return sourceQualitySuppressionForRecord(row).suppressed;
+}
+
+function staffActiveReviewRows(rows = [], limit = STAFF_DASHBOARD_QUEUE_LIMIT) {
+  return (Array.isArray(rows) ? rows : [])
+    .filter((row) => !rowSourceQualitySuppressed(row))
+    .slice(0, limit);
 }
 
 function staffSourceMonitorGuide() {
@@ -213,14 +239,14 @@ function pendingReviewWhere(alias = 'p') {
 function activePendingReviewWhere(alias = 'p') {
   return `
     ${pendingReviewWhere(alias)}
-    AND NOT ${sourceQualitySuppressedSql(alias)}
+    AND NOT ${sourceQualitySuppressedFlagSql(alias)}
   `;
 }
 
 function sourceQualitySuppressedPendingWhere(alias = 'p') {
   return `
     ${pendingReviewWhere(alias)}
-    AND ${sourceQualitySuppressedSql(alias)}
+    AND ${sourceQualitySuppressedFlagSql(alias)}
   `;
 }
 
@@ -752,10 +778,10 @@ async function dashboardPayload(req) {
        LEFT JOIN LATERAL (
          SELECT url FROM property_images i WHERE i.property_id = p.id ORDER BY i.is_primary DESC, i.sort_order ASC, i.created_at ASC LIMIT 1
        ) img ON true
-       WHERE ${activePendingReviewWhere('p')}
+       WHERE ${pendingReviewWhere('p')}
        ORDER BY COALESCE(p.updated_at, p.created_at) DESC
        LIMIT $1`,
-      [queueLimit]
+      [STAFF_DASHBOARD_QUEUE_SCAN_LIMIT]
     ),
     safeRows(
       `SELECT p.id, p.title, p.description, p.listing_type, p.property_type, p.district, p.area, p.address,
@@ -771,11 +797,11 @@ async function dashboardPayload(req) {
        LEFT JOIN LATERAL (
          SELECT url FROM property_images i WHERE i.property_id = p.id ORDER BY i.is_primary DESC, i.sort_order ASC, i.created_at ASC LIMIT 1
        ) img ON true
-       WHERE ${activePendingReviewWhere('p')}
+       WHERE ${pendingReviewWhere('p')}
          AND ${brokerReviewWhere('p')}
        ORDER BY COALESCE(p.updated_at, p.created_at) DESC
        LIMIT $1`,
-      [queueLimit]
+      [STAFF_DASHBOARD_QUEUE_SCAN_LIMIT]
     ),
     safeRows(
       `SELECT l.*, c.name AS contact_name, c.phone AS contact_phone, c.email AS contact_email, c.whatsapp AS contact_whatsapp, p.title AS listing_title
@@ -908,14 +934,14 @@ async function dashboardPayload(req) {
               p.lister_phone,
               COALESCE(p.extra_fields->>'source_name', p.lister_name, 'Found online') AS source_name
        FROM properties p
-       WHERE ${activePendingReviewWhere('p')}
+       WHERE ${pendingReviewWhere('p')}
          AND (
            COALESCE(p.extra_fields->>'found_online', p.extra_fields->>'found_online_candidate', p.extra_fields->>'social_search_candidate', '') ~* '^(true|1|yes)$'
            OR COALESCE(p.extra_fields->>'source_url', p.extra_fields->>'source_post_url', p.extra_fields->>'youtube_url', p.extra_fields->>'tiktok_url', '') <> ''
          )
        ORDER BY COALESCE(p.updated_at, p.created_at) DESC
        LIMIT $1`,
-      [panelLimit]
+      [STAFF_DASHBOARD_PANEL_SCAN_LIMIT]
     ),
     safeOne(
       `SELECT
@@ -945,6 +971,10 @@ async function dashboardPayload(req) {
     )
   ]);
 
+  const activeReviewRows = staffActiveReviewRows(reviewRows, queueLimit);
+  const activeBrokerReviewRows = staffActiveReviewRows(brokerReviewRows, queueLimit);
+  const activeSourceQueueRows = staffActiveReviewRows(sourceQueueRows, panelLimit);
+
   return {
     staff: publicStaffUser(req.userAuth),
     summary: {
@@ -959,8 +989,8 @@ async function dashboardPayload(req) {
       payments: paymentSummary,
       definitions: staffMetricDefinitions()
     },
-    review_queue: reviewRows,
-    broker_review_queue: brokerReviewRows,
+    review_queue: activeReviewRows,
+    broker_review_queue: activeBrokerReviewRows,
     leads: leadRows,
     advertising_inquiries: adRows,
     whatsapp_conversations: whatsappRows,
@@ -976,7 +1006,7 @@ async function dashboardPayload(req) {
       monitor: staffSourceMonitorGuide(),
       source_presets: STAFF_SOURCE_PRESETS,
       source_registry: sourceRows,
-      queued_found_online: sourceQueueRows,
+      queued_found_online: activeSourceQueueRows,
       exact_import_endpoint: '/api/staff/source-intake/exact-social/import',
       sweep_endpoint: '/api/staff/source-intake/social-sweep'
     },

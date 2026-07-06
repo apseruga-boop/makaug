@@ -158,10 +158,15 @@ function run() {
   assert(staffRoutes.includes('function clearStaffFastDashboardCache'), 'staff inventory changes should invalidate the fast dashboard cache');
   assert(staffRoutes.includes("deferred_dashboard_endpoint: '/api/staff/dashboard?panels=1'"), 'fast dashboard payload should point to deferred panels');
   assert(staffRoutes.includes('sourceQualitySuppressedSql'), 'staff dashboard should hide obvious non-listing construction/tutorial source rows');
+  assert(staffRoutes.includes('function sourceQualitySuppressedFlagSql'), 'staff dashboard counts should use a cheap stored source-quality flag');
+  assert(staffRoutes.includes('function staffActiveReviewRows'), 'staff dashboard should filter legacy suppressed rows in Node after a bounded over-fetch');
+  assert(staffRoutes.includes('STAFF_DASHBOARD_QUEUE_SCAN_LIMIT'), 'staff dashboard should over-fetch a bounded queue window instead of regex scanning the full pending set');
   assert(staffRoutes.includes('source_quality_suppressed_pending'), 'staff dashboard should count hidden source-quality rows separately');
   assert(staffRoutes.includes('source_quality_suppressed'), 'staff source intake should expose source-quality suppression status');
   assert(staffRoutes.includes('FROM properties p\n       WHERE p.id <> $1'), 'staff duplicate preview query should use a property alias for source-quality filtering');
   assert(staffRoutes.includes("AND NOT ${sourceQualitySuppressedSql('p')}"), 'staff duplicate preview query should hide source-quality suppressed rows');
+  assert(app.includes('STAFF_DASHBOARD_PANEL_TIMEOUT_MS'), 'frontend should timeout stuck staff panel hydration requests');
+  assert(app.includes('Staff dashboard panels'), 'staff panel timeout should clearly identify the stuck request');
   assert(app.includes('async function refreshAuthSession()'), 'frontend should refresh auth sessions explicitly');
   assert(app.includes('const tokenAtStart = authState.token'), 'auth refresh should capture the token it started with');
   assert(app.includes('if (tokenAtStart !== authState?.token) return;'), 'stale auth refreshes should not clear a newer staff login session');
