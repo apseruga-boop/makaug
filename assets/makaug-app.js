@@ -10139,9 +10139,11 @@ function renderStaffSourceIntake(data = {}) {
   const status = document.getElementById("staff-source-intake-status");
   if (status) {
     const summary = data.summary || {};
+    const suppressed = data.source_quality_suppressed || {};
     status.innerHTML = `
       <div><strong>${staffNumber(summary.total_sources || 0)}</strong> source records • <strong>${staffNumber(summary.active_sources || 0)}</strong> active</div>
       <div class="mt-1"><strong>${staffNumber(data.possible_duplicates || 0)}</strong> pending listings have duplicate risk. Preview before approval.</div>
+      ${Number(suppressed.pending_count || 0) ? `<div class="mt-1 text-[11px] text-amber-700"><strong>${staffNumber(suppressed.pending_count || 0)}</strong> non-listing construction/design/tutorial rows are hidden from active review.</div>` : ""}
       <div class="mt-1 text-[11px] text-gray-500">Batch: ${adminEscape(data.batch_id || "source-intake")}</div>`;
   }
   const monitor = data.monitor || {};

@@ -187,7 +187,7 @@ test('public featured property feed only returns featured backend listings', () 
   assert.match(appSource, /function loadingPropertyGridHtml\(count = 3\)/);
   assert.match(appSource, /id === "home-grid" && !publicListingsFromApiLoaded/);
   assert.match(appSource, /\/api\/properties\?status=approved&featured=true&limit=12&page=1&public_only=1&sort=featured&include_summary=0/);
-  assert.match(appSource, /\/api\/properties\?status=approved&public_only=1&limit=1&page=1&include_summary=1/);
+  assert.match(appSource, /\/api\/properties\?status=approved&public_only=1&limit=1&page=1&summary_only=1&include_summary=1/);
   assert.match(appSource, /const featuredRowsPromise = activeCategory \? Promise\.resolve\(\[\]\) : fetchPublicFeaturedListingsFromApi\(\)/);
   assert.match(appSource, /function applyPublicOpportunityStats\(stats\)/);
   assert.match(appSource, /fetchPublicOpportunityStatsFromApi\(\)/);

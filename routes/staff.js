@@ -25,6 +25,7 @@ const {
   PROPERTY_SOURCE_REGISTRY_BATCH_ID,
   PROPERTY_SOURCE_REGISTRY_TARGET_COUNT
 } = require('../services/propertySourceRegistryService');
+const { sourceQualitySuppressedSql } = require('../utils/sourceContentQuality');
 
 const router = express.Router();
 
@@ -206,6 +207,20 @@ function pendingReviewWhere(alias = 'p') {
       LOWER(COALESCE(${prefix}status, '')) IN (${sqlList(PENDING_REVIEW_STATUSES)})
       OR LOWER(COALESCE(${prefix}moderation_stage, '')) IN (${sqlList(PENDING_REVIEW_STATUSES)})
     )
+  `;
+}
+
+function activePendingReviewWhere(alias = 'p') {
+  return `
+    ${pendingReviewWhere(alias)}
+    AND NOT ${sourceQualitySuppressedSql(alias)}
+  `;
+}
+
+function sourceQualitySuppressedPendingWhere(alias = 'p') {
+  return `
+    ${pendingReviewWhere(alias)}
+    AND ${sourceQualitySuppressedSql(alias)}
   `;
 }
 
@@ -504,15 +519,16 @@ async function buildDashboardFastPayload(req) {
       `SELECT
          COUNT(*)::int AS database_total,
          COUNT(*) FILTER (WHERE ${staffVisiblePropertyWhere('p')})::int AS staff_visible_total,
-         COUNT(*) FILTER (WHERE ${pendingReviewWhere('p')})::int AS pending_review,
-         COUNT(*) FILTER (WHERE ${pendingReviewWhere('p')} AND ${brokerReviewWhere('p')})::int AS broker_pending_review,
+         COUNT(*) FILTER (WHERE ${activePendingReviewWhere('p')})::int AS pending_review,
+         COUNT(*) FILTER (WHERE ${activePendingReviewWhere('p')} AND ${brokerReviewWhere('p')})::int AS broker_pending_review,
+         COUNT(*) FILTER (WHERE ${sourceQualitySuppressedPendingWhere('p')})::int AS source_quality_suppressed_pending,
          COUNT(*) FILTER (WHERE ${publicCustomerVisiblePropertyWhere('p')})::int AS live,
          COUNT(*) FILTER (WHERE LOWER(COALESCE(p.status, '')) IN (${sqlList(STAFF_REMOVED_STATUSES)}))::int AS staff_removed,
          COUNT(*) FILTER (WHERE ${staffVisiblePropertyWhere('p')} AND COALESCE(p.extra_fields->>'found_online', p.extra_fields->>'found_online_candidate', p.extra_fields->>'social_search_candidate', '') ~* '^(true|1|yes)$')::int AS found_online,
          COUNT(*) FILTER (WHERE ${staffVisiblePropertyWhere('p')} AND LOWER(COALESCE(p.source, p.listed_via, '')) IN ('website','web'))::int AS website_submitted
        FROM properties p`,
       [],
-      { database_total: 0, staff_visible_total: 0, pending_review: 0, broker_pending_review: 0, live: 0, staff_removed: 0, found_online: 0, website_submitted: 0 }
+      { database_total: 0, staff_visible_total: 0, pending_review: 0, broker_pending_review: 0, source_quality_suppressed_pending: 0, live: 0, staff_removed: 0, found_online: 0, website_submitted: 0 }
     ),
     safeOne(
       `SELECT
@@ -663,14 +679,15 @@ async function dashboardPayload(req) {
       `SELECT
          COUNT(*)::int AS database_total,
          COUNT(*) FILTER (WHERE ${staffVisiblePropertyWhere('p')})::int AS staff_visible_total,
-         COUNT(*) FILTER (WHERE ${pendingReviewWhere('p')})::int AS pending_review,
+         COUNT(*) FILTER (WHERE ${activePendingReviewWhere('p')})::int AS pending_review,
+         COUNT(*) FILTER (WHERE ${sourceQualitySuppressedPendingWhere('p')})::int AS source_quality_suppressed_pending,
          COUNT(*) FILTER (WHERE ${publicCustomerVisiblePropertyWhere('p')})::int AS live,
          COUNT(*) FILTER (WHERE LOWER(COALESCE(p.status, '')) IN (${sqlList(STAFF_REMOVED_STATUSES)}))::int AS staff_removed,
          COUNT(*) FILTER (WHERE ${staffVisiblePropertyWhere('p')} AND COALESCE(p.extra_fields->>'found_online', p.extra_fields->>'found_online_candidate', p.extra_fields->>'social_search_candidate', '') ~* '^(true|1|yes)$')::int AS found_online,
          COUNT(*) FILTER (WHERE ${staffVisiblePropertyWhere('p')} AND LOWER(COALESCE(p.source, p.listed_via, '')) IN ('website','web'))::int AS website_submitted
        FROM properties p`,
       [],
-      { database_total: 0, staff_visible_total: 0, pending_review: 0, live: 0, staff_removed: 0, found_online: 0, website_submitted: 0 }
+      { database_total: 0, staff_visible_total: 0, pending_review: 0, source_quality_suppressed_pending: 0, live: 0, staff_removed: 0, found_online: 0, website_submitted: 0 }
     ),
     safeOne(
       `SELECT
@@ -735,7 +752,7 @@ async function dashboardPayload(req) {
        LEFT JOIN LATERAL (
          SELECT url FROM property_images i WHERE i.property_id = p.id ORDER BY i.is_primary DESC, i.sort_order ASC, i.created_at ASC LIMIT 1
        ) img ON true
-       WHERE ${pendingReviewWhere('p')}
+       WHERE ${activePendingReviewWhere('p')}
        ORDER BY COALESCE(p.updated_at, p.created_at) DESC
        LIMIT $1`,
       [queueLimit]
@@ -754,7 +771,7 @@ async function dashboardPayload(req) {
        LEFT JOIN LATERAL (
          SELECT url FROM property_images i WHERE i.property_id = p.id ORDER BY i.is_primary DESC, i.sort_order ASC, i.created_at ASC LIMIT 1
        ) img ON true
-       WHERE ${pendingReviewWhere('p')}
+       WHERE ${activePendingReviewWhere('p')}
          AND ${brokerReviewWhere('p')}
        ORDER BY COALESCE(p.updated_at, p.created_at) DESC
        LIMIT $1`,
@@ -860,7 +877,7 @@ async function dashboardPayload(req) {
            NULLIF(LOWER(COALESCE(title, '')), '') AS normalized_title,
            NULLIF(COALESCE(extra_fields->>'source_url', extra_fields->>'source_post_url', ''), '') AS source_url
          FROM properties p
-         WHERE ${pendingReviewWhere('p')}
+         WHERE ${activePendingReviewWhere('p')}
        ),
        duplicate_keys AS (
          SELECT lister_phone AS duplicate_key FROM pending WHERE lister_phone IS NOT NULL GROUP BY lister_phone HAVING COUNT(*) > 1
@@ -891,7 +908,7 @@ async function dashboardPayload(req) {
               p.lister_phone,
               COALESCE(p.extra_fields->>'source_name', p.lister_name, 'Found online') AS source_name
        FROM properties p
-       WHERE ${pendingReviewWhere('p')}
+       WHERE ${activePendingReviewWhere('p')}
          AND (
            COALESCE(p.extra_fields->>'found_online', p.extra_fields->>'found_online_candidate', p.extra_fields->>'social_search_candidate', '') ~* '^(true|1|yes)$'
            OR COALESCE(p.extra_fields->>'source_url', p.extra_fields->>'source_post_url', p.extra_fields->>'youtube_url', p.extra_fields->>'tiktok_url', '') <> ''
@@ -951,6 +968,11 @@ async function dashboardPayload(req) {
       batch_id: SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID,
       summary: sourceSummary,
       possible_duplicates: safeNumber(duplicateSummary, 'possible_duplicates'),
+      source_quality_suppressed: {
+        pending_count: safeNumber(listingSummary, 'source_quality_suppressed_pending'),
+        hidden_from_active_review: true,
+        reason: 'Construction tutorials, design showcases, building-cost videos, and similar non-listing source posts are filtered out of the active moderator queue.'
+      },
       monitor: staffSourceMonitorGuide(),
       source_presets: STAFF_SOURCE_PRESETS,
       source_registry: sourceRows,
@@ -1878,7 +1900,7 @@ router.post('/assistant/query', async (req, res, next) => {
         `SELECT
            COALESCE(NULLIF(area, ''), NULLIF(district, ''), 'Unknown') AS location,
            COUNT(*) FILTER (WHERE ${publicCustomerVisiblePropertyWhere('p')})::int AS live_listings,
-           COUNT(*) FILTER (WHERE ${pendingReviewWhere('p')})::int AS pending_review,
+           COUNT(*) FILTER (WHERE ${activePendingReviewWhere('p')})::int AS pending_review,
            COUNT(*) FILTER (WHERE COALESCE(lister_phone, '') <> '')::int AS listings_with_phone
          FROM properties p
          WHERE ($1::text = '' OR p.area ILIKE $2 OR p.district ILIKE $2 OR p.address ILIKE $2)

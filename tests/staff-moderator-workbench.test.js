@@ -157,6 +157,9 @@ function run() {
   assert(staffRoutes.includes('STAFF_FAST_DASHBOARD_CACHE_TTL_MS'), 'fast staff dashboard should cache expensive first-paint counts briefly');
   assert(staffRoutes.includes('function clearStaffFastDashboardCache'), 'staff inventory changes should invalidate the fast dashboard cache');
   assert(staffRoutes.includes("deferred_dashboard_endpoint: '/api/staff/dashboard?panels=1'"), 'fast dashboard payload should point to deferred panels');
+  assert(staffRoutes.includes('sourceQualitySuppressedSql'), 'staff dashboard should hide obvious non-listing construction/tutorial source rows');
+  assert(staffRoutes.includes('source_quality_suppressed_pending'), 'staff dashboard should count hidden source-quality rows separately');
+  assert(staffRoutes.includes('source_quality_suppressed'), 'staff source intake should expose source-quality suppression status');
   assert(app.includes('async function refreshAuthSession()'), 'frontend should refresh auth sessions explicitly');
   assert(app.includes('const tokenAtStart = authState.token'), 'auth refresh should capture the token it started with');
   assert(app.includes('if (tokenAtStart !== authState?.token) return;'), 'stale auth refreshes should not clear a newer staff login session');
@@ -212,6 +215,7 @@ function run() {
   assert(app.includes('Approve live after preview'), 'frontend should require preview before live approval');
   assert(app.includes('/api/staff/source-intake/exact-social/import'), 'frontend should call staff source intake import');
   assert(app.includes('/api/staff/source-intake/social-sweep'), 'frontend should call staff source sweep');
+  assert(app.includes('non-listing construction/design/tutorial rows are hidden from active review'), 'staff dashboard should explain source-quality filtered rows');
   assert(app.includes('Copy CSV'), 'staff AI should render contact CSV copy control');
   assert(app.includes('function preferredAudienceForResolvedUser'), 'generic account drawer sign-in should resolve staff role from returned user');
   assert(app.includes('return derivePortalMode(user, "")'), 'finder drawer sign-in must not force moderator accounts into finder dashboard');

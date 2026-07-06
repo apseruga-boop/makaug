@@ -12,6 +12,7 @@ const {
   ownerEditTokenExpiry,
 } = require('./listingModerationService');
 const { SOURCE } = require('../scripts/seed-sourced-inventory-candidates');
+const { sourceQualitySuppressionForRecord } = require('../utils/sourceContentQuality');
 
 const SOCIAL_SEARCH_BATCH_ID = 'social_search_authorised_20260520';
 const LEGACY_SOURCED_INVENTORY_CANDIDATE_SOURCE = SOURCE;
@@ -859,10 +860,11 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
   const hasImageOrEvidence = Boolean(sourceImageRowsFor(item).length || sourceUrlForItem(item));
   const dateStatus = sourceDateStatusFor(item);
   const preApproval = sourcePreApprovalStatusFor(item);
+  const sourceQuality = sourceQualityReviewForItem(item, agent);
   const pendingKingSourceReview = !preApproval.preapproved;
   const hasQueuePermission = allowedSocialSource;
   return {
-    eligible: hasSource && allowedSocialSource && hasLocation && hasContact && hasImageOrEvidence && dateStatus !== 'before_2026_source_window' && hasQueuePermission,
+    eligible: hasSource && allowedSocialSource && hasLocation && hasContact && hasImageOrEvidence && dateStatus !== 'before_2026_source_window' && hasQueuePermission && !sourceQuality.suppressed,
     has_source_url: hasSource,
     allowed_social_source: allowedSocialSource,
     has_location_or_area: hasLocation,
@@ -884,6 +886,9 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
       : 'unsupported_source_platform',
     website_source_blocked: hasSource && !allowedSocialSource,
     no_phone_ok_with_source_contact: Boolean(!String(agent.phone || agent.phoneAlt || item.phone || item.phoneAlt || '').trim() && hasContact),
+    source_quality_suppressed: sourceQuality.suppressed,
+    source_quality_reason: sourceQuality.reason,
+    source_quality_matched: sourceQuality.matched,
   };
 }
 
@@ -1348,6 +1353,27 @@ function sourcePublishedLabelFor(item = {}) {
   return dateText ? `First posted online on ${dateText}` : 'Original post date is being confirmed from the source platform.';
 }
 
+function sourceQualityReviewForItem(item = {}, agent = sourceAgentForItem(item)) {
+  return sourceQualitySuppressionForRecord({
+    ...item,
+    source_name: agent.name || item.agentKey || '',
+    source_agent_name: agent.name || item.agentKey || '',
+    lister_name: agent.name || '',
+    extra_fields: {
+      source_name: agent.name || '',
+      source_agent_name: agent.name || '',
+      public_display_name: agent.name || '',
+      source_title: item.sourceTitle || item.source_title || item.title || '',
+      source_caption: item.caption || item.raw_source_post?.caption || item.rawSourcePost?.caption || '',
+      source_description: item.description || '',
+      source_text: item.sourceText || item.source_text || item.raw_source_post?.source_text || item.rawSourcePost?.source_text || '',
+      source_visual_text: item.sourceVisualText || item.source_visual_text || item.raw_source_post?.source_visual_text || item.rawSourcePost?.source_visual_text || '',
+      youtube_source_title: item.youtube_source_title || item.sourceTitle || '',
+      raw_source_post: item.raw_source_post || item.rawSourcePost || {}
+    }
+  });
+}
+
 function isStudentSourceListing(item = {}) {
   const type = String(item.listingType || item.listing_type || item.type || '').trim().toLowerCase();
   return type === 'student' || type === 'students';
@@ -1494,6 +1520,7 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
     price_upon_application: !hasPublishedPriceOrGuidePrice(item),
     price_status: hasPublishedPriceOrGuidePrice(item) ? 'published_price_or_guide_price' : 'price_upon_application',
     source_price_policy: 'If the public social source does not publish a price, makaug shows Price upon application and King confirms the price during review/follow-up.',
+    source_quality_review: sourceQualityReviewForItem(item, agent),
     source_channel_url: agent.channelUrl || '',
     source: SOCIAL_SEARCH_SOURCE,
     agent_permission_reported: preApproval.preapproved,
@@ -2214,9 +2241,15 @@ async function queueFoundOnlineSourcePostListings({
       agent_name: agent.name || item.agentKey,
       source_url: sourceUrlForItem(item),
       source_contact_url: sourceContactUrlForAgent(agent, item),
-      reason: 'missing_2026_launch_intake_evidence',
+      reason: intake.source_quality_suppressed ? 'non_listing_source_content' : 'missing_2026_launch_intake_evidence',
       intake,
+      source_quality: intake.source_quality_suppressed ? {
+        suppressed: true,
+        reason: intake.source_quality_reason,
+        matched: intake.source_quality_matched,
+      } : undefined,
     }));
+  const sourceQualitySuppressedRecords = sourceReviewRecords.filter((item) => item.reason === 'non_listing_source_content');
 
   if (dryRun) {
     const eligible = evaluated.filter(({ intake }) => intake.eligible);
@@ -2257,6 +2290,7 @@ async function queueFoundOnlineSourcePostListings({
       normalized_posts: items.length,
       eligible_to_queue_count: eligible.length,
       source_review_count: sourceReviewRecords.length,
+      source_quality_suppressed_count: sourceQualitySuppressedRecords.length,
       created_properties: 0,
       existing_properties: 0,
       created_auto_live_properties: 0,
@@ -2267,6 +2301,7 @@ async function queueFoundOnlineSourcePostListings({
       queued_listings: dryRunRows,
       review_queue_listings: reviewRows,
       source_review_records: sourceReviewRecords,
+      source_quality_suppressed_records: sourceQualitySuppressedRecords,
       daily_target_status: {
         ...socialSearchDailyTargetStatus(),
         imported_post_eligible_count: eligible.length,
@@ -2391,7 +2426,9 @@ async function queueFoundOnlineSourcePostListings({
       duplicate_warnings: duplicateWarnings,
       duplicate_source_url_records: duplicateWarnings,
       source_review_count: skippedListings.length,
+      source_quality_suppressed_count: sourceQualitySuppressedRecords.length,
       source_review_records: skippedListings,
+      source_quality_suppressed_records: sourceQualitySuppressedRecords,
       daily_target_status: {
         ...socialSearchDailyTargetStatus({ createdCount: created.length, alreadyPresentCount: alreadyPresent.length }),
         imported_post_eligible_count: evaluated.filter(({ intake }) => intake.eligible).length,
