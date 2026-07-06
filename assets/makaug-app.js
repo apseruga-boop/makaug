@@ -755,6 +755,9 @@ let activeAdminWorkflowTab = "review";
 let adminDashboardRendering = false;
 let adminDashboardTabRefreshTimer = null;
 let adminLiveAuthFailure = null;
+let staffModerationRefreshTimer = null;
+const STAFF_MODERATION_WRITE_TIMEOUT_MS = 18000;
+const STAFF_MODERATION_PUBLIC_PROOF_TIMEOUT_MS = 6000;
 let adminCurrentPendingListings = [];
 let adminPendingQueueFilter = "all";
 const ADMIN_PENDING_QUEUE_RENDER_STEP = 150;
@@ -6050,7 +6053,8 @@ async function apiRequest(path, options = {}) {
     method,
     headers,
     credentials: "same-origin",
-    body: body !== undefined ? JSON.stringify(body) : undefined
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+    signal: options.signal
   });
 
   let data = null;
@@ -10804,9 +10808,16 @@ async function saveStaffListingPreview(propertyId, options = {}) {
         warning_overrides: warningOverrides
       }
     });
-    renderStaffListingPreviewModal(response?.data || {});
-    await renderStaffDashboard();
-    toast("Preview changes saved.");
+    if (options.deferUi) {
+      adminActiveReview = {
+        ...(adminActiveReview || {}),
+        ...(response?.data || {})
+      };
+    } else {
+      renderStaffListingPreviewModal(response?.data || {});
+      await renderStaffDashboard();
+    }
+    if (!options.silent) toast("Preview changes saved.");
     return response?.data || null;
   } catch (error) {
     toast(`Preview save failed: ${error.message || "request failed"}`);
@@ -10838,15 +10849,121 @@ function openStaffOwnerStatusWhatsApp(statusData = {}, normalizedStatus = "", re
   return true;
 }
 
+function staffPreviewDecisionButtons() {
+  const modal = document.getElementById("staff-listing-preview-modal");
+  if (!modal) return [];
+  return Array.from(modal.querySelectorAll("button")).filter((button) => {
+    const text = cleanText(button.textContent || "");
+    return text === "Approve live after preview"
+      || text === "Reject with reason"
+      || text === "Keep pending"
+      || text === "Saving decision...";
+  });
+}
+
+function setStaffPreviewDecisionBusy(isBusy) {
+  staffPreviewDecisionButtons().forEach((button) => {
+    if (isBusy) {
+      if (!button.dataset.staffOriginalText) {
+        button.dataset.staffOriginalText = button.textContent || "";
+        button.dataset.staffWasDisabled = button.disabled ? "1" : "0";
+      }
+      button.disabled = true;
+      button.textContent = "Saving decision...";
+      button.classList.add("opacity-70", "cursor-wait");
+      return;
+    }
+    if (button.dataset.staffOriginalText) {
+      button.textContent = button.dataset.staffOriginalText;
+      button.disabled = button.dataset.staffWasDisabled === "1";
+      delete button.dataset.staffOriginalText;
+      delete button.dataset.staffWasDisabled;
+    }
+    button.classList.remove("opacity-70", "cursor-wait");
+  });
+}
+
+function staffModerationTimeoutMessage(label, timeoutMs) {
+  return `${label} timed out after ${Math.round(timeoutMs / 1000)} seconds. Reload the dashboard before retrying this same row.`;
+}
+
+async function staffApiRequestWithTimeout(path, options = {}, timeoutMs = STAFF_MODERATION_WRITE_TIMEOUT_MS, label = "Staff request") {
+  if (!window.AbortController) {
+    return Promise.race([
+      apiRequest(path, options),
+      new Promise((_, reject) => {
+        window.setTimeout(() => reject(new Error(staffModerationTimeoutMessage(label, timeoutMs))), timeoutMs);
+      })
+    ]);
+  }
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await apiRequest(path, { ...options, signal: controller.signal });
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error(staffModerationTimeoutMessage(label, timeoutMs));
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
+function staffVerifyApprovedListingInBackground(propertyId) {
+  staffApiRequestWithTimeout(
+    `/api/properties/${encodeURIComponent(propertyId)}`,
+    { skipAuth: true },
+    STAFF_MODERATION_PUBLIC_PROOF_TIMEOUT_MS,
+    "Public listing proof"
+  )
+    .then((publicProof) => {
+      const publicProofOk = String(publicProof?.data?.id || "") === String(propertyId);
+      if (!publicProofOk) {
+        toast("Listing approved, but public API proof did not return yet.");
+        return;
+      }
+      const publicProperty = mapRemotePropertyForUi(publicProof?.data || {});
+      publicProperty.status = "approved";
+      upsertPropertyForUi(publicProperty);
+      toast("Listing approved, sent live, and verified on the public API.");
+    })
+    .catch((error) => {
+      console.warn("Public listing proof failed after staff moderation", error);
+      toast("Listing approved; public proof will catch up shortly.");
+    });
+}
+
+function queueStaffDashboardRefreshAfterModeration({ refreshPublicSummary = false } = {}) {
+  if (staffModerationRefreshTimer) window.clearTimeout(staffModerationRefreshTimer);
+  const run = async () => {
+    staffModerationRefreshTimer = null;
+    try {
+      if (refreshPublicSummary) await refreshPublicOpportunitySummary({ silent: true });
+      await renderStaffDashboard();
+    } catch (error) {
+      toast(`Dashboard refresh failed: ${error.message || "error"}`);
+    }
+  };
+  staffModerationRefreshTimer = window.setTimeout(() => {
+    if ("requestIdleCallback" in window) {
+      window.requestIdleCallback(() => run(), { timeout: 2500 });
+    } else {
+      run();
+    }
+  }, 700);
+}
+
 async function staffApprovePreviewListing(propertyId) {
   const ok = window.confirm("Approve this listing live after the saved preview facts? It will appear on the public website if backend checks pass.");
   if (!ok) return;
   try {
-    await saveStaffListingPreview(propertyId, { prepareApproval: true });
+    setStaffPreviewDecisionBusy(true);
+    await saveStaffListingPreview(propertyId, { prepareApproval: true, deferUi: true, silent: true });
     const review = staffReviewPatch();
     const warningOverrides = staffBuildReviewWarningOverrides(adminActiveReview);
     const foundOnlineApproval = typeof adminIsSourcedInventoryCandidate === "function" && adminIsSourcedInventoryCandidate(adminActiveReview);
-    const statusRes = await apiRequest(`/api/properties/${encodeURIComponent(propertyId)}/status`, {
+    const statusRes = await staffApiRequestWithTimeout(`/api/properties/${encodeURIComponent(propertyId)}/status`, {
       method: "PATCH",
       body: {
         ...(foundOnlineApproval ? {
@@ -10860,48 +10977,51 @@ async function staffApprovePreviewListing(propertyId) {
         review_notes: review.notes || "Staff preview completed before approval",
         checklist: review.checklist,
         warning_overrides: warningOverrides,
+        fast_admin_render: true,
         manual_notification_only: true
       }
-    });
+    }, STAFF_MODERATION_WRITE_TIMEOUT_MS, "Staff moderation write");
     const messageOpened = openStaffOwnerStatusWhatsApp(statusRes?.data || {}, "approved");
     closeStaffListingPreview();
-    toast(messageOpened ? "Listing approved. WhatsApp message is ready." : "Listing approved and live.");
-    void Promise.resolve().then(async () => {
-      await refreshPublicListingsFromApi({ silent: true });
-      await renderStaffDashboard();
-    }).catch((refreshError) => {
-      console.warn("Staff dashboard refresh failed after approval", refreshError);
-    });
+    staffVerifyApprovedListingInBackground(propertyId);
+    queueStaffDashboardRefreshAfterModeration({ refreshPublicSummary: true });
+    toast(messageOpened ? "Listing approved. WhatsApp message is ready." : "Listing approved. Public proof and dashboard refresh are running in the background.");
   } catch (error) {
     toast(`Approval blocked: ${error.message || "backend checks failed"}`);
+  } finally {
+    setStaffPreviewDecisionBusy(false);
   }
 }
 
 async function staffRejectPreviewListing(propertyId) {
   const review = staffReviewPatch();
-  const reason = review.reason || window.prompt("Why is this listing being rejected?", "Location/contact/evidence was not confirmed") || "";
-  if (!reason.trim()) return;
+  const reason = String(review.reason || "").trim();
+  if (!reason) {
+    toast("Add a rejection reason in the Decision reason box first.");
+    document.getElementById("admin-review-reason")?.focus();
+    return;
+  }
   try {
-    const statusRes = await apiRequest(`/api/properties/${encodeURIComponent(propertyId)}/status`, {
+    setStaffPreviewDecisionBusy(true);
+    const statusRes = await staffApiRequestWithTimeout(`/api/properties/${encodeURIComponent(propertyId)}/status`, {
       method: "PATCH",
       body: {
         status: "rejected",
         reason,
         review_notes: review.notes || "Rejected from staff preview",
         checklist: review.checklist,
+        fast_admin_render: true,
         manual_notification_only: true
       }
-    });
+    }, STAFF_MODERATION_WRITE_TIMEOUT_MS, "Staff moderation write");
     const messageOpened = openStaffOwnerStatusWhatsApp(statusRes?.data || {}, "rejected", reason);
     closeStaffListingPreview();
     toast(messageOpened ? "Listing rejected. WhatsApp message is ready." : "Listing rejected.");
-    void Promise.resolve().then(async () => {
-      await renderStaffDashboard();
-    }).catch((refreshError) => {
-      console.warn("Staff dashboard refresh failed after rejection", refreshError);
-    });
+    queueStaffDashboardRefreshAfterModeration();
   } catch (error) {
     toast(`Reject failed: ${error.message || "request failed"}`);
+  } finally {
+    setStaffPreviewDecisionBusy(false);
   }
 }
 
@@ -10911,15 +11031,17 @@ async function staffModerateListing(propertyId, status) {
     await openStaffListingPreview(propertyId);
     return;
   }
+  if (cleanStatus === "rejected") {
+    await openStaffListingPreview(propertyId);
+    toast("Add a Decision reason in the review panel before rejecting.");
+    return;
+  }
   let reason = cleanStatus === "approved"
     ? "Staff approved after moderation review"
     : "Staff moderation update";
-  if (cleanStatus === "rejected") {
-    reason = window.prompt("Why is this listing being rejected?", "Location/contact/evidence was not confirmed") || "";
-    if (!reason.trim()) return;
-  }
   try {
-    const statusRes = await apiRequest(`/api/properties/${encodeURIComponent(propertyId)}/status`, {
+    if (document.getElementById("staff-listing-preview-modal")) setStaffPreviewDecisionBusy(true);
+    const statusRes = await staffApiRequestWithTimeout(`/api/properties/${encodeURIComponent(propertyId)}/status`, {
       method: "PATCH",
       body: {
         status: cleanStatus,
@@ -10927,17 +11049,15 @@ async function staffModerateListing(propertyId, status) {
         fast_admin_render: ["approved", "rejected"].includes(cleanStatus),
         manual_notification_only: ["approved", "rejected"].includes(cleanStatus)
       }
-    });
+    }, STAFF_MODERATION_WRITE_TIMEOUT_MS, "Staff moderation write");
     const messageOpened = openStaffOwnerStatusWhatsApp(statusRes?.data || {}, cleanStatus, reason);
     toast(messageOpened ? "WhatsApp message is ready." : (cleanStatus === "approved" ? "Listing approved and sent live." : `Listing updated: ${cleanStatus}.`));
-    void Promise.resolve().then(async () => {
-      await refreshPublicListingsFromApi({ silent: true });
-      await renderStaffDashboard();
-    }).catch((refreshError) => {
-      console.warn("Staff dashboard refresh failed after moderation", refreshError);
-    });
+    if (cleanStatus === "approved") staffVerifyApprovedListingInBackground(propertyId);
+    queueStaffDashboardRefreshAfterModeration({ refreshPublicSummary: cleanStatus === "approved" });
   } catch (error) {
     toast(`Listing moderation failed: ${error.message || "request failed"}`);
+  } finally {
+    setStaffPreviewDecisionBusy(false);
   }
 }
 

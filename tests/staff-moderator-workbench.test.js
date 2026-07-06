@@ -76,6 +76,8 @@ function run() {
   assert(propertyRoutes.includes('Found-online staff approval requires source review confirmation'), 'moderator found-online approval should require explicit source review confirmation');
   assert(propertyRoutes.includes('found_online_source_reviewed'), 'found-online approvals should persist source review confirmation');
   assert(propertyRoutes.includes('staff_listing_approved'), 'moderator approvals should be logged');
+  assert(propertyRoutes.includes('canSkipAutomatedReviewForSourcedOverride'), 'source-reviewed found-online approvals should skip the heavy automated review on the write path');
+  assert(propertyRoutes.includes('Found-online source override used saved checklist data for fast moderation write.'), 'fast found-online approval path should be visible in warnings');
 
   assert(html.includes('id="page-staff-dashboard"'), 'staff dashboard page should be in the product');
   assert(html.includes('id="staff-settings-panel"'), 'staff dashboard should expose staff settings and payout details');
@@ -171,7 +173,13 @@ function run() {
   assert(app.includes('const location = preview.location_review || {}'), 'staff preview should define location guardrail data before rendering warnings');
   assert(app.includes('openStaffOwnerStatusWhatsApp'), 'staff decisions should open owner WhatsApp notification drafts');
   assert(app.includes('function staffBuildReviewWarningOverrides'), 'staff approval should build moderator warning overrides from preview checks');
-  assert(app.includes('saveStaffListingPreview(propertyId, { prepareApproval: true })'), 'staff approval should save preview facts with approval overrides before publishing');
+  assert(app.includes('saveStaffListingPreview(propertyId, { prepareApproval: true, deferUi: true, silent: true })'), 'staff approval should save preview facts quietly before publishing');
+  assert(app.includes('STAFF_MODERATION_WRITE_TIMEOUT_MS'), 'staff moderation writes should have a timeout guard');
+  assert(app.includes('staffApiRequestWithTimeout(`/api/properties/${encodeURIComponent(propertyId)}/status`'), 'staff status writes should use the bounded request helper');
+  assert(app.includes('queueStaffDashboardRefreshAfterModeration({ refreshPublicSummary: true })'), 'staff approval should defer dashboard refresh after the write');
+  assert(app.includes('Add a rejection reason in the Decision reason box first.'), 'staff rejection should require the visible decision reason');
+  assert(app.includes('Add a Decision reason in the review panel before rejecting.'), 'queue-card rejection should open the review panel instead of prompting');
+  assert(!app.includes('window.prompt("Why is this listing being rejected?"'), 'staff rejection should not use a blocking native prompt');
   assert(app.includes('warning_overrides: warningOverrides'), 'staff approval status call should submit warning overrides to the live publish API');
   assert(app.includes('const foundOnlineApproval = typeof adminIsSourcedInventoryCandidate === "function" && adminIsSourcedInventoryCandidate(adminActiveReview)'), 'staff approval should detect found-online rows before publishing');
   assert(app.includes('staff_source_reviewed: true'), 'staff found-online approval should confirm source review to the backend');

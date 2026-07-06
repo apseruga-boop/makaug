@@ -3270,7 +3270,11 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
     const sourcedCandidateOverride = requestedSourcedCandidateOverride && isSourcedCandidate;
     const approvalWarnings = [];
     let automatedReview = null;
-    if (nextStatus === 'approved') {
+    const canSkipAutomatedReviewForSourcedOverride = nextStatus === 'approved'
+      && sourcedCandidateOverride
+      && sourcedCandidateSourceReviewed
+      && sourcedCandidateRecordHasApprovalLocation(current);
+    if (nextStatus === 'approved' && !canSkipAutomatedReviewForSourcedOverride) {
       try {
         automatedReview = await loadAutomatedReviewForProperty(req.params.id);
       } catch (error) {
@@ -3280,6 +3284,8 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
         });
         approvalWarnings.push('Automated review refresh failed; used saved checklist data.');
       }
+    } else if (canSkipAutomatedReviewForSourcedOverride) {
+      approvalWarnings.push('Found-online source override used saved checklist data for fast moderation write.');
     }
     const checklistSource = automatedReview?.checklist
       || (req.body.checklist && typeof req.body.checklist === 'object' ? req.body.checklist : current.moderation_checklist);
