@@ -16,6 +16,11 @@ function run() {
   const propertyRoutes = read('routes/properties.js');
   const app = read('assets/makaug-app.js');
   const html = read('index.html');
+  const staffApproveStart = app.indexOf('async function staffApprovePreviewListing');
+  const staffApproveEnd = app.indexOf('async function staffRejectPreviewListing');
+  const staffApproveBody = staffApproveStart >= 0 && staffApproveEnd > staffApproveStart
+    ? app.slice(staffApproveStart, staffApproveEnd)
+    : '';
 
   assert(migration.includes("'moderator'"), 'users role check must include moderator');
   assert(migration.includes('CREATE TABLE IF NOT EXISTS staff_activity_logs'), 'staff activity log table must exist');
@@ -78,6 +83,9 @@ function run() {
   assert(propertyRoutes.includes('staff_listing_approved'), 'moderator approvals should be logged');
   assert(propertyRoutes.includes('canSkipAutomatedReviewForSourcedOverride'), 'source-reviewed found-online approvals should skip the heavy automated review on the write path');
   assert(propertyRoutes.includes('Found-online source override used saved checklist data for fast moderation write.'), 'fast found-online approval path should be visible in warnings');
+  assert(propertyRoutes.includes('const fastAdminRender = parseBooleanLike'), 'status route should separate fast admin rendering from notification mode');
+  assert(propertyRoutes.includes('Deferred fast moderation audit failed'), 'fast staff moderation should defer non-critical audit follow-up after the status update');
+  assert(propertyRoutes.includes('return res.json(buildStatusResponse(fastAlertMatching))'), 'fast staff moderation should respond before deferred audit/search follow-up finishes');
 
   assert(html.includes('id="page-staff-dashboard"'), 'staff dashboard page should be in the product');
   assert(html.includes('id="staff-settings-panel"'), 'staff dashboard should expose staff settings and payout details');
@@ -173,7 +181,10 @@ function run() {
   assert(app.includes('const location = preview.location_review || {}'), 'staff preview should define location guardrail data before rendering warnings');
   assert(app.includes('openStaffOwnerStatusWhatsApp'), 'staff decisions should open owner WhatsApp notification drafts');
   assert(app.includes('function staffBuildReviewWarningOverrides'), 'staff approval should build moderator warning overrides from preview checks');
-  assert(app.includes('saveStaffListingPreview(propertyId, { prepareApproval: true, deferUi: true, silent: true })'), 'staff approval should save preview facts quietly before publishing');
+  assert(staffApproveBody, 'staff approval handler should be present for targeted freeze checks');
+  assert(!staffApproveBody.includes('window.confirm('), 'staff approval should not use a blocking native confirm dialog');
+  assert(!staffApproveBody.includes('saveStaffListingPreview(propertyId'), 'staff approval should not run the preview-save path before publishing');
+  assert(staffApproveBody.includes('await new Promise((resolve) => window.setTimeout(resolve, 0));'), 'staff approval should yield once after setting busy state before the status write');
   assert(app.includes('STAFF_MODERATION_WRITE_TIMEOUT_MS'), 'staff moderation writes should have a timeout guard');
   assert(app.includes('staffApiRequestWithTimeout(`/api/properties/${encodeURIComponent(propertyId)}/status`'), 'staff status writes should use the bounded request helper');
   assert(app.includes('queueStaffDashboardRefreshAfterModeration({ refreshPublicSummary: true })'), 'staff approval should defer dashboard refresh after the write');

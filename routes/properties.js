@@ -3202,11 +3202,11 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
     const warningOverrides = req.body.warning_overrides && typeof req.body.warning_overrides === 'object'
       ? req.body.warning_overrides
       : {};
+    const fastAdminRender = parseBooleanLike(req.body.fast_admin_render || req.body.fastAdminRender, false);
     const manualNotificationOnly = parseBooleanLike(
       req.body.manual_notification_only
         || req.body.manualNotificationOnly
-        || req.body.fast_admin_render
-        || req.body.fastAdminRender,
+        || fastAdminRender,
       false
     );
 
@@ -3501,38 +3501,14 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
       notification = { sent: false, reason: 'notification_failed', error: error.message || 'send_failed' };
     }
 
-    try {
-      const moderationEventDelivery = sourcedCandidateDispensation
-        ? {
-          ...notification,
-          sourced_candidate_special_dispensation: sourcedCandidateDispensation
-        }
-        : notification;
-      await db.query(
-        `INSERT INTO property_moderation_events (
-          property_id,
-          actor_id,
-          action,
-          status_from,
-          status_to,
-          checklist,
-          reason,
-          notes,
-          delivery
-        ) VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9::jsonb)`,
-        [
-          listing.id,
-          actorId,
-          'listing_status_changed',
-          current.status,
-          nextStatus,
-          JSON.stringify(checklist),
-          moderationReason,
-          reviewNotes,
-          JSON.stringify(moderationEventDelivery)
-        ]
-      );
-      if (sourcedCandidateDispensation) {
+    const writeModerationAuditEvents = async () => {
+      try {
+        const moderationEventDelivery = sourcedCandidateDispensation
+          ? {
+            ...notification,
+            sourced_candidate_special_dispensation: sourcedCandidateDispensation
+          }
+          : notification;
         await db.query(
           `INSERT INTO property_moderation_events (
             property_id,
@@ -3548,61 +3524,72 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
           [
             listing.id,
             actorId,
-            'found_online_approval_used',
+            'listing_status_changed',
             current.status,
             nextStatus,
             JSON.stringify(checklist),
             moderationReason,
-            'Staff/admin confirmed location and overrode non-location checks for this found-online approval.',
-            JSON.stringify(sourcedCandidateDispensation)
+            reviewNotes,
+            JSON.stringify(moderationEventDelivery)
           ]
         );
+        if (sourcedCandidateDispensation) {
+          await db.query(
+            `INSERT INTO property_moderation_events (
+              property_id,
+              actor_id,
+              action,
+              status_from,
+              status_to,
+              checklist,
+              reason,
+              notes,
+              delivery
+            ) VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9::jsonb)`,
+            [
+              listing.id,
+              actorId,
+              'found_online_approval_used',
+              current.status,
+              nextStatus,
+              JSON.stringify(checklist),
+              moderationReason,
+              'Staff/admin confirmed location and overrode non-location checks for this found-online approval.',
+              JSON.stringify(sourcedCandidateDispensation)
+            ]
+          );
+        }
+      } catch (error) {
+        logger.error('Listing moderation event write failed after status update', {
+          property_id: listing.id,
+          status: nextStatus,
+          message: error.message
+        });
+        approvalWarnings.push('Moderation history event could not be written, but the listing status was updated.');
       }
-    } catch (error) {
-      logger.error('Listing moderation event write failed after status update', {
-        property_id: listing.id,
-        status: nextStatus,
-        message: error.message
-      });
-      approvalWarnings.push('Moderation history event could not be written, but the listing status was updated.');
-    }
 
-    if (actorRole === 'moderator') {
-      await db.query(
-        `INSERT INTO staff_activity_logs (staff_user_id, action, target_type, target_id, metadata)
-         VALUES ($1,$2,$3,$4,$5::jsonb)`,
-        [
-          reviewerUserId,
-          nextStatus === 'approved' ? 'staff_listing_approved' : (nextStatus === 'rejected' ? 'staff_listing_rejected' : 'staff_listing_returned_pending'),
-          'property',
-          listing.id,
-          JSON.stringify({
-            status_from: current.status,
-            status_to: nextStatus,
-            title: listing.title || null,
-            reason: moderationReason || null,
-            lister_notified: !!(notification.email?.sent || notification.whatsapp?.sent)
-          })
-        ]
-      ).catch(() => {});
-    }
-
-    let alertMatching = null;
-    if (nextStatus === 'approved' && current.status !== 'approved') {
-      if (manualNotificationOnly) {
-        alertMatching = { deferred: true, reason: 'fast_manual_notification_response' };
-        runPublicInventoryFollowup(
-          () => matchListingToSavedSearches(db, { ...current, ...listing }),
-          'Deferred listing saved-search matching failed',
-          { property_id: listing.id }
-        );
-      } else {
-        alertMatching = await matchListingToSavedSearches(db, { ...current, ...listing });
+      if (actorRole === 'moderator') {
+        await db.query(
+          `INSERT INTO staff_activity_logs (staff_user_id, action, target_type, target_id, metadata)
+           VALUES ($1,$2,$3,$4,$5::jsonb)`,
+          [
+            reviewerUserId,
+            nextStatus === 'approved' ? 'staff_listing_approved' : (nextStatus === 'rejected' ? 'staff_listing_rejected' : 'staff_listing_returned_pending'),
+            'property',
+            listing.id,
+            JSON.stringify({
+              status_from: current.status,
+              status_to: nextStatus,
+              title: listing.title || null,
+              reason: moderationReason || null,
+              lister_notified: !!(notification.email?.sent || notification.whatsapp?.sent)
+            })
+          ]
+        ).catch(() => {});
       }
-    }
-    clearPublicPropertiesCache(`listing_status_${current.status || 'unknown'}_to_${nextStatus}`);
+    };
 
-    return res.json({
+    const buildStatusResponse = (alertMatching = null) => ({
       ok: true,
       data: {
         ...listing,
@@ -3614,6 +3601,35 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
         automated_review: automatedReview || undefined
       }
     });
+
+    if (fastAdminRender && manualNotificationOnly && ['approved', 'rejected', 'pending'].includes(nextStatus)) {
+      clearPublicPropertiesCache(`listing_status_${current.status || 'unknown'}_to_${nextStatus}`);
+      runPublicInventoryFollowup(
+        writeModerationAuditEvents,
+        'Deferred fast moderation audit failed',
+        { property_id: listing.id, status: nextStatus }
+      );
+      let fastAlertMatching = null;
+      if (nextStatus === 'approved' && current.status !== 'approved') {
+        fastAlertMatching = { deferred: true, reason: 'fast_manual_notification_response' };
+        runPublicInventoryFollowup(
+          () => matchListingToSavedSearches(db, { ...current, ...listing }),
+          'Deferred listing saved-search matching failed',
+          { property_id: listing.id }
+        );
+      }
+      return res.json(buildStatusResponse(fastAlertMatching));
+    }
+
+    await writeModerationAuditEvents();
+
+    let alertMatching = null;
+    if (nextStatus === 'approved' && current.status !== 'approved') {
+      alertMatching = await matchListingToSavedSearches(db, { ...current, ...listing });
+    }
+    clearPublicPropertiesCache(`listing_status_${current.status || 'unknown'}_to_${nextStatus}`);
+
+    return res.json(buildStatusResponse(alertMatching));
   } catch (error) {
     logger.error('Listing status update failed', {
       property_id: req.params.id,

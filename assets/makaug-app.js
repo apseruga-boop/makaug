@@ -10955,11 +10955,9 @@ function queueStaffDashboardRefreshAfterModeration({ refreshPublicSummary = fals
 }
 
 async function staffApprovePreviewListing(propertyId) {
-  const ok = window.confirm("Approve this listing live after the saved preview facts? It will appear on the public website if backend checks pass.");
-  if (!ok) return;
   try {
     setStaffPreviewDecisionBusy(true);
-    await saveStaffListingPreview(propertyId, { prepareApproval: true, deferUi: true, silent: true });
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
     const review = staffReviewPatch();
     const warningOverrides = staffBuildReviewWarningOverrides(adminActiveReview);
     const foundOnlineApproval = typeof adminIsSourcedInventoryCandidate === "function" && adminIsSourcedInventoryCandidate(adminActiveReview);
@@ -10973,7 +10971,7 @@ async function staffApprovePreviewListing(propertyId) {
           staff_source_reviewed: true
         } : {}),
         status: "approved",
-        reason: review.reason || "Staff approved after previewing and saving listing facts",
+        reason: review.reason || "Staff approved after previewing listing facts",
         review_notes: review.notes || "Staff preview completed before approval",
         checklist: review.checklist,
         warning_overrides: warningOverrides,
