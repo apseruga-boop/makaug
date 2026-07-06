@@ -1441,7 +1441,8 @@ async function listPropertiesHandler(req, res, next) {
     const featuredRaw = req.query.featured ?? req.query.is_featured ?? req.query.isFeatured;
     const featuredFilterRequested = featuredRaw !== undefined && featuredRaw !== null && cleanText(featuredRaw) !== '';
     const featuredOnly = parseBooleanLike(featuredRaw, false);
-    const includeSummary = parseBooleanLike(req.query.include_summary ?? req.query.includeSummary ?? true, true);
+    const summaryOnly = parseBooleanLike(req.query.summary_only || req.query.summaryOnly, false);
+    const includeSummary = summaryOnly || parseBooleanLike(req.query.include_summary ?? req.query.includeSummary ?? true, true);
     const radiusUnit = cleanText(req.query.radiusUnit || req.query.radius_unit || (req.query.radiusMiles || req.query.radius_miles ? 'miles' : 'km')).toLowerCase();
     const requestingModerationData = status && status !== 'approved';
     const searchLat = toNullableFloat(req.query.lat || req.query.latitude);
@@ -1650,6 +1651,16 @@ async function listPropertiesHandler(req, res, next) {
       opportunitySummary = null;
     }
     const total = opportunitySummary?.total || 0;
+    if (summaryOnly) {
+      return res.json({
+        ok: true,
+        data: [],
+        summary: {
+          public_opportunities: opportunitySummary || null
+        },
+        pagination: toPagination(total, page, limit)
+      });
+    }
     if (includeSummary && total === 0) {
       try {
         await db.query(

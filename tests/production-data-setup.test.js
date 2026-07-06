@@ -55,9 +55,11 @@ assert(
     && adminRoute.includes('durableCloudConfigured')
     && adminRoute.includes('MEDIA_STORAGE_PROVIDER=s3')
     && adminRoute.includes('backupStorage')
+    && adminRoute.includes('uploadMediaStorageCanary')
+    && adminRoute.includes("provider_test_media_storage")
     && adminRoute.includes("provider_test_backups")
     && adminRoute.includes("router.post('/setup-status/provider-test'"),
-  'admin setup status must expose durable cloud media and backup storage readiness'
+  'admin setup status must expose durable cloud media and backup storage readiness plus live canary tests'
 );
 
 assert.strictEqual(
