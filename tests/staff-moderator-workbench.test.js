@@ -186,6 +186,8 @@ function run() {
   assert(app.includes('ensureStaffModerationActionDelegates'), 'staff moderation should install delegated action handlers');
   assert(app.includes('staffApprovalDiagnostic("requesting"'), 'staff approval should expose a diagnostic before the status request');
   assert(app.includes('window.__makaugLastStaffApproval'), 'staff approval diagnostics should be readable by browser operators');
+  assert(app.includes('function cleanText(value = "")'), 'staff approval helpers should define cleanText before decision buttons use it');
+  assert(app.includes('function staffPreviewDecisionButtons()'), 'staff approval should keep the preview decision button helper');
   assert(staffApproveBody.includes('const statusPath = `/api/properties/${encodeURIComponent(propertyIdForRequest)}/status`;'), 'staff approval should build an explicit status path before request');
   assert(staffApproveBody.includes('staffSafeReviewPatch()'), 'staff approval should use a safe review patch fallback');
   assert(staffApproveBody.includes('staffSafeReviewWarningOverrides(adminActiveReview)'), 'staff approval should use safe warning override fallback');
