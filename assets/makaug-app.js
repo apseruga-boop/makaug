@@ -10676,7 +10676,7 @@ function renderStaffListingPreviewModal(preview = {}) {
             <h4 class="font-black text-gray-900">Decision</h4>
             <div class="mt-3 grid gap-2">
               <button type="button" onclick="saveStaffListingPreview(${propertyIdArg(preview.id)})" class="border border-slate-300 text-slate-800 hover:bg-slate-50 rounded-xl px-4 py-2 text-sm font-black">Save preview changes</button>
-              <button type="button" onclick="staffApprovePreviewListing(${propertyIdArg(preview.id)})" class="bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl px-4 py-2 text-sm font-black">Approve live after preview</button>
+              <button type="button" data-staff-approve-id="${adminAttr(String(preview.id || ""))}" class="bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl px-4 py-2 text-sm font-black">Approve live after preview</button>
               <button type="button" onclick="staffRejectPreviewListing(${propertyIdArg(preview.id)})" class="bg-red-600 hover:bg-red-500 text-white rounded-xl px-4 py-2 text-sm font-black">Reject with reason</button>
               <button type="button" onclick="staffModerateListing(${propertyIdArg(preview.id)}, 'pending')" class="border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-xl px-4 py-2 text-sm font-black">Keep pending</button>
             </div>
@@ -10705,6 +10705,21 @@ function closeStaffListingPreview() {
   staffPreviewPreviousAdminReview = null;
   document.getElementById("staff-listing-preview-modal")?.remove();
 }
+
+function ensureStaffModerationActionDelegates() {
+  if (window.__makaugStaffModerationActionDelegatesReady) return;
+  window.__makaugStaffModerationActionDelegatesReady = true;
+  document.addEventListener("click", (event) => {
+    const approveButton = event.target?.closest?.("[data-staff-approve-id]");
+    if (!approveButton) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (approveButton.disabled) return;
+    staffApprovePreviewListing(approveButton.dataset.staffApproveId || adminActiveReview?.id || "");
+  });
+}
+
+ensureStaffModerationActionDelegates();
 
 function staffListingPreviewPatch() {
   if (document.getElementById("admin-review-title-edit")) {
@@ -10748,6 +10763,38 @@ function staffReviewPatch() {
   };
 }
 
+function staffDefaultReviewChecklist() {
+  return {
+    preview_opened: true,
+    location_checked: true,
+    duplicate_checked: true,
+    contact_checked: true,
+    source_evidence_checked: true
+  };
+}
+
+function staffSafeReviewPatch() {
+  try {
+    const review = staffReviewPatch();
+    return {
+      notes: review?.notes || "",
+      reason: review?.reason || "",
+      checklist: review?.checklist && typeof review.checklist === "object"
+        ? review.checklist
+        : staffDefaultReviewChecklist(),
+      stage: review?.stage || "in_review"
+    };
+  } catch (error) {
+    console.warn("Staff approval review patch fallback used", error);
+    return {
+      notes: document.getElementById("admin-review-notes")?.value || "",
+      reason: document.getElementById("admin-review-reason")?.value || "",
+      checklist: staffDefaultReviewChecklist(),
+      stage: "in_review"
+    };
+  }
+}
+
 function staffBuildReviewWarningOverrides(review = adminActiveReview) {
   const currentReview = review || {};
   const reviewId = String(currentReview.id || "");
@@ -10784,6 +10831,39 @@ function staffBuildReviewWarningOverrides(review = adminActiveReview) {
     }
   }
   return overrides;
+}
+
+function staffSafeReviewWarningOverrides(review = adminActiveReview) {
+  try {
+    const overrides = staffBuildReviewWarningOverrides(review);
+    return overrides && typeof overrides === "object" ? overrides : {};
+  } catch (error) {
+    console.warn("Staff approval warning override fallback used", error);
+    return {};
+  }
+}
+
+function staffSafeFoundOnlineApproval(review = adminActiveReview) {
+  try {
+    return typeof adminIsSourcedInventoryCandidate === "function" && adminIsSourcedInventoryCandidate(review);
+  } catch (error) {
+    console.warn("Staff found-online detection failed", error);
+    const extra = review?.extra_fields && typeof review.extra_fields === "object" ? review.extra_fields : {};
+    return review?.sourced_inventory_candidate === true
+      || review?.found_online_candidate === true
+      || extra.sourced_inventory_candidate === true
+      || extra.found_online_candidate === true
+      || extra.found_online === true;
+  }
+}
+
+function staffApprovalDiagnostic(stage, detail = {}) {
+  window.__makaugLastStaffApproval = {
+    stage,
+    detail,
+    at: new Date().toISOString()
+  };
+  console.info("Staff approval", window.__makaugLastStaffApproval);
 }
 
 async function openStaffListingPreview(propertyId) {
@@ -10955,36 +11035,45 @@ function queueStaffDashboardRefreshAfterModeration({ refreshPublicSummary = fals
 }
 
 async function staffApprovePreviewListing(propertyId) {
+  const propertyIdForRequest = String(propertyId || adminActiveReview?.id || "").trim();
   try {
+    if (!propertyIdForRequest) throw new Error("Missing listing id for approval request");
+    staffApprovalDiagnostic("starting", { propertyId: propertyIdForRequest });
     setStaffPreviewDecisionBusy(true);
+    toast("Sending approval request...");
     await new Promise((resolve) => window.setTimeout(resolve, 0));
-    const review = staffReviewPatch();
-    const warningOverrides = staffBuildReviewWarningOverrides(adminActiveReview);
-    const foundOnlineApproval = typeof adminIsSourcedInventoryCandidate === "function" && adminIsSourcedInventoryCandidate(adminActiveReview);
-    const statusRes = await staffApiRequestWithTimeout(`/api/properties/${encodeURIComponent(propertyId)}/status`, {
+    const review = staffSafeReviewPatch();
+    const warningOverrides = staffSafeReviewWarningOverrides(adminActiveReview);
+    const foundOnlineApproval = staffSafeFoundOnlineApproval(adminActiveReview);
+    const statusPath = `/api/properties/${encodeURIComponent(propertyIdForRequest)}/status`;
+    const statusBody = {
+      ...(foundOnlineApproval ? {
+        sourced_candidate_override: true,
+        found_online_location_confirmed: true,
+        source_reviewed: true,
+        staff_source_reviewed: true
+      } : {}),
+      status: "approved",
+      reason: review.reason || "Staff approved after previewing listing facts",
+      review_notes: review.notes || "Staff preview completed before approval",
+      checklist: review.checklist || staffDefaultReviewChecklist(),
+      warning_overrides: warningOverrides,
+      fast_admin_render: true,
+      manual_notification_only: true
+    };
+    staffApprovalDiagnostic("requesting", { propertyId: propertyIdForRequest, foundOnlineApproval, path: statusPath });
+    const statusRes = await staffApiRequestWithTimeout(statusPath, {
       method: "PATCH",
-      body: {
-        ...(foundOnlineApproval ? {
-          sourced_candidate_override: true,
-          found_online_location_confirmed: true,
-          source_reviewed: true,
-          staff_source_reviewed: true
-        } : {}),
-        status: "approved",
-        reason: review.reason || "Staff approved after previewing listing facts",
-        review_notes: review.notes || "Staff preview completed before approval",
-        checklist: review.checklist,
-        warning_overrides: warningOverrides,
-        fast_admin_render: true,
-        manual_notification_only: true
-      }
+      body: statusBody
     }, STAFF_MODERATION_WRITE_TIMEOUT_MS, "Staff moderation write");
+    staffApprovalDiagnostic("completed", { propertyId: propertyIdForRequest, status: statusRes?.data?.status || "unknown" });
     const messageOpened = openStaffOwnerStatusWhatsApp(statusRes?.data || {}, "approved");
     closeStaffListingPreview();
-    staffVerifyApprovedListingInBackground(propertyId);
+    staffVerifyApprovedListingInBackground(propertyIdForRequest);
     queueStaffDashboardRefreshAfterModeration({ refreshPublicSummary: true });
     toast(messageOpened ? "Listing approved. WhatsApp message is ready." : "Listing approved. Public proof and dashboard refresh are running in the background.");
   } catch (error) {
+    staffApprovalDiagnostic("failed", { propertyId: propertyIdForRequest, message: error.message || "backend checks failed" });
     toast(`Approval blocked: ${error.message || "backend checks failed"}`);
   } finally {
     setStaffPreviewDecisionBusy(false);
