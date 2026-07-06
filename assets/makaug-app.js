@@ -11058,6 +11058,7 @@ async function staffApprovePreviewListing(propertyId) {
         staff_source_reviewed: true
       } : {}),
       status: "approved",
+      listing: staffListingPreviewPatch(),
       reason: review.reason || "Staff approved after previewing listing facts",
       review_notes: review.notes || "Staff preview completed before approval",
       checklist: review.checklist || staffDefaultReviewChecklist(),

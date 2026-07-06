@@ -84,6 +84,9 @@ function run() {
   assert(propertyRoutes.includes('canSkipAutomatedReviewForSourcedOverride'), 'source-reviewed found-online approvals should skip the heavy automated review on the write path');
   assert(propertyRoutes.includes('Found-online source override used saved checklist data for fast moderation write.'), 'fast found-online approval path should be visible in warnings');
   assert(propertyRoutes.includes('const fastAdminRender = parseBooleanLike'), 'status route should separate fast admin rendering from notification mode');
+  assert(propertyRoutes.includes('applyStatusListingPatchBeforeModeration'), 'status route should apply edited listing facts before approval/rejection');
+  assert(propertyRoutes.includes('listing_facts_updated_with_status'), 'status route should audit listing fact edits made during moderation status changes');
+  assert(propertyRoutes.includes('statusListingPatchFromBody(req.body)'), 'status route should read listing patches from the approval payload');
   assert(propertyRoutes.includes('Deferred fast moderation audit failed'), 'fast staff moderation should defer non-critical audit follow-up after the status update');
   assert(propertyRoutes.includes('return res.json(buildStatusResponse(fastAlertMatching))'), 'fast staff moderation should respond before deferred audit/search follow-up finishes');
 
@@ -190,6 +193,7 @@ function run() {
   assert(app.includes('function staffPreviewDecisionButtons()'), 'staff approval should keep the preview decision button helper');
   assert(staffApproveBody.includes('const statusPath = `/api/properties/${encodeURIComponent(propertyIdForRequest)}/status`;'), 'staff approval should build an explicit status path before request');
   assert(staffApproveBody.includes('staffSafeReviewPatch()'), 'staff approval should use a safe review patch fallback');
+  assert(staffApproveBody.includes('listing: staffListingPreviewPatch()'), 'staff approval should persist preview listing edits in the status write');
   assert(staffApproveBody.includes('staffSafeReviewWarningOverrides(adminActiveReview)'), 'staff approval should use safe warning override fallback');
   assert(staffApproveBody.includes('staffSafeFoundOnlineApproval(adminActiveReview)'), 'staff approval should use safe found-online detection');
   assert(!staffApproveBody.includes('window.confirm('), 'staff approval should not use a blocking native confirm dialog');

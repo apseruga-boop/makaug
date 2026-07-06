@@ -219,6 +219,163 @@ function normalizeListingType(type) {
   return t;
 }
 
+function statusListingPatchFromBody(body = {}) {
+  const candidate = body.listing && typeof body.listing === 'object'
+    ? body.listing
+    : (body.listing_patch && typeof body.listing_patch === 'object'
+      ? body.listing_patch
+      : (body.listingPatch && typeof body.listingPatch === 'object' ? body.listingPatch : null));
+  if (!candidate || Array.isArray(candidate)) return {};
+  return candidate;
+}
+
+async function applyStatusListingPatchBeforeModeration(req, propertyId, existing = {}, rawPatch = {}) {
+  const patch = statusListingPatchFromBody({ listing: rawPatch });
+  if (!Object.keys(patch).length) return { changed_fields: [], property: existing };
+  if (!Object.prototype.hasOwnProperty.call(patch, 'listing_type')) {
+    const alias = patch.listingType ?? patch.type ?? patch.category;
+    if (alias != null) patch.listing_type = alias;
+  }
+  if (!Object.prototype.hasOwnProperty.call(patch, 'price_period')) {
+    const alias = patch.pricePeriod ?? patch.period;
+    if (alias != null) patch.price_period = alias;
+  }
+
+  const setParts = [];
+  const values = [propertyId];
+  const changed = [];
+  const add = (column, value, cast = '') => {
+    values.push(value);
+    setParts.push(`${column} = $${values.length}${cast}`);
+    changed.push(column);
+  };
+  const validateError = (message, details = []) => {
+    const error = new Error(message);
+    error.status = 400;
+    error.details = details.length ? details : undefined;
+    return error;
+  };
+  const fieldMap = {
+    title: (value) => cleanText(value),
+    description: (value) => cleanText(value),
+    listing_type: (value) => {
+      const listingType = normalizeListingType(value);
+      if (listingType && !LISTING_TYPES.includes(listingType)) {
+        throw validateError('listing_type must be sale, rent, land, commercial, or student');
+      }
+      return listingType;
+    },
+    area: (value) => cleanText(value),
+    district: (value) => {
+      const district = cleanText(value);
+      if (district && !DISTRICTS.includes(district)) {
+        throw validateError('district must be one of Uganda\'s valid districts');
+      }
+      return district;
+    },
+    address: (value) => cleanText(value) || null,
+    price: (value) => toNullableInt(value),
+    price_period: (value) => cleanText(value) || null,
+    property_type: (value) => cleanText(value) || null,
+    title_type: (value) => cleanText(value) || null,
+    bedrooms: (value) => toNullableInt(value),
+    bathrooms: (value) => toNullableInt(value),
+    lister_name: (value) => cleanText(value) || null,
+    lister_phone: (value) => {
+      const phone = normalizePhone(value) || null;
+      if (phone && !isValidPhone(phone)) throw validateError('lister_phone must be a valid phone number');
+      return phone;
+    },
+    lister_email: (value) => {
+      const email = normalizeEmail(value) || null;
+      if (email && !isValidEmail(email)) throw validateError('lister_email must be a valid email address');
+      return email;
+    },
+    latitude: (value) => toNullableFloat(value),
+    longitude: (value) => toNullableFloat(value)
+  };
+
+  Object.entries(fieldMap).forEach(([key, transform]) => {
+    if (!Object.prototype.hasOwnProperty.call(patch, key)) return;
+    const value = transform(patch[key]);
+    if (['title', 'description', 'area', 'district', 'listing_type'].includes(key) && !value) return;
+    add(key, value);
+  });
+
+  const extraPatch = {};
+  [
+    'region',
+    'city',
+    'neighborhood',
+    'street_name',
+    'location_note',
+    'source_url',
+    'source_platform',
+    'geocoding_provider',
+    'place_id',
+    'location_confidence',
+    'map_pin_source',
+    'land_title_available',
+    'nearest_university',
+    'distance_to_uni_km',
+    'room_type',
+    'room_arrangement',
+    'gender_pref',
+    'student_room_label'
+  ].forEach((key) => {
+    if (Object.prototype.hasOwnProperty.call(patch, key)) extraPatch[key] = cleanText(patch[key]) || null;
+  });
+  if (Object.prototype.hasOwnProperty.call(patch, 'students_welcome')) {
+    extraPatch.students_welcome = parseBooleanLike(patch.students_welcome, false);
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'student_universities')) {
+    extraPatch.student_universities = asArray(patch.student_universities).map((item) => cleanText(item)).filter(Boolean);
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'amenities')) {
+    const amenities = asArray(patch.amenities).map((item) => cleanText(item)).filter(Boolean);
+    values.push(JSON.stringify(amenities));
+    setParts.push(`amenities = $${values.length}::jsonb`);
+    changed.push('amenities');
+  }
+  if (Object.keys(extraPatch).length) {
+    extraPatch.staff_status_listing_patch_applied_at = new Date().toISOString();
+    extraPatch.staff_status_listing_patch_applied_by = req.adminAuth?.userId || req.adminAuth?.type || 'moderation_api';
+    values.push(JSON.stringify(extraPatch));
+    setParts.push(`extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $${values.length}::jsonb`);
+    changed.push('extra_fields');
+  }
+
+  if (!setParts.length) return { changed_fields: [], property: existing };
+
+  const updated = await db.query(
+    `UPDATE properties
+     SET ${setParts.join(', ')}, updated_at = NOW()
+     WHERE id = $1
+     RETURNING *`,
+    values
+  );
+  const property = updated.rows[0] || existing;
+  await db.query(
+    `INSERT INTO property_moderation_events (property_id, actor_id, action, status_from, status_to, notes, delivery)
+     VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb)`,
+    [
+      propertyId,
+      req.adminAuth?.userId || req.adminAuth?.type || 'moderation_api',
+      'listing_facts_updated_with_status',
+      existing.status || null,
+      property.status || null,
+      'Listing facts were updated as part of the moderation status action.',
+      JSON.stringify({ changed_fields: changed })
+    ]
+  ).catch((error) => {
+    logger.warn('Listing status fact-update audit failed', {
+      property_id: propertyId,
+      message: error.message
+    });
+  });
+  return { changed_fields: changed, property };
+}
+
 function publicOpportunityBucketSql(alias = 'p') {
   const a = alias;
   const directType = `LOWER(TRIM(COALESCE(${a}.listing_type, '')))`;
@@ -3249,7 +3406,18 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
       return res.status(404).json({ ok: false, error: 'Property not found' });
     }
 
-    const current = currentResult.rows[0];
+    let current = currentResult.rows[0];
+    const approvalWarnings = [];
+    const listingPatchResult = await applyStatusListingPatchBeforeModeration(
+      req,
+      req.params.id,
+      current,
+      statusListingPatchFromBody(req.body)
+    );
+    if (listingPatchResult.changed_fields.length) {
+      current = listingPatchResult.property || current;
+      approvalWarnings.push(`Listing facts updated before moderation status change: ${listingPatchResult.changed_fields.join(', ')}`);
+    }
     const actorId = req.adminAuth?.userId || req.adminAuth?.type || 'admin_api_key';
     const reviewerUserId = toUuidOrNull(req.adminAuth?.userId);
     const isSourcedCandidate = isSourcedInventoryCandidateRecord(current);
@@ -3279,7 +3447,6 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
     }
 
     const sourcedCandidateOverride = requestedSourcedCandidateOverride && isSourcedCandidate;
-    const approvalWarnings = [];
     let automatedReview = null;
     const canSkipAutomatedReviewForSourcedOverride = nextStatus === 'approved'
       && sourcedCandidateOverride
