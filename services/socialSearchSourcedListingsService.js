@@ -12,7 +12,10 @@ const {
   ownerEditTokenExpiry,
 } = require('./listingModerationService');
 const { SOURCE } = require('../scripts/seed-sourced-inventory-candidates');
-const { sourceQualitySuppressionForRecord } = require('../utils/sourceContentQuality');
+const {
+  sourceLocationQualityForRecord,
+  sourceQualitySuppressionForRecord,
+} = require('../utils/sourceContentQuality');
 
 const SOCIAL_SEARCH_BATCH_ID = 'social_search_authorised_20260520';
 const LEGACY_SOURCED_INVENTORY_CANDIDATE_SOURCE = SOURCE;
@@ -49,7 +52,7 @@ const PUBLIC_SOURCE_CONTACT_POLICY = 'No public phone number is not a blocker wh
 const FOUND_ONLINE_LAUNCH_INTAKE_POLICY = {
   source_window_start: LAUNCH_SOURCE_POST_WINDOW_START,
   target_source_year: 2026,
-  queue_rule: 'Queue curated exact YouTube social-source property posts and other specific public social property posts from 1 January 2026 onward. The source must be YouTube, TikTok, Instagram, Facebook, or X/Twitter; it must include a source URL, location or area, usable listing/source evidence, and a social/direct contact path. Location is non-negotiable. Missing price becomes Price upon application. Website-only sources are ignored.',
+  queue_rule: 'Queue curated exact YouTube social-source property posts and other specific public social property posts from 1 January 2026 onward. The source must be YouTube, TikTok, Instagram, Facebook, or X/Twitter; it must include a source URL, a specific area/neighbourhood/road/corridor, usable listing/source evidence, and a social/direct contact path. District-only locations such as only Kampala or only Wakiso stay out of active review. Missing price becomes Price upon application when the source and location are otherwise credible. Website-only sources are ignored.',
   image_rule: 'Found-online/social imports are public discovery results: do not rehost downloaded TikTok, Facebook, Instagram, YouTube, X, LinkedIn, WhatsApp, or website photos/videos as makaug gallery assets unless the rights holder has explicitly supplied or approved them. Public pages should show source links or official embeds first, then makaug rewritten facts and disclosures.',
   facebook_image_rule: 'For Facebook, store the exact public post URL as source evidence. Do not scrape or rehost Meta media without permission or an approved Meta tool/feed; link back to the source and ask the source/agent for authorised images before using photos publicly. Location must still be present before approval.',
   platform_scope: ['YouTube', 'TikTok', 'Instagram', 'Facebook', 'X/Twitter'],
@@ -854,6 +857,7 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
   const hasSource = Boolean(sourceUrlForItem(item));
   const allowedSocialSource = itemHasAllowedSocialSource(item, agent);
   const hasLocation = Boolean(String(item.address || item.area || item.district || '').trim());
+  const locationQuality = sourceLocationQualityForItem(item, agent);
   const hasPrice = hasPublishedPriceOrGuidePrice(item);
   const priceUponApplication = !hasPrice;
   const hasContact = hasAnyPublicContactPath(agent, item);
@@ -863,11 +867,20 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
   const sourceQuality = sourceQualityReviewForItem(item, agent);
   const pendingKingSourceReview = !preApproval.preapproved;
   const hasQueuePermission = allowedSocialSource;
+  const requiresSpecificSourcePostLocation = item.importedFromSourcePost === true;
+  const locationPassesIntake = !requiresSpecificSourcePostLocation || locationQuality.ok;
   return {
-    eligible: hasSource && allowedSocialSource && hasLocation && hasContact && hasImageOrEvidence && dateStatus !== 'before_2026_source_window' && hasQueuePermission && !sourceQuality.suppressed,
+    eligible: hasSource && allowedSocialSource && hasLocation && locationPassesIntake && hasContact && hasImageOrEvidence && dateStatus !== 'before_2026_source_window' && hasQueuePermission && !sourceQuality.suppressed,
     has_source_url: hasSource,
     allowed_social_source: allowedSocialSource,
     has_location_or_area: hasLocation,
+    has_specific_location: locationQuality.ok,
+    requires_specific_source_post_location: requiresSpecificSourcePostLocation,
+    location_passes_intake: locationPassesIntake,
+    location_quality_status: locationQuality.status,
+    location_quality_reason: locationQuality.reason,
+    location_quality_matched: locationQuality.matched || '',
+    district_only_location: locationQuality.status === 'district_only_location',
     has_price_or_guide_price: hasPrice,
     price_upon_application: priceUponApplication,
     price_status: hasPrice ? 'published_price_or_guide_price' : 'price_upon_application',
@@ -889,7 +902,19 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
     source_quality_suppressed: sourceQuality.suppressed,
     source_quality_reason: sourceQuality.reason,
     source_quality_matched: sourceQuality.matched,
+    source_quality_location_status: sourceQuality.location_status || locationQuality.status,
   };
+}
+
+function sourceReviewReasonForIntake(intake = {}) {
+  if (intake.source_quality_suppressed && /^low_signal_/i.test(String(intake.source_quality_reason || ''))) {
+    return 'low_signal_source_location';
+  }
+  if (intake.source_quality_suppressed) return 'non_listing_source_content';
+  if (intake.requires_specific_source_post_location && intake.has_location_or_area && !intake.has_specific_location) {
+    return 'low_signal_source_location';
+  }
+  return 'missing_2026_launch_intake_evidence';
 }
 
 function youtubeConfidenceReviewForItem(item = {}) {
@@ -1369,6 +1394,26 @@ function sourceQualityReviewForItem(item = {}, agent = sourceAgentForItem(item))
       source_text: item.sourceText || item.source_text || item.raw_source_post?.source_text || item.rawSourcePost?.source_text || '',
       source_visual_text: item.sourceVisualText || item.source_visual_text || item.raw_source_post?.source_visual_text || item.rawSourcePost?.source_visual_text || '',
       youtube_source_title: item.youtube_source_title || item.sourceTitle || '',
+      raw_source_post: item.raw_source_post || item.rawSourcePost || {}
+    }
+  });
+}
+
+function sourceLocationQualityForItem(item = {}, agent = sourceAgentForItem(item)) {
+  return sourceLocationQualityForRecord({
+    ...item,
+    source_name: agent.name || item.agentKey || '',
+    source_agent_name: agent.name || item.agentKey || '',
+    lister_name: agent.name || '',
+    extra_fields: {
+      source_name: agent.name || '',
+      source_agent_name: agent.name || '',
+      public_display_name: agent.name || '',
+      source_title: item.sourceTitle || item.source_title || item.title || '',
+      source_caption: item.caption || item.raw_source_post?.caption || item.rawSourcePost?.caption || '',
+      youtube_source_title: item.youtube_source_title || item.sourceTitle || '',
+      resolved_location_label: item.address || item.location_label || '',
+      map_pin_label: item.address || item.location_label || '',
       raw_source_post: item.raw_source_post || item.rawSourcePost || {}
     }
   });
@@ -2241,7 +2286,7 @@ async function queueFoundOnlineSourcePostListings({
       agent_name: agent.name || item.agentKey,
       source_url: sourceUrlForItem(item),
       source_contact_url: sourceContactUrlForAgent(agent, item),
-      reason: intake.source_quality_suppressed ? 'non_listing_source_content' : 'missing_2026_launch_intake_evidence',
+      reason: sourceReviewReasonForIntake(intake),
       intake,
       source_quality: intake.source_quality_suppressed ? {
         suppressed: true,
@@ -2249,7 +2294,8 @@ async function queueFoundOnlineSourcePostListings({
         matched: intake.source_quality_matched,
       } : undefined,
     }));
-  const sourceQualitySuppressedRecords = sourceReviewRecords.filter((item) => item.reason === 'non_listing_source_content');
+  const sourceQualitySuppressedRecords = sourceReviewRecords.filter((item) => item.intake?.source_quality_suppressed);
+  const lowSignalSourceLocationRecords = sourceReviewRecords.filter((item) => item.reason === 'low_signal_source_location');
 
   if (dryRun) {
     const eligible = evaluated.filter(({ intake }) => intake.eligible);
@@ -2291,6 +2337,7 @@ async function queueFoundOnlineSourcePostListings({
       eligible_to_queue_count: eligible.length,
       source_review_count: sourceReviewRecords.length,
       source_quality_suppressed_count: sourceQualitySuppressedRecords.length,
+      low_signal_source_location_count: lowSignalSourceLocationRecords.length,
       created_properties: 0,
       existing_properties: 0,
       created_auto_live_properties: 0,
@@ -2302,6 +2349,7 @@ async function queueFoundOnlineSourcePostListings({
       review_queue_listings: reviewRows,
       source_review_records: sourceReviewRecords,
       source_quality_suppressed_records: sourceQualitySuppressedRecords,
+      low_signal_source_location_records: lowSignalSourceLocationRecords,
       daily_target_status: {
         ...socialSearchDailyTargetStatus(),
         imported_post_eligible_count: eligible.length,
@@ -2427,8 +2475,10 @@ async function queueFoundOnlineSourcePostListings({
       duplicate_source_url_records: duplicateWarnings,
       source_review_count: skippedListings.length,
       source_quality_suppressed_count: sourceQualitySuppressedRecords.length,
+      low_signal_source_location_count: lowSignalSourceLocationRecords.length,
       source_review_records: skippedListings,
       source_quality_suppressed_records: sourceQualitySuppressedRecords,
+      low_signal_source_location_records: lowSignalSourceLocationRecords,
       daily_target_status: {
         ...socialSearchDailyTargetStatus({ createdCount: created.length, alreadyPresentCount: alreadyPresent.length }),
         imported_post_eligible_count: evaluated.filter(({ intake }) => intake.eligible).length,
@@ -2536,7 +2586,7 @@ async function seedSocialSearchAuthorisedListings({ db, replace = true } = {}) {
           agent_name: agentByKey(item.agentKey)?.name || item.agentKey,
           source_url: sourceUrlForItem(item),
           source_contact_url: sourceContactUrlForAgent(agentByKey(item.agentKey), item),
-          reason: 'missing_2026_launch_intake_evidence',
+          reason: sourceReviewReasonForIntake(intake),
           intake,
         });
         continue;

@@ -2,6 +2,7 @@ const assert = require('assert');
 const path = require('path');
 
 const {
+  sourceLocationQualityForRecord,
   sourceQualitySuppressionForRecord,
   sourceQualitySuppressedSql,
 } = require('../utils/sourceContentQuality');
@@ -45,6 +46,16 @@ async function run() {
     description: 'A house showcase for sale on Entebbe Road, UGX 380M',
   });
   assert.strictEqual(entebbeSale.suppressed, false, 'real price/location listing should remain reviewable');
+  assert.strictEqual(
+    sourceLocationQualityForRecord({
+      title: 'What 380m ugx gets you on Entebbe rd',
+      area: 'Kampala',
+      district: 'Kampala',
+      description: 'A house showcase for sale on Entebbe Road, UGX 380M',
+    }).ok,
+    true,
+    'Entebbe Road should count as a usable corridor even when the captured area is broad'
+  );
 
   const kasangatiLand = sourceQualitySuppressionForRecord({
     title: 'Kasangati Mawule on Half an Acre at 450m ugx very Negotiable',
@@ -59,6 +70,17 @@ async function run() {
     description: 'Land plots for sale in Kiwatule, Kampala',
   });
   assert.strictEqual(kiwatuleLand.suppressed, false, 'real land listing should remain reviewable');
+
+  const clickbaitDistrictOnly = sourceQualitySuppressionForRecord({
+    title: 'I NEED ONE SERIOUS CUSTOMER TO TAKE THIS BEAUTIFUL HOUSE',
+    source_name: 'Found online property source',
+    area: 'Kampala',
+    district: 'Kampala',
+    address: 'Kampala',
+    price: 130000000,
+  });
+  assert.strictEqual(clickbaitDistrictOnly.suppressed, true, 'district-only clickbait listings should be hidden from active review');
+  assert.strictEqual(clickbaitDistrictOnly.reason, 'low_signal_district_only_promo');
 
   const dryBlocked = await queueFoundOnlineSourcePostListings({
     dryRun: true,
@@ -97,10 +119,88 @@ async function run() {
   assert.strictEqual(dryAllowed.eligible_to_queue_count, 1, 'specific land listing should stay eligible');
   assert.strictEqual(dryAllowed.source_quality_suppressed_count, 0, 'specific land listing should not be suppressed');
 
+  const dryDistrictOnlyClickbait = await queueFoundOnlineSourcePostListings({
+    dryRun: true,
+    posts: [{
+      source_url: 'https://www.youtube.com/watch?v=genericClickbait130m',
+      source_contact_url: 'https://www.youtube.com/@foundonlineagent',
+      source_name: 'Found Online Agent',
+      platform: 'YouTube',
+      title: 'I NEED ONE SERIOUS CUSTOMER TO TAKE THIS BEAUTIFUL HOUSE',
+      description: 'Only serious buyers. Kampala. UGX 130M',
+      area: 'Kampala',
+      district: 'Kampala',
+      address: 'Kampala',
+      listing_type: 'sale',
+      price_text: 'UGX 130M',
+      published_at: '2026-06-15T00:00:00.000Z',
+    }],
+  });
+  assert.strictEqual(dryDistrictOnlyClickbait.eligible_to_queue_count, 0, 'district-only clickbait should not queue');
+  assert.strictEqual(dryDistrictOnlyClickbait.low_signal_source_location_count, 1, 'district-only clickbait should be reported separately');
+  assert.strictEqual(dryDistrictOnlyClickbait.source_review_records[0].reason, 'low_signal_source_location');
+  assert.strictEqual(dryDistrictOnlyClickbait.source_review_records[0].intake.district_only_location, true);
+
+  const dryEntebbeRoad = await queueFoundOnlineSourcePostListings({
+    dryRun: true,
+    posts: [{
+      source_url: 'https://www.youtube.com/watch?v=entebbeRoad380m',
+      source_contact_url: 'https://www.youtube.com/@ugandayaffeeproperties',
+      source_name: 'UGANDA YAFFEE PROPERTIES',
+      platform: 'YouTube',
+      title: 'What 380m ugx gets you on Entebbe rd',
+      description: 'A real house showcase on Entebbe Road. UGX 380M',
+      area: 'Kampala',
+      district: 'Kampala',
+      listing_type: 'sale',
+      price_text: 'UGX 380M',
+      published_at: '2026-06-15T00:00:00.000Z',
+    }],
+  });
+  assert.strictEqual(dryEntebbeRoad.eligible_to_queue_count, 1, 'Entebbe Road corridor listings should remain queueable');
+
+  const dryPriceUponApplication = await queueFoundOnlineSourcePostListings({
+    dryRun: true,
+    posts: [{
+      source_url: 'https://www.youtube.com/watch?v=kitendeAffordableHome',
+      source_contact_url: 'https://www.youtube.com/@primetimeproperties',
+      source_name: 'Primetime Properties',
+      platform: 'YouTube',
+      title: 'Beautiful Home in Kitende',
+      description: 'A specific affordable home around Kitende.',
+      area: 'Kitende',
+      district: 'Wakiso',
+      listing_type: 'sale',
+      published_at: '2026-06-15T00:00:00.000Z',
+    }],
+  });
+  assert.strictEqual(dryPriceUponApplication.eligible_to_queue_count, 1, 'specific POA agency listings should still queue');
+  assert.strictEqual(dryPriceUponApplication.queued_listings[0].price_label, 'Price upon application');
+
+  const dryLugandaPromo = await queueFoundOnlineSourcePostListings({
+    dryRun: true,
+    posts: [{
+      source_url: 'https://www.tiktok.com/@promo/video/7330000000000000999',
+      source_contact_url: 'https://www.tiktok.com/@promo',
+      source_name: 'Promo Source',
+      platform: 'TikTok',
+      title: 'FUUKA LANDLORD LEERO KU SENTE OBUKADDE 40',
+      description: 'TUSIGAZAWO PLOT NTONO. Kampala.',
+      area: 'Kampala',
+      district: 'Kampala',
+      listing_type: 'land',
+      published_at: '2026-06-15T00:00:00.000Z',
+    }],
+  });
+  assert.strictEqual(dryLugandaPromo.eligible_to_queue_count, 0, 'district-only Luganda promo rows should not queue');
+  assert.strictEqual(dryLugandaPromo.source_review_records[0].reason, 'low_signal_source_location');
+
   const sql = sourceQualitySuppressedSql('p');
   assert(sql.includes('building[[:space:]]+permit'), 'SQL suppression should include building permit keyword');
   assert(sql.includes('how[[:space:]]+big[[:space:]]+is'), 'SQL suppression should include plot-size explainer keyword');
   assert(sql.includes('sameblood'), 'SQL suppression should include known source keyword');
+  assert(sql.includes('serious[[:space:]]+customer'), 'SQL suppression should include low-signal promo wording');
+  assert(sql.includes('entebbe[[:space:]]*(road|rd)'), 'SQL suppression should preserve specific Entebbe Road corridor listings');
   assert(!sql.includes('source_text'), 'staff dashboard SQL should not scan large source_text blobs');
   assert(!sql.includes('source_visual_text'), 'staff dashboard SQL should not scan large source_visual_text blobs');
 }
