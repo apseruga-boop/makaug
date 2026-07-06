@@ -1266,29 +1266,30 @@ async function loadStaffPropertyPreview(propertyId) {
       [property.id]
     ),
     safeRows(
-      `SELECT id, title, listing_type, district, area, address, price, status, lister_phone,
-              COALESCE(extra_fields->>'source_url', extra_fields->>'source_post_url', '') AS source_url,
-              created_at
-       FROM properties
-       WHERE id <> $1
-         AND LOWER(COALESCE(status, '')) NOT IN (${sqlList(STAFF_REMOVED_STATUSES)})
-         AND LOWER(COALESCE(moderation_stage, '')) NOT IN (${sqlList(STAFF_REMOVED_STATUSES)})
+      `SELECT p.id, p.title, p.listing_type, p.district, p.area, p.address, p.price, p.status, p.lister_phone,
+              COALESCE(p.extra_fields->>'source_url', p.extra_fields->>'source_post_url', '') AS source_url,
+              p.created_at
+       FROM properties p
+       WHERE p.id <> $1
+         AND LOWER(COALESCE(p.status, '')) NOT IN (${sqlList(STAFF_REMOVED_STATUSES)})
+         AND LOWER(COALESCE(p.moderation_stage, '')) NOT IN (${sqlList(STAFF_REMOVED_STATUSES)})
+         AND NOT ${sourceQualitySuppressedSql('p')}
          AND (
-           (COALESCE($2::text, '') <> '' AND lister_phone = $2)
-           OR LOWER(COALESCE(title, '')) = LOWER(COALESCE($3::text, ''))
+           (COALESCE($2::text, '') <> '' AND p.lister_phone = $2)
+           OR LOWER(COALESCE(p.title, '')) = LOWER(COALESCE($3::text, ''))
            OR (
              COALESCE($4::text, '') <> ''
-             AND COALESCE(extra_fields->>'source_url', extra_fields->>'source_post_url', '') = $4
+             AND COALESCE(p.extra_fields->>'source_url', p.extra_fields->>'source_post_url', '') = $4
            )
            OR (
              COALESCE($5::text, '') <> ''
              AND COALESCE($6::text, '') <> ''
-             AND LOWER(COALESCE(area, '')) = LOWER($5)
-             AND district = $6
-             AND COALESCE(price, 0) = COALESCE($7::bigint, 0)
+             AND LOWER(COALESCE(p.area, '')) = LOWER($5)
+             AND p.district = $6
+             AND COALESCE(p.price, 0) = COALESCE($7::bigint, 0)
            )
          )
-       ORDER BY created_at DESC
+       ORDER BY p.created_at DESC
        LIMIT 20`,
       [
         property.id,

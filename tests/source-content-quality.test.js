@@ -32,12 +32,26 @@ async function run() {
   });
   assert.strictEqual(sameblood.suppressed, true, 'sameblood construction cost video should be suppressed');
 
+  const samebloodPlotSize = sourceQualitySuppressionForRecord({
+    title: 'How big is your 50ft by 100ft Plot of land?',
+    source_name: 'sameblood Media',
+    description: 'Educational plot-size explainer, not a property for sale',
+  });
+  assert.strictEqual(samebloodPlotSize.suppressed, true, 'sameblood plot-size explainer should be suppressed');
+
   const entebbeSale = sourceQualitySuppressionForRecord({
     title: 'What 380m ugx gets you on Entebbe rd',
     source_name: 'UGANDA YAFFEE PROPERTIES',
     description: 'A house showcase for sale on Entebbe Road, UGX 380M',
   });
   assert.strictEqual(entebbeSale.suppressed, false, 'real price/location listing should remain reviewable');
+
+  const kasangatiLand = sourceQualitySuppressionForRecord({
+    title: 'Kasangati Mawule on Half an Acre at 450m ugx very Negotiable',
+    source_name: 'UGANDA YAFFEE PROPERTIES',
+    description: 'Land for sale around Kasangati, Wakiso',
+  });
+  assert.strictEqual(kasangatiLand.suppressed, false, 'specific priced land listing should remain reviewable');
 
   const kiwatuleLand = sourceQualitySuppressionForRecord({
     title: 'SIX PLOTS IN KIWATULE UGX 250M',
@@ -85,7 +99,10 @@ async function run() {
 
   const sql = sourceQualitySuppressedSql('p');
   assert(sql.includes('building[[:space:]]+permit'), 'SQL suppression should include building permit keyword');
+  assert(sql.includes('how[[:space:]]+big[[:space:]]+is'), 'SQL suppression should include plot-size explainer keyword');
   assert(sql.includes('sameblood'), 'SQL suppression should include known source keyword');
+  assert(!sql.includes('source_text'), 'staff dashboard SQL should not scan large source_text blobs');
+  assert(!sql.includes('source_visual_text'), 'staff dashboard SQL should not scan large source_visual_text blobs');
 }
 
 run()

@@ -1,7 +1,7 @@
 'use strict';
 
 const NON_LISTING_SOURCE_PATTERN = /\b(?:dawinci|da\s*winci|sameblood)\b/i;
-const HARD_NON_LISTING_PATTERN = /\b(?:how\s+to\s+apply|building\s+permit|building\s+regulations?|bio(?:de)?g[ie]ster|biodigester|plumbing|pipe\s*work|pipework|material\s+costs?|cost\s+breakdown|roofing\s+materials?|perimeter\s+fence|land\s+title\s+transfer|documents?\s+needed|penthouse\s+design|house\s+design|house\s+plan|construction\s+(?:tips?|ideas?|costs?|materials?))\b/i;
+const HARD_NON_LISTING_PATTERN = /\b(?:how\s+to\s+apply|how\s+big\s+is|building\s+permit|building\s+regulations?|bio(?:de)?g[ie]ster|biodigester|plumbing|pipe\s*work|pipework|material\s+costs?|cost\s+breakdown|roofing\s+materials?|perimeter\s+fence|land\s+title\s+transfer|documents?\s+needed|penthouse\s+design|house\s+design|house\s+plan|(?:plot|land)\s+(?:sizes?|dimensions?|measurements?)|(?:plot|land)\s+measurements?|\d+\s*ft\s*(?:by|x)\s*\d+\s*ft|construction\s+(?:tips?|ideas?|costs?|materials?))\b/i;
 const SOURCE_BOUND_NON_LISTING_PATTERN = /\b(?:house\s+reveal|building\s+nice\s+houses?|design\s+and\s+construction|construction\s+clip|construction\s+video|building\s+process|site\s+visit)\b/i;
 const EXPLICIT_LISTING_INTENT_PATTERN = /\b(?:for\s+sale|on\s+sale|for\s+rent|to\s+rent|to\s+let|rent\s+to\s+own|rent-to-own|available\s+(?:for\s+)?(?:sale|rent|lease)|selling|asking\s+price|guide\s+price|price\s*:|land\s+for\s+sale|plots?\s+for\s+sale|house\s+for\s+sale|home\s+for\s+sale|apartment\s+for\s+sale|apartment\s+for\s+rent|office\s+space\s+for\s+rent|shop\s+for\s+rent|student\s+(?:room|hostel|accommodation))\b/i;
 const MONEY_SIGNAL_PATTERN = /\b(?:ugx|ush|shs?|usd|\$)\s*[\d,.]+|[\d,.]+\s*(?:m|mn|million|b|bn|billion)\b/i;
@@ -121,20 +121,20 @@ function sourceQualitySuppressionForRecord(record = {}) {
 
 function sqlTextExpression(alias = 'p') {
   const prefix = alias ? `${alias}.` : '';
+  // Keep staff dashboard SQL cheap. The richer JS classifier still inspects long
+  // source/OCR text at import time, but live queue counts must avoid scanning
+  // large JSON text fields for every pending row on every dashboard hydrate.
   return `CONCAT_WS(' ',
     COALESCE(${prefix}title, ''),
-    COALESCE(${prefix}description, ''),
     COALESCE(${prefix}lister_name, ''),
     COALESCE(${prefix}source, ''),
     COALESCE(${prefix}listed_via, ''),
     COALESCE(${prefix}extra_fields->>'source_name', ''),
     COALESCE(${prefix}extra_fields->>'source_agent_name', ''),
     COALESCE(${prefix}extra_fields->>'public_display_name', ''),
+    COALESCE(${prefix}extra_fields->>'youtube_channel_title', ''),
     COALESCE(${prefix}extra_fields->>'source_title', ''),
     COALESCE(${prefix}extra_fields->>'source_caption', ''),
-    COALESCE(${prefix}extra_fields->>'source_description', ''),
-    COALESCE(${prefix}extra_fields->>'source_text', ''),
-    COALESCE(${prefix}extra_fields->>'source_visual_text', ''),
     COALESCE(${prefix}extra_fields->>'youtube_source_title', '')
   )`;
 }
@@ -147,14 +147,15 @@ function sqlSourceExpression(alias = 'p') {
     COALESCE(${prefix}listed_via, ''),
     COALESCE(${prefix}extra_fields->>'source_name', ''),
     COALESCE(${prefix}extra_fields->>'source_agent_name', ''),
-    COALESCE(${prefix}extra_fields->>'public_display_name', '')
+    COALESCE(${prefix}extra_fields->>'public_display_name', ''),
+    COALESCE(${prefix}extra_fields->>'youtube_channel_title', '')
   )`;
 }
 
 function sourceQualitySuppressedSql(alias = 'p') {
   const text = sqlTextExpression(alias);
   const source = sqlSourceExpression(alias);
-  const hard = "(how[[:space:]]+to[[:space:]]+apply|building[[:space:]]+permit|building[[:space:]]+regulations?|bio(de)?g[ie]ster|biodigester|plumbing|pipe[[:space:]]*work|pipework|material[[:space:]]+costs?|cost[[:space:]]+breakdown|roofing[[:space:]]+materials?|perimeter[[:space:]]+fence|land[[:space:]]+title[[:space:]]+transfer|documents?[[:space:]]+needed|penthouse[[:space:]]+design|house[[:space:]]+design|house[[:space:]]+plan|construction[[:space:]]+(tips?|ideas?|costs?|materials?))";
+  const hard = "(how[[:space:]]+to[[:space:]]+apply|how[[:space:]]+big[[:space:]]+is|building[[:space:]]+permit|building[[:space:]]+regulations?|bio(de)?g[ie]ster|biodigester|plumbing|pipe[[:space:]]*work|pipework|material[[:space:]]+costs?|cost[[:space:]]+breakdown|roofing[[:space:]]+materials?|perimeter[[:space:]]+fence|land[[:space:]]+title[[:space:]]+transfer|documents?[[:space:]]+needed|penthouse[[:space:]]+design|house[[:space:]]+design|house[[:space:]]+plan|(plot|land)[[:space:]]+(size|sizes|dimensions?|measurements?)|(plot|land)[[:space:]]+measurements?|[0-9]+[[:space:]]*ft[[:space:]]*(by|x)[[:space:]]*[0-9]+[[:space:]]*ft|construction[[:space:]]+(tips?|ideas?|costs?|materials?))";
   const sourceBound = "(house[[:space:]]+reveal|building[[:space:]]+nice[[:space:]]+houses?|design[[:space:]]+and[[:space:]]+construction|construction[[:space:]]+clip|construction[[:space:]]+video|building[[:space:]]+process|site[[:space:]]+visit)";
   const explicit = "(for[[:space:]]+sale|on[[:space:]]+sale|for[[:space:]]+rent|to[[:space:]]+rent|to[[:space:]]+let|rent[[:space:]]+to[[:space:]]+own|rent-to-own|available[[:space:]]+(for[[:space:]]+)?(sale|rent|lease)|selling|asking[[:space:]]+price|guide[[:space:]]+price|price[[:space:]]*:|land[[:space:]]+for[[:space:]]+sale|plots?[[:space:]]+for[[:space:]]+sale|house[[:space:]]+for[[:space:]]+sale|home[[:space:]]+for[[:space:]]+sale|apartment[[:space:]]+for[[:space:]]+sale|apartment[[:space:]]+for[[:space:]]+rent|office[[:space:]]+space[[:space:]]+for[[:space:]]+rent|shop[[:space:]]+for[[:space:]]+rent|student[[:space:]]+(room|hostel|accommodation))";
   const knownSource = "(dawinci|da[[:space:]]*winci|sameblood)";
