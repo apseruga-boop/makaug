@@ -42,8 +42,8 @@ const OPEN_AD_STATUSES = ['new', 'contacted', 'proposal_sent'];
 const STAFF_CONTACT_EXPORT_LIMIT = 50;
 const STAFF_DASHBOARD_QUEUE_LIMIT = 12;
 const STAFF_DASHBOARD_PANEL_LIMIT = 8;
-const STAFF_DASHBOARD_QUEUE_SCAN_LIMIT = STAFF_DASHBOARD_QUEUE_LIMIT * 10;
-const STAFF_DASHBOARD_PANEL_SCAN_LIMIT = STAFF_DASHBOARD_PANEL_LIMIT * 10;
+const STAFF_DASHBOARD_QUEUE_SCAN_LIMIT = STAFF_DASHBOARD_QUEUE_LIMIT * 20;
+const STAFF_DASHBOARD_PANEL_SCAN_LIMIT = STAFF_DASHBOARD_PANEL_LIMIT * 20;
 const STAFF_EXACT_SOCIAL_IMPORT_LIMIT = 500;
 const STAFF_FAST_DASHBOARD_CACHE_TTL_MS = Math.max(5000, parseInt(process.env.STAFF_FAST_DASHBOARD_CACHE_TTL_MS || '60000', 10) || 60000);
 const EXACT_SOCIAL_URL_PATTERN = /https?:\/\/[^\s<>"']*(?:tiktok\.com\/@[^/\s?#]+\/video\/\d+|youtube\.com\/watch\?[^ \n\r\t<>"']*v=|youtube\.com\/shorts\/|youtu\.be\/|instagram\.com\/(?:p|reel|tv)\/|facebook\.com\/.+\/(?:posts|videos|reel)|fb\.watch\/|(?:x|twitter)\.com\/[^/\s?#]+\/status\/\d+)/ig;
@@ -1028,6 +1028,82 @@ async function dashboardPayload(req) {
   };
 }
 
+async function dashboardPanelsPayload(req) {
+  const queueLimit = STAFF_DASHBOARD_QUEUE_LIMIT;
+  const panelLimit = STAFF_DASHBOARD_PANEL_LIMIT;
+  const [reviewRows, brokerReviewRows, sourceQueueRows] = await Promise.all([
+    safeRows(
+      `SELECT p.id, p.title, p.description, p.listing_type, p.property_type, p.district, p.area, p.address,
+              p.price, p.price_period, p.bedrooms, p.bathrooms, p.title_type,
+              p.status, p.moderation_stage, p.moderation_reason, p.created_at, p.updated_at,
+              p.inquiry_reference, p.lister_name, p.lister_phone, p.lister_email, p.source, p.listed_via,
+              p.lister_type, p.agent_id, p.extra_fields,
+              COALESCE(p.extra_fields->>'source_url', p.extra_fields->>'source_post_url', p.extra_fields->>'tiktok_url', p.extra_fields->>'youtube_url', p.extra_fields->>'video_url') AS source_url,
+              COALESCE(p.extra_fields->>'source_platform', p.extra_fields->>'source_badge', p.source, p.listed_via) AS source_platform,
+              0::int AS duplicate_count,
+              img.url AS primary_image_url
+       FROM properties p
+       LEFT JOIN LATERAL (
+         SELECT url FROM property_images i WHERE i.property_id = p.id ORDER BY i.is_primary DESC, i.sort_order ASC, i.created_at ASC LIMIT 1
+       ) img ON true
+       WHERE ${pendingReviewWhere('p')}
+         AND NOT ${sourceQualitySuppressedFlagSql('p')}
+       ORDER BY COALESCE(p.updated_at, p.created_at) DESC
+       LIMIT $1`,
+      [STAFF_DASHBOARD_QUEUE_SCAN_LIMIT]
+    ),
+    safeRows(
+      `SELECT p.id, p.title, p.description, p.listing_type, p.property_type, p.district, p.area, p.address,
+              p.price, p.price_period, p.bedrooms, p.bathrooms, p.title_type,
+              p.status, p.moderation_stage, p.moderation_reason, p.created_at, p.updated_at,
+              p.inquiry_reference, p.lister_name, p.lister_phone, p.lister_email, p.source, p.listed_via,
+              p.lister_type, p.agent_id, p.extra_fields,
+              COALESCE(p.extra_fields->>'source_url', p.extra_fields->>'source_post_url', p.extra_fields->>'tiktok_url', p.extra_fields->>'youtube_url', p.extra_fields->>'video_url') AS source_url,
+              COALESCE(p.extra_fields->>'source_platform', p.extra_fields->>'source_badge', p.source, p.listed_via) AS source_platform,
+              0::int AS duplicate_count,
+              img.url AS primary_image_url
+       FROM properties p
+       LEFT JOIN LATERAL (
+         SELECT url FROM property_images i WHERE i.property_id = p.id ORDER BY i.is_primary DESC, i.sort_order ASC, i.created_at ASC LIMIT 1
+       ) img ON true
+       WHERE ${pendingReviewWhere('p')}
+         AND NOT ${sourceQualitySuppressedFlagSql('p')}
+         AND ${brokerReviewWhere('p')}
+       ORDER BY COALESCE(p.updated_at, p.created_at) DESC
+       LIMIT $1`,
+      [STAFF_DASHBOARD_QUEUE_SCAN_LIMIT]
+    ),
+    safeRows(
+      `SELECT p.id, p.title, p.area, p.district, p.status, p.updated_at,
+              COALESCE(p.extra_fields->>'source_platform', p.source, p.listed_via) AS platform,
+              COALESCE(p.extra_fields->>'source_url', p.extra_fields->>'source_post_url', p.extra_fields->>'youtube_url', p.extra_fields->>'tiktok_url') AS source_url,
+              p.lister_phone,
+              COALESCE(p.extra_fields->>'source_name', p.lister_name, 'Found online') AS source_name,
+              p.extra_fields
+       FROM properties p
+       WHERE ${pendingReviewWhere('p')}
+         AND NOT ${sourceQualitySuppressedFlagSql('p')}
+         AND (
+           COALESCE(p.extra_fields->>'found_online', p.extra_fields->>'found_online_candidate', p.extra_fields->>'social_search_candidate', '') ~* '^(true|1|yes)$'
+           OR COALESCE(p.extra_fields->>'source_url', p.extra_fields->>'source_post_url', p.extra_fields->>'youtube_url', p.extra_fields->>'tiktok_url', '') <> ''
+         )
+       ORDER BY COALESCE(p.updated_at, p.created_at) DESC
+       LIMIT $1`,
+      [STAFF_DASHBOARD_PANEL_SCAN_LIMIT]
+    )
+  ]);
+
+  return {
+    staff: publicStaffUser(req.userAuth),
+    panel_payload: true,
+    review_queue: staffActiveReviewRows(reviewRows, queueLimit),
+    broker_review_queue: staffActiveReviewRows(brokerReviewRows, queueLimit),
+    source_intake: {
+      queued_found_online: staffActiveReviewRows(sourceQueueRows, panelLimit)
+    }
+  };
+}
+
 function normalizeStaffListingPatch(existing = {}, patch = {}) {
   const normalized = safeJsonObject(patch, {});
   if (!Object.prototype.hasOwnProperty.call(normalized, 'listing_type')) {
@@ -1576,7 +1652,10 @@ router.get('/dashboard', async (req, res, next) => {
     logStaffActivity(req, 'staff_dashboard_opened', { metadata: { role: req.userAuth?.role } })
       .catch((error) => logger.warn('Staff dashboard activity log failed', { message: error.message }));
     const fast = boolLike(req.query?.fast || req.query?.light);
-    return res.json({ ok: true, data: fast ? await dashboardFastPayload(req) : await dashboardPayload(req) });
+    const panels = boolLike(req.query?.panels);
+    if (fast) return res.json({ ok: true, data: await dashboardFastPayload(req) });
+    if (panels) return res.json({ ok: true, data: await dashboardPanelsPayload(req) });
+    return res.json({ ok: true, data: await dashboardPayload(req) });
   } catch (error) {
     return next(error);
   }

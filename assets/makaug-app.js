@@ -10243,6 +10243,32 @@ function renderStaffDeferredPanelLoading() {
   });
 }
 
+function mergeStaffDashboardPanelData(base = {}, panels = {}) {
+  if (!panels?.panel_payload) return panels || {};
+  return {
+    ...(base || {}),
+    ...panels,
+    summary: {
+      ...(base?.summary || {}),
+      ...(panels.summary || {})
+    },
+    source_intake: {
+      ...(base?.source_intake || {}),
+      ...(panels.source_intake || {})
+    },
+    bank_leads: {
+      ...(base?.bank_leads || {}),
+      ...(panels.bank_leads || {})
+    },
+    payments: {
+      ...(base?.payments || {}),
+      ...(panels.payments || {})
+    },
+    partial: false,
+    panel_payload: false
+  };
+}
+
 function applyStaffDashboardData(data = {}, user = {}) {
   staffDashboardData = data;
   staffDashboardHasLiveData = true;
@@ -10288,7 +10314,7 @@ async function hydrateStaffDashboardPanels(endpoint = "/api/staff/dashboard?pane
     const sameUser = tokenAtStart === (authState?.token || "")
       && userIdAtStart === String(authState?.user?.id || authState?.user?.email || authState?.user?.phone || "");
     if (!sameUser || seq !== staffDashboardPanelHydrationSeq) return;
-    applyStaffDashboardData(res?.data || {}, authState?.user || {});
+    applyStaffDashboardData(mergeStaffDashboardPanelData(staffDashboardData, res?.data || {}), authState?.user || {});
   } catch (error) {
     const sameUser = tokenAtStart === (authState?.token || "")
       && userIdAtStart === String(authState?.user?.id || authState?.user?.email || authState?.user?.phone || "");
