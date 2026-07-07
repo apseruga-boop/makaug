@@ -165,6 +165,8 @@ const publicI18nCookiePersistenceVersion = 'public-i18n-cookie-persistence-20260
 const publicI18nAuthLanguageGuardVersion = 'public-i18n-auth-language-guard-20260707';
 const publicSearchAreaHandoffVersion = 'public-search-area-handoff-20260707';
 const publicSearchNormalizeHelperVersion = 'public-search-normalize-helper-20260707';
+const publicSearchRouteBackendResultsVersion = 'public-search-route-backend-results-20260707';
+const publicHomeSearchBackendResultsVersion = 'public-home-search-backend-results-20260707';
 const publicAppVersionSuffixes = [
   captureHelperUsabilityVersion,
   studentNearestUniversityVersion,
@@ -199,7 +201,9 @@ const publicAppVersionSuffixes = [
   publicI18nCookiePersistenceVersion,
   publicI18nAuthLanguageGuardVersion,
   publicSearchAreaHandoffVersion,
-  publicSearchNormalizeHelperVersion
+  publicSearchNormalizeHelperVersion,
+  publicSearchRouteBackendResultsVersion,
+  publicHomeSearchBackendResultsVersion
 ];
 let cachedIndexHtml = null;
 const publicHtmlCache = new Map();

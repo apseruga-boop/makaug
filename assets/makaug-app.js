@@ -30589,12 +30589,13 @@ function routeSearchHandoffPayload(page) {
   };
   const hasFilters = Object.values(filters).some(Boolean);
   if (!query && !area && !hasFilters) return null;
+  const radiusMilesParam = normalizeInput(qs.get("radiusMiles") || qs.get("radius_miles") || qs.get("radius") || "");
   return {
     page: targetPage,
     query: query || area,
     area,
     filters,
-    radiusMiles: normalizeInput(qs.get("radiusMiles") || qs.get("radius_miles") || qs.get("radius") || "") || DEFAULT_NEAR_ME_RADIUS_MI,
+    radiusMiles: radiusMilesParam || null,
     source: "route_query"
   };
 }
@@ -30634,7 +30635,7 @@ function applyHeroSearchHandoff(page) {
   const payload = consumeHeroSearchHandoff(page) || routeSearchHandoffPayload(page);
   if (!payload) return false;
   updateHeroSearchRoute(page, payload, payload.source || "hero_search_handoff");
-  const radiusValue = String(payload.radiusMiles || payload.radius || DEFAULT_NEAR_ME_RADIUS_MI);
+  const radiusValue = payload.radiusMiles || payload.radius ? String(payload.radiusMiles || payload.radius) : "";
   if (payload.nearState) {
     nearMeSearchState[page] = {
       ...payload.nearState,
@@ -30651,7 +30652,7 @@ function applyHeroSearchHandoff(page) {
   if (page === "rent") {
     setValue("rent-location-f", payload.query);
     setValue("rent-district-f", payload.area);
-    setValue("rent-radius-f", radiusValue);
+    if (radiusValue) setValue("rent-radius-f", radiusValue);
     setValue("rent-min-beds-f", /^\d+$/.test(String(filters.bedrooms || "")) ? filters.bedrooms : payload.context);
     setValue("rent-min-price-f", filters.minPrice ? String(filters.minPrice) : "");
     setValue("rent-price-f", filters.maxPrice ? String(filters.maxPrice) : "");
@@ -30660,14 +30661,14 @@ function applyHeroSearchHandoff(page) {
   } else if (page === "students") {
     setValue("student-q-f", payload.query);
     setValue("student-uni-f", payload.area);
-    setValue("student-radius-f", radiusValue);
+    if (radiusValue) setValue("student-radius-f", radiusValue);
     setValue("student-type-quick-f", filters.propertyType || payload.context);
     setValue("student-budget-f", filters.maxPrice ? String(filters.maxPrice) : "");
     filterStudents();
   } else if (page === "commercial") {
     setValue("commercial-q-f", payload.query);
     setValue("commercial-district-f", payload.area);
-    setValue("commercial-radius-f", radiusValue);
+    if (radiusValue) setValue("commercial-radius-f", radiusValue);
     setValue("commercial-type-f", filters.propertyType || payload.context);
     setValue("commercial-min-price-f", filters.minPrice ? String(filters.minPrice) : "");
     setValue("commercial-price-f", filters.maxPrice ? String(filters.maxPrice) : "");
@@ -30675,7 +30676,7 @@ function applyHeroSearchHandoff(page) {
   } else if (page === "land") {
     setValue("land-q-f", payload.query);
     setValue("land-district-f", payload.area);
-    setValue("land-radius-f", radiusValue);
+    if (radiusValue) setValue("land-radius-f", radiusValue);
     setValue("land-type-f", filters.propertyType || payload.context);
     setValue("land-min-price-f", filters.minPrice ? String(filters.minPrice) : "");
     setValue("land-price-f", filters.maxPrice ? String(filters.maxPrice) : "");
@@ -30683,7 +30684,7 @@ function applyHeroSearchHandoff(page) {
   } else if (page === "sale") {
     setValue("sale-location-f", payload.query);
     setValue("sale-district-f", payload.area);
-    setValue("sale-radius-f", radiusValue);
+    if (radiusValue) setValue("sale-radius-f", radiusValue);
     setValue("sale-min-beds-f", /^\d+$/.test(String(filters.bedrooms || "")) ? filters.bedrooms : payload.context);
     setValue("sale-min-price-f", filters.minPrice ? String(filters.minPrice) : "");
     setValue("sale-price-f", filters.maxPrice ? String(filters.maxPrice) : "");
@@ -34128,6 +34129,49 @@ function publicInventoryCategoryPath(category) {
   return "";
 }
 
+function publicInventoryRouteSearchPath(category) {
+  const page = category === "student" ? "students" : normalizePageKey(category);
+  const payload = routeSearchHandoffPayload(page);
+  const config = sectionSearchConfigFor(page);
+  if (!payload || !config) return "";
+  const query = normalizeInput(payload.query || payload.area || "");
+  const area = normalizeInput(payload.area || "");
+  const filters = payload.filters || {};
+  const hasSearch = Boolean(query || area || Object.values(filters).some(Boolean));
+  if (!hasSearch) return "";
+  const params = new URLSearchParams();
+  params.set("status", "approved");
+  params.set("public_only", "1");
+  if (config.backendCategory === "students") {
+    params.set("student_portal", "1");
+  } else {
+    params.set("listing_type", config.backendCategory);
+  }
+  if (query) params.set("query", query);
+  if (area && area !== query) params.set(page === "students" ? "studentCampus" : "area", area);
+  if (filters.propertyType) params.set("property_type", filters.propertyType);
+  if (filters.minPrice) params.set("min_price", String(filters.minPrice));
+  if (filters.maxPrice) params.set("max_price", String(filters.maxPrice));
+  if (filters.bedrooms) params.set("bedrooms", String(filters.bedrooms));
+  if (filters.amenities) params.set("amenities", String(filters.amenities));
+  if (filters.commercialType) params.set("commercial_type", String(filters.commercialType));
+  if (filters.landTitleType) params.set("land_title_type", String(filters.landTitleType));
+  return `/api/properties/search?${params.toString()}`;
+}
+
+function hydrateVisibleRouteSearchResults(source = "route_search_backend_results") {
+  const activeCategory = activePublicInventoryCategoryFromRoute();
+  if (!activeCategory || !publicInventoryRouteSearchPath(activeCategory)) return false;
+  refreshActivePublicInventoryCategoryFromApi({ silent: true })
+    .then((loaded) => {
+      if (loaded && activeCategory === activePublicInventoryCategoryFromRoute()) {
+        syncActiveRouteSearchHandoff(source);
+      }
+    })
+    .catch((error) => console.warn("Route search hydration failed", error));
+  return true;
+}
+
 function exactPublicPaginationTotal(response) {
   if (response?.pagination?.approximate) return 0;
   const total = Number(response?.pagination?.total || 0) || 0;
@@ -34167,7 +34211,8 @@ async function fetchPublicCategoryRows(category, totalCount = 0, options = {}) {
 async function refreshActivePublicInventoryCategoryFromApi({ silent = true } = {}) {
   const activeCategory = activePublicInventoryCategoryFromRoute();
   if (!activeCategory) return false;
-  const activeCategoryPath = publicInventoryCategoryPath(activeCategory);
+  const activeRouteSearchPath = publicInventoryRouteSearchPath(activeCategory);
+  const activeCategoryPath = activeRouteSearchPath || publicInventoryCategoryPath(activeCategory);
   if (!activeCategoryPath) return false;
   if (publicActiveCategoryHydrationPromises.has(activeCategory)) {
     return publicActiveCategoryHydrationPromises.get(activeCategory);
@@ -34182,6 +34227,7 @@ async function refreshActivePublicInventoryCategoryFromApi({ silent = true } = {
       if (firstCategoryRows.length && activeCategory === activePublicInventoryCategoryFromRoute()) {
         applyPublicRowsForUi(firstCategoryRows, firstCategoryResponse);
         renderAll();
+        syncActiveRouteSearchHandoff(activeRouteSearchPath ? "active_route_search_first_page" : "active_category_first_page");
       }
       const stats = publicListingsApiStats || await fetchPublicOpportunityStatsFromApi()
         .then((nextStats) => {
@@ -34194,6 +34240,26 @@ async function refreshActivePublicInventoryCategoryFromApi({ silent = true } = {
         });
       const firstCategoryTotal = exactPublicPaginationTotal(firstCategoryResponse);
       const categoryTotal = firstCategoryTotal || (publicOpportunityStatForCategory(activeCategory) ?? stats?.[activeCategory] ?? 0);
+      if (activeRouteSearchPath) {
+        const expectedPages = Math.ceil(Math.max(0, Number(categoryTotal) || 0) / PUBLIC_LISTINGS_BACKGROUND_PAGE_LIMIT) || 1;
+        const { rows: searchRows, firstResponse: searchFirstResponse } = await fetchPublicPaginatedRows(activeRouteSearchPath, {
+          limit: PUBLIC_LISTINGS_BACKGROUND_PAGE_LIMIT,
+          maxPages: Math.min(Math.max(expectedPages, 1), 12),
+          includeSummary: false,
+          onPage: ({ rows, response }) => {
+            if (activeCategory !== activePublicInventoryCategoryFromRoute()) return;
+            applyPublicRowsForUi(rows, response);
+            renderAll();
+            syncActiveRouteSearchHandoff("active_route_search_page");
+          }
+        });
+        if (searchRows.length && activeCategory === activePublicInventoryCategoryFromRoute()) {
+          applyPublicRowsForUi(searchRows, searchFirstResponse || firstCategoryResponse);
+          renderAll();
+          syncActiveRouteSearchHandoff("active_route_search_complete");
+        }
+        return searchRows.length > 0 || firstCategoryRows.length > 0;
+      }
       const { rows: categoryRows, firstResponse: categoryFirstResponse } = await fetchPublicCategoryRows(activeCategory, categoryTotal, {
         onPageRows: (pageRows, pageResponse) => {
           if (activeCategory !== activePublicInventoryCategoryFromRoute()) return;
@@ -34261,7 +34327,10 @@ async function refreshPublicListingsFromApi({ silent = true } = {}) {
         console.warn("Unable to refresh public opportunity summary", summaryError);
         return null;
       });
-    const firstPagePath = activeCategory ? publicInventoryCategoryPath(activeCategory) || "/api/properties?status=approved&public_only=1" : "/api/properties?status=approved&public_only=1";
+    const activeRouteSearchPath = activeCategory ? publicInventoryRouteSearchPath(activeCategory) : "";
+    const firstPagePath = activeCategory
+      ? activeRouteSearchPath || publicInventoryCategoryPath(activeCategory) || "/api/properties?status=approved&public_only=1"
+      : "/api/properties?status=approved&public_only=1";
     const firstPageRowsPromise = fetchPublicPaginatedRows(firstPagePath, {
       limit: PUBLIC_LISTINGS_FAST_PAGE_LIMIT,
       maxPages: 1,
@@ -34273,9 +34342,30 @@ async function refreshPublicListingsFromApi({ silent = true } = {}) {
     ] = await Promise.all([firstPageRowsPromise, summaryStatsPromise]);
     applyPublicRowsForUi(firstPageRows, firstPageResponse);
     renderAll();
+    if (activeRouteSearchPath) syncActiveRouteSearchHandoff("initial_route_search_first_page");
     const firstPageCategoryTotal = activeCategory ? exactPublicPaginationTotal(firstPageResponse) : 0;
     const categoryTotal = activeCategory ? firstPageCategoryTotal || (publicOpportunityStatForCategory(activeCategory) ?? summaryStats?.[activeCategory] ?? 0) : 0;
     if (activeCategory) {
+      if (activeRouteSearchPath) {
+        const expectedPages = Math.ceil(Math.max(0, Number(categoryTotal) || 0) / PUBLIC_LISTINGS_BACKGROUND_PAGE_LIMIT) || 1;
+        const { rows: searchRows, firstResponse: searchFirstResponse } = await fetchPublicPaginatedRows(activeRouteSearchPath, {
+          limit: PUBLIC_LISTINGS_BACKGROUND_PAGE_LIMIT,
+          maxPages: Math.min(Math.max(expectedPages, 1), 12),
+          includeSummary: false,
+          onPage: ({ rows, response }) => {
+            if (activeCategory !== activePublicInventoryCategoryFromRoute()) return;
+            applyPublicRowsForUi(rows, response);
+            renderAll();
+            syncActiveRouteSearchHandoff("initial_route_search_page");
+          }
+        });
+        if (searchRows.length && activeCategory === activePublicInventoryCategoryFromRoute()) {
+          applyPublicRowsForUi(searchRows, searchFirstResponse || firstPageResponse);
+          renderAll();
+          syncActiveRouteSearchHandoff("initial_route_search_complete");
+        }
+        return true;
+      }
       schedulePublicCategoryDeepHydration(activeCategory, categoryTotal);
       return true;
     }
@@ -35153,6 +35243,7 @@ function doSearch() {
     search_source: heroNearState ? "homepage_location_control" : "homepage_search",
     near_me: Boolean(heroNearState)
   });
+  hydrateVisibleRouteSearchResults("homepage_search_backend_results");
 }
 
 function quickSearch(area) {

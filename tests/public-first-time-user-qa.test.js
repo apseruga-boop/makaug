@@ -38,12 +38,24 @@ assert(
 );
 
 assert(
+  indexHtml.includes("public-search-route-backend-results-20260707"),
+  "route-search backend results marker should be present to force the corrected public app bundle"
+);
+
+assert(
+  indexHtml.includes("public-home-search-backend-results-20260707"),
+  "homepage search backend results marker should be present to force the corrected public app bundle"
+);
+
+assert(
   serverJs.includes("publicI18nDetailPersistenceVersion")
     && serverJs.includes("publicI18nStartupRaceFixVersion")
     && serverJs.includes("publicI18nCookiePersistenceVersion")
     && serverJs.includes("publicI18nAuthLanguageGuardVersion")
     && serverJs.includes("publicSearchAreaHandoffVersion")
     && serverJs.includes("publicSearchNormalizeHelperVersion")
+    && serverJs.includes("publicSearchRouteBackendResultsVersion")
+    && serverJs.includes("publicHomeSearchBackendResultsVersion")
     && serverJs.includes("publicAppVersionSuffixes"),
   "server-rendered public routes should receive the same i18n app-version suffixes as the homepage"
 );
@@ -135,6 +147,23 @@ assert(
   appJs.includes("updateHeroSearchRoute(page, payload")
     && appJs.includes("applyHeroSearchHandoff(page)"),
   "route fragments should re-apply the durable search URL after hydration"
+);
+
+assert(
+  appJs.includes("function publicInventoryRouteSearchPath")
+    && appJs.includes("function hydrateVisibleRouteSearchResults")
+    && appJs.includes('return `/api/properties/search?${params.toString()}`')
+    && appJs.includes("activeRouteSearchPath || publicInventoryCategoryPath(activeCategory)")
+    && appJs.includes('syncActiveRouteSearchHandoff("initial_route_search_complete")')
+    && appJs.includes('hydrateVisibleRouteSearchResults("homepage_search_backend_results")'),
+  "direct category URLs with q/area params should hydrate from backend search results before showing an empty state"
+);
+
+assert(
+  appJs.includes('const radiusMilesParam = normalizeInput(qs.get("radiusMiles")')
+    && appJs.includes("radiusMiles: radiusMilesParam || null")
+    && appJs.includes('if (radiusValue) setValue("sale-radius-f", radiusValue);'),
+  "plain text route searches should not silently enable the default 10-mile radius filter"
 );
 
 console.log("public first-time-user QA regression checks passed");
