@@ -1296,7 +1296,7 @@ const I18N_UI = {
     brandSubtitle: "EBY'OBUGAGGA BY'ETTAKA",
     saved: "Byaterekedwa",
     signIn: "Yingira",
-    advertiseProperty: "List Property",
+    advertiseProperty: "Teka ekintu kyo",
     navSale: "Ebitundibwa",
     navRent: "Ebipangisibwa",
     navStudents: "Abayizi",
@@ -1306,97 +1306,97 @@ const I18N_UI = {
     navMortgage: "Noonya Mortgage",
     navAI: "Noonya AI Chatbot",
     navFraud: "Fraud",
-    heroBadge: "Pulatifoomu ya Property ey'obwereere mu Uganda",
+    heroBadge: "Pulatifoomu y'ebintu ey'obwereere mu Uganda",
     heroTitleHtml: "Noonya <span class=\"text-green-300\">maka</span> yo ennungi",
-    heroSubtitle: "Search engine ya property mu Uganda: amaka, ez'okupangisa, ettaka, rooms z'abayizi, n'ebizuuliddwa ku social media.",
+    heroSubtitle: "Enkola y'okunoonya ebintu mu Uganda: amaka, ez'okupangisa, ettaka, ebisenge by'abayizi, n'ebizuuliddwa ku social media.",
     heroRent: "Pangisa",
     heroBuy: "Gula",
     heroCommercial: "Busuubuzi",
     heroStudents: "Abayizi",
     heroLand: "Ettaka",
-    heroListFree: "Teka Property",
+    heroListFree: "Teka ekintu kyo",
     heroSearch: "Noonya",
     heroLocationLabel: "Ekifo",
     heroLocationHelper: "Okunoonya okusinziira ku kifo kukozesa mayiro 10 nga default.",
-    heroLocationFinding: "Tunoonya properties ezikuli okumpi...",
+    heroLocationFinding: "Tunoonya ebintu ebikuli okumpi...",
     heroLocationActive: "Ekifo kikozesebwa: tunoonya mu mayiro 10 okuva gy'oli.",
     heroLocationDenied: "Okukozesa ekifo kugaaniddwa. Noonya n'ekibuga, ekitundu oba landmark.",
     heroLocationUnavailable: "Tetuyinza kufuna kifo kyo. Noonya n'ekibuga, ekitundu oba landmark.",
     heroLocationOutside: "Olaga nga oli bweru wa Uganda. Londa ekitundu kya Uganda oba noonyereza Uganda yonna.",
-    heroPropertyType: "Ekika kya property",
+    heroPropertyType: "Ekika ky'ekintu",
     heroMinPrice: "Omuwendo ogutandika",
     heroMaxPrice: "Omuwendo ogusembayo",
     heroBedrooms: "Ebisenge",
-    heroFilters: "Filters",
+    heroFilters: "Ebisengejja",
     heroAny: "Kyonna",
-    heroBedroomStudio: "Studio",
+    heroBedroomStudio: "Ekisenge kya studio",
     heroTypeHouse: "Ennyumba",
-    heroTypeApartment: "Apartment",
-    heroTypeBungalow: "Bungalow",
-    heroTypeStudio: "Studio",
-    heroTypeRoom: "Room",
-    heroTypeHostel: "Hostel",
+    heroTypeApartment: "Apartimenti",
+    heroTypeBungalow: "Ennyumba ya bungalow",
+    heroTypeStudio: "Ekisenge kya studio",
+    heroTypeRoom: "Ekisenge",
+    heroTypeHostel: "Hostel y'abayizi",
     heroTypeLand: "Ettaka",
-    heroTypeCommercialSpace: "Commercial space",
-    heroTypeOffice: "Office",
-    heroTypeShop: "Shop",
-    heroTypeWarehouse: "Warehouse",
+    heroTypeCommercialSpace: "Ekifo ky'obusuubuzi",
+    heroTypeOffice: "Ofiisi",
+    heroTypeShop: "Dduuka",
+    heroTypeWarehouse: "Ggwanika",
     heroCommercialType: "Ekika kya commercial",
     heroLandType: "Ekika ky'ettaka",
     heroRoomType: "Ekika ky'ekisenge",
-    heroTypeRetail: "Retail",
-    heroTypeResidentialPlot: "Residential plot",
-    heroTypeCommercialPlot: "Commercial plot",
-    heroTypeAgriculturalLand: "Agricultural land",
-    heroTypeSelfContained: "Self-contained",
-    heroTypeSharedRoom: "Shared room",
-    heroBathrooms: "Bathrooms",
-    heroAmenities: "Amenities",
+    heroTypeRetail: "Dduuka lya retail",
+    heroTypeResidentialPlot: "Plot y'okubeeramu",
+    heroTypeCommercialPlot: "Plot y'obusuubuzi",
+    heroTypeAgriculturalLand: "Ettaka ly'obulimi",
+    heroTypeSelfContained: "Ekisenge ekirina byonna",
+    heroTypeSharedRoom: "Ekisenge ekigabanyizibwa",
+    heroBathrooms: "Ebinaabiro",
+    heroAmenities: "Ebiriwo",
     heroStudentAmenities: "Ebiriwo by'abayizi",
     heroCommercialFeatures: "Ebiriwo by'obusuubuzi",
     heroLandFeatures: "Ebiri ku ttaka",
-    heroAmenityParking: "Parking",
+    heroAmenityParking: "Aw'okupakinga",
     heroAmenityGuarded: "Obukuumi",
-    heroAmenityGarden: "Garden",
-    heroAmenityPool: "Swimming pool",
-    heroAmenityServantsQuarter: "Servants quarter",
-    heroAmenityTitleReady: "Titled land",
-    heroAmenityWater: "Water",
-    heroAmenityFurnished: "Furnished",
+    heroAmenityGarden: "Olusuku",
+    heroAmenityPool: "Ekidiba ky'okuwugiramu",
+    heroAmenityServantsQuarter: "Ekisenge ky'omuyambi",
+    heroAmenityTitleReady: "Ettaka eririna title",
+    heroAmenityWater: "Amazzi",
+    heroAmenityFurnished: "Kirina ebintu munda",
     heroAmenityWifi: "Wi-Fi",
-    heroAmenityPetFriendly: "Pet friendly",
-    heroAmenityMeals: "Meals",
-    heroAmenityStudyArea: "Study area",
-    heroAmenityNearCampus: "Near campus",
-    heroAmenityMainRoad: "Main road",
-    heroAmenityLoadingBay: "Loading bay",
-    heroAmenityPowerBackup: "Power backup",
-    heroAmenityStorefront: "Storefront",
-    heroAmenityRoadAccess: "Road access",
-    heroAmenityElectricityNearby: "Electricity nearby",
-    heroAmenityWaterNearby: "Water nearby",
-    heroAmenityBoundaryMarkers: "Boundary markers",
-    heroRadius: "Radius",
+    heroAmenityPetFriendly: "Ekkiriza ebisolo by'awaka",
+    heroAmenityMeals: "Emmere",
+    heroAmenityStudyArea: "Aw'okusomerwa",
+    heroAmenityNearCampus: "Kumpi ne campus",
+    heroAmenityMainRoad: "Oluguudo olukulu",
+    heroAmenityLoadingBay: "Aw'okutikkira",
+    heroAmenityPowerBackup: "Amasannyalaze agasigala",
+    heroAmenityStorefront: "Maaso g'edduuka",
+    heroAmenityRoadAccess: "Okutuuka ku kkubo",
+    heroAmenityElectricityNearby: "Amasannyalaze kumpi",
+    heroAmenityWaterNearby: "Amazzi kumpi",
+    heroAmenityBoundaryMarkers: "Obubonero bw'ensalo",
+    heroRadius: "Obugazi bw'okunoonya",
     heroSortNewest: "Sooka ebipya",
     heroSortPriceAsc: "Omuwendo mutono okudda ku munene",
     heroSortPriceDesc: "Omuwendo munene okudda ku mutono",
-    heroSortDistance: "Distance",
+    heroSortDistance: "Obuwanvu",
     heroApply: "Kozesa",
     heroClear: "Gyawo",
-    homeFeatured: "Property Ezitwaliridde",
+    homeFeatured: "Ebintu Ebitwaliridde",
     homeMap: "Noonya ku Maapu",
     homeBrokers: "Agents Abalondedwa",
-    pageSale: "Property Ezitundibwa",
-    pageRent: "Property Ezibapangisibwa",
+    pageSale: "Ebintu Ebitundibwa",
+    pageRent: "Ebintu Ebipangisibwa",
     pageStudents: "Noonya obulamu bw'abayizi obutuufu",
-    pageCommercial: "Property z'Obusuubuzi",
+    pageCommercial: "Ebintu by'Obusuubuzi",
     pageLand: "Ettaka Eritundibwa oba Okupangisibwa",
     pageBrokers: "Broker Abakakasiddwa",
     pageMortgage: "Noonya Mortgage",
     pageAI: "Noonya AI Chatbot yaffe",
-    pageList: "Teka Property",
+    pageList: "Teka ekintu kyo",
     pageAbout: "Ebikwata ku makaug",
-    pageSaved: "Property Zo Ezaterekedwa",
+    pageSaved: "Ebintu Byo Ebyaterekedwa",
     pageAccount: "Akaawunti Yange",
     langLabel: "Olulimi",
     langBanner: "Kozesa makaug mu nnimi 9",
@@ -1702,16 +1702,16 @@ const I18N_UI_HARDENING = {
     ctx2Beds: "Ebisenge 2+",
     ctx3Beds: "Ebisenge 3+",
     ctx4Beds: "Ebisenge 4+",
-    ctxPropertyType: "Ekika kya Property",
+    ctxPropertyType: "Ekika ky'ekintu",
     ctxOffice: "Ofiisi",
     ctxRetail: "Dduuka",
     ctxWarehouse: "Sitowa",
     ctxShop: "Kiyumba",
     ctxRoomType: "Ekika ky’Ekisenge",
     ctxHostel: "Hostel",
-    ctxApartment: "Apartment",
+    ctxApartment: "Apartimenti",
     ctxSharedRoom: "Egisangibwa awamu",
-    ctxStudio: "Studio",
+    ctxStudio: "Ekisenge kya studio",
     ctxLandType: "Ekika ky’Ettaka",
     ctxResidentialPlot: "Plot y’Okubeeramu",
     ctxCommercialPlot: "Plot y’Obusuubuzi",
@@ -2958,19 +2958,19 @@ const FOOTER_I18N = {
     copyright: `© 2026 ${publicBrand()}. All rights reserved.`
   },
   lg: {
-    brandCopy: `Pulatifoomu ya property ey'obwereere ddala mu Uganda. Teka listing, noonyereza, era okwatanagane okuyita ku website oba WhatsApp. Ebikka ku disitulikiti zonna 146.`,
+    brandCopy: `Pulatifoomu y'ebintu ey'obwereere ddala mu Uganda. Teka listing, noonyereza, era okwatanagane okuyita ku website oba WhatsApp. Ebikka ku disitulikiti zonna 146.`,
     whatsapp: "WhatsApp",
     email: "Email",
     chatWhatsapp: "Nyumya ku WhatsApp",
     location: "Kampala, Uganda",
-    properties: "Ebika bya property",
+    properties: "Ebika by'ebintu",
     sale: "Ennyumba ezitundibwa",
     rent: "Ennyumba ezipangisibwa",
     students: "Obutuuze bw'abayizi",
     commercial: "By'obusuubuzi",
     land: "Ettaka eritundibwa",
     mortgage: "Noonya mortgage",
-    list: "Teka property",
+    list: "Teka ekintu kyo",
     looking: "Onoonya ki...",
     company: "Kkampuni",
     about: "Ebikwata ku ffe",
@@ -5846,7 +5846,7 @@ function applyLanguageUI() {
   const heroLocationHelper = document.getElementById("hero-location-helper");
   if (heroLocationHelper) heroLocationHelper.textContent = getNearMeSearchState(currentTab) ? tr("heroLocationActive") : tr("heroLocationHelper");
   const heroLocationControl = document.getElementById("hero-location-control");
-  if (heroLocationControl) heroLocationControl.setAttribute("aria-label", "Use location search");
+  if (heroLocationControl) heroLocationControl.setAttribute("aria-label", tr("heroLocationLabel"));
   applyHeroSearchLanguageUI();
 
   setTextById("home-featured-title", tr("homeFeatured"));
@@ -5983,8 +5983,64 @@ function setCurrency(cur) {
   toast("Currency changed to " + cur);
 }
 
+function normalizeMakaugLanguageCode(lang) {
+  const code = String(lang || "en").trim().toLowerCase();
+  return getSupportedMakaugLanguageCode(code) || "en";
+}
+
+function getSupportedMakaugLanguageCode(lang) {
+  const code = String(lang || "").trim().toLowerCase();
+  return I18N_UI[code] ? code : "";
+}
+
+function getCurrentLanguageControlValue() {
+  const values = [
+    document.getElementById("lang-sel")?.value,
+    document.getElementById("lang-sel-spotlight")?.value,
+    document.getElementById("lp-review-lang-sel")?.value,
+    document.getElementById("auth-drawer-language")?.value
+  ].map((value) => normalizeMakaugLanguageCode(value));
+  return values.find((value) => value && value !== "en") || "";
+}
+
+function readMakaugLanguageCookie() {
+  try {
+    const match = String(document.cookie || "").match(/(?:^|; )makaug_lang=([^;]+)/);
+    return getSupportedMakaugLanguageCode(match ? decodeURIComponent(match[1]) : "");
+  } catch (error) {
+    return "";
+  }
+}
+
+function getStoredMakaugLanguagePreference() {
+  let storedLang = "";
+  try {
+    storedLang = localStorage.getItem("makaug_lang") || "";
+  } catch (error) {}
+  return getSupportedMakaugLanguageCode(storedLang) || readMakaugLanguageCookie();
+}
+
+function persistMakaugLanguagePreference(lang) {
+  const safeLang = normalizeMakaugLanguageCode(lang);
+  try { localStorage.setItem("makaug_lang", safeLang); } catch (error) {}
+  try {
+    document.cookie = `makaug_lang=${encodeURIComponent(safeLang)}; Max-Age=31536000; Path=/; SameSite=Lax`;
+  } catch (error) {}
+}
+
+function getStartupLanguagePreference(savedLang = "") {
+  return normalizeMakaugLanguageCode(
+    getCurrentLanguageControlValue()
+    || getSupportedMakaugLanguageCode(savedLang)
+    || getStoredMakaugLanguagePreference()
+    || document.documentElement.lang
+    || currentLang
+    || "en"
+  );
+}
+
 function setLang(lang, silent = false, rerender = true) {
-  currentLang = lang || "en";
+  currentLang = normalizeMakaugLanguageCode(lang);
   document.documentElement.lang = currentLang;
   document.documentElement.dir = currentLang === "ar" ? "rtl" : "ltr";
   const langSel = document.getElementById("lang-sel");
@@ -5993,7 +6049,7 @@ function setLang(lang, silent = false, rerender = true) {
   if (langSelSpotlight && langSelSpotlight.value !== currentLang) langSelSpotlight.value = currentLang;
   const langSelReview = document.getElementById("lp-review-lang-sel");
   if (langSelReview && langSelReview.value !== currentLang) langSelReview.value = currentLang;
-  try { localStorage.setItem("makaug_lang", currentLang); } catch (e) {}
+  persistMakaugLanguagePreference(currentLang);
 
   applyLanguageUI();
   document.querySelectorAll(".ad-wrap").forEach((el) => el.remove());
@@ -21526,7 +21582,13 @@ function persistAuthState(token, user) {
   try {
     localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authState));
   } catch (e) {}
-  if (resolvedUser?.preferred_language && resolvedUser.preferred_language !== currentLang) {
+  const storedLanguagePreference = getStoredMakaugLanguagePreference();
+  if (
+    resolvedUser?.preferred_language
+    && resolvedUser.preferred_language !== currentLang
+    && currentLang === "en"
+    && (!storedLanguagePreference || storedLanguagePreference === "en")
+  ) {
     setLang(resolvedUser.preferred_language, true, false);
   }
   loadSavedIdsForCurrentUser();
@@ -30340,11 +30402,31 @@ function setHeroFilterControlVisible(id, visible) {
   if (!visible) el.value = "";
 }
 
+function heroPlaceholderKey(tab = currentTab) {
+  if (tab === "rent") return "phRent";
+  if (tab === "students") return "phStudents";
+  if (tab === "commercial") return "phCommercial";
+  if (tab === "land") return "phLand";
+  return "phSale";
+}
+
+function setHeroControlLanguage(selectId, labelKey) {
+  const text = tr(labelKey);
+  const el = document.getElementById(selectId);
+  if (el) el.setAttribute("aria-label", text);
+  const label = document.querySelector(`label[for="${selectId}"]`);
+  if (label) label.textContent = text;
+}
+
 function applyHeroSearchLanguageUI() {
   const heroInput = document.getElementById("hero-q");
+  const heroPlaceholder = tr(heroPlaceholderKey(currentTab)) || "City, area, suburb or landmark";
   if (heroInput) {
-    heroInput.placeholder = tr(`ph${currentTab === "sale" ? "Sale" : currentTab === "rent" ? "Rent" : currentTab === "students" ? "Students" : currentTab === "commercial" ? "Commercial" : "Land"}`) || "City, area, suburb or landmark";
+    heroInput.placeholder = heroPlaceholder;
+    heroInput.setAttribute("aria-label", heroPlaceholder);
   }
+  const heroInputLabel = document.querySelector('label[for="hero-q"]');
+  if (heroInputLabel) heroInputLabel.textContent = heroPlaceholder;
   const config = heroCurrentFilterConfig();
   const typeOptions = HERO_PROPERTY_TYPE_OPTIONS_BY_TAB[currentTab] || HERO_PROPERTY_TYPE_OPTIONS;
   const priceOptions = HERO_PRICE_OPTIONS_BY_TAB[currentTab] || HERO_PRICE_OPTIONS_UGX;
@@ -30352,21 +30434,29 @@ function applyHeroSearchLanguageUI() {
   setHeroSelectOptions("hero-min-price-f", priceOptions, "heroMinPrice");
   setHeroSelectOptions("hero-max-price-f", priceOptions, "heroMaxPrice");
   setHeroSelectOptions("hero-bedrooms-f", HERO_BEDROOM_OPTIONS, "heroBedrooms");
+  setHeroControlLanguage("hero-property-type-f", config.propertyLabelKey || "heroPropertyType");
+  setHeroControlLanguage("hero-min-price-f", "heroMinPrice");
+  setHeroControlLanguage("hero-max-price-f", "heroMaxPrice");
+  setHeroControlLanguage("hero-bedrooms-f", "heroBedrooms");
   setHeroFilterControlVisible("hero-bedrooms-f", Boolean(config.showBedrooms));
   setTextById("hero-filters-label", tr("heroFilters"));
 
   const bathrooms = document.getElementById("hero-bathrooms-f");
   if (bathrooms?.options?.[0]) bathrooms.options[0].textContent = tr("heroBathrooms");
+  setHeroControlLanguage("hero-bathrooms-f", "heroBathrooms");
   setHeroFilterControlVisible("hero-bathrooms-f", Boolean(config.showBathrooms));
   const amenityOptions = HERO_AMENITY_OPTIONS_BY_TAB[config.amenityOptionsKey || currentTab] || HERO_AMENITY_OPTIONS_BY_TAB.sale;
   setHeroSelectOptions("hero-amenities-f", amenityOptions, "");
+  setHeroControlLanguage("hero-amenities-f", config.amenityLabelKey || "heroAmenities");
   const radius = document.getElementById("hero-radius-advanced-f");
   if (radius?.options?.[0]) radius.options[0].textContent = "10 miles";
+  setHeroControlLanguage("hero-radius-advanced-f", "heroRadius");
   const sort = document.getElementById("hero-sort-f");
   if (sort?.options?.[0]) sort.options[0].textContent = tr("heroSortNewest");
   if (sort?.options?.[1]) sort.options[1].textContent = tr("heroSortPriceAsc");
   if (sort?.options?.[2]) sort.options[2].textContent = tr("heroSortPriceDesc");
   if (sort?.options?.[3]) sort.options[3].textContent = tr("heroSortDistance");
+  setHeroControlLanguage("hero-sort-f", "heroSortNewest");
   setTextById("hero-apply-filters-btn", tr("heroApply"));
   setTextById("hero-clear-filters-btn", tr("heroClear"));
 }
@@ -30454,6 +30544,10 @@ function handleHeroSearchKeydown(event) {
 
 const HERO_SEARCH_HANDOFF_KEY = "makaug_hero_search_handoff";
 
+function normalizeInput(value = "") {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
 function saveHeroSearchHandoff(page, payload = {}) {
   try {
     sessionStorage.setItem(HERO_SEARCH_HANDOFF_KEY, JSON.stringify({
@@ -30505,9 +30599,41 @@ function routeSearchHandoffPayload(page) {
   };
 }
 
+function heroSearchRouteUrl(page, payload = {}) {
+  const targetPage = normalizePageKey(page);
+  const route = routeForPage(targetPage);
+  if (!route) return "";
+  const query = normalizeInput(payload.query || "");
+  const area = normalizeInput(payload.area || "");
+  const filters = payload.filters || {};
+  const params = new URLSearchParams();
+  if (query) params.set("q", query);
+  if (area) params.set(targetPage === "students" ? "campus" : "area", area);
+  if (payload.radiusMiles) params.set("radiusMiles", String(payload.radiusMiles));
+  if (filters.propertyType) params.set("property_type", filters.propertyType);
+  if (filters.minPrice) params.set("min_price", String(filters.minPrice));
+  if (filters.maxPrice) params.set("max_price", String(filters.maxPrice));
+  if (filters.bedrooms) params.set("bedrooms", String(filters.bedrooms));
+  const queryString = params.toString();
+  return `${route}${queryString ? `?${queryString}` : ""}`;
+}
+
+function updateHeroSearchRoute(page, payload = {}, source = "hero_search_route") {
+  const nextUrl = heroSearchRouteUrl(page, payload);
+  if (!nextUrl) return false;
+  if (currentPathWithQueryAndHash() === nextUrl) return true;
+  try {
+    window.history.replaceState({ page: normalizePageKey(page), source }, "", nextUrl);
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
 function applyHeroSearchHandoff(page) {
   const payload = consumeHeroSearchHandoff(page) || routeSearchHandoffPayload(page);
   if (!payload) return false;
+  updateHeroSearchRoute(page, payload, payload.source || "hero_search_handoff");
   const radiusValue = String(payload.radiusMiles || payload.radius || DEFAULT_NEAR_ME_RADIUS_MI);
   if (payload.nearState) {
     nearMeSearchState[page] = {
@@ -34882,7 +35008,7 @@ function doSearch() {
   const areaOrUniRaw = document.getElementById("hero-district").value || "";
   const areaOrUni = currentTab === "students"
     ? (areaOrUniRaw || (document.getElementById("hero-q").value || ""))
-    : (areaOrUniRaw || guessDistrictFromText(document.getElementById("hero-q").value || ""));
+    : areaOrUniRaw;
   const uniValue = areaOrUni.toLowerCase().trim();
   const heroRadiusValue = document.getElementById("hero-radius-f")?.value || "0";
   const heroRadiusKm = getRadiusKmFromSelect("hero-radius-f");
@@ -34933,6 +35059,13 @@ function doSearch() {
     } : null
   });
   showPage(destinationPage);
+  updateHeroSearchRoute(destinationPage, {
+    query: qRaw || "",
+    area: areaOrUni || "",
+    radius: routedRadiusValue,
+    radiusMiles: heroNearState?.radiusMiles || (parseFloat(heroRadiusValue || "0") || null),
+    filters: heroFilters
+  }, "homepage_search");
   if (currentTab === "rent") {
     const rq = document.getElementById("rent-location-f");
     const rd = document.getElementById("rent-district-f");
@@ -35046,7 +35179,7 @@ function filterListings(page) {
   if (page === "sale") {
     const q = (document.getElementById("sale-location-f")?.value || "").toLowerCase().trim();
     const dRaw = document.getElementById("sale-district-f")?.value || "";
-    const d = dRaw || guessDistrictFromText(q);
+    const d = dRaw;
     const radiusKm = getRadiusKmFromSelect("sale-radius-f");
     const nearState = getNearMeSearchState("sale");
     const minBeds = parseInt(document.getElementById("sale-min-beds-f")?.value || "0", 10);
@@ -35073,7 +35206,7 @@ function filterListings(page) {
   } else if (page === "rent") {
     const q = (document.getElementById("rent-location-f")?.value || "").toLowerCase().trim();
     const dRaw = document.getElementById("rent-district-f")?.value || "";
-    const d = dRaw || guessDistrictFromText(q);
+    const d = dRaw;
     const radiusKm = getRadiusKmFromSelect("rent-radius-f");
     const nearState = getNearMeSearchState("rent");
     const minBeds = parseInt(document.getElementById("rent-min-beds-f")?.value || "0", 10);
@@ -35108,7 +35241,7 @@ function filterListings(page) {
 function filterStudents() {
   const q = (document.getElementById("student-q-f")?.value || "").toLowerCase().trim();
   const dRaw = document.getElementById("student-district-f")?.value || "";
-  const d = dRaw || guessDistrictFromText(q);
+  const d = dRaw;
   const radiusKm = getRadiusKmFromSelect("student-radius-f");
   const nearState = getNearMeSearchState("students");
   const uni = (document.getElementById("student-uni-f")?.value || "").toLowerCase().trim();
@@ -35714,7 +35847,7 @@ const UG_AMENITY_POINTS = [
 
 const LISTING_LABEL_I18N = {
   lg: {
-    "Property Details": "Ebikwata ku Property",
+    "Property Details": "Ebikwata ku kintu",
     "Listing Type *": "Ekika ky'okutunda *",
     "Title *": "Omutwe *",
     "Best Contact Method *": "Engeri y'okukutuukako esinga obulungi *",
@@ -35743,14 +35876,14 @@ const LISTING_LABEL_I18N = {
     "Area / Neighbourhood *": "Ekitundu / Ekifo *",
     "Street / Road": "Ekkubo / Oluguudo",
     "Full Address": "Endagiriro yonna",
-    "Property Category *": "Ekika kya Property *",
+    "Property Category *": "Ekika ky'ekintu *",
     "Price (USh) *": "Omuwendo (USh) *",
     "Price Period": "Omuwendo (obudde)",
     "Description *": "Ennyonnyola *",
     "Amenities": "Ebiriwo",
     "Pin Property Location": "Laga Ekifo ku Maapu",
     "Find address or place": "Noonya endagiriro oba ekifo",
-    "Search for the nearest place, road, landmark, or area, then place the map pin where the property is located.": "Noonya ekifo, oluguudo, landmark, oba area esinga okumpi, oluvannyuma oteeke pin ya maapu awali property.",
+    "Search for the nearest place, road, landmark, or area, then place the map pin where the property is located.": "Noonya ekifo, oluguudo, landmark, oba area esinga okumpi, oluvannyuma oteeke pin ya maapu awali ekintu.",
     "Sync map to selected area": "Tereza maapu ku kitundu ekirondeddwa",
     "Continue to Photos →": "Genda ku Bifaananyi →",
     "Photos & Media": "Bifaananyi & Media",
@@ -35767,7 +35900,7 @@ const LISTING_LABEL_I18N = {
     "Email *": "Email *",
     "National ID Number (NIN) *": "Namba ya National ID (NIN) *",
     "Upload National ID Photo *": "Teeka Ekifaananyi kya National ID *",
-    "I confirm this pin matches my property location.": "Nkakasa nti pin eno y'ekifo kya property yange.",
+    "I confirm this pin matches my property location.": "Nkakasa nti pin eno y'ekifo ky'ekintu kyange.",
     "I confirm the typed NIN matches the uploaded National ID photo.": "Nkakasa nti NIN gyennawandise ekwatagana n'ekifaananyi kya National ID ekiteekeddwako.",
     "I agree to the Terms, Anti-Fraud Policy, and lawful data use for verification.": "Nkiriziganya n'Amateeka, Anti-Fraud Policy, n'okukozesa data mu mateeka okukakasa.",
     "I understand false or fraudulent listings may be escalated to police authorities.": "Ntegedde nti listing ey'obulimba esobola okutwalibwa eri poliisi.",
@@ -35785,13 +35918,13 @@ const LISTING_LABEL_I18N = {
     "e.g. Kira Road": "nga Kira Road",
     "Clear & Start Again": "Gyamu Otandike Buto",
     "Reset this listing form and remove the current photos, details, and verification draft?": "Oddemu otandike ffoomu eno era oggyewo ebifaananyi, details, n'ekiwandiiko ky'okukakasa ekiriwo kati?",
-    "Listing form cleared. Start again with the correct property type.": "Ffoomu ya listing eggiddwawo. Tandika nate n'ekika kya property ekituufu.",
+    "Listing form cleared. Start again with the correct property type.": "Ffoomu ya listing eggiddwawo. Tandika nate n'ekika ky'ekintu ekituufu.",
     "Auto-detected after pin placement": "Etegeerekeka yokka oluvannyuma lwa pin",
     "Set a pin to resolve the nearest location label.": "Teeka pin okulaga ekifo ekisinga okuba okumpi.",
     "Resolving nearest location...": "Tunoonya ekifo ekiri okumpi...",
     "Location resolved": "Ekifo kitegeerekeddwa",
     "Location pinned": "Pin y'ekifo etekeddwa",
-    "You confirm you have legal authority to list this property, and that your submitted details are accurate and lawful.": "Okakasa nti olina obuyinza obw'amateeka okuteka property eno, era nti amawulire gonna geoweereza gatufu era ga mateeka.",
+    "You confirm you have legal authority to list this property, and that your submitted details are accurate and lawful.": "Okakasa nti olina obuyinza obw'amateeka okuteka ekintu kino, era nti amawulire gonna geoweereza gatufu era ga mateeka.",
     "False listings, forged ownership claims, and identity fraud may be reported under Uganda criminal and cybercrime laws.": "Listing ez'obulimba, eby'obwannannyini ebikyamu, n'obubbi bw'endagamuntu bisobola okutegeezebwa ng'amatteeka ga Uganda bwegalagira ku buzzi bw'emisango n'eby'ebyuma.",
     "You agree that makaug can contact you by phone, SMS, WhatsApp, or email for verification, compliance, and listing approval.": "Okiriza nti makaug esobola okukukwatako ku simu, SMS, WhatsApp, oba email ku kukakasa, okugoberera amateeka, n'okukkiriza listing.",
     "makaug runs anti-fraud checks including ID, phone OTP, and listing consistency checks. Suspected fraud may be escalated to authorities.": "makaug ekola okukakasa ku bulimba omuli ID, OTP y'essimu, n'okulaba oba listing etambula bulungi. Obulimba obuteeberezebwa busobola okutwalibwa eri abakulu.",
@@ -35804,7 +35937,7 @@ const LISTING_LABEL_I18N = {
     "Amenities will appear here": "Ebiriwo bijja kulabika wano",
     "Need to change anything? Use quick edit buttons before you submit.": "Waliwo ky'oyagala okukyusa? Kozesa obutambi bw'okulongoosa nga tonnawereza.",
     "Language": "Olulimi",
-    "Edit Property Details": "Longoosa Ebikwata ku Property",
+    "Edit Property Details": "Longoosa ebikwata ku kintu",
     "Edit Photos & Media": "Longoosa Bifaananyi & Media",
     "Edit Verify Identity": "Longoosa Okukakasa Endagamuntu",
     "Listing Area Summary (editable)": "Ebigambo ku Kitundu (biyinza okulongoosebwa)",
@@ -35828,7 +35961,7 @@ const LISTING_LABEL_I18N = {
     "student accommodation": "obutuuze bw'abayizi",
     "land investment": "okusiga ensimbi mu ttaka",
     "business use": "okukozesa mu bizinensi",
-    "property use": "okukozesa property",
+    "property use": "okukozesa ekintu",
     "Public contact name": "Erinnya ery'olukale ery'okukwatibwako",
     "Map synced to selected region/district/neighbourhood.": "Maapu etereezeddwa ku region/district/neighbourhood olondedde.",
     "NEW": "KIPYA",
@@ -35837,7 +35970,7 @@ const LISTING_LABEL_I18N = {
     "beds": "ebisenge",
     "bath": "ekinaabiro",
     "baths": "ebinaabiro",
-    "Private Owner": "Nnyini Property",
+    "Private Owner": "Nnyini kintu",
     "Back to results": "Ddayo ku byavuddemu",
     "Sign Out": "Fuluma",
     "Registered": "Akwatiddwa",
@@ -35861,8 +35994,8 @@ const LISTING_LABEL_I18N = {
     "suitable for development or long-term investment": "nnungi ku nkulaakulana oba okusiga ensimbi okw'ebbanga eddene",
     "positioned for business operations and growth": "nnungi ku mirimu gya bizinensi n'okukula",
     "tailored for students and guardians seeking safe accommodation": "etegekeddwa abayizi n'ababakuuma abanoonya obutuuze obukuumi",
-    "Property listing": "Listing ya property",
-    "Property": "Property",
+    "Property listing": "Listing y'ekintu",
+    "Property": "Ekintu",
     "standard amenities": "ebiriwo ebya bulijjo",
     "key daily services": "empeereza enkulu eya buli lunaku",
     "Built in": "Yazimbibwa mu",
@@ -35871,12 +36004,12 @@ const LISTING_LABEL_I18N = {
     "Minimum Contract": "Endagaano esinga obutono",
     "months": "emyezi",
     "Deposit": "Deposit",
-    "Properties": "Properties",
+    "Properties": "Ebintu",
     "Houses for Sale": "Ennyumba Ezitundibwa",
     "Houses for Rent": "Ennyumba Ezapangisibwa",
     "Student Housing": "Obutuuze bw'Abayizi",
     "Land for Sale": "Ettaka Eritundibwa",
-    "List Property": "Teka Property",
+    "List Property": "Teka ekintu kyo",
     "Looking For...": "Onoonya ki...",
     "Company": "Kkampuni",
     "About Us": "Ebikwata ku Ffe",
@@ -35894,8 +36027,8 @@ const LISTING_LABEL_I18N = {
     "Report a Listing": "Loopa Listing",
     "Safety Tips": "Obukodyo bw'Obukuumi",
     "Chat on WhatsApp": "Kuba Chat ku WhatsApp",
-    "List Your Property": "Teka Property Yo",
-    "Choose how you'd like to add your property": "Londa engeri gy'oyagala okutekeramu property yo",
+    "List Your Property": "Teka ekintu kyo",
+    "Choose how you'd like to add your property": "Londa engeri gy'oyagala okutekeramu ekintu kyo",
     "List Online": "Teka ku Mukutu",
     "Full form on website": "Ffoomu enzijuvu ku website",
     "Via WhatsApp": "Okuyita ku WhatsApp",
@@ -35916,7 +36049,7 @@ const LISTING_LABEL_I18N = {
     "Mortgage Finder": "Noonya Mortgage",
     "House Type *": "Ekika ky'Ennyumba *",
     "Rental Type *": "Ekika ky'Okupangisa *",
-    "Commercial Property Type *": "Ekika kya Property y'Obusuubuzi *",
+    "Commercial Property Type *": "Ekika ky'ekintu ky'obusuubuzi *",
     "Accommodation Type *": "Ekika ky'Obutuuze *",
     "Size": "Obunene",
     "Bedrooms": "Ebisenge",
@@ -35927,10 +36060,10 @@ const LISTING_LABEL_I18N = {
     "Payment Period": "Obudde bw'Okusasula",
     "Street name, plot number, etc.": "Erinnya ly'oluguudo, namba ya plot, n'ebirala",
     "e.g. 4-Bedroom Family House in Muyenga": "nga Ennyumba y'amaka erina ebisenge 4 e Muyenga",
-    "e.g. 2-Bedroom Apartment in Ntinda": "nga Apartment erina ebisenge 2 e Ntinda",
+    "e.g. 2-Bedroom Apartment in Ntinda": "nga Apartimenti erina ebisenge 2 e Ntinda",
     "e.g. 1 Acre Residential Plot in Namugongo": "nga Plot y'okubeeramu ya acre 1 e Namugongo",
     "e.g. Retail Shop in Ntinda Commercial Center": "nga Dduuka lya retail mu Ntinda Commercial Center",
-    "e.g. Self-contained Room near Makerere": "nga Ekisenge kya self-contained okumpi ne Makerere",
+    "e.g. Self-contained Room near Makerere": "nga Ekisenge ekirina byonna okumpi ne Makerere",
     "Resolved Map Location": "Ekifo kya maapu ekitegeerekeddwa",
     "Latitude": "Latitude",
     "Longitude": "Longitude",
@@ -35968,12 +36101,12 @@ const LISTING_LABEL_I18N = {
     "Commercial Plot": "Plot y'obusuubuzi",
     "Agricultural": "Ebyobulimi",
     "Industrial": "Industrial",
-    "Warehouse": "Warehouse",
+    "Warehouse": "Ggwanika",
     "Retail Shop": "Dduuka lya retail",
-    "Office": "Office",
+    "Office": "Ofiisi",
     "Showroom": "Showroom",
-    "Apartment": "Apartment",
-    "Studio": "Studio",
+    "Apartment": "Apartimenti",
+    "Studio": "Ekisenge kya studio",
     "Single Room": "Ekisenge kimu",
     "Self-Contained": "Self-contained",
     "Shared Unit": "Ekifo ekigabanibwa",
@@ -36001,10 +36134,10 @@ const LISTING_LABEL_I18N = {
     "Describe the house — condition, finishes, plot setup, and neighbourhood highlights...": "Nnyonnyola ennyumba — embeera yaayo, enkozesa n'okumaliriza, entegeka ya plot, n'ebikulu ku kitundu...",
     "Describe rental condition, terms, nearby amenities, and what is included...": "Nnyonnyola embeera y'okupangisa, obukwakkulizo, ebiriwo ebiri okumpi, n'ebiri mu kusasula...",
     "Describe plot access, documents, utilities, and nearby landmarks...": "Nnyonnyola okutuuka ku plot, ebiwandiiko, empeereza, n'ebifo eby'amaanyi ebiri okumpi...",
-    "Describe business suitability, access, parking, loading, power, and terms...": "Nnyonnyola engeri property eno gy'esaanira bizinensi, okutuukako, parking, loading, amasannyalaze, n'obukwakkulizo...",
+    "Describe business suitability, access, parking, loading, power, and terms...": "Nnyonnyola engeri ekintu kino gy'esaanira bizinensi, okutuukako, parking, loading, amasannyalaze, n'obukwakkulizo...",
     "Describe proximity to campus, room setup, facilities, and rules...": "Nnyonnyola okumpi ne campus, entegeka y'ebisenge, ebikozesebwa, n'amateeka...",
     "Example: \"Modern 3-bedroom bungalow in Ntinda, 5 minutes from shopping centre. 2 bathrooms, secure perimeter wall, paved compound, borehole water, and backup generator. Quiet residential street with easy taxi access.\"": "Okugeza: \"Bungalow ey'omulembe erina ebisenge 3 e Ntinda, eddakiika 5 okuva ku shopping centre. Erina ebinaabiro 2, bbugwe ow'obukuumi, compound epaved, amazzi ga borehole, ne generator ey'ekyemalirizo. Eri ku luguudo olutebenkevu olw'obulamu bw'amaka era olutuukikako amangu n'entambula ya taxi.\"",
-    "Changed the property type? Use “Clear & Start Again” if this is a different listing.": "Okikyusizza ekika kya property? Kozesa “Gyamu Otandike Buto” bw'eba listing endala.",
+    "Changed the property type? Use “Clear & Start Again” if this is a different listing.": "Okikyusizza ekika ky'ekintu? Kozesa “Gyamu Otandike Buto” bw'eba listing endala.",
     "🚗 Parking": "🚗 Pakingi",
     "🔐 Security": "🔐 Obukuumi",
     "🌊 Borehole Water": "🌊 Amazzi ga borehole",
@@ -36050,9 +36183,9 @@ const LISTING_LABEL_I18N = {
     "🕙 Curfew Policy": "🕙 Enkola ya curfew",
     "Yes": "Yee",
     "No": "Nedda",
-    "Describe the property — key features, condition, neighbourhood highlights...": "Nnyonnyola property — ebyayo ebikulu, embeera, n'ebikulu ku kitundu...",
+    "Describe the property — key features, condition, neighbourhood highlights...": "Nnyonnyola ekintu — ebyayo ebikulu, embeera, n'ebikulu ku kitundu...",
     "📍 Kampala, Uganda": "📍 Kampala, Uganda",
-    "Uganda's first completely free property platform. List, search, and connect via website or WhatsApp. Covering all 146 districts.": "Pulatifoomu ya property ey'olubereberye mu Uganda ey'obwereere ddala. Teka listing, noonyereza, era okwatanagane okuyita ku website oba WhatsApp. Ebikka ku disitulikiti zonna 146.",
+    "Uganda's first completely free property platform. List, search, and connect via website or WhatsApp. Covering all 146 districts.": "Pulatifoomu y'ebintu eby'obugagga ey'olubereberye mu Uganda ey'obwereere ddala. Teka listing, noonyereza, era okwatanagane okuyita ku website oba WhatsApp. Ebikka ku disitulikiti zonna 146.",
     "© 2026 makaug. All rights reserved.": "© 2026 makaug. Eddembe lyonna likuumiddwa.",
     "quality flag(s)": "obubaka bw'omutindo",
     "No quality flags": "Tewali buzibu bwa mutindo",
@@ -36086,7 +36219,7 @@ const LISTING_LABEL_I18N = {
     "Summary reset to auto-generated.": "Summary ezze ku ebyekolebwa yokka.",
     "Track listing views, saves, and enquiries in real time.": "Kulondoola abalabye listing, abagiterekedde n'ababuuzizza mu kiseera kyennyini.",
     "Edit your listing faster and update photos any time.": "Okulongoosa listing yo amangu n'okukyusa bifaananyi buli kiseera.",
-    "Receive weekly property tips and market updates.": "Okufuna obukodyo bwa property obwa buli wiiki n'amawulire g'akatale.",
+    "Receive weekly property tips and market updates.": "Okufuna obukodyo bw'ebintu obwa buli wiiki n'amawulire g'akatale.",
     "Get priority alerts when buyers or tenants show interest.": "Okufuna amagezi ago bukadde nga abagula oba abapangisi balaze obwagazi.",
     "Create Free Account": "Kola Account ya Bwereere",
     "Back to Home": "Ddayo Awaka",
@@ -39064,7 +39197,7 @@ function shiftDetailGalleryPhoto(direction = 1) {
 function filterCommercial() {
   const q = (document.getElementById("commercial-q-f")?.value || "").toLowerCase().trim();
   const dRaw = document.getElementById("commercial-district-f")?.value || "";
-  const d = dRaw || guessDistrictFromText(q);
+  const d = dRaw;
   const radiusKm = getRadiusKmFromSelect("commercial-radius-f");
   const nearState = getNearMeSearchState("commercial");
   const type = (document.getElementById("commercial-type-f")?.value || "").toLowerCase().trim();
@@ -39097,7 +39230,7 @@ function filterCommercial() {
 function filterLand() {
   const q = (document.getElementById("land-q-f")?.value || "").toLowerCase().trim();
   const dRaw = document.getElementById("land-district-f")?.value || "";
-  const d = dRaw || guessDistrictFromText(q);
+  const d = dRaw;
   const radiusKm = getRadiusKmFromSelect("land-radius-f");
   const nearState = getNearMeSearchState("land");
   const type = (document.getElementById("land-type-f")?.value || "").toLowerCase().trim();
@@ -40518,6 +40651,7 @@ async function openDetail(id, options = {}) {
       </div>
     </div>`;
   showPage("detail");
+  setLang(currentLang, true, false);
   updateDetailSaveButton(p.id);
   ensureRevenuePlacements();
   setTimeout(() => {
@@ -41420,10 +41554,7 @@ function initializeMakaugApp() {
   if (window.__makaugAppInitialized) return;
   window.__makaugAppInitialized = true;
   installPublicRouteInterceptor();
-  let savedLang = null;
-  try {
-    savedLang = localStorage.getItem("makaug_lang");
-  } catch (e) {}
+  const savedLang = getStoredMakaugLanguagePreference();
   addAdUnits();
   initGoogleAds();
   populateDistricts();
@@ -41433,7 +41564,7 @@ function initializeMakaugApp() {
   loadDashboardState();
   loadAuthState();
   handleOAuthReturnFromUrl();
-  setLang(savedLang || currentLang, true, false);
+  setLang(getStartupLanguagePreference(savedLang), true, false);
   initFrontendAnalytics();
   initWebVitalsTracking();
   setHeroLocationFilter(currentTab);

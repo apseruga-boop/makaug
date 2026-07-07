@@ -159,6 +159,12 @@ const whatsappMatchboardQueryHandoffRetryVersion = 'whatsapp-matchboard-query-ha
 const whatsappMatchboardInventorySyncVersion = 'whatsapp-matchboard-inventory-sync-20260703';
 const whatsappMatchboardVisibleQuerySyncVersion = 'whatsapp-matchboard-visible-query-sync-20260703';
 const whatsappMatchboardVisibleQueryGuardVersion = 'whatsapp-matchboard-visible-query-guard-20260703';
+const publicI18nDetailPersistenceVersion = 'public-i18n-detail-persistence-20260707';
+const publicI18nStartupRaceFixVersion = 'public-i18n-startup-race-fix-20260707';
+const publicI18nCookiePersistenceVersion = 'public-i18n-cookie-persistence-20260707';
+const publicI18nAuthLanguageGuardVersion = 'public-i18n-auth-language-guard-20260707';
+const publicSearchAreaHandoffVersion = 'public-search-area-handoff-20260707';
+const publicSearchNormalizeHelperVersion = 'public-search-normalize-helper-20260707';
 const publicAppVersionSuffixes = [
   captureHelperUsabilityVersion,
   studentNearestUniversityVersion,
@@ -187,7 +193,13 @@ const publicAppVersionSuffixes = [
   whatsappMatchboardQueryHandoffRetryVersion,
   whatsappMatchboardInventorySyncVersion,
   whatsappMatchboardVisibleQuerySyncVersion,
-  whatsappMatchboardVisibleQueryGuardVersion
+  whatsappMatchboardVisibleQueryGuardVersion,
+  publicI18nDetailPersistenceVersion,
+  publicI18nStartupRaceFixVersion,
+  publicI18nCookiePersistenceVersion,
+  publicI18nAuthLanguageGuardVersion,
+  publicSearchAreaHandoffVersion,
+  publicSearchNormalizeHelperVersion
 ];
 let cachedIndexHtml = null;
 const publicHtmlCache = new Map();
