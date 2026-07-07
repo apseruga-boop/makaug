@@ -88,9 +88,21 @@ const staffFastDashboardCache = new Map();
 const staffFastDashboardRefreshes = new Map();
 const staffSourceIntakeJobs = new Map();
 
+function activeStaffSourceIntakeJob(type = '') {
+  const targetType = cleanText(type);
+  const activeStatuses = new Set(['queued', 'running']);
+  return [...staffSourceIntakeJobs.values()]
+    .filter((job) => activeStatuses.has(job.status))
+    .find((job) => !targetType || job.type === targetType) || null;
+}
+
 function publicStaffSourceIntakeJob(job = {}) {
   const result = job.result && typeof job.result === 'object' ? job.result : {};
   const importResult = result.import_result && typeof result.import_result === 'object' ? result.import_result : result;
+  const backlogResult = result.pending_backlog_reprocess_result
+    || result.youtube?.pending_backlog_reprocess
+    || {};
+  const backlogReprocess = backlogResult.reprocess_result || {};
   return {
     async_job: true,
     job_id: job.id || '',
@@ -114,6 +126,13 @@ function publicStaffSourceIntakeJob(job = {}) {
       source_review_count: Number(importResult.source_review_count || result.source_review_count || 0),
       low_signal_source_location_count: Number(importResult.low_signal_source_location_count || result.low_signal_source_location_count || 0),
       source_quality_suppressed_count: Number(importResult.source_quality_suppressed_count || result.source_quality_suppressed_count || 0),
+      pending_backlog_rows_considered: Number(backlogResult.rows_considered || 0),
+      pending_backlog_video_details_fetched_count: Number(backlogResult.video_details_fetched_count || 0),
+      pending_backlog_comment_threads_attempted_count: Number(backlogResult.comment_threads_attempted_count || 0),
+      pending_backlog_comment_threads_fetched_count: Number(backlogResult.comment_threads_fetched_count || 0),
+      pending_backlog_updated_properties: Number(backlogReprocess.updated_properties || 0),
+      pending_backlog_auto_live_properties: Number(backlogReprocess.auto_live_properties || 0),
+      pending_backlog_review_queue_properties: Number(backlogReprocess.review_queue_properties || 0),
     } : undefined,
   };
 }
@@ -1998,6 +2017,30 @@ router.post('/source-intake/social-sweep', async (req, res, next) => {
       return responseData;
     };
     if (asyncJob) {
+      const activeSweep = activeStaffSourceIntakeJob('social_sweep');
+      if (activeSweep) {
+        activeSweep.message = 'A social sweep is already queued or running. Poll this job before launching another sweep.';
+        await logStaffActivity(req, 'staff_social_sweep_job_reused', {
+          targetType: 'source_intake',
+          targetId: activeSweep.id,
+          metadata: {
+            batch_id: SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID,
+            platform,
+            focus,
+            youtube_job_mode: youtubeJobMode,
+            max_sources: maxSources,
+            reason: 'social_sweep_already_running'
+          }
+        });
+        return res.status(202).json({
+          ok: true,
+          data: {
+            ...publicStaffSourceIntakeJob(activeSweep),
+            already_running: true,
+            reused_existing_job: true,
+          }
+        });
+      }
       const job = createStaffSourceIntakeJob({
         type: 'social_sweep',
         requestedSourceCount: maxSources,

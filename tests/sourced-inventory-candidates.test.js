@@ -12,6 +12,7 @@ const imageImportScript = read('scripts/import-found-online-images.js');
 const videoStillScript = read('scripts/prepare-found-online-video-stills.js');
 const frontend = read('assets/makaug-app.js');
 const adminRoute = read('routes/admin.js');
+const staffRoute = read('routes/staff.js');
 const html = read('index.html');
 const propertiesRoute = read('routes/properties.js');
 const agentsRoute = read('routes/agents.js');
@@ -1365,6 +1366,10 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
   assert.strictEqual(typeof enrichPendingYouTubeSourceRows, 'function', 'sweeps should expose pending YouTube backlog enrichment for existing review rows');
   assert(socialPlatformSweepServiceSource.includes('pending_backlog_reprocess'), 'sweep result should report existing pending YouTube backlog reprocessing');
   assert(socialPlatformSweepServiceSource.includes('reprocessExistingFoundOnlineSourcePostListings'), 'sweep should update existing pending source rows after enrichment');
+  assert(socialPlatformSweepServiceSource.includes('pg_try_advisory_lock'), 'pending YouTube backlog reprocessing should use a database lock to prevent overlapping heavy jobs');
+  assert(socialPlatformSweepServiceSource.includes('pending_youtube_backlog_reprocess_already_running'), 'overlapping backlog reprocess attempts should return a clear already-running status');
+  assert(staffRoute.includes("activeStaffSourceIntakeJob('social_sweep')"), 'staff dashboard should reuse an active social sweep job instead of launching duplicate heavy sweeps');
+  assert(staffRoute.includes('pending_backlog_rows_considered'), 'staff source job summaries should expose pending backlog reprocess counters');
   assert(socialSearchServiceSource.includes('youtube_source_reenrichment_result'), 'existing pending rows should be marked after enrichment to avoid rechecking the same weak backlog forever');
   const normalizedDescriptionEnrichedYoutube = normalizeYouTubeApiPost({
     id: { videoId: 'desc123XYZ90' },

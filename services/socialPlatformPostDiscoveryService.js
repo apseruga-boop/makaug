@@ -32,6 +32,7 @@ const DEFAULT_YOUTUBE_COMMENT_LOOKUP_LIMIT = 80;
 const DEFAULT_YOUTUBE_COMMENTS_PER_VIDEO = 3;
 const DEFAULT_YOUTUBE_PENDING_REPROCESS_LIMIT = 160;
 const YOUTUBE_SOURCE_TEXT_ENRICHMENT_VERSION = 'youtube-source-text-enrichment-20260707';
+const YOUTUBE_PENDING_REPROCESS_ADVISORY_LOCK_ID = 2026070701;
 const YOUTUBE_API_KEY_ENV_NAMES = ['YOUTUBE_API_KEY', 'GOOGLE_YOUTUBE_API_KEY', 'GOOGLE_API_KEY'];
 const META_GRAPH_ACCESS_TOKEN_ENV_NAMES = ['META_GRAPH_ACCESS_TOKEN', 'FACEBOOK_GRAPH_ACCESS_TOKEN', 'FACEBOOK_PAGE_ACCESS_TOKEN', 'INSTAGRAM_GRAPH_ACCESS_TOKEN'];
 const FACEBOOK_PAGE_ID_ENV_NAMES = ['FACEBOOK_PAGE_IDS', 'FACEBOOK_PAGE_ID'];
@@ -2864,6 +2865,7 @@ function youtubeSourceJobFromPendingPropertyRow(row = {}) {
 async function pendingYouTubeSourceRowsForEnrichment(db, {
   limit = DEFAULT_YOUTUBE_PENDING_REPROCESS_LIMIT,
   offset = 0,
+  queryClient = null,
 } = {}) {
   if (!db?.pool) {
     return {
@@ -2874,7 +2876,8 @@ async function pendingYouTubeSourceRowsForEnrichment(db, {
   }
   const cappedLimit = cappedNumber(limit, DEFAULT_YOUTUBE_PENDING_REPROCESS_LIMIT, 1, 500);
   const cappedStart = cappedOffset(offset);
-  const result = await db.pool.query(
+  const runner = queryClient || db.pool;
+  const result = await runner.query(
     `SELECT
        id::text AS id,
        title,
@@ -2927,12 +2930,11 @@ async function enrichPendingYouTubeSourceRows({
   offset = 0,
   commentLookupBudget = null,
 } = {}) {
-  const pending = await pendingYouTubeSourceRowsForEnrichment(db, { limit, offset });
-  if (!pending.ok || !apiKey) {
+  if (!db?.pool) {
     return {
-      ok: pending.ok,
+      ok: false,
       skipped: true,
-      reason: pending.reason || (apiKey ? '' : 'youtube_api_key_required'),
+      reason: 'db_pool_required',
       rows_considered: 0,
       video_details_fetched_count: 0,
       comment_threads_attempted_count: 0,
@@ -2940,6 +2942,52 @@ async function enrichPendingYouTubeSourceRows({
       reprocess_result: null,
     };
   }
+  if (!apiKey) {
+    return {
+      ok: true,
+      skipped: true,
+      reason: 'youtube_api_key_required',
+      rows_considered: 0,
+      video_details_fetched_count: 0,
+      comment_threads_attempted_count: 0,
+      comment_threads_fetched_count: 0,
+      reprocess_result: null,
+    };
+  }
+  const lockClient = await db.pool.connect();
+  let lockAcquired = false;
+  try {
+    const lock = await lockClient.query(
+      'SELECT pg_try_advisory_lock($1)::boolean AS locked',
+      [YOUTUBE_PENDING_REPROCESS_ADVISORY_LOCK_ID]
+    );
+    lockAcquired = lock.rows[0]?.locked === true;
+    if (!lockAcquired) {
+      return {
+        ok: true,
+        skipped: true,
+        reason: 'pending_youtube_backlog_reprocess_already_running',
+        lock_id: YOUTUBE_PENDING_REPROCESS_ADVISORY_LOCK_ID,
+        rows_considered: 0,
+        video_details_fetched_count: 0,
+        comment_threads_attempted_count: 0,
+        comment_threads_fetched_count: 0,
+        reprocess_result: null,
+      };
+    }
+    const pending = await pendingYouTubeSourceRowsForEnrichment(db, { limit, offset, queryClient: lockClient });
+    if (!pending.ok) {
+      return {
+        ok: pending.ok,
+        skipped: true,
+        reason: pending.reason || 'pending_youtube_rows_unavailable',
+        rows_considered: 0,
+        video_details_fetched_count: 0,
+        comment_threads_attempted_count: 0,
+        comment_threads_fetched_count: 0,
+        reprocess_result: null,
+      };
+    }
   const rows = pending.rows || [];
   const pendingApiRows = rows
     .map((row) => ({
@@ -3044,6 +3092,14 @@ async function enrichPendingYouTubeSourceRows({
     comment_reports: (enriched.comment_reports || []).slice(0, 50),
     reprocess_result: reprocessResult,
   };
+  } finally {
+    if (lockAcquired) {
+      try {
+        await lockClient.query('SELECT pg_advisory_unlock($1)', [YOUTUBE_PENDING_REPROCESS_ADVISORY_LOCK_ID]);
+      } catch (_) {}
+    }
+    lockClient.release();
+  }
 }
 
 async function runSocialPlatformPostSweep({
