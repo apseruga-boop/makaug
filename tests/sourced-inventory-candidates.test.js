@@ -75,6 +75,8 @@ const {
   YOUTUBE_PLAYLIST_ITEMS_URL,
   YOUTUBE_VIDEOS_URL,
   YOUTUBE_COMMENT_THREADS_URL,
+  DEFAULT_YOUTUBE_PENDING_REPROCESS_LIMIT,
+  YOUTUBE_SOURCE_TEXT_ENRICHMENT_VERSION,
   socialDiscoveryApiReadiness,
   TIKTOK_OEMBED_URL,
   YOUTUBE_OEMBED_URL,
@@ -85,6 +87,7 @@ const {
   buildTikTokExactPostImportRows,
   buildYouTubeSearchJobs,
   buildXSearchJobs,
+  enrichPendingYouTubeSourceRows,
   extractExactSocialPostUrls,
   extractTikTokVideoUrls,
   normalizeExactSocialPostUrl,
@@ -1357,6 +1360,12 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
   assert.strictEqual(autoLiveStatus.status, 'approved', 'hashtag auto-live importer should create public inventory, not pending review rows');
   assert.strictEqual(YOUTUBE_VIDEOS_URL, 'https://www.googleapis.com/youtube/v3/videos', 'YouTube sweeps should enrich search results with full video descriptions');
   assert.strictEqual(YOUTUBE_COMMENT_THREADS_URL, 'https://www.googleapis.com/youtube/v3/commentThreads', 'YouTube sweeps should support bounded comment evidence enrichment');
+  assert.strictEqual(YOUTUBE_SOURCE_TEXT_ENRICHMENT_VERSION, 'youtube-source-text-enrichment-20260707', 'YouTube enrichment should mark processed pending rows by version');
+  assert.strictEqual(DEFAULT_YOUTUBE_PENDING_REPROCESS_LIMIT, 160, 'pending YouTube backlog reprocessing should be bounded by default');
+  assert.strictEqual(typeof enrichPendingYouTubeSourceRows, 'function', 'sweeps should expose pending YouTube backlog enrichment for existing review rows');
+  assert(socialPlatformSweepServiceSource.includes('pending_backlog_reprocess'), 'sweep result should report existing pending YouTube backlog reprocessing');
+  assert(socialPlatformSweepServiceSource.includes('reprocessExistingFoundOnlineSourcePostListings'), 'sweep should update existing pending source rows after enrichment');
+  assert(socialSearchServiceSource.includes('youtube_source_reenrichment_result'), 'existing pending rows should be marked after enrichment to avoid rechecking the same weak backlog forever');
   const normalizedDescriptionEnrichedYoutube = normalizeYouTubeApiPost({
     id: { videoId: 'desc123XYZ90' },
     snippet: {

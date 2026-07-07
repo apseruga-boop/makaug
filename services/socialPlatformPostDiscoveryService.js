@@ -8,6 +8,7 @@ const {
   FOUND_ONLINE_SOURCE_POST_IMPORT_BATCH_ID,
   LAUNCH_SOURCE_POST_WINDOW_START,
   queueFoundOnlineSourcePostListings,
+  reprocessExistingFoundOnlineSourcePostListings,
 } = require('./socialSearchSourcedListingsService');
 const { DISTRICTS } = require('../utils/constants');
 
@@ -29,6 +30,8 @@ const YOUTUBE_OEMBED_URL = 'https://www.youtube.com/oembed';
 const YOUTUBE_SOURCE_POST_WINDOW_START = '2026-01-01T00:00:00.000Z';
 const DEFAULT_YOUTUBE_COMMENT_LOOKUP_LIMIT = 80;
 const DEFAULT_YOUTUBE_COMMENTS_PER_VIDEO = 3;
+const DEFAULT_YOUTUBE_PENDING_REPROCESS_LIMIT = 160;
+const YOUTUBE_SOURCE_TEXT_ENRICHMENT_VERSION = 'youtube-source-text-enrichment-20260707';
 const YOUTUBE_API_KEY_ENV_NAMES = ['YOUTUBE_API_KEY', 'GOOGLE_YOUTUBE_API_KEY', 'GOOGLE_API_KEY'];
 const META_GRAPH_ACCESS_TOKEN_ENV_NAMES = ['META_GRAPH_ACCESS_TOKEN', 'FACEBOOK_GRAPH_ACCESS_TOKEN', 'FACEBOOK_PAGE_ACCESS_TOKEN', 'INSTAGRAM_GRAPH_ACCESS_TOKEN'];
 const FACEBOOK_PAGE_ID_ENV_NAMES = ['FACEBOOK_PAGE_IDS', 'FACEBOOK_PAGE_ID'];
@@ -2745,6 +2748,304 @@ function summarizeYouTubeConfidence(posts = []) {
   });
 }
 
+function youtubeSourceUrlFromPropertyExtra(extra = {}) {
+  return cleanText(
+    extra.source_url
+    || extra.source_post_url
+    || extra.youtube_url
+    || extra.video_url
+    || extra.original_url
+    || ''
+  );
+}
+
+function youtubePendingRowVideoId(row = {}) {
+  const extra = row.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
+  return normalizeYouTubeVideoId(
+    extra.youtube_video_id
+    || extra.youtube_id
+    || youtubeSourceUrlFromPropertyExtra(extra)
+    || ''
+  );
+}
+
+function firstCleanText(values = []) {
+  for (const value of values) {
+    const text = cleanText(value);
+    if (text) return text;
+  }
+  return '';
+}
+
+function youtubeApiItemFromPendingPropertyRow(row = {}) {
+  const extra = row.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
+  const sourceUrl = youtubeSourceUrlFromPropertyExtra(extra);
+  const videoId = youtubePendingRowVideoId(row);
+  if (!videoId) return null;
+  const description = cleanText([
+    extra.source_description,
+    extra.source_caption,
+    extra.source_text,
+    extra.source_visual_text,
+    row.description,
+  ].filter(Boolean).join(' '));
+  return {
+    id: { videoId },
+    snippet: {
+      publishedAt: firstCleanText([
+        extra.youtube_source_published_at,
+        extra.youtube_published_at,
+        extra.source_published_at,
+        extra.first_posted_online_at,
+        extra.video_published_at,
+        row.created_at,
+      ]),
+      title: firstCleanText([
+        extra.source_title,
+        extra.youtube_source_title,
+        row.title,
+      ]) || `YouTube property video ${videoId}`,
+      description,
+      channelId: firstCleanText([
+        extra.youtube_channel_id,
+        extra.source_channel_id,
+      ]),
+      channelTitle: firstCleanText([
+        extra.source_name,
+        extra.source_agent_name,
+        row.lister_name,
+      ]) || 'YouTube property source',
+      thumbnails: {},
+    },
+    comments: extra.source_comments || '',
+    source_visual_text: extra.source_visual_text || extra.video_ocr_text || extra.frame_ocr_text || '',
+    youtube_top_comments: extra.youtube_top_comments || '',
+    pending_property_id: row.id,
+    pending_source_url: sourceUrl,
+    pending_extra_fields: extra,
+  };
+}
+
+function youtubeSourceJobFromPendingPropertyRow(row = {}) {
+  const extra = row.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
+  const sourceUrl = youtubeSourceUrlFromPropertyExtra(extra);
+  const videoId = youtubePendingRowVideoId(row);
+  const channelUrl = firstCleanText([
+    extra.youtube_channel_url,
+    extra.source_channel_url,
+    extra.source_contact_url,
+    extra.source_page_url,
+  ]);
+  return {
+    platform: 'youtube',
+    source_key: firstCleanText([
+      extra.source_registry_key,
+      extra.source_listing_key,
+      extra.source_name,
+      videoId,
+      row.id,
+    ]) || `youtube-pending-${row.id}`,
+    source_name: firstCleanText([
+      extra.source_name,
+      extra.source_agent_name,
+      row.lister_name,
+    ]) || 'YouTube property source',
+    source_type: 'youtube_hashtag_pending_backlog_reprocess',
+    source_record_kind: 'youtube_hashtag_pending_backlog_reprocess',
+    source_url: channelUrl || sourceUrl || (videoId ? youtubeWatchUrl(videoId) : ''),
+    source_contact_url: channelUrl || sourceUrl || (videoId ? youtubeWatchUrl(videoId) : ''),
+    source_listing_types: [row.listing_type, extra.source_listing_type, extra.listing_type].filter(Boolean),
+    published_after: LAUNCH_SOURCE_POST_WINDOW_START,
+    source_can_contact_directly: true,
+    youtube_hashtag_source: true,
+  };
+}
+
+async function pendingYouTubeSourceRowsForEnrichment(db, {
+  limit = DEFAULT_YOUTUBE_PENDING_REPROCESS_LIMIT,
+  offset = 0,
+} = {}) {
+  if (!db?.pool) {
+    return {
+      ok: false,
+      reason: 'db_pool_required',
+      rows: [],
+    };
+  }
+  const cappedLimit = cappedNumber(limit, DEFAULT_YOUTUBE_PENDING_REPROCESS_LIMIT, 1, 500);
+  const cappedStart = cappedOffset(offset);
+  const result = await db.pool.query(
+    `SELECT
+       id::text AS id,
+       title,
+       description,
+       listing_type,
+       status,
+       moderation_stage,
+       district,
+       area,
+       address,
+       price,
+       price_period,
+       bedrooms,
+       bathrooms,
+       latitude,
+       longitude,
+       lister_name,
+       created_at,
+       updated_at,
+       extra_fields
+     FROM properties
+     WHERE COALESCE(status, 'pending') NOT IN ('approved', 'live', 'published', 'sold', 'hidden', 'deleted', 'rejected', 'archived')
+       AND (
+         LOWER(COALESCE(extra_fields->>'source_platform', '')) = 'youtube'
+         OR COALESCE(extra_fields->>'source_url', '') ~* '(youtube\\.com|youtu\\.be)'
+         OR COALESCE(extra_fields->>'source_post_url', '') ~* '(youtube\\.com|youtu\\.be)'
+         OR COALESCE(extra_fields->>'youtube_url', '') ~* '(youtube\\.com|youtu\\.be)'
+         OR COALESCE(extra_fields->>'video_url', '') ~* '(youtube\\.com|youtu\\.be)'
+       )
+       AND COALESCE(extra_fields->>'youtube_source_text_enrichment_version', '') <> $1
+     ORDER BY created_at DESC NULLS LAST, id DESC
+     LIMIT $2 OFFSET $3`,
+    [YOUTUBE_SOURCE_TEXT_ENRICHMENT_VERSION, cappedLimit, cappedStart]
+  );
+  return {
+    ok: true,
+    limit: cappedLimit,
+    offset: cappedStart,
+    rows: result.rows || [],
+  };
+}
+
+async function enrichPendingYouTubeSourceRows({
+  db,
+  apiKey = '',
+  env = process.env,
+  fetchImpl = fetch,
+  dryRun = false,
+  limit = DEFAULT_YOUTUBE_PENDING_REPROCESS_LIMIT,
+  offset = 0,
+  commentLookupBudget = null,
+} = {}) {
+  const pending = await pendingYouTubeSourceRowsForEnrichment(db, { limit, offset });
+  if (!pending.ok || !apiKey) {
+    return {
+      ok: pending.ok,
+      skipped: true,
+      reason: pending.reason || (apiKey ? '' : 'youtube_api_key_required'),
+      rows_considered: 0,
+      video_details_fetched_count: 0,
+      comment_threads_attempted_count: 0,
+      comment_threads_fetched_count: 0,
+      reprocess_result: null,
+    };
+  }
+  const rows = pending.rows || [];
+  const pendingApiRows = rows
+    .map((row) => ({
+      row,
+      item: youtubeApiItemFromPendingPropertyRow(row),
+      job: youtubeSourceJobFromPendingPropertyRow(row),
+    }))
+    .filter((entry) => entry.item);
+  const sharedCommentLookupBudget = commentLookupBudget || {
+    remaining: cappedNumber(
+      env.STAFF_YOUTUBE_COMMENT_LOOKUP_LIMIT,
+      DEFAULT_YOUTUBE_COMMENT_LOOKUP_LIMIT,
+      0,
+      500
+    ),
+    perVideo: cappedNumber(
+      env.STAFF_YOUTUBE_COMMENTS_PER_VIDEO,
+      DEFAULT_YOUTUBE_COMMENTS_PER_VIDEO,
+      1,
+      10
+    ),
+  };
+  const genericPendingJob = {
+    platform: 'youtube',
+    source_type: 'youtube_hashtag_pending_backlog_reprocess',
+    source_record_kind: 'youtube_hashtag_pending_backlog_reprocess',
+    source_name: 'YouTube hashtag pending backlog reprocess',
+    source_url: 'https://www.youtube.com/hashtag/ugandaproperty',
+    source_listing_types: ['sale', 'rent', 'land', 'students', 'commercial'],
+    published_after: LAUNCH_SOURCE_POST_WINDOW_START,
+    source_can_contact_directly: true,
+    youtube_hashtag_source: true,
+  };
+  const enriched = pendingApiRows.length
+    ? await enrichYouTubeApiItems(pendingApiRows.map((entry) => entry.item), genericPendingJob, {
+      apiKey,
+      fetchImpl,
+      commentLookupBudget: sharedCommentLookupBudget,
+    })
+    : {
+      rows: [],
+      video_details_fetched_count: 0,
+      comment_threads_attempted_count: 0,
+      comment_threads_fetched_count: 0,
+      detail_reports: [],
+      comment_reports: [],
+    };
+  const enrichedByVideoId = new Map((enriched.rows || []).map((row) => [
+    normalizeYouTubeVideoId(row.id?.videoId || row.contentDetails?.videoId || row.snippet?.resourceId?.videoId || row.id || ''),
+    row,
+  ]));
+  const enrichedPosts = [];
+  for (const entry of pendingApiRows) {
+    const videoId = normalizeYouTubeVideoId(entry.item.id?.videoId || entry.item.id || '');
+    const post = normalizeYouTubeApiPost(enrichedByVideoId.get(videoId) || entry.item, entry.job);
+    if (post) {
+      enrichedPosts.push({
+        ...post,
+        source_url: entry.item.pending_source_url || post.source_url,
+        post_url: entry.item.pending_source_url || post.post_url || post.source_url,
+        youtube_url: post.youtube_url || youtubeWatchUrl(post.youtube_video_id || post.post_id),
+        source_batch: FOUND_ONLINE_SOURCE_POST_IMPORT_BATCH_ID,
+        raw_source_post: {
+          ...(post.raw_source_post || {}),
+          pending_property_id: entry.row.id,
+          pending_property_title: entry.row.title,
+          youtube_source_text_enrichment_version: YOUTUBE_SOURCE_TEXT_ENRICHMENT_VERSION,
+        },
+      });
+    }
+  }
+  const reprocessResult = enrichedPosts.length
+    ? await reprocessExistingFoundOnlineSourcePostListings({
+      db,
+      posts: enrichedPosts,
+      dryRun,
+    })
+    : {
+      ok: true,
+      dry_run: dryRun,
+      received_posts: 0,
+      normalized_posts: 0,
+      matched_existing_properties: 0,
+      updated_properties: 0,
+      auto_live_properties: 0,
+      review_queue_properties: 0,
+      auto_live_listings: [],
+      review_queue_listings: [],
+      skipped_records: [],
+    };
+  return {
+    ok: true,
+    skipped: false,
+    version: YOUTUBE_SOURCE_TEXT_ENRICHMENT_VERSION,
+    rows_considered: rows.length,
+    api_rows_prepared: pendingApiRows.length,
+    enriched_posts_count: enrichedPosts.length,
+    video_details_fetched_count: Number(enriched.video_details_fetched_count || 0),
+    comment_threads_attempted_count: Number(enriched.comment_threads_attempted_count || 0),
+    comment_threads_fetched_count: Number(enriched.comment_threads_fetched_count || 0),
+    detail_reports: (enriched.detail_reports || []).slice(0, 50),
+    comment_reports: (enriched.comment_reports || []).slice(0, 50),
+    reprocess_result: reprocessResult,
+  };
+}
+
 async function runSocialPlatformPostSweep({
   db,
   platform = 'all',
@@ -2807,6 +3108,20 @@ async function runSocialPlatformPostSweep({
     : [];
   const youtubeApi = envYouTubeApiKey(env);
   const apiReadiness = socialDiscoveryApiReadiness(env);
+  const youtubeCommentLookupBudget = {
+    remaining: cappedNumber(
+      env.STAFF_YOUTUBE_COMMENT_LOOKUP_LIMIT,
+      DEFAULT_YOUTUBE_COMMENT_LOOKUP_LIMIT,
+      0,
+      500
+    ),
+    perVideo: cappedNumber(
+      env.STAFF_YOUTUBE_COMMENTS_PER_VIDEO,
+      DEFAULT_YOUTUBE_COMMENTS_PER_VIDEO,
+      1,
+      10
+    ),
+  };
   let youtubeFetch = {
     api_configured: Boolean(youtubeApi.apiKey),
     api_key_env: youtubeApi.name || '',
@@ -2832,6 +3147,7 @@ async function runSocialPlatformPostSweep({
       maxPagesPerSource,
       env,
       fetchImpl,
+      youtubeCommentLookupBudget,
     });
     youtubeFetch = {
       ...youtubeFetch,
@@ -2884,6 +3200,7 @@ async function runSocialPlatformPostSweep({
         maxPagesPerSource,
         env,
         fetchImpl,
+        youtubeCommentLookupBudget,
       });
       const fallbackPosts = uniquePosts(fallbackFetched.posts);
       youtubeFetch = {
@@ -2953,6 +3270,27 @@ async function runSocialPlatformPostSweep({
       queued_listings: [],
       source_review_records: [],
     };
+  const pendingYouTubeBacklogReprocess = requestedPlatforms.includes('youtube') && fetchYouTube && youtubeApi.apiKey
+    ? await enrichPendingYouTubeSourceRows({
+      db,
+      apiKey: youtubeApi.apiKey,
+      env,
+      fetchImpl,
+      dryRun,
+      limit: env.STAFF_YOUTUBE_PENDING_REPROCESS_LIMIT || DEFAULT_YOUTUBE_PENDING_REPROCESS_LIMIT,
+      offset: 0,
+      commentLookupBudget: youtubeCommentLookupBudget,
+    })
+    : {
+      ok: true,
+      skipped: true,
+      reason: requestedPlatforms.includes('youtube') ? 'youtube_api_key_required' : 'youtube_not_requested',
+      rows_considered: 0,
+      video_details_fetched_count: 0,
+      comment_threads_attempted_count: 0,
+      comment_threads_fetched_count: 0,
+      reprocess_result: null,
+    };
 
   return {
     ok: true,
@@ -2995,6 +3333,7 @@ async function runSocialPlatformPostSweep({
       fetched_posts_count: youtubeFetch.posts.length,
       confidence_summary: summarizeYouTubeConfidence(youtubeFetch.posts),
       known_channel_fallback: youtubeKnownChannelFallback,
+      pending_backlog_reprocess: pendingYouTubeBacklogReprocess,
     },
     x: {
       source_count: xSources.length,
@@ -3030,6 +3369,7 @@ async function runSocialPlatformPostSweep({
     discovered_posts_count: discoveredPosts.length,
     discovered_posts: discoveredPosts.slice(0, 50),
     import_result: importResult,
+    pending_backlog_reprocess_result: pendingYouTubeBacklogReprocess,
   };
 }
 
@@ -3049,6 +3389,8 @@ module.exports = {
   YOUTUBE_SOURCE_POST_WINDOW_START,
   DEFAULT_YOUTUBE_COMMENT_LOOKUP_LIMIT,
   DEFAULT_YOUTUBE_COMMENTS_PER_VIDEO,
+  DEFAULT_YOUTUBE_PENDING_REPROCESS_LIMIT,
+  YOUTUBE_SOURCE_TEXT_ENRICHMENT_VERSION,
   YOUTUBE_API_KEY_ENV_NAMES,
   X_BEARER_ENV_NAMES,
   META_GRAPH_ACCESS_TOKEN_ENV_NAMES,
@@ -3063,6 +3405,7 @@ module.exports = {
   extractExactSocialPostUrls,
   extractTikTokVideoUrls,
   buildExactSocialPostImportRows,
+  enrichPendingYouTubeSourceRows,
   buildTikTokCaptureTasks,
   buildManualSocialCaptureTasks,
   buildTikTokExactPostImportRows,

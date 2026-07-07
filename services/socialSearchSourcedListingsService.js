@@ -2492,6 +2492,435 @@ async function queueFoundOnlineSourcePostListings({
   }
 }
 
+function sourceKeyCandidatesForItem(item = {}) {
+  return [
+    item.key,
+    item.source_listing_key,
+    item.sourceListingKey,
+    item.post_id,
+    item.postId,
+    item.id,
+  ].map((value) => String(value || '').trim()).filter(Boolean);
+}
+
+function sourceVideoIdForItem(item = {}) {
+  return String(
+    item.youtubeId
+    || item.youtube_id
+    || item.youtubeVideoId
+    || item.youtube_video_id
+    || youtubeIdFromUrl(sourceUrlForItem(item))
+    || ''
+  ).trim();
+}
+
+function sourceVideoIdForRow(row = {}) {
+  const extra = row.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
+  return String(
+    extra.youtube_video_id
+    || extra.youtube_id
+    || youtubeIdFromUrl(extra.source_url)
+    || youtubeIdFromUrl(extra.source_post_url)
+    || youtubeIdFromUrl(extra.youtube_url)
+    || youtubeIdFromUrl(extra.video_url)
+    || youtubeIdFromUrl(row.source_url)
+    || ''
+  ).trim();
+}
+
+function addExistingRowCandidate(existing = new Map(), key = '', row = {}) {
+  const normalized = String(key || '').trim();
+  if (normalized && !existing.has(normalized)) existing.set(normalized, row);
+}
+
+async function existingFoundOnlineSourceRowsForReprocess(client, items = []) {
+  const keys = [...new Set(items.flatMap(sourceKeyCandidatesForItem))].filter(Boolean);
+  const urls = uniqueUrls(items.flatMap((item) => [
+    sourceUrlForItem(item),
+    item.sourceUrl,
+    item.source_url,
+    item.source_post_url,
+    item.postUrl,
+    item.post_url,
+    item.youtube_url,
+    item.video_url,
+  ]));
+  const videoIds = [...new Set(items.map(sourceVideoIdForItem).filter(Boolean))];
+  if (!keys.length && !urls.length && !videoIds.length) return new Map();
+  const result = await client.query(
+    `SELECT
+       id::text AS id,
+       title,
+       status,
+       moderation_stage,
+       inquiry_reference,
+       lister_name,
+       agent_id::text AS agent_id,
+       extra_fields,
+       extra_fields->>'source_listing_key' AS source_listing_key,
+       extra_fields->>'source_post_url' AS source_post_url,
+       COALESCE(
+         extra_fields->>'source_url',
+         extra_fields->>'youtube_url',
+         extra_fields->>'video_url',
+         extra_fields->>'original_url'
+       ) AS source_url
+     FROM properties
+     WHERE COALESCE(status, '') <> 'deleted'
+       AND (
+         extra_fields->>'source_listing_key' = ANY($1::text[])
+         OR extra_fields->>'source_post_url' = ANY($2::text[])
+         OR extra_fields->>'source_url' = ANY($2::text[])
+         OR extra_fields->>'youtube_url' = ANY($2::text[])
+         OR extra_fields->>'video_url' = ANY($2::text[])
+         OR extra_fields->>'original_url' = ANY($2::text[])
+         OR extra_fields->>'youtube_video_id' = ANY($3::text[])
+         OR EXISTS (
+           SELECT 1
+           FROM unnest($3::text[]) AS video_id
+           WHERE video_id <> ''
+             AND (
+               COALESCE(extra_fields->>'source_url', '') ILIKE '%' || video_id || '%'
+               OR COALESCE(extra_fields->>'source_post_url', '') ILIKE '%' || video_id || '%'
+               OR COALESCE(extra_fields->>'youtube_url', '') ILIKE '%' || video_id || '%'
+               OR COALESCE(extra_fields->>'video_url', '') ILIKE '%' || video_id || '%'
+               OR COALESCE(extra_fields->>'original_url', '') ILIKE '%' || video_id || '%'
+             )
+         )
+       )`,
+    [keys, urls, videoIds]
+  );
+  const existing = new Map();
+  for (const row of result.rows) {
+    const payload = {
+      ...row,
+      property_url: `${publicBaseUrl()}/property/${row.id}`,
+    };
+    addExistingRowCandidate(existing, row.source_listing_key, payload);
+    addExistingRowCandidate(existing, row.source_post_url, payload);
+    addExistingRowCandidate(existing, row.source_url, payload);
+    const videoId = sourceVideoIdForRow(row);
+    addExistingRowCandidate(existing, videoId, payload);
+    if (videoId) addExistingRowCandidate(existing, `youtube:${videoId}`, payload);
+  }
+  return existing;
+}
+
+async function updateExistingFoundOnlineSourcePostListing(client, existingRow = {}, item = {}, agentId = null) {
+  const listing = buildSocialSearchListing(item, agentId);
+  const autoLive = sourcePostAutoLiveStatusFor(item, sourceAgentForItem(item));
+  const propertyUrl = `${publicBaseUrl()}/property/${existingRow.id}`;
+  const existingExtra = existingRow.extra_fields && typeof existingRow.extra_fields === 'object'
+    ? existingRow.extra_fields
+    : {};
+  const ownerPreviewUrl = existingExtra.owner_preview_url || '';
+  const finalExtraFields = {
+    ...extraFieldsFor(item, agentId, propertyUrl, ownerPreviewUrl),
+    youtube_source_text_enrichment_version: 'youtube-source-text-enrichment-20260707',
+    youtube_source_reenriched_at: new Date().toISOString(),
+    youtube_source_reenrichment_result: autoLive.approved ? 'auto_live_after_backlog_enrichment' : 'still_pending_after_backlog_enrichment',
+    reprocessed_existing_source_post: true,
+  };
+  const updated = await client.query(
+    `UPDATE properties
+     SET listing_type = $2,
+         title = $3,
+         description = $4,
+         district = $5,
+         area = $6,
+         address = $7,
+         price = $8,
+         price_period = $9,
+         bedrooms = $10,
+         bathrooms = $11,
+         property_type = $12,
+         land_size_value = $13,
+         land_size_unit = $14,
+         latitude = $15,
+         longitude = $16,
+         students_welcome = $17,
+         amenities = $18::jsonb,
+         status = $19,
+         moderation_stage = $20,
+         reviewed_at = CASE WHEN $21::boolean THEN COALESCE(reviewed_at, NOW()) ELSE reviewed_at END,
+         moderation_notes = $22,
+         moderation_reason = $23,
+         extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $24::jsonb,
+         updated_at = NOW()
+     WHERE id = $1
+     RETURNING id::text AS id, title, status, moderation_stage`,
+    [
+      existingRow.id,
+      listing.listing_type,
+      listing.title,
+      listing.description,
+      listing.district,
+      listing.area,
+      listing.address,
+      listing.price,
+      listing.price_period,
+      listing.bedrooms,
+      listing.bathrooms,
+      listing.property_type,
+      listing.land_size_value,
+      listing.land_size_unit,
+      listing.latitude,
+      listing.longitude,
+      listing.students_welcome,
+      listing.amenities,
+      listing.status,
+      listing.moderation_stage,
+      autoLive.approved,
+      listing.moderation_notes,
+      listing.moderation_reason,
+      JSON.stringify(finalExtraFields),
+    ]
+  );
+  await client.query(
+    `INSERT INTO property_moderation_events (
+      property_id, actor_id, action, status_from, status_to, checklist, reason, notes, delivery
+    ) VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9::jsonb)`,
+    [
+      existingRow.id,
+      autoLive.approved ? 'youtube_hashtag_backlog_enricher' : 'youtube_hashtag_backlog_reviewer',
+      autoLive.approved ? 'youtube_hashtag_backlog_enriched_auto_live' : 'youtube_hashtag_backlog_enriched_pending',
+      existingRow.status || 'pending',
+      listing.status || 'pending',
+      JSON.stringify({
+        found_online_candidate: true,
+        social_search_candidate: true,
+        reprocessed_existing_source_post: true,
+        auto_live_source_import: autoLive.approved,
+        auto_live_policy: autoLive.policy,
+        auto_live_review_status: autoLive.review_status,
+        source_batch: itemBatchId(item),
+        source_url: sourceUrlForItem(item),
+        youtube_url: item.youtubeId ? youtubeUrl(item.youtubeId) : sourceUrlForItem(item),
+        youtube_video_id: sourceVideoIdForItem(item),
+        youtube_source_text_enrichment_version: 'youtube-source-text-enrichment-20260707',
+      }),
+      listing.moderation_reason,
+      listing.moderation_notes,
+      JSON.stringify({
+        property_url: propertyUrl,
+        owner_preview_url: ownerPreviewUrl,
+        agent_id: agentId,
+        whatsapp_share_card: whatsappShareMessage(item, propertyUrl, ownerPreviewUrl),
+      }),
+    ]
+  );
+  return {
+    ...updated.rows[0],
+    property_url: propertyUrl,
+    source_url: sourceUrlForItem(item),
+    youtube_url: item.youtubeId ? youtubeUrl(item.youtubeId) : sourceUrlForItem(item),
+    agent_name: listing.lister_name,
+    auto_live_ready: autoLive.approved,
+    auto_live_policy: autoLive.policy,
+    auto_live_review_status: autoLive.review_status,
+  };
+}
+
+async function markExistingFoundOnlineSourcePostEnrichedPending(client, existingRow = {}, item = {}, agentId = null, reason = '') {
+  const autoLive = sourcePostAutoLiveStatusFor(item, sourceAgentForItem(item));
+  const propertyUrl = `${publicBaseUrl()}/property/${existingRow.id}`;
+  const existingExtra = existingRow.extra_fields && typeof existingRow.extra_fields === 'object'
+    ? existingRow.extra_fields
+    : {};
+  const ownerPreviewUrl = existingExtra.owner_preview_url || '';
+  const finalExtraFields = {
+    ...extraFieldsFor(item, agentId, propertyUrl, ownerPreviewUrl),
+    youtube_source_text_enrichment_version: 'youtube-source-text-enrichment-20260707',
+    youtube_source_reenriched_at: new Date().toISOString(),
+    youtube_source_reenrichment_result: reason || 'held_after_backlog_enrichment',
+    reprocessed_existing_source_post: true,
+  };
+  const updated = await client.query(
+    `UPDATE properties
+     SET extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $2::jsonb,
+         moderation_reason = COALESCE(NULLIF(moderation_reason, ''), $3),
+         updated_at = NOW()
+     WHERE id = $1
+     RETURNING id::text AS id, title, status, moderation_stage`,
+    [
+      existingRow.id,
+      JSON.stringify(finalExtraFields),
+      reason || 'Still pending after YouTube source text enrichment; source evidence is not specific enough for auto-live.',
+    ]
+  );
+  await client.query(
+    `INSERT INTO property_moderation_events (
+      property_id, actor_id, action, status_from, status_to, checklist, reason, notes, delivery
+    ) VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9::jsonb)`,
+    [
+      existingRow.id,
+      'youtube_hashtag_backlog_reviewer',
+      'youtube_hashtag_backlog_enriched_pending',
+      existingRow.status || 'pending',
+      existingRow.status || 'pending',
+      JSON.stringify({
+        found_online_candidate: true,
+        social_search_candidate: true,
+        reprocessed_existing_source_post: true,
+        auto_live_source_import: false,
+        auto_live_policy: autoLive.policy,
+        auto_live_review_status: autoLive.review_status,
+        source_batch: itemBatchId(item),
+        source_url: sourceUrlForItem(item),
+        youtube_url: item.youtubeId ? youtubeUrl(item.youtubeId) : sourceUrlForItem(item),
+        youtube_video_id: sourceVideoIdForItem(item),
+        youtube_source_text_enrichment_version: 'youtube-source-text-enrichment-20260707',
+      }),
+      reason || 'Still pending after YouTube source text enrichment.',
+      `YouTube source text/comments were enriched, but this row remains pending because it does not meet the auto-live gate. Source: ${sourceUrlForItem(item)}.`,
+      JSON.stringify({
+        property_url: propertyUrl,
+        owner_preview_url: ownerPreviewUrl,
+        agent_id: agentId,
+      }),
+    ]
+  );
+  return {
+    ...updated.rows[0],
+    property_url: propertyUrl,
+    source_url: sourceUrlForItem(item),
+    youtube_url: item.youtubeId ? youtubeUrl(item.youtubeId) : sourceUrlForItem(item),
+    agent_name: sourceAgentForItem(item).name || existingRow.lister_name || '',
+    auto_live_ready: false,
+    auto_live_policy: autoLive.policy,
+    auto_live_review_status: autoLive.review_status,
+    held_reason: reason || 'held_after_backlog_enrichment',
+  };
+}
+
+async function reprocessExistingFoundOnlineSourcePostListings({
+  db,
+  posts = [],
+  dryRun = false,
+} = {}) {
+  const items = (Array.isArray(posts) ? posts : [])
+    .map((post, index) => normalizeFoundOnlineSourcePost(post, index))
+    .filter((item) => item.sourceUrl || item.title);
+  const evaluated = items.map((item) => ({
+    item,
+    agent: sourceAgentForItem(item),
+    intake: sourcePostMeetsLaunchIntakeRule(item, sourceAgentForItem(item)),
+  }));
+  if (!db?.pool) throw new Error('db.pool is required');
+  const client = await db.pool.connect();
+  try {
+    await client.query('BEGIN');
+    const existing = await existingFoundOnlineSourceRowsForReprocess(client, items);
+    const matched = [];
+    const updated = [];
+    const skipped = [];
+
+    for (const { item, agent, intake } of evaluated) {
+      const sourceUrl = sourceUrlForItem(item);
+      const videoId = sourceVideoIdForItem(item);
+      const existingRow = existing.get(item.key)
+        || existing.get(sourceUrl)
+        || existing.get(videoId)
+        || existing.get(videoId ? `youtube:${videoId}` : '');
+      if (!existingRow) {
+        skipped.push({
+          key: item.key,
+          title: item.title,
+          source_url: sourceUrl,
+          youtube_video_id: videoId,
+          reason: 'no_existing_property_for_source',
+        });
+        continue;
+      }
+      const autoLive = sourcePostAutoLiveStatusFor(item, agent);
+      const payload = {
+        key: item.key,
+        id: existingRow.id,
+        title: item.title,
+        previous_title: existingRow.title || '',
+        status: existingRow.status || '',
+        moderation_stage: existingRow.moderation_stage || '',
+        property_url: existingRow.property_url || `${publicBaseUrl()}/property/${existingRow.id}`,
+        source_url: sourceUrl,
+        youtube_video_id: videoId,
+        intake,
+        auto_live_ready: autoLive.approved,
+        auto_live_policy: autoLive.policy,
+        auto_live_review_status: autoLive.review_status,
+      };
+      matched.push(payload);
+      if (isLiveOrApprovedStatus(existingRow)) {
+        skipped.push({
+          ...payload,
+          reason: 'already_live_or_final',
+        });
+        continue;
+      }
+      if (!isReviewQueueStatus(existingRow)) {
+        skipped.push({
+          ...payload,
+          reason: 'not_review_queue_status',
+        });
+        continue;
+      }
+      if (!intake.eligible) {
+        const reason = sourceReviewReasonForIntake(intake);
+        if (dryRun) {
+          skipped.push({
+            ...payload,
+            reason,
+          });
+          continue;
+        }
+        const updatedRow = await markExistingFoundOnlineSourcePostEnrichedPending(client, existingRow, item, existingRow.agent_id || null, reason);
+        updated.push(updatedRow);
+        continue;
+      }
+      if (dryRun) {
+        skipped.push({
+          ...payload,
+          reason: autoLive.approved ? 'dry_run_would_auto_live' : 'dry_run_would_update_pending',
+        });
+        continue;
+      }
+      const updatedRow = await updateExistingFoundOnlineSourcePostListing(client, existingRow, item, existingRow.agent_id || null);
+      updated.push(updatedRow);
+    }
+
+    if (dryRun) {
+      await client.query('ROLLBACK');
+    } else {
+      await client.query('COMMIT');
+    }
+    const autoLiveUpdated = updated.filter((item) => isLiveOrApprovedStatus(item));
+    const reviewUpdated = updated.filter((item) => isReviewQueueStatus(item));
+    const dryRunAutoLive = dryRun ? skipped.filter((item) => item.reason === 'dry_run_would_auto_live') : [];
+    const dryRunPendingUpdates = dryRun ? skipped.filter((item) => item.reason === 'dry_run_would_update_pending') : [];
+    return {
+      ok: true,
+      dry_run: dryRun,
+      received_posts: Array.isArray(posts) ? posts.length : 0,
+      normalized_posts: items.length,
+      matched_existing_properties: matched.length,
+      updated_properties: updated.length,
+      auto_live_properties: autoLiveUpdated.length + dryRunAutoLive.length,
+      review_queue_properties: reviewUpdated.length + dryRunPendingUpdates.length,
+      auto_live_listings: [...autoLiveUpdated, ...dryRunAutoLive],
+      review_queue_listings: [...reviewUpdated, ...dryRunPendingUpdates],
+      matched_properties: matched,
+      skipped_records: skipped,
+      skipped_count: skipped.length,
+    };
+  } catch (error) {
+    try {
+      await client.query('ROLLBACK');
+    } catch (_) {}
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 async function seedSocialSearchAuthorisedListings({ db, replace = true } = {}) {
   if (!db?.pool) throw new Error('db.pool is required');
   const client = await db.pool.connect();
@@ -2752,6 +3181,7 @@ module.exports = {
   plannedSocialSearchListings,
   seedSocialSearchAuthorisedListings,
   queueFoundOnlineSourcePostListings,
+  reprocessExistingFoundOnlineSourcePostListings,
   normalizeFoundOnlineSourcePost,
   summarizeSocialSearchListings,
   socialSearchDailyTargetStatus,
