@@ -23,8 +23,12 @@ const DEFAULT_YOUTUBE_PAGES_PER_SOURCE = 1;
 const YOUTUBE_SEARCH_URL = 'https://www.googleapis.com/youtube/v3/search';
 const YOUTUBE_CHANNELS_URL = 'https://www.googleapis.com/youtube/v3/channels';
 const YOUTUBE_PLAYLIST_ITEMS_URL = 'https://www.googleapis.com/youtube/v3/playlistItems';
+const YOUTUBE_VIDEOS_URL = 'https://www.googleapis.com/youtube/v3/videos';
+const YOUTUBE_COMMENT_THREADS_URL = 'https://www.googleapis.com/youtube/v3/commentThreads';
 const YOUTUBE_OEMBED_URL = 'https://www.youtube.com/oembed';
 const YOUTUBE_SOURCE_POST_WINDOW_START = '2026-01-01T00:00:00.000Z';
+const DEFAULT_YOUTUBE_COMMENT_LOOKUP_LIMIT = 80;
+const DEFAULT_YOUTUBE_COMMENTS_PER_VIDEO = 3;
 const YOUTUBE_API_KEY_ENV_NAMES = ['YOUTUBE_API_KEY', 'GOOGLE_YOUTUBE_API_KEY', 'GOOGLE_API_KEY'];
 const META_GRAPH_ACCESS_TOKEN_ENV_NAMES = ['META_GRAPH_ACCESS_TOKEN', 'FACEBOOK_GRAPH_ACCESS_TOKEN', 'FACEBOOK_PAGE_ACCESS_TOKEN', 'INSTAGRAM_GRAPH_ACCESS_TOKEN'];
 const FACEBOOK_PAGE_ID_ENV_NAMES = ['FACEBOOK_PAGE_IDS', 'FACEBOOK_PAGE_ID'];
@@ -1802,13 +1806,285 @@ function youtubeConfidenceReviewForPost({
   };
 }
 
+function youtubeSnippetForItem(item = {}) {
+  return item.video_details?.snippet || item.videoDetails?.snippet || item.youtube_video_details?.snippet || item.snippet || {};
+}
+
+function youtubeLocationDescriptionForItem(item = {}) {
+  return cleanText(
+    item.recordingDetails?.locationDescription
+    || item.video_details?.recordingDetails?.locationDescription
+    || item.videoDetails?.recordingDetails?.locationDescription
+    || item.youtube_video_details?.recordingDetails?.locationDescription
+    || ''
+  );
+}
+
+function flattenCleanTextValues(values = []) {
+  const output = [];
+  for (const value of values) {
+    if (!value) continue;
+    if (Array.isArray(value)) output.push(...value);
+    else output.push(value);
+  }
+  return output.map((value) => cleanText(value)).filter(Boolean);
+}
+
+function youtubeCommentTextFromThread(thread = {}) {
+  if (typeof thread === 'string') return cleanText(thread);
+  const snippet = thread.snippet?.topLevelComment?.snippet
+    || thread.topLevelComment?.snippet
+    || thread.snippet
+    || thread;
+  return cleanText(snippet.textOriginal || snippet.textDisplay || snippet.text || snippet.comment || '');
+}
+
+function youtubeCommentEvidenceFromItem(item = {}) {
+  const threadValues = [
+    item.youtube_comment_threads?.items,
+    item.youtube_comment_threads,
+    item.comment_threads?.items,
+    item.comment_threads,
+  ].flatMap((value) => (Array.isArray(value) ? value : []))
+    .map((thread) => youtubeCommentTextFromThread(thread));
+  return cleanText(flattenCleanTextValues([
+    item.youtube_top_comments,
+    item.top_comments,
+    item.comments,
+    item.comment,
+    item.owner_comment,
+    item.owner_comments,
+    item.owner_response,
+    item.poster_reply,
+    item.poster_response,
+    item.reply,
+    item.replies,
+    threadValues,
+  ]).join(' '));
+}
+
+function youtubeEvidenceTextForItem(item = {}, job = {}, { includeComments = true } = {}) {
+  const snippet = youtubeSnippetForItem(item);
+  const tags = Array.isArray(snippet.tags) ? snippet.tags.join(' ') : '';
+  const visualText = sourceVisualTextFromObject(item);
+  const commentEvidence = includeComments ? youtubeCommentEvidenceFromItem(item) : '';
+  return cleanText([
+    snippet.title,
+    snippet.description,
+    tags,
+    youtubeLocationDescriptionForItem(item),
+    visualText,
+    commentEvidence,
+    Array.isArray(job.source_listing_types) ? job.source_listing_types.join(' ') : '',
+  ].filter(Boolean).join(' '));
+}
+
+function youtubeShouldFetchCommentEvidence(item = {}, job = {}) {
+  const combinedText = youtubeEvidenceTextForItem(item, job, { includeComments: false });
+  if (!youtubeHasPropertySignal(combinedText, job)) return false;
+  const area = extractArea(combinedText);
+  const district = districtForArea(area, combinedText);
+  const listingType = listingTypeFromText(`${combinedText} ${(job.source_listing_types || []).join(' ')}`);
+  const missingSpecificLocation = youtubeLocationConfidence(area, district) !== 'area_or_neighbourhood_detected';
+  const missingIntent = !youtubeHasExplicitListingIntent(combinedText, listingType);
+  return missingSpecificLocation || missingIntent;
+}
+
+function youtubeMergeVideoDetailsIntoItem(item = {}, detail = null) {
+  if (!detail) return item;
+  const existingSnippet = item.snippet || {};
+  const detailSnippet = detail.snippet || {};
+  const mergedSnippet = {
+    ...existingSnippet,
+    ...detailSnippet,
+    title: cleanText(detailSnippet.title) || existingSnippet.title,
+    description: cleanText(detailSnippet.description) || existingSnippet.description,
+    publishedAt: detailSnippet.publishedAt || existingSnippet.publishedAt,
+    channelId: detailSnippet.channelId || existingSnippet.channelId,
+    channelTitle: detailSnippet.channelTitle || existingSnippet.channelTitle,
+    thumbnails: detailSnippet.thumbnails || existingSnippet.thumbnails,
+    tags: Array.isArray(detailSnippet.tags) ? detailSnippet.tags : existingSnippet.tags,
+    resourceId: existingSnippet.resourceId || detailSnippet.resourceId,
+    videoOwnerChannelId: existingSnippet.videoOwnerChannelId || detailSnippet.videoOwnerChannelId,
+  };
+  return {
+    ...item,
+    snippet: mergedSnippet,
+    recordingDetails: detail.recordingDetails || item.recordingDetails,
+    video_details: detail,
+    videoDetails: detail,
+    youtube_video_details: detail,
+  };
+}
+
+async function fetchYouTubeVideoDetailsForItems(items = [], {
+  apiKey = '',
+  fetchImpl = fetch,
+} = {}) {
+  const ids = Array.from(new Set((Array.isArray(items) ? items : [])
+    .map((item) => normalizeYouTubeVideoId(item.id?.videoId || item.contentDetails?.videoId || item.snippet?.resourceId?.videoId || item.id || ''))
+    .filter(Boolean)));
+  if (!apiKey || !ids.length) {
+    return { ok: false, skipped: true, reason: apiKey ? 'no_youtube_video_ids' : 'missing_youtube_api_key', detailsById: new Map(), reports: [] };
+  }
+  const detailsById = new Map();
+  const reports = [];
+  for (let index = 0; index < ids.length; index += 50) {
+    const batch = ids.slice(index, index + 50);
+    const url = new URL(YOUTUBE_VIDEOS_URL);
+    url.searchParams.set('key', apiKey);
+    url.searchParams.set('part', 'snippet,recordingDetails');
+    url.searchParams.set('id', batch.join(','));
+    const response = await fetchImpl(url, {
+      headers: { Accept: 'application/json' },
+    });
+    const payload = await response.json().catch(() => ({}));
+    const report = {
+      ok: response.ok,
+      status: response.status,
+      requested_count: batch.length,
+      returned_count: Array.isArray(payload.items) ? payload.items.length : 0,
+    };
+    if (!response.ok) {
+      const firstError = Array.isArray(payload?.error?.errors) ? payload.error.errors[0] : null;
+      report.reason = firstError?.message || payload?.error?.message || 'youtube_video_details_failed';
+      report.error_reason = firstError?.reason || '';
+      reports.push(report);
+      continue;
+    }
+    for (const item of Array.isArray(payload.items) ? payload.items : []) {
+      const id = normalizeYouTubeVideoId(item.id || '');
+      if (id) detailsById.set(id, item);
+    }
+    reports.push(report);
+  }
+  return {
+    ok: reports.some((report) => report.ok),
+    detailsById,
+    reports,
+    result_count: detailsById.size,
+  };
+}
+
+async function fetchYouTubeCommentEvidenceForItems(items = [], job = {}, {
+  apiKey = '',
+  fetchImpl = fetch,
+  commentLookupBudget = null,
+} = {}) {
+  const budget = commentLookupBudget || { remaining: 0, perVideo: DEFAULT_YOUTUBE_COMMENTS_PER_VIDEO };
+  if (!apiKey || !budget.remaining) {
+    return { commentsById: new Map(), attempted_count: 0, fetched_count: 0, reports: [] };
+  }
+  const candidates = [];
+  const seen = new Set();
+  for (const item of Array.isArray(items) ? items : []) {
+    const videoId = normalizeYouTubeVideoId(item.id?.videoId || item.contentDetails?.videoId || item.snippet?.resourceId?.videoId || item.id || '');
+    if (!videoId || seen.has(videoId)) continue;
+    if (!youtubeShouldFetchCommentEvidence(item, job)) continue;
+    seen.add(videoId);
+    candidates.push({ item, videoId });
+    if (candidates.length >= budget.remaining) break;
+  }
+  const commentsById = new Map();
+  const reports = [];
+  for (const candidate of candidates) {
+    if (budget.remaining <= 0) break;
+    budget.remaining -= 1;
+    const url = new URL(YOUTUBE_COMMENT_THREADS_URL);
+    url.searchParams.set('key', apiKey);
+    url.searchParams.set('part', 'snippet');
+    url.searchParams.set('videoId', candidate.videoId);
+    url.searchParams.set('maxResults', String(cappedNumber(budget.perVideo, DEFAULT_YOUTUBE_COMMENTS_PER_VIDEO, 1, 10)));
+    url.searchParams.set('order', 'relevance');
+    url.searchParams.set('textFormat', 'plainText');
+    const response = await fetchImpl(url, {
+      headers: { Accept: 'application/json' },
+    });
+    const payload = await response.json().catch(() => ({}));
+    const report = {
+      ok: response.ok,
+      status: response.status,
+      video_id: candidate.videoId,
+      returned_count: Array.isArray(payload.items) ? payload.items.length : 0,
+    };
+    if (!response.ok) {
+      const firstError = Array.isArray(payload?.error?.errors) ? payload.error.errors[0] : null;
+      report.reason = firstError?.message || payload?.error?.message || 'youtube_comment_threads_failed';
+      report.error_reason = firstError?.reason || '';
+      reports.push(report);
+      continue;
+    }
+    const comments = (Array.isArray(payload.items) ? payload.items : [])
+      .map((thread) => youtubeCommentTextFromThread(thread))
+      .filter(Boolean)
+      .slice(0, cappedNumber(budget.perVideo, DEFAULT_YOUTUBE_COMMENTS_PER_VIDEO, 1, 10));
+    if (comments.length) commentsById.set(candidate.videoId, cleanText(comments.join(' ')));
+    reports.push(report);
+  }
+  return {
+    commentsById,
+    attempted_count: candidates.length,
+    fetched_count: commentsById.size,
+    reports,
+  };
+}
+
+async function enrichYouTubeApiItems(items = [], job = {}, {
+  apiKey = '',
+  fetchImpl = fetch,
+  commentLookupBudget = null,
+} = {}) {
+  const rows = Array.isArray(items) ? items : [];
+  if (!apiKey || !rows.length) {
+    return {
+      rows,
+      video_details_fetched_count: 0,
+      comment_threads_attempted_count: 0,
+      comment_threads_fetched_count: 0,
+      detail_reports: [],
+      comment_reports: [],
+    };
+  }
+  const detailResult = await fetchYouTubeVideoDetailsForItems(rows, { apiKey, fetchImpl });
+  const detailRows = rows.map((row) => {
+    const videoId = normalizeYouTubeVideoId(row.id?.videoId || row.contentDetails?.videoId || row.snippet?.resourceId?.videoId || row.id || '');
+    return youtubeMergeVideoDetailsIntoItem(row, detailResult.detailsById.get(videoId));
+  });
+  const commentResult = await fetchYouTubeCommentEvidenceForItems(detailRows, job, {
+    apiKey,
+    fetchImpl,
+    commentLookupBudget,
+  });
+  const enrichedRows = detailRows.map((row) => {
+    const videoId = normalizeYouTubeVideoId(row.id?.videoId || row.contentDetails?.videoId || row.snippet?.resourceId?.videoId || row.id || '');
+    const commentEvidence = cleanText(commentResult.commentsById.get(videoId) || '');
+    if (!commentEvidence) return row;
+    return {
+      ...row,
+      comments: cleanText(`${row.comments || ''} ${commentEvidence}`),
+      youtube_top_comments: commentEvidence,
+      youtube_comment_evidence: commentEvidence,
+    };
+  });
+  return {
+    rows: enrichedRows,
+    video_details_fetched_count: detailResult.result_count || 0,
+    comment_threads_attempted_count: commentResult.attempted_count || 0,
+    comment_threads_fetched_count: commentResult.fetched_count || 0,
+    detail_reports: detailResult.reports || [],
+    comment_reports: commentResult.reports || [],
+  };
+}
+
 function normalizeYouTubeApiPost(item = {}, job = {}) {
   const videoId = normalizeYouTubeVideoId(item.id?.videoId || item.contentDetails?.videoId || item.snippet?.resourceId?.videoId || item.id || '');
   if (!videoId) return null;
-  const snippet = item.snippet || {};
+  const snippet = youtubeSnippetForItem(item);
   const title = cleanText(snippet.title || `YouTube property video ${videoId}`);
   const description = cleanText(snippet.description || '');
-  const combinedText = cleanText(`${title} ${description}`);
+  const commentEvidence = youtubeCommentEvidenceFromItem(item);
+  const visualText = sourceVisualTextFromObject(item);
+  const combinedText = youtubeEvidenceTextForItem(item, job);
   if (!youtubeHasPropertySignal(combinedText, job)) return null;
   const area = extractArea(combinedText);
   const district = districtForArea(area, combinedText);
@@ -1852,6 +2128,9 @@ function normalizeYouTubeApiPost(item = {}, job = {}) {
     source_title: title,
     caption: description,
     description: description || title,
+    comments: commentEvidence,
+    source_text: combinedText,
+    source_visual_text: visualText,
     first_posted_at: publishedAt,
     published_at: publishedAt,
     platform_posted_at: publishedAt,
@@ -1874,6 +2153,11 @@ function normalizeYouTubeApiPost(item = {}, job = {}) {
     source_urls: [job.source_url, channelUrl, sourceUrl].filter(Boolean),
     raw_source_post: {
       youtube_search_item: item,
+      youtube_video_details: item.youtube_video_details || item.video_details || item.videoDetails || null,
+      youtube_top_comments: commentEvidence,
+      comments: commentEvidence,
+      source_text: combinedText,
+      source_visual_text: visualText,
       source_job: job,
       import_method: 'youtube_data_api_search',
       youtube_hashtag_source: hashtagSource,
@@ -1889,6 +2173,7 @@ async function fetchYouTubeSearchJob(job = {}, {
   maxResults = DEFAULT_YOUTUBE_RESULTS_PER_SOURCE,
   pageToken = '',
   fetchImpl = fetch,
+  commentLookupBudget = null,
 } = {}) {
   if (!apiKey) {
     return {
@@ -1923,12 +2208,18 @@ async function fetchYouTubeSearchJob(job = {}, {
     };
   }
   const rows = Array.isArray(payload.items) ? payload.items : [];
+  const enriched = await enrichYouTubeApiItems(rows, job, { apiKey, fetchImpl, commentLookupBudget });
   return {
     ok: true,
     result_count: rows.length,
-    posts: rows.map((row) => normalizeYouTubeApiPost(row, job)).filter(Boolean),
+    posts: enriched.rows.map((row) => normalizeYouTubeApiPost(row, job)).filter(Boolean),
     next_page_token: payload.nextPageToken || '',
     page_info: payload.pageInfo || {},
+    video_details_fetched_count: enriched.video_details_fetched_count || 0,
+    comment_threads_attempted_count: enriched.comment_threads_attempted_count || 0,
+    comment_threads_fetched_count: enriched.comment_threads_fetched_count || 0,
+    detail_reports: enriched.detail_reports || [],
+    comment_reports: enriched.comment_reports || [],
   };
 }
 
@@ -2006,6 +2297,7 @@ async function fetchYouTubeChannelUploadsJob(job = {}, {
   pageToken = '',
   fetchImpl = fetch,
   channelDetails = null,
+  commentLookupBudget = null,
 } = {}) {
   const details = channelDetails || await fetchYouTubeChannelDetails(job, { apiKey, fetchImpl });
   if (!details.ok) {
@@ -2038,21 +2330,28 @@ async function fetchYouTubeChannelUploadsJob(job = {}, {
   }
   const rows = Array.isArray(payload.items) ? payload.items : [];
   const inWindowRows = rows.filter((row) => youtubePublishedInWindow(row, job.published_after || YOUTUBE_SOURCE_POST_WINDOW_START));
+  const normalizedJob = {
+    ...job,
+    channel_id: details.channel_id,
+    source_name: details.channel_title || job.source_name,
+  };
+  const enriched = await enrichYouTubeApiItems(inWindowRows, normalizedJob, { apiKey, fetchImpl, commentLookupBudget });
   return {
     ok: true,
     result_count: rows.length,
     in_window_result_count: inWindowRows.length,
-    posts: inWindowRows.map((row) => normalizeYouTubeApiPost(row, {
-      ...job,
-      channel_id: details.channel_id,
-      source_name: details.channel_title || job.source_name,
-    })).filter(Boolean),
+    posts: enriched.rows.map((row) => normalizeYouTubeApiPost(row, normalizedJob)).filter(Boolean),
     next_page_token: payload.nextPageToken || '',
     page_info: payload.pageInfo || {},
     channel_id: details.channel_id,
     channel_title: details.channel_title,
     uploads_playlist_id: details.uploads_playlist_id,
     hit_older_than_window: rows.length > 0 && inWindowRows.length < rows.length,
+    video_details_fetched_count: enriched.video_details_fetched_count || 0,
+    comment_threads_attempted_count: enriched.comment_threads_attempted_count || 0,
+    comment_threads_fetched_count: enriched.comment_threads_fetched_count || 0,
+    detail_reports: enriched.detail_reports || [],
+    comment_reports: enriched.comment_reports || [],
   };
 }
 
@@ -2060,11 +2359,32 @@ async function fetchYouTubePostsForJobs(jobs = [], options = {}) {
   const posts = [];
   const reports = [];
   const maxPages = cappedNumber(options.maxPagesPerSource || options.maxPages || DEFAULT_YOUTUBE_PAGES_PER_SOURCE, DEFAULT_YOUTUBE_PAGES_PER_SOURCE, 1, 10);
+  const env = options.env || process.env;
+  const commentLookupBudget = options.youtubeCommentLookupBudget || {
+    remaining: cappedNumber(
+      options.maxYouTubeCommentLookups
+      ?? options.youtubeCommentLookupLimit
+      ?? env.STAFF_YOUTUBE_COMMENT_LOOKUP_LIMIT,
+      DEFAULT_YOUTUBE_COMMENT_LOOKUP_LIMIT,
+      0,
+      500
+    ),
+    perVideo: cappedNumber(
+      options.youtubeCommentsPerVideo
+      ?? env.STAFF_YOUTUBE_COMMENTS_PER_VIDEO,
+      DEFAULT_YOUTUBE_COMMENTS_PER_VIDEO,
+      1,
+      10
+    ),
+  };
   for (const job of jobs) {
     let pageToken = '';
     let totalResultCount = 0;
     let totalInWindowResultCount = 0;
     let normalizedPostCount = 0;
+    let videoDetailsFetchedCount = 0;
+    let commentThreadsAttemptedCount = 0;
+    let commentThreadsFetchedCount = 0;
     let pagesFetched = 0;
     let lastReport = null;
     let channelDetails = null;
@@ -2090,13 +2410,16 @@ async function fetchYouTubePostsForJobs(jobs = [], options = {}) {
     }
     for (let page = 0; page < maxPages; page += 1) {
       const report = job.search_method === 'channel_uploads'
-        ? await fetchYouTubeChannelUploadsJob(job, { ...options, pageToken, channelDetails })
-        : await fetchYouTubeSearchJob(job, { ...options, pageToken });
+        ? await fetchYouTubeChannelUploadsJob(job, { ...options, pageToken, channelDetails, commentLookupBudget })
+        : await fetchYouTubeSearchJob(job, { ...options, pageToken, commentLookupBudget });
       lastReport = report;
       pagesFetched += 1;
       totalResultCount += report.result_count || 0;
       totalInWindowResultCount += report.in_window_result_count == null ? (report.result_count || 0) : report.in_window_result_count;
       normalizedPostCount += Array.isArray(report.posts) ? report.posts.length : 0;
+      videoDetailsFetchedCount += report.video_details_fetched_count || 0;
+      commentThreadsAttemptedCount += report.comment_threads_attempted_count || 0;
+      commentThreadsFetchedCount += report.comment_threads_fetched_count || 0;
       posts.push(...(report.posts || []));
       pageToken = report.next_page_token || '';
       if (!report.ok || !pageToken) break;
@@ -2112,6 +2435,9 @@ async function fetchYouTubePostsForJobs(jobs = [], options = {}) {
       result_count: totalResultCount,
       in_window_result_count: totalInWindowResultCount,
       normalized_post_count: normalizedPostCount,
+      video_details_fetched_count: videoDetailsFetchedCount,
+      comment_threads_attempted_count: commentThreadsAttemptedCount,
+      comment_threads_fetched_count: commentThreadsFetchedCount,
       pages_fetched: pagesFetched,
       max_pages: maxPages,
       next_page_token: pageToken,
@@ -2504,6 +2830,7 @@ async function runSocialPlatformPostSweep({
       apiKey: youtubeApi.apiKey,
       maxResults: maxResultsPerSource,
       maxPagesPerSource,
+      env,
       fetchImpl,
     });
     youtubeFetch = {
@@ -2555,6 +2882,7 @@ async function runSocialPlatformPostSweep({
         apiKey: youtubeApi.apiKey,
         maxResults: maxResultsPerSource,
         maxPagesPerSource,
+        env,
         fetchImpl,
       });
       const fallbackPosts = uniquePosts(fallbackFetched.posts);
@@ -2715,8 +3043,12 @@ module.exports = {
   YOUTUBE_SEARCH_URL,
   YOUTUBE_CHANNELS_URL,
   YOUTUBE_PLAYLIST_ITEMS_URL,
+  YOUTUBE_VIDEOS_URL,
+  YOUTUBE_COMMENT_THREADS_URL,
   YOUTUBE_OEMBED_URL,
   YOUTUBE_SOURCE_POST_WINDOW_START,
+  DEFAULT_YOUTUBE_COMMENT_LOOKUP_LIMIT,
+  DEFAULT_YOUTUBE_COMMENTS_PER_VIDEO,
   YOUTUBE_API_KEY_ENV_NAMES,
   X_BEARER_ENV_NAMES,
   META_GRAPH_ACCESS_TOKEN_ENV_NAMES,

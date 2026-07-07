@@ -73,6 +73,8 @@ const {
   YOUTUBE_SOURCE_POST_WINDOW_START,
   YOUTUBE_CHANNELS_URL,
   YOUTUBE_PLAYLIST_ITEMS_URL,
+  YOUTUBE_VIDEOS_URL,
+  YOUTUBE_COMMENT_THREADS_URL,
   socialDiscoveryApiReadiness,
   TIKTOK_OEMBED_URL,
   YOUTUBE_OEMBED_URL,
@@ -1353,6 +1355,52 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
   const autoLiveStatus = sourcePostAutoLiveStatusFor(normalizedHashtagForQueue, normalizedHashtagForQueue.sourceAgent);
   assert.strictEqual(autoLiveStatus.approved, true, 'hashtag YouTube posts with area-level location and source contact should auto-live without a phone');
   assert.strictEqual(autoLiveStatus.status, 'approved', 'hashtag auto-live importer should create public inventory, not pending review rows');
+  assert.strictEqual(YOUTUBE_VIDEOS_URL, 'https://www.googleapis.com/youtube/v3/videos', 'YouTube sweeps should enrich search results with full video descriptions');
+  assert.strictEqual(YOUTUBE_COMMENT_THREADS_URL, 'https://www.googleapis.com/youtube/v3/commentThreads', 'YouTube sweeps should support bounded comment evidence enrichment');
+  const normalizedDescriptionEnrichedYoutube = normalizeYouTubeApiPost({
+    id: { videoId: 'desc123XYZ90' },
+    snippet: {
+      publishedAt: '2026-05-20T09:00:00.000Z',
+      title: 'Beautiful house in Uganda #UgandaRealEstate',
+      description: 'Shorts result snippet only says Kampala.',
+      channelId: 'UCHashtagExample',
+      channelTitle: 'Uganda Real Estate Clips',
+    },
+    video_details: {
+      id: 'desc123XYZ90',
+      snippet: {
+        publishedAt: '2026-05-20T09:00:00.000Z',
+        title: 'Beautiful house in Uganda #UgandaRealEstate',
+        description: 'Fresh 4 bedroom house for sale in Ndejje Lubugumu, Wakiso. Contact through the YouTube channel for viewing.',
+        channelId: 'UCHashtagExample',
+        channelTitle: 'Uganda Real Estate Clips',
+        tags: ['UgandaRealEstate', 'Ndejje', 'Wakiso'],
+      },
+    },
+  }, broadYoutubeJobs[0]);
+  assert.strictEqual(normalizedDescriptionEnrichedYoutube.area, 'Ndejje', 'YouTube normalizer should use full video descriptions/tags for exact area extraction');
+  assert.strictEqual(normalizedDescriptionEnrichedYoutube.district, 'Wakiso', 'description-enriched YouTube posts should map exact areas to districts');
+  assert(normalizedDescriptionEnrichedYoutube.source_text.includes('Ndejje Lubugumu'), 'YouTube normalizer should carry enriched source text into the import row');
+  assert.strictEqual(normalizedDescriptionEnrichedYoutube.raw_source_post.youtube_confidence_review.status, 'youtube_hashtag_auto_live_ready', 'description-enriched hashtag posts should pass the same auto-live gate');
+  const descriptionEnrichedQueue = normalizeFoundOnlineSourcePost(normalizedDescriptionEnrichedYoutube);
+  assert.strictEqual(descriptionEnrichedQueue.area, 'Ndejje', 'generic found-online normalizer should keep the enriched YouTube area');
+  assert.strictEqual(sourcePostAutoLiveStatusFor(descriptionEnrichedQueue, descriptionEnrichedQueue.sourceAgent).approved, true, 'description-enriched YouTube rows should auto-live through the shared gate');
+  const normalizedCommentEnrichedYoutube = normalizeYouTubeApiPost({
+    id: { videoId: 'comment123XYZ90' },
+    snippet: {
+      publishedAt: '2026-05-21T09:00:00.000Z',
+      title: '2 bedroom apartment in Kampala #UgandaRealEstate',
+      description: 'Message the source for details.',
+      channelId: 'UCHashtagExample',
+      channelTitle: 'Uganda Real Estate Clips',
+    },
+    youtube_top_comments: 'Original poster: this rental is in Ndejje, rent is 400k per month. WhatsApp 0706110456.',
+  }, broadYoutubeJobs[0]);
+  assert.strictEqual(normalizedCommentEnrichedYoutube.area, 'Ndejje', 'YouTube normalizer should use original-poster/top comment evidence for location');
+  assert.strictEqual(normalizedCommentEnrichedYoutube.price_text, '400k per month', 'YouTube normalizer should use comment evidence for price text');
+  assert.strictEqual(normalizedCommentEnrichedYoutube.contact_phone, '+256706110456', 'YouTube normalizer should use comment evidence for phone contact when present');
+  assert(normalizedCommentEnrichedYoutube.comments.includes('Original poster'), 'YouTube comment evidence should be carried for King review');
+  assert.strictEqual(normalizedCommentEnrichedYoutube.raw_source_post.youtube_confidence_review.status, 'youtube_hashtag_auto_live_ready', 'comment-enriched hashtag posts should pass with social source contact/evidence');
   const normalizedNonPropertyYoutube = normalizeYouTubeApiPost({
     id: { videoId: 'nonProperty123' },
     snippet: {
