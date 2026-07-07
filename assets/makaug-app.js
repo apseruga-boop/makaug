@@ -769,6 +769,12 @@ const STAFF_SOURCE_INTAKE_POLL_MS = 2500;
 const STAFF_SOURCE_SWEEP_BATCH_SIZE = 50;
 const STAFF_SOURCE_SWEEP_MAX_RESULTS = 25;
 const STAFF_SOURCE_SWEEP_MAX_PAGES = 2;
+const STAFF_SOURCE_DEEP_SWEEP_BATCH_SIZE = 80;
+const STAFF_SOURCE_DEEP_SWEEP_MAX_RESULTS = 50;
+const STAFF_SOURCE_DEEP_SWEEP_MAX_PAGES = 6;
+const STAFF_SOURCE_SEARCH_SWEEP_BATCH_SIZE = 20;
+const STAFF_SOURCE_SEARCH_SWEEP_MAX_RESULTS = 10;
+const STAFF_SOURCE_SEARCH_SWEEP_MAX_PAGES = 1;
 const STAFF_SOURCE_SWEEP_OFFSET_KEY = "makaug.staff.sourceSweepOffset";
 let adminCurrentPendingListings = [];
 let adminPendingQueueFilter = "all";
@@ -10533,45 +10539,90 @@ async function staffQueueSourceImport() {
   }
 }
 
-function staffStoredSweepOffset() {
+function staffSweepOffsetKey(mode = "") {
+  const suffix = String(mode || "agency").replace(/[^a-z0-9_-]+/gi, "_").toLowerCase() || "agency";
+  return `${STAFF_SOURCE_SWEEP_OFFSET_KEY}.${suffix}`;
+}
+
+function staffStoredSweepOffset(mode = "") {
   try {
-    const parsed = Number(localStorage.getItem(STAFF_SOURCE_SWEEP_OFFSET_KEY));
+    const key = staffSweepOffsetKey(mode);
+    const shouldReadLegacyCursor = !mode || mode === "agency";
+    const raw = localStorage.getItem(key) || (shouldReadLegacyCursor ? localStorage.getItem(STAFF_SOURCE_SWEEP_OFFSET_KEY) : "");
+    const parsed = Number(raw);
     return Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed) : 0;
   } catch (_) {
     return 0;
   }
 }
 
-function staffStoreSweepOffset(value = 0) {
+function staffStoreSweepOffset(value = 0, mode = "") {
   try {
-    localStorage.setItem(STAFF_SOURCE_SWEEP_OFFSET_KEY, String(Math.max(0, Math.round(Number(value) || 0))));
+    localStorage.setItem(staffSweepOffsetKey(mode), String(Math.max(0, Math.round(Number(value) || 0))));
   } catch (_) {}
 }
 
-function staffAdvanceSweepOffsetFromResult(result = {}, currentOffset = 0) {
+function staffAdvanceSweepOffsetFromResult(result = {}, currentOffset = 0, mode = "", fallbackStep = STAFF_SOURCE_SWEEP_BATCH_SIZE) {
   const youtube = result.youtube || {};
   const sourceCount = Number(youtube.source_count || 0);
-  const jobCount = Number(youtube.search_job_count || result.requested_source_count || STAFF_SOURCE_SWEEP_BATCH_SIZE);
+  const jobCount = Number(youtube.search_job_count || result.requested_source_count || fallbackStep);
   if (!jobCount) return currentOffset;
   const nextOffset = sourceCount > 0
     ? (Number(currentOffset || 0) + jobCount) % sourceCount
     : Number(currentOffset || 0) + jobCount;
-  staffStoreSweepOffset(nextOffset);
+  staffStoreSweepOffset(nextOffset, mode);
   return nextOffset;
 }
 
-async function staffRunSourceSweep(dryRun = true) {
-  const platform = document.getElementById("staff-source-sweep-platform")?.value || "all";
+function staffSourceSweepProfile(profile = "agency") {
+  const normalized = String(profile || "agency").toLowerCase();
+  if (normalized === "deep_agency" || normalized === "deep") {
+    return {
+      key: "deep_agency",
+      label: "Deep agency uploads",
+      platform: "youtube",
+      youtubeJobMode: "channel_uploads",
+      maxSources: STAFF_SOURCE_DEEP_SWEEP_BATCH_SIZE,
+      maxResults: STAFF_SOURCE_DEEP_SWEEP_MAX_RESULTS,
+      maxPages: STAFF_SOURCE_DEEP_SWEEP_MAX_PAGES,
+    };
+  }
+  if (normalized === "broad_search" || normalized === "search") {
+    return {
+      key: "broad_search",
+      label: "Broad hashtag/search",
+      platform: "youtube",
+      youtubeJobMode: "search",
+      maxSources: STAFF_SOURCE_SEARCH_SWEEP_BATCH_SIZE,
+      maxResults: STAFF_SOURCE_SEARCH_SWEEP_MAX_RESULTS,
+      maxPages: STAFF_SOURCE_SEARCH_SWEEP_MAX_PAGES,
+    };
+  }
+  return {
+    key: "agency",
+    label: "High-yield agency uploads",
+    platform: document.getElementById("staff-source-sweep-platform")?.value || "all",
+    youtubeJobMode: document.getElementById("staff-source-sweep-youtube-mode")?.value || "channel_uploads",
+    maxSources: STAFF_SOURCE_SWEEP_BATCH_SIZE,
+    maxResults: STAFF_SOURCE_SWEEP_MAX_RESULTS,
+    maxPages: STAFF_SOURCE_SWEEP_MAX_PAGES,
+  };
+}
+
+async function staffRunSourceSweep(dryRun = true, profile = "agency") {
+  const sweepProfile = staffSourceSweepProfile(profile);
+  const platform = sweepProfile.platform;
   const focus = document.getElementById("staff-source-sweep-focus")?.value || "";
-  const youtubeJobMode = document.getElementById("staff-source-sweep-youtube-mode")?.value || "channel_uploads";
-  const sourceOffset = staffStoredSweepOffset();
+  const youtubeJobMode = sweepProfile.youtubeJobMode;
+  const sourceOffset = staffStoredSweepOffset(sweepProfile.key);
+  const requestedSourceCount = dryRun ? Math.min(12, sweepProfile.maxSources) : sweepProfile.maxSources;
   renderStaffSourceImportResult({
     async_job: !dryRun,
     status: dryRun ? "running" : "queued",
-    requested_source_count: dryRun ? 12 : STAFF_SOURCE_SWEEP_BATCH_SIZE,
+    requested_source_count: requestedSourceCount,
     message: dryRun
-      ? "Previewing a source sweep..."
-      : `Submitting background source sweep from source offset ${sourceOffset}...`
+      ? `Previewing ${sweepProfile.label.toLowerCase()} from source offset ${sourceOffset}...`
+      : `Submitting ${sweepProfile.label.toLowerCase()} from source offset ${sourceOffset}...`
   }, dryRun);
   try {
     const res = await staffApiRequestWithTimeout(
@@ -10583,10 +10634,10 @@ async function staffRunSourceSweep(dryRun = true) {
           focus,
           dry_run: dryRun,
           async_job: !dryRun,
-          max_sources: dryRun ? 12 : STAFF_SOURCE_SWEEP_BATCH_SIZE,
+          max_sources: requestedSourceCount,
           source_offset: sourceOffset,
-          max_results: dryRun ? 10 : STAFF_SOURCE_SWEEP_MAX_RESULTS,
-          max_pages: dryRun ? 1 : STAFF_SOURCE_SWEEP_MAX_PAGES,
+          max_results: dryRun ? Math.min(10, sweepProfile.maxResults) : sweepProfile.maxResults,
+          max_pages: dryRun ? 1 : sweepProfile.maxPages,
           published_after: "2026-01-01T00:00:00.000Z",
           youtube_job_mode: youtubeJobMode
         }
@@ -10597,10 +10648,10 @@ async function staffRunSourceSweep(dryRun = true) {
     const data = res?.data || {};
     renderStaffSourceImportResult(data, dryRun);
     if (dryRun) {
-      staffAdvanceSweepOffsetFromResult(data, sourceOffset);
+      staffAdvanceSweepOffsetFromResult(data, sourceOffset, sweepProfile.key, requestedSourceCount);
     } else if (data.job_id) {
       scheduleStaffSourceJobPoll(data.job_id, 0);
-      staffStoreSweepOffset(sourceOffset + STAFF_SOURCE_SWEEP_BATCH_SIZE);
+      staffStoreSweepOffset(sourceOffset + requestedSourceCount, sweepProfile.key);
     }
     toast(dryRun ? "Sweep preview ready." : "Source sweep accepted in the background.");
   } catch (error) {

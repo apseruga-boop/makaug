@@ -48,9 +48,9 @@ const STAFF_EXACT_SOCIAL_IMPORT_LIMIT = 500;
 const STAFF_FAST_DASHBOARD_CACHE_TTL_MS = Math.max(5000, parseInt(process.env.STAFF_FAST_DASHBOARD_CACHE_TTL_MS || '60000', 10) || 60000);
 const STAFF_SOURCE_INTAKE_JOB_TTL_MS = Math.max(300000, parseInt(process.env.STAFF_SOURCE_INTAKE_JOB_TTL_MS || '3600000', 10) || 3600000);
 const STAFF_SOURCE_INTAKE_JOB_LIMIT = Math.max(10, parseInt(process.env.STAFF_SOURCE_INTAKE_JOB_LIMIT || '50', 10) || 50);
-const STAFF_SOCIAL_SWEEP_SOURCE_LIMIT = Math.max(15, parseInt(process.env.STAFF_SOCIAL_SWEEP_SOURCE_LIMIT || '80', 10) || 80);
+const STAFF_SOCIAL_SWEEP_SOURCE_LIMIT = Math.max(15, parseInt(process.env.STAFF_SOCIAL_SWEEP_SOURCE_LIMIT || '160', 10) || 160);
 const STAFF_SOCIAL_SWEEP_RESULT_LIMIT = Math.max(10, parseInt(process.env.STAFF_SOCIAL_SWEEP_RESULT_LIMIT || '50', 10) || 50);
-const STAFF_SOCIAL_SWEEP_PAGE_LIMIT = Math.max(1, parseInt(process.env.STAFF_SOCIAL_SWEEP_PAGE_LIMIT || '2', 10) || 2);
+const STAFF_SOCIAL_SWEEP_PAGE_LIMIT = Math.max(1, parseInt(process.env.STAFF_SOCIAL_SWEEP_PAGE_LIMIT || '6', 10) || 6);
 const EXACT_SOCIAL_URL_PATTERN = /https?:\/\/[^\s<>"']*(?:tiktok\.com\/@[^/\s?#]+\/video\/\d+|youtube\.com\/watch\?[^ \n\r\t<>"']*v=|youtube\.com\/shorts\/|youtu\.be\/|instagram\.com\/(?:p|reel|tv)\/|facebook\.com\/.+\/(?:posts|videos|reel)|fb\.watch\/|(?:x|twitter)\.com\/[^/\s?#]+\/status\/\d+)/ig;
 const PUBLIC_SUPPRESSED_LISTING_MARKERS = ['SOFT LAUNCH TEST - DELETE', 'QA TEST - DELETE'];
 const PUBLIC_SUPPRESSED_DUMMY_TITLES = ['sdgsdgd', 'sgsgsgsgs'];
@@ -67,10 +67,12 @@ const STAFF_SOURCE_MONITOR_GUIDE = {
   status: 'Ready for Render Cron Job and Render Shell trigger',
   dry_run_command: 'npm run inventory:continuous-monitor -- --dry-run',
   confirm_command: 'npm run inventory:continuous-monitor -- --confirm --platforms=youtube,x --youtube-job-mode=channel_uploads --max-sources=15 --max-results=25 --max-pages=1',
-  broad_search_command: 'npm run inventory:sweep-social-platforms -- --platform=youtube --confirm --youtube-job-mode=all --published-after=2026-01-01T00:00:00.000Z --max-sources=25 --max-results=25 --max-pages=1',
+  deep_channel_command: 'npm run inventory:sweep-social-platforms -- --platform=youtube --confirm --youtube-job-mode=channel_uploads --published-after=2026-01-01T00:00:00.000Z --max-sources=80 --max-results=50 --max-pages=6',
+  broad_search_command: 'npm run inventory:sweep-social-platforms -- --platform=youtube --confirm --youtube-job-mode=search --published-after=2026-01-01T00:00:00.000Z --max-sources=20 --max-results=10 --max-pages=1',
   daily_registry_command: 'npm run inventory:daily-source-sweep -- --confirm',
   high_frequency_cadence: 'Every 10-15 minutes: safe known-channel uploads plus X recent search.',
-  broad_search_cadence: 'Every 2-4 hours: broader hashtag/search discovery in small batches.',
+  deep_channel_cadence: 'Every 1-2 hours: deeper known-channel upload scans for agency sources that post heavily.',
+  broad_search_cadence: 'Every 2-4 hours: broader hashtag/search discovery in small batches so YouTube Search quota is protected.',
   daily_registry_cadence: 'Once daily: refresh the source registry and review baseline.',
   render_trigger_path: 'Render Dashboard > project > New > Cron Job, or web service Shell for a one-off run.',
   published_after: '2026-01-01T00:00:00.000Z',
