@@ -766,6 +766,10 @@ const STAFF_MODERATION_PUBLIC_PROOF_TIMEOUT_MS = 6000;
 const STAFF_SOURCE_INTAKE_SUBMIT_TIMEOUT_MS = 7000;
 const STAFF_SOURCE_INTAKE_POLL_TIMEOUT_MS = 6000;
 const STAFF_SOURCE_INTAKE_POLL_MS = 2500;
+const STAFF_SOURCE_SWEEP_BATCH_SIZE = 50;
+const STAFF_SOURCE_SWEEP_MAX_RESULTS = 25;
+const STAFF_SOURCE_SWEEP_MAX_PAGES = 2;
+const STAFF_SOURCE_SWEEP_OFFSET_KEY = "makaug.staff.sourceSweepOffset";
 let adminCurrentPendingListings = [];
 let adminPendingQueueFilter = "all";
 const ADMIN_PENDING_QUEUE_RENDER_STEP = 150;
@@ -10402,6 +10406,9 @@ function renderStaffSourceImportResult(data = {}, dryRun = true) {
           <div>Job ID: <strong>${adminEscape(result.job_id || "-")}</strong></div>
           <div>Status: <strong>${adminEscape(result.status || "queued")}</strong></div>
           <div>Batch inputs: <strong>${staffNumber(result.exact_input_count || 0)}</strong></div>
+          <div>Source batch: <strong>${staffNumber(result.requested_source_count || 0)}</strong></div>
+          <div>Discovered posts: <strong>${staffNumber(summary.discovered_posts_count || 0)}</strong></div>
+          <div>Auto-live properties: <strong>${staffNumber(summary.auto_live_properties || 0)}</strong></div>
           <div>Created properties: <strong>${staffNumber(summary.created_properties || 0)}</strong></div>
           <div>Existing/duplicates blocked: <strong>${staffNumber(summary.existing_properties || 0)}</strong></div>
           <div>Review queue rows: <strong>${staffNumber(summary.review_queue_properties || 0)}</strong></div>
@@ -10526,26 +10533,76 @@ async function staffQueueSourceImport() {
   }
 }
 
+function staffStoredSweepOffset() {
+  try {
+    const parsed = Number(localStorage.getItem(STAFF_SOURCE_SWEEP_OFFSET_KEY));
+    return Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed) : 0;
+  } catch (_) {
+    return 0;
+  }
+}
+
+function staffStoreSweepOffset(value = 0) {
+  try {
+    localStorage.setItem(STAFF_SOURCE_SWEEP_OFFSET_KEY, String(Math.max(0, Math.round(Number(value) || 0))));
+  } catch (_) {}
+}
+
+function staffAdvanceSweepOffsetFromResult(result = {}, currentOffset = 0) {
+  const youtube = result.youtube || {};
+  const sourceCount = Number(youtube.source_count || 0);
+  const jobCount = Number(youtube.search_job_count || result.requested_source_count || STAFF_SOURCE_SWEEP_BATCH_SIZE);
+  if (!jobCount) return currentOffset;
+  const nextOffset = sourceCount > 0
+    ? (Number(currentOffset || 0) + jobCount) % sourceCount
+    : Number(currentOffset || 0) + jobCount;
+  staffStoreSweepOffset(nextOffset);
+  return nextOffset;
+}
+
 async function staffRunSourceSweep(dryRun = true) {
   const platform = document.getElementById("staff-source-sweep-platform")?.value || "all";
   const focus = document.getElementById("staff-source-sweep-focus")?.value || "";
   const youtubeJobMode = document.getElementById("staff-source-sweep-youtube-mode")?.value || "channel_uploads";
+  const sourceOffset = staffStoredSweepOffset();
+  renderStaffSourceImportResult({
+    async_job: !dryRun,
+    status: dryRun ? "running" : "queued",
+    requested_source_count: dryRun ? 12 : STAFF_SOURCE_SWEEP_BATCH_SIZE,
+    message: dryRun
+      ? "Previewing a source sweep..."
+      : `Submitting background source sweep from source offset ${sourceOffset}...`
+  }, dryRun);
   try {
-    const res = await apiRequest("/api/staff/source-intake/social-sweep", {
-      method: "POST",
-      body: {
-        platform,
-        focus,
-        dry_run: dryRun,
-        max_sources: 8,
-        max_results: 5,
-        published_after: "2026-01-01T00:00:00.000Z",
-        youtube_job_mode: youtubeJobMode
-      }
-    });
-    renderStaffSourceImportResult(res?.data || {}, dryRun);
-    if (!dryRun) await renderStaffDashboard();
-    toast(dryRun ? "Sweep preview ready." : "Limited source sweep queued rows where eligible.");
+    const res = await staffApiRequestWithTimeout(
+      "/api/staff/source-intake/social-sweep",
+      {
+        method: "POST",
+        body: {
+          platform,
+          focus,
+          dry_run: dryRun,
+          async_job: !dryRun,
+          max_sources: dryRun ? 12 : STAFF_SOURCE_SWEEP_BATCH_SIZE,
+          source_offset: sourceOffset,
+          max_results: dryRun ? 10 : STAFF_SOURCE_SWEEP_MAX_RESULTS,
+          max_pages: dryRun ? 1 : STAFF_SOURCE_SWEEP_MAX_PAGES,
+          published_after: "2026-01-01T00:00:00.000Z",
+          youtube_job_mode: youtubeJobMode
+        }
+      },
+      dryRun ? STAFF_SOURCE_INTAKE_POLL_TIMEOUT_MS : STAFF_SOURCE_INTAKE_SUBMIT_TIMEOUT_MS,
+      "Staff source sweep submit"
+    );
+    const data = res?.data || {};
+    renderStaffSourceImportResult(data, dryRun);
+    if (dryRun) {
+      staffAdvanceSweepOffsetFromResult(data, sourceOffset);
+    } else if (data.job_id) {
+      scheduleStaffSourceJobPoll(data.job_id, 0);
+      staffStoreSweepOffset(sourceOffset + STAFF_SOURCE_SWEEP_BATCH_SIZE);
+    }
+    toast(dryRun ? "Sweep preview ready." : "Source sweep accepted in the background.");
   } catch (error) {
     toast(`Source sweep failed: ${error.message || "request failed"}`);
   }

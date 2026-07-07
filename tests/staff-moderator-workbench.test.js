@@ -234,6 +234,13 @@ function run() {
   const staffQueueSourceImportBody = app.slice(app.indexOf('async function staffQueueSourceImport'), app.indexOf('async function staffRunSourceSweep'));
   assert(!staffQueueSourceImportBody.includes('window.confirm('), 'staff source queue action should not use a blocking native confirm');
   assert(!staffQueueSourceImportBody.includes('await renderStaffDashboard()'), 'staff source queue action should not refresh heavy dashboard panels on the click path');
+  assert(staffRoutes.includes('STAFF_SOCIAL_SWEEP_SOURCE_LIMIT'), 'staff social sweep should have a configurable high-volume source cap');
+  assert(staffRoutes.includes("youtubeJobMode || 'channel_uploads'"), 'staff social sweep should default to high-yield YouTube channel uploads');
+  assert(staffRoutes.includes("type: 'social_sweep'"), 'staff social sweep should return background jobs for live runs');
+  assert(app.includes('STAFF_SOURCE_SWEEP_BATCH_SIZE = 50'), 'staff social sweep should run a meaningful 50-source batch');
+  assert(app.includes('async_job: !dryRun'), 'staff social sweep should use async jobs for live runs');
+  assert(app.includes('staffStoreSweepOffset(sourceOffset + STAFF_SOURCE_SWEEP_BATCH_SIZE)'), 'staff social sweep should advance source batches between runs');
+  assert(html.includes('staff-high-volume-source-sweep-20260707'), 'frontend cache version must be bumped for the high-volume staff source sweep');
   assert(app.includes('non-listing construction/design/tutorial rows are hidden from active review'), 'staff dashboard should explain source-quality filtered rows');
   assert(app.includes('Copy CSV'), 'staff AI should render contact CSV copy control');
   assert(app.includes('function preferredAudienceForResolvedUser'), 'generic account drawer sign-in should resolve staff role from returned user');

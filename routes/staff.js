@@ -48,6 +48,9 @@ const STAFF_EXACT_SOCIAL_IMPORT_LIMIT = 500;
 const STAFF_FAST_DASHBOARD_CACHE_TTL_MS = Math.max(5000, parseInt(process.env.STAFF_FAST_DASHBOARD_CACHE_TTL_MS || '60000', 10) || 60000);
 const STAFF_SOURCE_INTAKE_JOB_TTL_MS = Math.max(300000, parseInt(process.env.STAFF_SOURCE_INTAKE_JOB_TTL_MS || '3600000', 10) || 3600000);
 const STAFF_SOURCE_INTAKE_JOB_LIMIT = Math.max(10, parseInt(process.env.STAFF_SOURCE_INTAKE_JOB_LIMIT || '50', 10) || 50);
+const STAFF_SOCIAL_SWEEP_SOURCE_LIMIT = Math.max(15, parseInt(process.env.STAFF_SOCIAL_SWEEP_SOURCE_LIMIT || '80', 10) || 80);
+const STAFF_SOCIAL_SWEEP_RESULT_LIMIT = Math.max(10, parseInt(process.env.STAFF_SOCIAL_SWEEP_RESULT_LIMIT || '50', 10) || 50);
+const STAFF_SOCIAL_SWEEP_PAGE_LIMIT = Math.max(1, parseInt(process.env.STAFF_SOCIAL_SWEEP_PAGE_LIMIT || '2', 10) || 2);
 const EXACT_SOCIAL_URL_PATTERN = /https?:\/\/[^\s<>"']*(?:tiktok\.com\/@[^/\s?#]+\/video\/\d+|youtube\.com\/watch\?[^ \n\r\t<>"']*v=|youtube\.com\/shorts\/|youtu\.be\/|instagram\.com\/(?:p|reel|tv)\/|facebook\.com\/.+\/(?:posts|videos|reel)|fb\.watch\/|(?:x|twitter)\.com\/[^/\s?#]+\/status\/\d+)/ig;
 const PUBLIC_SUPPRESSED_LISTING_MARKERS = ['SOFT LAUNCH TEST - DELETE', 'QA TEST - DELETE'];
 const PUBLIC_SUPPRESSED_DUMMY_TITLES = ['sdgsdgd', 'sgsgsgsgs'];
@@ -95,11 +98,14 @@ function publicStaffSourceIntakeJob(job = {}) {
     started_at: job.startedAt || null,
     finished_at: job.finishedAt || null,
     exact_input_count: job.exactInputCount || result.exact_input_count || 0,
+    requested_source_count: job.requestedSourceCount || result.requested_source_count || 0,
     dry_run: job.dryRun === true,
     message: job.message || '',
     error: job.error || '',
     result: job.status === 'completed' ? result : undefined,
     result_summary: job.status === 'completed' ? {
+      discovered_posts_count: Number(result.discovered_posts_count || 0),
+      auto_live_properties: Number(importResult.auto_live_properties || result.auto_live_properties || 0),
       created_properties: Number(importResult.created_properties || result.created_properties || 0),
       existing_properties: Number(importResult.existing_properties || result.existing_properties || 0),
       review_queue_properties: Number(importResult.review_queue_properties || result.review_queue_properties || 0),
@@ -123,7 +129,7 @@ function pruneStaffSourceIntakeJobs(now = Date.now()) {
   }
 }
 
-function createStaffSourceIntakeJob({ type = 'exact_social_import', exactInputCount = 0, dryRun = false } = {}) {
+function createStaffSourceIntakeJob({ type = 'exact_social_import', exactInputCount = 0, requestedSourceCount = 0, dryRun = false } = {}) {
   pruneStaffSourceIntakeJobs();
   const id = `staff-source-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
   const job = {
@@ -134,6 +140,7 @@ function createStaffSourceIntakeJob({ type = 'exact_social_import', exactInputCo
     startedAt: null,
     finishedAt: null,
     exactInputCount,
+    requestedSourceCount,
     dryRun,
     message: 'Source intake job accepted. You can keep using the dashboard while makaug imports in the background.',
     result: null,
@@ -1934,37 +1941,84 @@ router.post('/source-intake/social-sweep', async (req, res, next) => {
     const platform = cleanText(req.body?.platform || 'all').toLowerCase() || 'all';
     const focus = cleanText(req.body?.focus || req.body?.sweep_focus || req.body?.sweepFocus || '');
     const dryRun = req.body?.dry_run !== false && req.body?.dryRun !== false;
-    const maxSources = Math.min(15, Math.max(1, parseInt(req.body?.max_sources || req.body?.maxSources || 8, 10) || 8));
-    const youtubeJobMode = cleanText(req.body?.youtube_job_mode || req.body?.youtubeJobMode || 'all') || 'all';
-    const result = await runSocialPlatformPostSweep({
+    const asyncJob = !dryRun && req.body?.async_job !== false && req.body?.asyncJob !== false && req.body?.background !== false;
+    const maxSources = Math.min(
+      STAFF_SOCIAL_SWEEP_SOURCE_LIMIT,
+      Math.max(1, parseInt(req.body?.max_sources || req.body?.maxSources || (dryRun ? 12 : 50), 10) || (dryRun ? 12 : 50))
+    );
+    const youtubeJobMode = cleanText(req.body?.youtube_job_mode || req.body?.youtubeJobMode || 'channel_uploads') || 'channel_uploads';
+    const sweepPayload = {
       db,
       platform,
       focus,
       dryRun,
       maxSources,
       sourceOffset: Math.max(0, parseInt(req.body?.source_offset || req.body?.sourceOffset || 0, 10) || 0),
-      maxResultsPerSource: Math.min(10, Math.max(1, parseInt(req.body?.max_results || req.body?.maxResults || 5, 10) || 5)),
+      maxResultsPerSource: Math.min(
+        STAFF_SOCIAL_SWEEP_RESULT_LIMIT,
+        Math.max(1, parseInt(req.body?.max_results || req.body?.maxResults || (dryRun ? 10 : 25), 10) || (dryRun ? 10 : 25))
+      ),
+      maxPagesPerSource: Math.min(
+        STAFF_SOCIAL_SWEEP_PAGE_LIMIT,
+        Math.max(1, parseInt(req.body?.max_pages || req.body?.maxPages || (dryRun ? 1 : 2), 10) || (dryRun ? 1 : 2))
+      ),
       searchMode: cleanText(req.body?.x_search_mode || req.body?.xSearchMode || 'all'),
       lookbackDays: Math.max(0, parseInt(req.body?.lookback_days || req.body?.lookbackDays || 0, 10) || 0),
       publishedAfter: cleanText(req.body?.published_after || req.body?.publishedAfter || '2026-01-01T00:00:00.000Z'),
       youtubeJobMode
-    });
-    if (!dryRun) clearStaffFastDashboardCache();
-    await logStaffActivity(req, dryRun ? 'staff_social_sweep_previewed' : 'staff_social_sweep_run', {
-      targetType: 'source_intake',
-      metadata: {
-        batch_id: SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID,
-        platform,
-        focus,
-        youtube_job_mode: youtubeJobMode,
-        dry_run: dryRun,
-        max_sources: maxSources,
-        discovered_posts_count: result.discovered_posts_count || 0,
-        created_properties: result.import_result?.created_properties || 0,
-        existing_properties: result.import_result?.existing_properties || 0
-      }
-    });
-    return res.json({ ok: true, data: result });
+    };
+    const runSweep = async () => {
+      const result = await runSocialPlatformPostSweep(sweepPayload);
+      const responseData = {
+        ...result,
+        requested_source_count: maxSources,
+      };
+      if (!dryRun) clearStaffFastDashboardCache();
+      await logStaffActivity(req, dryRun ? 'staff_social_sweep_previewed' : 'staff_social_sweep_run', {
+        targetType: 'source_intake',
+        metadata: {
+          batch_id: SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID,
+          platform,
+          focus,
+          youtube_job_mode: youtubeJobMode,
+          dry_run: dryRun,
+          async_job: asyncJob,
+          max_sources: maxSources,
+          max_results_per_source: sweepPayload.maxResultsPerSource,
+          max_pages_per_source: sweepPayload.maxPagesPerSource,
+          source_offset: sweepPayload.sourceOffset,
+          discovered_posts_count: result.discovered_posts_count || 0,
+          created_properties: result.import_result?.created_properties || 0,
+          auto_live_properties: result.import_result?.auto_live_properties || 0,
+          existing_properties: result.import_result?.existing_properties || 0
+        }
+      });
+      return responseData;
+    };
+    if (asyncJob) {
+      const job = createStaffSourceIntakeJob({
+        type: 'social_sweep',
+        requestedSourceCount: maxSources,
+        dryRun
+      });
+      runStaffSourceIntakeJob(job.id, runSweep);
+      await logStaffActivity(req, 'staff_social_sweep_job_accepted', {
+        targetType: 'source_intake',
+        targetId: job.id,
+        metadata: {
+          batch_id: SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID,
+          platform,
+          focus,
+          youtube_job_mode: youtubeJobMode,
+          max_sources: maxSources,
+          max_results_per_source: sweepPayload.maxResultsPerSource,
+          max_pages_per_source: sweepPayload.maxPagesPerSource,
+          source_offset: sweepPayload.sourceOffset,
+        }
+      });
+      return res.status(202).json({ ok: true, data: publicStaffSourceIntakeJob(job) });
+    }
+    return res.json({ ok: true, data: await runSweep() });
   } catch (error) {
     return next(error);
   }

@@ -923,6 +923,8 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
   assert(socialPlatformSweepServiceSource.includes('inferTikTokPostedAtFromVideoId'), 'TikTok exact-link import should infer visible-date evidence from public video IDs when no API exists');
   assert(socialPlatformSweepServiceSource.includes('inferXPostedAtFromStatusId'), 'X exact-link import should infer post dates from public status IDs when no API exists');
   assert(socialPlatformSweepServiceSource.includes('snippet.publishedAt'), 'YouTube sweep policy should explain the source publish date comes from YouTube snippet.publishedAt');
+  assert(socialPlatformSweepServiceSource.includes('high_yield_known_channel_upload_scan'), 'YouTube staff sweeps should scan stored source channels as a high-yield path, not only after quota failure');
+  assert(socialPlatformSweepServiceSource.includes("normalizedYoutubeJobMode === 'channel_uploads'"), 'YouTube high-yield mode should explicitly trigger known channel upload scanning');
   assert(socialPlatformSweepServiceSource.includes('X_BEARER_TOKEN'), 'X sweep should use an explicit bearer-token env var');
   assert(socialPlatformSweepServiceSource.includes('META_GRAPH_ACCESS_TOKEN'), 'Meta readiness should expose a Graph access token env var');
   assert(socialPlatformSweepServiceSource.includes('FACEBOOK_PAGE_IDS'), 'Facebook readiness should expose page ID env vars');

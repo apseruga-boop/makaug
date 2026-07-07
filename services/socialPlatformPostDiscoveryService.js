@@ -2513,12 +2513,16 @@ async function runSocialPlatformPostSweep({
       skipped_reason: '',
     };
   }
-  if (
-    requestedPlatforms.includes('youtube')
+  const youtubeSearchQuotaExceeded = youtubeSearchQuotaExceededFromReports(youtubeFetch.reports);
+  const shouldFetchKnownYouTubeChannels = requestedPlatforms.includes('youtube')
     && fetchYouTube
     && youtubeApi.apiKey
-    && youtubeSearchQuotaExceededFromReports(youtubeFetch.reports)
-  ) {
+    && (
+      youtubeSearchQuotaExceeded
+      || normalizedYoutubeJobMode === 'channel_uploads'
+      || normalizedYoutubeJobMode === 'all'
+    );
+  if (shouldFetchKnownYouTubeChannels) {
     const loadedKnownChannels = await knownYouTubeChannelSourcesFromDb(db, {
       limit: sourceLimit,
       offset: normalizedSourceOffset,
@@ -2536,12 +2540,14 @@ async function runSocialPlatformPostSweep({
       : [];
     youtubeKnownChannelFallback = {
       attempted: true,
-      triggered_by_search_quota: true,
+      triggered_by_search_quota: youtubeSearchQuotaExceeded,
       source_count: loadedKnownChannels.sources.length,
       search_job_count: knownChannelJobs.length,
       fetched_posts_count: 0,
       skipped_reason: knownChannelJobs.length ? '' : (loadedKnownChannels.ok ? 'no_known_youtube_channel_sources_found' : loadedKnownChannels.reason),
-      load_reason: loadedKnownChannels.reason || '',
+      load_reason: youtubeSearchQuotaExceeded
+        ? (loadedKnownChannels.reason || 'youtube_search_quota_exceeded')
+        : 'high_yield_known_channel_upload_scan',
       confidence_summary: summarizeYouTubeConfidence([]),
     };
     if (knownChannelJobs.length) {
@@ -2560,7 +2566,7 @@ async function runSocialPlatformPostSweep({
           ...fallbackFetched.reports.map((report) => ({
             ...report,
             fallback_channel_source: true,
-            fallback_reason: 'youtube_search_quota_exceeded',
+            fallback_reason: youtubeSearchQuotaExceeded ? 'youtube_search_quota_exceeded' : 'high_yield_known_channel_upload_scan',
           })),
         ],
       };
