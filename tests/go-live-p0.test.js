@@ -352,6 +352,13 @@ function run() {
   assert(/<details\s+id="lp-location-advanced"[^>]*>/i.test(listPropertyHtml), '/list-property should keep advanced location details collapsed');
   assert(!/<details\s+id="lp-location-advanced"[^>]*\sopen\b/i.test(listPropertyHtml), 'advanced location details should be collapsed by default');
   assert(listPropertyHtml.includes('data-listing-translation-preview="1"'), 'listing description translation preview should exist');
+  assert(frontendSource.includes('function removeLpSelectedPhoto'), '/list-property photo cards should let users remove unwanted selected photos before submission');
+  assert(frontendSource.includes('reindexLpPhotoAssignments'), 'photo removal should preserve category assignments by photo identity instead of stale array indexes');
+  assert(frontendSource.includes('LP_MAX_SUBMITTED_PHOTO_BYTES'), 'listing photos should be compressed below the backend upload limit before submission');
+  assert(frontendSource.includes('Large phone photos are compressed before upload'), 'photo upload helper copy should explain large phone-photo handling');
+  assert(frontendSource.includes('If this is an iPhone HEIC photo'), 'unsupported iPhone photo formats should show a useful workaround message');
+  assert(!frontendSource.includes('JPG, PNG or WEBP - up to 10MB each'), 'photo upload copy should not claim a 10MB per-photo backend limit');
+  assert(sourceHtml.includes('list-property-photo-upload-fix-20260708'), 'frontend cache version must be bumped for list-property photo upload fixes');
   assert(listPropertyHtml.includes('id="lp-verify-id-file" type="file" accept="image/*"'), 'National ID upload should accept photos only');
   assert(listPropertyText.includes('PDFs are not accepted'), 'National ID upload should tell users PDFs are not accepted');
   assert(!listPropertyHtml.includes('id="lp-verify-id-file" type="file" accept="image/*,.pdf"'), 'National ID upload must not accept PDFs');

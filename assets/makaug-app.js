@@ -880,6 +880,7 @@ let lpPreviewMapInitPromise = null;
 const LP_MIN_UPLOAD_PHOTOS = 5;
 const LP_LAND_MIN_UPLOAD_PHOTOS = 3;
 const LP_MAX_UPLOAD_PHOTOS = 20;
+const LP_MAX_SUBMITTED_PHOTO_BYTES = 5.5 * 1024 * 1024;
 const LP_OTHER_PHOTO_SLOT = "other";
 let lpSelectedPhotos = [];
 let lpPhotoUploadUrls = [];
@@ -5275,7 +5276,7 @@ function applyListingWizardLanguageUI() {
     improveDescBtn.innerHTML = `<i class="fas fa-wand-magic-sparkles"></i> ${translatePropertyUi("AI Write Description")}`;
   }
   setTextById("lp-photo-drop-title", translateListingLabel("Drag & Drop Photos or Click to Browse"));
-  setTextById("lp-photo-drop-sub", translateListingLabel("JPG, PNG or WEBP - up to 10MB each"));
+  setTextById("lp-photo-drop-sub", translateListingLabel("JPG, PNG or WEBP. Large phone photos are compressed before upload."));
   setTextById("lp-add-one-photo-btn", translateListingLabel("Add one photo"));
   setTextById("lp-add-multiple-photo-btn", translateListingLabel("Add multiple photos"));
   const mainPhotoHelp = document.getElementById("lp-main-photo-help");
@@ -22609,6 +22610,28 @@ function getLpPhotoAssignmentStorageValue(selectValue, previousValue = "") {
   return `${LP_OTHER_PHOTO_SLOT}:${previousLabel.slice(0, 80)}`;
 }
 
+function lpPhotoSignature(file = {}) {
+  return `${file.name || ""}:${file.size || 0}:${file.lastModified || 0}`;
+}
+
+function resetLpPreparedPhotoCache() {
+  lpPhotoUploadUrls = [];
+  lpPhotoUploadSignature = "";
+}
+
+function reindexLpPhotoAssignments(previousPhotos = [], previousAssignments = {}) {
+  const assignmentBySignature = new Map(previousPhotos.map((file, index) => [
+    lpPhotoSignature(file),
+    previousAssignments[index]
+  ]));
+  const nextAssignments = {};
+  lpSelectedPhotos.forEach((file, index) => {
+    const assigned = assignmentBySignature.get(lpPhotoSignature(file));
+    if (assigned) nextAssignments[index] = assigned;
+  });
+  lpPhotoAssignments = nextAssignments;
+}
+
 function setLpPhotoAssignment(index, value) {
   const idx = Number(index);
   if (!Number.isFinite(idx)) return;
@@ -22629,6 +22652,29 @@ function setLpPhotoOtherLabel(index, value) {
   renderListReviewSummary();
 }
 
+function removeLpSelectedPhoto(index) {
+  const idx = Number(index);
+  if (!Number.isFinite(idx) || idx < 0 || idx >= lpSelectedPhotos.length) return;
+  const previousPhotos = lpSelectedPhotos.slice();
+  const previousAssignments = { ...lpPhotoAssignments };
+  const removed = lpSelectedPhotos[idx];
+  lpSelectedPhotos.splice(idx, 1);
+  reindexLpPhotoAssignments(previousPhotos, previousAssignments);
+  resetLpPreparedPhotoCache();
+  if (!lpSelectedPhotos.length) {
+    lpMainPhotoIndex = 0;
+  } else if (lpMainPhotoIndex === idx) {
+    lpMainPhotoIndex = 0;
+  } else if (lpMainPhotoIndex > idx) {
+    lpMainPhotoIndex -= 1;
+  }
+  renderLpPhotoFeedback();
+  evaluateLpPhotoQuality(lpSelectedPhotos);
+  updateListPreview();
+  renderListReviewSummary();
+  toast(`${removed?.name || "Photo"} removed.`);
+}
+
 function renderLpPhotoFeedback() {
   const listEl = document.getElementById("lp-photo-file-list");
   const galleryEl = document.getElementById("lp-photo-gallery");
@@ -22638,7 +22684,7 @@ function renderLpPhotoFeedback() {
     if (!lpSelectedPhotos.length) {
       listEl.innerHTML = `<div class="text-sm text-gray-500">${translateListingLabel("No photos selected yet.")}</div>`;
     } else {
-      const items = lpSelectedPhotos.map((file) => `<li>${file.name} <span class="text-gray-400">(${Math.round(file.size / 1024)} KB)</span></li>`).join("");
+      const items = lpSelectedPhotos.map((file, index) => `<li class="flex items-center justify-between gap-2"><span>${file.name} <span class="text-gray-400">(${Math.round(file.size / 1024)} KB)</span></span><button type="button" onclick="removeLpSelectedPhoto(${index})" class="text-[11px] font-bold text-red-600 hover:text-red-700">${translateListingLabel("Remove")}</button></li>`).join("");
       listEl.innerHTML = `<div class="font-semibold text-gray-700 mb-1">${translateListingLabel("Selected photos")}: ${lpSelectedPhotos.length}</div><ul class="list-disc pl-5 space-y-1 text-sm">${items}</ul>`;
     }
   }
@@ -22661,9 +22707,14 @@ function renderLpPhotoFeedback() {
             <img src="${src}" alt="${file.name}" class="w-full h-36 object-cover rounded-lg">
             <div class="mt-2 flex items-center justify-between gap-2">
               <div class="text-xs text-gray-500 line-clamp-1">${file.name}</div>
-              <button type="button" onclick="setLpMainPhoto(${index})" class="text-[11px] px-2 py-1 rounded-full font-semibold ${isMain ? "bg-green-700 text-white" : "border border-green-200 text-green-700 hover:bg-green-50"}">
-                ${isMain ? translateListingLabel("Main photo") : translateListingLabel("Set as main")}
-              </button>
+              <div class="flex items-center gap-1">
+                <button type="button" onclick="setLpMainPhoto(${index})" class="text-[11px] px-2 py-1 rounded-full font-semibold ${isMain ? "bg-green-700 text-white" : "border border-green-200 text-green-700 hover:bg-green-50"}">
+                  ${isMain ? translateListingLabel("Main photo") : translateListingLabel("Set as main")}
+                </button>
+                <button type="button" onclick="removeLpSelectedPhoto(${index})" class="text-[11px] px-2 py-1 rounded-full border border-red-200 text-red-600 hover:bg-red-50 font-semibold">
+                  ${translateListingLabel("Remove")}
+                </button>
+              </div>
             </div>
             <select onchange="setLpPhotoAssignment(${index}, this.value)" class="mt-2 w-full border border-green-100 rounded-lg px-3 py-2 text-sm bg-white">
               ${options}
@@ -22711,20 +22762,30 @@ function loadImageElement(url) {
 
 async function compressPhotoForSubmission(file, options = {}) {
   if (!file || !(file.type || "").startsWith("image/")) return "";
-  const maxSide = options.maxSide || 1400;
-  const quality = options.quality || 0.78;
+  const maxBytes = options.maxBytes || LP_MAX_SUBMITTED_PHOTO_BYTES;
+  const maxSideOptions = options.maxSideOptions || [1600, 1400, 1200, 1000, 850];
+  const qualityOptions = options.qualityOptions || [0.82, 0.74, 0.66, 0.58, 0.5];
   const objectUrl = URL.createObjectURL(file);
   try {
     const img = await loadImageElement(objectUrl);
-    const scale = Math.min(1, maxSide / Math.max(img.width || maxSide, img.height || maxSide));
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.max(1, Math.round((img.width || maxSide) * scale));
-    canvas.height = Math.max(1, Math.round((img.height || maxSide) * scale));
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return readBlobAsDataUrl(file);
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-    const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
-    return readBlobAsDataUrl(blob || file);
+    let bestBlob = null;
+    for (const maxSide of maxSideOptions) {
+      const scale = Math.min(1, maxSide / Math.max(img.width || maxSide, img.height || maxSide));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round((img.width || maxSide) * scale));
+      canvas.height = Math.max(1, Math.round((img.height || maxSide) * scale));
+      const ctx = canvas.getContext("2d");
+      if (!ctx) continue;
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      for (const quality of qualityOptions) {
+        const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
+        if (!blob) continue;
+        if (!bestBlob || blob.size < bestBlob.size) bestBlob = blob;
+        if (blob.size <= maxBytes) return readBlobAsDataUrl(blob);
+      }
+    }
+    if (bestBlob) return readBlobAsDataUrl(bestBlob);
+    return readBlobAsDataUrl(file);
   } finally {
     try { URL.revokeObjectURL(objectUrl); } catch (e) {}
   }
@@ -22737,8 +22798,13 @@ async function prepareListingPhotoUploadUrls() {
   }
   const urls = [];
   for (const file of lpSelectedPhotos) {
-    const dataUrl = await compressPhotoForSubmission(file);
-    if (!dataUrl) throw new Error(`${file?.name || "Photo"} could not be prepared for upload.`);
+    let dataUrl = "";
+    try {
+      dataUrl = await compressPhotoForSubmission(file);
+    } catch (error) {
+      dataUrl = "";
+    }
+    if (!dataUrl) throw new Error(`${file?.name || "Photo"} could not be prepared. If this is an iPhone HEIC photo, choose JPEG/Most Compatible or take a screenshot and upload that.`);
     urls.push(dataUrl);
   }
   lpPhotoUploadUrls = urls;
@@ -22779,12 +22845,13 @@ async function evaluateLpPhotoQuality(files) {
 
 function handleLpPhotoSelection(event) {
   const files = Array.from(event?.target?.files || []);
-  const existingSig = new Set(lpSelectedPhotos.map((file) => `${file.name}:${file.size}:${file.lastModified}`));
-  const incoming = files.filter((file) => !existingSig.has(`${file.name}:${file.size}:${file.lastModified}`));
+  const previousPhotos = lpSelectedPhotos.slice();
+  const previousAssignments = { ...lpPhotoAssignments };
+  const existingSig = new Set(lpSelectedPhotos.map(lpPhotoSignature));
+  const incoming = files.filter((file) => !existingSig.has(lpPhotoSignature(file)));
   const beforeCount = lpSelectedPhotos.length;
   lpSelectedPhotos = lpSelectedPhotos.concat(incoming).slice(0, LP_MAX_UPLOAD_PHOTOS);
-  lpPhotoUploadUrls = [];
-  lpPhotoUploadSignature = "";
+  resetLpPreparedPhotoCache();
   const duplicateCount = files.length - incoming.length;
   const overflowCount = beforeCount + incoming.length - lpSelectedPhotos.length;
   if (duplicateCount > 0) {
@@ -22795,11 +22862,7 @@ function handleLpPhotoSelection(event) {
   }
   if (event?.target) event.target.value = "";
   if (lpMainPhotoIndex >= lpSelectedPhotos.length) lpMainPhotoIndex = 0;
-  const nextAssignments = {};
-  lpSelectedPhotos.forEach((file, idx) => {
-    if (lpPhotoAssignments[idx]) nextAssignments[idx] = lpPhotoAssignments[idx];
-  });
-  lpPhotoAssignments = nextAssignments;
+  reindexLpPhotoAssignments(previousPhotos, previousAssignments);
   renderLpPhotoFeedback();
   evaluateLpPhotoQuality(lpSelectedPhotos);
   renderListReviewSummary();
@@ -37245,7 +37308,7 @@ const LISTING_LABEL_I18N = {
 const LISTING_LABEL_I18N_SUPPLEMENTAL = {
   lg: {
     "Drag & Drop Photos or Click to Browse": "Sika ebifaananyi oba koona okulonda",
-    "JPG, PNG or WEBP - up to 10MB each": "JPG, PNG oba WEBP - buli kimu tekisukka 10MB",
+    "JPG, PNG or WEBP. Large phone photos are compressed before upload.": "JPG, PNG oba WEBP. Ebifaananyi bya phone ebunene bikendeezebwa nga tebinnatikkibwa.",
     "Add one photo": "Yongera ekifaananyi kimu",
     "Add multiple photos": "Yongera ebifaananyi ebingi",
     "Choose one image as the": "Londa ekifaananyi kimu nga",
@@ -37271,7 +37334,7 @@ const LISTING_LABEL_I18N_SUPPLEMENTAL = {
   },
   sw: {
     "Drag & Drop Photos or Click to Browse": "Buruta picha au bofya kuchagua",
-    "JPG, PNG or WEBP - up to 10MB each": "JPG, PNG au WEBP - hadi 10MB kila moja",
+    "JPG, PNG or WEBP. Large phone photos are compressed before upload.": "JPG, PNG au WEBP. Picha kubwa za simu hupunguzwa kabla ya kupakiwa.",
     "Add one photo": "Ongeza picha moja",
     "Add multiple photos": "Ongeza picha nyingi",
     "Choose one image as the": "Chagua picha moja kama",
@@ -37297,7 +37360,7 @@ const LISTING_LABEL_I18N_SUPPLEMENTAL = {
   },
   ac: {
     "Drag & Drop Photos or Click to Browse": "Ywayo cal onyo dii me yero",
-    "JPG, PNG or WEBP - up to 10MB each": "JPG, PNG onyo WEBP - naka 10MB acel acel",
+    "JPG, PNG or WEBP. Large phone photos are compressed before upload.": "JPG, PNG onyo WEBP. Cal madongo me cim ki dwoko matidi mapwod pe ki upload.",
     "Add one photo": "Med cal acel",
     "Add multiple photos": "Med cal mapol",
     "Choose one image as the": "Yer cal acel calo",
@@ -37323,7 +37386,7 @@ const LISTING_LABEL_I18N_SUPPLEMENTAL = {
   },
   ny: {
     "Drag & Drop Photos or Click to Browse": "Hurura ebishushani nari okoreho kuronda",
-    "JPG, PNG or WEBP - up to 10MB each": "JPG, PNG nari WEBP - obwingi 10MB buri kimwe",
+    "JPG, PNG or WEBP. Large phone photos are compressed before upload.": "JPG, PNG nari WEBP. Ebishushani bya phone ebinene nibikendeezibwa bitakatikkirwe.",
     "Add one photo": "Ongyera ekishushani kimwe",
     "Add multiple photos": "Ongyera ebishushani bingi",
     "Choose one image as the": "Toorana ekishushani kimwe nk'",
@@ -37349,7 +37412,7 @@ const LISTING_LABEL_I18N_SUPPLEMENTAL = {
   },
   rn: {
     "Drag & Drop Photos or Click to Browse": "Hurura ebishushani nari okoreho kuronda",
-    "JPG, PNG or WEBP - up to 10MB each": "JPG, PNG nari WEBP - obwingi 10MB buri kimwe",
+    "JPG, PNG or WEBP. Large phone photos are compressed before upload.": "JPG, PNG nari WEBP. Ebishushani bya phone ebinene nibikendeezibwa bitakatikkirwe.",
     "Add one photo": "Ongyera ekishushani kimwe",
     "Add multiple photos": "Ongyera ebishushani bingi",
     "Choose one image as the": "Toorana ekishushani kimwe nk'",
@@ -37375,7 +37438,7 @@ const LISTING_LABEL_I18N_SUPPLEMENTAL = {
   },
   sm: {
     "Drag & Drop Photos or Click to Browse": "Sika ebifaananyi oba koona okulonda",
-    "JPG, PNG or WEBP - up to 10MB each": "JPG, PNG oba WEBP - buli kimu tekisukka 10MB",
+    "JPG, PNG or WEBP. Large phone photos are compressed before upload.": "JPG, PNG oba WEBP. Ebifaananyi bya phone ebunene bikendeezebwa nga tebinnatikkibwa.",
     "Add one photo": "Yongera ekifaananyi kimu",
     "Add multiple photos": "Yongera ebifaananyi ebingi",
     "Choose one image as the": "Londa ekifaananyi kimu nga",
@@ -37817,7 +37880,7 @@ const LISTING_LABEL_I18N_SUPPLEMENTAL = {
 
 Object.assign(LISTING_LABEL_I18N_SUPPLEMENTAL.am ||= {}, {
   "Drag & Drop Photos or Click to Browse": "ፎቶዎችን ይጎትቱ ወይም ለመምረጥ ይንኩ",
-  "JPG, PNG or WEBP - up to 10MB each": "JPG፣ PNG ወይም WEBP - እያንዳንዱ እስከ 10MB",
+  "JPG, PNG or WEBP. Large phone photos are compressed before upload.": "JPG፣ PNG ወይም WEBP። ትልልቅ የስልክ ፎቶዎች ከመጫን በፊት ይጨመቃሉ።",
   "Add one photo": "አንድ ፎቶ ያክሉ",
   "Add multiple photos": "ብዙ ፎቶዎች ያክሉ",
   "Choose one image as the": "አንድ ምስል እንደ",
@@ -37921,7 +37984,7 @@ Object.assign(LISTING_LABEL_I18N_SUPPLEMENTAL.am ||= {}, {
 
 Object.assign(LISTING_LABEL_I18N_SUPPLEMENTAL.ar ||= {}, {
   "Drag & Drop Photos or Click to Browse": "اسحب الصور أو اضغط للاختيار",
-  "JPG, PNG or WEBP - up to 10MB each": "JPG أو PNG أو WEBP - حتى 10MB لكل صورة",
+  "JPG, PNG or WEBP. Large phone photos are compressed before upload.": "JPG أو PNG أو WEBP. يتم ضغط صور الهاتف الكبيرة قبل الرفع.",
   "Add one photo": "أضف صورة واحدة",
   "Add multiple photos": "أضف عدة صور",
   "Choose one image as the": "اختر صورة واحدة كـ",
