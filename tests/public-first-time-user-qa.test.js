@@ -48,6 +48,11 @@ assert(
 );
 
 assert(
+  indexHtml.includes("public-qa-cleanup-20260708"),
+  "public QA cleanup marker should be present to force the corrected public app bundle"
+);
+
+assert(
   serverJs.includes("publicI18nDetailPersistenceVersion")
     && serverJs.includes("publicI18nStartupRaceFixVersion")
     && serverJs.includes("publicI18nCookiePersistenceVersion")
@@ -56,6 +61,7 @@ assert(
     && serverJs.includes("publicSearchNormalizeHelperVersion")
     && serverJs.includes("publicSearchRouteBackendResultsVersion")
     && serverJs.includes("publicHomeSearchBackendResultsVersion")
+    && serverJs.includes("publicQaCleanupVersion")
     && serverJs.includes("publicAppVersionSuffixes"),
   "server-rendered public routes should receive the same i18n app-version suffixes as the homepage"
 );
@@ -155,6 +161,7 @@ assert(
     && appJs.includes('return `/api/properties/search?${params.toString()}`')
     && appJs.includes("activeRouteSearchPath || publicInventoryCategoryPath(activeCategory)")
     && appJs.includes('syncActiveRouteSearchHandoff("initial_route_search_complete")')
+    && appJs.includes("backend_results|route_query|route_search|public_inventory|active_route_search|initial_route_search")
     && appJs.includes('hydrateVisibleRouteSearchResults("homepage_search_backend_results")'),
   "direct category URLs with q/area params should hydrate from backend search results before showing an empty state"
 );
@@ -164,6 +171,14 @@ assert(
     && appJs.includes("radiusMiles: radiusMilesParam || null")
     && appJs.includes('if (radiusValue) setValue("sale-radius-f", radiusValue);'),
   "plain text route searches should not silently enable the default 10-mile radius filter"
+);
+
+assert(
+  !appJs.includes("Rukiga translation is not fully available yet")
+    && appJs.includes('rn: {')
+    && appJs.includes('heroTitleHtml: "Shaka <span class=\\"text-green-300\\">maka</span> yawe enungi"')
+    && appJs.includes('heroSearch: "Shaka"'),
+  "Rukiga should use its translated homepage/search copy instead of a forced English fallback"
 );
 
 console.log("public first-time-user QA regression checks passed");

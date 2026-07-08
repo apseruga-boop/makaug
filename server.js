@@ -167,6 +167,7 @@ const publicSearchAreaHandoffVersion = 'public-search-area-handoff-20260707';
 const publicSearchNormalizeHelperVersion = 'public-search-normalize-helper-20260707';
 const publicSearchRouteBackendResultsVersion = 'public-search-route-backend-results-20260707';
 const publicHomeSearchBackendResultsVersion = 'public-home-search-backend-results-20260707';
+const publicQaCleanupVersion = 'public-qa-cleanup-20260708';
 const publicAppVersionSuffixes = [
   captureHelperUsabilityVersion,
   studentNearestUniversityVersion,
@@ -203,7 +204,8 @@ const publicAppVersionSuffixes = [
   publicSearchAreaHandoffVersion,
   publicSearchNormalizeHelperVersion,
   publicSearchRouteBackendResultsVersion,
-  publicHomeSearchBackendResultsVersion
+  publicHomeSearchBackendResultsVersion,
+  publicQaCleanupVersion
 ];
 let cachedIndexHtml = null;
 const publicHtmlCache = new Map();

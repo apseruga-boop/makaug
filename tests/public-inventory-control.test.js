@@ -196,7 +196,7 @@ test('public featured property feed only returns featured backend listings', () 
 });
 
 test('anonymous public agent APIs suppress QA broker records', () => {
-  assert.match(agentsRouteSource, /PUBLIC_AGENT_SUPPRESSED_MARKERS = \['QA TEST - DELETE', 'SOFT LAUNCH TEST - DELETE'\]/);
+  assert.match(agentsRouteSource, /PUBLIC_AGENT_SUPPRESSED_MARKERS = \['QA TEST - DELETE', 'SOFT LAUNCH TEST - DELETE', 'TRAINING', 'DEMO', 'SAMPLE', 'PLACEHOLDER'\]/);
   assert.match(agentsRouteSource, /function addPublicAgentLaunchTestFilter/);
   assert.match(agentsRouteSource, /function addPublicAgentSelfRegistrationFilter/);
   assert.match(agentsRouteSource, /PUBLIC_AGENT_MIN_LIVE_LISTINGS = 2/);
@@ -209,6 +209,9 @@ test('anonymous public agent APIs suppress QA broker records', () => {
   assert(agentsRouteSource.includes("COALESCE(a.email, '') !~* '(qa-test|makaug\\\\.invalid|dummy|sample)'"));
   assert(agentsRouteSource.includes("COALESCE(a.licence_number, '') !~* '^(QA|TEST|DUMMY|SAMPLE)-'"));
   assert(agentsRouteSource.includes("COALESCE(a.licence_number, '') !~* '^(SOCIAL|FOUND-ONLINE|TIKTOK|FACEBOOK|X)-'"));
+  assert(agentsRouteSource.includes("COALESCE(a.full_name, '') !~* '(training|demo|sample|placeholder)'"));
+  assert(agentsRouteSource.includes("COALESCE(a.company_name, '') !~* '(training|demo|sample|placeholder)'"));
+  assert(agentsRouteSource.includes("COALESCE(a.verification_reason, '') !~* '(training|demo|sample|placeholder)'"));
 });
 
 test('admin live endpoint mirrors public visibility and exposes cleanup action', () => {
@@ -287,9 +290,15 @@ test('student public listings are discoverable from backend listing aliases', ()
   assert.equal(isStudent({ listing_type: 'student' }), true);
   assert.equal(isStudent({ type: 'student_accommodation' }), true);
   assert.equal(isStudent({ type: 'rent', students_welcome: 'yes' }), true);
-  assert.equal(isStudent({ type: 'commercial', extra_fields: { student_verified: true } }), true);
+  assert.equal(isStudent({ type: 'sale', students_welcome: true }), false);
+  assert.equal(isStudent({ type: 'commercial', extra_fields: { student_verified: true } }), false);
   assert.equal(isStudent({ type: 'sale' }), false);
   assert.match(propertiesRouteSource, /const listingType = normalizeListingType\(req\.query\.listing_type \|\| req\.query\.type \|\| req\.query\.category\)/);
+  assert.match(propertiesRouteSource, /p\.listing_type = \? OR \(p\.listing_type = \? AND p\.students_welcome = \?\)/);
+  assert.match(propertiesRouteSource, /WHEN \$\{directType\} = 'rent' AND \$\{a\}\.students_welcome = TRUE THEN 'student'/);
+  assert(appSource.includes('if (t !== "rent") return false;'), 'student page should not accept sale/commercial listings through students_welcome');
+  assert(!appSource.includes('if (!["sale", "rent", "commercial"].includes(t)) return false;'), 'old broad student discoverability should stay removed');
+  assert(appSource.includes('distanceMiles != null && Number.isFinite(Number(distanceMiles))'), 'null API distances must not render as 0.0 mi away');
 });
 
 test('public properties API is cacheable and uses the fast public summary path', () => {

@@ -412,7 +412,7 @@ function fastPublicOpportunityBucketSql(alias = 'p') {
   return `CASE
     WHEN ${directType} IN ('sale', 'rent', 'commercial', 'land') THEN ${directType}
     WHEN ${directType} IN ('student', 'students') THEN 'student'
-    WHEN ${a}.students_welcome = TRUE THEN 'student'
+    WHEN ${directType} = 'rent' AND ${a}.students_welcome = TRUE THEN 'student'
     WHEN ${propertyType} ~* '(land|plot|acre|decimal|estate plots?)' THEN 'land'
     WHEN ${propertyType} ~* '(commercial|office|shop|retail|warehouse|showroom|restaurant|industrial)' THEN 'commercial'
     WHEN ${propertyType} ~* '(hostel|student|campus|dorm|bedsitter)' THEN 'student'
@@ -1642,7 +1642,7 @@ async function listPropertiesHandler(req, res, next) {
     }
 
     if (studentPortal) {
-      addFilter(filters, values, "(p.listing_type = ? OR p.students_welcome = ?)", 'student', true);
+      addFilter(filters, values, "(p.listing_type = ? OR (p.listing_type = ? AND p.students_welcome = ?))", 'student', 'rent', true);
     } else if (listingType && LISTING_TYPES.includes(listingType)) {
       addFilter(filters, values, 'p.listing_type = ?', listingType);
     }

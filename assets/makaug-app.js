@@ -2447,14 +2447,6 @@ const LANG_FALLBACK = {
   ar: "en"
 };
 
-if (I18N_UI.rn) {
-  I18N_UI.rn = Object.assign({}, I18N_UI.en, {
-    languageSet: "Language set",
-    langBanner: "Rukiga translation is not fully available yet, so makaug uses English fallback instead of guessing another language.",
-    pageAbout: "About makaug"
-  });
-}
-
 const CONTENT_I18N = {
   en: {
     "about.heroLabel": "About makaug",
@@ -33146,10 +33138,11 @@ function propertyDescriptionHoverHtml(p = {}) {
   const saved = isPropertySaved(p.id);
   const broker = findBrokerById(p.agent);
   const source = listingRouteBadgeMeta(p);
-	      const registration = listingRegistrationMeta(p);
-	      const addedMeta = listingDateMeta(p);
-	      const availability = propertyAvailabilityText(p);
-	      const nearDistance = Number.isFinite(Number(p.distance_miles)) ? `${Number(p.distance_miles).toFixed(1)} mi away` : "";
+  const registration = listingRegistrationMeta(p);
+  const addedMeta = listingDateMeta(p);
+  const availability = propertyAvailabilityText(p);
+  const distanceMiles = p.distance_miles ?? p.distanceMiles;
+  const nearDistance = distanceMiles != null && Number.isFinite(Number(distanceMiles)) ? `${Number(distanceMiles).toFixed(1)} mi away` : "";
   const landTitleBadge = landTitleAvailabilityBadgeHtml(p, { compact: true });
   const isThirdPartyResult = isFoundOnlineListing(p);
   const photoSrc = isThirdPartyResult ? "" : publicImageSrc(p.img, "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=900&q=80");
@@ -33274,7 +33267,7 @@ function isStudentDiscoverable(p) {
   const extra = p?.extra_fields && typeof p.extra_fields === "object" ? p.extra_fields : {};
   const t = normalizeType(p?.type || p?.listing_type || p?.category || extra.listing_type);
   if (t === "student") return true;
-  if (!["sale", "rent", "commercial"].includes(t)) return false;
+  if (t !== "rent") return false;
   const flag = p?.students_welcome ?? p?.student_verified ?? extra.students_welcome ?? extra.student_verified;
   if (typeof flag === "boolean") return flag;
   if (typeof flag === "string") return ["yes", "true", "1"].includes(flag.toLowerCase().trim());
@@ -33326,7 +33319,8 @@ function studentCard(p) {
   const distanceText = nearestUniversity
     ? [p.area, universityDistanceText].filter(Boolean).join(", ")
     : `${p.area}, ${p.district}`;
-  const nearDistanceText = Number.isFinite(Number(p.distance_miles)) ? `${Number(p.distance_miles).toFixed(1)} mi away` : "";
+  const distanceMiles = p.distance_miles ?? p.distanceMiles;
+  const nearDistanceText = distanceMiles != null && Number.isFinite(Number(distanceMiles)) ? `${Number(distanceMiles).toFixed(1)} mi away` : "";
   const walkText = String(p.student_walk_text || "").trim();
   const bottomText = nearestUniversity || (!/near\s+campus/i.test(walkText) ? walkText : "") || "Nearest university to confirm";
   const roomLabel = p.student_room_label || ((studentTypeKey(p) === "shared") ? "Shared" : (p.beds ? String(p.beds) : ""));
@@ -35138,6 +35132,9 @@ function syncActiveRouteSearchHandoff(source = "route_query_sync") {
   const page = pageForPublicRoute(window.location.pathname || "/");
   if (!page || !routeQueryValueForSectionPage()) return false;
   syncSectionSearchShell(page, { forceRouteQuery: true });
+  if (publicInventoryRouteSearchPath(activePublicInventoryCategoryFromRoute()) && /backend_results|route_query|route_search|public_inventory|active_route_search|initial_route_search/i.test(source)) {
+    return true;
+  }
   return applyRouteQueryToVisibleSectionSearch(page, source);
 }
 
