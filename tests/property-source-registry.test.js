@@ -181,7 +181,8 @@ test('public pages explain the search-engine model and expose found-online sourc
   assert(read('services/publicHtmlSanitizer.js').includes("preserve.add('report-modal')"), 'public property and report routes should keep the report modal available');
   assert(frontend.includes('foundOnlineSourceVisualHtml'), 'found-online public cards should use a source/video placeholder instead of copied social photos');
   assert(frontend.includes('thirdPartyDiscovery ? [] : imageItems'), 'remote found-online rows should not keep imported social image arrays in the public UI');
-  assert(frontend.includes('Watch on the original platform before you enquire'), 'found-online detail should put the original platform video/source before the description');
+  assert(frontend.includes('foundOnlineSourceThumbnailUrl'), 'found-online detail should prefer static source thumbnails over live social embeds');
+  assert(frontend.includes('Makaug shows a static source preview here and links back to the original platform'), 'found-online detail should explain static source previews before the description');
   assert(frontend.includes('First picked up by makaug'), 'source disclosure should show first-picked-up metadata');
   assert(frontend.includes('First posted online'), 'source disclosure should show original source post metadata');
   assert(frontend.includes('Being confirmed from source'), 'source disclosure should show a clear fallback while the original post date is being confirmed');

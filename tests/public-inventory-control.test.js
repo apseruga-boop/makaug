@@ -111,7 +111,8 @@ test('anonymous public property APIs suppress launch seed QA listings', () => {
   assert.match(routeSource, /if \(publicOnly \|\| !adminAccess\) \{\s*addPublicLaunchSeedFilter\(filters, values\);/);
   assert.match(appSource, /PUBLIC_LISTINGS_FAST_PAGE_LIMIT = 8/);
   assert.match(appSource, /PUBLIC_LISTINGS_BACKGROUND_PAGE_LIMIT = 24/);
-  assert.match(appSource, /PUBLIC_LISTINGS_BACKGROUND_MAX_PAGES = 2/);
+  assert.match(appSource, /PUBLIC_LISTINGS_BACKGROUND_MAX_PAGES = 80/);
+  assert.match(appSource, /PUBLIC_LISTINGS_ROUTE_SEARCH_MAX_PAGES = 80/);
   assert.match(appSource, /PUBLIC_OPPORTUNITY_SUMMARY_PATH = "\/api\/properties\?status=approved&public_only=1&limit=1&page=1&summary_only=1&include_summary=1"/);
   assert.match(routeSource, /const summaryOnly = parseBooleanLike\(req\.query\.summary_only \|\| req\.query\.summaryOnly, false\)/);
   assert.match(routeSource, /const includeSummary = summaryOnly \|\| parseBooleanLike/);
@@ -340,6 +341,24 @@ test('public cards do not show stale Kampala area when richer location fields di
   );
   assert(appSource.includes('const displayLocation = publicPropertyLocationLabel(p);'), 'property/student cards should use the corrected public location label');
   assert(!appSource.includes('[p.area, universityDistanceText].filter(Boolean).join(", ")'), 'student cards must not prepend stale area to university labels');
+});
+
+test('public result pages expose the full inventory and avoid black iframe media cards', () => {
+  assert.match(appSource, /const PUBLIC_LISTINGS_BACKGROUND_MAX_PAGES = 80;/);
+  assert.match(appSource, /const PUBLIC_LISTINGS_ROUTE_SEARCH_MAX_PAGES = 80;/);
+  assert.doesNotMatch(appSource, /const PUBLIC_LISTINGS_BACKGROUND_MAX_PAGES = 2;/);
+  assert.match(asyncFunctionSource('fetchPublicCategoryRows'), /fetchPublicPaginatedRows/);
+  assert.doesNotMatch(asyncFunctionSource('fetchPublicCategoryRows'), /Promise\.all\(Array\.from/);
+
+  const sourceVisual = functionSource('foundOnlineSourceVisualHtml');
+  assert.doesNotMatch(sourceVisual, /<iframe/);
+  assert.match(sourceVisual, /foundOnlineSourceThumbnailUrl/);
+  assert.match(functionSource('foundOnlineSourceThumbnailUrl'), /img\.youtube\.com\/vi/);
+  assert.match(sourceVisual, /source preview/);
+
+  const detailMap = asyncFunctionSource('initDetailMap');
+  assert.match(functionSource('renderStaticDetailMapFallback'), /staticmap\.openstreetmap\.de/);
+  assert.match(detailMap, /renderStaticDetailMapFallback\(el, p, point\)/);
 });
 
 test('public properties API is cacheable and uses the fast public summary path', () => {

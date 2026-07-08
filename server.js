@@ -169,6 +169,7 @@ const publicSearchRouteBackendResultsVersion = 'public-search-route-backend-resu
 const publicHomeSearchBackendResultsVersion = 'public-home-search-backend-results-20260707';
 const publicQaCleanupVersion = 'public-qa-cleanup-20260708';
 const publicLocationLabelFixVersion = 'public-location-label-fix-20260708';
+const publicResultsDeliveryFixVersion = 'public-results-delivery-fix-20260708';
 const publicAppVersionSuffixes = [
   captureHelperUsabilityVersion,
   studentNearestUniversityVersion,
@@ -207,7 +208,8 @@ const publicAppVersionSuffixes = [
   publicSearchRouteBackendResultsVersion,
   publicHomeSearchBackendResultsVersion,
   publicQaCleanupVersion,
-  publicLocationLabelFixVersion
+  publicLocationLabelFixVersion,
+  publicResultsDeliveryFixVersion
 ];
 let cachedIndexHtml = null;
 const publicHtmlCache = new Map();

@@ -856,7 +856,8 @@ let publicListingsApiStats = null;
 const publicActiveCategoryHydrationPromises = new Map();
 const PUBLIC_LISTINGS_FAST_PAGE_LIMIT = 8;
 const PUBLIC_LISTINGS_BACKGROUND_PAGE_LIMIT = 24;
-const PUBLIC_LISTINGS_BACKGROUND_MAX_PAGES = 2;
+const PUBLIC_LISTINGS_BACKGROUND_MAX_PAGES = 80;
+const PUBLIC_LISTINGS_ROUTE_SEARCH_MAX_PAGES = 80;
 const PUBLIC_OPPORTUNITY_SUMMARY_PATH = "/api/properties?status=approved&public_only=1&limit=1&page=1&summary_only=1&include_summary=1";
 const PUBLIC_CATEGORY_DEEP_HYDRATION_DELAY_MS = 8000;
 const publicCategoryDeepHydrationTimers = new Map();
@@ -24640,6 +24641,28 @@ function getYouTubeEmbedUrl(url) {
   }
 }
 
+function getYouTubeVideoId(url) {
+  const raw = String(url || "").trim();
+  if (!raw) return "";
+  try {
+    const parsed = new URL(raw);
+    const host = parsed.hostname.replace(/^www\./, "").toLowerCase();
+    let id = "";
+    if (host === "youtu.be") {
+      id = parsed.pathname.split("/").filter(Boolean)[0] || "";
+    } else if (host.endsWith("youtube.com")) {
+      if (parsed.pathname.startsWith("/shorts/") || parsed.pathname.startsWith("/embed/")) {
+        id = parsed.pathname.split("/").filter(Boolean)[1] || "";
+      } else {
+        id = parsed.searchParams.get("v") || "";
+      }
+    }
+    return /^[a-zA-Z0-9_-]{6,}$/.test(id) ? id : "";
+  } catch (error) {
+    return "";
+  }
+}
+
 function getTikTokEmbedUrl(url) {
   const raw = String(url || "").trim();
   if (!raw) return "";
@@ -32217,43 +32240,63 @@ function foundOnlineSourceVideoUrl(p = {}) {
   return values.find((value) => /^https?:\/\//i.test(String(value || "").trim())) || "";
 }
 
+function foundOnlineSourceThumbnailUrl(p = {}, videoUrl = "") {
+  const extra = p?.extra_fields && typeof p.extra_fields === "object" ? p.extra_fields : {};
+  const explicit = [
+    p.thumbnail_url,
+    p.video_thumbnail_url,
+    p.source_thumbnail_url,
+    p.cover_image_url,
+    extra.thumbnail_url,
+    extra.video_thumbnail_url,
+    extra.source_thumbnail_url,
+    extra.cover_image_url
+  ].find((value) => /^https?:\/\//i.test(String(value || "").trim()));
+  if (explicit) return explicit;
+  const youtubeId = getYouTubeVideoId(videoUrl || foundOnlineSourceVideoUrl(p));
+  return youtubeId ? `https://img.youtube.com/vi/${encodeURIComponent(youtubeId)}/hqdefault.jpg` : "";
+}
+
+function foundOnlineSourceFallbackVisualHtml(platform = "Source") {
+  const icon = /tiktok/i.test(platform) ? "fab fa-tiktok" : (/youtube/i.test(platform) ? "fab fa-youtube" : "fas fa-link");
+  return `
+    <div class="absolute inset-0 grid place-items-center bg-gradient-to-br from-emerald-50 via-white to-blue-50 text-slate-900">
+      <div class="px-5 text-center">
+        <div class="mx-auto mb-3 h-14 w-14 rounded-full border border-emerald-100 bg-white text-emerald-700 shadow-sm grid place-items-center">
+          <i class="${icon} text-2xl"></i>
+        </div>
+        <div class="text-xs font-black uppercase tracking-wide text-emerald-800">${translateListingLabel("Third-party property result")}</div>
+        <div class="mt-1 text-sm font-bold text-slate-700">${adminEscape(platform)} ${translateListingLabel("source preview")}</div>
+      </div>
+    </div>`;
+}
+
 function foundOnlineSourceVisualHtml(p = {}, options = {}) {
   const meta = foundOnlineSourceMeta(p) || {};
   const videoUrl = foundOnlineSourceVideoUrl(p);
   const platform = meta.platform || (/tiktok\.com/i.test(videoUrl) ? "TikTok" : (/youtube\.com|youtu\.be/i.test(videoUrl) ? "YouTube" : "Source"));
   const icon = /tiktok/i.test(platform) ? "fab fa-tiktok" : (/youtube/i.test(platform) ? "fab fa-youtube" : "fas fa-link");
   const compact = options.compact === true;
-  const youtubeEmbedUrl = videoUrl ? getYouTubeEmbedUrl(videoUrl) : "";
-  const tiktokEmbedUrl = !youtubeEmbedUrl && videoUrl ? getTikTokEmbedUrl(videoUrl) : "";
-  const officialEmbedUrl = youtubeEmbedUrl || tiktokEmbedUrl;
-  if (officialEmbedUrl) {
-    const openLabel = /tiktok/i.test(platform)
-      ? translateListingLabel("Open TikTok")
-      : /youtube/i.test(platform)
-        ? translateListingLabel("Open YouTube")
-        : translateListingLabel("Open source");
-    return `
-      <div class="${compact ? "h-full min-h-[12rem]" : "min-h-[18rem]"} relative overflow-hidden bg-slate-950 text-white">
-        <iframe src="${adminAttr(officialEmbedUrl)}" title="${adminAttr(`${platform} property source video`)}" class="absolute inset-0 h-full w-full border-0 bg-black" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
-        <div class="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/95 via-slate-950/60 to-transparent p-3 pt-12 text-left">
-          <div class="inline-flex items-center gap-1 rounded-full bg-white/90 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-slate-900">
-            <i class="${icon}"></i>${adminEscape(platform)} ${translateListingLabel("source")}
-          </div>
-          ${compact ? "" : `<div class="mt-2 text-xs text-blue-50">${translateListingLabel("Official platform embed. Makaug does not re-host social media photos or videos.")}</div>`}
-        </div>
-        <a href="${adminAttr(videoUrl)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation();" class="absolute right-2 top-2 rounded-full bg-white/95 px-3 py-1 text-[11px] font-black text-slate-900 shadow-sm hover:bg-white">${openLabel}</a>
-      </div>`;
-  }
+  const thumbnailUrl = foundOnlineSourceThumbnailUrl(p, videoUrl);
+  const sourceUrl = meta.sourceUrl || videoUrl || meta.sourceContactUrl || "";
+  const openLabel = /tiktok/i.test(platform)
+    ? translateListingLabel("Open TikTok")
+    : /youtube/i.test(platform)
+      ? translateListingLabel("Open YouTube")
+      : translateListingLabel("Open source");
   return `
-    <div class="${compact ? "h-full min-h-[12rem]" : "min-h-[18rem]"} grid place-items-center bg-gradient-to-br from-blue-50 via-white to-emerald-50 text-slate-900 p-5 text-center border border-blue-100">
-      <div>
-        <div class="mx-auto mb-3 h-12 w-12 rounded-full bg-white border border-blue-100 text-blue-700 shadow-sm grid place-items-center">
-          <i class="${icon} text-2xl"></i>
+    <div class="${compact ? "h-full min-h-[12rem]" : "min-h-[18rem]"} relative overflow-hidden border border-blue-100 bg-gradient-to-br from-emerald-50 via-white to-blue-50 text-slate-900">
+      ${thumbnailUrl ? `
+        <img src="${adminAttr(thumbnailUrl)}" alt="${adminAttr(`${platform} property source preview`)}" class="absolute inset-0 h-full w-full object-cover" loading="lazy" onerror="this.classList.add('hidden'); var fallback=this.nextElementSibling; if (fallback) fallback.classList.remove('hidden');">
+        <div class="hidden">${foundOnlineSourceFallbackVisualHtml(platform)}</div>
+      ` : foundOnlineSourceFallbackVisualHtml(platform)}
+      <div class="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/85 via-slate-950/45 to-transparent p-3 pt-12 text-left text-white">
+        <div class="inline-flex items-center gap-1 rounded-full bg-white/95 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-slate-900">
+          <i class="${icon}"></i>${adminEscape(platform)} ${translateListingLabel("source")}
         </div>
-        <div class="text-xs uppercase tracking-wide text-blue-800 font-black">${translateListingLabel("Third-party property result")}</div>
-        <div class="mt-1 text-lg font-black">${adminEscape(platform)} ${videoUrl ? translateListingLabel("video/source") : translateListingLabel("source")}</div>
-        <div class="mt-2 text-xs text-slate-600 max-w-xs mx-auto">${translateListingLabel("Makaug shows facts and links back to the original source. Social media photos are not re-hosted here.")}</div>
+        ${compact ? "" : `<div class="mt-2 max-w-md text-xs text-blue-50">${translateListingLabel("Makaug shows a static source preview here and links back to the original platform. Social media embeds load only after the user opens the source.")}</div>`}
       </div>
+      ${sourceUrl ? `<a href="${adminAttr(sourceUrl)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation();" class="absolute right-2 top-2 rounded-full bg-white/95 px-3 py-1 text-[11px] font-black text-slate-900 shadow-sm hover:bg-white"><i class="fas fa-play mr-1 text-[10px]"></i>${openLabel}</a>` : ""}
     </div>`;
 }
 
@@ -34487,29 +34530,24 @@ async function fetchPublicCategoryRows(category, totalCount = 0, options = {}) {
   if (!path) return { rows: [], firstResponse: null };
   const limit = PUBLIC_LISTINGS_BACKGROUND_PAGE_LIMIT;
   const expectedPages = Math.ceil(Math.max(0, Number(totalCount) || 0) / limit) || 1;
-  const maxPages = Math.min(Math.max(expectedPages, 1), PUBLIC_LISTINGS_BACKGROUND_MAX_PAGES);
-  const separator = path.includes("?") ? "&" : "?";
-  const responses = await Promise.all(Array.from({ length: maxPages }, (_, index) => {
-    const page = index + 1;
-    return apiRequest(`${path}${separator}limit=${limit}&page=${page}&include_summary=0`, { skipAuth: true })
-      .then((response) => {
-        const pageRows = Array.isArray(response?.data) ? response.data : [];
-        if (pageRows.length && typeof options.onPageRows === "function") {
-          try {
-            options.onPageRows(pageRows, response, page);
-          } catch (pageCallbackError) {
-            console.warn("Public category inventory page callback failed", pageCallbackError);
-          }
+  try {
+    return await fetchPublicPaginatedRows(path, {
+      limit,
+      maxPages: Math.min(Math.max(expectedPages, 1), PUBLIC_LISTINGS_BACKGROUND_MAX_PAGES),
+      includeSummary: false,
+      onPage: ({ rows, response, page }) => {
+        if (!rows.length || typeof options.onPageRows !== "function") return;
+        try {
+          options.onPageRows(rows, response, page);
+        } catch (pageCallbackError) {
+          console.warn("Public category inventory page callback failed", pageCallbackError);
         }
-        return response;
-      })
-      .catch((error) => {
-        console.warn("Public category inventory page failed", { category, page, error: error?.message || error });
-        return null;
-      });
-  }));
-  const rows = responses.flatMap((response) => Array.isArray(response?.data) ? response.data : []);
-  return { rows, firstResponse: responses.find(Boolean) || null };
+      }
+    });
+  } catch (error) {
+    console.warn("Public category inventory failed", { category, error: error?.message || error });
+    return { rows: [], firstResponse: null };
+  }
 }
 
 async function refreshActivePublicInventoryCategoryFromApi({ silent = true } = {}) {
@@ -34548,7 +34586,7 @@ async function refreshActivePublicInventoryCategoryFromApi({ silent = true } = {
         const expectedPages = Math.ceil(Math.max(0, Number(categoryTotal) || 0) / PUBLIC_LISTINGS_BACKGROUND_PAGE_LIMIT) || 1;
         const { rows: searchRows, firstResponse: searchFirstResponse } = await fetchPublicPaginatedRows(activeRouteSearchPath, {
           limit: PUBLIC_LISTINGS_BACKGROUND_PAGE_LIMIT,
-          maxPages: Math.min(Math.max(expectedPages, 1), 12),
+          maxPages: Math.min(Math.max(expectedPages, 1), PUBLIC_LISTINGS_ROUTE_SEARCH_MAX_PAGES),
           includeSummary: false,
           onPage: ({ rows, response }) => {
             if (activeCategory !== activePublicInventoryCategoryFromRoute()) return;
@@ -34654,7 +34692,7 @@ async function refreshPublicListingsFromApi({ silent = true } = {}) {
         const expectedPages = Math.ceil(Math.max(0, Number(categoryTotal) || 0) / PUBLIC_LISTINGS_BACKGROUND_PAGE_LIMIT) || 1;
         const { rows: searchRows, firstResponse: searchFirstResponse } = await fetchPublicPaginatedRows(activeRouteSearchPath, {
           limit: PUBLIC_LISTINGS_BACKGROUND_PAGE_LIMIT,
-          maxPages: Math.min(Math.max(expectedPages, 1), 12),
+          maxPages: Math.min(Math.max(expectedPages, 1), PUBLIC_LISTINGS_ROUTE_SEARCH_MAX_PAGES),
           includeSummary: false,
           onPage: ({ rows, response }) => {
             if (activeCategory !== activePublicInventoryCategoryFromRoute()) return;
@@ -40888,10 +40926,7 @@ async function openDetail(id, options = {}) {
         <div class="bg-white border border-gray-200 rounded-2xl overflow-hidden">
           ${thirdPartyDetail ? `
             <div class="p-4 pb-0">
-              ${safeVideoUrl ? renderVideoEmbedCard(safeVideoUrl, {
-                title: safeVideoIsTikTok ? translateListingLabel("TikTok source video") : translateListingLabel("Original source video"),
-                sub: translateListingLabel("Watch on the original platform before you enquire.")
-              }) : foundOnlineSourceVisualHtml(p)}
+              ${foundOnlineSourceVisualHtml(p, { detail: true })}
             </div>
           ` : `
 	              <button type="button" onclick="openDetailGalleryLightbox(detailGalleryPhotoIndex)" class="block w-full property-gallery-hero relative overflow-hidden group">
@@ -41825,13 +41860,40 @@ function resetMaps() {
   setBrokerMapMarkers(getBrokerDirectory());
 }
 
+function renderStaticDetailMapFallback(el, p = {}, point = {}) {
+  if (!el) return;
+  const lat = Number.isFinite(point?.lat) ? point.lat : MAP_DEFAULT_CENTER.lat;
+  const lng = Number.isFinite(point?.lng) ? point.lng : MAP_DEFAULT_CENTER.lng;
+  const zoom = point?.exact ? 16 : MAP_DISTRICT_ZOOM;
+  const title = getLocalizedPropertyTitle(p) || p.title || translatePropertyUi("Property");
+  const location = getPropertyLocationDisplay(p) || [p.area, p.district].filter(Boolean).join(", ") || translatePropertyUi("Location");
+  const mapUrl = `https://www.openstreetmap.org/?mlat=${encodeURIComponent(lat)}&mlon=${encodeURIComponent(lng)}#map=${encodeURIComponent(zoom)}/${encodeURIComponent(lat)}/${encodeURIComponent(lng)}`;
+  const staticUrl = `https://staticmap.openstreetmap.de/staticmap.php?center=${encodeURIComponent(`${lat},${lng}`)}&zoom=${encodeURIComponent(zoom)}&size=900x280&markers=${encodeURIComponent(`${lat},${lng},red-pushpin`)}`;
+  el.innerHTML = `
+    <a href="${adminAttr(mapUrl)}" target="_blank" rel="noopener noreferrer" class="relative block h-full min-h-[220px] overflow-hidden bg-emerald-50 text-left">
+      <img src="${adminAttr(staticUrl)}" alt="${adminAttr(`${title} map location`)}" class="h-full w-full object-cover" loading="lazy" onerror="this.classList.add('hidden'); var fallback=this.nextElementSibling; if (fallback) fallback.classList.remove('hidden');">
+      <div class="hidden absolute inset-0 grid place-items-center bg-gradient-to-br from-emerald-50 via-white to-blue-50 p-5 text-center">
+        <div>
+          <div class="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-full border border-emerald-100 bg-white text-emerald-700 shadow-sm"><i class="fas fa-map-location-dot text-xl"></i></div>
+          <div class="text-xs font-black uppercase tracking-wide text-emerald-800">${translatePropertyUi("Location")}</div>
+          <div class="mt-1 text-sm font-bold text-slate-700">${adminEscape(location)}</div>
+        </div>
+      </div>
+      <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/80 via-slate-950/40 to-transparent p-3 text-white">
+        <div class="text-sm font-black">${adminEscape(title)}</div>
+        <div class="text-xs">${adminEscape(location)}</div>
+      </div>
+    </a>`;
+}
+
 async function initDetailMap(p) {
   const el = document.getElementById("map-detail");
   if (!el) return;
-  const useGoogle = await ensureGoogleMapsApi();
   const point = getListingMapPoint(p);
   const lat = point?.lat ?? MAP_DEFAULT_CENTER.lat;
   const lng = point?.lng ?? MAP_DEFAULT_CENTER.lng;
+  renderStaticDetailMapFallback(el, p, point);
+  const useGoogle = await ensureGoogleMapsApi();
   if (useGoogle && window.google?.maps) {
     el.innerHTML = "";
     const map = new google.maps.Map(el, {

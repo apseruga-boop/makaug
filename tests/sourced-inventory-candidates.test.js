@@ -1600,9 +1600,10 @@ test('found-online social search admin path and share cards are protected and au
   assert(frontend.includes('No phone number is not a blocker if a public social profile exists'), 'dashboard should explain source-review no-phone policy');
   assert(frontend.includes('Website-only sources are disabled'), 'source database should explain website sources are not imported as properties');
   assert(frontend.includes('Open Source'), 'seed summaries should use a platform-neutral source action label');
-  assert(frontend.includes('getYouTubeEmbedUrl(videoUrl)'), 'found-online source cards should use official YouTube embeds when available');
-  assert(frontend.includes('getTikTokEmbedUrl(videoUrl)'), 'found-online source cards should use official TikTok embeds when available');
-  assert(frontend.includes('Official platform embed. Makaug does not re-host social media photos or videos.'), 'found-online source cards should label official embeds without rehosting media');
+  assert(frontend.includes('foundOnlineSourceThumbnailUrl'), 'found-online source cards should prefer static platform thumbnails when available');
+  assert(frontend.includes('https://img.youtube.com/vi/'), 'YouTube source cards should fall back to official YouTube thumbnails instead of black embeds');
+  assert(frontend.includes('foundOnlineSourceFallbackVisualHtml'), 'found-online source cards should render a branded fallback preview when no thumbnail exists');
+  assert(frontend.includes('Makaug shows a static source preview here and links back to the original platform'), 'found-online source cards should explain that embeds load only after opening the source');
   assert(frontend.includes('foundOnlineSourceContactButtonLabel'), 'public listing detail should build a platform-specific source contact CTA');
   assert(frontend.includes('p.source_contact_url'), 'public listing detail should fall back to top-level source contact fields as well as extra_fields');
   assert(frontend.includes('Contact via {platform} source'), 'public listing detail should label TikTok/Facebook/X source contact buttons by platform');
