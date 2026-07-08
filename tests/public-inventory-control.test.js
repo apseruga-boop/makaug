@@ -125,7 +125,7 @@ test('anonymous public property APIs suppress launch seed QA listings', () => {
   assert.match(appSource, /function publicOpportunityStatsFromApiResponse\(response\)/);
   assert.match(appSource, /window\.__makaugPublicSummaryPromise && !window\.__makaugPublicSummaryConsumed/);
   assert.match(appSource, /const response = await apiRequest\(PUBLIC_OPPORTUNITY_SUMMARY_PATH, \{ skipAuth: true \}\)/);
-  assert.match(appSource, /const firstPagePath = activeCategory \? publicInventoryCategoryPath\(activeCategory\) \|\| "\/api\/properties\?status=approved&public_only=1" : "\/api\/properties\?status=approved&public_only=1"/);
+  assert.match(appSource, /const firstPagePath = activeCategory\s*\? activeRouteSearchPath \|\| publicInventoryCategoryPath\(activeCategory\) \|\| "\/api\/properties\?status=approved&public_only=1"\s*: "\/api\/properties\?status=approved&public_only=1"/);
   assert.match(appSource, /const firstPageRowsPromise = fetchPublicPaginatedRows\(firstPagePath, \{[\s\S]*limit: PUBLIC_LISTINGS_FAST_PAGE_LIMIT,[\s\S]*maxPages: 1,[\s\S]*includeSummary: false/);
   assert.match(appSource, /await Promise\.all\(\[firstPageRowsPromise, summaryStatsPromise\]\)/);
   assert.match(appSource, /applyPublicRowsForUi\(firstPageRows, firstPageResponse\);\s*renderAll\(\);/);

@@ -83,7 +83,7 @@ const AREA_HINTS = [
   'Komamboga', 'Kiwatule', 'Bukoto', 'Naguru', 'Kololo', 'Nakasero', 'Luzira',
   'Lubowa', 'Seguku', 'Kitende', 'Kajansi', 'Akright', 'Garuga', 'Kiwafu',
   'Munyonyo', 'Makindye', 'Kansanga', 'Mengo', 'Makerere', 'Kyambogo', 'MUBS',
-  'Namanve', 'Katosi', 'Mpunge', 'Mpungwe', 'Lake Victoria', 'Luweero', 'Masaka',
+  'Namanve', 'Namasuba', 'Rahim Foods', 'Katosi', 'Mpunge', 'Mpungwe', 'Lake Victoria', 'Luweero', 'Masaka',
   'Mbarara', 'Mbale', 'Gulu', 'Arua',
   'Bujjuko', 'Bujuuko', 'Namayumba', 'Kakiri', 'Masulita', 'Hoima Road',
   'Mityana Road', 'Entebbe Road', 'Jinja Road', 'Kigo', 'Kawuku', 'Kisubi',
@@ -94,6 +94,7 @@ const AREA_HINTS = [
 ];
 
 const AREA_PIN_OVERRIDES = [
+  { name: 'Namasuba', district: 'Wakiso', lat: 0.258, lng: 32.558, aliases: ['Namasuba', 'Namasuba Kampala', 'Namasuba Entebbe Road', 'Rahim Foods', 'Rahim Foods Namasuba'] },
   { name: 'Ndejje', district: 'Wakiso', lat: 0.244, lng: 32.553, aliases: ['Ndejje', 'Ndejje Lubugumu'] },
   { name: 'Bujjuko Akright Estate', district: 'Wakiso', lat: 0.374, lng: 32.389, aliases: ['Bujjuko Akright', 'Bujuuko Akright', 'Akright', 'Bujjuko', 'Bujuuko'] },
   { name: 'Kakiri', district: 'Wakiso', lat: 0.409, lng: 32.38, aliases: ['Kakiri', 'Kakiri Masulita', 'Kakiri Masulita Hoima Road', 'Hoima Road'] },
@@ -148,6 +149,22 @@ function areaPinFromText(value = '') {
     if (new RegExp(`(^|[^a-z0-9])${pattern}([^a-z0-9]|$)`, 'i').test(haystack)) return point;
   }
   return null;
+}
+
+function sourceListingTitleFromText(value = '') {
+  const raw = cleanText(value);
+  if (!raw) return '';
+  const labelled = raw.match(/\b(?:listing|title|property)\s*:\s*([^.!?]+?)(?=\s+(?:overview|location and access|apartment highlights|house highlights|property highlights|who this suits)\b|$)/i);
+  if (labelled) return cleanText(labelled[1]);
+  const patterns = [
+    /\b(?:Luxury\s+)?(?:\d{1,2}\s*(?:-)?\s*)?(?:bedroom|bed|br|studio)\s+(?:apartment|flat|house|home|villa|mansion|bungalow|property)\s+for\s+(?:rent|sale)\s+in\s+[^.!?]+/i,
+    /\b(?:Luxury\s+)?(?:apartment|flat|house|home|villa|mansion|bungalow|property)\s+for\s+(?:rent|sale)\s+in\s+[^.!?]+/i,
+  ];
+  for (const pattern of patterns) {
+    const match = raw.match(pattern);
+    if (match) return cleanText(match[0]);
+  }
+  return '';
 }
 
 function normalizePlatform(value = '') {
@@ -880,8 +897,9 @@ function buildTikTokExactPostImportRows({
       const commentEvidence = cleanText(seed.comments || seed.comment || seed.owner_comment || seed.owner_comments || seed.owner_response || seed.poster_reply || seed.poster_response || seed.reply || seed.replies || '');
       const visualText = sourceVisualTextFromObject(seed);
       const caption = cleanText(seed.caption || seed.description || oembed.title || seed.title || '');
-      const title = cleanText(seed.title || oembed.title || caption || `TikTok property post ${index + 1}`);
-      const combinedText = cleanText(`${title} ${caption} ${visualText} ${commentEvidence}`);
+      const sourceDerivedTitle = sourceListingTitleFromText(`${visualText} ${caption} ${commentEvidence}`);
+      const title = cleanText(seed.title || sourceDerivedTitle || oembed.title || caption || `TikTok property post ${index + 1}`);
+      const combinedText = cleanText(`${sourceDerivedTitle} ${title} ${caption} ${visualText} ${commentEvidence}`);
       const rawArea = cleanText(seed.area || seed.location || '');
       const extractedRawArea = extractArea(rawArea);
       const areaPin = areaPinFromText(`${rawArea} ${combinedText}`);
@@ -1039,11 +1057,12 @@ function buildExactSocialPostImportRows({
         || sourcePageUrl.replace(/^https?:\/\/(?:www\.)?/i, '').replace(/[/?#].*$/g, '')
         || `${platform} property source`
       );
-      const title = cleanText(seed.title || page.title || oembed.title || `Found-online ${platform} property post ${index + 1}`);
       const commentEvidence = cleanText(seed.comments || seed.comment || seed.owner_comment || seed.owner_comments || seed.owner_response || seed.poster_reply || seed.poster_response || seed.reply || seed.replies || '');
       const visualText = sourceVisualTextFromObject(seed);
-      const caption = cleanText(seed.caption || seed.description || page.description || oembed.title || title);
-      const combinedText = cleanText(`${title} ${caption} ${visualText} ${commentEvidence}`);
+      const caption = cleanText(seed.caption || seed.description || page.description || oembed.title || page.title || '');
+      const sourceDerivedTitle = sourceListingTitleFromText(`${visualText} ${caption} ${commentEvidence}`);
+      const title = cleanText(seed.title || sourceDerivedTitle || page.title || oembed.title || `Found-online ${platform} property post ${index + 1}`);
+      const combinedText = cleanText(`${sourceDerivedTitle} ${title} ${caption} ${visualText} ${commentEvidence}`);
       const rawArea = cleanText(seed.area || seed.location || '');
       const extractedRawArea = extractArea(rawArea);
       const areaPin = areaPinFromText(`${rawArea} ${combinedText}`);

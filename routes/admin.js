@@ -7,7 +7,7 @@ const { requireAdminApiKey } = require('../middleware/auth');
 const { asArray, cleanText, toNullableInt, toNullableFloat, isValidEmail, isValidPhone } = require('../middleware/validation');
 const { parsePagination, toPagination } = require('../utils/pagination');
 const { DISTRICTS, LISTING_TYPES } = require('../utils/constants');
-const { normalizeReviewLocationHierarchy } = require('../utils/ugandaLocationHierarchy');
+const { normalizeReviewLocationHierarchy, districtForKnownArea } = require('../utils/ugandaLocationHierarchy');
 const { normalizeEmail, normalizeUgPhone } = require('../utils/adminOtpOverride');
 const { createListingSubmitToken } = require('../utils/listingSubmitOtp');
 const { publicLivePropertyStatusSql } = require('../utils/publicInventoryStatus');
@@ -2221,6 +2221,17 @@ async function loadPropertyReview(propertyId) {
   };
 }
 
+function districtForKnownLocationText(value = '') {
+  const text = cleanText(value);
+  if (!text) return '';
+  const direct = districtForKnownArea(text);
+  if (direct) return direct;
+  return text
+    .split(/[,;|/]+/)
+    .map((part) => districtForKnownArea(part))
+    .find(Boolean) || '';
+}
+
 async function updatePropertyEditableFields({ propertyId, patch = {} }) {
   const normalizedPatch = { ...patch };
   if (!Object.prototype.hasOwnProperty.call(normalizedPatch, 'listing_type')) {
@@ -2274,6 +2285,13 @@ async function updatePropertyEditableFields({ propertyId, patch = {} }) {
     if (hierarchy.region) normalizedPatch.region = hierarchy.region;
     if (Object.prototype.hasOwnProperty.call(normalizedPatch, 'city')) normalizedPatch.city = hierarchy.city;
     if (Object.prototype.hasOwnProperty.call(normalizedPatch, 'neighborhood')) normalizedPatch.neighborhood = hierarchy.neighborhood;
+  }
+  const selectedDistrict = cleanText(normalizedPatch.district);
+  if (selectedDistrict && Object.prototype.hasOwnProperty.call(normalizedPatch, 'address')) {
+    const addressDistrict = districtForKnownLocationText(normalizedPatch.address);
+    if (addressDistrict && addressDistrict !== selectedDistrict) {
+      errors.push('address/location note must match the selected district');
+    }
   }
 
   Object.entries(fieldMap).forEach(([bodyKey, spec]) => {

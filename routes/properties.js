@@ -463,6 +463,7 @@ function approximatePublicPagination({ page, limit, offset, rowCount, hasMore })
 }
 
 const PUBLIC_AREA_PIN_OVERRIDES = [
+  { name: 'Namasuba', district: 'Wakiso', latitude: 0.258, longitude: 32.558, aliases: ['Namasuba', 'Namasuba Kampala', 'Namasuba Entebbe Road', 'Rahim Foods', 'Rahim Foods Namasuba'] },
   { name: 'Ndejje', district: 'Wakiso', latitude: 0.244, longitude: 32.553, aliases: ['Ndejje', 'Ndejje Lubugumu'] },
   { name: 'Munyonyo', district: 'Kampala', latitude: 0.236, longitude: 32.623, aliases: ['Munyonyo', 'Munyonjo', 'Munyonyo Kampala', 'Munyonyo Uganda'] },
   { name: 'Bujjuko Akright Estate', district: 'Wakiso', latitude: 0.374, longitude: 32.389, aliases: ['Bujjuko Akright', 'Bujuuko Akright', 'Akright', 'Bujjuko', 'Bujuuko'] },
@@ -2527,6 +2528,16 @@ router.post('/', async (req, res, next) => {
     const body = req.body || {};
     const authUser = await getOptionalAuthUser(req);
     const extraFields = typeof body.extra_fields === 'object' && body.extra_fields !== null ? body.extra_fields : {};
+    const landVerificationPatch = sanitizeUgNlisLandVerificationFields({
+      ...extraFields,
+      ...body,
+      land_verification: body.land_verification || extraFields.land_verification,
+      ugnlis: body.ugnlis || extraFields.ugnlis,
+      ugnlis_transaction_number: body.ugnlis_transaction_number ?? extraFields.ugnlis_transaction_number
+    });
+    if (Object.keys(landVerificationPatch).length) {
+      Object.assign(extraFields, landVerificationPatch);
+    }
     const requestedBrokerSubmission = authUser?.role === 'agent_broker'
       && (
         cleanText(body.lister_type).toLowerCase() === 'agent'

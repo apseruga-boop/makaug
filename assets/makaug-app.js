@@ -375,6 +375,7 @@ function getHierarchyPointForArea(district, area) {
 }
 
 const UG_AREA_PIN_OVERRIDES = [
+  { name: "Namasuba", district: "Wakiso", lat: 0.258, lng: 32.558, aliases: ["Namasuba", "Namasuba Kampala", "Namasuba Entebbe Road", "Rahim Foods", "Rahim Foods Namasuba"] },
   { name: "Ndejje", district: "Wakiso", lat: 0.244, lng: 32.553, aliases: ["Ndejje", "Ndejje Lubugumu"] },
   { name: "Munyonyo", district: "Kampala", lat: 0.236, lng: 32.623, aliases: ["Munyonyo", "Munyonjo", "Munyonyo Kampala", "Munyonyo Uganda"] },
   { name: "Bujjuko Akright Estate", district: "Wakiso", lat: 0.374, lng: 32.389, aliases: ["Bujjuko Akright", "Bujuuko Akright", "Akright", "Bujjuko", "Bujuuko"] },
@@ -403,6 +404,53 @@ const UG_AREA_PIN_OVERRIDES = [
   { name: "Kikuubo", district: "Kampala", lat: 0.314, lng: 32.576, aliases: ["Kikuubo"] }
 ];
 
+function findHierarchyLocationForKnownArea(district = "", area = "") {
+  const needle = String(area || "").trim().toLowerCase();
+  if (!needle) return null;
+  const districtNames = district ? [district] : Object.keys(UG_LOCATION_TREE || {});
+  for (const districtName of districtNames) {
+    const tree = getDistrictLocationTree(districtName);
+    for (const cityNode of tree || []) {
+      if (String(cityNode.city || "").trim().toLowerCase() === needle) {
+        const point = getCityPoint(districtName, cityNode.city) || {};
+        return {
+          district: districtName,
+          city: cityNode.city,
+          neighborhood: "",
+          lat: Number(point.lat),
+          lng: Number(point.lng)
+        };
+      }
+      const neighborhood = (cityNode.neighborhoods || []).find((item) => String(item.name || "").trim().toLowerCase() === needle);
+      if (neighborhood) {
+        return {
+          district: districtName,
+          city: cityNode.city,
+          neighborhood: neighborhood.name,
+          lat: Number(neighborhood.lat),
+          lng: Number(neighborhood.lng)
+        };
+      }
+    }
+  }
+  return null;
+}
+
+function enrichKnownUgandaAreaPoint(point = {}, matchedArea = "") {
+  const hierarchy = findHierarchyLocationForKnownArea(point.district, matchedArea)
+    || findHierarchyLocationForKnownArea(point.district, point.name);
+  const lat = Number(point.lat);
+  const lng = Number(point.lng);
+  return {
+    ...point,
+    district: point.district || hierarchy?.district || "",
+    city: point.city || hierarchy?.city || "",
+    neighborhood: point.neighborhood || hierarchy?.neighborhood || "",
+    lat: Number.isFinite(lat) ? lat : Number(hierarchy?.lat),
+    lng: Number.isFinite(lng) ? lng : Number(hierarchy?.lng)
+  };
+}
+
 function knownAreaAliasPattern(alias = "") {
   return String(alias || "")
     .trim()
@@ -421,7 +469,15 @@ function findKnownUgandaAreaPointFromText(value = "") {
     const pattern = knownAreaAliasPattern(point.alias);
     if (!pattern) continue;
     if (new RegExp(`(^|[^a-z0-9])${pattern}([^a-z0-9]|$)`, "i").test(haystack)) {
-      return { lat: point.lat, lng: point.lng, district: point.district, area: point.name };
+      const enriched = enrichKnownUgandaAreaPoint(point, point.alias);
+      return {
+        lat: enriched.lat,
+        lng: enriched.lng,
+        district: enriched.district,
+        city: enriched.city,
+        neighborhood: enriched.neighborhood,
+        area: enriched.neighborhood || enriched.city || enriched.name
+      };
     }
   }
   return null;
@@ -19247,17 +19303,26 @@ function adminReviewKnownLocationCandidates() {
       district: String(candidate.district || "").trim(),
       city: String(candidate.city || "").trim(),
       neighborhood: String(candidate.neighborhood || "").trim(),
+      lat: Number(candidate.lat),
+      lng: Number(candidate.lng),
       specificity: Number(candidate.specificity) || 0
     });
   };
 
   (UG_AREA_PIN_OVERRIDES || []).forEach((point) => {
-    (point.aliases || [point.name]).forEach((alias) => add({
-      name: point.name,
-      alias,
-      district: point.district,
-      specificity: 5
-    }));
+    (point.aliases || [point.name]).forEach((alias) => {
+      const enriched = enrichKnownUgandaAreaPoint(point, alias);
+      add({
+        name: enriched.neighborhood || enriched.city || enriched.name,
+        alias,
+        district: enriched.district,
+        city: enriched.city,
+        neighborhood: enriched.neighborhood,
+        lat: enriched.lat,
+        lng: enriched.lng,
+        specificity: 5
+      });
+    });
   });
 
   Object.entries(UG_LOCATION_TREE || {}).forEach(([district, tree]) => {
@@ -19827,6 +19892,74 @@ function adminReviewApplyHierarchyFromText(label = "", point = null) {
   adminReviewSetAreaFromNeighborhood();
 }
 
+function adminReviewKnownLocationPoint(location = {}) {
+  const lat = Number(location?.lat);
+  const lng = Number(location?.lng);
+  if (Number.isFinite(lat) && Number.isFinite(lng) && isLikelyUgandaCoordinate(lat, lng)) {
+    return { lat, lng };
+  }
+  const hierarchy = findHierarchyLocationForKnownArea(location?.district, location?.neighborhood || location?.name || location?.city || location?.alias);
+  const hLat = Number(hierarchy?.lat);
+  const hLng = Number(hierarchy?.lng);
+  if (Number.isFinite(hLat) && Number.isFinite(hLng) && isLikelyUgandaCoordinate(hLat, hLng)) {
+    return { lat: hLat, lng: hLng };
+  }
+  return null;
+}
+
+function adminReviewCurrentCoordinatesPoint() {
+  const latValue = document.getElementById("admin-review-latitude-edit")?.value;
+  const lngValue = document.getElementById("admin-review-longitude-edit")?.value;
+  if (!adminReviewHasUsableCoordinates(latValue, lngValue)) return null;
+  return {
+    lat: adminReviewCoordinateNumber(latValue),
+    lng: adminReviewCoordinateNumber(lngValue)
+  };
+}
+
+function adminReviewPointDistanceKm(point, location) {
+  const locationPoint = adminReviewKnownLocationPoint(location);
+  if (!point || !locationPoint) return Infinity;
+  return distanceBetweenPointsKm(point, locationPoint);
+}
+
+function adminReviewLocationConflictsWithKnownLocation(location = {}) {
+  const fields = adminReviewCurrentLocationFields();
+  const enriched = enrichKnownUgandaAreaPoint(location, location.neighborhood || location.name || location.alias);
+  if (fields.district && enriched.district && fields.district !== enriched.district) return true;
+  if (fields.city && enriched.city && fields.city !== enriched.city) return true;
+  if (fields.neighborhood && enriched.neighborhood && fields.neighborhood !== enriched.neighborhood) return true;
+  const areaLocation = adminReviewBestKnownLocationFromText(fields.area);
+  if (areaLocation?.district && enriched.district && areaLocation.district !== enriched.district) return true;
+  return false;
+}
+
+function adminReviewApplySpecificKnownLocation(location = {}, options = {}) {
+  const enriched = enrichKnownUgandaAreaPoint(location, location.neighborhood || location.name || location.alias);
+  const district = enriched.district || "";
+  if (!district) return false;
+  const region = regionForDistrict(district);
+  const cityValue = enriched.city || "";
+  const neighborhoodValue = enriched.neighborhood || "";
+  adminSetReviewEditValue("admin-review-region-edit", region);
+  adminReviewSetOptions("admin-review-district-edit", adminReviewDistrictOptionsHtml(region, district), district);
+  const city = adminReviewSetOptions("admin-review-city-edit", adminReviewCityOptionsHtml(district, cityValue), cityValue);
+  adminReviewSetOptions("admin-review-neighborhood-edit", adminReviewNeighborhoodOptionsHtml(district, city, neighborhoodValue), neighborhoodValue);
+
+  const areaEl = document.getElementById("admin-review-area-edit");
+  const area = neighborhoodValue || enriched.name || cityValue || "";
+  if (areaEl && area && (options.forceArea || !areaEl.value.trim() || areaEl.dataset.auto === "1" || adminReviewLocationConflictsWithKnownLocation(enriched))) {
+    areaEl.value = area;
+    areaEl.dataset.auto = "1";
+  }
+
+  const point = adminReviewKnownLocationPoint(enriched);
+  if (point && (options.forceCoordinates || !adminReviewCurrentCoordinatesPoint())) {
+    adminReviewSetLocationInputs(point.lat, point.lng, options.message || "Source area pin found");
+  }
+  return true;
+}
+
 function adminReviewSetAddressSearchStatus(message = "", tone = "blue") {
   const el = document.getElementById("admin-review-address-search-status");
   if (!el) return;
@@ -19904,6 +20037,17 @@ async function adminReviewFindAddressOrPlace(options = {}) {
     adminReviewSetAddressSearchStatus("No exact match found. Fallback pin is ready; move it if needed.", "amber");
     return false;
   }
+  const knownLocation = adminReviewBestKnownLocationFromText(point.label || query);
+  const knownPoint = adminReviewKnownLocationPoint(knownLocation);
+  if (knownLocation && knownPoint && adminReviewPointDistanceKm(point, knownLocation) > 15) {
+    point = {
+      ...point,
+      lat: knownPoint.lat,
+      lng: knownPoint.lng,
+      provider: point.provider || "known_area",
+      confidence: Math.max(Number(point.confidence) || 0, 0.7)
+    };
+  }
   if (input && point.label) input.value = point.label;
   adminSetReviewEditValue("admin-review-address-edit", point.label || query);
   if (point.streetName && !document.getElementById("admin-review-street-edit")?.value?.trim()) {
@@ -19912,7 +20056,8 @@ async function adminReviewFindAddressOrPlace(options = {}) {
   adminSetReviewEditValue("admin-review-geocoding-provider-edit", point.provider || "google");
   adminSetReviewEditValue("admin-review-location-confidence-edit", point.confidence != null ? String(point.confidence) : "0.65");
   adminSetReviewEditValue("admin-review-place-id-edit", point.placeId || "");
-  adminReviewApplyHierarchyFromText(point.label || query, point);
+  if (knownLocation) adminReviewApplySpecificKnownLocation(knownLocation, { forceArea: true });
+  else adminReviewApplyHierarchyFromText(point.label || query, point);
   adminReviewSetLocationInputs(point.lat, point.lng, "Address pin found");
   adminReviewMoveLocationPin(point.lat, point.lng, { zoom: MAP_PROPERTY_ZOOM });
   adminReviewSetAddressSearchStatus("Address found. Check the pin and use it before approval.", "green");
@@ -19947,6 +20092,18 @@ function adminReviewAutoPopulateLocationFromSource(review = {}) {
   const seedText = adminReviewLocationAutofillText(review, facts);
   if (seedText || reviewPoint) {
     adminReviewApplyHierarchyFromText(seedText, reviewPoint);
+  }
+  const sourceLocation = adminReviewBestKnownLocationFromText(seedText);
+  if (sourceLocation?.district) {
+    const currentPoint = adminReviewCurrentCoordinatesPoint();
+    const replaceCoordinates = !currentPoint || adminReviewPointDistanceKm(currentPoint, sourceLocation) > 15;
+    const replaceArea = adminReviewLocationConflictsWithKnownLocation(sourceLocation)
+      || !document.getElementById("admin-review-area-edit")?.value?.trim();
+    adminReviewApplySpecificKnownLocation(sourceLocation, {
+      forceArea: replaceArea,
+      forceCoordinates: replaceCoordinates,
+      message: "Source area pin found"
+    });
   }
   const latest = adminReviewCurrentLocationFields();
   const areaEl = document.getElementById("admin-review-area-edit");
@@ -20018,7 +20175,12 @@ function adminReviewListingEditPanel(review = {}) {
     review.area,
     review.district
   ]).join(", ");
-  const inferredHierarchy = adminReviewInferHierarchyFromText(locationSeedText, reviewPoint, facts.district || review.district || "");
+  const sourceLocation = adminReviewBestKnownLocationFromText(locationSeedText);
+  const sourcePoint = adminReviewKnownLocationPoint(sourceLocation);
+  const initialPoint = sourcePoint && (!reviewPoint || adminReviewPointDistanceKm(reviewPoint, sourceLocation) > 15)
+    ? sourcePoint
+    : reviewPoint;
+  const inferredHierarchy = adminReviewInferHierarchyFromText(locationSeedText, initialPoint, facts.district || review.district || "");
   const initialDistrict = inferredHierarchy.district || facts.district || review.district || "";
   const initialRegion = initialDistrict ? regionForDistrict(initialDistrict) : (inferredHierarchy.region || review.region || extra.region || "");
   const cityCandidate = inferredHierarchy.city || review.city || extra.city || extra.town || "";
@@ -20026,6 +20188,8 @@ function adminReviewListingEditPanel(review = {}) {
   const neighborhoodCandidate = inferredHierarchy.neighborhood || review.neighborhood || extra.neighborhood || "";
   const initialNeighborhood = adminReviewNeighborhoodBelongsToCity(initialDistrict, initialCity, neighborhoodCandidate) ? neighborhoodCandidate : "";
   const initialArea = inferredHierarchy.neighborhood || facts.area || inferredHierarchy.city || review.area || "";
+  const initialLatitude = initialPoint ? Number(initialPoint.lat).toFixed(6) : (review.latitude ?? "");
+  const initialLongitude = initialPoint ? Number(initialPoint.lng).toFixed(6) : (review.longitude ?? "");
   const initialStreet = review.street_name || extra.street_name || "";
   const districtOptions = adminReviewDistrictOptionsHtml(initialRegion, initialDistrict);
   const regionOptions = adminReviewRegionOptionsHtml(initialRegion);
@@ -20139,10 +20303,10 @@ function adminReviewListingEditPanel(review = {}) {
         </label>
         ${adminReviewStudentFieldsHtml(review, facts, extra, amenities)}
         <label class="block text-xs font-bold text-gray-700">Latitude
-          <input id="admin-review-latitude-edit" type="number" step="0.000001" oninput="adminReviewScheduleLocationSync()" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.latitude ?? "")}">
+          <input id="admin-review-latitude-edit" type="number" step="0.000001" oninput="adminReviewScheduleLocationSync()" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(initialLatitude)}">
         </label>
         <label class="block text-xs font-bold text-gray-700">Longitude
-          <input id="admin-review-longitude-edit" type="number" step="0.000001" oninput="adminReviewScheduleLocationSync()" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.longitude ?? "")}">
+          <input id="admin-review-longitude-edit" type="number" step="0.000001" oninput="adminReviewScheduleLocationSync()" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(initialLongitude)}">
         </label>
         <div class="md:col-span-2 rounded-xl border border-blue-200 bg-blue-50 p-3">
           <div class="flex items-start justify-between gap-3 flex-wrap">
@@ -20181,8 +20345,18 @@ function adminApplyExtractedReviewFacts() {
   adminSetReviewEditValue("admin-review-listing-type-edit", facts.listing_type || adminActiveReview.listing_type || "");
   adminReviewOnListingTypeChange();
   adminSetReviewEditValue("admin-review-lister-phone-edit", facts.contact_phone || adminActiveReview.lister_phone || "");
-  adminSetReviewEditValue("admin-review-area-edit", facts.area || adminActiveReview.area || "");
-  adminReviewApplyHierarchyFromText([facts.area, facts.district, adminActiveReview.address].filter(Boolean).join(", "));
+  const sourceLocationText = adminReviewLocationAutofillText(adminActiveReview, facts);
+  const sourceLocation = adminReviewBestKnownLocationFromText(sourceLocationText);
+  const sourcePoint = adminReviewKnownLocationPoint(sourceLocation);
+  adminSetReviewEditValue("admin-review-area-edit", sourceLocation?.neighborhood || sourceLocation?.name || facts.area || adminActiveReview.area || "");
+  adminReviewApplyHierarchyFromText(sourceLocationText || [facts.area, facts.district, adminActiveReview.address].filter(Boolean).join(", "), sourcePoint);
+  if (sourceLocation?.district) {
+    adminReviewApplySpecificKnownLocation(sourceLocation, {
+      forceArea: true,
+      forceCoordinates: true,
+      message: "Source area pin found"
+    });
+  }
   adminSetReviewEditValue("admin-review-property-type-edit", facts.property_type || adminActiveReview.property_type || "");
   adminSetReviewEditValue("admin-review-land-title-available-edit", facts.land_title_available || getLandTitleAvailabilityValue(adminActiveReview) || "");
   adminSetReviewEditValue("admin-review-price-edit", facts.price || adminActiveReview.price || "");
@@ -20455,8 +20629,8 @@ async function initAdminReviewLocationMap(review = adminActiveReview) {
 function collectAdminReviewListingPatch() {
   const get = (id) => document.getElementById(id)?.value ?? "";
   const listingType = normalizeType(get("admin-review-listing-type-edit"));
-  const district = get("admin-review-district-edit");
-  const region = district ? regionForDistrict(district) : get("admin-review-region-edit");
+  let district = get("admin-review-district-edit");
+  let region = district ? regionForDistrict(district) : get("admin-review-region-edit");
   let city = get("admin-review-city-edit");
   if (city && !adminReviewCityBelongsToDistrict(district, city)) city = "";
   let neighborhood = get("admin-review-neighborhood-edit");
@@ -20466,10 +20640,42 @@ function collectAdminReviewListingPatch() {
   if (areaLocation?.district && district && areaLocation.district !== district) {
     area = neighborhood || city || district;
   }
-  const coordinates = adminReviewNormalizeCoordinateInputs(
+  let coordinates = adminReviewNormalizeCoordinateInputs(
     get("admin-review-latitude-edit"),
     get("admin-review-longitude-edit")
   );
+  const sourceLocation = adminReviewBestKnownLocationFromText(uniqueTextParts([
+    get("admin-review-address-edit"),
+    get("admin-review-address-search-edit"),
+    area,
+    neighborhood,
+    city,
+    district
+  ]).join(", "));
+  if (sourceLocation?.district && (
+    !district
+    || sourceLocation.district !== district
+    || (sourceLocation.neighborhood && sourceLocation.neighborhood !== neighborhood)
+    || (sourceLocation.city && sourceLocation.city !== city)
+  )) {
+    const enriched = enrichKnownUgandaAreaPoint(sourceLocation, sourceLocation.neighborhood || sourceLocation.name || sourceLocation.alias);
+    district = enriched.district || district;
+    region = district ? regionForDistrict(district) : region;
+    city = enriched.city || "";
+    neighborhood = enriched.neighborhood || "";
+    area = neighborhood || enriched.name || area;
+  }
+  const sourcePoint = adminReviewKnownLocationPoint(sourceLocation);
+  if (sourcePoint && (!coordinates.exact || adminReviewPointDistanceKm({
+    lat: Number(coordinates.latitude),
+    lng: Number(coordinates.longitude)
+  }, sourceLocation) > 15)) {
+    coordinates = {
+      latitude: Number(sourcePoint.lat).toFixed(6),
+      longitude: Number(sourcePoint.lng).toFixed(6),
+      exact: true
+    };
+  }
   const amenities = get("admin-review-amenities-edit")
     .split(/[,;\n]/)
     .map((item) => item.trim())
@@ -35484,6 +35690,7 @@ const UG_LOCATION_TREE = {
         { name: "Kitende", lat: 0.198, lng: 32.533 },
         { name: "Kajjansi", lat: 0.208, lng: 32.552 },
         { name: "Bwebajja", lat: 0.179, lng: 32.541 },
+        { name: "Namasuba", lat: 0.258, lng: 32.558 },
         { name: "Ndejje", lat: 0.244, lng: 32.553 },
         { name: "Lubugumu", lat: 0.239, lng: 32.554 }
       ]

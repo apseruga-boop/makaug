@@ -825,6 +825,41 @@ test('TikTok minimum viable source posts can queue with evidence card and date c
   assert(socialSearchServiceSource.includes('sourceVisualTextForRawPost'), 'source-post importer should treat video-frame/OCR text as extraction evidence');
   assert(socialPlatformSweepServiceSource.includes('sourceVisualTextFromObject'), 'exact social importer should accept video_text/source_visual_text OCR evidence');
 
+  const namasubaVisibleText = [
+    'Luxury 1bedroom apartment for rent for rent in Kampala Namasuba after Rahim foods',
+    'Listing: Luxury 1-Bedroom Apartment for Rent in Namasuba, Kampala',
+    'Overview A luxury 1-bedroom apartment is available for rent in Namasuba, Kampala, located after Rahim Foods.',
+    'The unit is offered at 500k per month. For inquiries and viewings call 0755156152.',
+    'Apartment Highlights - Type: 1 bedroom luxury apartment - Rent: 500k per month - Notable landmark: after Rahim Foods - Contact: 0755156152'
+  ].join(' ');
+  const namasubaRows = buildTikTokExactPostImportRows({
+    rawText: [
+      'https://www.tiktok.com/@mrsharifproperties1/video/7647561981007908103',
+      `video_text: ${namasubaVisibleText}`,
+    ].join('\n'),
+    oembedByUrl: {
+      'https://www.tiktok.com/@mrsharifproperties1/video/7647561981007908103': {
+        title: 'Luxury 1-3 Bedroom Apartments for Rent in Kampala',
+        author_name: 'MR SHARIF TRUST PROPERTY',
+        author_url: 'https://www.tiktok.com/@mrsharifproperties1',
+      },
+    },
+  });
+  assert.strictEqual(namasubaRows[0].title, 'Luxury 1-Bedroom Apartment for Rent in Namasuba, Kampala', 'visible TikTok source text should beat a broad 1-3 bedroom oEmbed title');
+  assert.strictEqual(namasubaRows[0].area, 'Namasuba', 'visible TikTok text should extract Namasuba instead of broad Kampala');
+  assert.strictEqual(namasubaRows[0].district, 'Wakiso', 'Namasuba should map to Wakiso for hierarchy and map pin review');
+  assert.strictEqual(namasubaRows[0].price_text, '500k per month', 'visible TikTok text should extract 500k monthly rent');
+  assert.strictEqual(namasubaRows[0].contact_phone, '+256755156152', 'visible TikTok text should extract the public Uganda phone');
+  assert.strictEqual(namasubaRows[0].bedrooms, 1, 'a 1-3 bedroom fallback title must not override visible 1-bedroom evidence');
+  assert.strictEqual(namasubaRows[0].listing_type, 'rent', 'visible TikTok text should infer rent');
+  assert.strictEqual(namasubaRows[0].latitude, 0.258, 'Namasuba should carry an approximate area-level review pin');
+  assert.strictEqual(namasubaRows[0].longitude, 32.558, 'Namasuba should carry an approximate area-level review pin');
+  const namasubaPost = normalizeFoundOnlineSourcePost(namasubaRows[0]);
+  assert.strictEqual(namasubaPost.price, 500000, '500k monthly TikTok text should normalize to UGX amount');
+  assert.strictEqual(namasubaPost.sourceAgent.phone, '+256755156152', 'normalized source post should retain the extracted phone');
+  assert.strictEqual(namasubaPost.area, 'Namasuba', 'normalized source post should retain the specific Namasuba area');
+  assert.strictEqual(namasubaPost.district, 'Wakiso', 'normalized source post should retain the specific Namasuba district');
+
   const normalizedNdejje = normalizeFoundOnlineSourcePost(ndejjeRows[0]);
   assert.strictEqual(normalizedNdejje.district, 'Wakiso', 'source-post normalizer should preserve Ndejje as Wakiso for future imports');
   assert.strictEqual(normalizedNdejje.lat, 0.244, 'source-post normalizer should store an area-level pin when the source gives a known area');
@@ -1646,6 +1681,10 @@ test('King review can correct sourced listing facts before approval', () => {
   assert(frontend.includes('admin-review-region-edit') && frontend.includes('admin-review-city-edit') && frontend.includes('admin-review-neighborhood-edit'), 'King review should mirror the public guided region/city/neighbourhood location flow');
   assert(frontend.includes('adminReviewFindAddressOrPlace'), 'King review should reuse address/place search before approval');
   assert(frontend.includes('function adminReviewInferHierarchyFromText'), 'King review should infer town/city and neighbourhood from the same guided location tree used by public search/listing');
+  assert(frontend.includes('function findHierarchyLocationForKnownArea'), 'King review should map known source areas like Namasuba to their guided district/city/neighbourhood hierarchy');
+  assert(frontend.includes('{ name: "Namasuba", lat: 0.258, lng: 32.558 }'), 'King review hierarchy should include Namasuba so the form does not keep stale city/neighbourhood values');
+  assert(frontend.includes('adminReviewApplySpecificKnownLocation'), 'King review should apply a specific source location over stale broad district/city/neighbourhood fields');
+  assert(frontend.includes('forceCoordinates: true'), 'King review source extraction should replace stale exact pins when a specific source area pin is known');
   assert(frontend.includes('adminReviewAutoPopulateLocationFromSource(review)'), 'King review should auto-populate missing guided location fields when a review record opens');
   assert(frontend.includes('adminReviewOnAddressSearchInput') && frontend.includes('getGooglePlacePredictions(query)'), 'King review address search should offer the same local/online suggestions as the public listing flow');
   assert(frontend.includes('admin-review-place-id-edit') && frontend.includes('place_id: get("admin-review-place-id-edit")'), 'King review should persist online place lookup IDs with edited location facts');
@@ -1670,6 +1709,7 @@ test('King review can correct sourced listing facts before approval', () => {
   assert(frontend.includes('Shorten description'), 'King review should provide a concise public description action');
   assert(frontend.includes('adminSocialSourceTrustHtml'), 'King review should show the social source trust review before approval');
   assert(adminRoute.includes('review_location_hierarchy'), 'admin review edits should persist the guided location hierarchy');
+  assert(adminRoute.includes('districtForKnownLocationText') && adminRoute.includes('address/location note must match the selected district'), 'admin review backend should block saves where the address names a known area in another district');
   assert(adminRoute.includes('king_review_public_listing_facts'), 'admin review edits should keep a single source of truth snapshot');
   assert(adminRoute.includes('street_name'), 'admin review edits should store granular street/landmark context in extra fields');
   assert(adminRoute.includes("lister_phone: { column: 'lister_phone'") && adminRoute.includes("nearest_university: { column: 'nearest_university'"), 'admin review backend should persist King-edited phone and student columns');
