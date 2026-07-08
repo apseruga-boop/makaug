@@ -33133,6 +33133,45 @@ function propertyDescriptionHoverHtml(p = {}) {
     </div>`;
 }
 
+function uniqueCleanLocationParts(parts = []) {
+  const seen = new Set();
+  return parts
+    .map(cleanWhatsappValue)
+    .filter(Boolean)
+    .filter((part) => {
+      const key = part.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+function publicPropertyLocationLabel(p = {}, fallback = "Location pending") {
+  const area = cleanWhatsappValue(p.area);
+  const neighbourhood = cleanWhatsappValue(p.neighborhood || p.neighbourhood || p.suburb);
+  const city = cleanWhatsappValue(p.city || p.town || p.municipality);
+  const district = cleanWhatsappValue(p.district);
+  const region = cleanWhatsappValue(p.region);
+  const areaKey = area.toLowerCase();
+  const cityKey = city.toLowerCase();
+  const districtKey = district.toLowerCase();
+  const staleKampalaArea = areaKey === "kampala" && ((districtKey && districtKey !== "kampala") || (cityKey && cityKey !== "kampala"));
+  const specificParts = uniqueCleanLocationParts([neighbourhood, city, district, region]);
+  if (staleKampalaArea && specificParts.length) return specificParts.join(", ");
+  const primaryParts = uniqueCleanLocationParts([area || neighbourhood || city, district || region]);
+  if (primaryParts.length) return primaryParts.join(", ");
+  const fallbackParts = uniqueCleanLocationParts([
+    neighbourhood,
+    city,
+    district,
+    region,
+    p.resolved_location_label,
+    p.location_label,
+    p.location
+  ]);
+  return fallbackParts.join(", ") || fallback;
+}
+
 	    function propCard(p) {
   const idArg = propertyIdArg(p.id);
   const saved = isPropertySaved(p.id);
@@ -33147,6 +33186,7 @@ function propertyDescriptionHoverHtml(p = {}) {
   const isThirdPartyResult = isFoundOnlineListing(p);
   const photoSrc = isThirdPartyResult ? "" : publicImageSrc(p.img, "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=900&q=80");
   const displayTitle = getLocalizedPropertyTitle(p);
+  const displayLocation = publicPropertyLocationLabel(p);
   return `
     <div class="group relative bg-white rounded-xl border border-gray-100 overflow-hidden property-card cursor-pointer" onclick="openPropertyCardDetail(event, ${idArg})">
       ${propertyDescriptionHoverHtml(p)}
@@ -33170,7 +33210,7 @@ function propertyDescriptionHoverHtml(p = {}) {
       </div>
       <div class="p-4">
         <h3 class="font-bold text-gray-800 line-clamp-1">${adminEscape(displayTitle)}</h3>
-        <p class="text-sm text-gray-500 mt-1"><i class="fas fa-map-marker-alt text-green-600"></i> ${p.area}, ${p.district}</p>
+        <p class="text-sm text-gray-500 mt-1"><i class="fas fa-map-marker-alt text-green-600"></i> ${adminEscape(displayLocation)}</p>
         ${nearDistance ? `<p class="text-xs font-semibold text-green-700 mt-1"><i class="fas fa-location-arrow mr-1"></i>${nearDistance}</p>` : ""}
         <div class="mt-2 text-sm text-gray-500 flex gap-3 flex-wrap">
           ${p.beds ? `<span><i class="fas fa-bed text-green-600"></i> ${p.beds} ${countLabel(p.beds, "bed", "beds")}</span>` : ""}
@@ -33316,9 +33356,10 @@ function studentCard(p) {
   const universityDistanceText = Number.isFinite(universityDistance) && universityDistance > 0
     ? `${universityDistance.toFixed(universityDistance < 10 ? 1 : 0)}km from ${nearestUniversity}`
     : nearestUniversity;
+  const displayLocation = publicPropertyLocationLabel(p);
   const distanceText = nearestUniversity
-    ? [p.area, universityDistanceText].filter(Boolean).join(", ")
-    : `${p.area}, ${p.district}`;
+    ? [displayLocation, universityDistanceText].filter(Boolean).join(", ")
+    : displayLocation;
   const distanceMiles = p.distance_miles ?? p.distanceMiles;
   const nearDistanceText = distanceMiles != null && Number.isFinite(Number(distanceMiles)) ? `${Number(distanceMiles).toFixed(1)} mi away` : "";
   const walkText = String(p.student_walk_text || "").trim();

@@ -301,6 +301,47 @@ test('student public listings are discoverable from backend listing aliases', ()
   assert(appSource.includes('distanceMiles != null && Number.isFinite(Number(distanceMiles))'), 'null API distances must not render as 0.0 mi away');
 });
 
+test('public cards do not show stale Kampala area when richer location fields disagree', () => {
+  const locationLabel = vm.runInNewContext([
+    functionSource('cleanWhatsappValue'),
+    functionSource('uniqueCleanLocationParts'),
+    functionSource('publicPropertyLocationLabel'),
+    'publicPropertyLocationLabel'
+  ].join('\n'));
+
+  assert.equal(
+    locationLabel({
+      area: 'Kampala',
+      neighborhood: 'Adyel',
+      city: 'Lira City',
+      district: 'Lira',
+      location: 'Kampala, Lira'
+    }),
+    'Adyel, Lira City, Lira'
+  );
+  assert.equal(
+    locationLabel({
+      area: 'Kampala',
+      neighborhood: 'Mukono Town',
+      city: 'Mukono',
+      district: 'Mukono',
+      location: 'Kampala, Mukono'
+    }),
+    'Mukono Town, Mukono'
+  );
+  assert.equal(
+    locationLabel({
+      area: 'Kampala',
+      neighborhood: 'Kasubi',
+      city: 'Rubaga',
+      district: 'Kampala'
+    }),
+    'Kasubi, Rubaga, Kampala'
+  );
+  assert(appSource.includes('const displayLocation = publicPropertyLocationLabel(p);'), 'property/student cards should use the corrected public location label');
+  assert(!appSource.includes('[p.area, universityDistanceText].filter(Boolean).join(", ")'), 'student cards must not prepend stale area to university labels');
+});
+
 test('public properties API is cacheable and uses the fast public summary path', () => {
   assert.match(propertiesRouteSource, /function readPositiveIntegerEnv\(names, fallback\)/);
   assert.match(propertiesRouteSource, /PUBLIC_PROPERTIES_CACHE_TTL_MS = readPositiveIntegerEnv\(/);
