@@ -310,9 +310,9 @@ test('public property cards standardise badges and found-online labels', () => {
   assert(frontend.includes('translateListingLabel("Found online")'), 'public UI should translate the found-online badge');
   const badgeRowHelper = frontend.slice(frontend.indexOf('function listingBadgeRowHtml'), frontend.indexOf('function brokerRegistrationMeta'));
   assert(badgeRowHelper.indexOf('listingNewBadgeHtml') < badgeRowHelper.indexOf('listingFoundOnlineBadgeHtml'), 'NEW should appear before Found online when both apply');
-  assert(badgeRowHelper.includes('badgeHtml(listingSourceMeta(p)'), 'each public badge row should include Agent listed / Private listed');
+  assert(badgeRowHelper.includes('if (!isFoundOnlineListing(p)) badges.push(badgeHtml(listingSourceMeta(p), sizeClass));'), 'Agent listed / Private listed should be reserved for manual non-found-online listings');
   assert(badgeRowHelper.includes('landTitleBadgeForListingHtml'), 'land title badges should be routed through a land-only helper');
-  assert(badgeRowHelper.includes('foundOnlineSourcePlatformBadgeMeta'), 'source platform badge should be available for found-online rows');
+  assert(!badgeRowHelper.includes('foundOnlineSourcePlatformBadgeMeta'), 'source platform should not duplicate the media-chip source/play treatment in the badge row');
   assert(frontend.includes('listingAgent: "Agent listed"'), 'English listed-by copy should say Agent listed');
   assert(frontend.includes('listingPrivate: "Private listed"'), 'English listed-by copy should say Private listed');
   assert(!badgeRowHelper.includes('Sourced online'), 'public card badge row should not render Sourced online');

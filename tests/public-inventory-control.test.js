@@ -376,6 +376,8 @@ test('listing detail has a mobile sticky contact bar with phone, source, and mak
   assert.match(appSource, /function landTitleBadgeForListingHtml/);
   assert.match(appSource, /listingAgent: "Agent listed"/);
   assert.match(appSource, /listingPrivate: "Private listed"/);
+  assert.match(functionSource('listingBadgeRowHtml'), /if \(!isFoundOnlineListing\(p\)\) badges\.push\(badgeHtml\(listingSourceMeta\(p\), sizeClass\)\);/);
+  assert.doesNotMatch(functionSource('listingBadgeRowHtml'), /foundOnlineSourcePlatformBadgeMeta/);
   assert.doesNotMatch(functionSource('listingBadgeRowHtml'), /Sourced online/);
   assert.match(appSource, /id="detail-source-verification"/);
   assert.match(appSource, /More options \/ Report an issue/);
@@ -425,6 +427,8 @@ test('listing detail has a mobile sticky contact bar with phone, source, and mak
   assert.match(serverSource, /tiktokOembedFieldsVersion/);
   assert.match(htmlSource, /badge-standardisation-20260709/);
   assert.match(serverSource, /badgeStandardisationVersion/);
+  assert.match(htmlSource, /found-online-play-chip-cleanup-20260709/);
+  assert.match(serverSource, /foundOnlinePlayChipCleanupVersion/);
   assert.match(propertiesRouteSource, /function publicContactPhoneForRow/);
   assert.match(propertiesRouteSource, /public_contact_phone: publicContactPhone \|\| null/);
   assert.match(appSource, /function isTikTokProfileUrl/);
@@ -452,10 +456,12 @@ test('public result pages expose the full inventory and avoid black iframe media
   assert.doesNotMatch(sourceVisual, /<iframe/);
   assert.match(sourceVisual, /foundOnlineSourceThumbnailUrl/);
   assert.match(sourceVisual, /foundOnlineSourcePlayControlsHtml/);
+  assert.match(sourceVisual, /foundOnlineSourcePlayControlsHtml\(sourceUrl, platform, \{ chip: true, icon \}\)/);
   assert.match(functionSource('foundOnlineSourceThumbnailUrl'), /img\.youtube\.com\/vi/);
   assert.match(sourceVisual, /source preview/);
   assert.match(htmlSource, /id="source-video-modal"/);
   assert.match(functionSource('foundOnlineSourcePlayControlsHtml'), /data-source-video-play/);
+  assert.match(functionSource('foundOnlineSourcePlayControlsHtml'), /options\.chip === true/);
   assert.match(functionSource('foundOnlineSourcePlayControlsHtml'), /openFoundOnlineSourceVideoPlayer/);
   assert.match(functionSource('getSourceVideoEmbedMeta'), /youtube\.com\/embed/);
   assert.match(functionSource('getSourceVideoEmbedMeta'), /autoplay: "1"/);

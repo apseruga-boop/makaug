@@ -31948,9 +31948,8 @@ function listingBadgeRowHtml(p = {}, options = {}) {
   }
   badges.push(listingNewBadgeHtml(p, sizeClass));
   badges.push(listingFoundOnlineBadgeHtml(p, sizeClass));
-  badges.push(badgeHtml(listingSourceMeta(p), sizeClass));
+  if (!isFoundOnlineListing(p)) badges.push(badgeHtml(listingSourceMeta(p), sizeClass));
   badges.push(landTitleBadgeForListingHtml(p, { compact: options.compact !== false }));
-  badges.push(badgeHtml(foundOnlineSourcePlatformBadgeMeta(p), sizeClass));
   return badges.filter(Boolean).join("");
 }
 
@@ -32702,26 +32701,31 @@ function foundOnlineSourceFallbackVisualHtml(platform = "Source") {
     </div>`;
 }
 
-function foundOnlineSourcePlayControlsHtml(sourceUrl = "", platform = "Source") {
+function foundOnlineSourcePlayControlsHtml(sourceUrl = "", platform = "Source", options = {}) {
   const safeSourceUrl = String(sourceUrl || "").trim();
   if (!/^https?:\/\//i.test(safeSourceUrl)) return "";
   const embedMeta = getSourceVideoEmbedMeta(safeSourceUrl, platform);
   const encodedUrl = encodeURIComponent(safeSourceUrl);
   const encodedPlatform = encodeURIComponent(embedMeta.platform || platform || "Source");
+  const chip = options.chip === true;
+  const icon = options.icon || (/tiktok/i.test(platform) ? "fab fa-tiktok" : (/youtube/i.test(platform) ? "fab fa-youtube" : "fas fa-link"));
+  if (chip) {
+    if (embedMeta.embedUrl) {
+      return `
+        <button type="button" data-source-video-play="1" onclick="event.stopPropagation(); return openFoundOnlineSourceVideoPlayer('${adminAttr(encodedUrl)}', '${adminAttr(encodedPlatform)}');" class="pointer-events-auto inline-flex items-center gap-1 rounded-full bg-white/95 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-slate-900 shadow-sm hover:bg-emerald-50">
+          <i class="fas fa-play text-[10px] text-emerald-700"></i>${translateListingLabel("Play here")}
+        </button>`;
+    }
+    return `
+      <a href="${adminAttr(safeSourceUrl)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation();" class="pointer-events-auto inline-flex items-center gap-1 rounded-full bg-white/95 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-slate-900 shadow-sm hover:bg-white">
+        <i class="${icon}"></i>${translateListingLabel("Open original")}
+      </a>`;
+  }
   const originalLink = `
     <a href="${adminAttr(safeSourceUrl)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation();" class="rounded-full bg-white/90 px-2.5 py-1 text-[10px] font-black text-slate-800 shadow-sm hover:bg-white">
       <i class="fas fa-up-right-from-square mr-1 text-[9px]"></i>${translateListingLabel("Open original")}
     </a>`;
-  if (!embedMeta.embedUrl) {
-    return `<div class="absolute right-2 top-2 z-20">${originalLink}</div>`;
-  }
-  return `
-    <div class="absolute right-2 top-2 z-20 flex flex-col items-end gap-1">
-      <button type="button" data-source-video-play="1" onclick="event.stopPropagation(); return openFoundOnlineSourceVideoPlayer('${adminAttr(encodedUrl)}', '${adminAttr(encodedPlatform)}');" class="rounded-full bg-white px-3 py-1.5 text-[11px] font-black text-slate-950 shadow-md hover:bg-emerald-50">
-        <i class="fas fa-play mr-1 text-[10px] text-emerald-700"></i>${translateListingLabel("Play here")}
-      </button>
-      ${originalLink}
-    </div>`;
+  return `<div class="absolute right-2 top-2 z-20">${originalLink}</div>`;
 }
 
 function foundOnlineSourceVisualHtml(p = {}, options = {}) {
@@ -32752,10 +32756,8 @@ function foundOnlineSourceVisualHtml(p = {}, options = {}) {
         <img src="${adminAttr(thumbnailUrl)}" alt="${adminAttr(`${platform} property source preview`)}" class="absolute inset-0 h-full w-full object-cover" loading="lazy" onerror="this.classList.add('hidden'); var fallback=this.nextElementSibling; if (fallback) fallback.classList.remove('hidden');">
         <div class="hidden">${foundOnlineSourceFallbackVisualHtml(platform)}</div>
       ` : foundOnlineSourceFallbackVisualHtml(platform)}
-      <div class="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/85 via-slate-950/45 to-transparent p-3 pt-12 text-left text-white">
-        <div class="inline-flex items-center gap-1 rounded-full bg-white/95 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-slate-900">
-          <i class="${icon}"></i>${adminEscape(platform)} ${translateListingLabel("source")}
-        </div>
+      <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/85 via-slate-950/45 to-transparent p-3 pt-12 text-left text-white">
+        ${foundOnlineSourcePlayControlsHtml(sourceUrl, platform, { chip: true, icon })}
         ${compact ? "" : `<div class="mt-2 max-w-md text-xs text-blue-50">${translateListingLabel("Makaug shows a static source preview here and links back to the original platform. Social media embeds load only after the user opens the source.")}</div>`}
       </div>
       ${foundOnlineSourcePlayControlsHtml(sourceUrl, platform)}
