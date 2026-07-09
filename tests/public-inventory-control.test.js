@@ -414,6 +414,8 @@ test('listing detail has a mobile sticky contact bar with phone, source, and mak
   assert.match(serverSource, /contactBarAllPropertiesI18nVersion/);
   assert.match(htmlSource, /detail-p1-p2-p4-fix-20260709/);
   assert.match(serverSource, /detailP1P2P4FixVersion/);
+  assert.match(htmlSource, /tiktok-oembed-fields-20260709/);
+  assert.match(serverSource, /tiktokOembedFieldsVersion/);
   assert.match(propertiesRouteSource, /function publicContactPhoneForRow/);
   assert.match(propertiesRouteSource, /public_contact_phone: publicContactPhone \|\| null/);
   assert.match(appSource, /function isTikTokProfileUrl/);

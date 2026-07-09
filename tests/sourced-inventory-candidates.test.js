@@ -758,6 +758,8 @@ test('TikTok minimum viable source posts can queue with evidence card and date c
   assert.strictEqual(exactRows[0].image_rights_confirmed, 'true');
   assert.strictEqual(exactRows[0].thumbnail_url, 'https://p16-sign-va.tiktokcdn.com/example.jpg');
   assert.strictEqual(exactRows[0].source_thumbnail_url, 'https://p16-sign-va.tiktokcdn.com/example.jpg');
+  assert.strictEqual(exactRows[0].tiktok_thumbnail_url, 'https://p16-sign-va.tiktokcdn.com/example.jpg');
+  assert.strictEqual(exactRows[0].oembed_thumbnail_url, 'https://p16-sign-va.tiktokcdn.com/example.jpg');
   assert.deepStrictEqual(exactRows[0].image_urls, ['https://p16-sign-va.tiktokcdn.com/example.jpg']);
 
   const deadExactRows = buildTikTokExactPostImportRows({
@@ -1058,6 +1060,8 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
   assert.strictEqual(noApiRows[0].listing_type, 'students');
   assert.strictEqual(noApiRows[0].source_contact_url, 'https://www.tiktok.com/@agentug');
   assert.strictEqual(noApiRows[0].thumbnail_url, 'https://p16-sign.tiktokcdn-us.com/example.jpeg');
+  assert.strictEqual(noApiRows[0].tiktok_thumbnail_url, 'https://p16-sign.tiktokcdn-us.com/example.jpeg');
+  assert.strictEqual(noApiRows[0].oembed_thumbnail_url, 'https://p16-sign.tiktokcdn-us.com/example.jpeg');
   assert.strictEqual(noApiRows[0].first_posted_at, '', 'TikTok public video ID inference must not be shown as a confirmed first-posted date');
   assert(noApiRows[0].raw_source_post.inferred_platform_posted_at.startsWith('2026-'), 'TikTok public video ID inference should stay available as reviewer evidence');
   assert.strictEqual(noApiRows[0].raw_source_post.date_confidence, 'inferred_from_public_post_id_needs_confirmation');
