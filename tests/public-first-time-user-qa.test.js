@@ -63,6 +63,11 @@ assert(
 );
 
 assert(
+  indexHtml.includes("inpage-video-facade-20260709"),
+  "in-page video facade marker should be present to force the corrected public app bundle"
+);
+
+assert(
   serverJs.includes("publicI18nDetailPersistenceVersion")
     && serverJs.includes("publicI18nStartupRaceFixVersion")
     && serverJs.includes("publicI18nCookiePersistenceVersion")
@@ -74,6 +79,7 @@ assert(
     && serverJs.includes("publicQaCleanupVersion")
     && serverJs.includes("publicLocationLabelFixVersion")
     && serverJs.includes("publicResultsDeliveryFixVersion")
+    && serverJs.includes("inpageVideoFacadeVersion")
     && serverJs.includes("publicAppVersionSuffixes"),
   "server-rendered public routes should receive the same i18n app-version suffixes as the homepage"
 );

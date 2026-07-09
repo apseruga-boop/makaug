@@ -353,8 +353,18 @@ test('public result pages expose the full inventory and avoid black iframe media
   const sourceVisual = functionSource('foundOnlineSourceVisualHtml');
   assert.doesNotMatch(sourceVisual, /<iframe/);
   assert.match(sourceVisual, /foundOnlineSourceThumbnailUrl/);
+  assert.match(sourceVisual, /foundOnlineSourcePlayControlsHtml/);
   assert.match(functionSource('foundOnlineSourceThumbnailUrl'), /img\.youtube\.com\/vi/);
   assert.match(sourceVisual, /source preview/);
+  assert.match(htmlSource, /id="source-video-modal"/);
+  assert.match(functionSource('foundOnlineSourcePlayControlsHtml'), /data-source-video-play/);
+  assert.match(functionSource('foundOnlineSourcePlayControlsHtml'), /openFoundOnlineSourceVideoPlayer/);
+  assert.match(functionSource('getSourceVideoEmbedMeta'), /youtube\.com\/embed/);
+  assert.match(functionSource('getSourceVideoEmbedMeta'), /autoplay: "1"/);
+  assert.match(functionSource('getSourceVideoEmbedMeta'), /getTikTokEmbedUrl/);
+  assert.match(functionSource('getXPostEmbedUrl'), /platform\.twitter\.com\/embed\/Tweet\.html/);
+  assert.match(functionSource('openFoundOnlineSourceVideoPlayer'), /source-video-frame-wrap/);
+  assert.match(functionSource('openFoundOnlineSourceVideoPlayer'), /openModal\("source-video-modal"\)/);
 
   const detailMap = asyncFunctionSource('initDetailMap');
   assert.match(functionSource('renderStaticDetailMapFallback'), /staticmap\.openstreetmap\.de/);

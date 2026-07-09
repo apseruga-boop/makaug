@@ -24680,6 +24680,148 @@ function getTikTokEmbedUrl(url) {
   }
 }
 
+function getXPostEmbedUrl(url) {
+  const raw = String(url || "").trim();
+  if (!raw) return "";
+  try {
+    const parsed = new URL(raw);
+    const host = parsed.hostname.replace(/^www\./, "").toLowerCase();
+    if (!["x.com", "twitter.com", "mobile.twitter.com"].some((domain) => host === domain || host.endsWith(`.${domain}`))) return "";
+    const parts = parsed.pathname.split("/").filter(Boolean);
+    const statusIndex = parts.findIndex((part) => ["status", "statuses"].includes(part.toLowerCase()));
+    const id = statusIndex >= 0 ? parts[statusIndex + 1] || "" : "";
+    if (!/^\d{6,}$/.test(id)) return "";
+    const params = new URLSearchParams({ id, dnt: "true", hide_thread: "true" });
+    return `https://platform.twitter.com/embed/Tweet.html?${params.toString()}`;
+  } catch (error) {
+    return "";
+  }
+}
+
+function getSourceVideoEmbedMeta(url, platformHint = "") {
+  const sourceUrl = String(url || "").trim();
+  const hint = String(platformHint || "").trim();
+  if (!/^https?:\/\//i.test(sourceUrl)) {
+    return { sourceUrl: "", platform: hint || "Source", icon: "fas fa-link", embedUrl: "", tall: false };
+  }
+  const youtubeId = getYouTubeVideoId(sourceUrl);
+  if (youtubeId) {
+    const params = new URLSearchParams({
+      autoplay: "1",
+      rel: "0",
+      playsinline: "1",
+      modestbranding: "1"
+    });
+    const origin = window.location?.origin && window.location.origin !== "null" ? window.location.origin : "";
+    if (origin) params.set("origin", origin);
+    return {
+      sourceUrl,
+      platform: "YouTube",
+      icon: "fab fa-youtube",
+      embedUrl: `https://www.youtube.com/embed/${encodeURIComponent(youtubeId)}?${params.toString()}`,
+      tall: false,
+      title: translateListingLabel("YouTube property source video"),
+      allow: "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+    };
+  }
+  const tiktokEmbedUrl = getTikTokEmbedUrl(sourceUrl);
+  if (tiktokEmbedUrl) {
+    return {
+      sourceUrl,
+      platform: "TikTok",
+      icon: "fab fa-tiktok",
+      embedUrl: tiktokEmbedUrl,
+      tall: true,
+      title: translateListingLabel("TikTok property source video"),
+      allow: "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+    };
+  }
+  const xEmbedUrl = getXPostEmbedUrl(sourceUrl);
+  if (xEmbedUrl) {
+    return {
+      sourceUrl,
+      platform: "X",
+      icon: "fab fa-x-twitter",
+      embedUrl: xEmbedUrl,
+      tall: true,
+      title: translateListingLabel("X property source post"),
+      allow: "clipboard-write; encrypted-media; picture-in-picture; web-share"
+    };
+  }
+  return {
+    sourceUrl,
+    platform: hint || "Source",
+    icon: /tiktok/i.test(hint) ? "fab fa-tiktok" : (/youtube/i.test(hint) ? "fab fa-youtube" : "fas fa-link"),
+    embedUrl: "",
+    tall: false,
+    title: translateListingLabel("Property source")
+  };
+}
+
+function clearSourceVideoPlayer() {
+  const frameWrap = document.getElementById("source-video-frame-wrap");
+  if (frameWrap) {
+    frameWrap.className = "mt-4 aspect-video rounded-2xl bg-slate-950 overflow-hidden grid place-items-center text-white text-sm";
+    frameWrap.innerHTML = translateListingLabel("Select a source video to play.");
+  }
+  const originalLink = document.getElementById("source-video-original-link");
+  if (originalLink) originalLink.href = "#";
+}
+
+function closeSourceVideoPlayer() {
+  closeModal("source-video-modal");
+}
+
+function openFoundOnlineSourceVideoPlayer(encodedUrl = "", encodedPlatform = "") {
+  const sourceUrl = decodeURIComponent(String(encodedUrl || "")).trim();
+  const platformHint = decodeURIComponent(String(encodedPlatform || "")).trim();
+  const meta = getSourceVideoEmbedMeta(sourceUrl, platformHint);
+  if (!meta.sourceUrl) return false;
+  const modal = document.getElementById("source-video-modal");
+  const frameWrap = document.getElementById("source-video-frame-wrap");
+  if (!modal || !frameWrap) {
+    window.open(meta.sourceUrl, "_blank", "noopener,noreferrer");
+    return false;
+  }
+  const platformLabel = document.getElementById("source-video-platform-label");
+  const platformIcon = document.getElementById("source-video-platform-icon");
+  const titleEl = document.getElementById("source-video-title");
+  const subEl = document.getElementById("source-video-sub");
+  const originalLink = document.getElementById("source-video-original-link");
+  if (platformLabel) platformLabel.textContent = `${meta.platform} ${translateListingLabel("source")}`;
+  if (platformIcon) platformIcon.className = meta.icon || "fas fa-play";
+  if (titleEl) titleEl.textContent = meta.title || translateListingLabel("Property source video");
+  if (subEl) {
+    subEl.textContent = meta.embedUrl
+      ? translateListingLabel("Playing inside makaug. The original source link remains available for verification.")
+      : translateListingLabel("This platform did not provide an embeddable player, so use the original source link.");
+  }
+  if (originalLink) {
+    originalLink.href = meta.sourceUrl;
+    originalLink.textContent = translateListingLabel("Open original");
+  }
+  if (meta.embedUrl) {
+    frameWrap.className = meta.tall
+      ? "mt-4 rounded-2xl bg-slate-950 overflow-hidden grid place-items-center text-white text-sm min-h-[560px]"
+      : "mt-4 aspect-video rounded-2xl bg-slate-950 overflow-hidden grid place-items-center text-white text-sm";
+    frameWrap.innerHTML = `
+      <iframe src="${adminAttr(meta.embedUrl)}" title="${adminAttr(meta.title || "Property source video")}" class="${meta.tall ? "w-full min-h-[560px]" : "w-full h-full"}" loading="eager" referrerpolicy="strict-origin-when-cross-origin" allow="${adminAttr(meta.allow || "autoplay; encrypted-media; picture-in-picture; web-share")}" allowfullscreen></iframe>`;
+  } else {
+    frameWrap.className = "mt-4 aspect-video rounded-2xl bg-slate-950 overflow-hidden grid place-items-center text-white text-sm";
+    frameWrap.innerHTML = `
+      <div class="px-5 text-center">
+        <div class="mx-auto mb-3 h-14 w-14 rounded-full border border-white/20 bg-white/10 grid place-items-center">
+          <i class="${adminAttr(meta.icon || "fas fa-link")} text-2xl"></i>
+        </div>
+        <div class="text-lg font-black">${translateListingLabel("Open original source")}</div>
+        <p class="mt-2 text-sm text-slate-300">${translateListingLabel("This source cannot be embedded reliably, so makaug keeps the original link available.")}</p>
+        <a href="${adminAttr(meta.sourceUrl)}" target="_blank" rel="noopener noreferrer" class="mt-4 inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-black text-slate-950">${translateListingLabel("Open original")}</a>
+      </div>`;
+  }
+  openModal("source-video-modal");
+  return false;
+}
+
 function renderVideoEmbedCard(url, options = {}) {
   const safeUrl = String(url || "").trim();
   if (!/^https?:\/\//i.test(safeUrl)) return "";
@@ -32271,6 +32413,28 @@ function foundOnlineSourceFallbackVisualHtml(platform = "Source") {
     </div>`;
 }
 
+function foundOnlineSourcePlayControlsHtml(sourceUrl = "", platform = "Source") {
+  const safeSourceUrl = String(sourceUrl || "").trim();
+  if (!/^https?:\/\//i.test(safeSourceUrl)) return "";
+  const embedMeta = getSourceVideoEmbedMeta(safeSourceUrl, platform);
+  const encodedUrl = encodeURIComponent(safeSourceUrl);
+  const encodedPlatform = encodeURIComponent(embedMeta.platform || platform || "Source");
+  const originalLink = `
+    <a href="${adminAttr(safeSourceUrl)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation();" class="rounded-full bg-white/90 px-2.5 py-1 text-[10px] font-black text-slate-800 shadow-sm hover:bg-white">
+      <i class="fas fa-up-right-from-square mr-1 text-[9px]"></i>${translateListingLabel("Open original")}
+    </a>`;
+  if (!embedMeta.embedUrl) {
+    return `<div class="absolute right-2 top-2 z-20">${originalLink}</div>`;
+  }
+  return `
+    <div class="absolute right-2 top-2 z-20 flex flex-col items-end gap-1">
+      <button type="button" data-source-video-play="1" onclick="event.stopPropagation(); return openFoundOnlineSourceVideoPlayer('${adminAttr(encodedUrl)}', '${adminAttr(encodedPlatform)}');" class="rounded-full bg-white px-3 py-1.5 text-[11px] font-black text-slate-950 shadow-md hover:bg-emerald-50">
+        <i class="fas fa-play mr-1 text-[10px] text-emerald-700"></i>${translateListingLabel("Play here")}
+      </button>
+      ${originalLink}
+    </div>`;
+}
+
 function foundOnlineSourceVisualHtml(p = {}, options = {}) {
   const meta = foundOnlineSourceMeta(p) || {};
   const videoUrl = foundOnlineSourceVideoUrl(p);
@@ -32279,11 +32443,6 @@ function foundOnlineSourceVisualHtml(p = {}, options = {}) {
   const compact = options.compact === true;
   const thumbnailUrl = foundOnlineSourceThumbnailUrl(p, videoUrl);
   const sourceUrl = meta.sourceUrl || videoUrl || meta.sourceContactUrl || "";
-  const openLabel = /tiktok/i.test(platform)
-    ? translateListingLabel("Open TikTok")
-    : /youtube/i.test(platform)
-      ? translateListingLabel("Open YouTube")
-      : translateListingLabel("Open source");
   return `
     <div class="${compact ? "h-full min-h-[12rem]" : "min-h-[18rem]"} relative overflow-hidden border border-blue-100 bg-gradient-to-br from-emerald-50 via-white to-blue-50 text-slate-900">
       ${thumbnailUrl ? `
@@ -32296,7 +32455,7 @@ function foundOnlineSourceVisualHtml(p = {}, options = {}) {
         </div>
         ${compact ? "" : `<div class="mt-2 max-w-md text-xs text-blue-50">${translateListingLabel("Makaug shows a static source preview here and links back to the original platform. Social media embeds load only after the user opens the source.")}</div>`}
       </div>
-      ${sourceUrl ? `<a href="${adminAttr(sourceUrl)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation();" class="absolute right-2 top-2 rounded-full bg-white/95 px-3 py-1 text-[11px] font-black text-slate-900 shadow-sm hover:bg-white"><i class="fas fa-play mr-1 text-[10px]"></i>${openLabel}</a>` : ""}
+      ${foundOnlineSourcePlayControlsHtml(sourceUrl, platform)}
     </div>`;
 }
 
@@ -33883,9 +34042,13 @@ function closeRouteTransientModals(nextPage, previousPage) {
   if (nextPage !== "list-property") modalIds.push("list-choice-modal", "listing-submit-modal");
   if (nextPage !== "detail") modalIds.push("save-property-modal", "report-modal");
   if (nextPage !== "ai-chatbot") modalIds.push("howto-video-modal");
+  modalIds.push("source-video-modal");
   modalIds.forEach((id) => {
     const el = document.getElementById(id);
-    if (el?.classList.contains("open")) el.classList.remove("open");
+    if (el?.classList.contains("open")) {
+      if (id === "source-video-modal") closeSourceVideoPlayer();
+      else el.classList.remove("open");
+    }
   });
   if (modalIds.length) syncModalOpenState();
 }
@@ -41967,6 +42130,9 @@ function openModal(id) {
 function closeModal(id) {
   const el = document.getElementById(id);
   if (el) el.classList.remove("open");
+  if (id === "source-video-modal") {
+    clearSourceVideoPlayer();
+  }
   if (id === "broker-reg-modal") {
     resetAgentApplicationSuccessState();
     resetAgentRegistrationOtpState();
@@ -41987,6 +42153,10 @@ function syncModalOpenState() {
 document.addEventListener("click", (e) => {
   if (e.target.classList.contains("modal-overlay")) {
     if (e.target.getAttribute("data-modal-static") === "true") return;
+    if (e.target.id === "source-video-modal") {
+      closeSourceVideoPlayer();
+      return;
+    }
     e.target.classList.remove("open");
     syncModalOpenState();
   }
