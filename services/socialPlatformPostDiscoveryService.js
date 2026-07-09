@@ -874,11 +874,26 @@ async function fetchTikTokOEmbed(url = '', { fetchImpl = fetch } = {}) {
   };
 }
 
+function sourceUnavailableFromMetadataReport(report = {}) {
+  if (!report || report.ok === true) return null;
+  const status = Number(report.status || 0);
+  const reason = cleanText(report.reason || report.message || report.error || '');
+  if ([404, 410].includes(status) || /not found|unavailable|deleted|removed|does.?not exist|private|gone/i.test(reason)) {
+    return {
+      source_unavailable: true,
+      source_url_status: status ? `unavailable_${status}` : 'unavailable',
+      source_unavailable_reason: reason || 'This source video is no longer available.',
+    };
+  }
+  return null;
+}
+
 function buildTikTokExactPostImportRows({
   posts = [],
   urls = [],
   rawText = '',
   oembedByUrl = {},
+  oembedReportsByUrl = {},
 } = {}) {
   const seeds = tikTokSeedsFromInputs({ posts, urls, rawText });
   const seen = new Set();
@@ -890,6 +905,7 @@ function buildTikTokExactPostImportRows({
     })
     .map((seed, index) => {
       const oembed = normalizeTikTokOEmbed(oembedByUrl[seed.post_url] || {});
+      const sourceHealth = sourceUnavailableFromMetadataReport(oembedReportsByUrl[seed.post_url]) || {};
       const sourceUrl = seed.post_url;
       const profileUrl = seed.source_page_url || seed.source_contact_url || oembed.author_url || tiktokProfileUrlFromVideoUrl(sourceUrl);
       const handle = tiktokHandleFromUrl(sourceUrl);
@@ -922,10 +938,16 @@ function buildTikTokExactPostImportRows({
         source_url: sourceUrl,
         source_page_url: profileUrl,
         source_contact_url: seed.source_contact_url || profileUrl || sourceUrl,
+        source_unavailable: sourceHealth.source_unavailable === true,
+        source_url_status: sourceHealth.source_url_status || '',
+        source_unavailable_reason: sourceHealth.source_unavailable_reason || '',
         source_key: seed.source_key || handle || sourceUrl,
         source_name: sourceName,
         platform: 'TikTok',
         tiktok_url: sourceUrl,
+        thumbnail_url: oembed.thumbnail_url,
+        source_thumbnail_url: oembed.thumbnail_url,
+        video_thumbnail_url: oembed.thumbnail_url,
         title,
         caption,
         comments: commentEvidence,
@@ -962,6 +984,9 @@ function buildTikTokExactPostImportRows({
         raw_source_post: {
           ...seed,
           oembed,
+          oembed_status: sourceHealth.source_url_status || '',
+          oembed_reason: sourceHealth.source_unavailable_reason || '',
+          source_unavailable: sourceHealth.source_unavailable === true,
           comments: commentEvidence,
           source_visual_text: visualText,
           import_method: 'tiktok_exact_video_intake',
@@ -981,6 +1006,7 @@ async function importTikTokExactVideoPosts({
 } = {}) {
   const seeds = tikTokSeedsFromInputs({ posts, urls, rawText });
   const oembedByUrl = {};
+  const oembedReportsByUrl = {};
   const oembedReports = [];
   if (fetchOembed) {
     for (const seed of seeds) {
@@ -989,18 +1015,21 @@ async function importTikTokExactVideoPosts({
         ok: false,
         reason: error.message || 'tiktok_oembed_failed',
       }));
-      oembedReports.push({
+      const reportSummary = {
         post_url: seed.post_url,
         ok: report.ok === true,
         status: report.status || null,
         reason: report.ok ? '' : (report.reason || 'tiktok_oembed_failed'),
-      });
+      };
+      oembedReports.push(reportSummary);
+      oembedReportsByUrl[seed.post_url] = reportSummary;
       if (report.ok && report.payload) oembedByUrl[seed.post_url] = report.payload;
     }
   }
   const importRows = buildTikTokExactPostImportRows({
     posts: seeds,
     oembedByUrl,
+    oembedReportsByUrl,
   });
   const importResult = await queueFoundOnlineSourcePostListings({
     db,
@@ -1041,6 +1070,9 @@ function buildExactSocialPostImportRows({
       const metadata = metadataByUrl[sourceUrl] || {};
       const oembed = metadata.oembed || {};
       const page = metadata.page || {};
+      const sourceHealth = sourceUnavailableFromMetadataReport(metadata.oembed_error)
+        || sourceUnavailableFromMetadataReport(metadata.page_error)
+        || {};
       const inferredPostedAt = inferredPlatformPostedAt(sourceUrl);
       const videoId = normalizeYouTubeVideoId(seed.youtube_video_id || sourceUrl);
       const sourcePageUrl = seed.source_page_url
@@ -1094,6 +1126,9 @@ function buildExactSocialPostImportRows({
         source_url: sourceUrl,
         source_page_url: sourcePageUrl,
         source_contact_url: seed.source_contact_url || seed.contact_url || sourcePageUrl || sourceUrl,
+        source_unavailable: sourceHealth.source_unavailable === true,
+        source_url_status: sourceHealth.source_url_status || '',
+        source_unavailable_reason: sourceHealth.source_unavailable_reason || '',
         source_key: seed.source_key || sourceName || sourceUrl,
         source_name: sourceName,
         platform,
@@ -1104,6 +1139,9 @@ function buildExactSocialPostImportRows({
         instagram_url: /instagram\.com/i.test(sourceUrl) ? sourceUrl : '',
         facebook_url: /facebook\.com|fb\.watch/i.test(sourceUrl) ? sourceUrl : '',
         video_url: /youtube\.com|youtu\.be|tiktok\.com/i.test(sourceUrl) ? sourceUrl : '',
+        thumbnail_url: page.image_url || oembed.thumbnail_url || '',
+        source_thumbnail_url: page.image_url || oembed.thumbnail_url || '',
+        video_thumbnail_url: page.image_url || oembed.thumbnail_url || '',
         title,
         caption,
         comments: commentEvidence,
@@ -1140,6 +1178,9 @@ function buildExactSocialPostImportRows({
         raw_source_post: {
           ...seed,
           no_api_metadata: metadata,
+          source_unavailable: sourceHealth.source_unavailable === true,
+          source_url_status: sourceHealth.source_url_status || '',
+          source_unavailable_reason: sourceHealth.source_unavailable_reason || '',
           comments: commentEvidence,
           source_visual_text: visualText,
           inferred_platform_posted_at: inferredPostedAt || '',
@@ -1188,6 +1229,7 @@ async function importExactSocialSourcePosts({
         reason: report.ok ? '' : (report.reason || 'tiktok_oembed_failed'),
       });
       if (report.ok && report.payload) metadata.oembed = report.payload;
+      if (!report.ok) metadata.oembed_error = { ok: false, status: report.status || null, reason: report.reason || 'tiktok_oembed_failed' };
     }
     if (fetchOembed && platform === 'YouTube') {
       const report = await fetchYouTubeOEmbed(url, { fetchImpl }).catch((error) => ({
@@ -1203,6 +1245,7 @@ async function importExactSocialSourcePosts({
         reason: report.ok ? '' : (report.reason || 'youtube_oembed_failed'),
       });
       if (report.ok && report.payload) metadata.oembed = report.payload;
+      if (!report.ok) metadata.oembed_error = { ok: false, status: report.status || null, reason: report.reason || 'youtube_oembed_failed' };
     }
     if (fetchPublicMetadata && platform === 'YouTube') {
       const report = await fetchPublicPageMetadata(url, { fetchImpl }).catch((error) => ({
@@ -1218,6 +1261,7 @@ async function importExactSocialSourcePosts({
         reason: report.ok ? '' : (report.reason || 'public_page_metadata_failed'),
       });
       if (report.ok && report.payload) metadata.page = report.payload;
+      if (!report.ok) metadata.page_error = { ok: false, status: report.status || null, reason: report.reason || 'public_page_metadata_failed' };
     }
     metadataByUrl[url] = metadata;
   }

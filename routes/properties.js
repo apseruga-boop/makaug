@@ -184,8 +184,28 @@ function isLaunchSeedListing(row = {}) {
   const title = String(row.title || '');
   const normalizedTitle = title.trim().toLowerCase();
   const description = String(row.description || '');
+  const extraText = (() => {
+    try {
+      return typeof row.extra_fields === 'string'
+        ? row.extra_fields
+        : JSON.stringify(row.extra_fields || {});
+    } catch (_) {
+      return '';
+    }
+  })();
+  const publicTrainingDemoText = [
+    title,
+    description,
+    row.source,
+    row.listed_via,
+    row.lister_name,
+    row.moderation_notes,
+    row.moderation_reason,
+    extraText
+  ].filter(Boolean).join(' ');
   return LAUNCH_DUMMY_LISTING_TITLES.has(normalizedTitle)
-    || LAUNCH_SEED_LISTING_MARKERS.some((marker) => title.includes(marker) || description.includes(marker));
+    || LAUNCH_SEED_LISTING_MARKERS.some((marker) => title.includes(marker) || description.includes(marker))
+    || /\bmakaug training\b|\btraining visibility\b|\bvisibility check\b|\bstock unsplash\b|\bdemo listing\b|\bqa test\b|\bsoft_launch\b|\blaunch_proof\b/i.test(publicTrainingDemoText);
 }
 
 function addPublicLaunchSeedFilter(filters, values) {
@@ -211,6 +231,7 @@ function addPublicLaunchSeedFilter(filters, values) {
   filters.push("COALESCE(p.extra_fields->>'is_test', '') !~* '^(true|1|yes)$'");
   filters.push("COALESCE(p.extra_fields->>'launch_proof', '') !~* '^(true|1|yes)$'");
   filters.push("COALESCE(p.extra_fields->>'non_public_test', '') !~* '^(true|1|yes)$'");
+  filters.push("(COALESCE(p.title, '') || ' ' || COALESCE(p.description, '') || ' ' || COALESCE(p.extra_fields::text, '')) !~* '(makaug training|training visibility|visibility check|stock unsplash|demo listing)'");
 }
 
 function normalizeListingType(type) {
@@ -1058,6 +1079,23 @@ function publicExtraFields(extraFields = {}) {
       || tiktokUrl
       || (/youtube\.com|youtu\.be|tiktok\.com/i.test(String(sourceUrl || '')) ? sourceUrl : '')
   );
+  const sourceThumbnailUrl = normalizePublicImageUrl(
+    extra.source_thumbnail_url
+      || extra.video_thumbnail_url
+      || extra.thumbnail_url
+      || extra.cover_image_url
+      || (Array.isArray(extra.photo_source_urls) ? extra.photo_source_urls[0] : '')
+      || (Array.isArray(extra.authorised_photo_urls) ? extra.authorised_photo_urls[0] : '')
+  );
+  const publicContactPhone = normalizeUgPhone(
+    extra.public_contact_phone
+      || extra.contact_phone
+      || extra.phone
+      || extra.whatsapp
+      || ''
+  );
+  const sourceUnavailable = extra.source_unavailable === true
+    || /(?:dead|deleted|removed|unavailable|not_found|not found|account_does_not_exist|account does not exist|404|410)/i.test(String(extra.source_url_status || extra.source_status || extra.source_availability_status || ''));
   return {
     city: extra.city || null,
     neighborhood: extra.neighborhood || null,
@@ -1071,9 +1109,18 @@ function publicExtraFields(extraFields = {}) {
     student_campus: nearestUniversity || extra.student_campus || null,
     student_universities: studentUniversities,
     land_title_available: landTitleAvailable || null,
-    land_title_available_label: landTitleAvailabilityLabel(landTitleAvailable) || null,    video_url: videoUrl || null,
+    land_title_available_label: landTitleAvailabilityLabel(landTitleAvailable) || null,
+    video_url: videoUrl || null,
     youtube_url: youtubeUrl || null,
     tiktok_url: tiktokUrl || null,
+    thumbnail_url: sourceThumbnailUrl || null,
+    source_thumbnail_url: sourceThumbnailUrl || null,
+    video_thumbnail_url: sourceThumbnailUrl || null,
+    public_contact_phone: publicContactPhone || null,
+    contact_phone: publicContactPhone || null,
+    source_unavailable: sourceUnavailable,
+    source_url_status: extra.source_url_status || extra.source_status || null,
+    source_unavailable_reason: extra.source_unavailable_reason || extra.source_url_status_reason || null,
     found_online: extra.found_online === true,
     third_party_discovery_result: extra.found_online === true
       || extra.social_search_candidate === true

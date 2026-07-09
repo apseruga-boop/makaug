@@ -1465,6 +1465,7 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
   const sourceContactAvailableWithoutPhone = Boolean(!hasDirectAgentPhone && sourceContactUrl);
   const nearby = NEARBY[item.nearbyKey] || [];
   const sourceImageRows = sourceImageRowsFor(item);
+  const sourceThumbnailUrl = sourceImageRows[0]?.url || item.thumbnailUrl || item.sourceThumbnailUrl || item.videoThumbnailUrl || '';
   const imageRows = listingImageRowsFor(item);
   const generatedSupportImageRows = imageRows.filter((image) => /^data:image\//i.test(image.url));
   const sourcePublishedAt = sourcePublishedAtFor(item);
@@ -1509,6 +1510,9 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
     source_agent_name: agent.name || '',
     source_url: sourceUrl,
     source_post_url: sourceUrl,
+    thumbnail_url: sourceThumbnailUrl,
+    source_thumbnail_url: sourceThumbnailUrl,
+    video_thumbnail_url: sourceThumbnailUrl,
     source_title: item.sourceTitle || item.title || '',
     source_caption: item.caption || item.raw_source_post?.caption || item.rawSourcePost?.caption || '',
     source_description: item.description || '',
@@ -1556,7 +1560,12 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
     source_contact_method: sourceContactMethod,
     source_contact_platform: sourcePlatform,
     source_contact_available_without_phone: sourceContactAvailableWithoutPhone,
+    public_contact_phone: agent.phone || agent.phoneAlt || item.contactPhone || item.phone || '',
+    contact_phone: agent.phone || agent.phoneAlt || item.contactPhone || item.phone || '',
     public_contact_path_available: hasAnyPublicContactPath(agent, item),
+    source_unavailable: item.sourceUnavailable === true || item.source_unavailable === true,
+    source_url_status: item.sourceUrlStatus || item.source_url_status || '',
+    source_unavailable_reason: item.sourceUnavailableReason || item.source_unavailable_reason || '',
     social_source_trust_review: trustReview,
     social_source_trust_score: trustReview.score,
     social_source_trust_level: trustReview.level,
@@ -2091,8 +2100,13 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
     videoUrl: raw.video_url || raw.youtube_url || raw.tiktok_url || sourceUrl,
     youtubeId: youtubeId || null,
     tiktokUrl: raw.tiktok_url || (/tiktok\.com/i.test(sourceUrl) ? sourceUrl : ''),
+    thumbnailUrl: raw.thumbnail_url || raw.source_thumbnail_url || raw.video_thumbnail_url || raw.cover_image_url || '',
+    sourceThumbnailUrl: raw.source_thumbnail_url || raw.thumbnail_url || raw.video_thumbnail_url || raw.cover_image_url || '',
     sourceContactUrl: raw.source_contact_url || raw.contact_url || sourceAgent.channelUrl || sourceUrl,
     sourcePlatform: platform,
+    sourceUnavailable: raw.source_unavailable === true || raw.sourceUnavailable === true,
+    sourceUrlStatus: raw.source_url_status || raw.sourceUrlStatus || '',
+    sourceUnavailableReason: raw.source_unavailable_reason || raw.sourceUnavailableReason || '',
     sourcePublishedAt:
       raw.first_posted_online_at
       || raw.first_posted_at

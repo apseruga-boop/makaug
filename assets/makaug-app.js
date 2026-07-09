@@ -11743,6 +11743,7 @@ function isBackendControlledListing(property) {
 function getPublicListings() {
   return PROPERTIES.filter((p) => (
     isListingPublicVisible(p)
+    && !isPublicDemoTrainingListing(p)
     && (isBackendControlledListing(p) || publicSampleListingsEnabled())
   ));
 }
@@ -32049,6 +32050,35 @@ function sourcePostDateNeedsPlatformConfirmation(extra = {}) {
   return /inferred_from_public_post_id|inferred.*(?:video|status|post|id)|estimated|needs_.*date_confirmation/.test(confidence);
 }
 
+function foundOnlineSourceUnavailableMeta(p = {}) {
+  const extra = p?.extra_fields && typeof p.extra_fields === "object" ? p.extra_fields : {};
+  const raw = extra.raw_source_post && typeof extra.raw_source_post === "object" ? extra.raw_source_post : {};
+  const status = String(
+    extra.source_url_status
+      || extra.source_status
+      || extra.source_availability_status
+      || raw.source_url_status
+      || raw.source_status
+      || raw.oembed_status
+      || ""
+  ).toLowerCase();
+  const unavailable = extra.source_unavailable === true
+    || raw.source_unavailable === true
+    || /(?:dead|deleted|removed|unavailable|not_found|not found|account_does_not_exist|account does not exist|404|410)/i.test(status);
+  if (!unavailable) return null;
+  const reason = String(
+    extra.source_unavailable_reason
+      || extra.source_url_status_reason
+      || raw.source_unavailable_reason
+      || raw.oembed_reason
+      || "This source video is no longer available."
+  ).trim();
+  return {
+    unavailable: true,
+    reason: reason || "This source video is no longer available."
+  };
+}
+
 function foundOnlineSourceMeta(p = {}) {
   if (!isFoundOnlineListing(p)) return null;
   let extra = {};
@@ -32126,6 +32156,7 @@ function foundOnlineSourceMeta(p = {}) {
       || p.source_contact_label
       || (sourceContactUrl ? `Contact via ${sourceContactPlatform || platform || "source"} source` : "")
   ).trim();
+  const unavailableMeta = foundOnlineSourceUnavailableMeta(p);
   const sourceContactMethod = String(extra.source_contact_method || p.source_contact_method || "").trim();
   const followersLabel = String(extra.source_followers_label || extra.source_audience_label || "").trim();
   const dateNeedsConfirmation = sourcePostDateNeedsPlatformConfirmation(extra);
@@ -32166,8 +32197,8 @@ function foundOnlineSourceMeta(p = {}) {
   return {
     sourceName,
     platform,
-    sourceUrl: /^https?:\/\//i.test(sourceUrl) ? sourceUrl : "",
-    sourceContactUrl: /^https?:\/\//i.test(sourceContactUrl) ? sourceContactUrl : "",
+    sourceUrl: !unavailableMeta && /^https?:\/\//i.test(sourceUrl) ? sourceUrl : "",
+    sourceContactUrl: !unavailableMeta && /^https?:\/\//i.test(sourceContactUrl) ? sourceContactUrl : "",
     sourceContactLabel,
     sourceContactMethod,
     sourceContactPlatform,
@@ -32179,6 +32210,8 @@ function foundOnlineSourceMeta(p = {}) {
     addedToMakaug,
     addedToMakaugLabel,
     hasDirectContact,
+    sourceUnavailable: Boolean(unavailableMeta),
+    sourceUnavailableReason: unavailableMeta?.reason || "",
   };
 }
 
@@ -32325,10 +32358,11 @@ function openThirdPartyListingRequest(event, requestType = "report", propertyId 
 
 function foundOnlineSourceActionLinksHtml(p = {}, meta = {}) {
   const listingId = p.id || p.backend_id || "";
+  const sourceUnavailable = meta.sourceUnavailable === true || foundOnlineSourceUnavailableMeta(p);
   return `
     <div class="mt-3 flex flex-wrap gap-2 text-xs">
-      ${meta.sourceUrl ? `<a href="${adminAttr(meta.sourceUrl)}" target="_blank" rel="noopener noreferrer" class="rounded-full bg-white border border-blue-100 px-3 py-1.5 font-black text-blue-800 underline">${translateListingLabel("Open original source")}</a>` : ""}
-      ${meta.sourceContactUrl ? `<a href="${adminAttr(meta.sourceContactUrl)}" target="_blank" rel="noopener noreferrer" class="rounded-full bg-white border border-blue-100 px-3 py-1.5 font-black text-blue-800 underline">${translateListingLabel("Contact original poster")}</a>` : ""}
+      ${!sourceUnavailable && meta.sourceUrl ? `<a href="${adminAttr(meta.sourceUrl)}" target="_blank" rel="noopener noreferrer" class="rounded-full bg-white border border-blue-100 px-3 py-1.5 font-black text-blue-800 underline">${translateListingLabel("Open original source")}</a>` : ""}
+      ${!sourceUnavailable && meta.sourceContactUrl ? `<a href="${adminAttr(meta.sourceContactUrl)}" target="_blank" rel="noopener noreferrer" class="rounded-full bg-white border border-blue-100 px-3 py-1.5 font-black text-blue-800 underline">${translateListingLabel("Contact original poster")}</a>` : ""}
       <button type="button" onclick="return openThirdPartyListingRequest(event, ${propertyIdArg("claim")}, ${propertyIdArg(listingId)})" class="rounded-full bg-white border border-blue-100 px-3 py-1.5 font-black text-blue-800">${translateListingLabel("Claim this listing")}</button>
       <button type="button" onclick="return openThirdPartyListingRequest(event, ${propertyIdArg("correction")}, ${propertyIdArg(listingId)})" class="rounded-full bg-white border border-blue-100 px-3 py-1.5 font-black text-blue-800">${translateListingLabel("Request correction")}</button>
       <button type="button" onclick="return openThirdPartyListingRequest(event, ${propertyIdArg("removal")}, ${propertyIdArg(listingId)})" class="rounded-full bg-white border border-red-100 px-3 py-1.5 font-black text-red-700">${translateListingLabel("Request removal")}</button>
@@ -32396,7 +32430,10 @@ function foundOnlineSourceThumbnailUrl(p = {}, videoUrl = "") {
     extra.thumbnail_url,
     extra.video_thumbnail_url,
     extra.source_thumbnail_url,
-    extra.cover_image_url
+    extra.cover_image_url,
+    ...(Array.isArray(extra.photo_source_urls) ? extra.photo_source_urls : []),
+    ...(Array.isArray(extra.authorised_photo_urls) ? extra.authorised_photo_urls : []),
+    ...(Array.isArray(p.photo_source_urls) ? p.photo_source_urls : [])
   ].find((value) => /^https?:\/\//i.test(String(value || "").trim()));
   if (explicit) return explicit;
   const youtubeId = getYouTubeVideoId(videoUrl || foundOnlineSourceVideoUrl(p));
@@ -32445,6 +32482,20 @@ function foundOnlineSourceVisualHtml(p = {}, options = {}) {
   const platform = meta.platform || (/tiktok\.com/i.test(videoUrl) ? "TikTok" : (/youtube\.com|youtu\.be/i.test(videoUrl) ? "YouTube" : "Source"));
   const icon = /tiktok/i.test(platform) ? "fab fa-tiktok" : (/youtube/i.test(platform) ? "fab fa-youtube" : "fas fa-link");
   const compact = options.compact === true;
+  const unavailableMeta = foundOnlineSourceUnavailableMeta(p);
+  if (unavailableMeta) {
+    return `
+    <div class="${compact ? "h-full min-h-[12rem]" : "min-h-[18rem]"} relative grid place-items-center overflow-hidden border border-amber-100 bg-amber-50 text-amber-950 p-5 text-center">
+      <div>
+        <div class="mx-auto mb-3 grid h-14 w-14 place-items-center rounded-full border border-amber-200 bg-white text-amber-700 shadow-sm">
+          <i class="fas fa-video-slash text-2xl"></i>
+        </div>
+        <div class="text-xs font-black uppercase tracking-wide">${translateListingLabel("Source unavailable")}</div>
+        <div class="mt-1 text-sm font-bold">${translateListingLabel("This source video is no longer available")}</div>
+        ${compact ? "" : `<div class="mx-auto mt-2 max-w-md text-xs text-amber-800">${adminEscape(unavailableMeta.reason || translateListingLabel("The account or source post may have been deleted, renamed, or made private."))}</div>`}
+      </div>
+    </div>`;
+  }
   const thumbnailUrl = foundOnlineSourceThumbnailUrl(p, videoUrl);
   const sourceUrl = meta.sourceUrl || videoUrl || meta.sourceContactUrl || "";
   return `
@@ -33378,7 +33429,85 @@ function publicPropertyLocationLabel(p = {}, fallback = "Location pending") {
   return fallbackParts.join(", ") || fallback;
 }
 
-	    function propCard(p) {
+function publicCardTheme(type, options = {}) {
+  const t = options.student === true ? "student" : normalizeType(type);
+  return {
+    accentText: {
+      sale: "text-green-700",
+      rent: "text-blue-700",
+      student: "text-purple-700",
+      commercial: "text-amber-700",
+      land: "text-emerald-700"
+    }[t] || "text-green-700",
+    iconText: {
+      sale: "text-green-600",
+      rent: "text-blue-600",
+      student: "text-purple-600",
+      commercial: "text-amber-600",
+      land: "text-emerald-600"
+    }[t] || "text-green-600",
+    priceBg: {
+      sale: "bg-green-900/90",
+      rent: "bg-green-900/90",
+      student: "bg-purple-900/90",
+      commercial: "bg-amber-900/90",
+      land: "bg-emerald-900/90"
+    }[t] || "bg-green-900/90",
+    tagBg: {
+      sale: "bg-green-700",
+      rent: "bg-green-700",
+      student: "bg-purple-700",
+      commercial: "bg-amber-600",
+      land: "bg-emerald-700"
+    }[t] || "bg-green-700"
+  };
+}
+
+function isPublicDemoTrainingListing(p = {}) {
+  const extra = p?.extra_fields && typeof p.extra_fields === "object" ? p.extra_fields : {};
+  const haystack = [
+    p.title,
+    p.description,
+    p.source,
+    p.listed_via,
+    p.lister_name,
+    p.moderation_notes,
+    p.moderation_reason,
+    extra.source_badge,
+    extra.visibility_badge,
+    extra.training_badge,
+    extra.qa_test_delete,
+    extra.soft_launch_test,
+    extra.is_test,
+    extra.launch_proof,
+    JSON.stringify(extra)
+  ].filter(Boolean).join(" ").toLowerCase();
+  return /\bmakaug training\b|\btraining visibility\b|\bvisibility check\b|\bstock unsplash\b|\bdemo listing\b|\bqa test\b|\bsoft_launch\b|\blaunch_proof\b/.test(haystack);
+}
+
+function studentCardExtraHtml(p = {}, theme = publicCardTheme("student", { student: true })) {
+  const nearestUniversity = inferStudentNearestUniversity(p);
+  const uniTags = normalizeStudentUniversityList([
+    ...(Array.isArray(p.student_universities) ? p.student_universities : []),
+    nearestUniversity
+  ]).slice(0, 3);
+  const amenities = (p.amenities || []).slice(0, 3);
+  const tagHtml = uniTags.length
+    ? `<div class="flex flex-wrap gap-1.5 mt-3">${uniTags.map((u) => `<span class="${theme.tagBg} text-white text-xs font-semibold px-2 py-1 rounded">${adminEscape(u)}</span>`).join("")}</div>`
+    : "";
+  const amenityHtml = amenities.length
+    ? `<div class="flex flex-wrap gap-1.5 mt-3">${amenities.map((a) => `<span class="bg-gray-100 text-gray-700 text-xs px-2 py-1 rounded inline-flex items-center gap-1"><i class="${studentAmenityIcon(a)} text-[10px]"></i>${adminEscape(a)}</span>`).join("")}</div>`
+    : "";
+  return `${tagHtml}${amenityHtml}`;
+}
+
+function studentCardFooterText(p = {}) {
+  const nearestUniversity = inferStudentNearestUniversity(p);
+  const walkText = String(p.student_walk_text || "").trim();
+  return nearestUniversity || (!/near\s+campus/i.test(walkText) ? walkText : "") || translateListingLabel("Nearest university to confirm");
+}
+
+	    function propCard(p, options = {}) {
   const idArg = propertyIdArg(p.id);
   const saved = isPropertySaved(p.id);
   const broker = findBrokerById(p.agent);
@@ -33393,13 +33522,17 @@ function publicPropertyLocationLabel(p = {}, fallback = "Location pending") {
   const photoSrc = isThirdPartyResult ? "" : publicImageSrc(p.img, "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=900&q=80");
   const displayTitle = getLocalizedPropertyTitle(p);
   const displayLocation = publicPropertyLocationLabel(p);
+  const studentMode = options.student === true;
+  const displayType = studentMode ? "student" : p.type;
+  const theme = publicCardTheme(displayType, { student: studentMode });
+  const footerText = studentMode ? studentCardFooterText(p) : (broker ? broker.name : translateListingLabel("Private Owner"));
   return `
     <div class="group relative bg-white rounded-xl border border-gray-100 overflow-hidden property-card cursor-pointer" onclick="openPropertyCardDetail(event, ${idArg})">
       ${propertyDescriptionHoverHtml(p)}
       <div class="h-48 relative overflow-hidden">
         ${isThirdPartyResult ? foundOnlineSourceVisualHtml(p, { compact: true }) : `<img src="${adminAttr(photoSrc)}" alt="${adminAttr(displayTitle)}" class="w-full h-full object-cover">`}
         <div class="absolute top-2 left-2 flex flex-col gap-1.5">
-          <div class="${badgeColor(p.type)} text-white text-xs px-2 py-1 rounded font-bold">${badgeLabel(p.type)}</div>
+          <div class="${badgeColor(displayType)} text-white text-xs px-2 py-1 rounded font-bold">${badgeLabel(displayType)}</div>
           ${listingFreshnessBadgeHtml(p)}
           ${source ? `<div class="${source.cls} text-white text-[11px] px-2 py-1 rounded font-semibold inline-flex items-center gap-1">
             <i class="${source.icon} text-[10px]"></i> ${source.label}
@@ -33412,21 +33545,22 @@ function publicPropertyLocationLabel(p = {}, fallback = "Location pending") {
         <button onclick="event.stopPropagation(); toggleSave(${idArg})" aria-pressed="${saved ? "true" : "false"}" title="${adminAttr(getCardSaveButtonTitle(p.id))}" class="${getCardSaveButtonClasses(p.id)}">
           <i class="${getCardSaveButtonIconClasses(p.id)}"></i>
         </button>
-        <div class="absolute bottom-2 right-2 bg-green-900/90 text-white px-2 py-1 rounded text-sm font-bold">${fmtP(p.price, p.period)}</div>
+        <div class="absolute bottom-2 right-2 ${theme.priceBg} text-white px-2 py-1 rounded text-sm font-bold">${fmtP(p.price, studentMode ? (p.period || "sem") : p.period)}</div>
       </div>
       <div class="p-4">
         <h3 class="font-bold text-gray-800 line-clamp-1">${adminEscape(displayTitle)}</h3>
-        <p class="text-sm text-gray-500 mt-1"><i class="fas fa-map-marker-alt text-green-600"></i> ${adminEscape(displayLocation)}</p>
-        ${nearDistance ? `<p class="text-xs font-semibold text-green-700 mt-1"><i class="fas fa-location-arrow mr-1"></i>${nearDistance}</p>` : ""}
+        <p class="text-sm text-gray-500 mt-1"><i class="fas fa-map-marker-alt ${theme.iconText}"></i> ${adminEscape(displayLocation)}</p>
+        ${nearDistance ? `<p class="text-xs font-semibold ${theme.accentText} mt-1"><i class="fas fa-location-arrow mr-1"></i>${nearDistance}</p>` : ""}
         <div class="mt-2 text-sm text-gray-500 flex gap-3 flex-wrap">
-          ${p.beds ? `<span><i class="fas fa-bed text-green-600"></i> ${p.beds} ${countLabel(p.beds, "bed", "beds")}</span>` : ""}
-          ${p.baths ? `<span><i class="fas fa-bath text-green-600"></i> ${p.baths} ${countLabel(p.baths, "bath", "baths")}</span>` : ""}
-          ${p.size ? `<span><i class="fas fa-vector-square text-green-600"></i> ${p.size}</span>` : ""}
+          ${p.beds ? `<span><i class="fas fa-bed ${theme.iconText}"></i> ${p.beds} ${countLabel(p.beds, "bed", "beds")}</span>` : ""}
+          ${p.baths ? `<span><i class="fas fa-bath ${theme.iconText}"></i> ${p.baths} ${countLabel(p.baths, "bath", "baths")}</span>` : ""}
+          ${p.size ? `<span><i class="fas fa-vector-square ${theme.iconText}"></i> ${p.size}</span>` : ""}
         </div>
-	            ${availability ? `<div class="mt-3 text-xs font-semibold text-green-700"><i class="fas fa-calendar-check mr-1"></i>${availability}</div>` : ""}
-	            <div class="mt-3 text-xs text-gray-500">${broker ? broker.name : translateListingLabel("Private Owner")}</div>
+        ${studentMode ? studentCardExtraHtml(p, theme) : ""}
+	            ${availability ? `<div class="mt-3 text-xs font-semibold ${theme.accentText}"><i class="fas fa-calendar-check mr-1"></i>${availability}</div>` : ""}
+	            <div class="mt-3 text-xs text-gray-500">${adminEscape(footerText)}</div>
         <div class="mt-3 flex items-center justify-between gap-2 text-xs text-gray-500">
-          <span class="inline-flex items-center gap-1"><i class="fas fa-calendar-alt text-green-600"></i>${addedMeta}</span>
+          <span class="inline-flex items-center gap-1"><i class="fas fa-calendar-alt ${theme.iconText}"></i>${addedMeta}</span>
           <div class="flex items-center gap-1">
             ${renderPropertyShareActions(p, idArg, { stopPropagation: true })}
           </div>
@@ -33510,6 +33644,7 @@ function studentTypeKey(p) {
 }
 
 function isStudentDiscoverable(p) {
+  if (isPublicDemoTrainingListing(p)) return false;
   const extra = p?.extra_fields && typeof p.extra_fields === "object" ? p.extra_fields : {};
   const t = normalizeType(p?.type || p?.listing_type || p?.category || extra.listing_type);
   if (t === "student") return true;
@@ -33543,76 +33678,7 @@ function studentAmenityIcon(name) {
 }
 
 function studentCard(p) {
-  const idArg = propertyIdArg(p.id);
-  const saved = isPropertySaved(p.id);
-  const source = listingRouteBadgeMeta(p);
-  const registration = listingRegistrationMeta(p);
-	      const addedMeta = listingDateMeta(p);
-	      const availability = propertyAvailabilityText(p);
-	      const badge = p.student_badge || (p.student_verified ? "VERIFIED" : (normalizeType(p.type) === "student" ? "" : "STUDENTS WELCOME"));
-  const isThirdPartyResult = isFoundOnlineListing(p);
-  const photoSrc = isThirdPartyResult ? "" : publicImageSrc(p.img, "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?w=900&q=80");
-  const nearestUniversity = inferStudentNearestUniversity(p);
-  const uniTags = normalizeStudentUniversityList([
-    ...(Array.isArray(p.student_universities) ? p.student_universities : []),
-    nearestUniversity
-  ]).slice(0, 3);
-  const amenities = (p.amenities || []).slice(0, 3);
-  const universityDistance = Number(p.distance_to_uni_km);
-  const universityDistanceText = Number.isFinite(universityDistance) && universityDistance > 0
-    ? `${universityDistance.toFixed(universityDistance < 10 ? 1 : 0)}km from ${nearestUniversity}`
-    : nearestUniversity;
-  const displayLocation = publicPropertyLocationLabel(p);
-  const distanceText = nearestUniversity
-    ? [displayLocation, universityDistanceText].filter(Boolean).join(", ")
-    : displayLocation;
-  const distanceMiles = p.distance_miles ?? p.distanceMiles;
-  const nearDistanceText = distanceMiles != null && Number.isFinite(Number(distanceMiles)) ? `${Number(distanceMiles).toFixed(1)} mi away` : "";
-  const walkText = String(p.student_walk_text || "").trim();
-  const bottomText = nearestUniversity || (!/near\s+campus/i.test(walkText) ? walkText : "") || "Nearest university to confirm";
-  const roomLabel = p.student_room_label || ((studentTypeKey(p) === "shared") ? "Shared" : (p.beds ? String(p.beds) : ""));
-  return `
-    <div class="group relative bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm property-card cursor-pointer" onclick="openPropertyCardDetail(event, ${idArg})">
-      ${propertyDescriptionHoverHtml(p)}
-      <div class="relative h-48 overflow-hidden">
-        ${isThirdPartyResult ? foundOnlineSourceVisualHtml(p, { compact: true }) : `<img src="${adminAttr(photoSrc)}" alt="${adminAttr(p.title)}" class="w-full h-full object-cover">`}
-        ${badge ? `<span class="absolute top-2 left-2 ${studentBadgeClass(badge)} text-white text-xs font-bold px-2.5 py-1 rounded">${badge}</span>` : ""}
-        <button onclick="event.stopPropagation(); toggleSave(${idArg})" aria-pressed="${saved ? "true" : "false"}" title="${adminAttr(getCardSaveButtonTitle(p.id))}" class="${getCardSaveButtonClasses(p.id)}">
-          <i class="${getCardSaveButtonIconClasses(p.id)}"></i>
-        </button>
-        <div class="absolute bottom-2 left-2 bg-gray-900/90 text-white font-bold px-3 py-1 rounded-lg text-sm">${fmtP(p.price, p.period || "sem")}</div>
-        <div class="absolute bottom-2 right-2 flex items-center gap-1">
-          ${roomLabel ? `<span class="bg-white/95 text-gray-800 text-xs font-semibold px-2 py-1 rounded">🛏 ${roomLabel}</span>` : ""}
-          ${p.baths ? `<span class="bg-white/95 text-gray-800 text-xs font-semibold px-2 py-1 rounded">🛁 ${p.baths}</span>` : ""}
-        </div>
-      </div>
-      <div class="p-4">
-        <h3 class="font-bold text-gray-800 leading-snug line-clamp-2">${p.title}</h3>
-        <p class="text-gray-600 mt-1">${distanceText}</p>
-        ${nearDistanceText ? `<p class="text-xs font-semibold text-purple-700 mt-1"><i class="fas fa-location-arrow mr-1"></i>${nearDistanceText}</p>` : ""}
-        <div class="mt-2">
-          ${source ? `<span class="${source.cls} text-white text-[11px] px-2 py-1 rounded font-semibold inline-flex items-center gap-1">
-            <i class="${source.icon} text-[10px]"></i> ${source.label}
-          </span>` : ""}
-          ${registration ? `<span class="${registration.cls} text-white text-[11px] px-2 py-1 rounded font-semibold inline-flex items-center gap-1 ml-1.5">
-            <i class="${registration.icon} text-[10px]"></i> ${registration.label}
-          </span>` : ""}
-        </div>
-	            ${uniTags.length ? `<div class="flex flex-wrap gap-1.5 mt-3">${uniTags.map((u) => `<span class="bg-indigo-600 text-white text-xs font-semibold px-2 py-1 rounded">${u}</span>`).join("")}</div>` : ""}
-	            ${amenities.length ? `<div class="flex flex-wrap gap-1.5 mt-3">${amenities.map((a) => `<span class="bg-gray-100 text-gray-700 text-xs px-2 py-1 rounded inline-flex items-center gap-1"><i class="${studentAmenityIcon(a)} text-[10px]"></i>${a}</span>`).join("")}</div>` : ""}
-	            ${availability ? `<div class="mt-3 text-xs font-semibold text-purple-700"><i class="fas fa-calendar-check mr-1"></i>${availability}</div>` : ""}
-	            <div class="flex items-center justify-between mt-4 text-sm">
-          <span class="text-gray-500">${bottomText}</span>
-          <span class="font-semibold text-gray-800">Details</span>
-        </div>
-        <div class="mt-2 flex items-center justify-between gap-2 text-xs text-gray-500">
-          <span class="inline-flex items-center gap-1"><i class="fas fa-calendar-alt text-green-600"></i>${addedMeta}</span>
-          <div class="flex items-center gap-1">
-            ${renderPropertyShareActions(p, idArg, { stopPropagation: true })}
-          </div>
-        </div>
-      </div>
-    </div>`;
+  return propCard(p, { student: true });
 }
 
 function renderStudentGrid(list) {
@@ -41415,6 +41481,75 @@ async function saveAdminLandVerificationReview(propertyId, fields = {}) {
   return response?.data || null;
 }
 
+function propertyDetailContactTheme(type = "") {
+  const t = normalizeType(type);
+  if (t === "student") {
+    return {
+      bar: "border-purple-100 bg-white/95",
+      primary: "bg-purple-700 hover:bg-purple-600 text-white",
+      secondary: "border border-purple-200 bg-purple-50 text-purple-800 hover:bg-purple-100",
+      icon: "text-purple-600"
+    };
+  }
+  return {
+    bar: "border-green-100 bg-white/95",
+    primary: "bg-green-700 hover:bg-green-600 text-white",
+    secondary: "border border-green-200 bg-green-50 text-green-800 hover:bg-green-100",
+    icon: "text-green-600"
+  };
+}
+
+function publicContactPhoneForProperty(p = {}, broker = null) {
+  const extra = p?.extra_fields && typeof p.extra_fields === "object" ? p.extra_fields : {};
+  return normalizePhoneInput(
+    broker?.whatsapp
+      || broker?.phone
+      || p.lister_phone
+      || p.contact_phone
+      || p.phone
+      || p.public_contact_phone
+      || extra.public_contact_phone
+      || extra.contact_phone
+      || extra.phone
+      || extra.whatsapp
+      || ""
+  );
+}
+
+function detailMobileContactBarHtml({
+  property = {},
+  type = "",
+  phone = "",
+  sourceUrl = "",
+  sourceLabel = "",
+  contactMessage = "",
+  detailIdArg = "null"
+} = {}) {
+  const theme = propertyDetailContactTheme(type);
+  const normalizedPhone = normalizePhoneInput(phone);
+  const phoneHref = normalizedPhone ? `tel:${String(normalizedPhone).replace(/\s+/g, "")}` : "";
+  const phoneArg = adminAttr(JSON.stringify(normalizedPhone || ""));
+  const messageArg = adminAttr(JSON.stringify(contactMessage || ""));
+  const whatsappUrl = normalizedPhone ? buildWhatsAppUrl(normalizedPhone, contactMessage) : "";
+  const sourceHref = /^https?:\/\//i.test(String(sourceUrl || "")) ? String(sourceUrl).trim() : "";
+  const fallbackUrl = sourceHref || buildWhatsAppUrl(MAKAUG_SUPPORT_WHATSAPP, `Hi makaug, I need help with ${property.title || "this property"}. ${getPropertyShareUrl(property)}`);
+  const fallbackLabel = sourceHref ? (sourceLabel || translatePropertyUi("Message via source")) : translatePropertyUi("Ask makaug");
+  const common = "min-h-[44px] rounded-xl px-4 py-2.5 text-sm font-black inline-flex items-center justify-center gap-2";
+  if (normalizedPhone) {
+    return `
+      <div id="property-detail-mobile-contact-bar" class="lg:hidden fixed inset-x-0 bottom-0 z-[70] border-t ${theme.bar} px-3 pt-2 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] shadow-[0_-12px_30px_rgba(15,23,42,0.14)] backdrop-blur">
+        <div class="grid grid-cols-2 gap-2">
+          <a href="${adminAttr(phoneHref)}" class="${common} ${theme.secondary}"><i class="fas fa-phone ${theme.icon}"></i>${translatePropertyUi("Call")}</a>
+          <a href="${adminAttr(whatsappUrl)}" target="_blank" rel="noopener noreferrer" onclick="recordListingWhatsappClick(${detailIdArg}, ${messageArg}, ${phoneArg}, 'listing_detail_mobile_sticky_whatsapp')" class="${common} ${theme.primary}"><i class="fab fa-whatsapp"></i>${translatePropertyUi("WhatsApp")}</a>
+        </div>
+      </div>`;
+  }
+  return `
+    <div id="property-detail-mobile-contact-bar" class="lg:hidden fixed inset-x-0 bottom-0 z-[70] border-t ${theme.bar} px-3 pt-2 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] shadow-[0_-12px_30px_rgba(15,23,42,0.14)] backdrop-blur">
+      <a href="${adminAttr(fallbackUrl)}" target="_blank" rel="noopener noreferrer" class="${common} ${theme.primary} w-full"><i class="${sourceHref ? "fas fa-up-right-from-square" : "fab fa-whatsapp"}"></i>${adminEscape(fallbackLabel)}</a>
+    </div>`;
+}
+
 async function openDetail(id, options = {}) {
   let p = findPropertyForUi(id);
   if (!p) return false;
@@ -41465,6 +41600,7 @@ async function openDetail(id, options = {}) {
   const detailIdArg = JSON.stringify(String(p.id));
   const detailLocation = getPropertyLocationDisplay(p);
   const ownerPhone = p.lister_phone || p.contact_phone || p.phone || "";
+  const mobileContactPhone = publicContactPhoneForProperty(p, broker);
   const ownerPhoneHref = ownerPhone ? `tel:${String(ownerPhone).replace(/\s+/g, "")}` : "";
   const ownerEmail = p.lister_email || p.contact_email || "";
   const foundOnlineMeta = foundOnlineSourceMeta(p);
@@ -41493,6 +41629,15 @@ async function openDetail(id, options = {}) {
   const directionsUrl = propertyDirectionsUrl(p);
   const contactTitle = isFoundOnlineContact ? translatePropertyUi("Original source") : (broker ? translatePropertyUi("Contact Broker") : translatePropertyUi("Contact Lister"));
   const photoCountLabel = translateListingLabel(detailGalleryPhotos.length === 1 ? "Photo" : "Photos");
+  const mobileContactBarHtml = detailMobileContactBarHtml({
+    property: p,
+    type: normalizedType,
+    phone: mobileContactPhone,
+    sourceUrl: sourceContactUrl,
+    sourceLabel: sourceContactButtonLabel || translatePropertyUi("Message via source"),
+    contactMessage,
+    detailIdArg
+  });
   const inquiryRecipientName = broker?.name || foundOnlineMeta?.sourceName || ownerDisplayName || translatePropertyUi("Public listing contact");
   const canPrefillInquiryFromUser = !!authState?.user && !isAdminViewer;
   const inquiryNameDefault = canPrefillInquiryFromUser ? `${authState.user.first_name || ""} ${authState.user.last_name || ""}`.trim() : "";
@@ -41682,7 +41827,9 @@ async function openDetail(id, options = {}) {
           </div>` : ""}
         </div>
       </div>
-    </div>`;
+    </div>
+    ${mobileContactBarHtml}
+    <div class="lg:hidden h-24" aria-hidden="true"></div>`;
   showPage("detail");
   setLang(currentLang, true, false);
   updateDetailSaveButton(p.id);

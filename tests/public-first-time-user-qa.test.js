@@ -73,8 +73,18 @@ assert(
 );
 
 assert(
+  indexHtml.includes("tiles-contact-consistency-20260709"),
+  "tile/contact consistency marker should be present to force the corrected public app bundle"
+);
+
+assert(
   (indexHtml.match(/numbered-pagination-20260709/g) || []).length >= 3,
   "numbered pagination marker should be present in the preload, release marker, and body script loader"
+);
+
+assert(
+  (indexHtml.match(/tiles-contact-consistency-20260709/g) || []).length >= 3,
+  "tile/contact consistency marker should be present in the preload, release marker, and body script loader"
 );
 
 assert(
@@ -91,6 +101,7 @@ assert(
     && serverJs.includes("publicResultsDeliveryFixVersion")
     && serverJs.includes("inpageVideoFacadeVersion")
     && serverJs.includes("numberedPaginationVersion")
+    && serverJs.includes("tilesContactConsistencyVersion")
     && serverJs.includes("publicAppVersionSuffixes"),
   "server-rendered public routes should receive the same i18n app-version suffixes as the homepage"
 );

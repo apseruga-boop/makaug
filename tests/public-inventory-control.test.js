@@ -298,13 +298,17 @@ test('homepage opportunity counter preserves backend category counts and aliases
 });
 
 test('student public listings are discoverable from backend listing aliases', () => {
-  const isStudent = vm.runInNewContext(`${constFunctionSource('normalizeType')}\n${functionSource('isStudentDiscoverable')}; isStudentDiscoverable`);
+  const isStudent = vm.runInNewContext(`${constFunctionSource('normalizeType')}\n${functionSource('isPublicDemoTrainingListing')}\n${functionSource('isStudentDiscoverable')}; isStudentDiscoverable`);
   assert.equal(isStudent({ listing_type: 'student' }), true);
   assert.equal(isStudent({ type: 'student_accommodation' }), true);
   assert.equal(isStudent({ type: 'rent', students_welcome: 'yes' }), true);
   assert.equal(isStudent({ type: 'sale', students_welcome: true }), false);
   assert.equal(isStudent({ type: 'commercial', extra_fields: { student_verified: true } }), false);
   assert.equal(isStudent({ type: 'sale' }), false);
+  assert.equal(isStudent({ type: 'student', title: 'Makaug training student room', extra_fields: { source_badge: 'Training visibility check' } }), false);
+  assert.match(appSource, /function studentCard\(p\) \{\s*return propCard\(p, \{ student: true \}\);\s*\}/);
+  assert.match(appSource, /function publicCardTheme\(type, options = \{\}\)/);
+  assert.match(appSource, /student: "bg-purple-700"/);
   assert.match(propertiesRouteSource, /const listingType = normalizeListingType\(req\.query\.listing_type \|\| req\.query\.type \|\| req\.query\.category\)/);
   assert.match(propertiesRouteSource, /p\.listing_type = \? OR \(p\.listing_type = \? AND p\.students_welcome = \?\)/);
   assert.match(propertiesRouteSource, /WHEN \$\{directType\} = 'rent' AND \$\{a\}\.students_welcome = TRUE THEN 'student'/);
@@ -352,6 +356,18 @@ test('public cards do not show stale Kampala area when richer location fields di
   );
   assert(appSource.includes('const displayLocation = publicPropertyLocationLabel(p);'), 'property/student cards should use the corrected public location label');
   assert(!appSource.includes('[p.area, universityDistanceText].filter(Boolean).join(", ")'), 'student cards must not prepend stale area to university labels');
+});
+
+test('listing detail has a mobile sticky contact bar with phone, source, and makaug fallback priority', () => {
+  assert.match(appSource, /function detailMobileContactBarHtml\(\{/);
+  assert.match(appSource, /id="property-detail-mobile-contact-bar"/);
+  assert.match(appSource, /lg:hidden fixed inset-x-0 bottom-0/);
+  assert.match(appSource, /min-h-\[44px\]/);
+  assert.match(appSource, /publicContactPhoneForProperty\(p, broker\)/);
+  assert.match(appSource, /sourceHref \|\| buildWhatsAppUrl\(MAKAUG_SUPPORT_WHATSAPP/);
+  assert.match(appSource, /translatePropertyUi\("Message via source"\)/);
+  assert.match(appSource, /propertyDetailContactTheme\(type = ""\)[\s\S]*bg-purple-700 hover:bg-purple-600/);
+  assert.match(appSource, /sourceUrl: sourceContactUrl/);
 });
 
 test('public result pages expose the full inventory and avoid black iframe media cards', () => {

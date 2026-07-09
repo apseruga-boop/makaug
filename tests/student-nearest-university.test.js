@@ -29,7 +29,8 @@ assert.strictEqual(
 );
 
 assert(frontend.includes('function inferStudentNearestUniversity'), 'student cards should infer a nearest university in the browser');
-assert(frontend.includes('const bottomText = nearestUniversity'), 'student cards should render the university name in the bottom row');
+assert(frontend.includes('function studentCardFooterText'), 'student cards should feed the nearest university into the shared card footer');
+assert(frontend.includes('return nearestUniversity || (!/near\\s+campus/i.test(walkText) ? walkText : "")'), 'student cards should render the university name before generic walk text');
 assert(!frontend.includes('const bottomText = p.student_walk_text || "Near campus";'), 'student cards must not fall back to generic Near campus copy');
 
 assert(propertiesRoute.includes('function studentUniversityContextFor'), 'public property API should build student university context');

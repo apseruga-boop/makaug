@@ -172,6 +172,7 @@ const publicLocationLabelFixVersion = 'public-location-label-fix-20260708';
 const publicResultsDeliveryFixVersion = 'public-results-delivery-fix-20260708';
 const inpageVideoFacadeVersion = 'inpage-video-facade-20260709';
 const numberedPaginationVersion = 'numbered-pagination-20260709';
+const tilesContactConsistencyVersion = 'tiles-contact-consistency-20260709';
 const publicAppVersionSuffixes = [
   captureHelperUsabilityVersion,
   studentNearestUniversityVersion,
@@ -213,7 +214,8 @@ const publicAppVersionSuffixes = [
   publicLocationLabelFixVersion,
   publicResultsDeliveryFixVersion,
   inpageVideoFacadeVersion,
-  numberedPaginationVersion
+  numberedPaginationVersion,
+  tilesContactConsistencyVersion
 ];
 let cachedIndexHtml = null;
 const publicHtmlCache = new Map();

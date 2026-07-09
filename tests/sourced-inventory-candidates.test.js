@@ -341,7 +341,7 @@ test('public property images escape and normalize generated SVG evidence cards',
   assert(frontend.includes('data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}'), 'SVG data URLs should be encoded for mobile browsers');
   assert(frontend.includes('const photoSrc = isThirdPartyResult ? "" : publicImageSrc(p.img'), 'public listing cards should suppress copied social/gallery media for third-party results while normalizing owned/direct images');
   assert(frontend.includes('foundOnlineSourceVisualHtml(p, { compact: true })'), 'third-party result cards should render the source-first discovery visual instead of copied social media photos');
-  assert(frontend.includes('<img src="${adminAttr(photoSrc)}" alt="${adminAttr(p.title)}"'), 'public listing cards should escape image src and title attributes');
+  assert(frontend.includes('<img src="${adminAttr(photoSrc)}" alt="${adminAttr(displayTitle)}"'), 'public listing cards should escape image src and localized title attributes');
   assert(frontend.includes('const selectedPhotoSrc = thirdPartyDetail ? "" : publicImageSrc(selectedPhoto?.url || p.img'), 'detail gallery should suppress third-party media and normalize owned/direct selected image sources');
   assert(frontend.includes('<img id="detail-gallery-hero-img" src="${adminAttr(selectedPhotoSrc)}"'), 'detail hero image should escape the selected image src');
   assert(!frontend.includes('<img src="${p.img || "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=900&q=80"}"'), 'public cards should not inject raw p.img values into src');
@@ -751,7 +751,23 @@ test('TikTok minimum viable source posts can queue with evidence card and date c
   assert.strictEqual(exactRows[0].price_text, 'USh 650M');
   assert.strictEqual(exactRows[0].pre_approved, 'true');
   assert.strictEqual(exactRows[0].image_rights_confirmed, 'true');
+  assert.strictEqual(exactRows[0].thumbnail_url, 'https://p16-sign-va.tiktokcdn.com/example.jpg');
+  assert.strictEqual(exactRows[0].source_thumbnail_url, 'https://p16-sign-va.tiktokcdn.com/example.jpg');
   assert.deepStrictEqual(exactRows[0].image_urls, ['https://p16-sign-va.tiktokcdn.com/example.jpg']);
+
+  const deadExactRows = buildTikTokExactPostImportRows({
+    urls: ['https://www.tiktok.com/@goneagent/video/7330000000000000099'],
+    oembedReportsByUrl: {
+      'https://www.tiktok.com/@goneagent/video/7330000000000000099': {
+        ok: false,
+        status: 404,
+        reason: 'account does not exist',
+      },
+    },
+  });
+  assert.strictEqual(deadExactRows[0].source_unavailable, true);
+  assert.strictEqual(deadExactRows[0].source_url_status, 'unavailable_404');
+  assert.strictEqual(deadExactRows[0].raw_source_post.source_unavailable, true);
 
   const ndejjeRows = buildTikTokExactPostImportRows({
     rawText: [
@@ -1036,6 +1052,7 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
   assert.strictEqual(noApiRows[0].area, 'Makerere');
   assert.strictEqual(noApiRows[0].listing_type, 'students');
   assert.strictEqual(noApiRows[0].source_contact_url, 'https://www.tiktok.com/@agentug');
+  assert.strictEqual(noApiRows[0].thumbnail_url, 'https://p16-sign.tiktokcdn-us.com/example.jpeg');
   assert.strictEqual(noApiRows[0].first_posted_at, '', 'TikTok public video ID inference must not be shown as a confirmed first-posted date');
   assert(noApiRows[0].raw_source_post.inferred_platform_posted_at.startsWith('2026-'), 'TikTok public video ID inference should stay available as reviewer evidence');
   assert.strictEqual(noApiRows[0].raw_source_post.date_confidence, 'inferred_from_public_post_id_needs_confirmation');
@@ -1543,6 +1560,11 @@ test('found-online social search admin path and share cards are protected and au
   assert(read('services/socialSearchSourcedListingsService.js').includes('source_contact_url'), 'seed should keep a social/source contact URL for no-phone sourced listings');
   assert(read('routes/properties.js').includes('sourceContactUrl = safePublicSourceUrl'), 'public property API should expose a source/contact URL fallback for found-online records');
   assert(read('routes/properties.js').includes("`Contact via ${sourceContactPlatform || 'source'} source`"), 'public property API should label source contact by platform when direct phone is absent');
+  assert(read('routes/properties.js').includes('source_thumbnail_url: sourceThumbnailUrl'), 'public property API should expose safe source thumbnails for social cards');
+  assert(read('routes/properties.js').includes('public_contact_phone: publicContactPhone'), 'public property API should expose source-extracted public phones for contact CTAs');
+  assert(frontend.includes('foundOnlineSourceUnavailableMeta'), 'public cards should detect dead/deleted source videos before rendering source actions');
+  assert(frontend.includes('This source video is no longer available'), 'public cards should render a clean unavailable-source state');
+  assert(frontend.includes('sourceHref || buildWhatsAppUrl(MAKAUG_SUPPORT_WHATSAPP'), 'mobile contact bar should fall back to makaug only after source routes are absent');
   assert(read('services/socialSearchSourcedListingsService.js').includes('missing_any_public_contact_path'), 'seed should treat social pages as a usable contact path before skipping a source');
   assert(read('services/socialSearchSourcedListingsService.js').includes('existingSocialSearchListingKeys'), 'daily found-online sweeps should skip already queued listing keys');
   assert(read('services/socialSearchSourcedListingsService.js').includes("'already_queued'"), 'daily found-online sweeps should report already queued records');
