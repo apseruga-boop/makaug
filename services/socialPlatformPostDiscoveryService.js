@@ -40,7 +40,11 @@ const INSTAGRAM_BUSINESS_ACCOUNT_ID_ENV_NAMES = ['INSTAGRAM_BUSINESS_ACCOUNT_IDS
 const TIKTOK_ACCESS_TOKEN_ENV_NAMES = ['TIKTOK_ACCESS_TOKEN', 'TIKTOK_RESEARCH_API_ACCESS_TOKEN'];
 const TIKTOK_CLIENT_KEY_ENV_NAMES = ['TIKTOK_CLIENT_KEY'];
 const TIKTOK_CLIENT_SECRET_ENV_NAMES = ['TIKTOK_CLIENT_SECRET'];
+const TIKTOK_DATA_SOURCE_URL_ENV_NAMES = ['TIKTOK_DATA_SOURCE_URL', 'TIKTOK_SOURCE_FEED_URL', 'TIKTOK_SEARCH_EXPORT_URL'];
 const TIKTOK_OEMBED_URL = 'https://www.tiktok.com/oembed';
+const TIKTOK_OEMBED_THUMBNAIL_REPROCESS_VERSION = 'tiktok-oembed-thumbnail-reprocess-20260709';
+const DEFAULT_TIKTOK_PENDING_REPROCESS_LIMIT = 80;
+const TIKTOK_PENDING_REPROCESS_ADVISORY_LOCK_ID = 2026070902;
 const TIKTOK_EXACT_VIDEO_URL_PATTERN = /^https:\/\/(www\.)?tiktok\.com\/@[^/]+\/video\/\d+/i;
 const TIKTOK_EXACT_VIDEO_URL_GLOBAL_PATTERN = /https?:\/\/(?:www\.)?tiktok\.com\/@[^/\s?#]+\/video\/\d+(?:[^\s]*)?/ig;
 const SOCIAL_URL_GLOBAL_PATTERN = /https?:\/\/[^\s<>"']+/ig;
@@ -214,6 +218,7 @@ function socialDiscoveryApiReadiness(env = process.env) {
   const tiktokAccessToken = envValue(TIKTOK_ACCESS_TOKEN_ENV_NAMES, env);
   const tiktokClientKey = envValue(TIKTOK_CLIENT_KEY_ENV_NAMES, env);
   const tiktokClientSecret = envValue(TIKTOK_CLIENT_SECRET_ENV_NAMES, env);
+  const tiktokDataSourceUrl = envValue(TIKTOK_DATA_SOURCE_URL_ENV_NAMES, env);
   return {
     source_registry_target_count: MAX_PLATFORM_SWEEP_SOURCES,
     youtube: {
@@ -247,14 +252,16 @@ function socialDiscoveryApiReadiness(env = process.env) {
       note: 'Instagram hashtag/media access requires an eligible Instagram Business or Creator account connected through Meta Graph permissions.',
     },
     tiktok: {
-      configured: Boolean(tiktokAccessToken.value || (tiktokClientKey.value && tiktokClientSecret.value)),
+      configured: Boolean(tiktokAccessToken.value || (tiktokClientKey.value && tiktokClientSecret.value) || tiktokDataSourceUrl.value),
       credential_env: tiktokAccessToken.value ? tiktokAccessToken.name : '',
       client_key_env: tiktokClientKey.value ? tiktokClientKey.name : '',
       client_secret_env: tiktokClientSecret.value ? tiktokClientSecret.name : '',
-      mode: 'official_tiktok_api_when_approved_plus_oembed_exact_url_import',
+      data_source_url_env: tiktokDataSourceUrl.value ? tiktokDataSourceUrl.name : '',
+      mode: 'official_tiktok_api_or_configured_data_source_plus_oembed_exact_url_import',
       required_any_of: TIKTOK_ACCESS_TOKEN_ENV_NAMES,
       required_client_env_any_of: [...TIKTOK_CLIENT_KEY_ENV_NAMES, ...TIKTOK_CLIENT_SECRET_ENV_NAMES],
-      note: 'TikTok broad public discovery is approval-gated. Current production-safe path uses exact video URLs plus TikTok oEmbed and King evidence review.',
+      required_data_source_env_any_of: TIKTOK_DATA_SOURCE_URL_ENV_NAMES,
+      note: 'TikTok broad public discovery is approval-gated. Current production-safe path uses exact video URLs plus TikTok oEmbed thumbnails and King evidence review; configure a TikTok data-source/export URL when official search access is not available.',
     },
   };
 }
@@ -323,6 +330,28 @@ function sourceHashtag(source = {}) {
   const tagMatch = url.match(/(?:tiktok\.com\/tag|youtube\.com\/hashtag|instagram\.com\/explore\/tags|facebook\.com\/hashtag)\/([^/?#]+)/i);
   if (tagMatch) return decodeURIComponent(tagMatch[1]);
   return cleanText(tags[0] || '').replace(/^#/, '');
+}
+
+function sourceHashtags(source = {}) {
+  const tags = [];
+  const first = sourceHashtag(source);
+  if (first) tags.push(first);
+  const metadata = source.metadata && typeof source.metadata === 'object' ? source.metadata : {};
+  [
+    ...(Array.isArray(source.hashtags) ? source.hashtags : []),
+    metadata.hashtag,
+    ...(Array.isArray(metadata.hashtag_watchlist) ? metadata.hashtag_watchlist : []),
+  ].forEach((tag) => {
+    const cleaned = cleanText(tag).replace(/^#/, '');
+    if (cleaned) tags.push(cleaned);
+  });
+  const seen = new Set();
+  return tags.filter((tag) => {
+    const key = tag.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function normalizeYouTubeVideoId(value = '') {
@@ -654,6 +683,57 @@ function tikTokSeedsFromInputs({ posts = [], urls = [], rawText = '' } = {}) {
       post_url: normalizeTikTokVideoUrl(seed.post_url || seed.source_url || seed.url),
     }))
     .filter((seed) => seed.post_url);
+}
+
+function tikTokDataSourceItemsFromPayload(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (!payload || typeof payload !== 'object') return [];
+  for (const key of ['posts', 'videos', 'items', 'results', 'data', 'records', 'rows']) {
+    if (Array.isArray(payload[key])) return payload[key];
+  }
+  return [payload];
+}
+
+function tikTokSeedFromDataSourceItem(item = {}, index = 0) {
+  if (typeof item === 'string') return { post_url: item };
+  if (!item || typeof item !== 'object') return null;
+  const rawText = cleanText([
+    item.caption,
+    item.description,
+    item.text,
+    item.title,
+    item.body,
+    item.source_text,
+    item.video_text,
+    item.comments,
+  ].filter(Boolean).join(' '));
+  return {
+    ...item,
+    post_url: item.post_url || item.source_url || item.video_url || item.tiktok_url || item.url || item.link || '',
+    caption: item.caption || item.description || item.text || item.title || '',
+    description: item.description || item.caption || item.text || '',
+    source_text: item.source_text || rawText,
+    source_name: item.source_name || item.author_name || item.account_name || item.account || '',
+    source_page_url: item.source_page_url || item.author_url || item.profile_url || item.profile || '',
+    source_contact_url: item.source_contact_url || item.author_url || item.profile_url || item.profile || '',
+    source_registry_key: item.source_registry_key || item.registry_key || `tiktok-data-source-${index + 1}`,
+  };
+}
+
+function tikTokSeedsFromDataSourcePayload(payload) {
+  if (typeof payload === 'string') {
+    const raw = payload.trim();
+    if (!raw) return [];
+    try {
+      return tikTokSeedsFromDataSourcePayload(JSON.parse(raw));
+    } catch (_) {
+      return tikTokSeedsFromInputs({ rawText: raw });
+    }
+  }
+  const seeds = tikTokDataSourceItemsFromPayload(payload)
+    .map(tikTokSeedFromDataSourceItem)
+    .filter(Boolean);
+  return tikTokSeedsFromInputs({ posts: seeds });
 }
 
 function socialSeedsFromText(rawText = '') {
@@ -1052,6 +1132,287 @@ async function importTikTokExactVideoPosts({
   };
 }
 
+async function fetchTikTokDataSourcePosts({
+  env = process.env,
+  fetchImpl = fetch,
+  limit = 500,
+} = {}) {
+  const dataSource = envValue(TIKTOK_DATA_SOURCE_URL_ENV_NAMES, env);
+  if (!dataSource.value) {
+    return {
+      api_configured: false,
+      data_source_url_env: '',
+      skipped_reason: 'Set TIKTOK_DATA_SOURCE_URL, TIKTOK_SOURCE_FEED_URL, or TIKTOK_SEARCH_EXPORT_URL to import approved TikTok search/export results.',
+      posts: [],
+      reports: [],
+      oembed_fetch_count: 0,
+    };
+  }
+  const cappedLimit = cappedNumber(limit, 500, 1, 1000);
+  const reports = [];
+  try {
+    const response = await fetchImpl(dataSource.value, {
+      headers: { Accept: 'application/json, text/plain;q=0.9, */*;q=0.8' },
+    });
+    const body = await response.text();
+    if (!response.ok) {
+      return {
+        api_configured: true,
+        data_source_url_env: dataSource.name,
+        skipped_reason: `tiktok_data_source_fetch_failed_${response.status}`,
+        posts: [],
+        reports: [{
+          ok: false,
+          status: response.status,
+          reason: cleanText(body).slice(0, 220) || 'tiktok_data_source_fetch_failed',
+        }],
+        oembed_fetch_count: 0,
+      };
+    }
+    const seeds = tikTokSeedsFromDataSourcePayload(body).slice(0, cappedLimit);
+    const oembedByUrl = {};
+    const oembedReportsByUrl = {};
+    for (const seed of seeds) {
+      if (!seed.post_url || oembedByUrl[seed.post_url] || oembedReportsByUrl[seed.post_url]) continue;
+      const report = await fetchTikTokOEmbed(seed.post_url, { fetchImpl }).catch((error) => ({
+        ok: false,
+        reason: error.message || 'tiktok_oembed_failed',
+      }));
+      const reportSummary = {
+        post_url: seed.post_url,
+        ok: report.ok === true,
+        status: report.status || null,
+        reason: report.ok ? '' : (report.reason || 'tiktok_oembed_failed'),
+      };
+      reports.push(reportSummary);
+      oembedReportsByUrl[seed.post_url] = reportSummary;
+      if (report.ok && report.payload) oembedByUrl[seed.post_url] = report.payload;
+    }
+    return {
+      api_configured: true,
+      data_source_url_env: dataSource.name,
+      skipped_reason: '',
+      received_rows: seeds.length,
+      posts: buildTikTokExactPostImportRows({
+        posts: seeds,
+        oembedByUrl,
+        oembedReportsByUrl,
+      }),
+      reports,
+      oembed_fetch_count: reports.length,
+    };
+  } catch (error) {
+    return {
+      api_configured: true,
+      data_source_url_env: dataSource.name,
+      skipped_reason: 'tiktok_data_source_fetch_error',
+      posts: [],
+      reports: [{ ok: false, reason: error.message || 'tiktok_data_source_fetch_error' }],
+      oembed_fetch_count: 0,
+    };
+  }
+}
+
+function tiktokVideoUrlFromExtra(extra = {}, row = {}) {
+  return normalizeTikTokVideoUrl(
+    extra.tiktok_url
+      || extra.tiktok_video_url
+      || extra.video_url
+      || extra.source_post_url
+      || extra.source_url
+      || extra.original_url
+      || row.source_url
+      || ''
+  );
+}
+
+async function pendingTikTokSourceRowsForThumbnailEnrichment(db, {
+  limit = DEFAULT_TIKTOK_PENDING_REPROCESS_LIMIT,
+  offset = 0,
+  queryClient = null,
+} = {}) {
+  const client = queryClient || db;
+  if (!client?.query) {
+    return { ok: false, reason: 'missing_db_connection', rows: [] };
+  }
+  const cappedLimit = cappedNumber(limit, DEFAULT_TIKTOK_PENDING_REPROCESS_LIMIT, 1, 500);
+  const cappedRowOffset = cappedOffset(offset, 50000);
+  const sql = `
+    SELECT
+      id::text AS id,
+      title,
+      status,
+      extra_fields,
+      COALESCE(
+        extra_fields->>'tiktok_url',
+        extra_fields->>'tiktok_video_url',
+        extra_fields->>'video_url',
+        extra_fields->>'source_post_url',
+        extra_fields->>'source_url',
+        extra_fields->>'original_url',
+        ''
+      ) AS source_url
+    FROM properties
+    WHERE COALESCE(status, '') <> 'deleted'
+      AND (
+        LOWER(COALESCE(extra_fields->>'source_platform', '')) = 'tiktok'
+        OR COALESCE(extra_fields->>'tiktok_url', '') ~* 'tiktok\\.com/@[^/]+/video/[0-9]+'
+        OR COALESCE(extra_fields->>'video_url', '') ~* 'tiktok\\.com/@[^/]+/video/[0-9]+'
+        OR COALESCE(extra_fields->>'source_url', '') ~* 'tiktok\\.com/@[^/]+/video/[0-9]+'
+        OR COALESCE(extra_fields->>'source_post_url', '') ~* 'tiktok\\.com/@[^/]+/video/[0-9]+'
+      )
+      AND COALESCE(extra_fields->>'source_unavailable', '') !~* '^(true|1|yes)$'
+      AND COALESCE(extra_fields->>'tiktok_thumbnail_url', extra_fields->>'oembed_thumbnail_url', extra_fields->>'source_thumbnail_url', extra_fields->>'video_thumbnail_url', extra_fields->>'thumbnail_url', '') = ''
+    ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST
+    LIMIT $1 OFFSET $2
+  `;
+  try {
+    const result = await client.query(sql, [cappedLimit, cappedRowOffset]);
+    return { ok: true, rows: result.rows || [] };
+  } catch (error) {
+    return { ok: false, reason: error.message || 'pending_tiktok_thumbnail_rows_unavailable', rows: [] };
+  }
+}
+
+async function enrichPendingTikTokSourceThumbnailRows({
+  db,
+  dryRun = false,
+  fetchImpl = fetch,
+  limit = DEFAULT_TIKTOK_PENDING_REPROCESS_LIMIT,
+  offset = 0,
+} = {}) {
+  if (!db?.pool) {
+    return {
+      ok: false,
+      skipped: true,
+      reason: 'db_pool_required',
+      version: TIKTOK_OEMBED_THUMBNAIL_REPROCESS_VERSION,
+      rows_considered: 0,
+      oembed_fetch_count: 0,
+      updated_properties: 0,
+      unavailable_properties: 0,
+      reports: [],
+    };
+  }
+  const lockClient = await db.pool.connect();
+  let lockAcquired = false;
+  try {
+    const lock = await lockClient.query(
+      'SELECT pg_try_advisory_lock($1)::boolean AS locked',
+      [TIKTOK_PENDING_REPROCESS_ADVISORY_LOCK_ID]
+    );
+    lockAcquired = lock.rows[0]?.locked === true;
+    if (!lockAcquired) {
+      return {
+        ok: true,
+        skipped: true,
+        reason: 'pending_tiktok_thumbnail_reprocess_already_running',
+        lock_id: TIKTOK_PENDING_REPROCESS_ADVISORY_LOCK_ID,
+        version: TIKTOK_OEMBED_THUMBNAIL_REPROCESS_VERSION,
+        rows_considered: 0,
+        oembed_fetch_count: 0,
+        updated_properties: 0,
+        unavailable_properties: 0,
+        reports: [],
+      };
+    }
+    const pending = await pendingTikTokSourceRowsForThumbnailEnrichment(db, { limit, offset, queryClient: lockClient });
+    if (!pending.ok) {
+      return {
+        ok: false,
+        skipped: true,
+        reason: pending.reason || 'pending_tiktok_thumbnail_rows_unavailable',
+        version: TIKTOK_OEMBED_THUMBNAIL_REPROCESS_VERSION,
+        rows_considered: 0,
+        oembed_fetch_count: 0,
+        updated_properties: 0,
+        unavailable_properties: 0,
+        reports: [],
+      };
+    }
+    let updatedProperties = 0;
+    let unavailableProperties = 0;
+    const reports = [];
+    for (const row of pending.rows || []) {
+      const extra = row.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
+      const sourceUrl = tiktokVideoUrlFromExtra(extra, row);
+      if (!sourceUrl) {
+        reports.push({ property_id: row.id, ok: false, skipped: true, reason: 'missing_exact_tiktok_video_url' });
+        continue;
+      }
+      const report = await fetchTikTokOEmbed(sourceUrl, { fetchImpl }).catch((error) => ({
+        ok: false,
+        reason: error.message || 'tiktok_oembed_failed',
+      }));
+      const sourceHealth = sourceUnavailableFromMetadataReport({
+        ok: report.ok === true,
+        status: report.status || null,
+        reason: report.ok ? '' : (report.reason || 'tiktok_oembed_failed'),
+      }) || {};
+      const oembed = report.ok && report.payload ? normalizeTikTokOEmbed(report.payload) : {};
+      const thumbnailUrl = cleanText(oembed.thumbnail_url || '');
+      const patch = {
+        tiktok_oembed_thumbnail_reprocess_version: TIKTOK_OEMBED_THUMBNAIL_REPROCESS_VERSION,
+        tiktok_oembed_thumbnail_reprocessed_at: new Date().toISOString(),
+        tiktok_url: sourceUrl,
+        video_url: sourceUrl,
+        ...(thumbnailUrl ? {
+          thumbnail_url: thumbnailUrl,
+          source_thumbnail_url: thumbnailUrl,
+          video_thumbnail_url: thumbnailUrl,
+          tiktok_thumbnail_url: thumbnailUrl,
+          oembed_thumbnail_url: thumbnailUrl,
+        } : {}),
+        ...(oembed.title ? { source_title: extra.source_title || oembed.title } : {}),
+        ...(oembed.author_name ? { source_name: extra.source_name || oembed.author_name } : {}),
+        ...(oembed.author_url ? { source_contact_url: extra.source_contact_url || oembed.author_url } : {}),
+        ...(sourceHealth.source_unavailable ? sourceHealth : {}),
+      };
+      if (sourceHealth.source_unavailable) unavailableProperties += 1;
+      if (thumbnailUrl) updatedProperties += 1;
+      if (!dryRun && (thumbnailUrl || sourceHealth.source_unavailable)) {
+        await lockClient.query(
+          `UPDATE properties
+           SET extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $2::jsonb,
+               updated_at = NOW()
+           WHERE id = $1`,
+          [row.id, JSON.stringify(patch)]
+        );
+      }
+      reports.push({
+        property_id: row.id,
+        source_url: sourceUrl,
+        ok: report.ok === true,
+        status: report.status || null,
+        thumbnail_url: thumbnailUrl,
+        updated: Boolean(thumbnailUrl),
+        source_unavailable: sourceHealth.source_unavailable === true,
+        reason: report.ok ? '' : (report.reason || 'tiktok_oembed_failed'),
+      });
+    }
+    return {
+      ok: true,
+      skipped: false,
+      dry_run: dryRun,
+      version: TIKTOK_OEMBED_THUMBNAIL_REPROCESS_VERSION,
+      rows_considered: (pending.rows || []).length,
+      oembed_fetch_count: reports.filter((item) => !item.skipped).length,
+      updated_properties: dryRun ? 0 : updatedProperties,
+      update_candidates: updatedProperties,
+      unavailable_properties: dryRun ? 0 : unavailableProperties,
+      unavailable_candidates: unavailableProperties,
+      reports: reports.slice(0, 50),
+    };
+  } finally {
+    if (lockAcquired) {
+      try {
+        await lockClient.query('SELECT pg_advisory_unlock($1)', [TIKTOK_PENDING_REPROCESS_ADVISORY_LOCK_ID]);
+      } catch (_) {}
+    }
+    lockClient.release();
+  }
+}
+
 function buildExactSocialPostImportRows({
   posts = [],
   urls = [],
@@ -1421,6 +1782,17 @@ function sourceDistrictTerms(source = {}) {
   return values.map(cleanText).filter(Boolean).slice(0, 2);
 }
 
+function sourceTownTerm(source = {}) {
+  const metadata = source.metadata && typeof source.metadata === 'object' ? source.metadata : {};
+  const metadataQuery = cleanText(metadata.query || '');
+  const beforeHash = cleanText(metadataQuery.split('#')[0]);
+  if (beforeHash && beforeHash.length <= 40) return beforeHash;
+  const sourceNameText = sourceName(source);
+  const bulletMatch = sourceNameText.match(/•\s*([^•]+)$/);
+  if (bulletMatch) return cleanText(bulletMatch[1]).slice(0, 40);
+  return sourceDistrictTerms(source)[0] || '';
+}
+
 function queryHasUgandaContext(query = '') {
   return /\b(uganda|kampala|wakiso|mukono|entebbe|jinja|kira|ntinda|naalya|najjera|namugongo|makerere|kyambogo|mubs|ucu)\b/i.test(query);
 }
@@ -1492,6 +1864,39 @@ function buildYouTubeQueryForSource(source = {}) {
     queryHasUgandaContext(discoveryTerms) ? '' : 'Uganda',
     focusedYouTubeFallbackTerm(source),
   ]).join(' ');
+}
+
+function youtubeFocusedSearchQueriesForSource(source = {}) {
+  if (youtubeChannelLookupForSource(source)) return [buildYouTubeQueryForSource(source)];
+  const url = sourceUrl(source);
+  const existingQuery = urlParam(url, 'search_query') || urlParam(url, 'q');
+  if (youtubeSourceIsHashtag(source)) {
+    const town = sourceTownTerm(source);
+    const queries = [];
+    for (const tag of sourceHashtags(source).slice(0, 3)) {
+      const hashtag = `#${String(tag).replace(/^#/, '')}`;
+      queries.push(hashtag);
+      if (town && !new RegExp(`\\b${town.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(hashtag)) {
+        queries.push(`${hashtag} ${town}`);
+      }
+    }
+    return dedupeQueryTerms(queries).slice(0, 4);
+  }
+  if (existingQuery) {
+    return [dedupeQueryTerms([
+      existingQuery,
+      queryHasUgandaContext(existingQuery) ? '' : 'Uganda',
+    ]).join(' ')];
+  }
+  const metadataQuery = cleanText(source.metadata?.query || '');
+  if (metadataQuery) {
+    const town = sourceTownTerm(source);
+    return dedupeQueryTerms([
+      metadataQuery,
+      town ? `${town} ${focusedYouTubeFallbackTerm(source)}` : '',
+    ]).slice(0, 2);
+  }
+  return [buildYouTubeQueryForSource(source)];
 }
 
 function youtubeCoverageTermsForSource(source = {}) {
@@ -1689,12 +2094,16 @@ function buildYouTubeSearchJobs({
   const sortedSources = sortYouTubeSourcesForDiscovery(sources
     .filter((source) => normalizePlatform(source.platform) === 'youtube')
   );
-  const jobs = sortedSources.map((source) => {
+  const jobs = sortedSources.flatMap((source) => {
       const channelLookup = youtubeChannelLookupForSource(source);
       const searchMethod = channelLookup ? 'channel_uploads' : 'search';
-      return {
+      const queries = searchMethod === 'channel_uploads'
+        ? [buildYouTubeQueryForSource(source)]
+        : youtubeFocusedSearchQueriesForSource(source);
+      return queries.map((query, queryIndex) => ({
         platform: 'youtube',
-        source_key: sourceKey(source),
+        source_key: queryIndex ? `${sourceKey(source)}:q${queryIndex + 1}` : sourceKey(source),
+        source_root_key: sourceKey(source),
         source_name: sourceName(source),
         source_type: source.source_type || source.sourceType || '',
         source_record_kind: isDiscoveryFeed(source) ? 'discovery_feed' : 'source_page',
@@ -1708,7 +2117,11 @@ function buildYouTubeSearchJobs({
         source_trust_level: cleanText(source.trustLevel || source.trust_level || ''),
         source_consent_status: cleanText(source.consentStatus || source.consent_status || ''),
         discovery_priority: youtubeDiscoveryPriority(source),
-        query: buildYouTubeQueryForSource(source).slice(0, 500),
+        query: cleanText(query).slice(0, 500),
+        query_variant: queryIndex + 1,
+        query_strategy: searchMethod === 'channel_uploads'
+          ? 'channel_uploads'
+          : (youtubeSourceIsHashtag(source) ? 'single_hashtag_or_hashtag_plus_town' : 'focused_registry_query'),
         coverage_terms: youtubeCoverageTermsForSource(source).slice(0, 80),
         search_method: searchMethod,
         channel_id: channelLookup?.channel_id || '',
@@ -1719,7 +2132,7 @@ function buildYouTubeSearchJobs({
         max_results: DEFAULT_YOUTUBE_RESULTS_PER_SOURCE,
         max_pages: pageLimit,
         includes_shorts_and_long_form: true,
-      };
+      }));
     });
   const filteredJobs = filterYouTubeJobsByMode(jobs, normalizedJobMode);
   const startOffset = filteredJobs.length ? cappedOffset(offset) % filteredJobs.length : 0;
@@ -3231,6 +3644,24 @@ async function runSocialPlatformPostSweep({
     : [];
   const youtubeApi = envYouTubeApiKey(env);
   const apiReadiness = socialDiscoveryApiReadiness(env);
+  const tiktokDataSourceLimit = Math.min(
+    1000,
+    Math.max(1, sourceLimit) * Math.max(1, cappedNumber(maxResultsPerSource, DEFAULT_X_RESULTS_PER_SOURCE, 1, 100))
+  );
+  const tiktokDataSourceFetch = requestedPlatforms.includes('tiktok')
+    ? await fetchTikTokDataSourcePosts({
+      env,
+      fetchImpl,
+      limit: env.STAFF_TIKTOK_DATA_SOURCE_LIMIT || tiktokDataSourceLimit,
+    })
+    : {
+      api_configured: false,
+      data_source_url_env: '',
+      skipped_reason: 'tiktok_not_requested',
+      posts: [],
+      reports: [],
+      oembed_fetch_count: 0,
+    };
   const youtubeCommentLookupBudget = {
     remaining: cappedNumber(
       env.STAFF_YOUTUBE_COMMENT_LOOKUP_LIMIT,
@@ -3371,6 +3802,7 @@ async function runSocialPlatformPostSweep({
     };
   }
   const discoveredPosts = uniquePosts([
+    ...tiktokDataSourceFetch.posts,
     ...youtubeFetch.posts,
     ...xFetch.posts,
   ]);
@@ -3414,6 +3846,25 @@ async function runSocialPlatformPostSweep({
       comment_threads_fetched_count: 0,
       reprocess_result: null,
     };
+  const pendingTikTokThumbnailReprocess = requestedPlatforms.includes('tiktok')
+    ? await enrichPendingTikTokSourceThumbnailRows({
+      db,
+      dryRun,
+      fetchImpl,
+      limit: env.STAFF_TIKTOK_PENDING_REPROCESS_LIMIT || DEFAULT_TIKTOK_PENDING_REPROCESS_LIMIT,
+      offset: normalizedSourceOffset,
+    })
+    : {
+      ok: true,
+      skipped: true,
+      reason: 'tiktok_not_requested',
+      version: TIKTOK_OEMBED_THUMBNAIL_REPROCESS_VERSION,
+      rows_considered: 0,
+      oembed_fetch_count: 0,
+      updated_properties: 0,
+      unavailable_properties: 0,
+      reports: [],
+    };
 
   return {
     ok: true,
@@ -3438,6 +3889,16 @@ async function runSocialPlatformPostSweep({
       api_note: apiReadiness.tiktok.note,
       exact_video_url_pattern: TIKTOK_EXACT_VIDEO_URL_PATTERN.source,
       capture_tasks: tiktokCaptureTasks,
+      data_source_fetch: {
+        api_configured: tiktokDataSourceFetch.api_configured,
+        data_source_url_env: tiktokDataSourceFetch.data_source_url_env,
+        skipped_reason: tiktokDataSourceFetch.skipped_reason || '',
+        received_rows: tiktokDataSourceFetch.received_rows || 0,
+        fetched_posts_count: (tiktokDataSourceFetch.posts || []).length,
+        oembed_fetch_count: tiktokDataSourceFetch.oembed_fetch_count || 0,
+        reports: (tiktokDataSourceFetch.reports || []).slice(0, 20),
+      },
+      pending_thumbnail_reprocess: pendingTikTokThumbnailReprocess,
     },
     youtube: {
       source_count: youtubeSources.length,
@@ -3522,13 +3983,18 @@ module.exports = {
   TIKTOK_ACCESS_TOKEN_ENV_NAMES,
   TIKTOK_CLIENT_KEY_ENV_NAMES,
   TIKTOK_CLIENT_SECRET_ENV_NAMES,
+  TIKTOK_DATA_SOURCE_URL_ENV_NAMES,
+  TIKTOK_OEMBED_THUMBNAIL_REPROCESS_VERSION,
+  DEFAULT_TIKTOK_PENDING_REPROCESS_LIMIT,
   socialDiscoveryApiReadiness,
   TIKTOK_OEMBED_URL,
   TIKTOK_EXACT_VIDEO_URL_PATTERN,
   extractExactSocialPostUrls,
   extractTikTokVideoUrls,
+  fetchTikTokDataSourcePosts,
   buildExactSocialPostImportRows,
   enrichPendingYouTubeSourceRows,
+  enrichPendingTikTokSourceThumbnailRows,
   buildTikTokCaptureTasks,
   buildManualSocialCaptureTasks,
   buildTikTokExactPostImportRows,

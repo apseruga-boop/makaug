@@ -78,6 +78,8 @@ const {
   YOUTUBE_COMMENT_THREADS_URL,
   DEFAULT_YOUTUBE_PENDING_REPROCESS_LIMIT,
   YOUTUBE_SOURCE_TEXT_ENRICHMENT_VERSION,
+  DEFAULT_TIKTOK_PENDING_REPROCESS_LIMIT,
+  TIKTOK_OEMBED_THUMBNAIL_REPROCESS_VERSION,
   socialDiscoveryApiReadiness,
   TIKTOK_OEMBED_URL,
   YOUTUBE_OEMBED_URL,
@@ -88,9 +90,11 @@ const {
   buildTikTokExactPostImportRows,
   buildYouTubeSearchJobs,
   buildXSearchJobs,
+  enrichPendingTikTokSourceThumbnailRows,
   enrichPendingYouTubeSourceRows,
   extractExactSocialPostUrls,
   extractTikTokVideoUrls,
+  fetchTikTokDataSourcePosts,
   normalizeExactSocialPostUrl,
   normalizeYouTubeApiPost,
   normalizeXApiPost,
@@ -1008,6 +1012,17 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
   assert(socialPlatformSweepServiceSource.includes('FACEBOOK_PAGE_IDS'), 'Facebook readiness should expose page ID env vars');
   assert(socialPlatformSweepServiceSource.includes('INSTAGRAM_BUSINESS_ACCOUNT_IDS'), 'Instagram readiness should expose business account env vars');
   assert(socialPlatformSweepServiceSource.includes('TIKTOK_CLIENT_KEY'), 'TikTok readiness should expose official API client env vars');
+  assert(socialPlatformSweepServiceSource.includes('TIKTOK_DATA_SOURCE_URL'), 'TikTok readiness should expose a configured data-source/export URL env var');
+  assert(socialPlatformSweepServiceSource.includes('fetchTikTokDataSourcePosts'), 'TikTok sweeps should fetch exact-video rows from a configured data-source/export URL');
+  assert(socialPlatformSweepServiceSource.includes('data_source_fetch'), 'TikTok sweeps should report configured data-source import results');
+  assert(socialPlatformSweepServiceSource.includes('pending_thumbnail_reprocess'), 'TikTok sweeps should report old-row cover-thumbnail reprocessing');
+  assert(socialPlatformSweepServiceSource.includes('tiktok_oembed_thumbnail_reprocess_version'), 'TikTok cover reprocessing should stamp its version into updated source rows');
+  assert.strictEqual(DEFAULT_TIKTOK_PENDING_REPROCESS_LIMIT, 80, 'TikTok thumbnail backfill should process a bounded batch by default');
+  assert.strictEqual(TIKTOK_OEMBED_THUMBNAIL_REPROCESS_VERSION, 'tiktok-oembed-thumbnail-reprocess-20260709');
+  assert.strictEqual(typeof enrichPendingTikTokSourceThumbnailRows, 'function', 'TikTok sweep should expose a reprocessor for rows missing oEmbed cover thumbnails');
+  assert.strictEqual(typeof fetchTikTokDataSourcePosts, 'function', 'TikTok sweep should expose a configured data-source fetcher');
+  assert(frontend.includes('TikTok data source'), 'King dashboard should show TikTok data-source fetch status');
+  assert(frontend.includes('TikTok cover re-check'), 'King dashboard should show TikTok cover backfill status');
   assert(socialPlatformSweepScript.includes('up to 60,000 social source records'), 'sweep CLI should explain the 60,000-source ceiling');
   const readiness = socialDiscoveryApiReadiness({
     YOUTUBE_API_KEY: 'yt_test',
@@ -1024,6 +1039,11 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
   assert.strictEqual(readiness.facebook.configured, true, 'Facebook readiness should turn on when Meta token and page IDs are present');
   assert.strictEqual(readiness.instagram.configured, true, 'Instagram readiness should turn on when Meta token and IG business IDs are present');
   assert.strictEqual(readiness.tiktok.configured, true, 'TikTok readiness should turn on when official client credentials are present');
+  const readinessWithTikTokDataSource = socialDiscoveryApiReadiness({
+    TIKTOK_DATA_SOURCE_URL: 'https://example.com/tiktok-property-export.json',
+  });
+  assert.strictEqual(readinessWithTikTokDataSource.tiktok.configured, true, 'TikTok readiness should turn on when a configured data-source/export URL is present');
+  assert.strictEqual(readinessWithTikTokDataSource.tiktok.data_source_url_env, 'TIKTOK_DATA_SOURCE_URL');
   assert(socialPlatformSweepServiceSource.includes('createProfilesForRepeatedSourcesOnly: false'), 'platform sweep should not auto-create source broker profiles');
   assert(frontend.includes('ADMIN_YOUTUBE_SWEEP_BATCH_SIZE = 50'), 'King dashboard should use quota-safe 50-source YouTube batches');
   assert(frontend.includes('source_offset: youtubeSourceOffset'), 'King dashboard should advance through YouTube source batches instead of repeating the first sources');
@@ -1209,6 +1229,28 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
   assert(!youtubeJobs[0].query.includes('nyumba'), 'local-language alternatives should not be appended to every YouTube API query');
   assert(youtubeJobs[0].coverage_terms.includes('nyumba'), 'YouTube search jobs should still carry local-language coverage metadata');
   assert(youtubeJobs[0].coverage_terms.includes('student accommodation'), 'student YouTube searches should expose student category coverage metadata');
+  const hashtagYoutubeJobs = buildYouTubeSearchJobs({
+    sources: [{
+      key: 'youtube-kampala-ettaka-hashtag',
+      name: 'YouTube hashtag: #EttakaElitundibwa • Kampala Central',
+      platform: 'youtube',
+      sourceType: 'hashtag_search_feed',
+      url: 'https://www.youtube.com/hashtag/EttakaElitundibwa',
+      districts: ['Kampala'],
+      hashtags: ['EttakaElitundibwa'],
+      metadata: {
+        generated_hashtag_discovery: true,
+        query: 'Kampala Central #EttakaElitundibwa houses for sale Uganda',
+      },
+    }],
+    limit: 4,
+    jobMode: 'search',
+  });
+  assert(hashtagYoutubeJobs.length >= 2, 'YouTube hashtag sources should fan out into simple focused query variants');
+  assert.strictEqual(hashtagYoutubeJobs[0].query, '#EttakaElitundibwa', 'YouTube hashtag sweeps should try the hashtag by itself first');
+  assert.strictEqual(hashtagYoutubeJobs[0].query_strategy, 'single_hashtag_or_hashtag_plus_town');
+  assert(hashtagYoutubeJobs.some((job) => job.query === '#EttakaElitundibwa Kampala Central'), 'YouTube hashtag sweeps should add one town-specific variant');
+  assert(!hashtagYoutubeJobs.some((job) => job.query.includes('houses for sale Uganda')), 'YouTube hashtag sweeps should not stack generic property keywords onto hashtag queries');
   const channelYoutubeJobs = buildYouTubeSearchJobs({
     sources: [{
       key: 'youtube-agent-channel',
