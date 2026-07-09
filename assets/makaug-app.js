@@ -858,9 +858,13 @@ const PUBLIC_LISTINGS_FAST_PAGE_LIMIT = 8;
 const PUBLIC_LISTINGS_BACKGROUND_PAGE_LIMIT = 24;
 const PUBLIC_LISTINGS_BACKGROUND_MAX_PAGES = 80;
 const PUBLIC_LISTINGS_ROUTE_SEARCH_MAX_PAGES = 80;
+const PUBLIC_RESULTS_PAGE_SIZE = 24;
 const PUBLIC_OPPORTUNITY_SUMMARY_PATH = "/api/properties?status=approved&public_only=1&limit=1&page=1&summary_only=1&include_summary=1";
 const PUBLIC_CATEGORY_DEEP_HYDRATION_DELAY_MS = 8000;
 const publicCategoryDeepHydrationTimers = new Map();
+const PUBLIC_PAGINATION_CATEGORIES = Object.freeze(["sale", "rent", "students", "commercial", "land"]);
+const publicCategoryPaginationState = {};
+const publicCategoryPageRowsCache = {};
 let remoteBrokersLoaded = false;
 let REMOTE_BROKERS = [];
 let siteMetrics = { propertyViews: {}, propertySaves: {}, brokerProfileViews: {} };
@@ -33625,7 +33629,7 @@ function renderStudentGrid(list) {
   el.innerHTML = list.map(studentCard).join("");
 }
 
-function updateStudentHeader(list) {
+function updateStudentHeader(list, options = {}) {
   const uni = document.getElementById("student-uni-f")?.value || "";
   const titleEl = document.getElementById("student-results-title");
   const subtitleEl = document.getElementById("student-results-subtitle");
@@ -33633,8 +33637,14 @@ function updateStudentHeader(list) {
     titleEl.textContent = uni ? `Student accommodation near ${uni}` : "Student accommodation across Uganda";
   }
   if (subtitleEl) {
-    const suffix = list.length === 1 ? "property" : "properties";
-    subtitleEl.textContent = `Showing ${list.length} ${suffix} • Prices per semester`;
+    const total = Math.max(0, Number(options.total ?? list.length) || 0);
+    const page = Math.max(1, Number(options.page) || 1);
+    const pageSize = Math.max(1, Number(options.pageSize || PUBLIC_RESULTS_PAGE_SIZE) || PUBLIC_RESULTS_PAGE_SIZE);
+    const start = total ? ((page - 1) * pageSize) + 1 : 0;
+    const end = Math.min(total, (page - 1) * pageSize + list.length);
+    const suffix = total === 1 ? "property" : "properties";
+    const showing = total > list.length ? `Showing ${start}-${end} of ${total}` : `Showing ${total}`;
+    subtitleEl.textContent = `${showing} ${suffix} • Prices per semester`;
   }
 }
 
@@ -33737,19 +33747,43 @@ function renderAll() {
   const publicListings = getPublicListings();
   const saleListings = publicListings.filter((p) => normalizeType(p.type) === "sale");
   const rentListings = publicListings.filter((p) => normalizeType(p.type) === "rent");
+  const saleFiltered = hasActivePublicCategoryFilter("sale");
+  const rentFiltered = hasActivePublicCategoryFilter("rent");
+  const studentsFiltered = hasActivePublicCategoryFilter("students");
+  const commercialFiltered = hasActivePublicCategoryFilter("commercial");
+  const landFiltered = hasActivePublicCategoryFilter("land");
   renderHeroPropertyOpportunityCounter();
   renderGrid("home-grid", getHomepageFeaturedListings(publicListings).slice(0, 3));
-  renderGrid("sale-grid", saleListings);
-  renderGrid("rent-grid", rentListings);
+  renderPublicCategoryPage("sale", saleListings, {
+    total: publicCategoryRenderTotal("sale", saleListings, saleFiltered),
+    filtered: saleFiltered,
+    mode: saleFiltered && !publicCategoryHasRouteSearch("sale") ? "local" : "api"
+  });
+  renderPublicCategoryPage("rent", rentListings, {
+    total: publicCategoryRenderTotal("rent", rentListings, rentFiltered),
+    filtered: rentFiltered,
+    mode: rentFiltered && !publicCategoryHasRouteSearch("rent") ? "local" : "api"
+  });
   const studentList = publicListings.filter((p) => isStudentDiscoverable(p));
-  renderStudentGrid(studentList);
-  updateStudentHeader(studentList);
-  renderGrid("commercial-grid", publicListings.filter((p) => normalizeType(p.type) === "commercial"));
-  renderGrid("land-grid", publicListings.filter((p) => normalizeType(p.type) === "land"));
+  renderPublicCategoryPage("students", studentList, {
+    total: publicCategoryRenderTotal("students", studentList, studentsFiltered),
+    filtered: studentsFiltered,
+    mode: studentsFiltered && !publicCategoryHasRouteSearch("students") ? "local" : "api"
+  });
+  const commercialListings = publicListings.filter((p) => normalizeType(p.type) === "commercial");
+  const landListings = publicListings.filter((p) => normalizeType(p.type) === "land");
+  renderPublicCategoryPage("commercial", commercialListings, {
+    total: publicCategoryRenderTotal("commercial", commercialListings, commercialFiltered),
+    filtered: commercialFiltered,
+    mode: commercialFiltered && !publicCategoryHasRouteSearch("commercial") ? "local" : "api"
+  });
+  renderPublicCategoryPage("land", landListings, {
+    total: publicCategoryRenderTotal("land", landListings, landFiltered),
+    filtered: landFiltered,
+    mode: landFiltered && !publicCategoryHasRouteSearch("land") ? "local" : "api"
+  });
   renderBrokers("home-brokers", getFeaturedBrokers(getBrokerDirectory()).slice(0, 3));
   renderBrokers("brokers-grid", getBrokerDirectory());
-  setPublicCategoryCount("sale", saleListings.length, { filtered: hasActiveListingFilter("sale") });
-  setPublicCategoryCount("rent", rentListings.length, { filtered: hasActiveListingFilter("rent") });
   renderSaved();
   renderActiveAuthDashboard();
   ensureRevenuePlacements();
@@ -34132,6 +34166,14 @@ function showPage(page, options = {}) {
       setListPropertyFormVisible(false);
       maybeOpenListPropertyChoiceModal();
     }
+  }
+  if (PUBLIC_PAGINATION_CATEGORIES.includes(targetPage)) {
+    refreshActivePublicInventoryCategoryFromApi({ silent: true }).then((loaded) => {
+      if (loaded && publicPaginationKey(targetPage) === publicPaginationKey(activePublicInventoryCategoryFromRoute())) {
+        renderAll();
+        resetMaps();
+      }
+    });
   }
   syncPublicWhatsappLinks();
 }
@@ -34639,6 +34681,336 @@ function publicInventoryCategoryPath(category) {
   return "";
 }
 
+function publicPaginationKey(category) {
+  const key = normalizePageKey(category === "student" ? "students" : category);
+  return PUBLIC_PAGINATION_CATEGORIES.includes(key) ? key : "";
+}
+
+function publicPaginationBackendCategory(category) {
+  const key = publicPaginationKey(category);
+  return key === "students" ? "student" : key;
+}
+
+function publicPaginationGridId(category) {
+  const key = publicPaginationKey(category);
+  return key === "students" ? "student-grid" : (key ? `${key}-grid` : "");
+}
+
+function publicPaginationMapId(category) {
+  const key = publicPaginationKey(category);
+  return key === "students" ? "map-students" : (key ? `map-${key}` : "");
+}
+
+function publicPaginationStateFor(category) {
+  const key = publicPaginationKey(category);
+  if (!key) return null;
+  if (!publicCategoryPaginationState[key]) {
+    publicCategoryPaginationState[key] = {
+      page: 1,
+      total: 0,
+      loading: false,
+      mode: "api",
+      requestSeq: 0,
+      sourcePath: ""
+    };
+  }
+  return publicCategoryPaginationState[key];
+}
+
+function publicPaginationCacheFor(category) {
+  const key = publicPaginationKey(category);
+  if (!key) return null;
+  if (!publicCategoryPageRowsCache[key]) publicCategoryPageRowsCache[key] = {};
+  return publicCategoryPageRowsCache[key];
+}
+
+function publicCategoryHasRouteSearch(category) {
+  const backendCategory = publicPaginationBackendCategory(category);
+  return Boolean(backendCategory && publicInventoryRouteSearchPath(backendCategory));
+}
+
+function publicCategoryApiPathForPagination(category) {
+  const backendCategory = publicPaginationBackendCategory(category);
+  if (!backendCategory) return "";
+  return publicInventoryRouteSearchPath(backendCategory) || publicInventoryCategoryPath(backendCategory);
+}
+
+function cachePublicCategoryPageRows(category, page, rows = []) {
+  const key = publicPaginationKey(category);
+  const cache = publicPaginationCacheFor(key);
+  if (!cache) return [];
+  const safePage = Math.max(1, Number(page) || 1);
+  const mappedRows = (Array.isArray(rows) ? rows : [])
+    .map((row) => {
+      if (!row) return null;
+      if (row.remote_source === "api" || row.backend_id || row.type) {
+        return findPropertyForUi(row.id || row.backend_id) || row;
+      }
+      return findPropertyForUi(row.id) || mapRemotePropertyForUi(row);
+    })
+    .filter(Boolean);
+  cache[safePage] = mappedRows;
+  return mappedRows;
+}
+
+function clearPublicCategoryPageCache(category) {
+  const key = publicPaginationKey(category);
+  if (key) publicCategoryPageRowsCache[key] = {};
+}
+
+function syncPublicCategoryPaginationSource(category, path = "") {
+  const state = publicPaginationStateFor(category);
+  if (!state) return null;
+  const nextPath = String(path || "");
+  if (state.sourcePath && nextPath && state.sourcePath !== nextPath) {
+    clearPublicCategoryPageCache(category);
+  }
+  if (nextPath) state.sourcePath = nextPath;
+  return state;
+}
+
+function hasActivePublicCategoryFilter(category) {
+  const key = publicPaginationKey(category);
+  if (key === "sale" || key === "rent") return hasActiveListingFilter(key);
+  if (key === "students") {
+    const fieldIds = ["student-q-f", "student-district-f", "student-type-quick-f", "student-budget-f", "student-uni-f", "student-amenity-f", "student-category-f"];
+    return fieldIds.some((id) => publicListingFilterValue(id))
+      || getRadiusKmFromSelect("student-radius-f") > 0
+      || Boolean(getNearMeSearchState("students"));
+  }
+  if (key === "commercial") {
+    const fieldIds = ["commercial-q-f", "commercial-district-f", "commercial-type-f", "commercial-min-price-f", "commercial-price-f", "commercial-size-f"];
+    return fieldIds.some((id) => publicListingFilterValue(id))
+      || getRadiusKmFromSelect("commercial-radius-f") > 0
+      || Boolean(getNearMeSearchState("commercial"));
+  }
+  if (key === "land") {
+    const fieldIds = ["land-q-f", "land-district-f", "land-type-f", "land-min-price-f", "land-price-f", "land-min-size-f"];
+    return fieldIds.some((id) => publicListingFilterValue(id))
+      || getRadiusKmFromSelect("land-radius-f") > 0
+      || Boolean(getNearMeSearchState("land"));
+  }
+  return false;
+}
+
+function publicCategoryTotalForPagination(category, localCount = 0, response = null, options = {}) {
+  const exactResponseTotal = exactPublicPaginationTotal(response);
+  if (exactResponseTotal) return exactResponseTotal;
+  if (options.filtered) return Math.max(0, Number(localCount) || 0);
+  const state = publicPaginationStateFor(category);
+  const stateTotal = Math.max(0, Number(state?.total) || 0);
+  const apiTotal = publicOpportunityStatForCategory(publicPaginationBackendCategory(category));
+  return Math.max(
+    Math.max(0, Number(localCount) || 0),
+    stateTotal,
+    apiTotal == null ? 0 : Number(apiTotal) || 0
+  );
+}
+
+function publicCategoryRenderTotal(category, list = [], filtered = false) {
+  const state = publicPaginationStateFor(category);
+  const routeSearchTotal = publicCategoryHasRouteSearch(category) ? Math.max(0, Number(state?.total) || 0) : 0;
+  if (routeSearchTotal) return routeSearchTotal;
+  if (filtered) return Math.max(0, Number(list.length) || 0);
+  return publicCategoryTotalForPagination(category, list.length, null, { filtered: false });
+}
+
+function publicPaginationPageCount(total) {
+  return Math.max(1, Math.ceil(Math.max(0, Number(total) || 0) / PUBLIC_RESULTS_PAGE_SIZE));
+}
+
+function publicPaginationVisiblePages(page, totalPages) {
+  const safePage = Math.max(1, Number(page) || 1);
+  const safeTotal = Math.max(1, Number(totalPages) || 1);
+  const pages = new Set([1, safeTotal, safePage - 1, safePage, safePage + 1]);
+  if (safePage <= 3) [2, 3, 4].forEach((p) => pages.add(p));
+  if (safePage >= safeTotal - 2) [safeTotal - 3, safeTotal - 2, safeTotal - 1].forEach((p) => pages.add(p));
+  return Array.from(pages)
+    .filter((p) => p >= 1 && p <= safeTotal)
+    .sort((a, b) => a - b);
+}
+
+function ensurePublicPaginationContainer(category) {
+  const key = publicPaginationKey(category);
+  if (!key) return null;
+  let el = document.getElementById(`${key}-pagination`);
+  if (el) return el;
+  const grid = document.getElementById(publicPaginationGridId(key));
+  if (!grid || !grid.parentElement) return null;
+  el = document.createElement("div");
+  el.id = `${key}-pagination`;
+  el.className = "mt-6";
+  el.setAttribute("data-public-pagination", key);
+  grid.insertAdjacentElement("afterend", el);
+  return el;
+}
+
+function renderPublicCategoryPagination(category, options = {}) {
+  const key = publicPaginationKey(category);
+  const el = ensurePublicPaginationContainer(key);
+  const state = publicPaginationStateFor(key);
+  if (!key || !el || !state) return;
+  const total = Math.max(0, Number(options.total ?? state.total) || 0);
+  const totalPages = publicPaginationPageCount(total);
+  const page = Math.min(Math.max(1, Number(options.page ?? state.page) || 1), totalPages);
+  const loading = options.loading ?? state.loading;
+  if (!total && !loading) {
+    el.innerHTML = "";
+    return;
+  }
+  const pageStart = total ? ((page - 1) * PUBLIC_RESULTS_PAGE_SIZE) + 1 : 0;
+  const pageEnd = Math.min(total, page * PUBLIC_RESULTS_PAGE_SIZE);
+  const disabledClass = "opacity-45 cursor-not-allowed";
+  const enabledClass = "hover:bg-green-50 hover:border-green-400";
+  const buttonClass = "min-h-[44px] min-w-[44px] rounded-xl border border-gray-200 bg-white px-3 text-sm font-bold text-gray-700 transition-colors";
+  const navButton = (label, targetPage, disabled, extra = "") => `
+    <button type="button" ${disabled ? "disabled" : `onclick="goToPublicCategoryPage('${adminAttr(key)}', ${Number(targetPage) || 1})"`}
+      class="${buttonClass} ${disabled ? disabledClass : enabledClass} ${extra}"
+      aria-label="${adminAttr(label)}">${adminEscape(label)}</button>`;
+  const pageButtons = [];
+  let previous = 0;
+  publicPaginationVisiblePages(page, totalPages).forEach((visiblePage) => {
+    if (previous && visiblePage - previous > 1) {
+      pageButtons.push(`<span class="min-h-[44px] min-w-[28px] inline-flex items-center justify-center text-gray-400 font-bold">...</span>`);
+    }
+    const active = visiblePage === page;
+    pageButtons.push(`
+      <button type="button" ${active || loading ? "disabled" : `onclick="goToPublicCategoryPage('${adminAttr(key)}', ${visiblePage})"`}
+        class="${buttonClass} ${active ? "bg-green-700 text-white border-green-700" : (loading ? disabledClass : enabledClass)}"
+        aria-current="${active ? "page" : "false"}">${visiblePage}</button>`);
+    previous = visiblePage;
+  });
+  el.innerHTML = `
+    <div class="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm" data-public-pagination-bar="${adminAttr(key)}">
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div class="text-sm font-semibold text-gray-700">
+          ${loading ? "Loading listings..." : `Page ${page} of ${totalPages}`}
+          <span class="block text-xs font-medium text-gray-500">${total ? `Showing ${pageStart}-${pageEnd} of ${total} properties` : "No properties found"}</span>
+        </div>
+        <nav class="flex flex-wrap items-center gap-2" aria-label="${adminAttr(key)} results pages">
+          ${navButton("‹ Prev", Math.max(1, page - 1), loading || page <= 1)}
+          ${pageButtons.join("")}
+          ${navButton("Next ›", Math.min(totalPages, page + 1), loading || page >= totalPages)}
+        </nav>
+      </div>
+    </div>`;
+}
+
+function renderPublicCategoryPage(category, list = [], options = {}) {
+  const key = publicPaginationKey(category);
+  const state = publicPaginationStateFor(key);
+  if (!key || !state) return [];
+  if (options.mode) state.mode = options.mode;
+  if (options.sourcePath !== undefined) syncPublicCategoryPaginationSource(key, options.sourcePath || "");
+  if (options.page) state.page = Math.max(1, Number(options.page) || 1);
+  const filtered = options.filtered ?? hasActivePublicCategoryFilter(key);
+  const resolvedTotal = options.total == null
+    ? publicCategoryTotalForPagination(key, list.length, options.response || null, { filtered })
+    : Math.max(0, Number(options.total) || 0);
+  const total = resolvedTotal;
+  state.total = total;
+  const totalPages = publicPaginationPageCount(total);
+  state.page = Math.min(Math.max(1, Number(state.page) || 1), totalPages);
+  const cache = publicPaginationCacheFor(key);
+  const cachedRows = state.mode === "api" ? cache?.[state.page] : null;
+  const pageRows = Array.isArray(options.rowsOverride)
+    ? options.rowsOverride
+    : (Array.isArray(cachedRows) && cachedRows.length ? cachedRows : list.slice((state.page - 1) * PUBLIC_RESULTS_PAGE_SIZE, state.page * PUBLIC_RESULTS_PAGE_SIZE));
+  if (key === "students") {
+    renderStudentGrid(pageRows);
+    updateStudentHeader(pageRows, { total, page: state.page, pageSize: PUBLIC_RESULTS_PAGE_SIZE });
+  } else {
+    renderGrid(publicPaginationGridId(key), pageRows);
+    if (key === "sale" || key === "rent") {
+      setPublicCategoryCount(key, total, { filtered: true });
+    }
+  }
+  const mapId = publicPaginationMapId(key);
+  if (mapId) setMapMarkers(mapId, pageRows);
+  renderPublicCategoryPagination(key, { total, page: state.page, loading: state.loading });
+  return pageRows;
+}
+
+async function fetchPublicCategoryPage(category, page = 1, options = {}) {
+  const key = publicPaginationKey(category);
+  const state = publicPaginationStateFor(key);
+  const path = options.path || publicCategoryApiPathForPagination(key);
+  if (!key || !state || !path) return { rows: [], response: null, total: 0 };
+  syncPublicCategoryPaginationSource(key, path);
+  const safePage = Math.max(1, Number(page) || 1);
+  const separator = path.includes("?") ? "&" : "?";
+  const hasSummaryParam = /[?&](include_summary|includeSummary|summary)=/i.test(path);
+  const includeSummary = options.includeSummary === true;
+  const summaryParam = hasSummaryParam ? "" : `&include_summary=${includeSummary ? "1" : "0"}`;
+  const response = await apiRequest(`${path}${separator}limit=${PUBLIC_RESULTS_PAGE_SIZE}&page=${safePage}${summaryParam}`, { skipAuth: true });
+  const rawRows = Array.isArray(response?.data) ? response.data : [];
+  applyPublicRowsForUi(rawRows, response);
+  const rows = cachePublicCategoryPageRows(key, safePage, rawRows);
+  const total = publicCategoryTotalForPagination(key, rows.length, response, { filtered: false });
+  state.total = total || state.total || rows.length;
+  state.mode = "api";
+  state.sourcePath = path;
+  return { rows, response, total: state.total };
+}
+
+function renderLocalPublicCategoryPage(category, page = 1) {
+  const key = publicPaginationKey(category);
+  if (key === "sale" || key === "rent") return filterListings(key, { page, preservePage: true });
+  if (key === "students") return filterStudents({ page, preservePage: true });
+  if (key === "commercial") return filterCommercial({ page, preservePage: true });
+  if (key === "land") return filterLand({ page, preservePage: true });
+  return [];
+}
+
+async function goToPublicCategoryPage(category, page = 1) {
+  const key = publicPaginationKey(category);
+  const state = publicPaginationStateFor(key);
+  if (!key || !state) return false;
+  const targetPage = Math.min(Math.max(1, Number(page) || 1), publicPaginationPageCount(state.total || PUBLIC_RESULTS_PAGE_SIZE));
+  const routeSearchPath = publicCategoryHasRouteSearch(key) ? publicCategoryApiPathForPagination(key) : "";
+  const shouldUseLocalPage = hasActivePublicCategoryFilter(key) && !routeSearchPath;
+  state.page = targetPage;
+  if (shouldUseLocalPage) {
+    state.mode = "local";
+    renderLocalPublicCategoryPage(key, targetPage);
+    document.getElementById(publicPaginationGridId(key))?.scrollIntoView({ behavior: "smooth", block: "start" });
+    return false;
+  }
+  const path = routeSearchPath || publicCategoryApiPathForPagination(key);
+  if (!path) return false;
+  const requestSeq = (state.requestSeq || 0) + 1;
+  state.requestSeq = requestSeq;
+  state.loading = true;
+  state.mode = "api";
+  const grid = document.getElementById(publicPaginationGridId(key));
+  if (grid) grid.innerHTML = loadingPropertyGridHtml(4);
+  renderPublicCategoryPagination(key, { loading: true });
+  try {
+    const needExactTotal = targetPage === 1 && (!state.total || routeSearchPath);
+    const result = await fetchPublicCategoryPage(key, targetPage, { path, includeSummary: needExactTotal });
+    if (state.requestSeq !== requestSeq) return false;
+    state.loading = false;
+    renderPublicCategoryPage(key, result.rows, {
+      page: targetPage,
+      total: result.total,
+      response: result.response,
+      rowsOverride: result.rows,
+      mode: "api",
+      sourcePath: path,
+      filtered: false
+    });
+    document.getElementById(publicPaginationGridId(key))?.scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (error) {
+    if (state.requestSeq === requestSeq) {
+      state.loading = false;
+      renderPublicCategoryPagination(key, { loading: false });
+      toast(`Could not load page ${targetPage}. Please try again.`);
+      console.warn("Public pagination page fetch failed", { category: key, page: targetPage, error });
+    }
+  }
+  return false;
+}
+
 function publicInventoryRouteSearchPath(category) {
   const page = category === "student" ? "students" : normalizePageKey(category);
   const payload = routeSearchHandoffPayload(page);
@@ -34725,12 +35097,21 @@ async function refreshActivePublicInventoryCategoryFromApi({ silent = true } = {
   const hydrationPromise = (async () => {
     try {
       const { rows: firstCategoryRows, firstResponse: firstCategoryResponse } = await fetchPublicPaginatedRows(activeCategoryPath, {
-        limit: PUBLIC_LISTINGS_FAST_PAGE_LIMIT,
+        limit: PUBLIC_RESULTS_PAGE_SIZE,
         maxPages: 1,
-        includeSummary: false
+        includeSummary: Boolean(activeRouteSearchPath)
       });
       if (firstCategoryRows.length && activeCategory === activePublicInventoryCategoryFromRoute()) {
+        syncPublicCategoryPaginationSource(activeCategory, activeCategoryPath);
         applyPublicRowsForUi(firstCategoryRows, firstCategoryResponse);
+        cachePublicCategoryPageRows(activeCategory, 1, firstCategoryRows);
+        const firstCategoryState = publicPaginationStateFor(activeCategory);
+        if (firstCategoryState) {
+          firstCategoryState.page = 1;
+          firstCategoryState.total = publicCategoryTotalForPagination(activeCategory, firstCategoryRows.length, firstCategoryResponse, { filtered: false });
+          firstCategoryState.mode = "api";
+          firstCategoryState.sourcePath = activeCategoryPath;
+        }
         renderAll();
         syncActiveRouteSearchHandoff(activeRouteSearchPath ? "active_route_search_first_page" : "active_category_first_page");
       }
@@ -34745,6 +35126,11 @@ async function refreshActivePublicInventoryCategoryFromApi({ silent = true } = {
         });
       const firstCategoryTotal = exactPublicPaginationTotal(firstCategoryResponse);
       const categoryTotal = firstCategoryTotal || (publicOpportunityStatForCategory(activeCategory) ?? stats?.[activeCategory] ?? 0);
+      const categoryState = publicPaginationStateFor(activeCategory);
+      if (categoryState && categoryTotal) {
+        categoryState.total = categoryTotal;
+        categoryState.sourcePath = activeCategoryPath;
+      }
       if (activeRouteSearchPath) {
         const expectedPages = Math.ceil(Math.max(0, Number(categoryTotal) || 0) / PUBLIC_LISTINGS_BACKGROUND_PAGE_LIMIT) || 1;
         const { rows: searchRows, firstResponse: searchFirstResponse } = await fetchPublicPaginatedRows(activeRouteSearchPath, {
@@ -34792,7 +35178,7 @@ async function refreshActivePublicInventoryCategoryFromApi({ silent = true } = {
 
 function schedulePublicCategoryDeepHydration(category, totalCount = 0) {
   const normalizedCategory = category === "students" ? "student" : normalizeType(category);
-  if (!normalizedCategory || totalCount <= PUBLIC_LISTINGS_FAST_PAGE_LIMIT) return false;
+  if (!normalizedCategory || totalCount <= PUBLIC_RESULTS_PAGE_SIZE) return false;
   if (publicCategoryDeepHydrationTimers.has(normalizedCategory)) return false;
   const timer = window.setTimeout(() => {
     publicCategoryDeepHydrationTimers.delete(normalizedCategory);
@@ -34837,19 +35223,37 @@ async function refreshPublicListingsFromApi({ silent = true } = {}) {
       ? activeRouteSearchPath || publicInventoryCategoryPath(activeCategory) || "/api/properties?status=approved&public_only=1"
       : "/api/properties?status=approved&public_only=1";
     const firstPageRowsPromise = fetchPublicPaginatedRows(firstPagePath, {
-      limit: PUBLIC_LISTINGS_FAST_PAGE_LIMIT,
+      limit: activeCategory ? PUBLIC_RESULTS_PAGE_SIZE : PUBLIC_LISTINGS_FAST_PAGE_LIMIT,
       maxPages: 1,
-      includeSummary: false
+      includeSummary: Boolean(activeRouteSearchPath)
     });
     const [
       { rows: firstPageRows, firstResponse: firstPageResponse },
       summaryStats
     ] = await Promise.all([firstPageRowsPromise, summaryStatsPromise]);
     applyPublicRowsForUi(firstPageRows, firstPageResponse);
+    if (activeCategory) {
+      syncPublicCategoryPaginationSource(activeCategory, firstPagePath);
+      cachePublicCategoryPageRows(activeCategory, 1, firstPageRows);
+      const firstPageState = publicPaginationStateFor(activeCategory);
+      if (firstPageState) {
+        firstPageState.page = 1;
+        firstPageState.total = publicCategoryTotalForPagination(activeCategory, firstPageRows.length, firstPageResponse, { filtered: false });
+        firstPageState.mode = "api";
+        firstPageState.sourcePath = firstPagePath;
+      }
+    }
     renderAll();
     if (activeRouteSearchPath) syncActiveRouteSearchHandoff("initial_route_search_first_page");
     const firstPageCategoryTotal = activeCategory ? exactPublicPaginationTotal(firstPageResponse) : 0;
     const categoryTotal = activeCategory ? firstPageCategoryTotal || (publicOpportunityStatForCategory(activeCategory) ?? summaryStats?.[activeCategory] ?? 0) : 0;
+    if (activeCategory && categoryTotal) {
+      const categoryState = publicPaginationStateFor(activeCategory);
+      if (categoryState) {
+        categoryState.total = categoryTotal;
+        categoryState.sourcePath = firstPagePath;
+      }
+    }
     if (activeCategory) {
       if (activeRouteSearchPath) {
         const expectedPages = Math.ceil(Math.max(0, Number(categoryTotal) || 0) / PUBLIC_LISTINGS_BACKGROUND_PAGE_LIMIT) || 1;
@@ -35773,7 +36177,7 @@ function hasActiveListingFilter(page) {
   return hasFieldFilter || radiusKm > 0 || Boolean(getNearMeSearchState(key));
 }
 
-function filterListings(page) {
+function filterListings(page, options = {}) {
   let list = getPublicListings().filter((p) => normalizeType(p.type) === page);
   if (page === "sale") {
     const q = (document.getElementById("sale-location-f")?.value || "").toLowerCase().trim();
@@ -35798,9 +36202,14 @@ function filterListings(page) {
       return qMatch && dMatch && minBedsMatch && maxBedsMatch && minMatch && maxMatch && typeMatch;
     });
     list = decorateAndSortNearMeResults(list, nearState);
-    setPublicCategoryCount("sale", list.length, { filtered: hasActiveListingFilter("sale") });
-    renderGrid("sale-grid", list);
-    setMapMarkers("map-sale", list);
+    const filtered = hasActivePublicCategoryFilter("sale");
+    const routeSearch = publicCategoryHasRouteSearch("sale");
+    renderPublicCategoryPage("sale", list, {
+      page: options.preservePage ? options.page : 1,
+      total: publicCategoryRenderTotal("sale", list, filtered),
+      mode: filtered && !routeSearch ? "local" : "api",
+      filtered
+    });
     return list;
   } else if (page === "rent") {
     const q = (document.getElementById("rent-location-f")?.value || "").toLowerCase().trim();
@@ -35829,15 +36238,20 @@ function filterListings(page) {
     if (sort === "price_desc") list.sort((a, b) => b.price - a.price);
     if (sort === "newest") list.sort(sortListingsByNewest);
     if (nearState) list = decorateAndSortNearMeResults(list, nearState);
-    setPublicCategoryCount("rent", list.length, { filtered: hasActiveListingFilter("rent") });
-    renderGrid("rent-grid", list);
-    setMapMarkers("map-rent", list);
+    const filtered = hasActivePublicCategoryFilter("rent");
+    const routeSearch = publicCategoryHasRouteSearch("rent");
+    renderPublicCategoryPage("rent", list, {
+      page: options.preservePage ? options.page : 1,
+      total: publicCategoryRenderTotal("rent", list, filtered),
+      mode: filtered && !routeSearch ? "local" : "api",
+      filtered
+    });
     return list;
   }
   return list;
 }
 
-function filterStudents() {
+function filterStudents(options = {}) {
   const q = (document.getElementById("student-q-f")?.value || "").toLowerCase().trim();
   const dRaw = document.getElementById("student-district-f")?.value || "";
   const d = dRaw;
@@ -35876,9 +36290,14 @@ function filterStudents() {
   if (sort === "distance_asc") list.sort((a, b) => (a.distance_to_uni_km || 999) - (b.distance_to_uni_km || 999));
   if (sort === "newest") list.sort(sortListingsByNewest);
   if (nearState) list = decorateAndSortNearMeResults(list, nearState);
-  renderStudentGrid(list);
-  updateStudentHeader(list);
-  setMapMarkers("map-students", list);
+  const filtered = hasActivePublicCategoryFilter("students");
+  const routeSearch = publicCategoryHasRouteSearch("students");
+  renderPublicCategoryPage("students", list, {
+    page: options.preservePage ? options.page : 1,
+    total: publicCategoryRenderTotal("students", list, filtered),
+    mode: filtered && !routeSearch ? "local" : "api",
+    filtered
+  });
   return list;
 }
 
@@ -39794,7 +40213,7 @@ function shiftDetailGalleryPhoto(direction = 1) {
   renderDetailGalleryLightbox();
 }
 
-function filterCommercial() {
+function filterCommercial(options = {}) {
   const q = (document.getElementById("commercial-q-f")?.value || "").toLowerCase().trim();
   const dRaw = document.getElementById("commercial-district-f")?.value || "";
   const d = dRaw;
@@ -39822,12 +40241,18 @@ function filterCommercial() {
   if (sort === "size_desc") list.sort((a, b) => numericValue(b.size) - numericValue(a.size));
   if (sort === "newest") list.sort(sortListingsByNewest);
   if (nearState) list = decorateAndSortNearMeResults(list, nearState);
-  renderGrid("commercial-grid", list);
-  setMapMarkers("map-commercial", list);
+  const filtered = hasActivePublicCategoryFilter("commercial");
+  const routeSearch = publicCategoryHasRouteSearch("commercial");
+  renderPublicCategoryPage("commercial", list, {
+    page: options.preservePage ? options.page : 1,
+    total: publicCategoryRenderTotal("commercial", list, filtered),
+    mode: filtered && !routeSearch ? "local" : "api",
+    filtered
+  });
   return list;
 }
 
-function filterLand() {
+function filterLand(options = {}) {
   const q = (document.getElementById("land-q-f")?.value || "").toLowerCase().trim();
   const dRaw = document.getElementById("land-district-f")?.value || "";
   const d = dRaw;
@@ -39855,21 +40280,32 @@ function filterLand() {
   if (sort === "size_desc") list.sort((a, b) => numericValue(b.size) - numericValue(a.size));
   if (sort === "newest") list.sort(sortListingsByNewest);
   if (nearState) list = decorateAndSortNearMeResults(list, nearState);
-  renderGrid("land-grid", list);
-  setMapMarkers("map-land", list);
+  const filtered = hasActivePublicCategoryFilter("land");
+  const routeSearch = publicCategoryHasRouteSearch("land");
+  renderPublicCategoryPage("land", list, {
+    page: options.preservePage ? options.page : 1,
+    total: publicCategoryRenderTotal("land", list, filtered),
+    mode: filtered && !routeSearch ? "local" : "api",
+    filtered
+  });
   return list;
 }
 
 function sortProps(page, order) {
-  const gridMap = { sale: "sale-grid", rent: "rent-grid", students: "student-grid", commercial: "commercial-grid", land: "land-grid" };
-  const key = page === "students" ? "student" : page;
-  const list = getPublicListings().filter((p) => normalizeType(p.type) === key);
+  const key = publicPaginationKey(page);
+  const backendKey = publicPaginationBackendCategory(key);
+  const list = getPublicListings().filter((p) => key === "students" ? isStudentDiscoverable(p) : normalizeType(p.type) === backendKey);
   if (order === "price_asc") list.sort((a, b) => a.price - b.price);
   if (order === "price_desc") list.sort((a, b) => b.price - a.price);
   if (order === "newest") {
     list.sort(sortListingsByNewest);
   }
-  renderGrid(gridMap[page], list);
+  renderPublicCategoryPage(key, list, {
+    page: 1,
+    total: list.length,
+    mode: "local",
+    filtered: true
+  });
 }
 
 async function toggleSave(id) {

@@ -113,6 +113,8 @@ test('anonymous public property APIs suppress launch seed QA listings', () => {
   assert.match(appSource, /PUBLIC_LISTINGS_BACKGROUND_PAGE_LIMIT = 24/);
   assert.match(appSource, /PUBLIC_LISTINGS_BACKGROUND_MAX_PAGES = 80/);
   assert.match(appSource, /PUBLIC_LISTINGS_ROUTE_SEARCH_MAX_PAGES = 80/);
+  assert.match(appSource, /PUBLIC_RESULTS_PAGE_SIZE = 24/);
+  assert.match(appSource, /PUBLIC_PAGINATION_CATEGORIES = Object\.freeze\(\["sale", "rent", "students", "commercial", "land"\]\)/);
   assert.match(appSource, /PUBLIC_OPPORTUNITY_SUMMARY_PATH = "\/api\/properties\?status=approved&public_only=1&limit=1&page=1&summary_only=1&include_summary=1"/);
   assert.match(routeSource, /const summaryOnly = parseBooleanLike\(req\.query\.summary_only \|\| req\.query\.summaryOnly, false\)/);
   assert.match(routeSource, /const includeSummary = summaryOnly \|\| parseBooleanLike/);
@@ -127,9 +129,10 @@ test('anonymous public property APIs suppress launch seed QA listings', () => {
   assert.match(appSource, /window\.__makaugPublicSummaryPromise && !window\.__makaugPublicSummaryConsumed/);
   assert.match(appSource, /const response = await apiRequest\(PUBLIC_OPPORTUNITY_SUMMARY_PATH, \{ skipAuth: true \}\)/);
   assert.match(appSource, /const firstPagePath = activeCategory\s*\? activeRouteSearchPath \|\| publicInventoryCategoryPath\(activeCategory\) \|\| "\/api\/properties\?status=approved&public_only=1"\s*: "\/api\/properties\?status=approved&public_only=1"/);
-  assert.match(appSource, /const firstPageRowsPromise = fetchPublicPaginatedRows\(firstPagePath, \{[\s\S]*limit: PUBLIC_LISTINGS_FAST_PAGE_LIMIT,[\s\S]*maxPages: 1,[\s\S]*includeSummary: false/);
+  assert.match(appSource, /const firstPageRowsPromise = fetchPublicPaginatedRows\(firstPagePath, \{[\s\S]*limit: activeCategory \? PUBLIC_RESULTS_PAGE_SIZE : PUBLIC_LISTINGS_FAST_PAGE_LIMIT,[\s\S]*maxPages: 1,[\s\S]*includeSummary: Boolean\(activeRouteSearchPath\)/);
   assert.match(appSource, /await Promise\.all\(\[firstPageRowsPromise, summaryStatsPromise\]\)/);
-  assert.match(appSource, /applyPublicRowsForUi\(firstPageRows, firstPageResponse\);\s*renderAll\(\);/);
+  assert.match(appSource, /applyPublicRowsForUi\(firstPageRows, firstPageResponse\);[\s\S]*cachePublicCategoryPageRows\(activeCategory, 1, firstPageRows\);[\s\S]*renderAll\(\);/);
+  assert.match(appSource, /cachePublicCategoryPageRows\(activeCategory, 1, firstPageRows\)/);
   assert.match(appSource, /function schedulePublicCategoryDeepHydration\(category, totalCount = 0\)/);
   assert.match(appSource, /window\.setTimeout\(\(\) => \{[\s\S]*refreshActivePublicInventoryCategoryFromApi\(\{ silent: true \}\)/);
   assert.match(appSource, /schedulePublicCategoryDeepHydration\(activeCategory, categoryTotal\);\s*return true;/);
@@ -144,6 +147,13 @@ test('anonymous public property APIs suppress launch seed QA listings', () => {
   assert.match(appSource, /function hasActiveListingFilter\(page\)/);
   assert.match(appSource, /function activePublicInventoryCategoryFromRoute\(\)/);
   assert.match(appSource, /function publicInventoryCategoryPath\(category\)/);
+  assert.match(appSource, /function renderPublicCategoryPagination\(category, options = \{\}\)/);
+  assert.match(appSource, /function renderPublicCategoryPage\(category, list = \[\], options = \{\}\)/);
+  assert.match(appSource, /async function fetchPublicCategoryPage\(category, page = 1, options = \{\}\)/);
+  assert.match(appSource, /async function goToPublicCategoryPage\(category, page = 1\)/);
+  assert.match(appSource, /data-public-pagination-bar/);
+  assert.match(appSource, /onclick="goToPublicCategoryPage\('\$\{adminAttr\(key\)\}', \$\{visiblePage\}\)"/);
+  assert.match(appSource, /limit=\$\{PUBLIC_RESULTS_PAGE_SIZE\}&page=\$\{safePage\}/);
   assert.match(appSource, /async function fetchPublicCategoryRows\(category, totalCount = 0, options = \{\}\)/);
   assert.match(appSource, /async function refreshActivePublicInventoryCategoryFromApi\(\{ silent = true \} = \{\}\)/);
   assert.match(appSource, /if \(publicListingsApiLoading\) return refreshActivePublicInventoryCategoryFromApi\(\{ silent \}\)/);
@@ -153,10 +163,11 @@ test('anonymous public property APIs suppress launch seed QA listings', () => {
   assert.match(appSource, /onPageRows: \(pageRows, pageResponse\) => \{/);
   assert.match(appSource, /applyPublicRowsForUi\(pageRows, pageResponse\);\s*renderAll\(\);/);
   assert.match(appSource, /await fetchPublicCategoryRows\(activeCategory, categoryTotal, \{/);
-  assert.match(appSource, /setPublicCategoryCount\("sale", saleListings\.length, \{ filtered: hasActiveListingFilter\("sale"\) \}\)/);
-  assert.match(appSource, /setPublicCategoryCount\("rent", rentListings\.length, \{ filtered: hasActiveListingFilter\("rent"\) \}\)/);
-  assert.match(appSource, /setPublicCategoryCount\("sale", list\.length, \{ filtered: hasActiveListingFilter\("sale"\) \}\)/);
-  assert.match(appSource, /setPublicCategoryCount\("rent", list\.length, \{ filtered: hasActiveListingFilter\("rent"\) \}\)/);
+  assert.match(appSource, /renderPublicCategoryPage\("sale", saleListings, \{/);
+  assert.match(appSource, /renderPublicCategoryPage\("rent", rentListings, \{/);
+  assert.match(appSource, /setPublicCategoryCount\(key, total, \{ filtered: true \}\)/);
+  assert.match(appSource, /renderPublicCategoryPage\("sale", list, \{/);
+  assert.match(appSource, /renderPublicCategoryPage\("rent", list, \{/);
   assert(appSource.includes('const summaryParam = hasSummaryParam ? "" : `&include_summary=${includeSummary ? "1" : "0"}`;'));
   assert.match(appSource, /publicListingsApiTotal = Number\.isFinite\(apiTotal\) \? apiTotal : rows\.length/);
   assert.match(appSource, /apiRequest\(`\$\{path\}\$\{separator\}limit=\$\{limit\}&page=\$\{page\}\$\{summaryParam\}`, \{ skipAuth: true \}\)/);
@@ -346,9 +357,16 @@ test('public cards do not show stale Kampala area when richer location fields di
 test('public result pages expose the full inventory and avoid black iframe media cards', () => {
   assert.match(appSource, /const PUBLIC_LISTINGS_BACKGROUND_MAX_PAGES = 80;/);
   assert.match(appSource, /const PUBLIC_LISTINGS_ROUTE_SEARCH_MAX_PAGES = 80;/);
+  assert.match(appSource, /const PUBLIC_RESULTS_PAGE_SIZE = 24;/);
   assert.doesNotMatch(appSource, /const PUBLIC_LISTINGS_BACKGROUND_MAX_PAGES = 2;/);
   assert.match(asyncFunctionSource('fetchPublicCategoryRows'), /fetchPublicPaginatedRows/);
   assert.doesNotMatch(asyncFunctionSource('fetchPublicCategoryRows'), /Promise\.all\(Array\.from/);
+  assert.match(functionSource('renderPublicCategoryPagination'), /Page \$\{page\} of \$\{totalPages\}/);
+  assert.match(functionSource('renderPublicCategoryPagination'), /‹ Prev/);
+  assert.match(functionSource('renderPublicCategoryPagination'), /Next ›/);
+  assert.match(functionSource('renderPublicCategoryPage'), /PUBLIC_RESULTS_PAGE_SIZE/);
+  assert.match(asyncFunctionSource('fetchPublicCategoryPage'), /limit=\$\{PUBLIC_RESULTS_PAGE_SIZE\}&page=\$\{safePage\}/);
+  assert.match(asyncFunctionSource('goToPublicCategoryPage'), /fetchPublicCategoryPage/);
 
   const sourceVisual = functionSource('foundOnlineSourceVisualHtml');
   assert.doesNotMatch(sourceVisual, /<iframe/);
