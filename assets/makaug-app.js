@@ -39326,49 +39326,49 @@ Object.assign(PROPERTY_UI_I18N.lg, {
   "Call Agent": "Kuba Agent",
   "Message Agent": "Wandiikira Agent",
   "Social": "Social",
-  "Message via social": "Message via social"
+  "Message via social": "Wandiika ku social"
 });
 Object.assign(PROPERTY_UI_I18N.sw, {
   "Call Agent": "Piga Agent",
   "Message Agent": "Tuma Ujumbe kwa Agent",
-  "Social": "Social",
-  "Message via social": "Message via social"
+  "Social": "Mitandao",
+  "Message via social": "Tuma kwa mitandao"
 });
 Object.assign(PROPERTY_UI_I18N.ac, {
   "Call Agent": "Go cim Agent",
   "Message Agent": "Cwal lok bot Agent",
   "Social": "Social",
-  "Message via social": "Message via social"
+  "Message via social": "Cwal lok i social"
 });
 Object.assign(PROPERTY_UI_I18N.ny, {
   "Call Agent": "Kuba Agent",
   "Message Agent": "Ohereze obutumwa kuri Agent",
   "Social": "Social",
-  "Message via social": "Message via social"
+  "Message via social": "Ohereza kuri social"
 });
 Object.assign(PROPERTY_UI_I18N.rn, {
   "Call Agent": "Kuba Agent",
   "Message Agent": "Ohereze obutumwa kuri Agent",
   "Social": "Social",
-  "Message via social": "Message via social"
+  "Message via social": "Ohereza kuri social"
 });
 Object.assign(PROPERTY_UI_I18N.sm, {
   "Call Agent": "Kuba Agent",
   "Message Agent": "Wandiikira Agent",
   "Social": "Social",
-  "Message via social": "Message via social"
+  "Message via social": "Wandiika ku social"
 });
 Object.assign(PROPERTY_UI_I18N.am, {
   "Call Agent": "ወኪሉን ይደውሉ",
   "Message Agent": "ለወኪሉ መልእክት ይላኩ",
-  "Social": "Social",
-  "Message via social": "Message via social"
+  "Social": "ማህበራዊ",
+  "Message via social": "በማህበራዊ ይላኩ"
 });
 Object.assign(PROPERTY_UI_I18N.ar, {
   "Call Agent": "اتصل بالوكيل",
   "Message Agent": "راسل الوكيل",
-  "Social": "Social",
-  "Message via social": "Message via social"
+  "Social": "تواصل",
+  "Message via social": "راسل عبر التواصل"
 });
 
 function translatePropertyUi(text, vars = {}) {

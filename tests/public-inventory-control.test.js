@@ -359,6 +359,10 @@ test('public cards do not show stale Kampala area when richer location fields di
 });
 
 test('listing detail has a mobile sticky contact bar with phone, source, and makaug fallback priority', () => {
+  const propCardSource = functionSource('propCard');
+  const openPropertyCardDetailSource = functionSource('openPropertyCardDetail');
+  const openPropertyLinkDetailSource = functionSource('openPropertyLinkDetail');
+  const openDetailSource = asyncFunctionSource('openDetail');
   assert.match(appSource, /function detailMobileContactBarHtml\(\{/);
   assert.match(appSource, /id="property-detail-mobile-contact-bar"/);
   assert.match(appSource, /lg:hidden fixed inset-x-0 bottom-0/);
@@ -374,16 +378,28 @@ test('listing detail has a mobile sticky contact bar with phone, source, and mak
   assert.match(appSource, /translatePropertyUi\("Call"\)/);
   assert.match(appSource, /translatePropertyUi\("Social"\)/);
   assert.match(appSource, /translatePropertyUi\("Message via social"\)/);
+  assert.match(appSource, /"Social": "Mitandao"/);
+  assert.match(appSource, /"Social": "ማህበራዊ"/);
+  assert.match(appSource, /"Social": "تواصل"/);
   assert.match(appSource, /actions\.length >= 3 \? "grid-cols-3"/);
   assert.match(appSource, /buildWhatsAppUrl\(MAKAUG_SUPPORT_WHATSAPP/);
   assert.match(appSource, /propertyDetailContactTheme\(type = ""\)[\s\S]*bg-purple-700 hover:bg-purple-600/);
   assert.match(appSource, /sourceUrl: sourceContactUrl/);
+  assert.match(propCardSource, /onclick="openPropertyCardDetail\(event, \$\{idArg\}\)"/);
+  assert.match(openPropertyCardDetailSource, /return openPropertyLinkDetail\(event, id, "property_card"\)/);
+  assert.match(openPropertyLinkDetailSource, /Promise\.resolve\(openDetail\(id, \{ source \}\)\)/);
+  assert.match(openDetailSource, /const mobileContactBarHtml = detailMobileContactBarHtml\(\{/);
+  ['sale', 'rent', 'students', 'commercial', 'land'].forEach((page) => {
+    assert.match(appSource, new RegExp(`renderPublicCategoryPage\\("${page}"`), `${page} page should use shared public category card rendering`);
+  });
   assert.match(htmlSource, /property24-contact-bar-20260709/);
   assert.match(serverSource, /property24ContactBarVersion/);
   assert.match(htmlSource, /public-contact-phone-routing-20260709/);
   assert.match(serverSource, /publicContactPhoneRoutingVersion/);
   assert.match(htmlSource, /contact-bar-copy-fit-20260709/);
   assert.match(serverSource, /contactBarCopyFitVersion/);
+  assert.match(htmlSource, /contact-bar-all-properties-i18n-20260709/);
+  assert.match(serverSource, /contactBarAllPropertiesI18nVersion/);
   assert.match(propertiesRouteSource, /function publicContactPhoneForRow/);
   assert.match(propertiesRouteSource, /public_contact_phone: publicContactPhone \|\| null/);
   assert.match(appSource, /function isTikTokProfileUrl/);

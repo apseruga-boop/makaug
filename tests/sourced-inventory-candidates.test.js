@@ -1579,7 +1579,12 @@ test('found-online social search admin path and share cards are protected and au
   assert(frontend.includes('translatePropertyUi("WhatsApp")'), 'mobile contact bar should keep the WhatsApp action clear and short');
   assert(frontend.includes('translatePropertyUi("Social")'), 'mobile contact bar should use short neutral Social copy for source/social links');
   assert(frontend.includes('translatePropertyUi("Message via social")'), 'contact source labels should retain the longer social meaning where available');
+  assert(frontend.includes('"Social": "Mitandao"'), 'Kiswahili contact bar should have a short translated social label');
+  assert(frontend.includes('"Social": "ማህበራዊ"'), 'Amharic contact bar should have a translated social label');
+  assert(frontend.includes('"Social": "تواصل"'), 'Arabic contact bar should have a short translated social label');
   assert(frontend.includes('actions.length >= 3 ? "grid-cols-3"'), 'mobile contact bar should render call, WhatsApp, and message as three side-by-side actions');
+  assert(frontend.includes('openPropertyCardDetail(event, ${idArg})'), 'all public property cards should open the shared property detail contact renderer');
+  assert(frontend.includes('return openPropertyLinkDetail(event, id, "property_card")'), 'category cards should route through the shared detail handoff');
   assert(frontend.includes('buildWhatsAppUrl(MAKAUG_SUPPORT_WHATSAPP'), 'mobile contact bar should fall back to makaug only after phone and source routes are absent');
   assert(read('services/socialSearchSourcedListingsService.js').includes('missing_any_public_contact_path'), 'seed should treat social pages as a usable contact path before skipping a source');
   assert(read('services/socialSearchSourcedListingsService.js').includes('existingSocialSearchListingKeys'), 'daily found-online sweeps should skip already queued listing keys');

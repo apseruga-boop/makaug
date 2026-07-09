@@ -178,6 +178,7 @@ const contactOptionMatrixVersion = 'contact-option-matrix-20260709';
 const property24ContactBarVersion = 'property24-contact-bar-20260709';
 const publicContactPhoneRoutingVersion = 'public-contact-phone-routing-20260709';
 const contactBarCopyFitVersion = 'contact-bar-copy-fit-20260709';
+const contactBarAllPropertiesI18nVersion = 'contact-bar-all-properties-i18n-20260709';
 const publicAppVersionSuffixes = [
   captureHelperUsabilityVersion,
   studentNearestUniversityVersion,
@@ -225,7 +226,8 @@ const publicAppVersionSuffixes = [
   contactOptionMatrixVersion,
   property24ContactBarVersion,
   publicContactPhoneRoutingVersion,
-  contactBarCopyFitVersion
+  contactBarCopyFitVersion,
+  contactBarAllPropertiesI18nVersion
 ];
 let cachedIndexHtml = null;
 const publicHtmlCache = new Map();
