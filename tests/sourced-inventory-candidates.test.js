@@ -1575,8 +1575,10 @@ test('found-online social search admin path and share cards are protected and au
   assert(frontend.includes('publicCallPhoneForProperty'), 'public detail contact panels should keep direct call separate from WhatsApp');
   assert(frontend.includes('publicWhatsappPhoneForProperty'), 'public detail contact panels should render WhatsApp when a WhatsApp-capable phone exists');
   assert(frontend.includes('actions.push(`<a href="${adminAttr(sourceHref)}"'), 'mobile contact bar should render source/social contact alongside phone options');
-  assert(frontend.includes('translatePropertyUi("Call Agent")'), 'mobile contact bar should use Property24-style Call Agent copy for direct tel links');
-  assert(frontend.includes('translatePropertyUi("Message Agent")'), 'mobile contact bar should use Property24-style Message Agent copy for source/social links');
+  assert(frontend.includes('translatePropertyUi("Call")'), 'mobile contact bar should use short neutral Call copy for direct tel links');
+  assert(frontend.includes('translatePropertyUi("WhatsApp")'), 'mobile contact bar should keep the WhatsApp action clear and short');
+  assert(frontend.includes('translatePropertyUi("Social")'), 'mobile contact bar should use short neutral Social copy for source/social links');
+  assert(frontend.includes('translatePropertyUi("Message via social")'), 'contact source labels should retain the longer social meaning where available');
   assert(frontend.includes('actions.length >= 3 ? "grid-cols-3"'), 'mobile contact bar should render call, WhatsApp, and message as three side-by-side actions');
   assert(frontend.includes('buildWhatsAppUrl(MAKAUG_SUPPORT_WHATSAPP'), 'mobile contact bar should fall back to makaug only after phone and source routes are absent');
   assert(read('services/socialSearchSourcedListingsService.js').includes('missing_any_public_contact_path'), 'seed should treat social pages as a usable contact path before skipping a source');

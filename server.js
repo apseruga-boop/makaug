@@ -177,6 +177,7 @@ const deadTikTokSourceContactFixVersion = 'dead-tiktok-source-contact-fix-202607
 const contactOptionMatrixVersion = 'contact-option-matrix-20260709';
 const property24ContactBarVersion = 'property24-contact-bar-20260709';
 const publicContactPhoneRoutingVersion = 'public-contact-phone-routing-20260709';
+const contactBarCopyFitVersion = 'contact-bar-copy-fit-20260709';
 const publicAppVersionSuffixes = [
   captureHelperUsabilityVersion,
   studentNearestUniversityVersion,
@@ -223,7 +224,8 @@ const publicAppVersionSuffixes = [
   deadTikTokSourceContactFixVersion,
   contactOptionMatrixVersion,
   property24ContactBarVersion,
-  publicContactPhoneRoutingVersion
+  publicContactPhoneRoutingVersion,
+  contactBarCopyFitVersion
 ];
 let cachedIndexHtml = null;
 const publicHtmlCache = new Map();
