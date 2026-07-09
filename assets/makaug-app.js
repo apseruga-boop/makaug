@@ -12855,7 +12855,7 @@ async function fetchRemoteAdminSnapshot(options = {}) {
     adminSafeSnapshotRequest("summary", () => apiRequest("/api/admin/summary", { headers }), { data: {} }),
     adminSafeSnapshotRequest("command centre", () => apiRequest("/api/admin/command-centre", { headers }), { data: {} }),
     adminSafeSnapshotRequest("recent activity", () => apiRequest("/api/admin/recent", { headers }), { data: {} }),
-    shouldLoadReviewQueue ? adminSafeSnapshotRequest("review queue", () => fetchAdminPaginatedRows("/api/admin/properties/review-queue", headers, { maxPages: 500 }), []) : null,
+    shouldLoadReviewQueue ? adminSafeSnapshotRequest("review queue", () => fetchAdminPaginatedRows("/api/admin/properties/review-queue?include_total=0", headers, { maxPages: 3 }), []) : null,
     shouldLoadLiveListings ? adminSafeSnapshotRequest("live listings", () => fetchAdminPaginatedRows("/api/admin/properties/live", headers, { maxPages: 10 }), []) : null,
     shouldLoadAccounts ? adminSafeSnapshotRequest("users", () => apiRequest(`/api/admin/users?${userParams.toString()}`, { headers }), { data: [] }) : null,
     shouldLoadAgents ? adminSafeSnapshotRequest("agents", () => apiRequest("/api/admin/agents?limit=100", { headers }), { data: [] }) : null,
@@ -15432,6 +15432,10 @@ async function renderAdminDashboard(options = {}) {
   const gate = document.getElementById("admin-auth-gate");
   const body = document.getElementById("admin-body");
   if (!gate || !body) return;
+  if (adminDashboardRendering) {
+    console.warn("King dashboard refresh already running; skipping duplicate render.");
+    return;
+  }
 
   const adminUser = authState?.user && derivePortalMode(authState.user, authState.user.portal_mode) === "admin"
     ? authState.user

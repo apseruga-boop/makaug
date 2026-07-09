@@ -215,6 +215,29 @@ function adminPendingReviewWhere(alias = 'p') {
   )`;
 }
 
+function adminPendingReviewFastWhere(alias = 'p') {
+  const final = adminSqlList(ADMIN_FINAL_REVIEW_STATUSES);
+  return `(
+    COALESCE(${adminColumn(alias, 'status')}, '') NOT IN (${final})
+    AND COALESCE(${adminColumn(alias, 'moderation_stage')}, '') NOT IN (${final})
+  )`;
+}
+
+function adminLaunchTestListingFastCondition(alias = 'p') {
+  const col = (column) => adminColumn(alias, column);
+  return `(
+    COALESCE(${col('source')}, '') ~* '(qa|test|demo|soft_launch|launch_proof)'
+    OR COALESCE(${col('listed_via')}, '') ~* '(qa|test|demo|soft_launch|launch_proof)'
+    OR COALESCE(${col('lister_email')}, '') ~* '(makaug\\.invalid|test@|qa@|dummy|sample)'
+    OR COALESCE(${col('inquiry_reference')}, '') ~* '^(SLT|QA|TEST|DUMMY|SAMPLE)-'
+    OR COALESCE(${col('extra_fields')}->>'is_test', '') ~* '^(true|1|yes)$'
+    OR COALESCE(${col('extra_fields')}->>'qa_test_delete', '') ~* '^(true|1|yes)$'
+    OR COALESCE(${col('extra_fields')}->>'soft_launch_test', '') ~* '^(true|1|yes)$'
+    OR COALESCE(${col('extra_fields')}->>'launch_proof', '') ~* '^(true|1|yes)$'
+    OR COALESCE(${col('extra_fields')}->>'non_public_test', '') ~* '^(true|1|yes)$'
+  )`;
+}
+
 function adminLaunchTestListingCondition(alias = 'p') {
   const col = (column) => adminColumn(alias, column);
   return `(
@@ -1504,28 +1527,93 @@ function missingProviderEnv(provider) {
   if (provider === 'backups') return missingBackupStorageEnv();  return missingEnv(providerEnvKeys(provider));
 }
 
-async function safeOne(sql, values = [], fallback = {}) {
+const ADMIN_DASHBOARD_CACHE_TTL_MS = 15000;
+const ADMIN_REVIEW_QUEUE_CACHE_TTL_MS = 8000;
+const ADMIN_SAFE_QUERY_TIMEOUT_MS = 3500;
+const adminDashboardResponseCache = new Map();
+
+function adminCacheEntryIsFresh(entry) {
+  return entry?.value && Number(entry.expiresAt || 0) > Date.now();
+}
+
+async function adminCachedPayload(cacheKey, ttlMs, producer) {
+  const existing = adminDashboardResponseCache.get(cacheKey);
+  if (adminCacheEntryIsFresh(existing)) return existing.value;
+  if (existing?.promise) return existing.promise;
+
+  const promise = Promise.resolve()
+    .then(producer)
+    .then((value) => {
+      adminDashboardResponseCache.set(cacheKey, {
+        value,
+        expiresAt: Date.now() + Math.max(1000, Number(ttlMs) || ADMIN_DASHBOARD_CACHE_TTL_MS)
+      });
+      return value;
+    })
+    .catch((error) => {
+      adminDashboardResponseCache.delete(cacheKey);
+      throw error;
+    });
+
+  adminDashboardResponseCache.set(cacheKey, { promise, expiresAt: 0 });
+  return promise;
+}
+
+function adminSafeQueryFallbackReason(error) {
+  if (['42P01', '42703', '42704'].includes(error?.code)) return error.code;
+  if (error?.code === '57014') return 'statement_timeout';
+  if (/statement timeout|canceling statement/i.test(String(error?.message || ''))) return 'statement_timeout';
+  return '';
+}
+
+async function adminTimedQuery(sql, values = [], timeoutMs = ADMIN_SAFE_QUERY_TIMEOUT_MS) {
+  const client = await db.getClient();
   try {
-    const result = await db.query(sql, values);
+    await client.query('BEGIN');
+    await client.query('SELECT set_config($1, $2, true)', [
+      'statement_timeout',
+      `${Math.max(250, Number(timeoutMs) || ADMIN_SAFE_QUERY_TIMEOUT_MS)}ms`
+    ]);
+    const result = await client.query(sql, values);
+    await client.query('COMMIT');
+    return result;
+  } catch (error) {
+    try {
+      await client.query('ROLLBACK');
+    } catch (_) {}
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function safeOne(sql, values = [], fallback = {}, options = {}) {
+  try {
+    const result = options.timeoutMs === 0
+      ? await db.query(sql, values)
+      : await adminTimedQuery(sql, values, options.timeoutMs || ADMIN_SAFE_QUERY_TIMEOUT_MS);
     return result.rows[0] || fallback;
   } catch (error) {
-    if (['42P01', '42703', '42704'].includes(error?.code)) return fallback;
+    const fallbackReason = adminSafeQueryFallbackReason(error);
+    if (fallbackReason) return { ...fallback, _fallback_reason: fallbackReason };
     throw error;
   }
 }
 
-async function safeRows(sql, values = []) {
+async function safeRows(sql, values = [], options = {}) {
   try {
-    const result = await db.query(sql, values);
+    const result = options.timeoutMs === 0
+      ? await db.query(sql, values)
+      : await adminTimedQuery(sql, values, options.timeoutMs || ADMIN_SAFE_QUERY_TIMEOUT_MS);
     return result.rows || [];
   } catch (error) {
-    if (['42P01', '42703', '42704'].includes(error?.code)) return [];
+    if (adminSafeQueryFallbackReason(error)) return [];
     throw error;
   }
 }
 
-async function safeCount(sql, values = []) {
-  const row = await safeOne(sql, values, { total: 0 });
+async function safeCount(sql, values = [], options = {}) {
+  const row = await safeOne(sql, values, { total: 0 }, options);
   return Number(row.total || 0);
 }
 
@@ -2505,120 +2593,153 @@ async function updatePropertyEditableFields({ propertyId, patch = {} }) {
 
 router.get('/summary', async (req, res, next) => {
   try {
-    const [
-      properties,
-      agents,
-      reports,
-      requests,
-      inquiries,
-      users,
-      engagement,
-      engagement48h,
-      topAreas48h,
-      topListingTypes48h
-    ] = await Promise.all([
-      db.query(
-        `SELECT
-          COUNT(*)::int AS total,
-          COUNT(*) FILTER (WHERE ${adminPendingReviewWhere('')})::int AS pending,
-          COUNT(*) FILTER (WHERE status = 'approved')::int AS approved,          COUNT(*) FILTER (WHERE ${adminPublicLiveListingWhere('')})::int AS public_live,
-          COUNT(*) FILTER (WHERE ${adminPublicLiveListingWhere('')} AND ${adminFeaturedListingCondition('')})::int AS public_featured,
-          COUNT(*) FILTER (WHERE status = 'rejected')::int AS rejected,
-          COUNT(*) FILTER (WHERE status = 'hidden')::int AS hidden,
-          COUNT(*) FILTER (WHERE status = 'deleted')::int AS deleted,
-          COUNT(*) FILTER (WHERE COALESCE(lister_type, 'owner') <> 'agent' AND agent_id IS NULL)::int AS private,
-          COUNT(*) FILTER (WHERE COALESCE(lister_type, 'owner') = 'agent' OR agent_id IS NOT NULL)::int AS agent_listed,
-          COUNT(*) FILTER (WHERE listing_type = 'student' OR students_welcome = TRUE)::int AS student_discoverable,
-          COALESCE(ROUND((((COUNT(*) FILTER (WHERE ${publicLivePropertyStatusSql('')}))::numeric / NULLIF(COUNT(*)::numeric, 0)) * 100)), 0)::int AS approval_rate_pct,
-          COALESCE(ROUND((((COUNT(*) FILTER (WHERE status = 'rejected'))::numeric / NULLIF(COUNT(*)::numeric, 0)) * 100)), 0)::int AS rejection_rate_pct
-         FROM properties`
-      ),
-      db.query(
-        `SELECT
-          COUNT(*)::int AS total,
-          COUNT(*) FILTER (WHERE status = 'pending')::int AS pending,
-          COUNT(*) FILTER (WHERE status = 'approved')::int AS approved
-         FROM agents`
-      ),
-      db.query(
-        `SELECT
-          COUNT(*)::int AS total,
-          COUNT(*) FILTER (WHERE status = 'open')::int AS open
-         FROM report_listings`
-      ),
-      db.query('SELECT COUNT(*)::int AS total FROM property_requests'),
-      db.query('SELECT COUNT(*)::int AS total FROM property_inquiries'),
-      db.query(
-        `SELECT
-          COUNT(*)::int AS total,
-          COUNT(*) FILTER (WHERE status = 'active')::int AS active,
-          COUNT(*) FILTER (WHERE status = 'suspended')::int AS suspended,
-          COUNT(*) FILTER (WHERE phone_verified = TRUE)::int AS phone_verified,
-          COUNT(*) FILTER (WHERE weekly_tips_opt_in = TRUE)::int AS weekly_tips_opt_in,
-          COUNT(*) FILTER (WHERE marketing_opt_in = TRUE)::int AS marketing_opt_in,
-          COUNT(*) FILTER (WHERE oauth_provider IS NOT NULL)::int AS social_linked
-         FROM users`
-      ),
-      db.query(
-        `SELECT
-          COUNT(*) FILTER (WHERE event_name IN ('property_open','property_view'))::int AS property_views,
-          COUNT(*) FILTER (WHERE event_name IN ('property_save','property_saved','save_property'))::int AS property_saves,
-          COUNT(*) FILTER (WHERE event_name IN ('broker_profile_open','broker_profile_view'))::int AS broker_profile_views,
-          COUNT(*) FILTER (WHERE event_name IN ('property_inquiry_submit','property_inquiry'))::int AS property_inquiries,
-          COUNT(*) FILTER (WHERE event_name IN ('property_directions_open','directions_open','route_time_view'))::int AS route_events
-         FROM analytics_events`
-      ),
-      db.query(
-        `SELECT
-          COUNT(*) FILTER (WHERE event_name IN ('property_open','property_view'))::int AS property_views,
-          COUNT(DISTINCT client_id) FILTER (WHERE event_name IN ('property_open','property_view','page_view','property_search'))::int AS unique_visitors,
-          COUNT(*) FILTER (WHERE event_name IN ('property_save','property_saved','save_property'))::int AS property_saves,
-          COUNT(*) FILTER (WHERE event_name IN ('property_inquiry_submit','property_inquiry'))::int AS property_inquiries,
-          COUNT(*) FILTER (WHERE event_name IN ('property_directions_open','directions_open','route_time_view'))::int AS route_events
-         FROM analytics_events
-         WHERE created_at >= NOW() - INTERVAL '2 days'`
-      ),
-      db.query(
-        `SELECT
-          COALESCE(NULLIF(payload->>'area', ''), NULLIF(payload->>'district', ''), 'Unknown area') AS area,
-          COUNT(*)::int AS events
-         FROM analytics_events
-         WHERE created_at >= NOW() - INTERVAL '2 days'
-           AND event_name IN ('property_open','property_view','property_search','near_me_search')
-         GROUP BY 1
-         ORDER BY events DESC, area ASC
-         LIMIT 5`
-      ),
-      db.query(
-        `SELECT
-          COALESCE(NULLIF(payload->>'listing_type', ''), NULLIF(payload->>'tab', ''), 'unknown') AS listing_type,
-          COUNT(*)::int AS events
-         FROM analytics_events
-         WHERE created_at >= NOW() - INTERVAL '2 days'
-           AND event_name IN ('property_open','property_view','property_search','near_me_search')
-         GROUP BY 1
-         ORDER BY events DESC, listing_type ASC
-         LIMIT 5`
-      )
-    ]);
+    const payload = await adminCachedPayload('admin-summary-v4', ADMIN_DASHBOARD_CACHE_TTL_MS, async () => {
+      const [
+        properties,
+        agents,
+        reports,
+        requests,
+        inquiries,
+        users,
+        engagement,
+        engagement48h,
+        topAreas48h,
+        topListingTypes48h
+      ] = await Promise.all([
+        safeOne(
+          `SELECT
+            COUNT(*)::int AS total,
+            COUNT(*) FILTER (WHERE ${adminPendingReviewFastWhere('')})::int AS pending,
+            COUNT(*) FILTER (WHERE status = 'approved')::int AS approved,
+            COUNT(*) FILTER (WHERE status = 'approved' OR (status = 'sold' AND sold_at >= NOW() - INTERVAL '7 days'))::int AS public_live,
+            COUNT(*) FILTER (WHERE (status = 'approved' OR (status = 'sold' AND sold_at >= NOW() - INTERVAL '7 days')) AND ${adminFeaturedListingCondition('')})::int AS public_featured,
+            COUNT(*) FILTER (WHERE status = 'rejected')::int AS rejected,
+            COUNT(*) FILTER (WHERE status = 'hidden')::int AS hidden,
+            COUNT(*) FILTER (WHERE status = 'deleted')::int AS deleted,
+            COUNT(*) FILTER (WHERE COALESCE(lister_type, 'owner') <> 'agent' AND agent_id IS NULL)::int AS private,
+            COUNT(*) FILTER (WHERE COALESCE(lister_type, 'owner') = 'agent' OR agent_id IS NOT NULL)::int AS agent_listed,
+            COUNT(*) FILTER (WHERE listing_type = 'student' OR students_welcome = TRUE)::int AS student_discoverable,
+            COALESCE(ROUND((((COUNT(*) FILTER (WHERE status = 'approved' OR (status = 'sold' AND sold_at >= NOW() - INTERVAL '7 days')))::numeric / NULLIF(COUNT(*)::numeric, 0)) * 100)), 0)::int AS approval_rate_pct,
+            COALESCE(ROUND((((COUNT(*) FILTER (WHERE status = 'rejected'))::numeric / NULLIF(COUNT(*)::numeric, 0)) * 100)), 0)::int AS rejection_rate_pct
+           FROM properties`,
+          [],
+          { total: 0, pending: 0, approved: 0, public_live: 0, public_featured: 0, rejected: 0, hidden: 0, deleted: 0, private: 0, agent_listed: 0, student_discoverable: 0, approval_rate_pct: 0, rejection_rate_pct: 0 },
+          { timeoutMs: 9000 }
+        ),
+        safeOne(
+          `SELECT
+            COUNT(*)::int AS total,
+            COUNT(*) FILTER (WHERE status = 'pending')::int AS pending,
+            COUNT(*) FILTER (WHERE status = 'approved')::int AS approved
+           FROM agents`,
+          [],
+          { total: 0, pending: 0, approved: 0 },
+          { timeoutMs: 2500 }
+        ),
+        safeOne(
+          `SELECT
+            COUNT(*)::int AS total,
+            COUNT(*) FILTER (WHERE status = 'open')::int AS open
+           FROM report_listings`,
+          [],
+          { total: 0, open: 0 },
+          { timeoutMs: 2000 }
+        ),
+        safeOne('SELECT COUNT(*)::int AS total FROM property_requests', [], { total: 0 }, { timeoutMs: 2000 }),
+        safeOne('SELECT COUNT(*)::int AS total FROM property_inquiries', [], { total: 0 }, { timeoutMs: 2000 }),
+        safeOne(
+          `SELECT
+            COUNT(*)::int AS total,
+            COUNT(*) FILTER (WHERE status = 'active')::int AS active,
+            COUNT(*) FILTER (WHERE status = 'suspended')::int AS suspended,
+            COUNT(*) FILTER (WHERE phone_verified = TRUE)::int AS phone_verified,
+            COUNT(*) FILTER (WHERE weekly_tips_opt_in = TRUE)::int AS weekly_tips_opt_in,
+            COUNT(*) FILTER (WHERE marketing_opt_in = TRUE)::int AS marketing_opt_in,
+            COUNT(*) FILTER (WHERE oauth_provider IS NOT NULL)::int AS social_linked
+           FROM users`,
+          [],
+          { total: 0, active: 0, suspended: 0, phone_verified: 0, weekly_tips_opt_in: 0, marketing_opt_in: 0, social_linked: 0 },
+          { timeoutMs: 2500 }
+        ),
+        safeOne(
+          `SELECT
+            COUNT(*) FILTER (WHERE event_name IN ('property_open','property_view'))::int AS property_views,
+            COUNT(*) FILTER (WHERE event_name IN ('property_save','property_saved','save_property'))::int AS property_saves,
+            COUNT(*) FILTER (WHERE event_name IN ('broker_profile_open','broker_profile_view'))::int AS broker_profile_views,
+            COUNT(*) FILTER (WHERE event_name IN ('property_inquiry_submit','property_inquiry'))::int AS property_inquiries,
+            COUNT(*) FILTER (WHERE event_name IN ('property_directions_open','directions_open','route_time_view'))::int AS route_events
+           FROM analytics_events`,
+          [],
+          { property_views: 0, property_saves: 0, broker_profile_views: 0, property_inquiries: 0, route_events: 0 },
+          { timeoutMs: 2500 }
+        ),
+        safeOne(
+          `SELECT
+            COUNT(*) FILTER (WHERE event_name IN ('property_open','property_view'))::int AS property_views,
+            COUNT(DISTINCT client_id) FILTER (WHERE event_name IN ('property_open','property_view','page_view','property_search'))::int AS unique_visitors,
+            COUNT(*) FILTER (WHERE event_name IN ('property_save','property_saved','save_property'))::int AS property_saves,
+            COUNT(*) FILTER (WHERE event_name IN ('property_inquiry_submit','property_inquiry'))::int AS property_inquiries,
+            COUNT(*) FILTER (WHERE event_name IN ('property_directions_open','directions_open','route_time_view'))::int AS route_events
+           FROM analytics_events
+           WHERE created_at >= NOW() - INTERVAL '2 days'`,
+          [],
+          { property_views: 0, unique_visitors: 0, property_saves: 0, property_inquiries: 0, route_events: 0 },
+          { timeoutMs: 2500 }
+        ),
+        safeRows(
+          `SELECT
+            COALESCE(NULLIF(payload->>'area', ''), NULLIF(payload->>'district', ''), 'Unknown area') AS area,
+            COUNT(*)::int AS events
+           FROM analytics_events
+           WHERE created_at >= NOW() - INTERVAL '2 days'
+             AND event_name IN ('property_open','property_view','property_search','near_me_search')
+           GROUP BY 1
+           ORDER BY events DESC, area ASC
+           LIMIT 5`,
+          [],
+          { timeoutMs: 2500 }
+        ),
+        safeRows(
+          `SELECT
+            COALESCE(NULLIF(payload->>'listing_type', ''), NULLIF(payload->>'tab', ''), 'unknown') AS listing_type,
+            COUNT(*)::int AS events
+           FROM analytics_events
+           WHERE created_at >= NOW() - INTERVAL '2 days'
+             AND event_name IN ('property_open','property_view','property_search','near_me_search')
+           GROUP BY 1
+           ORDER BY events DESC, listing_type ASC
+           LIMIT 5`,
+          [],
+          { timeoutMs: 2500 }
+        )
+      ]);
 
-    return res.json({
+      return {
       ok: true,
       data: {
-        properties: properties.rows[0],
-        agents: agents.rows[0],
-        users: users.rows[0],
-        reports: reports.rows[0],
-        propertyRequests: requests.rows[0],
-        inquiries: inquiries.rows[0],
-        engagement: engagement.rows[0],
+        properties,
+        agents,
+        users,
+        reports,
+        propertyRequests: requests,
+        inquiries,
+        engagement,
         ai_insights: {
-          last_48h: engagement48h.rows[0],
-          top_areas: topAreas48h.rows,
-          top_listing_types: topListingTypes48h.rows
+          last_48h: engagement48h,
+          top_areas: topAreas48h,
+          top_listing_types: topListingTypes48h
         }
+      },
+      meta: {
+        cache: 'admin_summary_v4',
+        cache_ttl_ms: ADMIN_DASHBOARD_CACHE_TTL_MS,
+        generated_at: new Date().toISOString(),
+        partial: [properties, agents, reports, requests, inquiries, users, engagement, engagement48h].some((row) => row?._fallback_reason)
       }
+      };
     });
+
+    return res.json(payload);
   } catch (error) {
     return next(error);
   }
@@ -2626,6 +2747,7 @@ router.get('/summary', async (req, res, next) => {
 
 router.get('/command-centre', async (_req, res, next) => {
   try {
+    const payload = await adminCachedPayload('admin-command-centre-v4', ADMIN_DASHBOARD_CACHE_TTL_MS, async () => {
     const [
       pendingListings,
       liveListings,
@@ -2746,7 +2868,7 @@ router.get('/command-centre', async (_req, res, next) => {
       }
     ];
 
-    return res.json({
+    return {
       ok: true,
       data: {
         generated_at: new Date().toISOString(),
@@ -2771,8 +2893,15 @@ router.get('/command-centre', async (_req, res, next) => {
           property_requests: propertyRequests
         },
         decisions
+      },
+      meta: {
+        cache: 'admin_command_centre_v4',
+        cache_ttl_ms: ADMIN_DASHBOARD_CACHE_TTL_MS
       }
+    };
     });
+
+    return res.json(payload);
   } catch (error) {
     return next(error);
   }
@@ -2855,12 +2984,14 @@ router.get('/properties/review-queue', async (req, res, next) => {
   try {
     const { page, limit, offset } = parsePagination(req.query);
     const includeTestLike = parseBooleanLike(req.query.include_test_like || req.query.includeTestLike, false);
-    const filters = [adminPendingReviewWhere('p')];
+    const includeTotal = parseBooleanLike(req.query.include_total || req.query.includeTotal, false);
+    const includeImages = parseBooleanLike(req.query.include_images || req.query.includeImages, false);
+    const filters = [adminPendingReviewFastWhere('p')];
     const values = [];
     const search = cleanText(req.query.search || req.query.q);
     const listingType = cleanText(req.query.listing_type || req.query.type).toLowerCase();
 
-    if (!includeTestLike) filters.push(`NOT ${adminLaunchTestListingCondition('p')}`);
+    if (!includeTestLike) filters.push(`NOT ${adminLaunchTestListingFastCondition('p')}`);
     if (listingType && LISTING_TYPES.includes(listingType)) {
       values.push(listingType);
       filters.push(`p.listing_type = $${values.length}`);
@@ -2880,62 +3011,119 @@ router.get('/properties/review-queue', async (req, res, next) => {
     }
 
     const where = `WHERE ${filters.join(' AND ')}`;
-    const countResult = await db.query(`SELECT COUNT(*)::int AS total FROM properties p ${where}`, values);
-    const total = countResult.rows[0]?.total || 0;
-
-    const rows = await db.query(
-      `SELECT
-         p.id,
-         p.title,
-         p.listing_type,
-         p.property_type,
-         p.district,
-         p.area,
-         p.price,
-         p.price_period,
-         p.status,
-         p.moderation_stage,
-         p.moderation_notes,
-         p.moderation_reason,
-         p.inquiry_reference,
-         p.source,
-         p.listed_via,
-         p.lister_type,
-         p.agent_id,
-         p.lister_name,
-         p.lister_phone,
-         p.lister_email,
-         p.created_at,
-         p.updated_at,
-         p.extra_fields,
-         CONCAT('/property/', p.id::text) AS property_url,
-         img.url AS primary_image_url
-       FROM properties p
-       LEFT JOIN LATERAL (
-         SELECT i.url
-         FROM property_images i
-         WHERE i.property_id = p.id
-         ORDER BY i.is_primary DESC, i.sort_order ASC, i.created_at ASC
-         LIMIT 1
-       ) img ON true
-       ${where}
-       ORDER BY COALESCE(p.updated_at, p.created_at) DESC
-       LIMIT $${values.length + 1}
-       OFFSET $${values.length + 2}`,
-      [...values, limit, offset]
-    );
-
-    return res.json({
-      ok: true,
-      data: rows.rows,
-      pagination: toPagination(total, page, limit),
-      meta: {
-        status: 'review_queue',
-        include_test_like: includeTestLike,
-        pending_statuses: ADMIN_PENDING_REVIEW_STATUSES,
-        final_statuses_excluded: ADMIN_FINAL_REVIEW_STATUSES
-      }
+    const cacheKey = JSON.stringify({
+      route: 'admin-review-queue-v4',
+      page,
+      limit,
+      includeTestLike,
+      includeTotal,
+      includeImages,
+      search,
+      listingType
     });
+
+    const payload = await adminCachedPayload(cacheKey, ADMIN_REVIEW_QUEUE_CACHE_TTL_MS, async () => {
+      let exactTotal = null;
+      let exactTotalAvailable = false;
+      let countFallbackReason = '';
+      if (includeTotal || search || listingType) {
+        const countRow = await safeOne(
+          `SELECT COUNT(*)::int AS total FROM properties p ${where}`,
+          values,
+          { total: 0 },
+          { timeoutMs: 2000 }
+        );
+        exactTotal = Number(countRow.total || 0);
+        countFallbackReason = countRow._fallback_reason || '';
+        exactTotalAvailable = !countFallbackReason;
+      }
+
+      const imageSelect = includeImages ? 'img.url AS primary_image_url' : 'NULL::text AS primary_image_url';
+      const imageJoin = includeImages
+        ? `LEFT JOIN LATERAL (
+           SELECT i.url
+           FROM property_images i
+           WHERE i.property_id = p.id
+           ORDER BY i.is_primary DESC, i.sort_order ASC, i.created_at ASC
+           LIMIT 1
+         ) img ON true`
+        : '';
+      const rowLimit = limit + 1;
+      let rowFallbackReason = '';
+      let rawRows = [];
+      try {
+        const rows = await adminTimedQuery(
+          `SELECT
+             p.id,
+             p.title,
+             p.listing_type,
+             p.property_type,
+             p.district,
+             p.area,
+             p.price,
+             p.price_period,
+             p.status,
+             p.moderation_stage,
+             p.moderation_notes,
+             p.moderation_reason,
+             p.inquiry_reference,
+             p.source,
+             p.listed_via,
+             p.lister_type,
+             p.agent_id,
+             p.lister_name,
+             p.lister_phone,
+             p.lister_email,
+             p.created_at,
+             p.updated_at,
+             p.extra_fields,
+             CONCAT('/property/', p.id::text) AS property_url,
+             ${imageSelect}
+           FROM properties p
+           ${imageJoin}
+           ${where}
+           ORDER BY p.updated_at DESC NULLS LAST, p.created_at DESC NULLS LAST, p.id DESC
+           LIMIT $${values.length + 1}
+           OFFSET $${values.length + 2}`,
+          [...values, rowLimit, offset],
+          9000
+        );
+        rawRows = rows.rows || [];
+      } catch (error) {
+        rowFallbackReason = adminSafeQueryFallbackReason(error);
+        if (!rowFallbackReason) throw error;
+      }
+
+      const hasMore = rawRows.length > limit;
+      const responseRows = rawRows.slice(0, limit);
+      const inferredTotal = offset + responseRows.length + (hasMore ? 1 : 0);
+      const total = exactTotalAvailable ? exactTotal : inferredTotal;
+      const pagination = toPagination(total, page, limit);
+      if (!exactTotalAvailable) pagination.totalPages = page + (hasMore ? 1 : 0);
+
+      return {
+        ok: true,
+        data: responseRows,
+        pagination,
+        meta: {
+          status: 'review_queue',
+          cache: 'admin_review_queue_v4',
+          cache_ttl_ms: ADMIN_REVIEW_QUEUE_CACHE_TTL_MS,
+          include_test_like: includeTestLike,
+          include_total: includeTotal,
+          include_images: includeImages,
+          has_more: hasMore,
+          total_exact: exactTotalAvailable,
+          partial_total: !exactTotalAvailable,
+          count_fallback_reason: countFallbackReason,
+          row_fallback_reason: rowFallbackReason,
+          pending_statuses: ADMIN_PENDING_REVIEW_STATUSES,
+          final_statuses_excluded: ADMIN_FINAL_REVIEW_STATUSES
+        }
+      };
+    });
+
+    return res.json(payload);
   } catch (error) {
     return next(error);
   }

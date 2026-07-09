@@ -186,6 +186,9 @@ const foundOnlinePlayChipCleanupVersion = 'found-online-play-chip-cleanup-202607
 const staffSourceSweepAsyncUnblockVersion = 'staff-source-sweep-async-unblock-20260709';
 const tiktokThumbnailSourceVolumeUnlockVersion = 'tiktok-thumbnail-source-volume-unlock-20260709';
 const tiktokThumbnailCacheProxyVersion = 'tiktok-thumbnail-cache-proxy-20260709';
+const adminDashboardStabilityVersion = 'admin-dashboard-stability-20260709';
+const adminDashboardStabilityV2Version = 'admin-dashboard-stability-v2-20260709';
+const adminDashboardStabilityV3Version = 'admin-dashboard-stability-v3-20260709';
 const publicAppVersionSuffixes = [
   captureHelperUsabilityVersion,
   studentNearestUniversityVersion,
@@ -241,7 +244,10 @@ const publicAppVersionSuffixes = [
   foundOnlinePlayChipCleanupVersion,
   staffSourceSweepAsyncUnblockVersion,
   tiktokThumbnailSourceVolumeUnlockVersion,
-  tiktokThumbnailCacheProxyVersion
+  tiktokThumbnailCacheProxyVersion,
+  adminDashboardStabilityVersion,
+  adminDashboardStabilityV2Version,
+  adminDashboardStabilityV3Version
 ];
 let cachedIndexHtml = null;
 const publicHtmlCache = new Map();
