@@ -1562,8 +1562,12 @@ test('found-online social search admin path and share cards are protected and au
   assert(read('routes/properties.js').includes("`Contact via ${sourceContactPlatform || 'source'} source`"), 'public property API should label source contact by platform when direct phone is absent');
   assert(read('routes/properties.js').includes('source_thumbnail_url: sourceThumbnailUrl'), 'public property API should expose safe source thumbnails for social cards');
   assert(read('routes/properties.js').includes('public_contact_phone: publicContactPhone'), 'public property API should expose source-extracted public phones for contact CTAs');
+  assert(read('routes/properties.js').includes('function isPublicTikTokProfileUrl'), 'public property API should detect TikTok profile-only contact URLs');
+  assert(read('routes/properties.js').includes('tiktokProfileOnlyContact'), 'public property API should fail closed when a TikTok contact is only a profile, not an exact property post');
+  assert(read('routes/properties.js').includes('source_contact_url: sourceUnavailable ? null'), 'public property API should not expose unavailable source contact links');
   assert(frontend.includes('foundOnlineSourceUnavailableMeta'), 'public cards should detect dead/deleted source videos before rendering source actions');
   assert(frontend.includes('This source video is no longer available'), 'public cards should render a clean unavailable-source state');
+  assert(frontend.includes('foundOnlineSourceContactCtaUrl'), 'public detail contact bars should resolve source CTAs before linking out');
   assert(frontend.includes('sourceHref || buildWhatsAppUrl(MAKAUG_SUPPORT_WHATSAPP'), 'mobile contact bar should fall back to makaug only after source routes are absent');
   assert(read('services/socialSearchSourcedListingsService.js').includes('missing_any_public_contact_path'), 'seed should treat social pages as a usable contact path before skipping a source');
   assert(read('services/socialSearchSourcedListingsService.js').includes('existingSocialSearchListingKeys'), 'daily found-online sweeps should skip already queued listing keys');

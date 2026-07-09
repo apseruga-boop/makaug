@@ -368,6 +368,11 @@ test('listing detail has a mobile sticky contact bar with phone, source, and mak
   assert.match(appSource, /translatePropertyUi\("Message via source"\)/);
   assert.match(appSource, /propertyDetailContactTheme\(type = ""\)[\s\S]*bg-purple-700 hover:bg-purple-600/);
   assert.match(appSource, /sourceUrl: sourceContactUrl/);
+  assert.match(appSource, /function isTikTokProfileUrl/);
+  assert.match(appSource, /function isTikTokVideoUrl/);
+  assert.match(appSource, /function foundOnlineSourceContactCtaUrl/);
+  assert.match(appSource, /isTikTokProfileUrl\(contactUrl\) && isTikTokVideoUrl\(sourceUrl\)/);
+  assert.match(appSource, /sourceContactUrl = foundOnlineSourceContactCtaUrl\(foundOnlineMeta\)/);
 });
 
 test('public result pages expose the full inventory and avoid black iframe media cards', () => {

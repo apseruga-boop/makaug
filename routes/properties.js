@@ -89,6 +89,26 @@ function readPositiveIntegerEnv(names, fallback) {
   return fallback;
 }
 
+function isPublicTikTokProfileUrl(value = '') {
+  try {
+    const url = new URL(String(value || '').trim());
+    if (!/^(?:www\.)?tiktok\.com$/i.test(url.hostname)) return false;
+    return /^\/@[^/]+\/?$/i.test(url.pathname);
+  } catch (error) {
+    return false;
+  }
+}
+
+function isPublicTikTokVideoUrl(value = '') {
+  try {
+    const url = new URL(String(value || '').trim());
+    if (!/(?:^|\.)tiktok\.com$/i.test(url.hostname)) return false;
+    return /\/@[^/]+\/video\/\d+/i.test(url.pathname) || /^\/(?:t|v)\//i.test(url.pathname);
+  } catch (error) {
+    return false;
+  }
+}
+
 const PUBLIC_PROPERTIES_CACHE_TTL_MS = readPositiveIntegerEnv(
   ['PUBLIC_PROPERTIES_CACHE_TTL_MS', 'PUBLIC_OPPORTUNITY_SUMMARY_CACHE_TTL_MS'],
   60 * 1000
@@ -1079,6 +1099,10 @@ function publicExtraFields(extraFields = {}) {
       || tiktokUrl
       || (/youtube\.com|youtu\.be|tiktok\.com/i.test(String(sourceUrl || '')) ? sourceUrl : '')
   );
+  const sourceHasTikTokVideoPost = isPublicTikTokVideoUrl(sourceUrl)
+    || isPublicTikTokVideoUrl(tiktokUrl)
+    || isPublicTikTokVideoUrl(videoUrl);
+  const tiktokProfileOnlyContact = isPublicTikTokProfileUrl(sourceContactUrl) && !sourceHasTikTokVideoPost;
   const sourceThumbnailUrl = normalizePublicImageUrl(
     extra.source_thumbnail_url
       || extra.video_thumbnail_url
@@ -1095,7 +1119,11 @@ function publicExtraFields(extraFields = {}) {
       || ''
   );
   const sourceUnavailable = extra.source_unavailable === true
+    || tiktokProfileOnlyContact
     || /(?:dead|deleted|removed|unavailable|not_found|not found|account_does_not_exist|account does not exist|404|410)/i.test(String(extra.source_url_status || extra.source_status || extra.source_availability_status || ''));
+  const sourceUnavailableReason = tiktokProfileOnlyContact
+    ? 'TikTok profile contact is not an exact property source and may be deleted or renamed.'
+    : (extra.source_unavailable_reason || extra.source_url_status_reason || null);
   return {
     city: extra.city || null,
     neighborhood: extra.neighborhood || null,
@@ -1120,7 +1148,7 @@ function publicExtraFields(extraFields = {}) {
     contact_phone: publicContactPhone || null,
     source_unavailable: sourceUnavailable,
     source_url_status: extra.source_url_status || extra.source_status || null,
-    source_unavailable_reason: extra.source_unavailable_reason || extra.source_url_status_reason || null,
+    source_unavailable_reason: sourceUnavailableReason,
     found_online: extra.found_online === true,
     third_party_discovery_result: extra.found_online === true
       || extra.social_search_candidate === true
@@ -1153,8 +1181,8 @@ function publicExtraFields(extraFields = {}) {
     added_to_makaug_label: extra.added_to_makaug_label || null,
     source_followers_label: extra.source_followers_label || null,
     source_audience_label: extra.source_audience_label || null,
-    source_contact_url: sourceContactUrl || null,
-    source_contact_label: sourceContactLabel,
+    source_contact_url: sourceUnavailable ? null : (sourceContactUrl || null),
+    source_contact_label: sourceUnavailable ? null : sourceContactLabel,
     source_contact_method: extra.source_contact_method || null,
     source_contact_platform: sourceContactPlatform || null,
     source_hover_description: sourceHoverDescription || null,

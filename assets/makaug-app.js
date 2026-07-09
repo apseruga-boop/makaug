@@ -32062,12 +32062,23 @@ function foundOnlineSourceUnavailableMeta(p = {}) {
       || raw.oembed_status
       || ""
   ).toLowerCase();
+  const sourceUrl = String(extra.source_url || raw.source_url || extra.source_post_url || extra.video_url || raw.post_url || "").trim();
+  const contactUrl = String(extra.source_contact_url || raw.source_contact_url || extra.source_channel_url || raw.source_page_url || "").trim();
+  const tiktokProfileOnlyContact = isTikTokProfileUrl(contactUrl) && ![
+    sourceUrl,
+    extra.tiktok_url,
+    extra.video_url,
+    raw.source_url,
+    raw.post_url
+  ].some(isTikTokVideoUrl);
   const unavailable = extra.source_unavailable === true
     || raw.source_unavailable === true
+    || tiktokProfileOnlyContact
     || /(?:dead|deleted|removed|unavailable|not_found|not found|account_does_not_exist|account does not exist|404|410)/i.test(status);
   if (!unavailable) return null;
   const reason = String(
-    extra.source_unavailable_reason
+    (tiktokProfileOnlyContact ? "TikTok profile contact is not an exact property source and may be deleted or renamed." : "")
+      || extra.source_unavailable_reason
       || extra.source_url_status_reason
       || raw.source_unavailable_reason
       || raw.oembed_reason
@@ -32077,6 +32088,35 @@ function foundOnlineSourceUnavailableMeta(p = {}) {
     unavailable: true,
     reason: reason || "This source video is no longer available."
   };
+}
+
+function isTikTokProfileUrl(value = "") {
+  try {
+    const url = new URL(String(value || "").trim());
+    if (!/^(?:www\.)?tiktok\.com$/i.test(url.hostname)) return false;
+    return /^\/@[^/]+\/?$/i.test(url.pathname);
+  } catch (error) {
+    return false;
+  }
+}
+
+function isTikTokVideoUrl(value = "") {
+  try {
+    const url = new URL(String(value || "").trim());
+    if (!/(?:^|\.)tiktok\.com$/i.test(url.hostname)) return false;
+    return /\/@[^/]+\/video\/\d+/i.test(url.pathname) || /^\/(?:t|v)\//i.test(url.pathname);
+  } catch (error) {
+    return false;
+  }
+}
+
+function foundOnlineSourceContactCtaUrl(meta = {}) {
+  if (!meta || meta.sourceUnavailable === true) return "";
+  const sourceUrl = /^https?:\/\//i.test(String(meta.sourceUrl || "")) ? String(meta.sourceUrl).trim() : "";
+  const contactUrl = /^https?:\/\//i.test(String(meta.sourceContactUrl || "")) ? String(meta.sourceContactUrl).trim() : "";
+  if (isTikTokProfileUrl(contactUrl) && isTikTokVideoUrl(sourceUrl)) return sourceUrl;
+  if (isTikTokProfileUrl(contactUrl) && !sourceUrl) return "";
+  return contactUrl || sourceUrl;
 }
 
 function foundOnlineSourceMeta(p = {}) {
@@ -32217,6 +32257,10 @@ function foundOnlineSourceMeta(p = {}) {
 
 function foundOnlineSourceContactButtonLabel(meta = {}) {
   const platform = String(meta.sourceContactPlatform || meta.platform || "").trim();
+  const ctaUrl = foundOnlineSourceContactCtaUrl(meta);
+  if (/tiktok/i.test(platform) && ctaUrl && ctaUrl === meta.sourceUrl && isTikTokVideoUrl(ctaUrl)) {
+    return translatePropertyUi("Open TikTok source");
+  }
   return platform
     ? translatePropertyUi("Contact via {platform} source", { platform })
     : translatePropertyUi("Contact via source");
@@ -32359,10 +32403,13 @@ function openThirdPartyListingRequest(event, requestType = "report", propertyId 
 function foundOnlineSourceActionLinksHtml(p = {}, meta = {}) {
   const listingId = p.id || p.backend_id || "";
   const sourceUnavailable = meta.sourceUnavailable === true || foundOnlineSourceUnavailableMeta(p);
+  const contactRoute = foundOnlineSourceContactCtaUrl(meta);
+  const sourceContactIsTikTokProfile = isTikTokProfileUrl(meta.sourceContactUrl);
+  const showDistinctContactRoute = contactRoute && contactRoute !== meta.sourceUrl && !sourceContactIsTikTokProfile;
   return `
     <div class="mt-3 flex flex-wrap gap-2 text-xs">
       ${!sourceUnavailable && meta.sourceUrl ? `<a href="${adminAttr(meta.sourceUrl)}" target="_blank" rel="noopener noreferrer" class="rounded-full bg-white border border-blue-100 px-3 py-1.5 font-black text-blue-800 underline">${translateListingLabel("Open original source")}</a>` : ""}
-      ${!sourceUnavailable && meta.sourceContactUrl ? `<a href="${adminAttr(meta.sourceContactUrl)}" target="_blank" rel="noopener noreferrer" class="rounded-full bg-white border border-blue-100 px-3 py-1.5 font-black text-blue-800 underline">${translateListingLabel("Contact original poster")}</a>` : ""}
+      ${!sourceUnavailable && showDistinctContactRoute ? `<a href="${adminAttr(contactRoute)}" target="_blank" rel="noopener noreferrer" class="rounded-full bg-white border border-blue-100 px-3 py-1.5 font-black text-blue-800 underline">${translateListingLabel("Contact original poster")}</a>` : ""}
       <button type="button" onclick="return openThirdPartyListingRequest(event, ${propertyIdArg("claim")}, ${propertyIdArg(listingId)})" class="rounded-full bg-white border border-blue-100 px-3 py-1.5 font-black text-blue-800">${translateListingLabel("Claim this listing")}</button>
       <button type="button" onclick="return openThirdPartyListingRequest(event, ${propertyIdArg("correction")}, ${propertyIdArg(listingId)})" class="rounded-full bg-white border border-blue-100 px-3 py-1.5 font-black text-blue-800">${translateListingLabel("Request correction")}</button>
       <button type="button" onclick="return openThirdPartyListingRequest(event, ${propertyIdArg("removal")}, ${propertyIdArg(listingId)})" class="rounded-full bg-white border border-red-100 px-3 py-1.5 font-black text-red-700">${translateListingLabel("Request removal")}</button>
@@ -32374,7 +32421,7 @@ function listingOnlineSourceDisclosureHtml(p = {}) {
   const meta = foundOnlineSourceMeta(p);
   if (!meta) return "";
   const sourceBits = [meta.sourceName, meta.platform].filter(Boolean).join(" • ");
-  const contactHref = meta.sourceContactUrl || meta.sourceUrl;
+  const contactHref = foundOnlineSourceContactCtaUrl(meta);
   const contactCopy = meta.sourceContactLabel
     ? translateFoundOnlineSourceText(meta.sourceContactLabel)
     : (meta.sourceContactMethod === "social" || !meta.hasDirectContact
@@ -41604,7 +41651,7 @@ async function openDetail(id, options = {}) {
   const ownerPhoneHref = ownerPhone ? `tel:${String(ownerPhone).replace(/\s+/g, "")}` : "";
   const ownerEmail = p.lister_email || p.contact_email || "";
   const foundOnlineMeta = foundOnlineSourceMeta(p);
-  const sourceContactUrl = foundOnlineMeta?.sourceContactUrl || foundOnlineMeta?.sourceUrl || "";
+  const sourceContactUrl = foundOnlineSourceContactCtaUrl(foundOnlineMeta);
   const sourceContactButtonLabel = foundOnlineMeta ? foundOnlineSourceContactButtonLabel(foundOnlineMeta) : translatePropertyUi("Contact via source");
   const sourceContactSubtitle = foundOnlineMeta ? foundOnlineSourceContactSubtitle(foundOnlineMeta) : "";
   const sourceContactCopy = foundOnlineMeta?.sourceContactLabel
