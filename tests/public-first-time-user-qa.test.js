@@ -73,6 +73,11 @@ assert(
 );
 
 assert(
+  (indexHtml.match(/numbered-pagination-20260709/g) || []).length >= 3,
+  "numbered pagination marker should be present in the preload, release marker, and body script loader"
+);
+
+assert(
   serverJs.includes("publicI18nDetailPersistenceVersion")
     && serverJs.includes("publicI18nStartupRaceFixVersion")
     && serverJs.includes("publicI18nCookiePersistenceVersion")
