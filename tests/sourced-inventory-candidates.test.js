@@ -315,6 +315,9 @@ test('public property cards keep NEW freshness and replace registered badge with
   assert(frontend.includes('"Found online": "Kizuuliddwa ku mutimbagano"'), 'Luganda should include found-online copy');
   assert(frontend.includes('"Found online": "Imepatikana mtandaoni"'), 'Kiswahili should include found-online copy');
   assert(frontend.includes('"First posted online"'), 'source disclosure should translate first-posted metadata');
+  assert(frontend.includes('sourceDateOutOfOrder'), 'source disclosure should guard impossible posted-after-picked-up dates');
+  assert(frontend.includes('"Source date approx."'), 'source disclosure should label conflicted source dates honestly');
+  assert(frontend.includes('Source date conflicts with first pickup, so makaug is confirming it from the platform.'), 'source disclosure should explain conflicted source dates');
   assert(frontend.includes('"First picked up by makaug"'), 'source disclosure should translate first-picked-up metadata');
   assert(frontend.includes('translateFoundOnlineSourceText'), 'source disclosure should translate database-supplied source phrases');
   assert(frontend.includes('"Open original source": "Ggulawo ensibuko eyasooka"'), 'source disclosure should translate original-source action');
@@ -341,6 +344,8 @@ test('public property images escape and normalize generated SVG evidence cards',
   assert(frontend.includes('data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}'), 'SVG data URLs should be encoded for mobile browsers');
   assert(frontend.includes('const photoSrc = isThirdPartyResult ? "" : publicImageSrc(p.img'), 'public listing cards should suppress copied social/gallery media for third-party results while normalizing owned/direct images');
   assert(frontend.includes('foundOnlineSourceVisualHtml(p, { compact: true })'), 'third-party result cards should render the source-first discovery visual instead of copied social media photos');
+  assert(frontend.includes('p.tiktok_thumbnail_url') && frontend.includes('extra.tiktok_thumbnail_url'), 'TikTok oEmbed thumbnails should be usable by public source cards');
+  assert(frontend.includes('p.oembed_thumbnail_url') && frontend.includes('extra.oembed_thumbnail_url'), 'oEmbed thumbnails should be usable by public source cards');
   assert(frontend.includes('<img src="${adminAttr(photoSrc)}" alt="${adminAttr(displayTitle)}"'), 'public listing cards should escape image src and localized title attributes');
   assert(frontend.includes('const selectedPhotoSrc = thirdPartyDetail ? "" : publicImageSrc(selectedPhoto?.url || p.img'), 'detail gallery should suppress third-party media and normalize owned/direct selected image sources');
   assert(frontend.includes('<img id="detail-gallery-hero-img" src="${adminAttr(selectedPhotoSrc)}"'), 'detail hero image should escape the selected image src');

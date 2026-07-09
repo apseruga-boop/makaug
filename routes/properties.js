@@ -1086,6 +1086,21 @@ function publicSourceDateNeedsPlatformConfirmation(extra = {}) {
   return /inferred_from_public_post_id|inferred.*(?:video|status|post|id)|estimated|needs_.*date_confirmation/.test(confidence);
 }
 
+function publicSourceDateMs(value) {
+  if (!value) return null;
+  const ms = Date.parse(String(value));
+  return Number.isFinite(ms) ? ms : null;
+}
+
+function publicSourceDateOutOfOrder(firstPostedRaw, firstSeenRaw, addedToMakaugRaw) {
+  const firstPostedMs = publicSourceDateMs(firstPostedRaw);
+  if (firstPostedMs == null) return false;
+  const firstSeenMs = publicSourceDateMs(firstSeenRaw);
+  const addedMs = publicSourceDateMs(addedToMakaugRaw);
+  return (firstSeenMs != null && firstPostedMs > firstSeenMs)
+    || (addedMs != null && firstPostedMs > addedMs);
+}
+
 function publicExtraFields(extraFields = {}) {
   const extra = extraFields && typeof extraFields === 'object' ? extraFields : {};
   const landTitleAvailable = normalizeLandTitleAvailability(
@@ -1172,8 +1187,12 @@ function publicExtraFields(extraFields = {}) {
     || isPublicTikTokVideoUrl(tiktokUrl)
     || isPublicTikTokVideoUrl(videoUrl);
   const tiktokProfileOnlyContact = isPublicTikTokProfileUrl(sourceContactUrl) && !sourceHasTikTokVideoPost;
+  const tiktokThumbnailUrl = normalizePublicImageUrl(extra.tiktok_thumbnail_url);
+  const oembedThumbnailUrl = normalizePublicImageUrl(extra.oembed_thumbnail_url);
   const sourceThumbnailUrl = normalizePublicImageUrl(
-    extra.source_thumbnail_url
+    tiktokThumbnailUrl
+      || oembedThumbnailUrl
+      || extra.source_thumbnail_url
       || extra.video_thumbnail_url
       || extra.thumbnail_url
       || extra.cover_image_url
@@ -1186,6 +1205,25 @@ function publicExtraFields(extraFields = {}) {
   const sourceUnavailableReason = tiktokProfileOnlyContact
     ? 'TikTok profile contact is not an exact property source and may be deleted or renamed.'
     : (extra.source_unavailable_reason || extra.source_url_status_reason || null);
+  const firstPostedOnlineAt = sourceDateNeedsConfirmation ? null : (extra.first_posted_online_at || null);
+  const sourcePublishedAt = sourceDateNeedsConfirmation ? null : (extra.source_published_at || null);
+  const firstPostedRawForOrder = firstPostedOnlineAt
+    || sourcePublishedAt
+    || extra.video_published_at
+    || extra.video_posted_at
+    || extra.post_published_at
+    || extra.post_posted_at
+    || extra.platform_posted_at
+    || extra.youtube_published_at
+    || extra.youtube_source_published_at
+    || extra.published_at
+    || extra.publishedAt
+    || extra.original_posted_at
+    || extra.source_posted_at;
+  const firstSeenOnlineAt = extra.first_seen_online_at || extra.source_first_seen_at || null;
+  const addedToMakaugAt = extra.added_to_makaug_at || null;
+  const sourceDateOutOfOrder = publicSourceDateOutOfOrder(firstPostedRawForOrder, firstSeenOnlineAt, addedToMakaugAt);
+  const sourceDateConflictLabel = 'Source date conflicts with first pickup, so makaug is confirming it from the platform.';
   return {
     city: extra.city || null,
     neighborhood: extra.neighborhood || null,
@@ -1206,6 +1244,8 @@ function publicExtraFields(extraFields = {}) {
     thumbnail_url: sourceThumbnailUrl || null,
     source_thumbnail_url: sourceThumbnailUrl || null,
     video_thumbnail_url: sourceThumbnailUrl || null,
+    tiktok_thumbnail_url: tiktokThumbnailUrl || null,
+    oembed_thumbnail_url: oembedThumbnailUrl || null,
     public_contact_phone: publicContactPhone || null,
     contact_phone: publicContactPhone || null,
     source_unavailable: sourceUnavailable,
@@ -1228,18 +1268,24 @@ function publicExtraFields(extraFields = {}) {
     source_agent_name: extra.source_agent_name || extra.source_name || null,
     source_url: sourceUrl || null,
     source_urls: safeSourceUrls,
-    first_seen_online_at: extra.first_seen_online_at || null,
+    first_seen_online_at: firstSeenOnlineAt,
     first_seen_online_label: extra.first_seen_online_label || null,
-    first_posted_online_at: sourceDateNeedsConfirmation ? null : (extra.first_posted_online_at || null),
-    first_posted_online_label: sourceDateNeedsConfirmation ? sourceDateConfirmationLabel : (extra.first_posted_online_label || null),
-    source_published_at: sourceDateNeedsConfirmation ? null : (extra.source_published_at || null),
-    source_published_label: sourceDateNeedsConfirmation ? sourceDateConfirmationLabel : (extra.source_published_label || null),
+    first_posted_online_at: sourceDateOutOfOrder ? null : firstPostedOnlineAt,
+    first_posted_online_label: sourceDateNeedsConfirmation
+      ? sourceDateConfirmationLabel
+      : (sourceDateOutOfOrder ? sourceDateConflictLabel : (extra.first_posted_online_label || null)),
+    source_published_at: sourceDateOutOfOrder ? null : sourcePublishedAt,
+    source_published_label: sourceDateNeedsConfirmation
+      ? sourceDateConfirmationLabel
+      : (sourceDateOutOfOrder ? sourceDateConflictLabel : (extra.source_published_label || null)),
     source_post_date_confidence: publicSourceDateConfidence(extra) || null,
     source_post_date_status: sourceDateNeedsConfirmation
       ? 'needs_source_platform_date_confirmation'
-      : (extra.source_post_date_status || null),
-    original_publish_date_status: sourceDateNeedsConfirmation ? sourceDateConfirmationLabel : (extra.original_publish_date_status || null),
-    added_to_makaug_at: extra.added_to_makaug_at || null,
+      : (sourceDateOutOfOrder ? 'source_date_conflicts_with_first_pickup' : (extra.source_post_date_status || null)),
+    original_publish_date_status: sourceDateNeedsConfirmation
+      ? sourceDateConfirmationLabel
+      : (sourceDateOutOfOrder ? sourceDateConflictLabel : (extra.original_publish_date_status || null)),
+    added_to_makaug_at: addedToMakaugAt,
     added_to_makaug_label: extra.added_to_makaug_label || null,
     source_followers_label: extra.source_followers_label || null,
     source_audience_label: extra.source_audience_label || null,

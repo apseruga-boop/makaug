@@ -370,6 +370,9 @@ test('listing detail has a mobile sticky contact bar with phone, source, and mak
   assert.match(appSource, /function publicCallPhoneForProperty/);
   assert.match(appSource, /function publicWhatsappPhoneForProperty/);
   assert.match(appSource, /function detailContactActionButtonsHtml/);
+  assert.match(appSource, /id="detail-source-verification"/);
+  assert.match(appSource, /More options \/ Report an issue/);
+  assert.match(appSource, /Source date approx\./);
   assert.match(appSource, /callPhone: publicCallPhone/);
   assert.match(appSource, /whatsappPhone: publicWhatsappPhone/);
   assert.match(appSource, /actions\.push\(`<a href="\$\{adminAttr\(`tel:/);
@@ -389,6 +392,15 @@ test('listing detail has a mobile sticky contact bar with phone, source, and mak
   assert.match(openPropertyCardDetailSource, /return openPropertyLinkDetail\(event, id, "property_card"\)/);
   assert.match(openPropertyLinkDetailSource, /Promise\.resolve\(openDetail\(id, \{ source \}\)\)/);
   assert.match(openDetailSource, /const mobileContactBarHtml = detailMobileContactBarHtml\(\{/);
+  assert(
+    openDetailSource.indexOf('${listingOnlineSourceDisclosureHtml(p)}') > openDetailSource.indexOf('translatePropertyUi("Location")'),
+    'source disclosure should render below the property info and location map, not at the top of the card'
+  );
+  assert(
+    openDetailSource.indexOf('${renderUgNlisVerificationCard(p)}') > openDetailSource.indexOf('${listingOnlineSourceDisclosureHtml(p)}'),
+    'UgNLIS verification should sit with source verification after the property-first content'
+  );
+  assert.match(openDetailSource, /\$\{similar\.length \? `<div id="detail-similar-properties"/);
   ['sale', 'rent', 'students', 'commercial', 'land'].forEach((page) => {
     assert.match(appSource, new RegExp(`renderPublicCategoryPage\\("${page}"`), `${page} page should use shared public category card rendering`);
   });
@@ -400,6 +412,8 @@ test('listing detail has a mobile sticky contact bar with phone, source, and mak
   assert.match(serverSource, /contactBarCopyFitVersion/);
   assert.match(htmlSource, /contact-bar-all-properties-i18n-20260709/);
   assert.match(serverSource, /contactBarAllPropertiesI18nVersion/);
+  assert.match(htmlSource, /detail-p1-p2-p4-fix-20260709/);
+  assert.match(serverSource, /detailP1P2P4FixVersion/);
   assert.match(propertiesRouteSource, /function publicContactPhoneForRow/);
   assert.match(propertiesRouteSource, /public_contact_phone: publicContactPhone \|\| null/);
   assert.match(appSource, /function isTikTokProfileUrl/);

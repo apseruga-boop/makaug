@@ -32200,38 +32200,60 @@ function foundOnlineSourceMeta(p = {}) {
   const sourceContactMethod = String(extra.source_contact_method || p.source_contact_method || "").trim();
   const followersLabel = String(extra.source_followers_label || extra.source_audience_label || "").trim();
   const dateNeedsConfirmation = sourcePostDateNeedsPlatformConfirmation(extra);
-  const firstPosted = dateNeedsConfirmation
-    ? ""
-    : formatListingDate(
-      extra.first_posted_online_at
-      || extra.source_published_at
-      || extra.video_published_at
-      || extra.video_posted_at
-      || extra.post_published_at
-      || extra.post_posted_at
-      || extra.platform_posted_at
-      || extra.youtube_published_at
-      || extra.youtube_source_published_at
-      || extra.published_at
-      || extra.publishedAt
-      || extra.original_posted_at
-      || extra.source_posted_at
-    );
+  const firstPostedRaw = extra.first_posted_online_at
+    || extra.source_published_at
+    || extra.video_published_at
+    || extra.video_posted_at
+    || extra.post_published_at
+    || extra.post_posted_at
+    || extra.platform_posted_at
+    || extra.youtube_published_at
+    || extra.youtube_source_published_at
+    || extra.published_at
+    || extra.publishedAt
+    || extra.original_posted_at
+    || extra.source_posted_at;
+  const firstSeenRaw = extra.first_seen_online_at
+    || extra.source_first_seen_at
+    || extra.last_checked_at
+    || p.created_at
+    || p.createdAt;
+  const addedToMakaugRaw = extra.added_to_makaug_at || p.created_at || p.createdAt || firstSeenRaw;
+  const firstPostedDate = dateNeedsConfirmation ? null : parseDateSafe(firstPostedRaw);
+  const firstSeenDate = parseDateSafe(firstSeenRaw);
+  const addedToMakaugDate = parseDateSafe(addedToMakaugRaw);
+  const sourceDateOutOfOrder = Boolean(
+    firstPostedDate
+    && (
+      (firstSeenDate && firstPostedDate.getTime() > firstSeenDate.getTime())
+      || (addedToMakaugDate && firstPostedDate.getTime() > addedToMakaugDate.getTime())
+    )
+  );
+  const safeFirstSeenRaw = firstSeenDate && addedToMakaugDate && firstSeenDate.getTime() > addedToMakaugDate.getTime()
+    ? addedToMakaugRaw
+    : firstSeenRaw;
+  const firstPosted = (dateNeedsConfirmation || sourceDateOutOfOrder) ? "" : formatListingDate(firstPostedRaw);
   const firstPostedLabel = String(
-    dateNeedsConfirmation
+    sourceDateOutOfOrder
+      ? "Source date conflicts with first pickup, so makaug is confirming it from the platform."
+      : dateNeedsConfirmation
       ? (extra.original_publish_date_status || "Original post date is being confirmed from the source platform.")
       : (extra.first_posted_online_label || extra.source_published_label || extra.youtube_source_published_label || extra.original_publish_date_status || "")
   ).trim();
-  const firstSeen = formatListingDate(extra.first_seen_online_at || extra.source_first_seen_at || extra.last_checked_at || p.created_at || p.createdAt);
+  const firstSeen = formatListingDate(safeFirstSeenRaw);
   const firstSeenLabel = String(extra.first_seen_online_label || "").trim();
-  const addedToMakaug = formatListingDate(extra.added_to_makaug_at || p.created_at || p.createdAt);
+  const addedToMakaug = formatListingDate(addedToMakaugRaw);
   const addedToMakaugLabel = String(extra.added_to_makaug_label || "").trim();
   const hasDirectContact = Boolean(
     p.lister_phone
     || p.contact_phone
     || p.phone
     || extra.contact_phone
+    || extra.public_contact_phone
     || extra.phone
+    || extra.whatsapp_phone
+    || extra.whatsapp
+    || extra.source_contact_phone
     || extra.contact_phone_alt
   );
   return {
@@ -32245,6 +32267,7 @@ function foundOnlineSourceMeta(p = {}) {
     followersLabel,
     firstPosted,
     firstPostedLabel,
+    sourceDateOutOfOrder,
     firstSeen,
     firstSeenLabel,
     addedToMakaug,
@@ -32410,10 +32433,15 @@ function foundOnlineSourceActionLinksHtml(p = {}, meta = {}) {
     <div class="mt-3 flex flex-wrap gap-2 text-xs">
       ${!sourceUnavailable && meta.sourceUrl ? `<a href="${adminAttr(meta.sourceUrl)}" target="_blank" rel="noopener noreferrer" class="rounded-full bg-white border border-blue-100 px-3 py-1.5 font-black text-blue-800 underline">${translateListingLabel("Open original source")}</a>` : ""}
       ${!sourceUnavailable && showDistinctContactRoute ? `<a href="${adminAttr(contactRoute)}" target="_blank" rel="noopener noreferrer" class="rounded-full bg-white border border-blue-100 px-3 py-1.5 font-black text-blue-800 underline">${translateListingLabel("Contact original poster")}</a>` : ""}
-      <button type="button" onclick="return openThirdPartyListingRequest(event, ${propertyIdArg("claim")}, ${propertyIdArg(listingId)})" class="rounded-full bg-white border border-blue-100 px-3 py-1.5 font-black text-blue-800">${translateListingLabel("Claim this listing")}</button>
-      <button type="button" onclick="return openThirdPartyListingRequest(event, ${propertyIdArg("correction")}, ${propertyIdArg(listingId)})" class="rounded-full bg-white border border-blue-100 px-3 py-1.5 font-black text-blue-800">${translateListingLabel("Request correction")}</button>
-      <button type="button" onclick="return openThirdPartyListingRequest(event, ${propertyIdArg("removal")}, ${propertyIdArg(listingId)})" class="rounded-full bg-white border border-red-100 px-3 py-1.5 font-black text-red-700">${translateListingLabel("Request removal")}</button>
-      <button type="button" onclick="return openThirdPartyListingRequest(event, ${propertyIdArg("report")}, ${propertyIdArg(listingId)})" class="rounded-full bg-white border border-red-100 px-3 py-1.5 font-black text-red-700">${translateListingLabel("Report fraud or incorrect information")}</button>
+      <details class="group rounded-2xl border border-slate-200 bg-white px-3 py-1.5 text-slate-800">
+        <summary class="cursor-pointer list-none font-black">${translateListingLabel("More options / Report an issue")}</summary>
+        <div class="mt-2 grid gap-2 min-w-[13rem]">
+          <button type="button" onclick="return openThirdPartyListingRequest(event, ${propertyIdArg("claim")}, ${propertyIdArg(listingId)})" class="rounded-xl bg-blue-50 px-3 py-2 text-left font-black text-blue-800">${translateListingLabel("Claim this listing")}</button>
+          <button type="button" onclick="return openThirdPartyListingRequest(event, ${propertyIdArg("correction")}, ${propertyIdArg(listingId)})" class="rounded-xl bg-blue-50 px-3 py-2 text-left font-black text-blue-800">${translateListingLabel("Request correction")}</button>
+          <button type="button" onclick="return openThirdPartyListingRequest(event, ${propertyIdArg("removal")}, ${propertyIdArg(listingId)})" class="rounded-xl bg-red-50 px-3 py-2 text-left font-black text-red-700">${translateListingLabel("Request removal")}</button>
+          <button type="button" onclick="return openThirdPartyListingRequest(event, ${propertyIdArg("report")}, ${propertyIdArg(listingId)})" class="rounded-xl bg-red-50 px-3 py-2 text-left font-black text-red-700">${translateListingLabel("Report fraud or incorrect information")}</button>
+        </div>
+      </details>
     </div>`;
 }
 
@@ -32428,9 +32456,21 @@ function listingOnlineSourceDisclosureHtml(p = {}) {
       ? translateListingLabel("Contact through the public social channel")
       : translateListingLabel("Open the public source page for contact details."));
   const audienceLabel = translateFoundOnlineSourceText(meta.followersLabel);
+  const firstPostedTitle = meta.sourceDateOutOfOrder || !meta.firstPosted
+    ? translateListingLabel("Source date approx.")
+    : translateListingLabel("First posted online");
   return `
-    <div class="mt-4 rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm text-blue-950">
-      <div class="flex items-start gap-2">
+    <details id="detail-source-verification" class="mt-5 rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-950">
+      <summary class="cursor-pointer list-none">
+        <div class="flex items-center justify-between gap-3">
+          <div class="inline-flex items-center gap-2 font-black">
+            <i class="fas fa-magnifying-glass-location text-blue-700"></i>
+            <span>${translateListingLabel("Source & verification")}</span>
+          </div>
+          <i class="fas fa-chevron-down text-xs text-blue-700"></i>
+        </div>
+      </summary>
+      <div class="mt-3 flex items-start gap-2">
         <i class="fas fa-magnifying-glass-location mt-0.5 text-blue-700"></i>
         <div>
           <div class="font-black">${translateListingLabel("Third-party property result")}</div>
@@ -32439,18 +32479,19 @@ function listingOnlineSourceDisclosureHtml(p = {}) {
             ${translateListingLabel("Makaug does not claim ownership of third-party photos, videos, captions, descriptions, trademarks, or contact details. All third-party content remains the property of its original rights holder. Contact is handled through the original source.")}
           </div>
           <div class="mt-2 flex flex-wrap gap-2 text-xs">
-            <span class="rounded-full bg-white border border-blue-100 px-2 py-1"><strong>${translateListingLabel("First posted online")}:</strong> ${adminEscape(meta.firstPosted || translateListingLabel("Being confirmed from source"))}</span>
+            <span class="rounded-full bg-white border border-blue-100 px-2 py-1"><strong>${firstPostedTitle}:</strong> ${adminEscape(meta.firstPosted || translateListingLabel("Being confirmed from source"))}</span>
             ${meta.firstSeen ? `<span class="rounded-full bg-white border border-blue-100 px-2 py-1"><strong>${translateListingLabel("First picked up by makaug")}:</strong> ${adminEscape(meta.firstSeen)}</span>` : ""}
             ${meta.addedToMakaug ? `<span class="rounded-full bg-white border border-blue-100 px-2 py-1"><strong>${translateListingLabel("Added to makaug")}:</strong> ${adminEscape(meta.addedToMakaug)}</span>` : ""}
             ${sourceBits ? `<span class="rounded-full bg-white border border-blue-100 px-2 py-1"><strong>${translateListingLabel("Source")}:</strong> ${adminEscape(sourceBits)}</span>` : ""}
             ${audienceLabel ? `<span class="rounded-full bg-white border border-blue-100 px-2 py-1"><strong>${translateListingLabel("Audience")}:</strong> ${adminEscape(audienceLabel)}</span>` : ""}
           </div>
           ${foundOnlineSourceActionLinksHtml(p, meta)}
-          ${!meta.firstPosted ? `<div class="mt-2 text-xs text-blue-800">${adminEscape(translateListingLabel("Original post date is being confirmed from the source platform."))}</div>` : ""}
+          ${!meta.firstPosted ? `<div class="mt-2 text-xs text-blue-800">${adminEscape(translateListingLabel(meta.firstPostedLabel || "Original post date is being confirmed from the source platform."))}</div>` : ""}
+          ${meta.sourceUnavailable ? `<div class="mt-2 text-xs font-bold text-amber-800">${translateListingLabel("This source video or account is no longer available. Use the listing facts with care while makaug re-checks it.")}</div>` : ""}
           ${contactHref && (!meta.hasDirectContact || meta.sourceContactMethod === "social") ? `<div class="mt-2 text-xs text-blue-800">${adminEscape(contactCopy)}</div>` : ""}
         </div>
       </div>
-    </div>`;
+    </details>`;
 }
 
 function foundOnlineSourceVideoUrl(p = {}) {
@@ -32473,10 +32514,16 @@ function foundOnlineSourceThumbnailUrl(p = {}, videoUrl = "") {
     p.thumbnail_url,
     p.video_thumbnail_url,
     p.source_thumbnail_url,
+    p.tiktok_thumbnail_url,
+    p.youtube_thumbnail_url,
+    p.oembed_thumbnail_url,
     p.cover_image_url,
     extra.thumbnail_url,
     extra.video_thumbnail_url,
     extra.source_thumbnail_url,
+    extra.tiktok_thumbnail_url,
+    extra.youtube_thumbnail_url,
+    extra.oembed_thumbnail_url,
     extra.cover_image_url,
     ...(Array.isArray(extra.photo_source_urls) ? extra.photo_source_urls : []),
     ...(Array.isArray(extra.authorised_photo_urls) ? extra.authorised_photo_urls : []),
@@ -38424,7 +38471,9 @@ const LISTING_LABEL_I18N_SUPPLEMENTAL = {
       "Sourced online": "Ezuuliddwa online",
       "This listing was found through a public or authorised online property source and checked before publishing on makaug.": "Listing eno yazuuliddwa mu source ya property eri online oba ekkiriziddwa, era n'ekeberebwa nga tennateekebwa ku makaug.",
       "This listing was found through a public or authorised online property source. makaug keeps the source trail visible so buyers can check the original post and contact route.": "Listing eno yazuuliddwa mu source ya property eri online oba ekkiriziddwa. makaug eraga obujulizi bw'ensibuko abantu basobole okukakasa post eyasooka n'engeri y'okukwatagana.",
-      "Third-party property result": "Property ezuuliddwa okuva ku nsibuko ey'omuntu omulala",
+	      "Third-party property result": "Property ezuuliddwa okuva ku nsibuko ey'omuntu omulala",
+	      "Source & verification": "Ensibuko n'okukakasa",
+	      "More options / Report an issue": "Ebirala / Loopa obuzibu",
       "This property was found from a public third-party source. Makaug provides a search and discovery preview only. Makaug has not verified ownership, availability, price, land title, seller authority, image rights, or contact details. Please check the original source and carry out independent verification before making any payment or arranging a viewing.": "Property eno yazuuliddwa okuva ku nsibuko ey'olukale ey'omuntu omulala. Makaug eraga eby'okunoonya n'okuzuula byokka. Makaug tekakasizza bwannannyini, okubeerawo, bbeeyi, title y'ettaka, obuyinza bw'omutunzi, eddembe ly'ebifaananyi, oba ebikwata ku contact. Kebera ensibuko eyasooka era okole okukakasa kwo nga tonnasasula oba okutegeka okulaba.",
       "Makaug does not claim ownership of third-party photos, videos, captions, descriptions, trademarks, or contact details. All third-party content remains the property of its original rights holder. Contact is handled through the original source.": "Makaug tegamba nti ebifaananyi, videos, captions, ennyonnyola, trademarks, oba contact details ez'omuntu omulala byayo. Ebintu byonna eby'omuntu omulala bisigala bya nannyini ddembe eyabisooka. Okukwatagana kuyita ku nsibuko eyasooka.",
       "Open original source": "Ggulawo ensibuko eyasooka",
@@ -38446,12 +38495,15 @@ const LISTING_LABEL_I18N_SUPPLEMENTAL = {
       "Please describe the correction needed, including the accurate location, price, contact route, or source detail.": "Nyonyola okutereeza okwetaagisa, omuli ekifo ekituufu, bbeeyi, contact route, oba source detail.",
       "Please explain why this result should be removed and add any proof that you are authorised to make this request.": "Nyonyola lwaki result eno erina okuggyibwawo era oteekemu obukakafu nti oli mukkiriziddwa okusaba kino.",
       "Please describe the issue, what looks wrong, and any evidence you want makaug to review.": "Nyonyola obuzibu, ekirabika nga kikyamu, n'obukakafu bw'oyagala makaug ekwekebejje.",
-      "First posted online": "Yasooka okuteekebwa online",
-      "First seen by makaug": "makaug yasooka okugiraba",
-      "First picked up by makaug": "makaug yasooka okugikima",
-      "Being confirmed from source": "Kikakasibwa okuva ku nsibuko",
-      "Audience count to confirm from source": "Omuwendo gw'abagoberera gukakasibwa okuva ku nsibuko",
-      "Original post date is being confirmed from the source platform.": "Olunaku lwa post eyasooka lukakasibwa okuva ku platform y'ensibuko.",
+	      "First posted online": "Yasooka okuteekebwa online",
+	      "Source date approx.": "Olunaku lw'ensibuko lukakasibwa",
+	      "First seen by makaug": "makaug yasooka okugiraba",
+	      "First picked up by makaug": "makaug yasooka okugikima",
+	      "Being confirmed from source": "Kikakasibwa okuva ku nsibuko",
+	      "Audience count to confirm from source": "Omuwendo gw'abagoberera gukakasibwa okuva ku nsibuko",
+	      "Original post date is being confirmed from the source platform.": "Olunaku lwa post eyasooka lukakasibwa okuva ku platform y'ensibuko.",
+	      "Source date conflicts with first pickup, so makaug is confirming it from the platform.": "Olunaku lw'ensibuko lukontana n'olwasooka okukimibwa, kale makaug erukakasa okuva ku platform.",
+	      "This source video or account is no longer available. Use the listing facts with care while makaug re-checks it.": "Video oba account y'ensibuko eno tekyaliwo. Kozesa ebikwata ku listing n'obwegendereza nga makaug eddamu okukikakasa.",
       "Added to makaug": "Yayongerwa ku makaug",
       "Audience": "Abagoberera",
       "Source": "Ensibuko",
@@ -38573,7 +38625,9 @@ const LISTING_LABEL_I18N_SUPPLEMENTAL = {
       "Sourced online": "Imepatikana mtandaoni",
       "This listing was found through a public or authorised online property source and checked before publishing on makaug.": "Tangazo hili lilipatikana kupitia chanzo cha mali cha umma au kilichoidhinishwa mtandaoni, kisha likakaguliwa kabla ya kuchapishwa kwenye makaug.",
       "This listing was found through a public or authorised online property source. makaug keeps the source trail visible so buyers can check the original post and contact route.": "Tangazo hili lilipatikana kupitia chanzo cha mali cha umma au kilichoidhinishwa mtandaoni. makaug huonyesha njia ya chanzo ili wanunuzi wakague chapisho la awali na njia ya kuwasiliana.",
-      "Third-party property result": "Matokeo ya mali kutoka chanzo cha nje",
+	      "Third-party property result": "Matokeo ya mali kutoka chanzo cha nje",
+	      "Source & verification": "Chanzo na uthibitisho",
+	      "More options / Report an issue": "Chaguo zaidi / Ripoti tatizo",
       "This property was found from a public third-party source. Makaug provides a search and discovery preview only. Makaug has not verified ownership, availability, price, land title, seller authority, image rights, or contact details. Please check the original source and carry out independent verification before making any payment or arranging a viewing.": "Mali hii ilipatikana kutoka chanzo cha umma cha mtu mwingine. Makaug hutoa muhtasari wa utafutaji na ugunduzi pekee. Makaug haijathibitisha umiliki, upatikanaji, bei, hati ya ardhi, mamlaka ya muuzaji, haki za picha, au mawasiliano. Tafadhali angalia chanzo cha awali na ufanye uthibitishaji wako kabla ya kulipa au kupanga kuona mali.",
       "Makaug does not claim ownership of third-party photos, videos, captions, descriptions, trademarks, or contact details. All third-party content remains the property of its original rights holder. Contact is handled through the original source.": "Makaug haidai umiliki wa picha, video, captions, maelezo, alama za biashara, au mawasiliano ya wahusika wengine. Maudhui yote ya wahusika wengine yanabaki mali ya mwenye haki wa awali. Mawasiliano hufanyika kupitia chanzo cha awali.",
       "Open original source": "Fungua chanzo cha awali",
@@ -38595,12 +38649,15 @@ const LISTING_LABEL_I18N_SUPPLEMENTAL = {
       "Please describe the correction needed, including the accurate location, price, contact route, or source detail.": "Eleza marekebisho yanayohitajika, pamoja na eneo sahihi, bei, njia ya mawasiliano, au taarifa ya chanzo.",
       "Please explain why this result should be removed and add any proof that you are authorised to make this request.": "Eleza kwa nini matokeo haya yaondolewe na ongeza uthibitisho kuwa umeidhinishwa kuomba hilo.",
       "Please describe the issue, what looks wrong, and any evidence you want makaug to review.": "Eleza tatizo, kinachoonekana vibaya, na ushahidi wowote unaotaka makaug ipitie.",
-      "First posted online": "Ilichapishwa kwanza mtandaoni",
-      "First seen by makaug": "Ilionekana kwanza na makaug",
-      "First picked up by makaug": "Ilichukuliwa kwanza na makaug",
-      "Being confirmed from source": "Inathibitishwa kutoka chanzo",
-      "Audience count to confirm from source": "Idadi ya hadhira inathibitishwa kutoka chanzo",
-      "Original post date is being confirmed from the source platform.": "Tarehe ya chapisho la awali inathibitishwa kutoka kwenye jukwaa la chanzo.",
+	      "First posted online": "Ilichapishwa kwanza mtandaoni",
+	      "Source date approx.": "Tarehe ya chanzo inathibitishwa",
+	      "First seen by makaug": "Ilionekana kwanza na makaug",
+	      "First picked up by makaug": "Ilichukuliwa kwanza na makaug",
+	      "Being confirmed from source": "Inathibitishwa kutoka chanzo",
+	      "Audience count to confirm from source": "Idadi ya hadhira inathibitishwa kutoka chanzo",
+	      "Original post date is being confirmed from the source platform.": "Tarehe ya chapisho la awali inathibitishwa kutoka kwenye jukwaa la chanzo.",
+	      "Source date conflicts with first pickup, so makaug is confirming it from the platform.": "Tarehe ya chanzo inakinzana na muda wa kwanza kukusanywa, hivyo makaug inaithibitisha kutoka jukwaani.",
+	      "This source video or account is no longer available. Use the listing facts with care while makaug re-checks it.": "Video au akaunti ya chanzo haipatikani tena. Tumia taarifa za tangazo kwa tahadhari wakati makaug inakagua tena.",
       "Added to makaug": "Imeongezwa kwenye makaug",
       "Audience": "Wafuasi",
       "Source": "Chanzo",
@@ -38674,13 +38731,18 @@ Object.assign(LISTING_LABEL_I18N_SUPPLEMENTAL.am ||= {}, {
   "No photos selected yet.": "እስካሁን ፎቶ አልተመረጠም።",
   "Selected photos": "የተመረጡ ፎቶዎች",
   "Photo quality check passed. Files are suitable for review.": "የፎቶ ጥራት ምርመራ አልፏል። ፋይሎቹ ለግምገማ ተስማሚ ናቸው።",
-  "Third-party property result": "የሶስተኛ ወገን የንብረት ውጤት",
+	  "Third-party property result": "የሶስተኛ ወገን የንብረት ውጤት",
+	  "Source & verification": "ምንጭ እና ማረጋገጫ",
+	  "More options / Report an issue": "ተጨማሪ አማራጮች / ችግር ሪፖርት ያድርጉ",
   "This property was found from a public third-party source. Makaug provides a search and discovery preview only.": "ይህ ንብረት ከህዝብ የሶስተኛ ወገን ምንጭ ተገኝቷል። makaug የፍለጋ እና የግኝት ቅድመ እይታ ብቻ ይሰጣል።",
   "Makaug has not verified ownership, availability, price, land title, seller authority, image rights, or contact details. Please check the original source and carry out independent verification before making any payment or arranging a viewing.": "makaug ባለቤትነት፣ መገኘት፣ ዋጋ፣ የመሬት ርዕስ፣ የሻጭ ስልጣን፣ የምስል መብቶች ወይም የእውቂያ ዝርዝሮችን አላረጋገጠም። ክፍያ ወይም እይታ ከማዘጋጀትዎ በፊት ዋናውን ምንጭ ይመልከቱ እና በራስዎ ያረጋግጡ።",
   "Makaug does not claim ownership of third-party photos, videos, captions, descriptions, trademarks, or contact details. All third-party content remains the property of its original rights holder. Contact is handled through the original source.": "makaug የሶስተኛ ወገን ፎቶዎች፣ ቪዲዮዎች፣ captions፣ መግለጫዎች፣ ምልክቶች ወይም የእውቂያ ዝርዝሮች ባለቤትነትን አይጠይቅም። ሁሉም የሶስተኛ ወገን ይዘት የመጀመሪያው የመብት ባለቤት ንብረት ነው። ግንኙነት በዋናው ምንጭ ይካሄዳል።",
-  "First posted online": "መጀመሪያ በመስመር ላይ የተለጠፈ",
-  "First picked up by makaug": "በ makaug መጀመሪያ የተገኘ",
-  "Added to makaug": "ወደ makaug የተጨመረ",
+	  "First posted online": "መጀመሪያ በመስመር ላይ የተለጠፈ",
+	  "Source date approx.": "የምንጭ ቀን በማረጋገጥ ላይ ነው",
+	  "First picked up by makaug": "በ makaug መጀመሪያ የተገኘ",
+	  "Added to makaug": "ወደ makaug የተጨመረ",
+	  "Source date conflicts with first pickup, so makaug is confirming it from the platform.": "የምንጭ ቀን ከመጀመሪያ መያዝ ጋር ይጋጫል፣ ስለዚህ makaug ከመድረኩ እያረጋገጠው ነው።",
+	  "This source video or account is no longer available. Use the listing facts with care while makaug re-checks it.": "ይህ የምንጭ ቪዲዮ ወይም መለያ ከእንግዲህ አይገኝም። makaug እንደገና እያረጋገጠው ሳለ የዝርዝሩን መረጃ በጥንቃቄ ይጠቀሙ።",
   "Source": "ምንጭ",
   "Audience": "ተመልካቾች",
   "Open original source": "ዋናውን ምንጭ ክፈት",
@@ -38778,16 +38840,21 @@ Object.assign(LISTING_LABEL_I18N_SUPPLEMENTAL.ar ||= {}, {
   "No photos selected yet.": "لم يتم اختيار صور بعد.",
   "Selected photos": "الصور المختارة",
   "Photo quality check passed. Files are suitable for review.": "نجح فحص جودة الصور. الملفات مناسبة للمراجعة.",
-  "Third-party property result": "نتيجة عقار من طرف ثالث",
+	  "Third-party property result": "نتيجة عقار من طرف ثالث",
+	  "Source & verification": "المصدر والتحقق",
+	  "More options / Report an issue": "خيارات إضافية / أبلغ عن مشكلة",
   "This property was found from a public third-party source. Makaug provides a search and discovery preview only.": "تم العثور على هذا العقار من مصدر عام تابع لطرف ثالث. يقدم makaug معاينة بحث واكتشاف فقط.",
   "Makaug has not verified ownership, availability, price, land title, seller authority, image rights, or contact details. Please check the original source and carry out independent verification before making any payment or arranging a viewing.": "لم يتحقق makaug من الملكية أو التوفر أو السعر أو سند الأرض أو صلاحية البائع أو حقوق الصور أو بيانات التواصل. يرجى فحص المصدر الأصلي والتحقق بشكل مستقل قبل أي دفع أو ترتيب معاينة.",
   "Makaug does not claim ownership of third-party photos, videos, captions, descriptions, trademarks, or contact details. All third-party content remains the property of its original rights holder. Contact is handled through the original source.": "لا يدعي makaug ملكية صور أو فيديوهات أو تسميات أو أوصاف أو علامات تجارية أو بيانات تواصل خاصة بأطراف ثالثة. كل محتوى الطرف الثالث يبقى ملكاً لصاحب الحقوق الأصلي. يتم التواصل عبر المصدر الأصلي.",
-  "First posted online": "نشر أولاً على الإنترنت",
-  "First seen by makaug": "شوهد أولاً بواسطة makaug",
-  "First picked up by makaug": "التقطه makaug أولاً",
-  "Being confirmed from source": "يتم تأكيده من المصدر",
-  "Audience count to confirm from source": "عدد الجمهور يحتاج تأكيداً من المصدر",
-  "Original post date is being confirmed from the source platform.": "يتم تأكيد تاريخ النشر الأصلي من منصة المصدر.",
+	  "First posted online": "نشر أولاً على الإنترنت",
+	  "Source date approx.": "تاريخ المصدر قيد التأكيد",
+	  "First seen by makaug": "شوهد أولاً بواسطة makaug",
+	  "First picked up by makaug": "التقطه makaug أولاً",
+	  "Being confirmed from source": "يتم تأكيده من المصدر",
+	  "Audience count to confirm from source": "عدد الجمهور يحتاج تأكيداً من المصدر",
+	  "Original post date is being confirmed from the source platform.": "يتم تأكيد تاريخ النشر الأصلي من منصة المصدر.",
+	  "Source date conflicts with first pickup, so makaug is confirming it from the platform.": "يتعارض تاريخ المصدر مع أول التقاط، لذلك يؤكده makaug من المنصة.",
+	  "This source video or account is no longer available. Use the listing facts with care while makaug re-checks it.": "لم يعد فيديو المصدر أو الحساب متاحاً. استخدم حقائق الإعلان بحذر بينما يعيد makaug التحقق.",
   "Added to makaug": "أضيف إلى makaug",
   "Source": "المصدر",
   "source": "المصدر",
@@ -41897,8 +41964,6 @@ async function openDetail(id, options = {}) {
             <div class="mt-3 flex items-center gap-2">
               ${renderPropertyShareActions(p, detailIdArg)}
             </div>
-            ${listingOnlineSourceDisclosureHtml(p)}
-            ${renderUgNlisVerificationCard(p)}
             ${isOwnerPreviewViewer ? `
             <div class="mt-4 bg-amber-50 border border-amber-200 rounded-xl p-3">
               <div class="text-xs uppercase tracking-wide text-amber-700 font-semibold mb-1">${translateListingLabel("Private Preview")}</div>
@@ -41948,10 +42013,12 @@ async function openDetail(id, options = {}) {
             <i class="fas fa-route"></i> ${translatePropertyUi("Directions unavailable")}
           </button>`}
         </div>
-        <div class="bg-white border border-gray-200 rounded-2xl p-5 mt-5">
+        ${similar.length ? `<div id="detail-similar-properties" class="bg-white border border-gray-200 rounded-2xl p-5 mt-5">
           <h2 class="text-xl font-bold mb-3">${translatePropertyUi("Similar Properties")}</h2>
           <div class="grid md:grid-cols-3 gap-4">${similar.map(propCard).join("")}</div>
-        </div>
+        </div>` : ""}
+        ${listingOnlineSourceDisclosureHtml(p)}
+        ${renderUgNlisVerificationCard(p)}
       </div>
       <div>
         <div class="bg-white border border-gray-200 rounded-2xl p-5 sticky top-24">
