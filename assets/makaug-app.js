@@ -41546,11 +41546,10 @@ function propertyDetailContactTheme(type = "") {
   };
 }
 
-function publicContactPhoneForProperty(p = {}, broker = null) {
+function publicCallPhoneForProperty(p = {}, broker = null) {
   const extra = p?.extra_fields && typeof p.extra_fields === "object" ? p.extra_fields : {};
   return normalizePhoneInput(
-    broker?.whatsapp
-      || broker?.phone
+    broker?.phone
       || p.lister_phone
       || p.contact_phone
       || p.phone
@@ -41558,42 +41557,110 @@ function publicContactPhoneForProperty(p = {}, broker = null) {
       || extra.public_contact_phone
       || extra.contact_phone
       || extra.phone
+      || broker?.whatsapp
       || extra.whatsapp
       || ""
   );
 }
 
+function publicWhatsappPhoneForProperty(p = {}, broker = null) {
+  const extra = p?.extra_fields && typeof p.extra_fields === "object" ? p.extra_fields : {};
+  return normalizePhoneInput(
+    broker?.whatsapp
+      || broker?.phone
+      || p.whatsapp
+      || p.whatsapp_phone
+      || p.lister_whatsapp
+      || p.contact_whatsapp
+      || p.public_contact_phone
+      || p.lister_phone
+      || p.contact_phone
+      || p.phone
+      || extra.whatsapp
+      || extra.whatsapp_phone
+      || extra.public_contact_phone
+      || extra.contact_phone
+      || extra.phone
+      || ""
+  );
+}
+
+function publicContactPhoneForProperty(p = {}, broker = null) {
+  return publicWhatsappPhoneForProperty(p, broker) || publicCallPhoneForProperty(p, broker);
+}
+
+function detailContactActionButtonsHtml({
+  property = {},
+  type = "",
+  callPhone = "",
+  whatsappPhone = "",
+  sourceUrl = "",
+  sourceLabel = "",
+  contactMessage = "",
+  detailIdArg = "null",
+  whatsappSource = "listing_detail_whatsapp",
+  emptyLabel = ""
+} = {}) {
+  const theme = propertyDetailContactTheme(type);
+  const normalizedCallPhone = normalizePhoneInput(callPhone);
+  const normalizedWhatsappPhone = normalizePhoneInput(whatsappPhone || normalizedCallPhone);
+  const sourceHref = /^https?:\/\//i.test(String(sourceUrl || "")) ? String(sourceUrl).trim() : "";
+  const messageArg = adminAttr(JSON.stringify(contactMessage || ""));
+  const callPhoneArg = adminAttr(JSON.stringify(normalizedCallPhone || ""));
+  const whatsappPhoneArg = adminAttr(JSON.stringify(normalizedWhatsappPhone || ""));
+  const rows = [];
+  if (normalizedCallPhone) {
+    rows.push(`<a href="${adminAttr(`tel:${String(normalizedCallPhone).replace(/\s+/g, "")}`)}" class="block text-center w-full ${theme.primary} py-2.5 rounded-xl font-semibold mb-2"><i class="fas fa-phone mr-1"></i>${translatePropertyUi("Call")}</a>`);
+  }
+  if (normalizedWhatsappPhone) {
+    rows.push(`<a href="${adminAttr(buildWhatsAppUrl(normalizedWhatsappPhone, contactMessage))}" target="_blank" rel="noopener noreferrer" onclick="recordListingWhatsappClick(${detailIdArg}, ${messageArg}, ${whatsappPhoneArg}, '${adminAttr(whatsappSource)}')" class="block text-center w-full bg-green-500 text-white py-2.5 rounded-xl font-semibold mb-2"><i class="fab fa-whatsapp mr-1"></i>${translatePropertyUi("WhatsApp")}</a>`);
+  }
+  if (sourceHref) {
+    rows.push(`<a href="${adminAttr(sourceHref)}" target="_blank" rel="noopener noreferrer" class="block text-center w-full border border-green-700 text-green-700 py-2.5 rounded-xl font-semibold mb-2 hover:bg-green-50"><i class="fas fa-up-right-from-square mr-1"></i>${adminEscape(sourceLabel || translatePropertyUi("Message via source"))}</a>`);
+  }
+  if (!rows.length) {
+    rows.push(`<button type="button" class="w-full bg-gray-200 text-gray-500 py-2.5 rounded-xl font-semibold mb-2 cursor-not-allowed">${adminEscape(emptyLabel || translatePropertyUi("Contact unavailable"))}</button>`);
+  }
+  return rows.join("");
+}
+
 function detailMobileContactBarHtml({
   property = {},
   type = "",
-  phone = "",
+  callPhone = "",
+  whatsappPhone = "",
   sourceUrl = "",
   sourceLabel = "",
   contactMessage = "",
   detailIdArg = "null"
 } = {}) {
   const theme = propertyDetailContactTheme(type);
-  const normalizedPhone = normalizePhoneInput(phone);
-  const phoneHref = normalizedPhone ? `tel:${String(normalizedPhone).replace(/\s+/g, "")}` : "";
-  const phoneArg = adminAttr(JSON.stringify(normalizedPhone || ""));
+  const normalizedCallPhone = normalizePhoneInput(callPhone);
+  const normalizedWhatsappPhone = normalizePhoneInput(whatsappPhone || normalizedCallPhone);
   const messageArg = adminAttr(JSON.stringify(contactMessage || ""));
-  const whatsappUrl = normalizedPhone ? buildWhatsAppUrl(normalizedPhone, contactMessage) : "";
+  const whatsappPhoneArg = adminAttr(JSON.stringify(normalizedWhatsappPhone || ""));
   const sourceHref = /^https?:\/\//i.test(String(sourceUrl || "")) ? String(sourceUrl).trim() : "";
-  const fallbackUrl = sourceHref || buildWhatsAppUrl(MAKAUG_SUPPORT_WHATSAPP, `Hi makaug, I need help with ${property.title || "this property"}. ${getPropertyShareUrl(property)}`);
-  const fallbackLabel = sourceHref ? (sourceLabel || translatePropertyUi("Message via source")) : translatePropertyUi("Ask makaug");
   const common = "min-h-[44px] rounded-xl px-4 py-2.5 text-sm font-black inline-flex items-center justify-center gap-2";
-  if (normalizedPhone) {
-    return `
-      <div id="property-detail-mobile-contact-bar" class="lg:hidden fixed inset-x-0 bottom-0 z-[70] border-t ${theme.bar} px-3 pt-2 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] shadow-[0_-12px_30px_rgba(15,23,42,0.14)] backdrop-blur">
-        <div class="grid grid-cols-2 gap-2">
-          <a href="${adminAttr(phoneHref)}" class="${common} ${theme.secondary}"><i class="fas fa-phone ${theme.icon}"></i>${translatePropertyUi("Call")}</a>
-          <a href="${adminAttr(whatsappUrl)}" target="_blank" rel="noopener noreferrer" onclick="recordListingWhatsappClick(${detailIdArg}, ${messageArg}, ${phoneArg}, 'listing_detail_mobile_sticky_whatsapp')" class="${common} ${theme.primary}"><i class="fab fa-whatsapp"></i>${translatePropertyUi("WhatsApp")}</a>
-        </div>
-      </div>`;
+  const actions = [];
+  if (normalizedCallPhone) {
+    actions.push(`<a href="${adminAttr(`tel:${String(normalizedCallPhone).replace(/\s+/g, "")}`)}" class="${common} ${theme.secondary}"><i class="fas fa-phone ${theme.icon}"></i>${translatePropertyUi("Call")}</a>`);
   }
+  if (normalizedWhatsappPhone) {
+    actions.push(`<a href="${adminAttr(buildWhatsAppUrl(normalizedWhatsappPhone, contactMessage))}" target="_blank" rel="noopener noreferrer" onclick="recordListingWhatsappClick(${detailIdArg}, ${messageArg}, ${whatsappPhoneArg}, 'listing_detail_mobile_sticky_whatsapp')" class="${common} ${theme.primary}"><i class="fab fa-whatsapp"></i>${translatePropertyUi("WhatsApp")}</a>`);
+  }
+  if (sourceHref) {
+    const sourceButtonClass = actions.length >= 2 ? `${common} ${theme.secondary} col-span-2` : `${common} ${theme.primary} w-full`;
+    actions.push(`<a href="${adminAttr(sourceHref)}" target="_blank" rel="noopener noreferrer" class="${sourceButtonClass}"><i class="fas fa-up-right-from-square"></i>${adminEscape(sourceLabel || translatePropertyUi("Message via source"))}</a>`);
+  }
+  if (!actions.length) {
+    actions.push(`<a href="${adminAttr(buildWhatsAppUrl(MAKAUG_SUPPORT_WHATSAPP, `Hi makaug, I need help with ${property.title || "this property"}. ${getPropertyShareUrl(property)}`))}" target="_blank" rel="noopener noreferrer" class="${common} ${theme.primary} w-full"><i class="fab fa-whatsapp"></i>${translatePropertyUi("Ask makaug")}</a>`);
+  }
+  const gridCols = actions.length === 1 ? "grid-cols-1" : "grid-cols-2";
   return `
     <div id="property-detail-mobile-contact-bar" class="lg:hidden fixed inset-x-0 bottom-0 z-[70] border-t ${theme.bar} px-3 pt-2 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] shadow-[0_-12px_30px_rgba(15,23,42,0.14)] backdrop-blur">
-      <a href="${adminAttr(fallbackUrl)}" target="_blank" rel="noopener noreferrer" class="${common} ${theme.primary} w-full"><i class="${sourceHref ? "fas fa-up-right-from-square" : "fab fa-whatsapp"}"></i>${adminEscape(fallbackLabel)}</a>
+      <div class="grid ${gridCols} gap-2">
+        ${actions.join("")}
+      </div>
     </div>`;
 }
 
@@ -41647,7 +41714,8 @@ async function openDetail(id, options = {}) {
   const detailIdArg = JSON.stringify(String(p.id));
   const detailLocation = getPropertyLocationDisplay(p);
   const ownerPhone = p.lister_phone || p.contact_phone || p.phone || "";
-  const mobileContactPhone = publicContactPhoneForProperty(p, broker);
+  const publicCallPhone = publicCallPhoneForProperty(p, broker);
+  const publicWhatsappPhone = publicWhatsappPhoneForProperty(p, broker);
   const ownerPhoneHref = ownerPhone ? `tel:${String(ownerPhone).replace(/\s+/g, "")}` : "";
   const ownerEmail = p.lister_email || p.contact_email || "";
   const foundOnlineMeta = foundOnlineSourceMeta(p);
@@ -41679,11 +41747,24 @@ async function openDetail(id, options = {}) {
   const mobileContactBarHtml = detailMobileContactBarHtml({
     property: p,
     type: normalizedType,
-    phone: mobileContactPhone,
+    callPhone: publicCallPhone,
+    whatsappPhone: publicWhatsappPhone,
     sourceUrl: sourceContactUrl,
     sourceLabel: sourceContactButtonLabel || translatePropertyUi("Message via source"),
     contactMessage,
     detailIdArg
+  });
+  const detailContactActionsHtml = detailContactActionButtonsHtml({
+    property: p,
+    type: normalizedType,
+    callPhone: publicCallPhone,
+    whatsappPhone: publicWhatsappPhone,
+    sourceUrl: sourceContactUrl,
+    sourceLabel: sourceContactButtonLabel || translatePropertyUi("Message via source"),
+    contactMessage,
+    detailIdArg,
+    whatsappSource: "listing_detail_whatsapp",
+    emptyLabel: isFoundOnlineContact ? translatePropertyUi("Source contact unavailable") : translatePropertyUi("Contact unavailable")
   });
   const inquiryRecipientName = broker?.name || foundOnlineMeta?.sourceName || ownerDisplayName || translatePropertyUi("Public listing contact");
   const canPrefillInquiryFromUser = !!authState?.user && !isAdminViewer;
@@ -41824,7 +41905,7 @@ async function openDetail(id, options = {}) {
           ${isFoundOnlineContact ? `
             <p class="font-semibold text-gray-800 mb-1">${adminEscape(foundOnlineMeta?.sourceName || ownerDisplayName || translatePropertyUi("Original poster"))}</p>
             <p class="text-xs text-gray-500 mb-3">${adminEscape(sourceContactSubtitle || translatePropertyUi("Public source contact"))}</p>
-            ${sourceContactUrl ? `<a href="${adminAttr(sourceContactUrl)}" target="_blank" rel="noopener noreferrer" class="block text-center w-full bg-green-700 text-white py-2.5 rounded-xl font-semibold mb-2">${adminEscape(sourceContactButtonLabel || translatePropertyUi("Open source contact"))}</a>` : `<button type="button" class="w-full bg-gray-200 text-gray-500 py-2.5 rounded-xl font-semibold mb-2 cursor-not-allowed">${translatePropertyUi("Source contact unavailable")}</button>`}
+            ${detailContactActionsHtml}
             <p class="text-[11px] text-gray-500 mb-2">${translatePropertyUi("Makaug does not send enquiries to this lister. Use the original source to check availability, contact details, and payment instructions.")}</p>
           ` : broker ? `
             <a href="${adminAttr(brokerProfilePath)}" onclick="return openBrokerProfileLink(event, ${adminListingIdArg(broker.id)})" class="detail-broker-profile-link flex items-center gap-3 rounded-xl border border-green-100 bg-green-50/60 p-3 mb-3 hover:border-green-300 hover:bg-green-50 transition">
@@ -41834,18 +41915,16 @@ async function openDetail(id, options = {}) {
                 <span class="block text-sm text-gray-500 truncate">${broker.company || broker.name}</span>
               </span>
             </a>
-            ${brokerPhoneHref ? `<a href="${adminAttr(brokerPhoneHref)}" class="block text-center bg-green-700 text-white py-2.5 rounded-xl font-semibold mb-2">${translatePropertyUi("Call Broker")}</a>` : sourceContactUrl ? `<a href="${adminAttr(sourceContactUrl)}" target="_blank" rel="noopener noreferrer" class="block text-center bg-green-700 text-white py-2.5 rounded-xl font-semibold mb-2">${adminEscape(sourceContactButtonLabel)}</a>` : `<button type="button" class="w-full bg-gray-200 text-gray-500 py-2.5 rounded-xl font-semibold mb-2 cursor-not-allowed">${translatePropertyUi("Call unavailable")}</button>`}
-            ${brokerWhatsapp ? `<a href="${adminAttr(buildWhatsAppUrl(brokerWhatsapp, contactMessage))}" target="_blank" rel="noopener noreferrer" onclick="recordListingWhatsappClick(${detailIdArg}, ${contactMessageArg}, ${brokerWhatsAppArg}, 'listing_detail_whatsapp')" class="block text-center bg-green-500 text-white py-2.5 rounded-xl font-semibold mb-2">${translatePropertyUi("WhatsApp Broker")}</a>` : sourceContactUrl ? `<a href="${adminAttr(sourceContactUrl)}" target="_blank" rel="noopener noreferrer" class="block text-center bg-green-500 text-white py-2.5 rounded-xl font-semibold mb-2">${adminEscape(sourceContactButtonLabel)}</a>` : `<button type="button" class="w-full bg-gray-200 text-gray-500 py-2.5 rounded-xl font-semibold mb-2 cursor-not-allowed">${translatePropertyUi("WhatsApp unavailable")}</button>`}
-            ${sourceContactUrl && !brokerPhoneHref ? `<p class="text-[11px] text-gray-500 mb-2">${adminEscape(sourceContactCopy || translatePropertyUi("No phone number is published. Use the source page to contact the lister."))}</p>` : ""}
+            ${detailContactActionsHtml}
+            ${sourceContactUrl && !publicCallPhone ? `<p class="text-[11px] text-gray-500 mb-2">${adminEscape(sourceContactCopy || translatePropertyUi("No phone number is published. Use the source page to contact the lister."))}</p>` : ""}
             <button onclick="shareBrokerBusinessCard(${adminListingIdArg(broker.id)}, 'whatsapp')" class="w-full border border-green-200 text-green-700 py-2.5 rounded-xl font-semibold mb-2 hover:bg-green-50">${translateListingLabel("Share Broker Card")}</button>
             <a href="${adminAttr(brokerProfilePath)}" onclick="return openBrokerProfileLink(event, ${adminListingIdArg(broker.id)})" class="w-full border border-green-700 text-green-700 py-2.5 rounded-xl font-semibold inline-flex items-center justify-center">${translatePropertyUi("View Broker")}</a>
           ` : `
             <p class="font-semibold text-gray-800 mb-1">${ownerDisplayName}</p>
             <p class="text-xs text-gray-500 mb-3">${adminEscape(sourceContactSubtitle || translatePropertyUi("Public listing contact"))}</p>
-            ${allowCall ? `<a href="${adminAttr(ownerPhoneHref)}" class="block text-center w-full bg-green-700 text-white py-2.5 rounded-xl font-semibold mb-2">${translatePropertyUi("Call Contact")}</a>` : ""}
-            ${ownerWhatsAppUrl ? `<a href="${adminAttr(ownerWhatsAppUrl)}" target="_blank" rel="noopener noreferrer" onclick="recordListingWhatsappClick(${detailIdArg}, ${contactMessageArg}, ${ownerPhoneArg}, 'listing_detail_whatsapp')" class="block text-center w-full bg-green-500 text-white py-2.5 rounded-xl font-semibold mb-2">${translatePropertyUi("WhatsApp Contact")}</a>` : sourceContactUrl ? `<a href="${adminAttr(sourceContactUrl)}" target="_blank" rel="noopener noreferrer" class="block text-center w-full bg-green-500 text-white py-2.5 rounded-xl font-semibold mb-2">${adminEscape(sourceContactButtonLabel)}</a>` : `<button type="button" class="w-full bg-gray-200 text-gray-500 py-2.5 rounded-xl font-semibold mb-2 cursor-not-allowed">${translatePropertyUi("WhatsApp unavailable")}</button>`}
+            ${detailContactActionsHtml}
             ${ownerEmailUrl ? `<a href="${adminAttr(ownerEmailUrl)}" class="block text-center w-full border border-green-700 text-green-700 py-2.5 rounded-xl font-semibold mb-2">${translatePropertyUi("Email Contact")}</a>` : ""}
-            ${sourceContactUrl && !ownerWhatsAppUrl ? `<p class="text-[11px] text-gray-500 mb-2">${adminEscape(sourceContactCopy || translatePropertyUi("No phone number is published. Use the source page to contact the lister."))}</p>` : ""}
+            ${sourceContactUrl && !publicWhatsappPhone ? `<p class="text-[11px] text-gray-500 mb-2">${adminEscape(sourceContactCopy || translatePropertyUi("No phone number is published. Use the source page to contact the lister."))}</p>` : ""}
           `}
           <button id="detail-save-btn" type="button" onclick="toggleSave(${detailIdArg})" class="${getDetailSaveButtonClasses(p.id)}">${getDetailSaveButtonContent(p.id)}</button>
           ${!isFoundOnlineContact ? foundOnlineContactPanelHtml : ""}

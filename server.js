@@ -174,6 +174,7 @@ const inpageVideoFacadeVersion = 'inpage-video-facade-20260709';
 const numberedPaginationVersion = 'numbered-pagination-20260709';
 const tilesContactConsistencyVersion = 'tiles-contact-consistency-20260709';
 const deadTikTokSourceContactFixVersion = 'dead-tiktok-source-contact-fix-20260709';
+const contactOptionMatrixVersion = 'contact-option-matrix-20260709';
 const publicAppVersionSuffixes = [
   captureHelperUsabilityVersion,
   studentNearestUniversityVersion,
@@ -217,7 +218,8 @@ const publicAppVersionSuffixes = [
   inpageVideoFacadeVersion,
   numberedPaginationVersion,
   tilesContactConsistencyVersion,
-  deadTikTokSourceContactFixVersion
+  deadTikTokSourceContactFixVersion,
+  contactOptionMatrixVersion
 ];
 let cachedIndexHtml = null;
 const publicHtmlCache = new Map();

@@ -1568,7 +1568,11 @@ test('found-online social search admin path and share cards are protected and au
   assert(frontend.includes('foundOnlineSourceUnavailableMeta'), 'public cards should detect dead/deleted source videos before rendering source actions');
   assert(frontend.includes('This source video is no longer available'), 'public cards should render a clean unavailable-source state');
   assert(frontend.includes('foundOnlineSourceContactCtaUrl'), 'public detail contact bars should resolve source CTAs before linking out');
-  assert(frontend.includes('sourceHref || buildWhatsAppUrl(MAKAUG_SUPPORT_WHATSAPP'), 'mobile contact bar should fall back to makaug only after source routes are absent');
+  assert(frontend.includes('detailContactActionButtonsHtml'), 'public detail contact panels should render every available contact option, not only one path');
+  assert(frontend.includes('publicCallPhoneForProperty'), 'public detail contact panels should keep direct call separate from WhatsApp');
+  assert(frontend.includes('publicWhatsappPhoneForProperty'), 'public detail contact panels should render WhatsApp when a WhatsApp-capable phone exists');
+  assert(frontend.includes('actions.push(`<a href="${adminAttr(sourceHref)}"'), 'mobile contact bar should render source/social contact alongside phone options');
+  assert(frontend.includes('buildWhatsAppUrl(MAKAUG_SUPPORT_WHATSAPP'), 'mobile contact bar should fall back to makaug only after phone and source routes are absent');
   assert(read('services/socialSearchSourcedListingsService.js').includes('missing_any_public_contact_path'), 'seed should treat social pages as a usable contact path before skipping a source');
   assert(read('services/socialSearchSourcedListingsService.js').includes('existingSocialSearchListingKeys'), 'daily found-online sweeps should skip already queued listing keys');
   assert(read('services/socialSearchSourcedListingsService.js').includes("'already_queued'"), 'daily found-online sweeps should report already queued records');

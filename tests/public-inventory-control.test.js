@@ -363,8 +363,15 @@ test('listing detail has a mobile sticky contact bar with phone, source, and mak
   assert.match(appSource, /id="property-detail-mobile-contact-bar"/);
   assert.match(appSource, /lg:hidden fixed inset-x-0 bottom-0/);
   assert.match(appSource, /min-h-\[44px\]/);
-  assert.match(appSource, /publicContactPhoneForProperty\(p, broker\)/);
-  assert.match(appSource, /sourceHref \|\| buildWhatsAppUrl\(MAKAUG_SUPPORT_WHATSAPP/);
+  assert.match(appSource, /function publicCallPhoneForProperty/);
+  assert.match(appSource, /function publicWhatsappPhoneForProperty/);
+  assert.match(appSource, /function detailContactActionButtonsHtml/);
+  assert.match(appSource, /callPhone: publicCallPhone/);
+  assert.match(appSource, /whatsappPhone: publicWhatsappPhone/);
+  assert.match(appSource, /actions\.push\(`<a href="\$\{adminAttr\(`tel:/);
+  assert.match(appSource, /actions\.push\(`<a href="\$\{adminAttr\(buildWhatsAppUrl/);
+  assert.match(appSource, /actions\.push\(`<a href="\$\{adminAttr\(sourceHref\)/);
+  assert.match(appSource, /buildWhatsAppUrl\(MAKAUG_SUPPORT_WHATSAPP/);
   assert.match(appSource, /translatePropertyUi\("Message via source"\)/);
   assert.match(appSource, /propertyDetailContactTheme\(type = ""\)[\s\S]*bg-purple-700 hover:bg-purple-600/);
   assert.match(appSource, /sourceUrl: sourceContactUrl/);
