@@ -80,6 +80,7 @@ const {
   YOUTUBE_SOURCE_TEXT_ENRICHMENT_VERSION,
   DEFAULT_TIKTOK_PENDING_REPROCESS_LIMIT,
   TIKTOK_OEMBED_THUMBNAIL_REPROCESS_VERSION,
+  TIKTOK_OEMBED_THUMBNAIL_CACHE_VERSION,
   socialDiscoveryApiReadiness,
   TIKTOK_OEMBED_URL,
   YOUTUBE_OEMBED_URL,
@@ -364,6 +365,8 @@ test('public property images escape and normalize generated SVG evidence cards',
   assert(frontend.includes('foundOnlineSourceVisualHtml(p, { compact: true })'), 'third-party result cards should render the source-first discovery visual instead of copied social media photos');
   assert(frontend.includes('p.tiktok_thumbnail_url') && frontend.includes('extra.tiktok_thumbnail_url'), 'TikTok oEmbed thumbnails should be usable by public source cards');
   assert(frontend.includes('p.oembed_thumbnail_url') && frontend.includes('extra.oembed_thumbnail_url'), 'oEmbed thumbnails should be usable by public source cards');
+  assert(frontend.includes('Makaug-cached cover thumbnails'), 'King sweep status should distinguish cached TikTok covers from raw TikTok CDN hotlinks');
+  assert(html.includes('tiktok-thumbnail-cache-proxy-20260709'), 'public app marker should identify the TikTok thumbnail cache/proxy rollout');
   assert(frontend.includes('<img src="${adminAttr(photoSrc)}" alt="${adminAttr(displayTitle)}"'), 'public listing cards should escape image src and localized title attributes');
   assert(frontend.includes('const selectedPhotoSrc = thirdPartyDetail ? "" : publicImageSrc(selectedPhoto?.url || p.img'), 'detail gallery should suppress third-party media and normalize owned/direct selected image sources');
   assert(frontend.includes('<img id="detail-gallery-hero-img" src="${adminAttr(selectedPhotoSrc)}"'), 'detail hero image should escape the selected image src');
@@ -1017,8 +1020,12 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
   assert(socialPlatformSweepServiceSource.includes('data_source_fetch'), 'TikTok sweeps should report configured data-source import results');
   assert(socialPlatformSweepServiceSource.includes('pending_thumbnail_reprocess'), 'TikTok sweeps should report old-row cover-thumbnail reprocessing');
   assert(socialPlatformSweepServiceSource.includes('tiktok_oembed_thumbnail_reprocess_version'), 'TikTok cover reprocessing should stamp its version into updated source rows');
+  assert(socialPlatformSweepServiceSource.includes('storeRemoteImageUrl'), 'TikTok oEmbed covers should be cached into Makaug storage instead of hotlinked from TikTok CDN');
+  assert(socialPlatformSweepServiceSource.includes('cached_to_makaug_storage'), 'TikTok cached thumbnails should carry an explicit cache status');
+  assert(socialPlatformSweepServiceSource.includes("~* '(tiktokcdn|muscdn|byteoversea)'"), 'TikTok backfill should revisit rows that already hold raw blocked TikTok CDN URLs');
   assert.strictEqual(DEFAULT_TIKTOK_PENDING_REPROCESS_LIMIT, 80, 'TikTok thumbnail backfill should process a bounded batch by default');
   assert.strictEqual(TIKTOK_OEMBED_THUMBNAIL_REPROCESS_VERSION, 'tiktok-oembed-thumbnail-reprocess-20260709');
+  assert.strictEqual(TIKTOK_OEMBED_THUMBNAIL_CACHE_VERSION, 'tiktok-oembed-thumbnail-cache-20260709');
   assert.strictEqual(typeof enrichPendingTikTokSourceThumbnailRows, 'function', 'TikTok sweep should expose a reprocessor for rows missing oEmbed cover thumbnails');
   assert.strictEqual(typeof fetchTikTokDataSourcePosts, 'function', 'TikTok sweep should expose a configured data-source fetcher');
   assert(frontend.includes('TikTok data source'), 'King dashboard should show TikTok data-source fetch status');

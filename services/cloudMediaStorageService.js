@@ -144,7 +144,7 @@ function objectKeyFor({ keyPrefix = 'uploads', filename = '', mimeType = 'applic
   return normalizeObjectKey(`${safePrefix}/${Date.now()}-${crypto.randomUUID()}-${basename}.${ext}`);
 }
 
-async function uploadBufferToS3({ bytes, mimeType, key, bucket: bucketOverride } = {}) {
+async function uploadBufferToS3({ bytes, mimeType, key, bucket: bucketOverride, fetchImpl = fetch } = {}) {
   assertCloudMediaStorageConfigured();
 
   const endpoint = new URL(process.env.S3_ENDPOINT);
@@ -172,7 +172,7 @@ async function uploadBufferToS3({ bytes, mimeType, key, bucket: bucketOverride }
   const stringToSign = ['AWS4-HMAC-SHA256', amzDate, credentialScope, sha256Hex(canonicalRequest)].join('\n');
   const signature = crypto.createHmac('sha256', signingKey(secret, dateStamp, region)).update(stringToSign).digest('hex');
 
-  const response = await fetch(uploadUrl, {
+  const response = await fetchImpl(uploadUrl, {
     method: 'PUT',
     headers: {
       'Content-Type': mimeType,
@@ -196,6 +196,61 @@ async function uploadBufferToS3({ bytes, mimeType, key, bucket: bucketOverride }
     sha256: payloadHash,
     mimeType
   };
+}
+
+async function storeRemoteImageUrl(remoteUrl, options = {}) {
+  const raw = String(remoteUrl || '').trim();
+  if (!raw) return null;
+  let parsedUrl;
+  try {
+    parsedUrl = new URL(raw);
+  } catch (_) {
+    throw storageError(`${options.label || 'remote image'} must be a valid URL.`, 400);
+  }
+  if (parsedUrl.protocol !== 'https:') {
+    throw storageError(`${options.label || 'remote image'} must use HTTPS.`, 400);
+  }
+  if (!cloudMediaStorageConfigured()) {
+    if (cloudMediaStorageRequired()) assertCloudMediaStorageConfigured();
+    return null;
+  }
+  const allowedHosts = Array.isArray(options.allowedHosts) ? options.allowedHosts.map((host) => String(host || '').toLowerCase()) : [];
+  if (allowedHosts.length && !allowedHosts.some((host) => parsedUrl.hostname.toLowerCase() === host || parsedUrl.hostname.toLowerCase().endsWith(`.${host}`))) {
+    throw storageError(`${options.label || 'remote image'} host is not allowed for remote caching.`, 400);
+  }
+  const allowedMimeTypes = options.allowedMimeTypes || ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+  const maxBytes = options.maxBytes || (4 * 1024 * 1024);
+  const fetchImpl = options.fetchImpl || fetch;
+  const response = await fetchImpl(raw, {
+    headers: {
+      Accept: allowedMimeTypes.join(', '),
+      'User-Agent': options.userAgent || 'makaug-source-preview-cache/1.0',
+    },
+  });
+  if (!response.ok) {
+    throw storageError(`${options.label || 'remote image'} download failed: ${response.status}`, 502);
+  }
+  const mimeType = String(response.headers?.get?.('content-type') || '').split(';')[0].trim().toLowerCase();
+  if (allowedMimeTypes.length && !allowedMimeTypes.includes(mimeType)) {
+    throw storageError(`${options.label || 'remote image'} must be one of: ${allowedMimeTypes.join(', ')}`, 400);
+  }
+  const bytes = Buffer.from(await response.arrayBuffer());
+  if (maxBytes && bytes.length > maxBytes) {
+    throw storageError(`${options.label || 'remote image'} is too large. Upload must be ${Math.floor(maxBytes / (1024 * 1024))}MB or smaller.`, 400);
+  }
+  const key = objectKeyFor({
+    keyPrefix: options.keyPrefix || 'remote-images',
+    filename: options.filename || parsedUrl.pathname.split('/').pop() || options.label || 'remote-image',
+    mimeType,
+  });
+  const stored = await uploadBufferToS3({
+    bytes,
+    mimeType,
+    key,
+    bucket: options.bucket,
+    fetchImpl: options.uploadFetchImpl || fetchImpl,
+  });
+  return options.isPrivate ? stored.internalRef : (stored.publicUrl || stored.internalRef);
 }
 
 async function storeDataUrl(dataUrl, options = {}) {
@@ -248,5 +303,6 @@ module.exports = {
   prepareMediaUrlForStorage,
   prepareUploadObjectForStorage,
   uploadBufferToS3,
-  storeDataUrl
+  storeDataUrl,
+  storeRemoteImageUrl
 };
