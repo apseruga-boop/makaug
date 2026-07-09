@@ -854,6 +854,68 @@ function normalizeUgPhone(phone) {
   return value;
 }
 
+function normalizePublicUgandaContactPhone(value = '') {
+  const compact = String(value || '').replace(/[^\d+]+/g, '');
+  const phone = normalizeUgPhone(compact);
+  return phone && isValidPhone(phone) && isValidUgPhone(phone) ? phone : '';
+}
+
+function publicUgandaContactPhoneFromText(text = '') {
+  const raw = String(text || '');
+  const matches = raw.match(/(?:\+?256|0)(?:[\s().-]*\d){9}/g) || [];
+  for (const match of matches) {
+    const phone = normalizePublicUgandaContactPhone(match);
+    if (phone) return phone;
+  }
+  return '';
+}
+
+function publicContactPhoneFromExtra(extra = {}) {
+  const raw = extra && typeof extra === 'object' ? extra : {};
+  const rawSourcePost = raw.raw_source_post && typeof raw.raw_source_post === 'object' ? raw.raw_source_post : {};
+  const directPhone = [
+    raw.public_contact_phone,
+    raw.contact_phone,
+    raw.phone,
+    raw.whatsapp,
+    raw.whatsapp_phone,
+    raw.lister_phone,
+    raw.lister_whatsapp,
+    raw.source_phone,
+    raw.source_whatsapp,
+    raw.contact_phone_alt,
+    raw.phone_alt,
+    rawSourcePost.public_contact_phone,
+    rawSourcePost.contact_phone,
+    rawSourcePost.phone,
+    rawSourcePost.whatsapp,
+    rawSourcePost.lister_phone
+  ].map(normalizePublicUgandaContactPhone).find(Boolean);
+  if (directPhone) return directPhone;
+  return publicUgandaContactPhoneFromText([
+    raw.source_text,
+    raw.source_caption,
+    raw.source_description,
+    raw.source_visual_text,
+    raw.video_ocr_text,
+    raw.frame_ocr_text,
+    raw.source_hover_description,
+    raw.source_card_description,
+    rawSourcePost.source_text,
+    rawSourcePost.caption,
+    rawSourcePost.description,
+    rawSourcePost.title,
+    Array.isArray(rawSourcePost.comments) ? rawSourcePost.comments.join(' ') : ''
+  ].filter(Boolean).join(' '));
+}
+
+function publicContactPhoneForRow(row = {}, safeExtra = null) {
+  const extraPhone = publicContactPhoneFromExtra(row?.extra_fields || {});
+  const safeExtraPhone = normalizePublicUgandaContactPhone(safeExtra?.public_contact_phone || safeExtra?.contact_phone || '');
+  const rowPhone = normalizePublicUgandaContactPhone(row?.lister_phone || row?.contact_phone || row?.phone || row?.whatsapp || '');
+  return safeExtraPhone || extraPhone || rowPhone || '';
+}
+
 function phoneDigits(phone = '') {
   return normalizePhone(phone).replace(/\D+/g, '');
 }
@@ -1069,8 +1131,15 @@ function publicExtraFields(extraFields = {}) {
   const sourceContactPlatform = cleanText(extra.source_contact_platform)
     || sourcePlatform
     || inferPublicSourcePlatform(sourceContactUrl);
-  const sourceContactLabel = cleanText(extra.source_contact_label)
-    || (sourceContactUrl ? `Contact via ${sourceContactPlatform || 'source'} source` : null);
+  const publicContactPhone = publicContactPhoneFromExtra(extra);
+  const rawSourceContactMethod = cleanText(extra.source_contact_method || '');
+  const sourceContactHasPhoneClaim = /(?:phone|call|whatsapp)/i.test(`${rawSourceContactMethod} ${extra.source_contact_label || ''}`);
+  const sourceContactLabel = publicContactPhone || !sourceContactHasPhoneClaim
+    ? (cleanText(extra.source_contact_label) || (sourceContactUrl ? `Contact via ${sourceContactPlatform || 'source'} source` : null))
+    : (sourceContactUrl ? `Contact via ${sourceContactPlatform || 'source'} source` : null);
+  const sourceContactMethod = publicContactPhone || !sourceContactHasPhoneClaim
+    ? (rawSourceContactMethod || null)
+    : (sourceContactUrl ? 'social' : null);
   const nearestUniversity = normalizeUniversityName(
     extra.nearest_university
     || extra.nearest_uni
@@ -1110,13 +1179,6 @@ function publicExtraFields(extraFields = {}) {
       || extra.cover_image_url
       || (Array.isArray(extra.photo_source_urls) ? extra.photo_source_urls[0] : '')
       || (Array.isArray(extra.authorised_photo_urls) ? extra.authorised_photo_urls[0] : '')
-  );
-  const publicContactPhone = normalizeUgPhone(
-    extra.public_contact_phone
-      || extra.contact_phone
-      || extra.phone
-      || extra.whatsapp
-      || ''
   );
   const sourceUnavailable = extra.source_unavailable === true
     || tiktokProfileOnlyContact
@@ -1183,7 +1245,7 @@ function publicExtraFields(extraFields = {}) {
     source_audience_label: extra.source_audience_label || null,
     source_contact_url: sourceUnavailable ? null : (sourceContactUrl || null),
     source_contact_label: sourceUnavailable ? null : sourceContactLabel,
-    source_contact_method: extra.source_contact_method || null,
+    source_contact_method: sourceContactMethod,
     source_contact_platform: sourceContactPlatform || null,
     source_hover_description: sourceHoverDescription || null,
     source_card_description: sourceHoverDescription || null,
@@ -1238,8 +1300,11 @@ function publicPropertyRow(property, images = []) {
     ? buildThirdPartyPublicSummary(safeProperty, safeExtra)
     : cleanPublicListingCopy(safeProperty.description || '');
   const studentContext = studentUniversityContextFor(safeProperty, safeExtra);
+  const publicContactPhone = publicContactPhoneForRow(property, safeExtra);
   const extraWithStudentContext = {
     ...safeExtra,
+    public_contact_phone: publicContactPhone || null,
+    contact_phone: publicContactPhone || null,
     ...(studentContext.nearest_university ? {
       nearest_university: studentContext.nearest_university,
       student_campus: studentContext.nearest_university,
@@ -1260,6 +1325,8 @@ function publicPropertyRow(property, images = []) {
     extra_fields: extraWithStudentContext,
     land_verification: buildUgNlisLandVerificationPack(property?.extra_fields || {}),    featured: safeProperty.featured === true || String(safeExtra?.featured || '').toLowerCase() === 'true',
     featured_at: safeProperty.featured_at || safeExtra?.featured_at || null,
+    public_contact_phone: publicContactPhone || null,
+    contact_phone: publicContactPhone || null,
     id_number_present: !!property?.id_number,
     id_document_present: !!property?.id_document_name,
     agent_id: foundOnlinePublic ? null : safeProperty.agent_id,
@@ -2139,8 +2206,11 @@ async function listPropertiesHandler(req, res, next) {
           ? buildThirdPartyPublicSummary(row, safeExtra)
           : cleanPublicListingCopy(publicRow.description || '');
         const studentContext = studentUniversityContextFor(row, safeExtra);
+        const publicContactPhone = publicContactPhoneForRow(row, safeExtra);
         const publicExtra = {
           ...safeExtra,
+          public_contact_phone: publicContactPhone || null,
+          contact_phone: publicContactPhone || null,
           ...(studentContext.nearest_university ? {
             nearest_university: studentContext.nearest_university,
             student_campus: studentContext.nearest_university,
@@ -2174,6 +2244,8 @@ async function listPropertiesHandler(req, res, next) {
           nearest_university: studentContext.nearest_university || null,
           distance_to_uni_km: studentContext.distance_to_uni_km,
           student_universities: studentContext.student_universities,
+          public_contact_phone: publicContactPhone || null,
+          contact_phone: publicContactPhone || null,
           extra_fields: publicExtra,
           third_party_discovery_result: foundOnlinePublic
         };

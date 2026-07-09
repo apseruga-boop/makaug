@@ -379,6 +379,10 @@ test('listing detail has a mobile sticky contact bar with phone, source, and mak
   assert.match(appSource, /sourceUrl: sourceContactUrl/);
   assert.match(htmlSource, /property24-contact-bar-20260709/);
   assert.match(serverSource, /property24ContactBarVersion/);
+  assert.match(htmlSource, /public-contact-phone-routing-20260709/);
+  assert.match(serverSource, /publicContactPhoneRoutingVersion/);
+  assert.match(propertiesRouteSource, /function publicContactPhoneForRow/);
+  assert.match(propertiesRouteSource, /public_contact_phone: publicContactPhone \|\| null/);
   assert.match(appSource, /function isTikTokProfileUrl/);
   assert.match(appSource, /function isTikTokVideoUrl/);
   assert.match(appSource, /function foundOnlineSourceContactCtaUrl/);

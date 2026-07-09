@@ -1562,6 +1562,9 @@ test('found-online social search admin path and share cards are protected and au
   assert(read('routes/properties.js').includes("`Contact via ${sourceContactPlatform || 'source'} source`"), 'public property API should label source contact by platform when direct phone is absent');
   assert(read('routes/properties.js').includes('source_thumbnail_url: sourceThumbnailUrl'), 'public property API should expose safe source thumbnails for social cards');
   assert(read('routes/properties.js').includes('public_contact_phone: publicContactPhone'), 'public property API should expose source-extracted public phones for contact CTAs');
+  assert(read('routes/properties.js').includes('publicContactPhoneForRow(row, safeExtra)'), 'public property list API should expose safe phone-backed call/WhatsApp routes for found-online rows');
+  assert(read('routes/properties.js').includes('publicContactPhoneForRow(property, safeExtra)'), 'public property detail API should expose safe phone-backed call/WhatsApp routes for found-online rows');
+  assert(read('routes/properties.js').includes('sourceContactHasPhoneClaim'), 'public property API should not claim Call/WhatsApp source contact when no phone is resolved');
   assert(read('routes/properties.js').includes('function isPublicTikTokProfileUrl'), 'public property API should detect TikTok profile-only contact URLs');
   assert(read('routes/properties.js').includes('tiktokProfileOnlyContact'), 'public property API should fail closed when a TikTok contact is only a profile, not an exact property post');
   assert(read('routes/properties.js').includes('source_contact_url: sourceUnavailable ? null'), 'public property API should not expose unavailable source contact links');
