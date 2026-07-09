@@ -175,6 +175,7 @@ const numberedPaginationVersion = 'numbered-pagination-20260709';
 const tilesContactConsistencyVersion = 'tiles-contact-consistency-20260709';
 const deadTikTokSourceContactFixVersion = 'dead-tiktok-source-contact-fix-20260709';
 const contactOptionMatrixVersion = 'contact-option-matrix-20260709';
+const property24ContactBarVersion = 'property24-contact-bar-20260709';
 const publicAppVersionSuffixes = [
   captureHelperUsabilityVersion,
   studentNearestUniversityVersion,
@@ -219,7 +220,8 @@ const publicAppVersionSuffixes = [
   numberedPaginationVersion,
   tilesContactConsistencyVersion,
   deadTikTokSourceContactFixVersion,
-  contactOptionMatrixVersion
+  contactOptionMatrixVersion,
+  property24ContactBarVersion
 ];
 let cachedIndexHtml = null;
 const publicHtmlCache = new Map();

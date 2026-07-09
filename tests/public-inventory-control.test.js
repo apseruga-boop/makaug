@@ -371,10 +371,14 @@ test('listing detail has a mobile sticky contact bar with phone, source, and mak
   assert.match(appSource, /actions\.push\(`<a href="\$\{adminAttr\(`tel:/);
   assert.match(appSource, /actions\.push\(`<a href="\$\{adminAttr\(buildWhatsAppUrl/);
   assert.match(appSource, /actions\.push\(`<a href="\$\{adminAttr\(sourceHref\)/);
+  assert.match(appSource, /translatePropertyUi\("Call Agent"\)/);
+  assert.match(appSource, /translatePropertyUi\("Message Agent"\)/);
+  assert.match(appSource, /actions\.length >= 3 \? "grid-cols-3"/);
   assert.match(appSource, /buildWhatsAppUrl\(MAKAUG_SUPPORT_WHATSAPP/);
-  assert.match(appSource, /translatePropertyUi\("Message via source"\)/);
   assert.match(appSource, /propertyDetailContactTheme\(type = ""\)[\s\S]*bg-purple-700 hover:bg-purple-600/);
   assert.match(appSource, /sourceUrl: sourceContactUrl/);
+  assert.match(htmlSource, /property24-contact-bar-20260709/);
+  assert.match(serverSource, /property24ContactBarVersion/);
   assert.match(appSource, /function isTikTokProfileUrl/);
   assert.match(appSource, /function isTikTokVideoUrl/);
   assert.match(appSource, /function foundOnlineSourceContactCtaUrl/);

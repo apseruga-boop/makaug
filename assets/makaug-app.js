@@ -39322,6 +39322,39 @@ PROPERTY_UI_I18N.ar = Object.assign({}, PROPERTY_UI_I18N.sw, {
   "Open full Mortgage Finder": "افتح أداة Mortgage Finder كاملة"
 });
 
+Object.assign(PROPERTY_UI_I18N.lg, {
+  "Call Agent": "Kuba Agent",
+  "Message Agent": "Wandiikira Agent"
+});
+Object.assign(PROPERTY_UI_I18N.sw, {
+  "Call Agent": "Piga Agent",
+  "Message Agent": "Tuma Ujumbe kwa Agent"
+});
+Object.assign(PROPERTY_UI_I18N.ac, {
+  "Call Agent": "Go cim Agent",
+  "Message Agent": "Cwal lok bot Agent"
+});
+Object.assign(PROPERTY_UI_I18N.ny, {
+  "Call Agent": "Kuba Agent",
+  "Message Agent": "Ohereze obutumwa kuri Agent"
+});
+Object.assign(PROPERTY_UI_I18N.rn, {
+  "Call Agent": "Kuba Agent",
+  "Message Agent": "Ohereze obutumwa kuri Agent"
+});
+Object.assign(PROPERTY_UI_I18N.sm, {
+  "Call Agent": "Kuba Agent",
+  "Message Agent": "Wandiikira Agent"
+});
+Object.assign(PROPERTY_UI_I18N.am, {
+  "Call Agent": "ወኪሉን ይደውሉ",
+  "Message Agent": "ለወኪሉ መልእክት ይላኩ"
+});
+Object.assign(PROPERTY_UI_I18N.ar, {
+  "Call Agent": "اتصل بالوكيل",
+  "Message Agent": "راسل الوكيل"
+});
+
 function translatePropertyUi(text, vars = {}) {
   const lang = currentLang || "en";
   const fallback = LANG_FALLBACK[lang] || "en";
@@ -41596,6 +41629,7 @@ function detailContactActionButtonsHtml({
   whatsappPhone = "",
   sourceUrl = "",
   sourceLabel = "",
+  sourceTitle = "",
   contactMessage = "",
   detailIdArg = "null",
   whatsappSource = "listing_detail_whatsapp",
@@ -41605,18 +41639,19 @@ function detailContactActionButtonsHtml({
   const normalizedCallPhone = normalizePhoneInput(callPhone);
   const normalizedWhatsappPhone = normalizePhoneInput(whatsappPhone || normalizedCallPhone);
   const sourceHref = /^https?:\/\//i.test(String(sourceUrl || "")) ? String(sourceUrl).trim() : "";
+  const sourceButtonTitle = String(sourceTitle || sourceLabel || translatePropertyUi("Message Agent")).trim();
   const messageArg = adminAttr(JSON.stringify(contactMessage || ""));
   const callPhoneArg = adminAttr(JSON.stringify(normalizedCallPhone || ""));
   const whatsappPhoneArg = adminAttr(JSON.stringify(normalizedWhatsappPhone || ""));
   const rows = [];
   if (normalizedCallPhone) {
-    rows.push(`<a href="${adminAttr(`tel:${String(normalizedCallPhone).replace(/\s+/g, "")}`)}" class="block text-center w-full ${theme.primary} py-2.5 rounded-xl font-semibold mb-2"><i class="fas fa-phone mr-1"></i>${translatePropertyUi("Call")}</a>`);
+    rows.push(`<a href="${adminAttr(`tel:${String(normalizedCallPhone).replace(/\s+/g, "")}`)}" class="block text-center w-full ${theme.primary} py-2.5 rounded-xl font-semibold mb-2" aria-label="${adminAttr(translatePropertyUi("Call Agent"))}"><i class="fas fa-phone mr-1"></i>${translatePropertyUi("Call Agent")}</a>`);
   }
   if (normalizedWhatsappPhone) {
     rows.push(`<a href="${adminAttr(buildWhatsAppUrl(normalizedWhatsappPhone, contactMessage))}" target="_blank" rel="noopener noreferrer" onclick="recordListingWhatsappClick(${detailIdArg}, ${messageArg}, ${whatsappPhoneArg}, '${adminAttr(whatsappSource)}')" class="block text-center w-full bg-green-500 text-white py-2.5 rounded-xl font-semibold mb-2"><i class="fab fa-whatsapp mr-1"></i>${translatePropertyUi("WhatsApp")}</a>`);
   }
   if (sourceHref) {
-    rows.push(`<a href="${adminAttr(sourceHref)}" target="_blank" rel="noopener noreferrer" class="block text-center w-full border border-green-700 text-green-700 py-2.5 rounded-xl font-semibold mb-2 hover:bg-green-50"><i class="fas fa-up-right-from-square mr-1"></i>${adminEscape(sourceLabel || translatePropertyUi("Message via source"))}</a>`);
+    rows.push(`<a href="${adminAttr(sourceHref)}" target="_blank" rel="noopener noreferrer" class="block text-center w-full border border-green-700 text-green-700 py-2.5 rounded-xl font-semibold mb-2 hover:bg-green-50" aria-label="${adminAttr(sourceButtonTitle)}" title="${adminAttr(sourceButtonTitle)}"><i class="fas fa-up-right-from-square mr-1"></i>${translatePropertyUi("Message Agent")}</a>`);
   }
   if (!rows.length) {
     rows.push(`<button type="button" class="w-full bg-gray-200 text-gray-500 py-2.5 rounded-xl font-semibold mb-2 cursor-not-allowed">${adminEscape(emptyLabel || translatePropertyUi("Contact unavailable"))}</button>`);
@@ -41631,6 +41666,7 @@ function detailMobileContactBarHtml({
   whatsappPhone = "",
   sourceUrl = "",
   sourceLabel = "",
+  sourceTitle = "",
   contactMessage = "",
   detailIdArg = "null"
 } = {}) {
@@ -41640,22 +41676,24 @@ function detailMobileContactBarHtml({
   const messageArg = adminAttr(JSON.stringify(contactMessage || ""));
   const whatsappPhoneArg = adminAttr(JSON.stringify(normalizedWhatsappPhone || ""));
   const sourceHref = /^https?:\/\//i.test(String(sourceUrl || "")) ? String(sourceUrl).trim() : "";
-  const common = "min-h-[44px] rounded-xl px-4 py-2.5 text-sm font-black inline-flex items-center justify-center gap-2";
+  const sourceButtonTitle = String(sourceTitle || sourceLabel || translatePropertyUi("Message Agent")).trim();
+  const common = "min-h-[44px] min-w-0 rounded-xl px-2 py-2.5 text-[13px] sm:text-sm font-black inline-flex items-center justify-center gap-1.5 text-center leading-tight whitespace-nowrap";
   const actions = [];
   if (normalizedCallPhone) {
-    actions.push(`<a href="${adminAttr(`tel:${String(normalizedCallPhone).replace(/\s+/g, "")}`)}" class="${common} ${theme.secondary}"><i class="fas fa-phone ${theme.icon}"></i>${translatePropertyUi("Call")}</a>`);
+    actions.push(`<a href="${adminAttr(`tel:${String(normalizedCallPhone).replace(/\s+/g, "")}`)}" class="${common} ${theme.secondary}" aria-label="${adminAttr(translatePropertyUi("Call Agent"))}"><i class="fas fa-phone ${theme.icon}"></i><span class="truncate">${translatePropertyUi("Call Agent")}</span></a>`);
   }
   if (normalizedWhatsappPhone) {
-    actions.push(`<a href="${adminAttr(buildWhatsAppUrl(normalizedWhatsappPhone, contactMessage))}" target="_blank" rel="noopener noreferrer" onclick="recordListingWhatsappClick(${detailIdArg}, ${messageArg}, ${whatsappPhoneArg}, 'listing_detail_mobile_sticky_whatsapp')" class="${common} ${theme.primary}"><i class="fab fa-whatsapp"></i>${translatePropertyUi("WhatsApp")}</a>`);
+    const whatsappClass = sourceHref ? theme.secondary : theme.primary;
+    actions.push(`<a href="${adminAttr(buildWhatsAppUrl(normalizedWhatsappPhone, contactMessage))}" target="_blank" rel="noopener noreferrer" onclick="recordListingWhatsappClick(${detailIdArg}, ${messageArg}, ${whatsappPhoneArg}, 'listing_detail_mobile_sticky_whatsapp')" class="${common} ${whatsappClass}" aria-label="${adminAttr(translatePropertyUi("WhatsApp"))}"><i class="fab fa-whatsapp"></i><span class="truncate">${translatePropertyUi("WhatsApp")}</span></a>`);
   }
   if (sourceHref) {
-    const sourceButtonClass = actions.length >= 2 ? `${common} ${theme.secondary} col-span-2` : `${common} ${theme.primary} w-full`;
-    actions.push(`<a href="${adminAttr(sourceHref)}" target="_blank" rel="noopener noreferrer" class="${sourceButtonClass}"><i class="fas fa-up-right-from-square"></i>${adminEscape(sourceLabel || translatePropertyUi("Message via source"))}</a>`);
+    const sourceButtonClass = `${common} ${theme.primary}`;
+    actions.push(`<a href="${adminAttr(sourceHref)}" target="_blank" rel="noopener noreferrer" class="${sourceButtonClass}" aria-label="${adminAttr(sourceButtonTitle)}" title="${adminAttr(sourceButtonTitle)}"><i class="fas fa-envelope"></i><span class="truncate">${translatePropertyUi("Message Agent")}</span></a>`);
   }
   if (!actions.length) {
     actions.push(`<a href="${adminAttr(buildWhatsAppUrl(MAKAUG_SUPPORT_WHATSAPP, `Hi makaug, I need help with ${property.title || "this property"}. ${getPropertyShareUrl(property)}`))}" target="_blank" rel="noopener noreferrer" class="${common} ${theme.primary} w-full"><i class="fab fa-whatsapp"></i>${translatePropertyUi("Ask makaug")}</a>`);
   }
-  const gridCols = actions.length === 1 ? "grid-cols-1" : "grid-cols-2";
+  const gridCols = actions.length >= 3 ? "grid-cols-3" : (actions.length === 2 ? "grid-cols-2" : "grid-cols-1");
   return `
     <div id="property-detail-mobile-contact-bar" class="lg:hidden fixed inset-x-0 bottom-0 z-[70] border-t ${theme.bar} px-3 pt-2 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] shadow-[0_-12px_30px_rgba(15,23,42,0.14)] backdrop-blur">
       <div class="grid ${gridCols} gap-2">
@@ -41776,7 +41814,7 @@ async function openDetail(id, options = {}) {
           <div class="mt-4 pt-4 border-t border-gray-100">
             <h4 class="font-bold text-gray-800 text-sm mb-2">${translatePropertyUi("Contact through source")}</h4>
             <p class="text-xs text-gray-500 mb-3">${translatePropertyUi("This is a third-party property result. Makaug is not the seller, broker, agent, land owner, or payment collector. Contact is handled through the original source.")}</p>
-            ${sourceContactUrl ? `<a href="${adminAttr(sourceContactUrl)}" target="_blank" rel="noopener noreferrer" class="block text-center w-full border border-green-700 text-green-700 py-2.5 rounded-xl font-semibold text-sm hover:bg-green-50">${adminEscape(sourceContactButtonLabel || translatePropertyUi("Open source contact"))}</a>` : `<div class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">${translatePropertyUi("Source contact is being confirmed by King review.")}</div>`}
+            ${sourceContactUrl ? `<a href="${adminAttr(sourceContactUrl)}" target="_blank" rel="noopener noreferrer" class="block text-center w-full border border-green-700 text-green-700 py-2.5 rounded-xl font-semibold text-sm hover:bg-green-50" aria-label="${adminAttr(sourceContactButtonLabel || translatePropertyUi("Message Agent"))}" title="${adminAttr(sourceContactButtonLabel || translatePropertyUi("Message Agent"))}">${translatePropertyUi("Message Agent")}</a>` : `<div class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">${translatePropertyUi("Source contact is being confirmed by King review.")}</div>`}
           </div>
   ` : "";
   const internalInquiryFormHtml = !isFoundOnlineContact ? `
