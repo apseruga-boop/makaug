@@ -183,6 +183,7 @@ const detailP1P2P4FixVersion = 'detail-p1-p2-p4-fix-20260709';
 const tiktokOembedFieldsVersion = 'tiktok-oembed-fields-20260709';
 const badgeStandardisationVersion = 'badge-standardisation-20260709';
 const foundOnlinePlayChipCleanupVersion = 'found-online-play-chip-cleanup-20260709';
+const staffSourceSweepAsyncUnblockVersion = 'staff-source-sweep-async-unblock-20260709';
 const publicAppVersionSuffixes = [
   captureHelperUsabilityVersion,
   studentNearestUniversityVersion,
@@ -235,7 +236,8 @@ const publicAppVersionSuffixes = [
   detailP1P2P4FixVersion,
   tiktokOembedFieldsVersion,
   badgeStandardisationVersion,
-  foundOnlinePlayChipCleanupVersion
+  foundOnlinePlayChipCleanupVersion,
+  staffSourceSweepAsyncUnblockVersion
 ];
 let cachedIndexHtml = null;
 const publicHtmlCache = new Map();

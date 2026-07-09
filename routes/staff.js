@@ -522,6 +522,16 @@ async function logStaffActivity(req, action, { targetType = null, targetId = nul
   });
 }
 
+function logStaffActivityInBackground(req, action, options = {}) {
+  logStaffActivity(req, action, options).catch((error) => {
+    logger.warn('Staff activity background log failed', {
+      action,
+      target_id: options?.targetId || null,
+      message: error.message
+    });
+  });
+}
+
 function trainingGuide() {
   return {
     moderation: {
@@ -2020,7 +2030,7 @@ router.post('/source-intake/social-sweep', async (req, res, next) => {
       const activeSweep = activeStaffSourceIntakeJob('social_sweep');
       if (activeSweep) {
         activeSweep.message = 'A social sweep is already queued or running. Poll this job before launching another sweep.';
-        await logStaffActivity(req, 'staff_social_sweep_job_reused', {
+        logStaffActivityInBackground(req, 'staff_social_sweep_job_reused', {
           targetType: 'source_intake',
           targetId: activeSweep.id,
           metadata: {
@@ -2047,7 +2057,7 @@ router.post('/source-intake/social-sweep', async (req, res, next) => {
         dryRun
       });
       runStaffSourceIntakeJob(job.id, runSweep);
-      await logStaffActivity(req, 'staff_social_sweep_job_accepted', {
+      logStaffActivityInBackground(req, 'staff_social_sweep_job_accepted', {
         targetType: 'source_intake',
         targetId: job.id,
         metadata: {

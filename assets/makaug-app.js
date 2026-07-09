@@ -819,7 +819,7 @@ let staffModerationRefreshTimer = null;
 const STAFF_MODERATION_WRITE_TIMEOUT_MS = 18000;
 const STAFF_DASHBOARD_PANEL_TIMEOUT_MS = 10000;
 const STAFF_MODERATION_PUBLIC_PROOF_TIMEOUT_MS = 6000;
-const STAFF_SOURCE_INTAKE_SUBMIT_TIMEOUT_MS = 7000;
+const STAFF_SOURCE_INTAKE_SUBMIT_TIMEOUT_MS = 15000;
 const STAFF_SOURCE_INTAKE_POLL_TIMEOUT_MS = 6000;
 const STAFF_SOURCE_INTAKE_POLL_MS = 2500;
 const STAFF_SOURCE_SWEEP_BATCH_SIZE = 50;
@@ -10761,7 +10761,7 @@ async function staffRunSourceSweep(dryRun = true, profile = "agency") {
       staffAdvanceSweepOffsetFromResult(data, sourceOffset, sweepProfile.key, requestedSourceCount);
     } else if (data.job_id) {
       scheduleStaffSourceJobPoll(data.job_id, 0);
-      staffStoreSweepOffset(sourceOffset + requestedSourceCount, sweepProfile.key);
+      if (!data.already_running) staffStoreSweepOffset(sourceOffset + requestedSourceCount, sweepProfile.key);
     }
     toast(dryRun ? "Sweep preview ready." : "Source sweep accepted in the background.");
   } catch (error) {
@@ -12347,6 +12347,11 @@ function hasAdminIdentity() {
 
 function canUseLiveAdminApi() {
   return !!(adminApiKey || hasAdminIdentity());
+}
+
+function canUseStaffSourceIntakeApi() {
+  const mode = derivePortalMode(authState?.user, authState?.user?.portal_mode);
+  return !!(authState?.token && ["moderator", "admin"].includes(mode));
 }
 
 function normalizeRemoteAdminListing(p) {
@@ -14311,13 +14316,199 @@ function adminSocialPlatformSweepHtml(data = {}, platform = "all") {
     ${sourceReview.length ? `<div class="mt-3 rounded-xl border border-amber-100 bg-amber-50 p-3 text-amber-900"><div class="font-black">Posts needing source review</div><div class="mt-2 space-y-2">${sourceReview.slice(0, 12).map((item) => adminSourceReviewRecordSummaryHtml(item)).join("")}</div></div>` : ""}`;
 }
 
-async function adminSweepSocialPlatformPosts(platform = "all") {
-  if (!canUseLiveAdminApi()) {
-    toast("Sign in as admin or save ADMIN_API_KEY first.");
-    return;
+function adminSweepButtonId(normalized = "all", studentFocus = false) {
+  if (studentFocus) return activeAdminWorkflowTab === "student-sweep" ? "admin-student-suite-sweep-btn" : "admin-sweep-student-housing-btn";
+  if (normalized === "x") return "admin-sweep-x-posts-btn";
+  if (normalized === "youtube") return activeAdminWorkflowTab === "youtube-sweep" ? "admin-youtube-suite-sweep-btn" : "admin-sweep-youtube-posts-btn";
+  if (normalized === "all") return "admin-sweep-all-social-posts-btn";
+  return "admin-sweep-tiktok-posts-btn";
+}
+
+function adminStaffSocialSweepProfile(normalized = "all", studentFocus = false) {
+  if (studentFocus) {
+    return {
+      label: "Student housing source sweep",
+      platform: "student",
+      focus: "students",
+      youtubeJobMode: "channel_uploads",
+      maxSources: STAFF_SOURCE_DEEP_SWEEP_BATCH_SIZE,
+      maxResults: STAFF_SOURCE_DEEP_SWEEP_MAX_RESULTS,
+      maxPages: STAFF_SOURCE_DEEP_SWEEP_MAX_PAGES,
+      offsetKey: "admin_student"
+    };
   }
+  if (normalized === "youtube") {
+    return {
+      label: "YouTube source sweep",
+      platform: "youtube",
+      focus: "",
+      youtubeJobMode: "channel_uploads",
+      maxSources: STAFF_SOURCE_DEEP_SWEEP_BATCH_SIZE,
+      maxResults: STAFF_SOURCE_DEEP_SWEEP_MAX_RESULTS,
+      maxPages: STAFF_SOURCE_DEEP_SWEEP_MAX_PAGES,
+      offsetKey: "admin_youtube"
+    };
+  }
+  if (normalized === "x") {
+    return {
+      label: "X source sweep",
+      platform: "x",
+      focus: "",
+      youtubeJobMode: "channel_uploads",
+      maxSources: STAFF_SOURCE_SWEEP_BATCH_SIZE,
+      maxResults: STAFF_SOURCE_SWEEP_MAX_RESULTS,
+      maxPages: 1,
+      offsetKey: "admin_x"
+    };
+  }
+  if (normalized === "tiktok") {
+    return {
+      label: "TikTok source sweep",
+      platform: "tiktok",
+      focus: "",
+      youtubeJobMode: "channel_uploads",
+      maxSources: STAFF_SOURCE_SWEEP_BATCH_SIZE,
+      maxResults: STAFF_SOURCE_SWEEP_MAX_RESULTS,
+      maxPages: 1,
+      offsetKey: "admin_tiktok"
+    };
+  }
+  return {
+    label: "All social source sweep",
+    platform: "all",
+    focus: "",
+    youtubeJobMode: "channel_uploads",
+    maxSources: STAFF_SOURCE_SWEEP_BATCH_SIZE,
+    maxResults: STAFF_SOURCE_SWEEP_MAX_RESULTS,
+    maxPages: STAFF_SOURCE_SWEEP_MAX_PAGES,
+    offsetKey: "admin_all"
+  };
+}
+
+function adminStaffSocialSweepJobHtml(data = {}) {
+  const summary = data.result_summary || {};
+  const status = String(data.status || "queued").toLowerCase();
+  const completed = status === "completed";
+  const failed = status === "failed";
+  const tone = failed
+    ? "border-red-100 bg-red-50 text-red-950"
+    : completed
+      ? "border-emerald-100 bg-emerald-50 text-emerald-950"
+      : "border-amber-100 bg-amber-50 text-amber-950";
+  return `
+    <div class="rounded-xl border ${tone} p-3">
+      <div class="font-black">${completed ? "Staff source sweep complete" : failed ? "Staff source sweep failed" : "Staff source sweep accepted"}</div>
+      <div class="mt-1">${adminEscape(data.message || "The sweep is running through the staff async queue.")}</div>
+      <div class="mt-2 grid sm:grid-cols-2 gap-2 text-[11px]">
+        <div>Job ID: <strong>${adminEscape(data.job_id || "-")}</strong></div>
+        <div>Status: <strong>${adminEscape(data.status || "queued")}</strong></div>
+        <div>Requested sources: <strong>${staffNumber(data.requested_source_count || 0)}</strong></div>
+        <div>Already running: <strong>${data.already_running ? "Yes" : "No"}</strong></div>
+        <div>Discovered posts: <strong>${staffNumber(summary.discovered_posts_count || 0)}</strong></div>
+        <div>Created properties: <strong>${staffNumber(summary.created_properties || 0)}</strong></div>
+        <div>Auto-live properties: <strong>${staffNumber(summary.auto_live_properties || 0)}</strong></div>
+        <div>Review queue rows: <strong>${staffNumber(summary.review_queue_properties || 0)}</strong></div>
+        <div>Existing/duplicates: <strong>${staffNumber(summary.existing_properties || 0)}</strong></div>
+        <div>Source-review only: <strong>${staffNumber(summary.source_review_count || 0)}</strong></div>
+      </div>
+      ${data.error ? `<div class="mt-2 rounded-lg bg-white/80 border border-red-100 p-2 text-red-800">${adminEscape(data.error)}</div>` : ""}
+    </div>`;
+}
+
+async function adminPollStaffSocialSweepJob(jobId = "", statusEl = null, attempt = 0) {
+  const id = String(jobId || "").trim();
+  if (!id || attempt > 40) return;
+  window.setTimeout(async () => {
+    try {
+      const res = await staffApiRequestWithTimeout(
+        `/api/staff/source-intake/jobs/${encodeURIComponent(id)}`,
+        {},
+        STAFF_SOURCE_INTAKE_POLL_TIMEOUT_MS,
+        "Staff source sweep status"
+      );
+      const data = res?.data || {};
+      if (statusEl) statusEl.innerHTML = adminStaffSocialSweepJobHtml(data);
+      const status = String(data.status || "").toLowerCase();
+      if (status === "completed") {
+        toast("Staff source sweep completed.");
+        return;
+      }
+      if (status === "failed") {
+        toast(`Staff source sweep failed: ${data.error || "check job status"}`);
+        return;
+      }
+      adminPollStaffSocialSweepJob(id, statusEl, attempt + 1);
+    } catch (_) {
+      if (attempt < 8) adminPollStaffSocialSweepJob(id, statusEl, attempt + 1);
+    }
+  }, STAFF_SOURCE_INTAKE_POLL_MS);
+}
+
+async function adminRunStaffSocialSweepFallback(normalized = "all", studentFocus = false) {
+  const profile = adminStaffSocialSweepProfile(normalized, studentFocus);
+  const statusEl = adminSocialStatusElement();
+  const sourceOffset = staffStoredSweepOffset(profile.offsetKey);
+  if (statusEl) {
+    statusEl.classList.remove("hidden");
+    statusEl.innerHTML = `Submitting ${adminEscape(profile.label.toLowerCase())} through the staff async queue from source offset ${adminEscape(sourceOffset)}...`;
+  }
+  const button = document.getElementById(adminSweepButtonId(normalized, studentFocus));
+  if (button) {
+    button.disabled = true;
+    button.classList.add("opacity-60", "cursor-wait");
+  }
+  try {
+    const res = await staffApiRequestWithTimeout(
+      "/api/staff/source-intake/social-sweep",
+      {
+        method: "POST",
+        body: {
+          platform: profile.platform,
+          focus: profile.focus,
+          dry_run: false,
+          async_job: true,
+          max_sources: profile.maxSources,
+          source_offset: sourceOffset,
+          max_results: profile.maxResults,
+          max_pages: profile.maxPages,
+          published_after: ADMIN_YOUTUBE_SWEEP_WINDOW_START,
+          youtube_job_mode: profile.youtubeJobMode
+        }
+      },
+      STAFF_SOURCE_INTAKE_SUBMIT_TIMEOUT_MS,
+      "Staff source sweep submit"
+    );
+    const data = res?.data || {};
+    if (statusEl) statusEl.innerHTML = adminStaffSocialSweepJobHtml(data);
+    if (data.job_id) {
+      adminPollStaffSocialSweepJob(data.job_id, statusEl, 0);
+      if (!data.already_running) staffStoreSweepOffset(sourceOffset + profile.maxSources, profile.offsetKey);
+    }
+    toast(data.already_running ? "Existing source sweep job reused." : "Source sweep accepted in the staff queue.");
+  } catch (error) {
+    if (statusEl) {
+      statusEl.classList.remove("hidden");
+      statusEl.innerHTML = `Staff source sweep failed: ${adminEscape(error.message || "Unknown error")}`;
+    }
+    toast(`Staff source sweep failed: ${error.message || "request failed"}`);
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.classList.remove("opacity-60", "cursor-wait");
+    }
+  }
+}
+
+async function adminSweepSocialPlatformPosts(platform = "all") {
   const normalized = String(platform || "all").toLowerCase();
   const studentFocus = normalized === "student" || normalized === "students" || normalized === "student_housing";
+  if (!canUseLiveAdminApi()) {
+    if (canUseStaffSourceIntakeApi()) {
+      return adminRunStaffSocialSweepFallback(normalized, studentFocus);
+    }
+    toast("Sign in as staff, admin, or save ADMIN_API_KEY first.");
+    return;
+  }
   const dryRun = normalized === "tiktok";
   const usesYouTubeSweep = normalized === "youtube" || normalized === "all" || studentFocus;
   const youtubeSourceOffset = usesYouTubeSweep
@@ -14336,15 +14527,7 @@ async function adminSweepSocialPlatformPosts(platform = "all") {
   const ok = window.confirm(confirmCopy);
   if (!ok) return;
   const statusEl = adminSocialStatusElement();
-  const buttonId = studentFocus
-    ? (activeAdminWorkflowTab === "student-sweep" ? "admin-student-suite-sweep-btn" : "admin-sweep-student-housing-btn")
-    : normalized === "x"
-      ? "admin-sweep-x-posts-btn"
-      : normalized === "youtube"
-        ? (activeAdminWorkflowTab === "youtube-sweep" ? "admin-youtube-suite-sweep-btn" : "admin-sweep-youtube-posts-btn")
-        : normalized === "all"
-          ? "admin-sweep-all-social-posts-btn"
-          : "admin-sweep-tiktok-posts-btn";
+  const buttonId = adminSweepButtonId(normalized, studentFocus);
   const button = document.getElementById(buttonId);
   if (button) {
     button.disabled = true;
