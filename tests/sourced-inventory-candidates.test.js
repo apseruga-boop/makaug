@@ -302,16 +302,30 @@ test('found-online seed panel hides approved and live records from pending moder
   assert(socialSearchServiceSource.includes('already_present_all_properties: alreadyPresent'), 'service should keep full already-present records in a separate non-pending field');
 });
 
-test('public property cards keep NEW freshness and replace registered badge with sourced-online status', () => {
+test('public property cards standardise badges and found-online labels', () => {
   assert(frontend.includes('function isFoundOnlineListing'), 'public UI should detect found-online listing records');
-  assert(frontend.includes('function listingFreshnessBadgeHtml'), 'public UI should render listing freshness through a shared helper');
+  assert(frontend.includes('function listingBadgeRowHtml'), 'public UI should render badges through a shared helper');
+  assert(frontend.includes('function listingNewBadgeHtml'), 'public UI should keep NEW separate from found-online');
+  assert(frontend.includes('function listingFoundOnlineBadgeHtml'), 'public UI should keep found-online separate from freshness');
   assert(frontend.includes('translateListingLabel("Found online")'), 'public UI should translate the found-online badge');
-  const freshnessHelper = frontend.slice(frontend.indexOf('function listingFreshnessBadgeHtml'), frontend.indexOf('function foundOnlineSourceMeta'));
-  assert(freshnessHelper.indexOf('if (isListingNew(p))') < freshnessHelper.indexOf('if (isFoundOnlineListing(p))'), 'fresh found-online listings should still show NEW first');
-  assert(frontend.includes('if (isFoundOnlineListing(p))') && frontend.includes('translateListingLabel("Sourced online")'), 'found-online cards should show sourced-online instead of registered');
-  assert(frontend.includes('function listingRouteBadgeMeta') && frontend.includes('if (isFoundOnlineListing(p)) return null;'), 'found-online cards should not show broker/private listing route badges');
+  const badgeRowHelper = frontend.slice(frontend.indexOf('function listingBadgeRowHtml'), frontend.indexOf('function brokerRegistrationMeta'));
+  assert(badgeRowHelper.indexOf('listingNewBadgeHtml') < badgeRowHelper.indexOf('listingFoundOnlineBadgeHtml'), 'NEW should appear before Found online when both apply');
+  assert(badgeRowHelper.includes('badgeHtml(listingSourceMeta(p)'), 'each public badge row should include Agent listed / Private listed');
+  assert(badgeRowHelper.includes('landTitleBadgeForListingHtml'), 'land title badges should be routed through a land-only helper');
+  assert(badgeRowHelper.includes('foundOnlineSourcePlatformBadgeMeta'), 'source platform badge should be available for found-online rows');
+  assert(frontend.includes('listingAgent: "Agent listed"'), 'English listed-by copy should say Agent listed');
+  assert(frontend.includes('listingPrivate: "Private listed"'), 'English listed-by copy should say Private listed');
+  assert(!badgeRowHelper.includes('Sourced online'), 'public card badge row should not render Sourced online');
+  assert(frontend.includes('function shouldShowListingTypeBadge'), 'public UI should hide type badges on category pages and keep them on mixed results');
+  assert(frontend.includes('renderGrid(publicPaginationGridId(key), pageRows, { categoryPage: key })'), 'category pages should pass category context to hide redundant type badges');
   assert(frontend.includes('sourceBatch === "social_search_authorised_20260520"'), 'public UI should recognise the social-search batch');
-  assert(frontend.includes('listingFreshnessBadgeHtml(p)'), 'property cards should render the found-online badge helper');
+  assert(frontend.includes('const badgeRow = listingBadgeRowHtml(p'), 'property cards should render the standard badge helper');
+  assert(frontend.includes('const detailBadgeRow = listingBadgeRowHtml(p'), 'property detail should render the same standard badge helper');
+  assert(frontend.includes('const value = getLandTitleAvailabilityValue(property) || "unknown";'), 'land listings should always carry a title-status badge');
+  assert(frontend.includes('normalizeType(property?.type || property?.listing_type || property?.category) !== "land"'), 'land title badges should only render on land listings');
+  assert(frontend.includes('const LISTING_NEW_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;'), 'NEW should expire after 14 days');
+  assert(frontend.includes('function listingTrueNewDate'), 'NEW should use a true listing/source-added date helper');
+  assert(frontend.includes('if (isFoundOnlineListing(p))') && frontend.includes('p.first_posted_online_at'), 'found-online NEW should prefer source dates instead of bulk created_at');
   assert(frontend.includes('"Found online": "Kizuuliddwa ku mutimbagano"'), 'Luganda should include found-online copy');
   assert(frontend.includes('"Found online": "Imepatikana mtandaoni"'), 'Kiswahili should include found-online copy');
   assert(frontend.includes('"First posted online"'), 'source disclosure should translate first-posted metadata');

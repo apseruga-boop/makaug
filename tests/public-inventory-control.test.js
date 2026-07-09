@@ -306,7 +306,8 @@ test('student public listings are discoverable from backend listing aliases', ()
   assert.equal(isStudent({ type: 'commercial', extra_fields: { student_verified: true } }), false);
   assert.equal(isStudent({ type: 'sale' }), false);
   assert.equal(isStudent({ type: 'student', title: 'Makaug training student room', extra_fields: { source_badge: 'Training visibility check' } }), false);
-  assert.match(appSource, /function studentCard\(p\) \{\s*return propCard\(p, \{ student: true \}\);\s*\}/);
+  assert.match(appSource, /function studentCard\(p, options = \{\}\) \{\s*return propCard\(p, \{ \.\.\.options, student: true \}\);\s*\}/);
+  assert.match(appSource, /studentCard\(p, \{ categoryPage: "students" \}\)/);
   assert.match(appSource, /function publicCardTheme\(type, options = \{\}\)/);
   assert.match(appSource, /student: "bg-purple-700"/);
   assert.match(propertiesRouteSource, /const listingType = normalizeListingType\(req\.query\.listing_type \|\| req\.query\.type \|\| req\.query\.category\)/);
@@ -370,6 +371,12 @@ test('listing detail has a mobile sticky contact bar with phone, source, and mak
   assert.match(appSource, /function publicCallPhoneForProperty/);
   assert.match(appSource, /function publicWhatsappPhoneForProperty/);
   assert.match(appSource, /function detailContactActionButtonsHtml/);
+  assert.match(appSource, /function listingBadgeRowHtml/);
+  assert.match(appSource, /function shouldShowListingTypeBadge/);
+  assert.match(appSource, /function landTitleBadgeForListingHtml/);
+  assert.match(appSource, /listingAgent: "Agent listed"/);
+  assert.match(appSource, /listingPrivate: "Private listed"/);
+  assert.doesNotMatch(functionSource('listingBadgeRowHtml'), /Sourced online/);
   assert.match(appSource, /id="detail-source-verification"/);
   assert.match(appSource, /More options \/ Report an issue/);
   assert.match(appSource, /Source date approx\./);
@@ -416,6 +423,8 @@ test('listing detail has a mobile sticky contact bar with phone, source, and mak
   assert.match(serverSource, /detailP1P2P4FixVersion/);
   assert.match(htmlSource, /tiktok-oembed-fields-20260709/);
   assert.match(serverSource, /tiktokOembedFieldsVersion/);
+  assert.match(htmlSource, /badge-standardisation-20260709/);
+  assert.match(serverSource, /badgeStandardisationVersion/);
   assert.match(propertiesRouteSource, /function publicContactPhoneForRow/);
   assert.match(propertiesRouteSource, /public_contact_phone: publicContactPhone \|\| null/);
   assert.match(appSource, /function isTikTokProfileUrl/);

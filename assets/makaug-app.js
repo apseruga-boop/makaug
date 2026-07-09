@@ -933,7 +933,7 @@ let activeBrokerProfileId = "";
 let adminAccessUnlocked = false;
 let adminUnlockTapBuffer = [];
 const lpHierarchyAnchorCache = new Map();
-const LISTING_NEW_WINDOW_MS = 5 * 24 * 60 * 60 * 1000;
+const LISTING_NEW_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
 const typeaheadState = { panel: null, input: null, items: [], index: -1, onPick: null };
 const DEFAULT_NEAR_ME_RADIUS_MI = 10;
 const SEARCH_RADIUS_MI_OPTIONS = [0, 0.25, 0.5, 1, 3, 5, 10, 15, 20, 30, 40, 50];
@@ -1346,8 +1346,8 @@ const I18N_UI = {
     badgeStudent: "Student",
     badgeCommercial: "Commercial",
     badgeLand: "Land",
-    listingAgent: "Broker Listed",
-    listingPrivate: "Private Listed",
+    listingAgent: "Agent listed",
+    listingPrivate: "Private listed",
     listingRegistered: "Registered",
     listingNotRegistered: "",
     footerGrowth: "In-house sponsored placements and SEO indexing enabled for growth campaigns.",
@@ -31802,7 +31802,27 @@ function badgeLabel(type) {
 }
 
 function listingSourceMeta(p) {
-  const byAgent = p && (p.agent || (p.listed_by || "").toLowerCase() === "agent");
+  const extra = p?.extra_fields && typeof p.extra_fields === "object" ? p.extra_fields : {};
+  const listedBy = String(
+    p?.listed_by
+    || p?.lister_type
+    || p?.listing_lister_type
+    || p?.lister_role
+    || extra.listed_by
+    || extra.lister_type
+    || extra.source_lister_type
+    || extra.lister_role
+    || ""
+  ).toLowerCase();
+  const byAgent = Boolean(
+    p?.agent
+    || p?.agent_id
+    || p?.broker_id
+    || p?.broker
+    || p?.lister_is_agent === true
+    || extra.lister_is_agent === true
+    || /\b(agent|broker|agency|realtor|company)\b/.test(listedBy)
+  );
   if (byAgent) {
     return {
       key: "agent",
@@ -31820,14 +31840,13 @@ function listingSourceMeta(p) {
 }
 
 function listingRouteBadgeMeta(p) {
-  if (isFoundOnlineListing(p)) return null;
   return listingSourceMeta(p);
 }
 
 function listingRegistrationMeta(p) {
   if (isFoundOnlineListing(p)) {
     return {
-      label: translateListingLabel("Sourced online"),
+      label: translateListingLabel("Found online"),
       cls: "bg-sky-700 text-white",
       icon: "fas fa-magnifying-glass-location"
     };
@@ -31850,6 +31869,89 @@ function listingRegistrationMeta(p) {
     };
   }
   return null;
+}
+
+function shouldShowListingTypeBadge(p = {}, options = {}) {
+  if (typeof options.showTypeBadge === "boolean") return options.showTypeBadge;
+  const categoryPage = publicPaginationKey(options.categoryPage || options.page || "");
+  if (["sale", "rent", "students", "commercial", "land"].includes(categoryPage)) return false;
+  return true;
+}
+
+function badgeHtml(meta, sizeClass = "text-[11px] px-2 py-1 rounded font-semibold") {
+  if (!meta?.label) return "";
+  const iconHtml = meta.icon ? `<i class="${meta.icon} text-[10px]"></i>` : "";
+  return `<span class="${meta.cls} ${sizeClass} inline-flex items-center gap-1">${iconHtml}${adminEscape(meta.label)}</span>`;
+}
+
+function listingNewBadgeHtml(p = {}, sizeClass = "text-[11px] px-2 py-1 rounded font-semibold") {
+  if (!isListingNew(p)) return "";
+  return badgeHtml({
+    label: translateListingLabel("NEW"),
+    cls: "bg-blue-600 text-white",
+    icon: "fas fa-bolt"
+  }, sizeClass);
+}
+
+function listingFoundOnlineBadgeHtml(p = {}, sizeClass = "text-[11px] px-2 py-1 rounded font-semibold") {
+  if (!isFoundOnlineListing(p)) return "";
+  return badgeHtml({
+    label: translateListingLabel("Found online"),
+    cls: "bg-blue-600 text-white",
+    icon: "fas fa-magnifying-glass-location"
+  }, sizeClass);
+}
+
+function foundOnlineSourcePlatformBadgeMeta(p = {}) {
+  if (!isFoundOnlineListing(p)) return null;
+  const meta = foundOnlineSourceMeta(p);
+  const platform = String(meta?.platform || "").trim();
+  if (!platform) return null;
+  const key = platform.toLowerCase();
+  const icon = key.includes("tiktok")
+    ? "fab fa-tiktok"
+    : key.includes("youtube")
+      ? "fab fa-youtube"
+      : key.includes("facebook")
+        ? "fab fa-facebook-f"
+        : key.includes("instagram")
+          ? "fab fa-instagram"
+          : key === "x" || key.includes("twitter")
+            ? "fab fa-x-twitter"
+            : "fas fa-link";
+  return {
+    label: `${platform} ${translateListingLabel("source")}`.trim(),
+    cls: "bg-slate-900 text-white",
+    icon
+  };
+}
+
+function landTitleBadgeForListingHtml(p = {}, options = {}) {
+  if (normalizeType(p?.type || p?.listing_type || p?.category) !== "land") return "";
+  return landTitleAvailabilityBadgeHtml(p, options);
+}
+
+function listingBadgeRowHtml(p = {}, options = {}) {
+  const sizeClass = options.sizeClass || "text-[11px] px-2 py-1 rounded font-semibold";
+  const badges = [];
+  if (shouldShowListingTypeBadge(p, options)) {
+    const displayType = options.student === true ? "student" : (p.type || p.listing_type || p.category);
+    badges.push(badgeHtml({
+      label: badgeLabel(displayType),
+      cls: `${badgeColor(displayType)} text-white`,
+      icon: ""
+    }, sizeClass));
+  }
+  const isSold = normalizeModerationStatus(p.status) === "sold";
+  if (isSold) {
+    badges.push(badgeHtml({ label: "SOLD", cls: "bg-blue-600 text-white", icon: "" }, sizeClass));
+  }
+  badges.push(listingNewBadgeHtml(p, sizeClass));
+  badges.push(listingFoundOnlineBadgeHtml(p, sizeClass));
+  badges.push(badgeHtml(listingSourceMeta(p), sizeClass));
+  badges.push(landTitleBadgeForListingHtml(p, { compact: options.compact !== false }));
+  badges.push(badgeHtml(foundOnlineSourcePlatformBadgeMeta(p), sizeClass));
+  return badges.filter(Boolean).join("");
 }
 
 function brokerRegistrationMeta(broker) {
@@ -31938,23 +32040,81 @@ function parseDateSafe(value) {
   return dt;
 }
 
+function extraFieldsForListing(p = {}) {
+  if (p?.extra_fields && typeof p.extra_fields === "object") return p.extra_fields;
+  if (typeof p?.extra_fields === "string") {
+    try { return JSON.parse(p.extra_fields) || {}; } catch (error) {}
+  }
+  return {};
+}
+
+function firstValidListingDate(values = []) {
+  for (const value of values) {
+    const dt = parseDateSafe(value);
+    if (dt) return dt;
+  }
+  return null;
+}
+
+function listingTrueNewDate(p = {}) {
+  const extra = extraFieldsForListing(p);
+  if (isFoundOnlineListing(p)) {
+    return firstValidListingDate([
+      p.first_posted_online_at,
+      p.source_published_at,
+      p.video_published_at,
+      p.video_posted_at,
+      p.post_published_at,
+      p.post_posted_at,
+      p.platform_posted_at,
+      p.youtube_published_at,
+      p.original_posted_at,
+      p.source_posted_at,
+      p.first_seen_online_at,
+      p.source_first_seen_at,
+      extra.first_posted_online_at,
+      extra.source_published_at,
+      extra.video_published_at,
+      extra.video_posted_at,
+      extra.post_published_at,
+      extra.post_posted_at,
+      extra.platform_posted_at,
+      extra.youtube_published_at,
+      extra.original_posted_at,
+      extra.source_posted_at,
+      extra.first_seen_online_at,
+      extra.source_first_seen_at
+    ]);
+  }
+  return firstValidListingDate([
+    p.first_added_at,
+    p.added_at,
+    p.added_to_makaug_at,
+    p.published_at,
+    p.approved_at,
+    p.live_at,
+    p.created_at,
+    p.createdAt,
+    extra.first_added_at,
+    extra.added_at,
+    extra.added_to_makaug_at,
+    extra.published_at,
+    extra.approved_at,
+    extra.live_at
+  ]);
+}
+
 function isListingNew(p) {
   if (!p) return false;
   const now = Date.now();
-  const until = parseDateSafe(p.new_until || p.newUntil);
-  if (until) return until.getTime() > now;
-  const created = parseDateSafe(p.created_at || p.createdAt);
-  if (created) return now - created.getTime() <= LISTING_NEW_WINDOW_MS;
-  return !!p.new;
+  const baseDate = listingTrueNewDate(p);
+  if (!baseDate) return false;
+  const ageMs = now - baseDate.getTime();
+  return ageMs >= 0 && ageMs <= LISTING_NEW_WINDOW_MS;
 }
 
 function isFoundOnlineListing(p = {}) {
-  let extra = {};
-  if (p?.extra_fields && typeof p.extra_fields === "object") {
-    extra = p.extra_fields;
-  } else if (typeof p?.extra_fields === "string") {
-    try { extra = JSON.parse(p.extra_fields) || {}; } catch (error) {}
-  }
+  const extra = extraFieldsForListing(p);
   const badge = String(extra.source_badge || extra.source_discovery_label || "").toLowerCase();
   const sourceBatch = String(extra.source_batch || "").toLowerCase();
   const sourceType = String(extra.source_type || extra.source_kind || "").toLowerCase();
@@ -32019,13 +32179,7 @@ function shouldUseSourceOnlyContact(p = {}, meta = null) {
 }
 
 function listingFreshnessBadgeHtml(p = {}) {
-  if (isListingNew(p)) {
-    return `<div class="bg-blue-600 text-white text-[11px] px-2 py-1 rounded font-semibold inline-flex items-center gap-1"><i class="fas fa-bolt text-[10px]"></i> ${translateListingLabel("NEW")}</div>`;
-  }
-  if (isFoundOnlineListing(p)) {
-    return `<div class="bg-blue-600 text-white text-[11px] px-2 py-1 rounded font-semibold inline-flex items-center gap-1"><i class="fas fa-magnifying-glass-location text-[10px]"></i> ${translateListingLabel("Found online")}</div>`;
-  }
-  return "";
+  return listingNewBadgeHtml(p);
 }
 
 function sourcePostDateConfidence(extra = {}) {
@@ -33443,7 +33597,8 @@ function landTitleAvailabilityLabel(value) {
 }
 
 function landTitleAvailabilityBadgeHtml(property = {}, options = {}) {
-  const value = getLandTitleAvailabilityValue(property);
+  if (normalizeType(property?.type || property?.listing_type || property?.category) !== "land") return "";
+  const value = getLandTitleAvailabilityValue(property) || "unknown";
   const label = landTitleAvailabilityLabel(value);
   if (!label) return "";
   const tone = value === "yes"
@@ -33605,13 +33760,10 @@ function studentCardFooterText(p = {}) {
   const idArg = propertyIdArg(p.id);
   const saved = isPropertySaved(p.id);
   const broker = findBrokerById(p.agent);
-  const source = listingRouteBadgeMeta(p);
-  const registration = listingRegistrationMeta(p);
   const addedMeta = listingDateMeta(p);
   const availability = propertyAvailabilityText(p);
   const distanceMiles = p.distance_miles ?? p.distanceMiles;
   const nearDistance = distanceMiles != null && Number.isFinite(Number(distanceMiles)) ? `${Number(distanceMiles).toFixed(1)} mi away` : "";
-  const landTitleBadge = landTitleAvailabilityBadgeHtml(p, { compact: true });
   const isThirdPartyResult = isFoundOnlineListing(p);
   const photoSrc = isThirdPartyResult ? "" : publicImageSrc(p.img, "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=900&q=80");
   const displayTitle = getLocalizedPropertyTitle(p);
@@ -33620,21 +33772,19 @@ function studentCardFooterText(p = {}) {
   const displayType = studentMode ? "student" : p.type;
   const theme = publicCardTheme(displayType, { student: studentMode });
   const footerText = studentMode ? studentCardFooterText(p) : (broker ? broker.name : translateListingLabel("Private Owner"));
+  const badgeRow = listingBadgeRowHtml(p, {
+    student: studentMode,
+    categoryPage: options.categoryPage || "",
+    showTypeBadge: options.showTypeBadge,
+    compact: true
+  });
   return `
     <div class="group relative bg-white rounded-xl border border-gray-100 overflow-hidden property-card cursor-pointer" onclick="openPropertyCardDetail(event, ${idArg})">
       ${propertyDescriptionHoverHtml(p)}
       <div class="h-48 relative overflow-hidden">
         ${isThirdPartyResult ? foundOnlineSourceVisualHtml(p, { compact: true }) : `<img src="${adminAttr(photoSrc)}" alt="${adminAttr(displayTitle)}" class="w-full h-full object-cover">`}
         <div class="absolute top-2 left-2 flex flex-col gap-1.5">
-          <div class="${badgeColor(displayType)} text-white text-xs px-2 py-1 rounded font-bold">${badgeLabel(displayType)}</div>
-          ${listingFreshnessBadgeHtml(p)}
-          ${source ? `<div class="${source.cls} text-white text-[11px] px-2 py-1 rounded font-semibold inline-flex items-center gap-1">
-            <i class="${source.icon} text-[10px]"></i> ${source.label}
-          </div>` : ""}
-          ${registration ? `<div class="${registration.cls} text-white text-[11px] px-2 py-1 rounded font-semibold inline-flex items-center gap-1">
-            <i class="${registration.icon} text-[10px]"></i> ${registration.label}
-          </div>` : ""}
-          ${landTitleBadge}
+          ${badgeRow}
         </div>
         <button onclick="event.stopPropagation(); toggleSave(${idArg})" aria-pressed="${saved ? "true" : "false"}" title="${adminAttr(getCardSaveButtonTitle(p.id))}" class="${getCardSaveButtonClasses(p.id)}">
           <i class="${getCardSaveButtonIconClasses(p.id)}"></i>
@@ -33714,7 +33864,7 @@ function loadingPropertyGridHtml(count = 3) {
     </div>`).join("");
 }
 
-function renderGrid(id, list) {
+function renderGrid(id, list, options = {}) {
   const el = document.getElementById(id);
   if (!el) return;
   if (!list.length) {
@@ -33725,7 +33875,7 @@ function renderGrid(id, list) {
     el.innerHTML = noResultsCardForGrid(id);
     return;
   }
-  el.innerHTML = list.map(propCard).join("");
+  el.innerHTML = list.map((p) => propCard(p, options.cardOptions || options)).join("");
 }
 
 function studentTypeKey(p) {
@@ -33771,8 +33921,8 @@ function studentAmenityIcon(name) {
   return "fas fa-circle";
 }
 
-function studentCard(p) {
-  return propCard(p, { student: true });
+function studentCard(p, options = {}) {
+  return propCard(p, { ...options, student: true });
 }
 
 function renderStudentGrid(list) {
@@ -33786,7 +33936,7 @@ function renderStudentGrid(list) {
       </div>`;
     return;
   }
-  el.innerHTML = list.map(studentCard).join("");
+  el.innerHTML = list.map((p) => studentCard(p, { categoryPage: "students" })).join("");
 }
 
 function updateStudentHeader(list, options = {}) {
@@ -35080,7 +35230,7 @@ function renderPublicCategoryPage(category, list = [], options = {}) {
     renderStudentGrid(pageRows);
     updateStudentHeader(pageRows, { total, page: state.page, pageSize: PUBLIC_RESULTS_PAGE_SIZE });
   } else {
-    renderGrid(publicPaginationGridId(key), pageRows);
+    renderGrid(publicPaginationGridId(key), pageRows, { categoryPage: key });
     if (key === "sale" || key === "rent") {
       setPublicCategoryCount(key, total, { filtered: true });
     }
@@ -38468,7 +38618,6 @@ const LISTING_LABEL_I18N_SUPPLEMENTAL = {
       "Careers": "Emirimu",
       "Email CV to makaug": "Weereza CV ku makaug",
       "Message on WhatsApp": "Wandiika ku WhatsApp",
-      "Sourced online": "Ezuuliddwa online",
       "This listing was found through a public or authorised online property source and checked before publishing on makaug.": "Listing eno yazuuliddwa mu source ya property eri online oba ekkiriziddwa, era n'ekeberebwa nga tennateekebwa ku makaug.",
       "This listing was found through a public or authorised online property source. makaug keeps the source trail visible so buyers can check the original post and contact route.": "Listing eno yazuuliddwa mu source ya property eri online oba ekkiriziddwa. makaug eraga obujulizi bw'ensibuko abantu basobole okukakasa post eyasooka n'engeri y'okukwatagana.",
 	      "Third-party property result": "Property ezuuliddwa okuva ku nsibuko ey'omuntu omulala",
@@ -38622,7 +38771,6 @@ const LISTING_LABEL_I18N_SUPPLEMENTAL = {
       "Careers": "Ajira",
       "Email CV to makaug": "Tuma CV kwa makaug",
       "Message on WhatsApp": "Tuma ujumbe WhatsApp",
-      "Sourced online": "Imepatikana mtandaoni",
       "This listing was found through a public or authorised online property source and checked before publishing on makaug.": "Tangazo hili lilipatikana kupitia chanzo cha mali cha umma au kilichoidhinishwa mtandaoni, kisha likakaguliwa kabla ya kuchapishwa kwenye makaug.",
       "This listing was found through a public or authorised online property source. makaug keeps the source trail visible so buyers can check the original post and contact route.": "Tangazo hili lilipatikana kupitia chanzo cha mali cha umma au kilichoidhinishwa mtandaoni. makaug huonyesha njia ya chanzo ili wanunuzi wakague chapisho la awali na njia ya kuwasiliana.",
 	      "Third-party property result": "Matokeo ya mali kutoka chanzo cha nje",
@@ -38766,7 +38914,6 @@ Object.assign(LISTING_LABEL_I18N_SUPPLEMENTAL.am ||= {}, {
   "For Sale": "ለሽያጭ",
   "To Rent": "ለኪራይ",
   "Found online": "በመስመር ላይ የተገኘ",
-  "Sourced online": "ከመስመር ላይ የተገኘ",
   "Price upon application": "ዋጋ በጥያቄ ላይ",
   "Added": "የተጨመረ",
   "Added today": "ዛሬ የተጨመረ",
@@ -38896,7 +39043,6 @@ Object.assign(LISTING_LABEL_I18N_SUPPLEMENTAL.ar ||= {}, {
   "For Sale": "للبيع",
   "To Rent": "للإيجار",
   "Found online": "تم العثور عليه على الإنترنت",
-  "Sourced online": "مصدره الإنترنت",
   "Price upon application": "السعر عند الطلب",
   "Added": "أضيف",
   "Added today": "أضيف اليوم",
@@ -41806,8 +41952,6 @@ async function openDetail(id, options = {}) {
     area: p.area
   });
   const broker = findBrokerById(p.agent);
-  const source = listingRouteBadgeMeta(p);
-  const registration = listingRegistrationMeta(p);
   const similar = getSimilarProperties(p, 3);
   const normalizedType = normalizeType(p.type);
   const showMortgageWidget = normalizedType === "sale" || normalizedType === "land" || isCommercialForSale(p);
@@ -41820,10 +41964,8 @@ async function openDetail(id, options = {}) {
   const localizedHighlights = getLocalizedPropertyHighlights(p, detailNearby);
 	      const addedMeta = listingDateMeta(p);
 	      const availability = propertyAvailabilityText(p);
-	      const landTitleBadge = landTitleAvailabilityBadgeHtml(p);
-	      const landTitleLabel = landTitleAvailabilityLabel(getLandTitleAvailabilityValue(p));
+	      const landTitleLabel = normalizedType === "land" ? landTitleAvailabilityLabel(getLandTitleAvailabilityValue(p) || "unknown") : "";
 	      const ownerDisplayName = p.contact_display_name || p.lister_display_name || p.lister_name || translateListingLabel("Private Owner");
-  const isSoldListing = normalizeModerationStatus(p.status) === "sold";
   const thirdPartyDetail = isFoundOnlineListing(p);
   const detailPhotos = thirdPartyDetail ? [] : getPropertyGalleryPhotos(p);
   const primaryPhoto = thirdPartyDetail ? null : (detailPhotos.find((item) => item.is_main) || detailPhotos[0] || { url: p.img, slot: "", room_label: "", location_label: [p.area, p.district].filter(Boolean).join(", ") });
@@ -41893,6 +42035,12 @@ async function openDetail(id, options = {}) {
   const inquiryPhoneDefault = canPrefillInquiryFromUser ? (authState?.user?.phone || "") : "";
   const inquiryEmailDefault = canPrefillInquiryFromUser ? (authState?.user?.email || "") : "";
   const brokerProfilePath = broker ? getBrokerProfilePath(broker) : "";
+  const detailBadgeRow = listingBadgeRowHtml(p, {
+    categoryPage: normalizedType === "student" ? "students" : normalizedType,
+    showTypeBadge: false,
+    compact: false,
+    sizeClass: "text-xs font-semibold px-2 py-1 rounded"
+  });
   const foundOnlineContactPanelHtml = isFoundOnlineContact ? `
           <div class="mt-4 pt-4 border-t border-gray-100">
             <h4 class="font-bold text-gray-800 text-sm mb-2">${translatePropertyUi("Contact through source")}</h4>
@@ -41944,11 +42092,7 @@ async function openDetail(id, options = {}) {
             <div class="flex justify-between gap-4 flex-wrap">
               <div>
                 <div class="flex items-center gap-2 flex-wrap">
-                  <span class="${badgeColor(p.type)} text-white text-xs font-bold px-2 py-1 rounded">${badgeLabel(p.type)}</span>
-                  ${isSoldListing ? `<span class="bg-blue-600 text-white text-xs font-bold px-2 py-1 rounded">SOLD</span>` : ""}
-                  ${source ? `<span class="${source.cls} text-white text-xs font-semibold px-2 py-1 rounded inline-flex items-center gap-1"><i class="${source.icon} text-[10px]"></i>${source.label}</span>` : ""}
-                  ${registration ? `<span class="${registration.cls} text-white text-xs font-semibold px-2 py-1 rounded inline-flex items-center gap-1"><i class="${registration.icon} text-[10px]"></i>${registration.label}</span>` : ""}
-                  ${landTitleBadge}
+                  ${detailBadgeRow}
                 </div>
                 <h1 class="text-3xl font-bold text-gray-800 mt-2 serif">${adminEscape(displayTitle)}</h1>
                 <p class="text-gray-500 mt-1"><i class="fas fa-map-marker-alt text-green-600"></i> ${detailLocation || [p.area, p.district].filter(Boolean).join(", ")}</p>
