@@ -11926,7 +11926,7 @@ function buildAdminAiSnapshot(remoteSnap, localSnap, sourceLabel = "") {
     weeklyTips: Number(users.weekly_tips_opt_in ?? (localSnap?.recentUsers || []).filter((u) => u.weekly_tips_opt_in !== false).length ?? 0),
     totalUsers: Number(users.total ?? localSummary.totalUsers ?? 0),
     pendingListings: Number(commandMetrics.pending_listings ?? summary?.properties?.pending ?? localSummary.pendingListings ?? 0),
-    approvedListings: Number(commandMetrics.live_listings ?? summary?.properties?.public_live ?? summary?.properties?.approved ?? localSummary.approvedListings ?? 0),
+    approvedListings: adminPreferNonZeroMetric(commandMetrics.live_listings, summary?.properties?.public_live ?? summary?.properties?.approved ?? localSummary.approvedListings ?? 0),
     topAreas,
     topListingTypes
   };
@@ -11954,6 +11954,14 @@ function renderAdminAiAssistant(remoteSnap, localSnap, sourceLabel = "") {
 
 function adminFormatUgx(value) {
   return `UGX ${Number(value || 0).toLocaleString("en-UG")}`;
+}
+
+function adminPreferNonZeroMetric(primaryValue, fallbackValue) {
+  const primary = Number(primaryValue);
+  const fallback = Number(fallbackValue);
+  if (Number.isFinite(primary) && !(primary === 0 && Number.isFinite(fallback) && fallback > 0)) return primary;
+  if (Number.isFinite(fallback)) return fallback;
+  return Number.isFinite(primary) ? primary : 0;
 }
 
 function adminCommandSelectorForTab(tab = "review") {
@@ -12001,6 +12009,7 @@ function adminBuildCommandCentre(remoteSnap, localSnap) {
     property_requests: Array.isArray(remoteSnap?.propertyRequests) ? remoteSnap.propertyRequests.length : 0
   };
   const merged = { ...fallbackMetrics, ...metrics };
+  merged.live_listings = adminPreferNonZeroMetric(metrics.live_listings, fallbackMetrics.live_listings);
   const decisions = Array.isArray(command.decisions) && command.decisions.length ? command.decisions : [
     { key: "listing_review", label: "Listings waiting for approval", value: merged.pending_listings, priority: merged.pending_listings ? "high" : "clear", tab: "review", action: "Approve, reject, hide, or request changes." },
     { key: "lead_follow_up", label: "Open CRM leads", value: merged.open_leads, priority: merged.hot_leads || merged.overdue_tasks ? "high" : merged.open_leads ? "medium" : "clear", tab: "notifications", action: "Work hot leads and overdue follow-ups first." },
@@ -12219,10 +12228,21 @@ function renderAiCeoStatus(data) {
     const reportSummary = lastReport?.summary || "No saved morning report yet. Run one before live operations begin.";
     const channels = deliveryChannels.length ? deliveryChannels.join(", ") : "dashboard";
     const latestCommand = recentCommands[0]?.response_summary || "";
-    const liveMetrics = adminLatestCommandCentreMetrics && typeof adminLatestCommandCentreMetrics === "object"
+    const statusMetrics = data?.current_dashboard_metrics && typeof data.current_dashboard_metrics === "object"
+      ? data.current_dashboard_metrics
+      : {};
+    const latestMetrics = adminLatestCommandCentreMetrics && typeof adminLatestCommandCentreMetrics === "object"
       ? adminLatestCommandCentreMetrics
       : {};
-    const hasLiveMetrics = Object.keys(liveMetrics).length > 0;
+    const hasDashboardMetrics = Object.keys(statusMetrics).length > 0 || Object.keys(latestMetrics).length > 0;
+    const liveMetrics = hasDashboardMetrics
+      ? {
+          ...statusMetrics,
+          ...latestMetrics,
+          live_listings: adminPreferNonZeroMetric(latestMetrics.live_listings, statusMetrics.live_listings)
+        }
+      : {};
+    const hasLiveMetrics = hasDashboardMetrics;
     const liveSummary = hasLiveMetrics
       ? `Current dashboard: ${Number(liveMetrics.pending_listings || 0).toLocaleString("en-UG")} listings to decide, ${Number(liveMetrics.live_listings || 0).toLocaleString("en-UG")} live, ${Number(liveMetrics.open_leads || 0).toLocaleString("en-UG")} open leads, ${Number(liveMetrics.broker_pending || 0).toLocaleString("en-UG")} broker reviews.`
       : "";

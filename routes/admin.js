@@ -286,6 +286,10 @@ function adminPublicLiveListingCondition(alias = 'p') {
 function adminPublicLiveListingWhere(alias = 'p') {
   return `(${adminColumn(alias, 'status')} = 'approved' OR (${adminColumn(alias, 'status')} = 'sold' AND ${adminColumn(alias, 'sold_at')} >= NOW() - INTERVAL '7 days')) AND ${adminPublicLiveListingCondition(alias)}`;}
 
+function adminPublicLiveListingFastWhere(alias = 'p') {
+  return `(${adminColumn(alias, 'status')} = 'approved' OR (${adminColumn(alias, 'status')} = 'sold' AND ${adminColumn(alias, 'sold_at')} >= NOW() - INTERVAL '7 days')) AND NOT ${adminLaunchTestListingFastCondition(alias)}`;
+}
+
 function safeJsonObject(value, fallback = {}) {
   if (!value) return fallback;
   if (typeof value === 'object' && !Array.isArray(value)) return value;
@@ -2771,7 +2775,7 @@ router.get('/command-centre', async (_req, res, next) => {
       propertyRequests
     ] = await Promise.all([
       safeCount(`SELECT COUNT(*)::int AS total FROM properties p WHERE ${adminPendingReviewWhere('p')}`),
-      safeCount(`SELECT COUNT(*)::int AS total FROM properties p WHERE ${adminPublicLiveListingWhere('p')}`),
+      safeCount(`SELECT COUNT(*)::int AS total FROM properties p WHERE ${adminPublicLiveListingFastWhere('p')}`),
       safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'deleted'"),
       safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'hidden'"),
       safeCount("SELECT COUNT(*)::int AS total FROM agents WHERE status = 'pending' OR COALESCE(registration_status, 'not_registered') <> 'registered'"),

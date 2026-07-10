@@ -39,6 +39,8 @@ assert(service.includes('collectCeoMetrics'), 'AI CEO must collect platform metr
 assert(service.includes('ceoPendingReviewWhere') && service.includes("lead_status = 'open'"), 'AI CEO metrics must match Command Centre pending/listing/lead definitions');
 assert(orchestratorService.includes('ceoPendingReviewWhere') && orchestratorService.includes('ceoPublicLiveWhere'), 'AI CEO orchestrator must use the same listing status definitions as Command Centre');
 assert(orchestratorService.includes("lead_status = 'open'"), 'AI CEO orchestrator must count only live open leads like Command Centre');
+assert(orchestratorService.includes('current_dashboard_metrics'), 'AI CEO status must expose fresh dashboard metrics, not only saved reports');
+assert(app.includes('data?.current_dashboard_metrics'), 'AI CEO dashboard panel must render fresh status metrics when available');
 
 assert(whatsappRoute.includes('handleOwnerWhatsappCommand'), 'WhatsApp runtime must intercept founder owner commands');
 assert(whatsappRoute.includes('ai_ceo_control_service'), 'WhatsApp command handling must be logged as AI CEO control');

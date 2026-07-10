@@ -53,6 +53,8 @@ test('admin live controls use paginated backend snapshots', () => {
   assert.match(adminRouteSource, /router\.get\('\/properties\/review-queue'/);
   assert.match(adminRouteSource, /router\.get\('\/properties\/actioned'/);
   assert.match(adminRouteSource, /NOT \$\{sourceQualitySuppressedSql\('p'\)\}/);
+  assert.match(adminRouteSource, /function adminPublicLiveListingFastWhere\(alias = 'p'\)/);
+  assert.match(adminRouteSource, /safeCount\(`SELECT COUNT\(\*\)::int AS total FROM properties p WHERE \$\{adminPublicLiveListingFastWhere\('p'\)\}`\)/);
   assert.match(adminRouteSource, /'source_review'/);
   assert.match(adminRouteSource, /'queued'/);
   assert.match(adminRouteSource, /function adminPendingReviewWhere\(alias = 'p'\)[\s\S]*\$\{statusExpr\} NOT IN \(\$\{final\}\)[\s\S]*\$\{stageExpr\} NOT IN \(\$\{final\}\)/);
@@ -72,6 +74,8 @@ test('admin live controls use paginated backend snapshots', () => {
   assert.match(appSource, /adminSafeSnapshotRequest\("whatsapp insights"/);
   assert.match(appSource, /function adminUnavailableFallback\(label, fallback, error\)/);
   assert.match(appSource, /partialLiveData: unavailablePanels\.length > 0/);
+  assert.match(appSource, /function adminPreferNonZeroMetric\(primaryValue, fallbackValue\)/);
+  assert.match(appSource, /merged\.live_listings = adminPreferNonZeroMetric\(metrics\.live_listings, fallbackMetrics\.live_listings\)/);
   assert.match(appSource, /ADMIN_PENDING_QUEUE_RENDER_STEP = 150/);
   assert.match(appSource, /function adminShowMorePendingQueueRows\(\)/);
   assert.match(appSource, /function hydrateAdminAllListingsInBackground\(headers\)/);

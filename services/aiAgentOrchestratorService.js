@@ -1049,7 +1049,8 @@ async function runCeoMorningReport({ triggerSource = 'manual_morning_report', cr
 async function getCeoStatus() {
   const agent = await getAgentByCode(AI_CEO_AGENT_CODE);
   const config = mergeConfig(agent?.config, {});
-  const [lastReport, lastRun, openFindings, pendingActions, recentCommands] = await Promise.all([
+  const [currentMetrics, lastReport, lastRun, openFindings, pendingActions, recentCommands] = await Promise.all([
+    collectCeoOperatingMetrics(),
     safeOne(
       `SELECT id, run_id, report_date, report_type, status, summary, metrics, priorities, approvals_required, kill_switches, delivery_channels, created_by, created_at
        FROM ai_ceo_reports
@@ -1110,6 +1111,13 @@ async function getCeoStatus() {
       : CEO_OPERATING_AREAS,
     kill_switches: getCeoKillSwitches(config),
     delivery_channels: getCeoDeliveryChannels(config),
+    current_metrics: currentMetrics,
+    current_dashboard_metrics: {
+      pending_listings: Number(currentMetrics?.listings?.pending || 0),
+      live_listings: Number(currentMetrics?.listings?.live || 0),
+      open_leads: Number(currentMetrics?.leads?.open || 0),
+      broker_pending: Number(currentMetrics?.brokers_and_field_agents?.pending_brokers || 0)
+    },
     last_report: lastReport,
     last_run: lastRun,
     open_findings: openFindings,

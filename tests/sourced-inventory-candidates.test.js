@@ -368,6 +368,7 @@ test('public property images escape and normalize generated SVG evidence cards',
   assert(frontend.includes('Makaug-cached cover thumbnails'), 'King sweep status should distinguish cached TikTok covers from raw TikTok CDN hotlinks');
   assert(html.includes('tiktok-thumbnail-cache-proxy-20260709'), 'public app marker should identify the TikTok thumbnail cache/proxy rollout');
   assert(html.includes('king-dashboard-correlation-fix-20260710'), 'public app marker should identify the King dashboard correlation fix rollout');
+  assert(html.includes('king-dashboard-live-ai-fix-20260710'), 'public app marker should identify the King dashboard live/AI metric fix rollout');
   assert(frontend.includes('<img src="${adminAttr(photoSrc)}" alt="${adminAttr(displayTitle)}"'), 'public listing cards should escape image src and localized title attributes');
   assert(frontend.includes('const selectedPhotoSrc = thirdPartyDetail ? "" : publicImageSrc(selectedPhoto?.url || p.img'), 'detail gallery should suppress third-party media and normalize owned/direct selected image sources');
   assert(frontend.includes('<img id="detail-gallery-hero-img" src="${adminAttr(selectedPhotoSrc)}"'), 'detail hero image should escape the selected image src');
