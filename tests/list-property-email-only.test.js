@@ -12,6 +12,8 @@ const propertiesRoute = read('routes/properties.js');
 
 assert(html.includes('list-property-email-only-20260710'), 'public app marker must identify the email-only listing rollout');
 assert(server.includes('listPropertyEmailOnlyVersion'), 'server must include the email-only listing version in the public app suffix list');
+assert(html.includes('list-property-email-only-copy-fix-20260710'), 'public app marker must bust cache for the email-only copy hydration fix');
+assert(server.includes('listPropertyEmailOnlyCopyFixVersion'), 'server must include the email-only copy fix version in the public app suffix list');
 assert(html.includes('id="lp-otp-action-wrap" class="hidden'), 'online listing OTP controls must be hidden from the public flow');
 assert(html.includes('id="lp-verify-nin-wrap" class="hidden'), 'online listing NIN field must be hidden from the public flow');
 assert(html.includes('id="lp-verify-id-wrap" class="hidden'), 'online listing National ID upload must be hidden from the public flow');
