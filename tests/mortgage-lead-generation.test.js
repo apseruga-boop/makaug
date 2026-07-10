@@ -16,6 +16,7 @@ const requiredWindowHandlers = [
   'resetMortgageCalculator',
   'saveMortgageCalculation',
   'setMortgageExtraPayment',
+  'setMortgageComparisonSort',
   'setMortgageLeadProvider',
   'setMortgageManualRate',
   'setMortgageTab',
@@ -28,7 +29,8 @@ assert(
   html.includes('mortgage-finder-accuracy-handlers-20260621')
     && html.includes('mortgage-qualification-20260621-mortgage-provider-sources-20260621')
     && html.includes('mortgage-provider-badges-20260630')
-    && html.includes('mortgage-lead-routing-fix-20260710'),
+    && html.includes('mortgage-lead-routing-fix-20260710')
+    && html.includes('mortgage-finder-redesign-20260710'),
   'mortgage cache marker should force the corrected app bundle to load'
 );
 assert(
@@ -64,16 +66,27 @@ assert(app.includes('function getMortgageFeeEstimates'), 'mortgage fee estimator
 assert(server.includes("mortgageUiTabsBankLogosVersion = 'mortgage-provider-badges-20260630'"), 'server should append the mortgage UI cache marker in production HTML');
 assert(server.includes("mortgageLeadRoutingFixVersion = 'mortgage-lead-routing-fix-20260710'"), 'server should append the mortgage lead-routing cache marker in production HTML');
 assert(app.includes('const MORTGAGE_PROVIDER_BRANDS'), 'mortgage comparison should define bank brand/logo metadata');
+assert(app.includes('MORTGAGE_PROVIDER_LOGO_URLS'), 'mortgage comparison should use owned hosted bank logos');
 assert(app.includes('function renderMortgageProviderLogo'), 'mortgage comparison should render lender logo badges');
 assert(app.includes('renderMortgageProviderLogo(result.best.provider'), 'best-match mortgage card should show a lender logo');
 assert(app.includes('renderMortgageProviderLogo(row.provider'), 'every mortgage comparison row should show a lender logo');
 assert(app.includes('data-mortgage-logo-text'), 'mortgage lender badges should render deterministic text labels immediately');
 assert(!app.includes('/favicon.ico'), 'mortgage lender badges should not depend on third-party favicon URLs');
 assert(html.includes('grid lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.82fr)]'), 'mortgage calculator should use the compact two-column layout');
+assert(html.includes('<details class="bg-white border border-green-100 rounded-2xl p-5">'), 'mortgage explainer should start collapsed');
+assert(html.indexOf('id="mortgage-results"') < html.indexOf('id="mortgage-best"'), 'mortgage comparison table should render before best-match card');
 assert(html.includes('bg-white/85 p-3 text-sm text-emerald-950 shadow-sm'), 'mortgage tab panel should live inside the calculator panel');
 const mortgageResultShell = (html.match(/id="mortgage-professional-results"[^>]+>/) || [''])[0];
 assert(!mortgageResultShell.includes('min-h-[360px]'), 'mortgage result card should not force a large blank area');
 assert(app.includes('aria-pressed'), 'mortgage tabs should expose active state and visibly change content');
+assert(app.includes('activeMortgageComparisonSort'), 'mortgage comparison should track active sort mode');
+assert(app.includes('function setMortgageComparisonSort'), 'mortgage comparison sort handler should exist');
+assert(app.includes('sortMortgageProviderRows(result.providerRows)'), 'mortgage comparison should sort lender rows before rendering');
+assert(app.includes('data-mortgage-sort-option'), 'mortgage comparison should expose sort controls');
+assert(app.includes('hidden md:block') && app.includes('md:hidden'), 'mortgage comparison should have desktop table and mobile card layouts');
+assert(app.includes('ratesAsOfLine'), 'mortgage page should render an explicit rates-as-of line');
+assert(html.includes('admin-mortgage-leads-table'), 'admin dashboard should include a visible mortgage leads table');
+assert(app.includes('/api/admin/mortgage-leads?limit=20'), 'admin dashboard should fetch dedicated mortgage leads');
 for (const provider of [
   'NCBA Bank Uganda',
   'Centenary Bank Uganda',
@@ -131,5 +144,19 @@ assert(adminRoutes.includes('adminLeadUnionSql'), 'admin lead feed should includ
 assert(adminRoutes.includes('mortgage_enquiry_fallback'), 'admin lead feed should surface mortgage enquiries missing CRM lead rows');
 assert(adminRoutes.includes("router.get('/mortgage-leads'"), 'admin should expose a dedicated mortgage leads endpoint');
 assert(adminRoutes.includes("router.get('/mortgage-enquiries'"), 'admin should expose a dedicated mortgage enquiries endpoint');
+assert(mortgageRoutes.includes('logo_url'), 'mortgage rates API should expose hosted logo URLs');
+for (const logoAsset of [
+  'assets/mortgage-logos/stanbic.svg',
+  'assets/mortgage-logos/hfb.svg',
+  'assets/mortgage-logos/dfcu.svg',
+  'assets/mortgage-logos/kcb.svg',
+  'assets/mortgage-logos/ncba.svg',
+  'assets/mortgage-logos/centenary.svg',
+  'assets/mortgage-logos/baroda.svg',
+  'assets/mortgage-logos/absa.svg',
+  'assets/mortgage-logos/equity.svg'
+]) {
+  assert(fs.existsSync(path.join(root, logoAsset)), `missing owned mortgage logo asset: ${logoAsset}`);
+}
 
 console.log('mortgage-lead-generation regression checks passed');

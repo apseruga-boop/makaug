@@ -125,6 +125,17 @@ const FALLBACK_MORTGAGE_PROVIDERS = [
   }
 ];
 const AUDITED_MORTGAGE_PROVIDER_BY_KEY = new Map(FALLBACK_MORTGAGE_PROVIDERS.map((provider) => [provider.key, provider]));
+const MORTGAGE_PROVIDER_LOGO_URLS = {
+  stanbic: '/assets/mortgage-logos/stanbic.svg',
+  hfb: '/assets/mortgage-logos/hfb.svg',
+  dfcu: '/assets/mortgage-logos/dfcu.svg',
+  kcb: '/assets/mortgage-logos/kcb.svg',
+  ncba: '/assets/mortgage-logos/ncba.svg',
+  centenary: '/assets/mortgage-logos/centenary.svg',
+  baroda: '/assets/mortgage-logos/baroda.svg',
+  absa: '/assets/mortgage-logos/absa.svg',
+  equity: '/assets/mortgage-logos/equity.svg'
+};
 
 function normalizeProvider(row) {
   return {
@@ -147,7 +158,8 @@ function normalizeProvider(row) {
     sourceLabel: cleanText(row.source_label || row.sourceLabel),
     sourceUrl: cleanText(row.source_url || row.sourceUrl),
     sourceNote: cleanText(row.source_note || row.sourceNote),
-    sourceVerifiedAt: row.source_verified_at || row.sourceVerifiedAt || null
+    sourceVerifiedAt: row.source_verified_at || row.sourceVerifiedAt || null,
+    logoUrl: cleanText(row.logo_url || row.logoUrl)
   };
 }
 
@@ -171,13 +183,16 @@ function withAuditedMortgageData(provider) {
     sourceLabel: audited.sourceLabel || provider.sourceLabel,
     sourceUrl: audited.sourceUrl || provider.sourceUrl,
     sourceNote: audited.sourceNote || provider.sourceNote,
-    sourceVerifiedAt: audited.sourceVerifiedAt || provider.sourceVerifiedAt
+    sourceVerifiedAt: audited.sourceVerifiedAt || provider.sourceVerifiedAt,
+    logoUrl: provider.logoUrl || MORTGAGE_PROVIDER_LOGO_URLS[audited.key]
   };
 }
 
 function withDefaultKeys(provider) {
   return {
     ...provider,
+    logoUrl: provider.logoUrl || MORTGAGE_PROVIDER_LOGO_URLS[provider.key] || '',
+    logo_url: provider.logo_url || provider.logoUrl || MORTGAGE_PROVIDER_LOGO_URLS[provider.key] || '',
     minDepositPct: {
       residential: provider.minDepositPct?.residential ?? 20,
       commercial: provider.minDepositPct?.commercial ?? 20,

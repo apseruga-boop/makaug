@@ -689,6 +689,17 @@ const DEFAULT_MORTGAGE_PROVIDERS = [
   }
 ];
 const AUDITED_MORTGAGE_PROVIDER_BY_ID = Object.fromEntries(DEFAULT_MORTGAGE_PROVIDERS.map((provider) => [provider.id, provider]));
+const MORTGAGE_PROVIDER_LOGO_URLS = {
+  stanbic: "/assets/mortgage-logos/stanbic.svg",
+  hfb: "/assets/mortgage-logos/hfb.svg",
+  dfcu: "/assets/mortgage-logos/dfcu.svg",
+  kcb: "/assets/mortgage-logos/kcb.svg",
+  ncba: "/assets/mortgage-logos/ncba.svg",
+  centenary: "/assets/mortgage-logos/centenary.svg",
+  baroda: "/assets/mortgage-logos/baroda.svg",
+  absa: "/assets/mortgage-logos/absa.svg",
+  equity: "/assets/mortgage-logos/equity.svg"
+};
 const MORTGAGE_PROVIDER_BRANDS = {
   stanbic: {
     shortName: "Stanbic",
@@ -737,6 +748,12 @@ const MORTGAGE_PROVIDER_BRANDS = {
     bg: "#fef2f2",
     border: "#fecaca",
     text: "#b91c1c"
+  },
+  equity: {
+    shortName: "Equity",
+    bg: "#fff7ed",
+    border: "#fed7aa",
+    text: "#b45309"
   }
 };
 let MORTGAGE_RATE_UPDATED_AT = DEFAULT_MORTGAGE_RATE_UPDATED_AT;
@@ -746,6 +763,7 @@ let mortgageRatesHydrating = false;
 let mortgageRatesHydratedOnce = false;
 let MORTGAGE_PROVIDERS = JSON.parse(JSON.stringify(DEFAULT_MORTGAGE_PROVIDERS));
 let activeMortgageTab = "repayment";
+let activeMortgageComparisonSort = "monthly";
 let selectedMortgageProviderKey = "";
 let mortgageExtraPaymentAmount = 0;
 let mortgageRateManuallyEdited = false;
@@ -807,6 +825,7 @@ let adminWhatsappConversations = [];
 let adminCrmSummary = {};
 let adminCrmLeads = [];
 let adminCrmTasks = [];
+let adminMortgageLeads = [];
 let adminNotificationLogs = [];
 let adminEmailLogs = [];
 let adminWhatsappLogs = [];
@@ -3386,6 +3405,21 @@ const MORTGAGE_I18N = {
     leadSubmitBank: "Request {bank} Call",
     resultsTitle: "Best Match & Bank Comparison",
     ratesFootnote: "Indicative public rates from bank sources. Confirm current rates with the lender before applying.",
+    ratesAsOfLine: "Rates as of {date} · indicative, confirm with the bank.",
+    comparisonSubtitle: "Sort live public bank assumptions by repayment, rate, term, or deposit strength.",
+    sortBy: "Sort by",
+    sortMonthly: "Monthly repayment",
+    sortRate: "Interest rate",
+    sortTerm: "Max term",
+    sortLtv: "Max LTV",
+    tableLogo: "Logo",
+    tableBank: "Bank",
+    tableInterestRate: "Interest rate",
+    tableMaxTerm: "Max term",
+    tableMaxLtv: "Max LTV",
+    tableMonthly: "Monthly repayment",
+    tableAction: "Action",
+    bestMatchBadge: "Best match",
     refresh: "Refresh",
     whatTitle: "What is a Mortgage?",
     whatBody: "A mortgage is a long-term loan used to buy property. You pay a deposit upfront, and the bank finances the balance. You then repay monthly with interest over an agreed period.",
@@ -4625,6 +4659,135 @@ Object.assign(MORTGAGE_I18N.ar, {
   transferAndStampDutyEstimate: "تقدير التحويل ورسوم الطابع العقاري والتقييم",
   bestRateApplied: "نستخدم أفضل تطابق حالي: {bank} عند {rate}%. عدل الفائدة لاختبار افتراض آخر.",
   manualRateApplied: "نستخدم نسبة الفائدة التي أدخلتها في الحاسبة."
+});
+
+Object.assign(MORTGAGE_I18N.lg, {
+  ratesAsOfLine: "Rate nga bwe ziri ku {date} · za kuteebereza, kakasa ne bbanka.",
+  comparisonSubtitle: "Tegeka bbanka okusinziira ku nsasula, rate, ebbanga oba LTV.",
+  sortBy: "Tegeka nga",
+  sortMonthly: "Okusasula buli mwezi",
+  sortRate: "Interest rate",
+  sortTerm: "Ebbanga erisinga",
+  sortLtv: "Max LTV",
+  tableBank: "Bbanka",
+  tableInterestRate: "Interest rate",
+  tableMaxTerm: "Ebbanga",
+  tableMaxLtv: "Max LTV",
+  tableMonthly: "Buli mwezi",
+  tableAction: "Kola",
+  bestMatchBadge: "Esinga okukwatagana"
+});
+Object.assign(MORTGAGE_I18N.sw, {
+  ratesAsOfLine: "Viwango kufikia {date} · ni makadirio, thibitisha na benki.",
+  comparisonSubtitle: "Panga benki kwa malipo, riba, muda au LTV.",
+  sortBy: "Panga kwa",
+  sortMonthly: "Malipo ya mwezi",
+  sortRate: "Riba",
+  sortTerm: "Muda wa juu",
+  sortLtv: "Max LTV",
+  tableBank: "Benki",
+  tableInterestRate: "Riba",
+  tableMaxTerm: "Muda",
+  tableMaxLtv: "Max LTV",
+  tableMonthly: "Kila mwezi",
+  tableAction: "Hatua",
+  bestMatchBadge: "Inayofaa zaidi"
+});
+Object.assign(MORTGAGE_I18N.ac, {
+  ratesAsOfLine: "Rate me {date} · obedo con, mok ki bank.",
+  comparisonSubtitle: "Yer bank pi culu dwe, rate, kare onyo LTV.",
+  sortBy: "Yer ki",
+  sortMonthly: "Culu dwe",
+  sortRate: "Interest rate",
+  sortTerm: "Kare madit",
+  sortLtv: "Max LTV",
+  tableBank: "Bank",
+  tableInterestRate: "Interest rate",
+  tableMaxTerm: "Kare",
+  tableMaxLtv: "Max LTV",
+  tableMonthly: "Dwe",
+  tableAction: "Tic",
+  bestMatchBadge: "Maromo maber"
+});
+Object.assign(MORTGAGE_I18N.ny, {
+  ratesAsOfLine: "Rate za {date} · ni izo kugereranya, byemeze na banki.",
+  comparisonSubtitle: "Tondeka amabanki ku kwishyura, rate, igihe cyangwa LTV.",
+  sortBy: "Tondeka kuri",
+  sortMonthly: "Kwishyura buri kwezi",
+  sortRate: "Interest rate",
+  sortTerm: "Igihe kinini",
+  sortLtv: "Max LTV",
+  tableBank: "Banki",
+  tableInterestRate: "Interest rate",
+  tableMaxTerm: "Igihe",
+  tableMaxLtv: "Max LTV",
+  tableMonthly: "Buri kwezi",
+  tableAction: "Igikorwa",
+  bestMatchBadge: "Ihura neza"
+});
+Object.assign(MORTGAGE_I18N.rn, {
+  ratesAsOfLine: "Rate za {date} · ni izo kugereranya, byemeze na banki.",
+  comparisonSubtitle: "Tondeka banki ku kwishyura, rate, igihe cyangwa LTV.",
+  sortBy: "Tondeka kuri",
+  sortMonthly: "Kwishyura buri kwezi",
+  sortRate: "Interest rate",
+  sortTerm: "Igihe kinini",
+  sortLtv: "Max LTV",
+  tableBank: "Banki",
+  tableInterestRate: "Interest rate",
+  tableMaxTerm: "Igihe",
+  tableMaxLtv: "Max LTV",
+  tableMonthly: "Buri kwezi",
+  tableAction: "Igikorwa",
+  bestMatchBadge: "Ihura neza"
+});
+Object.assign(MORTGAGE_I18N.sm, {
+  ratesAsOfLine: "Rate nga {date} · bya kuteebereza, kakasa ne bbanka.",
+  comparisonSubtitle: "Tegeka bbanka ku nsasula, rate, ebbanga oba LTV.",
+  sortBy: "Tegeka ku",
+  sortMonthly: "Okusasula buli mwezi",
+  sortRate: "Interest rate",
+  sortTerm: "Ebbanga erisinga",
+  sortLtv: "Max LTV",
+  tableBank: "Bbanka",
+  tableInterestRate: "Interest rate",
+  tableMaxTerm: "Ebbanga",
+  tableMaxLtv: "Max LTV",
+  tableMonthly: "Buli mwezi",
+  tableAction: "Kola",
+  bestMatchBadge: "Esinga"
+});
+Object.assign(MORTGAGE_I18N.am, {
+  ratesAsOfLine: "የ{date} ዋጋዎች · ግምት ናቸው፣ ከባንኩ ጋር ያረጋግጡ።",
+  comparisonSubtitle: "ባንኮችን በወርሃዊ ክፍያ፣ በወለድ፣ በጊዜ ወይም LTV ያስተካክሉ።",
+  sortBy: "አስተካክል በ",
+  sortMonthly: "ወርሃዊ ክፍያ",
+  sortRate: "የወለድ መጠን",
+  sortTerm: "ከፍተኛ ጊዜ",
+  sortLtv: "Max LTV",
+  tableBank: "ባንክ",
+  tableInterestRate: "የወለድ መጠን",
+  tableMaxTerm: "ጊዜ",
+  tableMaxLtv: "Max LTV",
+  tableMonthly: "ወርሃዊ",
+  tableAction: "እርምጃ",
+  bestMatchBadge: "ምርጥ ተዛማጅ"
+});
+Object.assign(MORTGAGE_I18N.ar, {
+  ratesAsOfLine: "الأسعار بتاريخ {date} · تقديرية، أكدها مع البنك.",
+  comparisonSubtitle: "رتب البنوك حسب القسط أو الفائدة أو المدة أو LTV.",
+  sortBy: "ترتيب حسب",
+  sortMonthly: "القسط الشهري",
+  sortRate: "نسبة الفائدة",
+  sortTerm: "أطول مدة",
+  sortLtv: "Max LTV",
+  tableBank: "البنك",
+  tableInterestRate: "الفائدة",
+  tableMaxTerm: "المدة",
+  tableMaxLtv: "Max LTV",
+  tableMonthly: "شهرياً",
+  tableAction: "الإجراء",
+  bestMatchBadge: "أفضل تطابق"
 });
 
 function mortgageTr(key) {
@@ -12942,7 +13105,7 @@ async function fetchRemoteAdminSnapshot(options = {}) {
   const shouldLoadAds = tabNeeds.ads;
   const shouldLoadWhatsapp = tabNeeds.whatsapp;
   const shouldLoadNotifications = tabNeeds.notifications;
-  const [summaryRes, commandCentreRes, recentRes, pendingRows, liveRows, actionedRows, usersRes, agentsRes, propertyRequestsRes, fieldAgentsRes, campaignsRes, adPackagesRes, adPlacementsRes, adSummaryRes, adInquiriesRes, adCampaignsRes, whatsappInsightsRes, whatsappConversationsRes, crmSummaryRes, crmLeadsRes, notificationsRes, emailsRes, outlookStatusRes, outlookActionsRes, whatsappLogsRes] = await Promise.all([
+  const [summaryRes, commandCentreRes, recentRes, pendingRows, liveRows, actionedRows, usersRes, agentsRes, propertyRequestsRes, fieldAgentsRes, campaignsRes, adPackagesRes, adPlacementsRes, adSummaryRes, adInquiriesRes, adCampaignsRes, whatsappInsightsRes, whatsappConversationsRes, crmSummaryRes, crmLeadsRes, mortgageLeadsRes, notificationsRes, emailsRes, outlookStatusRes, outlookActionsRes, whatsappLogsRes] = await Promise.all([
     adminSafeSnapshotRequest("summary", () => apiRequest("/api/admin/summary", { headers }), { data: {} }),
     adminSafeSnapshotRequest("command centre", () => apiRequest("/api/admin/command-centre", { headers }), { data: {} }),
     adminSafeSnapshotRequest("recent activity", () => apiRequest("/api/admin/recent", { headers }), { data: {} }),
@@ -12963,6 +13126,7 @@ async function fetchRemoteAdminSnapshot(options = {}) {
     shouldLoadWhatsapp ? adminSafeSnapshotRequest("whatsapp conversations", () => apiRequest(`/api/admin/whatsapp/conversations?${whatsappParams.toString()}`, { headers }), { data: [], summary: {} }) : null,
     shouldLoadNotifications ? adminSafeSnapshotRequest("crm summary", () => apiRequest("/api/admin/crm/summary", { headers }), { data: {} }) : null,
     shouldLoadNotifications ? adminSafeSnapshotRequest("crm leads", () => apiRequest("/api/admin/leads?limit=50", { headers }), { data: [] }) : null,
+    shouldLoadNotifications ? adminSafeSnapshotRequest("mortgage leads", () => apiRequest("/api/admin/mortgage-leads?limit=20", { headers }), { data: [] }) : null,
     shouldLoadNotifications ? adminSafeSnapshotRequest("notifications", () => apiRequest("/api/admin/notifications?limit=50", { headers }), { data: [] }) : null,
     shouldLoadNotifications ? adminSafeSnapshotRequest("emails", () => apiRequest("/api/admin/emails?limit=50", { headers }), { data: [] }) : null,
     shouldLoadNotifications ? adminSafeSnapshotRequest("outlook status", () => apiRequest("/api/admin/outlook-agent/status", { headers }), { data: {} }) : null,
@@ -13007,6 +13171,7 @@ async function fetchRemoteAdminSnapshot(options = {}) {
   if (Array.isArray(whatsappConversationsRes?.data)) adminWhatsappConversations = whatsappConversationsRes.data;
   if (crmSummaryRes?.data) adminCrmSummary = crmSummaryRes.data;
   if (Array.isArray(crmLeadsRes?.data)) adminCrmLeads = crmLeadsRes.data;
+  if (Array.isArray(mortgageLeadsRes?.data)) adminMortgageLeads = mortgageLeadsRes.data;
   if (Array.isArray(crmSummaryRes?.data?.openTasks)) adminCrmTasks = crmSummaryRes.data.openTasks;
   if (Array.isArray(notificationsRes?.data)) adminNotificationLogs = notificationsRes.data;
   if (Array.isArray(emailsRes?.data)) adminEmailLogs = emailsRes.data;
@@ -13034,6 +13199,7 @@ async function fetchRemoteAdminSnapshot(options = {}) {
     whatsappConversationsRes,
     crmSummaryRes,
     crmLeadsRes,
+    mortgageLeadsRes,
     notificationsRes,
     emailsRes,
     outlookStatusRes,
@@ -13063,6 +13229,7 @@ async function fetchRemoteAdminSnapshot(options = {}) {
     whatsappConversations: adminWhatsappConversations,
     crmSummary: adminCrmSummary,
     crmLeads: adminCrmLeads,
+    mortgageLeads: adminMortgageLeads,
     crmTasks: adminCrmTasks,
     notificationLogs: adminNotificationLogs,
     emailLogs: adminEmailLogs,
@@ -15195,6 +15362,44 @@ function renderAdminCrmLeadsRows(leads = []) {
   }).join("");
 }
 
+function renderAdminMortgageLeadsRows(leads = []) {
+  const wrap = document.getElementById("admin-mortgage-leads-table");
+  if (!wrap) return;
+  const rows = Array.isArray(leads) ? leads : [];
+  if (!rows.length) {
+    wrap.innerHTML = `<div class="text-sm text-gray-500 bg-white border border-gray-200 rounded-xl p-4">No mortgage leads in this snapshot yet. New mortgage-page and bank callback requests will appear here.</div>`;
+    return;
+  }
+  wrap.innerHTML = rows.slice(0, 20).map((lead) => {
+    const payload = lead.payload && typeof lead.payload === "object" ? lead.payload : {};
+    const provider = lead.provider_name || payload.preferredProviderName || payload.preferred_provider_name || payload.preferred_bank || "No bank preference";
+    const amount = Number(lead.amount_to_borrow || payload.amountToBorrow || payload.amount_to_borrow || 0);
+    const monthly = Number(payload.monthlyRepayment || payload.monthly_repayment || 0);
+    const term = lead.preferred_term_years || payload.termYears || payload.preferred_term_years || "";
+    const ref = lead.reference || payload.reference || lead.id || "-";
+    const contact = lead.contact_name || payload.name || "Mortgage lead";
+    const phone = lead.contact_phone || lead.user_phone || payload.phone || "-";
+    const submitted = lead.created_at ? new Date(lead.created_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "-";
+    return `<div class="border border-gray-200 rounded-xl bg-white p-4">
+      <div class="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <div class="text-[11px] uppercase tracking-wide font-black text-green-700">${adminEscape(ref)}</div>
+          <div class="mt-1 font-black text-gray-900">${adminEscape(provider)}</div>
+          <div class="mt-1 text-xs text-gray-500">${adminEscape(contact)} • ${adminEscape(phone)}</div>
+        </div>
+        <span class="rounded-full bg-green-100 px-2.5 py-1 text-xs font-bold text-green-700">${adminEscape(lead.bank_handoff_status || payload.bank_handoff_status || "new")}</span>
+      </div>
+      <div class="mt-3 grid sm:grid-cols-4 gap-2 text-xs">
+        <div><span class="text-gray-500">Borrow</span><strong class="block text-gray-900">${amount ? formatUgxAmount(amount) : "-"}</strong></div>
+        <div><span class="text-gray-500">Monthly</span><strong class="block text-gray-900">${monthly ? formatUgxAmount(monthly) : "-"}</strong></div>
+        <div><span class="text-gray-500">Term</span><strong class="block text-gray-900">${term ? `${adminEscape(term)} years` : "-"}</strong></div>
+        <div><span class="text-gray-500">Submitted</span><strong class="block text-gray-900">${adminEscape(submitted)}</strong></div>
+      </div>
+      <div class="mt-2 text-[11px] text-gray-500">CRM lead: ${adminEscape(lead.crm_lead_id || payload.crmLeadId || "not linked")}</div>
+    </div>`;
+  }).join("");
+}
+
 async function adminOpenLeadMatchMessage(leadId) {
   if (!leadId) return;
   if (!canUseLiveAdminApi()) {
@@ -15719,6 +15924,7 @@ async function renderAdminDashboard(options = {}) {
   renderAdminAllListingsRows(remoteSnap?.allListings || localSnap.allListings);
   renderAdminCrmOverview(remoteSnap?.crmSummary || {});
   renderAdminCrmLeadsRows(remoteSnap?.crmLeads || []);
+  renderAdminMortgageLeadsRows(remoteSnap?.mortgageLeads || []);
   renderAdminCrmTasksRows(remoteSnap?.crmTasks || []);
   renderAdminOutlookAgentStatus(remoteSnap?.outlookAgentStatus || {});
   renderAdminOutlookAgentActions(remoteSnap?.outlookAgentActions || [], remoteSnap?.outlookAgentStatus || {});
@@ -41308,9 +41514,10 @@ function mortgageProviderBrand(provider = {}) {
     || (key.includes("centenary") || name.includes("centenary") ? "centenary" : "")
     || (key.includes("baroda") || name.includes("baroda") ? "baroda" : "")
     || (key.includes("absa") || name.includes("absa") ? "absa" : "")
+    || (key.includes("equity") || name.includes("equity") ? "equity" : "")
     || key;
   const brand = MORTGAGE_PROVIDER_BRANDS[alias] || {};
-  const logoUrl = provider.logoUrl || provider.logo_url || "";
+  const logoUrl = provider.logoUrl || provider.logo_url || brand.logoUrl || MORTGAGE_PROVIDER_LOGO_URLS[alias] || "";
   const fallbackName = brand.shortName || String(provider.name || provider.provider_name || "Bank").replace(/\s+Bank\s+Uganda$/i, "").trim();
   const initials = fallbackName
     .split(/\s+/)
@@ -41950,6 +42157,31 @@ function resetMortgageCalculator() {
 	  toast(mortgageTr("resetDone"));
 	}
 
+function mortgageRowMaxLtv(row = {}) {
+  const deposit = Number(row.minDeposit || 0);
+  return Math.max(0, Math.min(100, 100 - deposit));
+}
+
+function mortgageComparisonSortValue(row = {}, sortKey = activeMortgageComparisonSort) {
+  if (sortKey === "rate") return Number.isFinite(Number(row.rate)) && Number(row.rate) > 0 ? Number(row.rate) : Number.POSITIVE_INFINITY;
+  if (sortKey === "term") return -(Number(row.maxYears) || 0);
+  if (sortKey === "ltv") return -mortgageRowMaxLtv(row);
+  return Number(row.monthlyRepayment || 0) || Number.POSITIVE_INFINITY;
+}
+
+function sortMortgageProviderRows(rows = []) {
+  return [...rows].sort((a, b) => {
+    const delta = mortgageComparisonSortValue(a) - mortgageComparisonSortValue(b);
+    if (delta !== 0) return delta;
+    return String(a.provider?.name || "").localeCompare(String(b.provider?.name || ""));
+  });
+}
+
+function setMortgageComparisonSort(sortKey = "monthly") {
+  activeMortgageComparisonSort = ["monthly", "rate", "term", "ltv"].includes(sortKey) ? sortKey : "monthly";
+  renderMortgageFinder();
+}
+
 function renderMortgageFinder() {
   const priceEl = document.getElementById("mortgage-price");
   const depositEl = document.getElementById("mortgage-deposit");
@@ -41980,6 +42212,10 @@ function renderMortgageFinder() {
 
   const result = buildMortgageComparison(priceEl.value, normalizedDeposit, normalizedYears, purposeEl.value);
   const updatedLabel = formatMortgageUpdatedAtLabel(MORTGAGE_RATE_UPDATED_RAW || MORTGAGE_RATE_UPDATED_AT || DEFAULT_MORTGAGE_RATE_UPDATED_AT);
+  const ratesFootnoteEl = document.getElementById("mortgage-rates-footnote");
+  if (ratesFootnoteEl) {
+    ratesFootnoteEl.textContent = mortgageTr("ratesAsOfLine").replace("{date}", updatedLabel);
+  }
   const income = Math.max(0, Number(incomeEl?.value || 0));
   const selectedRate = resolveMortgageSelectedRate(result, rateEl);
   const monthly = computeMonthlyRepayment(result.loanAmount, selectedRate, normalizedYears) || result.best?.monthlyRepayment || 0;
@@ -42097,12 +42333,64 @@ function renderMortgageFinder() {
     bestEl.innerHTML = `<div class="border border-amber-200 bg-amber-50 text-amber-800 rounded-xl p-4 text-sm">${mortgageTr("noMatch")}</div>`;
   }
 
-  rowsEl.innerHTML = result.providerRows.map((row) => {
+  const sortedProviderRows = sortMortgageProviderRows(result.providerRows);
+  const sortOptions = [
+    ["monthly", mortgageTr("sortMonthly")],
+    ["rate", mortgageTr("sortRate")],
+    ["term", mortgageTr("sortTerm")],
+    ["ltv", mortgageTr("sortLtv")]
+  ];
+  const sortControls = `
+    <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
+      <p class="text-xs text-gray-600">${adminEscape(mortgageTr("comparisonSubtitle"))}</p>
+      <div class="inline-flex items-center gap-1 rounded-full border border-emerald-100 bg-white p-1 shadow-sm" aria-label="${adminAttr(mortgageTr("sortBy"))}">
+        ${sortOptions.map(([key, label]) => `
+          <button type="button" data-mortgage-sort-option="${adminAttr(key)}" onclick="setMortgageComparisonSort('${adminAttr(key)}')" aria-pressed="${activeMortgageComparisonSort === key ? "true" : "false"}" class="${activeMortgageComparisonSort === key ? "bg-green-700 text-white" : "text-green-800 hover:bg-green-50"} rounded-full px-3 py-1.5 text-xs font-black">${adminEscape(label)}</button>
+        `).join("")}
+      </div>
+    </div>`;
+  const desktopRows = sortedProviderRows.map((row) => {
     const status = providerStatusMeta(row.status);
     const monthly = row.monthlyRepayment ? `${formatUgxAmount(row.monthlyRepayment)} / ${mortgageTr("monthWord")}` : mortgageTr("quoteRequired");
     const repay = row.totalRepayment ? formatUgxAmount(row.totalRepayment) : "-";
     const providerKey = mortgageProviderKey(row.provider);
     const providerLogo = renderMortgageProviderLogo(row.provider, { size: "md" });
+    const maxLtv = mortgageRowMaxLtv(row);
+    const isBest = result.best && mortgageProviderKey(result.best.provider) === providerKey;
+    const sourceNote = row.provider.sourceNote ? `<div class="mt-2 rounded-lg bg-gray-50 border border-gray-100 p-2 text-[11px] text-gray-600"><strong>${mortgageTr("sourceNoteLabel")}:</strong> ${adminEscape(row.provider.sourceNote)}</div>` : "";
+    return `
+      <tr class="align-top border-t border-gray-100 ${isBest ? "bg-emerald-50/70" : "bg-white"}">
+        <td class="py-3 pl-3 pr-2">${providerLogo}</td>
+        <td class="py-3 px-2 min-w-[190px]">
+          <div class="font-black text-gray-950">${adminEscape(row.provider.name)}</div>
+          <div class="mt-1 text-[11px] text-gray-500">${adminEscape(row.provider.sourceLabel || "-")}</div>
+          ${isBest ? `<span class="mt-2 inline-flex rounded-full bg-green-700 px-2 py-0.5 text-[10px] font-black uppercase text-white">${adminEscape(mortgageTr("bestMatchBadge"))}</span>` : ""}
+        </td>
+        <td class="py-3 px-2 text-sm font-bold text-gray-800">${row.rate ? `${row.rate.toFixed(2)}%` : "-"}</td>
+        <td class="py-3 px-2 text-sm font-bold text-gray-800">${row.maxYears} ${mortgageTr("yearsWord")}</td>
+        <td class="py-3 px-2 text-sm font-bold text-gray-800">${maxLtv}%</td>
+        <td class="py-3 px-2">
+          <div class="text-sm font-black text-gray-950">${monthly}</div>
+          <div class="text-[11px] text-gray-500">${mortgageTr("totalRepayment")}: ${repay}</div>
+        </td>
+        <td class="py-3 px-2"><span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${status.cls}">${status.label}</span></td>
+        <td class="py-3 pl-2 pr-3">
+          <div class="flex flex-col gap-1.5">
+            <button type="button" onclick="requestMortgageHelp('${adminAttr(providerKey)}')" class="inline-flex items-center justify-center gap-1 rounded-lg bg-green-700 px-3 py-1.5 text-xs font-black text-white hover:bg-green-600">${mortgageTr("setUpBankCall")}</button>
+            <a href="${adminAttr(row.provider.sourceUrl)}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center gap-1 text-xs font-semibold text-green-700 hover:underline">${mortgageTr("viewBankSource")} <i class="fas fa-arrow-up-right-from-square text-[10px]"></i></a>
+          </div>
+        </td>
+      </tr>
+      ${sourceNote ? `<tr class="border-t border-gray-50"><td colspan="8" class="px-3 pb-3">${sourceNote}</td></tr>` : ""}`;
+  }).join("");
+  const mobileCards = sortedProviderRows.map((row) => {
+    const status = providerStatusMeta(row.status);
+    const monthly = row.monthlyRepayment ? `${formatUgxAmount(row.monthlyRepayment)} / ${mortgageTr("monthWord")}` : mortgageTr("quoteRequired");
+    const repay = row.totalRepayment ? formatUgxAmount(row.totalRepayment) : "-";
+    const providerKey = mortgageProviderKey(row.provider);
+    const providerLogo = renderMortgageProviderLogo(row.provider, { size: "md" });
+    const maxLtv = mortgageRowMaxLtv(row);
+    const isBest = result.best && mortgageProviderKey(result.best.provider) === providerKey;
     const sourceNote = row.provider.sourceNote ? `<div class="mt-2 rounded-lg bg-gray-50 border border-gray-100 p-2 text-[11px] text-gray-600"><strong>${mortgageTr("sourceNoteLabel")}:</strong> ${adminEscape(row.provider.sourceNote)}</div>` : "";
     return `
       <div class="border border-gray-200 rounded-xl p-4 bg-white">
@@ -42112,13 +42400,14 @@ function renderMortgageFinder() {
             <div class="min-w-0">
               <div class="font-bold text-gray-900">${adminEscape(row.provider.name)}</div>
               <div class="text-xs text-gray-500 mt-1">${mortgageTr("bankSourceLabel")}: ${adminEscape(row.provider.sourceLabel || "-")}</div>
+              ${isBest ? `<span class="mt-2 inline-flex rounded-full bg-green-700 px-2 py-0.5 text-[10px] font-black uppercase text-white">${adminEscape(mortgageTr("bestMatchBadge"))}</span>` : ""}
             </div>
           </div>
           <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${status.cls}">${status.label}</span>
         </div>
-        <div class="grid sm:grid-cols-4 gap-2 mt-3 text-sm">
+        <div class="grid grid-cols-2 gap-2 mt-3 text-sm">
           <div><span class="text-gray-500">${mortgageTr("rate")}</span><div class="font-semibold text-gray-800">${row.rate ? `${row.rate.toFixed(2)}%` : "-"}</div></div>
-          <div><span class="text-gray-500">${mortgageTr("minDeposit")}</span><div class="font-semibold text-gray-800">${row.minDeposit}%</div></div>
+          <div><span class="text-gray-500">${mortgageTr("tableMaxLtv")}</span><div class="font-semibold text-gray-800">${maxLtv}%</div></div>
           <div><span class="text-gray-500">${mortgageTr("maxTerm")}</span><div class="font-semibold text-gray-800">${row.maxYears} ${mortgageTr("yearsWord")}</div></div>
           <div><span class="text-gray-500">${mortgageTr("monthly")}</span><div class="font-semibold text-gray-800">${monthly}</div></div>
         </div>
@@ -42130,6 +42419,26 @@ function renderMortgageFinder() {
         </div>
       </div>`;
   }).join("");
+  rowsEl.innerHTML = `
+    ${sortControls}
+    <div class="hidden md:block overflow-x-auto rounded-2xl border border-gray-200 bg-white">
+      <table class="w-full min-w-[860px] text-left">
+        <thead class="bg-gray-50 text-[11px] uppercase tracking-wide text-gray-500">
+          <tr>
+            <th class="py-2 pl-3 pr-2">${adminEscape(mortgageTr("tableLogo"))}</th>
+            <th class="py-2 px-2">${adminEscape(mortgageTr("tableBank"))}</th>
+            <th class="py-2 px-2">${adminEscape(mortgageTr("tableInterestRate"))}</th>
+            <th class="py-2 px-2">${adminEscape(mortgageTr("tableMaxTerm"))}</th>
+            <th class="py-2 px-2">${adminEscape(mortgageTr("tableMaxLtv"))}</th>
+            <th class="py-2 px-2">${adminEscape(mortgageTr("tableMonthly"))}</th>
+            <th class="py-2 px-2">${adminEscape(providerStatusMeta("eligible").label)}</th>
+            <th class="py-2 pl-2 pr-3">${adminEscape(mortgageTr("tableAction"))}</th>
+          </tr>
+        </thead>
+        <tbody>${desktopRows}</tbody>
+      </table>
+    </div>
+    <div class="md:hidden space-y-3">${mobileCards}</div>`;
   hydrateMortgageProviderSelect();
   renderMortgageLeadProviderContext();
   renderMortgageTabs({
@@ -42196,6 +42505,7 @@ function exposeMortgageFinderHandlers() {
     requestMortgageHelp,
     resetMortgageCalculator,
     saveMortgageCalculation,
+    setMortgageComparisonSort,
     setMortgageExtraPayment,
     setMortgageLeadProvider,
     setMortgageManualRate,
