@@ -202,6 +202,7 @@ const mortgageI18nCompletionVersion = 'mortgage-i18n-completion-20260710';
 const mortgageI18nPolishVersion = 'mortgage-i18n-polish-20260710';
 const mortgageRealBankLogosVersion = 'mortgage-real-bank-logos-20260710';
 const mortgageRealBankLogosEagerVersion = 'mortgage-real-bank-logos-eager-20260710';
+const mortgageLogoCellPolishVersion = 'mortgage-logo-cell-polish-20260710';
 const publicAppVersionSuffixes = [
   captureHelperUsabilityVersion,
   studentNearestUniversityVersion,
@@ -273,7 +274,8 @@ const publicAppVersionSuffixes = [
   mortgageI18nCompletionVersion,
   mortgageI18nPolishVersion,
   mortgageRealBankLogosVersion,
-  mortgageRealBankLogosEagerVersion
+  mortgageRealBankLogosEagerVersion,
+  mortgageLogoCellPolishVersion
 ];
 let cachedIndexHtml = null;
 const publicHtmlCache = new Map();

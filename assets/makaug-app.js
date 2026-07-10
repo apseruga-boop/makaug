@@ -41669,16 +41669,16 @@ function mortgageProviderBrand(provider = {}) {
 
 function renderMortgageProviderLogo(provider = {}, options = {}) {
   const brand = mortgageProviderBrand(provider);
-  const size = options.size === "lg" ? "h-14 min-w-[86px] max-w-[104px] px-2" : options.size === "sm" ? "h-9 min-w-[54px] max-w-[72px] px-2" : "h-11 min-w-[68px] max-w-[88px] px-2";
-  const imgSize = options.size === "lg" ? "max-w-[76px] max-h-[42px]" : options.size === "sm" ? "max-w-[46px] max-h-[26px]" : "max-w-[58px] max-h-[32px]";
+  const size = options.size === "lg" ? "h-14 min-w-[104px] max-w-[128px] px-3" : options.size === "sm" ? "h-10 min-w-[64px] max-w-[84px] px-2" : "h-12 min-w-[92px] max-w-[112px] px-2.5";
+  const imgSize = options.size === "lg" ? "max-w-[96px] max-h-11" : options.size === "sm" ? "max-w-[58px] max-h-7" : "max-w-[80px] max-h-9";
   const fallbackSize = options.size === "lg" ? "text-xs" : options.size === "sm" ? "text-[9px]" : "text-[10px]";
   const label = `${provider.name || brand.shortName || "Bank"} logo`;
   const image = brand.logoUrl
     ? `<img src="${adminAttr(brand.logoUrl)}" alt="${adminAttr(label)}" loading="eager" decoding="async" referrerpolicy="no-referrer" class="${imgSize} hidden object-contain" onload="this.classList.remove('hidden');this.previousElementSibling.classList.add('hidden');" onerror="this.remove();">`
     : "";
   return `
-    <span role="img" aria-label="${adminAttr(label)}" data-mortgage-logo="${adminAttr(brand.key)}" class="${size} shrink-0 rounded-2xl border flex items-center justify-center overflow-hidden shadow-sm" style="background:${adminAttr(brand.bg)};border-color:${adminAttr(brand.border)};color:${adminAttr(brand.text)}">
-      <span data-mortgage-logo-text class="${fallbackSize} font-black leading-none tracking-normal text-center whitespace-nowrap overflow-hidden text-ellipsis">${adminEscape(brand.shortName || brand.initials)}</span>
+    <span role="img" aria-label="${adminAttr(label)}" data-mortgage-logo="${adminAttr(brand.key)}" class="${size} shrink-0 rounded-lg bg-white flex items-center justify-center overflow-hidden">
+      <span data-mortgage-logo-text class="${fallbackSize} font-black leading-none tracking-normal text-center whitespace-nowrap overflow-hidden text-ellipsis text-slate-700">${adminEscape(brand.shortName || brand.initials)}</span>
       ${image}
     </span>`;
 }
@@ -42556,7 +42556,7 @@ function renderMortgageFinder() {
       <table class="w-full min-w-[860px] text-left">
         <thead class="bg-gray-50 text-[11px] uppercase tracking-wide text-gray-500">
           <tr>
-            <th class="py-2 pl-3 pr-2">${adminEscape(mortgageTr("tableLogo"))}</th>
+            <th class="py-2 pl-3 pr-2" aria-label="${adminAttr(mortgageTr("tableLogo"))}"></th>
             <th class="py-2 px-2">${adminEscape(mortgageTr("tableBank"))}</th>
             <th class="py-2 px-2">${adminEscape(mortgageTr("tableInterestRate"))}</th>
             <th class="py-2 px-2">${adminEscape(mortgageTr("tableMaxTerm"))}</th>

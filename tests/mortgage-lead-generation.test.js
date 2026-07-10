@@ -60,13 +60,15 @@ assert(
     && html.includes('mortgage-i18n-completion-20260710')
     && html.includes('mortgage-i18n-polish-20260710')
     && html.includes('mortgage-real-bank-logos-20260710')
-    && html.includes('mortgage-real-bank-logos-eager-20260710'),
+    && html.includes('mortgage-real-bank-logos-eager-20260710')
+    && html.includes('mortgage-logo-cell-polish-20260710'),
   'mortgage cache marker should force the corrected app bundle to load'
 );
 assert(server.includes("mortgageI18nCompletionVersion = 'mortgage-i18n-completion-20260710'"), 'server should append the mortgage i18n cache marker in production HTML');
 assert(server.includes("mortgageI18nPolishVersion = 'mortgage-i18n-polish-20260710'"), 'server should append the mortgage i18n polish cache marker in production HTML');
 assert(server.includes("mortgageRealBankLogosVersion = 'mortgage-real-bank-logos-20260710'"), 'server should append the mortgage real bank logos cache marker in production HTML');
 assert(server.includes("mortgageRealBankLogosEagerVersion = 'mortgage-real-bank-logos-eager-20260710'"), 'server should append the mortgage eager logo cache marker in production HTML');
+assert(server.includes("mortgageLogoCellPolishVersion = 'mortgage-logo-cell-polish-20260710'"), 'server should append the mortgage logo-cell polish cache marker in production HTML');
 assert(
   html.includes('id="mortgage-rate" type="number" value=""') && html.includes('oninput="setMortgageManualRate(this.value)"'),
   'mortgage rate field should start from the best provider rate and only switch to manual mode when edited'
@@ -108,6 +110,12 @@ assert(app.includes('renderMortgageProviderLogo(result.best.provider'), 'best-ma
 assert(app.includes('renderMortgageProviderLogo(row.provider'), 'every mortgage comparison row should show a lender logo');
 assert(app.includes('data-mortgage-logo-text'), 'mortgage lender badges should render deterministic text labels immediately');
 assert(app.includes('loading="eager" decoding="async"'), 'mortgage logos should eager-load so rows do not sit on text chips by default');
+assert(app.includes('rounded-lg bg-white flex items-center justify-center overflow-hidden'), 'mortgage logo cells should use one neutral borderless treatment');
+assert(app.includes('max-w-[80px] max-h-9'), 'mortgage table logos should have enough room for wordmark logos');
+assert(!app.includes('border-color:${adminAttr(brand.border)}'), 'mortgage logo cells should not use per-bank coloured borders');
+assert(!app.includes('style="background:${adminAttr(brand.bg)}'), 'mortgage logo cells should not use per-bank tinted backgrounds');
+assert(app.includes('<th class="py-2 pl-3 pr-2" aria-label="${adminAttr(mortgageTr("tableLogo"))}"></th>'), 'mortgage comparison logo header should be visually empty');
+assert(!app.includes('${adminEscape(mortgageTr("tableLogo"))}</th>'), 'mortgage comparison should not print a visible LOGO column label');
 assert(!app.includes('/favicon.ico'), 'mortgage lender badges should not depend on third-party favicon URLs');
 assert(html.includes('grid lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.82fr)]'), 'mortgage calculator should use the compact two-column layout');
 assert(html.includes('<details class="bg-white border border-green-100 rounded-2xl p-5">'), 'mortgage explainer should start collapsed');
