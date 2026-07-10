@@ -82,6 +82,16 @@ async function run() {
   assert.strictEqual(clickbaitDistrictOnly.suppressed, true, 'district-only clickbait listings should be hidden from active review');
   assert.strictEqual(clickbaitDistrictOnly.reason, 'low_signal_district_only_promo');
 
+  const kolkataListing = sourceQualitySuppressionForRecord({
+    title: 'REAL ESTATE WB KOLKATA 3 BHK flat for sale',
+    source_name: 'India Property Updates',
+    description: 'Warangal Telugu real estate update, not Uganda property inventory.',
+    area: 'Kampala',
+    district: 'Kampala',
+  });
+  assert.strictEqual(kolkataListing.suppressed, true, 'foreign property-market posts should not enter King review');
+  assert.strictEqual(kolkataListing.reason, 'foreign_property_market_source');
+
   const dryBlocked = await queueFoundOnlineSourcePostListings({
     dryRun: true,
     posts: [{
@@ -200,6 +210,8 @@ async function run() {
   assert(sql.includes('how[[:space:]]+big[[:space:]]+is'), 'SQL suppression should include plot-size explainer keyword');
   assert(sql.includes('sameblood'), 'SQL suppression should include known source keyword');
   assert(sql.includes('serious[[:space:]]+customer'), 'SQL suppression should include low-signal promo wording');
+  assert(sql.includes('kolkata'), 'SQL suppression should include foreign property-market locations');
+  assert(sql.includes('[1-9][[:space:]]*bhk'), 'SQL suppression should include India-style BHK listing labels');
   assert(sql.includes('entebbe[[:space:]]*(road|rd)'), 'SQL suppression should preserve specific Entebbe Road corridor listings');
   assert(!sql.includes('source_text'), 'staff dashboard SQL should not scan large source_text blobs');
   assert(!sql.includes('source_visual_text'), 'staff dashboard SQL should not scan large source_visual_text blobs');

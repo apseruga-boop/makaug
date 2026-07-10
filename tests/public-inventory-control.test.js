@@ -51,6 +51,8 @@ test('public listings are backend-controlled, not frontend seed inventory', () =
 test('admin live controls use paginated backend snapshots', () => {
   assert.match(appSource, /async function fetchAdminPaginatedRows\(path, headers, options = \{\}\)/);
   assert.match(adminRouteSource, /router\.get\('\/properties\/review-queue'/);
+  assert.match(adminRouteSource, /router\.get\('\/properties\/actioned'/);
+  assert.match(adminRouteSource, /NOT \$\{sourceQualitySuppressedSql\('p'\)\}/);
   assert.match(adminRouteSource, /'source_review'/);
   assert.match(adminRouteSource, /'queued'/);
   assert.match(adminRouteSource, /function adminPendingReviewWhere\(alias = 'p'\)[\s\S]*\$\{statusExpr\} NOT IN \(\$\{final\}\)[\s\S]*\$\{stageExpr\} NOT IN \(\$\{final\}\)/);
@@ -66,16 +68,21 @@ test('admin live controls use paginated backend snapshots', () => {
   assert.match(appSource, /function adminAuthHeaders\(\) \{\s*const headers = \{\};[\s\S]*headers\["x-api-key"\] = adminApiKey;[\s\S]*headers\.Authorization = `Bearer \$\{authState\.token\}`;[\s\S]*return headers;/);
   assert.match(appSource, /async function adminSafeSnapshotRequest\(label, requestFn, fallback\)/);
   assert.match(appSource, /adminSafeSnapshotRequest\("review queue", \(\) => fetchAdminPaginatedRows\("\/api\/admin\/properties\/review-queue\?include_total=0", headers, \{ maxPages: 3 \}\), \[\]\)/);
+  assert.match(appSource, /adminSafeSnapshotRequest\("actioned listings", \(\) => fetchAdminPaginatedRows\("\/api\/admin\/properties\/actioned\?include_total=0", headers, \{ maxPages: 3 \}\), \[\]\)/);
   assert.match(appSource, /adminSafeSnapshotRequest\("whatsapp insights"/);
+  assert.match(appSource, /function adminUnavailableFallback\(label, fallback, error\)/);
+  assert.match(appSource, /partialLiveData: unavailablePanels\.length > 0/);
   assert.match(appSource, /ADMIN_PENDING_QUEUE_RENDER_STEP = 150/);
   assert.match(appSource, /function adminShowMorePendingQueueRows\(\)/);
   assert.match(appSource, /function hydrateAdminAllListingsInBackground\(headers\)/);
   assert.match(appSource, /fetchAdminPaginatedRows\("\/api\/properties\?status=all", headers, \{ maxPages: 500 \}\)/);
+  assert.match(appSource, /if \(activeTab === "listings"\) hydrateAdminAllListingsInBackground\(headers\)/);
   assert.match(appSource, /fetchAdminPaginatedRows\("\/api\/admin\/properties\/live", headers, \{ maxPages: 10 \}\)/);
   assert.match(appSource, /Object\.defineProperties\(rows, \{/);
   assert.match(appSource, /adminSummary: \{ value: lastResponse\?\.summary \|\| firstResponse\?\.summary \|\| null \}/);
   assert.match(appSource, /const adminLiveRows = remoteSnap\?\.liveListings \|\| localSnap\.liveListings \|\| \[\]/);
   assert.match(appSource, /renderAdminFeaturedRows\(adminLiveRows\)/);
+  assert.match(appSource, /renderAdminActionedRows\(remoteSnap\?\.actionedListings \|\| remoteSnap\?\.allListings \|\| localSnap\.allListings \|\| \[\]\)/);
   assert.doesNotMatch(appSource, /renderAdminFeaturedRows\(remoteSnap\?\.allListings \|\| localSnap\.allListings/);
 });
 
@@ -605,7 +612,8 @@ test('King dashboard loads core review data before heavy tab-specific panels', (
   assert.match(snapshotSource, /shouldLoadAds \? adminSafeSnapshotRequest\("advertising packages"/);
   assert.match(snapshotSource, /shouldLoadWhatsapp \? adminSafeSnapshotRequest\("whatsapp insights"/);
   assert.match(snapshotSource, /shouldLoadNotifications \? adminSafeSnapshotRequest\("crm summary"/);
-  assert.match(snapshotSource, /if \(tabNeeds\.actionedListings\) hydrateAdminAllListingsInBackground\(headers\)/);
+  assert.match(snapshotSource, /shouldLoadActionedListings \? adminSafeSnapshotRequest\("actioned listings"/);
+  assert.match(snapshotSource, /if \(activeTab === "listings"\) hydrateAdminAllListingsInBackground\(headers\)/);
   assert.match(tabSource, /adminScheduleDashboardRefreshForTab\(\)/);
   assert.match(renderSource, /fetchRemoteAdminSnapshot\(\{ activeTab: activeAdminWorkflowTab/);
   assert.match(renderSource, /if \(activeAdminWorkflowTab === "staff"\) \{[\s\S]*renderAdminStaffControl\(\)/);

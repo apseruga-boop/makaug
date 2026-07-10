@@ -47,6 +47,27 @@ const CEO_OPERATING_AREAS = [
   'llm_learning'
 ];
 
+const CEO_FINAL_LISTING_STATUSES = [
+  'approved',
+  'live',
+  'published',
+  'sold',
+  'hidden',
+  'deleted',
+  'rejected',
+  'declined',
+  'fraud',
+  'archived',
+  'off_market',
+  'paused',
+  'inactive',
+  'expired',
+  'removed',
+  'unavailable',
+  'duplicate',
+  'actioned'
+];
+
 const CEO_APPROVAL_ACTION_TYPES = new Set([
   'set_property_status',
   'send_support_email',
@@ -60,6 +81,26 @@ const CEO_APPROVAL_ACTION_TYPES = new Set([
   'change_user_access',
   'notify_founder'
 ]);
+
+function ceoSqlList(values = []) {
+  return values.map((value) => `'${String(value).replace(/'/g, "''")}'`).join(', ');
+}
+
+function ceoColumn(alias, column) {
+  return alias ? `${alias}.${column}` : column;
+}
+
+function ceoPendingReviewWhere(alias = 'p') {
+  const final = ceoSqlList(CEO_FINAL_LISTING_STATUSES);
+  return `(
+    LOWER(COALESCE(${ceoColumn(alias, 'status')}, '')) NOT IN (${final})
+    AND LOWER(COALESCE(${ceoColumn(alias, 'moderation_stage')}, '')) NOT IN (${final})
+  )`;
+}
+
+function ceoPublicLiveWhere(alias = 'p') {
+  return `(${ceoColumn(alias, 'status')} = 'approved' OR (${ceoColumn(alias, 'status')} = 'sold' AND ${ceoColumn(alias, 'sold_at')} >= NOW() - INTERVAL '7 days'))`;
+}
 
 function getCeoKillSwitches(agentConfig = {}) {
   const configSwitches = agentConfig && typeof agentConfig === 'object' && agentConfig.killSwitches
@@ -548,17 +589,17 @@ async function collectCeoOperatingMetrics() {
       [],
       { events: 0, visitors: 0, property_views: 0, searches: 0 }
     ),
-    safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'pending'"),
-    safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE status IN ('approved','sold')"),
-    safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'pending' AND (source = 'field_agent' OR listed_via = 'field_agent' OR extra_fields->>'source_role' = 'field_agent')"),
+    safeCount(`SELECT COUNT(*)::int AS total FROM properties p WHERE ${ceoPendingReviewWhere('p')}`),
+    safeCount(`SELECT COUNT(*)::int AS total FROM properties p WHERE ${ceoPublicLiveWhere('p')}`),
+    safeCount(`SELECT COUNT(*)::int AS total FROM properties p WHERE ${ceoPendingReviewWhere('p')} AND (source = 'field_agent' OR listed_via = 'field_agent' OR extra_fields->>'source_role' = 'field_agent')`),
     safeCount("SELECT COUNT(*)::int AS total FROM users WHERE role = 'field_agent' AND status = 'active'"),
     safeCount("SELECT COUNT(*)::int AS total FROM agents WHERE status = 'pending' OR COALESCE(registration_status, 'not_registered') <> 'registered'"),
     safeCount("SELECT COUNT(*)::int AS total FROM agents WHERE status = 'approved' AND COALESCE(registration_status, 'not_registered') = 'registered'"),
     safeCount("SELECT COUNT(*)::int AS total FROM email_logs WHERE status IN ('failed','provider_missing','bounced','error')"),
     safeCount("SELECT COUNT(*)::int AS total FROM notifications WHERE status IN ('failed','provider_missing','bounced','error')"),
     safeCount("SELECT COUNT(*)::int AS total FROM whatsapp_message_logs WHERE status IN ('failed','provider_missing','error')"),
-    safeCount("SELECT COUNT(*)::int AS total FROM leads WHERE lead_status NOT IN ('closed','resolved','won','lost','archived')"),
-    safeCount("SELECT COUNT(*)::int AS total FROM leads WHERE lead_status NOT IN ('closed','resolved','won','lost','archived') AND (priority IN ('high','urgent') OR lead_score >= 50)"),
+    safeCount("SELECT COUNT(*)::int AS total FROM leads WHERE lead_status = 'open'"),
+    safeCount("SELECT COUNT(*)::int AS total FROM leads WHERE lead_status = 'open' AND (priority IN ('high','urgent') OR lead_score >= 50)"),
     safeCount("SELECT COUNT(*)::int AS total FROM lead_tasks WHERE status = 'open' AND due_at < NOW()"),
     safeCount("SELECT COUNT(*)::int AS total FROM property_requests"),
     safeCount("SELECT COUNT(*)::int AS total FROM whatsapp_conversation_state WHERE status IN ('needs_human','escalated')"),

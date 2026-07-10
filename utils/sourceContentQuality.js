@@ -7,6 +7,7 @@ const EXPLICIT_LISTING_INTENT_PATTERN = /\b(?:for\s+sale|on\s+sale|for\s+rent|to
 const MONEY_SIGNAL_PATTERN = /\b(?:ugx|ush|shs?|usd|\$)\s*[\d,.]+|[\d,.]+\s*(?:m|mn|million|b|bn|billion)\b/i;
 const LOW_SIGNAL_PROMO_PATTERN = /\b(?:serious\s+customer|owner\s+wants?\s+money|owner\s+want\s+money|my\s+people|just\s+at|you\s+are\s+to\s+own|own\s+this|take\s+this\s+beautiful\s+house|fuuka\s+landlord|njagala\s+plot|tusigazawo|plot\s+ntono|sente\s+obukadde|hot\s+deal|quick\s+sale)\b/i;
 const SPECIFIC_LOCATION_SIGNAL_PATTERN = /\b(?:entebbe\s*(?:road|rd)|hoima\s*(?:road|rd)|mawanda\s*(?:road|rd)|road|rd|street|avenue|close|estate|village|zone|parish|division|municipality|kiwatule|kyanja|kisaasi|kira|kira[-\s]*mulawa|mulawa|nsasa|kitende|kasangati|mawule|munyonyo|kololo|ntinda|bugolobi|makindye|lubowa|seguku|bwebajja|akright|kajjansi|komamboga|kyebando|makerere|najjeera|namugongo|gayaza|nansana|bulindo|katosi|mpunge|ndejje|bujjuko|bujuuko|kakiri|masulita)\b/i;
+const FOREIGN_PROPERTY_MARKET_PATTERN = /\b(?:kolkata|west\s+bengal|bengal|warangal|hanumakonda|telugu|hyderabad|telangana|andhra\s+pradesh|mumbai|delhi|pune|india|indian\s+real\s+estate|[1-9]\s*bhk)\b/i;
 const BROAD_LOCATION_LABELS = new Set([
   'uganda',
   'kampala',
@@ -194,6 +195,17 @@ function sourceQualitySuppressionForRecord(record = {}) {
   const knownNonListingSource = NON_LISTING_SOURCE_PATTERN.test(sourceText || text);
   const locationQuality = sourceLocationQualityForRecord(record);
   const lowSignalPromoMatch = text.match(LOW_SIGNAL_PROMO_PATTERN);
+  const foreignMarketMatch = text.match(FOREIGN_PROPERTY_MARKET_PATTERN);
+
+  if (foreignMarketMatch) {
+    return {
+      suppressed: true,
+      reason: 'foreign_property_market_source',
+      matched: foreignMarketMatch[0],
+      location_status: locationQuality.status,
+      listing_signal: hasExplicitListingIntent || hasMoneySignal ? 'foreign_listing_signal_not_uganda' : 'foreign_market_content',
+    };
+  }
 
   if (!locationQuality.ok && lowSignalPromoMatch) {
     return {
@@ -287,6 +299,7 @@ function sourceQualitySuppressedSql(alias = 'p') {
   const explicit = "(for[[:space:]]+sale|on[[:space:]]+sale|for[[:space:]]+rent|to[[:space:]]+rent|to[[:space:]]+let|rent[[:space:]]+to[[:space:]]+own|rent-to-own|available[[:space:]]+(for[[:space:]]+)?(sale|rent|lease)|selling|asking[[:space:]]+price|guide[[:space:]]+price|price[[:space:]]*:|land[[:space:]]+for[[:space:]]+sale|plots?[[:space:]]+for[[:space:]]+sale|house[[:space:]]+for[[:space:]]+sale|home[[:space:]]+for[[:space:]]+sale|apartment[[:space:]]+for[[:space:]]+sale|apartment[[:space:]]+for[[:space:]]+rent|office[[:space:]]+space[[:space:]]+for[[:space:]]+rent|shop[[:space:]]+for[[:space:]]+rent|student[[:space:]]+(room|hostel|accommodation))";
   const knownSource = "(dawinci|da[[:space:]]*winci|sameblood)";
   const lowSignalPromo = "(serious[[:space:]]+customer|owner[[:space:]]+wants?[[:space:]]+money|owner[[:space:]]+want[[:space:]]+money|my[[:space:]]+people|just[[:space:]]+at|you[[:space:]]+are[[:space:]]+to[[:space:]]+own|own[[:space:]]+this|take[[:space:]]+this[[:space:]]+beautiful[[:space:]]+house|fuuka[[:space:]]+landlord|njagala[[:space:]]+plot|tusigazawo|plot[[:space:]]+ntono|sente[[:space:]]+obukadde|hot[[:space:]]+deal|quick[[:space:]]+sale)";
+  const foreignMarket = "(kolkata|west[[:space:]]+bengal|bengal|warangal|hanumakonda|telugu|hyderabad|telangana|andhra[[:space:]]+pradesh|mumbai|delhi|pune|india|indian[[:space:]]+real[[:space:]]+estate|[1-9][[:space:]]*bhk)";
   const specificLocation = "(entebbe[[:space:]]*(road|rd)|hoima[[:space:]]*(road|rd)|mawanda[[:space:]]*(road|rd)|road|rd|street|avenue|close|estate|village|zone|parish|division|municipality|kiwatule|kyanja|kisaasi|kira|kira(-|[[:space:]])*mulawa|mulawa|nsasa|kitende|kasangati|mawule|munyonyo|kololo|ntinda|bugolobi|makindye|lubowa|seguku|bwebajja|akright|kajjansi|komamboga|kyebando|makerere|najjeera|namugongo|gayaza|nansana|bulindo|katosi|mpunge|ndejje|bujjuko|bujuuko|kakiri|masulita)";
   const broadLocationOnly = `(
       COALESCE(NULLIF(TRIM(${prefix}area), ''), '') = ''
@@ -301,7 +314,8 @@ function sourceQualitySuppressedSql(alias = 'p') {
     )
     AND ${text} !~* '${specificLocation}'`;
   return `(
-    (${text} ~* '${hard}' AND ${text} !~* '${explicit}')
+    (${text} ~* '${foreignMarket}')
+    OR (${text} ~* '${hard}' AND ${text} !~* '${explicit}')
     OR (${source} ~* '${knownSource}' AND ${text} ~* '${sourceBound}' AND ${text} !~* '${explicit}')
     OR (${source} ~* '${knownSource}' AND ${text} ~* '${hard}')
     OR (${text} ~* '${lowSignalPromo}' AND ${broadLocationOnly})

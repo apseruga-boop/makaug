@@ -787,6 +787,7 @@ let authSignUpOtpChannel = "phone";
 let adminApiKey = "";
 let adminRemoteListings = [];
 let adminLiveListings = [];
+let adminActionedListings = [];
 let adminPublicInventoryParity = {};
 let adminRemoteAgents = [];
 let adminPropertyRequests = [];
@@ -844,6 +845,7 @@ let adminReviewLocationMarker = null;
 let adminReviewLocationProvider = "";
 let adminWhatsAppDraft = null;
 let adminAiSnapshot = null;
+let adminLatestCommandCentreMetrics = null;
 let adminPendingPhotoDeleteId = "";
 let adminPendingPhotoDeleteReviewId = "";
 let adminPendingPhotoDeleteTimer = null;
@@ -11904,6 +11906,7 @@ function buildLocalAdminAreaInsights(listings = []) {
 
 function buildAdminAiSnapshot(remoteSnap, localSnap, sourceLabel = "") {
   const summary = remoteSnap?.summary || {};
+  const commandMetrics = remoteSnap?.commandCentre?.metrics || {};
   const insights = summary?.ai_insights || {};
   const users = summary?.users || {};
   const engagement = summary?.engagement || {};
@@ -11922,8 +11925,8 @@ function buildAdminAiSnapshot(remoteSnap, localSnap, sourceLabel = "") {
     totalSaves: Number(engagement.property_saves ?? localSummary.totalSaves ?? 0),
     weeklyTips: Number(users.weekly_tips_opt_in ?? (localSnap?.recentUsers || []).filter((u) => u.weekly_tips_opt_in !== false).length ?? 0),
     totalUsers: Number(users.total ?? localSummary.totalUsers ?? 0),
-    pendingListings: Number(summary?.properties?.pending ?? localSummary.pendingListings ?? 0),
-    approvedListings: Number(summary?.properties?.public_live ?? summary?.properties?.approved ?? localSummary.approvedListings ?? 0),
+    pendingListings: Number(commandMetrics.pending_listings ?? summary?.properties?.pending ?? localSummary.pendingListings ?? 0),
+    approvedListings: Number(commandMetrics.live_listings ?? summary?.properties?.public_live ?? summary?.properties?.approved ?? localSummary.approvedListings ?? 0),
     topAreas,
     topListingTypes
   };
@@ -12017,6 +12020,7 @@ function adminPriorityClass(priority = "clear") {
 
 function renderAdminCommandCentre(remoteSnap, localSnap, sourceLabel = "") {
   const { metrics, decisions } = adminBuildCommandCentre(remoteSnap, localSnap);
+  adminLatestCommandCentreMetrics = metrics;
   const source = document.getElementById("admin-command-source");
   if (source) source.textContent = sourceLabel.replace(/^Data source:\s*/i, "") || "live admin data";
 
@@ -12215,9 +12219,17 @@ function renderAiCeoStatus(data) {
     const reportSummary = lastReport?.summary || "No saved morning report yet. Run one before live operations begin.";
     const channels = deliveryChannels.length ? deliveryChannels.join(", ") : "dashboard";
     const latestCommand = recentCommands[0]?.response_summary || "";
+    const liveMetrics = adminLatestCommandCentreMetrics && typeof adminLatestCommandCentreMetrics === "object"
+      ? adminLatestCommandCentreMetrics
+      : {};
+    const hasLiveMetrics = Object.keys(liveMetrics).length > 0;
+    const liveSummary = hasLiveMetrics
+      ? `Current dashboard: ${Number(liveMetrics.pending_listings || 0).toLocaleString("en-UG")} listings to decide, ${Number(liveMetrics.live_listings || 0).toLocaleString("en-UG")} live, ${Number(liveMetrics.open_leads || 0).toLocaleString("en-UG")} open leads, ${Number(liveMetrics.broker_pending || 0).toLocaleString("en-UG")} broker reviews.`
+      : "";
     outputEl.innerHTML = `
       <div class="font-black text-gray-900">Latest AI CEO view</div>
-      <p class="mt-1">${adminEscape(reportSummary)}</p>
+      <p class="mt-1">${adminEscape(liveSummary || reportSummary)}</p>
+      ${liveSummary ? `<p class="mt-1 text-xs text-gray-500">Saved report: ${adminEscape(reportSummary)}</p>` : ""}
       <div class="mt-3 grid sm:grid-cols-3 gap-2 text-xs">
         <div class="rounded-xl bg-white border border-gray-200 p-3"><strong>${adminEscape(openFindings.length)}</strong><br>open finding(s)</div>
         <div class="rounded-xl bg-white border border-gray-200 p-3"><strong>${adminEscape(pendingActions.length)}</strong><br>pending action(s)</div>
@@ -12804,8 +12816,35 @@ async function adminSafeSnapshotRequest(label, requestFn, fallback) {
       adminLiveAuthFailure = error;
     }
     console.warn(`Admin dashboard ${label} unavailable`, error?.message || error);
+    return adminUnavailableFallback(label, fallback, error);
+  }
+}
+
+function adminUnavailableFallback(label, fallback, error) {
+  const reason = error?.message || "request failed";
+  if (Array.isArray(fallback)) {
+    Object.defineProperties(fallback, {
+      __adminUnavailable: { value: true, configurable: true },
+      __adminUnavailableLabel: { value: label, configurable: true },
+      __adminUnavailableReason: { value: reason, configurable: true }
+    });
     return fallback;
   }
+  return {
+    ...(fallback || {}),
+    __adminUnavailable: true,
+    __adminUnavailableLabel: label,
+    __adminUnavailableReason: reason
+  };
+}
+
+function adminUnavailablePanelsFromSnapshotParts(parts = []) {
+  return parts
+    .filter((item) => item && item.__adminUnavailable)
+    .map((item) => ({
+      label: item.__adminUnavailableLabel || "panel",
+      reason: item.__adminUnavailableReason || "request failed"
+    }));
 }
 
 function buildAdminAuthFailureError() {
@@ -12844,6 +12883,7 @@ async function fetchRemoteAdminSnapshot(options = {}) {
   if (whatsappAiMode) whatsappParams.set("ai_mode", whatsappAiMode);
   const shouldLoadReviewQueue = tabNeeds.reviewQueue;
   const shouldLoadLiveListings = tabNeeds.liveListings;
+  const shouldLoadActionedListings = tabNeeds.actionedListings;
   const shouldLoadAgents = tabNeeds.accounts || tabNeeds.liveListings;
   const shouldLoadAccounts = tabNeeds.accounts;
   const shouldLoadCampaigns = tabNeeds.accounts || tabNeeds.ads;
@@ -12851,12 +12891,13 @@ async function fetchRemoteAdminSnapshot(options = {}) {
   const shouldLoadAds = tabNeeds.ads;
   const shouldLoadWhatsapp = tabNeeds.whatsapp;
   const shouldLoadNotifications = tabNeeds.notifications;
-  const [summaryRes, commandCentreRes, recentRes, pendingRows, liveRows, usersRes, agentsRes, propertyRequestsRes, fieldAgentsRes, campaignsRes, adPackagesRes, adPlacementsRes, adSummaryRes, adInquiriesRes, adCampaignsRes, whatsappInsightsRes, whatsappConversationsRes, crmSummaryRes, crmLeadsRes, notificationsRes, emailsRes, outlookStatusRes, outlookActionsRes, whatsappLogsRes] = await Promise.all([
+  const [summaryRes, commandCentreRes, recentRes, pendingRows, liveRows, actionedRows, usersRes, agentsRes, propertyRequestsRes, fieldAgentsRes, campaignsRes, adPackagesRes, adPlacementsRes, adSummaryRes, adInquiriesRes, adCampaignsRes, whatsappInsightsRes, whatsappConversationsRes, crmSummaryRes, crmLeadsRes, notificationsRes, emailsRes, outlookStatusRes, outlookActionsRes, whatsappLogsRes] = await Promise.all([
     adminSafeSnapshotRequest("summary", () => apiRequest("/api/admin/summary", { headers }), { data: {} }),
     adminSafeSnapshotRequest("command centre", () => apiRequest("/api/admin/command-centre", { headers }), { data: {} }),
     adminSafeSnapshotRequest("recent activity", () => apiRequest("/api/admin/recent", { headers }), { data: {} }),
     shouldLoadReviewQueue ? adminSafeSnapshotRequest("review queue", () => fetchAdminPaginatedRows("/api/admin/properties/review-queue?include_total=0", headers, { maxPages: 3 }), []) : null,
     shouldLoadLiveListings ? adminSafeSnapshotRequest("live listings", () => fetchAdminPaginatedRows("/api/admin/properties/live", headers, { maxPages: 10 }), []) : null,
+    shouldLoadActionedListings ? adminSafeSnapshotRequest("actioned listings", () => fetchAdminPaginatedRows("/api/admin/properties/actioned?include_total=0", headers, { maxPages: 3 }), []) : null,
     shouldLoadAccounts ? adminSafeSnapshotRequest("users", () => apiRequest(`/api/admin/users?${userParams.toString()}`, { headers }), { data: [] }) : null,
     shouldLoadAgents ? adminSafeSnapshotRequest("agents", () => apiRequest("/api/admin/agents?limit=100", { headers }), { data: [] }) : null,
     shouldLoadAccounts ? adminSafeSnapshotRequest("property requests", () => apiRequest(`/api/admin/property-requests?${propertyRequestParams.toString()}`, { headers }), { data: [] }) : null,
@@ -12885,13 +12926,17 @@ async function fetchRemoteAdminSnapshot(options = {}) {
   const liveListings = Array.isArray(liveRows)
     ? liveRows.map((row) => normalizeRemoteAdminListing({ ...row, admin_live_endpoint: true }))
     : adminLiveListings;
+  const actionedListings = Array.isArray(actionedRows)
+    ? actionedRows.map((row) => normalizeRemoteAdminListing({ ...row, admin_actioned_endpoint: true }))
+    : adminActionedListings;
   if (Array.isArray(liveRows)) {
     adminPublicInventoryParity = liveRows?.adminMeta?.public_parity || liveRows?.adminSummary?.public_inventory || adminPublicInventoryParity || {};
   }
-  const allListings = adminUniqueSeedItems([...pendingListings, ...liveListings]);
-  if (Array.isArray(pendingRows) || Array.isArray(liveRows)) adminRemoteListings = allListings;
+  const allListings = adminUniqueSeedItems([...pendingListings, ...liveListings, ...actionedListings]);
+  if (Array.isArray(pendingRows) || Array.isArray(liveRows) || Array.isArray(actionedRows)) adminRemoteListings = allListings;
   if (Array.isArray(liveRows)) adminLiveListings = liveListings;
-  if (tabNeeds.actionedListings) hydrateAdminAllListingsInBackground(headers);
+  if (Array.isArray(actionedRows)) adminActionedListings = actionedListings;
+  if (activeTab === "listings") hydrateAdminAllListingsInBackground(headers);
   if (Array.isArray(agentsRes?.data)) adminRemoteAgents = agentsRes.data.map(mapRemoteAgentForUi);
   if (Array.isArray(propertyRequestsRes?.data)) adminPropertyRequests = propertyRequestsRes.data;
   if (Array.isArray(fieldAgentsRes?.data)) adminFieldAgents = fieldAgentsRes.data;
@@ -12917,13 +12962,42 @@ async function fetchRemoteAdminSnapshot(options = {}) {
   if (Array.isArray(whatsappLogsRes?.data)) adminWhatsappLogs = whatsappLogsRes.data;
   const outlookAgentStatus = outlookStatusRes?.data || {};
   const outlookAgentActions = Array.isArray(outlookActionsRes?.data) ? outlookActionsRes.data : [];
+  const unavailablePanels = adminUnavailablePanelsFromSnapshotParts([
+    summaryRes,
+    commandCentreRes,
+    recentRes,
+    pendingRows,
+    liveRows,
+    actionedRows,
+    usersRes,
+    agentsRes,
+    propertyRequestsRes,
+    fieldAgentsRes,
+    campaignsRes,
+    adPackagesRes,
+    adPlacementsRes,
+    adSummaryRes,
+    adInquiriesRes,
+    adCampaignsRes,
+    whatsappInsightsRes,
+    whatsappConversationsRes,
+    crmSummaryRes,
+    crmLeadsRes,
+    notificationsRes,
+    emailsRes,
+    outlookStatusRes,
+    outlookActionsRes,
+    whatsappLogsRes
+  ]);
   return {
     summary: summaryRes?.data || {},
     commandCentre: commandCentreRes?.data || {},
     recent: recentRes?.data || {},
     pendingListings,
     liveListings,
-    publicInventoryParity: adminPublicInventoryParity,    allListings,
+    actionedListings,
+    publicInventoryParity: adminPublicInventoryParity,
+    allListings,
     users: usersRes?.data || [],
     agents: adminRemoteAgents,
     propertyRequests: adminPropertyRequests,
@@ -12943,7 +13017,9 @@ async function fetchRemoteAdminSnapshot(options = {}) {
     emailLogs: adminEmailLogs,
     outlookAgentStatus,
     outlookAgentActions,
-    whatsappLogs: adminWhatsappLogs
+    whatsappLogs: adminWhatsappLogs,
+    unavailablePanels,
+    partialLiveData: unavailablePanels.length > 0
   };
 }
 
@@ -15481,6 +15557,10 @@ async function renderAdminDashboard(options = {}) {
     try {
       remoteSnap = await fetchRemoteAdminSnapshot({ activeTab: activeAdminWorkflowTab, source: options.source || "dashboard" });
       sourceLabel = adminApiKey ? "Data source: live admin API." : "Data source: live admin API via signed-in admin.";
+      if (remoteSnap?.partialLiveData) {
+        const labels = (remoteSnap.unavailablePanels || []).map((item) => item.label).filter(Boolean).slice(0, 4);
+        sourceLabel = `${sourceLabel.replace(/\.$/, "")} (partial: ${labels.join(", ") || "some panels"} unavailable; using live fallbacks where available).`;
+      }
     } catch (e) {
       if (e?.adminAuthFailure) {
         renderAdminAuthFailureGate(gate, body, e);
@@ -15491,12 +15571,19 @@ async function renderAdminDashboard(options = {}) {
   }
 
   const summary = remoteSnap?.summary || {};
-  const totalListings = summary?.properties?.total ?? localSnap.summary.totalListings;
-  const pendingListings = summary?.properties?.pending ?? localSnap.summary.pendingListings;
-  const approvedListings = summary?.properties?.public_live ?? summary?.properties?.approved ?? localSnap.summary.approvedListings;
+  const commandMetrics = remoteSnap?.commandCentre?.metrics || {};
+  const totalFromCommand = (
+    Number(commandMetrics.pending_listings || 0)
+    + Number(commandMetrics.live_listings || 0)
+    + Number(commandMetrics.hidden_listings || 0)
+    + Number(commandMetrics.deleted_listings || 0)
+  );
+  const totalListings = summary?.properties?.total ?? (totalFromCommand || undefined) ?? localSnap.summary.totalListings;
+  const pendingListings = summary?.properties?.pending ?? commandMetrics.pending_listings ?? localSnap.summary.pendingListings;
+  const approvedListings = summary?.properties?.public_live ?? summary?.properties?.approved ?? commandMetrics.live_listings ?? localSnap.summary.approvedListings;
   const rejectedListings = summary?.properties?.rejected ?? localSnap.summary.rejectedListings;
-  const hiddenListings = summary?.properties?.hidden ?? localSnap.summary.hiddenListings;
-  const deletedListings = summary?.properties?.deleted ?? localSnap.summary.deletedListings;
+  const hiddenListings = summary?.properties?.hidden ?? commandMetrics.hidden_listings ?? localSnap.summary.hiddenListings;
+  const deletedListings = summary?.properties?.deleted ?? commandMetrics.deleted_listings ?? localSnap.summary.deletedListings;
   const totalAgents = summary?.agents?.total ?? localSnap.summary.totalAgents;
   const totalUsers = summary?.users?.total ?? localSnap.summary.totalUsers;
   const totalViews = summary?.engagement?.property_views ?? localSnap.summary.totalViews;
@@ -15505,8 +15592,8 @@ async function renderAdminDashboard(options = {}) {
   const privateListings = summary?.properties?.private ?? localSnap.summary.privateListings;
   const agentListings = summary?.properties?.agent_listed ?? localSnap.summary.agentListings;
   const studentDiscoverableListings = summary?.properties?.student_discoverable ?? localSnap.summary.studentDiscoverableListings;
-  const registeredAgents = summary?.agents?.registered ?? localSnap.summary.registeredAgents;
-  const notRegisteredAgents = summary?.agents?.not_registered ?? localSnap.summary.notRegisteredAgents;
+  const registeredAgents = summary?.agents?.registered ?? commandMetrics.broker_approved ?? localSnap.summary.registeredAgents;
+  const notRegisteredAgents = summary?.agents?.not_registered ?? commandMetrics.broker_pending ?? localSnap.summary.notRegisteredAgents;
   const approvalRate = summary?.properties?.approval_rate_pct ?? localSnap.summary.approvalRate;
   const rejectionRate = summary?.properties?.rejection_rate_pct ?? localSnap.summary.rejectionRate;
   const avgViewsPerListing = summary?.engagement?.avg_views_per_listing ?? localSnap.summary.avgViewsPerListing;
@@ -15536,9 +15623,9 @@ async function renderAdminDashboard(options = {}) {
   setText("admin-stat-save-view-ratio", `${saveToViewRatio}%`);
   setText("admin-stat-registered-agents", registeredAgents);
   setText("admin-stat-not-registered-agents", notRegisteredAgents);
-  setText("admin-stat-ad-leads", remoteSnap?.advertisingSummary?.open_inquiries ?? 0);
-  setText("admin-stat-live-ads", remoteSnap?.advertisingSummary?.live_campaigns ?? 0);
-  setText("admin-stat-ad-revenue", `UGX ${Number(remoteSnap?.advertisingSummary?.paid_revenue_ugx || 0).toLocaleString("en-UG")}`);
+  setText("admin-stat-ad-leads", remoteSnap?.advertisingSummary?.open_inquiries ?? commandMetrics.advertising_open_leads ?? 0);
+  setText("admin-stat-live-ads", remoteSnap?.advertisingSummary?.live_campaigns ?? commandMetrics.live_ads ?? 0);
+  setText("admin-stat-ad-revenue", `UGX ${Number(remoteSnap?.advertisingSummary?.paid_revenue_ugx ?? commandMetrics.paid_revenue_ugx ?? 0).toLocaleString("en-UG")}`);
   if (sourceEl) sourceEl.textContent = sourceLabel;
   renderAdminAiAssistant(remoteSnap, localSnap, sourceLabel);
   renderAdminCommandCentre(remoteSnap, localSnap, sourceLabel);
@@ -15548,7 +15635,7 @@ async function renderAdminDashboard(options = {}) {
   const adminAgents = remoteSnap?.agents || localSnap.agents || [];
   const adminLiveRows = remoteSnap?.liveListings || localSnap.liveListings || [];
   renderAdminPendingRows(remoteSnap?.pendingListings || localSnap.pendingListings);
-  renderAdminActionedRows(remoteSnap?.allListings || localSnap.allListings || []);
+  renderAdminActionedRows(remoteSnap?.actionedListings || remoteSnap?.allListings || localSnap.allListings || []);
   renderAdminLiveParitySummary(remoteSnap || localSnap, adminLiveRows);  renderAdminLiveListingsRows(adminLiveRows);
   renderAdminFeaturedRows(adminLiveRows);
   renderAdminOutreachOverview({

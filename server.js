@@ -189,6 +189,7 @@ const tiktokThumbnailCacheProxyVersion = 'tiktok-thumbnail-cache-proxy-20260709'
 const adminDashboardStabilityVersion = 'admin-dashboard-stability-20260709';
 const adminDashboardStabilityV2Version = 'admin-dashboard-stability-v2-20260709';
 const adminDashboardStabilityV3Version = 'admin-dashboard-stability-v3-20260709';
+const kingDashboardCorrelationFixVersion = 'king-dashboard-correlation-fix-20260710';
 const publicAppVersionSuffixes = [
   captureHelperUsabilityVersion,
   studentNearestUniversityVersion,
@@ -247,7 +248,8 @@ const publicAppVersionSuffixes = [
   tiktokThumbnailCacheProxyVersion,
   adminDashboardStabilityVersion,
   adminDashboardStabilityV2Version,
-  adminDashboardStabilityV3Version
+  adminDashboardStabilityV3Version,
+  kingDashboardCorrelationFixVersion
 ];
 let cachedIndexHtml = null;
 const publicHtmlCache = new Map();

@@ -15,6 +15,7 @@ const {
   landTitleAvailabilityLabel,
   normalizeLandTitleAvailability
 } = require('../utils/landTitleAvailability');
+const { sourceQualitySuppressedSql } = require('../utils/sourceContentQuality');
 const {
   buildUgNlisLandVerificationPack,
   sanitizeUgNlisLandVerificationFields
@@ -2992,6 +2993,7 @@ router.get('/properties/review-queue', async (req, res, next) => {
     const listingType = cleanText(req.query.listing_type || req.query.type).toLowerCase();
 
     if (!includeTestLike) filters.push(`NOT ${adminLaunchTestListingFastCondition('p')}`);
+    filters.push(`NOT ${sourceQualitySuppressedSql('p')}`);
     if (listingType && LISTING_TYPES.includes(listingType)) {
       values.push(listingType);
       filters.push(`p.listing_type = $${values.length}`);
@@ -3119,6 +3121,160 @@ router.get('/properties/review-queue', async (req, res, next) => {
           row_fallback_reason: rowFallbackReason,
           pending_statuses: ADMIN_PENDING_REVIEW_STATUSES,
           final_statuses_excluded: ADMIN_FINAL_REVIEW_STATUSES
+        }
+      };
+    });
+
+    return res.json(payload);
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/properties/actioned', async (req, res, next) => {
+  try {
+    const { page, limit, offset } = parsePagination(req.query);
+    const includeTestLike = parseBooleanLike(req.query.include_test_like || req.query.includeTestLike, false);
+    const includeTotal = parseBooleanLike(req.query.include_total || req.query.includeTotal, false);
+    const includeImages = parseBooleanLike(req.query.include_images || req.query.includeImages, false);
+    const finalStatuses = adminSqlList(ADMIN_FINAL_REVIEW_STATUSES);
+    const filters = [`(
+      LOWER(COALESCE(p.status, '')) IN (${finalStatuses})
+      OR LOWER(COALESCE(p.moderation_stage, '')) IN (${finalStatuses})
+    )`];
+    const values = [];
+    const search = cleanText(req.query.search || req.query.q);
+    const listingType = cleanText(req.query.listing_type || req.query.type).toLowerCase();
+
+    if (!includeTestLike) filters.push(`NOT ${adminLaunchTestListingFastCondition('p')}`);
+    if (listingType && LISTING_TYPES.includes(listingType)) {
+      values.push(listingType);
+      filters.push(`p.listing_type = $${values.length}`);
+    }
+    if (search) {
+      values.push(`%${search}%`);
+      const idx = values.length;
+      filters.push(`(
+        p.title ILIKE $${idx}
+        OR p.area ILIKE $${idx}
+        OR p.district ILIKE $${idx}
+        OR COALESCE(p.inquiry_reference, '') ILIKE $${idx}
+        OR COALESCE(p.lister_phone, '') ILIKE $${idx}
+        OR COALESCE(p.extra_fields->>'source_name', '') ILIKE $${idx}
+        OR COALESCE(p.extra_fields->>'source_platform', '') ILIKE $${idx}
+      )`);
+    }
+
+    const where = `WHERE ${filters.join(' AND ')}`;
+    const cacheKey = JSON.stringify({
+      route: 'admin-actioned-v1',
+      page,
+      limit,
+      includeTestLike,
+      includeTotal,
+      includeImages,
+      search,
+      listingType
+    });
+
+    const payload = await adminCachedPayload(cacheKey, ADMIN_REVIEW_QUEUE_CACHE_TTL_MS, async () => {
+      let exactTotal = null;
+      let exactTotalAvailable = false;
+      let countFallbackReason = '';
+      if (includeTotal || search || listingType) {
+        const countRow = await safeOne(
+          `SELECT COUNT(*)::int AS total FROM properties p ${where}`,
+          values,
+          { total: 0 },
+          { timeoutMs: 2000 }
+        );
+        exactTotal = Number(countRow.total || 0);
+        countFallbackReason = countRow._fallback_reason || '';
+        exactTotalAvailable = !countFallbackReason;
+      }
+
+      const imageSelect = includeImages ? 'img.url AS primary_image_url' : 'NULL::text AS primary_image_url';
+      const imageJoin = includeImages
+        ? `LEFT JOIN LATERAL (
+           SELECT i.url
+           FROM property_images i
+           WHERE i.property_id = p.id
+           ORDER BY i.is_primary DESC, i.sort_order ASC, i.created_at ASC
+           LIMIT 1
+         ) img ON true`
+        : '';
+      const rowLimit = limit + 1;
+      let rowFallbackReason = '';
+      let rawRows = [];
+      try {
+        const rows = await adminTimedQuery(
+          `SELECT
+             p.id,
+             p.title,
+             p.listing_type,
+             p.property_type,
+             p.district,
+             p.area,
+             p.price,
+             p.price_period,
+             p.status,
+             p.moderation_stage,
+             p.moderation_notes,
+             p.moderation_reason,
+             p.inquiry_reference,
+             p.source,
+             p.listed_via,
+             p.lister_type,
+             p.agent_id,
+             p.lister_name,
+             p.lister_phone,
+             p.lister_email,
+             p.created_at,
+             p.updated_at,
+             p.reviewed_at,
+             p.approved_at,
+             p.extra_fields,
+             CONCAT('/property/', p.id::text) AS property_url,
+             ${imageSelect}
+           FROM properties p
+           ${imageJoin}
+           ${where}
+           ORDER BY COALESCE(p.reviewed_at, p.approved_at, p.updated_at, p.created_at) DESC NULLS LAST, p.id DESC
+           LIMIT $${values.length + 1}
+           OFFSET $${values.length + 2}`,
+          [...values, rowLimit, offset],
+          9000
+        );
+        rawRows = rows.rows || [];
+      } catch (error) {
+        rowFallbackReason = adminSafeQueryFallbackReason(error);
+        if (!rowFallbackReason) throw error;
+      }
+
+      const hasMore = rawRows.length > limit;
+      const responseRows = rawRows.slice(0, limit);
+      const inferredTotal = offset + responseRows.length + (hasMore ? 1 : 0);
+      const total = exactTotalAvailable ? exactTotal : inferredTotal;
+      const pagination = toPagination(total, page, limit);
+      if (!exactTotalAvailable) pagination.totalPages = page + (hasMore ? 1 : 0);
+
+      return {
+        ok: true,
+        data: responseRows,
+        pagination,
+        meta: {
+          status: 'actioned',
+          cache: 'admin_actioned_v1',
+          cache_ttl_ms: ADMIN_REVIEW_QUEUE_CACHE_TTL_MS,
+          include_test_like: includeTestLike,
+          include_total: includeTotal,
+          include_images: includeImages,
+          has_more: hasMore,
+          total_exact: exactTotalAvailable,
+          partial_total: !exactTotalAvailable,
+          count_fallback_reason: countFallbackReason,
+          row_fallback_reason: rowFallbackReason,
+          final_statuses_included: ADMIN_FINAL_REVIEW_STATUSES
         }
       };
     });

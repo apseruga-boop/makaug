@@ -6,6 +6,7 @@ const root = path.join(__dirname, '..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 
 const service = read('services/aiCeoControlService.js');
+const orchestratorService = read('services/aiAgentOrchestratorService.js');
 const whatsappRoute = read('routes/whatsapp.js');
 const adminAgentsRoute = read('routes/admin-agents.js');
 const aiCeoRoute = read('routes/ai-ceo.js');
@@ -35,6 +36,9 @@ assert(service.includes('queueFounderApprovalAction'), 'AI CEO must queue risky 
 assert(service.includes('sendSupportEmail'), 'AI CEO must be able to send outgoing email through the existing email service');
 assert(service.includes('sendTelegramMessage'), 'AI CEO service must support Telegram owner replies');
 assert(service.includes('collectCeoMetrics'), 'AI CEO must collect platform metrics for reports');
+assert(service.includes('ceoPendingReviewWhere') && service.includes("lead_status = 'open'"), 'AI CEO metrics must match Command Centre pending/listing/lead definitions');
+assert(orchestratorService.includes('ceoPendingReviewWhere') && orchestratorService.includes('ceoPublicLiveWhere'), 'AI CEO orchestrator must use the same listing status definitions as Command Centre');
+assert(orchestratorService.includes("lead_status = 'open'"), 'AI CEO orchestrator must count only live open leads like Command Centre');
 
 assert(whatsappRoute.includes('handleOwnerWhatsappCommand'), 'WhatsApp runtime must intercept founder owner commands');
 assert(whatsappRoute.includes('ai_ceo_control_service'), 'WhatsApp command handling must be logged as AI CEO control');
