@@ -2797,7 +2797,7 @@ router.post('/', async (req, res, next) => {
 
     const listedVia = cleanText(body.listed_via || (brokerCanSkipOwnerIdentity ? 'broker_dashboard' : 'website')).toLowerCase();
     const listedViaBrokerPath = listedVia.includes('broker');
-    const enforceOtp = !brokerCanSkipOwnerIdentity && (listedVia === 'website' || listedVia === 'web' || listedVia === 'desktop' || listedViaBrokerPath);
+    const enforceWebsiteSubmissionRules = !brokerCanSkipOwnerIdentity && (listedVia === 'website' || listedVia === 'web' || listedVia === 'desktop' || listedViaBrokerPath);
     const resolvedListerType = brokerCanSkipOwnerIdentity ? 'agent' : (cleanText(body.lister_type) || 'owner');
     if (listedViaBrokerPath && !brokerCanSkipOwnerIdentity) {
       errors.push('Signed-in broker profile is required before using the broker listing path');
@@ -2819,13 +2819,9 @@ router.post('/', async (req, res, next) => {
     const websiteMinImages = 5;
     const websiteMaxImages = 20;
 
-    if (enforceOtp) {
-      if (otpChannel === 'email') {
-        if (!listerEmailNormalized || !isValidEmail(listerEmailNormalized)) {
-          errors.push('lister_email is required for email OTP verification');
-        }
-      } else if (!listerPhone) {
-        errors.push('lister_phone is required for OTP verification');
+    if (enforceWebsiteSubmissionRules) {
+      if (!listerEmailNormalized || !isValidEmail(listerEmailNormalized)) {
+        errors.push('lister_email is required for online listing review updates');
       }
       if (submittedImages.length < websiteMinImages || submittedImages.length > websiteMaxImages) {
         errors.push(`At least ${websiteMinImages} and no more than ${websiteMaxImages} property images are required for website submissions`);
@@ -2833,14 +2829,10 @@ router.post('/', async (req, res, next) => {
       if (invalidSubmittedImages.length) {
         errors.push('Each property image must include a viewable image URL');
       }
-      if (!idDocumentName && !idDocumentUrl) {
-        errors.push('National ID photo is required. Upload a photo image; PDFs are not accepted');
-      } else if (!isAcceptedNationalIdPhoto({ name: idDocumentName, url: idDocumentUrl, mimeType: idDocumentType })) {
+      if ((idDocumentName || idDocumentUrl) && !isAcceptedNationalIdPhoto({ name: idDocumentName, url: idDocumentUrl, mimeType: idDocumentType })) {
         errors.push('National ID must be uploaded as a photo image. PDFs are not accepted. Please take a picture and upload it');
       }
-      if (!listingOtpToken) {
-        errors.push('listing_otp_token is required. Verify OTP before submit');
-      } else {
+      if (listingOtpToken) {
         const verified = verifyListingSubmitToken(listingOtpToken);
         if (!verified.ok) {
           errors.push('listing_otp_token is invalid or expired');

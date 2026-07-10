@@ -192,6 +192,7 @@ const adminDashboardStabilityV3Version = 'admin-dashboard-stability-v3-20260709'
 const kingDashboardCorrelationFixVersion = 'king-dashboard-correlation-fix-20260710';
 const kingDashboardLiveAiFixVersion = 'king-dashboard-live-ai-fix-20260710';
 const kingDashboardAiVisibleSummaryFixVersion = 'king-dashboard-ai-visible-summary-fix-20260710';
+const listPropertyEmailOnlyVersion = 'list-property-email-only-20260710';
 const publicAppVersionSuffixes = [
   captureHelperUsabilityVersion,
   studentNearestUniversityVersion,
@@ -253,7 +254,8 @@ const publicAppVersionSuffixes = [
   adminDashboardStabilityV3Version,
   kingDashboardCorrelationFixVersion,
   kingDashboardLiveAiFixVersion,
-  kingDashboardAiVisibleSummaryFixVersion
+  kingDashboardAiVisibleSummaryFixVersion,
+  listPropertyEmailOnlyVersion
 ];
 let cachedIndexHtml = null;
 const publicHtmlCache = new Map();

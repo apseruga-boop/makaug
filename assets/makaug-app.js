@@ -4849,7 +4849,7 @@ const FRAUD_I18N = {
     title: "Fraud Prevention",
     sub: "We use layered verification, AI-powered fraud detection, and manual moderation to keep makaug safer for buyers, renters, brokers, and property listers.",
     card1Title: "Identity Verification",
-    card1Sub: "OTP + National ID checks before listing submission and publishing review.",
+    card1Sub: "Email contact capture, photo checks, and admin review before publishing.",
     card2Title: "AI Fraud Signals",
     card2Sub: "Image duplication checks, suspicious listing patterns, and document anomaly checks.",
     card3Title: "Manual Moderation",
@@ -5187,26 +5187,26 @@ function applyListingWizardLanguageUI() {
     ["lp-alt-label", "Altitude (m)"],
     ["lp-step2-title", "Photos & Media"],
     ["lp-upload-label", "Upload Photos (min 5, max 20) *"],
-    ["lp-step3-title", "Verify Identity"],
-    ["lp-verify-name-label", "Full Name *"],
-    ["lp-public-name-label", "Display Name on Website *"],
+    ["lp-step3-title", "Contact Details"],
+    ["lp-verify-name-label", "Full Name"],
+    ["lp-public-name-label", "Display Name on Website (optional)"],
     ["lp-public-name-msg", "This is the name buyers/tenants will see publicly."],
-    ["lp-verify-phone-label", "Phone Number *"],
+    ["lp-verify-phone-label", "Phone Number (optional)"],
     ["lp-contact-pref-label", "Best Contact Method *"],
     ["lp-verify-email-label", "Email *"],
-    ["lp-verify-nin-label", "National ID Number (NIN) *"],
-    ["lp-verify-id-label", "Upload National ID Photo *"],
+    ["lp-verify-nin-label", "National ID Number (NIN) (optional)"],
+    ["lp-verify-id-label", "Upload National ID Photo (optional)"],
     ["lp-verify-nin-match-label", "I confirm the typed NIN matches the uploaded National ID photo."],
     ["lp-verify-legal-title", "Legal notice:"],
-    ["lp-verify-terms-label", "I agree to the Terms, Anti-Fraud Policy, and lawful data use for verification."],
+    ["lp-verify-terms-label", "I agree to the Terms, Anti-Fraud Policy, and lawful data use for listing review."],
     ["lp-verify-fraud-label", "I understand false or fraudulent listings may be escalated to police authorities."],
-    ["lp-verify-consent-label", "I consent to contact by phone/SMS/email regarding this listing review and verification."],
+    ["lp-verify-consent-label", "I consent to contact by email and any phone number I provide regarding this listing review."],
     ["lp-step4-title", "Review & Submit"],
     ["lp-review-edit-tip", "Need to change anything? Use quick edit buttons before you submit."],
     ["lp-review-lang-label", "Language"],
     ["lp-edit-step1-btn", "Edit Property Details"],
     ["lp-edit-step2-btn", "Edit Photos & Media"],
-    ["lp-edit-step3-btn", "Edit Verify Identity"],
+    ["lp-edit-step3-btn", "Edit Contact Details"],
     ["lp-preview-title-label", "Live Listing Preview"],
     ["lp-area-highlights-edit-label", "Listing Area Summary (editable)"],
     ["lp-area-highlights-edit-help", "You can adjust this text to improve the final listing description."],
@@ -5226,7 +5226,7 @@ function applyListingWizardLanguageUI() {
     ["list-choice-wa-title", "Via WhatsApp AI"],
     ["list-choice-wa-copy", "Chat with the makaug AI listing assistant."],
     ["list-choice-free-title", "Always 100% Free."],
-    ["list-choice-free-copy", "Your listing goes live within 24 hours after identity verification."]
+    ["list-choice-free-copy", "Submit with your email; makaug reviews the listing before it goes live."]
   ];
   labelPairs.forEach(([id, text]) => {
     const el = document.getElementById(id);
@@ -5237,7 +5237,7 @@ function applyListingWizardLanguageUI() {
   const stepLabelMap = {
     "1": "Property Details",
     "2": "Photos & Media",
-    "3": "Verify Identity",
+    "3": "Contact Details",
     "4": "Review & Submit"
   };
   document.querySelectorAll("[data-lp-step-label]").forEach((el) => {
@@ -22958,10 +22958,12 @@ function reindexLpPhotoAssignments(previousPhotos = [], previousAssignments = {}
 function setLpPhotoAssignment(index, value) {
   const idx = Number(index);
   if (!Number.isFinite(idx)) return;
+  const wasOther = getLpPhotoAssignmentSelectValue(lpPhotoAssignments[idx]) === LP_OTHER_PHOTO_SLOT;
   const storedValue = getLpPhotoAssignmentStorageValue(value, lpPhotoAssignments[idx]);
   if (!storedValue) delete lpPhotoAssignments[idx];
   else lpPhotoAssignments[idx] = storedValue;
-  renderLpPhotoFeedback();
+  const isOther = getLpPhotoAssignmentSelectValue(storedValue) === LP_OTHER_PHOTO_SLOT;
+  if (wasOther || isOther) renderLpPhotoFeedback();
   updateListPreview();
   renderListReviewSummary();
 }
@@ -23275,7 +23277,7 @@ function onLpVerifyPhoneInput() {
     if (input) input.classList.remove("border-green-300", "border-red-300");
     if (msg) {
       msg.className = "text-xs text-gray-500 mt-1";
-      msg.textContent = "Use Uganda format e.g. +256770123456";
+      msg.textContent = "Optional. Add a Uganda number if buyers can call or WhatsApp you.";
     }
     return;
   }
@@ -23286,8 +23288,8 @@ function onLpVerifyPhoneInput() {
     lpListingOtpToken = "";
     const otpStatus = document.getElementById("lp-otp-status");
     if (otpStatus) {
-      otpStatus.className = "text-xs text-amber-700 mt-1";
-      otpStatus.textContent = "Phone changed. Please verify OTP again.";
+      otpStatus.className = "text-xs text-green-700 mt-1";
+      otpStatus.textContent = "No OTP is needed for online listing submission.";
     }
   }
   renderListReviewSummary();
@@ -23312,8 +23314,8 @@ function onLpVerifyEmailInput() {
     lpListingOtpToken = "";
     const otpStatus = document.getElementById("lp-otp-status");
     if (otpStatus) {
-      otpStatus.className = "text-xs text-amber-700 mt-1";
-      otpStatus.textContent = "Email changed. Please verify OTP again.";
+      otpStatus.className = "text-xs text-green-700 mt-1";
+      otpStatus.textContent = "No OTP is needed for online listing submission.";
     }
   }
   renderListReviewSummary();
@@ -25278,28 +25280,17 @@ function validateListStep3() {
     }
     return true;
   }
-  const name = lpVal("lp-verify-name");
   const email = lpVal("lp-verify-email");
   const phone = normalizePhoneInput(lpVal("lp-verify-phone"));
-  const nin = lpVal("lp-verify-nin");
-  const otpChannel = lpListingOtpChannel === "email" ? "email" : "phone";
   const terms = document.getElementById("lp-verify-terms")?.checked;
   const fraud = document.getElementById("lp-verify-fraud")?.checked;
   const consent = document.getElementById("lp-verify-consent")?.checked;
-  const ninMatch = document.getElementById("lp-verify-nin-match")?.checked;
   const fieldAgentAssisted = (lpVal("lp-field-agent-assisted") || "no") === "yes";
   const fieldAgentId = lpVal("lp-field-agent-id");
-  if (!name || !email || !phone || !nin) {
-    if (!name) markLpFieldError("lp-verify-name", "Full name is required.");
+  const contactPref = lpVal("lp-contact-pref") || "both";
+  if (!email) {
     if (!email) markLpFieldError("lp-verify-email", "Email is required.");
-    if (!phone) markLpFieldError("lp-verify-phone", "Phone number is required.");
-    if (!nin) markLpFieldError("lp-verify-nin", "NIN is required.");
-    toast("Please complete all identity fields.");
-    return false;
-  }
-  if (!(/^\+2567\d{8}$/.test(phone) || /^\+256\d{9}$/.test(phone))) {
-    markLpFieldError("lp-verify-phone", "Please enter a valid Uganda phone number.");
-    toast("Please enter a valid Uganda phone number.");
+    toast("Please add your email so makaug can send review updates.");
     return false;
   }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -25307,24 +25298,20 @@ function validateListStep3() {
     toast("Please enter a valid email address.");
     return false;
   }
-  if (!isValidUgNin(nin)) {
-    markLpFieldError("lp-verify-nin", "Please enter a valid NIN.");
-    toast("Please enter a valid NIN.");
+  if (phone && !(/^\+2567\d{8}$/.test(phone) || /^\+256\d{9}$/.test(phone))) {
+    markLpFieldError("lp-verify-phone", "Please enter a valid Uganda phone number, or leave it blank.");
+    toast("Please enter a valid Uganda phone number, or leave it blank.");
     return false;
   }
-  if (!lpIdentityFileMeta) {
-    markLpFieldError("lp-verify-id-file", "Please upload a photo of your National ID. PDFs are not accepted.");
-    toast("Please upload a photo of your National ID. PDFs are not accepted.");
-    return false;
+  if (!phone && ["phone", "whatsapp", "both"].includes(contactPref)) {
+    const prefEl = document.getElementById("lp-contact-pref");
+    if (prefEl) prefEl.value = "email";
+    toast("No phone number added, so contact method has been set to email enquiry.");
   }
-  if (/\.pdf$/i.test(lpIdentityFileMeta.name || "") || String(lpIdentityFileMeta.type || "").toLowerCase().includes("pdf") || !String(lpIdentityFileMeta.preview_url || "").startsWith("data:image/")) {
-    markLpFieldError("lp-verify-id-file", "Please upload a photo of your National ID. PDFs are not accepted.");
-    toast("Please upload a photo of your National ID. PDFs are not accepted.");
-    return false;
-  }
-  if (!ninMatch) {
-    markLpFieldError("lp-verify-nin-match", "Please confirm NIN matches uploaded ID.");
-    toast("Please confirm NIN matches uploaded ID.");
+  const nin = lpVal("lp-verify-nin");
+  if (nin && !isValidUgNin(nin)) {
+    markLpFieldError("lp-verify-nin", "Please enter a valid NIN, or leave it blank.");
+    toast("Please enter a valid NIN, or leave it blank.");
     return false;
   }
   if (!terms || !fraud || !consent) {
@@ -25337,19 +25324,6 @@ function validateListStep3() {
   if (fieldAgentAssisted && !normalizeFieldAgentCode(fieldAgentId)) {
     markLpFieldError("lp-field-agent-id", "Use Field Agent ID format FA-7301.");
     toast("Enter the Field Agent ID in FA-7301 format, or set Field Agent assisted to No.");
-    return false;
-  }
-  const otpOk = !!lpListingOtpToken && (
-    (otpChannel === "email" && lpListingOtpVerifiedEmail === email.toLowerCase()) ||
-    (otpChannel === "phone" && lpListingOtpVerifiedPhone === phone)
-  );
-  if (!otpOk) {
-    markLpFieldError("lp-verify-otp-code", otpChannel === "email"
-      ? "Verify email OTP before continuing."
-      : "Verify phone OTP before continuing.");
-    toast(otpChannel === "email"
-      ? "Please verify your email address with OTP before continuing."
-      : "Please verify your phone number with OTP before continuing.");
     return false;
   }
   return true;
@@ -25494,8 +25468,8 @@ function buildListPropertyPayload(photoUploadUrls = lpPhotoUploadUrls) {
     longitude: lng,
     verification_terms_accepted: !!(document.getElementById("lp-verify-terms")?.checked && document.getElementById("lp-verify-fraud")?.checked && document.getElementById("lp-verify-consent")?.checked),
     inquiry_reference: inquiryReference,
-    listing_otp_token: lpListingOtpToken || null,
-    otp_channel: lpListingOtpChannel === "email" ? "email" : "phone",
+    listing_otp_token: null,
+    otp_channel: "not_required",
     id_number: lpVal("lp-verify-nin") || null,
     id_document_name: lpIdentityFileMeta?.name || null,
     id_document_url: lpIdentityFileMeta?.preview_url || null,
@@ -25559,7 +25533,7 @@ function buildListPropertyPayload(photoUploadUrls = lpPhotoUploadUrls) {
         contact_preference: lpVal("lp-contact-pref") || "phone",
         nin_match_confirmed: !!document.getElementById("lp-verify-nin-match")?.checked,
         public_display_name: publicDisplayName || null,
-        otp_channel: lpListingOtpChannel === "email" ? "email" : "phone",
+        otp_channel: "not_required",
         field_agent_assisted: fieldAgentAssisted,
         field_agent_id: fieldAgentAssisted ? fieldAgentId : null,
         ownership_verification_requested: ownerVerificationRequested
@@ -25663,14 +25637,6 @@ function renderListReviewSummary() {
   const termsOk = (document.getElementById("lp-verify-terms")?.checked && document.getElementById("lp-verify-fraud")?.checked)
     ? translateListingLabel("Accepted")
     : translateListingLabel("Pending");
-  const otpChannel = lpListingOtpChannel === "email" ? "email" : "phone";
-  const otpVerified = !!lpListingOtpToken && (
-    (otpChannel === "email" && lpListingOtpVerifiedEmail === (lpVal("lp-verify-email") || "").toLowerCase()) ||
-    (otpChannel === "phone" && lpListingOtpVerifiedPhone === normalizePhoneInput(lpVal("lp-verify-phone")))
-  );
-  const otpOk = otpVerified
-    ? translateListingLabel("Verified")
-    : translateListingLabel("Pending");
   const fieldAgentAssisted = payload?.extra_fields?.field_agent_assisted;
   const fieldAgentTag = fieldAgentAssisted
     ? `${translateListingLabel("Yes")} (${payload?.extra_fields?.field_agent_id || "-"})`
@@ -25697,10 +25663,11 @@ function renderListReviewSummary() {
         <div class="text-xs text-gray-500 mt-1">${translateListingLabel("Video tour")}: ${payload.video_url ? translateListingLabel("Attached") : translateListingLabel("Not set")}</div>
       </div>
       <div class="bg-gray-50 border border-gray-200 rounded-lg p-3">
-        <div class="text-xs uppercase text-gray-500 font-semibold">${translateListingLabel("Verification")}</div>
+        <div class="text-xs uppercase text-gray-500 font-semibold">${translateListingLabel("Contact Details")}</div>
         <div class="text-sm font-semibold text-gray-800 mt-1">${payload.lister_name || translateListingLabel("Not set")}</div>
-        <div class="text-xs text-gray-500 mt-1">${translateListingLabel("Display Name on Website *")}: ${payload.lister_display_name || translateListingLabel("Not set")}</div>
-        <div class="text-xs text-gray-500 mt-1">${translateListingLabel("Terms")}: ${termsOk} • OTP (${otpChannel.toUpperCase()}): ${otpOk}</div>
+        <div class="text-xs text-gray-500 mt-1">${translateListingLabel("Display Name on Website")}: ${payload.lister_display_name || translateListingLabel("Not set")}</div>
+        <div class="text-xs text-gray-500 mt-1">${translateListingLabel("Email")}: ${payload.lister_email || translateListingLabel("Not set")}</div>
+        <div class="text-xs text-gray-500 mt-1">${translateListingLabel("Terms")}: ${termsOk} • ${translateListingLabel("OTP not required")}</div>
         <div class="text-xs text-gray-500 mt-1">${translateListingLabel("Best Contact Method *")}: ${translateListingLabel(
           payload.extra_fields?.verify?.contact_preference === "whatsapp"
             ? "WhatsApp"
@@ -26717,10 +26684,8 @@ function setLpOtpChannel(channel) {
   lpListingOtpChannel = next === "email" ? "email" : "phone";
   const otpStatus = document.getElementById("lp-otp-status");
   if (otpStatus) {
-    otpStatus.className = "text-xs text-gray-500 mt-1";
-    otpStatus.textContent = lpListingOtpChannel === "email"
-      ? "Email OTP pending verification."
-      : "SMS OTP pending verification.";
+    otpStatus.className = "text-xs text-green-700 mt-1";
+    otpStatus.textContent = "No OTP is needed for online listing submission.";
   }
   lpListingOtpToken = "";
   lpListingOtpVerifiedPhone = "";
@@ -31011,8 +30976,8 @@ function clearListPropertyDraft() {
 
   const otpStatus = document.getElementById("lp-otp-status");
   if (otpStatus) {
-    otpStatus.className = "text-xs text-gray-500 mt-1";
-    otpStatus.textContent = "";
+    otpStatus.className = "text-xs text-green-700 mt-1";
+    otpStatus.textContent = "No OTP is needed for online listing submission.";
   }
 
   const success = document.getElementById("lp-success-box");
@@ -31668,7 +31633,7 @@ function inferPublicDisplayNameFromFullName(fullName) {
 function getPublicDisplayName() {
   const chosen = lpVal("lp-public-name");
   if (chosen) return chosen;
-  return inferPublicDisplayNameFromFullName(lpVal("lp-verify-name"));
+  return inferPublicDisplayNameFromFullName(lpVal("lp-verify-name")) || translateListingLabel("Private lister");
 }
 
 function syncLpPublicNameSuggestion() {
