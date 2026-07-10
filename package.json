@@ -12,7 +12,8 @@
     "dev:whatsapp-agent": "node scripts/whatsapp-web-agent.js",
     "dev:bot": "tsx watch src/server.ts",
     "start:bot": "node dist/server.js",
-    "build:bot": "tsc -p tsconfig.json",
+    "build:css": "tailwindcss -c tailwind.config.cjs -i assets/tailwind.input.css -o assets/tailwind.css --minify",
+    "build:bot": "npm run build:css && tsc -p tsconfig.json",
     "typecheck:bot": "tsc -p tsconfig.json --noEmit",
     "test:bot": "vitest run",
     "migrate": "node scripts/migrate.js",
@@ -83,8 +84,9 @@
     "@types/supertest": "^6.0.3",
     "nodemon": "^3.1.4",
     "supertest": "^7.1.4",
+    "tailwindcss": "^3.4.17",
     "tsx": "^4.20.3",
     "typescript": "^5.8.3",
- "vitest": "^3.2.4"
+    "vitest": "^3.2.4"
   }
 }

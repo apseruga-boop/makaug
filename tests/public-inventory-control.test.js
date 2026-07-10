@@ -8,6 +8,9 @@ const vm = require('node:vm');
 const appSource = fs.readFileSync('assets/makaug-app.js', 'utf8');
 const browserProbeSource = fs.readFileSync('scripts/probe-public-routes-browser.js', 'utf8');
 const htmlSource = fs.readFileSync('index.html', 'utf8');
+const packageSource = fs.readFileSync('package.json', 'utf8');
+const tailwindConfigSource = fs.readFileSync('tailwind.config.cjs', 'utf8');
+const tailwindCssSource = fs.readFileSync('assets/tailwind.css', 'utf8');
 const whatsappRouteSource = fs.readFileSync('routes/whatsapp.js', 'utf8');
 const adminRouteSource = fs.readFileSync('routes/admin.js', 'utf8');
 const agentsRouteSource = fs.readFileSync('routes/agents.js', 'utf8');
@@ -479,6 +482,22 @@ test('public result pages keep the map shell sticky without trapping it in a sho
   }
   assert.match(htmlSource, /public-sticky-map-assist-rail-20260710/);
   assert.match(serverSource, /publicStickyMapAssistRailVersion/);
+});
+
+test('public shell uses precompiled Tailwind CSS instead of the runtime Play CDN', () => {
+  assert.match(htmlSource, /<link rel="stylesheet" href="\/assets\/tailwind\.css">/);
+  assert.doesNotMatch(htmlSource, /cdn\.tailwindcss\.com/);
+  assert.match(htmlSource, /tailwind-static-css-20260710/);
+  assert.match(serverSource, /tailwindStaticCssVersion = 'tailwind-static-css-20260710'/);
+  assert.match(packageSource, /"build:css": "tailwindcss -c tailwind\.config\.cjs -i assets\/tailwind\.input\.css -o assets\/tailwind\.css --minify"/);
+  assert.match(packageSource, /"build:bot": "npm run build:css && tsc -p tsconfig\.json"/);
+  assert.match(tailwindConfigSource, /content: \['\.\/index\.html', '\.\/assets\/makaug-app\.js'\]/);
+  assert.ok(tailwindCssSource.length > 100000, 'compiled Tailwind CSS should be present, not an empty placeholder');
+  assert.match(tailwindCssSource, /\.bg-green-700/);
+  assert.match(tailwindCssSource, /\.text-green-700/);
+  assert.match(tailwindCssSource, /\.md\\:grid-cols-2/);
+  assert.match(tailwindCssSource, /\.rounded-2xl/);
+  assert.match(tailwindCssSource, /\.hover\\:bg-green-50:hover/);
 });
 
 test('public result pages expose the full inventory and avoid black iframe media cards', () => {
