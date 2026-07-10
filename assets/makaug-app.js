@@ -11964,6 +11964,43 @@ function adminPreferNonZeroMetric(primaryValue, fallbackValue) {
   return Number.isFinite(primary) ? primary : 0;
 }
 
+function adminCeoCurrentDashboardMetrics(data = {}) {
+  const statusMetrics = data?.current_dashboard_metrics && typeof data.current_dashboard_metrics === "object"
+    ? data.current_dashboard_metrics
+    : {};
+  const latestMetrics = adminLatestCommandCentreMetrics && typeof adminLatestCommandCentreMetrics === "object"
+    ? adminLatestCommandCentreMetrics
+    : {};
+  const hasMetrics = Object.keys(statusMetrics).length > 0 || Object.keys(latestMetrics).length > 0;
+  return {
+    hasMetrics,
+    metrics: {
+      pending_listings: adminPreferNonZeroMetric(
+        statusMetrics.pending_listings ?? statusMetrics.pending,
+        latestMetrics.pending_listings ?? latestMetrics.pending
+      ),
+      live_listings: adminPreferNonZeroMetric(
+        statusMetrics.live_listings ?? statusMetrics.live,
+        latestMetrics.live_listings ?? latestMetrics.live
+      ),
+      open_leads: adminPreferNonZeroMetric(
+        statusMetrics.open_leads ?? statusMetrics.leads,
+        latestMetrics.open_leads ?? latestMetrics.leads
+      ),
+      broker_pending: adminPreferNonZeroMetric(
+        statusMetrics.broker_pending ?? statusMetrics.broker,
+        latestMetrics.broker_pending ?? latestMetrics.broker
+      )
+    }
+  };
+}
+
+function adminCeoDashboardSummary(data = {}) {
+  const { hasMetrics, metrics } = adminCeoCurrentDashboardMetrics(data);
+  if (!hasMetrics) return "";
+  return `Current dashboard: ${Number(metrics.pending_listings || 0).toLocaleString("en-UG")} listings to decide, ${Number(metrics.live_listings || 0).toLocaleString("en-UG")} live, ${Number(metrics.open_leads || 0).toLocaleString("en-UG")} open leads, ${Number(metrics.broker_pending || 0).toLocaleString("en-UG")} broker reviews.`;
+}
+
 function adminCommandSelectorForTab(tab = "review") {
   const map = {
     review: "#admin-review-queue-control",
@@ -12228,28 +12265,11 @@ function renderAiCeoStatus(data) {
     const reportSummary = lastReport?.summary || "No saved morning report yet. Run one before live operations begin.";
     const channels = deliveryChannels.length ? deliveryChannels.join(", ") : "dashboard";
     const latestCommand = recentCommands[0]?.response_summary || "";
-    const statusMetrics = data?.current_dashboard_metrics && typeof data.current_dashboard_metrics === "object"
-      ? data.current_dashboard_metrics
-      : {};
-    const latestMetrics = adminLatestCommandCentreMetrics && typeof adminLatestCommandCentreMetrics === "object"
-      ? adminLatestCommandCentreMetrics
-      : {};
-    const hasDashboardMetrics = Object.keys(statusMetrics).length > 0 || Object.keys(latestMetrics).length > 0;
-    const liveMetrics = hasDashboardMetrics
-      ? {
-          ...statusMetrics,
-          ...latestMetrics,
-          live_listings: adminPreferNonZeroMetric(latestMetrics.live_listings, statusMetrics.live_listings)
-        }
-      : {};
-    const hasLiveMetrics = hasDashboardMetrics;
-    const liveSummary = hasLiveMetrics
-      ? `Current dashboard: ${Number(liveMetrics.pending_listings || 0).toLocaleString("en-UG")} listings to decide, ${Number(liveMetrics.live_listings || 0).toLocaleString("en-UG")} live, ${Number(liveMetrics.open_leads || 0).toLocaleString("en-UG")} open leads, ${Number(liveMetrics.broker_pending || 0).toLocaleString("en-UG")} broker reviews.`
-      : "";
+    const liveSummary = adminCeoDashboardSummary(data);
     outputEl.innerHTML = `
       <div class="font-black text-gray-900">Latest AI CEO view</div>
-      <p class="mt-1">${adminEscape(liveSummary || reportSummary)}</p>
-      ${liveSummary ? `<p class="mt-1 text-xs text-gray-500">Saved report: ${adminEscape(reportSummary)}</p>` : ""}
+      <p class="mt-1">${adminEscape(liveSummary || "Current dashboard metrics are loading. The saved report below may be older than the live Command Centre.")}</p>
+      <p class="mt-1 text-xs text-gray-500">Saved report: ${adminEscape(reportSummary)}</p>
       <div class="mt-3 grid sm:grid-cols-3 gap-2 text-xs">
         <div class="rounded-xl bg-white border border-gray-200 p-3"><strong>${adminEscape(openFindings.length)}</strong><br>open finding(s)</div>
         <div class="rounded-xl bg-white border border-gray-200 p-3"><strong>${adminEscape(pendingActions.length)}</strong><br>pending action(s)</div>
@@ -12311,13 +12331,15 @@ async function runAiCeoMorningReport() {
     });
     const data = response?.data || {};
     const report = data.report || {};
-    if (outputEl) {
+    const refreshed = await loadAiCeoStatus({ silent: true });
+    if (!refreshed && outputEl) {
+      const liveSummary = adminCeoDashboardSummary(data);
       outputEl.innerHTML = `
         <div class="font-black text-gray-900">Morning report saved</div>
-        <p class="mt-1">${adminEscape(report.summary || "Report generated.")}</p>
+        <p class="mt-1">${adminEscape(liveSummary || "Current dashboard metrics are loading. The saved report below may be older than the live Command Centre.")}</p>
+        <p class="mt-1 text-xs text-gray-500">Saved report: ${adminEscape(report.summary || "Report generated.")}</p>
         <div class="mt-3 text-xs text-gray-600">Findings created: ${adminEscape((data.findings || []).length)}</div>`;
     }
-    await loadAiCeoStatus({ silent: true });
     toast("AI CEO morning report generated.");
   } catch (error) {
     if (outputEl) outputEl.innerHTML = `AI CEO morning report failed: ${adminEscape(error.message || "Unknown error")}`;
@@ -12350,13 +12372,15 @@ async function askAiCeoCommand() {
     });
     const data = response?.data || {};
     const summary = data.response?.summary || data.command?.response_summary || "AI CEO answered.";
-    if (outputEl) {
+    const refreshed = await loadAiCeoStatus({ silent: true });
+    if (!refreshed && outputEl) {
+      const liveSummary = adminCeoDashboardSummary(data);
       outputEl.innerHTML = `
         <div class="font-black text-gray-900">AI CEO response</div>
-        <p class="mt-1">${adminEscape(summary)}</p>
+        <p class="mt-1">${adminEscape(liveSummary || "Current dashboard metrics are loading. The AI CEO response below may not match the live Command Centre yet.")}</p>
+        <p class="mt-1 text-xs text-gray-500">AI CEO response: ${adminEscape(summary)}</p>
         ${data.response?.requires_founder_approval ? `<div class="mt-3 rounded-xl border border-amber-100 bg-amber-50 p-3 text-xs font-bold text-amber-800">Founder approval guardrail is active for this request.</div>` : ""}`;
     }
-    await loadAiCeoStatus({ silent: true });
     toast("AI CEO response ready.");
   } catch (error) {
     if (outputEl) outputEl.innerHTML = `AI CEO command failed: ${adminEscape(error.message || "Unknown error")}`;

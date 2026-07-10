@@ -41,6 +41,12 @@ assert(orchestratorService.includes('ceoPendingReviewWhere') && orchestratorServ
 assert(orchestratorService.includes("lead_status = 'open'"), 'AI CEO orchestrator must count only live open leads like Command Centre');
 assert(orchestratorService.includes('current_dashboard_metrics'), 'AI CEO status must expose fresh dashboard metrics, not only saved reports');
 assert(app.includes('data?.current_dashboard_metrics'), 'AI CEO dashboard panel must render fresh status metrics when available');
+assert(app.includes('function adminCeoCurrentDashboardMetrics'), 'AI CEO dashboard panel must normalise fresh metrics before rendering');
+assert(app.includes('function adminCeoDashboardSummary'), 'AI CEO dashboard panel must put live Command Centre metrics ahead of stale saved reports');
+assert(app.includes('Current dashboard metrics are loading. The saved report below may be older than the live Command Centre.'), 'AI CEO panel must label saved reports as secondary when fresh metrics are unavailable');
+assert(app.includes('const refreshed = await loadAiCeoStatus({ silent: true });'), 'AI CEO report and command actions must refresh status before leaving output visible');
+assert(!app.includes('<p class="mt-1">${adminEscape(report.summary || "Report generated.")}</p>'), 'Morning report must not render a saved narrative as the primary latest view');
+assert(!app.includes('<p class="mt-1">${adminEscape(summary)}</p>'), 'AI CEO command must not render a command narrative as the primary latest view');
 
 assert(whatsappRoute.includes('handleOwnerWhatsappCommand'), 'WhatsApp runtime must intercept founder owner commands');
 assert(whatsappRoute.includes('ai_ceo_control_service'), 'WhatsApp command handling must be logged as AI CEO control');
