@@ -466,17 +466,19 @@ test('public result pages keep the map shell sticky without trapping it in a sho
   assert.doesNotMatch(mapColumnCss, /max-height:/, 'the right rail must not end before the listing results section');
   assert.match(mapShellCss, /position:\s*sticky;/, 'the map shell itself should be sticky');
   assert.match(mapShellCss, /top:\s*5\.75rem;/, 'the map should pin below the public header/search chrome');
-  assert.match(mapHeightCss, /height:\s*min\(72vh,\s*calc\(100vh - 7rem\),\s*520px\);/, 'the sticky map should fill the visible side rail without running below the fold');
-  assert.match(mapHeightCss, /min-height:\s*360px;/, 'desktop maps should not collapse while sticky');
+  assert.match(mapShellCss, /max-height:\s*calc\(100vh - 6\.75rem\);/, 'the sticky stack should fit below the public header');
+  assert.match(mapShellCss, /overflow-y:\s*auto;/, 'the combined map and assist form should scroll as one pinned panel when needed');
+  assert.match(mapHeightCss, /height:\s*min\(52vh,\s*calc\(100vh - 22rem\),\s*430px\);/, 'the sticky map should leave space for the pinned assist form');
+  assert.match(mapHeightCss, /min-height:\s*340px;/, 'desktop maps should not collapse while sharing the sticky rail');
   for (const page of ['sale', 'rent', 'students', 'commercial', 'land', 'brokers']) {
     assert.match(
       htmlSource,
-      new RegExp(`<div class="hidden lg:block listing-map-col">[\\s\\S]*?<div id="map-${page}" class="map-h`),
-      `${page} results page should use the shared sticky map rail`
+      new RegExp(`<div class="hidden lg:block listing-map-col">[\\s\\S]*?<div class="listing-map-shell">[\\s\\S]*?<div id="map-${page}" class="map-h[\\s\\S]*?<div class="map-assist-card`),
+      `${page} results page should pin the map and assist form inside the shared sticky rail`
     );
   }
-  assert.match(htmlSource, /public-sticky-map-rail-20260710/);
-  assert.match(serverSource, /publicStickyMapRailVersion/);
+  assert.match(htmlSource, /public-sticky-map-assist-rail-20260710/);
+  assert.match(serverSource, /publicStickyMapAssistRailVersion/);
 });
 
 test('public result pages expose the full inventory and avoid black iframe media cards', () => {

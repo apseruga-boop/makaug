@@ -204,6 +204,7 @@ const mortgageRealBankLogosVersion = 'mortgage-real-bank-logos-20260710';
 const mortgageRealBankLogosEagerVersion = 'mortgage-real-bank-logos-eager-20260710';
 const mortgageLogoCellPolishVersion = 'mortgage-logo-cell-polish-20260710';
 const publicStickyMapRailVersion = 'public-sticky-map-rail-20260710';
+const publicStickyMapAssistRailVersion = 'public-sticky-map-assist-rail-20260710';
 const publicAppVersionSuffixes = [
   captureHelperUsabilityVersion,
   studentNearestUniversityVersion,
@@ -277,7 +278,8 @@ const publicAppVersionSuffixes = [
   mortgageRealBankLogosVersion,
   mortgageRealBankLogosEagerVersion,
   mortgageLogoCellPolishVersion,
-  publicStickyMapRailVersion
+  publicStickyMapRailVersion,
+  publicStickyMapAssistRailVersion
 ];
 let cachedIndexHtml = null;
 const publicHtmlCache = new Map();

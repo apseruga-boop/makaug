@@ -119,6 +119,7 @@
     window.__makaugAppVersion += "-mortgage-real-bank-logos-eager-20260710";
     window.__makaugAppVersion += "-mortgage-logo-cell-polish-20260710";
     window.__makaugAppVersion += "-public-sticky-map-rail-20260710";
+    window.__makaugAppVersion += "-public-sticky-map-assist-rail-20260710";
     window.__makaugReleaseMarkers = "admin-command-centre-20260514-section-search-shell-20260512-controlled-public-inventory-20260514-admin-live-control-parity-20260515-final-map-sweep-20260515-outlook-email-agent-20260515-contextual-whatsapp-20260517-whatsapp-prefill-copy-20260517-listing-contact-whatsapp-i18n-20260519-live-featured-cleanup-20260519-agent-inquiry-nearby-20260519-approval-profile-sync-20260519-broker-profile-share-links-20260519-direct-agent-profile-20260519-source-registry-20260520-found-online-pending-filter-20260521-review-queue-final-hide-20260521-source-fishing-policy-20260523-launch-intake-20260523-source-post-import-20260523-found-online-queue-tabs-20260524-found-online-only-cleanup-20260524-found-online-status-cleanup-20260524-found-online-2026-unlimited-sweep-20260524-found-online-production-sweep-20260524-found-online-evidence-sweep-20260524-public-image-src-fix-20260524-found-online-admin-archive-20260524-social-platform-sweep-20260525-tiktok-full-capture-20260525-tiktok-exact-import-20260525-live-review-separation-20260525-social-only-preapproved-20260525-strict-preapproval-20260525-youtube-social-restore-20260525-youtube-social-republish-20260525-tiktok-source-import-fix-20260525-public-featured-feed-fix-20260525-public-featured-feed-fix-20260526-price-upon-application-import-20260526-found-online-location-override-20260526-source-contact-fallback-20260526-escaped-labels-20260526-sourced-broker-badge-cleanup-20260526-admin-source-fact-editor-20260526-social-location-pin-repair-20260527-youtube-feb-sweep-20260528-third-party-legal-guardrails-20260528-amharic-i18n-20260529-hero-opportunity-counter-20260529-i18n-counter-fix-20260529-counter-maths-fix-20260529-detail-container-i18n-20260529-king-review-location-trust-20260529-detail-map-description-i18n-20260529-social-capture-bookmarklet-20260602-marketplace-land-safety-20260602-king-student-youtube-import-20260603-source-post-date-confirmation-20260606-king-youtube-student-sweep-tabs-20260606-owner-verification-startup-fix-20260606-arabic-i18n-20260606-youtube-jan-broad-batch-sweep-20260607-king-review-location-autofill-20260607-mortgage-bank-leads-i18n-20260607-whatsapp-no-match-leadgen-20260607-land-title-availability-20260607-whatsapp-no-match-visible-leadbox-20260607-agent-registration-mobile-20260607-public-inventory-summary-20260609-king-status-fast-render-20260609-king-live-public-parity-20260609-king-location-hierarchy-nansana-20260616-public-i18n-detail-persistence-20260707-public-i18n-startup-race-fix-20260707-public-i18n-cookie-persistence-20260707-public-i18n-auth-language-guard-20260707-public-search-area-handoff-20260707-public-search-normalize-helper-20260707-public-search-route-backend-results-20260707-public-home-search-backend-results-20260707-staff-review-location-namasuba-20260708-list-property-photo-upload-fix-20260708-public-qa-cleanup-20260708-public-location-label-fix-20260708-public-results-delivery-fix-20260708-inpage-video-facade-20260709";
     window.__makaugReleaseMarkers += "-numbered-pagination-20260709";
     window.__makaugReleaseMarkers += "-tiles-contact-consistency-20260709";
@@ -152,6 +153,7 @@
     window.__makaugReleaseMarkers += "-mortgage-real-bank-logos-eager-20260710";
     window.__makaugReleaseMarkers += "-mortgage-logo-cell-polish-20260710";
     window.__makaugReleaseMarkers += "-public-sticky-map-rail-20260710";
+    window.__makaugReleaseMarkers += "-public-sticky-map-assist-rail-20260710";
     window.__makaugPublicSummaryPath = "/api/properties?status=approved&public_only=1&limit=1&page=1&summary_only=1&include_summary=1";
     if (window.fetch && !window.__makaugPublicSummaryPromise) {
       window.__makaugPublicSummaryPromise = fetch(window.__makaugPublicSummaryPath, { credentials: "same-origin" })
@@ -828,10 +830,17 @@
       background: #ffffff;
       border-radius: 0.75rem;
       isolation: isolate;
+      max-height: calc(100vh - 6.75rem);
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      scrollbar-gutter: stable;
     }
     .listing-map-shell .map-h {
-      height: min(72vh, calc(100vh - 7rem), 520px);
-      min-height: 360px;
+      height: min(52vh, calc(100vh - 22rem), 430px);
+      min-height: 340px;
+    }
+    .listing-map-shell .map-assist-card {
+      margin-bottom: 0;
     }
     .map-assist-card select,
     .map-assist-card input,
@@ -859,6 +868,9 @@
         position: relative;
         top: auto;
         z-index: 0;
+        max-height: none;
+        overflow: visible;
+        overscroll-behavior: auto;
       }
       #detail-photo-modal .modal-box,
       #preview-photo-modal .modal-box {
@@ -1928,11 +1940,10 @@
       <div class="hidden lg:block listing-map-col">
         <div class="listing-map-shell">
           <div id="map-sale" class="map-h rounded-xl border border-gray-200 overflow-hidden"></div>
-        </div>
-        <div class="map-assist-card mt-3 rounded-xl border border-green-100 bg-green-50 p-3 text-sm">
-	          <div class="font-bold text-green-900">Can't find what you're looking for?</div>
-	          <p class="text-xs text-green-800 mt-1">Tell makaug what you need and we will follow up with matching homes or agents.</p>
-	          <div class="grid gap-2 mt-2">
+          <div class="map-assist-card mt-3 rounded-xl border border-green-100 bg-green-50 p-3 text-sm">
+		          <div class="font-bold text-green-900">Can't find what you're looking for?</div>
+		          <p class="text-xs text-green-800 mt-1">Tell makaug what you need and we will follow up with matching homes or agents.</p>
+		          <div class="grid gap-2 mt-2">
 	            <input data-map-assist-name="sale" class="border border-green-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Your name">
 	            <input data-map-assist-phone="sale" class="border border-green-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="WhatsApp / phone">
 	            <input data-map-assist-email="sale" type="email" class="border border-green-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Email address">
@@ -1949,8 +1960,9 @@
 	            <input data-map-assist-location="sale" class="border border-green-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Location, district or street">
 	            <input data-map-assist-budget="sale" type="number" class="border border-green-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Budget (USh)">
 	            <textarea data-map-assist-details="sale" rows="2" class="border border-green-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="What are you looking for?"></textarea>
-	            <button type="button" onclick="submitMapAssistRequest('sale')" class="bg-green-700 hover:bg-green-600 text-white rounded-lg px-3 py-2 text-xs font-bold">Ask makaug to help</button>
-	          </div>
+		            <button type="button" onclick="submitMapAssistRequest('sale')" class="bg-green-700 hover:bg-green-600 text-white rounded-lg px-3 py-2 text-xs font-bold">Ask makaug to help</button>
+		          </div>
+          </div>
         </div>
       </div>
     </div>
@@ -2064,11 +2076,10 @@
       <div class="hidden lg:block listing-map-col">
         <div class="listing-map-shell">
           <div id="map-rent" class="map-h rounded-xl border border-gray-200 overflow-hidden"></div>
-        </div>
-        <div class="map-assist-card mt-3 rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm">
-	          <div class="font-bold text-blue-900">Can't find the right rental?</div>
-	          <p class="text-xs text-blue-800 mt-1">Send your budget, area, and must-haves. We will track it for follow-up.</p>
-	          <div class="grid gap-2 mt-2">
+          <div class="map-assist-card mt-3 rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm">
+		          <div class="font-bold text-blue-900">Can't find the right rental?</div>
+		          <p class="text-xs text-blue-800 mt-1">Send your budget, area, and must-haves. We will track it for follow-up.</p>
+		          <div class="grid gap-2 mt-2">
 	            <input data-map-assist-name="rent" class="border border-blue-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Your name">
 	            <input data-map-assist-phone="rent" class="border border-blue-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="WhatsApp / phone">
 	            <input data-map-assist-email="rent" type="email" class="border border-blue-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Email address">
@@ -2085,8 +2096,9 @@
 	            <input data-map-assist-location="rent" class="border border-blue-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Location, district or street">
 	            <input data-map-assist-budget="rent" type="number" class="border border-blue-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Monthly budget (USh)">
 	            <textarea data-map-assist-details="rent" rows="2" class="border border-blue-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="What are you looking for?"></textarea>
-	            <button type="button" onclick="submitMapAssistRequest('rent')" class="bg-blue-700 hover:bg-blue-600 text-white rounded-lg px-3 py-2 text-xs font-bold">Ask makaug to help</button>
-	          </div>
+		            <button type="button" onclick="submitMapAssistRequest('rent')" class="bg-blue-700 hover:bg-blue-600 text-white rounded-lg px-3 py-2 text-xs font-bold">Ask makaug to help</button>
+		          </div>
+          </div>
         </div>
       </div>
     </div>
@@ -2197,11 +2209,10 @@
         <div class="hidden lg:block listing-map-col">
           <div class="listing-map-shell">
             <div id="map-students" class="map-h rounded-xl border border-gray-200 overflow-hidden"></div>
-          </div>
-          <div class="map-assist-card mt-3 rounded-xl border border-purple-100 bg-purple-50 p-3 text-sm">
-	          <div class="font-bold text-purple-900">Need student accommodation help?</div>
-	          <p class="text-xs text-purple-800 mt-1">Share university, budget, and move-in date. makaug will save the request.</p>
-	          <div class="grid gap-2 mt-2">
+            <div class="map-assist-card mt-3 rounded-xl border border-purple-100 bg-purple-50 p-3 text-sm">
+		          <div class="font-bold text-purple-900">Need student accommodation help?</div>
+		          <p class="text-xs text-purple-800 mt-1">Share university, budget, and move-in date. makaug will save the request.</p>
+		          <div class="grid gap-2 mt-2">
 	            <input data-map-assist-name="students" class="border border-purple-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Your name">
 	            <input data-map-assist-phone="students" class="border border-purple-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="WhatsApp / phone">
 	            <input data-map-assist-email="students" type="email" class="border border-purple-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Email address">
@@ -2218,8 +2229,9 @@
 	            <input data-map-assist-location="students" class="border border-purple-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="University, area or street">
 	            <input data-map-assist-budget="students" type="number" class="border border-purple-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Budget per semester (USh)">
 	            <textarea data-map-assist-details="students" rows="2" class="border border-purple-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="University, room type, budget..."></textarea>
-	            <button type="button" onclick="submitMapAssistRequest('students')" class="bg-purple-700 hover:bg-purple-600 text-white rounded-lg px-3 py-2 text-xs font-bold">Ask makaug to help</button>
-	          </div>
+		            <button type="button" onclick="submitMapAssistRequest('students')" class="bg-purple-700 hover:bg-purple-600 text-white rounded-lg px-3 py-2 text-xs font-bold">Ask makaug to help</button>
+		          </div>
+            </div>
           </div>
         </div>
       </div>
@@ -2312,11 +2324,10 @@
       <div class="hidden lg:block listing-map-col">
         <div class="listing-map-shell">
           <div id="map-commercial" class="map-h rounded-xl border border-gray-200 overflow-hidden"></div>
-        </div>
-        <div class="map-assist-card mt-3 rounded-xl border border-amber-100 bg-amber-50 p-3 text-sm">
-	          <div class="font-bold text-amber-900">Need a commercial space?</div>
-	          <p class="text-xs text-amber-800 mt-1">Tell us the business type, size, area, and budget.</p>
-	          <div class="grid gap-2 mt-2">
+          <div class="map-assist-card mt-3 rounded-xl border border-amber-100 bg-amber-50 p-3 text-sm">
+		          <div class="font-bold text-amber-900">Need a commercial space?</div>
+		          <p class="text-xs text-amber-800 mt-1">Tell us the business type, size, area, and budget.</p>
+		          <div class="grid gap-2 mt-2">
 	            <input data-map-assist-name="commercial" class="border border-amber-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Your name">
 	            <input data-map-assist-phone="commercial" class="border border-amber-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="WhatsApp / phone">
 	            <input data-map-assist-email="commercial" type="email" class="border border-amber-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Email address">
@@ -2333,8 +2344,9 @@
 	            <input data-map-assist-location="commercial" class="border border-amber-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Location, district or street">
 	            <input data-map-assist-budget="commercial" type="number" class="border border-amber-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Budget (USh)">
 	            <textarea data-map-assist-details="commercial" rows="2" class="border border-amber-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Office, shop, warehouse, location..."></textarea>
-	            <button type="button" onclick="submitMapAssistRequest('commercial')" class="bg-amber-700 hover:bg-amber-600 text-white rounded-lg px-3 py-2 text-xs font-bold">Ask makaug to help</button>
-	          </div>
+		            <button type="button" onclick="submitMapAssistRequest('commercial')" class="bg-amber-700 hover:bg-amber-600 text-white rounded-lg px-3 py-2 text-xs font-bold">Ask makaug to help</button>
+		          </div>
+          </div>
         </div>
       </div>
     </div>
@@ -2430,11 +2442,10 @@
       <div class="hidden lg:block listing-map-col">
         <div class="listing-map-shell">
           <div id="map-land" class="map-h rounded-xl border border-gray-200 overflow-hidden"></div>
-        </div>
-        <div class="map-assist-card mt-3 rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-sm">
-	          <div class="font-bold text-emerald-900">Looking for land?</div>
-	          <p class="text-xs text-emerald-800 mt-1">Send acreage, title preference, area, and budget. We will save it for follow-up.</p>
-	          <div class="grid gap-2 mt-2">
+          <div class="map-assist-card mt-3 rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-sm">
+		          <div class="font-bold text-emerald-900">Looking for land?</div>
+		          <p class="text-xs text-emerald-800 mt-1">Send acreage, title preference, area, and budget. We will save it for follow-up.</p>
+		          <div class="grid gap-2 mt-2">
 	            <input data-map-assist-name="land" class="border border-emerald-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Your name">
 	            <input data-map-assist-phone="land" class="border border-emerald-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="WhatsApp / phone">
 	            <input data-map-assist-email="land" type="email" class="border border-emerald-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Email address">
@@ -2451,8 +2462,9 @@
 	            <input data-map-assist-location="land" class="border border-emerald-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Location, district or street">
 	            <input data-map-assist-budget="land" type="number" class="border border-emerald-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Budget (USh)">
 	            <textarea data-map-assist-details="land" rows="2" class="border border-emerald-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Acres, district, road access, title..."></textarea>
-	            <button type="button" onclick="submitMapAssistRequest('land')" class="bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg px-3 py-2 text-xs font-bold">Ask makaug to help</button>
-	          </div>
+		            <button type="button" onclick="submitMapAssistRequest('land')" class="bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg px-3 py-2 text-xs font-bold">Ask makaug to help</button>
+		          </div>
+          </div>
         </div>
       </div>
     </div>
@@ -2498,8 +2510,7 @@
           <div class="listing-map-shell">
             <div id="map-brokers" class="map-h rounded-xl border border-gray-200 overflow-hidden shadow-sm"></div>
             <p class="mt-2 text-xs text-gray-500">Hover or click marker to view broker details.</p>
-          </div>
-          <div class="map-assist-card mt-3 rounded-xl border border-green-100 bg-green-50 p-3 text-sm">
+            <div class="map-assist-card mt-3 rounded-xl border border-green-100 bg-green-50 p-3 text-sm">
             <div class="font-bold text-green-900">Need help finding a broker?</div>
             <p class="text-xs text-green-800 mt-1">Tell us the district, property type, and how to reach you. makaug will help match you.</p>
             <div class="grid gap-2 mt-2">
@@ -2519,6 +2530,7 @@
               <input data-map-assist-location="brokers" class="border border-green-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="District or area">
               <textarea data-map-assist-details="brokers" rows="2" class="border border-green-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="What should the broker help with?"></textarea>
               <button type="button" onclick="submitMapAssistRequest('brokers')" class="bg-green-700 hover:bg-green-600 text-white rounded-lg px-3 py-2 text-xs font-bold">Ask makaug to help</button>
+            </div>
             </div>
           </div>
         </div>
@@ -7227,6 +7239,7 @@
         window.__makaugAppVersion += "-mortgage-real-bank-logos-eager-20260710";
         window.__makaugAppVersion += "-mortgage-logo-cell-polish-20260710";
         window.__makaugAppVersion += "-public-sticky-map-rail-20260710";
+        window.__makaugAppVersion += "-public-sticky-map-assist-rail-20260710";
         var script = document.createElement("script");
         script.src = "/assets/makaug-app.js?v=" + encodeURIComponent(window.__makaugAppVersion);
         script.async = true;
