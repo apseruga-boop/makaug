@@ -9,6 +9,32 @@ const mortgageRoutes = fs.readFileSync(path.join(root, 'routes', 'mortgage.js'),
 const adminRoutes = fs.readFileSync(path.join(root, 'routes', 'admin.js'), 'utf8');
 const server = fs.readFileSync(path.join(root, 'server.js'), 'utf8');
 
+function readPngDimensions(assetPath) {
+  const bytes = fs.readFileSync(path.join(root, assetPath));
+  assert(bytes.length > 24, `${assetPath} should not be an empty image`);
+  assert(bytes.slice(1, 4).toString('ascii') === 'PNG', `${assetPath} should be a PNG image`);
+  return {
+    width: bytes.readUInt32BE(16),
+    height: bytes.readUInt32BE(20)
+  };
+}
+
+function assertRenderableLogo(assetPath) {
+  const absolutePath = path.join(root, assetPath);
+  assert(fs.existsSync(absolutePath), `missing owned mortgage logo asset: ${assetPath}`);
+  const contents = fs.readFileSync(absolutePath);
+  assert(contents.length > 500, `${assetPath} should contain a real logo payload`);
+  if (assetPath.endsWith('.png')) {
+    const dimensions = readPngDimensions(assetPath);
+    assert(dimensions.width > 0 && dimensions.height > 0, `${assetPath} should have non-zero dimensions`);
+    return;
+  }
+  const text = contents.toString('utf8');
+  assert(/<svg[\s>]/i.test(text), `${assetPath} should be an SVG image`);
+  assert(/viewBox=|width=/i.test(text), `${assetPath} should expose SVG dimensions`);
+  assert(!text.includes('Owned makaug mortgage lender logo tile'), `${assetPath} should not be the old placeholder tile`);
+}
+
 const requiredWindowHandlers = [
   'loadMortgageRates',
   'renderMortgageFinder',
@@ -32,11 +58,15 @@ assert(
     && html.includes('mortgage-lead-routing-fix-20260710')
     && html.includes('mortgage-finder-redesign-20260710')
     && html.includes('mortgage-i18n-completion-20260710')
-    && html.includes('mortgage-i18n-polish-20260710'),
+    && html.includes('mortgage-i18n-polish-20260710')
+    && html.includes('mortgage-real-bank-logos-20260710')
+    && html.includes('mortgage-real-bank-logos-eager-20260710'),
   'mortgage cache marker should force the corrected app bundle to load'
 );
 assert(server.includes("mortgageI18nCompletionVersion = 'mortgage-i18n-completion-20260710'"), 'server should append the mortgage i18n cache marker in production HTML');
 assert(server.includes("mortgageI18nPolishVersion = 'mortgage-i18n-polish-20260710'"), 'server should append the mortgage i18n polish cache marker in production HTML');
+assert(server.includes("mortgageRealBankLogosVersion = 'mortgage-real-bank-logos-20260710'"), 'server should append the mortgage real bank logos cache marker in production HTML');
+assert(server.includes("mortgageRealBankLogosEagerVersion = 'mortgage-real-bank-logos-eager-20260710'"), 'server should append the mortgage eager logo cache marker in production HTML');
 assert(
   html.includes('id="mortgage-rate" type="number" value=""') && html.includes('oninput="setMortgageManualRate(this.value)"'),
   'mortgage rate field should start from the best provider rate and only switch to manual mode when edited'
@@ -77,6 +107,7 @@ assert(app.includes('function renderMortgageProviderLogo'), 'mortgage comparison
 assert(app.includes('renderMortgageProviderLogo(result.best.provider'), 'best-match mortgage card should show a lender logo');
 assert(app.includes('renderMortgageProviderLogo(row.provider'), 'every mortgage comparison row should show a lender logo');
 assert(app.includes('data-mortgage-logo-text'), 'mortgage lender badges should render deterministic text labels immediately');
+assert(app.includes('loading="eager" decoding="async"'), 'mortgage logos should eager-load so rows do not sit on text chips by default');
 assert(!app.includes('/favicon.ico'), 'mortgage lender badges should not depend on third-party favicon URLs');
 assert(html.includes('grid lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.82fr)]'), 'mortgage calculator should use the compact two-column layout');
 assert(html.includes('<details class="bg-white border border-green-100 rounded-2xl p-5">'), 'mortgage explainer should start collapsed');
@@ -176,18 +207,22 @@ assert(adminRoutes.includes('mortgage_enquiry_fallback'), 'admin lead feed shoul
 assert(adminRoutes.includes("router.get('/mortgage-leads'"), 'admin should expose a dedicated mortgage leads endpoint');
 assert(adminRoutes.includes("router.get('/mortgage-enquiries'"), 'admin should expose a dedicated mortgage enquiries endpoint');
 assert(mortgageRoutes.includes('logo_url'), 'mortgage rates API should expose hosted logo URLs');
-for (const logoAsset of [
-  'assets/mortgage-logos/stanbic.svg',
-  'assets/mortgage-logos/hfb.svg',
-  'assets/mortgage-logos/dfcu.svg',
-  'assets/mortgage-logos/kcb.svg',
-  'assets/mortgage-logos/ncba.svg',
-  'assets/mortgage-logos/centenary.svg',
-  'assets/mortgage-logos/baroda.svg',
-  'assets/mortgage-logos/absa.svg',
-  'assets/mortgage-logos/equity.svg'
-]) {
-  assert(fs.existsSync(path.join(root, logoAsset)), `missing owned mortgage logo asset: ${logoAsset}`);
+for (const [providerKey, logoAsset] of Object.entries({
+  stanbic: 'assets/mortgage-logos/stanbic.svg',
+  hfb: 'assets/mortgage-logos/hfb.png',
+  dfcu: 'assets/mortgage-logos/dfcu.png',
+  kcb: 'assets/mortgage-logos/kcb.png',
+  ncba: 'assets/mortgage-logos/ncba.svg',
+  centenary: 'assets/mortgage-logos/centenary.png',
+  baroda: 'assets/mortgage-logos/baroda.svg',
+  absa: 'assets/mortgage-logos/absa.png',
+  equity: 'assets/mortgage-logos/equity.png'
+})) {
+  const publicLogoPath = `/${logoAsset.replace(/^assets\//, 'assets/')}`;
+  assert(app.includes(publicLogoPath), `frontend logo map should reference ${publicLogoPath}`);
+  assert(mortgageRoutes.includes(publicLogoPath), `mortgage rates API should reference ${publicLogoPath}`);
+  assertRenderableLogo(logoAsset);
+  assert(!fs.existsSync(path.join(root, `assets/mortgage-logos/${providerKey}.svg`)) || logoAsset.endsWith('.svg'), `${providerKey} should not keep an unused placeholder SVG`);
 }
 
 console.log('mortgage-lead-generation regression checks passed');

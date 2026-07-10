@@ -200,6 +200,8 @@ const mortgageLeadRoutingFixVersion = 'mortgage-lead-routing-fix-20260710';
 const mortgageFinderRedesignVersion = 'mortgage-finder-redesign-20260710';
 const mortgageI18nCompletionVersion = 'mortgage-i18n-completion-20260710';
 const mortgageI18nPolishVersion = 'mortgage-i18n-polish-20260710';
+const mortgageRealBankLogosVersion = 'mortgage-real-bank-logos-20260710';
+const mortgageRealBankLogosEagerVersion = 'mortgage-real-bank-logos-eager-20260710';
 const publicAppVersionSuffixes = [
   captureHelperUsabilityVersion,
   studentNearestUniversityVersion,
@@ -269,7 +271,9 @@ const publicAppVersionSuffixes = [
   mortgageLeadRoutingFixVersion,
   mortgageFinderRedesignVersion,
   mortgageI18nCompletionVersion,
-  mortgageI18nPolishVersion
+  mortgageI18nPolishVersion,
+  mortgageRealBankLogosVersion,
+  mortgageRealBankLogosEagerVersion
 ];
 let cachedIndexHtml = null;
 const publicHtmlCache = new Map();

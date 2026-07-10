@@ -127,14 +127,14 @@ const FALLBACK_MORTGAGE_PROVIDERS = [
 const AUDITED_MORTGAGE_PROVIDER_BY_KEY = new Map(FALLBACK_MORTGAGE_PROVIDERS.map((provider) => [provider.key, provider]));
 const MORTGAGE_PROVIDER_LOGO_URLS = {
   stanbic: '/assets/mortgage-logos/stanbic.svg',
-  hfb: '/assets/mortgage-logos/hfb.svg',
-  dfcu: '/assets/mortgage-logos/dfcu.svg',
-  kcb: '/assets/mortgage-logos/kcb.svg',
+  hfb: '/assets/mortgage-logos/hfb.png',
+  dfcu: '/assets/mortgage-logos/dfcu.png',
+  kcb: '/assets/mortgage-logos/kcb.png',
   ncba: '/assets/mortgage-logos/ncba.svg',
-  centenary: '/assets/mortgage-logos/centenary.svg',
+  centenary: '/assets/mortgage-logos/centenary.png',
   baroda: '/assets/mortgage-logos/baroda.svg',
-  absa: '/assets/mortgage-logos/absa.svg',
-  equity: '/assets/mortgage-logos/equity.svg'
+  absa: '/assets/mortgage-logos/absa.png',
+  equity: '/assets/mortgage-logos/equity.png'
 };
 
 function normalizeProvider(row) {

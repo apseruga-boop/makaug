@@ -691,14 +691,14 @@ const DEFAULT_MORTGAGE_PROVIDERS = [
 const AUDITED_MORTGAGE_PROVIDER_BY_ID = Object.fromEntries(DEFAULT_MORTGAGE_PROVIDERS.map((provider) => [provider.id, provider]));
 const MORTGAGE_PROVIDER_LOGO_URLS = {
   stanbic: "/assets/mortgage-logos/stanbic.svg",
-  hfb: "/assets/mortgage-logos/hfb.svg",
-  dfcu: "/assets/mortgage-logos/dfcu.svg",
-  kcb: "/assets/mortgage-logos/kcb.svg",
+  hfb: "/assets/mortgage-logos/hfb.png",
+  dfcu: "/assets/mortgage-logos/dfcu.png",
+  kcb: "/assets/mortgage-logos/kcb.png",
   ncba: "/assets/mortgage-logos/ncba.svg",
-  centenary: "/assets/mortgage-logos/centenary.svg",
+  centenary: "/assets/mortgage-logos/centenary.png",
   baroda: "/assets/mortgage-logos/baroda.svg",
-  absa: "/assets/mortgage-logos/absa.svg",
-  equity: "/assets/mortgage-logos/equity.svg"
+  absa: "/assets/mortgage-logos/absa.png",
+  equity: "/assets/mortgage-logos/equity.png"
 };
 const MORTGAGE_PROVIDER_BRANDS = {
   stanbic: {
@@ -41674,7 +41674,7 @@ function renderMortgageProviderLogo(provider = {}, options = {}) {
   const fallbackSize = options.size === "lg" ? "text-xs" : options.size === "sm" ? "text-[9px]" : "text-[10px]";
   const label = `${provider.name || brand.shortName || "Bank"} logo`;
   const image = brand.logoUrl
-    ? `<img src="${adminAttr(brand.logoUrl)}" alt="${adminAttr(label)}" loading="lazy" referrerpolicy="no-referrer" class="${imgSize} hidden object-contain" onload="this.classList.remove('hidden');this.previousElementSibling.classList.add('hidden');" onerror="this.remove();">`
+    ? `<img src="${adminAttr(brand.logoUrl)}" alt="${adminAttr(label)}" loading="eager" decoding="async" referrerpolicy="no-referrer" class="${imgSize} hidden object-contain" onload="this.classList.remove('hidden');this.previousElementSibling.classList.add('hidden');" onerror="this.remove();">`
     : "";
   return `
     <span role="img" aria-label="${adminAttr(label)}" data-mortgage-logo="${adminAttr(brand.key)}" class="${size} shrink-0 rounded-2xl border flex items-center justify-center overflow-hidden shadow-sm" style="background:${adminAttr(brand.bg)};border-color:${adminAttr(brand.border)};color:${adminAttr(brand.text)}">
