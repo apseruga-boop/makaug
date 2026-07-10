@@ -5187,26 +5187,26 @@ function applyListingWizardLanguageUI() {
     ["lp-alt-label", "Altitude (m)"],
     ["lp-step2-title", "Photos & Media"],
     ["lp-upload-label", "Upload Photos (min 5, max 20) *"],
-    ["lp-step3-title", "Contact Details"],
+    ["lp-step3-title", "Contact & Verification"],
     ["lp-verify-name-label", "Full Name"],
     ["lp-public-name-label", "Display Name on Website (optional)"],
     ["lp-public-name-msg", "This is the name buyers/tenants will see publicly."],
-    ["lp-verify-phone-label", "Phone Number (optional)"],
+    ["lp-verify-phone-label", "Phone Number *"],
     ["lp-contact-pref-label", "Best Contact Method *"],
     ["lp-verify-email-label", "Email *"],
-    ["lp-verify-nin-label", "National ID Number (NIN) (optional)"],
-    ["lp-verify-id-label", "Upload National ID Photo (optional)"],
+    ["lp-verify-nin-label", "National ID Number (NIN) *"],
+    ["lp-verify-id-label", "Upload National ID Photo *"],
     ["lp-verify-nin-match-label", "I confirm the typed NIN matches the uploaded National ID photo."],
     ["lp-verify-legal-title", "Legal notice:"],
     ["lp-verify-terms-label", "I agree to the Terms, Anti-Fraud Policy, and lawful data use for listing review."],
     ["lp-verify-fraud-label", "I understand false or fraudulent listings may be escalated to police authorities."],
-    ["lp-verify-consent-label", "I consent to contact by email and any phone number I provide regarding this listing review."],
+    ["lp-verify-consent-label", "I consent to contact by phone, WhatsApp, and email regarding this listing review."],
     ["lp-step4-title", "Review & Submit"],
     ["lp-review-edit-tip", "Need to change anything? Use quick edit buttons before you submit."],
     ["lp-review-lang-label", "Language"],
     ["lp-edit-step1-btn", "Edit Property Details"],
     ["lp-edit-step2-btn", "Edit Photos & Media"],
-    ["lp-edit-step3-btn", "Edit Contact Details"],
+    ["lp-edit-step3-btn", "Edit Contact & Verification"],
     ["lp-preview-title-label", "Live Listing Preview"],
     ["lp-area-highlights-edit-label", "Listing Area Summary (editable)"],
     ["lp-area-highlights-edit-help", "You can adjust this text to improve the final listing description."],
@@ -5226,7 +5226,7 @@ function applyListingWizardLanguageUI() {
     ["list-choice-wa-title", "Via WhatsApp AI"],
     ["list-choice-wa-copy", "Chat with the makaug AI listing assistant."],
     ["list-choice-free-title", "Always 100% Free."],
-    ["list-choice-free-copy", "Submit with your email; makaug reviews the listing before it goes live."]
+    ["list-choice-free-copy", "Submit with email, phone, and ID details; makaug reviews the listing before it goes live."]
   ];
   labelPairs.forEach(([id, text]) => {
     const el = document.getElementById(id);
@@ -5237,7 +5237,7 @@ function applyListingWizardLanguageUI() {
   const stepLabelMap = {
     "1": "Property Details",
     "2": "Photos & Media",
-    "3": "Contact Details",
+    "3": "Contact & Verification",
     "4": "Review & Submit"
   };
   document.querySelectorAll("[data-lp-step-label]").forEach((el) => {
@@ -5261,7 +5261,7 @@ function applyListingWizardLanguageUI() {
   const sub2 = document.getElementById("lp-step2-sub");
   if (sub2) sub2.textContent = translateListingLabel("Upload clear photos. At least 5 photos are required, and you can upload up to 20. Better quality images increase trust and enquiries.");
   const sub3 = document.getElementById("lp-step3-sub");
-  if (sub3) sub3.textContent = translateListingLabel("Email is required so makaug can send review updates. Phone, WhatsApp, and ID details are optional.");
+  if (sub3) sub3.textContent = translateListingLabel("Email, phone, and National ID details are required for review. No OTP is needed.");
   const sub4 = document.getElementById("lp-step4-sub");
   if (sub4) sub4.textContent = translateListingLabel("Confirm listing details before final submission.");
   const mapNote = document.getElementById("lp-preview-map-note");
@@ -5284,6 +5284,9 @@ function applyListingWizardLanguageUI() {
   setTextById("lp-field-agent-assisted-help", translateListingLabel("A Field Agent is someone who helped you fill this form. Only select yes if makaug or a broker assistant supported you."));
   setTextById("lp-field-agent-id-label", translateListingLabel("Field Agent ID"));
   setTextById("lp-field-agent-id-help", translateListingLabel("Only fill this if a Field Agent assisted you."));
+  setTextById("lp-verify-phone-msg", translateListingLabel("Required. This is the number buyers/tenants use to call or WhatsApp you."));
+  setTextById("lp-verify-nin-msg", translateListingLabel("Required. Write your ID number here. Uganda NIN format check is enabled."));
+  setTextById("lp-verify-id-file-name", translateListingLabel("Attach a clear photo of your ID. PDFs are not accepted. Your ID is used only for verification and fraud prevention - it is never shown publicly."));
   const langTip = document.querySelector("#lp-language-tip span");
   if (langTip) langTip.textContent = translateListingLabel("You can change language any time from the language bar above.");
   setTextById("lp-success-title", translateListingLabel("Listing submitted successfully"));
@@ -23237,7 +23240,7 @@ async function handleLpIdentityFile(event) {
     label.className = lpIdentityFileMeta ? "text-xs text-green-700 mt-1" : "text-xs text-gray-500 mt-1";
     label.textContent = lpIdentityFileMeta
       ? `${lpIdentityFileMeta.name} (${Math.round(lpIdentityFileMeta.size / 1024)} KB) - National ID photo ready.`
-      : "Please upload a clear photo of your National ID. PDFs are not accepted.";
+      : "Attach a clear photo of your ID. PDFs are not accepted. Your ID is used only for verification and fraud prevention - it is never shown publicly.";
   }
   if (previewEl) {
     previewEl.innerHTML = "";
@@ -23277,7 +23280,7 @@ function onLpVerifyPhoneInput() {
     if (input) input.classList.remove("border-green-300", "border-red-300");
     if (msg) {
       msg.className = "text-xs text-gray-500 mt-1";
-      msg.textContent = "Optional. Add a Uganda number if buyers can call or WhatsApp you.";
+      msg.textContent = "Required. This is the number buyers/tenants use to call or WhatsApp you.";
     }
     return;
   }
@@ -23329,7 +23332,7 @@ function onLpVerifyNinInput() {
     if (input) input.classList.remove("border-green-300", "border-red-300");
     if (msg) {
       msg.className = "text-xs text-gray-500 mt-1";
-      msg.textContent = "Format check enabled for Uganda NIN style (CM/CF...).";
+      msg.textContent = "Required. Write your ID number here. Uganda NIN format check is enabled.";
     }
     return;
   }
@@ -25282,12 +25285,13 @@ function validateListStep3() {
   }
   const email = lpVal("lp-verify-email");
   const phone = normalizePhoneInput(lpVal("lp-verify-phone"));
+  const nin = lpVal("lp-verify-nin");
+  const ninMatch = document.getElementById("lp-verify-nin-match")?.checked;
   const terms = document.getElementById("lp-verify-terms")?.checked;
   const fraud = document.getElementById("lp-verify-fraud")?.checked;
   const consent = document.getElementById("lp-verify-consent")?.checked;
   const fieldAgentAssisted = (lpVal("lp-field-agent-assisted") || "no") === "yes";
   const fieldAgentId = lpVal("lp-field-agent-id");
-  const contactPref = lpVal("lp-contact-pref") || "both";
   if (!email) {
     if (!email) markLpFieldError("lp-verify-email", "Email is required.");
     toast("Please add your email so makaug can send review updates.");
@@ -25298,20 +25302,34 @@ function validateListStep3() {
     toast("Please enter a valid email address.");
     return false;
   }
-  if (phone && !(/^\+2567\d{8}$/.test(phone) || /^\+256\d{9}$/.test(phone))) {
-    markLpFieldError("lp-verify-phone", "Please enter a valid Uganda phone number, or leave it blank.");
-    toast("Please enter a valid Uganda phone number, or leave it blank.");
+  if (!phone) {
+    markLpFieldError("lp-verify-phone", "Phone number is required.");
+    toast("Please add the phone number buyers/tenants should use.");
     return false;
   }
-  if (!phone && ["phone", "whatsapp", "both"].includes(contactPref)) {
-    const prefEl = document.getElementById("lp-contact-pref");
-    if (prefEl) prefEl.value = "email";
-    toast("No phone number added, so contact method has been set to email enquiry.");
+  if (!(/^\+2567\d{8}$/.test(phone) || /^\+256\d{9}$/.test(phone))) {
+    markLpFieldError("lp-verify-phone", "Please enter a valid Uganda phone number.");
+    toast("Please enter a valid Uganda phone number.");
+    return false;
   }
-  const nin = lpVal("lp-verify-nin");
-  if (nin && !isValidUgNin(nin)) {
-    markLpFieldError("lp-verify-nin", "Please enter a valid NIN, or leave it blank.");
-    toast("Please enter a valid NIN, or leave it blank.");
+  if (!lpIdentityFileMeta?.preview_url) {
+    markLpFieldError("lp-verify-id-file", "Please upload a photo of your National ID. PDFs are not accepted.");
+    toast("Please upload a photo of your National ID. PDFs are not accepted.");
+    return false;
+  }
+  if (!nin) {
+    markLpFieldError("lp-verify-nin", "National ID number is required.");
+    toast("Please type your National ID number.");
+    return false;
+  }
+  if (!isValidUgNin(nin)) {
+    markLpFieldError("lp-verify-nin", "Please enter a valid Uganda NIN.");
+    toast("Please enter a valid Uganda NIN.");
+    return false;
+  }
+  if (!ninMatch) {
+    markLpFieldError("lp-verify-nin-match", "Please confirm NIN matches uploaded ID.");
+    toast("Please confirm NIN matches uploaded ID.");
     return false;
   }
   if (!terms || !fraud || !consent) {
@@ -39484,6 +39502,37 @@ Object.assign(LISTING_LABEL_I18N_SUPPLEMENTAL.ar ||= {}, {
     sourceAndDetailLabels[lang] = { ...sourceAndDetailLabels.lg, ...(sourceAndDetailLabels[lang] || {}) };
   });
   Object.entries(sourceAndDetailLabels).forEach(([lang, labels]) => {
+    Object.assign(LISTING_LABEL_I18N_SUPPLEMENTAL[lang] ||= {}, labels);
+  });
+})();
+
+(function registerListingContactIdLabels() {
+  const contactIdLabels = {
+    lg: {
+      "Contact & Verification": "Ebikwata ku Kukwasaganya n'Okukakasa",
+      "Email, phone, and National ID details are required for review. No OTP is needed.": "Email, namba y'essimu, n'ebikwata ku National ID byetaagisa okukeberebwa. OTP teyeetaagisa.",
+      "Required. This is the number buyers/tenants use to call or WhatsApp you.": "Kyetaagisa. Eno ye namba abagula oba abapangisi gye bakozesa okukukubira oba WhatsApp.",
+      "Required. Write your ID number here. Uganda NIN format check is enabled.": "Kyetaagisa. Wandiika namba ya ID yo wano. Okukebera format ya Uganda NIN kukola.",
+      "Attach a clear photo of your ID. PDFs are not accepted. Your ID is used only for verification and fraud prevention - it is never shown publicly.": "Teekako ekifaananyi kya ID ekirabika obulungi. PDF tekkirizibwa. ID yo ekozesebwa okukakasa n'okutangira obufere - teragibwa ku lukale.",
+      "I consent to contact by phone, WhatsApp, and email regarding this listing review.": "Nzikiriza okukwatibwako ku simu, WhatsApp, ne email ku review ya listing eno.",
+      "Edit Contact & Verification": "Kyusa Ebikwata ku Kukwasaganya n'Okukakasa",
+      "Submit with email, phone, and ID details; makaug reviews the listing before it goes live.": "Weereza ne email, simu, n'ebikwata ku ID; makaug ekebere listing nga tennaba live."
+    },
+    sw: {
+      "Contact & Verification": "Mawasiliano na Uhakiki",
+      "Email, phone, and National ID details are required for review. No OTP is needed.": "Email, simu, na maelezo ya kitambulisho yanahitajika kwa ukaguzi. Hakuna OTP inayohitajika.",
+      "Required. This is the number buyers/tenants use to call or WhatsApp you.": "Inahitajika. Hii ndiyo namba wanunuzi au wapangaji watatumia kukupigia au WhatsApp.",
+      "Required. Write your ID number here. Uganda NIN format check is enabled.": "Inahitajika. Andika namba yako ya ID hapa. Ukaguzi wa muundo wa Uganda NIN umewezeshwa.",
+      "Attach a clear photo of your ID. PDFs are not accepted. Your ID is used only for verification and fraud prevention - it is never shown publicly.": "Ambatisha picha wazi ya ID yako. PDF hazikubaliwi. ID yako hutumika kwa uthibitishaji na kuzuia udanganyifu - haionyeshwi hadharani.",
+      "I consent to contact by phone, WhatsApp, and email regarding this listing review.": "Nakubali kuwasiliana kwa simu, WhatsApp, na email kuhusu ukaguzi wa tangazo hili.",
+      "Edit Contact & Verification": "Hariri Mawasiliano na Uhakiki",
+      "Submit with email, phone, and ID details; makaug reviews the listing before it goes live.": "Wasilisha na email, simu, na maelezo ya ID; makaug hukagua tangazo kabla halijaonekana live."
+    }
+  };
+  ["ac", "ny", "rn", "sm"].forEach((lang) => {
+    contactIdLabels[lang] = { ...contactIdLabels.lg, ...(contactIdLabels[lang] || {}) };
+  });
+  Object.entries(contactIdLabels).forEach(([lang, labels]) => {
     Object.assign(LISTING_LABEL_I18N_SUPPLEMENTAL[lang] ||= {}, labels);
   });
 })();

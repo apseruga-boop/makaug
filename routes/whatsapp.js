@@ -94,8 +94,8 @@ const T = {
     askContactMethod: '📲 How should serious viewers contact you?\n1️⃣ WhatsApp / phone\n2️⃣ Email',
     askContactValuePhone: '📱 Please send the WhatsApp/phone number for listing enquiries.\nFormat: +256 7XX XXX XXX',
     askContactValueEmail: '✉️ Please send the email address for listing enquiries.',
-    askIDNumber: '🪪 For security, we need your National ID Number (NIN). This is required to prevent fraud and will not be publicly shown.\n\nPlease type your NIN:',
-    askSelfie: '🤳 Please take a clear photo of yourself holding your National ID card and send the photo here. Do not send a PDF or document file. It has to be a photo.',
+    askIDNumber: '🪪 Now type your National ID Number (NIN) here. This is required to prevent fraud and will not be publicly shown.',
+    askSelfie: '🪪 Please send a clear photo of your National ID. Do not send a PDF or document file. Your ID is used only for verification and fraud prevention - it is never shown publicly.',
     askPhone: '📱 What is your mobile phone number (for verification)?\nFormat: +256 7XX XXX XXX',
     otpSent: "📲 We've sent a 6-digit code to your phone via SMS. Please type that code here to verify:",
     otpSentEmail: "✉️ We've sent a 6-digit code to your email. Please type that code here to verify:",
@@ -132,7 +132,7 @@ const T = {
     photosUploaded: "📸 You've uploaded {count} photos. Type *DONE* to continue, or send any extra helpful photos.",
     photoReceived: '✅ Photo {count} received.',
     invalidNin: '❌ Please enter a valid National ID Number (NIN).',
-    sendSelfiePhotoOnly: '❌ Please upload a photo of your National ID/selfie. No PDFs or document files. Take a picture and send the photo.',
+    sendSelfiePhotoOnly: '❌ Please upload a photo of your National ID. No PDFs or document files. Take a picture and send the photo.',
     invalidPhone: '❌ Invalid phone format. Try: 0760112587',
     visitMoreListings: 'Visit {url} for more listings.',
     seeAllAgents: 'See all agents: {url}',
@@ -1945,11 +1945,9 @@ function nextListingDraftStep(draft = {}) {
   if (isDraftMissingValue(draft, 'description')) return 'description';
   if (!Array.isArray(draft.photos) || draft.photos.length < 5) return 'photos';
   if (isDraftMissingValue(draft, 'lister_name') && isDraftMissingValue(draft, 'contact_display_name')) return 'ask_public_name';
-  if (isDraftMissingValue(draft, 'preferred_contact_channel')) return 'ask_contact_method';
-  if (isDraftMissingValue(draft, 'otp_identifier')) return 'ask_contact_value';
-  if (isDraftMissingValue(draft, 'national_id_number')) return 'ask_id_number';
   if (isDraftMissingValue(draft, 'selfie_url')) return 'ask_selfie';
-  return 'verify_otp';
+  if (isDraftMissingValue(draft, 'national_id_number')) return 'ask_id_number';
+  return 'submitted';
 }
 
 function savedListingFieldSummary(patch = {}) {
@@ -2000,6 +1998,115 @@ function fastListingProgressReply(lang, patch = {}, updatedDraft = {}, intro = '
     nextStep,
     message: `✅ ${savedLine}\n\nNext: ${stepPromptFor(lang, nextStep)}`
   };
+}
+
+async function submitWhatsappListingDraft({ phone, lang, draft }) {
+  try {
+    const d = draft || {};
+    const expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
+    const contactPhone = d.owner_phone || d.lister_phone || normalizeContactPhone(phone);
+    const preferredChannel = d.preferred_contact_channel || 'phone';
+    const verifyFields = {
+      nin: d.national_id_number || null,
+      id_number: d.national_id_number || null,
+      id_document_url: d.selfie_url || null,
+      id_document_source: 'whatsapp',
+      otp_channel: 'not_required'
+    };
+
+    const result = await db.query(
+      `INSERT INTO properties (
+        listing_type, title, description, district, area, price,
+        deposit_amount, contract_months, bedrooms,
+        nearest_university, distance_to_uni_km,
+        lister_name, lister_phone, lister_email, lister_type, extra_fields,
+        status, listed_via, source, expires_at, id_number, id_document_url
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'pending','whatsapp','whatsapp',$17,$18,$19)
+      RETURNING id`,
+      [
+        d.listing_type, d.title, d.description, d.district, d.area, d.price,
+        d.deposit_amount || null, d.contract_months || null, d.bedrooms || null,
+        d.nearest_university || null, d.distance_to_uni_km || null,
+        d.lister_name || d.contact_display_name || null,
+        contactPhone || null,
+        d.lister_email || null,
+        d.lister_type || 'owner',
+        {
+          contact_display_name: d.contact_display_name || d.lister_name || null,
+          preferred_contact_channel: preferredChannel,
+          whatsapp_listing_flow: true,
+          verification_channel: 'whatsapp_sender',
+          verification_otp_required: false,
+          verify: verifyFields,
+          assisted_by_field_agent: d.assisted_by_field_agent === true,
+          field_agent_reference: normalizeFieldAgentCode(d.field_agent_reference) || null,
+          bedroom_options_text: d.bedroom_options_text || null,
+          bedroom_options_min: d.bedroom_options_min || null,
+          bedroom_options_max: d.bedroom_options_max || null
+        },
+        expiresAt,
+        d.national_id_number || null,
+        d.selfie_url || null
+      ]
+    );
+
+    const propertyId = result.rows[0].id;
+    const matchedBroker = await findBrokerAgentByContact({
+      phone: contactPhone || phone,
+      email: d.lister_email || ''
+    });
+    if (matchedBroker?.id) {
+      await db.query(
+        `UPDATE properties
+         SET agent_id = $2,
+             lister_type = 'agent',
+             lister_name = COALESCE(NULLIF($3, ''), lister_name),
+             lister_phone = COALESCE(NULLIF($4, ''), lister_phone),
+             lister_email = COALESCE(NULLIF($5, ''), lister_email),
+             extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $6::jsonb,
+             updated_at = NOW()
+         WHERE id = $1`,
+        [
+          propertyId,
+          matchedBroker.id,
+          matchedBroker.full_name || d.lister_name || d.contact_display_name || '',
+          matchedBroker.phone || contactPhone || '',
+          matchedBroker.email || d.lister_email || '',
+          JSON.stringify({
+            broker_submission: true,
+            broker_agent_id: matchedBroker.id,
+            broker_status: matchedBroker.status || 'pending',
+            broker_matched_by: d.lister_email ? 'email_or_phone' : 'phone',
+            whatsapp_broker_fast_track: true
+          })
+        ]
+      );
+    }
+
+    const refCode = String(propertyId).substring(0, 8).toUpperCase();
+    if (d.photos && d.photos.length) {
+      const photos = d.photos.slice(0, 5);
+      const labels = ['front/outside', 'sitting room/main room', 'bedroom', 'kitchen', 'bathroom'];
+      const slots = ['front', 'sitting_room', 'bedroom', 'kitchen', 'bathroom'];
+      for (let i = 0; i < photos.length; i += 1) {
+        await db.query(
+          'INSERT INTO property_images (property_id, url, is_primary, sort_order, slot_key, room_label) VALUES ($1, $2, $3, $4, $5, $6)',
+          [propertyId, photos[i], i === 0, i, slots[i] || `extra_${i + 1}`, labels[i] || 'extra photo']
+        );
+      }
+    }
+
+    await db.query(
+      "UPDATE whatsapp_sessions SET current_step = 'submitted', listing_draft = '{}', session_data = '{}' WHERE phone = $1",
+      [phone]
+    );
+
+    const msg = t(lang, 'listingSubmitted').replace('#{ref}', refCode);
+    return { message: `${msg}\n\n🔗 Once approved: ${HOME_URL}/property/${propertyId}`, nextStep: 'submitted' };
+  } catch (err) {
+    logger.error('WhatsApp listing save error:', err);
+    return { message: tt(lang, 'genericSaveError', { url: HOME_URL }), nextStep: 'submitted' };
+  }
 }
 
 function listingStartReply(lang, listingType, hints = {}) {
@@ -2121,6 +2228,14 @@ function isValidEmailAddress(value) {
 
 function normalizeContactPhone(value) {
   return String(value || '').replace(/\s+/g, '').trim();
+}
+
+function normalizeWhatsappNin(value) {
+  return String(value || '').replace(/\s+/g, '').trim().toUpperCase();
+}
+
+function isValidWhatsappUgNin(value) {
+  return /^(CM|CF|PM|PF)[A-Z0-9]{12}$/.test(normalizeWhatsappNin(value));
 }
 
 function isValidContactPhone(value) {
@@ -6137,7 +6252,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
   const listingFlowSteps = [
     'listing_type', 'ownership', 'ask_field_agent', 'ask_field_agent_details', 'title', 'district',
     'area', 'price', 'bedrooms', 'description', 'ask_deposit', 'ask_contract', 'ask_university',
-    'ask_distance', 'ask_public_name', 'ask_contact_method', 'ask_contact_value', 'ask_id_number',
+    'ask_distance', 'ask_public_name', 'ask_contact_method', 'ask_contact_value', 'ask_selfie', 'ask_id_number',
     'ask_phone', 'verify_otp'
   ];
   const hasListingContext = Boolean(
@@ -7456,8 +7571,15 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
   // PUBLIC CONTACT NAME
   if (step === 'ask_public_name') {
     if (cleanBody.length < 2) return respond(t(lang, 'askPublicName'), 'ask_public_name');
-    await patchDraft(phone, { lister_name: cleanBody, contact_display_name: cleanBody });
-    return respond(t(lang, 'askContactMethod'), 'ask_contact_method');
+    await patchDraft(phone, {
+      lister_name: cleanBody,
+      contact_display_name: cleanBody,
+      owner_phone: normalizeContactPhone(phone),
+      lister_phone: normalizeContactPhone(phone),
+      preferred_contact_channel: 'phone',
+      otp_channel: 'not_required'
+    });
+    return respond(t(lang, 'askSelfie'), 'ask_selfie');
   }
 
   // CONTACT METHOD
@@ -7488,20 +7610,26 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
   // NATIONAL ID
   if (step === 'ask_id_number') {
-    if (cleanBody.length < 6) return respond(t(lang, 'invalidNin'), 'ask_id_number');
-    await patchDraft(phone, { national_id_number: cleanBody });
-    return respond(t(lang, 'askSelfie'), 'ask_selfie');
+    const nationalIdNumber = normalizeWhatsappNin(cleanBody);
+    if (!isValidWhatsappUgNin(nationalIdNumber)) return respond(t(lang, 'invalidNin'), 'ask_id_number');
+    const updatedDraft = {
+      ...draft,
+      national_id_number: nationalIdNumber,
+      owner_phone: draft.owner_phone || normalizeContactPhone(phone),
+      lister_phone: draft.lister_phone || normalizeContactPhone(phone),
+      preferred_contact_channel: draft.preferred_contact_channel || 'phone',
+      otp_channel: 'not_required'
+    };
+    await patchDraft(phone, updatedDraft);
+    const result = await submitWhatsappListingDraft({ phone, lang, draft: updatedDraft });
+    return respond(result.message, result.nextStep);
   }
 
   // SELFIE
   if (step === 'ask_selfie') {
     if (!isPhotoMediaForIdentity(runtime.mediaType, mediaUrl)) return respond(t(lang, 'sendSelfiePhotoOnly'), 'ask_selfie');
     await patchDraft(phone, { selfie_url: mediaUrl });
-    if (draft.otp_identifier) {
-      await issueOtp(draft.otp_identifier, { channel: draft.otp_channel || 'phone' });
-      return respond(draft.otp_channel === 'email' ? t(lang, 'otpSentEmail') : t(lang, 'otpSent'), 'verify_otp');
-    }
-    return respond(t(lang, 'askPhone'), 'ask_phone');
+    return respond(t(lang, 'askIDNumber'), 'ask_id_number');
   }
 
   // PHONE

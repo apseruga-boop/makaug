@@ -948,6 +948,14 @@ function isValidUgPhone(phone) {
   return /^\+256\d{9}$/.test(phone);
 }
 
+function normalizeUgNin(value = '') {
+  return cleanText(value).replace(/\s+/g, '').toUpperCase();
+}
+
+function isValidUgNin(value = '') {
+  return /^(CM|CF|PM|PF)[A-Z0-9]{12}$/.test(normalizeUgNin(value));
+}
+
 function normalizePreferredLanguage(value) {
   const lang = cleanText(value).toLowerCase();
   return ['en', 'lg', 'sw', 'ac', 'ny', 'rn', 'sm'].includes(lang) ? lang : 'en';
@@ -2785,6 +2793,7 @@ router.post('/', async (req, res, next) => {
     const inquiryReference = cleanText(body.inquiry_reference) || buildListingReference();
     const newUntilDate = body.new_until ? new Date(body.new_until) : new Date(Date.now() + (5 * 24 * 60 * 60 * 1000));
     const newUntil = Number.isNaN(newUntilDate.getTime()) ? new Date(Date.now() + (5 * 24 * 60 * 60 * 1000)) : newUntilDate;
+    const idNumber = normalizeUgNin(body.id_number || extraFields?.verify?.nin || extraFields?.verify?.id_number);
     const idDocumentName = cleanText(body.id_document_name || extraFields?.verify?.id_document_name);
     let idDocumentUrl = cleanText(body.id_document_url || extraFields?.verify?.id_document_url);
     const idDocumentType = cleanText(body.id_document_type || body.id_document_mime_type || extraFields?.verify?.id_document_type || extraFields?.verify?.id_document_mime_type);
@@ -2823,13 +2832,23 @@ router.post('/', async (req, res, next) => {
       if (!listerEmailNormalized || !isValidEmail(listerEmailNormalized)) {
         errors.push('lister_email is required for online listing review updates');
       }
+      if (!listerPhone) {
+        errors.push('lister_phone is required for online listing contact');
+      }
       if (submittedImages.length < websiteMinImages || submittedImages.length > websiteMaxImages) {
         errors.push(`At least ${websiteMinImages} and no more than ${websiteMaxImages} property images are required for website submissions`);
       }
       if (invalidSubmittedImages.length) {
         errors.push('Each property image must include a viewable image URL');
       }
-      if ((idDocumentName || idDocumentUrl) && !isAcceptedNationalIdPhoto({ name: idDocumentName, url: idDocumentUrl, mimeType: idDocumentType })) {
+      if (!idNumber) {
+        errors.push('id_number is required for online listing review');
+      } else if (!isValidUgNin(idNumber)) {
+        errors.push('id_number must be a valid Uganda NIN');
+      }
+      if (!idDocumentName && !idDocumentUrl) {
+        errors.push('National ID photo is required. Upload a photo image; PDFs are not accepted');
+      } else if (!isAcceptedNationalIdPhoto({ name: idDocumentName, url: idDocumentUrl, mimeType: idDocumentType })) {
         errors.push('National ID must be uploaded as a photo image. PDFs are not accepted. Please take a picture and upload it');
       }
       if (listingOtpToken) {
@@ -2864,8 +2883,12 @@ router.post('/', async (req, res, next) => {
       maxBytes: 5 * 1024 * 1024,
       label: 'National ID photo'
     });
-    if (idDocumentUrl && extraFields.verify && typeof extraFields.verify === 'object') {
-      extraFields.verify.id_document_url = idDocumentUrl;
+    if (idDocumentUrl || idNumber) {
+      extraFields.verify = {
+        ...(extraFields.verify && typeof extraFields.verify === 'object' ? extraFields.verify : {}),
+        ...(idDocumentUrl ? { id_document_url: idDocumentUrl } : {}),
+        ...(idNumber ? { nin: idNumber, id_number: idNumber } : {})
+      };
     }
     const storedSubmittedImageItems = [];
     for (const [index, item] of submittedImageItems.entries()) {
@@ -3039,7 +3062,7 @@ router.post('/', async (req, res, next) => {
         listingType === 'student' ? true : studentsWelcome,
         verificationTermsAccepted,
         inquiryReference,
-        cleanText(body.id_number) || null,
+        idNumber || null,
         idDocumentName || null,
         idDocumentUrl || null,
         newUntil,

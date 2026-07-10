@@ -109,6 +109,7 @@
     window.__makaugAppVersion += "-king-dashboard-ai-visible-summary-fix-20260710";
     window.__makaugAppVersion += "-list-property-email-only-20260710";
     window.__makaugAppVersion += "-list-property-email-only-copy-fix-20260710";
+    window.__makaugAppVersion += "-list-property-contact-id-required-20260710";
     window.__makaugReleaseMarkers = "admin-command-centre-20260514-section-search-shell-20260512-controlled-public-inventory-20260514-admin-live-control-parity-20260515-final-map-sweep-20260515-outlook-email-agent-20260515-contextual-whatsapp-20260517-whatsapp-prefill-copy-20260517-listing-contact-whatsapp-i18n-20260519-live-featured-cleanup-20260519-agent-inquiry-nearby-20260519-approval-profile-sync-20260519-broker-profile-share-links-20260519-direct-agent-profile-20260519-source-registry-20260520-found-online-pending-filter-20260521-review-queue-final-hide-20260521-source-fishing-policy-20260523-launch-intake-20260523-source-post-import-20260523-found-online-queue-tabs-20260524-found-online-only-cleanup-20260524-found-online-status-cleanup-20260524-found-online-2026-unlimited-sweep-20260524-found-online-production-sweep-20260524-found-online-evidence-sweep-20260524-public-image-src-fix-20260524-found-online-admin-archive-20260524-social-platform-sweep-20260525-tiktok-full-capture-20260525-tiktok-exact-import-20260525-live-review-separation-20260525-social-only-preapproved-20260525-strict-preapproval-20260525-youtube-social-restore-20260525-youtube-social-republish-20260525-tiktok-source-import-fix-20260525-public-featured-feed-fix-20260525-public-featured-feed-fix-20260526-price-upon-application-import-20260526-found-online-location-override-20260526-source-contact-fallback-20260526-escaped-labels-20260526-sourced-broker-badge-cleanup-20260526-admin-source-fact-editor-20260526-social-location-pin-repair-20260527-youtube-feb-sweep-20260528-third-party-legal-guardrails-20260528-amharic-i18n-20260529-hero-opportunity-counter-20260529-i18n-counter-fix-20260529-counter-maths-fix-20260529-detail-container-i18n-20260529-king-review-location-trust-20260529-detail-map-description-i18n-20260529-social-capture-bookmarklet-20260602-marketplace-land-safety-20260602-king-student-youtube-import-20260603-source-post-date-confirmation-20260606-king-youtube-student-sweep-tabs-20260606-owner-verification-startup-fix-20260606-arabic-i18n-20260606-youtube-jan-broad-batch-sweep-20260607-king-review-location-autofill-20260607-mortgage-bank-leads-i18n-20260607-whatsapp-no-match-leadgen-20260607-land-title-availability-20260607-whatsapp-no-match-visible-leadbox-20260607-agent-registration-mobile-20260607-public-inventory-summary-20260609-king-status-fast-render-20260609-king-live-public-parity-20260609-king-location-hierarchy-nansana-20260616-public-i18n-detail-persistence-20260707-public-i18n-startup-race-fix-20260707-public-i18n-cookie-persistence-20260707-public-i18n-auth-language-guard-20260707-public-search-area-handoff-20260707-public-search-normalize-helper-20260707-public-search-route-backend-results-20260707-public-home-search-backend-results-20260707-staff-review-location-namasuba-20260708-list-property-photo-upload-fix-20260708-public-qa-cleanup-20260708-public-location-label-fix-20260708-public-results-delivery-fix-20260708-inpage-video-facade-20260709";
     window.__makaugReleaseMarkers += "-numbered-pagination-20260709";
     window.__makaugReleaseMarkers += "-tiles-contact-consistency-20260709";
@@ -133,6 +134,7 @@
     window.__makaugReleaseMarkers += "-king-dashboard-ai-visible-summary-fix-20260710";
     window.__makaugReleaseMarkers += "-list-property-email-only-20260710";
     window.__makaugReleaseMarkers += "-list-property-email-only-copy-fix-20260710";
+    window.__makaugReleaseMarkers += "-list-property-contact-id-required-20260710";
     window.__makaugPublicSummaryPath = "/api/properties?status=approved&public_only=1&limit=1&page=1&summary_only=1&include_summary=1";
     if (window.fetch && !window.__makaugPublicSummaryPromise) {
       window.__makaugPublicSummaryPromise = fetch(window.__makaugPublicSummaryPath, { credentials: "same-origin" })
@@ -3396,8 +3398,8 @@
         </div>
 
 	        <div id="lp-step-3" data-lp-step-panel="3" class="hidden">
-	          <h2 id="lp-step3-title" class="text-3xl md:text-4xl font-black serif text-gray-800 mb-2">Contact Details</h2>
-	          <p id="lp-step3-sub" class="text-sm text-gray-500 mb-4">Email is required so makaug can send review updates. Phone, WhatsApp, and ID details are optional.</p>
+	          <h2 id="lp-step3-title" class="text-3xl md:text-4xl font-black serif text-gray-800 mb-2">Contact & Verification</h2>
+	          <p id="lp-step3-sub" class="text-sm text-gray-500 mb-4">Email, phone, and National ID details are required for review. No OTP is needed.</p>
 	          <div id="lp-broker-fast-track-note" class="hidden mb-4 rounded-2xl border border-green-100 bg-green-50 p-3 text-sm text-green-950">
 	            <strong>Broker fast track:</strong> your broker account has already completed contact and ID verification. We will attach this listing to your broker profile and send it to makaug admin review before it can go live.
 	          </div>
@@ -3413,9 +3415,9 @@
               <p id="lp-public-name-msg" class="text-xs text-gray-500 mt-1">This is the name buyers/tenants will see publicly.</p>
             </div>
             <div>
-              <label id="lp-verify-phone-label" class="block text-sm font-semibold text-gray-700 mb-1.5">Phone Number <span class="font-normal text-gray-400">(optional)</span></label>
+              <label id="lp-verify-phone-label" class="block text-sm font-semibold text-gray-700 mb-1.5">Phone Number *</label>
               <input id="lp-verify-phone" oninput="onLpVerifyPhoneInput()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="+256 7XX XXX XXX">
-              <p id="lp-verify-phone-msg" class="text-xs text-gray-500 mt-1">Optional. Add a Uganda number if buyers can call or WhatsApp you.</p>
+              <p id="lp-verify-phone-msg" class="text-xs text-gray-500 mt-1">Required. This is the number buyers/tenants use to call or WhatsApp you.</p>
               <div id="lp-otp-channel-wrap" class="hidden mt-2">
                 <label class="block text-xs font-semibold text-gray-600 mb-1">Receive OTP via</label>
                 <select id="lp-otp-channel" onchange="setLpOtpChannel(this.value)" class="w-full border border-green-100 rounded-lg px-3 py-2 text-sm bg-white">
@@ -3444,16 +3446,16 @@
               <input id="lp-verify-email" type="email" oninput="onLpVerifyEmailInput()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="you@email.com">
               <p id="lp-verify-email-msg" class="text-xs text-gray-500 mt-1">Required. We use this to send review updates and your listing reference.</p>
             </div>
-            <div id="lp-verify-nin-wrap" class="hidden">
-              <label id="lp-verify-nin-label" class="block text-sm font-semibold text-gray-700 mb-1.5">National ID Number (NIN) <span class="font-normal text-gray-400">(optional)</span></label>
-              <input id="lp-verify-nin" oninput="onLpVerifyNinInput()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="CMXXXXXXXXXXXX">
-              <p id="lp-verify-nin-msg" class="text-xs text-gray-500 mt-1">Optional. Staff may request ID later only if extra review is needed.</p>
-            </div>
-            <div id="lp-verify-id-wrap" class="hidden md:col-span-2">
-              <label id="lp-verify-id-label" class="block text-sm font-semibold text-gray-700 mb-2">Upload National ID Photo <span class="font-normal text-gray-400">(optional)</span></label>
+            <div id="lp-verify-id-wrap" class="md:col-span-2">
+              <label id="lp-verify-id-label" class="block text-sm font-semibold text-gray-700 mb-2">Upload National ID Photo *</label>
               <input id="lp-verify-id-file" type="file" accept="image/*" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white" onchange="handleLpIdentityFile(event)">
-              <p id="lp-verify-id-file-name" class="text-xs text-gray-500 mt-1">Optional. Upload only if makaug staff requested it. PDFs are not accepted.</p>
+              <p id="lp-verify-id-file-name" class="text-xs text-gray-500 mt-1">Attach a clear photo of your ID. PDFs are not accepted. Your ID is used only for verification and fraud prevention — it is never shown publicly.</p>
               <div id="lp-verify-id-preview" class="mt-3"></div>
+            </div>
+            <div id="lp-verify-nin-wrap">
+              <label id="lp-verify-nin-label" class="block text-sm font-semibold text-gray-700 mb-1.5">National ID Number (NIN) *</label>
+              <input id="lp-verify-nin" oninput="onLpVerifyNinInput()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="CMXXXXXXXXXXXX">
+              <p id="lp-verify-nin-msg" class="text-xs text-gray-500 mt-1">Required. Write your ID number here. Uganda NIN format check is enabled.</p>
             </div>
             <div>
               <label id="lp-field-agent-assisted-label" class="block text-sm font-semibold text-gray-700 mb-1.5">Field Agent assisted?</label>
@@ -3470,7 +3472,7 @@
             </div>
           </div>
 
-          <label id="lp-verify-nin-match-wrap" class="hidden mt-3 flex items-start gap-2 text-sm text-gray-700">
+          <label id="lp-verify-nin-match-wrap" class="mt-3 flex items-start gap-2 text-sm text-gray-700">
             <input id="lp-verify-nin-match" type="checkbox" class="mt-1 accent-green-700">
             <span id="lp-verify-nin-match-label">I confirm the typed NIN matches the uploaded National ID photo.</span>
           </label>
@@ -3491,7 +3493,7 @@
           </label>
           <label class="mt-2 flex items-start gap-2 text-sm text-gray-700">
             <input id="lp-verify-consent" type="checkbox" class="mt-1 accent-green-700">
-            <span id="lp-verify-consent-label">I consent to contact by email and any phone number I provide regarding this listing review.</span>
+            <span id="lp-verify-consent-label">I consent to contact by phone, WhatsApp, and email regarding this listing review.</span>
             <span title="makaug may contact you to request missing details and confirm publishing status within the review window." class="text-xs text-green-700 cursor-help">ⓘ</span>
           </label>
 
@@ -6368,7 +6370,7 @@
       </div>
 
       <div class="mt-5 bg-green-50 border border-green-100 rounded-xl px-4 py-3 text-sm text-green-800">
-        ✅ <strong id="list-choice-free-title">Always 100% Free.</strong> <span id="list-choice-free-copy">Submit with your email; makaug reviews the listing before it goes live.</span>
+        ✅ <strong id="list-choice-free-title">Always 100% Free.</strong> <span id="list-choice-free-copy">Submit with email, phone, and ID details; makaug reviews the listing before it goes live.</span>
       </div>
     </div>
   </div>
@@ -7098,6 +7100,7 @@
         window.__makaugAppVersion += "-king-dashboard-ai-visible-summary-fix-20260710";
         window.__makaugAppVersion += "-list-property-email-only-20260710";
         window.__makaugAppVersion += "-list-property-email-only-copy-fix-20260710";
+        window.__makaugAppVersion += "-list-property-contact-id-required-20260710";
         var script = document.createElement("script");
         script.src = "/assets/makaug-app.js?v=" + encodeURIComponent(window.__makaugAppVersion);
         script.async = true;
