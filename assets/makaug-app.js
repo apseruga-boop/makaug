@@ -541,7 +541,7 @@ const CURRENCIES = {
 };
 const REVIEW_USD_TO_UGX_GUIDE_RATE = 3800;
 
-const DEFAULT_MORTGAGE_RATE_UPDATED_AT = "2026-02-26";
+const DEFAULT_MORTGAGE_RATE_UPDATED_AT = "2026-06-21";
 const MAP_DEFAULT_CENTER = { lat: 1.3733, lng: 32.2903 };
 const MAP_UGANDA_OVERVIEW_CENTER = { lat: 1.3733, lng: 32.2903 };
 const MAP_DEFAULT_ZOOM = 7;
@@ -742,6 +742,8 @@ const MORTGAGE_PROVIDER_BRANDS = {
 let MORTGAGE_RATE_UPDATED_AT = DEFAULT_MORTGAGE_RATE_UPDATED_AT;
 let MORTGAGE_RATE_UPDATED_RAW = DEFAULT_MORTGAGE_RATE_UPDATED_AT;
 let MORTGAGE_RATE_LAST_CHECKED_RAW = "";
+let mortgageRatesHydrating = false;
+let mortgageRatesHydratedOnce = false;
 let MORTGAGE_PROVIDERS = JSON.parse(JSON.stringify(DEFAULT_MORTGAGE_PROVIDERS));
 let activeMortgageTab = "repayment";
 let selectedMortgageProviderKey = "";
@@ -41262,17 +41264,28 @@ function hydrateMortgageProvidersFromApi(data, options = {}) {
 }
 
 async function loadMortgageRates(showToastOnRefresh = false) {
+  if (mortgageRatesHydrating) return false;
+  if (!showToastOnRefresh && mortgageRatesHydratedOnce) {
+    renderMortgageFinder();
+    return true;
+  }
+  mortgageRatesHydrating = true;
   try {
     const checkedAt = new Date().toISOString();
     const response = await apiRequest("/api/mortgage-rates");
     hydrateMortgageProvidersFromApi(response?.data || {}, { checkedAt });
+    mortgageRatesHydratedOnce = true;
     renderMortgageFinder();
     if (showToastOnRefresh) toast(mortgageTr("dataRefreshed"));
+    return true;
   } catch (error) {
     // Keep static fallback rates when API is unavailable.
     MORTGAGE_RATE_LAST_CHECKED_RAW = new Date().toISOString();
     renderMortgageFinder();
     if (showToastOnRefresh) toast(mortgageTr("dataRefreshFail"));
+    return false;
+  } finally {
+    mortgageRatesHydrating = false;
   }
 }
 
@@ -41966,7 +41979,7 @@ function renderMortgageFinder() {
   if (yearsValueEl) yearsValueEl.textContent = `${normalizedYears} ${mortgageTr("yearsWord")}`;
 
   const result = buildMortgageComparison(priceEl.value, normalizedDeposit, normalizedYears, purposeEl.value);
-  const updatedLabel = formatMortgageUpdatedAtLabel(MORTGAGE_RATE_LAST_CHECKED_RAW || MORTGAGE_RATE_UPDATED_RAW || MORTGAGE_RATE_UPDATED_AT);
+  const updatedLabel = formatMortgageUpdatedAtLabel(MORTGAGE_RATE_UPDATED_RAW || MORTGAGE_RATE_UPDATED_AT || DEFAULT_MORTGAGE_RATE_UPDATED_AT);
   const income = Math.max(0, Number(incomeEl?.value || 0));
   const selectedRate = resolveMortgageSelectedRate(result, rateEl);
   const monthly = computeMonthlyRepayment(result.loanAmount, selectedRate, normalizedYears) || result.best?.monthlyRepayment || 0;

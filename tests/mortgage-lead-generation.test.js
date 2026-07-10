@@ -6,6 +6,7 @@ const root = path.resolve(__dirname, '..');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const app = fs.readFileSync(path.join(root, 'assets', 'makaug-app.js'), 'utf8');
 const mortgageRoutes = fs.readFileSync(path.join(root, 'routes', 'mortgage.js'), 'utf8');
+const adminRoutes = fs.readFileSync(path.join(root, 'routes', 'admin.js'), 'utf8');
 const server = fs.readFileSync(path.join(root, 'server.js'), 'utf8');
 
 const requiredWindowHandlers = [
@@ -26,7 +27,8 @@ const requiredWindowHandlers = [
 assert(
   html.includes('mortgage-finder-accuracy-handlers-20260621')
     && html.includes('mortgage-qualification-20260621-mortgage-provider-sources-20260621')
-    && html.includes('mortgage-provider-badges-20260630'),
+    && html.includes('mortgage-provider-badges-20260630')
+    && html.includes('mortgage-lead-routing-fix-20260710'),
   'mortgage cache marker should force the corrected app bundle to load'
 );
 assert(
@@ -60,6 +62,7 @@ assert(app.includes('let mortgageRateManuallyEdited = false;'), 'mortgage manual
 assert(app.includes('function resolveMortgageSelectedRate'), 'mortgage rate resolver should exist');
 assert(app.includes('function getMortgageFeeEstimates'), 'mortgage fee estimator should exist');
 assert(server.includes("mortgageUiTabsBankLogosVersion = 'mortgage-provider-badges-20260630'"), 'server should append the mortgage UI cache marker in production HTML');
+assert(server.includes("mortgageLeadRoutingFixVersion = 'mortgage-lead-routing-fix-20260710'"), 'server should append the mortgage lead-routing cache marker in production HTML');
 assert(app.includes('const MORTGAGE_PROVIDER_BRANDS'), 'mortgage comparison should define bank brand/logo metadata');
 assert(app.includes('function renderMortgageProviderLogo'), 'mortgage comparison should render lender logo badges');
 assert(app.includes('renderMortgageProviderLogo(result.best.provider'), 'best-match mortgage card should show a lender logo');
@@ -108,6 +111,8 @@ for (const lang of ['lg', 'sw', 'ac', 'ny', 'sm', 'am', 'ar']) {
 assert(app.includes('mergeAuditedMortgageProvider'), 'frontend should protect audited bank data from stale API rows');
 assert(app.includes('mergeAuditedMortgageProviderList'), 'frontend should append audited providers missing from API rows');
 assert(app.includes('DEFAULT_MORTGAGE_PROVIDERS'), 'frontend should keep audited fallback providers available after API hydration');
+assert(app.includes('mortgageRatesHydrating'), 'mortgage rate loading should guard against stacked refreshes');
+assert(app.includes('mortgageRatesHydratedOnce'), 'mortgage rate loading should only auto-hydrate once per page session');
 
 assert(mortgageRoutes.includes('withAuditedMortgageData'), 'API should protect audited bank data from stale DB rows');
 assert(mortgageRoutes.includes('mergeAuditedMortgageProviders'), 'API should append audited providers missing from database rows');
@@ -120,5 +125,11 @@ assert(mortgageRoutes.includes('mortgage_bank_callback'), 'bank-specific mortgag
 assert(mortgageRoutes.includes('buyingStage'), 'mortgage enquiry API should persist buying stage');
 assert(mortgageRoutes.includes('depositStatus'), 'mortgage enquiry API should persist deposit readiness');
 assert(mortgageRoutes.includes('incomeType'), 'mortgage enquiry API should persist income type');
+assert(mortgageRoutes.includes('crmLeadId'), 'mortgage enquiry rows should store the linked CRM lead id when available');
+assert(mortgageRoutes.includes('crmLeadCreated'), 'mortgage enquiry rows should record whether CRM lead creation succeeded');
+assert(adminRoutes.includes('adminLeadUnionSql'), 'admin lead feed should include mortgage enquiry fallback rows');
+assert(adminRoutes.includes('mortgage_enquiry_fallback'), 'admin lead feed should surface mortgage enquiries missing CRM lead rows');
+assert(adminRoutes.includes("router.get('/mortgage-leads'"), 'admin should expose a dedicated mortgage leads endpoint');
+assert(adminRoutes.includes("router.get('/mortgage-enquiries'"), 'admin should expose a dedicated mortgage enquiries endpoint');
 
 console.log('mortgage-lead-generation regression checks passed');

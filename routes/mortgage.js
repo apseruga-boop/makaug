@@ -428,6 +428,21 @@ router.post('/enquiry', async (req, res, next) => {
         bank_handoff_status: isBankProviderLead ? 'pending_bank_handoff' : null
       }
     });
+    await db.query(
+      `UPDATE mortgage_enquiries
+       SET payload = payload || $2::jsonb
+       WHERE id = $1`,
+      [
+        id,
+        JSON.stringify({
+          reference,
+          crmLeadId: lead?.id || null,
+          crmLeadCreated: Boolean(lead?.id),
+          crmLeadSource: lead?.source || null,
+          crmLeadStatus: lead?.lead_status || null
+        })
+      ]
+    ).catch(() => {});
     const supportEmail = getSupportEmail();
     const whatsappUrl = getSupportWhatsappUrl();
     let userDelivery = { sent: false, reason: 'not_attempted' };

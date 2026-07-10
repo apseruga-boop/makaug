@@ -196,6 +196,7 @@ const listPropertyEmailOnlyVersion = 'list-property-email-only-20260710';
 const listPropertyEmailOnlyCopyFixVersion = 'list-property-email-only-copy-fix-20260710';
 const listPropertyContactIdRequiredVersion = 'list-property-contact-id-required-20260710';
 const publicFilterStandardisationVersion = 'public-filter-standardisation-20260710';
+const mortgageLeadRoutingFixVersion = 'mortgage-lead-routing-fix-20260710';
 const publicAppVersionSuffixes = [
   captureHelperUsabilityVersion,
   studentNearestUniversityVersion,
@@ -261,7 +262,8 @@ const publicAppVersionSuffixes = [
   listPropertyEmailOnlyVersion,
   listPropertyEmailOnlyCopyFixVersion,
   listPropertyContactIdRequiredVersion,
-  publicFilterStandardisationVersion
+  publicFilterStandardisationVersion,
+  mortgageLeadRoutingFixVersion
 ];
 let cachedIndexHtml = null;
 const publicHtmlCache = new Map();

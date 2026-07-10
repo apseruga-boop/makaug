@@ -2780,8 +2780,8 @@ router.get('/command-centre', async (_req, res, next) => {
       safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'hidden'"),
       safeCount("SELECT COUNT(*)::int AS total FROM agents WHERE status = 'pending' OR COALESCE(registration_status, 'not_registered') <> 'registered'"),
       safeCount("SELECT COUNT(*)::int AS total FROM agents WHERE status = 'approved' AND COALESCE(registration_status, 'not_registered') = 'registered'"),
-      safeCount("SELECT COUNT(*)::int AS total FROM leads WHERE lead_status = 'open'"),
-      safeCount("SELECT COUNT(*)::int AS total FROM leads WHERE priority IN ('high','urgent') OR lead_score >= 50"),
+      safeCount(`${adminLeadUnionSql()} SELECT COUNT(*)::int AS total FROM all_leads WHERE lead_status = 'open'`),
+      safeCount(`${adminLeadUnionSql()} SELECT COUNT(*)::int AS total FROM all_leads WHERE priority IN ('high','urgent') OR lead_score >= 50`),
       safeCount("SELECT COUNT(*)::int AS total FROM lead_tasks WHERE status = 'open' AND due_at < NOW()"),
       safeCount("SELECT COUNT(*)::int AS total FROM whatsapp_conversation_state WHERE status IN ('needs_human','escalated')"),
       safeCount("SELECT COUNT(*)::int AS total FROM email_logs WHERE status IN ('failed','provider_missing','bounced','error')"),
@@ -7932,32 +7932,36 @@ router.get('/crm/summary', async (_req, res, next) => {
   try {
     const [summary, bySource, byType, demand, tasks] = await Promise.all([
       db.query(
-        `SELECT
+        `${adminLeadUnionSql()}
+         SELECT
            COUNT(*)::int AS total_leads,
            COUNT(*) FILTER (WHERE lead_status = 'open')::int AS open_leads,
            COUNT(*) FILTER (WHERE assigned_to_user_id IS NULL)::int AS unassigned_leads,
            COUNT(*) FILTER (WHERE priority IN ('high','urgent'))::int AS hot_leads,
            COUNT(*) FILTER (WHERE next_follow_up_at < NOW() AND lead_status = 'open')::int AS overdue_followups,
            COALESCE(SUM(budget), 0)::bigint AS budget_pipeline
-         FROM leads`
+         FROM all_leads`
       ),
       db.query(
-        `SELECT source, COUNT(*)::int AS total
-         FROM leads
+        `${adminLeadUnionSql()}
+         SELECT source, COUNT(*)::int AS total
+         FROM all_leads
          GROUP BY source
          ORDER BY total DESC
          LIMIT 12`
       ),
       db.query(
-        `SELECT lead_type, COUNT(*)::int AS total
-         FROM leads
+        `${adminLeadUnionSql()}
+         SELECT lead_type, COUNT(*)::int AS total
+         FROM all_leads
          GROUP BY lead_type
          ORDER BY total DESC
          LIMIT 12`
       ),
       db.query(
-        `SELECT location, category, COUNT(*)::int AS total, COALESCE(AVG(budget), 0)::bigint AS avg_budget
-         FROM leads
+        `${adminLeadUnionSql()}
+         SELECT location, category, COUNT(*)::int AS total, COALESCE(AVG(budget), 0)::bigint AS avg_budget
+         FROM all_leads
          WHERE location IS NOT NULL OR category IS NOT NULL
          GROUP BY location, category
          ORDER BY total DESC
@@ -8477,45 +8481,210 @@ router.get('/whatsapp-message-logs', async (req, res, next) => {
   }
 });
 
+function buildAdminLeadFilters(query = {}) {
+  const filters = [];
+  const values = [];
+  const addFilter = (sql, value) => {
+    values.push(value);
+    filters.push(sql.replace('?', `$${values.length}`));
+  };
+  if (query.status) addFilter('lead_status = ?', String(query.status).trim());
+  if (query.source) addFilter('source = ?', String(query.source).trim());
+  if (query.type) addFilter('lead_type = ?', String(query.type).trim());
+  if (query.priority) addFilter('priority = ?', String(query.priority).trim());
+  if (query.search) {
+    values.push(`%${String(query.search).trim()}%`);
+    filters.push(`(message ILIKE $${values.length} OR location ILIKE $${values.length} OR contact_name ILIKE $${values.length} OR contact_phone ILIKE $${values.length} OR contact_email ILIKE $${values.length})`);
+  }
+  return {
+    values,
+    where: filters.length ? `WHERE ${filters.join(' AND ')}` : ''
+  };
+}
+
+function adminLeadUnionSql() {
+  return `
+    WITH crm_leads AS (
+      SELECT
+        l.id::text AS id,
+        l.contact_id::text AS contact_id,
+        l.user_id::text AS user_id,
+        l.listing_id::text AS listing_id,
+        l.campaign_id::text AS campaign_id,
+        l.source,
+        l.lead_type,
+        l.category,
+        l.location,
+        l.budget,
+        l.message,
+        l.lifecycle_stage,
+        l.lead_status,
+        l.lead_score,
+        l.priority,
+        l.assigned_to_user_id::text AS assigned_to_user_id,
+        l.next_follow_up_at,
+        l.last_contacted_at,
+        l.sla_status,
+        l.outcome,
+        l.lost_reason,
+        l.metadata,
+        l.created_at,
+        l.updated_at,
+        c.name AS contact_name,
+        c.phone AS contact_phone,
+        c.email AS contact_email,
+        c.whatsapp AS contact_whatsapp,
+        p.title AS listing_title
+      FROM leads l
+      LEFT JOIN contacts c ON c.id = l.contact_id
+      LEFT JOIN properties p ON p.id = l.listing_id
+    ),
+    mortgage_enquiry_fallback AS (
+      SELECT
+        ('mortgage-enquiry:' || me.id::text) AS id,
+        NULL::text AS contact_id,
+        NULL::text AS user_id,
+        NULL::text AS listing_id,
+        NULL::text AS campaign_id,
+        COALESCE(NULLIF(me.payload->>'source', ''), 'website_mortgage_finder') AS source,
+        'mortgage' AS lead_type,
+        COALESCE(NULLIF(me.property_purpose, ''), 'mortgage_help') AS category,
+        NULLIF(COALESCE(me.payload->>'location', me.payload->>'preferred_area'), '') AS location,
+        COALESCE(me.property_price, NULL)::bigint AS budget,
+        trim(concat(
+          'Mortgage help requested',
+          CASE WHEN NULLIF(me.payload->>'reference', '') IS NOT NULL THEN ' • ' || (me.payload->>'reference') ELSE '' END,
+          CASE WHEN NULLIF(me.payload->>'preferredProviderName', '') IS NOT NULL THEN ' • ' || (me.payload->>'preferredProviderName') ELSE '' END
+        )) AS message,
+        'new' AS lifecycle_stage,
+        'open' AS lead_status,
+        60 AS lead_score,
+        'normal' AS priority,
+        NULL::text AS assigned_to_user_id,
+        NULL::timestamptz AS next_follow_up_at,
+        NULL::timestamptz AS last_contacted_at,
+        'open' AS sla_status,
+        NULL::text AS outcome,
+        NULL::text AS lost_reason,
+        me.payload || jsonb_build_object(
+          'mortgage_enquiry_id', me.id::text,
+          'crm_lead_missing', true,
+          'admin_visible_fallback', true
+        ) AS metadata,
+        me.created_at,
+        me.created_at AS updated_at,
+        COALESCE(NULLIF(me.payload->>'name', ''), 'Mortgage lead') AS contact_name,
+        me.user_phone AS contact_phone,
+        NULLIF(me.payload->>'email', '') AS contact_email,
+        me.user_phone AS contact_whatsapp,
+        NULL::text AS listing_title
+      FROM mortgage_enquiries me
+      WHERE NOT EXISTS (
+        SELECT 1
+        FROM leads l
+        WHERE l.metadata->>'mortgage_enquiry_id' = me.id::text
+      )
+    ),
+    all_leads AS (
+      SELECT * FROM crm_leads
+      UNION ALL
+      SELECT * FROM mortgage_enquiry_fallback
+    )`;
+}
+
 router.get('/leads', async (req, res, next) => {
   try {
     const { page, limit, offset } = parsePagination(req.query);
-    const filters = [];
-    const values = [];
-    const addFilter = (sql, value) => {
-      values.push(value);
-      filters.push(sql.replace('?', `$${values.length}`));
-    };
-    if (req.query.status) addFilter('l.lead_status = ?', String(req.query.status).trim());
-    if (req.query.source) addFilter('l.source = ?', String(req.query.source).trim());
-    if (req.query.type) addFilter('l.lead_type = ?', String(req.query.type).trim());
-    if (req.query.priority) addFilter('l.priority = ?', String(req.query.priority).trim());
-    if (req.query.search) {
-      values.push(`%${String(req.query.search).trim()}%`);
-      filters.push(`(l.message ILIKE $${values.length} OR l.location ILIKE $${values.length} OR c.name ILIKE $${values.length} OR c.phone ILIKE $${values.length} OR c.email ILIKE $${values.length})`);
-    }
-    const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+    const { values, where } = buildAdminLeadFilters(req.query);
+    const leadUnion = adminLeadUnionSql();
     const count = await db.query(
       `SELECT COUNT(*)::int AS total
-       FROM leads l
-       LEFT JOIN contacts c ON c.id = l.contact_id
+       FROM (${leadUnion}
+         SELECT * FROM all_leads
+       ) lead_rows
        ${where}`,
       values
     );
     const total = count.rows[0]?.total || 0;
     const rows = await db.query(
-      `SELECT l.*, c.name AS contact_name, c.phone AS contact_phone, c.email AS contact_email,
-              c.whatsapp AS contact_whatsapp, p.title AS listing_title
-       FROM leads l
-       LEFT JOIN contacts c ON c.id = l.contact_id
-       LEFT JOIN properties p ON p.id = l.listing_id
+      `${leadUnion}
+       SELECT *
+       FROM all_leads
        ${where}
-       ORDER BY l.created_at DESC
+       ORDER BY created_at DESC
        LIMIT $${values.length + 1}
        OFFSET $${values.length + 2}`,
       [...values, limit, offset]
     );
     return res.json({ ok: true, data: rows.rows, pagination: toPagination(total, page, limit) });
+  } catch (error) {
+    if (['42P01', '42703'].includes(error.code)) {
+      return res.json({ ok: true, data: [], pagination: toPagination(0, 1, 50), provider_missing: true });
+    }
+    return next(error);
+  }
+});
+
+async function queryAdminMortgageLeads(req) {
+  const { page, limit, offset } = parsePagination(req.query);
+  const filters = [];
+  const values = [];
+  if (req.query.search) {
+    values.push(`%${String(req.query.search).trim()}%`);
+    filters.push(`(me.user_phone ILIKE $${values.length} OR (me.payload->>'name') ILIKE $${values.length} OR (me.payload->>'email') ILIKE $${values.length} OR (me.payload->>'preferredProviderName') ILIKE $${values.length})`);
+  }
+  const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+  const count = await db.query(
+    `SELECT COUNT(*)::int AS total
+     FROM mortgage_enquiries me
+     ${where}`,
+    values
+  );
+  const rows = await db.query(
+    `SELECT
+       me.*,
+       l.id AS crm_lead_id,
+       l.lead_status AS crm_lead_status,
+       l.source AS crm_lead_source,
+       c.name AS contact_name,
+       c.email AS contact_email,
+       c.phone AS contact_phone
+     FROM mortgage_enquiries me
+     LEFT JOIN leads l ON l.metadata->>'mortgage_enquiry_id' = me.id::text
+     LEFT JOIN contacts c ON c.id = l.contact_id
+     ${where}
+     ORDER BY me.created_at DESC
+     LIMIT $${values.length + 1}
+     OFFSET $${values.length + 2}`,
+    [...values, limit, offset]
+  );
+  return { page, limit, total: count.rows[0]?.total || 0, rows: rows.rows };
+}
+
+router.get('/mortgage-leads', async (req, res, next) => {
+  try {
+    const result = await queryAdminMortgageLeads(req);
+    return res.json({
+      ok: true,
+      data: result.rows,
+      pagination: toPagination(result.total, result.page, result.limit)
+    });
+  } catch (error) {
+    if (['42P01', '42703'].includes(error.code)) {
+      return res.json({ ok: true, data: [], pagination: toPagination(0, 1, 50), provider_missing: true });
+    }
+    return next(error);
+  }
+});
+
+router.get('/mortgage-enquiries', async (req, res, next) => {
+  try {
+    const result = await queryAdminMortgageLeads(req);
+    return res.json({
+      ok: true,
+      data: result.rows,
+      pagination: toPagination(result.total, result.page, result.limit)
+    });
   } catch (error) {
     if (['42P01', '42703'].includes(error.code)) {
       return res.json({ ok: true, data: [], pagination: toPagination(0, 1, 50), provider_missing: true });
