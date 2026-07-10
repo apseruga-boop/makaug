@@ -199,6 +199,7 @@ const publicFilterStandardisationVersion = 'public-filter-standardisation-202607
 const mortgageLeadRoutingFixVersion = 'mortgage-lead-routing-fix-20260710';
 const mortgageFinderRedesignVersion = 'mortgage-finder-redesign-20260710';
 const mortgageI18nCompletionVersion = 'mortgage-i18n-completion-20260710';
+const mortgageI18nPolishVersion = 'mortgage-i18n-polish-20260710';
 const publicAppVersionSuffixes = [
   captureHelperUsabilityVersion,
   studentNearestUniversityVersion,
@@ -267,7 +268,8 @@ const publicAppVersionSuffixes = [
   publicFilterStandardisationVersion,
   mortgageLeadRoutingFixVersion,
   mortgageFinderRedesignVersion,
-  mortgageI18nCompletionVersion
+  mortgageI18nCompletionVersion,
+  mortgageI18nPolishVersion
 ];
 let cachedIndexHtml = null;
 const publicHtmlCache = new Map();

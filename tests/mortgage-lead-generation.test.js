@@ -31,10 +31,12 @@ assert(
     && html.includes('mortgage-provider-badges-20260630')
     && html.includes('mortgage-lead-routing-fix-20260710')
     && html.includes('mortgage-finder-redesign-20260710')
-    && html.includes('mortgage-i18n-completion-20260710'),
+    && html.includes('mortgage-i18n-completion-20260710')
+    && html.includes('mortgage-i18n-polish-20260710'),
   'mortgage cache marker should force the corrected app bundle to load'
 );
 assert(server.includes("mortgageI18nCompletionVersion = 'mortgage-i18n-completion-20260710'"), 'server should append the mortgage i18n cache marker in production HTML');
+assert(server.includes("mortgageI18nPolishVersion = 'mortgage-i18n-polish-20260710'"), 'server should append the mortgage i18n polish cache marker in production HTML');
 assert(
   html.includes('id="mortgage-rate" type="number" value=""') && html.includes('oninput="setMortgageManualRate(this.value)"'),
   'mortgage rate field should start from the best provider rate and only switch to manual mode when edited'
