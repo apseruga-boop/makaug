@@ -10787,15 +10787,44 @@ function staffSourceImportUrlCount(text = "") {
   return (String(text || "").match(/https?:\/\/[^\s<>"']+/gi) || []).length;
 }
 
-function staffSourceImportPayload(dryRun = true) {
+function staffSourceImportUrls(text = "") {
+  return (String(text || "").match(/https?:\/\/[^\s<>"']+/gi) || [])
+    .map((url) => String(url || "").replace(/[),.;]+$/g, ""))
+    .filter(Boolean);
+}
+
+function staffSourceImportTikTokUrls(text = "") {
+  return staffSourceImportUrls(text)
+    .filter((url) => /tiktok\.com\/@[^/\s?#]+\/video\/\d+/i.test(url));
+}
+
+function staffSourceImportIsTikTokOnlyBatch(text = "", { maxUrls = 50 } = {}) {
+  const urls = staffSourceImportUrls(text);
+  const tiktokUrls = staffSourceImportTikTokUrls(text);
+  return urls.length > 0 && urls.length <= maxUrls && urls.length === tiktokUrls.length;
+}
+
+function staffSourceImportPayload(dryRun = true, options = {}) {
   const rawText = document.getElementById("staff-source-quick-paste")?.value || "";
-  const metadataEnabled = staffSourceImportUrlCount(rawText) <= 20;
+  const urlCount = staffSourceImportUrlCount(rawText);
+  const tiktokOembedOnly = options.tiktokOnly === true || staffSourceImportIsTikTokOnlyBatch(rawText);
+  const metadataEnabled = urlCount <= 20;
   return {
     raw_text: rawText,
     dry_run: dryRun,
-    fetch_oembed: metadataEnabled,
-    fetch_public_metadata: metadataEnabled
+    fetch_oembed: metadataEnabled || tiktokOembedOnly,
+    fetch_public_metadata: metadataEnabled && !tiktokOembedOnly,
+    tiktok_oembed_manual_import: tiktokOembedOnly
   };
+}
+
+function staffValidateTikTokVideoPaste(rawText = "") {
+  const urlCount = staffSourceImportUrlCount(rawText);
+  const tiktokCount = staffSourceImportTikTokUrls(rawText).length;
+  if (!urlCount) return "Paste at least one exact TikTok /@handle/video/id link first.";
+  if (urlCount > 50) return "TikTok oEmbed import is capped at 50 video links per batch.";
+  if (urlCount !== tiktokCount) return "Use Import TikTok Videos only with exact TikTok /@handle/video/id links.";
+  return "";
 }
 
 function renderStaffSourceImportResult(data = {}, dryRun = true) {
@@ -10843,6 +10872,8 @@ function renderStaffSourceImportResult(data = {}, dryRun = true) {
   const autoLiveCount = importResult.auto_live_properties || result.auto_live_properties || 0;
   const metadataNote = result.metadata_skipped_for_large_batch
     ? `<div class="mt-2 rounded-lg border border-amber-100 bg-amber-50 p-2 text-amber-900">Large batch mode: external metadata fetches were skipped for speed. Paste title, location, price, posted date, phone, and visible source text under each exact link before queueing.</div>`
+    : result.metadata_tiktok_oembed_enabled
+      ? `<div class="mt-2 rounded-lg border border-pink-100 bg-pink-50 p-2 text-pink-900">TikTok oEmbed mode: makaug fetched public TikTok captions/authors for these exact video links and used that text for location, price, and title extraction.</div>`
     : "";
   wrap.innerHTML = `
     <div class="rounded-xl border ${dryRun ? "border-violet-100 bg-violet-50" : "border-emerald-100 bg-emerald-50"} p-3 text-xs">
@@ -10902,11 +10933,18 @@ async function staffPollSourceIntakeJob(jobId = "", attempt = 0) {
   }
 }
 
-async function staffPreviewSourceImport() {
-  const payload = staffSourceImportPayload(true);
+async function staffPreviewSourceImport(options = {}) {
+  const payload = staffSourceImportPayload(true, options);
   if (!payload.raw_text.trim()) {
     toast("Paste exact social links or copied source text first.");
     return;
+  }
+  if (options.tiktokOnly) {
+    const validationError = staffValidateTikTokVideoPaste(payload.raw_text);
+    if (validationError) {
+      toast(validationError);
+      return;
+    }
   }
   try {
     const res = await apiRequest("/api/staff/source-intake/exact-social/import", {
@@ -10920,11 +10958,18 @@ async function staffPreviewSourceImport() {
   }
 }
 
-async function staffQueueSourceImport() {
-  const payload = staffSourceImportPayload(false);
+async function staffQueueSourceImport(options = {}) {
+  const payload = staffSourceImportPayload(false, options);
   if (!payload.raw_text.trim()) {
     toast("Paste exact social links or copied source text first.");
     return;
+  }
+  if (options.tiktokOnly) {
+    const validationError = staffValidateTikTokVideoPaste(payload.raw_text);
+    if (validationError) {
+      toast(validationError);
+      return;
+    }
   }
   payload.async_job = true;
   renderStaffSourceImportResult({
@@ -10950,6 +10995,10 @@ async function staffQueueSourceImport() {
   } catch (error) {
     toast(`Source queue failed: ${error.message || "request failed"}`);
   }
+}
+
+function staffImportTikTokVideos() {
+  return staffQueueSourceImport({ tiktokOnly: true });
 }
 
 function staffSweepOffsetKey(mode = "") {

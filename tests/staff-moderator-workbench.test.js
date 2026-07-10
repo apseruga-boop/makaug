@@ -186,7 +186,13 @@ function run() {
   assert(app.includes('staffWhatsappBridgeCopy'), 'staff dashboard should render hosted WhatsApp bridge status');
   assert(app.includes('staffUseSourcePreset'), 'staff source intake should expose search presets');
   assert(app.includes('staffSourceImportUrlCount'), 'staff source import should switch large batches to fast metadata mode');
-  assert(app.includes('fetch_oembed: metadataEnabled'), 'staff source import should skip external metadata fetches on large batches');
+  assert(app.includes('fetch_oembed: metadataEnabled || tiktokOembedOnly'), 'staff source import should skip external metadata fetches on large non-TikTok batches while keeping TikTok oEmbed batches enriched');
+  assert(app.includes('staffSourceImportIsTikTokOnlyBatch'), 'staff source import should detect TikTok-only exact video batches');
+  assert(app.includes('staffImportTikTokVideos'), 'staff source quick paste should expose a TikTok oEmbed import action');
+  assert(app.includes('tiktok_oembed_manual_import'), 'staff TikTok paste imports should explicitly request oEmbed caption enrichment');
+  assert(html.includes('Import TikTok Videos'), 'staff source quick paste should render the TikTok import button');
+  assert(staffRoutes.includes('staffTikTokOembedOnlyBatch'), 'staff import API should force oEmbed for TikTok-only exact video batches');
+  assert(staffRoutes.includes('metadata_tiktok_oembed_enabled'), 'staff import API should report TikTok oEmbed metadata mode');
   assert(app.includes('metadata_skipped_for_large_batch'), 'staff source import should explain when metadata was skipped for speed');
   assert(app.includes('setStaffTrainingTab'), 'staff training should render one focused workflow at a time');
   assert(app.includes('copyStaffTrainingScript'), 'staff scripts should be copyable');

@@ -1078,6 +1078,7 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
   assert(html.includes('source-registry-rotation-20260710'), 'public app marker should identify the source registry rotation fix');
   assert(html.includes('source-sweep-performance-20260710'), 'public app marker should identify the source sweep performance fix');
   assert(html.includes('source-sweep-hard-budget-20260710'), 'public app marker should identify the source sweep hard-budget fix');
+  assert(html.includes('staff-tiktok-paste-oembed-20260711'), 'public app marker should identify the staff TikTok paste oEmbed fix');
   assert(socialSearchServiceSource.includes('defer_until_agent_claims_profile'), 'source-post import should defer source profiles until the source owner registers or claims them');
 
   const tiktokTasks = buildTikTokCaptureTasks({
@@ -1136,6 +1137,27 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
     'needs_source_platform_date_confirmation',
     'inferred TikTok dates should remain platform-date-confirmation pending'
   );
+
+  const bareTikTokOembedRows = buildExactSocialPostImportRows({
+    rawText: 'https://www.tiktok.com/@agentug/video/7608944105338457365',
+    metadataByUrl: {
+      'https://www.tiktok.com/@agentug/video/7608944105338457365': {
+        oembed: {
+          title: '4 bedroom house for sale in Kyanja, Kampala. Price USh 750M. Call 0701110416',
+          author_name: 'Agent UG',
+          author_url: 'https://www.tiktok.com/@agentug',
+          thumbnail_url: 'https://p16-sign.tiktokcdn-us.com/kyanja.jpeg',
+        },
+      },
+    },
+  });
+  assert.strictEqual(bareTikTokOembedRows.length, 1, 'bare TikTok URL plus oEmbed should create one import row');
+  assert.strictEqual(bareTikTokOembedRows[0].area, 'Kyanja', 'TikTok oEmbed title should feed location extraction');
+  assert.strictEqual(bareTikTokOembedRows[0].district, 'Kampala', 'TikTok oEmbed title should feed district extraction');
+  assert.strictEqual(bareTikTokOembedRows[0].price_text, 'USh 750M', 'TikTok oEmbed title should feed price extraction');
+  assert.strictEqual(bareTikTokOembedRows[0].contact_phone, '+256701110416', 'TikTok oEmbed title should feed phone extraction');
+  assert.strictEqual(bareTikTokOembedRows[0].source_name, 'Agent UG', 'TikTok oEmbed author should become the source name');
+  assert.strictEqual(bareTikTokOembedRows[0].source_contact_url, 'https://www.tiktok.com/@agentug', 'TikTok oEmbed author URL should become the source contact route');
 
   const youtubeQuickPasteRows = buildExactSocialPostImportRows({
     rawText: [

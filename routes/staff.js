@@ -18,7 +18,10 @@ const { getCachedExternalDuplicateScan } = require('../services/externalDuplicat
 const { getProviderClient, getProviderMeta, getTaskModel } = require('../services/llmProvider');
 const {
   SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID,
+  extractExactSocialPostUrls,
+  extractTikTokVideoUrls,
   importExactSocialSourcePosts,
+  normalizeExactSocialPostUrl,
   runSocialPlatformPostSweep
 } = require('../services/socialPlatformPostDiscoveryService');
 const {
@@ -295,6 +298,21 @@ function cleanArray(value) {
 function countExactSocialInputs({ posts = [], urls = [], rawText = '' } = {}) {
   const rawMatches = String(rawText || '').match(EXACT_SOCIAL_URL_PATTERN) || [];
   return posts.length + urls.length + rawMatches.length;
+}
+
+function staffExactSocialUrlsForInput({ posts = [], urls = [], rawText = '' } = {}) {
+  const fromPosts = (Array.isArray(posts) ? posts : [])
+    .map((post) => (typeof post === 'string' ? post : (post?.post_url || post?.source_url || post?.url || post?.video_url || '')));
+  const fromUrls = Array.isArray(urls) ? urls : [];
+  return [...fromPosts, ...fromUrls, ...extractExactSocialPostUrls(rawText)]
+    .map((url) => normalizeExactSocialPostUrl(url))
+    .filter(Boolean);
+}
+
+function staffTikTokOembedOnlyBatch({ posts = [], urls = [], rawText = '' } = {}) {
+  const exactUrls = staffExactSocialUrlsForInput({ posts, urls, rawText });
+  if (!exactUrls.length || exactUrls.length > 50) return false;
+  return exactUrls.every((url) => extractTikTokVideoUrls(url).includes(url));
 }
 
 function boolField(value) {
@@ -1911,8 +1929,11 @@ router.post('/source-intake/exact-social/import', async (req, res, next) => {
         error: `Staff exact social import is capped at ${STAFF_EXACT_SOCIAL_IMPORT_LIMIT} posts per batch.`
       });
     }
-    const fetchOembed = req.body?.fetch_oembed !== false && req.body?.fetchOembed !== false;
-    const fetchPublicMetadata = req.body?.fetch_public_metadata !== false && req.body?.fetchPublicMetadata !== false;
+    const tiktokOembedOnlyBatch = staffTikTokOembedOnlyBatch({ posts: inputPosts, urls: inputUrls, rawText });
+    const fetchOembed = tiktokOembedOnlyBatch || (req.body?.fetch_oembed !== false && req.body?.fetchOembed !== false);
+    const fetchPublicMetadata = tiktokOembedOnlyBatch
+      ? (req.body?.fetch_public_metadata === true || req.body?.fetchPublicMetadata === true)
+      : (req.body?.fetch_public_metadata !== false && req.body?.fetchPublicMetadata !== false);
     const importPayload = {
       db,
       posts: inputPosts.slice(0, STAFF_EXACT_SOCIAL_IMPORT_LIMIT),
@@ -1927,7 +1948,11 @@ router.post('/source-intake/exact-social/import', async (req, res, next) => {
       const responseData = {
         ...result,
         exact_input_count: exactInputCount,
-        metadata_skipped_for_large_batch: !fetchOembed && !fetchPublicMetadata
+        metadata_skipped_for_large_batch: !fetchOembed && !fetchPublicMetadata,
+        metadata_tiktok_oembed_enabled: tiktokOembedOnlyBatch && fetchOembed,
+        metadata_mode: tiktokOembedOnlyBatch && fetchOembed
+          ? 'tiktok_oembed_caption_author'
+          : (!fetchOembed && !fetchPublicMetadata ? 'metadata_skipped_for_large_batch' : 'standard_metadata')
       };
       if (!dryRun) clearStaffFastDashboardCache();
       await logStaffActivity(req, dryRun ? 'staff_social_import_previewed' : 'staff_social_import_queued', {
@@ -1939,6 +1964,8 @@ router.post('/source-intake/exact-social/import', async (req, res, next) => {
           exact_input_count: exactInputCount,
           exact_social_url_count: result.exact_social_url_count || 0,
           metadata_fetch_count: result.metadata_fetch_count || 0,
+          metadata_tiktok_oembed_enabled: tiktokOembedOnlyBatch && fetchOembed,
+          metadata_mode: responseData.metadata_mode,
           created_properties: result.created_properties || 0,
           existing_properties: result.existing_properties || 0,
           review_queue_properties: result.review_queue_properties || 0,
@@ -1961,7 +1988,8 @@ router.post('/source-intake/exact-social/import', async (req, res, next) => {
           batch_id: SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID,
           dry_run: dryRun,
           exact_input_count: exactInputCount,
-          metadata_fetch_enabled: fetchOembed || fetchPublicMetadata
+          metadata_fetch_enabled: fetchOembed || fetchPublicMetadata,
+          metadata_tiktok_oembed_enabled: tiktokOembedOnlyBatch && fetchOembed
         }
       });
       return res.status(202).json({ ok: true, data: publicStaffSourceIntakeJob(job) });

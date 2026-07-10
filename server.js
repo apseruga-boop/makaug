@@ -209,6 +209,7 @@ const tailwindStaticCssVersion = 'tailwind-static-css-20260710';
 const sourceRegistryRotationVersion = 'source-registry-rotation-20260710';
 const sourceSweepPerformanceVersion = 'source-sweep-performance-20260710';
 const sourceSweepHardBudgetVersion = 'source-sweep-hard-budget-20260710';
+const staffTikTokPasteOembedVersion = 'staff-tiktok-paste-oembed-20260711';
 const publicAppVersionSuffixes = [
   captureHelperUsabilityVersion,
   studentNearestUniversityVersion,
@@ -287,7 +288,8 @@ const publicAppVersionSuffixes = [
   tailwindStaticCssVersion,
   sourceRegistryRotationVersion,
   sourceSweepPerformanceVersion,
-  sourceSweepHardBudgetVersion
+  sourceSweepHardBudgetVersion,
+  staffTikTokPasteOembedVersion
 ];
 let cachedIndexHtml = null;
 const publicHtmlCache = new Map();
