@@ -1,5 +1,4 @@
-import { toFile } from 'openai/uploads';
-import { openai } from '../config/openai';
+import { getOpenAiClient } from '../config/openai';
 import { env } from '../config/env';
 import { MediaUploadService } from './mediaUploadService';
 
@@ -15,8 +14,12 @@ export class VoiceTranscriptionService {
 
   async transcribeFromMediaId(mediaId: string): Promise<TranscriptionResult | null> {
     const media = await this.mediaService.fetchMediaById(mediaId);
+    const openai = getOpenAiClient();
     if (!media || !openai) return null;
 
+    const { toFile } = require('openai/uploads') as {
+      toFile(bytes: Buffer, name: string, options: { type: string }): Promise<unknown>;
+    };
     const file = await toFile(media.bytes, `${media.filename || mediaId}.ogg`, {
       type: media.mimeType || 'audio/ogg'
     });

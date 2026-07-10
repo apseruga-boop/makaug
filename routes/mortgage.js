@@ -20,32 +20,38 @@ const FALLBACK_MORTGAGE_PROVIDERS = [
     minDepositPct: { residential: 20, commercial: 20, land: 20, default: 20 },
     maxYears: { residential: 25, commercial: 25, land: 25, default: 25 },
     arrangementFeePct: 1.5,
-    sourceLabel: 'Stanbic mortgages and home loans',
-    sourceUrl: 'https://www.stanbicbank.co.ug/uganda/personal/products-and-services/borrow-for-your-needs/see-all-mortgages-and-home-loans'
+    sourceLabel: 'Stanbic home loan public pages',
+    sourceUrl: 'https://www.stanbicbank.co.ug/uganda/personal/products-and-services/borrow-for-your-needs/see-all-mortgages-and-home-loans/house-purchase-loan',
+    sourceNote: 'Stanbic publishes home loan fees, transfer stamp duty, mortgage stamp duty, and valuation guidance; final pricing is confirmed by the bank.',
+    sourceVerifiedAt: '2026-06-21'
   },
   {
     key: 'hfb',
     name: 'Housing Finance Bank',
-    residentialRate: 16.0,
-    commercialRate: 18.0,
-    landRate: 18.0,
-    minDepositPct: { residential: 30, commercial: 40, land: 40, default: 30 },
-    maxYears: { residential: 20, commercial: 20, land: 15, default: 20 },
-    arrangementFeePct: 1.5,
+    residentialRate: null,
+    commercialRate: null,
+    landRate: null,
+    minDepositPct: { residential: 20, commercial: 20, land: 40, default: 20 },
+    maxYears: { residential: 20, commercial: 20, land: 5, default: 20 },
+    arrangementFeePct: 1.25,
     sourceLabel: 'Housing Finance mortgage terms and conditions',
-    sourceUrl: 'https://www.housingfinance.co.ug/mortgage-development-finance/mortgage-products/housing-finance-bank-mortgages-terms-and-conditions/'
+    sourceUrl: 'https://www.housingfinance.co.ug/mortgage-development-finance/housing-finance-bank-mortgage-terms-and-conditions/',
+    sourceNote: 'Housing Finance publishes LTV, term, facility fee, and gross-income guidance; rate is variable and requires bank confirmation.',
+    sourceVerifiedAt: '2026-06-21'
   },
   {
     key: 'dfcu',
     name: 'dfcu Bank',
     residentialRate: 16.0,
-    commercialRate: 16.0,
-    landRate: 16.5,
-    minDepositPct: { residential: 40, commercial: 40, land: 40, default: 40 },
+    commercialRate: null,
+    landRate: null,
+    minDepositPct: { residential: 15, commercial: 40, land: 40, default: 15 },
     maxYears: { residential: 20, commercial: 20, land: 20, default: 20 },
     arrangementFeePct: 2.0,
     sourceLabel: 'dfcu home loans',
-    sourceUrl: 'https://www.dfcugroup.com/personal-banking/home-loans/'
+    sourceUrl: 'https://www.dfcugroup.com/personal-banking/home-loans/',
+    sourceNote: 'dfcu publishes UGX home-loan rate guidance, 20-year UGX term rules, and up-to-85% open-market-value guidance for residential home loans.',
+    sourceVerifiedAt: '2026-06-21'
   },
   {
     key: 'kcb',
@@ -57,7 +63,9 @@ const FALLBACK_MORTGAGE_PROVIDERS = [
     maxYears: { residential: 20, commercial: 20, land: 20, default: 20 },
     arrangementFeePct: 1.5,
     sourceLabel: 'KCB mortgage overview',
-    sourceUrl: 'https://ug.kcbgroup.com/products/mortgage'
+    sourceUrl: 'https://ug.kcbgroup.com/products/mortgage',
+    sourceNote: 'KCB publishes UGX pricing from 17.5%, 20-year purchase/construction/refinance term guidance, and LTV rules.',
+    sourceVerifiedAt: '2026-06-21'
   },
   {
     key: 'baroda',
@@ -67,9 +75,11 @@ const FALLBACK_MORTGAGE_PROVIDERS = [
     landRate: null,
     minDepositPct: { residential: 20, commercial: 20, land: 20, default: 20 },
     maxYears: { residential: 15, commercial: 15, land: 15, default: 15 },
-    arrangementFeePct: 1.5,
-    sourceLabel: 'Baroda housing loan',
-    sourceUrl: 'https://www.bankofbaroda.ug/personal-banking/loans/housing-loan'
+    arrangementFeePct: 1.0,
+    sourceLabel: 'Baroda housing loan and interest rates',
+    sourceUrl: 'https://www.bankofbaroda.ug/rates-and-charges/interest-rates',
+    sourceNote: 'Baroda publishes housing loan pricing as 2% below UGX PLR; with PLR 20%, this gives an indicative 18% UGX rate.',
+    sourceVerifiedAt: '2026-06-07'
   },
   {
     key: 'absa',
@@ -81,9 +91,23 @@ const FALLBACK_MORTGAGE_PROVIDERS = [
     maxYears: { residential: 25, commercial: 25, land: 25, default: 25 },
     arrangementFeePct: 1.5,
     sourceLabel: 'Absa Uganda home loans',
-    sourceUrl: 'https://www.absa.co.ug/personal/home-loans/'
+    sourceUrl: 'https://www.absa.co.ug/personal/home-loans/',
+    sourceNote: 'Absa publishes home-loan availability in UGX/USD with competitive rates, but does not publish a fixed public rate on the page.',
+    sourceVerifiedAt: '2026-06-07'
   }
 ];
+
+const MORTGAGE_PROVIDER_LOGO_URLS = {
+  stanbic: '/assets/mortgage-logos/stanbic.svg',
+  hfb: '/assets/mortgage-logos/hfb.svg',
+  dfcu: '/assets/mortgage-logos/dfcu.svg',
+  kcb: '/assets/mortgage-logos/kcb.svg',
+  ncba: '/assets/mortgage-logos/ncba.svg',
+  centenary: '/assets/mortgage-logos/centenary.svg',
+  baroda: '/assets/mortgage-logos/baroda.svg',
+  absa: '/assets/mortgage-logos/absa.svg',
+  equity: '/assets/mortgage-logos/equity.svg'
+};
 
 function normalizeProvider(row) {
   return {
@@ -104,13 +128,21 @@ function normalizeProvider(row) {
     },
     arrangementFeePct: toNullableFloat(row.arrangement_fee_pct ?? row.arrangementFeePct) ?? 1.5,
     sourceLabel: cleanText(row.source_label || row.sourceLabel),
-    sourceUrl: cleanText(row.source_url || row.sourceUrl)
+    sourceUrl: cleanText(row.source_url || row.sourceUrl),
+    sourceNote: cleanText(row.source_note || row.sourceNote || row.notes),
+    logoUrl: cleanText(row.logo_url || row.logoUrl),
+    logo_url: cleanText(row.logo_url || row.logoUrl),
+    sourceVerifiedAt: row.source_verified_at || row.sourceVerifiedAt || null
   };
 }
 
 function withDefaultKeys(provider) {
+  const providerKey = cleanText(provider.key || provider.provider_key || provider.id).toLowerCase();
+  const logoUrl = provider.logoUrl || provider.logo_url || MORTGAGE_PROVIDER_LOGO_URLS[providerKey] || null;
   return {
     ...provider,
+    logoUrl,
+    logo_url: logoUrl,
     minDepositPct: {
       residential: provider.minDepositPct?.residential ?? 20,
       commercial: provider.minDepositPct?.commercial ?? 20,
@@ -178,6 +210,7 @@ async function readMortgageProviders() {
       arrangement_fee_pct,
       source_label,
       source_url,
+      notes,
       updated_at
      FROM mortgage_providers
      WHERE is_active = TRUE
@@ -234,6 +267,20 @@ router.post('/enquiry', async (req, res, next) => {
   const depositPercent = toNullableFloat(body.deposit_percent ?? body.depositPercent);
   const termYears = toNullableInt(body.term_years ?? body.termYears ?? body.preferred_term_years ?? body.preferredTermYears);
   const householdIncome = toNullableFloat(body.household_income ?? body.householdIncome);
+  const annualRate = toNullableFloat(body.annual_rate ?? body.annualRate);
+  const monthlyRepayment = toNullableFloat(body.monthly_repayment ?? body.monthlyRepayment);
+  const preferredProviderKey = cleanText(body.preferred_provider_key || body.preferredProviderKey).toLowerCase();
+  const preferredProviderName = cleanText(body.preferred_provider_name || body.preferredProviderName);
+  const leadContext = cleanText(body.lead_context || body.leadContext || (preferredProviderKey || preferredProviderName ? 'bank_provider' : 'general_mortgage_callback')).toLowerCase();
+  const language = cleanText(body.language || body.preferred_language || body.preferredLanguage || 'en').toLowerCase();
+  const extraMonthlyPayment = toNullableFloat(body.extra_monthly_payment ?? body.extraMonthlyPayment);
+  const estimatedInterestSaved = toNullableFloat(body.estimated_interest_saved ?? body.estimatedInterestSaved);
+  const estimatedMonthsSaved = toNullableInt(body.estimated_months_saved ?? body.estimatedMonthsSaved);
+  const sourceNote = cleanText(body.source_note || body.sourceNote);
+  const publicRecordDisclosure = cleanText(body.public_record_disclosure || body.publicRecordDisclosure)
+    || 'Indicative mortgage data is pulled from public bank pages and public records. Terms can change without notice; customers must confirm with the lender before applying.';
+  const isBankProviderLead = Boolean(preferredProviderKey || preferredProviderName || leadContext === 'bank_provider');
+  const providerLabel = preferredProviderName || preferredProviderKey || '';
 
   if (!name) {
     return res.status(400).json({ ok: false, error: 'name is required' });
@@ -257,6 +304,29 @@ router.post('/enquiry', async (req, res, next) => {
       contactMethod: ['phone', 'whatsapp', 'email'].includes(contactMethod) ? contactMethod : 'phone',
       amountToBorrow,
       preferredTermYears: toNullableInt(body.preferred_term_years ?? body.preferredTermYears),
+      preferredProviderKey: preferredProviderKey || null,
+      preferredProviderName: preferredProviderName || null,
+      leadContext: isBankProviderLead ? 'bank_provider' : 'general_mortgage_callback',
+      language,
+      calculation: {
+        propertyPrice,
+        propertyPurpose,
+        depositPercent,
+        termYears,
+        householdIncome,
+        annualRate,
+        monthlyRepayment,
+        extraMonthlyPayment,
+        estimatedInterestSaved,
+        estimatedMonthsSaved
+      },
+      bankHandoff: isBankProviderLead ? {
+        status: 'ready_for_bank_export',
+        providerKey: preferredProviderKey || null,
+        providerName: preferredProviderName || null
+      } : null,
+      publicRecordDisclosure,
+      sourceNote: sourceNote || null,
       source: 'website_mortgage_finder',
       submittedAt: new Date().toISOString()
     };
@@ -278,25 +348,46 @@ router.post('/enquiry', async (req, res, next) => {
     );
     const id = String(saved.rows[0]?.id || "");
     const reference = id ? `MF-${id.slice(0, 8).toUpperCase()}` : fallbackRef;
+    const leadSource = isBankProviderLead ? 'mortgage_bank_callback' : 'mortgage_widget';
+    const leadMessage = isBankProviderLead
+      ? `Mortgage bank callback requested for ${providerLabel}: ${reference}`
+      : `Mortgage help requested: ${reference}`;
     const lead = await createLead(db, {
-      source: 'mortgage_widget',
+      source: leadSource,
       leadType: 'mortgage',
-      category: propertyPurpose,
+      category: isBankProviderLead && providerLabel ? `bank:${providerLabel}` : propertyPurpose,
       budget: amountToBorrow,
-      message: `Mortgage help requested: ${reference}`,
+      message: leadMessage,
       contact: {
         name,
         email: email || null,
         phone,
         preferredContactChannel: payload.contactMethod,
+        preferredLanguage: language,
         roleType: 'mortgage'
       },
       activityType: 'mortgage_lead_received',
+      priority: isBankProviderLead ? 'high' : 'normal',
       metadata: {
         mortgage_enquiry_id: id || null,
         reference,
         amount_to_borrow: amountToBorrow,
-        preferred_term_years: termYears
+        preferred_term_years: termYears,
+        preferred_provider_key: preferredProviderKey || null,
+        preferred_provider_name: preferredProviderName || null,
+        lead_context: payload.leadContext,
+        bank_handoff_status: isBankProviderLead ? 'ready_for_bank_export' : null,
+        annual_rate: annualRate,
+        monthly_repayment: monthlyRepayment,
+        property_price: propertyPrice,
+        deposit_percent: depositPercent,
+        household_income: householdIncome,
+        extra_monthly_payment: extraMonthlyPayment,
+        estimated_interest_saved: estimatedInterestSaved,
+        estimated_months_saved: estimatedMonthsSaved,
+        language,
+        source_note: sourceNote || null,
+        public_record_disclosure: payload.publicRecordDisclosure
       }
     });
     const supportEmail = getSupportEmail();
@@ -326,14 +417,18 @@ router.post('/enquiry', async (req, res, next) => {
         to: supportEmail,
         subject: `[makaug] Mortgage lead received • ${reference}`,
         text: [
-          'A mortgage help request was submitted.',
+          isBankProviderLead ? 'A bank-specific mortgage callback request was submitted.' : 'A mortgage help request was submitted.',
           '',
           `Reference: ${reference}`,
+          `Lead type: ${isBankProviderLead ? 'Bank provider callback' : 'General mortgage callback'}`,
+          `Preferred bank: ${providerLabel || '-'}`,
           `Name: ${name}`,
           `Phone: ${phone}`,
           `Email: ${email || '-'}`,
           `Amount to borrow: UGX ${Number(amountToBorrow).toLocaleString('en-UG')}`,
-          `Preferred contact: ${payload.contactMethod}`
+          `Preferred contact: ${payload.contactMethod}`,
+          `Monthly repayment estimate: ${monthlyRepayment ? `UGX ${Number(monthlyRepayment).toLocaleString('en-UG')}` : '-'}`,
+          `Public source note: ${sourceNote || '-'}`
         ].join('\n'),
         replyTo: email || undefined
       });
@@ -370,7 +465,14 @@ router.post('/enquiry', async (req, res, next) => {
         channel: 'in_app',
         type: 'mortgage_lead_received',
         status: 'logged',
-        payloadSummary: { reference, amount_to_borrow: amountToBorrow },
+        payloadSummary: {
+          reference,
+          amount_to_borrow: amountToBorrow,
+          preferred_provider_key: preferredProviderKey || null,
+          preferred_provider_name: preferredProviderName || null,
+          lead_context: payload.leadContext,
+          bank_handoff_status: isBankProviderLead ? 'ready_for_bank_export' : null
+        },
         relatedLeadId: lead?.id || null
       })
     ]);
@@ -451,13 +553,14 @@ router.put('/', requireAdminApiKey, async (req, res, next) => {
             max_years_residential,
             max_years_commercial,
             max_years_land,
-            arrangement_fee_pct,
-            source_label,
-            source_url,
-            is_active
-          ) VALUES (
-            $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,TRUE
-          )
+	            arrangement_fee_pct,
+	            source_label,
+	            source_url,
+	            notes,
+	            is_active
+	          ) VALUES (
+	            $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,TRUE
+	          )
           ON CONFLICT (provider_key) DO UPDATE SET
             provider_name = EXCLUDED.provider_name,
             residential_rate = EXCLUDED.residential_rate,
@@ -469,10 +572,11 @@ router.put('/', requireAdminApiKey, async (req, res, next) => {
             max_years_residential = EXCLUDED.max_years_residential,
             max_years_commercial = EXCLUDED.max_years_commercial,
             max_years_land = EXCLUDED.max_years_land,
-            arrangement_fee_pct = EXCLUDED.arrangement_fee_pct,
-            source_label = EXCLUDED.source_label,
-            source_url = EXCLUDED.source_url,
-            is_active = TRUE,
+	            arrangement_fee_pct = EXCLUDED.arrangement_fee_pct,
+	            source_label = EXCLUDED.source_label,
+	            source_url = EXCLUDED.source_url,
+	            notes = EXCLUDED.notes,
+	            is_active = TRUE,
             updated_at = NOW()`,
           [
             p.key,
@@ -486,10 +590,11 @@ router.put('/', requireAdminApiKey, async (req, res, next) => {
             p.maxYears.residential,
             p.maxYears.commercial,
             p.maxYears.land,
-            p.arrangementFeePct,
-            p.sourceLabel || null,
-            p.sourceUrl || null
-          ]
+	            p.arrangementFeePct,
+	            p.sourceLabel || null,
+	            p.sourceUrl || null,
+	            p.sourceNote || null
+	          ]
         );
       }
       await client.query('COMMIT');

@@ -10,10 +10,15 @@ const { logEmailEvent } = require('../services/emailLogService');
 const { logNotification, notificationStatusFromDelivery } = require('../services/notificationLogService');
 const { logWhatsAppMessage } = require('../services/whatsappMessageLogService');
 const { sendWhatsAppText } = require('../services/whatsappNotificationService');
+const { normalizeLandTitleAvailability } = require('../utils/landTitleAvailability');
+const {
+  isPublicLivePropertyStatus,
+  publicLivePropertyStatusSql
+} = require('../utils/publicInventoryStatus');
 
 const router = express.Router();
 
-const SUPPORTED_LANGUAGES = new Set(['en', 'lg', 'sw', 'ac', 'ny', 'rn', 'sm']);
+const SUPPORTED_LANGUAGES = new Set(['en', 'lg', 'sw', 'ac', 'ny', 'rn', 'sm', 'am', 'ar']);
 const CONTACT_CHANNELS = new Set(['whatsapp', 'email', 'phone', 'sms', 'in_app']);
 
 function isUuid(value) {
@@ -53,6 +58,12 @@ function asBigIntNumber(value, fallback = null) {
   if (!digits) return fallback;
   const parsed = Number.parseInt(digits, 10);
   return Number.isSafeInteger(parsed) ? parsed : fallback;
+}
+
+function asDecimalNumber(value, fallback = null) {
+  if (value == null || value === '') return fallback;
+  const parsed = Number(String(value).replace(/[^\d.-]/g, ''));
+  return Number.isFinite(parsed) ? parsed : fallback;
 }
 
 function asArray(value) {
@@ -109,7 +120,7 @@ function propertyToCard(row, reason = 'Recommended for your saved preferences') 
 
 function ownedListingToCard(row) {
   return {
-    ...propertyToCard(row, row.status === 'approved' ? 'Live listing linked to your account' : `Status: ${row.status || 'pending'}`),
+    ...propertyToCard(row, isPublicLivePropertyStatus(row.status) ? 'Live listing linked to your account' : `Status: ${row.status || 'pending'}`),
     description: row.description || '',
     status: row.status || 'pending',
     moderation_stage: row.moderation_stage || 'submitted',
@@ -213,6 +224,43 @@ async function logActivity(userId, activityType, metadata = {}, extra = {}) {
   } catch (error) {
     logger.warn('Property seeker activity log failed', { activityType, error: error.message });
   }
+}
+
+async function ensureSavedMortgageCalculationsTable() {
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS saved_mortgage_calculations (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      property_price NUMERIC,
+      deposit_percent NUMERIC,
+      loan_amount NUMERIC,
+      annual_rate NUMERIC,
+      term_years INTEGER,
+      monthly_repayment NUMERIC,
+      household_income NUMERIC,
+      currency TEXT NOT NULL DEFAULT 'UGX',
+      product_type TEXT,
+      preferred_provider_key TEXT,
+      preferred_provider_name TEXT,
+      extra_monthly_payment NUMERIC,
+      estimated_interest_saved NUMERIC,
+      estimated_months_saved INTEGER,
+      source TEXT NOT NULL DEFAULT 'mortgage_calculator',
+      language TEXT NOT NULL DEFAULT 'en',
+      payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS idx_saved_mortgage_calculations_user_updated
+    ON saved_mortgage_calculations(user_id, updated_at DESC)
+  `);
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS idx_saved_mortgage_calculations_provider
+    ON saved_mortgage_calculations(preferred_provider_key, created_at DESC)
+    WHERE preferred_provider_key IS NOT NULL
+  `);
 }
 
 async function loadUserFromToken(token) {
@@ -495,7 +543,7 @@ function scoreListing(row, preferences = {}) {
     score += 8;
     reasons.push('matches your property type');
   }
-  if (row.status === 'approved') score += 5;
+  if (isPublicLivePropertyStatus(row.status)) score += 5;
   if (!reasons.length) reasons.push('new live makaug.com listing you may want to review');
   return { score, reason: reasons.slice(0, 2).join(' and ') };
 }
@@ -514,7 +562,7 @@ async function fetchRecommendations(userId, preferences = {}, limit = 12) {
        ORDER BY is_primary DESC, sort_order ASC, created_at ASC
        LIMIT 1
      ) img ON true
-     WHERE p.status = 'approved'
+     WHERE ${publicLivePropertyStatusSql('p')}
        AND NOT EXISTS (
          SELECT 1
          FROM hidden_listings h
@@ -674,7 +722,8 @@ async function logOwnedListingChange({ user = {}, listing = {}, action, previous
 async function dashboardPayload(user) {
   const profile = await upsertProfile(user, {});
   const preferences = await upsertPreferences(user.id, {});
-  const [recommendations, ownedListings, saved, recent, searches, needRequests, notes, comparisons, viewings, callbacks] = await Promise.all([
+  await ensureSavedMortgageCalculationsTable();
+  const [recommendations, ownedListings, saved, recent, searches, needRequests, notes, comparisons, viewings, callbacks, mortgageCalculations] = await Promise.all([
     fetchRecommendations(user.id, preferences, 12),
     fetchOwnedListings(user, 24),
     db.query(
@@ -724,6 +773,18 @@ async function dashboardPayload(user) {
        ORDER BY cb.created_at DESC
        LIMIT 20`,
       [user.id]
+    ),
+    db.query(
+      `SELECT id, property_price, deposit_percent, loan_amount, annual_rate, term_years,
+              monthly_repayment, household_income, currency, product_type,
+              preferred_provider_key, preferred_provider_name, extra_monthly_payment,
+              estimated_interest_saved, estimated_months_saved, source, language,
+              payload, created_at, updated_at
+       FROM saved_mortgage_calculations
+       WHERE user_id = $1
+       ORDER BY updated_at DESC, created_at DESC
+       LIMIT 10`,
+      [user.id]
     )
   ]);
 
@@ -742,7 +803,8 @@ async function dashboardPayload(user) {
       ownedListings: ownedListings.length,
       savedSearches: searches.rows.length,
       recentlyViewed: recent.rows.length,
-      needRequests: needRequests.rows.length
+      needRequests: needRequests.rows.length,
+      mortgageCalculations: mortgageCalculations.rows.length
     },
     recommendations,
     ownedListings,
@@ -754,6 +816,7 @@ async function dashboardPayload(user) {
     comparisons: comparisons.rows,
     viewings: viewings.rows,
     callbacks: callbacks.rows,
+    mortgageCalculations: mortgageCalculations.rows,
     nextActions,
     insights: {
       message: 'makaug.com is using your saved preferences, searches, views, and WhatsApp-ready demand data to improve matches safely.'
@@ -871,6 +934,111 @@ router.get('/dashboard', requireAuth, async (req, res, next) => {
   }
 });
 
+router.post('/mortgage-calculations', requireAuth, async (req, res, next) => {
+  try {
+    await ensureSavedMortgageCalculationsTable();
+    const payload = safeJson(req.body.payload, {});
+    const propertyPrice = asDecimalNumber(req.body.property_price ?? req.body.propertyPrice ?? payload.property_price, null);
+    const depositPercent = asDecimalNumber(req.body.deposit_percent ?? req.body.depositPercent ?? payload.deposit_percent, null);
+    const loanAmount = asDecimalNumber(req.body.loan_amount ?? req.body.loanAmount ?? payload.loan_amount, null);
+    const annualRate = asDecimalNumber(req.body.annual_rate ?? req.body.annualRate ?? payload.annual_rate, null);
+    const termYears = asInteger(req.body.term_years ?? req.body.termYears ?? payload.term_years, null);
+    const monthlyRepayment = asDecimalNumber(req.body.monthly_repayment ?? req.body.monthlyRepayment ?? payload.monthly_repayment, null);
+    const householdIncome = asDecimalNumber(req.body.household_income ?? req.body.householdIncome ?? payload.household_income, null);
+    const currency = asText(req.body.currency ?? payload.currency, 'UGX').toUpperCase().slice(0, 8);
+    const productType = asText(req.body.product_type ?? req.body.productType ?? payload.product_type, 'residential').slice(0, 80);
+    const preferredProviderKey = asText(req.body.preferred_provider_key ?? req.body.preferredProviderKey ?? payload.preferred_provider_key).slice(0, 80) || null;
+    const preferredProviderName = asText(req.body.preferred_provider_name ?? req.body.preferredProviderName ?? payload.preferred_provider_name).slice(0, 120) || null;
+    const extraMonthlyPayment = asDecimalNumber(req.body.extra_monthly_payment ?? req.body.extraMonthlyPayment ?? payload.extra_monthly_payment, null);
+    const estimatedInterestSaved = asDecimalNumber(req.body.estimated_interest_saved ?? req.body.estimatedInterestSaved ?? payload.estimated_interest_saved, null);
+    const estimatedMonthsSaved = asInteger(req.body.estimated_months_saved ?? req.body.estimatedMonthsSaved ?? payload.estimated_months_saved, null);
+    const source = asText(req.body.source ?? payload.source, 'mortgage_calculator').slice(0, 80);
+    const language = asLanguage(req.body.language ?? payload.language ?? req.userAuth.preferred_language);
+
+    if (!propertyPrice || !loanAmount || !termYears || monthlyRepayment === null) {
+      return res.status(400).json({ ok: false, error: 'property_price, loan_amount, term_years, and monthly_repayment are required' });
+    }
+
+    const depositAmount = Math.max(0, Math.round(propertyPrice - loanAmount));
+    const storedPayload = {
+      ...payload,
+      public_record_disclosure: asText(req.body.public_record_disclosure ?? payload.public_record_disclosure),
+      source_note: asText(req.body.source_note ?? payload.source_note),
+      preferred_provider_key: preferredProviderKey,
+      preferred_provider_name: preferredProviderName,
+      saved_from: source
+    };
+
+    const result = await db.query(
+      `INSERT INTO saved_mortgage_calculations (
+         user_id, property_price, deposit_percent, loan_amount, annual_rate, term_years,
+         monthly_repayment, household_income, currency, product_type,
+         preferred_provider_key, preferred_provider_name, extra_monthly_payment,
+         estimated_interest_saved, estimated_months_saved, source, language, payload
+       )
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18::jsonb)
+       RETURNING *`,
+      [
+        req.userAuth.id,
+        propertyPrice,
+        depositPercent,
+        loanAmount,
+        annualRate,
+        termYears,
+        monthlyRepayment,
+        householdIncome,
+        currency,
+        productType,
+        preferredProviderKey,
+        preferredProviderName,
+        extraMonthlyPayment,
+        estimatedInterestSaved,
+        estimatedMonthsSaved,
+        source,
+        language,
+        JSON.stringify(storedPayload)
+      ]
+    );
+    const savedCalculation = result.rows[0];
+
+    await Promise.all([
+      upsertPreferences(req.userAuth.id, {
+        mortgage_interest: true,
+        deposit_amount: depositAmount,
+        currency
+      }),
+      logActivity(req.userAuth.id, 'mortgage_calculation_saved', {
+        saved_mortgage_calculation_id: savedCalculation.id,
+        loan_amount: loanAmount,
+        monthly_repayment: monthlyRepayment,
+        preferred_provider_key: preferredProviderKey,
+        preferred_provider_name: preferredProviderName,
+        source
+      }),
+      logNotification(db, {
+        userId: req.userAuth.id,
+        recipientEmail: req.userAuth.email,
+        recipientPhone: req.userAuth.phone,
+        channel: 'in_app',
+        type: 'mortgage_calculation_saved',
+        status: 'logged',
+        payloadSummary: {
+          saved_mortgage_calculation_id: savedCalculation.id,
+          loan_amount: loanAmount,
+          monthly_repayment: monthlyRepayment,
+          preferred_provider_name: preferredProviderName,
+          term_years: termYears
+        }
+      })
+    ]);
+
+    return res.status(201).json({ ok: true, data: { calculation: savedCalculation } });
+  } catch (error) {
+    logger.error('Failed to save mortgage calculation', { error: error.message, userId: req.userAuth?.id });
+    return next(error);
+  }
+});
+
 router.get('/my-listings', requireAuth, async (req, res, next) => {
   try {
     const items = await fetchOwnedListings(req.userAuth, asInteger(req.query.limit, 50));
@@ -921,7 +1089,7 @@ router.patch('/my-listings/:id', requireAuth, async (req, res, next) => {
       owner_dashboard_updated_at: new Date().toISOString()
     }));
     updates.push(`extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $${values.length}::jsonb`);
-    updates.push(`status = CASE WHEN status = 'approved' THEN 'pending' ELSE status END`);
+    updates.push(`status = CASE WHEN ${publicLivePropertyStatusSql('')} THEN 'pending' ELSE status END`);
     updates.push(`moderation_stage = 'owner_updated'`);
     updates.push(`owner_last_edited_at = NOW()`);
     updates.push(`updated_at = NOW()`);
@@ -1006,7 +1174,7 @@ router.get('/insights', requireAuth, async (req, res, next) => {
     const result = await db.query(
       `SELECT listing_type, COUNT(*)::int AS total, MIN(price) AS min_price, MAX(price) AS max_price
        FROM properties
-       WHERE status = 'approved'
+       WHERE ${publicLivePropertyStatusSql('')}
          AND ($1::text IS NULL OR district ILIKE $1 OR area ILIKE $1 OR address ILIKE $1)
        GROUP BY listing_type
        ORDER BY total DESC`,
@@ -1373,6 +1541,7 @@ router.post('/saved-searches', requireAuth, async (req, res, next) => {
       amenities: asArray(req.body.amenities),
       studentCampus: asText(req.body.student_campus || req.body.studentCampus || req.body.campus) || null,
       landTitleType: asText(req.body.land_title_type || req.body.landTitleType) || null,
+      landTitleAvailable: normalizeLandTitleAvailability(req.body.land_title_available ?? req.body.landTitleAvailable ?? req.body.title_available ?? req.body.titleAvailable),
       commercialType: asText(req.body.commercial_type || req.body.commercialType || req.body.commercial_subtype || req.body.commercialSubtype) || null,
       radiusKm: locationObject?.radiusKm || null,
       radiusMiles: locationObject?.radiusMiles || null,

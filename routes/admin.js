@@ -7,7 +7,7 @@ const { requireAdminApiKey } = require('../middleware/auth');
 const { asArray, cleanText, toNullableInt, toNullableFloat, isValidEmail, isValidPhone } = require('../middleware/validation');
 const { parsePagination, toPagination } = require('../utils/pagination');
 const { DISTRICTS, LISTING_TYPES } = require('../utils/constants');
-const { normalizeReviewLocationHierarchy } = require('../utils/ugandaLocationHierarchy');
+const { normalizeReviewLocationHierarchy, districtForKnownArea } = require('../utils/ugandaLocationHierarchy');
 const { normalizeEmail, normalizeUgPhone } = require('../utils/adminOtpOverride');
 const { createListingSubmitToken } = require('../utils/listingSubmitOtp');
 const { publicLivePropertyStatusSql } = require('../utils/publicInventoryStatus');
@@ -2142,6 +2142,17 @@ async function loadPropertyReview(propertyId) {
   };
 }
 
+function districtForKnownLocationText(value = '') {
+  const text = cleanText(value);
+  if (!text) return '';
+  const direct = districtForKnownArea(text);
+  if (direct) return direct;
+  return text
+    .split(/[,;|/]+/)
+    .map((part) => districtForKnownArea(part))
+    .find(Boolean) || '';
+}
+
 async function updatePropertyEditableFields({ propertyId, patch = {} }) {
   const normalizedPatch = { ...patch };
   if (!Object.prototype.hasOwnProperty.call(normalizedPatch, 'listing_type')) {
@@ -2195,6 +2206,13 @@ async function updatePropertyEditableFields({ propertyId, patch = {} }) {
     if (hierarchy.region) normalizedPatch.region = hierarchy.region;
     if (Object.prototype.hasOwnProperty.call(normalizedPatch, 'city')) normalizedPatch.city = hierarchy.city;
     if (Object.prototype.hasOwnProperty.call(normalizedPatch, 'neighborhood')) normalizedPatch.neighborhood = hierarchy.neighborhood;
+  }
+  const selectedDistrict = cleanText(normalizedPatch.district);
+  if (selectedDistrict && Object.prototype.hasOwnProperty.call(normalizedPatch, 'address')) {
+    const addressDistrict = districtForKnownLocationText(normalizedPatch.address);
+    if (addressDistrict && addressDistrict !== selectedDistrict) {
+      errors.push('address/location note must match the selected district');
+    }
   }
 
   Object.entries(fieldMap).forEach(([bodyKey, spec]) => {
@@ -2804,6 +2822,8 @@ router.get('/properties/review-queue', async (req, res, next) => {
          p.inquiry_reference,
          p.source,
          p.listed_via,
+         p.lister_type,
+         p.agent_id,
          p.lister_name,
          p.lister_phone,
          p.lister_email,
@@ -2821,7 +2841,7 @@ router.get('/properties/review-queue', async (req, res, next) => {
          LIMIT 1
        ) img ON true
        ${where}
-       ORDER BY COALESCE(p.updated_at, p.created_at) DESC
+       ORDER BY COALESCE(p.updated_at, p.created_at) DESC, p.id DESC
        LIMIT $${values.length + 1}
        OFFSET $${values.length + 2}`,
       [...values, limit, offset]
@@ -4504,7 +4524,7 @@ router.get('/field-agents/listings', async (req, res, next) => {
        WHERE 1=1
        ${statusClause}
        ${payoutWindowClause}
-       ORDER BY COALESCE(p.updated_at, p.created_at) DESC
+       ORDER BY COALESCE(p.updated_at, p.created_at) DESC, p.id DESC
        LIMIT $1`,
       values
     );
@@ -4598,7 +4618,7 @@ router.get('/field-agents/payouts', async (req, res, next) => {
                  'created_at', p.created_at,
                  'updated_at', p.updated_at
                )
-               ORDER BY COALESCE(p.updated_at, p.created_at) DESC
+               ORDER BY COALESCE(p.updated_at, p.created_at) DESC, p.id DESC
              ) FILTER (WHERE p.id IS NOT NULL),
              '[]'::jsonb
            ) AS listings
@@ -7978,6 +7998,52 @@ router.get('/leads', async (req, res, next) => {
   }
 });
 
+router.get('/mortgage-leads', async (req, res, next) => {
+  try {
+    const { page, limit, offset } = parsePagination(req.query);
+    const count = await db.query(`SELECT COUNT(*)::int AS total FROM mortgage_enquiries`);
+    const total = count.rows[0]?.total || 0;
+    const rows = await db.query(
+      `SELECT
+         m.id,
+         m.created_at,
+         m.user_phone,
+         m.property_price,
+         m.property_purpose,
+         m.deposit_percent,
+         m.term_years,
+         m.household_income,
+         m.payload,
+         COALESCE(l.id::text, '') AS crm_lead_id,
+         COALESCE(l.lead_status, '') AS lead_status,
+         COALESCE(l.lifecycle_stage, '') AS lifecycle_stage,
+         COALESCE(l.priority, '') AS priority,
+         COALESCE(l.metadata->>'reference', 'MF-' || UPPER(SUBSTRING(m.id::text, 1, 8))) AS reference,
+         COALESCE(l.metadata->>'preferred_provider_name', m.payload->>'preferredProviderName', '') AS preferred_provider_name,
+         COALESCE(l.metadata->>'preferred_provider_key', m.payload->>'preferredProviderKey', '') AS preferred_provider_key,
+         COALESCE(l.metadata->>'bank_handoff_status', m.payload->'bankHandoff'->>'status', '') AS bank_handoff_status,
+         COALESCE(l.metadata->>'amount_to_borrow', m.payload->>'amountToBorrow', '') AS amount_to_borrow,
+         COALESCE(l.metadata->>'monthly_repayment', m.payload->'calculation'->>'monthlyRepayment', '') AS monthly_repayment,
+         COALESCE(c.name, m.payload->>'name', '') AS contact_name,
+         COALESCE(c.phone, m.user_phone, '') AS contact_phone,
+         COALESCE(c.email, m.payload->>'email', '') AS contact_email,
+         COALESCE(c.preferred_contact_channel, m.payload->>'contactMethod', '') AS preferred_contact_channel
+       FROM mortgage_enquiries m
+       LEFT JOIN leads l ON l.metadata->>'mortgage_enquiry_id' = m.id::text
+       LEFT JOIN contacts c ON c.id = l.contact_id
+       ORDER BY m.created_at DESC
+       LIMIT $1 OFFSET $2`,
+      [limit, offset]
+    );
+    return res.json({ ok: true, data: rows.rows, pagination: toPagination(total, page, limit) });
+  } catch (error) {
+    if (['42P01', '42703'].includes(error.code)) {
+      return res.json({ ok: true, data: [], pagination: toPagination(0, 1, 50), provider_missing: true });
+    }
+    return next(error);
+  }
+});
+
 router.get('/leads/:id/matches', async (req, res, next) => {
   try {
     const leadId = req.params.id;
@@ -8546,16 +8612,56 @@ router.post('/setup-status/provider-test', async (req, res, next) => {
     };
     let log = null;
     if (provider === 'email') {
+      let delivery = { sent: false, reason: 'email_provider_missing' };
+      if (configured) {
+        delivery = await sendSupportEmail({
+          to: adminTestEmail(),
+          subject: 'makaug email provider test',
+          text: [
+            'makaug email provider test.',
+            'No action needed.',
+            `Created: ${new Date().toISOString()}`
+          ].join('\n')
+        });
+      }
+      const deliveryStatus = configured ? notificationStatusFromDelivery(delivery) : 'provider_missing';
       log = await logEmailEvent(db, {
         eventType: 'admin_provider_test_email',
         recipientEmail: adminTestEmail(),
         recipientRole: 'admin',
         templateKey: 'provider_test_email',
         subject: 'makaug email provider test',
-        status: configured ? 'queued' : 'provider_missing',
-        provider: configured ? 'configured' : null,
-        failureReason: configured ? null : 'email_provider_missing'
+        status: deliveryStatus,
+        provider: delivery.provider || (configured ? 'configured' : null),
+        providerMessageId: delivery.id || null,
+        failureReason: deliveryStatus === 'sent' || deliveryStatus === 'queued'
+          ? null
+          : (delivery.error || delivery.reason || delivery.setupAction || 'email_provider_test_failed'),
+        sentAt: delivery.sent ? new Date() : null
       });
+      await logNotification(db, {
+        recipientEmail: adminTestEmail(),
+        channel: 'email',
+        type: 'provider_test_email',
+        status: deliveryStatus,
+        payloadSummary: {
+          provider,
+          configured,
+          launch_proof: true,
+          delivery_provider: delivery.provider || null,
+          provider_status: delivery.status || null,
+          setup_action: delivery.setupAction || null
+        },
+        failureReason: deliveryStatus === 'sent' || deliveryStatus === 'queued'
+          ? null
+          : (delivery.error || delivery.reason || delivery.setupAction || 'email_provider_test_failed'),
+        sentAt: delivery.sent ? new Date() : null
+      });
+      base.status = deliveryStatus;
+      base.deliveryChannel = 'email';
+      base.deliveryProvider = delivery.provider || null;
+      base.providerStatus = delivery.status || null;
+      base.setupAction = delivery.setupAction || null;
     } else if (provider === 'whatsapp') {
       log = await logWhatsAppMessage(db, {
         recipientPhone: adminTestPhone(),
@@ -9149,5 +9255,9 @@ router.post('/whatsapp-message-logs/:id/retry', async (req, res, next) => {
     return res.status(error.status || 500).json({ ok: false, error: error.message || 'WhatsApp retry failed' });
   }
 });
+
+router.loadPropertyReview = loadPropertyReview;
+router.buildAdminLivePreviewPayload = buildAdminLivePreviewPayload;
+router.updatePropertyEditableFields = updatePropertyEditableFields;
 
 module.exports = router;
