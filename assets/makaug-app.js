@@ -5261,7 +5261,7 @@ function applyListingWizardLanguageUI() {
   const sub2 = document.getElementById("lp-step2-sub");
   if (sub2) sub2.textContent = translateListingLabel("Upload clear photos. At least 5 photos are required, and you can upload up to 20. Better quality images increase trust and enquiries.");
   const sub3 = document.getElementById("lp-step3-sub");
-  if (sub3) sub3.textContent = translateListingLabel("Verification is required to reduce fraud and comply with Uganda regulations.");
+  if (sub3) sub3.textContent = translateListingLabel("Email is required so makaug can send review updates. Phone, WhatsApp, and ID details are optional.");
   const sub4 = document.getElementById("lp-step4-sub");
   if (sub4) sub4.textContent = translateListingLabel("Confirm listing details before final submission.");
   const mapNote = document.getElementById("lp-preview-map-note");

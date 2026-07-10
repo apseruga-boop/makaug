@@ -17,6 +17,8 @@ assert(html.includes('id="lp-verify-nin-wrap" class="hidden'), 'online listing N
 assert(html.includes('id="lp-verify-id-wrap" class="hidden'), 'online listing National ID upload must be hidden from the public flow');
 assert(html.includes('No OTP is needed for online listing submission.'), 'listing form must clearly say OTP is not needed');
 assert(html.includes('Email is required so makaug can send review updates'), 'listing form must present email as the required contact gate');
+assert(app.includes('Email is required so makaug can send review updates. Phone, WhatsApp, and ID details are optional.'), 'listing app hydration must keep the email-only step 3 copy');
+assert(!app.includes('translateListingLabel("Verification is required to reduce fraud and comply with Uganda regulations.")'), 'listing app hydration must not restore the old identity-verification subtitle');
 assert(!html.includes('National ID Number (NIN) *'), 'public online listing form must not mark NIN as required');
 assert(!html.includes('Upload National ID Photo *'), 'public online listing form must not mark ID photo as required');
 
