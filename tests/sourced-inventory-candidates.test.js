@@ -1057,6 +1057,13 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
   assert(socialPlatformSweepServiceSource.includes('createProfilesForRepeatedSourcesOnly: false'), 'platform sweep should not auto-create source broker profiles');
   assert(frontend.includes('ADMIN_YOUTUBE_SWEEP_BATCH_SIZE = 50'), 'King dashboard should use quota-safe 50-source YouTube batches');
   assert(frontend.includes('source_offset: youtubeSourceOffset'), 'King dashboard should advance through YouTube source batches instead of repeating the first sources');
+  assert(frontend.includes('next_source_offset'), 'dashboard source sweeps should store the backend rotation cursor instead of guessing the next batch');
+  assert(frontend.includes('["moderator", "admin", "super_admin"].includes(mode)'), 'super admins should be allowed to submit source sweeps through the async staff queue');
+  assert(frontend.includes('Submit ${profile.label.toLowerCase()} to the async source-intake queue'), 'King source-sweep buttons should use the async queue instead of freezing on a synchronous sweep');
+  assert(socialPlatformSweepServiceSource.includes('registry_fill_search_job_count'), 'deep YouTube sweeps should top up from registry search feeds when the known-channel pool is exhausted');
+  assert(socialPlatformSweepServiceSource.includes('registry_rotation'), 'platform sweeps should expose source-window rotation telemetry for staff/King verification');
+  assert(staffRoute.includes('registry_next_source_offset'), 'staff job summaries should expose the next source cursor');
+  assert(html.includes('source-registry-rotation-20260710'), 'public app marker should identify the source registry rotation fix');
   assert(socialSearchServiceSource.includes('defer_until_agent_claims_profile'), 'source-post import should defer source profiles until the source owner registers or claims them');
 
   const tiktokTasks = buildTikTokCaptureTasks({

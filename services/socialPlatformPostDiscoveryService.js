@@ -1825,6 +1825,36 @@ function sourcesForPlatform(platform = 'all') {
     }));
 }
 
+function rotatingSourceWindow(sources = [], {
+  limit = DEFAULT_MAX_SOURCES,
+  offset = 0,
+} = {}) {
+  const list = Array.isArray(sources) ? sources.filter(Boolean) : [];
+  const total = list.length;
+  const selectedLimit = Math.min(cappedNumber(limit, DEFAULT_MAX_SOURCES, 1, MAX_PLATFORM_SWEEP_SOURCES), total || 1);
+  const startOffset = total ? cappedOffset(offset) % total : 0;
+  const rotated = total
+    ? [...list.slice(startOffset), ...list.slice(0, startOffset)].slice(0, selectedLimit)
+    : [];
+  const nextOffset = total ? (startOffset + rotated.length) % total : cappedOffset(offset) + rotated.length;
+  return {
+    sources: rotated,
+    source_count: total,
+    selected_source_count: rotated.length,
+    source_offset: startOffset,
+    next_source_offset: nextOffset,
+  };
+}
+
+function sourceWindowSummary(window = {}) {
+  return {
+    source_count: Number(window.source_count || 0),
+    selected_source_count: Number(window.selected_source_count || 0),
+    source_offset: Number(window.source_offset || 0),
+    next_source_offset: Number(window.next_source_offset || 0),
+  };
+}
+
 function buildTikTokCaptureTasks({ sources = sourcesForPlatform('tiktok'), limit = DEFAULT_MAX_SOURCES } = {}) {
   return sources
     .filter((source) => normalizePlatform(source.platform) === 'tiktok')
@@ -3776,26 +3806,43 @@ async function runSocialPlatformPostSweep({
   const xSources = requestedPlatforms.includes('x') ? sourcesForPlatform('x') : [];
   const facebookSources = requestedPlatforms.includes('facebook') ? sourcesForPlatform('facebook') : [];
   const instagramSources = requestedPlatforms.includes('instagram') ? sourcesForPlatform('instagram') : [];
+  const tiktokSourceWindow = rotatingSourceWindow(tiktokSources, { limit: sourceLimit, offset: normalizedSourceOffset });
+  const youtubeSourceWindow = rotatingSourceWindow(youtubeSources, { limit: sourceLimit, offset: normalizedSourceOffset });
+  const xSourceWindow = rotatingSourceWindow(xSources, { limit: sourceLimit, offset: normalizedSourceOffset });
+  const facebookSourceWindow = rotatingSourceWindow(facebookSources, { limit: sourceLimit, offset: normalizedSourceOffset });
+  const instagramSourceWindow = rotatingSourceWindow(instagramSources, { limit: sourceLimit, offset: normalizedSourceOffset });
   const archiveStartTime = isoStartTimeForLookbackDays(lookbackDays);
   const youtubeStartTime = cleanText(publishedAfter || youtubePublishedAfter) || YOUTUBE_SOURCE_POST_WINDOW_START;
   const tiktokCaptureTasks = requestedPlatforms.includes('tiktok')
-    ? buildTikTokCaptureTasks({ sources: tiktokSources, limit: sourceLimit })
+    ? buildTikTokCaptureTasks({ sources: tiktokSourceWindow.sources, limit: sourceLimit })
     : [];
   const normalizedYoutubeJobMode = normalizeYouTubeJobMode(youtubeJobMode);
   const unfilteredYoutubeSearchJobs = requestedPlatforms.includes('youtube')
     ? buildYouTubeSearchJobs({ sources: youtubeSources, limit: sourceLimit, offset: normalizedSourceOffset, publishedAfter: youtubeStartTime, maxPagesPerSource, jobMode: 'all' })
     : [];
-  const youtubeSearchJobs = requestedPlatforms.includes('youtube')
+  const primaryYoutubeSearchJobs = requestedPlatforms.includes('youtube')
     ? buildYouTubeSearchJobs({ sources: youtubeSources, limit: sourceLimit, offset: normalizedSourceOffset, publishedAfter: youtubeStartTime, maxPagesPerSource, jobMode: normalizedYoutubeJobMode })
     : [];
+  const primaryYoutubeSourceKeys = new Set(primaryYoutubeSearchJobs.map((item) => item.source_key));
+  const youtubeRegistryFillSearchJobs = requestedPlatforms.includes('youtube') && normalizedYoutubeJobMode === 'channel_uploads' && primaryYoutubeSearchJobs.length < sourceLimit
+    ? buildYouTubeSearchJobs({
+      sources: youtubeSources,
+      limit: sourceLimit - primaryYoutubeSearchJobs.length,
+      offset: normalizedSourceOffset,
+      publishedAfter: youtubeStartTime,
+      maxPagesPerSource,
+      jobMode: 'search',
+    }).filter((job) => !primaryYoutubeSourceKeys.has(job.source_key))
+    : [];
+  const youtubeSearchJobs = [...primaryYoutubeSearchJobs, ...youtubeRegistryFillSearchJobs];
   const xSearchJobs = requestedPlatforms.includes('x')
-    ? buildXSearchJobs({ sources: xSources, limit: sourceLimit, searchMode, startTime: archiveStartTime })
+    ? buildXSearchJobs({ sources: xSourceWindow.sources, limit: sourceLimit, searchMode, startTime: archiveStartTime })
     : [];
   const facebookCaptureTasks = requestedPlatforms.includes('facebook')
-    ? buildManualSocialCaptureTasks({ sources: facebookSources, platform: 'facebook', limit: sourceLimit })
+    ? buildManualSocialCaptureTasks({ sources: facebookSourceWindow.sources, platform: 'facebook', limit: sourceLimit })
     : [];
   const instagramCaptureTasks = requestedPlatforms.includes('instagram')
-    ? buildManualSocialCaptureTasks({ sources: instagramSources, platform: 'instagram', limit: sourceLimit })
+    ? buildManualSocialCaptureTasks({ sources: instagramSourceWindow.sources, platform: 'instagram', limit: sourceLimit })
     : [];
   const youtubeApi = envYouTubeApiKey(env);
   const apiReadiness = socialDiscoveryApiReadiness(env);
@@ -4028,6 +4075,15 @@ async function runSocialPlatformPostSweep({
     dry_run: dryRun,
     platforms: requestedPlatforms,
     focus: studentHousingFocus ? 'students' : normalizedFocus,
+    registry_rotation: {
+      requested_source_limit: sourceLimit,
+      source_offset: normalizedSourceOffset,
+      tiktok: sourceWindowSummary(tiktokSourceWindow),
+      youtube: sourceWindowSummary(youtubeSourceWindow),
+      x: sourceWindowSummary(xSourceWindow),
+      facebook: sourceWindowSummary(facebookSourceWindow),
+      instagram: sourceWindowSummary(instagramSourceWindow),
+    },
     policy: {
       tiktok: 'Hashtag/profile URLs are discovery tasks. Queue a property after the exact TikTok /@handle/video/id URL, location, source contact path, and source evidence are captured. Missing price becomes Price upon application. Location is non-negotiable before approval; other checks are King-review overrides.',
       youtube: 'YouTube source pages are scanned through channel upload playlists when a channel/handle is known; hashtags and search feeds use focused YouTube Data API search queries from 1 January 2026 onward for both Shorts and long-form videos. If YouTube Search quota is exhausted, the sweep falls back to stored YouTube source/contact channels and scans their upload playlists without broad hashtag search. Exact video URLs with snippet.publishedAt, title/description, channel contact path, location, and source evidence become Found Online review records. Missing price becomes Price upon application.',
@@ -4038,6 +4094,9 @@ async function runSocialPlatformPostSweep({
     api_readiness: apiReadiness,
     tiktok: {
       source_count: tiktokSources.length,
+      selected_source_count: tiktokSourceWindow.selected_source_count,
+      source_offset: tiktokSourceWindow.source_offset,
+      next_source_offset: tiktokSourceWindow.next_source_offset,
       capture_task_count: tiktokCaptureTasks.length,
       api_configured: apiReadiness.tiktok.configured,
       api_mode: apiReadiness.tiktok.mode,
@@ -4059,9 +4118,13 @@ async function runSocialPlatformPostSweep({
     },
     youtube: {
       source_count: youtubeSources.length,
+      selected_source_count: youtubeSourceWindow.selected_source_count,
       source_offset: normalizedSourceOffset,
+      next_source_offset: youtubeSourceWindow.next_source_offset,
       job_mode: normalizedYoutubeJobMode,
       unfiltered_search_job_count: unfilteredYoutubeSearchJobs.length,
+      primary_search_job_count: primaryYoutubeSearchJobs.length,
+      registry_fill_search_job_count: youtubeRegistryFillSearchJobs.length,
       search_job_count: youtubeSearchJobs.length,
       api_configured: youtubeFetch.api_configured,
       api_key_env: youtubeFetch.api_key_env,
@@ -4078,6 +4141,9 @@ async function runSocialPlatformPostSweep({
     },
     x: {
       source_count: xSources.length,
+      selected_source_count: xSourceWindow.selected_source_count,
+      source_offset: xSourceWindow.source_offset,
+      next_source_offset: xSourceWindow.next_source_offset,
       search_job_count: xSearchJobs.length,
       api_configured: xFetch.api_configured,
       token_env: xFetch.token_env,
@@ -4089,6 +4155,9 @@ async function runSocialPlatformPostSweep({
     },
     facebook: {
       source_count: facebookSources.length,
+      selected_source_count: facebookSourceWindow.selected_source_count,
+      source_offset: facebookSourceWindow.source_offset,
+      next_source_offset: facebookSourceWindow.next_source_offset,
       capture_task_count: facebookCaptureTasks.length,
       api_configured: apiReadiness.facebook.configured,
       api_mode: apiReadiness.facebook.mode,
@@ -4099,6 +4168,9 @@ async function runSocialPlatformPostSweep({
     },
     instagram: {
       source_count: instagramSources.length,
+      selected_source_count: instagramSourceWindow.selected_source_count,
+      source_offset: instagramSourceWindow.source_offset,
+      next_source_offset: instagramSourceWindow.next_source_offset,
       capture_task_count: instagramCaptureTasks.length,
       api_configured: apiReadiness.instagram.configured,
       api_mode: apiReadiness.instagram.mode,

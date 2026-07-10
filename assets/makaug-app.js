@@ -10976,6 +10976,17 @@ function staffStoreSweepOffset(value = 0, mode = "") {
 }
 
 function staffAdvanceSweepOffsetFromResult(result = {}, currentOffset = 0, mode = "", fallbackStep = STAFF_SOURCE_SWEEP_BATCH_SIZE) {
+  const rotation = result.registry_rotation || {};
+  const platformOrder = ["youtube", "tiktok", "x", "facebook", "instagram"];
+  for (const platform of platformOrder) {
+    const platformRotation = rotation[platform] || result[platform] || {};
+    const nextOffset = Number(platformRotation.next_source_offset);
+    const selectedCount = Number(platformRotation.selected_source_count || platformRotation.search_job_count || platformRotation.capture_task_count || 0);
+    if (Number.isFinite(nextOffset) && nextOffset >= 0 && selectedCount > 0) {
+      staffStoreSweepOffset(nextOffset, mode);
+      return nextOffset;
+    }
+  }
   const youtube = result.youtube || {};
   const sourceCount = Number(youtube.source_count || 0);
   const jobCount = Number(youtube.search_job_count || result.requested_source_count || fallbackStep);
@@ -12708,7 +12719,7 @@ function canUseLiveAdminApi() {
 
 function canUseStaffSourceIntakeApi() {
   const mode = derivePortalMode(authState?.user, authState?.user?.portal_mode);
-  return !!(authState?.token && ["moderator", "admin"].includes(mode));
+  return !!(authState?.token && ["moderator", "admin", "super_admin"].includes(mode));
 }
 
 function normalizeRemoteAdminListing(p) {
@@ -14601,6 +14612,12 @@ function adminYouTubeQuotaReportIndex(youtube = {}) {
 }
 
 function adminAdvanceYouTubeSourceOffsetIfUseful(data = {}, normalized = "youtube", studentFocus = false, currentOffset = 0) {
+  const rotatedNextOffset = Number(data.youtube?.next_source_offset ?? data.registry_rotation?.youtube?.next_source_offset);
+  const rotatedSelectedCount = Number(data.youtube?.selected_source_count ?? data.registry_rotation?.youtube?.selected_source_count ?? 0);
+  if (Number.isFinite(rotatedNextOffset) && rotatedNextOffset >= 0 && rotatedSelectedCount > 0) {
+    adminStoreNumber(adminSocialSweepOffsetKey(normalized, studentFocus), rotatedNextOffset);
+    return rotatedNextOffset;
+  }
   const youtube = data.youtube || {};
   const searchJobCount = Number(youtube.search_job_count || 0);
   if (!searchJobCount || !youtube.api_configured) return currentOffset;
@@ -14940,6 +14957,13 @@ async function adminSweepSocialPlatformPosts(platform = "all") {
     }
     toast("Sign in as staff, admin, or save ADMIN_API_KEY first.");
     return;
+  }
+  if (canUseStaffSourceIntakeApi()) {
+    const profile = adminStaffSocialSweepProfile(normalized, studentFocus);
+    const sourceOffset = staffStoredSweepOffset(profile.offsetKey);
+    const ok = window.confirm(`Submit ${profile.label.toLowerCase()} to the async source-intake queue from source offset ${sourceOffset}? You can keep using the dashboard while it runs.`);
+    if (!ok) return;
+    return adminRunStaffSocialSweepFallback(normalized, studentFocus);
   }
   const dryRun = normalized === "tiktok";
   const usesYouTubeSweep = normalized === "youtube" || normalized === "all" || studentFocus;

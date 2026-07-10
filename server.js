@@ -206,6 +206,7 @@ const mortgageLogoCellPolishVersion = 'mortgage-logo-cell-polish-20260710';
 const publicStickyMapRailVersion = 'public-sticky-map-rail-20260710';
 const publicStickyMapAssistRailVersion = 'public-sticky-map-assist-rail-20260710';
 const tailwindStaticCssVersion = 'tailwind-static-css-20260710';
+const sourceRegistryRotationVersion = 'source-registry-rotation-20260710';
 const publicAppVersionSuffixes = [
   captureHelperUsabilityVersion,
   studentNearestUniversityVersion,
@@ -281,7 +282,8 @@ const publicAppVersionSuffixes = [
   mortgageLogoCellPolishVersion,
   publicStickyMapRailVersion,
   publicStickyMapAssistRailVersion,
-  tailwindStaticCssVersion
+  tailwindStaticCssVersion,
+  sourceRegistryRotationVersion
 ];
 let cachedIndexHtml = null;
 const publicHtmlCache = new Map();
