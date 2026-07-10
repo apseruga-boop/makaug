@@ -198,6 +198,7 @@ const listPropertyContactIdRequiredVersion = 'list-property-contact-id-required-
 const publicFilterStandardisationVersion = 'public-filter-standardisation-20260710';
 const mortgageLeadRoutingFixVersion = 'mortgage-lead-routing-fix-20260710';
 const mortgageFinderRedesignVersion = 'mortgage-finder-redesign-20260710';
+const mortgageI18nCompletionVersion = 'mortgage-i18n-completion-20260710';
 const publicAppVersionSuffixes = [
   captureHelperUsabilityVersion,
   studentNearestUniversityVersion,
@@ -265,7 +266,8 @@ const publicAppVersionSuffixes = [
   listPropertyContactIdRequiredVersion,
   publicFilterStandardisationVersion,
   mortgageLeadRoutingFixVersion,
-  mortgageFinderRedesignVersion
+  mortgageFinderRedesignVersion,
+  mortgageI18nCompletionVersion
 ];
 let cachedIndexHtml = null;
 const publicHtmlCache = new Map();
