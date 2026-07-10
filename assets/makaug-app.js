@@ -14837,7 +14837,9 @@ function adminStaffSocialSweepProfile(normalized = "all", studentFocus = false) 
 function adminStaffSocialSweepJobHtml(data = {}) {
   const summary = data.result_summary || {};
   const status = String(data.status || "queued").toLowerCase();
+  const completionState = String(data.completion_state || status).toLowerCase();
   const completed = status === "completed";
+  const completedPartial = completionState === "completed_partial" || summary.partial_results === true;
   const failed = status === "failed";
   const tone = failed
     ? "border-red-100 bg-red-50 text-red-950"
@@ -14846,11 +14848,11 @@ function adminStaffSocialSweepJobHtml(data = {}) {
       : "border-amber-100 bg-amber-50 text-amber-950";
   return `
     <div class="rounded-xl border ${tone} p-3">
-      <div class="font-black">${completed ? "Staff source sweep complete" : failed ? "Staff source sweep failed" : "Staff source sweep accepted"}</div>
+      <div class="font-black">${completedPartial ? "Staff source sweep complete (partial)" : completed ? "Staff source sweep complete" : failed ? "Staff source sweep failed" : "Staff source sweep accepted"}</div>
       <div class="mt-1">${adminEscape(data.message || "The sweep is running through the staff async queue.")}</div>
       <div class="mt-2 grid sm:grid-cols-2 gap-2 text-[11px]">
         <div>Job ID: <strong>${adminEscape(data.job_id || "-")}</strong></div>
-        <div>Status: <strong>${adminEscape(data.status || "queued")}</strong></div>
+        <div>Status: <strong>${adminEscape(data.completion_state || data.status || "queued")}</strong></div>
         <div>Requested sources: <strong>${staffNumber(data.requested_source_count || 0)}</strong></div>
         <div>Already running: <strong>${data.already_running ? "Yes" : "No"}</strong></div>
         <div>Discovered posts: <strong>${staffNumber(summary.discovered_posts_count || 0)}</strong></div>
@@ -14863,6 +14865,7 @@ function adminStaffSocialSweepJobHtml(data = {}) {
         <div>Time budget: <strong>${staffNumber(summary.time_budget_ms || 0)}ms</strong></div>
         <div>Partial: <strong>${summary.partial_results ? "Yes" : "No"}</strong></div>
         <div>Batch cap: <strong>${staffNumber(summary.sweep_source_cap || 0)} sources / ${staffNumber(summary.sweep_max_pages_per_source || 0)} page</strong></div>
+        <div>Import cap: <strong>${staffNumber(summary.sweep_import_post_cap || 0)} posts</strong></div>
       </div>
       ${data.error ? `<div class="mt-2 rounded-lg bg-white/80 border border-red-100 p-2 text-red-800">${adminEscape(data.error)}</div>` : ""}
     </div>`;

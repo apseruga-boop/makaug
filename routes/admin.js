@@ -3524,7 +3524,7 @@ router.post('/social-platform-posts/sweep', async (req, res, next) => {
       searchMode,
       lookbackDays,
       publishedAfter,
-      timeBudgetMs: 55000
+      timeBudgetMs: 45000
     });
     await writeAudit('admin_social_platform_posts_sweep', {
       source: SOURCED_INVENTORY_CANDIDATE_SOURCE,

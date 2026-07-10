@@ -24,12 +24,15 @@ const SOCIAL_SWEEP_FAST_DEFAULT_SOURCES = 50;
 const SOCIAL_SWEEP_FAST_MAX_RESULTS_PER_SOURCE = 25;
 const SOCIAL_SWEEP_FAST_MAX_PAGES_PER_SOURCE = 1;
 const SOCIAL_SWEEP_TIKTOK_DATA_SOURCE_MAX_POSTS = 200;
-const DEFAULT_SOCIAL_SWEEP_TIME_BUDGET_MS = 55000;
-const MAX_SOCIAL_SWEEP_TIME_BUDGET_MS = 60000;
+const SOCIAL_SWEEP_IMPORT_POST_LIMIT = 60;
+const DEFAULT_SOCIAL_SWEEP_TIME_BUDGET_MS = 45000;
+const MAX_SOCIAL_SWEEP_TIME_BUDGET_MS = 45000;
 const SOCIAL_SWEEP_MIN_REMAINING_MS = 2500;
-const SOCIAL_SWEEP_BACKLOG_MIN_REMAINING_MS = 12000;
-const SOCIAL_SWEEP_REQUEST_TIMEOUT_MS = 8000;
-const SOCIAL_SWEEP_BACKLOG_REPROCESS_LIMIT = 20;
+const SOCIAL_SWEEP_COMMIT_RESERVE_MS = 12000;
+const SOCIAL_SWEEP_BACKLOG_MIN_REMAINING_MS = 20000;
+const SOCIAL_SWEEP_REQUEST_TIMEOUT_MS = 5500;
+const SOCIAL_SWEEP_SOURCE_START_MIN_REMAINING_MS = SOCIAL_SWEEP_COMMIT_RESERVE_MS + SOCIAL_SWEEP_REQUEST_TIMEOUT_MS;
+const SOCIAL_SWEEP_BACKLOG_REPROCESS_LIMIT = 5;
 const DEFAULT_X_RESULTS_PER_SOURCE = 25;
 const X_RECENT_SEARCH_URL = 'https://api.x.com/2/tweets/search/recent';
 const X_FULL_ARCHIVE_SEARCH_URL = 'https://api.x.com/2/tweets/search/all';
@@ -326,14 +329,38 @@ function fetchWithSweepDeadline(fetchImpl = fetch, deadlineAt = 0, {
     const remaining = sweepRemainingMs(deadlineAt);
     if (remaining <= 0) throw sourceSweepTimeoutError();
     const timeoutMs = Math.max(1, Math.min(Number(perRequestTimeoutMs) || SOCIAL_SWEEP_REQUEST_TIMEOUT_MS, remaining));
+    const supportsAbort = typeof AbortController !== 'undefined';
+    const controller = supportsAbort ? new AbortController() : null;
+    const upstreamSignal = options?.signal;
+    let upstreamAbortHandler = null;
+    if (controller && upstreamSignal) {
+      if (upstreamSignal.aborted) throw sourceSweepTimeoutError('source_sweep_api_call_aborted');
+      upstreamAbortHandler = () => controller.abort(upstreamSignal.reason);
+      upstreamSignal.addEventListener('abort', upstreamAbortHandler, { once: true });
+    }
     let timeout = null;
+    let timedOut = false;
     const timeoutPromise = new Promise((_, reject) => {
-      timeout = setTimeout(() => reject(sourceSweepTimeoutError('source_sweep_api_call_timed_out')), timeoutMs);
+      timeout = setTimeout(() => {
+        timedOut = true;
+        if (controller) controller.abort();
+        reject(sourceSweepTimeoutError('source_sweep_api_call_timed_out'));
+      }, timeoutMs);
     });
     try {
-      return await Promise.race([fetchImpl(url, options), timeoutPromise]);
+      const requestOptions = controller ? { ...options, signal: controller.signal } : options;
+      const fetchPromise = Promise.resolve(fetchImpl(url, requestOptions)).catch((error) => {
+        if (timedOut || error?.name === 'AbortError') {
+          throw sourceSweepTimeoutError(timedOut ? 'source_sweep_api_call_timed_out' : 'source_sweep_api_call_aborted');
+        }
+        throw error;
+      });
+      return await Promise.race([fetchPromise, timeoutPromise]);
     } finally {
       if (timeout) clearTimeout(timeout);
+      if (upstreamSignal && upstreamAbortHandler) {
+        upstreamSignal.removeEventListener('abort', upstreamAbortHandler);
+      }
     }
   };
 }
@@ -1300,6 +1327,8 @@ async function fetchTikTokDataSourcePosts({
   env = process.env,
   fetchImpl = fetch,
   limit = 500,
+  deadlineAt = 0,
+  minRemainingMs = SOCIAL_SWEEP_SOURCE_START_MIN_REMAINING_MS,
 } = {}) {
   const dataSource = envValue(TIKTOK_DATA_SOURCE_URL_ENV_NAMES, env);
   if (!dataSource.value) {
@@ -1312,6 +1341,22 @@ async function fetchTikTokDataSourcePosts({
       oembed_fetch_count: 0,
     };
   }
+  if (sweepDeadlineReached(deadlineAt, minRemainingMs)) {
+    return {
+      api_configured: true,
+      data_source_url_env: dataSource.name,
+      skipped_reason: 'source_sweep_time_budget_exhausted',
+      posts: [],
+      reports: [{
+        ok: false,
+        skipped: true,
+        reason: 'source_sweep_time_budget_exhausted',
+      }],
+      oembed_fetch_count: 0,
+      partial_results: true,
+      timed_out: true,
+    };
+  }
   const cappedLimit = cappedNumber(limit, 500, 1, 1000);
   const reports = [];
   try {
@@ -1319,6 +1364,22 @@ async function fetchTikTokDataSourcePosts({
       headers: { Accept: 'application/json, text/plain;q=0.9, */*;q=0.8' },
     });
     const body = await response.text();
+    if (sweepDeadlineReached(deadlineAt, minRemainingMs)) {
+      return {
+        api_configured: true,
+        data_source_url_env: dataSource.name,
+        skipped_reason: 'source_sweep_time_budget_reserved_for_partial_commit',
+        posts: [],
+        reports: [{
+          ok: false,
+          skipped: true,
+          reason: 'source_sweep_time_budget_reserved_for_partial_commit',
+        }],
+        oembed_fetch_count: 0,
+        partial_results: true,
+        timed_out: true,
+      };
+    }
     if (!response.ok) {
       return {
         api_configured: true,
@@ -1334,14 +1395,31 @@ async function fetchTikTokDataSourcePosts({
       };
     }
     const seeds = tikTokSeedsFromDataSourcePayload(body).slice(0, cappedLimit);
+    const seedsForImport = [];
     const oembedByUrl = {};
     const oembedReportsByUrl = {};
-    for (const seed of seeds) {
+    let skippedDueToTimeBudget = 0;
+    let timedOut = false;
+    for (let seedIndex = 0; seedIndex < seeds.length; seedIndex += 1) {
+      const seed = seeds[seedIndex];
+      if (sweepDeadlineReached(deadlineAt, minRemainingMs)) {
+        timedOut = true;
+        skippedDueToTimeBudget = seeds.length - seedIndex;
+        reports.push({
+          ok: false,
+          skipped: true,
+          reason: 'source_sweep_time_budget_reserved_for_partial_commit',
+          remaining_seed_count: skippedDueToTimeBudget,
+        });
+        break;
+      }
+      seedsForImport.push(seed);
       if (!seed.post_url || oembedByUrl[seed.post_url] || oembedReportsByUrl[seed.post_url]) continue;
       const report = await fetchTikTokOEmbed(seed.post_url, { fetchImpl }).catch((error) => ({
         ok: false,
-        reason: error.message || 'tiktok_oembed_failed',
+        reason: sourceSweepErrorReason(error) || error.message || 'tiktok_oembed_failed',
       }));
+      if (/source_sweep/.test(report.reason || '')) timedOut = true;
       const reportSummary = {
         post_url: seed.post_url,
         ok: report.ok === true,
@@ -1349,7 +1427,13 @@ async function fetchTikTokDataSourcePosts({
         reason: report.ok ? '' : (report.reason || 'tiktok_oembed_failed'),
       };
       if (report.ok && report.payload) {
-        const cached = await cacheTikTokOEmbedThumbnail(report.payload, seed.post_url, { fetchImpl });
+        const cached = await cacheTikTokOEmbedThumbnail(report.payload, seed.post_url, { fetchImpl }).catch((error) => ({
+          payload: report.payload,
+          report: {
+            cached: false,
+            reason: sourceSweepErrorReason(error) || error.message || 'tiktok_thumbnail_cache_failed',
+          },
+        }));
         report.payload = cached.payload;
         reportSummary.thumbnail_cache_status = cached.payload.thumbnail_cache_status || '';
         reportSummary.thumbnail_cached = cached.report.cached === true;
@@ -1358,14 +1442,20 @@ async function fetchTikTokDataSourcePosts({
       reports.push(reportSummary);
       oembedReportsByUrl[seed.post_url] = reportSummary;
       if (report.ok && report.payload) oembedByUrl[seed.post_url] = report.payload;
+      if (timedOut) {
+        skippedDueToTimeBudget = Math.max(0, seeds.length - seedIndex - 1);
+        break;
+      }
     }
     return {
       api_configured: true,
       data_source_url_env: dataSource.name,
-      skipped_reason: '',
+      skipped_reason: timedOut ? 'source_sweep_time_budget_reserved_for_partial_commit' : '',
       received_rows: seeds.length,
+      processed_rows: seedsForImport.length,
+      rows_skipped_due_to_time_budget: skippedDueToTimeBudget,
       posts: buildTikTokExactPostImportRows({
-        posts: seeds,
+        posts: seedsForImport,
         oembedByUrl,
         oembedReportsByUrl,
       }),
@@ -1373,15 +1463,20 @@ async function fetchTikTokDataSourcePosts({
       oembed_fetch_count: reports.length,
       thumbnail_cached_count: reports.filter((item) => item.thumbnail_cached === true).length,
       thumbnail_cache_skipped_count: reports.filter((item) => item.thumbnail_cache_reason || item.thumbnail_cache_status === 'cloud_media_storage_not_configured').length,
+      partial_results: timedOut,
+      timed_out: timedOut,
     };
   } catch (error) {
+    const reason = sourceSweepErrorReason(error);
     return {
       api_configured: true,
       data_source_url_env: dataSource.name,
-      skipped_reason: 'tiktok_data_source_fetch_error',
+      skipped_reason: /source_sweep/.test(reason) ? reason : 'tiktok_data_source_fetch_error',
       posts: [],
-      reports: [{ ok: false, reason: error.message || 'tiktok_data_source_fetch_error' }],
+      reports: [{ ok: false, reason: reason || error.message || 'tiktok_data_source_fetch_error' }],
       oembed_fetch_count: 0,
+      partial_results: /source_sweep/.test(reason),
+      timed_out: /source_sweep/.test(reason),
     };
   }
 }
@@ -1459,6 +1554,8 @@ async function enrichPendingTikTokSourceThumbnailRows({
   fetchImpl = fetch,
   limit = DEFAULT_TIKTOK_PENDING_REPROCESS_LIMIT,
   offset = 0,
+  deadlineAt = 0,
+  minRemainingMs = SOCIAL_SWEEP_MIN_REMAINING_MS,
 } = {}) {
   if (!db?.pool) {
     return {
@@ -1514,7 +1611,22 @@ async function enrichPendingTikTokSourceThumbnailRows({
     let cachedThumbnailProperties = 0;
     let thumbnailCacheSkippedProperties = 0;
     const reports = [];
-    for (const row of pending.rows || []) {
+    let timedOut = false;
+    let rowsSkippedDueToTimeBudget = 0;
+    const rows = pending.rows || [];
+    for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
+      const row = rows[rowIndex];
+      if (sweepDeadlineReached(deadlineAt, minRemainingMs)) {
+        timedOut = true;
+        rowsSkippedDueToTimeBudget = rows.length - rowIndex;
+        reports.push({
+          ok: false,
+          skipped: true,
+          reason: 'source_sweep_time_budget_exhausted',
+          remaining_row_count: rowsSkippedDueToTimeBudget,
+        });
+        break;
+      }
       const extra = row.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
       const sourceUrl = tiktokVideoUrlFromExtra(extra, row);
       if (!sourceUrl) {
@@ -1523,16 +1635,24 @@ async function enrichPendingTikTokSourceThumbnailRows({
       }
       const report = await fetchTikTokOEmbed(sourceUrl, { fetchImpl }).catch((error) => ({
         ok: false,
-        reason: error.message || 'tiktok_oembed_failed',
+        reason: sourceSweepErrorReason(error) || error.message || 'tiktok_oembed_failed',
       }));
+      if (/source_sweep/.test(report.reason || '')) timedOut = true;
       const sourceHealth = sourceUnavailableFromMetadataReport({
         ok: report.ok === true,
         status: report.status || null,
         reason: report.ok ? '' : (report.reason || 'tiktok_oembed_failed'),
       }) || {};
       const cached = report.ok && report.payload
-        ? await cacheTikTokOEmbedThumbnail(report.payload, sourceUrl, { fetchImpl })
+        ? await cacheTikTokOEmbedThumbnail(report.payload, sourceUrl, { fetchImpl }).catch((error) => ({
+          payload: report.payload,
+          report: {
+            cached: false,
+            reason: sourceSweepErrorReason(error) || error.message || 'tiktok_thumbnail_cache_failed',
+          },
+        }))
         : null;
+      if (/source_sweep/.test(cached?.report?.reason || '')) timedOut = true;
       const oembed = cached?.payload ? normalizeTikTokOEmbed(cached.payload) : {};
       const thumbnailUrl = cleanText(oembed.thumbnail_url || '');
       const patch = {
@@ -1587,13 +1707,20 @@ async function enrichPendingTikTokSourceThumbnailRows({
         source_unavailable: sourceHealth.source_unavailable === true,
         reason: report.ok ? '' : (report.reason || 'tiktok_oembed_failed'),
       });
+      if (timedOut) {
+        rowsSkippedDueToTimeBudget = Math.max(0, rows.length - rowIndex - 1);
+        break;
+      }
     }
     return {
       ok: true,
       skipped: false,
+      partial_results: timedOut,
+      timed_out: timedOut,
       dry_run: dryRun,
       version: TIKTOK_OEMBED_THUMBNAIL_REPROCESS_VERSION,
       rows_considered: (pending.rows || []).length,
+      rows_skipped_due_to_time_budget: rowsSkippedDueToTimeBudget,
       oembed_fetch_count: reports.filter((item) => !item.skipped).length,
       updated_properties: dryRun ? 0 : updatedProperties,
       update_candidates: updatedProperties,
@@ -2650,6 +2777,8 @@ function youtubeMergeVideoDetailsIntoItem(item = {}, detail = null) {
 async function fetchYouTubeVideoDetailsForItems(items = [], {
   apiKey = '',
   fetchImpl = fetch,
+  deadlineAt = 0,
+  minRemainingMs = SOCIAL_SWEEP_COMMIT_RESERVE_MS,
 } = {}) {
   const ids = Array.from(new Set((Array.isArray(items) ? items : [])
     .map((item) => normalizeYouTubeVideoId(item.id?.videoId || item.contentDetails?.videoId || item.snippet?.resourceId?.videoId || item.id || ''))
@@ -2659,15 +2788,42 @@ async function fetchYouTubeVideoDetailsForItems(items = [], {
   }
   const detailsById = new Map();
   const reports = [];
+  let timedOut = false;
   for (let index = 0; index < ids.length; index += 50) {
+    if (sweepDeadlineReached(deadlineAt, minRemainingMs)) {
+      timedOut = true;
+      reports.push({
+        ok: false,
+        skipped: true,
+        reason: 'source_sweep_time_budget_reserved_for_partial_commit',
+        remaining_id_count: ids.length - index,
+      });
+      break;
+    }
     const batch = ids.slice(index, index + 50);
     const url = new URL(YOUTUBE_VIDEOS_URL);
     url.searchParams.set('key', apiKey);
     url.searchParams.set('part', 'snippet,recordingDetails');
     url.searchParams.set('id', batch.join(','));
-    const response = await fetchImpl(url, {
-      headers: { Accept: 'application/json' },
-    });
+    let response;
+    try {
+      response = await fetchImpl(url, {
+        headers: { Accept: 'application/json' },
+      });
+    } catch (error) {
+      const reason = sourceSweepErrorReason(error);
+      if (/source_sweep/.test(reason)) {
+        timedOut = true;
+        reports.push({
+          ok: false,
+          skipped: true,
+          reason,
+          requested_count: batch.length,
+        });
+        break;
+      }
+      throw error;
+    }
     const payload = await response.json().catch(() => ({}));
     const report = {
       ok: response.ok,
@@ -2693,6 +2849,7 @@ async function fetchYouTubeVideoDetailsForItems(items = [], {
     detailsById,
     reports,
     result_count: detailsById.size,
+    timed_out: timedOut,
   };
 }
 
@@ -2700,6 +2857,8 @@ async function fetchYouTubeCommentEvidenceForItems(items = [], job = {}, {
   apiKey = '',
   fetchImpl = fetch,
   commentLookupBudget = null,
+  deadlineAt = 0,
+  minRemainingMs = SOCIAL_SWEEP_COMMIT_RESERVE_MS,
 } = {}) {
   const budget = commentLookupBudget || { remaining: 0, perVideo: DEFAULT_YOUTUBE_COMMENTS_PER_VIDEO };
   if (!apiKey || !budget.remaining) {
@@ -2717,8 +2876,19 @@ async function fetchYouTubeCommentEvidenceForItems(items = [], job = {}, {
   }
   const commentsById = new Map();
   const reports = [];
+  let timedOut = false;
   for (const candidate of candidates) {
     if (budget.remaining <= 0) break;
+    if (sweepDeadlineReached(deadlineAt, minRemainingMs)) {
+      timedOut = true;
+      reports.push({
+        ok: false,
+        skipped: true,
+        reason: 'source_sweep_time_budget_reserved_for_partial_commit',
+        remaining_candidate_count: candidates.length - reports.length,
+      });
+      break;
+    }
     budget.remaining -= 1;
     const url = new URL(YOUTUBE_COMMENT_THREADS_URL);
     url.searchParams.set('key', apiKey);
@@ -2727,9 +2897,25 @@ async function fetchYouTubeCommentEvidenceForItems(items = [], job = {}, {
     url.searchParams.set('maxResults', String(cappedNumber(budget.perVideo, DEFAULT_YOUTUBE_COMMENTS_PER_VIDEO, 1, 10)));
     url.searchParams.set('order', 'relevance');
     url.searchParams.set('textFormat', 'plainText');
-    const response = await fetchImpl(url, {
-      headers: { Accept: 'application/json' },
-    });
+    let response;
+    try {
+      response = await fetchImpl(url, {
+        headers: { Accept: 'application/json' },
+      });
+    } catch (error) {
+      const reason = sourceSweepErrorReason(error);
+      if (/source_sweep/.test(reason)) {
+        timedOut = true;
+        reports.push({
+          ok: false,
+          skipped: true,
+          reason,
+          video_id: candidate.videoId,
+        });
+        break;
+      }
+      throw error;
+    }
     const payload = await response.json().catch(() => ({}));
     const report = {
       ok: response.ok,
@@ -2756,6 +2942,7 @@ async function fetchYouTubeCommentEvidenceForItems(items = [], job = {}, {
     attempted_count: candidates.length,
     fetched_count: commentsById.size,
     reports,
+    timed_out: timedOut,
   };
 }
 
@@ -2763,6 +2950,8 @@ async function enrichYouTubeApiItems(items = [], job = {}, {
   apiKey = '',
   fetchImpl = fetch,
   commentLookupBudget = null,
+  deadlineAt = 0,
+  minRemainingMs = SOCIAL_SWEEP_COMMIT_RESERVE_MS,
 } = {}) {
   const rows = Array.isArray(items) ? items : [];
   if (!apiKey || !rows.length) {
@@ -2775,7 +2964,12 @@ async function enrichYouTubeApiItems(items = [], job = {}, {
       comment_reports: [],
     };
   }
-  const detailResult = await fetchYouTubeVideoDetailsForItems(rows, { apiKey, fetchImpl });
+  const detailResult = await fetchYouTubeVideoDetailsForItems(rows, {
+    apiKey,
+    fetchImpl,
+    deadlineAt,
+    minRemainingMs,
+  });
   const detailRows = rows.map((row) => {
     const videoId = normalizeYouTubeVideoId(row.id?.videoId || row.contentDetails?.videoId || row.snippet?.resourceId?.videoId || row.id || '');
     return youtubeMergeVideoDetailsIntoItem(row, detailResult.detailsById.get(videoId));
@@ -2784,6 +2978,8 @@ async function enrichYouTubeApiItems(items = [], job = {}, {
     apiKey,
     fetchImpl,
     commentLookupBudget,
+    deadlineAt,
+    minRemainingMs,
   });
   const enrichedRows = detailRows.map((row) => {
     const videoId = normalizeYouTubeVideoId(row.id?.videoId || row.contentDetails?.videoId || row.snippet?.resourceId?.videoId || row.id || '');
@@ -2803,6 +2999,7 @@ async function enrichYouTubeApiItems(items = [], job = {}, {
     comment_threads_fetched_count: commentResult.fetched_count || 0,
     detail_reports: detailResult.reports || [],
     comment_reports: commentResult.reports || [],
+    timed_out: detailResult.timed_out === true || commentResult.timed_out === true,
   };
 }
 
@@ -2904,6 +3101,8 @@ async function fetchYouTubeSearchJob(job = {}, {
   pageToken = '',
   fetchImpl = fetch,
   commentLookupBudget = null,
+  deadlineAt = 0,
+  minRemainingMs = SOCIAL_SWEEP_COMMIT_RESERVE_MS,
 } = {}) {
   if (!apiKey) {
     return {
@@ -2938,7 +3137,13 @@ async function fetchYouTubeSearchJob(job = {}, {
     };
   }
   const rows = Array.isArray(payload.items) ? payload.items : [];
-  const enriched = await enrichYouTubeApiItems(rows, job, { apiKey, fetchImpl, commentLookupBudget });
+  const enriched = await enrichYouTubeApiItems(rows, job, {
+    apiKey,
+    fetchImpl,
+    commentLookupBudget,
+    deadlineAt,
+    minRemainingMs,
+  });
   return {
     ok: true,
     result_count: rows.length,
@@ -2950,6 +3155,7 @@ async function fetchYouTubeSearchJob(job = {}, {
     comment_threads_fetched_count: enriched.comment_threads_fetched_count || 0,
     detail_reports: enriched.detail_reports || [],
     comment_reports: enriched.comment_reports || [],
+    timed_out: enriched.timed_out === true,
   };
 }
 
@@ -3028,6 +3234,8 @@ async function fetchYouTubeChannelUploadsJob(job = {}, {
   fetchImpl = fetch,
   channelDetails = null,
   commentLookupBudget = null,
+  deadlineAt = 0,
+  minRemainingMs = SOCIAL_SWEEP_COMMIT_RESERVE_MS,
 } = {}) {
   const details = channelDetails || await fetchYouTubeChannelDetails(job, { apiKey, fetchImpl });
   if (!details.ok) {
@@ -3065,7 +3273,13 @@ async function fetchYouTubeChannelUploadsJob(job = {}, {
     channel_id: details.channel_id,
     source_name: details.channel_title || job.source_name,
   };
-  const enriched = await enrichYouTubeApiItems(inWindowRows, normalizedJob, { apiKey, fetchImpl, commentLookupBudget });
+  const enriched = await enrichYouTubeApiItems(inWindowRows, normalizedJob, {
+    apiKey,
+    fetchImpl,
+    commentLookupBudget,
+    deadlineAt,
+    minRemainingMs,
+  });
   return {
     ok: true,
     result_count: rows.length,
@@ -3082,6 +3296,7 @@ async function fetchYouTubeChannelUploadsJob(job = {}, {
     comment_threads_fetched_count: enriched.comment_threads_fetched_count || 0,
     detail_reports: enriched.detail_reports || [],
     comment_reports: enriched.comment_reports || [],
+    timed_out: enriched.timed_out === true,
   };
 }
 
@@ -3092,7 +3307,7 @@ async function fetchYouTubePostsForJobs(jobs = [], options = {}) {
   let jobsAttemptedCount = 0;
   let jobsSkippedDueToTimeBudget = 0;
   const deadlineAt = Number(options.deadlineAt || 0) || 0;
-  const minRemainingMs = Math.max(0, Number(options.minRemainingMs ?? SOCIAL_SWEEP_MIN_REMAINING_MS) || 0);
+  const minRemainingMs = Math.max(0, Number(options.minRemainingMs ?? SOCIAL_SWEEP_SOURCE_START_MIN_REMAINING_MS) || 0);
   const maxPages = cappedNumber(options.maxPagesPerSource || options.maxPages || DEFAULT_YOUTUBE_PAGES_PER_SOURCE, DEFAULT_YOUTUBE_PAGES_PER_SOURCE, 1, SOCIAL_SWEEP_FAST_MAX_PAGES_PER_SOURCE);
   const env = options.env || process.env;
   const commentLookupBudget = options.youtubeCommentLookupBudget || {
@@ -3188,8 +3403,21 @@ async function fetchYouTubePostsForJobs(jobs = [], options = {}) {
       let report;
       try {
         report = job.search_method === 'channel_uploads'
-          ? await fetchYouTubeChannelUploadsJob(job, { ...options, pageToken, channelDetails, commentLookupBudget })
-          : await fetchYouTubeSearchJob(job, { ...options, pageToken, commentLookupBudget });
+          ? await fetchYouTubeChannelUploadsJob(job, {
+            ...options,
+            pageToken,
+            channelDetails,
+            commentLookupBudget,
+            deadlineAt,
+            minRemainingMs,
+          })
+          : await fetchYouTubeSearchJob(job, {
+            ...options,
+            pageToken,
+            commentLookupBudget,
+            deadlineAt,
+            minRemainingMs,
+          });
       } catch (error) {
         const reason = sourceSweepErrorReason(error);
         report = {
@@ -3201,6 +3429,10 @@ async function fetchYouTubePostsForJobs(jobs = [], options = {}) {
         };
         stopAfterCurrentJob = /source_sweep/.test(reason);
         if (stopAfterCurrentJob) timedOut = true;
+      }
+      if (report?.timed_out || /source_sweep/.test(report?.reason || '')) {
+        stopAfterCurrentJob = true;
+        timedOut = true;
       }
       lastReport = report;
       pagesFetched += 1;
@@ -3484,7 +3716,7 @@ async function fetchXPostsForJobs(jobs = [], options = {}) {
   let jobsAttemptedCount = 0;
   let jobsSkippedDueToTimeBudget = 0;
   const deadlineAt = Number(options.deadlineAt || 0) || 0;
-  const minRemainingMs = Math.max(0, Number(options.minRemainingMs ?? SOCIAL_SWEEP_MIN_REMAINING_MS) || 0);
+  const minRemainingMs = Math.max(0, Number(options.minRemainingMs ?? SOCIAL_SWEEP_SOURCE_START_MIN_REMAINING_MS) || 0);
   for (let jobIndex = 0; jobIndex < jobs.length; jobIndex += 1) {
     const job = jobs[jobIndex];
     if (sweepDeadlineReached(deadlineAt, minRemainingMs)) {
@@ -3759,6 +3991,8 @@ async function enrichPendingYouTubeSourceRows({
   limit = DEFAULT_YOUTUBE_PENDING_REPROCESS_LIMIT,
   offset = 0,
   commentLookupBudget = null,
+  deadlineAt = 0,
+  minRemainingMs = SOCIAL_SWEEP_MIN_REMAINING_MS,
 } = {}) {
   if (!db?.pool) {
     return {
@@ -3818,6 +4052,20 @@ async function enrichPendingYouTubeSourceRows({
         reprocess_result: null,
       };
     }
+  if (sweepDeadlineReached(deadlineAt, minRemainingMs)) {
+    return {
+      ok: true,
+      skipped: true,
+      reason: 'source_sweep_time_budget_exhausted',
+      rows_considered: 0,
+      video_details_fetched_count: 0,
+      comment_threads_attempted_count: 0,
+      comment_threads_fetched_count: 0,
+      partial_results: true,
+      timed_out: true,
+      reprocess_result: null,
+    };
+  }
   const rows = pending.rows || [];
   const pendingApiRows = rows
     .map((row) => ({
@@ -3856,6 +4104,8 @@ async function enrichPendingYouTubeSourceRows({
       apiKey,
       fetchImpl,
       commentLookupBudget: sharedCommentLookupBudget,
+      deadlineAt,
+      minRemainingMs,
     })
     : {
       rows: [],
@@ -3920,6 +4170,8 @@ async function enrichPendingYouTubeSourceRows({
     comment_threads_fetched_count: Number(enriched.comment_threads_fetched_count || 0),
     detail_reports: (enriched.detail_reports || []).slice(0, 50),
     comment_reports: (enriched.comment_reports || []).slice(0, 50),
+    partial_results: enriched.timed_out === true,
+    timed_out: enriched.timed_out === true,
     reprocess_result: reprocessResult,
   };
   } finally {
@@ -3973,6 +4225,7 @@ async function runSocialPlatformPostSweep({
   const sourceLimit = cappedNumber(maxSources, SOCIAL_SWEEP_FAST_DEFAULT_SOURCES, 1, SOCIAL_SWEEP_FAST_MAX_SOURCES);
   const resultLimit = cappedNumber(maxResultsPerSource, DEFAULT_X_RESULTS_PER_SOURCE, 1, SOCIAL_SWEEP_FAST_MAX_RESULTS_PER_SOURCE);
   const pageLimit = cappedNumber(maxPagesPerSource, DEFAULT_YOUTUBE_PAGES_PER_SOURCE, 1, SOCIAL_SWEEP_FAST_MAX_PAGES_PER_SOURCE);
+  const importPostLimit = Math.min(SOCIAL_SWEEP_IMPORT_POST_LIMIT, sourceLimit);
   const normalizedSourceOffset = cappedOffset(sourceOffset);
   const tiktokSources = requestedPlatforms.includes('tiktok') ? sourcesForPlatform('tiktok') : [];
   const youtubeSources = requestedPlatforms.includes('youtube') ? sourcesForPlatform('youtube') : [];
@@ -4028,6 +4281,8 @@ async function runSocialPlatformPostSweep({
       env,
       fetchImpl: sweepFetchImpl,
       limit: cappedNumber(env.STAFF_TIKTOK_DATA_SOURCE_LIMIT, tiktokDataSourceLimit, 1, SOCIAL_SWEEP_TIKTOK_DATA_SOURCE_MAX_POSTS),
+      deadlineAt: sweepDeadlineAt,
+      minRemainingMs: SOCIAL_SWEEP_SOURCE_START_MIN_REMAINING_MS,
     })
     : {
       api_configured: false,
@@ -4037,7 +4292,11 @@ async function runSocialPlatformPostSweep({
       reports: [],
       oembed_fetch_count: 0,
     };
-  if (/source_sweep/.test(tiktokDataSourceFetch.skipped_reason || '')) partialResults = true;
+  if (
+    tiktokDataSourceFetch.partial_results === true
+    || tiktokDataSourceFetch.timed_out === true
+    || /source_sweep/.test(tiktokDataSourceFetch.skipped_reason || '')
+  ) partialResults = true;
   const youtubeCommentLookupBudget = {
     remaining: cappedNumber(
       env.STAFF_YOUTUBE_COMMENT_LOOKUP_LIMIT,
@@ -4197,11 +4456,13 @@ async function runSocialPlatformPostSweep({
       skipped_reason: '',
     };
   }
-  const discoveredPosts = uniquePosts([
+  const allDiscoveredPosts = uniquePosts([
     ...tiktokDataSourceFetch.posts,
     ...youtubeFetch.posts,
     ...xFetch.posts,
   ]);
+  const discoveredPosts = allDiscoveredPosts.slice(0, importPostLimit);
+  if (allDiscoveredPosts.length > discoveredPosts.length) partialResults = true;
   const importResult = discoveredPosts.length
     ? await queueFoundOnlineSourcePostListings({
       db,
@@ -4233,6 +4494,8 @@ async function runSocialPlatformPostSweep({
       limit: Math.min(cappedNumber(env.STAFF_YOUTUBE_PENDING_REPROCESS_LIMIT, DEFAULT_YOUTUBE_PENDING_REPROCESS_LIMIT, 1, DEFAULT_YOUTUBE_PENDING_REPROCESS_LIMIT), SOCIAL_SWEEP_BACKLOG_REPROCESS_LIMIT),
       offset: 0,
       commentLookupBudget: youtubeCommentLookupBudget,
+      deadlineAt: sweepDeadlineAt,
+      minRemainingMs: SOCIAL_SWEEP_MIN_REMAINING_MS,
     })
     : {
       ok: true,
@@ -4247,6 +4510,7 @@ async function runSocialPlatformPostSweep({
       reprocess_result: null,
     };
   if (requestedPlatforms.includes('youtube') && youtubeApi.apiKey && !canRunYouTubeBacklog) partialResults = true;
+  if (pendingYouTubeBacklogReprocess.partial_results === true || pendingYouTubeBacklogReprocess.timed_out === true) partialResults = true;
   const canRunTikTokBacklog = requestedPlatforms.includes('tiktok')
     && !sweepDeadlineReached(sweepDeadlineAt, SOCIAL_SWEEP_BACKLOG_MIN_REMAINING_MS);
   const pendingTikTokThumbnailReprocess = canRunTikTokBacklog
@@ -4256,6 +4520,8 @@ async function runSocialPlatformPostSweep({
       fetchImpl: sweepFetchImpl,
       limit: Math.min(cappedNumber(env.STAFF_TIKTOK_PENDING_REPROCESS_LIMIT, DEFAULT_TIKTOK_PENDING_REPROCESS_LIMIT, 1, DEFAULT_TIKTOK_PENDING_REPROCESS_LIMIT), SOCIAL_SWEEP_BACKLOG_REPROCESS_LIMIT),
       offset: normalizedSourceOffset,
+      deadlineAt: sweepDeadlineAt,
+      minRemainingMs: SOCIAL_SWEEP_MIN_REMAINING_MS,
     })
     : {
       ok: true,
@@ -4269,6 +4535,7 @@ async function runSocialPlatformPostSweep({
       reports: [],
     };
   if (requestedPlatforms.includes('tiktok') && !canRunTikTokBacklog) partialResults = true;
+  if (pendingTikTokThumbnailReprocess.partial_results === true || pendingTikTokThumbnailReprocess.timed_out === true) partialResults = true;
   const sweepElapsedMs = Date.now() - sweepStartedAt;
   const sweepRemaining = sweepRemainingMs(sweepDeadlineAt);
 
@@ -4293,6 +4560,7 @@ async function runSocialPlatformPostSweep({
         max_pages_per_source: pageLimit,
         tiktok_data_source_limit: tiktokDataSourceLimit,
         backlog_reprocess_limit: SOCIAL_SWEEP_BACKLOG_REPROCESS_LIMIT,
+        import_post_limit: importPostLimit,
       },
     },
     registry_rotation: {

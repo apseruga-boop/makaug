@@ -62,6 +62,7 @@ test('channel-upload source sweeps top up from rotated registry search feeds whe
   assert.equal(result.performance.caps.source_limit, 50);
   assert.equal(result.performance.caps.max_results_per_source, 25);
   assert.equal(result.performance.caps.max_pages_per_source, 1);
+  assert.equal(result.performance.caps.import_post_limit, 50);
 });
 
 test('source sweeps enforce fast caps and return partial telemetry when the time budget is exhausted', async () => {
@@ -80,6 +81,8 @@ test('source sweeps enforce fast caps and return partial telemetry when the time
   assert.equal(capped.performance.caps.source_limit, 60);
   assert.equal(capped.performance.caps.max_results_per_source, 25);
   assert.equal(capped.performance.caps.max_pages_per_source, 1);
+  assert.equal(capped.performance.caps.import_post_limit, 60);
+  assert.equal(capped.performance.time_budget_ms, 45000);
 
   const timed = await runSocialPlatformPostSweep({
     platform: 'youtube',

@@ -51,7 +51,7 @@ const STAFF_SOURCE_INTAKE_JOB_LIMIT = Math.max(10, parseInt(process.env.STAFF_SO
 const STAFF_SOCIAL_SWEEP_SOURCE_LIMIT = Math.min(60, Math.max(15, parseInt(process.env.STAFF_SOCIAL_SWEEP_SOURCE_LIMIT || '50', 10) || 50));
 const STAFF_SOCIAL_SWEEP_RESULT_LIMIT = Math.min(25, Math.max(10, parseInt(process.env.STAFF_SOCIAL_SWEEP_RESULT_LIMIT || '25', 10) || 25));
 const STAFF_SOCIAL_SWEEP_PAGE_LIMIT = 1;
-const STAFF_SOCIAL_SWEEP_TIME_BUDGET_MS = Math.min(60000, Math.max(10000, parseInt(process.env.STAFF_SOCIAL_SWEEP_TIME_BUDGET_MS || '55000', 10) || 55000));
+const STAFF_SOCIAL_SWEEP_TIME_BUDGET_MS = Math.min(45000, Math.max(10000, parseInt(process.env.STAFF_SOCIAL_SWEEP_TIME_BUDGET_MS || '45000', 10) || 45000));
 const EXACT_SOCIAL_URL_PATTERN = /https?:\/\/[^\s<>"']*(?:tiktok\.com\/@[^/\s?#]+\/video\/\d+|youtube\.com\/watch\?[^ \n\r\t<>"']*v=|youtube\.com\/shorts\/|youtu\.be\/|instagram\.com\/(?:p|reel|tv)\/|facebook\.com\/.+\/(?:posts|videos|reel)|fb\.watch\/|(?:x|twitter)\.com\/[^/\s?#]+\/status\/\d+)/ig;
 const PUBLIC_SUPPRESSED_LISTING_MARKERS = ['SOFT LAUNCH TEST - DELETE', 'QA TEST - DELETE'];
 const PUBLIC_SUPPRESSED_DUMMY_TITLES = ['sdgsdgd', 'sgsgsgsgs'];
@@ -104,11 +104,14 @@ function publicStaffSourceIntakeJob(job = {}) {
     || result.youtube?.pending_backlog_reprocess
     || {};
   const backlogReprocess = backlogResult.reprocess_result || {};
+  const partialResults = result.partial_results === true || result.performance?.partial_results === true;
+  const completedPartial = job.status === 'completed' && partialResults;
   return {
     async_job: true,
     job_id: job.id || '',
     type: job.type || 'source_intake',
     status: job.status || 'queued',
+    completion_state: completedPartial ? 'completed_partial' : (job.status || 'queued'),
     created_at: job.createdAt || null,
     started_at: job.startedAt || null,
     finished_at: job.finishedAt || null,
@@ -139,10 +142,11 @@ function publicStaffSourceIntakeJob(job = {}) {
       pending_backlog_review_queue_properties: Number(backlogReprocess.review_queue_properties || 0),
       elapsed_ms: Number(result.performance?.elapsed_ms || 0),
       time_budget_ms: Number(result.performance?.time_budget_ms || 0),
-      partial_results: result.partial_results === true || result.performance?.partial_results === true,
+      partial_results: partialResults,
       time_budget_exhausted: result.time_budget_exhausted === true || result.performance?.time_budget_exhausted === true,
       sweep_source_cap: Number(result.performance?.caps?.source_limit || 0),
       sweep_max_pages_per_source: Number(result.performance?.caps?.max_pages_per_source || 0),
+      sweep_import_post_cap: Number(result.performance?.caps?.import_post_limit || 0),
     } : undefined,
   };
 }

@@ -244,6 +244,7 @@ function run() {
   assert(staffRoutes.includes("process.env.STAFF_SOCIAL_SWEEP_SOURCE_LIMIT || '50'"), 'staff social sweep should default to fast 50-source batches');
   assert(staffRoutes.includes('const STAFF_SOCIAL_SWEEP_PAGE_LIMIT = 1'), 'staff social sweep should only fetch one page per source');
   assert(staffRoutes.includes('STAFF_SOCIAL_SWEEP_TIME_BUDGET_MS'), 'staff social sweep should have a hard runtime budget');
+  assert(staffRoutes.includes("process.env.STAFF_SOCIAL_SWEEP_TIME_BUDGET_MS || '45000'"), 'staff social sweep should cap live jobs at a 45s budget');
   assert(staffRoutes.includes("youtubeJobMode || 'channel_uploads'"), 'staff social sweep should default to high-yield YouTube channel uploads');
   assert(staffRoutes.includes("type: 'social_sweep'"), 'staff social sweep should return background jobs for live runs');
   assert(app.includes('STAFF_SOURCE_SWEEP_BATCH_SIZE = 50'), 'staff social sweep should run a meaningful 50-source batch');

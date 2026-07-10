@@ -1066,11 +1066,18 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
   assert(socialPlatformSweepServiceSource.includes('registry_fill_search_job_count'), 'deep YouTube sweeps should top up from registry search feeds when the known-channel pool is exhausted');
   assert(socialPlatformSweepServiceSource.includes('registry_rotation'), 'platform sweeps should expose source-window rotation telemetry for staff/King verification');
   assert(socialPlatformSweepServiceSource.includes('source_sweep_time_budget_exhausted'), 'platform sweeps should stop cleanly and return partial results when the time budget is exhausted');
+  assert(socialPlatformSweepServiceSource.includes('AbortController'), 'platform sweeps should abort in-flight external fetches when the time budget is hit');
+  assert(socialPlatformSweepServiceSource.includes('DEFAULT_SOCIAL_SWEEP_TIME_BUDGET_MS = 45000'), 'platform sweeps should use a 45s wall-clock budget');
+  assert(socialPlatformSweepServiceSource.includes('SOCIAL_SWEEP_IMPORT_POST_LIMIT = 60'), 'platform sweeps should cap the import batch so DB writes cannot explode runtime');
+  assert(socialPlatformSweepServiceSource.includes('SOCIAL_SWEEP_SOURCE_START_MIN_REMAINING_MS'), 'platform sweeps should reserve commit time before starting another source fetch');
   assert(staffRoute.includes('STAFF_SOCIAL_SWEEP_TIME_BUDGET_MS'), 'staff social sweep jobs should have a bounded runtime budget');
+  assert(staffRoute.includes("process.env.STAFF_SOCIAL_SWEEP_TIME_BUDGET_MS || '45000'"), 'staff social sweep route should clamp the production budget to 45s');
   assert(staffRoute.includes("STAFF_SOCIAL_SWEEP_SOURCE_LIMIT = Math.min(60"), 'staff social sweep route should enforce the fast source cap');
+  assert(staffRoute.includes('completed_partial'), 'staff job payload should distinguish completed partial sweeps');
   assert(staffRoute.includes('registry_next_source_offset'), 'staff job summaries should expose the next source cursor');
   assert(html.includes('source-registry-rotation-20260710'), 'public app marker should identify the source registry rotation fix');
   assert(html.includes('source-sweep-performance-20260710'), 'public app marker should identify the source sweep performance fix');
+  assert(html.includes('source-sweep-hard-budget-20260710'), 'public app marker should identify the source sweep hard-budget fix');
   assert(socialSearchServiceSource.includes('defer_until_agent_claims_profile'), 'source-post import should defer source profiles until the source owner registers or claims them');
 
   const tiktokTasks = buildTikTokCaptureTasks({
