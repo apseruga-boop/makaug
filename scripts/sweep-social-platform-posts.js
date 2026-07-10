@@ -23,8 +23,8 @@ function usage() {
   console.error([
     'Usage:',
     '  node scripts/sweep-social-platform-posts.js --platform=tiktok --dry-run',
-    '  node scripts/sweep-social-platform-posts.js --platform=youtube --confirm --published-after=2026-01-01T00:00:00.000Z --source-offset=0 --max-sources=50 --max-results=50 --max-pages=2',
-    '  node scripts/sweep-social-platform-posts.js --platform=youtube --dry-run --source-offset=100 --max-sources=50 --max-results=50 --max-pages=2',
+    '  node scripts/sweep-social-platform-posts.js --platform=youtube --confirm --published-after=2026-01-01T00:00:00.000Z --source-offset=0 --max-sources=50 --max-results=25 --max-pages=1',
+    '  node scripts/sweep-social-platform-posts.js --platform=youtube --dry-run --source-offset=100 --max-sources=50 --max-results=25 --max-pages=1',
     '  node scripts/sweep-social-platform-posts.js --platform=youtube --confirm --youtube-job-mode=channel_uploads --source-offset=0 --max-sources=25 --max-results=25',
     '  node scripts/sweep-social-platform-posts.js --platform=x --dry-run',
     '  node scripts/sweep-social-platform-posts.js --platform=x --confirm --max-sources=25 --max-results=25 --lookback-days=14',
@@ -42,7 +42,7 @@ function usage() {
     '  --confirm queues eligible exact YouTube/X posts into King found-online review. TikTok, Facebook, and Instagram broad feeds still require exact post URLs or approved platform API adapters before import.',
     '',
     'Capacity:',
-    '  Each sweep can page through up to 60,000 social source records; use --source-offset with small --max-sources batches on Render cron jobs.',
+    '  Each sweep rotates through the source registry in small, time-budgeted batches; use --source-offset with --max-sources=50 on Render cron jobs.',
   ].join('\n'));
 }
 

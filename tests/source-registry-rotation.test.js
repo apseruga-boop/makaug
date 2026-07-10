@@ -45,7 +45,7 @@ test('channel-upload source sweeps top up from rotated registry search feeds whe
   const result = await runSocialPlatformPostSweep({
     platform: 'youtube',
     dryRun: true,
-    maxSources: 80,
+    maxSources: 50,
     sourceOffset: 0,
     fetchYouTube: false,
     fetchX: false,
@@ -54,9 +54,52 @@ test('channel-upload source sweeps top up from rotated registry search feeds whe
   });
 
   assert.equal(result.youtube.job_mode, 'channel_uploads');
-  assert.equal(result.youtube.selected_source_count, 80);
-  assert.equal(result.youtube.next_source_offset, 80);
+  assert.equal(result.youtube.selected_source_count, 50);
+  assert.equal(result.youtube.next_source_offset, 50);
   assert.ok(result.youtube.primary_search_job_count > 0, 'known channel uploads should still be attempted first');
   assert.ok(result.youtube.registry_fill_search_job_count > 0, 'registry search feeds should fill the batch when channel uploads are too small');
-  assert.ok(result.youtube.search_job_count >= 80, 'deep sweep should no longer be limited to the small known-channel pool');
+  assert.ok(result.youtube.search_job_count >= 50, 'deep sweep should no longer be limited to the small known-channel pool');
+  assert.equal(result.performance.caps.source_limit, 50);
+  assert.equal(result.performance.caps.max_results_per_source, 25);
+  assert.equal(result.performance.caps.max_pages_per_source, 1);
+});
+
+test('source sweeps enforce fast caps and return partial telemetry when the time budget is exhausted', async () => {
+  const capped = await runSocialPlatformPostSweep({
+    platform: 'youtube',
+    dryRun: true,
+    maxSources: 500,
+    maxResultsPerSource: 99,
+    maxPagesPerSource: 6,
+    fetchYouTube: false,
+    fetchX: false,
+    env: {},
+  });
+
+  assert.equal(capped.registry_rotation.requested_source_limit, 60);
+  assert.equal(capped.performance.caps.source_limit, 60);
+  assert.equal(capped.performance.caps.max_results_per_source, 25);
+  assert.equal(capped.performance.caps.max_pages_per_source, 1);
+
+  const timed = await runSocialPlatformPostSweep({
+    platform: 'youtube',
+    dryRun: true,
+    maxSources: 3,
+    maxResultsPerSource: 25,
+    maxPagesPerSource: 1,
+    youtubeJobMode: 'search',
+    fetchYouTube: true,
+    fetchX: false,
+    env: { YOUTUBE_API_KEY: 'test-key' },
+    timeBudgetMs: 1,
+    fetchImpl: async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ items: [] }),
+    }),
+  });
+
+  assert.equal(timed.partial_results, true);
+  assert.equal(timed.performance.partial_results, true);
+  assert.ok(timed.youtube.fetch_reports.some((report) => report.reason === 'source_sweep_time_budget_exhausted'));
 });

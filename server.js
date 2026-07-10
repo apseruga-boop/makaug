@@ -207,6 +207,7 @@ const publicStickyMapRailVersion = 'public-sticky-map-rail-20260710';
 const publicStickyMapAssistRailVersion = 'public-sticky-map-assist-rail-20260710';
 const tailwindStaticCssVersion = 'tailwind-static-css-20260710';
 const sourceRegistryRotationVersion = 'source-registry-rotation-20260710';
+const sourceSweepPerformanceVersion = 'source-sweep-performance-20260710';
 const publicAppVersionSuffixes = [
   captureHelperUsabilityVersion,
   studentNearestUniversityVersion,
@@ -283,7 +284,8 @@ const publicAppVersionSuffixes = [
   publicStickyMapRailVersion,
   publicStickyMapAssistRailVersion,
   tailwindStaticCssVersion,
-  sourceRegistryRotationVersion
+  sourceRegistryRotationVersion,
+  sourceSweepPerformanceVersion
 ];
 let cachedIndexHtml = null;
 const publicHtmlCache = new Map();

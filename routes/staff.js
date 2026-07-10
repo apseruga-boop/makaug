@@ -48,9 +48,10 @@ const STAFF_EXACT_SOCIAL_IMPORT_LIMIT = 500;
 const STAFF_FAST_DASHBOARD_CACHE_TTL_MS = Math.max(5000, parseInt(process.env.STAFF_FAST_DASHBOARD_CACHE_TTL_MS || '60000', 10) || 60000);
 const STAFF_SOURCE_INTAKE_JOB_TTL_MS = Math.max(300000, parseInt(process.env.STAFF_SOURCE_INTAKE_JOB_TTL_MS || '3600000', 10) || 3600000);
 const STAFF_SOURCE_INTAKE_JOB_LIMIT = Math.max(10, parseInt(process.env.STAFF_SOURCE_INTAKE_JOB_LIMIT || '50', 10) || 50);
-const STAFF_SOCIAL_SWEEP_SOURCE_LIMIT = Math.max(15, parseInt(process.env.STAFF_SOCIAL_SWEEP_SOURCE_LIMIT || '160', 10) || 160);
-const STAFF_SOCIAL_SWEEP_RESULT_LIMIT = Math.max(10, parseInt(process.env.STAFF_SOCIAL_SWEEP_RESULT_LIMIT || '50', 10) || 50);
-const STAFF_SOCIAL_SWEEP_PAGE_LIMIT = Math.max(1, parseInt(process.env.STAFF_SOCIAL_SWEEP_PAGE_LIMIT || '6', 10) || 6);
+const STAFF_SOCIAL_SWEEP_SOURCE_LIMIT = Math.min(60, Math.max(15, parseInt(process.env.STAFF_SOCIAL_SWEEP_SOURCE_LIMIT || '50', 10) || 50));
+const STAFF_SOCIAL_SWEEP_RESULT_LIMIT = Math.min(25, Math.max(10, parseInt(process.env.STAFF_SOCIAL_SWEEP_RESULT_LIMIT || '25', 10) || 25));
+const STAFF_SOCIAL_SWEEP_PAGE_LIMIT = 1;
+const STAFF_SOCIAL_SWEEP_TIME_BUDGET_MS = Math.min(60000, Math.max(10000, parseInt(process.env.STAFF_SOCIAL_SWEEP_TIME_BUDGET_MS || '55000', 10) || 55000));
 const EXACT_SOCIAL_URL_PATTERN = /https?:\/\/[^\s<>"']*(?:tiktok\.com\/@[^/\s?#]+\/video\/\d+|youtube\.com\/watch\?[^ \n\r\t<>"']*v=|youtube\.com\/shorts\/|youtu\.be\/|instagram\.com\/(?:p|reel|tv)\/|facebook\.com\/.+\/(?:posts|videos|reel)|fb\.watch\/|(?:x|twitter)\.com\/[^/\s?#]+\/status\/\d+)/ig;
 const PUBLIC_SUPPRESSED_LISTING_MARKERS = ['SOFT LAUNCH TEST - DELETE', 'QA TEST - DELETE'];
 const PUBLIC_SUPPRESSED_DUMMY_TITLES = ['sdgsdgd', 'sgsgsgsgs'];
@@ -67,7 +68,7 @@ const STAFF_SOURCE_MONITOR_GUIDE = {
   status: 'Ready for Render Cron Job and Render Shell trigger',
   dry_run_command: 'npm run inventory:continuous-monitor -- --dry-run',
   confirm_command: 'npm run inventory:continuous-monitor -- --confirm --platforms=youtube,x --youtube-job-mode=channel_uploads --max-sources=15 --max-results=25 --max-pages=1',
-  deep_channel_command: 'npm run inventory:sweep-social-platforms -- --platform=youtube --confirm --youtube-job-mode=channel_uploads --published-after=2026-01-01T00:00:00.000Z --max-sources=80 --max-results=50 --max-pages=6',
+  deep_channel_command: 'npm run inventory:sweep-social-platforms -- --platform=youtube --confirm --youtube-job-mode=channel_uploads --published-after=2026-01-01T00:00:00.000Z --max-sources=50 --max-results=25 --max-pages=1',
   broad_search_command: 'npm run inventory:sweep-social-platforms -- --platform=youtube --confirm --youtube-job-mode=search --published-after=2026-01-01T00:00:00.000Z --max-sources=20 --max-results=10 --max-pages=1',
   daily_registry_command: 'npm run inventory:daily-source-sweep -- --confirm',
   high_frequency_cadence: 'Every 10-15 minutes: safe known-channel uploads plus X recent search.',
@@ -136,6 +137,12 @@ function publicStaffSourceIntakeJob(job = {}) {
       pending_backlog_updated_properties: Number(backlogReprocess.updated_properties || 0),
       pending_backlog_auto_live_properties: Number(backlogReprocess.auto_live_properties || 0),
       pending_backlog_review_queue_properties: Number(backlogReprocess.review_queue_properties || 0),
+      elapsed_ms: Number(result.performance?.elapsed_ms || 0),
+      time_budget_ms: Number(result.performance?.time_budget_ms || 0),
+      partial_results: result.partial_results === true || result.performance?.partial_results === true,
+      time_budget_exhausted: result.time_budget_exhausted === true || result.performance?.time_budget_exhausted === true,
+      sweep_source_cap: Number(result.performance?.caps?.source_limit || 0),
+      sweep_max_pages_per_source: Number(result.performance?.caps?.max_pages_per_source || 0),
     } : undefined,
   };
 }
@@ -1999,7 +2006,8 @@ router.post('/source-intake/social-sweep', async (req, res, next) => {
       searchMode: cleanText(req.body?.x_search_mode || req.body?.xSearchMode || 'all'),
       lookbackDays: Math.max(0, parseInt(req.body?.lookback_days || req.body?.lookbackDays || 0, 10) || 0),
       publishedAfter: cleanText(req.body?.published_after || req.body?.publishedAfter || '2026-01-01T00:00:00.000Z'),
-      youtubeJobMode
+      youtubeJobMode,
+      timeBudgetMs: STAFF_SOCIAL_SWEEP_TIME_BUDGET_MS
     };
     const runSweep = async () => {
       const result = await runSocialPlatformPostSweep(sweepPayload);
@@ -2020,11 +2028,15 @@ router.post('/source-intake/social-sweep', async (req, res, next) => {
           max_sources: maxSources,
           max_results_per_source: sweepPayload.maxResultsPerSource,
           max_pages_per_source: sweepPayload.maxPagesPerSource,
+          time_budget_ms: sweepPayload.timeBudgetMs,
           source_offset: sweepPayload.sourceOffset,
           discovered_posts_count: result.discovered_posts_count || 0,
           created_properties: result.import_result?.created_properties || 0,
           auto_live_properties: result.import_result?.auto_live_properties || 0,
-          existing_properties: result.import_result?.existing_properties || 0
+          existing_properties: result.import_result?.existing_properties || 0,
+          elapsed_ms: result.performance?.elapsed_ms || 0,
+          partial_results: result.partial_results === true || result.performance?.partial_results === true,
+          time_budget_exhausted: result.time_budget_exhausted === true || result.performance?.time_budget_exhausted === true
         }
       });
       return responseData;
@@ -2071,6 +2083,7 @@ router.post('/source-intake/social-sweep', async (req, res, next) => {
           max_sources: maxSources,
           max_results_per_source: sweepPayload.maxResultsPerSource,
           max_pages_per_source: sweepPayload.maxPagesPerSource,
+          time_budget_ms: sweepPayload.timeBudgetMs,
           source_offset: sweepPayload.sourceOffset,
         }
       });

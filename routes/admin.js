@@ -3502,10 +3502,10 @@ router.post('/social-platform-posts/sweep', async (req, res, next) => {
   try {
     const platform = req.body?.platform || 'all';
     const dryRun = req.body?.dry_run === true || req.body?.dryRun === true;
-    const maxSources = req.body?.max_sources || req.body?.maxSources || 40;
+    const maxSources = Math.min(60, Math.max(1, parseInt(req.body?.max_sources || req.body?.maxSources || 50, 10) || 50));
     const sourceOffset = req.body?.source_offset || req.body?.sourceOffset || 0;
-    const maxResultsPerSource = req.body?.max_results || req.body?.maxResults || 25;
-    const maxPagesPerSource = req.body?.max_pages || req.body?.maxPages || 1;
+    const maxResultsPerSource = Math.min(25, Math.max(1, parseInt(req.body?.max_results || req.body?.maxResults || 25, 10) || 25));
+    const maxPagesPerSource = 1;
     const youtubeJobMode = req.body?.youtube_job_mode || req.body?.youtubeJobMode || 'all';
     const searchMode = req.body?.x_search_mode || req.body?.xSearchMode || 'all';
     const lookbackDays = req.body?.lookback_days || req.body?.lookbackDays || 0;
@@ -3523,7 +3523,8 @@ router.post('/social-platform-posts/sweep', async (req, res, next) => {
       youtubeJobMode,
       searchMode,
       lookbackDays,
-      publishedAfter
+      publishedAfter,
+      timeBudgetMs: 55000
     });
     await writeAudit('admin_social_platform_posts_sweep', {
       source: SOURCED_INVENTORY_CANDIDATE_SOURCE,
@@ -3544,6 +3545,10 @@ router.post('/social-platform-posts/sweep', async (req, res, next) => {
       created_properties: result.import_result?.created_properties || 0,
       existing_properties: result.import_result?.existing_properties || 0,
       review_queue_properties: result.import_result?.review_queue_properties || 0,
+      elapsed_ms: result.performance?.elapsed_ms || 0,
+      time_budget_ms: result.performance?.time_budget_ms || 0,
+      partial_results: result.partial_results === true || result.performance?.partial_results === true,
+      time_budget_exhausted: result.time_budget_exhausted === true || result.performance?.time_budget_exhausted === true,
     }, adminActorId(req));
     return res.json({ ok: true, data: result });
   } catch (error) {

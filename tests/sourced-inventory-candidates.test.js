@@ -1033,7 +1033,7 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
   assert.strictEqual(typeof fetchTikTokDataSourcePosts, 'function', 'TikTok sweep should expose a configured data-source fetcher');
   assert(frontend.includes('TikTok data source'), 'King dashboard should show TikTok data-source fetch status');
   assert(frontend.includes('TikTok cover re-check'), 'King dashboard should show TikTok cover backfill status');
-  assert(socialPlatformSweepScript.includes('up to 60,000 social source records'), 'sweep CLI should explain the 60,000-source ceiling');
+  assert(socialPlatformSweepScript.includes('small, time-budgeted batches'), 'sweep CLI should explain the fast batch operating model');
   const readiness = socialDiscoveryApiReadiness({
     YOUTUBE_API_KEY: 'yt_test',
     X_BEARER_TOKEN: 'x_test',
@@ -1056,14 +1056,21 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
   assert.strictEqual(readinessWithTikTokDataSource.tiktok.data_source_url_env, 'TIKTOK_DATA_SOURCE_URL');
   assert(socialPlatformSweepServiceSource.includes('createProfilesForRepeatedSourcesOnly: false'), 'platform sweep should not auto-create source broker profiles');
   assert(frontend.includes('ADMIN_YOUTUBE_SWEEP_BATCH_SIZE = 50'), 'King dashboard should use quota-safe 50-source YouTube batches');
+  assert(frontend.includes('STAFF_SOURCE_DEEP_SWEEP_BATCH_SIZE = 50'), 'staff deep sweeps should use fast 50-source batches');
+  assert(frontend.includes('STAFF_SOURCE_DEEP_SWEEP_MAX_RESULTS = 25'), 'staff deep sweeps should cap results per source');
+  assert(frontend.includes('STAFF_SOURCE_DEEP_SWEEP_MAX_PAGES = 1'), 'staff deep sweeps should only fetch one page per source');
   assert(frontend.includes('source_offset: youtubeSourceOffset'), 'King dashboard should advance through YouTube source batches instead of repeating the first sources');
   assert(frontend.includes('next_source_offset'), 'dashboard source sweeps should store the backend rotation cursor instead of guessing the next batch');
   assert(frontend.includes('["moderator", "admin", "super_admin"].includes(mode)'), 'super admins should be allowed to submit source sweeps through the async staff queue');
   assert(frontend.includes('Submit ${profile.label.toLowerCase()} to the async source-intake queue'), 'King source-sweep buttons should use the async queue instead of freezing on a synchronous sweep');
   assert(socialPlatformSweepServiceSource.includes('registry_fill_search_job_count'), 'deep YouTube sweeps should top up from registry search feeds when the known-channel pool is exhausted');
   assert(socialPlatformSweepServiceSource.includes('registry_rotation'), 'platform sweeps should expose source-window rotation telemetry for staff/King verification');
+  assert(socialPlatformSweepServiceSource.includes('source_sweep_time_budget_exhausted'), 'platform sweeps should stop cleanly and return partial results when the time budget is exhausted');
+  assert(staffRoute.includes('STAFF_SOCIAL_SWEEP_TIME_BUDGET_MS'), 'staff social sweep jobs should have a bounded runtime budget');
+  assert(staffRoute.includes("STAFF_SOCIAL_SWEEP_SOURCE_LIMIT = Math.min(60"), 'staff social sweep route should enforce the fast source cap');
   assert(staffRoute.includes('registry_next_source_offset'), 'staff job summaries should expose the next source cursor');
   assert(html.includes('source-registry-rotation-20260710'), 'public app marker should identify the source registry rotation fix');
+  assert(html.includes('source-sweep-performance-20260710'), 'public app marker should identify the source sweep performance fix');
   assert(socialSearchServiceSource.includes('defer_until_agent_claims_profile'), 'source-post import should defer source profiles until the source owner registers or claims them');
 
   const tiktokTasks = buildTikTokCaptureTasks({
@@ -1684,7 +1691,7 @@ test('found-online social search admin path and share cards are protected and au
   assert(continuousMonitorScript.includes("'channel_uploads'"), 'continuous monitor should default frequent YouTube pulls to channel uploads');
   assert(continuousMonitorScript.includes('next_source_offset'), 'continuous monitor should advance source offsets between runs');
   assert(continuousMonitorScript.includes('runSocialPlatformPostSweep'), 'continuous monitor should use the existing sweep/import gate');
-  assert(adminRoute.includes('max_pages') && adminRoute.includes('maxPagesPerSource'), 'admin YouTube sweep endpoint should accept bounded pagination');
+  assert(adminRoute.includes('const maxPagesPerSource = 1'), 'admin YouTube sweep endpoint should pin pagination to one fast page');
   assert(adminRoute.includes('youtube_job_mode') && adminRoute.includes('youtubeJobMode'), 'admin YouTube sweep endpoint should accept explicit job mode');
   assert(frontend.includes('ADMIN_YOUTUBE_SWEEP_MAX_PAGES'), 'King dashboard should send the YouTube pagination depth');
   assert(frontend.includes('adminYouTubeSweepMethodLabel'), 'King dashboard should distinguish YouTube search feeds from channel-upload scans');

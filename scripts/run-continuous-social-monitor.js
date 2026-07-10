@@ -133,9 +133,9 @@ async function main() {
 
   const targetCount = numberValue('--source-target', PROPERTY_SOURCE_REGISTRY_TARGET_COUNT, { min: 1 });
   const cadenceMinutes = numberValue('--cadence-minutes', Number(process.env.CONTINUOUS_SOCIAL_MONITOR_CADENCE_MINUTES || DEFAULT_CADENCE_MINUTES), { min: 1, max: 1440 });
-  const maxSources = numberValue('--max-sources', Number(process.env.CONTINUOUS_SOCIAL_MONITOR_MAX_SOURCES || 15), { min: 1, max: 250 });
-  const maxResultsPerSource = numberValue('--max-results', Number(process.env.CONTINUOUS_SOCIAL_MONITOR_MAX_RESULTS || 25), { min: 1, max: 50 });
-  const maxPagesPerSource = numberValue('--max-pages', Number(process.env.CONTINUOUS_SOCIAL_MONITOR_MAX_PAGES || 1), { min: 1, max: 3 });
+  const maxSources = numberValue('--max-sources', Number(process.env.CONTINUOUS_SOCIAL_MONITOR_MAX_SOURCES || 15), { min: 1, max: 60 });
+  const maxResultsPerSource = numberValue('--max-results', Number(process.env.CONTINUOUS_SOCIAL_MONITOR_MAX_RESULTS || 25), { min: 1, max: 25 });
+  const maxPagesPerSource = numberValue('--max-pages', Number(process.env.CONTINUOUS_SOCIAL_MONITOR_MAX_PAGES || 1), { min: 1, max: 1 });
   const publishedAfter = argValue('--published-after', process.env.CONTINUOUS_SOCIAL_MONITOR_PUBLISHED_AFTER || '2026-01-01T00:00:00.000Z');
   const lookbackDays = numberValue('--lookback-days', Number(process.env.CONTINUOUS_SOCIAL_MONITOR_LOOKBACK_DAYS || 7), { min: 0, max: 30 });
   const searchMode = argValue('--x-search-mode', process.env.CONTINUOUS_SOCIAL_MONITOR_X_SEARCH_MODE || 'recent');

@@ -846,10 +846,10 @@ const STAFF_SOURCE_INTAKE_POLL_TIMEOUT_MS = 6000;
 const STAFF_SOURCE_INTAKE_POLL_MS = 2500;
 const STAFF_SOURCE_SWEEP_BATCH_SIZE = 50;
 const STAFF_SOURCE_SWEEP_MAX_RESULTS = 25;
-const STAFF_SOURCE_SWEEP_MAX_PAGES = 2;
-const STAFF_SOURCE_DEEP_SWEEP_BATCH_SIZE = 80;
-const STAFF_SOURCE_DEEP_SWEEP_MAX_RESULTS = 50;
-const STAFF_SOURCE_DEEP_SWEEP_MAX_PAGES = 6;
+const STAFF_SOURCE_SWEEP_MAX_PAGES = 1;
+const STAFF_SOURCE_DEEP_SWEEP_BATCH_SIZE = 50;
+const STAFF_SOURCE_DEEP_SWEEP_MAX_RESULTS = 25;
+const STAFF_SOURCE_DEEP_SWEEP_MAX_PAGES = 1;
 const STAFF_SOURCE_SEARCH_SWEEP_BATCH_SIZE = 20;
 const STAFF_SOURCE_SEARCH_SWEEP_MAX_RESULTS = 10;
 const STAFF_SOURCE_SEARCH_SWEEP_MAX_PAGES = 1;
@@ -14573,7 +14573,7 @@ function adminImportYouTubeExactPosts(seedText = "") {
 
 const ADMIN_YOUTUBE_SWEEP_WINDOW_START = "2026-01-01T00:00:00.000Z";
 const ADMIN_YOUTUBE_SWEEP_BATCH_SIZE = 50;
-const ADMIN_YOUTUBE_SWEEP_MAX_PAGES = 2;
+const ADMIN_YOUTUBE_SWEEP_MAX_PAGES = 1;
 const ADMIN_YOUTUBE_SWEEP_OFFSET_KEYS = {
   youtube: "makaug.admin.youtubeSweepSourceOffset",
   student: "makaug.admin.studentYoutubeSweepSourceOffset",
@@ -14859,6 +14859,10 @@ function adminStaffSocialSweepJobHtml(data = {}) {
         <div>Review queue rows: <strong>${staffNumber(summary.review_queue_properties || 0)}</strong></div>
         <div>Existing/duplicates: <strong>${staffNumber(summary.existing_properties || 0)}</strong></div>
         <div>Source-review only: <strong>${staffNumber(summary.source_review_count || 0)}</strong></div>
+        <div>Elapsed: <strong>${staffNumber(summary.elapsed_ms || 0)}ms</strong></div>
+        <div>Time budget: <strong>${staffNumber(summary.time_budget_ms || 0)}ms</strong></div>
+        <div>Partial: <strong>${summary.partial_results ? "Yes" : "No"}</strong></div>
+        <div>Batch cap: <strong>${staffNumber(summary.sweep_source_cap || 0)} sources / ${staffNumber(summary.sweep_max_pages_per_source || 0)} page</strong></div>
       </div>
       ${data.error ? `<div class="mt-2 rounded-lg bg-white/80 border border-red-100 p-2 text-red-800">${adminEscape(data.error)}</div>` : ""}
     </div>`;
@@ -15009,9 +15013,9 @@ async function adminSweepSocialPlatformPosts(platform = "all") {
         platform: studentFocus ? "student" : normalized,
         focus: studentFocus ? "students" : "",
         dry_run: dryRun,
-        max_sources: normalized === "tiktok" ? 30000 : usesYouTubeSweep ? youtubeBatchSize : 40,
+        max_sources: usesYouTubeSweep ? youtubeBatchSize : STAFF_SOURCE_SWEEP_BATCH_SIZE,
         source_offset: youtubeSourceOffset,
-        max_results: (normalized === "youtube" || studentFocus || normalized === "all") ? 50 : 25,
+        max_results: STAFF_SOURCE_SWEEP_MAX_RESULTS,
         max_pages: usesYouTubeSweep ? ADMIN_YOUTUBE_SWEEP_MAX_PAGES : 1,
         x_search_mode: "all",
         published_after: ADMIN_YOUTUBE_SWEEP_WINDOW_START
