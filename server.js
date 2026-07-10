@@ -195,6 +195,7 @@ const kingDashboardAiVisibleSummaryFixVersion = 'king-dashboard-ai-visible-summa
 const listPropertyEmailOnlyVersion = 'list-property-email-only-20260710';
 const listPropertyEmailOnlyCopyFixVersion = 'list-property-email-only-copy-fix-20260710';
 const listPropertyContactIdRequiredVersion = 'list-property-contact-id-required-20260710';
+const publicFilterStandardisationVersion = 'public-filter-standardisation-20260710';
 const publicAppVersionSuffixes = [
   captureHelperUsabilityVersion,
   studentNearestUniversityVersion,
@@ -259,7 +260,8 @@ const publicAppVersionSuffixes = [
   kingDashboardAiVisibleSummaryFixVersion,
   listPropertyEmailOnlyVersion,
   listPropertyEmailOnlyCopyFixVersion,
-  listPropertyContactIdRequiredVersion
+  listPropertyContactIdRequiredVersion,
+  publicFilterStandardisationVersion
 ];
 let cachedIndexHtml = null;
 const publicHtmlCache = new Map();

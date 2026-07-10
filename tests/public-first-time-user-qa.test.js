@@ -207,10 +207,11 @@ assert(
 );
 
 assert(
-  appJs.includes('const radiusMilesParam = normalizeInput(qs.get("radiusMiles")')
-    && appJs.includes("radiusMiles: radiusMilesParam || null")
+  appJs.includes('const radiusKmParam = normalizeInput(qs.get("radiusKm")')
+    && appJs.includes("radiusKm: radiusKmParam || radiusKmFromLegacyMiles || null")
+    && appJs.includes("radiusKmSelectValue(milesToKm(radiusMilesParam))")
     && appJs.includes('if (radiusValue) setValue("sale-radius-f", radiusValue);'),
-  "plain text route searches should not silently enable the default 10-mile radius filter"
+  "plain text route searches should not silently enable the default radius filter, and old mile URLs should map into km controls"
 );
 
 assert(

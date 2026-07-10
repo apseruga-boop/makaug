@@ -939,6 +939,8 @@ const LISTING_NEW_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
 const typeaheadState = { panel: null, input: null, items: [], index: -1, onPick: null };
 const DEFAULT_NEAR_ME_RADIUS_MI = 10;
 const SEARCH_RADIUS_MI_OPTIONS = [0, 0.25, 0.5, 1, 3, 5, 10, 15, 20, 30, 40, 50];
+const DEFAULT_NEAR_ME_RADIUS_KM = 10;
+const SEARCH_RADIUS_KM_OPTIONS = [0, 1, 2, 5, 10, 15, 20, 30, 50, 75];
 const nearMeSearchState = {
   hero: null,
   sale: null,
@@ -1229,9 +1231,9 @@ const I18N_UI = {
     heroSearch: "Search",
     heroUseLocation: "Use my location",
     heroLocationLabel: "Location",
-    heroLocationHelper: "Location search uses a 10 mile radius by default.",
+    heroLocationHelper: "Location search uses a 10 km radius by default.",
     heroLocationFinding: "Finding properties near your location...",
-    heroLocationActive: "Location active: searching within 10 miles of your location.",
+    heroLocationActive: "Location active: searching within 10 km of your location.",
     heroLocationDenied: "Location permission was denied. Search by city, area, suburb or landmark instead.",
     heroLocationUnavailable: "We could not get your location. Search by city, area, suburb or landmark instead.",
     heroLocationOutside: "You appear to be outside Uganda. Choose a Ugandan area to search, or search all Uganda.",
@@ -1295,7 +1297,7 @@ const I18N_UI = {
     heroSortDistance: "Distance",
     heroApply: "Apply",
     heroClear: "Clear",
-    heroNearMeNote: "Location search uses a 10 mile radius by default.",
+    heroNearMeNote: "Location search uses a 10 km radius by default.",
     homeFeatured: "Featured Properties",
     homeMap: "Explore on Map",
     homeBrokers: "Featured Agents",
@@ -31022,16 +31024,13 @@ function clearListPropertyDraft() {
   toast(translateListingLabel("Listing form cleared. Start again with the correct property type."));
 }
 
-function formatRadiusDistanceText(miles) {
-  if (miles === 0.25) return "1/4";
-  if (miles === 0.5) return "1/2";
-  return Number.isInteger(miles) ? String(miles) : String(miles);
+function formatRadiusDistanceText(km) {
+  return Number.isInteger(km) ? String(km) : String(km);
 }
 
-function radiusLabel(miles) {
-  if (!miles) return tr("areaOnly");
-  const unit = miles <= 1 ? tr("mileUnitSingular") : tr("mileUnitPlural");
-  return `${tr("withinLabel")} ${formatRadiusDistanceText(miles)} ${unit}`;
+function radiusLabel(km) {
+  if (!km) return tr("areaOnly");
+  return `${tr("withinLabel")} ${formatRadiusDistanceText(km)} km`;
 }
 
 function populateRadiusSelects() {
@@ -31047,7 +31046,7 @@ function populateRadiusSelects() {
     const el = document.getElementById(id);
     if (!el) return;
     const current = el.value || "0";
-    el.innerHTML = SEARCH_RADIUS_MI_OPTIONS.map((miles) => `<option value="${miles}">${radiusLabel(miles)}</option>`).join("");
+    el.innerHTML = SEARCH_RADIUS_KM_OPTIONS.map((km) => `<option value="${km}">${radiusLabel(km)}</option>`).join("");
     if (Array.from(el.options).some((opt) => opt.value === current)) el.value = current;
     else el.value = "0";
   });
@@ -31069,9 +31068,28 @@ function milesToKm(miles) {
   return value * 1.60934;
 }
 
+function kmToMiles(km) {
+  const value = parseFloat(km || "0");
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  return value / 1.60934;
+}
+
+function radiusKmSelectValue(km) {
+  const value = parseFloat(km || "0");
+  if (!Number.isFinite(value) || value <= 0) return "";
+  const exact = SEARCH_RADIUS_KM_OPTIONS.find((option) => Math.abs(Number(option) - value) < 0.001);
+  if (exact !== undefined) return String(exact);
+  const candidates = SEARCH_RADIUS_KM_OPTIONS.filter((option) => Number(option) > 0);
+  const nearest = candidates.reduce((best, option) => (
+    Math.abs(Number(option) - value) < Math.abs(Number(best) - value) ? option : best
+  ), candidates[0] || DEFAULT_NEAR_ME_RADIUS_KM);
+  return String(nearest);
+}
+
 function getRadiusKmFromSelect(selectId) {
-  const miles = document.getElementById(selectId)?.value || "0";
-  return milesToKm(miles);
+  const km = parseFloat(document.getElementById(selectId)?.value || "0");
+  if (!Number.isFinite(km) || km <= 0) return 0;
+  return km;
 }
 
 function isPointInUgandaClient(lat, lng) {
@@ -31188,7 +31206,7 @@ function applyHeroSearchLanguageUI() {
   setHeroSelectOptions("hero-amenities-f", amenityOptions, "");
   setHeroControlLanguage("hero-amenities-f", config.amenityLabelKey || "heroAmenities");
   const radius = document.getElementById("hero-radius-advanced-f");
-  if (radius?.options?.[0]) radius.options[0].textContent = "10 miles";
+  if (radius?.options?.[0]) radius.options[0].textContent = "10 km";
   setHeroControlLanguage("hero-radius-advanced-f", "heroRadius");
   const sort = document.getElementById("hero-sort-f");
   if (sort?.options?.[0]) sort.options[0].textContent = tr("heroSortNewest");
@@ -31205,7 +31223,7 @@ function getHeroFilterValues() {
   const minPrice = parseInt(document.getElementById("hero-min-price-f")?.value || "0", 10) || 0;
   const maxPrice = parseInt(document.getElementById("hero-max-price-f")?.value || "0", 10) || 0;
   const bedroomsRaw = config.showBedrooms ? (document.getElementById("hero-bedrooms-f")?.value || "") : "";
-  const radiusMiles = parseFloat(document.getElementById("hero-radius-advanced-f")?.value || String(DEFAULT_NEAR_ME_RADIUS_MI)) || DEFAULT_NEAR_ME_RADIUS_MI;
+  const radiusKm = parseFloat(document.getElementById("hero-radius-advanced-f")?.value || String(DEFAULT_NEAR_ME_RADIUS_KM)) || DEFAULT_NEAR_ME_RADIUS_KM;
   const propertyType = (document.getElementById("hero-property-type-f")?.value || "").trim();
   return {
     propertyType,
@@ -31217,8 +31235,9 @@ function getHeroFilterValues() {
     amenities: (document.getElementById("hero-amenities-f")?.value || "").trim(),
     commercialType: currentTab === "commercial" ? propertyType : "",
     landTitleType: currentTab === "land" ? propertyType : "",
-    radiusMiles,
-    radiusKm: milesToKm(radiusMiles),
+    radiusKm,
+    radiusMiles: kmToMiles(radiusKm),
+    radiusUnit: "km",
     sort: document.getElementById("hero-sort-f")?.value || "newest"
   };
 }
@@ -31266,7 +31285,7 @@ function clearHeroFilters() {
     if (el) el.value = "";
   });
   const radius = document.getElementById("hero-radius-advanced-f");
-  if (radius) radius.value = String(DEFAULT_NEAR_ME_RADIUS_MI);
+  if (radius) radius.value = String(DEFAULT_NEAR_ME_RADIUS_KM);
   const sort = document.getElementById("hero-sort-f");
   if (sort) sort.value = "newest";
   clearNearMeSearchState(currentTab);
@@ -31323,17 +31342,21 @@ function routeSearchHandoffPayload(page) {
     minPrice: normalizeInput(qs.get("min_price") || qs.get("minPrice") || ""),
     maxPrice: normalizeInput(qs.get("max_price") || qs.get("maxPrice") || qs.get("budget") || ""),
     bedrooms: normalizeInput(qs.get("bedrooms") || qs.get("beds") || ""),
+    bathrooms: normalizeInput(qs.get("bathrooms") || qs.get("baths") || ""),
     amenities: normalizeInput(qs.get("amenities") || ""),
     sort: normalizeInput(qs.get("sort") || "")
   };
   const hasFilters = Object.values(filters).some(Boolean);
   if (!query && !area && !hasFilters) return null;
+  const radiusKmParam = normalizeInput(qs.get("radiusKm") || qs.get("radius_km") || "");
   const radiusMilesParam = normalizeInput(qs.get("radiusMiles") || qs.get("radius_miles") || qs.get("radius") || "");
+  const radiusKmFromLegacyMiles = radiusKmParam ? "" : (radiusMilesParam ? radiusKmSelectValue(milesToKm(radiusMilesParam)) : "");
   return {
     page: targetPage,
     query: query || area,
     area,
     filters,
+    radiusKm: radiusKmParam || radiusKmFromLegacyMiles || null,
     radiusMiles: radiusMilesParam || null,
     source: "route_query"
   };
@@ -31349,11 +31372,15 @@ function heroSearchRouteUrl(page, payload = {}) {
   const params = new URLSearchParams();
   if (query) params.set("q", query);
   if (area) params.set(targetPage === "students" ? "campus" : "area", area);
-  if (payload.radiusMiles) params.set("radiusMiles", String(payload.radiusMiles));
+  if (payload.radiusKm) params.set("radiusKm", String(payload.radiusKm));
+  else if (payload.radiusMiles) params.set("radiusKm", String(Number(milesToKm(payload.radiusMiles).toFixed(3))));
   if (filters.propertyType) params.set("property_type", filters.propertyType);
   if (filters.minPrice) params.set("min_price", String(filters.minPrice));
   if (filters.maxPrice) params.set("max_price", String(filters.maxPrice));
   if (filters.bedrooms) params.set("bedrooms", String(filters.bedrooms));
+  if (filters.bathrooms) params.set("bathrooms", String(filters.bathrooms));
+  if (filters.amenities) params.set("amenities", String(filters.amenities));
+  if (filters.sort) params.set("sort", String(filters.sort));
   const queryString = params.toString();
   return `${route}${queryString ? `?${queryString}` : ""}`;
 }
@@ -31374,12 +31401,14 @@ function applyHeroSearchHandoff(page) {
   const payload = consumeHeroSearchHandoff(page) || routeSearchHandoffPayload(page);
   if (!payload) return false;
   updateHeroSearchRoute(page, payload, payload.source || "hero_search_handoff");
-  const radiusValue = payload.radiusMiles || payload.radius ? String(payload.radiusMiles || payload.radius) : "";
+  const rawRadiusValue = payload.radiusKm || payload.radius || "";
+  const radiusValue = rawRadiusValue ? (radiusKmSelectValue(rawRadiusValue) || String(rawRadiusValue)) : "";
   if (payload.nearState) {
+    const nearRadiusKm = Number(payload.nearState.radiusKm || payload.radiusKm || milesToKm(payload.nearState.radiusMiles || payload.radiusMiles || DEFAULT_NEAR_ME_RADIUS_MI) || DEFAULT_NEAR_ME_RADIUS_KM);
     nearMeSearchState[page] = {
       ...payload.nearState,
-      radiusMiles: Number(payload.nearState.radiusMiles || payload.radiusMiles || DEFAULT_NEAR_ME_RADIUS_MI),
-      radiusKm: Number(payload.nearState.radiusKm || milesToKm(payload.nearState.radiusMiles || payload.radiusMiles || DEFAULT_NEAR_ME_RADIUS_MI))
+      radiusKm: nearRadiusKm,
+      radiusMiles: Number(payload.nearState.radiusMiles || payload.radiusMiles || kmToMiles(nearRadiusKm))
     };
   }
   const setValue = (id, value) => {
@@ -31396,6 +31425,9 @@ function applyHeroSearchHandoff(page) {
     setValue("rent-min-price-f", filters.minPrice ? String(filters.minPrice) : "");
     setValue("rent-price-f", filters.maxPrice ? String(filters.maxPrice) : "");
     setValue("rent-type-f", filters.bedrooms === "studio" ? "studio" : filters.propertyType || "");
+    setValue("rent-baths-f", filters.bathrooms || "");
+    setValue("rent-amenity-f", filters.amenities || "");
+    setValue("rent-sort-f", filters.sort || "newest");
     filterListings("rent");
   } else if (page === "students") {
     setValue("student-q-f", payload.query);
@@ -31403,6 +31435,7 @@ function applyHeroSearchHandoff(page) {
     if (radiusValue) setValue("student-radius-f", radiusValue);
     setValue("student-type-quick-f", filters.propertyType || payload.context);
     setValue("student-budget-f", filters.maxPrice ? String(filters.maxPrice) : "");
+    setValue("student-sort-f", filters.sort || "newest");
     filterStudents();
   } else if (page === "commercial") {
     setValue("commercial-q-f", payload.query);
@@ -31411,6 +31444,7 @@ function applyHeroSearchHandoff(page) {
     setValue("commercial-type-f", filters.propertyType || payload.context);
     setValue("commercial-min-price-f", filters.minPrice ? String(filters.minPrice) : "");
     setValue("commercial-price-f", filters.maxPrice ? String(filters.maxPrice) : "");
+    setValue("commercial-sort-f", filters.sort || "newest");
     filterCommercial();
   } else if (page === "land") {
     setValue("land-q-f", payload.query);
@@ -31419,6 +31453,7 @@ function applyHeroSearchHandoff(page) {
     setValue("land-type-f", filters.propertyType || payload.context);
     setValue("land-min-price-f", filters.minPrice ? String(filters.minPrice) : "");
     setValue("land-price-f", filters.maxPrice ? String(filters.maxPrice) : "");
+    setValue("land-sort-f", filters.sort || "newest");
     filterLand();
   } else if (page === "sale") {
     setValue("sale-location-f", payload.query);
@@ -31428,6 +31463,9 @@ function applyHeroSearchHandoff(page) {
     setValue("sale-min-price-f", filters.minPrice ? String(filters.minPrice) : "");
     setValue("sale-price-f", filters.maxPrice ? String(filters.maxPrice) : "");
     setValue("sale-type-f", filters.bedrooms === "studio" ? "studio" : filters.propertyType || "");
+    setValue("sale-baths-f", filters.bathrooms || "");
+    setValue("sale-amenity-f", filters.amenities || "");
+    setValue("sale-sort-f", filters.sort || "newest");
     filterListings("sale");
   }
   syncSectionSearchShell(page);
@@ -31440,7 +31478,7 @@ function propertyMatchesNearMe(property, state, radiusKm) {
   const pLng = Number(property?.lng ?? property?.longitude);
   if (!Number.isFinite(pLat) || !Number.isFinite(pLng)) return false;
   const distanceKm = haversineKm(Number(state.lat), Number(state.lng), pLat, pLng);
-  return Number.isFinite(distanceKm) && distanceKm <= (Number(radiusKm) || state.radiusKm || milesToKm(DEFAULT_NEAR_ME_RADIUS_MI));
+  return Number.isFinite(distanceKm) && distanceKm <= (Number(radiusKm) || state.radiusKm || DEFAULT_NEAR_ME_RADIUS_KM);
 }
 
 function decorateAndSortNearMeResults(list, state) {
@@ -31518,14 +31556,14 @@ function applyNearMe(page) {
     const districtEl = document.getElementById(cfg.districtId);
     const radiusEl = document.getElementById(cfg.radiusId);
     const heroFilters = page === "hero" ? getHeroFilterValues() : {};
-    const radiusMiles = page === "hero" ? (heroFilters.radiusMiles || DEFAULT_NEAR_ME_RADIUS_MI) : DEFAULT_NEAR_ME_RADIUS_MI;
-    const radiusKm = milesToKm(radiusMiles);
+    const radiusKm = page === "hero" ? (heroFilters.radiusKm || DEFAULT_NEAR_ME_RADIUS_KM) : DEFAULT_NEAR_ME_RADIUS_KM;
+    const radiusMiles = kmToMiles(radiusKm);
 
     if (districtEl && nearest.district && Array.from(districtEl.options).some((o) => o.value === nearest.district)) {
       districtEl.value = nearest.district;
     }
-    if (radiusEl && Array.from(radiusEl.options).some((o) => o.value === String(radiusMiles))) {
-      radiusEl.value = String(radiusMiles);
+    if (radiusEl && Array.from(radiusEl.options).some((o) => o.value === String(radiusKm))) {
+      radiusEl.value = String(radiusKm);
     }
     nearMeSearchState[targetPage] = {
       lat,
@@ -31550,10 +31588,11 @@ function applyNearMe(page) {
       lng: roundSearchCoord(lng),
       radius_miles: radiusMiles,
       radius_km: Number(radiusKm.toFixed(2)),
+      radius_unit: "km",
       district: nearest.district || "",
       nearest_distance_km: Number.isFinite(nearest.distanceKm) ? Number(nearest.distanceKm.toFixed(2)) : null
     });
-    toast(nearest.district ? `Showing properties within ${radiusMiles} miles of you in/around ${nearest.district}` : `Showing properties within ${radiusMiles} miles of your location`);
+    toast(nearest.district ? `Showing properties within ${radiusKm} km of you in/around ${nearest.district}` : `Showing properties within ${radiusKm} km of your location`);
   }, (err) => {
     const denied = err?.code === 1;
     const message = denied ? tr("heroLocationDenied") : tr("heroLocationUnavailable");
@@ -35393,22 +35432,25 @@ function hasActivePublicCategoryFilter(category) {
   const key = publicPaginationKey(category);
   if (key === "sale" || key === "rent") return hasActiveListingFilter(key);
   if (key === "students") {
-    const fieldIds = ["student-q-f", "student-district-f", "student-type-quick-f", "student-budget-f", "student-uni-f", "student-amenity-f", "student-category-f"];
+    const fieldIds = ["student-q-f", "student-district-f", "student-type-quick-f", "student-budget-f", "student-uni-f", "student-amenity-f", "student-category-f", "student-distance-f"];
     return fieldIds.some((id) => publicListingFilterValue(id))
       || getRadiusKmFromSelect("student-radius-f") > 0
-      || Boolean(getNearMeSearchState("students"));
+      || Boolean(getNearMeSearchState("students"))
+      || Boolean(publicListingFilterValue("student-sort-f") && publicListingFilterValue("student-sort-f") !== "newest");
   }
   if (key === "commercial") {
-    const fieldIds = ["commercial-q-f", "commercial-district-f", "commercial-type-f", "commercial-min-price-f", "commercial-price-f", "commercial-size-f"];
+    const fieldIds = ["commercial-q-f", "commercial-district-f", "commercial-type-f", "commercial-min-price-f", "commercial-price-f", "commercial-size-f", "commercial-max-size-f"];
     return fieldIds.some((id) => publicListingFilterValue(id))
       || getRadiusKmFromSelect("commercial-radius-f") > 0
-      || Boolean(getNearMeSearchState("commercial"));
+      || Boolean(getNearMeSearchState("commercial"))
+      || Boolean(publicListingFilterValue("commercial-sort-f") && publicListingFilterValue("commercial-sort-f") !== "newest");
   }
   if (key === "land") {
-    const fieldIds = ["land-q-f", "land-district-f", "land-type-f", "land-min-price-f", "land-price-f", "land-min-size-f"];
+    const fieldIds = ["land-q-f", "land-district-f", "land-type-f", "land-min-price-f", "land-price-f", "land-min-size-f", "land-max-size-f", "land-title-f"];
     return fieldIds.some((id) => publicListingFilterValue(id))
       || getRadiusKmFromSelect("land-radius-f") > 0
-      || Boolean(getNearMeSearchState("land"));
+      || Boolean(getNearMeSearchState("land"))
+      || Boolean(publicListingFilterValue("land-sort-f") && publicListingFilterValue("land-sort-f") !== "newest");
   }
   return false;
 }
@@ -35655,9 +35697,11 @@ function publicInventoryRouteSearchPath(category) {
   if (filters.minPrice) params.set("min_price", String(filters.minPrice));
   if (filters.maxPrice) params.set("max_price", String(filters.maxPrice));
   if (filters.bedrooms) params.set("bedrooms", String(filters.bedrooms));
+  if (filters.bathrooms) params.set("bathrooms", String(filters.bathrooms));
   if (filters.amenities) params.set("amenities", String(filters.amenities));
   if (filters.commercialType) params.set("commercial_type", String(filters.commercialType));
   if (filters.landTitleType) params.set("land_title_type", String(filters.landTitleType));
+  if (filters.sort) params.set("sort", String(filters.sort));
   return `/api/properties/search?${params.toString()}`;
 }
 
@@ -36189,9 +36233,9 @@ function buildHeroSearchBackendPayload({ query = "", area = "", filters = {}, ne
   if (nearState) {
     payload.lat = nearState.lat;
     payload.lng = nearState.lng;
-    payload.radiusMiles = nearState.radiusMiles || filters.radiusMiles || DEFAULT_NEAR_ME_RADIUS_MI;
-    payload.radiusKm = nearState.radiusKm || filters.radiusKm || milesToKm(payload.radiusMiles);
-    payload.radiusUnit = "miles";
+    payload.radiusKm = nearState.radiusKm || filters.radiusKm || DEFAULT_NEAR_ME_RADIUS_KM;
+    payload.radiusMiles = nearState.radiusMiles || filters.radiusMiles || kmToMiles(payload.radiusKm);
+    payload.radiusUnit = "km";
     payload.locationSource = "browser_geolocation";
   }
   return payload;
@@ -36212,6 +36256,7 @@ function recordHeroSearchBackendPayload(payload = {}) {
       trackEvent("homepage_search_backend_checked", {
         category: payload.category,
         source: payload.source,
+        radius_km: payload.radiusKm || null,
         radius_miles: payload.radiusMiles || null,
         backend_ok: ok,
         backend_results: Array.isArray(body?.data) ? body.data.length : null,
@@ -36638,7 +36683,7 @@ function doSearch() {
   const pageMap = { sale: "sale", rent: "rent", students: "students", commercial: "commercial", land: "land" };
   const heroNearState = getNearMeSearchState(currentTab);
   const routedRadiusValue = heroNearState
-    ? String(heroNearState.radiusMiles || DEFAULT_NEAR_ME_RADIUS_MI)
+    ? String(heroNearState.radiusKm || DEFAULT_NEAR_ME_RADIUS_KM)
     : heroRadiusValue;
   let results = getPublicListings().filter((p) => {
     const typeMatch = currentTab === "students" ? isStudentDiscoverable(p) : normalizeType(p.type) === currentTab;
@@ -36669,7 +36714,8 @@ function doSearch() {
     query: qRaw || "",
     area: areaOrUni || "",
     radius: routedRadiusValue,
-    radiusMiles: heroNearState?.radiusMiles || (parseFloat(heroRadiusValue || "0") || null),
+    radiusKm: heroNearState?.radiusKm || (parseFloat(heroRadiusValue || "0") || null),
+    radiusMiles: heroNearState?.radiusMiles || (parseFloat(heroRadiusValue || "0") ? kmToMiles(parseFloat(heroRadiusValue || "0")) : null),
     filters: heroFilters,
     nearState: heroNearState ? {
       lat: heroNearState.lat,
@@ -36685,7 +36731,8 @@ function doSearch() {
     query: qRaw || "",
     area: areaOrUni || "",
     radius: routedRadiusValue,
-    radiusMiles: heroNearState?.radiusMiles || (parseFloat(heroRadiusValue || "0") || null),
+    radiusKm: heroNearState?.radiusKm || (parseFloat(heroRadiusValue || "0") || null),
+    radiusMiles: heroNearState?.radiusMiles || (parseFloat(heroRadiusValue || "0") ? kmToMiles(parseFloat(heroRadiusValue || "0")) : null),
     filters: heroFilters
   }, "homepage_search");
   if (currentTab === "rent") {
@@ -36696,6 +36743,9 @@ function doSearch() {
     const rMax = document.getElementById("rent-price-f");
     const rMin = document.getElementById("rent-min-price-f");
     const rType = document.getElementById("rent-type-f");
+    const rBaths = document.getElementById("rent-baths-f");
+    const rAmenity = document.getElementById("rent-amenity-f");
+    const rSort = document.getElementById("rent-sort-f");
     if (rq) rq.value = document.getElementById("hero-q").value || "";
     if (rd) rd.value = areaOrUni;
     if (rr) rr.value = routedRadiusValue;
@@ -36703,6 +36753,9 @@ function doSearch() {
     if (rMin) rMin.value = heroFilters.minPrice ? String(heroFilters.minPrice) : "";
     if (rMax) rMax.value = heroFilters.maxPrice ? String(heroFilters.maxPrice) : "";
     if (rType) rType.value = heroFilters.bedrooms === "studio" ? "studio" : heroFilters.propertyType;
+    if (rBaths) rBaths.value = heroFilters.bathrooms ? String(heroFilters.bathrooms) : "";
+    if (rAmenity) rAmenity.value = heroFilters.amenities || "";
+    if (rSort) rSort.value = heroFilters.sort || "newest";
     filterListings("rent");
   } else if (currentTab === "students") {
     const sq = document.getElementById("student-q-f");
@@ -36710,11 +36763,13 @@ function doSearch() {
     const sr = document.getElementById("student-radius-f");
     const stQuick = document.getElementById("student-type-quick-f");
     const sbudget = document.getElementById("student-budget-f");
+    const sSort = document.getElementById("student-sort-f");
     if (sq) sq.value = document.getElementById("hero-q").value || "";
     if (su) su.value = areaOrUni;
     if (sr) sr.value = routedRadiusValue;
     if (stQuick) stQuick.value = heroFilters.propertyType === "hostel" || heroFilters.propertyType === "room" || heroFilters.propertyType === "studio" || heroFilters.propertyType === "apartment" ? heroFilters.propertyType : "";
     if (sbudget) sbudget.value = heroFilters.maxPrice ? String(heroFilters.maxPrice) : "";
+    if (sSort) sSort.value = heroFilters.sort || "newest";
     filterStudents();
   } else if (currentTab === "commercial") {
     const cq = document.getElementById("commercial-q-f");
@@ -36723,6 +36778,7 @@ function doSearch() {
     const ct = document.getElementById("commercial-type-f");
     const cMin = document.getElementById("commercial-min-price-f");
     const cMax = document.getElementById("commercial-price-f");
+    const cSort = document.getElementById("commercial-sort-f");
     const commercialTypeMap = { office: "Office", retail: "Retail", warehouse: "Warehouse", shop: "Shop" };
     if (cq) cq.value = document.getElementById("hero-q").value || "";
     if (cd) cd.value = areaOrUni;
@@ -36730,6 +36786,7 @@ function doSearch() {
     if (ct) ct.value = commercialTypeMap[heroFilters.propertyType] || (heroFilters.propertyType === "commercial space" ? "" : "");
     if (cMin) cMin.value = heroFilters.minPrice ? String(heroFilters.minPrice) : "";
     if (cMax) cMax.value = heroFilters.maxPrice ? String(heroFilters.maxPrice) : "";
+    if (cSort) cSort.value = heroFilters.sort || "newest";
     filterCommercial();
   } else if (currentTab === "land") {
     const lq = document.getElementById("land-q-f");
@@ -36738,6 +36795,7 @@ function doSearch() {
     const lt = document.getElementById("land-type-f");
     const lMin = document.getElementById("land-min-price-f");
     const lMax = document.getElementById("land-price-f");
+    const lSort = document.getElementById("land-sort-f");
     const landTypeMap = { residential: "Residential", commercial: "Commercial", agricultural: "Agricultural" };
     if (lq) lq.value = document.getElementById("hero-q").value || "";
     if (ld) ld.value = areaOrUni;
@@ -36745,6 +36803,7 @@ function doSearch() {
     if (lt) lt.value = landTypeMap[heroFilters.propertyType] || "";
     if (lMin) lMin.value = heroFilters.minPrice ? String(heroFilters.minPrice) : "";
     if (lMax) lMax.value = heroFilters.maxPrice ? String(heroFilters.maxPrice) : "";
+    if (lSort) lSort.value = heroFilters.sort || "newest";
     filterLand();
   } else {
     const sq = document.getElementById("sale-location-f");
@@ -36754,6 +36813,9 @@ function doSearch() {
     const sMin = document.getElementById("sale-min-price-f");
     const sMax = document.getElementById("sale-price-f");
     const sType = document.getElementById("sale-type-f");
+    const saleBaths = document.getElementById("sale-baths-f");
+    const saleAmenity = document.getElementById("sale-amenity-f");
+    const saleSort = document.getElementById("sale-sort-f");
     if (sq) sq.value = document.getElementById("hero-q").value || "";
     if (sd) sd.value = areaOrUni;
     if (sr) sr.value = routedRadiusValue;
@@ -36761,6 +36823,9 @@ function doSearch() {
     if (sMin) sMin.value = heroFilters.minPrice ? String(heroFilters.minPrice) : "";
     if (sMax) sMax.value = heroFilters.maxPrice ? String(heroFilters.maxPrice) : "";
     if (sType) sType.value = heroFilters.bedrooms === "studio" ? "studio" : heroFilters.propertyType;
+    if (saleBaths) saleBaths.value = heroFilters.bathrooms ? String(heroFilters.bathrooms) : "";
+    if (saleAmenity) saleAmenity.value = heroFilters.amenities || "";
+    if (saleSort) saleSort.value = heroFilters.sort || "newest";
     filterListings("sale");
   }
   toast(`Found ${results.length} properties`);
@@ -36770,8 +36835,9 @@ function doSearch() {
     district_or_university: areaOrUni || "",
     filters: heroFilters,
     results_count: results.length,
+    radius_km: heroNearState?.radiusKm || null,
     radius_miles: heroNearState?.radiusMiles || null,
-    radius_unit: heroNearState ? "miles" : null,
+    radius_unit: heroNearState ? "km" : null,
     search_source: heroNearState ? "homepage_location_control" : "homepage_search",
     near_me: Boolean(heroNearState)
   });
@@ -36787,14 +36853,36 @@ function publicListingFilterValue(id) {
   return String(document.getElementById(id)?.value || "").trim();
 }
 
+function publicListingFilterText(property) {
+  const extraText = property?.extra_fields && typeof property.extra_fields === "object"
+    ? JSON.stringify(property.extra_fields)
+    : "";
+  return [
+    getPropertySearchText(property),
+    Array.isArray(property?.amenities) ? property.amenities.join(" ") : "",
+    extraText
+  ].join(" ").toLowerCase();
+}
+
+function publicListingMatchesFurnishing(text, value) {
+  const wanted = String(value || "").toLowerCase().trim();
+  if (!wanted) return true;
+  const hasUnfurnished = /\bunfurnished\b|\bnot furnished\b|\bwithout furniture\b/.test(text);
+  const hasFurnished = /\bfurnished\b|\bfully furnished\b|\bsemi furnished\b/.test(text) && !hasUnfurnished;
+  if (wanted === "furnished") return hasFurnished;
+  if (wanted === "unfurnished") return hasUnfurnished;
+  return true;
+}
+
 function hasActiveListingFilter(page) {
   const key = page === "rent" ? "rent" : "sale";
   const fieldIds = key === "rent"
-    ? ["rent-location-f", "rent-district-f", "rent-min-price-f", "rent-price-f", "rent-min-beds-f", "rent-beds-f", "rent-type-f"]
-    : ["sale-location-f", "sale-district-f", "sale-min-price-f", "sale-price-f", "sale-min-beds-f", "sale-beds-f", "sale-type-f"];
+    ? ["rent-location-f", "rent-district-f", "rent-min-price-f", "rent-price-f", "rent-min-beds-f", "rent-beds-f", "rent-type-f", "rent-baths-f", "rent-furnished-f", "rent-amenity-f"]
+    : ["sale-location-f", "sale-district-f", "sale-min-price-f", "sale-price-f", "sale-min-beds-f", "sale-beds-f", "sale-type-f", "sale-baths-f", "sale-title-f", "sale-amenity-f"];
   const hasFieldFilter = fieldIds.some((id) => publicListingFilterValue(id));
+  const sortValue = publicListingFilterValue(`${key}-sort-f`);
   const radiusKm = getRadiusKmFromSelect(`${key}-radius-f`);
-  return hasFieldFilter || radiusKm > 0 || Boolean(getNearMeSearchState(key));
+  return hasFieldFilter || radiusKm > 0 || Boolean(getNearMeSearchState(key)) || Boolean(sortValue && sortValue !== "newest");
 }
 
 function filterListings(page, options = {}) {
@@ -36810,17 +36898,27 @@ function filterListings(page, options = {}) {
     const min = parseInt(document.getElementById("sale-min-price-f")?.value || "0", 10);
     const max = parseInt(document.getElementById("sale-price-f")?.value || "0", 10);
     const type = (document.getElementById("sale-type-f")?.value || "").toLowerCase().trim();
+    const minBaths = parseInt(document.getElementById("sale-baths-f")?.value || "0", 10);
+    const titleType = (document.getElementById("sale-title-f")?.value || "").toLowerCase().trim();
+    const amenity = (document.getElementById("sale-amenity-f")?.value || "").toLowerCase().trim();
+    const sort = document.getElementById("sale-sort-f")?.value || "newest";
     list = list.filter((p) => {
-      const text = getPropertySearchText(p);
+      const text = publicListingFilterText(p);
       const qMatch = !q || text.includes(q);
       const dMatch = nearState ? propertyMatchesNearMe(p, nearState, radiusKm || nearState.radiusKm) : matchDistrictRadius(p, d, radiusKm);
       const minBedsMatch = !minBeds || (p.beds || 0) >= minBeds;
       const maxBedsMatch = !maxBeds || (p.beds || 0) <= maxBeds;
+      const minBathsMatch = !minBaths || Number(p.baths || p.bathrooms || 0) >= minBaths;
       const minMatch = !min || p.price >= min;
       const maxMatch = !max || p.price <= max;
       const typeMatch = !type || ((p.subtype || "").toLowerCase().includes(type) || text.includes(type));
-      return qMatch && dMatch && minBedsMatch && maxBedsMatch && minMatch && maxMatch && typeMatch;
+      const titleMatch = !titleType || text.includes(titleType);
+      const amenityMatch = !amenity || text.includes(amenity);
+      return qMatch && dMatch && minBedsMatch && maxBedsMatch && minBathsMatch && minMatch && maxMatch && typeMatch && titleMatch && amenityMatch;
     });
+    if (sort === "price_asc") list.sort((a, b) => a.price - b.price);
+    if (sort === "price_desc") list.sort((a, b) => b.price - a.price);
+    if (sort === "newest") list.sort(sortListingsByNewest);
     list = decorateAndSortNearMeResults(list, nearState);
     const filtered = hasActivePublicCategoryFilter("sale");
     const routeSearch = publicCategoryHasRouteSearch("sale");
@@ -36842,17 +36940,23 @@ function filterListings(page, options = {}) {
     const min = parseInt(document.getElementById("rent-min-price-f")?.value || "0", 10);
     const max = parseInt(document.getElementById("rent-price-f")?.value || "0", 10);
     const type = (document.getElementById("rent-type-f")?.value || "").toLowerCase().trim();
+    const minBaths = parseInt(document.getElementById("rent-baths-f")?.value || "0", 10);
+    const furnishing = (document.getElementById("rent-furnished-f")?.value || "").toLowerCase().trim();
+    const amenity = (document.getElementById("rent-amenity-f")?.value || "").toLowerCase().trim();
     const sort = document.getElementById("rent-sort-f")?.value || "newest";
     list = list.filter((p) => {
-      const text = getPropertySearchText(p);
+      const text = publicListingFilterText(p);
       const qMatch = !q || text.includes(q);
       const dMatch = nearState ? propertyMatchesNearMe(p, nearState, radiusKm || nearState.radiusKm) : matchDistrictRadius(p, d, radiusKm);
       const minBedsMatch = !minBeds || (p.beds || 0) >= minBeds;
       const maxBedsMatch = !maxBeds || (p.beds || 0) <= maxBeds;
+      const minBathsMatch = !minBaths || Number(p.baths || p.bathrooms || 0) >= minBaths;
       const minMatch = !min || p.price >= min;
       const maxMatch = !max || p.price <= max;
       const typeMatch = !type || ((p.subtype || "").toLowerCase().includes(type) || text.includes(type));
-      return qMatch && dMatch && minBedsMatch && maxBedsMatch && minMatch && maxMatch && typeMatch;
+      const furnishingMatch = publicListingMatchesFurnishing(text, furnishing);
+      const amenityMatch = !amenity || text.includes(amenity);
+      return qMatch && dMatch && minBedsMatch && maxBedsMatch && minBathsMatch && minMatch && maxMatch && typeMatch && furnishingMatch && amenityMatch;
     });
     if (sort === "price_asc") list.sort((a, b) => a.price - b.price);
     if (sort === "price_desc") list.sort((a, b) => b.price - a.price);
@@ -36884,9 +36988,10 @@ function filterStudents(options = {}) {
   const verifiedOnly = document.getElementById("student-verified-f")?.value === "1";
   const sort = document.getElementById("student-sort-f")?.value || "newest";
   const max = parseInt(document.getElementById("student-budget-f")?.value || "0", 10);
+  const maxDistance = parseFloat(document.getElementById("student-distance-f")?.value || "0");
   let list = getPublicListings().filter((p) => isStudentDiscoverable(p));
   list = list.filter((p) => {
-    const text = getPropertySearchText(p);
+    const text = publicListingFilterText(p);
     const pType = studentTypeKey(p);
     const nearCampus = typeof p.distance_to_uni_km === "number" ? p.distance_to_uni_km <= 2 : false;
     const uniMatchText = (p.nearest_university || "").toLowerCase() + " " + (p.student_universities || []).join(" ").toLowerCase();
@@ -36903,7 +37008,8 @@ function filterStudents(options = {}) {
       || (category === "near" && nearCampus);
     const vMatch = !verifiedOnly || !!p.student_verified || !!p.students_welcome;
     const maxMatch = !max || p.price <= max;
-    return typeMatch && qMatch && dMatch && uMatch && aMatch && cMatch && vMatch && maxMatch;
+    const distanceMatch = !maxDistance || (typeof p.distance_to_uni_km === "number" && p.distance_to_uni_km <= maxDistance);
+    return typeMatch && qMatch && dMatch && uMatch && aMatch && cMatch && vMatch && maxMatch && distanceMatch;
   });
   if (sort === "price_asc") list.sort((a, b) => a.price - b.price);
   if (sort === "price_desc") list.sort((a, b) => b.price - a.price);
@@ -40939,10 +41045,11 @@ function filterCommercial(options = {}) {
   const min = parseInt(document.getElementById("commercial-min-price-f")?.value || "0", 10);
   const max = parseInt(document.getElementById("commercial-price-f")?.value || "0", 10);
   const minSize = parseFloat(document.getElementById("commercial-size-f")?.value || "0");
+  const maxSize = parseFloat(document.getElementById("commercial-max-size-f")?.value || "0");
   const sort = document.getElementById("commercial-sort-f")?.value || "newest";
   let list = getPublicListings().filter((p) => normalizeType(p.type) === "commercial");
   list = list.filter((p) => {
-    const text = getPropertySearchText(p);
+    const text = publicListingFilterText(p);
     const sizeNum = numericValue(p.size);
     const qMatch = !q || text.includes(q);
     const dMatch = nearState ? propertyMatchesNearMe(p, nearState, radiusKm || nearState.radiusKm) : matchDistrictRadius(p, d, radiusKm);
@@ -40950,7 +41057,8 @@ function filterCommercial(options = {}) {
     const minMatch = !min || p.price >= min;
     const maxMatch = !max || p.price <= max;
     const sizeMatch = !minSize || sizeNum >= minSize;
-    return qMatch && dMatch && tMatch && minMatch && maxMatch && sizeMatch;
+    const maxSizeMatch = !maxSize || sizeNum <= maxSize;
+    return qMatch && dMatch && tMatch && minMatch && maxMatch && sizeMatch && maxSizeMatch;
   });
   if (sort === "price_asc") list.sort((a, b) => a.price - b.price);
   if (sort === "price_desc") list.sort((a, b) => b.price - a.price);
@@ -40978,10 +41086,12 @@ function filterLand(options = {}) {
   const min = parseInt(document.getElementById("land-min-price-f")?.value || "0", 10);
   const max = parseInt(document.getElementById("land-price-f")?.value || "0", 10);
   const minSize = parseFloat(document.getElementById("land-min-size-f")?.value || "0");
+  const maxSize = parseFloat(document.getElementById("land-max-size-f")?.value || "0");
+  const titleType = (document.getElementById("land-title-f")?.value || "").toLowerCase().trim();
   const sort = document.getElementById("land-sort-f")?.value || "newest";
   let list = getPublicListings().filter((p) => normalizeType(p.type) === "land");
   list = list.filter((p) => {
-    const text = getPropertySearchText(p);
+    const text = publicListingFilterText(p);
     const sizeNum = numericValue(p.size);
     const qMatch = !q || text.includes(q);
     const dMatch = nearState ? propertyMatchesNearMe(p, nearState, radiusKm || nearState.radiusKm) : matchDistrictRadius(p, d, radiusKm);
@@ -40989,7 +41099,9 @@ function filterLand(options = {}) {
     const minMatch = !min || p.price >= min;
     const maxMatch = !max || p.price <= max;
     const sizeMatch = !minSize || sizeNum >= minSize;
-    return qMatch && dMatch && tMatch && minMatch && maxMatch && sizeMatch;
+    const maxSizeMatch = !maxSize || sizeNum <= maxSize;
+    const titleMatch = !titleType || text.includes(titleType);
+    return qMatch && dMatch && tMatch && minMatch && maxMatch && sizeMatch && maxSizeMatch && titleMatch;
   });
   if (sort === "price_asc") list.sort((a, b) => a.price - b.price);
   if (sort === "price_desc") list.sort((a, b) => b.price - a.price);

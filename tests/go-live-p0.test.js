@@ -1047,7 +1047,7 @@ function run() {
   assert(clickProbeScript.includes("window.google.maps.event.trigger(candidate, 'click')"), 'click probe should trigger Google marker click handlers directly');
   assert(frontendSource.includes('id="hero-location-control"'), 'homepage should include compact Location control');
   assert(frontendSource.includes('aria-label="Use location search"'), 'homepage Location control should be accessible');
-  assert(frontendSource.includes('Location search uses a 10 mile radius by default.'), 'homepage Location helper should explain the default radius');
+  assert(frontendSource.includes('Location search uses a 10 km radius by default.'), 'homepage Location helper should explain the default radius in local units');
   assert(frontendSource.includes('City, area, suburb or landmark'), 'homepage search input should support city, area, suburb, or landmark');
   assert(!frontendSource.includes('id="hero-use-location-btn"'), 'homepage should not keep the old bulky Use my location button');
   assert(frontendSource.includes('id="hero-filter-row"'), 'homepage should render the lower filter row');
@@ -1074,8 +1074,8 @@ function run() {
   assert(frontendSource.includes('setFilter("landTitleType", "land_title_type", filters.landTitleType)'), 'homepage land searches should send landTitleType to the backend');
   assert(!frontendSource.includes('Manual area, radius, and property filters stay active.'), 'homepage advanced filters should not show the removed manual/radius helper copy');
   assert(frontendSource.includes('No exact matches yet.'), 'search no-results state should use the required launch copy');
-  assert(frontendSource.includes('DEFAULT_NEAR_ME_RADIUS_MI = 10'), 'near-me search should default to 10 miles');
-  assert(frontendSource.includes('SEARCH_RADIUS_MI_OPTIONS = [0, 0.25, 0.5, 1, 3, 5, 10, 15, 20, 30, 40, 50]'), 'radius selector should preserve the detailed mile options');
+  assert(frontendSource.includes('DEFAULT_NEAR_ME_RADIUS_KM = 10'), 'public near-me search should default to 10 km');
+  assert(frontendSource.includes('SEARCH_RADIUS_KM_OPTIONS = [0, 1, 2, 5, 10, 15, 20, 30, 50, 75]'), 'public radius selector should use kilometre options');
   assert(frontendSource.includes('routedRadiusValue'), 'homepage near-me search should preserve radius when routing to category pages');
   assert(frontendSource.includes('HERO_SEARCH_HANDOFF_KEY'), 'homepage near-me search should persist search state across sanitized public route navigation');
   assert(frontendSource.includes('applyHeroSearchHandoff(publicRoutePage)'), 'public route loader should restore hero search handoff state');
