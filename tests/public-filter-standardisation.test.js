@@ -18,14 +18,23 @@ assert(serverJs.includes(marker), "server should append the public filter standa
   "student-sort-f",
   "commercial-sort-f",
   "land-sort-f",
+  "sale-min-price-custom-f",
+  "sale-max-price-custom-f",
   "sale-baths-f",
   "sale-title-f",
   "sale-amenity-f",
+  "rent-min-price-custom-f",
+  "rent-max-price-custom-f",
   "rent-baths-f",
   "rent-furnished-f",
   "rent-amenity-f",
+  "student-budget-custom-f",
   "student-distance-f",
+  "commercial-min-price-custom-f",
+  "commercial-max-price-custom-f",
   "commercial-max-size-f",
+  "land-min-price-custom-f",
+  "land-max-price-custom-f",
   "land-max-size-f",
   "land-title-f"
 ].forEach((id) => {
@@ -76,6 +85,11 @@ assert(
 
 assert(
   appJs.includes('const minBaths = parseInt(document.getElementById("sale-baths-f")?.value || "0", 10)')
+    && appJs.includes('publicListingFilterNumber("sale-min-price-custom-f") || parseInt(document.getElementById("sale-min-price-f")?.value || "0", 10)')
+    && appJs.includes('publicListingFilterNumber("rent-max-price-custom-f") || parseInt(document.getElementById("rent-price-f")?.value || "0", 10)')
+    && appJs.includes('publicListingFilterNumber("student-budget-custom-f") || parseInt(document.getElementById("student-budget-f")?.value || "0", 10)')
+    && appJs.includes('publicListingFilterNumber("commercial-min-price-custom-f") || parseInt(document.getElementById("commercial-min-price-f")?.value || "0", 10)')
+    && appJs.includes('publicListingFilterNumber("land-max-price-custom-f") || parseInt(document.getElementById("land-price-f")?.value || "0", 10)')
     && appJs.includes('const furnishing = (document.getElementById("rent-furnished-f")?.value || "").toLowerCase().trim()')
     && appJs.includes('const maxDistance = parseFloat(document.getElementById("student-distance-f")?.value || "0")')
     && appJs.includes('const maxSize = parseFloat(document.getElementById("commercial-max-size-f")?.value || "0")')

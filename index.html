@@ -1860,7 +1860,9 @@
             </button>
           </div>
 
-          <div class="mt-2 grid grid-cols-1 md:grid-cols-3 gap-2">
+          <div class="mt-2 grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-2">
+            <input id="sale-min-price-custom-f" type="number" min="0" step="5000000" oninput="filterListings('sale')" placeholder="Custom min UGX" class="h-10 rounded-lg border border-white/20 bg-green-950/50 text-white placeholder:text-green-100/70 px-3 text-sm outline-none focus:ring-2 focus:ring-green-400/40">
+            <input id="sale-max-price-custom-f" type="number" min="0" step="5000000" oninput="filterListings('sale')" placeholder="Custom max UGX" class="h-10 rounded-lg border border-white/20 bg-green-950/50 text-white placeholder:text-green-100/70 px-3 text-sm outline-none focus:ring-2 focus:ring-green-400/40">
             <select id="sale-baths-f" onchange="filterListings('sale')" class="h-10 rounded-lg border border-white/20 bg-green-950/50 text-white px-3 text-sm outline-none focus:ring-2 focus:ring-green-400/40">
               <option value="">Min Bathrooms</option>
               <option value="1">1+</option>
@@ -1997,7 +1999,9 @@
             <button onclick="filterListings('rent')" class="h-11 px-5 rounded-xl bg-white text-blue-900 font-semibold text-sm hover:bg-blue-50 transition-colors"><i class="fas fa-search mr-1.5"></i>Search</button>
             <button id="rent-use-location-btn" type="button" onclick="applyNearMe('rent')" class="h-11 px-4 rounded-xl border border-white/40 text-white font-semibold text-sm hover:bg-white/10 transition-colors"><i class="fas fa-location-crosshairs mr-1.5"></i>Use my location (10 km)</button>
           </div>
-          <div class="mt-2 grid grid-cols-1 md:grid-cols-3 gap-2">
+          <div class="mt-2 grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-2">
+            <input id="rent-min-price-custom-f" type="number" min="0" step="100000" oninput="filterListings('rent')" placeholder="Custom min UGX" class="h-10 rounded-lg border border-white/20 bg-blue-950/50 text-white placeholder:text-blue-100/70 px-3 text-sm outline-none focus:ring-2 focus:ring-blue-400/40">
+            <input id="rent-max-price-custom-f" type="number" min="0" step="100000" oninput="filterListings('rent')" placeholder="Custom max UGX" class="h-10 rounded-lg border border-white/20 bg-blue-950/50 text-white placeholder:text-blue-100/70 px-3 text-sm outline-none focus:ring-2 focus:ring-blue-400/40">
             <select id="rent-baths-f" onchange="filterListings('rent')" class="h-10 rounded-lg border border-white/20 bg-blue-950/50 text-white px-3 text-sm outline-none focus:ring-2 focus:ring-blue-400/40">
               <option value="">Min Bathrooms</option>
               <option value="1">1+</option>
@@ -2134,6 +2138,7 @@
           </div>
           <div class="mt-2 flex justify-end gap-2 flex-wrap">
             <button id="student-verified-btn" onclick="toggleStudentVerified()" class="h-10 px-4 rounded-lg bg-white text-purple-900 text-sm font-semibold border border-white/30">⚡ Verified</button>
+            <input id="student-budget-custom-f" type="number" min="0" step="50000" oninput="filterStudents()" placeholder="Custom max UGX" class="h-10 rounded-lg border border-white/20 bg-purple-950/50 text-white placeholder:text-purple-100/70 px-3 text-sm outline-none focus:ring-2 focus:ring-purple-400/40">
             <select id="student-distance-f" onchange="filterStudents()" class="h-10 rounded-lg border border-white/20 bg-purple-950/50 text-white px-3 text-sm outline-none focus:ring-2 focus:ring-purple-400/40">
               <option value="">Distance to campus</option>
               <option value="1">Within 1 km</option>
@@ -2257,8 +2262,10 @@
             <button onclick="filterCommercial()" class="h-11 px-5 rounded-xl bg-white text-amber-900 font-semibold text-sm hover:bg-amber-50 transition-colors"><i class="fas fa-search mr-1.5"></i>Search</button>
             <button id="commercial-use-location-btn" type="button" onclick="applyNearMe('commercial')" class="h-11 px-4 rounded-xl border border-white/40 text-white font-semibold text-sm hover:bg-white/10 transition-colors"><i class="fas fa-location-crosshairs mr-1.5"></i>Use my location (10 km)</button>
           </div>
-          <div class="mt-2 flex justify-end">
-            <select id="commercial-max-size-f" onchange="filterCommercial()" class="mr-2 h-10 rounded-lg border border-white/20 bg-amber-900/30 text-white px-3 text-sm outline-none focus:ring-2 focus:ring-amber-300/40">
+          <div class="mt-2 grid grid-cols-1 md:grid-cols-4 gap-2">
+            <input id="commercial-min-price-custom-f" type="number" min="0" step="500000" oninput="filterCommercial()" placeholder="Custom min UGX" class="h-10 rounded-lg border border-white/20 bg-amber-900/30 text-white placeholder:text-amber-100/70 px-3 text-sm outline-none focus:ring-2 focus:ring-amber-300/40">
+            <input id="commercial-max-price-custom-f" type="number" min="0" step="500000" oninput="filterCommercial()" placeholder="Custom max UGX" class="h-10 rounded-lg border border-white/20 bg-amber-900/30 text-white placeholder:text-amber-100/70 px-3 text-sm outline-none focus:ring-2 focus:ring-amber-300/40">
+            <select id="commercial-max-size-f" onchange="filterCommercial()" class="h-10 rounded-lg border border-white/20 bg-amber-900/30 text-white px-3 text-sm outline-none focus:ring-2 focus:ring-amber-300/40">
               <option value="">Max Area (sqm)</option>
               <option value="100">100</option>
               <option value="300">300</option>
@@ -2365,8 +2372,10 @@
             <button onclick="filterLand()" class="h-11 px-5 rounded-xl bg-white text-emerald-900 font-semibold text-sm hover:bg-emerald-50 transition-colors"><i class="fas fa-search mr-1.5"></i>Search</button>
             <button id="land-use-location-btn" type="button" onclick="applyNearMe('land')" class="h-11 px-4 rounded-xl border border-white/40 text-white font-semibold text-sm hover:bg-white/10 transition-colors"><i class="fas fa-location-crosshairs mr-1.5"></i>Use my location (10 km)</button>
           </div>
-          <div class="mt-2 flex justify-end">
-            <select id="land-max-size-f" onchange="filterLand()" class="mr-2 h-10 rounded-lg border border-white/20 bg-emerald-950/40 text-white px-3 text-sm outline-none focus:ring-2 focus:ring-emerald-400/40">
+          <div class="mt-2 grid grid-cols-1 md:grid-cols-5 gap-2">
+            <input id="land-min-price-custom-f" type="number" min="0" step="5000000" oninput="filterLand()" placeholder="Custom min UGX" class="h-10 rounded-lg border border-white/20 bg-emerald-950/40 text-white placeholder:text-emerald-100/70 px-3 text-sm outline-none focus:ring-2 focus:ring-emerald-400/40">
+            <input id="land-max-price-custom-f" type="number" min="0" step="5000000" oninput="filterLand()" placeholder="Custom max UGX" class="h-10 rounded-lg border border-white/20 bg-emerald-950/40 text-white placeholder:text-emerald-100/70 px-3 text-sm outline-none focus:ring-2 focus:ring-emerald-400/40">
+            <select id="land-max-size-f" onchange="filterLand()" class="h-10 rounded-lg border border-white/20 bg-emerald-950/40 text-white px-3 text-sm outline-none focus:ring-2 focus:ring-emerald-400/40">
               <option value="">Max Acres</option>
               <option value="0.25">0.25</option>
               <option value="0.5">0.5</option>
@@ -2374,7 +2383,7 @@
               <option value="5">5</option>
               <option value="10">10</option>
             </select>
-            <select id="land-title-f" onchange="filterLand()" class="mr-2 h-10 rounded-lg border border-white/20 bg-emerald-950/40 text-white px-3 text-sm outline-none focus:ring-2 focus:ring-emerald-400/40">
+            <select id="land-title-f" onchange="filterLand()" class="h-10 rounded-lg border border-white/20 bg-emerald-950/40 text-white px-3 text-sm outline-none focus:ring-2 focus:ring-emerald-400/40">
               <option value="">Title Type</option>
               <option value="mailo">Mailo</option>
               <option value="freehold">Freehold</option>

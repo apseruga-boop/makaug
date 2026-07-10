@@ -35432,21 +35432,21 @@ function hasActivePublicCategoryFilter(category) {
   const key = publicPaginationKey(category);
   if (key === "sale" || key === "rent") return hasActiveListingFilter(key);
   if (key === "students") {
-    const fieldIds = ["student-q-f", "student-district-f", "student-type-quick-f", "student-budget-f", "student-uni-f", "student-amenity-f", "student-category-f", "student-distance-f"];
+    const fieldIds = ["student-q-f", "student-district-f", "student-type-quick-f", "student-budget-f", "student-budget-custom-f", "student-uni-f", "student-amenity-f", "student-category-f", "student-distance-f"];
     return fieldIds.some((id) => publicListingFilterValue(id))
       || getRadiusKmFromSelect("student-radius-f") > 0
       || Boolean(getNearMeSearchState("students"))
       || Boolean(publicListingFilterValue("student-sort-f") && publicListingFilterValue("student-sort-f") !== "newest");
   }
   if (key === "commercial") {
-    const fieldIds = ["commercial-q-f", "commercial-district-f", "commercial-type-f", "commercial-min-price-f", "commercial-price-f", "commercial-size-f", "commercial-max-size-f"];
+    const fieldIds = ["commercial-q-f", "commercial-district-f", "commercial-type-f", "commercial-min-price-f", "commercial-price-f", "commercial-min-price-custom-f", "commercial-max-price-custom-f", "commercial-size-f", "commercial-max-size-f"];
     return fieldIds.some((id) => publicListingFilterValue(id))
       || getRadiusKmFromSelect("commercial-radius-f") > 0
       || Boolean(getNearMeSearchState("commercial"))
       || Boolean(publicListingFilterValue("commercial-sort-f") && publicListingFilterValue("commercial-sort-f") !== "newest");
   }
   if (key === "land") {
-    const fieldIds = ["land-q-f", "land-district-f", "land-type-f", "land-min-price-f", "land-price-f", "land-min-size-f", "land-max-size-f", "land-title-f"];
+    const fieldIds = ["land-q-f", "land-district-f", "land-type-f", "land-min-price-f", "land-price-f", "land-min-price-custom-f", "land-max-price-custom-f", "land-min-size-f", "land-max-size-f", "land-title-f"];
     return fieldIds.some((id) => publicListingFilterValue(id))
       || getRadiusKmFromSelect("land-radius-f") > 0
       || Boolean(getNearMeSearchState("land"))
@@ -36853,6 +36853,11 @@ function publicListingFilterValue(id) {
   return String(document.getElementById(id)?.value || "").trim();
 }
 
+function publicListingFilterNumber(id) {
+  const value = Number(publicListingFilterValue(id));
+  return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
 function publicListingFilterText(property) {
   const extraText = property?.extra_fields && typeof property.extra_fields === "object"
     ? JSON.stringify(property.extra_fields)
@@ -36877,8 +36882,8 @@ function publicListingMatchesFurnishing(text, value) {
 function hasActiveListingFilter(page) {
   const key = page === "rent" ? "rent" : "sale";
   const fieldIds = key === "rent"
-    ? ["rent-location-f", "rent-district-f", "rent-min-price-f", "rent-price-f", "rent-min-beds-f", "rent-beds-f", "rent-type-f", "rent-baths-f", "rent-furnished-f", "rent-amenity-f"]
-    : ["sale-location-f", "sale-district-f", "sale-min-price-f", "sale-price-f", "sale-min-beds-f", "sale-beds-f", "sale-type-f", "sale-baths-f", "sale-title-f", "sale-amenity-f"];
+    ? ["rent-location-f", "rent-district-f", "rent-min-price-f", "rent-price-f", "rent-min-price-custom-f", "rent-max-price-custom-f", "rent-min-beds-f", "rent-beds-f", "rent-type-f", "rent-baths-f", "rent-furnished-f", "rent-amenity-f"]
+    : ["sale-location-f", "sale-district-f", "sale-min-price-f", "sale-price-f", "sale-min-price-custom-f", "sale-max-price-custom-f", "sale-min-beds-f", "sale-beds-f", "sale-type-f", "sale-baths-f", "sale-title-f", "sale-amenity-f"];
   const hasFieldFilter = fieldIds.some((id) => publicListingFilterValue(id));
   const sortValue = publicListingFilterValue(`${key}-sort-f`);
   const radiusKm = getRadiusKmFromSelect(`${key}-radius-f`);
@@ -36895,8 +36900,8 @@ function filterListings(page, options = {}) {
     const nearState = getNearMeSearchState("sale");
     const minBeds = parseInt(document.getElementById("sale-min-beds-f")?.value || "0", 10);
     const maxBeds = parseInt(document.getElementById("sale-beds-f")?.value || "0", 10);
-    const min = parseInt(document.getElementById("sale-min-price-f")?.value || "0", 10);
-    const max = parseInt(document.getElementById("sale-price-f")?.value || "0", 10);
+    const min = publicListingFilterNumber("sale-min-price-custom-f") || parseInt(document.getElementById("sale-min-price-f")?.value || "0", 10);
+    const max = publicListingFilterNumber("sale-max-price-custom-f") || parseInt(document.getElementById("sale-price-f")?.value || "0", 10);
     const type = (document.getElementById("sale-type-f")?.value || "").toLowerCase().trim();
     const minBaths = parseInt(document.getElementById("sale-baths-f")?.value || "0", 10);
     const titleType = (document.getElementById("sale-title-f")?.value || "").toLowerCase().trim();
@@ -36937,8 +36942,8 @@ function filterListings(page, options = {}) {
     const nearState = getNearMeSearchState("rent");
     const minBeds = parseInt(document.getElementById("rent-min-beds-f")?.value || "0", 10);
     const maxBeds = parseInt(document.getElementById("rent-beds-f")?.value || "0", 10);
-    const min = parseInt(document.getElementById("rent-min-price-f")?.value || "0", 10);
-    const max = parseInt(document.getElementById("rent-price-f")?.value || "0", 10);
+    const min = publicListingFilterNumber("rent-min-price-custom-f") || parseInt(document.getElementById("rent-min-price-f")?.value || "0", 10);
+    const max = publicListingFilterNumber("rent-max-price-custom-f") || parseInt(document.getElementById("rent-price-f")?.value || "0", 10);
     const type = (document.getElementById("rent-type-f")?.value || "").toLowerCase().trim();
     const minBaths = parseInt(document.getElementById("rent-baths-f")?.value || "0", 10);
     const furnishing = (document.getElementById("rent-furnished-f")?.value || "").toLowerCase().trim();
@@ -36987,7 +36992,7 @@ function filterStudents(options = {}) {
   const category = (document.getElementById("student-category-f")?.value || "").toLowerCase().trim();
   const verifiedOnly = document.getElementById("student-verified-f")?.value === "1";
   const sort = document.getElementById("student-sort-f")?.value || "newest";
-  const max = parseInt(document.getElementById("student-budget-f")?.value || "0", 10);
+  const max = publicListingFilterNumber("student-budget-custom-f") || parseInt(document.getElementById("student-budget-f")?.value || "0", 10);
   const maxDistance = parseFloat(document.getElementById("student-distance-f")?.value || "0");
   let list = getPublicListings().filter((p) => isStudentDiscoverable(p));
   list = list.filter((p) => {
@@ -41042,8 +41047,8 @@ function filterCommercial(options = {}) {
   const radiusKm = getRadiusKmFromSelect("commercial-radius-f");
   const nearState = getNearMeSearchState("commercial");
   const type = (document.getElementById("commercial-type-f")?.value || "").toLowerCase().trim();
-  const min = parseInt(document.getElementById("commercial-min-price-f")?.value || "0", 10);
-  const max = parseInt(document.getElementById("commercial-price-f")?.value || "0", 10);
+  const min = publicListingFilterNumber("commercial-min-price-custom-f") || parseInt(document.getElementById("commercial-min-price-f")?.value || "0", 10);
+  const max = publicListingFilterNumber("commercial-max-price-custom-f") || parseInt(document.getElementById("commercial-price-f")?.value || "0", 10);
   const minSize = parseFloat(document.getElementById("commercial-size-f")?.value || "0");
   const maxSize = parseFloat(document.getElementById("commercial-max-size-f")?.value || "0");
   const sort = document.getElementById("commercial-sort-f")?.value || "newest";
@@ -41083,8 +41088,8 @@ function filterLand(options = {}) {
   const radiusKm = getRadiusKmFromSelect("land-radius-f");
   const nearState = getNearMeSearchState("land");
   const type = (document.getElementById("land-type-f")?.value || "").toLowerCase().trim();
-  const min = parseInt(document.getElementById("land-min-price-f")?.value || "0", 10);
-  const max = parseInt(document.getElementById("land-price-f")?.value || "0", 10);
+  const min = publicListingFilterNumber("land-min-price-custom-f") || parseInt(document.getElementById("land-min-price-f")?.value || "0", 10);
+  const max = publicListingFilterNumber("land-max-price-custom-f") || parseInt(document.getElementById("land-price-f")?.value || "0", 10);
   const minSize = parseFloat(document.getElementById("land-min-size-f")?.value || "0");
   const maxSize = parseFloat(document.getElementById("land-max-size-f")?.value || "0");
   const titleType = (document.getElementById("land-title-f")?.value || "").toLowerCase().trim();
