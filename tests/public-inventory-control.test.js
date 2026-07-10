@@ -456,6 +456,29 @@ test('listing detail has a mobile sticky contact bar with phone, source, and mak
   assert.match(appSource, /sourceContactUrl = foundOnlineSourceContactCtaUrl\(foundOnlineMeta\)/);
 });
 
+test('public result pages keep the map shell sticky without trapping it in a short scroll rail', () => {
+  const mapColumnCss = (htmlSource.match(/\.listing-map-col\s*\{[\s\S]*?\n\s*\}/) || [''])[0];
+  const mapShellCss = (htmlSource.match(/\.listing-map-shell\s*\{[\s\S]*?\n\s*\}/) || [''])[0];
+  const mapHeightCss = (htmlSource.match(/\.listing-map-shell \.map-h\s*\{[\s\S]*?\n\s*\}/) || [''])[0];
+  assert.match(mapColumnCss, /position:\s*relative;/, 'the right rail should stretch with the results grid instead of becoming the sticky element');
+  assert.match(mapColumnCss, /align-self:\s*stretch;/, 'the right rail should stay as tall as the listing results section');
+  assert.doesNotMatch(mapColumnCss, /overflow-y:\s*auto;/, 'the right rail must not trap the map in an internal scroll area');
+  assert.doesNotMatch(mapColumnCss, /max-height:/, 'the right rail must not end before the listing results section');
+  assert.match(mapShellCss, /position:\s*sticky;/, 'the map shell itself should be sticky');
+  assert.match(mapShellCss, /top:\s*5\.75rem;/, 'the map should pin below the public header/search chrome');
+  assert.match(mapHeightCss, /height:\s*min\(72vh,\s*calc\(100vh - 7rem\),\s*520px\);/, 'the sticky map should fill the visible side rail without running below the fold');
+  assert.match(mapHeightCss, /min-height:\s*360px;/, 'desktop maps should not collapse while sticky');
+  for (const page of ['sale', 'rent', 'students', 'commercial', 'land', 'brokers']) {
+    assert.match(
+      htmlSource,
+      new RegExp(`<div class="hidden lg:block listing-map-col">[\\s\\S]*?<div id="map-${page}" class="map-h`),
+      `${page} results page should use the shared sticky map rail`
+    );
+  }
+  assert.match(htmlSource, /public-sticky-map-rail-20260710/);
+  assert.match(serverSource, /publicStickyMapRailVersion/);
+});
+
 test('public result pages expose the full inventory and avoid black iframe media cards', () => {
   assert.match(appSource, /const PUBLIC_LISTINGS_BACKGROUND_MAX_PAGES = 80;/);
   assert.match(appSource, /const PUBLIC_LISTINGS_ROUTE_SEARCH_MAX_PAGES = 80;/);
