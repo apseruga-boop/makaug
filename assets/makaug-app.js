@@ -10445,20 +10445,36 @@ function staffReviewQueueCardHtml(item = {}, options = {}) {
     </article>`;
 }
 
-function renderStaffReviewQueue(rows = []) {
+function staffReviewQueueLoadingHtml(label = "Moderation queue is still loading. Retry the dashboard in a moment.") {
+  return `
+    <div class="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+      <div class="font-black">${adminEscape(label)}</div>
+      <div class="mt-1 text-xs">The pending count is live, but the row query did not finish. This is not an empty queue.</div>
+    </div>`;
+}
+
+function renderStaffReviewQueue(rows = [], meta = {}) {
   const wrap = document.getElementById("staff-review-queue");
   if (!wrap) return;
   if (!rows.length) {
+    if (meta?.query_ok === false || meta?.timed_out || meta?.query_error || Number(meta?.expected_count || 0) > 0) {
+      wrap.innerHTML = staffReviewQueueLoadingHtml("Listing moderation rows are still catching up.");
+      return;
+    }
     wrap.innerHTML = staffEmpty("No listings are waiting for staff review.");
     return;
   }
   wrap.innerHTML = rows.map((item) => staffReviewQueueCardHtml(item)).join("");
 }
 
-function renderStaffBrokerReviewQueue(rows = []) {
+function renderStaffBrokerReviewQueue(rows = [], meta = {}) {
   const wrap = document.getElementById("staff-broker-review-queue");
   if (!wrap) return;
   if (!rows.length) {
+    if (meta?.query_ok === false || meta?.timed_out || meta?.query_error || Number(meta?.expected_count || 0) > 0) {
+      wrap.innerHTML = staffReviewQueueLoadingHtml("Broker review rows are still catching up.");
+      return;
+    }
     wrap.innerHTML = staffEmpty("No broker listings are waiting for review.");
     return;
   }
@@ -10717,8 +10733,14 @@ function applyStaffDashboardData(data = {}, user = {}) {
     renderStaffDeferredPanelLoading();
     return;
   }
-  renderStaffBrokerReviewQueue(data.broker_review_queue || []);
-  renderStaffReviewQueue(data.review_queue || []);
+  renderStaffBrokerReviewQueue(data.broker_review_queue || [], {
+    ...(data.broker_review_queue_meta || {}),
+    expected_count: data.summary?.listings?.broker_pending_review
+  });
+  renderStaffReviewQueue(data.review_queue || [], {
+    ...(data.review_queue_meta || {}),
+    expected_count: data.summary?.listings?.pending_review
+  });
   renderStaffLeads(data.leads || []);
   renderStaffAdvertising(data.advertising_inquiries || []);
   renderStaffWhatsapp(data.whatsapp_conversations || [], data.summary?.whatsapp || {});

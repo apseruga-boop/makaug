@@ -47,7 +47,7 @@ const STAFF_DASHBOARD_QUEUE_LIMIT = 12;
 const STAFF_DASHBOARD_PANEL_LIMIT = 8;
 const STAFF_DASHBOARD_QUEUE_SCAN_LIMIT = STAFF_DASHBOARD_QUEUE_LIMIT * 20;
 const STAFF_DASHBOARD_PANEL_SCAN_LIMIT = STAFF_DASHBOARD_PANEL_LIMIT * 20;
-const STAFF_DASHBOARD_PANEL_QUERY_TIMEOUT_MS = Math.max(1000, parseInt(process.env.STAFF_DASHBOARD_PANEL_QUERY_TIMEOUT_MS || '2500', 10) || 2500);
+const STAFF_DASHBOARD_PANEL_QUERY_TIMEOUT_MS = Math.max(1000, parseInt(process.env.STAFF_DASHBOARD_PANEL_QUERY_TIMEOUT_MS || '5000', 10) || 5000);
 const STAFF_REVIEW_QUEUE_QUERY_TIMEOUT_MS = Math.max(1500, parseInt(process.env.STAFF_REVIEW_QUEUE_QUERY_TIMEOUT_MS || '4000', 10) || 4000);
 const STAFF_EXACT_SOCIAL_IMPORT_LIMIT = 500;
 const STAFF_FAST_DASHBOARD_CACHE_TTL_MS = Math.max(5000, parseInt(process.env.STAFF_FAST_DASHBOARD_CACHE_TTL_MS || '60000', 10) || 60000);
@@ -242,6 +242,10 @@ function staffActiveReviewRows(rows = [], limit = STAFF_DASHBOARD_QUEUE_LIMIT) {
   return (Array.isArray(rows) ? rows : [])
     .filter((row) => !rowSourceQualitySuppressed(row))
     .slice(0, limit);
+}
+
+function staffModerationPanelRows(rows = [], limit = STAFF_DASHBOARD_QUEUE_LIMIT) {
+  return (Array.isArray(rows) ? rows : []).slice(0, limit);
 }
 
 function staffSourceMonitorGuide() {
@@ -536,6 +540,27 @@ async function safeRows(sql, params = [], options = {}) {
       logger.warn('Staff dashboard rows query failed', { message: error.message });
     }
     return [];
+  }
+}
+
+async function safeRowsResult(sql, params = [], options = {}) {
+  try {
+    const result = await staffQuery(sql, params, options);
+    return { rows: result.rows, ok: true, error: null, timed_out: false };
+  } catch (error) {
+    if (!['42P01', '42703'].includes(error.code)) {
+      logger.warn('Staff dashboard rows query failed', {
+        label: options.label || 'staff_rows',
+        code: error.code,
+        message: error.message
+      });
+    }
+    return {
+      rows: [],
+      ok: false,
+      error: error.code || error.message || 'query_failed',
+      timed_out: error.code === '57014'
+    };
   }
 }
 
@@ -1212,9 +1237,8 @@ async function dashboardPanelsPayload(req) {
   const staffId = actorId(req);
   const queueLimit = STAFF_DASHBOARD_QUEUE_LIMIT;
   const panelLimit = STAFF_DASHBOARD_PANEL_LIMIT;
-  const queueScanLimit = Math.min(STAFF_DASHBOARD_QUEUE_SCAN_LIMIT, STAFF_DASHBOARD_QUEUE_LIMIT * 5);
   const panelQueryOptions = { timeoutMs: STAFF_DASHBOARD_PANEL_QUERY_TIMEOUT_MS };
-  const [recentActivity, reviewRows, brokerReviewRows, sourceQueueRows] = await Promise.all([
+  const [recentActivity, reviewResult, brokerReviewResult, sourceQueueRows] = await Promise.all([
     safeRows(
       `SELECT id, action, target_type, target_id, metadata, created_at
        FROM staff_activity_logs
@@ -1224,7 +1248,7 @@ async function dashboardPanelsPayload(req) {
       [staffId, panelLimit],
       panelQueryOptions
     ),
-    safeRows(
+    safeRowsResult(
       `SELECT p.id, p.title, p.description, p.listing_type, p.property_type, p.district, p.area, p.address,
               p.price, p.price_period, p.bedrooms, p.bathrooms, p.title_type,
               p.status, p.moderation_stage, p.moderation_reason, p.created_at, p.updated_at,
@@ -1236,12 +1260,12 @@ async function dashboardPanelsPayload(req) {
               NULL::text AS primary_image_url
        FROM properties p
        WHERE ${activePendingReviewWhere('p')}
-       ORDER BY COALESCE(p.updated_at, p.created_at) DESC, p.id DESC
+       ORDER BY p.updated_at DESC NULLS LAST, p.created_at DESC NULLS LAST, p.id DESC
        LIMIT $1`,
-      [queueScanLimit],
-      panelQueryOptions
+      [queueLimit],
+      { ...panelQueryOptions, label: 'staff_panel_review_queue' }
     ),
-    safeRows(
+    safeRowsResult(
       `SELECT p.id, p.title, p.description, p.listing_type, p.property_type, p.district, p.area, p.address,
               p.price, p.price_period, p.bedrooms, p.bathrooms, p.title_type,
               p.status, p.moderation_stage, p.moderation_reason, p.created_at, p.updated_at,
@@ -1254,10 +1278,10 @@ async function dashboardPanelsPayload(req) {
        FROM properties p
        WHERE ${activePendingReviewWhere('p')}
          AND ${brokerReviewWhere('p')}
-       ORDER BY COALESCE(p.updated_at, p.created_at) DESC, p.id DESC
+       ORDER BY p.updated_at DESC NULLS LAST, p.created_at DESC NULLS LAST, p.id DESC
        LIMIT $1`,
-      [queueScanLimit],
-      panelQueryOptions
+      [queueLimit],
+      { ...panelQueryOptions, label: 'staff_panel_broker_review_queue' }
     ),
     safeRows(
       `SELECT p.id, p.title, p.area, p.district, p.status, p.updated_at,
@@ -1278,12 +1302,32 @@ async function dashboardPanelsPayload(req) {
       panelQueryOptions
     )
   ]);
+  const reviewQueue = staffModerationPanelRows(reviewResult.rows, queueLimit);
+  const brokerReviewQueue = staffModerationPanelRows(brokerReviewResult.rows, queueLimit);
 
   return {
     staff: publicStaffUser(req.userAuth),
     panel_payload: true,
-    review_queue: staffActiveReviewRows(reviewRows, queueLimit),
-    broker_review_queue: staffActiveReviewRows(brokerReviewRows, queueLimit),
+    review_queue: reviewQueue,
+    review_queue_meta: {
+      count_filter: 'staff_active_pending_review',
+      source_quality_filter: 'stored_suppression_flag_only',
+      returned_count: reviewQueue.length,
+      query_ok: reviewResult.ok,
+      query_error: reviewResult.error,
+      timed_out: reviewResult.timed_out,
+      empty_is_authoritative: reviewResult.ok
+    },
+    broker_review_queue: brokerReviewQueue,
+    broker_review_queue_meta: {
+      count_filter: 'staff_active_pending_review_and_broker',
+      source_quality_filter: 'stored_suppression_flag_only',
+      returned_count: brokerReviewQueue.length,
+      query_ok: brokerReviewResult.ok,
+      query_error: brokerReviewResult.error,
+      timed_out: brokerReviewResult.timed_out,
+      empty_is_authoritative: brokerReviewResult.ok
+    },
     recent_activity: recentActivity,
     source_intake: {
       queued_found_online: staffActiveReviewRows(sourceQueueRows, panelLimit)

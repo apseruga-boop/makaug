@@ -212,6 +212,7 @@ const sourceSweepHardBudgetVersion = 'source-sweep-hard-budget-20260710';
 const staffTikTokPasteOembedVersion = 'staff-tiktok-paste-oembed-20260711';
 const reviewQueueParityVersion = 'review-queue-list-count-parity-20260711';
 const staffPanelsReviewQueueVersion = 'staff-panels-review-queue-20260711';
+const staffPanelsReviewQueueRowsVersion = 'staff-panels-review-queue-rows-20260711';
 const publicAppVersionSuffixes = [
   captureHelperUsabilityVersion,
   studentNearestUniversityVersion,
@@ -293,7 +294,8 @@ const publicAppVersionSuffixes = [
   sourceSweepHardBudgetVersion,
   staffTikTokPasteOembedVersion,
   reviewQueueParityVersion,
-  staffPanelsReviewQueueVersion
+  staffPanelsReviewQueueVersion,
+  staffPanelsReviewQueueRowsVersion
 ];
 let cachedIndexHtml = null;
 const publicHtmlCache = new Map();
