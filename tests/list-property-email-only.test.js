@@ -13,6 +13,8 @@ const whatsappRoute = read('routes/whatsapp.js');
 
 assert(html.includes('list-property-contact-id-required-20260710'), 'public app marker must identify the listing contact and ID correction');
 assert(server.includes('listPropertyContactIdRequiredVersion'), 'server must include the contact and ID correction version in the public app suffix list');
+assert(html.includes('list-property-create-fix-20260711'), 'public app marker must identify the list-property create fix');
+assert(server.includes('listPropertyCreateFixVersion'), 'server must include the list-property create fix in the public app suffix list');
 
 assert(html.includes('id="lp-otp-action-wrap" class="hidden'), 'online listing OTP controls must stay hidden from the public flow');
 assert(html.includes('No OTP is needed for online listing submission.'), 'listing form must clearly say OTP is not needed');
@@ -45,6 +47,8 @@ assert(propertiesRoute.includes('lister_phone is required for online listing con
 assert(propertiesRoute.includes('id_number is required for online listing review'), 'backend must require NIN for public online submissions');
 assert(propertiesRoute.includes('National ID photo is required. Upload a photo image; PDFs are not accepted'), 'backend must require ID photo for public online submissions');
 assert(!propertiesRoute.includes('listing_otp_token is required. Verify OTP before submit'), 'backend must not require listing OTP for public online submissions');
+assert(!/\benforceOtp\b/.test(propertiesRoute), 'backend create path must not reference the removed OTP enforcement flag');
+assert(propertiesRoute.includes('storedSubmittedImageItems.slice(0, enforceWebsiteSubmissionRules ? websiteMaxImages : 20)'), 'backend image cap must use the website submission rule, not the removed OTP flag');
 
 assert(whatsappRoute.includes("return respond(t(lang, 'askSelfie'), 'ask_selfie');"), 'WhatsApp listing flow must ask for ID photo after public name');
 assert(whatsappRoute.includes("return respond(t(lang, 'askIDNumber'), 'ask_id_number');"), 'WhatsApp listing flow must ask for NIN after ID photo');

@@ -3140,7 +3140,7 @@ router.post('/', async (req, res, next) => {
       userAgent: req.get('user-agent')
     });
 
-    const imageItems = storedSubmittedImageItems.slice(0, enforceOtp ? websiteMaxImages : 20);
+    const imageItems = storedSubmittedImageItems.slice(0, enforceWebsiteSubmissionRules ? websiteMaxImages : 20);
     const imageUrls = imageItems.map((item) => item.url);
 
     for (let i = 0; i < imageUrls.length; i += 1) {

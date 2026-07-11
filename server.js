@@ -195,6 +195,7 @@ const kingDashboardAiVisibleSummaryFixVersion = 'king-dashboard-ai-visible-summa
 const listPropertyEmailOnlyVersion = 'list-property-email-only-20260710';
 const listPropertyEmailOnlyCopyFixVersion = 'list-property-email-only-copy-fix-20260710';
 const listPropertyContactIdRequiredVersion = 'list-property-contact-id-required-20260710';
+const listPropertyCreateFixVersion = 'list-property-create-fix-20260711';
 const publicFilterStandardisationVersion = 'public-filter-standardisation-20260710';
 const mortgageLeadRoutingFixVersion = 'mortgage-lead-routing-fix-20260710';
 const mortgageFinderRedesignVersion = 'mortgage-finder-redesign-20260710';
@@ -286,6 +287,7 @@ const publicAppVersionSuffixes = [
   listPropertyEmailOnlyVersion,
   listPropertyEmailOnlyCopyFixVersion,
   listPropertyContactIdRequiredVersion,
+  listPropertyCreateFixVersion,
   publicFilterStandardisationVersion,
   mortgageLeadRoutingFixVersion,
   mortgageFinderRedesignVersion,
