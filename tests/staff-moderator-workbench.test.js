@@ -240,6 +240,8 @@ function run() {
   assert(server.includes('staff-bulk-gate-tighten-v2-20260711'), 'server should cache-bust the second-pass staff bulk-review gates');
   assert(html.includes('staff-bulk-gate-positive-20260711'), 'index should cache-bust the positive staff bulk-review gate');
   assert(server.includes('staff-bulk-gate-positive-20260711'), 'server should cache-bust the positive staff bulk-review gate');
+  assert(html.includes('staff-bulk-gate-round4-20260711'), 'index should cache-bust the round-four staff bulk-review gate');
+  assert(server.includes('staff-bulk-gate-round4-20260711'), 'server should cache-bust the round-four staff bulk-review gate');
   assert(staffRoutes.includes('function staffBulkModerationDecision'), 'staff bulk review should gate each listing server-side');
   assert(staffRoutes.includes('UGANDA_DISTRICT_SET'), 'staff bulk review should require a canonical Uganda district before approval');
   assert(staffRoutes.includes('STAFF_UGANDA_BBOX'), 'staff bulk review should geofence coordinates to Uganda before approval');
@@ -247,7 +249,9 @@ function run() {
   assert(staffRoutes.includes('owerri') && staffRoutes.includes('certificate\\s+of\\s+occupancy'), 'staff bulk review should block second-pass Nigerian location/title tokens');
   assert(staffRoutes.includes('real\\s+estate\\s+ltd') && staffRoutes.includes('ai[- ]powered'), 'staff bulk review should block company, promo, and episode rows');
   assert(sourceQuality.includes('function sourcePositiveListingGateForRecord'), 'source quality should expose a positive Uganda-property listing classifier');
-  assert(sourceQuality.includes('POSITIVE_LISTING_SIGNAL_PATTERN'), 'positive classifier should require a concrete property listing signal');
+  assert(sourceQuality.includes('POSITIVE_PROPERTY_NOUN_PATTERN'), 'positive classifier should require a concrete property noun');
+  assert(sourceQuality.includes('POSITIVE_LISTING_INTENT_WITH_NOUN_PATTERN'), 'positive classifier should require listing intent with a concrete property noun');
+  assert(sourceQuality.includes('POSITIVE_PROPERTY_COUNT_PATTERN'), 'positive classifier should accept concrete bedroom, plot, or acre counts');
   assert(sourceQuality.includes('POSITIVE_NEWS_POLITICS_PATTERN'), 'positive classifier should block news and politics clips');
   assert(sourceQuality.includes('POSITIVE_VLOG_EVENT_PATTERN'), 'positive classifier should block vlogs, events, worship nights, and generic clips');
   assert(socialSearchService.includes('sourcePositiveListingGateForItem'), 'source intake should reuse the positive listing classifier');

@@ -218,6 +218,7 @@ const staffBulkModerationVersion = 'staff-bulk-moderation-20260711';
 const staffBulkGateTightenVersion = 'staff-bulk-gate-tighten-20260711';
 const staffBulkGateTightenV2Version = 'staff-bulk-gate-tighten-v2-20260711';
 const staffBulkGatePositiveVersion = 'staff-bulk-gate-positive-20260711';
+const staffBulkGateRound4Version = 'staff-bulk-gate-round4-20260711';
 const publicAppVersionSuffixes = [
   captureHelperUsabilityVersion,
   studentNearestUniversityVersion,
@@ -305,7 +306,8 @@ const publicAppVersionSuffixes = [
   staffBulkModerationVersion,
   staffBulkGateTightenVersion,
   staffBulkGateTightenV2Version,
-  staffBulkGatePositiveVersion
+  staffBulkGatePositiveVersion,
+  staffBulkGateRound4Version
 ];
 let cachedIndexHtml = null;
 const publicHtmlCache = new Map();

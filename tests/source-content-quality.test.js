@@ -180,6 +180,30 @@ async function run() {
   assert.strictEqual(indiaHostel.ok, false, 'India hostel/university content must not pass via defaulted Uganda district');
   assert.strictEqual(indiaHostel.reason, 'non_uganda_location');
 
+  const munnarLand = sourcePositiveListingGateForRecord({
+    title: 'Land For Sale In Munnar Lakshmi Estate Viripara',
+    district: 'Kampala',
+    property_type: 'land',
+  });
+  assert.strictEqual(munnarLand.ok, false, 'Munnar/Kerala land listings must not pass via defaulted Uganda district');
+  assert.strictEqual(munnarLand.reason, 'non_uganda_location');
+
+  const southAsianLandUnit = sourcePositiveListingGateForRecord({
+    title: 'Prime Investment Opportunity 23 Decimal Residential Land',
+    district: 'Kampala',
+    property_type: 'land',
+  });
+  assert.strictEqual(southAsianLandUnit.ok, false, 'South Asian land units such as decimal must hold as foreign');
+  assert.strictEqual(southAsianLandUnit.reason, 'non_uganda_location');
+
+  const sobhaForeignDeveloper = sourcePositiveListingGateForRecord({
+    title: '413 Villas at Sobha silver estate',
+    district: 'Kampala',
+    property_type: 'villa',
+  });
+  assert.strictEqual(sobhaForeignDeveloper.ok, false, 'Sobha/Dubai-India developer rows must not pass via defaulted Uganda district');
+  assert.strictEqual(sobhaForeignDeveloper.reason, 'non_uganda_location');
+
   const richHomesExplainer = sourcePositiveListingGateForRecord({
     title: 'What Rich Homes Look Like in Uganda Serena Kigo New Rich Neighborhood',
     district: 'Wakiso',
@@ -259,6 +283,38 @@ async function run() {
   });
   assert.strictEqual(realEstateJokeShort.ok, false, 'joke/shorts content must not pass as a listing');
   assert.strictEqual(realEstateJokeShort.reason, 'not_a_listing');
+
+  const housingExpo = sourcePositiveListingGateForRecord({
+    title: 'Uganda Real Estate and Housing Expo',
+    district: 'Kampala',
+    property_type: 'property',
+  });
+  assert.strictEqual(housingExpo.ok, false, 'housing expo content must not pass as a listing');
+  assert.strictEqual(housingExpo.reason, 'not_a_listing');
+
+  const industryOverview = sourcePositiveListingGateForRecord({
+    title: "Uganda's Real Estate Industry Overview",
+    district: 'Kampala',
+    property_type: 'property',
+  });
+  assert.strictEqual(industryOverview.ok, false, 'industry overviews must not pass as listings');
+  assert.strictEqual(industryOverview.reason, 'not_a_listing');
+
+  const transformationContent = sourcePositiveListingGateForRecord({
+    title: 'Real Estate transformation in Kampala',
+    district: 'Kampala',
+    property_type: 'estate',
+  });
+  assert.strictEqual(transformationContent.ok, false, 'real-estate transformation content must not pass on estate wording alone');
+  assert.strictEqual(transformationContent.reason, 'not_a_listing');
+
+  const realEstateBusinessIdeas = sourcePositiveListingGateForRecord({
+    title: 'Sharing ideas on real estate business',
+    district: 'Kampala',
+    property_type: 'property',
+  });
+  assert.strictEqual(realEstateBusinessIdeas.ok, false, 'real-estate business idea content must not pass as a listing');
+  assert.strictEqual(realEstateBusinessIdeas.reason, 'not_a_listing');
 
   const dryBlocked = await queueFoundOnlineSourcePostListings({
     dryRun: true,
