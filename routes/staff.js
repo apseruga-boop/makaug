@@ -13,7 +13,7 @@ const {
   regionForDistrict
 } = require('../utils/ugandaLocationHierarchy');
 const { addLeadActivity } = require('../services/leadService');
-const { buildAutomatedListingReview } = require('../services/listingModerationService');
+const { buildAutomatedListingReview, normalizeReviewChecklist } = require('../services/listingModerationService');
 const { getCachedExternalDuplicateScan } = require('../services/externalDuplicateScanService');
 const { getProviderClient, getProviderMeta, getTaskModel } = require('../services/llmProvider');
 const {
@@ -29,8 +29,7 @@ const {
   PROPERTY_SOURCE_REGISTRY_TARGET_COUNT
 } = require('../services/propertySourceRegistryService');
 const {
-  sourceQualitySuppressionForRecord,
-  sourceQualitySuppressedSql
+  sourceQualitySuppressionForRecord
 } = require('../utils/sourceContentQuality');
 
 const router = express.Router();
@@ -49,6 +48,8 @@ const STAFF_DASHBOARD_QUEUE_SCAN_LIMIT = STAFF_DASHBOARD_QUEUE_LIMIT * 20;
 const STAFF_DASHBOARD_PANEL_SCAN_LIMIT = STAFF_DASHBOARD_PANEL_LIMIT * 20;
 const STAFF_DASHBOARD_PANEL_QUERY_TIMEOUT_MS = Math.max(1000, parseInt(process.env.STAFF_DASHBOARD_PANEL_QUERY_TIMEOUT_MS || '5000', 10) || 5000);
 const STAFF_REVIEW_QUEUE_QUERY_TIMEOUT_MS = Math.max(1500, parseInt(process.env.STAFF_REVIEW_QUEUE_QUERY_TIMEOUT_MS || '4000', 10) || 4000);
+const STAFF_PREVIEW_QUERY_TIMEOUT_MS = Math.max(800, parseInt(process.env.STAFF_PREVIEW_QUERY_TIMEOUT_MS || '1500', 10) || 1500);
+const STAFF_BULK_REVIEW_LIMIT = Math.min(2000, Math.max(1, parseInt(process.env.STAFF_BULK_REVIEW_LIMIT || '1000', 10) || 1000));
 const STAFF_EXACT_SOCIAL_IMPORT_LIMIT = 500;
 const STAFF_FAST_DASHBOARD_CACHE_TTL_MS = Math.max(5000, parseInt(process.env.STAFF_FAST_DASHBOARD_CACHE_TTL_MS || '60000', 10) || 60000);
 const STAFF_SOURCE_INTAKE_JOB_TTL_MS = Math.max(300000, parseInt(process.env.STAFF_SOURCE_INTAKE_JOB_TTL_MS || '3600000', 10) || 3600000);
@@ -67,6 +68,23 @@ const STAFF_SOURCE_PRESETS = [
   { label: 'Luganda homes', value: '#Ennyumba #Obupangisa #Amayumba #Muzigo #KampalaRent', language: 'Luganda' },
   { label: 'Swahili homes', value: '#NyumbaUganda #NyumbaYaKupanga #ViwanjaUganda #KodiKampala', language: 'Kiswahili' },
   { label: 'Wakiso growth', value: '#Nansana #Kira #Namugongo #Gayaza #WakisoHomes #WakisoRentals', language: 'Local areas' }
+];
+const STAFF_BULK_APPROVAL_CHECK_KEYS = [
+  'required_listing_fields',
+  'contact_details_verified',
+  'identity_number_supplied',
+  'identity_number_format',
+  'identity_document_available',
+  'identity_number_not_reused',
+  'previous_lister_checked',
+  'makaug_duplicate_checked',
+  'image_count_checked',
+  'image_quality_checked',
+  'location_verified',
+  'pricing_checked',
+  'otp_verified',
+  'terms_accepted',
+  'external_duplicate_checked'
 ];
 const STAFF_SOURCE_MONITOR_GUIDE = {
   title: 'Continuous source monitor',
@@ -226,8 +244,8 @@ function safeJsonObject(value, fallback = {}) {
 function sourceQualitySuppressedFlagSql(alias = 'p') {
   const prefix = alias ? `${alias}.` : '';
   return `(
-    COALESCE(${prefix}extra_fields->'source_quality_review'->>'suppressed', '') ~* '^(true|1|yes)$'
-    OR COALESCE(${prefix}extra_fields->>'source_quality_suppressed', '') ~* '^(true|1|yes)$'
+    LOWER(COALESCE(${prefix}extra_fields->'source_quality_review'->>'suppressed', '')) IN ('true', '1', 'yes')
+    OR LOWER(COALESCE(${prefix}extra_fields->>'source_quality_suppressed', '')) IN ('true', '1', 'yes')
   )`;
 }
 
@@ -246,6 +264,82 @@ function staffActiveReviewRows(rows = [], limit = STAFF_DASHBOARD_QUEUE_LIMIT) {
 
 function staffModerationPanelRows(rows = [], limit = STAFF_DASHBOARD_QUEUE_LIMIT) {
   return (Array.isArray(rows) ? rows : []).slice(0, limit);
+}
+
+function toUuidOrNull(value) {
+  const text = cleanText(value);
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(text)
+    ? text
+    : null;
+}
+
+function staffListingSourceUrl(row = {}) {
+  const extra = safeJsonObject(row.extra_fields, {});
+  return firstNonEmpty(extra.source_url, extra.source_post_url, extra.tiktok_url, extra.youtube_url, extra.video_url, row.source_url);
+}
+
+function normalizeDuplicateText(value = '') {
+  return cleanText(value).toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+function duplicateTitlePrefix(value = '') {
+  return normalizeDuplicateText(value).slice(0, 25);
+}
+
+function staffLocationWarnings(row = {}) {
+  const warnings = [];
+  const area = cleanText(row.area);
+  const district = cleanText(row.district);
+  if (!area || !district) warnings.push('Area and district are required before approval.');
+  const knownDistrict = districtForKnownArea(area);
+  if (knownDistrict && knownDistrict !== district) warnings.push(`${area} belongs to ${knownDistrict}, not ${district}`);
+  return warnings;
+}
+
+function staffTitleSpamReason(title = '') {
+  const text = cleanText(title);
+  const commaCount = (text.match(/,/g) || []).length;
+  const hashtagCount = (text.match(/#/g) || []).length;
+  const housesPhraseCount = (text.match(/houses?\s+for\s+(?:sale|rent)/gi) || []).length;
+  if (commaCount >= 5 && /for sale/i.test(text) && /for rent/i.test(text)) return 'comma keyword stuffing mixes sale and rent intent';
+  if (hashtagCount > 7) return 'too many hashtags in title';
+  if (housesPhraseCount >= 3) return 'repeated houses for sale/rent keyword spam';
+  return '';
+}
+
+function isStaffSourcedInventoryCandidate(row = {}) {
+  const extra = safeJsonObject(row.extra_fields, {});
+  const source = cleanText(row.source || extra.source).toLowerCase();
+  const listedVia = cleanText(row.listed_via || extra.listed_via).toLowerCase();
+  return row.sourced_inventory_candidate === true
+    || row.found_online_candidate === true
+    || extra.sourced_inventory_candidate === true
+    || extra.found_online_candidate === true
+    || extra.found_online === true
+    || source === 'sourced_inventory_candidate_v1'
+    || source === 'found_online_property_source_v1'
+    || listedVia === 'sourced_inventory'
+    || listedVia === 'found_online';
+}
+
+function staffSourcedCandidateHasApprovalLocation(row = {}) {
+  const extra = safeJsonObject(row.extra_fields, {});
+  const lat = toNullableFloat(row.latitude ?? extra.latitude);
+  const lng = toNullableFloat(row.longitude ?? extra.longitude);
+  const hasCoordinates = lat != null && lng != null && !(Number(lat) === 0 && Number(lng) === 0);
+  return Boolean(
+    cleanText(row.area)
+      || cleanText(row.district)
+      || cleanText(row.address)
+      || cleanText(row.location)
+      || cleanText(extra.area)
+      || cleanText(extra.district)
+      || cleanText(extra.location)
+      || cleanText(extra.source_area)
+      || cleanText(extra.source_location)
+      || cleanText(extra.location_label)
+      || hasCoordinates
+  );
 }
 
 function staffSourceMonitorGuide() {
@@ -1602,13 +1696,15 @@ async function updateStaffEditableListing(req, propertyId, listingPatch = {}, re
 }
 
 async function loadStaffPropertyPreview(propertyId) {
+  const previewQueryOptions = { timeoutMs: STAFF_PREVIEW_QUERY_TIMEOUT_MS };
   const property = await safeOne(
     `SELECT p.*
      FROM properties p
      WHERE p.id::text = $1 OR p.inquiry_reference = $1
      LIMIT 1`,
     [cleanText(propertyId)],
-    null
+    null,
+    previewQueryOptions
   );
   if (!property) return null;
   const [images, duplicates, events, previousListerListings, reusedImages, idNumberMatches, matchingUsers] = await Promise.all([
@@ -1617,7 +1713,8 @@ async function loadStaffPropertyPreview(propertyId) {
        FROM property_images
        WHERE property_id = $1
        ORDER BY is_primary DESC, sort_order ASC, created_at ASC`,
-      [property.id]
+      [property.id],
+      previewQueryOptions
     ),
     safeRows(
       `SELECT p.id, p.title, p.listing_type, p.district, p.area, p.address, p.price, p.status, p.lister_phone,
@@ -1627,7 +1724,7 @@ async function loadStaffPropertyPreview(propertyId) {
        WHERE p.id <> $1
          AND LOWER(COALESCE(p.status, '')) NOT IN (${sqlList(STAFF_REMOVED_STATUSES)})
          AND LOWER(COALESCE(p.moderation_stage, '')) NOT IN (${sqlList(STAFF_REMOVED_STATUSES)})
-         AND NOT ${sourceQualitySuppressedSql('p')}
+         AND NOT ${sourceQualitySuppressedFlagSql('p')}
          AND (
            (COALESCE($2::text, '') <> '' AND p.lister_phone = $2)
            OR LOWER(COALESCE(p.title, '')) = LOWER(COALESCE($3::text, ''))
@@ -1653,7 +1750,8 @@ async function loadStaffPropertyPreview(propertyId) {
         property.area || '',
         property.district || '',
         property.price || 0
-      ]
+      ],
+      previewQueryOptions
     ),
     safeRows(
       `SELECT id, actor_id, action, status_from, status_to, reason, notes, created_at
@@ -1661,7 +1759,8 @@ async function loadStaffPropertyPreview(propertyId) {
        WHERE property_id = $1
        ORDER BY created_at DESC
       LIMIT 30`,
-      [property.id]
+      [property.id],
+      previewQueryOptions
     ),
     safeRows(
       `SELECT id, title, listing_type, district, area, price, status, created_at
@@ -1673,17 +1772,23 @@ async function loadStaffPropertyPreview(propertyId) {
          )
        ORDER BY created_at DESC
        LIMIT 20`,
-      [property.id, property.lister_phone || null, property.lister_email || null]
+      [property.id, property.lister_phone || null, property.lister_email || null],
+      previewQueryOptions
     ),
     safeRows(
-      `SELECT DISTINCT p.id, p.title, p.status, i.url
-       FROM property_images current_i
-       JOIN property_images i ON i.url = current_i.url AND i.property_id <> current_i.property_id
+      `WITH current_image_hashes AS MATERIALIZED (
+         SELECT md5(url) AS url_hash
+         FROM property_images
+         WHERE property_id = $1
+       )
+       SELECT DISTINCT p.id, p.title, p.status, i.url
+       FROM current_image_hashes current_i
+       JOIN property_images i ON md5(i.url) = current_i.url_hash AND i.property_id <> $1
        JOIN properties p ON p.id = i.property_id
-       WHERE current_i.property_id = $1
        ORDER BY p.title ASC
        LIMIT 20`,
-      [property.id]
+      [property.id],
+      previewQueryOptions
     ),
     safeRows(
       `SELECT id, title, lister_name, lister_phone, lister_email, status, created_at
@@ -1693,7 +1798,8 @@ async function loadStaffPropertyPreview(propertyId) {
          AND id_number = $2
        ORDER BY created_at DESC
        LIMIT 20`,
-      [property.id, property.id_number || null]
+      [property.id, property.id_number || null],
+      previewQueryOptions
     ),
     safeRows(
       `SELECT id, first_name, last_name, phone, email, role, status, created_at
@@ -1702,7 +1808,8 @@ async function loadStaffPropertyPreview(propertyId) {
           OR ($2::text IS NOT NULL AND LOWER(COALESCE(email, '')) = LOWER($2))
        ORDER BY created_at DESC
        LIMIT 20`,
-      [property.lister_phone || null, property.lister_email || null]
+      [property.lister_phone || null, property.lister_email || null],
+      previewQueryOptions
     )
   ]);
   const extra = safeJsonObject(property.extra_fields, {});
@@ -1751,6 +1858,212 @@ async function loadStaffPropertyPreview(propertyId) {
     },
     events
   };
+}
+
+function staffBulkApprovalChecklist() {
+  return normalizeReviewChecklist(Object.fromEntries(STAFF_BULK_APPROVAL_CHECK_KEYS.map((key) => [key, true])));
+}
+
+function staffBulkWarningOverrides(reason = 'Staff QA found-online bulk approval') {
+  return Object.fromEntries(STAFF_BULK_APPROVAL_CHECK_KEYS.map((key) => [key, {
+    overridden: true,
+    source: 'staff_bulk_found_online_review',
+    reason
+  }]));
+}
+
+async function loadStaffBulkReviewCandidates({ ids = [], allPending = false } = {}) {
+  if (allPending) {
+    const result = await staffQuery(
+      `SELECT p.*,
+              COALESCE(p.extra_fields->>'source_url', p.extra_fields->>'source_post_url', p.extra_fields->>'tiktok_url', p.extra_fields->>'youtube_url', p.extra_fields->>'video_url') AS source_url
+       FROM properties p
+       WHERE ${activePendingReviewWhere('p')}
+       ORDER BY p.updated_at DESC NULLS LAST, p.created_at DESC NULLS LAST, p.id DESC
+       LIMIT $1`,
+      [STAFF_BULK_REVIEW_LIMIT],
+      { timeoutMs: STAFF_REVIEW_QUEUE_QUERY_TIMEOUT_MS }
+    );
+    return { rows: result.rows, missing_ids: [] };
+  }
+
+  const requested = Array.from(new Set((Array.isArray(ids) ? ids : [])
+    .map((id) => cleanText(id))
+    .filter(Boolean)))
+    .slice(0, STAFF_BULK_REVIEW_LIMIT);
+  const uuidIds = requested.filter((id) => toUuidOrNull(id));
+  const textIds = requested;
+  if (!requested.length) return { rows: [], missing_ids: [] };
+
+  const result = await staffQuery(
+    `SELECT p.*,
+            COALESCE(p.extra_fields->>'source_url', p.extra_fields->>'source_post_url', p.extra_fields->>'tiktok_url', p.extra_fields->>'youtube_url', p.extra_fields->>'video_url') AS source_url
+     FROM properties p
+     WHERE p.id = ANY($1::uuid[])
+        OR p.inquiry_reference = ANY($2::text[])
+     ORDER BY p.updated_at DESC NULLS LAST, p.created_at DESC NULLS LAST, p.id DESC
+     LIMIT $3`,
+    [uuidIds, textIds, requested.length],
+    { timeoutMs: STAFF_REVIEW_QUEUE_QUERY_TIMEOUT_MS }
+  );
+  const found = new Set(result.rows.flatMap((row) => [String(row.id), cleanText(row.inquiry_reference)].filter(Boolean)));
+  return {
+    rows: result.rows,
+    missing_ids: requested.filter((id) => !found.has(id))
+  };
+}
+
+async function loadApprovedDuplicateIndex() {
+  const result = await staffQuery(
+    `SELECT p.id, p.title, p.lister_phone, p.status,
+            COALESCE(p.extra_fields->>'source_url', p.extra_fields->>'source_post_url', p.extra_fields->>'tiktok_url', p.extra_fields->>'youtube_url', p.extra_fields->>'video_url') AS source_url
+     FROM properties p
+     WHERE LOWER(COALESCE(p.status, '')) = 'approved'
+     ORDER BY p.updated_at DESC NULLS LAST, p.created_at DESC NULLS LAST
+     LIMIT 5000`,
+    [],
+    { timeoutMs: STAFF_REVIEW_QUEUE_QUERY_TIMEOUT_MS }
+  );
+  const byPhone = new Map();
+  const bySourceUrl = new Map();
+  const byTitlePrefix = new Map();
+  result.rows.forEach((row) => {
+    const phone = normalizePhoneLite(row.lister_phone);
+    const sourceUrl = cleanText(row.source_url).toLowerCase();
+    const prefix = duplicateTitlePrefix(row.title);
+    if (phone && !byPhone.has(phone)) byPhone.set(phone, row);
+    if (sourceUrl && !bySourceUrl.has(sourceUrl)) bySourceUrl.set(sourceUrl, row);
+    if (prefix && !byTitlePrefix.has(prefix)) byTitlePrefix.set(prefix, row);
+  });
+  return { byPhone, bySourceUrl, byTitlePrefix };
+}
+
+function staffBulkDuplicateMatch(row = {}, approvedIndex = {}) {
+  const phone = normalizePhoneLite(row.lister_phone);
+  const sourceUrl = cleanText(staffListingSourceUrl(row)).toLowerCase();
+  const prefix = duplicateTitlePrefix(row.title);
+  const matches = [
+    phone ? approvedIndex.byPhone?.get(phone) : null,
+    sourceUrl ? approvedIndex.bySourceUrl?.get(sourceUrl) : null,
+    prefix ? approvedIndex.byTitlePrefix?.get(prefix) : null
+  ].filter((match) => match && String(match.id) !== String(row.id));
+  return matches[0] || null;
+}
+
+function staffBulkModerationDecision(row = {}, approvedIndex = {}) {
+  if (String(row.status || '').toLowerCase() === 'approved') {
+    return { id: row.id, title: row.title, decision: 'hold', reason: 'already_approved' };
+  }
+  if (!isStaffSourcedInventoryCandidate(row)) {
+    return { id: row.id, title: row.title, decision: 'hold', reason: 'not_found_online' };
+  }
+  const locationWarnings = staffLocationWarnings(row);
+  if (locationWarnings.length || !staffSourcedCandidateHasApprovalLocation(row)) {
+    return { id: row.id, title: row.title, decision: 'hold', reason: 'location', details: locationWarnings };
+  }
+  const spamReason = staffTitleSpamReason(row.title);
+  if (spamReason) return { id: row.id, title: row.title, decision: 'hold', reason: 'spam', details: [spamReason] };
+  if (String(row.listing_type || '').toLowerCase() === 'sale' && Number(row.price || 0) > 0 && Number(row.price || 0) < 20000000) {
+    return { id: row.id, title: row.title, decision: 'hold', reason: 'misclassified_sale' };
+  }
+  const duplicate = staffBulkDuplicateMatch(row, approvedIndex);
+  if (duplicate) {
+    return {
+      id: row.id,
+      title: row.title,
+      decision: 'hold',
+      reason: 'duplicate',
+      duplicate_id: duplicate.id,
+      duplicate_title: duplicate.title
+    };
+  }
+  return { id: row.id, title: row.title, decision: 'approve' };
+}
+
+async function approveStaffBulkFoundOnlineListing(client, req, row = {}) {
+  const reason = 'Staff QA - found-online source verified';
+  const reviewerUserId = toUuidOrNull(actorId(req));
+  const checklist = staffBulkApprovalChecklist();
+  const warningOverrides = staffBulkWarningOverrides(reason);
+  const dispensation = {
+    used: true,
+    source: 'found_online_property_source_v1',
+    at: new Date().toISOString(),
+    actor_id: actorId(req),
+    approval_policy: 'location_required_non_location_checks_staff_or_admin_override',
+    location_confirmed: true,
+    source_reviewed: true,
+    consent_confirmed: false,
+    image_rights_confirmed: false,
+    missing_checks_overridden: [],
+    warning_checks_overridden: [],
+    reason,
+    bulk_review: true,
+    manual_notification_only: true
+  };
+  const extraPatch = {
+    sourced_candidate_special_dispensation: dispensation,
+    found_online_approval_policy: 'location_required_non_location_checks_staff_or_admin_override',
+    found_online_location_confirmed: true,
+    found_online_source_reviewed: true,
+    found_online_non_location_checks_overridden: true,
+    staff_source_reviewed: true,
+    review_warning_overrides: warningOverrides,
+    bulk_staff_review: {
+      approved: true,
+      at: dispensation.at,
+      actor_id: actorId(req),
+      no_owner_whatsapp_auto_sent: true
+    }
+  };
+  const result = await client.query(
+    `UPDATE properties
+     SET status = 'approved',
+         reviewed_at = NOW(),
+         reviewed_by = COALESCE($2::uuid, reviewed_by),
+         moderation_stage = 'approved',
+         moderation_checklist = $3::jsonb,
+         moderation_notes = COALESCE($4::text, moderation_notes),
+         moderation_reason = $5::text,
+         approved_at = NOW(),
+         sold_at = NULL,
+         updated_at = NOW(),
+         extra_fields = COALESCE(extra_fields, '{}'::jsonb)
+           || jsonb_build_object('moderation_reason', $5::text, 'review_warning_overrides', $6::jsonb)
+           || $7::jsonb
+     WHERE id = $1
+     RETURNING id, title, status`,
+    [
+      row.id,
+      reviewerUserId,
+      JSON.stringify(checklist),
+      'Bulk staff review approved found-online source; owner notification left manual.',
+      reason,
+      JSON.stringify(warningOverrides),
+      JSON.stringify(extraPatch)
+    ]
+  );
+  await client.query(
+    `INSERT INTO property_moderation_events (
+      property_id, actor_id, action, status_from, status_to, checklist, reason, notes, delivery
+    ) VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9::jsonb)`,
+    [
+      row.id,
+      actorId(req),
+      'staff_bulk_found_online_approved',
+      row.status || null,
+      'approved',
+      JSON.stringify(checklist),
+      reason,
+      'Bulk staff approval used found-online override; owner WhatsApp was not auto-sent.',
+      JSON.stringify({
+        email: { sent: false, reason: 'manual_bulk_review' },
+        whatsapp: { sent: false, reason: 'manual_notification_only' },
+        sourced_candidate_special_dispensation: dispensation
+      })
+    ]
+  );
+  return result.rows[0] || { id: row.id, title: row.title, status: 'approved' };
 }
 
 function extractQuestionFilter(question = '') {
@@ -1912,7 +2225,8 @@ router.get('/dashboard', async (req, res, next) => {
 router.get('/properties/review-queue', async (req, res, next) => {
   try {
     const { page, limit, offset } = parsePagination(req.query);
-    const includeTotal = boolLike(req.query?.include_total || req.query?.includeTotal);
+    const includeTotalParam = req.query?.include_total ?? req.query?.includeTotal;
+    const includeTotal = includeTotalParam == null ? true : boolLike(includeTotalParam);
     const includeImages = boolLike(req.query?.include_images || req.query?.includeImages);
     const search = cleanText(req.query.search || req.query.q);
     const listingType = cleanText(req.query.listing_type || req.query.type).toLowerCase();
@@ -1949,8 +2263,16 @@ router.get('/properties/review-queue', async (req, res, next) => {
          ) img ON true`
       : '';
     const rowLimit = limit + 1;
-    const rawRows = await safeRows(
-      `SELECT p.id, p.title, p.description, p.listing_type, p.property_type, p.district, p.area, p.address,
+    const rawResult = await safeRowsResult(
+      `WITH paged_review_queue AS MATERIALIZED (
+         SELECT p.id
+         FROM properties p
+         ${where}
+         ORDER BY p.updated_at DESC NULLS LAST, p.created_at DESC NULLS LAST, p.id DESC
+         LIMIT $${values.length + 1}
+         OFFSET $${values.length + 2}
+       )
+       SELECT p.id, p.title, p.description, p.listing_type, p.property_type, p.district, p.area, p.address,
               p.price, p.price_period, p.bedrooms, p.bathrooms, p.title_type,
               p.status, p.moderation_stage, p.moderation_reason, p.created_at, p.updated_at,
               p.inquiry_reference, p.lister_name, p.lister_phone, p.lister_email, p.source, p.listed_via,
@@ -1960,20 +2282,55 @@ router.get('/properties/review-queue', async (req, res, next) => {
               0::int AS duplicate_count,
               ${imageSelect}
        FROM properties p
+       JOIN paged_review_queue q ON q.id = p.id
        ${imageJoin}
-       ${where}
-       ORDER BY COALESCE(p.updated_at, p.created_at) DESC, p.id DESC
-       LIMIT $${values.length + 1}
-       OFFSET $${values.length + 2}`,
+       ORDER BY p.updated_at DESC NULLS LAST, p.created_at DESC NULLS LAST, p.id DESC`,
       [...values, rowLimit, offset],
-      { timeoutMs: STAFF_REVIEW_QUEUE_QUERY_TIMEOUT_MS }
+      { timeoutMs: STAFF_REVIEW_QUEUE_QUERY_TIMEOUT_MS, label: 'staff_review_queue_page' }
     );
+    if (!rawResult.ok) {
+      return res.status(503).json({
+        ok: false,
+        error: 'review_queue_query_failed',
+        details: rawResult.error ? [rawResult.error] : undefined,
+        meta: {
+          status: 'active_review_queue',
+          query_ok: false,
+          query_error: rawResult.error,
+          timed_out: rawResult.timed_out,
+          empty_is_authoritative: false
+        }
+      });
+    }
 
+    const rawRows = rawResult.rows;
     const rows = rawRows.slice(0, limit);
     const hasMore = rawRows.length > limit;
-    const countRow = includeTotal
-      ? await safeOne(`SELECT COUNT(*)::int AS total FROM properties p ${where}`, values, { total: 0 }, { timeoutMs: STAFF_REVIEW_QUEUE_QUERY_TIMEOUT_MS })
-      : null;
+    let countRow = null;
+    if (includeTotal) {
+      try {
+        const countResult = await staffQuery(
+          `SELECT COUNT(*)::int AS total FROM properties p ${where}`,
+          values,
+          { timeoutMs: STAFF_REVIEW_QUEUE_QUERY_TIMEOUT_MS }
+        );
+        countRow = countResult.rows[0] || { total: 0 };
+      } catch (error) {
+        logger.warn('Staff review queue count failed', { code: error.code, message: error.message });
+        return res.status(503).json({
+          ok: false,
+          error: 'review_queue_count_failed',
+          details: [error.code || error.message || 'count_failed'],
+          meta: {
+            status: 'active_review_queue',
+            query_ok: false,
+            query_error: error.code || error.message || 'count_failed',
+            timed_out: error.code === '57014',
+            empty_is_authoritative: false
+          }
+        });
+      }
+    }
     const total = includeTotal
       ? safeNumber(countRow, 'total')
       : offset + rows.length + (hasMore ? 1 : 0);
@@ -1991,7 +2348,10 @@ router.get('/properties/review-queue', async (req, res, next) => {
         has_more: hasMore,
         total_exact: includeTotal,
         count_filter: 'staff_active_pending_review',
-        source_quality_filter: 'stored_suppression_flag_only'
+        source_quality_filter: 'stored_suppression_flag_only',
+        query_ok: true,
+        timed_out: false,
+        returned_count: rows.length
       }
     });
   } catch (error) {
@@ -2049,11 +2409,83 @@ router.patch('/profile', async (req, res, next) => {
   }
 });
 
+router.post('/properties/bulk-review', async (req, res, next) => {
+  try {
+    const ids = Array.isArray(req.body?.ids) ? req.body.ids : [];
+    const allPending = boolLike(req.body?.all_pending || req.body?.allPending);
+    const dryRun = boolLike(req.body?.dry_run || req.body?.dryRun);
+    if (!allPending && !ids.length) {
+      return res.status(400).json({
+        ok: false,
+        error: 'ids or all_pending=true is required'
+      });
+    }
+
+    const [candidateResult, approvedIndex] = await Promise.all([
+      loadStaffBulkReviewCandidates({ ids, allPending }),
+      loadApprovedDuplicateIndex()
+    ]);
+    const decisions = candidateResult.rows.map((row) => staffBulkModerationDecision(row, approvedIndex));
+    candidateResult.missing_ids.forEach((id) => {
+      decisions.push({ id, title: '', decision: 'hold', reason: 'not_found' });
+    });
+    const approveIds = new Set(decisions.filter((item) => item.decision === 'approve').map((item) => String(item.id)));
+    const rowsById = new Map(candidateResult.rows.map((row) => [String(row.id), row]));
+    const approvedRows = [];
+
+    if (!dryRun && approveIds.size) {
+      const client = await db.getClient();
+      try {
+        await client.query('BEGIN');
+        for (const id of approveIds) {
+          const row = rowsById.get(id);
+          if (!row) continue;
+          const approved = await approveStaffBulkFoundOnlineListing(client, req, row);
+          approvedRows.push(approved);
+        }
+        await client.query('COMMIT');
+      } catch (error) {
+        try {
+          await client.query('ROLLBACK');
+        } catch (_) {}
+        throw error;
+      } finally {
+        client.release();
+      }
+      clearStaffFastDashboardCache();
+      logStaffActivityInBackground(req, 'staff_bulk_found_online_review', {
+        targetType: 'property',
+        metadata: {
+          approved: approvedRows.length,
+          held: decisions.filter((item) => item.decision !== 'approve').length,
+          dry_run: false
+        }
+      });
+    }
+
+    return res.json({
+      ok: true,
+      data: {
+        dry_run: dryRun,
+        all_pending: allPending,
+        requested: allPending ? candidateResult.rows.length : ids.length,
+        approved: dryRun ? approveIds.size : approvedRows.length,
+        held: decisions.filter((item) => item.decision !== 'approve').length,
+        decisions,
+        approved_rows: approvedRows
+      }
+    });
+  } catch (error) {
+    logger.error('Staff bulk review failed', { message: error.message });
+    return next(error);
+  }
+});
+
 router.get('/properties/:id/preview', async (req, res, next) => {
   try {
     const preview = await loadStaffPropertyPreview(req.params.id);
     if (!preview) return res.status(404).json({ ok: false, error: 'Property not found' });
-    await logStaffActivity(req, 'staff_listing_preview_opened', {
+    logStaffActivityInBackground(req, 'staff_listing_preview_opened', {
       targetType: 'property',
       targetId: preview.id,
       metadata: { duplicate_count: preview.duplicate_review?.count || 0 }

@@ -13,6 +13,7 @@ function run() {
   const server = read('server.js');
   const staffRoutes = read('routes/staff.js');
   const staffReviewQueuePerfMigration = read('db/migrations/067_staff_review_queue_performance.sql');
+  const staffBulkModerationMigration = read('db/migrations/068_staff_bulk_moderation_performance.sql');
   const adminRoutes = read('routes/admin.js');
   const propertyRoutes = read('routes/properties.js');
   const app = read('assets/makaug-app.js');
@@ -51,6 +52,7 @@ function run() {
 
   assert(staffRoutes.includes("router.get('/dashboard'"), 'staff dashboard API route should exist');
   assert(staffRoutes.includes("router.get('/properties/review-queue'"), 'staff review queue API route should exist instead of 404ing');
+  assert(staffRoutes.includes("router.post('/properties/bulk-review'"), 'staff bulk review API route should exist for high-volume moderation');
   assert(staffRoutes.includes("router.patch('/profile'"), 'staff profile/settings save API should exist');
   assert(staffRoutes.includes("router.get('/properties/:id/preview'"), 'staff listing preview API should exist');
   assert(staffRoutes.includes('brokerReviewWhere'), 'staff dashboard should classify broker-submitted review listings');
@@ -164,7 +166,7 @@ function run() {
   assert(staffRoutes.includes('STAFF_FAST_DASHBOARD_CACHE_TTL_MS'), 'fast staff dashboard should cache expensive first-paint counts briefly');
   assert(staffRoutes.includes('function clearStaffFastDashboardCache'), 'staff inventory changes should invalidate the fast dashboard cache');
   assert(staffRoutes.includes("deferred_dashboard_endpoint: '/api/staff/dashboard?panels=1'"), 'fast dashboard payload should point to deferred panels');
-  assert(staffRoutes.includes('sourceQualitySuppressedSql'), 'staff dashboard should hide obvious non-listing construction/tutorial source rows');
+  assert(staffRoutes.includes('sourceQualitySuppressedFlagSql'), 'staff dashboard should hide stored non-listing construction/tutorial source rows without full regex scans');
   assert(staffRoutes.includes('function sourceQualitySuppressedFlagSql'), 'staff dashboard counts should use a cheap stored source-quality flag');
   assert(staffRoutes.includes('function staffActiveReviewRows'), 'staff dashboard should filter legacy suppressed rows in Node after a bounded over-fetch');
   assert(staffRoutes.includes('function staffModerationPanelRows'), 'staff moderation panel should not re-run fuzzy source-quality filtering after SQL count parity');
@@ -172,6 +174,9 @@ function run() {
   assert(staffRoutes.includes('async function safeRowsResult'), 'staff panel row queries should report timeout/error metadata instead of pretending empty');
   assert(staffReviewQueuePerfMigration.includes('idx_properties_staff_active_review_queue_order'), 'staff review queue needs a dedicated ordered partial index');
   assert(staffReviewQueuePerfMigration.includes('ANALYZE properties'), 'staff review queue performance migration should refresh planner stats after creating the index');
+  assert(staffBulkModerationMigration.includes('idx_properties_staff_active_review_unsuppressed_order'), 'staff paginated review queue should have an unsuppressed ordered partial index');
+  assert(staffBulkModerationMigration.includes('idx_properties_staff_review_lower_title_created'), 'staff duplicate gate should have a lower-title lookup index');
+  assert(staffBulkModerationMigration.includes('idx_properties_staff_review_source_url_created'), 'staff duplicate gate should have a source URL lookup index');
   assert(staffRoutes.includes('STAFF_DASHBOARD_QUEUE_SCAN_LIMIT'), 'staff dashboard should over-fetch a bounded queue window instead of regex scanning the full pending set');
   assert(staffRoutes.includes('STAFF_DASHBOARD_PANEL_QUERY_TIMEOUT_MS'), 'staff panels endpoint should use server-side DB timeouts so one slow query cannot 503 the panel bundle');
   assert(staffRoutes.includes('STAFF_REVIEW_QUEUE_QUERY_TIMEOUT_MS'), 'standalone staff review queue endpoint should be timeout bounded');
@@ -187,12 +192,14 @@ function run() {
   assert(staffPanelsBody.includes('empty_is_authoritative: reviewResult.ok'), 'empty moderation queue should only be authoritative after a successful row query');
   assert(staffRoutes.includes("count_filter: 'staff_active_pending_review'"), 'staff review queue endpoint should advertise the same active pending filter used by staff counts');
   assert(staffRoutes.includes("source_quality_filter: 'stored_suppression_flag_only'"), 'staff review queue endpoint should use the cheap stored source-quality flag');
+  assert(staffRoutes.includes('WITH paged_review_queue AS MATERIALIZED'), 'staff paginated review queue should page through an indexed ID candidate set');
+  assert(staffRoutes.includes("error: 'review_queue_query_failed'"), 'staff paginated review queue should not return false-empty rows after a timeout');
   assert(staffRoutes.includes('async function dashboardPanelsPayload'), 'staff panels endpoint should return a queue-first lightweight payload');
   assert(staffRoutes.includes('if (panels) return res.json({ ok: true, data: await dashboardPanelsPayload(req) });'), 'staff dashboard panels query should not call the full heavy dashboard payload');
   assert(staffRoutes.includes('source_quality_suppressed_pending'), 'staff dashboard should count hidden source-quality rows separately');
   assert(staffRoutes.includes('source_quality_suppressed'), 'staff source intake should expose source-quality suppression status');
   assert(staffRoutes.includes('FROM properties p\n       WHERE p.id <> $1'), 'staff duplicate preview query should use a property alias for source-quality filtering');
-  assert(staffRoutes.includes("AND NOT ${sourceQualitySuppressedSql('p')}"), 'staff duplicate preview query should hide source-quality suppressed rows');
+  assert(staffRoutes.includes("AND NOT ${sourceQualitySuppressedFlagSql('p')}"), 'staff duplicate preview query should hide stored source-quality suppressed rows without full regex scans');
   assert(app.includes('STAFF_DASHBOARD_PANEL_TIMEOUT_MS'), 'frontend should timeout stuck staff panel hydration requests');
   assert(app.includes('Staff dashboard panels'), 'staff panel timeout should clearly identify the stuck request');
   assert(app.includes('function mergeStaffDashboardPanelData'), 'frontend should merge queue-first panel payloads into existing fast dashboard data');
@@ -224,6 +231,10 @@ function run() {
   assert(html.includes('staff-panels-review-queue-20260711'), 'index should cache-bust the real staff panels review queue fix');
   assert(html.includes('staff-panels-review-queue-rows-20260711'), 'index should cache-bust the staff panel row parity fix');
   assert(html.includes('staff-review-queue-performance-20260711'), 'index should cache-bust the staff review queue performance fix');
+  assert(html.includes('staff-bulk-moderation-20260711'), 'index should cache-bust the staff bulk moderation infrastructure');
+  assert(staffRoutes.includes('function staffBulkModerationDecision'), 'staff bulk review should gate each listing server-side');
+  assert(staffRoutes.includes("reason: 'misclassified_sale'"), 'staff bulk review should hold suspicious sub-20M sale rows');
+  assert(staffRoutes.includes('manual_notification_only'), 'staff bulk approval should record that owner WhatsApp is not auto-sent');
   assert(staffRoutes.includes('staffTikTokOembedOnlyBatch'), 'staff import API should force oEmbed for TikTok-only exact video batches');
   assert(staffRoutes.includes('metadata_tiktok_oembed_enabled'), 'staff import API should report TikTok oEmbed metadata mode');
   assert(app.includes('metadata_skipped_for_large_batch'), 'staff source import should explain when metadata was skipped for speed');
@@ -254,6 +265,7 @@ function run() {
   assert(app.includes('STAFF_MODERATION_WRITE_TIMEOUT_MS'), 'staff moderation writes should have a timeout guard');
   assert(staffApproveBody.includes('staffApiRequestWithTimeout(statusPath'), 'staff status writes should use the bounded request helper');
   assert(app.includes('queueStaffDashboardRefreshAfterModeration({ refreshPublicSummary: true })'), 'staff approval should defer dashboard refresh after the write');
+  assert(app.includes('async function refreshPublicOpportunitySummary'), 'staff approval refresh should not throw a missing public summary helper');
   assert(app.includes('Add a rejection reason in the Decision reason box first.'), 'staff rejection should require the visible decision reason');
   assert(app.includes('Add a Decision reason in the review panel before rejecting.'), 'queue-card rejection should open the review panel instead of prompting');
   assert(!app.includes('window.prompt("Why is this listing being rejected?"'), 'staff rejection should not use a blocking native prompt');

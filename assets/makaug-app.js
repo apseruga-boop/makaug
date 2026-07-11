@@ -35683,6 +35683,16 @@ async function fetchPublicOpportunityStatsFromApi() {
   return publicOpportunityStatsFromApiResponse(response);
 }
 
+async function refreshPublicOpportunitySummary({ silent = false } = {}) {
+  try {
+    const stats = await fetchPublicOpportunityStatsFromApi();
+    return applyPublicOpportunityStats(stats);
+  } catch (error) {
+    if (!silent) toast(`Public summary refresh failed: ${error.message || "error"}`);
+    throw error;
+  }
+}
+
 async function loadRemotePropertyDetailForUi(id, options = {}) {
   const listingId = String(id || "").trim();
   if (!listingId) return null;
