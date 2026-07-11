@@ -164,6 +164,14 @@ async function run() {
   assert.strictEqual(eastLegonForeignListing.ok, false, 'East Legon/Ghana listings must be held even if a Uganda district was defaulted');
   assert.strictEqual(eastLegonForeignListing.reason, 'non_uganda_location');
 
+  const portHarcourtEstate = sourcePositiveListingGateForRecord({
+    title: 'Duplex for Sale in Shell Cooperative Estate PH #property',
+    district: 'Kampala',
+    property_type: 'duplex',
+  });
+  assert.strictEqual(portHarcourtEstate.ok, false, 'Port Harcourt estate shorthand must not pass via defaulted Uganda district');
+  assert.strictEqual(portHarcourtEstate.reason, 'non_uganda_location');
+
   const richHomesExplainer = sourcePositiveListingGateForRecord({
     title: 'What Rich Homes Look Like in Uganda Serena Kigo New Rich Neighborhood',
     district: 'Wakiso',
