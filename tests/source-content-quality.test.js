@@ -172,6 +172,14 @@ async function run() {
   assert.strictEqual(portHarcourtEstate.ok, false, 'Port Harcourt estate shorthand must not pass via defaulted Uganda district');
   assert.strictEqual(portHarcourtEstate.reason, 'non_uganda_location');
 
+  const indiaHostel = sourcePositiveListingGateForRecord({
+    title: 'Students Cafeteria and Hostel Mess Facilities - Usha Martin University, Ranchi, Jharkhand',
+    district: 'Kampala',
+    property_type: 'hostel',
+  });
+  assert.strictEqual(indiaHostel.ok, false, 'India hostel/university content must not pass via defaulted Uganda district');
+  assert.strictEqual(indiaHostel.reason, 'non_uganda_location');
+
   const richHomesExplainer = sourcePositiveListingGateForRecord({
     title: 'What Rich Homes Look Like in Uganda Serena Kigo New Rich Neighborhood',
     district: 'Wakiso',
