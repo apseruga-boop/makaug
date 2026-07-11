@@ -217,6 +217,7 @@ const staffReviewQueuePerformanceVersion = 'staff-review-queue-performance-20260
 const staffBulkModerationVersion = 'staff-bulk-moderation-20260711';
 const staffBulkGateTightenVersion = 'staff-bulk-gate-tighten-20260711';
 const staffBulkGateTightenV2Version = 'staff-bulk-gate-tighten-v2-20260711';
+const staffBulkGatePositiveVersion = 'staff-bulk-gate-positive-20260711';
 const publicAppVersionSuffixes = [
   captureHelperUsabilityVersion,
   studentNearestUniversityVersion,
@@ -303,7 +304,8 @@ const publicAppVersionSuffixes = [
   staffReviewQueuePerformanceVersion,
   staffBulkModerationVersion,
   staffBulkGateTightenVersion,
-  staffBulkGateTightenV2Version
+  staffBulkGateTightenV2Version,
+  staffBulkGatePositiveVersion
 ];
 let cachedIndexHtml = null;
 const publicHtmlCache = new Map();

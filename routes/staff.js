@@ -29,6 +29,7 @@ const {
   PROPERTY_SOURCE_REGISTRY_TARGET_COUNT
 } = require('../services/propertySourceRegistryService');
 const {
+  sourcePositiveListingGateForRecord,
   sourceQualitySuppressionForRecord
 } = require('../utils/sourceContentQuality');
 
@@ -351,10 +352,14 @@ function staffUgandaLocationHoldReason(row = {}) {
     };
   }
   const district = cleanText(row.district);
-  if (!district || !UGANDA_DISTRICT_SET.has(district.toLowerCase())) {
+  const hasUgandaDistrict = district && UGANDA_DISTRICT_SET.has(district.toLowerCase());
+  const hasUgandaCoordinates = coords && staffCoordinatesInsideUganda(coords);
+  if (!hasUgandaDistrict && !hasUgandaCoordinates) {
     return {
       reason: 'non_uganda_location',
-      details: district ? [`District "${district}" is not a canonical Uganda district.`] : ['Canonical Uganda district is required before bulk approval.']
+      details: district
+        ? [`District "${district}" is not a canonical Uganda district, and no in-Uganda coordinates are present.`]
+        : ['Canonical Uganda district or in-Uganda coordinates are required before bulk approval.']
     };
   }
   const searchText = staffGateSearchText(row);
@@ -408,7 +413,6 @@ function staffLocationWarnings(row = {}) {
   const warnings = [];
   const area = cleanText(row.area);
   const district = cleanText(row.district);
-  if (!area || !district) warnings.push('Area and district are required before approval.');
   const knownDistrict = districtForKnownArea(area);
   if (knownDistrict && knownDistrict !== district) warnings.push(`${area} belongs to ${knownDistrict}, not ${district}`);
   return warnings;
@@ -2097,6 +2101,13 @@ function staffBulkModerationDecision(row = {}, approvedIndex = {}) {
   }
   if (!isStaffSourcedInventoryCandidate(row)) {
     return { id: row.id, title: row.title, decision: 'hold', reason: 'not_found_online' };
+  }
+  const positiveGate = sourcePositiveListingGateForRecord({
+    ...row,
+    source_url: staffListingSourceUrl(row)
+  });
+  if (!positiveGate.ok) {
+    return { id: row.id, title: row.title, decision: 'hold', reason: positiveGate.reason || 'not_a_listing', details: positiveGate.details || [] };
   }
   const ugandaLocationHold = staffUgandaLocationHoldReason(row);
   if (ugandaLocationHold) {

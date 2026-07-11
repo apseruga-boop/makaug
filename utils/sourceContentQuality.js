@@ -1,5 +1,7 @@
 'use strict';
 
+const { DISTRICTS } = require('./constants');
+
 const NON_LISTING_SOURCE_PATTERN = /\b(?:dawinci|da\s*winci|sameblood)\b/i;
 const HARD_NON_LISTING_PATTERN = /\b(?:how\s+to\s+apply|how\s+big\s+is|building\s+permit|building\s+regulations?|bio(?:de)?g[ie]ster|biodigester|plumbing|pipe\s*work|pipework|material\s+costs?|cost\s+breakdown|roofing\s+materials?|perimeter\s+fence|land\s+title\s+transfer|documents?\s+needed|penthouse\s+design|house\s+design|house\s+plan|(?:plot|land)\s+(?:sizes?|dimensions?|measurements?)|(?:plot|land)\s+measurements?|\d+\s*ft\s*(?:by|x)\s*\d+\s*ft|construction\s+(?:tips?|ideas?|costs?|materials?))\b/i;
 const SOURCE_BOUND_NON_LISTING_PATTERN = /\b(?:house\s+reveal|building\s+nice\s+houses?|design\s+and\s+construction|construction\s+clip|construction\s+video|building\s+process|site\s+visit)\b/i;
@@ -8,6 +10,14 @@ const MONEY_SIGNAL_PATTERN = /\b(?:ugx|ush|shs?|usd|\$)\s*[\d,.]+|[\d,.]+\s*(?:m
 const LOW_SIGNAL_PROMO_PATTERN = /\b(?:serious\s+customer|owner\s+wants?\s+money|owner\s+want\s+money|my\s+people|just\s+at|you\s+are\s+to\s+own|own\s+this|take\s+this\s+beautiful\s+house|fuuka\s+landlord|njagala\s+plot|tusigazawo|plot\s+ntono|sente\s+obukadde|hot\s+deal|quick\s+sale)\b/i;
 const SPECIFIC_LOCATION_SIGNAL_PATTERN = /\b(?:entebbe\s*(?:road|rd)|hoima\s*(?:road|rd)|mawanda\s*(?:road|rd)|road|rd|street|avenue|close|estate|village|zone|parish|division|municipality|kiwatule|kyanja|kisaasi|kira|kira[-\s]*mulawa|mulawa|nsasa|kitende|kasangati|mawule|munyonyo|kololo|ntinda|bugolobi|makindye|lubowa|seguku|bwebajja|akright|kajjansi|komamboga|kyebando|makerere|najjeera|namugongo|gayaza|nansana|bulindo|katosi|mpunge|ndejje|bujjuko|bujuuko|kakiri|masulita)\b/i;
 const FOREIGN_PROPERTY_MARKET_PATTERN = /\b(?:kolkata|west\s+bengal|bengal|warangal|hanumakonda|telugu|hyderabad|telangana|andhra\s+pradesh|mumbai|delhi|pune|india|indian\s+real\s+estate|[1-9]\s*bhk)\b/i;
+const UGANDA_BBOX = { minLat: -1.5, maxLat: 4.3, minLng: 29.5, maxLng: 35.1 };
+const UGANDA_DISTRICT_SET = new Set(DISTRICTS.map((district) => district.toLowerCase()));
+const POSITIVE_LISTING_SIGNAL_PATTERN = /\b(?:for\s+sale|for\s+rent|to\s+let|to\s+rent|bedroom|bdrm|plots?|land|acre|house|home|apartment|studio|rental|hostel|shop|office|warehouse|duplex|bungalow|mansion|condo)\b/i;
+const POSITIVE_FOREIGN_LOCATION_PATTERN = /(^|\b)(ajah|lekki|ibeju|lagos|abuja|ikeja|ikoyi|nigeria|naira|nairobi|mombasa|kenya|accra|ghana|dar\s+es\s+salaam|tanzania|kigali|rwanda|johannesburg|cape\s+town|south\s+africa|dubai|uae|texas|florida|london|uk|canada|portugal|golden\s+visa|passport|citizenship|residency|owerri|asaba|enugu|awka|onitsha|nnewi|imo|anambra|delta\s+state|edo|certificate\s+of\s+occupancy|ibusa|apogazi|avu|sangotedo|ibeju|eneka|port\s+harcourt|gra\s+phase|ph\s+city|rwf|kanombe|ada\s+george|aluu|omoko|rivers\s+state|ksh|tzs)(\b|$)|\bc\s*(?:of|\/|-)\s*o\b|\b(?:apogazi\s+nike|nike\s+enugu)\b|\u20a6/i;
+const POSITIVE_CLICKBAIT_PATTERN = /^\s*what\s+\$/i;
+const POSITIVE_EXPLAINER_PATTERN = /(?:\$\s*\d{2,}\s*k?\s+can\s+(?:buy|get)|\b\d+\s+countries\b|\bgolden\s+visa\b|\bland\s+banking\b|\bhow\s+to\b|\btop\s+\d+\b|\bexplained\b|\btour\s+of\b|\bforget\s+\$|\bltd\b|\blimited\b|\bcompany\b|welcome\s+to|well\s*come\s+to|\bep\s?\d+\b|\bepisode\b|podcast|ifma|association|new\s+chapter|your\s+(?:construction|real\s+estate)|ai[- ]powered|ecosystem|getting\s+smarter|real\s+estate\s+ltd|consultants\s+ltd|agencies\b)/i;
+const POSITIVE_NEWS_POLITICS_PATTERN = /\b(?:mps?|opposition|speaker|bill|parliament|minister|president|drama|arrested|scandal|police|election|cdf|warns)\b/i;
+const POSITIVE_VLOG_EVENT_PATTERN = /(?:latest\s+updates|city\s+streets|streets\s+\d|rainy\s+day|\bparties\b|sunrise|\bvlog\b|presentation|\bproject\b|walkthrough|drone|timelapse|nightlife|worship|church|\bmix\b|whatsapp\s+video|\bvillage\b|i\s+found|why\s+everyone|moving\s+to)/i;
 const BROAD_LOCATION_LABELS = new Set([
   'uganda',
   'kampala',
@@ -21,6 +31,12 @@ const BROAD_LOCATION_LABELS = new Set([
 
 function compactText(value = '') {
   return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function nullableNumber(value) {
+  if (value == null || value === '') return null;
+  const n = Number(String(value).replace(/,/g, '').replace(/[^\d.-]/g, ''));
+  return Number.isFinite(n) ? n : null;
 }
 
 function jsonText(value) {
@@ -115,6 +131,129 @@ function sourceLocationText(record = {}) {
     extra.source_caption,
     extra.youtube_source_title,
   ].map(compactText).filter(Boolean).join(' ');
+}
+
+function sourcePositiveListingText(record = {}) {
+  return [sourceQualityText(record), sourceLocationText(record)].map(compactText).filter(Boolean).join(' ');
+}
+
+function sourcePositiveListingCoordinates(record = {}) {
+  const extra = record.extra_fields && typeof record.extra_fields === 'object' && !Array.isArray(record.extra_fields)
+    ? record.extra_fields
+    : {};
+  const lat = nullableNumber(record.latitude ?? record.lat ?? extra.latitude ?? extra.lat ?? extra.map_latitude ?? extra.map_lat);
+  const lng = nullableNumber(record.longitude ?? record.lng ?? record.lon ?? record.long ?? extra.longitude ?? extra.lng ?? extra.lon ?? extra.long ?? extra.map_longitude ?? extra.map_lng);
+  if (lat == null || lng == null) return null;
+  if (Number(lat) === 0 && Number(lng) === 0) return null;
+  return { lat, lng };
+}
+
+function sourceCoordinatesInsideUganda(coords = null) {
+  if (!coords) return false;
+  return coords.lat >= UGANDA_BBOX.minLat
+    && coords.lat <= UGANDA_BBOX.maxLat
+    && coords.lng >= UGANDA_BBOX.minLng
+    && coords.lng <= UGANDA_BBOX.maxLng;
+}
+
+function sourceCanonicalUgandaDistrict(record = {}) {
+  const extra = record.extra_fields && typeof record.extra_fields === 'object' && !Array.isArray(record.extra_fields)
+    ? record.extra_fields
+    : {};
+  const district = compactText(record.district || extra.district || extra.resolved_district || '');
+  return district && UGANDA_DISTRICT_SET.has(district.toLowerCase()) ? district : '';
+}
+
+function sourceHasConcreteListingSignal(record = {}) {
+  const extra = record.extra_fields && typeof record.extra_fields === 'object' && !Array.isArray(record.extra_fields)
+    ? record.extra_fields
+    : {};
+  const price = nullableNumber(record.price ?? record.asking_price ?? record.amount ?? extra.price ?? extra.asking_price);
+  const bedrooms = nullableNumber(record.bedrooms ?? record.beds ?? extra.bedrooms ?? extra.beds);
+  const propertyType = compactText(record.property_type || record.subtype || record.type || extra.property_type || extra.subtype || '');
+  const text = sourcePositiveListingText(record);
+  return Boolean(
+    (price != null && price > 0)
+      || (bedrooms != null && bedrooms > 0)
+      || propertyType
+      || POSITIVE_LISTING_SIGNAL_PATTERN.test(text)
+  );
+}
+
+function sourcePositiveListingGateForRecord(record = {}) {
+  const text = sourcePositiveListingText(record);
+  const coords = sourcePositiveListingCoordinates(record);
+  const canonicalDistrict = sourceCanonicalUgandaDistrict(record);
+  const hasInUgandaCoordinates = sourceCoordinatesInsideUganda(coords);
+  if (coords && !hasInUgandaCoordinates) {
+    return {
+      ok: false,
+      reason: 'non_uganda_location',
+      details: [`Coordinates ${coords.lat}, ${coords.lng} are outside Uganda's bounding box.`],
+      has_uganda_location_signal: false,
+      has_listing_signal: false,
+      coordinates: coords,
+      district: canonicalDistrict,
+    };
+  }
+  if (POSITIVE_FOREIGN_LOCATION_PATTERN.test(text)) {
+    return {
+      ok: false,
+      reason: 'non_uganda_location',
+      details: ['Foreign location/currency/residency token detected in source text.'],
+      has_uganda_location_signal: false,
+      has_listing_signal: false,
+      coordinates: coords,
+      district: canonicalDistrict,
+    };
+  }
+  if (!canonicalDistrict && !hasInUgandaCoordinates) {
+    return {
+      ok: false,
+      reason: 'non_uganda_location',
+      details: ['Canonical Uganda district or in-Uganda coordinates are required.'],
+      has_uganda_location_signal: false,
+      has_listing_signal: false,
+      coordinates: coords,
+      district: canonicalDistrict,
+    };
+  }
+  const negativeMatch = text.match(POSITIVE_CLICKBAIT_PATTERN)
+    || text.match(POSITIVE_EXPLAINER_PATTERN)
+    || text.match(POSITIVE_NEWS_POLITICS_PATTERN)
+    || text.match(POSITIVE_VLOG_EVENT_PATTERN);
+  if (negativeMatch) {
+    return {
+      ok: false,
+      reason: 'not_a_listing',
+      details: [`Non-listing content signal detected: ${negativeMatch[0]}`],
+      has_uganda_location_signal: true,
+      has_listing_signal: false,
+      coordinates: coords,
+      district: canonicalDistrict,
+    };
+  }
+  const hasListingSignal = sourceHasConcreteListingSignal(record);
+  if (!hasListingSignal) {
+    return {
+      ok: false,
+      reason: 'not_a_listing',
+      details: ['Concrete property listing signal is required before approval.'],
+      has_uganda_location_signal: true,
+      has_listing_signal: false,
+      coordinates: coords,
+      district: canonicalDistrict,
+    };
+  }
+  return {
+    ok: true,
+    reason: '',
+    details: [],
+    has_uganda_location_signal: true,
+    has_listing_signal: true,
+    coordinates: coords,
+    district: canonicalDistrict,
+  };
 }
 
 function sourceLocationQualityForRecord(record = {}) {
@@ -325,5 +464,6 @@ function sourceQualitySuppressedSql(alias = 'p') {
 module.exports = {
   sourceQualitySuppressionForRecord,
   sourceLocationQualityForRecord,
+  sourcePositiveListingGateForRecord,
   sourceQualitySuppressedSql,
 };

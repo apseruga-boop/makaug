@@ -3,6 +3,7 @@ const path = require('path');
 
 const {
   sourceLocationQualityForRecord,
+  sourcePositiveListingGateForRecord,
   sourceQualitySuppressionForRecord,
   sourceQualitySuppressedSql,
 } = require('../utils/sourceContentQuality');
@@ -92,6 +93,41 @@ async function run() {
   assert.strictEqual(kolkataListing.suppressed, true, 'foreign property-market posts should not enter King review');
   assert.strictEqual(kolkataListing.reason, 'foreign_property_market_source');
 
+  const politicsClip = sourcePositiveListingGateForRecord({
+    title: 'New Speaker MPs Drama in Parliament',
+    description: 'Uganda political news update',
+    district: 'Kampala',
+  });
+  assert.strictEqual(politicsClip.ok, false, 'news/politics clips must not pass the positive listing gate');
+  assert.strictEqual(politicsClip.reason, 'not_a_listing');
+
+  const cityVlog = sourcePositiveListingGateForRecord({
+    title: 'Kampala City streets on a rainy day',
+    description: 'Latest updates from downtown Kampala',
+    district: 'Kampala',
+  });
+  assert.strictEqual(cityVlog.ok, false, 'city vlogs must not pass the positive listing gate');
+  assert.strictEqual(cityVlog.reason, 'not_a_listing');
+
+  const foreignTextListing = sourcePositiveListingGateForRecord({
+    title: '500,000Rwf Kanombe apartment for rent',
+    description: 'Kigali Rwanda apartment update',
+    district: '',
+  });
+  assert.strictEqual(foreignTextListing.ok, false, 'foreign listings without coordinates must not pass the positive listing gate');
+  assert.strictEqual(foreignTextListing.reason, 'non_uganda_location');
+
+  const cleanKiraListing = sourcePositiveListingGateForRecord({
+    title: '5 bedroom mansion for sale in Kira Kampala Uganda',
+    description: 'House for sale with 5 bedrooms and 6 bathrooms',
+    district: 'Wakiso',
+    area: 'Kira',
+    bedrooms: 5,
+    latitude: 0.3978,
+    longitude: 32.6414,
+  });
+  assert.strictEqual(cleanKiraListing.ok, true, 'clear Uganda property listings should pass the positive gate');
+
   const dryBlocked = await queueFoundOnlineSourcePostListings({
     dryRun: true,
     posts: [{
@@ -109,6 +145,24 @@ async function run() {
   assert.strictEqual(dryBlocked.eligible_to_queue_count, 0, 'non-listing construction source should not be eligible');
   assert.strictEqual(dryBlocked.source_quality_suppressed_count, 1, 'non-listing construction source should be counted separately');
   assert.strictEqual(dryBlocked.source_review_records[0].reason, 'non_listing_source_content');
+
+  const dryNewsBlocked = await queueFoundOnlineSourcePostListings({
+    dryRun: true,
+    posts: [{
+      source_url: 'https://www.youtube.com/watch?v=ugandaPoliticsClip',
+      source_contact_url: 'https://www.youtube.com/@newsclip',
+      source_name: 'Uganda News Clip',
+      platform: 'YouTube',
+      title: 'New Bill Targets the Leader of the Opposition',
+      description: 'Parliament and minister drama from Kampala',
+      area: 'Kampala',
+      district: 'Kampala',
+      published_at: '2026-06-15T00:00:00.000Z',
+    }],
+  });
+  assert.strictEqual(dryNewsBlocked.eligible_to_queue_count, 0, 'news clips should not enter source review as property listings');
+  assert.strictEqual(dryNewsBlocked.source_review_records[0].reason, 'not_a_listing');
+  assert.strictEqual(dryNewsBlocked.source_review_records[0].intake.positive_listing_gate_passed, false);
 
   const dryAllowed = await queueFoundOnlineSourcePostListings({
     dryRun: true,

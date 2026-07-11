@@ -14,6 +14,7 @@ const {
 const { SOURCE } = require('../scripts/seed-sourced-inventory-candidates');
 const {
   sourceLocationQualityForRecord,
+  sourcePositiveListingGateForRecord,
   sourceQualitySuppressionForRecord,
 } = require('../utils/sourceContentQuality');
 
@@ -857,7 +858,6 @@ function sourcePriceLabelFor(item = {}) {
 function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
   const hasSource = Boolean(sourceUrlForItem(item));
   const allowedSocialSource = itemHasAllowedSocialSource(item, agent);
-  const hasLocation = Boolean(String(item.address || item.area || item.district || '').trim());
   const locationQuality = sourceLocationQualityForItem(item, agent);
   const hasPrice = hasPublishedPriceOrGuidePrice(item);
   const priceUponApplication = !hasPrice;
@@ -866,12 +866,14 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
   const dateStatus = sourceDateStatusFor(item);
   const preApproval = sourcePreApprovalStatusFor(item);
   const sourceQuality = sourceQualityReviewForItem(item, agent);
+  const positiveListingGate = sourcePositiveListingGateForItem(item, agent);
+  const hasLocation = Boolean(String(item.address || item.area || item.district || '').trim()) || positiveListingGate.has_uganda_location_signal === true;
   const pendingKingSourceReview = !preApproval.preapproved;
   const hasQueuePermission = allowedSocialSource;
   const requiresSpecificSourcePostLocation = item.importedFromSourcePost === true;
-  const locationPassesIntake = !requiresSpecificSourcePostLocation || locationQuality.ok;
+  const locationPassesIntake = !requiresSpecificSourcePostLocation || locationQuality.ok || positiveListingGate.has_uganda_location_signal === true;
   return {
-    eligible: hasSource && allowedSocialSource && hasLocation && locationPassesIntake && hasContact && hasImageOrEvidence && dateStatus !== 'before_2026_source_window' && hasQueuePermission && !sourceQuality.suppressed,
+    eligible: hasSource && allowedSocialSource && hasLocation && locationPassesIntake && hasContact && hasImageOrEvidence && dateStatus !== 'before_2026_source_window' && hasQueuePermission && !sourceQuality.suppressed && positiveListingGate.ok,
     has_source_url: hasSource,
     allowed_social_source: allowedSocialSource,
     has_location_or_area: hasLocation,
@@ -904,6 +906,11 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
     source_quality_reason: sourceQuality.reason,
     source_quality_matched: sourceQuality.matched,
     source_quality_location_status: sourceQuality.location_status || locationQuality.status,
+    positive_listing_gate_passed: positiveListingGate.ok,
+    positive_listing_gate_reason: positiveListingGate.reason || '',
+    positive_listing_gate_details: positiveListingGate.details || [],
+    has_uganda_location_signal: positiveListingGate.has_uganda_location_signal === true,
+    has_concrete_listing_signal: positiveListingGate.has_listing_signal === true,
   };
 }
 
@@ -912,6 +919,9 @@ function sourceReviewReasonForIntake(intake = {}) {
     return 'low_signal_source_location';
   }
   if (intake.source_quality_suppressed) return 'non_listing_source_content';
+  if (intake.positive_listing_gate_passed === false) {
+    return intake.positive_listing_gate_reason || 'not_a_listing';
+  }
   if (intake.requires_specific_source_post_location && intake.has_location_or_area && !intake.has_specific_location) {
     return 'low_signal_source_location';
   }
@@ -1400,6 +1410,39 @@ function sourceQualityReviewForItem(item = {}, agent = sourceAgentForItem(item))
   });
 }
 
+function sourcePositiveListingGateForItem(item = {}, agent = sourceAgentForItem(item)) {
+  return sourcePositiveListingGateForRecord({
+    ...item,
+    title: item.title || item.sourceTitle || item.source_title || '',
+    description: item.description || item.caption || item.sourceText || item.source_text || '',
+    source_name: agent.name || item.agentKey || '',
+    source_agent_name: agent.name || item.agentKey || '',
+    lister_name: agent.name || '',
+    source_platform: sourcePlatformFor(agent, item),
+    source_url: sourceUrlForItem(item),
+    price: item.price,
+    bedrooms: item.beds ?? item.bedrooms,
+    beds: item.beds ?? item.bedrooms,
+    property_type: item.subtype || item.property_type || '',
+    latitude: item.lat ?? item.latitude,
+    longitude: item.lng ?? item.longitude,
+    extra_fields: {
+      source_name: agent.name || '',
+      source_agent_name: agent.name || '',
+      public_display_name: agent.name || '',
+      source_title: item.sourceTitle || item.source_title || item.title || '',
+      source_caption: item.caption || item.raw_source_post?.caption || item.rawSourcePost?.caption || '',
+      source_description: item.description || '',
+      source_text: item.sourceText || item.source_text || item.raw_source_post?.source_text || item.rawSourcePost?.source_text || '',
+      source_visual_text: item.sourceVisualText || item.source_visual_text || item.raw_source_post?.source_visual_text || item.rawSourcePost?.source_visual_text || '',
+      youtube_source_title: item.youtube_source_title || item.sourceTitle || '',
+      resolved_location_label: item.address || item.location_label || '',
+      map_pin_label: item.address || item.location_label || '',
+      raw_source_post: item.raw_source_post || item.rawSourcePost || {}
+    }
+  });
+}
+
 function sourceLocationQualityForItem(item = {}, agent = sourceAgentForItem(item)) {
   return sourceLocationQualityForRecord({
     ...item,
@@ -1474,6 +1517,7 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
   const preApproval = sourcePreApprovalStatusFor(item);
   const youtubeConfidenceReview = youtubeConfidenceReviewForItem(item);
   const autoLive = sourcePostAutoLiveStatusFor(item, agent);
+  const positiveListingGate = sourcePositiveListingGateForItem(item, agent);
   const nearestUniversity = nearestUniversityForSourceItem(item);
   const trustReview = buildSocialSourceTrustReview({
     ...item,
@@ -1576,6 +1620,10 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
     price_status: hasPublishedPriceOrGuidePrice(item) ? 'published_price_or_guide_price' : 'price_upon_application',
     source_price_policy: 'If the public social source does not publish a price, makaug shows Price upon application and King confirms the price during review/follow-up.',
     source_quality_review: sourceQualityReviewForItem(item, agent),
+    source_positive_listing_gate: positiveListingGate,
+    source_positive_listing_gate_passed: positiveListingGate.ok === true,
+    source_positive_listing_gate_reason: positiveListingGate.reason || '',
+    source_positive_listing_gate_details: positiveListingGate.details || [],
     source_channel_url: agent.channelUrl || '',
     source: SOCIAL_SEARCH_SOURCE,
     agent_permission_reported: preApproval.preapproved,
