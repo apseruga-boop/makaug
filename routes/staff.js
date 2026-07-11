@@ -59,7 +59,11 @@ const STAFF_SOCIAL_SWEEP_SOURCE_LIMIT = Math.min(60, Math.max(15, parseInt(proce
 const STAFF_SOCIAL_SWEEP_RESULT_LIMIT = Math.min(25, Math.max(10, parseInt(process.env.STAFF_SOCIAL_SWEEP_RESULT_LIMIT || '25', 10) || 25));
 const STAFF_SOCIAL_SWEEP_PAGE_LIMIT = 1;
 const STAFF_SOCIAL_SWEEP_TIME_BUDGET_MS = Math.min(45000, Math.max(10000, parseInt(process.env.STAFF_SOCIAL_SWEEP_TIME_BUDGET_MS || '45000', 10) || 45000));
+const UGANDA_DISTRICT_SET = new Set(DISTRICTS.map((district) => district.toLowerCase()));
 const EXACT_SOCIAL_URL_PATTERN = /https?:\/\/[^\s<>"']*(?:tiktok\.com\/@[^/\s?#]+\/video\/\d+|youtube\.com\/watch\?[^ \n\r\t<>"']*v=|youtube\.com\/shorts\/|youtu\.be\/|instagram\.com\/(?:p|reel|tv)\/|facebook\.com\/.+\/(?:posts|videos|reel)|fb\.watch\/|(?:x|twitter)\.com\/[^/\s?#]+\/status\/\d+)/ig;
+const STAFF_FOREIGN_LOCATION_TOKEN_PATTERN = /(^|\b)(ajah|lekki|ibeju|lagos|abuja|ikeja|ikoyi|nigeria|naira|nairobi|mombasa|kenya|accra|ghana|dar\s+es\s+salaam|tanzania|kigali|rwanda|johannesburg|cape\s+town|south\s+africa|dubai|uae|texas|florida|london|uk|canada|portugal|golden\s+visa|passport|citizenship|residency)(\b|$)|\u20a6/i;
+const STAFF_NOT_LISTING_TITLE_PATTERN = /^\s*what\s+\$/i;
+const STAFF_NOT_LISTING_CONTENT_PATTERN = /(?:\$\s*\d{2,}\s*k?\s+can\s+(?:buy|get)|\b\d+\s+countries\b|\bgolden\s+visa\b|\bland\s+banking\b|\bhow\s+to\b|\btop\s+\d+\b|\bexplained\b|\btour\s+of\b|\bforget\s+\$)/i;
 const PUBLIC_SUPPRESSED_LISTING_MARKERS = ['SOFT LAUNCH TEST - DELETE', 'QA TEST - DELETE'];
 const PUBLIC_SUPPRESSED_DUMMY_TITLES = ['sdgsdgd', 'sgsgsgsgs'];
 const STAFF_SOURCE_PRESETS = [
@@ -285,6 +289,94 @@ function normalizeDuplicateText(value = '') {
 
 function duplicateTitlePrefix(value = '') {
   return normalizeDuplicateText(value).slice(0, 25);
+}
+
+function normalizedInternalDuplicateTitle(value = '') {
+  return normalizeDuplicateText(value)
+    .replace(/https?:\/\/\S+/gi, ' ')
+    .replace(/#[^\s]+/g, ' ')
+    .replace(/[^\w\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 40);
+}
+
+function staffGateSearchText(row = {}) {
+  const extra = safeJsonObject(row.extra_fields, {});
+  return [
+    row.title,
+    row.description,
+    row.address,
+    row.area,
+    row.district,
+    row.location,
+    row.source_url,
+    extra.title,
+    extra.description,
+    extra.caption,
+    extra.source_caption,
+    extra.source_description,
+    extra.source_text,
+    extra.source_location,
+    extra.location,
+    extra.location_label,
+    extra.resolved_location_label
+  ].map((value) => cleanText(value)).filter(Boolean).join(' | ');
+}
+
+function staffUgandaLocationHoldReason(row = {}) {
+  const district = cleanText(row.district);
+  if (!district || !UGANDA_DISTRICT_SET.has(district.toLowerCase())) {
+    return {
+      reason: 'non_uganda_location',
+      details: district ? [`District "${district}" is not a canonical Uganda district.`] : ['Canonical Uganda district is required before bulk approval.']
+    };
+  }
+  const searchText = staffGateSearchText(row);
+  if (STAFF_FOREIGN_LOCATION_TOKEN_PATTERN.test(searchText)) {
+    return {
+      reason: 'non_uganda_location',
+      details: ['Foreign location/citizenship token detected in title, caption, address, or source text.']
+    };
+  }
+  return null;
+}
+
+function staffNotListingReason(title = '') {
+  const text = cleanText(title);
+  if (!text) return '';
+  if (STAFF_NOT_LISTING_TITLE_PATTERN.test(text) || STAFF_NOT_LISTING_CONTENT_PATTERN.test(text)) {
+    return 'informational, explainer, residency, or clickbait content is not a specific property listing';
+  }
+  return '';
+}
+
+function staffInternalDuplicateCompletenessScore(row = {}) {
+  const extra = safeJsonObject(row.extra_fields, {});
+  const lat = toNullableFloat(row.latitude ?? extra.latitude);
+  const lng = toNullableFloat(row.longitude ?? extra.longitude);
+  const fields = [
+    row.title,
+    row.description,
+    row.listing_type,
+    row.property_type,
+    row.area,
+    row.district,
+    row.address,
+    row.price,
+    row.bedrooms,
+    row.bathrooms,
+    row.lister_phone,
+    row.lister_email,
+    staffListingSourceUrl(row),
+    extra.city,
+    extra.neighborhood,
+    extra.source_caption,
+    extra.source_description
+  ];
+  let score = fields.filter((value) => cleanText(value)).length;
+  if (lat != null && lng != null && !(Number(lat) === 0 && Number(lng) === 0)) score += 3;
+  return score;
 }
 
 function staffLocationWarnings(row = {}) {
@@ -1826,6 +1918,10 @@ async function loadStaffPropertyPreview(propertyId) {
     matchingUsers,
     externalDuplicateScan: getCachedExternalDuplicateScan(property)
   });
+  const bulkGatePreview = staffBulkModerationDecision(
+    { ...property, source_url: sourceUrl },
+    approvedDuplicateIndexFromRows(duplicates)
+  );
   return {
     ...property,
     images,
@@ -1856,7 +1952,8 @@ async function loadStaffPropertyPreview(propertyId) {
       notes: property.moderation_notes || '',
       reason: property.moderation_reason || extra.moderation_reason || '',
       warning_overrides: safeJsonObject(extra.review_warning_overrides, {}),
-      automated: automatedReview
+      automated: automatedReview,
+      bulk_gate_preview: bulkGatePreview
     },
     events
   };
@@ -1940,6 +2037,23 @@ async function loadApprovedDuplicateIndex() {
   return { byPhone, bySourceUrl, byTitlePrefix };
 }
 
+function approvedDuplicateIndexFromRows(rows = []) {
+  const byPhone = new Map();
+  const bySourceUrl = new Map();
+  const byTitlePrefix = new Map();
+  (Array.isArray(rows) ? rows : [])
+    .filter((row) => ['approved', 'live', 'published'].includes(String(row.status || '').toLowerCase()))
+    .forEach((row) => {
+      const phone = normalizePhoneLite(row.lister_phone);
+      const sourceUrl = cleanText(row.source_url).toLowerCase();
+      const prefix = duplicateTitlePrefix(row.title);
+      if (phone && !byPhone.has(phone)) byPhone.set(phone, row);
+      if (sourceUrl && !bySourceUrl.has(sourceUrl)) bySourceUrl.set(sourceUrl, row);
+      if (prefix && !byTitlePrefix.has(prefix)) byTitlePrefix.set(prefix, row);
+    });
+  return { byPhone, bySourceUrl, byTitlePrefix };
+}
+
 function staffBulkDuplicateMatch(row = {}, approvedIndex = {}) {
   const phone = normalizePhoneLite(row.lister_phone);
   const sourceUrl = cleanText(staffListingSourceUrl(row)).toLowerCase();
@@ -1959,10 +2073,16 @@ function staffBulkModerationDecision(row = {}, approvedIndex = {}) {
   if (!isStaffSourcedInventoryCandidate(row)) {
     return { id: row.id, title: row.title, decision: 'hold', reason: 'not_found_online' };
   }
+  const ugandaLocationHold = staffUgandaLocationHoldReason(row);
+  if (ugandaLocationHold) {
+    return { id: row.id, title: row.title, decision: 'hold', ...ugandaLocationHold };
+  }
   const locationWarnings = staffLocationWarnings(row);
   if (locationWarnings.length || !staffSourcedCandidateHasApprovalLocation(row)) {
     return { id: row.id, title: row.title, decision: 'hold', reason: 'location', details: locationWarnings };
   }
+  const notListingReason = staffNotListingReason(row.title);
+  if (notListingReason) return { id: row.id, title: row.title, decision: 'hold', reason: 'not_a_listing', details: [notListingReason] };
   const spamReason = staffTitleSpamReason(row.title);
   if (spamReason) return { id: row.id, title: row.title, decision: 'hold', reason: 'spam', details: [spamReason] };
   if (String(row.listing_type || '').toLowerCase() === 'sale' && Number(row.price || 0) > 0 && Number(row.price || 0) < 20000000) {
@@ -1980,6 +2100,42 @@ function staffBulkModerationDecision(row = {}, approvedIndex = {}) {
     };
   }
   return { id: row.id, title: row.title, decision: 'approve' };
+}
+
+function applyStaffBulkInternalDuplicateGate(decisions = [], rows = []) {
+  const rowsById = new Map((Array.isArray(rows) ? rows : []).map((row) => [String(row.id), row]));
+  const approvalsByKey = new Map();
+  decisions.forEach((decision, index) => {
+    if (decision?.decision !== 'approve') return;
+    const row = rowsById.get(String(decision.id));
+    const key = normalizedInternalDuplicateTitle(row?.title || decision.title);
+    if (!key || key.length < 12) return;
+    if (!approvalsByKey.has(key)) approvalsByKey.set(key, []);
+    approvalsByKey.get(key).push({
+      index,
+      decision,
+      row,
+      score: staffInternalDuplicateCompletenessScore(row)
+    });
+  });
+
+  approvalsByKey.forEach((items) => {
+    if (items.length < 2) return;
+    const keeper = items.reduce((best, item) => (item.score > best.score ? item : best), items[0]);
+    items.forEach((item) => {
+      if (item.index === keeper.index) return;
+      decisions[item.index] = {
+        id: item.decision.id,
+        title: item.decision.title,
+        decision: 'hold',
+        reason: 'internal_duplicate',
+        duplicate_id: keeper.decision.id,
+        duplicate_title: keeper.decision.title,
+        details: ['Duplicate within the same bulk-review run; keeping the most complete row.']
+      };
+    });
+  });
+  return decisions;
 }
 
 async function approveStaffBulkFoundOnlineListing(client, req, row = {}) {
@@ -2429,7 +2585,10 @@ router.post('/properties/bulk-review', async (req, res, next) => {
       loadStaffBulkReviewCandidates({ ids, allPending }),
       loadApprovedDuplicateIndex()
     ]);
-    const decisions = candidateResult.rows.map((row) => staffBulkModerationDecision(row, approvedIndex));
+    const decisions = applyStaffBulkInternalDuplicateGate(
+      candidateResult.rows.map((row) => staffBulkModerationDecision(row, approvedIndex)),
+      candidateResult.rows
+    );
     candidateResult.missing_ids.forEach((id) => {
       decisions.push({ id, title: '', decision: 'hold', reason: 'not_found' });
     });

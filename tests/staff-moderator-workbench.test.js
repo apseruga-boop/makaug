@@ -232,7 +232,15 @@ function run() {
   assert(html.includes('staff-panels-review-queue-rows-20260711'), 'index should cache-bust the staff panel row parity fix');
   assert(html.includes('staff-review-queue-performance-20260711'), 'index should cache-bust the staff review queue performance fix');
   assert(html.includes('staff-bulk-moderation-20260711'), 'index should cache-bust the staff bulk moderation infrastructure');
+  assert(html.includes('staff-bulk-gate-tighten-20260711'), 'index should cache-bust the tightened staff bulk-review gates');
+  assert(server.includes('staff-bulk-gate-tighten-20260711'), 'server should cache-bust the tightened staff bulk-review gates');
   assert(staffRoutes.includes('function staffBulkModerationDecision'), 'staff bulk review should gate each listing server-side');
+  assert(staffRoutes.includes('UGANDA_DISTRICT_SET'), 'staff bulk review should require a canonical Uganda district before approval');
+  assert(staffRoutes.includes("reason: 'non_uganda_location'"), 'staff bulk review should hold non-Uganda or foreign-token rows');
+  assert(staffRoutes.includes("reason: 'not_a_listing'"), 'staff bulk review should hold clickbait/explainer source videos');
+  assert(staffRoutes.includes('applyStaffBulkInternalDuplicateGate'), 'staff bulk review should deduplicate approvals inside the same run');
+  assert(staffRoutes.includes("reason: 'internal_duplicate'"), 'staff bulk review should hold duplicate approvals inside the same run');
+  assert(staffRoutes.includes('bulk_gate_preview'), 'staff listing preview should expose the same bulk-review gate decision');
   assert(staffRoutes.includes("reason: 'misclassified_sale'"), 'staff bulk review should hold suspicious sub-20M sale rows');
   assert(staffRoutes.includes('manual_notification_only'), 'staff bulk approval should record that owner WhatsApp is not auto-sent');
   assert(staffRoutes.includes('staffTikTokOembedOnlyBatch'), 'staff import API should force oEmbed for TikTok-only exact video batches');

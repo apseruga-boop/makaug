@@ -215,6 +215,7 @@ const staffPanelsReviewQueueVersion = 'staff-panels-review-queue-20260711';
 const staffPanelsReviewQueueRowsVersion = 'staff-panels-review-queue-rows-20260711';
 const staffReviewQueuePerformanceVersion = 'staff-review-queue-performance-20260711';
 const staffBulkModerationVersion = 'staff-bulk-moderation-20260711';
+const staffBulkGateTightenVersion = 'staff-bulk-gate-tighten-20260711';
 const publicAppVersionSuffixes = [
   captureHelperUsabilityVersion,
   studentNearestUniversityVersion,
@@ -299,7 +300,8 @@ const publicAppVersionSuffixes = [
   staffPanelsReviewQueueVersion,
   staffPanelsReviewQueueRowsVersion,
   staffReviewQueuePerformanceVersion,
-  staffBulkModerationVersion
+  staffBulkModerationVersion,
+  staffBulkGateTightenVersion
 ];
 let cachedIndexHtml = null;
 const publicHtmlCache = new Map();
