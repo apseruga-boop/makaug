@@ -244,6 +244,14 @@ async function run() {
   assert.strictEqual(realEstateTvSegment.ok, false, 'TV investment segments must not pass as listings');
   assert.strictEqual(realEstateTvSegment.reason, 'not_a_listing');
 
+  const firstTimeInvestorAdvice = sourcePositiveListingGateForRecord({
+    title: 'The specified areas to invest in real estate in Uganda as a first time investor',
+    district: 'Kampala',
+    property_type: 'land',
+  });
+  assert.strictEqual(firstTimeInvestorAdvice.ok, false, 'first-time investor advice must not pass as a listing');
+  assert.strictEqual(firstTimeInvestorAdvice.reason, 'not_a_listing');
+
   const dryBlocked = await queueFoundOnlineSourcePostListings({
     dryRun: true,
     posts: [{
