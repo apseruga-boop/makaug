@@ -212,6 +212,14 @@ async function run() {
   assert.strictEqual(scamWarningContent.ok, false, 'scam-warning content must not pass as a listing');
   assert.strictEqual(scamWarningContent.reason, 'not_a_listing');
 
+  const realEstateAdvice = sourcePositiveListingGateForRecord({
+    title: 'Investing in real estate in Uganda - Tips #propertylane',
+    district: 'Kampala',
+    property_type: 'land',
+  });
+  assert.strictEqual(realEstateAdvice.ok, false, 'real-estate advice/tips clips must not pass as listings');
+  assert.strictEqual(realEstateAdvice.reason, 'not_a_listing');
+
   const dryBlocked = await queueFoundOnlineSourcePostListings({
     dryRun: true,
     posts: [{
