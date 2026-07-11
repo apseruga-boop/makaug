@@ -196,6 +196,14 @@ async function run() {
   assert.strictEqual(southAsianLandUnit.ok, false, 'South Asian land units such as decimal must hold as foreign');
   assert.strictEqual(southAsianLandUnit.reason, 'non_uganda_location');
 
+  const compactDecimalLandUnit = sourcePositiveListingGateForRecord({
+    title: '12decimals Residential Private Mailo land for 230Million',
+    district: 'Kampala',
+    property_type: 'land',
+  });
+  assert.strictEqual(compactDecimalLandUnit.ok, false, 'compact decimal land-unit rows must hold under the foreign land-unit gate');
+  assert.strictEqual(compactDecimalLandUnit.reason, 'non_uganda_location');
+
   const sobhaForeignDeveloper = sourcePositiveListingGateForRecord({
     title: '413 Villas at Sobha silver estate',
     district: 'Kampala',
@@ -315,6 +323,22 @@ async function run() {
   });
   assert.strictEqual(realEstateBusinessIdeas.ok, false, 'real-estate business idea content must not pass as a listing');
   assert.strictEqual(realEstateBusinessIdeas.reason, 'not_a_listing');
+
+  const bobiWineClip = sourcePositiveListingGateForRecord({
+    title: 'Bobi wine is hiding at his friends house in makindye',
+    district: 'Kampala',
+    property_type: 'house',
+  });
+  assert.strictEqual(bobiWineClip.ok, false, 'political clips mentioning a house must not pass as listings');
+  assert.strictEqual(bobiWineClip.reason, 'not_a_listing');
+
+  const kasokosoLandPolitics = sourcePositiveListingGateForRecord({
+    title: "GOVERNMENT DOESN'T OWN LAND. THE PEOPLE OF KASOKOSO WERE GIVEN HOT AIR - COUNSEL BWANIKA",
+    district: 'Kampala',
+    property_type: 'land',
+  });
+  assert.strictEqual(kasokosoLandPolitics.ok, false, 'political land-rights clips must not pass as listings');
+  assert.strictEqual(kasokosoLandPolitics.reason, 'not_a_listing');
 
   const dryBlocked = await queueFoundOnlineSourcePostListings({
     dryRun: true,
