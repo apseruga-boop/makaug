@@ -48,7 +48,8 @@ const STAFF_DASHBOARD_QUEUE_SCAN_LIMIT = STAFF_DASHBOARD_QUEUE_LIMIT * 20;
 const STAFF_DASHBOARD_PANEL_SCAN_LIMIT = STAFF_DASHBOARD_PANEL_LIMIT * 20;
 const STAFF_DASHBOARD_PANEL_QUERY_TIMEOUT_MS = Math.max(1000, parseInt(process.env.STAFF_DASHBOARD_PANEL_QUERY_TIMEOUT_MS || '5000', 10) || 5000);
 const STAFF_REVIEW_QUEUE_QUERY_TIMEOUT_MS = Math.max(1500, parseInt(process.env.STAFF_REVIEW_QUEUE_QUERY_TIMEOUT_MS || '4000', 10) || 4000);
-const STAFF_PREVIEW_QUERY_TIMEOUT_MS = Math.max(800, parseInt(process.env.STAFF_PREVIEW_QUERY_TIMEOUT_MS || '1500', 10) || 1500);
+const STAFF_PREVIEW_QUERY_TIMEOUT_MS = Math.max(500, parseInt(process.env.STAFF_PREVIEW_QUERY_TIMEOUT_MS || '900', 10) || 900);
+const STAFF_BULK_REVIEW_QUERY_TIMEOUT_MS = Math.max(5000, parseInt(process.env.STAFF_BULK_REVIEW_QUERY_TIMEOUT_MS || '15000', 10) || 15000);
 const STAFF_BULK_REVIEW_LIMIT = Math.min(2000, Math.max(1, parseInt(process.env.STAFF_BULK_REVIEW_LIMIT || '1000', 10) || 1000));
 const STAFF_EXACT_SOCIAL_IMPORT_LIMIT = 500;
 const STAFF_FAST_DASHBOARD_CACHE_TTL_MS = Math.max(5000, parseInt(process.env.STAFF_FAST_DASHBOARD_CACHE_TTL_MS || '60000', 10) || 60000);
@@ -1697,12 +1698,13 @@ async function updateStaffEditableListing(req, propertyId, listingPatch = {}, re
 
 async function loadStaffPropertyPreview(propertyId) {
   const previewQueryOptions = { timeoutMs: STAFF_PREVIEW_QUERY_TIMEOUT_MS };
+  const lookup = cleanText(propertyId);
+  const lookupUuid = toUuidOrNull(lookup);
   const property = await safeOne(
-    `SELECT p.*
-     FROM properties p
-     WHERE p.id::text = $1 OR p.inquiry_reference = $1
-     LIMIT 1`,
-    [cleanText(propertyId)],
+    lookupUuid
+      ? `SELECT p.* FROM properties p WHERE p.id = $1::uuid LIMIT 1`
+      : `SELECT p.* FROM properties p WHERE p.inquiry_reference = $1 LIMIT 1`,
+    [lookup],
     null,
     previewQueryOptions
   );
@@ -1882,7 +1884,7 @@ async function loadStaffBulkReviewCandidates({ ids = [], allPending = false } = 
        ORDER BY p.updated_at DESC NULLS LAST, p.created_at DESC NULLS LAST, p.id DESC
        LIMIT $1`,
       [STAFF_BULK_REVIEW_LIMIT],
-      { timeoutMs: STAFF_REVIEW_QUEUE_QUERY_TIMEOUT_MS }
+      { timeoutMs: STAFF_BULK_REVIEW_QUERY_TIMEOUT_MS }
     );
     return { rows: result.rows, missing_ids: [] };
   }
@@ -1904,7 +1906,7 @@ async function loadStaffBulkReviewCandidates({ ids = [], allPending = false } = 
      ORDER BY p.updated_at DESC NULLS LAST, p.created_at DESC NULLS LAST, p.id DESC
      LIMIT $3`,
     [uuidIds, textIds, requested.length],
-    { timeoutMs: STAFF_REVIEW_QUEUE_QUERY_TIMEOUT_MS }
+    { timeoutMs: STAFF_BULK_REVIEW_QUERY_TIMEOUT_MS }
   );
   const found = new Set(result.rows.flatMap((row) => [String(row.id), cleanText(row.inquiry_reference)].filter(Boolean)));
   return {
@@ -1922,7 +1924,7 @@ async function loadApprovedDuplicateIndex() {
      ORDER BY p.updated_at DESC NULLS LAST, p.created_at DESC NULLS LAST
      LIMIT 5000`,
     [],
-    { timeoutMs: STAFF_REVIEW_QUEUE_QUERY_TIMEOUT_MS }
+    { timeoutMs: STAFF_BULK_REVIEW_QUERY_TIMEOUT_MS }
   );
   const byPhone = new Map();
   const bySourceUrl = new Map();
@@ -2263,7 +2265,7 @@ router.get('/properties/review-queue', async (req, res, next) => {
          ) img ON true`
       : '';
     const rowLimit = limit + 1;
-    const rawResult = await safeRowsResult(
+    const rowPromise = safeRowsResult(
       `WITH paged_review_queue AS MATERIALIZED (
          SELECT p.id
          FROM properties p
@@ -2288,6 +2290,16 @@ router.get('/properties/review-queue', async (req, res, next) => {
       [...values, rowLimit, offset],
       { timeoutMs: STAFF_REVIEW_QUEUE_QUERY_TIMEOUT_MS, label: 'staff_review_queue_page' }
     );
+    const countPromise = includeTotal
+      ? staffQuery(
+        `SELECT COUNT(*)::int AS total FROM properties p ${where}`,
+        values,
+        { timeoutMs: STAFF_REVIEW_QUEUE_QUERY_TIMEOUT_MS }
+      )
+        .then((result) => ({ ok: true, row: result.rows[0] || { total: 0 } }))
+        .catch((error) => ({ ok: false, error }))
+      : Promise.resolve({ ok: true, row: null });
+    const [rawResult, countResult] = await Promise.all([rowPromise, countPromise]);
     if (!rawResult.ok) {
       return res.status(503).json({
         ok: false,
@@ -2306,16 +2318,9 @@ router.get('/properties/review-queue', async (req, res, next) => {
     const rawRows = rawResult.rows;
     const rows = rawRows.slice(0, limit);
     const hasMore = rawRows.length > limit;
-    let countRow = null;
-    if (includeTotal) {
-      try {
-        const countResult = await staffQuery(
-          `SELECT COUNT(*)::int AS total FROM properties p ${where}`,
-          values,
-          { timeoutMs: STAFF_REVIEW_QUEUE_QUERY_TIMEOUT_MS }
-        );
-        countRow = countResult.rows[0] || { total: 0 };
-      } catch (error) {
+    const countRow = countResult.row;
+    if (includeTotal && !countResult.ok) {
+        const error = countResult.error || {};
         logger.warn('Staff review queue count failed', { code: error.code, message: error.message });
         return res.status(503).json({
           ok: false,
@@ -2329,7 +2334,6 @@ router.get('/properties/review-queue', async (req, res, next) => {
             empty_is_authoritative: false
           }
         });
-      }
     }
     const total = includeTotal
       ? safeNumber(countRow, 'total')
