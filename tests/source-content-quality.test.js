@@ -188,6 +188,30 @@ async function run() {
   assert.strictEqual(kinyarwandaForeignDefault.ok, false, 'Kinyarwanda foreign/defaulted rows must not pass via a default Uganda district');
   assert.strictEqual(kinyarwandaForeignDefault.reason, 'non_uganda_location');
 
+  const financeComparison = sourcePositiveListingGateForRecord({
+    title: 'Treasury bonds vs real estate. Uganda perspective.',
+    district: 'Kampala',
+    property_type: 'land',
+  });
+  assert.strictEqual(financeComparison.ok, false, 'finance comparison clips must not pass as listings');
+  assert.strictEqual(financeComparison.reason, 'not_a_listing');
+
+  const developmentPlanContent = sourcePositiveListingGateForRecord({
+    title: 'A MASTER PHYSICAL DEVELOPMENT PLAN IMPLEMENTED TO DETAIL A DIVE INTO PEARL MARINA ESTATE',
+    district: 'Wakiso',
+    property_type: 'estate',
+  });
+  assert.strictEqual(developmentPlanContent.ok, false, 'development-plan explainer content must not pass as a listing');
+  assert.strictEqual(developmentPlanContent.reason, 'not_a_listing');
+
+  const scamWarningContent = sourcePositiveListingGateForRecord({
+    title: "Don't Buy This House It Has No Road Access It's A Scam",
+    district: 'Kampala',
+    property_type: 'house',
+  });
+  assert.strictEqual(scamWarningContent.ok, false, 'scam-warning content must not pass as a listing');
+  assert.strictEqual(scamWarningContent.reason, 'not_a_listing');
+
   const dryBlocked = await queueFoundOnlineSourcePostListings({
     dryRun: true,
     posts: [{
