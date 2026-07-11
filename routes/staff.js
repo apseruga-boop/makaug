@@ -61,9 +61,10 @@ const STAFF_SOCIAL_SWEEP_PAGE_LIMIT = 1;
 const STAFF_SOCIAL_SWEEP_TIME_BUDGET_MS = Math.min(45000, Math.max(10000, parseInt(process.env.STAFF_SOCIAL_SWEEP_TIME_BUDGET_MS || '45000', 10) || 45000));
 const UGANDA_DISTRICT_SET = new Set(DISTRICTS.map((district) => district.toLowerCase()));
 const EXACT_SOCIAL_URL_PATTERN = /https?:\/\/[^\s<>"']*(?:tiktok\.com\/@[^/\s?#]+\/video\/\d+|youtube\.com\/watch\?[^ \n\r\t<>"']*v=|youtube\.com\/shorts\/|youtu\.be\/|instagram\.com\/(?:p|reel|tv)\/|facebook\.com\/.+\/(?:posts|videos|reel)|fb\.watch\/|(?:x|twitter)\.com\/[^/\s?#]+\/status\/\d+)/ig;
-const STAFF_FOREIGN_LOCATION_TOKEN_PATTERN = /(^|\b)(ajah|lekki|ibeju|lagos|abuja|ikeja|ikoyi|nigeria|naira|nairobi|mombasa|kenya|accra|ghana|dar\s+es\s+salaam|tanzania|kigali|rwanda|johannesburg|cape\s+town|south\s+africa|dubai|uae|texas|florida|london|uk|canada|portugal|golden\s+visa|passport|citizenship|residency)(\b|$)|\u20a6/i;
+const STAFF_UGANDA_BBOX = { minLat: -1.5, maxLat: 4.3, minLng: 29.5, maxLng: 35.1 };
+const STAFF_FOREIGN_LOCATION_TOKEN_PATTERN = /(^|\b)(ajah|lekki|ibeju|lagos|abuja|ikeja|ikoyi|nigeria|naira|nairobi|mombasa|kenya|accra|ghana|dar\s+es\s+salaam|tanzania|kigali|rwanda|johannesburg|cape\s+town|south\s+africa|dubai|uae|texas|florida|london|uk|canada|portugal|golden\s+visa|passport|citizenship|residency|owerri|asaba|enugu|awka|onitsha|nnewi|imo|anambra|delta\s+state|edo|certificate\s+of\s+occupancy|ibusa|apogazi|avu|sangotedo|ibeju|eneka|port\s+harcourt|gra\s+phase|ph\s+city)(\b|$)|\bc\s*(?:of|\/|-)\s*o\b|\b(?:apogazi\s+nike|nike\s+enugu)\b|\u20a6/i;
 const STAFF_NOT_LISTING_TITLE_PATTERN = /^\s*what\s+\$/i;
-const STAFF_NOT_LISTING_CONTENT_PATTERN = /(?:\$\s*\d{2,}\s*k?\s+can\s+(?:buy|get)|\b\d+\s+countries\b|\bgolden\s+visa\b|\bland\s+banking\b|\bhow\s+to\b|\btop\s+\d+\b|\bexplained\b|\btour\s+of\b|\bforget\s+\$)/i;
+const STAFF_NOT_LISTING_CONTENT_PATTERN = /(?:\$\s*\d{2,}\s*k?\s+can\s+(?:buy|get)|\b\d+\s+countries\b|\bgolden\s+visa\b|\bland\s+banking\b|\bhow\s+to\b|\btop\s+\d+\b|\bexplained\b|\btour\s+of\b|\bforget\s+\$|\bltd\b|\blimited\b|\bcompany\b|welcome\s+to|well\s*come\s+to|\bep\s?\d+\b|\bepisode\b|podcast|ifma|association|new\s+chapter|your\s+(?:construction|real\s+estate)|ai[- ]powered|ecosystem|getting\s+smarter|\.com\b|real\s+estate\s+ltd|consultants\s+ltd|agencies\b)/i;
 const PUBLIC_SUPPRESSED_LISTING_MARKERS = ['SOFT LAUNCH TEST - DELETE', 'QA TEST - DELETE'];
 const PUBLIC_SUPPRESSED_DUMMY_TITLES = ['sdgsdgd', 'sgsgsgsgs'];
 const STAFF_SOURCE_PRESETS = [
@@ -324,7 +325,31 @@ function staffGateSearchText(row = {}) {
   ].map((value) => cleanText(value)).filter(Boolean).join(' | ');
 }
 
+function staffBulkCoordinates(row = {}) {
+  const extra = safeJsonObject(row.extra_fields, {});
+  const lat = toNullableFloat(row.latitude ?? row.lat ?? extra.latitude ?? extra.lat ?? extra.map_latitude ?? extra.map_lat);
+  const lng = toNullableFloat(row.longitude ?? row.lng ?? row.lon ?? row.long ?? extra.longitude ?? extra.lng ?? extra.lon ?? extra.long ?? extra.map_longitude ?? extra.map_lng);
+  if (lat == null || lng == null) return null;
+  if (Number(lat) === 0 && Number(lng) === 0) return null;
+  return { lat, lng };
+}
+
+function staffCoordinatesInsideUganda(coords = null) {
+  if (!coords) return false;
+  return coords.lat >= STAFF_UGANDA_BBOX.minLat
+    && coords.lat <= STAFF_UGANDA_BBOX.maxLat
+    && coords.lng >= STAFF_UGANDA_BBOX.minLng
+    && coords.lng <= STAFF_UGANDA_BBOX.maxLng;
+}
+
 function staffUgandaLocationHoldReason(row = {}) {
+  const coords = staffBulkCoordinates(row);
+  if (coords && !staffCoordinatesInsideUganda(coords)) {
+    return {
+      reason: 'non_uganda_location',
+      details: [`Coordinates ${coords.lat}, ${coords.lng} are outside Uganda's bounding box.`]
+    };
+  }
   const district = cleanText(row.district);
   if (!district || !UGANDA_DISTRICT_SET.has(district.toLowerCase())) {
     return {

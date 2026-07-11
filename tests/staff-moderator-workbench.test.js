@@ -234,8 +234,14 @@ function run() {
   assert(html.includes('staff-bulk-moderation-20260711'), 'index should cache-bust the staff bulk moderation infrastructure');
   assert(html.includes('staff-bulk-gate-tighten-20260711'), 'index should cache-bust the tightened staff bulk-review gates');
   assert(server.includes('staff-bulk-gate-tighten-20260711'), 'server should cache-bust the tightened staff bulk-review gates');
+  assert(html.includes('staff-bulk-gate-tighten-v2-20260711'), 'index should cache-bust the second-pass staff bulk-review gates');
+  assert(server.includes('staff-bulk-gate-tighten-v2-20260711'), 'server should cache-bust the second-pass staff bulk-review gates');
   assert(staffRoutes.includes('function staffBulkModerationDecision'), 'staff bulk review should gate each listing server-side');
   assert(staffRoutes.includes('UGANDA_DISTRICT_SET'), 'staff bulk review should require a canonical Uganda district before approval');
+  assert(staffRoutes.includes('STAFF_UGANDA_BBOX'), 'staff bulk review should geofence coordinates to Uganda before approval');
+  assert(staffRoutes.includes('staffCoordinatesInsideUganda'), 'staff bulk review should reject coordinates outside Uganda');
+  assert(staffRoutes.includes('owerri') && staffRoutes.includes('certificate\\s+of\\s+occupancy'), 'staff bulk review should block second-pass Nigerian location/title tokens');
+  assert(staffRoutes.includes('real\\s+estate\\s+ltd') && staffRoutes.includes('ai[- ]powered'), 'staff bulk review should block company, promo, and episode rows');
   assert(staffRoutes.includes("reason: 'non_uganda_location'"), 'staff bulk review should hold non-Uganda or foreign-token rows');
   assert(staffRoutes.includes("reason: 'not_a_listing'"), 'staff bulk review should hold clickbait/explainer source videos');
   assert(staffRoutes.includes('applyStaffBulkInternalDuplicateGate'), 'staff bulk review should deduplicate approvals inside the same run');
