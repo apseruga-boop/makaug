@@ -340,6 +340,14 @@ async function run() {
   assert.strictEqual(kasokosoLandPolitics.ok, false, 'political land-rights clips must not pass as listings');
   assert.strictEqual(kasokosoLandPolitics.reason, 'not_a_listing');
 
+  const publicHealthClip = sourcePositiveListingGateForRecord({
+    title: 'We fight Ebola together. century Property Real estate has a plot of 1million 50by50.',
+    district: 'Kampala',
+    property_type: 'land',
+  });
+  assert.strictEqual(publicHealthClip.ok, false, 'public-health/news-framed clips must not pass as listings');
+  assert.strictEqual(publicHealthClip.reason, 'not_a_listing');
+
   const dryBlocked = await queueFoundOnlineSourcePostListings({
     dryRun: true,
     posts: [{
