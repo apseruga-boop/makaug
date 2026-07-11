@@ -252,6 +252,14 @@ async function run() {
   assert.strictEqual(firstTimeInvestorAdvice.ok, false, 'first-time investor advice must not pass as a listing');
   assert.strictEqual(firstTimeInvestorAdvice.reason, 'not_a_listing');
 
+  const realEstateJokeShort = sourcePositiveListingGateForRecord({
+    title: 'looking for a house in Kampala and you suddenly become a real estate detective #shorts #viral',
+    district: 'Kampala',
+    property_type: 'house',
+  });
+  assert.strictEqual(realEstateJokeShort.ok, false, 'joke/shorts content must not pass as a listing');
+  assert.strictEqual(realEstateJokeShort.reason, 'not_a_listing');
+
   const dryBlocked = await queueFoundOnlineSourcePostListings({
     dryRun: true,
     posts: [{
