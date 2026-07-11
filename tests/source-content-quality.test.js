@@ -131,9 +131,11 @@ async function run() {
   const dateOnlyTitle = sourcePositiveListingGateForRecord({
     title: '1 July 2026',
     district: 'Kampala',
-    property_type: 'Property',
+    property_type: 'house',
+    bedrooms: 3,
+    price: 250000000,
   });
-  assert.strictEqual(dateOnlyTitle.ok, false, 'date-only imported titles must not pass through a generic property type');
+  assert.strictEqual(dateOnlyTitle.ok, false, 'date-only imported titles must not pass through extracted property fields');
   assert.strictEqual(dateOnlyTitle.reason, 'not_a_listing');
 
   const filatomPromo = sourcePositiveListingGateForRecord({
@@ -169,6 +171,22 @@ async function run() {
   });
   assert.strictEqual(richHomesExplainer.ok, false, 'rich-home explainer/showcase videos must not pass as a specific listing');
   assert.strictEqual(richHomesExplainer.reason, 'not_a_listing');
+
+  const realEstateFuturePromo = sourcePositiveListingGateForRecord({
+    title: 'The Future is in Real Estate Cubana Millenium City #propertyinvestment',
+    district: 'Kampala',
+    property_type: 'estate',
+  });
+  assert.strictEqual(realEstateFuturePromo.ok, false, 'real-estate investment promos must not pass as specific listings');
+  assert.strictEqual(realEstateFuturePromo.reason, 'not_a_listing');
+
+  const kinyarwandaForeignDefault = sourcePositiveListingGateForRecord({
+    title: 'REAL ESTATE tubafitiye ibibanza byokumazi nokurikaburimbo nahandi hatandukanye murakaza neza',
+    district: 'Kampala',
+    property_type: 'land',
+  });
+  assert.strictEqual(kinyarwandaForeignDefault.ok, false, 'Kinyarwanda foreign/defaulted rows must not pass via a default Uganda district');
+  assert.strictEqual(kinyarwandaForeignDefault.reason, 'non_uganda_location');
 
   const dryBlocked = await queueFoundOnlineSourcePostListings({
     dryRun: true,
