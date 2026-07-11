@@ -1237,6 +1237,7 @@ async function dashboardPanelsPayload(req) {
   const staffId = actorId(req);
   const queueLimit = STAFF_DASHBOARD_QUEUE_LIMIT;
   const panelLimit = STAFF_DASHBOARD_PANEL_LIMIT;
+  const queueScanLimit = Math.min(STAFF_DASHBOARD_QUEUE_SCAN_LIMIT, STAFF_DASHBOARD_QUEUE_LIMIT * 20);
   const panelQueryOptions = { timeoutMs: STAFF_DASHBOARD_PANEL_QUERY_TIMEOUT_MS };
   const [recentActivity, reviewResult, brokerReviewResult, sourceQueueRows] = await Promise.all([
     safeRows(
@@ -1249,7 +1250,14 @@ async function dashboardPanelsPayload(req) {
       panelQueryOptions
     ),
     safeRowsResult(
-      `SELECT p.id, p.title, p.description, p.listing_type, p.property_type, p.district, p.area, p.address,
+      `WITH panel_candidates AS MATERIALIZED (
+         SELECT p.id
+         FROM properties p
+         WHERE ${pendingReviewWhere('p')}
+         ORDER BY p.updated_at DESC NULLS LAST, p.created_at DESC NULLS LAST, p.id DESC
+         LIMIT $1
+       )
+       SELECT p.id, p.title, p.description, p.listing_type, p.property_type, p.district, p.area, p.address,
               p.price, p.price_period, p.bedrooms, p.bathrooms, p.title_type,
               p.status, p.moderation_stage, p.moderation_reason, p.created_at, p.updated_at,
               p.inquiry_reference, p.lister_name, p.lister_phone, p.lister_email, p.source, p.listed_via,
@@ -1259,14 +1267,23 @@ async function dashboardPanelsPayload(req) {
               0::int AS duplicate_count,
               NULL::text AS primary_image_url
        FROM properties p
-       WHERE ${activePendingReviewWhere('p')}
+       JOIN panel_candidates c ON c.id = p.id
+       WHERE NOT ${sourceQualitySuppressedFlagSql('p')}
        ORDER BY p.updated_at DESC NULLS LAST, p.created_at DESC NULLS LAST, p.id DESC
-       LIMIT $1`,
-      [queueLimit],
+       LIMIT $2`,
+      [queueScanLimit, queueLimit],
       { ...panelQueryOptions, label: 'staff_panel_review_queue' }
     ),
     safeRowsResult(
-      `SELECT p.id, p.title, p.description, p.listing_type, p.property_type, p.district, p.area, p.address,
+      `WITH panel_candidates AS MATERIALIZED (
+         SELECT p.id
+         FROM properties p
+         WHERE ${pendingReviewWhere('p')}
+           AND ${brokerReviewWhere('p')}
+         ORDER BY p.updated_at DESC NULLS LAST, p.created_at DESC NULLS LAST, p.id DESC
+         LIMIT $1
+       )
+       SELECT p.id, p.title, p.description, p.listing_type, p.property_type, p.district, p.area, p.address,
               p.price, p.price_period, p.bedrooms, p.bathrooms, p.title_type,
               p.status, p.moderation_stage, p.moderation_reason, p.created_at, p.updated_at,
               p.inquiry_reference, p.lister_name, p.lister_phone, p.lister_email, p.source, p.listed_via,
@@ -1276,11 +1293,11 @@ async function dashboardPanelsPayload(req) {
               0::int AS duplicate_count,
               NULL::text AS primary_image_url
        FROM properties p
-       WHERE ${activePendingReviewWhere('p')}
-         AND ${brokerReviewWhere('p')}
+       JOIN panel_candidates c ON c.id = p.id
+       WHERE NOT ${sourceQualitySuppressedFlagSql('p')}
        ORDER BY p.updated_at DESC NULLS LAST, p.created_at DESC NULLS LAST, p.id DESC
-       LIMIT $1`,
-      [queueLimit],
+       LIMIT $2`,
+      [queueScanLimit, queueLimit],
       { ...panelQueryOptions, label: 'staff_panel_broker_review_queue' }
     ),
     safeRows(

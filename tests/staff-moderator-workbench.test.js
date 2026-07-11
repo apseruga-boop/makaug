@@ -12,6 +12,7 @@ function run() {
   const sanitizer = read('services/publicHtmlSanitizer.js');
   const server = read('server.js');
   const staffRoutes = read('routes/staff.js');
+  const staffReviewQueuePerfMigration = read('db/migrations/067_staff_review_queue_performance.sql');
   const adminRoutes = read('routes/admin.js');
   const propertyRoutes = read('routes/properties.js');
   const app = read('assets/makaug-app.js');
@@ -169,6 +170,8 @@ function run() {
   assert(staffRoutes.includes('function staffModerationPanelRows'), 'staff moderation panel should not re-run fuzzy source-quality filtering after SQL count parity');
   assert(staffRoutes.includes("process.env.STAFF_DASHBOARD_PANEL_QUERY_TIMEOUT_MS || '5000'"), 'staff panels endpoint should allow the live review queue query enough time to return rows');
   assert(staffRoutes.includes('async function safeRowsResult'), 'staff panel row queries should report timeout/error metadata instead of pretending empty');
+  assert(staffReviewQueuePerfMigration.includes('idx_properties_staff_active_review_queue_order'), 'staff review queue needs a dedicated ordered partial index');
+  assert(staffReviewQueuePerfMigration.includes('ANALYZE properties'), 'staff review queue performance migration should refresh planner stats after creating the index');
   assert(staffRoutes.includes('STAFF_DASHBOARD_QUEUE_SCAN_LIMIT'), 'staff dashboard should over-fetch a bounded queue window instead of regex scanning the full pending set');
   assert(staffRoutes.includes('STAFF_DASHBOARD_PANEL_QUERY_TIMEOUT_MS'), 'staff panels endpoint should use server-side DB timeouts so one slow query cannot 503 the panel bundle');
   assert(staffRoutes.includes('STAFF_REVIEW_QUEUE_QUERY_TIMEOUT_MS'), 'standalone staff review queue endpoint should be timeout bounded');
@@ -177,6 +180,8 @@ function run() {
   assert(staffPanelsBody.includes('NULL::text AS primary_image_url'), 'staff panels moderation queue should skip image joins for fast first render');
   assert(!staffPanelsBody.includes('LEFT JOIN LATERAL'), 'staff panels endpoint should not run per-row image lateral joins');
   assert(staffPanelsBody.includes('staffModerationPanelRows(reviewResult.rows, queueLimit)'), 'staff panels endpoint should render SQL-parity rows directly instead of filtering them to zero in JS');
+  assert(staffPanelsBody.includes('WITH panel_candidates AS MATERIALIZED'), 'staff panels endpoint should pre-scan ordered pending IDs through the review queue index');
+  assert(staffPanelsBody.includes("WHERE NOT ${sourceQualitySuppressedFlagSql('p')}"), 'staff panels endpoint should apply JSON suppression only after the small indexed candidate scan');
   assert(staffPanelsBody.includes('review_queue_meta'), 'staff panels endpoint should expose review queue query metadata for false-empty protection');
   assert(staffPanelsBody.includes('query_ok: reviewResult.ok'), 'staff panels endpoint should expose whether the moderation queue query really succeeded');
   assert(staffPanelsBody.includes('empty_is_authoritative: reviewResult.ok'), 'empty moderation queue should only be authoritative after a successful row query');
@@ -218,6 +223,7 @@ function run() {
   assert(html.includes('review-queue-list-count-parity-20260711'), 'index should cache-bust review queue list/count parity fix');
   assert(html.includes('staff-panels-review-queue-20260711'), 'index should cache-bust the real staff panels review queue fix');
   assert(html.includes('staff-panels-review-queue-rows-20260711'), 'index should cache-bust the staff panel row parity fix');
+  assert(html.includes('staff-review-queue-performance-20260711'), 'index should cache-bust the staff review queue performance fix');
   assert(staffRoutes.includes('staffTikTokOembedOnlyBatch'), 'staff import API should force oEmbed for TikTok-only exact video batches');
   assert(staffRoutes.includes('metadata_tiktok_oembed_enabled'), 'staff import API should report TikTok oEmbed metadata mode');
   assert(app.includes('metadata_skipped_for_large_batch'), 'staff source import should explain when metadata was skipped for speed');
