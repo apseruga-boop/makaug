@@ -47,6 +47,8 @@ const STAFF_DASHBOARD_QUEUE_LIMIT = 12;
 const STAFF_DASHBOARD_PANEL_LIMIT = 8;
 const STAFF_DASHBOARD_QUEUE_SCAN_LIMIT = STAFF_DASHBOARD_QUEUE_LIMIT * 20;
 const STAFF_DASHBOARD_PANEL_SCAN_LIMIT = STAFF_DASHBOARD_PANEL_LIMIT * 20;
+const STAFF_DASHBOARD_PANEL_QUERY_TIMEOUT_MS = Math.max(1000, parseInt(process.env.STAFF_DASHBOARD_PANEL_QUERY_TIMEOUT_MS || '2500', 10) || 2500);
+const STAFF_REVIEW_QUEUE_QUERY_TIMEOUT_MS = Math.max(1500, parseInt(process.env.STAFF_REVIEW_QUEUE_QUERY_TIMEOUT_MS || '4000', 10) || 4000);
 const STAFF_EXACT_SOCIAL_IMPORT_LIMIT = 500;
 const STAFF_FAST_DASHBOARD_CACHE_TTL_MS = Math.max(5000, parseInt(process.env.STAFF_FAST_DASHBOARD_CACHE_TTL_MS || '60000', 10) || 60000);
 const STAFF_SOURCE_INTAKE_JOB_TTL_MS = Math.max(300000, parseInt(process.env.STAFF_SOURCE_INTAKE_JOB_TTL_MS || '3600000', 10) || 3600000);
@@ -513,9 +515,9 @@ function safeNumber(row, key) {
   return Number(row?.[key] || 0) || 0;
 }
 
-async function safeOne(sql, params = [], fallback = {}) {
+async function safeOne(sql, params = [], fallback = {}, options = {}) {
   try {
-    const result = await db.query(sql, params);
+    const result = await staffQuery(sql, params, options);
     return result.rows[0] || fallback;
   } catch (error) {
     if (!['42P01', '42703'].includes(error.code)) {
@@ -525,15 +527,35 @@ async function safeOne(sql, params = [], fallback = {}) {
   }
 }
 
-async function safeRows(sql, params = []) {
+async function safeRows(sql, params = [], options = {}) {
   try {
-    const result = await db.query(sql, params);
+    const result = await staffQuery(sql, params, options);
     return result.rows;
   } catch (error) {
     if (!['42P01', '42703'].includes(error.code)) {
       logger.warn('Staff dashboard rows query failed', { message: error.message });
     }
     return [];
+  }
+}
+
+async function staffQuery(sql, params = [], options = {}) {
+  const timeoutMs = Math.max(0, Number(options.timeoutMs || 0) || 0);
+  if (!timeoutMs) return db.query(sql, params);
+  const client = await db.getClient();
+  try {
+    await client.query('BEGIN');
+    await client.query(`SET LOCAL statement_timeout = ${Math.max(1, Math.floor(timeoutMs))}`);
+    const result = await client.query(sql, params);
+    await client.query('COMMIT');
+    return result;
+  } catch (error) {
+    try {
+      await client.query('ROLLBACK');
+    } catch (_) {}
+    throw error;
+  } finally {
+    client.release();
   }
 }
 
@@ -1187,28 +1209,20 @@ async function dashboardPayload(req) {
 }
 
 async function dashboardPanelsPayload(req) {
+  const staffId = actorId(req);
   const queueLimit = STAFF_DASHBOARD_QUEUE_LIMIT;
   const panelLimit = STAFF_DASHBOARD_PANEL_LIMIT;
-  const [reviewRows, brokerReviewRows, sourceQueueRows] = await Promise.all([
+  const queueScanLimit = Math.min(STAFF_DASHBOARD_QUEUE_SCAN_LIMIT, STAFF_DASHBOARD_QUEUE_LIMIT * 5);
+  const panelQueryOptions = { timeoutMs: STAFF_DASHBOARD_PANEL_QUERY_TIMEOUT_MS };
+  const [recentActivity, reviewRows, brokerReviewRows, sourceQueueRows] = await Promise.all([
     safeRows(
-      `SELECT p.id, p.title, p.description, p.listing_type, p.property_type, p.district, p.area, p.address,
-              p.price, p.price_period, p.bedrooms, p.bathrooms, p.title_type,
-              p.status, p.moderation_stage, p.moderation_reason, p.created_at, p.updated_at,
-              p.inquiry_reference, p.lister_name, p.lister_phone, p.lister_email, p.source, p.listed_via,
-              p.lister_type, p.agent_id, p.extra_fields,
-              COALESCE(p.extra_fields->>'source_url', p.extra_fields->>'source_post_url', p.extra_fields->>'tiktok_url', p.extra_fields->>'youtube_url', p.extra_fields->>'video_url') AS source_url,
-              COALESCE(p.extra_fields->>'source_platform', p.extra_fields->>'source_badge', p.source, p.listed_via) AS source_platform,
-              0::int AS duplicate_count,
-              img.url AS primary_image_url
-       FROM properties p
-       LEFT JOIN LATERAL (
-         SELECT url FROM property_images i WHERE i.property_id = p.id ORDER BY i.is_primary DESC, i.sort_order ASC, i.created_at ASC LIMIT 1
-       ) img ON true
-       WHERE ${pendingReviewWhere('p')}
-         AND NOT ${sourceQualitySuppressedFlagSql('p')}
-       ORDER BY COALESCE(p.updated_at, p.created_at) DESC
-       LIMIT $1`,
-      [STAFF_DASHBOARD_QUEUE_SCAN_LIMIT]
+      `SELECT id, action, target_type, target_id, metadata, created_at
+       FROM staff_activity_logs
+       WHERE staff_user_id = $1
+       ORDER BY created_at DESC
+       LIMIT $2`,
+      [staffId, panelLimit],
+      panelQueryOptions
     ),
     safeRows(
       `SELECT p.id, p.title, p.description, p.listing_type, p.property_type, p.district, p.area, p.address,
@@ -1219,17 +1233,31 @@ async function dashboardPanelsPayload(req) {
               COALESCE(p.extra_fields->>'source_url', p.extra_fields->>'source_post_url', p.extra_fields->>'tiktok_url', p.extra_fields->>'youtube_url', p.extra_fields->>'video_url') AS source_url,
               COALESCE(p.extra_fields->>'source_platform', p.extra_fields->>'source_badge', p.source, p.listed_via) AS source_platform,
               0::int AS duplicate_count,
-              img.url AS primary_image_url
+              NULL::text AS primary_image_url
        FROM properties p
-       LEFT JOIN LATERAL (
-         SELECT url FROM property_images i WHERE i.property_id = p.id ORDER BY i.is_primary DESC, i.sort_order ASC, i.created_at ASC LIMIT 1
-       ) img ON true
-       WHERE ${pendingReviewWhere('p')}
-         AND NOT ${sourceQualitySuppressedFlagSql('p')}
-         AND ${brokerReviewWhere('p')}
-       ORDER BY COALESCE(p.updated_at, p.created_at) DESC
+       WHERE ${activePendingReviewWhere('p')}
+       ORDER BY COALESCE(p.updated_at, p.created_at) DESC, p.id DESC
        LIMIT $1`,
-      [STAFF_DASHBOARD_QUEUE_SCAN_LIMIT]
+      [queueScanLimit],
+      panelQueryOptions
+    ),
+    safeRows(
+      `SELECT p.id, p.title, p.description, p.listing_type, p.property_type, p.district, p.area, p.address,
+              p.price, p.price_period, p.bedrooms, p.bathrooms, p.title_type,
+              p.status, p.moderation_stage, p.moderation_reason, p.created_at, p.updated_at,
+              p.inquiry_reference, p.lister_name, p.lister_phone, p.lister_email, p.source, p.listed_via,
+              p.lister_type, p.agent_id, p.extra_fields,
+              COALESCE(p.extra_fields->>'source_url', p.extra_fields->>'source_post_url', p.extra_fields->>'tiktok_url', p.extra_fields->>'youtube_url', p.extra_fields->>'video_url') AS source_url,
+              COALESCE(p.extra_fields->>'source_platform', p.extra_fields->>'source_badge', p.source, p.listed_via) AS source_platform,
+              0::int AS duplicate_count,
+              NULL::text AS primary_image_url
+       FROM properties p
+       WHERE ${activePendingReviewWhere('p')}
+         AND ${brokerReviewWhere('p')}
+       ORDER BY COALESCE(p.updated_at, p.created_at) DESC, p.id DESC
+       LIMIT $1`,
+      [queueScanLimit],
+      panelQueryOptions
     ),
     safeRows(
       `SELECT p.id, p.title, p.area, p.district, p.status, p.updated_at,
@@ -1239,15 +1267,15 @@ async function dashboardPanelsPayload(req) {
               COALESCE(p.extra_fields->>'source_name', p.lister_name, 'Found online') AS source_name,
               p.extra_fields
        FROM properties p
-       WHERE ${pendingReviewWhere('p')}
-         AND NOT ${sourceQualitySuppressedFlagSql('p')}
+       WHERE ${activePendingReviewWhere('p')}
          AND (
            COALESCE(p.extra_fields->>'found_online', p.extra_fields->>'found_online_candidate', p.extra_fields->>'social_search_candidate', '') ~* '^(true|1|yes)$'
            OR COALESCE(p.extra_fields->>'source_url', p.extra_fields->>'source_post_url', p.extra_fields->>'youtube_url', p.extra_fields->>'tiktok_url', '') <> ''
          )
-       ORDER BY COALESCE(p.updated_at, p.created_at) DESC
+       ORDER BY COALESCE(p.updated_at, p.created_at) DESC, p.id DESC
        LIMIT $1`,
-      [STAFF_DASHBOARD_PANEL_SCAN_LIMIT]
+      [STAFF_DASHBOARD_PANEL_SCAN_LIMIT],
+      panelQueryOptions
     )
   ]);
 
@@ -1256,6 +1284,7 @@ async function dashboardPanelsPayload(req) {
     panel_payload: true,
     review_queue: staffActiveReviewRows(reviewRows, queueLimit),
     broker_review_queue: staffActiveReviewRows(brokerReviewRows, queueLimit),
+    recent_activity: recentActivity,
     source_intake: {
       queued_found_online: staffActiveReviewRows(sourceQueueRows, panelLimit)
     }
@@ -1875,13 +1904,14 @@ router.get('/properties/review-queue', async (req, res, next) => {
        ORDER BY COALESCE(p.updated_at, p.created_at) DESC, p.id DESC
        LIMIT $${values.length + 1}
        OFFSET $${values.length + 2}`,
-      [...values, rowLimit, offset]
+      [...values, rowLimit, offset],
+      { timeoutMs: STAFF_REVIEW_QUEUE_QUERY_TIMEOUT_MS }
     );
 
     const rows = rawRows.slice(0, limit);
     const hasMore = rawRows.length > limit;
     const countRow = includeTotal
-      ? await safeOne(`SELECT COUNT(*)::int AS total FROM properties p ${where}`, values, { total: 0 })
+      ? await safeOne(`SELECT COUNT(*)::int AS total FROM properties p ${where}`, values, { total: 0 }, { timeoutMs: STAFF_REVIEW_QUEUE_QUERY_TIMEOUT_MS })
       : null;
     const total = includeTotal
       ? safeNumber(countRow, 'total')

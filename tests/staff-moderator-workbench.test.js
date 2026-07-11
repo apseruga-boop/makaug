@@ -21,6 +21,11 @@ function run() {
   const staffApproveBody = staffApproveStart >= 0 && staffApproveEnd > staffApproveStart
     ? app.slice(staffApproveStart, staffApproveEnd)
     : '';
+  const staffPanelsStart = staffRoutes.indexOf('async function dashboardPanelsPayload');
+  const staffPanelsEnd = staffRoutes.indexOf('function normalizeStaffListingPatch', staffPanelsStart);
+  const staffPanelsBody = staffPanelsStart >= 0 && staffPanelsEnd > staffPanelsStart
+    ? staffRoutes.slice(staffPanelsStart, staffPanelsEnd)
+    : '';
 
   assert(migration.includes("'moderator'"), 'users role check must include moderator');
   assert(migration.includes('CREATE TABLE IF NOT EXISTS staff_activity_logs'), 'staff activity log table must exist');
@@ -162,6 +167,12 @@ function run() {
   assert(staffRoutes.includes('function sourceQualitySuppressedFlagSql'), 'staff dashboard counts should use a cheap stored source-quality flag');
   assert(staffRoutes.includes('function staffActiveReviewRows'), 'staff dashboard should filter legacy suppressed rows in Node after a bounded over-fetch');
   assert(staffRoutes.includes('STAFF_DASHBOARD_QUEUE_SCAN_LIMIT'), 'staff dashboard should over-fetch a bounded queue window instead of regex scanning the full pending set');
+  assert(staffRoutes.includes('STAFF_DASHBOARD_PANEL_QUERY_TIMEOUT_MS'), 'staff panels endpoint should use server-side DB timeouts so one slow query cannot 503 the panel bundle');
+  assert(staffRoutes.includes('STAFF_REVIEW_QUEUE_QUERY_TIMEOUT_MS'), 'standalone staff review queue endpoint should be timeout bounded');
+  assert(staffPanelsBody.includes('panelQueryOptions'), 'staff panels endpoint should pass timeout options into panel queries');
+  assert(staffPanelsBody.includes('const [recentActivity, reviewRows, brokerReviewRows, sourceQueueRows]'), 'staff panels endpoint should include recent activity with moderation panels');
+  assert(staffPanelsBody.includes('NULL::text AS primary_image_url'), 'staff panels moderation queue should skip image joins for fast first render');
+  assert(!staffPanelsBody.includes('LEFT JOIN LATERAL'), 'staff panels endpoint should not run per-row image lateral joins');
   assert(staffRoutes.includes("count_filter: 'staff_active_pending_review'"), 'staff review queue endpoint should advertise the same active pending filter used by staff counts');
   assert(staffRoutes.includes("source_quality_filter: 'stored_suppression_flag_only'"), 'staff review queue endpoint should use the cheap stored source-quality flag');
   assert(staffRoutes.includes('async function dashboardPanelsPayload'), 'staff panels endpoint should return a queue-first lightweight payload');
@@ -195,6 +206,7 @@ function run() {
   assert(app.includes('tiktok_oembed_manual_import'), 'staff TikTok paste imports should explicitly request oEmbed caption enrichment');
   assert(html.includes('Import TikTok Videos'), 'staff source quick paste should render the TikTok import button');
   assert(html.includes('review-queue-list-count-parity-20260711'), 'index should cache-bust review queue list/count parity fix');
+  assert(html.includes('staff-panels-review-queue-20260711'), 'index should cache-bust the real staff panels review queue fix');
   assert(staffRoutes.includes('staffTikTokOembedOnlyBatch'), 'staff import API should force oEmbed for TikTok-only exact video batches');
   assert(staffRoutes.includes('metadata_tiktok_oembed_enabled'), 'staff import API should report TikTok oEmbed metadata mode');
   assert(app.includes('metadata_skipped_for_large_batch'), 'staff source import should explain when metadata was skipped for speed');
