@@ -128,6 +128,15 @@ async function run() {
   });
   assert.strictEqual(cleanKiraListing.ok, true, 'clear Uganda property listings should pass the positive gate');
 
+  const makerereHostel = sourcePositiveListingGateForRecord({
+    title: 'Self-contained single room hostel near Makerere, per semester',
+    description: 'Residential hostel room available for students in Kikoni',
+    district: 'Kampala',
+    area: 'Kikoni',
+    listing_type: 'student',
+  });
+  assert.strictEqual(makerereHostel.ok, true, 'student hostel vocabulary should pass the positive gate when Uganda location is present');
+
   const dateOnlyTitle = sourcePositiveListingGateForRecord({
     title: '1 July 2026',
     district: 'Kampala',

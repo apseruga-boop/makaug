@@ -534,7 +534,7 @@ test('found-online social search batch accepts curated YouTube source records', 
   const listings = plannedSocialSearchListings(Object.fromEntries(SOCIAL_SEARCH_AGENTS.map((agent, index) => [agent.key, `agent-${index}`])));
   assert.strictEqual(SOCIAL_SEARCH_BATCH_ID, 'social_search_authorised_20260520');
   assert.strictEqual(summary.count, 18, 'social search batch should contain the high-confidence recent public YouTube property records');
-  assert.strictEqual(summary.seed_eligible_count, 18, 'curated exact YouTube source rows should be eligible found-online properties');
+  assert.strictEqual(summary.seed_eligible_count, 15, 'strict positive gates should keep only the publishable curated exact YouTube source rows eligible');
   assert.strictEqual(summary.agents_count, 0, 'social search batch should not auto-create public broker profiles from source discovery');
   assert.strictEqual(summary.source_profiles_deferred_count, SOCIAL_SEARCH_AGENTS.length, 'all source-only profiles should stay deferred until the source owner registers or claims them');
   assert(/registers or claims/i.test(summary.profile_policy), 'summary should expose the source-profile claim/registration policy');
@@ -551,11 +551,16 @@ test('found-online social search batch accepts curated YouTube source records', 
   assert.strictEqual(SOCIAL_SEARCH_LISTINGS.length, listings.length, 'planned social search listings should match source records');
   assert(summary.by_type.sale >= 14, 'social search batch should prioritise sale listings from the provided channels');
   assert(summary.by_type.land >= 2, 'social search batch should include land records where the source gives land detail');
-  assert.strictEqual(
-    sourcePostMeetsLaunchIntakeRule(SOCIAL_SEARCH_LISTINGS[0], SOCIAL_SEARCH_AGENTS.find((agent) => agent.key === SOCIAL_SEARCH_LISTINGS[0].agentKey)).eligible,
-    true,
-    'curated exact YouTube source rows should be eligible after King confirmed YouTube social rows are acceptable'
-  );
+  const eligibleSeedRow = SOCIAL_SEARCH_LISTINGS.find((item) => {
+    const agent = SOCIAL_SEARCH_AGENTS.find((candidate) => candidate.key === item.agentKey);
+    return sourcePostMeetsLaunchIntakeRule(item, agent).eligible;
+  });
+  const heldSeedRow = SOCIAL_SEARCH_LISTINGS.find((item) => {
+    const agent = SOCIAL_SEARCH_AGENTS.find((candidate) => candidate.key === item.agentKey);
+    return !sourcePostMeetsLaunchIntakeRule(item, agent).eligible;
+  });
+  assert(eligibleSeedRow, 'at least one strict curated YouTube source row should remain eligible');
+  assert(heldSeedRow, 'strict curated YouTube source rows should expose held residue instead of pretending all are publishable');
   for (const listing of listings) {
     const extra = JSON.parse(listing.extra_fields);
     assert.strictEqual(listing.status, 'pending');

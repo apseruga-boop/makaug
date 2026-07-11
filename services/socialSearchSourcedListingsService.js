@@ -17,6 +17,10 @@ const {
   sourcePositiveListingGateForRecord,
   sourceQualitySuppressionForRecord,
 } = require('../utils/sourceContentQuality');
+const {
+  normalizeSourceUrl,
+  suppressedSourceRowsForUrls,
+} = require('./suppressedSourceService');
 
 const SOCIAL_SEARCH_BATCH_ID = 'social_search_authorised_20260520';
 const LEGACY_SOURCED_INVENTORY_CANDIDATE_SOURCE = SOURCE;
@@ -29,6 +33,17 @@ const SOCIAL_SEARCH_ADDED_TO_MAKAUG_AT = '2026-05-20T00:00:00.000Z';
 const PRICE_UPON_APPLICATION_LABEL = 'Price upon application';
 const USD_TO_UGX_GUIDE_RATE = 3800;
 const ALLOWED_SOCIAL_SOURCE_PLATFORMS = ['youtube', 'tiktok', 'instagram', 'facebook', 'x', 'twitter'];
+const STUDENT_SOURCE_LISTING_PATTERN = /\b(?:students?|hostel|campus|self[-\s]*contained|single\s+room|double\s+room|bedsitter|bed\s*sitter|roommate|per\s+semester|non[-\s]*residential|residential\s+hostel|rooms?\s+near\s+campus)\b/i;
+const STUDENT_RENTISH_SOURCE_PATTERN = /\b(?:rent|rental|to\s+let|room|hostel|bedsitter|bed\s*sitter|self[-\s]*contained|per\s+semester|students?|campus)\b/i;
+const STUDENT_NEAR_CAMPUS_RADIUS_KM = 2;
+const STUDENT_CAMPUS_COORDINATES = [
+  { name: 'Makerere University', lat: 0.3356, lng: 32.5686 },
+  { name: 'Kyambogo University', lat: 0.3489, lng: 32.6301 },
+  { name: 'Makerere University Business School (MUBS)', lat: 0.335, lng: 32.615 },
+  { name: 'Uganda Christian University (UCU)', lat: 0.3542, lng: 32.742 },
+  { name: 'Nkumba University', lat: 0.0958, lng: 32.5097 },
+  { name: 'Mbarara University of Science and Technology (MUST)', lat: -0.6162, lng: 30.6569 },
+];
 const PREAPPROVED_PERMISSION_STATUSES = [
   'founder_reported_agent_authorised_upload',
   'founder_reported_agent_authorised_listing',
@@ -708,6 +723,27 @@ function sourceUrlForItem(item = {}) {
     || (item.youtubeId ? youtubeUrl(item.youtubeId) : '');
 }
 
+function normalizedSourceUrlForItem(item = {}) {
+  return normalizeSourceUrl(sourceUrlForItem(item));
+}
+
+async function suppressedSourceRowsForItems(db, items = []) {
+  if (!db || (typeof db.query !== 'function' && !db.pool)) return new Map();
+  const executor = typeof db.query === 'function' ? db : db.pool;
+  const urls = items.flatMap((item) => [
+    sourceUrlForItem(item),
+    item.sourceUrl,
+    item.source_url,
+    item.source_post_url,
+    item.postUrl,
+    item.post_url,
+    item.listingUrl,
+    item.videoUrl,
+    item.url,
+  ]);
+  return suppressedSourceRowsForUrls(executor, urls);
+}
+
 function sourceContactCandidateUrls(agent = {}, item = {}) {
   return uniqueUrls([
     agent.channelUrl,
@@ -915,6 +951,7 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
 }
 
 function sourceReviewReasonForIntake(intake = {}) {
+  if (intake.suppressed_source_url) return 'skipped_suppressed';
   if (intake.source_quality_suppressed && /^low_signal_/i.test(String(intake.source_quality_reason || ''))) {
     return 'low_signal_source_location';
   }
@@ -1423,6 +1460,7 @@ function sourcePositiveListingGateForItem(item = {}, agent = sourceAgentForItem(
     price: item.price,
     bedrooms: item.beds ?? item.bedrooms,
     beds: item.beds ?? item.bedrooms,
+    listing_type: item.listingType || item.listing_type || '',
     property_type: item.subtype || item.property_type || '',
     latitude: item.lat ?? item.latitude,
     longitude: item.lng ?? item.longitude,
@@ -1463,14 +1501,70 @@ function sourceLocationQualityForItem(item = {}, agent = sourceAgentForItem(item
   });
 }
 
+function distanceKmBetween(lat1, lng1, lat2, lng2) {
+  const radiusKm = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos((lat1 * Math.PI) / 180)
+    * Math.cos((lat2 * Math.PI) / 180)
+    * Math.sin(dLng / 2) ** 2;
+  return radiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function sourceItemCoordinates(item = {}) {
+  const lat = numberOrNull(item.lat ?? item.latitude);
+  const lng = numberOrNull(item.lng ?? item.longitude);
+  if (lat == null || lng == null) return null;
+  if (Number(lat) === 0 && Number(lng) === 0) return null;
+  return { lat, lng };
+}
+
+function nearestCampusByCoordinates(item = {}) {
+  const coords = sourceItemCoordinates(item);
+  if (!coords) return null;
+  return STUDENT_CAMPUS_COORDINATES
+    .map((campus) => ({
+      ...campus,
+      distance_km: distanceKmBetween(coords.lat, coords.lng, campus.lat, campus.lng)
+    }))
+    .filter((campus) => campus.distance_km <= STUDENT_NEAR_CAMPUS_RADIUS_KM)
+    .sort((a, b) => a.distance_km - b.distance_km)[0] || null;
+}
+
 function isStudentSourceListing(item = {}) {
   const type = String(item.listingType || item.listing_type || item.type || '').trim().toLowerCase();
-  return type === 'student' || type === 'students';
+  if (type === 'student' || type === 'students') return true;
+  const extra = item.extra_fields && typeof item.extra_fields === 'object' ? item.extra_fields : {};
+  const text = [
+    item.title,
+    item.description,
+    item.caption,
+    item.sourceTitle,
+    item.source_title,
+    item.sourceText,
+    item.source_text,
+    item.area,
+    item.address,
+    item.nearest_university,
+    item.university,
+    item.campus,
+    extra.source_title,
+    extra.source_caption,
+    extra.source_description,
+    extra.source_text,
+    extra.nearest_university,
+    extra.student_campus,
+    extra.student_university,
+  ].map((value) => String(value || '')).filter(Boolean).join(' ');
+  return STUDENT_SOURCE_LISTING_PATTERN.test(text);
 }
 
 function nearestUniversityForSourceItem(item = {}) {
-  if (!isStudentSourceListing(item)) return '';
   const extra = item.extra_fields && typeof item.extra_fields === 'object' ? item.extra_fields : {};
+  const campusByCoords = nearestCampusByCoordinates(item);
+  if (campusByCoords) return campusByCoords.name;
+  if (!isStudentSourceListing(item) && !inferNearestUniversityFromListing(item)) return '';
   return normalizeUniversityName(
     item.nearest_university
     || item.nearestUniversity
@@ -1701,9 +1795,28 @@ function whatsappShareMessage(item, propertyUrl, ownerPreviewUrl = '') {
 function buildSocialSearchListing(item, agentId = null) {
   const agent = sourceAgentForItem(item);
   const autoLive = sourcePostAutoLiveStatusFor(item, agent);
-  const listingType = item.listingType || 'sale';
-  const studentListing = isStudentSourceListing({ ...item, listingType });
-  const nearestUniversity = studentListing ? nearestUniversityForSourceItem({ ...item, listingType }) : '';
+  const originalListingType = item.listingType || 'sale';
+  const studentText = [
+    item.title,
+    item.description,
+    item.caption,
+    item.sourceTitle,
+    item.source_title,
+    item.sourceText,
+    item.source_text,
+    item.area,
+    item.address,
+  ].map((value) => String(value || '')).join(' ');
+  const explicitlyStudent = isStudentSourceListing({ ...item, listingType: originalListingType });
+  const rentishNearCampus = /^(rent|rental|students|student)$/i.test(String(originalListingType || ''))
+    || STUDENT_RENTISH_SOURCE_PATTERN.test(studentText);
+  const campusByCoords = (explicitlyStudent || rentishNearCampus) ? nearestCampusByCoordinates(item) : null;
+  const nearestUniversity = campusByCoords?.name
+    || ((explicitlyStudent || rentishNearCampus)
+      ? nearestUniversityForSourceItem({ ...item, listingType: originalListingType })
+      : '');
+  const studentListing = explicitlyStudent || Boolean(nearestUniversity && rentishNearCampus);
+  const listingType = studentListing ? 'students' : originalListingType;
   return {
     listing_type: listingType,
     title: item.title,
@@ -1727,7 +1840,7 @@ function buildSocialSearchListing(item, agentId = null) {
     usable_size_sqm: null,
     parking_bays: null,
     nearest_university: nearestUniversity || null,
-    distance_to_uni_km: null,
+    distance_to_uni_km: campusByCoords ? Number(campusByCoords.distance_km.toFixed(1)) : null,
     room_type: null,
     room_arrangement: null,
     commercial_intent: null,
@@ -2043,7 +2156,7 @@ function publicEmailFromText(text = '') {
 function normalizeFoundOnlineListingType(value = '') {
   const raw = String(value || '').toLowerCase();
   const hasDwelling = /\b(apartment|flat|house|home|villa|mansion|duplex|bungalow|bedroom|bedrooms|beds?|living room|sitting room)\b/.test(raw);
-  if (raw.includes('student') || raw.includes('hostel') || raw.includes('campus')) return 'students';
+  if (STUDENT_SOURCE_LISTING_PATTERN.test(raw)) return 'students';
   if (raw.includes('rent') || raw.includes('rental') || raw.includes('let')) return 'rent';
   if (raw.includes('commercial') || raw.includes('shop') || raw.includes('office') || raw.includes('warehouse')) return 'commercial';
   if (hasDwelling && (raw.includes('sale') || raw.includes('selling') || raw.includes('buy'))) return 'sale';
@@ -2206,6 +2319,7 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
 async function existingFoundOnlineSourcePostListings(client, items = []) {
   const keys = items.map((item) => item.key).filter(Boolean);
   const urls = uniqueUrls(items.map((item) => sourceUrlForItem(item)));
+  const normalizedUrls = [...new Set(items.map(normalizedSourceUrlForItem).filter(Boolean))];
   if (!keys.length && !urls.length) return new Map();
   const result = await client.query(
     `SELECT
@@ -2219,6 +2333,7 @@ async function existingFoundOnlineSourcePostListings(client, items = []) {
        extra_fields->>'source_post_url' AS source_post_url,
        COALESCE(
          extra_fields->>'source_url',
+         extra_fields->>'source_post_url',
          extra_fields->>'youtube_url',
          extra_fields->>'video_url',
          extra_fields->>'original_url'
@@ -2232,8 +2347,9 @@ async function existingFoundOnlineSourcePostListings(client, items = []) {
          OR extra_fields->>'youtube_url' = ANY($2::text[])
          OR extra_fields->>'video_url' = ANY($2::text[])
          OR extra_fields->>'original_url' = ANY($2::text[])
+         OR LOWER(REGEXP_REPLACE(COALESCE(extra_fields->>'source_url', extra_fields->>'source_post_url', extra_fields->>'youtube_url', extra_fields->>'video_url', extra_fields->>'original_url', ''), '[?#].*$', '')) = ANY($3::text[])
        )`,
-    [keys, urls]
+    [keys, urls, normalizedUrls]
   );
   const existing = new Map();
   for (const row of result.rows) {
@@ -2244,6 +2360,8 @@ async function existingFoundOnlineSourcePostListings(client, items = []) {
     if (row.source_listing_key) existing.set(row.source_listing_key, payload);
     if (row.source_post_url) existing.set(row.source_post_url, payload);
     if (row.source_url) existing.set(row.source_url, payload);
+    const normalized = normalizeSourceUrl(row.source_post_url) || normalizeSourceUrl(row.source_url);
+    if (normalized) existing.set(normalized, payload);
   }
   return existing;
 }
@@ -2316,11 +2434,27 @@ async function queueFoundOnlineSourcePostListings({
   const items = (Array.isArray(posts) ? posts : [])
     .map((post, index) => normalizeFoundOnlineSourcePost(post, index))
     .filter((item) => item.sourceUrl || item.title);
+  const suppressedSources = await suppressedSourceRowsForItems(db, items);
   const evaluated = items.map((item) => ({
     item,
     agent: sourceAgentForItem(item),
-    intake: sourcePostMeetsLaunchIntakeRule(item, sourceAgentForItem(item)),
-  }));
+    suppressed_source: suppressedSources.get(normalizedSourceUrlForItem(item)),
+  })).map(({ item, agent, suppressed_source: suppressedSource }) => {
+    const intake = sourcePostMeetsLaunchIntakeRule(item, agent);
+    return {
+      item,
+      agent,
+      suppressed_source: suppressedSource || null,
+      intake: suppressedSource
+        ? {
+          ...intake,
+          eligible: false,
+          suppressed_source_url: normalizedSourceUrlForItem(item),
+          suppressed_source_reason: suppressedSource.reason || 'source_previously_rejected',
+        }
+        : intake,
+    };
+  });
   const eligibleSourceCounts = evaluated.reduce((acc, { item, intake }) => {
     if (intake.eligible) acc[item.agentKey] = (acc[item.agentKey] || 0) + 1;
     return acc;
@@ -2351,6 +2485,10 @@ async function queueFoundOnlineSourcePostListings({
       source_contact_url: sourceContactUrlForAgent(agent, item),
       reason: sourceReviewReasonForIntake(intake),
       intake,
+      suppressed_source: intake.suppressed_source_url ? {
+        source_url: intake.suppressed_source_url,
+        reason: intake.suppressed_source_reason,
+      } : undefined,
       source_quality: intake.source_quality_suppressed ? {
         suppressed: true,
         reason: intake.source_quality_reason,
@@ -2358,6 +2496,7 @@ async function queueFoundOnlineSourcePostListings({
       } : undefined,
     }));
   const sourceQualitySuppressedRecords = sourceReviewRecords.filter((item) => item.intake?.source_quality_suppressed);
+  const suppressedSourceRecords = sourceReviewRecords.filter((item) => item.intake?.suppressed_source_url);
   const lowSignalSourceLocationRecords = sourceReviewRecords.filter((item) => item.reason === 'low_signal_source_location');
 
   if (dryRun) {
@@ -2399,6 +2538,7 @@ async function queueFoundOnlineSourcePostListings({
       normalized_posts: items.length,
       eligible_to_queue_count: eligible.length,
       source_review_count: sourceReviewRecords.length,
+      suppressed_source_count: suppressedSourceRecords.length,
       source_quality_suppressed_count: sourceQualitySuppressedRecords.length,
       low_signal_source_location_count: lowSignalSourceLocationRecords.length,
       created_properties: 0,
@@ -2411,6 +2551,7 @@ async function queueFoundOnlineSourcePostListings({
       queued_listings: dryRunRows,
       review_queue_listings: reviewRows,
       source_review_records: sourceReviewRecords,
+      suppressed_source_records: suppressedSourceRecords,
       source_quality_suppressed_records: sourceQualitySuppressedRecords,
       low_signal_source_location_records: lowSignalSourceLocationRecords,
       daily_target_status: {
@@ -2433,7 +2574,7 @@ async function queueFoundOnlineSourcePostListings({
 
     for (const { item, agent, intake } of evaluated) {
       const sourceUrl = sourceUrlForItem(item);
-      const existingRow = existing.get(item.key) || existing.get(sourceUrl);
+      const existingRow = existing.get(item.key) || existing.get(sourceUrl) || existing.get(normalizedSourceUrlForItem(item));
       if (existingRow) {
         alreadyPresent.push({
           key: item.key,
@@ -2537,9 +2678,11 @@ async function queueFoundOnlineSourcePostListings({
       duplicate_warnings: duplicateWarnings,
       duplicate_source_url_records: duplicateWarnings,
       source_review_count: skippedListings.length,
+      suppressed_source_count: suppressedSourceRecords.length,
       source_quality_suppressed_count: sourceQualitySuppressedRecords.length,
       low_signal_source_location_count: lowSignalSourceLocationRecords.length,
       source_review_records: skippedListings,
+      suppressed_source_records: suppressedSourceRecords,
       source_quality_suppressed_records: sourceQualitySuppressedRecords,
       low_signal_source_location_records: lowSignalSourceLocationRecords,
       daily_target_status: {

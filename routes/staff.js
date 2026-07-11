@@ -32,6 +32,10 @@ const {
   sourcePositiveListingGateForRecord,
   sourceQualitySuppressionForRecord
 } = require('../utils/sourceContentQuality');
+const {
+  normalizeSourceUrl,
+  upsertSuppressedSourceRows
+} = require('../services/suppressedSourceService');
 
 const router = express.Router();
 
@@ -52,6 +56,7 @@ const STAFF_REVIEW_QUEUE_QUERY_TIMEOUT_MS = Math.max(1500, parseInt(process.env.
 const STAFF_PREVIEW_QUERY_TIMEOUT_MS = Math.max(500, parseInt(process.env.STAFF_PREVIEW_QUERY_TIMEOUT_MS || '900', 10) || 900);
 const STAFF_BULK_REVIEW_QUERY_TIMEOUT_MS = Math.max(5000, parseInt(process.env.STAFF_BULK_REVIEW_QUERY_TIMEOUT_MS || '15000', 10) || 15000);
 const STAFF_BULK_REVIEW_LIMIT = Math.min(2000, Math.max(1, parseInt(process.env.STAFF_BULK_REVIEW_LIMIT || '1000', 10) || 1000));
+const STAFF_CLEAR_JUNK_REJECT_REASONS = ['non_uganda_location', 'not_a_listing'];
 const STAFF_EXACT_SOCIAL_IMPORT_LIMIT = 500;
 const STAFF_FAST_DASHBOARD_CACHE_TTL_MS = Math.max(5000, parseInt(process.env.STAFF_FAST_DASHBOARD_CACHE_TTL_MS || '60000', 10) || 60000);
 const STAFF_SOURCE_INTAKE_JOB_TTL_MS = Math.max(300000, parseInt(process.env.STAFF_SOURCE_INTAKE_JOB_TTL_MS || '3600000', 10) || 3600000);
@@ -283,6 +288,37 @@ function toUuidOrNull(value) {
 function staffListingSourceUrl(row = {}) {
   const extra = safeJsonObject(row.extra_fields, {});
   return firstNonEmpty(extra.source_url, extra.source_post_url, extra.tiktok_url, extra.youtube_url, extra.video_url, row.source_url);
+}
+
+function staffListingSourceUrlCandidates(row = {}) {
+  const extra = safeJsonObject(row.extra_fields, {});
+  return [
+    row.source_url,
+    extra.source_url,
+    extra.source_post_url,
+    extra.tiktok_url,
+    extra.youtube_url,
+    extra.video_url,
+    extra.original_url,
+    extra.source_original_url,
+    extra.raw_source_post?.url,
+    extra.raw_source_post?.source_url,
+    extra.raw_source_post?.post_url,
+  ].map(cleanText).filter(Boolean);
+}
+
+function normalizedStaffListingSourceUrl(row = {}) {
+  return normalizeSourceUrl(staffListingSourceUrl(row))
+    || staffListingSourceUrlCandidates(row).map(normalizeSourceUrl).find(Boolean)
+    || '';
+}
+
+function normalizeBulkRejectReasons(value) {
+  const raw = Array.isArray(value)
+    ? value
+    : String(value || '').split(/[,\s]+/);
+  const reasons = raw.map((item) => cleanText(item).toLowerCase()).filter(Boolean);
+  return reasons.length ? Array.from(new Set(reasons)) : [...STAFF_CLEAR_JUNK_REJECT_REASONS];
 }
 
 function normalizeDuplicateText(value = '') {
@@ -2260,6 +2296,98 @@ async function approveStaffBulkFoundOnlineListing(client, req, row = {}) {
   return result.rows[0] || { id: row.id, title: row.title, status: 'approved' };
 }
 
+async function rejectStaffBulkFoundOnlineListing(client, req, row = {}, decision = {}) {
+  const actor = toUuidOrNull(actorId(req));
+  const normalizedSourceUrl = normalizedStaffListingSourceUrl(row);
+  const reason = cleanText(decision.reason || 'bulk_rejected') || 'bulk_rejected';
+  const moderationReason = `Staff bulk rejected clear junk: ${reason}`;
+  const extraPatch = {
+    moderation_reason: moderationReason,
+    bulk_staff_reject: {
+      rejected: true,
+      at: new Date().toISOString(),
+      actor_id: actorId(req),
+      reason,
+      details: decision.details || [],
+      source_url_suppressed: Boolean(normalizedSourceUrl),
+      normalized_source_url: normalizedSourceUrl || null,
+      manual_notification_only: true
+    }
+  };
+  const result = await client.query(
+    `UPDATE properties
+     SET status = 'rejected',
+         reviewed_at = NOW(),
+         reviewed_by = COALESCE($2::uuid, reviewed_by),
+         moderation_stage = 'rejected',
+         moderation_reason = $3::text,
+         updated_at = NOW(),
+         extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $4::jsonb
+     WHERE id = $1
+     RETURNING id::text AS id, title, status, moderation_stage`,
+    [
+      row.id,
+      actor,
+      moderationReason,
+      JSON.stringify(extraPatch)
+    ]
+  );
+  await client.query(
+    `INSERT INTO property_moderation_events (
+      property_id, actor_id, action, status_from, status_to, checklist, reason, notes, delivery
+    ) VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9::jsonb)`,
+    [
+      row.id,
+      actorId(req),
+      'staff_bulk_found_online_rejected_suppressed',
+      row.status || null,
+      'rejected',
+      JSON.stringify({
+        found_online_candidate: true,
+        clear_junk_rejection: true,
+        suppression_registry: Boolean(normalizedSourceUrl)
+      }),
+      moderationReason,
+      'Bulk staff rejection suppressed the exact source URL; no owner/source notification was sent.',
+      JSON.stringify({
+        whatsapp: { sent: false, reason: 'manual_notification_only' },
+        email: { sent: false, reason: 'manual_bulk_reject' },
+        source_url: staffListingSourceUrl(row),
+        normalized_source_url: normalizedSourceUrl || null,
+      })
+    ]
+  );
+  return {
+    ...(result.rows[0] || { id: row.id, title: row.title, status: 'rejected', moderation_stage: 'rejected' }),
+    source_url: staffListingSourceUrl(row),
+    normalized_source_url: normalizedSourceUrl,
+    reason
+  };
+}
+
+function staffBulkRejectTargets(rows = [], decisions = [], reasons = STAFF_CLEAR_JUNK_REJECT_REASONS) {
+  const reasonSet = new Set((Array.isArray(reasons) ? reasons : STAFF_CLEAR_JUNK_REJECT_REASONS).map((reason) => cleanText(reason).toLowerCase()).filter(Boolean));
+  const rowsById = new Map((Array.isArray(rows) ? rows : []).map((row) => [String(row.id), row]));
+  return (Array.isArray(decisions) ? decisions : [])
+    .filter((decision) => decision?.decision === 'hold' && reasonSet.has(cleanText(decision.reason).toLowerCase()))
+    .map((decision) => {
+      const row = rowsById.get(String(decision.id));
+      if (!row) return null;
+      const normalizedSourceUrl = normalizedStaffListingSourceUrl(row);
+      return {
+        row,
+        decision,
+        id: row.id,
+        title: row.title,
+        reason: decision.reason,
+        source_url: staffListingSourceUrl(row),
+        normalized_source_url: normalizedSourceUrl,
+        suppressible: Boolean(normalizedSourceUrl),
+      };
+    })
+    .filter(Boolean);
+}
+
 function extractQuestionFilter(question = '') {
   const lower = String(question || '').toLowerCase();
   const district = DISTRICTS.find((item) => lower.includes(item.toLowerCase())) || '';
@@ -2676,6 +2804,110 @@ router.post('/properties/bulk-review', async (req, res, next) => {
     });
   } catch (error) {
     logger.error('Staff bulk review failed', { message: error.message });
+    return next(error);
+  }
+});
+
+router.post('/properties/bulk-reject', async (req, res, next) => {
+  try {
+    const ids = Array.isArray(req.body?.ids) ? req.body.ids : [];
+    const allPending = boolLike(req.body?.all_pending || req.body?.allPending);
+    const dryRun = boolLike(req.body?.dry_run || req.body?.dryRun);
+    const reasons = normalizeBulkRejectReasons(req.body?.reasons || req.body?.reason);
+    if (!allPending && !ids.length) {
+      return res.status(400).json({
+        ok: false,
+        error: 'ids or all_pending=true is required'
+      });
+    }
+
+    const [candidateResult, approvedIndex] = await Promise.all([
+      loadStaffBulkReviewCandidates({ ids, allPending }),
+      loadApprovedDuplicateIndex()
+    ]);
+    const decisions = applyStaffBulkInternalDuplicateGate(
+      candidateResult.rows.map((row) => staffBulkModerationDecision(row, approvedIndex)),
+      candidateResult.rows
+    );
+    candidateResult.missing_ids.forEach((id) => {
+      decisions.push({ id, title: '', decision: 'hold', reason: 'not_found' });
+    });
+    const targets = staffBulkRejectTargets(candidateResult.rows, decisions, reasons);
+    const reasonCounts = targets.reduce((acc, item) => {
+      acc[item.reason] = (acc[item.reason] || 0) + 1;
+      return acc;
+    }, {});
+    const suppressibleTargets = targets.filter((item) => item.suppressible);
+    const rejectedRows = [];
+    let suppressedSources = 0;
+
+    if (!dryRun && targets.length) {
+      const client = await db.getClient();
+      try {
+        await client.query('BEGIN');
+        for (const target of targets) {
+          const rejected = await rejectStaffBulkFoundOnlineListing(client, req, target.row, target.decision);
+          rejectedRows.push(rejected);
+        }
+        suppressedSources = await upsertSuppressedSourceRows(client, suppressibleTargets.map((target) => ({
+          source_url: target.normalized_source_url,
+          reason: target.reason,
+          rejected_property_id: target.id,
+          created_by: toUuidOrNull(actorId(req)),
+          metadata: {
+            original_source_url: target.source_url,
+            title: target.title,
+            moderation_decision: target.decision,
+            source: 'staff_bulk_reject'
+          }
+        })));
+        await client.query('COMMIT');
+      } catch (error) {
+        try {
+          await client.query('ROLLBACK');
+        } catch (_) {}
+        throw error;
+      } finally {
+        client.release();
+      }
+      clearStaffFastDashboardCache();
+      logStaffActivityInBackground(req, 'staff_bulk_found_online_reject_suppress', {
+        targetType: 'property',
+        metadata: {
+          rejected: rejectedRows.length,
+          suppressed_sources: suppressedSources,
+          reasons,
+          dry_run: false
+        }
+      });
+    }
+
+    return res.json({
+      ok: true,
+      data: {
+        dry_run: dryRun,
+        all_pending: allPending,
+        requested: allPending ? candidateResult.rows.length : ids.length,
+        reasons,
+        rejected: dryRun ? targets.length : rejectedRows.length,
+        suppressible_sources: suppressibleTargets.length,
+        suppressed_sources: dryRun ? 0 : suppressedSources,
+        kept_fixable: decisions.filter((item) => item.decision === 'hold' && !reasons.includes(cleanText(item.reason).toLowerCase())).length,
+        reason_counts: reasonCounts,
+        targets: targets.map((item) => ({
+          id: item.id,
+          title: item.title,
+          reason: item.reason,
+          source_url: item.source_url,
+          normalized_source_url: item.normalized_source_url,
+          suppressible: item.suppressible,
+        })),
+        rejected_rows: rejectedRows,
+        decisions,
+      }
+    });
+  } catch (error) {
+    logger.error('Staff bulk reject failed', { message: error.message });
     return next(error);
   }
 });
