@@ -224,6 +224,21 @@ function adminPendingReviewFastWhere(alias = 'p') {
   )`;
 }
 
+function adminSourceQualitySuppressedFlagSql(alias = 'p') {
+  const extra = adminColumn(alias, 'extra_fields');
+  return `(
+    COALESCE(${extra}->'source_quality_review'->>'suppressed', '') ~* '^(true|1|yes)$'
+    OR COALESCE(${extra}->>'source_quality_suppressed', '') ~* '^(true|1|yes)$'
+  )`;
+}
+
+function adminActiveReviewQueueWhere(alias = 'p') {
+  return `(
+    ${adminPendingReviewWhere(alias)}
+    AND NOT ${adminSourceQualitySuppressedFlagSql(alias)}
+  )`;
+}
+
 function adminLaunchTestListingFastCondition(alias = 'p') {
   const col = (column) => adminColumn(alias, column);
   return `(
@@ -236,6 +251,13 @@ function adminLaunchTestListingFastCondition(alias = 'p') {
     OR COALESCE(${col('extra_fields')}->>'soft_launch_test', '') ~* '^(true|1|yes)$'
     OR COALESCE(${col('extra_fields')}->>'launch_proof', '') ~* '^(true|1|yes)$'
     OR COALESCE(${col('extra_fields')}->>'non_public_test', '') ~* '^(true|1|yes)$'
+  )`;
+}
+
+function adminDefaultReviewQueueWhere(alias = 'p') {
+  return `(
+    ${adminActiveReviewQueueWhere(alias)}
+    AND NOT ${adminLaunchTestListingFastCondition(alias)}
   )`;
 }
 
@@ -2614,7 +2636,7 @@ router.get('/summary', async (req, res, next) => {
         safeOne(
           `SELECT
             COUNT(*)::int AS total,
-            COUNT(*) FILTER (WHERE ${adminPendingReviewFastWhere('')})::int AS pending,
+            COUNT(*) FILTER (WHERE ${adminDefaultReviewQueueWhere('')})::int AS pending,
             COUNT(*) FILTER (WHERE status = 'approved')::int AS approved,
             COUNT(*) FILTER (WHERE status = 'approved' OR (status = 'sold' AND sold_at >= NOW() - INTERVAL '7 days'))::int AS public_live,
             COUNT(*) FILTER (WHERE (status = 'approved' OR (status = 'sold' AND sold_at >= NOW() - INTERVAL '7 days')) AND ${adminFeaturedListingCondition('')})::int AS public_featured,
@@ -2774,7 +2796,7 @@ router.get('/command-centre', async (_req, res, next) => {
       testUsers,
       propertyRequests
     ] = await Promise.all([
-      safeCount(`SELECT COUNT(*)::int AS total FROM properties p WHERE ${adminPendingReviewWhere('p')}`),
+      safeCount(`SELECT COUNT(*)::int AS total FROM properties p WHERE ${adminDefaultReviewQueueWhere('p')}`),
       safeCount(`SELECT COUNT(*)::int AS total FROM properties p WHERE ${adminPublicLiveListingFastWhere('p')}`),
       safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'deleted'"),
       safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'hidden'"),
@@ -2991,13 +3013,11 @@ router.get('/properties/review-queue', async (req, res, next) => {
     const includeTestLike = parseBooleanLike(req.query.include_test_like || req.query.includeTestLike, false);
     const includeTotal = parseBooleanLike(req.query.include_total || req.query.includeTotal, false);
     const includeImages = parseBooleanLike(req.query.include_images || req.query.includeImages, false);
-    const filters = [adminPendingReviewFastWhere('p')];
+    const filters = [includeTestLike ? adminActiveReviewQueueWhere('p') : adminDefaultReviewQueueWhere('p')];
     const values = [];
     const search = cleanText(req.query.search || req.query.q);
     const listingType = cleanText(req.query.listing_type || req.query.type).toLowerCase();
 
-    if (!includeTestLike) filters.push(`NOT ${adminLaunchTestListingFastCondition('p')}`);
-    filters.push(`NOT ${sourceQualitySuppressedSql('p')}`);
     if (listingType && LISTING_TYPES.includes(listingType)) {
       values.push(listingType);
       filters.push(`p.listing_type = $${values.length}`);
@@ -3018,7 +3038,7 @@ router.get('/properties/review-queue', async (req, res, next) => {
 
     const where = `WHERE ${filters.join(' AND ')}`;
     const cacheKey = JSON.stringify({
-      route: 'admin-review-queue-v4',
+      route: 'admin-review-queue-v5',
       page,
       limit,
       includeTestLike,
@@ -3113,7 +3133,7 @@ router.get('/properties/review-queue', async (req, res, next) => {
         pagination,
         meta: {
           status: 'review_queue',
-          cache: 'admin_review_queue_v4',
+          cache: 'admin_review_queue_v5',
           cache_ttl_ms: ADMIN_REVIEW_QUEUE_CACHE_TTL_MS,
           include_test_like: includeTestLike,
           include_total: includeTotal,
@@ -3123,6 +3143,8 @@ router.get('/properties/review-queue', async (req, res, next) => {
           partial_total: !exactTotalAvailable,
           count_fallback_reason: countFallbackReason,
           row_fallback_reason: rowFallbackReason,
+          count_filter: includeTestLike ? 'admin_active_review_queue' : 'admin_default_review_queue',
+          source_quality_filter: 'stored_suppression_flag_only',
           pending_statuses: ADMIN_PENDING_REVIEW_STATUSES,
           final_statuses_excluded: ADMIN_FINAL_REVIEW_STATUSES
         }

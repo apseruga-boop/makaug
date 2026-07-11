@@ -1819,6 +1819,95 @@ router.get('/dashboard', async (req, res, next) => {
   }
 });
 
+router.get('/properties/review-queue', async (req, res, next) => {
+  try {
+    const { page, limit, offset } = parsePagination(req.query);
+    const includeTotal = boolLike(req.query?.include_total || req.query?.includeTotal);
+    const includeImages = boolLike(req.query?.include_images || req.query?.includeImages);
+    const search = cleanText(req.query.search || req.query.q);
+    const listingType = cleanText(req.query.listing_type || req.query.type).toLowerCase();
+    const filters = [activePendingReviewWhere('p')];
+    const values = [];
+
+    if (listingType && LISTING_TYPES.includes(listingType)) {
+      values.push(listingType);
+      filters.push(`p.listing_type = $${values.length}`);
+    }
+    if (search) {
+      values.push(`%${search}%`);
+      const idx = values.length;
+      filters.push(`(
+        p.title ILIKE $${idx}
+        OR p.area ILIKE $${idx}
+        OR p.district ILIKE $${idx}
+        OR COALESCE(p.inquiry_reference, '') ILIKE $${idx}
+        OR COALESCE(p.lister_phone, '') ILIKE $${idx}
+        OR COALESCE(p.extra_fields->>'source_name', '') ILIKE $${idx}
+        OR COALESCE(p.extra_fields->>'source_platform', '') ILIKE $${idx}
+      )`);
+    }
+
+    const where = `WHERE ${filters.join(' AND ')}`;
+    const imageSelect = includeImages ? 'img.url AS primary_image_url' : 'NULL::text AS primary_image_url';
+    const imageJoin = includeImages
+      ? `LEFT JOIN LATERAL (
+           SELECT i.url
+           FROM property_images i
+           WHERE i.property_id = p.id
+           ORDER BY i.is_primary DESC, i.sort_order ASC, i.created_at ASC
+           LIMIT 1
+         ) img ON true`
+      : '';
+    const rowLimit = limit + 1;
+    const rawRows = await safeRows(
+      `SELECT p.id, p.title, p.description, p.listing_type, p.property_type, p.district, p.area, p.address,
+              p.price, p.price_period, p.bedrooms, p.bathrooms, p.title_type,
+              p.status, p.moderation_stage, p.moderation_reason, p.created_at, p.updated_at,
+              p.inquiry_reference, p.lister_name, p.lister_phone, p.lister_email, p.source, p.listed_via,
+              p.lister_type, p.agent_id, p.extra_fields,
+              COALESCE(p.extra_fields->>'source_url', p.extra_fields->>'source_post_url', p.extra_fields->>'tiktok_url', p.extra_fields->>'youtube_url', p.extra_fields->>'video_url') AS source_url,
+              COALESCE(p.extra_fields->>'source_platform', p.extra_fields->>'source_badge', p.source, p.listed_via) AS source_platform,
+              0::int AS duplicate_count,
+              ${imageSelect}
+       FROM properties p
+       ${imageJoin}
+       ${where}
+       ORDER BY COALESCE(p.updated_at, p.created_at) DESC, p.id DESC
+       LIMIT $${values.length + 1}
+       OFFSET $${values.length + 2}`,
+      [...values, rowLimit, offset]
+    );
+
+    const rows = rawRows.slice(0, limit);
+    const hasMore = rawRows.length > limit;
+    const countRow = includeTotal
+      ? await safeOne(`SELECT COUNT(*)::int AS total FROM properties p ${where}`, values, { total: 0 })
+      : null;
+    const total = includeTotal
+      ? safeNumber(countRow, 'total')
+      : offset + rows.length + (hasMore ? 1 : 0);
+    const pagination = toPagination(total, page, limit);
+    if (!includeTotal) pagination.totalPages = page + (hasMore ? 1 : 0);
+
+    return res.json({
+      ok: true,
+      data: rows,
+      pagination,
+      meta: {
+        status: 'active_review_queue',
+        include_total: includeTotal,
+        include_images: includeImages,
+        has_more: hasMore,
+        total_exact: includeTotal,
+        count_filter: 'staff_active_pending_review',
+        source_quality_filter: 'stored_suppression_flag_only'
+      }
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.patch('/profile', async (req, res, next) => {
   try {
     const userId = actorId(req);

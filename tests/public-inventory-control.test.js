@@ -42,6 +42,13 @@ function asyncFunctionSource(name) {
   return appSource.slice(start, next === undefined ? appSource.length : next);
 }
 
+function routeSource(source, signature) {
+  const start = source.indexOf(signature);
+  assert.notEqual(start, -1, `Expected route ${signature} to exist`);
+  const next = source.indexOf('\nrouter.', start + 1);
+  return source.slice(start, next === -1 ? source.length : next);
+}
+
 test('public listings are backend-controlled, not frontend seed inventory', () => {
   assert.match(appSource, /function publicSampleListingsEnabled\(\)/);
   assert.match(appSource, /window\.MAKAUG_ALLOW_SAMPLE_LISTINGS === true/);
@@ -55,7 +62,16 @@ test('admin live controls use paginated backend snapshots', () => {
   assert.match(appSource, /async function fetchAdminPaginatedRows\(path, headers, options = \{\}\)/);
   assert.match(adminRouteSource, /router\.get\('\/properties\/review-queue'/);
   assert.match(adminRouteSource, /router\.get\('\/properties\/actioned'/);
-  assert.match(adminRouteSource, /NOT \$\{sourceQualitySuppressedSql\('p'\)\}/);
+  assert.match(adminRouteSource, /function adminSourceQualitySuppressedFlagSql\(alias = 'p'\)/);
+  assert.match(adminRouteSource, /function adminActiveReviewQueueWhere\(alias = 'p'\)/);
+  assert.match(adminRouteSource, /function adminDefaultReviewQueueWhere\(alias = 'p'\)/);
+  assert.match(adminRouteSource, /COUNT\(\*\) FILTER \(WHERE \$\{adminDefaultReviewQueueWhere\(''\)\}\)::int AS pending/);
+  assert.match(adminRouteSource, /safeCount\(`SELECT COUNT\(\*\)::int AS total FROM properties p WHERE \$\{adminDefaultReviewQueueWhere\('p'\)\}`\)/);
+  const reviewQueueRouteSource = routeSource(adminRouteSource, "router.get('/properties/review-queue'");
+  assert.match(reviewQueueRouteSource, /const filters = \[includeTestLike \? adminActiveReviewQueueWhere\('p'\) : adminDefaultReviewQueueWhere\('p'\)\]/);
+  assert.match(reviewQueueRouteSource, /source_quality_filter: 'stored_suppression_flag_only'/);
+  assert.match(reviewQueueRouteSource, /count_filter: includeTestLike \? 'admin_active_review_queue' : 'admin_default_review_queue'/);
+  assert.doesNotMatch(reviewQueueRouteSource, /sourceQualitySuppressedSql\('p'\)/);
   assert.match(adminRouteSource, /function adminPublicLiveListingFastWhere\(alias = 'p'\)/);
   assert.match(adminRouteSource, /safeCount\(`SELECT COUNT\(\*\)::int AS total FROM properties p WHERE \$\{adminPublicLiveListingFastWhere\('p'\)\}`\)/);
   assert.match(adminRouteSource, /'source_review'/);
@@ -66,7 +82,7 @@ test('admin live controls use paginated backend snapshots', () => {
   assert.match(appSource, /King dashboard refresh already running; skipping duplicate render\./);
   assert.match(adminRouteSource, /adminCachedPayload\('admin-summary-v4'/);
   assert.match(adminRouteSource, /adminCachedPayload\('admin-command-centre-v4'/);
-  assert.match(adminRouteSource, /admin-review-queue-v4/);
+  assert.match(adminRouteSource, /admin-review-queue-v5/);
   assert.match(adminRouteSource, /const includeTotal = parseBooleanLike\(req\.query\.include_total \|\| req\.query\.includeTotal, false\)/);
   assert.match(adminRouteSource, /const rowLimit = limit \+ 1/);
   assert.match(adminRouteSource, /has_more: hasMore/);
@@ -82,6 +98,7 @@ test('admin live controls use paginated backend snapshots', () => {
   assert.match(appSource, /ADMIN_PENDING_QUEUE_RENDER_STEP = 150/);
   assert.match(appSource, /function adminShowMorePendingQueueRows\(\)/);
   assert.match(appSource, /function hydrateAdminAllListingsInBackground\(headers\)/);
+  assert.match(htmlSource, /review-queue-list-count-parity-20260711/);
   assert.match(appSource, /fetchAdminPaginatedRows\("\/api\/properties\?status=all", headers, \{ maxPages: 500 \}\)/);
   assert.match(appSource, /if \(activeTab === "listings"\) hydrateAdminAllListingsInBackground\(headers\)/);
   assert.match(appSource, /fetchAdminPaginatedRows\("\/api\/admin\/properties\/live", headers, \{ maxPages: 10 \}\)/);
