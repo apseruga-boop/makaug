@@ -128,6 +128,48 @@ async function run() {
   });
   assert.strictEqual(cleanKiraListing.ok, true, 'clear Uganda property listings should pass the positive gate');
 
+  const dateOnlyTitle = sourcePositiveListingGateForRecord({
+    title: '1 July 2026',
+    district: 'Kampala',
+    property_type: 'Property',
+  });
+  assert.strictEqual(dateOnlyTitle.ok, false, 'date-only imported titles must not pass through a generic property type');
+  assert.strictEqual(dateOnlyTitle.reason, 'not_a_listing');
+
+  const filatomPromo = sourcePositiveListingGateForRecord({
+    title: 'Ever wondered what FILATOM means? Find Invest Lease Acquire Trade Own Manage',
+    description: 'Early closed testing announcement from a real estate app',
+    district: 'Kampala',
+    property_type: 'Property',
+  });
+  assert.strictEqual(filatomPromo.ok, false, 'real-estate app/product promos must not pass as property listings');
+  assert.strictEqual(filatomPromo.reason, 'not_a_listing');
+
+  const officeOpeningPromo = sourcePositiveListingGateForRecord({
+    title: 'Opening Soon! Our New Kyanja office.',
+    district: 'Kampala',
+    property_type: 'office',
+  });
+  assert.strictEqual(officeOpeningPromo.ok, false, 'office-opening promos must not pass as office listings');
+  assert.strictEqual(officeOpeningPromo.reason, 'not_a_listing');
+
+  const eastLegonForeignListing = sourcePositiveListingGateForRecord({
+    title: 'Sweet 3 Bedroom Home for sale | East Legon Hills | $140,000',
+    description: 'Ghana listing',
+    district: 'Kampala',
+    bedrooms: 3,
+  });
+  assert.strictEqual(eastLegonForeignListing.ok, false, 'East Legon/Ghana listings must be held even if a Uganda district was defaulted');
+  assert.strictEqual(eastLegonForeignListing.reason, 'non_uganda_location');
+
+  const richHomesExplainer = sourcePositiveListingGateForRecord({
+    title: 'What Rich Homes Look Like in Uganda Serena Kigo New Rich Neighborhood',
+    district: 'Wakiso',
+    property_type: 'Property',
+  });
+  assert.strictEqual(richHomesExplainer.ok, false, 'rich-home explainer/showcase videos must not pass as a specific listing');
+  assert.strictEqual(richHomesExplainer.reason, 'not_a_listing');
+
   const dryBlocked = await queueFoundOnlineSourcePostListings({
     dryRun: true,
     posts: [{

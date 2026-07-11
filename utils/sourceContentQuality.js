@@ -13,11 +13,12 @@ const FOREIGN_PROPERTY_MARKET_PATTERN = /\b(?:kolkata|west\s+bengal|bengal|waran
 const UGANDA_BBOX = { minLat: -1.5, maxLat: 4.3, minLng: 29.5, maxLng: 35.1 };
 const UGANDA_DISTRICT_SET = new Set(DISTRICTS.map((district) => district.toLowerCase()));
 const POSITIVE_LISTING_SIGNAL_PATTERN = /\b(?:for\s+sale|for\s+rent|to\s+let|to\s+rent|bedroom|bdrm|plots?|land|acre|house|home|apartment|studio|rental|hostel|shop|office|warehouse|duplex|bungalow|mansion|condo|estate)\b/i;
-const POSITIVE_FOREIGN_LOCATION_PATTERN = /(^|\b)(ajah|lekki|ibeju|lagos|abuja|ikeja|ikoyi|nigeria|naira|nairobi|mombasa|kenya|accra|ghana|dar\s+es\s+salaam|tanzania|kigali|rwanda|johannesburg|cape\s+town|south\s+africa|dubai|uae|texas|florida|london|uk|canada|portugal|golden\s+visa|passport|citizenship|residency|owerri|asaba|enugu|awka|onitsha|nnewi|imo|anambra|delta\s+state|edo|certificate\s+of\s+occupancy|ibusa|apogazi|avu|sangotedo|ibeju|eneka|port\s+harcourt|gra\s+phase|ph\s+city|rwf|kanombe|ada\s+george|aluu|omoko|rivers\s+state|ksh|tzs|ota|sango|ogun|ogborhill|aba|abia|cantonment|trasacco)(\b|$)|\bc\s*(?:of|\/|-)\s*o\b|\b(?:apogazi\s+nike|nike\s+enugu)\b|\+233\b|\u20a6/i;
+const POSITIVE_FOREIGN_LOCATION_PATTERN = /(^|\b)(ajah|lekki|ibeju|lagos|abuja|ikeja|ikoyi|nigeria|naira|nairobi|mombasa|kenya|accra|ghana|east\s+legon|dar\s+es\s+salaam|tanzania|kigali|rwanda|johannesburg|cape\s+town|south\s+africa|dubai|uae|texas|florida|london|uk|canada|portugal|golden\s+visa|passport|citizenship|residency|owerri|asaba|enugu|awka|onitsha|nnewi|imo|anambra|delta\s+state|edo|certificate\s+of\s+occupancy|ibusa|apogazi|avu|sangotedo|ibeju|eneka|port\s+harcourt|gra\s+phase|ph\s+city|rwf|kanombe|ada\s+george|aluu|omoko|rivers\s+state|ksh|tzs|ota|sango|ogun|ogborhill|aba|abia|cantonment|trasacco)(\b|$)|\bc\s*(?:of|\/|-)\s*o\b|\b(?:apogazi\s+nike|nike\s+enugu)\b|\+233\b|\u20a6/i;
 const POSITIVE_CLICKBAIT_PATTERN = /^\s*what\s+\$/i;
-const POSITIVE_EXPLAINER_PATTERN = /(?:\$\s*\d{2,}\s*k?\s+can\s+(?:buy|get)|\b\d+\s+countries\b|\bgolden\s+visa\b|\bland\s+banking\b|\bhow\s+to\b|\btop\s+\d+\b|\bexplained\b|\btour\s+of\b|\bforget\s+\$|\bltd\b|\blimited\b|\bcompany\b|welcome\s+to|well\s*come\s+to|\bep\s?\d+\b|\bepisode\b|podcast|ifma|association|new\s+chapter|your\s+(?:construction|real\s+estate)|ai[- ]powered|ecosystem|getting\s+smarter|real\s+estate\s+ltd|consultants\s+ltd|agencies\b)/i;
+const POSITIVE_EXPLAINER_PATTERN = /(?:\$\s*\d{2,}\s*k?\s+can\s+(?:buy|get)|\b\d+\s+countries\b|\bgolden\s+visa\b|\bland\s+banking\b|\bhow\s+to\b|\btop\s+\d+\b|\bexplained\b|\btour\s+of\b|\bforget\s+\$|\bltd\b|\blimited\b|\bcompany\b|welcome\s+to|well\s*come\s+to|\bep\s?\d+\b|\bepisode\b|podcast|ifma|association|new\s+chapter|your\s+(?:construction|real\s+estate)|ai[- ]powered|ecosystem|getting\s+smarter|real\s+estate\s+ltd|consultants\s+ltd|agencies\b|real\s+estate\s+empire|what\s+rich\s+homes\s+look\s+like|what(?:'s|\s+is)\s+your\s+budget)/i;
 const POSITIVE_NEWS_POLITICS_PATTERN = /\b(?:mps?|opposition|speaker|bill|parliament|minister|president|drama|arrested|scandal|police|election|cdf|warns|robber(?:y|ies)|thie(?:f|ves)|fraud|lukwago|baryomunsi)\b/i;
-const POSITIVE_VLOG_EVENT_PATTERN = /(?:latest\s+updates|city\s+streets|streets\s+\d|rainy\s+day|\bparties\b|sunrise|\bvlog\b|presentation|\bproject\b|walkthrough|drone|timelapse|nightlife|worship|church|\bmix\b|whatsapp\s+video|\bvillage\b|i\s+found|why\s+everyone|moving\s+to|trusted\s+real\s+estate\s+partner|be\s+aware|real\s+estate\s+empire|lucky\s+winner|price\s+reduction|inflated\s+uganda\s+real\s+estate|\bsalon\b|home\s+service)/i;
+const POSITIVE_VLOG_EVENT_PATTERN = /(?:latest\s+updates|city\s+streets|streets\s+\d|rainy\s+day|\bparties\b|sunrise|\bvlog\b|presentation|\bproject\b|walkthrough|drone|timelapse|nightlife|worship|church|\bmix\b|whatsapp\s+video|\bvillage\b|i\s+found|why\s+everyone|moving\s+to|trusted\s+real\s+estate\s+partner|be\s+aware|lucky\s+winner|price\s+reduction|inflated\s+uganda\s+real\s+estate|\bsalon\b|home\s+service|opening\s+soon|new\s+\w+\s+office|closed\s+testing|\bfilatom\b|what(?:'s|\s+is)\s+in\s+the\s+box|ever\s+wondered|^\s*\d{1,2}\s+(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+\d{4}\s*$)/i;
+const BROAD_PROPERTY_TYPE_LABELS = new Set(['property', 'other', 'unknown', 'not stated', 'n/a', 'na']);
 const BROAD_LOCATION_LABELS = new Set([
   'uganda',
   'kampala',
@@ -170,12 +171,12 @@ function sourceHasConcreteListingSignal(record = {}) {
     : {};
   const price = nullableNumber(record.price ?? record.asking_price ?? record.amount ?? extra.price ?? extra.asking_price);
   const bedrooms = nullableNumber(record.bedrooms ?? record.beds ?? extra.bedrooms ?? extra.beds);
-  const propertyType = compactText(record.property_type || record.subtype || record.type || extra.property_type || extra.subtype || '');
+  const propertyType = compactText(record.property_type || record.subtype || record.type || extra.property_type || extra.subtype || '').toLowerCase();
   const text = sourcePositiveListingText(record);
   return Boolean(
     (price != null && price > 0)
       || (bedrooms != null && bedrooms > 0)
-      || propertyType
+      || (propertyType && !BROAD_PROPERTY_TYPE_LABELS.has(propertyType))
       || POSITIVE_LISTING_SIGNAL_PATTERN.test(text)
   );
 }
