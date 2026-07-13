@@ -29,7 +29,7 @@ function run() {
   const staffApproveBody = staffApproveStart >= 0 && staffApproveEnd > staffApproveStart
     ? app.slice(staffApproveStart, staffApproveEnd)
     : '';
-  const staffPanelsStart = staffRoutes.indexOf('async function dashboardPanelsPayload');
+  const staffPanelsStart = staffRoutes.indexOf('async function buildDashboardPanelsPayload');
   const staffPanelsEnd = staffRoutes.indexOf('function normalizeStaffListingPatch', staffPanelsStart);
   const staffPanelsBody = staffPanelsStart >= 0 && staffPanelsEnd > staffPanelsStart
     ? staffRoutes.slice(staffPanelsStart, staffPanelsEnd)
@@ -190,6 +190,9 @@ function run() {
   assert(studentSupplyBackfillMigration.includes('student-supply-gate-20260711'), 'student supply backfill should stamp the marker version');
   assert(staffRoutes.includes('STAFF_DASHBOARD_QUEUE_SCAN_LIMIT'), 'staff dashboard should retain a bounded queue scan setting for non-critical source panels');
   assert(staffRoutes.includes('STAFF_DASHBOARD_PANEL_QUERY_TIMEOUT_MS'), 'staff panels endpoint should use server-side DB timeouts so one slow query cannot 503 the panel bundle');
+  assert(staffRoutes.includes('STAFF_DASHBOARD_PANEL_CACHE_TTL_MS'), 'staff panels endpoint should coalesce concurrent panel requests with a short cache');
+  assert(staffRoutes.includes('staffDashboardPanelsCache'), 'staff panels endpoint should avoid duplicate concurrent dashboard panel queries');
+  assert(staffRoutes.includes("cache: { status: 'shared_inflight'"), 'staff panels endpoint should report shared in-flight panel payloads');
   assert(staffRoutes.includes('STAFF_REVIEW_QUEUE_QUERY_TIMEOUT_MS'), 'standalone staff review queue endpoint should be timeout bounded');
   assert(staffPanelsBody.includes('panelQueryOptions'), 'staff panels endpoint should pass timeout options into panel queries');
   assert(staffPanelsBody.includes('const [recentActivity, reviewResult, brokerReviewResult, sourceQueueRows]'), 'staff panels endpoint should include recent activity with moderation panel query metadata');

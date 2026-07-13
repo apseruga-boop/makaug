@@ -55,6 +55,7 @@ const STAFF_DASHBOARD_PANEL_LIMIT = 8;
 const STAFF_DASHBOARD_QUEUE_SCAN_LIMIT = STAFF_DASHBOARD_QUEUE_LIMIT * 20;
 const STAFF_DASHBOARD_PANEL_SCAN_LIMIT = STAFF_DASHBOARD_PANEL_LIMIT * 20;
 const STAFF_DASHBOARD_PANEL_QUERY_TIMEOUT_MS = Math.max(1000, parseInt(process.env.STAFF_DASHBOARD_PANEL_QUERY_TIMEOUT_MS || '5000', 10) || 5000);
+const STAFF_DASHBOARD_PANEL_CACHE_TTL_MS = Math.max(500, parseInt(process.env.STAFF_DASHBOARD_PANEL_CACHE_TTL_MS || '3000', 10) || 3000);
 const STAFF_REVIEW_QUEUE_QUERY_TIMEOUT_MS = Math.max(1500, parseInt(process.env.STAFF_REVIEW_QUEUE_QUERY_TIMEOUT_MS || '4000', 10) || 4000);
 const STAFF_PREVIEW_QUERY_TIMEOUT_MS = Math.max(500, parseInt(process.env.STAFF_PREVIEW_QUERY_TIMEOUT_MS || '900', 10) || 900);
 const STAFF_BULK_REVIEW_QUERY_TIMEOUT_MS = Math.max(5000, parseInt(process.env.STAFF_BULK_REVIEW_QUERY_TIMEOUT_MS || '15000', 10) || 15000);
@@ -125,6 +126,7 @@ const STAFF_SOURCE_MONITOR_GUIDE = {
 };
 const staffFastDashboardCache = new Map();
 const staffFastDashboardRefreshes = new Map();
+const staffDashboardPanelsCache = new Map();
 const staffSourceIntakeJobs = new Map();
 
 function activeStaffSourceIntakeJob(type = '') {
@@ -951,6 +953,7 @@ function cloneDashboardPayload(payload = {}) {
 
 function clearStaffFastDashboardCache() {
   staffFastDashboardCache.clear();
+  staffDashboardPanelsCache.clear();
 }
 
 function refreshStaffFastDashboardCache(req, cacheKey) {
@@ -986,6 +989,44 @@ async function dashboardFastPayload(req) {
   return {
     ...payload,
     cache: { status: 'miss', age_ms: 0, ttl_ms: STAFF_FAST_DASHBOARD_CACHE_TTL_MS }
+  };
+}
+
+function staffDashboardPanelsCacheKey(req) {
+  return String(actorId(req) || req.userAuth?.email || req.userAuth?.phone || 'staff');
+}
+
+async function dashboardPanelsPayload(req) {
+  const cacheKey = staffDashboardPanelsCacheKey(req);
+  const cached = staffDashboardPanelsCache.get(cacheKey);
+  const now = Date.now();
+  if (cached?.payload && now - cached.at <= STAFF_DASHBOARD_PANEL_CACHE_TTL_MS) {
+    return {
+      ...cloneDashboardPayload(cached.payload),
+      cache: { status: 'hit', age_ms: now - cached.at, ttl_ms: STAFF_DASHBOARD_PANEL_CACHE_TTL_MS }
+    };
+  }
+  if (cached?.promise) {
+    const payload = await cached.promise;
+    return {
+      ...cloneDashboardPayload(payload),
+      cache: { status: 'shared_inflight', age_ms: 0, ttl_ms: STAFF_DASHBOARD_PANEL_CACHE_TTL_MS }
+    };
+  }
+  const promise = buildDashboardPanelsPayload(req)
+    .then((payload) => {
+      staffDashboardPanelsCache.set(cacheKey, { at: Date.now(), payload: cloneDashboardPayload(payload) });
+      return payload;
+    })
+    .catch((error) => {
+      staffDashboardPanelsCache.delete(cacheKey);
+      throw error;
+    });
+  staffDashboardPanelsCache.set(cacheKey, { at: now, promise });
+  const payload = await promise;
+  return {
+    ...payload,
+    cache: { status: 'miss', age_ms: 0, ttl_ms: STAFF_DASHBOARD_PANEL_CACHE_TTL_MS }
   };
 }
 
@@ -1488,7 +1529,7 @@ async function dashboardPayload(req) {
   };
 }
 
-async function dashboardPanelsPayload(req) {
+async function buildDashboardPanelsPayload(req) {
   const staffId = actorId(req);
   const queueLimit = STAFF_DASHBOARD_QUEUE_LIMIT;
   const panelLimit = STAFF_DASHBOARD_PANEL_LIMIT;
