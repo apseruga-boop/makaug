@@ -30530,7 +30530,7 @@ async function submitAiChatbotPrompt(event) {
         }
       }
     });
-    const text = response?.data?.reply || response?.data?.message || response?.reply || "makaug AI is connected. If provider output is unavailable, use WhatsApp or Help Centre for human follow-up.";
+    const text = response?.data?.text || response?.data?.reply || response?.data?.message || response?.reply || "makaug AI is connected. If provider output is unavailable, use WhatsApp or Help Centre for human follow-up.";
     if (responseBox) responseBox.textContent = text;
     trackEvent("ai_chatbot_prompt_submitted", { intent, source_page: currentPage, language: currentLang || "en" });
   } catch (error) {
