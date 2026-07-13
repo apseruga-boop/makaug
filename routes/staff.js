@@ -36,6 +36,9 @@ const {
   normalizeSourceUrl,
   upsertSuppressedSourceRows
 } = require('../services/suppressedSourceService');
+const {
+  buildListingIdentityDocumentPayload
+} = require('../services/listingIdentityDocumentService');
 
 const router = express.Router();
 
@@ -1989,6 +1992,8 @@ async function loadStaffPropertyPreview(propertyId) {
   );
   return {
     ...property,
+    id_document_url: undefined,
+    id_document_available: !!(property.id_document_url || extra.verify?.id_document_url),
     images,
     duplicate_review: {
       count: duplicates.length,
@@ -2923,6 +2928,31 @@ router.get('/properties/:id/preview', async (req, res, next) => {
     });
     return res.json({ ok: true, data: preview });
   } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/properties/:id/id-document', async (req, res, next) => {
+  try {
+    const data = await buildListingIdentityDocumentPayload(db, req.params.id, {
+      actorId: actorId(req),
+      actorRole: req.userAuth?.role || req.userAuth?.portal_mode || 'staff',
+      source: 'staff_dashboard'
+    });
+    logStaffActivityInBackground(req, 'staff_identity_document_accessed', {
+      targetType: 'property',
+      targetId: data.property_id,
+      metadata: {
+        inquiry_reference: data.inquiry_reference || null,
+        storage: data.document?.storage || null,
+        expires_at: data.document?.expires_at || null
+      }
+    });
+    return res.json({ ok: true, data });
+  } catch (error) {
+    if (error.status) {
+      return res.status(error.status).json({ ok: false, error: error.message });
+    }
     return next(error);
   }
 });

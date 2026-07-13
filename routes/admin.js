@@ -86,6 +86,9 @@ const { logEmailEvent } = require('../services/emailLogService');
 const { logWhatsAppMessage } = require('../services/whatsappMessageLogService');
 const { prepareMediaUrlForStorage, prepareUploadObjectForStorage, uploadBufferToS3 } = require('../services/cloudMediaStorageService');
 const {
+  buildListingIdentityDocumentPayload
+} = require('../services/listingIdentityDocumentService');
+const {
   approveOutlookEmailAction,
   getOutlookAgentStatus,
   listOutlookEmailActions,
@@ -2310,6 +2313,8 @@ async function loadPropertyReview(propertyId) {
   return {
     ...listing,
     owner_edit_token_hash: undefined,
+    id_document_url: undefined,
+    id_document_available: !!(listing.id_document_url || listing.extra_fields?.verify?.id_document_url),
     images: images.rows,
     review: {
       checklist: automatedReview.checklist,
@@ -3987,6 +3992,27 @@ router.get('/properties/:id/review', async (req, res, next) => {
 
     return res.json({ ok: true, data: review });
   } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/properties/:id/id-document', async (req, res, next) => {
+  const actorId = adminActorId(req);
+  try {
+    const data = await buildListingIdentityDocumentPayload(db, req.params.id, {
+      actorId,
+      actorRole: req.adminAuth?.role || req.adminAuth?.type || 'admin',
+      source: 'king_dashboard'
+    });
+    await writeAudit('admin_identity_document_accessed', {
+      property_id: data.property_id,
+      inquiry_reference: data.inquiry_reference || null,
+      storage: data.document?.storage || null,
+      expires_at: data.document?.expires_at || null
+    }, actorId);
+    return res.json({ ok: true, data });
+  } catch (error) {
+    if (error.status) return res.status(error.status).json({ ok: false, error: error.message });
     return next(error);
   }
 });

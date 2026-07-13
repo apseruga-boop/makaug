@@ -32,6 +32,10 @@ const { logWhatsAppMessage } = require('../services/whatsappMessageLogService');
 const { createLead } = require('../services/leadService');
 const { ensurePostVerificationRecords } = require('../services/authFlowService');
 const { prepareMediaUrlForStorage } = require('../services/cloudMediaStorageService');
+const {
+  buildIdentityVerificationExtra,
+  listingRequiresIdentityVerification
+} = require('../services/listingIdentityDocumentService');
 const { hasAdminAccess, requireAdminApiKey, requireListingModerationAccess } = require('../middleware/auth');
 const {
   asArray,
@@ -1659,6 +1663,30 @@ function parseBooleanLike(value, fallback = false) {
   if (['1', 'true', 'yes', 'y', 'on'].includes(text)) return true;
   if (['0', 'false', 'no', 'n', 'off'].includes(text)) return false;
   return fallback;
+}
+
+function identityVerificationConfirmedFromBody(body = {}, checklist = {}) {
+  if (parseBooleanLike(body.identity_verified, false)) return true;
+  if (parseBooleanLike(body.identityVerified, false)) return true;
+  if (parseBooleanLike(body.identity_document_verified, false)) return true;
+  if (parseBooleanLike(body.identityDocumentVerified, false)) return true;
+  if (parseBooleanLike(body.id_document_clear_and_matches, false)) return true;
+  if (parseBooleanLike(checklist.identity_document_verified, false)
+      && parseBooleanLike(checklist.identity_number_matches_document, false)) return true;
+  if (parseBooleanLike(checklist.identity_verified, false)) return true;
+  return false;
+}
+
+function normalizeStructuredRejectionReasons(body = {}) {
+  const rawReasons = body.structured_rejection_reasons
+    || body.rejection_reasons
+    || body.structuredRejectionReasons
+    || body.rejectionReasons
+    || [];
+  return asArray(rawReasons)
+    .map((item) => cleanText(item).toLowerCase().replace(/[^a-z0-9_ -]+/g, '').replace(/\s+/g, '_'))
+    .filter(Boolean)
+    .slice(0, 8);
 }
 
 function buildManualOwnerStatusNotification({ listing = {}, status, reason }) {
@@ -3666,6 +3694,7 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
     if (nextStatus === 'rejected' && !moderationReason) {
       return res.status(400).json({ ok: false, error: 'reason is required when rejecting a listing' });
     }
+    const structuredRejectionReasons = normalizeStructuredRejectionReasons(req.body);
 
     const currentResult = await db.query(
       `SELECT *
@@ -3740,7 +3769,7 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
     }
     const checklistSource = automatedReview?.checklist
       || (req.body.checklist && typeof req.body.checklist === 'object' ? req.body.checklist : current.moderation_checklist);
-    const checklist = normalizeReviewChecklist(checklistSource);
+    const checklist = { ...normalizeReviewChecklist(checklistSource) };
     const missingChecks = nextStatus === 'approved'
       ? (automatedReview?.checks || [])
         .filter((item) => {
@@ -3776,6 +3805,34 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
       });
     }
 
+    const identityVerificationRequired = nextStatus === 'approved'
+      && !sourcedCandidateOverride
+      && listingRequiresIdentityVerification(current);
+    const identityVerificationConfirmed = identityVerificationConfirmedFromBody(req.body, checklist);
+    let identityVerificationExtraFields = null;
+    if (identityVerificationRequired) {
+      if (!identityVerificationConfirmed) {
+        return res.status(400).json({
+          ok: false,
+          error: 'ID verification confirmation is required before approval',
+          details: [
+            'Open the Identity panel, check that the National ID photo is clear, and confirm the ID number matches the document before approving.'
+          ]
+        });
+      }
+      const verifiedAt = new Date().toISOString();
+      checklist.identity_document_verified = true;
+      checklist.identity_number_matches_document = true;
+      checklist.identity_verified = true;
+      moderationReason = moderationReason || 'Approved - identity verified: ID photo clear and ID number matches. Listing details confirmed.';
+      identityVerificationExtraFields = buildIdentityVerificationExtra({
+        actorId,
+        actorRole: actorRole || req.adminAuth?.type || 'staff',
+        verifiedAt
+      });
+      approvalWarnings.push('National ID photo and ID number match were confirmed before approval.');
+    }
+
     let sourcedCandidateDispensation = null;
     if (sourcedCandidateOverride) {
       moderationReason = moderationReason || 'Approved as found-online intake after location was confirmed and non-location source-review checks were overridden.';
@@ -3808,6 +3865,20 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
           image_rights_status: 'admin_confirmed_authorised'
         } : {})
       }
+      : null;
+    const structuredRejectionExtraFields = nextStatus === 'rejected' && structuredRejectionReasons.length
+      ? {
+        structured_rejection_reasons: structuredRejectionReasons,
+        structured_rejection_message: moderationReason
+      }
+      : null;
+    const moderationExtraFields = {
+      ...(sourcedCandidateExtraFields || {}),
+      ...(identityVerificationExtraFields || {}),
+      ...(structuredRejectionExtraFields || {})
+    };
+    const moderationExtraFieldsJson = Object.keys(moderationExtraFields).length
+      ? JSON.stringify(moderationExtraFields)
       : null;
 
     const regeneratedOwnerToken = nextStatus === 'rejected' ? createOwnerEditToken() : '';
@@ -3860,7 +3931,7 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
           regeneratedOwnerTokenHash,
           regeneratedOwnerTokenExpiresAt,
           JSON.stringify(warningOverrides),
-          sourcedCandidateExtraFields ? JSON.stringify(sourcedCandidateExtraFields) : null
+          moderationExtraFieldsJson
         ]
       );
       listing = result.rows[0];
@@ -3897,7 +3968,7 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
           reviewNotes,
           moderationReason,
           JSON.stringify(warningOverrides),
-          sourcedCandidateExtraFields ? JSON.stringify(sourcedCandidateExtraFields) : null
+          moderationExtraFieldsJson
         ]
       );
       listing = {
@@ -3943,12 +4014,12 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
 
     const writeModerationAuditEvents = async () => {
       try {
-        const moderationEventDelivery = sourcedCandidateDispensation
-          ? {
-            ...notification,
-            sourced_candidate_special_dispensation: sourcedCandidateDispensation
-          }
-          : notification;
+        const moderationEventDelivery = {
+          ...notification,
+          ...(sourcedCandidateDispensation ? { sourced_candidate_special_dispensation: sourcedCandidateDispensation } : {}),
+          ...(identityVerificationExtraFields ? { identity_verification: identityVerificationExtraFields.identity_verification } : {}),
+          ...(structuredRejectionReasons.length ? { structured_rejection_reasons: structuredRejectionReasons } : {})
+        };
         await db.query(
           `INSERT INTO property_moderation_events (
             property_id,
@@ -4022,6 +4093,8 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
               status_to: nextStatus,
               title: listing.title || null,
               reason: moderationReason || null,
+              structured_rejection_reasons: structuredRejectionReasons,
+              identity_verified: !!identityVerificationExtraFields,
               lister_notified: !!(notification.email?.sent || notification.whatsapp?.sent)
             })
           ]

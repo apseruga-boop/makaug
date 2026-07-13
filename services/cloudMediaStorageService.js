@@ -27,6 +27,17 @@ function canonicalUriFor(endpoint, bucket, key) {
   return `${prefix}/${encodePathSegment(bucket)}/${normalizeObjectKey(key).split('/').map(encodePathSegment).join('/')}`;
 }
 
+function canonicalQueryString(params = {}) {
+  return Object.entries(params)
+    .map(([name, value]) => [encodePathSegment(name), encodePathSegment(value)])
+    .sort(([aName, aValue], [bName, bValue]) => {
+      const nameCompare = aName.localeCompare(bName);
+      return nameCompare || aValue.localeCompare(bValue);
+    })
+    .map(([name, value]) => `${name}=${value}`)
+    .join('&');
+}
+
 function sha256Hex(value) {
   return crypto.createHash('sha256').update(value).digest('hex');
 }
@@ -64,6 +75,20 @@ function storageError(message, status = 503) {
   const error = new Error(message);
   error.status = status;
   return error;
+}
+
+function parseS3InternalRef(value = '') {
+  const raw = String(value || '').trim();
+  if (!raw.toLowerCase().startsWith('s3://')) return null;
+  const withoutScheme = raw.slice(5);
+  const slashIndex = withoutScheme.indexOf('/');
+  if (slashIndex <= 0 || slashIndex === withoutScheme.length - 1) {
+    throw storageError('Private media reference is invalid.', 500);
+  }
+  return {
+    bucket: withoutScheme.slice(0, slashIndex),
+    key: normalizeObjectKey(withoutScheme.slice(slashIndex + 1))
+  };
 }
 
 function mediaStorageProvider() {
@@ -198,6 +223,44 @@ async function uploadBufferToS3({ bytes, mimeType, key, bucket: bucketOverride, 
   };
 }
 
+function createSignedS3GetUrl(internalRef, { expiresSeconds = 300, now = new Date() } = {}) {
+  assertCloudMediaStorageConfigured();
+  const parsed = parseS3InternalRef(internalRef);
+  if (!parsed?.bucket || !parsed?.key) {
+    throw storageError('Private media reference is not an S3 object.', 400);
+  }
+
+  const endpoint = new URL(process.env.S3_ENDPOINT);
+  const region = String(process.env.S3_REGION || 'auto').trim() || 'auto';
+  const accessKey = String(process.env.S3_ACCESS_KEY_ID || '').trim();
+  const secret = String(process.env.S3_SECRET_ACCESS_KEY || '').trim();
+  const safeExpires = Math.min(900, Math.max(60, parseInt(expiresSeconds, 10) || 300));
+  const { dateStamp, amzDate } = dateParts(now);
+  const credentialScope = `${dateStamp}/${region}/${SERVICE}/aws4_request`;
+  const canonicalUri = canonicalUriFor(endpoint, parsed.bucket, parsed.key);
+  const headers = { host: endpoint.host };
+  const { canonicalHeaders, signedHeaderNames } = signedHeaders(headers);
+  const baseQuery = {
+    'X-Amz-Algorithm': 'AWS4-HMAC-SHA256',
+    'X-Amz-Credential': `${accessKey}/${credentialScope}`,
+    'X-Amz-Date': amzDate,
+    'X-Amz-Expires': String(safeExpires),
+    'X-Amz-SignedHeaders': signedHeaderNames
+  };
+  const unsignedQuery = canonicalQueryString(baseQuery);
+  const canonicalRequest = ['GET', canonicalUri, unsignedQuery, canonicalHeaders, signedHeaderNames, 'UNSIGNED-PAYLOAD'].join('\n');
+  const stringToSign = ['AWS4-HMAC-SHA256', amzDate, credentialScope, sha256Hex(canonicalRequest)].join('\n');
+  const signature = crypto.createHmac('sha256', signingKey(secret, dateStamp, region)).update(stringToSign).digest('hex');
+
+  return {
+    url: `${endpoint.origin}${canonicalUri}?${unsignedQuery}&X-Amz-Signature=${signature}`,
+    expiresSeconds: safeExpires,
+    expiresAt: new Date(now.getTime() + (safeExpires * 1000)).toISOString(),
+    bucket: parsed.bucket,
+    key: parsed.key
+  };
+}
+
 async function storeRemoteImageUrl(remoteUrl, options = {}) {
   const raw = String(remoteUrl || '').trim();
   if (!raw) return null;
@@ -302,6 +365,8 @@ module.exports = {
   missingS3Env,
   prepareMediaUrlForStorage,
   prepareUploadObjectForStorage,
+  parseS3InternalRef,
+  createSignedS3GetUrl,
   uploadBufferToS3,
   storeDataUrl,
   storeRemoteImageUrl

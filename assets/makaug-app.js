@@ -6081,6 +6081,7 @@ const PUBLIC_FILTERS_LOCATION_QUALITY_MARKER = "public-filters-location-quality-
 const PUBLIC_FILTERS_LOCATION_QUALITY_V2_MARKER = "public-filters-location-quality-v2-20260713";
 const PUBLIC_FILTERS_LOCATION_QUALITY_V3_MARKER = "public-filters-location-quality-v3-20260713";
 const PUBLIC_FILTERS_LOCATION_QUALITY_V4_MARKER = "public-filters-location-quality-v4-20260713";
+const MODERATOR_ID_VERIFICATION_MARKER = "moderator-id-verification-20260713";
 const PUBLIC_FILTER_SEARCH_ENDPOINT = "/api/properties/search";
 
 function publicCategorySortSelectId(category) {
@@ -11481,6 +11482,188 @@ function staffPreviewImagesHtml(images = []) {
   </div>`;
 }
 
+const MODERATION_IDENTITY_APPROVAL_MESSAGE = "Approved - identity verified: ID photo clear and ID number matches. Listing details confirmed.";
+const MODERATION_REJECTION_REASON_OPTIONS = [
+  { key: "id_mismatch", label: "ID number does not match the ID document", message: "Rejected - the ID number does not match the ID document." },
+  { key: "id_photo_unclear", label: "ID photo not clear / unreadable", message: "Rejected - the ID photo is not clear enough to verify." },
+  { key: "id_document_missing_invalid", label: "ID document missing or invalid", message: "Rejected - a valid National ID document is missing or invalid." },
+  { key: "listing_details_unverified", label: "Listing details incorrect / cannot verify", message: "Rejected - the listing details could not be verified." },
+  { key: "location_mismatch", label: "Location mismatch", message: "Rejected - the listing location does not match the submitted evidence." },
+  { key: "duplicate_listing", label: "Duplicate listing", message: "Rejected - this appears to be a duplicate listing." },
+  { key: "prohibited_spam", label: "Prohibited / spam content", message: "Rejected - this listing appears to be prohibited or spam content." },
+  { key: "other", label: "Other", message: "Rejected - other moderation issue. Please review the notes." }
+];
+
+function moderationExtra(review = {}) {
+  return review?.extra_fields && typeof review.extra_fields === "object" ? review.extra_fields : {};
+}
+
+function moderationSourceUrl(review = {}) {
+  const extra = moderationExtra(review);
+  return cleanText(extra.source_url || extra.source_post_url || extra.tiktok_url || extra.youtube_url || review.source_url || "");
+}
+
+function moderationRequiresIdentity(review = {}) {
+  const extra = moderationExtra(review);
+  if (extra.identity_verification?.required === true) return true;
+  if (extra.identity_verification?.verified === true) return false;
+  if (review.id_number || review.id_document_url || extra.verify?.nin || extra.verify?.id_document_url) return true;
+  const listerType = cleanText(review.lister_type || extra.lister_type || extra.verify?.lister_type || "").toLowerCase();
+  const listedVia = cleanText(review.listed_via || review.source || extra.listed_via || extra.submission_channel || "").toLowerCase();
+  const ownerish = !listerType || ["owner", "private", "private_owner", "private-owner", "direct_owner", "direct-owner"].includes(listerType);
+  const websiteish = !listedVia || ["website", "web", "online", "list_property_online", "list-property-online", "owner_submission"].includes(listedVia);
+  return ownerish && websiteish && !moderationSourceUrl(review);
+}
+
+function moderationIdentityAlreadyVerified(review = {}) {
+  const extra = moderationExtra(review);
+  return extra.identity_verification?.verified === true || extra.identity_verified_at;
+}
+
+function moderationIdentityNumber(review = {}) {
+  const extra = moderationExtra(review);
+  return cleanText(review.id_number || extra.verify?.nin || extra.id_number || "");
+}
+
+function moderationIdentityDocumentName(review = {}) {
+  const extra = moderationExtra(review);
+  return cleanText(review.id_document_name || extra.verify?.id_document_name || "National ID photo");
+}
+
+function moderationIdentityCheckbox(prefix) {
+  return document.getElementById(`${prefix}-id-verified`);
+}
+
+function moderationIdentityConfirmed(prefix, review = adminActiveReview) {
+  return moderationIdentityAlreadyVerified(review) || moderationIdentityCheckbox(prefix)?.checked === true;
+}
+
+function moderationSelectedRejectionReasons(prefix) {
+  return Array.from(document.querySelectorAll(`[data-rejection-reason-prefix="${adminAttr(prefix)}"]:checked`))
+    .map((input) => input.value)
+    .filter(Boolean);
+}
+
+function moderationStructuredReasonControlsHtml(prefix) {
+  return `
+    <div class="mt-3 rounded-xl border border-red-100 bg-red-50 p-3">
+      <div class="text-xs uppercase tracking-wide text-red-800 font-black">Structured rejection reason</div>
+      <div class="mt-2 grid gap-1.5">
+        ${MODERATION_REJECTION_REASON_OPTIONS.map((option) => `
+          <label class="flex items-start gap-2 text-xs font-semibold text-red-950">
+            <input type="checkbox" value="${adminAttr(option.key)}" data-rejection-reason-prefix="${adminAttr(prefix)}" onchange="moderationApplyRejectionReasonPreset('${adminAttr(prefix)}')" class="mt-0.5 rounded border-red-200 text-red-700">
+            <span>${adminEscape(option.label)}</span>
+          </label>
+        `).join("")}
+      </div>
+    </div>`;
+}
+
+function moderationApplyRejectionReasonPreset(prefix) {
+  const selected = moderationSelectedRejectionReasons(prefix);
+  if (!selected.length) return;
+  const messages = selected
+    .map((key) => MODERATION_REJECTION_REASON_OPTIONS.find((option) => option.key === key)?.message)
+    .filter(Boolean);
+  const reasonEl = document.getElementById("admin-review-reason") || document.getElementById(`${prefix}-reason`);
+  if (!reasonEl || !messages.length) return;
+  const current = cleanText(reasonEl.value || "");
+  const currentIsPreset = MODERATION_REJECTION_REASON_OPTIONS.some((option) => current === option.message);
+  if (!current || currentIsPreset) {
+    reasonEl.value = messages.join(" ");
+  }
+}
+
+function moderationIdentitySectionHtml(review = {}, prefix = "staff-preview", scope = "staff") {
+  const required = moderationRequiresIdentity(review);
+  const alreadyVerified = moderationIdentityAlreadyVerified(review);
+  const idNumber = moderationIdentityNumber(review);
+  const documentName = moderationIdentityDocumentName(review);
+  const ref = review.inquiry_reference || review.reference || review.id || "-";
+  return `
+    <section class="rounded-xl border ${required ? "border-emerald-200 bg-emerald-50" : "border-gray-200 bg-white"} p-4" data-identity-prefix="${adminAttr(prefix)}" data-identity-scope="${adminAttr(scope)}">
+      <div class="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h4 class="font-black ${required ? "text-emerald-950" : "text-gray-900"}">Identity verification</h4>
+          <p class="text-xs ${required ? "text-emerald-900" : "text-gray-600"} mt-1">Private owner submissions require the ID photo and ID number to be checked before approval.</p>
+        </div>
+        <button type="button" onclick="moderationLoadIdentityDocument('${adminAttr(prefix)}', ${propertyIdArg(review.id)}, '${adminAttr(scope)}')" class="border border-emerald-700 text-emerald-800 bg-white hover:bg-emerald-50 rounded-lg px-3 py-1.5 text-xs font-black">Load secure ID photo</button>
+      </div>
+      <div class="mt-3 grid sm:grid-cols-2 gap-2 text-xs text-gray-700">
+        <div><span class="text-gray-500">Submission ref:</span> <span class="font-mono font-bold">${adminEscape(ref)}</span></div>
+        <div><span class="text-gray-500">Lister type:</span> ${adminEscape(review.lister_type || review.extra_fields?.lister_type || "-")}</div>
+        <div><span class="text-gray-500">Email:</span> ${adminEscape(review.lister_email || "-")}</div>
+        <div><span class="text-gray-500">Phone:</span> ${adminEscape(review.lister_phone || "-")}</div>
+        <div class="sm:col-span-2"><span class="text-gray-500">ID number:</span> <span id="${adminAttr(prefix)}-id-number" class="font-mono font-black text-gray-950">${adminEscape(idNumber || "Not supplied")}</span></div>
+        <div class="sm:col-span-2"><span class="text-gray-500">ID photo:</span> ${adminEscape(documentName || "Not supplied")}</div>
+      </div>
+      <div id="${adminAttr(prefix)}-id-document-viewer" class="mt-3 rounded-xl border border-dashed border-emerald-200 bg-white p-3 text-xs text-gray-600">Secure ID photo not loaded yet.</div>
+      ${required ? `
+        <label class="mt-3 flex items-start gap-2 rounded-xl bg-white border border-emerald-100 p-3 text-xs font-black text-emerald-950">
+          <input id="${adminAttr(prefix)}-id-verified" type="checkbox" ${alreadyVerified ? "checked" : ""} onchange="moderationUpdateApprovalGate('${adminAttr(prefix)}')" class="mt-0.5 rounded border-emerald-300 text-emerald-700">
+          <span>ID photo is clear AND the ID number matches the document.</span>
+        </label>
+      ` : `
+        <div class="mt-3 rounded-xl bg-gray-50 border border-gray-100 p-3 text-xs text-gray-600">Identity verification is not required for this record type.</div>
+      `}
+    </section>`;
+}
+
+async function moderationLoadIdentityDocument(prefix, propertyId, scope = "staff") {
+  const viewer = document.getElementById(`${prefix}-id-document-viewer`);
+  const cleanId = cleanText(propertyId || adminActiveReview?.id || "");
+  if (!viewer || !cleanId) return;
+  viewer.innerHTML = `<div class="text-xs font-semibold text-gray-600">Loading secure ID photo...</div>`;
+  const path = `/api/${scope === "admin" ? "admin" : "staff"}/properties/${encodeURIComponent(cleanId)}/id-document`;
+  const options = scope === "admin" ? { headers: adminAuthHeaders() } : {};
+  try {
+    const response = await apiRequest(path, options);
+    const data = response?.data || {};
+    const documentData = data.document || {};
+    const idNumberEl = document.getElementById(`${prefix}-id-number`);
+    if (idNumberEl && data.id_number) idNumberEl.textContent = data.id_number;
+    if (!documentData.available || !(documentData.signed_url || documentData.url)) {
+      viewer.innerHTML = `<div class="text-xs font-bold text-amber-800">No viewable ID photo is stored for this listing.</div>`;
+      moderationUpdateApprovalGate(prefix);
+      return;
+    }
+    const url = documentData.signed_url || documentData.url;
+    viewer.innerHTML = `
+      <div class="flex items-center justify-between gap-2 flex-wrap mb-2">
+        <div class="text-xs font-black text-emerald-950">Secure National ID photo</div>
+        ${documentData.expires_at ? `<div class="text-[11px] text-gray-500">Signed URL expires ${adminEscape(formatListingDate(documentData.expires_at))}</div>` : ""}
+      </div>
+      <a href="${adminAttr(url)}" target="_blank" rel="noopener noreferrer" class="inline-block">
+        <img src="${adminAttr(url)}" alt="National ID document" class="max-h-80 rounded-lg border border-gray-200 bg-gray-50 object-contain">
+      </a>`;
+  } catch (error) {
+    viewer.innerHTML = `<div class="text-xs font-bold text-red-700">ID photo load failed: ${adminEscape(error.message || "request failed")}</div>`;
+  } finally {
+    moderationUpdateApprovalGate(prefix);
+  }
+}
+
+function moderationUpdateApprovalGate(prefix) {
+  const button = document.querySelector(`[data-identity-approve-prefix="${adminAttr(prefix)}"]`);
+  if (!button) return;
+  const required = button.dataset.identityRequired === "true";
+  const ok = !required || moderationIdentityCheckbox(prefix)?.checked === true;
+  button.disabled = !ok;
+  button.classList.toggle("bg-green-700", ok && prefix === "admin-review");
+  button.classList.toggle("hover:bg-green-600", ok && prefix === "admin-review");
+  button.classList.toggle("bg-emerald-700", ok && prefix !== "admin-review");
+  button.classList.toggle("hover:bg-emerald-600", ok && prefix !== "admin-review");
+  button.classList.toggle("bg-gray-300", !ok);
+  button.classList.toggle("cursor-not-allowed", !ok);
+}
+
+function moderationInitIdentityPanel(prefix, review = {}, scope = "staff") {
+  moderationUpdateApprovalGate(prefix);
+  if (review?.id_document_available || review?.id_document_url || review?.extra_fields?.verify?.id_document_url) {
+    moderationLoadIdentityDocument(prefix, review.id, scope);
+  }
+}
+
 function staffPreviewField(id, label, value = "", type = "text", extra = "") {
   const tag = type === "textarea"
     ? `<textarea id="${adminAttr(id)}" class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm min-h-[90px]" ${extra}>${adminEscape(value || "")}</textarea>`
@@ -11499,6 +11682,8 @@ function renderStaffListingPreviewModal(preview = {}) {
   const duplicates = preview.duplicate_review || {};
   const location = preview.location_review || {};
   const sourceUrl = String(source.source_url || "").trim();
+  const identityRequired = moderationRequiresIdentity(preview);
+  const identityGateOpen = moderationIdentityAlreadyVerified(preview);
   adminActiveReview = preview;
   const modal = document.createElement("div");
   modal.id = "staff-listing-preview-modal";
@@ -11526,6 +11711,7 @@ function renderStaffListingPreviewModal(preview = {}) {
               ${sourceUrl ? `<a href="${adminAttr(sourceUrl)}" target="_blank" rel="noopener noreferrer" class="inline-flex mt-2 font-black text-blue-700 underline underline-offset-2">Open original evidence</a>` : `<div class="mt-2 text-amber-700 font-bold">No source URL stored. Do not approve found-online listings without evidence.</div>`}
             </div>
           </section>
+          ${moderationIdentitySectionHtml(preview, "staff-preview", "staff")}
         </div>
         <div class="space-y-4">
           <section class="rounded-xl border ${duplicates.count ? "border-red-200 bg-red-50" : "border-emerald-100 bg-emerald-50"} p-4">
@@ -11546,13 +11732,14 @@ function renderStaffListingPreviewModal(preview = {}) {
           <section class="rounded-xl border border-gray-200 p-4">
             <h4 class="font-black text-gray-900">Internal review notes</h4>
             <textarea id="admin-review-notes" class="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm min-h-[90px]" placeholder="What did you verify?">${adminEscape(preview.review?.notes || preview.moderation_notes || "")}</textarea>
+            ${moderationStructuredReasonControlsHtml("staff-preview")}
             <textarea id="admin-review-reason" class="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm min-h-[80px]" placeholder="Approval/rejection reason">${adminEscape(preview.review?.reason || preview.moderation_reason || "")}</textarea>
           </section>
           <section class="rounded-xl border border-gray-200 p-4">
             <h4 class="font-black text-gray-900">Decision</h4>
             <div class="mt-3 grid gap-2">
               <button type="button" onclick="saveStaffListingPreview(${propertyIdArg(preview.id)})" class="border border-slate-300 text-slate-800 hover:bg-slate-50 rounded-xl px-4 py-2 text-sm font-black">Save preview changes</button>
-              <button type="button" data-staff-approve-id="${adminAttr(String(preview.id || ""))}" class="bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl px-4 py-2 text-sm font-black">Approve live after preview</button>
+              <button type="button" data-staff-approve-id="${adminAttr(String(preview.id || ""))}" data-identity-approve-prefix="staff-preview" data-identity-required="${identityRequired ? "true" : "false"}" ${identityRequired && !identityGateOpen ? "disabled" : ""} class="${identityRequired && !identityGateOpen ? "bg-gray-300 cursor-not-allowed" : "bg-emerald-700 hover:bg-emerald-600"} text-white rounded-xl px-4 py-2 text-sm font-black">Approve live after preview</button>
               <button type="button" onclick="staffRejectPreviewListing(${propertyIdArg(preview.id)})" class="bg-red-600 hover:bg-red-500 text-white rounded-xl px-4 py-2 text-sm font-black">Reject with reason</button>
               <button type="button" onclick="staffModerateListing(${propertyIdArg(preview.id)}, 'pending')" class="border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-xl px-4 py-2 text-sm font-black">Keep pending</button>
             </div>
@@ -11567,6 +11754,7 @@ function renderStaffListingPreviewModal(preview = {}) {
     adminReviewOnListingTypeChange();
     adminReviewAutoPopulateLocationFromSource(preview);
     initAdminReviewLocationMap(preview);
+    moderationInitIdentityPanel("staff-preview", preview, "staff");
   }, 120);
 }
 
@@ -11625,16 +11813,25 @@ function staffListingPreviewPatch() {
 }
 
 function staffReviewPatch() {
+  const checklist = typeof getAdminReviewChecklistFromDom === "function" ? getAdminReviewChecklistFromDom() : {
+    preview_opened: true,
+    location_checked: true,
+    duplicate_checked: true,
+    contact_checked: true,
+    source_evidence_checked: true
+  };
+  const identityChecked = moderationIdentityCheckbox("staff-preview")?.checked === true;
+  if (identityChecked) {
+    checklist.identity_document_verified = true;
+    checklist.identity_number_matches_document = true;
+    checklist.identity_verified = true;
+  }
   return {
     notes: document.getElementById("admin-review-notes")?.value || document.getElementById("staff-preview-review-notes")?.value || "",
     reason: document.getElementById("admin-review-reason")?.value || document.getElementById("staff-preview-reason")?.value || "",
-    checklist: typeof getAdminReviewChecklistFromDom === "function" ? getAdminReviewChecklistFromDom() : {
-      preview_opened: true,
-      location_checked: true,
-      duplicate_checked: true,
-      contact_checked: true,
-      source_evidence_checked: true
-    },
+    checklist,
+    identity_verified: identityChecked,
+    structured_rejection_reasons: moderationSelectedRejectionReasons("staff-preview"),
     stage: "in_review"
   };
 }
@@ -11658,6 +11855,8 @@ function staffSafeReviewPatch() {
       checklist: review?.checklist && typeof review.checklist === "object"
         ? review.checklist
         : staffDefaultReviewChecklist(),
+      identity_verified: review?.identity_verified === true,
+      structured_rejection_reasons: Array.isArray(review?.structured_rejection_reasons) ? review.structured_rejection_reasons : [],
       stage: review?.stage || "in_review"
     };
   } catch (error) {
@@ -11666,6 +11865,8 @@ function staffSafeReviewPatch() {
       notes: document.getElementById("admin-review-notes")?.value || "",
       reason: document.getElementById("admin-review-reason")?.value || "",
       checklist: staffDefaultReviewChecklist(),
+      identity_verified: moderationIdentityCheckbox("staff-preview")?.checked === true,
+      structured_rejection_reasons: moderationSelectedRejectionReasons("staff-preview"),
       stage: "in_review"
     };
   }
@@ -11914,6 +12115,12 @@ async function staffApprovePreviewListing(propertyId) {
   const propertyIdForRequest = String(propertyId || adminActiveReview?.id || "").trim();
   try {
     if (!propertyIdForRequest) throw new Error("Missing listing id for approval request");
+    const identityRequired = moderationRequiresIdentity(adminActiveReview);
+    if (identityRequired && !moderationIdentityConfirmed("staff-preview", adminActiveReview)) {
+      toast("Confirm that the ID photo is clear and matches the ID number before approving.");
+      moderationIdentityCheckbox("staff-preview")?.focus();
+      return;
+    }
     staffApprovalDiagnostic("starting", { propertyId: propertyIdForRequest });
     setStaffPreviewDecisionBusy(true);
     toast("Sending approval request...");
@@ -11931,9 +12138,12 @@ async function staffApprovePreviewListing(propertyId) {
       } : {}),
       status: "approved",
       listing: staffListingPreviewPatch(),
-      reason: review.reason || "Staff approved after previewing listing facts",
-      review_notes: review.notes || "Staff preview completed before approval",
+      reason: review.reason || (identityRequired ? MODERATION_IDENTITY_APPROVAL_MESSAGE : "Staff approved after previewing listing facts"),
+      review_notes: review.notes || (identityRequired ? "Identity verified and listing facts checked before approval" : "Staff preview completed before approval"),
       checklist: review.checklist || staffDefaultReviewChecklist(),
+      identity_verified: identityRequired ? true : review.identity_verified === true,
+      identity_document_verified: identityRequired ? true : review.identity_verified === true,
+      id_document_clear_and_matches: identityRequired ? true : review.identity_verified === true,
       warning_overrides: warningOverrides,
       fast_admin_render: true,
       manual_notification_only: true
@@ -11958,10 +12168,11 @@ async function staffApprovePreviewListing(propertyId) {
 }
 
 async function staffRejectPreviewListing(propertyId) {
+  moderationApplyRejectionReasonPreset("staff-preview");
   const review = staffReviewPatch();
   const reason = String(review.reason || "").trim();
   if (!reason) {
-    toast("Add a rejection reason in the Decision reason box first.");
+    toast("Choose a rejection reason or add a rejection message first.");
     document.getElementById("admin-review-reason")?.focus();
     return;
   }
@@ -11974,6 +12185,7 @@ async function staffRejectPreviewListing(propertyId) {
         reason,
         review_notes: review.notes || "Rejected from staff preview",
         checklist: review.checklist,
+        structured_rejection_reasons: review.structured_rejection_reasons || moderationSelectedRejectionReasons("staff-preview"),
         fast_admin_render: true,
         manual_notification_only: true
       }
@@ -16515,9 +16727,19 @@ function closeAdminReviewPanel() {
 }
 
 function getAdminReviewChecklistFromDom() {
-  return adminActiveReview?.review?.automated?.checklist
+  const checklist = {
+    ...(adminActiveReview?.review?.automated?.checklist
     || adminActiveReview?.review?.checklist
-    || {};
+    || {})
+  };
+  const adminIdentityChecked = moderationIdentityCheckbox("admin-review")?.checked === true;
+  const staffIdentityChecked = moderationIdentityCheckbox("staff-preview")?.checked === true;
+  if (adminIdentityChecked || staffIdentityChecked) {
+    checklist.identity_document_verified = true;
+    checklist.identity_number_matches_document = true;
+    checklist.identity_verified = true;
+  }
+  return checklist;
 }
 
 function renderAdminQualitySignals(review) {
@@ -21747,7 +21969,9 @@ function renderAdminReviewPanel(review) {
   const warningOverrides = getAdminReviewWarningOverrides(review);
   if (reviewOverrideKey) adminReviewWarningOverrides[reviewOverrideKey] = warningOverrides;
   const pendingWarningOverrides = getAdminPendingWarningOverrideLabels(review);
-  const approvalUnlocked = canApprove && pendingWarningOverrides.length === 0;
+  const identityRequired = moderationRequiresIdentity(review);
+  const identityGateOpen = moderationIdentityAlreadyVerified(review);
+  const approvalUnlocked = canApprove && pendingWarningOverrides.length === 0 && (!identityRequired || identityGateOpen);
   const events = Array.isArray(review.events) ? review.events : [];
   const reviewIdArg = adminListingIdArg(review.id);
   const listerVerificationStatus = review.extra_fields?.lister_registration_status || review.registration_status || "not_registered";
@@ -21814,7 +22038,7 @@ function renderAdminReviewPanel(review) {
   const idEvidenceId = registerAdminEvidence(`review-${review.id}-id-document`, {
     kind: "media",
     title: "National ID Document",
-    url: review.id_document_url || review.extra_fields?.verify?.id_document_url || "",
+    url: "",
     filename: review.id_document_name || review.extra_fields?.verify?.id_document_name || "makaug-id-document",
     id_number: review.id_number || review.extra_fields?.verify?.nin || ""
   });
@@ -21864,20 +22088,7 @@ function renderAdminReviewPanel(review) {
               </div>
             </div>
           </div>
-          <div class="mt-4 border border-gray-100 rounded-xl p-3 bg-gray-50">
-            <div class="flex items-center justify-between gap-2 mb-2">
-              <div class="text-xs uppercase tracking-wide text-gray-500 font-semibold">National ID Document</div>
-              <div class="flex gap-1.5">
-                <button onclick="openAdminEvidence('${adminAttr(idEvidenceId)}')" class="text-[11px] px-2 py-1 rounded border border-green-700 text-green-700 hover:bg-green-50">Preview</button>
-                <button onclick="downloadAdminEvidence('${adminAttr(idEvidenceId)}')" class="text-[11px] px-2 py-1 rounded border border-gray-300 text-gray-700 hover:bg-gray-50">Download</button>
-              </div>
-            </div>
-            ${review.id_document_url ? (
-              String(review.id_document_url).startsWith("data:image/") || /\.(png|jpe?g|webp|gif)$/i.test(String(review.id_document_url))
-                ? `<button type="button" onclick="openAdminEvidence('${adminAttr(idEvidenceId)}')" class="block"><img src="${adminAttr(review.id_document_url)}" alt="ID document" class="max-h-56 rounded-lg border border-gray-200"></button>`
-                : `<a href="${adminAttr(review.id_document_url)}" target="_blank" class="text-sm text-green-700 font-semibold hover:underline">Open National ID photo</a>`
-            ) : `<div class="text-sm text-gray-600">${adminEscape(review.id_document_name || "No National ID photo preview stored.")}</div>`}
-          </div>
+          <div class="mt-4">${moderationIdentitySectionHtml(review, "admin-review", "admin")}</div>
         </div>
 
         <div class="border border-gray-200 rounded-xl p-4">
@@ -21981,6 +22192,7 @@ function renderAdminReviewPanel(review) {
           <label class="block text-sm font-semibold text-gray-700 mb-1">Review notes</label>
           <textarea id="admin-review-notes" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm min-h-[90px]" placeholder="Internal notes for this review">${adminEscape(review?.review?.notes || "")}</textarea>
           <label class="block text-sm font-semibold text-gray-700 mt-3 mb-1">Decision reason</label>
+          ${moderationStructuredReasonControlsHtml("admin-review")}
           <textarea id="admin-review-reason" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm min-h-[110px]" placeholder="Required for rejection, optional for other statuses">${adminEscape(decisionReason)}</textarea>
           ${generatedDecisionReason ? `
             <div class="mt-2 rounded-xl border border-amber-100 bg-amber-50 p-3 text-xs text-amber-900">
@@ -21993,7 +22205,7 @@ function renderAdminReviewPanel(review) {
             <button onclick="adminCreateShareablePreviewLink(${reviewIdArg})" class="border border-amber-300 text-amber-800 hover:bg-amber-50 px-3 py-2 rounded-lg text-xs font-semibold">Copy Private Preview Link</button>
             <button onclick="saveAdminListingReview()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-semibold">Save Review</button>
             ${generatedDecisionReason ? `<button onclick="useAdminGeneratedDecisionReason()" class="border border-amber-300 text-amber-800 hover:bg-amber-50 px-3 py-2 rounded-lg text-xs font-semibold">Use Suggested Reason</button>` : ""}
-            <button onclick="adminSetListingStatus(${reviewIdArg}, 'approved', ${reviewIdArg})" ${approvalUnlocked ? "" : "disabled"} class="${approvalUnlocked ? "bg-green-700 hover:bg-green-600" : "bg-gray-300 cursor-not-allowed"} text-white px-3 py-2 rounded-lg text-xs font-semibold">Approve & Notify</button>
+            <button onclick="adminSetListingStatus(${reviewIdArg}, 'approved', ${reviewIdArg})" data-identity-approve-prefix="admin-review" data-identity-required="${identityRequired ? "true" : "false"}" ${approvalUnlocked ? "" : "disabled"} class="${approvalUnlocked ? "bg-green-700 hover:bg-green-600" : "bg-gray-300 cursor-not-allowed"} text-white px-3 py-2 rounded-lg text-xs font-semibold">Approve & Notify</button>
             ${isSourcedCandidate ? `<button onclick="adminApproveSourcedCandidateOverride(${reviewIdArg})" ${sourcedCandidateOverrideReady ? "" : "disabled"} class="${sourcedCandidateOverrideReady ? "bg-blue-700 hover:bg-blue-600" : "bg-gray-300 cursor-not-allowed"} text-white px-3 py-2 rounded-lg text-xs font-semibold">Approve Found Online</button>` : ""}
             <button onclick="adminSetListingStatus(${reviewIdArg}, 'rejected', ${reviewIdArg})" class="bg-red-600 hover:bg-red-500 text-white px-3 py-2 rounded-lg text-xs font-semibold">Reject & Notify</button>
           </div>
@@ -22023,6 +22235,7 @@ function renderAdminReviewPanel(review) {
     adminReviewOnListingTypeChange();
     adminReviewAutoPopulateLocationFromSource(review);
     initAdminReviewLocationMap(review);
+    moderationInitIdentityPanel("admin-review", review, "admin");
   }, 120);
 }
 
@@ -22338,10 +22551,23 @@ async function adminSetListingStatus(localId, nextStatus, backendId = "", option
       toast(`Review and override warning evidence first: ${pendingWarnings.slice(0, 3).join(", ")}${pendingWarnings.length > 3 ? "..." : ""}`);
       return;
     }
+    if (moderationRequiresIdentity(adminActiveReview) && !moderationIdentityConfirmed("admin-review", adminActiveReview)) {
+      toast("Confirm that the ID photo is clear and matches the ID number before approving.");
+      moderationIdentityCheckbox("admin-review")?.focus();
+      return;
+    }
   }
+  if (normalizedStatus === "rejected") moderationApplyRejectionReasonPreset("admin-review");
   let moderationReason = (document.getElementById("admin-review-reason")?.value || listing?.extra_fields?.moderation_reason || "").trim();
   const reviewNotes = (document.getElementById("admin-review-notes")?.value || "").trim();
   const checklist = getAdminReviewChecklistFromDom();
+  const structuredRejectionReasons = moderationSelectedRejectionReasons("admin-review");
+  const identityRequired = normalizedStatus === "approved" && moderationRequiresIdentity(adminActiveReview || listing) && !isSourcedCandidateOverride;
+  if (identityRequired && !moderationReason) {
+    moderationReason = MODERATION_IDENTITY_APPROVAL_MESSAGE;
+    const reasonEl = document.getElementById("admin-review-reason");
+    if (reasonEl) reasonEl.value = moderationReason;
+  }
   if (isSourcedCandidateOverride && !moderationReason) {
     moderationReason = "Approved as found-online intake after location was confirmed and non-location source-review checks were overridden.";
     const reasonEl = document.getElementById("admin-review-reason");
@@ -22404,6 +22630,10 @@ async function adminSetListingStatus(localId, nextStatus, backendId = "", option
 	          reason: moderationReason.trim() || undefined,
 	          review_notes: reviewNotes || undefined,
 	          checklist,
+            identity_verified: identityRequired ? true : moderationIdentityConfirmed("admin-review", adminActiveReview),
+            identity_document_verified: identityRequired ? true : moderationIdentityConfirmed("admin-review", adminActiveReview),
+            id_document_clear_and_matches: identityRequired ? true : moderationIdentityConfirmed("admin-review", adminActiveReview),
+            structured_rejection_reasons: structuredRejectionReasons,
 	          warning_overrides: getAdminReviewWarningOverrides(adminActiveReview)
         }
       });

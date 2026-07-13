@@ -108,6 +108,7 @@ function isUsableMediaUrl(value, { allowPdf = false } = {}) {
   const url = String(value || '').trim();
   if (!url || url === '[object Object]') return false;
   if (/^https?:\/\//i.test(url)) return true;
+  if (/^s3:\/\//i.test(url)) return true;
   if (/^data:image\//i.test(url)) return true;
   if (allowPdf && /^data:application\/pdf/i.test(url)) return true;
   return false;
