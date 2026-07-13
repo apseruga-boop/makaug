@@ -228,6 +228,7 @@ const listingConfirmationsRedesignVersion = 'listing-confirmations-redesign-2026
 const listPropertyDescLiveTranslateVersion = 'list-property-desc-live-translate-20260713';
 const aboutPageFullCopyVersion = 'about-page-full-copy-20260713';
 const aboutPageVisualRefineVersion = 'about-page-visual-refine-20260713';
+const aboutCtaPrimaryVersion = 'about-cta-primary-20260713';
 const publicAppVersionSuffixes = [
   captureHelperUsabilityVersion,
   studentNearestUniversityVersion,
@@ -324,7 +325,8 @@ const publicAppVersionSuffixes = [
   listingConfirmationsRedesignVersion,
   listPropertyDescLiveTranslateVersion,
   aboutPageFullCopyVersion,
-  aboutPageVisualRefineVersion
+  aboutPageVisualRefineVersion,
+  aboutCtaPrimaryVersion
 ];
 let cachedIndexHtml = null;
 const publicHtmlCache = new Map();
