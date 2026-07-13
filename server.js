@@ -229,6 +229,7 @@ const listPropertyDescLiveTranslateVersion = 'list-property-desc-live-translate-
 const aboutPageFullCopyVersion = 'about-page-full-copy-20260713';
 const aboutPageVisualRefineVersion = 'about-page-visual-refine-20260713';
 const aboutCtaPrimaryVersion = 'about-cta-primary-20260713';
+const aboutHeroContrastFixVersion = 'about-hero-contrast-fix-20260713';
 const publicAppVersionSuffixes = [
   captureHelperUsabilityVersion,
   studentNearestUniversityVersion,
@@ -326,7 +327,8 @@ const publicAppVersionSuffixes = [
   listPropertyDescLiveTranslateVersion,
   aboutPageFullCopyVersion,
   aboutPageVisualRefineVersion,
-  aboutCtaPrimaryVersion
+  aboutCtaPrimaryVersion,
+  aboutHeroContrastFixVersion
 ];
 let cachedIndexHtml = null;
 const publicHtmlCache = new Map();

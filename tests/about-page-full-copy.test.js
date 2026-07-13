@@ -18,12 +18,15 @@ const normalizedAbout = aboutBlock.replace(/\s+/g, ' ');
 assert(html.includes('about-page-full-copy-20260713'), 'HTML app version should include about-page-full-copy marker');
 assert(html.includes('about-page-visual-refine-20260713'), 'HTML app version should include about-page-visual-refine marker');
 assert(html.includes('about-cta-primary-20260713'), 'HTML app version should include about CTA primary marker');
+assert(html.includes('about-hero-contrast-fix-20260713'), 'HTML app version should include about hero contrast fix marker');
 assert(server.includes("aboutPageFullCopyVersion = 'about-page-full-copy-20260713'"), 'server should include about page release marker');
 assert(server.includes("aboutPageVisualRefineVersion = 'about-page-visual-refine-20260713'"), 'server should include about visual refine release marker');
 assert(server.includes("aboutCtaPrimaryVersion = 'about-cta-primary-20260713'"), 'server should include about CTA primary release marker');
+assert(server.includes("aboutHeroContrastFixVersion = 'about-hero-contrast-fix-20260713'"), 'server should include about hero contrast fix release marker');
 assert(server.includes('aboutPageFullCopyVersion'), 'server public app suffix list should include the about page marker');
 assert(server.includes('aboutPageVisualRefineVersion'), 'server public app suffix list should include the about visual refine marker');
 assert(server.includes('aboutCtaPrimaryVersion'), 'server public app suffix list should include the about CTA primary marker');
+assert(server.includes('aboutHeroContrastFixVersion'), 'server public app suffix list should include the about hero contrast fix marker');
 
 [
   'Every property in Uganda, finally in one place',
@@ -53,6 +56,13 @@ assert(server.includes('aboutCtaPrimaryVersion'), 'server public app suffix list
 assert(aboutBlock.includes('id="about-live-listing-count"'), 'About page should include a live listings count node');
 assert(aboutBlock.includes('data-about-stat-count="146"'), 'About stats should include count-up district metric');
 assert(aboutBlock.includes('data-about-stat-count="9"'), 'About stats should include count-up language metric');
+assert(aboutBlock.includes('about-hero-panel bg-[#0f3d2e]'), 'About hero should carry an explicit dark panel class');
+assert(aboutBlock.includes('about-vision-panel rounded-xl'), 'About vision block should carry an explicit dark panel class');
+assert(html.includes('#page-about .about-hero-panel') && html.includes('#page-about .about-vision-panel'), 'About contrast fix should use scoped hero and vision CSS');
+assert(html.includes('background: #0f3d2e'), 'About contrast fix should force the approved deep green background in inline CSS');
+assert(aboutBlock.includes('about-hero-cta-primary'), 'About hero primary CTA should have explicit contrast-safe styling');
+assert(aboutBlock.includes('about-hero-cta-secondary'), 'About hero secondary CTA should have explicit contrast-safe styling');
+assert(aboutBlock.includes('about-hero-cta-social'), 'About hero WhatsApp CTA should have explicit contrast-safe styling');
 assert(aboutBlock.includes('about-stat-card rounded-xl border border-[#e4ece8] bg-white'), 'About stat cards should use one uniform white card treatment');
 assert(aboutBlock.includes('bg-[#f0f6f2]'), 'final CTA should use the approved green-tint panel');
 assert(aboutBlock.includes('about-final-cta-actions'), 'final CTA should have a dedicated three-button action row');
