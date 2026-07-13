@@ -63,6 +63,8 @@ assert(html.includes('background: #0f3d2e'), 'About contrast fix should force th
 assert(aboutBlock.includes('about-hero-cta-primary'), 'About hero primary CTA should have explicit contrast-safe styling');
 assert(aboutBlock.includes('about-hero-cta-secondary'), 'About hero secondary CTA should have explicit contrast-safe styling');
 assert(aboutBlock.includes('about-hero-cta-social'), 'About hero WhatsApp CTA should have explicit contrast-safe styling');
+assert(html.includes('#page-about .about-solid-green-cta'), 'About solid green CTAs should have scoped fallback styling');
+assert.strictEqual((aboutBlock.match(/bg-\[#15603f\][^"]*text-white/g) || []).length, (aboutBlock.match(/about-solid-green-cta/g) || []).length, 'Every About solid-green CTA should use the contrast-safe fallback class');
 assert(aboutBlock.includes('about-stat-card rounded-xl border border-[#e4ece8] bg-white'), 'About stat cards should use one uniform white card treatment');
 assert(aboutBlock.includes('bg-[#f0f6f2]'), 'final CTA should use the approved green-tint panel');
 assert(aboutBlock.includes('about-final-cta-actions'), 'final CTA should have a dedicated three-button action row');
