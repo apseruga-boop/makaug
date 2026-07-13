@@ -222,6 +222,7 @@ const staffBulkGatePositiveVersion = 'staff-bulk-gate-positive-20260711';
 const staffBulkGateRound4Version = 'staff-bulk-gate-round4-20260711';
 const staffSuppressedSourcesRegistryVersion = 'staff-suppressed-sources-registry-20260711';
 const studentSupplyGateVersion = 'student-supply-gate-20260711';
+const staffReviewQueuePanelRetryVersion = 'staff-review-queue-panel-retry-20260713';
 const publicAppVersionSuffixes = [
   captureHelperUsabilityVersion,
   studentNearestUniversityVersion,
@@ -313,7 +314,8 @@ const publicAppVersionSuffixes = [
   staffBulkGatePositiveVersion,
   staffBulkGateRound4Version,
   staffSuppressedSourcesRegistryVersion,
-  studentSupplyGateVersion
+  studentSupplyGateVersion,
+  staffReviewQueuePanelRetryVersion
 ];
 let cachedIndexHtml = null;
 const publicHtmlCache = new Map();

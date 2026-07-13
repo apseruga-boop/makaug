@@ -188,7 +188,7 @@ function run() {
   assert(suppressedSourcesMigration.includes('idx_suppressed_sources_source_url_unique'), 'suppressed sources should have a unique source_url index');
   assert(studentSupplyBackfillMigration.includes("listing_type = 'students'"), 'student supply backfill should move clear hostel rows into the student category');
   assert(studentSupplyBackfillMigration.includes('student-supply-gate-20260711'), 'student supply backfill should stamp the marker version');
-  assert(staffRoutes.includes('STAFF_DASHBOARD_QUEUE_SCAN_LIMIT'), 'staff dashboard should over-fetch a bounded queue window instead of regex scanning the full pending set');
+  assert(staffRoutes.includes('STAFF_DASHBOARD_QUEUE_SCAN_LIMIT'), 'staff dashboard should retain a bounded queue scan setting for non-critical source panels');
   assert(staffRoutes.includes('STAFF_DASHBOARD_PANEL_QUERY_TIMEOUT_MS'), 'staff panels endpoint should use server-side DB timeouts so one slow query cannot 503 the panel bundle');
   assert(staffRoutes.includes('STAFF_REVIEW_QUEUE_QUERY_TIMEOUT_MS'), 'standalone staff review queue endpoint should be timeout bounded');
   assert(staffPanelsBody.includes('panelQueryOptions'), 'staff panels endpoint should pass timeout options into panel queries');
@@ -197,7 +197,9 @@ function run() {
   assert(!staffPanelsBody.includes('LEFT JOIN LATERAL'), 'staff panels endpoint should not run per-row image lateral joins');
   assert(staffPanelsBody.includes('staffModerationPanelRows(reviewResult.rows, queueLimit)'), 'staff panels endpoint should render SQL-parity rows directly instead of filtering them to zero in JS');
   assert(staffPanelsBody.includes('WITH panel_candidates AS MATERIALIZED'), 'staff panels endpoint should pre-scan ordered pending IDs through the review queue index');
-  assert(staffPanelsBody.includes("WHERE NOT ${sourceQualitySuppressedFlagSql('p')}"), 'staff panels endpoint should apply JSON suppression only after the small indexed candidate scan');
+  assert(staffPanelsBody.includes("WHERE ${activePendingReviewWhere('p')}"), 'staff panels endpoint should use the unsuppressed active-review partial index inside the candidate scan');
+  assert(staffPanelsBody.includes('const queueScanLimit = queueLimit;'), 'staff panels endpoint should only scan the rows needed for first paint under concurrent load');
+  assert(!staffPanelsBody.includes("WHERE NOT ${sourceQualitySuppressedFlagSql('p')}"), 'staff panels endpoint should not re-filter source quality outside the indexed candidate scan');
   assert(staffPanelsBody.includes('review_queue_meta'), 'staff panels endpoint should expose review queue query metadata for false-empty protection');
   assert(staffPanelsBody.includes('query_ok: reviewResult.ok'), 'staff panels endpoint should expose whether the moderation queue query really succeeded');
   assert(staffPanelsBody.includes('empty_is_authoritative: reviewResult.ok'), 'empty moderation queue should only be authoritative after a successful row query');
@@ -216,6 +218,8 @@ function run() {
   assert(app.includes('function mergeStaffDashboardPanelData'), 'frontend should merge queue-first panel payloads into existing fast dashboard data');
   assert(app.includes('function staffReviewQueueLoadingHtml'), 'frontend should not render a timed-out queue query as a genuine empty queue');
   assert(app.includes('Listing moderation rows are still catching up.'), 'staff queue timeout state should be explicit in the dashboard');
+  assert(app.includes('function scheduleStaffDashboardPanelRetry'), 'frontend should automatically retry non-authoritative moderation queue panel failures');
+  assert(app.includes('staffPanelQueueNeedsRetry'), 'staff queue renderer should detect retryable empty/catching-up states');
   assert(app.includes('expected_count: data.summary?.listings?.pending_review'), 'staff review queue renderer should compare rows against the live pending count');
   assert(app.includes('async function refreshAuthSession()'), 'frontend should refresh auth sessions explicitly');
   assert(app.includes('const tokenAtStart = authState.token'), 'auth refresh should capture the token it started with');

@@ -1492,7 +1492,7 @@ async function dashboardPanelsPayload(req) {
   const staffId = actorId(req);
   const queueLimit = STAFF_DASHBOARD_QUEUE_LIMIT;
   const panelLimit = STAFF_DASHBOARD_PANEL_LIMIT;
-  const queueScanLimit = Math.min(STAFF_DASHBOARD_QUEUE_SCAN_LIMIT, STAFF_DASHBOARD_QUEUE_LIMIT * 20);
+  const queueScanLimit = queueLimit;
   const panelQueryOptions = { timeoutMs: STAFF_DASHBOARD_PANEL_QUERY_TIMEOUT_MS };
   const [recentActivity, reviewResult, brokerReviewResult, sourceQueueRows] = await Promise.all([
     safeRows(
@@ -1508,7 +1508,7 @@ async function dashboardPanelsPayload(req) {
       `WITH panel_candidates AS MATERIALIZED (
          SELECT p.id
          FROM properties p
-         WHERE ${pendingReviewWhere('p')}
+         WHERE ${activePendingReviewWhere('p')}
          ORDER BY p.updated_at DESC NULLS LAST, p.created_at DESC NULLS LAST, p.id DESC
          LIMIT $1
        )
@@ -1523,7 +1523,6 @@ async function dashboardPanelsPayload(req) {
               NULL::text AS primary_image_url
        FROM properties p
        JOIN panel_candidates c ON c.id = p.id
-       WHERE NOT ${sourceQualitySuppressedFlagSql('p')}
        ORDER BY p.updated_at DESC NULLS LAST, p.created_at DESC NULLS LAST, p.id DESC
        LIMIT $2`,
       [queueScanLimit, queueLimit],
@@ -1533,7 +1532,7 @@ async function dashboardPanelsPayload(req) {
       `WITH panel_candidates AS MATERIALIZED (
          SELECT p.id
          FROM properties p
-         WHERE ${pendingReviewWhere('p')}
+         WHERE ${activePendingReviewWhere('p')}
            AND ${brokerReviewWhere('p')}
          ORDER BY p.updated_at DESC NULLS LAST, p.created_at DESC NULLS LAST, p.id DESC
          LIMIT $1
@@ -1549,7 +1548,6 @@ async function dashboardPanelsPayload(req) {
               NULL::text AS primary_image_url
        FROM properties p
        JOIN panel_candidates c ON c.id = p.id
-       WHERE NOT ${sourceQualitySuppressedFlagSql('p')}
        ORDER BY p.updated_at DESC NULLS LAST, p.created_at DESC NULLS LAST, p.id DESC
        LIMIT $2`,
       [queueScanLimit, queueLimit],

@@ -10422,6 +10422,9 @@ let staffDashboardHasLiveData = false;
 let staffDashboardAuthRetryCount = 0;
 let staffDashboardPanelHydrationSeq = 0;
 let staffDashboardPanelHydrating = false;
+let staffDashboardPanelRetryTimer = null;
+let staffDashboardPanelRetryCount = 0;
+const STAFF_DASHBOARD_PANEL_RETRY_LIMIT = 4;
 let staffAiLastCsv = "";
 let staffTrainingActive = "moderation";
 let staffTrainingScripts = [];
@@ -10597,21 +10600,56 @@ function staffReviewQueueLoadingHtml(label = "Moderation queue is still loading.
   return `
     <div class="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
       <div class="font-black">${adminEscape(label)}</div>
-      <div class="mt-1 text-xs">The pending count is live, but the row query did not finish. This is not an empty queue.</div>
+      <div class="mt-1 text-xs">The pending count is live, but the row query did not finish. This is not an empty queue. Retrying automatically.</div>
     </div>`;
+}
+
+function staffPanelQueueNeedsRetry(rows = [], meta = {}) {
+  if (Array.isArray(rows) && rows.length) return false;
+  return meta?.query_ok === false
+    || meta?.timed_out
+    || !!meta?.query_error
+    || Number(meta?.expected_count || 0) > 0;
+}
+
+function scheduleStaffDashboardPanelRetry(reason = "review_queue") {
+  if (staffDashboardPanelRetryTimer || staffDashboardPanelRetryCount >= STAFF_DASHBOARD_PANEL_RETRY_LIMIT) return;
+  if (currentPage !== "staff-dashboard" || !authState?.token) return;
+  staffDashboardPanelRetryCount += 1;
+  const delay = Math.min(15000, 1800 * staffDashboardPanelRetryCount);
+  staffDashboardPanelRetryTimer = window.setTimeout(() => {
+    staffDashboardPanelRetryTimer = null;
+    if (currentPage !== "staff-dashboard" || !authState?.token) return;
+    hydrateStaffDashboardPanels(
+      "/api/staff/dashboard?panels=1",
+      authState.token,
+      String(authState?.user?.id || authState?.user?.email || authState?.user?.phone || "")
+    );
+  }, delay);
+  setTextById("staff-source-monitor-status", `Moderation queue is retrying (${reason}, attempt ${staffDashboardPanelRetryCount}/${STAFF_DASHBOARD_PANEL_RETRY_LIMIT})...`);
+}
+
+function clearStaffDashboardPanelRetry() {
+  if (staffDashboardPanelRetryTimer) {
+    window.clearTimeout(staffDashboardPanelRetryTimer);
+    staffDashboardPanelRetryTimer = null;
+  }
+  staffDashboardPanelRetryCount = 0;
 }
 
 function renderStaffReviewQueue(rows = [], meta = {}) {
   const wrap = document.getElementById("staff-review-queue");
   if (!wrap) return;
   if (!rows.length) {
-    if (meta?.query_ok === false || meta?.timed_out || meta?.query_error || Number(meta?.expected_count || 0) > 0) {
+    if (staffPanelQueueNeedsRetry(rows, meta)) {
       wrap.innerHTML = staffReviewQueueLoadingHtml("Listing moderation rows are still catching up.");
+      scheduleStaffDashboardPanelRetry("listing queue");
       return;
     }
     wrap.innerHTML = staffEmpty("No listings are waiting for staff review.");
     return;
   }
+  clearStaffDashboardPanelRetry();
   wrap.innerHTML = rows.map((item) => staffReviewQueueCardHtml(item)).join("");
 }
 
@@ -10619,8 +10657,9 @@ function renderStaffBrokerReviewQueue(rows = [], meta = {}) {
   const wrap = document.getElementById("staff-broker-review-queue");
   if (!wrap) return;
   if (!rows.length) {
-    if (meta?.query_ok === false || meta?.timed_out || meta?.query_error || Number(meta?.expected_count || 0) > 0) {
+    if (staffPanelQueueNeedsRetry(rows, meta)) {
       wrap.innerHTML = staffReviewQueueLoadingHtml("Broker review rows are still catching up.");
+      scheduleStaffDashboardPanelRetry("broker queue");
       return;
     }
     wrap.innerHTML = staffEmpty("No broker listings are waiting for review.");
@@ -10917,6 +10956,7 @@ async function hydrateStaffDashboardPanels(endpoint = "/api/staff/dashboard?pane
       && userIdAtStart === String(authState?.user?.id || authState?.user?.email || authState?.user?.phone || "");
     if (sameUser) {
       setTextById("staff-source-monitor-status", "Live cards loaded. Heavy panels are still catching up; continue with the visible queue and retry shortly.");
+      scheduleStaffDashboardPanelRetry("panel request");
     }
   } finally {
     if (seq === staffDashboardPanelHydrationSeq) staffDashboardPanelHydrating = false;
