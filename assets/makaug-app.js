@@ -6082,6 +6082,7 @@ const PUBLIC_FILTERS_LOCATION_QUALITY_V2_MARKER = "public-filters-location-quali
 const PUBLIC_FILTERS_LOCATION_QUALITY_V3_MARKER = "public-filters-location-quality-v3-20260713";
 const PUBLIC_FILTERS_LOCATION_QUALITY_V4_MARKER = "public-filters-location-quality-v4-20260713";
 const MODERATOR_ID_VERIFICATION_MARKER = "moderator-id-verification-20260713";
+const MODERATOR_ID_PANEL_RENDER_MARKER = "moderator-id-panel-render-20260713";
 const PUBLIC_FILTER_SEARCH_ENDPOINT = "/api/properties/search";
 
 function publicCategorySortSelectId(category) {
@@ -11581,19 +11582,20 @@ function moderationIdentitySectionHtml(review = {}, prefix = "staff-preview", sc
   const documentName = moderationIdentityDocumentName(review);
   const ref = review.inquiry_reference || review.reference || review.id || "-";
   return `
-    <section class="rounded-xl border ${required ? "border-emerald-200 bg-emerald-50" : "border-gray-200 bg-white"} p-4" data-identity-prefix="${adminAttr(prefix)}" data-identity-scope="${adminAttr(scope)}">
+    <section class="rounded-xl border ${required ? "border-emerald-200 bg-emerald-50" : "border-gray-200 bg-white"} p-4" data-moderation-identity-panel="true" data-identity-prefix="${adminAttr(prefix)}" data-identity-scope="${adminAttr(scope)}">
       <div class="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h4 class="font-black ${required ? "text-emerald-950" : "text-gray-900"}">Identity verification</h4>
           <p class="text-xs ${required ? "text-emerald-900" : "text-gray-600"} mt-1">Private owner submissions require the ID photo and ID number to be checked before approval.</p>
         </div>
-        <button type="button" onclick="moderationLoadIdentityDocument('${adminAttr(prefix)}', ${propertyIdArg(review.id)}, '${adminAttr(scope)}')" class="border border-emerald-700 text-emerald-800 bg-white hover:bg-emerald-50 rounded-lg px-3 py-1.5 text-xs font-black">Load secure ID photo</button>
+        <button type="button" onclick="moderationLoadIdentityDocument('${adminAttr(prefix)}', ${propertyIdArg(review.id)}, '${adminAttr(scope)}')" class="border border-emerald-700 text-emerald-800 bg-white hover:bg-emerald-50 rounded-lg px-3 py-1.5 text-xs font-black">View ID / Load document</button>
       </div>
       <div class="mt-3 grid sm:grid-cols-2 gap-2 text-xs text-gray-700">
         <div><span class="text-gray-500">Submission ref:</span> <span class="font-mono font-bold">${adminEscape(ref)}</span></div>
-        <div><span class="text-gray-500">Lister type:</span> ${adminEscape(review.lister_type || review.extra_fields?.lister_type || "-")}</div>
-        <div><span class="text-gray-500">Email:</span> ${adminEscape(review.lister_email || "-")}</div>
-        <div><span class="text-gray-500">Phone:</span> ${adminEscape(review.lister_phone || "-")}</div>
+        <div><span class="text-gray-500">Lister type:</span> <span id="${adminAttr(prefix)}-identity-type">${adminEscape(review.lister_type || review.extra_fields?.lister_type || "-")}</span></div>
+        <div><span class="text-gray-500">Email:</span> <span id="${adminAttr(prefix)}-identity-email">${adminEscape(review.lister_email || "-")}</span></div>
+        <div><span class="text-gray-500">Phone:</span> <span id="${adminAttr(prefix)}-identity-phone">${adminEscape(review.lister_phone || "-")}</span></div>
+        <div class="sm:col-span-2"><span class="text-gray-500">Submitted:</span> <span id="${adminAttr(prefix)}-identity-submitted">${adminEscape(formatListingDate(review.created_at || review.submitted_at) || "-")}</span></div>
         <div class="sm:col-span-2"><span class="text-gray-500">ID number:</span> <span id="${adminAttr(prefix)}-id-number" class="font-mono font-black text-gray-950">${adminEscape(idNumber || "Not supplied")}</span></div>
         <div class="sm:col-span-2"><span class="text-gray-500">ID photo:</span> ${adminEscape(documentName || "Not supplied")}</div>
       </div>
@@ -11601,7 +11603,7 @@ function moderationIdentitySectionHtml(review = {}, prefix = "staff-preview", sc
       ${required ? `
         <label class="mt-3 flex items-start gap-2 rounded-xl bg-white border border-emerald-100 p-3 text-xs font-black text-emerald-950">
           <input id="${adminAttr(prefix)}-id-verified" type="checkbox" ${alreadyVerified ? "checked" : ""} onchange="moderationUpdateApprovalGate('${adminAttr(prefix)}')" class="mt-0.5 rounded border-emerald-300 text-emerald-700">
-          <span>ID photo is clear AND the ID number matches the document.</span>
+          <span>I confirm the typed NIN matches the uploaded National ID photo.</span>
         </label>
       ` : `
         <div class="mt-3 rounded-xl bg-gray-50 border border-gray-100 p-3 text-xs text-gray-600">Identity verification is not required for this record type.</div>
@@ -11622,6 +11624,14 @@ async function moderationLoadIdentityDocument(prefix, propertyId, scope = "staff
     const documentData = data.document || {};
     const idNumberEl = document.getElementById(`${prefix}-id-number`);
     if (idNumberEl && data.id_number) idNumberEl.textContent = data.id_number;
+    const setText = (id, value) => {
+      const el = document.getElementById(`${prefix}-${id}`);
+      if (el && value) el.textContent = value;
+    };
+    setText("identity-email", data.lister?.email || "");
+    setText("identity-phone", data.lister?.phone || "");
+    setText("identity-type", data.lister?.type || data.lister?.listed_via || "");
+    setText("identity-submitted", data.submitted_at ? formatListingDate(data.submitted_at) : "");
     if (!documentData.available || !(documentData.signed_url || documentData.url)) {
       viewer.innerHTML = `<div class="text-xs font-bold text-amber-800">No viewable ID photo is stored for this listing.</div>`;
       moderationUpdateApprovalGate(prefix);
@@ -11634,7 +11644,7 @@ async function moderationLoadIdentityDocument(prefix, propertyId, scope = "staff
         ${documentData.expires_at ? `<div class="text-[11px] text-gray-500">Signed URL expires ${adminEscape(formatListingDate(documentData.expires_at))}</div>` : ""}
       </div>
       <a href="${adminAttr(url)}" target="_blank" rel="noopener noreferrer" class="inline-block">
-        <img src="${adminAttr(url)}" alt="National ID document" class="max-h-80 rounded-lg border border-gray-200 bg-gray-50 object-contain">
+        <img src="${adminAttr(url)}" alt="National ID document" class="max-h-80 rounded-lg border border-gray-200 bg-gray-50 object-contain" referrerpolicy="no-referrer" data-identity-document-image="true">
       </a>`;
   } catch (error) {
     viewer.innerHTML = `<div class="text-xs font-bold text-red-700">ID photo load failed: ${adminEscape(error.message || "request failed")}</div>`;
@@ -11659,9 +11669,18 @@ function moderationUpdateApprovalGate(prefix) {
 
 function moderationInitIdentityPanel(prefix, review = {}, scope = "staff") {
   moderationUpdateApprovalGate(prefix);
-  if (review?.id_document_available || review?.id_document_url || review?.extra_fields?.verify?.id_document_url) {
+  if (moderationRequiresIdentity(review) || review?.id_document_available || review?.id_document_url || review?.extra_fields?.verify?.id_document_url || moderationIdentityNumber(review)) {
     moderationLoadIdentityDocument(prefix, review.id, scope);
   }
+}
+
+function moderationEnsureIdentityPanel(prefix, review = {}, scope = "staff", container) {
+  const target = typeof container === "string" ? document.querySelector(container) : container;
+  if (!target) return;
+  if (!document.getElementById(`${prefix}-id-document-viewer`)) {
+    target.insertAdjacentHTML("afterbegin", moderationIdentitySectionHtml(review, prefix, scope));
+  }
+  moderationInitIdentityPanel(prefix, review, scope);
 }
 
 function staffPreviewField(id, label, value = "", type = "text", extra = "") {
@@ -11754,7 +11773,7 @@ function renderStaffListingPreviewModal(preview = {}) {
     adminReviewOnListingTypeChange();
     adminReviewAutoPopulateLocationFromSource(preview);
     initAdminReviewLocationMap(preview);
-    moderationInitIdentityPanel("staff-preview", preview, "staff");
+    moderationEnsureIdentityPanel("staff-preview", preview, "staff", document.querySelector("#staff-listing-preview-modal .p-5 > .space-y-4") || document.querySelector("#staff-listing-preview-modal"));
   }, 120);
 }
 
@@ -22235,7 +22254,7 @@ function renderAdminReviewPanel(review) {
     adminReviewOnListingTypeChange();
     adminReviewAutoPopulateLocationFromSource(review);
     initAdminReviewLocationMap(review);
-    moderationInitIdentityPanel("admin-review", review, "admin");
+    moderationEnsureIdentityPanel("admin-review", review, "admin", document.querySelector("#admin-review-content .space-y-4") || document.getElementById("admin-review-content"));
   }, 120);
 }
 

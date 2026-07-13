@@ -17,6 +17,9 @@ const moderationService = read('services/listingModerationService.js');
 assert(html.includes('moderator-id-verification-20260713'), 'production shell must carry the moderator ID verification marker');
 assert((html.match(/moderator-id-verification-20260713/g) || []).length >= 3, 'marker must be in preload, lazy script cache-bust, and release markers');
 assert(app.includes('MODERATOR_ID_VERIFICATION_MARKER = "moderator-id-verification-20260713"'), 'app bundle must carry the moderator ID marker');
+assert(html.includes('moderator-id-panel-render-20260713'), 'production shell must carry the moderator ID panel render marker');
+assert((html.match(/moderator-id-panel-render-20260713/g) || []).length >= 3, 'panel render marker must be in preload, lazy script cache-bust, and release markers');
+assert(app.includes('MODERATOR_ID_PANEL_RENDER_MARKER = "moderator-id-panel-render-20260713"'), 'app bundle must carry the moderator ID panel render marker');
 
 assert(cloudMedia.includes('function createSignedS3GetUrl'), 'cloud media service must expose a signed S3 GET helper');
 assert(cloudMedia.includes('UNSIGNED-PAYLOAD'), 'signed GET helper must use a presigned GET payload');
@@ -43,10 +46,13 @@ assert(propertiesRoute.includes('normalizeStructuredRejectionReasons'), 'backend
 assert(propertiesRoute.includes('structured_rejection_reasons'), 'backend must persist structured rejection reasons');
 
 assert(app.includes('function moderationIdentitySectionHtml'), 'staff/King UI must render a shared identity panel');
-assert(app.includes('Load secure ID photo'), 'identity panel must load the private ID photo through the signed endpoint');
-assert(app.includes('ID photo is clear AND the ID number matches the document'), 'moderator must confirm ID photo and number match');
+assert(app.includes('View ID / Load document'), 'identity panel must expose a visible View ID / Load document action');
+assert(app.includes('I confirm the typed NIN matches the uploaded National ID photo.'), 'moderator must confirm typed NIN and uploaded ID photo match');
 assert(app.includes('function moderationLoadIdentityDocument'), 'frontend must fetch the signed ID document route');
 assert(app.includes('/id-document'), 'frontend must call the ID document endpoint');
+assert(app.includes('data-identity-document-image="true"'), 'signed ID document must render as a visible image');
+assert(app.includes('moderationRequiresIdentity(review) || review?.id_document_available'), 'identity panel must fetch the endpoint when identity verification is required even if availability flag is missing');
+assert(app.includes('function moderationEnsureIdentityPanel'), 'staff/King render paths must have a fallback injector for the identity panel');
 assert(!app.includes('href="${adminAttr(review.id_document_url)}"'), 'King UI must not link directly to raw ID document URLs');
 assert(!app.includes('src="${adminAttr(review.id_document_url)}"'), 'King UI must not render raw ID document URLs');
 assert(app.includes('data-identity-approve-prefix="staff-preview"'), 'staff approve button must be identity-gated');
