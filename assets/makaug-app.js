@@ -26754,7 +26754,12 @@ function showListSubmissionSuccess(reference, payload, options = {}) {
         ? translateListingLabel("WhatsApp confirmation has been logged and will send when WhatsApp is configured.")
         : translateListingLabel("WhatsApp confirmation logged for admin follow-up."));
   }
-  if (modalWhatsappLinkEl && options.owner_whatsapp_url) modalWhatsappLinkEl.href = options.owner_whatsapp_url;
+  if (modalWhatsappLinkEl && options.owner_whatsapp_url) {
+    modalWhatsappLinkEl.href = options.owner_whatsapp_url;
+    modalWhatsappLinkEl.textContent = ownerWhatsappDelivery?.sent === true
+      ? translateListingLabel("Open WhatsApp confirmation")
+      : translateListingLabel("Get your confirmation on WhatsApp");
+  }
   if (statusEl) {
     const isOffline = !!options.offline;
     statusEl.className = `text-xs mt-2 ${isOffline ? "text-amber-700" : "text-green-700"}`;

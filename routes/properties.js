@@ -1710,6 +1710,27 @@ function buildManualOwnerStatusNotification({ listing = {}, status, reason }) {
   };
 }
 
+async function getPrimaryImageUrlForProperty(propertyId) {
+  if (!propertyId) return '';
+  try {
+    const result = await db.query(
+      `SELECT url
+       FROM property_images
+       WHERE property_id = $1
+       ORDER BY is_primary DESC, sort_order ASC, created_at ASC
+       LIMIT 1`,
+      [propertyId]
+    );
+    return cleanText(result.rows[0]?.url || '');
+  } catch (error) {
+    logger.warn('Unable to load primary listing image for notification', {
+      property_id: propertyId,
+      message: error.message
+    });
+    return '';
+  }
+}
+
 function isSourcedInventoryCandidateRecord(row = {}) {
   const extra = row.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
   const source = cleanText(row.source || extra.source).toLowerCase();
@@ -3111,7 +3132,7 @@ router.post('/', async (req, res, next) => {
         $21,$22,$23,$24,$25,$26,$27,$28,$29,$30,
         $31,$32,$33,$34,$35,$36,$37,$38,$39,$40,
         $41,$42,$43,$44,$45,$46,$47,$48
-      ) RETURNING id`,
+      ) RETURNING id, created_at`,
       [
         listingType,
         title,
@@ -3282,11 +3303,30 @@ router.post('/', async (req, res, next) => {
       logger.error('Property submission support email failed:', error.message);
     }
 
+    let liveListingCount = null;
+    try {
+      const liveCountResult = await db.query(
+        "SELECT COUNT(*)::int AS total FROM properties WHERE status IN ('approved', 'live', 'published')"
+      );
+      liveListingCount = liveCountResult.rows[0]?.total ?? null;
+    } catch (error) {
+      logger.warn('Unable to load public live listing count for submitted confirmation', { message: error.message });
+    }
+
     const ownerNotificationListing = {
       id: propertyId,
       title,
       listing_type: listingType,
       inquiry_reference: inquiryReference,
+      created_at: insertResult.rows[0].created_at,
+      submitted_at: insertResult.rows[0].created_at,
+      price,
+      currency: cleanText(body.currency || body.price_currency) || 'UGX',
+      price_period: cleanText(body.price_period) || null,
+      area,
+      district,
+      primary_image_url: imageUrls[0] || null,
+      live_count: liveListingCount,
       lister_name: listerName || null,
       lister_phone: listerPhone || null,
       lister_email: listerEmailNormalized || null
@@ -3918,7 +3958,10 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
            ) || jsonb_build_object('review_warning_overrides', $11::jsonb)
              || COALESCE($12::jsonb, '{}'::jsonb)
          WHERE id = $1
-         RETURNING id, title, listing_type, inquiry_reference, lister_name, lister_phone, lister_email, status, reviewed_at, approved_at, last_moderation_notification_at, moderation_stage, moderation_checklist, moderation_notes, moderation_reason, extra_fields`,
+         RETURNING id, title, listing_type, inquiry_reference, lister_name, lister_phone, lister_email, status,
+                   price, price_period, area, district, created_at,
+                   reviewed_at, approved_at, last_moderation_notification_at, moderation_stage,
+                   moderation_checklist, moderation_notes, moderation_reason, extra_fields`,
         [
           req.params.id,
           nextStatus,
@@ -3959,7 +4002,8 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
              )
              || COALESCE($8::jsonb, '{}'::jsonb)
          WHERE id = $1
-         RETURNING id, title, listing_type, inquiry_reference, lister_name, lister_phone, lister_email, status, reviewed_at, extra_fields`,
+         RETURNING id, title, listing_type, inquiry_reference, lister_name, lister_phone, lister_email, status,
+                   price, price_period, area, district, created_at, reviewed_at, extra_fields`,
         [
           req.params.id,
           nextStatus,
@@ -3978,6 +4022,9 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
         moderation_notes: reviewNotes,
         moderation_reason: moderationReason
       };
+    }
+    if (nextStatus === 'approved') {
+      listing.primary_image_url = await getPrimaryImageUrlForProperty(listing.id);
     }
     let notification = {
       email: { sent: false, reason: 'not_attempted' },

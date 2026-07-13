@@ -94,6 +94,202 @@ function getSocialShareLinks(listing = {}) {
   };
 }
 
+function escapeHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function listingLocationLabel(listing = {}) {
+  return [listing.area, listing.district].map((item) => String(item || '').trim()).filter(Boolean).join(', ');
+}
+
+function formatUgandaDateTime(value) {
+  const date = value ? new Date(value) : new Date();
+  const safeDate = Number.isNaN(date.getTime()) ? new Date() : date;
+  const parts = new Intl.DateTimeFormat('en-UG', {
+    timeZone: 'Africa/Kampala',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  }).formatToParts(safeDate).reduce((acc, part) => {
+    acc[part.type] = part.value;
+    return acc;
+  }, {});
+  return `${parts.day} ${parts.month} ${parts.year}, ${parts.hour}:${parts.minute} ${String(parts.dayPeriod || '').toUpperCase()}`.trim();
+}
+
+function formatListingPrice(listing = {}) {
+  const rawPrice = Number(listing.price || 0);
+  if (!Number.isFinite(rawPrice) || rawPrice <= 0) return 'Price on application';
+  const currencyRaw = String(listing.currency || listing.price_currency || 'UGX').trim().toUpperCase();
+  const currencyLabel = ['UGX', 'USH', 'UG SHS', 'UGANDA SHILLINGS'].includes(currencyRaw) ? 'USh' : (listing.currency || 'USh');
+  const amount = new Intl.NumberFormat('en-UG', { maximumFractionDigits: 0 }).format(Math.round(rawPrice));
+  const period = String(listing.price_period || '').trim();
+  return `${currencyLabel} ${amount}${period && period !== 'once' ? `/${period}` : ''}`;
+}
+
+function emailWordmarkHtml() {
+  return `
+    <div style="font-size:28px;font-weight:900;letter-spacing:.2px;line-height:1;">
+      <span style="color:#ffffff;">makaug</span><span style="color:#d9a441;">.com</span>
+    </div>
+    <div style="margin-top:7px;color:#cde7d0;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;">Uganda Property</div>`;
+}
+
+function emailFooterHtml() {
+  const supportEmail = getSupportEmail();
+  const supportPhone = getSupportPhone();
+  const whatsappUrl = `https://wa.me/${String(supportPhone).replace(/\D/g, '') || '256760112587'}`;
+  return `
+    <tr>
+      <td style="background:#f8faf7;border-top:1px solid #e5efe2;padding:18px 28px;color:#6b7280;font-size:12px;line-height:1.6;">
+        <div style="font-size:18px;font-weight:900;letter-spacing:.2px;line-height:1;margin-bottom:5px;"><span style="color:#0f3d2e;">makaug</span><span style="color:#d9a441;">.com</span></div>
+        Uganda Property<br>
+        WhatsApp <a href="${escapeHtml(whatsappUrl)}" style="color:#166534;font-weight:700;text-decoration:none;">${escapeHtml(supportPhone)}</a> &middot;
+        <a href="mailto:${escapeHtml(supportEmail)}" style="color:#166534;font-weight:700;text-decoration:none;">${escapeHtml(supportEmail)}</a><br>
+        You're receiving this because you submitted a listing on makaug.com.
+      </td>
+    </tr>`;
+}
+
+function emailShellHtml({ title, preheader, bodyHtml }) {
+  return `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>${escapeHtml(title)}</title>
+  </head>
+  <body style="margin:0;background:#f4f7f2;font-family:Arial,Helvetica,sans-serif;color:#111827;">
+    <div style="display:none;max-height:0;overflow:hidden;color:#f4f7f2;">${escapeHtml(preheader || title)}</div>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f7f2;padding:24px 12px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border-radius:18px;overflow:hidden;border:1px solid #dbe7d7;box-shadow:0 12px 30px rgba(15,23,42,0.08);">
+            <tr>
+              <td style="background:#0f3d2e;padding:24px 28px;">
+                ${emailWordmarkHtml()}
+              </td>
+            </tr>
+            ${bodyHtml}
+            ${emailFooterHtml()}
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+}
+
+function emailButtonHtml(url, label, options = {}) {
+  const bg = options.bg || '#166534';
+  const color = options.color || '#ffffff';
+  const border = options.border || bg;
+  return `<a href="${escapeHtml(url)}" style="display:inline-block;background:${bg};color:${color};border:1px solid ${border};text-decoration:none;border-radius:12px;padding:13px 16px;font-size:14px;font-weight:900;margin:4px 6px 4px 0;">${escapeHtml(label)}</a>`;
+}
+
+function buildListingSubmittedEmailHtml({ listing = {}, submittedAt, liveCount }) {
+  const name = String(listing.lister_name || '').trim() || 'there';
+  const title = listing.title || 'Your property listing';
+  const reference = getListingReference(listing);
+  const submittedLabel = formatUgandaDateTime(submittedAt || listing.created_at);
+  const liveCountText = Number.isFinite(Number(liveCount)) && Number(liveCount) > 0
+    ? `${new Intl.NumberFormat('en-UG').format(Number(liveCount))} live listings`
+    : 'live listings';
+  const browseUrl = `${getSiteBaseUrl()}/for-sale`;
+
+  return emailShellHtml({
+    title: "We've received your listing",
+    preheader: `Your listing ${reference} is pending makaug review.`,
+    bodyHtml: `
+      <tr>
+        <td style="padding:28px;">
+          <div style="width:52px;height:52px;border-radius:999px;background:#dcfce7;color:#166534;text-align:center;line-height:52px;font-size:26px;font-weight:900;">&#10003;</div>
+          <h1 style="margin:18px 0 12px;color:#111827;font-size:26px;line-height:1.22;font-weight:900;">We've received your listing</h1>
+          <p style="margin:0 0 18px;color:#374151;font-size:15px;line-height:1.65;">Hi ${escapeHtml(name)}, thanks for listing with makaug. Your property is with our team for review - we'll email and WhatsApp you the moment it's live, with a link to share.</p>
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f7f4;border:1px solid #dbe7d7;border-radius:16px;margin:18px 0;border-collapse:separate;">
+            <tr><td style="padding:16px;">
+              <span style="display:inline-block;background:#fef3c7;color:#92400e;border-radius:999px;padding:6px 10px;font-size:12px;font-weight:900;margin-bottom:12px;">Pending review</span>
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+                <tr><td style="padding:7px 0;color:#6b7280;font-size:13px;width:120px;">Property</td><td style="padding:7px 0;color:#111827;font-size:14px;font-weight:800;">${escapeHtml(title)}</td></tr>
+                <tr><td style="padding:7px 0;color:#6b7280;font-size:13px;width:120px;">Reference</td><td style="padding:7px 0;color:#111827;font-family:Consolas,Menlo,monospace;font-size:14px;font-weight:800;">${escapeHtml(reference)}</td></tr>
+                <tr><td style="padding:7px 0;color:#6b7280;font-size:13px;width:120px;">Submitted</td><td style="padding:7px 0;color:#111827;font-size:14px;font-weight:800;">${escapeHtml(submittedLabel)}</td></tr>
+              </table>
+            </td></tr>
+          </table>
+          <h2 style="margin:22px 0 12px;color:#111827;font-size:18px;line-height:1.3;font-weight:900;">What happens next</h2>
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+            ${[
+              'We verify your details, photos, location, and ID.',
+              'We message you if anything needs updating.',
+              'Once approved, it goes live and we send your share link.'
+            ].map((item, index) => `
+              <tr>
+                <td valign="top" style="padding:7px 0;width:34px;"><span style="display:inline-block;width:24px;height:24px;border-radius:999px;background:#166534;color:#ffffff;text-align:center;line-height:24px;font-size:12px;font-weight:900;">${index + 1}</span></td>
+                <td style="padding:7px 0;color:#374151;font-size:14px;line-height:1.55;">${escapeHtml(item)}</td>
+              </tr>`).join('')}
+          </table>
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0f3d2e;border-radius:16px;margin-top:24px;border-collapse:separate;">
+            <tr><td style="padding:18px;">
+              <div style="color:#ffffff;font-size:16px;font-weight:900;line-height:1.4;">While you wait, explore makaug</div>
+              <div style="margin-top:6px;color:#dff7e4;font-size:14px;line-height:1.55;">${escapeHtml(liveCountText)} across Uganda, updated daily.</div>
+              <div style="margin-top:14px;">${emailButtonHtml(browseUrl, 'Browse listings', { bg: '#d9a441', color: '#111827', border: '#d9a441' })}</div>
+            </td></tr>
+          </table>
+        </td>
+      </tr>`
+  });
+}
+
+function buildListingLiveEmailHtml({ listing = {} }) {
+  const name = String(listing.lister_name || '').trim() || 'there';
+  const title = listing.title || 'Your property listing';
+  const publicUrl = getPublicListingUrl(listing);
+  const shareLinks = getSocialShareLinks(listing);
+  const location = listingLocationLabel(listing) || 'Uganda';
+  const price = formatListingPrice(listing);
+  const imageUrl = String(listing.primary_image_url || listing.image_url || '').trim();
+  const imageBlock = /^https?:\/\//i.test(imageUrl)
+    ? `<img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(title)}" width="544" style="display:block;width:100%;max-width:544px;height:auto;border-radius:14px 14px 0 0;border:0;">`
+    : `<div style="height:190px;background:#ecfdf3;border-radius:14px 14px 0 0;text-align:center;color:#166534;font-size:18px;font-weight:900;line-height:190px;">makaug property</div>`;
+
+  return emailShellHtml({
+    title: 'Your listing is live',
+    preheader: `${title} is now live on makaug.`,
+    bodyHtml: `
+      <tr>
+        <td style="padding:28px;">
+          <div style="width:52px;height:52px;border-radius:999px;background:#dcfce7;color:#166534;text-align:center;line-height:52px;font-size:24px;font-weight:900;">LIVE</div>
+          <h1 style="margin:18px 0 12px;color:#111827;font-size:26px;line-height:1.22;font-weight:900;">Your listing is live</h1>
+          <p style="margin:0 0 18px;color:#374151;font-size:15px;line-height:1.65;">Hi ${escapeHtml(name)}, your property is now live on makaug and visible to buyers across Uganda. Share it to reach even more people.</p>
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #dbe7d7;border-radius:16px;border-collapse:separate;overflow:hidden;">
+            <tr><td>${imageBlock}</td></tr>
+            <tr><td style="padding:16px;">
+              <span style="display:inline-block;background:#dcfce7;color:#166534;border-radius:999px;padding:6px 10px;font-size:12px;font-weight:900;margin-bottom:10px;">Live</span>
+              <div style="color:#111827;font-size:20px;line-height:1.3;font-weight:900;">${escapeHtml(title)}</div>
+              <div style="margin-top:8px;color:#4b5563;font-size:14px;line-height:1.5;">Location: ${escapeHtml(location)}</div>
+              <div style="margin-top:8px;color:#166534;font-size:17px;font-weight:900;">${escapeHtml(price)}</div>
+              <div style="margin-top:8px;color:#6b7280;font-size:12px;line-height:1.4;word-break:break-all;">${escapeHtml(publicUrl)}</div>
+            </td></tr>
+          </table>
+          <div style="margin-top:22px;">
+            ${emailButtonHtml(shareLinks.whatsapp, 'Share on WhatsApp', { bg: '#16a34a', border: '#16a34a' })}
+            ${emailButtonHtml(shareLinks.facebook, 'Share on Facebook', { bg: '#ffffff', color: '#166534', border: '#bbf7d0' })}
+            ${emailButtonHtml(publicUrl, 'View listing', { bg: '#0f3d2e', border: '#0f3d2e' })}
+          </div>
+          <p style="margin:18px 0 0;color:#4b5563;font-size:14px;line-height:1.6;">We'll let you know when people view or save your listing. Need a change? Just reply to this email.</p>
+        </td>
+      </tr>`
+  });
+}
+
 function getDirectWhatsAppUrl(phone, message) {
   const normalized = normalizeUgPhoneForWhatsApp(phone);
   if (!normalized) return '';
@@ -385,35 +581,31 @@ function buildOwnerStatusMessage({ listing = {}, status, reason }) {
   if (String(status || '').toLowerCase() === 'approved') {
     const publicUrl = getPublicListingUrl(listing);
     const shareLinks = getSocialShareLinks(listing);
+    const location = listingLocationLabel(listing) || 'Uganda';
+    const price = formatListingPrice(listing);
     return {
-      subject: `[makaug] Listing approved • ${title}`,
+      subject: `Your listing is live - ${title}`,
       text: [
         `Hello${listing?.lister_name ? ` ${listing.lister_name}` : ''},`,
         '',
-        'Good news, your makaug property listing is now approved and live.',
-        `Listing reference: ${reference}`,
-        `Title: ${title}`,
-        `Live link: ${publicUrl}`,
+        'Your property is now live on makaug and visible to buyers across Uganda.',
+        `Reference: ${reference}`,
+        `Property: ${title}`,
+        `Location: ${location}`,
+        `Price: ${price}`,
+        `View listing: ${publicUrl}`,
         '',
-        'Share links:',
         `WhatsApp: ${shareLinks.whatsapp}`,
         `Facebook: ${shareLinks.facebook}`,
-        `X/Twitter: ${shareLinks.x}`,
-        `LinkedIn: ${shareLinks.linkedin}`,
-        `Instagram/link-in-bio: ${publicUrl}`,
-        `YouTube description/caption: ${shareLinks.youtube_caption}`,
         '',
-        `If you need help, contact ${supportEmail}.`,
-        'Thank you for using makaug.'
+        'We will let you know when people view or save your listing. Need a change? Just reply to this email.',
+        `Need help? ${supportEmail}`
       ].join('\n'),
+      html: buildListingLiveEmailHtml({ listing }),
       whatsapp: [
-        `makaug: your listing is approved and live.`,
-        `Ref: ${reference}`,
-        `Title: ${title}`,
-        `View/share: ${publicUrl}`,
-        `WhatsApp share: ${shareLinks.whatsapp}`,
-        `Facebook: ${shareLinks.facebook}`,
-        `Instagram/YouTube caption: ${shareLinks.youtube_caption}`
+        `Great news ${listing?.lister_name || 'there'} - your listing is *live* on makaug \u{1F389}`,
+        `${title} - ${location} - ${price}`,
+        `View & share: ${publicUrl}`
       ].join('\n')
     };
   }
@@ -467,44 +659,33 @@ function buildOwnerStatusMessage({ listing = {}, status, reason }) {
 function buildOwnerSubmissionMessage({ listing = {}, token = '' }) {
   const reference = getListingReference(listing);
   const title = listing.title || 'Your property listing';
-  const supportEmail = getSupportEmail();
   const siteUrl = getSiteBaseUrl();
-  const submittedAt = new Date().toISOString();
-  const dashboardUrl = `${siteUrl}/dashboard`;
-  const whatsappUrl = `https://wa.me/${String(getSupportPhone()).replace(/\D/g, '') || '256760112587'}`;
+  const submittedAt = listing.submitted_at || listing.created_at || new Date();
+  const submittedLabel = formatUgandaDateTime(submittedAt);
 
   return {
-    subject: 'Your makaug property listing has been submitted',
+    subject: "We've received your makaug listing",
     text: [
       `Hello${listing?.lister_name ? ` ${listing.lister_name}` : ''},`,
       '',
-      'Your makaug property listing has been submitted.',
-      `Title: ${title}`,
-      `Listing reference: ${reference}`,
-      'Status: Pending Review',
-      `Submitted: ${submittedAt}`,
+      'Thanks for listing with makaug. Your property is with our team for review.',
+      `Property: ${title}`,
+      `Reference: ${reference}`,
+      `Submitted: ${submittedLabel}`,
       '',
       'What happens next:',
-      '- Our team checks the details, media, location, and verification information before publication.',
-      '- We will contact you if anything needs updating.',
-      '- Approved listings appear publicly after review.',
+      '1. We verify your details, photos, location, and ID.',
+      '2. We message you if anything needs updating.',
+      '3. Once approved, it goes live and we send your share link.',
       '',
-      `Dashboard: ${dashboardUrl}`,
-      `WhatsApp support: ${whatsappUrl}`,
-      `If you need help, contact ${supportEmail}.`,
-      `Open makaug: ${siteUrl}`,
-      '',
-      'makaug',
-      'Thank you for using makaug.'
+      `Browse listings while you wait: ${siteUrl}/for-sale`
     ].join('\n'),
+    html: buildListingSubmittedEmailHtml({ listing, submittedAt, liveCount: listing.live_count }),
     whatsapp: [
-      'makaug Listing Received',
-      '',
-      'Your property listing has been submitted for review.',
-      `Title: ${title}`,
+      `Hi ${listing?.lister_name || 'there'}, your makaug listing is *submitted* and under review.`,
       `Ref: ${reference}`,
-      'Status: Pending Review',
-      'We will contact you after review or if we need more information.'
+      `Property: ${title}`,
+      `We'll message you the moment it's live with a link to share. Browse makaug meanwhile: ${siteUrl}`
     ].join('\n')
   };
 }
@@ -522,7 +703,8 @@ async function sendOwnerListingStatusNotifications({ listing = {}, status, reaso
         ...await sendSupportEmail({
           to: listing.lister_email,
           subject: message.subject,
-          text: message.text
+          text: message.text,
+          html: message.html
         }),
         subject: message.subject,
         message: message.text
@@ -573,7 +755,8 @@ async function sendOwnerListingSubmissionNotifications({ listing = {}, token = '
         ...await sendSupportEmail({
           to: listing.lister_email,
           subject: message.subject,
-          text: message.text
+          text: message.text,
+          html: message.html
         }),
         subject: message.subject,
         message: message.text
@@ -614,6 +797,7 @@ async function sendOwnerListingSubmissionNotifications({ listing = {}, token = '
 module.exports = {
   REVIEW_CHECKS,
   REQUIRED_REVIEW_CHECK_KEYS,
+  buildOwnerSubmissionMessage,
   buildOwnerStatusMessage,
   buildAutomatedListingReview,
   createOwnerEditToken,

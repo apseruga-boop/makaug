@@ -399,9 +399,10 @@ function run() {
   assert(propertiesRoutes.includes("leadType: 'listing_owner'"), 'property submission should create listing-owner CRM lead');
   assert(propertiesRoutes.includes("activityType: 'whatsapp_contact_initiated'"), 'WhatsApp listing click should create CRM lead activity');
   assert(propertiesRoutes.includes("activityType: 'property_enquiry_created'"), 'property enquiry should create CRM lead activity');
-  assert(listingModerationService.includes('Your makaug property listing has been submitted'), 'property submitted email subject should be makaug branded');
-  assert(listingModerationService.includes('Status: Pending Review'), 'property submitted email should include pending-review status');
-  assert(listingModerationService.includes('WhatsApp support'), 'property submitted email should include WhatsApp support');
+  assert(listingModerationService.includes("We've received your makaug listing"), 'property submitted email subject should use the redesigned received copy');
+  assert(listingModerationService.includes('Pending review'), 'property submitted email should include a pending-review status pill');
+  assert(listingModerationService.includes('Browse listings'), 'property submitted email should use the single browse-listings CTA');
+  assert(frontendSource.includes('Get your confirmation on WhatsApp'), 'success modal should expose the WhatsApp click-to-chat confirmation fallback');
   assert(emailLogService.includes('INSERT INTO email_logs'), 'email log service should persist email logs when table exists');
   assert(whatsappMessageLogService.includes('INSERT INTO whatsapp_message_logs'), 'WhatsApp log service should persist WhatsApp logs when table exists');
   assert(whatsappRoutes.includes('Do not send a PDF'), 'WhatsApp identity prompt should say PDFs are not accepted');

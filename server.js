@@ -10,6 +10,7 @@ const rateLimit = require('express-rate-limit');
 const jwt = require('jsonwebtoken');
 
 const logger = require('./config/logger');
+const db = require('./config/database');
 const healthRoutes = require('./routes/health');
 const authRoutes = require('./routes/auth');
 const propertiesRoutes = require('./routes/properties');
@@ -223,6 +224,7 @@ const staffBulkGateRound4Version = 'staff-bulk-gate-round4-20260711';
 const staffSuppressedSourcesRegistryVersion = 'staff-suppressed-sources-registry-20260711';
 const studentSupplyGateVersion = 'student-supply-gate-20260711';
 const staffReviewQueuePanelRetryVersion = 'staff-review-queue-panel-retry-20260713';
+const listingConfirmationsRedesignVersion = 'listing-confirmations-redesign-20260713';
 const publicAppVersionSuffixes = [
   captureHelperUsabilityVersion,
   studentNearestUniversityVersion,
@@ -315,7 +317,8 @@ const publicAppVersionSuffixes = [
   staffBulkGateRound4Version,
   staffSuppressedSourcesRegistryVersion,
   studentSupplyGateVersion,
-  staffReviewQueuePanelRetryVersion
+  staffReviewQueuePanelRetryVersion,
+  listingConfirmationsRedesignVersion
 ];
 let cachedIndexHtml = null;
 const publicHtmlCache = new Map();
@@ -695,6 +698,84 @@ function renderPublicHtml(pathname) {
   return rendered;
 }
 
+function escapeMetaContent(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function absolutePublicUrl(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (/^https?:\/\//i.test(raw)) return raw;
+  const base = String(process.env.PUBLIC_SITE_URL || process.env.PUBLIC_BASE_URL || process.env.APP_BASE_URL || 'https://makaug.com').replace(/\/+$/, '');
+  return `${base}${raw.startsWith('/') ? '' : '/'}${raw}`;
+}
+
+function patchMetaTag(html, propertyName, content) {
+  const safeContent = escapeMetaContent(content);
+  const propertyPattern = new RegExp(`(<meta\\\\s+(?:property|name)=["']${propertyName.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')}["']\\\\s+content=)["'][^"']*["']`, 'i');
+  if (propertyPattern.test(html)) {
+    return html.replace(propertyPattern, `$1"${safeContent}"`);
+  }
+  return html.replace('</head>', `  <meta property="${escapeMetaContent(propertyName)}" content="${safeContent}">\n</head>`);
+}
+
+function patchListingOpenGraphMeta(html, meta = {}) {
+  let patched = html;
+  patched = patchMetaTag(patched, 'og:title', meta.title);
+  patched = patchMetaTag(patched, 'og:description', meta.description);
+  patched = patchMetaTag(patched, 'og:image', meta.image);
+  patched = patchMetaTag(patched, 'twitter:title', meta.title);
+  patched = patchMetaTag(patched, 'twitter:description', meta.description);
+  patched = patchMetaTag(patched, 'twitter:image', meta.image);
+  patched = patchMetaTag(patched, 'twitter:card', 'summary_large_image');
+  return patched;
+}
+
+async function loadPublicListingOpenGraphMeta(propertyId) {
+  const safeId = String(propertyId || '').trim();
+  if (!safeId) return null;
+  const result = await db.query(
+    `SELECT
+       p.id,
+       p.title,
+       p.description,
+       p.area,
+       p.district,
+       p.price,
+       p.price_period,
+       (
+         SELECT i.url
+         FROM property_images i
+         WHERE i.property_id = p.id
+         ORDER BY i.is_primary DESC, i.sort_order ASC, i.created_at ASC
+         LIMIT 1
+       ) AS primary_image_url
+     FROM properties p
+     WHERE p.id::text = $1
+       AND p.status IN ('approved', 'live', 'published')
+     LIMIT 1`,
+    [safeId]
+  );
+  const row = result.rows[0];
+  if (!row) return null;
+  const location = [row.area, row.district].filter(Boolean).join(', ');
+  const price = Number(row.price || 0) > 0
+    ? `USh ${new Intl.NumberFormat('en-UG', { maximumFractionDigits: 0 }).format(Number(row.price))}${row.price_period && row.price_period !== 'once' ? `/${row.price_period}` : ''}`
+    : 'Price on application';
+  const description = [location, price, 'View and share this Uganda property on makaug.com.']
+    .filter(Boolean)
+    .join(' - ');
+  return {
+    title: `${row.title || 'Uganda property'} | makaug.com`,
+    description,
+    image: absolutePublicUrl(row.primary_image_url || '/assets/og-cover.jpg')
+  };
+}
+
 app.get('/assets/makaug-app.js', (req, res, next) => {
   try {
     const asset = readCachedTextAsset(appJsPath);
@@ -704,6 +785,23 @@ app.get('/assets/makaug-app.js', (req, res, next) => {
       etag: asset.etag,
       lastModified: asset.lastModified,
       compressed: asset.compressed
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+app.get('/property/:id', async (req, res, next) => {
+  try {
+    res.set('X-makaug-Public-Sanitized', '1');
+    let html = renderPublicHtml(req.originalUrl || req.url || req.path);
+    const meta = await loadPublicListingOpenGraphMeta(req.params.id);
+    if (meta) {
+      html = patchListingOpenGraphMeta(html, meta);
+      res.set('X-makaug-Listing-OG', '1');
+    }
+    return sendTextResponse(req, res, html, {
+      cacheControl: PUBLIC_HTML_CACHE_CONTROL
     });
   } catch (error) {
     return next(error);
