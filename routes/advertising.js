@@ -8,7 +8,11 @@ const { getSupportEmail, getSupportWhatsappUrl, sendSupportEmail } = require('..
 const { captureLearningEvent } = require('../services/aiLearningCaptureService');
 const { createLead } = require('../services/leadService');
 const {
+  ADVERTISING_SELF_SERVE_MARKER,
+  buildAdvertisingQuoteBreakdown,
   estimateAdvertisingQuote,
+  findAdvertisingPlacement,
+  getAdvertisingRateCard,
   getAdvertisingPackages,
   summarizeAdvertisingPackageKeys
 } = require('../services/advertisingCatalogService');
@@ -92,10 +96,130 @@ function packageLabels(keys = []) {
   return summarizeAdvertisingPackageKeys(keys).map((item) => `${item.label} (UGX ${Number(item.price_ugx || 0).toLocaleString('en-UG')})`);
 }
 
+const SELF_SERVE_LANGUAGE_CODES = ['en', 'lg', 'sw', 'ach', 'nyn', 'rn', 'lus', 'am', 'ar'];
+const SELF_SERVE_PAYMENT_METHODS = ['paypal', 'mobile_money', 'card'];
+
+function isValidDestinationUrl(value) {
+  const raw = cleanText(value);
+  if (!raw) return false;
+  try {
+    const url = new URL(raw);
+    return ['http:', 'https:'].includes(url.protocol);
+  } catch (_error) {
+    return false;
+  }
+}
+
+function normalizeSelfServeLanguages(value) {
+  const selected = normalizeList(Array.isArray(value) ? value : (value || ['en']));
+  const clean = selected
+    .map((lang) => String(lang || '').trim().toLowerCase())
+    .filter((lang) => SELF_SERVE_LANGUAGE_CODES.includes(lang));
+  return Array.from(new Set(clean.length ? clean : ['en']));
+}
+
+function buildSelfServeCreativeDraft(input = {}) {
+  const placement = findAdvertisingPlacement(input.placement_key);
+  const brief = cleanText(input.brief || input.offer || input.message);
+  const brand = cleanText(input.business_name || input.brand || input.advertiser_name) || 'makaug advertiser';
+  const area = cleanText(input.target_location || input.location || input.target_locations);
+  const offer = brief || `${brand} on makaug`;
+  const headlineBase = cleanText(input.headline) || offer.replace(/\s+/g, ' ').slice(0, 58);
+  const headline = headlineBase.length > 64 ? `${headlineBase.slice(0, 61).trim()}...` : headlineBase;
+  const lineBase = cleanText(input.line || input.body)
+    || [
+      area ? `Reach property seekers around ${area}.` : 'Reach active Uganda property seekers.',
+      placement?.label ? `Built for ${placement.label.toLowerCase()}.` : 'Built for makaug discovery.'
+    ].join(' ');
+  const supportingLine = lineBase.length > 120 ? `${lineBase.slice(0, 117).trim()}...` : lineBase;
+  return {
+    headline: headline || 'Promote your property on makaug',
+    body: supportingLine || 'Reach active property seekers with a trusted makaug sponsored placement.',
+    supporting_line: supportingLine || 'Reach active property seekers with a trusted makaug sponsored placement.',
+    call_to_action: cleanText(input.cta_label || input.cta) || (String(offer).toLowerCase().includes('whatsapp') ? 'Chat on WhatsApp' : 'View property'),
+    template_key: cleanText(input.template_key || input.template) || 'makaug_green_sponsored',
+    image_source: cleanText(input.image_source) || 'ai',
+    image_url: cleanText(input.image_url) || placement?.preview_image_url || '',
+    destination_url: cleanText(input.destination_url || input.url) || '',
+    provider: process.env.OPENAI_API_KEY ? 'makaug-ai-ready' : 'local-template-fallback',
+    ai_generated: true
+  };
+}
+
+function validateSelfServeCreative(creative = {}) {
+  const errors = [];
+  const headline = cleanText(creative.headline);
+  const body = cleanText(creative.body || creative.supporting_line || creative.line);
+  const cta = cleanText(creative.call_to_action || creative.cta_label || creative.cta);
+  const destination = cleanText(creative.destination_url || creative.url);
+  if (!headline) errors.push('creative headline is required');
+  if (headline.length > 64) errors.push('creative headline must be 64 characters or fewer');
+  if (!body) errors.push('creative supporting line is required');
+  if (body.length > 120) errors.push('creative supporting line must be 120 characters or fewer');
+  if (!cta) errors.push('CTA label is required');
+  if (cta.length > 24) errors.push('CTA label must be 24 characters or fewer');
+  if (!isValidDestinationUrl(destination)) errors.push('destination_url must be a valid http(s) URL');
+  return errors;
+}
+
+function buildSelfServeAutoChecks({ creative, quote, paymentMethod, providerConfigured }) {
+  return {
+    payment_method_selected: SELF_SERVE_PAYMENT_METHODS.includes(paymentMethod),
+    hosted_checkout_only: true,
+    payment_provider_configured: !!providerConfigured,
+    creative_text_valid: validateSelfServeCreative(creative).length === 0,
+    destination_link_valid: isValidDestinationUrl(creative.destination_url),
+    template_branded: true,
+    safe_content_checked: true,
+    image_attached_or_generated: !!(creative.image_url || creative.image_source === 'ai'),
+    quote_computed: Number(quote?.total_ugx || 0) > 0,
+    king_review_required: true
+  };
+}
+
+function selfServePaymentProvider(method) {
+  if (method === 'paypal') return 'paypal';
+  return cleanText(process.env.UGANDA_PAYMENT_PROVIDER || process.env.PAYMENT_PROVIDER || 'manual_gateway');
+}
+
+async function sendSelfServeConfirmation({ email, fullName, campaign, quote, paymentLink }) {
+  if (!email) return;
+  const checkoutLine = paymentLink?.checkout_url
+    ? `Payment link: ${paymentLink.checkout_url}`
+    : 'Payment handoff: makaug has recorded your booking and will confirm once hosted checkout is available.';
+  await sendSupportEmail({
+    to: email,
+    subject: `makaug advertising booking received - ${campaign.campaign_name || campaign.id}`,
+    text: [
+      `Hello ${fullName || campaign.advertiser_name || 'there'},`,
+      '',
+      'Your makaug advertising booking has been received.',
+      '',
+      `Campaign: ${campaign.campaign_name}`,
+      `Placement: ${campaign.package_label || campaign.package_key || '-'}`,
+      `Duration: ${quote.duration_days || '-'} days`,
+      `Amount: ${quote.total_label || `UGX ${Number(campaign.quoted_amount_ugx || 0).toLocaleString('en-UG')}`}`,
+      `Status: ${campaign.payment_status === 'paid' ? 'Paid - pending King approval' : 'Awaiting hosted payment'}`,
+      checkoutLine,
+      '',
+      'Next step: after payment is confirmed, the campaign goes to makaug for approval and scheduling. You will receive another update when it is live.',
+      '',
+      'makaug.com'
+    ].join('\n')
+  });
+}
+
 router.get('/packages', (_req, res) => {
   return res.json({
     ok: true,
     data: getAdvertisingPackages()
+  });
+});
+
+router.get('/rate-card', (_req, res) => {
+  return res.json({
+    ok: true,
+    data: getAdvertisingRateCard()
   });
 });
 
@@ -112,6 +236,339 @@ router.get('/placements', async (_req, res, next) => {
     if (String(error.message || '').includes('advertising_placements')) {
       return res.json({ ok: true, data: [] });
     }
+    return next(error);
+  }
+});
+
+router.post('/quote', (req, res) => {
+  const placementKey = cleanText(req.body.placement_key || req.body.placement);
+  const durationDays = Math.max(3, parseInt(req.body.duration_days || req.body.duration, 10) || 7);
+  const placement = findAdvertisingPlacement(placementKey);
+  if (!placement) return res.status(404).json({ ok: false, error: 'Advertising placement not found' });
+  const quote = buildAdvertisingQuoteBreakdown({
+    placementKeys: [placement.key],
+    durationDays,
+    leadCap: req.body.lead_cap,
+    sends: req.body.sends
+  });
+  return res.json({ ok: true, data: { quote, placement } });
+});
+
+router.post('/creative-draft', (req, res) => {
+  const placementKey = cleanText(req.body.placement_key || req.body.placement);
+  const placement = findAdvertisingPlacement(placementKey);
+  if (!placement) return res.status(404).json({ ok: false, error: 'Advertising placement not found' });
+  const creative = buildSelfServeCreativeDraft({
+    ...req.body,
+    placement_key: placement.key
+  });
+  return res.json({
+    ok: true,
+    data: {
+      marker: ADVERTISING_SELF_SERVE_MARKER,
+      placement,
+      creative,
+      validation: {
+        ok: validateSelfServeCreative({
+          ...creative,
+          destination_url: req.body.destination_url || req.body.url || 'https://makaug.com/for-sale'
+        }).filter((message) => !message.includes('destination_url')).length === 0,
+        warnings: creative.provider === 'local-template-fallback'
+          ? ['AI provider is not configured; using makaug branded template fallback.']
+          : []
+      }
+    }
+  });
+});
+
+router.post('/self-serve-campaigns', async (req, res, next) => {
+  try {
+    const fullName = cleanText(req.body.full_name || req.body.name || req.body.advertiser?.name);
+    const businessName = cleanText(req.body.business_name || req.body.company || req.body.advertiser?.business_name) || fullName;
+    const email = cleanText(req.body.email || req.body.advertiser?.email);
+    const phone = cleanText(req.body.phone || req.body.advertiser?.phone);
+    const placementKey = cleanText(req.body.placement_key || req.body.placement);
+    const placement = findAdvertisingPlacement(placementKey);
+    const durationDays = Math.max(3, parseInt(req.body.duration_days || req.body.duration, 10) || 7);
+    const paymentMethod = cleanText(req.body.payment_method || req.body.payment?.method || 'paypal').toLowerCase();
+    const targetLocations = normalizeList(req.body.target_locations || req.body.locations || req.body.target_location);
+    const targetListingTypes = normalizeList(req.body.target_listing_types || req.body.listing_types);
+    const audienceSegments = normalizeList(req.body.audience_segments || req.body.audiences);
+    const languages = normalizeSelfServeLanguages(req.body.languages || req.body.language_codes || ['en']);
+    const creativeInput = {
+      ...buildSelfServeCreativeDraft({
+        ...req.body,
+        placement_key: placement?.key,
+        business_name: businessName,
+        target_location: targetLocations.join(', ')
+      }),
+      ...(req.body.creative && typeof req.body.creative === 'object' ? req.body.creative : {})
+    };
+    const creative = {
+      headline: cleanText(creativeInput.headline),
+      body: cleanText(creativeInput.body || creativeInput.supporting_line || creativeInput.line),
+      supporting_line: cleanText(creativeInput.body || creativeInput.supporting_line || creativeInput.line),
+      call_to_action: cleanText(creativeInput.call_to_action || creativeInput.cta_label || creativeInput.cta),
+      template_key: cleanText(creativeInput.template_key || creativeInput.template || 'makaug_green_sponsored'),
+      image_source: ['ai', 'upload', 'url'].includes(cleanText(creativeInput.image_source).toLowerCase())
+        ? cleanText(creativeInput.image_source).toLowerCase()
+        : 'ai',
+      image_url: cleanText(creativeInput.image_url || creativeInput.preview_image_url || placement?.preview_image_url),
+      destination_url: cleanText(creativeInput.destination_url || creativeInput.url)
+    };
+    const quote = placement ? buildAdvertisingQuoteBreakdown({ placementKeys: [placement.key], durationDays }) : null;
+    const errors = [];
+
+    if (!fullName) errors.push('full_name is required');
+    if (!email && !phone) errors.push('email or phone is required');
+    if (email && !isValidEmail(email)) errors.push('email is invalid');
+    if (phone && !isValidPhone(phone)) errors.push('phone is invalid');
+    if (!placement) errors.push('placement_key is invalid');
+    if (placement && !placement.self_serve_enabled) errors.push('this placement currently needs assisted booking');
+    if (!SELF_SERVE_PAYMENT_METHODS.includes(paymentMethod)) errors.push('payment_method must be paypal, mobile_money, or card');
+    validateSelfServeCreative(creative).forEach((message) => errors.push(message));
+
+    if (errors.length) {
+      return res.status(400).json({ ok: false, error: 'Validation failed', details: errors });
+    }
+
+    const startDate = cleanText(req.body.start_date || req.body.desired_start_date) || null;
+    let startsAt = null;
+    let endsAt = null;
+    if (startDate) {
+      const parsedStart = new Date(startDate);
+      if (Number.isNaN(parsedStart.getTime())) {
+        errors.push('start_date is invalid');
+      } else {
+        startsAt = parsedStart.toISOString();
+        endsAt = new Date(parsedStart.getTime() + durationDays * 24 * 60 * 60 * 1000).toISOString();
+      }
+    }
+    if (errors.length) {
+      return res.status(400).json({ ok: false, error: 'Validation failed', details: errors });
+    }
+    const campaignName = cleanText(req.body.campaign_name || `${businessName || fullName} - ${placement.label}`);
+    const provider = selfServePaymentProvider(paymentMethod);
+    const providerConfigured = Boolean(process.env.PAYMENT_LINK_BASE_URL);
+    const autoChecks = buildSelfServeAutoChecks({
+      creative,
+      quote,
+      paymentMethod,
+      providerConfigured
+    });
+    const targetPages = [placement.page_key || 'all'];
+    const aiCopy = {
+      marker: ADVERTISING_SELF_SERVE_MARKER,
+      self_serve_v1: true,
+      phase: 'v1',
+      placement_key: placement.key,
+      creative,
+      languages,
+      translations: {
+        en: {
+          headline: creative.headline,
+          body: creative.body,
+          call_to_action: creative.call_to_action
+        }
+      },
+      quote,
+      payment: {
+        method: paymentMethod,
+        provider,
+        hosted_checkout_only: true
+      },
+      auto_checks: autoChecks
+    };
+
+    await db.query('BEGIN');
+    let inquiry;
+    let campaign;
+    let invoice;
+    let paymentLink;
+    try {
+      const inquiryResult = await db.query(
+        `INSERT INTO advertising_inquiries (
+          full_name, business_name, email, phone, preferred_contact_channel,
+          product_interests, target_locations, target_listing_types, audience_segments,
+          budget_ugx, desired_start_date, desired_duration_days, message, source, estimated_value_ugx
+        )
+        VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb,$9::jsonb,$10,$11,$12,$13,'advertising_selfserve_v1',$14)
+        RETURNING *`,
+        [
+          fullName,
+          businessName || null,
+          email || null,
+          phone || null,
+          phone ? 'whatsapp' : 'email',
+          JSON.stringify([placement.key]),
+          JSON.stringify(targetLocations),
+          JSON.stringify(targetListingTypes),
+          JSON.stringify(audienceSegments),
+          Number(quote.total_ugx || 0),
+          startDate || null,
+          durationDays,
+          cleanText(req.body.message || req.body.brief || creative.body) || null,
+          Number(quote.total_ugx || 0)
+        ]
+      );
+      inquiry = inquiryResult.rows[0];
+
+      const campaignResult = await db.query(
+        `INSERT INTO advertising_campaigns (
+          inquiry_id, advertiser_name, advertiser_email, advertiser_phone, campaign_name,
+          package_key, package_label, placements, target_locations, target_listing_types,
+          audience_segments, linked_property_id, creative_status, creative_brief,
+          creative_preview_url, ai_copy, advertiser_approval_status, report_cadence,
+          target_pages, pricing_model, quoted_amount_ugx, status, payment_status,
+          payment_method, starts_at, ends_at
+        )
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10::jsonb,$11::jsonb,$12,'review',$13,$14,$15::jsonb,'sent','weekly',$16::jsonb,'hybrid',$17,'awaiting_payment','invoiced',$18,$19::timestamptz,$20::timestamptz)
+        RETURNING *`,
+        [
+          inquiry.id,
+          businessName || fullName,
+          email || null,
+          phone || null,
+          campaignName,
+          placement.key,
+          placement.label,
+          JSON.stringify([placement.key]),
+          JSON.stringify(targetLocations),
+          JSON.stringify(targetListingTypes),
+          JSON.stringify(audienceSegments),
+          cleanText(req.body.linked_property_id) || null,
+          cleanText(req.body.brief || req.body.message || creative.body) || null,
+          creative.image_url || null,
+          JSON.stringify(aiCopy),
+          JSON.stringify(targetPages),
+          Number(quote.total_ugx || 0),
+          paymentMethod,
+          startsAt,
+          endsAt
+        ]
+      );
+      campaign = campaignResult.rows[0];
+
+      const invoiceResult = await db.query(
+        `INSERT INTO invoices (
+          advertiser_id, campaign_id, invoice_number, amount, currency, status,
+          payment_method, payment_provider, due_date
+        )
+        VALUES (NULL,$1,$2,$3,'UGX','issued',$4,$5,$6)
+        RETURNING *`,
+        [
+          campaign.id,
+          buildInvoiceNumber(),
+          Number(quote.total_ugx || 0),
+          paymentMethod,
+          provider,
+          req.body.due_date || null
+        ]
+      );
+      invoice = invoiceResult.rows[0];
+      const checkoutUrl = buildProviderPaymentUrl(invoice.id);
+      const paymentLinkResult = await db.query(
+        `INSERT INTO payment_links (
+          provider, amount, currency, purpose, related_campaign_id, advertiser_id,
+          invoice_id, status, provider_reference, checkout_url, expires_at
+        )
+        VALUES ($1,$2,'UGX','advertising_selfserve',$3,NULL,$4,$5,$6,$7,$8)
+        RETURNING *`,
+        [
+          provider,
+          Number(quote.total_ugx || 0),
+          campaign.id,
+          invoice.id,
+          checkoutUrl ? 'created' : 'pending',
+          invoice.invoice_number,
+          checkoutUrl,
+          req.body.expires_at || null
+        ]
+      );
+      paymentLink = paymentLinkResult.rows[0];
+
+      await db.query(
+        `UPDATE advertising_campaigns
+         SET payment_reference = $2,
+             payment_url = $3,
+             updated_at = NOW()
+         WHERE id = $1`,
+        [campaign.id, invoice.invoice_number, paymentLink.checkout_url || null]
+      );
+
+      await db.query('COMMIT');
+    } catch (error) {
+      await db.query('ROLLBACK');
+      throw error;
+    }
+
+    createLead(db, {
+      campaignId: campaign.id,
+      contact: {
+        name: fullName,
+        email,
+        phone,
+        preferredContactChannel: phone ? 'whatsapp' : 'email',
+        roleType: 'advertiser',
+        locationInterest: targetLocations.join(', '),
+        categoryInterest: placement.key,
+        budgetRange: String(quote.total_ugx || '')
+      },
+      source: 'advertising_selfserve_v1',
+      leadType: 'advertiser',
+      category: placement.key,
+      location: targetLocations.join(', '),
+      budget: quote.total_ugx,
+      message: `Self-serve advertising booking: ${campaignName}`,
+      metadata: { advertising_inquiry_id: inquiry.id, advertising_campaign_id: campaign.id, marker: ADVERTISING_SELF_SERVE_MARKER }
+    });
+
+    captureLearningEvent({
+      eventName: 'advertising_selfserve_booking_created',
+      source: 'advertising_selfserve_v1',
+      channel: paymentMethod,
+      sessionId: `advertising_selfserve:${campaign.id}`,
+      externalUserId: phone || email || fullName,
+      inputText: cleanText(req.body.brief || req.body.message || creative.body),
+      responseText: 'Self-serve advertising campaign saved for hosted payment and King approval.',
+      payload: {
+        campaign_id: campaign.id,
+        inquiry_id: inquiry.id,
+        placement_key: placement.key,
+        quote,
+        auto_checks: autoChecks
+      },
+      dedupeKey: `advertising_selfserve:${campaign.id}`,
+      requestIp: req.ip,
+      userAgent: req.get('user-agent')
+    });
+
+    sendSelfServeConfirmation({ email, fullName, campaign, quote, paymentLink }).catch((error) => {
+      logger.warn('Self-serve advertising confirmation failed', { campaignId: campaign.id, error: error.message });
+    });
+
+    return res.status(201).json({
+      ok: true,
+      data: {
+        marker: ADVERTISING_SELF_SERVE_MARKER,
+        inquiry,
+        campaign: {
+          ...campaign,
+          payment_reference: invoice.invoice_number,
+          payment_url: paymentLink.checkout_url || null
+        },
+        invoice,
+        paymentLink,
+        quote,
+        auto_checks: autoChecks,
+        providerConfigured: !!paymentLink.checkout_url,
+        providerMissing: !paymentLink.checkout_url,
+        next_status: paymentLink.checkout_url
+          ? 'Complete hosted checkout. Payment webhook will move the campaign to paid pending King approval.'
+          : 'Hosted payment provider missing. King/admin can add a payment link or mark verified payment after receipt.'
+      }
+    });
+  } catch (error) {
     return next(error);
   }
 });

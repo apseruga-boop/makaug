@@ -26,6 +26,10 @@ async function updateCampaignPayment(db, campaignId, status, reference = null) {
     `UPDATE advertising_campaigns
      SET payment_status = $2,
          status = COALESCE($3, status),
+         paid_amount_ugx = CASE
+           WHEN $2 = 'paid' THEN GREATEST(COALESCE(paid_amount_ugx, 0), COALESCE(quoted_amount_ugx, 0))
+           ELSE paid_amount_ugx
+         END,
          payment_reference = COALESCE($4, payment_reference),
          updated_at = NOW()
      WHERE id = $1

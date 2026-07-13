@@ -18289,9 +18289,11 @@ function renderAdminAdvertisingPlacements(placements) {
           <div class="rounded-lg bg-white border border-gray-200 p-2"><div class="text-gray-500">CPM</div><div class="font-black text-gray-800">${adminEscape(slot.price_labels?.cpm || "-")}</div></div>
         </div>
         <div class="mt-2 text-[11px] text-gray-500">Creative: ${adminEscape(slot.primary_size || slot.size_label || "-")} • Mobile: ${adminEscape(slot.mobile_size || "responsive")} • ${adminEscape((slot.accepted_formats || ["JPG","PNG","WebP"]).join(", "))}</div>
+        <div class="mt-1 text-[11px] text-gray-500">Traffic: ${adminEscape(slot.live_traffic_label || "-")} • Multiplier: ${adminEscape(slot.traffic_multiplier || 1)}x • Self-serve: ${slot.self_serve_enabled ? "yes" : "assisted"}</div>
         <div class="mt-1 text-xs text-gray-500">${adminEscape(slot.notes || "")}</div>
         <div class="mt-3 flex gap-2 flex-wrap">
           <button onclick="adminUpdateAdPlacementPrice(${keyArg})" class="border border-green-300 text-green-700 hover:bg-white px-3 py-1.5 rounded-lg text-xs font-semibold">Change Price</button>
+          <button onclick="adminUpdateAdPlacementTraffic(${keyArg})" class="border border-blue-300 text-blue-700 hover:bg-white px-3 py-1.5 rounded-lg text-xs font-semibold">Traffic / Multiplier</button>
           <button onclick="adminCopyAdPrompt(${keyArg})" class="border border-amber-300 text-amber-700 hover:bg-white px-3 py-1.5 rounded-lg text-xs font-semibold">Copy Prompt</button>
           <button onclick="adminToggleAdPlacement(${keyArg}, ${slot.is_active ? "false" : "true"})" class="border border-gray-300 text-gray-700 hover:bg-white px-3 py-1.5 rounded-lg text-xs font-semibold">${slot.is_active ? "Pause Slot" : "Activate Slot"}</button>
         </div>
@@ -18377,6 +18379,13 @@ function renderAdminAdvertisingCampaigns(campaigns) {
 	        const paid = Number(campaign.paid_amount_ugx || 0) || 0;
 	        const outstanding = Math.max(0, quote - paid);
 	        const sponsored = (Array.isArray(campaign.placements) && campaign.placements.length) || String(campaign.package_key || "").includes("boost");
+	        const aiCopy = campaign.ai_copy && typeof campaign.ai_copy === "object" ? campaign.ai_copy : {};
+	        const isSelfServe = Boolean(aiCopy.self_serve_v1 || aiCopy.marker === "advertising-selfserve-v1-20260713");
+	        const autoChecks = aiCopy.auto_checks && typeof aiCopy.auto_checks === "object" ? aiCopy.auto_checks : {};
+	        const creative = aiCopy.creative && typeof aiCopy.creative === "object" ? aiCopy.creative : {};
+	        const checkRows = Object.entries(autoChecks).map(([key, value]) => `
+	          <span class="rounded-full px-2 py-1 text-[11px] font-semibold ${value ? "bg-green-100 text-green-800" : "bg-slate-100 text-slate-600"}">${value ? "✓" : "•"} ${adminEscape(key.replace(/_/g, " "))}</span>
+	        `).join("");
 	        return `
 	          <div class="border border-gray-200 rounded-xl p-4 bg-white">
         <div class="flex items-start justify-between gap-3">
@@ -18401,6 +18410,28 @@ function renderAdminAdvertisingCampaigns(campaigns) {
             <div class="text-[11px] uppercase tracking-wide text-green-700 font-bold">Creative preview</div>
             <div class="font-black text-gray-900">${adminEscape(campaign.ai_copy?.headline || campaign.campaign_name || "makaug sponsored placement")}</div>
             <div class="text-xs text-gray-600">${adminEscape(campaign.ai_copy?.body || campaign.creative_brief || "")}</div>
+          </div>
+        ` : ""}
+        ${isSelfServe ? `
+          <div class="mt-3 rounded-xl border border-green-100 bg-[#f6f9f7] p-3">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <div class="text-[11px] uppercase tracking-wide text-green-800 font-black">Self-serve pending approval</div>
+                <div class="text-xs text-gray-600 mt-1">Amount: ${adminEscape(adMoney(campaign.paid_amount_ugx || campaign.quoted_amount_ugx))} • Method: ${adminEscape(campaign.payment_method || aiCopy.payment?.method || "-")} • Ref: ${adminEscape(campaign.payment_reference || "-")}</div>
+              </div>
+              <span class="rounded-full bg-white border border-green-100 px-2 py-1 text-[11px] font-black text-green-800">${adminEscape((aiCopy.languages || ["en"]).join(", ").toUpperCase())}</span>
+            </div>
+            <div class="mt-3 rounded-xl border border-white bg-white p-3">
+              <div class="text-xs font-black text-gray-900">${adminEscape(creative.headline || aiCopy.headline || campaign.campaign_name || "Sponsored makaug placement")}</div>
+              <div class="text-xs text-gray-600 mt-1">${adminEscape(creative.body || aiCopy.body || campaign.creative_brief || "")}</div>
+              <div class="text-[11px] text-gray-500 mt-1">CTA: ${adminEscape(creative.call_to_action || aiCopy.call_to_action || "View property")} • URL: ${adminEscape(creative.destination_url || aiCopy.cta_url || "-")}</div>
+            </div>
+            <div class="flex flex-wrap gap-1 mt-3">${checkRows || `<span class="text-xs text-gray-500">No auto-checks saved.</span>`}</div>
+            <div class="mt-3 flex flex-wrap gap-2">
+              <button onclick="adminApproveSelfServeAdCampaign(${idArg})" class="bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Approve & Schedule</button>
+              <button onclick="adminRequestSelfServeAdChange(${idArg})" class="border border-slate-300 text-slate-700 hover:bg-slate-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Request Change</button>
+              <button onclick="adminRejectSelfServeAdCampaign(${idArg})" class="border border-red-200 text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Reject / Refund</button>
+            </div>
           </div>
         ` : ""}
         ${campaign.payment_url ? `<div class="mt-2 text-xs"><a href="${adminAttr(campaign.payment_url)}" target="_blank" rel="noopener noreferrer" class="text-green-700 font-semibold hover:underline">Open payment link</a></div>` : ""}
@@ -18523,6 +18554,31 @@ async function adminUpdateAdPlacementPrice(placementKey) {
   }
 }
 
+async function adminUpdateAdPlacementTraffic(placementKey) {
+  const slot = adminAdvertisingPlacements.find((item) => String(item.key) === String(placementKey)) || {};
+  const weekly = window.prompt(`Weekly impressions for ${slot.label || placementKey}`, String(slot.weekly_impressions || slot.estimated_weekly_impressions || 0));
+  if (weekly === null) return;
+  const baseline = window.prompt("Baseline weekly impressions", String(slot.baseline_weekly_impressions || 1));
+  if (baseline === null) return;
+  const multiplier = window.prompt("Traffic multiplier", String(slot.traffic_multiplier || 1));
+  if (multiplier === null) return;
+  try {
+    await apiRequest(`/api/admin/advertising/placements/${encodeURIComponent(placementKey)}`, {
+      method: "PATCH",
+      headers: adminAuthHeaders(),
+      body: {
+        weekly_impressions: parseInt(weekly, 10) || 0,
+        baseline_weekly_impressions: parseInt(baseline, 10) || 1,
+        traffic_multiplier: Number(multiplier || 1) || 1
+      }
+    });
+    await renderAdminDashboard();
+    toast("Placement traffic settings updated.");
+  } catch (e) {
+    toast(`Traffic update failed: ${e.message || "error"}`);
+  }
+}
+
 async function adminToggleAdPlacement(placementKey, isActive) {
   try {
     await apiRequest(`/api/admin/advertising/placements/${encodeURIComponent(placementKey)}`, {
@@ -18586,6 +18642,76 @@ async function adminSetAdCampaignStatus(campaignId, status) {
     toast("Advertising campaign updated.");
   } catch (e) {
     toast(`Campaign update failed: ${e.message || "error"}`);
+  }
+}
+
+async function adminApproveSelfServeAdCampaign(campaignId) {
+  const campaign = adminAdvertisingCampaigns.find((item) => String(item.id) === String(campaignId)) || {};
+  const aiCopy = campaign.ai_copy && typeof campaign.ai_copy === "object" ? campaign.ai_copy : {};
+  const durationDays = Math.max(1, Number(aiCopy.quote?.duration_days || 7));
+  const now = new Date();
+  const starts = campaign.starts_at || now.toISOString();
+  const ends = campaign.ends_at || new Date(new Date(starts).getTime() + durationDays * 24 * 60 * 60 * 1000).toISOString();
+  const confirmed = window.confirm("Approve and schedule this self-serve ad? It will become live with the saved creative and placement.");
+  if (!confirmed) return;
+  try {
+    await apiRequest(`/api/admin/advertising/campaigns/${encodeURIComponent(campaignId)}`, {
+      method: "PATCH",
+      headers: adminAuthHeaders(),
+      body: {
+        status: "live",
+        creative_status: "live_asset",
+        advertiser_approval_status: "approved",
+        payment_status: campaign.payment_status === "paid" ? "paid" : campaign.payment_status || "invoiced",
+        starts_at: starts,
+        ends_at: ends
+      }
+    });
+    await renderAdminDashboard();
+    toast("Self-serve ad approved and scheduled.");
+  } catch (e) {
+    toast(`Approve failed: ${e.message || "error"}`);
+  }
+}
+
+async function adminRequestSelfServeAdChange(campaignId) {
+  const note = window.prompt("What should the advertiser change?", "Please update the creative or destination link and resubmit for approval.");
+  if (note === null) return;
+  try {
+    await apiRequest(`/api/admin/advertising/campaigns/${encodeURIComponent(campaignId)}`, {
+      method: "PATCH",
+      headers: adminAuthHeaders(),
+      body: {
+        advertiser_approval_status: "changes_requested",
+        creative_status: "review",
+        creative_brief: note
+      }
+    });
+    await renderAdminDashboard();
+    toast("Change request saved.");
+  } catch (e) {
+    toast(`Change request failed: ${e.message || "error"}`);
+  }
+}
+
+async function adminRejectSelfServeAdCampaign(campaignId) {
+  const reason = window.prompt("Reject/refund reason", "Campaign rejected after review. Refund via original hosted payment method.");
+  if (reason === null) return;
+  try {
+    await apiRequest(`/api/admin/advertising/campaigns/${encodeURIComponent(campaignId)}`, {
+      method: "PATCH",
+      headers: adminAuthHeaders(),
+      body: {
+        status: "cancelled",
+        advertiser_approval_status: "rejected",
+        payment_status: "refunded",
+        creative_brief: reason
+      }
+    });
+    await renderAdminDashboard();
+    toast("Self-serve ad rejected and marked for refund.");
+  } catch (e) {
+    toast(`Reject failed: ${e.message || "error"}`);
   }
 }
 
@@ -31518,8 +31644,126 @@ const PAGE_CONTENT = {
     </p>`
 };
 
+function buildAdvertiseSelfServePage() {
+  return `
+    <span class="sr-only" data-release-marker="advertising-selfserve-v1-20260713">advertising-selfserve-v1-20260713</span>
+    <section class="rounded-3xl bg-[#0f3d2e] text-white p-5 mb-5">
+      <div class="max-w-3xl">
+        <p class="text-xs uppercase tracking-[0.24em] text-green-100 font-bold">Self-serve advertising</p>
+        <h2 class="text-3xl md:text-4xl font-black mt-2">Advertise on makaug in minutes</h2>
+        <p class="text-green-50 text-sm md:text-base mt-3">Pick a placement, set the duration, generate an on-brand ad, preview it on mobile and desktop, then use hosted PayPal or Uganda mobile-money/card checkout. Staff only approve before it goes live.</p>
+      </div>
+      <div class="mt-5 flex flex-wrap gap-3">
+        <button type="button" onclick="startAdvertiseSelfServe()" class="rounded-xl bg-white text-[#15603f] px-5 py-3 text-sm font-black">Start advertising</button>
+        <a href="https://wa.me/256760112587?text=Hello%20makaug,%20I%20need%20help%20booking%20an%20advertising%20campaign." target="_blank" rel="noopener" class="rounded-xl border border-white/40 px-5 py-3 text-sm font-black text-white">WhatsApp help</a>
+      </div>
+    </section>
+
+    <section class="grid md:grid-cols-3 gap-3 mb-5 text-sm">
+      <div class="rounded-2xl border border-green-100 bg-white p-4"><strong class="text-gray-900">Live pricing</strong><p class="text-gray-600 mt-1">Hybrid quote: base rate x days x traffic multiplier.</p></div>
+      <div class="rounded-2xl border border-green-100 bg-white p-4"><strong class="text-gray-900">Makaug templates</strong><p class="text-gray-600 mt-1">Every creative keeps the sponsored makaug treatment.</p></div>
+      <div class="rounded-2xl border border-green-100 bg-white p-4"><strong class="text-gray-900">King approval</strong><p class="text-gray-600 mt-1">Paid campaigns wait for approval before they render live.</p></div>
+    </section>
+
+    <form id="advertising-selfserve-form" onsubmit="submitAdvertisingSelfServeCampaign(event)" class="rounded-3xl border border-green-100 bg-white p-4 md:p-5">
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div>
+          <h3 class="text-xl font-black text-gray-900">Campaign builder</h3>
+          <p class="text-xs text-gray-500">5 steps: placement, duration, creative, preview, pay.</p>
+        </div>
+        <div id="advertising-ss-step-pills" class="flex flex-wrap gap-1 text-[11px] font-bold"></div>
+      </div>
+
+      <div class="grid lg:grid-cols-[1.05fr_0.95fr] gap-5">
+        <div class="space-y-4">
+          <section data-ad-ss-step="1" class="space-y-3">
+            <div class="flex items-center justify-between gap-3">
+              <h4 class="font-black text-gray-900">1. Choose placement</h4>
+              <span class="text-xs text-gray-500">Phase 1 placements are bookable now.</span>
+            </div>
+            <div id="advertising-ss-placement-grid" class="grid md:grid-cols-3 gap-3">
+              <div class="rounded-2xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-500">Loading placements...</div>
+            </div>
+          </section>
+
+          <section data-ad-ss-step="2" class="hidden space-y-3">
+            <h4 class="font-black text-gray-900">2. Duration</h4>
+            <div class="grid sm:grid-cols-4 gap-2">
+              <button type="button" onclick="setAdvertisingDuration(7)" data-ad-duration="7" class="rounded-xl border border-green-200 bg-green-50 px-3 py-3 text-sm font-black text-green-800">1 week</button>
+              <button type="button" onclick="setAdvertisingDuration(14)" data-ad-duration="14" class="rounded-xl border border-gray-200 px-3 py-3 text-sm font-black text-gray-700">2 weeks</button>
+              <button type="button" onclick="setAdvertisingDuration(28)" data-ad-duration="28" class="rounded-xl border border-gray-200 px-3 py-3 text-sm font-black text-gray-700">4 weeks</button>
+              <label class="rounded-xl border border-gray-200 px-3 py-2 text-xs text-gray-500">Custom days<input id="advertising-ss-duration" type="number" min="3" value="7" oninput="setAdvertisingDuration(this.value, true)" class="mt-1 w-full text-sm font-black text-gray-900 outline-none"></label>
+            </div>
+            <label class="block text-sm font-bold text-gray-800">Start date<input id="advertising-ss-start-date" type="date" onchange="renderAdvertisingSelfServePreview()" class="mt-2 w-full rounded-xl border border-gray-200 px-4 py-3 text-sm"></label>
+          </section>
+
+          <section data-ad-ss-step="3" class="hidden space-y-3">
+            <h4 class="font-black text-gray-900">3. Creative</h4>
+            <label class="block text-sm font-bold text-gray-800">What are you advertising?<textarea id="advertising-ss-brief" rows="3" oninput="syncAdvertisingCreativeFromInputs()" class="mt-2 w-full rounded-xl border border-gray-200 px-4 py-3 text-sm" placeholder="Example: 3-bed bungalow in Naalya, UGX 480M, ready to move."></textarea></label>
+            <button type="button" onclick="generateAdvertisingAiDraft()" class="rounded-xl bg-[#15603f] px-4 py-2 text-sm font-black text-white">Generate my ad with AI</button>
+            <div class="grid md:grid-cols-2 gap-3">
+              <label class="block text-sm font-bold text-gray-800">Headline<input id="advertising-ss-headline" maxlength="64" oninput="syncAdvertisingCreativeFromInputs()" class="mt-2 w-full rounded-xl border border-gray-200 px-4 py-3 text-sm" placeholder="Premium homes in Kira"></label>
+              <label class="block text-sm font-bold text-gray-800">CTA label<input id="advertising-ss-cta" maxlength="24" oninput="syncAdvertisingCreativeFromInputs()" class="mt-2 w-full rounded-xl border border-gray-200 px-4 py-3 text-sm" placeholder="View property"></label>
+            </div>
+            <label class="block text-sm font-bold text-gray-800">Supporting line<input id="advertising-ss-line" maxlength="120" oninput="syncAdvertisingCreativeFromInputs()" class="mt-2 w-full rounded-xl border border-gray-200 px-4 py-3 text-sm" placeholder="Reach active property seekers around Kampala."></label>
+            <label class="block text-sm font-bold text-gray-800">Destination URL<input id="advertising-ss-url" type="url" oninput="syncAdvertisingCreativeFromInputs()" class="mt-2 w-full rounded-xl border border-gray-200 px-4 py-3 text-sm" placeholder="https://makaug.com/property/... or https://wa.me/..."></label>
+            <div class="grid md:grid-cols-2 gap-3">
+              <label class="block text-sm font-bold text-gray-800">Image path<select id="advertising-ss-image-source" onchange="syncAdvertisingCreativeFromInputs()" class="mt-2 w-full rounded-xl border border-gray-200 px-4 py-3 text-sm bg-white"><option value="ai">AI image in makaug style</option><option value="upload">Upload / own photo</option><option value="url">Image URL</option></select></label>
+              <label class="block text-sm font-bold text-gray-800">Image URL<input id="advertising-ss-image-url" oninput="syncAdvertisingCreativeFromInputs()" class="mt-2 w-full rounded-xl border border-gray-200 px-4 py-3 text-sm" placeholder="Optional hosted image URL"></label>
+            </div>
+            <input id="advertising-ss-image-file" type="file" accept="image/png,image/jpeg,image/webp" onchange="handleAdvertisingImageUploadPreview(event)" class="block w-full rounded-xl border border-gray-200 px-4 py-3 text-sm">
+            <p id="advertising-ss-validation" class="text-xs text-gray-500">Headline 64 chars, line 120 chars, CTA 24 chars. Images are previewed locally or passed as a hosted URL; final files stay in hosted upload flow.</p>
+          </section>
+
+          <section data-ad-ss-step="4" class="hidden space-y-3">
+            <h4 class="font-black text-gray-900">4. Confirm preview</h4>
+            <div class="grid sm:grid-cols-3 gap-2">
+              <button type="button" onclick="setAdvertisingPreviewDevice('mobile')" data-ad-device="mobile" class="rounded-xl bg-green-50 border border-green-200 px-3 py-2 text-sm font-bold text-green-800">Mobile</button>
+              <button type="button" onclick="setAdvertisingPreviewDevice('desktop')" data-ad-device="desktop" class="rounded-xl border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700">Desktop</button>
+              <select id="advertising-ss-language" onchange="setAdvertisingPreviewLanguage(this.value)" class="rounded-xl border border-gray-200 px-3 py-2 text-sm bg-white">
+                <option value="en">English</option><option value="lg">Luganda</option><option value="sw">Kiswahili</option><option value="ach">Acholi</option><option value="nyn">Runyankole</option><option value="rn">Rukiga</option><option value="lus">Lusoga</option><option value="am">Amharic</option><option value="ar">Arabic</option>
+              </select>
+            </div>
+            <p id="advertising-ss-translation-note" class="text-xs text-gray-500">English preview shown. Switch language to auto-translate the ad copy.</p>
+          </section>
+
+          <section data-ad-ss-step="5" class="hidden space-y-3">
+            <h4 class="font-black text-gray-900">5. Pay</h4>
+            <div class="grid md:grid-cols-2 gap-3">
+              <input id="advertising-ss-name" class="rounded-xl border border-gray-200 px-4 py-3 text-sm" placeholder="Your name" required>
+              <input id="advertising-ss-business" class="rounded-xl border border-gray-200 px-4 py-3 text-sm" placeholder="Business / brand">
+              <input id="advertising-ss-email" type="email" class="rounded-xl border border-gray-200 px-4 py-3 text-sm" placeholder="Email">
+              <input id="advertising-ss-phone" class="rounded-xl border border-gray-200 px-4 py-3 text-sm" placeholder="WhatsApp / phone">
+            </div>
+            <div class="grid sm:grid-cols-3 gap-2">
+              <label class="rounded-xl border border-green-200 bg-green-50 px-3 py-3 text-sm font-bold"><input type="radio" name="advertising-ss-payment" value="paypal" checked> PayPal</label>
+              <label class="rounded-xl border border-gray-200 px-3 py-3 text-sm font-bold"><input type="radio" name="advertising-ss-payment" value="mobile_money"> MTN/Airtel Mobile Money</label>
+              <label class="rounded-xl border border-gray-200 px-3 py-3 text-sm font-bold"><input type="radio" name="advertising-ss-payment" value="card"> Card</label>
+            </div>
+            <p class="text-xs text-gray-500">Card and mobile-money details are entered only on the hosted gateway or PayPal page, never inside makaug.</p>
+          </section>
+
+          <div class="flex items-center justify-between gap-3 pt-2">
+            <button type="button" onclick="setAdvertiseSelfServeStep((advertisingSelfServeState.step || 1) - 1)" class="rounded-xl border border-gray-200 px-4 py-2 text-sm font-black text-gray-700">Back</button>
+            <div class="flex gap-2">
+              <button type="button" onclick="setAdvertiseSelfServeStep((advertisingSelfServeState.step || 1) + 1)" class="rounded-xl bg-[#15603f] px-4 py-2 text-sm font-black text-white">Next</button>
+              <button type="submit" class="rounded-xl bg-[#0f3d2e] px-4 py-2 text-sm font-black text-white">Create checkout</button>
+            </div>
+          </div>
+          <div id="advertising-ss-status" class="hidden rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-900"></div>
+        </div>
+
+        <aside class="space-y-3">
+          <div id="advertising-ss-quote" class="rounded-2xl border border-green-100 bg-[#f6f9f7] p-4 text-sm">Choose a placement to see the live quote.</div>
+          <div id="advertising-ss-live-preview" class="rounded-3xl border border-green-100 bg-white p-4"></div>
+          <div class="rounded-2xl border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600">King sees payment status, auto-checks, destination URL, language set, and creative preview before approving or requesting changes.</div>
+        </aside>
+      </div>
+    </form>`;
+}
+
 function openPageMod(page) {
-  const html = PAGE_CONTENT[page];
+  const html = page === "advertise" ? buildAdvertiseSelfServePage() : PAGE_CONTENT[page];
   if (!html) {
     toast("Content coming soon");
     return;
@@ -31561,48 +31805,402 @@ function localizePageModalContent(root) {
   });
 }
 
+const ADVERTISING_SELF_SERVE_RELEASE_MARKER = "advertising-selfserve-v1-20260713";
+const advertisingSelfServeTranslations = new Map();
+let advertisingSelfServeTranslateTimer = null;
+let advertisingSelfServeState = {
+  step: 1,
+  placements: [],
+  placementKey: "homepage_hero_banner",
+  durationDays: 7,
+  device: "mobile",
+  language: "en",
+  creative: {
+    headline: "Promote your property on makaug",
+    body: "Reach active Uganda property seekers with a trusted sponsored placement.",
+    call_to_action: "View property",
+    image_source: "ai",
+    image_url: "",
+    destination_url: "https://makaug.com/for-sale"
+  }
+};
+
 async function hydrateAdvertisePricingPreview() {
-  const wrap = document.getElementById("advertising-live-rate-card");
+  await hydrateAdvertiseSelfServe();
+}
+
+function startAdvertiseSelfServe() {
+  const form = document.getElementById("advertising-selfserve-form");
+  if (form) form.scrollIntoView({ behavior: "smooth", block: "start" });
+  setAdvertiseSelfServeStep(1);
+}
+
+function setAdvertiseSelfServeStep(step) {
+  const next = Math.max(1, Math.min(5, Number(step || 1)));
+  advertisingSelfServeState.step = next;
+  document.querySelectorAll("[data-ad-ss-step]").forEach((panel) => {
+    panel.classList.toggle("hidden", Number(panel.getAttribute("data-ad-ss-step")) !== next);
+  });
+  const pills = document.getElementById("advertising-ss-step-pills");
+  if (pills) {
+    const labels = ["Placement", "Duration", "Creative", "Preview", "Pay"];
+    pills.innerHTML = labels.map((label, index) => {
+      const active = index + 1 === next;
+      return `<button type="button" onclick="setAdvertiseSelfServeStep(${index + 1})" class="rounded-full px-3 py-1 ${active ? "bg-[#15603f] text-white" : "bg-gray-100 text-gray-600"}">${index + 1}. ${adminEscape(label)}</button>`;
+    }).join("");
+  }
+  renderAdvertisingSelfServePreview();
+}
+
+function selectedAdvertisingPlacement() {
+  return (advertisingSelfServeState.placements || []).find((item) => item.key === advertisingSelfServeState.placementKey) || null;
+}
+
+function renderAdvertisingPlacementCards() {
+  const wrap = document.getElementById("advertising-ss-placement-grid");
   if (!wrap) return;
-  try {
-    const res = await apiRequest("/api/advertising/rate-card");
-    const rows = Array.isArray(res?.data?.placements) ? res.data.placements : [];
-    if (!rows.length) {
-      wrap.innerHTML = `<div class="font-bold text-gray-800">Live placement menu</div><div class="text-xs text-gray-500 mt-1">Ask makaug for current placement availability and pricing.</div>`;
-      return;
-    }
-    const creative = res?.data?.creative_guidelines || {};
-    const fx = Number(res?.data?.ugx_per_usd || 3800);
-    wrap.innerHTML = `
-      <div class="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <div class="font-bold text-gray-800">Live placement menu</div>
-          <div class="text-xs text-gray-500 mt-1">Prices shown in UGX with USD guide at about UGX ${Number(fx).toLocaleString("en-UG")} per USD.</div>
+  const rows = advertisingSelfServeState.placements || [];
+  if (!rows.length) {
+    wrap.innerHTML = `<div class="rounded-2xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-500">No self-serve placements are available right now. WhatsApp makaug for assisted booking.</div>`;
+    return;
+  }
+  wrap.innerHTML = rows.map((slot) => {
+    const active = slot.key === advertisingSelfServeState.placementKey;
+    const disabled = slot.self_serve_enabled === false;
+    return `
+      <button type="button" ${disabled ? "disabled" : ""} onclick="selectAdvertisingPlacement('${adminAttr(slot.key)}')" class="text-left rounded-2xl border ${active ? "border-[#15603f] bg-[#f0f6f2]" : "border-gray-200 bg-white"} ${disabled ? "opacity-60 cursor-not-allowed" : "hover:border-green-300"} p-4">
+        <div class="flex items-center justify-between gap-2">
+          <i class="fas ${adminAttr(slot.icon || "fa-rectangle-ad")} text-[#15603f]"></i>
+          <span class="text-[10px] uppercase tracking-wide rounded-full px-2 py-1 ${slot.self_serve_enabled ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-600"}">${slot.self_serve_enabled ? "Book now" : "Assisted"}</span>
         </div>
-        <a href="mailto:info@makaug.com?subject=makaug%20advertising%20campaign" class="text-xs font-black text-green-700 hover:underline">info@makaug.com</a>
-      </div>
-      <div class="grid lg:grid-cols-2 gap-2 mt-3">
-        ${rows.slice(0, 10).map((slot) => `
-          <div class="rounded-xl border border-white bg-white p-3">
-            <div class="text-xs font-bold text-gray-900">${adminEscape(slot.label)}</div>
-            <div class="text-[11px] text-gray-500">${adminEscape(slot.page_key)} • ${adminEscape(slot.size_label || slot.slot_type || "")}</div>
-            <div class="grid grid-cols-2 gap-1 mt-2 text-[11px]">
-              <div class="rounded-lg bg-green-50 px-2 py-1"><strong>Day</strong><br>${adminEscape(slot.price_labels?.day || adMoney(slot.daily_price_ugx || slot.base_price_ugx))}</div>
-              <div class="rounded-lg bg-green-50 px-2 py-1"><strong>Week</strong><br>${adminEscape(slot.price_labels?.week || adMoney(slot.weekly_price_ugx || slot.base_price_ugx))}</div>
-              <div class="rounded-lg bg-amber-50 px-2 py-1"><strong>Month</strong><br>${adminEscape(slot.price_labels?.month || "-")}</div>
-              <div class="rounded-lg bg-gray-50 px-2 py-1"><strong>CPM</strong><br>${adminEscape(slot.price_labels?.cpm || "-")}</div>
-            </div>
-            <div class="text-[11px] text-gray-500 mt-2">USD guide: ${adminEscape(slot.usd_labels?.week || "")} / week</div>
-          </div>
-        `).join("")}
-      </div>
-      <div class="mt-3 rounded-xl border border-amber-100 bg-white p-3">
-        <div class="text-xs font-black uppercase tracking-wide text-amber-700">Creative prompt starter</div>
-        <p class="text-xs text-gray-600 mt-1">Accepted formats: ${(creative.accepted_formats || ["JPG", "PNG", "WebP"]).join(", ")}. Max file size: ${adminEscape(creative.max_file_size_mb || 2)}MB. Keep logo, headline, and CTA inside the central safe area.</p>
-        <div class="mt-2 rounded-lg bg-gray-50 border border-gray-200 p-2 text-[11px] text-gray-700">Create a polished makaug.com display advert for [brand/property]. Required size: [placement size]. Audience: [target locations]. Offer: [offer]. Style: Uganda property marketplace, clean, premium, trustworthy, high-contrast CTA. Include readable headline and CTA. Leave room for a makaug sponsored label.</div>
-      </div>`;
+        <div class="font-black text-gray-900 mt-3">${adminEscape(slot.label)}</div>
+        <div class="text-xs text-gray-600 mt-1 min-h-[34px]">${adminEscape(slot.description || "")}</div>
+        <div class="mt-3 text-xs text-gray-500">${adminEscape(slot.live_traffic_label || "Traffic measured by makaug")}</div>
+        <div class="mt-1 font-black text-[#15603f]">${adminEscape(slot.price_labels?.week || adMoney(slot.weekly_price_ugx || slot.base_price_ugx))} / week</div>
+      </button>
+    `;
+  }).join("");
+}
+
+function selectAdvertisingPlacement(key) {
+  advertisingSelfServeState.placementKey = String(key || "homepage_hero_banner");
+  renderAdvertisingPlacementCards();
+  updateAdvertisingSelfServeQuote();
+}
+
+function setAdvertisingDuration(value, custom = false) {
+  const days = Math.max(3, parseInt(value, 10) || 7);
+  advertisingSelfServeState.durationDays = days;
+  const input = document.getElementById("advertising-ss-duration");
+  if (input && !custom) input.value = String(days);
+  document.querySelectorAll("[data-ad-duration]").forEach((btn) => {
+    const active = Number(btn.getAttribute("data-ad-duration")) === days;
+    btn.className = `rounded-xl border ${active ? "border-green-200 bg-green-50 text-green-800" : "border-gray-200 text-gray-700"} px-3 py-3 text-sm font-black`;
+  });
+  updateAdvertisingSelfServeQuote();
+}
+
+async function hydrateAdvertiseSelfServe() {
+  const form = document.getElementById("advertising-selfserve-form");
+  if (!form) return;
+  try {
+    const res = await apiRequest("/api/advertising/rate-card", { skipAuth: true });
+    const rows = Array.isArray(res?.data?.placements) ? res.data.placements : [];
+    advertisingSelfServeState.placements = rows;
+    const firstSelfServe = rows.find((item) => item.self_serve_enabled) || rows[0];
+    if (firstSelfServe && !rows.some((item) => item.key === advertisingSelfServeState.placementKey && item.self_serve_enabled)) {
+      advertisingSelfServeState.placementKey = firstSelfServe.key;
+    }
+    renderAdvertisingPlacementCards();
+    setAdvertisingDuration(advertisingSelfServeState.durationDays || 7);
+    setAdvertiseSelfServeStep(advertisingSelfServeState.step || 1);
   } catch (error) {
-    wrap.innerHTML = `<div class="font-bold text-gray-800">Live placement menu</div><div class="text-xs text-gray-500 mt-1">Current prices can be confirmed by makaug after inquiry.</div>`;
+    const wrap = document.getElementById("advertising-ss-placement-grid");
+    if (wrap) wrap.innerHTML = `<div class="rounded-2xl border border-red-100 bg-red-50 p-4 text-sm text-red-700">Could not load the live rate card. Please try again or use WhatsApp help.</div>`;
+    renderAdvertisingSelfServePreview();
+  }
+}
+
+async function updateAdvertisingSelfServeQuote() {
+  const quoteWrap = document.getElementById("advertising-ss-quote");
+  const placement = selectedAdvertisingPlacement();
+  if (!quoteWrap || !placement) return;
+  quoteWrap.innerHTML = `<div class="text-sm text-gray-500">Calculating live price...</div>`;
+  try {
+    const res = await apiRequest("/api/advertising/quote", {
+      method: "POST",
+      skipAuth: true,
+      body: {
+        placement_key: placement.key,
+        duration_days: advertisingSelfServeState.durationDays
+      }
+    });
+    advertisingSelfServeState.quote = res?.data?.quote || null;
+  } catch (_error) {
+    advertisingSelfServeState.quote = {
+      duration_days: advertisingSelfServeState.durationDays,
+      total_label: placement.price_labels?.week || adMoney(placement.weekly_price_ugx || placement.base_price_ugx),
+      plain_language: `${placement.live_traffic_label || "Traffic measured by makaug"} - ${placement.price_labels?.week || ""}`
+    };
+  }
+  const quote = advertisingSelfServeState.quote || {};
+  quoteWrap.innerHTML = `
+    <div class="text-xs uppercase tracking-wide font-black text-[#15603f]">Live quote</div>
+    <div class="text-2xl font-black text-gray-900 mt-1">${adminEscape(quote.total_label || "-")}</div>
+    <div class="text-sm text-gray-600 mt-1">${adminEscape(quote.plain_language || "Price updates with placement traffic and duration.")}</div>
+    <div class="grid grid-cols-2 gap-2 mt-3 text-xs">
+      <div class="rounded-xl bg-white border border-green-100 p-2"><strong>Base/day</strong><br>${adminEscape(adMoney(quote.line_items?.[0]?.base_rate_ugx || placement.daily_base_rate_ugx || 0))}</div>
+      <div class="rounded-xl bg-white border border-green-100 p-2"><strong>Multiplier</strong><br>${adminEscape(String(quote.line_items?.[0]?.traffic_multiplier || placement.traffic_multiplier || 1))}x</div>
+    </div>`;
+  renderAdvertisingSelfServePreview();
+}
+
+function syncAdvertisingCreativeFromInputs() {
+  advertisingSelfServeState.creative = {
+    ...advertisingSelfServeState.creative,
+    headline: (document.getElementById("advertising-ss-headline")?.value || "").trim(),
+    body: (document.getElementById("advertising-ss-line")?.value || "").trim(),
+    supporting_line: (document.getElementById("advertising-ss-line")?.value || "").trim(),
+    call_to_action: (document.getElementById("advertising-ss-cta")?.value || "").trim(),
+    destination_url: (document.getElementById("advertising-ss-url")?.value || "").trim(),
+    image_source: (document.getElementById("advertising-ss-image-source")?.value || "ai").trim(),
+    image_url: (document.getElementById("advertising-ss-image-url")?.value || advertisingSelfServeState.creative?.image_url || "").trim()
+  };
+  renderAdvertisingSelfServePreview();
+}
+
+async function generateAdvertisingAiDraft() {
+  const brief = (document.getElementById("advertising-ss-brief")?.value || "").trim();
+  const placement = selectedAdvertisingPlacement();
+  if (!placement) return toast("Choose a placement first.");
+  try {
+    const res = await apiRequest("/api/advertising/creative-draft", {
+      method: "POST",
+      skipAuth: true,
+      body: {
+        placement_key: placement.key,
+        brief,
+        destination_url: document.getElementById("advertising-ss-url")?.value || "https://makaug.com/for-sale"
+      }
+    });
+    const creative = res?.data?.creative || {};
+    const fields = {
+      "advertising-ss-headline": creative.headline,
+      "advertising-ss-line": creative.body || creative.supporting_line,
+      "advertising-ss-cta": creative.call_to_action,
+      "advertising-ss-image-url": creative.image_url,
+      "advertising-ss-url": creative.destination_url || document.getElementById("advertising-ss-url")?.value || "https://makaug.com/for-sale"
+    };
+    Object.entries(fields).forEach(([id, value]) => {
+      const el = document.getElementById(id);
+      if (el && value) el.value = value;
+    });
+    syncAdvertisingCreativeFromInputs();
+    toast("AI draft prepared.");
+  } catch (error) {
+    toast(`AI draft failed: ${error.message || "error"}`);
+  }
+}
+
+function handleAdvertisingImageUploadPreview(event) {
+  const file = event?.target?.files?.[0];
+  if (!file) return;
+  if (!/^image\/(png|jpe?g|webp)$/i.test(file.type || "")) {
+    toast("Upload JPG, PNG, or WebP only.");
+    event.target.value = "";
+    return;
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    toast("Image must be 5MB or less.");
+    event.target.value = "";
+    return;
+  }
+  const url = URL.createObjectURL(file);
+  const input = document.getElementById("advertising-ss-image-url");
+  const source = document.getElementById("advertising-ss-image-source");
+  if (input) input.value = url;
+  if (source) source.value = "upload";
+  syncAdvertisingCreativeFromInputs();
+}
+
+function setAdvertisingPreviewDevice(device) {
+  advertisingSelfServeState.device = device === "desktop" ? "desktop" : "mobile";
+  document.querySelectorAll("[data-ad-device]").forEach((btn) => {
+    const active = btn.getAttribute("data-ad-device") === advertisingSelfServeState.device;
+    btn.className = `rounded-xl ${active ? "bg-green-50 border border-green-200 text-green-800" : "border border-gray-200 text-gray-700"} px-3 py-2 text-sm font-bold`;
+  });
+  renderAdvertisingSelfServePreview();
+}
+
+function setAdvertisingPreviewLanguage(lang) {
+  advertisingSelfServeState.language = String(lang || "en").trim().toLowerCase();
+  renderAdvertisingSelfServePreview();
+  translateAdvertisingCreativePreview();
+}
+
+function advertisingPreviewCopy() {
+  const creative = advertisingSelfServeState.creative || {};
+  const translated = advertisingSelfServeTranslations.get(`${advertisingSelfServeState.language}:${creative.headline}:${creative.body}:${creative.call_to_action}`);
+  return translated || {
+    headline: creative.headline || "Promote your property on makaug",
+    body: creative.body || creative.supporting_line || "Reach active Uganda property seekers with a trusted sponsored placement.",
+    call_to_action: creative.call_to_action || "View property"
+  };
+}
+
+function renderAdvertisingSelfServePreview() {
+  const wrap = document.getElementById("advertising-ss-live-preview");
+  if (!wrap) return;
+  const placement = selectedAdvertisingPlacement() || {};
+  const copy = advertisingPreviewCopy();
+  const creative = advertisingSelfServeState.creative || {};
+  const isDesktop = advertisingSelfServeState.device === "desktop";
+  const dir = advertisingSelfServeState.language === "ar" ? "rtl" : "ltr";
+  const image = creative.image_url || placement.preview_image_url || "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=1200&q=80";
+  wrap.innerHTML = `
+    <div class="flex items-center justify-between gap-2 mb-3">
+      <div>
+        <div class="text-xs uppercase tracking-wide font-black text-[#15603f]">Live preview</div>
+        <div class="text-xs text-gray-500">${adminEscape(placement.label || "Selected placement")} • ${adminEscape(isDesktop ? "Desktop" : "Mobile")} • ${adminEscape((advertisingSelfServeState.language || "en").toUpperCase())}</div>
+      </div>
+      <span class="rounded-full bg-green-100 text-green-800 px-2 py-1 text-[10px] font-black">Sponsored · makaug</span>
+    </div>
+    <div dir="${dir}" class="${isDesktop ? "max-w-full" : "max-w-[340px] mx-auto"} rounded-3xl overflow-hidden border border-green-100 bg-white shadow-sm">
+      <div class="${isDesktop ? "h-48" : "h-40"} bg-cover bg-center relative" style="background-image:url('${adminAttr(image)}')">
+        <div class="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent"></div>
+        <div class="absolute left-4 right-4 bottom-4 text-white">
+          <div class="text-[10px] uppercase tracking-wide font-black">Sponsored · makaug</div>
+          <div class="${isDesktop ? "text-2xl" : "text-xl"} font-black leading-tight mt-1">${adminEscape(copy.headline)}</div>
+        </div>
+      </div>
+      <div class="p-4">
+        <p class="text-sm text-gray-600">${adminEscape(copy.body)}</p>
+        <a href="${adminAttr(creative.destination_url || "https://makaug.com/for-sale")}" target="_blank" rel="noopener noreferrer" class="mt-3 inline-flex rounded-xl bg-[#15603f] px-4 py-2 text-sm font-black text-white">${adminEscape(copy.call_to_action)}</a>
+      </div>
+    </div>`;
+}
+
+async function translateAdvertisingCreativePreview() {
+  const lang = advertisingSelfServeState.language || "en";
+  const note = document.getElementById("advertising-ss-translation-note");
+  const creative = advertisingSelfServeState.creative || {};
+  if (advertisingSelfServeTranslateTimer) clearTimeout(advertisingSelfServeTranslateTimer);
+  if (lang === "en") {
+    if (note) note.textContent = "English preview shown. Switch language to auto-translate the ad copy.";
+    renderAdvertisingSelfServePreview();
+    return;
+  }
+  const key = `${lang}:${creative.headline}:${creative.body}:${creative.call_to_action}`;
+  if (advertisingSelfServeTranslations.has(key)) {
+    if (note) note.textContent = `Auto-translated preview in ${lang.toUpperCase()}.`;
+    renderAdvertisingSelfServePreview();
+    return;
+  }
+  if (note) note.textContent = `Translating preview into ${lang.toUpperCase()}...`;
+  advertisingSelfServeTranslateTimer = setTimeout(async () => {
+    try {
+      const sourceText = [creative.headline, creative.body, creative.call_to_action].filter(Boolean).join("\n");
+      const response = await apiRequest("/api/ai/translate-text", {
+        method: "POST",
+        skipAuth: true,
+        body: {
+          text: sourceText,
+          source_language: "en",
+          target_language: lang,
+          context: "advertising self serve creative preview",
+          source: "advertising_selfserve_preview"
+        }
+      });
+      const parts = String(response?.data?.translated_text || sourceText).split(/\n+/);
+      advertisingSelfServeTranslations.set(key, {
+        headline: parts[0] || creative.headline,
+        body: parts[1] || creative.body,
+        call_to_action: parts[2] || creative.call_to_action
+      });
+      if (note) note.textContent = response?.data?.fallback_used ? "Translation fallback used; showing the closest available preview." : `Auto-translated preview in ${lang.toUpperCase()}.`;
+    } catch (_error) {
+      if (note) note.textContent = "Could not translate preview; showing original copy.";
+    }
+    renderAdvertisingSelfServePreview();
+  }, 450);
+}
+
+function validateAdvertisingSelfServeClient() {
+  syncAdvertisingCreativeFromInputs();
+  const creative = advertisingSelfServeState.creative || {};
+  const errors = [];
+  if (!advertisingSelfServeState.placementKey) errors.push("Choose a placement.");
+  if (!creative.headline) errors.push("Add a headline.");
+  if (!creative.body) errors.push("Add a supporting line.");
+  if (!creative.call_to_action) errors.push("Add a CTA label.");
+  try {
+    const url = new URL(creative.destination_url || "");
+    if (!["http:", "https:"].includes(url.protocol)) errors.push("Destination URL must start with http or https.");
+  } catch (_error) {
+    errors.push("Add a valid destination URL.");
+  }
+  const status = document.getElementById("advertising-ss-validation");
+  if (status) status.textContent = errors.length ? errors.join(" ") : "Creative passes the required checks.";
+  return errors;
+}
+
+async function submitAdvertisingSelfServeCampaign(event) {
+  event.preventDefault();
+  const errors = validateAdvertisingSelfServeClient();
+  if (errors.length) {
+    toast(errors[0]);
+    setAdvertiseSelfServeStep(3);
+    return;
+  }
+  const status = document.getElementById("advertising-ss-status");
+  const paymentMethod = document.querySelector("input[name='advertising-ss-payment']:checked")?.value || "paypal";
+  const submit = event.currentTarget.querySelector("button[type='submit']");
+  const payload = {
+    full_name: (document.getElementById("advertising-ss-name")?.value || "").trim(),
+    business_name: (document.getElementById("advertising-ss-business")?.value || "").trim(),
+    email: (document.getElementById("advertising-ss-email")?.value || "").trim(),
+    phone: normalizePhoneInput(document.getElementById("advertising-ss-phone")?.value || ""),
+    placement_key: advertisingSelfServeState.placementKey,
+    duration_days: advertisingSelfServeState.durationDays,
+    start_date: (document.getElementById("advertising-ss-start-date")?.value || "").trim(),
+    payment_method: paymentMethod,
+    languages: Array.from(new Set(["en", advertisingSelfServeState.language || "en"])),
+    creative: advertisingSelfServeState.creative,
+    brief: (document.getElementById("advertising-ss-brief")?.value || "").trim()
+  };
+  if (!payload.email && !payload.phone) {
+    toast("Add email or phone so makaug can confirm your booking.");
+    setAdvertiseSelfServeStep(5);
+    return;
+  }
+  try {
+    if (submit) {
+      submit.disabled = true;
+      submit.textContent = "Creating...";
+    }
+    const response = await apiRequest("/api/advertising/self-serve-campaigns", {
+      method: "POST",
+      skipAuth: true,
+      body: payload
+    });
+    const data = response?.data || {};
+    if (status) {
+      status.classList.remove("hidden");
+      status.innerHTML = `
+        <strong>Campaign created.</strong><br>
+        Campaign: ${adminEscape(data.campaign?.campaign_name || data.campaign?.id || "-")}<br>
+        Quote: ${adminEscape(data.quote?.total_label || adMoney(data.campaign?.quoted_amount_ugx || 0))}<br>
+        ${data.paymentLink?.checkout_url ? `<a class="font-black text-green-800 underline" target="_blank" rel="noopener noreferrer" href="${adminAttr(data.paymentLink.checkout_url)}">Open hosted checkout</a>` : "Hosted payment provider is not configured yet; makaug admin can attach the payment link."}
+      `;
+    }
+    toast("Advertising campaign saved.");
+  } catch (error) {
+    toast(`Advertising booking failed: ${error.message || "error"}`);
+  } finally {
+    if (submit) {
+      submit.disabled = false;
+      submit.textContent = "Create checkout";
+    }
   }
 }
 
@@ -45537,6 +46135,9 @@ function initializeMakaugApp() {
   onLpVerifyNinInput();
   renderAll();
   renderHowToVideoSections();
+  if (document.getElementById("advertising-selfserve-form")) {
+    hydrateAdvertisePricingPreview();
+  }
   refreshPublicListingsFromApi({ silent: true }).then((loaded) => {
     if (loaded) {
       renderAll();

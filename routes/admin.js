@@ -5487,6 +5487,10 @@ router.patch('/advertising/placements/:key', async (req, res, next) => {
 
     if (Object.prototype.hasOwnProperty.call(req.body, 'is_active')) add('is_active', !!req.body.is_active);
     if (Object.prototype.hasOwnProperty.call(req.body, 'base_price_ugx')) add('base_price_ugx', Math.max(0, parseInt(req.body.base_price_ugx, 10) || 0));
+    if (Object.prototype.hasOwnProperty.call(req.body, 'traffic_multiplier')) add('traffic_multiplier', Math.max(0.1, Number(req.body.traffic_multiplier || 1) || 1));
+    if (Object.prototype.hasOwnProperty.call(req.body, 'weekly_impressions')) add('weekly_impressions', Math.max(0, parseInt(req.body.weekly_impressions, 10) || 0));
+    if (Object.prototype.hasOwnProperty.call(req.body, 'baseline_weekly_impressions')) add('baseline_weekly_impressions', Math.max(1, parseInt(req.body.baseline_weekly_impressions, 10) || 1));
+    if (Object.prototype.hasOwnProperty.call(req.body, 'self_serve_enabled')) add('self_serve_enabled', !!req.body.self_serve_enabled);
     if (Object.prototype.hasOwnProperty.call(req.body, 'notes')) add('notes', String(req.body.notes || '').trim() || null);
     if (Object.prototype.hasOwnProperty.call(req.body, 'preview_image_url')) add('preview_image_url', String(req.body.preview_image_url || '').trim() || null);
 
