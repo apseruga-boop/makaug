@@ -876,6 +876,8 @@ let publicListingsFromApiLoaded = false;
 let publicFeaturedListingsFromApi = [];
 let publicListingsApiTotal = null;
 let publicListingsApiStats = null;
+let aboutPublicListingsTotal = null;
+let aboutPublicListingsTotalPromise = null;
 const publicActiveCategoryHydrationPromises = new Map();
 const PUBLIC_LISTINGS_FAST_PAGE_LIMIT = 8;
 const PUBLIC_LISTINGS_BACKGROUND_PAGE_LIMIT = 24;
@@ -6484,14 +6486,80 @@ function animateAboutStatNumber(el, target) {
   requestAnimationFrame(step);
 }
 
+function aboutPublicListingTotalFromResponse(response) {
+  const candidates = [
+    response?.pagination?.total,
+    response?.summary?.public_opportunities?.total,
+    response?.summary?.total,
+    response?.total
+  ];
+  for (const value of candidates) {
+    const total = Number(value);
+    if (Number.isFinite(total) && total > 0) return total;
+  }
+  return 0;
+}
+
+function setAboutPublicListingsTotal(value) {
+  const total = Number(value || 0);
+  if (!Number.isFinite(total) || total <= 0) return false;
+  aboutPublicListingsTotal = total;
+  publicListingsApiTotal = Math.max(Number(publicListingsApiTotal || 0), total);
+  return true;
+}
+
+function aboutLiveListingTotal(stats = {}) {
+  const candidates = [
+    aboutPublicListingsTotal,
+    publicListingsApiTotal,
+    stats?.total
+  ].map((value) => Number(value || 0)).filter((value) => Number.isFinite(value) && value > 0);
+  const plausibleTotal = candidates.find((value) => value >= 100);
+  return plausibleTotal || 1889;
+}
+
+async function fetchAboutPublicListingsTotal() {
+  if (aboutPublicListingsTotalPromise) return aboutPublicListingsTotalPromise;
+  aboutPublicListingsTotalPromise = (async () => {
+    let response = null;
+    try {
+      if (window.__makaugPublicSummaryPromise) response = await window.__makaugPublicSummaryPromise;
+    } catch (prefetchError) {
+      response = null;
+    }
+    let total = aboutPublicListingTotalFromResponse(response);
+    if (total < 100 && typeof fetch === "function") {
+      try {
+        const fresh = await fetch(PUBLIC_OPPORTUNITY_SUMMARY_PATH, { credentials: "same-origin", cache: "no-store" });
+        if (fresh.ok) {
+          response = await fresh.json();
+          total = aboutPublicListingTotalFromResponse(response);
+        }
+      } catch (fetchError) {
+        total = 0;
+      }
+    }
+    if (setAboutPublicListingsTotal(total)) {
+      updateAboutPageUi({ total });
+    }
+    return aboutPublicListingsTotal;
+  })().finally(() => {
+    aboutPublicListingsTotalPromise = null;
+  });
+  return aboutPublicListingsTotalPromise;
+}
+
 function updateAboutPageUi(stats = getHeroPropertyOpportunityStats()) {
   const aboutPage = document.getElementById("page-about");
   if (!aboutPage) return;
   const liveCount = aboutPage.querySelector("#about-live-listing-count");
   if (liveCount) {
-    const total = Number(stats?.total || publicListingsApiTotal || 1889);
+    const total = aboutLiveListingTotal(stats);
     liveCount.dataset.aboutStatCount = String(total);
     animateAboutStatNumber(liveCount, total);
+    if (!aboutPublicListingsTotal || total < 100) {
+      fetchAboutPublicListingsTotal().catch(() => {});
+    }
   }
   aboutPage.querySelectorAll("[data-about-stat-count]").forEach((el) => {
     if (el.id === "about-live-listing-count") return;
@@ -36349,6 +36417,7 @@ async function fetchPublicFeaturedListingsFromApi() {
 function applyPublicOpportunityStats(stats) {
   const nextStats = normalizeHeroOpportunityStats(stats);
   if (!nextStats) return false;
+  if (nextStats.total >= 100) setAboutPublicListingsTotal(nextStats.total);
   publicListingsApiStats = nextStats;
   publicListingsApiTotal = nextStats.total;
   renderHeroPropertyOpportunityCounter();

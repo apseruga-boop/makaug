@@ -16,8 +16,11 @@ const aboutBlock = html.slice(aboutStart, aboutEnd);
 const normalizedAbout = aboutBlock.replace(/\s+/g, ' ');
 
 assert(html.includes('about-page-full-copy-20260713'), 'HTML app version should include about-page-full-copy marker');
+assert(html.includes('about-page-visual-refine-20260713'), 'HTML app version should include about-page-visual-refine marker');
 assert(server.includes("aboutPageFullCopyVersion = 'about-page-full-copy-20260713'"), 'server should include about page release marker');
+assert(server.includes("aboutPageVisualRefineVersion = 'about-page-visual-refine-20260713'"), 'server should include about visual refine release marker');
 assert(server.includes('aboutPageFullCopyVersion'), 'server public app suffix list should include the about page marker');
+assert(server.includes('aboutPageVisualRefineVersion'), 'server public app suffix list should include the about visual refine marker');
 
 [
   'Every property in Uganda, finally in one place',
@@ -47,6 +50,11 @@ assert(server.includes('aboutPageFullCopyVersion'), 'server public app suffix li
 assert(aboutBlock.includes('id="about-live-listing-count"'), 'About page should include a live listings count node');
 assert(aboutBlock.includes('data-about-stat-count="146"'), 'About stats should include count-up district metric');
 assert(aboutBlock.includes('data-about-stat-count="9"'), 'About stats should include count-up language metric');
+assert(aboutBlock.includes('about-stat-card rounded-xl border border-[#e4ece8] bg-white'), 'About stat cards should use one uniform white card treatment');
+assert(aboutBlock.includes('bg-[#f0f6f2]'), 'final CTA should use the approved green-tint panel');
+assert(!/(?:bg|text|border)-(?:amber|yellow|orange|purple|blue|red)-/.test(aboutBlock), 'About page should not use yellow/multicolour Tailwind palette classes');
+assert(!aboutBlock.includes('#d9a441'), 'About page should not use the old gold/yellow accent');
+assert.strictEqual((aboutBlock.match(/<section[^>]*bg-\[#0f3d2e\]/g) || []).length, 1, 'Only the vision section should be a dark feature block');
 assert(aboutBlock.includes('about-ai-pipeline'), 'About page should include the animated AI pipeline');
 assert(aboutBlock.includes('data-about-persona="renters"'), 'About page should include persona selector buttons');
 assert(aboutBlock.includes('onclick="setAboutPersona(\'businesses\')"'), 'About persona selector should be interactive');
@@ -62,6 +70,10 @@ aboutKeys.forEach((key) => {
   'function setAboutPersona',
   'ABOUT_PERSONA_ROUTES',
   'function updateAboutPageUi',
+  'function fetchAboutPublicListingsTotal',
+  'function aboutLiveListingTotal',
+  'pagination?.total',
+  'PUBLIC_OPPORTUNITY_SUMMARY_PATH',
   'function animateAboutStatNumber',
   'updateAboutPageUi(stats)',
   'CONTENT_I18N[code] = Object.assign({}, CONTENT_I18N[code] || {}, ABOUT_PAGE_I18N_EN)'
