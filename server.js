@@ -226,6 +226,7 @@ const studentSupplyGateVersion = 'student-supply-gate-20260711';
 const staffReviewQueuePanelRetryVersion = 'staff-review-queue-panel-retry-20260713';
 const listingConfirmationsRedesignVersion = 'listing-confirmations-redesign-20260713';
 const listPropertyDescLiveTranslateVersion = 'list-property-desc-live-translate-20260713';
+const aboutPageFullCopyVersion = 'about-page-full-copy-20260713';
 const publicAppVersionSuffixes = [
   captureHelperUsabilityVersion,
   studentNearestUniversityVersion,
@@ -320,7 +321,8 @@ const publicAppVersionSuffixes = [
   studentSupplyGateVersion,
   staffReviewQueuePanelRetryVersion,
   listingConfirmationsRedesignVersion,
-  listPropertyDescLiveTranslateVersion
+  listPropertyDescLiveTranslateVersion,
+  aboutPageFullCopyVersion
 ];
 let cachedIndexHtml = null;
 const publicHtmlCache = new Map();

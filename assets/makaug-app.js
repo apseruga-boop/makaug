@@ -2907,6 +2907,150 @@ CONTENT_I18N.ar = Object.assign({}, CONTENT_I18N.en, {
   "safety.reportBody": "أوقف المحادثة، احفظ screenshots وتفاصيل الدفع، ثم أبلغ حتى يراجع makaug.com الإعلان."
 });
 
+const ABOUT_PAGE_I18N_EN = Object.freeze({
+  "about.heroLabel": "About makaug",
+  "about.title": "Every property in Uganda, finally in one place",
+  "about.heroStatement": "Every property in Uganda, finally in one place",
+  "about.subtitle": "Buy, rent, sell, or find student housing and land — free to list, in 9 languages, on the web or straight from WhatsApp, across all 146 districts.",
+  "about.ctaSearch": "Search property",
+  "about.ctaList": "List free",
+  "about.ctaWhatsapp": "Ask makaug on WhatsApp",
+  "about.statDistricts": "districts covered",
+  "about.statLanguages": "languages",
+  "about.statLiveListings": "live listings",
+  "about.statFreeValue": "Free",
+  "about.statFreeLabel": "to list",
+  "about.visionLabel": "Our vision",
+  "about.visionTitle": "We find every property, so you don't have to",
+  "about.visionText": "Property in Uganda is scattered — across WhatsApp, social media, brokers, and word of mouth. makaug is changing that. Our AI searches TikTok, YouTube, Facebook, and X, reads what it finds, and brings every real property into one place you can actually search. Think of it as a search engine for Uganda property.",
+  "about.pipelineSources": "Sources",
+  "about.pipelineAi": "AI organises",
+  "about.pipelineAiText": "location, price, category, duplicates",
+  "about.pipelineReview": "Team review",
+  "about.pipelineReviewText": "checked before buyers see it",
+  "about.pipelineCaption": "Discovered by AI · checked by our team · live for buyers",
+  "about.aiDiscoveryTitle": "AI discovery",
+  "about.aiDiscoveryText": "We find property posted anywhere online, not just what's listed with us — and organise it so it's searchable.",
+  "about.aiAssistantTitle": "AI assistant",
+  "about.aiAssistantText": "Ask makaug anything about property, in any of 9 languages, and get a straight answer.",
+  "about.aiToolsTitle": "AI listing tools",
+  "about.aiToolsText": "Owners get a description written for them and translated live, so listings look great with no effort.",
+  "about.everythingTitle": "Everything you can do",
+  "about.everythingSub": "One platform for every kind of property journey.",
+  "about.everySaleTitle": "For sale",
+  "about.everySaleText": "homes and property to buy",
+  "about.everyRentTitle": "To rent",
+  "about.everyRentText": "houses and apartments",
+  "about.everyStudentsTitle": "Students",
+  "about.everyStudentsText": "hostels and rooms near campus",
+  "about.everyLandTitle": "Land",
+  "about.everyLandText": "plots and acreage",
+  "about.everyCommercialTitle": "Commercial",
+  "about.everyCommercialText": "offices, shops, warehouses",
+  "about.everyBrokersTitle": "Find brokers",
+  "about.everyBrokersText": "trusted agents near you",
+  "about.everyMortgageTitle": "Mortgage finder",
+  "about.everyMortgageText": "compare bank rates and get help",
+  "about.everyAiTitle": "AI helper",
+  "about.everyAiText": "search and ask, hands-free",
+  "about.personaTitle": "Property made simple — whoever you are",
+  "about.personaLabel": "What brings you here?",
+  "about.rentersTitle": "Renters",
+  "about.personaRentersText": "Search by area and budget, save homes, set alerts, book viewings, and contact owners safely.",
+  "about.personaRentersCta": "Search rentals",
+  "about.buyersTitle": "Buyers",
+  "about.personaBuyersText": "Compare homes and land, read location, title, and verification signals, and use safety guidance before you pay.",
+  "about.personaBuyersCta": "Browse for sale",
+  "about.studentsTitle": "Students and parents",
+  "about.personaStudentsText": "Find hostels by campus, budget, room type, security, water, and Wi-Fi, with viewings and student alerts.",
+  "about.personaStudentsCta": "Find student housing",
+  "about.ownersTitle": "Owners and sellers",
+  "about.personaOwnersText": "List free with guided fields, map your location, verify with your ID, and get enquiries — reviewed before it goes public.",
+  "about.personaOwnersCta": "List your property",
+  "about.brokersTitle": "Brokers",
+  "about.personaBrokersText": "Build a broker profile, manage listings and leads, and handle WhatsApp enquiries and viewings in one place.",
+  "about.personaBrokersCta": "Register as broker",
+  "about.businessesTitle": "Businesses",
+  "about.personaBusinessesText": "Find offices, shops, and warehouses, enquire directly, and save your commercial searches.",
+  "about.personaBusinessesCta": "Find commercial space",
+  "about.stepsTitle": "From search to sorted, in three steps",
+  "about.stepSearchTitle": "Search or list",
+  "about.stepSearchText": "On the web or straight from WhatsApp. Owners list free in minutes.",
+  "about.stepVerifyTitle": "Verified and safe",
+  "about.stepVerifyText": "Every listing is checked for location, photos, contact, and fraud signals before it goes live. Verified, not blindly posted.",
+  "about.stepConnectTitle": "Connect",
+  "about.stepConnectText": "Message the owner or broker, book a viewing, and decide — with safety guidance the whole way.",
+  "about.landHubTitle": "Find and list land — without pretending to clear titles",
+  "about.landHubText": "Browse land, compare details, map locations, and see seller contact routes. makaug is a marketplace, not a title-checking or legal service — so always inspect the land, review documents with your own lawyer, confirm the seller's authority independently, and never make untraceable payments.",
+  "about.landHubPortal": "Browse land",
+  "about.landHubUgNlis": "Official UgNLIS portal",
+  "about.landHubOfficialTitle": "Map locations",
+  "about.landHubEvidenceTitle": "Check documents",
+  "about.landHubProcessTitle": "Avoid pressure",
+  "about.trustTitle": "Trust comes first",
+  "about.trustIdentityTitle": "Identity and contact checks",
+  "about.trustIdentityText": "Owners verify with a National ID and contact details, so you know who you're dealing with.",
+  "about.trustReviewTitle": "Reviewed before it's public",
+  "about.trustReviewText": "Our team checks details, photos, location, duplicates, and fraud signals before any listing goes live.",
+  "about.trustSourceTitle": "Source transparency",
+  "about.trustSourceText": "Found-online listings show where and when we found them, and how to check the original post.",
+  "about.trustClaimTitle": "Claim or remove",
+  "about.trustClaimText": "Owners and agents can claim, update, correct, or remove a listing anytime — with a full review trail.",
+  "about.trustFraudTitle": "Report fraud",
+  "about.trustFraudText": "Flag suspicious listings, title concerns, or payment pressure in one tap.",
+  "about.ctaSafety": "Safety tips",
+  "about.trustRecordTitle": "Review trail",
+  "about.trustRecordText": "Changes, approvals, and removals are handled through staff review, not hidden shortcuts.",
+  "about.whyChooseTitle": "Why people choose makaug",
+  "about.chooseFreeTitle": "Free to list",
+  "about.chooseFreeText": "no listing fees, ever; paid advertising stays separate",
+  "about.chooseWhatsappTitle": "WhatsApp-first",
+  "about.chooseWhatsappText": "built for how Uganda actually communicates",
+  "about.chooseLanguagesTitle": "9 languages",
+  "about.chooseLanguagesText": "including Luganda, Kiswahili, and more, right across the site",
+  "about.chooseDistrictsTitle": "All 146 districts",
+  "about.chooseDistrictsText": "Kampala to the furthest town",
+  "about.chooseAiTitle": "AI-powered",
+  "about.chooseAiText": "discovery, assistant, and listing tools",
+  "about.chooseVerifiedTitle": "Verified listings",
+  "about.chooseVerifiedText": "human-reviewed for trust",
+  "about.finalTitle": "Ready to find your place?",
+  "about.finalSub": "Search thousands of listings, or list your own free in minutes.",
+  "about.finalWhatsapp": "Chat on WhatsApp",
+  "about.finalHow": "How it works",
+  "about.finalHelp": "Help centre",
+  "about.finalSafety": "Safety tips"
+});
+
+Object.assign(CONTENT_I18N.en, ABOUT_PAGE_I18N_EN);
+["lg", "sw", "ac", "ny", "rn", "sm", "am", "ar"].forEach((code) => {
+  CONTENT_I18N[code] = Object.assign({}, CONTENT_I18N[code] || {}, ABOUT_PAGE_I18N_EN);
+});
+Object.assign(CONTENT_I18N.lg, {
+  "about.heroLabel": "Ebitukwatako",
+  "about.ctaSearch": "Noonya property",
+  "about.ctaWhatsapp": "Buuza makaug ku WhatsApp",
+  "about.finalWhatsapp": "Yogera ku WhatsApp"
+});
+Object.assign(CONTENT_I18N.sw, {
+  "about.heroLabel": "Kuhusu makaug",
+  "about.ctaSearch": "Tafuta mali",
+  "about.ctaWhatsapp": "Uliza makaug kwenye WhatsApp",
+  "about.finalWhatsapp": "Ongea kwenye WhatsApp"
+});
+Object.assign(CONTENT_I18N.am, {
+  "about.heroLabel": "ስለ makaug",
+  "about.ctaSearch": "ንብረት ፈልግ",
+  "about.ctaWhatsapp": "makaugን በ WhatsApp ጠይቅ",
+  "about.finalWhatsapp": "በ WhatsApp ይወያዩ"
+});
+Object.assign(CONTENT_I18N.ar, {
+  "about.heroLabel": "عن makaug",
+  "about.ctaSearch": "ابحث عن عقار",
+  "about.ctaWhatsapp": "اسأل makaug على WhatsApp",
+  "about.finalWhatsapp": "تحدث عبر WhatsApp"
+});
+
 function contentTr(key) {
   const lang = currentLang || "en";
   const fallback = LANG_FALLBACK[lang] || "en";
@@ -2934,7 +3078,72 @@ function applyContentLanguageUI(root = document) {
 
 function applyAboutLanguageUI() {
   applyContentLanguageUI(document.getElementById("page-about"));
+  updateAboutPageUi();
 }
+
+const ABOUT_PERSONA_ROUTES = {
+  renters: "/to-rent",
+  buyers: "/for-sale",
+  students: "/student-accommodation",
+  owners: "/list-property",
+  brokers: "/broker-signup",
+  businesses: "/commercial"
+};
+
+const ABOUT_PERSONA_COPY = {
+  renters: {
+    titleKey: "about.rentersTitle",
+    copyKey: "about.personaRentersText",
+    ctaKey: "about.personaRentersCta"
+  },
+  buyers: {
+    titleKey: "about.buyersTitle",
+    copyKey: "about.personaBuyersText",
+    ctaKey: "about.personaBuyersCta"
+  },
+  students: {
+    titleKey: "about.studentsTitle",
+    copyKey: "about.personaStudentsText",
+    ctaKey: "about.personaStudentsCta"
+  },
+  owners: {
+    titleKey: "about.ownersTitle",
+    copyKey: "about.personaOwnersText",
+    ctaKey: "about.personaOwnersCta"
+  },
+  brokers: {
+    titleKey: "about.brokersTitle",
+    copyKey: "about.personaBrokersText",
+    ctaKey: "about.personaBrokersCta"
+  },
+  businesses: {
+    titleKey: "about.businessesTitle",
+    copyKey: "about.personaBusinessesText",
+    ctaKey: "about.personaBusinessesCta"
+  }
+};
+
+let activeAboutPersonaKey = "renters";
+
+function setAboutPersona(key = "renters") {
+  const personaKey = ABOUT_PERSONA_COPY[key] ? key : "renters";
+  activeAboutPersonaKey = personaKey;
+  const config = ABOUT_PERSONA_COPY[personaKey];
+  document.querySelectorAll("[data-about-persona]").forEach((button) => {
+    const isActive = button.getAttribute("data-about-persona") === personaKey;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-pressed", isActive ? "true" : "false");
+  });
+  setTextById("about-persona-title", contentTr(config.titleKey));
+  setTextById("about-persona-copy", contentTr(config.copyKey));
+  const cta = document.getElementById("about-persona-cta");
+  if (cta) {
+    cta.textContent = contentTr(config.ctaKey);
+    cta.href = ABOUT_PERSONA_ROUTES[personaKey] || "/for-sale";
+  }
+}
+
+window.setAboutPersona = setAboutPersona;
 
 function tr(key) {
   const lang = currentLang || "en";
@@ -6254,7 +6463,47 @@ function heroOpportunityStatRow(labelKey, value) {
     </div>`;
 }
 
+function animateAboutStatNumber(el, target) {
+  if (!el) return;
+  const next = Number(target || 0);
+  if (!Number.isFinite(next)) return;
+  const prefersReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+  const previous = Number(String(el.textContent || "0").replace(/[^\d.-]/g, "")) || 0;
+  if (prefersReducedMotion || Math.abs(next - previous) < 2) {
+    el.textContent = next.toLocaleString();
+    return;
+  }
+  const start = performance.now();
+  const duration = 700;
+  const step = (now) => {
+    const progress = Math.min(1, (now - start) / duration);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    el.textContent = Math.round(previous + (next - previous) * eased).toLocaleString();
+    if (progress < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+function updateAboutPageUi(stats = getHeroPropertyOpportunityStats()) {
+  const aboutPage = document.getElementById("page-about");
+  if (!aboutPage) return;
+  const liveCount = aboutPage.querySelector("#about-live-listing-count");
+  if (liveCount) {
+    const total = Number(stats?.total || publicListingsApiTotal || 1889);
+    liveCount.dataset.aboutStatCount = String(total);
+    animateAboutStatNumber(liveCount, total);
+  }
+  aboutPage.querySelectorAll("[data-about-stat-count]").forEach((el) => {
+    if (el.id === "about-live-listing-count") return;
+    const target = Number(el.getAttribute("data-about-stat-count"));
+    if (Number.isFinite(target)) animateAboutStatNumber(el, target);
+  });
+  setAboutPersona(activeAboutPersonaKey || "renters");
+}
+
 function renderHeroPropertyOpportunityCounter() {
+  const stats = getHeroPropertyOpportunityStats();
+  updateAboutPageUi(stats);
   const subtitle = document.getElementById("hero-subtitle");
   if (!subtitle) return;
   const prefix = document.getElementById("hero-subtitle-prefix");
@@ -6263,7 +6512,6 @@ function renderHeroPropertyOpportunityCounter() {
   const count = document.getElementById("hero-property-count");
   const countLabel = document.getElementById("hero-property-count-label");
   const tooltip = document.getElementById("hero-property-counter-tooltip");
-  const stats = getHeroPropertyOpportunityStats();
   const totalLabelKey = stats.total === 1 ? "heroSubtitleCountLabelSingular" : "heroSubtitleCountLabelPlural";
   if (prefix) prefix.textContent = tr("heroSubtitlePrefix");
   if (suffix) suffix.textContent = tr("heroSubtitleSuffix");
@@ -6376,6 +6624,7 @@ function applyLanguageUI() {
   setPageHeading("page-saved", tr("pageSaved"));
   setPageHeading("page-account", tr("pageAccount"));
   applyContentLanguageUI(document);
+  updateAboutPageUi();
   applyAuthUi();
   applyAccountAccessLanguageUi();
   applyListingWizardLanguageUI();

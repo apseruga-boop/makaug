@@ -316,7 +316,7 @@ function run() {
   assert(languageRegistrySource.includes('providerSupport'), 'language registry should document provider support per language');
   assert(languageRegistrySource.includes('humanReviewRequired'), 'language registry should document human review status per language');
   assert(translationProviderServiceSource.includes('human_table_then_provider_then_english'), 'translation provider should use safe fallback strategy');
-  assert(frontendSource.includes('data-content-i18n="about.heroStatement"'), 'About page body should use content i18n keys');
+  assert(frontendSource.includes('ABOUT_PAGE_I18N_EN'), 'About page body should use the approved content i18n pack');
   assert(frontendSource.includes('function applyAboutLanguageUI'), 'About page should apply body translations on language switch');
   assert(frontendSource.includes('window.MAKAUG_MISSING_TRANSLATIONS'), 'missing content translations should be logged in the browser session');
   assert(aiServiceSource.includes('wrong_nearby_language_guard'), 'AI replies should guard against nearby-language substitution');
@@ -425,17 +425,19 @@ function run() {
   assert(aboutHtml.includes('id="page-about"'), '/about should render the about route');
   assert(aboutText.includes('About makaug'), '/about should show About makaug');
   for (const expected of [
-    'Property in Uganda should be easier to find, easier to list, and safer to trust.',
-    'Who we are',
-    'Our mission',
-    'Why makaug exists',
+    'Every property in Uganda, finally in one place',
+    'We find every property, so you don\'t have to',
+    'Everything you can do',
+    'Property made simple',
+    'From search to sorted, in three steps',
+    'Trust comes first',
     'Renters',
     'Buyers',
     'Students and parents',
     'Owners and sellers',
     'Brokers',
-    'Commercial users',
-    'How we support trust and safety'
+    'Businesses',
+    'Why people choose makaug'
   ]) {
     assert(aboutText.includes(expected), `/about missing redesigned section: ${expected}`);
   }

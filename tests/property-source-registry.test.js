@@ -163,8 +163,8 @@ test('daily source sweep is scriptable and keeps King queue guardrails', () => {
 test('public pages explain the search-engine model and expose found-online source metadata', () => {
   assert(html.includes('A property search engine for Uganda'), 'homepage hero should explain search-engine positioning simply');
   assert(!html.includes('broker listings, reviewed online sources, and official UgNLIS land checks in one place'), 'homepage hero should not carry the old long positioning copy');
-  assert(html.includes('about.searchEngineTitle'), 'about page should include search-engine section');
-  assert(frontend.includes('How makaug finds property information'), 'about i18n should include source model copy');
+  assert(html.includes('about.visionTitle'), 'about page should include the AI discovery vision section');
+  assert(frontend.includes("We find every property, so you don't have to"), 'about i18n should include source discovery positioning');
   assert(frontend.includes('listingOnlineSourceDisclosureHtml'), 'property detail should render source disclosure');
   assert(frontend.includes('Third-party property result'), 'found-online detail should label imported listings as third-party property results');
   assert(frontend.includes('Makaug provides a search and discovery preview only'), 'found-online detail should include search/discovery legal positioning');
