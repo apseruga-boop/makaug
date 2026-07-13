@@ -19,14 +19,17 @@ assert(html.includes('about-page-full-copy-20260713'), 'HTML app version should 
 assert(html.includes('about-page-visual-refine-20260713'), 'HTML app version should include about-page-visual-refine marker');
 assert(html.includes('about-cta-primary-20260713'), 'HTML app version should include about CTA primary marker');
 assert(html.includes('about-hero-contrast-fix-20260713'), 'HTML app version should include about hero contrast fix marker');
+assert(html.includes('about-land-steps-20260713'), 'HTML app version should include about land steps marker');
 assert(server.includes("aboutPageFullCopyVersion = 'about-page-full-copy-20260713'"), 'server should include about page release marker');
 assert(server.includes("aboutPageVisualRefineVersion = 'about-page-visual-refine-20260713'"), 'server should include about visual refine release marker');
 assert(server.includes("aboutCtaPrimaryVersion = 'about-cta-primary-20260713'"), 'server should include about CTA primary release marker');
 assert(server.includes("aboutHeroContrastFixVersion = 'about-hero-contrast-fix-20260713'"), 'server should include about hero contrast fix release marker');
+assert(server.includes("aboutLandStepsVersion = 'about-land-steps-20260713'"), 'server should include about land steps release marker');
 assert(server.includes('aboutPageFullCopyVersion'), 'server public app suffix list should include the about page marker');
 assert(server.includes('aboutPageVisualRefineVersion'), 'server public app suffix list should include the about visual refine marker');
 assert(server.includes('aboutCtaPrimaryVersion'), 'server public app suffix list should include the about CTA primary marker');
 assert(server.includes('aboutHeroContrastFixVersion'), 'server public app suffix list should include the about hero contrast fix marker');
+assert(server.includes('aboutLandStepsVersion'), 'server public app suffix list should include the about land steps marker');
 
 [
   'Every property in Uganda, finally in one place',
@@ -36,6 +39,9 @@ assert(server.includes('aboutHeroContrastFixVersion'), 'server public app suffix
   'Property made simple — whoever you are',
   'From search to sorted, in three steps',
   'Find and list land — without pretending to clear titles',
+  'Pin the exact plot before you travel to see it.',
+  "Review the title with your own lawyer, not the seller's.",
+  'Never rush, and never make untraceable payments.',
   'Trust comes first',
   'Why people choose makaug',
   'Ready to find your place?'
@@ -65,6 +71,26 @@ assert(aboutBlock.includes('about-hero-cta-secondary'), 'About hero secondary CT
 assert(aboutBlock.includes('about-hero-cta-social'), 'About hero WhatsApp CTA should have explicit contrast-safe styling');
 assert(html.includes('#page-about .about-solid-green-cta'), 'About solid green CTAs should have scoped fallback styling');
 assert.strictEqual((aboutBlock.match(/bg-\[#15603f\][^"]*text-white/g) || []).length, (aboutBlock.match(/about-solid-green-cta/g) || []).length, 'Every About solid-green CTA should use the contrast-safe fallback class');
+assert(aboutBlock.includes('about-land-steps-section'), 'About land section should use the numbered safety steps layout');
+assert(aboutBlock.includes('data-release-marker="about-land-steps-20260713"'), 'About land section should expose the land steps marker');
+assert.strictEqual((aboutBlock.match(/about-land-step-card/g) || []).length, 3, 'About land section should render three step cards');
+assert.deepStrictEqual(
+  [...aboutBlock.matchAll(/<span class="about-land-step-badge">(\d)<\/span>/g)].map((match) => match[1]),
+  ['1', '2', '3'],
+  'About land step badges should read 1, 2, 3'
+);
+['ti-map-pin', 'ti-file-check', 'ti-shield-check'].forEach((iconClass) => {
+  assert(aboutBlock.includes(iconClass), `About land step should include icon marker: ${iconClass}`);
+});
+[
+  'about.landHubOfficialText',
+  'about.landHubEvidenceText',
+  'about.landHubProcessText'
+].forEach((key) => {
+  assert(aboutBlock.includes(`data-content-i18n="${key}"`), `About land step tip should be i18n-wired: ${key}`);
+});
+assert(aboutBlock.includes('href="/land"'), 'About land Browse land CTA should link to /land');
+assert(aboutBlock.includes('href="https://ugnlis.mlhud.go.ug/"'), 'About land UgNLIS CTA should link to the official portal');
 assert(aboutBlock.includes('about-stat-card rounded-xl border border-[#e4ece8] bg-white'), 'About stat cards should use one uniform white card treatment');
 assert(aboutBlock.includes('bg-[#f0f6f2]'), 'final CTA should use the approved green-tint panel');
 assert(aboutBlock.includes('about-final-cta-actions'), 'final CTA should have a dedicated three-button action row');
@@ -98,6 +124,24 @@ const aboutKeys = [...new Set([...aboutBlock.matchAll(/data-content-i18n="([^"]+
 assert(aboutKeys.length >= 90, 'About page should wire all visible copy through content i18n');
 aboutKeys.forEach((key) => {
   assert(frontend.includes(`"${key}"`), `content i18n dictionary missing About key: ${key}`);
+});
+
+[
+  'about.landHubTitle',
+  'about.landHubText',
+  'about.landHubOfficialTitle',
+  'about.landHubOfficialText',
+  'about.landHubEvidenceTitle',
+  'about.landHubEvidenceText',
+  'about.landHubProcessTitle',
+  'about.landHubProcessText'
+].forEach((key) => {
+  ['en', 'lg', 'sw', 'ac', 'ny', 'rn', 'sm', 'am', 'ar'].forEach((code) => {
+    const packPattern = code === 'en'
+      ? new RegExp(`const ABOUT_PAGE_I18N_EN[\\s\\S]*"${key}"`)
+      : new RegExp(`Object\\.assign\\(CONTENT_I18N\\.${code},[\\s\\S]*"${key}"`);
+    assert(packPattern.test(frontend), `About land key should be translated in ${code}: ${key}`);
+  });
 });
 
 [

@@ -2983,12 +2983,15 @@ const ABOUT_PAGE_I18N_EN = Object.freeze({
   "about.stepConnectTitle": "Connect",
   "about.stepConnectText": "Message the owner or broker, book a viewing, and decide — with safety guidance the whole way.",
   "about.landHubTitle": "Find and list land — without pretending to clear titles",
-  "about.landHubText": "Browse land, compare details, map locations, and see seller contact routes. makaug is a marketplace, not a title-checking or legal service — so always inspect the land, review documents with your own lawyer, confirm the seller's authority independently, and never make untraceable payments.",
+  "about.landHubText": "Browse land, compare details, and see seller contact routes. makaug is a marketplace, not a title-checking or legal service — so take three steps to protect yourself before you pay.",
   "about.landHubPortal": "Browse land",
   "about.landHubUgNlis": "Official UgNLIS portal",
-  "about.landHubOfficialTitle": "Map locations",
-  "about.landHubEvidenceTitle": "Check documents",
+  "about.landHubOfficialTitle": "Map the location",
+  "about.landHubOfficialText": "Pin the exact plot before you travel to see it.",
+  "about.landHubEvidenceTitle": "Check the documents",
+  "about.landHubEvidenceText": "Review the title with your own lawyer, not the seller's.",
   "about.landHubProcessTitle": "Avoid pressure",
+  "about.landHubProcessText": "Never rush, and never make untraceable payments.",
   "about.trustTitle": "Trust comes first",
   "about.trustIdentityTitle": "Identity and contact checks",
   "about.trustIdentityText": "Owners verify with a National ID and contact details, so you know who you're dealing with.",
@@ -3032,24 +3035,112 @@ Object.assign(CONTENT_I18N.lg, {
   "about.heroLabel": "Ebitukwatako",
   "about.ctaSearch": "Noonya property",
   "about.ctaWhatsapp": "Buuza makaug ku WhatsApp",
+  "about.landHubTitle": "Noonya oba listinga ettaka nga tetweyita abakakasa title",
+  "about.landHubText": "Laba ettaka, geraageranya ebikwata ku listing, era laba amakubo g'okukwatagana n'omutunzi. makaug marketplace; si service ekakasa title oba amateeka — kola emitendera esatu okwekuuma nga tonnasasula.",
+  "about.landHubPortal": "Laba ettaka",
+  "about.landHubUgNlis": "Portal entongole ya UgNLIS",
+  "about.landHubOfficialTitle": "Teeka pin ku kifo",
+  "about.landHubOfficialText": "Kakasa plot entuufu ku map nga tonnagenda kugiraba.",
+  "about.landHubEvidenceTitle": "Kebera ebiwandiiko",
+  "about.landHubEvidenceText": "Kebera title n'omuwabuzi wo ow'amateeka, si n'omutunzi yekka.",
+  "about.landHubProcessTitle": "Weewale pressure",
+  "about.landHubProcessText": "Towanguyiriza, era tosasula mu ngeri etalondoolerwa.",
   "about.finalWhatsapp": "Yogera ku WhatsApp"
 });
 Object.assign(CONTENT_I18N.sw, {
   "about.heroLabel": "Kuhusu makaug",
   "about.ctaSearch": "Tafuta mali",
   "about.ctaWhatsapp": "Uliza makaug kwenye WhatsApp",
+  "about.landHubTitle": "Tafuta na orodhesha ardhi bila kujifanya tunakagua hati",
+  "about.landHubText": "Tazama ardhi, linganisha maelezo, na uone njia za kuwasiliana na muuzaji. makaug ni marketplace, si huduma ya kuhakiki hati au ya kisheria — chukua hatua tatu kujilinda kabla ya kulipa.",
+  "about.landHubPortal": "Tazama ardhi",
+  "about.landHubUgNlis": "Tovuti rasmi ya UgNLIS",
+  "about.landHubOfficialTitle": "Weka eneo kwenye ramani",
+  "about.landHubOfficialText": "Weka pin ya plot halisi kabla ya kusafiri kwenda kuiona.",
+  "about.landHubEvidenceTitle": "Kagua hati",
+  "about.landHubEvidenceText": "Kagua title na lawyer wako mwenyewe, si kwa muuzaji.",
+  "about.landHubProcessTitle": "Epuka shinikizo",
+  "about.landHubProcessText": "Usikimbizwe, na usifanye malipo yasiyofuatilika.",
   "about.finalWhatsapp": "Ongea kwenye WhatsApp"
+});
+Object.assign(CONTENT_I18N.ac, {
+  "about.landHubTitle": "Yeny lobo ki ket listing labongo waco ni wa ngiyo title",
+  "about.landHubText": "Nen lobo, por lok matut, ki nen yoo me kube ki lacat. makaug obedo marketplace, pe tic me ngiyo title onyo cik — kwany yoo adek me gwoko in mapwod pe iculo.",
+  "about.landHubPortal": "Nen lobo",
+  "about.landHubUgNlis": "UgNLIS portal me gamente",
+  "about.landHubOfficialTitle": "Ket kabedo i map",
+  "about.landHubOfficialText": "Ket pin i plot kikome mapwod pe iwoto me neno ne.",
+  "about.landHubEvidenceTitle": "Ngii dokumen",
+  "about.landHubEvidenceText": "Ngii title ki lawyer mamegi, pe ki lacat keken.",
+  "about.landHubProcessTitle": "Geng diro",
+  "about.landHubProcessText": "Pe iring oyot, ki pe icwal cente i yoo ma pe twero lubo kore."
+});
+Object.assign(CONTENT_I18N.ny, {
+  "about.landHubTitle": "Noonya nari listinga eitaka tutarikweyita abarikuhamya title",
+  "about.landHubText": "Reeba eitaka, geragyeranisa ebirikurikwataho, kandi reeba emihanda y'okuhika ku mutunzi. makaug ni marketplace, tikiri service y'okuhamya title nari amateeka — kora emitendera eshatu okwerinda otakashashura.",
+  "about.landHubPortal": "Reeba eitaka",
+  "about.landHubUgNlis": "Portal ya UgNLIS ey'obutongole",
+  "about.landHubOfficialTitle": "Teeka pin aha kifo",
+  "about.landHubOfficialText": "Hamya plot nyakuri aha map otakagiire kugireeba.",
+  "about.landHubEvidenceTitle": "Kebera ebihandiiko",
+  "about.landHubEvidenceText": "Kebera title n'omunyamateeka waawe, hatari omutunzi.",
+  "about.landHubProcessTitle": "Yangira okupirizibwa",
+  "about.landHubProcessText": "Otahutiririzibwa, kandi otakashashura omu buryo obutarikukurikirwa."
+});
+Object.assign(CONTENT_I18N.rn, {
+  "about.landHubTitle": "Noonya nari listinga eitaka tutarikweyita abarikuhamya title",
+  "about.landHubText": "Reeba eitaka, geragyeranisa ebirikwetengyesa, kandi reeba emihanda y'okuhika ku mutunzi. makaug ni marketplace, tikiri service y'okuhamya title nari amateeka — kora emitendera eshatu okwerinda otakashashura.",
+  "about.landHubPortal": "Reeba eitaka",
+  "about.landHubUgNlis": "Portal ya UgNLIS ey'obutongole",
+  "about.landHubOfficialTitle": "Teeka pin aha kifo",
+  "about.landHubOfficialText": "Hamya plot nyakuri aha map otakagiire kugireeba.",
+  "about.landHubEvidenceTitle": "Kebera ebihandiiko",
+  "about.landHubEvidenceText": "Kebera title n'omunyamateeka waawe, hatari omutunzi.",
+  "about.landHubProcessTitle": "Yangira okupirizibwa",
+  "about.landHubProcessText": "Otahutiririzibwa, kandi otakashashura omu buryo obutarikukurikirwa."
+});
+Object.assign(CONTENT_I18N.sm, {
+  "about.landHubTitle": "Noonya oba listinga eitaka nga tetweyita abakakasa title",
+  "about.landHubText": "Bona eitaka, geraageranya ebikwata ku listing, era bona amakubo g'okukwatagana n'omutunzi. makaug marketplace; si service ekakasa title oba amateeka — kola emitendera esatu okwekuuma nga tonnasasula.",
+  "about.landHubPortal": "Bona eitaka",
+  "about.landHubUgNlis": "Portal entongole ya UgNLIS",
+  "about.landHubOfficialTitle": "Teeka pin ku kifo",
+  "about.landHubOfficialText": "Kakasa plot entuufu ku map nga tonnagenda kugiraba.",
+  "about.landHubEvidenceTitle": "Kebera ebiwandiiko",
+  "about.landHubEvidenceText": "Kebera title n'omuwabuzi wo ow'amateeka, si n'omutunzi yekka.",
+  "about.landHubProcessTitle": "Weewale pressure",
+  "about.landHubProcessText": "Towanguyiriza, era tosasula mu ngeri etalondoolerwa."
 });
 Object.assign(CONTENT_I18N.am, {
   "about.heroLabel": "ስለ makaug",
   "about.ctaSearch": "ንብረት ፈልግ",
   "about.ctaWhatsapp": "makaugን በ WhatsApp ጠይቅ",
+  "about.landHubTitle": "የርዕስ ማረጋገጫ እንደምንሰራ ሳንመስል መሬት ይፈልጉ እና ይዘርዝሩ",
+  "about.landHubText": "መሬትን ይመልከቱ፣ ዝርዝሮችን ያነጻጽሩ፣ እና የሻጩን መገናኛ መንገዶች ይመልከቱ። makaug የገበያ መድረክ ነው፣ የርዕስ ማረጋገጫ ወይም የሕግ አገልግሎት አይደለም — ከመክፈልዎ በፊት ራስዎን ለመጠበቅ ሶስት እርምጃዎችን ይውሰዱ።",
+  "about.landHubPortal": "መሬት ይመልከቱ",
+  "about.landHubUgNlis": "የUgNLIS ኦፊሴላዊ ፖርታል",
+  "about.landHubOfficialTitle": "ቦታውን በካርታ ያስቀምጡ",
+  "about.landHubOfficialText": "ለማየት ከመጓዝዎ በፊት ትክክለኛውን plot በpin ያመልክቱ።",
+  "about.landHubEvidenceTitle": "ሰነዶቹን ያረጋግጡ",
+  "about.landHubEvidenceText": "title ን ከራስዎ ጠበቃ ጋር ይመርምሩ፣ ከሻጩ ጋር ብቻ አይደለም።",
+  "about.landHubProcessTitle": "ግፊትን ያስወግዱ",
+  "about.landHubProcessText": "አትቸኩሉ፣ እና ሊከታተሉ የማይችሉ ክፍያዎችን አታድርጉ።",
   "about.finalWhatsapp": "በ WhatsApp ይወያዩ"
 });
 Object.assign(CONTENT_I18N.ar, {
   "about.heroLabel": "عن makaug",
   "about.ctaSearch": "ابحث عن عقار",
   "about.ctaWhatsapp": "اسأل makaug على WhatsApp",
+  "about.landHubTitle": "ابحث عن الأرض وأدرجها دون ادعاء فحص سندات الملكية",
+  "about.landHubText": "تصفح الأرض، وقارن التفاصيل، وشاهد طرق التواصل مع البائع. makaug سوق عقاري، وليس خدمة لفحص الملكية أو خدمة قانونية — لذلك اتخذ ثلاث خطوات لحماية نفسك قبل الدفع.",
+  "about.landHubPortal": "تصفح الأرض",
+  "about.landHubUgNlis": "بوابة UgNLIS الرسمية",
+  "about.landHubOfficialTitle": "حدد الموقع على الخريطة",
+  "about.landHubOfficialText": "ثبت موقع قطعة الأرض بالضبط قبل أن تسافر لمعاينتها.",
+  "about.landHubEvidenceTitle": "افحص المستندات",
+  "about.landHubEvidenceText": "راجع سند الملكية مع محاميك أنت، وليس مع البائع فقط.",
+  "about.landHubProcessTitle": "تجنب الضغط",
+  "about.landHubProcessText": "لا تتعجل، ولا تدفع بطرق لا يمكن تتبعها.",
   "about.finalWhatsapp": "تحدث عبر WhatsApp"
 });
 
