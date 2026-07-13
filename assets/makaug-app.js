@@ -6076,6 +6076,7 @@ function setPublicCategoryCount(category, localCount = 0, options = {}) {
 
 const PUBLIC_FILTERS_WIRED_MARKER = "public-filters-wired-20260711";
 const PUBLIC_FILTERS_WIRED_V2_MARKER = "public-filters-wired-v2-20260713";
+const PUBLIC_FILTERS_WIRED_V3_MARKER = "public-filters-wired-v3-20260713";
 const PUBLIC_FILTER_SEARCH_ENDPOINT = "/api/properties/search";
 
 function publicCategorySortSelectId(category) {
@@ -36075,7 +36076,8 @@ function publicCategoryTotalForPagination(category, localCount = 0, response = n
 
 function publicCategoryRenderTotal(category, list = [], filtered = false) {
   const state = publicPaginationStateFor(category);
-  const routeSearchTotal = publicCategoryHasRouteSearch(category) ? Math.max(0, Number(state?.total) || 0) : 0;
+  const activeSearchPath = publicCategoryActiveSearchPath(category);
+  const routeSearchTotal = activeSearchPath && state?.sourcePath === activeSearchPath ? Math.max(0, Number(state?.total) || 0) : 0;
   if (routeSearchTotal) return routeSearchTotal;
   if (filtered) return Math.max(0, Number(list.length) || 0);
   return publicCategoryTotalForPagination(category, list.length, null, { filtered: false });
@@ -36422,6 +36424,13 @@ function hydrateVisibleRouteSearchResults(source = "route_search_backend_results
     })
     .catch((error) => console.warn("Route search hydration failed", error));
   return true;
+}
+
+function hydratePublicCategorySearchIfActive(category, source = "public_filter_search_results") {
+  const key = publicPaginationKey(category);
+  if (!key || key !== activePublicInventoryCategoryFromRoute()) return false;
+  if (!publicCategoryActiveSearchPath(key)) return false;
+  return hydrateVisibleRouteSearchResults(source);
 }
 
 function exactPublicPaginationTotal(response) {
@@ -37676,6 +37685,7 @@ function filterListings(page, options = {}) {
       mode: filtered && !routeSearch ? "local" : "api",
       filtered
     });
+    if (!options.skipBackendSearch) hydratePublicCategorySearchIfActive("sale", "sale_filter_search_results");
     return list;
   } else if (page === "rent") {
     const q = (document.getElementById("rent-location-f")?.value || "").toLowerCase().trim();
@@ -37719,6 +37729,7 @@ function filterListings(page, options = {}) {
       mode: filtered && !routeSearch ? "local" : "api",
       filtered
     });
+    if (!options.skipBackendSearch) hydratePublicCategorySearchIfActive("rent", "rent_filter_search_results");
     return list;
   }
   return list;
@@ -37774,6 +37785,7 @@ function filterStudents(options = {}) {
     mode: filtered && !routeSearch ? "local" : "api",
     filtered
   });
+  if (!options.skipBackendSearch) hydratePublicCategorySearchIfActive("students", "student_filter_search_results");
   return list;
 }
 
@@ -41824,6 +41836,7 @@ function filterCommercial(options = {}) {
     mode: filtered && !routeSearch ? "local" : "api",
     filtered
   });
+  if (!options.skipBackendSearch) hydratePublicCategorySearchIfActive("commercial", "commercial_filter_search_results");
   return list;
 }
 
@@ -41868,6 +41881,7 @@ function filterLand(options = {}) {
     mode: filtered && !routeSearch ? "local" : "api",
     filtered
   });
+  if (!options.skipBackendSearch) hydratePublicCategorySearchIfActive("land", "land_filter_search_results");
   return list;
 }
 

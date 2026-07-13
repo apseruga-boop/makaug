@@ -11,6 +11,8 @@ assert(html.includes('public-filters-wired-20260711'), 'release marker must be p
 assert(app.includes('PUBLIC_FILTERS_WIRED_MARKER = "public-filters-wired-20260711"'), 'app bundle must carry the filter wiring marker');
 assert(html.includes('public-filters-wired-v2-20260713'), 'v2 release marker must be present in the public shell');
 assert(app.includes('PUBLIC_FILTERS_WIRED_V2_MARKER = "public-filters-wired-v2-20260713"'), 'app bundle must carry the v2 filter wiring marker');
+assert(html.includes('public-filters-wired-v3-20260713'), 'v3 release marker must be present in the public shell');
+assert(app.includes('PUBLIC_FILTERS_WIRED_V3_MARKER = "public-filters-wired-v3-20260713"'), 'app bundle must carry the v3 filter wiring marker');
 
 assert(app.includes('const PUBLIC_FILTER_SEARCH_ENDPOINT = "/api/properties/search"'), 'category filters must fetch the search endpoint');
 assert(app.includes('return active ? `${PUBLIC_FILTER_SEARCH_ENDPOINT}?${params.toString()}` : ""'), 'category filter URL must be built from the search endpoint');
@@ -34,6 +36,8 @@ assert(app.includes('function publicCategorySortOptionsHtml'), 'sort options mus
 assert(app.includes('"Highest Price"') && app.includes('"Lowest Price"') && app.includes('"Newest Listed"') && app.includes('"Oldest Listed"'), 'Rightmove-style sort labels must exist');
 assert(app.includes('function shouldIgnoreCatalogueHydration'), 'active filters must ignore stale generic catalogue hydration');
 assert(app.includes('const hydrationKey = `${activeCategory}::${activeCategoryPath}`'), 'hydration promises must be keyed by category and source path');
+assert(app.includes('function hydratePublicCategorySearchIfActive'), 'visible filter actions must hydrate from the search endpoint');
+assert(app.includes('state?.sourcePath === activeSearchPath'), 'filtered counts must not reuse stale generic category totals');
 
 for (const id of [
   'sale-baths-f',
