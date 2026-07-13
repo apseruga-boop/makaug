@@ -120,11 +120,7 @@ const PUBLIC_PROPERTIES_CACHE_REFRESH_AGENT = 'makaug-public-inventory-cache-war
 const PUBLIC_PROPERTIES_CACHE_IGNORED_QUERY_KEYS = new Set(['cache_refresh', 'cacheRefresh', 'deploy_probe', 'v', '_']);
 const PUBLIC_LOCATION_SEARCH_COLUMNS = Object.freeze([
   "p.area",
-  "p.district",
-  "COALESCE(p.extra_fields->>'city', '')",
-  "COALESCE(p.extra_fields->>'neighborhood', '')",
-  "COALESCE(p.extra_fields->>'street_name', '')",
-  "COALESCE(p.extra_fields->>'region', '')"
+  "p.district"
 ]);
 const publicPropertiesResponseCache = new Map();
 
