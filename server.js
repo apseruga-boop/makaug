@@ -231,6 +231,7 @@ const aboutPageVisualRefineVersion = 'about-page-visual-refine-20260713';
 const aboutCtaPrimaryVersion = 'about-cta-primary-20260713';
 const aboutHeroContrastFixVersion = 'about-hero-contrast-fix-20260713';
 const aboutLandStepsVersion = 'about-land-steps-20260713';
+const socialImportTilesVersion = 'social-import-tiles-20260713';
 const publicAppVersionSuffixes = [
   captureHelperUsabilityVersion,
   studentNearestUniversityVersion,
@@ -330,7 +331,8 @@ const publicAppVersionSuffixes = [
   aboutPageVisualRefineVersion,
   aboutCtaPrimaryVersion,
   aboutHeroContrastFixVersion,
-  aboutLandStepsVersion
+  aboutLandStepsVersion,
+  socialImportTilesVersion
 ];
 let cachedIndexHtml = null;
 const publicHtmlCache = new Map();

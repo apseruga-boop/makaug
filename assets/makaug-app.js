@@ -6385,6 +6385,7 @@ const PUBLIC_FILTERS_LOCATION_QUALITY_V3_MARKER = "public-filters-location-quali
 const PUBLIC_FILTERS_LOCATION_QUALITY_V4_MARKER = "public-filters-location-quality-v4-20260713";
 const MODERATOR_ID_VERIFICATION_MARKER = "moderator-id-verification-20260713";
 const MODERATOR_ID_PANEL_RENDER_MARKER = "moderator-id-panel-render-20260713";
+const SOCIAL_IMPORT_TILES_MARKER = "social-import-tiles-20260713";
 const PUBLIC_FILTER_SEARCH_ENDPOINT = "/api/properties/search";
 
 function publicCategorySortSelectId(category) {
@@ -34366,6 +34367,231 @@ function foundOnlineSourcePlayControlsHtml(sourceUrl = "", platform = "Source", 
   return `<div class="absolute right-2 top-2 z-20">${originalLink}</div>`;
 }
 
+function normalizeSocialImportPlatform(value = "") {
+  const raw = String(value || "").trim().toLowerCase();
+  if (raw.includes("tiktok")) return "tiktok";
+  if (raw === "x" || raw.includes("twitter") || raw.includes("x/twitter") || raw.includes("x.com/")) return "x";
+  if (raw.includes("facebook") || raw.includes("fb.watch")) return "facebook";
+  if (raw.includes("instagram")) return "instagram";
+  if (raw.includes("youtube") || raw.includes("youtu.be")) return "youtube";
+  return raw || "source";
+}
+
+function socialImportPlatformMeta(p = {}) {
+  const meta = foundOnlineSourceMeta(p) || {};
+  const extra = extraFieldsForListing(p);
+  const platformText = meta.platform
+    || p.source_platform
+    || extra.source_platform
+    || extra.source_contact_platform
+    || "";
+  const sourceText = [
+    platformText,
+    meta.sourceUrl,
+    meta.sourceContactUrl,
+    p.source_url,
+    p.video_url,
+    p.youtube_url,
+    p.tiktok_url,
+    extra.source_url,
+    extra.video_url,
+    extra.youtube_url,
+    extra.tiktok_url
+  ].filter(Boolean).join(" ");
+  const key = normalizeSocialImportPlatform(sourceText);
+  const platformMap = {
+    tiktok: {
+      key: "tiktok",
+      label: "TikTok",
+      icon: "ti-brand-tiktok fab fa-tiktok",
+      chipClass: "bg-black"
+    },
+    x: {
+      key: "x",
+      label: "X",
+      icon: "ti-brand-x fab fa-x-twitter",
+      chipClass: "bg-black"
+    },
+    facebook: {
+      key: "facebook",
+      label: "Facebook",
+      icon: "ti-brand-facebook fab fa-facebook-f",
+      chipClass: "bg-[#1877f2]"
+    },
+    instagram: {
+      key: "instagram",
+      label: "Instagram",
+      icon: "ti-brand-instagram fab fa-instagram",
+      chipClass: ""
+    },
+    youtube: {
+      key: "youtube",
+      label: "YouTube",
+      icon: "ti-brand-youtube fab fa-youtube",
+      chipClass: "bg-[#111827]"
+    }
+  };
+  return platformMap[key] || {
+    key: "source",
+    label: meta.platform || "Source",
+    icon: "ti-link fas fa-link",
+    chipClass: "bg-[#111827]"
+  };
+}
+
+function socialImportSourceUrl(p = {}) {
+  const meta = foundOnlineSourceMeta(p) || {};
+  const extra = extraFieldsForListing(p);
+  return [
+    foundOnlineSourceVideoUrl(p),
+    meta.sourceUrl,
+    meta.sourceContactUrl,
+    p.source_url,
+    p.source_contact_url,
+    extra.source_url,
+    extra.source_contact_url
+  ].find((value) => /^https?:\/\//i.test(String(value || "").trim())) || "";
+}
+
+function socialImportMediaType(p = {}) {
+  const extra = extraFieldsForListing(p);
+  const raw = String(p.media_type || p.source_media_type || extra.media_type || extra.source_media_type || "").trim().toLowerCase();
+  if (/photo|image/.test(raw)) return "image";
+  if (/video|reel/.test(raw)) return "video";
+  const sourceUrl = socialImportSourceUrl(p).toLowerCase();
+  const platform = socialImportPlatformMeta(p).key;
+  if (/youtube\.com|youtu\.be|tiktok\.com|fb\.watch|facebook\.com\/(?:watch|reel|videos)|instagram\.com\/(?:reel|tv)|\/video\/|\/reel\//.test(sourceUrl)) return "video";
+  if (platform === "tiktok" || platform === "youtube") return "video";
+  return socialImportImageCount(p) > 0 ? "image" : "image";
+}
+
+function socialImportImageCount(p = {}) {
+  const extra = extraFieldsForListing(p);
+  const raw = Number(
+    p.image_count
+    || p.photo_count
+    || extra.image_count
+    || extra.photo_count
+    || (Array.isArray(extra.authorised_photo_urls) ? extra.authorised_photo_urls.length : 0)
+    || (Array.isArray(extra.photo_source_urls) ? extra.photo_source_urls.length : 0)
+    || 0
+  );
+  return Number.isFinite(raw) && raw > 0 ? Math.max(1, Math.round(raw)) : 1;
+}
+
+function socialImportDurationLabel(p = {}) {
+  const extra = extraFieldsForListing(p);
+  const raw = String(
+    p.media_duration
+    || p.video_duration
+    || p.duration
+    || extra.media_duration
+    || extra.video_duration
+    || extra.duration
+    || ""
+  ).trim();
+  if (/^\d{1,2}:\d{2}(?::\d{2})?$/.test(raw)) return raw;
+  const seconds = Number(raw);
+  if (Number.isFinite(seconds) && seconds > 0) {
+    const total = Math.round(seconds);
+    const mins = Math.floor(total / 60);
+    const secs = String(total % 60).padStart(2, "0");
+    return `${mins}:${secs}`;
+  }
+  const platform = socialImportPlatformMeta(p).key;
+  return platform === "instagram" ? "Reel" : translateListingLabel("Video");
+}
+
+function socialImportMediaBadgeHtml(p = {}) {
+  const type = socialImportMediaType(p);
+  if (type === "video") {
+    return `<span class="social-import-media-badge"><i class="ti-player-play-filled fas fa-play text-[9px]"></i>${adminEscape(socialImportDurationLabel(p))}</span>`;
+  }
+  return `<span class="social-import-media-badge"><i class="ti-photo fas fa-image text-[10px]"></i>${adminEscape(String(socialImportImageCount(p)))}</span>`;
+}
+
+function socialImportSpecsHtml(p = {}) {
+  const type = normalizeType(p?.type || p?.listing_type || p?.category);
+  const specs = [];
+  const addSpec = (icon, value) => {
+    const text = String(value || "").trim();
+    if (text) specs.push(`<span><i class="${icon}"></i>${adminEscape(text)}</span>`);
+  };
+  if (type === "land") {
+    addSpec("ti-ruler-2 fas fa-ruler-combined", p.size || p.extra_fields?.size_raw || p.extra_fields?.land_size_label);
+    addSpec("ti-file-check fas fa-file-signature", p.title_type || p.extra_fields?.title_type || landTitleAvailabilityLabel(getLandTitleAvailabilityValue(p)));
+  } else {
+    if (p.subtype || p.property_type) addSpec("ti-building fas fa-building", p.subtype || p.property_type);
+    if (p.beds) addSpec("ti-bed fas fa-bed", `${p.beds} ${countLabel(p.beds, "bed", "beds")}`);
+    if (p.baths) addSpec("ti-bath fas fa-bath", `${p.baths} ${countLabel(p.baths, "bath", "baths")}`);
+    addSpec("ti-ruler-2 fas fa-ruler-combined", p.size || p.extra_fields?.size_raw || p.extra_fields?.floor_area_label);
+  }
+  return specs.length ? `<div class="social-import-card-specs">${specs.join("")}</div>` : "";
+}
+
+function socialImportPriceHtml(p = {}, { student = false } = {}) {
+  const value = Number(p?.price || 0);
+  if (!Number.isFinite(value) || value <= 0) {
+    return `<div class="social-import-card-price">${translateListingLabel("Price upon application")}</div>`;
+  }
+  const type = normalizeType(p?.type || p?.listing_type || p?.category);
+  const period = String(p?.period || p?.price_period || "").trim().toLowerCase();
+  const rental = type === "rent" || period === "mo" || period === "month" || period === "monthly";
+  const base = (CURRENCIES[activeCur] || CURRENCIES.UGX).fmt(value, "");
+  const suffix = rental ? `<span class="social-import-card-price-period">/mo</span>` : (student ? `<span class="social-import-card-price-period">/sem</span>` : "");
+  return `<div class="social-import-card-price">${adminEscape(base)}${suffix}</div>`;
+}
+
+function socialImportProvenanceHtml(p = {}) {
+  const platform = socialImportPlatformMeta(p).label;
+  const status = normalizeModerationStatus(p?.status || p?.moderation_status || "");
+  const reviewed = status === "approved" || status === "live" || status === "sold";
+  const copy = reviewed
+    ? `Imported from ${platform} · reviewed by makaug`
+    : `Imported from ${platform} · Auto-imported`;
+  return `<div class="social-import-card-provenance"><i class="ti-circle-check fas fa-circle-check"></i>${adminEscape(translateListingLabel(copy))}</div>`;
+}
+
+function socialImportTileMediaHtml(p = {}, idArg = "''") {
+  const platform = socialImportPlatformMeta(p);
+  const mediaType = socialImportMediaType(p);
+  const sourceUrl = socialImportSourceUrl(p);
+  const coverUrl = foundOnlineSourceThumbnailUrl(p, sourceUrl);
+  const encodedUrl = encodeURIComponent(sourceUrl || "");
+  const encodedPlatform = encodeURIComponent(platform.label || "Source");
+  const canPlay = mediaType === "video" && sourceUrl;
+  const playAction = canPlay
+    ? `event.stopPropagation(); return openFoundOnlineSourceVideoPlayer('${adminAttr(encodedUrl)}', '${adminAttr(encodedPlatform)}');`
+    : `return openPropertyCardDetail(event, ${idArg});`;
+  return `
+    <div class="social-import-tile-media">
+      ${coverUrl
+        ? `<img src="${adminAttr(coverUrl)}" alt="${adminAttr(`${platform.label} property preview`)}" class="absolute inset-0 h-full w-full object-cover" loading="lazy" decoding="async" onerror="this.classList.add('hidden'); var fallback=this.nextElementSibling; if (fallback) fallback.classList.remove('hidden');"><div class="hidden">${foundOnlineSourceFallbackVisualHtml(platform.label)}</div>`
+        : foundOnlineSourceFallbackVisualHtml(platform.label)}
+      <span class="social-import-source-chip ${platform.chipClass}" data-platform="${adminAttr(platform.key)}"><i class="${platform.icon}"></i>${adminEscape(platform.label)}</span>
+      ${socialImportMediaBadgeHtml(p)}
+      ${canPlay ? `<button type="button" data-source-video-play="1" onclick="${playAction}" class="social-import-play-button" aria-label="${adminAttr(`${translateListingLabel("Play")} ${platform.label} ${translateListingLabel("video")}`)}"><span><i class="ti-player-play-filled fas fa-play"></i></span></button>` : ""}
+    </div>`;
+}
+
+function socialImportListingCardHtml(p = {}, options = {}) {
+  const idArg = propertyIdArg(p.id);
+  const displayTitle = getLocalizedPropertyTitle(p);
+  const displayLocation = publicPropertyLocationLabel(p);
+  return `
+    <div class="group relative social-import-tile property-card cursor-pointer" data-release-marker="${SOCIAL_IMPORT_TILES_MARKER}" data-social-import-tile="1" onclick="openPropertyCardDetail(event, ${idArg})">
+      ${propertyDescriptionHoverHtml(p)}
+      ${socialImportTileMediaHtml(p, idArg)}
+      <div class="social-import-card-body">
+        ${socialImportPriceHtml(p, { student: options.student === true })}
+        <h3 class="social-import-card-title line-clamp-1">${adminEscape(displayTitle)}</h3>
+        <p class="social-import-card-location"><i class="ti-map-pin fas fa-map-marker-alt"></i>${adminEscape(displayLocation)}</p>
+        ${socialImportSpecsHtml(p)}
+        ${socialImportProvenanceHtml(p)}
+      </div>
+    </div>`;
+}
+
 function foundOnlineSourceVisualHtml(p = {}, options = {}) {
   const meta = foundOnlineSourceMeta(p) || {};
   const videoUrl = foundOnlineSourceVideoUrl(p);
@@ -35397,6 +35623,9 @@ function studentCardFooterText(p = {}) {
 }
 
 	    function propCard(p, options = {}) {
+  if (isFoundOnlineListing(p)) {
+    return socialImportListingCardHtml(p, options);
+  }
   const idArg = propertyIdArg(p.id);
   const saved = isPropertySaved(p.id);
   const broker = findBrokerById(p.agent);
@@ -35404,8 +35633,7 @@ function studentCardFooterText(p = {}) {
   const availability = propertyAvailabilityText(p);
   const distanceMiles = p.distance_miles ?? p.distanceMiles;
   const nearDistance = distanceMiles != null && Number.isFinite(Number(distanceMiles)) ? `${Number(distanceMiles).toFixed(1)} mi away` : "";
-  const isThirdPartyResult = isFoundOnlineListing(p);
-  const photoSrc = isThirdPartyResult ? "" : publicImageSrc(p.img, "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=900&q=80");
+  const photoSrc = publicImageSrc(p.img, "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=900&q=80");
   const displayTitle = getLocalizedPropertyTitle(p);
   const displayLocation = publicPropertyLocationLabel(p);
   const studentMode = options.student === true;
@@ -35422,7 +35650,7 @@ function studentCardFooterText(p = {}) {
     <div class="group relative bg-white rounded-xl border border-gray-100 overflow-hidden property-card cursor-pointer" onclick="openPropertyCardDetail(event, ${idArg})">
       ${propertyDescriptionHoverHtml(p)}
       <div class="h-48 relative overflow-hidden">
-        ${isThirdPartyResult ? foundOnlineSourceVisualHtml(p, { compact: true }) : `<img src="${adminAttr(photoSrc)}" alt="${adminAttr(displayTitle)}" class="w-full h-full object-cover">`}
+        <img src="${adminAttr(photoSrc)}" alt="${adminAttr(displayTitle)}" class="w-full h-full object-cover">
         <div class="absolute top-2 left-2 flex flex-col gap-1.5">
           ${badgeRow}
         </div>
@@ -36402,6 +36630,18 @@ function mapRemotePropertyForUi(p, options = {}) {
   const publicImageItems = thirdPartyDiscovery ? [] : imageItems;
   const normalizedListingType = normalizeType(p?.listing_type || p?.type);
   const publicListingType = normalizedListingType || getHeroPropertyOpportunityBucket(p);
+  const sourceVideoUrl = p?.video_url || extraFields.video_url || extraFields.youtube_url || extraFields.tiktok_url || extraFields.source_url || "";
+  const sourceCoverImageUrl = p?.cover_image_url
+    || p?.thumbnail_url
+    || p?.source_thumbnail_url
+    || extraFields.cover_image_url
+    || extraFields.thumbnail_url
+    || extraFields.source_thumbnail_url
+    || extraFields.video_thumbnail_url
+    || extraFields.tiktok_thumbnail_url
+    || extraFields.youtube_thumbnail_url
+    || extraFields.oembed_thumbnail_url
+    || "";
   const nearestUniversity = inferStudentNearestUniversity({ ...p, type: publicListingType, extra_fields: extraFields });  const studentUniversities = normalizeStudentUniversityList([
     ...(Array.isArray(p?.student_universities) ? p.student_universities : []),
     ...(Array.isArray(extraFields.student_universities) ? extraFields.student_universities : []),
@@ -36443,10 +36683,20 @@ function mapRemotePropertyForUi(p, options = {}) {
     region: p?.region || extraFields.region || "",
     street_name: p?.street_name || extraFields.street_name || "",
     preferred_contact_method: p?.preferred_contact_method || extraFields.preferred_contact_method || "both",
-    video_url: p?.video_url || extraFields.video_url || extraFields.youtube_url || extraFields.tiktok_url || "",
+    video_url: sourceVideoUrl,
     youtube_url: p?.youtube_url || extraFields.youtube_url || "",
-    tiktok_url: p?.tiktok_url || extraFields.tiktok_url || (/tiktok\.com/i.test(String(p?.video_url || extraFields.video_url || extraFields.source_url || "")) ? (p?.video_url || extraFields.video_url || extraFields.source_url || "") : ""),
+    tiktok_url: p?.tiktok_url || extraFields.tiktok_url || (/tiktok\.com/i.test(String(sourceVideoUrl || "")) ? sourceVideoUrl : ""),
+    source_platform: p?.source_platform || extraFields.source_platform || "",
+    source_url: p?.source_url || extraFields.source_url || "",
+    source_contact_url: p?.source_contact_url || extraFields.source_contact_url || "",
+    cover_image_url: sourceCoverImageUrl,
+    thumbnail_url: p?.thumbnail_url || extraFields.thumbnail_url || sourceCoverImageUrl,
+    source_thumbnail_url: p?.source_thumbnail_url || extraFields.source_thumbnail_url || sourceCoverImageUrl,
+    media_type: p?.media_type || extraFields.media_type || "",
+    media_duration: p?.media_duration || p?.video_duration || extraFields.media_duration || extraFields.video_duration || "",
+    image_count: Number(p?.image_count || extraFields.image_count || extraFields.photo_count || 0) || null,
     resolved_location_label: p?.resolved_location_label || extraFields.resolved_location_label || "",
+    size: p?.size || extraFields.size_raw || extraFields.size_label || extraFields.land_size_label || "",
     nearby_places: normalizeNearbyPlacesForUi(
       Array.isArray(extraFields.nearby_facilities) ? extraFields.nearby_facilities : (Array.isArray(p?.nearby_places) ? p.nearby_places : [])
     ),

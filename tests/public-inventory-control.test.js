@@ -550,6 +550,25 @@ test('public result pages expose the full inventory and avoid black iframe media
   assert.match(functionSource('openFoundOnlineSourceVideoPlayer'), /source-video-frame-wrap/);
   assert.match(functionSource('openFoundOnlineSourceVideoPlayer'), /openModal\("source-video-modal"\)/);
 
+  const socialTile = functionSource('socialImportListingCardHtml');
+  assert.match(socialTile, /data-social-import-tile="1"/);
+  assert.match(socialTile, /socialImportTileMediaHtml/);
+  assert.match(socialTile, /socialImportPriceHtml/);
+  assert.match(socialTile, /socialImportSpecsHtml/);
+  assert.match(socialTile, /socialImportProvenanceHtml/);
+  assert.match(functionSource('socialImportPlatformMeta'), /label: "TikTok"/);
+  assert.match(functionSource('socialImportPlatformMeta'), /label: "X"/);
+  assert.match(functionSource('normalizeSocialImportPlatform'), /x\.com\//);
+  assert.match(functionSource('socialImportPlatformMeta'), /label: "Facebook"/);
+  assert.match(functionSource('socialImportPlatformMeta'), /label: "Instagram"/);
+  assert.match(functionSource('socialImportMediaType'), /fb\\.watch/);
+  assert.match(functionSource('socialImportMediaBadgeHtml'), /ti-player-play-filled/);
+  assert.match(functionSource('socialImportMediaBadgeHtml'), /ti-photo/);
+  assert.match(functionSource('socialImportTileMediaHtml'), /social-import-source-chip/);
+  assert.match(functionSource('socialImportMediaBadgeHtml'), /social-import-media-badge/);
+  assert.match(functionSource('propCard'), /return socialImportListingCardHtml\(p, options\);/);
+  assert.match(htmlSource, /social-import-tiles-20260713/);
+
   const detailMap = asyncFunctionSource('initDetailMap');
   assert.match(functionSource('renderStaticDetailMapFallback'), /staticmap\.openstreetmap\.de/);
   assert.match(detailMap, /renderStaticDetailMapFallback\(el, p, point\)/);

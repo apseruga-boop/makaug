@@ -179,7 +179,9 @@ test('public pages explain the search-engine model and expose found-online sourc
   assert(read('routes/contact.js').includes("router.post('/report-listing', handleReportListing)"), 'third-party listing requests should submit into the backend report queue');
   assert(read('routes/contact.js').includes('request_type: requestType'), 'backend report queue should retain claim/correction/removal/report request type metadata');
   assert(read('services/publicHtmlSanitizer.js').includes("preserve.add('report-modal')"), 'public property and report routes should keep the report modal available');
-  assert(frontend.includes('foundOnlineSourceVisualHtml'), 'found-online public cards should use a source/video placeholder instead of copied social photos');
+  assert(frontend.includes('socialImportListingCardHtml'), 'found-online public grid cards should use native social import listing tiles');
+  assert(frontend.includes('socialImportTileMediaHtml'), 'social import tiles should render normalized media thumbnails with platform overlays');
+  assert(frontend.includes('socialImportProvenanceHtml'), 'social import tiles should show public imported/reviewed provenance');
   assert(frontend.includes('thirdPartyDiscovery ? [] : imageItems'), 'remote found-online rows should not keep imported social image arrays in the public UI');
   assert(frontend.includes('foundOnlineSourceThumbnailUrl'), 'found-online detail should prefer static source thumbnails over live social embeds');
   assert(frontend.includes('Makaug shows a static source preview here and links back to the original platform'), 'found-online detail should explain static source previews before the description');

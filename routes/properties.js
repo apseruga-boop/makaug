@@ -1138,6 +1138,7 @@ function publicSourceDateOutOfOrder(firstPostedRaw, firstSeenRaw, addedToMakaugR
 
 function publicExtraFields(extraFields = {}) {
   const extra = extraFields && typeof extraFields === 'object' ? extraFields : {};
+  const rawSourcePost = extra.raw_source_post && typeof extra.raw_source_post === 'object' ? extra.raw_source_post : {};
   const landTitleAvailable = normalizeLandTitleAvailability(
     extra.land_title_available
       ?? extra.landTitleAvailable
@@ -1234,6 +1235,39 @@ function publicExtraFields(extraFields = {}) {
       || (Array.isArray(extra.photo_source_urls) ? extra.photo_source_urls[0] : '')
       || (Array.isArray(extra.authorised_photo_urls) ? extra.authorised_photo_urls[0] : '')
   );
+  const mediaTypeRaw = cleanText(
+    extra.media_type
+      || extra.source_media_type
+      || extra.post_media_type
+      || rawSourcePost.media_type
+      || rawSourcePost.source_media_type
+      || ''
+  ).toLowerCase();
+  const mediaType = mediaTypeRaw.includes('photo') || mediaTypeRaw.includes('image')
+    ? 'image'
+    : mediaTypeRaw.includes('video') || mediaTypeRaw.includes('reel')
+      ? 'video'
+      : null;
+  const mediaDuration = cleanText(
+    extra.media_duration
+      || extra.video_duration
+      || extra.duration
+      || extra.duration_label
+      || rawSourcePost.media_duration
+      || rawSourcePost.video_duration
+      || rawSourcePost.duration
+      || ''
+  );
+  const imageCount = Number(
+    extra.image_count
+      || extra.photo_count
+      || extra.media_image_count
+      || rawSourcePost.image_count
+      || rawSourcePost.photo_count
+      || (Array.isArray(extra.authorised_photo_urls) ? extra.authorised_photo_urls.length : 0)
+      || (Array.isArray(extra.photo_source_urls) ? extra.photo_source_urls.length : 0)
+      || 0
+  ) || null;
   const sourceUnavailable = extra.source_unavailable === true
     || tiktokProfileOnlyContact
     || /(?:dead|deleted|removed|unavailable|not_found|not found|account_does_not_exist|account does not exist|404|410)/i.test(String(extra.source_url_status || extra.source_status || extra.source_availability_status || ''));
@@ -1279,8 +1313,12 @@ function publicExtraFields(extraFields = {}) {
     thumbnail_url: sourceThumbnailUrl || null,
     source_thumbnail_url: sourceThumbnailUrl || null,
     video_thumbnail_url: sourceThumbnailUrl || null,
+    cover_image_url: sourceThumbnailUrl || null,
     tiktok_thumbnail_url: tiktokThumbnailUrl || null,
     oembed_thumbnail_url: oembedThumbnailUrl || null,
+    media_type: mediaType,
+    media_duration: mediaDuration || null,
+    image_count: imageCount,
     public_contact_phone: publicContactPhone || null,
     contact_phone: publicContactPhone || null,
     source_unavailable: sourceUnavailable,
