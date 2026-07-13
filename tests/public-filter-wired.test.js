@@ -7,6 +7,7 @@ const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const app = fs.readFileSync(path.join(root, 'assets', 'makaug-app.js'), 'utf8');
 const propertiesRoute = fs.readFileSync(path.join(root, 'routes', 'properties.js'), 'utf8');
 const locationMigration = fs.readFileSync(path.join(root, 'db', 'migrations', '071_public_search_location_performance.sql'), 'utf8');
+const locationLabelMigration = fs.readFileSync(path.join(root, 'db', 'migrations', '072_public_area_district_normalisation.sql'), 'utf8');
 
 assert(html.includes('public-filters-wired-20260711'), 'release marker must be present in the public shell');
 assert(app.includes('PUBLIC_FILTERS_WIRED_MARKER = "public-filters-wired-20260711"'), 'app bundle must carry the filter wiring marker');
@@ -24,6 +25,9 @@ assert((html.match(/public-filters-location-quality-v2-20260713/g) || []).length
 assert(html.includes('public-filters-location-quality-v3-20260713'), 'location-quality v3 release marker must be present in the public shell');
 assert(app.includes('PUBLIC_FILTERS_LOCATION_QUALITY_V3_MARKER = "public-filters-location-quality-v3-20260713"'), 'app bundle must carry the location-quality v3 marker');
 assert((html.match(/public-filters-location-quality-v3-20260713/g) || []).length >= 2, 'location-quality v3 marker must be present in both preload and script cache-bust builders');
+assert(html.includes('public-filters-location-quality-v4-20260713'), 'location-quality v4 release marker must be present in the public shell');
+assert(app.includes('PUBLIC_FILTERS_LOCATION_QUALITY_V4_MARKER = "public-filters-location-quality-v4-20260713"'), 'app bundle must carry the location-quality v4 marker');
+assert((html.match(/public-filters-location-quality-v4-20260713/g) || []).length >= 2, 'location-quality v4 marker must be present in both preload and script cache-bust builders');
 
 assert(app.includes('const PUBLIC_FILTER_SEARCH_ENDPOINT = "/api/properties/search"'), 'category filters must fetch the search endpoint');
 assert(app.includes('return active ? `${PUBLIC_FILTER_SEARCH_ENDPOINT}?${params.toString()}` : ""'), 'category filter URL must be built from the search endpoint');
@@ -91,6 +95,8 @@ assert(locationMigration.includes('idx_properties_public_live_type_price_created
 assert(locationMigration.includes('test zone') && locationMigration.includes("status = 'rejected'"), 'location search migration must reject public test-zone rows');
 assert(locationMigration.includes('public_search_suppressed'), 'location search migration must tag suppressed public test rows');
 assert(locationMigration.includes('ANALYZE properties'), 'location search migration must refresh planner stats');
+assert(locationLabelMigration.includes('public_area_district') && locationLabelMigration.includes("('nansana', 'Wakiso')"), 'district normalisation migration must align visible areas with stored districts');
+assert(locationLabelMigration.includes('public_location_district_normalised') && locationLabelMigration.includes('ANALYZE properties'), 'district normalisation migration must tag rows and refresh planner stats');
 assert(app.includes('function comparePublicPriceDesc') && app.includes('publicSortablePrice'), 'client-side price sorting must also put unpriced rows last');
 
 console.log('public filter wiring regression checks passed');
