@@ -13,6 +13,7 @@ assert(html.includes('public-filters-wired-v2-20260713'), 'v2 release marker mus
 assert(app.includes('PUBLIC_FILTERS_WIRED_V2_MARKER = "public-filters-wired-v2-20260713"'), 'app bundle must carry the v2 filter wiring marker');
 assert(html.includes('public-filters-wired-v3-20260713'), 'v3 release marker must be present in the public shell');
 assert(app.includes('PUBLIC_FILTERS_WIRED_V3_MARKER = "public-filters-wired-v3-20260713"'), 'app bundle must carry the v3 filter wiring marker');
+assert((html.match(/public-filters-wired-v3-20260713/g) || []).length >= 2, 'v3 marker must be present in both preload and script cache-bust builders');
 
 assert(app.includes('const PUBLIC_FILTER_SEARCH_ENDPOINT = "/api/properties/search"'), 'category filters must fetch the search endpoint');
 assert(app.includes('return active ? `${PUBLIC_FILTER_SEARCH_ENDPOINT}?${params.toString()}` : ""'), 'category filter URL must be built from the search endpoint');
