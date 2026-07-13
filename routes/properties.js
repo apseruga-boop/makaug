@@ -215,14 +215,8 @@ function addPublicLocationSearchFilter(filters, values, value = '') {
   PUBLIC_LOCATION_SEARCH_COLUMNS.forEach((columnSql) => {
     values.push(needle);
     const exactRef = `$${values.length}`;
-    values.push(`${needle}%`);
-    const prefixRef = `$${values.length}`;
-    values.push(`%, ${needle}%`);
-    const commaRef = `$${values.length}`;
     clauses.push(`(
       LOWER(TRIM(COALESCE(${columnSql}, ''))) = ${exactRef}
-      OR LOWER(TRIM(COALESCE(${columnSql}, ''))) LIKE ${prefixRef}
-      OR LOWER(TRIM(COALESCE(${columnSql}, ''))) LIKE ${commaRef}
     )`);
   });
   filters.push(`(${clauses.join(' OR ')})`);

@@ -21,6 +21,9 @@ assert((html.match(/public-filters-location-quality-20260713/g) || []).length >=
 assert(html.includes('public-filters-location-quality-v2-20260713'), 'location-quality v2 release marker must be present in the public shell');
 assert(app.includes('PUBLIC_FILTERS_LOCATION_QUALITY_V2_MARKER = "public-filters-location-quality-v2-20260713"'), 'app bundle must carry the location-quality v2 marker');
 assert((html.match(/public-filters-location-quality-v2-20260713/g) || []).length >= 2, 'location-quality v2 marker must be present in both preload and script cache-bust builders');
+assert(html.includes('public-filters-location-quality-v3-20260713'), 'location-quality v3 release marker must be present in the public shell');
+assert(app.includes('PUBLIC_FILTERS_LOCATION_QUALITY_V3_MARKER = "public-filters-location-quality-v3-20260713"'), 'app bundle must carry the location-quality v3 marker');
+assert((html.match(/public-filters-location-quality-v3-20260713/g) || []).length >= 2, 'location-quality v3 marker must be present in both preload and script cache-bust builders');
 
 assert(app.includes('const PUBLIC_FILTER_SEARCH_ENDPOINT = "/api/properties/search"'), 'category filters must fetch the search endpoint');
 assert(app.includes('return active ? `${PUBLIC_FILTER_SEARCH_ENDPOINT}?${params.toString()}` : ""'), 'category filter URL must be built from the search endpoint');
@@ -80,6 +83,7 @@ assert(propertiesRoute.includes("oldest: 'p.created_at ASC, p.id ASC'"), 'backen
 assert(propertiesRoute.includes('function addPublicLocationSearchFilter'), 'public searches must use the stricter location search helper');
 assert(propertiesRoute.includes('if (publicOnly || !adminAccess)') && propertiesRoute.includes('addPublicLocationSearchFilter(filters, values, area)'), 'anonymous/public location searches must not use broad title/description fallback');
 assert(!propertiesRoute.includes('"COALESCE(p.extra_fields->>\'neighborhood\', \'\')"'), 'public visible-location search must not match hidden neighborhood labels');
+assert(!propertiesRoute.includes('OR LOWER(TRIM(COALESCE(${columnSql}, \'\'))) LIKE'), 'public location searches must use exact indexed area/district equality');
 assert(propertiesRoute.includes('\\btest zone\\b'), 'public QA/test listings must be suppressed from consumer results');
 assert(locationMigration.includes('CREATE EXTENSION IF NOT EXISTS pg_trgm'), 'location search migration must enable trigram indexes');
 assert(locationMigration.includes('idx_properties_public_live_type_area_lower'), 'location search migration must index area by listing type');
