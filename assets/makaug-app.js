@@ -41726,6 +41726,10 @@ function lpNum(id) {
   return Number.isFinite(v) ? v : 0;
 }
 
+let lpDescriptionTranslationTimer = null;
+let lpDescriptionTranslationRequestId = 0;
+const lpDescriptionTranslationCache = new Map();
+
 function renderListingDescriptionTranslationPreview() {
   const copyEl = document.getElementById("lp-description-preview-copy");
   const sourceEl = document.getElementById("lp-description-preview-source");
@@ -41745,16 +41749,67 @@ function renderListingDescriptionTranslationPreview() {
   };
   if (!original) {
     copyEl.textContent = translateListingLabel("Add a description to preview it in another language.");
-    if (sourceEl) sourceEl.textContent = translateListingLabel("Source: original description. Translation review pending.");
+    copyEl.dir = "auto";
+    if (sourceEl) sourceEl.textContent = translateListingLabel("Type a description, then choose a language for an auto-translated preview.");
     return;
   }
-  copyEl.textContent = original;
-  if (sourceEl) {
-    const label = names[lang] || "selected language";
-    sourceEl.textContent = lang === "en"
-      ? "Source: original English description."
-      : `Preview in ${label}: original shown until AI/manual translation is reviewed.`;
+
+  const label = names[lang] || "selected language";
+  const cacheKey = `${lang}:${original}`;
+  const requestId = lpDescriptionTranslationRequestId + 1;
+  lpDescriptionTranslationRequestId = requestId;
+
+  if (lpDescriptionTranslationTimer) clearTimeout(lpDescriptionTranslationTimer);
+
+  if (lang === "en") {
+    copyEl.textContent = original;
+    copyEl.dir = "auto";
+    if (sourceEl) sourceEl.textContent = "Source: original English description.";
+    return;
   }
+
+  if (lpDescriptionTranslationCache.has(cacheKey)) {
+    const cached = lpDescriptionTranslationCache.get(cacheKey);
+    copyEl.textContent = cached.text || original;
+    copyEl.dir = lang === "ar" ? "rtl" : "auto";
+    if (sourceEl) sourceEl.textContent = cached.note || `Auto-translated preview in ${label}. Public copy still requires review before it appears live.`;
+    return;
+  }
+
+  copyEl.textContent = translateListingLabel("Translating preview...");
+  copyEl.dir = lang === "ar" ? "rtl" : "auto";
+  if (sourceEl) sourceEl.textContent = `Auto-translating into ${label}. Your original description is preserved.`;
+
+  lpDescriptionTranslationTimer = setTimeout(async () => {
+    try {
+      const response = await apiRequest("/api/ai/translate-text", {
+        method: "POST",
+        skipAuth: true,
+        body: {
+          text: original,
+          source_language: "en",
+          target_language: lang,
+          context: "list-property description language preview",
+          source: "list_property_description_preview"
+        }
+      });
+      if (requestId !== lpDescriptionTranslationRequestId) return;
+      const translated = response?.data?.translated_text || "";
+      const fallbackUsed = Boolean(response?.data?.fallback_used);
+      const note = fallbackUsed
+        ? `Could not confidently translate into ${label}; showing the original for now.`
+        : `Auto-translated preview in ${label}. Public copy still requires review before it appears live.`;
+      lpDescriptionTranslationCache.set(cacheKey, { text: translated || original, note });
+      copyEl.textContent = translated || original;
+      copyEl.dir = lang === "ar" ? "rtl" : "auto";
+      if (sourceEl) sourceEl.textContent = note;
+    } catch (error) {
+      if (requestId !== lpDescriptionTranslationRequestId) return;
+      copyEl.textContent = original;
+      copyEl.dir = "auto";
+      if (sourceEl) sourceEl.textContent = `Couldn't translate into ${label}; showing the original for now.`;
+    }
+  }, 500);
 }
 
 function updateListPreview() {

@@ -1549,6 +1549,136 @@ Return strict JSON: {"text":"..."}`
   }
 }
 
+async function translateFreeText({
+  text = '',
+  targetLanguage = 'en',
+  sourceLanguage = 'en',
+  context = '',
+  source = 'api_free_text_translation'
+}) {
+  const inputText = cleanText(text, 5000);
+  const target = normalizeLanguageCode(targetLanguage);
+  const sourceLang = normalizeLanguageCode(sourceLanguage || 'en');
+  const targetName = languageDisplayName(target);
+
+  if (!inputText) {
+    return {
+      translated_text: '',
+      language: target,
+      source_language: sourceLang,
+      model: 'none',
+      fallbackUsed: false,
+      fallbackReason: 'empty_text'
+    };
+  }
+
+  if (target === sourceLang || target === 'en') {
+    return {
+      translated_text: inputText,
+      language: target,
+      source_language: sourceLang,
+      model: 'original',
+      fallbackUsed: false,
+      fallbackReason: null
+    };
+  }
+
+  const client = getClient();
+  if (!client) {
+    await logAiModelEvent({
+      eventType: 'free_text_translation',
+      source,
+      inputPayload: { text: inputText, targetLanguage: target, sourceLanguage: sourceLang, context },
+      outputPayload: { translated_text: inputText, fallbackUsed: true, fallbackReason: 'provider_missing' },
+      modelName: 'template',
+      language: target,
+      qualityScore: 0.2
+    });
+    return {
+      translated_text: inputText,
+      language: target,
+      source_language: sourceLang,
+      model: 'template',
+      fallbackUsed: true,
+      fallbackReason: 'provider_missing'
+    };
+  }
+
+  const model = getTaskModel('translation', process.env.OPENAI_TRANSLATION_MODEL || process.env.OPENAI_LISTING_MODEL || 'gpt-4.1-mini');
+
+  try {
+    const completion = await createChatCompletionResilient(client, {
+      model,
+      temperature: 0.15,
+      messages: [
+        {
+          role: 'system',
+          content: `Translate user-written Uganda property listing text into ${targetName}.
+This is a private on-form auto-translated preview, not reviewed public copy.
+Preserve meaning, numbers, prices, phone numbers, place names, district/area names, and URLs.
+Do not add facts, promises, legal claims, or marketing exaggeration.
+If the target is Rukiga or Runyankole, do not substitute Kinyarwanda.
+Return strict JSON: {"translated_text":"..."}.`
+        },
+        {
+          role: 'user',
+          content: JSON.stringify({
+            text: inputText,
+            source_language: sourceLang,
+            target_language: target,
+            target_language_name: targetName,
+            context: cleanText(context, 500)
+          })
+        }
+      ]
+    }, { preferJson: true });
+
+    const parsed = safeJsonParse(completion?.choices?.[0]?.message?.content || '{}', {});
+    const translatedText = cleanText(parsed.translated_text || parsed.translation || parsed.text || '', 5000);
+    const fallbackUsed = !translatedText || translatedText === inputText;
+    const output = {
+      translated_text: translatedText || inputText,
+      language: target,
+      source_language: sourceLang,
+      model,
+      fallbackUsed,
+      fallbackReason: fallbackUsed ? 'empty_or_unchanged_model_output' : null
+    };
+
+    await logAiModelEvent({
+      eventType: 'free_text_translation',
+      source,
+      inputPayload: { text: inputText, targetLanguage: target, sourceLanguage: sourceLang, context },
+      outputPayload: output,
+      modelName: model,
+      language: target,
+      qualityScore: fallbackUsed ? 0.45 : 0.8
+    });
+
+    return output;
+  } catch (error) {
+    logger.warn('Free-text translation failed:', error.message);
+    await logAiModelEvent({
+      eventType: 'free_text_translation_error',
+      source,
+      inputPayload: { text: inputText, targetLanguage: target, sourceLanguage: sourceLang, context },
+      outputPayload: { translated_text: inputText },
+      modelName: model,
+      language: target,
+      qualityScore: 0.25,
+      errorMessage: error.message
+    });
+    return {
+      translated_text: inputText,
+      language: target,
+      source_language: sourceLang,
+      model: 'template_fallback',
+      fallbackUsed: true,
+      fallbackReason: 'translation_error'
+    };
+  }
+}
+
 async function recordAiFeedback({ eventId = null, rating = null, label = '', notes = '', actorId = null }) {
   const safeRating = rating == null ? null : Math.max(1, Math.min(5, parseInt(rating, 10) || 0));
   const safeLabel = cleanText(label, 80).toLowerCase() || null;
@@ -1642,6 +1772,7 @@ module.exports = {
   transcribeAudioFromDataUrl,
   generateCampaignCopy,
   generateListingIntelligence,
+  translateFreeText,
   suggestWhatsappAssistantReply,
   recordAiFeedback,
   logAiModelEvent,

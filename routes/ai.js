@@ -9,6 +9,7 @@ const { logNotification } = require('../services/notificationLogService');
 const {
   SUPPORTED_AI_LANGUAGES,
   generateListingIntelligence,
+  translateFreeText,
   suggestWhatsappAssistantReply,
   recordAiFeedback,
   normalizeLanguageCode
@@ -209,6 +210,40 @@ router.post('/rewrite-description', async (req, res, next) => {
         language: targetLanguage,
         rewritten_description: intelligence.canonical?.rewritten_description || listing.description,
         area_highlights: intelligence.canonical?.area_highlights || ''
+      }
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/translate-text', async (req, res, next) => {
+  try {
+    const body = req.body || {};
+    const text = cleanText(body.text || body.description).replace(/\s+/g, ' ').slice(0, 5000);
+    if (!text) {
+      return res.status(400).json({ ok: false, error: 'text is required' });
+    }
+
+    const targetLanguage = normalizeLanguageCode(body.target_language || body.language || 'en');
+    const sourceLanguage = normalizeLanguageCode(body.source_language || 'en');
+    const result = await translateFreeText({
+      text,
+      targetLanguage,
+      sourceLanguage,
+      context: cleanText(body.context || 'list-property description preview').slice(0, 500),
+      source: cleanText(body.source || 'api_translate_text') || 'api_translate_text'
+    });
+
+    return res.json({
+      ok: true,
+      data: {
+        language: result.language || targetLanguage,
+        source_language: result.source_language || sourceLanguage,
+        translated_text: result.translated_text || text,
+        model: result.model || 'unknown',
+        fallback_used: Boolean(result.fallbackUsed),
+        fallback_reason: result.fallbackReason || null
       }
     });
   } catch (error) {
