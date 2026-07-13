@@ -198,6 +198,8 @@ function run() {
   assert(staffPanelsBody.includes('const [recentActivity, reviewResult, brokerReviewResult, sourceQueueRows]'), 'staff panels endpoint should include recent activity with moderation panel query metadata');
   assert(staffPanelsBody.includes('NULL::text AS primary_image_url'), 'staff panels moderation queue should skip image joins for fast first render');
   assert(!staffPanelsBody.includes('LEFT JOIN LATERAL'), 'staff panels endpoint should not run per-row image lateral joins');
+  assert(!staffPanelsBody.includes('p.description'), 'staff panels moderation queue should not ship full descriptions before preview');
+  assert(staffPanelsBody.includes('jsonb_build_object('), 'staff panels moderation queue should ship only minimal broker metadata');
   assert(staffPanelsBody.includes('staffModerationPanelRows(reviewResult.rows, queueLimit)'), 'staff panels endpoint should render SQL-parity rows directly instead of filtering them to zero in JS');
   assert(staffPanelsBody.includes('WITH panel_candidates AS MATERIALIZED'), 'staff panels endpoint should pre-scan ordered pending IDs through the review queue index');
   assert(staffPanelsBody.includes("WHERE ${activePendingReviewWhere('p')}"), 'staff panels endpoint should use the unsuppressed active-review partial index inside the candidate scan');

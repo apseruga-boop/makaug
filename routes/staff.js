@@ -1553,11 +1553,15 @@ async function buildDashboardPanelsPayload(req) {
          ORDER BY p.updated_at DESC NULLS LAST, p.created_at DESC NULLS LAST, p.id DESC
          LIMIT $1
        )
-       SELECT p.id, p.title, p.description, p.listing_type, p.property_type, p.district, p.area, p.address,
-              p.price, p.price_period, p.bedrooms, p.bathrooms, p.title_type,
+       SELECT p.id, p.title, p.listing_type, p.property_type, p.district, p.area,
+              p.price,
               p.status, p.moderation_stage, p.moderation_reason, p.created_at, p.updated_at,
               p.inquiry_reference, p.lister_name, p.lister_phone, p.lister_email, p.source, p.listed_via,
-              p.lister_type, p.agent_id, p.extra_fields,
+              p.lister_type, p.agent_id,
+              jsonb_build_object(
+                'broker_submission', p.extra_fields->>'broker_submission',
+                'broker_agent_id', p.extra_fields->>'broker_agent_id'
+              ) AS extra_fields,
               COALESCE(p.extra_fields->>'source_url', p.extra_fields->>'source_post_url', p.extra_fields->>'tiktok_url', p.extra_fields->>'youtube_url', p.extra_fields->>'video_url') AS source_url,
               COALESCE(p.extra_fields->>'source_platform', p.extra_fields->>'source_badge', p.source, p.listed_via) AS source_platform,
               0::int AS duplicate_count,
@@ -1578,11 +1582,15 @@ async function buildDashboardPanelsPayload(req) {
          ORDER BY p.updated_at DESC NULLS LAST, p.created_at DESC NULLS LAST, p.id DESC
          LIMIT $1
        )
-       SELECT p.id, p.title, p.description, p.listing_type, p.property_type, p.district, p.area, p.address,
-              p.price, p.price_period, p.bedrooms, p.bathrooms, p.title_type,
+       SELECT p.id, p.title, p.listing_type, p.property_type, p.district, p.area,
+              p.price,
               p.status, p.moderation_stage, p.moderation_reason, p.created_at, p.updated_at,
               p.inquiry_reference, p.lister_name, p.lister_phone, p.lister_email, p.source, p.listed_via,
-              p.lister_type, p.agent_id, p.extra_fields,
+              p.lister_type, p.agent_id,
+              jsonb_build_object(
+                'broker_submission', p.extra_fields->>'broker_submission',
+                'broker_agent_id', p.extra_fields->>'broker_agent_id'
+              ) AS extra_fields,
               COALESCE(p.extra_fields->>'source_url', p.extra_fields->>'source_post_url', p.extra_fields->>'tiktok_url', p.extra_fields->>'youtube_url', p.extra_fields->>'video_url') AS source_url,
               COALESCE(p.extra_fields->>'source_platform', p.extra_fields->>'source_badge', p.source, p.listed_via) AS source_platform,
               0::int AS duplicate_count,
