@@ -30551,6 +30551,8 @@ async function submitAiChatbotPrompt(event) {
   }
 }
 
+window.submitAiChatbotPrompt = submitAiChatbotPrompt;
+
 function openHowToVideo(key) {
   const video = HOW_TO_VIDEO_SLOTS.find((item) => item.key === key) || HOW_TO_VIDEO_SLOTS[0];
   const title = document.getElementById("howto-video-title");
