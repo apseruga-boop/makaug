@@ -118,6 +118,14 @@ const PUBLIC_PROPERTIES_CACHE_STALE_SECONDS = 300;
 const PUBLIC_PROPERTIES_CACHE_MAX_ENTRIES = 120;
 const PUBLIC_PROPERTIES_CACHE_REFRESH_AGENT = 'makaug-public-inventory-cache-warmup';
 const PUBLIC_PROPERTIES_CACHE_IGNORED_QUERY_KEYS = new Set(['cache_refresh', 'cacheRefresh', 'deploy_probe', 'v', '_']);
+const PUBLIC_LOCATION_SEARCH_COLUMNS = Object.freeze([
+  "p.area",
+  "p.district",
+  "COALESCE(p.extra_fields->>'city', '')",
+  "COALESCE(p.extra_fields->>'neighborhood', '')",
+  "COALESCE(p.extra_fields->>'street_name', '')",
+  "COALESCE(p.extra_fields->>'region', '')"
+]);
 const publicPropertiesResponseCache = new Map();
 
 function runPublicInventoryFollowup(task, label, context = {}) {
@@ -200,6 +208,31 @@ function addFilter(filters, values, clause, ...vals) {
   filters.push(prepared);
 }
 
+function normalizePublicSearchNeedle(value = '') {
+  return cleanText(value).toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+function addPublicLocationSearchFilter(filters, values, value = '') {
+  const needle = normalizePublicSearchNeedle(value);
+  if (!needle) return false;
+  const clauses = [];
+  PUBLIC_LOCATION_SEARCH_COLUMNS.forEach((columnSql) => {
+    values.push(needle);
+    const exactRef = `$${values.length}`;
+    values.push(`${needle}%`);
+    const prefixRef = `$${values.length}`;
+    values.push(`%, ${needle}%`);
+    const commaRef = `$${values.length}`;
+    clauses.push(`(
+      LOWER(TRIM(COALESCE(${columnSql}, ''))) = ${exactRef}
+      OR LOWER(TRIM(COALESCE(${columnSql}, ''))) LIKE ${prefixRef}
+      OR LOWER(TRIM(COALESCE(${columnSql}, ''))) LIKE ${commaRef}
+    )`);
+  });
+  filters.push(`(${clauses.join(' OR ')})`);
+  return true;
+}
+
 function isLaunchSeedListing(row = {}) {
   const title = String(row.title || '');
   const normalizedTitle = title.trim().toLowerCase();
@@ -225,7 +258,7 @@ function isLaunchSeedListing(row = {}) {
   ].filter(Boolean).join(' ');
   return LAUNCH_DUMMY_LISTING_TITLES.has(normalizedTitle)
     || LAUNCH_SEED_LISTING_MARKERS.some((marker) => title.includes(marker) || description.includes(marker))
-    || /\bmakaug training\b|\btraining visibility\b|\bvisibility check\b|\bstock unsplash\b|\bdemo listing\b|\bqa test\b|\bsoft_launch\b|\blaunch_proof\b/i.test(publicTrainingDemoText);
+    || /\bmakaug training\b|\btraining visibility\b|\bvisibility check\b|\bstock unsplash\b|\bdemo listing\b|\bqa test\b|\btest zone\b|\bsoft_launch\b|\blaunch_proof\b/i.test(publicTrainingDemoText);
 }
 
 function addPublicLaunchSeedFilter(filters, values) {
@@ -251,7 +284,7 @@ function addPublicLaunchSeedFilter(filters, values) {
   filters.push("COALESCE(p.extra_fields->>'is_test', '') !~* '^(true|1|yes)$'");
   filters.push("COALESCE(p.extra_fields->>'launch_proof', '') !~* '^(true|1|yes)$'");
   filters.push("COALESCE(p.extra_fields->>'non_public_test', '') !~* '^(true|1|yes)$'");
-  filters.push("(COALESCE(p.title, '') || ' ' || COALESCE(p.description, '') || ' ' || COALESCE(p.extra_fields::text, '')) !~* '(makaug training|training visibility|visibility check|stock unsplash|demo listing)'");
+  filters.push("(COALESCE(p.title, '') || ' ' || COALESCE(p.description, '') || ' ' || COALESCE(p.area, '') || ' ' || COALESCE(p.address, '') || ' ' || COALESCE(p.extra_fields::text, '')) !~* '(makaug training|training visibility|visibility check|stock unsplash|demo listing|test zone|qa test|soft_launch|launch_proof|non_public_test)'");
 }
 
 function normalizeListingType(type) {
@@ -1852,21 +1885,25 @@ async function listPropertiesHandler(req, res, next) {
     }
 
     if (area) {
-      addFilter(
-        filters,
-        values,
-        '(p.area ILIKE ? OR p.title ILIKE ? OR p.district ILIKE ? OR COALESCE(p.address, \'\') ILIKE ? OR COALESCE(p.description, \'\') ILIKE ? OR COALESCE(p.extra_fields->>\'city\', \'\') ILIKE ? OR COALESCE(p.extra_fields->>\'neighborhood\', \'\') ILIKE ? OR COALESCE(p.extra_fields->>\'street_name\', \'\') ILIKE ? OR COALESCE(p.extra_fields->>\'region\', \'\') ILIKE ? OR COALESCE(p.extra_fields->>\'resolved_location_label\', \'\') ILIKE ?)',
-        `%${area}%`,
-        `%${area}%`,
-        `%${area}%`,
-        `%${area}%`,
-        `%${area}%`,
-        `%${area}%`,
-        `%${area}%`,
-        `%${area}%`,
-        `%${area}%`,
-        `%${area}%`
-      );
+      if (publicOnly || !adminAccess) {
+        addPublicLocationSearchFilter(filters, values, area);
+      } else {
+        addFilter(
+          filters,
+          values,
+          '(p.area ILIKE ? OR p.title ILIKE ? OR p.district ILIKE ? OR COALESCE(p.address, \'\') ILIKE ? OR COALESCE(p.description, \'\') ILIKE ? OR COALESCE(p.extra_fields->>\'city\', \'\') ILIKE ? OR COALESCE(p.extra_fields->>\'neighborhood\', \'\') ILIKE ? OR COALESCE(p.extra_fields->>\'street_name\', \'\') ILIKE ? OR COALESCE(p.extra_fields->>\'region\', \'\') ILIKE ? OR COALESCE(p.extra_fields->>\'resolved_location_label\', \'\') ILIKE ?)',
+          `%${area}%`,
+          `%${area}%`,
+          `%${area}%`,
+          `%${area}%`,
+          `%${area}%`,
+          `%${area}%`,
+          `%${area}%`,
+          `%${area}%`,
+          `%${area}%`,
+          `%${area}%`
+        );
+      }
     }
 
     if (status && status !== 'all') {

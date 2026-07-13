@@ -6077,6 +6077,7 @@ function setPublicCategoryCount(category, localCount = 0, options = {}) {
 const PUBLIC_FILTERS_WIRED_MARKER = "public-filters-wired-20260711";
 const PUBLIC_FILTERS_WIRED_V2_MARKER = "public-filters-wired-v2-20260713";
 const PUBLIC_FILTERS_WIRED_V3_MARKER = "public-filters-wired-v3-20260713";
+const PUBLIC_FILTERS_LOCATION_QUALITY_MARKER = "public-filters-location-quality-20260713";
 const PUBLIC_FILTER_SEARCH_ENDPOINT = "/api/properties/search";
 
 function publicCategorySortSelectId(category) {

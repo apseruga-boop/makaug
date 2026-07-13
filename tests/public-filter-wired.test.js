@@ -6,6 +6,7 @@ const root = path.resolve(__dirname, '..');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const app = fs.readFileSync(path.join(root, 'assets', 'makaug-app.js'), 'utf8');
 const propertiesRoute = fs.readFileSync(path.join(root, 'routes', 'properties.js'), 'utf8');
+const locationMigration = fs.readFileSync(path.join(root, 'db', 'migrations', '071_public_search_location_performance.sql'), 'utf8');
 
 assert(html.includes('public-filters-wired-20260711'), 'release marker must be present in the public shell');
 assert(app.includes('PUBLIC_FILTERS_WIRED_MARKER = "public-filters-wired-20260711"'), 'app bundle must carry the filter wiring marker');
@@ -14,6 +15,9 @@ assert(app.includes('PUBLIC_FILTERS_WIRED_V2_MARKER = "public-filters-wired-v2-2
 assert(html.includes('public-filters-wired-v3-20260713'), 'v3 release marker must be present in the public shell');
 assert(app.includes('PUBLIC_FILTERS_WIRED_V3_MARKER = "public-filters-wired-v3-20260713"'), 'app bundle must carry the v3 filter wiring marker');
 assert((html.match(/public-filters-wired-v3-20260713/g) || []).length >= 2, 'v3 marker must be present in both preload and script cache-bust builders');
+assert(html.includes('public-filters-location-quality-20260713'), 'location-quality release marker must be present in the public shell');
+assert(app.includes('PUBLIC_FILTERS_LOCATION_QUALITY_MARKER = "public-filters-location-quality-20260713"'), 'app bundle must carry the location-quality marker');
+assert((html.match(/public-filters-location-quality-20260713/g) || []).length >= 2, 'location-quality marker must be present in both preload and script cache-bust builders');
 
 assert(app.includes('const PUBLIC_FILTER_SEARCH_ENDPOINT = "/api/properties/search"'), 'category filters must fetch the search endpoint');
 assert(app.includes('return active ? `${PUBLIC_FILTER_SEARCH_ENDPOINT}?${params.toString()}` : ""'), 'category filter URL must be built from the search endpoint');
@@ -70,6 +74,15 @@ assert(propertiesRoute.includes('const minSize = toNullableFloat'), 'backend mus
 assert(propertiesRoute.includes('const priceSortRankSql'), 'backend must rank unpriced/outlier listings last for price sorting');
 assert(propertiesRoute.includes('price_desc: `${priceSortRankSql} ASC, p.price DESC NULLS LAST'), 'backend must sort priced listings high-to-low before unpriced/outliers');
 assert(propertiesRoute.includes("oldest: 'p.created_at ASC, p.id ASC'"), 'backend must support oldest sort');
+assert(propertiesRoute.includes('function addPublicLocationSearchFilter'), 'public searches must use the stricter location search helper');
+assert(propertiesRoute.includes('if (publicOnly || !adminAccess)') && propertiesRoute.includes('addPublicLocationSearchFilter(filters, values, area)'), 'anonymous/public location searches must not use broad title/description fallback');
+assert(propertiesRoute.includes('\\btest zone\\b'), 'public QA/test listings must be suppressed from consumer results');
+assert(locationMigration.includes('CREATE EXTENSION IF NOT EXISTS pg_trgm'), 'location search migration must enable trigram indexes');
+assert(locationMigration.includes('idx_properties_public_live_type_area_lower'), 'location search migration must index area by listing type');
+assert(locationMigration.includes('idx_properties_public_live_type_price_created'), 'location search migration must index sortable public prices');
+assert(locationMigration.includes('test zone') && locationMigration.includes("status = 'rejected'"), 'location search migration must reject public test-zone rows');
+assert(locationMigration.includes('public_search_suppressed'), 'location search migration must tag suppressed public test rows');
+assert(locationMigration.includes('ANALYZE properties'), 'location search migration must refresh planner stats');
 assert(app.includes('function comparePublicPriceDesc') && app.includes('publicSortablePrice'), 'client-side price sorting must also put unpriced rows last');
 
 console.log('public filter wiring regression checks passed');
