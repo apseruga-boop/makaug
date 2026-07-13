@@ -716,11 +716,13 @@ function absolutePublicUrl(value) {
 
 function patchMetaTag(html, propertyName, content) {
   const safeContent = escapeMetaContent(content);
-  const propertyPattern = new RegExp(`(<meta\\\\s+(?:property|name)=["']${propertyName.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')}["']\\\\s+content=)["'][^"']*["']`, 'i');
-  if (propertyPattern.test(html)) {
-    return html.replace(propertyPattern, `$1"${safeContent}"`);
-  }
-  return html.replace('</head>', `  <meta property="${escapeMetaContent(propertyName)}" content="${safeContent}">\n</head>`);
+  const safeName = escapeMetaContent(propertyName);
+  const escapedName = propertyName.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+  const attribute = propertyName.startsWith('twitter:') ? 'name' : 'property';
+  const replacement = `<meta ${attribute}="${safeName}" content="${safeContent}">`;
+  const tagPattern = new RegExp(`<meta\\b(?=[^>]*(?:property|name)=["']${escapedName}["'])[^>]*>`, 'i');
+  if (tagPattern.test(html)) return html.replace(tagPattern, replacement);
+  return html.replace('</head>', `  ${replacement}\n</head>`);
 }
 
 function patchListingOpenGraphMeta(html, meta = {}) {
