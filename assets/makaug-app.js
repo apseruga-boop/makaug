@@ -6065,11 +6065,111 @@ function getPublicCategoryDisplayCount(category, localCount = 0, { filtered = fa
 function setPublicCategoryCount(category, localCount = 0, options = {}) {
   const idMap = {
     sale: "sale-count",
-    rent: "rent-count"
+    rent: "rent-count",
+    commercial: "commercial-count",
+    land: "land-count"
   };
+  ensurePublicResultsHeader(category);
   const el = document.getElementById(idMap[category]);
-  if (!el) return;
-  el.textContent = getPublicCategoryDisplayCount(category, localCount, options);
+  if (el) el.textContent = getPublicCategoryDisplayCount(category, localCount, options);
+}
+
+const PUBLIC_FILTERS_WIRED_MARKER = "public-filters-wired-20260711";
+const PUBLIC_FILTER_SEARCH_ENDPOINT = "/api/properties/search";
+
+function publicCategorySortSelectId(category) {
+  const key = publicPaginationKey(category);
+  if (key === "students") return "student-sort-f";
+  return key ? `${key}-sort-f` : "";
+}
+
+function normalizePublicSortValue(value) {
+  const sort = String(value || "newest").trim().toLowerCase();
+  return ["newest", "oldest", "price_asc", "price_desc"].includes(sort) ? sort : "newest";
+}
+
+function publicCategorySortOptionsHtml(current = "newest") {
+  const selected = normalizePublicSortValue(current);
+  return [
+    ["newest", translateListingLabel("Newest Listed")],
+    ["price_desc", translateListingLabel("Highest Price")],
+    ["price_asc", translateListingLabel("Lowest Price")],
+    ["oldest", translateListingLabel("Oldest Listed")]
+  ].map(([value, label]) => `<option value="${adminAttr(value)}"${selected === value ? " selected" : ""}>${adminEscape(label)}</option>`).join("");
+}
+
+function publicCategoryFilterHandler(category) {
+  const key = publicPaginationKey(category);
+  if (key === "students") return "filterStudents()";
+  if (key === "commercial") return "filterCommercial()";
+  if (key === "land") return "filterLand()";
+  return `filterListings('${key}')`;
+}
+
+function ensurePublicResultsHeader(category) {
+  const key = publicPaginationKey(category);
+  const grid = document.getElementById(publicPaginationGridId(key));
+  if (!key || !grid || !grid.parentElement) return null;
+  let header = document.getElementById(`${key}-results-header`);
+  if (!header) {
+    header = document.createElement("div");
+    header.id = `${key}-results-header`;
+    header.className = "mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between";
+    grid.parentElement.insertBefore(header, grid);
+  }
+
+  let left = header.querySelector("[data-public-results-count]");
+  if (!left) {
+    left = document.createElement("div");
+    left.className = "text-sm font-semibold text-gray-600";
+    left.setAttribute("data-public-results-count", "1");
+    header.appendChild(left);
+  }
+  const countIds = { sale: "sale-count", rent: "rent-count", commercial: "commercial-count", land: "land-count" };
+  const countId = countIds[key];
+  if (key === "students") {
+    const subtitle = document.getElementById("student-results-subtitle");
+    if (subtitle && subtitle.parentElement !== left) {
+      subtitle.className = "text-sm font-semibold text-gray-600";
+      left.innerHTML = "";
+      left.appendChild(subtitle);
+    }
+  } else if (countId) {
+    let countEl = document.getElementById(countId);
+    if (!countEl) {
+      countEl = document.createElement("strong");
+      countEl.id = countId;
+      countEl.textContent = "0";
+    }
+    if (!left.contains(countEl)) {
+      left.innerHTML = "";
+      left.appendChild(countEl);
+      left.append(` ${translateListingLabel("properties found")}`);
+    }
+  }
+
+  let right = header.querySelector("[data-public-results-sort]");
+  if (!right) {
+    right = document.createElement("label");
+    right.className = "flex items-center justify-between gap-2 text-sm font-black text-gray-700 sm:justify-end";
+    right.setAttribute("data-public-results-sort", "1");
+    header.appendChild(right);
+  }
+  const sortId = publicCategorySortSelectId(key);
+  const sortSelect = sortId ? document.getElementById(sortId) : null;
+  if (sortSelect) {
+    const current = normalizePublicSortValue(sortSelect.value);
+    sortSelect.innerHTML = publicCategorySortOptionsHtml(current);
+    sortSelect.value = current;
+    sortSelect.setAttribute("aria-label", translateListingLabel("Sort"));
+    sortSelect.setAttribute("onchange", publicCategoryFilterHandler(key));
+    sortSelect.className = "h-11 min-w-[190px] rounded-xl border border-gray-200 bg-white px-3 text-sm font-bold text-gray-800 shadow-sm outline-none focus:ring-2 focus:ring-green-500/30";
+    if (sortSelect.parentElement !== right) {
+      right.innerHTML = `<span>${adminEscape(translateListingLabel("Sort"))}:</span>`;
+      right.appendChild(sortSelect);
+    }
+  }
+  return header;
 }
 
 function getHeroPropertyOpportunityBucket(property) {
@@ -36013,6 +36113,7 @@ function renderPublicCategoryPage(category, list = [], options = {}) {
   const key = publicPaginationKey(category);
   const state = publicPaginationStateFor(key);
   if (!key || !state) return [];
+  ensurePublicResultsHeader(key);
   if (options.mode) state.mode = options.mode;
   if (options.sourcePath !== undefined) syncPublicCategoryPaginationSource(key, options.sourcePath || "");
   if (options.page) state.page = Math.max(1, Number(options.page) || 1);
@@ -36034,9 +36135,7 @@ function renderPublicCategoryPage(category, list = [], options = {}) {
     updateStudentHeader(pageRows, { total, page: state.page, pageSize: PUBLIC_RESULTS_PAGE_SIZE });
   } else {
     renderGrid(publicPaginationGridId(key), pageRows, { categoryPage: key });
-    if (key === "sale" || key === "rent") {
-      setPublicCategoryCount(key, total, { filtered: true });
-    }
+    setPublicCategoryCount(key, total, { filtered: true });
   }
   const mapId = publicPaginationMapId(key);
   if (mapId) setMapMarkers(mapId, pageRows);
@@ -36126,6 +36225,8 @@ async function goToPublicCategoryPage(category, page = 1) {
 
 function publicInventoryRouteSearchPath(category) {
   const page = category === "student" ? "students" : normalizePageKey(category);
+  const controlPath = publicCategoryControlSearchPath(page);
+  if (controlPath) return controlPath;
   const payload = routeSearchHandoffPayload(page);
   const config = sectionSearchConfigFor(page);
   if (!payload || !config) return "";
@@ -36154,6 +36255,105 @@ function publicInventoryRouteSearchPath(category) {
   if (filters.landTitleType) params.set("land_title_type", String(filters.landTitleType));
   if (filters.sort) params.set("sort", String(filters.sort));
   return `/api/properties/search?${params.toString()}`;
+}
+
+function addPublicSearchParam(params, key, value) {
+  const text = String(value || "").trim();
+  if (!text || text === "0") return false;
+  params.set(key, text);
+  return true;
+}
+
+function publicFilterNumberOrSelect(customId, selectId) {
+  return publicListingFilterValue(customId) || publicListingFilterValue(selectId);
+}
+
+function publicCategoryControlSearchPath(category) {
+  const page = category === "student" ? "students" : normalizePageKey(category);
+  const config = sectionSearchConfigFor(page);
+  if (!config || !document?.getElementById) return "";
+  const params = new URLSearchParams();
+  params.set("status", "approved");
+  params.set("public_only", "1");
+  if (config.backendCategory === "students") {
+    params.set("student_portal", "1");
+  } else {
+    params.set("listing_type", config.backendCategory);
+  }
+  let active = false;
+  const add = (key, value) => {
+    if (addPublicSearchParam(params, key, value)) active = true;
+  };
+  add("query", publicListingFilterValue(config.queryId));
+  add("district", publicListingFilterValue(`${page === "students" ? "student" : page}-district-f`));
+  const radiusKm = getRadiusKmFromSelect(`${page === "students" ? "student" : page}-radius-f`);
+  const nearState = getNearMeSearchState(page);
+  if (nearState?.lat != null && nearState?.lng != null && radiusKm) {
+    params.set("lat", String(nearState.lat));
+    params.set("lng", String(nearState.lng));
+    params.set("radiusKm", String(radiusKm));
+    params.set("radius_unit", "km");
+    active = true;
+  } else if (radiusKm) {
+    const districtOrQuery = publicListingFilterValue(`${page === "students" ? "student" : page}-district-f`) || publicListingFilterValue(config.queryId);
+    const center = getDistrictCenter(districtOrQuery);
+    if (center?.lat != null && center?.lng != null) {
+      params.set("lat", String(center.lat));
+      params.set("lng", String(center.lng));
+      params.set("radiusKm", String(radiusKm));
+      params.set("radius_unit", "km");
+      active = true;
+    }
+  }
+
+  if (page === "sale") {
+    add("min_price", publicFilterNumberOrSelect("sale-min-price-custom-f", "sale-min-price-f"));
+    add("max_price", publicFilterNumberOrSelect("sale-max-price-custom-f", "sale-price-f"));
+    add("min_beds", publicListingFilterValue("sale-min-beds-f"));
+    add("max_beds", publicListingFilterValue("sale-beds-f"));
+    add("bathrooms", publicListingFilterValue("sale-baths-f"));
+    add("property_type", publicListingFilterValue("sale-type-f"));
+    add("land_title_type", publicListingFilterValue("sale-title-f"));
+    add("amenities", publicListingFilterValue("sale-amenity-f"));
+    const sort = normalizePublicSortValue(publicListingFilterValue("sale-sort-f"));
+    if (sort !== "newest") { params.set("sort", sort); active = true; } else if (active) params.set("sort", sort);
+  } else if (page === "rent") {
+    add("min_price", publicFilterNumberOrSelect("rent-min-price-custom-f", "rent-min-price-f"));
+    add("max_price", publicFilterNumberOrSelect("rent-max-price-custom-f", "rent-price-f"));
+    add("min_beds", publicListingFilterValue("rent-min-beds-f"));
+    add("max_beds", publicListingFilterValue("rent-beds-f"));
+    add("bathrooms", publicListingFilterValue("rent-baths-f"));
+    add("property_type", publicListingFilterValue("rent-type-f"));
+    add("furnished", publicListingFilterValue("rent-furnished-f"));
+    add("amenities", publicListingFilterValue("rent-amenity-f"));
+    const sort = normalizePublicSortValue(publicListingFilterValue("rent-sort-f"));
+    if (sort !== "newest") { params.set("sort", sort); active = true; } else if (active) params.set("sort", sort);
+  } else if (page === "students") {
+    add("property_type", publicListingFilterValue("student-type-quick-f"));
+    add("max_price", publicFilterNumberOrSelect("student-budget-custom-f", "student-budget-f"));
+    add("student_campus", publicListingFilterValue("student-uni-f"));
+    add("amenities", publicListingFilterValue("student-amenity-f"));
+    add("max_distance_km", publicListingFilterValue("student-distance-f"));
+    const sort = normalizePublicSortValue(publicListingFilterValue("student-sort-f"));
+    if (sort !== "newest") { params.set("sort", sort); active = true; } else if (active) params.set("sort", sort);
+  } else if (page === "commercial") {
+    add("commercial_type", publicListingFilterValue("commercial-type-f"));
+    add("min_price", publicFilterNumberOrSelect("commercial-min-price-custom-f", "commercial-min-price-f"));
+    add("max_price", publicFilterNumberOrSelect("commercial-max-price-custom-f", "commercial-price-f"));
+    add("min_size", publicListingFilterValue("commercial-size-f"));
+    add("max_size", publicListingFilterValue("commercial-max-size-f"));
+    const sort = normalizePublicSortValue(publicListingFilterValue("commercial-sort-f"));
+    if (sort !== "newest") { params.set("sort", sort); active = true; } else if (active) params.set("sort", sort);
+  } else if (page === "land") {
+    add("land_title_type", publicListingFilterValue("land-title-f") || publicListingFilterValue("land-type-f"));
+    add("min_price", publicFilterNumberOrSelect("land-min-price-custom-f", "land-min-price-f"));
+    add("max_price", publicFilterNumberOrSelect("land-max-price-custom-f", "land-price-f"));
+    add("min_size", publicListingFilterValue("land-min-size-f"));
+    add("max_size", publicListingFilterValue("land-max-size-f"));
+    const sort = normalizePublicSortValue(publicListingFilterValue("land-sort-f"));
+    if (sort !== "newest") { params.set("sort", sort); active = true; } else if (active) params.set("sort", sort);
+  }
+  return active ? `${PUBLIC_FILTER_SEARCH_ENDPOINT}?${params.toString()}` : "";
 }
 
 function hydrateVisibleRouteSearchResults(source = "route_search_backend_results") {
@@ -36738,7 +36938,9 @@ const SECTION_SEARCH_CONFIGS = {
       { id: "sale-price-f", key: "maxPrice" },
       { id: "sale-min-beds-f", key: "bedrooms" },
       { id: "sale-beds-f", key: "maxBeds" },
-      { id: "sale-type-f", key: "propertyType" }
+      { id: "sale-baths-f", key: "bathrooms" },
+      { id: "sale-type-f", key: "propertyType" },
+      { id: "sale-amenity-f", key: "amenities" }
     ]
   },
   rent: {
@@ -36755,7 +36957,10 @@ const SECTION_SEARCH_CONFIGS = {
       { id: "rent-price-f", key: "maxPrice" },
       { id: "rent-min-beds-f", key: "bedrooms" },
       { id: "rent-beds-f", key: "maxBeds" },
-      { id: "rent-type-f", key: "propertyType" }
+      { id: "rent-baths-f", key: "bathrooms" },
+      { id: "rent-type-f", key: "propertyType" },
+      { id: "rent-furnished-f", key: "furnished" },
+      { id: "rent-amenity-f", key: "amenities" }
     ]
   },
   students: {

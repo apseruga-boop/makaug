@@ -1782,6 +1782,10 @@ async function listPropertiesHandler(req, res, next) {
     const bathrooms = toNullableInt(req.query.bathrooms);
     const propertyType = cleanText(req.query.property_type || req.query.propertyType);
     const amenities = asArray(req.query.amenities).map((item) => cleanText(item).toLowerCase()).filter(Boolean);
+    const furnished = cleanText(req.query.furnished || req.query.furnishing).toLowerCase();
+    const minSize = toNullableFloat(req.query.min_size || req.query.minSize || req.query.min_area_sqm || req.query.minAreaSqm || req.query.min_acres || req.query.minAcres);
+    const maxSize = toNullableFloat(req.query.max_size || req.query.maxSize || req.query.max_area_sqm || req.query.maxAreaSqm || req.query.max_acres || req.query.maxAcres);
+    const maxStudentDistanceKm = toNullableFloat(req.query.max_distance_km || req.query.distance_to_uni_km || req.query.distanceToUniKm);
     const studentCampus = cleanText(req.query.studentCampus || req.query.student_campus);
     const landTitleType = cleanText(req.query.landTitleType || req.query.land_title_type);
     const landTitleAvailable = normalizeLandTitleAvailability(req.query.landTitleAvailable ?? req.query.land_title_available ?? req.query.titleAvailable ?? req.query.title_available);
@@ -1909,6 +1913,26 @@ async function listPropertiesHandler(req, res, next) {
           `%${amenity}%`
         );
       });
+    }
+    if (furnished) {
+      const furnishedNeedle = `%${furnished}%`;
+      addFilter(
+        filters,
+        values,
+        "(LOWER(COALESCE(p.furnishing, '')) LIKE ? OR LOWER(COALESCE(p.extra_fields->>'furnished', p.extra_fields->>'furnishing', '')) LIKE ? OR LOWER(COALESCE(p.description, '')) LIKE ?)",
+        furnishedNeedle,
+        furnishedNeedle,
+        furnishedNeedle
+      );
+    }
+    if (minSize != null) {
+      addFilter(filters, values, "COALESCE(p.floor_area_sqm, p.usable_size_sqm, p.land_size_value) >= ?", minSize);
+    }
+    if (maxSize != null) {
+      addFilter(filters, values, "COALESCE(p.floor_area_sqm, p.usable_size_sqm, p.land_size_value) <= ?", maxSize);
+    }
+    if (maxStudentDistanceKm != null) {
+      addFilter(filters, values, 'p.distance_to_uni_km <= ?', maxStudentDistanceKm);
     }
     if (studentCampus) {
       addFilter(
@@ -2057,11 +2081,14 @@ async function listPropertiesHandler(req, res, next) {
       }
     }
 
+    const publicPriceSortMaxUgx = 100000000000;
+    const priceSortRankSql = `(CASE WHEN p.price IS NOT NULL AND p.price > 0 AND p.price <= ${publicPriceSortMaxUgx} THEN 0 ELSE 1 END)`;
     const sortMap = {
       featured: "p.extra_fields->>'featured_at' DESC NULLS LAST, p.updated_at DESC, p.created_at DESC, p.id DESC",
       newest: 'p.created_at DESC, p.id DESC',
-      price_asc: 'p.price ASC NULLS LAST, p.created_at DESC, p.id DESC',
-      price_desc: 'p.price DESC NULLS LAST, p.created_at DESC, p.id DESC'
+      oldest: 'p.created_at ASC, p.id ASC',
+      price_asc: `${priceSortRankSql} ASC, p.price ASC NULLS LAST, p.created_at DESC, p.id DESC`,
+      price_desc: `${priceSortRankSql} ASC, p.price DESC NULLS LAST, p.created_at DESC, p.id DESC`
     };
 
     const defaultSort = featuredFilterRequested && featuredOnly ? 'featured' : 'newest';
