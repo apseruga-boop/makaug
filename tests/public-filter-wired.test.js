@@ -9,6 +9,8 @@ const propertiesRoute = fs.readFileSync(path.join(root, 'routes', 'properties.js
 
 assert(html.includes('public-filters-wired-20260711'), 'release marker must be present in the public shell');
 assert(app.includes('PUBLIC_FILTERS_WIRED_MARKER = "public-filters-wired-20260711"'), 'app bundle must carry the filter wiring marker');
+assert(html.includes('public-filters-wired-v2-20260713'), 'v2 release marker must be present in the public shell');
+assert(app.includes('PUBLIC_FILTERS_WIRED_V2_MARKER = "public-filters-wired-v2-20260713"'), 'app bundle must carry the v2 filter wiring marker');
 
 assert(app.includes('const PUBLIC_FILTER_SEARCH_ENDPOINT = "/api/properties/search"'), 'category filters must fetch the search endpoint');
 assert(app.includes('return active ? `${PUBLIC_FILTER_SEARCH_ENDPOINT}?${params.toString()}` : ""'), 'category filter URL must be built from the search endpoint');
@@ -27,8 +29,11 @@ for (const id of [
 
 assert(app.includes('function ensurePublicResultsHeader'), 'results header must be created above the grid');
 assert(app.includes('data-public-results-sort'), 'sort control must live in the results header');
+assert(app.includes('data-public-results-sort-select'), 'sort select must be rendered as a visible header-owned control');
 assert(app.includes('function publicCategorySortOptionsHtml'), 'sort options must be centralized for all categories');
 assert(app.includes('"Highest Price"') && app.includes('"Lowest Price"') && app.includes('"Newest Listed"') && app.includes('"Oldest Listed"'), 'Rightmove-style sort labels must exist');
+assert(app.includes('function shouldIgnoreCatalogueHydration'), 'active filters must ignore stale generic catalogue hydration');
+assert(app.includes('const hydrationKey = `${activeCategory}::${activeCategoryPath}`'), 'hydration promises must be keyed by category and source path');
 
 for (const id of [
   'sale-baths-f',
@@ -60,5 +65,6 @@ assert(propertiesRoute.includes('const minSize = toNullableFloat'), 'backend mus
 assert(propertiesRoute.includes('const priceSortRankSql'), 'backend must rank unpriced/outlier listings last for price sorting');
 assert(propertiesRoute.includes('price_desc: `${priceSortRankSql} ASC, p.price DESC NULLS LAST'), 'backend must sort priced listings high-to-low before unpriced/outliers');
 assert(propertiesRoute.includes("oldest: 'p.created_at ASC, p.id ASC'"), 'backend must support oldest sort');
+assert(app.includes('function comparePublicPriceDesc') && app.includes('publicSortablePrice'), 'client-side price sorting must also put unpriced rows last');
 
 console.log('public filter wiring regression checks passed');

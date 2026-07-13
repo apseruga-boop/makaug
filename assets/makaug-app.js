@@ -6075,6 +6075,7 @@ function setPublicCategoryCount(category, localCount = 0, options = {}) {
 }
 
 const PUBLIC_FILTERS_WIRED_MARKER = "public-filters-wired-20260711";
+const PUBLIC_FILTERS_WIRED_V2_MARKER = "public-filters-wired-v2-20260713";
 const PUBLIC_FILTER_SEARCH_ENDPOINT = "/api/properties/search";
 
 function publicCategorySortSelectId(category) {
@@ -6083,9 +6084,31 @@ function publicCategorySortSelectId(category) {
   return key ? `${key}-sort-f` : "";
 }
 
+function publicCategoryResultsSortSelectId(category) {
+  const key = publicPaginationKey(category);
+  return key ? `${key}-results-sort-f` : "";
+}
+
 function normalizePublicSortValue(value) {
   const sort = String(value || "newest").trim().toLowerCase();
   return ["newest", "oldest", "price_asc", "price_desc"].includes(sort) ? sort : "newest";
+}
+
+function publicCategorySortValue(category) {
+  const key = publicPaginationKey(category);
+  const visibleValue = publicListingFilterValue(publicCategoryResultsSortSelectId(key));
+  const originalValue = publicListingFilterValue(publicCategorySortSelectId(key));
+  return normalizePublicSortValue(visibleValue || originalValue || "newest");
+}
+
+function syncPublicCategorySortValue(category, value = "") {
+  const key = publicPaginationKey(category);
+  const next = normalizePublicSortValue(value);
+  [publicCategorySortSelectId(key), publicCategoryResultsSortSelectId(key)].forEach((id) => {
+    const el = id ? document.getElementById(id) : null;
+    if (el && el.value !== next) el.value = next;
+  });
+  return next;
 }
 
 function publicCategorySortOptionsHtml(current = "newest") {
@@ -6155,18 +6178,36 @@ function ensurePublicResultsHeader(category) {
     right.setAttribute("data-public-results-sort", "1");
     header.appendChild(right);
   }
-  const sortId = publicCategorySortSelectId(key);
-  const sortSelect = sortId ? document.getElementById(sortId) : null;
-  if (sortSelect) {
-    const current = normalizePublicSortValue(sortSelect.value);
-    sortSelect.innerHTML = publicCategorySortOptionsHtml(current);
-    sortSelect.value = current;
-    sortSelect.setAttribute("aria-label", translateListingLabel("Sort"));
-    sortSelect.setAttribute("onchange", publicCategoryFilterHandler(key));
-    sortSelect.className = "h-11 min-w-[190px] rounded-xl border border-gray-200 bg-white px-3 text-sm font-bold text-gray-800 shadow-sm outline-none focus:ring-2 focus:ring-green-500/30";
-    if (sortSelect.parentElement !== right) {
-      right.innerHTML = `<span>${adminEscape(translateListingLabel("Sort"))}:</span>`;
-      right.appendChild(sortSelect);
+  const originalSortId = publicCategorySortSelectId(key);
+  const originalSortSelect = originalSortId ? document.getElementById(originalSortId) : null;
+  const visibleSortId = publicCategoryResultsSortSelectId(key);
+  let visibleSortSelect = visibleSortId ? document.getElementById(visibleSortId) : null;
+  if (originalSortSelect || visibleSortSelect) {
+    const current = publicCategorySortValue(key);
+    right.innerHTML = `<span>${adminEscape(translateListingLabel("Sort"))}:</span>`;
+    visibleSortSelect = document.createElement("select");
+    visibleSortSelect.id = visibleSortId;
+    visibleSortSelect.setAttribute("data-public-results-sort-select", key);
+    visibleSortSelect.setAttribute("aria-label", translateListingLabel("Sort"));
+    visibleSortSelect.className = "block h-11 min-w-[190px] rounded-xl border border-gray-200 bg-white px-3 text-sm font-bold text-gray-800 shadow-sm outline-none focus:ring-2 focus:ring-green-500/30";
+    visibleSortSelect.innerHTML = publicCategorySortOptionsHtml(current);
+    visibleSortSelect.value = current;
+    visibleSortSelect.onchange = () => {
+      syncPublicCategorySortValue(key, visibleSortSelect.value);
+      const handler = publicCategoryFilterHandler(key);
+      if (handler === "filterStudents()") filterStudents();
+      else if (handler === "filterCommercial()") filterCommercial();
+      else if (handler === "filterLand()") filterLand();
+      else filterListings(key);
+    };
+    right.appendChild(visibleSortSelect);
+    if (originalSortSelect) {
+      originalSortSelect.value = current;
+      originalSortSelect.setAttribute("aria-hidden", "true");
+      originalSortSelect.tabIndex = -1;
+      originalSortSelect.classList.add("hidden");
+      const wrapper = originalSortSelect.parentElement;
+      if (wrapper && wrapper.children.length === 1) wrapper.classList.add("hidden");
     }
   }
   return header;
@@ -35945,6 +35986,18 @@ function publicCategoryApiPathForPagination(category) {
   return publicInventoryRouteSearchPath(backendCategory) || publicInventoryCategoryPath(backendCategory);
 }
 
+function publicCategoryActiveSearchPath(category) {
+  const backendCategory = publicPaginationBackendCategory(category);
+  return backendCategory ? publicInventoryRouteSearchPath(backendCategory) : "";
+}
+
+function shouldIgnoreCatalogueHydration(category, sourcePath = "") {
+  const key = publicPaginationKey(category);
+  const activeSearchPath = publicCategoryActiveSearchPath(key);
+  if (!activeSearchPath) return false;
+  return !sourcePath || sourcePath !== activeSearchPath;
+}
+
 function cachePublicCategoryPageRows(category, page, rows = []) {
   const key = publicPaginationKey(category);
   const cache = publicPaginationCacheFor(key);
@@ -35987,21 +36040,21 @@ function hasActivePublicCategoryFilter(category) {
     return fieldIds.some((id) => publicListingFilterValue(id))
       || getRadiusKmFromSelect("student-radius-f") > 0
       || Boolean(getNearMeSearchState("students"))
-      || Boolean(publicListingFilterValue("student-sort-f") && publicListingFilterValue("student-sort-f") !== "newest");
+      || Boolean(publicCategorySortValue("students") !== "newest");
   }
   if (key === "commercial") {
     const fieldIds = ["commercial-q-f", "commercial-district-f", "commercial-type-f", "commercial-min-price-f", "commercial-price-f", "commercial-min-price-custom-f", "commercial-max-price-custom-f", "commercial-size-f", "commercial-max-size-f"];
     return fieldIds.some((id) => publicListingFilterValue(id))
       || getRadiusKmFromSelect("commercial-radius-f") > 0
       || Boolean(getNearMeSearchState("commercial"))
-      || Boolean(publicListingFilterValue("commercial-sort-f") && publicListingFilterValue("commercial-sort-f") !== "newest");
+      || Boolean(publicCategorySortValue("commercial") !== "newest");
   }
   if (key === "land") {
     const fieldIds = ["land-q-f", "land-district-f", "land-type-f", "land-min-price-f", "land-price-f", "land-min-price-custom-f", "land-max-price-custom-f", "land-min-size-f", "land-max-size-f", "land-title-f"];
     return fieldIds.some((id) => publicListingFilterValue(id))
       || getRadiusKmFromSelect("land-radius-f") > 0
       || Boolean(getNearMeSearchState("land"))
-      || Boolean(publicListingFilterValue("land-sort-f") && publicListingFilterValue("land-sort-f") !== "newest");
+      || Boolean(publicCategorySortValue("land") !== "newest");
   }
   return false;
 }
@@ -36126,7 +36179,9 @@ function renderPublicCategoryPage(category, list = [], options = {}) {
   const totalPages = publicPaginationPageCount(total);
   state.page = Math.min(Math.max(1, Number(state.page) || 1), totalPages);
   const cache = publicPaginationCacheFor(key);
-  const cachedRows = state.mode === "api" ? cache?.[state.page] : null;
+  const activePath = publicCategoryApiPathForPagination(key);
+  const cacheMatchesActivePath = !activePath || !state.sourcePath || state.sourcePath === activePath;
+  const cachedRows = state.mode === "api" && cacheMatchesActivePath ? cache?.[state.page] : null;
   const pageRows = Array.isArray(options.rowsOverride)
     ? options.rowsOverride
     : (Array.isArray(cachedRows) && cachedRows.length ? cachedRows : list.slice((state.page - 1) * PUBLIC_RESULTS_PAGE_SIZE, state.page * PUBLIC_RESULTS_PAGE_SIZE));
@@ -36271,7 +36326,7 @@ function publicFilterNumberOrSelect(customId, selectId) {
 function publicCategoryControlSearchPath(category) {
   const page = category === "student" ? "students" : normalizePageKey(category);
   const config = sectionSearchConfigFor(page);
-  if (!config || !document?.getElementById) return "";
+  if (!config || typeof document === "undefined" || !document.getElementById) return "";
   const params = new URLSearchParams();
   params.set("status", "approved");
   params.set("public_only", "1");
@@ -36315,7 +36370,7 @@ function publicCategoryControlSearchPath(category) {
     add("property_type", publicListingFilterValue("sale-type-f"));
     add("land_title_type", publicListingFilterValue("sale-title-f"));
     add("amenities", publicListingFilterValue("sale-amenity-f"));
-    const sort = normalizePublicSortValue(publicListingFilterValue("sale-sort-f"));
+    const sort = publicCategorySortValue("sale");
     if (sort !== "newest") { params.set("sort", sort); active = true; } else if (active) params.set("sort", sort);
   } else if (page === "rent") {
     add("min_price", publicFilterNumberOrSelect("rent-min-price-custom-f", "rent-min-price-f"));
@@ -36326,7 +36381,7 @@ function publicCategoryControlSearchPath(category) {
     add("property_type", publicListingFilterValue("rent-type-f"));
     add("furnished", publicListingFilterValue("rent-furnished-f"));
     add("amenities", publicListingFilterValue("rent-amenity-f"));
-    const sort = normalizePublicSortValue(publicListingFilterValue("rent-sort-f"));
+    const sort = publicCategorySortValue("rent");
     if (sort !== "newest") { params.set("sort", sort); active = true; } else if (active) params.set("sort", sort);
   } else if (page === "students") {
     add("property_type", publicListingFilterValue("student-type-quick-f"));
@@ -36334,7 +36389,7 @@ function publicCategoryControlSearchPath(category) {
     add("student_campus", publicListingFilterValue("student-uni-f"));
     add("amenities", publicListingFilterValue("student-amenity-f"));
     add("max_distance_km", publicListingFilterValue("student-distance-f"));
-    const sort = normalizePublicSortValue(publicListingFilterValue("student-sort-f"));
+    const sort = publicCategorySortValue("students");
     if (sort !== "newest") { params.set("sort", sort); active = true; } else if (active) params.set("sort", sort);
   } else if (page === "commercial") {
     add("commercial_type", publicListingFilterValue("commercial-type-f"));
@@ -36342,7 +36397,7 @@ function publicCategoryControlSearchPath(category) {
     add("max_price", publicFilterNumberOrSelect("commercial-max-price-custom-f", "commercial-price-f"));
     add("min_size", publicListingFilterValue("commercial-size-f"));
     add("max_size", publicListingFilterValue("commercial-max-size-f"));
-    const sort = normalizePublicSortValue(publicListingFilterValue("commercial-sort-f"));
+    const sort = publicCategorySortValue("commercial");
     if (sort !== "newest") { params.set("sort", sort); active = true; } else if (active) params.set("sort", sort);
   } else if (page === "land") {
     add("land_title_type", publicListingFilterValue("land-title-f") || publicListingFilterValue("land-type-f"));
@@ -36350,7 +36405,7 @@ function publicCategoryControlSearchPath(category) {
     add("max_price", publicFilterNumberOrSelect("land-max-price-custom-f", "land-price-f"));
     add("min_size", publicListingFilterValue("land-min-size-f"));
     add("max_size", publicListingFilterValue("land-max-size-f"));
-    const sort = normalizePublicSortValue(publicListingFilterValue("land-sort-f"));
+    const sort = publicCategorySortValue("land");
     if (sort !== "newest") { params.set("sort", sort); active = true; } else if (active) params.set("sort", sort);
   }
   return active ? `${PUBLIC_FILTER_SEARCH_ENDPOINT}?${params.toString()}` : "";
@@ -36406,8 +36461,9 @@ async function refreshActivePublicInventoryCategoryFromApi({ silent = true } = {
   const activeRouteSearchPath = publicInventoryRouteSearchPath(activeCategory);
   const activeCategoryPath = activeRouteSearchPath || publicInventoryCategoryPath(activeCategory);
   if (!activeCategoryPath) return false;
-  if (publicActiveCategoryHydrationPromises.has(activeCategory)) {
-    return publicActiveCategoryHydrationPromises.get(activeCategory);
+  const hydrationKey = `${activeCategory}::${activeCategoryPath}`;
+  if (publicActiveCategoryHydrationPromises.has(hydrationKey)) {
+    return publicActiveCategoryHydrationPromises.get(hydrationKey);
   }
   const hydrationPromise = (async () => {
     try {
@@ -36416,6 +36472,31 @@ async function refreshActivePublicInventoryCategoryFromApi({ silent = true } = {
         maxPages: 1,
         includeSummary: Boolean(activeRouteSearchPath)
       });
+      if (activeCategory !== activePublicInventoryCategoryFromRoute()) return false;
+      if (activeRouteSearchPath) {
+        syncPublicCategoryPaginationSource(activeCategory, activeCategoryPath);
+        applyPublicRowsForUi(firstCategoryRows, firstCategoryResponse);
+        const firstPageRows = cachePublicCategoryPageRows(activeCategory, 1, firstCategoryRows);
+        const firstCategoryState = publicPaginationStateFor(activeCategory);
+        const firstCategoryTotal = exactPublicPaginationTotal(firstCategoryResponse) || firstCategoryRows.length;
+        if (firstCategoryState) {
+          firstCategoryState.page = 1;
+          firstCategoryState.total = firstCategoryTotal;
+          firstCategoryState.mode = "api";
+          firstCategoryState.sourcePath = activeCategoryPath;
+        }
+        renderPublicCategoryPage(activeCategory, firstPageRows, {
+          page: 1,
+          total: firstCategoryTotal,
+          response: firstCategoryResponse,
+          rowsOverride: firstPageRows,
+          mode: "api",
+          sourcePath: activeCategoryPath,
+          filtered: true
+        });
+        syncActiveRouteSearchHandoff(activeRouteSearchPath ? "active_route_search_first_page" : "active_category_first_page");
+        return true;
+      }
       if (firstCategoryRows.length && activeCategory === activePublicInventoryCategoryFromRoute()) {
         syncPublicCategoryPaginationSource(activeCategory, activeCategoryPath);
         applyPublicRowsForUi(firstCategoryRows, firstCategoryResponse);
@@ -36428,7 +36509,7 @@ async function refreshActivePublicInventoryCategoryFromApi({ silent = true } = {
           firstCategoryState.sourcePath = activeCategoryPath;
         }
         renderAll();
-        syncActiveRouteSearchHandoff(activeRouteSearchPath ? "active_route_search_first_page" : "active_category_first_page");
+        syncActiveRouteSearchHandoff("active_category_first_page");
       }
       const stats = publicListingsApiStats || await fetchPublicOpportunityStatsFromApi()
         .then((nextStats) => {
@@ -36446,34 +36527,16 @@ async function refreshActivePublicInventoryCategoryFromApi({ silent = true } = {
         categoryState.total = categoryTotal;
         categoryState.sourcePath = activeCategoryPath;
       }
-      if (activeRouteSearchPath) {
-        const expectedPages = Math.ceil(Math.max(0, Number(categoryTotal) || 0) / PUBLIC_LISTINGS_BACKGROUND_PAGE_LIMIT) || 1;
-        const { rows: searchRows, firstResponse: searchFirstResponse } = await fetchPublicPaginatedRows(activeRouteSearchPath, {
-          limit: PUBLIC_LISTINGS_BACKGROUND_PAGE_LIMIT,
-          maxPages: Math.min(Math.max(expectedPages, 1), PUBLIC_LISTINGS_ROUTE_SEARCH_MAX_PAGES),
-          includeSummary: false,
-          onPage: ({ rows, response }) => {
-            if (activeCategory !== activePublicInventoryCategoryFromRoute()) return;
-            applyPublicRowsForUi(rows, response);
-            renderAll();
-            syncActiveRouteSearchHandoff("active_route_search_page");
-          }
-        });
-        if (searchRows.length && activeCategory === activePublicInventoryCategoryFromRoute()) {
-          applyPublicRowsForUi(searchRows, searchFirstResponse || firstCategoryResponse);
-          renderAll();
-          syncActiveRouteSearchHandoff("active_route_search_complete");
-        }
-        return searchRows.length > 0 || firstCategoryRows.length > 0;
-      }
       const { rows: categoryRows, firstResponse: categoryFirstResponse } = await fetchPublicCategoryRows(activeCategory, categoryTotal, {
         onPageRows: (pageRows, pageResponse) => {
           if (activeCategory !== activePublicInventoryCategoryFromRoute()) return;
+          if (shouldIgnoreCatalogueHydration(activeCategory, activeCategoryPath)) return;
           applyPublicRowsForUi(pageRows, pageResponse);
           renderAll();
         }
       });
       if (categoryRows.length && activeCategory === activePublicInventoryCategoryFromRoute()) {
+        if (shouldIgnoreCatalogueHydration(activeCategory, activeCategoryPath)) return true;
         applyPublicRowsForUi(categoryRows, categoryFirstResponse);
         renderAll();
       }
@@ -36483,11 +36546,11 @@ async function refreshActivePublicInventoryCategoryFromApi({ silent = true } = {
       return false;
     }
   })();
-  publicActiveCategoryHydrationPromises.set(activeCategory, hydrationPromise);
+  publicActiveCategoryHydrationPromises.set(hydrationKey, hydrationPromise);
   try {
     return await hydrationPromise;
   } finally {
-    publicActiveCategoryHydrationPromises.delete(activeCategory);
+    publicActiveCategoryHydrationPromises.delete(hydrationKey);
   }
 }
 
@@ -37514,6 +37577,29 @@ function publicListingFilterNumber(id) {
   return Number.isFinite(value) && value > 0 ? value : 0;
 }
 
+function publicSortablePrice(property) {
+  const value = Number(property?.price);
+  return Number.isFinite(value) && value > 0 && value <= 100000000000 ? value : null;
+}
+
+function comparePublicPriceAsc(a, b) {
+  const ap = publicSortablePrice(a);
+  const bp = publicSortablePrice(b);
+  if (ap == null && bp == null) return sortListingsByNewest(a, b);
+  if (ap == null) return 1;
+  if (bp == null) return -1;
+  return ap - bp || sortListingsByNewest(a, b);
+}
+
+function comparePublicPriceDesc(a, b) {
+  const ap = publicSortablePrice(a);
+  const bp = publicSortablePrice(b);
+  if (ap == null && bp == null) return sortListingsByNewest(a, b);
+  if (ap == null) return 1;
+  if (bp == null) return -1;
+  return bp - ap || sortListingsByNewest(a, b);
+}
+
 function publicListingFilterText(property) {
   const extraText = property?.extra_fields && typeof property.extra_fields === "object"
     ? JSON.stringify(property.extra_fields)
@@ -37541,7 +37627,7 @@ function hasActiveListingFilter(page) {
     ? ["rent-location-f", "rent-district-f", "rent-min-price-f", "rent-price-f", "rent-min-price-custom-f", "rent-max-price-custom-f", "rent-min-beds-f", "rent-beds-f", "rent-type-f", "rent-baths-f", "rent-furnished-f", "rent-amenity-f"]
     : ["sale-location-f", "sale-district-f", "sale-min-price-f", "sale-price-f", "sale-min-price-custom-f", "sale-max-price-custom-f", "sale-min-beds-f", "sale-beds-f", "sale-type-f", "sale-baths-f", "sale-title-f", "sale-amenity-f"];
   const hasFieldFilter = fieldIds.some((id) => publicListingFilterValue(id));
-  const sortValue = publicListingFilterValue(`${key}-sort-f`);
+  const sortValue = publicCategorySortValue(key);
   const radiusKm = getRadiusKmFromSelect(`${key}-radius-f`);
   return hasFieldFilter || radiusKm > 0 || Boolean(getNearMeSearchState(key)) || Boolean(sortValue && sortValue !== "newest");
 }
@@ -37562,7 +37648,8 @@ function filterListings(page, options = {}) {
     const minBaths = parseInt(document.getElementById("sale-baths-f")?.value || "0", 10);
     const titleType = (document.getElementById("sale-title-f")?.value || "").toLowerCase().trim();
     const amenity = (document.getElementById("sale-amenity-f")?.value || "").toLowerCase().trim();
-    const sort = document.getElementById("sale-sort-f")?.value || "newest";
+    const sort = publicCategorySortValue("sale");
+    syncPublicCategorySortValue("sale", sort);
     list = list.filter((p) => {
       const text = publicListingFilterText(p);
       const qMatch = !q || text.includes(q);
@@ -37577,8 +37664,8 @@ function filterListings(page, options = {}) {
       const amenityMatch = !amenity || text.includes(amenity);
       return qMatch && dMatch && minBedsMatch && maxBedsMatch && minBathsMatch && minMatch && maxMatch && typeMatch && titleMatch && amenityMatch;
     });
-    if (sort === "price_asc") list.sort((a, b) => a.price - b.price);
-    if (sort === "price_desc") list.sort((a, b) => b.price - a.price);
+    if (sort === "price_asc") list.sort(comparePublicPriceAsc);
+    if (sort === "price_desc") list.sort(comparePublicPriceDesc);
     if (sort === "newest") list.sort(sortListingsByNewest);
     list = decorateAndSortNearMeResults(list, nearState);
     const filtered = hasActivePublicCategoryFilter("sale");
@@ -37604,7 +37691,8 @@ function filterListings(page, options = {}) {
     const minBaths = parseInt(document.getElementById("rent-baths-f")?.value || "0", 10);
     const furnishing = (document.getElementById("rent-furnished-f")?.value || "").toLowerCase().trim();
     const amenity = (document.getElementById("rent-amenity-f")?.value || "").toLowerCase().trim();
-    const sort = document.getElementById("rent-sort-f")?.value || "newest";
+    const sort = publicCategorySortValue("rent");
+    syncPublicCategorySortValue("rent", sort);
     list = list.filter((p) => {
       const text = publicListingFilterText(p);
       const qMatch = !q || text.includes(q);
@@ -37619,8 +37707,8 @@ function filterListings(page, options = {}) {
       const amenityMatch = !amenity || text.includes(amenity);
       return qMatch && dMatch && minBedsMatch && maxBedsMatch && minBathsMatch && minMatch && maxMatch && typeMatch && furnishingMatch && amenityMatch;
     });
-    if (sort === "price_asc") list.sort((a, b) => a.price - b.price);
-    if (sort === "price_desc") list.sort((a, b) => b.price - a.price);
+    if (sort === "price_asc") list.sort(comparePublicPriceAsc);
+    if (sort === "price_desc") list.sort(comparePublicPriceDesc);
     if (sort === "newest") list.sort(sortListingsByNewest);
     if (nearState) list = decorateAndSortNearMeResults(list, nearState);
     const filtered = hasActivePublicCategoryFilter("rent");
@@ -37647,7 +37735,8 @@ function filterStudents(options = {}) {
   const amenity = (document.getElementById("student-amenity-f")?.value || "").toLowerCase().trim();
   const category = (document.getElementById("student-category-f")?.value || "").toLowerCase().trim();
   const verifiedOnly = document.getElementById("student-verified-f")?.value === "1";
-  const sort = document.getElementById("student-sort-f")?.value || "newest";
+  const sort = publicCategorySortValue("students");
+  syncPublicCategorySortValue("students", sort);
   const max = publicListingFilterNumber("student-budget-custom-f") || parseInt(document.getElementById("student-budget-f")?.value || "0", 10);
   const maxDistance = parseFloat(document.getElementById("student-distance-f")?.value || "0");
   let list = getPublicListings().filter((p) => isStudentDiscoverable(p));
@@ -37672,8 +37761,8 @@ function filterStudents(options = {}) {
     const distanceMatch = !maxDistance || (typeof p.distance_to_uni_km === "number" && p.distance_to_uni_km <= maxDistance);
     return typeMatch && qMatch && dMatch && uMatch && aMatch && cMatch && vMatch && maxMatch && distanceMatch;
   });
-  if (sort === "price_asc") list.sort((a, b) => a.price - b.price);
-  if (sort === "price_desc") list.sort((a, b) => b.price - a.price);
+  if (sort === "price_asc") list.sort(comparePublicPriceAsc);
+  if (sort === "price_desc") list.sort(comparePublicPriceDesc);
   if (sort === "distance_asc") list.sort((a, b) => (a.distance_to_uni_km || 999) - (b.distance_to_uni_km || 999));
   if (sort === "newest") list.sort(sortListingsByNewest);
   if (nearState) list = decorateAndSortNearMeResults(list, nearState);
@@ -41707,7 +41796,8 @@ function filterCommercial(options = {}) {
   const max = publicListingFilterNumber("commercial-max-price-custom-f") || parseInt(document.getElementById("commercial-price-f")?.value || "0", 10);
   const minSize = parseFloat(document.getElementById("commercial-size-f")?.value || "0");
   const maxSize = parseFloat(document.getElementById("commercial-max-size-f")?.value || "0");
-  const sort = document.getElementById("commercial-sort-f")?.value || "newest";
+  const sort = publicCategorySortValue("commercial");
+  syncPublicCategorySortValue("commercial", sort);
   let list = getPublicListings().filter((p) => normalizeType(p.type) === "commercial");
   list = list.filter((p) => {
     const text = publicListingFilterText(p);
@@ -41721,8 +41811,8 @@ function filterCommercial(options = {}) {
     const maxSizeMatch = !maxSize || sizeNum <= maxSize;
     return qMatch && dMatch && tMatch && minMatch && maxMatch && sizeMatch && maxSizeMatch;
   });
-  if (sort === "price_asc") list.sort((a, b) => a.price - b.price);
-  if (sort === "price_desc") list.sort((a, b) => b.price - a.price);
+  if (sort === "price_asc") list.sort(comparePublicPriceAsc);
+  if (sort === "price_desc") list.sort(comparePublicPriceDesc);
   if (sort === "size_desc") list.sort((a, b) => numericValue(b.size) - numericValue(a.size));
   if (sort === "newest") list.sort(sortListingsByNewest);
   if (nearState) list = decorateAndSortNearMeResults(list, nearState);
@@ -41749,7 +41839,8 @@ function filterLand(options = {}) {
   const minSize = parseFloat(document.getElementById("land-min-size-f")?.value || "0");
   const maxSize = parseFloat(document.getElementById("land-max-size-f")?.value || "0");
   const titleType = (document.getElementById("land-title-f")?.value || "").toLowerCase().trim();
-  const sort = document.getElementById("land-sort-f")?.value || "newest";
+  const sort = publicCategorySortValue("land");
+  syncPublicCategorySortValue("land", sort);
   let list = getPublicListings().filter((p) => normalizeType(p.type) === "land");
   list = list.filter((p) => {
     const text = publicListingFilterText(p);
@@ -41764,8 +41855,8 @@ function filterLand(options = {}) {
     const titleMatch = !titleType || text.includes(titleType);
     return qMatch && dMatch && tMatch && minMatch && maxMatch && sizeMatch && maxSizeMatch && titleMatch;
   });
-  if (sort === "price_asc") list.sort((a, b) => a.price - b.price);
-  if (sort === "price_desc") list.sort((a, b) => b.price - a.price);
+  if (sort === "price_asc") list.sort(comparePublicPriceAsc);
+  if (sort === "price_desc") list.sort(comparePublicPriceDesc);
   if (sort === "size_desc") list.sort((a, b) => numericValue(b.size) - numericValue(a.size));
   if (sort === "newest") list.sort(sortListingsByNewest);
   if (nearState) list = decorateAndSortNearMeResults(list, nearState);
@@ -41784,8 +41875,8 @@ function sortProps(page, order) {
   const key = publicPaginationKey(page);
   const backendKey = publicPaginationBackendCategory(key);
   const list = getPublicListings().filter((p) => key === "students" ? isStudentDiscoverable(p) : normalizeType(p.type) === backendKey);
-  if (order === "price_asc") list.sort((a, b) => a.price - b.price);
-  if (order === "price_desc") list.sort((a, b) => b.price - a.price);
+  if (order === "price_asc") list.sort(comparePublicPriceAsc);
+  if (order === "price_desc") list.sort(comparePublicPriceDesc);
   if (order === "newest") {
     list.sort(sortListingsByNewest);
   }
