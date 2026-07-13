@@ -6337,6 +6337,22 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
   if (
     isIdleResumeDue(session)
+    && isGreetingText(cleanBody)
+    && !['greeting', 'main_menu', 'submitted', 'choose_language'].includes(step)
+    && !mediaUrl
+    && !sharedLocation
+  ) {
+    await patchSessionData(phone, {
+      idle_resume_prompt: null,
+      idle_resume_resolved_as: 'greeting_step_reminder',
+      idle_resume_resolved_at: new Date().toISOString(),
+      idle_resume_reply_step: step
+    });
+    return respond(stepReminderMessage(lang, step), step);
+  }
+
+  if (
+    isIdleResumeDue(session)
     && !['greeting', 'main_menu', 'submitted', 'choose_language'].includes(step)
     && !actionableStepReply
     && !mediaUrl
