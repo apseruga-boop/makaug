@@ -14400,6 +14400,12 @@ function ensureAdminFoundOnlineControls() {
     sourcePanel.className = "hidden mb-4 rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-xs text-emerald-950";
     table.parentNode.insertBefore(sourcePanel, table);
   }
+  if (!document.getElementById("admin-x-source-drip-panel")) {
+    const dripPanel = document.createElement("div");
+    dripPanel.id = "admin-x-source-drip-panel";
+    dripPanel.className = "hidden mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-950";
+    table.parentNode.insertBefore(dripPanel, table);
+  }
   if (
     document.getElementById("admin-seed-bakaima-listings-btn")
     && document.getElementById("admin-seed-carnelian-listings-btn")
@@ -14410,6 +14416,7 @@ function ensureAdminFoundOnlineControls() {
     && document.getElementById("admin-import-youtube-posts-btn")
     && document.getElementById("admin-sweep-youtube-posts-btn")
     && document.getElementById("admin-sweep-x-posts-btn")
+    && document.getElementById("admin-x-drip-btn")
     && document.getElementById("admin-sweep-all-social-posts-btn")
     && document.getElementById("admin-copy-social-capture-helper-btn")
     && document.getElementById("admin-import-exact-social-links-btn")
@@ -14446,6 +14453,9 @@ function ensureAdminFoundOnlineControls() {
   }
   if (!document.getElementById("admin-sweep-x-posts-btn")) {
     missingButtons.push(`<button id="admin-sweep-x-posts-btn" type="button" onclick="adminSweepSocialPlatformPosts('x')" class="border border-slate-300 text-slate-700 hover:bg-slate-50 px-3 py-2 rounded-lg text-xs font-bold">Sweep X Posts</button>`);
+  }
+  if (!document.getElementById("admin-x-drip-btn")) {
+    missingButtons.push(`<button id="admin-x-drip-btn" type="button" onclick="adminLoadXSourceDrip()" class="border border-slate-900 text-slate-900 hover:bg-slate-50 px-3 py-2 rounded-lg text-xs font-bold">X Drip Crawler</button>`);
   }
   if (!document.getElementById("admin-sweep-all-social-posts-btn")) {
     missingButtons.push(`<button id="admin-sweep-all-social-posts-btn" type="button" onclick="adminSweepAllSocialPosts()" class="border border-gray-900 text-gray-900 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-bold">Sweep All Social Sources</button>`);
@@ -14845,6 +14855,175 @@ function adminSourceRegistryPanelElement() {
     return adminSocialStatusElement();
   }
   return document.getElementById("admin-source-registry-panel") || adminSocialStatusElement();
+}
+
+function adminXSourceDripPanelElement() {
+  return document.getElementById("admin-x-source-drip-panel") || adminSocialStatusElement();
+}
+
+function adminXSourceDripRunHtml(run = {}) {
+  const summary = run.result_summary || {};
+  const status = run.status || summary.status || "-";
+  const statusClass = status === "blocked" || status === "error"
+    ? "border-red-100 bg-red-50 text-red-900"
+    : status === "rate_limited"
+      ? "border-amber-100 bg-amber-50 text-amber-900"
+      : "border-slate-200 bg-white text-slate-800";
+  return `<div class="rounded-lg border ${statusClass} p-2">
+    <div class="font-black">${adminEscape(status)} • offset ${adminEscape(run.source_offset ?? summary.source_offset ?? 0)} → ${adminEscape(run.next_source_offset ?? summary.next_source_offset ?? 0)}</div>
+    <div class="mt-1 text-[11px]">Since ${adminEscape((run.published_after || summary.published_after || "").slice(0, 10) || "-")} • Fetched ${adminEscape(run.fetched_posts_count || summary.fetched_posts_count || 0)} • Discovered ${adminEscape(run.discovered_posts_count || summary.discovered_posts_count || 0)} • Created ${adminEscape(run.created_properties || summary.created_properties || 0)} • Review ${adminEscape(run.review_queue_properties || summary.review_queue_properties || 0)} • Existing ${adminEscape(run.existing_properties || summary.existing_properties || 0)} • 429s ${adminEscape(run.rate_limited_count || summary.rate_limited_count || 0)}</div>
+    <div class="mt-1 text-[11px] text-slate-500">${adminEscape(run.created_at || "")}${summary.reason ? ` • ${adminEscape(summary.reason)}` : ""}</div>
+  </div>`;
+}
+
+function adminXSourceDripHtml(data = {}) {
+  const state = data.state || {};
+  const inventory = data.inventory || {};
+  const runs = Array.isArray(data.recent_runs) ? data.recent_runs : [];
+  const marker = data.marker || "x-source-drip-20260714";
+  const enabled = state.enabled === true;
+  const crawled = Number(state.percent_crawled || 0);
+  const target = Number(inventory.target || state.target_reviewable || 3000);
+  const reviewable = Number(inventory.reviewable_count || 0);
+  const progress = target ? Math.min(100, Math.round((reviewable / target) * 100)) : 0;
+  return `
+    <div class="flex items-start justify-between gap-3 flex-wrap">
+      <div>
+        <div class="font-black text-slate-950">X source drip crawler</div>
+        <div class="mt-1">Marker: <span class="font-mono">${adminEscape(marker)}</span> • Status: <span class="font-black">${adminEscape(state.status || "paused")}</span>${state.pause_reason ? ` • ${adminEscape(state.pause_reason)}` : ""}</div>
+        <div class="mt-1 text-slate-700">Cursor ${adminEscape(state.cursor_offset || 0)} / ${adminEscape(state.source_count || 0)} (${adminEscape(crawled)}% crawled) • since ${adminEscape((state.published_after || "2026-01-01").slice(0, 10))} • next run ${adminEscape(state.next_run_at || "not scheduled")}</div>
+      </div>
+      <button type="button" onclick="adminLoadXSourceDrip()" class="border border-slate-300 bg-white text-slate-800 hover:bg-slate-50 px-3 py-1.5 rounded-lg text-xs font-bold">Refresh</button>
+    </div>
+    <div class="mt-3 grid sm:grid-cols-3 lg:grid-cols-6 gap-2">
+      <label class="rounded-lg border border-slate-200 bg-white p-2"><span class="block text-[10px] font-black text-slate-500 uppercase">Interval min</span><input id="admin-x-drip-interval" type="number" min="1" max="1440" value="${adminAttr(state.base_interval_minutes || 15)}" class="mt-1 w-full border border-slate-200 rounded px-2 py-1 text-xs"></label>
+      <label class="rounded-lg border border-slate-200 bg-white p-2"><span class="block text-[10px] font-black text-slate-500 uppercase">Batch max 5</span><input id="admin-x-drip-batch" type="number" min="1" max="5" value="${adminAttr(state.batch_size || 5)}" class="mt-1 w-full border border-slate-200 rounded px-2 py-1 text-xs"></label>
+      <label class="rounded-lg border border-slate-200 bg-white p-2"><span class="block text-[10px] font-black text-slate-500 uppercase">Max results</span><input id="admin-x-drip-results" type="number" min="10" max="100" value="${adminAttr(state.max_results || 10)}" class="mt-1 w-full border border-slate-200 rounded px-2 py-1 text-xs"></label>
+      <label class="rounded-lg border border-slate-200 bg-white p-2"><span class="block text-[10px] font-black text-slate-500 uppercase">Offset</span><input id="admin-x-drip-offset" type="number" min="0" value="${adminAttr(state.cursor_offset || 0)}" class="mt-1 w-full border border-slate-200 rounded px-2 py-1 text-xs"></label>
+      <label class="rounded-lg border border-slate-200 bg-white p-2"><span class="block text-[10px] font-black text-slate-500 uppercase">Since</span><input id="admin-x-drip-published-after" type="date" value="${adminAttr((state.published_after || "2026-01-01").slice(0, 10))}" class="mt-1 w-full border border-slate-200 rounded px-2 py-1 text-xs"></label>
+      <label class="rounded-lg border border-slate-200 bg-white p-2"><span class="block text-[10px] font-black text-slate-500 uppercase">Mode</span><select id="admin-x-drip-mode" class="mt-1 w-full border border-slate-200 rounded px-2 py-1 text-xs"><option value="all" ${state.search_mode === "all" ? "selected" : ""}>all</option><option value="recent" ${state.search_mode === "recent" ? "selected" : ""}>recent</option></select></label>
+    </div>
+    <div class="mt-3 rounded-lg border border-slate-200 bg-white p-3">
+      <div class="flex items-center justify-between gap-2"><div class="font-black">Reviewable inventory target</div><div>${adminEscape(reviewable)} / ${adminEscape(target)}</div></div>
+      <div class="mt-2 h-2 rounded-full bg-slate-100 overflow-hidden"><div class="h-full bg-slate-900" style="width:${adminAttr(progress)}%"></div></div>
+      <div class="mt-1 text-[11px] text-slate-500">${adminEscape(progress)}% toward the 3,000 target from found-online reviewable rows.</div>
+    </div>
+    <div class="mt-3 flex gap-2 flex-wrap">
+      <button type="button" onclick="adminSaveXSourceDrip()" class="border border-slate-300 bg-white text-slate-900 hover:bg-slate-50 px-3 py-2 rounded-lg text-xs font-bold">Save config</button>
+      ${enabled ? `<button type="button" onclick="adminPauseXSourceDrip()" class="border border-red-200 text-red-700 hover:bg-red-50 px-3 py-2 rounded-lg text-xs font-bold">Pause drip</button>` : `<button type="button" onclick="adminStartXSourceDrip()" class="bg-slate-900 text-white hover:bg-slate-800 px-3 py-2 rounded-lg text-xs font-bold">Start drip</button>`}
+      <button type="button" onclick="adminRunXSourceDripOnce()" class="border border-emerald-200 text-emerald-700 hover:bg-emerald-50 px-3 py-2 rounded-lg text-xs font-bold">Run one batch now</button>
+    </div>
+    <div class="mt-3 grid md:grid-cols-2 gap-2">
+      ${runs.length ? runs.slice(0, 10).map(adminXSourceDripRunHtml).join("") : `<div class="rounded-lg border border-slate-200 bg-white p-3 text-slate-600">No drip runs logged yet.</div>`}
+    </div>`;
+}
+
+function adminReadXSourceDripConfig() {
+  return {
+    interval_minutes: Number(document.getElementById("admin-x-drip-interval")?.value || 15),
+    batch_size: Number(document.getElementById("admin-x-drip-batch")?.value || 5),
+    max_results: Number(document.getElementById("admin-x-drip-results")?.value || 10),
+    cursor_offset: Number(document.getElementById("admin-x-drip-offset")?.value || 0),
+    published_after: document.getElementById("admin-x-drip-published-after")?.value || "2026-01-01",
+    x_search_mode: document.getElementById("admin-x-drip-mode")?.value || "all",
+    target_reviewable: 3000
+  };
+}
+
+async function adminLoadXSourceDrip() {
+  if (!canUseLiveAdminApi()) {
+    toast("Sign in as admin or save ADMIN_API_KEY first.");
+    return;
+  }
+  const panel = adminXSourceDripPanelElement();
+  const button = document.getElementById("admin-x-drip-btn");
+  if (button) {
+    button.disabled = true;
+    button.classList.add("opacity-60", "cursor-wait");
+  }
+  if (panel) {
+    panel.classList.remove("hidden");
+    panel.innerHTML = "Loading X drip crawler...";
+  }
+  try {
+    const response = await apiRequest("/api/admin/x-source-drip", {
+      method: "GET",
+      headers: adminAuthHeaders()
+    });
+    if (panel) panel.innerHTML = adminXSourceDripHtml(response?.data || {});
+    toast("X drip status loaded.");
+  } catch (e) {
+    if (panel) panel.innerHTML = `Could not load X drip crawler: ${adminEscape(e.message || "Unknown error")}`;
+    toast(`X drip failed: ${e.message || "error"}`);
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.classList.remove("opacity-60", "cursor-wait");
+    }
+  }
+}
+
+async function adminSaveXSourceDrip() {
+  const panel = adminXSourceDripPanelElement();
+  try {
+    const response = await apiRequest("/api/admin/x-source-drip", {
+      method: "PATCH",
+      headers: adminAuthHeaders(),
+      body: adminReadXSourceDripConfig()
+    });
+    if (panel) panel.innerHTML = adminXSourceDripHtml(response?.data || {});
+    toast("X drip config saved.");
+  } catch (e) {
+    toast(`X drip save failed: ${e.message || "error"}`);
+  }
+}
+
+async function adminStartXSourceDrip() {
+  const panel = adminXSourceDripPanelElement();
+  try {
+    const response = await apiRequest("/api/admin/x-source-drip/start", {
+      method: "POST",
+      headers: adminAuthHeaders(),
+      body: adminReadXSourceDripConfig()
+    });
+    if (panel) panel.innerHTML = adminXSourceDripHtml(response?.data || {});
+    toast("X drip started.");
+  } catch (e) {
+    toast(`X drip start failed: ${e.message || "error"}`);
+  }
+}
+
+async function adminPauseXSourceDrip() {
+  const panel = adminXSourceDripPanelElement();
+  try {
+    const response = await apiRequest("/api/admin/x-source-drip/pause", {
+      method: "POST",
+      headers: adminAuthHeaders(),
+      body: { reason: "paused_by_admin" }
+    });
+    if (panel) panel.innerHTML = adminXSourceDripHtml(response?.data || {});
+    toast("X drip paused.");
+  } catch (e) {
+    toast(`X drip pause failed: ${e.message || "error"}`);
+  }
+}
+
+async function adminRunXSourceDripOnce() {
+  const panel = adminXSourceDripPanelElement();
+  if (!window.confirm("Run one X drip batch now? This uses X API credits and stays capped to 5 sources.")) return;
+  try {
+    if (panel) panel.innerHTML = "Running one X drip batch...";
+    await apiRequest("/api/admin/x-source-drip/run-once", {
+      method: "POST",
+      headers: adminAuthHeaders(),
+      body: { force: true }
+    });
+    await adminLoadXSourceDrip();
+    toast("X drip batch finished.");
+  } catch (e) {
+    if (panel) panel.innerHTML = `X drip run failed: ${adminEscape(e.message || "Unknown error")}`;
+    toast(`X drip run failed: ${e.message || "error"}`);
+  }
 }
 
 async function adminLoadPropertySourceRegistry() {

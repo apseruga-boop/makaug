@@ -38,6 +38,7 @@ const {
   renderProtectedLoginShell,
   sanitizePublicHtml
 } = require('./services/publicHtmlSanitizer');
+const { startXSourceDripScheduler } = require('./services/xSourceDripService');
 
 const app = express();
 // Required on Render so rate limiting uses the forwarded client IP correctly.
@@ -951,6 +952,7 @@ async function start() {
   } else if (!process.env.DATABASE_URL) {
     logger.warn('Skipping startup migrations because DATABASE_URL is not set');
   }
+  startXSourceDripScheduler(db);
 
   app.listen(port, () => {
     logger.info(`makaug backend running on http://localhost:${port}`);

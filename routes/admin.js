@@ -127,6 +127,13 @@ const {
   runSocialPlatformPostSweep
 } = require('../services/socialPlatformPostDiscoveryService');
 const {
+  getXSourceDripStatus,
+  pauseXSourceDrip,
+  runXSourceDripOnce,
+  startXSourceDrip,
+  updateXSourceDripConfig
+} = require('../services/xSourceDripService');
+const {
   runTikTokAutopublishAgent
 } = require('../services/tiktokAutopublishAgentService');
 const { getProviderMeta } = require('../services/llmProvider');
@@ -3537,6 +3544,7 @@ router.post('/social-platform-posts/sweep', async (req, res, next) => {
     const searchMode = req.body?.x_search_mode || req.body?.xSearchMode || 'all';
     const lookbackDays = req.body?.lookback_days || req.body?.lookbackDays || 0;
     const publishedAfter = req.body?.published_after || req.body?.publishedAfter || '2026-01-01T00:00:00.000Z';
+    const xPublishedAfter = req.body?.x_published_after || req.body?.xPublishedAfter || publishedAfter;
     const focus = req.body?.focus || req.body?.sweep_focus || req.body?.sweepFocus || '';
     const result = await runSocialPlatformPostSweep({
       db,
@@ -3550,6 +3558,7 @@ router.post('/social-platform-posts/sweep', async (req, res, next) => {
       youtubeJobMode,
       searchMode,
       lookbackDays,
+      xPublishedAfter,
       publishedAfter,
       timeBudgetMs: 45000
     });
@@ -3559,6 +3568,8 @@ router.post('/social-platform-posts/sweep', async (req, res, next) => {
       platform,
       focus,
       dry_run: dryRun,
+      published_after: publishedAfter,
+      x_published_after: xPublishedAfter,
       tiktok_capture_task_count: result.tiktok?.capture_task_count || 0,
       facebook_capture_task_count: result.facebook?.capture_task_count || 0,
       instagram_capture_task_count: result.instagram?.capture_task_count || 0,
@@ -3578,6 +3589,86 @@ router.post('/social-platform-posts/sweep', async (req, res, next) => {
       time_budget_exhausted: result.time_budget_exhausted === true || result.performance?.time_budget_exhausted === true,
     }, adminActorId(req));
     return res.json({ ok: true, data: result });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/x-source-drip', async (_req, res, next) => {
+  try {
+    const result = await getXSourceDripStatus(db);
+    return res.json({ ok: true, data: result });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.patch('/x-source-drip', async (req, res, next) => {
+  try {
+    const state = await updateXSourceDripConfig(db, req.body || {});
+    await writeAudit('admin_x_source_drip_configured', {
+      state: {
+        enabled: state.enabled,
+        cursor_offset: state.cursor_offset,
+        source_count: state.source_count,
+        base_interval_minutes: state.base_interval_minutes,
+        batch_size: state.batch_size,
+        max_results: state.max_results,
+        search_mode: state.search_mode,
+        published_after: state.published_after,
+        target_reviewable: state.target_reviewable
+      }
+    }, adminActorId(req));
+    return res.json({ ok: true, data: await getXSourceDripStatus(db) });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/x-source-drip/start', async (req, res, next) => {
+  try {
+    const state = await startXSourceDrip(db, req.body || {});
+    await writeAudit('admin_x_source_drip_started', {
+      cursor_offset: state.cursor_offset,
+      source_count: state.source_count,
+      interval_minutes: state.base_interval_minutes,
+      batch_size: state.batch_size,
+      max_results: state.max_results,
+      published_after: state.published_after
+    }, adminActorId(req));
+    return res.json({ ok: true, data: await getXSourceDripStatus(db) });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/x-source-drip/pause', async (req, res, next) => {
+  try {
+    const reason = cleanText(req.body?.reason || 'paused_by_admin');
+    const state = await pauseXSourceDrip(db, reason);
+    await writeAudit('admin_x_source_drip_paused', {
+      reason: state.pause_reason,
+      cursor_offset: state.cursor_offset
+    }, adminActorId(req));
+    return res.json({ ok: true, data: await getXSourceDripStatus(db) });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/x-source-drip/run-once', async (req, res, next) => {
+  try {
+    const result = await runXSourceDripOnce(db, {
+      force: req.body?.force !== false,
+      actorId: adminActorId(req)
+    });
+    await writeAudit('admin_x_source_drip_run_once', {
+      ok: result.ok === true,
+      skipped: result.skipped === true,
+      reason: result.reason || result.error || '',
+      result: result.result || null
+    }, adminActorId(req));
+    return res.status(result.ok === false ? 500 : 200).json({ ok: result.ok !== false, data: result });
   } catch (error) {
     return next(error);
   }

@@ -4199,6 +4199,7 @@ async function runSocialPlatformPostSweep({
   fetchX = true,
   fetchYouTube = true,
   youtubePublishedAfter = YOUTUBE_SOURCE_POST_WINDOW_START,
+  xPublishedAfter = '',
   publishedAfter = '',
   env = process.env,
   fetchImpl = fetch,
@@ -4239,6 +4240,7 @@ async function runSocialPlatformPostSweep({
   const instagramSourceWindow = rotatingSourceWindow(instagramSources, { limit: sourceLimit, offset: normalizedSourceOffset });
   const archiveStartTime = isoStartTimeForLookbackDays(lookbackDays);
   const youtubeStartTime = cleanText(publishedAfter || youtubePublishedAfter) || YOUTUBE_SOURCE_POST_WINDOW_START;
+  const xStartTime = cleanText(xPublishedAfter || archiveStartTime) || LAUNCH_SOURCE_POST_WINDOW_START;
   const tiktokCaptureTasks = requestedPlatforms.includes('tiktok')
     ? buildTikTokCaptureTasks({ sources: tiktokSourceWindow.sources, limit: sourceLimit })
     : [];
@@ -4262,7 +4264,7 @@ async function runSocialPlatformPostSweep({
     : [];
   const youtubeSearchJobs = [...primaryYoutubeSearchJobs, ...youtubeRegistryFillSearchJobs];
   const xSearchJobs = requestedPlatforms.includes('x')
-    ? buildXSearchJobs({ sources: xSourceWindow.sources, limit: sourceLimit, searchMode, startTime: archiveStartTime })
+    ? buildXSearchJobs({ sources: xSourceWindow.sources, limit: sourceLimit, searchMode, startTime: xStartTime })
     : [];
   const facebookCaptureTasks = requestedPlatforms.includes('facebook')
     ? buildManualSocialCaptureTasks({ sources: facebookSourceWindow.sources, platform: 'facebook', limit: sourceLimit })
@@ -4432,7 +4434,8 @@ async function runSocialPlatformPostSweep({
     token_env: bearer.name || '',
     search_mode: searchMode,
     lookback_days: Number(lookbackDays) || 0,
-    archive_start_time: archiveStartTime || LAUNCH_SOURCE_POST_WINDOW_START,
+    archive_start_time: xStartTime,
+    published_after: xStartTime,
     skipped_reason: bearer.token ? '' : 'Set X_BEARER_TOKEN, TWITTER_BEARER_TOKEN, or X_API_BEARER_TOKEN to convert X source feeds into exact post imports.',
     posts: [],
     reports: [],
@@ -4636,6 +4639,8 @@ async function runSocialPlatformPostSweep({
       api_configured: xFetch.api_configured,
       token_env: xFetch.token_env,
       search_mode: searchMode,
+      published_after: xFetch.published_after,
+      archive_start_time: xFetch.archive_start_time,
       skipped_reason: xFetch.skipped_reason,
       search_jobs: xSearchJobs,
       fetch_reports: xFetch.reports,
