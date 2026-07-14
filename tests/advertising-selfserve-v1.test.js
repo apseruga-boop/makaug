@@ -8,8 +8,11 @@ const advertisingRoute = fs.readFileSync(path.join(root, 'routes/advertising.js'
 const adminRoute = fs.readFileSync(path.join(root, 'routes/admin.js'), 'utf8');
 const publicHtmlSanitizer = fs.readFileSync(path.join(root, 'services/publicHtmlSanitizer.js'), 'utf8');
 const paymentProviderService = fs.readFileSync(path.join(root, 'services/paymentProviderService.js'), 'utf8');
+const lifecycleService = fs.readFileSync(path.join(root, 'services/advertisingLifecycleNotificationService.js'), 'utf8');
 const migration = fs.readFileSync(path.join(root, 'db/migrations/073_advertising_selfserve_v1.sql'), 'utf8');
+const lifecycleMigration = fs.readFileSync(path.join(root, 'db/migrations/074_advertising_lifecycle_statuses.sql'), 'utf8');
 const catalog = require('../services/advertisingCatalogService');
+const { buildAdvertisingLifecycleTemplate } = require('../services/advertisingLifecycleNotificationService');
 
 const marker = 'advertising-selfserve-v1-20260713';
 const flutterwaveMarker = 'advertising-flutterwave-staging-20260714';
@@ -44,6 +47,7 @@ assert(advertisingRoute.includes("router.post('/creative-draft'"), 'public adver
 assert(advertisingRoute.includes("router.post('/self-serve-campaigns'"), 'public advertising route must expose self-serve campaign endpoint');
 assert(advertisingRoute.includes('createHostedPaymentLink'), 'self-serve route must create provider-hosted payment links');
 assert(advertisingRoute.includes('generateCampaignCopy'), 'creative draft route must call the AI campaign copy service when configured');
+assert(advertisingRoute.includes("trigger: 'submitted'"), 'self-serve submit must send/log the received notification');
 assert(advertisingRoute.includes("status = 'awaiting_payment'") || advertisingRoute.includes("'awaiting_payment'"), 'self-serve campaign must create a hosted-payment handoff state');
 assert(advertisingRoute.includes("'advertising_selfserve_v1'"), 'self-serve campaign must mark inquiry/lead source');
 assert(advertisingRoute.includes('hosted_checkout_only'), 'self-serve campaign must enforce hosted checkout boundary');
@@ -52,12 +56,23 @@ assert(advertisingRoute.includes('advertiser_approval_status') && advertisingRou
 assert(adminRoute.includes('traffic_multiplier'), 'King placement route must allow multiplier edits');
 assert(adminRoute.includes('weekly_impressions'), 'King placement route must allow traffic edits');
 assert(adminRoute.includes('FLUTTERWAVE_SECRET_KEY'), 'admin setup status must know Flutterwave keys');
+assert(adminRoute.includes('paid_pending_approval'), 'admin advertising status machine must allow paid pending approval');
+assert(adminRoute.includes('requestAdvertisingCampaignRefund'), 'King reject path must request payment-provider refund when paid');
+assert(adminRoute.includes("trigger: 'approved_live'"), 'King live approval must trigger approved/live notification');
 
 assert(paymentProviderService.includes('createFlutterwaveCheckout'), 'payment provider service must create Flutterwave checkout sessions');
 assert(paymentProviderService.includes('mobilemoneyuganda'), 'Flutterwave checkout must request Uganda mobile money payment options');
 assert(paymentProviderService.includes('verifyFlutterwaveWebhookSignature'), 'Flutterwave webhook signature must be verified');
 assert(paymentProviderService.includes('flutterwave-signature') || advertisingRoute.includes('flutterwave-signature'), 'Flutterwave signature header must be accepted');
 assert(paymentProviderService.includes('FLUTTERWAVE_SECRET_KEY'), 'Flutterwave secret key env must be used server-side');
+assert(paymentProviderService.includes("'paid_pending_approval'"), 'payment webhook must move paid campaigns to paid pending approval');
+assert(paymentProviderService.includes('requestFlutterwaveRefund'), 'payment provider service must have a Flutterwave refund path');
+
+assert(lifecycleService.includes('advertising_campaign_received'), 'lifecycle service must define Email 1 received template');
+assert(lifecycleService.includes('advertising_payment_confirmed'), 'lifecycle service must define Email 2 payment confirmed template');
+assert(lifecycleService.includes('advertising_campaign_live'), 'lifecycle service must define Email 3 live template');
+assert(lifecycleService.includes('logWhatsAppMessage'), 'lifecycle service must write WhatsApp message log entries');
+assert(lifecycleService.includes('logNotification'), 'lifecycle service must write notification log entries');
 
 assert(migration.includes('weekly_impressions'), 'migration must add weekly impression field');
 assert(migration.includes('traffic_multiplier'), 'migration must add traffic multiplier field');
@@ -65,6 +80,8 @@ assert(migration.includes('self_serve_enabled'), 'migration must add self-serve 
 assert(migration.includes('homepage_hero_banner'), 'migration must seed homepage hero self-serve placement');
 assert(migration.includes('sponsored_search_result'), 'migration must seed sponsored search result placement');
 assert(migration.includes('feature_my_listing'), 'migration must seed feature-my-listing placement');
+assert(lifecycleMigration.includes('paid_pending_approval'), 'lifecycle migration must add paid pending approval status');
+assert(lifecycleMigration.includes('refund_pending'), 'lifecycle migration must add refund pending payment status');
 
 const rateCard = catalog.getAdvertisingRateCard();
 assert.strictEqual(rateCard.marker, marker, 'rate card marker must match release marker');
@@ -86,6 +103,30 @@ const quote = catalog.buildAdvertisingQuoteBreakdown({
 assert.strictEqual(quote.pricing_model, 'hybrid', 'quote must use hybrid pricing');
 assert(Number(quote.total_ugx) > 0, 'quote must produce a non-zero total');
 assert(quote.line_items[0].plain_language.includes('views'), 'quote must include plain-language traffic line');
+
+const submittedEmail = buildAdvertisingLifecycleTemplate('submitted', {
+  id: '12345678-aaaa-bbbb-cccc-123456789000',
+  advertiser_name: 'QA Advertiser',
+  campaign_name: 'QA Campaign',
+  package_label: 'Homepage hero banner',
+  quoted_amount_ugx: 1008000,
+  payment_url: 'https://pay.example/checkout',
+  ai_copy: { languages: ['en', 'sw'] }
+});
+assert.strictEqual(submittedEmail.subject, "We've received your ad - one step left", 'submitted template subject must match the approved copy');
+assert(submittedEmail.text.includes('Amount due'), 'submitted template must include amount due');
+assert(submittedEmail.whatsapp.includes('Complete payment'), 'submitted WhatsApp fallback must include payment instruction');
+
+const paidEmail = buildAdvertisingLifecycleTemplate('payment_confirmed', {
+  id: '12345678-aaaa-bbbb-cccc-123456789000',
+  advertiser_name: 'QA Advertiser',
+  campaign_name: 'QA Campaign',
+  package_label: 'Homepage hero banner',
+  paid_amount_ugx: 1008000,
+  payment_reference: 'FLW-REF'
+}, { method: 'Flutterwave hosted checkout', reference: 'FLW-REF' });
+assert.strictEqual(paidEmail.subject, 'Payment confirmed - your ad is now in review', 'payment-confirmed template subject must match the approved copy');
+assert(paidEmail.text.includes('Next: we review and approve'), 'payment-confirmed template must explain review step');
 
 function buildAdvertiseSelfServePageSource(source) {
   const start = source.indexOf('function buildAdvertiseSelfServePage()');

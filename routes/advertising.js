@@ -23,6 +23,7 @@ const {
   paymentProviderConfigured
 } = require('../services/paymentProviderService');
 const { generateCampaignCopy } = require('../services/aiService');
+const { sendAdvertisingLifecycleNotification } = require('../services/advertisingLifecycleNotificationService');
 
 const router = express.Router();
 
@@ -617,8 +618,20 @@ router.post('/self-serve-campaigns', async (req, res, next) => {
       userAgent: req.get('user-agent')
     });
 
-    sendSelfServeConfirmation({ email, fullName, campaign, quote, paymentLink }).catch((error) => {
-      logger.warn('Self-serve advertising confirmation failed', { campaignId: campaign.id, error: error.message });
+    sendAdvertisingLifecycleNotification(db, {
+      trigger: 'submitted',
+      campaign: {
+        ...campaign,
+        payment_reference: invoice.invoice_number,
+        payment_url: paymentLink.checkout_url || null
+      },
+      context: {
+        amount: quote.total_ugx,
+        currency: quote.currency || 'UGX',
+        paymentUrl: paymentLink.checkout_url || null
+      }
+    }).catch((error) => {
+      logger.warn('Self-serve advertising lifecycle notification failed', { campaignId: campaign.id, error: error.message });
     });
 
     return res.status(201).json({

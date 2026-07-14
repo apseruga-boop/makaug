@@ -18218,6 +18218,9 @@ function adStatusBadge(status, type = "lead") {
     archived: "bg-gray-100 text-gray-700",
     draft: "bg-gray-100 text-gray-700",
     awaiting_payment: "bg-amber-100 text-amber-800",
+    paid_pending_approval: "bg-blue-100 text-blue-800",
+    changes_requested: "bg-fuchsia-100 text-fuchsia-800",
+    rejected: "bg-red-100 text-red-700",
     paid: "bg-green-100 text-green-700",
     live: "bg-emerald-100 text-emerald-700",
     paused: "bg-yellow-100 text-yellow-700",
@@ -18226,6 +18229,7 @@ function adStatusBadge(status, type = "lead") {
     unpaid: "bg-red-100 text-red-700",
     invoiced: "bg-amber-100 text-amber-800",
     refunded: "bg-gray-100 text-gray-700",
+    refund_pending: "bg-orange-100 text-orange-800",
     waived: "bg-blue-100 text-blue-700"
   };
   return `<span class="text-[11px] font-semibold px-2 py-1 rounded ${map[normalized] || "bg-gray-100 text-gray-700"}">${adminEscape(normalized.replace(/_/g, " "))}</span>`;
@@ -18683,6 +18687,7 @@ async function adminRequestSelfServeAdChange(campaignId) {
       headers: adminAuthHeaders(),
       body: {
         advertiser_approval_status: "changes_requested",
+        status: "changes_requested",
         creative_status: "review",
         creative_brief: note
       }
@@ -18702,9 +18707,9 @@ async function adminRejectSelfServeAdCampaign(campaignId) {
       method: "PATCH",
       headers: adminAuthHeaders(),
       body: {
-        status: "cancelled",
+        status: "rejected",
         advertiser_approval_status: "rejected",
-        payment_status: "refunded",
+        payment_status: "refund_pending",
         creative_brief: reason
       }
     });

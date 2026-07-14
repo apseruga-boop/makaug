@@ -80,7 +80,8 @@ const {
 } = require('../services/advertisingCatalogService');
 const { addLeadActivity, createLead } = require('../services/leadService');
 const { getAlertSummary, matchListingToSavedSearches } = require('../services/alertSchedulerService');
-const { markInvoicePaidManually, paymentProviderConfigured } = require('../services/paymentProviderService');
+const { markInvoicePaidManually, paymentProviderConfigured, requestAdvertisingCampaignRefund } = require('../services/paymentProviderService');
+const { sendAdvertisingLifecycleNotification } = require('../services/advertisingLifecycleNotificationService');
 const { logNotification, notificationStatusFromDelivery } = require('../services/notificationLogService');
 const { logEmailEvent } = require('../services/emailLogService');
 const { logWhatsAppMessage } = require('../services/whatsappMessageLogService');
@@ -5395,58 +5396,36 @@ function advertisingMoney(value) {
 }
 
 async function notifyAdvertisingCampaignChange(campaign = {}, previous = {}) {
-  const email = String(campaign.advertiser_email || '').trim();
-  const phone = String(campaign.advertiser_phone || '').trim();
-  const supportEmail = getSupportEmail();
-  const whatsappUrl = getSupportWhatsappUrl();
   const becamePaid = campaign.payment_status === 'paid' && previous.payment_status !== 'paid';
   const becameLive = campaign.status === 'live' && previous.status !== 'live';
+  const becameChangesRequested = (
+    campaign.status === 'changes_requested'
+    || campaign.advertiser_approval_status === 'changes_requested'
+  ) && previous.advertiser_approval_status !== 'changes_requested' && previous.status !== 'changes_requested';
+  const becameRejected = (
+    campaign.status === 'rejected'
+    || campaign.advertiser_approval_status === 'rejected'
+  ) && previous.advertiser_approval_status !== 'rejected' && previous.status !== 'rejected';
 
-  if (!becamePaid && !becameLive) return;
-
-  const lines = [
-    `Hello ${campaign.advertiser_name || 'there'},`,
-    '',
-    becameLive
-      ? 'Your makaug advertising campaign is now live.'
-      : 'makaug has recorded your advertising payment.',
-    '',
-    `Campaign: ${campaign.campaign_name || '-'}`,
-    `Package: ${campaign.package_label || campaign.package_key || '-'}`,
-    `Status: ${campaign.status || '-'}`,
-    `Payment: ${campaign.payment_status || '-'}`,
-    `Paid Amount: ${advertisingMoney(campaign.paid_amount_ugx)}`,
-    campaign.payment_reference ? `Payment Reference: ${campaign.payment_reference}` : '',
-    campaign.starts_at ? `Starts: ${campaign.starts_at}` : '',
-    campaign.ends_at ? `Ends: ${campaign.ends_at}` : '',
-    campaign.creative_preview_url ? `Creative Preview: ${campaign.creative_preview_url}` : '',
-    '',
-    'makaug will track impressions, clicks, and leads while the campaign is active.',
-    `Need help? WhatsApp: ${whatsappUrl}`,
-    `Email: ${supportEmail}`
-  ].filter(Boolean).join('\n');
-
-  if (email) {
-    await sendSupportEmail({
-      to: email,
-      subject: becameLive
-        ? `[makaug Ads] Campaign live - ${campaign.campaign_name || 'Your ad'}`
-        : `[makaug Ads] Payment received - ${campaign.campaign_name || 'Your ad'}`,
-      text: lines
+  if (becamePaid && !becameLive) {
+    await sendAdvertisingLifecycleNotification(db, {
+      trigger: 'payment_confirmed',
+      campaign,
+      context: {
+        amount: campaign.paid_amount_ugx || campaign.quoted_amount_ugx,
+        method: campaign.payment_method || 'payment',
+        reference: campaign.payment_reference || ''
+      }
     });
   }
-
-  if (phone) {
-    await sendWhatsAppText({
-      to: phone,
-      body: [
-        becameLive ? 'Your makaug ad is live.' : 'makaug has recorded your ad payment.',
-        `Campaign: ${campaign.campaign_name || '-'}`,
-        `Status: ${campaign.status || '-'}`,
-        campaign.ends_at ? `Runs until: ${new Date(campaign.ends_at).toLocaleDateString('en-GB')}` : '',
-        'We will keep tracking performance for you.'
-      ].filter(Boolean).join('\n')
-    });
+  if (becameLive) {
+    await sendAdvertisingLifecycleNotification(db, { trigger: 'approved_live', campaign });
+  }
+  if (becameChangesRequested) {
+    await sendAdvertisingLifecycleNotification(db, { trigger: 'changes_requested', campaign });
+  }
+  if (becameRejected) {
+    await sendAdvertisingLifecycleNotification(db, { trigger: 'rejected', campaign });
   }
 }
 
@@ -5520,7 +5499,7 @@ router.get('/advertising/summary', async (_req, res, next) => {
         (SELECT COUNT(*)::int FROM advertising_inquiries WHERE status = 'new') AS new_inquiries,
         (SELECT COUNT(*)::int FROM advertising_inquiries WHERE status IN ('new','contacted','proposal_sent')) AS open_inquiries,
         (SELECT COUNT(*)::int FROM advertising_campaigns WHERE status = 'live') AS live_campaigns,
-        (SELECT COUNT(*)::int FROM advertising_campaigns WHERE status IN ('draft','awaiting_payment','paid')) AS pipeline_campaigns,
+        (SELECT COUNT(*)::int FROM advertising_campaigns WHERE status IN ('draft','awaiting_payment','paid','paid_pending_approval','changes_requested')) AS pipeline_campaigns,
         (SELECT COALESCE(SUM(paid_amount_ugx),0)::bigint FROM advertising_campaigns WHERE payment_status = 'paid') AS paid_revenue_ugx,
         (SELECT COALESCE(SUM(quoted_amount_ugx),0)::bigint FROM advertising_campaigns WHERE status NOT IN ('cancelled')) AS quoted_pipeline_ugx,
         (SELECT COALESCE(SUM(impressions),0)::bigint FROM advertising_campaigns) AS impressions,
@@ -5538,7 +5517,7 @@ router.get('/advertising/summary', async (_req, res, next) => {
             (SELECT COUNT(*)::int FROM advertising_inquiries WHERE status = 'new') AS new_inquiries,
             (SELECT COUNT(*)::int FROM advertising_inquiries WHERE status IN ('new','contacted','proposal_sent')) AS open_inquiries,
             (SELECT COUNT(*)::int FROM advertising_campaigns WHERE status = 'live') AS live_campaigns,
-            (SELECT COUNT(*)::int FROM advertising_campaigns WHERE status IN ('draft','awaiting_payment','paid')) AS pipeline_campaigns,
+            (SELECT COUNT(*)::int FROM advertising_campaigns WHERE status IN ('draft','awaiting_payment','paid','paid_pending_approval','changes_requested')) AS pipeline_campaigns,
             (SELECT COALESCE(SUM(paid_amount_ugx),0)::bigint FROM advertising_campaigns WHERE payment_status = 'paid') AS paid_revenue_ugx,
             (SELECT COALESCE(SUM(quoted_amount_ugx),0)::bigint FROM advertising_campaigns WHERE status NOT IN ('cancelled')) AS quoted_pipeline_ugx,
             (SELECT COALESCE(SUM(impressions),0)::bigint FROM advertising_campaigns) AS impressions,
@@ -5800,8 +5779,8 @@ router.post('/advertising/campaigns', async (req, res, next) => {
 router.patch('/advertising/campaigns/:id', async (req, res, next) => {
   try {
     const campaignId = req.params.id;
-    const allowedStatuses = ['draft', 'awaiting_payment', 'paid', 'live', 'paused', 'completed', 'cancelled'];
-    const allowedPaymentStatuses = ['unpaid', 'invoiced', 'paid', 'refunded', 'waived'];
+    const allowedStatuses = ['draft', 'awaiting_payment', 'paid', 'paid_pending_approval', 'changes_requested', 'rejected', 'live', 'paused', 'completed', 'ended', 'cancelled'];
+    const allowedPaymentStatuses = ['unpaid', 'invoiced', 'paid', 'refunded', 'refund_pending', 'waived'];
     const allowedCreativeStatuses = ['brief_needed', 'draft', 'review', 'approved', 'live_asset'];
     const allowedApprovalStatuses = ['draft', 'sent', 'approved', 'changes_requested', 'rejected'];
     const allowedReportCadences = ['none', 'daily', 'weekly', 'post_campaign', 'dashboard'];
@@ -5896,8 +5875,25 @@ router.patch('/advertising/campaigns/:id', async (req, res, next) => {
       values
     );
     if (!updated.rows.length) return res.status(404).json({ ok: false, error: 'Advertising campaign not found' });
+    let updatedCampaign = updated.rows[0];
+    const rejectedNow = (
+      updatedCampaign.status === 'rejected'
+      || updatedCampaign.advertiser_approval_status === 'rejected'
+    ) && previousCampaign.status !== 'rejected' && previousCampaign.advertiser_approval_status !== 'rejected';
+    if (rejectedNow && previousCampaign.payment_status === 'paid') {
+      const refund = await requestAdvertisingCampaignRefund(db, {
+        campaignId,
+        reason: String(req.body.creative_brief || req.body.rejection_reason || 'Campaign rejected after review').trim(),
+        adminUserId: adminActorId(req),
+        req
+      });
+      updatedCampaign = {
+        ...updatedCampaign,
+        payment_status: refund.requested ? 'refunded' : 'refund_pending'
+      };
+    }
     try {
-      await notifyAdvertisingCampaignChange(updated.rows[0], previousCampaign);
+      await notifyAdvertisingCampaignChange(updatedCampaign, previousCampaign);
     } catch (notifyError) {
       await writeAudit('advertising_campaign_notification_failed', {
         campaign_id: campaignId,
@@ -5905,7 +5901,7 @@ router.patch('/advertising/campaigns/:id', async (req, res, next) => {
       }, adminActorId(req));
     }
     await writeAudit('advertising_campaign_updated', { campaign_id: campaignId }, adminActorId(req));
-    return res.json({ ok: true, data: updated.rows[0] });
+    return res.json({ ok: true, data: updatedCampaign });
   } catch (error) {
     return next(error);
   }

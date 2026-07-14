@@ -2,6 +2,7 @@
 
 const crypto = require('crypto');
 const { writeAdminAudit, mirrorLegacyAudit } = require('./adminSecurityService');
+const { sendAdvertisingLifecycleNotification } = require('./advertisingLifecycleNotificationService');
 
 function clean(value) {
   return String(value || '').trim();
@@ -187,6 +188,111 @@ async function createHostedPaymentLink(options = {}) {
   };
 }
 
+async function requestFlutterwaveRefund({ transactionId, amount = null, reason = '' } = {}) {
+  const secretKey = flutterwaveSecretKey();
+  const txId = clean(transactionId);
+  if (!secretKey) return { requested: false, provider: 'flutterwave', error: 'FLUTTERWAVE_SECRET_KEY is not configured' };
+  if (!txId) return { requested: false, provider: 'flutterwave', error: 'Flutterwave transaction id is missing' };
+  const payload = {};
+  if (amount) payload.amount = Number(amount);
+  if (clean(reason)) payload.comments = clean(reason).slice(0, 180);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), Math.max(3000, Number(process.env.FLUTTERWAVE_TIMEOUT_MS || 12000)));
+  try {
+    const response = await fetch(`${flutterwaveApiBase()}/transactions/${encodeURIComponent(txId)}/refund`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${secretKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      return { requested: false, provider: 'flutterwave', error: body?.message || `Flutterwave refund failed with HTTP ${response.status}`, response: body };
+    }
+    return { requested: true, provider: 'flutterwave', response: body };
+  } catch (error) {
+    return { requested: false, provider: 'flutterwave', error: error.name === 'AbortError' ? 'Flutterwave refund timed out' : error.message };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function providerOrderIdFromWebhookPayload(value) {
+  const parsed = value && typeof value === 'object' ? value : (() => {
+    try { return JSON.parse(String(value || '{}')); } catch (_error) { return {}; }
+  })();
+  return firstClean(
+    parsed.provider_order_id,
+    parsed.payload?.data?.id,
+    parsed.payload?.data?.transaction_id,
+    parsed.payload?.data?.flw_ref
+  );
+}
+
+async function requestAdvertisingCampaignRefund(db, {
+  campaignId,
+  reason = '',
+  adminUserId = null,
+  req = null
+} = {}) {
+  if (!campaignId) return { requested: false, reason: 'campaign_id_missing' };
+  const result = await db.query(
+    `SELECT pl.*, i.amount AS invoice_amount, i.currency AS invoice_currency, i.id AS invoice_id
+     FROM payment_links pl
+     LEFT JOIN invoices i ON i.id = pl.invoice_id
+     WHERE pl.related_campaign_id = $1
+     ORDER BY pl.created_at DESC
+     LIMIT 1`,
+    [campaignId]
+  );
+  const link = result.rows[0] || null;
+  if (!link) return { requested: false, reason: 'payment_link_missing' };
+  const provider = normalizeProvider(link.provider);
+  let refund = { requested: false, provider, error: 'unsupported_provider' };
+  if (provider === 'flutterwave') {
+    refund = await requestFlutterwaveRefund({
+      transactionId: providerOrderIdFromWebhookPayload(link.webhook_payload),
+      amount: Number(link.invoice_amount || link.amount || 0) || null,
+      reason
+    });
+  }
+  const refundStatus = refund.requested ? 'refunded' : 'refund_pending';
+  await db.query(
+    `UPDATE payment_links
+     SET status = $2,
+         webhook_payload = COALESCE(webhook_payload, '{}'::jsonb) || $3::jsonb,
+         updated_at = NOW()
+     WHERE id = $1`,
+    [link.id, refundStatus, JSON.stringify({ refund })]
+  ).catch(() => {});
+  await db.query(
+    `UPDATE invoices
+     SET status = $2,
+         updated_at = NOW()
+     WHERE id = $1`,
+    [link.invoice_id, refund.requested ? 'refunded' : 'refund_pending']
+  ).catch(() => {});
+  await db.query(
+    `UPDATE advertising_campaigns
+     SET payment_status = $2,
+         updated_at = NOW()
+     WHERE id = $1`,
+    [campaignId, refundStatus]
+  ).catch(() => {});
+  await writeAdminAudit(db, {
+    adminUserId,
+    action: refund.requested ? 'advertising_refund_requested' : 'advertising_refund_pending',
+    targetType: 'advertising_campaign',
+    targetId: campaignId,
+    metadata: { reason: clean(reason), refund },
+    req
+  }).catch(() => {});
+  return refund;
+}
+
 function timingSafeEqualText(a, b) {
   const left = Buffer.from(clean(a));
   const right = Buffer.from(clean(b));
@@ -266,7 +372,7 @@ function extractPaymentWebhookReference(payload = {}) {
 
 async function updateCampaignPayment(db, campaignId, status, reference = null) {
   if (!campaignId) return null;
-  const campaignStatus = status === 'paid' ? 'paid' : status === 'failed' ? 'awaiting_payment' : null;
+  const campaignStatus = status === 'paid' ? 'paid_pending_approval' : status === 'failed' ? 'awaiting_payment' : null;
   const paymentStatus = status === 'paid' ? 'paid' : status === 'failed' ? 'unpaid' : status;
   const result = await db.query(
     `UPDATE advertising_campaigns
@@ -426,7 +532,20 @@ async function handlePaymentWebhook(db, {
     })]
   ).catch(() => {});
   if (invoice.campaign_id) {
-    await updateCampaignPayment(db, invoice.campaign_id, status, reference || invoice.invoice_number);
+    const updatedCampaign = await updateCampaignPayment(db, invoice.campaign_id, status, reference || invoice.invoice_number);
+    if (status === 'paid' && updatedCampaign) {
+      await sendAdvertisingLifecycleNotification(db, {
+        trigger: 'payment_confirmed',
+        campaign: updatedCampaign,
+        context: {
+          amount: extracted.amount || updatedCampaign.paid_amount_ugx || invoice.amount,
+          currency: extracted.currency || invoice.currency,
+          method: normalizedProvider === 'flutterwave' ? 'Flutterwave hosted checkout' : normalizedProvider,
+          reference: reference || invoice.invoice_number,
+          paidAt: new Date().toISOString()
+        }
+      }).catch(() => {});
+    }
   }
   await writeAdminAudit(db, {
     action: 'payment_webhook_processed',
@@ -466,5 +585,6 @@ module.exports = {
   markInvoicePaidManually,
   normalizePaymentStatus,
   normalizeProvider,
-  paymentProviderConfigured
+  paymentProviderConfigured,
+  requestAdvertisingCampaignRefund
 };

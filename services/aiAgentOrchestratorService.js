@@ -606,7 +606,7 @@ async function collectCeoOperatingMetrics() {
     safeCount("SELECT COUNT(*)::int AS total FROM whatsapp_messages WHERE direction = 'inbound' AND created_at >= NOW() - INTERVAL '24 hours'"),
     safeCount("SELECT COUNT(*)::int AS total FROM whatsapp_messages WHERE direction = 'outbound' AND created_at >= NOW() - INTERVAL '24 hours'"),
     safeCount("SELECT COUNT(*)::int AS total FROM whatsapp_call_events WHERE created_at >= NOW() - INTERVAL '24 hours'"),
-    safeCount("SELECT COUNT(*)::int AS total FROM advertising_campaigns WHERE status IN ('draft','awaiting_payment','paid')"),
+    safeCount("SELECT COUNT(*)::int AS total FROM advertising_campaigns WHERE status IN ('draft','awaiting_payment','paid','paid_pending_approval','changes_requested')"),
     safeCount("SELECT COUNT(*)::int AS total FROM advertising_campaigns WHERE status = 'live'"),
     safeCount("SELECT COUNT(*)::int AS total FROM advertising_inquiries WHERE status IN ('new','contacted','proposal_sent')"),
     safeOne("SELECT COALESCE(SUM(paid_amount_ugx), 0)::bigint AS total FROM advertising_campaigns WHERE payment_status = 'paid'", [], { total: 0 }).then((row) => Number(row.total || 0)),
