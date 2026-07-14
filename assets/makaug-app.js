@@ -14881,32 +14881,47 @@ function adminXSourceDripHtml(data = {}) {
   const inventory = data.inventory || {};
   const runs = Array.isArray(data.recent_runs) ? data.recent_runs : [];
   const marker = data.marker || "x-source-drip-20260714";
+  const fastMarker = data.fast_mode_marker || "x-source-drip-fast-mode-20260714";
   const enabled = state.enabled === true;
   const crawled = Number(state.percent_crawled || 0);
   const target = Number(inventory.target || state.target_reviewable || 3000);
   const reviewable = Number(inventory.reviewable_count || 0);
   const progress = target ? Math.min(100, Math.round((reviewable / target) * 100)) : 0;
+  const mode = state.search_mode === "all" ? "all" : "recent";
+  const batchMax = mode === "all" ? 5 : 25;
+  const monthlyCap = Number(state.monthly_read_cap || 10000);
+  const monthlyUsed = Number(state.monthly_read_count || 0);
+  const monthlyRemaining = Math.max(0, Number(state.monthly_read_remaining ?? (monthlyCap - monthlyUsed)));
+  const monthlyProgress = monthlyCap ? Math.min(100, Math.round((monthlyUsed / monthlyCap) * 100)) : 0;
   return `
     <div class="flex items-start justify-between gap-3 flex-wrap">
       <div>
         <div class="font-black text-slate-950">X source drip crawler</div>
-        <div class="mt-1">Marker: <span class="font-mono">${adminEscape(marker)}</span> • Status: <span class="font-black">${adminEscape(state.status || "paused")}</span>${state.pause_reason ? ` • ${adminEscape(state.pause_reason)}` : ""}</div>
-        <div class="mt-1 text-slate-700">Cursor ${adminEscape(state.cursor_offset || 0)} / ${adminEscape(state.source_count || 0)} (${adminEscape(crawled)}% crawled) • since ${adminEscape((state.published_after || "2026-01-01").slice(0, 10))} • next run ${adminEscape(state.next_run_at || "not scheduled")}</div>
+        <div class="mt-1">Marker: <span class="font-mono">${adminEscape(marker)}</span> • <span class="font-mono">${adminEscape(fastMarker)}</span> • Status: <span class="font-black">${adminEscape(state.status || "paused")}</span>${state.pause_reason ? ` • ${adminEscape(state.pause_reason)}` : ""}</div>
+        <div class="mt-1 text-slate-700">Mode ${adminEscape(mode)} • Cursor ${adminEscape(state.cursor_offset || 0)} / ${adminEscape(state.source_count || 0)} (${adminEscape(crawled)}% crawled) • since ${adminEscape((state.published_after || "2026-01-01").slice(0, 10))} • next run ${adminEscape(state.next_run_at || "not scheduled")}</div>
       </div>
       <button type="button" onclick="adminLoadXSourceDrip()" class="border border-slate-300 bg-white text-slate-800 hover:bg-slate-50 px-3 py-1.5 rounded-lg text-xs font-bold">Refresh</button>
     </div>
     <div class="mt-3 grid sm:grid-cols-3 lg:grid-cols-6 gap-2">
       <label class="rounded-lg border border-slate-200 bg-white p-2"><span class="block text-[10px] font-black text-slate-500 uppercase">Interval min</span><input id="admin-x-drip-interval" type="number" min="1" max="1440" value="${adminAttr(state.base_interval_minutes || 15)}" class="mt-1 w-full border border-slate-200 rounded px-2 py-1 text-xs"></label>
-      <label class="rounded-lg border border-slate-200 bg-white p-2"><span class="block text-[10px] font-black text-slate-500 uppercase">Batch max 5</span><input id="admin-x-drip-batch" type="number" min="1" max="5" value="${adminAttr(state.batch_size || 5)}" class="mt-1 w-full border border-slate-200 rounded px-2 py-1 text-xs"></label>
+      <label class="rounded-lg border border-slate-200 bg-white p-2"><span class="block text-[10px] font-black text-slate-500 uppercase">Batch max ${adminEscape(batchMax)}</span><input id="admin-x-drip-batch" type="number" min="1" max="${adminAttr(batchMax)}" value="${adminAttr(state.batch_size || (mode === "all" ? 5 : 20))}" class="mt-1 w-full border border-slate-200 rounded px-2 py-1 text-xs"></label>
       <label class="rounded-lg border border-slate-200 bg-white p-2"><span class="block text-[10px] font-black text-slate-500 uppercase">Max results</span><input id="admin-x-drip-results" type="number" min="10" max="100" value="${adminAttr(state.max_results || 10)}" class="mt-1 w-full border border-slate-200 rounded px-2 py-1 text-xs"></label>
       <label class="rounded-lg border border-slate-200 bg-white p-2"><span class="block text-[10px] font-black text-slate-500 uppercase">Offset</span><input id="admin-x-drip-offset" type="number" min="0" value="${adminAttr(state.cursor_offset || 0)}" class="mt-1 w-full border border-slate-200 rounded px-2 py-1 text-xs"></label>
       <label class="rounded-lg border border-slate-200 bg-white p-2"><span class="block text-[10px] font-black text-slate-500 uppercase">Since</span><input id="admin-x-drip-published-after" type="date" value="${adminAttr((state.published_after || "2026-01-01").slice(0, 10))}" class="mt-1 w-full border border-slate-200 rounded px-2 py-1 text-xs"></label>
       <label class="rounded-lg border border-slate-200 bg-white p-2"><span class="block text-[10px] font-black text-slate-500 uppercase">Mode</span><select id="admin-x-drip-mode" class="mt-1 w-full border border-slate-200 rounded px-2 py-1 text-xs"><option value="all" ${state.search_mode === "all" ? "selected" : ""}>all</option><option value="recent" ${state.search_mode === "recent" ? "selected" : ""}>recent</option></select></label>
+      <label class="rounded-lg border border-slate-200 bg-white p-2"><span class="block text-[10px] font-black text-slate-500 uppercase">Monthly read cap</span><input id="admin-x-drip-monthly-cap" type="number" min="1" max="10000000" value="${adminAttr(monthlyCap)}" class="mt-1 w-full border border-slate-200 rounded px-2 py-1 text-xs"></label>
     </div>
-    <div class="mt-3 rounded-lg border border-slate-200 bg-white p-3">
-      <div class="flex items-center justify-between gap-2"><div class="font-black">Reviewable inventory target</div><div>${adminEscape(reviewable)} / ${adminEscape(target)}</div></div>
-      <div class="mt-2 h-2 rounded-full bg-slate-100 overflow-hidden"><div class="h-full bg-slate-900" style="width:${adminAttr(progress)}%"></div></div>
-      <div class="mt-1 text-[11px] text-slate-500">${adminEscape(progress)}% toward the 3,000 target from found-online reviewable rows.</div>
+    <div class="mt-3 grid md:grid-cols-2 gap-2">
+      <div class="rounded-lg border border-slate-200 bg-white p-3">
+        <div class="flex items-center justify-between gap-2"><div class="font-black">Reviewable inventory target</div><div>${adminEscape(reviewable)} / ${adminEscape(target)}</div></div>
+        <div class="mt-2 h-2 rounded-full bg-slate-100 overflow-hidden"><div class="h-full bg-slate-900" style="width:${adminAttr(progress)}%"></div></div>
+        <div class="mt-1 text-[11px] text-slate-500">${adminEscape(progress)}% toward the 3,000 target from found-online reviewable rows.</div>
+      </div>
+      <div class="rounded-lg border border-slate-200 bg-white p-3">
+        <div class="flex items-center justify-between gap-2"><div class="font-black">X monthly read guard</div><div>${adminEscape(monthlyUsed)} / ${adminEscape(monthlyCap)}</div></div>
+        <div class="mt-2 h-2 rounded-full bg-slate-100 overflow-hidden"><div class="h-full bg-emerald-700" style="width:${adminAttr(monthlyProgress)}%"></div></div>
+        <div class="mt-1 text-[11px] text-slate-500">${adminEscape(monthlyRemaining)} reads remaining this month. Auto-pauses at cap.</div>
+      </div>
     </div>
     <div class="mt-3 flex gap-2 flex-wrap">
       <button type="button" onclick="adminSaveXSourceDrip()" class="border border-slate-300 bg-white text-slate-900 hover:bg-slate-50 px-3 py-2 rounded-lg text-xs font-bold">Save config</button>
@@ -14926,7 +14941,8 @@ function adminReadXSourceDripConfig() {
     cursor_offset: Number(document.getElementById("admin-x-drip-offset")?.value || 0),
     published_after: document.getElementById("admin-x-drip-published-after")?.value || "2026-01-01",
     x_search_mode: document.getElementById("admin-x-drip-mode")?.value || "all",
-    target_reviewable: 3000
+    target_reviewable: 3000,
+    monthly_read_cap: Number(document.getElementById("admin-x-drip-monthly-cap")?.value || 10000)
   };
 }
 
@@ -15010,7 +15026,7 @@ async function adminPauseXSourceDrip() {
 
 async function adminRunXSourceDripOnce() {
   const panel = adminXSourceDripPanelElement();
-  if (!window.confirm("Run one X drip batch now? This uses X API credits and stays capped to 5 sources.")) return;
+  if (!window.confirm("Run one X drip batch now? This uses X API reads and respects the current mode cap.")) return;
   try {
     if (panel) panel.innerHTML = "Running one X drip batch...";
     await apiRequest("/api/admin/x-source-drip/run-once", {

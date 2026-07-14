@@ -3616,7 +3616,9 @@ router.patch('/x-source-drip', async (req, res, next) => {
         max_results: state.max_results,
         search_mode: state.search_mode,
         published_after: state.published_after,
-        target_reviewable: state.target_reviewable
+        target_reviewable: state.target_reviewable,
+        monthly_read_cap: state.monthly_read_cap,
+        monthly_read_count: state.monthly_read_count
       }
     }, adminActorId(req));
     return res.json({ ok: true, data: await getXSourceDripStatus(db) });
@@ -3634,7 +3636,9 @@ router.post('/x-source-drip/start', async (req, res, next) => {
       interval_minutes: state.base_interval_minutes,
       batch_size: state.batch_size,
       max_results: state.max_results,
-      published_after: state.published_after
+      published_after: state.published_after,
+      monthly_read_cap: state.monthly_read_cap,
+      monthly_read_count: state.monthly_read_count
     }, adminActorId(req));
     return res.json({ ok: true, data: await getXSourceDripStatus(db) });
   } catch (error) {

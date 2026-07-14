@@ -6,13 +6,18 @@ const { runSocialPlatformPostSweep } = require('./socialPlatformPostDiscoverySer
 const { logNotification } = require('./notificationLogService');
 
 const X_SOURCE_DRIP_MARKER = 'x-source-drip-20260714';
+const X_SOURCE_DRIP_FAST_MODE_MARKER = 'x-source-drip-fast-mode-20260714';
 const X_SOURCE_DRIP_KEY = 'x_source_drip';
-const BASE_INTERVAL_MINUTES = 15;
+const BASE_INTERVAL_MINUTES = 2;
 const MAX_BACKOFF_MINUTES = 240;
-const DEFAULT_BATCH_SIZE = 5;
+const FULL_ARCHIVE_MAX_BATCH_SIZE = 5;
+const RECENT_MAX_BATCH_SIZE = 25;
+const DEFAULT_BATCH_SIZE = 20;
 const DEFAULT_MAX_RESULTS = 10;
 const DEFAULT_X_PUBLISHED_AFTER = '2026-01-01T00:00:00.000Z';
+const DEFAULT_SEARCH_MODE = 'recent';
 const TARGET_REVIEWABLE = 3000;
+const DEFAULT_MONTHLY_READ_CAP = 10000;
 const SCHEDULER_POLL_MS = 60 * 1000;
 let schedulerTimer = null;
 let schedulerRunning = false;
@@ -43,6 +48,25 @@ function normalizeIsoDate(value, fallback = DEFAULT_X_PUBLISHED_AFTER) {
   return fallback;
 }
 
+function normalizeSearchMode(value, fallback = DEFAULT_SEARCH_MODE) {
+  const mode = String(value || fallback || DEFAULT_SEARCH_MODE).trim().toLowerCase();
+  return mode === 'all' ? 'all' : 'recent';
+}
+
+function maxBatchSizeForMode(searchMode = DEFAULT_SEARCH_MODE) {
+  return normalizeSearchMode(searchMode) === 'all' ? FULL_ARCHIVE_MAX_BATCH_SIZE : RECENT_MAX_BATCH_SIZE;
+}
+
+function monthWindowStart(date = new Date()) {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1, 0, 0, 0, 0));
+}
+
+function normalizeMonthWindow(value) {
+  const parsed = value ? new Date(value) : null;
+  if (parsed && !Number.isNaN(parsed.getTime())) return parsed.toISOString();
+  return monthWindowStart().toISOString();
+}
+
 function xSourceCount() {
   return getPropertySourceRegistry().filter((source) => String(source.platform || '').toLowerCase() === 'x').length;
 }
@@ -50,6 +74,9 @@ function xSourceCount() {
 function normalizeStateRow(row = {}) {
   const sourceCount = Number(row.source_count || 0) || xSourceCount();
   const offset = numberInRange(row.cursor_offset, 0, 0, Math.max(sourceCount - 1, 0));
+  const searchMode = normalizeSearchMode(row.search_mode);
+  const monthlyReadCap = numberInRange(row.monthly_read_cap, DEFAULT_MONTHLY_READ_CAP, 1, 10000000);
+  const monthlyReadCount = Math.max(0, Number(row.monthly_read_count || 0) || 0);
   return {
     drip_key: row.drip_key || X_SOURCE_DRIP_KEY,
     platform: 'x',
@@ -59,11 +86,15 @@ function normalizeStateRow(row = {}) {
     percent_crawled: sourceCount ? Number(((offset / sourceCount) * 100).toFixed(2)) : 0,
     base_interval_minutes: numberInRange(row.base_interval_minutes, BASE_INTERVAL_MINUTES, 1, 1440),
     current_interval_minutes: numberInRange(row.current_interval_minutes, BASE_INTERVAL_MINUTES, 1, 1440),
-    batch_size: numberInRange(row.batch_size, DEFAULT_BATCH_SIZE, 1, DEFAULT_BATCH_SIZE),
+    batch_size: numberInRange(row.batch_size, DEFAULT_BATCH_SIZE, 1, maxBatchSizeForMode(searchMode)),
     max_results: numberInRange(row.max_results, DEFAULT_MAX_RESULTS, 10, 100),
-    search_mode: String(row.search_mode || 'all').toLowerCase() === 'recent' ? 'recent' : 'all',
+    search_mode: searchMode,
     published_after: normalizeIsoDate(row.published_after),
     target_reviewable: numberInRange(row.target_reviewable, TARGET_REVIEWABLE, 1, 1000000),
+    monthly_read_cap: monthlyReadCap,
+    monthly_read_count: monthlyReadCount,
+    monthly_read_remaining: Math.max(0, monthlyReadCap - monthlyReadCount),
+    monthly_window_started_at: normalizeMonthWindow(row.monthly_window_started_at),
     status: row.status || 'paused',
     pause_reason: row.pause_reason || '',
     consecutive_rate_limited_runs: Number(row.consecutive_rate_limited_runs || 0),
@@ -78,22 +109,28 @@ function normalizeStateRow(row = {}) {
 async function ensureXSourceDripState(db) {
   const sourceCount = xSourceCount();
   const baseInterval = numberInRange(process.env.X_SOURCE_DRIP_BASE_INTERVAL_MINUTES, BASE_INTERVAL_MINUTES, 1, 1440);
-  const batchSize = numberInRange(process.env.X_SOURCE_DRIP_BATCH_SIZE, DEFAULT_BATCH_SIZE, 1, DEFAULT_BATCH_SIZE);
+  const searchMode = normalizeSearchMode(process.env.X_SOURCE_DRIP_SEARCH_MODE);
+  const batchSize = numberInRange(process.env.X_SOURCE_DRIP_BATCH_SIZE, DEFAULT_BATCH_SIZE, 1, maxBatchSizeForMode(searchMode));
   const maxResults = numberInRange(process.env.X_SOURCE_DRIP_MAX_RESULTS, DEFAULT_MAX_RESULTS, 10, 100);
   const publishedAfter = normalizeIsoDate(process.env.X_SOURCE_DRIP_PUBLISHED_AFTER);
+  const monthlyReadCap = numberInRange(process.env.X_SOURCE_DRIP_MONTHLY_READ_CAP, DEFAULT_MONTHLY_READ_CAP, 1, 10000000);
   await db.query(
     `INSERT INTO source_drip_state (
        drip_key, platform, enabled, cursor_offset, source_count,
        base_interval_minutes, current_interval_minutes, batch_size, max_results,
-       search_mode, published_after, target_reviewable, status, next_run_at
+       search_mode, published_after, target_reviewable, monthly_read_cap, status, next_run_at
      )
-     VALUES ($1,'x',FALSE,0,$2,$3,$3,$4,$5,'all',$6,$7,'paused',NULL)
+     VALUES ($1,'x',FALSE,0,$2,$3,$3,$4,$5,$6,$7,$8,$9,'paused',NULL)
      ON CONFLICT (drip_key) DO UPDATE
        SET source_count = EXCLUDED.source_count,
-           batch_size = LEAST(source_drip_state.batch_size, 5),
+           batch_size = CASE
+             WHEN source_drip_state.search_mode = 'all' THEN LEAST(source_drip_state.batch_size, 5)
+             ELSE LEAST(source_drip_state.batch_size, 25)
+           END,
+           monthly_read_cap = COALESCE(source_drip_state.monthly_read_cap, EXCLUDED.monthly_read_cap),
            updated_at = NOW()
      RETURNING *`,
-    [X_SOURCE_DRIP_KEY, sourceCount, baseInterval, batchSize, maxResults, publishedAfter, TARGET_REVIEWABLE]
+    [X_SOURCE_DRIP_KEY, sourceCount, baseInterval, batchSize, maxResults, searchMode, publishedAfter, TARGET_REVIEWABLE, monthlyReadCap]
   );
 }
 
@@ -119,6 +156,7 @@ async function getXSourceDripStatus(db, { limit = 12 } = {}) {
   );
   return {
     marker: X_SOURCE_DRIP_MARKER,
+    fast_mode_marker: X_SOURCE_DRIP_FAST_MODE_MARKER,
     state: normalizeStateRow(stateResult.rows[0]),
     recent_runs: runs.rows,
     inventory: {
@@ -134,13 +172,14 @@ async function updateXSourceDripConfig(db, input = {}) {
   const current = await getXSourceDripStatus(db);
   const state = current.state;
   const sourceCount = xSourceCount();
-  const batchSize = numberInRange(input.batch_size ?? input.batchSize ?? state.batch_size, state.batch_size, 1, DEFAULT_BATCH_SIZE);
+  const searchMode = normalizeSearchMode(input.x_search_mode || input.search_mode || input.searchMode || state.search_mode);
+  const batchSize = numberInRange(input.batch_size ?? input.batchSize ?? state.batch_size, state.batch_size, 1, maxBatchSizeForMode(searchMode));
   const baseInterval = numberInRange(input.interval_minutes ?? input.intervalMinutes ?? input.base_interval_minutes ?? state.base_interval_minutes, state.base_interval_minutes, 1, 1440);
   const maxResults = numberInRange(input.max_results ?? input.maxResults ?? state.max_results, state.max_results, 10, 100);
   const cursorOffset = numberInRange(input.cursor_offset ?? input.cursorOffset ?? state.cursor_offset, state.cursor_offset, 0, Math.max(sourceCount - 1, 0));
-  const searchMode = String(input.x_search_mode || input.search_mode || input.searchMode || state.search_mode || 'all').toLowerCase() === 'recent' ? 'recent' : 'all';
   const publishedAfter = normalizeIsoDate(input.published_after ?? input.publishedAfter ?? input.x_published_after ?? input.xPublishedAfter ?? state.published_after, state.published_after);
   const target = numberInRange(input.target_reviewable ?? input.targetReviewable ?? state.target_reviewable, state.target_reviewable, 1, 1000000);
+  const monthlyReadCap = numberInRange(input.monthly_read_cap ?? input.monthlyReadCap ?? state.monthly_read_cap, state.monthly_read_cap || DEFAULT_MONTHLY_READ_CAP, 1, 10000000);
   const enabled = input.enabled == null ? state.enabled : boolLike(input.enabled, state.enabled);
   const nextRunAt = enabled ? (state.next_run_at || addMinutes(new Date(), baseInterval).toISOString()) : null;
   const result = await db.query(
@@ -155,13 +194,14 @@ async function updateXSourceDripConfig(db, input = {}) {
          search_mode = $8,
          published_after = $9,
          target_reviewable = $10,
+         monthly_read_cap = $11,
          status = CASE WHEN $2 THEN 'scheduled' ELSE 'paused' END,
          pause_reason = CASE WHEN $2 THEN NULL ELSE pause_reason END,
-         next_run_at = $11,
+         next_run_at = $12,
          updated_at = NOW()
      WHERE drip_key = $1
      RETURNING *`,
-    [X_SOURCE_DRIP_KEY, enabled, cursorOffset, sourceCount, baseInterval, batchSize, maxResults, searchMode, publishedAfter, target, nextRunAt]
+    [X_SOURCE_DRIP_KEY, enabled, cursorOffset, sourceCount, baseInterval, batchSize, maxResults, searchMode, publishedAfter, target, monthlyReadCap, nextRunAt]
   );
   return normalizeStateRow(result.rows[0]);
 }
@@ -211,6 +251,7 @@ function summarizeSweepResult(result = {}) {
   const billingErrorCount = reports.filter((report) => reportStatus(report) === 402 || /payment required|credits/i.test(String(report.reason || ''))).length;
   return {
     search_job_count: Number(x.search_job_count || reports.length || 0),
+    api_read_count: Number(x.search_job_count || reports.length || 0),
     fetched_posts_count: Number(x.fetched_posts_count || 0),
     discovered_posts_count: Number(result.discovered_posts_count || 0),
     created_properties: Number(importResult.created_properties || 0),
@@ -238,6 +279,24 @@ function summarizeSweepResult(result = {}) {
   };
 }
 
+async function resetMonthlyReadWindowIfNeeded(db, state) {
+  const currentWindow = monthWindowStart();
+  const stateWindow = new Date(state.monthly_window_started_at || 0);
+  if (stateWindow && !Number.isNaN(stateWindow.getTime()) && stateWindow.getTime() === currentWindow.getTime()) {
+    return state;
+  }
+  const result = await db.query(
+    `UPDATE source_drip_state
+     SET monthly_read_count = 0,
+         monthly_window_started_at = $2,
+         updated_at = NOW()
+     WHERE drip_key = $1
+     RETURNING *`,
+    [X_SOURCE_DRIP_KEY, currentWindow.toISOString()]
+  );
+  return normalizeStateRow(result.rows[0]);
+}
+
 function nextBackoff({ summary, state }) {
   const jobCount = Math.max(1, summary.search_job_count || 0);
   const mostlyRateLimited = summary.rate_limited_count / jobCount >= 0.6;
@@ -260,16 +319,16 @@ function nextBackoff({ summary, state }) {
 
 async function insertRunLog(db, payload = {}) {
   await db.query(
-    `INSERT INTO source_drip_run_logs (
+     `INSERT INTO source_drip_run_logs (
        drip_key, platform, source_offset, next_source_offset, source_count,
        batch_size, max_results, status, fetched_posts_count, discovered_posts_count,
        published_after,
        created_properties, review_queue_properties, existing_properties,
        duplicate_warning_count, source_review_count, suppressed_source_count,
        low_signal_source_location_count, rate_limited_count, auth_error_count,
-       billing_error_count, elapsed_ms, result_summary
+       billing_error_count, api_read_count, elapsed_ms, result_summary
      )
-     VALUES ($1,'x',$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22::jsonb)`,
+     VALUES ($1,'x',$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23::jsonb)`,
     [
       X_SOURCE_DRIP_KEY,
       payload.source_offset || 0,
@@ -291,6 +350,7 @@ async function insertRunLog(db, payload = {}) {
       payload.rate_limited_count || 0,
       payload.auth_error_count || 0,
       payload.billing_error_count || 0,
+      payload.api_read_count || 0,
       payload.elapsed_ms || 0,
       JSON.stringify(payload.result_summary || {}),
     ]
@@ -311,6 +371,9 @@ async function logDripNotification(db, summary = {}, status = 'logged', failureR
       created_properties: summary.created_properties,
       review_queue_properties: summary.review_queue_properties,
       existing_properties: summary.existing_properties,
+      api_read_count: summary.api_read_count,
+      monthly_read_count: summary.monthly_read_count,
+      monthly_read_cap: summary.monthly_read_cap,
       rate_limited_count: summary.rate_limited_count,
       auth_error_count: summary.auth_error_count,
       billing_error_count: summary.billing_error_count,
@@ -330,11 +393,59 @@ async function runXSourceDripOnce(db, { force = false, actorId = 'system' } = {}
   const started = Date.now();
   try {
     const stateResult = await db.query('SELECT * FROM source_drip_state WHERE drip_key = $1', [X_SOURCE_DRIP_KEY]);
-    const state = normalizeStateRow(stateResult.rows[0]);
+    let state = normalizeStateRow(stateResult.rows[0]);
     const now = new Date();
     if (!force) {
       if (!state.enabled) return { ok: true, skipped: true, reason: 'x_source_drip_paused', state };
       if (state.next_run_at && new Date(state.next_run_at) > now) return { ok: true, skipped: true, reason: 'x_source_drip_not_due', state };
+    }
+    state = await resetMonthlyReadWindowIfNeeded(db, state);
+    const sourceCount = xSourceCount();
+    const offset = sourceCount ? state.cursor_offset % sourceCount : 0;
+    const batchSize = numberInRange(state.batch_size, DEFAULT_BATCH_SIZE, 1, maxBatchSizeForMode(state.search_mode));
+    const maxResults = numberInRange(state.max_results, DEFAULT_MAX_RESULTS, 10, 100);
+    const plannedApiReads = sourceCount ? Math.min(batchSize, sourceCount) : 0;
+    if (state.monthly_read_count + plannedApiReads > state.monthly_read_cap) {
+      const capResult = {
+        marker: X_SOURCE_DRIP_MARKER,
+        fast_mode_marker: X_SOURCE_DRIP_FAST_MODE_MARKER,
+        actor_id: actorId,
+        status: 'blocked',
+        reason: 'x_monthly_read_cap_reached',
+        elapsed_ms: Date.now() - started,
+        source_offset: offset,
+        next_source_offset: offset,
+        source_count: sourceCount,
+        batch_size: batchSize,
+        api_read_count: 0,
+        planned_api_read_count: plannedApiReads,
+        monthly_read_count: state.monthly_read_count,
+        monthly_read_cap: state.monthly_read_cap,
+      };
+      await insertRunLog(db, {
+        source_offset: offset,
+        next_source_offset: offset,
+        source_count: sourceCount,
+        batch_size: batchSize,
+        max_results: maxResults,
+        status: 'blocked',
+        api_read_count: 0,
+        elapsed_ms: capResult.elapsed_ms,
+        result_summary: capResult,
+      });
+      await db.query(
+        `UPDATE source_drip_state
+         SET enabled = FALSE,
+             status = 'blocked',
+             pause_reason = 'x_monthly_read_cap_reached',
+             next_run_at = NULL,
+             last_result = $2::jsonb,
+             updated_at = NOW()
+         WHERE drip_key = $1`,
+        [X_SOURCE_DRIP_KEY, JSON.stringify(capResult)]
+      );
+      await logDripNotification(db, capResult, 'failed', 'x_monthly_read_cap_reached');
+      return { ok: true, skipped: true, marker: X_SOURCE_DRIP_MARKER, reason: 'x_monthly_read_cap_reached', state: (await getXSourceDripStatus(db)).state, result: capResult };
     }
     await db.query(
       `UPDATE source_drip_state
@@ -342,10 +453,6 @@ async function runXSourceDripOnce(db, { force = false, actorId = 'system' } = {}
        WHERE drip_key = $1`,
       [X_SOURCE_DRIP_KEY]
     );
-    const sourceCount = xSourceCount();
-    const offset = sourceCount ? state.cursor_offset % sourceCount : 0;
-    const batchSize = numberInRange(state.batch_size, DEFAULT_BATCH_SIZE, 1, DEFAULT_BATCH_SIZE);
-    const maxResults = numberInRange(state.max_results, DEFAULT_MAX_RESULTS, 10, 100);
     const result = await runSocialPlatformPostSweep({
       db,
       platform: 'x',
@@ -359,20 +466,27 @@ async function runXSourceDripOnce(db, { force = false, actorId = 'system' } = {}
     const summary = summarizeSweepResult(result);
     const elapsedMs = Date.now() - started;
     const nextOffset = sourceCount ? (offset + batchSize) % sourceCount : offset + batchSize;
+    const apiReadCount = Math.max(0, Number(summary.api_read_count || summary.search_job_count || 0) || 0);
+    const monthlyReadCountAfter = state.monthly_read_count + apiReadCount;
     const hardStop = summary.billing_error_count > 0
       ? { status: 'blocked', reason: 'x_payment_required_or_credits_exhausted' }
       : summary.auth_error_count > 0
         ? { status: 'blocked', reason: 'x_auth_or_permission_error' }
         : null;
+    const capReached = !hardStop && monthlyReadCountAfter >= state.monthly_read_cap;
     const backoff = hardStop || nextBackoff({ summary, state });
-    const enabled = hardStop ? false : state.enabled === true;
+    const enabled = hardStop || capReached ? false : state.enabled === true;
     const nextRunAt = enabled ? addMinutes(now, backoff.interval).toISOString() : null;
     const lastResult = {
       marker: X_SOURCE_DRIP_MARKER,
+      fast_mode_marker: X_SOURCE_DRIP_FAST_MODE_MARKER,
       actor_id: actorId,
-      status: backoff.status,
-      reason: backoff.reason,
+      status: capReached ? 'blocked' : backoff.status,
+      reason: capReached ? 'x_monthly_read_cap_reached' : backoff.reason,
       elapsed_ms: elapsedMs,
+      api_read_count: apiReadCount,
+      monthly_read_count: monthlyReadCountAfter,
+      monthly_read_cap: state.monthly_read_cap,
       ...summary,
     };
     await insertRunLog(db, {
@@ -382,7 +496,8 @@ async function runXSourceDripOnce(db, { force = false, actorId = 'system' } = {}
       source_count: sourceCount,
       batch_size: batchSize,
       max_results: maxResults,
-      status: backoff.status,
+      status: capReached ? 'blocked' : backoff.status,
+      api_read_count: apiReadCount,
       elapsed_ms: elapsedMs,
       result_summary: lastResult,
     });
@@ -398,6 +513,7 @@ async function runXSourceDripOnce(db, { force = false, actorId = 'system' } = {}
            last_run_at = NOW(),
            next_run_at = $9,
            last_result = $10::jsonb,
+           monthly_read_count = COALESCE(monthly_read_count, 0) + $11,
            updated_at = NOW()
        WHERE drip_key = $1`,
       [
@@ -406,14 +522,15 @@ async function runXSourceDripOnce(db, { force = false, actorId = 'system' } = {}
         hardStop ? offset : nextOffset,
         sourceCount,
         backoff.interval || state.base_interval_minutes,
-        backoff.status,
-        hardStop ? backoff.reason : null,
-        hardStop ? state.consecutive_rate_limited_runs : backoff.consecutive,
+        capReached ? 'blocked' : backoff.status,
+        hardStop ? backoff.reason : (capReached ? 'x_monthly_read_cap_reached' : null),
+        hardStop || capReached ? state.consecutive_rate_limited_runs : backoff.consecutive,
         nextRunAt,
         JSON.stringify(lastResult),
+        apiReadCount,
       ]
     );
-    await logDripNotification(db, lastResult, hardStop ? 'failed' : 'logged', hardStop?.reason || '');
+    await logDripNotification(db, lastResult, hardStop || capReached ? 'failed' : 'logged', hardStop?.reason || (capReached ? 'x_monthly_read_cap_reached' : ''));
     return { ok: true, marker: X_SOURCE_DRIP_MARKER, state: (await getXSourceDripStatus(db)).state, result: lastResult };
   } catch (error) {
     const elapsedMs = Date.now() - started;
@@ -466,7 +583,9 @@ function startXSourceDripScheduler(db) {
 
 module.exports = {
   X_SOURCE_DRIP_MARKER,
+  X_SOURCE_DRIP_FAST_MODE_MARKER,
   X_SOURCE_DRIP_KEY,
+  maxBatchSizeForMode,
   ensureXSourceDripState,
   getXSourceDripStatus,
   updateXSourceDripConfig,

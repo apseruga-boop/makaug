@@ -16,11 +16,14 @@ const {
 } = require('../services/propertySourceRegistryService');
 const {
   X_SOURCE_DRIP_MARKER,
+  X_SOURCE_DRIP_FAST_MODE_MARKER,
+  maxBatchSizeForMode,
   summarizeSweepResult,
 } = require('../services/xSourceDripService');
 
 async function main() {
   const migration = read('db/migrations/067_x_source_drip.sql');
+  const fastModeMigration = read('db/migrations/073_x_source_drip_fast_mode.sql');
   const dripService = read('services/xSourceDripService.js');
   const adminRoute = read('routes/admin.js');
   const server = read('server.js');
@@ -29,15 +32,26 @@ async function main() {
   const socialDiscoveryService = read('services/socialPlatformPostDiscoveryService.js');
 
   assert.strictEqual(X_SOURCE_DRIP_MARKER, 'x-source-drip-20260714', 'drip marker should be stable for production verification');
+  assert.strictEqual(X_SOURCE_DRIP_FAST_MODE_MARKER, 'x-source-drip-fast-mode-20260714', 'fast-mode marker should be stable for production verification');
   assert(migration.includes('CREATE TABLE IF NOT EXISTS source_drip_state'), 'migration should create persistent drip state');
   assert(migration.includes('CREATE TABLE IF NOT EXISTS source_drip_run_logs'), 'migration should create per-run logs');
-  assert(migration.includes('batch_size BETWEEN 1 AND 5'), 'migration should enforce max 5 sources per drip batch');
+  assert(migration.includes('batch_size BETWEEN 1 AND 5'), 'initial migration should keep full-archive batches small');
+  assert(fastModeMigration.includes('batch_size BETWEEN 1 AND 25'), 'fast-mode migration should allow larger recent-search batches');
+  assert(fastModeMigration.includes('monthly_read_cap'), 'fast-mode migration should persist the monthly X read cap');
+  assert(fastModeMigration.includes('api_read_count'), 'fast-mode migration should log per-run X API reads');
+  assert(fastModeMigration.includes("search_mode = CASE WHEN search_mode = 'all' THEN 'recent'"), 'fast-mode migration should move old default state to recent search');
+  assert(fastModeMigration.includes('WHEN batch_size <= 5 THEN 20'), 'fast-mode migration should lift old 5-sized recent batches to 20');
   assert(migration.includes('published_after TIMESTAMPTZ'), 'migration should persist the X crawl date floor');
+  assert.strictEqual(maxBatchSizeForMode('all'), 5, 'full-archive mode should stay capped to 5');
+  assert.strictEqual(maxBatchSizeForMode('recent'), 25, 'recent mode should allow fast batches up to 25');
   assert(dripService.includes('pg_try_advisory_lock'), 'drip runs should be concurrency guarded');
   assert(dripService.includes("platform: 'x'"), 'drip service should be X-only');
   assert(dripService.includes('X_SOURCE_DRIP_PUBLISHED_AFTER'), 'drip should allow Render/env date-floor configuration');
+  assert(dripService.includes('X_SOURCE_DRIP_SEARCH_MODE'), 'drip should allow Render/env search-mode configuration');
+  assert(dripService.includes('X_SOURCE_DRIP_MONTHLY_READ_CAP'), 'drip should allow Render/env monthly-read cap configuration');
   assert(dripService.includes('x_payment_required_or_credits_exhausted'), 'drip should hard-stop on X payment/credits failure');
   assert(dripService.includes('x_auth_or_permission_error'), 'drip should hard-stop on auth/permission failure');
+  assert(dripService.includes('x_monthly_read_cap_reached'), 'drip should auto-pause when monthly X read cap is hit');
   assert(dripService.includes('rate_limited'), 'drip should record rate-limited runs for adaptive backoff');
   assert(adminRoute.includes("router.get('/x-source-drip'"), 'admin route should expose drip status');
   assert(adminRoute.includes("router.post('/x-source-drip/start'"), 'admin route should expose start control');
@@ -48,6 +62,8 @@ async function main() {
   assert(frontend.includes('adminLoadXSourceDrip'), 'frontend should load the X drip panel');
   assert(frontend.includes('/api/admin/x-source-drip/run-once'), 'frontend should call the protected run-once endpoint');
   assert(frontend.includes('admin-x-drip-published-after'), 'frontend should expose the X drip since-date field');
+  assert(frontend.includes('admin-x-drip-monthly-cap'), 'frontend should expose the monthly X read cap');
+  assert(frontend.includes('x-source-drip-fast-mode-20260714'), 'frontend should render the fast-mode marker');
   assert(socialDiscoveryService.includes('next_source_offset'), 'sweep response should expose next source offset');
   assert(socialDiscoveryService.includes('xPublishedAfter'), 'X sweep should accept an explicit X published-after date');
   assert(socialDiscoveryService.includes('const xSourceWindow = rotatingSourceWindow(xSources'), 'X sweep should walk source offsets through the rotating source window');
@@ -107,6 +123,7 @@ async function main() {
   assert.strictEqual(summary.billing_error_count, 1, 'summary should count 402 payment failures');
   assert.strictEqual(summary.auth_error_count, 1, 'summary should count auth failures');
   assert.strictEqual(summary.created_properties, 1, 'summary should preserve created count');
+  assert.strictEqual(summary.api_read_count, 5, 'summary should count X API reads from search jobs');
   assert.strictEqual(summary.published_after, '2026-01-01T00:00:00.000Z', 'summary should preserve the crawl date floor');
 
   console.log('ok - X source drip scheduler, cursor, controls, and backoff guards are wired');
