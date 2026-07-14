@@ -7,10 +7,12 @@ const appJs = fs.readFileSync(path.join(root, 'assets/makaug-app.js'), 'utf8');
 const advertisingRoute = fs.readFileSync(path.join(root, 'routes/advertising.js'), 'utf8');
 const adminRoute = fs.readFileSync(path.join(root, 'routes/admin.js'), 'utf8');
 const publicHtmlSanitizer = fs.readFileSync(path.join(root, 'services/publicHtmlSanitizer.js'), 'utf8');
+const paymentProviderService = fs.readFileSync(path.join(root, 'services/paymentProviderService.js'), 'utf8');
 const migration = fs.readFileSync(path.join(root, 'db/migrations/073_advertising_selfserve_v1.sql'), 'utf8');
 const catalog = require('../services/advertisingCatalogService');
 
 const marker = 'advertising-selfserve-v1-20260713';
+const flutterwaveMarker = 'advertising-flutterwave-staging-20260714';
 
 assert(appJs.includes(marker), 'public app must expose the advertising self-serve marker');
 assert(appJs.includes('buildAdvertiseSelfServePage'), 'advertise route must render the new self-serve page builder');
@@ -25,6 +27,7 @@ assert(appJs.includes('/api/advertising/quote'), 'wizard must recompute hybrid q
 assert(appJs.includes('/api/advertising/creative-draft'), 'wizard must call the creative draft endpoint');
 assert(appJs.includes('/api/advertising/self-serve-campaigns'), 'wizard must create self-serve campaigns');
 assert(appJs.includes('/api/ai/translate-text'), 'wizard must use translate-text for language preview');
+assert(appJs.includes('Flutterwave hosted checkout'), 'wizard copy must name Flutterwave hosted checkout');
 assert(appJs.includes('adminApproveSelfServeAdCampaign'), 'King dashboard must have approve/schedule action');
 assert(appJs.includes('adminRequestSelfServeAdChange'), 'King dashboard must have request-change action');
 assert(appJs.includes('adminRejectSelfServeAdCampaign'), 'King dashboard must have reject/refund action');
@@ -39,6 +42,8 @@ assert(advertisingRoute.includes("router.get('/rate-card'"), 'public advertising
 assert(advertisingRoute.includes("router.post('/quote'"), 'public advertising route must expose quote endpoint');
 assert(advertisingRoute.includes("router.post('/creative-draft'"), 'public advertising route must expose creative draft endpoint');
 assert(advertisingRoute.includes("router.post('/self-serve-campaigns'"), 'public advertising route must expose self-serve campaign endpoint');
+assert(advertisingRoute.includes('createHostedPaymentLink'), 'self-serve route must create provider-hosted payment links');
+assert(advertisingRoute.includes('generateCampaignCopy'), 'creative draft route must call the AI campaign copy service when configured');
 assert(advertisingRoute.includes("status = 'awaiting_payment'") || advertisingRoute.includes("'awaiting_payment'"), 'self-serve campaign must create a hosted-payment handoff state');
 assert(advertisingRoute.includes("'advertising_selfserve_v1'"), 'self-serve campaign must mark inquiry/lead source');
 assert(advertisingRoute.includes('hosted_checkout_only'), 'self-serve campaign must enforce hosted checkout boundary');
@@ -46,6 +51,13 @@ assert(advertisingRoute.includes('advertiser_approval_status') && advertisingRou
 
 assert(adminRoute.includes('traffic_multiplier'), 'King placement route must allow multiplier edits');
 assert(adminRoute.includes('weekly_impressions'), 'King placement route must allow traffic edits');
+assert(adminRoute.includes('FLUTTERWAVE_SECRET_KEY'), 'admin setup status must know Flutterwave keys');
+
+assert(paymentProviderService.includes('createFlutterwaveCheckout'), 'payment provider service must create Flutterwave checkout sessions');
+assert(paymentProviderService.includes('mobilemoneyuganda'), 'Flutterwave checkout must request Uganda mobile money payment options');
+assert(paymentProviderService.includes('verifyFlutterwaveWebhookSignature'), 'Flutterwave webhook signature must be verified');
+assert(paymentProviderService.includes('flutterwave-signature') || advertisingRoute.includes('flutterwave-signature'), 'Flutterwave signature header must be accepted');
+assert(paymentProviderService.includes('FLUTTERWAVE_SECRET_KEY'), 'Flutterwave secret key env must be used server-side');
 
 assert(migration.includes('weekly_impressions'), 'migration must add weekly impression field');
 assert(migration.includes('traffic_multiplier'), 'migration must add traffic multiplier field');
@@ -56,6 +68,8 @@ assert(migration.includes('feature_my_listing'), 'migration must seed feature-my
 
 const rateCard = catalog.getAdvertisingRateCard();
 assert.strictEqual(rateCard.marker, marker, 'rate card marker must match release marker');
+assert.strictEqual(rateCard.payment_gateway_marker, flutterwaveMarker, 'rate card must expose the Flutterwave staging marker');
+assert(rateCard.payment_methods.every((item) => String(item.provider || '').includes('flutterwave') || item.provider), 'rate card payment methods must expose a hosted provider');
 assert(rateCard.self_serve_placements.length >= 3, 'rate card must expose at least three phase-1 self-serve placements');
 ['homepage_hero_banner', 'sponsored_search_result', 'feature_my_listing'].forEach((key) => {
   const placement = catalog.findAdvertisingPlacement(key);

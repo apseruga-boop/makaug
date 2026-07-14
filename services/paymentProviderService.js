@@ -1,21 +1,267 @@
 'use strict';
 
+const crypto = require('crypto');
 const { writeAdminAudit, mirrorLegacyAudit } = require('./adminSecurityService');
 
 function clean(value) {
   return String(value || '').trim();
 }
 
-function paymentProviderConfigured() {
+function normalizeProvider(value = '') {
+  const provider = clean(value || process.env.UGANDA_PAYMENT_PROVIDER || process.env.PAYMENT_PROVIDER || 'manual').toLowerCase();
+  if (['flw', 'flutterwave', 'flutter_wave'].includes(provider)) return 'flutterwave';
+  if (provider.includes('flutterwave')) return 'flutterwave';
+  if (provider.includes('paypal')) return 'paypal';
+  return provider || 'manual';
+}
+
+function isFlutterwaveProvider(value = '') {
+  return normalizeProvider(value) === 'flutterwave';
+}
+
+function flutterwaveSecretKey() {
+  return clean(process.env.FLUTTERWAVE_SECRET_KEY || process.env.FLW_SECRET_KEY);
+}
+
+function flutterwaveWebhookSecret() {
+  return clean(process.env.FLUTTERWAVE_WEBHOOK_SECRET || process.env.FLW_WEBHOOK_SECRET || process.env.PAYMENT_PROVIDER_WEBHOOK_SECRET);
+}
+
+function flutterwaveSecretHash() {
+  return clean(process.env.FLUTTERWAVE_SECRET_HASH || process.env.FLW_SECRET_HASH || process.env.FLUTTERWAVE_WEBHOOK_SECRET_HASH);
+}
+
+function paymentProviderConfigured(provider = process.env.UGANDA_PAYMENT_PROVIDER || process.env.PAYMENT_PROVIDER || 'manual') {
+  const normalized = normalizeProvider(provider);
+  if (normalized === 'flutterwave') {
+    return Boolean(flutterwaveSecretKey() || process.env.FLUTTERWAVE_PAYMENT_LINK_BASE_URL || process.env.PAYMENT_LINK_BASE_URL);
+  }
   return Boolean(process.env.PAYMENT_LINK_BASE_URL || process.env.PAYMENT_PROVIDER_WEBHOOK_SECRET || process.env.PAYMENT_PROVIDER_API_KEY);
 }
 
 function normalizePaymentStatus(value) {
   const status = clean(value).toLowerCase();
+  if (status.includes('charge.completed')) return 'paid';
   if (['paid', 'success', 'successful', 'completed'].includes(status)) return 'paid';
   if (['failed', 'declined', 'cancelled', 'canceled'].includes(status)) return 'failed';
   if (['expired'].includes(status)) return 'expired';
   return 'pending';
+}
+
+function firstClean(...values) {
+  for (const value of values) {
+    const cleaned = clean(value);
+    if (cleaned) return cleaned;
+  }
+  return '';
+}
+
+function safeJson(value) {
+  try {
+    return JSON.stringify(value || {});
+  } catch (_error) {
+    return '{}';
+  }
+}
+
+function buildLocalPaymentUrl(paymentLinkId) {
+  const base = clean(
+    process.env.FLUTTERWAVE_PAYMENT_LINK_BASE_URL
+    || process.env.PAYMENT_LINK_BASE_URL
+    || process.env.PAYPAL_PAYMENT_LINK_BASE_URL
+  ).replace(/\/$/, '');
+  if (!base) return null;
+  return `${base}/pay/${paymentLinkId}`;
+}
+
+function flutterwaveApiBase() {
+  return clean(process.env.FLUTTERWAVE_API_BASE_URL || 'https://api.flutterwave.com/v3').replace(/\/$/, '');
+}
+
+function flutterwavePaymentOptions(method = '') {
+  const normalized = clean(method).toLowerCase();
+  if (normalized === 'mobile_money') return 'mobilemoneyuganda';
+  if (normalized === 'paypal') return 'paypal';
+  if (normalized === 'card') return 'card';
+  return 'card,mobilemoneyuganda,paypal';
+}
+
+function publicBaseUrl() {
+  return clean(process.env.PUBLIC_BASE_URL || process.env.APP_BASE_URL || 'https://makaug.com').replace(/\/$/, '');
+}
+
+async function createFlutterwaveCheckout({
+  amount,
+  currency = 'UGX',
+  reference,
+  invoiceId = null,
+  campaignId = null,
+  paymentMethod = 'card',
+  customer = {},
+  title = 'makaug advertising',
+  description = 'makaug sponsored advertising booking',
+  redirectUrl = '',
+  metadata = {}
+} = {}) {
+  const secretKey = flutterwaveSecretKey();
+  if (!secretKey) {
+    return { configured: false, provider: 'flutterwave', checkoutUrl: null, providerReference: reference || null, providerError: 'FLUTTERWAVE_SECRET_KEY is not configured' };
+  }
+
+  const txRef = clean(reference) || `MK-FLW-${Date.now()}`;
+  const payload = {
+    tx_ref: txRef,
+    amount: Number(amount || 0),
+    currency: clean(currency || 'UGX').toUpperCase(),
+    redirect_url: clean(redirectUrl) || `${publicBaseUrl()}/advertise?payment_ref=${encodeURIComponent(txRef)}`,
+    payment_options: flutterwavePaymentOptions(paymentMethod),
+    customer: {
+      email: clean(customer.email) || `advertising-${txRef.toLowerCase()}@makaug.com`,
+      phonenumber: clean(customer.phone) || undefined,
+      name: clean(customer.name) || 'makaug advertiser'
+    },
+    customizations: {
+      title: clean(title) || 'makaug advertising',
+      description: clean(description) || 'makaug sponsored advertising booking',
+      logo: clean(process.env.FLUTTERWAVE_CHECKOUT_LOGO_URL) || `${publicBaseUrl()}/assets/icon-512.png`
+    },
+    meta: {
+      ...metadata,
+      invoice_id: invoiceId,
+      campaign_id: campaignId,
+      source: 'advertising_selfserve_v1',
+      payment_method: paymentMethod
+    }
+  };
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), Math.max(3000, Number(process.env.FLUTTERWAVE_TIMEOUT_MS || 12000)));
+  try {
+    const response = await fetch(`${flutterwaveApiBase()}/payments`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${secretKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok || !body?.data?.link) {
+      const message = body?.message || `Flutterwave checkout failed with HTTP ${response.status}`;
+      return { configured: true, provider: 'flutterwave', checkoutUrl: null, providerReference: txRef, providerError: message, providerResponse: body };
+    }
+    return {
+      configured: true,
+      provider: 'flutterwave',
+      checkoutUrl: body.data.link,
+      providerReference: body.data.tx_ref || txRef,
+      providerOrderId: body.data.id || null,
+      providerResponse: {
+        status: body.status || null,
+        message: body.message || null,
+        id: body.data.id || null,
+        link_created: true
+      }
+    };
+  } catch (error) {
+    return { configured: true, provider: 'flutterwave', checkoutUrl: null, providerReference: txRef, providerError: error.name === 'AbortError' ? 'Flutterwave checkout timed out' : error.message };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function createHostedPaymentLink(options = {}) {
+  const provider = normalizeProvider(options.provider);
+  if (provider === 'flutterwave') {
+    return createFlutterwaveCheckout(options);
+  }
+  const checkoutUrl = buildLocalPaymentUrl(options.invoiceId || options.reference || options.paymentLinkId);
+  return {
+    configured: Boolean(checkoutUrl),
+    provider,
+    checkoutUrl,
+    providerReference: clean(options.reference) || null,
+    providerResponse: checkoutUrl ? { link_created: true, mode: 'configured_base_url' } : null,
+    providerError: checkoutUrl ? null : 'PAYMENT_LINK_BASE_URL is not configured'
+  };
+}
+
+function timingSafeEqualText(a, b) {
+  const left = Buffer.from(clean(a));
+  const right = Buffer.from(clean(b));
+  if (!left.length || left.length !== right.length) return false;
+  return crypto.timingSafeEqual(left, right);
+}
+
+function verifyFlutterwaveWebhookSignature({ signature = '', rawBody = '', payload = {} } = {}) {
+  const header = clean(signature);
+  const secretHash = flutterwaveSecretHash();
+  const webhookSecret = flutterwaveWebhookSecret();
+  if (!secretHash && !webhookSecret) {
+    return { required: false, verified: false };
+  }
+  if (!header) {
+    const error = new Error('Flutterwave webhook signature is required');
+    error.status = 401;
+    throw error;
+  }
+  if (secretHash && timingSafeEqualText(header, secretHash)) {
+    return { required: true, verified: true, mode: 'secret_hash' };
+  }
+  if (webhookSecret) {
+    const body = rawBody || safeJson(payload);
+    const hex = crypto.createHmac('sha256', webhookSecret).update(body).digest('hex');
+    const base64 = crypto.createHmac('sha256', webhookSecret).update(body).digest('base64');
+    if (timingSafeEqualText(header, hex) || timingSafeEqualText(header, base64)) {
+      return { required: true, verified: true, mode: 'hmac_sha256' };
+    }
+  }
+  const error = new Error('Flutterwave webhook signature is invalid');
+  error.status = 401;
+  throw error;
+}
+
+function extractPaymentWebhookReference(payload = {}) {
+  const data = payload.data && typeof payload.data === 'object' ? payload.data : {};
+  const meta = data.meta && typeof data.meta === 'object' ? data.meta : {};
+  const resource = payload.resource && typeof payload.resource === 'object' ? payload.resource : {};
+  const purchaseUnit = Array.isArray(resource.purchase_units) ? resource.purchase_units[0] || {} : {};
+  const related = Array.isArray(resource.supplementary_data?.related_ids)
+    ? resource.supplementary_data.related_ids[0] || {}
+    : {};
+  return {
+    reference: firstClean(
+      data.tx_ref,
+      payload.tx_ref,
+      payload.providerReference,
+      payload.provider_reference,
+      payload.reference,
+      payload.invoice_number,
+      payload.invoiceNumber,
+      resource.invoice_id,
+      resource.invoice_number,
+      resource.custom_id,
+      resource.custom,
+      purchaseUnit.invoice_id,
+      purchaseUnit.custom_id,
+      purchaseUnit.reference_id,
+      related.order_id
+    ),
+    invoiceId: firstClean(meta.invoice_id, payload.invoiceId, payload.invoice_id),
+    statusValue: firstClean(
+      data.status,
+      payload.status,
+      payload.payment_status,
+      payload.event,
+      payload.event_type,
+      resource.status,
+      resource.state
+    ),
+    providerOrderId: firstClean(data.id, data.transaction_id, data.flw_ref, resource.id, payload.orderID, payload.order_id, related.order_id),
+    amount: Number(data.amount || payload.amount || 0) || null,
+    currency: firstClean(data.currency, payload.currency)
+  };
 }
 
 async function updateCampaignPayment(db, campaignId, status, reference = null) {
@@ -103,12 +349,18 @@ async function handlePaymentWebhook(db, {
   provider = process.env.PAYMENT_PROVIDER || 'manual',
   payload = {},
   signature = '',
+  rawBody = '',
   req = null
 } = {}) {
   const safePayload = payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : {};
-  const reference = clean(safePayload.providerReference || safePayload.provider_reference || safePayload.reference || safePayload.invoice_number || safePayload.invoiceNumber);
-  const invoiceId = clean(safePayload.invoiceId || safePayload.invoice_id);
-  const status = normalizePaymentStatus(safePayload.status || safePayload.payment_status || safePayload.event);
+  const normalizedProvider = normalizeProvider(provider);
+  const signatureVerification = normalizedProvider === 'flutterwave'
+    ? verifyFlutterwaveWebhookSignature({ signature, rawBody, payload: safePayload })
+    : { required: false, verified: false };
+  const extracted = extractPaymentWebhookReference(safePayload);
+  const reference = extracted.reference;
+  const invoiceId = extracted.invoiceId;
+  let status = normalizePaymentStatus(extracted.statusValue);
   const values = [];
   let where = '';
   if (invoiceId) {
@@ -129,6 +381,19 @@ async function handlePaymentWebhook(db, {
     throw error;
   }
   const invoice = invoiceResult.rows[0];
+  const expectedAmount = Number(invoice.amount || 0) || 0;
+  const expectedCurrency = clean(invoice.currency || '').toUpperCase();
+  const amountVerified = status !== 'paid'
+    || !extracted.amount
+    || !expectedAmount
+    || Number(extracted.amount) + 0.5 >= expectedAmount;
+  const currencyVerified = status !== 'paid'
+    || !extracted.currency
+    || !expectedCurrency
+    || clean(extracted.currency).toUpperCase() === expectedCurrency;
+  if (status === 'paid' && (!amountVerified || !currencyVerified)) {
+    status = 'pending';
+  }
   const invoiceStatus = status === 'paid' ? 'paid' : status === 'failed' ? 'failed' : 'pending_payment';
   const updatedInvoice = await db.query(
     `UPDATE invoices
@@ -139,7 +404,7 @@ async function handlePaymentWebhook(db, {
          updated_at = NOW()
      WHERE id = $1
      RETURNING *`,
-    [invoice.id, invoiceStatus, clean(provider) || 'manual', reference || null]
+    [invoice.id, invoiceStatus, normalizedProvider || 'manual', reference || null]
   );
   await db.query(
     `UPDATE payment_links
@@ -149,7 +414,16 @@ async function handlePaymentWebhook(db, {
          paid_at = CASE WHEN $2 = 'paid' THEN COALESCE(paid_at, NOW()) ELSE paid_at END,
          updated_at = NOW()
      WHERE invoice_id = $1`,
-    [invoice.id, status, reference || null, JSON.stringify({ provider, signature_present: Boolean(signature), payload: safePayload })]
+    [invoice.id, status, reference || extracted.providerOrderId || null, JSON.stringify({
+      provider: normalizedProvider,
+      signature_present: Boolean(signature),
+      signature_verified: Boolean(signatureVerification.verified),
+      signature_mode: signatureVerification.mode || null,
+      provider_order_id: extracted.providerOrderId || null,
+      amount_verified: amountVerified,
+      currency_verified: currencyVerified,
+      payload: safePayload
+    })]
   ).catch(() => {});
   if (invoice.campaign_id) {
     await updateCampaignPayment(db, invoice.campaign_id, status, reference || invoice.invoice_number);
@@ -158,7 +432,15 @@ async function handlePaymentWebhook(db, {
     action: 'payment_webhook_processed',
     targetType: 'invoice',
     targetId: invoice.id,
-    metadata: { provider, status, reference: reference || null, configured: paymentProviderConfigured() },
+    metadata: {
+      provider: normalizedProvider,
+      status,
+      reference: reference || null,
+      configured: paymentProviderConfigured(normalizedProvider),
+      signature_verified: Boolean(signatureVerification.verified),
+      amount_verified: amountVerified,
+      currency_verified: currencyVerified
+    },
     req
   });
   return updatedInvoice.rows[0] || null;
@@ -178,9 +460,11 @@ async function getPaymentStatus(db, paymentLinkId) {
 }
 
 module.exports = {
+  createHostedPaymentLink,
   getPaymentStatus,
   handlePaymentWebhook,
   markInvoicePaidManually,
   normalizePaymentStatus,
+  normalizeProvider,
   paymentProviderConfigured
 };

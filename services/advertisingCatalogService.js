@@ -1,4 +1,5 @@
 const ADVERTISING_SELF_SERVE_MARKER = 'advertising-selfserve-v1-20260713';
+const ADVERTISING_FLUTTERWAVE_STAGING_MARKER = 'advertising-flutterwave-staging-20260714';
 const UGX_PER_USD_GUIDE = 3800;
 
 const ADVERTISING_PACKAGES = [
@@ -516,16 +517,18 @@ function buildAdvertisingQuoteBreakdown({ placementKeys = [], packageKeys = [], 
 
 function getAdvertisingRateCard() {
   const placements = getAdvertisingPlacements();
+  const hostedProvider = process.env.UGANDA_PAYMENT_PROVIDER || process.env.PAYMENT_PROVIDER || 'flutterwave';
   return {
     marker: ADVERTISING_SELF_SERVE_MARKER,
+    payment_gateway_marker: ADVERTISING_FLUTTERWAVE_STAGING_MARKER,
     pricing_formula: 'base_rate(placement) x duration_days x traffic_multiplier(placement)',
     ugx_per_usd: UGX_PER_USD_GUIDE,
     duration_presets: [7, 14, 28],
     minimum_duration_days: 3,
     payment_methods: [
-      { key: 'paypal', label: 'PayPal hosted checkout', provider: 'paypal' },
-      { key: 'mobile_money', label: 'MTN/Airtel Mobile Money hosted checkout', provider: process.env.UGANDA_PAYMENT_PROVIDER || 'pesapal_or_flutterwave' },
-      { key: 'card', label: 'Card hosted checkout', provider: process.env.UGANDA_PAYMENT_PROVIDER || 'pesapal_or_flutterwave' }
+      { key: 'paypal', label: 'PayPal via hosted checkout where available', provider: hostedProvider },
+      { key: 'mobile_money', label: 'MTN/Airtel Mobile Money hosted checkout', provider: hostedProvider },
+      { key: 'card', label: 'Card hosted checkout', provider: hostedProvider }
     ],
     placements,
     self_serve_placements: placements.filter((item) => item.self_serve_enabled),
@@ -547,6 +550,7 @@ function getAdvertisingRateCard() {
 }
 
 module.exports = {
+  ADVERTISING_FLUTTERWAVE_STAGING_MARKER,
   ADVERTISING_SELF_SERVE_MARKER,
   buildAdvertisingQuoteBreakdown,
   estimateAdvertisingQuote,

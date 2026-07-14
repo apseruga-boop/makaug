@@ -69,8 +69,14 @@ app.use(
   })
 );
 
-app.use(express.urlencoded({ extended: true, limit: '15mb' }));
-app.use(express.json({ limit: '15mb' }));
+function captureRawBody(req, _res, buf) {
+  if (buf && buf.length) {
+    req.rawBody = buf.toString('utf8');
+  }
+}
+
+app.use(express.urlencoded({ extended: true, limit: '15mb', verify: captureRawBody }));
+app.use(express.json({ limit: '15mb', verify: captureRawBody }));
 
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,

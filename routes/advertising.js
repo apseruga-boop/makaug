@@ -17,9 +17,12 @@ const {
   summarizeAdvertisingPackageKeys
 } = require('../services/advertisingCatalogService');
 const {
+  createHostedPaymentLink,
   getPaymentStatus,
-  handlePaymentWebhook
+  handlePaymentWebhook,
+  paymentProviderConfigured
 } = require('../services/paymentProviderService');
+const { generateCampaignCopy } = require('../services/aiService');
 
 const router = express.Router();
 
@@ -69,12 +72,6 @@ function buildInvoiceNumber(date = new Date()) {
   const stamp = date.toISOString().slice(0, 10).replace(/-/g, '');
   const code = Math.random().toString(36).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6).padEnd(6, '0');
   return `MK-INV-${stamp}-${code}`;
-}
-
-function buildProviderPaymentUrl(paymentLinkId) {
-  const base = String(process.env.PAYMENT_LINK_BASE_URL || '').replace(/\/$/, '');
-  if (!base) return null;
-  return `${base}/pay/${paymentLinkId}`;
 }
 
 function normalizeList(value) {
@@ -146,6 +143,51 @@ function buildSelfServeCreativeDraft(input = {}) {
   };
 }
 
+async function generateSelfServeCreativeDraft(input = {}) {
+  const fallback = buildSelfServeCreativeDraft(input);
+  try {
+    const placement = findAdvertisingPlacement(input.placement_key);
+    const brand = cleanText(input.business_name || input.brand || input.advertiser_name) || 'makaug advertiser';
+    const offer = cleanText(input.brief || input.offer || input.message || fallback.headline);
+    const area = cleanText(input.target_location || input.location || input.target_locations);
+    const ai = await generateCampaignCopy({
+      objective: [
+        `Write one short sponsored property ad for makaug.`,
+        `Brand/business: ${brand}.`,
+        placement?.label ? `Placement: ${placement.label}.` : '',
+        offer ? `Offer: ${offer}.` : '',
+        area ? `Target location: ${area}.` : '',
+        `Return clean ad copy suitable for a web banner/card, no hashtags, no emojis.`
+      ].filter(Boolean).join(' '),
+      audience: 'Uganda property seekers on makaug.com',
+      language: 'English',
+      channel: 'web_ad'
+    });
+    const text = cleanText(ai?.text || '', 500);
+    if (!text || /^makaug update:/i.test(text) || String(ai?.model || '').includes('template')) {
+      return fallback;
+    }
+    const sentences = text
+      .split(/\n+|(?<=[.!?])\s+/)
+      .map((line) => cleanText(line))
+      .filter(Boolean);
+    const headlineSource = sentences[0] || fallback.headline;
+    const bodySource = sentences.slice(1).join(' ') || sentences[0] || fallback.body;
+    return {
+      ...fallback,
+      headline: headlineSource.length > 64 ? `${headlineSource.slice(0, 61).trim()}...` : headlineSource,
+      body: bodySource.length > 120 ? `${bodySource.slice(0, 117).trim()}...` : bodySource,
+      supporting_line: bodySource.length > 120 ? `${bodySource.slice(0, 117).trim()}...` : bodySource,
+      provider: ai.model || 'makaug-ai',
+      ai_generated: true,
+      fallback_used: false
+    };
+  } catch (error) {
+    logger.warn('Advertising self-serve AI draft failed', { error: error.message || 'ai_failed' });
+    return { ...fallback, fallback_used: true };
+  }
+}
+
 function validateSelfServeCreative(creative = {}) {
   const errors = [];
   const headline = cleanText(creative.headline);
@@ -178,8 +220,10 @@ function buildSelfServeAutoChecks({ creative, quote, paymentMethod, providerConf
 }
 
 function selfServePaymentProvider(method) {
+  const configured = cleanText(process.env.UGANDA_PAYMENT_PROVIDER || process.env.PAYMENT_PROVIDER).toLowerCase();
+  if (configured) return configured;
   if (method === 'paypal') return 'paypal';
-  return cleanText(process.env.UGANDA_PAYMENT_PROVIDER || process.env.PAYMENT_PROVIDER || 'manual_gateway');
+  return 'flutterwave';
 }
 
 async function sendSelfServeConfirmation({ email, fullName, campaign, quote, paymentLink }) {
@@ -254,31 +298,35 @@ router.post('/quote', (req, res) => {
   return res.json({ ok: true, data: { quote, placement } });
 });
 
-router.post('/creative-draft', (req, res) => {
+router.post('/creative-draft', async (req, res, next) => {
   const placementKey = cleanText(req.body.placement_key || req.body.placement);
   const placement = findAdvertisingPlacement(placementKey);
   if (!placement) return res.status(404).json({ ok: false, error: 'Advertising placement not found' });
-  const creative = buildSelfServeCreativeDraft({
-    ...req.body,
-    placement_key: placement.key
-  });
-  return res.json({
-    ok: true,
-    data: {
-      marker: ADVERTISING_SELF_SERVE_MARKER,
-      placement,
-      creative,
-      validation: {
-        ok: validateSelfServeCreative({
-          ...creative,
-          destination_url: req.body.destination_url || req.body.url || 'https://makaug.com/for-sale'
-        }).filter((message) => !message.includes('destination_url')).length === 0,
-        warnings: creative.provider === 'local-template-fallback'
-          ? ['AI provider is not configured; using makaug branded template fallback.']
-          : []
+  try {
+    const creative = await generateSelfServeCreativeDraft({
+      ...req.body,
+      placement_key: placement.key
+    });
+    return res.json({
+      ok: true,
+      data: {
+        marker: ADVERTISING_SELF_SERVE_MARKER,
+        placement,
+        creative,
+        validation: {
+          ok: validateSelfServeCreative({
+            ...creative,
+            destination_url: req.body.destination_url || req.body.url || 'https://makaug.com/for-sale'
+          }).filter((message) => !message.includes('destination_url')).length === 0,
+          warnings: creative.provider === 'local-template-fallback'
+            ? ['AI provider is not configured; using makaug branded template fallback.']
+            : []
+        }
       }
-    }
-  });
+    });
+  } catch (error) {
+    return next(error);
+  }
 });
 
 router.post('/self-serve-campaigns', async (req, res, next) => {
@@ -296,7 +344,7 @@ router.post('/self-serve-campaigns', async (req, res, next) => {
     const audienceSegments = normalizeList(req.body.audience_segments || req.body.audiences);
     const languages = normalizeSelfServeLanguages(req.body.languages || req.body.language_codes || ['en']);
     const creativeInput = {
-      ...buildSelfServeCreativeDraft({
+      ...await generateSelfServeCreativeDraft({
         ...req.body,
         placement_key: placement?.key,
         business_name: businessName,
@@ -349,7 +397,7 @@ router.post('/self-serve-campaigns', async (req, res, next) => {
     }
     const campaignName = cleanText(req.body.campaign_name || `${businessName || fullName} - ${placement.label}`);
     const provider = selfServePaymentProvider(paymentMethod);
-    const providerConfigured = Boolean(process.env.PAYMENT_LINK_BASE_URL);
+    const providerConfigured = paymentProviderConfigured(provider);
     const autoChecks = buildSelfServeAutoChecks({
       creative,
       quote,
@@ -466,23 +514,49 @@ router.post('/self-serve-campaigns', async (req, res, next) => {
         ]
       );
       invoice = invoiceResult.rows[0];
-      const checkoutUrl = buildProviderPaymentUrl(invoice.id);
+      const hostedPayment = await createHostedPaymentLink({
+        provider,
+        amount: Number(quote.total_ugx || 0),
+        currency: 'UGX',
+        reference: invoice.invoice_number,
+        invoiceId: invoice.id,
+        campaignId: campaign.id,
+        paymentMethod,
+        customer: {
+          name: fullName,
+          email,
+          phone
+        },
+        title: 'makaug advertising',
+        description: `${placement.label} for ${businessName || fullName}`,
+        redirectUrl: cleanText(req.body.redirect_url || req.body.return_url),
+        metadata: {
+          placement_key: placement.key,
+          marker: ADVERTISING_SELF_SERVE_MARKER
+        }
+      });
+      const checkoutUrl = hostedPayment.checkoutUrl;
       const paymentLinkResult = await db.query(
         `INSERT INTO payment_links (
           provider, amount, currency, purpose, related_campaign_id, advertiser_id,
-          invoice_id, status, provider_reference, checkout_url, expires_at
+          invoice_id, status, provider_reference, checkout_url, expires_at, webhook_payload
         )
-        VALUES ($1,$2,'UGX','advertising_selfserve',$3,NULL,$4,$5,$6,$7,$8)
+        VALUES ($1,$2,'UGX','advertising_selfserve',$3,NULL,$4,$5,$6,$7,$8,$9::jsonb)
         RETURNING *`,
         [
-          provider,
+          hostedPayment.provider || provider,
           Number(quote.total_ugx || 0),
           campaign.id,
           invoice.id,
           checkoutUrl ? 'created' : 'pending',
-          invoice.invoice_number,
+          hostedPayment.providerReference || invoice.invoice_number,
           checkoutUrl,
-          req.body.expires_at || null
+          req.body.expires_at || null,
+          JSON.stringify({
+            provider_configured: Boolean(hostedPayment.configured),
+            provider_error: hostedPayment.providerError || null,
+            provider_response: hostedPayment.providerResponse || null
+          })
         ]
       );
       paymentLink = paymentLinkResult.rows[0];
@@ -563,6 +637,7 @@ router.post('/self-serve-campaigns', async (req, res, next) => {
         auto_checks: autoChecks,
         providerConfigured: !!paymentLink.checkout_url,
         providerMissing: !paymentLink.checkout_url,
+        providerError: hostedPayment.providerError || null,
         next_status: paymentLink.checkout_url
           ? 'Complete hosted checkout. Payment webhook will move the campaign to paid pending King approval.'
           : 'Hosted payment provider missing. King/admin can add a payment link or mark verified payment after receipt.'
@@ -791,24 +866,46 @@ router.post('/campaigns/:id/payment-link', requireAdvertiserAuth, async (req, re
       ]
     );
     const paymentProvider = cleanText(process.env.PAYMENT_PROVIDER || 'manual');
+    const hostedPayment = await createHostedPaymentLink({
+      provider: paymentProvider,
+      amount,
+      currency: invoice.rows[0].currency,
+      reference: invoice.rows[0].invoice_number,
+      invoiceId: invoice.rows[0].id,
+      campaignId: item.id,
+      paymentMethod: cleanText(req.body.payment_method || 'payment_link') || 'payment_link',
+      customer: {
+        name: item.advertiser_name,
+        email: item.advertiser_email,
+        phone: item.advertiser_phone
+      },
+      title: 'makaug advertising',
+      description: item.campaign_name || 'makaug advertising campaign',
+      redirectUrl: cleanText(req.body.redirect_url || req.body.return_url)
+    });
     const link = await db.query(
       `INSERT INTO payment_links (
         provider, amount, currency, purpose, related_campaign_id, advertiser_id,
-        invoice_id, status, provider_reference, checkout_url, expires_at
+        invoice_id, status, provider_reference, checkout_url, expires_at, webhook_payload
       )
-      VALUES ($1,$2,$3,'campaign',$4,$5,$6,$7,$8,$9,$10)
+      VALUES ($1,$2,$3,'campaign',$4,$5,$6,$7,$8,$9,$10,$11::jsonb)
       RETURNING *`,
       [
-        paymentProvider,
+        hostedPayment.provider || paymentProvider,
         amount,
         invoice.rows[0].currency,
         item.id,
         req.userAuth.id,
         invoice.rows[0].id,
-        buildProviderPaymentUrl(invoice.rows[0].id) ? 'created' : 'pending',
-        invoice.rows[0].invoice_number,
-        buildProviderPaymentUrl(invoice.rows[0].id),
-        req.body.expires_at || null
+        hostedPayment.checkoutUrl ? 'created' : 'pending',
+        hostedPayment.providerReference || invoice.rows[0].invoice_number,
+        hostedPayment.checkoutUrl,
+        req.body.expires_at || null,
+        JSON.stringify({
+          provider_configured: Boolean(hostedPayment.configured),
+          provider_error: hostedPayment.providerError || null,
+          provider_response: hostedPayment.providerResponse || null
+        })
       ]
     );
     await db.query(
@@ -830,7 +927,8 @@ router.post('/campaigns/:id/payment-link', requireAdvertiserAuth, async (req, re
         providerMissing: !link.rows[0].checkout_url,
         message: link.rows[0].checkout_url
           ? 'Payment link created.'
-          : 'Payment provider is not configured. makaug has logged the invoice and admin can mark manual payment.'
+          : 'Payment provider is not configured or did not return a checkout link. makaug has logged the invoice and admin can mark manual payment.',
+        providerError: hostedPayment.providerError || null
       }
     });
   } catch (error) {
@@ -853,7 +951,8 @@ router.post('/payment-webhook/:provider?', async (req, res, next) => {
     const invoice = await handlePaymentWebhook(db, {
       provider: req.params.provider || process.env.PAYMENT_PROVIDER || 'manual',
       payload: req.body,
-      signature: req.get('x-payment-signature') || req.get('x-signature') || '',
+      signature: req.get('flutterwave-signature') || req.get('verif-hash') || req.get('x-payment-signature') || req.get('x-signature') || '',
+      rawBody: req.rawBody || '',
       req
     });
     return res.json({ ok: true, data: { invoice } });

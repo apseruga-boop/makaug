@@ -31651,7 +31651,7 @@ function buildAdvertiseSelfServePage() {
       <div class="max-w-3xl">
         <p class="text-xs uppercase tracking-[0.24em] text-green-100 font-bold">Self-serve advertising</p>
         <h2 class="text-3xl md:text-4xl font-black mt-2">Advertise on makaug in minutes</h2>
-        <p class="text-green-50 text-sm md:text-base mt-3">Pick a placement, set the duration, generate an on-brand ad, preview it on mobile and desktop, then use hosted PayPal or Uganda mobile-money/card checkout. Staff only approve before it goes live.</p>
+        <p class="text-green-50 text-sm md:text-base mt-3">Pick a placement, set the duration, generate an on-brand ad, preview it on mobile and desktop, then use Flutterwave hosted checkout for mobile money, card, or PayPal where available. Staff only approve before it goes live.</p>
       </div>
       <div class="mt-5 flex flex-wrap gap-3">
         <button type="button" onclick="startAdvertiseSelfServe()" class="rounded-xl bg-white text-[#15603f] px-5 py-3 text-sm font-black">Start advertising</button>
@@ -31736,11 +31736,11 @@ function buildAdvertiseSelfServePage() {
               <input id="advertising-ss-phone" class="rounded-xl border border-gray-200 px-4 py-3 text-sm" placeholder="WhatsApp / phone">
             </div>
             <div class="grid sm:grid-cols-3 gap-2">
-              <label class="rounded-xl border border-green-200 bg-green-50 px-3 py-3 text-sm font-bold"><input type="radio" name="advertising-ss-payment" value="paypal" checked> PayPal</label>
+              <label class="rounded-xl border border-green-200 bg-green-50 px-3 py-3 text-sm font-bold"><input type="radio" name="advertising-ss-payment" value="paypal" checked> PayPal via Flutterwave</label>
               <label class="rounded-xl border border-gray-200 px-3 py-3 text-sm font-bold"><input type="radio" name="advertising-ss-payment" value="mobile_money"> MTN/Airtel Mobile Money</label>
               <label class="rounded-xl border border-gray-200 px-3 py-3 text-sm font-bold"><input type="radio" name="advertising-ss-payment" value="card"> Card</label>
             </div>
-            <p class="text-xs text-gray-500">Card and mobile-money details are entered only on the hosted gateway or PayPal page, never inside makaug.</p>
+            <p class="text-xs text-gray-500">Card, PayPal, and mobile-money details are entered only inside Flutterwave hosted checkout, never inside makaug.</p>
           </section>
 
           <div class="flex items-center justify-between gap-3 pt-2">
