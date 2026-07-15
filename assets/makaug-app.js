@@ -767,6 +767,62 @@ let activeMortgageComparisonSort = "monthly";
 let selectedMortgageProviderKey = "";
 let mortgageExtraPaymentAmount = 0;
 let mortgageRateManuallyEdited = false;
+const MONETIZATION_SPINE_MARKER = "monetization-spine-v1-20260715";
+let makaugMonetizationConfig = {
+  marker: MONETIZATION_SPINE_MARKER,
+  free_default: true,
+  flags: {
+    listing_boosts_enabled: false,
+    agent_pro_enabled: false,
+    featured_lenders_enabled: false
+  },
+  products: []
+};
+
+function monetizationFeatureEnabled(flagName) {
+  return Boolean(makaugMonetizationConfig?.flags?.[flagName]);
+}
+
+function monetizationProductByType(type) {
+  return (makaugMonetizationConfig?.products || []).find((item) => String(item.type || "") === String(type || ""));
+}
+
+function renderAgentProHook(options = {}) {
+  const enabled = monetizationFeatureEnabled("agent_pro_enabled");
+  const product = monetizationProductByType("agent_plan");
+  const price = product?.price ? `UGX ${Number(product.price || 0).toLocaleString("en-UG")}` : "pricing controlled by King";
+  return `
+    <button type="button" data-monetization-hook="agent-pro" onclick="toast('${enabled ? "Agent Pro checkout is being prepared." : "Agent Pro is prepared but not live yet."}')" class="${options.className || "border border-emerald-200 bg-white text-emerald-800 hover:bg-emerald-50 rounded-xl px-3 py-2 text-xs font-black"}">
+      <i class="ti-shield-check fas fa-shield-alt mr-1"></i>Go Pro${enabled ? ` · ${adminEscape(price)}` : " · prepared"}
+    </button>`;
+}
+
+function renderFeaturedLenderHook() {
+  const enabled = monetizationFeatureEnabled("featured_lenders_enabled");
+  const product = monetizationProductByType("featured_lender");
+  const price = product?.price ? `UGX ${Number(product.price || 0).toLocaleString("en-UG")}` : "King-priced";
+  return `
+    <div data-monetization-hook="featured-lender" class="rounded-2xl border border-emerald-100 bg-emerald-50 p-3 text-sm text-emerald-950">
+      <div class="font-black"><i class="ti-building-bank fas fa-university mr-1"></i>Featured lender slot ${enabled ? "available" : "prepared"}</div>
+      <div class="text-xs text-emerald-800 mt-1">${enabled ? `Starts from ${adminEscape(price)}. King approval still controls placement.` : "Lender sponsorship is wired but hidden until Arthur turns on the feature flag."}</div>
+    </div>`;
+}
+
+async function hydrateMonetizationConfig() {
+  try {
+    const response = await apiRequest("/api/monetization/config", { skipAuth: true });
+    if (response?.data) {
+      makaugMonetizationConfig = {
+        ...makaugMonetizationConfig,
+        ...response.data,
+        flags: { ...makaugMonetizationConfig.flags, ...(response.data.flags || {}) },
+        products: Array.isArray(response.data.products) ? response.data.products : []
+      };
+    }
+  } catch (error) {
+    console.warn("Monetization config unavailable", error);
+  }
+}
 
 const HOW_TO_VIDEO_SLOTS = [
   { key: "what-is-makaug", title: "What is makaug?", description: "A one-minute introduction to the Uganda-first property platform.", category: "about", youtubeVideoId: "", ctaLabel: "Explore makaug", ctaUrl: "/about" },
@@ -820,6 +876,7 @@ let adminAdvertisingSummary = {};
 let adminAdvertisingInquiries = [];
 let adminAdvertisingCampaigns = [];
 let adminAdvertisingPlacements = [];
+let adminMonetizationProducts = [];
 let adminWhatsappSummary = {};
 let adminWhatsappConversations = [];
 let adminCrmSummary = {};
@@ -9971,6 +10028,57 @@ function getBrokerBoostFormat(formatKey = "") {
   return BROKER_BOOST_FORMATS.find((item) => item.key === formatKey) || BROKER_BOOST_FORMATS[0];
 }
 
+function renderListingBoostHook(p = {}, options = {}) {
+  const listingId = p?.id || "";
+  const status = normalizeModerationStatus(p?.status || p?.moderation_status || "");
+  const approved = status === "approved" || status === "live";
+  const enabled = monetizationFeatureEnabled("listing_boosts_enabled");
+  if (!enabled && !options.alwaysShow) return "";
+  const product = monetizationProductByType("listing_boost");
+  const priceText = product?.price ? `UGX ${Number(product.price || 0).toLocaleString("en-UG")}` : "price set by makaug";
+  if (!enabled || !approved) {
+    return `
+      <button type="button" data-monetization-hook="listing-boost" onclick="event.stopPropagation(); toast('${approved ? "Listing boosts are prepared but not live yet." : "This listing can be boosted after makaug approves it."}')" class="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] font-black text-gray-500">
+        <i class="ti-rocket fas fa-rocket"></i>Boost prepared
+      </button>`;
+  }
+  return `
+    <button type="button" data-monetization-hook="listing-boost" onclick="event.stopPropagation(); handleListingBoostCheckout(${propertyIdArg(listingId)})" class="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-black text-emerald-700">
+      <i class="ti-rocket fas fa-rocket"></i>Boost · ${adminEscape(priceText)}
+    </button>`;
+}
+
+async function handleListingBoostCheckout(listingId) {
+  if (!listingId) {
+    toast("Choose a live listing first.");
+    return;
+  }
+  if (!monetizationFeatureEnabled("listing_boosts_enabled")) {
+    toast("Listing boosts are prepared but not live yet.");
+    return;
+  }
+  try {
+    const response = await apiRequest("/api/monetization/listing-boost/checkout", {
+      method: "POST",
+      body: { listing_id: listingId, product_key: "listing_boost_basic" }
+    });
+    const checkoutUrl = response?.data?.checkoutUrl || response?.data?.checkout_url || response?.data?.payment?.checkout_url;
+    if (checkoutUrl) {
+      window.open(checkoutUrl, "_blank", "noopener,noreferrer");
+      toast("Opening secure payment checkout.");
+      return;
+    }
+    toast("Checkout created, but no hosted URL was returned yet.");
+  } catch (error) {
+    toast(`Boost checkout unavailable: ${error.message || "try again later"}`);
+  }
+}
+
+function handleBrokerBoostCheckout() {
+  const selectedId = document.getElementById("broker-boost-listing-select")?.value || "";
+  return handleListingBoostCheckout(selectedId);
+}
+
 function renderBrokerBoostPanel(listingId = "", formatKey = "") {
   const panel = document.getElementById("broker-boost-panel");
   if (!panel) return;
@@ -9993,7 +10101,10 @@ function renderBrokerBoostPanel(listingId = "", formatKey = "") {
           <h2 class="text-xl font-black text-gray-900 mt-1">Boost a broker listing</h2>
           <p class="text-sm text-gray-600 mt-1">Boost is available only after makaug approves one of your listings and it is live on the public website.</p>
         </div>
-        <button onclick="handleAdvertisePropertyCta(event)" class="border border-amber-300 text-amber-800 hover:bg-amber-50 px-3 py-2 rounded-lg text-xs font-bold">View public ad formats</button>
+        <div class="flex flex-wrap gap-2">
+          ${renderAgentProHook({ className: "border border-emerald-200 bg-white text-emerald-800 hover:bg-emerald-50 rounded-lg px-3 py-2 text-xs font-bold" })}
+          <button onclick="handleAdvertisePropertyCta(event)" class="border border-amber-300 text-amber-800 hover:bg-amber-50 px-3 py-2 rounded-lg text-xs font-bold">View public ad formats</button>
+        </div>
       </div>
       <div class="mt-4 rounded-2xl border border-amber-100 bg-amber-50 p-5">
         <h3 class="font-black text-amber-950">No live broker listing available to boost yet.</h3>
@@ -10016,7 +10127,10 @@ function renderBrokerBoostPanel(listingId = "", formatKey = "") {
         <h2 class="text-xl font-black text-gray-900 mt-1">Boost a broker listing</h2>
         <p class="text-sm text-gray-600 mt-1">Choose one of your approved live listings, select a real ad format, and preview the guide price and estimated reach before payment.</p>
       </div>
-      <button onclick="handleAdvertisePropertyCta(event)" class="border border-amber-300 text-amber-800 hover:bg-amber-50 px-3 py-2 rounded-lg text-xs font-bold">View public ad formats</button>
+      <div class="flex flex-wrap gap-2">
+        ${renderAgentProHook({ className: "border border-emerald-200 bg-white text-emerald-800 hover:bg-emerald-50 rounded-lg px-3 py-2 text-xs font-bold" })}
+        <button onclick="handleAdvertisePropertyCta(event)" class="border border-amber-300 text-amber-800 hover:bg-amber-50 px-3 py-2 rounded-lg text-xs font-bold">View public ad formats</button>
+      </div>
     </div>
     <div class="grid lg:grid-cols-[0.9fr_1.1fr] gap-4 mt-4">
       <div class="rounded-2xl border border-gray-200 bg-gray-50 p-4">
@@ -10061,7 +10175,7 @@ function renderBrokerBoostPanel(listingId = "", formatKey = "") {
           </div>
         </div>
         <div class="flex gap-2 flex-wrap mt-4">
-          <button onclick="toast('Payment checkout will connect here after the advertising payment provider is enabled.')" class="bg-amber-600 hover:bg-amber-500 text-white rounded-xl px-4 py-2 text-sm font-black">Prepare campaign</button>
+          <button onclick="handleBrokerBoostCheckout()" data-monetization-hook="listing-boost-dashboard" class="bg-amber-600 hover:bg-amber-500 text-white rounded-xl px-4 py-2 text-sm font-black">Prepare boost checkout</button>
           <a href="mailto:info@makaug.com?subject=Broker%20boost%20campaign" class="border border-amber-300 text-amber-800 hover:bg-white rounded-xl px-4 py-2 text-sm font-black">Ask makaug ads team</a>
         </div>
       </div>
@@ -13360,7 +13474,7 @@ function adminRunCommandSearch() {
   const routes = [
     { terms: ["lead", "crm", "callback", "viewing", "mortgage", "enquiry", "enquiries"], tab: "notifications", selector: "#admin-notifications-control", label: "Leads & Notifications" },
     { terms: ["whatsapp", "chat", "handoff", "conversation", "language"], tab: "whatsapp", selector: "#admin-whatsapp-control", label: "WhatsApp Inbox" },
-    { terms: ["ad", "advert", "revenue", "payment", "invoice", "boost", "campaign"], tab: "ads", selector: "#admin-advertising-control", label: "Advertising Desk" },
+    { terms: ["ad", "advert", "revenue", "payment", "invoice", "boost", "campaign", "monetization", "entitlement", "product"], tab: "ads", selector: "#admin-advertising-control", label: "Advertising Desk" },
     { terms: ["broker", "agent account", "account", "password", "user", "student"], tab: "accounts", selector: "#admin-accounts-control", label: "Accounts & Outreach" },
     { terms: ["field", "payout", "pin", "territory"], tab: "field-agents", selector: "#admin-field-agent-control", label: "Field Agent Control Centre" },
     { terms: ["listing", "property", "delete", "hide", "approve", "pending", "live"], tab: "listings", selector: "#admin-listings-control", label: "All Listings" },
@@ -14144,7 +14258,7 @@ async function fetchRemoteAdminSnapshot(options = {}) {
   const shouldLoadAds = tabNeeds.ads;
   const shouldLoadWhatsapp = tabNeeds.whatsapp;
   const shouldLoadNotifications = tabNeeds.notifications;
-  const [summaryRes, commandCentreRes, recentRes, pendingRows, liveRows, actionedRows, usersRes, agentsRes, propertyRequestsRes, fieldAgentsRes, campaignsRes, adPackagesRes, adPlacementsRes, adSummaryRes, adInquiriesRes, adCampaignsRes, whatsappInsightsRes, whatsappConversationsRes, crmSummaryRes, crmLeadsRes, mortgageLeadsRes, notificationsRes, emailsRes, outlookStatusRes, outlookActionsRes, whatsappLogsRes] = await Promise.all([
+  const [summaryRes, commandCentreRes, recentRes, pendingRows, liveRows, actionedRows, usersRes, agentsRes, propertyRequestsRes, fieldAgentsRes, campaignsRes, adPackagesRes, adPlacementsRes, adSummaryRes, adInquiriesRes, adCampaignsRes, monetizationProductsRes, whatsappInsightsRes, whatsappConversationsRes, crmSummaryRes, crmLeadsRes, mortgageLeadsRes, notificationsRes, emailsRes, outlookStatusRes, outlookActionsRes, whatsappLogsRes] = await Promise.all([
     adminSafeSnapshotRequest("summary", () => apiRequest("/api/admin/summary", { headers }), { data: {} }),
     adminSafeSnapshotRequest("command centre", () => apiRequest("/api/admin/command-centre", { headers }), { data: {} }),
     adminSafeSnapshotRequest("recent activity", () => apiRequest("/api/admin/recent", { headers }), { data: {} }),
@@ -14161,6 +14275,7 @@ async function fetchRemoteAdminSnapshot(options = {}) {
     shouldLoadAds ? adminSafeSnapshotRequest("advertising summary", () => apiRequest("/api/admin/advertising/summary", { headers }), { data: {} }) : null,
     shouldLoadAds ? adminSafeSnapshotRequest("advertising inquiries", () => apiRequest("/api/admin/advertising/inquiries?limit=100", { headers }), { data: [] }) : null,
     shouldLoadAds ? adminSafeSnapshotRequest("advertising campaigns", () => apiRequest("/api/admin/advertising/campaigns?limit=100", { headers }), { data: [] }) : null,
+    shouldLoadAds ? adminSafeSnapshotRequest("monetization products", () => apiRequest("/api/admin/monetization/products", { headers }), { data: [] }) : null,
     shouldLoadWhatsapp ? adminSafeSnapshotRequest("whatsapp insights", () => apiRequest("/api/admin/whatsapp/insights", { headers }), { data: {} }) : null,
     shouldLoadWhatsapp ? adminSafeSnapshotRequest("whatsapp conversations", () => apiRequest(`/api/admin/whatsapp/conversations?${whatsappParams.toString()}`, { headers }), { data: [], summary: {} }) : null,
     shouldLoadNotifications ? adminSafeSnapshotRequest("crm summary", () => apiRequest("/api/admin/crm/summary", { headers }), { data: {} }) : null,
@@ -14200,6 +14315,7 @@ async function fetchRemoteAdminSnapshot(options = {}) {
   if (adSummaryRes?.data) adminAdvertisingSummary = adSummaryRes.data;
   if (Array.isArray(adInquiriesRes?.data)) adminAdvertisingInquiries = adInquiriesRes.data;
   if (Array.isArray(adCampaignsRes?.data)) adminAdvertisingCampaigns = adCampaignsRes.data;
+  if (Array.isArray(monetizationProductsRes?.data)) adminMonetizationProducts = monetizationProductsRes.data;
   if (whatsappInsightsRes?.data || whatsappConversationsRes?.summary) {
     adminWhatsappSummary = {
       ...(whatsappInsightsRes?.data || {}),
@@ -14234,6 +14350,7 @@ async function fetchRemoteAdminSnapshot(options = {}) {
     adSummaryRes,
     adInquiriesRes,
     adCampaignsRes,
+    monetizationProductsRes,
     whatsappInsightsRes,
     whatsappConversationsRes,
     crmSummaryRes,
@@ -14264,6 +14381,7 @@ async function fetchRemoteAdminSnapshot(options = {}) {
     advertisingSummary: adminAdvertisingSummary,
     advertisingInquiries: adminAdvertisingInquiries,
     advertisingCampaigns: adminAdvertisingCampaigns,
+    monetizationProducts: adminMonetizationProducts,
     whatsappSummary: adminWhatsappSummary,
     whatsappConversations: adminWhatsappConversations,
     crmSummary: adminCrmSummary,
@@ -17162,6 +17280,7 @@ async function renderAdminDashboard(options = {}) {
   renderAdminAdvertisingPlacements(remoteSnap?.advertisingPlacements || []);
   renderAdminAdvertisingInquiries(remoteSnap?.advertisingInquiries || []);
   renderAdminAdvertisingCampaigns(remoteSnap?.advertisingCampaigns || []);
+  renderAdminMonetizationProducts(remoteSnap?.monetizationProducts || []);
   renderAdminUsersRows(adminUsers);
   if (activeAdminWorkflowTab === "staff") {
     renderAdminStaffControl().catch((error) => {
@@ -18511,6 +18630,80 @@ function renderAdminAdvertisingPackages(packages) {
       <div class="text-[11px] text-gray-500 mt-2">Placements: ${adminEscape(adListText(pkg.placement_keys || pkg.placements || []))}</div>
     </div>
   `).join("");
+}
+
+function renderAdminMonetizationProducts(products) {
+  const wrap = document.getElementById("admin-monetization-products-grid");
+  if (!wrap) return;
+  adminMonetizationProducts = Array.isArray(products) ? products : [];
+  if (!canUseLiveAdminApi()) {
+    wrap.innerHTML = `<div class="text-sm text-gray-500 bg-white border border-emerald-100 rounded-xl p-4">Sign in as admin to manage revenue product pricing.</div>`;
+    return;
+  }
+  if (!adminMonetizationProducts.length) {
+    wrap.innerHTML = `<div class="text-sm text-gray-500 bg-white border border-emerald-100 rounded-xl p-4">Revenue products are prepared by migration but are not loaded yet.</div>`;
+    return;
+  }
+  wrap.innerHTML = adminMonetizationProducts.map((product) => {
+    const keyArg = adminListingIdArg(product.key);
+    const active = !!product.active;
+    const featureFlag = product.feature_flag || "feature flag pending";
+    return `
+      <div class="rounded-xl border ${active ? "border-emerald-300 bg-white" : "border-emerald-100 bg-white"} p-3">
+        <div class="flex items-start justify-between gap-2">
+          <div>
+            <div class="font-bold text-gray-900">${adminEscape(product.name || product.key)}</div>
+            <div class="text-[11px] uppercase tracking-wide font-black text-emerald-700 mt-1">${adminEscape(product.type || "product")}</div>
+          </div>
+          <span class="text-[11px] rounded-full px-2 py-1 font-black ${active ? "bg-emerald-100 text-emerald-800" : "bg-gray-100 text-gray-600"}">${active ? "Active" : "Off"}</span>
+        </div>
+        <div class="mt-3 rounded-lg bg-emerald-50 border border-emerald-100 p-2">
+          <div class="text-xs text-emerald-800">Price</div>
+          <div class="font-black text-emerald-950">${adminEscape(product.currency || "UGX")} ${Number(product.price || 0).toLocaleString("en-UG")} ${product.billing && product.billing !== "one_off" ? `/ ${adminEscape(product.billing.replace(/_/g, " "))}` : ""}</div>
+        </div>
+        <p class="text-xs text-gray-600 mt-2">${adminEscape(product.description || "Prepared revenue product.")}</p>
+        <div class="text-[11px] text-gray-500 mt-2">Gate: ${adminEscape(featureFlag)} • Default: free/no entitlement</div>
+        <div class="mt-3 flex flex-wrap gap-2">
+          <button type="button" onclick="adminUpdateMonetizationProductPrice(${keyArg})" class="border border-emerald-300 text-emerald-700 hover:bg-emerald-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Change Price</button>
+          <button type="button" onclick="adminToggleMonetizationProduct(${keyArg}, ${active ? "false" : "true"})" class="border ${active ? "border-red-200 text-red-600 hover:bg-red-50" : "border-gray-300 text-gray-700 hover:bg-gray-50"} px-3 py-1.5 rounded-lg text-xs font-semibold">${active ? "Turn Off" : "Turn On"}</button>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+async function adminUpdateMonetizationProductPrice(productKey) {
+  const product = adminMonetizationProducts.find((item) => String(item.key) === String(productKey)) || {};
+  const next = window.prompt(`New price for ${product.name || productKey} in UGX`, String(product.price || 0));
+  if (next == null) return;
+  const amount = Math.max(0, parseInt(next, 10) || 0);
+  try {
+    await apiRequest(`/api/admin/monetization/products/${encodeURIComponent(productKey)}`, {
+      method: "PATCH",
+      headers: adminAuthHeaders(),
+      body: { price: amount, currency: "UGX" }
+    });
+    await renderAdminDashboard();
+    toast("Revenue product price updated.");
+  } catch (error) {
+    toast(`Product update failed: ${error.message || "request failed"}`);
+  }
+}
+
+async function adminToggleMonetizationProduct(productKey, isActive) {
+  const product = adminMonetizationProducts.find((item) => String(item.key) === String(productKey)) || {};
+  if (isActive && !window.confirm(`Turn on ${product.name || productKey}? This makes the paid product available if the matching feature flag is enabled.`)) return;
+  try {
+    await apiRequest(`/api/admin/monetization/products/${encodeURIComponent(productKey)}`, {
+      method: "PATCH",
+      headers: adminAuthHeaders(),
+      body: { active: !!isActive }
+    });
+    await renderAdminDashboard();
+    toast(isActive ? "Revenue product activated." : "Revenue product paused.");
+  } catch (error) {
+    toast(`Product update failed: ${error.message || "request failed"}`);
+  }
 }
 
 function renderAdminAdvertisingInquiries(inquiries) {
@@ -34783,6 +34976,7 @@ function socialImportListingCardHtml(p = {}, options = {}) {
         <p class="social-import-card-location"><i class="ti-map-pin fas fa-map-marker-alt"></i>${adminEscape(displayLocation)}</p>
         ${socialImportSpecsHtml(p)}
         ${socialImportProvenanceHtml(p)}
+        ${renderListingBoostHook(p, { compact: true })}
       </div>
     </div>`;
 }
@@ -35872,6 +36066,7 @@ function studentCardFooterText(p = {}) {
             ${renderPropertyShareActions(p, idArg, { stopPropagation: true })}
           </div>
         </div>
+        ${renderListingBoostHook(p, { compact: true })}
       </div>
     </div>`;
 }
@@ -44110,7 +44305,8 @@ function renderMortgageFinder() {
           <button type="button" data-mortgage-sort-option="${adminAttr(key)}" onclick="setMortgageComparisonSort('${adminAttr(key)}')" aria-pressed="${activeMortgageComparisonSort === key ? "true" : "false"}" class="${activeMortgageComparisonSort === key ? "bg-green-700 text-white" : "text-green-800 hover:bg-green-50"} rounded-full px-3 py-1.5 text-xs font-black">${adminEscape(label)}</button>
         `).join("")}
       </div>
-    </div>`;
+    </div>
+    ${renderFeaturedLenderHook()}`;
   const desktopRows = sortedProviderRows.map((row) => {
     const status = providerStatusMeta(row.status);
     const monthly = row.monthlyRepayment ? `${formatUgxAmount(row.monthlyRepayment)} / ${mortgageTr("monthWord")}` : mortgageTr("quoteRequired");
@@ -45711,6 +45907,7 @@ function initializeMakaugApp() {
   populateListAddressSuggestions();
   loadDashboardState();
   loadAuthState();
+  hydrateMonetizationConfig();
   handleOAuthReturnFromUrl();
   setLang(getStartupLanguagePreference(savedLang), true, false);
   initFrontendAnalytics();
