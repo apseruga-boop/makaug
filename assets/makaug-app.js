@@ -946,6 +946,8 @@ const PUBLIC_CATEGORY_DEEP_HYDRATION_DELAY_MS = 8000;
 const STUDENT_PAGE_PAGINATION_FIX_MARKER = "student-page-pagination-fix-20260715";
 const STUDENT_PAGINATION_NAV_FIX_MARKER = "student-pagination-nav-fix-20260715";
 const CATEGORY_PAGINATION_TOTAL_FIX_MARKER = "category-pagination-total-fix-20260715";
+const CATEGORY_PAGINATION_API_TOTAL_FIX_MARKER = "category-pagination-api-total-fix-20260715";
+const CATEGORY_PAGINATION_STARTUP_LOADING_FIX_MARKER = "category-pagination-startup-loading-fix-20260715";
 const publicCategoryDeepHydrationTimers = new Map();
 const PUBLIC_PAGINATION_CATEGORIES = Object.freeze(["sale", "rent", "students", "commercial", "land"]);
 const publicCategoryPaginationState = {};
@@ -37285,7 +37287,7 @@ function publicInventoryCategoryPath(category) {
   const normalized = category === "students" ? "student" : normalizeType(category);
   if (normalized === "student") return "/api/properties?status=approved&public_only=1&student_portal=1";
   if (["sale", "rent", "commercial", "land"].includes(normalized)) {
-    return `/api/properties?status=approved&public_only=1&listing_type=${encodeURIComponent(normalized)}`;
+    return `/api/properties?status=approved&public_only=1&category=${encodeURIComponent(normalized)}`;
   }
   return "";
 }
@@ -37539,6 +37541,16 @@ function renderPublicCategoryPagination(category, options = {}) {
   }
   const pageStart = total ? ((page - 1) * PUBLIC_RESULTS_PAGE_SIZE) + 1 : 0;
   const pageEnd = Math.min(total, page * PUBLIC_RESULTS_PAGE_SIZE);
+  const awaitingExactRouteTotal = Boolean(
+    loading
+    && key === publicPaginationKey(activePublicInventoryCategoryFromRoute())
+    && state.mode === "api"
+    && !state.totalAuthoritative
+    && total <= PUBLIC_RESULTS_PAGE_SIZE
+  );
+  const rangeText = awaitingExactRouteTotal
+    ? "Fetching the full result count..."
+    : (total ? `Showing ${pageStart}-${pageEnd} of ${total} properties` : "No properties found");
   const disabledClass = "opacity-45 cursor-not-allowed";
   const enabledClass = "hover:bg-green-50 hover:border-green-400";
   const buttonClass = "min-h-[44px] min-w-[44px] rounded-xl border border-gray-200 bg-white px-3 text-sm font-bold text-gray-700 transition-colors";
@@ -37570,7 +37582,7 @@ function renderPublicCategoryPagination(category, options = {}) {
       <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div class="text-sm font-semibold text-gray-700">
           ${loading ? "Loading listings..." : `Page ${page} of ${totalPages}`}
-          <span class="block text-xs font-medium text-gray-500">${total ? `Showing ${pageStart}-${pageEnd} of ${total} properties` : "No properties found"}</span>
+          <span class="block text-xs font-medium text-gray-500">${rangeText}</span>
         </div>
         ${navHtml}
       </div>
@@ -38028,6 +38040,9 @@ function schedulePublicCategoryDeepHydration(category, totalCount = 0) {
 async function refreshPublicListingsFromApi({ silent = true } = {}) {
   if (publicListingsApiLoading) return refreshActivePublicInventoryCategoryFromApi({ silent });
   publicListingsApiLoading = true;
+  const startupCategory = activePublicInventoryCategoryFromRoute();
+  const startupState = startupCategory ? publicPaginationStateFor(startupCategory) : null;
+  if (startupState) startupState.loading = true;
   try {
     const activeCategory = activePublicInventoryCategoryFromRoute();
     const featuredRowsPromise = activeCategory ? Promise.resolve([]) : fetchPublicFeaturedListingsFromApi()
@@ -38058,10 +38073,7 @@ async function refreshPublicListingsFromApi({ silent = true } = {}) {
       maxPages: 1,
       includeSummary: Boolean(activeRouteSearchPath)
     });
-    const [
-      { rows: firstPageRows, firstResponse: firstPageResponse },
-      summaryStats
-    ] = await Promise.all([firstPageRowsPromise, summaryStatsPromise]);
+    const { rows: firstPageRows, firstResponse: firstPageResponse } = await firstPageRowsPromise;
     applyPublicRowsForUi(firstPageRows, firstPageResponse);
     if (activeCategory) {
       syncPublicCategoryPaginationSource(activeCategory, firstPagePath);
@@ -38071,12 +38083,14 @@ async function refreshPublicListingsFromApi({ silent = true } = {}) {
         firstPageState.page = 1;
         firstPageState.total = publicCategoryTotalForPagination(activeCategory, firstPageRows.length, firstPageResponse, { filtered: false });
         firstPageState.totalAuthoritative = exactPublicPaginationTotalValue(firstPageResponse) != null;
+        firstPageState.loading = false;
         firstPageState.mode = "api";
         firstPageState.sourcePath = firstPagePath;
       }
     }
     renderAll();
     if (activeRouteSearchPath) syncActiveRouteSearchHandoff("initial_route_search_first_page");
+    const summaryStats = await summaryStatsPromise;
     const firstPageCategoryExactTotal = activeCategory ? exactPublicPaginationTotalValue(firstPageResponse) : null;
     const categoryTotal = activeCategory ? firstPageCategoryExactTotal ?? (publicOpportunityStatForCategory(activeCategory) ?? summaryStats?.[activeCategory] ?? 0) : 0;
     if (activeCategory && (firstPageCategoryExactTotal != null || categoryTotal)) {
@@ -38122,6 +38136,12 @@ async function refreshPublicListingsFromApi({ silent = true } = {}) {
     renderAll();
     return true;
   } catch (e) {
+    const activeCategory = activePublicInventoryCategoryFromRoute();
+    const activeState = activeCategory ? publicPaginationStateFor(activeCategory) : null;
+    if (activeState) {
+      activeState.loading = false;
+      renderPublicCategoryPagination(activeCategory, { loading: false });
+    }
     if (!silent) toast(`Live listings refresh failed: ${e.message || "error"}`);
     return false;
   } finally {

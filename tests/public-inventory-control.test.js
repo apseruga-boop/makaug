@@ -168,7 +168,9 @@ test('anonymous public property APIs suppress launch seed QA listings', () => {
   assert.match(appSource, /const response = await apiRequest\(PUBLIC_OPPORTUNITY_SUMMARY_PATH, \{ skipAuth: true \}\)/);
   assert.match(appSource, /const firstPagePath = activeCategory\s*\? activeRouteSearchPath \|\| publicInventoryCategoryPath\(activeCategory\) \|\| "\/api\/properties\?status=approved&public_only=1"\s*: "\/api\/properties\?status=approved&public_only=1"/);
   assert.match(appSource, /const firstPageRowsPromise = fetchPublicPaginatedRows\(firstPagePath, \{[\s\S]*limit: activeCategory \? PUBLIC_RESULTS_PAGE_SIZE : PUBLIC_LISTINGS_FAST_PAGE_LIMIT,[\s\S]*maxPages: 1,[\s\S]*includeSummary: Boolean\(activeRouteSearchPath\)/);
-  assert.match(appSource, /await Promise\.all\(\[firstPageRowsPromise, summaryStatsPromise\]\)/);
+  assert.match(appSource, /const \{ rows: firstPageRows, firstResponse: firstPageResponse \} = await firstPageRowsPromise/);
+  assert.match(appSource, /const summaryStats = await summaryStatsPromise/);
+  assert(appSource.indexOf('const { rows: firstPageRows, firstResponse: firstPageResponse } = await firstPageRowsPromise') < appSource.indexOf('const summaryStats = await summaryStatsPromise'));
   assert.match(appSource, /applyPublicRowsForUi\(firstPageRows, firstPageResponse\);[\s\S]*cachePublicCategoryPageRows\(activeCategory, 1, firstPageRows\);[\s\S]*renderAll\(\);/);
   assert.match(appSource, /cachePublicCategoryPageRows\(activeCategory, 1, firstPageRows\)/);
   assert.match(appSource, /function schedulePublicCategoryDeepHydration\(category, totalCount = 0\)/);
@@ -176,8 +178,8 @@ test('anonymous public property APIs suppress launch seed QA listings', () => {
   assert.match(appSource, /schedulePublicCategoryDeepHydration\(activeCategory, categoryTotal\);\s*return true;/);
   assert.match(appSource, /const backgroundRowsPromise = fetchPublicPaginatedRows\("\/api\/properties\?status=approved&public_only=1", \{/);
   assert.match(appSource, /limit: PUBLIC_LISTINGS_BACKGROUND_PAGE_LIMIT,[\s\S]*maxPages: PUBLIC_LISTINGS_BACKGROUND_MAX_PAGES,[\s\S]*includeSummary: false/);
-  assert.match(appSource, /const firstPageCategoryTotal = activeCategory \? exactPublicPaginationTotal\(firstPageResponse\) : 0;/);
-  assert.match(appSource, /const categoryTotal = activeCategory \? firstPageCategoryTotal \|\| \(publicOpportunityStatForCategory\(activeCategory\) \?\? summaryStats\?\.\[activeCategory\] \?\? 0\) : 0;/);
+  assert.match(appSource, /const firstPageCategoryExactTotal = activeCategory \? exactPublicPaginationTotalValue\(firstPageResponse\) : null;/);
+  assert.match(appSource, /const categoryTotal = activeCategory \? firstPageCategoryExactTotal \?\? \(publicOpportunityStatForCategory\(activeCategory\) \?\? summaryStats\?\.\[activeCategory\] \?\? 0\) : 0;/);
   assert.match(appSource, /const \{ rows: publicRows, firstResponse \} = await backgroundRowsPromise;\s*const featuredRows = await featuredRowsPromise;\s*applyPublicRowsForUi\(publicRows, firstResponse, \{ featuredRows, prune: true \}\);\s*renderAll\(\);/);
   assert.match(appSource, /function publicOpportunityStatForCategory\(category\)/);
   assert.match(appSource, /function getPublicCategoryDisplayCount\(category, localCount = 0, \{ filtered = false \} = \{\}\)/);
@@ -196,13 +198,13 @@ test('anonymous public property APIs suppress launch seed QA listings', () => {
   assert.match(appSource, /async function refreshActivePublicInventoryCategoryFromApi\(\{ silent = true \} = \{\}\)/);
   assert.match(appSource, /if \(publicListingsApiLoading\) return refreshActivePublicInventoryCategoryFromApi\(\{ silent \}\)/);
   assert.match(appSource, /return "\/api\/properties\?status=approved&public_only=1&student_portal=1"/);
-  assert.match(appSource, /listing_type=\$\{encodeURIComponent\(normalized\)\}/);
+  assert.match(appSource, /category=\$\{encodeURIComponent\(normalized\)\}/);
   assert.match(appSource, /const activeCategory = activePublicInventoryCategoryFromRoute\(\)/);
   assert.match(appSource, /onPageRows: \(pageRows, pageResponse\) => \{/);
   assert.match(appSource, /applyPublicRowsForUi\(pageRows, pageResponse\);\s*renderAll\(\);/);
   assert.match(appSource, /await fetchPublicCategoryRows\(activeCategory, categoryTotal, \{/);
-  assert.match(appSource, /renderPublicCategoryPage\("sale", saleListings, \{/);
-  assert.match(appSource, /renderPublicCategoryPage\("rent", rentListings, \{/);
+  assert.match(appSource, /renderPublicCategoryPageWithAuthoritativeCache\("sale", saleListings, \{/);
+  assert.match(appSource, /renderPublicCategoryPageWithAuthoritativeCache\("rent", rentListings, \{/);
   assert.match(appSource, /setPublicCategoryCount\(key, total, \{ filtered: true \}\)/);
   assert.match(appSource, /renderPublicCategoryPage\("sale", list, \{/);
   assert.match(appSource, /renderPublicCategoryPage\("rent", list, \{/);
