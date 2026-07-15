@@ -25,6 +25,7 @@ const pkg = JSON.parse(read('package.json'));
 const {
   PROPERTY_SOURCE_REGISTRY,
   PROPERTY_SOURCE_REGISTRY_TARGET_COUNT,
+  X_SEARCH_REGISTRY_LOCALIZED_MARKER,
   PROPERTY_HASHTAG_WATCHLIST,
   sourceRecordKind,
   summarizePropertySourceRegistry,
@@ -98,6 +99,33 @@ test('source registry service defines a multi-platform Uganda property source da
   assert(PROPERTY_SOURCE_REGISTRY.some((item) => sourceRecordKind(item) === 'source_page'), 'source registry should contain real page/channel/account records');
   assert(PROPERTY_SOURCE_REGISTRY.some((item) => sourceRecordKind(item) === 'discovery_feed'), 'source registry should contain discovery feeds that find new pages/posts');
   assert(PROPERTY_SOURCE_REGISTRY.some((item) => item.platform === 'x' && item.sourceType === 'hashtag_search_feed' && /x\.com\/search/i.test(item.url || '')), 'source registry should include X hashtag search feeds');
+  assert(service.includes("X_SEARCH_REGISTRY_LOCALIZED_MARKER = 'x-search-registry-localized-20260715'"), 'source registry should carry the localized X registry marker');
+  const xSources = PROPERTY_SOURCE_REGISTRY.filter((item) => item.platform === 'x');
+  const localizedX = xSources.filter((item) => item.metadata?.x_search_registry_marker === X_SEARCH_REGISTRY_LOCALIZED_MARKER);
+  assert(localizedX.length >= 4000, 'X registry should seed thousands of localized district/language/student/hashtag searches ahead of generic fallback rows');
+  assert(xSources.slice(0, 20).some((item) => item.metadata?.x_search_registry_marker === X_SEARCH_REGISTRY_LOCALIZED_MARKER), 'localized X searches should appear at low X cursor offsets');
+  assert(localizedX.some((item) => /from:KPAestates/i.test(item.metadata?.query || '')), 'X registry should include the verified KPA Estates account search and avoid guessed handles');
+  assert(localizedX.some((item) => item.metadata?.x_query_variant === 'broad' && !/\bhas:media\b/i.test(item.metadata?.query || '')), 'X registry should include no-media broad variants');
+  assert(localizedX.some((item) => item.metadata?.x_query_variant === 'has_media' && /\bhas:media\b/i.test(item.metadata?.query || '')), 'X registry should include has:media variants');
+  assert(localizedX.some((item) => item.metadata?.x_query_variant === 'phone' && /\+256|070|075|077|078/.test(item.metadata?.query || '')), 'X registry should include phone-signal variants');
+  ['English', 'Luganda', 'Kiswahili', 'Runyankole', 'Rukiga', 'Lusoga', 'Amharic', 'Arabic', 'Acholi'].forEach((language) => {
+    assert(localizedX.some((item) => item.languages?.includes(language) || item.metadata?.x_query_language === language), `localized X registry should include ${language} sources`);
+  });
+  ['Mbarara', 'Gulu', 'Arua', 'Wakiso', 'Kampala', 'Mukono'].forEach((district) => {
+    assert(localizedX.some((item) => item.districts?.includes(district)), `localized X registry should include ${district} searches`);
+  });
+  ['Makerere University', 'Kyambogo University', 'MUBS', 'Uganda Christian University', 'Nkumba University'].forEach((campus) => {
+    assert(localizedX.some((item) => (item.metadata?.query || '').includes(campus)), `student X registry should include ${campus}`);
+  });
+  const variantGroups = localizedX.reduce((acc, item) => {
+    const key = item.metadata?.x_query_base_key;
+    if (!key) return acc;
+    acc[key] = acc[key] || new Set();
+    acc[key].add(item.metadata?.x_query_variant);
+    return acc;
+  }, {});
+  assert(Object.values(variantGroups).some((variants) => variants.has('broad') && variants.has('has_media')), 'X registry should pair each source family with broad and has:media variants');
+  assert(localizedX.every((item) => /\s-is:retweet\b/i.test(item.metadata?.query || '')), 'X registry sources should keep retweets excluded');
   assert(PROPERTY_SOURCE_REGISTRY.some((item) => item.platform === 'instagram' && item.sourceType === 'hashtag_search_feed' && /instagram\.com\/explore\/tags/i.test(item.url || '')), 'source registry should include Instagram hashtag search feeds');
   assert(PROPERTY_SOURCE_REGISTRY.some((item) => item.platform === 'facebook' && item.sourceType === 'hashtag_search_feed' && /facebook\.com\/hashtag/i.test(item.url || '')), 'source registry should include Facebook hashtag search feeds');
   assert(PROPERTY_SOURCE_REGISTRY.some((item) => item.platform === 'tiktok' && item.sourceType === 'hashtag_search_feed' && /tiktok\.com\/tag/i.test(item.url || '')), 'source registry should include TikTok hashtag/tag feeds');

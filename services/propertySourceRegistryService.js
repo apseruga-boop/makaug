@@ -6,13 +6,14 @@ const PROPERTY_SOURCE_REGISTRY_TARGET_COUNT = 60000;
 const PROPERTY_SOURCE_REGISTRY_RESPONSE_SAMPLE_LIMIT = 500;
 const X_HASHTAG_DISCOVERY_TARGET_COUNT = 16000;
 const CROSS_PLATFORM_HASHTAG_DISCOVERY_TARGET_COUNT = 24000;
+const X_SEARCH_REGISTRY_LOCALIZED_MARKER = 'x-search-registry-localized-20260715';
 const SOURCE_FRESHNESS_WINDOW_DAYS = 366;
 const TARGET_SOURCE_YEAR = 2026;
 const SOCIAL_FIRST_PLATFORM_PRIORITY = ['tiktok', 'facebook', 'youtube', 'x', 'instagram'];
 const SOCIAL_PROFILE_CREATION_RULE = 'Do not automatically create or update a public Makaug source/broker profile from social discovery. Keep the source as attribution/contact evidence only until the agent or broker registers or claims the profile through the Makaug broker process.';
 const SOCIAL_ONE_OFF_LISTING_RULE = 'One-off and repeated social posts can become found-online listings when evidence is complete, but profile creation is deferred until the source owner registers or claims the Makaug broker profile.';
 
-const SOURCE_LANGUAGES = ['English', 'Luganda', 'Kiswahili', 'Amharic'];
+const SOURCE_LANGUAGES = ['English', 'Luganda', 'Kiswahili', 'Runyankole', 'Rukiga', 'Lusoga', 'Amharic', 'Arabic', 'Acholi'];
 const CORE_HASHTAGS = [
   'UgandaRealEstate',
   'RealEstateUganda',
@@ -260,6 +261,106 @@ const PROPERTY_HASHTAG_WATCHLIST = [
   'UgandaRealEstateTour',
   'UgandaPropertyShorts',
   'KampalaPropertyShorts',
+];
+
+const X_PHONE_SIGNAL_QUERY = '("070" OR "075" OR "076" OR "077" OR "078" OR "+256" OR "2567")';
+
+const X_UGANDA_DISTRICTS = [
+  'Abim', 'Adjumani', 'Agago', 'Alebtong', 'Amolatar', 'Amudat', 'Amuria', 'Amuru',
+  'Apac', 'Arua', 'Budaka', 'Bududa', 'Bugiri', 'Bugweri', 'Buhweju', 'Buikwe',
+  'Bukedea', 'Bukomansimbi', 'Bukwo', 'Bulambuli', 'Buliisa', 'Bundibugyo', 'Bunyangabu',
+  'Bushenyi', 'Busia', 'Butaleja', 'Butambala', 'Butebo', 'Buvuma', 'Buyende',
+  'Dokolo', 'Gomba', 'Gulu', 'Hoima', 'Ibanda', 'Iganga', 'Isingiro', 'Jinja',
+  'Kaabong', 'Kabale', 'Kabarole', 'Kaberamaido', 'Kagadi', 'Kakumiro', 'Kalangala',
+  'Kaliro', 'Kalungu', 'Kampala', 'Kamuli', 'Kamwenge', 'Kanungu', 'Kapchorwa',
+  'Kapelebyong', 'Karenga', 'Kasanda', 'Kasese', 'Katakwi', 'Kayunga', 'Kazo',
+  'Kibaale', 'Kiboga', 'Kibuku', 'Kikuube', 'Kiruhura', 'Kiryandongo', 'Kisoro',
+  'Kitagwenda', 'Kitgum', 'Koboko', 'Kole', 'Kotido', 'Kumi', 'Kwania', 'Kween',
+  'Kyankwanzi', 'Kyegegwa', 'Kyenjojo', 'Kyotera', 'Lamwo', 'Lira', 'Luuka',
+  'Luwero', 'Lwengo', 'Lyantonde', 'Madi-Okollo', 'Manafwa', 'Maracha', 'Masaka',
+  'Masindi', 'Mayuge', 'Mbale', 'Mbarara', 'Mitooma', 'Mityana', 'Moroto', 'Moyo',
+  'Mpigi', 'Mubende', 'Mukono', 'Nabilatuk', 'Nakapiripirit', 'Nakaseke', 'Nakasongola',
+  'Namayingo', 'Namisindwa', 'Namutumba', 'Napak', 'Nebbi', 'Ngora', 'Ntoroko',
+  'Ntungamo', 'Nwoya', 'Obongi', 'Omoro', 'Otuke', 'Oyam', 'Pader', 'Pakwach',
+  'Pallisa', 'Rakai', 'Rubanda', 'Rubirizi', 'Rukiga', 'Rukungiri', 'Rwampara',
+  'Sembabule', 'Serere', 'Sheema', 'Sironko', 'Soroti', 'Tororo', 'Wakiso',
+  'Yumbe', 'Zombo',
+  'Arua City', 'Fort Portal', 'Gulu City', 'Hoima City', 'Jinja City', 'Lira City',
+  'Masaka City', 'Mbale City', 'Mbarara City', 'Soroti City',
+];
+
+const X_LOCALIZED_INTENT_TERMS = [
+  { language: 'English', terms: ['house for sale', 'house for rent', 'land for sale', 'apartment for rent', 'student hostel', 'commercial property'] },
+  { language: 'Luganda', terms: ['ettaka lyokutunda', 'ekibanja kyokutunda', 'amayumba agokutunda', 'nyumba yopangisa', 'muzigo gwokupangisa', 'hostel y’abayizi'] },
+  { language: 'Kiswahili', terms: ['nyumba inauzwa', 'nyumba ya kupanga', 'kiwanja kinauzwa', 'chumba cha mwanafunzi', 'duka la kupanga'] },
+  { language: 'Runyankole', terms: ['eka egurishwa', 'enju egurishwa', 'eitaka ryokuguza', 'enju yokupangisa', 'ekishengye kyabayizi'] },
+  { language: 'Rukiga', terms: ['eka egurishwa', 'enju egurishwa', 'itaka ryokuguza', 'enju yokupangisa', 'hostel y’abanyeshuri'] },
+  { language: 'Lusoga', terms: ['enyumba eguzibwa', 'eitaka eriguzibwa', 'enyumba eyokupangisa', 'ekisenge kyokupangisa', 'hostel y’abayizi'] },
+  { language: 'Amharic', terms: ['የሚሸጥ ቤት', 'የሚከራይ ቤት', 'የሚሸጥ መሬት', 'የተማሪ ሆስቴል'] },
+  { language: 'Arabic', terms: ['منزل للبيع', 'منزل للايجار', 'ارض للبيع', 'سكن طلاب'] },
+  { language: 'Acholi', terms: ['ot me acata', 'ngom me acata', 'ot me upang', 'hostel me kwan'] },
+];
+
+const X_CATEGORY_QUERY_BANK = [
+  {
+    category: 'sale',
+    listingTypes: ['sale'],
+    terms: ['"house for sale"', '"property for sale"', '"home for sale"', '"apartment for sale"', 'amayumba agokutunda', 'nyumba inauzwa'],
+  },
+  {
+    category: 'rent',
+    listingTypes: ['rent'],
+    terms: ['"house for rent"', '"apartment for rent"', '"to let"', '"rentals"', '"self contained"', 'nyumba yopangisa', 'nyumba ya kupanga'],
+  },
+  {
+    category: 'land',
+    listingTypes: ['land'],
+    terms: ['"land for sale"', '"plot for sale"', '"plots for sale"', '"50x100"', '"mailo land"', 'ettaka lyokutunda', 'kiwanja kinauzwa'],
+  },
+  {
+    category: 'students',
+    listingTypes: ['students', 'rent'],
+    terms: ['"student hostel"', '"student accommodation"', '"hostel room"', '"single room"', '"double room"', '"per semester"', '"near campus"'],
+  },
+  {
+    category: 'commercial',
+    listingTypes: ['commercial', 'rent'],
+    terms: ['"office space"', '"shop for rent"', '"commercial property"', '"warehouse for rent"', '"showroom"', '"arcade shop"', '"industrial space"'],
+  },
+];
+
+const X_STUDENT_INSTITUTIONS = [
+  ['Kampala', 'Makerere University', ['Makerere', 'Kikoni', 'Wandegeya']],
+  ['Kampala', 'Kyambogo University', ['Kyambogo', 'Banda']],
+  ['Kampala', 'MUBS', ['Nakawa', 'Bugolobi']],
+  ['Kampala', 'Kampala International University', ['Kansanga', 'Kabalagala']],
+  ['Mukono', 'Uganda Christian University', ['UCU Mukono', 'Mukono']],
+  ['Wakiso', 'Nkumba University', ['Nkumba', 'Entebbe']],
+  ['Wakiso', 'Ndejje University', ['Ndejje', 'Bombo Road']],
+  ['Mbarara', 'Mbarara University', ['Mbarara City', 'Mbarara']],
+  ['Gulu', 'Gulu University', ['Gulu City', 'Gulu']],
+  ['Mbale', 'Islamic University in Uganda', ['Mbale', 'IUIU']],
+  ['Kampala', 'Uganda Martyrs University Rubaga', ['Rubaga', 'Nkozi']],
+  ['Kampala', 'Victoria University', ['Kampala Central']],
+  ['Kampala', 'ISBAT University', ['Kampala Central']],
+  ['Kampala', 'Cavendish University', ['Kansanga']],
+  ['Kampala', 'Uganda Technology and Management University', ['Kampala']],
+];
+
+const X_HOSTEL_SEARCH_TERMS = [
+  'hostel', '"student hostel"', '"student accommodation"', '"self contained room"',
+  '"single room"', '"double room"', '"hostel room"', '"per semester"', '"near campus"',
+];
+
+const X_VERIFIED_ACCOUNT_SEARCHES = [
+  {
+    handle: 'KPAestates',
+    name: 'KPA Estates',
+    districts: ['Kampala', 'Wakiso'],
+    listingTypes: ['sale', 'rent', 'land'],
+    category: 'account',
+    priorityWeight: 100,
+  },
 ];
 
 function source({
@@ -1611,6 +1712,264 @@ function expandedHashtagDiscoverySources(platforms = ['x', 'instagram', 'faceboo
   return sources;
 }
 
+function generatedXHashtagBank() {
+  const areas = [...new Set([
+    'Uganda', 'Kampala', 'Wakiso', 'Mukono', 'Entebbe', 'Jinja', 'Mbarara', 'Gulu', 'Mbale',
+    ...DISCOVERY_AREAS.map(([, area]) => area),
+    ...X_UGANDA_DISTRICTS.slice(0, 70),
+  ].map(compactTag).filter(Boolean))];
+  const propertyTypes = [
+    'Property', 'RealEstate', 'House', 'Homes', 'Apartments', 'Rentals', 'ToLet',
+    'Land', 'Plots', 'Hostels', 'StudentHostel', 'Commercial', 'Office', 'Shops',
+    'Warehouse',
+  ];
+  const intentSuffixes = ['ForSale', 'ForRent', 'Uganda', 'UG', '256'];
+  const tags = [];
+  for (const area of areas) {
+    for (const type of propertyTypes) {
+      tags.push(`${area}${type}`);
+      tags.push(`${type}${area}`);
+      for (const suffix of intentSuffixes.slice(0, 3)) {
+        tags.push(`${area}${type}${suffix}`);
+      }
+    }
+  }
+  for (const type of propertyTypes) {
+    for (const intent of intentSuffixes) {
+      tags.push(`${type}${intent}`);
+      tags.push(`${type}For${intent}Uganda`);
+    }
+  }
+  return [...new Set(tags.filter(Boolean))];
+}
+
+function quotedXTerm(value = '') {
+  const cleaned = String(value || '').replace(/\s+/g, ' ').trim();
+  if (!cleaned) return '';
+  if (/^#|^from:|^".*"$/.test(cleaned)) return cleaned;
+  return /[\s'’]/.test(cleaned) ? `"${cleaned.replace(/"/g, '')}"` : cleaned;
+}
+
+function xOrGroup(terms = []) {
+  const values = [...new Set(terms.map(quotedXTerm).filter(Boolean))];
+  if (!values.length) return '';
+  return values.length === 1 ? values[0] : `(${values.join(' OR ')})`;
+}
+
+function normalizeXRegistryQuery(query = '') {
+  const withoutRetweet = String(query || '')
+    .replace(/\s+-is:retweet\b/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return `${withoutRetweet} -is:retweet`.trim();
+}
+
+function xSearchUrlForQuery(query = '') {
+  return `https://x.com/search?q=${encodeURIComponent(query)}&src=typed_query&f=live`;
+}
+
+function localizedXQuerySource({
+  baseKey,
+  label,
+  query,
+  district,
+  listingTypes,
+  language = 'English',
+  category,
+  priorityWeight = 50,
+  variant = 'broad',
+  baseQueryKey,
+  hashtags = [],
+  index = 0,
+}) {
+  const normalizedQuery = normalizeXRegistryQuery(query);
+  return source({
+    key: `x-localized-${baseKey}-${variant}-${index}`,
+    name: `X ${category}: ${label} (${variant})`,
+    platform: 'x',
+    sourceType: category === 'hashtag' ? 'hashtag_search_feed' : 'public_post_search_feed',
+    url: xSearchUrlForQuery(normalizedQuery),
+    districts: [district].filter(Boolean),
+    listingTypes,
+    languages: [language],
+    hashtags: [...new Set(hashtags.filter(Boolean))],
+    status: 'candidate',
+    trustLevel: 'source_discovery_needed',
+    consentStatus: 'public_source_review_needed',
+    scrapePolicy: 'public_search_manual_review_only',
+    canContactDirectly: false,
+    notes: 'Generated localized X search source. Query is intentionally broad: one location or one hashtag plus one listing intent, with paired media and no-media variants.',
+    metadata: {
+      [X_SEARCH_REGISTRY_LOCALIZED_MARKER]: true,
+      x_search_registry_marker: X_SEARCH_REGISTRY_LOCALIZED_MARKER,
+      generated_x_localized_search: true,
+      query: normalizedQuery,
+      x_query_base_key: baseQueryKey || baseKey,
+      x_query_variant: variant,
+      x_query_language: language,
+      x_query_category: category,
+      priority_weight: priorityWeight,
+      query_construction_rule: 'Do not AND-stack location, niche language, category and media. Use one location plus one intent, or one high-signal hashtag/account. Keep paired has:media and no-media variants.',
+      phone_signal_variant: variant.includes('phone'),
+      verified_account: category === 'account',
+    },
+  });
+}
+
+function addLocalizedXQueryVariants(sources, seenQueries, {
+  baseKey,
+  label,
+  baseQuery,
+  district,
+  listingTypes,
+  language = 'English',
+  category,
+  priorityWeight = 50,
+  hashtags = [],
+  phoneSignal = false,
+  index = 0,
+}) {
+  const variants = [
+    { variant: 'broad', query: baseQuery },
+    { variant: 'has_media', query: `${baseQuery} has:media` },
+  ];
+  if (phoneSignal) {
+    variants.push(
+      { variant: 'phone', query: `${baseQuery} ${X_PHONE_SIGNAL_QUERY}` },
+      { variant: 'phone_has_media', query: `${baseQuery} ${X_PHONE_SIGNAL_QUERY} has:media` }
+    );
+  }
+
+  for (const item of variants) {
+    const normalizedQuery = normalizeXRegistryQuery(item.query);
+    const dedupeKey = normalizedQuery.toLowerCase();
+    if (seenQueries.has(dedupeKey)) continue;
+    seenQueries.add(dedupeKey);
+    sources.push(localizedXQuerySource({
+      baseKey,
+      label,
+      query: normalizedQuery,
+      district,
+      listingTypes,
+      language,
+      category,
+      priorityWeight,
+      variant: item.variant,
+      baseQueryKey: baseKey,
+      hashtags,
+      index,
+    }));
+  }
+}
+
+function expandedLocalizedXSearchSources(limit = Infinity) {
+  const sources = [];
+  const seenQueries = new Set();
+  const pushVariants = (payload) => {
+    if (hasSourceLimit(sources, limit)) return;
+    addLocalizedXQueryVariants(sources, seenQueries, payload);
+  };
+
+  X_VERIFIED_ACCOUNT_SEARCHES.forEach((account, index) => {
+    pushVariants({
+      baseKey: `verified-account-${slugify(account.handle)}`,
+      label: `from:${account.handle}`,
+      baseQuery: `from:${account.handle}`,
+      district: account.districts[0],
+      listingTypes: account.listingTypes,
+      language: 'English',
+      category: account.category,
+      priorityWeight: account.priorityWeight,
+      hashtags: ['UgandaPropertyAgent', 'UgandaRealEstate'],
+      phoneSignal: true,
+      index,
+    });
+  });
+
+  for (const [[district, area], areaIndex] of DISCOVERY_AREAS.map((item, index) => [item, index])) {
+    for (const [categoryIndex, category] of X_CATEGORY_QUERY_BANK.entries()) {
+      const locationQuery = xOrGroup([area, district, 'Uganda']);
+      const intentQuery = xOrGroup(category.terms.slice(0, 4));
+      pushVariants({
+        baseKey: `${slugify(area)}-${category.category}`,
+        label: `${area} ${category.category}`,
+        baseQuery: `${locationQuery} ${intentQuery}`,
+        district,
+        listingTypes: category.listingTypes,
+        language: 'English',
+        category: category.category,
+        priorityWeight: 95 - categoryIndex,
+        hashtags: hashtagWatchlistForIntent(category.category, area),
+        phoneSignal: ['sale', 'rent', 'land'].includes(category.category),
+        index: `${areaIndex}-${categoryIndex}`,
+      });
+      if (hasSourceLimit(sources, limit)) return sources.slice(0, limit);
+    }
+  }
+
+  for (const [districtIndex, district] of X_UGANDA_DISTRICTS.entries()) {
+    for (const [languageIndex, languageRow] of X_LOCALIZED_INTENT_TERMS.entries()) {
+      const locationQuery = xOrGroup([district, 'Uganda']);
+      const intentQuery = xOrGroup(languageRow.terms.slice(0, languageRow.language === 'English' ? 5 : 3));
+      pushVariants({
+        baseKey: `${slugify(district)}-${slugify(languageRow.language)}-district`,
+        label: `${district} ${languageRow.language}`,
+        baseQuery: `${locationQuery} ${intentQuery}`,
+        district,
+        listingTypes: ['sale', 'rent', 'land', 'students', 'commercial'],
+        language: languageRow.language,
+        category: 'district_language',
+        priorityWeight: languageRow.language === 'English' ? 84 : 75,
+        hashtags: ['UgandaProperty', 'UgandaRealEstate', compactTag(district)].filter(Boolean),
+        phoneSignal: districtIndex < 24,
+        index: `${districtIndex}-${languageIndex}`,
+      });
+      if (hasSourceLimit(sources, limit)) return sources.slice(0, limit);
+    }
+  }
+
+  for (const [institutionIndex, [district, institution, areas]] of X_STUDENT_INSTITUTIONS.entries()) {
+    for (const [areaIndex, area] of areas.entries()) {
+      const locationQuery = xOrGroup([institution, area, district]);
+      const hostelQuery = xOrGroup(X_HOSTEL_SEARCH_TERMS.slice(0, 5));
+      pushVariants({
+        baseKey: `${slugify(institution)}-${slugify(area)}-student`,
+        label: `${institution} ${area} hostel`,
+        baseQuery: `${locationQuery} ${hostelQuery}`,
+        district,
+        listingTypes: ['students', 'rent'],
+        language: 'English',
+        category: 'students',
+        priorityWeight: 90,
+        hashtags: hashtagWatchlistForIntent('student hostel', area),
+        phoneSignal: true,
+        index: `${institutionIndex}-${areaIndex}`,
+      });
+      if (hasSourceLimit(sources, limit)) return sources.slice(0, limit);
+    }
+  }
+
+  const xHashtagBank = [...new Set([...PROPERTY_HASHTAG_WATCHLIST, ...generatedXHashtagBank()])];
+  for (const [tagIndex, tag] of xHashtagBank.entries()) {
+    pushVariants({
+      baseKey: `hashtag-${slugify(tag)}`,
+      label: `#${tag}`,
+      baseQuery: `#${tag}`,
+      district: /kampala/i.test(tag) ? 'Kampala' : /wakiso/i.test(tag) ? 'Wakiso' : 'Kampala',
+      listingTypes: listingTypesForIntent(tag),
+      language: 'English',
+      category: 'hashtag',
+      priorityWeight: tagIndex < 50 ? 80 : 65,
+      hashtags: [tag],
+      phoneSignal: tagIndex < 80,
+      index: tagIndex,
+    });
+    if (hasSourceLimit(sources, limit)) return sources.slice(0, limit);
+  }
+
+  return sources.slice(0, limit);
+}
+
 let propertySourceRegistryCache = null;
 
 function socialSourceRegistryRows(rows = []) {
@@ -1619,10 +1978,13 @@ function socialSourceRegistryRows(rows = []) {
 
 function buildPropertySourceRegistry() {
   const socialBaseRegistry = socialSourceRegistryRows(BASE_PROPERTY_SOURCE_REGISTRY);
-  const generatedXHashtagDiscoverySources = expandedHashtagDiscoverySources(
-    ['x'],
-    X_HASHTAG_DISCOVERY_TARGET_COUNT
-  );
+  const localizedXSearchSources = expandedLocalizedXSearchSources(X_HASHTAG_DISCOVERY_TARGET_COUNT);
+  const generatedXHashtagDiscoverySources = [
+    ...localizedXSearchSources,
+    ...(localizedXSearchSources.length < X_HASHTAG_DISCOVERY_TARGET_COUNT
+      ? expandedHashtagDiscoverySources(['x'], X_HASHTAG_DISCOVERY_TARGET_COUNT - localizedXSearchSources.length)
+      : []),
+  ].slice(0, X_HASHTAG_DISCOVERY_TARGET_COUNT);
   const generatedCrossPlatformHashtagDiscoverySources = expandedHashtagDiscoverySources(
     ['instagram', 'facebook', 'tiktok', 'youtube'],
     CROSS_PLATFORM_HASHTAG_DISCOVERY_TARGET_COUNT
@@ -1903,6 +2265,7 @@ async function listPropertySourceRegistry({ db, limit = 250 } = {}) {
 const exported = {
   PROPERTY_SOURCE_REGISTRY_BATCH_ID,
   PROPERTY_SOURCE_REGISTRY_TARGET_COUNT,
+  X_SEARCH_REGISTRY_LOCALIZED_MARKER,
   PROPERTY_HASHTAG_WATCHLIST,
   getPropertySourceRegistry,
   normalizeSourceForDb,

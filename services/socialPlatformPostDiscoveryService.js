@@ -3496,23 +3496,53 @@ function youtubeSearchQuotaExceededFromReports(reports = []) {
   });
 }
 
+function normalizeXSearchQuery(query = '') {
+  const cleaned = cleanText(query)
+    .replace(/\s+-is:retweet\b/ig, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return cleaned ? `${cleaned} -is:retweet` : '-is:retweet';
+}
+
+function metadataQueryFromSource(source = {}) {
+  const metadata = source.metadata && typeof source.metadata === 'object' ? source.metadata : {};
+  return cleanText(metadata.query || metadata.x_query || source.query);
+}
+
+function orGroup(values = []) {
+  const terms = [...new Set(values.map(cleanText).filter(Boolean))];
+  if (!terms.length) return '';
+  return terms.length === 1 ? terms[0] : `(${terms.join(' OR ')})`;
+}
+
 function buildXQueryForSource(source = {}) {
+  const metadataQuery = metadataQueryFromSource(source);
+  if (metadataQuery) return normalizeXSearchQuery(metadataQuery);
+
   const url = sourceUrl(source);
   const existingQuery = urlParam(url, 'q');
   if (existingQuery) {
-    const decoded = cleanText(existingQuery);
-    return decoded.includes('has:media')
-      ? `${decoded} -is:retweet`
-      : `(${decoded}) has:media -is:retweet`;
+    return normalizeXSearchQuery(existingQuery);
   }
   const handle = sourceHandle(source);
   if (handle) {
-    return `from:${handle} (${CORE_PROPERTY_QUERY}) has:media -is:retweet`;
+    return normalizeXSearchQuery(`from:${handle}`);
   }
   const tags = Array.isArray(source.hashtags) ? source.hashtags.filter(Boolean).slice(0, 4).map((tag) => `#${String(tag).replace(/^#/, '')}`) : [];
   const sourceWords = cleanText(sourceName(source)).split(/\s+/).filter((word) => word.length > 3).slice(0, 4);
-  const discoveryTerms = [...tags, ...sourceWords].join(' OR ') || CORE_PROPERTY_QUERY;
-  return `(${discoveryTerms}) (${UGANDA_LOCATION_QUERY}) (${CORE_PROPERTY_QUERY}) has:media -is:retweet`;
+  const districts = sourceListValues(source, 'districts', 'districts').slice(0, 3);
+  const listingTypes = sourceListValues(source, 'listingTypes', 'listing_types')
+    .slice(0, 3)
+    .map((type) => {
+      if (/student/i.test(type)) return '"student accommodation"';
+      if (/commercial/i.test(type)) return '"commercial property"';
+      if (/land/i.test(type)) return '"land for sale"';
+      if (/rent/i.test(type)) return '"for rent"';
+      return '"for sale"';
+    });
+  const discoveryTerms = orGroup([...tags, ...sourceWords, ...listingTypes]) || orGroup(['Uganda property']);
+  const locationTerms = orGroup(districts.length ? [...districts, 'Uganda'] : ['Uganda', 'Kampala', 'Wakiso']);
+  return normalizeXSearchQuery(`${locationTerms} ${discoveryTerms}`);
 }
 
 function buildXSearchJobs({ sources = sourcesForPlatform('x'), limit = DEFAULT_MAX_SOURCES, searchMode = 'all', startTime = '' } = {}) {
