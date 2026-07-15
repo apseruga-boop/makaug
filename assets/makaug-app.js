@@ -943,6 +943,7 @@ const PUBLIC_LISTINGS_ROUTE_SEARCH_MAX_PAGES = 80;
 const PUBLIC_RESULTS_PAGE_SIZE = 24;
 const PUBLIC_OPPORTUNITY_SUMMARY_PATH = "/api/properties?status=approved&public_only=1&limit=1&page=1&summary_only=1&include_summary=1";
 const PUBLIC_CATEGORY_DEEP_HYDRATION_DELAY_MS = 8000;
+const STUDENT_PAGE_PAGINATION_FIX_MARKER = "student-page-pagination-fix-20260715";
 const publicCategoryDeepHydrationTimers = new Map();
 const PUBLIC_PAGINATION_CATEGORIES = Object.freeze(["sale", "rent", "students", "commercial", "land"]);
 const publicCategoryPaginationState = {};
@@ -36207,12 +36208,16 @@ function updateStudentHeader(list, options = {}) {
   }
   if (subtitleEl) {
     const total = Math.max(0, Number(options.total ?? list.length) || 0);
-    const page = Math.max(1, Number(options.page) || 1);
     const pageSize = Math.max(1, Number(options.pageSize || PUBLIC_RESULTS_PAGE_SIZE) || PUBLIC_RESULTS_PAGE_SIZE);
-    const start = total ? ((page - 1) * pageSize) + 1 : 0;
-    const end = Math.min(total, (page - 1) * pageSize + list.length);
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const page = Math.min(Math.max(1, Number(options.page) || 1), totalPages);
+    const visibleCount = Array.isArray(list) ? list.length : 0;
+    const start = total ? Math.min(total, ((page - 1) * pageSize) + 1) : 0;
+    const expectedEnd = page * pageSize;
+    const rowEnd = visibleCount ? start + visibleCount - 1 : expectedEnd;
+    const end = total ? Math.max(start, Math.min(total, rowEnd)) : 0;
     const suffix = total === 1 ? "property" : "properties";
-    const showing = total > list.length ? `Showing ${start}-${end} of ${total}` : `Showing ${total}`;
+    const showing = total ? `Showing ${start}-${end} of ${total}` : "Showing 0";
     subtitleEl.textContent = `${showing} ${suffix} • Prices per semester`;
   }
 }
@@ -37313,7 +37318,8 @@ function publicPaginationStateFor(category) {
       loading: false,
       mode: "api",
       requestSeq: 0,
-      sourcePath: ""
+      sourcePath: "",
+      totalAuthoritative: false
     };
   }
   return publicCategoryPaginationState[key];
@@ -37378,6 +37384,9 @@ function syncPublicCategoryPaginationSource(category, path = "") {
   const nextPath = String(path || "");
   if (state.sourcePath && nextPath && state.sourcePath !== nextPath) {
     clearPublicCategoryPageCache(category);
+    state.total = 0;
+    state.totalAuthoritative = false;
+    state.page = 1;
   }
   if (nextPath) state.sourcePath = nextPath;
   return state;
@@ -37410,12 +37419,28 @@ function hasActivePublicCategoryFilter(category) {
   return false;
 }
 
+function exactPublicPaginationTotalValue(response) {
+  if (response?.pagination?.approximate) return null;
+  if (!response || response.pagination == null || response.pagination.total == null) return null;
+  const total = Number(response.pagination.total);
+  return Number.isFinite(total) && total >= 0 ? total : null;
+}
+
+function publicCategoryStateHasAuthoritativeTotal(category, state = null) {
+  const key = publicPaginationKey(category);
+  const currentState = state || publicPaginationStateFor(key);
+  if (!key || !currentState?.totalAuthoritative) return false;
+  const activePath = publicCategoryApiPathForPagination(key);
+  return Boolean(activePath && currentState.sourcePath === activePath);
+}
+
 function publicCategoryTotalForPagination(category, localCount = 0, response = null, options = {}) {
-  const exactResponseTotal = exactPublicPaginationTotal(response);
-  if (exactResponseTotal) return exactResponseTotal;
+  const exactResponseTotal = exactPublicPaginationTotalValue(response);
+  if (exactResponseTotal != null) return exactResponseTotal;
   if (options.filtered) return Math.max(0, Number(localCount) || 0);
   const state = publicPaginationStateFor(category);
   const stateTotal = Math.max(0, Number(state?.total) || 0);
+  if (publicCategoryStateHasAuthoritativeTotal(category, state)) return stateTotal;
   const apiTotal = publicOpportunityStatForCategory(publicPaginationBackendCategory(category));
   return Math.max(
     Math.max(0, Number(localCount) || 0),
@@ -37428,6 +37453,7 @@ function publicCategoryRenderTotal(category, list = [], filtered = false) {
   const state = publicPaginationStateFor(category);
   const activeSearchPath = publicCategoryActiveSearchPath(category);
   const routeSearchTotal = activeSearchPath && state?.sourcePath === activeSearchPath ? Math.max(0, Number(state?.total) || 0) : 0;
+  if (activeSearchPath && state?.sourcePath === activeSearchPath && state?.totalAuthoritative) return routeSearchTotal;
   if (routeSearchTotal) return routeSearchTotal;
   if (filtered) return Math.max(0, Number(list.length) || 0);
   return publicCategoryTotalForPagination(category, list.length, null, { filtered: false });
@@ -37526,8 +37552,14 @@ function renderPublicCategoryPage(category, list = [], options = {}) {
   const resolvedTotal = options.total == null
     ? publicCategoryTotalForPagination(key, list.length, options.response || null, { filtered })
     : Math.max(0, Number(options.total) || 0);
+  const exactResponseTotal = exactPublicPaginationTotalValue(options.response || null);
   const total = resolvedTotal;
   state.total = total;
+  if (exactResponseTotal != null) {
+    state.totalAuthoritative = true;
+  } else if (state.mode === "local" || options.mode === "local" || filtered) {
+    state.totalAuthoritative = false;
+  }
   const totalPages = publicPaginationPageCount(total);
   state.page = Math.min(Math.max(1, Number(state.page) || 1), totalPages);
   const cache = publicPaginationCacheFor(key);
@@ -37566,7 +37598,8 @@ async function fetchPublicCategoryPage(category, page = 1, options = {}) {
   applyPublicRowsForUi(rawRows, response);
   const rows = cachePublicCategoryPageRows(key, safePage, rawRows);
   const total = publicCategoryTotalForPagination(key, rows.length, response, { filtered: false });
-  state.total = total || state.total || rows.length;
+  state.total = total;
+  state.totalAuthoritative = exactPublicPaginationTotalValue(response) != null;
   state.mode = "api";
   state.sourcePath = path;
   return { rows, response, total: state.total };
@@ -37784,9 +37817,8 @@ function hydratePublicCategorySearchIfActive(category, source = "public_filter_s
 }
 
 function exactPublicPaginationTotal(response) {
-  if (response?.pagination?.approximate) return 0;
-  const total = Number(response?.pagination?.total || 0) || 0;
-  return total > 0 ? total : 0;
+  const total = exactPublicPaginationTotalValue(response);
+  return total != null && total > 0 ? total : 0;
 }
 
 async function fetchPublicCategoryRows(category, totalCount = 0, options = {}) {
@@ -37837,10 +37869,12 @@ async function refreshActivePublicInventoryCategoryFromApi({ silent = true } = {
         applyPublicRowsForUi(firstCategoryRows, firstCategoryResponse);
         const firstPageRows = cachePublicCategoryPageRows(activeCategory, 1, firstCategoryRows);
         const firstCategoryState = publicPaginationStateFor(activeCategory);
-        const firstCategoryTotal = exactPublicPaginationTotal(firstCategoryResponse) || firstCategoryRows.length;
+        const firstCategoryExactTotal = exactPublicPaginationTotalValue(firstCategoryResponse);
+        const firstCategoryTotal = firstCategoryExactTotal ?? firstCategoryRows.length;
         if (firstCategoryState) {
           firstCategoryState.page = 1;
           firstCategoryState.total = firstCategoryTotal;
+          firstCategoryState.totalAuthoritative = firstCategoryExactTotal != null;
           firstCategoryState.mode = "api";
           firstCategoryState.sourcePath = activeCategoryPath;
         }
@@ -37864,6 +37898,7 @@ async function refreshActivePublicInventoryCategoryFromApi({ silent = true } = {
         if (firstCategoryState) {
           firstCategoryState.page = 1;
           firstCategoryState.total = publicCategoryTotalForPagination(activeCategory, firstCategoryRows.length, firstCategoryResponse, { filtered: false });
+          firstCategoryState.totalAuthoritative = exactPublicPaginationTotalValue(firstCategoryResponse) != null;
           firstCategoryState.mode = "api";
           firstCategoryState.sourcePath = activeCategoryPath;
         }
@@ -37879,11 +37914,12 @@ async function refreshActivePublicInventoryCategoryFromApi({ silent = true } = {
           console.warn("Unable to refresh public opportunity summary", summaryError);
           return null;
         });
-      const firstCategoryTotal = exactPublicPaginationTotal(firstCategoryResponse);
-      const categoryTotal = firstCategoryTotal || (publicOpportunityStatForCategory(activeCategory) ?? stats?.[activeCategory] ?? 0);
+      const firstCategoryExactTotal = exactPublicPaginationTotalValue(firstCategoryResponse);
+      const categoryTotal = firstCategoryExactTotal ?? (publicOpportunityStatForCategory(activeCategory) ?? stats?.[activeCategory] ?? 0);
       const categoryState = publicPaginationStateFor(activeCategory);
-      if (categoryState && categoryTotal) {
+      if (categoryState && (firstCategoryExactTotal != null || categoryTotal)) {
         categoryState.total = categoryTotal;
+        if (firstCategoryExactTotal != null) categoryState.totalAuthoritative = true;
         categoryState.sourcePath = activeCategoryPath;
       }
       const { rows: categoryRows, firstResponse: categoryFirstResponse } = await fetchPublicCategoryRows(activeCategory, categoryTotal, {
@@ -37976,18 +38012,20 @@ async function refreshPublicListingsFromApi({ silent = true } = {}) {
       if (firstPageState) {
         firstPageState.page = 1;
         firstPageState.total = publicCategoryTotalForPagination(activeCategory, firstPageRows.length, firstPageResponse, { filtered: false });
+        firstPageState.totalAuthoritative = exactPublicPaginationTotalValue(firstPageResponse) != null;
         firstPageState.mode = "api";
         firstPageState.sourcePath = firstPagePath;
       }
     }
     renderAll();
     if (activeRouteSearchPath) syncActiveRouteSearchHandoff("initial_route_search_first_page");
-    const firstPageCategoryTotal = activeCategory ? exactPublicPaginationTotal(firstPageResponse) : 0;
-    const categoryTotal = activeCategory ? firstPageCategoryTotal || (publicOpportunityStatForCategory(activeCategory) ?? summaryStats?.[activeCategory] ?? 0) : 0;
-    if (activeCategory && categoryTotal) {
+    const firstPageCategoryExactTotal = activeCategory ? exactPublicPaginationTotalValue(firstPageResponse) : null;
+    const categoryTotal = activeCategory ? firstPageCategoryExactTotal ?? (publicOpportunityStatForCategory(activeCategory) ?? summaryStats?.[activeCategory] ?? 0) : 0;
+    if (activeCategory && (firstPageCategoryExactTotal != null || categoryTotal)) {
       const categoryState = publicPaginationStateFor(activeCategory);
       if (categoryState) {
         categoryState.total = categoryTotal;
+        if (firstPageCategoryExactTotal != null) categoryState.totalAuthoritative = true;
         categoryState.sourcePath = firstPagePath;
       }
     }
