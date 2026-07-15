@@ -37,6 +37,7 @@ const DEFAULT_X_RESULTS_PER_SOURCE = 25;
 const X_RECENT_SEARCH_URL = 'https://api.x.com/2/tweets/search/recent';
 const X_FULL_ARCHIVE_SEARCH_URL = 'https://api.x.com/2/tweets/search/all';
 const X_BEARER_ENV_NAMES = ['X_BEARER_TOKEN', 'TWITTER_BEARER_TOKEN', 'X_API_BEARER_TOKEN'];
+const X_FULL_ARCHIVE_SEARCH_PACING_MS = 1100;
 const DEFAULT_YOUTUBE_RESULTS_PER_SOURCE = 25;
 const DEFAULT_YOUTUBE_PAGES_PER_SOURCE = 1;
 const YOUTUBE_SEARCH_URL = 'https://www.googleapis.com/youtube/v3/search';
@@ -67,6 +68,10 @@ const TIKTOK_PENDING_REPROCESS_ADVISORY_LOCK_ID = 2026070902;
 const TIKTOK_EXACT_VIDEO_URL_PATTERN = /^https:\/\/(www\.)?tiktok\.com\/@[^/]+\/video\/\d+/i;
 const TIKTOK_EXACT_VIDEO_URL_GLOBAL_PATTERN = /https?:\/\/(?:www\.)?tiktok\.com\/@[^/\s?#]+\/video\/\d+(?:[^\s]*)?/ig;
 const SOCIAL_URL_GLOBAL_PATTERN = /https?:\/\/[^\s<>"']+/ig;
+
+function delay(ms = 0) {
+  return new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
+}
 
 const CORE_PROPERTY_QUERY = [
   'property', 'house', 'home', 'apartment', 'land', 'plot', 'rent', 'rental',
@@ -2022,7 +2027,13 @@ function rotatingSourceWindow(sources = [], {
   const selectedLimit = Math.min(cappedNumber(limit, DEFAULT_MAX_SOURCES, 1, MAX_PLATFORM_SWEEP_SOURCES), total || 1);
   const startOffset = total ? cappedOffset(offset) % total : 0;
   const rotated = total
-    ? [...list.slice(startOffset), ...list.slice(0, startOffset)].slice(0, selectedLimit)
+    ? [...list.slice(startOffset), ...list.slice(0, startOffset)]
+      .slice(0, selectedLimit)
+      .map((source, index) => ({
+        ...source,
+        source_registry_offset: (startOffset + index) % total,
+        source_window_index: index,
+      }))
     : [];
   const nextOffset = total ? (startOffset + rotated.length) % total : cappedOffset(offset) + rotated.length;
   return {
@@ -3516,6 +3527,8 @@ function buildXSearchJobs({ sources = sourcesForPlatform('x'), limit = DEFAULT_M
       source_name: sourceName(source),
       source_type: source.source_type || source.sourceType || '',
       source_record_kind: isDiscoveryFeed(source) ? 'discovery_feed' : 'source_page',
+      source_registry_offset: Number.isFinite(Number(source.source_registry_offset)) ? Number(source.source_registry_offset) : null,
+      source_window_index: Number.isFinite(Number(source.source_window_index)) ? Number(source.source_window_index) : null,
       source_url: sourceUrl(source),
       query: buildXQueryForSource(source).slice(0, searchMode === 'recent' ? 1024 : 4096),
       endpoint,
@@ -3717,6 +3730,11 @@ async function fetchXPostsForJobs(jobs = [], options = {}) {
   let jobsSkippedDueToTimeBudget = 0;
   const deadlineAt = Number(options.deadlineAt || 0) || 0;
   const minRemainingMs = Math.max(0, Number(options.minRemainingMs ?? SOCIAL_SWEEP_SOURCE_START_MIN_REMAINING_MS) || 0);
+  const searchMode = String(options.searchMode || 'all').trim().toLowerCase() === 'recent' ? 'recent' : 'all';
+  const fullArchivePacingMs = searchMode === 'recent'
+    ? 0
+    : Math.max(0, Number(options.fullArchivePacingMs ?? X_FULL_ARCHIVE_SEARCH_PACING_MS) || 0);
+  let previousFullArchiveStartedAt = 0;
   for (let jobIndex = 0; jobIndex < jobs.length; jobIndex += 1) {
     const job = jobs[jobIndex];
     if (sweepDeadlineReached(deadlineAt, minRemainingMs)) {
@@ -3733,7 +3751,26 @@ async function fetchXPostsForJobs(jobs = [], options = {}) {
       });
       break;
     }
+    if (fullArchivePacingMs > 0 && previousFullArchiveStartedAt > 0) {
+      const waitMs = fullArchivePacingMs - (Date.now() - previousFullArchiveStartedAt);
+      if (waitMs > 0) await delay(waitMs);
+      if (sweepDeadlineReached(deadlineAt, minRemainingMs)) {
+        timedOut = true;
+        jobsSkippedDueToTimeBudget = jobs.length - jobIndex;
+        reports.push({
+          ...job,
+          ok: false,
+          skipped: true,
+          reason: 'source_sweep_time_budget_exhausted_after_x_full_archive_pacing',
+          remaining_job_count: jobsSkippedDueToTimeBudget,
+          result_count: 0,
+          error_count: 0,
+        });
+        break;
+      }
+    }
     jobsAttemptedCount += 1;
+    if (fullArchivePacingMs > 0) previousFullArchiveStartedAt = Date.now();
     let report;
     try {
       report = await fetchXSearchJob(job, options);
@@ -4709,6 +4746,7 @@ module.exports = {
   TIKTOK_OEMBED_THUMBNAIL_REPROCESS_VERSION,
   TIKTOK_OEMBED_THUMBNAIL_CACHE_VERSION,
   DEFAULT_TIKTOK_PENDING_REPROCESS_LIMIT,
+  X_FULL_ARCHIVE_SEARCH_PACING_MS,
   socialDiscoveryApiReadiness,
   TIKTOK_OEMBED_URL,
   TIKTOK_EXACT_VIDEO_URL_PATTERN,
@@ -4726,6 +4764,7 @@ module.exports = {
   filterYouTubeJobsByMode,
   normalizeYouTubeJobMode,
   buildXSearchJobs,
+  fetchXPostsForJobs,
   importExactSocialSourcePosts,
   importTikTokExactVideoPosts,
   normalizeExactSocialPostUrl,

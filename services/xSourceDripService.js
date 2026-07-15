@@ -7,6 +7,7 @@ const { logNotification } = require('./notificationLogService');
 
 const X_SOURCE_DRIP_MARKER = 'x-source-drip-20260714';
 const X_SOURCE_DRIP_FAST_MODE_MARKER = 'x-source-drip-fast-mode-20260714';
+const X_SOURCE_DRIP_FULL_ARCHIVE_PACING_MARKER = 'x-drip-fullarchive-pacing-20260715';
 const X_SOURCE_DRIP_KEY = 'x_source_drip';
 const BASE_INTERVAL_MINUTES = 2;
 const MAX_BACKOFF_MINUTES = 240;
@@ -157,6 +158,7 @@ async function getXSourceDripStatus(db, { limit = 12 } = {}) {
   return {
     marker: X_SOURCE_DRIP_MARKER,
     fast_mode_marker: X_SOURCE_DRIP_FAST_MODE_MARKER,
+    full_archive_pacing_marker: X_SOURCE_DRIP_FULL_ARCHIVE_PACING_MARKER,
     state: normalizeStateRow(stateResult.rows[0]),
     recent_runs: runs.rows,
     inventory: {
@@ -181,7 +183,7 @@ async function updateXSourceDripConfig(db, input = {}) {
   const target = numberInRange(input.target_reviewable ?? input.targetReviewable ?? state.target_reviewable, state.target_reviewable, 1, 1000000);
   const monthlyReadCap = numberInRange(input.monthly_read_cap ?? input.monthlyReadCap ?? state.monthly_read_cap, state.monthly_read_cap || DEFAULT_MONTHLY_READ_CAP, 1, 10000000);
   const enabled = input.enabled == null ? state.enabled : boolLike(input.enabled, state.enabled);
-  const nextRunAt = enabled ? (state.next_run_at || addMinutes(new Date(), baseInterval).toISOString()) : null;
+  const nextRunAt = enabled ? addMinutes(new Date(), baseInterval).toISOString() : null;
   const result = await db.query(
     `UPDATE source_drip_state
      SET enabled = $2,
@@ -198,6 +200,7 @@ async function updateXSourceDripConfig(db, input = {}) {
          status = CASE WHEN $2 THEN 'scheduled' ELSE 'paused' END,
          pause_reason = CASE WHEN $2 THEN NULL ELSE pause_reason END,
          next_run_at = $12,
+         consecutive_rate_limited_runs = CASE WHEN $2 THEN 0 ELSE consecutive_rate_limited_runs END,
          updated_at = NOW()
      WHERE drip_key = $1
      RETURNING *`,
@@ -213,7 +216,9 @@ async function startXSourceDrip(db, input = {}) {
      SET enabled = TRUE,
          status = 'scheduled',
          pause_reason = NULL,
-         next_run_at = COALESCE(next_run_at, NOW()),
+         current_interval_minutes = base_interval_minutes,
+         consecutive_rate_limited_runs = 0,
+         next_run_at = NOW() + (base_interval_minutes * INTERVAL '1 minute'),
          updated_at = NOW()
      WHERE drip_key = $1
      RETURNING *`,
@@ -240,6 +245,13 @@ async function pauseXSourceDrip(db, reason = 'paused_by_admin') {
 
 function reportStatus(report = {}) {
   return Number(report.status || report.statusCode || 0);
+}
+
+function firstRateLimitedSourceOffset(summary = {}, fallbackOffset = 0) {
+  const reports = Array.isArray(summary.fetch_reports) ? summary.fetch_reports : [];
+  const rateLimited = reports.find((report) => reportStatus(report) === 429 || /rate|too many/i.test(String(report.reason || '')));
+  const offset = Number(rateLimited?.source_registry_offset);
+  return Number.isFinite(offset) && offset >= 0 ? offset : fallbackOffset;
 }
 
 function summarizeSweepResult(result = {}) {
@@ -271,6 +283,8 @@ function summarizeSweepResult(result = {}) {
     fetch_reports: reports.map((report) => ({
       source_key: report.source_key,
       source_name: report.source_name,
+      source_registry_offset: Number.isFinite(Number(report.source_registry_offset)) ? Number(report.source_registry_offset) : null,
+      source_window_index: Number.isFinite(Number(report.source_window_index)) ? Number(report.source_window_index) : null,
       ok: report.ok === true,
       status: report.status || null,
       reason: report.reason || '',
@@ -409,6 +423,7 @@ async function runXSourceDripOnce(db, { force = false, actorId = 'system' } = {}
       const capResult = {
         marker: X_SOURCE_DRIP_MARKER,
         fast_mode_marker: X_SOURCE_DRIP_FAST_MODE_MARKER,
+        full_archive_pacing_marker: X_SOURCE_DRIP_FULL_ARCHIVE_PACING_MARKER,
         actor_id: actorId,
         status: 'blocked',
         reason: 'x_monthly_read_cap_reached',
@@ -445,7 +460,7 @@ async function runXSourceDripOnce(db, { force = false, actorId = 'system' } = {}
         [X_SOURCE_DRIP_KEY, JSON.stringify(capResult)]
       );
       await logDripNotification(db, capResult, 'failed', 'x_monthly_read_cap_reached');
-      return { ok: true, skipped: true, marker: X_SOURCE_DRIP_MARKER, reason: 'x_monthly_read_cap_reached', state: (await getXSourceDripStatus(db)).state, result: capResult };
+      return { ok: true, skipped: true, marker: X_SOURCE_DRIP_MARKER, full_archive_pacing_marker: X_SOURCE_DRIP_FULL_ARCHIVE_PACING_MARKER, reason: 'x_monthly_read_cap_reached', state: (await getXSourceDripStatus(db)).state, result: capResult };
     }
     await db.query(
       `UPDATE source_drip_state
@@ -465,7 +480,10 @@ async function runXSourceDripOnce(db, { force = false, actorId = 'system' } = {}
     });
     const summary = summarizeSweepResult(result);
     const elapsedMs = Date.now() - started;
-    const nextOffset = sourceCount ? (offset + batchSize) % sourceCount : offset + batchSize;
+    const sweepNextOffset = sourceCount ? (offset + batchSize) % sourceCount : offset + batchSize;
+    const nextOffset = summary.rate_limited_count > 0
+      ? firstRateLimitedSourceOffset(summary, offset)
+      : Number(summary.next_source_offset || sweepNextOffset);
     const apiReadCount = Math.max(0, Number(summary.api_read_count || summary.search_job_count || 0) || 0);
     const monthlyReadCountAfter = state.monthly_read_count + apiReadCount;
     const hardStop = summary.billing_error_count > 0
@@ -480,6 +498,7 @@ async function runXSourceDripOnce(db, { force = false, actorId = 'system' } = {}
     const lastResult = {
       marker: X_SOURCE_DRIP_MARKER,
       fast_mode_marker: X_SOURCE_DRIP_FAST_MODE_MARKER,
+      full_archive_pacing_marker: X_SOURCE_DRIP_FULL_ARCHIVE_PACING_MARKER,
       actor_id: actorId,
       status: capReached ? 'blocked' : backoff.status,
       reason: capReached ? 'x_monthly_read_cap_reached' : backoff.reason,
@@ -488,6 +507,8 @@ async function runXSourceDripOnce(db, { force = false, actorId = 'system' } = {}
       monthly_read_count: monthlyReadCountAfter,
       monthly_read_cap: state.monthly_read_cap,
       ...summary,
+      next_source_offset: nextOffset,
+      requeued_rate_limited_source_offset: summary.rate_limited_count > 0 ? nextOffset : null,
     };
     await insertRunLog(db, {
       ...summary,
@@ -531,11 +552,12 @@ async function runXSourceDripOnce(db, { force = false, actorId = 'system' } = {}
       ]
     );
     await logDripNotification(db, lastResult, hardStop || capReached ? 'failed' : 'logged', hardStop?.reason || (capReached ? 'x_monthly_read_cap_reached' : ''));
-    return { ok: true, marker: X_SOURCE_DRIP_MARKER, state: (await getXSourceDripStatus(db)).state, result: lastResult };
+    return { ok: true, marker: X_SOURCE_DRIP_MARKER, full_archive_pacing_marker: X_SOURCE_DRIP_FULL_ARCHIVE_PACING_MARKER, state: (await getXSourceDripStatus(db)).state, result: lastResult };
   } catch (error) {
     const elapsedMs = Date.now() - started;
     const failure = {
       marker: X_SOURCE_DRIP_MARKER,
+      full_archive_pacing_marker: X_SOURCE_DRIP_FULL_ARCHIVE_PACING_MARKER,
       status: 'error',
       reason: error.message || 'x_source_drip_failed',
       elapsed_ms: elapsedMs,
@@ -556,7 +578,7 @@ async function runXSourceDripOnce(db, { force = false, actorId = 'system' } = {}
       [X_SOURCE_DRIP_KEY, failure.reason.slice(0, 240), JSON.stringify(failure)]
     ).catch(() => {});
     await logDripNotification(db, failure, 'failed', failure.reason).catch(() => {});
-    return { ok: false, marker: X_SOURCE_DRIP_MARKER, error: failure.reason, result: failure };
+    return { ok: false, marker: X_SOURCE_DRIP_MARKER, full_archive_pacing_marker: X_SOURCE_DRIP_FULL_ARCHIVE_PACING_MARKER, error: failure.reason, result: failure };
   } finally {
     await db.query('SELECT pg_advisory_unlock(hashtext($1))', [X_SOURCE_DRIP_KEY]).catch(() => {});
   }
@@ -584,7 +606,9 @@ function startXSourceDripScheduler(db) {
 module.exports = {
   X_SOURCE_DRIP_MARKER,
   X_SOURCE_DRIP_FAST_MODE_MARKER,
+  X_SOURCE_DRIP_FULL_ARCHIVE_PACING_MARKER,
   X_SOURCE_DRIP_KEY,
+  firstRateLimitedSourceOffset,
   maxBatchSizeForMode,
   ensureXSourceDripState,
   getXSourceDripStatus,

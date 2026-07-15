@@ -15000,6 +15000,7 @@ function adminXSourceDripHtml(data = {}) {
   const runs = Array.isArray(data.recent_runs) ? data.recent_runs : [];
   const marker = data.marker || "x-source-drip-20260714";
   const fastMarker = data.fast_mode_marker || "x-source-drip-fast-mode-20260714";
+  const fullArchivePacingMarker = data.full_archive_pacing_marker || "x-drip-fullarchive-pacing-20260715";
   const enabled = state.enabled === true;
   const crawled = Number(state.percent_crawled || 0);
   const target = Number(inventory.target || state.target_reviewable || 3000);
@@ -15015,7 +15016,7 @@ function adminXSourceDripHtml(data = {}) {
     <div class="flex items-start justify-between gap-3 flex-wrap">
       <div>
         <div class="font-black text-slate-950">X source drip crawler</div>
-        <div class="mt-1">Marker: <span class="font-mono">${adminEscape(marker)}</span> • <span class="font-mono">${adminEscape(fastMarker)}</span> • Status: <span class="font-black">${adminEscape(state.status || "paused")}</span>${state.pause_reason ? ` • ${adminEscape(state.pause_reason)}` : ""}</div>
+        <div class="mt-1">Marker: <span class="font-mono">${adminEscape(marker)}</span> • <span class="font-mono">${adminEscape(fastMarker)}</span> • <span class="font-mono">${adminEscape(fullArchivePacingMarker)}</span> • Status: <span class="font-black">${adminEscape(state.status || "paused")}</span>${state.pause_reason ? ` • ${adminEscape(state.pause_reason)}` : ""}</div>
         <div class="mt-1 text-slate-700">Mode ${adminEscape(mode)} • Cursor ${adminEscape(state.cursor_offset || 0)} / ${adminEscape(state.source_count || 0)} (${adminEscape(crawled)}% crawled) • since ${adminEscape((state.published_after || "2026-01-01").slice(0, 10))} • next run ${adminEscape(state.next_run_at || "not scheduled")}</div>
       </div>
       <button type="button" onclick="adminLoadXSourceDrip()" class="border border-slate-300 bg-white text-slate-800 hover:bg-slate-50 px-3 py-1.5 rounded-lg text-xs font-bold">Refresh</button>
