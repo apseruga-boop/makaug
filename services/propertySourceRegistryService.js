@@ -4,6 +4,7 @@ const PROPERTY_SOURCE_REGISTRY_BATCH_ID = 'property_source_registry_20260520';
 const REGISTRY_SEEN_AT = '2026-05-20T00:00:00.000Z';
 const PROPERTY_SOURCE_REGISTRY_TARGET_COUNT = 60000;
 const PROPERTY_SOURCE_REGISTRY_RESPONSE_SAMPLE_LIMIT = 500;
+const PROPERTY_SOURCE_REGISTRY_SEED_BATCH_SIZE = 500;
 const X_HASHTAG_DISCOVERY_TARGET_COUNT = 16000;
 const CROSS_PLATFORM_HASHTAG_DISCOVERY_TARGET_COUNT = 24000;
 const X_SEARCH_REGISTRY_LOCALIZED_MARKER = 'x-search-registry-localized-20260715';
@@ -2092,6 +2093,93 @@ function normalizeSourceForDb(item) {
   };
 }
 
+function sourceRegistrySeedValues(row) {
+  return [
+    row.source_key,
+    row.source_name,
+    row.platform,
+    row.source_type,
+    row.source_url,
+    row.handle,
+    row.contact_phone,
+    row.contact_phone_alt,
+    row.contact_email,
+    row.website_url,
+    row.districts,
+    row.listing_types,
+    row.languages,
+    row.hashtags,
+    row.status,
+    row.trust_level,
+    row.consent_status,
+    row.scrape_policy,
+    row.can_contact_directly,
+    row.first_seen_at,
+    row.last_seen_at,
+    row.last_checked_at,
+    row.notes,
+    JSON.stringify(row.metadata),
+  ];
+}
+
+function sourceRegistrySeedPlaceholders(rowCount) {
+  return Array.from({ length: rowCount }, (_, rowIndex) => {
+    const base = rowIndex * 24;
+    return `(
+      $${base + 1},$${base + 2},$${base + 3},$${base + 4},$${base + 5},$${base + 6},
+      $${base + 7},$${base + 8},$${base + 9},$${base + 10},
+      $${base + 11}::text[],$${base + 12}::text[],$${base + 13}::text[],$${base + 14}::text[],
+      $${base + 15},$${base + 16},$${base + 17},$${base + 18},$${base + 19},
+      $${base + 20}::timestamptz,$${base + 21}::timestamptz,$${base + 22}::timestamptz,
+      $${base + 23},$${base + 24}::jsonb
+    )`;
+  }).join(',');
+}
+
+async function upsertPropertySourceRegistryBatch(client, rows) {
+  if (!rows.length) return [];
+  const values = rows.flatMap(sourceRegistrySeedValues);
+  const result = await client.query(
+    `INSERT INTO property_source_registry (
+      source_key, source_name, platform, source_type, source_url, handle,
+      contact_phone, contact_phone_alt, contact_email, website_url,
+      districts, listing_types, languages, hashtags, status, trust_level,
+      consent_status, scrape_policy, can_contact_directly, first_seen_at,
+      last_seen_at, last_checked_at, notes, metadata
+    ) VALUES ${sourceRegistrySeedPlaceholders(rows.length)}
+    ON CONFLICT (source_key) DO UPDATE SET
+      source_name = EXCLUDED.source_name,
+      platform = EXCLUDED.platform,
+      source_type = EXCLUDED.source_type,
+      source_url = EXCLUDED.source_url,
+      handle = EXCLUDED.handle,
+      contact_phone = EXCLUDED.contact_phone,
+      contact_phone_alt = EXCLUDED.contact_phone_alt,
+      contact_email = EXCLUDED.contact_email,
+      website_url = EXCLUDED.website_url,
+      districts = EXCLUDED.districts,
+      listing_types = EXCLUDED.listing_types,
+      languages = EXCLUDED.languages,
+      hashtags = EXCLUDED.hashtags,
+      status = EXCLUDED.status,
+      trust_level = EXCLUDED.trust_level,
+      consent_status = EXCLUDED.consent_status,
+      scrape_policy = EXCLUDED.scrape_policy,
+      can_contact_directly = EXCLUDED.can_contact_directly,
+      first_seen_at = LEAST(property_source_registry.first_seen_at, EXCLUDED.first_seen_at),
+      last_seen_at = EXCLUDED.last_seen_at,
+      last_checked_at = EXCLUDED.last_checked_at,
+      notes = EXCLUDED.notes,
+      metadata = COALESCE(property_source_registry.metadata, '{}'::jsonb) || EXCLUDED.metadata,
+      updated_at = NOW()
+    RETURNING id::text, source_key, source_name, platform, source_type, source_url,
+      contact_phone, contact_phone_alt, contact_email, website_url, status, trust_level,
+      consent_status, can_contact_directly, notes, metadata`,
+    values
+  );
+  return result.rows;
+}
+
 async function seedPropertySourceRegistry({ db, sources } = {}) {
   if (!db?.pool) throw new Error('db.pool is required');
   const client = await db.pool.connect();
@@ -2100,80 +2188,15 @@ async function seedPropertySourceRegistry({ db, sources } = {}) {
     await client.query('BEGIN');
     let upsertedCount = 0;
     const upsertedSample = [];
-    const activeSourceKeys = [];
-    for (const item of registrySources) {
-      const row = normalizeSourceForDb(item);
-      activeSourceKeys.push(row.source_key);
-      const result = await client.query(
-        `INSERT INTO property_source_registry (
-          source_key, source_name, platform, source_type, source_url, handle,
-          contact_phone, contact_phone_alt, contact_email, website_url,
-          districts, listing_types, languages, hashtags, status, trust_level,
-          consent_status, scrape_policy, can_contact_directly, first_seen_at,
-          last_seen_at, last_checked_at, notes, metadata
-        ) VALUES (
-          $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
-          $11::text[],$12::text[],$13::text[],$14::text[],$15,$16,
-          $17,$18,$19,$20::timestamptz,$21::timestamptz,$22::timestamptz,$23,$24::jsonb
-        )
-        ON CONFLICT (source_key) DO UPDATE SET
-          source_name = EXCLUDED.source_name,
-          platform = EXCLUDED.platform,
-          source_type = EXCLUDED.source_type,
-          source_url = EXCLUDED.source_url,
-          handle = EXCLUDED.handle,
-          contact_phone = EXCLUDED.contact_phone,
-          contact_phone_alt = EXCLUDED.contact_phone_alt,
-          contact_email = EXCLUDED.contact_email,
-          website_url = EXCLUDED.website_url,
-          districts = EXCLUDED.districts,
-          listing_types = EXCLUDED.listing_types,
-          languages = EXCLUDED.languages,
-          hashtags = EXCLUDED.hashtags,
-          status = EXCLUDED.status,
-          trust_level = EXCLUDED.trust_level,
-          consent_status = EXCLUDED.consent_status,
-          scrape_policy = EXCLUDED.scrape_policy,
-          can_contact_directly = EXCLUDED.can_contact_directly,
-          first_seen_at = LEAST(property_source_registry.first_seen_at, EXCLUDED.first_seen_at),
-          last_seen_at = EXCLUDED.last_seen_at,
-          last_checked_at = EXCLUDED.last_checked_at,
-          notes = EXCLUDED.notes,
-          metadata = COALESCE(property_source_registry.metadata, '{}'::jsonb) || EXCLUDED.metadata,
-          updated_at = NOW()
-        RETURNING id::text, source_key, source_name, platform, source_type, source_url,
-          contact_phone, contact_phone_alt, contact_email, website_url, status, trust_level,
-          consent_status, can_contact_directly, notes, metadata`,
-        [
-          row.source_key,
-          row.source_name,
-          row.platform,
-          row.source_type,
-          row.source_url,
-          row.handle,
-          row.contact_phone,
-          row.contact_phone_alt,
-          row.contact_email,
-          row.website_url,
-          row.districts,
-          row.listing_types,
-          row.languages,
-          row.hashtags,
-          row.status,
-          row.trust_level,
-          row.consent_status,
-          row.scrape_policy,
-          row.can_contact_directly,
-          row.first_seen_at,
-          row.last_seen_at,
-          row.last_checked_at,
-          row.notes,
-          JSON.stringify(row.metadata),
-        ]
-      );
-      upsertedCount += 1;
-      if (upsertedSample.length < PROPERTY_SOURCE_REGISTRY_RESPONSE_SAMPLE_LIMIT) {
-        upsertedSample.push(result.rows[0]);
+    const registryRows = registrySources.map(normalizeSourceForDb);
+    const activeSourceKeys = registryRows.map((row) => row.source_key);
+    for (let index = 0; index < registryRows.length; index += PROPERTY_SOURCE_REGISTRY_SEED_BATCH_SIZE) {
+      const batch = registryRows.slice(index, index + PROPERTY_SOURCE_REGISTRY_SEED_BATCH_SIZE);
+      const rows = await upsertPropertySourceRegistryBatch(client, batch);
+      upsertedCount += batch.length;
+      for (const row of rows) {
+        if (upsertedSample.length >= PROPERTY_SOURCE_REGISTRY_RESPONSE_SAMPLE_LIMIT) break;
+        upsertedSample.push(row);
       }
     }
     const pruned = await client.query(
