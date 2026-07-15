@@ -949,6 +949,7 @@ const CATEGORY_PAGINATION_TOTAL_FIX_MARKER = "category-pagination-total-fix-2026
 const CATEGORY_PAGINATION_API_TOTAL_FIX_MARKER = "category-pagination-api-total-fix-20260715";
 const CATEGORY_PAGINATION_STARTUP_LOADING_FIX_MARKER = "category-pagination-startup-loading-fix-20260715";
 const CATEGORY_PAGINATION_LOADING_RENDER_FIX_MARKER = "category-pagination-loading-render-fix-20260715";
+const CATEGORY_PAGINATION_NO_LOCAL_TOTAL_FIX_MARKER = "category-pagination-no-local-total-fix-20260715";
 const publicCategoryDeepHydrationTimers = new Map();
 const PUBLIC_PAGINATION_CATEGORIES = Object.freeze(["sale", "rent", "students", "commercial", "land"]);
 const publicCategoryPaginationState = {};
@@ -37543,8 +37544,7 @@ function renderPublicCategoryPagination(category, options = {}) {
   const pageStart = total ? ((page - 1) * PUBLIC_RESULTS_PAGE_SIZE) + 1 : 0;
   const pageEnd = Math.min(total, page * PUBLIC_RESULTS_PAGE_SIZE);
   const awaitingExactRouteTotal = Boolean(
-    loading
-    && key === publicPaginationKey(activePublicInventoryCategoryFromRoute())
+    key === publicPaginationKey(activePublicInventoryCategoryFromRoute())
     && state.mode === "api"
     && !state.totalAuthoritative
     && total <= PUBLIC_RESULTS_PAGE_SIZE
@@ -37572,7 +37572,7 @@ function renderPublicCategoryPagination(category, options = {}) {
         aria-current="${active ? "page" : "false"}">${visiblePage}</button>`);
     previous = visiblePage;
   });
-  const navHtml = totalPages > 1 ? `
+  const navHtml = !awaitingExactRouteTotal && totalPages > 1 ? `
         <nav class="flex flex-wrap items-center gap-2" aria-label="${adminAttr(key)} results pages">
           ${navButton("‹ Prev", Math.max(1, page - 1), loading || page <= 1)}
           ${pageButtons.join("")}
@@ -37582,7 +37582,7 @@ function renderPublicCategoryPagination(category, options = {}) {
     <div class="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm" data-public-pagination-bar="${adminAttr(key)}">
       <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div class="text-sm font-semibold text-gray-700">
-          ${loading ? "Loading listings..." : `Page ${page} of ${totalPages}`}
+          ${loading || awaitingExactRouteTotal ? "Loading listings..." : `Page ${page} of ${totalPages}`}
           <span class="block text-xs font-medium text-gray-500">${rangeText}</span>
         </div>
         ${navHtml}
