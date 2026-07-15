@@ -22,6 +22,25 @@ const DEFAULT_MONTHLY_READ_CAP = 10000;
 const SCHEDULER_POLL_MS = 60 * 1000;
 let schedulerTimer = null;
 let schedulerRunning = false;
+let schedulerArmedAt = null;
+let schedulerLastTickAt = null;
+let schedulerLastResult = null;
+
+function schedulerDisabledByEnv() {
+  return String(process.env.X_SOURCE_DRIP_SCHEDULER_ENABLED || 'true').toLowerCase() === 'false';
+}
+
+function schedulerStatus() {
+  return {
+    armed: Boolean(schedulerTimer),
+    disabled_by_env: schedulerDisabledByEnv(),
+    running: schedulerRunning,
+    poll_ms: SCHEDULER_POLL_MS,
+    armed_at: schedulerArmedAt,
+    last_tick_at: schedulerLastTickAt,
+    last_result: schedulerLastResult,
+  };
+}
 
 function numberInRange(value, fallback, min, max) {
   const parsed = Number(value);
@@ -159,6 +178,7 @@ async function getXSourceDripStatus(db, { limit = 12 } = {}) {
     marker: X_SOURCE_DRIP_MARKER,
     fast_mode_marker: X_SOURCE_DRIP_FAST_MODE_MARKER,
     full_archive_pacing_marker: X_SOURCE_DRIP_FULL_ARCHIVE_PACING_MARKER,
+    scheduler: schedulerStatus(),
     state: normalizeStateRow(stateResult.rows[0]),
     recent_runs: runs.rows,
     inventory: {
@@ -584,22 +604,49 @@ async function runXSourceDripOnce(db, { force = false, actorId = 'system' } = {}
   }
 }
 
+async function tickXSourceDripScheduler(db, actorId = 'x_source_drip_scheduler') {
+  if (schedulerRunning) {
+    schedulerLastResult = {
+      ok: true,
+      skipped: true,
+      reason: 'x_source_drip_scheduler_already_running',
+      at: new Date().toISOString(),
+    };
+    return schedulerLastResult;
+  }
+  schedulerRunning = true;
+  schedulerLastTickAt = new Date().toISOString();
+  try {
+    schedulerLastResult = await runXSourceDripOnce(db, { force: false, actorId });
+    return schedulerLastResult;
+  } catch (error) {
+    schedulerLastResult = {
+      ok: false,
+      error: error.message || 'x_source_drip_scheduler_tick_failed',
+      at: new Date().toISOString(),
+    };
+    logger.warn('X source drip scheduler tick failed', error.message);
+    return schedulerLastResult;
+  } finally {
+    schedulerRunning = false;
+  }
+}
+
 function startXSourceDripScheduler(db) {
-  if (schedulerTimer || String(process.env.X_SOURCE_DRIP_SCHEDULER_ENABLED || 'true').toLowerCase() === 'false') {
+  if (schedulerTimer || schedulerDisabledByEnv()) {
     return;
   }
-  schedulerTimer = setInterval(async () => {
-    if (schedulerRunning) return;
-    schedulerRunning = true;
-    try {
-      await runXSourceDripOnce(db, { force: false, actorId: 'x_source_drip_scheduler' });
-    } catch (error) {
-      logger.warn('X source drip scheduler tick failed', error.message);
-    } finally {
-      schedulerRunning = false;
-    }
+  schedulerArmedAt = new Date().toISOString();
+  schedulerTimer = setInterval(() => {
+    tickXSourceDripScheduler(db).catch((error) => {
+      logger.warn('X source drip scheduler interval failed', error.message);
+    });
   }, SCHEDULER_POLL_MS);
-  schedulerTimer.unref?.();
+  setTimeout(() => {
+    tickXSourceDripScheduler(db, 'x_source_drip_scheduler_boot').catch((error) => {
+      logger.warn('X source drip scheduler boot tick failed', error.message);
+    });
+  }, 5000);
   logger.info('X source drip scheduler armed');
 }
 
@@ -617,5 +664,7 @@ module.exports = {
   pauseXSourceDrip,
   runXSourceDripOnce,
   startXSourceDripScheduler,
+  schedulerStatus,
+  tickXSourceDripScheduler,
   summarizeSweepResult,
 };
