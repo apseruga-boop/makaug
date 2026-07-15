@@ -18,6 +18,8 @@ assert(html.includes('category-pagination-api-total-fix-20260715'), 'public shel
 assert(app.includes('CATEGORY_PAGINATION_API_TOTAL_FIX_MARKER = "category-pagination-api-total-fix-20260715"'), 'app bundle must carry the category API total fix marker');
 assert(html.includes('category-pagination-startup-loading-fix-20260715'), 'public shell must expose the category startup loading fix marker');
 assert(app.includes('CATEGORY_PAGINATION_STARTUP_LOADING_FIX_MARKER = "category-pagination-startup-loading-fix-20260715"'), 'app bundle must carry the category startup loading fix marker');
+assert(html.includes('category-pagination-loading-render-fix-20260715'), 'public shell must expose the category loading render fix marker');
+assert(app.includes('CATEGORY_PAGINATION_LOADING_RENDER_FIX_MARKER = "category-pagination-loading-render-fix-20260715"'), 'app bundle must carry the category loading render fix marker');
 
 const scriptLoaderIndex = html.indexOf('script.src = "/assets/makaug-app.js?v="');
 assert(scriptLoaderIndex > 0, 'public shell should load the app bundle with a versioned script URL');
@@ -27,6 +29,7 @@ assert(scriptLoaderVersionBlock.includes('student-pagination-nav-fix-20260715'),
 assert(scriptLoaderVersionBlock.includes('category-pagination-total-fix-20260715'), 'the body script loader must include the cross-category total marker so stale total logic is busted');
 assert(scriptLoaderVersionBlock.includes('category-pagination-api-total-fix-20260715'), 'the body script loader must include the category API total marker so stale category paths are busted');
 assert(scriptLoaderVersionBlock.includes('category-pagination-startup-loading-fix-20260715'), 'the body script loader must include the category startup loading marker so stale startup render logic is busted');
+assert(scriptLoaderVersionBlock.includes('category-pagination-loading-render-fix-20260715'), 'the body script loader must include the category loading render marker so stale loading render logic is busted');
 
 assert(app.includes('function exactPublicPaginationTotalValue'), 'pagination should distinguish missing totals from exact zero totals');
 assert(app.includes('response.pagination.total == null'), 'exact total helper must not treat a missing total as authoritative zero');
@@ -57,6 +60,7 @@ assert(app.includes('category=${encodeURIComponent(normalized)}'), 'public categ
 assert(!app.includes('public_only=1&listing_type=${encodeURIComponent(normalized)}'), 'public category page loader must not use listing_type totals that collapse to the current page');
 assert(app.includes('params.set("student_portal", "1")'), 'student searches should keep sending the student portal flag');
 assert(app.includes('Fetching the full result count...'), 'startup pagination must not present a page-sized local count as the full result total');
+assert(app.includes('renderPublicCategoryPagination(startupCategory, { loading: true })'), 'category routes must immediately replace stale local pagination with a loading count while API totals hydrate');
 assert(app.includes('const { rows: firstPageRows, firstResponse: firstPageResponse } = await firstPageRowsPromise'), 'first category page should render before waiting on the slower summary promise');
 assert(app.indexOf('const { rows: firstPageRows, firstResponse: firstPageResponse } = await firstPageRowsPromise') < app.indexOf('const summaryStats = await summaryStatsPromise'), 'first page response must be applied before awaiting summary stats');
 
