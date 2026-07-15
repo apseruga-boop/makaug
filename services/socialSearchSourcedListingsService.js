@@ -69,7 +69,7 @@ const PUBLIC_SOURCE_CONTACT_POLICY = 'No public phone number is not a blocker wh
 const FOUND_ONLINE_LAUNCH_INTAKE_POLICY = {
   source_window_start: LAUNCH_SOURCE_POST_WINDOW_START,
   target_source_year: 2026,
-  queue_rule: 'Queue curated exact YouTube social-source property posts and other specific public social property posts from 1 January 2026 onward. The source must be YouTube, TikTok, Instagram, Facebook, or X/Twitter; it must include a source URL, a specific area/neighbourhood/road/corridor, usable listing/source evidence, and a social/direct contact path. District-only locations such as only Kampala or only Wakiso stay out of active review. Missing price becomes Price upon application when the source and location are otherwise credible. Website-only sources are ignored.',
+  queue_rule: 'Launch harvest mode: queue every supported public social property post from 1 January 2026 onward into review, regardless of poster type. Missing phone, media, price, or exact pin are review notes, not capture blockers. Only suppressed URLs, unsupported platforms, old posts, duplicates, clear foreign/non-Uganda property, and obvious non-property content stay out of the property review queue.',
   image_rule: 'Found-online/social imports are public discovery results: do not rehost downloaded TikTok, Facebook, Instagram, YouTube, X, LinkedIn, WhatsApp, or website photos/videos as makaug gallery assets unless the rights holder has explicitly supplied or approved them. Public pages should show source links or official embeds first, then makaug rewritten facts and disclosures.',
   facebook_image_rule: 'For Facebook, store the exact public post URL as source evidence. Do not scrape or rehost Meta media without permission or an approved Meta tool/feed; link back to the source and ask the source/agent for authorised images before using photos publicly. Location must still be present before approval.',
   platform_scope: ['YouTube', 'TikTok', 'Instagram', 'Facebook', 'X/Twitter'],
@@ -897,8 +897,10 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
   const locationQuality = sourceLocationQualityForItem(item, agent);
   const hasPrice = hasPublishedPriceOrGuidePrice(item);
   const priceUponApplication = !hasPrice;
+  const imageRows = sourceImageRowsFor(item);
+  const hasDirectContact = Boolean(String(agent.phone || agent.phoneAlt || agent.email || item.phone || item.phoneAlt || item.email || '').trim());
   const hasContact = hasAnyPublicContactPath(agent, item);
-  const hasImageOrEvidence = Boolean(sourceImageRowsFor(item).length || sourceUrlForItem(item));
+  const hasImageOrEvidence = Boolean(imageRows.length || sourceUrlForItem(item));
   const dateStatus = sourceDateStatusFor(item);
   const preApproval = sourcePreApprovalStatusFor(item);
   const sourceQuality = sourceQualityReviewForItem(item, agent);
@@ -908,8 +910,24 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
   const hasQueuePermission = allowedSocialSource;
   const requiresSpecificSourcePostLocation = item.importedFromSourcePost === true;
   const locationPassesIntake = !requiresSpecificSourcePostLocation || locationQuality.ok || positiveListingGate.has_uganda_location_signal === true;
+  const lowSignalOnlySuppressed = sourceQuality.suppressed && /^low_signal_/i.test(String(sourceQuality.reason || ''));
+  const sourceQualityHardBlocked = sourceQuality.suppressed && !lowSignalOnlySuppressed;
+  const positiveGateHardBlocked = positiveListingGate.reason === 'not_a_listing'
+    || (
+      positiveListingGate.reason === 'non_uganda_location'
+      && /foreign|outside uganda/i.test(String((positiveListingGate.details || []).join(' ')))
+    );
+  const captureToReview = Boolean(
+    hasSource
+      && allowedSocialSource
+      && dateStatus !== 'before_2026_source_window'
+      && !sourceQualityHardBlocked
+      && !positiveGateHardBlocked
+  );
   return {
-    eligible: hasSource && allowedSocialSource && hasLocation && locationPassesIntake && hasContact && hasImageOrEvidence && dateStatus !== 'before_2026_source_window' && hasQueuePermission && !sourceQuality.suppressed && positiveListingGate.ok,
+    eligible: captureToReview,
+    capture_mode: 'launch_review_first',
+    capture_rule: 'supported_social_property_posts_go_to_review_even_when_phone_media_or_exact_location_need_human_confirmation',
     has_source_url: hasSource,
     allowed_social_source: allowedSocialSource,
     has_location_or_area: hasLocation,
@@ -941,10 +959,17 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
     source_quality_suppressed: sourceQuality.suppressed,
     source_quality_reason: sourceQuality.reason,
     source_quality_matched: sourceQuality.matched,
+    source_quality_listing_signal: sourceQuality.listing_signal || '',
+    source_quality_low_signal_only: lowSignalOnlySuppressed,
+    source_quality_hard_blocked: sourceQualityHardBlocked,
     source_quality_location_status: sourceQuality.location_status || locationQuality.status,
     positive_listing_gate_passed: positiveListingGate.ok,
     positive_listing_gate_reason: positiveListingGate.reason || '',
     positive_listing_gate_details: positiveListingGate.details || [],
+    positive_listing_gate_hard_blocked: positiveGateHardBlocked,
+    weak_contact_captured_for_review: !hasDirectContact,
+    weak_media_captured_for_review: !imageRows.length,
+    weak_location_captured_for_review: !locationPassesIntake || !locationQuality.ok,
     has_uganda_location_signal: positiveListingGate.has_uganda_location_signal === true,
     has_concrete_listing_signal: positiveListingGate.has_listing_signal === true,
   };

@@ -40,6 +40,7 @@ const {
   sanitizePublicHtml
 } = require('./services/publicHtmlSanitizer');
 const { startXSourceDripScheduler } = require('./services/xSourceDripService');
+const { startYouTubeSourceDripScheduler } = require('./services/youtubeSourceDripService');
 
 const app = express();
 // Required on Render so rate limiting uses the forwarded client IP correctly.
@@ -955,6 +956,7 @@ async function start() {
     logger.warn('Skipping startup migrations because DATABASE_URL is not set');
   }
   startXSourceDripScheduler(db);
+  startYouTubeSourceDripScheduler(db);
 
   app.listen(port, () => {
     logger.info(`makaug backend running on http://localhost:${port}`);

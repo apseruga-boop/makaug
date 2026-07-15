@@ -20,6 +20,7 @@ const {
   X_SOURCE_DRIP_MARKER,
   X_SOURCE_DRIP_FAST_MODE_MARKER,
   X_SOURCE_DRIP_FULL_ARCHIVE_PACING_MARKER,
+  X_SOURCE_DRIP_BATCH25_MARKER,
   firstRateLimitedSourceOffset,
   maxBatchSizeForMode,
   summarizeSweepResult,
@@ -28,6 +29,7 @@ const {
 async function main() {
   const migration = read('db/migrations/067_x_source_drip.sql');
   const fastModeMigration = read('db/migrations/073_x_source_drip_fast_mode.sql');
+  const youtubeDripMigration = read('db/migrations/075_youtube_source_drip.sql');
   const dripService = read('services/xSourceDripService.js');
   const adminRoute = read('routes/admin.js');
   const server = read('server.js');
@@ -38,17 +40,20 @@ async function main() {
   assert.strictEqual(X_SOURCE_DRIP_MARKER, 'x-source-drip-20260714', 'drip marker should be stable for production verification');
   assert.strictEqual(X_SOURCE_DRIP_FAST_MODE_MARKER, 'x-source-drip-fast-mode-20260714', 'fast-mode marker should be stable for production verification');
   assert.strictEqual(X_SOURCE_DRIP_FULL_ARCHIVE_PACING_MARKER, 'x-drip-fullarchive-pacing-20260715', 'full-archive pacing marker should be stable for production verification');
+  assert.strictEqual(X_SOURCE_DRIP_BATCH25_MARKER, 'x-drip-batch25-20260715', 'X full-archive batch-25 marker should be stable for production verification');
   assert.strictEqual(X_FULL_ARCHIVE_SEARCH_PACING_MS, 1100, 'full-archive X calls should be paced at least 1.1s apart');
   assert(migration.includes('CREATE TABLE IF NOT EXISTS source_drip_state'), 'migration should create persistent drip state');
   assert(migration.includes('CREATE TABLE IF NOT EXISTS source_drip_run_logs'), 'migration should create per-run logs');
   assert(migration.includes('batch_size BETWEEN 1 AND 5'), 'initial migration should keep full-archive batches small');
   assert(fastModeMigration.includes('batch_size BETWEEN 1 AND 25'), 'fast-mode migration should allow larger recent-search batches');
+  assert(youtubeDripMigration.includes("platform IN ('x','youtube')"), 'YouTube drip migration should preserve X drip state and allow YouTube too');
+  assert(youtubeDripMigration.includes('batch_size BETWEEN 1 AND 25'), 'latest drip migration should allow full-archive X batches up to 25');
   assert(fastModeMigration.includes('monthly_read_cap'), 'fast-mode migration should persist the monthly X read cap');
   assert(fastModeMigration.includes('api_read_count'), 'fast-mode migration should log per-run X API reads');
   assert(fastModeMigration.includes("search_mode = CASE WHEN search_mode = 'all' THEN 'recent'"), 'fast-mode migration should move old default state to recent search');
   assert(fastModeMigration.includes('WHEN batch_size <= 5 THEN 20'), 'fast-mode migration should lift old 5-sized recent batches to 20');
   assert(migration.includes('published_after TIMESTAMPTZ'), 'migration should persist the X crawl date floor');
-  assert.strictEqual(maxBatchSizeForMode('all'), 5, 'full-archive mode should stay capped to 5');
+  assert.strictEqual(maxBatchSizeForMode('all'), 25, 'full-archive mode should allow launch-blitz batches up to 25');
   assert.strictEqual(maxBatchSizeForMode('recent'), 25, 'recent mode should allow fast batches up to 25');
   assert(dripService.includes('pg_try_advisory_lock'), 'drip runs should be concurrency guarded');
   assert(dripService.includes("platform: 'x'"), 'drip service should be X-only');
@@ -78,6 +83,7 @@ async function main() {
   assert(frontend.includes('admin-x-drip-monthly-cap'), 'frontend should expose the monthly X read cap');
   assert(frontend.includes('x-source-drip-fast-mode-20260714'), 'frontend should render the fast-mode marker');
   assert(frontend.includes('x-drip-fullarchive-pacing-20260715'), 'frontend should render the full-archive pacing marker');
+  assert(html.includes('x-drip-batch25-20260715'), 'production HTML marker should include the launch X batch-25 marker');
   assert(socialDiscoveryService.includes('next_source_offset'), 'sweep response should expose next source offset');
   assert(socialDiscoveryService.includes('X_FULL_ARCHIVE_SEARCH_PACING_MS'), 'X full-archive sweeps should include pacing between requests');
   assert(socialDiscoveryService.includes('source_registry_offset'), 'X fetch reports should carry registry offsets for 429 requeue');

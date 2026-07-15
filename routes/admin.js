@@ -134,6 +134,13 @@ const {
   updateXSourceDripConfig
 } = require('../services/xSourceDripService');
 const {
+  getYouTubeSourceDripStatus,
+  pauseYouTubeSourceDrip,
+  runYouTubeSourceDripOnce,
+  startYouTubeSourceDrip,
+  updateYouTubeSourceDripConfig
+} = require('../services/youtubeSourceDripService');
+const {
   runTikTokAutopublishAgent
 } = require('../services/tiktokAutopublishAgentService');
 const { getProviderMeta } = require('../services/llmProvider');
@@ -3668,6 +3675,91 @@ router.post('/x-source-drip/run-once', async (req, res, next) => {
       actorId: adminActorId(req)
     });
     await writeAudit('admin_x_source_drip_run_once', {
+      ok: result.ok === true,
+      skipped: result.skipped === true,
+      reason: result.reason || result.error || '',
+      result: result.result || null
+    }, adminActorId(req));
+    return res.status(result.ok === false ? 500 : 200).json({ ok: result.ok !== false, data: result });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/youtube-source-drip', async (_req, res, next) => {
+  try {
+    const result = await getYouTubeSourceDripStatus(db);
+    return res.json({ ok: true, data: result });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.patch('/youtube-source-drip', async (req, res, next) => {
+  try {
+    const state = await updateYouTubeSourceDripConfig(db, req.body || {});
+    await writeAudit('admin_youtube_source_drip_configured', {
+      state: {
+        enabled: state.enabled,
+        cursor_offset: state.cursor_offset,
+        source_count: state.source_count,
+        base_interval_minutes: state.base_interval_minutes,
+        batch_size: state.batch_size,
+        max_results: state.max_results,
+        job_mode: state.job_mode,
+        published_after: state.published_after,
+        target_reviewable: state.target_reviewable,
+        monthly_read_cap: state.monthly_read_cap,
+        monthly_read_count: state.monthly_read_count
+      }
+    }, adminActorId(req));
+    return res.json({ ok: true, data: await getYouTubeSourceDripStatus(db) });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/youtube-source-drip/start', async (req, res, next) => {
+  try {
+    const state = await startYouTubeSourceDrip(db, req.body || {});
+    await writeAudit('admin_youtube_source_drip_started', {
+      cursor_offset: state.cursor_offset,
+      source_count: state.source_count,
+      interval_minutes: state.base_interval_minutes,
+      batch_size: state.batch_size,
+      max_results: state.max_results,
+      job_mode: state.job_mode,
+      published_after: state.published_after,
+      monthly_read_cap: state.monthly_read_cap,
+      monthly_read_count: state.monthly_read_count
+    }, adminActorId(req));
+    return res.json({ ok: true, data: await getYouTubeSourceDripStatus(db) });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/youtube-source-drip/pause', async (req, res, next) => {
+  try {
+    const reason = cleanText(req.body?.reason || 'paused_by_admin');
+    const state = await pauseYouTubeSourceDrip(db, reason);
+    await writeAudit('admin_youtube_source_drip_paused', {
+      reason: state.pause_reason,
+      cursor_offset: state.cursor_offset
+    }, adminActorId(req));
+    return res.json({ ok: true, data: await getYouTubeSourceDripStatus(db) });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/youtube-source-drip/run-once', async (req, res, next) => {
+  try {
+    const result = await runYouTubeSourceDripOnce(db, {
+      force: req.body?.force !== false,
+      actorId: adminActorId(req)
+    });
+    await writeAudit('admin_youtube_source_drip_run_once', {
       ok: result.ok === true,
       skipped: result.skipped === true,
       reason: result.reason || result.error || '',
