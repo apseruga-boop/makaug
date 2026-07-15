@@ -10,11 +10,14 @@ const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 
 assert(html.includes('student-page-pagination-fix-20260715'), 'public shell must expose the student pagination fix marker');
 assert(app.includes('STUDENT_PAGE_PAGINATION_FIX_MARKER = "student-page-pagination-fix-20260715"'), 'app bundle must carry the student pagination fix marker');
+assert(html.includes('student-pagination-nav-fix-20260715'), 'public shell must expose the student pagination navigation fix marker');
+assert(app.includes('STUDENT_PAGINATION_NAV_FIX_MARKER = "student-pagination-nav-fix-20260715"'), 'app bundle must carry the student pagination navigation fix marker');
 
 const scriptLoaderIndex = html.indexOf('script.src = "/assets/makaug-app.js?v="');
 assert(scriptLoaderIndex > 0, 'public shell should load the app bundle with a versioned script URL');
 const scriptLoaderVersionBlock = html.slice(Math.max(0, scriptLoaderIndex - 1200), scriptLoaderIndex);
 assert(scriptLoaderVersionBlock.includes('student-page-pagination-fix-20260715'), 'the body script loader must include the student pagination marker so stale bundles are busted');
+assert(scriptLoaderVersionBlock.includes('student-pagination-nav-fix-20260715'), 'the body script loader must include the student nav marker so stale click handlers are busted');
 
 assert(app.includes('function exactPublicPaginationTotalValue'), 'pagination should distinguish missing totals from exact zero totals');
 assert(app.includes('response.pagination.total == null'), 'exact total helper must not treat a missing total as authoritative zero');
@@ -28,6 +31,9 @@ assert(app.includes('publicCategoryStateHasAuthoritativeTotal(category, state)')
 assert(app.includes('function authoritativePublicCategoryPageRows'), 'renderAll should keep using exact active-route API rows after broader catalogue hydration');
 assert(app.includes('state.sourcePath !== activePath || state.mode !== "api"'), 'authoritative route rows must only apply to the matching active API source');
 assert(app.includes('renderPublicCategoryPageWithAuthoritativeCache("students"'), 'student render path must use the authoritative active-route cache');
+assert(app.includes('const authoritative = authoritativePublicCategoryPageRows(key);\n  const total = authoritative'), 'pagination controls must prefer authoritative route totals over stale passed totals');
+assert(app.includes('const navHtml = totalPages > 1'), 'single-page result sets should not render clickable pagination navigation');
+assert(app.includes('if (authoritative && requestedPage !== targetPage)'), 'pagination click handler must no-op when a stale click targets a non-existent authoritative page');
 
 assert(app.includes('if (publicCategoryStateHasAuthoritativeTotal(category, state)) return stateTotal'), 'global summary counts must not overwrite exact category API totals');
 assert(app.includes('state.total = total;\n  state.totalAuthoritative = exactPublicPaginationTotalValue(response) != null'), 'exact zero totals should replace stale page totals instead of falling through');
