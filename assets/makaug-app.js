@@ -36328,30 +36328,30 @@ function renderAll() {
   const landFiltered = hasActivePublicCategoryFilter("land");
   renderHeroPropertyOpportunityCounter();
   renderGrid("home-grid", getHomepageFeaturedListings(publicListings).slice(0, 3));
-  renderPublicCategoryPage("sale", saleListings, {
+  renderPublicCategoryPageWithAuthoritativeCache("sale", saleListings, {
     total: publicCategoryRenderTotal("sale", saleListings, saleFiltered),
     filtered: saleFiltered,
     mode: saleFiltered && !publicCategoryHasRouteSearch("sale") ? "local" : "api"
   });
-  renderPublicCategoryPage("rent", rentListings, {
+  renderPublicCategoryPageWithAuthoritativeCache("rent", rentListings, {
     total: publicCategoryRenderTotal("rent", rentListings, rentFiltered),
     filtered: rentFiltered,
     mode: rentFiltered && !publicCategoryHasRouteSearch("rent") ? "local" : "api"
   });
   const studentList = publicListings.filter((p) => isStudentDiscoverable(p));
-  renderPublicCategoryPage("students", studentList, {
+  renderPublicCategoryPageWithAuthoritativeCache("students", studentList, {
     total: publicCategoryRenderTotal("students", studentList, studentsFiltered),
     filtered: studentsFiltered,
     mode: studentsFiltered && !publicCategoryHasRouteSearch("students") ? "local" : "api"
   });
   const commercialListings = publicListings.filter((p) => normalizeType(p.type) === "commercial");
   const landListings = publicListings.filter((p) => normalizeType(p.type) === "land");
-  renderPublicCategoryPage("commercial", commercialListings, {
+  renderPublicCategoryPageWithAuthoritativeCache("commercial", commercialListings, {
     total: publicCategoryRenderTotal("commercial", commercialListings, commercialFiltered),
     filtered: commercialFiltered,
     mode: commercialFiltered && !publicCategoryHasRouteSearch("commercial") ? "local" : "api"
   });
-  renderPublicCategoryPage("land", landListings, {
+  renderPublicCategoryPageWithAuthoritativeCache("land", landListings, {
     total: publicCategoryRenderTotal("land", landListings, landFiltered),
     filtered: landFiltered,
     mode: landFiltered && !publicCategoryHasRouteSearch("land") ? "local" : "api"
@@ -37457,6 +37457,33 @@ function publicCategoryRenderTotal(category, list = [], filtered = false) {
   if (routeSearchTotal) return routeSearchTotal;
   if (filtered) return Math.max(0, Number(list.length) || 0);
   return publicCategoryTotalForPagination(category, list.length, null, { filtered: false });
+}
+
+function authoritativePublicCategoryPageRows(category) {
+  const key = publicPaginationKey(category);
+  if (!key || key !== publicPaginationKey(activePublicInventoryCategoryFromRoute())) return null;
+  const state = publicPaginationStateFor(key);
+  const activePath = publicCategoryApiPathForPagination(key);
+  if (!state?.totalAuthoritative || !activePath || state.sourcePath !== activePath || state.mode !== "api") return null;
+  const page = Math.min(Math.max(1, Number(state.page) || 1), publicPaginationPageCount(state.total));
+  const rows = publicPaginationCacheFor(key)?.[page];
+  return Array.isArray(rows) ? { rows, page, total: Math.max(0, Number(state.total) || 0), sourcePath: activePath } : null;
+}
+
+function renderPublicCategoryPageWithAuthoritativeCache(category, fallbackList = [], options = {}) {
+  const authoritative = authoritativePublicCategoryPageRows(category);
+  if (authoritative) {
+    return renderPublicCategoryPage(category, authoritative.rows, {
+      ...options,
+      page: authoritative.page,
+      total: authoritative.total,
+      rowsOverride: authoritative.rows,
+      mode: "api",
+      sourcePath: authoritative.sourcePath,
+      filtered: hasActivePublicCategoryFilter(category)
+    });
+  }
+  return renderPublicCategoryPage(category, fallbackList, options);
 }
 
 function publicPaginationPageCount(total) {
