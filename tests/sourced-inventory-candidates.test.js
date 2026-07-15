@@ -1625,8 +1625,21 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
     limit: 1,
   });
   assert.strictEqual(xJobs.length, 1);
-  assert(xJobs[0].query.includes('has:media'), 'X search jobs should request media-backed posts');
+  assert(!xJobs[0].query.includes('has:media'), 'X broad search jobs should not be forced into media-only mode');
+  assert(xJobs[0].query.includes('#UgandaRealEstate Uganda property'), 'X search jobs should preserve the registry query text');
+  assert(xJobs[0].query.includes('-is:retweet'), 'X search jobs should still exclude retweets');
   assert(xJobs[0].endpoint.includes('/2/tweets/search/all'), 'X full archive search should be available for 2026-onward sweeps');
+  const xMediaJobs = buildXSearchJobs({
+    sources: [{
+      key: 'x-uganda-property-media',
+      name: 'X Uganda property media search',
+      platform: 'x',
+      sourceType: 'search_feed',
+      metadata: { query: '#UgandaRealEstate Uganda property has:media -is:retweet' },
+    }],
+    limit: 1,
+  });
+  assert(xMediaJobs[0].query.includes('has:media'), 'X media variants should stay media-backed when the registry explicitly asks for media');
   const xLookbackJobs = buildXSearchJobs({
     sources: [{
       key: 'x-uganda-property-lookback',
