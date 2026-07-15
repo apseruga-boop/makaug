@@ -62,6 +62,10 @@ async function main() {
   assert(dripService.includes('firstRateLimitedSourceOffset(summary, offset)'), 'drip cursor should resume from the first rate-limited source instead of skipping it');
   assert(dripService.includes("next_run_at = NOW() + (base_interval_minutes * INTERVAL '1 minute')"), 'start/restart should recompute the next run from the current interval');
   assert(dripService.includes('consecutive_rate_limited_runs = CASE WHEN $2 THEN 0'), 'config changes should clear stale rate-limit backoff when enabled');
+  assert(dripService.includes('schedulerStatus()'), 'drip status should expose scheduler health');
+  assert(dripService.includes('tickXSourceDripScheduler'), 'drip scheduler should have a reusable tick function');
+  assert(dripService.includes("'x_source_drip_scheduler_boot'"), 'drip scheduler should run an initial boot tick for overdue jobs');
+  assert(!dripService.includes('schedulerTimer.unref'), 'drip scheduler timer should stay referenced in the web process');
   assert(adminRoute.includes("router.get('/x-source-drip'"), 'admin route should expose drip status');
   assert(adminRoute.includes("router.post('/x-source-drip/start'"), 'admin route should expose start control');
   assert(adminRoute.includes("router.post('/x-source-drip/pause'"), 'admin route should expose pause control');
