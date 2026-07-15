@@ -948,6 +948,7 @@ const STUDENT_PAGINATION_NAV_FIX_MARKER = "student-pagination-nav-fix-20260715";
 const CATEGORY_PAGINATION_TOTAL_FIX_MARKER = "category-pagination-total-fix-20260715";
 const CATEGORY_PAGINATION_API_TOTAL_FIX_MARKER = "category-pagination-api-total-fix-20260715";
 const CATEGORY_PAGINATION_STARTUP_LOADING_FIX_MARKER = "category-pagination-startup-loading-fix-20260715";
+const CATEGORY_PAGINATION_LOADING_RENDER_FIX_MARKER = "category-pagination-loading-render-fix-20260715";
 const publicCategoryDeepHydrationTimers = new Map();
 const PUBLIC_PAGINATION_CATEGORIES = Object.freeze(["sale", "rent", "students", "commercial", "land"]);
 const publicCategoryPaginationState = {};
@@ -38042,7 +38043,13 @@ async function refreshPublicListingsFromApi({ silent = true } = {}) {
   publicListingsApiLoading = true;
   const startupCategory = activePublicInventoryCategoryFromRoute();
   const startupState = startupCategory ? publicPaginationStateFor(startupCategory) : null;
-  if (startupState) startupState.loading = true;
+  if (startupState) {
+    const startupPath = publicInventoryCategoryPath(startupCategory);
+    startupState.loading = true;
+    startupState.mode = "api";
+    if (startupPath && !startupState.sourcePath) startupState.sourcePath = startupPath;
+    renderPublicCategoryPagination(startupCategory, { loading: true });
+  }
   try {
     const activeCategory = activePublicInventoryCategoryFromRoute();
     const featuredRowsPromise = activeCategory ? Promise.resolve([]) : fetchPublicFeaturedListingsFromApi()
