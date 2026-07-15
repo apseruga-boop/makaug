@@ -944,6 +944,7 @@ const PUBLIC_RESULTS_PAGE_SIZE = 24;
 const PUBLIC_OPPORTUNITY_SUMMARY_PATH = "/api/properties?status=approved&public_only=1&limit=1&page=1&summary_only=1&include_summary=1";
 const PUBLIC_CATEGORY_DEEP_HYDRATION_DELAY_MS = 8000;
 const STUDENT_PAGE_PAGINATION_FIX_MARKER = "student-page-pagination-fix-20260715";
+const STUDENT_PAGINATION_NAV_FIX_MARKER = "student-pagination-nav-fix-20260715";
 const publicCategoryDeepHydrationTimers = new Map();
 const PUBLIC_PAGINATION_CATEGORIES = Object.freeze(["sale", "rent", "students", "commercial", "land"]);
 const publicCategoryPaginationState = {};
@@ -37521,9 +37522,14 @@ function renderPublicCategoryPagination(category, options = {}) {
   const el = ensurePublicPaginationContainer(key);
   const state = publicPaginationStateFor(key);
   if (!key || !el || !state) return;
-  const total = Math.max(0, Number(options.total ?? state.total) || 0);
+  const authoritative = authoritativePublicCategoryPageRows(key);
+  const total = authoritative
+    ? authoritative.total
+    : Math.max(0, Number(options.total ?? state.total) || 0);
   const totalPages = publicPaginationPageCount(total);
-  const page = Math.min(Math.max(1, Number(options.page ?? state.page) || 1), totalPages);
+  const page = authoritative
+    ? authoritative.page
+    : Math.min(Math.max(1, Number(options.page ?? state.page) || 1), totalPages);
   const loading = options.loading ?? state.loading;
   if (!total && !loading) {
     el.innerHTML = "";
@@ -37551,6 +37557,12 @@ function renderPublicCategoryPagination(category, options = {}) {
         aria-current="${active ? "page" : "false"}">${visiblePage}</button>`);
     previous = visiblePage;
   });
+  const navHtml = totalPages > 1 ? `
+        <nav class="flex flex-wrap items-center gap-2" aria-label="${adminAttr(key)} results pages">
+          ${navButton("‹ Prev", Math.max(1, page - 1), loading || page <= 1)}
+          ${pageButtons.join("")}
+          ${navButton("Next ›", Math.min(totalPages, page + 1), loading || page >= totalPages)}
+        </nav>` : "";
   el.innerHTML = `
     <div class="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm" data-public-pagination-bar="${adminAttr(key)}">
       <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -37558,11 +37570,7 @@ function renderPublicCategoryPagination(category, options = {}) {
           ${loading ? "Loading listings..." : `Page ${page} of ${totalPages}`}
           <span class="block text-xs font-medium text-gray-500">${total ? `Showing ${pageStart}-${pageEnd} of ${total} properties` : "No properties found"}</span>
         </div>
-        <nav class="flex flex-wrap items-center gap-2" aria-label="${adminAttr(key)} results pages">
-          ${navButton("‹ Prev", Math.max(1, page - 1), loading || page <= 1)}
-          ${pageButtons.join("")}
-          ${navButton("Next ›", Math.min(totalPages, page + 1), loading || page >= totalPages)}
-        </nav>
+        ${navHtml}
       </div>
     </div>`;
 }
@@ -37576,7 +37584,10 @@ function renderPublicCategoryPage(category, list = [], options = {}) {
   if (options.sourcePath !== undefined) syncPublicCategoryPaginationSource(key, options.sourcePath || "");
   if (options.page) state.page = Math.max(1, Number(options.page) || 1);
   const filtered = options.filtered ?? hasActivePublicCategoryFilter(key);
-  const resolvedTotal = options.total == null
+  const authoritative = authoritativePublicCategoryPageRows(key);
+  const resolvedTotal = authoritative
+    ? authoritative.total
+    : options.total == null
     ? publicCategoryTotalForPagination(key, list.length, options.response || null, { filtered })
     : Math.max(0, Number(options.total) || 0);
   const exactResponseTotal = exactPublicPaginationTotalValue(options.response || null);
@@ -37595,7 +37606,8 @@ function renderPublicCategoryPage(category, list = [], options = {}) {
   const cachedRows = state.mode === "api" && cacheMatchesActivePath ? cache?.[state.page] : null;
   const pageRows = Array.isArray(options.rowsOverride)
     ? options.rowsOverride
-    : (Array.isArray(cachedRows) && cachedRows.length ? cachedRows : list.slice((state.page - 1) * PUBLIC_RESULTS_PAGE_SIZE, state.page * PUBLIC_RESULTS_PAGE_SIZE));
+    : (authoritative ? authoritative.rows
+    : (Array.isArray(cachedRows) && cachedRows.length ? cachedRows : list.slice((state.page - 1) * PUBLIC_RESULTS_PAGE_SIZE, state.page * PUBLIC_RESULTS_PAGE_SIZE)));
   if (key === "students") {
     renderStudentGrid(pageRows);
     updateStudentHeader(pageRows, { total, page: state.page, pageSize: PUBLIC_RESULTS_PAGE_SIZE });
@@ -37645,7 +37657,24 @@ async function goToPublicCategoryPage(category, page = 1) {
   const key = publicPaginationKey(category);
   const state = publicPaginationStateFor(key);
   if (!key || !state) return false;
-  const targetPage = Math.min(Math.max(1, Number(page) || 1), publicPaginationPageCount(state.total || PUBLIC_RESULTS_PAGE_SIZE));
+  const requestedPage = Math.max(1, Number(page) || 1);
+  const authoritative = authoritativePublicCategoryPageRows(key);
+  const authoritativeTotal = authoritative ? authoritative.total : null;
+  const totalForClamp = authoritative ? authoritative.total : Math.max(0, Number(state.total) || 0);
+  const totalPages = publicPaginationPageCount(totalForClamp || PUBLIC_RESULTS_PAGE_SIZE);
+  const targetPage = Math.min(requestedPage, totalPages);
+  if (authoritative && requestedPage !== targetPage) {
+    state.page = authoritative.page;
+    renderPublicCategoryPage(key, authoritative.rows, {
+      page: authoritative.page,
+      total: authoritativeTotal,
+      rowsOverride: authoritative.rows,
+      mode: "api",
+      sourcePath: authoritative.sourcePath,
+      filtered: hasActivePublicCategoryFilter(key)
+    });
+    return false;
+  }
   const routeSearchPath = publicCategoryHasRouteSearch(key) ? publicCategoryApiPathForPagination(key) : "";
   const shouldUseLocalPage = hasActivePublicCategoryFilter(key) && !routeSearchPath;
   state.page = targetPage;
