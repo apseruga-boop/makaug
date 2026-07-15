@@ -9,7 +9,9 @@ const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 
 const {
   buildXSearchJobs,
+  fetchXPostsForJobs,
   runSocialPlatformPostSweep,
+  X_FULL_ARCHIVE_SEARCH_PACING_MS,
 } = require('../services/socialPlatformPostDiscoveryService');
 const {
   getPropertySourceRegistry,
@@ -17,6 +19,8 @@ const {
 const {
   X_SOURCE_DRIP_MARKER,
   X_SOURCE_DRIP_FAST_MODE_MARKER,
+  X_SOURCE_DRIP_FULL_ARCHIVE_PACING_MARKER,
+  firstRateLimitedSourceOffset,
   maxBatchSizeForMode,
   summarizeSweepResult,
 } = require('../services/xSourceDripService');
@@ -33,6 +37,8 @@ async function main() {
 
   assert.strictEqual(X_SOURCE_DRIP_MARKER, 'x-source-drip-20260714', 'drip marker should be stable for production verification');
   assert.strictEqual(X_SOURCE_DRIP_FAST_MODE_MARKER, 'x-source-drip-fast-mode-20260714', 'fast-mode marker should be stable for production verification');
+  assert.strictEqual(X_SOURCE_DRIP_FULL_ARCHIVE_PACING_MARKER, 'x-drip-fullarchive-pacing-20260715', 'full-archive pacing marker should be stable for production verification');
+  assert.strictEqual(X_FULL_ARCHIVE_SEARCH_PACING_MS, 1100, 'full-archive X calls should be paced at least 1.1s apart');
   assert(migration.includes('CREATE TABLE IF NOT EXISTS source_drip_state'), 'migration should create persistent drip state');
   assert(migration.includes('CREATE TABLE IF NOT EXISTS source_drip_run_logs'), 'migration should create per-run logs');
   assert(migration.includes('batch_size BETWEEN 1 AND 5'), 'initial migration should keep full-archive batches small');
@@ -53,6 +59,9 @@ async function main() {
   assert(dripService.includes('x_auth_or_permission_error'), 'drip should hard-stop on auth/permission failure');
   assert(dripService.includes('x_monthly_read_cap_reached'), 'drip should auto-pause when monthly X read cap is hit');
   assert(dripService.includes('rate_limited'), 'drip should record rate-limited runs for adaptive backoff');
+  assert(dripService.includes('firstRateLimitedSourceOffset(summary, offset)'), 'drip cursor should resume from the first rate-limited source instead of skipping it');
+  assert(dripService.includes("next_run_at = NOW() + (base_interval_minutes * INTERVAL '1 minute')"), 'start/restart should recompute the next run from the current interval');
+  assert(dripService.includes('consecutive_rate_limited_runs = CASE WHEN $2 THEN 0'), 'config changes should clear stale rate-limit backoff when enabled');
   assert(adminRoute.includes("router.get('/x-source-drip'"), 'admin route should expose drip status');
   assert(adminRoute.includes("router.post('/x-source-drip/start'"), 'admin route should expose start control');
   assert(adminRoute.includes("router.post('/x-source-drip/pause'"), 'admin route should expose pause control');
@@ -64,7 +73,10 @@ async function main() {
   assert(frontend.includes('admin-x-drip-published-after'), 'frontend should expose the X drip since-date field');
   assert(frontend.includes('admin-x-drip-monthly-cap'), 'frontend should expose the monthly X read cap');
   assert(frontend.includes('x-source-drip-fast-mode-20260714'), 'frontend should render the fast-mode marker');
+  assert(frontend.includes('x-drip-fullarchive-pacing-20260715'), 'frontend should render the full-archive pacing marker');
   assert(socialDiscoveryService.includes('next_source_offset'), 'sweep response should expose next source offset');
+  assert(socialDiscoveryService.includes('X_FULL_ARCHIVE_SEARCH_PACING_MS'), 'X full-archive sweeps should include pacing between requests');
+  assert(socialDiscoveryService.includes('source_registry_offset'), 'X fetch reports should carry registry offsets for 429 requeue');
   assert(socialDiscoveryService.includes('xPublishedAfter'), 'X sweep should accept an explicit X published-after date');
   assert(socialDiscoveryService.includes('const xSourceWindow = rotatingSourceWindow(xSources'), 'X sweep should walk source offsets through the rotating source window');
   assert(socialDiscoveryService.includes('buildXSearchJobs({ sources: xSourceWindow.sources'), 'X sweep should build X jobs from the offset-selected source window');
@@ -104,8 +116,8 @@ async function main() {
       search_job_count: 5,
       fetched_posts_count: 1,
       fetch_reports: [
-        { status: 429, reason: 'Too Many Requests' },
-        { status: 429, reason: 'Too Many Requests' },
+        { status: 429, reason: 'Too Many Requests', source_registry_offset: 52 },
+        { status: 429, reason: 'Too Many Requests', source_registry_offset: 53 },
         { status: 402, reason: 'Payment Required' },
         { status: 401, reason: 'Unauthorized' },
       ],
@@ -125,6 +137,25 @@ async function main() {
   assert.strictEqual(summary.created_properties, 1, 'summary should preserve created count');
   assert.strictEqual(summary.api_read_count, 5, 'summary should count X API reads from search jobs');
   assert.strictEqual(summary.published_after, '2026-01-01T00:00:00.000Z', 'summary should preserve the crawl date floor');
+  assert.strictEqual(summary.fetch_reports[0].source_registry_offset, 52, 'summary should retain the first 429 source offset');
+  assert.strictEqual(firstRateLimitedSourceOffset(summary, 50), 52, 'cursor should requeue the first rate-limited source');
+
+  const callTimes = [];
+  await fetchXPostsForJobs([
+    { query: 'Uganda house for sale has:media -is:retweet', source_key: 'x-test-1', source_registry_offset: 1 },
+    { query: 'Uganda apartment for rent has:media -is:retweet', source_key: 'x-test-2', source_registry_offset: 2 },
+  ], {
+    bearerToken: 'test-token',
+    maxResults: 10,
+    searchMode: 'all',
+    fullArchivePacingMs: 10,
+    fetchImpl: async () => {
+      callTimes.push(Date.now());
+      return { ok: true, json: async () => ({ data: [], meta: {} }) };
+    },
+  });
+  assert.strictEqual(callTimes.length, 2, 'full-archive pacing test should make two calls');
+  assert(callTimes[1] - callTimes[0] >= 8, 'full-archive calls should be spaced apart instead of fired back-to-back');
 
   console.log('ok - X source drip scheduler, cursor, controls, and backoff guards are wired');
 }
