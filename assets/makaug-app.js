@@ -945,6 +945,7 @@ const PUBLIC_OPPORTUNITY_SUMMARY_PATH = "/api/properties?status=approved&public_
 const PUBLIC_CATEGORY_DEEP_HYDRATION_DELAY_MS = 8000;
 const STUDENT_PAGE_PAGINATION_FIX_MARKER = "student-page-pagination-fix-20260715";
 const STUDENT_PAGINATION_NAV_FIX_MARKER = "student-pagination-nav-fix-20260715";
+const CATEGORY_PAGINATION_TOTAL_FIX_MARKER = "category-pagination-total-fix-20260715";
 const publicCategoryDeepHydrationTimers = new Map();
 const PUBLIC_PAGINATION_CATEGORIES = Object.freeze(["sale", "rent", "students", "commercial", "land"]);
 const publicCategoryPaginationState = {};
@@ -37462,6 +37463,7 @@ function publicCategoryRenderTotal(category, list = [], filtered = false) {
 
 function authoritativePublicCategoryPageRows(category) {
   const key = publicPaginationKey(category);
+  if (key !== "students") return null;
   if (!key || key !== publicPaginationKey(activePublicInventoryCategoryFromRoute())) return null;
   const state = publicPaginationStateFor(key);
   const activePath = publicCategoryApiPathForPagination(key);
