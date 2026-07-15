@@ -2478,7 +2478,7 @@ function buildYouTubeSearchJobs({
   const sortedSources = sortYouTubeSourcesForDiscovery(sources
     .filter((source) => normalizePlatform(source.platform) === 'youtube')
   );
-  const jobs = sortedSources.flatMap((source) => {
+  const jobs = sortedSources.flatMap((source, sourceIndex) => {
       const channelLookup = youtubeChannelLookupForSource(source);
       const searchMethod = channelLookup ? 'channel_uploads' : 'search';
       const queries = searchMethod === 'channel_uploads'
@@ -2486,6 +2486,7 @@ function buildYouTubeSearchJobs({
         : youtubeFocusedSearchQueriesForSource(source);
       return queries.map((query, queryIndex) => ({
         platform: 'youtube',
+        source_registry_offset: sourceIndex,
         source_key: queryIndex ? `${sourceKey(source)}:q${queryIndex + 1}` : sourceKey(source),
         source_root_key: sourceKey(source),
         source_name: sourceName(source),
@@ -2521,7 +2522,11 @@ function buildYouTubeSearchJobs({
   const filteredJobs = filterYouTubeJobsByMode(jobs, normalizedJobMode);
   const startOffset = filteredJobs.length ? cappedOffset(offset) % filteredJobs.length : 0;
   return filteredJobs
-    .slice(startOffset, startOffset + cappedNumber(limit, DEFAULT_MAX_SOURCES, 1, MAX_PLATFORM_SWEEP_SOURCES));
+    .slice(startOffset, startOffset + cappedNumber(limit, DEFAULT_MAX_SOURCES, 1, MAX_PLATFORM_SWEEP_SOURCES))
+    .map((job, sourceWindowIndex) => ({
+      ...job,
+      source_window_index: sourceWindowIndex,
+    }));
 }
 
 function normalizeYouTubeJobMode(value = 'all') {
@@ -4293,7 +4298,7 @@ async function runSocialPlatformPostSweep({
   const sourceLimit = cappedNumber(maxSources, SOCIAL_SWEEP_FAST_DEFAULT_SOURCES, 1, SOCIAL_SWEEP_FAST_MAX_SOURCES);
   const resultLimit = cappedNumber(maxResultsPerSource, DEFAULT_X_RESULTS_PER_SOURCE, 1, SOCIAL_SWEEP_FAST_MAX_RESULTS_PER_SOURCE);
   const pageLimit = cappedNumber(maxPagesPerSource, DEFAULT_YOUTUBE_PAGES_PER_SOURCE, 1, SOCIAL_SWEEP_FAST_MAX_PAGES_PER_SOURCE);
-  const importPostLimit = Math.min(SOCIAL_SWEEP_IMPORT_POST_LIMIT, sourceLimit);
+  const importPostLimit = Math.min(SOCIAL_SWEEP_IMPORT_POST_LIMIT, Math.max(sourceLimit, sourceLimit * resultLimit));
   const normalizedSourceOffset = cappedOffset(sourceOffset);
   const tiktokSources = requestedPlatforms.includes('tiktok') ? sourcesForPlatform('tiktok') : [];
   const youtubeSources = requestedPlatforms.includes('youtube') ? sourcesForPlatform('youtube') : [];
