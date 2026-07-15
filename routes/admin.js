@@ -165,6 +165,7 @@ const ADMIN_LISTING_IMAGE_MAX_COUNT = 20;
 const LAUNCH_TEST_LISTING_MARKERS = ['SOFT LAUNCH TEST - DELETE', 'QA TEST - DELETE'];
 const LAUNCH_TEST_DUMMY_TITLES = ['sdgsdgd', 'sgsgsgsgs'];
 const PUBLIC_SITE_URL = String(process.env.PUBLIC_BASE_URL || process.env.APP_BASE_URL || 'https://makaug.com').replace(/\/+$/, '');
+let propertySourceRegistrySeedJob = null;
 const LEAD_PROPERTY_MATCH_LIMIT = 10;
 const ADMIN_PENDING_REVIEW_STATUSES = [
   'pending',
@@ -3813,6 +3814,116 @@ router.post('/property-source-registry/seed', async (req, res, next) => {
   } catch (error) {
     return next(error);
   }
+});
+
+function publicPropertySourceRegistrySeedJob(job = propertySourceRegistrySeedJob) {
+  if (!job) {
+    return {
+      exists: false,
+      status: 'idle',
+      marker: 'source-registry-async-seed-20260715',
+    };
+  }
+  return {
+    exists: true,
+    id: job.id,
+    status: job.status,
+    marker: 'source-registry-async-seed-20260715',
+    started_at: job.started_at,
+    finished_at: job.finished_at || null,
+    elapsed_ms: job.finished_at
+      ? new Date(job.finished_at).getTime() - new Date(job.started_at).getTime()
+      : Date.now() - new Date(job.started_at).getTime(),
+    phase: job.phase || '',
+    upserted_sources: job.upserted_sources || 0,
+    total_sources: job.total_sources || 0,
+    batch_size: job.batch_size || 0,
+    result: job.result || null,
+    error: job.error || null,
+  };
+}
+
+function startPropertySourceRegistrySeedJob(req) {
+  if (propertySourceRegistrySeedJob?.status === 'running') {
+    return {
+      already_running: true,
+      job: publicPropertySourceRegistrySeedJob(propertySourceRegistrySeedJob),
+    };
+  }
+
+  const job = {
+    id: crypto.randomUUID(),
+    status: 'running',
+    started_at: new Date().toISOString(),
+    phase: 'queued',
+    upserted_sources: 0,
+    total_sources: 0,
+    batch_size: 0,
+    result: null,
+    error: null,
+  };
+  propertySourceRegistrySeedJob = job;
+  const actorId = adminActorId(req);
+
+  setImmediate(async () => {
+    try {
+      const result = await seedPropertySourceRegistry({
+        db,
+        onProgress: (progress = {}) => {
+          job.phase = progress.phase || job.phase;
+          job.upserted_sources = Number(progress.upserted_sources || job.upserted_sources || 0);
+          job.total_sources = Number(progress.total_sources || job.total_sources || 0);
+          job.batch_size = Number(progress.batch_size || job.batch_size || 0);
+        },
+      });
+      job.status = 'completed';
+      job.phase = 'completed';
+      job.finished_at = new Date().toISOString();
+      job.result = {
+        upserted_sources: result.upserted_sources,
+        pruned_stale_sources: result.pruned_stale_sources,
+        by_platform: result.by_platform,
+        by_status: result.by_status,
+        returned_count: result.returned_count,
+      };
+      await writeAudit('admin_property_source_registry_seeded_async', {
+        source: SOURCED_INVENTORY_CANDIDATE_SOURCE,
+        batch_id: PROPERTY_SOURCE_REGISTRY_BATCH_ID,
+        job_id: job.id,
+        upserted_sources: result.upserted_sources,
+        pruned_stale_sources: result.pruned_stale_sources,
+        by_platform: result.by_platform,
+      }, actorId);
+    } catch (error) {
+      job.status = 'failed';
+      job.phase = 'failed';
+      job.finished_at = new Date().toISOString();
+      job.error = {
+        message: error.message || 'Source registry seed failed',
+        code: error.code || null,
+      };
+    }
+  });
+
+  return {
+    already_running: false,
+    job: publicPropertySourceRegistrySeedJob(job),
+  };
+}
+
+router.get('/property-source-registry/seed-status', async (_req, res) => {
+  return res.json({
+    ok: true,
+    data: publicPropertySourceRegistrySeedJob(),
+  });
+});
+
+router.post('/property-source-registry/seed-async', async (req, res) => {
+  const result = startPropertySourceRegistrySeedJob(req);
+  return res.status(result.already_running ? 200 : 202).json({
+    ok: true,
+    data: result,
+  });
 });
 
 router.get('/property-source-registry', async (req, res, next) => {

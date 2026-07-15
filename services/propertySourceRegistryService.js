@@ -2180,7 +2180,7 @@ async function upsertPropertySourceRegistryBatch(client, rows) {
   return result.rows;
 }
 
-async function seedPropertySourceRegistry({ db, sources } = {}) {
+async function seedPropertySourceRegistry({ db, sources, onProgress } = {}) {
   if (!db?.pool) throw new Error('db.pool is required');
   const client = await db.pool.connect();
   const registrySources = sources || getPropertySourceRegistry();
@@ -2194,10 +2194,25 @@ async function seedPropertySourceRegistry({ db, sources } = {}) {
       const batch = registryRows.slice(index, index + PROPERTY_SOURCE_REGISTRY_SEED_BATCH_SIZE);
       const rows = await upsertPropertySourceRegistryBatch(client, batch);
       upsertedCount += batch.length;
+      if (typeof onProgress === 'function') {
+        onProgress({
+          phase: 'upserting',
+          upserted_sources: upsertedCount,
+          total_sources: registryRows.length,
+          batch_size: batch.length,
+        });
+      }
       for (const row of rows) {
         if (upsertedSample.length >= PROPERTY_SOURCE_REGISTRY_RESPONSE_SAMPLE_LIMIT) break;
         upsertedSample.push(row);
       }
+    }
+    if (typeof onProgress === 'function') {
+      onProgress({
+        phase: 'pruning',
+        upserted_sources: upsertedCount,
+        total_sources: registryRows.length,
+      });
     }
     const pruned = await client.query(
       `DELETE FROM property_source_registry
