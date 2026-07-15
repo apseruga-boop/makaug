@@ -80,7 +80,7 @@ const {
 } = require('../services/advertisingCatalogService');
 const { addLeadActivity, createLead } = require('../services/leadService');
 const { getAlertSummary, matchListingToSavedSearches } = require('../services/alertSchedulerService');
-const { markInvoicePaidManually, paymentProviderConfigured } = require('../services/paymentProviderService');
+const { MONETIZATION_SPINE_MARKER, markInvoicePaidManually, paymentProviderConfigured } = require('../services/paymentProviderService');
 const { logNotification, notificationStatusFromDelivery } = require('../services/notificationLogService');
 const { logEmailEvent } = require('../services/emailLogService');
 const { logWhatsAppMessage } = require('../services/whatsappMessageLogService');
@@ -5551,6 +5551,73 @@ router.get('/advertising/packages', (_req, res) => {
 
 router.get('/advertising/rate-card', (_req, res) => {
   return res.json({ ok: true, data: getAdvertisingRateCard() });
+});
+
+router.get('/monetization/products', async (_req, res, next) => {
+  try {
+    const rows = await db.query(
+      `SELECT key, type, name, description, price, currency, billing, active, feature_flag, metadata, updated_at
+       FROM products
+       ORDER BY type ASC, key ASC`
+    );
+    return res.json({
+      ok: true,
+      marker: MONETIZATION_SPINE_MARKER,
+      data: rows.rows
+    });
+  } catch (error) {
+    if (['42P01', '42703'].includes(error.code)) {
+      return res.json({ ok: true, marker: MONETIZATION_SPINE_MARKER, data: [], provider_missing: true });
+    }
+    return next(error);
+  }
+});
+
+router.patch('/monetization/products/:key', async (req, res, next) => {
+  try {
+    const productKey = cleanText(req.params.key);
+    const updates = [];
+    const values = [];
+    const add = (column, value, cast = '') => {
+      values.push(value);
+      updates.push(`${column} = $${values.length}${cast}`);
+    };
+    if (Object.prototype.hasOwnProperty.call(req.body, 'price')) {
+      add('price', Math.max(0, Number(req.body.price) || 0));
+    }
+    if (Object.prototype.hasOwnProperty.call(req.body, 'currency')) {
+      add('currency', cleanText(req.body.currency || 'UGX').toUpperCase().slice(0, 8) || 'UGX');
+    }
+    if (Object.prototype.hasOwnProperty.call(req.body, 'billing')) {
+      add('billing', cleanText(req.body.billing || 'one_off').toLowerCase().slice(0, 40) || 'one_off');
+    }
+    if (Object.prototype.hasOwnProperty.call(req.body, 'active')) {
+      add('active', parseBooleanLike(req.body.active, false));
+    }
+    if (Object.prototype.hasOwnProperty.call(req.body, 'description')) {
+      add('description', cleanText(req.body.description || ''));
+    }
+    if (Object.prototype.hasOwnProperty.call(req.body, 'metadata')) {
+      add('metadata', JSON.stringify(safeJsonb(req.body.metadata, {})), '::jsonb');
+    }
+    if (!productKey) return res.status(400).json({ ok: false, error: 'product key is required' });
+    if (!updates.length) return res.status(400).json({ ok: false, error: 'No product updates provided' });
+
+    values.push(productKey);
+    const updated = await db.query(
+      `UPDATE products
+       SET ${updates.join(', ')},
+           updated_at = NOW()
+       WHERE key = $${values.length}
+       RETURNING *`,
+      values
+    );
+    if (!updated.rows.length) return res.status(404).json({ ok: false, error: 'Product not found' });
+    await writeAudit('monetization_product_updated', { product_key: productKey }, adminActorId(req));
+    return res.json({ ok: true, marker: MONETIZATION_SPINE_MARKER, data: updated.rows[0] });
+  } catch (error) {
+    return next(error);
+  }
 });
 
 router.get('/advertising/placements', async (_req, res, next) => {

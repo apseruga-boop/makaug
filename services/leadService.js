@@ -127,20 +127,26 @@ async function createLead(db, input = {}) {
     const leadType = text(input.leadType || input.lead_type, 'enquiry').toLowerCase();
     const source = text(input.source, 'web').toLowerCase();
     const listingId = input.listingId || input.listing_id || null;
+    const agentId = input.agentId || input.agent_id || null;
+    const buyerRef = text(input.buyerRef || input.buyer_ref || input.contact?.phone || input.phone || input.contact?.email || input.email) || null;
+    const billable = input.billable === true || input.billable === 'true';
+    const charged = input.charged === true || input.charged === 'true';
     const budget = integer(input.budget, null);
     const result = await db.query(
       `INSERT INTO leads (
-         contact_id, user_id, listing_id, campaign_id, source, lead_type,
+         contact_id, user_id, listing_id, agent_id, buyer_ref, campaign_id, source, lead_type,
          category, location, budget, message, lifecycle_stage, lead_status,
          lead_score, priority, assigned_to_user_id, next_follow_up_at,
-         last_contacted_at, sla_status, outcome, lost_reason, metadata
+         last_contacted_at, sla_status, outcome, lost_reason, billable, charged, metered_at, metadata
        )
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21::jsonb)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,NOW(),$25::jsonb)
        RETURNING *`,
       [
         contact?.id || null,
         input.userId || input.user_id || null,
         listingId,
+        agentId,
+        buyerRef,
         input.campaignId || input.campaign_id || null,
         source,
         leadType,
@@ -165,7 +171,19 @@ async function createLead(db, input = {}) {
         text(input.slaStatus || input.sla_status, 'open'),
         text(input.outcome) || null,
         text(input.lostReason || input.lost_reason) || null,
-        JSON.stringify(safeJson(input.metadata, {}))
+        billable,
+        charged,
+        JSON.stringify({
+          ...safeJson(input.metadata, {}),
+          metering: {
+            source,
+            listing_id: listingId,
+            agent_id: agentId,
+            buyer_ref: buyerRef,
+            billable,
+            charged
+          }
+        })
       ]
     );
     const lead = result.rows[0] || null;

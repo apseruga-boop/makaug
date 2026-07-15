@@ -3294,6 +3294,10 @@ router.post('/', async (req, res, next) => {
 
     const submissionLead = await createLead(db, {
       listingId: propertyId,
+      agentId: brokerCanSkipOwnerIdentity ? brokerAgent.id : null,
+      buyerRef: listerPhone || listerEmailNormalized || inquiryReference,
+      billable: false,
+      charged: false,
       contact: {
         name: listerName || 'Listing owner',
         phone: listerPhone || null,
@@ -3536,6 +3540,7 @@ router.post('/:id/whatsapp-click', async (req, res, next) => {
     const exists = await db.query(
       `SELECT
          p.id,
+         p.agent_id,
          p.title,
          p.inquiry_reference,
          p.status,
@@ -3577,6 +3582,10 @@ router.post('/:id/whatsapp-click', async (req, res, next) => {
 
     const lead = await createLead(db, {
       listingId: propertyId,
+      agentId: listingContact.agent_id || null,
+      buyerRef: contactPhone || contactEmail || req.ip || null,
+      billable: Boolean(listingContact.agent_id),
+      charged: false,
       contact: {
         name: contactName,
         phone: contactPhone || null,
@@ -3592,6 +3601,8 @@ router.post('/:id/whatsapp-click', async (req, res, next) => {
       metadata: {
         cta_location: ctaLocation,
         target_phone_present: Boolean(resolvedTargetPhone),
+        agent_id: listingContact.agent_id || null,
+        billable: Boolean(listingContact.agent_id),
         property_reference: exists.rows[0].inquiry_reference || null,
         property_inquiry_id: inserted.rows[0].id
       }
@@ -3643,6 +3654,7 @@ router.post('/:id/inquiries', async (req, res, next) => {
     const exists = await db.query(
       `SELECT
          p.id,
+         p.agent_id,
          p.title,
          p.inquiry_reference,
          p.lister_name,
@@ -3689,6 +3701,10 @@ router.post('/:id/inquiries', async (req, res, next) => {
 
     const lead = await createLead(db, {
       listingId: propertyId,
+      agentId: listingContact.agent_id || null,
+      buyerRef: contactPhone || contactEmail || req.ip || null,
+      billable: Boolean(listingContact.agent_id),
+      charged: false,
       contact: {
         name: contactName,
         phone: contactPhone || null,
@@ -3702,6 +3718,8 @@ router.post('/:id/inquiries', async (req, res, next) => {
       activityType: 'property_enquiry_created',
       metadata: {
         property_inquiry_id: inserted.rows[0].id,
+        agent_id: listingContact.agent_id || null,
+        billable: Boolean(listingContact.agent_id),
         target_contact_name: targetName,
         property_reference: listingContact.inquiry_reference || null,
         property_title: listingContact.title || null

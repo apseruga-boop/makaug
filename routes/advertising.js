@@ -13,6 +13,7 @@ const {
   summarizeAdvertisingPackageKeys
 } = require('../services/advertisingCatalogService');
 const {
+  createHostedPayment,
   getPaymentStatus,
   handlePaymentWebhook
 } = require('../services/paymentProviderService');
@@ -333,7 +334,26 @@ router.post('/campaigns/:id/payment-link', requireAdvertiserAuth, async (req, re
         cleanText(req.body.due_date) || null
       ]
     );
-    const paymentProvider = cleanText(process.env.PAYMENT_PROVIDER || 'manual');
+    const hostedPayment = await createHostedPayment(db, {
+      purpose: 'advertising_campaign',
+      amount,
+      currency: invoice.rows[0].currency,
+      payer: {
+        id: req.userAuth.id,
+        name: [req.userAuth.first_name, req.userAuth.last_name].filter(Boolean).join(' ') || item.advertiser_name,
+        email: req.userAuth.email || item.advertiser_email,
+        phone: req.userAuth.phone || item.advertiser_phone
+      },
+      metadata: {
+        campaign_id: item.id,
+        invoice_id: invoice.rows[0].id,
+        invoice_number: invoice.rows[0].invoice_number,
+        package_key: item.package_key || null
+      }
+    }, { allowProviderMissing: true });
+    const checkoutUrl = hostedPayment.checkoutUrl || buildProviderPaymentUrl(invoice.rows[0].id);
+    const providerReference = hostedPayment.payment?.checkout_reference || invoice.rows[0].invoice_number;
+    const paymentProvider = cleanText(process.env.UGANDA_PAYMENT_PROVIDER || process.env.PAYMENT_PROVIDER || 'flutterwave');
     const link = await db.query(
       `INSERT INTO payment_links (
         provider, amount, currency, purpose, related_campaign_id, advertiser_id,
@@ -348,9 +368,9 @@ router.post('/campaigns/:id/payment-link', requireAdvertiserAuth, async (req, re
         item.id,
         req.userAuth.id,
         invoice.rows[0].id,
-        buildProviderPaymentUrl(invoice.rows[0].id) ? 'created' : 'pending',
-        invoice.rows[0].invoice_number,
-        buildProviderPaymentUrl(invoice.rows[0].id),
+        checkoutUrl ? 'created' : 'pending',
+        providerReference,
+        checkoutUrl,
         req.body.expires_at || null
       ]
     );
@@ -362,13 +382,14 @@ router.post('/campaigns/:id/payment-link', requireAdvertiserAuth, async (req, re
            payment_reference = $3,
            updated_at = NOW()
        WHERE id = $1`,
-      [item.id, link.rows[0].checkout_url || null, invoice.rows[0].invoice_number]
+      [item.id, link.rows[0].checkout_url || null, providerReference]
     );
     return res.status(201).json({
       ok: true,
       data: {
         invoice: invoice.rows[0],
         paymentLink: link.rows[0],
+        payment: hostedPayment.payment || null,
         providerConfigured: Boolean(link.rows[0].checkout_url),
         providerMissing: !link.rows[0].checkout_url,
         message: link.rows[0].checkout_url
