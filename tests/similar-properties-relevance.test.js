@@ -11,6 +11,7 @@ const recallMarker = "similar-recall-widening-20260718";
 const aliasRenderMarker = "similar-alias-render-20260718";
 const purposeFallbackMarker = "similar-purpose-fallback-20260718";
 const hydrationResponseMarker = "similar-hydration-response-20260718";
+const explicitCategoryMarker = "similar-explicit-category-20260718";
 
 const markerCount = (indexHtml.match(new RegExp(marker, "g")) || []).length;
 assert(markerCount >= 2, "production HTML must carry the similar relevance marker in both preload and app-loader cache keys");
@@ -27,6 +28,9 @@ assert(appJs.includes(`SIMILAR_PROPERTIES_PURPOSE_FALLBACK_MARKER = "${purposeFa
 const hydrationResponseMarkerCount = (indexHtml.match(new RegExp(hydrationResponseMarker, "g")) || []).length;
 assert(hydrationResponseMarkerCount >= 2, "production HTML must carry the similar hydration response marker in both preload and app-loader cache keys");
 assert(appJs.includes(`SIMILAR_PROPERTIES_HYDRATION_RESPONSE_MARKER = "${hydrationResponseMarker}"`), "client bundle must carry the similar hydration response marker");
+const explicitCategoryMarkerCount = (indexHtml.match(new RegExp(explicitCategoryMarker, "g")) || []).length;
+assert(explicitCategoryMarkerCount >= 2, "production HTML must carry the similar explicit category marker in both preload and app-loader cache keys");
+assert(appJs.includes(`SIMILAR_PROPERTIES_EXPLICIT_CATEGORY_MARKER = "${explicitCategoryMarker}"`), "client bundle must carry the similar explicit category marker");
 assert(appJs.includes("function similarPropertyCategory(property = {})"), "similar properties must normalize listing category before ranking");
 assert(appJs.includes("function similarPropertyPurpose(property = {})"), "similar properties must normalize sale/rent purpose before ranking");
 assert(appJs.includes("function similarPropertyPrice(property = {})"), "similar properties must reject unpriced candidates");
@@ -56,10 +60,13 @@ assert(
 assert(
   appJs.includes("property?.listing_category")
     && appJs.includes("extra.source_listing_type")
+    && appJs.includes("const authoritativeParts = [")
+    && appJs.includes("if (authoritativeParts.includes(\"rent\")) return \"rent\";")
+    && appJs.includes("if (authoritativeParts.includes(\"commercial\")) return \"commercial\";")
     && appJs.includes("isStudentDiscoverable(property)")
     && appJs.includes("return \"student\";")
     && appJs.includes("return \"commercial\";"),
-  "similar property category normalization must use route/category/source aliases, student flags, and property-type hints"
+  "similar property category normalization must trust explicit backend category aliases before softer inference"
 );
 
 assert(
@@ -96,6 +103,7 @@ assert(
     && appJs.includes("id=\"detail-similar-properties-grid\"")
     && appJs.includes("data-similar-purpose-fallback")
     && appJs.includes("data-similar-hydration-response")
+    && appJs.includes("data-similar-explicit-category")
     && appJs.includes("updateDetailSimilarPropertiesSection(nextMatches)")
     && appJs.includes("hydrateDetailSimilarProperties(p);"),
   "detail pages must always include a hydratable similar-properties section and render it when matches appear"

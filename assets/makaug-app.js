@@ -35890,10 +35890,40 @@ const SIMILAR_PROPERTIES_RECALL_MARKER = "similar-recall-widening-20260718";
 const SIMILAR_PROPERTIES_ALIAS_RENDER_MARKER = "similar-alias-render-20260718";
 const SIMILAR_PROPERTIES_PURPOSE_FALLBACK_MARKER = "similar-purpose-fallback-20260718";
 const SIMILAR_PROPERTIES_HYDRATION_RESPONSE_MARKER = "similar-hydration-response-20260718";
+const SIMILAR_PROPERTIES_EXPLICIT_CATEGORY_MARKER = "similar-explicit-category-20260718";
 const detailSimilarHydrationInFlight = new Map();
 
 function similarPropertyCategory(property = {}) {
   const extra = property?.extra_fields && typeof property.extra_fields === "object" ? property.extra_fields : {};
+  const propertyKindParts = [
+    property?.property_type,
+    property?.subtype,
+    property?.room_type,
+    extra.property_type,
+    extra.subtype,
+    extra.room_type
+  ].map((value) => normalizeType(value)).filter(Boolean);
+  if (propertyKindParts.includes("student")) return "student";
+  if (propertyKindParts.includes("land")) return "land";
+  if (propertyKindParts.includes("commercial")) return "commercial";
+
+  const authoritativeParts = [
+    property?.type,
+    property?.listing_type,
+    property?.category,
+    property?.listing_category,
+    extra.listing_type,
+    extra.category,
+    extra.listing_category,
+    extra.source_listing_type,
+    extra.source_category
+  ].map((value) => normalizeType(value)).filter(Boolean);
+  if (authoritativeParts.includes("student")) return "student";
+  if (authoritativeParts.includes("land")) return "land";
+  if (authoritativeParts.includes("commercial")) return "commercial";
+  if (authoritativeParts.includes("rent")) return "rent";
+  if (authoritativeParts.includes("sale")) return "sale";
+
   const rawParts = [
     property?.type,
     property?.listing_type,
@@ -45718,7 +45748,7 @@ function similarPropertyCategoryApiPath(property = {}) {
 
 function renderDetailSimilarPropertiesSectionHtml(similar = []) {
   const rows = (Array.isArray(similar) ? similar : []).filter(Boolean);
-  return `<div id="detail-similar-properties" data-similar-alias-render="${SIMILAR_PROPERTIES_ALIAS_RENDER_MARKER}" data-similar-purpose-fallback="${SIMILAR_PROPERTIES_PURPOSE_FALLBACK_MARKER}" data-similar-hydration-response="${SIMILAR_PROPERTIES_HYDRATION_RESPONSE_MARKER}" class="bg-white border border-gray-200 rounded-2xl p-5 mt-5 ${rows.length ? "" : "hidden"}">
+  return `<div id="detail-similar-properties" data-similar-alias-render="${SIMILAR_PROPERTIES_ALIAS_RENDER_MARKER}" data-similar-purpose-fallback="${SIMILAR_PROPERTIES_PURPOSE_FALLBACK_MARKER}" data-similar-hydration-response="${SIMILAR_PROPERTIES_HYDRATION_RESPONSE_MARKER}" data-similar-explicit-category="${SIMILAR_PROPERTIES_EXPLICIT_CATEGORY_MARKER}" class="bg-white border border-gray-200 rounded-2xl p-5 mt-5 ${rows.length ? "" : "hidden"}">
           <h2 class="text-xl font-bold mb-3">${translatePropertyUi("Similar Properties")}</h2>
           <div id="detail-similar-properties-grid" class="grid md:grid-cols-3 gap-4">${rows.map(propCard).join("")}</div>
         </div>`;
