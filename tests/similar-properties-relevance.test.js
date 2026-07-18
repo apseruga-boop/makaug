@@ -19,6 +19,7 @@ const pathTitleFallbackMarker = "similar-path-title-fallback-20260718";
 const directDetailObjectMarker = "similar-direct-detail-object-20260718";
 const textSourceFallbackMarker = "similar-text-source-fallback-20260718";
 const hydrationAttemptMarker = "similar-hydration-attempt-20260718";
+const skeletonMarker = "similar-skeleton-20260718";
 
 const markerCount = (indexHtml.match(new RegExp(marker, "g")) || []).length;
 assert(markerCount >= 2, "production HTML must carry the similar relevance marker in both preload and app-loader cache keys");
@@ -59,6 +60,9 @@ assert(appJs.includes(`SIMILAR_PROPERTIES_TEXT_SOURCE_FALLBACK_MARKER = "${textS
 const hydrationAttemptMarkerCount = (indexHtml.match(new RegExp(hydrationAttemptMarker, "g")) || []).length;
 assert(hydrationAttemptMarkerCount >= 2, "production HTML must carry the similar hydration attempt marker in both preload and app-loader cache keys");
 assert(appJs.includes(`SIMILAR_PROPERTIES_HYDRATION_ATTEMPT_MARKER = "${hydrationAttemptMarker}"`), "client bundle must carry the similar hydration attempt marker");
+const skeletonMarkerCount = (indexHtml.match(new RegExp(skeletonMarker, "g")) || []).length;
+assert(skeletonMarkerCount >= 2, "production HTML must carry the similar skeleton marker in both preload and app-loader cache keys");
+assert(appJs.includes(`SIMILAR_PROPERTIES_SKELETON_MARKER = "${skeletonMarker}"`), "client bundle must carry the similar skeleton marker");
 assert(appJs.includes("function similarPropertyCategory(property = {})"), "similar properties must normalize listing category before ranking");
 assert(appJs.includes("function similarPropertyPurpose(property = {})"), "similar properties must normalize sale/rent purpose before ranking");
 assert(appJs.includes("function similarPropertyPrice(property = {})"), "similar properties must reject unpriced candidates");
@@ -147,7 +151,12 @@ assert(
 
 assert(
   appJs.includes("function renderDetailSimilarPropertiesSectionHtml(similar = [])")
+    && appJs.includes("function renderDetailSimilarPropertiesSkeletonHtml(count = 4)")
+    && appJs.includes("function setDetailSimilarPropertiesLoading(isLoading = true)")
     && appJs.includes("id=\"detail-similar-properties-grid\"")
+    && appJs.includes("data-similar-skeleton")
+    && appJs.includes("data-similar-skeleton-card")
+    && appJs.includes("animate-pulse")
     && appJs.includes("data-similar-purpose-fallback")
     && appJs.includes("data-similar-hydration-response")
     && appJs.includes("data-similar-explicit-category")
@@ -157,9 +166,12 @@ assert(
     && appJs.includes("data-similar-direct-detail-object")
     && appJs.includes("data-similar-text-source-fallback")
     && appJs.includes("data-similar-hydration-attempt")
+    && appJs.includes("if (!localMatches.length) setDetailSimilarPropertiesLoading(true);")
+    && appJs.includes("if (!localMatches.length) updateDetailSimilarPropertiesSection([]);")
+    && appJs.includes("if (!localMatches.length && String(activeDetailPropertyId || \"\") === id) updateDetailSimilarPropertiesSection([]);")
     && appJs.includes("updateDetailSimilarPropertiesSection(nextMatches)")
     && appJs.includes("hydrateDetailSimilarProperties(p);"),
-  "detail pages must always include a hydratable similar-properties section and render it when matches appear"
+  "detail pages must show skeletons while similar properties hydrate, then render cards or hide the section cleanly"
 );
 
 assert(

@@ -25,6 +25,7 @@ includes(indexHtml, 'ask-ai-fast-mobile-20260718', 'Ask AI fast/mobile marker mu
 includes(indexHtml, 'ask-ai-similar-closeout-20260718', 'Ask AI/similar closeout marker must be present in HTML');
 includes(indexHtml, 'ask-ai-card-sql-fast-20260718', 'Ask AI card SQL fast-path marker must be present in HTML');
 includes(indexHtml, 'ask-ai-placeholder-i18n-live-20260718', 'Ask AI visible placeholder/i18n marker must be present in HTML');
+includes(indexHtml, 'ask-ai-search-prewarm-20260718', 'Ask AI search prewarm marker must be present in HTML');
 includes(indexHtml, 'data-ask-ai-results-hero="1"', 'homepage Ask AI hero marker missing');
 includes(indexHtml, 'data-ask-ai-blue-categoryrouting="1"', 'Ask AI blue/category-routing UI marker missing');
 includes(indexHtml, 'data-ask-ai-fast-mobile="1"', 'Ask AI fast/mobile UI marker missing');
@@ -51,6 +52,13 @@ includes(aiRoute, '/api/properties/search?', 'assistant route must call properti
 includes(aiRoute, "include_summary: '0'", 'assistant search must request a lightweight card payload');
 includes(aiRoute, "card_fields: '1'", 'assistant search must request card-only public fields');
 includes(aiRoute, 'ASSISTANT_SEARCH_RESULT_CACHE_TTL_MS', 'assistant route must cache repeated common search results briefly');
+includes(aiRoute, "ASSISTANT_SEARCH_PREWARM_MARKER = 'ask-ai-search-prewarm-20260718'", 'assistant route must carry the search prewarm marker');
+includes(aiRoute, 'ASSISTANT_SEARCH_PREWARM_QUERIES', 'assistant route must define common broad searches to prewarm');
+includes(aiRoute, 'prewarmAssistantSearchCacheOnce', 'assistant route must prewarm common search result cards');
+includes(aiRoute, 'startAssistantSearchPrewarmLoop', 'assistant route must start a bounded prewarm loop');
+includes(aiRoute, 'ASSISTANT_SEARCH_PREWARM_ENABLED', 'assistant search prewarm must be env-toggleable');
+includes(aiRoute, 'ASSISTANT_SEARCH_CACHE_TTL_MS', 'assistant cache TTL must be configurable for short freshness windows');
+includes(aiRoute, 'search_prewarm_marker: ASSISTANT_SEARCH_PREWARM_MARKER', 'assistant responses must expose the prewarm marker for live verification');
 includes(aiRoute, 'ASSISTANT_SEARCH_TIMEOUT_MS', 'assistant search timeout must be configurable');
 includes(aiRoute, 'hasRelaxablePropertyType', 'assistant route should detect scarce subtype filters');
 includes(aiRoute, "relaxedFilters = ['property_type']", 'assistant route should relax scarce subtype filters before the first search');

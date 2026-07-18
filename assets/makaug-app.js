@@ -35898,6 +35898,7 @@ const SIMILAR_PROPERTIES_PATH_TITLE_FALLBACK_MARKER = "similar-path-title-fallba
 const SIMILAR_PROPERTIES_DIRECT_DETAIL_OBJECT_MARKER = "similar-direct-detail-object-20260718";
 const SIMILAR_PROPERTIES_TEXT_SOURCE_FALLBACK_MARKER = "similar-text-source-fallback-20260718";
 const SIMILAR_PROPERTIES_HYDRATION_ATTEMPT_MARKER = "similar-hydration-attempt-20260718";
+const SIMILAR_PROPERTIES_SKELETON_MARKER = "similar-skeleton-20260718";
 const detailSimilarHydrationInFlight = new Map();
 
 function similarPropertyCategory(property = {}) {
@@ -45780,10 +45781,41 @@ function similarPropertyCategoryApiPath(property = {}) {
 
 function renderDetailSimilarPropertiesSectionHtml(similar = []) {
   const rows = (Array.isArray(similar) ? similar : []).filter(Boolean);
-  return `<div id="detail-similar-properties" data-similar-alias-render="${SIMILAR_PROPERTIES_ALIAS_RENDER_MARKER}" data-similar-purpose-fallback="${SIMILAR_PROPERTIES_PURPOSE_FALLBACK_MARKER}" data-similar-hydration-response="${SIMILAR_PROPERTIES_HYDRATION_RESPONSE_MARKER}" data-similar-explicit-category="${SIMILAR_PROPERTIES_EXPLICIT_CATEGORY_MARKER}" data-similar-hydration-fallback="${SIMILAR_PROPERTIES_HYDRATION_FALLBACK_MARKER}" data-similar-endpoint-fallback="${SIMILAR_PROPERTIES_ENDPOINT_FALLBACK_MARKER}" data-similar-path-title-fallback="${SIMILAR_PROPERTIES_PATH_TITLE_FALLBACK_MARKER}" data-similar-direct-detail-object="${SIMILAR_PROPERTIES_DIRECT_DETAIL_OBJECT_MARKER}" data-similar-text-source-fallback="${SIMILAR_PROPERTIES_TEXT_SOURCE_FALLBACK_MARKER}" data-similar-hydration-attempt="${SIMILAR_PROPERTIES_HYDRATION_ATTEMPT_MARKER}" class="bg-white border border-gray-200 rounded-2xl p-5 mt-5 ${rows.length ? "" : "hidden"}">
+  return `<div id="detail-similar-properties" data-similar-alias-render="${SIMILAR_PROPERTIES_ALIAS_RENDER_MARKER}" data-similar-purpose-fallback="${SIMILAR_PROPERTIES_PURPOSE_FALLBACK_MARKER}" data-similar-hydration-response="${SIMILAR_PROPERTIES_HYDRATION_RESPONSE_MARKER}" data-similar-explicit-category="${SIMILAR_PROPERTIES_EXPLICIT_CATEGORY_MARKER}" data-similar-hydration-fallback="${SIMILAR_PROPERTIES_HYDRATION_FALLBACK_MARKER}" data-similar-endpoint-fallback="${SIMILAR_PROPERTIES_ENDPOINT_FALLBACK_MARKER}" data-similar-path-title-fallback="${SIMILAR_PROPERTIES_PATH_TITLE_FALLBACK_MARKER}" data-similar-direct-detail-object="${SIMILAR_PROPERTIES_DIRECT_DETAIL_OBJECT_MARKER}" data-similar-text-source-fallback="${SIMILAR_PROPERTIES_TEXT_SOURCE_FALLBACK_MARKER}" data-similar-hydration-attempt="${SIMILAR_PROPERTIES_HYDRATION_ATTEMPT_MARKER}" data-similar-skeleton="${SIMILAR_PROPERTIES_SKELETON_MARKER}" data-similar-loading="${rows.length ? "0" : "1"}" class="bg-white border border-gray-200 rounded-2xl p-5 mt-5">
           <h2 class="text-xl font-bold mb-3">${translatePropertyUi("Similar Properties")}</h2>
-          <div id="detail-similar-properties-grid" class="grid md:grid-cols-3 gap-4">${rows.map(propCard).join("")}</div>
+          <div id="detail-similar-properties-grid" class="grid md:grid-cols-3 gap-4">${rows.length ? rows.map(propCard).join("") : renderDetailSimilarPropertiesSkeletonHtml(4)}</div>
         </div>`;
+}
+
+function renderDetailSimilarPropertiesSkeletonHtml(count = 4) {
+  const total = Math.max(3, Math.min(4, Number(count) || 4));
+  return Array.from({ length: total }, () => `
+    <article data-similar-skeleton-card="${SIMILAR_PROPERTIES_SKELETON_MARKER}" class="rounded-xl border border-gray-100 bg-white overflow-hidden shadow-sm animate-pulse">
+      <div class="aspect-[4/3] bg-gray-100"></div>
+      <div class="p-4 space-y-3">
+        <div class="h-4 w-2/3 rounded bg-gray-100"></div>
+        <div class="h-3 w-5/6 rounded bg-gray-100"></div>
+        <div class="h-3 w-1/2 rounded bg-gray-100"></div>
+        <div class="flex items-center justify-between pt-2">
+          <div class="h-5 w-20 rounded-full bg-gray-100"></div>
+          <div class="h-8 w-24 rounded-lg bg-gray-100"></div>
+        </div>
+      </div>
+    </article>`).join("");
+}
+
+function setDetailSimilarPropertiesLoading(isLoading = true) {
+  const section = document.getElementById("detail-similar-properties");
+  if (!section) return;
+  const grid = document.getElementById("detail-similar-properties-grid");
+  if (!grid) return;
+  if (isLoading) {
+    section.dataset.similarLoading = "1";
+    grid.innerHTML = renderDetailSimilarPropertiesSkeletonHtml(4);
+    section.classList.remove("hidden");
+    return;
+  }
+  section.dataset.similarLoading = "0";
 }
 
 function updateDetailSimilarPropertiesSection(similar = []) {
@@ -45791,6 +45823,7 @@ function updateDetailSimilarPropertiesSection(similar = []) {
   if (!section) return;
   const grid = document.getElementById("detail-similar-properties-grid");
   const rows = (Array.isArray(similar) ? similar : []).filter(Boolean);
+  section.dataset.similarLoading = "0";
   if (!rows.length) {
     section.classList.add("hidden");
     if (grid) grid.innerHTML = "";
@@ -45823,7 +45856,11 @@ async function hydrateDetailSimilarProperties(property = {}) {
     similarHydrationSubjectCategory: similarPropertyCategory(property),
     similarHydrationInitialMatches: localMatches.length
   });
-  if (!path) return localMatches;
+  if (!localMatches.length) setDetailSimilarPropertiesLoading(true);
+  if (!path) {
+    if (!localMatches.length) updateDetailSimilarPropertiesSection([]);
+    return localMatches;
+  }
   const key = `${id}:${path}`;
   if (detailSimilarHydrationInFlight.has(key)) return detailSimilarHydrationInFlight.get(key);
 
@@ -45875,6 +45912,7 @@ async function hydrateDetailSimilarProperties(property = {}) {
       setDetailSimilarHydrationDiagnostics({
         similarHydrationError: error?.message || "fetch_failed"
       });
+      if (!localMatches.length && String(activeDetailPropertyId || "") === id) updateDetailSimilarPropertiesSection([]);
       return localMatches;
     } finally {
       detailSimilarHydrationInFlight.delete(key);

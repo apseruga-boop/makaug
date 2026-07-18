@@ -401,9 +401,50 @@ function buildAssistantCapturePayload({ userMessage = '', parsed = {}, searchTyp
   };
 }
 
-const ASSISTANT_SEARCH_RESULT_CACHE_TTL_MS = 60 * 1000;
+const ASSISTANT_SEARCH_PREWARM_MARKER = 'ask-ai-search-prewarm-20260718';
+const ASSISTANT_SEARCH_RESULT_CACHE_TTL_MS = Math.max(
+  60 * 1000,
+  Math.min(10 * 60 * 1000, parseInt(process.env.ASSISTANT_SEARCH_CACHE_TTL_MS || `${5 * 60 * 1000}`, 10) || (5 * 60 * 1000))
+);
 const ASSISTANT_SEARCH_TIMEOUT_MS = Math.max(1200, Math.min(8000, parseInt(process.env.ASSISTANT_SEARCH_TIMEOUT_MS || '5000', 10) || 5000));
+const ASSISTANT_SEARCH_PREWARM_ENABLED = String(process.env.ASSISTANT_SEARCH_PREWARM_ENABLED || 'true').toLowerCase() !== 'false';
+const ASSISTANT_SEARCH_PREWARM_INTERVAL_MS = Math.max(
+  2 * 60 * 1000,
+  Math.min(15 * 60 * 1000, parseInt(process.env.ASSISTANT_SEARCH_PREWARM_INTERVAL_MS || `${4 * 60 * 1000}`, 10) || (4 * 60 * 1000))
+);
+const ASSISTANT_SEARCH_PREWARM_START_DELAY_MS = Math.max(
+  5000,
+  Math.min(120000, parseInt(process.env.ASSISTANT_SEARCH_PREWARM_START_DELAY_MS || '15000', 10) || 15000)
+);
 const assistantSearchResultCache = new Map();
+let assistantSearchPrewarmStarted = false;
+
+const ASSISTANT_SEARCH_PREWARM_QUERIES = Object.freeze([
+  { searchType: 'sale', parsed: { area: 'Kira' } },
+  { searchType: 'sale', parsed: { area: 'Ntinda' } },
+  { searchType: 'sale', parsed: { area: 'Muyenga' } },
+  { searchType: 'sale', parsed: { area: 'Najjera' } },
+  { searchType: 'sale', parsed: { area: 'Kyanja' } },
+  { searchType: 'sale', parsed: { area: 'Gayaza' } },
+  { searchType: 'sale', parsed: { district: 'Wakiso' } },
+  { searchType: 'rent', parsed: { area: 'Ntinda' } },
+  { searchType: 'rent', parsed: { area: 'Kira' } },
+  { searchType: 'rent', parsed: { area: 'Bukoto' } },
+  { searchType: 'rent', parsed: { area: 'Kisaasi' } },
+  { searchType: 'rent', parsed: { area: 'Muyenga' } },
+  { searchType: 'rent', parsed: { area: 'Nakasero' } },
+  { searchType: 'land', parsed: { area: 'Gayaza' } },
+  { searchType: 'land', parsed: { area: 'Wakiso' } },
+  { searchType: 'land', parsed: { area: 'Mukono' } },
+  { searchType: 'land', parsed: { area: 'Kira' } },
+  { searchType: 'commercial', parsed: { area: 'Kampala', propertyType: 'warehouse' } },
+  { searchType: 'commercial', parsed: { area: 'Nakawa', propertyType: 'office' } },
+  { searchType: 'commercial', parsed: { area: 'Nakasero', propertyType: 'office' } },
+  { searchType: 'commercial', parsed: { area: 'Kampala', propertyType: 'shop' } },
+  { searchType: 'student', parsed: { area: 'Makerere', propertyType: 'hostel' } },
+  { searchType: 'student', parsed: { area: 'Kyambogo', propertyType: 'hostel' } },
+  { searchType: 'student', parsed: { area: 'MUBS', propertyType: 'hostel' } }
+]);
 
 function getAssistantSearchResultCache(key = '') {
   const cached = assistantSearchResultCache.get(key);
@@ -423,10 +464,7 @@ function setAssistantSearchResultCache(key = '', payload = null) {
   if (oldestKey) assistantSearchResultCache.delete(oldestKey);
 }
 
-async function fetchAssistantSearchResults(req, { parsed, searchType, language, timeoutMs = ASSISTANT_SEARCH_TIMEOUT_MS }) {
-  const params = buildAssistantSearchParams(parsed, searchType, language);
-  const origin = assistantSearchOriginFromRequest(req);
-  const url = `${origin}/api/properties/search?${params.toString()}`;
+async function fetchAssistantSearchUrl(url, { timeoutMs = ASSISTANT_SEARCH_TIMEOUT_MS } = {}) {
   const cached = getAssistantSearchResultCache(url);
   if (cached) return cached;
   const controller = new AbortController();
@@ -451,7 +489,8 @@ async function fetchAssistantSearchResults(req, { parsed, searchType, language, 
       listings,
       total,
       pagination: json?.pagination || null,
-      meta: json?.meta || null
+      meta: json?.meta || null,
+      prewarm_marker: ASSISTANT_SEARCH_PREWARM_MARKER
     };
     setAssistantSearchResultCache(url, payload);
     return payload;
@@ -459,6 +498,60 @@ async function fetchAssistantSearchResults(req, { parsed, searchType, language, 
     clearTimeout(timeout);
   }
 }
+
+async function fetchAssistantSearchResults(req, { parsed, searchType, language, timeoutMs = ASSISTANT_SEARCH_TIMEOUT_MS }) {
+  const params = buildAssistantSearchParams(parsed, searchType, language);
+  const origin = assistantSearchOriginFromRequest(req);
+  const url = `${origin}/api/properties/search?${params.toString()}`;
+  return fetchAssistantSearchUrl(url, { timeoutMs });
+}
+
+function assistantSearchPrewarmOrigin() {
+  const explicit = cleanText(process.env.ASSISTANT_SEARCH_BASE_URL || process.env.PUBLIC_SITE_URL || process.env.APP_URL || process.env.RENDER_EXTERNAL_URL);
+  if (explicit) return explicit.replace(/\/$/, '');
+  const port = cleanText(process.env.PORT || '3000');
+  return `http://127.0.0.1:${port}`;
+}
+
+async function prewarmAssistantSearchCacheOnce() {
+  const origin = assistantSearchPrewarmOrigin();
+  if (!origin) return { warmed: 0, skipped: 0, failed: 0 };
+  let warmed = 0;
+  let skipped = 0;
+  let failed = 0;
+  for (const query of ASSISTANT_SEARCH_PREWARM_QUERIES) {
+    const params = buildAssistantSearchParams(query.parsed, query.searchType, 'en');
+    const url = `${origin}/api/properties/search?${params.toString()}`;
+    if (getAssistantSearchResultCache(url)) {
+      skipped += 1;
+      continue;
+    }
+    try {
+      await fetchAssistantSearchUrl(url, { timeoutMs: ASSISTANT_SEARCH_TIMEOUT_MS });
+      warmed += 1;
+    } catch (error) {
+      failed += 1;
+      if (process.env.NODE_ENV !== 'test') console.warn('Ask AI search prewarm failed', { url, error: error?.message || error });
+    }
+  }
+  return { warmed, skipped, failed };
+}
+
+function startAssistantSearchPrewarmLoop() {
+  if (!ASSISTANT_SEARCH_PREWARM_ENABLED || assistantSearchPrewarmStarted || process.env.NODE_ENV === 'test') return;
+  assistantSearchPrewarmStarted = true;
+  const run = () => {
+    prewarmAssistantSearchCacheOnce().catch((error) => {
+      console.warn('Ask AI search prewarm loop failed', error?.message || error);
+    });
+  };
+  const first = setTimeout(run, ASSISTANT_SEARCH_PREWARM_START_DELAY_MS);
+  if (typeof first.unref === 'function') first.unref();
+  const interval = setInterval(run, ASSISTANT_SEARCH_PREWARM_INTERVAL_MS);
+  if (typeof interval.unref === 'function') interval.unref();
+}
+
+startAssistantSearchPrewarmLoop();
 
 async function recordAssistantBackendTrace(req, { userMessage, intent, language, response }) {
   const normalizedIntent = normalizeAssistantIntent(intent);
@@ -838,7 +931,8 @@ router.post('/assistant-reply', async (req, res, next) => {
           capture_available: false,
           match_quality: 'needs_input',
           exact_match: false,
-          search_error: null
+          search_error: null,
+          search_prewarm_marker: ASSISTANT_SEARCH_PREWARM_MARKER
         };
       } else {
         try {
@@ -906,7 +1000,8 @@ router.post('/assistant-reply', async (req, res, next) => {
             capture_payload: capturePayload,
             match_quality: matchQuality,
             exact_match: matchQuality === 'exact' && result.total > 0,
-            search_error: null
+            search_error: null,
+            search_prewarm_marker: ASSISTANT_SEARCH_PREWARM_MARKER
           };
         } catch (searchError) {
           const capturePayload = buildAssistantCapturePayload({
@@ -941,7 +1036,8 @@ router.post('/assistant-reply', async (req, res, next) => {
             capture_payload: capturePayload,
             match_quality: 'search_error',
             exact_match: false,
-            search_error: searchError.message || 'property_search_failed'
+            search_error: searchError.message || 'property_search_failed',
+            search_prewarm_marker: ASSISTANT_SEARCH_PREWARM_MARKER
           };
           response = assistantFastResponse(
             assistantLeadText({ total: 0, parsed, searchType, language }),
