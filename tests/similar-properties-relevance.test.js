@@ -16,6 +16,7 @@ const hydrationFallbackMarker = "similar-hydration-fallback-20260718";
 const endpointFallbackMarker = "similar-endpoint-fallback-20260718";
 const hydrationDiagnosticsMarker = "similar-hydration-diagnostics-20260718";
 const pathTitleFallbackMarker = "similar-path-title-fallback-20260718";
+const directDetailObjectMarker = "similar-direct-detail-object-20260718";
 
 const markerCount = (indexHtml.match(new RegExp(marker, "g")) || []).length;
 assert(markerCount >= 2, "production HTML must carry the similar relevance marker in both preload and app-loader cache keys");
@@ -47,6 +48,9 @@ assert(appJs.includes(`SIMILAR_PROPERTIES_HYDRATION_DIAGNOSTICS_MARKER = "${hydr
 const pathTitleFallbackMarkerCount = (indexHtml.match(new RegExp(pathTitleFallbackMarker, "g")) || []).length;
 assert(pathTitleFallbackMarkerCount >= 2, "production HTML must carry the similar path title fallback marker in both preload and app-loader cache keys");
 assert(appJs.includes(`SIMILAR_PROPERTIES_PATH_TITLE_FALLBACK_MARKER = "${pathTitleFallbackMarker}"`), "client bundle must carry the similar path title fallback marker");
+const directDetailObjectMarkerCount = (indexHtml.match(new RegExp(directDetailObjectMarker, "g")) || []).length;
+assert(directDetailObjectMarkerCount >= 2, "production HTML must carry the similar direct detail object marker in both preload and app-loader cache keys");
+assert(appJs.includes(`SIMILAR_PROPERTIES_DIRECT_DETAIL_OBJECT_MARKER = "${directDetailObjectMarker}"`), "client bundle must carry the similar direct detail object marker");
 assert(appJs.includes("function similarPropertyCategory(property = {})"), "similar properties must normalize listing category before ranking");
 assert(appJs.includes("function similarPropertyPurpose(property = {})"), "similar properties must normalize sale/rent purpose before ranking");
 assert(appJs.includes("function similarPropertyPrice(property = {})"), "similar properties must reject unpriced candidates");
@@ -122,6 +126,13 @@ assert(
 );
 
 assert(
+  appJs.includes("await openDetail(loaded, { source: \"linked_property_detail\" });")
+    && appJs.includes("let p = id && typeof id === \"object\" ? id : findPropertyForUi(id);")
+    && appJs.includes("if (p?.id) upsertPropertyForUi(p);"),
+  "direct property routes must render the freshly loaded property object instead of depending only on a cache lookup"
+);
+
+assert(
   appJs.includes("function renderDetailSimilarPropertiesSectionHtml(similar = [])")
     && appJs.includes("id=\"detail-similar-properties-grid\"")
     && appJs.includes("data-similar-purpose-fallback")
@@ -130,6 +141,7 @@ assert(
     && appJs.includes("data-similar-hydration-fallback")
     && appJs.includes("data-similar-endpoint-fallback")
     && appJs.includes("data-similar-path-title-fallback")
+    && appJs.includes("data-similar-direct-detail-object")
     && appJs.includes("updateDetailSimilarPropertiesSection(nextMatches)")
     && appJs.includes("hydrateDetailSimilarProperties(p);"),
   "detail pages must always include a hydratable similar-properties section and render it when matches appear"

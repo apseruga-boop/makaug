@@ -35895,6 +35895,7 @@ const SIMILAR_PROPERTIES_HYDRATION_FALLBACK_MARKER = "similar-hydration-fallback
 const SIMILAR_PROPERTIES_ENDPOINT_FALLBACK_MARKER = "similar-endpoint-fallback-20260718";
 const SIMILAR_PROPERTIES_HYDRATION_DIAGNOSTICS_MARKER = "similar-hydration-diagnostics-20260718";
 const SIMILAR_PROPERTIES_PATH_TITLE_FALLBACK_MARKER = "similar-path-title-fallback-20260718";
+const SIMILAR_PROPERTIES_DIRECT_DETAIL_OBJECT_MARKER = "similar-direct-detail-object-20260718";
 const detailSimilarHydrationInFlight = new Map();
 
 function similarPropertyCategory(property = {}) {
@@ -39189,7 +39190,7 @@ async function parseInitialDeepLink() {
     try {
       const loaded = await loadRemotePropertyDetailForUi(pid);
       if (loaded && isListingPublicVisible(loaded)) {
-        await openDetail(loaded.id);
+        await openDetail(loaded, { source: "linked_property_detail" });
         return true;
       }
     } catch (error) {
@@ -45769,7 +45770,7 @@ function similarPropertyCategoryApiPath(property = {}) {
 
 function renderDetailSimilarPropertiesSectionHtml(similar = []) {
   const rows = (Array.isArray(similar) ? similar : []).filter(Boolean);
-  return `<div id="detail-similar-properties" data-similar-alias-render="${SIMILAR_PROPERTIES_ALIAS_RENDER_MARKER}" data-similar-purpose-fallback="${SIMILAR_PROPERTIES_PURPOSE_FALLBACK_MARKER}" data-similar-hydration-response="${SIMILAR_PROPERTIES_HYDRATION_RESPONSE_MARKER}" data-similar-explicit-category="${SIMILAR_PROPERTIES_EXPLICIT_CATEGORY_MARKER}" data-similar-hydration-fallback="${SIMILAR_PROPERTIES_HYDRATION_FALLBACK_MARKER}" data-similar-endpoint-fallback="${SIMILAR_PROPERTIES_ENDPOINT_FALLBACK_MARKER}" data-similar-path-title-fallback="${SIMILAR_PROPERTIES_PATH_TITLE_FALLBACK_MARKER}" class="bg-white border border-gray-200 rounded-2xl p-5 mt-5 ${rows.length ? "" : "hidden"}">
+  return `<div id="detail-similar-properties" data-similar-alias-render="${SIMILAR_PROPERTIES_ALIAS_RENDER_MARKER}" data-similar-purpose-fallback="${SIMILAR_PROPERTIES_PURPOSE_FALLBACK_MARKER}" data-similar-hydration-response="${SIMILAR_PROPERTIES_HYDRATION_RESPONSE_MARKER}" data-similar-explicit-category="${SIMILAR_PROPERTIES_EXPLICIT_CATEGORY_MARKER}" data-similar-hydration-fallback="${SIMILAR_PROPERTIES_HYDRATION_FALLBACK_MARKER}" data-similar-endpoint-fallback="${SIMILAR_PROPERTIES_ENDPOINT_FALLBACK_MARKER}" data-similar-path-title-fallback="${SIMILAR_PROPERTIES_PATH_TITLE_FALLBACK_MARKER}" data-similar-direct-detail-object="${SIMILAR_PROPERTIES_DIRECT_DETAIL_OBJECT_MARKER}" class="bg-white border border-gray-200 rounded-2xl p-5 mt-5 ${rows.length ? "" : "hidden"}">
           <h2 class="text-xl font-bold mb-3">${translatePropertyUi("Similar Properties")}</h2>
           <div id="detail-similar-properties-grid" class="grid md:grid-cols-3 gap-4">${rows.map(propCard).join("")}</div>
         </div>`;
@@ -45864,7 +45865,8 @@ async function hydrateDetailSimilarProperties(property = {}) {
 }
 
 async function openDetail(id, options = {}) {
-  let p = findPropertyForUi(id);
+  let p = id && typeof id === "object" ? id : findPropertyForUi(id);
+  if (p?.id) upsertPropertyForUi(p);
   if (!p) return false;
   p = await hydratePropertyDetailForUi(p);
   if (!p) return false;
