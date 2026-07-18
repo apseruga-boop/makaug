@@ -1613,12 +1613,36 @@ async function adminCachedPayload(cacheKey, ttlMs, producer) {
 function adminSafeQueryFallbackReason(error) {
   if (['42P01', '42703', '42704'].includes(error?.code)) return error.code;
   if (error?.code === '57014') return 'statement_timeout';
+  if (error?.code === 'POOL_TIMEOUT') return 'pool_timeout';
   if (/statement timeout|canceling statement/i.test(String(error?.message || ''))) return 'statement_timeout';
+  if (/client acquisition timed out|connection timeout|timeout exceeded/i.test(String(error?.message || ''))) return 'pool_timeout';
   return '';
 }
 
 async function adminTimedQuery(sql, values = [], timeoutMs = ADMIN_SAFE_QUERY_TIMEOUT_MS) {
-  const client = await db.getClient();
+  let acquireTimedOut = false;
+  const acquireTimeoutMs = Math.max(250, Math.min(Number(timeoutMs) || ADMIN_SAFE_QUERY_TIMEOUT_MS, 900));
+  const clientPromise = db.getClient().then((client) => {
+    if (acquireTimedOut) {
+      client.release();
+      return null;
+    }
+    return client;
+  });
+  const timeoutPromise = new Promise((_, reject) => {
+    setTimeout(() => {
+      acquireTimedOut = true;
+      const error = new Error('Database client acquisition timed out');
+      error.code = 'POOL_TIMEOUT';
+      reject(error);
+    }, acquireTimeoutMs);
+  });
+  const client = await Promise.race([clientPromise, timeoutPromise]);
+  if (!client) {
+    const error = new Error('Database client acquisition timed out');
+    error.code = 'POOL_TIMEOUT';
+    throw error;
+  }
   try {
     await client.query('BEGIN');
     await client.query('SELECT set_config($1, $2, true)', [
@@ -1668,6 +1692,42 @@ async function safeCount(sql, values = [], options = {}) {
   return Number(row.total || 0);
 }
 
+function adminSummaryFallbackReason(error) {
+  return adminSafeQueryFallbackReason(error) || error?.code || 'query_failed';
+}
+
+async function adminSummaryOne(sql, values = [], fallback = {}, options = {}) {
+  try {
+    return await safeOne(sql, values, fallback, options);
+  } catch (error) {
+    const fallbackReason = adminSummaryFallbackReason(error);
+    logger.warn('Admin summary widget fell back after query failure', {
+      reason: fallbackReason,
+      code: error?.code,
+      message: error?.message
+    });
+    return { ...fallback, _fallback_reason: fallbackReason };
+  }
+}
+
+async function adminSummaryRows(sql, values = [], options = {}) {
+  try {
+    return await safeRows(sql, values, options);
+  } catch (error) {
+    logger.warn('Admin summary list widget fell back after query failure', {
+      reason: adminSummaryFallbackReason(error),
+      code: error?.code,
+      message: error?.message
+    });
+    return [];
+  }
+}
+
+async function adminSummaryCount(sql, values = [], options = {}) {
+  const row = await adminSummaryOne(sql, values, { total: 0 }, options);
+  return Number(row.total || 0);
+}
+
 function zeroPublicInventorySummary() {
   return normalizePublicOpportunitySummary({});
 }
@@ -1681,7 +1741,9 @@ async function safePublicInventorySummaryForAdmin() {
       meta: {
         marker: PUBLIC_INVENTORY_METRICS_MARKER,
         cache: 'fallback',
-        fallback_reason: error?.code === '57014' ? 'statement_timeout' : 'query_failed'
+        fallback_reason: error?.code === '57014'
+          ? 'statement_timeout'
+          : error?.code === 'POOL_TIMEOUT' ? 'pool_timeout' : 'query_failed'
       }
     };
   }
@@ -1702,28 +1764,28 @@ async function loadAdminPropertiesSummaryFast() {
     studentDiscoverable
   ] = await Promise.all([
     safePublicInventorySummaryForAdmin(),
-    safeOne(
+    adminSummaryOne(
       "SELECT GREATEST(COALESCE(reltuples::bigint, 0), 0)::int AS total FROM pg_class WHERE oid = 'properties'::regclass",
       [],
       { total: 0 },
       { timeoutMs: 500 }
     ),
-    safeCount(`SELECT COUNT(*)::int AS total FROM properties p WHERE ${adminDefaultReviewQueueWhere('p')}`, [], { timeoutMs: 1200 }),
-    safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'approved'", [], { timeoutMs: 1200 }),
-    safeCount(
+    adminSummaryCount(`SELECT COUNT(*)::int AS total FROM properties p WHERE ${adminDefaultReviewQueueWhere('p')}`, [], { timeoutMs: 700 }),
+    adminSummaryCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'approved'", [], { timeoutMs: 700 }),
+    adminSummaryCount(
       `SELECT COUNT(*)::int AS total
        FROM properties p
        WHERE ${publicVisibleInventoryWhere('p')}
          AND ${adminFeaturedListingCondition('p')}`,
       [],
-      { timeoutMs: 1200 }
+      { timeoutMs: 700 }
     ),
-    safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'rejected'", [], { timeoutMs: 1200 }),
-    safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'hidden'", [], { timeoutMs: 1200 }),
-    safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'deleted'", [], { timeoutMs: 1200 }),
-    safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE COALESCE(lister_type, 'owner') <> 'agent' AND agent_id IS NULL", [], { timeoutMs: 1200 }),
-    safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE COALESCE(lister_type, 'owner') = 'agent' OR agent_id IS NOT NULL", [], { timeoutMs: 1200 }),
-    safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE listing_type = 'student' OR students_welcome = TRUE", [], { timeoutMs: 1200 })
+    adminSummaryCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'rejected'", [], { timeoutMs: 700 }),
+    adminSummaryCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'hidden'", [], { timeoutMs: 700 }),
+    adminSummaryCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'deleted'", [], { timeoutMs: 700 }),
+    adminSummaryCount("SELECT COUNT(*)::int AS total FROM properties WHERE COALESCE(lister_type, 'owner') <> 'agent' AND agent_id IS NULL", [], { timeoutMs: 700 }),
+    adminSummaryCount("SELECT COUNT(*)::int AS total FROM properties WHERE COALESCE(lister_type, 'owner') = 'agent' OR agent_id IS NOT NULL", [], { timeoutMs: 700 }),
+    adminSummaryCount("SELECT COUNT(*)::int AS total FROM properties WHERE listing_type = 'student' OR students_welcome = TRUE", [], { timeoutMs: 700 })
   ]);
   const total = Number(totalRow?.total || 0) || 0;
   const publicLive = Number(publicInventory?.summary?.total || 0) || 0;
@@ -1745,6 +1807,55 @@ async function loadAdminPropertiesSummaryFast() {
     public_count_marker: publicInventory.meta?.marker || PUBLIC_INVENTORY_METRICS_MARKER,
     public_count_cache: publicInventory.meta?.cache || 'unknown',
     ...(publicInventory.meta?.fallback_reason ? { _fallback_reason: publicInventory.meta.fallback_reason } : {})
+  };
+}
+
+async function buildAdminSummaryFallbackPayload(error) {
+  const publicInventory = await safePublicInventorySummaryForAdmin();
+  const publicLive = Number(publicInventory?.summary?.total || 0) || 0;
+  const reason = adminSummaryFallbackReason(error);
+  return {
+    ok: true,
+    data: {
+      properties: {
+        total: publicLive,
+        pending: 0,
+        approved: publicLive,
+        public_live: publicLive,
+        public_featured: 0,
+        rejected: 0,
+        hidden: 0,
+        deleted: 0,
+        private: 0,
+        agent_listed: 0,
+        student_discoverable: publicInventory?.summary?.student || 0,
+        approval_rate_pct: publicLive ? 100 : 0,
+        rejection_rate_pct: 0,
+        public_opportunities: publicInventory.summary || zeroPublicInventorySummary(),
+        public_count_marker: publicInventory.meta?.marker || PUBLIC_INVENTORY_METRICS_MARKER,
+        public_count_cache: publicInventory.meta?.cache || 'fallback',
+        _fallback_reason: reason
+      },
+      agents: { total: 0, pending: 0, approved: 0, _fallback_reason: reason },
+      users: { total: 0, active: 0, suspended: 0, phone_verified: 0, weekly_tips_opt_in: 0, marketing_opt_in: 0, social_linked: 0, _fallback_reason: reason },
+      reports: { total: 0, open: 0, _fallback_reason: reason },
+      propertyRequests: { total: 0, _fallback_reason: reason },
+      inquiries: { total: 0, _fallback_reason: reason },
+      engagement: { property_views: 0, property_saves: 0, broker_profile_views: 0, property_inquiries: 0, route_events: 0, _fallback_reason: reason },
+      ai_insights: {
+        last_48h: { property_views: 0, unique_visitors: 0, property_saves: 0, property_inquiries: 0, route_events: 0, _fallback_reason: reason },
+        top_areas: [],
+        top_listing_types: []
+      }
+    },
+    meta: {
+      cache: 'admin_summary_route_fallback',
+      cache_ttl_ms: ADMIN_DASHBOARD_CACHE_TTL_MS,
+      public_count_marker: PUBLIC_INVENTORY_METRICS_MARKER,
+      generated_at: new Date().toISOString(),
+      partial: true,
+      fallback_reason: reason
+    }
   };
 }
 
@@ -2740,7 +2851,7 @@ router.get('/summary', async (req, res, next) => {
         topListingTypes48h
       ] = await Promise.all([
         loadAdminPropertiesSummaryFast(),
-        safeOne(
+        adminSummaryOne(
           `SELECT
             COUNT(*)::int AS total,
             COUNT(*) FILTER (WHERE status = 'pending')::int AS pending,
@@ -2748,20 +2859,20 @@ router.get('/summary', async (req, res, next) => {
            FROM agents`,
           [],
           { total: 0, pending: 0, approved: 0 },
-          { timeoutMs: 2500 }
+          { timeoutMs: 650 }
         ),
-        safeOne(
+        adminSummaryOne(
           `SELECT
             COUNT(*)::int AS total,
             COUNT(*) FILTER (WHERE status = 'open')::int AS open
            FROM report_listings`,
           [],
           { total: 0, open: 0 },
-          { timeoutMs: 2000 }
+          { timeoutMs: 650 }
         ),
-        safeOne('SELECT COUNT(*)::int AS total FROM property_requests', [], { total: 0 }, { timeoutMs: 2000 }),
-        safeOne('SELECT COUNT(*)::int AS total FROM property_inquiries', [], { total: 0 }, { timeoutMs: 2000 }),
-        safeOne(
+        adminSummaryOne('SELECT COUNT(*)::int AS total FROM property_requests', [], { total: 0 }, { timeoutMs: 650 }),
+        adminSummaryOne('SELECT COUNT(*)::int AS total FROM property_inquiries', [], { total: 0 }, { timeoutMs: 650 }),
+        adminSummaryOne(
           `SELECT
             COUNT(*)::int AS total,
             COUNT(*) FILTER (WHERE status = 'active')::int AS active,
@@ -2773,9 +2884,9 @@ router.get('/summary', async (req, res, next) => {
            FROM users`,
           [],
           { total: 0, active: 0, suspended: 0, phone_verified: 0, weekly_tips_opt_in: 0, marketing_opt_in: 0, social_linked: 0 },
-          { timeoutMs: 2500 }
+          { timeoutMs: 650 }
         ),
-        safeOne(
+        adminSummaryOne(
           `SELECT
             COUNT(*) FILTER (WHERE event_name IN ('property_open','property_view'))::int AS property_views,
             COUNT(*) FILTER (WHERE event_name IN ('property_save','property_saved','save_property'))::int AS property_saves,
@@ -2785,9 +2896,9 @@ router.get('/summary', async (req, res, next) => {
            FROM analytics_events`,
           [],
           { property_views: 0, property_saves: 0, broker_profile_views: 0, property_inquiries: 0, route_events: 0 },
-          { timeoutMs: 2500 }
+          { timeoutMs: 650 }
         ),
-        safeOne(
+        adminSummaryOne(
           `SELECT
             COUNT(*) FILTER (WHERE event_name IN ('property_open','property_view'))::int AS property_views,
             COUNT(DISTINCT client_id) FILTER (WHERE event_name IN ('property_open','property_view','page_view','property_search'))::int AS unique_visitors,
@@ -2798,9 +2909,9 @@ router.get('/summary', async (req, res, next) => {
            WHERE created_at >= NOW() - INTERVAL '2 days'`,
           [],
           { property_views: 0, unique_visitors: 0, property_saves: 0, property_inquiries: 0, route_events: 0 },
-          { timeoutMs: 2500 }
+          { timeoutMs: 650 }
         ),
-        safeRows(
+        adminSummaryRows(
           `SELECT
             COALESCE(NULLIF(payload->>'area', ''), NULLIF(payload->>'district', ''), 'Unknown area') AS area,
             COUNT(*)::int AS events
@@ -2811,9 +2922,9 @@ router.get('/summary', async (req, res, next) => {
            ORDER BY events DESC, area ASC
            LIMIT 5`,
           [],
-          { timeoutMs: 2500 }
+          { timeoutMs: 650 }
         ),
-        safeRows(
+        adminSummaryRows(
           `SELECT
             COALESCE(NULLIF(payload->>'listing_type', ''), NULLIF(payload->>'tab', ''), 'unknown') AS listing_type,
             COUNT(*)::int AS events
@@ -2824,7 +2935,7 @@ router.get('/summary', async (req, res, next) => {
            ORDER BY events DESC, listing_type ASC
            LIMIT 5`,
           [],
-          { timeoutMs: 2500 }
+          { timeoutMs: 650 }
         )
       ]);
 
@@ -2856,7 +2967,16 @@ router.get('/summary', async (req, res, next) => {
 
     return res.json(payload);
   } catch (error) {
-    return next(error);
+    logger.warn('Admin summary route returned fallback payload after producer failure', {
+      reason: adminSummaryFallbackReason(error),
+      code: error?.code,
+      message: error?.message
+    });
+    try {
+      return res.status(200).json(await buildAdminSummaryFallbackPayload(error));
+    } catch (fallbackError) {
+      return next(fallbackError);
+    }
   }
 });
 

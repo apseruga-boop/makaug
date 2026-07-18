@@ -124,7 +124,29 @@ function setCachedPublicInventoryMetrics(key, summary) {
 }
 
 async function timedQuery(sql, values = [], timeoutMs = PUBLIC_INVENTORY_METRICS_TIMEOUT_MS) {
-  const client = await db.getClient();
+  let acquireTimedOut = false;
+  const acquireTimeoutMs = Math.max(250, Math.min(Number(timeoutMs) || PUBLIC_INVENTORY_METRICS_TIMEOUT_MS, 900));
+  const clientPromise = db.getClient().then((client) => {
+    if (acquireTimedOut) {
+      client.release();
+      return null;
+    }
+    return client;
+  });
+  const timeoutPromise = new Promise((_, reject) => {
+    setTimeout(() => {
+      acquireTimedOut = true;
+      const error = new Error('Database client acquisition timed out');
+      error.code = 'POOL_TIMEOUT';
+      reject(error);
+    }, acquireTimeoutMs);
+  });
+  const client = await Promise.race([clientPromise, timeoutPromise]);
+  if (!client) {
+    const error = new Error('Database client acquisition timed out');
+    error.code = 'POOL_TIMEOUT';
+    throw error;
+  }
   try {
     await client.query('BEGIN');
     await client.query('SELECT set_config($1, $2, true)', [
@@ -196,7 +218,9 @@ async function loadPublicOpportunitySummary({ where = '', values = [], timeoutMs
         meta: {
           cache: 'stale',
           marker: PUBLIC_INVENTORY_METRICS_MARKER,
-          fallback_reason: error.code === '57014' ? 'statement_timeout' : 'query_failed'
+          fallback_reason: error.code === '57014'
+            ? 'statement_timeout'
+            : error.code === 'POOL_TIMEOUT' ? 'pool_timeout' : 'query_failed'
         }
       };
     }

@@ -40,6 +40,18 @@ assert(
   adminRoute.includes("public_count_marker"),
   'admin summary should expose the shared public count marker'
 );
+assert(
+  adminRoute.includes("admin_summary_route_fallback"),
+  'admin summary should return a 200 fallback payload instead of bubbling producer failures to 503'
+);
+assert(
+  adminRoute.includes("POOL_TIMEOUT") && adminRoute.includes("Database client acquisition timed out"),
+  'admin summary queries should bound database client acquisition, not only statement execution'
+);
+assert(
+  adminRoute.includes("adminSummaryOne") && adminRoute.includes("adminSummaryRows") && adminRoute.includes("adminSummaryCount"),
+  'admin summary widgets should use non-fatal wrappers so one slow widget cannot blank the dashboard'
+);
 
 assert(
   metricsService.includes("PUBLIC_INVENTORY_METRICS_MARKER = 'properties-list-count-fast-20260718'"),
@@ -48,6 +60,10 @@ assert(
 assert(
   metricsService.includes("statement_timeout"),
   'public inventory metrics query should be time-bounded'
+);
+assert(
+  metricsService.includes("POOL_TIMEOUT") && metricsService.includes("Database client acquisition timed out"),
+  'public inventory metrics should also bound pool acquisition under scrape/prewarm load'
 );
 assert(
   metricsService.includes("publicVisibleInventoryWhere"),
@@ -67,6 +83,10 @@ assert(
 assert(
   html.includes('properties-list-count-fast-20260718'),
   'production HTML should include the properties-list-count-fast marker'
+);
+assert(
+  html.includes('admin-summary-fallback-20260718'),
+  'production HTML should include the admin summary fallback marker'
 );
 
 console.log('properties-list-count-performance: ok');
