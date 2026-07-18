@@ -31646,22 +31646,62 @@ function renderHomeAskAiExamples() {
 let aiAssistantPlaceholderTimer = null;
 let aiAssistantPlaceholderIndex = 0;
 
+function aiAssistantPlaceholderTargets() {
+  return [
+    { inputId: "home-ai-message", overlayId: "home-ai-placeholder-rotator" },
+    { inputId: "ai-chatbot-message", overlayId: "ai-chatbot-placeholder-rotator" }
+  ];
+}
+
 function aiAssistantPlaceholderExamples() {
   const copy = getAiAssistantPromptCopy();
   const chips = Array.isArray(copy.chips) && copy.chips.length ? copy.chips : AI_ASSISTANT_PROMPT_I18N.en.chips;
   return [copy.placeholder, ...chips.map((chip) => chip.label || chip.prompt).filter(Boolean)].filter(Boolean);
 }
 
+function setAiAssistantPlaceholderOverlay(input, overlay, value = "", { force = false } = {}) {
+  if (!input) return;
+  input.placeholder = value;
+  if (!overlay) return;
+  const hasTypedText = !!String(input.value || "").trim();
+  overlay.classList.toggle("opacity-0", hasTypedText);
+  overlay.classList.toggle("opacity-100", !hasTypedText);
+  if (hasTypedText) return;
+  const nextValue = String(value || "").trim();
+  if (!nextValue || (!force && overlay.textContent === nextValue)) return;
+  overlay.classList.remove("opacity-100");
+  overlay.classList.add("opacity-0");
+  window.setTimeout(() => {
+    overlay.textContent = nextValue;
+    if (!String(input.value || "").trim()) {
+      overlay.classList.remove("opacity-0");
+      overlay.classList.add("opacity-100");
+    }
+  }, 120);
+}
+
+function wireAiAssistantPlaceholderTarget(input, overlay) {
+  if (!input || input.dataset.aiPlaceholderWired === "1") return;
+  input.dataset.aiPlaceholderWired = "1";
+  const sync = () => setAiAssistantPlaceholderOverlay(input, overlay, input.placeholder || "", { force: true });
+  input.addEventListener("input", sync);
+  input.addEventListener("blur", sync);
+}
+
 function updateAiAssistantRotatingPlaceholders({ force = false } = {}) {
   const examples = aiAssistantPlaceholderExamples();
   if (!examples.length) return;
   const value = examples[aiAssistantPlaceholderIndex % examples.length];
-  ["home-ai-message", "ai-chatbot-message"].forEach((id) => {
-    const input = document.getElementById(id);
+  aiAssistantPlaceholderTargets().forEach(({ inputId, overlayId }) => {
+    const input = document.getElementById(inputId);
+    const overlay = document.getElementById(overlayId);
     if (!input) return;
-    const isFocused = document.activeElement === input;
-    if (!force && (isFocused || String(input.value || "").trim())) return;
-    input.placeholder = value;
+    wireAiAssistantPlaceholderTarget(input, overlay);
+    if (!force && String(input.value || "").trim()) {
+      setAiAssistantPlaceholderOverlay(input, overlay, input.placeholder || value);
+      return;
+    }
+    setAiAssistantPlaceholderOverlay(input, overlay, value, { force });
   });
 }
 
@@ -31950,7 +31990,10 @@ function runHomeAskAiExample(index = 0) {
   const chip = chips[index] || chips[0] || AI_ASSISTANT_PROMPT_I18N.en.chips[0];
   const input = document.getElementById("home-ai-message");
   const intent = document.getElementById("home-ai-intent");
-  if (input) input.value = chip.prompt || chip.label || "";
+  if (input) {
+    input.value = chip.prompt || chip.label || "";
+    setAiAssistantPlaceholderOverlay(input, document.getElementById("home-ai-placeholder-rotator"), input.placeholder || "", { force: true });
+  }
   if (intent) intent.value = chip.intent || "search_property";
   return submitHomeAskAiPrompt({ preventDefault() {} });
 }
@@ -35814,6 +35857,7 @@ function openPropertyDirections(id) {
 }
 
 const SIMILAR_PROPERTIES_RELEVANCE_MARKER = "similar-relevance-v2-20260718";
+const SIMILAR_PROPERTIES_RECALL_MARKER = "similar-recall-widening-20260718";
 
 function similarPropertyCategory(property = {}) {
   return normalizeType(property?.type || property?.listing_type || property?.category || property?.extra_fields?.listing_type || "");
@@ -35926,14 +35970,17 @@ function similarPropertyScore(subject, candidate, context = {}) {
   const candidateLocation = similarPropertyLocation(candidate);
   const subjectPoint = subjectLocation?.point;
   const candidatePoint = candidateLocation.point;
-  const priceDelta = Math.abs(candidatePrice - subjectPrice) / subjectPrice;
+  const hasSubjectPrice = Number.isFinite(Number(subjectPrice)) && Number(subjectPrice) > 0;
+  const priceDelta = hasSubjectPrice ? Math.abs(candidatePrice - subjectPrice) / subjectPrice : 1;
   let score = 0;
 
   if (similarSameArea(subjectLocation, candidateLocation)) score += 100;
   else if (similarSameDistrict(subjectLocation, candidateLocation)) score += 60;
   else if (similarSameRegion(subjectLocation, candidateLocation)) score += 25;
 
-  score += Math.max(0, 40 * (1 - priceDelta));
+  if (hasSubjectPrice && candidatePrice > 0) {
+    score += Math.max(0, 40 * (1 - Math.min(1, priceDelta)));
+  }
 
   if (subjectPoint && candidatePoint) {
     const distanceKm = haversineKm(subjectPoint.lat, subjectPoint.lng, candidatePoint.lat, candidatePoint.lng);
@@ -35980,24 +36027,60 @@ function similarPropertyScore(subject, candidate, context = {}) {
   return score;
 }
 
+function similarPropertyPriceWithinBand(subjectPrice, candidatePrice, band = 0.5) {
+  const subject = Number(subjectPrice);
+  const candidate = Number(candidatePrice);
+  if (!Number.isFinite(subject) || subject <= 0) return true;
+  if (!Number.isFinite(candidate) || candidate <= 0) return false;
+  const ratio = Math.abs(candidate - subject) / subject;
+  return ratio <= band;
+}
+
+function similarLocationMatchesScope(subjectLocation = {}, candidateLocation = {}, scope = "national") {
+  if (scope === "area") return similarSameArea(subjectLocation, candidateLocation);
+  if (scope === "district") return similarSameArea(subjectLocation, candidateLocation) || similarSameDistrict(subjectLocation, candidateLocation);
+  if (scope === "region") {
+    return similarSameArea(subjectLocation, candidateLocation)
+      || similarSameDistrict(subjectLocation, candidateLocation)
+      || similarSameRegion(subjectLocation, candidateLocation);
+  }
+  return true;
+}
+
+function similarDedupedSortedItems(items = []) {
+  const seen = new Set();
+  return items
+    .filter((item) => {
+      const id = String(item?.property?.id || "");
+      if (!id || seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    })
+    .sort((a, b) => b.score - a.score);
+}
+
 function getSimilarProperties(property, limit = 8) {
   if (!property) return [];
   const subjectCategory = similarPropertyCategory(property);
   const subjectPurpose = similarPropertyPurpose(property);
   const subjectPrice = similarPropertyPrice(property);
   const subjectLocation = similarPropertyLocation(property);
-  if (!subjectCategory || !subjectPrice || !subjectLocation.usable) return [];
+  if (!subjectCategory) return [];
 
-  const eligible = getPublicListings()
+  const categoryEligible = getPublicListings()
     .filter((candidate) => {
       if (String(candidate.id) === String(property.id)) return false;
       if (!isListingPublicVisible(candidate) || similarPropertyIsUnavailable(candidate)) return false;
       if (similarPropertyCategory(candidate) !== subjectCategory) return false;
       if (similarPropertyPurpose(candidate) !== subjectPurpose) return false;
+      return true;
+    });
+  if (categoryEligible.length < 2) return [];
+
+  const eligible = categoryEligible
+    .filter((candidate) => {
       const candidatePrice = similarPropertyPrice(candidate);
       if (!candidatePrice) return false;
-      const priceRatio = Math.abs(candidatePrice - subjectPrice) / subjectPrice;
-      if (priceRatio > 0.5) return false;
       return similarPropertyLocation(candidate).usable;
     })
     .map((candidate) => ({
@@ -36005,14 +36088,37 @@ function getSimilarProperties(property, limit = 8) {
       location: similarPropertyLocation(candidate),
       score: similarPropertyScore(property, candidate, { subjectPrice, subjectLocation, subjectCategory })
     }));
+  if (!eligible.length) return [];
 
-  const minLocalResults = Math.min(3, limit);
-  const local = eligible.filter((item) => similarSameArea(subjectLocation, item.location) || similarSameDistrict(subjectLocation, item.location));
-  const regional = eligible.filter((item) => local.includes(item) || similarSameRegion(subjectLocation, item.location));
-  const scoped = local.length >= minLocalResults ? local : (regional.length >= minLocalResults ? regional : eligible);
+  const desired = Math.min(Math.max(4, Math.min(6, limit)), limit);
+  const locationLevels = subjectLocation.usable
+    ? ["area", "district", "region", "national"]
+    : ["national"];
+  const priceBands = subjectPrice > 0 ? [0.5, 1, Infinity] : [Infinity];
+  const selected = [];
+  const selectedIds = new Set();
 
-  return scoped
-    .sort((a, b) => b.score - a.score)
+  for (const scope of locationLevels) {
+    for (const band of priceBands) {
+      const scoped = similarDedupedSortedItems(eligible.filter((item) => {
+        if (selectedIds.has(String(item.property.id))) return false;
+        if (!similarLocationMatchesScope(subjectLocation, item.location, scope)) return false;
+        if (!Number.isFinite(band)) return true;
+        return similarPropertyPriceWithinBand(subjectPrice, similarPropertyPrice(item.property), band);
+      }));
+      scoped.forEach((item) => {
+        const id = String(item.property.id);
+        if (!selectedIds.has(id)) {
+          selectedIds.add(id);
+          selected.push(item);
+        }
+      });
+      if (selected.length >= desired) break;
+    }
+    if (selected.length >= desired) break;
+  }
+
+  return similarDedupedSortedItems(selected.length ? selected : eligible)
     .slice(0, limit)
     .map((item) => item.property);
 }

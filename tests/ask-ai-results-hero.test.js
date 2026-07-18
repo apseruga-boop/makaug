@@ -24,17 +24,24 @@ includes(indexHtml, 'ask-ai-no-intent-routing-20260718', 'Ask AI no-intent routi
 includes(indexHtml, 'ask-ai-fast-mobile-20260718', 'Ask AI fast/mobile marker must be present in HTML');
 includes(indexHtml, 'ask-ai-similar-closeout-20260718', 'Ask AI/similar closeout marker must be present in HTML');
 includes(indexHtml, 'ask-ai-card-sql-fast-20260718', 'Ask AI card SQL fast-path marker must be present in HTML');
+includes(indexHtml, 'ask-ai-placeholder-i18n-live-20260718', 'Ask AI visible placeholder/i18n marker must be present in HTML');
 includes(indexHtml, 'data-ask-ai-results-hero="1"', 'homepage Ask AI hero marker missing');
 includes(indexHtml, 'data-ask-ai-blue-categoryrouting="1"', 'Ask AI blue/category-routing UI marker missing');
 includes(indexHtml, 'data-ask-ai-fast-mobile="1"', 'Ask AI fast/mobile UI marker missing');
 includes(indexHtml, 'data-ask-ai-similar-closeout="1"', 'Ask AI closeout UI marker missing');
+includes(indexHtml, 'data-ask-ai-placeholder-i18n-live="1"', 'Ask AI visible placeholder UI marker missing');
 includes(indexHtml, 'id="home-ai-search-form"', 'homepage Ask AI form missing');
 includes(indexHtml, 'id="home-ai-example-chips"', 'homepage localized example chips missing');
 includes(indexHtml, 'id="home-ai-response"', 'homepage Ask AI response region missing');
+includes(indexHtml, 'id="home-ai-placeholder-rotator"', 'homepage Ask AI must render a visible rotating placeholder overlay');
+includes(indexHtml, 'id="ai-chatbot-placeholder-rotator"', 'test Ask AI panel must render a visible rotating placeholder overlay');
 includes(indexHtml, 'submitHomeAskAiPrompt(event)', 'homepage form must call Ask AI submit handler');
 includes(indexHtml, 'text-[clamp(16px,3.8vw,21px)] font-semibold', 'Ask AI heading must use compact mobile-first type');
+includes(indexHtml, 'text-[#0b1220]', 'Ask AI heading and shell should use the darker true-black text tone');
 includes(indexHtml, '✨ Ask AI', 'Ask AI button must include the AI star');
 includes(indexHtml, 'pl-10 pr-4 text-sm', 'Ask AI input must reserve room for star and avoid mobile overflow');
+includes(indexHtml, 'placeholder:text-transparent', 'Ask AI native placeholder should be hidden behind the animated overlay');
+includes(indexHtml, 'transition-opacity', 'Ask AI placeholder overlay must visibly fade between localized examples');
 
 includes(aiRoute, 'extractNaturalPropertyQuery', 'assistant route must parse natural property queries');
 includes(aiRoute, 'heuristicNaturalPropertyQuery', 'assistant route must expose the deterministic fast parser');
@@ -71,6 +78,9 @@ includes(appJs, 'AI_ASSISTANT_PROMPT_I18N', 'frontend must include language-awar
 includes(appJs, 'aiAssistantStarLabel', 'frontend must keep AI star through language refreshes');
 includes(appJs, 'updateHomeAskAiLanguageCopy', 'frontend must update prompt/chips when language changes');
 includes(appJs, 'startAiAssistantPlaceholderRotation', 'frontend must rotate localized Ask AI placeholder examples');
+includes(appJs, 'aiAssistantPlaceholderTargets', 'frontend must target both Ask AI inputs for visible placeholder rotation');
+includes(appJs, 'setAiAssistantPlaceholderOverlay', 'frontend must animate the visible placeholder overlay');
+includes(appJs, 'dataset.aiPlaceholderWired', 'frontend must wire placeholder overlay sync only once per input');
 includes(appJs, 'renderAiAssistantResponse', 'frontend must render assistant responses');
 includes(appJs, 'aiAssistantListingCardsHtml', 'frontend must render listing cards inline');
 includes(appJs, 'aiAssistantNeedCaptureHtml', 'frontend must render zero-result capture UI');
