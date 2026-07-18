@@ -31383,9 +31383,9 @@ function renderHowToVideoSections() {
 
 const AI_ASSISTANT_PROMPT_I18N = Object.freeze({
   en: {
-    pill: "Ask makaug AI",
-    title: "Ask makaug AI",
-    subtitle: "Describe what you want — makaug AI finds it in any language.",
+    pill: "Describe what you want",
+    title: "Describe what you want",
+    subtitle: "Search in any language — makaug AI finds real listings.",
     placeholder: "Try: 2-bed in Ntinda under 1.5M",
     ask: "Ask AI",
     loading: "makaug AI is searching...",
@@ -31778,35 +31778,32 @@ function aiAssistantScopeHintText(scope = "all") {
 function aiAssistantShellHtml({ scope = "all", idPrefix = "ask-ai-inline" } = {}) {
   const normalizedScope = normalizeAiAssistantScope(scope);
   const copy = getAiAssistantPromptCopy();
-  const title = copy.pill || copy.title || AI_ASSISTANT_PROMPT_I18N.en.pill;
+  const title = copy.title || copy.pill || AI_ASSISTANT_PROMPT_I18N.en.title;
   const subtitle = copy.subtitle || AI_ASSISTANT_PROMPT_I18N.en.subtitle;
   const buttonText = aiAssistantStarLabel(copy.ask, "Ask AI");
   const scopeHint = aiAssistantScopeHintText(normalizedScope);
   const inputId = `${idPrefix}-message`;
   const labelId = `${idPrefix}-label`;
-  const placeholderId = `${idPrefix}-placeholder`;
   const responseId = `${idPrefix}-response`;
   const buttonId = `${idPrefix}-submit`;
   const intent = aiAssistantIntentForScope(normalizedScope);
+  const placeholder = copy.placeholder || AI_ASSISTANT_PROMPT_I18N.en.placeholder;
   return `
-    <div class="rounded-[1.35rem] border border-blue-100 bg-white p-3.5 md:p-4 shadow-sm" data-ai-search-shell data-ai-scope="${adminAttr(normalizedScope)}">
+    <div class="ask-ai-search-shell" data-ai-search-shell data-ai-scope="${adminAttr(normalizedScope)}">
       <div class="flex items-center justify-between gap-3 flex-wrap">
         <div class="min-w-0">
-          <h2 data-ai-title class="text-base md:text-lg font-black text-[#0b1220]">${adminEscape(title)}</h2>
-          <p data-ai-subtitle class="mt-0.5 text-sm text-[#5b6b62]">${adminEscape(subtitle)}</p>
+          <h2 data-ai-title class="ask-ai-search-title">${adminEscape(title)}</h2>
+          <p data-ai-subtitle class="ask-ai-search-subtitle">${adminEscape(subtitle)}</p>
         </div>
         <p data-ai-scope-hint class="text-xs font-bold text-blue-700 bg-blue-50 border border-blue-100 rounded-full px-3 py-1">${adminEscape(scopeHint)}</p>
       </div>
       <form data-ai-search-form data-ai-scope="${adminAttr(normalizedScope)}" onsubmit="submitAskAiSearchPrompt(event)" class="mt-3">
         <input data-ai-intent type="hidden" value="${adminAttr(intent)}">
         <label id="${adminAttr(labelId)}" data-ai-label for="${adminAttr(inputId)}" class="sr-only">${adminEscape(title)}</label>
-        <div class="flex items-center gap-2 rounded-full border border-blue-200 bg-white px-3 py-2 shadow-inner focus-within:border-blue-400 focus-within:ring-4 focus-within:ring-blue-100">
-          <span class="shrink-0 text-base" aria-hidden="true">✨</span>
-          <div class="relative min-w-0 flex-1">
-            <span id="${adminAttr(placeholderId)}" data-ai-placeholder class="pointer-events-none absolute inset-y-0 left-0 right-0 flex items-center truncate text-sm text-gray-500 opacity-100 transition-opacity duration-300" aria-hidden="true">${adminEscape(copy.placeholder || AI_ASSISTANT_PROMPT_I18N.en.placeholder)}</span>
-            <input id="${adminAttr(inputId)}" data-ai-message autocomplete="off" class="h-10 w-full min-w-0 truncate bg-transparent text-sm text-gray-950 outline-none placeholder:text-transparent" placeholder="">
-          </div>
-          <button id="${adminAttr(buttonId)}" data-ai-submit type="submit" class="h-10 shrink-0 rounded-full bg-blue-600 hover:bg-blue-700 text-white px-4 text-sm font-black whitespace-nowrap">
+        <div class="ask-ai-search-row">
+          <span class="ask-ai-search-icon" aria-hidden="true">✨</span>
+          <input id="${adminAttr(inputId)}" data-ai-message autocomplete="off" class="ask-ai-search-input" placeholder="${adminAttr(placeholder)}">
+          <button id="${adminAttr(buttonId)}" data-ai-submit type="submit" class="ask-ai-search-submit">
             ${adminEscape(buttonText)}
           </button>
         </div>
@@ -31841,10 +31838,9 @@ let aiAssistantPlaceholderIndex = 0;
 
 function aiAssistantPlaceholderTargets() {
   return Array.from(document.querySelectorAll("[data-ai-message]")).map((input) => {
-    const shell = input.closest("[data-ai-search-shell], [data-ai-search-form]") || document;
     return {
       input,
-      overlay: shell.querySelector("[data-ai-placeholder]") || null
+      overlay: null
     };
   });
 }
@@ -31859,7 +31855,7 @@ function setAiAssistantPlaceholderOverlay(input, overlay, value = "", { force = 
   if (!input) return;
   const nextValue = String(value || "").trim();
   input.dataset.aiPlaceholderText = nextValue;
-  input.placeholder = overlay ? "" : nextValue;
+  input.placeholder = nextValue;
   if (!overlay) return;
   const hasTypedText = !!String(input.value || "").trim();
   overlay.classList.toggle("opacity-0", hasTypedText);
@@ -31911,7 +31907,7 @@ function startAiAssistantPlaceholderRotation() {
 function updateHomeAskAiLanguageCopy() {
   renderAskAiSearchInlineSurfaces();
   const copy = getAiAssistantPromptCopy();
-  const titleText = copy.pill || copy.title || AI_ASSISTANT_PROMPT_I18N.en.pill;
+  const titleText = copy.title || copy.pill || AI_ASSISTANT_PROMPT_I18N.en.title;
   const subtitleText = copy.subtitle || AI_ASSISTANT_PROMPT_I18N.en.subtitle;
   const textTargets = [
     ["home-ai-pill", titleText],
@@ -32181,7 +32177,7 @@ function runHomeAskAiExample(index = 0) {
   const intent = document.getElementById("home-ai-intent");
   if (input) {
     input.value = chip.prompt || chip.label || "";
-    setAiAssistantPlaceholderOverlay(input, document.getElementById("home-ai-placeholder-rotator"), input.placeholder || "", { force: true });
+    setAiAssistantPlaceholderOverlay(input, null, input.placeholder || "", { force: true });
   }
   if (intent) intent.value = chip.intent || "search_property";
   return submitHomeAskAiPrompt({ preventDefault() {} });
