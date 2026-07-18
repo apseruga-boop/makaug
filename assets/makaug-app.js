@@ -7,22 +7,51 @@ const BrandConfig = Object.freeze({
 const publicBrand = () => BrandConfig.productDisplayName;
 const normalizeType = (t) => {
   const value = String(t || "").toLowerCase().trim();
+  const aliasKey = value.replace(/[-\s]+/g, "_");
   const aliases = {
     buy: "sale",
     for_sale: "sale",
+    "for-sale": "sale",
     "for sale": "sale",
     sales: "sale",
+    sell: "sale",
     rental: "rent",
     rentals: "rent",
+    rent: "rent",
     to_rent: "rent",
+    "to-rent": "rent",
     "to rent": "rent",
+    for_rent: "rent",
+    "for-rent": "rent",
+    "for rent": "rent",
+    to_let: "rent",
+    "to-let": "rent",
+    "to let": "rent",
     let: "rent",
     students: "student",
+    student: "student",
     student_accommodation: "student",
+    "student-accommodation": "student",
+    "student accommodation": "student",
     student_housing: "student",
-    campus_housing: "student"
+    "student-housing": "student",
+    "student housing": "student",
+    campus_housing: "student",
+    "campus-housing": "student",
+    "campus housing": "student",
+    hostel: "student",
+    hostels: "student",
+    commercial_property: "commercial",
+    "commercial-property": "commercial",
+    "commercial property": "commercial",
+    commercial: "commercial",
+    plots: "land",
+    plot: "land",
+    land_sale: "land",
+    "land-sale": "land",
+    "land sale": "land"
   };
-  return aliases[value] || value;
+  return aliases[value] || aliases[aliasKey] || value;
 };
 
 function cleanText(value = "") {
@@ -35858,9 +35887,49 @@ function openPropertyDirections(id) {
 
 const SIMILAR_PROPERTIES_RELEVANCE_MARKER = "similar-relevance-v2-20260718";
 const SIMILAR_PROPERTIES_RECALL_MARKER = "similar-recall-widening-20260718";
+const SIMILAR_PROPERTIES_ALIAS_RENDER_MARKER = "similar-alias-render-20260718";
+const detailSimilarHydrationInFlight = new Map();
 
 function similarPropertyCategory(property = {}) {
-  return normalizeType(property?.type || property?.listing_type || property?.category || property?.extra_fields?.listing_type || "");
+  const extra = property?.extra_fields && typeof property.extra_fields === "object" ? property.extra_fields : {};
+  const rawParts = [
+    property?.type,
+    property?.listing_type,
+    property?.category,
+    property?.listing_category,
+    property?.property_type,
+    property?.subtype,
+    property?.room_type,
+    extra.listing_type,
+    extra.category,
+    extra.listing_category,
+    extra.property_type,
+    extra.subtype,
+    extra.room_type,
+    extra.source_listing_type,
+    extra.source_category
+  ].map((value) => String(value || "").trim()).filter(Boolean);
+  const normalizedParts = rawParts.map((value) => normalizeType(value)).filter(Boolean);
+  const joined = similarLocationText(rawParts.join(" "));
+
+  if (normalizedParts.includes("student")
+    || property?.student_portal === true
+    || extra.student_portal === true
+    || isStudentDiscoverable(property)
+    || /\b(student|students|hostel|hostels|campus|university|makerere|kyambogo|mubs|ucu|nkumba)\b/.test(joined)) {
+    return "student";
+  }
+  if (normalizedParts.includes("land")
+    || /\b(land|plot|plots|acre|acres|decimal|decimals|hectare|hectares|mailo|freehold|leasehold)\b/.test(joined)) {
+    return "land";
+  }
+  if (normalizedParts.includes("commercial")
+    || /\b(commercial|office|offices|shop|shops|retail|warehouse|warehouses|industrial|business\s*space)\b/.test(joined)) {
+    return "commercial";
+  }
+  if (normalizedParts.includes("rent")) return "rent";
+  if (normalizedParts.includes("sale")) return "sale";
+  return normalizedParts[0] || "";
 }
 
 function similarPropertyPurpose(property = {}) {
@@ -44918,7 +44987,7 @@ function mortgagePurposeFromListing(listingType) {
 }
 
 function isCommercialForSale(property) {
-  if (!property || normalizeType(property.type) !== "commercial") return false;
+  if (!property || normalizeType(property.type || property.listing_type || property.category || property.extra_fields?.listing_type) !== "commercial") return false;
   const intent = String(
     property.commercial_intent
     || property.commercialIntent
@@ -45634,6 +45703,70 @@ function detailMobileContactBarHtml({
     </div>`;
 }
 
+function similarPropertyCategoryApiPath(property = {}) {
+  const category = similarPropertyCategory(property);
+  if (category === "student") return "/api/properties?status=approved&public_only=1&student_portal=1";
+  if (["sale", "rent", "commercial", "land"].includes(category)) {
+    return `/api/properties?status=approved&public_only=1&category=${encodeURIComponent(category)}`;
+  }
+  return "";
+}
+
+function renderDetailSimilarPropertiesSectionHtml(similar = []) {
+  const rows = (Array.isArray(similar) ? similar : []).filter(Boolean);
+  return `<div id="detail-similar-properties" data-similar-alias-render="${SIMILAR_PROPERTIES_ALIAS_RENDER_MARKER}" class="bg-white border border-gray-200 rounded-2xl p-5 mt-5 ${rows.length ? "" : "hidden"}">
+          <h2 class="text-xl font-bold mb-3">${translatePropertyUi("Similar Properties")}</h2>
+          <div id="detail-similar-properties-grid" class="grid md:grid-cols-3 gap-4">${rows.map(propCard).join("")}</div>
+        </div>`;
+}
+
+function updateDetailSimilarPropertiesSection(similar = []) {
+  const section = document.getElementById("detail-similar-properties");
+  if (!section) return;
+  const grid = document.getElementById("detail-similar-properties-grid");
+  const rows = (Array.isArray(similar) ? similar : []).filter(Boolean);
+  if (!rows.length) {
+    section.classList.add("hidden");
+    if (grid) grid.innerHTML = "";
+    return;
+  }
+  if (grid) grid.innerHTML = rows.map(propCard).join("");
+  section.classList.remove("hidden");
+}
+
+async function hydrateDetailSimilarProperties(property = {}) {
+  const id = String(property?.id || property?.backend_id || "");
+  if (!id) return [];
+  const localMatches = getSimilarProperties(property, 8);
+  if (localMatches.length) updateDetailSimilarPropertiesSection(localMatches);
+  if (localMatches.length >= 4) return localMatches;
+
+  const path = similarPropertyCategoryApiPath(property);
+  if (!path) return localMatches;
+  const key = `${id}:${path}`;
+  if (detailSimilarHydrationInFlight.has(key)) return detailSimilarHydrationInFlight.get(key);
+
+  const request = (async () => {
+    try {
+      const separator = path.includes("?") ? "&" : "?";
+      const response = await apiRequest(`${path}${separator}limit=96&page=1&include_summary=0`, { skipAuth: true });
+      const rows = Array.isArray(response?.data) ? response.data : [];
+      rows.forEach((row) => upsertPropertyForUi(row));
+      const subject = findPropertyForUi(id) || property;
+      const nextMatches = getSimilarProperties(subject, 8);
+      if (String(activeDetailPropertyId || "") === id) updateDetailSimilarPropertiesSection(nextMatches);
+      return nextMatches;
+    } catch (error) {
+      console.warn("Unable to hydrate similar properties", error);
+      return localMatches;
+    } finally {
+      detailSimilarHydrationInFlight.delete(key);
+    }
+  })();
+  detailSimilarHydrationInFlight.set(key, request);
+  return request;
+}
+
 async function openDetail(id, options = {}) {
   let p = findPropertyForUi(id);
   if (!p) return false;
@@ -45860,10 +45993,7 @@ async function openDetail(id, options = {}) {
             <i class="fas fa-route"></i> ${translatePropertyUi("Directions unavailable")}
           </button>`}
         </div>
-        ${similar.length ? `<div id="detail-similar-properties" class="bg-white border border-gray-200 rounded-2xl p-5 mt-5">
-          <h2 class="text-xl font-bold mb-3">${translatePropertyUi("Similar Properties")}</h2>
-          <div class="grid md:grid-cols-3 gap-4">${similar.map(propCard).join("")}</div>
-        </div>` : ""}
+        ${renderDetailSimilarPropertiesSectionHtml(similar)}
         ${listingOnlineSourceDisclosureHtml(p)}
         ${renderUgNlisVerificationCard(p)}
       </div>
@@ -45928,6 +46058,7 @@ async function openDetail(id, options = {}) {
   setLang(currentLang, true, false);
   updateDetailSaveButton(p.id);
   ensureRevenuePlacements();
+  hydrateDetailSimilarProperties(p);
   setTimeout(() => {
     initDetailMap(p);
     if (showMortgageWidget) renderDetailMortgageWidget(p.id);

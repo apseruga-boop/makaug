@@ -450,7 +450,8 @@ test('listing detail has a mobile sticky contact bar with phone, source, and mak
     openDetailSource.indexOf('${renderUgNlisVerificationCard(p)}') > openDetailSource.indexOf('${listingOnlineSourceDisclosureHtml(p)}'),
     'UgNLIS verification should sit with source verification after the property-first content'
   );
-  assert.match(openDetailSource, /\$\{similar\.length \? `<div id="detail-similar-properties"/);
+  assert.match(openDetailSource, /\$\{renderDetailSimilarPropertiesSectionHtml\(similar\)\}/);
+  assert.match(openDetailSource, /hydrateDetailSimilarProperties\(p\);/);
   ['sale', 'rent', 'students', 'commercial', 'land'].forEach((page) => {
     assert.match(appSource, new RegExp(`renderPublicCategoryPage\\("${page}"`), `${page} page should use shared public category card rendering`);
   });

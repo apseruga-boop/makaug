@@ -8,6 +8,7 @@ const indexHtml = fs.readFileSync(path.join(root, "index.html"), "utf8");
 
 const marker = "similar-relevance-v2-20260718";
 const recallMarker = "similar-recall-widening-20260718";
+const aliasRenderMarker = "similar-alias-render-20260718";
 
 const markerCount = (indexHtml.match(new RegExp(marker, "g")) || []).length;
 assert(markerCount >= 2, "production HTML must carry the similar relevance marker in both preload and app-loader cache keys");
@@ -15,6 +16,9 @@ assert(appJs.includes(`SIMILAR_PROPERTIES_RELEVANCE_MARKER = "${marker}"`), "cli
 const recallMarkerCount = (indexHtml.match(new RegExp(recallMarker, "g")) || []).length;
 assert(recallMarkerCount >= 2, "production HTML must carry the similar recall marker in both preload and app-loader cache keys");
 assert(appJs.includes(`SIMILAR_PROPERTIES_RECALL_MARKER = "${recallMarker}"`), "client bundle must carry the similar recall marker");
+const aliasRenderMarkerCount = (indexHtml.match(new RegExp(aliasRenderMarker, "g")) || []).length;
+assert(aliasRenderMarkerCount >= 2, "production HTML must carry the similar alias/render marker in both preload and app-loader cache keys");
+assert(appJs.includes(`SIMILAR_PROPERTIES_ALIAS_RENDER_MARKER = "${aliasRenderMarker}"`), "client bundle must carry the similar alias/render marker");
 assert(appJs.includes("function similarPropertyCategory(property = {})"), "similar properties must normalize listing category before ranking");
 assert(appJs.includes("function similarPropertyPurpose(property = {})"), "similar properties must normalize sale/rent purpose before ranking");
 assert(appJs.includes("function similarPropertyPrice(property = {})"), "similar properties must reject unpriced candidates");
@@ -33,6 +37,23 @@ assert(
 );
 
 assert(
+  appJs.includes("\"to-rent\": \"rent\"")
+    && appJs.includes("\"student-accommodation\": \"student\"")
+    && appJs.includes("\"commercial-property\": \"commercial\"")
+    && appJs.includes("const aliasKey = value.replace(/[-\\s]+/g, \"_\");"),
+  "similar properties must collapse dashed public-route category aliases before same-category matching"
+);
+
+assert(
+  appJs.includes("property?.listing_category")
+    && appJs.includes("extra.source_listing_type")
+    && appJs.includes("isStudentDiscoverable(property)")
+    && appJs.includes("return \"student\";")
+    && appJs.includes("return \"commercial\";"),
+  "similar property category normalization must use route/category/source aliases, student flags, and property-type hints"
+);
+
+assert(
   appJs.includes("if (!candidatePrice) return false;")
     && appJs.includes("return similarPropertyLocation(candidate).usable;"),
   "similar property hard gates must exclude price=0 and no-location candidates before widening"
@@ -46,6 +67,24 @@ assert(
     && appJs.includes("[\"area\", \"district\", \"region\", \"national\"]")
     && appJs.includes("return similarPropertyPriceWithinBand(subjectPrice, similarPropertyPrice(item.property), band);"),
   "similar property recall must widen area/district/region/national and price band before going empty"
+);
+
+assert(
+  appJs.includes("function similarPropertyCategoryApiPath(property = {})")
+    && appJs.includes("student_portal=1")
+    && appJs.includes("category=${encodeURIComponent(category)}")
+    && appJs.includes("function hydrateDetailSimilarProperties(property = {})")
+    && appJs.includes("limit=96&page=1&include_summary=0")
+    && appJs.includes("rows.forEach((row) => upsertPropertyForUi(row));"),
+  "direct property detail loads must fetch same-category public rows before giving up on similar cards"
+);
+
+assert(
+  appJs.includes("function renderDetailSimilarPropertiesSectionHtml(similar = [])")
+    && appJs.includes("id=\"detail-similar-properties-grid\"")
+    && appJs.includes("updateDetailSimilarPropertiesSection(nextMatches)")
+    && appJs.includes("hydrateDetailSimilarProperties(p);"),
+  "detail pages must always include a hydratable similar-properties section and render it when matches appear"
 );
 
 assert(
