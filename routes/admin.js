@@ -1582,6 +1582,46 @@ const ADMIN_DASHBOARD_CACHE_TTL_MS = 15000;
 const ADMIN_REVIEW_QUEUE_CACHE_TTL_MS = 8000;
 const ADMIN_SAFE_QUERY_TIMEOUT_MS = 3500;
 const adminDashboardResponseCache = new Map();
+let adminSummaryLastKnownGoodPayload = null;
+
+function cloneJson(value) {
+  if (value == null) return value;
+  return JSON.parse(JSON.stringify(value));
+}
+
+function hasUsefulAdminSummaryNumbers(payload = {}) {
+  const properties = payload?.data?.properties || {};
+  return Number(properties.public_live || 0) > 0
+    || Number(properties.approved || 0) > 0
+    || Number(properties.total || 0) > 0;
+}
+
+function rememberAdminSummaryLastKnownGood(payload = {}) {
+  if (!hasUsefulAdminSummaryNumbers(payload)) return payload;
+  adminSummaryLastKnownGoodPayload = cloneJson(payload);
+  return payload;
+}
+
+function buildAdminSummaryLastKnownGoodPayload(error, source = 'admin_summary_last_known_good') {
+  if (!adminSummaryLastKnownGoodPayload) return null;
+  const payload = cloneJson(adminSummaryLastKnownGoodPayload);
+  payload.meta = {
+    ...(payload.meta || {}),
+    cache: source,
+    stale: true,
+    partial: true,
+    fallback_reason: adminSummaryFallbackReason(error),
+    generated_at: new Date().toISOString(),
+    last_known_good_generated_at: payload.meta?.generated_at || null
+  };
+  if (payload.data?.properties) {
+    payload.data.properties = {
+      ...payload.data.properties,
+      _fallback_reason: adminSummaryFallbackReason(error)
+    };
+  }
+  return payload;
+}
 
 function adminCacheEntryIsFresh(entry) {
   return entry?.value && Number(entry.expiresAt || 0) > Date.now();
@@ -1602,6 +1642,23 @@ async function adminCachedPayload(cacheKey, ttlMs, producer) {
       return value;
     })
     .catch((error) => {
+      if (existing?.value) {
+        const stalePayload = cloneJson(existing.value);
+        stalePayload.meta = {
+          ...(stalePayload.meta || {}),
+          cache: `${cacheKey}_stale`,
+          stale: true,
+          partial: true,
+          fallback_reason: adminSafeQueryFallbackReason(error) || error?.code || 'query_failed',
+          generated_at: new Date().toISOString(),
+          last_known_good_generated_at: stalePayload.meta?.generated_at || null
+        };
+        adminDashboardResponseCache.set(cacheKey, {
+          value: stalePayload,
+          expiresAt: Date.now() + Math.max(1000, Math.min(Number(ttlMs) || ADMIN_DASHBOARD_CACHE_TTL_MS, 5000))
+        });
+        return stalePayload;
+      }
       adminDashboardResponseCache.delete(cacheKey);
       throw error;
     });
@@ -1811,39 +1868,43 @@ async function loadAdminPropertiesSummaryFast() {
 }
 
 async function buildAdminSummaryFallbackPayload(error) {
+  const lastKnownGood = buildAdminSummaryLastKnownGoodPayload(error);
+  if (lastKnownGood) return lastKnownGood;
+
   const publicInventory = await safePublicInventorySummaryForAdmin();
   const publicLive = Number(publicInventory?.summary?.total || 0) || 0;
   const reason = adminSummaryFallbackReason(error);
+  const unknownCount = null;
   return {
     ok: true,
     data: {
       properties: {
-        total: publicLive,
-        pending: 0,
-        approved: publicLive,
-        public_live: publicLive,
-        public_featured: 0,
-        rejected: 0,
-        hidden: 0,
-        deleted: 0,
-        private: 0,
-        agent_listed: 0,
-        student_discoverable: publicInventory?.summary?.student || 0,
-        approval_rate_pct: publicLive ? 100 : 0,
-        rejection_rate_pct: 0,
+        total: publicLive || null,
+        pending: unknownCount,
+        approved: publicLive || null,
+        public_live: publicLive || null,
+        public_featured: unknownCount,
+        rejected: unknownCount,
+        hidden: unknownCount,
+        deleted: unknownCount,
+        private: unknownCount,
+        agent_listed: unknownCount,
+        student_discoverable: publicLive > 0 ? publicInventory?.summary?.student || 0 : null,
+        approval_rate_pct: publicLive ? 100 : null,
+        rejection_rate_pct: publicLive ? 0 : null,
         public_opportunities: publicInventory.summary || zeroPublicInventorySummary(),
         public_count_marker: publicInventory.meta?.marker || PUBLIC_INVENTORY_METRICS_MARKER,
         public_count_cache: publicInventory.meta?.cache || 'fallback',
         _fallback_reason: reason
       },
-      agents: { total: 0, pending: 0, approved: 0, _fallback_reason: reason },
-      users: { total: 0, active: 0, suspended: 0, phone_verified: 0, weekly_tips_opt_in: 0, marketing_opt_in: 0, social_linked: 0, _fallback_reason: reason },
-      reports: { total: 0, open: 0, _fallback_reason: reason },
-      propertyRequests: { total: 0, _fallback_reason: reason },
-      inquiries: { total: 0, _fallback_reason: reason },
-      engagement: { property_views: 0, property_saves: 0, broker_profile_views: 0, property_inquiries: 0, route_events: 0, _fallback_reason: reason },
+      agents: { total: null, pending: null, approved: null, _fallback_reason: reason },
+      users: { total: null, active: null, suspended: null, phone_verified: null, weekly_tips_opt_in: null, marketing_opt_in: null, social_linked: null, _fallback_reason: reason },
+      reports: { total: null, open: null, _fallback_reason: reason },
+      propertyRequests: { total: null, _fallback_reason: reason },
+      inquiries: { total: null, _fallback_reason: reason },
+      engagement: { property_views: null, property_saves: null, broker_profile_views: null, property_inquiries: null, route_events: null, _fallback_reason: reason },
       ai_insights: {
-        last_48h: { property_views: 0, unique_visitors: 0, property_saves: 0, property_inquiries: 0, route_events: 0, _fallback_reason: reason },
+        last_48h: { property_views: null, unique_visitors: null, property_saves: null, property_inquiries: null, route_events: null, _fallback_reason: reason },
         top_areas: [],
         top_listing_types: []
       }
@@ -1854,6 +1915,7 @@ async function buildAdminSummaryFallbackPayload(error) {
       public_count_marker: PUBLIC_INVENTORY_METRICS_MARKER,
       generated_at: new Date().toISOString(),
       partial: true,
+      stale: true,
       fallback_reason: reason
     }
   };
@@ -2939,7 +3001,7 @@ router.get('/summary', async (req, res, next) => {
         )
       ]);
 
-      return {
+      return rememberAdminSummaryLastKnownGood({
       ok: true,
       data: {
         properties,
@@ -2962,10 +3024,10 @@ router.get('/summary', async (req, res, next) => {
         generated_at: new Date().toISOString(),
         partial: [properties, agents, reports, requests, inquiries, users, engagement, engagement48h].some((row) => row?._fallback_reason)
       }
-      };
+      });
     });
 
-    return res.json(payload);
+    return res.json(rememberAdminSummaryLastKnownGood(payload));
   } catch (error) {
     logger.warn('Admin summary route returned fallback payload after producer failure', {
       reason: adminSummaryFallbackReason(error),

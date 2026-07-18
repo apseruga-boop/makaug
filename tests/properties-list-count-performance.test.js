@@ -5,6 +5,8 @@ const path = require('path');
 const root = path.resolve(__dirname, '..');
 const propertiesRoute = fs.readFileSync(path.join(root, 'routes/properties.js'), 'utf8');
 const adminRoute = fs.readFileSync(path.join(root, 'routes/admin.js'), 'utf8');
+const databaseConfig = fs.readFileSync(path.join(root, 'config/database.js'), 'utf8');
+const serverSource = fs.readFileSync(path.join(root, 'server.js'), 'utf8');
 const metricsService = fs.readFileSync(path.join(root, 'services/publicInventoryMetricsService.js'), 'utf8');
 const migration = fs.readFileSync(path.join(root, 'db/migrations/077_properties_list_count_performance.sql'), 'utf8');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
@@ -52,6 +54,27 @@ assert(
   adminRoute.includes("adminSummaryOne") && adminRoute.includes("adminSummaryRows") && adminRoute.includes("adminSummaryCount"),
   'admin summary widgets should use non-fatal wrappers so one slow widget cannot blank the dashboard'
 );
+assert(
+  adminRoute.includes("adminSummaryLastKnownGoodPayload") && adminRoute.includes("rememberAdminSummaryLastKnownGood"),
+  'admin summary should keep a last-known-good payload for cold/pool fallback'
+);
+assert(
+  adminRoute.includes("stale: true") && adminRoute.includes("last_known_good_generated_at"),
+  'admin summary fallback should mark stale last-known-good responses explicitly'
+);
+assert(
+  adminRoute.includes("publicLive || null") && !adminRoute.includes("total: 0,\n        pending: 0,\n        approved: 0"),
+  'admin summary fallback must not synthesize a misleading all-zero dashboard'
+);
+
+assert(
+  databaseConfig.includes("DB_POOL_MIN") && databaseConfig.includes("DB_POOL_WARM_CONNECTIONS") && databaseConfig.includes("async function warmPool"),
+  'database config should support warming retained pool connections before traffic'
+);
+assert(
+  serverSource.includes("await db.warmPool()") && serverSource.includes("Database pool warmed before accepting traffic"),
+  'server startup should warm the database pool before accepting requests'
+);
 
 assert(
   metricsService.includes("PUBLIC_INVENTORY_METRICS_MARKER = 'properties-list-count-fast-20260718'"),
@@ -87,6 +110,10 @@ assert(
 assert(
   html.includes('admin-summary-fallback-20260718'),
   'production HTML should include the admin summary fallback marker'
+);
+assert(
+  html.includes('admin-summary-warm-nozero-20260718'),
+  'production HTML should include the admin summary warm/no-zero marker'
 );
 
 console.log('properties-list-count-performance: ok');

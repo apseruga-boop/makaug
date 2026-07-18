@@ -955,6 +955,17 @@ async function start() {
   } else if (!process.env.DATABASE_URL) {
     logger.warn('Skipping startup migrations because DATABASE_URL is not set');
   }
+  if (process.env.DATABASE_URL && typeof db.warmPool === 'function') {
+    try {
+      const warmResult = await db.warmPool();
+      logger.info('Database pool warmed before accepting traffic', warmResult);
+    } catch (error) {
+      logger.warn('Database pool warmup failed; continuing startup', {
+        code: error?.code,
+        message: error?.message
+      });
+    }
+  }
   startXSourceDripScheduler(db);
   startYouTubeSourceDripScheduler(db);
 
