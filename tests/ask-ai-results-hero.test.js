@@ -21,15 +21,29 @@ function excludes(haystack, needle, message) {
 includes(indexHtml, 'ask-ai-results-hero-20260717', 'original Ask AI results release marker must be present in HTML');
 includes(indexHtml, 'ask-ai-blue-categoryrouting-20260718', 'Ask AI blue/category-routing marker must be present in HTML');
 includes(indexHtml, 'ask-ai-no-intent-routing-20260718', 'Ask AI no-intent routing marker must be present in HTML');
+includes(indexHtml, 'ask-ai-fast-mobile-20260718', 'Ask AI fast/mobile marker must be present in HTML');
 includes(indexHtml, 'data-ask-ai-results-hero="1"', 'homepage Ask AI hero marker missing');
 includes(indexHtml, 'data-ask-ai-blue-categoryrouting="1"', 'Ask AI blue/category-routing UI marker missing');
+includes(indexHtml, 'data-ask-ai-fast-mobile="1"', 'Ask AI fast/mobile UI marker missing');
 includes(indexHtml, 'id="home-ai-search-form"', 'homepage Ask AI form missing');
 includes(indexHtml, 'id="home-ai-example-chips"', 'homepage localized example chips missing');
 includes(indexHtml, 'id="home-ai-response"', 'homepage Ask AI response region missing');
 includes(indexHtml, 'submitHomeAskAiPrompt(event)', 'homepage form must call Ask AI submit handler');
+includes(indexHtml, 'text-[clamp(16px,3.8vw,21px)] font-semibold', 'Ask AI heading must use compact mobile-first type');
+includes(indexHtml, '✨ Ask AI', 'Ask AI button must include the AI star');
+includes(indexHtml, 'pl-10 pr-4 text-sm', 'Ask AI input must reserve room for star and avoid mobile overflow');
 
 includes(aiRoute, 'extractNaturalPropertyQuery', 'assistant route must parse natural property queries');
+includes(aiRoute, 'heuristicNaturalPropertyQuery', 'assistant route must expose the deterministic fast parser');
+includes(aiRoute, 'model: \'heuristic-fast\'', 'assistant search route must support non-LLM fast parsing');
+includes(aiRoute, 'if (!assistantIsSearch)', 'assistant route must keep LLM chat off the search critical path');
 includes(aiRoute, '/api/properties/search?', 'assistant route must call properties search');
+includes(aiRoute, "include_summary: '0'", 'assistant search must request a lightweight card payload');
+includes(aiRoute, 'ASSISTANT_SEARCH_RESULT_CACHE_TTL_MS', 'assistant route must cache repeated common search results briefly');
+includes(aiRoute, 'ASSISTANT_SEARCH_TIMEOUT_MS', 'assistant search timeout must be configurable');
+includes(aiRoute, 'relaxedResultPromise', 'assistant route should start relaxed fallback search in parallel');
+includes(aiRoute, 'assistantSearchOriginFromRequest', 'assistant search should use an internal origin where available');
+includes(aiRoute, 'ASSISTANT_SEARCH_BASE_URL', 'assistant search should allow an internal search base URL override');
 includes(aiRoute, 'listings: result.listings', 'assistant route must return listings array');
 includes(aiRoute, 'results: result.listings', 'assistant route must return results alias');
 includes(aiRoute, 'total_matches: result.total', 'assistant route must return total_matches');
@@ -49,6 +63,7 @@ includes(aiRoute, "matchQuality = 'nearby_not_exact'", 'relaxed or nearby result
 includes(aiRoute, 'capture_available', 'zero/relaxed search responses must advertise capture availability');
 
 includes(appJs, 'AI_ASSISTANT_PROMPT_I18N', 'frontend must include language-aware Ask AI prompt copy');
+includes(appJs, 'aiAssistantStarLabel', 'frontend must keep AI star through language refreshes');
 includes(appJs, 'updateHomeAskAiLanguageCopy', 'frontend must update prompt/chips when language changes');
 includes(appJs, 'startAiAssistantPlaceholderRotation', 'frontend must rotate localized Ask AI placeholder examples');
 includes(appJs, 'renderAiAssistantResponse', 'frontend must render assistant responses');

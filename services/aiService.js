@@ -1768,6 +1768,7 @@ module.exports = {
   classifyWhatsappIntent,
   detectWhatsappLanguage,
   extractNaturalPropertyQuery,
+  heuristicNaturalPropertyQuery,
   transcribeAudioFromUrl,
   transcribeAudioFromDataUrl,
   generateCampaignCopy,

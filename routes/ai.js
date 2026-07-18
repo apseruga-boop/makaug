@@ -9,6 +9,7 @@ const { logNotification } = require('../services/notificationLogService');
 const {
   SUPPORTED_AI_LANGUAGES,
   extractNaturalPropertyQuery,
+  heuristicNaturalPropertyQuery,
   generateListingIntelligence,
   translateFreeText,
   suggestWhatsappAssistantReply,
@@ -143,6 +144,17 @@ function sanitizeAssistantText(value = '') {
     .trim();
 }
 
+function assistantFastResponse(text = '', language = 'en', model = 'heuristic-fast') {
+  return {
+    text: sanitizeAssistantText(text),
+    model,
+    requestedLanguage: language,
+    responseLanguage: language,
+    fallbackUsed: false,
+    fallbackReason: null
+  };
+}
+
 function isAssistantSearchIntent(intent = '') {
   const rawIntent = cleanText(intent).toLowerCase();
   return ASSISTANT_SEARCH_INTENTS.has(rawIntent) || ASSISTANT_SEARCH_INTENTS.has(normalizeAssistantIntent(rawIntent));
@@ -159,6 +171,16 @@ function appOriginFromRequest(req) {
   const proto = cleanText(req.get('x-forwarded-proto') || req.protocol || 'https').split(',')[0] || 'https';
   const host = cleanText(req.get('x-forwarded-host') || req.get('host') || 'makaug.com').split(',')[0] || 'makaug.com';
   return `${proto}://${host}`.replace(/\/+$/, '');
+}
+
+function assistantSearchOriginFromRequest(req) {
+  const configured = cleanText(process.env.ASSISTANT_SEARCH_BASE_URL || process.env.INTERNAL_SEARCH_BASE_URL);
+  if (configured) return configured.replace(/\/+$/, '');
+  const port = cleanText(process.env.PORT);
+  if (process.env.NODE_ENV === 'production' && port) {
+    return `http://127.0.0.1:${port}`;
+  }
+  return appOriginFromRequest(req);
 }
 
 function publicSearchPathForType(searchType = 'any') {
@@ -268,7 +290,7 @@ function buildAssistantSearchParams(parsed = {}, searchType = 'any', language = 
     public_only: '1',
     limit: '6',
     page: '1',
-    include_summary: '1',
+    include_summary: '0',
     sort: 'newest',
     source: 'ai_assistant',
     language
@@ -378,12 +400,37 @@ function buildAssistantCapturePayload({ userMessage = '', parsed = {}, searchTyp
   };
 }
 
-async function fetchAssistantSearchResults(req, { parsed, searchType, language }) {
+const ASSISTANT_SEARCH_RESULT_CACHE_TTL_MS = 60 * 1000;
+const ASSISTANT_SEARCH_TIMEOUT_MS = Math.max(1200, Math.min(8000, parseInt(process.env.ASSISTANT_SEARCH_TIMEOUT_MS || '5000', 10) || 5000));
+const assistantSearchResultCache = new Map();
+
+function getAssistantSearchResultCache(key = '') {
+  const cached = assistantSearchResultCache.get(key);
+  if (!cached) return null;
+  if ((Date.now() - cached.createdAt) > ASSISTANT_SEARCH_RESULT_CACHE_TTL_MS) {
+    assistantSearchResultCache.delete(key);
+    return null;
+  }
+  return cached.payload;
+}
+
+function setAssistantSearchResultCache(key = '', payload = null) {
+  if (!key || !payload) return;
+  assistantSearchResultCache.set(key, { createdAt: Date.now(), payload });
+  if (assistantSearchResultCache.size <= 80) return;
+  const oldestKey = assistantSearchResultCache.keys().next().value;
+  if (oldestKey) assistantSearchResultCache.delete(oldestKey);
+}
+
+async function fetchAssistantSearchResults(req, { parsed, searchType, language, timeoutMs = ASSISTANT_SEARCH_TIMEOUT_MS }) {
   const params = buildAssistantSearchParams(parsed, searchType, language);
-  const origin = appOriginFromRequest(req);
+  const origin = assistantSearchOriginFromRequest(req);
   const url = `${origin}/api/properties/search?${params.toString()}`;
+  const cached = getAssistantSearchResultCache(url);
+  if (cached) return cached;
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 7000);
+  const boundedTimeoutMs = Math.max(1000, Math.min(ASSISTANT_SEARCH_TIMEOUT_MS, Number(timeoutMs) || ASSISTANT_SEARCH_TIMEOUT_MS));
+  const timeout = setTimeout(() => controller.abort(), boundedTimeoutMs);
   try {
     const response = await fetch(url, {
       headers: { Accept: 'application/json' },
@@ -397,7 +444,7 @@ async function fetchAssistantSearchResults(req, { parsed, searchType, language }
     }
     const listings = Array.isArray(json?.data) ? json.data : [];
     const total = Number(json?.pagination?.total ?? json?.summary?.public_opportunities?.total ?? listings.length) || 0;
-    return {
+    const payload = {
       ok: true,
       url,
       listings,
@@ -405,6 +452,8 @@ async function fetchAssistantSearchResults(req, { parsed, searchType, language }
       pagination: json?.pagination || null,
       meta: json?.meta || null
     };
+    setAssistantSearchResultCache(url, payload);
+    return payload;
   } finally {
     clearTimeout(timeout);
   }
@@ -719,27 +768,38 @@ router.post('/assistant-reply', async (req, res, next) => {
     const language = normalizeLanguageCode(body.language || 'en');
     const requestedIntent = cleanText(body.intent).toLowerCase() || 'unknown';
     const effectiveIntent = inferAssistantIntentFromMessage(userMessage, requestedIntent);
-    let response = await suggestWhatsappAssistantReply({
-      userMessage,
-      intent: effectiveIntent,
-      language,
-      context: body.context && typeof body.context === 'object' ? body.context : {},
-      source: 'api_assistant_reply'
-    });
-    response = {
-      ...response,
-      text: sanitizeAssistantText(response?.text || '')
-    };
-
+    const assistantIsSearch = isAssistantSearchIntent(effectiveIntent);
+    let response = null;
     let searchPayload = null;
-    if (isAssistantSearchIntent(effectiveIntent)) {
-      const rawIntentType = assistantSearchType(effectiveIntent);
-      const extracted = await extractNaturalPropertyQuery({
-        text: userMessage,
+
+    if (!assistantIsSearch) {
+      response = await suggestWhatsappAssistantReply({
+        userMessage,
+        intent: effectiveIntent,
         language,
-        sessionData: body.context && typeof body.context === 'object' ? body.context : {},
-        fallbackType: rawIntentType
+        context: body.context && typeof body.context === 'object' ? body.context : {},
+        source: 'api_assistant_reply'
       });
+      response = {
+        ...response,
+        text: sanitizeAssistantText(response?.text || '')
+      };
+    }
+
+    if (assistantIsSearch) {
+      const rawIntentType = assistantSearchType(effectiveIntent);
+      const useLlmParser = parseBooleanLike(body.use_llm_parser ?? body.force_llm_parser, false);
+      const extracted = useLlmParser
+        ? await extractNaturalPropertyQuery({
+          text: userMessage,
+          language,
+          sessionData: body.context && typeof body.context === 'object' ? body.context : {},
+          fallbackType: rawIntentType
+        })
+        : {
+          ...heuristicNaturalPropertyQuery({ text: userMessage, fallbackType: rawIntentType }),
+          model: 'heuristic-fast'
+        };
       const prepared = prepareAssistantParsedQuery({ parsed: extracted, intent: effectiveIntent, userMessage });
       const parsed = prepared.parsed;
       const searchType = prepared.searchType;
@@ -747,7 +807,11 @@ router.post('/assistant-reply', async (req, res, next) => {
       const hasSearchSignal = assistantHasSearchSignal(parsed, searchType, userMessage);
 
       if (!hasSearchSignal) {
-        response.text = assistantLeadText({ total: 0, parsed, searchType, language, needsInput: true });
+        response = assistantFastResponse(
+          assistantLeadText({ total: 0, parsed, searchType, language, needsInput: true }),
+          language,
+          extracted?.model || 'heuristic-fast'
+        );
         searchPayload = {
           parsed_query: extracted,
           effective_query: parsed,
@@ -781,25 +845,42 @@ router.post('/assistant-reply', async (req, res, next) => {
           let relaxedFilters = [];
           let matchQuality = 'exact';
           let exactTotal = null;
-          let result = await fetchAssistantSearchResults(req, { parsed: effectiveParsed, searchType, language });
-          exactTotal = result.total;
-          if (result.total === 0 && parsed?.propertyType) {
-            const relaxedParsed = { ...parsed, propertyType: null };
-            const relaxedResult = await fetchAssistantSearchResults(req, { parsed: relaxedParsed, searchType, language });
-            if (relaxedResult.total > 0) {
+          let result = null;
+          let exactSearchError = null;
+          const hasRelaxablePropertyType = Boolean(parsed?.propertyType);
+          const relaxedParsed = hasRelaxablePropertyType ? { ...parsed, propertyType: null } : null;
+          const relaxedResultPromise = relaxedParsed
+            ? fetchAssistantSearchResults(req, { parsed: relaxedParsed, searchType, language }).catch((error) => ({ __error: error }))
+            : null;
+          try {
+            result = await fetchAssistantSearchResults(req, {
+              parsed: effectiveParsed,
+              searchType,
+              language,
+              timeoutMs: hasRelaxablePropertyType ? 2500 : ASSISTANT_SEARCH_TIMEOUT_MS
+            });
+            exactTotal = result.total;
+          } catch (error) {
+            exactSearchError = error;
+            exactTotal = 0;
+          }
+          if ((!result || result.total === 0) && relaxedResultPromise) {
+            const relaxedResult = await relaxedResultPromise;
+            if (!relaxedResult?.__error && relaxedResult.total > 0) {
               effectiveParsed = relaxedParsed;
               relaxedFilters = ['property_type'];
               matchQuality = 'nearby_not_exact';
               result = relaxedResult;
             }
           }
+          if (!result) throw exactSearchError || new Error('property_search_failed');
           if (result.total > 0 && assistantLocationLooksRelaxed(result.listings, effectiveParsed)) {
             matchQuality = 'nearby_not_exact';
             relaxedFilters = Array.from(new Set([...relaxedFilters, 'location']));
           }
           const seeAllUrl = buildAssistantSeeAllUrl(effectiveParsed, searchType);
           const leadText = assistantLeadText({ total: result.total, parsed: effectiveParsed, searchType, language, matchQuality });
-          response.text = leadText;
+          response = assistantFastResponse(leadText, language, extracted?.model || 'heuristic-fast');
           const capturePayload = buildAssistantCapturePayload({
             userMessage,
             parsed: effectiveParsed,
@@ -869,9 +950,17 @@ router.post('/assistant-reply', async (req, res, next) => {
             exact_match: false,
             search_error: searchError.message || 'property_search_failed'
           };
-          response.text = assistantLeadText({ total: 0, parsed, searchType, language });
+          response = assistantFastResponse(
+            assistantLeadText({ total: 0, parsed, searchType, language }),
+            language,
+            extracted?.model || 'heuristic-fast'
+          );
         }
       }
+    }
+
+    if (!response) {
+      response = assistantFastResponse('', language);
     }
 
     await recordAssistantBackendTrace(req, { userMessage, intent: effectiveIntent, language, response });

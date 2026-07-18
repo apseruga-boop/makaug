@@ -31626,13 +31626,19 @@ function aiAssistantCopyText(key, fallback = "") {
   return copy[key] || AI_ASSISTANT_PROMPT_I18N.en[key] || fallback;
 }
 
+function aiAssistantStarLabel(text = "", fallback = "Ask AI") {
+  const clean = String(text || fallback || "").trim();
+  if (!clean) return "✨ Ask AI";
+  return clean.startsWith("✨") ? clean : `✨ ${clean}`;
+}
+
 function renderHomeAskAiExamples() {
   const container = document.getElementById("home-ai-example-chips");
   if (!container) return;
   const copy = getAiAssistantPromptCopy();
   const chips = Array.isArray(copy.chips) && copy.chips.length ? copy.chips : AI_ASSISTANT_PROMPT_I18N.en.chips;
   container.innerHTML = chips.map((chip, idx) => `
-    <button type="button" onclick="runHomeAskAiExample(${idx})" class="rounded-full border border-blue-100 bg-white px-3 py-2 text-xs font-bold text-blue-700 shadow-sm hover:border-blue-300 hover:bg-blue-50">
+    <button type="button" onclick="runHomeAskAiExample(${idx})" class="rounded-full border border-[#d5ddd8] bg-white px-3 py-2 text-xs font-bold text-[#111a22] shadow-sm hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700">
       ${adminEscape(chip.label)}
     </button>`).join("");
 }
@@ -31680,7 +31686,10 @@ function updateHomeAskAiLanguageCopy() {
   ];
   textTargets.forEach(([id, text]) => {
     const el = document.getElementById(id);
-    if (el) el.textContent = text;
+    if (!el) return;
+    el.textContent = ["home-ai-pill", "ai-chatbot-live-pill"].includes(id)
+      ? aiAssistantStarLabel(text, "Ask makaug AI")
+      : text;
   });
   const input = document.getElementById("home-ai-message");
   const testInput = document.getElementById("ai-chatbot-message");
@@ -31688,13 +31697,13 @@ function updateHomeAskAiLanguageCopy() {
   if (testInput) testInput.placeholder = copy.placeholder;
   const button = document.getElementById("home-ai-submit-btn");
   if (button) {
-    button.textContent = copy.ask;
-    button.dataset.idleText = copy.ask;
+    button.textContent = aiAssistantStarLabel(copy.ask, "Ask AI");
+    button.dataset.idleText = button.textContent;
   }
   const testButton = document.getElementById("ai-chatbot-submit-btn");
   if (testButton) {
-    testButton.textContent = copy.ask;
-    testButton.dataset.idleText = copy.ask;
+    testButton.textContent = aiAssistantStarLabel(copy.ask, "Ask AI");
+    testButton.dataset.idleText = testButton.textContent;
   }
   renderHomeAskAiExamples();
   aiAssistantPlaceholderIndex = 0;
@@ -31863,11 +31872,11 @@ async function requestAiAssistantResults({ message, intent, responseBox, button,
   if (button) {
     button.dataset.idleText = idleText;
     button.disabled = true;
-    button.textContent = "Asking...";
+    button.textContent = aiAssistantStarLabel("Searching...", "Searching...");
   }
   if (responseBox) {
     responseBox.classList.remove("hidden");
-    responseBox.innerHTML = `<div class="rounded-xl bg-green-50 border border-green-100 p-4 text-sm font-bold text-green-900">${adminEscape(aiAssistantCopyText("loading", "makaug AI is searching..."))}</div>`;
+    responseBox.innerHTML = `<div class="rounded-xl bg-blue-50 border border-blue-100 p-4 text-sm font-bold text-blue-900">${adminEscape(aiAssistantCopyText("loading", "makaug AI is searching..."))}</div>`;
   }
   try {
     const response = await apiRequest("/api/ai/assistant-reply", {
@@ -31898,7 +31907,7 @@ async function requestAiAssistantResults({ message, intent, responseBox, button,
       report_fraud: "Use /report-fraud or /anti-fraud to report suspicious listings. makaug treats fraud reports as urgent support cases.",
       human_handoff: "Human handoff is available through the Help Centre or WhatsApp support."
     }[intent] || "AI provider output is unavailable right now. makaug logged this safely and you can continue by WhatsApp or Help Centre.";
-    if (responseBox) responseBox.innerHTML = `<div class="rounded-xl bg-green-50 border border-green-100 p-4 text-sm text-green-950">${adminEscape(fallback)}</div>`;
+    if (responseBox) responseBox.innerHTML = `<div class="rounded-xl bg-blue-50 border border-blue-100 p-4 text-sm text-blue-950">${adminEscape(fallback)}</div>`;
     trackEvent("ai_chatbot_provider_missing_or_failed", { intent, source_page: currentPage, error: error.message || "request_failed", source });
     return null;
   } finally {
