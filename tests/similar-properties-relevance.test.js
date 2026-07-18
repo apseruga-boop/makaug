@@ -8,7 +8,8 @@ const indexHtml = fs.readFileSync(path.join(root, "index.html"), "utf8");
 
 const marker = "similar-relevance-v2-20260718";
 
-assert(indexHtml.includes(marker), "production HTML must carry the similar relevance marker");
+const markerCount = (indexHtml.match(new RegExp(marker, "g")) || []).length;
+assert(markerCount >= 2, "production HTML must carry the similar relevance marker in both preload and app-loader cache keys");
 assert(appJs.includes(`SIMILAR_PROPERTIES_RELEVANCE_MARKER = "${marker}"`), "client bundle must carry the similar relevance marker");
 assert(appJs.includes("function similarPropertyCategory(property = {})"), "similar properties must normalize listing category before ranking");
 assert(appJs.includes("function similarPropertyPurpose(property = {})"), "similar properties must normalize sale/rent purpose before ranking");
