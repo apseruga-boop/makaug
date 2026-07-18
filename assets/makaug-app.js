@@ -7062,6 +7062,7 @@ function setLang(lang, silent = false, rerender = true) {
   renderListReviewSummary();
   renderMortgageFinder();
   applyLanguageUI();
+  updateHomeAskAiLanguageCopy();
   if (!silent) toast(`${tr("languageSet")}: ${currentLang.toUpperCase()}`);
 }
 
@@ -31351,27 +31352,287 @@ function renderHowToVideoSections() {
   });
 }
 
-async function submitAiChatbotPrompt(event) {
-  if (event) event.preventDefault();
-  const intent = (document.getElementById("ai-chatbot-intent")?.value || "search_property").trim();
-  const message = (document.getElementById("ai-chatbot-message")?.value || "").trim()
-    || `Please help me with ${intent.replace(/_/g, " ")} on makaug.`;
-  const responseBox = document.getElementById("ai-chatbot-response");
-  const button = document.getElementById("ai-chatbot-submit-btn");
+const AI_ASSISTANT_PROMPT_I18N = Object.freeze({
+  en: {
+    pill: "Ask makaug AI",
+    title: "Describe what you want. Get instant property matches.",
+    subtitle: "Search in any language. makaug AI turns your message into filters and shows real listings straight away.",
+    placeholder: "Try: 2-bed in Ntinda under 1.5M",
+    ask: "Ask AI",
+    loading: "makaug AI is searching...",
+    zero: "No exact matches yet. Tell us what you need and we can help watch for it.",
+    seeAll: "See all matches",
+    chips: [
+      { label: "2-bed in Ntinda under 1.5M", prompt: "2-bed apartment to rent in Ntinda under 1.5m", intent: "search_rent" },
+      { label: "Land in Gayaza", prompt: "Land for sale in Gayaza", intent: "search_land" },
+      { label: "Hostel near Makerere", prompt: "Student hostel near Makerere", intent: "search_student" },
+      { label: "Office in Kampala", prompt: "Office space in Kampala", intent: "search_commercial" }
+    ]
+  },
+  lg: {
+    pill: "Buuza makaug AI",
+    title: "Nyonyola ky'onoonya. Funa ebyapa ebikwatagana.",
+    subtitle: "Noonya mu lulimi lwo. makaug AI ekola filters n'ekulaga amayumba agaliwo.",
+    placeholder: "Okugeza: 2-bed e Ntinda wansi wa 1.5M",
+    ask: "Buuza AI",
+    loading: "makaug AI enoonya...",
+    zero: "Tewali bikwatagana kati. Tugambe ky'oyagala tukinonye.",
+    seeAll: "Laba byonna",
+    chips: [
+      { label: "2-bed e Ntinda wansi wa 1.5M", prompt: "2-bed apartment to rent in Ntinda under 1.5m", intent: "search_rent" },
+      { label: "Ettaka e Gayaza", prompt: "Land for sale in Gayaza", intent: "search_land" },
+      { label: "Hostel okumpi ne Makerere", prompt: "Student hostel near Makerere", intent: "search_student" },
+      { label: "Office e Kampala", prompt: "Office space in Kampala", intent: "search_commercial" }
+    ]
+  },
+  sw: {
+    pill: "Uliza makaug AI",
+    title: "Eleza unachotaka. Pata nyumba zinazolingana.",
+    subtitle: "Tafuta kwa lugha yoyote. makaug AI hugeuza ujumbe kuwa vichujio na matokeo halisi.",
+    placeholder: "Jaribu: vyumba 2 Ntinda chini ya 1.5M",
+    ask: "Uliza AI",
+    loading: "makaug AI inatafuta...",
+    zero: "Hakuna matokeo kamili bado. Tuambie unachotafuta.",
+    seeAll: "Ona matokeo yote",
+    chips: [
+      { label: "Vyumba 2 Ntinda chini ya 1.5M", prompt: "2-bed apartment to rent in Ntinda under 1.5m", intent: "search_rent" },
+      { label: "Ardhi Gayaza", prompt: "Land for sale in Gayaza", intent: "search_land" },
+      { label: "Hosteli karibu Makerere", prompt: "Student hostel near Makerere", intent: "search_student" },
+      { label: "Ofisi Kampala", prompt: "Office space in Kampala", intent: "search_commercial" }
+    ]
+  },
+  ac: {
+    pill: "Peny makaug AI",
+    title: "Tit ngo ma imito. Nong property ma rwate.",
+    subtitle: "Yeny i leb mo keken. makaug AI loko lok me yeny me property.",
+    placeholder: "Tem: 2-bed i Ntinda piny 1.5M",
+    ask: "Peny AI",
+    loading: "makaug AI tye ka yeny...",
+    zero: "Pe tye ma rwate kombedi. Wac kiwa ngo ma imito.",
+    seeAll: "Nen ducu",
+    chips: [
+      { label: "2-bed i Ntinda piny 1.5M", prompt: "2-bed apartment to rent in Ntinda under 1.5m", intent: "search_rent" },
+      { label: "Ngom i Gayaza", prompt: "Land for sale in Gayaza", intent: "search_land" },
+      { label: "Hostel cok ki Makerere", prompt: "Student hostel near Makerere", intent: "search_student" },
+      { label: "Office i Kampala", prompt: "Office space in Kampala", intent: "search_commercial" }
+    ]
+  },
+  ny: {
+    pill: "Buuza makaug AI",
+    title: "Gamba eki orikusherura. Funa ebirikuhika.",
+    subtitle: "Shaka omu rurimi rwawe. makaug AI ekora filters n'ekwereka listings.",
+    placeholder: "Reeba: 2-bed Ntinda ahansi ya 1.5M",
+    ask: "Buuza AI",
+    loading: "makaug AI erikusherura...",
+    zero: "Tihariho ebirikuhika hati. Tugambire eki orikwenda.",
+    seeAll: "Reeba byona",
+    chips: [
+      { label: "2-bed Ntinda ahansi ya 1.5M", prompt: "2-bed apartment to rent in Ntinda under 1.5m", intent: "search_rent" },
+      { label: "Eitaka Gayaza", prompt: "Land for sale in Gayaza", intent: "search_land" },
+      { label: "Hostel haihi na Makerere", prompt: "Student hostel near Makerere", intent: "search_student" },
+      { label: "Office Kampala", prompt: "Office space in Kampala", intent: "search_commercial" }
+    ]
+  },
+  rn: {
+    pill: "Buuza makaug AI",
+    title: "Gamba eki orikusherura. Funa ebirikukuhika.",
+    subtitle: "Shaka omu rurimi rwawe. makaug AI ekora filters n'ekwereka properties.",
+    placeholder: "Reeba: 2-bed Ntinda ahansi ya 1.5M",
+    ask: "Buuza AI",
+    loading: "makaug AI erikusherura...",
+    zero: "Tihariho ebirikuhika hati. Tugambire eki orikwenda.",
+    seeAll: "Reeba byona",
+    chips: [
+      { label: "2-bed Ntinda ahansi ya 1.5M", prompt: "2-bed apartment to rent in Ntinda under 1.5m", intent: "search_rent" },
+      { label: "Eitaka Gayaza", prompt: "Land for sale in Gayaza", intent: "search_land" },
+      { label: "Hostel haihi na Makerere", prompt: "Student hostel near Makerere", intent: "search_student" },
+      { label: "Office Kampala", prompt: "Office space in Kampala", intent: "search_commercial" }
+    ]
+  },
+  sm: {
+    pill: "Buuza makaug AI",
+    title: "Koba ky'oyagala. Funa ebyekiwandiiko ebikwatagana.",
+    subtitle: "Noonya mu lulimi lwo. makaug AI ekulaga listings eziriwo.",
+    placeholder: "Okugeza: 2-bed e Ntinda wansi wa 1.5M",
+    ask: "Buuza AI",
+    loading: "makaug AI enoonya...",
+    zero: "Tewali bikwatagana kati. Tugambe ky'oyagala tukinonye.",
+    seeAll: "Laba byonna",
+    chips: [
+      { label: "2-bed e Ntinda wansi wa 1.5M", prompt: "2-bed apartment to rent in Ntinda under 1.5m", intent: "search_rent" },
+      { label: "Ettaka e Gayaza", prompt: "Land for sale in Gayaza", intent: "search_land" },
+      { label: "Hostel okumpi ne Makerere", prompt: "Student hostel near Makerere", intent: "search_student" },
+      { label: "Office e Kampala", prompt: "Office space in Kampala", intent: "search_commercial" }
+    ]
+  },
+  am: {
+    pill: "makaug AI ይጠይቁ",
+    title: "የሚፈልጉትን ይግለጹ። ተዛማጅ ንብረቶችን ያግኙ።",
+    subtitle: "በማንኛውም ቋንቋ ይፈልጉ። makaug AI መልዕክትዎን ወደ ማጣሪያ ይቀይራል።",
+    placeholder: "ምሳሌ: 2-bed Ntinda under 1.5M",
+    ask: "AI ይጠይቁ",
+    loading: "makaug AI እየፈለገ ነው...",
+    zero: "ትክክለኛ ውጤት አልተገኘም። የሚፈልጉትን ይንገሩን።",
+    seeAll: "ሁሉን ይመልከቱ",
+    chips: [
+      { label: "2-bed Ntinda under 1.5M", prompt: "2-bed apartment to rent in Ntinda under 1.5m", intent: "search_rent" },
+      { label: "መሬት Gayaza", prompt: "Land for sale in Gayaza", intent: "search_land" },
+      { label: "Hostel near Makerere", prompt: "Student hostel near Makerere", intent: "search_student" },
+      { label: "Office Kampala", prompt: "Office space in Kampala", intent: "search_commercial" }
+    ]
+  },
+  ar: {
+    pill: "اسأل makaug AI",
+    title: "اكتب ما تريد. واحصل على عقارات مطابقة فوراً.",
+    subtitle: "ابحث بأي لغة. يحول makaug AI رسالتك إلى فلاتر ويعرض نتائج حقيقية.",
+    placeholder: "جرب: غرفتان في Ntinda تحت 1.5M",
+    ask: "اسأل AI",
+    loading: "makaug AI يبحث الآن...",
+    zero: "لا توجد نتائج دقيقة بعد. أخبرنا بما تحتاجه وسنساعدك.",
+    seeAll: "عرض كل النتائج",
+    chips: [
+      { label: "غرفتان Ntinda تحت 1.5M", prompt: "2-bed apartment to rent in Ntinda under 1.5m", intent: "search_rent" },
+      { label: "أرض في Gayaza", prompt: "Land for sale in Gayaza", intent: "search_land" },
+      { label: "سكن طلاب قرب Makerere", prompt: "Student hostel near Makerere", intent: "search_student" },
+      { label: "مكتب في Kampala", prompt: "Office space in Kampala", intent: "search_commercial" }
+    ]
+  }
+});
+
+function getAiAssistantPromptCopy(lang = currentLang || "en") {
+  const code = normalizeMakaugLanguageCode(lang);
+  return AI_ASSISTANT_PROMPT_I18N[code] || AI_ASSISTANT_PROMPT_I18N.en;
+}
+
+function aiAssistantCopyText(key, fallback = "") {
+  const copy = getAiAssistantPromptCopy();
+  return copy[key] || AI_ASSISTANT_PROMPT_I18N.en[key] || fallback;
+}
+
+function renderHomeAskAiExamples() {
+  const container = document.getElementById("home-ai-example-chips");
+  if (!container) return;
+  const copy = getAiAssistantPromptCopy();
+  const chips = Array.isArray(copy.chips) && copy.chips.length ? copy.chips : AI_ASSISTANT_PROMPT_I18N.en.chips;
+  container.innerHTML = chips.map((chip, idx) => `
+    <button type="button" onclick="runHomeAskAiExample(${idx})" class="rounded-full border border-white/20 bg-white/10 px-3 py-2 text-xs font-bold text-green-50 hover:bg-white/20">
+      ${adminEscape(chip.label)}
+    </button>`).join("");
+}
+
+function updateHomeAskAiLanguageCopy() {
+  const copy = getAiAssistantPromptCopy();
+  const textTargets = [
+    ["home-ai-pill", copy.pill],
+    ["home-ai-title", copy.title],
+    ["home-ai-subtitle", copy.subtitle],
+    ["home-ai-label", copy.pill]
+  ];
+  textTargets.forEach(([id, text]) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+  });
+  const input = document.getElementById("home-ai-message");
+  if (input) input.placeholder = copy.placeholder;
+  const button = document.getElementById("home-ai-submit-btn");
   if (button) {
+    button.textContent = copy.ask;
+    button.dataset.idleText = copy.ask;
+  }
+  renderHomeAskAiExamples();
+}
+
+function aiAssistantFilterChipsHtml(chips = []) {
+  if (!Array.isArray(chips) || !chips.length) return "";
+  return `<div class="flex flex-wrap gap-2 mb-4">${chips.filter(Boolean).map((chip) => `
+    <span class="inline-flex items-center rounded-full bg-green-50 px-3 py-1 text-xs font-black text-green-800 border border-green-100">${adminEscape(chip)}</span>
+  `).join("")}</div>`;
+}
+
+function aiAssistantListingCardsHtml(listings = [], searchType = "") {
+  const rows = Array.isArray(listings) ? listings : [];
+  if (!rows.length) return "";
+  const categoryPage = searchType === "rent" ? "rent"
+    : searchType === "sale" ? "sale"
+    : searchType === "land" ? "land"
+    : searchType === "commercial" ? "commercial"
+    : searchType === "student" ? "student"
+    : "";
+  const cards = rows
+    .map((property) => upsertPropertyForUi(property))
+    .filter(Boolean)
+    .map((property) => propCard(property, { categoryPage, student: searchType === "student" }))
+    .join("");
+  return `<div class="grid md:grid-cols-2 xl:grid-cols-3 gap-4">${cards}</div>`;
+}
+
+function renderAiAssistantResponse(responseBox, data = {}, context = {}) {
+  if (!responseBox) return;
+  responseBox.classList.remove("hidden");
+  const copy = getAiAssistantPromptCopy();
+  const text = data?.text || data?.reply || data?.message || "makaug AI is connected.";
+  const listings = Array.isArray(data?.listings) ? data.listings : (Array.isArray(data?.results) ? data.results : []);
+  const total = Number(data?.total_matches ?? data?.pagination?.total ?? listings.length) || 0;
+  const searchType = data?.search_type || data?.filters?.search_type || "";
+  const chips = Array.isArray(data?.filter_chips)
+    ? data.filter_chips
+    : Object.values(data?.filters || {}).filter(Boolean).slice(0, 5);
+  const cardHtml = aiAssistantListingCardsHtml(listings, searchType);
+  const seeAllUrl = data?.see_all_url || data?.search_url || "";
+  const seeAllHtml = seeAllUrl ? `
+    <a href="${adminAttr(seeAllUrl)}" class="inline-flex items-center justify-center rounded-xl bg-green-700 px-4 py-2 text-sm font-black text-white hover:bg-green-600">
+      ${adminEscape(copy.seeAll)}${total ? ` (${adminEscape(String(total))})` : ""} <i class="fas fa-arrow-right ml-2"></i>
+    </a>` : "";
+  const zeroHtml = !listings.length ? `
+    <div class="rounded-2xl border border-green-100 bg-green-50 p-4 text-sm text-green-950">
+      <div class="font-black">${adminEscape(copy.zero)}</div>
+      <div class="mt-3 flex flex-wrap gap-2">
+        <a href="/list-property" class="rounded-xl bg-green-700 px-3 py-2 text-xs font-black text-white">List free</a>
+        <a href="https://wa.me/256760112587?text=Hello%20makaug%2C%20I%20need%20help%20finding%20a%20property" target="_blank" rel="noopener" class="rounded-xl border border-green-200 bg-white px-3 py-2 text-xs font-black text-green-800">WhatsApp makaug</a>
+      </div>
+    </div>` : "";
+  responseBox.innerHTML = `
+    <div class="space-y-4" data-ai-assistant-inline-results="1">
+      <div>
+        <p class="text-sm font-bold text-gray-900">${adminEscape(text)}</p>
+        ${data?.search_error ? `<p class="mt-1 text-xs text-amber-700">Search is temporarily limited, showing the safest next step.</p>` : ""}
+      </div>
+      ${aiAssistantFilterChipsHtml(chips)}
+      ${cardHtml || zeroHtml}
+      ${seeAllHtml ? `<div>${seeAllHtml}</div>` : ""}
+    </div>`;
+  trackEvent("ai_assistant_results_rendered", {
+    source_page: currentPage,
+    source: context.source || "ai_assistant",
+    result_count: listings.length,
+    total_matches: total,
+    language: currentLang || "en"
+  });
+}
+
+async function requestAiAssistantResults({ message, intent, responseBox, button, source }) {
+  const fallbackMessage = `Please help me with ${String(intent || "search_property").replace(/_/g, " ")} on makaug.`;
+  const finalMessage = (message || "").trim() || fallbackMessage;
+  const idleText = button?.dataset?.idleText || button?.textContent || aiAssistantCopyText("ask", "Ask AI");
+  if (button) {
+    button.dataset.idleText = idleText;
     button.disabled = true;
     button.textContent = "Asking...";
   }
-  if (responseBox) responseBox.textContent = "Checking makaug AI...";
+  if (responseBox) {
+    responseBox.classList.remove("hidden");
+    responseBox.innerHTML = `<div class="rounded-xl bg-green-50 border border-green-100 p-4 text-sm font-bold text-green-900">${adminEscape(aiAssistantCopyText("loading", "makaug AI is searching..."))}</div>`;
+  }
   try {
     const response = await apiRequest("/api/ai/assistant-reply", {
       method: "POST",
       body: {
-        message,
+        message: finalMessage,
         intent,
         language: currentLang || "en",
         context: {
-          route: window.location.pathname || "/discover-ai-chatbot",
+          route: window.location.pathname || "/",
+          source,
           supported_intents: [
             "search_property", "search_rent", "search_sale", "search_student", "search_land", "search_commercial",
             "save_search", "create_alert", "book_viewing", "request_callback", "list_property", "list_property_whatsapp",
@@ -31380,9 +31641,9 @@ async function submitAiChatbotPrompt(event) {
         }
       }
     });
-    const text = response?.data?.text || response?.data?.reply || response?.data?.message || response?.reply || "makaug AI is connected. If provider output is unavailable, use WhatsApp or Help Centre for human follow-up.";
-    if (responseBox) responseBox.textContent = text;
-    trackEvent("ai_chatbot_prompt_submitted", { intent, source_page: currentPage, language: currentLang || "en" });
+    renderAiAssistantResponse(responseBox, response?.data || response || {}, { source });
+    trackEvent("ai_chatbot_prompt_submitted", { intent, source_page: currentPage, language: currentLang || "en", source });
+    return response;
   } catch (error) {
     const fallback = {
       search_property: "I can help you search by category, area, budget, bedrooms, campus, land/title needs, or commercial use. Try For Sale, To Rent, Land, Student Accommodation, or Commercial.",
@@ -31391,17 +31652,64 @@ async function submitAiChatbotPrompt(event) {
       report_fraud: "Use /report-fraud or /anti-fraud to report suspicious listings. makaug treats fraud reports as urgent support cases.",
       human_handoff: "Human handoff is available through the Help Centre or WhatsApp support."
     }[intent] || "AI provider output is unavailable right now. makaug logged this safely and you can continue by WhatsApp or Help Centre.";
-    if (responseBox) responseBox.textContent = fallback;
-    trackEvent("ai_chatbot_provider_missing_or_failed", { intent, source_page: currentPage, error: error.message || "request_failed" });
+    if (responseBox) responseBox.innerHTML = `<div class="rounded-xl bg-green-50 border border-green-100 p-4 text-sm text-green-950">${adminEscape(fallback)}</div>`;
+    trackEvent("ai_chatbot_provider_missing_or_failed", { intent, source_page: currentPage, error: error.message || "request_failed", source });
+    return null;
   } finally {
     if (button) {
       button.disabled = false;
-      button.textContent = "Ask AI";
+      button.textContent = button.dataset.idleText || idleText;
     }
   }
 }
 
+async function submitAiChatbotPrompt(event) {
+  if (event) event.preventDefault();
+  const intent = (document.getElementById("ai-chatbot-intent")?.value || "search_property").trim();
+  const message = (document.getElementById("ai-chatbot-message")?.value || "").trim();
+  return requestAiAssistantResults({
+    message,
+    intent,
+    responseBox: document.getElementById("ai-chatbot-response"),
+    button: document.getElementById("ai-chatbot-submit-btn"),
+    source: "discover_ai_chatbot"
+  });
+}
+
+async function submitHomeAskAiPrompt(event) {
+  if (event) event.preventDefault();
+  const intent = (document.getElementById("home-ai-intent")?.value || "search_property").trim();
+  const message = (document.getElementById("home-ai-message")?.value || "").trim();
+  return requestAiAssistantResults({
+    message,
+    intent,
+    responseBox: document.getElementById("home-ai-response"),
+    button: document.getElementById("home-ai-submit-btn"),
+    source: "home_ask_ai_hero"
+  });
+}
+
+function runHomeAskAiExample(index = 0) {
+  const copy = getAiAssistantPromptCopy();
+  const chips = Array.isArray(copy.chips) && copy.chips.length ? copy.chips : AI_ASSISTANT_PROMPT_I18N.en.chips;
+  const chip = chips[index] || chips[0] || AI_ASSISTANT_PROMPT_I18N.en.chips[0];
+  const input = document.getElementById("home-ai-message");
+  const intent = document.getElementById("home-ai-intent");
+  if (input) input.value = chip.prompt || chip.label || "";
+  if (intent) intent.value = chip.intent || "search_property";
+  return submitHomeAskAiPrompt({ preventDefault() {} });
+}
+
 window.submitAiChatbotPrompt = submitAiChatbotPrompt;
+window.submitHomeAskAiPrompt = submitHomeAskAiPrompt;
+window.runHomeAskAiExample = runHomeAskAiExample;
+window.updateHomeAskAiLanguageCopy = updateHomeAskAiLanguageCopy;
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", updateHomeAskAiLanguageCopy, { once: true });
+} else {
+  updateHomeAskAiLanguageCopy();
+}
 
 function openHowToVideo(key) {
   const video = HOW_TO_VIDEO_SLOTS.find((item) => item.key === key) || HOW_TO_VIDEO_SLOTS[0];
