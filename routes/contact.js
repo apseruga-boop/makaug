@@ -11,14 +11,49 @@ const { logNotification, notificationStatusFromDelivery } = require('../services
 
 const router = express.Router();
 
+function normalizeReportRequestType(value) {
+  const normalized = cleanText(value).toLowerCase();
+  if (['claim', 'correction', 'removal', 'report', 'fraud'].includes(normalized)) return normalized;
+  return normalized || 'report';
+}
+
+function cleanStructuredReportFields(raw = {}) {
+  const source = raw && typeof raw === 'object' ? raw : {};
+  const allowedKeys = [
+    'claim_name',
+    'claim_role',
+    'claim_proof',
+    'claim_account',
+    'correction_field',
+    'correction_value',
+    'correction_source',
+    'removal_reason',
+    'removal_evidence',
+    'fraud_details',
+    'fraud_evidence'
+  ];
+  return allowedKeys.reduce((fields, key) => {
+    const value = cleanText(source[key]);
+    if (value) fields[key] = value;
+    return fields;
+  }, {});
+}
+
+function normalizeOptionalUuid(value) {
+  const text = cleanText(value);
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(text) ? text : null;
+}
+
 async function handleReportListing(req, res, next) {
   try {
     const propertyReference = cleanText(req.body.property_reference || req.body.property_url);
     const reason = cleanText(req.body.reason);
     const details = cleanText(req.body.details) || null;
     const reporterContact = cleanText(req.body.reporter_contact || req.body.contact) || null;
-    const requestType = cleanText(req.body.request_type) || null;
+    const requestType = normalizeReportRequestType(req.body.request_type);
     const requestSource = cleanText(req.body.source) || (requestType ? 'third_party_listing_request' : 'fraud_report');
+    const linkedPropertyId = normalizeOptionalUuid(req.body.property_id || req.body.linked_property_id);
+    const structuredFields = cleanStructuredReportFields(req.body.structured_fields || req.body);
 
     if (!propertyReference || !reason) {
       return res.status(400).json({
@@ -27,22 +62,56 @@ async function handleReportListing(req, res, next) {
       });
     }
 
-    const result = await db.query(
-      `INSERT INTO report_listings (
-        property_reference,
-        reason,
-        details,
-        reporter_contact,
-        status
-      ) VALUES ($1,$2,$3,$4,'open')
-      RETURNING id, status, created_at`,
-      [
-        propertyReference,
-        reason,
-        details,
-        reporterContact
-      ]
-    );
+    let result;
+    try {
+      result = await db.query(
+        `INSERT INTO report_listings (
+          property_reference,
+          reason,
+          details,
+          reporter_contact,
+          status,
+          request_type,
+          request_source,
+          structured_fields,
+          linked_property_id
+        ) VALUES ($1,$2,$3,$4,'open',$5,$6,$7::jsonb,$8)
+        RETURNING id, status, request_type, created_at`,
+        [
+          propertyReference,
+          reason,
+          details,
+          reporterContact,
+          requestType,
+          requestSource,
+          JSON.stringify(structuredFields),
+          linkedPropertyId
+        ]
+      );
+    } catch (insertError) {
+      if (insertError?.code !== '42703') throw insertError;
+      result = await db.query(
+        `INSERT INTO report_listings (
+          property_reference,
+          reason,
+          details,
+          reporter_contact,
+          status
+        ) VALUES ($1,$2,$3,$4,'open')
+        RETURNING id, status, created_at`,
+        [
+          propertyReference,
+          reason,
+          [
+            details,
+            requestType ? `Request type: ${requestType}` : '',
+            requestSource ? `Request source: ${requestSource}` : '',
+            Object.keys(structuredFields).length ? `Structured fields: ${JSON.stringify(structuredFields)}` : ''
+          ].filter(Boolean).join('\n\n'),
+          reporterContact
+        ]
+      );
+    }
 
     const report = result.rows[0];
     const supportEmail = getSupportEmail();
@@ -66,7 +135,9 @@ async function handleReportListing(req, res, next) {
         property_reference: propertyReference,
         reason,
         request_type: requestType,
-        request_source: requestSource
+        request_source: requestSource,
+        linked_property_id: linkedPropertyId,
+        structured_fields: structuredFields
       }
     });
     let adminDelivery = { sent: false, reason: 'not_attempted' };
@@ -86,6 +157,7 @@ async function handleReportListing(req, res, next) {
           `Reason: ${reason}`,
           `Reporter Contact: ${reporterContact || '-'}`,
           details ? `Details: ${details}` : '',
+          Object.keys(structuredFields).length ? `Structured Fields: ${JSON.stringify(structuredFields, null, 2)}` : '',
           '',
           'Admin action: review the listing, contact the reporter if needed, then update the report status in the admin dashboard.'
         ].filter(Boolean).join('\n'),

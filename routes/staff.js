@@ -3,7 +3,7 @@ const express = require('express');
 const db = require('../config/database');
 const logger = require('../config/logger');
 const { requireStaffAccess } = require('../middleware/auth');
-const { cleanText } = require('../middleware/validation');
+const { cleanText, isValidEmail, isValidPhone } = require('../middleware/validation');
 const { parsePagination, toPagination } = require('../utils/pagination');
 const { DISTRICTS, LISTING_TYPES } = require('../utils/constants');
 const { publicLivePropertyStatusSql } = require('../utils/publicInventoryStatus');
@@ -39,6 +39,9 @@ const {
 const {
   buildListingIdentityDocumentPayload
 } = require('../services/listingIdentityDocumentService');
+const { sendSupportEmail } = require('../services/emailService');
+const { logEmailEvent } = require('../services/emailLogService');
+const { logNotification, notificationStatusFromDelivery } = require('../services/notificationLogService');
 
 const router = express.Router();
 
@@ -58,6 +61,7 @@ const STAFF_DASHBOARD_PANEL_QUERY_TIMEOUT_MS = Math.max(1000, parseInt(process.e
 const STAFF_DASHBOARD_PANEL_CACHE_TTL_MS = Math.max(500, parseInt(process.env.STAFF_DASHBOARD_PANEL_CACHE_TTL_MS || '3000', 10) || 3000);
 const STAFF_REVIEW_QUEUE_QUERY_TIMEOUT_MS = Math.max(1500, parseInt(process.env.STAFF_REVIEW_QUEUE_QUERY_TIMEOUT_MS || '4000', 10) || 4000);
 const STAFF_PREVIEW_QUERY_TIMEOUT_MS = Math.max(500, parseInt(process.env.STAFF_PREVIEW_QUERY_TIMEOUT_MS || '900', 10) || 900);
+const STAFF_MODERATION_WRITE_TIMEOUT_MS = Math.max(1000, parseInt(process.env.STAFF_MODERATION_WRITE_TIMEOUT_MS || '5000', 10) || 5000);
 const STAFF_BULK_REVIEW_QUERY_TIMEOUT_MS = Math.max(5000, parseInt(process.env.STAFF_BULK_REVIEW_QUERY_TIMEOUT_MS || '15000', 10) || 15000);
 const STAFF_BULK_REVIEW_LIMIT = Math.min(2000, Math.max(1, parseInt(process.env.STAFF_BULK_REVIEW_LIMIT || '1000', 10) || 1000));
 const STAFF_CLEAR_JUNK_REJECT_REASONS = ['non_uganda_location', 'not_a_listing'];
@@ -819,6 +823,179 @@ async function safeRowsResult(sql, params = [], options = {}) {
       timed_out: error.code === '57014'
     };
   }
+}
+
+function normalizeStaffReportStatus(value) {
+  const status = cleanText(value).toLowerCase();
+  return ['open', 'in_review', 'resolved', 'dismissed'].includes(status) ? status : '';
+}
+
+function extractStaffReportPropertyId(reference = '') {
+  const match = String(reference || '').match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+  return match ? match[0] : null;
+}
+
+function normalizeStaffReportRow(row = {}) {
+  const linkedPropertyId = row.linked_property_id || extractStaffReportPropertyId(row.property_reference);
+  return {
+    ...row,
+    request_type: row.request_type || 'report',
+    request_source: row.request_source || '',
+    structured_fields: row.structured_fields && typeof row.structured_fields === 'object' ? row.structured_fields : {},
+    linked_property_id: linkedPropertyId,
+    resolution_note: row.resolution_note || '',
+    actioned_by: row.actioned_by || '',
+    actioned_at: row.actioned_at || null
+  };
+}
+
+async function staffListReportRows({ status = '', search = '', limit = 20, offset = 0 } = {}) {
+  const filters = [];
+  const values = [];
+  if (status) {
+    values.push(status);
+    filters.push(`r.status = $${values.length}`);
+  }
+  if (search) {
+    values.push(`%${search}%`);
+    filters.push(`(
+      r.property_reference ILIKE $${values.length}
+      OR r.reason ILIKE $${values.length}
+      OR COALESCE(r.details, '') ILIKE $${values.length}
+      OR COALESCE(r.reporter_contact, '') ILIKE $${values.length}
+    )`);
+  }
+  const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+  const totalRows = await staffQuery(`SELECT COUNT(*)::int AS total FROM report_listings r ${where}`, values, { timeoutMs: STAFF_REVIEW_QUEUE_QUERY_TIMEOUT_MS });
+  const total = totalRows.rows[0]?.total || 0;
+  const listValues = [...values, limit, offset];
+  try {
+    const rows = await staffQuery(
+      `SELECT
+        r.id,
+        r.property_reference,
+        r.reason,
+        r.details,
+        r.reporter_contact,
+        r.status,
+        r.request_type,
+        r.request_source,
+        r.structured_fields,
+        r.linked_property_id,
+        r.resolution_note,
+        r.actioned_by,
+        r.actioned_at,
+        r.created_at,
+        r.updated_at,
+        p.title AS linked_property_title,
+        p.status AS linked_property_status
+      FROM report_listings r
+      LEFT JOIN properties p ON p.id = r.linked_property_id
+      ${where}
+      ORDER BY r.created_at DESC
+      LIMIT $${values.length + 1}
+      OFFSET $${values.length + 2}`,
+      listValues,
+      { timeoutMs: STAFF_REVIEW_QUEUE_QUERY_TIMEOUT_MS }
+    );
+    return { total, rows: rows.rows.map(normalizeStaffReportRow) };
+  } catch (error) {
+    if (error?.code !== '42703') throw error;
+    const rows = await staffQuery(
+      `SELECT
+        r.id,
+        r.property_reference,
+        r.reason,
+        r.details,
+        r.reporter_contact,
+        r.status,
+        r.created_at,
+        r.updated_at
+      FROM report_listings r
+      ${where}
+      ORDER BY r.created_at DESC
+      LIMIT $${values.length + 1}
+      OFFSET $${values.length + 2}`,
+      listValues,
+      { timeoutMs: STAFF_REVIEW_QUEUE_QUERY_TIMEOUT_MS }
+    );
+    return { total, rows: rows.rows.map(normalizeStaffReportRow) };
+  }
+}
+
+async function staffHidePropertyForReport({ propertyId, reportId, note, actor }) {
+  const id = cleanText(propertyId);
+  if (!id) return null;
+  const updated = await staffQuery(
+    `UPDATE properties
+     SET
+       status = 'hidden',
+       moderation_stage = 'hidden',
+       moderation_reason = $3,
+       moderation_notes = CONCAT_WS(E'\n', NULLIF(moderation_notes, ''), $3),
+       extra_fields = COALESCE(extra_fields, '{}'::jsonb)
+         || jsonb_build_object(
+           'hidden_by_report_id', $1::text,
+           'hidden_by_report_at', NOW()::text,
+           'hidden_by_report_by', $4::text,
+           'hidden_by_report_note', $3::text
+         ),
+       updated_at = NOW()
+     WHERE id = $2
+     RETURNING id, title, status, updated_at`,
+    [reportId, id, note, actor || 'staff_user'],
+    { timeoutMs: STAFF_MODERATION_WRITE_TIMEOUT_MS }
+  );
+  return updated.rows[0] || null;
+}
+
+async function staffNotifyReporterOutcome(row = {}, status = '', note = '') {
+  const reporter = cleanText(row.reporter_contact);
+  if (!reporter || !isValidEmail(reporter)) {
+    await logNotification(db, {
+      recipientEmail: null,
+      recipientPhone: reporter && isValidPhone(reporter) ? reporter : null,
+      channel: 'in_app',
+      type: 'listing_report_outcome',
+      status: 'logged',
+      payloadSummary: { report_id: row.id, status, reporter_contact: reporter || null }
+    }).catch(() => {});
+    return;
+  }
+  const delivery = await sendSupportEmail({
+    to: reporter,
+    subject: `makaug listing request updated: ${status}`,
+    text: [
+      'Your makaug listing request has been reviewed.',
+      '',
+      `Report ID: ${row.id}`,
+      `Status: ${status}`,
+      `Listing: ${row.property_reference || '-'}`,
+      note ? `Moderator note: ${note}` : '',
+      '',
+      'Thank you for helping keep makaug accurate and safe.'
+    ].filter(Boolean).join('\n')
+  });
+  const deliveryStatus = notificationStatusFromDelivery(delivery);
+  await Promise.allSettled([
+    logEmailEvent(db, {
+      eventType: 'listing_report_outcome',
+      recipientEmail: reporter,
+      recipientRole: 'reporter',
+      templateKey: 'listing_report_outcome',
+      subject: `makaug listing request updated: ${status}`,
+      status: deliveryStatus,
+      failureReason: delivery?.error || delivery?.reason || null,
+      sentAt: delivery?.sent ? new Date() : null
+    }),
+    logNotification(db, {
+      recipientEmail: reporter,
+      channel: 'email',
+      type: 'listing_report_outcome',
+      status: deliveryStatus,
+      payloadSummary: { report_id: row.id, status }
+    })
+  ]);
 }
 
 async function staffQuery(sql, params = [], options = {}) {
@@ -2591,6 +2768,102 @@ router.get('/dashboard', async (req, res, next) => {
     if (fast) return res.json({ ok: true, data: await dashboardFastPayload(req) });
     if (panels) return res.json({ ok: true, data: await dashboardPanelsPayload(req) });
     return res.json({ ok: true, data: await dashboardPayload(req) });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/reports', async (req, res, next) => {
+  try {
+    const { page, limit, offset } = parsePagination(req.query);
+    const status = normalizeStaffReportStatus(req.query.status);
+    const search = cleanText(req.query.search || req.query.q).toLowerCase();
+    const { total, rows } = await staffListReportRows({ status, search, limit, offset });
+    return res.json({
+      ok: true,
+      data: rows,
+      pagination: toPagination(total, page, limit)
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.patch('/reports/:id/status', async (req, res, next) => {
+  try {
+    const status = normalizeStaffReportStatus(req.body.status);
+    const resolutionNote = cleanText(req.body.resolution_note || req.body.note || req.body.moderator_note);
+    const hideListing = boolLike(req.body.hide_listing || req.body.remove_listing || req.body.unpublish_listing);
+    if (!status) {
+      return res.status(400).json({ ok: false, error: 'Invalid status value' });
+    }
+    if (!resolutionNote) {
+      return res.status(400).json({ ok: false, error: 'Moderator note is required' });
+    }
+
+    const existing = await staffQuery(`SELECT * FROM report_listings WHERE id = $1`, [req.params.id], { timeoutMs: STAFF_MODERATION_WRITE_TIMEOUT_MS });
+    if (!existing.rows.length) {
+      return res.status(404).json({ ok: false, error: 'Report not found' });
+    }
+
+    const current = normalizeStaffReportRow(existing.rows[0]);
+    const actor = actorId(req) || 'staff_user';
+    const requestedPropertyId = cleanText(req.body.property_id || req.body.linked_property_id);
+    const propertyId = extractStaffReportPropertyId(requestedPropertyId) || current.linked_property_id;
+    const hiddenProperty = hideListing ? await staffHidePropertyForReport({
+      propertyId,
+      reportId: req.params.id,
+      note: resolutionNote,
+      actor
+    }) : null;
+
+    let updated;
+    try {
+      updated = await staffQuery(
+        `UPDATE report_listings
+         SET
+           status = $2,
+           resolution_note = $3,
+           actioned_by = $4,
+           actioned_at = NOW(),
+           linked_property_id = COALESCE(linked_property_id, $5),
+           details = CONCAT(COALESCE(details, ''), CASE WHEN COALESCE(details, '') = '' THEN '' ELSE E'\n\n' END, 'Moderator note: ', $3::text),
+           updated_at = NOW()
+         WHERE id = $1
+         RETURNING *`,
+        [req.params.id, status, resolutionNote, actor, propertyId || null],
+        { timeoutMs: STAFF_MODERATION_WRITE_TIMEOUT_MS }
+      );
+    } catch (error) {
+      if (error?.code !== '42703') throw error;
+      updated = await staffQuery(
+        `UPDATE report_listings
+         SET
+           status = $2,
+           details = CONCAT(COALESCE(details, ''), CASE WHEN COALESCE(details, '') = '' THEN '' ELSE E'\n\n' END, 'Moderator note: ', $3::text),
+           updated_at = NOW()
+         WHERE id = $1
+         RETURNING id, property_reference, reason, details, reporter_contact, status, created_at, updated_at`,
+        [req.params.id, status, resolutionNote],
+        { timeoutMs: STAFF_MODERATION_WRITE_TIMEOUT_MS }
+      );
+    }
+
+    const row = normalizeStaffReportRow(updated.rows[0] || {});
+    await Promise.allSettled([
+      logStaffActivity(req, 'staff_report_status_updated', {
+        targetType: 'listing_report',
+        targetId: req.params.id,
+        metadata: {
+          status,
+          hide_listing: hideListing,
+          hidden_property_id: hiddenProperty?.id || null
+        }
+      }),
+      staffNotifyReporterOutcome(row, status, resolutionNote)
+    ]);
+
+    return res.json({ ok: true, data: row, hidden_property: hiddenProperty || null });
   } catch (error) {
     return next(error);
   }

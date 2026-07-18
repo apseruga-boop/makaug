@@ -11478,6 +11478,9 @@ function applyStaffDashboardData(data = {}, user = {}) {
   renderStaffTraining(data.training || {});
   if (data.partial) {
     renderStaffDeferredPanelLoading();
+    refreshStaffReportsQueue({ silent: true }).catch((error) => {
+      console.warn("Unable to load staff reports queue", error?.message || error);
+    });
     return;
   }
   renderStaffBrokerReviewQueue(data.broker_review_queue || [], {
@@ -11493,6 +11496,9 @@ function applyStaffDashboardData(data = {}, user = {}) {
   renderStaffWhatsapp(data.whatsapp_conversations || [], data.summary?.whatsapp || {});
   renderStaffBankLeads(data.bank_leads || {});
   renderStaffActivity(data.recent_activity || []);
+  refreshStaffReportsQueue({ silent: true }).catch((error) => {
+    console.warn("Unable to load staff reports queue", error?.message || error);
+  });
 }
 
 async function hydrateStaffDashboardPanels(endpoint = "/api/staff/dashboard?panels=1", tokenAtStart = "", userIdAtStart = "") {
@@ -17379,6 +17385,9 @@ async function renderAdminDashboard(options = {}) {
         <button onclick="adminSetReportStatus('${r.id}','dismissed')" class="bg-gray-700 hover:bg-gray-600 text-white px-2 py-1 rounded text-[11px] font-semibold">Dismiss</button>
       </div>` : ""}
     </div>`);
+  refreshAdminReportsQueue({ silent: true }).catch((error) => {
+    console.warn("Unable to load admin reports queue", error?.message || error);
+  });
   } finally {
     adminDashboardRendering = false;
   }
@@ -23758,19 +23767,166 @@ async function adminSetPropertyRegistrationStatus(propertyId, registrationStatus
   }
 }
 
-async function adminSetReportStatus(reportId, status) {
+function reportQueueStatusBadge(status = "") {
+  const st = String(status || "open").toLowerCase();
+  if (st === "resolved") return "bg-emerald-50 text-emerald-800 border-emerald-100";
+  if (st === "dismissed") return "bg-gray-100 text-gray-700 border-gray-200";
+  if (st === "in_review") return "bg-amber-50 text-amber-800 border-amber-100";
+  return "bg-rose-50 text-rose-800 border-rose-100";
+}
+
+function reportQueueTypeLabel(type = "", reason = "") {
+  const requestType = String(type || "").toLowerCase();
+  if (requestType === "claim") return "Claim";
+  if (requestType === "correction") return "Correction";
+  if (requestType === "removal") return "Removal";
+  if (requestType === "fraud" || requestType === "report") return /fraud/i.test(reason) ? "Fraud" : "Report";
+  return "Report";
+}
+
+function reportStructuredFieldsHtml(fields = {}) {
+  const entries = Object.entries(fields && typeof fields === "object" ? fields : {})
+    .filter(([, value]) => String(value || "").trim())
+    .slice(0, 6);
+  if (!entries.length) return "";
+  return `<div class="mt-2 grid sm:grid-cols-2 gap-2 text-[11px]">
+    ${entries.map(([key, value]) => `<div class="rounded-lg border border-slate-100 bg-slate-50 p-2"><strong>${adminEscape(key.replace(/_/g, " "))}</strong><br>${adminEscape(value)}</div>`).join("")}
+  </div>`;
+}
+
+function reportQueueCardHtml(row = {}, options = {}) {
+  const prefix = options.prefix || "admin";
+  const setter = prefix === "staff" ? "staffSetReportStatus" : "adminSetReportStatus";
+  const typeLabel = reportQueueTypeLabel(row.request_type, row.reason);
+  const propertyId = row.linked_property_id || "";
+  const propertyLabel = row.linked_property_title || row.property_reference || "Listing report";
+  const canAction = options.canAction !== false;
+  const source = row.request_source || "";
+  const status = String(row.status || "open").toLowerCase();
+  const hideAllowed = canAction && propertyId && ["removal", "report", "fraud"].includes(String(row.request_type || "report").toLowerCase());
+  return `
+    <article class="rounded-2xl border border-gray-200 bg-white p-4">
+      <div class="flex items-start justify-between gap-3">
+        <div class="min-w-0">
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="rounded-full border px-2.5 py-1 text-[11px] font-black ${reportQueueStatusBadge(status)}">${adminEscape(status.replace(/_/g, " "))}</span>
+            <span class="rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-[11px] font-black text-blue-800">${adminEscape(typeLabel)}</span>
+            ${source ? `<span class="rounded-full border border-slate-100 bg-slate-50 px-2.5 py-1 text-[11px] font-bold text-slate-600">${adminEscape(source.replace(/_/g, " "))}</span>` : ""}
+          </div>
+          <div class="mt-2 font-black text-gray-900 break-words">${adminEscape(propertyLabel)}</div>
+          <div class="mt-1 text-xs text-gray-500">${adminEscape(row.reason || "No reason provided")} • ${adminEscape(row.reporter_contact || "No reporter contact")} • ${adminEscape(formatListingDate(row.created_at || row.updated_at))}</div>
+          ${row.details ? `<div class="mt-2 rounded-xl bg-slate-50 border border-slate-100 p-3 text-xs text-slate-700 whitespace-pre-wrap">${adminEscape(row.details).slice(0, 650)}</div>` : ""}
+          ${reportStructuredFieldsHtml(row.structured_fields)}
+          ${row.resolution_note ? `<div class="mt-2 rounded-xl bg-emerald-50 border border-emerald-100 p-2 text-xs text-emerald-800"><strong>Resolution:</strong> ${adminEscape(row.resolution_note)}</div>` : ""}
+        </div>
+      </div>
+      ${canAction ? `<div class="mt-3 flex flex-wrap gap-2">
+        <button type="button" onclick="${setter}(${adminListingIdArg(row.id)}, 'in_review', { propertyId: ${adminListingIdArg(propertyId)} })" class="border border-amber-200 text-amber-800 hover:bg-amber-50 px-3 py-1.5 rounded-lg text-xs font-black">In review</button>
+        <button type="button" onclick="${setter}(${adminListingIdArg(row.id)}, 'resolved', { propertyId: ${adminListingIdArg(propertyId)} })" class="border border-emerald-200 text-emerald-700 hover:bg-emerald-50 px-3 py-1.5 rounded-lg text-xs font-black">Resolve</button>
+        <button type="button" onclick="${setter}(${adminListingIdArg(row.id)}, 'dismissed', { propertyId: ${adminListingIdArg(propertyId)} })" class="border border-gray-200 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-black">Dismiss</button>
+        ${hideAllowed ? `<button type="button" onclick="${setter}(${adminListingIdArg(row.id)}, 'resolved', { propertyId: ${adminListingIdArg(propertyId)}, hideListing: true })" class="bg-red-700 hover:bg-red-600 text-white px-3 py-1.5 rounded-lg text-xs font-black">Resolve + hide listing</button>` : ""}
+        ${propertyId ? `<a href="/property/${adminAttr(propertyId)}" target="_blank" rel="noopener noreferrer" class="border border-blue-200 text-blue-700 hover:bg-blue-50 px-3 py-1.5 rounded-lg text-xs font-black">Open listing</a>` : ""}
+      </div>` : ""}
+    </article>`;
+}
+
+async function refreshAdminReportsQueue(options = {}) {
+  const wrap = document.getElementById("admin-reports-queue");
+  if (!wrap || !canUseLiveAdminApi()) return;
+  if (!options.silent) wrap.innerHTML = staffEmpty("Reports loading...");
+  const status = document.getElementById("admin-reports-status-filter")?.value || "";
+  const params = new URLSearchParams({ limit: "50" });
+  if (status) params.set("status", status);
+  try {
+    const res = await apiRequest(`/api/admin/reports?${params.toString()}`, {
+      headers: adminAuthHeaders()
+    });
+    const rows = Array.isArray(res?.data) ? res.data : [];
+    const total = Number(res?.pagination?.total || rows.length || 0);
+    setTextById("admin-reports-count-badge", String(total));
+    wrap.innerHTML = rows.length
+      ? rows.map((row) => reportQueueCardHtml(row, { prefix: "admin" })).join("")
+      : staffEmpty(status ? "No reports match this status." : "No reports or claims have been submitted yet.");
+  } catch (error) {
+    wrap.innerHTML = staffEmpty(`Reports could not load: ${error.message || "request failed"}`);
+  }
+}
+
+async function refreshStaffReportsQueue(options = {}) {
+  const wrap = document.getElementById("staff-reports-queue");
+  if (!wrap || !authState?.token) return;
+  if (!options.silent) wrap.innerHTML = staffEmpty("Reports loading...");
+  try {
+    const res = await staffApiRequestWithTimeout("/api/staff/reports?status=open&limit=20", {}, STAFF_DASHBOARD_PANEL_TIMEOUT_MS, "Staff reports");
+    const rows = Array.isArray(res?.data) ? res.data : [];
+    wrap.innerHTML = rows.length
+      ? rows.map((row) => reportQueueCardHtml(row, { prefix: "staff" })).join("")
+      : staffEmpty("No open reports or claims are waiting.");
+  } catch (error) {
+    wrap.innerHTML = staffEmpty(`Reports could not load: ${error.message || "request failed"}`);
+  }
+}
+
+async function setReportStatusViaApi({ reportId, status, propertyId = "", hideListing = false, staff = false } = {}) {
+  const notePrompt = hideListing
+    ? "Required note for resolving this report and hiding the listing:"
+    : "Required moderator note:";
+  const note = window.prompt(notePrompt, "") || "";
+  if (!note.trim()) {
+    toast("Moderator note is required.");
+    return;
+  }
+  if (hideListing) {
+    const ok = window.confirm("This will hide the linked listing from public pages. Continue?");
+    if (!ok) return;
+  }
+  const path = staff
+    ? `/api/staff/reports/${encodeURIComponent(reportId)}/status`
+    : `/api/admin/reports/${encodeURIComponent(reportId)}/status`;
+  const options = {
+    method: "PATCH",
+    body: {
+      status,
+      resolution_note: note,
+      property_id: propertyId || undefined,
+      linked_property_id: propertyId || undefined,
+      hide_listing: hideListing
+    }
+  };
+  if (!staff) options.headers = adminAuthHeaders();
+  await apiRequest(path, options);
+}
+
+async function staffSetReportStatus(reportId, status, options = {}) {
+  try {
+    await setReportStatusViaApi({
+      reportId,
+      status,
+      propertyId: options.propertyId || "",
+      hideListing: options.hideListing === true,
+      staff: true
+    });
+    await refreshStaffReportsQueue({ silent: true });
+    toast(`Report updated: ${status}.`);
+  } catch (e) {
+    toast(`Report update failed: ${e.message || "error"}`);
+  }
+}
+
+async function adminSetReportStatus(reportId, status, options = {}) {
   if (!canUseLiveAdminApi()) {
     toast("Sign in as admin or set ADMIN_API_KEY first to moderate reports.");
     return;
   }
-  const note = window.prompt("Optional resolution note:", "") || "";
   try {
-    await apiRequest(`/api/admin/reports/${encodeURIComponent(reportId)}/status`, {
-      method: "PATCH",
-      headers: adminAuthHeaders(),
-      body: { status, resolution_note: note }
+    await setReportStatusViaApi({
+      reportId,
+      status,
+      propertyId: options.propertyId || "",
+      hideListing: options.hideListing === true,
+      staff: false
     });
-    await renderAdminDashboard();
+    await refreshAdminReportsQueue({ silent: true });
     toast(`Report updated: ${status}.`);
   } catch (e) {
     toast(`Report update failed: ${e.message || "error"}`);
@@ -27903,6 +28059,8 @@ async function submitReportListing() {
   const details = (detailsEl?.value || "").trim() || (detailsEl?.dataset.defaultDetails || "").trim();
   const requestType = (modal?.dataset.requestType || "").trim();
   const source = (modal?.dataset.requestSource || "").trim();
+  const linkedPropertyId = (modal?.dataset.propertyId || "").trim();
+  const structuredFields = collectReportStructuredFields();
 
   if (!propertyReference || !reason) {
     toast(translateListingLabel("Please provide listing reference and reason."));
@@ -27919,7 +28077,10 @@ async function submitReportListing() {
         details,
         reporter_contact: reporterContact,
         source: source || (requestType ? "third_party_listing_request" : "fraud_report"),
-        request_type: requestType || undefined
+        request_type: requestType || undefined,
+        property_id: linkedPropertyId || undefined,
+        linked_property_id: linkedPropertyId || undefined,
+        structured_fields: structuredFields
       }
     });
     await trackEvent("report_listing_submit", { reason, request_type: requestType || "report" });
@@ -27937,6 +28098,7 @@ function resetReportListingModal() {
   if (modal) {
     delete modal.dataset.requestType;
     delete modal.dataset.requestSource;
+    delete modal.dataset.propertyId;
   }
   const titleEl = document.getElementById("report-modal-title");
   const subEl = document.getElementById("report-modal-sub");
@@ -27953,6 +28115,8 @@ function resetReportListingModal() {
     detailsEl.placeholder = translateListingLabel("Details");
     delete detailsEl.dataset.defaultDetails;
   }
+  const structured = document.getElementById("report-structured-fields");
+  if (structured) structured.innerHTML = "";
 }
 
 function setAgentOtpStatus(tone, message) {
@@ -35687,6 +35851,68 @@ function ensureReportReasonOption(value) {
   select.value = reason;
 }
 
+function reportStructuredFieldHtml({ key = "", label = "", type = "text", placeholder = "", options = [] } = {}) {
+  const safeKey = adminAttr(key);
+  const safeLabel = translateListingLabel(label);
+  if (type === "textarea") {
+    return `<label class="block text-xs font-black text-gray-700">${adminEscape(safeLabel)}
+      <textarea data-report-field="${safeKey}" rows="3" class="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" placeholder="${adminAttr(translateListingLabel(placeholder || label))}"></textarea>
+    </label>`;
+  }
+  if (type === "select") {
+    return `<label class="block text-xs font-black text-gray-700">${adminEscape(safeLabel)}
+      <select data-report-field="${safeKey}" class="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white">
+        ${options.map((option) => `<option value="${adminAttr(option.value || option)}">${adminEscape(translateListingLabel(option.label || option))}</option>`).join("")}
+      </select>
+    </label>`;
+  }
+  return `<label class="block text-xs font-black text-gray-700">${adminEscape(safeLabel)}
+    <input data-report-field="${safeKey}" class="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" placeholder="${adminAttr(translateListingLabel(placeholder || label))}">
+  </label>`;
+}
+
+function renderThirdPartyRequestStructuredFields(type = "report") {
+  const wrap = document.getElementById("report-structured-fields");
+  if (!wrap) return;
+  const fieldsByType = {
+    claim: [
+      { key: "claim_name", label: "Your name / company", placeholder: "Name shown on documents or account" },
+      { key: "claim_role", label: "Your role", type: "select", options: ["Owner", "Broker / agent", "Photographer / creator", "Authorised representative", "Other"] },
+      { key: "claim_account", label: "makaug account email or phone", placeholder: "Where we should attach the claim if approved" },
+      { key: "claim_proof", label: "Proof of authority", type: "textarea", placeholder: "Title, sales agreement, agency authority, source account, or other proof" }
+    ],
+    correction: [
+      { key: "correction_field", label: "What needs correction?", type: "select", options: ["Price", "Location", "Phone / contact", "Photos / video", "Availability", "Description", "Other"] },
+      { key: "correction_value", label: "Correct value", placeholder: "Add the accurate value" },
+      { key: "correction_source", label: "Evidence / source", type: "textarea", placeholder: "Where can makaug verify the correction?" }
+    ],
+    removal: [
+      { key: "removal_reason", label: "Removal reason", type: "select", options: ["I own this and do not want it listed", "The listing is no longer available", "The media is unauthorised", "The information is unsafe or misleading", "Other"] },
+      { key: "removal_evidence", label: "Proof / evidence", type: "textarea", placeholder: "Explain your authority and add evidence for the team" }
+    ],
+    report: [
+      { key: "fraud_details", label: "What looks wrong?", type: "textarea", placeholder: "Describe the fraud, unsafe contact, copied content, or misleading detail" },
+      { key: "fraud_evidence", label: "Evidence", type: "textarea", placeholder: "Links, screenshots, phone numbers, or context that helps makaug review" }
+    ]
+  };
+  const fields = fieldsByType[type] || fieldsByType.report;
+  wrap.innerHTML = `
+    <div class="rounded-xl border border-gray-100 bg-gray-50 p-3">
+      <div class="text-xs font-black text-gray-900 mb-2">${translateListingLabel("Structured review details")}</div>
+      <div class="space-y-2">${fields.map(reportStructuredFieldHtml).join("")}</div>
+    </div>`;
+}
+
+function collectReportStructuredFields() {
+  const fields = {};
+  document.querySelectorAll("[data-report-field]").forEach((el) => {
+    const key = String(el.getAttribute("data-report-field") || "").trim();
+    const value = String(el.value || "").trim();
+    if (key && value) fields[key] = value;
+  });
+  return fields;
+}
+
 function buildThirdPartyRequestReference(property = {}, meta = {}) {
   const parts = [
     property?.id || property?.backend_id ? getPropertyShareUrl(property) : "",
@@ -35732,6 +35958,7 @@ function openThirdPartyListingRequest(event, requestType = "report", propertyId 
 
   modal.dataset.requestType = type;
   modal.dataset.requestSource = config.source;
+  modal.dataset.propertyId = property?.backend_id || property?.id || "";
   const titleEl = document.getElementById("report-modal-title");
   const subEl = document.getElementById("report-modal-sub");
   const referenceEl = document.getElementById("report-reference");
@@ -35747,6 +35974,7 @@ function openThirdPartyListingRequest(event, requestType = "report", propertyId 
     detailsEl.placeholder = translateListingLabel(config.detailsHint);
     detailsEl.dataset.defaultDetails = defaultDetails;
   }
+  renderThirdPartyRequestStructuredFields(type);
   openModal("report-modal");
   return false;
 }
@@ -35758,18 +35986,32 @@ function foundOnlineSourceActionLinksHtml(p = {}, meta = {}) {
   const sourceContactIsTikTokProfile = isTikTokProfileUrl(meta.sourceContactUrl);
   const showDistinctContactRoute = contactRoute && contactRoute !== meta.sourceUrl && !sourceContactIsTikTokProfile;
   return `
-    <div class="mt-3 flex flex-wrap gap-2 text-xs">
-      ${!sourceUnavailable && meta.sourceUrl ? `<a href="${adminAttr(meta.sourceUrl)}" target="_blank" rel="noopener noreferrer" class="rounded-full bg-white border border-blue-100 px-3 py-1.5 font-black text-blue-800 underline">${translateListingLabel("Open original source")}</a>` : ""}
-      ${!sourceUnavailable && showDistinctContactRoute ? `<a href="${adminAttr(contactRoute)}" target="_blank" rel="noopener noreferrer" class="rounded-full bg-white border border-blue-100 px-3 py-1.5 font-black text-blue-800 underline">${translateListingLabel("Contact original poster")}</a>` : ""}
-      <details class="group rounded-2xl border border-slate-200 bg-white px-3 py-1.5 text-slate-800">
-        <summary class="cursor-pointer list-none font-black">${translateListingLabel("More options / Report an issue")}</summary>
-        <div class="mt-2 grid gap-2 min-w-[13rem]">
-          <button type="button" onclick="return openThirdPartyListingRequest(event, ${propertyIdArg("claim")}, ${propertyIdArg(listingId)})" class="rounded-xl bg-blue-50 px-3 py-2 text-left font-black text-blue-800">${translateListingLabel("Claim this listing")}</button>
-          <button type="button" onclick="return openThirdPartyListingRequest(event, ${propertyIdArg("correction")}, ${propertyIdArg(listingId)})" class="rounded-xl bg-blue-50 px-3 py-2 text-left font-black text-blue-800">${translateListingLabel("Request correction")}</button>
-          <button type="button" onclick="return openThirdPartyListingRequest(event, ${propertyIdArg("removal")}, ${propertyIdArg(listingId)})" class="rounded-xl bg-red-50 px-3 py-2 text-left font-black text-red-700">${translateListingLabel("Request removal")}</button>
-          <button type="button" onclick="return openThirdPartyListingRequest(event, ${propertyIdArg("report")}, ${propertyIdArg(listingId)})" class="rounded-xl bg-red-50 px-3 py-2 text-left font-black text-red-700">${translateListingLabel("Report fraud or incorrect information")}</button>
+    <div class="mt-4 space-y-3">
+      <div class="flex flex-wrap gap-2 text-xs">
+        ${!sourceUnavailable && meta.sourceUrl ? `<a href="${adminAttr(meta.sourceUrl)}" target="_blank" rel="noopener noreferrer" class="rounded-xl bg-white border border-slate-200 px-3 py-2 font-black text-slate-800 hover:border-blue-200"><i class="fas fa-arrow-up-right-from-square mr-1 text-blue-700"></i>${translateListingLabel("Open original source")}</a>` : ""}
+        ${!sourceUnavailable && showDistinctContactRoute ? `<a href="${adminAttr(contactRoute)}" target="_blank" rel="noopener noreferrer" class="rounded-xl bg-white border border-slate-200 px-3 py-2 font-black text-slate-800 hover:border-blue-200"><i class="fas fa-user mr-1 text-blue-700"></i>${translateListingLabel("Contact original poster")}</a>` : ""}
+      </div>
+      <div class="rounded-2xl border border-slate-200 bg-white p-3">
+        <div class="text-xs font-black uppercase tracking-wide text-slate-600">${translateListingLabel("Something wrong? Report or claim this listing")}</div>
+        <div class="mt-3 grid sm:grid-cols-2 gap-2 text-xs">
+          <button type="button" onclick="return openThirdPartyListingRequest(event, ${propertyIdArg("claim")}, ${propertyIdArg(listingId)})" class="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-left text-blue-900 hover:bg-blue-100">
+            <span class="block font-black"><i class="fas fa-user-check mr-1"></i>${translateListingLabel("Claim listing")}</span>
+            <span class="block mt-0.5 text-[11px]">${translateListingLabel("Owner, broker, creator, or authorised representative.")}</span>
+          </button>
+          <button type="button" onclick="return openThirdPartyListingRequest(event, ${propertyIdArg("correction")}, ${propertyIdArg(listingId)})" class="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-left text-emerald-900 hover:bg-emerald-100">
+            <span class="block font-black"><i class="fas fa-pen-to-square mr-1"></i>${translateListingLabel("Request correction")}</span>
+            <span class="block mt-0.5 text-[11px]">${translateListingLabel("Fix price, location, contact, availability, or details.")}</span>
+          </button>
+          <button type="button" onclick="return openThirdPartyListingRequest(event, ${propertyIdArg("removal")}, ${propertyIdArg(listingId)})" class="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-left text-red-800 hover:bg-red-100">
+            <span class="block font-black"><i class="fas fa-ban mr-1"></i>${translateListingLabel("Request removal")}</span>
+            <span class="block mt-0.5 text-[11px]">${translateListingLabel("Ask makaug to hide a disputed third-party result.")}</span>
+          </button>
+          <button type="button" onclick="return openThirdPartyListingRequest(event, ${propertyIdArg("report")}, ${propertyIdArg(listingId)})" class="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-left text-red-800 hover:bg-red-100">
+            <span class="block font-black"><i class="fas fa-triangle-exclamation mr-1"></i>${translateListingLabel("Report fraud")}</span>
+            <span class="block mt-0.5 text-[11px]">${translateListingLabel("Unsafe contact, scam, copied media, or misleading info.")}</span>
+          </button>
         </div>
-      </details>
+      </div>
     </div>`;
 }
 
@@ -35788,38 +36030,32 @@ function listingOnlineSourceDisclosureHtml(p = {}) {
     ? translateListingLabel("Source date approx.")
     : translateListingLabel("First posted online");
   return `
-    <details id="detail-source-verification" class="mt-5 rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-950">
-      <summary class="cursor-pointer list-none">
-        <div class="flex items-center justify-between gap-3">
-          <div class="inline-flex items-center gap-2 font-black">
-            <i class="fas fa-magnifying-glass-location text-blue-700"></i>
+    <section id="detail-source-verification" class="mt-5 rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-800">
+      <div class="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <div class="inline-flex items-center gap-2 font-black text-slate-950">
+            <span class="grid h-9 w-9 place-items-center rounded-xl bg-blue-50 text-blue-700"><i class="fas fa-shield-halved"></i></span>
             <span>${translateListingLabel("Source & verification")}</span>
           </div>
-          <i class="fas fa-chevron-down text-xs text-blue-700"></i>
+          <p class="mt-2 text-slate-600">${translateListingLabel("This listing was found from a public third-party source. makaug is showing it as a discovery result and has not independently verified ownership, availability, price, land title, seller authority, image rights, or contact details.")}</p>
         </div>
-      </summary>
-      <div class="mt-3 flex items-start gap-2">
-        <i class="fas fa-magnifying-glass-location mt-0.5 text-blue-700"></i>
-        <div>
-          <div class="font-black">${translateListingLabel("Third-party property result")}</div>
-          <div class="mt-1">${translateListingLabel("This property was found from a public third-party source. Makaug provides a search and discovery preview only. Makaug has not verified ownership, availability, price, land title, seller authority, image rights, or contact details. Please check the original source and carry out independent verification before making any payment or arranging a viewing.")}</div>
-          <div class="mt-2 rounded-lg border border-blue-100 bg-white/80 p-2 text-xs text-blue-900">
-            ${translateListingLabel("Makaug does not claim ownership of third-party photos, videos, captions, descriptions, trademarks, or contact details. All third-party content remains the property of its original rights holder. Contact is handled through the original source.")}
-          </div>
-          <div class="mt-2 flex flex-wrap gap-2 text-xs">
-            <span class="rounded-full bg-white border border-blue-100 px-2 py-1"><strong>${firstPostedTitle}:</strong> ${adminEscape(meta.firstPosted || translateListingLabel("Being confirmed from source"))}</span>
-            ${meta.firstSeen ? `<span class="rounded-full bg-white border border-blue-100 px-2 py-1"><strong>${translateListingLabel("First picked up by makaug")}:</strong> ${adminEscape(meta.firstSeen)}</span>` : ""}
-            ${meta.addedToMakaug ? `<span class="rounded-full bg-white border border-blue-100 px-2 py-1"><strong>${translateListingLabel("Added to makaug")}:</strong> ${adminEscape(meta.addedToMakaug)}</span>` : ""}
-            ${sourceBits ? `<span class="rounded-full bg-white border border-blue-100 px-2 py-1"><strong>${translateListingLabel("Source")}:</strong> ${adminEscape(sourceBits)}</span>` : ""}
-            ${audienceLabel ? `<span class="rounded-full bg-white border border-blue-100 px-2 py-1"><strong>${translateListingLabel("Audience")}:</strong> ${adminEscape(audienceLabel)}</span>` : ""}
-          </div>
-          ${foundOnlineSourceActionLinksHtml(p, meta)}
-          ${!meta.firstPosted ? `<div class="mt-2 text-xs text-blue-800">${adminEscape(translateListingLabel(meta.firstPostedLabel || "Original post date is being confirmed from the source platform."))}</div>` : ""}
-          ${meta.sourceUnavailable ? `<div class="mt-2 text-xs font-bold text-amber-800">${translateListingLabel("This source video or account is no longer available. Use the listing facts with care while makaug re-checks it.")}</div>` : ""}
-          ${contactHref && (!meta.hasDirectContact || meta.sourceContactMethod === "social") ? `<div class="mt-2 text-xs text-blue-800">${adminEscape(contactCopy)}</div>` : ""}
-        </div>
+        <span class="rounded-full border border-amber-100 bg-amber-50 px-3 py-1 text-xs font-black text-amber-800">${translateListingLabel("Third-party - unverified")}</span>
       </div>
-    </details>`;
+      <div class="mt-3 rounded-xl border border-slate-100 bg-slate-50 p-3 text-xs text-slate-600">
+        ${translateListingLabel("makaug does not claim ownership of third-party photos, videos, captions, descriptions, trademarks, or contact details. Check the original source and verify independently before paying or viewing.")}
+      </div>
+      <div class="mt-3 grid sm:grid-cols-2 lg:grid-cols-3 gap-2 text-xs">
+        <div class="rounded-xl border border-slate-100 bg-slate-50 p-3"><strong>${firstPostedTitle}</strong><br>${adminEscape(meta.firstPosted || translateListingLabel("Being confirmed from source"))}</div>
+        ${meta.firstSeen ? `<div class="rounded-xl border border-slate-100 bg-slate-50 p-3"><strong>${translateListingLabel("First picked up by makaug")}</strong><br>${adminEscape(meta.firstSeen)}</div>` : ""}
+        ${meta.addedToMakaug ? `<div class="rounded-xl border border-slate-100 bg-slate-50 p-3"><strong>${translateListingLabel("Added to makaug")}</strong><br>${adminEscape(meta.addedToMakaug)}</div>` : ""}
+        ${sourceBits ? `<div class="rounded-xl border border-slate-100 bg-slate-50 p-3"><strong>${translateListingLabel("Source")}</strong><br>${adminEscape(sourceBits)}</div>` : ""}
+        ${audienceLabel ? `<div class="rounded-xl border border-slate-100 bg-slate-50 p-3"><strong>${translateListingLabel("Audience")}</strong><br>${adminEscape(audienceLabel)}</div>` : ""}
+        <div class="rounded-xl border border-slate-100 bg-slate-50 p-3"><strong>${translateListingLabel("Contact route")}</strong><br>${adminEscape(contactCopy)}</div>
+      </div>
+      ${foundOnlineSourceActionLinksHtml(p, meta)}
+      ${!meta.firstPosted ? `<div class="mt-2 text-xs text-slate-500">${adminEscape(translateListingLabel(meta.firstPostedLabel || "Original post date is being confirmed from the source platform."))}</div>` : ""}
+      ${meta.sourceUnavailable ? `<div class="mt-2 text-xs font-bold text-amber-800">${translateListingLabel("This source video or account is no longer available. Use the listing facts with care while makaug re-checks it.")}</div>` : ""}
+    </section>`;
 }
 
 function foundOnlineSourceVideoUrl(p = {}) {

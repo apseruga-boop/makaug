@@ -7633,33 +7633,84 @@ router.patch('/properties/:id/featured', async (req, res, next) => {
   }
 });
 
-router.get('/reports', async (req, res, next) => {
+function normalizeReportStatus(value) {
+  const status = cleanText(value).toLowerCase();
+  return ['open', 'in_review', 'resolved', 'dismissed'].includes(status) ? status : '';
+}
+
+function extractLinkedPropertyIdFromReference(reference = '') {
+  const match = String(reference || '').match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+  return match ? match[0] : null;
+}
+
+function normalizeReportRow(row = {}) {
+  const linkedPropertyId = row.linked_property_id || extractLinkedPropertyIdFromReference(row.property_reference);
+  return {
+    ...row,
+    request_type: row.request_type || 'report',
+    request_source: row.request_source || '',
+    structured_fields: row.structured_fields && typeof row.structured_fields === 'object' ? row.structured_fields : {},
+    linked_property_id: linkedPropertyId,
+    resolution_note: row.resolution_note || '',
+    actioned_by: row.actioned_by || '',
+    actioned_at: row.actioned_at || null
+  };
+}
+
+async function listReportRows({ status = '', search = '', limit = 20, offset = 0 } = {}) {
+  const filters = [];
+  const values = [];
+
+  if (status) {
+    values.push(status);
+    filters.push(`r.status = $${values.length}`);
+  }
+  if (search) {
+    values.push(`%${search}%`);
+    filters.push(`(
+      r.property_reference ILIKE $${values.length}
+      OR r.reason ILIKE $${values.length}
+      OR COALESCE(r.details, '') ILIKE $${values.length}
+      OR COALESCE(r.reporter_contact, '') ILIKE $${values.length}
+    )`);
+  }
+
+  const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+  const countResult = await db.query(`SELECT COUNT(*)::int AS total FROM report_listings r ${where}`, values);
+  const total = countResult.rows[0]?.total || 0;
+  const listValues = [...values, limit, offset];
+
   try {
-    const { page, limit, offset } = parsePagination(req.query);
-    const status = String(req.query.status || '').trim().toLowerCase();
-    const search = String(req.query.search || '').trim().toLowerCase();
-
-    const filters = [];
-    const values = [];
-
-    if (status) {
-      values.push(status);
-      filters.push(`r.status = $${values.length}`);
-    }
-    if (search) {
-      values.push(`%${search}%`);
-      filters.push(`(
-        r.property_reference ILIKE $${values.length}
-        OR r.reason ILIKE $${values.length}
-        OR COALESCE(r.details, '') ILIKE $${values.length}
-      )`);
-    }
-
-    const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
-    const countResult = await db.query(`SELECT COUNT(*)::int AS total FROM report_listings r ${where}`, values);
-    const total = countResult.rows[0]?.total || 0;
-
-    const listValues = [...values, limit, offset];
+    const rows = await db.query(
+      `SELECT
+        r.id,
+        r.property_reference,
+        r.reason,
+        r.details,
+        r.reporter_contact,
+        r.status,
+        r.request_type,
+        r.request_source,
+        r.structured_fields,
+        r.linked_property_id,
+        r.resolution_note,
+        r.actioned_by,
+        r.actioned_at,
+        r.created_at,
+        r.updated_at,
+        p.title AS linked_property_title,
+        p.status AS linked_property_status
+      FROM report_listings r
+      LEFT JOIN properties p ON p.id = r.linked_property_id
+      ${where}
+      ORDER BY r.created_at DESC
+      LIMIT $${values.length + 1}
+      OFFSET $${values.length + 2}`,
+      listValues
+    );
+    return { total, rows: rows.rows.map(normalizeReportRow) };
+  } catch (error) {
+    if (error?.code !== '42703') throw error;
     const rows = await db.query(
       `SELECT
         r.id,
@@ -7677,10 +7728,183 @@ router.get('/reports', async (req, res, next) => {
       OFFSET $${values.length + 2}`,
       listValues
     );
+    return { total, rows: rows.rows.map(normalizeReportRow) };
+  }
+}
+
+async function hidePropertyForReport({ propertyId, reportId, note, actorId }) {
+  const id = cleanText(propertyId);
+  if (!id) return null;
+  const updated = await db.query(
+    `UPDATE properties
+     SET
+       status = 'hidden',
+       moderation_stage = 'hidden',
+       moderation_reason = $3,
+       moderation_notes = CONCAT_WS(E'\n', NULLIF(moderation_notes, ''), $3),
+       extra_fields = COALESCE(extra_fields, '{}'::jsonb)
+         || jsonb_build_object(
+           'hidden_by_report_id', $1::text,
+           'hidden_by_report_at', NOW()::text,
+           'hidden_by_report_by', $4::text,
+           'hidden_by_report_note', $3::text
+         ),
+       updated_at = NOW()
+     WHERE id = $2
+     RETURNING id, title, status, updated_at`,
+    [reportId, id, note, actorId]
+  );
+  return updated.rows[0] || null;
+}
+
+async function notifyReporterOfReportOutcome(row = {}, status = '', note = '') {
+  const reporter = cleanText(row.reporter_contact);
+  if (!reporter || !isValidEmail(reporter)) {
+    await logNotification(db, {
+      recipientEmail: null,
+      recipientPhone: reporter && isValidPhone(reporter) ? reporter : null,
+      channel: 'in_app',
+      type: 'listing_report_outcome',
+      status: 'logged',
+      payloadSummary: {
+        report_id: row.id,
+        status,
+        reporter_contact: reporter || null
+      }
+    });
+    return { sent: false, reason: 'no_reporter_email' };
+  }
+
+  const delivery = await sendSupportEmail({
+    to: reporter,
+    subject: `makaug listing request updated: ${status}`,
+    text: [
+      'Your makaug listing request has been reviewed.',
+      '',
+      `Report ID: ${row.id}`,
+      `Status: ${status}`,
+      `Listing: ${row.property_reference || '-'}`,
+      note ? `Moderator note: ${note}` : '',
+      '',
+      'Thank you for helping keep makaug accurate and safe.'
+    ].filter(Boolean).join('\n')
+  });
+  const deliveryStatus = notificationStatusFromDelivery(delivery);
+  await Promise.allSettled([
+    logEmailEvent(db, {
+      eventType: 'listing_report_outcome',
+      recipientEmail: reporter,
+      recipientRole: 'reporter',
+      templateKey: 'listing_report_outcome',
+      subject: `makaug listing request updated: ${status}`,
+      status: deliveryStatus,
+      failureReason: delivery?.error || delivery?.reason || null,
+      sentAt: delivery?.sent ? new Date() : null
+    }),
+    logNotification(db, {
+      recipientEmail: reporter,
+      channel: 'email',
+      type: 'listing_report_outcome',
+      status: deliveryStatus,
+      payloadSummary: {
+        report_id: row.id,
+        status
+      }
+    })
+  ]);
+  return delivery;
+}
+
+async function updateReportStatusWithAction(req, { actorId = 'admin_api_key', auditAction = 'admin_report_status_updated' } = {}) {
+  const status = normalizeReportStatus(req.body.status);
+  const resolutionNote = cleanText(req.body.resolution_note || req.body.note || req.body.moderator_note);
+  const hideListing = parseBooleanLike(req.body.hide_listing || req.body.remove_listing || req.body.unpublish_listing, false);
+
+  if (!status) {
+    const error = new Error('Invalid status value');
+    error.status = 400;
+    throw error;
+  }
+  if (!resolutionNote) {
+    const error = new Error('Moderator note is required');
+    error.status = 400;
+    throw error;
+  }
+
+  const existing = await db.query(
+    `SELECT * FROM report_listings WHERE id = $1`,
+    [req.params.id]
+  );
+  if (!existing.rows.length) {
+    const error = new Error('Report not found');
+    error.status = 404;
+    throw error;
+  }
+  const current = normalizeReportRow(existing.rows[0]);
+  const requestedPropertyId = cleanText(req.body.property_id || req.body.linked_property_id);
+  const propertyId = extractLinkedPropertyIdFromReference(requestedPropertyId) || current.linked_property_id;
+  const hiddenProperty = hideListing ? await hidePropertyForReport({
+    propertyId,
+    reportId: req.params.id,
+    note: resolutionNote,
+    actorId
+  }) : null;
+
+  let updated;
+  try {
+    updated = await db.query(
+      `UPDATE report_listings
+       SET
+         status = $2,
+         resolution_note = $3,
+         actioned_by = $4,
+         actioned_at = NOW(),
+         linked_property_id = COALESCE(linked_property_id, $5),
+         details = CONCAT(COALESCE(details, ''), CASE WHEN COALESCE(details, '') = '' THEN '' ELSE E'\n\n' END, 'Moderator note: ', $3::text),
+         updated_at = NOW()
+       WHERE id = $1
+       RETURNING *`,
+      [req.params.id, status, resolutionNote, actorId, propertyId || null]
+    );
+  } catch (error) {
+    if (error?.code !== '42703') throw error;
+    updated = await db.query(
+      `UPDATE report_listings
+       SET
+         status = $2,
+         details = CONCAT(COALESCE(details, ''), CASE WHEN COALESCE(details, '') = '' THEN '' ELSE E'\n\n' END, 'Moderator note: ', $3::text),
+         updated_at = NOW()
+       WHERE id = $1
+       RETURNING id, property_reference, reason, details, reporter_contact, status, created_at, updated_at`,
+      [req.params.id, status, resolutionNote]
+    );
+  }
+
+  const row = normalizeReportRow(updated.rows[0] || {});
+  await Promise.allSettled([
+    writeAudit(auditAction, {
+      report_id: req.params.id,
+      status,
+      resolution_note: resolutionNote,
+      hide_listing: hideListing,
+      hidden_property_id: hiddenProperty?.id || null
+    }, actorId),
+    notifyReporterOfReportOutcome(row, status, resolutionNote)
+  ]);
+
+  return { row, hiddenProperty };
+}
+
+router.get('/reports', async (req, res, next) => {
+  try {
+    const { page, limit, offset } = parsePagination(req.query);
+    const status = normalizeReportStatus(req.query.status);
+    const search = String(req.query.search || '').trim().toLowerCase();
+    const { total, rows } = await listReportRows({ status, search, limit, offset });
 
     return res.json({
       ok: true,
-      data: rows.rows,
+      data: rows,
       pagination: toPagination(total, page, limit)
     });
   } catch (error) {
@@ -7690,40 +7914,15 @@ router.get('/reports', async (req, res, next) => {
 
 router.patch('/reports/:id/status', async (req, res, next) => {
   try {
-    const status = String(req.body.status || '').trim().toLowerCase();
-    const resolutionNote = String(req.body.resolution_note || '').trim();
-    const allowedStatuses = ['open', 'in_review', 'resolved', 'dismissed'];
-
-    if (!allowedStatuses.includes(status)) {
-      return res.status(400).json({ ok: false, error: 'Invalid status value' });
-    }
-
-    const updated = await db.query(
-      `UPDATE report_listings
-       SET
-         status = $2,
-         details = CASE
-           WHEN $3::text = '' THEN details
-           ELSE CONCAT(COALESCE(details, ''), CASE WHEN COALESCE(details, '') = '' THEN '' ELSE E'\n\n' END, 'Admin note: ', $3::text)
-         END,
-         updated_at = NOW()
-       WHERE id = $1
-       RETURNING id, property_reference, reason, details, reporter_contact, status, updated_at`,
-      [req.params.id, status, resolutionNote]
-    );
-
-    if (!updated.rows.length) {
-      return res.status(404).json({ ok: false, error: 'Report not found' });
-    }
-
-    await writeAudit('admin_report_status_updated', {
-      report_id: req.params.id,
-      status,
-      resolution_note: resolutionNote || null
+    const result = await updateReportStatusWithAction(req, {
+      actorId: adminActorId(req),
+      auditAction: 'admin_report_status_updated'
     });
-
-    return res.json({ ok: true, data: updated.rows[0] });
+    return res.json({ ok: true, data: result.row, hidden_property: result.hiddenProperty || null });
   } catch (error) {
+    if (error.status) {
+      return res.status(error.status).json({ ok: false, error: error.message });
+    }
     return next(error);
   }
 });
