@@ -10,6 +10,7 @@ const marker = "similar-relevance-v2-20260718";
 const recallMarker = "similar-recall-widening-20260718";
 const aliasRenderMarker = "similar-alias-render-20260718";
 const purposeFallbackMarker = "similar-purpose-fallback-20260718";
+const hydrationResponseMarker = "similar-hydration-response-20260718";
 
 const markerCount = (indexHtml.match(new RegExp(marker, "g")) || []).length;
 assert(markerCount >= 2, "production HTML must carry the similar relevance marker in both preload and app-loader cache keys");
@@ -23,6 +24,9 @@ assert(appJs.includes(`SIMILAR_PROPERTIES_ALIAS_RENDER_MARKER = "${aliasRenderMa
 const purposeFallbackMarkerCount = (indexHtml.match(new RegExp(purposeFallbackMarker, "g")) || []).length;
 assert(purposeFallbackMarkerCount >= 2, "production HTML must carry the similar purpose fallback marker in both preload and app-loader cache keys");
 assert(appJs.includes(`SIMILAR_PROPERTIES_PURPOSE_FALLBACK_MARKER = "${purposeFallbackMarker}"`), "client bundle must carry the similar purpose fallback marker");
+const hydrationResponseMarkerCount = (indexHtml.match(new RegExp(hydrationResponseMarker, "g")) || []).length;
+assert(hydrationResponseMarkerCount >= 2, "production HTML must carry the similar hydration response marker in both preload and app-loader cache keys");
+assert(appJs.includes(`SIMILAR_PROPERTIES_HYDRATION_RESPONSE_MARKER = "${hydrationResponseMarker}"`), "client bundle must carry the similar hydration response marker");
 assert(appJs.includes("function similarPropertyCategory(property = {})"), "similar properties must normalize listing category before ranking");
 assert(appJs.includes("function similarPropertyPurpose(property = {})"), "similar properties must normalize sale/rent purpose before ranking");
 assert(appJs.includes("function similarPropertyPrice(property = {})"), "similar properties must reject unpriced candidates");
@@ -81,14 +85,17 @@ assert(
     && appJs.includes("category=${encodeURIComponent(category)}")
     && appJs.includes("function hydrateDetailSimilarProperties(property = {})")
     && appJs.includes("limit=96&page=1&include_summary=0")
+    && appJs.includes("Array.isArray(response?.properties)")
+    && appJs.includes("Array.isArray(response?.data?.properties)")
     && appJs.includes("rows.forEach((row) => upsertPropertyForUi(row));"),
-  "direct property detail loads must fetch same-category public rows before giving up on similar cards"
+  "direct property detail loads must read same-category public rows from all supported response shapes before giving up on similar cards"
 );
 
 assert(
   appJs.includes("function renderDetailSimilarPropertiesSectionHtml(similar = [])")
     && appJs.includes("id=\"detail-similar-properties-grid\"")
     && appJs.includes("data-similar-purpose-fallback")
+    && appJs.includes("data-similar-hydration-response")
     && appJs.includes("updateDetailSimilarPropertiesSection(nextMatches)")
     && appJs.includes("hydrateDetailSimilarProperties(p);"),
   "detail pages must always include a hydratable similar-properties section and render it when matches appear"

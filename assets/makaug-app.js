@@ -35889,6 +35889,7 @@ const SIMILAR_PROPERTIES_RELEVANCE_MARKER = "similar-relevance-v2-20260718";
 const SIMILAR_PROPERTIES_RECALL_MARKER = "similar-recall-widening-20260718";
 const SIMILAR_PROPERTIES_ALIAS_RENDER_MARKER = "similar-alias-render-20260718";
 const SIMILAR_PROPERTIES_PURPOSE_FALLBACK_MARKER = "similar-purpose-fallback-20260718";
+const SIMILAR_PROPERTIES_HYDRATION_RESPONSE_MARKER = "similar-hydration-response-20260718";
 const detailSimilarHydrationInFlight = new Map();
 
 function similarPropertyCategory(property = {}) {
@@ -45717,7 +45718,7 @@ function similarPropertyCategoryApiPath(property = {}) {
 
 function renderDetailSimilarPropertiesSectionHtml(similar = []) {
   const rows = (Array.isArray(similar) ? similar : []).filter(Boolean);
-  return `<div id="detail-similar-properties" data-similar-alias-render="${SIMILAR_PROPERTIES_ALIAS_RENDER_MARKER}" data-similar-purpose-fallback="${SIMILAR_PROPERTIES_PURPOSE_FALLBACK_MARKER}" class="bg-white border border-gray-200 rounded-2xl p-5 mt-5 ${rows.length ? "" : "hidden"}">
+  return `<div id="detail-similar-properties" data-similar-alias-render="${SIMILAR_PROPERTIES_ALIAS_RENDER_MARKER}" data-similar-purpose-fallback="${SIMILAR_PROPERTIES_PURPOSE_FALLBACK_MARKER}" data-similar-hydration-response="${SIMILAR_PROPERTIES_HYDRATION_RESPONSE_MARKER}" class="bg-white border border-gray-200 rounded-2xl p-5 mt-5 ${rows.length ? "" : "hidden"}">
           <h2 class="text-xl font-bold mb-3">${translatePropertyUi("Similar Properties")}</h2>
           <div id="detail-similar-properties-grid" class="grid md:grid-cols-3 gap-4">${rows.map(propCard).join("")}</div>
         </div>`;
@@ -45753,7 +45754,11 @@ async function hydrateDetailSimilarProperties(property = {}) {
     try {
       const separator = path.includes("?") ? "&" : "?";
       const response = await apiRequest(`${path}${separator}limit=96&page=1&include_summary=0`, { skipAuth: true });
-      const rows = Array.isArray(response?.data) ? response.data : [];
+      const rows = Array.isArray(response?.properties)
+        ? response.properties
+        : (Array.isArray(response?.data?.properties)
+          ? response.data.properties
+          : (Array.isArray(response?.data) ? response.data : []));
       rows.forEach((row) => upsertPropertyForUi(row));
       const subject = findPropertyForUi(id) || property;
       const nextMatches = getSimilarProperties(subject, 8);
