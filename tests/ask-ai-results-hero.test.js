@@ -23,6 +23,7 @@ includes(indexHtml, 'ask-ai-blue-categoryrouting-20260718', 'Ask AI blue/categor
 includes(indexHtml, 'ask-ai-no-intent-routing-20260718', 'Ask AI no-intent routing marker must be present in HTML');
 includes(indexHtml, 'ask-ai-fast-mobile-20260718', 'Ask AI fast/mobile marker must be present in HTML');
 includes(indexHtml, 'ask-ai-similar-closeout-20260718', 'Ask AI/similar closeout marker must be present in HTML');
+includes(indexHtml, 'ask-ai-card-sql-fast-20260718', 'Ask AI card SQL fast-path marker must be present in HTML');
 includes(indexHtml, 'data-ask-ai-results-hero="1"', 'homepage Ask AI hero marker missing');
 includes(indexHtml, 'data-ask-ai-blue-categoryrouting="1"', 'Ask AI blue/category-routing UI marker missing');
 includes(indexHtml, 'data-ask-ai-fast-mobile="1"', 'Ask AI fast/mobile UI marker missing');
