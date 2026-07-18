@@ -2327,8 +2327,64 @@ async function listPropertiesHandler(req, res, next) {
     const rowLimit = includeSummary ? limit : limit + 1;
     const listValues = [...values, rowLimit, offset];
 
-    const listResult = await db.query(
-      `WITH public_page_source AS (
+    const fastPublicCardFields = cardFieldsOnly && !adminAccess;
+    const listSql = fastPublicCardFields
+      ? `SELECT
+          p.id,
+          p.listing_type,
+          p.title,
+          p.description,
+          p.district,
+          p.area,
+          p.address,
+          p.price,
+          p.price_period,
+          p.bedrooms,
+          p.bathrooms,
+          p.property_type,
+          p.nearest_university,
+          p.distance_to_uni_km,
+          p.room_type,
+          p.title_type,
+          p.status,
+          p.created_at,
+          p.latitude,
+          p.longitude,
+          p.students_welcome,
+          p.agent_id,
+          p.lister_phone,
+          ${extraFieldsSelectSql},
+          COALESCE(p.extra_fields->>'found_online_candidate', p.extra_fields->>'sourced_inventory_candidate') AS found_online_candidate,
+          p.extra_fields->>'city' AS city,
+          p.extra_fields->>'neighborhood' AS neighborhood,
+          p.extra_fields->>'street_name' AS street_name,
+          p.extra_fields->>'video_url' AS video_url,
+          p.extra_fields->>'youtube_url' AS youtube_url,
+          p.extra_fields->>'preferred_contact_method' AS preferred_contact_method,
+          p.extra_fields->>'region' AS region,
+          p.extra_fields->>'resolved_location_label' AS resolved_location_label,
+          ${distanceSql} AS distance_km,
+          (COALESCE(p.extra_fields->>'featured', 'false') IN ('true', '1', 'yes')) AS featured,
+          p.extra_fields->>'featured_at' AS featured_at,
+          CASE
+            WHEN p.agent_id IS NOT NULL OR p.lister_type = 'agent' THEN 'agent'
+            ELSE 'private'
+          END AS listed_by,
+          COALESCE(p.extra_fields->>'lister_registration_status', 'not_registered') AS registration_status,
+          img.url AS primary_image_url
+        FROM properties p
+        LEFT JOIN LATERAL (
+          SELECT i.url
+          FROM property_images i
+          WHERE i.property_id = p.id
+          ORDER BY i.is_primary DESC, i.sort_order ASC, i.created_at ASC
+          LIMIT 1
+        ) img ON true
+        ${where}
+        ORDER BY ${orderBy}
+        LIMIT $${values.length + 1}
+        OFFSET $${values.length + 2}`
+      : `WITH public_page_source AS (
         SELECT
           p.id,
           p.listing_type,
@@ -2409,9 +2465,8 @@ async function listPropertiesHandler(req, res, next) {
         ORDER BY i.is_primary DESC, i.sort_order ASC, i.created_at ASC
         LIMIT 1
       ) img ON true
-      ORDER BY public_page.__page_order`,
-      listValues
-    );
+      ORDER BY public_page.__page_order`;
+    const listResult = await db.query(listSql, listValues);
     const hasMoreRows = !includeSummary && listResult.rows.length > limit;
     const responseRows = hasMoreRows ? listResult.rows.slice(0, limit) : listResult.rows;
     const pagination = includeSummary
