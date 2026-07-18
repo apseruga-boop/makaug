@@ -35893,6 +35893,7 @@ const SIMILAR_PROPERTIES_HYDRATION_RESPONSE_MARKER = "similar-hydration-response
 const SIMILAR_PROPERTIES_EXPLICIT_CATEGORY_MARKER = "similar-explicit-category-20260718";
 const SIMILAR_PROPERTIES_HYDRATION_FALLBACK_MARKER = "similar-hydration-fallback-20260718";
 const SIMILAR_PROPERTIES_ENDPOINT_FALLBACK_MARKER = "similar-endpoint-fallback-20260718";
+const SIMILAR_PROPERTIES_HYDRATION_DIAGNOSTICS_MARKER = "similar-hydration-diagnostics-20260718";
 const detailSimilarHydrationInFlight = new Map();
 
 function similarPropertyCategory(property = {}) {
@@ -45770,6 +45771,14 @@ function updateDetailSimilarPropertiesSection(similar = []) {
   section.classList.remove("hidden");
 }
 
+function setDetailSimilarHydrationDiagnostics(fields = {}) {
+  const section = document.getElementById("detail-similar-properties");
+  if (!section) return;
+  Object.entries(fields).forEach(([key, value]) => {
+    section.dataset[key] = String(value ?? "");
+  });
+}
+
 async function hydrateDetailSimilarProperties(property = {}) {
   const id = String(property?.id || property?.backend_id || "");
   if (!id) return [];
@@ -45794,6 +45803,14 @@ async function hydrateDetailSimilarProperties(property = {}) {
       const hydratedRows = rows.map((row) => upsertPropertyForUi(row) || mapRemotePropertyForUi(row)).filter(Boolean);
       const subject = findPropertyForUi(id) || property;
       let nextMatches = getSimilarProperties(subject, 8);
+      setDetailSimilarHydrationDiagnostics({
+        similarHydrationMarker: SIMILAR_PROPERTIES_HYDRATION_DIAGNOSTICS_MARKER,
+        similarHydrationPath: path,
+        similarHydrationRows: rows.length,
+        similarHydrationMapped: hydratedRows.length,
+        similarHydrationSubjectCategory: similarPropertyCategory(subject),
+        similarHydrationInitialMatches: nextMatches.length
+      });
       if (!nextMatches.length && rows.length) {
         const subjectCategory = similarPropertyCategory(subject);
         const subjectPrice = similarPropertyPrice(subject);
@@ -45812,6 +45829,9 @@ async function hydrateDetailSimilarProperties(property = {}) {
           .slice(0, Math.min(6, 8))
           .map((item) => item.property);
       }
+      setDetailSimilarHydrationDiagnostics({
+        similarHydrationFinalMatches: nextMatches.length
+      });
       if (String(activeDetailPropertyId || "") === id) updateDetailSimilarPropertiesSection(nextMatches);
       return nextMatches;
     } catch (error) {

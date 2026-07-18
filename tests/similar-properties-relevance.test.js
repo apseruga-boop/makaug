@@ -14,6 +14,7 @@ const hydrationResponseMarker = "similar-hydration-response-20260718";
 const explicitCategoryMarker = "similar-explicit-category-20260718";
 const hydrationFallbackMarker = "similar-hydration-fallback-20260718";
 const endpointFallbackMarker = "similar-endpoint-fallback-20260718";
+const hydrationDiagnosticsMarker = "similar-hydration-diagnostics-20260718";
 
 const markerCount = (indexHtml.match(new RegExp(marker, "g")) || []).length;
 assert(markerCount >= 2, "production HTML must carry the similar relevance marker in both preload and app-loader cache keys");
@@ -39,6 +40,9 @@ assert(appJs.includes(`SIMILAR_PROPERTIES_HYDRATION_FALLBACK_MARKER = "${hydrati
 const endpointFallbackMarkerCount = (indexHtml.match(new RegExp(endpointFallbackMarker, "g")) || []).length;
 assert(endpointFallbackMarkerCount >= 2, "production HTML must carry the similar endpoint fallback marker in both preload and app-loader cache keys");
 assert(appJs.includes(`SIMILAR_PROPERTIES_ENDPOINT_FALLBACK_MARKER = "${endpointFallbackMarker}"`), "client bundle must carry the similar endpoint fallback marker");
+const hydrationDiagnosticsMarkerCount = (indexHtml.match(new RegExp(hydrationDiagnosticsMarker, "g")) || []).length;
+assert(hydrationDiagnosticsMarkerCount >= 2, "production HTML must carry the similar hydration diagnostics marker in both preload and app-loader cache keys");
+assert(appJs.includes(`SIMILAR_PROPERTIES_HYDRATION_DIAGNOSTICS_MARKER = "${hydrationDiagnosticsMarker}"`), "client bundle must carry the similar hydration diagnostics marker");
 assert(appJs.includes("function similarPropertyCategory(property = {})"), "similar properties must normalize listing category before ranking");
 assert(appJs.includes("function similarPropertyPurpose(property = {})"), "similar properties must normalize sale/rent purpose before ranking");
 assert(appJs.includes("function similarPropertyPrice(property = {})"), "similar properties must reject unpriced candidates");
@@ -104,7 +108,8 @@ assert(
     && appJs.includes("Array.isArray(response?.data?.properties)")
     && appJs.includes("if (!nextMatches.length && rows.length)")
     && appJs.includes("const hydratedRows = rows.map((row) => upsertPropertyForUi(row) || mapRemotePropertyForUi(row)).filter(Boolean);")
-    && appJs.includes("similarDedupedSortedItems(hydratedRows"),
+    && appJs.includes("similarDedupedSortedItems(hydratedRows")
+    && appJs.includes("setDetailSimilarHydrationDiagnostics({"),
   "direct property detail loads must read same-category public rows from all supported response shapes before giving up on similar cards"
 );
 
