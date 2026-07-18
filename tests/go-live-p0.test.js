@@ -1025,9 +1025,11 @@ function run() {
   assert(aiRoutes.includes('conversation_logged'), 'AI assistant API should report that backend logging happened');
   assert(aiRoutes.includes('human_handoff_required'), 'AI assistant API should log human handoff events');
   assert(aiRoutes.includes('createLead'), 'AI assistant API should create CRM leads for handoff/fraud/mortgage/advertiser intents');
-  for (const intent of ['search_property', 'search_rent', 'search_sale', 'search_student', 'search_land', 'search_commercial', 'save_search', 'create_alert', 'book_viewing', 'request_callback', 'list_property', 'list_property_whatsapp', 'report_fraud', 'ask_mortgage', 'ask_help', 'advertiser_interest', 'language_change', 'human_handoff']) {
-    assert(frontendSource.includes(`value="${intent}"`) || frontendSource.includes(`"${intent}"`), `AI chatbot missing intent: ${intent}`);
+  for (const intent of ['search_property', 'search_rent', 'search_sale', 'search_student', 'search_land', 'search_commercial']) {
+    assert(frontendSource.includes(`value="${intent}"`) || frontendSource.includes(`"${intent}"`), `AI chatbot missing search intent: ${intent}`);
   }
+  assert(!sourceHtml.includes('id="ai-chatbot-intent"'), 'public Ask AI should not expose the old product intent dropdown');
+  assert(frontendSource.includes('supported_intents: [\n            "search_property", "search_rent", "search_sale", "search_student", "search_land", "search_commercial"'), 'public Ask AI should advertise search-only supported intents');
   assert(frontendSource.includes('data-map-property-link="1"'), 'map listing popups should expose real property detail links');
   assert(frontendSource.includes('href="${adminAttr(detailPath)}"'), 'map listing popup should have a real /property fallback URL');
   assert(frontendSource.includes('openMapPropertyDetail(event'), 'map listing popup should use a delegated detail click handler');

@@ -31384,8 +31384,8 @@ function renderHowToVideoSections() {
 const AI_ASSISTANT_PROMPT_I18N = Object.freeze({
   en: {
     pill: "Ask makaug AI",
-    title: "Describe what you want. Get instant property matches.",
-    subtitle: "Search in any language. makaug AI turns your message into filters and shows real listings straight away.",
+    title: "Ask makaug AI",
+    subtitle: "Describe what you want — makaug AI finds it in any language.",
     placeholder: "Try: 2-bed in Ntinda under 1.5M",
     ask: "Ask AI",
     loading: "makaug AI is searching...",
@@ -31661,6 +31661,170 @@ function aiAssistantStarLabel(text = "", fallback = "Ask AI") {
   return clean.startsWith("✨") ? clean : `✨ ${clean}`;
 }
 
+const AI_ASSISTANT_SEARCH_SCOPES = Object.freeze({
+  all: { intent: "search_property", labelKey: "all" },
+  sale: { intent: "search_sale", labelKey: "sale" },
+  rent: { intent: "search_rent", labelKey: "rent" },
+  land: { intent: "search_land", labelKey: "land" },
+  commercial: { intent: "search_commercial", labelKey: "commercial" },
+  student: { intent: "search_student", labelKey: "student" }
+});
+
+const AI_ASSISTANT_SCOPE_HINT_I18N = Object.freeze({
+  en: {
+    all: "Searching all properties",
+    sale: "Searching For Sale",
+    rent: "Searching To Rent",
+    land: "Searching Land",
+    commercial: "Searching Commercial",
+    student: "Searching Student accommodation"
+  },
+  lg: {
+    all: "Enoonya properties zonna",
+    sale: "Enoonya ezigulishwa",
+    rent: "Enoonya ez'okupangisa",
+    land: "Enoonya ettaka",
+    commercial: "Enoonya commercial",
+    student: "Enoonya student accommodation"
+  },
+  sw: {
+    all: "Inatafuta mali zote",
+    sale: "Inatafuta za kuuza",
+    rent: "Inatafuta za kupanga",
+    land: "Inatafuta ardhi",
+    commercial: "Inatafuta biashara",
+    student: "Inatafuta malazi ya wanafunzi"
+  },
+  ac: {
+    all: "Tye ka yeny property ducu",
+    sale: "Tye ka yeny me cato",
+    rent: "Tye ka yeny me rent",
+    land: "Tye ka yeny ngom",
+    commercial: "Tye ka yeny commercial",
+    student: "Tye ka yeny student accommodation"
+  },
+  ny: {
+    all: "Erikusherura properties zoona",
+    sale: "Erikusherura ez'okuguza",
+    rent: "Erikusherura ez'okupangisa",
+    land: "Erikusherura eitaka",
+    commercial: "Erikusherura commercial",
+    student: "Erikusherura student accommodation"
+  },
+  rn: {
+    all: "Erikusherura properties zoona",
+    sale: "Erikusherura ez'okuguza",
+    rent: "Erikusherura ez'okupangisa",
+    land: "Erikusherura eitaka",
+    commercial: "Erikusherura commercial",
+    student: "Erikusherura student accommodation"
+  },
+  sm: {
+    all: "Enoonya properties zonna",
+    sale: "Enoonya ezigulishwa",
+    rent: "Enoonya ez'okupangisa",
+    land: "Enoonya ettaka",
+    commercial: "Enoonya commercial",
+    student: "Enoonya student accommodation"
+  },
+  am: {
+    all: "ሁሉንም ንብረቶች ይፈልጋል",
+    sale: "ለሽያጭ ይፈልጋል",
+    rent: "ለኪራይ ይፈልጋል",
+    land: "መሬት ይፈልጋል",
+    commercial: "ንግድ ቦታ ይፈልጋል",
+    student: "የተማሪ መኖሪያ ይፈልጋል"
+  },
+  ar: {
+    all: "يبحث في كل العقارات",
+    sale: "يبحث في عقارات البيع",
+    rent: "يبحث في عقارات الإيجار",
+    land: "يبحث في الأراضي",
+    commercial: "يبحث في التجاري",
+    student: "يبحث في سكن الطلاب"
+  }
+});
+
+function normalizeAiAssistantScope(scope = "all") {
+  const clean = String(scope || "all").trim().toLowerCase();
+  if (clean === "students" || clean === "student-accommodation") return "student";
+  if (clean === "to-rent" || clean === "rental" || clean === "rentals") return "rent";
+  if (clean === "for-sale" || clean === "sales") return "sale";
+  return AI_ASSISTANT_SEARCH_SCOPES[clean] ? clean : "all";
+}
+
+function aiAssistantScopeForPage(page = currentPage || "home") {
+  const clean = String(page || "").trim().toLowerCase();
+  if (clean === "sale" || clean === "for-sale" || clean === "property-sale") return "sale";
+  if (clean === "rent" || clean === "to-rent") return "rent";
+  if (clean === "land") return "land";
+  if (clean === "commercial") return "commercial";
+  if (clean === "students" || clean === "student" || clean === "student-accommodation") return "student";
+  return "all";
+}
+
+function aiAssistantIntentForScope(scope = "all") {
+  const normalized = normalizeAiAssistantScope(scope);
+  return AI_ASSISTANT_SEARCH_SCOPES[normalized]?.intent || AI_ASSISTANT_SEARCH_SCOPES.all.intent;
+}
+
+function aiAssistantScopeHintText(scope = "all") {
+  const normalized = normalizeAiAssistantScope(scope);
+  const code = normalizeMakaugLanguageCode(currentLang || "en");
+  const localized = AI_ASSISTANT_SCOPE_HINT_I18N[code] || AI_ASSISTANT_SCOPE_HINT_I18N.en;
+  return localized[normalized] || AI_ASSISTANT_SCOPE_HINT_I18N.en[normalized] || AI_ASSISTANT_SCOPE_HINT_I18N.en.all;
+}
+
+function aiAssistantShellHtml({ scope = "all", idPrefix = "ask-ai-inline" } = {}) {
+  const normalizedScope = normalizeAiAssistantScope(scope);
+  const copy = getAiAssistantPromptCopy();
+  const title = copy.pill || copy.title || AI_ASSISTANT_PROMPT_I18N.en.pill;
+  const subtitle = copy.subtitle || AI_ASSISTANT_PROMPT_I18N.en.subtitle;
+  const buttonText = aiAssistantStarLabel(copy.ask, "Ask AI");
+  const scopeHint = aiAssistantScopeHintText(normalizedScope);
+  const inputId = `${idPrefix}-message`;
+  const labelId = `${idPrefix}-label`;
+  const placeholderId = `${idPrefix}-placeholder`;
+  const responseId = `${idPrefix}-response`;
+  const buttonId = `${idPrefix}-submit`;
+  const intent = aiAssistantIntentForScope(normalizedScope);
+  return `
+    <div class="rounded-[1.35rem] border border-blue-100 bg-white p-3.5 md:p-4 shadow-sm" data-ai-search-shell data-ai-scope="${adminAttr(normalizedScope)}">
+      <div class="flex items-center justify-between gap-3 flex-wrap">
+        <div class="min-w-0">
+          <h2 data-ai-title class="text-base md:text-lg font-black text-[#0b1220]">${adminEscape(title)}</h2>
+          <p data-ai-subtitle class="mt-0.5 text-sm text-[#5b6b62]">${adminEscape(subtitle)}</p>
+        </div>
+        <p data-ai-scope-hint class="text-xs font-bold text-blue-700 bg-blue-50 border border-blue-100 rounded-full px-3 py-1">${adminEscape(scopeHint)}</p>
+      </div>
+      <form data-ai-search-form data-ai-scope="${adminAttr(normalizedScope)}" onsubmit="submitAskAiSearchPrompt(event)" class="mt-3">
+        <input data-ai-intent type="hidden" value="${adminAttr(intent)}">
+        <label id="${adminAttr(labelId)}" data-ai-label for="${adminAttr(inputId)}" class="sr-only">${adminEscape(title)}</label>
+        <div class="flex items-center gap-2 rounded-full border border-blue-200 bg-white px-3 py-2 shadow-inner focus-within:border-blue-400 focus-within:ring-4 focus-within:ring-blue-100">
+          <span class="shrink-0 text-base" aria-hidden="true">✨</span>
+          <div class="relative min-w-0 flex-1">
+            <span id="${adminAttr(placeholderId)}" data-ai-placeholder class="pointer-events-none absolute inset-y-0 left-0 right-0 flex items-center truncate text-sm text-gray-500 opacity-100 transition-opacity duration-300" aria-hidden="true">${adminEscape(copy.placeholder || AI_ASSISTANT_PROMPT_I18N.en.placeholder)}</span>
+            <input id="${adminAttr(inputId)}" data-ai-message autocomplete="off" class="h-10 w-full min-w-0 truncate bg-transparent text-sm text-gray-950 outline-none placeholder:text-transparent" placeholder="">
+          </div>
+          <button id="${adminAttr(buttonId)}" data-ai-submit type="submit" class="h-10 shrink-0 rounded-full bg-blue-600 hover:bg-blue-700 text-white px-4 text-sm font-black whitespace-nowrap">
+            ${adminEscape(buttonText)}
+          </button>
+        </div>
+      </form>
+      <div id="${adminAttr(responseId)}" data-ai-response class="mt-4 hidden rounded-2xl border border-blue-100 bg-white p-4 text-gray-900"></div>
+    </div>`;
+}
+
+function renderAskAiSearchInlineSurfaces() {
+  document.querySelectorAll("[data-ask-ai-inline-scope]").forEach((surface, index) => {
+    if (!surface || surface.dataset.askAiMounted === "1") return;
+    const scope = normalizeAiAssistantScope(surface.dataset.askAiInlineScope || aiAssistantScopeForPage());
+    const context = String(surface.dataset.askAiInlineContext || scope || "inline").replace(/[^a-z0-9_-]/gi, "-").toLowerCase();
+    surface.innerHTML = aiAssistantShellHtml({ scope, idPrefix: `ask-ai-${context}-${index}` });
+    surface.dataset.askAiMounted = "1";
+  });
+}
+
 function renderHomeAskAiExamples() {
   const container = document.getElementById("home-ai-example-chips");
   if (!container) return;
@@ -31676,10 +31840,13 @@ let aiAssistantPlaceholderTimer = null;
 let aiAssistantPlaceholderIndex = 0;
 
 function aiAssistantPlaceholderTargets() {
-  return [
-    { inputId: "home-ai-message", overlayId: "home-ai-placeholder-rotator" },
-    { inputId: "ai-chatbot-message", overlayId: "ai-chatbot-placeholder-rotator" }
-  ];
+  return Array.from(document.querySelectorAll("[data-ai-message]")).map((input) => {
+    const shell = input.closest("[data-ai-search-shell], [data-ai-search-form]") || document;
+    return {
+      input,
+      overlay: shell.querySelector("[data-ai-placeholder]") || null
+    };
+  });
 }
 
 function aiAssistantPlaceholderExamples() {
@@ -31690,13 +31857,14 @@ function aiAssistantPlaceholderExamples() {
 
 function setAiAssistantPlaceholderOverlay(input, overlay, value = "", { force = false } = {}) {
   if (!input) return;
-  input.placeholder = value;
+  const nextValue = String(value || "").trim();
+  input.dataset.aiPlaceholderText = nextValue;
+  input.placeholder = overlay ? "" : nextValue;
   if (!overlay) return;
   const hasTypedText = !!String(input.value || "").trim();
   overlay.classList.toggle("opacity-0", hasTypedText);
   overlay.classList.toggle("opacity-100", !hasTypedText);
   if (hasTypedText) return;
-  const nextValue = String(value || "").trim();
   if (!nextValue || (!force && overlay.textContent === nextValue)) return;
   overlay.classList.remove("opacity-100");
   overlay.classList.add("opacity-0");
@@ -31712,7 +31880,7 @@ function setAiAssistantPlaceholderOverlay(input, overlay, value = "", { force = 
 function wireAiAssistantPlaceholderTarget(input, overlay) {
   if (!input || input.dataset.aiPlaceholderWired === "1") return;
   input.dataset.aiPlaceholderWired = "1";
-  const sync = () => setAiAssistantPlaceholderOverlay(input, overlay, input.placeholder || "", { force: true });
+  const sync = () => setAiAssistantPlaceholderOverlay(input, overlay, input.dataset.aiPlaceholderText || input.placeholder || "", { force: true });
   input.addEventListener("input", sync);
   input.addEventListener("blur", sync);
 }
@@ -31721,13 +31889,11 @@ function updateAiAssistantRotatingPlaceholders({ force = false } = {}) {
   const examples = aiAssistantPlaceholderExamples();
   if (!examples.length) return;
   const value = examples[aiAssistantPlaceholderIndex % examples.length];
-  aiAssistantPlaceholderTargets().forEach(({ inputId, overlayId }) => {
-    const input = document.getElementById(inputId);
-    const overlay = document.getElementById(overlayId);
+  aiAssistantPlaceholderTargets().forEach(({ input, overlay }) => {
     if (!input) return;
     wireAiAssistantPlaceholderTarget(input, overlay);
     if (!force && String(input.value || "").trim()) {
-      setAiAssistantPlaceholderOverlay(input, overlay, input.placeholder || value);
+      setAiAssistantPlaceholderOverlay(input, overlay, input.dataset.aiPlaceholderText || input.placeholder || value);
       return;
     }
     setAiAssistantPlaceholderOverlay(input, overlay, value, { force });
@@ -31743,38 +31909,38 @@ function startAiAssistantPlaceholderRotation() {
 }
 
 function updateHomeAskAiLanguageCopy() {
+  renderAskAiSearchInlineSurfaces();
   const copy = getAiAssistantPromptCopy();
+  const titleText = copy.pill || copy.title || AI_ASSISTANT_PROMPT_I18N.en.pill;
+  const subtitleText = copy.subtitle || AI_ASSISTANT_PROMPT_I18N.en.subtitle;
   const textTargets = [
-    ["home-ai-pill", copy.pill],
-    ["home-ai-title", copy.title],
-    ["home-ai-subtitle", copy.subtitle],
-    ["home-ai-label", copy.pill],
-    ["ai-chatbot-live-pill", copy.pill],
-    ["ai-chatbot-live-title", copy.title],
-    ["ai-chatbot-live-subtitle", copy.subtitle]
+    ["home-ai-pill", titleText],
+    ["home-ai-title", titleText],
+    ["home-ai-subtitle", subtitleText],
+    ["home-ai-label", titleText]
   ];
   textTargets.forEach(([id, text]) => {
     const el = document.getElementById(id);
     if (!el) return;
-    el.textContent = ["home-ai-pill", "ai-chatbot-live-pill"].includes(id)
+    el.textContent = ["home-ai-pill"].includes(id)
       ? aiAssistantStarLabel(text, "Ask makaug AI")
       : text;
   });
-  const input = document.getElementById("home-ai-message");
-  const testInput = document.getElementById("ai-chatbot-message");
-  if (input) input.placeholder = copy.placeholder;
-  if (testInput) testInput.placeholder = copy.placeholder;
-  const button = document.getElementById("home-ai-submit-btn");
-  if (button) {
+  document.querySelectorAll("[data-ai-title]").forEach((el) => { el.textContent = titleText; });
+  document.querySelectorAll("[data-ai-subtitle]").forEach((el) => { el.textContent = subtitleText; });
+  document.querySelectorAll("[data-ai-label]").forEach((el) => { el.textContent = titleText; });
+  document.querySelectorAll("[data-ai-submit]").forEach((button) => {
     button.textContent = aiAssistantStarLabel(copy.ask, "Ask AI");
     button.dataset.idleText = button.textContent;
-  }
-  const testButton = document.getElementById("ai-chatbot-submit-btn");
-  if (testButton) {
-    testButton.textContent = aiAssistantStarLabel(copy.ask, "Ask AI");
-    testButton.dataset.idleText = testButton.textContent;
-  }
-  renderHomeAskAiExamples();
+  });
+  document.querySelectorAll("[data-ai-scope-hint]").forEach((el) => {
+    const scope = normalizeAiAssistantScope(el.closest("[data-ai-search-shell], [data-ai-search-form]")?.dataset?.aiScope || aiAssistantScopeForPage());
+    el.textContent = aiAssistantScopeHintText(scope);
+  });
+  document.querySelectorAll("[data-ai-intent]").forEach((input) => {
+    const scope = normalizeAiAssistantScope(input.closest("[data-ai-search-form], [data-ai-search-shell]")?.dataset?.aiScope || aiAssistantScopeForPage());
+    input.value = aiAssistantIntentForScope(scope);
+  });
   aiAssistantPlaceholderIndex = 0;
   updateAiAssistantRotatingPlaceholders({ force: true });
   startAiAssistantPlaceholderRotation();
@@ -31934,7 +32100,9 @@ async function submitAiAssistantNeedCapture(event) {
   return false;
 }
 
-async function requestAiAssistantResults({ message, intent, responseBox, button, source }) {
+async function requestAiAssistantResults({ message, intent, responseBox, button, source, scope }) {
+  const normalizedScope = normalizeAiAssistantScope(scope || aiAssistantScopeForPage());
+  const searchIntent = intent || aiAssistantIntentForScope(normalizedScope);
   const fallbackMessage = `Please help me with ${String(intent || "search_property").replace(/_/g, " ")} on makaug.`;
   const finalMessage = (message || "").trim() || fallbackMessage;
   const idleText = button?.dataset?.idleText || button?.textContent || aiAssistantCopyText("ask", "Ask AI");
@@ -31952,32 +32120,25 @@ async function requestAiAssistantResults({ message, intent, responseBox, button,
       method: "POST",
       body: {
         message: finalMessage,
-        intent,
+        intent: searchIntent,
         language: currentLang || "en",
         context: {
           route: window.location.pathname || "/",
           source,
+          search_scope: normalizedScope,
           supported_intents: [
-            "search_property", "search_rent", "search_sale", "search_student", "search_land", "search_commercial",
-            "save_search", "create_alert", "book_viewing", "request_callback", "list_property", "list_property_whatsapp",
-            "report_fraud", "ask_mortgage", "ask_help", "advertiser_interest", "language_change", "human_handoff"
+            "search_property", "search_rent", "search_sale", "search_student", "search_land", "search_commercial"
           ]
         }
       }
     });
     renderAiAssistantResponse(responseBox, response?.data || response || {}, { source });
-    trackEvent("ai_chatbot_prompt_submitted", { intent, source_page: currentPage, language: currentLang || "en", source });
+    trackEvent("ai_chatbot_prompt_submitted", { intent: searchIntent, source_page: currentPage, language: currentLang || "en", source, search_scope: normalizedScope });
     return response;
   } catch (error) {
-    const fallback = {
-      search_property: "I can help you search by category, area, budget, bedrooms, campus, land/title needs, or commercial use. Try For Sale, To Rent, Land, Student Accommodation, or Commercial.",
-      list_property: "You can list online from /list-property or use the WhatsApp listing option on that page.",
-      list_property_whatsapp: "Use the List via WhatsApp button on /list-property so makaug receives listing context safely.",
-      report_fraud: "Use /report-fraud or /anti-fraud to report suspicious listings. makaug treats fraud reports as urgent support cases.",
-      human_handoff: "Human handoff is available through the Help Centre or WhatsApp support."
-    }[intent] || "AI provider output is unavailable right now. makaug logged this safely and you can continue by WhatsApp or Help Centre.";
+    const fallback = "I could not search the live listings just now. Try an area, budget, beds, or property type again in a moment.";
     if (responseBox) responseBox.innerHTML = `<div class="rounded-xl bg-blue-50 border border-blue-100 p-4 text-sm text-blue-950">${adminEscape(fallback)}</div>`;
-    trackEvent("ai_chatbot_provider_missing_or_failed", { intent, source_page: currentPage, error: error.message || "request_failed", source });
+    trackEvent("ai_chatbot_provider_missing_or_failed", { intent: searchIntent, source_page: currentPage, error: error.message || "request_failed", source, search_scope: normalizedScope });
     return null;
   } finally {
     if (button) {
@@ -31987,30 +32148,29 @@ async function requestAiAssistantResults({ message, intent, responseBox, button,
   }
 }
 
-async function submitAiChatbotPrompt(event) {
+async function submitAskAiSearchPrompt(event) {
   if (event) event.preventDefault();
-  const intent = (document.getElementById("ai-chatbot-intent")?.value || "search_property").trim();
-  const message = (document.getElementById("ai-chatbot-message")?.value || "").trim();
+  const form = event?.target?.closest?.("[data-ai-search-form]") || event?.target || document.getElementById("home-ai-search-form");
+  const shell = form?.closest?.("[data-ai-search-shell]") || form?.parentElement || document;
+  const scope = normalizeAiAssistantScope(form?.dataset?.aiScope || shell?.dataset?.aiScope || aiAssistantScopeForPage());
+  const intent = form?.querySelector?.("[data-ai-intent]")?.value || aiAssistantIntentForScope(scope);
+  const message = (form?.querySelector?.("[data-ai-message]")?.value || "").trim();
   return requestAiAssistantResults({
     message,
     intent,
-    responseBox: document.getElementById("ai-chatbot-response"),
-    button: document.getElementById("ai-chatbot-submit-btn"),
-    source: "discover_ai_chatbot"
+    responseBox: shell?.querySelector?.("[data-ai-response]") || document.getElementById("home-ai-response"),
+    button: form?.querySelector?.("[data-ai-submit]") || document.getElementById("home-ai-submit-btn"),
+    source: scope === "all" && currentPage === "home" ? "home_ask_ai_hero" : "ask_ai_search_bar",
+    scope
   });
 }
 
 async function submitHomeAskAiPrompt(event) {
-  if (event) event.preventDefault();
-  const intent = (document.getElementById("home-ai-intent")?.value || "search_property").trim();
-  const message = (document.getElementById("home-ai-message")?.value || "").trim();
-  return requestAiAssistantResults({
-    message,
-    intent,
-    responseBox: document.getElementById("home-ai-response"),
-    button: document.getElementById("home-ai-submit-btn"),
-    source: "home_ask_ai_hero"
-  });
+  return submitAskAiSearchPrompt(event);
+}
+
+async function submitAiChatbotPrompt(event) {
+  return submitAskAiSearchPrompt(event);
 }
 
 function runHomeAskAiExample(index = 0) {
@@ -32029,6 +32189,7 @@ function runHomeAskAiExample(index = 0) {
 
 window.submitAiChatbotPrompt = submitAiChatbotPrompt;
 window.submitHomeAskAiPrompt = submitHomeAskAiPrompt;
+window.submitAskAiSearchPrompt = submitAskAiSearchPrompt;
 window.submitAiAssistantNeedCapture = submitAiAssistantNeedCapture;
 window.runHomeAskAiExample = runHomeAskAiExample;
 window.updateHomeAskAiLanguageCopy = updateHomeAskAiLanguageCopy;
@@ -37643,6 +37804,7 @@ function showPage(page, options = {}) {
     currentPage = targetPage;
     closeRouteTransientModals(targetPage, previousPage);
     mountSectionSearchShell(targetPage);
+    updateHomeAskAiLanguageCopy();
     if (options.history !== false) updateRouteHistoryForPage(targetPage, options.source || "show_page");
   } else {
     const route = routeForPage(targetPage);

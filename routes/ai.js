@@ -924,6 +924,7 @@ router.post('/property-need', async (req, res, next) => {
 router.post('/assistant-reply', async (req, res, next) => {
   try {
     const body = req.body || {};
+    const context = body.context && typeof body.context === 'object' ? body.context : {};
     const userMessage = cleanText(body.message, 1200);
     if (!userMessage) {
       return res.status(400).json({ ok: false, error: 'message is required' });
@@ -931,17 +932,24 @@ router.post('/assistant-reply', async (req, res, next) => {
 
     const language = normalizeLanguageCode(body.language || 'en');
     const requestedIntent = cleanText(body.intent).toLowerCase() || 'unknown';
-    const effectiveIntent = inferAssistantIntentFromMessage(userMessage, requestedIntent);
+    const sourceKey = cleanText(body.source || context.source).toLowerCase();
+    const cleanBarSearchOnly = sourceKey === 'ask_ai_search_bar'
+      || sourceKey === 'home_ask_ai_hero'
+      || sourceKey === 'discover_ai_chatbot'
+      || sourceKey.includes('ask_ai');
+    const effectiveIntent = cleanBarSearchOnly && !isAssistantSearchIntent(requestedIntent)
+      ? inferAssistantIntentFromMessage(userMessage, 'search_property')
+      : inferAssistantIntentFromMessage(userMessage, requestedIntent);
     const assistantIsSearch = isAssistantSearchIntent(effectiveIntent);
     let response = null;
     let searchPayload = null;
 
-    if (!assistantIsSearch) {
+    if (!assistantIsSearch && !cleanBarSearchOnly) {
       response = await suggestWhatsappAssistantReply({
         userMessage,
         intent: effectiveIntent,
         language,
-        context: body.context && typeof body.context === 'object' ? body.context : {},
+        context,
         source: 'api_assistant_reply'
       });
       response = {
@@ -950,14 +958,14 @@ router.post('/assistant-reply', async (req, res, next) => {
       };
     }
 
-    if (assistantIsSearch) {
+    if (assistantIsSearch || cleanBarSearchOnly) {
       const rawIntentType = assistantSearchType(effectiveIntent);
       const useLlmParser = parseBooleanLike(body.use_llm_parser ?? body.force_llm_parser, false);
       const extracted = useLlmParser
         ? await extractNaturalPropertyQuery({
           text: userMessage,
           language,
-          sessionData: body.context && typeof body.context === 'object' ? body.context : {},
+          sessionData: context,
           fallbackType: rawIntentType
         })
         : {
