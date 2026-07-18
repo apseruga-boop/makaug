@@ -102,6 +102,17 @@ function publicSearchPathForType(searchType = 'any') {
   return ASSISTANT_CATEGORY_PATHS[searchType] || ASSISTANT_CATEGORY_PATHS.any;
 }
 
+function buildAssistantSeeAllUrl(parsed = {}, searchType = 'any') {
+  const publicPath = publicSearchPathForType(searchType);
+  const publicParams = new URLSearchParams();
+  if (parsed?.area) publicParams.set('q', cleanText(parsed.area, 120));
+  if (parsed?.district && !parsed.area) publicParams.set('district', cleanText(parsed.district, 120));
+  if (Number(parsed?.bedsMin) > 0) publicParams.set('min_beds', String(Math.round(Number(parsed.bedsMin))));
+  if (Number(parsed?.maxBudgetUgx) > 0) publicParams.set('max_price', String(Math.round(Number(parsed.maxBudgetUgx))));
+  if (parsed?.propertyType) publicParams.set('property_type', cleanText(parsed.propertyType, 80));
+  return `${publicPath}${publicParams.toString() ? `?${publicParams.toString()}` : ''}`;
+}
+
 function buildAssistantSearchParams(parsed = {}, searchType = 'any', language = 'en') {
   const params = new URLSearchParams({
     status: 'approved',
@@ -443,29 +454,36 @@ router.post('/assistant-reply', async (req, res, next) => {
       });
       const searchType = cleanText(parsed?.searchType || rawIntentType || 'any').toLowerCase();
       const publicPath = publicSearchPathForType(searchType);
-      const publicParams = new URLSearchParams();
-      if (parsed?.area) publicParams.set('q', cleanText(parsed.area, 120));
-      if (parsed?.district && !parsed.area) publicParams.set('district', cleanText(parsed.district, 120));
-      if (Number(parsed?.bedsMin) > 0) publicParams.set('min_beds', String(Math.round(Number(parsed.bedsMin))));
-      if (Number(parsed?.maxBudgetUgx) > 0) publicParams.set('max_price', String(Math.round(Number(parsed.maxBudgetUgx))));
-      if (parsed?.propertyType) publicParams.set('property_type', cleanText(parsed.propertyType, 80));
-      const seeAllUrl = `${publicPath}${publicParams.toString() ? `?${publicParams.toString()}` : ''}`;
 
       try {
-        const result = await fetchAssistantSearchResults(req, { parsed, searchType, language });
-        const leadText = assistantLeadText({ total: result.total, parsed, searchType, language });
+        let effectiveParsed = parsed;
+        let relaxedFilters = [];
+        let result = await fetchAssistantSearchResults(req, { parsed: effectiveParsed, searchType, language });
+        if (result.total === 0 && parsed?.propertyType) {
+          const relaxedParsed = { ...parsed, propertyType: null };
+          const relaxedResult = await fetchAssistantSearchResults(req, { parsed: relaxedParsed, searchType, language });
+          if (relaxedResult.total > 0) {
+            effectiveParsed = relaxedParsed;
+            relaxedFilters = ['property_type'];
+            result = relaxedResult;
+          }
+        }
+        const seeAllUrl = buildAssistantSeeAllUrl(effectiveParsed, searchType);
+        const leadText = assistantLeadText({ total: result.total, parsed: effectiveParsed, searchType, language });
         response.text = leadText;
         searchPayload = {
           parsed_query: parsed,
+          effective_query: effectiveParsed,
+          relaxed_filters: relaxedFilters,
           filters: {
             search_type: searchType,
-            area: parsed?.area || null,
-            district: parsed?.district || null,
-            bedrooms: parsed?.bedsMin || null,
-            max_price: parsed?.maxBudgetUgx || null,
-            property_type: parsed?.propertyType || null
+            area: effectiveParsed?.area || null,
+            district: effectiveParsed?.district || null,
+            bedrooms: effectiveParsed?.bedsMin || null,
+            max_price: effectiveParsed?.maxBudgetUgx || null,
+            property_type: effectiveParsed?.propertyType || null
           },
-          filter_chips: assistantFilterChips(parsed, searchType),
+          filter_chips: assistantFilterChips(effectiveParsed, searchType),
           search_type: searchType,
           total_matches: result.total,
           result_count: result.listings.length,
@@ -479,6 +497,8 @@ router.post('/assistant-reply', async (req, res, next) => {
       } catch (searchError) {
         searchPayload = {
           parsed_query: parsed,
+          effective_query: parsed,
+          relaxed_filters: [],
           filters: {
             search_type: searchType,
             area: parsed?.area || null,
@@ -493,7 +513,7 @@ router.post('/assistant-reply', async (req, res, next) => {
           result_count: 0,
           listings: [],
           results: [],
-          see_all_url: seeAllUrl,
+          see_all_url: buildAssistantSeeAllUrl(parsed, searchType),
           search_path: publicPath,
           zero_results: true,
           search_error: searchError.message || 'property_search_failed'
