@@ -41,7 +41,8 @@ includes(aiRoute, '/api/properties/search?', 'assistant route must call properti
 includes(aiRoute, "include_summary: '0'", 'assistant search must request a lightweight card payload');
 includes(aiRoute, 'ASSISTANT_SEARCH_RESULT_CACHE_TTL_MS', 'assistant route must cache repeated common search results briefly');
 includes(aiRoute, 'ASSISTANT_SEARCH_TIMEOUT_MS', 'assistant search timeout must be configurable');
-includes(aiRoute, 'relaxedResultPromise', 'assistant route should start relaxed fallback search in parallel');
+includes(aiRoute, 'hasRelaxablePropertyType', 'assistant route should detect scarce subtype filters');
+includes(aiRoute, "relaxedFilters = ['property_type']", 'assistant route should relax scarce subtype filters before the first search');
 includes(aiRoute, 'assistantSearchOriginFromRequest', 'assistant search should use an internal origin where available');
 includes(aiRoute, 'ASSISTANT_SEARCH_BASE_URL', 'assistant search should allow an internal search base URL override');
 includes(aiRoute, 'listings: result.listings', 'assistant route must return listings array');

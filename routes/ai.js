@@ -849,29 +849,21 @@ router.post('/assistant-reply', async (req, res, next) => {
           let exactSearchError = null;
           const hasRelaxablePropertyType = Boolean(parsed?.propertyType);
           const relaxedParsed = hasRelaxablePropertyType ? { ...parsed, propertyType: null } : null;
-          const relaxedResultPromise = relaxedParsed
-            ? fetchAssistantSearchResults(req, { parsed: relaxedParsed, searchType, language }).catch((error) => ({ __error: error }))
-            : null;
+          if (relaxedParsed) {
+            effectiveParsed = relaxedParsed;
+            relaxedFilters = ['property_type'];
+            matchQuality = 'nearby_not_exact';
+          }
           try {
             result = await fetchAssistantSearchResults(req, {
               parsed: effectiveParsed,
               searchType,
-              language,
-              timeoutMs: hasRelaxablePropertyType ? 2500 : ASSISTANT_SEARCH_TIMEOUT_MS
+              language
             });
-            exactTotal = result.total;
+            exactTotal = hasRelaxablePropertyType ? null : result.total;
           } catch (error) {
             exactSearchError = error;
             exactTotal = 0;
-          }
-          if ((!result || result.total === 0) && relaxedResultPromise) {
-            const relaxedResult = await relaxedResultPromise;
-            if (!relaxedResult?.__error && relaxedResult.total > 0) {
-              effectiveParsed = relaxedParsed;
-              relaxedFilters = ['property_type'];
-              matchQuality = 'nearby_not_exact';
-              result = relaxedResult;
-            }
           }
           if (!result) throw exactSearchError || new Error('property_search_failed');
           if (result.total > 0 && assistantLocationLooksRelaxed(result.listings, effectiveParsed)) {
