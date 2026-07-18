@@ -291,6 +291,7 @@ function buildAssistantSearchParams(parsed = {}, searchType = 'any', language = 
     limit: '6',
     page: '1',
     include_summary: '0',
+    card_fields: '1',
     sort: 'newest',
     source: 'ai_assistant',
     language

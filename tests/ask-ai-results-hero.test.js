@@ -22,9 +22,11 @@ includes(indexHtml, 'ask-ai-results-hero-20260717', 'original Ask AI results rel
 includes(indexHtml, 'ask-ai-blue-categoryrouting-20260718', 'Ask AI blue/category-routing marker must be present in HTML');
 includes(indexHtml, 'ask-ai-no-intent-routing-20260718', 'Ask AI no-intent routing marker must be present in HTML');
 includes(indexHtml, 'ask-ai-fast-mobile-20260718', 'Ask AI fast/mobile marker must be present in HTML');
+includes(indexHtml, 'ask-ai-similar-closeout-20260718', 'Ask AI/similar closeout marker must be present in HTML');
 includes(indexHtml, 'data-ask-ai-results-hero="1"', 'homepage Ask AI hero marker missing');
 includes(indexHtml, 'data-ask-ai-blue-categoryrouting="1"', 'Ask AI blue/category-routing UI marker missing');
 includes(indexHtml, 'data-ask-ai-fast-mobile="1"', 'Ask AI fast/mobile UI marker missing');
+includes(indexHtml, 'data-ask-ai-similar-closeout="1"', 'Ask AI closeout UI marker missing');
 includes(indexHtml, 'id="home-ai-search-form"', 'homepage Ask AI form missing');
 includes(indexHtml, 'id="home-ai-example-chips"', 'homepage localized example chips missing');
 includes(indexHtml, 'id="home-ai-response"', 'homepage Ask AI response region missing');
@@ -39,6 +41,7 @@ includes(aiRoute, 'model: \'heuristic-fast\'', 'assistant search route must supp
 includes(aiRoute, 'if (!assistantIsSearch)', 'assistant route must keep LLM chat off the search critical path');
 includes(aiRoute, '/api/properties/search?', 'assistant route must call properties search');
 includes(aiRoute, "include_summary: '0'", 'assistant search must request a lightweight card payload');
+includes(aiRoute, "card_fields: '1'", 'assistant search must request card-only public fields');
 includes(aiRoute, 'ASSISTANT_SEARCH_RESULT_CACHE_TTL_MS', 'assistant route must cache repeated common search results briefly');
 includes(aiRoute, 'ASSISTANT_SEARCH_TIMEOUT_MS', 'assistant search timeout must be configurable');
 includes(aiRoute, 'hasRelaxablePropertyType', 'assistant route should detect scarce subtype filters');
@@ -83,5 +86,10 @@ includes(appJs, 'captureCta', 'frontend must include capture CTA copy');
 excludes(aiService, '🟨', 'AI service must not emit yellow square emoji');
 excludes(aiService, '🟩', 'AI service must not emit green square emoji');
 excludes(aiService, 'green/yellow brand cue', 'AI prompt must not instruct green/yellow emoji branding');
+
+const propertyRoute = read('routes/properties.js');
+includes(propertyRoute, 'cardFieldsOnly', 'properties route must parse the card_fields fast-path flag');
+includes(propertyRoute, 'compactPublicCardRow', 'properties route must expose a compact public card mapper');
+includes(propertyRoute, 'if (cardFieldsOnly && !adminAccess)', 'card_fields fast path must be public-only and avoid admin payloads');
 
 console.log('ask-ai-results-hero test passed');

@@ -943,6 +943,102 @@ function publicContactPhoneForRow(row = {}, safeExtra = null) {
   return safeExtraPhone || extraPhone || rowPhone || '';
 }
 
+function compactPublicCardRow(row = {}, currency = 'UGX') {
+  const safeExtra = publicExtraFields(row.admin_extra_fields || row.extra_fields || {});
+  const foundOnlinePublic = isFoundOnlinePublicRow(row, safeExtra);
+  const locationOverride = publicLocationOverrideForListing(row, safeExtra);
+  const hasUsablePublicPin = isUsablePublicCoordinate(row.latitude, row.longitude);
+  const publicDistrict = locationOverride?.district || row.district;
+  const publicLatitude = !hasUsablePublicPin && locationOverride ? locationOverride.latitude : row.latitude;
+  const publicLongitude = !hasUsablePublicPin && locationOverride ? locationOverride.longitude : row.longitude;
+  const primaryImageUrl = foundOnlinePublic ? null : normalizePublicImageUrl(row.primary_image_url);
+  const publicTitle = foundOnlinePublic
+    ? buildThirdPartyPublicTitle(row, safeExtra)
+    : cleanPublicListingCopy(row.title || '');
+  const publicDescription = foundOnlinePublic
+    ? buildThirdPartyPublicSummary(row, safeExtra)
+    : cleanPublicListingCopy(row.description || '');
+  const studentContext = studentUniversityContextFor(row, safeExtra);
+  const publicContactPhone = publicContactPhoneForRow(row, safeExtra);
+  const distanceKm = row.distance_km == null ? null : Number(Number(row.distance_km).toFixed(3));
+  const distanceMiles = distanceKm == null ? null : Number(kmToMiles(Number(distanceKm)).toFixed(2));
+  const publicExtra = {
+    source_platform: safeExtra.source_platform || null,
+    source_badge: safeExtra.source_badge || null,
+    source_url: safeExtra.source_url || null,
+    video_url: safeExtra.video_url || row.video_url || null,
+    youtube_url: safeExtra.youtube_url || row.youtube_url || null,
+    thumbnail_url: safeExtra.thumbnail_url || safeExtra.source_thumbnail_url || null,
+    source_thumbnail_url: safeExtra.source_thumbnail_url || safeExtra.thumbnail_url || null,
+    source_card_description: safeExtra.source_card_description || null,
+    found_online: safeExtra.found_online === true,
+    social_search_candidate: safeExtra.social_search_candidate === true,
+    sourced_inventory_candidate: safeExtra.sourced_inventory_candidate === true,
+    third_party_discovery_result: foundOnlinePublic,
+    public_contact_phone: publicContactPhone || null,
+    contact_phone: publicContactPhone || null,
+    nearest_university: studentContext.nearest_university || null,
+    student_campus: studentContext.nearest_university || null,
+    student_universities: studentContext.student_universities || [],
+    distance_to_uni_km: studentContext.distance_to_uni_km,
+    resolved_location_label: safeExtra.resolved_location_label || row.resolved_location_label || null
+  };
+  return {
+    id: row.id,
+    listing_type: row.listing_type,
+    type: row.listing_type,
+    title: publicTitle,
+    description: publicDescription,
+    desc: publicDescription,
+    district: publicDistrict,
+    area: row.area,
+    address: row.address,
+    price: row.price,
+    price_period: row.price_period,
+    period: row.price_period,
+    bedrooms: row.bedrooms,
+    beds: row.bedrooms,
+    bathrooms: row.bathrooms,
+    baths: row.bathrooms,
+    property_type: row.property_type,
+    subtype: row.property_type || row.room_type || 'Property',
+    room_type: row.room_type || null,
+    title_type: row.title_type || null,
+    status: row.status,
+    created_at: row.created_at,
+    latitude: publicLatitude,
+    longitude: publicLongitude,
+    lat: publicLatitude,
+    lng: publicLongitude,
+    students_welcome: row.students_welcome,
+    nearest_university: studentContext.nearest_university || null,
+    distance_to_uni_km: studentContext.distance_to_uni_km,
+    student_universities: studentContext.student_universities,
+    primary_image_url: primaryImageUrl,
+    image: primaryImageUrl,
+    img: primaryImageUrl,
+    listingId: row.id,
+    slug: row.id,
+    url: `/property/${row.id}`,
+    category: row.listing_type,
+    currency,
+    location: [row.area, publicDistrict].filter(Boolean).join(', '),
+    availability: row.status,
+    sponsored: row.featured === true,
+    featured: row.featured === true,
+    distance_km: distanceKm,
+    distanceKm,
+    distance_miles: distanceMiles,
+    distanceMiles,
+    listed_by: row.listed_by || null,
+    registration_status: row.registration_status || null,
+    public_contact_phone: publicContactPhone || null,
+    contact_phone: publicContactPhone || null,
+    extra_fields: publicExtra,
+    third_party_discovery_result: foundOnlinePublic
+  };
+}
+
 function phoneDigits(phone = '') {
   return normalizePhone(phone).replace(/\D+/g, '');
 }
@@ -1911,6 +2007,7 @@ async function listPropertiesHandler(req, res, next) {
     const featuredOnly = parseBooleanLike(featuredRaw, false);
     const summaryOnly = parseBooleanLike(req.query.summary_only || req.query.summaryOnly, false);
     const includeSummary = summaryOnly || parseBooleanLike(req.query.include_summary ?? req.query.includeSummary ?? true, true);
+    const cardFieldsOnly = parseBooleanLike(req.query.card_fields ?? req.query.cardFields ?? false, false);
     const radiusUnit = cleanText(req.query.radiusUnit || req.query.radius_unit || (req.query.radiusMiles || req.query.radius_miles ? 'miles' : 'km')).toLowerCase();
     const requestingModerationData = status && status !== 'approved';
     const searchLat = toNullableFloat(req.query.lat || req.query.latitude);
@@ -2371,6 +2468,9 @@ async function listPropertiesHandler(req, res, next) {
     const payload = {
       ok: true,
       data: responseRows.map((row) => {
+        if (cardFieldsOnly && !adminAccess) {
+          return compactPublicCardRow(row, currency);
+        }
         const {
           admin_extra_fields: adminExtraFields,
           source: rowSource,
