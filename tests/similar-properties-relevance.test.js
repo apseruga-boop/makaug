@@ -18,6 +18,7 @@ const hydrationDiagnosticsMarker = "similar-hydration-diagnostics-20260718";
 const pathTitleFallbackMarker = "similar-path-title-fallback-20260718";
 const directDetailObjectMarker = "similar-direct-detail-object-20260718";
 const textSourceFallbackMarker = "similar-text-source-fallback-20260718";
+const hydrationAttemptMarker = "similar-hydration-attempt-20260718";
 
 const markerCount = (indexHtml.match(new RegExp(marker, "g")) || []).length;
 assert(markerCount >= 2, "production HTML must carry the similar relevance marker in both preload and app-loader cache keys");
@@ -55,6 +56,9 @@ assert(appJs.includes(`SIMILAR_PROPERTIES_DIRECT_DETAIL_OBJECT_MARKER = "${direc
 const textSourceFallbackMarkerCount = (indexHtml.match(new RegExp(textSourceFallbackMarker, "g")) || []).length;
 assert(textSourceFallbackMarkerCount >= 2, "production HTML must carry the similar text source fallback marker in both preload and app-loader cache keys");
 assert(appJs.includes(`SIMILAR_PROPERTIES_TEXT_SOURCE_FALLBACK_MARKER = "${textSourceFallbackMarker}"`), "client bundle must carry the similar text source fallback marker");
+const hydrationAttemptMarkerCount = (indexHtml.match(new RegExp(hydrationAttemptMarker, "g")) || []).length;
+assert(hydrationAttemptMarkerCount >= 2, "production HTML must carry the similar hydration attempt marker in both preload and app-loader cache keys");
+assert(appJs.includes(`SIMILAR_PROPERTIES_HYDRATION_ATTEMPT_MARKER = "${hydrationAttemptMarker}"`), "client bundle must carry the similar hydration attempt marker");
 assert(appJs.includes("function similarPropertyCategory(property = {})"), "similar properties must normalize listing category before ranking");
 assert(appJs.includes("function similarPropertyPurpose(property = {})"), "similar properties must normalize sale/rent purpose before ranking");
 assert(appJs.includes("function similarPropertyPrice(property = {})"), "similar properties must reject unpriced candidates");
@@ -122,6 +126,8 @@ assert(
     && appJs.includes("const hydratedRows = rows.map((row) => upsertPropertyForUi(row) || mapRemotePropertyForUi(row)).filter(Boolean);")
     && appJs.includes("similarDedupedSortedItems(hydratedRows")
     && appJs.includes("setDetailSimilarHydrationDiagnostics({")
+    && appJs.includes("similarHydrationAttemptMarker: SIMILAR_PROPERTIES_HYDRATION_ATTEMPT_MARKER")
+    && appJs.includes("similarHydrationError: error?.message || \"fetch_failed\"")
     && appJs.includes("if (![\"student\", \"sale\", \"rent\", \"commercial\", \"land\"].includes(category))")
     && appJs.includes("property?.title")
     && appJs.includes("property?.description")
@@ -150,6 +156,7 @@ assert(
     && appJs.includes("data-similar-path-title-fallback")
     && appJs.includes("data-similar-direct-detail-object")
     && appJs.includes("data-similar-text-source-fallback")
+    && appJs.includes("data-similar-hydration-attempt")
     && appJs.includes("updateDetailSimilarPropertiesSection(nextMatches)")
     && appJs.includes("hydrateDetailSimilarProperties(p);"),
   "detail pages must always include a hydratable similar-properties section and render it when matches appear"
