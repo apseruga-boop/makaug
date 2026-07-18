@@ -86,6 +86,12 @@ const { logEmailEvent } = require('../services/emailLogService');
 const { logWhatsAppMessage } = require('../services/whatsappMessageLogService');
 const { prepareMediaUrlForStorage, prepareUploadObjectForStorage, uploadBufferToS3 } = require('../services/cloudMediaStorageService');
 const {
+  PUBLIC_INVENTORY_METRICS_MARKER,
+  loadPublicOpportunitySummary,
+  normalizePublicOpportunitySummary,
+  publicVisibleInventoryWhere
+} = require('../services/publicInventoryMetricsService');
+const {
   buildListingIdentityDocumentPayload
 } = require('../services/listingIdentityDocumentService');
 const {
@@ -1662,6 +1668,86 @@ async function safeCount(sql, values = [], options = {}) {
   return Number(row.total || 0);
 }
 
+function zeroPublicInventorySummary() {
+  return normalizePublicOpportunitySummary({});
+}
+
+async function safePublicInventorySummaryForAdmin() {
+  try {
+    return await loadPublicOpportunitySummary({ timeoutMs: 750 });
+  } catch (error) {
+    return {
+      summary: zeroPublicInventorySummary(),
+      meta: {
+        marker: PUBLIC_INVENTORY_METRICS_MARKER,
+        cache: 'fallback',
+        fallback_reason: error?.code === '57014' ? 'statement_timeout' : 'query_failed'
+      }
+    };
+  }
+}
+
+async function loadAdminPropertiesSummaryFast() {
+  const [
+    publicInventory,
+    totalRow,
+    pending,
+    approved,
+    publicFeatured,
+    rejected,
+    hidden,
+    deleted,
+    privateListed,
+    agentListed,
+    studentDiscoverable
+  ] = await Promise.all([
+    safePublicInventorySummaryForAdmin(),
+    safeOne(
+      "SELECT GREATEST(COALESCE(reltuples::bigint, 0), 0)::int AS total FROM pg_class WHERE oid = 'properties'::regclass",
+      [],
+      { total: 0 },
+      { timeoutMs: 500 }
+    ),
+    safeCount(`SELECT COUNT(*)::int AS total FROM properties p WHERE ${adminDefaultReviewQueueWhere('p')}`, [], { timeoutMs: 1200 }),
+    safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'approved'", [], { timeoutMs: 1200 }),
+    safeCount(
+      `SELECT COUNT(*)::int AS total
+       FROM properties p
+       WHERE ${publicVisibleInventoryWhere('p')}
+         AND ${adminFeaturedListingCondition('p')}`,
+      [],
+      { timeoutMs: 1200 }
+    ),
+    safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'rejected'", [], { timeoutMs: 1200 }),
+    safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'hidden'", [], { timeoutMs: 1200 }),
+    safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'deleted'", [], { timeoutMs: 1200 }),
+    safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE COALESCE(lister_type, 'owner') <> 'agent' AND agent_id IS NULL", [], { timeoutMs: 1200 }),
+    safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE COALESCE(lister_type, 'owner') = 'agent' OR agent_id IS NOT NULL", [], { timeoutMs: 1200 }),
+    safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE listing_type = 'student' OR students_welcome = TRUE", [], { timeoutMs: 1200 })
+  ]);
+  const total = Number(totalRow?.total || 0) || 0;
+  const publicLive = Number(publicInventory?.summary?.total || 0) || 0;
+  return {
+    total,
+    pending,
+    approved,
+    public_live: publicLive,
+    public_featured: publicFeatured,
+    rejected,
+    hidden,
+    deleted,
+    private: privateListed,
+    agent_listed: agentListed,
+    student_discoverable: studentDiscoverable,
+    approval_rate_pct: total ? Math.round((publicLive / total) * 100) : 0,
+    rejection_rate_pct: total ? Math.round((rejected / total) * 100) : 0,
+    public_opportunities: publicInventory.summary || zeroPublicInventorySummary(),
+    public_count_marker: publicInventory.meta?.marker || PUBLIC_INVENTORY_METRICS_MARKER,
+    public_count_cache: publicInventory.meta?.cache || 'unknown',
+    ...(publicInventory.meta?.fallback_reason ? { _fallback_reason: publicInventory.meta.fallback_reason } : {})
+  };
+}
+
 async function createLaunchAudit(req, action, details = {}) {
   await writeAudit(action, {
     ...details,
@@ -2640,7 +2726,7 @@ async function updatePropertyEditableFields({ propertyId, patch = {} }) {
 
 router.get('/summary', async (req, res, next) => {
   try {
-    const payload = await adminCachedPayload('admin-summary-v4', ADMIN_DASHBOARD_CACHE_TTL_MS, async () => {
+    const payload = await adminCachedPayload('admin-summary-v5-properties-list-count-fast', ADMIN_DASHBOARD_CACHE_TTL_MS, async () => {
       const [
         properties,
         agents,
@@ -2653,26 +2739,7 @@ router.get('/summary', async (req, res, next) => {
         topAreas48h,
         topListingTypes48h
       ] = await Promise.all([
-        safeOne(
-          `SELECT
-            COUNT(*)::int AS total,
-            COUNT(*) FILTER (WHERE ${adminDefaultReviewQueueWhere('')})::int AS pending,
-            COUNT(*) FILTER (WHERE status = 'approved')::int AS approved,
-            COUNT(*) FILTER (WHERE status = 'approved' OR (status = 'sold' AND sold_at >= NOW() - INTERVAL '7 days'))::int AS public_live,
-            COUNT(*) FILTER (WHERE (status = 'approved' OR (status = 'sold' AND sold_at >= NOW() - INTERVAL '7 days')) AND ${adminFeaturedListingCondition('')})::int AS public_featured,
-            COUNT(*) FILTER (WHERE status = 'rejected')::int AS rejected,
-            COUNT(*) FILTER (WHERE status = 'hidden')::int AS hidden,
-            COUNT(*) FILTER (WHERE status = 'deleted')::int AS deleted,
-            COUNT(*) FILTER (WHERE COALESCE(lister_type, 'owner') <> 'agent' AND agent_id IS NULL)::int AS private,
-            COUNT(*) FILTER (WHERE COALESCE(lister_type, 'owner') = 'agent' OR agent_id IS NOT NULL)::int AS agent_listed,
-            COUNT(*) FILTER (WHERE listing_type = 'student' OR students_welcome = TRUE)::int AS student_discoverable,
-            COALESCE(ROUND((((COUNT(*) FILTER (WHERE status = 'approved' OR (status = 'sold' AND sold_at >= NOW() - INTERVAL '7 days')))::numeric / NULLIF(COUNT(*)::numeric, 0)) * 100)), 0)::int AS approval_rate_pct,
-            COALESCE(ROUND((((COUNT(*) FILTER (WHERE status = 'rejected'))::numeric / NULLIF(COUNT(*)::numeric, 0)) * 100)), 0)::int AS rejection_rate_pct
-           FROM properties`,
-          [],
-          { total: 0, pending: 0, approved: 0, public_live: 0, public_featured: 0, rejected: 0, hidden: 0, deleted: 0, private: 0, agent_listed: 0, student_discoverable: 0, approval_rate_pct: 0, rejection_rate_pct: 0 },
-          { timeoutMs: 9000 }
-        ),
+        loadAdminPropertiesSummaryFast(),
         safeOne(
           `SELECT
             COUNT(*)::int AS total,
@@ -2778,8 +2845,9 @@ router.get('/summary', async (req, res, next) => {
         }
       },
       meta: {
-        cache: 'admin_summary_v4',
+        cache: 'admin_summary_v5_properties_list_count_fast',
         cache_ttl_ms: ADMIN_DASHBOARD_CACHE_TTL_MS,
+        public_count_marker: PUBLIC_INVENTORY_METRICS_MARKER,
         generated_at: new Date().toISOString(),
         partial: [properties, agents, reports, requests, inquiries, users, engagement, engagement48h].some((row) => row?._fallback_reason)
       }

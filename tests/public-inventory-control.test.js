@@ -15,6 +15,7 @@ const whatsappRouteSource = fs.readFileSync('routes/whatsapp.js', 'utf8');
 const adminRouteSource = fs.readFileSync('routes/admin.js', 'utf8');
 const agentsRouteSource = fs.readFileSync('routes/agents.js', 'utf8');
 const propertiesRouteSource = fs.readFileSync('routes/properties.js', 'utf8');
+const publicInventoryMetricsServiceSource = fs.readFileSync('services/publicInventoryMetricsService.js', 'utf8');
 const serverSource = fs.readFileSync('server.js', 'utf8');
 const publicInventoryPerformanceMigration = fs.readFileSync('db/migrations/066_public_inventory_performance.sql', 'utf8');
 
@@ -65,8 +66,8 @@ test('admin live controls use paginated backend snapshots', () => {
   assert.match(adminRouteSource, /function adminSourceQualitySuppressedFlagSql\(alias = 'p'\)/);
   assert.match(adminRouteSource, /function adminActiveReviewQueueWhere\(alias = 'p'\)/);
   assert.match(adminRouteSource, /function adminDefaultReviewQueueWhere\(alias = 'p'\)/);
-  assert.match(adminRouteSource, /COUNT\(\*\) FILTER \(WHERE \$\{adminDefaultReviewQueueWhere\(''\)\}\)::int AS pending/);
-  assert.match(adminRouteSource, /safeCount\(`SELECT COUNT\(\*\)::int AS total FROM properties p WHERE \$\{adminDefaultReviewQueueWhere\('p'\)\}`\)/);
+  assert.match(adminRouteSource, /async function loadAdminPropertiesSummaryFast\(\)/);
+  assert.match(adminRouteSource, /safeCount\(`SELECT COUNT\(\*\)::int AS total FROM properties p WHERE \$\{adminDefaultReviewQueueWhere\('p'\)\}`/);
   const reviewQueueRouteSource = routeSource(adminRouteSource, "router.get('/properties/review-queue'");
   assert.match(reviewQueueRouteSource, /const filters = \[includeTestLike \? adminActiveReviewQueueWhere\('p'\) : adminDefaultReviewQueueWhere\('p'\)\]/);
   assert.match(reviewQueueRouteSource, /source_quality_filter: 'stored_suppression_flag_only'/);
@@ -80,7 +81,7 @@ test('admin live controls use paginated backend snapshots', () => {
   assert.doesNotMatch(adminRouteSource, /AND \(\$\{statusExpr\} IN \(\$\{pending\}\) OR \$\{stageExpr\} IN \(\$\{pending\}\)\)/);
   assert.match(appSource, /fetchAdminPaginatedRows\("\/api\/admin\/properties\/review-queue\?include_total=0", headers, \{ maxPages: 3 \}\)/);
   assert.match(appSource, /King dashboard refresh already running; skipping duplicate render\./);
-  assert.match(adminRouteSource, /adminCachedPayload\('admin-summary-v4'/);
+  assert.match(adminRouteSource, /adminCachedPayload\('admin-summary-v5-properties-list-count-fast'/);
   assert.match(adminRouteSource, /adminCachedPayload\('admin-command-centre-v4'/);
   assert.match(adminRouteSource, /admin-review-queue-v5/);
   assert.match(adminRouteSource, /const includeTotal = parseBooleanLike\(req\.query\.include_total \|\| req\.query\.includeTotal, false\)/);
@@ -141,10 +142,11 @@ test('anonymous public property APIs suppress launch seed QA listings', () => {
   assert.match(routeSource, /LAUNCH_SEED_LISTING_MARKERS = \['SOFT LAUNCH TEST - DELETE', 'QA TEST - DELETE'\]/);
   assert.match(routeSource, /LAUNCH_DUMMY_LISTING_TITLES = new Set\(\['sdgsdgd', 'sgsgsgsgs'\]\)/);
   assert.match(routeSource, /function addPublicLaunchSeedFilter/);
-  assert.match(routeSource, /COALESCE\(p\.title, ''\) NOT ILIKE/);
-  assert.match(routeSource, /LOWER\(TRIM\(COALESCE\(p\.title,/);
-  assert.match(routeSource, /COALESCE\(p\.extra_fields->>'soft_launch_test', ''\) !~\*/);
-  assert(routeSource.includes("COALESCE(p.lister_email, '') !~* '(makaug\\\\.invalid|test@|qa@|dummy|sample)'"));
+  assert.match(routeSource, /publicLaunchTestListingFastCondition/);
+  assert.match(publicInventoryMetricsServiceSource, /COALESCE\(\$\{col\('title'\)\}, ''\) ILIKE/);
+  assert.match(publicInventoryMetricsServiceSource, /LOWER\(TRIM\(COALESCE\(\$\{col\('title'\)\}, ''\)\)\) IN/);
+  assert.match(publicInventoryMetricsServiceSource, /COALESCE\(\$\{col\('extra_fields'\)\}->>'soft_launch_test', ''\) ~\*/);
+  assert(publicInventoryMetricsServiceSource.includes("COALESCE(${col('lister_email')}, '') ~* '(makaug\\\\.invalid|test@|qa@|dummy|sample)'"));
   assert.match(routeSource, /const publicOnly = parseBooleanLike\(req\.query\.public_only \|\| req\.query\.publicOnly, false\)/);
   assert.match(routeSource, /if \(publicOnly \|\| !adminAccess\) \{\s*addPublicLaunchSeedFilter\(filters, values\);/);
   assert.match(appSource, /PUBLIC_LISTINGS_FAST_PAGE_LIMIT = 8/);
@@ -273,8 +275,9 @@ test('admin live endpoint mirrors public visibility and exposes cleanup action',
   assert.match(adminRouteSource, /function adminPublicLiveListingWhere/);
   assert.match(adminRouteSource, /status'\)} = 'approved' OR \(\$\{adminColumn\(alias, 'status'\)\} = 'sold' AND \$\{adminColumn\(alias, 'sold_at'\)\} >= NOW\(\) - INTERVAL '7 days'\)/);
   assert.match(adminRouteSource, /function adminFeaturedListingCondition/);
-  assert.match(adminRouteSource, /COUNT\(\*\) FILTER \(WHERE status = 'approved' OR \(status = 'sold' AND sold_at >= NOW\(\) - INTERVAL '7 days'\)\)::int AS public_live/);
-  assert.match(adminRouteSource, /COUNT\(\*\) FILTER \(WHERE \(status = 'approved' OR \(status = 'sold' AND sold_at >= NOW\(\) - INTERVAL '7 days'\)\) AND \$\{adminFeaturedListingCondition\(''\)\}\)::int AS public_featured/);
+  assert.match(adminRouteSource, /loadPublicOpportunitySummary/);
+  assert.match(adminRouteSource, /public_count_marker/);
+  assert.match(adminRouteSource, /WHERE \$\{publicVisibleInventoryWhere\('p'\)\}\s+AND \$\{adminFeaturedListingCondition\('p'\)\}/);
   assert.match(adminRouteSource, /router\.get\('\/properties\/live'/);
   assert.match(adminRouteSource, /WHERE \$\{publicLiveCondition\}/);
   assert.match(adminRouteSource, /summary: \{\s*public_inventory:/);
@@ -590,7 +593,8 @@ test('public properties API is cacheable and uses the fast public summary path',
   assert.match(propertiesRouteSource, /forcePublicCacheRefresh \? 'REFRESH' : 'MISS'/);
   assert.match(propertiesRouteSource, /X-Makaug-Properties-Cache', canUsePublicResponseCache \? \(forcePublicCacheRefresh \? 'REFRESH' : 'MISS'\) : 'BYPASS'/);
   assert.match(propertiesRouteSource, /function fastPublicOpportunityBucketSql\(alias = 'p'\)/);
-  assert.match(propertiesRouteSource, /const opportunityBucketSql = fastPublicOpportunityBucketSql\('p'\)/);
+  assert.match(propertiesRouteSource, /loadPublicOpportunitySummary\(\{/);
+  assert.match(propertiesRouteSource, /X-Makaug-Properties-Count-Marker/);
   assert.match(propertiesRouteSource, /function approximatePublicPagination/);
   assert.match(propertiesRouteSource, /public_opportunities: includeSummary \? opportunitySummary : null/);
   assert.doesNotMatch(propertiesRouteSource, /SELECT COUNT\(\*\)::int AS total\s+FROM properties p\s+\$\{where\}/);

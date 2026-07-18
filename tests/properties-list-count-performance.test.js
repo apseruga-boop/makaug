@@ -1,0 +1,72 @@
+const assert = require('assert');
+const fs = require('fs');
+const path = require('path');
+
+const root = path.resolve(__dirname, '..');
+const propertiesRoute = fs.readFileSync(path.join(root, 'routes/properties.js'), 'utf8');
+const adminRoute = fs.readFileSync(path.join(root, 'routes/admin.js'), 'utf8');
+const metricsService = fs.readFileSync(path.join(root, 'services/publicInventoryMetricsService.js'), 'utf8');
+const migration = fs.readFileSync(path.join(root, 'db/migrations/077_properties_list_count_performance.sql'), 'utf8');
+const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+
+assert(
+  propertiesRoute.includes("loadPublicOpportunitySummary"),
+  'properties list/count route should use the bounded public inventory summary helper'
+);
+assert(
+  propertiesRoute.includes("X-Makaug-Properties-Count-Marker"),
+  'summary_only responses should expose the fast-count marker header'
+);
+assert(
+  propertiesRoute.includes("count_cache"),
+  'properties route should surface count cache/fallback metadata'
+);
+assert(
+  !/function addPublicLaunchSeedFilter[\s\S]*?\n}\n[\s\S]*?COALESCE\(p\.extra_fields::text/.test(
+    propertiesRoute.match(/function addPublicLaunchSeedFilter[\s\S]*?\n}/)?.[0] || ''
+  ),
+  'public list/count hot path must not regex-scan full extra_fields JSON text'
+);
+
+assert(
+  adminRoute.includes("loadAdminPropertiesSummaryFast"),
+  'admin summary should use the split fast properties summary helper'
+);
+assert(
+  adminRoute.includes("admin-summary-v5-properties-list-count-fast"),
+  'admin summary cache key should roll for the fast count deployment'
+);
+assert(
+  adminRoute.includes("public_count_marker"),
+  'admin summary should expose the shared public count marker'
+);
+
+assert(
+  metricsService.includes("PUBLIC_INVENTORY_METRICS_MARKER = 'properties-list-count-fast-20260718'"),
+  'public inventory metrics service should carry the release marker'
+);
+assert(
+  metricsService.includes("statement_timeout"),
+  'public inventory metrics query should be time-bounded'
+);
+assert(
+  metricsService.includes("publicVisibleInventoryWhere"),
+  'shared service should export the public visible inventory predicate'
+);
+
+[
+  'idx_properties_public_visible_created_id',
+  'idx_properties_public_visible_type_created_id',
+  'idx_properties_public_visible_bucket_created_id',
+  'idx_properties_public_visible_price_created_id',
+  'idx_properties_public_visible_district_created_id',
+  'idx_properties_public_visible_area_created_id'
+].forEach((indexName) => {
+  assert(migration.includes(indexName), `migration 077 should create ${indexName}`);
+});
+assert(
+  html.includes('properties-list-count-fast-20260718'),
+  'production HTML should include the properties-list-count-fast marker'
+);
+
+console.log('properties-list-count-performance: ok');

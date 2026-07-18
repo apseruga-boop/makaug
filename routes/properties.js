@@ -80,6 +80,11 @@ const {
   normalizeUniversityList,
   normalizeUniversityName
 } = require('../utils/universityMatcher');
+const {
+  PUBLIC_INVENTORY_METRICS_MARKER,
+  loadPublicOpportunitySummary,
+  publicLaunchTestListingFastCondition
+} = require('../services/publicInventoryMetricsService');
 
 const router = express.Router();
 const LAUNCH_SEED_LISTING_MARKERS = ['SOFT LAUNCH TEST - DELETE', 'QA TEST - DELETE'];
@@ -280,29 +285,7 @@ function isLaunchSeedListing(row = {}) {
 }
 
 function addPublicLaunchSeedFilter(filters, values) {
-  LAUNCH_SEED_LISTING_MARKERS.forEach((marker) => {
-    addFilter(
-      filters,
-      values,
-      "(COALESCE(p.title, '') NOT ILIKE ? AND COALESCE(p.description, '') NOT ILIKE ?)",
-      `%${marker}%`,
-      `%${marker}%`
-    );
-  });
-  LAUNCH_DUMMY_LISTING_TITLES.forEach((title) => {
-    addFilter(filters, values, 'LOWER(TRIM(COALESCE(p.title, \'\'))) <> ?', title);
-  });
-  filters.push("COALESCE(p.source, '') !~* '(qa|test|demo|soft_launch|launch_proof)'");
-  filters.push("COALESCE(p.listed_via, '') !~* '(qa|test|demo|soft_launch|launch_proof)'");
-  filters.push("COALESCE(p.lister_name, '') !~* '(qa test delete|qa owner|dummy|sample)'");
-  filters.push("COALESCE(p.lister_email, '') !~* '(makaug\\.invalid|test@|qa@|dummy|sample)'");
-  filters.push("COALESCE(p.inquiry_reference, '') !~* '^(SLT|QA|TEST|DUMMY|SAMPLE)-'");
-  filters.push("COALESCE(p.extra_fields->>'qa_test_delete', '') !~* '^(true|1|yes)$'");
-  filters.push("COALESCE(p.extra_fields->>'soft_launch_test', '') !~* '^(true|1|yes)$'");
-  filters.push("COALESCE(p.extra_fields->>'is_test', '') !~* '^(true|1|yes)$'");
-  filters.push("COALESCE(p.extra_fields->>'launch_proof', '') !~* '^(true|1|yes)$'");
-  filters.push("COALESCE(p.extra_fields->>'non_public_test', '') !~* '^(true|1|yes)$'");
-  filters.push("(COALESCE(p.title, '') || ' ' || COALESCE(p.description, '') || ' ' || COALESCE(p.area, '') || ' ' || COALESCE(p.address, '') || ' ' || COALESCE(p.extra_fields::text, '')) !~* '(makaug training|training visibility|visibility check|stock unsplash|demo listing|test zone|qa test|soft_launch|launch_proof|non_public_test)'");
+  filters.push(`NOT ${publicLaunchTestListingFastCondition('p')}`);
 }
 
 function normalizeListingType(type) {
@@ -2226,37 +2209,33 @@ async function listPropertiesHandler(req, res, next) {
     const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
 
     let opportunitySummary;
+    let opportunitySummaryMeta = null;
     if (includeSummary) {
-      const opportunityBucketSql = fastPublicOpportunityBucketSql('p');
-      const summaryResult = await db.query(
-        `SELECT
-           COUNT(*)::int AS total,
-           COUNT(*) FILTER (WHERE bucket = 'sale')::int AS sale,
-           COUNT(*) FILTER (WHERE bucket = 'rent')::int AS rent,
-           COUNT(*) FILTER (WHERE bucket = 'student')::int AS student,
-           COUNT(*) FILTER (WHERE bucket = 'commercial')::int AS commercial,
-           COUNT(*) FILTER (WHERE bucket = 'land')::int AS land,
-           COUNT(*) FILTER (WHERE bucket = 'other')::int AS other
-         FROM (
-           SELECT ${opportunityBucketSql} AS bucket
-           FROM properties p
-           ${where}
-         ) public_inventory`,
-        values
-      );
-      opportunitySummary = normalizePublicOpportunitySummary(summaryResult.rows[0] || {});
+      const summaryResult = await loadPublicOpportunitySummary({
+        where,
+        values,
+        timeoutMs: summaryOnly ? 500 : undefined
+      });
+      opportunitySummary = summaryResult.summary;
+      opportunitySummaryMeta = summaryResult.meta;
     } else {
       opportunitySummary = null;
     }
     const total = opportunitySummary?.total || 0;
     if (summaryOnly) {
+      if (opportunitySummaryMeta?.marker) res.set('X-Makaug-Properties-Count-Marker', opportunitySummaryMeta.marker);
       return res.json({
         ok: true,
         data: [],
         summary: {
           public_opportunities: opportunitySummary || null
         },
-        pagination: toPagination(total, page, limit)
+        pagination: toPagination(total, page, limit),
+        meta: {
+          marker: PUBLIC_INVENTORY_METRICS_MARKER,
+          count_cache: opportunitySummaryMeta?.cache || 'unknown',
+          ...(opportunitySummaryMeta?.fallback_reason ? { count_fallback_reason: opportunitySummaryMeta.fallback_reason } : {})
+        }
       });
     }
     if (includeSummary && total === 0) {
@@ -2636,7 +2615,12 @@ async function listPropertiesHandler(req, res, next) {
       summary: {
         public_opportunities: includeSummary ? opportunitySummary : null
       },
-      pagination
+      pagination,
+      meta: {
+        marker: PUBLIC_INVENTORY_METRICS_MARKER,
+        ...(includeSummary ? { count_cache: opportunitySummaryMeta?.cache || 'unknown' } : {}),
+        ...(opportunitySummaryMeta?.fallback_reason ? { count_fallback_reason: opportunitySummaryMeta.fallback_reason } : {})
+      }
     };
     if (canUsePublicResponseCache) setPublicPropertiesCache(publicCache.key, payload);
     res.set('Cache-Control', canUsePublicResponseCache ? publicPropertiesCacheControl() : 'no-store');
