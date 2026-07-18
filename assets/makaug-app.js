@@ -35892,6 +35892,7 @@ const SIMILAR_PROPERTIES_PURPOSE_FALLBACK_MARKER = "similar-purpose-fallback-202
 const SIMILAR_PROPERTIES_HYDRATION_RESPONSE_MARKER = "similar-hydration-response-20260718";
 const SIMILAR_PROPERTIES_EXPLICIT_CATEGORY_MARKER = "similar-explicit-category-20260718";
 const SIMILAR_PROPERTIES_HYDRATION_FALLBACK_MARKER = "similar-hydration-fallback-20260718";
+const SIMILAR_PROPERTIES_ENDPOINT_FALLBACK_MARKER = "similar-endpoint-fallback-20260718";
 const detailSimilarHydrationInFlight = new Map();
 
 function similarPropertyCategory(property = {}) {
@@ -45749,7 +45750,7 @@ function similarPropertyCategoryApiPath(property = {}) {
 
 function renderDetailSimilarPropertiesSectionHtml(similar = []) {
   const rows = (Array.isArray(similar) ? similar : []).filter(Boolean);
-  return `<div id="detail-similar-properties" data-similar-alias-render="${SIMILAR_PROPERTIES_ALIAS_RENDER_MARKER}" data-similar-purpose-fallback="${SIMILAR_PROPERTIES_PURPOSE_FALLBACK_MARKER}" data-similar-hydration-response="${SIMILAR_PROPERTIES_HYDRATION_RESPONSE_MARKER}" data-similar-explicit-category="${SIMILAR_PROPERTIES_EXPLICIT_CATEGORY_MARKER}" data-similar-hydration-fallback="${SIMILAR_PROPERTIES_HYDRATION_FALLBACK_MARKER}" class="bg-white border border-gray-200 rounded-2xl p-5 mt-5 ${rows.length ? "" : "hidden"}">
+  return `<div id="detail-similar-properties" data-similar-alias-render="${SIMILAR_PROPERTIES_ALIAS_RENDER_MARKER}" data-similar-purpose-fallback="${SIMILAR_PROPERTIES_PURPOSE_FALLBACK_MARKER}" data-similar-hydration-response="${SIMILAR_PROPERTIES_HYDRATION_RESPONSE_MARKER}" data-similar-explicit-category="${SIMILAR_PROPERTIES_EXPLICIT_CATEGORY_MARKER}" data-similar-hydration-fallback="${SIMILAR_PROPERTIES_HYDRATION_FALLBACK_MARKER}" data-similar-endpoint-fallback="${SIMILAR_PROPERTIES_ENDPOINT_FALLBACK_MARKER}" class="bg-white border border-gray-200 rounded-2xl p-5 mt-5 ${rows.length ? "" : "hidden"}">
           <h2 class="text-xl font-bold mb-3">${translatePropertyUi("Similar Properties")}</h2>
           <div id="detail-similar-properties-grid" class="grid md:grid-cols-3 gap-4">${rows.map(propCard).join("")}</div>
         </div>`;
@@ -45790,19 +45791,17 @@ async function hydrateDetailSimilarProperties(property = {}) {
         : (Array.isArray(response?.data?.properties)
           ? response.data.properties
           : (Array.isArray(response?.data) ? response.data : []));
-      rows.forEach((row) => upsertPropertyForUi(row));
+      const hydratedRows = rows.map((row) => upsertPropertyForUi(row) || mapRemotePropertyForUi(row)).filter(Boolean);
       const subject = findPropertyForUi(id) || property;
       let nextMatches = getSimilarProperties(subject, 8);
       if (!nextMatches.length && rows.length) {
         const subjectCategory = similarPropertyCategory(subject);
         const subjectPrice = similarPropertyPrice(subject);
         const subjectLocation = similarPropertyLocation(subject);
-        nextMatches = similarDedupedSortedItems(rows
-          .map((row) => findPropertyForUi(row?.id) || mapRemotePropertyForUi(row))
+        nextMatches = similarDedupedSortedItems(hydratedRows
           .filter((candidate) => {
             if (!candidate || String(candidate.id) === id) return false;
             if (!isListingPublicVisible(candidate) || similarPropertyIsUnavailable(candidate)) return false;
-            if (similarPropertyCategory(candidate) !== subjectCategory) return false;
             if (!similarPropertyPrice(candidate)) return false;
             return similarPropertyLocation(candidate).usable;
           })
