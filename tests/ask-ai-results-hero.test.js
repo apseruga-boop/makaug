@@ -20,6 +20,7 @@ function excludes(haystack, needle, message) {
 
 includes(indexHtml, 'ask-ai-results-hero-20260717', 'original Ask AI results release marker must be present in HTML');
 includes(indexHtml, 'ask-ai-blue-categoryrouting-20260718', 'Ask AI blue/category-routing marker must be present in HTML');
+includes(indexHtml, 'ask-ai-no-intent-routing-20260718', 'Ask AI no-intent routing marker must be present in HTML');
 includes(indexHtml, 'data-ask-ai-results-hero="1"', 'homepage Ask AI hero marker missing');
 includes(indexHtml, 'data-ask-ai-blue-categoryrouting="1"', 'Ask AI blue/category-routing UI marker missing');
 includes(indexHtml, 'id="home-ai-search-form"', 'homepage Ask AI form missing');
@@ -36,6 +37,11 @@ includes(aiRoute, 'see_all_url: seeAllUrl', 'assistant route must return see_all
 includes(aiRoute, 'sanitizeAssistantText', 'assistant route must sanitize old brand emoji from replies');
 includes(aiRoute, "router.post('/property-need'", 'assistant route must expose zero-result property-need capture');
 includes(aiRoute, 'inferAssistantSearchType', 'assistant route must infer category from user text');
+includes(aiRoute, 'inferAssistantIntentFromMessage', 'assistant route must infer search intent when the client sends no intent');
+includes(aiRoute, 'const effectiveIntent = inferAssistantIntentFromMessage(userMessage, requestedIntent);', 'assistant route must derive effective intent from the user message');
+includes(aiRoute, 'isAssistantSearchIntent(effectiveIntent)', 'assistant search branch must use the inferred effective intent');
+includes(aiRoute, "property_search: 'search_property'", 'assistant intent aliases must include property_search');
+includes(aiRoute, "search_near_me: 'search_property'", 'assistant intent aliases must include search_near_me');
 includes(aiRoute, "params.set('student_portal', '1')", 'student searches must route to the student portal query');
 includes(aiRoute, "params.set('commercial_type', propertyType)", 'commercial subtype should be passed through for office/shop/warehouse');
 includes(aiRoute, "match_quality: 'needs_input'", 'greetings/no-signal prompts must not dump the catalogue');

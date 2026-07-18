@@ -21,6 +21,10 @@ const router = express.Router();
 function normalizeAssistantIntent(value = '') {
   const intent = cleanText(value).toLowerCase();
   const aliases = {
+    property_search: 'search_property',
+    apply_filters: 'search_property',
+    search_near_me: 'search_property',
+    shared_location_search: 'search_property',
     search_rent: 'search_property',
     search_sale: 'search_property',
     search_student: 'search_property',
@@ -38,6 +42,10 @@ function normalizeAssistantIntent(value = '') {
 
 const ASSISTANT_SEARCH_INTENTS = new Set([
   'search_property',
+  'property_search',
+  'apply_filters',
+  'search_near_me',
+  'shared_location_search',
   'search_rent',
   'search_rentals',
   'search_sale',
@@ -51,6 +59,10 @@ const ASSISTANT_SEARCH_INTENTS = new Set([
 ]);
 
 const ASSISTANT_SEARCH_TYPE_BY_INTENT = Object.freeze({
+  property_search: 'any',
+  apply_filters: 'any',
+  search_near_me: 'any',
+  shared_location_search: 'any',
   search_rent: 'rent',
   search_rentals: 'rent',
   search_sale: 'sale',
@@ -225,6 +237,16 @@ function assistantHasSearchSignal(parsed = {}, searchType = 'any', userMessage =
   if (cleanText(parsed?.area || parsed?.district || parsed?.propertyType)) return true;
   if (searchType && searchType !== 'any') return true;
   return ASSISTANT_LISTING_SIGNAL_PATTERN.test(text);
+}
+
+function inferAssistantIntentFromMessage(userMessage = '', suppliedIntent = 'unknown') {
+  const explicitIntent = cleanText(suppliedIntent).toLowerCase();
+  if (explicitIntent && explicitIntent !== 'unknown') return explicitIntent;
+  const text = cleanText(userMessage, 1200);
+  if (!text || ASSISTANT_GREETING_ONLY_PATTERN.test(text)) return 'unknown';
+  if (ASSISTANT_LISTING_SIGNAL_PATTERN.test(text)) return 'property_search';
+  if (ASSISTANT_TYPE_PATTERNS.some((item) => item.pattern.test(text))) return 'property_search';
+  return 'unknown';
 }
 
 function buildAssistantSeeAllUrl(parsed = {}, searchType = 'any') {
@@ -695,10 +717,11 @@ router.post('/assistant-reply', async (req, res, next) => {
     }
 
     const language = normalizeLanguageCode(body.language || 'en');
-    const intent = cleanText(body.intent).toLowerCase() || 'unknown';
+    const requestedIntent = cleanText(body.intent).toLowerCase() || 'unknown';
+    const effectiveIntent = inferAssistantIntentFromMessage(userMessage, requestedIntent);
     let response = await suggestWhatsappAssistantReply({
       userMessage,
-      intent,
+      intent: effectiveIntent,
       language,
       context: body.context && typeof body.context === 'object' ? body.context : {},
       source: 'api_assistant_reply'
@@ -709,15 +732,15 @@ router.post('/assistant-reply', async (req, res, next) => {
     };
 
     let searchPayload = null;
-    if (isAssistantSearchIntent(intent)) {
-      const rawIntentType = assistantSearchType(intent);
+    if (isAssistantSearchIntent(effectiveIntent)) {
+      const rawIntentType = assistantSearchType(effectiveIntent);
       const extracted = await extractNaturalPropertyQuery({
         text: userMessage,
         language,
         sessionData: body.context && typeof body.context === 'object' ? body.context : {},
         fallbackType: rawIntentType
       });
-      const prepared = prepareAssistantParsedQuery({ parsed: extracted, intent, userMessage });
+      const prepared = prepareAssistantParsedQuery({ parsed: extracted, intent: effectiveIntent, userMessage });
       const parsed = prepared.parsed;
       const searchType = prepared.searchType;
       const publicPath = publicSearchPathForType(searchType);
@@ -851,14 +874,15 @@ router.post('/assistant-reply', async (req, res, next) => {
       }
     }
 
-    await recordAssistantBackendTrace(req, { userMessage, intent, language, response });
+    await recordAssistantBackendTrace(req, { userMessage, intent: effectiveIntent, language, response });
 
     return res.json({
       ok: true,
       data: {
         ...response,
         ...(searchPayload || {}),
-        intent: normalizeAssistantIntent(intent),
+        intent: normalizeAssistantIntent(effectiveIntent),
+        requested_intent: normalizeAssistantIntent(requestedIntent),
         conversation_logged: true
       }
     });
