@@ -31645,6 +31645,347 @@ const AI_ASSISTANT_PROMPT_I18N = Object.freeze({
   }
 });
 
+const AI_ASSISTANT_EXAMPLE_PREFIX_I18N = Object.freeze({
+  en: "Try:",
+  lg: "Okugeza:",
+  sw: "Jaribu:",
+  ac: "Tem:",
+  ny: "Reeba:",
+  rn: "Reeba:",
+  sm: "Okugeza:",
+  am: "ምሳሌ:",
+  ar: "جرب:"
+});
+
+const AI_ASSISTANT_EXAMPLE_PROMPTS_I18N = Object.freeze({
+  en: {
+    all: [
+      { label: "2-bed in Ntinda under 1.5M", prompt: "2-bed apartment to rent in Ntinda under 1.5m", intent: "search_rent" },
+      { label: "Land in Gayaza", prompt: "Land for sale in Gayaza", intent: "search_land" },
+      { label: "Hostel near Makerere", prompt: "Student hostel near Makerere", intent: "search_student" },
+      { label: "Office in Kampala", prompt: "Office space in Kampala", intent: "search_commercial" }
+    ],
+    rent: [
+      { label: "2-bed to rent in Ntinda under 1.5M", prompt: "2-bed apartment to rent in Ntinda under 1.5m", intent: "search_rent" },
+      { label: "apartment in Kololo", prompt: "apartment to rent in Kololo", intent: "search_rent" },
+      { label: "studio in Bukoto", prompt: "studio to rent in Bukoto", intent: "search_rent" },
+      { label: "3-bed in Muyenga", prompt: "3-bed to rent in Muyenga", intent: "search_rent" }
+    ],
+    sale: [
+      { label: "3-bed house for sale in Muyenga", prompt: "3-bed house for sale in Muyenga", intent: "search_sale" },
+      { label: "bungalow in Kira", prompt: "bungalow for sale in Kira", intent: "search_sale" },
+      { label: "house in Namugongo under 300M", prompt: "house for sale in Namugongo under 300M", intent: "search_sale" }
+    ],
+    land: [
+      { label: "50x100 plot in Gayaza", prompt: "50x100 plot in Gayaza", intent: "search_land" },
+      { label: "acre in Mukono", prompt: "acre of land in Mukono", intent: "search_land" },
+      { label: "land for sale in Matugga", prompt: "land for sale in Matugga", intent: "search_land" }
+    ],
+    commercial: [
+      { label: "office in Nakasero", prompt: "office space in Nakasero", intent: "search_commercial" },
+      { label: "shop to rent in Kampala", prompt: "shop to rent in Kampala", intent: "search_commercial" },
+      { label: "warehouse in Ntinda", prompt: "warehouse in Ntinda", intent: "search_commercial" }
+    ],
+    student: [
+      { label: "hostel near Makerere", prompt: "student hostel near Makerere", intent: "search_student" },
+      { label: "single room near Kyambogo", prompt: "single room near Kyambogo", intent: "search_student" },
+      { label: "hostel near MUBS", prompt: "student hostel near MUBS", intent: "search_student" }
+    ]
+  },
+  lg: {
+    all: [
+      { label: "2-bed e Ntinda wansi wa 1.5M", prompt: "2-bed apartment to rent in Ntinda under 1.5m", intent: "search_rent" },
+      { label: "ettaka e Gayaza", prompt: "Land for sale in Gayaza", intent: "search_land" },
+      { label: "hostel okumpi ne Makerere", prompt: "Student hostel near Makerere", intent: "search_student" },
+      { label: "office e Kampala", prompt: "Office space in Kampala", intent: "search_commercial" }
+    ],
+    rent: [
+      { label: "2-bed okupangisa e Ntinda wansi wa 1.5M", prompt: "2-bed apartment to rent in Ntinda under 1.5m", intent: "search_rent" },
+      { label: "apartment e Kololo", prompt: "apartment to rent in Kololo", intent: "search_rent" },
+      { label: "studio e Bukoto", prompt: "studio to rent in Bukoto", intent: "search_rent" },
+      { label: "3-bed e Muyenga", prompt: "3-bed to rent in Muyenga", intent: "search_rent" }
+    ],
+    sale: [
+      { label: "ennyumba ya 3-bed egulishwa e Muyenga", prompt: "3-bed house for sale in Muyenga", intent: "search_sale" },
+      { label: "bungalow e Kira", prompt: "bungalow for sale in Kira", intent: "search_sale" },
+      { label: "ennyumba e Namugongo wansi wa 300M", prompt: "house for sale in Namugongo under 300M", intent: "search_sale" }
+    ],
+    land: [
+      { label: "plot ya 50x100 e Gayaza", prompt: "50x100 plot in Gayaza", intent: "search_land" },
+      { label: "acre e Mukono", prompt: "acre of land in Mukono", intent: "search_land" },
+      { label: "ettaka egulishwa e Matugga", prompt: "land for sale in Matugga", intent: "search_land" }
+    ],
+    commercial: [
+      { label: "office e Nakasero", prompt: "office space in Nakasero", intent: "search_commercial" },
+      { label: "duuka okupangisa e Kampala", prompt: "shop to rent in Kampala", intent: "search_commercial" },
+      { label: "warehouse e Ntinda", prompt: "warehouse in Ntinda", intent: "search_commercial" }
+    ],
+    student: [
+      { label: "hostel okumpi ne Makerere", prompt: "student hostel near Makerere", intent: "search_student" },
+      { label: "single room okumpi ne Kyambogo", prompt: "single room near Kyambogo", intent: "search_student" },
+      { label: "hostel okumpi ne MUBS", prompt: "student hostel near MUBS", intent: "search_student" }
+    ]
+  },
+  sw: {
+    all: [
+      { label: "vyumba 2 Ntinda chini ya 1.5M", prompt: "2-bed apartment to rent in Ntinda under 1.5m", intent: "search_rent" },
+      { label: "ardhi Gayaza", prompt: "Land for sale in Gayaza", intent: "search_land" },
+      { label: "hosteli karibu Makerere", prompt: "Student hostel near Makerere", intent: "search_student" },
+      { label: "ofisi Kampala", prompt: "Office space in Kampala", intent: "search_commercial" }
+    ],
+    rent: [
+      { label: "vyumba 2 vya kupanga Ntinda chini ya 1.5M", prompt: "2-bed apartment to rent in Ntinda under 1.5m", intent: "search_rent" },
+      { label: "apartment Kololo", prompt: "apartment to rent in Kololo", intent: "search_rent" },
+      { label: "studio Bukoto", prompt: "studio to rent in Bukoto", intent: "search_rent" },
+      { label: "vyumba 3 Muyenga", prompt: "3-bed to rent in Muyenga", intent: "search_rent" }
+    ],
+    sale: [
+      { label: "nyumba ya vyumba 3 ya kuuza Muyenga", prompt: "3-bed house for sale in Muyenga", intent: "search_sale" },
+      { label: "bungalow Kira", prompt: "bungalow for sale in Kira", intent: "search_sale" },
+      { label: "nyumba Namugongo chini ya 300M", prompt: "house for sale in Namugongo under 300M", intent: "search_sale" }
+    ],
+    land: [
+      { label: "kiwanja 50x100 Gayaza", prompt: "50x100 plot in Gayaza", intent: "search_land" },
+      { label: "eka moja Mukono", prompt: "acre of land in Mukono", intent: "search_land" },
+      { label: "ardhi ya kuuza Matugga", prompt: "land for sale in Matugga", intent: "search_land" }
+    ],
+    commercial: [
+      { label: "ofisi Nakasero", prompt: "office space in Nakasero", intent: "search_commercial" },
+      { label: "duka la kupanga Kampala", prompt: "shop to rent in Kampala", intent: "search_commercial" },
+      { label: "ghala Ntinda", prompt: "warehouse in Ntinda", intent: "search_commercial" }
+    ],
+    student: [
+      { label: "hosteli karibu Makerere", prompt: "student hostel near Makerere", intent: "search_student" },
+      { label: "chumba kimoja karibu Kyambogo", prompt: "single room near Kyambogo", intent: "search_student" },
+      { label: "hosteli karibu MUBS", prompt: "student hostel near MUBS", intent: "search_student" }
+    ]
+  },
+  ac: {
+    all: [
+      { label: "2-bed i Ntinda piny 1.5M", prompt: "2-bed apartment to rent in Ntinda under 1.5m", intent: "search_rent" },
+      { label: "ngom i Gayaza", prompt: "Land for sale in Gayaza", intent: "search_land" },
+      { label: "hostel cok ki Makerere", prompt: "Student hostel near Makerere", intent: "search_student" },
+      { label: "office i Kampala", prompt: "Office space in Kampala", intent: "search_commercial" }
+    ],
+    rent: [
+      { label: "2-bed me rent i Ntinda piny 1.5M", prompt: "2-bed apartment to rent in Ntinda under 1.5m", intent: "search_rent" },
+      { label: "apartment i Kololo", prompt: "apartment to rent in Kololo", intent: "search_rent" },
+      { label: "studio i Bukoto", prompt: "studio to rent in Bukoto", intent: "search_rent" },
+      { label: "3-bed i Muyenga", prompt: "3-bed to rent in Muyenga", intent: "search_rent" }
+    ],
+    sale: [
+      { label: "ot me 3-bed me cato i Muyenga", prompt: "3-bed house for sale in Muyenga", intent: "search_sale" },
+      { label: "bungalow i Kira", prompt: "bungalow for sale in Kira", intent: "search_sale" },
+      { label: "ot i Namugongo piny 300M", prompt: "house for sale in Namugongo under 300M", intent: "search_sale" }
+    ],
+    land: [
+      { label: "plot 50x100 i Gayaza", prompt: "50x100 plot in Gayaza", intent: "search_land" },
+      { label: "acre i Mukono", prompt: "acre of land in Mukono", intent: "search_land" },
+      { label: "ngom me cato i Matugga", prompt: "land for sale in Matugga", intent: "search_land" }
+    ],
+    commercial: [
+      { label: "office i Nakasero", prompt: "office space in Nakasero", intent: "search_commercial" },
+      { label: "shop me rent i Kampala", prompt: "shop to rent in Kampala", intent: "search_commercial" },
+      { label: "warehouse i Ntinda", prompt: "warehouse in Ntinda", intent: "search_commercial" }
+    ],
+    student: [
+      { label: "hostel cok ki Makerere", prompt: "student hostel near Makerere", intent: "search_student" },
+      { label: "room acel cok ki Kyambogo", prompt: "single room near Kyambogo", intent: "search_student" },
+      { label: "hostel cok ki MUBS", prompt: "student hostel near MUBS", intent: "search_student" }
+    ]
+  },
+  ny: {
+    all: [
+      { label: "2-bed Ntinda ahansi ya 1.5M", prompt: "2-bed apartment to rent in Ntinda under 1.5m", intent: "search_rent" },
+      { label: "eitaka Gayaza", prompt: "Land for sale in Gayaza", intent: "search_land" },
+      { label: "hostel haihi na Makerere", prompt: "Student hostel near Makerere", intent: "search_student" },
+      { label: "office Kampala", prompt: "Office space in Kampala", intent: "search_commercial" }
+    ],
+    rent: [
+      { label: "2-bed ey'okupangisa Ntinda ahansi ya 1.5M", prompt: "2-bed apartment to rent in Ntinda under 1.5m", intent: "search_rent" },
+      { label: "apartment Kololo", prompt: "apartment to rent in Kololo", intent: "search_rent" },
+      { label: "studio Bukoto", prompt: "studio to rent in Bukoto", intent: "search_rent" },
+      { label: "3-bed Muyenga", prompt: "3-bed to rent in Muyenga", intent: "search_rent" }
+    ],
+    sale: [
+      { label: "enju ya 3-bed ey'okuguza Muyenga", prompt: "3-bed house for sale in Muyenga", intent: "search_sale" },
+      { label: "bungalow Kira", prompt: "bungalow for sale in Kira", intent: "search_sale" },
+      { label: "enju Namugongo ahansi ya 300M", prompt: "house for sale in Namugongo under 300M", intent: "search_sale" }
+    ],
+    land: [
+      { label: "plot 50x100 Gayaza", prompt: "50x100 plot in Gayaza", intent: "search_land" },
+      { label: "acre Mukono", prompt: "acre of land in Mukono", intent: "search_land" },
+      { label: "eitaka ry'okuguza Matugga", prompt: "land for sale in Matugga", intent: "search_land" }
+    ],
+    commercial: [
+      { label: "office Nakasero", prompt: "office space in Nakasero", intent: "search_commercial" },
+      { label: "duuka ry'okupangisa Kampala", prompt: "shop to rent in Kampala", intent: "search_commercial" },
+      { label: "warehouse Ntinda", prompt: "warehouse in Ntinda", intent: "search_commercial" }
+    ],
+    student: [
+      { label: "hostel haihi na Makerere", prompt: "student hostel near Makerere", intent: "search_student" },
+      { label: "room emwe haihi na Kyambogo", prompt: "single room near Kyambogo", intent: "search_student" },
+      { label: "hostel haihi na MUBS", prompt: "student hostel near MUBS", intent: "search_student" }
+    ]
+  },
+  rn: {
+    all: [
+      { label: "2-bed Ntinda ahansi ya 1.5M", prompt: "2-bed apartment to rent in Ntinda under 1.5m", intent: "search_rent" },
+      { label: "eitaka Gayaza", prompt: "Land for sale in Gayaza", intent: "search_land" },
+      { label: "hostel haihi na Makerere", prompt: "Student hostel near Makerere", intent: "search_student" },
+      { label: "office Kampala", prompt: "Office space in Kampala", intent: "search_commercial" }
+    ],
+    rent: [
+      { label: "2-bed ey'okupangisa Ntinda ahansi ya 1.5M", prompt: "2-bed apartment to rent in Ntinda under 1.5m", intent: "search_rent" },
+      { label: "apartment Kololo", prompt: "apartment to rent in Kololo", intent: "search_rent" },
+      { label: "studio Bukoto", prompt: "studio to rent in Bukoto", intent: "search_rent" },
+      { label: "3-bed Muyenga", prompt: "3-bed to rent in Muyenga", intent: "search_rent" }
+    ],
+    sale: [
+      { label: "enju ya 3-bed ey'okuguza Muyenga", prompt: "3-bed house for sale in Muyenga", intent: "search_sale" },
+      { label: "bungalow Kira", prompt: "bungalow for sale in Kira", intent: "search_sale" },
+      { label: "enju Namugongo ahansi ya 300M", prompt: "house for sale in Namugongo under 300M", intent: "search_sale" }
+    ],
+    land: [
+      { label: "plot 50x100 Gayaza", prompt: "50x100 plot in Gayaza", intent: "search_land" },
+      { label: "acre Mukono", prompt: "acre of land in Mukono", intent: "search_land" },
+      { label: "eitaka ry'okuguza Matugga", prompt: "land for sale in Matugga", intent: "search_land" }
+    ],
+    commercial: [
+      { label: "office Nakasero", prompt: "office space in Nakasero", intent: "search_commercial" },
+      { label: "duuka ry'okupangisa Kampala", prompt: "shop to rent in Kampala", intent: "search_commercial" },
+      { label: "warehouse Ntinda", prompt: "warehouse in Ntinda", intent: "search_commercial" }
+    ],
+    student: [
+      { label: "hostel haihi na Makerere", prompt: "student hostel near Makerere", intent: "search_student" },
+      { label: "room emwe haihi na Kyambogo", prompt: "single room near Kyambogo", intent: "search_student" },
+      { label: "hostel haihi na MUBS", prompt: "student hostel near MUBS", intent: "search_student" }
+    ]
+  },
+  sm: {
+    all: [
+      { label: "2-bed e Ntinda wansi wa 1.5M", prompt: "2-bed apartment to rent in Ntinda under 1.5m", intent: "search_rent" },
+      { label: "ettaka e Gayaza", prompt: "Land for sale in Gayaza", intent: "search_land" },
+      { label: "hostel okumpi ne Makerere", prompt: "Student hostel near Makerere", intent: "search_student" },
+      { label: "office e Kampala", prompt: "Office space in Kampala", intent: "search_commercial" }
+    ],
+    rent: [
+      { label: "2-bed okupangisa e Ntinda wansi wa 1.5M", prompt: "2-bed apartment to rent in Ntinda under 1.5m", intent: "search_rent" },
+      { label: "apartment e Kololo", prompt: "apartment to rent in Kololo", intent: "search_rent" },
+      { label: "studio e Bukoto", prompt: "studio to rent in Bukoto", intent: "search_rent" },
+      { label: "3-bed e Muyenga", prompt: "3-bed to rent in Muyenga", intent: "search_rent" }
+    ],
+    sale: [
+      { label: "ennyumba ya 3-bed egulishwa e Muyenga", prompt: "3-bed house for sale in Muyenga", intent: "search_sale" },
+      { label: "bungalow e Kira", prompt: "bungalow for sale in Kira", intent: "search_sale" },
+      { label: "ennyumba e Namugongo wansi wa 300M", prompt: "house for sale in Namugongo under 300M", intent: "search_sale" }
+    ],
+    land: [
+      { label: "plot ya 50x100 e Gayaza", prompt: "50x100 plot in Gayaza", intent: "search_land" },
+      { label: "acre e Mukono", prompt: "acre of land in Mukono", intent: "search_land" },
+      { label: "ettaka egulishwa e Matugga", prompt: "land for sale in Matugga", intent: "search_land" }
+    ],
+    commercial: [
+      { label: "office e Nakasero", prompt: "office space in Nakasero", intent: "search_commercial" },
+      { label: "duuka okupangisa e Kampala", prompt: "shop to rent in Kampala", intent: "search_commercial" },
+      { label: "warehouse e Ntinda", prompt: "warehouse in Ntinda", intent: "search_commercial" }
+    ],
+    student: [
+      { label: "hostel okumpi ne Makerere", prompt: "student hostel near Makerere", intent: "search_student" },
+      { label: "single room okumpi ne Kyambogo", prompt: "single room near Kyambogo", intent: "search_student" },
+      { label: "hostel okumpi ne MUBS", prompt: "student hostel near MUBS", intent: "search_student" }
+    ]
+  },
+  am: {
+    all: [
+      { label: "2 መኝታ Ntinda ከ1.5M በታች", prompt: "2-bed apartment to rent in Ntinda under 1.5m", intent: "search_rent" },
+      { label: "መሬት በGayaza", prompt: "Land for sale in Gayaza", intent: "search_land" },
+      { label: "ሆስቴል በMakerere አጠገብ", prompt: "Student hostel near Makerere", intent: "search_student" },
+      { label: "ቢሮ በKampala", prompt: "Office space in Kampala", intent: "search_commercial" }
+    ],
+    rent: [
+      { label: "2 መኝታ ኪራይ Ntinda ከ1.5M በታች", prompt: "2-bed apartment to rent in Ntinda under 1.5m", intent: "search_rent" },
+      { label: "አፓርትመንት በKololo", prompt: "apartment to rent in Kololo", intent: "search_rent" },
+      { label: "ስቱዲዮ በBukoto", prompt: "studio to rent in Bukoto", intent: "search_rent" },
+      { label: "3 መኝታ በMuyenga", prompt: "3-bed to rent in Muyenga", intent: "search_rent" }
+    ],
+    sale: [
+      { label: "3 መኝታ ቤት ለሽያጭ በMuyenga", prompt: "3-bed house for sale in Muyenga", intent: "search_sale" },
+      { label: "bungalow በKira", prompt: "bungalow for sale in Kira", intent: "search_sale" },
+      { label: "ቤት በNamugongo ከ300M በታች", prompt: "house for sale in Namugongo under 300M", intent: "search_sale" }
+    ],
+    land: [
+      { label: "50x100 ፕሎት በGayaza", prompt: "50x100 plot in Gayaza", intent: "search_land" },
+      { label: "1 acre በMukono", prompt: "acre of land in Mukono", intent: "search_land" },
+      { label: "መሬት ለሽያጭ በMatugga", prompt: "land for sale in Matugga", intent: "search_land" }
+    ],
+    commercial: [
+      { label: "ቢሮ በNakasero", prompt: "office space in Nakasero", intent: "search_commercial" },
+      { label: "ሱቅ ለኪራይ በKampala", prompt: "shop to rent in Kampala", intent: "search_commercial" },
+      { label: "መጋዘን በNtinda", prompt: "warehouse in Ntinda", intent: "search_commercial" }
+    ],
+    student: [
+      { label: "ሆስቴል በMakerere አጠገብ", prompt: "student hostel near Makerere", intent: "search_student" },
+      { label: "ነጠላ ክፍል በKyambogo አጠገብ", prompt: "single room near Kyambogo", intent: "search_student" },
+      { label: "ሆስቴል በMUBS አጠገብ", prompt: "student hostel near MUBS", intent: "search_student" }
+    ]
+  },
+  ar: {
+    all: [
+      { label: "غرفتان في Ntinda تحت 1.5M", prompt: "2-bed apartment to rent in Ntinda under 1.5m", intent: "search_rent" },
+      { label: "أرض في Gayaza", prompt: "Land for sale in Gayaza", intent: "search_land" },
+      { label: "سكن طلاب قرب Makerere", prompt: "Student hostel near Makerere", intent: "search_student" },
+      { label: "مكتب في Kampala", prompt: "Office space in Kampala", intent: "search_commercial" }
+    ],
+    rent: [
+      { label: "غرفتان للإيجار في Ntinda تحت 1.5M", prompt: "2-bed apartment to rent in Ntinda under 1.5m", intent: "search_rent" },
+      { label: "شقة في Kololo", prompt: "apartment to rent in Kololo", intent: "search_rent" },
+      { label: "استوديو في Bukoto", prompt: "studio to rent in Bukoto", intent: "search_rent" },
+      { label: "3 غرف في Muyenga", prompt: "3-bed to rent in Muyenga", intent: "search_rent" }
+    ],
+    sale: [
+      { label: "منزل 3 غرف للبيع في Muyenga", prompt: "3-bed house for sale in Muyenga", intent: "search_sale" },
+      { label: "bungalow في Kira", prompt: "bungalow for sale in Kira", intent: "search_sale" },
+      { label: "منزل في Namugongo تحت 300M", prompt: "house for sale in Namugongo under 300M", intent: "search_sale" }
+    ],
+    land: [
+      { label: "قطعة 50x100 في Gayaza", prompt: "50x100 plot in Gayaza", intent: "search_land" },
+      { label: "فدان في Mukono", prompt: "acre of land in Mukono", intent: "search_land" },
+      { label: "أرض للبيع في Matugga", prompt: "land for sale in Matugga", intent: "search_land" }
+    ],
+    commercial: [
+      { label: "مكتب في Nakasero", prompt: "office space in Nakasero", intent: "search_commercial" },
+      { label: "محل للإيجار في Kampala", prompt: "shop to rent in Kampala", intent: "search_commercial" },
+      { label: "مستودع في Ntinda", prompt: "warehouse in Ntinda", intent: "search_commercial" }
+    ],
+    student: [
+      { label: "سكن طلاب قرب Makerere", prompt: "student hostel near Makerere", intent: "search_student" },
+      { label: "غرفة مفردة قرب Kyambogo", prompt: "single room near Kyambogo", intent: "search_student" },
+      { label: "سكن طلاب قرب MUBS", prompt: "student hostel near MUBS", intent: "search_student" }
+    ]
+  }
+});
+
+function getAiAssistantExamplePromptRows(lang = currentLang || "en", scope = "all") {
+  const code = normalizeMakaugLanguageCode(lang);
+  const normalizedScope = normalizeAiAssistantScope(scope);
+  const localized = AI_ASSISTANT_EXAMPLE_PROMPTS_I18N[code] || AI_ASSISTANT_EXAMPLE_PROMPTS_I18N.en;
+  const english = AI_ASSISTANT_EXAMPLE_PROMPTS_I18N.en;
+  return localized[normalizedScope] || localized.all || english[normalizedScope] || english.all || [];
+}
+
+function aiAssistantExamplePrefix(lang = currentLang || "en") {
+  const code = normalizeMakaugLanguageCode(lang);
+  return AI_ASSISTANT_EXAMPLE_PREFIX_I18N[code] || AI_ASSISTANT_EXAMPLE_PREFIX_I18N.en;
+}
+
+function aiAssistantExampleLabel(example = {}, lang = currentLang || "en") {
+  const label = String(example.label || example.prompt || "").trim();
+  if (!label) return "";
+  const prefix = aiAssistantExamplePrefix(lang);
+  return prefix ? `${prefix} ${label}` : label;
+}
+
 function getAiAssistantPromptCopy(lang = currentLang || "en") {
   const code = normalizeMakaugLanguageCode(lang);
   return AI_ASSISTANT_PROMPT_I18N[code] || AI_ASSISTANT_PROMPT_I18N.en;
@@ -31787,7 +32128,8 @@ function aiAssistantShellHtml({ scope = "all", idPrefix = "ask-ai-inline" } = {}
   const responseId = `${idPrefix}-response`;
   const buttonId = `${idPrefix}-submit`;
   const intent = aiAssistantIntentForScope(normalizedScope);
-  const placeholder = copy.placeholder || AI_ASSISTANT_PROMPT_I18N.en.placeholder;
+  const scopedExamples = getAiAssistantExamplePromptRows(currentLang || "en", normalizedScope);
+  const placeholder = aiAssistantExampleLabel(scopedExamples[0], currentLang || "en") || copy.placeholder || AI_ASSISTANT_PROMPT_I18N.en.placeholder;
   return `
     <div class="ask-ai-search-shell" data-ai-search-shell data-ai-scope="${adminAttr(normalizedScope)}">
       <div class="flex items-center justify-between gap-3 flex-wrap">
@@ -31825,8 +32167,7 @@ function renderAskAiSearchInlineSurfaces() {
 function renderHomeAskAiExamples() {
   const container = document.getElementById("home-ai-example-chips");
   if (!container) return;
-  const copy = getAiAssistantPromptCopy();
-  const chips = Array.isArray(copy.chips) && copy.chips.length ? copy.chips : AI_ASSISTANT_PROMPT_I18N.en.chips;
+  const chips = getAiAssistantExamplePromptRows(currentLang || "en", "all");
   container.innerHTML = chips.map((chip, idx) => `
     <button type="button" onclick="runHomeAskAiExample(${idx})" class="rounded-full border border-[#d5ddd8] bg-white px-3 py-2 text-xs font-bold text-[#111a22] shadow-sm hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700">
       ${adminEscape(chip.label)}
@@ -31845,10 +32186,16 @@ function aiAssistantPlaceholderTargets() {
   });
 }
 
-function aiAssistantPlaceholderExamples() {
-  const copy = getAiAssistantPromptCopy();
-  const chips = Array.isArray(copy.chips) && copy.chips.length ? copy.chips : AI_ASSISTANT_PROMPT_I18N.en.chips;
-  return [copy.placeholder, ...chips.map((chip) => chip.label || chip.prompt).filter(Boolean)].filter(Boolean);
+function aiAssistantScopeForInput(input) {
+  const form = input?.closest?.("[data-ai-search-form]");
+  const shell = input?.closest?.("[data-ai-search-shell]");
+  return normalizeAiAssistantScope(form?.dataset?.aiScope || shell?.dataset?.aiScope || aiAssistantScopeForPage());
+}
+
+function aiAssistantPlaceholderExamples(scope = "all") {
+  return getAiAssistantExamplePromptRows(currentLang || "en", scope)
+    .map((example) => aiAssistantExampleLabel(example, currentLang || "en"))
+    .filter(Boolean);
 }
 
 function setAiAssistantPlaceholderOverlay(input, overlay, value = "", { force = false } = {}) {
@@ -31882,11 +32229,12 @@ function wireAiAssistantPlaceholderTarget(input, overlay) {
 }
 
 function updateAiAssistantRotatingPlaceholders({ force = false } = {}) {
-  const examples = aiAssistantPlaceholderExamples();
-  if (!examples.length) return;
-  const value = examples[aiAssistantPlaceholderIndex % examples.length];
   aiAssistantPlaceholderTargets().forEach(({ input, overlay }) => {
     if (!input) return;
+    const scope = aiAssistantScopeForInput(input);
+    const examples = aiAssistantPlaceholderExamples(scope);
+    if (!examples.length) return;
+    const value = examples[aiAssistantPlaceholderIndex % examples.length];
     wireAiAssistantPlaceholderTarget(input, overlay);
     if (!force && String(input.value || "").trim()) {
       setAiAssistantPlaceholderOverlay(input, overlay, input.dataset.aiPlaceholderText || input.placeholder || value);
@@ -32170,9 +32518,8 @@ async function submitAiChatbotPrompt(event) {
 }
 
 function runHomeAskAiExample(index = 0) {
-  const copy = getAiAssistantPromptCopy();
-  const chips = Array.isArray(copy.chips) && copy.chips.length ? copy.chips : AI_ASSISTANT_PROMPT_I18N.en.chips;
-  const chip = chips[index] || chips[0] || AI_ASSISTANT_PROMPT_I18N.en.chips[0];
+  const chips = getAiAssistantExamplePromptRows(currentLang || "en", "all");
+  const chip = chips[index] || chips[0] || AI_ASSISTANT_EXAMPLE_PROMPTS_I18N.en.all[0];
   const input = document.getElementById("home-ai-message");
   const intent = document.getElementById("home-ai-intent");
   if (input) {

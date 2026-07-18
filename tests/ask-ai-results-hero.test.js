@@ -30,6 +30,7 @@ includes(indexHtml, 'ask-ai-prewarm-broad-20260718', 'Ask AI broad prewarm marke
 includes(indexHtml, 'ask-ai-clean-singlebar-20260718', 'Ask AI clean single-bar marker must be present in HTML');
 includes(indexHtml, 'ask-ai-topbar-match-20260718', 'Ask AI top search bar match marker must be present in HTML');
 includes(indexHtml, 'ai-category-colours-20260718', 'Ask AI category colour marker must be present in HTML');
+includes(indexHtml, 'ai-scoped-localized-prompts-20260718', 'Ask AI scoped localized prompt marker must be present in HTML');
 includes(indexHtml, 'data-ask-ai-results-hero="1"', 'homepage Ask AI hero marker missing');
 includes(indexHtml, 'data-ask-ai-blue-categoryrouting="1"', 'Ask AI blue/category-routing UI marker missing');
 includes(indexHtml, 'data-ask-ai-fast-mobile="1"', 'Ask AI fast/mobile UI marker missing');
@@ -76,6 +77,25 @@ includes(indexHtml, 'height: 50px', 'Ask AI inline blue button must match top se
 includes(indexHtml, 'font-size: 22px', 'Ask AI heading must be visibly larger');
 includes(indexHtml, 'font-weight: 800', 'Ask AI heading must be bolder');
 includes(indexHtml, 'Search in any language — makaug AI finds real listings.', 'Ask AI description must be one short line');
+
+function sectionFrom(needle, length = 1400) {
+  const start = indexHtml.indexOf(needle);
+  assert(start >= 0, `Missing section marker ${needle}`);
+  return indexHtml.slice(start, start + length);
+}
+
+const saleAiSection = sectionFrom('data-ask-ai-inline-scope="sale"');
+const rentAiSection = sectionFrom('data-ask-ai-inline-scope="rent"');
+const studentAiSectionForCopy = sectionFrom('data-ask-ai-inline-scope="student"');
+const commercialAiSection = sectionFrom('data-ask-ai-inline-scope="commercial"');
+const landAiSection = sectionFrom('data-ask-ai-inline-scope="land"');
+includes(saleAiSection, 'placeholder="Try: 3-bed house for sale in Muyenga"', 'sale Ask AI placeholder must be sale-specific');
+includes(rentAiSection, 'placeholder="Try: 2-bed to rent in Ntinda under 1.5M"', 'rent Ask AI placeholder must be rent-specific');
+excludes(rentAiSection, 'Land in Gayaza', 'rent Ask AI placeholder must not show land examples');
+excludes(rentAiSection, 'Office in Kampala', 'rent Ask AI placeholder must not show commercial examples');
+includes(studentAiSectionForCopy, 'placeholder="Try: hostel near Makerere"', 'student Ask AI placeholder must be student-specific');
+includes(commercialAiSection, 'placeholder="Try: office in Nakasero"', 'commercial Ask AI placeholder must be commercial-specific');
+includes(landAiSection, 'placeholder="Try: 50x100 plot in Gayaza"', 'land Ask AI placeholder must be land-specific');
 
 const studentPageStart = indexHtml.indexOf('<div id="page-students" class="page">');
 const studentAiBar = indexHtml.indexOf('data-ask-ai-inline-scope="student"', studentPageStart);
@@ -138,6 +158,8 @@ includes(aiRoute, "matchQuality = 'nearby_not_exact'", 'relaxed or nearby result
 includes(aiRoute, 'capture_available', 'zero/relaxed search responses must advertise capture availability');
 
 includes(appJs, 'AI_ASSISTANT_PROMPT_I18N', 'frontend must include language-aware Ask AI prompt copy');
+includes(appJs, 'AI_ASSISTANT_EXAMPLE_PROMPTS_I18N', 'frontend must include category-scoped localized Ask AI examples');
+includes(appJs, 'AI_ASSISTANT_EXAMPLE_PREFIX_I18N', 'frontend must include localized example prefixes');
 includes(appJs, 'AI_ASSISTANT_SEARCH_SCOPES', 'frontend must define page-aware Ask AI search scopes');
 includes(appJs, 'AI_ASSISTANT_SCOPE_HINT_I18N', 'frontend must translate page-aware scope hints');
 includes(appJs, 'ask-ai-scope-chip', 'frontend-generated Ask AI bars must use the scoped category colour chip');
@@ -148,8 +170,18 @@ includes(appJs, 'aiAssistantStarLabel', 'frontend must keep AI star through lang
 includes(appJs, 'updateHomeAskAiLanguageCopy', 'frontend must update prompt/chips when language changes');
 includes(appJs, 'startAiAssistantPlaceholderRotation', 'frontend must rotate localized Ask AI placeholder examples');
 includes(appJs, 'document.querySelectorAll("[data-ai-message]")', 'frontend placeholder rotation must target every mounted clean Ask AI input');
+includes(appJs, 'aiAssistantScopeForInput', 'frontend placeholder rotation must derive examples from the current page scope');
+includes(appJs, 'getAiAssistantExamplePromptRows(currentLang || "en", scope)', 'frontend placeholder rotation must choose localized examples by category scope');
 includes(appJs, 'setAiAssistantPlaceholderOverlay', 'frontend must rotate the native Ask AI placeholder');
 includes(appJs, 'input.placeholder = nextValue', 'frontend must write rotated examples to the native placeholder only');
+includes(appJs, '2-bed to rent in Ntinda under 1.5M', 'rent examples must include the approved rent-specific prompt');
+includes(appJs, '3-bed house for sale in Muyenga', 'sale examples must include the approved sale-specific prompt');
+includes(appJs, '50x100 plot in Gayaza', 'land examples must include the approved land-specific prompt');
+includes(appJs, 'office in Nakasero', 'commercial examples must include the approved commercial-specific prompt');
+includes(appJs, 'hostel near Makerere', 'student examples must include the approved student-specific prompt');
+includes(appJs, 'Okugeza:', 'Luganda/Lusoga examples must include localized prefix text');
+includes(appJs, 'Jaribu:', 'Kiswahili examples must include localized prefix text');
+includes(appJs, 'جرب:', 'Arabic examples must include localized prefix text');
 includes(appJs, 'land: "bg-teal-700"', 'land badges must use the new teal theme');
 includes(appJs, 'land: "text-teal-700"', 'land card accent text must use the new teal theme');
 includes(appJs, 'land: "bg-teal-900/90"', 'land card price badges must use the new teal theme');
