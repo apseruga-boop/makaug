@@ -35888,6 +35888,7 @@ function openPropertyDirections(id) {
 const SIMILAR_PROPERTIES_RELEVANCE_MARKER = "similar-relevance-v2-20260718";
 const SIMILAR_PROPERTIES_RECALL_MARKER = "similar-recall-widening-20260718";
 const SIMILAR_PROPERTIES_ALIAS_RENDER_MARKER = "similar-alias-render-20260718";
+const SIMILAR_PROPERTIES_PURPOSE_FALLBACK_MARKER = "similar-purpose-fallback-20260718";
 const detailSimilarHydrationInFlight = new Map();
 
 function similarPropertyCategory(property = {}) {
@@ -36141,12 +36142,14 @@ function getSimilarProperties(property, limit = 8) {
       if (String(candidate.id) === String(property.id)) return false;
       if (!isListingPublicVisible(candidate) || similarPropertyIsUnavailable(candidate)) return false;
       if (similarPropertyCategory(candidate) !== subjectCategory) return false;
-      if (similarPropertyPurpose(candidate) !== subjectPurpose) return false;
       return true;
     });
-  if (categoryEligible.length < 2) return [];
+  if (categoryEligible.length < 1) return [];
+  const purposeEligible = categoryEligible
+    .filter((candidate) => similarPropertyPurpose(candidate) === subjectPurpose);
+  const candidatePool = purposeEligible.length ? purposeEligible : categoryEligible;
 
-  const eligible = categoryEligible
+  const eligible = candidatePool
     .filter((candidate) => {
       const candidatePrice = similarPropertyPrice(candidate);
       if (!candidatePrice) return false;
@@ -45714,7 +45717,7 @@ function similarPropertyCategoryApiPath(property = {}) {
 
 function renderDetailSimilarPropertiesSectionHtml(similar = []) {
   const rows = (Array.isArray(similar) ? similar : []).filter(Boolean);
-  return `<div id="detail-similar-properties" data-similar-alias-render="${SIMILAR_PROPERTIES_ALIAS_RENDER_MARKER}" class="bg-white border border-gray-200 rounded-2xl p-5 mt-5 ${rows.length ? "" : "hidden"}">
+  return `<div id="detail-similar-properties" data-similar-alias-render="${SIMILAR_PROPERTIES_ALIAS_RENDER_MARKER}" data-similar-purpose-fallback="${SIMILAR_PROPERTIES_PURPOSE_FALLBACK_MARKER}" class="bg-white border border-gray-200 rounded-2xl p-5 mt-5 ${rows.length ? "" : "hidden"}">
           <h2 class="text-xl font-bold mb-3">${translatePropertyUi("Similar Properties")}</h2>
           <div id="detail-similar-properties-grid" class="grid md:grid-cols-3 gap-4">${rows.map(propCard).join("")}</div>
         </div>`;

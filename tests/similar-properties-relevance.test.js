@@ -9,6 +9,7 @@ const indexHtml = fs.readFileSync(path.join(root, "index.html"), "utf8");
 const marker = "similar-relevance-v2-20260718";
 const recallMarker = "similar-recall-widening-20260718";
 const aliasRenderMarker = "similar-alias-render-20260718";
+const purposeFallbackMarker = "similar-purpose-fallback-20260718";
 
 const markerCount = (indexHtml.match(new RegExp(marker, "g")) || []).length;
 assert(markerCount >= 2, "production HTML must carry the similar relevance marker in both preload and app-loader cache keys");
@@ -19,6 +20,9 @@ assert(appJs.includes(`SIMILAR_PROPERTIES_RECALL_MARKER = "${recallMarker}"`), "
 const aliasRenderMarkerCount = (indexHtml.match(new RegExp(aliasRenderMarker, "g")) || []).length;
 assert(aliasRenderMarkerCount >= 2, "production HTML must carry the similar alias/render marker in both preload and app-loader cache keys");
 assert(appJs.includes(`SIMILAR_PROPERTIES_ALIAS_RENDER_MARKER = "${aliasRenderMarker}"`), "client bundle must carry the similar alias/render marker");
+const purposeFallbackMarkerCount = (indexHtml.match(new RegExp(purposeFallbackMarker, "g")) || []).length;
+assert(purposeFallbackMarkerCount >= 2, "production HTML must carry the similar purpose fallback marker in both preload and app-loader cache keys");
+assert(appJs.includes(`SIMILAR_PROPERTIES_PURPOSE_FALLBACK_MARKER = "${purposeFallbackMarker}"`), "client bundle must carry the similar purpose fallback marker");
 assert(appJs.includes("function similarPropertyCategory(property = {})"), "similar properties must normalize listing category before ranking");
 assert(appJs.includes("function similarPropertyPurpose(property = {})"), "similar properties must normalize sale/rent purpose before ranking");
 assert(appJs.includes("function similarPropertyPrice(property = {})"), "similar properties must reject unpriced candidates");
@@ -32,8 +36,9 @@ assert(appJs.includes("function similarDedupedSortedItems(items = [])"), "simila
 
 assert(
   appJs.includes("if (similarPropertyCategory(candidate) !== subjectCategory) return false;")
-    && appJs.includes("if (similarPropertyPurpose(candidate) !== subjectPurpose) return false;"),
-  "similar property hard gates must keep candidates in the same category and sale/rent purpose"
+    && appJs.includes("const purposeEligible = categoryEligible")
+    && appJs.includes("const candidatePool = purposeEligible.length ? purposeEligible : categoryEligible;"),
+  "similar property hard gates must keep candidates in the same category while preferring same sale/rent purpose when available"
 );
 
 assert(
@@ -61,12 +66,13 @@ assert(
 
 assert(
   appJs.includes("const categoryEligible = getPublicListings()")
-    && appJs.includes("if (categoryEligible.length < 2) return [];")
+    && appJs.includes("if (categoryEligible.length < 1) return [];")
+    && appJs.includes("const eligible = candidatePool")
     && appJs.includes("const priceBands = subjectPrice > 0 ? [0.5, 1, Infinity] : [Infinity];")
     && appJs.includes("const locationLevels = subjectLocation.usable")
     && appJs.includes("[\"area\", \"district\", \"region\", \"national\"]")
     && appJs.includes("return similarPropertyPriceWithinBand(subjectPrice, similarPropertyPrice(item.property), band);"),
-  "similar property recall must widen area/district/region/national and price band before going empty"
+  "similar property recall must allow sparse categories and widen area/district/region/national and price band before going empty"
 );
 
 assert(
@@ -82,6 +88,7 @@ assert(
 assert(
   appJs.includes("function renderDetailSimilarPropertiesSectionHtml(similar = [])")
     && appJs.includes("id=\"detail-similar-properties-grid\"")
+    && appJs.includes("data-similar-purpose-fallback")
     && appJs.includes("updateDetailSimilarPropertiesSection(nextMatches)")
     && appJs.includes("hydrateDetailSimilarProperties(p);"),
   "detail pages must always include a hydratable similar-properties section and render it when matches appear"
