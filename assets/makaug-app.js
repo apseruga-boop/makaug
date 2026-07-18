@@ -35804,36 +35804,206 @@ function openPropertyDirections(id) {
   recordPropertyDirectionsClick(id);
 }
 
-function getSimilarProperties(property, limit = 3) {
-  if (!property) return [];
-  const type = normalizeType(property.type);
-  const price = Number(property.price) || 0;
+const SIMILAR_PROPERTIES_RELEVANCE_MARKER = "similar-relevance-v2-20260718";
+
+function similarPropertyCategory(property = {}) {
+  return normalizeType(property?.type || property?.listing_type || property?.category || property?.extra_fields?.listing_type || "");
+}
+
+function similarPropertyPurpose(property = {}) {
+  const category = similarPropertyCategory(property);
+  if (category === "rent" || category === "student") return "rent";
+  if (category === "sale" || category === "land") return "sale";
+  if (category === "commercial") return isCommercialForSale(property) ? "sale" : "rent";
+  const period = String(property?.period || property?.price_period || property?.pricePeriod || "").toLowerCase();
+  if (/\b(mo|month|week|day|yr|year|sem|semester)\b/.test(period)) return "rent";
+  return "sale";
+}
+
+function similarPropertyPrice(property = {}) {
+  const value = Number(property?.price ?? property?.asking_price ?? property?.price_ugx ?? 0);
+  return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+function similarLocationText(value = "") {
+  return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function similarPropertyLocation(property = {}) {
+  const extra = property?.extra_fields && typeof property.extra_fields === "object" ? property.extra_fields : {};
+  const area = similarLocationText(property?.area || property?.neighborhood || extra.neighborhood || extra.city || "");
+  const district = String(property?.district || extra.district || "").trim();
+  const city = similarLocationText(property?.city || property?.location_town || extra.city || "");
+  const region = property?.region || extra.region || regionForDistrict(district) || "";
   const point = getListingMapPoint(property);
-  const lat = Number(point?.lat);
-  const lng = Number(point?.lng);
-  const hasCoords = Number.isFinite(lat) && Number.isFinite(lng);
-  return getPublicListings()
-    .filter((x) => String(x.id) !== String(property.id) && isListingPublicVisible(x))
-    .map((x) => {
-      const xType = normalizeType(x.type);
-      const xPrice = Number(x.price) || 0;
-      const xPoint = getListingMapPoint(x);
-      const xLat = Number(xPoint?.lat);
-      const xLng = Number(xPoint?.lng);
-      const distanceKm = hasCoords && Number.isFinite(xLat) && Number.isFinite(xLng)
-        ? haversineKm(lat, lng, xLat, xLng)
-        : null;
-      const priceDiff = price && xPrice ? Math.abs(xPrice - price) / Math.max(price, xPrice) : 1;
-      let score = 0;
-      if (xType !== type) score += 80;
-      if (x.district !== property.district) score += 45;
-      if (String(x.area || "").toLowerCase() !== String(property.area || "").toLowerCase()) score += 15;
-      score += Math.min(priceDiff * 70, 70);
-      if (Number.isFinite(distanceKm)) score += Math.min(distanceKm * 3, 60);
-      else score += 30;
-      return { property: x, score };
+  const hasPoint = Number.isFinite(Number(point?.lat)) && Number.isFinite(Number(point?.lng));
+  return {
+    area,
+    district: district.toLowerCase(),
+    city,
+    region: similarLocationText(region),
+    point: hasPoint ? point : null,
+    usable: !!(area || district || city || hasPoint)
+  };
+}
+
+function similarSameArea(a = {}, b = {}) {
+  return !!a.area && !!b.area && a.area === b.area;
+}
+
+function similarSameDistrict(a = {}, b = {}) {
+  return !!a.district && !!b.district && a.district === b.district;
+}
+
+function similarSameRegion(a = {}, b = {}) {
+  return !!a.region && !!b.region && a.region === b.region;
+}
+
+function similarPropertySubtype(property = {}) {
+  const extra = property?.extra_fields && typeof property.extra_fields === "object" ? property.extra_fields : {};
+  return similarLocationText(property?.property_type || property?.subtype || property?.commercial_type || property?.room_type || extra.property_type || extra.commercial_type || extra.room_type || "");
+}
+
+function similarStudentRoomType(property = {}) {
+  const extra = property?.extra_fields && typeof property.extra_fields === "object" ? property.extra_fields : {};
+  return similarLocationText(property?.student_room_label || property?.room_type || property?.subtype || extra.room_type || extra.room_arrangement || "");
+}
+
+function similarLandSizeSqm(property = {}) {
+  const extra = property?.extra_fields && typeof property.extra_fields === "object" ? property.extra_fields : {};
+  const direct = parseFloatSafe(property?.land_size_sqm ?? property?.size_sqm ?? extra.land_size_sqm ?? extra.size_sqm);
+  if (Number.isFinite(direct) && direct > 0) return direct;
+  const acres = parseFloatSafe(property?.land_size_acres ?? extra.land_size_acres);
+  if (Number.isFinite(acres) && acres > 0) return acres * 4046.8564224;
+  const decimals = parseFloatSafe(property?.land_size_decimals ?? extra.land_size_decimals);
+  if (Number.isFinite(decimals) && decimals > 0) return decimals * 40.468564224;
+  const label = String(property?.size || extra.size_raw || extra.size_label || extra.land_size_label || "").toLowerCase();
+  const value = parseFloatSafe(label);
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  if (label.includes("acre")) return value * 4046.8564224;
+  if (label.includes("decimal")) return value * 40.468564224;
+  if (label.includes("hectare") || /\bha\b/.test(label)) return value * 10000;
+  if (label.includes("sqm") || label.includes("m2") || label.includes("m²")) return value;
+  const dimensionMatch = label.match(/(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)/);
+  if (dimensionMatch) {
+    const widthFt = Number(dimensionMatch[1]);
+    const lengthFt = Number(dimensionMatch[2]);
+    if (Number.isFinite(widthFt) && Number.isFinite(lengthFt)) return widthFt * lengthFt * 0.09290304;
+  }
+  return 0;
+}
+
+function similarPropertyRecencyScore(property = {}) {
+  const dateValue = property?.created_at || property?.published_at || property?.added_at || property?.date_added || property?.updated_at;
+  const time = Date.parse(dateValue || "");
+  if (!Number.isFinite(time)) return 0;
+  const ageDays = Math.max(0, (Date.now() - time) / 86400000);
+  return Math.max(0, 6 - Math.min(6, ageDays / 14));
+}
+
+function similarPropertyIsUnavailable(property = {}) {
+  const status = normalizeModerationStatus(property?.status || property?.moderation_status || "");
+  const availability = String(property?.availability || property?.availability_status || property?.extra_fields?.availability || "").toLowerCase();
+  return status === "sold"
+    || status === "hidden"
+    || status === "deleted"
+    || !!property?.sold_at
+    || /\b(sold|unavailable|off\s*market|taken|let\s*out)\b/.test(availability);
+}
+
+function similarPropertyScore(subject, candidate, context = {}) {
+  const { subjectPrice, subjectLocation, subjectCategory } = context;
+  const candidatePrice = similarPropertyPrice(candidate);
+  const candidateLocation = similarPropertyLocation(candidate);
+  const subjectPoint = subjectLocation?.point;
+  const candidatePoint = candidateLocation.point;
+  const priceDelta = Math.abs(candidatePrice - subjectPrice) / subjectPrice;
+  let score = 0;
+
+  if (similarSameArea(subjectLocation, candidateLocation)) score += 100;
+  else if (similarSameDistrict(subjectLocation, candidateLocation)) score += 60;
+  else if (similarSameRegion(subjectLocation, candidateLocation)) score += 25;
+
+  score += Math.max(0, 40 * (1 - priceDelta));
+
+  if (subjectPoint && candidatePoint) {
+    const distanceKm = haversineKm(subjectPoint.lat, subjectPoint.lng, candidatePoint.lat, candidatePoint.lng);
+    if (Number.isFinite(distanceKm)) score += Math.max(0, 30 - Math.min(30, distanceKm * 1.5));
+  }
+
+  const subjectSubtype = similarPropertySubtype(subject);
+  const candidateSubtype = similarPropertySubtype(candidate);
+  if (subjectCategory === "student") {
+    const subjectUni = similarLocationText(inferStudentNearestUniversity(subject));
+    const candidateUni = similarLocationText(inferStudentNearestUniversity(candidate));
+    if (subjectUni && candidateUni && subjectUni === candidateUni) score += 80;
+    const subjectRoom = similarStudentRoomType(subject);
+    const candidateRoom = similarStudentRoomType(candidate);
+    if (subjectRoom && candidateRoom && subjectRoom === candidateRoom) score += 20;
+    const subjectDistance = Number(subject?.distance_to_uni_km);
+    const candidateDistance = Number(candidate?.distance_to_uni_km);
+    if (Number.isFinite(subjectDistance) && Number.isFinite(candidateDistance)) {
+      score += Math.max(0, 20 - Math.min(20, Math.abs(subjectDistance - candidateDistance) * 5));
+    }
+  } else if (subjectCategory === "commercial") {
+    if (subjectSubtype && candidateSubtype && subjectSubtype === candidateSubtype) score += 50;
+  } else if (subjectCategory === "sale" || subjectCategory === "rent") {
+    const subjectBeds = Number(subject?.beds ?? subject?.bedrooms);
+    const candidateBeds = Number(candidate?.beds ?? candidate?.bedrooms);
+    if (Number.isFinite(subjectBeds) && Number.isFinite(candidateBeds)) {
+      const bedDiff = Math.abs(subjectBeds - candidateBeds);
+      if (bedDiff === 0) score += 30;
+      else if (bedDiff === 1) score += 15;
+    }
+    if (subjectSubtype && candidateSubtype && subjectSubtype === candidateSubtype) score += 20;
+  } else if (subjectCategory === "land") {
+    const subjectSize = similarLandSizeSqm(subject);
+    const candidateSize = similarLandSizeSqm(candidate);
+    if (subjectSize > 0 && candidateSize > 0) {
+      const sizeDelta = Math.abs(candidateSize - subjectSize) / Math.max(subjectSize, candidateSize);
+      score += Math.max(0, 30 * (1 - Math.min(1, sizeDelta)));
+    }
+  }
+
+  if (candidate?.featured === true) score += 5;
+  if (candidate?.student_verified === true || candidate?.verified === true || candidate?.land_title_available === true) score += 5;
+  score += similarPropertyRecencyScore(candidate);
+  return score;
+}
+
+function getSimilarProperties(property, limit = 8) {
+  if (!property) return [];
+  const subjectCategory = similarPropertyCategory(property);
+  const subjectPurpose = similarPropertyPurpose(property);
+  const subjectPrice = similarPropertyPrice(property);
+  const subjectLocation = similarPropertyLocation(property);
+  if (!subjectCategory || !subjectPrice || !subjectLocation.usable) return [];
+
+  const eligible = getPublicListings()
+    .filter((candidate) => {
+      if (String(candidate.id) === String(property.id)) return false;
+      if (!isListingPublicVisible(candidate) || similarPropertyIsUnavailable(candidate)) return false;
+      if (similarPropertyCategory(candidate) !== subjectCategory) return false;
+      if (similarPropertyPurpose(candidate) !== subjectPurpose) return false;
+      const candidatePrice = similarPropertyPrice(candidate);
+      if (!candidatePrice) return false;
+      const priceRatio = Math.abs(candidatePrice - subjectPrice) / subjectPrice;
+      if (priceRatio > 0.5) return false;
+      return similarPropertyLocation(candidate).usable;
     })
-    .sort((a, b) => a.score - b.score)
+    .map((candidate) => ({
+      property: candidate,
+      location: similarPropertyLocation(candidate),
+      score: similarPropertyScore(property, candidate, { subjectPrice, subjectLocation, subjectCategory })
+    }));
+
+  const minLocalResults = Math.min(3, limit);
+  const local = eligible.filter((item) => similarSameArea(subjectLocation, item.location) || similarSameDistrict(subjectLocation, item.location));
+  const regional = eligible.filter((item) => local.includes(item) || similarSameRegion(subjectLocation, item.location));
+  const scoped = local.length >= minLocalResults ? local : (regional.length >= minLocalResults ? regional : eligible);
+
+  return scoped
+    .sort((a, b) => b.score - a.score)
     .slice(0, limit)
     .map((item) => item.property);
 }
@@ -45370,7 +45540,7 @@ async function openDetail(id, options = {}) {
     area: p.area
   });
   const broker = findBrokerById(p.agent);
-  const similar = getSimilarProperties(p, 3);
+  const similar = getSimilarProperties(p, 8);
   const normalizedType = normalizeType(p.type);
   const showMortgageWidget = normalizedType === "sale" || normalizedType === "land" || isCommercialForSale(p);
   const savedNearbyRaw = Array.isArray(p.nearby_places) ? p.nearby_places : [];
