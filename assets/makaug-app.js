@@ -31795,7 +31795,7 @@ function aiAssistantShellHtml({ scope = "all", idPrefix = "ask-ai-inline" } = {}
           <h2 data-ai-title class="ask-ai-search-title">${adminEscape(title)}</h2>
           <p data-ai-subtitle class="ask-ai-search-subtitle">${adminEscape(subtitle)}</p>
         </div>
-        <p data-ai-scope-hint class="text-xs font-bold text-blue-700 bg-blue-50 border border-blue-100 rounded-full px-3 py-1">${adminEscape(scopeHint)}</p>
+        <p data-ai-scope-hint class="ask-ai-scope-chip">${adminEscape(scopeHint)}</p>
       </div>
       <form data-ai-search-form data-ai-scope="${adminAttr(normalizedScope)}" onsubmit="submitAskAiSearchPrompt(event)" class="mt-3">
         <input data-ai-intent type="hidden" value="${adminAttr(intent)}">
@@ -32503,7 +32503,7 @@ const PAGE_CONTENT = {
         <p class="text-sm text-gray-600 mt-1" data-content-i18n="safety.brokersText">Use accurate listing details, confirm owner authority, keep client communication recorded, and disclose fees clearly.</p>
       </article>
       <article class="rounded-3xl bg-white border border-green-100 p-4 hover:shadow-lg transition">
-        <div data-safety-illustration="land" class="h-28 rounded-2xl bg-gradient-to-br from-emerald-100 to-white grid place-items-center text-emerald-700"><i class="fas fa-map-marked-alt text-5xl"></i></div>
+        <div data-safety-illustration="land" class="h-28 rounded-2xl bg-gradient-to-br from-teal-100 to-white grid place-items-center text-teal-700"><i class="fas fa-map-marked-alt text-5xl"></i></div>
         <h3 class="font-black text-gray-900 mt-4" data-content-i18n="safety.landTitle">Land seekers</h3>
         <p class="text-sm text-gray-600 mt-1" data-content-i18n="safety.landText">Check title, boundaries, access roads, seller authority, neighbours, and survey details before any payment.</p>
       </article>
@@ -34614,7 +34614,7 @@ function badgeColor(type) {
     rent: "bg-blue-700",
     student: "bg-purple-700",
     commercial: "bg-amber-600",
-    land: "bg-emerald-700"
+    land: "bg-teal-700"
   }[t] || "bg-gray-700";
 }
 
@@ -37057,28 +37057,28 @@ function publicCardTheme(type, options = {}) {
       rent: "text-blue-700",
       student: "text-purple-700",
       commercial: "text-amber-700",
-      land: "text-emerald-700"
+      land: "text-teal-700"
     }[t] || "text-green-700",
     iconText: {
       sale: "text-green-600",
       rent: "text-blue-600",
       student: "text-purple-600",
       commercial: "text-amber-600",
-      land: "text-emerald-600"
+      land: "text-teal-600"
     }[t] || "text-green-600",
     priceBg: {
       sale: "bg-green-900/90",
       rent: "bg-green-900/90",
       student: "bg-purple-900/90",
       commercial: "bg-amber-900/90",
-      land: "bg-emerald-900/90"
+      land: "bg-teal-900/90"
     }[t] || "bg-green-900/90",
     tagBg: {
       sale: "bg-green-700",
       rent: "bg-green-700",
       student: "bg-purple-700",
       commercial: "bg-amber-600",
-      land: "bg-emerald-700"
+      land: "bg-teal-700"
     }[t] || "bg-green-700"
   };
 }
@@ -37205,7 +37205,7 @@ function noResultsCardForGrid(id) {
       body: "Save Search, Create Alert, Ask makaug.com on WhatsApp, or tell makaug.com what your business needs."
     },
     "land-grid": {
-      cls: "border-emerald-100 bg-emerald-50 text-emerald-950 md:col-span-2",
+      cls: "border-teal-100 bg-teal-50 text-teal-950 md:col-span-2",
       title: "No exact matches yet. No land listings match this search yet.",
       body: "Save Search, Create Alert, Ask makaug.com on WhatsApp, or tell makaug.com what plot you need. Always verify title and ownership before payment."
     }
@@ -43504,7 +43504,7 @@ const LP_CONFIG = {
   },
   land: {
     badge: "Land",
-    badgeClass: "bg-emerald-700 text-white",
+    badgeClass: "bg-teal-700 text-white",
     titlePlaceholder: "e.g. 1 Acre Residential Plot in Namugongo",
     areaLabel: "Location / Zone *",
     areaPlaceholder: "e.g. Namugongo, Kira, Nansana...",
@@ -45727,13 +45727,13 @@ function renderUgNlisVerificationCard(property = {}) {
   const landVerification = property.land_verification || property.extra_fields?.land_verification || {};
   const status = landVerification.status || property.land_verification_status || property.extra_fields?.land_verification_status || "not_started";
   return `
-    <div class="mt-4 rounded-xl border border-emerald-100 bg-emerald-50 p-4 text-sm text-emerald-950">
+    <div class="mt-4 rounded-xl border border-teal-100 bg-teal-50 p-4 text-sm text-teal-950">
       <div class="flex items-start justify-between gap-3">
         <div>
           <div class="font-black">Official searches happen on UgNLIS</div>
-          <div class="mt-1 text-emerald-900">Makaug helps you discover and compare land listings, but title search, parcel search, and transaction tracking must be checked on Uganda's official UgNLIS portal.</div>
+          <div class="mt-1 text-teal-900">Makaug helps you discover and compare land listings, but title search, parcel search, and transaction tracking must be checked on Uganda's official UgNLIS portal.</div>
         </div>
-        <span class="shrink-0 rounded-full bg-white px-2 py-1 text-[11px] font-bold text-emerald-800">${adminEscape(status)}</span>
+        <span class="shrink-0 rounded-full bg-white px-2 py-1 text-[11px] font-bold text-teal-800">${adminEscape(status)}</span>
       </div>
       <div class="mt-3 grid sm:grid-cols-3 gap-2 text-xs">
         <div class="rounded-lg bg-white/80 border border-white p-2"><strong>Before opening UgNLIS</strong><br>Have volume and folio, or county/block/plot ready.</div>
@@ -45741,9 +45741,9 @@ function renderUgNlisVerificationCard(property = {}) {
         <div class="rounded-lg bg-white/80 border border-white p-2">Keep independent legal and survey checks before payment.</div>
       </div>
       <div class="mt-3 flex gap-2 flex-wrap">
-        <a href="https://ugnlis.mlhud.go.ug/" target="_blank" rel="noopener noreferrer" class="inline-flex items-center rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white">Open UgNLIS</a>
-        <a href="/safety" class="inline-flex items-center rounded-lg border border-emerald-200 bg-white px-3 py-2 text-xs font-bold text-emerald-800">Land safety guide</a>
-        <span role="tooltip" class="inline-flex items-center rounded-lg border border-emerald-100 bg-white/80 px-3 py-2 text-[11px] text-emerald-900">UgNLIS is operated by Uganda's land ministry, not makaug.</span>
+        <a href="https://ugnlis.mlhud.go.ug/" target="_blank" rel="noopener noreferrer" class="inline-flex items-center rounded-lg bg-teal-700 px-3 py-2 text-xs font-bold text-white">Open UgNLIS</a>
+        <a href="/safety" class="inline-flex items-center rounded-lg border border-teal-200 bg-white px-3 py-2 text-xs font-bold text-teal-800">Land safety guide</a>
+        <span role="tooltip" class="inline-flex items-center rounded-lg border border-teal-100 bg-white/80 px-3 py-2 text-[11px] text-teal-900">UgNLIS is operated by Uganda's land ministry, not makaug.</span>
       </div>
     </div>`;
 }

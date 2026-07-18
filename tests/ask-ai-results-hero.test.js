@@ -29,6 +29,7 @@ includes(indexHtml, 'ask-ai-search-prewarm-20260718', 'Ask AI search prewarm mar
 includes(indexHtml, 'ask-ai-prewarm-broad-20260718', 'Ask AI broad prewarm marker must be present in HTML');
 includes(indexHtml, 'ask-ai-clean-singlebar-20260718', 'Ask AI clean single-bar marker must be present in HTML');
 includes(indexHtml, 'ask-ai-topbar-match-20260718', 'Ask AI top search bar match marker must be present in HTML');
+includes(indexHtml, 'ai-category-colours-20260718', 'Ask AI category colour marker must be present in HTML');
 includes(indexHtml, 'data-ask-ai-results-hero="1"', 'homepage Ask AI hero marker missing');
 includes(indexHtml, 'data-ask-ai-blue-categoryrouting="1"', 'Ask AI blue/category-routing UI marker missing');
 includes(indexHtml, 'data-ask-ai-fast-mobile="1"', 'Ask AI fast/mobile UI marker missing');
@@ -56,14 +57,30 @@ excludes(indexHtml, 'id="ai-chatbot-message"', 'duplicate lower Ask AI input mus
 excludes(indexHtml, 'id="home-ai-placeholder-rotator"', 'Ask AI must not render an overlay placeholder rotator');
 excludes(indexHtml, 'data-ai-placeholder', 'Ask AI must use exactly one native placeholder source');
 excludes(indexHtml, 'placeholder:text-transparent', 'Ask AI native placeholder must remain visible, not hidden behind an overlay');
-includes(indexHtml, 'color: #0b1220', 'Ask AI heading and shell should use the darker true-black text tone');
+includes(indexHtml, '--ai-accent: #1d6ff2', 'homepage Ask AI should keep the neutral blue accent');
+includes(indexHtml, '--ai-accent: #166534', 'sale Ask AI should use the sale green accent');
+includes(indexHtml, '--ai-accent: #1e40af', 'rent Ask AI should use the rent blue accent');
+includes(indexHtml, '--ai-accent: #0f766e', 'land Ask AI should use the new teal accent');
+includes(indexHtml, '--ai-accent: #b45309', 'commercial Ask AI should use the commercial amber accent');
+includes(indexHtml, '--ai-accent: #6b21a8', 'student Ask AI should use the student purple accent');
+includes(indexHtml, 'color: var(--ai-accent)', 'Ask AI heading/star/chip should use the scoped category accent');
+includes(indexHtml, 'class="ask-ai-scope-chip"', 'Ask AI scope hints must use the variable-driven category colour chip');
+includes(indexHtml, 'bg-teal-700 py-8 text-white', 'land page hero must use the new teal theme');
+includes(indexHtml, 'from-teal-950 via-teal-900 to-teal-950', 'land search band must use the new teal theme');
+includes(indexHtml, 'border border-teal-100 bg-teal-50 p-5 text-teal-950', 'land empty/helper states must use the new teal theme');
 includes(indexHtml, '✨ Ask AI', 'Ask AI button must include the AI star');
 includes(indexHtml, '.ask-ai-search-shell', 'Ask AI must have a shared topbar shell class');
 includes(indexHtml, 'border-radius: 16px', 'Ask AI shell/search row must match the top search 16px radius');
 includes(indexHtml, 'min-height: 56px', 'Ask AI search row must be 50-56px tall');
 includes(indexHtml, 'height: 50px', 'Ask AI inline blue button must match top search height');
-includes(indexHtml, 'font-weight: 700', 'Ask AI heading must use a calmer 700 weight');
+includes(indexHtml, 'font-size: 22px', 'Ask AI heading must be visibly larger');
+includes(indexHtml, 'font-weight: 800', 'Ask AI heading must be bolder');
 includes(indexHtml, 'Search in any language — makaug AI finds real listings.', 'Ask AI description must be one short line');
+
+const studentPageStart = indexHtml.indexOf('<div id="page-students" class="page">');
+const studentAiBar = indexHtml.indexOf('data-ask-ai-inline-scope="student"', studentPageStart);
+const studentResultsGrid = indexHtml.indexOf('id="student-grid"', studentPageStart);
+assert(studentPageStart >= 0 && studentAiBar >= 0 && studentResultsGrid >= 0 && studentAiBar < studentResultsGrid, 'student Ask AI bar must sit near the top before the student results grid');
 
 includes(aiRoute, 'extractNaturalPropertyQuery', 'assistant route must parse natural property queries');
 includes(aiRoute, 'heuristicNaturalPropertyQuery', 'assistant route must expose the deterministic fast parser');
@@ -123,6 +140,7 @@ includes(aiRoute, 'capture_available', 'zero/relaxed search responses must adver
 includes(appJs, 'AI_ASSISTANT_PROMPT_I18N', 'frontend must include language-aware Ask AI prompt copy');
 includes(appJs, 'AI_ASSISTANT_SEARCH_SCOPES', 'frontend must define page-aware Ask AI search scopes');
 includes(appJs, 'AI_ASSISTANT_SCOPE_HINT_I18N', 'frontend must translate page-aware scope hints');
+includes(appJs, 'ask-ai-scope-chip', 'frontend-generated Ask AI bars must use the scoped category colour chip');
 includes(appJs, 'renderAskAiSearchInlineSurfaces', 'frontend must render clean Ask AI bars on category pages');
 includes(appJs, 'submitAskAiSearchPrompt', 'frontend must expose the shared clean Ask AI submit handler');
 includes(appJs, 'search_scope', 'frontend must send the page-aware search scope to the assistant API');
@@ -132,6 +150,10 @@ includes(appJs, 'startAiAssistantPlaceholderRotation', 'frontend must rotate loc
 includes(appJs, 'document.querySelectorAll("[data-ai-message]")', 'frontend placeholder rotation must target every mounted clean Ask AI input');
 includes(appJs, 'setAiAssistantPlaceholderOverlay', 'frontend must rotate the native Ask AI placeholder');
 includes(appJs, 'input.placeholder = nextValue', 'frontend must write rotated examples to the native placeholder only');
+includes(appJs, 'land: "bg-teal-700"', 'land badges must use the new teal theme');
+includes(appJs, 'land: "text-teal-700"', 'land card accent text must use the new teal theme');
+includes(appJs, 'land: "bg-teal-900/90"', 'land card price badges must use the new teal theme');
+includes(appJs, 'badgeClass: "bg-teal-700 text-white"', 'land list-property badge must use the new teal theme');
 excludes(appJs, 'data-ai-placeholder class=', 'frontend must not generate an absolute placeholder overlay');
 includes(appJs, 'renderAiAssistantResponse', 'frontend must render assistant responses');
 includes(appJs, 'aiAssistantListingCardsHtml', 'frontend must render listing cards inline');
