@@ -76,10 +76,12 @@ assert(
 );
 
 assert(
-  appJs.includes('const sort = document.getElementById("sale-sort-f")?.value || "newest"')
-    && appJs.includes('publicListingFilterValue(`${key}-sort-f`)')
-    && appJs.includes('setValue("commercial-sort-f", filters.sort || "newest")')
-    && appJs.includes('setValue("land-sort-f", filters.sort || "newest")'),
+  appJs.includes("function publicCategorySortValue(category)")
+    && appJs.includes("publicListingFilterValue(publicCategoryResultsSortSelectId(key))")
+    && appJs.includes("publicListingFilterValue(publicCategorySortSelectId(key))")
+    && appJs.includes("function syncPublicCategorySortValue(category, value = \"\")")
+    && appJs.includes("setValue(\"commercial-sort-f\", filters.sort || \"newest\")")
+    && appJs.includes("setValue(\"land-sort-f\", filters.sort || \"newest\")"),
   "sort should be preserved and treated as an active filter across category pages"
 );
 

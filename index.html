@@ -147,6 +147,7 @@
     window.__makaugAppVersion += "-category-pagination-loading-render-fix-20260715";
     window.__makaugAppVersion += "-category-pagination-no-local-total-fix-20260715";
     window.__makaugAppVersion += "-ask-ai-results-hero-20260717";
+    window.__makaugAppVersion += "-ask-ai-blue-categoryrouting-20260718";
     window.__makaugReleaseMarkers = "admin-command-centre-20260514-section-search-shell-20260512-controlled-public-inventory-20260514-admin-live-control-parity-20260515-final-map-sweep-20260515-outlook-email-agent-20260515-contextual-whatsapp-20260517-whatsapp-prefill-copy-20260517-listing-contact-whatsapp-i18n-20260519-live-featured-cleanup-20260519-agent-inquiry-nearby-20260519-approval-profile-sync-20260519-broker-profile-share-links-20260519-direct-agent-profile-20260519-source-registry-20260520-found-online-pending-filter-20260521-review-queue-final-hide-20260521-source-fishing-policy-20260523-launch-intake-20260523-source-post-import-20260523-found-online-queue-tabs-20260524-found-online-only-cleanup-20260524-found-online-status-cleanup-20260524-found-online-2026-unlimited-sweep-20260524-found-online-production-sweep-20260524-found-online-evidence-sweep-20260524-public-image-src-fix-20260524-found-online-admin-archive-20260524-social-platform-sweep-20260525-tiktok-full-capture-20260525-tiktok-exact-import-20260525-live-review-separation-20260525-social-only-preapproved-20260525-strict-preapproval-20260525-youtube-social-restore-20260525-youtube-social-republish-20260525-tiktok-source-import-fix-20260525-public-featured-feed-fix-20260525-public-featured-feed-fix-20260526-price-upon-application-import-20260526-found-online-location-override-20260526-source-contact-fallback-20260526-escaped-labels-20260526-sourced-broker-badge-cleanup-20260526-admin-source-fact-editor-20260526-social-location-pin-repair-20260527-youtube-feb-sweep-20260528-third-party-legal-guardrails-20260528-amharic-i18n-20260529-hero-opportunity-counter-20260529-i18n-counter-fix-20260529-counter-maths-fix-20260529-detail-container-i18n-20260529-king-review-location-trust-20260529-detail-map-description-i18n-20260529-social-capture-bookmarklet-20260602-marketplace-land-safety-20260602-king-student-youtube-import-20260603-source-post-date-confirmation-20260606-king-youtube-student-sweep-tabs-20260606-owner-verification-startup-fix-20260606-arabic-i18n-20260606-youtube-jan-broad-batch-sweep-20260607-king-review-location-autofill-20260607-mortgage-bank-leads-i18n-20260607-whatsapp-no-match-leadgen-20260607-land-title-availability-20260607-whatsapp-no-match-visible-leadbox-20260607-agent-registration-mobile-20260607-public-inventory-summary-20260609-king-status-fast-render-20260609-king-live-public-parity-20260609-king-location-hierarchy-nansana-20260616-public-i18n-detail-persistence-20260707-public-i18n-startup-race-fix-20260707-public-i18n-cookie-persistence-20260707-public-i18n-auth-language-guard-20260707-public-search-area-handoff-20260707-public-search-normalize-helper-20260707-public-search-route-backend-results-20260707-public-home-search-backend-results-20260707-staff-review-location-namasuba-20260708-list-property-photo-upload-fix-20260708-public-qa-cleanup-20260708-public-location-label-fix-20260708-public-results-delivery-fix-20260708-inpage-video-facade-20260709";
     window.__makaugReleaseMarkers += "-numbered-pagination-20260709";
     window.__makaugReleaseMarkers += "-tiles-contact-consistency-20260709";
@@ -2132,36 +2133,36 @@
       </div>
     </section>
 
-    <section id="home-ask-ai-feature" data-ask-ai-results-hero="1" class="py-10 bg-white">
+    <section id="home-ask-ai-feature" data-ask-ai-results-hero="1" data-ask-ai-blue-categoryrouting="1" class="py-10 bg-[#f8fbf9]">
       <div class="max-w-7xl mx-auto px-4">
-        <div class="relative overflow-hidden rounded-3xl border border-green-900/20 bg-[#0f3d2e] text-white shadow-2xl">
-          <div class="absolute inset-0 opacity-20 pointer-events-none" aria-hidden="true">
-            <div class="absolute -top-20 -right-16 h-64 w-64 rounded-full bg-green-300 blur-3xl"></div>
-            <div class="absolute bottom-0 left-1/3 h-32 w-80 rounded-full bg-emerald-500 blur-3xl"></div>
+        <div class="relative overflow-hidden rounded-3xl border border-[#dbe8e0] bg-gradient-to-br from-white via-[#f7fbf9] to-[#edf8f3] text-[#16241d] shadow-xl">
+          <div class="absolute inset-0 opacity-70 pointer-events-none" aria-hidden="true">
+            <div class="absolute -top-24 -right-16 h-72 w-72 rounded-full bg-blue-100 blur-3xl animate-pulse"></div>
+            <div class="absolute bottom-0 left-1/3 h-36 w-96 rounded-full bg-emerald-100 blur-3xl"></div>
           </div>
           <div class="relative grid lg:grid-cols-[1.05fr_1.45fr] gap-6 p-5 md:p-8 lg:p-10">
             <div class="flex flex-col justify-center">
-              <div id="home-ai-pill" class="inline-flex w-fit items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-xs font-black uppercase tracking-wide text-green-100">
+              <div id="home-ai-pill" class="inline-flex w-fit items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-xs font-black uppercase tracking-wide text-blue-700">
                 <i class="fas fa-robot"></i> Ask makaug AI
               </div>
               <h2 id="home-ai-title" class="mt-4 text-3xl md:text-4xl font-black serif leading-tight">Describe what you want. Get instant property matches.</h2>
-              <p id="home-ai-subtitle" class="mt-3 text-green-50/90 text-sm md:text-base max-w-xl">
+              <p id="home-ai-subtitle" class="mt-3 text-[#5b6b62] text-sm md:text-base max-w-xl">
                 Search in any language. makaug AI turns your message into filters and shows real listings straight away.
               </p>
             </div>
-            <div class="rounded-2xl border border-white/15 bg-white/10 backdrop-blur-xl p-4 md:p-5">
+            <div class="rounded-2xl border border-white bg-white/95 shadow-lg p-4 md:p-5">
               <form id="home-ai-search-form" onsubmit="submitHomeAskAiPrompt(event)" class="grid gap-3">
                 <input id="home-ai-intent" type="hidden" value="search_property">
                 <label id="home-ai-label" for="home-ai-message" class="sr-only">Ask makaug AI</label>
                 <div class="grid sm:grid-cols-[1fr_auto] gap-3">
-                  <input id="home-ai-message" autocomplete="off" class="h-14 rounded-2xl border border-white/20 bg-white px-4 text-base text-gray-950 placeholder:text-gray-500 outline-none focus:ring-4 focus:ring-green-300/40" placeholder="Try: 2-bed in Ntinda under 1.5M">
-                  <button id="home-ai-submit-btn" type="submit" class="h-14 rounded-2xl bg-green-500 hover:bg-green-400 text-green-950 px-6 font-black shadow-lg shadow-green-950/20">
+                  <input id="home-ai-message" autocomplete="off" class="h-14 rounded-2xl border border-blue-100 bg-white px-4 text-base text-gray-950 placeholder:text-gray-500 outline-none focus:border-blue-300 focus:ring-4 focus:ring-blue-100" placeholder="Try: 2-bed in Ntinda under 1.5M">
+                  <button id="home-ai-submit-btn" type="submit" class="h-14 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white px-6 font-black shadow-lg shadow-blue-200">
                     Ask AI
                   </button>
                 </div>
                 <div id="home-ai-example-chips" class="flex flex-wrap gap-2" aria-label="Example AI prompts"></div>
               </form>
-              <div id="home-ai-response" class="mt-4 hidden rounded-2xl border border-white/15 bg-white p-4 text-gray-900"></div>
+              <div id="home-ai-response" class="mt-4 hidden rounded-2xl border border-blue-100 bg-white p-4 text-gray-900"></div>
             </div>
           </div>
         </div>
@@ -3245,14 +3246,14 @@
           </a>
         </div>
       </div>
-      <div class="bg-white border border-green-100 rounded-2xl p-6" data-ai-chatbot-live-panel="1">
+      <div class="bg-gradient-to-br from-white via-[#f7fbf9] to-[#edf8f3] border border-[#dbe8e0] rounded-3xl p-5 md:p-6 shadow-xl" data-ai-chatbot-live-panel="1" data-ask-ai-blue-categoryrouting="1">
         <div class="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <p class="text-xs font-black uppercase tracking-wide text-green-700">Connected AI flow</p>
-            <h2 class="text-2xl font-black text-gray-900 serif mt-1">Try a makaug AI task</h2>
-            <p class="text-sm text-gray-600 mt-1 max-w-2xl">Ask about search, rent, sale, student rooms, land, commercial spaces, listing property, alerts, viewings, mortgage help, fraud reporting, or human handoff.</p>
+            <p id="ai-chatbot-live-pill" class="inline-flex w-fit items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-xs font-black uppercase tracking-wide text-blue-700"><i class="fas fa-robot"></i> Ask makaug AI</p>
+            <h2 id="ai-chatbot-live-title" class="text-2xl font-black text-gray-900 serif mt-3">Describe what you want. Get instant property matches.</h2>
+            <p id="ai-chatbot-live-subtitle" class="text-sm text-gray-600 mt-1 max-w-2xl">Search in any language. makaug AI turns your message into filters and shows real listings straight away.</p>
           </div>
-          <a href="/help" onclick="showPage('help')" class="text-sm font-bold text-green-700">Need human help?</a>
+          <a href="/help" onclick="showPage('help')" class="text-sm font-bold text-blue-700">Need human help?</a>
         </div>
         <script>
           window.__makaugAiChatbotBootstrapMarker = "ai-chatbot-submit-bootstrap-20260713";
@@ -3287,7 +3288,7 @@
           }
         </script>
         <form id="ai-chatbot-test-form" onsubmit="submitAiChatbotPrompt(event)" class="mt-4 grid md:grid-cols-[220px,1fr,auto] gap-3">
-          <select id="ai-chatbot-intent" class="border border-green-100 rounded-xl px-4 py-3 text-sm bg-white">
+          <select id="ai-chatbot-intent" class="border border-blue-100 rounded-xl px-4 py-3 text-sm bg-white focus:border-blue-300 focus:ring-4 focus:ring-blue-100">
             <option value="search_property">Search property</option>
             <option value="search_rent">Search rentals</option>
             <option value="search_sale">Search for sale</option>
@@ -3307,10 +3308,10 @@
             <option value="language_change">Language change</option>
             <option value="human_handoff">Human handoff</option>
           </select>
-          <input id="ai-chatbot-message" class="border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="Example: I need a 2 bedroom rental in Ntinda below 1.5m">
-          <button id="ai-chatbot-submit-btn" class="bg-green-700 hover:bg-green-600 text-white px-5 py-3 rounded-xl text-sm font-bold">Ask AI</button>
+          <input id="ai-chatbot-message" class="border border-blue-100 rounded-xl px-4 py-3 text-sm focus:border-blue-300 focus:ring-4 focus:ring-blue-100" placeholder="Example: I need a 2 bedroom rental in Ntinda below 1.5m">
+          <button id="ai-chatbot-submit-btn" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-xl text-sm font-bold shadow-lg shadow-blue-100">Ask AI</button>
         </form>
-        <div id="ai-chatbot-response" class="mt-4 rounded-2xl border border-green-100 bg-green-50 p-4 text-sm text-green-950">AI responses appear here. Provider-missing states are shown safely.</div>
+        <div id="ai-chatbot-response" class="mt-4 rounded-2xl border border-blue-100 bg-white p-4 text-sm text-slate-900">AI responses appear here. Provider-missing states are shown safely.</div>
       </div>
       <section class="rounded-3xl bg-white border border-green-100 p-5 md:p-6" data-howto-video-grid="ai-chatbot"></section>
     </div>

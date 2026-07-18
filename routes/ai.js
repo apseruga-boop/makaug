@@ -72,6 +72,57 @@ const ASSISTANT_CATEGORY_PATHS = Object.freeze({
   student: '/student-accommodation'
 });
 
+const ASSISTANT_TYPE_PATTERNS = Object.freeze([
+  {
+    canonical: 'land',
+    searchType: 'land',
+    pattern: /\b(land|lands|plot|plots?|acre|acres|hectare|hectares|decimal|decimals|m2|sqm|square\s*met(?:er|re)s?|50\s*[x×]\s*100|100\s*[x×]\s*50|title\s*land|ettaka|eitaka|itaka|ngom|ardhi|shamba|kiwanja)\b/i
+  },
+  {
+    canonical: 'warehouse',
+    searchType: 'commercial',
+    pattern: /\b(warehouse|warehouses|godown|depot|industrial\s*space|storage\s*space)\b/i
+  },
+  {
+    canonical: 'office',
+    searchType: 'commercial',
+    pattern: /\b(office|offices|office\s*space|workspace|work\s*space|coworking|co-working|commercial\s*office)\b/i
+  },
+  {
+    canonical: 'shop',
+    searchType: 'commercial',
+    pattern: /\b(shop|shops|retail|store|stall|showroom|restaurant|commercial\s*space|business\s*space|duuka|dukas?)\b/i
+  },
+  {
+    canonical: 'hostel',
+    searchType: 'student',
+    pattern: /\b(hostel|hostels|student\s*(room|rooms|accommodation|housing)|campus|makerere|kyambogo|mubs|ucu|nkumba|university|college|bedsitter|bed\s*sitter|self[-\s]?contained|single\s*room|double\s*room|per\s*semester)\b/i
+  },
+  {
+    canonical: 'apartment',
+    searchType: null,
+    pattern: /\b(apartment|apartments|flat|flats|unit|condo|condominium|apartimenti)\b/i
+  },
+  {
+    canonical: 'studio',
+    searchType: null,
+    pattern: /\b(studio|bedsitter|bed\s*sitter|single\s*room|self[-\s]?contained)\b/i
+  },
+  {
+    canonical: 'bungalow',
+    searchType: null,
+    pattern: /\b(bungalow|bungalows)\b/i
+  },
+  {
+    canonical: 'house',
+    searchType: null,
+    pattern: /\b(house|houses|home|homes|villa|villas|mansion|maka|nyumba|enju)\b/i
+  }
+]);
+
+const ASSISTANT_LISTING_SIGNAL_PATTERN = /\b(for\s*sale|for\s*rent|to\s*let|to\s*rent|rent(?:al|ing)?|buy|sale|bed(?:room)?s?|bdrm|hostel|land|plot|acre|house|home|apartment|flat|studio|bedsitter|office|shop|warehouse|commercial|student|campus)\b/i;
+const ASSISTANT_GREETING_ONLY_PATTERN = /^\s*(hi|hello|hey|yo|sup|good\s*(morning|afternoon|evening)|morning|afternoon|evening|test|testing|asdf+|qwerty+|ok|okay)\s*[.!?]*\s*$/i;
+
 function sanitizeAssistantText(value = '') {
   return cleanText(value, 1600)
     .replace(/[🟩🟨]/gu, '')
@@ -102,6 +153,80 @@ function publicSearchPathForType(searchType = 'any') {
   return ASSISTANT_CATEGORY_PATHS[searchType] || ASSISTANT_CATEGORY_PATHS.any;
 }
 
+function assistantSearchText(parsed = {}, userMessage = '') {
+  return cleanText([
+    userMessage,
+    parsed?.searchType,
+    parsed?.propertyType,
+    parsed?.category,
+    parsed?.listingType,
+    parsed?.area,
+    parsed?.district,
+    parsed?.title,
+    parsed?.description
+  ].filter(Boolean).join(' '));
+}
+
+function normalizeAssistantPropertyType(propertyType = '', userMessage = '', parsed = {}) {
+  const blob = assistantSearchText({ ...parsed, propertyType }, userMessage);
+  if (!blob) return '';
+  const explicit = cleanText(propertyType).toLowerCase();
+  const directAliases = {
+    commercial_property: 'commercial',
+    commercial: 'commercial',
+    student_accommodation: 'hostel',
+    student: 'hostel',
+    room: 'studio',
+    rental: '',
+    rent: '',
+    sale: ''
+  };
+  if (Object.prototype.hasOwnProperty.call(directAliases, explicit)) return directAliases[explicit];
+  const matched = ASSISTANT_TYPE_PATTERNS.find((item) => item.pattern.test(blob));
+  return matched?.canonical || explicit || '';
+}
+
+function assistantSearchTypeFromProperty(propertyType = '', userMessage = '', parsed = {}) {
+  const blob = assistantSearchText({ ...parsed, propertyType }, userMessage);
+  const matched = ASSISTANT_TYPE_PATTERNS.find((item) => item.searchType && item.pattern.test(blob));
+  return matched?.searchType || '';
+}
+
+function inferAssistantSearchType({ intent = '', parsed = {}, userMessage = '' } = {}) {
+  const rawIntentType = assistantSearchType(intent);
+  const parsedType = cleanText(parsed?.searchType || parsed?.listingType || parsed?.category).toLowerCase();
+  const propertyDrivenType = assistantSearchTypeFromProperty(parsed?.propertyType, userMessage, parsed);
+  if (propertyDrivenType) return propertyDrivenType;
+  if (['land', 'commercial', 'student'].includes(parsedType)) return parsedType;
+  if (['land', 'commercial', 'student'].includes(rawIntentType)) return rawIntentType;
+  if (['rent', 'sale'].includes(rawIntentType)) return rawIntentType;
+  if (['rent', 'sale'].includes(parsedType)) return parsedType;
+  return 'any';
+}
+
+function prepareAssistantParsedQuery({ parsed = {}, intent = '', userMessage = '' } = {}) {
+  const searchType = inferAssistantSearchType({ intent, parsed, userMessage });
+  const normalizedPropertyType = normalizeAssistantPropertyType(parsed?.propertyType, userMessage, parsed);
+  const propertyType = normalizedPropertyType && normalizedPropertyType !== searchType ? normalizedPropertyType : '';
+  return {
+    parsed: {
+      ...(parsed || {}),
+      searchType,
+      propertyType: propertyType || null
+    },
+    searchType
+  };
+}
+
+function assistantHasSearchSignal(parsed = {}, searchType = 'any', userMessage = '') {
+  const text = cleanText(userMessage);
+  if (!text || ASSISTANT_GREETING_ONLY_PATTERN.test(text)) return false;
+  if (Number(parsed?.bedsMin) > 0 || Number(parsed?.maxBudgetUgx) > 0) return true;
+  if (cleanText(parsed?.area || parsed?.district || parsed?.propertyType)) return true;
+  if (searchType && searchType !== 'any') return true;
+  return ASSISTANT_LISTING_SIGNAL_PATTERN.test(text);
+}
+
 function buildAssistantSeeAllUrl(parsed = {}, searchType = 'any') {
   const publicPath = publicSearchPathForType(searchType);
   const publicParams = new URLSearchParams();
@@ -109,7 +234,9 @@ function buildAssistantSeeAllUrl(parsed = {}, searchType = 'any') {
   if (parsed?.district && !parsed.area) publicParams.set('district', cleanText(parsed.district, 120));
   if (Number(parsed?.bedsMin) > 0) publicParams.set('min_beds', String(Math.round(Number(parsed.bedsMin))));
   if (Number(parsed?.maxBudgetUgx) > 0) publicParams.set('max_price', String(Math.round(Number(parsed.maxBudgetUgx))));
-  if (parsed?.propertyType) publicParams.set('property_type', cleanText(parsed.propertyType, 80));
+  if (parsed?.propertyType && cleanText(parsed.propertyType).toLowerCase() !== searchType) {
+    publicParams.set('property_type', cleanText(parsed.propertyType, 80));
+  }
   return `${publicPath}${publicParams.toString() ? `?${publicParams.toString()}` : ''}`;
 }
 
@@ -124,7 +251,7 @@ function buildAssistantSearchParams(parsed = {}, searchType = 'any', language = 
     source: 'ai_assistant',
     language
   });
-  const type = cleanText(parsed.searchType || searchType || 'any').toLowerCase();
+  const type = cleanText(searchType || parsed.searchType || 'any').toLowerCase();
   if (type && type !== 'any') {
     if (type === 'student') {
       params.set('student_portal', '1');
@@ -135,15 +262,26 @@ function buildAssistantSearchParams(parsed = {}, searchType = 'any', language = 
   if (parsed.area) params.set('query', cleanText(parsed.area, 120));
   if (parsed.district && !parsed.area) params.set('district', cleanText(parsed.district, 120));
   if (Number(parsed.bedsMin) > 0) params.set('min_beds', String(Math.round(Number(parsed.bedsMin))));
-  if (parsed.propertyType) params.set('property_type', cleanText(parsed.propertyType, 80));
+  const propertyType = cleanText(parsed.propertyType, 80);
+  if (propertyType && propertyType.toLowerCase() !== type) {
+    params.set('property_type', propertyType);
+    if (type === 'commercial') params.set('commercial_type', propertyType);
+  }
   if (Number(parsed.maxBudgetUgx) > 0) params.set('max_price', String(Math.round(Number(parsed.maxBudgetUgx))));
   return params;
 }
 
 function assistantFilterChips(parsed = {}, searchType = 'any') {
   const chips = [];
-  const type = cleanText(parsed.searchType || searchType || 'any').toLowerCase();
-  if (type && type !== 'any') chips.push(type === 'rent' ? 'To rent' : type.charAt(0).toUpperCase() + type.slice(1));
+  const type = cleanText(searchType || parsed.searchType || 'any').toLowerCase();
+  const typeLabels = {
+    rent: 'To rent',
+    sale: 'For sale',
+    land: 'Land',
+    commercial: 'Commercial',
+    student: 'Student accommodation'
+  };
+  if (type && type !== 'any') chips.push(typeLabels[type] || type.charAt(0).toUpperCase() + type.slice(1));
   if (parsed.bedsMin) chips.push(`${parsed.bedsMin}+ beds`);
   if (parsed.area || parsed.district) chips.push(parsed.area || parsed.district);
   if (parsed.maxBudgetUgx) chips.push(`<= UGX ${Number(parsed.maxBudgetUgx).toLocaleString('en-UG')}`);
@@ -151,10 +289,22 @@ function assistantFilterChips(parsed = {}, searchType = 'any') {
   return chips;
 }
 
-function assistantLeadText({ total = 0, parsed = {}, searchType = 'any', language = 'en' } = {}) {
+function assistantLeadText({ total = 0, parsed = {}, searchType = 'any', language = 'en', matchQuality = 'exact', needsInput = false } = {}) {
   const place = cleanText(parsed.area || parsed.district || 'Uganda', 120);
   const type = cleanText(parsed.searchType || searchType || 'property').replace(/_/g, ' ');
   const count = Number(total) || 0;
+  if (needsInput) {
+    if (language === 'sw') return 'Niambie eneo, bei, na aina ya mali unayotafuta, kisha nitakuletea matokeo halisi.';
+    if (language === 'lg') return 'Mbuulira ekitundu, budget, n’ekika ky’ennyumba gy’onoonya, nkuleetere ebiriwo.';
+    if (language === 'ar') return 'اكتب المنطقة والميزانية ونوع العقار الذي تريده، وسأعرض لك النتائج المناسبة.';
+    return 'Tell me the area, budget, and property type you want, and I will search the live listings.';
+  }
+  if (count > 0 && matchQuality === 'nearby_not_exact') {
+    if (language === 'sw') return `Sikupata matokeo kamili ya ombi lote. Haya ni matokeo ya karibu zaidi kwa ${place}.`;
+    if (language === 'lg') return `Tewali kitu ekikwatagana ddala n’obusabe bwonna. Bino bye bisinga okumpi ne ${place}.`;
+    if (language === 'ar') return `لم أجد تطابقاً دقيقاً لكل طلبك. هذه أقرب نتائج مفيدة حول ${place}.`;
+    return `No exact match for the full request yet. Here are the nearest useful results around ${place}.`;
+  }
   if (language === 'sw') {
     return count > 0
       ? `Nimepata matokeo ${count} ya ${type} karibu na ${place}.`
@@ -173,6 +323,37 @@ function assistantLeadText({ total = 0, parsed = {}, searchType = 'any', languag
   return count > 0
     ? `I found ${count} matching ${type} result${count === 1 ? '' : 's'} around ${place}.`
     : `I could not find exact matches around ${place}. Tell us what you need and we can help watch for it.`;
+}
+
+function assistantLocationLooksRelaxed(listings = [], parsed = {}) {
+  const wanted = cleanText(parsed?.area || parsed?.district).toLowerCase();
+  if (!wanted || !Array.isArray(listings) || !listings.length) return false;
+  const normalizedWanted = wanted.replace(/[^a-z0-9]+/g, ' ').trim();
+  if (!normalizedWanted || normalizedWanted.length < 3) return false;
+  return !listings.some((listing) => {
+    const text = cleanText([
+      listing?.area,
+      listing?.district,
+      listing?.city,
+      listing?.address,
+      listing?.location_label,
+      listing?.title
+    ].filter(Boolean).join(' ')).toLowerCase().replace(/[^a-z0-9]+/g, ' ');
+    return text.includes(normalizedWanted);
+  });
+}
+
+function buildAssistantCapturePayload({ userMessage = '', parsed = {}, searchType = 'any', reason = 'zero_results' } = {}) {
+  return {
+    reason,
+    search_type: searchType || 'any',
+    area: parsed?.area || null,
+    district: parsed?.district || null,
+    bedrooms: parsed?.bedsMin || null,
+    max_price: parsed?.maxBudgetUgx || null,
+    property_type: parsed?.propertyType || null,
+    message: userMessage
+  };
 }
 
 async function fetchAssistantSearchResults(req, { parsed, searchType, language }) {
@@ -198,7 +379,9 @@ async function fetchAssistantSearchResults(req, { parsed, searchType, language }
       ok: true,
       url,
       listings,
-      total
+      total,
+      pagination: json?.pagination || null,
+      meta: json?.meta || null
     };
   } finally {
     clearTimeout(timeout);
@@ -421,6 +604,88 @@ router.post('/translate-text', async (req, res, next) => {
   }
 });
 
+router.post('/property-need', async (req, res, next) => {
+  try {
+    const body = req.body || {};
+    const message = cleanText(body.message || body.search_message || body.details, 1200);
+    const searchType = cleanText(body.search_type || body.category || body.listing_type || 'any', 80).toLowerCase() || 'any';
+    const language = normalizeLanguageCode(body.language || 'en');
+    const name = cleanText(body.name, 120) || 'Ask AI property seeker';
+    const phone = cleanText(body.phone || body.whatsapp, 40) || null;
+    const email = cleanText(body.email, 160).toLowerCase() || null;
+    const area = cleanText(body.area || body.location, 120) || null;
+    const district = cleanText(body.district, 120) || null;
+    const budget = toNullableInt(body.max_price || body.budget || body.maxBudgetUgx);
+    const propertyType = cleanText(body.property_type, 80) || null;
+
+    if (!message && !area && !district && !propertyType) {
+      return res.status(400).json({ ok: false, error: 'message or search details are required' });
+    }
+
+    const summary = message || `Ask AI no-match request: ${[searchType, area || district, propertyType].filter(Boolean).join(' · ')}`;
+    const lead = await createLead(db, {
+      source: 'ask_ai_zero_result',
+      leadType: 'property_need',
+      category: searchType,
+      location: area || district || null,
+      budget,
+      message: summary,
+      contact: {
+        name,
+        email,
+        phone,
+        preferredContactChannel: phone ? 'whatsapp' : (email ? 'email' : 'in_app'),
+        preferredLanguage: language,
+        roleType: 'buyer_renter',
+        locationInterest: area || district || null,
+        categoryInterest: searchType,
+        budgetRange: budget ? `Up to UGX ${budget}` : null,
+        whatsappConsent: Boolean(phone),
+        marketingConsent: false
+      },
+      activityType: 'ask_ai_property_need_captured',
+      metadata: {
+        route: cleanText(body.route || body.context?.route || '/'),
+        source: 'ask_ai',
+        capture_reason: cleanText(body.reason || 'zero_results'),
+        search_type: searchType,
+        area,
+        district,
+        bedrooms: toNullableInt(body.bedrooms),
+        max_price: budget,
+        property_type: propertyType,
+        original_message: message || null
+      }
+    });
+
+    await logNotification(db, {
+      recipientEmail: email,
+      recipientPhone: phone,
+      channel: 'in_app',
+      type: 'ask_ai_property_need',
+      status: 'logged',
+      payloadSummary: {
+        search_type: searchType,
+        area: area || district || null,
+        property_type: propertyType,
+        lead_id: lead?.id || null
+      },
+      relatedLeadId: lead?.id || null
+    });
+
+    return res.status(201).json({
+      ok: true,
+      data: {
+        lead_id: lead?.id || null,
+        status: lead?.lead_status || 'logged',
+        message: 'Property need captured for follow-up.'
+      }
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.post('/assistant-reply', async (req, res, next) => {
   try {
     const body = req.body || {};
@@ -446,68 +711,33 @@ router.post('/assistant-reply', async (req, res, next) => {
     let searchPayload = null;
     if (isAssistantSearchIntent(intent)) {
       const rawIntentType = assistantSearchType(intent);
-      const parsed = await extractNaturalPropertyQuery({
+      const extracted = await extractNaturalPropertyQuery({
         text: userMessage,
         language,
         sessionData: body.context && typeof body.context === 'object' ? body.context : {},
         fallbackType: rawIntentType
       });
-      const searchType = cleanText(parsed?.searchType || rawIntentType || 'any').toLowerCase();
+      const prepared = prepareAssistantParsedQuery({ parsed: extracted, intent, userMessage });
+      const parsed = prepared.parsed;
+      const searchType = prepared.searchType;
       const publicPath = publicSearchPathForType(searchType);
+      const hasSearchSignal = assistantHasSearchSignal(parsed, searchType, userMessage);
 
-      try {
-        let effectiveParsed = parsed;
-        let relaxedFilters = [];
-        let result = await fetchAssistantSearchResults(req, { parsed: effectiveParsed, searchType, language });
-        if (result.total === 0 && parsed?.propertyType) {
-          const relaxedParsed = { ...parsed, propertyType: null };
-          const relaxedResult = await fetchAssistantSearchResults(req, { parsed: relaxedParsed, searchType, language });
-          if (relaxedResult.total > 0) {
-            effectiveParsed = relaxedParsed;
-            relaxedFilters = ['property_type'];
-            result = relaxedResult;
-          }
-        }
-        const seeAllUrl = buildAssistantSeeAllUrl(effectiveParsed, searchType);
-        const leadText = assistantLeadText({ total: result.total, parsed: effectiveParsed, searchType, language });
-        response.text = leadText;
+      if (!hasSearchSignal) {
+        response.text = assistantLeadText({ total: 0, parsed, searchType, language, needsInput: true });
         searchPayload = {
-          parsed_query: parsed,
-          effective_query: effectiveParsed,
-          relaxed_filters: relaxedFilters,
-          filters: {
-            search_type: searchType,
-            area: effectiveParsed?.area || null,
-            district: effectiveParsed?.district || null,
-            bedrooms: effectiveParsed?.bedsMin || null,
-            max_price: effectiveParsed?.maxBudgetUgx || null,
-            property_type: effectiveParsed?.propertyType || null
-          },
-          filter_chips: assistantFilterChips(effectiveParsed, searchType),
-          search_type: searchType,
-          total_matches: result.total,
-          result_count: result.listings.length,
-          listings: result.listings,
-          results: result.listings,
-          see_all_url: seeAllUrl,
-          search_path: publicPath,
-          zero_results: result.total === 0,
-          search_error: null
-        };
-      } catch (searchError) {
-        searchPayload = {
-          parsed_query: parsed,
+          parsed_query: extracted,
           effective_query: parsed,
           relaxed_filters: [],
           filters: {
             search_type: searchType,
-            area: parsed?.area || null,
-            district: parsed?.district || null,
-            bedrooms: parsed?.bedsMin || null,
-            max_price: parsed?.maxBudgetUgx || null,
-            property_type: parsed?.propertyType || null
+            area: null,
+            district: null,
+            bedrooms: null,
+            max_price: null,
+            property_type: null
           },
-          filter_chips: assistantFilterChips(parsed, searchType),
+          filter_chips: [],
           search_type: searchType,
           total_matches: 0,
           result_count: 0,
@@ -515,10 +745,109 @@ router.post('/assistant-reply', async (req, res, next) => {
           results: [],
           see_all_url: buildAssistantSeeAllUrl(parsed, searchType),
           search_path: publicPath,
-          zero_results: true,
-          search_error: searchError.message || 'property_search_failed'
+          zero_results: false,
+          needs_search_input: true,
+          capture_available: false,
+          match_quality: 'needs_input',
+          exact_match: false,
+          search_error: null
         };
-        response.text = assistantLeadText({ total: 0, parsed, searchType, language });
+      } else {
+        try {
+          let effectiveParsed = parsed;
+          let relaxedFilters = [];
+          let matchQuality = 'exact';
+          let exactTotal = null;
+          let result = await fetchAssistantSearchResults(req, { parsed: effectiveParsed, searchType, language });
+          exactTotal = result.total;
+          if (result.total === 0 && parsed?.propertyType) {
+            const relaxedParsed = { ...parsed, propertyType: null };
+            const relaxedResult = await fetchAssistantSearchResults(req, { parsed: relaxedParsed, searchType, language });
+            if (relaxedResult.total > 0) {
+              effectiveParsed = relaxedParsed;
+              relaxedFilters = ['property_type'];
+              matchQuality = 'nearby_not_exact';
+              result = relaxedResult;
+            }
+          }
+          if (result.total > 0 && assistantLocationLooksRelaxed(result.listings, effectiveParsed)) {
+            matchQuality = 'nearby_not_exact';
+            relaxedFilters = Array.from(new Set([...relaxedFilters, 'location']));
+          }
+          const seeAllUrl = buildAssistantSeeAllUrl(effectiveParsed, searchType);
+          const leadText = assistantLeadText({ total: result.total, parsed: effectiveParsed, searchType, language, matchQuality });
+          response.text = leadText;
+          const capturePayload = buildAssistantCapturePayload({
+            userMessage,
+            parsed: effectiveParsed,
+            searchType,
+            reason: result.total === 0 ? 'zero_results' : matchQuality
+          });
+          searchPayload = {
+            parsed_query: extracted,
+            effective_query: effectiveParsed,
+            relaxed_filters: relaxedFilters,
+            filters: {
+              search_type: searchType,
+              area: effectiveParsed?.area || null,
+              district: effectiveParsed?.district || null,
+              bedrooms: effectiveParsed?.bedsMin || null,
+              max_price: effectiveParsed?.maxBudgetUgx || null,
+              property_type: effectiveParsed?.propertyType || null
+            },
+            filter_chips: assistantFilterChips(effectiveParsed, searchType),
+            search_type: searchType,
+            total_matches: result.total,
+            exact_total_matches: exactTotal,
+            result_count: result.listings.length,
+            listings: result.listings,
+            results: result.listings,
+            see_all_url: seeAllUrl,
+            search_path: publicPath,
+            zero_results: result.total === 0,
+            capture_available: result.total === 0 || matchQuality === 'nearby_not_exact',
+            capture_payload: capturePayload,
+            match_quality: matchQuality,
+            exact_match: matchQuality === 'exact' && result.total > 0,
+            search_error: null
+          };
+        } catch (searchError) {
+          const capturePayload = buildAssistantCapturePayload({
+            userMessage,
+            parsed,
+            searchType,
+            reason: 'search_error'
+          });
+          searchPayload = {
+            parsed_query: extracted,
+            effective_query: parsed,
+            relaxed_filters: [],
+            filters: {
+              search_type: searchType,
+              area: parsed?.area || null,
+              district: parsed?.district || null,
+              bedrooms: parsed?.bedsMin || null,
+              max_price: parsed?.maxBudgetUgx || null,
+              property_type: parsed?.propertyType || null
+            },
+            filter_chips: assistantFilterChips(parsed, searchType),
+            search_type: searchType,
+            total_matches: 0,
+            exact_total_matches: 0,
+            result_count: 0,
+            listings: [],
+            results: [],
+            see_all_url: buildAssistantSeeAllUrl(parsed, searchType),
+            search_path: publicPath,
+            zero_results: true,
+            capture_available: true,
+            capture_payload: capturePayload,
+            match_quality: 'search_error',
+            exact_match: false,
+            search_error: searchError.message || 'property_search_failed'
+          };
+          response.text = assistantLeadText({ total: 0, parsed, searchType, language });
+        }
       }
     }
 

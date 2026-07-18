@@ -18,7 +18,7 @@ assert(html.includes('makaug AI is still loading. Please tap Ask AI again.'), 'A
 assert(app.includes('async function submitAiChatbotPrompt'), 'public app must expose the AI chatbot submit handler');
 assert(app.includes('window.submitAiChatbotPrompt = submitAiChatbotPrompt;'), 'public app must replace the bootstrap submit handler when the bundle loads');
 assert(app.includes('apiRequest("/api/ai/assistant-reply"'), 'AI chatbot submit handler must post to the assistant reply endpoint');
-assert(app.includes('response?.data?.text || response?.data?.reply'), 'AI chatbot UI must render the endpoint data.text response before legacy reply/message fallbacks');
+assert(app.includes('const text = data?.text || data?.reply || data?.message'), 'AI chatbot UI must render the endpoint data.text response before legacy reply/message fallbacks');
 assert(aiRoute.includes('text:'), 'AI assistant reply endpoint must return data.text');
 assert(aiRoute.includes('conversation_logged: true'), 'AI assistant reply endpoint must report conversation logging');
 

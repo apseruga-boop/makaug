@@ -31361,6 +31361,19 @@ const AI_ASSISTANT_PROMPT_I18N = Object.freeze({
     ask: "Ask AI",
     loading: "makaug AI is searching...",
     zero: "No exact matches yet. Tell us what you need and we can help watch for it.",
+    needsInput: "Tell me the area, budget, and property type you want.",
+    nearbyNote: "These are nearby or relaxed matches, not an exact match.",
+    captureCta: "Tell us what you're looking for",
+    captureTitle: "Want the team to help?",
+    captureName: "Your name",
+    capturePhone: "WhatsApp or phone",
+    captureEmail: "Email",
+    captureDetails: "Anything else we should know?",
+    captureSubmit: "Send request",
+    captureSuccess: "Request saved. makaug will follow up when there is a match.",
+    captureError: "Could not save the request. Please try again or WhatsApp makaug.",
+    listFree: "List free",
+    whatsappMakaug: "WhatsApp makaug",
     seeAll: "See all matches",
     chips: [
       { label: "2-bed in Ntinda under 1.5M", prompt: "2-bed apartment to rent in Ntinda under 1.5m", intent: "search_rent" },
@@ -31377,6 +31390,19 @@ const AI_ASSISTANT_PROMPT_I18N = Object.freeze({
     ask: "Buuza AI",
     loading: "makaug AI enoonya...",
     zero: "Tewali bikwatagana kati. Tugambe ky'oyagala tukinonye.",
+    needsInput: "Mbuulira ekitundu, budget, n'ekika ky'ennyumba gy'onoonya.",
+    nearbyNote: "Bino biri kumpi oba bigaziyiziddwa; si match entuufu ddala.",
+    captureCta: "Tugambe ky'onoonya",
+    captureTitle: "Team ekuyambe?",
+    captureName: "Erinnya lyo",
+    capturePhone: "WhatsApp oba essimu",
+    captureEmail: "Email",
+    captureDetails: "Waliwo ekirala kye twandimanye?",
+    captureSubmit: "Sindika request",
+    captureSuccess: "Request eterekeddwa. makaug ejja kukuddamu nga waliwo ekikwatagana.",
+    captureError: "Request tesobodde kuterekebwa. Ddamu ogezeeko oba WhatsApp makaug.",
+    listFree: "Listinga free",
+    whatsappMakaug: "WhatsApp makaug",
     seeAll: "Laba byonna",
     chips: [
       { label: "2-bed e Ntinda wansi wa 1.5M", prompt: "2-bed apartment to rent in Ntinda under 1.5m", intent: "search_rent" },
@@ -31393,6 +31419,19 @@ const AI_ASSISTANT_PROMPT_I18N = Object.freeze({
     ask: "Uliza AI",
     loading: "makaug AI inatafuta...",
     zero: "Hakuna matokeo kamili bado. Tuambie unachotafuta.",
+    needsInput: "Niambie eneo, bajeti, na aina ya mali unayotafuta.",
+    nearbyNote: "Haya ni matokeo ya karibu au yaliyolegezwa, si mechi kamili.",
+    captureCta: "Tuambie unachotafuta",
+    captureTitle: "Unataka timu ikusaidie?",
+    captureName: "Jina lako",
+    capturePhone: "WhatsApp au simu",
+    captureEmail: "Barua pepe",
+    captureDetails: "Kuna jambo lingine?",
+    captureSubmit: "Tuma request",
+    captureSuccess: "Request imehifadhiwa. makaug itafuatilia ikipata mechi.",
+    captureError: "Request haikuhifadhiwa. Jaribu tena au WhatsApp makaug.",
+    listFree: "List bure",
+    whatsappMakaug: "WhatsApp makaug",
     seeAll: "Ona matokeo yote",
     chips: [
       { label: "Vyumba 2 Ntinda chini ya 1.5M", prompt: "2-bed apartment to rent in Ntinda under 1.5m", intent: "search_rent" },
@@ -31409,6 +31448,19 @@ const AI_ASSISTANT_PROMPT_I18N = Object.freeze({
     ask: "Peny AI",
     loading: "makaug AI tye ka yeny...",
     zero: "Pe tye ma rwate kombedi. Wac kiwa ngo ma imito.",
+    needsInput: "Wac area, budget, ki kit property ma imito.",
+    nearbyNote: "Magini rwate cokcok onyo filtros oyabe, pe rwate kikome.",
+    captureCta: "Wac kiwa ngo ma imito",
+    captureTitle: "I mito team okonyi?",
+    captureName: "Nyingi",
+    capturePhone: "WhatsApp onyo phone",
+    captureEmail: "Email",
+    captureDetails: "Gin mukene ma myero wangeyo?",
+    captureSubmit: "Cwal request",
+    captureSuccess: "Request ogwoko. makaug bi lubo ka gin ma rwate ononge.",
+    captureError: "Pe onongo twero gwoko request. Tem doki onyo WhatsApp makaug.",
+    listFree: "List free",
+    whatsappMakaug: "WhatsApp makaug",
     seeAll: "Nen ducu",
     chips: [
       { label: "2-bed i Ntinda piny 1.5M", prompt: "2-bed apartment to rent in Ntinda under 1.5m", intent: "search_rent" },
@@ -31425,6 +31477,19 @@ const AI_ASSISTANT_PROMPT_I18N = Object.freeze({
     ask: "Buuza AI",
     loading: "makaug AI erikusherura...",
     zero: "Tihariho ebirikuhika hati. Tugambire eki orikwenda.",
+    needsInput: "Gamba ahantu, budget, n'ekika kya property eki orikwenda.",
+    nearbyNote: "Ebi nibyo ebiri haihi ninga ebigaziibwe, si exact match.",
+    captureCta: "Tugambire eki orikwenda",
+    captureTitle: "Team ekuyambe?",
+    captureName: "Eiziina ryawe",
+    capturePhone: "WhatsApp ninga simu",
+    captureEmail: "Email",
+    captureDetails: "Hariho ekindi?",
+    captureSubmit: "Sindika request",
+    captureSuccess: "Request ebikire. makaug neija kukugarukamu twabona match.",
+    captureError: "Request terabikire. Garuka ogezeho ninga WhatsApp makaug.",
+    listFree: "List free",
+    whatsappMakaug: "WhatsApp makaug",
     seeAll: "Reeba byona",
     chips: [
       { label: "2-bed Ntinda ahansi ya 1.5M", prompt: "2-bed apartment to rent in Ntinda under 1.5m", intent: "search_rent" },
@@ -31441,6 +31506,19 @@ const AI_ASSISTANT_PROMPT_I18N = Object.freeze({
     ask: "Buuza AI",
     loading: "makaug AI erikusherura...",
     zero: "Tihariho ebirikuhika hati. Tugambire eki orikwenda.",
+    needsInput: "Gamba ahantu, budget, n'ekika kya property eki orikwenda.",
+    nearbyNote: "Ebi nibyo ebiri haihi ninga ebigaziibwe, si exact match.",
+    captureCta: "Tugambire eki orikwenda",
+    captureTitle: "Team ekuyambe?",
+    captureName: "Eiziina ryawe",
+    capturePhone: "WhatsApp ninga simu",
+    captureEmail: "Email",
+    captureDetails: "Hariho ekindi?",
+    captureSubmit: "Sindika request",
+    captureSuccess: "Request ebikire. makaug neija kukugarukamu twabona match.",
+    captureError: "Request terabikire. Garuka ogezeho ninga WhatsApp makaug.",
+    listFree: "List free",
+    whatsappMakaug: "WhatsApp makaug",
     seeAll: "Reeba byona",
     chips: [
       { label: "2-bed Ntinda ahansi ya 1.5M", prompt: "2-bed apartment to rent in Ntinda under 1.5m", intent: "search_rent" },
@@ -31457,6 +31535,19 @@ const AI_ASSISTANT_PROMPT_I18N = Object.freeze({
     ask: "Buuza AI",
     loading: "makaug AI enoonya...",
     zero: "Tewali bikwatagana kati. Tugambe ky'oyagala tukinonye.",
+    needsInput: "Mbuulira ekitundu, budget, n'ekika ky'ennyumba gy'onoonya.",
+    nearbyNote: "Bino biri kumpi oba bigaziyiziddwa; si match entuufu ddala.",
+    captureCta: "Tugambe ky'onoonya",
+    captureTitle: "Team ekuyambe?",
+    captureName: "Erinnya lyo",
+    capturePhone: "WhatsApp oba essimu",
+    captureEmail: "Email",
+    captureDetails: "Waliwo ekirala kye twandimanye?",
+    captureSubmit: "Sindika request",
+    captureSuccess: "Request eterekeddwa. makaug ejja kukuddamu nga waliwo ekikwatagana.",
+    captureError: "Request tesobodde kuterekebwa. Ddamu ogezeeko oba WhatsApp makaug.",
+    listFree: "Listinga free",
+    whatsappMakaug: "WhatsApp makaug",
     seeAll: "Laba byonna",
     chips: [
       { label: "2-bed e Ntinda wansi wa 1.5M", prompt: "2-bed apartment to rent in Ntinda under 1.5m", intent: "search_rent" },
@@ -31473,6 +31564,19 @@ const AI_ASSISTANT_PROMPT_I18N = Object.freeze({
     ask: "AI ይጠይቁ",
     loading: "makaug AI እየፈለገ ነው...",
     zero: "ትክክለኛ ውጤት አልተገኘም። የሚፈልጉትን ይንገሩን።",
+    needsInput: "የሚፈልጉትን አካባቢ፣ በጀት እና የንብረት አይነት ይጻፉ።",
+    nearbyNote: "እነዚህ ቅርብ ወይም የተለቀቁ ውጤቶች ናቸው፣ ትክክለኛ ተዛማጅ አይደሉም።",
+    captureCta: "የሚፈልጉትን ይንገሩን",
+    captureTitle: "ቡድኑ እንዲረዳዎት ይፈልጋሉ?",
+    captureName: "ስምዎ",
+    capturePhone: "WhatsApp ወይም ስልክ",
+    captureEmail: "ኢሜይል",
+    captureDetails: "ሌላ መረጃ?",
+    captureSubmit: "ጥያቄ ላክ",
+    captureSuccess: "ጥያቄዎ ተቀምጧል። makaug ተዛማጅ ሲኖር ይከታተላል።",
+    captureError: "ጥያቄውን ማስቀመጥ አልተቻለም። እንደገና ይሞክሩ ወይም WhatsApp makaug።",
+    listFree: "በነፃ ይዘርዝሩ",
+    whatsappMakaug: "WhatsApp makaug",
     seeAll: "ሁሉን ይመልከቱ",
     chips: [
       { label: "2-bed Ntinda under 1.5M", prompt: "2-bed apartment to rent in Ntinda under 1.5m", intent: "search_rent" },
@@ -31489,6 +31593,19 @@ const AI_ASSISTANT_PROMPT_I18N = Object.freeze({
     ask: "اسأل AI",
     loading: "makaug AI يبحث الآن...",
     zero: "لا توجد نتائج دقيقة بعد. أخبرنا بما تحتاجه وسنساعدك.",
+    needsInput: "اكتب المنطقة والميزانية ونوع العقار الذي تريده.",
+    nearbyNote: "هذه نتائج قريبة أو موسعة، وليست مطابقة دقيقة.",
+    captureCta: "أخبرنا بما تبحث عنه",
+    captureTitle: "هل تريد أن يساعدك الفريق؟",
+    captureName: "اسمك",
+    capturePhone: "واتساب أو هاتف",
+    captureEmail: "البريد الإلكتروني",
+    captureDetails: "أي تفاصيل أخرى؟",
+    captureSubmit: "إرسال الطلب",
+    captureSuccess: "تم حفظ الطلب. سيتابع makaug عند وجود تطابق.",
+    captureError: "تعذر حفظ الطلب. حاول مرة أخرى أو تواصل عبر واتساب.",
+    listFree: "أدرج مجاناً",
+    whatsappMakaug: "واتساب makaug",
     seeAll: "عرض كل النتائج",
     chips: [
       { label: "غرفتان Ntinda تحت 1.5M", prompt: "2-bed apartment to rent in Ntinda under 1.5m", intent: "search_rent" },
@@ -31515,9 +31632,39 @@ function renderHomeAskAiExamples() {
   const copy = getAiAssistantPromptCopy();
   const chips = Array.isArray(copy.chips) && copy.chips.length ? copy.chips : AI_ASSISTANT_PROMPT_I18N.en.chips;
   container.innerHTML = chips.map((chip, idx) => `
-    <button type="button" onclick="runHomeAskAiExample(${idx})" class="rounded-full border border-white/20 bg-white/10 px-3 py-2 text-xs font-bold text-green-50 hover:bg-white/20">
+    <button type="button" onclick="runHomeAskAiExample(${idx})" class="rounded-full border border-blue-100 bg-white px-3 py-2 text-xs font-bold text-blue-700 shadow-sm hover:border-blue-300 hover:bg-blue-50">
       ${adminEscape(chip.label)}
     </button>`).join("");
+}
+
+let aiAssistantPlaceholderTimer = null;
+let aiAssistantPlaceholderIndex = 0;
+
+function aiAssistantPlaceholderExamples() {
+  const copy = getAiAssistantPromptCopy();
+  const chips = Array.isArray(copy.chips) && copy.chips.length ? copy.chips : AI_ASSISTANT_PROMPT_I18N.en.chips;
+  return [copy.placeholder, ...chips.map((chip) => chip.label || chip.prompt).filter(Boolean)].filter(Boolean);
+}
+
+function updateAiAssistantRotatingPlaceholders({ force = false } = {}) {
+  const examples = aiAssistantPlaceholderExamples();
+  if (!examples.length) return;
+  const value = examples[aiAssistantPlaceholderIndex % examples.length];
+  ["home-ai-message", "ai-chatbot-message"].forEach((id) => {
+    const input = document.getElementById(id);
+    if (!input) return;
+    const isFocused = document.activeElement === input;
+    if (!force && (isFocused || String(input.value || "").trim())) return;
+    input.placeholder = value;
+  });
+}
+
+function startAiAssistantPlaceholderRotation() {
+  if (aiAssistantPlaceholderTimer) return;
+  aiAssistantPlaceholderTimer = window.setInterval(() => {
+    aiAssistantPlaceholderIndex += 1;
+    updateAiAssistantRotatingPlaceholders();
+  }, 2800);
 }
 
 function updateHomeAskAiLanguageCopy() {
@@ -31526,26 +31673,39 @@ function updateHomeAskAiLanguageCopy() {
     ["home-ai-pill", copy.pill],
     ["home-ai-title", copy.title],
     ["home-ai-subtitle", copy.subtitle],
-    ["home-ai-label", copy.pill]
+    ["home-ai-label", copy.pill],
+    ["ai-chatbot-live-pill", copy.pill],
+    ["ai-chatbot-live-title", copy.title],
+    ["ai-chatbot-live-subtitle", copy.subtitle]
   ];
   textTargets.forEach(([id, text]) => {
     const el = document.getElementById(id);
     if (el) el.textContent = text;
   });
   const input = document.getElementById("home-ai-message");
+  const testInput = document.getElementById("ai-chatbot-message");
   if (input) input.placeholder = copy.placeholder;
+  if (testInput) testInput.placeholder = copy.placeholder;
   const button = document.getElementById("home-ai-submit-btn");
   if (button) {
     button.textContent = copy.ask;
     button.dataset.idleText = copy.ask;
   }
+  const testButton = document.getElementById("ai-chatbot-submit-btn");
+  if (testButton) {
+    testButton.textContent = copy.ask;
+    testButton.dataset.idleText = copy.ask;
+  }
   renderHomeAskAiExamples();
+  aiAssistantPlaceholderIndex = 0;
+  updateAiAssistantRotatingPlaceholders({ force: true });
+  startAiAssistantPlaceholderRotation();
 }
 
 function aiAssistantFilterChipsHtml(chips = []) {
   if (!Array.isArray(chips) || !chips.length) return "";
   return `<div class="flex flex-wrap gap-2 mb-4">${chips.filter(Boolean).map((chip) => `
-    <span class="inline-flex items-center rounded-full bg-green-50 px-3 py-1 text-xs font-black text-green-800 border border-green-100">${adminEscape(chip)}</span>
+    <span class="inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-800 border border-emerald-100">${adminEscape(chip)}</span>
   `).join("")}</div>`;
 }
 
@@ -31566,6 +31726,36 @@ function aiAssistantListingCardsHtml(listings = [], searchType = "") {
   return `<div class="grid md:grid-cols-2 xl:grid-cols-3 gap-4">${cards}</div>`;
 }
 
+function aiAssistantNeedCaptureHtml(data = {}, copy = getAiAssistantPromptCopy()) {
+  const capture = data?.capture_payload && typeof data.capture_payload === "object" ? data.capture_payload : {};
+  const payload = {
+    reason: data?.match_quality || capture.reason || (data?.zero_results ? "zero_results" : "ask_ai_capture"),
+    search_type: data?.search_type || capture.search_type || data?.filters?.search_type || "any",
+    area: data?.filters?.area || capture.area || "",
+    district: data?.filters?.district || capture.district || "",
+    bedrooms: data?.filters?.bedrooms || capture.bedrooms || "",
+    max_price: data?.filters?.max_price || capture.max_price || "",
+    property_type: data?.filters?.property_type || capture.property_type || "",
+    message: capture.message || data?.text || ""
+  };
+  return `
+    <details class="rounded-2xl border border-blue-100 bg-blue-50/80 p-4 text-sm text-slate-900" data-ai-need-capture="1">
+      <summary class="cursor-pointer list-none font-black text-blue-800">${adminEscape(copy.captureCta || "Tell us what you're looking for")}</summary>
+      <div class="mt-3">
+        <div class="font-black text-slate-950">${adminEscape(copy.captureTitle || "Want the team to help?")}</div>
+        <form class="mt-3 grid md:grid-cols-2 gap-2" onsubmit="submitAiAssistantNeedCapture(event)">
+          <input type="hidden" name="payload" value="${adminAttr(JSON.stringify(payload))}">
+          <input name="name" class="rounded-xl border border-blue-100 bg-white px-3 py-2 text-sm" placeholder="${adminAttr(copy.captureName || "Your name")}">
+          <input name="phone" class="rounded-xl border border-blue-100 bg-white px-3 py-2 text-sm" placeholder="${adminAttr(copy.capturePhone || "WhatsApp or phone")}">
+          <input name="email" class="rounded-xl border border-blue-100 bg-white px-3 py-2 text-sm md:col-span-2" placeholder="${adminAttr(copy.captureEmail || "Email")}">
+          <textarea name="details" rows="2" class="rounded-xl border border-blue-100 bg-white px-3 py-2 text-sm md:col-span-2" placeholder="${adminAttr(copy.captureDetails || "Anything else we should know?")}"></textarea>
+          <button type="submit" class="rounded-xl bg-blue-600 px-4 py-2 text-sm font-black text-white hover:bg-blue-700 md:w-fit">${adminEscape(copy.captureSubmit || "Send request")}</button>
+          <div class="md:col-span-2 text-xs font-bold text-blue-800" data-ai-need-status></div>
+        </form>
+      </div>
+    </details>`;
+}
+
 function renderAiAssistantResponse(responseBox, data = {}, context = {}) {
   if (!responseBox) return;
   responseBox.classList.remove("hidden");
@@ -31580,15 +31770,24 @@ function renderAiAssistantResponse(responseBox, data = {}, context = {}) {
   const cardHtml = aiAssistantListingCardsHtml(listings, searchType);
   const seeAllUrl = data?.see_all_url || data?.search_url || "";
   const seeAllHtml = seeAllUrl ? `
-    <a href="${adminAttr(seeAllUrl)}" class="inline-flex items-center justify-center rounded-xl bg-green-700 px-4 py-2 text-sm font-black text-white hover:bg-green-600">
+    <a href="${adminAttr(seeAllUrl)}" class="inline-flex items-center justify-center rounded-xl bg-blue-600 px-4 py-2 text-sm font-black text-white hover:bg-blue-700">
       ${adminEscape(copy.seeAll)}${total ? ` (${adminEscape(String(total))})` : ""} <i class="fas fa-arrow-right ml-2"></i>
     </a>` : "";
-  const zeroHtml = !listings.length ? `
-    <div class="rounded-2xl border border-green-100 bg-green-50 p-4 text-sm text-green-950">
+  const needsInputHtml = data?.needs_search_input ? `
+    <div class="rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm font-bold text-blue-900">
+      ${adminEscape(copy.needsInput || copy.zero)}
+    </div>` : "";
+  const relaxedHtml = data?.match_quality && !["exact", "needs_input"].includes(String(data.match_quality)) ? `
+    <div class="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs font-bold text-amber-900">
+      ${adminEscape(copy.nearbyNote || "These are nearby or relaxed matches, not an exact match.")}
+    </div>` : "";
+  const captureHtml = data?.capture_available ? aiAssistantNeedCaptureHtml(data, copy) : "";
+  const zeroHtml = !listings.length && !data?.needs_search_input ? `
+    <div class="rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-950">
       <div class="font-black">${adminEscape(copy.zero)}</div>
       <div class="mt-3 flex flex-wrap gap-2">
-        <a href="/list-property" class="rounded-xl bg-green-700 px-3 py-2 text-xs font-black text-white">List free</a>
-        <a href="https://wa.me/256760112587?text=Hello%20makaug%2C%20I%20need%20help%20finding%20a%20property" target="_blank" rel="noopener" class="rounded-xl border border-green-200 bg-white px-3 py-2 text-xs font-black text-green-800">WhatsApp makaug</a>
+        <a href="/list-property" class="rounded-xl bg-blue-600 px-3 py-2 text-xs font-black text-white">${adminEscape(copy.listFree || "List free")}</a>
+        <a href="https://wa.me/256760112587?text=Hello%20makaug%2C%20I%20need%20help%20finding%20a%20property" target="_blank" rel="noopener" class="rounded-xl border border-blue-100 bg-white px-3 py-2 text-xs font-black text-blue-700">${adminEscape(copy.whatsappMakaug || "WhatsApp makaug")}</a>
       </div>
     </div>` : "";
   responseBox.innerHTML = `
@@ -31597,9 +31796,12 @@ function renderAiAssistantResponse(responseBox, data = {}, context = {}) {
         <p class="text-sm font-bold text-gray-900">${adminEscape(text)}</p>
         ${data?.search_error ? `<p class="mt-1 text-xs text-amber-700">Search is temporarily limited, showing the safest next step.</p>` : ""}
       </div>
+      ${needsInputHtml}
       ${aiAssistantFilterChipsHtml(chips)}
+      ${relaxedHtml}
       ${cardHtml || zeroHtml}
       ${seeAllHtml ? `<div>${seeAllHtml}</div>` : ""}
+      ${captureHtml}
     </div>`;
   trackEvent("ai_assistant_results_rendered", {
     source_page: currentPage,
@@ -31608,6 +31810,50 @@ function renderAiAssistantResponse(responseBox, data = {}, context = {}) {
     total_matches: total,
     language: currentLang || "en"
   });
+}
+
+async function submitAiAssistantNeedCapture(event) {
+  if (event) event.preventDefault();
+  const form = event?.target;
+  if (!form) return false;
+  const copy = getAiAssistantPromptCopy();
+  const status = form.querySelector("[data-ai-need-status]");
+  const button = form.querySelector("button[type='submit']");
+  let payload = {};
+  try {
+    payload = JSON.parse(form.elements.payload?.value || "{}");
+  } catch (error) {
+    payload = {};
+  }
+  const body = {
+    ...payload,
+    name: (form.elements.name?.value || "").trim(),
+    phone: (form.elements.phone?.value || "").trim(),
+    email: (form.elements.email?.value || "").trim(),
+    details: (form.elements.details?.value || "").trim(),
+    message: [payload.message, form.elements.details?.value].filter(Boolean).join("\n\n").trim(),
+    language: currentLang || "en",
+    route: window.location.pathname || "/"
+  };
+  if (button) {
+    button.disabled = true;
+    button.textContent = aiAssistantCopyText("loading", "Sending...");
+  }
+  try {
+    await apiRequest("/api/ai/property-need", { method: "POST", body });
+    if (status) status.textContent = copy.captureSuccess || "Request saved.";
+    form.reset();
+    trackEvent("ai_assistant_property_need_captured", { source_page: currentPage, search_type: body.search_type || "any" });
+  } catch (error) {
+    if (status) status.textContent = copy.captureError || "Could not save the request.";
+    trackEvent("ai_assistant_property_need_capture_failed", { source_page: currentPage, error: error.message || "request_failed" });
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = copy.captureSubmit || "Send request";
+    }
+  }
+  return false;
 }
 
 async function requestAiAssistantResults({ message, intent, responseBox, button, source }) {
@@ -31702,6 +31948,7 @@ function runHomeAskAiExample(index = 0) {
 
 window.submitAiChatbotPrompt = submitAiChatbotPrompt;
 window.submitHomeAskAiPrompt = submitHomeAskAiPrompt;
+window.submitAiAssistantNeedCapture = submitAiAssistantNeedCapture;
 window.runHomeAskAiExample = runHomeAskAiExample;
 window.updateHomeAskAiLanguageCopy = updateHomeAskAiLanguageCopy;
 
