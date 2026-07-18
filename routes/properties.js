@@ -227,6 +227,30 @@ function addPublicLocationSearchFilter(filters, values, value = '') {
   return true;
 }
 
+function addPublicCardLocationSearchFilter(filters, values, value = '') {
+  const raw = cleanText(value, 120);
+  if (!raw) return false;
+  addFilter(
+    filters,
+    values,
+    `(
+      p.area = ?
+      OR p.district = ?
+      OR p.extra_fields->>'city' = ?
+      OR p.extra_fields->>'neighborhood' = ?
+      OR p.extra_fields->>'region' = ?
+      OR p.extra_fields->>'resolved_location_label' = ?
+    )`,
+    raw,
+    raw,
+    raw,
+    raw,
+    raw,
+    raw
+  );
+  return true;
+}
+
 function isLaunchSeedListing(row = {}) {
   const title = String(row.title || '');
   const normalizedTitle = title.trim().toLowerCase();
@@ -2025,6 +2049,8 @@ async function listPropertiesHandler(req, res, next) {
       return res.json(publicCache.payload);
     }
 
+    const fastPublicCardFields = cardFieldsOnly && !adminAccess;
+
     if (publicOnly || !adminAccess) {
       addPublicLaunchSeedFilter(filters, values);
     }
@@ -2040,7 +2066,9 @@ async function listPropertiesHandler(req, res, next) {
     }
 
     if (area) {
-      if (publicOnly || !adminAccess) {
+      if (fastPublicCardFields) {
+        addPublicCardLocationSearchFilter(filters, values, area);
+      } else if (publicOnly || !adminAccess) {
         addPublicLocationSearchFilter(filters, values, area);
       } else {
         addFilter(
@@ -2308,7 +2336,6 @@ async function listPropertiesHandler(req, res, next) {
     const rowLimit = includeSummary ? limit : limit + 1;
     const listValues = [...values, rowLimit, offset];
 
-    const fastPublicCardFields = cardFieldsOnly && !adminAccess;
     const listSql = fastPublicCardFields
       ? `SELECT
           p.id,

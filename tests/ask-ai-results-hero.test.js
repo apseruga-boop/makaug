@@ -26,6 +26,7 @@ includes(indexHtml, 'ask-ai-similar-closeout-20260718', 'Ask AI/similar closeout
 includes(indexHtml, 'ask-ai-card-sql-fast-20260718', 'Ask AI card SQL fast-path marker must be present in HTML');
 includes(indexHtml, 'ask-ai-placeholder-i18n-live-20260718', 'Ask AI visible placeholder/i18n marker must be present in HTML');
 includes(indexHtml, 'ask-ai-search-prewarm-20260718', 'Ask AI search prewarm marker must be present in HTML');
+includes(indexHtml, 'ask-ai-prewarm-broad-20260718', 'Ask AI broad prewarm marker must be present in HTML');
 includes(indexHtml, 'data-ask-ai-results-hero="1"', 'homepage Ask AI hero marker missing');
 includes(indexHtml, 'data-ask-ai-blue-categoryrouting="1"', 'Ask AI blue/category-routing UI marker missing');
 includes(indexHtml, 'data-ask-ai-fast-mobile="1"', 'Ask AI fast/mobile UI marker missing');
@@ -53,6 +54,21 @@ includes(aiRoute, "include_summary: '0'", 'assistant search must request a light
 includes(aiRoute, "card_fields: '1'", 'assistant search must request card-only public fields');
 includes(aiRoute, 'ASSISTANT_SEARCH_RESULT_CACHE_TTL_MS', 'assistant route must cache repeated common search results briefly');
 includes(aiRoute, "ASSISTANT_SEARCH_PREWARM_MARKER = 'ask-ai-search-prewarm-20260718'", 'assistant route must carry the search prewarm marker');
+includes(aiRoute, "ASSISTANT_SEARCH_PREWARM_BROAD_MARKER = 'ask-ai-prewarm-broad-20260718'", 'assistant route must carry the broad search prewarm marker');
+includes(aiRoute, 'ASSISTANT_SEARCH_PREWARM_BROAD_AREAS', 'assistant route must define high-volume broad areas to prewarm');
+includes(aiRoute, 'ASSISTANT_SEARCH_PREWARM_BROAD_QUERIES', 'assistant route must generate high-volume area/category prewarm queries');
+includes(aiRoute, "'Kira'", 'assistant broad prewarm set must include Kira');
+includes(aiRoute, "{ searchType: 'sale', parsed: { area } }", 'assistant broad prewarm set must include sale area cache keys');
+includes(aiRoute, "{ searchType: 'commercial', parsed: { area } }", 'assistant broad prewarm set must include commercial area cache keys');
+includes(aiRoute, 'subtype URL filters are the expensive search path', 'assistant prewarm must avoid hammering slow subtype filter URLs');
+includes(aiRoute, 'ASSISTANT_SEARCH_RESULT_CACHE_MAX_ENTRIES', 'assistant cache must have room for broad prewarm entries');
+includes(aiRoute, 'ASSISTANT_SEARCH_PREWARM_REFRESH_MS', 'assistant prewarm must refresh cache entries before TTL expiry');
+includes(aiRoute, 'ASSISTANT_SEARCH_PREWARM_DELAY_MS', 'assistant prewarm must pace broad refreshes to avoid user-facing contention');
+includes(aiRoute, 'assistantSearchCacheKeyForUrl', 'assistant search cache must normalize keys across internal and public origins');
+includes(aiRoute, "`${parsed.pathname}?${parsed.searchParams.toString()}`", 'assistant search cache key must ignore origin so prewarm and live requests share entries');
+includes(aiRoute, 'getAssistantSearchResultCacheAgeMs', 'assistant prewarm must inspect cache age before deciding to skip');
+includes(aiRoute, 'forceRefresh: true', 'assistant prewarm must refresh stale broad cache entries instead of waiting for expiry');
+includes(aiRoute, 'search_prewarm_broad_marker: ASSISTANT_SEARCH_PREWARM_BROAD_MARKER', 'assistant responses must expose the broad prewarm marker for live verification');
 includes(aiRoute, 'ASSISTANT_SEARCH_PREWARM_QUERIES', 'assistant route must define common broad searches to prewarm');
 includes(aiRoute, 'prewarmAssistantSearchCacheOnce', 'assistant route must prewarm common search result cards');
 includes(aiRoute, 'startAssistantSearchPrewarmLoop', 'assistant route must start a bounded prewarm loop');
@@ -74,6 +90,8 @@ includes(aiRoute, 'inferAssistantSearchType', 'assistant route must infer catego
 includes(aiRoute, 'inferAssistantIntentFromMessage', 'assistant route must infer search intent when the client sends no intent');
 includes(aiRoute, 'const effectiveIntent = inferAssistantIntentFromMessage(userMessage, requestedIntent);', 'assistant route must derive effective intent from the user message');
 includes(aiRoute, 'isAssistantSearchIntent(effectiveIntent)', 'assistant search branch must use the inferred effective intent');
+includes(aiRoute, 'tracePromise.catch(logAssistantTraceFailure)', 'search replies must not wait on analytics trace writes before responding');
+includes(aiRoute, 'rent(?:al|als|ing)?', 'assistant route must treat plural rentals as a property search signal');
 includes(aiRoute, "property_search: 'search_property'", 'assistant intent aliases must include property_search');
 includes(aiRoute, "search_near_me: 'search_property'", 'assistant intent aliases must include search_near_me');
 includes(aiRoute, "params.set('student_portal', '1')", 'student searches must route to the student portal query');
@@ -105,10 +123,13 @@ includes(appJs, 'captureCta', 'frontend must include capture CTA copy');
 excludes(aiService, '🟨', 'AI service must not emit yellow square emoji');
 excludes(aiService, '🟩', 'AI service must not emit green square emoji');
 excludes(aiService, 'green/yellow brand cue', 'AI prompt must not instruct green/yellow emoji branding');
+includes(aiService, 'rentals?', 'natural query parser must classify plural rentals as rent searches');
 
 const propertyRoute = read('routes/properties.js');
 includes(propertyRoute, 'cardFieldsOnly', 'properties route must parse the card_fields fast-path flag');
 includes(propertyRoute, 'compactPublicCardRow', 'properties route must expose a compact public card mapper');
 includes(propertyRoute, 'if (cardFieldsOnly && !adminAccess)', 'card_fields fast path must be public-only and avoid admin payloads');
+includes(propertyRoute, 'addPublicCardLocationSearchFilter(filters, values, area)', 'card_fields AI searches must use the narrow exact-location filter');
+includes(propertyRoute, "p.extra_fields->>'resolved_location_label' = ?", 'card_fields location filter should include resolved labels without scanning long text columns');
 
 console.log('ask-ai-results-hero test passed');
