@@ -35894,6 +35894,7 @@ const SIMILAR_PROPERTIES_EXPLICIT_CATEGORY_MARKER = "similar-explicit-category-2
 const SIMILAR_PROPERTIES_HYDRATION_FALLBACK_MARKER = "similar-hydration-fallback-20260718";
 const SIMILAR_PROPERTIES_ENDPOINT_FALLBACK_MARKER = "similar-endpoint-fallback-20260718";
 const SIMILAR_PROPERTIES_HYDRATION_DIAGNOSTICS_MARKER = "similar-hydration-diagnostics-20260718";
+const SIMILAR_PROPERTIES_PATH_TITLE_FALLBACK_MARKER = "similar-path-title-fallback-20260718";
 const detailSimilarHydrationInFlight = new Map();
 
 function similarPropertyCategory(property = {}) {
@@ -45741,7 +45742,24 @@ function detailMobileContactBarHtml({
 }
 
 function similarPropertyCategoryApiPath(property = {}) {
-  const category = similarPropertyCategory(property);
+  let category = similarPropertyCategory(property);
+  if (!["student", "sale", "rent", "commercial", "land"].includes(category)) {
+    const text = similarLocationText([
+      property?.title,
+      property?.listing_type,
+      property?.type,
+      property?.category,
+      property?.property_type,
+      property?.subtype,
+      property?.period,
+      property?.price_period
+    ].join(" "));
+    if (/\b(student|hostel|campus|university|makerere|kyambogo|mubs|ucu)\b/.test(text)) category = "student";
+    else if (/\b(commercial|office|shop|warehouse|retail|industrial|business)\b/.test(text)) category = "commercial";
+    else if (/\b(land|plot|acre|decimal|mailo|freehold|leasehold)\b/.test(text)) category = "land";
+    else if (/\b(rent|rental|to let|to rent|month|weekly|semester)\b/.test(text)) category = "rent";
+    else if (/\b(sale|sell|buy|for sale)\b/.test(text)) category = "sale";
+  }
   if (category === "student") return "/api/properties?status=approved&public_only=1&student_portal=1";
   if (["sale", "rent", "commercial", "land"].includes(category)) {
     return `/api/properties?status=approved&public_only=1&category=${encodeURIComponent(category)}`;
@@ -45751,7 +45769,7 @@ function similarPropertyCategoryApiPath(property = {}) {
 
 function renderDetailSimilarPropertiesSectionHtml(similar = []) {
   const rows = (Array.isArray(similar) ? similar : []).filter(Boolean);
-  return `<div id="detail-similar-properties" data-similar-alias-render="${SIMILAR_PROPERTIES_ALIAS_RENDER_MARKER}" data-similar-purpose-fallback="${SIMILAR_PROPERTIES_PURPOSE_FALLBACK_MARKER}" data-similar-hydration-response="${SIMILAR_PROPERTIES_HYDRATION_RESPONSE_MARKER}" data-similar-explicit-category="${SIMILAR_PROPERTIES_EXPLICIT_CATEGORY_MARKER}" data-similar-hydration-fallback="${SIMILAR_PROPERTIES_HYDRATION_FALLBACK_MARKER}" data-similar-endpoint-fallback="${SIMILAR_PROPERTIES_ENDPOINT_FALLBACK_MARKER}" class="bg-white border border-gray-200 rounded-2xl p-5 mt-5 ${rows.length ? "" : "hidden"}">
+  return `<div id="detail-similar-properties" data-similar-alias-render="${SIMILAR_PROPERTIES_ALIAS_RENDER_MARKER}" data-similar-purpose-fallback="${SIMILAR_PROPERTIES_PURPOSE_FALLBACK_MARKER}" data-similar-hydration-response="${SIMILAR_PROPERTIES_HYDRATION_RESPONSE_MARKER}" data-similar-explicit-category="${SIMILAR_PROPERTIES_EXPLICIT_CATEGORY_MARKER}" data-similar-hydration-fallback="${SIMILAR_PROPERTIES_HYDRATION_FALLBACK_MARKER}" data-similar-endpoint-fallback="${SIMILAR_PROPERTIES_ENDPOINT_FALLBACK_MARKER}" data-similar-path-title-fallback="${SIMILAR_PROPERTIES_PATH_TITLE_FALLBACK_MARKER}" class="bg-white border border-gray-200 rounded-2xl p-5 mt-5 ${rows.length ? "" : "hidden"}">
           <h2 class="text-xl font-bold mb-3">${translatePropertyUi("Similar Properties")}</h2>
           <div id="detail-similar-properties-grid" class="grid md:grid-cols-3 gap-4">${rows.map(propCard).join("")}</div>
         </div>`;
