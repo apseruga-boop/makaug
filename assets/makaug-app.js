@@ -35896,6 +35896,7 @@ const SIMILAR_PROPERTIES_ENDPOINT_FALLBACK_MARKER = "similar-endpoint-fallback-2
 const SIMILAR_PROPERTIES_HYDRATION_DIAGNOSTICS_MARKER = "similar-hydration-diagnostics-20260718";
 const SIMILAR_PROPERTIES_PATH_TITLE_FALLBACK_MARKER = "similar-path-title-fallback-20260718";
 const SIMILAR_PROPERTIES_DIRECT_DETAIL_OBJECT_MARKER = "similar-direct-detail-object-20260718";
+const SIMILAR_PROPERTIES_TEXT_SOURCE_FALLBACK_MARKER = "similar-text-source-fallback-20260718";
 const detailSimilarHydrationInFlight = new Map();
 
 function similarPropertyCategory(property = {}) {
@@ -45752,8 +45753,16 @@ function similarPropertyCategoryApiPath(property = {}) {
       property?.category,
       property?.property_type,
       property?.subtype,
+      property?.description,
+      property?.desc,
       property?.period,
-      property?.price_period
+      property?.price_period,
+      property?.extra_fields?.source_hover_description,
+      property?.extra_fields?.source_card_description,
+      property?.extra_fields?.source_contact_label,
+      property?.extra_fields?.source_registry_key,
+      property?.extra_fields?.source_url,
+      property?.extra_fields?.video_url
     ].join(" "));
     if (/\b(student|hostel|campus|university|makerere|kyambogo|mubs|ucu)\b/.test(text)) category = "student";
     else if (/\b(commercial|office|shop|warehouse|retail|industrial|business)\b/.test(text)) category = "commercial";
@@ -45770,7 +45779,7 @@ function similarPropertyCategoryApiPath(property = {}) {
 
 function renderDetailSimilarPropertiesSectionHtml(similar = []) {
   const rows = (Array.isArray(similar) ? similar : []).filter(Boolean);
-  return `<div id="detail-similar-properties" data-similar-alias-render="${SIMILAR_PROPERTIES_ALIAS_RENDER_MARKER}" data-similar-purpose-fallback="${SIMILAR_PROPERTIES_PURPOSE_FALLBACK_MARKER}" data-similar-hydration-response="${SIMILAR_PROPERTIES_HYDRATION_RESPONSE_MARKER}" data-similar-explicit-category="${SIMILAR_PROPERTIES_EXPLICIT_CATEGORY_MARKER}" data-similar-hydration-fallback="${SIMILAR_PROPERTIES_HYDRATION_FALLBACK_MARKER}" data-similar-endpoint-fallback="${SIMILAR_PROPERTIES_ENDPOINT_FALLBACK_MARKER}" data-similar-path-title-fallback="${SIMILAR_PROPERTIES_PATH_TITLE_FALLBACK_MARKER}" data-similar-direct-detail-object="${SIMILAR_PROPERTIES_DIRECT_DETAIL_OBJECT_MARKER}" class="bg-white border border-gray-200 rounded-2xl p-5 mt-5 ${rows.length ? "" : "hidden"}">
+  return `<div id="detail-similar-properties" data-similar-alias-render="${SIMILAR_PROPERTIES_ALIAS_RENDER_MARKER}" data-similar-purpose-fallback="${SIMILAR_PROPERTIES_PURPOSE_FALLBACK_MARKER}" data-similar-hydration-response="${SIMILAR_PROPERTIES_HYDRATION_RESPONSE_MARKER}" data-similar-explicit-category="${SIMILAR_PROPERTIES_EXPLICIT_CATEGORY_MARKER}" data-similar-hydration-fallback="${SIMILAR_PROPERTIES_HYDRATION_FALLBACK_MARKER}" data-similar-endpoint-fallback="${SIMILAR_PROPERTIES_ENDPOINT_FALLBACK_MARKER}" data-similar-path-title-fallback="${SIMILAR_PROPERTIES_PATH_TITLE_FALLBACK_MARKER}" data-similar-direct-detail-object="${SIMILAR_PROPERTIES_DIRECT_DETAIL_OBJECT_MARKER}" data-similar-text-source-fallback="${SIMILAR_PROPERTIES_TEXT_SOURCE_FALLBACK_MARKER}" class="bg-white border border-gray-200 rounded-2xl p-5 mt-5 ${rows.length ? "" : "hidden"}">
           <h2 class="text-xl font-bold mb-3">${translatePropertyUi("Similar Properties")}</h2>
           <div id="detail-similar-properties-grid" class="grid md:grid-cols-3 gap-4">${rows.map(propCard).join("")}</div>
         </div>`;
