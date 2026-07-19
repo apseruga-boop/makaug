@@ -87,6 +87,22 @@ test('government office Google types require confirming government wording', () 
   }).decision, 'reject');
 });
 
+test('conflicting Google type metadata queues plausible professionals for review', () => {
+  const decision = classifyMarketplaceRelevance({
+    name: 'Abbas Advocates',
+    category: 'property_lawyers',
+    google_types: ['hardware_store']
+  });
+  assert.equal(decision.decision, 'pending_review');
+  assert.equal(decision.reason, 'conflicting_google_type:hardware_store');
+
+  assert.equal(classifyMarketplaceRelevance({
+    name: 'Muramba General Stores Hardware',
+    category: 'plumbers',
+    google_types: ['hardware_store']
+  }).decision, 'reject');
+});
+
 test('category evidence qualifies genuine businesses and queues only borderline evidence', () => {
   assert.equal(classifyMarketplaceRelevance({ name: 'Kampala Plumbing Services', category: 'plumbers', google_types: ['plumber'] }).decision, 'qualified');
   assert.equal(classifyMarketplaceRelevance({ name: 'Geo Land Surveyors Uganda', category: 'surveyors' }).decision, 'qualified');
