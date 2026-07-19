@@ -14,6 +14,11 @@ const {
   searchMarketplace,
   slugify
 } = require('./marketplaceService');
+const {
+  MARKETPLACE_RELEVANCE_MARKER,
+  classifyMarketplaceRelevance,
+  googleSearchOptionsForCategory
+} = require('../utils/marketplaceRelevance');
 
 const MARKETPLACE_P2_MARKER = 'marketplace-p2-20260719';
 const MARKETPLACE_SCALEUP_MARKER = 'marketplace-scaleup-20260719';
@@ -173,7 +178,7 @@ function sourceDefinitions() {
 }
 
 function queryFor(category, district) {
-  const term = category.terms?.[0] || category.label;
+  const term = googleSearchOptionsForCategory(category.key).queryTerm || category.terms?.[0] || category.label;
   return `${term} ${district} Uganda`;
 }
 
@@ -422,11 +427,20 @@ function googleCandidate(place = {}, sourceRow = {}) {
   const sourceUrl = clean(place.googleMapsUri);
   const website = clean(place.websiteUri);
   const competitor = isCompetitorPortal({ name, website, source_url: sourceUrl });
+  const relevance = classifyMarketplaceRelevance({
+    name,
+    category: sourceRow.category,
+    website,
+    google_types: place.types
+  });
   if (!name) return { accepted: false, reason: 'missing_name' };
   if (!sourceUrl || !clean(place.id)) return { accepted: false, reason: 'missing_source' };
   if (!placeMatchesDistrict(place, sourceRow.district)) return { accepted: false, reason: 'location_unresolved' };
   if (competitor) return { accepted: false, reason: 'competitor', competitor };
   if (!phone) return { accepted: false, reason: 'missing_contact' };
+  if (relevance.decision === 'reject') {
+    return { accepted: false, reason: 'irrelevant', relevance };
+  }
   return {
     accepted: true,
     name,
@@ -443,7 +457,10 @@ function googleCandidate(place = {}, sourceRow = {}) {
     longitude: Number(place.location?.longitude) || null,
     formatted_address: placeAddress(place),
     description: `${MARKETPLACE_CATEGORIES.find((item) => item.key === sourceRow.category)?.label || 'Property service'} serving ${sourceRow.district}. Found online via Google Maps; confirm services and availability directly with the business.`,
-    source_query: sourceRow.query_text
+    source_query: sourceRow.query_text,
+    google_types: relevance.google_types,
+    relevance,
+    publication_status: relevance.decision === 'qualified' ? 'live' : 'pending_review'
   };
 }
 
@@ -457,6 +474,16 @@ async function searchGooglePlaces(sourceRow, { fetchImpl = fetch } = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 10000);
   try {
+    const searchOptions = googleSearchOptionsForCategory(sourceRow.category);
+    const requestBody = {
+      textQuery: sourceRow.query_text,
+      pageSize: 20,
+      regionCode: 'UG'
+    };
+    if (searchOptions.includedType) {
+      requestBody.includedType = searchOptions.includedType;
+      requestBody.strictTypeFiltering = true;
+    }
     const response = await fetchImpl(GOOGLE_SEARCH_ENDPOINT, {
       method: 'POST',
       headers: {
@@ -466,10 +493,10 @@ async function searchGooglePlaces(sourceRow, { fetchImpl = fetch } = {}) {
         'X-Goog-FieldMask': [
           'places.id', 'places.displayName', 'places.formattedAddress', 'places.addressComponents',
           'places.nationalPhoneNumber', 'places.internationalPhoneNumber', 'places.websiteUri',
-          'places.googleMapsUri', 'places.location', 'places.types'
+          'places.googleMapsUri', 'places.location', 'places.types', 'places.primaryType'
         ].join(',')
       },
-      body: JSON.stringify({ textQuery: sourceRow.query_text, pageSize: 20, regionCode: 'UG' }),
+      body: JSON.stringify(requestBody),
       signal: controller.signal
     });
     const payload = await response.json().catch(() => ({}));
@@ -486,7 +513,7 @@ async function searchGooglePlaces(sourceRow, { fetchImpl = fetch } = {}) {
 
 async function upsertMarketplaceCandidate(db, candidate, sourceRow) {
   const duplicate = await db.query(
-    `SELECT id
+    `SELECT id, status, source_type
        FROM marketplace_businesses
       WHERE (source_url = $1 AND $1 <> '')
          OR (source_place_id = $2 AND $2 <> '')
@@ -497,6 +524,9 @@ async function upsertMarketplaceCandidate(db, candidate, sourceRow) {
     [candidate.source_url || '', candidate.source_place_id || '', candidate.phone || '', candidate.name, candidate.district]
   );
   if (duplicate.rows[0]) {
+    const demoteToReview = duplicate.rows[0].status === 'live'
+      && duplicate.rows[0].source_type === 'found_online'
+      && candidate.publication_status === 'pending_review';
     await db.query(
       `UPDATE marketplace_businesses
           SET source_urls = ARRAY(SELECT DISTINCT unnest(source_urls || ARRAY[$2]::text[])),
@@ -504,10 +534,34 @@ async function upsertMarketplaceCandidate(db, candidate, sourceRow) {
               whatsapp = COALESCE(NULLIF(whatsapp, ''), $3),
               website = COALESCE(NULLIF(website, ''), $4),
               source_place_id = COALESCE(source_place_id, NULLIF($5, '')),
+              source_metadata = source_metadata || $6::jsonb,
+              relevance_status = $7,
+              relevance_score = $8,
+              relevance_reason = $9,
+              relevance_checked_at = NOW(),
+              status = CASE WHEN $10::boolean THEN 'pending_review' ELSE status END,
               last_refreshed = NOW(), updated_at = NOW()
         WHERE id = $1`,
-      [duplicate.rows[0].id, candidate.source_url, candidate.phone, candidate.website || null, candidate.source_place_id || '']
+      [
+        duplicate.rows[0].id,
+        candidate.source_url,
+        candidate.phone,
+        candidate.website || null,
+        candidate.source_place_id || '',
+        JSON.stringify({ google_types: candidate.google_types || [], relevance: candidate.relevance || {} }),
+        candidate.relevance?.decision || 'unchecked',
+        Number(candidate.relevance?.score || 0),
+        candidate.relevance?.reason || '',
+        demoteToReview
+      ]
     );
+    if (demoteToReview) {
+      await db.query(
+        `INSERT INTO marketplace_events (business_id, event_type, metadata)
+         VALUES ($1,'business_relevance_review_queued',$2::jsonb)`,
+        [duplicate.rows[0].id, JSON.stringify({ marker: MARKETPLACE_RELEVANCE_MARKER, previous_status: 'live', relevance: candidate.relevance || {} })]
+      );
+    }
     return { action: 'existing', id: duplicate.rows[0].id };
   }
   const suffix = crypto.createHash('sha1').update(candidate.source_place_id || candidate.source_url).digest('hex').slice(0, 8);
@@ -519,35 +573,55 @@ async function upsertMarketplaceCandidate(db, candidate, sourceRow) {
     source_registry_key: sourceRow.source_key,
     source_registry_id: sourceRow.id,
     seeded_at: new Date().toISOString(),
-    seed: MARKETPLACE_P2_MARKER
+    seed: MARKETPLACE_P2_MARKER,
+    google_types: candidate.google_types || [],
+    relevance: candidate.relevance || {},
+    relevance_marker: MARKETPLACE_RELEVANCE_MARKER
   };
   const result = await db.query(
     `INSERT INTO marketplace_businesses (
        name, slug, category, description, services_text, district, area,
        latitude, longitude, serves_regions, phone, whatsapp, website,
        tier, status, source_type, source, source_url, source_urls,
-       source_place_id, source_metadata
+       source_place_id, source_metadata, relevance_status, relevance_score,
+       relevance_reason, relevance_checked_at, relevance_metadata
      ) VALUES (
        $1,$2,$3,$4,$4,$5,$6,$7,$8,ARRAY[$5]::text[],$9,$9,$10,
-       'found_online','live','found_online',$11,$12,ARRAY[$12]::text[],$13,$14::jsonb
+       'found_online',$15,'found_online',$11,$12,ARRAY[$12]::text[],$13,$14::jsonb,
+       $16,$17,$18,NOW(),$19::jsonb
      ) RETURNING id`,
     [
       candidate.name, slug, candidate.category, candidate.description, candidate.district,
       candidate.area || null, candidate.latitude, candidate.longitude, candidate.phone,
       candidate.website || null, candidate.source, candidate.source_url,
-      candidate.source_place_id || null, JSON.stringify(sourceMetadata)
+      candidate.source_place_id || null, JSON.stringify(sourceMetadata),
+      candidate.publication_status || 'pending_review',
+      candidate.relevance?.decision || 'pending_review',
+      Number(candidate.relevance?.score || 0),
+      candidate.relevance?.reason || '',
+      JSON.stringify({ marker: MARKETPLACE_RELEVANCE_MARKER, google_types: candidate.google_types || [] })
     ]
   );
   await db.query(
     `INSERT INTO marketplace_events (business_id, event_type, metadata)
-     VALUES ($1,'business_seeded',$2::jsonb)`,
-    [result.rows[0].id, JSON.stringify({ source: candidate.source, category: candidate.category, district: candidate.district, marker: MARKETPLACE_P2_MARKER })]
+     VALUES ($1,$2,$3::jsonb)`,
+    [
+      result.rows[0].id,
+      candidate.publication_status === 'live' ? 'business_seeded' : 'business_relevance_review_queued',
+      JSON.stringify({
+        source: candidate.source,
+        category: candidate.category,
+        district: candidate.district,
+        marker: MARKETPLACE_RELEVANCE_MARKER,
+        relevance: candidate.relevance || {}
+      })
+    ]
   );
-  return { action: 'inserted', id: result.rows[0].id };
+  return { action: candidate.publication_status === 'live' ? 'inserted' : 'queued_relevance', id: result.rows[0].id };
 }
 
 async function importMarketplaceSourceCandidates(db, rows = [], { actorId = 'marketplace_source_import' } = {}) {
-  const summary = { received: Array.isArray(rows) ? rows.length : 0, inserted: 0, existing: 0, hidden_enrichment: 0, rejected: 0, reasons: {} };
+  const summary = { received: Array.isArray(rows) ? rows.length : 0, inserted: 0, queued_relevance: 0, existing: 0, hidden_enrichment: 0, rejected: 0, reasons: {} };
   for (const input of (Array.isArray(rows) ? rows : []).slice(0, 500)) {
     const source = clean(input.source).toLowerCase();
     const sourceDefinition = SOURCE_DEFINITIONS.find((item) => item.key === source);
@@ -561,19 +635,27 @@ async function importMarketplaceSourceCandidates(db, rows = [], { actorId = 'mar
     const socialLinks = input.social_links && typeof input.social_links === 'object' ? input.social_links : {};
     const hasSocial = Object.values(socialLinks).some((value) => /^https?:\/\//i.test(clean(value)));
     const hasContact = Boolean(phone || whatsapp || hasSocial);
+    const relevance = classifyMarketplaceRelevance({
+      name,
+      category,
+      website,
+      relevance_text: clean(input.description),
+      google_types: input.google_types || input.types
+    });
     let reason = '';
     if (!sourceDefinition) reason = 'unsupported_source';
     else if (!name || !category || !DISTRICTS.includes(district)) reason = 'invalid_required_fields';
     else if (!/^https?:\/\//i.test(sourceUrl)) reason = 'missing_exact_source_url';
     else if (isCompetitorPortal({ name, website, source_url: sourceUrl, social_links: socialLinks })) reason = 'competitor';
     else if (!hasContact && source !== 'ursb') reason = 'missing_contact';
+    else if (relevance.decision === 'reject') reason = `irrelevant:${relevance.reason}`;
     if (reason) {
       summary.rejected += 1;
       increment(summary.reasons, reason);
       continue;
     }
     const duplicate = await db.query(
-      `SELECT id FROM marketplace_businesses
+      `SELECT id, status, source_type FROM marketplace_businesses
         WHERE source_url = $1
            OR (($2 <> '') AND phone = $2)
            OR (LOWER(name) = LOWER($3) AND district = $4)
@@ -581,25 +663,43 @@ async function importMarketplaceSourceCandidates(db, rows = [], { actorId = 'mar
       [sourceUrl, phone, name, district]
     );
     if (duplicate.rows[0]) {
+      const demoteToReview = duplicate.rows[0].status === 'live'
+        && duplicate.rows[0].source_type === 'found_online'
+        && relevance.decision === 'pending_review';
       await db.query(
         `UPDATE marketplace_businesses
             SET source_urls = ARRAY(SELECT DISTINCT unnest(source_urls || ARRAY[$2]::text[])),
+                status = CASE WHEN $3::boolean THEN 'pending_review' ELSE status END,
+                relevance_status = $4,
+                relevance_score = $5,
+                relevance_reason = $6,
+                relevance_checked_at = NOW(),
                 last_refreshed = NOW(), updated_at = NOW()
           WHERE id = $1`,
-        [duplicate.rows[0].id, sourceUrl]
+        [duplicate.rows[0].id, sourceUrl, demoteToReview, relevance.decision, Number(relevance.score || 0), relevance.reason]
       );
+      if (demoteToReview) {
+        await db.query(
+          `INSERT INTO marketplace_events (business_id, event_type, metadata)
+           VALUES ($1,'business_relevance_review_queued',$2::jsonb)`,
+          [duplicate.rows[0].id, JSON.stringify({ marker: MARKETPLACE_RELEVANCE_MARKER, actor_id: actorId, previous_status: 'live', relevance })]
+        );
+      }
       summary.existing += 1;
       continue;
     }
     const hidden = !hasContact;
+    const publicationStatus = hidden ? 'hidden' : (relevance.decision === 'qualified' ? 'live' : 'pending_review');
     const suffix = crypto.createHash('sha1').update(sourceUrl).digest('hex').slice(0, 8);
     const inserted = await db.query(
       `INSERT INTO marketplace_businesses (
          name, slug, category, description, services_text, district, area,
          serves_regions, phone, whatsapp, website, social_links,
-         tier, status, source_type, source, source_url, source_urls, source_metadata
+         tier, status, source_type, source, source_url, source_urls, source_metadata,
+         relevance_status, relevance_score, relevance_reason, relevance_checked_at, relevance_metadata
        ) VALUES ($1,$2,$3,$4,$4,$5,$6,ARRAY[$5]::text[],$7,$8,$9,$10::jsonb,
-         'found_online',$11,'found_online',$12,$13,ARRAY[$13]::text[],$14::jsonb)
+         'found_online',$11,'found_online',$12,$13,ARRAY[$13]::text[],$14::jsonb,
+         $15,$16,$17,NOW(),$18::jsonb)
        RETURNING id`,
       [
         name,
@@ -612,25 +712,214 @@ async function importMarketplaceSourceCandidates(db, rows = [], { actorId = 'mar
         whatsapp || phone || '',
         /^https?:\/\//i.test(website) ? website : null,
         JSON.stringify(socialLinks),
-        hidden ? 'hidden' : 'live',
+        publicationStatus,
         source,
         sourceUrl,
-        JSON.stringify({ marker: MARKETPLACE_P2_MARKER, enrichment_pending: hidden, imported_by: actorId, imported_at: new Date().toISOString() })
+        JSON.stringify({
+          marker: MARKETPLACE_RELEVANCE_MARKER,
+          enrichment_pending: hidden,
+          imported_by: actorId,
+          imported_at: new Date().toISOString(),
+          google_types: relevance.google_types,
+          relevance
+        }),
+        relevance.decision,
+        Number(relevance.score || 0),
+        relevance.reason,
+        JSON.stringify({ marker: MARKETPLACE_RELEVANCE_MARKER, google_types: relevance.google_types })
       ]
     );
     await db.query(
       `INSERT INTO marketplace_events (business_id, event_type, metadata)
        VALUES ($1,$2,$3::jsonb)`,
-      [inserted.rows[0].id, hidden ? 'business_enrichment_pending' : 'business_seeded', JSON.stringify({ source, marker: MARKETPLACE_P2_MARKER, actor_id: actorId })]
+      [
+        inserted.rows[0].id,
+        hidden ? 'business_enrichment_pending' : (publicationStatus === 'live' ? 'business_seeded' : 'business_relevance_review_queued'),
+        JSON.stringify({ source, marker: MARKETPLACE_RELEVANCE_MARKER, actor_id: actorId, relevance })
+      ]
     );
     if (hidden) summary.hidden_enrichment += 1;
-    else summary.inserted += 1;
+    else if (publicationStatus === 'live') summary.inserted += 1;
+    else summary.queued_relevance += 1;
   }
   if (summary.inserted) {
     invalidateMarketplaceStats();
     await warmMarketplacePublicCache(db);
   }
-  return { marker: MARKETPLACE_P2_MARKER, ...summary };
+  return { marker: MARKETPLACE_RELEVANCE_MARKER, ...summary };
+}
+
+async function auditMarketplaceRelevance(db, { dryRun = true, actorId = 'marketplace_relevance_audit' } = {}) {
+  const client = typeof db.connect === 'function' ? await db.connect() : db;
+  const decisions = [];
+  const affectedCells = new Map();
+  const report = {
+    marker: MARKETPLACE_RELEVANCE_MARKER,
+    dry_run: dryRun,
+    scanned: 0,
+    clean: 0,
+    hidden: 0,
+    queued_review: 0,
+    reasons: {},
+    by_category: {},
+    by_district: {},
+    samples: []
+  };
+  try {
+    if (!dryRun) await client.query('BEGIN');
+    const result = await client.query(
+      `SELECT id, name, category, district, website, source, source_type, source_metadata
+         FROM marketplace_businesses
+        WHERE status = 'live'
+        ORDER BY created_at ASC`
+    );
+    report.scanned = result.rows.length;
+    for (const row of result.rows) {
+      const relevance = classifyMarketplaceRelevance({
+        name: row.name,
+        category: row.category,
+        website: row.website,
+        source_metadata: row.source_metadata
+      });
+      // Legacy rows often predate Google type capture. Lack of evidence is
+      // reviewable; explicit exclusion or category-sanity failures are not.
+      const auditDecision = relevance.reason === 'no_category_evidence'
+        ? 'pending_review'
+        : relevance.decision;
+      const nextStatus = auditDecision === 'qualified'
+        ? 'live'
+        : (auditDecision === 'pending_review' ? 'pending_review' : 'hidden');
+      if (nextStatus === 'live') report.clean += 1;
+      else if (nextStatus === 'pending_review') report.queued_review += 1;
+      else report.hidden += 1;
+      increment(report.reasons, relevance.reason);
+      increment(report.by_category, `${row.category}:${nextStatus}`);
+      increment(report.by_district, `${row.district}:${nextStatus}`);
+      if (nextStatus !== 'live' && report.samples.length < 100) {
+        report.samples.push({
+          id: row.id,
+          name: row.name,
+          category: row.category,
+          district: row.district,
+          next_status: nextStatus,
+          reason: relevance.reason
+        });
+      }
+      const note = nextStatus === 'live'
+        ? ''
+        : `Marketplace relevance gate: ${nextStatus === 'hidden' ? 'hidden' : 'queued for review'} (${relevance.reason}).`;
+      if (nextStatus !== 'live') {
+        affectedCells.set(`${row.category}\u0000${row.district}`, { category: row.category, district: row.district });
+      }
+      decisions.push({
+        id: String(row.id),
+        status: nextStatus,
+        relevance_status: auditDecision,
+        relevance_score: Number(relevance.score || 0),
+        relevance_reason: relevance.reason,
+        relevance_metadata: {
+          marker: MARKETPLACE_RELEVANCE_MARKER,
+          actor_id: actorId,
+          checked_at: new Date().toISOString(),
+          google_types: relevance.google_types,
+          classifier_decision: relevance.decision,
+          audit_decision: auditDecision
+        },
+        note,
+        event_type: nextStatus === 'live'
+          ? ''
+          : (nextStatus === 'hidden' ? 'business_relevance_hidden' : 'business_relevance_review_queued'),
+        event_metadata: {
+          marker: MARKETPLACE_RELEVANCE_MARKER,
+          actor_id: actorId,
+          previous_status: 'live',
+          relevance: { ...relevance, audit_decision: auditDecision }
+        }
+      });
+    }
+    if (!dryRun) {
+      const chunkSize = 100;
+      for (let index = 0; index < decisions.length; index += chunkSize) {
+        const chunk = decisions.slice(index, index + chunkSize);
+        await client.query(
+          `UPDATE marketplace_businesses AS business
+              SET status = decision.status,
+                  relevance_status = decision.relevance_status,
+                  relevance_score = decision.relevance_score,
+                  relevance_reason = decision.relevance_reason,
+                  relevance_checked_at = NOW(),
+                  relevance_metadata = decision.relevance_metadata,
+                  moderation_notes = CASE
+                    WHEN decision.note = '' THEN business.moderation_notes
+                    ELSE CONCAT_WS(E'\n', NULLIF(business.moderation_notes, ''), decision.note)
+                  END,
+                  updated_at = NOW()
+             FROM jsonb_to_recordset($1::jsonb) AS decision(
+               id text,
+               status text,
+               relevance_status text,
+               relevance_score integer,
+               relevance_reason text,
+               relevance_metadata jsonb,
+               note text
+             )
+            WHERE business.id::text = decision.id`,
+          [JSON.stringify(chunk)]
+        );
+        await client.query(
+          `INSERT INTO marketplace_events (business_id, event_type, metadata)
+           SELECT business.id, decision.event_type, decision.event_metadata
+             FROM jsonb_to_recordset($1::jsonb) AS decision(
+               id text,
+               event_type text,
+               event_metadata jsonb
+             )
+             JOIN marketplace_businesses AS business ON business.id::text = decision.id
+            WHERE decision.event_type <> ''`,
+          [JSON.stringify(chunk)]
+        );
+      }
+      const recheckCells = [...affectedCells.values()];
+      if (recheckCells.length) {
+        await client.query(
+          `UPDATE marketplace_source_registry AS source
+              SET priority = LEAST(source.priority, 5),
+                  metadata = COALESCE(source.metadata, '{}'::jsonb) || jsonb_build_object(
+                    'relevance_recheck', TRUE,
+                    'relevance_recheck_marker', $2::text,
+                    'relevance_recheck_requested_at', NOW()
+                  ),
+                  updated_at = NOW()
+             FROM jsonb_to_recordset($1::jsonb) AS cell(category text, district text)
+            WHERE source.source = 'google_maps'
+              AND source.category = cell.category
+              AND source.district = cell.district`,
+          [JSON.stringify(recheckCells), MARKETPLACE_RELEVANCE_MARKER]
+        );
+        await client.query(
+          `UPDATE marketplace_drip_state
+              SET cursor_offset = 0,
+                  next_run_at = CASE WHEN enabled THEN NOW() ELSE next_run_at END,
+                  updated_at = NOW()
+            WHERE drip_key = $1`,
+          [DRIP_KEY]
+        );
+      }
+      report.recheck_cells = recheckCells;
+    }
+    if (!dryRun) await client.query('COMMIT');
+  } catch (error) {
+    if (!dryRun) await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally {
+    if (client !== db) client.release?.();
+  }
+  report.projected_public_after = report.clean;
+  if (!dryRun && (report.hidden || report.queued_review)) {
+    invalidateMarketplaceStats();
+    await warmMarketplacePublicCache(db);
+  }
+  return report;
 }
 
 function emptyRunSummary(state) {
@@ -643,13 +932,17 @@ function emptyRunSummary(state) {
     fetched: 0,
     accepted: 0,
     inserted: 0,
+    queued_relevance: 0,
     existing: 0,
     hidden_enrichment: 0,
     rejected_missing_contact: 0,
     rejected_location: 0,
     rejected_competitor: 0,
     rejected_source: 0,
+    rejected_relevance: 0,
+    no_qualified_results: 0,
     errors: 0,
+    relevance_reasons: {},
     source_counts: {},
     category_counts: {},
     district_counts: {}
@@ -740,6 +1033,8 @@ async function runMarketplaceDripOnce(db, { force = false, actorId = 'marketplac
       }
       const places = await searchGooglePlaces(sourceRow);
       summary.fetched += places.length;
+      let sourceQualified = 0;
+      let sourceQueued = 0;
       for (const place of places) {
         const candidate = googleCandidate(place, sourceRow);
         if (!candidate.accepted) {
@@ -747,19 +1042,38 @@ async function runMarketplaceDripOnce(db, { force = false, actorId = 'marketplac
           else if (candidate.reason === 'location_unresolved') summary.rejected_location += 1;
           else if (candidate.reason === 'competitor') summary.rejected_competitor += 1;
           else if (candidate.reason === 'missing_source') summary.rejected_source += 1;
+          else if (candidate.reason === 'irrelevant') {
+            summary.rejected_relevance += 1;
+            increment(summary.relevance_reasons, candidate.relevance?.reason || 'irrelevant');
+          }
           continue;
         }
         summary.accepted += 1;
+        if (candidate.relevance?.decision === 'qualified') sourceQualified += 1;
+        else sourceQueued += 1;
         const result = await upsertMarketplaceCandidate(db, candidate, sourceRow);
         summary[result.action] += 1;
         increment(summary.category_counts, candidate.category);
         increment(summary.district_counts, candidate.district);
       }
+      const sourceStatus = sourceQualified > 0
+        ? 'completed'
+        : (sourceQueued > 0 ? 'review_only' : 'no_qualified_results');
+      if (sourceStatus === 'no_qualified_results') summary.no_qualified_results += 1;
       await db.query(
         `UPDATE marketplace_source_registry
-            SET last_run_at = NOW(), last_success_at = NOW(), last_status = 'completed', last_error = NULL
+            SET last_run_at = NOW(), last_success_at = NOW(), last_status = $2, last_error = NULL,
+                metadata = metadata || jsonb_build_object(
+                  'last_relevance', jsonb_build_object(
+                    'marker', $3::text,
+                    'fetched', $4::int,
+                    'qualified', $5::int,
+                    'queued_review', $6::int,
+                    'checked_at', NOW()
+                  )
+                )
           WHERE id = $1`,
-        [sourceRow.id]
+        [sourceRow.id, sourceStatus, MARKETPLACE_RELEVANCE_MARKER, places.length, sourceQualified, sourceQueued]
       );
     } catch (error) {
       summary.errors += 1;
@@ -859,7 +1173,34 @@ async function getMarketplaceDripStatus(db) {
              AND COALESCE(phone, '') = ''
              AND COALESCE(whatsapp, '') = ''
              AND COALESCE(social_links, '{}'::jsonb) = '{}'::jsonb
-         )::int AS contactless_live
+         )::int AS contactless_live,
+         COUNT(*) FILTER (
+           WHERE status = 'live' AND relevance_status = 'reject'
+         )::int AS relevance_exclusions_live,
+         COUNT(*) FILTER (
+           WHERE status = 'live' AND COALESCE(relevance_status, 'unchecked') = 'unchecked'
+         )::int AS relevance_unchecked_live,
+         COUNT(*) FILTER (
+           WHERE status = 'live' AND relevance_status = 'qualified'
+         )::int AS relevance_qualified_live,
+         COUNT(*) FILTER (
+           WHERE status = 'live' AND relevance_status = 'pending_review'
+         )::int AS relevance_borderline_live,
+         COUNT(*) FILTER (
+           WHERE status = 'pending_review' AND relevance_status = 'pending_review'
+         )::int AS relevance_pending_review,
+         COUNT(*) FILTER (
+           WHERE relevance_checked_at >= NOW() - INTERVAL '7 days'
+         )::int AS relevance_checked_7d,
+         COUNT(*) FILTER (
+           WHERE relevance_checked_at >= NOW() - INTERVAL '7 days' AND relevance_status = 'qualified'
+         )::int AS relevance_qualified_7d,
+         COUNT(*) FILTER (
+           WHERE relevance_checked_at >= NOW() - INTERVAL '7 days' AND relevance_status = 'pending_review'
+         )::int AS relevance_queued_7d,
+         COUNT(*) FILTER (
+           WHERE relevance_checked_at >= NOW() - INTERVAL '7 days' AND relevance_status = 'reject'
+         )::int AS relevance_rejected_7d
        FROM marketplace_businesses`
     )
   ]);
@@ -868,6 +1209,7 @@ async function getMarketplaceDripStatus(db) {
   return {
     marker: MARKETPLACE_P2_MARKER,
     scaleup_marker: MARKETPLACE_SCALEUP_MARKER,
+    relevance_marker: MARKETPLACE_RELEVANCE_MARKER,
     state: {
       ...state,
       monthly_request_remaining: Math.max(0, Number(state.monthly_request_cap || 0) - Number(state.monthly_request_count || 0)),
@@ -891,7 +1233,16 @@ async function getMarketplaceDripStatus(db) {
       integrity: {
         duplicate_groups: Number(integrityRow.duplicate_groups || 0),
         competitors_live: Number(integrityRow.competitors_live || 0),
-        contactless_live: Number(integrityRow.contactless_live || 0)
+        contactless_live: Number(integrityRow.contactless_live || 0),
+        relevance_exclusions_live: Number(integrityRow.relevance_exclusions_live || 0),
+        relevance_unchecked_live: Number(integrityRow.relevance_unchecked_live || 0),
+        relevance_qualified_live: Number(integrityRow.relevance_qualified_live || 0),
+        relevance_borderline_live: Number(integrityRow.relevance_borderline_live || 0),
+        relevance_pending_review: Number(integrityRow.relevance_pending_review || 0),
+        relevance_checked_7d: Number(integrityRow.relevance_checked_7d || 0),
+        relevance_qualified_7d: Number(integrityRow.relevance_qualified_7d || 0),
+        relevance_queued_7d: Number(integrityRow.relevance_queued_7d || 0),
+        relevance_rejected_7d: Number(integrityRow.relevance_rejected_7d || 0)
       }
     },
     recent_runs: runs.rows
@@ -942,9 +1293,11 @@ function startMarketplaceDripScheduler(db) {
 module.exports = {
   DRIP_KEY,
   MARKETPLACE_P2_MARKER,
+  MARKETPLACE_RELEVANCE_MARKER,
   MARKETPLACE_SCALEUP_MARKER,
   PRIORITY_DISTRICTS,
   SOURCE_DEFINITIONS,
+  auditMarketplaceRelevance,
   googleCandidate,
   getMarketplaceDripStatus,
   getRegistryCoverage,

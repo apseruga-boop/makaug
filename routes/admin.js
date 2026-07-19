@@ -151,6 +151,7 @@ const {
   updateYouTubeSourceDripConfig
 } = require('../services/youtubeSourceDripService');
 const {
+  auditMarketplaceRelevance,
   getMarketplaceDripStatus,
   importMarketplaceSourceCandidates,
   pauseMarketplaceDrip,
@@ -4070,6 +4071,27 @@ router.post('/marketplace-drip/import-source-candidates', async (req, res, next)
     if (!rows.length) return res.status(400).json({ ok: false, error: 'rows[] is required.' });
     const result = await importMarketplaceSourceCandidates(db, rows, { actorId: adminActorId(req) });
     await writeAudit('admin_marketplace_source_candidates_imported', result, adminActorId(req));
+    return res.json({ ok: true, data: result });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/marketplace-drip/relevance-audit', async (req, res, next) => {
+  try {
+    const dryRun = req.body?.dry_run !== false;
+    const result = await auditMarketplaceRelevance(db, {
+      dryRun,
+      actorId: adminActorId(req)
+    });
+    await writeAudit(dryRun ? 'admin_marketplace_relevance_dry_run' : 'admin_marketplace_relevance_purge', {
+      marker: result.marker,
+      scanned: result.scanned,
+      clean: result.clean,
+      hidden: result.hidden,
+      queued_review: result.queued_review,
+      reasons: result.reasons
+    }, adminActorId(req));
     return res.json({ ok: true, data: result });
   } catch (error) {
     return next(error);
