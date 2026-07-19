@@ -80,6 +80,23 @@ test('owner and moderator interfaces expose the complete journey without enablin
   assert.match(route, /verified_waitlist_enabled: true/);
 });
 
+test('owner edit and direct profile routes bypass the broad marketplace search', () => {
+  const start = app.indexOf('async function loadMarketplacePage');
+  const end = app.indexOf('async function searchMarketplaceBusinesses', start);
+  const loader = app.slice(start, end);
+  assert.match(loader, /if \(marketplaceManageTokenFromRoute\(\)\)/);
+  assert.match(loader, /if \(directBusinessSlug\)/);
+  assert.ok(
+    loader.indexOf('if (marketplaceManageTokenFromRoute())') < loader.indexOf('await searchMarketplaceBusinesses()'),
+    'owner magic links must be resolved before the broad search'
+  );
+  assert.ok(
+    loader.indexOf('if (directBusinessSlug)') < loader.indexOf('await searchMarketplaceBusinesses()'),
+    'direct business profiles must be resolved before the broad search'
+  );
+  assert.match(html, /marketplace-owner-direct-fast-20260719/);
+});
+
 test('new lifecycle interface strings are translated in all nine languages', () => {
   const start = app.indexOf('const MARKETPLACE_UI_EN');
   const end = app.indexOf('const MARKETPLACE_CATEGORY_LABELS');
