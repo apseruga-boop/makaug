@@ -5,10 +5,19 @@ const test = require('node:test');
 
 const {
   buildCandidate,
+  buildPlacesRequest,
   buildQueries,
   parseArgs,
   resolveDistrict
 } = require('../scripts/seed-marketplace-google-places');
+
+test('Google Places request receives a scalar text query', () => {
+  assert.deepEqual(buildPlacesRequest('land surveyor Kampala Uganda'), {
+    textQuery: 'land surveyor Kampala Uganda',
+    pageSize: 20,
+    regionCode: 'UG'
+  });
+});
 
 test('seed query plan covers every category and target district before local expansion', () => {
   const queries = buildQueries();

@@ -124,7 +124,7 @@ async function searchPlaces(apiKey, query, { referer = DEFAULT_REFERER } = {}) {
           'places.types'
         ].join(',')
       },
-      body: JSON.stringify({ textQuery: query, pageSize: 20, regionCode: 'UG' }),
+      body: JSON.stringify(buildPlacesRequest(query)),
       signal: controller.signal
     });
     const payload = await response.json().catch(() => ({}));
@@ -137,6 +137,10 @@ async function searchPlaces(apiKey, query, { referer = DEFAULT_REFERER } = {}) {
   } finally {
     clearTimeout(timer);
   }
+}
+
+function buildPlacesRequest(query) {
+  return { textQuery: normalizeText(query), pageSize: 20, regionCode: 'UG' };
 }
 
 function buildCandidate(place, query) {
@@ -277,7 +281,7 @@ async function run() {
     if (summary.inserted + summary.would_insert >= options.target) break;
     summary.requests += 1;
     try {
-      const places = await searchPlaces(apiKey, query, {
+      const places = await searchPlaces(apiKey, query.text, {
         referer: process.env.GOOGLE_PLACES_REFERER || DEFAULT_REFERER
       });
       summary.fetched += places.length;
@@ -330,6 +334,7 @@ module.exports = {
   SEED_AREAS,
   SEED_CATEGORIES,
   buildCandidate,
+  buildPlacesRequest,
   buildQueries,
   parseArgs,
   placeAddress,
