@@ -3270,6 +3270,7 @@ function applyAboutLanguageUI() {
 const MARKETPLACE_P1_MARKER = "marketplace-p1-20260719";
 const MARKETPLACE_REPORT_FIXES_MARKER = "marketplace-report-fixes-20260719";
 const MARKETPLACE_ENRICH_MARKER = "marketplace-enrich-20260719";
+const MARKETPLACE_REGJOURNEY_MARKER = "marketplace-regjourney-20260719";
 const MARKETPLACE_UI_EN = Object.freeze({
   breadcrumbHome: "Home", breadcrumbMarketplace: "Marketplace", eyebrow: "Uganda property services",
   title: "Uganda's largest property services directory", subtitle: "Surveyors, lawyers, builders, brokers, valuers and practical property services across Uganda.",
@@ -3299,7 +3300,10 @@ const MARKETPLACE_UI_EN = Object.freeze({
   proofUrl: "Public proof link (website, company page or registration record, optional)", proofNotes: "Explain how we can confirm that you own or represent this business", claimConsent: "I confirm this claim is truthful and consent to makaug checking the evidence provided.",
   submitClaim: "Submit ownership claim", claimSent: "Ownership claim received", claimReference: "Claim reference", sourceFoundGoogle: "Found online via Google Maps", sourceFirstFound: "First found", sourceLastRefreshed: "Last refreshed",
   publicSourceDisclaimer: "Some profiles are gathered from public sources and are not verified by makaug. makaug is not a party to any deal. Always confirm qualifications, identity, scope and fees before paying. Owners may claim, correct or request removal of a profile.",
-  googleLoading: "Refreshing details from Google...", googleRating: "Google rating", reviewsOnGoogle: "reviews on Google", openNow: "Open now", closedNow: "Closed now", openingHours: "Opening hours", fullAddress: "Full address", plusCode: "Plus code", businessStatus: "Business status", operational: "Operational", temporarilyClosed: "Temporarily closed", googleDetailsUnavailable: "Live Google details are temporarily unavailable.", websiteLabel: "Website", phoneLabel: "International phone", viewOnGoogle: "View on Google Maps"
+  googleLoading: "Refreshing details from Google...", googleRating: "Google rating", reviewsOnGoogle: "reviews on Google", openNow: "Open now", closedNow: "Closed now", openingHours: "Opening hours", fullAddress: "Full address", plusCode: "Plus code", businessStatus: "Business status", operational: "Operational", temporarilyClosed: "Temporarily closed", googleDetailsUnavailable: "Live Google details are temporarily unavailable.", websiteLabel: "Website", phoneLabel: "International phone", viewOnGoogle: "View on Google Maps",
+  contactName: "Contact person name", reviewTitle: "Your business is under review", reviewCopy: "Thanks — most reviews are completed within 24 hours. We will message you when it is live.", acknowledgementWhatsApp: "Acknowledgement sent by WhatsApp.", acknowledgementEmail: "Acknowledgement sent by email.", acknowledgementPending: "Your reference is saved. We will contact you after review.",
+  manageProfile: "Manage your business profile", manageSubtitle: "This secure link lets you update your approved listing without a password.", loadingProfile: "Loading your secure profile...", profileViews: "Profile views", servicesOffered: "Services offered", servesRegions: "Other districts served, separated by commas", profilePhotos: "Business photos", profilePhotosHelp: "Upload up to four JPG, PNG or WebP images, 2.5MB each.", saveChanges: "Save changes", changesSaved: "Your business profile has been updated.",
+  privateUpsellTitle: "You're Privately Listed", privateUpsellCopy: "Verified businesses rank first and receive leads first. Verified is coming soon.", joinWaitlist: "Join the Verified waitlist", verifiedComing: "Verified is coming", waitlistTitle: "Get first access to Marketplace Verified", waitlistSubtitle: "Join the waitlist. We will contact you when evidence review and Flutterwave payment open.", businessOrOwnerName: "Business or owner name", waitlistSent: "You're on the Verified waitlist. We will contact you when it opens."
 });
 
 const MARKETPLACE_UI_OVERRIDES = Object.freeze({
@@ -3459,6 +3463,45 @@ Object.entries(MARKETPLACE_ENRICH_I18N).forEach(([language, values]) => {
   Object.assign(MARKETPLACE_UI_OVERRIDES[language], values);
 });
 
+const MARKETPLACE_LIFECYCLE_I18N = Object.freeze({
+  lg: {
+    contactName: "Erinnya ly'omuntu ow'okutuukirira", reviewTitle: "Bizinesi yo ekyakeberwa", reviewCopy: "Webale — okukebera kusinga kumala mu ssaawa 24. Tujja kukutegeeza bw'enaaba erabika.", acknowledgementWhatsApp: "Obubaka bw'okukakasa buweereddwa ku WhatsApp.", acknowledgementEmail: "Obubaka bw'okukakasa buweereddwa ku email.", acknowledgementPending: "Namba yo eterekeddwa. Tujja kukutuukirira oluvannyuma lw'okukebera.",
+    manageProfile: "Ddukanya profile ya bizinesi yo", manageSubtitle: "Link eno ey'obukuumi ekusobozesa okutereeza bizinesi yo awatali password.", loadingProfile: "Tukyalinda profile yo ey'obukuumi...", profileViews: "Abalabye profile", servicesOffered: "Obuweereza bw'owa", servesRegions: "Disitulikiti endala z'okoleramu, zaawulenga ne koma", profilePhotos: "Ebifaananyi bya bizinesi", profilePhotosHelp: "Teeka ebifaananyi okutuuka ku bina ebya JPG, PNG oba WebP, buli kimu 2.5MB.", saveChanges: "Tereka enkyukakyuka", changesSaved: "Profile ya bizinesi yo etereezeddwa.", privateUpsellTitle: "Owandiikiddwa butereevu", privateUpsellCopy: "Bizinesi ezikakasiddwa ze zisooka mu kunoonya n'okufuna leads. Verified ejja mangu.", joinWaitlist: "Weewandiise ku lukalala lwa Verified", verifiedComing: "Verified ejja", waitlistTitle: "Funa omukisa ogusooka ku Marketplace Verified", waitlistSubtitle: "Weewandiise. Tujja kukutuukirira okukebera n'okusasula ku Flutterwave bwe kunaaggulawo.", businessOrOwnerName: "Erinnya lya bizinesi oba nnannyini", waitlistSent: "Oli ku lukalala lwa Verified. Tujja kukutuukirira bwe kunaaggulawo."
+  },
+  sw: {
+    contactName: "Jina la mtu wa mawasiliano", reviewTitle: "Biashara yako inakaguliwa", reviewCopy: "Asante — ukaguzi mwingi hukamilika ndani ya saa 24. Tutakujulisha itakapokuwa live.", acknowledgementWhatsApp: "Uthibitisho umetumwa kwa WhatsApp.", acknowledgementEmail: "Uthibitisho umetumwa kwa barua pepe.", acknowledgementPending: "Kumbukumbu yako imehifadhiwa. Tutawasiliana nawe baada ya ukaguzi.",
+    manageProfile: "Simamia wasifu wa biashara yako", manageSubtitle: "Kiungo hiki salama hukuruhusu kusasisha orodha bila nenosiri.", loadingProfile: "Inapakia wasifu wako salama...", profileViews: "Mionekano ya wasifu", servicesOffered: "Huduma zinazotolewa", servesRegions: "Wilaya nyingine unazohudumia, zitenganishe kwa koma", profilePhotos: "Picha za biashara", profilePhotosHelp: "Pakia hadi picha nne za JPG, PNG au WebP, 2.5MB kila moja.", saveChanges: "Hifadhi mabadiliko", changesSaved: "Wasifu wa biashara yako umesasishwa.", privateUpsellTitle: "Umeorodheshwa binafsi", privateUpsellCopy: "Biashara Verified huonekana kwanza na kupata leads kwanza. Verified inakuja hivi karibuni.", joinWaitlist: "Jiunge na orodha ya Verified", verifiedComing: "Verified inakuja", waitlistTitle: "Pata nafasi ya kwanza ya Marketplace Verified", waitlistSubtitle: "Jiunge na orodha. Tutawasiliana nawe ukaguzi na malipo ya Flutterwave yakifunguliwa.", businessOrOwnerName: "Jina la biashara au mmiliki", waitlistSent: "Uko kwenye orodha ya Verified. Tutawasiliana nawe inapofunguliwa."
+  },
+  ac: {
+    contactName: "Nying ngat me kube", reviewTitle: "Tye ka neno bici ni", reviewCopy: "Apwoyo — coc mapol kineno i cawa 24. Wabi cwalo lok ka dong tye live.", acknowledgementWhatsApp: "Kicwalo lok me moko ki WhatsApp.", acknowledgementEmail: "Kicwalo lok me moko ki email.", acknowledgementPending: "Namba ni kigwoko. Wabi kube kwedi inge neno.",
+    manageProfile: "Yub profile me bici ni", manageSubtitle: "Kakube man ma ogwoke miyi yub nying bici labongo password.", loadingProfile: "Tye ka cano profile ni ma ogwoke...", profileViews: "Tyene ma kineno profile", servicesOffered: "Tic ma imiyo", servesRegions: "Distrik mukene ma itiyo iye, pok ki koma", profilePhotos: "Cal me bici", profilePhotosHelp: "Ket cal JPG, PNG onyo WebP nyaka angwen, 2.5MB acel acel.", saveChanges: "Gwok alokaloka", changesSaved: "Kiyubo profile me bici ni.", privateUpsellTitle: "Kicoyi labongo dano mukene", privateUpsellCopy: "Bici ma Verified bedo mukwongo i yeny ki leads. Verified bino cokcoki.", joinWaitlist: "Dony i nying me Verified", verifiedComing: "Verified bino", waitlistTitle: "Nong twero me acel me Marketplace Verified", waitlistSubtitle: "Dony i nying. Wabi kube kwedi ka neno caden ki culo Flutterwave oyabe.", businessOrOwnerName: "Nying bici onyo rwot", waitlistSent: "Itye i nying me Verified. Wabi kube kwedi ka oyabe."
+  },
+  ny: {
+    contactName: "Eiziina ry'ou turikugambaho", reviewTitle: "Bizinesi yawe neereebwa", reviewCopy: "Webare — okukebera okwingi nikuhwa omu shaaha 24. Nitwija kukumanyisa ku eraabe live.", acknowledgementWhatsApp: "Obutumwa bw'okuhamya buhereirwe aha WhatsApp.", acknowledgementEmail: "Obutumwa bw'okuhamya buhereirwe aha email.", acknowledgementPending: "Namba yawe ebiikirwe. Nitwija kukugarukamu bwanyima y'okukebera.",
+    manageProfile: "Tungaanisa profile ya bizinesi yawe", manageSubtitle: "Link egi eine oburinzi neekusobozesa kuhindura profile otarikwenda password.", loadingProfile: "Nitutureeba profile yawe...", profileViews: "Abareebire profile", servicesOffered: "Obuheereza obu orikuha", servesRegions: "Disiturikiti ezindi ezi orikuheereza, zitaanisize na koma", profilePhotos: "Ebifaananyi bya bizinesi", profilePhotosHelp: "Taho ebifaananyi bina ebya JPG, PNG nari WebP, buri kimwe 2.5MB.", saveChanges: "Biika empinduka", changesSaved: "Profile ya bizinesi yawe ehindwirwe.", privateUpsellTitle: "Ohandiikirwe nyenyo", privateUpsellCopy: "Bizinesi ezi Verified nizibanza omu kurondora kandi zifuna leads mbere. Verified neija juba.", joinWaitlist: "Handiika aha rukarara rwa Verified", verifiedComing: "Verified neija", waitlistTitle: "Funa omugisha gw'okubanza aha Marketplace Verified", waitlistSubtitle: "Handiika. Nitwija kukugarukamu okukebera n'okushashura Flutterwave ku biratandike.", businessOrOwnerName: "Eiziina rya bizinesi nari nyenyo", waitlistSent: "Ori aha rukarara rwa Verified. Nitwija kukugarukamu ku ruritandike."
+  },
+  rn: {
+    contactName: "Eiziina ry'ou turikugambaho", reviewTitle: "Bizinesi yawe neereebwa", reviewCopy: "Webare — okukebera okwingi nikuhwa omu shaaha 24. Nitwija kukumanyisa ku eraabe live.", acknowledgementWhatsApp: "Obutumwa bw'okuhamya buhereirwe aha WhatsApp.", acknowledgementEmail: "Obutumwa bw'okuhamya buhereirwe aha email.", acknowledgementPending: "Namba yawe ebiikirwe. Nitwija kukugarukamu bwanyima y'okukebera.",
+    manageProfile: "Tungaanisa profile ya bizinesi yawe", manageSubtitle: "Link egi eine oburinzi neekusobozesa kuhindura profile otarikwenda password.", loadingProfile: "Nitutureeba profile yawe...", profileViews: "Abareebire profile", servicesOffered: "Obuheereza obu orikuha", servesRegions: "Disiturikiti ezindi ezi orikuheereza, zitaanisize na koma", profilePhotos: "Ebifaananyi bya bizinesi", profilePhotosHelp: "Taho ebifaananyi bina ebya JPG, PNG nari WebP, buri kimwe 2.5MB.", saveChanges: "Biika empinduka", changesSaved: "Profile ya bizinesi yawe ehindwirwe.", privateUpsellTitle: "Ohandiikirwe nyenyo", privateUpsellCopy: "Bizinesi ezi Verified nizibanza omu kurondora kandi zifuna leads mbere. Verified neija juba.", joinWaitlist: "Handiika aha rukarara rwa Verified", verifiedComing: "Verified neija", waitlistTitle: "Funa omugisha gw'okubanza aha Marketplace Verified", waitlistSubtitle: "Handiika. Nitwija kukugarukamu okukebera n'okushashura Flutterwave ku biratandike.", businessOrOwnerName: "Eiziina rya bizinesi nari nyenyo", waitlistSent: "Ori aha rukarara rwa Verified. Nitwija kukugarukamu ku ruritandike."
+  },
+  sm: {
+    contactName: "Erinnya ly'omuntu ow'okutuukirira", reviewTitle: "Bizinesi yo ekyakeberwa", reviewCopy: "Webale — okukebera kusinga kumala mu ssaawa 24. Tujja kukutegeeza bw'enaaba live.", acknowledgementWhatsApp: "Obubaka bw'okukakasa buweereddwa ku WhatsApp.", acknowledgementEmail: "Obubaka bw'okukakasa buweereddwa ku email.", acknowledgementPending: "Namba yo eterekeddwa. Tujja kukutuukirira oluvannyuma lw'okukebera.",
+    manageProfile: "Ddukanya profile ya bizinesi yo", manageSubtitle: "Link eno ey'obukuumi ekusobozesa okutereeza profile awatali password.", loadingProfile: "Tukyalinda profile yo...", profileViews: "Abalabye profile", servicesOffered: "Obuweereza bw'owa", servesRegions: "Disitulikiti endala z'okoleramu, zaawulenga ne koma", profilePhotos: "Ebifaananyi bya bizinesi", profilePhotosHelp: "Teeka ebifaananyi bina ebya JPG, PNG oba WebP, buli kimu 2.5MB.", saveChanges: "Tereka enkyukakyuka", changesSaved: "Profile ya bizinesi yo etereezeddwa.", privateUpsellTitle: "Owandiikiddwa butereevu", privateUpsellCopy: "Bizinesi ezikakasiddwa ze zisooka mu kunoonya n'okufuna leads. Verified ejja mangu.", joinWaitlist: "Weewandiise ku lukalala lwa Verified", verifiedComing: "Verified ejja", waitlistTitle: "Funa omukisa ogusooka ku Marketplace Verified", waitlistSubtitle: "Weewandiise. Tujja kukutuukirira okukebera n'okusasula Flutterwave bwe kunaaggulawo.", businessOrOwnerName: "Erinnya lya bizinesi oba nnannyini", waitlistSent: "Oli ku lukalala lwa Verified. Tujja kukutuukirira bwe kunaaggulawo."
+  },
+  am: {
+    contactName: "የመገናኛ ሰው ስም", reviewTitle: "ንግድዎ በግምገማ ላይ ነው", reviewCopy: "እናመሰግናለን — አብዛኛው ግምገማ በ24 ሰዓት ውስጥ ይጠናቀቃል። ሲታተም እናሳውቃለን።", acknowledgementWhatsApp: "ማረጋገጫው በWhatsApp ተልኳል።", acknowledgementEmail: "ማረጋገጫው በኢሜይል ተልኳል።", acknowledgementPending: "ማጣቀሻዎ ተቀምጧል። ከግምገማ በኋላ እንገናኛለን።",
+    manageProfile: "የንግድ መገለጫዎን ያስተዳድሩ", manageSubtitle: "ይህ ደህንነቱ የተጠበቀ አገናኝ ያለ የይለፍ ቃል መገለጫዎን ያዘምናል።", loadingProfile: "ደህንነቱ የተጠበቀ መገለጫ በመጫን ላይ...", profileViews: "የመገለጫ እይታዎች", servicesOffered: "የሚሰጡ አገልግሎቶች", servesRegions: "ሌሎች የሚያገለግሉባቸው ዲስትሪክቶች", profilePhotos: "የንግድ ፎቶዎች", profilePhotosHelp: "እስከ አራት JPG፣ PNG ወይም WebP ምስሎች፣ እያንዳንዱ 2.5MB።", saveChanges: "ለውጦችን አስቀምጥ", changesSaved: "የንግድ መገለጫዎ ተዘምኗል።", privateUpsellTitle: "በግል ተዘርዝረዋል", privateUpsellCopy: "Verified ንግዶች በፍለጋ እና leads ቀዳሚ ናቸው። Verified በቅርቡ ይመጣል።", joinWaitlist: "የVerified ዝርዝርን ይቀላቀሉ", verifiedComing: "Verified በቅርቡ", waitlistTitle: "Marketplace Verifiedን ቀድመው ያግኙ", waitlistSubtitle: "ይመዝገቡ። የማስረጃ ግምገማና Flutterwave ክፍያ ሲከፈት እናሳውቃለን።", businessOrOwnerName: "የንግድ ወይም የባለቤት ስም", waitlistSent: "በVerified ዝርዝር ላይ ነዎት። ሲከፈት እናሳውቃለን።"
+  },
+  ar: {
+    contactName: "اسم مسؤول الاتصال", reviewTitle: "نشاطك قيد المراجعة", reviewCopy: "شكرا — تكتمل معظم المراجعات خلال 24 ساعة. سنراسلك عند النشر.", acknowledgementWhatsApp: "تم إرسال التأكيد عبر WhatsApp.", acknowledgementEmail: "تم إرسال التأكيد عبر البريد الإلكتروني.", acknowledgementPending: "تم حفظ المرجع. سنتواصل معك بعد المراجعة.",
+    manageProfile: "إدارة ملف نشاطك", manageSubtitle: "يتيح لك هذا الرابط الآمن تحديث الإدراج المعتمد دون كلمة مرور.", loadingProfile: "جار تحميل ملفك الآمن...", profileViews: "مشاهدات الملف", servicesOffered: "الخدمات المقدمة", servesRegions: "المقاطعات الأخرى التي تخدمها، مفصولة بفواصل", profilePhotos: "صور النشاط", profilePhotosHelp: "ارفع حتى أربع صور JPG أو PNG أو WebP، بحجم 2.5MB لكل صورة.", saveChanges: "حفظ التغييرات", changesSaved: "تم تحديث ملف نشاطك.", privateUpsellTitle: "أنت مدرج بشكل خاص", privateUpsellCopy: "تظهر الأنشطة الموثقة أولا وتحصل على العملاء أولا. Verified قادم قريبا.", joinWaitlist: "انضم إلى قائمة Verified", verifiedComing: "Verified قادم", waitlistTitle: "احصل على الوصول المبكر إلى Marketplace Verified", waitlistSubtitle: "انضم إلى القائمة. سنتواصل معك عند فتح مراجعة الأدلة والدفع عبر Flutterwave.", businessOrOwnerName: "اسم النشاط أو المالك", waitlistSent: "أنت في قائمة Verified. سنتواصل معك عند فتحها."
+  }
+});
+
+Object.entries(MARKETPLACE_LIFECYCLE_I18N).forEach(([language, values]) => {
+  Object.assign(MARKETPLACE_UI_OVERRIDES[language], values);
+});
+
 const MARKETPLACE_CATEGORY_LABELS = Object.freeze({
   surveyors: { en: "Surveyors", lg: "Abapima ettaka", sw: "Wapima ardhi", ac: "Jo pim ngom", ny: "Abapima eitaka", rn: "Abapima eitaka", sm: "Abapima eitaka", am: "ቀያሾች", ar: "المساحون" },
   brokers: { en: "Brokers & agents", lg: "Aba broker n'abasenza", sw: "Madalali na mawakala", ac: "Jo cat ot", ny: "Ba broker n'abakozi", rn: "Ba broker n'abakozi", sm: "Aba broker", am: "ደላሎች", ar: "الوسطاء والوكلاء" },
@@ -3494,7 +3537,10 @@ const marketplaceState = {
   limit: 20,
   activeCategory: "",
   categoryCounts: {},
-  profileDetails: {}
+  profileDetails: {},
+  manageToken: "",
+  managedBusiness: null,
+  managedImages: []
 };
 
 function marketplaceTr(key) {
@@ -3508,15 +3554,18 @@ function marketplaceCategoryLabel(key) {
 function applyMarketplaceLanguageUI() {
   const root = document.getElementById("page-marketplace");
   if (!root) return;
-  root.querySelectorAll("[data-marketplace-i18n]").forEach((element) => {
+  document.querySelectorAll("[data-marketplace-i18n]").forEach((element) => {
     const key = element.getAttribute("data-marketplace-i18n");
     if (key) element.textContent = marketplaceTr(key);
   });
-  root.querySelectorAll("[data-marketplace-placeholder]").forEach((element) => {
+  document.querySelectorAll("[data-marketplace-placeholder]").forEach((element) => {
     const key = element.getAttribute("data-marketplace-placeholder");
     if (key) element.setAttribute("placeholder", marketplaceTr(key));
   });
   root.dir = currentLang === "ar" ? "rtl" : "ltr";
+  document.querySelectorAll("[data-marketplace-marker]").forEach((element) => {
+    element.dir = currentLang === "ar" ? "rtl" : "ltr";
+  });
   populateMarketplaceSelects();
   renderMarketplaceCategoryChips();
   renderMarketplaceBusinesses();
@@ -3537,6 +3586,7 @@ function populateMarketplaceSelects() {
   marketplacePopulateSelect("marketplace-register-category", categories, marketplaceTr("chooseService"), "key", (item) => marketplaceCategoryLabel(item.key));
   marketplacePopulateSelect("marketplace-district", districts, marketplaceTr("allDistricts"), null, (item) => item);
   marketplacePopulateSelect("marketplace-register-district", districts, marketplaceTr("chooseDistrict"), null, (item) => item);
+  marketplacePopulateSelect("marketplace-manage-district", districts, marketplaceTr("chooseDistrict"), null, (item) => item);
   if (marketplaceState.activeCategory) {
     const filter = document.getElementById("marketplace-category");
     if (filter) filter.value = marketplaceState.activeCategory;
@@ -3655,6 +3705,11 @@ async function loadMarketplaceProfileDetails(id) {
       const index = marketplaceState.businesses.findIndex((item) => item.id === id);
       if (index >= 0) marketplaceState.businesses[index] = { ...marketplaceState.businesses[index], ...updatedBusiness };
     }
+    if (response?.data?.meta?.applicable === false) {
+      container.innerHTML = "";
+      container.dataset.state = "loaded";
+      return;
+    }
     if (!details) {
       container.innerHTML = `<div class="rounded-lg border border-gray-200 bg-gray-50 p-3 text-gray-500">${adminEscape(marketplaceTr("googleDetailsUnavailable"))}</div>`;
       container.dataset.state = "unavailable";
@@ -3684,7 +3739,6 @@ function renderMarketplaceBusinesses() {
     const socialUrl = marketplacePrimarySocialUrl(business);
     const foundOnline = business.tier === "found_online" || business.source_type === "found_online";
     const sourceUrl = foundOnline ? cleanText(business.source_url || "") : "";
-    const googleSource = foundOnline && ["google_maps", "google", "google_places"].includes(cleanText(business.source || "").toLowerCase());
     const firstFound = marketplaceFormatDate(business.first_seen);
     const lastRefreshed = marketplaceFormatDate(business.last_refreshed);
     const stars = rating ? `<span class="text-amber-500"><i class="fas fa-star"></i></span> ${rating.toFixed(1)} <span class="text-gray-400">(${Number(business.rating_count || 0)})</span>` : `<span class="text-gray-400">${adminEscape(marketplaceTr("newBusiness"))}</span>`;
@@ -3707,6 +3761,7 @@ function renderMarketplaceBusinesses() {
             <button type="button" onclick="marketplaceToggleProfile('${adminAttr(business.id)}')" class="text-sm font-black text-[#b3134f] hover:underline">${adminEscape(marketplaceTr("profile"))} <i class="fas fa-chevron-down ml-1 text-[10px]"></i></button>
           </div>
           <div id="marketplace-profile-${adminAttr(business.id)}" class="hidden mt-3 border-t border-gray-100 pt-3 text-xs text-gray-600 space-y-1">
+            ${Array.isArray(business.profile_images) && business.profile_images.length ? `<div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pb-2">${business.profile_images.slice(0, 4).map((url, index) => `<img src="${adminAttr(url)}" alt="${adminAttr(`${business.name} business photo ${index + 1}`)}" loading="lazy" class="h-24 w-full rounded-lg border border-gray-200 object-cover">`).join("")}</div>` : ""}
             <div class="text-sm leading-6 text-gray-700">${adminEscape(business.description || "")}</div>
             <div><span class="font-black text-gray-800">${adminEscape(marketplaceTr("serves"))}:</span> ${adminEscape((business.serves_regions || []).join(", ") || business.district)}</div>
             ${business.website ? `<div><a href="${adminAttr(business.website)}" target="_blank" rel="noopener nofollow" class="text-blue-700 font-bold hover:underline">${adminEscape(business.website)}</a></div>` : ""}
@@ -3716,10 +3771,10 @@ function renderMarketplaceBusinesses() {
               <div class="font-black text-gray-800"><i class="fas fa-globe mr-1 text-gray-500" aria-hidden="true"></i>${sourceUrl ? `<a href="${adminAttr(sourceUrl)}" target="_blank" rel="noopener nofollow" class="text-blue-700 hover:underline">${adminEscape(marketplaceSourceLabel(business))} <i class="fas fa-arrow-up-right-from-square ml-1 text-[10px]" aria-hidden="true"></i></a>` : adminEscape(marketplaceSourceLabel(business))}</div>
               ${firstFound ? `<div><span class="font-bold text-gray-700">${adminEscape(marketplaceTr("sourceFirstFound"))}:</span> ${adminEscape(firstFound)}</div>` : ""}
               ${lastRefreshed ? `<div><span class="font-bold text-gray-700">${adminEscape(marketplaceTr("sourceLastRefreshed"))}:</span> ${adminEscape(lastRefreshed)}</div>` : ""}
-              ${googleSource ? `<div id="marketplace-google-details-${adminAttr(business.id)}" class="pt-1" data-state="idle"></div>` : ""}
+              <div id="marketplace-google-details-${adminAttr(business.id)}" class="pt-1" data-state="idle"></div>
               <p class="pt-1 text-[11px] leading-5 text-gray-500">${adminEscape(marketplaceTr("publicSourceDisclaimer"))}</p>
               <button type="button" onclick="marketplaceOpenClaimForm('${adminAttr(business.id)}','${adminAttr(business.name)}')" class="mt-1 inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-black text-blue-700 hover:bg-blue-50"><i class="fas fa-hand" aria-hidden="true"></i>${adminEscape(marketplaceTr("claimBusiness"))}</button>
-            </div>` : ""}
+            </div>` : `<div id="marketplace-google-details-${adminAttr(business.id)}" class="pt-1" data-state="idle"></div>`}
           </div>
         </div>
       </div>
@@ -3765,6 +3820,8 @@ async function loadMarketplacePage({ force = false } = {}) {
     syncMarketplaceFilterControls();
     await searchMarketplaceBusinesses();
     applyMarketplaceLanguageUI();
+    await marketplaceOpenDirectBusinessFromRoute();
+    await marketplaceOpenOwnerJourneyFromRoute();
   } catch (error) {
     const results = document.getElementById("marketplace-results");
     if (results) results.innerHTML = `<div class="rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-800">${adminEscape(error.message || "Marketplace could not load.")}</div>`;
@@ -3873,6 +3930,216 @@ function marketplaceCloseClaimForm() {
   const form = document.getElementById("marketplace-claim-form");
   if (!form) return;
   form.classList.add("hidden");
+}
+
+function marketplaceManageTokenFromRoute() {
+  const fragment = new URLSearchParams(String(window.location.hash || "").replace(/^#/, ""));
+  return cleanText(fragment.get("manage") || "");
+}
+
+function marketplaceRenderManagedImages() {
+  const wrap = document.getElementById("marketplace-manage-image-preview");
+  if (!wrap) return;
+  const images = Array.isArray(marketplaceState.managedImages) ? marketplaceState.managedImages : [];
+  wrap.innerHTML = images.map((url, index) => `<div class="relative"><img src="${adminAttr(url)}" alt="${adminAttr(`${marketplaceState.managedBusiness?.name || "Business"} photo ${index + 1}`)}" class="h-24 w-full rounded-lg border border-gray-200 object-cover"><button type="button" onclick="marketplaceRemoveManagedImage(${index})" class="absolute right-1 top-1 inline-flex h-7 w-7 items-center justify-center rounded-full bg-white/95 text-red-700 shadow" aria-label="Remove photo"><i class="fas fa-xmark" aria-hidden="true"></i></button></div>`).join("");
+}
+
+function marketplaceRemoveManagedImage(index) {
+  marketplaceState.managedImages.splice(Number(index), 1);
+  marketplaceRenderManagedImages();
+}
+
+function marketplacePopulateManageForm(business = {}) {
+  marketplaceState.managedBusiness = business;
+  marketplaceState.managedImages = Array.isArray(business.profile_images) ? [...business.profile_images].slice(0, 4) : [];
+  const setValue = (id, value) => { const element = document.getElementById(id); if (element) element.value = value ?? ""; };
+  setValue("marketplace-manage-name", business.name);
+  setValue("marketplace-manage-description", business.description);
+  setValue("marketplace-manage-services", business.services_text);
+  setValue("marketplace-manage-district", business.district);
+  setValue("marketplace-manage-area", business.area);
+  setValue("marketplace-manage-serves", (business.serves_regions || []).join(", "));
+  setValue("marketplace-manage-phone", business.phone);
+  setValue("marketplace-manage-whatsapp", business.whatsapp);
+  setValue("marketplace-manage-email", business.email);
+  setValue("marketplace-manage-website", business.website);
+  setValue("marketplace-manage-social", marketplacePrimarySocialUrl(business));
+  setTextById("marketplace-manage-title", business.name || marketplaceTr("manageProfile"));
+  setTextById("marketplace-manage-views", Number(business.profile_view_count || 0).toLocaleString());
+  document.getElementById("marketplace-manage-images").value = "";
+  document.getElementById("marketplace-manage-loading")?.classList.add("hidden");
+  document.getElementById("marketplace-manage-form")?.classList.remove("hidden");
+  marketplaceRenderManagedImages();
+}
+
+async function marketplaceOpenManageProfile(token) {
+  const rawToken = cleanText(token);
+  if (!rawToken) return;
+  marketplaceState.manageToken = rawToken;
+  document.getElementById("marketplace-manage-loading")?.classList.remove("hidden");
+  document.getElementById("marketplace-manage-form")?.classList.add("hidden");
+  openModal("marketplace-manage-modal");
+  try {
+    const response = await apiRequest("/api/marketplace/manage/resolve", { method: "POST", skipAuth: true, body: { token: rawToken } });
+    marketplacePopulateManageForm(response?.data?.business || {});
+  } catch (error) {
+    const loading = document.getElementById("marketplace-manage-loading");
+    if (loading) loading.innerHTML = `<div class="text-red-800">${adminEscape(error.message || "This edit link is invalid or has expired.")}</div>`;
+  }
+}
+
+function marketplaceCloseManageModal() {
+  marketplaceState.manageToken = "";
+  closeModal("marketplace-manage-modal");
+  if (window.location.hash) window.history.replaceState(window.history.state, "", `${window.location.pathname}${window.location.search}`);
+}
+
+function marketplaceFileDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("A business photo could not be read."));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function submitMarketplaceManagedProfile(event) {
+  event?.preventDefault?.();
+  const button = document.getElementById("marketplace-manage-submit");
+  const result = document.getElementById("marketplace-manage-result");
+  const files = Array.from(document.getElementById("marketplace-manage-images")?.files || []);
+  if (files.length + marketplaceState.managedImages.length > 4) {
+    toast("Use no more than four business photos.");
+    return;
+  }
+  if (files.some((file) => file.size > 2_500_000 || !["image/jpeg", "image/png", "image/webp"].includes(file.type))) {
+    toast("Each photo must be JPG, PNG or WebP and 2.5MB or smaller.");
+    return;
+  }
+  if (button) { button.disabled = true; button.textContent = marketplaceTr("submitting"); }
+  try {
+    const uploadedImages = await Promise.all(files.map(marketplaceFileDataUrl));
+    const socialUrl = cleanText(document.getElementById("marketplace-manage-social")?.value || "");
+    const payload = {
+      token: marketplaceState.manageToken,
+      name: cleanText(document.getElementById("marketplace-manage-name")?.value || ""),
+      description: cleanText(document.getElementById("marketplace-manage-description")?.value || ""),
+      services_text: cleanText(document.getElementById("marketplace-manage-services")?.value || ""),
+      district: cleanText(document.getElementById("marketplace-manage-district")?.value || ""),
+      area: cleanText(document.getElementById("marketplace-manage-area")?.value || ""),
+      serves_regions: cleanText(document.getElementById("marketplace-manage-serves")?.value || "").split(",").map(cleanText).filter(Boolean),
+      phone: cleanText(document.getElementById("marketplace-manage-phone")?.value || ""),
+      whatsapp: cleanText(document.getElementById("marketplace-manage-whatsapp")?.value || ""),
+      email: cleanText(document.getElementById("marketplace-manage-email")?.value || ""),
+      website: cleanText(document.getElementById("marketplace-manage-website")?.value || ""),
+      social_links: socialUrl ? { primary: socialUrl } : {},
+      profile_images: [...marketplaceState.managedImages, ...uploadedImages]
+    };
+    const response = await apiRequest("/api/marketplace/manage/update", { method: "PATCH", skipAuth: true, body: payload });
+    marketplacePopulateManageForm({ ...marketplaceState.managedBusiness, ...(response?.data?.business || {}) });
+    if (result) {
+      result.className = "md:col-span-2 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900";
+      result.textContent = marketplaceTr("changesSaved");
+      result.classList.remove("hidden");
+    }
+  } catch (error) {
+    if (result) {
+      result.className = "md:col-span-2 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800";
+      result.textContent = error.message || "Business profile could not be updated.";
+      result.classList.remove("hidden");
+    }
+  } finally {
+    if (button) { button.disabled = false; button.textContent = marketplaceTr("saveChanges"); }
+  }
+}
+
+function marketplaceWaitlistBusiness() {
+  const slug = cleanText(new URLSearchParams(window.location.search || "").get("business") || marketplaceState.managedBusiness?.slug || "");
+  return (marketplaceState.businesses || []).find((business) => business.slug === slug) || marketplaceState.managedBusiness || null;
+}
+
+function marketplaceOpenVerifiedWaitlist(business = marketplaceWaitlistBusiness()) {
+  const form = document.getElementById("marketplace-waitlist-form");
+  const result = document.getElementById("marketplace-waitlist-result");
+  if (form) form.reset();
+  if (result) result.classList.add("hidden");
+  const idInput = document.getElementById("marketplace-waitlist-business-id");
+  if (idInput) {
+    idInput.value = business?.id || "";
+    idInput.dataset.businessSlug = business?.slug || cleanText(new URLSearchParams(window.location.search || "").get("business") || "");
+  }
+  const nameInput = document.getElementById("marketplace-waitlist-name");
+  if (nameInput) nameInput.value = business?.name || "";
+  const phoneInput = document.getElementById("marketplace-waitlist-phone");
+  if (phoneInput) phoneInput.value = business?.owner_phone || business?.whatsapp || business?.phone || "";
+  const emailInput = document.getElementById("marketplace-waitlist-email");
+  if (emailInput) emailInput.value = business?.owner_email || business?.email || "";
+  openModal("marketplace-waitlist-modal");
+}
+
+function marketplaceOpenVerifiedWaitlistFromManage() {
+  closeModal("marketplace-manage-modal");
+  marketplaceOpenVerifiedWaitlist(marketplaceState.managedBusiness);
+}
+
+async function submitMarketplaceVerifiedWaitlist(event) {
+  event?.preventDefault?.();
+  const businessInput = document.getElementById("marketplace-waitlist-business-id");
+  const button = document.getElementById("marketplace-waitlist-submit");
+  const result = document.getElementById("marketplace-waitlist-result");
+  const payload = {
+    business_id: cleanText(businessInput?.value || ""),
+    business_slug: cleanText(businessInput?.dataset?.businessSlug || ""),
+    name: cleanText(document.getElementById("marketplace-waitlist-name")?.value || ""),
+    phone: cleanText(document.getElementById("marketplace-waitlist-phone")?.value || ""),
+    email: cleanText(document.getElementById("marketplace-waitlist-email")?.value || ""),
+    language: currentLang
+  };
+  if (button) { button.disabled = true; button.textContent = marketplaceTr("submitting"); }
+  try {
+    await apiRequest("/api/marketplace/verified-waitlist", { method: "POST", skipAuth: true, body: payload });
+    if (result) {
+      result.className = "rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900";
+      result.textContent = marketplaceTr("waitlistSent");
+      result.classList.remove("hidden");
+    }
+  } catch (error) {
+    if (result) {
+      result.className = "rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800";
+      result.textContent = error.message || "Waitlist request could not be sent.";
+      result.classList.remove("hidden");
+    }
+  } finally {
+    if (button) { button.disabled = false; button.textContent = marketplaceTr("joinWaitlist"); }
+  }
+}
+
+async function marketplaceOpenDirectBusinessFromRoute() {
+  const slug = cleanText(new URLSearchParams(window.location.search || "").get("business") || "");
+  if (!slug) return;
+  try {
+    const response = await apiRequest(`/api/marketplace/${encodeURIComponent(slug)}`, { skipAuth: true });
+    const business = response?.data?.business;
+    if (!business) return;
+    marketplaceState.businesses = [business];
+    marketplaceState.total = 1;
+    marketplaceState.page = 1;
+    marketplaceState.totalPages = 1;
+    renderMarketplaceBusinesses();
+    marketplaceToggleProfile(business.id);
+  } catch (_error) {
+    // Keep the regular Marketplace search visible when a stale profile link no longer resolves.
+  }
+}
+
+async function marketplaceOpenOwnerJourneyFromRoute() {
+  const token = marketplaceManageTokenFromRoute();
+  if (token) {
+    await marketplaceOpenManageProfile(token);
+    return;
+  }
+  const params = new URLSearchParams(window.location.search || "");
+  if (params.get("verified_waitlist") === "1") marketplaceOpenVerifiedWaitlist();
 }
 
 function marketplaceToggleNeedForm(show = true) {
@@ -4005,6 +4272,7 @@ async function submitMarketplaceRegistration(event) {
   const socialUrl = cleanText(document.getElementById("marketplace-register-social")?.value || "");
   const payload = {
     name: cleanText(document.getElementById("marketplace-register-name")?.value || ""),
+    owner_name: cleanText(document.getElementById("marketplace-register-owner-name")?.value || ""),
     category: cleanText(document.getElementById("marketplace-register-category")?.value || ""),
     district: cleanText(document.getElementById("marketplace-register-district")?.value || ""),
     area: cleanText(document.getElementById("marketplace-register-area")?.value || ""),
@@ -4022,7 +4290,11 @@ async function submitMarketplaceRegistration(event) {
     const response = await apiRequest("/api/marketplace/register", { method: "POST", skipAuth: true, body: payload });
     if (resultEl) {
       resultEl.className = "mt-4 rounded-xl p-4 text-sm border border-green-100 bg-green-50 text-green-900";
-      resultEl.innerHTML = `<div class="font-black">${adminEscape(marketplaceTr("registrationSent"))}</div><div class="mt-1">${adminEscape(marketplaceTr("registrationRef"))}: <span class="font-mono font-black">${adminEscape(response?.data?.reference || "-")}</span></div>`;
+      const channel = cleanText(response?.data?.acknowledgement?.channel || "");
+      const acknowledgementCopy = response?.data?.acknowledgement?.sent
+        ? marketplaceTr(channel === "email" ? "acknowledgementEmail" : "acknowledgementWhatsApp")
+        : marketplaceTr("acknowledgementPending");
+      resultEl.innerHTML = `<div class="flex items-start gap-3"><span class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700"><i class="fas fa-check" aria-hidden="true"></i></span><div><div class="font-black text-base">${adminEscape(marketplaceTr("reviewTitle"))}</div><p class="mt-1 text-sm">${adminEscape(marketplaceTr("reviewCopy"))}</p><div class="mt-3 rounded-lg border border-emerald-200 bg-white px-3 py-2">${adminEscape(marketplaceTr("registrationRef"))}: <span class="font-mono font-black">${adminEscape(response?.data?.reference || "-")}</span></div><p class="mt-2 text-xs font-bold">${adminEscape(acknowledgementCopy)}</p></div></div>`;
     }
     form.reset();
   } catch (error) {
@@ -24686,13 +24958,15 @@ function marketplaceModerationCardHtml(business = {}, scope = "staff") {
         <div class="flex flex-wrap gap-2 items-center"><span class="rounded-full bg-rose-50 border border-rose-100 text-rose-700 px-2 py-1 text-[11px] font-black">${adminEscape(source)}</span><span class="rounded-full bg-gray-50 border border-gray-200 text-gray-600 px-2 py-1 text-[11px] font-bold">${adminEscape(marketplaceCategoryLabel(business.category))}</span></div>
         <h4 class="mt-2 font-black text-gray-950">${adminEscape(business.name)}</h4>
         <p class="mt-1 text-xs text-gray-500"><i class="fas fa-location-dot mr-1"></i>${adminEscape(location || "Location not supplied")} • ${adminEscape(business.phone || "No phone")}</p>
+        ${business.registration_reference ? `<p class="mt-1 text-xs font-black text-blue-700">Ref ${adminEscape(business.registration_reference)}</p>` : ""}
+        ${business.owner_name ? `<p class="mt-1 text-xs text-gray-600"><strong>Owner contact:</strong> ${adminEscape(business.owner_name)} • ${adminEscape(business.owner_phone || business.phone || "No phone")}${business.owner_email ? ` • ${adminEscape(business.owner_email)}` : ""}</p>` : ""}
         <p class="mt-2 text-xs text-gray-700 line-clamp-3">${adminEscape(business.description || "No description")}</p>
         ${business.website ? `<a href="${adminAttr(business.website)}" target="_blank" rel="noopener noreferrer" class="mt-2 inline-block text-xs font-bold text-blue-700 hover:underline">${adminEscape(business.website)}</a>` : ""}
       </div>
     </div>
     <div class="mt-3 flex flex-wrap gap-2">
       <button type="button" onclick="marketplaceModerateBusiness('${adminAttr(business.id)}','approve','${adminAttr(scope)}')" class="bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg px-3 py-1.5 text-xs font-black">Approve live</button>
-      <button type="button" onclick="marketplaceModerateBusiness('${adminAttr(business.id)}','reject','${adminAttr(scope)}')" class="border border-red-200 text-red-700 hover:bg-red-50 rounded-lg px-3 py-1.5 text-xs font-black">Hide with reason</button>
+      <button type="button" onclick="marketplaceModerateBusiness('${adminAttr(business.id)}','reject','${adminAttr(scope)}')" class="border border-red-200 text-red-700 hover:bg-red-50 rounded-lg px-3 py-1.5 text-xs font-black">Reject with reason</button>
       <button type="button" onclick="marketplaceModerateBusiness('${adminAttr(business.id)}','remove','${adminAttr(scope)}')" class="border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg px-3 py-1.5 text-xs font-black">Remove</button>
     </div>
   </article>`;
@@ -24743,16 +25017,12 @@ async function refreshMarketplaceModerationQueue(scope = "staff", options = {}) 
 
 async function marketplaceModerateClaim(id, status, scope = "staff") {
   const rejected = status === "reject";
-  const notes = rejected
-    ? (window.prompt("Required reason for rejecting this ownership claim:", "Ownership evidence could not be confirmed.") || "")
-    : "Ownership evidence reviewed and claim approved.";
-  if (rejected && !notes.trim()) {
-    toast("A rejection reason is required.");
+  if (rejected) {
+    marketplaceOpenRejection(id, scope, "claim");
     return;
   }
-  const confirmation = rejected
-    ? "Reject this ownership claim?"
-    : "Approve this claim and convert the business to Privately Listed?";
+  const notes = "Ownership evidence reviewed and claim approved.";
+  const confirmation = "Approve this claim and convert the business to Privately Listed?";
   if (!window.confirm(confirmation)) return;
   try {
     const requestOptions = { method: "PATCH", body: { status, notes } };
@@ -24766,6 +25036,10 @@ async function marketplaceModerateClaim(id, status, scope = "staff") {
 }
 
 async function marketplaceModerateBusiness(id, status, scope = "staff") {
+  if (status === "reject") {
+    marketplaceOpenRejection(id, scope, "business");
+    return;
+  }
   const hideAction = ["reject", "remove"].includes(status);
   const notes = hideAction ? (window.prompt("Required moderation reason:", "") || "") : "Approved for the public Marketplace directory.";
   if (hideAction && !notes.trim()) {
@@ -24784,6 +25058,42 @@ async function marketplaceModerateBusiness(id, status, scope = "staff") {
     toast(status === "approve" ? "Marketplace business approved and sent live." : "Marketplace business updated.");
   } catch (error) {
     toast(error.message || "Marketplace moderation failed.");
+  }
+}
+
+function marketplaceOpenRejection(id, scope = "staff", kind = "business") {
+  const setValue = (fieldId, value) => { const element = document.getElementById(fieldId); if (element) element.value = value; };
+  setValue("marketplace-rejection-id", id);
+  setValue("marketplace-rejection-scope", scope);
+  setValue("marketplace-rejection-kind", kind);
+  setValue("marketplace-rejection-code", "");
+  setValue("marketplace-rejection-notes", "");
+  openModal("marketplace-rejection-modal");
+}
+
+async function submitMarketplaceRejection(event) {
+  event?.preventDefault?.();
+  const id = cleanText(document.getElementById("marketplace-rejection-id")?.value || "");
+  const scope = cleanText(document.getElementById("marketplace-rejection-scope")?.value || "staff");
+  const kind = cleanText(document.getElementById("marketplace-rejection-kind")?.value || "business");
+  const reasonCode = cleanText(document.getElementById("marketplace-rejection-code")?.value || "");
+  const notes = cleanText(document.getElementById("marketplace-rejection-notes")?.value || "");
+  if (!id || !reasonCode || !notes) {
+    toast("Choose a reason and add an actionable note.");
+    return;
+  }
+  try {
+    const path = kind === "claim"
+      ? `/api/marketplace/admin/claims/${encodeURIComponent(id)}/status`
+      : `/api/marketplace/admin/${encodeURIComponent(id)}/status`;
+    const requestOptions = { method: "PATCH", body: { status: "reject", reason_code: reasonCode, notes } };
+    if (scope === "admin") requestOptions.headers = adminAuthHeaders();
+    await apiRequest(path, requestOptions);
+    closeModal("marketplace-rejection-modal");
+    await refreshMarketplaceModerationQueue(scope, { silent: true });
+    toast(kind === "claim" ? "Marketplace ownership claim rejected and owner notified." : "Marketplace business rejected and owner notified.");
+  } catch (error) {
+    toast(error.message || "Marketplace rejection failed.");
   }
 }
 

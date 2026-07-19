@@ -3312,7 +3312,7 @@
     </div>
   </div>
 
-  <div id="page-marketplace" class="page bg-[#f8faf9]" data-marketplace-marker="marketplace-enrich-20260719">
+  <div id="page-marketplace" class="page bg-[#f8faf9]" data-marketplace-marker="marketplace-regjourney-20260719">
     <div class="bg-white border-t-[3px] border-[#b3134f] border-b border-gray-100">
       <div class="max-w-7xl mx-auto px-4 py-8">
         <div class="text-xs font-bold text-gray-500"><a href="/" class="hover:text-[#b3134f]" data-marketplace-i18n="breadcrumbHome">Home</a> <span aria-hidden="true">/</span> <span class="text-[#b3134f]" data-marketplace-i18n="breadcrumbMarketplace">Marketplace</span></div>
@@ -3393,6 +3393,7 @@
           <article class="rounded-xl border border-blue-200 bg-white p-4">
             <div class="flex items-center justify-between gap-2"><div class="inline-flex items-center gap-2 text-sm font-black text-blue-800"><i class="fas fa-certificate" aria-hidden="true"></i><span data-marketplace-i18n="tierVerified">Verified</span></div><span class="rounded-full bg-blue-700 text-white px-2 py-1 text-[10px] font-black" data-marketplace-i18n="verifiedPrice">UGX 150,000/year</span></div>
             <p class="mt-2 text-xs leading-5 text-gray-600" data-marketplace-i18n="tierVerifiedDesc">Evidence reviewed, blue seal shown, ranked first in search, and receives leads first.</p>
+            <button type="button" onclick="marketplaceOpenVerifiedWaitlist()" class="mt-3 text-xs font-black text-blue-700 hover:underline" data-marketplace-i18n="joinWaitlist">Join the Verified waitlist</button>
           </article>
         </div>
       </section>
@@ -3464,6 +3465,7 @@
           </div>
           <form id="marketplace-register-form" class="mt-5 grid md:grid-cols-2 gap-3" onsubmit="submitMarketplaceRegistration(event)">
             <input id="marketplace-register-name" required class="marketplace-focus border border-gray-200 rounded-lg px-3 py-2.5 text-sm" data-marketplace-placeholder="businessName" placeholder="Business name">
+            <input id="marketplace-register-owner-name" required class="marketplace-focus border border-gray-200 rounded-lg px-3 py-2.5 text-sm" data-marketplace-placeholder="contactName" placeholder="Contact person name">
             <select id="marketplace-register-category" required class="marketplace-focus border border-gray-200 rounded-lg px-3 py-2.5 text-sm bg-white"><option value="" data-marketplace-i18n="chooseService">Choose service category</option></select>
             <select id="marketplace-register-district" required class="marketplace-focus border border-gray-200 rounded-lg px-3 py-2.5 text-sm bg-white"><option value="" data-marketplace-i18n="chooseDistrict">Choose district</option></select>
             <input id="marketplace-register-area" class="marketplace-focus border border-gray-200 rounded-lg px-3 py-2.5 text-sm" data-marketplace-placeholder="area" placeholder="Area or town">
@@ -7511,6 +7513,75 @@
 
   <a id="floating-whatsapp-link" href="https://wa.me/256760112587" target="_blank" rel="noopener noreferrer" aria-label="Ask makaug on WhatsApp" class="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-green-500 text-white flex items-center justify-center text-2xl shadow-xl z-40" data-public-whatsapp-link data-whatsapp-context="auto"><i class="fab fa-whatsapp"></i></a>
   <div class="toast" id="toast-el"></div>
+
+  <div id="marketplace-manage-modal" class="modal-overlay" data-marketplace-marker="marketplace-regjourney-20260719">
+    <div class="modal-box" style="max-width:860px">
+      <button type="button" onclick="marketplaceCloseManageModal()" class="absolute top-4 right-4 w-9 h-9 rounded-full border border-gray-200 text-gray-500 hover:bg-gray-50" aria-label="Close"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+      <div class="pr-12">
+        <p class="text-xs font-black uppercase tracking-wide text-blue-700" data-marketplace-i18n="manageProfile">Manage your business profile</p>
+        <h2 id="marketplace-manage-title" class="mt-1 text-2xl font-black text-gray-950">Business profile</h2>
+        <p class="mt-1 text-sm text-gray-600" data-marketplace-i18n="manageSubtitle">This secure link lets you update your approved listing without a password.</p>
+      </div>
+      <div id="marketplace-owner-upsell" class="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-4">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div><strong class="text-blue-950" data-marketplace-i18n="privateUpsellTitle">You're Privately Listed</strong><p class="mt-1 text-xs text-blue-900/75" data-marketplace-i18n="privateUpsellCopy">Verified businesses rank first and receive leads first. Verified is coming soon.</p></div>
+          <button type="button" onclick="marketplaceOpenVerifiedWaitlistFromManage()" class="shrink-0 rounded-lg bg-blue-700 px-4 py-2.5 text-xs font-black text-white hover:bg-blue-600" data-marketplace-i18n="joinWaitlist">Join the Verified waitlist</button>
+        </div>
+      </div>
+      <div id="marketplace-manage-loading" class="mt-5 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600"><i class="fas fa-spinner fa-spin mr-2" aria-hidden="true"></i><span data-marketplace-i18n="loadingProfile">Loading your secure profile...</span></div>
+      <form id="marketplace-manage-form" class="hidden mt-5 grid md:grid-cols-2 gap-3" onsubmit="submitMarketplaceManagedProfile(event)">
+        <input id="marketplace-manage-name" required class="marketplace-focus border border-gray-200 rounded-lg px-3 py-2.5 text-sm" data-marketplace-placeholder="businessName" placeholder="Business name">
+        <div class="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm"><span class="text-gray-500" data-marketplace-i18n="profileViews">Profile views</span>: <strong id="marketplace-manage-views" class="text-gray-950">0</strong></div>
+        <textarea id="marketplace-manage-description" required minlength="20" rows="4" class="marketplace-focus md:col-span-2 border border-gray-200 rounded-lg px-3 py-2.5 text-sm" data-marketplace-placeholder="description" placeholder="Describe your services"></textarea>
+        <textarea id="marketplace-manage-services" rows="3" class="marketplace-focus md:col-span-2 border border-gray-200 rounded-lg px-3 py-2.5 text-sm" data-marketplace-placeholder="servicesOffered" placeholder="Services offered"></textarea>
+        <select id="marketplace-manage-district" required class="marketplace-focus border border-gray-200 rounded-lg px-3 py-2.5 text-sm bg-white"><option value="" data-marketplace-i18n="chooseDistrict">Choose district</option></select>
+        <input id="marketplace-manage-area" class="marketplace-focus border border-gray-200 rounded-lg px-3 py-2.5 text-sm" data-marketplace-placeholder="area" placeholder="Area or town">
+        <input id="marketplace-manage-serves" class="marketplace-focus md:col-span-2 border border-gray-200 rounded-lg px-3 py-2.5 text-sm" data-marketplace-placeholder="servesRegions" placeholder="Other districts served, separated by commas">
+        <input id="marketplace-manage-phone" required inputmode="tel" class="marketplace-focus border border-gray-200 rounded-lg px-3 py-2.5 text-sm" data-marketplace-placeholder="phone" placeholder="Phone">
+        <input id="marketplace-manage-whatsapp" inputmode="tel" class="marketplace-focus border border-gray-200 rounded-lg px-3 py-2.5 text-sm" data-marketplace-placeholder="whatsapp" placeholder="WhatsApp">
+        <input id="marketplace-manage-email" type="email" class="marketplace-focus border border-gray-200 rounded-lg px-3 py-2.5 text-sm" data-marketplace-placeholder="email" placeholder="Email">
+        <input id="marketplace-manage-website" type="url" class="marketplace-focus border border-gray-200 rounded-lg px-3 py-2.5 text-sm" data-marketplace-placeholder="website" placeholder="Website">
+        <input id="marketplace-manage-social" type="url" class="marketplace-focus md:col-span-2 border border-gray-200 rounded-lg px-3 py-2.5 text-sm" data-marketplace-placeholder="social" placeholder="Social media URL">
+        <label class="md:col-span-2 rounded-xl border border-dashed border-blue-200 bg-blue-50 p-4 text-sm text-blue-950"><span class="block font-black" data-marketplace-i18n="profilePhotos">Business photos</span><span class="mt-1 block text-xs text-blue-900/70" data-marketplace-i18n="profilePhotosHelp">Upload up to four JPG, PNG or WebP images, 2.5MB each.</span><input id="marketplace-manage-images" type="file" accept="image/jpeg,image/png,image/webp" multiple class="mt-3 block w-full text-xs file:mr-3 file:rounded-lg file:border-0 file:bg-white file:px-3 file:py-2 file:text-xs file:font-black file:text-blue-700"></label>
+        <div id="marketplace-manage-image-preview" class="md:col-span-2 grid grid-cols-2 sm:grid-cols-4 gap-2"></div>
+        <button id="marketplace-manage-submit" type="submit" class="md:col-span-2 rounded-lg bg-blue-700 px-4 py-3 text-sm font-black text-white hover:bg-blue-600" data-marketplace-i18n="saveChanges">Save changes</button>
+        <div id="marketplace-manage-result" class="hidden md:col-span-2 rounded-xl p-4 text-sm" aria-live="polite"></div>
+      </form>
+    </div>
+  </div>
+
+  <div id="marketplace-waitlist-modal" class="modal-overlay" data-marketplace-marker="marketplace-regjourney-20260719">
+    <div class="modal-box" style="max-width:560px">
+      <button type="button" onclick="closeModal('marketplace-waitlist-modal')" class="absolute top-4 right-4 w-9 h-9 rounded-full border border-gray-200 text-gray-500 hover:bg-gray-50" aria-label="Close"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+      <div class="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-black text-blue-700"><i class="fas fa-certificate" aria-hidden="true"></i><span data-marketplace-i18n="verifiedComing">Verified is coming</span></div>
+      <h2 class="mt-3 text-2xl font-black text-gray-950" data-marketplace-i18n="waitlistTitle">Get first access to Marketplace Verified</h2>
+      <p class="mt-2 text-sm text-gray-600" data-marketplace-i18n="waitlistSubtitle">Join the waitlist. We will contact you when evidence review and Flutterwave payment open.</p>
+      <form id="marketplace-waitlist-form" class="mt-5 space-y-3" onsubmit="submitMarketplaceVerifiedWaitlist(event)">
+        <input id="marketplace-waitlist-business-id" type="hidden">
+        <input id="marketplace-waitlist-name" required class="marketplace-focus w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm" data-marketplace-placeholder="businessOrOwnerName" placeholder="Business or owner name">
+        <input id="marketplace-waitlist-phone" inputmode="tel" class="marketplace-focus w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm" data-marketplace-placeholder="phone" placeholder="Phone or WhatsApp">
+        <input id="marketplace-waitlist-email" type="email" class="marketplace-focus w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm" data-marketplace-placeholder="email" placeholder="Email">
+        <button id="marketplace-waitlist-submit" type="submit" class="w-full rounded-lg bg-blue-700 px-4 py-3 text-sm font-black text-white hover:bg-blue-600" data-marketplace-i18n="joinWaitlist">Join the Verified waitlist</button>
+        <div id="marketplace-waitlist-result" class="hidden rounded-xl p-4 text-sm" aria-live="polite"></div>
+      </form>
+    </div>
+  </div>
+
+  <div id="marketplace-rejection-modal" class="modal-overlay" data-marketplace-marker="marketplace-regjourney-20260719">
+    <div class="modal-box" style="max-width:560px">
+      <button type="button" onclick="closeModal('marketplace-rejection-modal')" class="absolute top-4 right-4 w-9 h-9 rounded-full border border-gray-200 text-gray-500 hover:bg-gray-50" aria-label="Close"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+      <h2 class="text-xl font-black text-gray-950">Reject Marketplace submission</h2>
+      <p class="mt-1 text-sm text-gray-600">Choose a clear reason. The owner receives this message with a resubmission link.</p>
+      <form class="mt-5 space-y-3" onsubmit="submitMarketplaceRejection(event)">
+        <input id="marketplace-rejection-id" type="hidden"><input id="marketplace-rejection-scope" type="hidden"><input id="marketplace-rejection-kind" type="hidden">
+        <select id="marketplace-rejection-code" required class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm bg-white">
+          <option value="">Choose rejection reason</option><option value="duplicate">Duplicate business profile</option><option value="not_property_related">Business is not property-related</option><option value="bad_contact">Contact details could not be verified</option><option value="suspicious">Submission needs additional trust evidence</option>
+        </select>
+        <textarea id="marketplace-rejection-notes" required minlength="3" rows="4" class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm" placeholder="Add a short, actionable explanation for the owner"></textarea>
+        <button type="submit" class="w-full rounded-lg bg-red-700 px-4 py-3 text-sm font-black text-white hover:bg-red-600">Reject and notify owner</button>
+      </form>
+    </div>
+  </div>
 
   <div id="admin-evidence-modal" class="modal-overlay">
     <div class="modal-box admin-evidence-box">
