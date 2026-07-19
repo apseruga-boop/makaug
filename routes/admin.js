@@ -1805,28 +1805,27 @@ async function adminActionableReviewQueueCount({ timeoutMs = ADMIN_SAFE_QUERY_TI
       AND COALESCE(p.listed_via, '') <> 'found_online'
     )`;
     const foundOnlinePending = adminPendingReviewFastWhere('p');
-    const notLaunchTest = `NOT ${adminLaunchTestListingFastCondition('p')}`;
-    const [standard, foundOnline] = await Promise.all([
+    const [standard, foundOnlineSource, foundOnlineListedVia] = await Promise.all([
       safeCount(`SELECT COUNT(*)::int AS total FROM properties p WHERE ${standardWhere}`, [], { timeoutMs }),
       safeCount(
         `SELECT COUNT(*)::int AS total
-         FROM (
-           SELECT p.id
-           FROM properties p
-           WHERE p.source = 'found_online_property_source_v1'
-             AND ${foundOnlinePending}
-             AND ${notLaunchTest}
-           UNION
-           SELECT p.id
-           FROM properties p
-           WHERE p.listed_via = 'found_online'
-             AND ${foundOnlinePending}
-             AND ${notLaunchTest}
-         ) found_online_review`,
+         FROM properties p
+         WHERE p.source = 'found_online_property_source_v1'
+           AND ${foundOnlinePending}`,
+        [],
+        { timeoutMs }
+      ),
+      safeCount(
+        `SELECT COUNT(*)::int AS total
+         FROM properties p
+         WHERE p.listed_via = 'found_online'
+           AND p.source IS DISTINCT FROM 'found_online_property_source_v1'
+           AND ${foundOnlinePending}`,
         [],
         { timeoutMs }
       )
     ]);
+    const foundOnline = foundOnlineSource + foundOnlineListedVia;
     return { total: standard + foundOnline, standard, found_online: foundOnline };
   });
   return Number(payload?.total || 0);
