@@ -55,7 +55,7 @@ test('public Marketplace exposes provenance, claim UI, disclaimer and full tier 
   assert.match(html, /data-marketplace-i18n="tierPrivate">Privately listed/);
   assert.match(html, /data-marketplace-i18n="tierVerified">Verified/);
   assert.match(app, /tierPrivate: "Privately listed"/);
-  assert.match(html, /UGX 150,000\/year/);
+  assert.match(html, /UGX 150,000\/month/);
   assert.match(html, /id="marketplace-claim-form"/);
   assert.match(html, /onsubmit="submitMarketplaceClaim\(event\)"/);
   assert.match(app, /marketplaceOpenClaimForm/);
@@ -77,7 +77,7 @@ test('new claim, provenance, disclaimer and tier strings are complete in all nin
     'claimBusiness', 'claimTitle', 'claimSubtitle', 'claimReviewNote', 'claimantName', 'claimantRole',
     'roleOwner', 'roleDirector', 'roleEmployee', 'roleAgent', 'proofUrl', 'proofNotes', 'claimConsent',
     'submitClaim', 'claimSent', 'claimReference', 'sourceFoundGoogle', 'sourceFirstFound',
-    'sourceLastRefreshed', 'publicSourceDisclaimer'
+    'sourceLastRefreshed', 'publicSourceDisclaimer', 'foundOnlineDescriptionTemplate'
   ];
   required.forEach((key) => assert.equal(typeof context.MARKETPLACE_UI_EN[key], 'string', `English missing ${key}`));
   for (const lang of ['lg', 'sw', 'ac', 'ny', 'rn', 'sm', 'am', 'ar']) {

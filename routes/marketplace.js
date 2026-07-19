@@ -3,6 +3,11 @@
 const express = require('express');
 
 const db = require('../config/database');
+const {
+  MARKETPLACE_POLISH_MARKER,
+  MARKETPLACE_VERIFIED_BILLING_PERIOD,
+  MARKETPLACE_VERIFIED_PRICE_UGX
+} = require('../config/marketplacePricing');
 const { requireListingModerationAccess } = require('../middleware/auth');
 const { isValidEmail, isValidPhone } = require('../middleware/validation');
 const { createLead } = require('../services/leadService');
@@ -109,11 +114,15 @@ router.get('/config', async (_req, res) => {
     ok: true,
     data: {
       marker: MARKETPLACE_P1_MARKER,
-      release_markers: [MARKETPLACE_P1_MARKER, MARKETPLACE_REPORT_FIXES_MARKER, MARKETPLACE_ENRICH_MARKER, MARKETPLACE_REGJOURNEY_MARKER, MARKETPLACE_P2_MARKER],
+      release_markers: [MARKETPLACE_P1_MARKER, MARKETPLACE_REPORT_FIXES_MARKER, MARKETPLACE_ENRICH_MARKER, MARKETPLACE_REGJOURNEY_MARKER, MARKETPLACE_P2_MARKER, MARKETPLACE_POLISH_MARKER],
       categories: MARKETPLACE_CATEGORIES,
       districts: DISTRICTS,
       paid_verification_enabled: false,
       verified_waitlist_enabled: true,
+      verified_pricing: {
+        amount_ugx: MARKETPLACE_VERIFIED_PRICE_UGX,
+        billing_period: MARKETPLACE_VERIFIED_BILLING_PERIOD
+      },
       registration_review_target_hours: 24,
       rejection_reasons: REJECTION_REASONS,
       source_drip_available: true,

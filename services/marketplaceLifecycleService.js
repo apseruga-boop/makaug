@@ -3,11 +3,13 @@
 const crypto = require('crypto');
 
 const logger = require('../config/logger');
+const { MARKETPLACE_VERIFIED_PRICE_UGX } = require('../config/marketplacePricing');
 const { sendSupportEmail } = require('./emailService');
 const { logNotification, notificationStatusFromDelivery } = require('./notificationLogService');
 const { sendWhatsAppText } = require('./whatsappNotificationService');
 
 const MARKETPLACE_REGJOURNEY_MARKER = 'marketplace-regjourney-20260719';
+const VERIFIED_PRICE = Number(MARKETPLACE_VERIFIED_PRICE_UGX).toLocaleString('en-US');
 const SUPPORTED_LANGUAGES = new Set(['en', 'lg', 'sw', 'ac', 'ny', 'rn', 'sm', 'am', 'ar']);
 const REJECTION_REASONS = Object.freeze({
   duplicate: 'Duplicate business profile',
@@ -21,63 +23,63 @@ const COPY = Object.freeze({
     received: ({ name, reference }) => `makaug: we received your listing for ${name}. Ref ${reference}. Most reviews are completed within 24 hours. We will message you when it is live.`,
     live: ({ name, publicUrl, editUrl, waitlistUrl }) => `makaug: ${name} is now live as Privately Listed.\n\nView profile: ${publicUrl}\nEdit your profile anytime: ${editUrl}\n\nWant to appear first in search and receive leads first? Verified is coming. Join the waitlist: ${waitlistUrl}`,
     rejected: ({ name, reason, resubmitUrl }) => `makaug: we could not approve ${name} yet. Reason: ${reason}. Please correct the details and resubmit here: ${resubmitUrl}`,
-    day7: ({ name, views, category, waitlistUrl }) => `${name} has been viewed ${views} times this week. Verified ${category} businesses receive leads first. Verified will be UGX 150,000/year. Join the waitlist: ${waitlistUrl}`,
+    day7: ({ name, views, category, waitlistUrl }) => `${name} has been viewed ${views} times this week. Verified ${category} businesses receive leads first. Verified will be UGX ${VERIFIED_PRICE}/month. Join the waitlist: ${waitlistUrl}`,
     lead: ({ category, district, waitlistUrl }) => `A customer just asked for ${category} services in ${district}. Verified members received the lead first. Join the Verified waitlist to be first next time: ${waitlistUrl}`
   },
   lg: {
     received: ({ name, reference }) => `makaug: tufunye okwewandiisa kwa ${name}. Ref ${reference}. Okukebera kusinga kukolebwa mu ssaawa 24. Tujja kukutegeeza bwe kunaaba kulabika.`,
     live: ({ name, publicUrl, editUrl, waitlistUrl }) => `makaug: ${name} kati erabika nga Privately Listed.\n\nLaba profile: ${publicUrl}\nKyusa profile yo: ${editUrl}\n\nOyagala okusooka mu kunoonya n'okufuna leads? Verified ejja. Weewandiise: ${waitlistUrl}`,
     rejected: ({ name, reason, resubmitUrl }) => `makaug: tetunnasobola kukkiriza ${name}. Ensonga: ${reason}. Tereeza ebikwata ku bizinesi oddemu oweereze: ${resubmitUrl}`,
-    day7: ({ name, views, category, waitlistUrl }) => `${name} erabiddwa emirundi ${views} wiiki eno. Bizinesi za ${category} eza Verified ze zisooka okufuna leads. Omuwendo gujja kuba UGX 150,000 buli mwaka. Weewandiise: ${waitlistUrl}`,
+    day7: ({ name, views, category, waitlistUrl }) => `${name} erabiddwa emirundi ${views} wiiki eno. Bizinesi za ${category} eza Verified ze zisooka okufuna leads. Omuwendo gujja kuba UGX ${VERIFIED_PRICE} buli mwezi. Weewandiise: ${waitlistUrl}`,
     lead: ({ category, district, waitlistUrl }) => `Kasitoma anoonya ${category} mu ${district}. Aba Verified be basoose okufuna lead. Weewandiise ku Verified: ${waitlistUrl}`
   },
   sw: {
     received: ({ name, reference }) => `makaug: tumepokea usajili wa ${name}. Ref ${reference}. Ukaguzi mwingi hukamilika ndani ya saa 24. Tutakujulisha ukiwa live.`,
     live: ({ name, publicUrl, editUrl, waitlistUrl }) => `makaug: ${name} sasa iko live kama Privately Listed.\n\nTazama wasifu: ${publicUrl}\nHariri wakati wowote: ${editUrl}\n\nUnataka kuonekana kwanza na kupata leads kwanza? Verified inakuja. Jiunge: ${waitlistUrl}`,
     rejected: ({ name, reason, resubmitUrl }) => `makaug: hatujaweza kuidhinisha ${name}. Sababu: ${reason}. Sahihisha maelezo na utume tena: ${resubmitUrl}`,
-    day7: ({ name, views, category, waitlistUrl }) => `${name} imetazamwa mara ${views} wiki hii. Biashara za ${category} zilizo Verified hupata leads kwanza. Bei itakuwa UGX 150,000 kwa mwaka. Jiunge: ${waitlistUrl}`,
+    day7: ({ name, views, category, waitlistUrl }) => `${name} imetazamwa mara ${views} wiki hii. Biashara za ${category} zilizo Verified hupata leads kwanza. Bei itakuwa UGX ${VERIFIED_PRICE} kwa mwezi. Jiunge: ${waitlistUrl}`,
     lead: ({ category, district, waitlistUrl }) => `Mteja ameomba huduma ya ${category} katika ${district}. Wanachama Verified walipata lead kwanza. Jiunge: ${waitlistUrl}`
   },
   ac: {
     received: ({ name, reference }) => `makaug: wagamo coc pa ${name}. Ref ${reference}. Kineno coc mapol i cawa 24. Wabi cwalo lok ka dong tye live.`,
     live: ({ name, publicUrl, editUrl, waitlistUrl }) => `makaug: ${name} dong tye live macalo Privately Listed.\nNen profile: ${publicUrl}\nYub profile: ${editUrl}\nVerified bino - donyo i nying: ${waitlistUrl}`,
     rejected: ({ name, reason, resubmitUrl }) => `makaug: pe watwero yee ${name} pud. Tyen lok: ${reason}. Yub lok ki icwal dok: ${resubmitUrl}`,
-    day7: ({ name, views, category, waitlistUrl }) => `${name} kineno tyen ${views} i cabit man. Jo ${category} ma Verified giyudo leads kong. Wel bino bedo UGX 150,000 i mwaka. Dony i nying: ${waitlistUrl}`,
+    day7: ({ name, views, category, waitlistUrl }) => `${name} kineno tyen ${views} i cabit man. Jo ${category} ma Verified giyudo leads kong. Wel bino bedo UGX ${VERIFIED_PRICE} i dwe. Dony i nying: ${waitlistUrl}`,
     lead: ({ category, district, waitlistUrl }) => `Latic mito ${category} i ${district}. Jo Verified guyudo lead kong. Dony i nying: ${waitlistUrl}`
   },
   ny: {
     received: ({ name, reference }) => `makaug: twakiira okuhandiika kwa ${name}. Ref ${reference}. Okukebera nikukira kumara omu shaaha 24. Nitwija kukumanyisa ku eraabe live.`,
     live: ({ name, publicUrl, editUrl, waitlistUrl }) => `makaug: ${name} hati eri live nka Privately Listed.\nReeba profile: ${publicUrl}\nHindura profile: ${editUrl}\nVerified neija - handiika aha waitlist: ${waitlistUrl}`,
     rejected: ({ name, reason, resubmitUrl }) => `makaug: titwabaasize kwikiriza ${name}. Enshonga: ${reason}. Tereeza ogarukemu ohereze: ${resubmitUrl}`,
-    day7: ({ name, views, category, waitlistUrl }) => `${name} ereebirwe emirundi ${views} omu saabiiti egi. Aba ${category} aba Verified nibo babanza leads. Omuhendo nigwija kuba UGX 150,000 omu mwaka. Handiika: ${waitlistUrl}`,
+    day7: ({ name, views, category, waitlistUrl }) => `${name} ereebirwe emirundi ${views} omu saabiiti egi. Aba ${category} aba Verified nibo babanza leads. Omuhendo nigwija kuba UGX ${VERIFIED_PRICE} buri kwezi. Handiika: ${waitlistUrl}`,
     lead: ({ category, district, waitlistUrl }) => `Omukiriya naayenda ${category} omu ${district}. Aba Verified nibo babanzire lead. Handiika: ${waitlistUrl}`
   },
   rn: {
     received: ({ name, reference }) => `makaug: twakiira okuhandiika kwa ${name}. Ref ${reference}. Okukebera nikukira kumara omu shaaha 24. Nitwija kukumanyisa ku eraabe live.`,
     live: ({ name, publicUrl, editUrl, waitlistUrl }) => `makaug: ${name} hati eri live nka Privately Listed.\nReeba profile: ${publicUrl}\nHindura profile: ${editUrl}\nVerified neija - handiika aha waitlist: ${waitlistUrl}`,
     rejected: ({ name, reason, resubmitUrl }) => `makaug: titwabaasize kwikiriza ${name}. Enshonga: ${reason}. Tereeza ogarukemu ohereze: ${resubmitUrl}`,
-    day7: ({ name, views, category, waitlistUrl }) => `${name} ereebirwe emirundi ${views} omu saabiiti egi. Aba ${category} aba Verified nibo babanza leads. Omuhendo nigwija kuba UGX 150,000 omu mwaka. Handiika: ${waitlistUrl}`,
+    day7: ({ name, views, category, waitlistUrl }) => `${name} ereebirwe emirundi ${views} omu saabiiti egi. Aba ${category} aba Verified nibo babanza leads. Omuhendo nigwija kuba UGX ${VERIFIED_PRICE} buri kwezi. Handiika: ${waitlistUrl}`,
     lead: ({ category, district, waitlistUrl }) => `Omukiriya naayenda ${category} omu ${district}. Aba Verified nibo babanzire lead. Handiika: ${waitlistUrl}`
   },
   sm: {
     received: ({ name, reference }) => `makaug: tufunye okwewandiisa kwa ${name}. Ref ${reference}. Okukebera kutera okukolebwa mu ssaawa 24. Tujja kukutegeeza bwe kunaaba live.`,
     live: ({ name, publicUrl, editUrl, waitlistUrl }) => `makaug: ${name} kati eri live nga Privately Listed.\nBona profile: ${publicUrl}\nKyusa profile: ${editUrl}\nVerified ejja - weewandiise: ${waitlistUrl}`,
     rejected: ({ name, reason, resubmitUrl }) => `makaug: tetunnasobola kukkiriza ${name}. Ensonga: ${reason}. Tereeza oddemu oweereze: ${resubmitUrl}`,
-    day7: ({ name, views, category, waitlistUrl }) => `${name} eboneddwa emirundi ${views} wiiki eno. Aba ${category} aba Verified be basooka leads. Omuwendo gujja kuba UGX 150,000 buli mwaka. Weewandiise: ${waitlistUrl}`,
+    day7: ({ name, views, category, waitlistUrl }) => `${name} eboneddwa emirundi ${views} wiiki eno. Aba ${category} aba Verified be basooka leads. Omuwendo gujja kuba UGX ${VERIFIED_PRICE} buli mwezi. Weewandiise: ${waitlistUrl}`,
     lead: ({ category, district, waitlistUrl }) => `Kasitoma anoonya ${category} mu ${district}. Aba Verified be basoose lead. Weewandiise: ${waitlistUrl}`
   },
   am: {
     received: ({ name, reference }) => `makaug: የ${name} ምዝገባ ደርሶናል። ማጣቀሻ ${reference}። አብዛኛው ግምገማ በ24 ሰዓት ውስጥ ይጠናቀቃል። በቀጥታ ሲታይ እናሳውቃለን።`,
     live: ({ name, publicUrl, editUrl, waitlistUrl }) => `makaug: ${name} እንደ Privately Listed በቀጥታ ይታያል።\nመገለጫ: ${publicUrl}\nአርትዕ: ${editUrl}\nVerified በቅርቡ ይመጣል። ይመዝገቡ: ${waitlistUrl}`,
     rejected: ({ name, reason, resubmitUrl }) => `makaug: ${name}ን ገና ማጽደቅ አልቻልንም። ምክንያት: ${reason}። አስተካክለው እንደገና ይላኩ: ${resubmitUrl}`,
-    day7: ({ name, views, category, waitlistUrl }) => `${name} በዚህ ሳምንት ${views} ጊዜ ታይቷል። Verified ${category} መጀመሪያ leads ያገኛሉ። ዋጋው በዓመት UGX 150,000 ይሆናል። ይመዝገቡ: ${waitlistUrl}`,
+    day7: ({ name, views, category, waitlistUrl }) => `${name} በዚህ ሳምንት ${views} ጊዜ ታይቷል። Verified ${category} መጀመሪያ leads ያገኛሉ። ዋጋው UGX ${VERIFIED_PRICE} በወር ይሆናል። ይመዝገቡ: ${waitlistUrl}`,
     lead: ({ category, district, waitlistUrl }) => `ደንበኛ በ${district} የ${category} አገልግሎት ጠይቋል። Verified አባላት መጀመሪያ lead አግኝተዋል። ይመዝገቡ: ${waitlistUrl}`
   },
   ar: {
     received: ({ name, reference }) => `makaug: استلمنا تسجيل ${name}. المرجع ${reference}. تكتمل معظم المراجعات خلال 24 ساعة. سنراسلك عند النشر.`,
     live: ({ name, publicUrl, editUrl, waitlistUrl }) => `makaug: أصبح ${name} منشورا كإدراج خاص.\nالملف: ${publicUrl}\nالتعديل: ${editUrl}\nخدمة Verified قادمة. انضم للقائمة: ${waitlistUrl}`,
     rejected: ({ name, reason, resubmitUrl }) => `makaug: لم نتمكن من اعتماد ${name} بعد. السبب: ${reason}. صحح البيانات وأعد الإرسال: ${resubmitUrl}`,
-    day7: ({ name, views, category, waitlistUrl }) => `تمت مشاهدة ${name} عدد ${views} مرات هذا الأسبوع. الأعمال الموثقة في ${category} تحصل على العملاء أولا. سيكون السعر 150,000 UGX سنويا. انضم: ${waitlistUrl}`,
+    day7: ({ name, views, category, waitlistUrl }) => `تمت مشاهدة ${name} عدد ${views} مرات هذا الأسبوع. الأعمال الموثقة في ${category} تحصل على العملاء أولا. سيكون السعر ${VERIFIED_PRICE} UGX شهريا. انضم: ${waitlistUrl}`,
     lead: ({ category, district, waitlistUrl }) => `طلب عميل خدمة ${category} في ${district}. حصل الأعضاء الموثقون على الطلب أولا. انضم: ${waitlistUrl}`
   }
 });
