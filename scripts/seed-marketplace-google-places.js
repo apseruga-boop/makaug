@@ -177,6 +177,7 @@ async function upsertCandidate(candidate, { dryRun = false } = {}) {
     `SELECT id
        FROM marketplace_businesses
       WHERE source_url = $1
+         OR source_place_id = $2
          OR source_metadata->>'google_place_id' = $2
          OR (phone = $3 AND phone <> '')
          OR (LOWER(name) = LOWER($4) AND district = $5)
@@ -189,13 +190,14 @@ async function upsertCandidate(candidate, { dryRun = false } = {}) {
       await db.query(
         `UPDATE marketplace_businesses
             SET source_urls = ARRAY(SELECT DISTINCT unnest(source_urls || ARRAY[$2]::text[])),
+                source_place_id = COALESCE(source_place_id, $5),
                 phone = COALESCE(NULLIF(phone, ''), $3),
                 whatsapp = COALESCE(NULLIF(whatsapp, ''), $3),
                 website = COALESCE(NULLIF(website, ''), $4),
                 last_refreshed = NOW(),
                 updated_at = NOW()
           WHERE id = $1`,
-        [duplicate.rows[0].id, candidate.source_url, candidate.phone, candidate.website || null]
+        [duplicate.rows[0].id, candidate.source_url, candidate.phone, candidate.website || null, candidate.place_id]
       );
     }
     return { action: 'existing', id: duplicate.rows[0].id };
@@ -216,10 +218,10 @@ async function upsertCandidate(candidate, { dryRun = false } = {}) {
     `INSERT INTO marketplace_businesses (
        name, slug, category, description, services_text, district, area,
        latitude, longitude, serves_regions, phone, whatsapp, website,
-       tier, status, source_type, source, source_url, source_urls, source_metadata
+       tier, status, source_type, source, source_url, source_urls, source_place_id, source_metadata
      ) VALUES (
        $1,$2,$3,$4,$5,$6,$7,$8,$9,ARRAY[$6]::text[],$10,$10,$11,
-       'found_online','live','found_online','google_maps',$12,ARRAY[$12]::text[],$13::jsonb
+       'found_online','live','found_online','google_maps',$12,ARRAY[$12]::text[],$13,$14::jsonb
      )
      RETURNING id`,
     [
@@ -235,6 +237,7 @@ async function upsertCandidate(candidate, { dryRun = false } = {}) {
       candidate.phone,
       candidate.website || null,
       candidate.source_url,
+      candidate.place_id,
       JSON.stringify(metadata)
     ]
   );

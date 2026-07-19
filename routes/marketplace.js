@@ -8,8 +8,13 @@ const { isValidEmail, isValidPhone } = require('../middleware/validation');
 const { createLead } = require('../services/leadService');
 const { logNotification } = require('../services/notificationLogService');
 const {
+  getGooglePlaceDetails,
+  googleDetailsStatus
+} = require('../services/marketplaceGooglePlacesService');
+const {
   DISTRICTS,
   MARKETPLACE_CATEGORIES,
+  MARKETPLACE_ENRICH_MARKER,
   MARKETPLACE_P1_MARKER,
   MARKETPLACE_REPORT_FIXES_MARKER,
   claimReference,
@@ -89,11 +94,15 @@ router.get('/config', async (_req, res) => {
     ok: true,
     data: {
       marker: MARKETPLACE_P1_MARKER,
-      release_markers: [MARKETPLACE_P1_MARKER, MARKETPLACE_REPORT_FIXES_MARKER],
+      release_markers: [MARKETPLACE_P1_MARKER, MARKETPLACE_REPORT_FIXES_MARKER, MARKETPLACE_ENRICH_MARKER],
       categories: MARKETPLACE_CATEGORIES,
       districts: DISTRICTS,
       paid_verification_enabled: false,
-      source_drip_enabled: false
+      source_drip_enabled: false,
+      google_details: {
+        configured: googleDetailsStatus().configured,
+        cache_ttl_ms: googleDetailsStatus().cache_ttl_ms
+      }
     }
   });
 });
@@ -391,6 +400,97 @@ router.post('/leads', async (req, res, next) => {
   }
 });
 
+router.get('/businesses/:id/details', async (req, res, next) => {
+  try {
+    const businessId = normalizeUuid(req.params.id);
+    if (!businessId) return res.status(400).json({ ok: false, error: 'Choose a valid Marketplace business.' });
+    const result = await db.query(
+      `SELECT id, name, slug, category, description, district, area, serves_regions,
+              phone, whatsapp, email, website, social_links, ursb_number, tier,
+              rating_avg, rating_count, source_type, source, source_url,
+              source_place_id, source_metadata, first_seen, last_refreshed, updated_at
+       FROM marketplace_businesses
+       WHERE id = $1 AND status = 'live'
+       LIMIT 1`,
+      [businessId]
+    );
+    const business = result.rows[0];
+    if (!business) return res.status(404).json({ ok: false, error: 'Marketplace business not found.' });
+    const publicProfile = publicBusiness(business);
+    if (business.source !== 'google_maps' || business.source_type !== 'found_online') {
+      return res.json({ ok: true, data: { marker: MARKETPLACE_ENRICH_MARKER, business: publicProfile, enrichment: null, meta: { applicable: false } } });
+    }
+    const metadata = safeObject(business.source_metadata);
+    const placeId = clean(business.source_place_id || metadata.google_place_id);
+    if (!placeId) {
+      return res.json({ ok: true, data: { marker: MARKETPLACE_ENRICH_MARKER, business: publicProfile, enrichment: null, meta: { applicable: true, available: false, reason: 'missing_place_id' } } });
+    }
+    try {
+      const enrichment = await getGooglePlaceDetails(placeId);
+      if (enrichment?.business_status === 'permanently_closed') {
+        await db.query(
+          `UPDATE marketplace_businesses
+           SET status = 'hidden', moderation_notes = 'Automatically hidden: Google reports permanently closed.', last_refreshed = NOW(), updated_at = NOW()
+           WHERE id = $1`,
+          [business.id]
+        );
+        await recordMarketplaceEvent(db, {
+          businessId: business.id,
+          eventType: 'business_hidden_permanently_closed',
+          metadata: { source: 'google_maps', place_id: placeId }
+        });
+        invalidateMarketplaceStats();
+        return res.status(410).json({ ok: false, error: 'This business is permanently closed and has been removed from the directory.' });
+      }
+      await db.query(
+        `UPDATE marketplace_businesses
+         SET source_place_id = COALESCE(source_place_id, $2),
+             phone = COALESCE(NULLIF(phone, ''), NULLIF($3, '')),
+             whatsapp = COALESCE(NULLIF(whatsapp, ''), NULLIF($3, '')),
+             website = COALESCE(NULLIF(website, ''), NULLIF($4, '')),
+             source_url = COALESCE(NULLIF($5, ''), source_url),
+             source_urls = CASE WHEN NULLIF($5, '') IS NULL THEN source_urls ELSE ARRAY(SELECT DISTINCT unnest(source_urls || ARRAY[$5]::text[])) END,
+             last_refreshed = NOW(),
+             updated_at = NOW()
+         WHERE id = $1`,
+        [business.id, placeId, enrichment.international_phone, enrichment.website, enrichment.google_maps_url]
+      );
+      return res.json({
+        ok: true,
+        data: {
+          marker: MARKETPLACE_ENRICH_MARKER,
+          business: {
+            ...publicProfile,
+            phone: publicProfile.phone || enrichment.international_phone || null,
+            whatsapp: publicProfile.whatsapp || enrichment.international_phone || null,
+            website: publicProfile.website || enrichment.website || null,
+            source_url: enrichment.google_maps_url || publicProfile.source_url,
+            last_refreshed: new Date().toISOString()
+          },
+          enrichment,
+          meta: { applicable: true, available: true, cache_status: enrichment.cache_status }
+        }
+      });
+    } catch (error) {
+      return res.json({
+        ok: true,
+        data: {
+          marker: MARKETPLACE_ENRICH_MARKER,
+          business: publicProfile,
+          enrichment: null,
+          meta: {
+            applicable: true,
+            available: false,
+            reason: error.code || 'google_details_unavailable'
+          }
+        }
+      });
+    }
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.get('/admin/pending', requireListingModerationAccess, async (req, res, next) => {
   try {
     const status = ['pending_review', 'live', 'hidden', 'removed'].includes(clean(req.query.status)) ? clean(req.query.status) : 'pending_review';
@@ -535,7 +635,7 @@ router.get('/:slug', async (req, res, next) => {
     const result = await db.query(
       `SELECT id, name, slug, category, description, district, area, serves_regions,
               phone, whatsapp, email, website, social_links, ursb_number, tier,
-              rating_avg, rating_count, source_type, source, source_url,
+              rating_avg, rating_count, source_type, source, source_url, source_place_id,
               first_seen, last_refreshed, updated_at
        FROM marketplace_businesses
        WHERE slug = $1 AND status = 'live'
@@ -552,7 +652,7 @@ router.get('/:slug', async (req, res, next) => {
        LIMIT 20`,
       [business.id]
     );
-    return res.json({ ok: true, data: { marker: MARKETPLACE_P1_MARKER, business: publicBusiness(business), reviews: reviews.rows } });
+    return res.json({ ok: true, data: { marker: MARKETPLACE_ENRICH_MARKER, business: publicBusiness(business), reviews: reviews.rows } });
   } catch (error) {
     return next(error);
   }

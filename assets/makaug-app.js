@@ -3269,6 +3269,7 @@ function applyAboutLanguageUI() {
 
 const MARKETPLACE_P1_MARKER = "marketplace-p1-20260719";
 const MARKETPLACE_REPORT_FIXES_MARKER = "marketplace-report-fixes-20260719";
+const MARKETPLACE_ENRICH_MARKER = "marketplace-enrich-20260719";
 const MARKETPLACE_UI_EN = Object.freeze({
   breadcrumbHome: "Home", breadcrumbMarketplace: "Marketplace", eyebrow: "Uganda property services",
   title: "Uganda's largest property services directory", subtitle: "Surveyors, lawyers, builders, brokers, valuers and practical property services across Uganda.",
@@ -3297,7 +3298,8 @@ const MARKETPLACE_UI_EN = Object.freeze({
   claimantName: "Your full name", claimantRole: "Your relationship to the business", roleOwner: "Owner", roleDirector: "Director", roleEmployee: "Employee", roleAgent: "Authorised agent",
   proofUrl: "Public proof link (website, company page or registration record, optional)", proofNotes: "Explain how we can confirm that you own or represent this business", claimConsent: "I confirm this claim is truthful and consent to makaug checking the evidence provided.",
   submitClaim: "Submit ownership claim", claimSent: "Ownership claim received", claimReference: "Claim reference", sourceFoundGoogle: "Found online via Google Maps", sourceFirstFound: "First found", sourceLastRefreshed: "Last refreshed",
-  publicSourceDisclaimer: "Some profiles are gathered from public sources and are not verified by makaug. makaug is not a party to any deal. Always confirm qualifications, identity, scope and fees before paying. Owners may claim, correct or request removal of a profile."
+  publicSourceDisclaimer: "Some profiles are gathered from public sources and are not verified by makaug. makaug is not a party to any deal. Always confirm qualifications, identity, scope and fees before paying. Owners may claim, correct or request removal of a profile.",
+  googleLoading: "Refreshing details from Google...", googleRating: "Google rating", reviewsOnGoogle: "reviews on Google", openNow: "Open now", closedNow: "Closed now", openingHours: "Opening hours", fullAddress: "Full address", plusCode: "Plus code", businessStatus: "Business status", operational: "Operational", temporarilyClosed: "Temporarily closed", googleDetailsUnavailable: "Live Google details are temporarily unavailable.", websiteLabel: "Website", phoneLabel: "International phone", viewOnGoogle: "View on Google Maps"
 });
 
 const MARKETPLACE_UI_OVERRIDES = Object.freeze({
@@ -3442,6 +3444,21 @@ Object.entries(MARKETPLACE_UI_COMPLETIONS).forEach(([language, values]) => {
   Object.assign(MARKETPLACE_UI_OVERRIDES[language], values);
 });
 
+const MARKETPLACE_ENRICH_I18N = Object.freeze({
+  lg: { googleLoading: "Tuzza buggya ebikwata ku Google...", googleRating: "Obubonero bwa Google", reviewsOnGoogle: "endowooza ku Google", openNow: "Kiggule kati", closedNow: "Kiggale kati", openingHours: "Essaawa z'okuggulawo", fullAddress: "Endagiriro enzijuvu", plusCode: "Plus code", businessStatus: "Embeera ya bizinesi", operational: "Ekola", temporarilyClosed: "Kiggale okumala akaseera", googleDetailsUnavailable: "Ebikwata ku Google tebiriwo kati.", websiteLabel: "Omukutu", phoneLabel: "Essimu y'ensi yonna", viewOnGoogle: "Laba ku Google Maps" },
+  sw: { googleLoading: "Inasasisha maelezo kutoka Google...", googleRating: "Ukadiriaji wa Google", reviewsOnGoogle: "maoni kwenye Google", openNow: "Imefunguliwa sasa", closedNow: "Imefungwa sasa", openingHours: "Saa za kazi", fullAddress: "Anwani kamili", plusCode: "Plus code", businessStatus: "Hali ya biashara", operational: "Inafanya kazi", temporarilyClosed: "Imefungwa kwa muda", googleDetailsUnavailable: "Maelezo ya moja kwa moja ya Google hayapatikani kwa muda.", websiteLabel: "Tovuti", phoneLabel: "Simu ya kimataifa", viewOnGoogle: "Tazama kwenye Google Maps" },
+  ac: { googleLoading: "Tye ka neno lok manyen ki Google...", googleRating: "Lacer pa Google", reviewsOnGoogle: "lok pa dano i Google", openNow: "Tye ayaba kombedi", closedNow: "Tye alora kombedi", openingHours: "Cawa me yabo", fullAddress: "Kabedo lung", plusCode: "Plus code", businessStatus: "Kit ma bici tye kwede", operational: "Tye atic", temporarilyClosed: "Kiloro pi kare manok", googleDetailsUnavailable: "Lok ma aa ki Google pe tye kombedi.", websiteLabel: "Kakube", phoneLabel: "Cim me wilobo", viewOnGoogle: "Nen i Google Maps" },
+  ny: { googleLoading: "Nituhindura amakuru kuruga Google...", googleRating: "Obubonero bwa Google", reviewsOnGoogle: "endowooza ahari Google", openNow: "Nekora hati", closedNow: "Neshwekwa hati", openingHours: "Obwire bw'okukora", fullAddress: "Endagiriro yoona", plusCode: "Plus code", businessStatus: "Embeera ya bizinesi", operational: "Nekora", temporarilyClosed: "Eshwekirwe akaanya", googleDetailsUnavailable: "Amakuru ga Google tigariho hati.", websiteLabel: "Omukutu", phoneLabel: "Esimu y'amahanga", viewOnGoogle: "Reeba ahari Google Maps" },
+  rn: { googleLoading: "Nituhindura amakuru kuruga Google...", googleRating: "Obubonero bwa Google", reviewsOnGoogle: "endowooza ahari Google", openNow: "Nekora hati", closedNow: "Neshwekwa hati", openingHours: "Obwire bw'okukora", fullAddress: "Endagiriro yoona", plusCode: "Plus code", businessStatus: "Embeera ya bizinesi", operational: "Nekora", temporarilyClosed: "Eshwekirwe akaanya", googleDetailsUnavailable: "Amakuru ga Google tigariho hati.", websiteLabel: "Omukutu", phoneLabel: "Esimu y'amahanga", viewOnGoogle: "Reeba ahari Google Maps" },
+  sm: { googleLoading: "Tuzza buggya ebikwata ku Google...", googleRating: "Obubonero bwa Google", reviewsOnGoogle: "endowooza ku Google", openNow: "Kiggule kati", closedNow: "Kiggale kati", openingHours: "Essaawa z'okuggulawo", fullAddress: "Endagiriro enzijuvu", plusCode: "Plus code", businessStatus: "Embeera ya bizinesi", operational: "Ekola", temporarilyClosed: "Kiggale okumala akaseera", googleDetailsUnavailable: "Ebikwata ku Google tebiriwo kati.", websiteLabel: "Omukutu", phoneLabel: "Essimu y'ensi yonna", viewOnGoogle: "Laba ku Google Maps" },
+  am: { googleLoading: "ዝርዝሮችን ከGoogle በማደስ ላይ...", googleRating: "የGoogle ደረጃ", reviewsOnGoogle: "በGoogle ላይ ግምገማዎች", openNow: "አሁን ክፍት", closedNow: "አሁን ዝግ", openingHours: "የስራ ሰዓታት", fullAddress: "ሙሉ አድራሻ", plusCode: "Plus code", businessStatus: "የንግድ ሁኔታ", operational: "እየሰራ ነው", temporarilyClosed: "ለጊዜው ዝግ", googleDetailsUnavailable: "የቀጥታ Google ዝርዝሮች ለጊዜው አይገኙም።", websiteLabel: "ድህረ ገጽ", phoneLabel: "ዓለም አቀፍ ስልክ", viewOnGoogle: "በGoogle Maps ይመልከቱ" },
+  ar: { googleLoading: "جار تحديث التفاصيل من Google...", googleRating: "تقييم Google", reviewsOnGoogle: "مراجعة على Google", openNow: "مفتوح الآن", closedNow: "مغلق الآن", openingHours: "ساعات العمل", fullAddress: "العنوان الكامل", plusCode: "Plus code", businessStatus: "حالة النشاط", operational: "يعمل", temporarilyClosed: "مغلق مؤقتا", googleDetailsUnavailable: "تفاصيل Google المباشرة غير متاحة مؤقتا.", websiteLabel: "الموقع", phoneLabel: "الهاتف الدولي", viewOnGoogle: "عرض على خرائط Google" }
+});
+
+Object.entries(MARKETPLACE_ENRICH_I18N).forEach(([language, values]) => {
+  Object.assign(MARKETPLACE_UI_OVERRIDES[language], values);
+});
+
 const MARKETPLACE_CATEGORY_LABELS = Object.freeze({
   surveyors: { en: "Surveyors", lg: "Abapima ettaka", sw: "Wapima ardhi", ac: "Jo pim ngom", ny: "Abapima eitaka", rn: "Abapima eitaka", sm: "Abapima eitaka", am: "ቀያሾች", ar: "المساحون" },
   brokers: { en: "Brokers & agents", lg: "Aba broker n'abasenza", sw: "Madalali na mawakala", ac: "Jo cat ot", ny: "Ba broker n'abakozi", rn: "Ba broker n'abakozi", sm: "Aba broker", am: "ደላሎች", ar: "الوسطاء والوكلاء" },
@@ -3476,7 +3493,8 @@ const marketplaceState = {
   totalPages: 1,
   limit: 20,
   activeCategory: "",
-  categoryCounts: {}
+  categoryCounts: {},
+  profileDetails: {}
 };
 
 function marketplaceTr(key) {
@@ -3593,6 +3611,67 @@ function marketplaceFormatDate(value) {
   }
 }
 
+function marketplaceGoogleDetailsHtml(enrichment = {}) {
+  const rating = Number(enrichment.rating || 0);
+  const reviewCount = Number(enrichment.review_count || 0);
+  const statusKey = enrichment.business_status === "temporarily_closed" ? "temporarilyClosed" : "operational";
+  const openState = enrichment.open_now === true
+    ? `<span class="font-black text-emerald-700">${adminEscape(marketplaceTr("openNow"))}</span>`
+    : enrichment.open_now === false
+      ? `<span class="font-black text-gray-600">${adminEscape(marketplaceTr("closedNow"))}</span>`
+      : "";
+  const hours = Array.isArray(enrichment.weekday_descriptions) ? enrichment.weekday_descriptions.filter(Boolean) : [];
+  return `<div class="rounded-lg border border-blue-100 bg-white p-3 space-y-2" data-google-attribution="Google">
+    <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+      ${rating ? `<span class="font-black text-gray-900"><i class="fas fa-star text-amber-500 mr-1" aria-hidden="true"></i>${rating.toFixed(1)} <span class="font-normal text-gray-500">· ${reviewCount.toLocaleString()} ${adminEscape(marketplaceTr("reviewsOnGoogle"))}</span></span>` : ""}
+      ${openState}
+      <span class="rounded-full bg-gray-100 px-2 py-1 text-[10px] font-black text-gray-700">${adminEscape(marketplaceTr(statusKey))}</span>
+    </div>
+    ${enrichment.formatted_address ? `<div><span class="font-black text-gray-800">${adminEscape(marketplaceTr("fullAddress"))}:</span> ${adminEscape(enrichment.formatted_address)}</div>` : ""}
+    ${enrichment.plus_code ? `<div><span class="font-black text-gray-800">${adminEscape(marketplaceTr("plusCode"))}:</span> ${adminEscape(enrichment.plus_code)}</div>` : ""}
+    ${enrichment.international_phone ? `<div><span class="font-black text-gray-800">${adminEscape(marketplaceTr("phoneLabel"))}:</span> <a href="${adminAttr(marketplaceContactUrl("phone", enrichment.international_phone))}" class="text-blue-700 font-bold hover:underline">${adminEscape(enrichment.international_phone)}</a></div>` : ""}
+    ${enrichment.website ? `<div><span class="font-black text-gray-800">${adminEscape(marketplaceTr("websiteLabel"))}:</span> <a href="${adminAttr(enrichment.website)}" target="_blank" rel="noopener nofollow" class="text-blue-700 font-bold hover:underline">${adminEscape(enrichment.website)}</a></div>` : ""}
+    ${hours.length ? `<details class="rounded-lg bg-gray-50 p-2"><summary class="cursor-pointer font-black text-gray-800">${adminEscape(marketplaceTr("openingHours"))}</summary><div class="mt-2 space-y-1">${hours.map((line) => `<div>${adminEscape(line)}</div>`).join("")}</div></details>` : ""}
+    ${enrichment.google_maps_url ? `<a href="${adminAttr(enrichment.google_maps_url)}" target="_blank" rel="noopener nofollow" class="inline-flex items-center gap-1.5 font-black text-blue-700 hover:underline">${adminEscape(marketplaceTr("viewOnGoogle"))}<i class="fas fa-arrow-up-right-from-square text-[10px]" aria-hidden="true"></i></a>` : ""}
+  </div>`;
+}
+
+async function loadMarketplaceProfileDetails(id) {
+  const container = document.getElementById(`marketplace-google-details-${id}`);
+  if (!container || container.dataset.state === "loading") return;
+  const cached = marketplaceState.profileDetails[id];
+  if (cached) {
+    container.innerHTML = marketplaceGoogleDetailsHtml(cached);
+    container.dataset.state = "loaded";
+    return;
+  }
+  container.dataset.state = "loading";
+  container.innerHTML = `<div class="rounded-lg border border-blue-100 bg-blue-50 p-3 text-blue-900"><i class="fas fa-spinner fa-spin mr-2" aria-hidden="true"></i>${adminEscape(marketplaceTr("googleLoading"))}</div>`;
+  try {
+    const response = await apiRequest(`/api/marketplace/businesses/${encodeURIComponent(id)}/details`, { skipAuth: true });
+    const details = response?.data?.enrichment || null;
+    const updatedBusiness = response?.data?.business || null;
+    if (updatedBusiness) {
+      const index = marketplaceState.businesses.findIndex((item) => item.id === id);
+      if (index >= 0) marketplaceState.businesses[index] = { ...marketplaceState.businesses[index], ...updatedBusiness };
+    }
+    if (!details) {
+      container.innerHTML = `<div class="rounded-lg border border-gray-200 bg-gray-50 p-3 text-gray-500">${adminEscape(marketplaceTr("googleDetailsUnavailable"))}</div>`;
+      container.dataset.state = "unavailable";
+      return;
+    }
+    marketplaceState.profileDetails[id] = details;
+    container.innerHTML = marketplaceGoogleDetailsHtml(details);
+    container.dataset.state = "loaded";
+  } catch (error) {
+    container.innerHTML = `<div class="rounded-lg border border-gray-200 bg-gray-50 p-3 text-gray-500">${adminEscape(error.message || marketplaceTr("googleDetailsUnavailable"))}</div>`;
+    container.dataset.state = "error";
+    if (Number(error.status || 0) === 410) {
+      setTimeout(() => searchMarketplaceBusinesses().catch(() => {}), 300);
+    }
+  }
+}
+
 function renderMarketplaceBusinesses() {
   const results = document.getElementById("marketplace-results");
   const empty = document.getElementById("marketplace-empty");
@@ -3605,6 +3684,7 @@ function renderMarketplaceBusinesses() {
     const socialUrl = marketplacePrimarySocialUrl(business);
     const foundOnline = business.tier === "found_online" || business.source_type === "found_online";
     const sourceUrl = foundOnline ? cleanText(business.source_url || "") : "";
+    const googleSource = foundOnline && ["google_maps", "google", "google_places"].includes(cleanText(business.source || "").toLowerCase());
     const firstFound = marketplaceFormatDate(business.first_seen);
     const lastRefreshed = marketplaceFormatDate(business.last_refreshed);
     const stars = rating ? `<span class="text-amber-500"><i class="fas fa-star"></i></span> ${rating.toFixed(1)} <span class="text-gray-400">(${Number(business.rating_count || 0)})</span>` : `<span class="text-gray-400">${adminEscape(marketplaceTr("newBusiness"))}</span>`;
@@ -3636,6 +3716,7 @@ function renderMarketplaceBusinesses() {
               <div class="font-black text-gray-800"><i class="fas fa-globe mr-1 text-gray-500" aria-hidden="true"></i>${sourceUrl ? `<a href="${adminAttr(sourceUrl)}" target="_blank" rel="noopener nofollow" class="text-blue-700 hover:underline">${adminEscape(marketplaceSourceLabel(business))} <i class="fas fa-arrow-up-right-from-square ml-1 text-[10px]" aria-hidden="true"></i></a>` : adminEscape(marketplaceSourceLabel(business))}</div>
               ${firstFound ? `<div><span class="font-bold text-gray-700">${adminEscape(marketplaceTr("sourceFirstFound"))}:</span> ${adminEscape(firstFound)}</div>` : ""}
               ${lastRefreshed ? `<div><span class="font-bold text-gray-700">${adminEscape(marketplaceTr("sourceLastRefreshed"))}:</span> ${adminEscape(lastRefreshed)}</div>` : ""}
+              ${googleSource ? `<div id="marketplace-google-details-${adminAttr(business.id)}" class="pt-1" data-state="idle"></div>` : ""}
               <p class="pt-1 text-[11px] leading-5 text-gray-500">${adminEscape(marketplaceTr("publicSourceDisclaimer"))}</p>
               <button type="button" onclick="marketplaceOpenClaimForm('${adminAttr(business.id)}','${adminAttr(business.name)}')" class="mt-1 inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-black text-blue-700 hover:bg-blue-50"><i class="fas fa-hand" aria-hidden="true"></i>${adminEscape(marketplaceTr("claimBusiness"))}</button>
             </div>` : ""}
@@ -3764,7 +3845,11 @@ function marketplaceChangePage(delta) {
 }
 
 function marketplaceToggleProfile(id) {
-  document.getElementById(`marketplace-profile-${id}`)?.classList.toggle("hidden");
+  const profile = document.getElementById(`marketplace-profile-${id}`);
+  if (!profile) return;
+  const opening = profile.classList.contains("hidden");
+  profile.classList.toggle("hidden");
+  if (opening) loadMarketplaceProfileDetails(id).catch(() => {});
 }
 
 function marketplaceOpenClaimForm(businessId, businessName) {
