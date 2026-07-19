@@ -8,6 +8,10 @@ const { parsePagination, toPagination } = require('../utils/pagination');
 const { DISTRICTS, LISTING_TYPES } = require('../utils/constants');
 const { publicLivePropertyStatusSql } = require('../utils/publicInventoryStatus');
 const {
+  normalizeCommercialTransactionType,
+  normalizeCommercialPropertyType,
+} = require('../utils/commercialClassification');
+const {
   districtForKnownArea,
   normalizeReviewLocationHierarchy,
   regionForDistrict
@@ -1901,6 +1905,16 @@ async function updateStaffEditableListing(req, propertyId, listingPatch = {}, re
   }
   const existing = existingResult.rows[0];
   const { patch, hierarchy, errors } = normalizeStaffListingPatch(existing, listingPatch);
+  if (!Object.prototype.hasOwnProperty.call(patch, 'transaction_type')) {
+    const alias = patch.transactionType ?? patch.commercial_mode ?? patch.commercial_intent;
+    if (alias != null) patch.transaction_type = alias;
+  }
+  if (cleanText(patch.listing_type || existing.listing_type).toLowerCase() === 'commercial' && Object.prototype.hasOwnProperty.call(patch, 'property_type')) {
+    patch.property_type = normalizeCommercialPropertyType(patch.property_type, {
+      title: patch.title || existing.title,
+      description: patch.description || existing.description
+    });
+  }
   if (errors.length) {
     const error = new Error(errors[0]);
     error.status = 400;
@@ -1925,6 +1939,7 @@ async function updateStaffEditableListing(req, propertyId, listingPatch = {}, re
     address: (value) => cleanText(value) || null,
     price: (value) => toNullableInt(value),
     price_period: (value) => cleanText(value) || null,
+    transaction_type: (value) => normalizeCommercialTransactionType(value) || null,
     property_type: (value) => cleanText(value) || null,
     title_type: (value) => cleanText(value) || null,
     bedrooms: (value) => toNullableInt(value),

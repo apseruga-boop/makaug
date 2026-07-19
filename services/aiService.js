@@ -570,6 +570,14 @@ function parseSearchTypeHeuristic(text, fallback = 'any') {
   return normalizeSearchType(fallback, 'any');
 }
 
+function parseTransactionTypeHeuristic(text, fallbackType = 'any') {
+  const clean = cleanText(text, 600).toLowerCase();
+  if (/\b(for rent|to rent|to let|for lease|rental)\b/.test(clean)) return 'rent';
+  if (/\b(for sale|buy|buying|purchase)\b/.test(clean)) return 'sale';
+  const fallback = normalizeSearchType(fallbackType, 'any');
+  return ['rent', 'sale'].includes(fallback) ? fallback : null;
+}
+
 function parsePropertyTypeHeuristic(text) {
   const clean = cleanText(text, 600);
   for (const rule of QUERY_PROPERTY_TYPE_RULES) {
@@ -683,6 +691,8 @@ function normalizeNaturalQueryPayload(payload = {}, fallbackType = 'any') {
   const district = districtRaw || null;
   const bedsMin = Math.max(0, parseInt(payload.bedsMin ?? payload.bedrooms ?? payload.beds ?? 0, 10) || 0);
   const propertyType = cleanText(payload.propertyType || payload.property_type || '', 60) || null;
+  const rawTransactionType = cleanText(payload.transactionType || payload.transaction_type || '', 20).toLowerCase();
+  const transactionType = ['rent', 'sale'].includes(rawTransactionType) ? rawTransactionType : null;
   const maxBudgetUgx = Math.max(0, Math.round(Number(payload.maxBudgetUgx ?? payload.budget ?? payload.budget_max ?? 0) || 0));
   const budgetPeriod = normalizeBudgetPeriod(payload.budgetPeriod || payload.period);
   const useSharedLocation = normalizeBool(payload.useSharedLocation ?? payload.use_shared_location ?? payload.near_me);
@@ -693,6 +703,7 @@ function normalizeNaturalQueryPayload(payload = {}, fallbackType = 'any') {
     || district
     || bedsMin > 0
     || propertyType
+    || transactionType
     || maxBudgetUgx > 0
     || useSharedLocation
     || (searchType && searchType !== 'any')
@@ -705,6 +716,7 @@ function normalizeNaturalQueryPayload(payload = {}, fallbackType = 'any') {
     district,
     bedsMin,
     propertyType,
+    transactionType,
     maxBudgetUgx,
     budgetPeriod,
     useSharedLocation,
@@ -725,6 +737,7 @@ function mergeNaturalQueryPayloads(primary = {}, secondary = {}, fallbackType = 
       district: p.district || s.district || '',
       bedsMin: Number(p.bedsMin || 0) > 0 ? p.bedsMin : (s.bedsMin || 0),
       propertyType: p.propertyType || s.propertyType || '',
+      transactionType: p.transactionType || s.transactionType || '',
       maxBudgetUgx: Number(p.maxBudgetUgx || 0) > 0 ? p.maxBudgetUgx : (s.maxBudgetUgx || 0),
       budgetPeriod: p.budgetPeriod || s.budgetPeriod || null,
       convertedFromUsd: Boolean(p.convertedFromUsd || s.convertedFromUsd),
@@ -751,6 +764,7 @@ function heuristicNaturalPropertyQuery({ text = '', fallbackType = 'any' } = {})
       area: parseAreaHeuristic(clean),
       bedsMin: parseBedsHeuristic(clean),
       propertyType: parsePropertyTypeHeuristic(clean),
+      transactionType: parseTransactionTypeHeuristic(clean, fallbackType),
       maxBudgetUgx: budget.maxBudgetUgx,
       budgetPeriod: budget.budgetPeriod,
       convertedFromUsd: budget.convertedFromUsd,
@@ -884,6 +898,7 @@ Return strict JSON only:
   "district": "string or empty",
   "bedsMin": number,
   "propertyType": "string or empty",
+  "transactionType": "rent|sale|null",
   "maxBudgetUgx": number,
   "budgetPeriod": "month|week|year|semester|null",
   "convertedFromUsd": boolean,
@@ -892,6 +907,7 @@ Return strict JSON only:
 }
 Rules:
 - Detect natural queries like "2 bed in Muyenga under $20k per month".
+- For commercial and land searches, preserve the independent transaction axis in transactionType.
 - Detect Uganda language queries such as "Natafuta shamba Mbale", "Noonya enju eya rent e Kampala", and "Funa agent e Wakiso".
 - Convert USD to UGX using rate 1 USD = ${process.env.USD_TO_UGX_RATE || 3800}.
 - Treat Kampala, Wakiso, Mukono, Mbale, Jinja, Mbarara, Gulu, etc. as places, never as property types.

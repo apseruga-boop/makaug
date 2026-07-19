@@ -85,6 +85,13 @@ const {
   loadPublicOpportunitySummary,
   publicLaunchTestListingFastCondition
 } = require('../services/publicInventoryMetricsService');
+const {
+  COMMERCIAL_TRANSACTION_TYPES,
+  COMMERCIAL_PROPERTY_TYPES,
+  normalizeCommercialTransactionType,
+  normalizeCommercialPropertyType,
+  commercialMisclassificationWarning
+} = require('../utils/commercialClassification');
 
 const router = express.Router();
 const LAUNCH_SEED_LISTING_MARKERS = ['SOFT LAUNCH TEST - DELETE', 'QA TEST - DELETE'];
@@ -315,6 +322,17 @@ async function applyStatusListingPatchBeforeModeration(req, propertyId, existing
     const alias = patch.pricePeriod ?? patch.period;
     if (alias != null) patch.price_period = alias;
   }
+  if (!Object.prototype.hasOwnProperty.call(patch, 'transaction_type')) {
+    const alias = patch.transactionType ?? patch.commercial_mode ?? patch.commercial_intent;
+    if (alias != null) patch.transaction_type = alias;
+  }
+  const effectiveListingType = normalizeListingType(patch.listing_type || existing.listing_type);
+  if (effectiveListingType === 'commercial' && Object.prototype.hasOwnProperty.call(patch, 'property_type')) {
+    patch.property_type = normalizeCommercialPropertyType(patch.property_type, {
+      title: patch.title || existing.title,
+      description: patch.description || existing.description
+    });
+  }
 
   const setParts = [];
   const values = [propertyId];
@@ -351,6 +369,13 @@ async function applyStatusListingPatchBeforeModeration(req, propertyId, existing
     address: (value) => cleanText(value) || null,
     price: (value) => toNullableInt(value),
     price_period: (value) => cleanText(value) || null,
+    transaction_type: (value) => {
+      const transactionType = normalizeCommercialTransactionType(value);
+      if (value && !transactionType) {
+        throw validateError('transaction_type must be rent or sale');
+      }
+      return transactionType || null;
+    },
     property_type: (value) => cleanText(value) || null,
     title_type: (value) => cleanText(value) || null,
     bedrooms: (value) => toNullableInt(value),
@@ -1000,6 +1025,7 @@ function compactPublicCardRow(row = {}, currency = 'UGX') {
     address: row.address,
     price: row.price,
     price_period: row.price_period,
+    transaction_type: row.transaction_type || null,
     bedrooms: row.bedrooms,
     bathrooms: row.bathrooms,
     property_type: row.property_type,
@@ -1984,6 +2010,7 @@ async function listPropertiesHandler(req, res, next) {
     const landTitleType = cleanText(req.query.landTitleType || req.query.land_title_type);
     const landTitleAvailable = normalizeLandTitleAvailability(req.query.landTitleAvailable ?? req.query.land_title_available ?? req.query.titleAvailable ?? req.query.title_available);
     const commercialType = cleanText(req.query.commercialType || req.query.commercial_type);
+    const transactionType = normalizeCommercialTransactionType(req.query.transactionType || req.query.transaction_type);
     const currency = cleanText(req.query.currency || 'UGX').toUpperCase();
     const source = cleanText(req.query.source || 'web_search');
     const language = cleanText(req.query.language || req.query.lang || 'en').toLowerCase();
@@ -2158,8 +2185,12 @@ async function listPropertiesHandler(req, res, next) {
         landTitleAvailable
       );
     }
+    if (transactionType) {
+      addFilter(filters, values, 'p.transaction_type = ?', transactionType);
+    }
     if (commercialType) {
-      addFilter(filters, values, "(p.property_type ILIKE ? OR COALESCE(p.extra_fields->>'commercial_type', '') ILIKE ?)", `%${commercialType}%`, `%${commercialType}%`);
+      const normalizedCommercialType = normalizeCommercialPropertyType(commercialType) || commercialType.toLowerCase();
+      addFilter(filters, values, "LOWER(COALESCE(p.property_type, p.extra_fields->>'commercial_type', '')) = ?", normalizedCommercialType);
     }
 
     if (hasRadiusSearch) {
@@ -2259,7 +2290,8 @@ async function listPropertiesHandler(req, res, next) {
               student_campus: studentCampus || null,
               land_title_type: landTitleType || null,
               land_title_available: landTitleAvailable || null,
-              commercial_type: commercialType || null
+              commercial_type: commercialType || null,
+              transaction_type: transactionType || null
             },
             location: hasRadiusSearch ? {
               lat: Number(searchLat.toFixed(5)),
@@ -2326,6 +2358,7 @@ async function listPropertiesHandler(req, res, next) {
           p.address,
           p.price,
           p.price_period,
+          p.transaction_type,
           p.bedrooms,
           p.bathrooms,
           p.property_type,
@@ -2382,6 +2415,7 @@ async function listPropertiesHandler(req, res, next) {
           p.address,
           p.price,
           p.price_period,
+          p.transaction_type,
           p.bedrooms,
           p.bathrooms,
           p.property_type,
@@ -2496,7 +2530,8 @@ async function listPropertiesHandler(req, res, next) {
               student_campus: studentCampus || null,
               land_title_type: landTitleType || null,
               land_title_available: landTitleAvailable || null,
-              commercial_type: commercialType || null
+              commercial_type: commercialType || null,
+              transaction_type: transactionType || null
             },
             result_count: responseRows.length,
             outside_uganda: false
@@ -2722,6 +2757,17 @@ router.patch('/:id/preview', async (req, res, next) => {
       address: { column: 'address', value: cleanText(patch.address) || null },
       price: { column: 'price', value: toNullableInt(patch.price) },
       price_period: { column: 'price_period', value: cleanText(patch.price_period) || null },
+      transaction_type: {
+        column: 'transaction_type',
+        value: normalizeCommercialTransactionType(
+          patch.transaction_type || patch.transactionType || patch.commercial_mode || patch.commercial_intent,
+          {
+            pricePeriod: patch.price_period || property.price_period,
+            title: patch.title || property.title,
+            description: patch.description || property.description
+          }
+        ) || null
+      },
       property_type: { column: 'property_type', value: cleanText(patch.property_type) || null },
       title_type: { column: 'title_type', value: cleanText(patch.title_type) || null },
       bedrooms: { column: 'bedrooms', value: toNullableInt(patch.bedrooms) },
@@ -3046,6 +3092,17 @@ router.post('/', async (req, res, next) => {
     const area = cleanText(body.area);
     const description = cleanText(body.description);
     const price = toNullableInt(body.price);
+    const transactionType = normalizeCommercialTransactionType(
+      body.transaction_type || body.transactionType || body.commercial_mode || body.commercial_intent,
+      {
+        pricePeriod: body.price_period,
+        title,
+        description
+      }
+    );
+    const commercialPropertyType = listingType === 'commercial'
+      ? normalizeCommercialPropertyType(body.property_type || body.commercial_type, { title, description })
+      : cleanText(body.property_type);
 
     const errors = [];
 
@@ -3055,6 +3112,12 @@ router.post('/', async (req, res, next) => {
     if (!area) errors.push('area is required');
     if (!description) errors.push('description is required');
     if (price == null || price < 10000) errors.push('price must be provided in UGX');
+    if (listingType === 'commercial' && !transactionType) {
+      errors.push('transaction_type is required for commercial listings and must be rent or sale');
+    }
+    if (listingType === 'commercial' && !commercialPropertyType) {
+      errors.push('property_type is required for commercial listings');
+    }
 
     if (district && !DISTRICTS.includes(district)) {
       errors.push('district must be one of Uganda\'s valid districts');
@@ -3264,6 +3327,7 @@ router.post('/', async (req, res, next) => {
     const insertResult = await db.query(
       `INSERT INTO properties (
         listing_type,
+        transaction_type,
         title,
         description,
         district,
@@ -3316,10 +3380,11 @@ router.post('/', async (req, res, next) => {
         $11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
         $21,$22,$23,$24,$25,$26,$27,$28,$29,$30,
         $31,$32,$33,$34,$35,$36,$37,$38,$39,$40,
-        $41,$42,$43,$44,$45,$46,$47,$48
+        $41,$42,$43,$44,$45,$46,$47,$48,$49
       ) RETURNING id, created_at`,
       [
         listingType,
+        transactionType || null,
         title,
         description,
         district,
@@ -3329,7 +3394,7 @@ router.post('/', async (req, res, next) => {
         cleanText(body.price_period) || null,
         toNullableInt(body.bedrooms),
         toNullableInt(body.bathrooms),
-        cleanText(body.property_type) || null,
+        commercialPropertyType || null,
         cleanText(body.title_type) || null,
         toNullableInt(body.year_built),
         cleanText(body.furnishing) || null,
@@ -3966,6 +4031,25 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
     const actorId = req.adminAuth?.userId || req.adminAuth?.type || 'admin_api_key';
     const reviewerUserId = toUuidOrNull(req.adminAuth?.userId);
     const isSourcedCandidate = isSourcedInventoryCandidateRecord(current);
+    if (nextStatus === 'approved' && normalizeListingType(current.listing_type) === 'commercial') {
+      const commercialTransactionType = normalizeCommercialTransactionType(current.transaction_type);
+      const commercialPropertyType = normalizeCommercialPropertyType(current.property_type, {
+        title: current.title,
+        description: current.description
+      });
+      const missingCommercialFields = [];
+      if (!commercialTransactionType) missingCommercialFields.push('Select For rent or For sale.');
+      if (!commercialPropertyType) missingCommercialFields.push('Select a commercial property type.');
+      if (missingCommercialFields.length) {
+        return res.status(400).json({
+          ok: false,
+          error: 'Commercial transaction and property type are required before approval',
+          details: missingCommercialFields
+        });
+      }
+      const classificationWarning = commercialMisclassificationWarning(current);
+      if (classificationWarning) approvalWarnings.push(classificationWarning);
+    }
     const requestedSourcedCandidateOverride = nextStatus === 'approved'
       && parseBooleanLike(req.body.sourced_candidate_override || req.body.sourced_candidate_special_dispensation, false);
     const sourcedCandidateConsentConfirmed = parseBooleanLike(req.body.consent_confirmed, false);

@@ -21626,10 +21626,32 @@ function adminReviewStudentFieldsHtml(review = {}, facts = {}, extra = {}, ameni
     </div>`;
 }
 
+function adminReviewCommercialFieldsHtml(review = {}, facts = {}) {
+  const transaction = commercialTransactionForProperty({ ...review, ...facts });
+  const commercialType = canonicalCommercialTypeForProperty({ ...review, ...facts });
+  const transactionOptions = [["", "Choose transaction"], ["rent", "For rent"], ["sale", "For sale"]]
+    .map(([value, label]) => `<option value="${value}" ${transaction === value ? "selected" : ""}>${label}</option>`).join("");
+  const typeOptions = [["", "Choose commercial type"], ["office", "Office"], ["shop_retail", "Shop / Retail"], ["warehouse_industrial", "Warehouse / Industrial"], ["commercial_land", "Commercial land"], ["hospitality", "Hospitality / Leisure"], ["other", "Other"]]
+    .map(([value, label]) => `<option value="${value}" ${commercialType === value ? "selected" : ""}>${label}</option>`).join("");
+  const text = `${review.title || ""} ${review.description || ""}`.toLowerCase();
+  const warning = /\b(house|home|apartment|villa|bungalow|bedroom)\b/.test(text) && !/\b(office|shop|retail|warehouse|industrial|commercial|hotel|restaurant)\b/.test(text);
+  return `<div id="admin-review-commercial-fields" class="md:col-span-2 rounded-xl border border-amber-300 bg-amber-50 p-3 ${normalizeType(review.listing_type || facts.listing_type) === "commercial" ? "" : "hidden"}">
+    <div class="text-xs font-black uppercase tracking-wide text-amber-950">Commercial classification</div>
+    <p class="mt-1 text-xs text-amber-900">Both fields are required before approval.</p>
+    ${warning ? '<p class="mt-2 rounded-lg bg-red-50 border border-red-200 px-2 py-1.5 text-xs font-bold text-red-800">Possible residential listing classified as commercial. Confirm the category before approval.</p>' : ""}
+    <div class="mt-3 grid md:grid-cols-2 gap-3">
+      <label class="block text-xs font-bold text-amber-950">Transaction *<select id="admin-review-transaction-type-edit" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm">${transactionOptions}</select></label>
+      <label class="block text-xs font-bold text-amber-950">Commercial type *<select id="admin-review-commercial-type-edit" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm">${typeOptions}</select></label>
+    </div>
+  </div>`;
+}
+
 function adminReviewOnListingTypeChange() {
   const type = normalizeType(document.getElementById("admin-review-listing-type-edit")?.value || "");
   const studentPanel = document.getElementById("admin-review-student-fields");
   if (studentPanel) studentPanel.classList.toggle("hidden", type !== "student");
+  const commercialPanel = document.getElementById("admin-review-commercial-fields");
+  if (commercialPanel) commercialPanel.classList.toggle("hidden", type !== "commercial");
   const period = document.getElementById("admin-review-price-period-edit");
   if (period && type === "student" && (!period.value || period.value === "once")) period.value = "sem";
   if (period && type === "rent" && (!period.value || period.value === "once" || period.value === "sem")) period.value = "month";
@@ -22324,6 +22346,7 @@ function adminReviewListingEditPanel(review = {}) {
         <label class="block text-xs font-bold text-gray-700">Property type
           <input id="admin-review-property-type-edit" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.property_type || "")}" placeholder="Apartment, House, Land, Office">
         </label>
+        ${adminReviewCommercialFieldsHtml(review, facts)}
         <label class="block text-xs font-bold text-gray-700">Title type
           <select id="admin-review-title-type-edit" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm">${titleTypeOptions}</select>
         </label>
@@ -22399,6 +22422,8 @@ function adminApplyExtractedReviewFacts() {
     });
   }
   adminSetReviewEditValue("admin-review-property-type-edit", facts.property_type || adminActiveReview.property_type || "");
+  adminSetReviewEditValue("admin-review-transaction-type-edit", commercialTransactionForProperty({ ...adminActiveReview, ...facts }));
+  adminSetReviewEditValue("admin-review-commercial-type-edit", canonicalCommercialTypeForProperty({ ...adminActiveReview, ...facts }));
   adminSetReviewEditValue("admin-review-land-title-available-edit", facts.land_title_available || getLandTitleAvailabilityValue(adminActiveReview) || "");
   adminSetReviewEditValue("admin-review-price-edit", facts.price || adminActiveReview.price || "");
   adminSetReviewEditValue("admin-review-price-period-edit", facts.price_period || adminActiveReview.price_period || "");
@@ -22746,7 +22771,8 @@ function collectAdminReviewListingPatch() {
     address: get("admin-review-address-edit"),
     price: get("admin-review-price-edit"),
     price_period: get("admin-review-price-period-edit"),
-    property_type: get("admin-review-property-type-edit"),
+    transaction_type: listingType === "commercial" ? get("admin-review-transaction-type-edit") : "",
+    property_type: listingType === "commercial" ? get("admin-review-commercial-type-edit") : get("admin-review-property-type-edit"),
     title_type: get("admin-review-title-type-edit"),
     land_title_available: get("admin-review-land-title-available-edit"),
     bedrooms: get("admin-review-bedrooms-edit"),
@@ -23449,6 +23475,16 @@ async function adminSetListingStatus(localId, nextStatus, backendId = "", option
     if (!ok) return;
   }
   if (normalizedStatus === "approved" && adminActiveReview?.id && String(adminActiveReview.id) === String(backendId) && !isSourcedCandidateOverride) {
+    const activeListingType = normalizeType(document.getElementById("admin-review-listing-type-edit")?.value || adminActiveReview.listing_type || "");
+    if (activeListingType === "commercial") {
+      const transactionType = document.getElementById("admin-review-transaction-type-edit")?.value || "";
+      const commercialType = document.getElementById("admin-review-commercial-type-edit")?.value || "";
+      if (!transactionType || !commercialType) {
+        toast("Choose the commercial transaction and property type before approving.");
+        (!transactionType ? document.getElementById("admin-review-transaction-type-edit") : document.getElementById("admin-review-commercial-type-edit"))?.focus();
+        return;
+      }
+    }
     const pendingWarnings = getAdminPendingWarningOverrideLabels(adminActiveReview);
     if (pendingWarnings.length) {
       toast(`Review and override warning evidence first: ${pendingWarnings.slice(0, 3).join(", ")}${pendingWarnings.length > 3 ? "..." : ""}`);
@@ -26769,6 +26805,16 @@ function validateListStep1() {
     missing.push("Location confirmation");
     markLpFieldError("lp-location-confirm", "Confirm that the pin matches the property location.");
   }
+  if (getListType() === "commercial") {
+    if (!lpVal("lp-extra-commercial_mode")) {
+      missing.push("Transaction");
+      markLpFieldError("lp-extra-commercial_mode", "Choose For Rent or For Sale.");
+    }
+    if (!lpVal("lp-subtype")) {
+      missing.push("Commercial type");
+      markLpFieldError("lp-subtype", "Choose the commercial property type.");
+    }
+  }
   if (missing.length) {
     toast(`Please complete: ${missing.join(", ")}`);
     return false;
@@ -27483,6 +27529,7 @@ function buildListPropertyPayload(photoUploadUrls = lpPhotoUploadUrls) {
 
   if (type === "commercial") {
     payload.commercial_intent = extra.commercial_mode || null;
+    payload.transaction_type = extra.commercial_mode || null;
     payload.floor_area_sqm = parseFloatSafe(extra.floor_area);
     payload.usable_size_sqm = parseFloatSafe(extra.floor_area);
     payload.parking_bays = parseIntSafe(extra.parking_bays);
@@ -34206,6 +34253,17 @@ function applyHeroSearchLanguageUI() {
   if (sort?.options?.[2]) sort.options[2].textContent = tr("heroSortPriceDesc");
   if (sort?.options?.[3]) sort.options[3].textContent = tr("heroSortDistance");
   setHeroControlLanguage("hero-sort-f", "heroSortNewest");
+  const heroTransactionLabels = {
+    "": translateListingLabel("All"),
+    rent: translateListingLabel("For Rent"),
+    sale: translateListingLabel("For Sale")
+  };
+  document.querySelectorAll("[data-hero-transaction]").forEach((button) => {
+    const value = button.getAttribute("data-hero-transaction") || "";
+    button.textContent = heroTransactionLabels[value] || heroTransactionLabels[""];
+  });
+  const heroTransactionSelect = document.getElementById("hero-transaction-f");
+  if (heroTransactionSelect) heroTransactionSelect.setAttribute("aria-label", translateListingLabel("Transaction"));
   setTextById("hero-apply-filters-btn", tr("heroApply"));
   setTextById("hero-clear-filters-btn", tr("heroClear"));
 }
@@ -34219,6 +34277,7 @@ function getHeroFilterValues() {
   const propertyType = (document.getElementById("hero-property-type-f")?.value || "").trim();
   return {
     propertyType,
+    transactionType: ["commercial", "land"].includes(currentTab) ? (document.getElementById("hero-transaction-f")?.value || "") : "",
     minPrice,
     maxPrice,
     currency: activeCur || "UGX",
@@ -34239,6 +34298,7 @@ function heroListingMatchesFilters(property, filters = {}) {
   const propertyType = String(filters.propertyType || "").toLowerCase();
   const bedrooms = String(filters.bedrooms || "").toLowerCase();
   const amenities = String(filters.amenities || "").toLowerCase();
+  if (filters.transactionType && commercialTransactionForProperty(property) !== filters.transactionType) return false;
   if (propertyType && !((property.subtype || "").toLowerCase().includes(propertyType) || searchText.includes(propertyType))) return false;
   if (filters.minPrice && Number(property.price || 0) < filters.minPrice) return false;
   if (filters.maxPrice && Number(property.price || 0) > filters.maxPrice) return false;
@@ -34280,6 +34340,7 @@ function clearHeroFilters() {
   if (radius) radius.value = String(DEFAULT_NEAR_ME_RADIUS_KM);
   const sort = document.getElementById("hero-sort-f");
   if (sort) sort.value = "newest";
+  setHeroTransactionType("");
   clearNearMeSearchState(currentTab);
   setHeroLocationStatus(tr("heroLocationHelper"), "idle");
   trackEvent("homepage_filters_cleared", { category: currentTab });
@@ -34331,6 +34392,7 @@ function routeSearchHandoffPayload(page) {
   const area = normalizeInput(qs.get("area") || qs.get("district") || qs.get("location") || qs.get("campus") || qs.get("university") || "");
   const filters = {
     propertyType: normalizeInput(qs.get("property_type") || qs.get("propertyType") || qs.get("room_type") || qs.get("commercial_type") || qs.get("land_title_type") || ""),
+    transactionType: normalizeInput(qs.get("transaction_type") || qs.get("transactionType") || ""),
     minPrice: normalizeInput(qs.get("min_price") || qs.get("minPrice") || ""),
     maxPrice: normalizeInput(qs.get("max_price") || qs.get("maxPrice") || qs.get("budget") || ""),
     bedrooms: normalizeInput(qs.get("bedrooms") || qs.get("beds") || ""),
@@ -34367,6 +34429,7 @@ function heroSearchRouteUrl(page, payload = {}) {
   if (payload.radiusKm) params.set("radiusKm", String(payload.radiusKm));
   else if (payload.radiusMiles) params.set("radiusKm", String(Number(milesToKm(payload.radiusMiles).toFixed(3))));
   if (filters.propertyType) params.set("property_type", filters.propertyType);
+  if (filters.transactionType) params.set("transaction_type", filters.transactionType);
   if (filters.minPrice) params.set("min_price", String(filters.minPrice));
   if (filters.maxPrice) params.set("max_price", String(filters.maxPrice));
   if (filters.bedrooms) params.set("bedrooms", String(filters.bedrooms));
@@ -34434,6 +34497,7 @@ function applyHeroSearchHandoff(page) {
     setValue("commercial-district-f", payload.area);
     if (radiusValue) setValue("commercial-radius-f", radiusValue);
     setValue("commercial-type-f", filters.propertyType || payload.context);
+    setValue("commercial-transaction-f", filters.transactionType || "");
     setValue("commercial-min-price-f", filters.minPrice ? String(filters.minPrice) : "");
     setValue("commercial-price-f", filters.maxPrice ? String(filters.maxPrice) : "");
     setValue("commercial-sort-f", filters.sort || "newest");
@@ -34443,6 +34507,7 @@ function applyHeroSearchHandoff(page) {
     setValue("land-district-f", payload.area);
     if (radiusValue) setValue("land-radius-f", radiusValue);
     setValue("land-type-f", filters.propertyType || payload.context);
+    setValue("land-transaction-f", filters.transactionType || "");
     setValue("land-min-price-f", filters.minPrice ? String(filters.minPrice) : "");
     setValue("land-price-f", filters.maxPrice ? String(filters.maxPrice) : "");
     setValue("land-sort-f", filters.sort || "newest");
@@ -38747,6 +38812,7 @@ function mapRemotePropertyForUi(p, options = {}) {
     backend_id: id,
     title: p?.title || "Untitled listing",
     type: publicListingType,
+    transaction_type: p?.transaction_type || extraFields.transaction_type || null,
     subtype: p?.property_type || p?.subtype || "Property",
     title_type: p?.title_type || extraFields.title_type || "",
     land_title_available: getLandTitleAvailabilityValue(p),
@@ -39101,14 +39167,14 @@ function hasActivePublicCategoryFilter(category) {
       || Boolean(publicCategorySortValue("students") !== "newest");
   }
   if (key === "commercial") {
-    const fieldIds = ["commercial-q-f", "commercial-district-f", "commercial-type-f", "commercial-min-price-f", "commercial-price-f", "commercial-min-price-custom-f", "commercial-max-price-custom-f", "commercial-size-f", "commercial-max-size-f"];
+    const fieldIds = ["commercial-q-f", "commercial-district-f", "commercial-type-f", "commercial-transaction-f", "commercial-min-price-f", "commercial-price-f", "commercial-min-price-custom-f", "commercial-max-price-custom-f", "commercial-size-f", "commercial-max-size-f"];
     return fieldIds.some((id) => publicListingFilterValue(id))
       || getRadiusKmFromSelect("commercial-radius-f") > 0
       || Boolean(getNearMeSearchState("commercial"))
       || Boolean(publicCategorySortValue("commercial") !== "newest");
   }
   if (key === "land") {
-    const fieldIds = ["land-q-f", "land-district-f", "land-type-f", "land-min-price-f", "land-price-f", "land-min-price-custom-f", "land-max-price-custom-f", "land-min-size-f", "land-max-size-f", "land-title-f"];
+    const fieldIds = ["land-q-f", "land-district-f", "land-type-f", "land-transaction-f", "land-min-price-f", "land-price-f", "land-min-price-custom-f", "land-max-price-custom-f", "land-min-size-f", "land-max-size-f", "land-title-f"];
     return fieldIds.some((id) => publicListingFilterValue(id))
       || getRadiusKmFromSelect("land-radius-f") > 0
       || Boolean(getNearMeSearchState("land"))
@@ -39455,6 +39521,7 @@ function publicInventoryRouteSearchPath(category) {
   if (filters.bathrooms) params.set("bathrooms", String(filters.bathrooms));
   if (filters.amenities) params.set("amenities", String(filters.amenities));
   if (filters.commercialType) params.set("commercial_type", String(filters.commercialType));
+  if (filters.transactionType) params.set("transaction_type", String(filters.transactionType));
   if (filters.landTitleType) params.set("land_title_type", String(filters.landTitleType));
   if (filters.sort) params.set("sort", String(filters.sort));
   return `/api/properties/search?${params.toString()}`;
@@ -39540,6 +39607,7 @@ function publicCategoryControlSearchPath(category) {
     const sort = publicCategorySortValue("students");
     if (sort !== "newest") { params.set("sort", sort); active = true; } else if (active) params.set("sort", sort);
   } else if (page === "commercial") {
+    add("transaction_type", publicListingFilterValue("commercial-transaction-f"));
     add("commercial_type", publicListingFilterValue("commercial-type-f"));
     add("min_price", publicFilterNumberOrSelect("commercial-min-price-custom-f", "commercial-min-price-f"));
     add("max_price", publicFilterNumberOrSelect("commercial-max-price-custom-f", "commercial-price-f"));
@@ -39548,6 +39616,7 @@ function publicCategoryControlSearchPath(category) {
     const sort = publicCategorySortValue("commercial");
     if (sort !== "newest") { params.set("sort", sort); active = true; } else if (active) params.set("sort", sort);
   } else if (page === "land") {
+    add("transaction_type", publicListingFilterValue("land-transaction-f"));
     add("land_title_type", publicListingFilterValue("land-title-f") || publicListingFilterValue("land-type-f"));
     add("min_price", publicFilterNumberOrSelect("land-min-price-custom-f", "land-min-price-f"));
     add("max_price", publicFilterNumberOrSelect("land-max-price-custom-f", "land-price-f"));
@@ -40072,6 +40141,9 @@ function setTab(el, type) {
   group.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
   el.classList.add("active");
   currentTab = type;
+  const transactionWrap = document.getElementById("hero-transaction-wrap");
+  if (transactionWrap) transactionWrap.classList.toggle("hidden", !["commercial", "land"].includes(type));
+  setHeroTransactionType(["commercial", "land"].includes(type) ? (document.getElementById("hero-transaction-f")?.value || "") : "");
   setHeroLocationFilter(type);
   setHeroRadiusState(type);
   setHeroContextFilter(type);
@@ -40082,6 +40154,15 @@ function setTab(el, type) {
   if (heroInput && document.activeElement === heroInput && heroInput.value.trim()) {
     renderTypeahead(heroInput, getLocationSuggestionPool(currentTab === "students"), () => {});
   }
+}
+
+function setHeroTransactionType(value = "") {
+  const normalized = ["rent", "sale"].includes(String(value || "").toLowerCase()) ? String(value).toLowerCase() : "";
+  const select = document.getElementById("hero-transaction-f");
+  if (select) select.value = normalized;
+  document.querySelectorAll("[data-hero-transaction]").forEach((button) => {
+    button.setAttribute("aria-pressed", button.getAttribute("data-hero-transaction") === normalized ? "true" : "false");
+  });
 }
 
 function buildHeroSearchBackendPayload({ query = "", area = "", filters = {}, nearState = null, resultsCount = 0, category = currentTab } = {}) {
@@ -40116,6 +40197,7 @@ function buildHeroSearchBackendPayload({ query = "", area = "", filters = {}, ne
   if (filters.bathrooms) payload.bathrooms = filters.bathrooms;
   if (filters.amenities) payload.amenities = filters.amenities;
   setFilter("commercialType", "commercial_type", filters.commercialType);
+  setFilter("transactionType", "transaction_type", filters.transactionType);
   setFilter("landTitleType", "land_title_type", filters.landTitleType);
   if (filters.sort) payload.sort = filters.sort;
   if (nearState) {
@@ -40240,6 +40322,7 @@ const SECTION_SEARCH_CONFIGS = {
     placeholder: "Search offices, shops, warehouses or areas",
     legacySelector: ".bg-gradient-to-r",
     filters: [
+      { id: "commercial-transaction-f", key: "transactionType" },
       { id: "commercial-radius-f", key: "radius" },
       { id: "commercial-type-f", key: "commercialType" },
       { id: "commercial-min-price-f", key: "minPrice" },
@@ -40288,6 +40371,14 @@ function sectionSearchSelectMarkup(config, field) {
   const options = source
     ? Array.from(source.options).map((option) => `<option value="${adminAttr(option.value || "")}">${adminEscape(option.textContent || "")}</option>`).join("")
     : `<option value="">${adminEscape(field.label || "Filter")}</option>`;
+  if (field.key === "transactionType") {
+    return `<div class="transaction-segmented" data-section-transaction-segments>
+      <button type="button" data-section-transaction="" aria-pressed="true">${translateListingLabel("All")}</button>
+      <button type="button" data-section-transaction="rent" aria-pressed="false">${translateListingLabel("For Rent")}</button>
+      <button type="button" data-section-transaction="sale" aria-pressed="false">${translateListingLabel("For Sale")}</button>
+      <select id="${adminAttr(sectionSearchFieldId(config, field))}" class="hidden" data-section-search-field="${adminAttr(field.key)}" data-section-search-source="${adminAttr(field.id)}" aria-label="${translateListingLabel("Transaction")}">${options}</select>
+    </div>`;
+  }
   return `<select id="${adminAttr(sectionSearchFieldId(config, field))}" data-section-search-field="${adminAttr(field.key)}" data-section-search-source="${adminAttr(field.id)}" aria-label="${adminAttr(field.label || source?.options?.[0]?.textContent || "Filter")}">${options}</select>`;
 }
 
@@ -40328,6 +40419,19 @@ function syncSectionSearchShell(page, options = {}) {
       target.innerHTML = Array.from(source.options).map((option) => `<option value="${adminAttr(option.value || "")}">${adminEscape(option.textContent || "")}</option>`).join("");
     }
     if (Array.from(target.options).some((option) => option.value === source.value)) target.value = source.value;
+    if (field.key === "transactionType") {
+      shell.querySelectorAll("[data-section-transaction]").forEach((button) => {
+        const value = button.getAttribute("data-section-transaction") || "";
+        const labels = {
+          "": translateListingLabel("All"),
+          rent: translateListingLabel("For Rent"),
+          sale: translateListingLabel("For Sale")
+        };
+        button.textContent = labels[value] || labels[""];
+        button.setAttribute("aria-pressed", value === target.value ? "true" : "false");
+      });
+      target.setAttribute("aria-label", translateListingLabel("Transaction"));
+    }
   });
   return true;
 }
@@ -40405,6 +40509,7 @@ function sectionSearchResultCount(page, result) {
 function sectionSearchFilterPayload(config, values = {}) {
   const filters = {
     propertyType: values.propertyType || "",
+    transactionType: values.transactionType || "",
     minPrice: parseInt(values.minPrice || "0", 10) || 0,
     maxPrice: parseInt(values.maxPrice || "0", 10) || 0,
     bedrooms: values.bedrooms || "",
@@ -40502,6 +40607,17 @@ function wireSectionSearchShell(config) {
   }
   shell.querySelectorAll("[data-section-search-field]").forEach((field) => {
     field.addEventListener("change", () => runSectionSearch(config.key, { source: "section_shell_filter" }));
+  });
+  shell.querySelectorAll("[data-section-transaction]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const select = shell.querySelector('[data-section-search-field="transactionType"]');
+      if (!select) return;
+      select.value = button.getAttribute("data-section-transaction") || "";
+      shell.querySelectorAll("[data-section-transaction]").forEach((item) => {
+        item.setAttribute("aria-pressed", item === button ? "true" : "false");
+      });
+      runSectionSearch(config.key, { source: "section_shell_transaction" });
+    });
   });
   const form = shell.querySelector("form");
   form?.addEventListener("submit", (event) => {
@@ -40669,14 +40785,16 @@ function doSearch() {
     const cd = document.getElementById("commercial-district-f");
     const cr = document.getElementById("commercial-radius-f");
     const ct = document.getElementById("commercial-type-f");
+    const cTransaction = document.getElementById("commercial-transaction-f");
     const cMin = document.getElementById("commercial-min-price-f");
     const cMax = document.getElementById("commercial-price-f");
     const cSort = document.getElementById("commercial-sort-f");
-    const commercialTypeMap = { office: "Office", retail: "Retail", warehouse: "Warehouse", shop: "Shop" };
+    const commercialTypeMap = { office: "office", retail: "shop_retail", shop: "shop_retail", warehouse: "warehouse_industrial", industrial: "warehouse_industrial", land: "commercial_land", hospitality: "hospitality" };
     if (cq) cq.value = document.getElementById("hero-q").value || "";
     if (cd) cd.value = areaOrUni;
     if (cr) cr.value = routedRadiusValue;
-    if (ct) ct.value = commercialTypeMap[heroFilters.propertyType] || (heroFilters.propertyType === "commercial space" ? "" : "");
+    if (ct) ct.value = commercialTypeMap[heroFilters.propertyType] || "";
+    if (cTransaction) cTransaction.value = heroFilters.transactionType || "";
     if (cMin) cMin.value = heroFilters.minPrice ? String(heroFilters.minPrice) : "";
     if (cMax) cMax.value = heroFilters.maxPrice ? String(heroFilters.maxPrice) : "";
     if (cSort) cSort.value = heroFilters.sort || "newest";
@@ -40686,6 +40804,7 @@ function doSearch() {
     const ld = document.getElementById("land-district-f");
     const lr = document.getElementById("land-radius-f");
     const lt = document.getElementById("land-type-f");
+    const lTransaction = document.getElementById("land-transaction-f");
     const lMin = document.getElementById("land-min-price-f");
     const lMax = document.getElementById("land-price-f");
     const lSort = document.getElementById("land-sort-f");
@@ -40694,6 +40813,7 @@ function doSearch() {
     if (ld) ld.value = areaOrUni;
     if (lr) lr.value = routedRadiusValue;
     if (lt) lt.value = landTypeMap[heroFilters.propertyType] || "";
+    if (lTransaction) lTransaction.value = heroFilters.transactionType || "";
     if (lMin) lMin.value = heroFilters.minPrice ? String(heroFilters.minPrice) : "";
     if (lMax) lMax.value = heroFilters.maxPrice ? String(heroFilters.maxPrice) : "";
     if (lSort) lSort.value = heroFilters.sort || "newest";
@@ -44144,10 +44264,13 @@ const LP_CONFIG = {
     areaPlaceholder: "e.g. Industrial Area, Ntinda, Kampala CBD...",
     subtypeLabel: "Commercial Property Type *",
     subtypes: [
-      { value: "Warehouse", label: "Warehouse" },
-      { value: "Retail Shop", label: "Retail Shop" },
-      { value: "Office", label: "Office" },
-      { value: "Showroom", label: "Showroom" }
+      { value: "", label: "Choose commercial type" },
+      { value: "office", label: "Office" },
+      { value: "shop_retail", label: "Shop / Retail" },
+      { value: "warehouse_industrial", label: "Warehouse / Industrial" },
+      { value: "commercial_land", label: "Commercial land" },
+      { value: "hospitality", label: "Hospitality / Leisure" },
+      { value: "other", label: "Other" }
     ],
     sizeLabel: "Size",
     sizePlaceholder: "N/A",
@@ -44165,7 +44288,7 @@ const LP_CONFIG = {
     descPlaceholder: "Describe business suitability, access, parking, loading, power, and terms...",
     continueLabel: "Continue to Photos →",
     extras: [
-      { key: "commercial_mode", label: "Commercial Listing Mode", type: "select", options: [{ value: "sale", label: "For Sale" }, { value: "rent", label: "For Rent" }] },
+      { key: "commercial_mode", label: "Transaction *", type: "select", required: true, options: [{ value: "", label: "Choose For Rent or For Sale" }, { value: "rent", label: "For Rent" }, { value: "sale", label: "For Sale" }] },
       { key: "floor_area", label: "Usable Floor Area (sqm)", type: "number", placeholder: "e.g. 300" },
       { key: "parking_bays", label: "Parking Bays", type: "number", placeholder: "e.g. 12" },
       { key: "use_class", label: "Use Class", type: "select", options: ["Office", "Retail", "Warehouse", "Mixed Use"] },
@@ -44331,7 +44454,7 @@ function updateLpDependentFields() {
 function syncCommercialMode(mode) {
   if (getListType() !== "commercial") return;
   const modeSel = document.getElementById("lp-extra-commercial_mode");
-  const currentMode = mode || modeSel?.value || "sale";
+  const currentMode = mode !== undefined ? mode : (modeSel?.value || "");
   if (modeSel) modeSel.value = currentMode;
 
   const periodLabelEl = document.getElementById("lp-period-label");
@@ -45017,6 +45140,31 @@ function shiftDetailGalleryPhoto(direction = 1) {
   renderDetailGalleryLightbox();
 }
 
+function commercialTransactionForProperty(property = {}) {
+  const explicit = String(property.transaction_type || property.transactionType || property.commercial_intent || property.commercial_mode || "").toLowerCase();
+  if (["rent", "sale"].includes(explicit)) return explicit;
+  const period = String(property.period || property.price_period || "").toLowerCase();
+  if (["month", "monthly", "mo", "week", "weekly", "night", "daily", "yr", "year"].includes(period)) return "rent";
+  if (["once", "sale", "total"].includes(period)) return "sale";
+  const text = publicListingFilterText(property);
+  if (/\b(for rent|to rent|to let|rental)\b/.test(text)) return "rent";
+  if (/\b(for sale|selling|purchase)\b/.test(text)) return "sale";
+  return "";
+}
+
+function canonicalCommercialTypeForProperty(property = {}) {
+  const value = String(property.property_type || property.subtype || property.commercial_type || property.extra_fields?.commercial_type || "").toLowerCase().replace(/[\s/.-]+/g, "_");
+  const aliases = {
+    office: "office", offices: "office", office_space: "office",
+    retail: "shop_retail", shop: "shop_retail", retail_shop: "shop_retail", shop_retail: "shop_retail", showroom: "shop_retail",
+    warehouse: "warehouse_industrial", industrial: "warehouse_industrial", warehouse_industrial: "warehouse_industrial",
+    land: "commercial_land", plot: "commercial_land", commercial_land: "commercial_land",
+    hotel: "hospitality", hospitality: "hospitality", restaurant: "hospitality", leisure: "hospitality",
+    other: "other", commercial: "other"
+  };
+  return aliases[value] || value;
+}
+
 function filterCommercial(options = {}) {
   const q = (document.getElementById("commercial-q-f")?.value || "").toLowerCase().trim();
   const dRaw = document.getElementById("commercial-district-f")?.value || "";
@@ -45024,6 +45172,7 @@ function filterCommercial(options = {}) {
   const radiusKm = getRadiusKmFromSelect("commercial-radius-f");
   const nearState = getNearMeSearchState("commercial");
   const type = (document.getElementById("commercial-type-f")?.value || "").toLowerCase().trim();
+  const transactionType = (document.getElementById("commercial-transaction-f")?.value || "").toLowerCase().trim();
   const min = publicListingFilterNumber("commercial-min-price-custom-f") || parseInt(document.getElementById("commercial-min-price-f")?.value || "0", 10);
   const max = publicListingFilterNumber("commercial-max-price-custom-f") || parseInt(document.getElementById("commercial-price-f")?.value || "0", 10);
   const minSize = parseFloat(document.getElementById("commercial-size-f")?.value || "0");
@@ -45036,12 +45185,13 @@ function filterCommercial(options = {}) {
     const sizeNum = numericValue(p.size);
     const qMatch = !q || text.includes(q);
     const dMatch = nearState ? propertyMatchesNearMe(p, nearState, radiusKm || nearState.radiusKm) : matchDistrictRadius(p, d, radiusKm);
-    const tMatch = !type || text.includes(type);
+    const tMatch = !type || canonicalCommercialTypeForProperty(p) === type;
+    const transactionMatch = !transactionType || commercialTransactionForProperty(p) === transactionType;
     const minMatch = !min || p.price >= min;
     const maxMatch = !max || p.price <= max;
     const sizeMatch = !minSize || sizeNum >= minSize;
     const maxSizeMatch = !maxSize || sizeNum <= maxSize;
-    return qMatch && dMatch && tMatch && minMatch && maxMatch && sizeMatch && maxSizeMatch;
+    return qMatch && dMatch && tMatch && transactionMatch && minMatch && maxMatch && sizeMatch && maxSizeMatch;
   });
   if (sort === "price_asc") list.sort(comparePublicPriceAsc);
   if (sort === "price_desc") list.sort(comparePublicPriceDesc);
@@ -45067,6 +45217,7 @@ function filterLand(options = {}) {
   const radiusKm = getRadiusKmFromSelect("land-radius-f");
   const nearState = getNearMeSearchState("land");
   const type = (document.getElementById("land-type-f")?.value || "").toLowerCase().trim();
+  const transactionType = (document.getElementById("land-transaction-f")?.value || "").toLowerCase().trim();
   const min = publicListingFilterNumber("land-min-price-custom-f") || parseInt(document.getElementById("land-min-price-f")?.value || "0", 10);
   const max = publicListingFilterNumber("land-max-price-custom-f") || parseInt(document.getElementById("land-price-f")?.value || "0", 10);
   const minSize = parseFloat(document.getElementById("land-min-size-f")?.value || "0");
@@ -45081,12 +45232,13 @@ function filterLand(options = {}) {
     const qMatch = !q || text.includes(q);
     const dMatch = nearState ? propertyMatchesNearMe(p, nearState, radiusKm || nearState.radiusKm) : matchDistrictRadius(p, d, radiusKm);
     const tMatch = !type || text.includes(type);
+    const transactionMatch = !transactionType || commercialTransactionForProperty(p) === transactionType;
     const minMatch = !min || p.price >= min;
     const maxMatch = !max || p.price <= max;
     const sizeMatch = !minSize || sizeNum >= minSize;
     const maxSizeMatch = !maxSize || sizeNum <= maxSize;
     const titleMatch = !titleType || text.includes(titleType);
-    return qMatch && dMatch && tMatch && minMatch && maxMatch && sizeMatch && maxSizeMatch && titleMatch;
+    return qMatch && dMatch && tMatch && transactionMatch && minMatch && maxMatch && sizeMatch && maxSizeMatch && titleMatch;
   });
   if (sort === "price_asc") list.sort(comparePublicPriceAsc);
   if (sort === "price_desc") list.sort(comparePublicPriceDesc);

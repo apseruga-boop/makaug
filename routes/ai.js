@@ -7,6 +7,10 @@ const { captureLearningEvent } = require('../services/aiLearningCaptureService')
 const { createLead } = require('../services/leadService');
 const { logNotification } = require('../services/notificationLogService');
 const {
+  normalizeCommercialTransactionType,
+  normalizeCommercialPropertyType,
+} = require('../utils/commercialClassification');
+const {
   SUPPORTED_AI_LANGUAGES,
   extractNaturalPropertyQuery,
   heuristicNaturalPropertyQuery,
@@ -241,12 +245,22 @@ function inferAssistantSearchType({ intent = '', parsed = {}, userMessage = '' }
 function prepareAssistantParsedQuery({ parsed = {}, intent = '', userMessage = '' } = {}) {
   const searchType = inferAssistantSearchType({ intent, parsed, userMessage });
   const normalizedPropertyType = normalizeAssistantPropertyType(parsed?.propertyType, userMessage, parsed);
-  const propertyType = normalizedPropertyType && normalizedPropertyType !== searchType ? normalizedPropertyType : '';
+  const propertyTypeRaw = normalizedPropertyType && normalizedPropertyType !== searchType ? normalizedPropertyType : '';
+  const propertyType = searchType === 'commercial'
+    ? normalizeCommercialPropertyType(propertyTypeRaw, { text: userMessage })
+    : propertyTypeRaw;
+  const transactionType = ['commercial', 'land'].includes(searchType)
+    ? normalizeCommercialTransactionType(parsed?.transactionType || parsed?.transaction_type, {
+      text: userMessage,
+      pricePeriod: parsed?.budgetPeriod
+    })
+    : null;
   return {
     parsed: {
       ...(parsed || {}),
       searchType,
-      propertyType: propertyType || null
+      propertyType: propertyType || null,
+      transactionType: transactionType || null
     },
     searchType
   };
@@ -281,6 +295,7 @@ function buildAssistantSeeAllUrl(parsed = {}, searchType = 'any') {
   if (parsed?.propertyType && cleanText(parsed.propertyType).toLowerCase() !== searchType) {
     publicParams.set('property_type', cleanText(parsed.propertyType, 80));
   }
+  if (parsed?.transactionType) publicParams.set('transaction_type', cleanText(parsed.transactionType, 20));
   return `${publicPath}${publicParams.toString() ? `?${publicParams.toString()}` : ''}`;
 }
 
@@ -312,6 +327,9 @@ function buildAssistantSearchParams(parsed = {}, searchType = 'any', language = 
     params.set('property_type', propertyType);
     if (type === 'commercial') params.set('commercial_type', propertyType);
   }
+  if (parsed.transactionType && ['commercial', 'land'].includes(type)) {
+    params.set('transaction_type', cleanText(parsed.transactionType, 20));
+  }
   if (Number(parsed.maxBudgetUgx) > 0) params.set('max_price', String(Math.round(Number(parsed.maxBudgetUgx))));
   return params;
 }
@@ -327,6 +345,7 @@ function assistantFilterChips(parsed = {}, searchType = 'any') {
     student: 'Student accommodation'
   };
   if (type && type !== 'any') chips.push(typeLabels[type] || type.charAt(0).toUpperCase() + type.slice(1));
+  if (parsed.transactionType) chips.push(parsed.transactionType === 'rent' ? 'For rent' : 'For sale');
   if (parsed.bedsMin) chips.push(`${parsed.bedsMin}+ beds`);
   if (parsed.area || parsed.district) chips.push(parsed.area || parsed.district);
   if (parsed.maxBudgetUgx) chips.push(`<= UGX ${Number(parsed.maxBudgetUgx).toLocaleString('en-UG')}`);
@@ -397,6 +416,7 @@ function buildAssistantCapturePayload({ userMessage = '', parsed = {}, searchTyp
     bedrooms: parsed?.bedsMin || null,
     max_price: parsed?.maxBudgetUgx || null,
     property_type: parsed?.propertyType || null,
+    transaction_type: parsed?.transactionType || null,
     message: userMessage
   };
 }
@@ -994,7 +1014,8 @@ router.post('/assistant-reply', async (req, res, next) => {
             district: null,
             bedrooms: null,
             max_price: null,
-            property_type: null
+            property_type: null,
+            transaction_type: parsed?.transactionType || null
           },
           filter_chips: [],
           search_type: searchType,
@@ -1021,25 +1042,28 @@ router.post('/assistant-reply', async (req, res, next) => {
           let exactTotal = null;
           let result = null;
           let exactSearchError = null;
-          const hasRelaxablePropertyType = Boolean(parsed?.propertyType);
-          const relaxedParsed = hasRelaxablePropertyType ? { ...parsed, propertyType: null } : null;
-          if (relaxedParsed) {
-            effectiveParsed = relaxedParsed;
-            relaxedFilters = ['property_type'];
-            matchQuality = 'nearby_not_exact';
-          }
           try {
             result = await fetchAssistantSearchResults(req, {
               parsed: effectiveParsed,
               searchType,
               language
             });
-            exactTotal = hasRelaxablePropertyType ? null : result.total;
+            exactTotal = result.total;
           } catch (error) {
             exactSearchError = error;
             exactTotal = 0;
           }
           if (!result) throw exactSearchError || new Error('property_search_failed');
+          if (result.total === 0 && parsed?.propertyType) {
+            effectiveParsed = { ...parsed, propertyType: null };
+            relaxedFilters = ['property_type'];
+            matchQuality = 'nearby_not_exact';
+            result = await fetchAssistantSearchResults(req, {
+              parsed: effectiveParsed,
+              searchType,
+              language
+            });
+          }
           if (result.total > 0 && assistantLocationLooksRelaxed(result.listings, effectiveParsed)) {
             matchQuality = 'nearby_not_exact';
             relaxedFilters = Array.from(new Set([...relaxedFilters, 'location']));
@@ -1063,7 +1087,8 @@ router.post('/assistant-reply', async (req, res, next) => {
               district: effectiveParsed?.district || null,
               bedrooms: effectiveParsed?.bedsMin || null,
               max_price: effectiveParsed?.maxBudgetUgx || null,
-              property_type: effectiveParsed?.propertyType || null
+              property_type: effectiveParsed?.propertyType || null,
+              transaction_type: effectiveParsed?.transactionType || null
             },
             filter_chips: assistantFilterChips(effectiveParsed, searchType),
             search_type: searchType,
@@ -1100,7 +1125,8 @@ router.post('/assistant-reply', async (req, res, next) => {
               district: parsed?.district || null,
               bedrooms: parsed?.bedsMin || null,
               max_price: parsed?.maxBudgetUgx || null,
-              property_type: parsed?.propertyType || null
+              property_type: parsed?.propertyType || null,
+              transaction_type: parsed?.transactionType || null
             },
             filter_chips: assistantFilterChips(parsed, searchType),
             search_type: searchType,

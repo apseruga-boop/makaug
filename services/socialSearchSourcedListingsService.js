@@ -21,6 +21,11 @@ const {
   normalizeSourceUrl,
   suppressedSourceRowsForUrls,
 } = require('./suppressedSourceService');
+const {
+  normalizeCommercialTransactionType,
+  normalizeCommercialPropertyType,
+  commercialMisclassificationWarning,
+} = require('../utils/commercialClassification');
 
 const SOCIAL_SEARCH_BATCH_ID = 'social_search_authorised_20260520';
 const LEGACY_SOURCED_INVENTORY_CANDIDATE_SOURCE = SOURCE;
@@ -1669,6 +1674,12 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
     source_registry_key: agent.key || item.agentKey || '',
     source_platform: sourcePlatform,
     source_type: item.sourceType || item.source_type || 'found_online_source_post',
+    transaction_type: item.transactionType || item.transaction_type || null,
+    commercial_type: item.listingType === 'commercial' ? (item.subtype || null) : null,
+    commercial_classification_warning: commercialMisclassificationWarning({
+      ...item,
+      listing_type: item.listingType || item.listing_type
+    }) || null,
     source_name: agent.name || '',
     source_agent_name: agent.name || '',
     source_url: sourceUrl,
@@ -1842,18 +1853,42 @@ function buildSocialSearchListing(item, agentId = null) {
       : '');
   const studentListing = explicitlyStudent || Boolean(nearestUniversity && rentishNearCampus);
   const listingType = studentListing ? 'students' : originalListingType;
+  const transactionType = ['commercial', 'land'].includes(listingType)
+    ? normalizeCommercialTransactionType(item.transactionType || item.transaction_type, {
+      pricePeriod: item.price_period || item.pricePeriod,
+      title: item.title,
+      description: item.description
+    })
+    : '';
+  const propertyType = listingType === 'commercial'
+    ? normalizeCommercialPropertyType(item.subtype || item.property_type, {
+      title: item.title,
+      description: item.description
+    })
+    : item.subtype;
+  const classificationWarning = commercialMisclassificationWarning({
+    ...item,
+    listing_type: listingType
+  });
+  if (listingType === 'commercial' && (!transactionType || !propertyType)) {
+    autoLive.approved = false;
+    autoLive.status = 'pending';
+    autoLive.moderation_stage = 'source_review';
+    autoLive.reason = 'Commercial transaction and subtype need staff confirmation before publication.';
+  }
   return {
     listing_type: listingType,
+    transaction_type: transactionType || null,
     title: item.title,
     description: publicDescriptionFor(item),
     district: item.district,
     area: item.area,
     address: item.address,
     price: Number(item.price || 0) > 0 ? item.price : null,
-    price_period: item.price_period || item.pricePeriod || 'once',
+    price_period: item.price_period || item.pricePeriod || (transactionType === 'rent' ? 'month' : 'once'),
     bedrooms: item.beds,
     bathrooms: item.baths,
-    property_type: item.subtype,
+    property_type: propertyType || null,
     title_type: listingType === 'land' ? null : null,
     year_built: null,
     furnishing: null,
@@ -1868,7 +1903,7 @@ function buildSocialSearchListing(item, agentId = null) {
     distance_to_uni_km: campusByCoords ? Number(campusByCoords.distance_km.toFixed(1)) : null,
     room_type: null,
     room_arrangement: null,
-    commercial_intent: null,
+    commercial_intent: listingType === 'commercial' ? (transactionType || null) : null,
     latitude: item.lat,
     longitude: item.lng,
     students_welcome: studentListing,
@@ -1892,7 +1927,7 @@ function buildSocialSearchListing(item, agentId = null) {
     status: autoLive.status,
     moderation_stage: autoLive.moderation_stage,
     reviewed_at: autoLive.approved ? new Date() : null,
-    moderation_notes: `${autoLive.approved ? 'YOUTUBE API AUTO-LIVE IMPORT' : (item.importedFromSourcePost ? 'FOUND-ONLINE SOURCE POST IMPORT' : 'SOCIAL SEARCH LISTING')}. Public source inventory from ${agent.name || 'source'}. Source post: ${sourceUrlForItem(item)}. ${autoLive.approved ? 'Location, 2026 source date, listing category, property signal, and public source/contact route passed the YouTube API auto-live policy; direct phone is not required when the source contact route is available.' : 'Confirm it was first posted on or after 1 January 2026, then confirm location, availability, and price or Price upon application. Location is non-negotiable; other source-review checks can be overridden by King.'} Batch: ${itemBatchId(item)}.`,
+    moderation_notes: `${autoLive.approved ? 'YOUTUBE API AUTO-LIVE IMPORT' : (item.importedFromSourcePost ? 'FOUND-ONLINE SOURCE POST IMPORT' : 'SOCIAL SEARCH LISTING')}. Public source inventory from ${agent.name || 'source'}. Source post: ${sourceUrlForItem(item)}. ${autoLive.approved ? 'Location, 2026 source date, listing category, property signal, and public source/contact route passed the YouTube API auto-live policy; direct phone is not required when the source contact route is available.' : 'Confirm it was first posted on or after 1 January 2026, then confirm location, availability, and price or Price upon application. Location is non-negotiable; other source-review checks can be overridden by King.'}${classificationWarning ? ` ${classificationWarning}` : ''} Batch: ${itemBatchId(item)}.`,
     moderation_reason: autoLive.approved
       ? autoLive.reason
       : 'Pending King review of public found-online source, exact pin, latest availability, and image/source evidence.',
@@ -2020,7 +2055,7 @@ async function insertListing(client, listing, agentId) {
   const autoLive = sourcePostAutoLiveStatusFor(listing.source_item, sourceAgentForItem(listing.source_item));
   const inserted = await client.query(
     `INSERT INTO properties (
-      listing_type, title, description, district, area, address, price, price_period,
+      listing_type, transaction_type, title, description, district, area, address, price, price_period,
       bedrooms, bathrooms, property_type, title_type, year_built, furnishing,
       contract_months, deposit_amount, land_size_value, land_size_unit,
       floor_area_sqm, usable_size_sqm, parking_bays, nearest_university,
@@ -2035,11 +2070,11 @@ async function insertListing(client, listing, agentId) {
       $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
       $11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
       $21,$22,$23,$24,$25,$26,$27,$28,$29,$30,
-      $31,$32,$33,$34,$35,$36::jsonb,$37::jsonb,$38,$39,$40,
-      $41,$42,$43,$44,$45,$46,$47,$48,$49,$50,$51
+      $31,$32,$33,$34,$35,$36,$37::jsonb,$38::jsonb,$39,$40,
+      $41,$42,$43,$44,$45,$46,$47,$48,$49,$50,$51,$52
     ) RETURNING id::text AS id`,
     [
-      listing.listing_type, listing.title, listing.description, listing.district,
+      listing.listing_type, listing.transaction_type, listing.title, listing.description, listing.district,
       listing.area, listing.address, listing.price, listing.price_period,
       listing.bedrooms, listing.bathrooms, listing.property_type, listing.title_type,
       listing.year_built, listing.furnishing, listing.contract_months,
@@ -2233,6 +2268,22 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
     baseDescription,
     sourceVisualText ? `Visible video/still text adds: ${sourceVisualText}` : '',
   ].filter(Boolean).join(' '));
+  const pricePeriod = raw.price_period || raw.pricePeriod || raw.period
+    || ((listingType === 'rent' || listingType === 'students')
+      ? 'month'
+      : (listingType === 'commercial' ? '' : 'once'));
+  const transactionType = ['commercial', 'land'].includes(listingType)
+    ? normalizeCommercialTransactionType(
+      raw.transaction_type || raw.transactionType || raw.commercial_mode || raw.commercial_intent,
+      { pricePeriod, title, description: `${description} ${sourceText}` }
+    )
+    : '';
+  const commercialSubtype = listingType === 'commercial'
+    ? normalizeCommercialPropertyType(raw.subtype || raw.property_type || raw.commercial_type, {
+      title,
+      description: `${description} ${sourceText}`
+    })
+    : (raw.subtype || raw.property_type || null);
   const nearestUniversity = nearestUniversityForSourceItem({
     ...raw,
     listingType,
@@ -2314,11 +2365,13 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
     address,
     price: parseMoneyValue(raw.price ?? raw.guide_price ?? raw.price_text ?? raw.asking_price),
     priceText: raw.price_text || raw.price_label || '',
-    price_period: raw.price_period || raw.pricePeriod || raw.period || ((listingType === 'rent' || listingType === 'students' || listingType === 'commercial') ? 'month' : 'once'),
+    price_period: pricePeriod,
+    transactionType: transactionType || null,
+    transaction_type: transactionType || null,
     listingType,
     nearest_university: nearestUniversity || null,
     student_universities: nearestUniversity ? normalizeUniversityList([nearestUniversity]) : [],
-    subtype: raw.subtype || raw.property_type || null,
+    subtype: commercialSubtype || null,
     beds: numberOrNull(raw.bedrooms ?? raw.beds),
     baths: numberOrNull(raw.bathrooms ?? raw.baths),
     landSizeValue: numberOrNull(raw.land_size_value ?? raw.landSizeValue),
@@ -2855,34 +2908,36 @@ async function updateExistingFoundOnlineSourcePostListing(client, existingRow = 
   const updated = await client.query(
     `UPDATE properties
      SET listing_type = $2,
-         title = $3,
-         description = $4,
-         district = $5,
-         area = $6,
-         address = $7,
-         price = $8,
-         price_period = $9,
-         bedrooms = $10,
-         bathrooms = $11,
-         property_type = $12,
-         land_size_value = $13,
-         land_size_unit = $14,
-         latitude = $15,
-         longitude = $16,
-         students_welcome = $17,
-         amenities = $18::jsonb,
-         status = $19,
-         moderation_stage = $20,
-         reviewed_at = CASE WHEN $21::boolean THEN COALESCE(reviewed_at, NOW()) ELSE reviewed_at END,
-         moderation_notes = $22,
-         moderation_reason = $23,
-         extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $24::jsonb,
+         transaction_type = $3,
+         title = $4,
+         description = $5,
+         district = $6,
+         area = $7,
+         address = $8,
+         price = $9,
+         price_period = $10,
+         bedrooms = $11,
+         bathrooms = $12,
+         property_type = $13,
+         land_size_value = $14,
+         land_size_unit = $15,
+         latitude = $16,
+         longitude = $17,
+         students_welcome = $18,
+         amenities = $19::jsonb,
+         status = $20,
+         moderation_stage = $21,
+         reviewed_at = CASE WHEN $22::boolean THEN COALESCE(reviewed_at, NOW()) ELSE reviewed_at END,
+         moderation_notes = $23,
+         moderation_reason = $24,
+         extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $25::jsonb,
          updated_at = NOW()
      WHERE id = $1
      RETURNING id::text AS id, title, status, moderation_stage`,
     [
       existingRow.id,
       listing.listing_type,
+      listing.transaction_type,
       listing.title,
       listing.description,
       listing.district,

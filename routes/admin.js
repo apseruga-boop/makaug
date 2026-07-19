@@ -9,6 +9,10 @@ const { parsePagination, toPagination } = require('../utils/pagination');
 const { DISTRICTS, LISTING_TYPES } = require('../utils/constants');
 const { normalizeReviewLocationHierarchy, districtForKnownArea } = require('../utils/ugandaLocationHierarchy');
 const { normalizeEmail, normalizeUgPhone } = require('../utils/adminOtpOverride');
+const {
+  normalizeCommercialTransactionType,
+  normalizeCommercialPropertyType,
+} = require('../utils/commercialClassification');
 const { createListingSubmitToken } = require('../utils/listingSubmitOtp');
 const { publicLivePropertyStatusSql } = require('../utils/publicInventoryStatus');
 const {
@@ -2644,6 +2648,17 @@ async function updatePropertyEditableFields({ propertyId, patch = {} }) {
     const landTitleAlias = normalizedPatch.landTitleAvailable ?? normalizedPatch.title_available ?? normalizedPatch.titleAvailable;
     if (landTitleAlias != null) normalizedPatch.land_title_available = landTitleAlias;
   }
+  if (!Object.prototype.hasOwnProperty.call(normalizedPatch, 'transaction_type')) {
+    const transactionAlias = normalizedPatch.transactionType ?? normalizedPatch.commercial_mode ?? normalizedPatch.commercial_intent;
+    if (transactionAlias != null) normalizedPatch.transaction_type = transactionAlias;
+  }
+  const effectiveListingType = cleanText(normalizedPatch.listing_type || normalizedPatch.listingType).toLowerCase();
+  if (effectiveListingType === 'commercial' && Object.prototype.hasOwnProperty.call(normalizedPatch, 'property_type')) {
+    normalizedPatch.property_type = normalizeCommercialPropertyType(normalizedPatch.property_type, {
+      title: normalizedPatch.title,
+      description: normalizedPatch.description
+    });
+  }
 
   const fieldMap = {
     title: { column: 'title', value: cleanText(normalizedPatch.title), required: true },
@@ -2652,6 +2667,7 @@ async function updatePropertyEditableFields({ propertyId, patch = {} }) {
     address: { column: 'address', value: cleanText(normalizedPatch.address) || null },
     price: { column: 'price', value: toNullableInt(normalizedPatch.price) },
     price_period: { column: 'price_period', value: cleanText(normalizedPatch.price_period) || null },
+    transaction_type: { column: 'transaction_type', value: normalizeCommercialTransactionType(normalizedPatch.transaction_type) || null },
     property_type: { column: 'property_type', value: cleanText(normalizedPatch.property_type) || null },
     title_type: { column: 'title_type', value: cleanText(normalizedPatch.title_type) || null },
     lister_phone: { column: 'lister_phone', value: cleanText(normalizeUgPhone(normalizedPatch.lister_phone)) || null },
@@ -4960,7 +4976,7 @@ router.patch('/properties/:id/review', async (req, res, next) => {
        WHERE id = $1
        RETURNING id, status, moderation_stage, moderation_checklist, moderation_notes, moderation_reason,
          reviewed_by, extra_fields, listing_type, title, description, district, area, address,
-         price, price_period, property_type, bedrooms, bathrooms, latitude, longitude, amenities, updated_at`,
+         price, price_period, transaction_type, property_type, bedrooms, bathrooms, latitude, longitude, amenities, updated_at`,
       [
         req.params.id,
         stage,

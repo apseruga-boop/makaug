@@ -133,8 +133,8 @@ includes(aiRoute, 'ASSISTANT_SEARCH_PREWARM_ENABLED', 'assistant search prewarm 
 includes(aiRoute, 'ASSISTANT_SEARCH_CACHE_TTL_MS', 'assistant cache TTL must be configurable for short freshness windows');
 includes(aiRoute, 'search_prewarm_marker: ASSISTANT_SEARCH_PREWARM_MARKER', 'assistant responses must expose the prewarm marker for live verification');
 includes(aiRoute, 'ASSISTANT_SEARCH_TIMEOUT_MS', 'assistant search timeout must be configurable');
-includes(aiRoute, 'hasRelaxablePropertyType', 'assistant route should detect scarce subtype filters');
-includes(aiRoute, "relaxedFilters = ['property_type']", 'assistant route should relax scarce subtype filters before the first search');
+includes(aiRoute, 'if (result.total === 0 && parsed?.propertyType)', 'assistant route should preserve the exact commercial subtype on the first search');
+includes(aiRoute, "relaxedFilters = ['property_type']", 'assistant route should only relax a scarce subtype after the exact search returns zero');
 includes(aiRoute, 'assistantSearchOriginFromRequest', 'assistant search should use an internal origin where available');
 includes(aiRoute, 'ASSISTANT_SEARCH_BASE_URL', 'assistant search should allow an internal search base URL override');
 includes(aiRoute, 'listings: result.listings', 'assistant route must return listings array');
