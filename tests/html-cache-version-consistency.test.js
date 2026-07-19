@@ -16,10 +16,10 @@ test('public HTML must revalidate and cannot be stored by an edge cache', () => 
 });
 
 test('runtime version endpoint exposes a non-cacheable build identity', () => {
-  assert.match(server, /const RUNTIME_BUILD_ID = 'html-cache-consistency-20260719'/);
+  assert.match(server, /const RUNTIME_BUILD_ID = 'bundle-version-commit-key-20260719'/);
   assert.match(server, /app\.get\('\/api\/version'/);
   assert.match(server, /process\.env\.RENDER_GIT_COMMIT/);
   assert.match(server, /process\.env\.RENDER_INSTANCE_ID/);
   assert.match(server, /res\.set\('Cache-Control', 'no-store'\)/);
-  assert.match(html, /html-cache-consistency-20260719/);
+  assert.match(html, /bundle-version-commit-key-20260719/);
 });

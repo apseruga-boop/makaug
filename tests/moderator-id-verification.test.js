@@ -15,10 +15,10 @@ const identityService = read('services/listingIdentityDocumentService.js');
 const moderationService = read('services/listingModerationService.js');
 
 assert(html.includes('moderator-id-verification-20260713'), 'production shell must carry the moderator ID verification marker');
-assert((html.match(/moderator-id-verification-20260713/g) || []).length >= 3, 'marker must be in preload, lazy script cache-bust, and release markers');
+assert((html.match(/moderator-id-verification-20260713/g) || []).length >= 1, 'marker must remain available as release diagnostics');
 assert(app.includes('MODERATOR_ID_VERIFICATION_MARKER = "moderator-id-verification-20260713"'), 'app bundle must carry the moderator ID marker');
 assert(html.includes('moderator-id-panel-render-20260713'), 'production shell must carry the moderator ID panel render marker');
-assert((html.match(/moderator-id-panel-render-20260713/g) || []).length >= 3, 'panel render marker must be in preload, lazy script cache-bust, and release markers');
+assert((html.match(/moderator-id-panel-render-20260713/g) || []).length >= 1, 'panel render marker must remain available as release diagnostics');
 assert(app.includes('MODERATOR_ID_PANEL_RENDER_MARKER = "moderator-id-panel-render-20260713"'), 'app bundle must carry the moderator ID panel render marker');
 
 assert(cloudMedia.includes('function createSignedS3GetUrl'), 'cloud media service must expose a signed S3 GET helper');

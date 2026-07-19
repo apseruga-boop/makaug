@@ -46,8 +46,17 @@ const app = express();
 // Required on Render so rate limiting uses the forwarded client IP correctly.
 app.set('trust proxy', 1);
 
-const RUNTIME_BUILD_ID = 'html-cache-consistency-20260719';
+const RUNTIME_BUILD_ID = 'bundle-version-commit-key-20260719';
 const RUNTIME_STARTED_AT = new Date().toISOString();
+
+function runtimeBundleVersion() {
+  return String(
+    process.env.RENDER_GIT_COMMIT
+      || process.env.SOURCE_VERSION
+      || process.env.GIT_COMMIT
+      || RUNTIME_BUILD_ID
+  ).trim();
+}
 
 const corsOrigins = (process.env.CORS_ORIGINS || '')
   .split(',')
@@ -546,13 +555,18 @@ function applyCaptureHelperUsabilityIndexPatch(html) {
   const missingSuffixes = publicAppVersionSuffixes.filter((version) => !html.includes(version));
   if (!missingSuffixes.length) return html;
   const suffix = missingSuffixes.map((version) => `-${version}`).join('');
-  const withDirectAssetUrls = html.replace(
-    /(assets\/makaug-app\.js\?v=)([^"'<\s]+)/g,
-    `$1$2${suffix}`
-  );
-  return withDirectAssetUrls.replace(
-    /(window\.__makaugAppVersion\s*=\s*")([^"]+)(")/g,
+  return html.replace(
+    /(window\.__makaugReleaseMarkers\s*=\s*")([^"]+)(")/,
     `$1$2${suffix}$3`
+  );
+}
+
+function injectRuntimeBundleVersion(html) {
+  if (!html) return html;
+  const version = JSON.stringify(runtimeBundleVersion());
+  return html.replace(
+    'window.__makaugAppVersion = "__MAKAUG_BUNDLE_VERSION__";',
+    `window.__makaugAppVersion = ${version};\n    document.documentElement.dataset.makaugAppVersion = window.__makaugAppVersion;`
   );
 }
 
@@ -719,7 +733,8 @@ const captureHelperUsabilityScriptPatch = `
 
 function readIndexHtml() {
   if (isProduction && cachedIndexHtml) return cachedIndexHtml;
-  const html = applyCaptureHelperUsabilityIndexPatch(fs.readFileSync(indexPath, 'utf8'));
+  const patchedHtml = applyCaptureHelperUsabilityIndexPatch(fs.readFileSync(indexPath, 'utf8'));
+  const html = injectRuntimeBundleVersion(patchedHtml);
   if (isProduction) cachedIndexHtml = html;
   return html;
 }

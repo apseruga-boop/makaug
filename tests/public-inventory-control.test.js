@@ -767,14 +767,14 @@ test('public app cache version is bumped for controlled inventory rollout', () =
   assert.match(htmlSource, /public-summary-prefetch-20260630/);
   assert.match(htmlSource, /public-category-focused-hydration-20260630/);
   assert.match(htmlSource, /public-category-deferred-hydration-20260630/);
-  assert.match(htmlSource, /window\.__makaugAppVersion \+= "-public-scale-fast-path-20260704"/);
+  assert.match(htmlSource, /window\.__makaugReleaseMarkersArchive \+= "-public-scale-fast-path-20260704"/);
   assert.match(htmlSource, /window\.__makaugPublicSummaryPath = "\/api\/properties\?status=approved&public_only=1&limit=1&page=1&summary_only=1&include_summary=1"/);
   assert.match(htmlSource, /window\.__makaugPublicSummaryPromise = fetch\(window\.__makaugPublicSummaryPath, \{ credentials: "same-origin" \}\)/);
   assert.match(htmlSource, /preload\.href = "\/assets\/makaug-app\.js\?v=" \+ encodeURIComponent\(window\.__makaugAppVersion\)/);
   assert.match(htmlSource, /script\.src = "\/assets\/makaug-app\.js\?v=" \+ encodeURIComponent\(window\.__makaugAppVersion\)/);
   assert.doesNotMatch(htmlSource, /<link rel="preload" href="\/assets\/makaug-app\.js\?v=/);
   const scaleMarkerCount = (htmlSource.match(/public-scale-fast-path-20260704/g) || []).length;
-  assert.ok(scaleMarkerCount >= 2, 'Expected public scale marker in both preload and runtime loader setup');
+  assert.ok(scaleMarkerCount >= 1, 'Expected public scale marker in release diagnostics');
   assert.doesNotMatch(htmlSource, /DOMContentLoaded", loadMakaugApp/);
   assert.doesNotMatch(appSource, /DOMContentLoaded", initializeMakaugApp/);
   assert.match(serverSource, /publicInventoryPerformanceVersion = 'public-inventory-performance-20260629'/);

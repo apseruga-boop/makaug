@@ -78,13 +78,13 @@ assert(
 );
 
 assert(
-  (indexHtml.match(/numbered-pagination-20260709/g) || []).length >= 3,
-  "numbered pagination marker should be present in the preload, release marker, and body script loader"
+  (indexHtml.match(/numbered-pagination-20260709/g) || []).length >= 1,
+  "numbered pagination marker should remain available as release diagnostics"
 );
 
 assert(
-  (indexHtml.match(/tiles-contact-consistency-20260709/g) || []).length >= 3,
-  "tile/contact consistency marker should be present in the preload, release marker, and body script loader"
+  (indexHtml.match(/tiles-contact-consistency-20260709/g) || []).length >= 1,
+  "tile/contact consistency marker should remain available as release diagnostics"
 );
 
 assert(

@@ -10,11 +10,11 @@ const app = read('assets/makaug-app.js');
 const aiRoute = read('routes/ai.js');
 
 assert(html.includes('ai-chatbot-response-text-20260713'), 'production shell must carry the AI chatbot response text marker');
-assert((html.match(/ai-chatbot-response-text-20260713/g) || []).length >= 3, 'AI chatbot marker must be in preload, lazy script cache-bust, and release markers');
+assert((html.match(/ai-chatbot-response-text-20260713/g) || []).length >= 1, 'AI chatbot marker must remain available as release diagnostics');
 assert(html.includes('ai-chatbot-submit-bootstrap-20260713'), 'production shell must carry the AI chatbot submit bootstrap marker');
-assert((html.match(/ai-chatbot-submit-bootstrap-20260713/g) || []).length >= 3, 'AI chatbot submit bootstrap marker must be in preload, lazy script cache-bust, and release markers');
-assert(html.includes('function makaugAiChatbotSubmitBootstrap'), 'AI chatbot form must have an inline bootstrap submit handler before the async app bundle is ready');
-assert(html.includes('makaug AI is still loading. Please tap Ask AI again.'), 'AI chatbot bootstrap must recover if the app bundle does not become ready');
+assert((html.match(/ai-chatbot-submit-bootstrap-20260713/g) || []).length >= 1, 'AI chatbot submit bootstrap marker must remain available as release diagnostics');
+assert(html.includes('onsubmit="submitAskAiSearchPrompt(event)"'), 'Ask AI forms must call the shared property-search handler');
+assert(app.includes('window.submitAskAiSearchPrompt = submitAskAiSearchPrompt;'), 'the loaded app bundle must expose the shared property-search handler');
 assert(app.includes('async function submitAiChatbotPrompt'), 'public app must expose the AI chatbot submit handler');
 assert(app.includes('window.submitAiChatbotPrompt = submitAiChatbotPrompt;'), 'public app must replace the bootstrap submit handler when the bundle loads');
 assert(app.includes('apiRequest("/api/ai/assistant-reply"'), 'AI chatbot submit handler must post to the assistant reply endpoint');

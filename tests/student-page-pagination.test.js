@@ -25,14 +25,8 @@ assert(app.includes('CATEGORY_PAGINATION_NO_LOCAL_TOTAL_FIX_MARKER = "category-p
 
 const scriptLoaderIndex = html.indexOf('script.src = "/assets/makaug-app.js?v="');
 assert(scriptLoaderIndex > 0, 'public shell should load the app bundle with a versioned script URL');
-const scriptLoaderVersionBlock = html.slice(Math.max(0, scriptLoaderIndex - 1200), scriptLoaderIndex);
-assert(scriptLoaderVersionBlock.includes('student-page-pagination-fix-20260715'), 'the body script loader must include the student pagination marker so stale bundles are busted');
-assert(scriptLoaderVersionBlock.includes('student-pagination-nav-fix-20260715'), 'the body script loader must include the student nav marker so stale click handlers are busted');
-assert(scriptLoaderVersionBlock.includes('category-pagination-total-fix-20260715'), 'the body script loader must include the cross-category total marker so stale total logic is busted');
-assert(scriptLoaderVersionBlock.includes('category-pagination-api-total-fix-20260715'), 'the body script loader must include the category API total marker so stale category paths are busted');
-assert(scriptLoaderVersionBlock.includes('category-pagination-startup-loading-fix-20260715'), 'the body script loader must include the category startup loading marker so stale startup render logic is busted');
-assert(scriptLoaderVersionBlock.includes('category-pagination-loading-render-fix-20260715'), 'the body script loader must include the category loading render marker so stale loading render logic is busted');
-assert(scriptLoaderVersionBlock.includes('category-pagination-no-local-total-fix-20260715'), 'the body script loader must include the no-local-total marker so stale total render logic is busted');
+assert(html.includes('script.src = "/assets/makaug-app.js?v=" + encodeURIComponent(window.__makaugAppVersion)'), 'the body script loader must use the shared commit-derived bundle version');
+assert(html.includes('window.__makaugAppVersion = "__MAKAUG_BUNDLE_VERSION__"'), 'the public shell must expose the runtime commit placeholder');
 
 assert(app.includes('function exactPublicPaginationTotalValue'), 'pagination should distinguish missing totals from exact zero totals');
 assert(app.includes('response.pagination.total == null'), 'exact total helper must not treat a missing total as authoritative zero');

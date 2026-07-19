@@ -11,7 +11,7 @@ test('capture helper usability patch is served and cache-busted by the server', 
   assert.match(serverSource, /capture-helper-usability-20260607/);
   assert.match(serverSource, /app\.get\('\/assets\/makaug-app\.js'/);
   assert.match(serverSource, /applyCaptureHelperUsabilityIndexPatch/);
-  assert.match(serverSource, /window\\\.__makaugAppVersion/);
+  assert.match(serverSource, /injectRuntimeBundleVersion/);
   assert.match(serverSource, /adminPasteSocialCapturedLinks/);
   assert.match(serverSource, /adminOpenSocialQuickPastePanel/);
   assert.match(serverSource, /admin-social-capture-bookmarklet-url/);
