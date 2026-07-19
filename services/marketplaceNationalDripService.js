@@ -22,6 +22,11 @@ const DEFAULT_INTERVAL_MINUTES = 30;
 const DEFAULT_BATCH_SIZE = 5;
 const DEFAULT_MONTHLY_CAP = 300;
 const SCHEDULER_POLL_MS = Math.max(30000, Number(process.env.MARKETPLACE_DRIP_SCHEDULER_POLL_MS || 60000));
+const PRIORITY_DISTRICTS = Object.freeze([
+  'Kampala', 'Wakiso', 'Mukono', 'Jinja', 'Mbarara', 'Gulu', 'Mbale', 'Kabarole', 'Arua', 'Lira',
+  'Masaka', 'Kabale', 'Hoima', 'Soroti', 'Tororo', 'Busia', 'Iganga', 'Kayunga', 'Mpigi', 'Mityana',
+  'Luwero', 'Nakasongola', 'Ntungamo', 'Bushenyi', 'Kasese', 'Rukungiri', 'Nebbi', 'Moroto', 'Kotido', 'Kitgum'
+]);
 
 let schedulerTimer = null;
 let schedulerRunning = false;
@@ -151,11 +156,17 @@ function queryFor(category, district) {
   return `${term} ${district} Uganda`;
 }
 
+function orderedDistricts() {
+  const priority = PRIORITY_DISTRICTS.filter((district) => DISTRICTS.includes(district));
+  const prioritySet = new Set(priority);
+  return [...priority, ...DISTRICTS.filter((district) => !prioritySet.has(district))];
+}
+
 function registryRows() {
   const rows = [];
   let cursorOrder = 0;
   const definitions = sourceDefinitions();
-  for (const district of DISTRICTS) {
+  for (const district of orderedDistricts()) {
     for (const category of MARKETPLACE_CATEGORIES) {
       for (const source of definitions) {
         const queryText = queryFor(category, district);
@@ -836,6 +847,7 @@ function startMarketplaceDripScheduler(db) {
 module.exports = {
   DRIP_KEY,
   MARKETPLACE_P2_MARKER,
+  PRIORITY_DISTRICTS,
   SOURCE_DEFINITIONS,
   googleCandidate,
   getMarketplaceDripStatus,
