@@ -1625,6 +1625,7 @@ function clearAdminReviewQueueCache() {
       key.includes('admin-review-queue-v')
       || key.includes('admin-command-centre-v4')
       || key.includes('admin-summary-v5-properties-list-count-fast')
+      || key.includes('admin-actionable-review-count-v1')
     ) {
       adminDashboardResponseCache.delete(cacheKey);
     }
@@ -1796,6 +1797,41 @@ async function safeCount(sql, values = [], options = {}) {
   return Number(row.total || 0);
 }
 
+async function adminActionableReviewQueueCount({ timeoutMs = ADMIN_SAFE_QUERY_TIMEOUT_MS } = {}) {
+  const payload = await adminCachedPayload('admin-actionable-review-count-v1', ADMIN_DASHBOARD_CACHE_TTL_MS, async () => {
+    const standardWhere = `(
+      ${adminDefaultReviewQueueWhere('p')}
+      AND COALESCE(p.source, '') <> 'found_online_property_source_v1'
+      AND COALESCE(p.listed_via, '') <> 'found_online'
+    )`;
+    const foundOnlinePending = adminPendingReviewFastWhere('p');
+    const notLaunchTest = `NOT ${adminLaunchTestListingFastCondition('p')}`;
+    const [standard, foundOnline] = await Promise.all([
+      safeCount(`SELECT COUNT(*)::int AS total FROM properties p WHERE ${standardWhere}`, [], { timeoutMs }),
+      safeCount(
+        `SELECT COUNT(*)::int AS total
+         FROM (
+           SELECT p.id
+           FROM properties p
+           WHERE p.source = 'found_online_property_source_v1'
+             AND ${foundOnlinePending}
+             AND ${notLaunchTest}
+           UNION
+           SELECT p.id
+           FROM properties p
+           WHERE p.listed_via = 'found_online'
+             AND ${foundOnlinePending}
+             AND ${notLaunchTest}
+         ) found_online_review`,
+        [],
+        { timeoutMs }
+      )
+    ]);
+    return { total: standard + foundOnline, standard, found_online: foundOnline };
+  });
+  return Number(payload?.total || 0);
+}
+
 function adminSummaryFallbackReason(error) {
   return adminSafeQueryFallbackReason(error) || error?.code || 'query_failed';
 }
@@ -1874,7 +1910,7 @@ async function loadAdminPropertiesSummaryFast() {
       { total: 0 },
       { timeoutMs: 500 }
     ),
-    adminSummaryCount(`SELECT COUNT(*)::int AS total FROM properties p WHERE ${adminActionableReviewQueueWhere('p')}`, [], { timeoutMs: 700 }),
+    adminActionableReviewQueueCount({ timeoutMs: 2500 }),
     adminSummaryCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'approved'", [], { timeoutMs: 700 }),
     adminSummaryCount(
       `SELECT COUNT(*)::int AS total
@@ -3125,7 +3161,7 @@ router.get('/command-centre', async (_req, res, next) => {
       testUsers,
       propertyRequests
     ] = await Promise.all([
-      safeCount(`SELECT COUNT(*)::int AS total FROM properties p WHERE ${adminActionableReviewQueueWhere('p')}`),
+      adminActionableReviewQueueCount({ timeoutMs: 3000 }),
       safeCount(`SELECT COUNT(*)::int AS total FROM properties p WHERE ${adminPublicLiveListingFastWhere('p')}`),
       safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'deleted'"),
       safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'hidden'"),
