@@ -3272,6 +3272,7 @@ const MARKETPLACE_REPORT_FIXES_MARKER = "marketplace-report-fixes-20260719";
 const MARKETPLACE_ENRICH_MARKER = "marketplace-enrich-20260719";
 const MARKETPLACE_REGJOURNEY_MARKER = "marketplace-regjourney-20260719";
 const MARKETPLACE_POLISH_MARKER = "marketplace-polish-20260719";
+const MARKETPLACE_FINAL_TWEAKS_MARKER = "marketplace-final-tweaks-20260719";
 const MARKETPLACE_UI_EN = Object.freeze({
   breadcrumbHome: "Home", breadcrumbMarketplace: "Marketplace", eyebrow: "Uganda property services",
   title: "Uganda's largest property services directory", subtitle: "Surveyors, lawyers, builders, brokers, valuers and practical property services across Uganda.",
@@ -3559,25 +3560,25 @@ const MARKETPLACE_CATEGORY_LABELS = Object.freeze({
 });
 
 const MARKETPLACE_CATEGORY_PALETTE = Object.freeze({
-  painters: { accent: "#d97706", soft: "#fffbeb" },
+  painters: { accent: "#d97706", text: "#b45309", soft: "#fffbeb" },
   plumbers: { accent: "#2563eb", soft: "#eff6ff" },
-  electricians: { accent: "#ca8a04", soft: "#fefce8" },
-  builders: { accent: "#ea580c", soft: "#fff7ed" },
+  electricians: { accent: "#ca8a04", text: "#854d0e", soft: "#fefce8" },
+  builders: { accent: "#ea580c", text: "#c2410c", soft: "#fff7ed" },
   surveyors: { accent: "#4f46e5", soft: "#eef2ff" },
   property_lawyers: { accent: "#7c3aed", soft: "#f5f3ff" },
   brokers: { accent: "#15803d", soft: "#f0fdf4" },
   valuers: { accent: "#0f766e", soft: "#f0fdfa" },
-  movers: { accent: "#0891b2", soft: "#ecfeff" },
+  movers: { accent: "#0891b2", text: "#0e7490", soft: "#ecfeff" },
   architects: { accent: "#e11d48", soft: "#fff1f2" },
   security: { accent: "#475569", soft: "#f8fafc" },
   solar: { accent: "#4d7c0f", soft: "#f7fee7" },
-  cleaning: { accent: "#0284c7", soft: "#f0f9ff" },
+  cleaning: { accent: "#0284c7", text: "#0369a1", soft: "#f0f9ff" },
   property_managers: { accent: "#047857", soft: "#ecfdf5" },
   mortgage_providers: { accent: "#1e3a8a", soft: "#eff6ff" },
   insurance: { accent: "#881337", soft: "#fff1f2" },
   interior_design: { accent: "#db2777", soft: "#fdf2f8" },
   borehole_water: { accent: "#0e7490", soft: "#ecfeff" },
-  developers: { accent: "#a16207", soft: "#fefce8" },
+  developers: { accent: "#a16207", text: "#92400e", soft: "#fefce8" },
   commercial_services: { accent: "#6b7280", soft: "#f3f4f6" },
   other: { accent: "#6b7280", soft: "#f3f4f6" }
 });
@@ -3626,7 +3627,7 @@ function marketplaceCategoryTheme(key) {
 
 function marketplaceCategoryStyle(key) {
   const theme = marketplaceCategoryTheme(key);
-  return `--marketplace-category-accent:${theme.accent};--marketplace-category-soft:${theme.soft}`;
+  return `--marketplace-category-accent:${theme.accent};--marketplace-category-text:${theme.text || theme.accent};--marketplace-category-soft:${theme.soft}`;
 }
 
 function marketplaceApplyCategoryControlTheme(category = marketplaceState.activeCategory) {
@@ -3849,7 +3850,7 @@ function renderMarketplaceBusinesses() {
         <div class="marketplace-category-icon w-12 h-12 shrink-0 rounded-lg flex items-center justify-center"><i class="fas ${adminAttr(marketplaceState.categories.find((item) => item.key === business.category)?.icon || "fa-briefcase")}"></i></div>
         <div class="min-w-0 flex-1">
           <div class="flex flex-col items-start gap-1.5 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
-            <div class="min-w-0 w-full"><h3 class="font-black leading-snug text-gray-950 break-words">${adminEscape(business.name)}</h3><p class="marketplace-category-label text-xs font-bold mt-0.5">${adminEscape(category)}</p></div>
+            <div class="min-w-0 w-full"><h3 class="marketplace-business-name font-black leading-snug break-words">${adminEscape(business.name)}</h3><p class="marketplace-category-label text-xs font-bold mt-0.5">${adminEscape(category)}</p></div>
             <div class="w-full sm:w-auto sm:shrink-0">${marketplaceTierHtml(business)}</div>
           </div>
           <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-600"><span class="inline-flex items-center gap-1"><i class="fas fa-location-dot marketplace-category-label" aria-hidden="true"></i>${adminEscape(location || business.district)}</span>${stars}</div>
@@ -4083,6 +4084,7 @@ function marketplacePopulateManageForm(business = {}) {
   setValue("marketplace-manage-website", business.website);
   setValue("marketplace-manage-social", marketplacePrimarySocialUrl(business));
   setTextById("marketplace-manage-title", business.name || marketplaceTr("manageProfile"));
+  document.getElementById("marketplace-manage-title")?.setAttribute("style", marketplaceCategoryStyle(business.category || "other"));
   setTextById("marketplace-manage-views", Number(business.profile_view_count || 0).toLocaleString());
   document.getElementById("marketplace-manage-images").value = "";
   document.getElementById("marketplace-manage-loading")?.classList.add("hidden");

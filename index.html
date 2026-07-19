@@ -2227,11 +2227,13 @@
     .marketplace-category-chip[aria-pressed="true"] { border-color: var(--marketplace-category-accent, #b3134f); color: var(--marketplace-category-accent, #8f0f3f); background: var(--marketplace-category-soft, #fff1f6); }
     .marketplace-business-row { border-left: 3px solid var(--marketplace-category-accent, #9ca3af); }
     .marketplace-category-icon { background: var(--marketplace-category-soft, #f3f4f6); color: var(--marketplace-category-accent, #4b5563); }
-    .marketplace-category-label { color: var(--marketplace-category-accent, #b3134f); }
+    .marketplace-category-label,
+    .marketplace-business-name { color: var(--marketplace-category-text, var(--marketplace-category-accent, #b3134f)); }
     .marketplace-category-select { border-color: var(--marketplace-category-accent, #e5e7eb); }
     .marketplace-tier-strip summary::-webkit-details-marker { display: none; }
     .marketplace-tier-strip[open] .marketplace-tier-chevron { transform: rotate(180deg); }
     .marketplace-tier-chevron { transition: transform .18s ease; }
+    .marketplace-tier-card { min-height: 118px; }
     .marketplace-verified-seal {
       width: 34px;
       height: 34px;
@@ -3312,7 +3314,7 @@
     </div>
   </div>
 
-  <div id="page-marketplace" class="page bg-[#f8faf9] overflow-x-clip" data-marketplace-marker="marketplace-p2-20260719 marketplace-regjourney-20260719 marketplace-scaleup-20260719 marketplace-relevance-gate-20260719 marketplace-polish-20260719">
+  <div id="page-marketplace" class="page bg-[#f8faf9] overflow-x-clip" data-marketplace-marker="marketplace-p2-20260719 marketplace-regjourney-20260719 marketplace-scaleup-20260719 marketplace-relevance-gate-20260719 marketplace-polish-20260719 marketplace-final-tweaks-20260719">
     <div class="bg-white border-t-[3px] border-[#b3134f] border-b border-gray-100">
       <div class="max-w-7xl mx-auto px-4 py-8">
         <div class="text-xs font-bold text-gray-500"><a href="/" class="hover:text-[#b3134f]" data-marketplace-i18n="breadcrumbHome">Home</a> <span aria-hidden="true">/</span> <span class="text-[#b3134f]" data-marketplace-i18n="breadcrumbMarketplace">Marketplace</span></div>
@@ -3390,12 +3392,21 @@
         </summary>
         <div class="mt-3 border-t border-gray-100 pt-3">
           <p class="text-xs text-gray-600" data-marketplace-i18n="tiersSubtitle">Every business shows how its information reached makaug, so you can make an informed choice.</p>
-          <div class="mt-2 grid gap-2 text-xs leading-5 text-gray-600 md:grid-cols-3">
-            <p><strong class="text-gray-800" data-marketplace-i18n="tierFound">Found online</strong> &middot; <span data-marketplace-i18n="tierFoundDesc">Gathered from a public source. The business has not claimed or verified this profile with makaug.</span></p>
-            <p><strong class="text-blue-800" data-marketplace-i18n="tierPrivate">Privately listed</strong> &middot; <span data-marketplace-i18n="tierPrivateDesc">Submitted or claimed by the business owner and approved by the makaug team.</span></p>
-            <p><strong class="text-blue-800" data-marketplace-i18n="tierVerified">Verified</strong> &middot; <span data-marketplace-i18n="tierVerifiedDesc">Evidence reviewed, blue seal shown, ranked first in search, and receives leads first.</span> <span class="ml-1 rounded-full bg-blue-700 px-2 py-0.5 text-[10px] font-black text-white" data-marketplace-i18n="verifiedPrice">UGX 150,000/month</span></p>
+          <div class="mt-2 grid gap-2 md:grid-cols-3">
+            <article class="marketplace-tier-card rounded-lg border border-gray-200 bg-gray-50/60 p-3">
+              <div class="flex items-center gap-2 text-xs font-black text-gray-800"><i class="fas fa-globe text-gray-500" aria-hidden="true"></i><span data-marketplace-i18n="tierFound">Found online</span></div>
+              <p class="mt-1.5 text-[11px] leading-4 text-gray-600" data-marketplace-i18n="tierFoundDesc">Gathered from a public source. The business has not claimed or verified this profile with makaug.</p>
+            </article>
+            <article class="marketplace-tier-card rounded-lg border border-blue-100 bg-blue-50/50 p-3">
+              <div class="flex items-center gap-2 text-xs font-black text-blue-800"><i class="fas fa-user-check" aria-hidden="true"></i><span data-marketplace-i18n="tierPrivate">Privately listed</span></div>
+              <p class="mt-1.5 text-[11px] leading-4 text-gray-600" data-marketplace-i18n="tierPrivateDesc">Submitted or claimed by the business owner and approved by the makaug team.</p>
+            </article>
+            <article class="marketplace-tier-card rounded-lg border border-blue-200 bg-blue-50/70 p-3">
+              <div class="flex flex-wrap items-center gap-2 text-xs font-black text-blue-800"><i class="fas fa-certificate" aria-hidden="true"></i><span data-marketplace-i18n="tierVerified">Verified</span><span class="rounded-full bg-blue-700 px-2 py-0.5 text-[10px] font-black text-white" data-marketplace-i18n="verifiedPrice">UGX 150,000/month</span></div>
+              <p class="mt-1.5 text-[11px] leading-4 text-gray-600" data-marketplace-i18n="tierVerifiedDesc">Evidence reviewed, blue seal shown, ranked first in search, and receives leads first.</p>
+              <button type="button" onclick="marketplaceOpenVerifiedWaitlist()" class="mt-1.5 text-[11px] font-black text-blue-700 hover:underline" data-marketplace-i18n="joinWaitlist">Join the Verified waitlist</button>
+            </article>
           </div>
-          <button type="button" onclick="marketplaceOpenVerifiedWaitlist()" class="mt-2 text-xs font-black text-blue-700 hover:underline" data-marketplace-i18n="joinWaitlist">Join the Verified waitlist</button>
         </div>
       </details>
 
@@ -7594,7 +7605,7 @@
       <button type="button" onclick="marketplaceCloseManageModal()" class="absolute top-4 right-4 w-9 h-9 rounded-full border border-gray-200 text-gray-500 hover:bg-gray-50" aria-label="Close"><i class="fas fa-xmark" aria-hidden="true"></i></button>
       <div class="pr-12">
         <p class="text-xs font-black uppercase tracking-wide text-blue-700" data-marketplace-i18n="manageProfile">Manage your business profile</p>
-        <h2 id="marketplace-manage-title" class="mt-1 text-2xl font-black text-gray-950">Business profile</h2>
+        <h2 id="marketplace-manage-title" class="marketplace-business-name mt-1 text-2xl font-black">Business profile</h2>
         <p class="mt-1 text-sm text-gray-600" data-marketplace-i18n="manageSubtitle">This secure link lets you update your approved listing without a password.</p>
       </div>
       <div id="marketplace-owner-upsell" class="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-4">
