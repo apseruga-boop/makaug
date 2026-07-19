@@ -12,6 +12,11 @@ Every candidate is classified before persistence:
 - `pending_review`: borderline evidence; stored for moderation and never public.
 - `reject`: an excluded place type, excluded name, invalid category, or category-specific sanity failure; not stored.
 
+Google's `local_government_office` and `government_office` annotations are
+corroborated against the business name before rejection because Places can add
+those types to legitimate surveyors and law firms. Explicit council, ministry,
+city hall, courthouse, or government-office names are still rejected.
+
 Thin district searches may produce `no_qualified_results`. Zero is authoritative; the crawler does not pad the directory with unrelated places.
 
 ## Existing inventory audit

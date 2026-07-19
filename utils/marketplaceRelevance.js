@@ -36,6 +36,14 @@ const GLOBAL_EXCLUDED_TYPES = Object.freeze(new Set([
   'atm'
 ]));
 
+// Google sometimes adds these types to legitimate professional offices. Treat
+// them as exclusions only when the business name also identifies a government
+// entity; GLOBAL_NAME_EXCLUSIONS performs that corroborating check below.
+const CONTEXTUAL_EXCLUDED_TYPES = Object.freeze(new Set([
+  'local_government_office',
+  'government_office'
+]));
+
 const GLOBAL_NAME_EXCLUSIONS = Object.freeze([
   { reason: 'education', pattern: /\b(?:institute|school|college|academy|vocational|university)\b/i },
   { reason: 'government', pattern: /\b(?:municipal council|district council|local government|government office|ministry|city hall|courthouse)\b/i },
@@ -52,7 +60,7 @@ const GLOBAL_NAME_EXCLUSIONS = Object.freeze([
 const CATEGORY_RELEVANCE = Object.freeze({
   surveyors: {
     queryTerm: 'land surveyor',
-    strong: [/\b(?:land|quantity|property|engineering)?\s*survey(?:or|ors|ing)?\b/i, /\b(?:cadastral|geomatics?)\b/i],
+    strong: [/\b(?:land|quantity|property|engineering)?\s*survey(?:or|ors|ing|s)?\b/i, /\b(?:cadastral|geomatics?)\b/i],
     weak: [/\b(?:boundary|mapping)\b/i]
   },
   brokers: {
@@ -201,7 +209,9 @@ function classifyMarketplaceRelevance(input = {}) {
     .map(clean)
     .filter(Boolean)
     .join(' ');
-  const excludedType = types.find((type) => GLOBAL_EXCLUDED_TYPES.has(type));
+  const excludedType = types.find((type) => (
+    GLOBAL_EXCLUDED_TYPES.has(type) && !CONTEXTUAL_EXCLUDED_TYPES.has(type)
+  ));
   if (!policy) {
     return { decision: 'reject', score: 0, reason: 'invalid_category', category, google_types: types };
   }
@@ -236,6 +246,7 @@ function classifyMarketplaceRelevance(input = {}) {
 
 module.exports = {
   CATEGORY_RELEVANCE,
+  CONTEXTUAL_EXCLUDED_TYPES,
   GLOBAL_EXCLUDED_TYPES,
   MARKETPLACE_RELEVANCE_MARKER,
   classifyMarketplaceRelevance,

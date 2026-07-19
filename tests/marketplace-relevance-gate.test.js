@@ -69,6 +69,24 @@ test('hard exclusions reject the production junk examples regardless of requeste
   }
 });
 
+test('government office Google types require confirming government wording', () => {
+  assert.equal(classifyMarketplaceRelevance({
+    name: 'Orbit Surveys and Mapping Ltd',
+    category: 'surveyors',
+    google_types: ['local_government_office']
+  }).decision, 'qualified');
+  assert.equal(classifyMarketplaceRelevance({
+    name: 'Magezi, Ibale & Co. Advocates',
+    category: 'property_lawyers',
+    google_types: ['lawyer', 'government_office']
+  }).decision, 'qualified');
+  assert.equal(classifyMarketplaceRelevance({
+    name: 'Kisoro Municipal Council Headquarters',
+    category: 'plumbers',
+    google_types: ['local_government_office']
+  }).decision, 'reject');
+});
+
 test('category evidence qualifies genuine businesses and queues only borderline evidence', () => {
   assert.equal(classifyMarketplaceRelevance({ name: 'Kampala Plumbing Services', category: 'plumbers', google_types: ['plumber'] }).decision, 'qualified');
   assert.equal(classifyMarketplaceRelevance({ name: 'Geo Land Surveyors Uganda', category: 'surveyors' }).decision, 'qualified');
