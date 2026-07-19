@@ -6,11 +6,21 @@ const db = require('../config/database');
 const { requireListingModerationAccess } = require('../middleware/auth');
 const { isValidEmail, isValidPhone } = require('../middleware/validation');
 const { createLead } = require('../services/leadService');
-const { logNotification } = require('../services/notificationLogService');
+const { isDataUrl, prepareMediaUrlForStorage } = require('../services/cloudMediaStorageService');
+const { logNotification, notificationStatusFromDelivery } = require('../services/notificationLogService');
 const {
   getGooglePlaceDetails,
   googleDetailsStatus
 } = require('../services/marketplaceGooglePlacesService');
+const {
+  MARKETPLACE_REGJOURNEY_MARKER,
+  REJECTION_REASONS,
+  notifyMarketplaceLeadOpportunity,
+  resolveMarketplaceEditToken,
+  sendMarketplaceApprovalNotification,
+  sendMarketplaceRegistrationAcknowledgement,
+  sendMarketplaceRejectionNotification
+} = require('../services/marketplaceLifecycleService');
 const {
   DISTRICTS,
   MARKETPLACE_CATEGORIES,
@@ -75,6 +85,7 @@ function publicBusiness(row = {}) {
     whatsapp: row.whatsapp,
     email: row.email,
     website: row.website,
+    profile_images: row.profile_images || [],
     social_links: row.social_links || {},
     ursb_number: row.ursb_number,
     tier: row.tier,
@@ -94,10 +105,13 @@ router.get('/config', async (_req, res) => {
     ok: true,
     data: {
       marker: MARKETPLACE_P1_MARKER,
-      release_markers: [MARKETPLACE_P1_MARKER, MARKETPLACE_REPORT_FIXES_MARKER, MARKETPLACE_ENRICH_MARKER],
+      release_markers: [MARKETPLACE_P1_MARKER, MARKETPLACE_REPORT_FIXES_MARKER, MARKETPLACE_ENRICH_MARKER, MARKETPLACE_REGJOURNEY_MARKER],
       categories: MARKETPLACE_CATEGORIES,
       districts: DISTRICTS,
       paid_verification_enabled: false,
+      verified_waitlist_enabled: true,
+      registration_review_target_hours: 24,
+      rejection_reasons: REJECTION_REASONS,
       source_drip_enabled: false,
       google_details: {
         configured: googleDetailsStatus().configured,
@@ -264,6 +278,7 @@ router.post('/register', async (req, res, next) => {
     const name = clean(input.name);
     const category = normalizeCategory(input.category);
     const description = clean(input.description);
+    const ownerName = clean(input.owner_name || input.contact_name);
     const location = validateUgandaLocation({ district: input.district, area: input.area });
     const phone = normalizePhone(input.phone);
     const whatsapp = normalizePhone(input.whatsapp || input.phone);
@@ -274,6 +289,7 @@ router.post('/register', async (req, res, next) => {
     const competitor = isCompetitorPortal({ ...input, social_links: socialLinks });
     const errors = [];
     if (name.length < 2) errors.push('Business name is required.');
+    if (ownerName.length < 2) errors.push('Contact person name is required.');
     if (!category) errors.push('Choose a marketplace service category.');
     if (description.length < 20) errors.push('Add a short description of at least 20 characters.');
     if (!location.ok) errors.push(location.error);
@@ -291,9 +307,12 @@ router.post('/register', async (req, res, next) => {
       `INSERT INTO marketplace_businesses (
          name, slug, category, description, district, area, serves_regions,
          phone, whatsapp, email, website, social_links, ursb_number,
-         tier, status, source_type, source_metadata
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13,'private','pending_review','private',$14::jsonb)
-       RETURNING id, name, slug, category, district, area, tier, status, created_at`,
+         tier, status, source_type, source_metadata, registration_reference,
+         owner_name, owner_phone, owner_email, owner_language
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13,'private','pending_review','private',$14::jsonb,$15,$16,$17,$18,$19)
+       RETURNING id, name, slug, category, district, area, tier, status, created_at,
+                 registration_reference, owner_name, owner_phone, owner_email, owner_language,
+                 phone, whatsapp, email`,
       [
         name,
         slug,
@@ -308,7 +327,12 @@ router.post('/register', async (req, res, next) => {
         website || null,
         JSON.stringify(primarySocialUrl ? { primary: primarySocialUrl } : {}),
         clean(input.ursb_number) || null,
-        JSON.stringify({ registration_reference: reference, language: clean(input.language) || 'en' })
+        JSON.stringify({ registration_reference: reference, language: clean(input.language) || 'en' }),
+        reference,
+        ownerName,
+        whatsapp || phone,
+        email || null,
+        clean(input.language) || 'en'
       ]
     );
     const business = result.rows[0];
@@ -335,7 +359,31 @@ router.post('/register', async (req, res, next) => {
       relatedLeadId: crmLead?.id || null,
       payloadSummary: { marketplace_business_id: business.id, reference, name, category, district: location.district }
     });
-    return res.status(201).json({ ok: true, data: { marker: MARKETPLACE_P1_MARKER, reference, business } });
+    const acknowledgement = await sendMarketplaceRegistrationAcknowledgement(db, business, reference);
+    await recordMarketplaceEvent(db, {
+      businessId: business.id,
+      eventType: 'business_registration_acknowledgement_attempted',
+      metadata: {
+        reference,
+        sent: Boolean(acknowledgement.sent),
+        channel: acknowledgement.channel || null,
+        failure_reason: acknowledgement.failure_reason || null
+      }
+    });
+    return res.status(201).json({
+      ok: true,
+      data: {
+        marker: MARKETPLACE_REGJOURNEY_MARKER,
+        reference,
+        review_target_hours: 24,
+        acknowledgement: {
+          sent: Boolean(acknowledgement.sent),
+          channel: acknowledgement.channel || null,
+          status: notificationStatusFromDelivery(acknowledgement.delivery || acknowledgement)
+        },
+        business
+      }
+    });
   } catch (error) {
     return next(error);
   }
@@ -360,7 +408,7 @@ router.post('/leads', async (req, res, next) => {
          business_id, requester_name, requester_phone, requester_email,
          category, district, area, message, source, metadata
        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb)
-       RETURNING id, status, created_at`,
+       RETURNING id, category, district, area, status, created_at`,
       [
         businessId || null,
         clean(input.name) || null,
@@ -394,6 +442,9 @@ router.post('/leads', async (req, res, next) => {
       relatedLeadId: crmLead?.id || null,
       payloadSummary: { marketplace_lead_id: lead.id, category }
     });
+    setImmediate(() => {
+      notifyMarketplaceLeadOpportunity(db, lead).catch(() => {});
+    });
     return res.status(201).json({ ok: true, data: { marker: MARKETPLACE_P1_MARKER, lead } });
   } catch (error) {
     return next(error);
@@ -416,6 +467,12 @@ router.get('/businesses/:id/details', async (req, res, next) => {
     );
     const business = result.rows[0];
     if (!business) return res.status(404).json({ ok: false, error: 'Marketplace business not found.' });
+    await db.query(
+      `UPDATE marketplace_businesses
+       SET profile_view_count = profile_view_count + 1, last_profile_viewed_at = NOW()
+       WHERE id = $1`,
+      [business.id]
+    );
     const publicProfile = publicBusiness(business);
     if (business.source !== 'google_maps' || business.source_type !== 'found_online') {
       return res.json({ ok: true, data: { marker: MARKETPLACE_ENRICH_MARKER, business: publicProfile, enrichment: null, meta: { applicable: false } } });
@@ -491,15 +548,204 @@ router.get('/businesses/:id/details', async (req, res, next) => {
   }
 });
 
+router.post('/manage/resolve', async (req, res, next) => {
+  try {
+    const business = await resolveMarketplaceEditToken(db, req.body?.token);
+    if (!business) return res.status(401).json({ ok: false, error: 'This edit link is invalid or has expired.' });
+    return res.json({
+      ok: true,
+      data: {
+        marker: MARKETPLACE_REGJOURNEY_MARKER,
+        business: {
+          id: business.id,
+          name: business.name,
+          slug: business.slug,
+          category: business.category,
+          description: business.description,
+          services_text: business.services_text,
+          district: business.district,
+          area: business.area,
+          serves_regions: business.serves_regions || [],
+          phone: business.phone,
+          whatsapp: business.whatsapp,
+          email: business.email,
+          website: business.website,
+          social_links: business.social_links || {},
+          profile_images: business.profile_images || [],
+          tier: business.tier,
+          status: business.status,
+          profile_view_count: Number(business.profile_view_count || 0),
+          updated_at: business.updated_at
+        },
+        paid_verification_enabled: false,
+        verified_waitlist_url: `/marketplace?verified_waitlist=1&business=${encodeURIComponent(business.slug)}`
+      }
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.patch('/manage/update', async (req, res, next) => {
+  try {
+    const business = await resolveMarketplaceEditToken(db, req.body?.token);
+    if (!business) return res.status(401).json({ ok: false, error: 'This edit link is invalid or has expired.' });
+    const input = req.body || {};
+    const name = clean(input.name);
+    const description = clean(input.description);
+    const servicesText = clean(input.services_text);
+    const phone = normalizePhone(input.phone);
+    const whatsapp = normalizePhone(input.whatsapp || input.phone);
+    const email = clean(input.email).toLowerCase();
+    const website = normalizePublicUrl(input.website);
+    const location = validateUgandaLocation({ district: input.district || business.district, area: input.area });
+    const socialLinks = Object.fromEntries(
+      Object.entries(safeObject(input.social_links))
+        .map(([key, value]) => [clean(key).toLowerCase().slice(0, 32), normalizePublicUrl(value)])
+        .filter(([key, value]) => key && value)
+        .slice(0, 8)
+    );
+    const profileImages = [];
+    for (const [index, rawImage] of (Array.isArray(input.profile_images) ? input.profile_images : []).slice(0, 4).entries()) {
+      const raw = clean(rawImage);
+      const stored = isDataUrl(raw)
+        ? await prepareMediaUrlForStorage(raw, {
+          allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp'],
+          maxBytes: 2_500_000,
+          keyPrefix: `marketplace/${business.id}/profile`,
+          filename: `business-photo-${index + 1}`,
+          label: `Marketplace business photo ${index + 1}`
+        })
+        : raw;
+      const publicUrl = normalizePublicUrl(stored);
+      if (isDataUrl(raw) && !publicUrl) {
+        return res.status(503).json({ ok: false, error: 'Business photo storage is temporarily unavailable. Try again shortly.' });
+      }
+      if (publicUrl) profileImages.push(publicUrl);
+    }
+    const errors = [];
+    if (name.length < 2) errors.push('Business name is required.');
+    if (description.length < 20) errors.push('Add a description of at least 20 characters.');
+    if (!location.ok) errors.push(location.error);
+    if (!phone || !isValidPhone(phone)) errors.push('Enter a valid phone number.');
+    if (email && !isValidEmail(email)) errors.push('Enter a valid email address.');
+    if (clean(input.website) && !website) errors.push('Website must be a valid HTTP or HTTPS URL.');
+    if (isCompetitorPortal({ ...input, name, website, description, social_links: socialLinks })) errors.push('Competing property portals cannot be registered as service providers.');
+    if (errors.length) return res.status(400).json({ ok: false, error: 'Validation failed', details: errors });
+    const result = await db.query(
+      `UPDATE marketplace_businesses
+       SET name = $2, description = $3, services_text = NULLIF($4, ''),
+           district = $5, area = NULLIF($6, ''), serves_regions = $7,
+           phone = $8, whatsapp = $9, email = NULLIF($10, ''),
+           website = NULLIF($11, ''), social_links = $12::jsonb,
+           profile_images = $13, owner_phone = $9, owner_email = NULLIF($10, ''),
+           updated_at = NOW()
+       WHERE id = $1
+       RETURNING id, name, slug, category, description, services_text, district, area,
+                 serves_regions, phone, whatsapp, email, website, social_links,
+                 profile_images, tier, status, updated_at`,
+      [
+        business.id,
+        name,
+        description,
+        servicesText,
+        location.district,
+        clean(input.area),
+        safeArray(input.serves_regions),
+        phone,
+        whatsapp || phone,
+        email,
+        website,
+        JSON.stringify(socialLinks),
+        profileImages
+      ]
+    );
+    await recordMarketplaceEvent(db, {
+      businessId: business.id,
+      eventType: 'business_profile_updated_by_owner_magic_link',
+      metadata: { changed_at: new Date().toISOString() }
+    });
+    invalidateMarketplaceStats();
+    return res.json({ ok: true, data: { marker: MARKETPLACE_REGJOURNEY_MARKER, business: result.rows[0] } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/verified-waitlist', async (req, res, next) => {
+  try {
+    const input = req.body || {};
+    let businessId = normalizeUuid(input.business_id);
+    const businessSlug = clean(input.business_slug);
+    const name = clean(input.name);
+    const phone = normalizePhone(input.phone);
+    const email = clean(input.email).toLowerCase();
+    if (name.length < 2) return res.status(400).json({ ok: false, error: 'Add your name or business name.' });
+    if (!phone && !email) return res.status(400).json({ ok: false, error: 'Add a phone number or email.' });
+    if (phone && !isValidPhone(phone)) return res.status(400).json({ ok: false, error: 'Enter a valid phone number.' });
+    if (email && !isValidEmail(email)) return res.status(400).json({ ok: false, error: 'Enter a valid email address.' });
+    if (clean(input.business_id) && !businessId) return res.status(400).json({ ok: false, error: 'Choose a valid Marketplace business.' });
+    if (!businessId && businessSlug) {
+      const businessResult = await db.query(
+        `SELECT id FROM marketplace_businesses WHERE slug = $1 AND status = 'live' LIMIT 1`,
+        [businessSlug]
+      );
+      businessId = businessResult.rows[0]?.id || null;
+    }
+    const duplicate = await db.query(
+      `SELECT id FROM marketplace_verified_waitlist
+       WHERE created_at > NOW() - INTERVAL '30 days'
+         AND (($1::uuid IS NOT NULL AND business_id = $1) OR ($2 <> '' AND phone = $2) OR ($3 <> '' AND email = $3))
+       LIMIT 1`,
+      [businessId || null, phone || '', email || '']
+    );
+    if (duplicate.rows[0]) {
+      return res.json({ ok: true, data: { marker: MARKETPLACE_REGJOURNEY_MARKER, waitlist_id: duplicate.rows[0].id, already_joined: true } });
+    }
+    const result = await db.query(
+      `INSERT INTO marketplace_verified_waitlist (business_id, name, phone, email, language, source)
+       VALUES ($1,$2,$3,$4,$5,'marketplace_verified_waitlist')
+       RETURNING id, status, created_at`,
+      [businessId || null, name, phone || null, email || null, clean(input.language) || 'en']
+    );
+    const waitlist = result.rows[0];
+    const crmLead = await createLead(db, {
+      source: 'marketplace_verified_waitlist',
+      leadType: 'marketplace_verified_interest',
+      category: 'marketplace_verification',
+      message: `${name} joined the Marketplace Verified waitlist.`,
+      contact: { name, phone, email },
+      metadata: { marketplace_waitlist_id: waitlist.id, marketplace_business_id: businessId || null }
+    });
+    await logNotification(db, {
+      channel: 'in_app',
+      type: 'marketplace_verified_waitlist_joined',
+      status: 'logged',
+      recipientPhone: phone || null,
+      recipientEmail: email || null,
+      relatedLeadId: crmLead?.id || null,
+      payloadSummary: { marketplace_waitlist_id: waitlist.id, marketplace_business_id: businessId || null }
+    });
+    if (businessId) {
+      await recordMarketplaceEvent(db, { businessId, eventType: 'business_joined_verified_waitlist', metadata: { waitlist_id: waitlist.id } });
+    }
+    return res.status(201).json({ ok: true, data: { marker: MARKETPLACE_REGJOURNEY_MARKER, waitlist } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.get('/admin/pending', requireListingModerationAccess, async (req, res, next) => {
   try {
     const status = ['pending_review', 'live', 'hidden', 'removed'].includes(clean(req.query.status)) ? clean(req.query.status) : 'pending_review';
     const limit = Math.max(1, Math.min(100, parseInt(req.query.limit || '50', 10) || 50));
     const result = await db.query(
       `SELECT id, name, slug, category, description, district, area, serves_regions,
-              phone, whatsapp, email, website, social_links, ursb_number, tier,
+              phone, whatsapp, email, website, social_links, profile_images, ursb_number, tier,
               status, source_type, source_url, source_urls, source_metadata,
-              moderation_notes, reviewed_by, reviewed_at, created_at, updated_at
+              registration_reference, owner_name, owner_phone, owner_email, owner_language,
+              moderation_notes, rejection_reason_code, rejection_message,
+              reviewed_by, reviewed_at, created_at, updated_at
        FROM marketplace_businesses
        WHERE status = $1
        ORDER BY created_at ASC
@@ -528,14 +774,19 @@ router.patch('/admin/claims/:id/status', requireListingModerationAccess, async (
   const requested = clean(req.body?.status).toLowerCase();
   const status = requested === 'approve' || requested === 'approved' ? 'approved' : requested === 'reject' || requested === 'rejected' ? 'rejected' : '';
   const reason = clean(req.body?.reason || req.body?.notes);
+  const reasonCode = clean(req.body?.reason_code).toLowerCase();
   if (!status) return res.status(400).json({ ok: false, error: 'Choose approve or reject.' });
   if (status === 'rejected' && reason.length < 3) return res.status(400).json({ ok: false, error: 'A rejection reason is required.' });
+  if (status === 'rejected' && !REJECTION_REASONS[reasonCode]) return res.status(400).json({ ok: false, error: 'Choose a structured rejection reason.', reasons: REJECTION_REASONS });
   const actorId = req.userAuth?.id || req.adminAuth?.userId || null;
   const client = await db.pool.connect();
+  let notification = null;
   try {
     await client.query('BEGIN');
     const current = await client.query(
-      `SELECT c.*, b.name AS business_name, b.slug AS business_slug
+      `SELECT c.*, b.name AS business_name, b.slug AS business_slug,
+              b.category AS business_category, b.district AS business_district,
+              b.phone AS business_phone, b.whatsapp AS business_whatsapp, b.email AS business_email
        FROM marketplace_claims c
        JOIN marketplace_businesses b ON b.id = c.business_id
        WHERE c.id = $1 AND c.status = 'pending_review'
@@ -554,9 +805,11 @@ router.patch('/admin/claims/:id/status', requireListingModerationAccess, async (
       [claim.id, status, reason, actorId]
     );
     if (status === 'approved') {
-      await client.query(
+      const converted = await client.query(
         `UPDATE marketplace_businesses
-         SET tier = 'private', source_type = 'private', reviewed_by = $2, reviewed_at = NOW(), updated_at = NOW(),
+         SET tier = 'private', source_type = 'private', status = 'live',
+             owner_name = $4, owner_phone = $5, owner_email = NULLIF($6, ''), owner_language = $7,
+             reviewed_by = $2, reviewed_at = NOW(), updated_at = NOW(),
              source_metadata = COALESCE(source_metadata, '{}'::jsonb) || jsonb_build_object(
                'approved_claim', jsonb_build_object(
                  'claim_id', $3::text,
@@ -566,23 +819,46 @@ router.patch('/admin/claims/:id/status', requireListingModerationAccess, async (
                  'approved_at', NOW()
                )
              )
-         WHERE id = $1`,
-        [claim.business_id, actorId, claim.id, claim.claimant_name, claim.claimant_phone, claim.claimant_email]
+         WHERE id = $1
+         RETURNING *`,
+        [claim.business_id, actorId, claim.id, claim.claimant_name, claim.claimant_phone, claim.claimant_email, claim.language || 'en']
       );
+      claim.converted_business = converted.rows[0] || null;
     }
     await recordMarketplaceEvent(client, {
       businessId: claim.business_id,
       actorUserId: actorId,
       eventType: `business_claim_${status}`,
-      metadata: { claim_id: claim.id, reference: claim.reference, reason }
+      metadata: { claim_id: claim.id, reference: claim.reference, reason_code: reasonCode || null, reason }
     });
     await client.query('COMMIT');
     invalidateMarketplaceStats();
+    if (status === 'approved' && claim.converted_business) {
+      notification = await sendMarketplaceApprovalNotification(db, claim.converted_business, {
+        claimId: claim.id,
+        actorUserId: actorId
+      });
+    } else if (status === 'rejected') {
+      notification = await sendMarketplaceRejectionNotification(db, {
+        id: claim.business_id,
+        name: claim.business_name,
+        slug: claim.business_slug,
+        category: claim.business_category,
+        district: claim.business_district,
+        phone: claim.business_phone,
+        whatsapp: claim.claimant_phone || claim.business_whatsapp,
+        email: claim.claimant_email || claim.business_email,
+        owner_phone: claim.claimant_phone,
+        owner_email: claim.claimant_email,
+        owner_language: claim.language || 'en'
+      }, { reasonCode, reason, triggerSuffix: claim.id });
+    }
     return res.json({
       ok: true,
       data: {
         marker: MARKETPLACE_REPORT_FIXES_MARKER,
-        claim: { id: claim.id, reference: claim.reference, business_id: claim.business_id, status, moderation_reason: reason || null }
+        claim: { id: claim.id, reference: claim.reference, business_id: claim.business_id, status, moderation_reason: reason || null },
+        notification
       }
     });
   } catch (error) {
@@ -600,8 +876,12 @@ router.patch('/admin/:id/status', requireListingModerationAccess, async (req, re
     const status = statusMap[requested];
     if (!status) return res.status(400).json({ ok: false, error: 'Choose approve, hide, remove, or pending review.' });
     const notes = clean(req.body?.notes || req.body?.reason);
+    const reasonCode = clean(req.body?.reason_code).toLowerCase();
     if (['hidden', 'removed'].includes(status) && notes.length < 3) {
       return res.status(400).json({ ok: false, error: 'A moderation reason is required.' });
+    }
+    if (['reject', 'rejected'].includes(requested) && !REJECTION_REASONS[reasonCode]) {
+      return res.status(400).json({ ok: false, error: 'Choose a structured rejection reason.', reasons: REJECTION_REASONS });
     }
     const result = await db.query(
       `UPDATE marketplace_businesses
@@ -610,10 +890,12 @@ router.patch('/admin/:id/status', requireListingModerationAccess, async (req, re
            moderation_notes = NULLIF($3, ''),
            reviewed_by = $4,
            reviewed_at = NOW(),
+           rejection_reason_code = CASE WHEN $2 = 'hidden' THEN NULLIF($5, '') ELSE NULL END,
+           rejection_message = CASE WHEN $2 = 'hidden' THEN NULLIF($3, '') ELSE NULL END,
            updated_at = NOW()
        WHERE id = $1
-       RETURNING id, name, slug, category, district, area, tier, status, moderation_notes, reviewed_at`,
-      [req.params.id, status, notes, req.userAuth?.id || req.adminAuth?.userId || null]
+       RETURNING *`,
+      [req.params.id, status, notes, req.userAuth?.id || req.adminAuth?.userId || null, reasonCode]
     );
     const business = result.rows[0];
     if (!business) return res.status(404).json({ ok: false, error: 'Marketplace business not found.' });
@@ -624,7 +906,16 @@ router.patch('/admin/:id/status', requireListingModerationAccess, async (req, re
       metadata: { notes, role: req.userAuth?.role || req.adminAuth?.role || req.adminAuth?.type || null }
     });
     invalidateMarketplaceStats();
-    return res.json({ ok: true, data: { marker: MARKETPLACE_P1_MARKER, business } });
+    let notification = null;
+    const hasOwnerContact = Boolean(business.owner_phone || business.owner_email || (business.source_type === 'private' && (business.whatsapp || business.phone || business.email)));
+    if (status === 'live' && hasOwnerContact && !business.approval_notification_sent_at) {
+      notification = await sendMarketplaceApprovalNotification(db, business, {
+        actorUserId: req.userAuth?.id || req.adminAuth?.userId || null
+      });
+    } else if (['reject', 'rejected'].includes(requested) && hasOwnerContact) {
+      notification = await sendMarketplaceRejectionNotification(db, business, { reasonCode, reason: notes });
+    }
+    return res.json({ ok: true, data: { marker: MARKETPLACE_REGJOURNEY_MARKER, business, notification } });
   } catch (error) {
     return next(error);
   }
@@ -634,9 +925,9 @@ router.get('/:slug', async (req, res, next) => {
   try {
     const result = await db.query(
       `SELECT id, name, slug, category, description, district, area, serves_regions,
-              phone, whatsapp, email, website, social_links, ursb_number, tier,
+              phone, whatsapp, email, website, social_links, profile_images, ursb_number, tier,
               rating_avg, rating_count, source_type, source, source_url, source_place_id,
-              first_seen, last_refreshed, updated_at
+              first_seen, last_refreshed, profile_view_count, updated_at
        FROM marketplace_businesses
        WHERE slug = $1 AND status = 'live'
        LIMIT 1`,

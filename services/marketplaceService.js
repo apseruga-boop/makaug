@@ -7,6 +7,7 @@ const { UG_REGION_DISTRICTS, districtForKnownArea, normalizeReviewLocationHierar
 const MARKETPLACE_P1_MARKER = 'marketplace-p1-20260719';
 const MARKETPLACE_REPORT_FIXES_MARKER = 'marketplace-report-fixes-20260719';
 const MARKETPLACE_ENRICH_MARKER = 'marketplace-enrich-20260719';
+const MARKETPLACE_REGJOURNEY_MARKER = 'marketplace-regjourney-20260719';
 const MARKETPLACE_STATS_TTL_MS = Math.max(15000, Number(process.env.MARKETPLACE_STATS_TTL_MS || 60000));
 const MARKETPLACE_SEARCH_TTL_MS = Math.max(5000, Number(process.env.MARKETPLACE_SEARCH_TTL_MS || 30000));
 const MARKETPLACE_SEARCH_CACHE_MAX = Math.max(25, Number(process.env.MARKETPLACE_SEARCH_CACHE_MAX || 200));
@@ -224,7 +225,7 @@ async function searchMarketplace(db, input = {}) {
   const result = await db.query(
     `WITH filtered AS (
        SELECT id, name, slug, category, description, district, area, serves_regions,
-              phone, whatsapp, email, website, social_links, ursb_number, tier,
+              phone, whatsapp, email, website, social_links, profile_images, ursb_number, tier,
               rating_avg, rating_count, source_type, source, source_url,
               first_seen, last_refreshed, updated_at
        FROM marketplace_businesses
@@ -277,6 +278,7 @@ module.exports = {
   DISTRICTS,
   MARKETPLACE_CATEGORIES,
   MARKETPLACE_ENRICH_MARKER,
+  MARKETPLACE_REGJOURNEY_MARKER,
   MARKETPLACE_P1_MARKER,
   MARKETPLACE_REPORT_FIXES_MARKER,
   buildSearchFilters,
