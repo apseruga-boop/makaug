@@ -1804,28 +1804,35 @@ async function adminActionableReviewQueueCount({ timeoutMs = ADMIN_SAFE_QUERY_TI
       AND COALESCE(p.source, '') <> 'found_online_property_source_v1'
       AND COALESCE(p.listed_via, '') <> 'found_online'
     )`;
-    const foundOnlinePending = adminPendingReviewFastWhere('p');
-    const [standard, foundOnlineSource, foundOnlineListedVia] = await Promise.all([
-      safeCount(`SELECT COUNT(*)::int AS total FROM properties p WHERE ${standardWhere}`, [], { timeoutMs }),
-      safeCount(
-        `SELECT COUNT(*)::int AS total
+    const pendingStatuses = adminSqlList(ADMIN_PENDING_REVIEW_STATUSES);
+    const foundOnlinePending = `(
+      COALESCE(p.status, '') IN (${pendingStatuses})
+      OR COALESCE(p.moderation_stage, '') IN (${pendingStatuses})
+    )`;
+
+    // Keep this sequential: command-centre already launches its widgets in parallel,
+    // so nested parallel queries can exhaust the pool on a cold dashboard load.
+    const standard = await safeCount(
+      `SELECT COUNT(*)::int AS total FROM properties p WHERE ${standardWhere}`,
+      [],
+      { timeoutMs }
+    );
+    const foundOnline = await safeCount(
+      `SELECT (
+         SELECT COUNT(*)::int
          FROM properties p
          WHERE p.source = 'found_online_property_source_v1'
-           AND ${foundOnlinePending}`,
-        [],
-        { timeoutMs }
-      ),
-      safeCount(
-        `SELECT COUNT(*)::int AS total
+           AND ${foundOnlinePending}
+       ) + (
+         SELECT COUNT(*)::int
          FROM properties p
          WHERE p.listed_via = 'found_online'
            AND p.source IS DISTINCT FROM 'found_online_property_source_v1'
-           AND ${foundOnlinePending}`,
-        [],
-        { timeoutMs }
-      )
-    ]);
-    const foundOnline = foundOnlineSource + foundOnlineListedVia;
+           AND ${foundOnlinePending}
+       ) AS total`,
+      [],
+      { timeoutMs }
+    );
     return { total: standard + foundOnline, standard, found_online: foundOnline };
   });
   return Number(payload?.total || 0);
