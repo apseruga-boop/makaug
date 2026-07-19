@@ -151,6 +151,15 @@ const {
   updateYouTubeSourceDripConfig
 } = require('../services/youtubeSourceDripService');
 const {
+  getMarketplaceDripStatus,
+  importMarketplaceSourceCandidates,
+  pauseMarketplaceDrip,
+  runMarketplaceDripOnce,
+  seedMarketplaceSourceRegistry,
+  startMarketplaceDrip,
+  updateMarketplaceDripConfig
+} = require('../services/marketplaceNationalDripService');
+const {
   runTikTokAutopublishAgent
 } = require('../services/tiktokAutopublishAgentService');
 const { getProviderMeta } = require('../services/llmProvider');
@@ -4026,6 +4035,98 @@ router.post('/youtube-source-drip/run-once', async (req, res, next) => {
       actorId: adminActorId(req)
     });
     await writeAudit('admin_youtube_source_drip_run_once', {
+      ok: result.ok === true,
+      skipped: result.skipped === true,
+      reason: result.reason || result.error || '',
+      result: result.result || null
+    }, adminActorId(req));
+    return res.status(result.ok === false ? 500 : 200).json({ ok: result.ok !== false, data: result });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/marketplace-drip', async (_req, res, next) => {
+  try {
+    return res.json({ ok: true, data: await getMarketplaceDripStatus(db) });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/marketplace-drip/seed-registry', async (req, res, next) => {
+  try {
+    const result = await seedMarketplaceSourceRegistry(db);
+    await writeAudit('admin_marketplace_drip_registry_seeded', result, adminActorId(req));
+    return res.json({ ok: true, data: { result, status: await getMarketplaceDripStatus(db) } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/marketplace-drip/import-source-candidates', async (req, res, next) => {
+  try {
+    const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
+    if (!rows.length) return res.status(400).json({ ok: false, error: 'rows[] is required.' });
+    const result = await importMarketplaceSourceCandidates(db, rows, { actorId: adminActorId(req) });
+    await writeAudit('admin_marketplace_source_candidates_imported', result, adminActorId(req));
+    return res.json({ ok: true, data: result });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.patch('/marketplace-drip', async (req, res, next) => {
+  try {
+    const state = await updateMarketplaceDripConfig(db, req.body || {});
+    await writeAudit('admin_marketplace_drip_configured', {
+      cursor_offset: state.cursor_offset,
+      interval_minutes: state.base_interval_minutes,
+      batch_size: state.batch_size,
+      monthly_request_cap: state.monthly_request_cap,
+      target_businesses: state.target_businesses
+    }, adminActorId(req));
+    return res.json({ ok: true, data: await getMarketplaceDripStatus(db) });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/marketplace-drip/start', async (req, res, next) => {
+  try {
+    const state = await startMarketplaceDrip(db, req.body || {});
+    await writeAudit('admin_marketplace_drip_started', {
+      cursor_offset: state.cursor_offset,
+      interval_minutes: state.base_interval_minutes,
+      batch_size: state.batch_size,
+      monthly_request_cap: state.monthly_request_cap
+    }, adminActorId(req));
+    return res.json({ ok: true, data: await getMarketplaceDripStatus(db) });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/marketplace-drip/pause', async (req, res, next) => {
+  try {
+    const state = await pauseMarketplaceDrip(db, cleanText(req.body?.reason || 'paused_by_admin'));
+    await writeAudit('admin_marketplace_drip_paused', {
+      reason: state.pause_reason,
+      cursor_offset: state.cursor_offset
+    }, adminActorId(req));
+    return res.json({ ok: true, data: await getMarketplaceDripStatus(db) });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/marketplace-drip/run-once', async (req, res, next) => {
+  try {
+    const result = await runMarketplaceDripOnce(db, {
+      force: req.body?.force !== false,
+      actorId: adminActorId(req)
+    });
+    await writeAudit('admin_marketplace_drip_run_once', {
       ok: result.ok === true,
       skipped: result.skipped === true,
       reason: result.reason || result.error || '',

@@ -3300,6 +3300,7 @@ const MARKETPLACE_UI_EN = Object.freeze({
   proofUrl: "Public proof link (website, company page or registration record, optional)", proofNotes: "Explain how we can confirm that you own or represent this business", claimConsent: "I confirm this claim is truthful and consent to makaug checking the evidence provided.",
   submitClaim: "Submit ownership claim", claimSent: "Ownership claim received", claimReference: "Claim reference", sourceFoundGoogle: "Found online via Google Maps", sourceFirstFound: "First found", sourceLastRefreshed: "Last refreshed",
   publicSourceDisclaimer: "Some profiles are gathered from public sources and are not verified by makaug. makaug is not a party to any deal. Always confirm qualifications, identity, scope and fees before paying. Owners may claim, correct or request removal of a profile.",
+  directoryLinksTitle: "Browse Uganda property services", directoryLinksSubtitle: "Direct links for people and search engines. The full national index is also published in the Marketplace sitemap.", directorySitemap: "National directory sitemap",
   googleLoading: "Refreshing details from Google...", googleRating: "Google rating", reviewsOnGoogle: "reviews on Google", openNow: "Open now", closedNow: "Closed now", openingHours: "Opening hours", fullAddress: "Full address", plusCode: "Plus code", businessStatus: "Business status", operational: "Operational", temporarilyClosed: "Temporarily closed", googleDetailsUnavailable: "Live Google details are temporarily unavailable.", websiteLabel: "Website", phoneLabel: "International phone", viewOnGoogle: "View on Google Maps",
   contactName: "Contact person name", reviewTitle: "Your business is under review", reviewCopy: "Thanks — most reviews are completed within 24 hours. We will message you when it is live.", acknowledgementWhatsApp: "Acknowledgement sent by WhatsApp.", acknowledgementEmail: "Acknowledgement sent by email.", acknowledgementPending: "Your reference is saved. We will contact you after review.",
   manageProfile: "Manage your business profile", manageSubtitle: "This secure link lets you update your approved listing without a password.", loadingProfile: "Loading your secure profile...", profileViews: "Profile views", servicesOffered: "Services offered", servesRegions: "Other districts served, separated by commas", profilePhotos: "Business photos", profilePhotosHelp: "Upload up to four JPG, PNG or WebP images, 2.5MB each.", saveChanges: "Save changes", changesSaved: "Your business profile has been updated.",
@@ -3460,6 +3461,21 @@ const MARKETPLACE_ENRICH_I18N = Object.freeze({
 });
 
 Object.entries(MARKETPLACE_ENRICH_I18N).forEach(([language, values]) => {
+  Object.assign(MARKETPLACE_UI_OVERRIDES[language], values);
+});
+
+const MARKETPLACE_P2_I18N = Object.freeze({
+  lg: { directoryLinksTitle: "Noonya obuweereza bw'eby'obutaka mu Uganda", directoryLinksSubtitle: "Enkolagana ez'olwatu eri abantu ne search engines. Olukalala lw'eggwanga luli ne mu sitemap y'Akatale.", directorySitemap: "Sitemap y'olukalala lw'eggwanga" },
+  sw: { directoryLinksTitle: "Vinjari huduma za mali Uganda", directoryLinksSubtitle: "Viungo vya moja kwa moja kwa watu na injini za utafutaji. Orodha kamili ya kitaifa pia ipo kwenye sitemap ya Soko.", directorySitemap: "Sitemap ya saraka ya kitaifa" },
+  ac: { directoryLinksTitle: "Nen tic me ot i Uganda", directoryLinksSubtitle: "Kakube atir pi dano ki jami yeny. Nying me wilobo lung tye bene i sitemap me Cuk.", directorySitemap: "Sitemap me nying me wilobo" },
+  ny: { directoryLinksTitle: "Rondora obuheereza bw'emitungo omuri Uganda", directoryLinksSubtitle: "Link ez'amangu z'abantu n'ebirikurondora. Orukarara rw'ihanga roona ruri n'omu sitemap y'Akatare.", directorySitemap: "Sitemap y'orukarara rw'ihanga" },
+  rn: { directoryLinksTitle: "Rondora obuheereza bw'emitungo omuri Uganda", directoryLinksSubtitle: "Link ez'amangu z'abantu n'ebirikurondora. Orukarara rw'ihanga roona ruri n'omu sitemap y'Akatare.", directorySitemap: "Sitemap y'orukarara rw'ihanga" },
+  sm: { directoryLinksTitle: "Noonya obuweereza bw'ebintu mu Uganda", directoryLinksSubtitle: "Enkolagana ez'olwatu eri abantu n'ebintu ebinoonya. Olukalala lw'eggwanga luli ne mu sitemap y'Akatale.", directorySitemap: "Sitemap y'olukalala lw'eggwanga" },
+  am: { directoryLinksTitle: "የኡጋንዳ የንብረት አገልግሎቶችን ያስሱ", directoryLinksSubtitle: "ለሰዎችና ለፍለጋ ሞተሮች ቀጥተኛ አገናኞች። ሙሉው ብሔራዊ ማውጫ በገበያው sitemap ላይም ታትሟል።", directorySitemap: "ብሔራዊ ማውጫ sitemap" },
+  ar: { directoryLinksTitle: "تصفح خدمات العقارات في أوغندا", directoryLinksSubtitle: "روابط مباشرة للأشخاص ومحركات البحث. ينشر الدليل الوطني الكامل أيضا في خريطة موقع السوق.", directorySitemap: "خريطة الدليل الوطني" }
+});
+
+Object.entries(MARKETPLACE_P2_I18N).forEach(([language, values]) => {
   Object.assign(MARKETPLACE_UI_OVERRIDES[language], values);
 });
 
@@ -25009,6 +25025,126 @@ function marketplaceClaimCardHtml(claim = {}, scope = "staff") {
       <button type="button" onclick="marketplaceModerateClaim('${adminAttr(claim.id)}','reject','${adminAttr(scope)}')" class="border border-red-200 text-red-700 hover:bg-red-50 rounded-lg px-3 py-1.5 text-xs font-black">Reject with reason</button>
     </div>
   </article>`;
+}
+
+function marketplaceDripRunHtml(run = {}) {
+  return `<div class="rounded-lg border border-gray-200 bg-white p-2 text-[11px]">
+    <div class="font-black text-gray-900">${adminEscape(run.status || "completed")} • ${adminEscape(run.source_offset || 0)} → ${adminEscape(run.next_source_offset || 0)}</div>
+    <div class="mt-1 text-gray-600">Requests ${adminEscape(run.requests || 0)} • fetched ${adminEscape(run.fetched || 0)} • accepted ${adminEscape(run.accepted || 0)} • inserted ${adminEscape(run.inserted || 0)} • existing ${adminEscape(run.existing || 0)} • errors ${adminEscape(run.errors || 0)}</div>
+    <div class="mt-1 text-gray-400">${adminEscape(run.created_at || "")} • ${adminEscape(run.elapsed_ms || 0)}ms</div>
+  </div>`;
+}
+
+function marketplaceDripHtml(data = {}) {
+  const state = data.state || {};
+  const inventory = data.inventory || {};
+  const registry = data.registry || {};
+  const sources = Array.isArray(data.sources) ? data.sources : [];
+  const runs = Array.isArray(data.recent_runs) ? data.recent_runs : [];
+  const target = Number(inventory.target || state.target_businesses || 5000);
+  const total = Number(inventory.total || 0);
+  const progress = target ? Math.min(100, Math.round((total / target) * 100)) : 0;
+  const sourceRows = sources.map((source) => `<tr class="border-t border-gray-100"><td class="py-1.5 pr-2 font-bold">${adminEscape(source.label || source.key)}</td><td class="py-1.5 pr-2">${source.enabled ? "Active" : adminEscape(source.adapter_status || "configured")}</td><td class="py-1.5 pr-2">${source.configured ? "Configured" : "Not configured"}</td><td class="py-1.5"><a href="${adminAttr(source.url || "#")}" target="_blank" rel="noopener" class="text-emerald-700 font-bold hover:underline">Source</a></td></tr>`).join("");
+  return `<div data-marketplace-drip-marker="${adminAttr(data.marker || "marketplace-p2-20260719")}">
+    <div class="flex items-start justify-between gap-3 flex-wrap">
+      <div>
+        <div class="font-black text-gray-950">${adminEscape(data.marker || "marketplace-p2-20260719")} • ${adminEscape(state.status || "paused")}</div>
+        <div class="mt-1 text-xs text-gray-600">Cursor ${adminEscape(state.cursor_offset || 0)} / ${adminEscape(state.source_count || 0)} • next ${adminEscape(state.next_run_at || "not scheduled")} ${state.pause_reason ? `• ${adminEscape(state.pause_reason)}` : ""}</div>
+      </div>
+      <button type="button" onclick="adminLoadMarketplaceDrip()" class="border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-bold">Refresh</button>
+    </div>
+    <div class="mt-3 grid sm:grid-cols-2 lg:grid-cols-5 gap-2">
+      <label class="rounded-lg border border-gray-200 p-2"><span class="block text-[10px] uppercase font-black text-gray-500">Interval min</span><input id="admin-marketplace-drip-interval" type="number" min="1" max="1440" value="${adminAttr(state.base_interval_minutes || 30)}" class="mt-1 w-full border border-gray-200 rounded px-2 py-1 text-xs"></label>
+      <label class="rounded-lg border border-gray-200 p-2"><span class="block text-[10px] uppercase font-black text-gray-500">Batch</span><input id="admin-marketplace-drip-batch" type="number" min="1" max="25" value="${adminAttr(state.batch_size || 5)}" class="mt-1 w-full border border-gray-200 rounded px-2 py-1 text-xs"></label>
+      <label class="rounded-lg border border-gray-200 p-2"><span class="block text-[10px] uppercase font-black text-gray-500">Cursor</span><input id="admin-marketplace-drip-offset" type="number" min="0" value="${adminAttr(state.cursor_offset || 0)}" class="mt-1 w-full border border-gray-200 rounded px-2 py-1 text-xs"></label>
+      <label class="rounded-lg border border-gray-200 p-2"><span class="block text-[10px] uppercase font-black text-gray-500">Monthly requests</span><input id="admin-marketplace-drip-cap" type="number" min="1" max="100000" value="${adminAttr(state.monthly_request_cap || 300)}" class="mt-1 w-full border border-gray-200 rounded px-2 py-1 text-xs"></label>
+      <label class="rounded-lg border border-gray-200 p-2"><span class="block text-[10px] uppercase font-black text-gray-500">Inventory target</span><input id="admin-marketplace-drip-target" type="number" min="100" max="100000" value="${adminAttr(target)}" class="mt-1 w-full border border-gray-200 rounded px-2 py-1 text-xs"></label>
+    </div>
+    <div class="mt-3 grid md:grid-cols-2 gap-2">
+      <div class="rounded-lg border border-emerald-100 bg-emerald-50 p-3"><div class="flex justify-between gap-2 font-black"><span>Public inventory</span><span>${adminEscape(total)} / ${adminEscape(target)}</span></div><div class="mt-2 h-2 rounded-full bg-white overflow-hidden"><div class="h-full bg-emerald-700" style="width:${adminAttr(progress)}%"></div></div><div class="mt-2 text-[11px] text-emerald-900">${adminEscape(inventory.distinct_categories || 0)} categories • ${adminEscape(inventory.distinct_districts || 0)} districts • contactless public ${adminEscape(inventory.contactless_public || 0)}</div></div>
+      <div class="rounded-lg border border-blue-100 bg-blue-50 p-3"><div class="font-black text-blue-950">Source registry</div><div class="mt-1 text-[11px] text-blue-900">${adminEscape(registry.registry_total || 0)} queries • ${adminEscape(registry.enabled_queries || 0)} active • ${adminEscape(registry.category_coverage || 0)} categories • ${adminEscape(registry.district_coverage || 0)} districts</div><div class="mt-1 text-[11px] text-blue-800">Monthly used ${adminEscape(state.monthly_request_count || 0)} / ${adminEscape(state.monthly_request_cap || 0)} • remaining ${adminEscape(state.monthly_request_remaining || 0)}</div></div>
+    </div>
+    <div class="mt-3 flex gap-2 flex-wrap">
+      <button type="button" onclick="adminSeedMarketplaceDripRegistry()" class="border border-blue-200 text-blue-700 rounded-lg px-3 py-2 text-xs font-bold">Build national registry</button>
+      <button type="button" onclick="adminSaveMarketplaceDrip()" class="border border-gray-300 text-gray-800 rounded-lg px-3 py-2 text-xs font-bold">Save config</button>
+      ${state.enabled ? `<button type="button" onclick="adminPauseMarketplaceDrip()" class="border border-red-200 text-red-700 rounded-lg px-3 py-2 text-xs font-bold">Pause</button>` : `<button type="button" onclick="adminStartMarketplaceDrip()" class="bg-emerald-700 text-white rounded-lg px-3 py-2 text-xs font-bold">Start</button>`}
+      <button type="button" onclick="adminRunMarketplaceDripOnce()" class="border border-emerald-200 text-emerald-700 rounded-lg px-3 py-2 text-xs font-bold">Run one batch</button>
+    </div>
+    <details class="mt-3 rounded-lg border border-gray-200 p-3"><summary class="cursor-pointer text-xs font-black text-gray-800">Provider truth (${adminEscape(sources.filter((source) => source.enabled).length)} active)</summary><div class="mt-2 overflow-auto"><table class="min-w-full text-left text-[11px]"><thead><tr><th class="pr-2">Provider</th><th class="pr-2">Adapter</th><th class="pr-2">Config</th><th>Link</th></tr></thead><tbody>${sourceRows}</tbody></table></div></details>
+    <div class="mt-3 grid md:grid-cols-2 gap-2">${runs.length ? runs.slice(0, 10).map(marketplaceDripRunHtml).join("") : `<div class="rounded-lg border border-gray-200 p-3 text-xs text-gray-500">No runs logged yet.</div>`}</div>
+  </div>`;
+}
+
+function marketplaceDripConfigFromUi() {
+  return {
+    interval_minutes: Number(document.getElementById("admin-marketplace-drip-interval")?.value || 30),
+    batch_size: Number(document.getElementById("admin-marketplace-drip-batch")?.value || 5),
+    cursor_offset: Number(document.getElementById("admin-marketplace-drip-offset")?.value || 0),
+    monthly_request_cap: Number(document.getElementById("admin-marketplace-drip-cap")?.value || 300),
+    target_businesses: Number(document.getElementById("admin-marketplace-drip-target")?.value || 5000)
+  };
+}
+
+async function adminLoadMarketplaceDrip() {
+  const panel = document.getElementById("admin-marketplace-drip-panel");
+  if (!panel || !canUseLiveAdminApi()) {
+    toast("Sign in as admin or save ADMIN_API_KEY first.");
+    return;
+  }
+  panel.innerHTML = "Loading Marketplace national drip...";
+  try {
+    const response = await apiRequest("/api/admin/marketplace-drip", { headers: adminAuthHeaders() });
+    panel.innerHTML = marketplaceDripHtml(response?.data || {});
+  } catch (error) {
+    panel.innerHTML = `Marketplace drip could not load: ${adminEscape(error.message || "request failed")}`;
+  }
+}
+
+async function adminSeedMarketplaceDripRegistry() {
+  const panel = document.getElementById("admin-marketplace-drip-panel");
+  if (!window.confirm("Build the national 20-category × 146-district source registry? This does not call providers.")) return;
+  try {
+    if (panel) panel.innerHTML = "Building the national source registry...";
+    const response = await apiRequest("/api/admin/marketplace-drip/seed-registry", { method: "POST", headers: adminAuthHeaders(), body: {} });
+    if (panel) panel.innerHTML = marketplaceDripHtml(response?.data?.status || {});
+    toast("Marketplace national registry built.");
+  } catch (error) {
+    if (panel) panel.innerHTML = `Registry build failed: ${adminEscape(error.message || "request failed")}`;
+  }
+}
+
+async function adminSaveMarketplaceDrip() {
+  const response = await apiRequest("/api/admin/marketplace-drip", { method: "PATCH", headers: adminAuthHeaders(), body: marketplaceDripConfigFromUi() });
+  const panel = document.getElementById("admin-marketplace-drip-panel");
+  if (panel) panel.innerHTML = marketplaceDripHtml(response?.data || {});
+  toast("Marketplace drip config saved.");
+}
+
+async function adminStartMarketplaceDrip() {
+  const response = await apiRequest("/api/admin/marketplace-drip/start", { method: "POST", headers: adminAuthHeaders(), body: marketplaceDripConfigFromUi() });
+  const panel = document.getElementById("admin-marketplace-drip-panel");
+  if (panel) panel.innerHTML = marketplaceDripHtml(response?.data || {});
+  toast("Marketplace national drip started.");
+}
+
+async function adminPauseMarketplaceDrip() {
+  const response = await apiRequest("/api/admin/marketplace-drip/pause", { method: "POST", headers: adminAuthHeaders(), body: { reason: "paused_by_admin" } });
+  const panel = document.getElementById("admin-marketplace-drip-panel");
+  if (panel) panel.innerHTML = marketplaceDripHtml(response?.data || {});
+  toast("Marketplace national drip paused.");
+}
+
+async function adminRunMarketplaceDripOnce() {
+  if (!window.confirm("Run one capped Marketplace source batch now? Provider calls count against the configured monthly cap.")) return;
+  const panel = document.getElementById("admin-marketplace-drip-panel");
+  try {
+    if (panel) panel.innerHTML = "Running one capped Marketplace batch...";
+    await apiRequest("/api/admin/marketplace-drip/run-once", { method: "POST", headers: adminAuthHeaders(), body: { force: true } });
+    await adminLoadMarketplaceDrip();
+    toast("Marketplace drip batch finished.");
+  } catch (error) {
+    if (panel) panel.innerHTML = `Marketplace drip run failed: ${adminEscape(error.message || "request failed")}`;
+  }
 }
 
 async function refreshMarketplaceModerationQueue(scope = "staff", options = {}) {
