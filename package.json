@@ -36,6 +36,7 @@
     "inventory:seed-carnelian": "node scripts/seed-carnelian-authorised-listings.js",
     "inventory:seed-social-search": "node scripts/seed-social-search-authorised-listings.js",
     "inventory:seed-source-registry": "node scripts/seed-property-source-registry.js",
+    "marketplace:seed-google": "node scripts/seed-marketplace-google-places.js",
     "inventory:daily-source-sweep": "node scripts/run-daily-found-online-source-sweep.js",
     "inventory:continuous-monitor": "node scripts/run-continuous-social-monitor.js",
     "inventory:import-source-posts": "node scripts/import-found-online-source-posts.js",
