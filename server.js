@@ -43,6 +43,8 @@ const {
 const { startXSourceDripScheduler } = require('./services/xSourceDripService');
 const { startYouTubeSourceDripScheduler } = require('./services/youtubeSourceDripService');
 const { startMarketplaceLifecycleScheduler } = require('./services/marketplaceLifecycleService');
+const { startMarketplaceDripScheduler } = require('./services/marketplaceNationalDripService');
+const { DISTRICTS: MARKETPLACE_DISTRICTS, MARKETPLACE_CATEGORIES } = require('./services/marketplaceService');
 
 const app = express();
 // Required on Render so rate limiting uses the forwarded client IP correctly.
@@ -50,6 +52,10 @@ app.set('trust proxy', 1);
 
 const RUNTIME_BUILD_ID = 'bundle-version-commit-key-20260719';
 const RUNTIME_STARTED_AT = new Date().toISOString();
+
+function escapeXml(value = '') {
+  return String(value).replace(/[<>&'\"]/g, (character) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '\"': '&quot;' }[character]));
+}
 
 function runtimeBundleVersion() {
   return String(
@@ -132,6 +138,18 @@ app.use('/api/property-seeker', propertySeekerRoutes);
 app.use('/api/student', studentRoutes);
 app.use('/api/field-agent', fieldAgentRoutes);
 app.use('/api/staff', staffRoutes);
+
+app.get('/marketplace-sitemap.xml', (_req, res) => {
+  const baseUrl = String(process.env.PUBLIC_BASE_URL || process.env.APP_BASE_URL || 'https://makaug.com').replace(/\/+$/, '');
+  const urls = [`${baseUrl}/marketplace`];
+  for (const category of MARKETPLACE_CATEGORIES) {
+    for (const district of MARKETPLACE_DISTRICTS) {
+      urls.push(`${baseUrl}/marketplace?category=${encodeURIComponent(category.key)}&district=${encodeURIComponent(district)}`);
+    }
+  }
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map((url) => `  <url><loc>${escapeXml(url)}</loc><changefreq>weekly</changefreq></url>`).join('\n')}\n</urlset>`;
+  res.type('application/xml').set('Cache-Control', 'public, max-age=3600').send(xml);
+});
 
 // Never expose local/private operator tools on public host.
 app.use('/private-local', (_req, res) => {
@@ -1006,6 +1024,7 @@ async function start() {
   startXSourceDripScheduler(db);
   startYouTubeSourceDripScheduler(db);
   startMarketplaceLifecycleScheduler(db);
+  startMarketplaceDripScheduler(db);
 
   app.listen(port, () => {
     logger.info(`makaug backend running on http://localhost:${port}`);

@@ -42,6 +42,10 @@ const {
   validateMarketplaceFilters,
   validateUgandaLocation
 } = require('../services/marketplaceService');
+const {
+  MARKETPLACE_P2_MARKER,
+  sourceDefinitions
+} = require('../services/marketplaceNationalDripService');
 
 const router = express.Router();
 
@@ -105,20 +109,37 @@ router.get('/config', async (_req, res) => {
     ok: true,
     data: {
       marker: MARKETPLACE_P1_MARKER,
-      release_markers: [MARKETPLACE_P1_MARKER, MARKETPLACE_REPORT_FIXES_MARKER, MARKETPLACE_ENRICH_MARKER, MARKETPLACE_REGJOURNEY_MARKER],
+      release_markers: [MARKETPLACE_P1_MARKER, MARKETPLACE_REPORT_FIXES_MARKER, MARKETPLACE_ENRICH_MARKER, MARKETPLACE_REGJOURNEY_MARKER, MARKETPLACE_P2_MARKER],
       categories: MARKETPLACE_CATEGORIES,
       districts: DISTRICTS,
       paid_verification_enabled: false,
       verified_waitlist_enabled: true,
       registration_review_target_hours: 24,
       rejection_reasons: REJECTION_REASONS,
-      source_drip_enabled: false,
+      source_drip_available: true,
+      source_catalog: sourceDefinitions().map(({ key, label, url, adapter_status, enabled, configured }) => ({ key, label, url, adapter_status, enabled, configured })),
       google_details: {
         configured: googleDetailsStatus().configured,
         cache_ttl_ms: googleDetailsStatus().cache_ttl_ms
       }
     }
   });
+});
+
+router.get('/seo-links', (_req, res) => {
+  const links = [];
+  for (const category of MARKETPLACE_CATEGORIES) {
+    for (const district of DISTRICTS) {
+      links.push({
+        category: category.key,
+        category_label: category.label,
+        district,
+        label: `${category.label} in ${district}`,
+        url: `/marketplace?category=${encodeURIComponent(category.key)}&district=${encodeURIComponent(district)}`
+      });
+    }
+  }
+  return res.json({ ok: true, data: { marker: MARKETPLACE_P2_MARKER, total: links.length, links } });
 });
 
 router.get('/stats', async (_req, res, next) => {

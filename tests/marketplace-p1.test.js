@@ -82,7 +82,7 @@ test('marketplace routes expose public contracts and protect staff/King moderati
   assert.match(route, /logNotification\(db/);
   assert.match(route, /recordMarketplaceEvent\(db/);
   assert.match(route, /paid_verification_enabled: false/);
-  assert.match(route, /source_drip_enabled: false/);
+  assert.match(route, /source_drip_available: true/);
   assert.match(route, /Website must be a valid HTTP or HTTPS URL/);
   assert.match(route, /Choose a valid marketplace business/);
 });
