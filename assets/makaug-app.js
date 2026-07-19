@@ -3278,7 +3278,7 @@ const MARKETPLACE_UI_EN = Object.freeze({
   aiSubtitle: "Describe who you need and where. Search in any language.", aiScope: "Searching Marketplace", aiPlaceholder: "Try: surveyor in Wakiso", askAi: "Ask AI",
   filterTitle: "Find a service", clearFilters: "Clear filters", searchPlaceholder: "Business or service", allServices: "All services",
   allDistricts: "All districts", anyRating: "Any rating", allTiers: "All listing tiers", tierVerified: "Verified",
-  tierPrivate: "Private listing", tierFound: "Found online", search: "Search", browseCategories: "Browse service categories",
+  tierPrivate: "Privately listed", tierFound: "Found online", search: "Search", browseCategories: "Browse service categories",
   emptyTitle: "No exact providers found", emptyText: "Tell us what you need and the makaug team will help find it.", tellUs: "Tell us what you need",
   needTitle: "Tell makaug what service you need", name: "Your name", phone: "Phone or WhatsApp", email: "Email (optional)",
   needPlaceholder: "What service do you need, and where?", sendRequest: "Send request", previous: "Previous", next: "Next",

@@ -74,7 +74,7 @@ const PUBLIC_SOURCE_CONTACT_POLICY = 'No public phone number is not a blocker wh
 const FOUND_ONLINE_LAUNCH_INTAKE_POLICY = {
   source_window_start: LAUNCH_SOURCE_POST_WINDOW_START,
   target_source_year: 2026,
-  queue_rule: 'Launch harvest mode: queue every supported public social property post from 1 January 2026 onward into review, regardless of poster type. Missing phone, media, price, or exact pin are review notes, not capture blockers. Only suppressed URLs, unsupported platforms, old posts, duplicates, clear foreign/non-Uganda property, and obvious non-property content stay out of the property review queue.',
+  queue_rule: 'Launch harvest mode: queue every supported public social property post from 1 January 2026 onward into review, regardless of poster type. Missing phone, media, price, or exact pin are review notes, not capture blockers. Website-only sources are ignored. Only suppressed URLs, unsupported platforms, old posts, duplicates, clear foreign/non-Uganda property, and obvious non-property content stay out of the property review queue.',
   image_rule: 'Found-online/social imports are public discovery results: do not rehost downloaded TikTok, Facebook, Instagram, YouTube, X, LinkedIn, WhatsApp, or website photos/videos as makaug gallery assets unless the rights holder has explicitly supplied or approved them. Public pages should show source links or official embeds first, then makaug rewritten facts and disclosures.',
   facebook_image_rule: 'For Facebook, store the exact public post URL as source evidence. Do not scrape or rehost Meta media without permission or an approved Meta tool/feed; link back to the source and ask the source/agent for authorised images before using photos publicly. Location must still be present before approval.',
   platform_scope: ['YouTube', 'TikTok', 'Instagram', 'Facebook', 'X/Twitter'],
@@ -2579,7 +2579,7 @@ async function queueFoundOnlineSourcePostListings({
 
   if (dryRun) {
     const eligible = evaluated.filter(({ intake }) => intake.eligible);
-    const dryRunRows = eligible.map(({ item, agent }) => {
+    const dryRunRows = eligible.map(({ item, agent, intake }) => {
       const autoLive = sourcePostAutoLiveStatusFor(item, agent);
       return {
         key: item.key,
@@ -2604,6 +2604,7 @@ async function queueFoundOnlineSourcePostListings({
         auto_live_policy: autoLive.policy,
         status: autoLive.status,
         moderation_stage: autoLive.moderation_stage,
+        intake,
         dry_run: true,
       };
     });
