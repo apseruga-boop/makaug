@@ -7,6 +7,7 @@ const test = require('node:test');
 
 const {
   MARKETPLACE_P2_MARKER,
+  PRIORITY_DISTRICTS,
   SOURCE_DEFINITIONS,
   googleCandidate,
   importMarketplaceSourceCandidates,
@@ -28,6 +29,14 @@ test('national registry covers every category, district and declared source exac
   assert.equal(new Set(rows.map((row) => row.category)).size, 20);
   assert.equal(new Set(rows.map((row) => row.district)).size, 146);
   assert.equal(new Set(rows.map((row) => row.source)).size, SOURCE_DEFINITIONS.length);
+});
+
+test('registry walks Kampala metro and major urban districts before the national tail', () => {
+  const googleRows = registryRows().filter((row) => row.source === 'google_maps');
+  const firstThirtyDistricts = [...new Set(googleRows.map((row) => row.district))].slice(0, 30);
+  assert.deepEqual(firstThirtyDistricts, PRIORITY_DISTRICTS);
+  assert.deepEqual(firstThirtyDistricts.slice(0, 3), ['Kampala', 'Wakiso', 'Mukono']);
+  assert.equal(PRIORITY_DISTRICTS.every((district) => DISTRICTS.includes(district)), true);
 });
 
 test('provider truth only enables Google when a real key is configured', () => {
