@@ -3271,6 +3271,7 @@ const MARKETPLACE_P1_MARKER = "marketplace-p1-20260719";
 const MARKETPLACE_REPORT_FIXES_MARKER = "marketplace-report-fixes-20260719";
 const MARKETPLACE_ENRICH_MARKER = "marketplace-enrich-20260719";
 const MARKETPLACE_REGJOURNEY_MARKER = "marketplace-regjourney-20260719";
+const MARKETPLACE_POLISH_MARKER = "marketplace-polish-20260719";
 const MARKETPLACE_UI_EN = Object.freeze({
   breadcrumbHome: "Home", breadcrumbMarketplace: "Marketplace", eyebrow: "Uganda property services",
   title: "Uganda's largest property services directory", subtitle: "Surveyors, lawyers, builders, brokers, valuers and practical property services across Uganda.",
@@ -3294,11 +3295,12 @@ const MARKETPLACE_UI_EN = Object.freeze({
   , rating4: "4+ stars", rating3: "3+ stars", newBusiness: "New", aiResultsFound: "Here are the property service providers I found.", submitting: "Submitting...",
   tiersTitle: "Know what each listing badge means", tiersSubtitle: "Every business shows how its information reached makaug, so you can make an informed choice.",
   tierFoundDesc: "Gathered from a public source. The business has not claimed or verified this profile with makaug.", tierPrivateDesc: "Submitted or claimed by the business owner and approved by the makaug team.",
-  tierVerifiedDesc: "Evidence reviewed, blue seal shown, ranked first in search, and receives leads first.", verifiedPrice: "UGX 150,000/year",
+  tierVerifiedDesc: "Evidence reviewed, blue seal shown, ranked first in search, and receives leads first.", verifiedPrice: "UGX {price}/month",
   claimBusiness: "Claim this business", claimTitle: "Claim this business", claimSubtitle: "Show your relationship to", claimReviewNote: "The makaug team reviews every claim before ownership changes.",
   claimantName: "Your full name", claimantRole: "Your relationship to the business", roleOwner: "Owner", roleDirector: "Director", roleEmployee: "Employee", roleAgent: "Authorised agent",
   proofUrl: "Public proof link (website, company page or registration record, optional)", proofNotes: "Explain how we can confirm that you own or represent this business", claimConsent: "I confirm this claim is truthful and consent to makaug checking the evidence provided.",
   submitClaim: "Submit ownership claim", claimSent: "Ownership claim received", claimReference: "Claim reference", sourceFoundGoogle: "Found online via Google Maps", sourceFirstFound: "First found", sourceLastRefreshed: "Last refreshed",
+  foundOnlineDescriptionTemplate: "{category} serving {district}. Found online via {source}; confirm services and availability directly with the business.",
   publicSourceDisclaimer: "Some profiles are gathered from public sources and are not verified by makaug. makaug is not a party to any deal. Always confirm qualifications, identity, scope and fees before paying. Owners may claim, correct or request removal of a profile.",
   directoryLinksTitle: "Browse Uganda property services", directoryLinksSubtitle: "Direct links for people and search engines. The full national index is also published in the Marketplace sitemap.", directorySitemap: "National directory sitemap",
   googleLoading: "Refreshing details from Google...", googleRating: "Google rating", reviewsOnGoogle: "reviews on Google", openNow: "Open now", closedNow: "Closed now", openingHours: "Opening hours", fullAddress: "Full address", plusCode: "Plus code", businessStatus: "Business status", operational: "Operational", temporarilyClosed: "Temporarily closed", googleDetailsUnavailable: "Live Google details are temporarily unavailable.", websiteLabel: "Website", phoneLabel: "International phone", viewOnGoogle: "View on Google Maps",
@@ -3401,51 +3403,66 @@ const MARKETPLACE_UI_OVERRIDES = Object.freeze({
 const MARKETPLACE_UI_COMPLETIONS = Object.freeze({
   lg: {
     breadcrumbMarketplace: "Akatale", whatsappAction: "WhatsApp", sourceLabel: "Ensibuko", requestSent: "Okusaba kuweereddwayo. Ttiimu ya makaug ejja kukuddira.", registrationSent: "Okwewandiisa kufunye", registrationRef: "Namba y'okujuliza",
-    rating4: "Emmunyeenye 4+", rating3: "Emmunyeenye 3+", newBusiness: "Mpya", aiResultsFound: "Bano be baweereza b'eby'obutaka be nsanze.", submitting: "Kuweereza...",
-    tiersTitle: "Manya amakulu g'akabonero buli kamwe", tiersSubtitle: "Buli bizinesi eraga engeri amakuru gaayo gye gaatuuka ku makaug.", tierFoundDesc: "Amakuru gano gaakunganyiziddwa okuva mu nsibuko ya lukale; bizinesi tennaggya kukakasa profile eno.", tierPrivateDesc: "Yawandiisibwa oba yafunibwa nnannyini bizinesi era ttiimu ya makaug n'egikkiriza.", tierVerifiedDesc: "Obujulizi bwakebereddwa, erina akabonero aka bbululu, esooka mu kunoonya era efuna leads okusooka.", verifiedPrice: "UGX 150,000 buli mwaka",
+    rating4: "Emmunyeenye 4+", rating3: "Emmunyeenye 3+", newBusiness: "Empya", aiResultsFound: "Bano be baweereza b'eby'obutaka be nsanze.", submitting: "Kuweereza...",
+    tiersTitle: "Manya amakulu g'akabonero buli kamwe", tiersSubtitle: "Buli bizinesi eraga engeri amakuru gaayo gye gaatuuka ku makaug.", tierFoundDesc: "Amakuru gano gaakunganyiziddwa okuva mu nsibuko ya lukale; bizinesi tennaggya kukakasa profile eno.", tierPrivateDesc: "Yawandiisibwa oba yafunibwa nnannyini bizinesi era ttiimu ya makaug n'egikkiriza.", tierVerifiedDesc: "Obujulizi bwakebereddwa, erina akabonero aka bbululu, esooka mu kunoonya era efuna leads okusooka.", verifiedPrice: "UGX {price} buli mwezi",
     claimBusiness: "Gamba nti bizinesi eno yiiyo", claimTitle: "Gamba nti bizinesi eno yiiyo", claimSubtitle: "Laga enkolagana yo ne", claimReviewNote: "Ttiimu ya makaug ekebera buli kusaba nga obwannannyini tebunnakyusibwa.", claimantName: "Erinnya lyo mu bujjuvu", claimantRole: "Enkolagana yo ne bizinesi", roleOwner: "Nnannyini", roleDirector: "Dayirekita", roleEmployee: "Mukozi", roleAgent: "Omubaka alina olukusa", proofUrl: "Link y'obujulizi bwa lukale (si kya tteeka)", proofNotes: "Nyonyola engeri gye tuyinza okukakasa nti bizinesi eno yiiyo oba ogikiikirira", claimConsent: "Nkakasa nti okusaba kuno kwa mazima era nzikiriza makaug okukebere obujulizi.", submitClaim: "Weereza okusaba obwannannyini", claimSent: "Okusaba obwannannyini kufunye", claimReference: "Namba y'okusaba", sourceFoundGoogle: "Kisangiddwa ku Google Maps", sourceFirstFound: "Kyasooka kusangibwa", sourceLastRefreshed: "Kyaddamu okukeberwa",
-    publicSourceDisclaimer: "Profile ezimu zikunganyiziddwa okuva mu nsibuko za lukale era makaug tezinnazikakasa. makaug si ludda mu ndagaano yonna. Kakasa obukugu, obumanyiddwa, omulimu n'ebisale nga tonnasasula. Bannannyini bayinza okusaba, okutereeza oba okuggyawo profile."
+    foundOnlineDescriptionTemplate: "{category} aweereza mu {district}. Kisangiddwa ku {source}; kakasa obuweereza n'obudde obuliwo butereevu ne bizinesi.", publicSourceDisclaimer: "Profile ezimu zikunganyiziddwa okuva mu nsibuko za lukale era makaug tezinnazikakasa. makaug si ludda mu ndagaano yonna. Kakasa obukugu, obumanyiddwa, omulimu n'ebisale nga tonnasasula. Bannannyini bayinza okusaba, okutereeza oba okuggyawo profile."
   },
   sw: {
     breadcrumbMarketplace: "Soko", whatsappAction: "WhatsApp", sourceLabel: "Chanzo", requestSent: "Ombi limetumwa. Timu ya makaug itawasiliana nawe.", registrationSent: "Usajili umepokelewa", registrationRef: "Kumbukumbu",
     rating4: "Nyota 4+", rating3: "Nyota 3+", newBusiness: "Mpya", aiResultsFound: "Hawa ndio watoa huduma za mali niliopata.", submitting: "Inatuma...",
-    tiersTitle: "Elewa maana ya kila beji", tiersSubtitle: "Kila biashara inaonyesha jinsi taarifa zake zilivyofika makaug.", tierFoundDesc: "Imekusanywa kutoka chanzo cha umma; biashara haijadai wala kuthibitisha wasifu huu kwa makaug.", tierPrivateDesc: "Imesajiliwa au kudaiwa na mwenye biashara na kuidhinishwa na timu ya makaug.", tierVerifiedDesc: "Ushahidi umekaguliwa, beji ya bluu, nafasi ya kwanza na inapokea leads kwanza.", verifiedPrice: "UGX 150,000 kwa mwaka",
+    tiersTitle: "Elewa maana ya kila beji", tiersSubtitle: "Kila biashara inaonyesha jinsi taarifa zake zilivyofika makaug.", tierFoundDesc: "Imekusanywa kutoka chanzo cha umma; biashara haijadai wala kuthibitisha wasifu huu kwa makaug.", tierPrivateDesc: "Imesajiliwa au kudaiwa na mwenye biashara na kuidhinishwa na timu ya makaug.", tierVerifiedDesc: "Ushahidi umekaguliwa, beji ya bluu, nafasi ya kwanza na inapokea leads kwanza.", verifiedPrice: "UGX {price} kwa mwezi",
     claimBusiness: "Dai biashara hii", claimTitle: "Dai biashara hii", claimSubtitle: "Onyesha uhusiano wako na", claimReviewNote: "Timu ya makaug hukagua kila dai kabla ya kubadili umiliki.", claimantName: "Jina lako kamili", claimantRole: "Uhusiano wako na biashara", roleOwner: "Mmiliki", roleDirector: "Mkurugenzi", roleEmployee: "Mfanyakazi", roleAgent: "Wakala aliyeidhinishwa", proofUrl: "Kiungo cha ushahidi wa umma (si lazima)", proofNotes: "Eleza jinsi tunavyoweza kuthibitisha kuwa unamiliki au unawakilisha biashara hii", claimConsent: "Nathibitisha dai hili ni la kweli na nakubali makaug ikague ushahidi.", submitClaim: "Tuma dai la umiliki", claimSent: "Dai la umiliki limepokelewa", claimReference: "Kumbukumbu ya dai", sourceFoundGoogle: "Imepatikana kupitia Google Maps", sourceFirstFound: "Ilipatikana kwanza", sourceLastRefreshed: "Ilisasishwa mwisho",
-    publicSourceDisclaimer: "Baadhi ya wasifu hukusanywa kutoka vyanzo vya umma na haujathibitishwa na makaug. makaug si mshiriki wa makubaliano yoyote. Thibitisha sifa, utambulisho, kazi na ada kabla ya kulipa. Wamiliki wanaweza kudai, kusahihisha au kuomba wasifu uondolewe."
+    foundOnlineDescriptionTemplate: "{category} inayohudumia {district}. Imepatikana kupitia {source}; thibitisha huduma na upatikanaji moja kwa moja na biashara.", publicSourceDisclaimer: "Baadhi ya wasifu hukusanywa kutoka vyanzo vya umma na haujathibitishwa na makaug. makaug si mshiriki wa makubaliano yoyote. Thibitisha sifa, utambulisho, kazi na ada kabla ya kulipa. Wamiliki wanaweza kudai, kusahihisha au kuomba wasifu uondolewe."
   },
   ac: {
     breadcrumbMarketplace: "Cuk", whatsapp: "WhatsApp (ka pat)", website: "Kakube (pe mite)", social: "Kakube me social media", ursb: "Namba me URSB (pe mite)", registrationConsent: "Amoko ni lok me bici magi tye kakare dok dul twero neno mapwod pe kiyaro.", whatsappAction: "WhatsApp", sourceLabel: "Ka ma oa iye", requestSent: "Kicwalo peny. Dul makaug bi kube kwedi.", registrationSent: "Kigamo coc", registrationRef: "Namba me coc",
     rating4: "Lacer 4+", rating3: "Lacer 3+", newBusiness: "Manyen", aiResultsFound: "Magi aye jo tic me ot ma anongo.", submitting: "Tye ka cwalo...",
-    tiersTitle: "Nge tyen lanyut me coc acel acel", tiersSubtitle: "Bici acel acel nyutu kit ma lokke oo kwede i makaug.", tierFoundDesc: "Kicoko ki i ka ma lwak neno; rwot bici pud pe omoko profile man.", tierPrivateDesc: "Rwot bici aye ocoyo onyo odano, ka dul makaug oye.", tierVerifiedDesc: "Kineno caden, tye ki lanyut bulu, bedo mukwongo i yeny ki leads.", verifiedPrice: "UGX 150,000 i mwaka", claimBusiness: "Dano bici man", claimTitle: "Dano bici man", claimSubtitle: "Nyut kube ni ki", claimReviewNote: "Dul makaug neno dano acel acel mapwod pe kiloko rwot.", claimantName: "Nyingi lung", claimantRole: "Kube ni ki bici", roleOwner: "Rwot", roleDirector: "Director", roleEmployee: "Latic", roleAgent: "Lakony ma kimiyo twero", proofUrl: "Kakube me caden (pe mite)", proofNotes: "Lok kit ma watwero moko ni in rwot onyo ikwanyo dog bici man", claimConsent: "Amoko ni lok man tye kakare dok aye makaug onen caden.", submitClaim: "Cwal dano me rwot", claimSent: "Kigamo dano me rwot", claimReference: "Namba me dano", sourceFoundGoogle: "Kinongo ki Google Maps", sourceFirstFound: "Nino me acaki", sourceLastRefreshed: "Nino me neno odoco", publicSourceDisclaimer: "Profile mogo kicoko ki i ka ma lwak neno dok makaug pud pe omoko. makaug pe obedo dul i wil mo. Mok ngec, nying, tic ki wel mapwod pe iculo. Rwodi twero dano, yiko onyo kwanyo profile."
+    tiersTitle: "Nge tyen lanyut me coc acel acel", tiersSubtitle: "Bici acel acel nyutu kit ma lokke oo kwede i makaug.", tierFoundDesc: "Kicoko ki i ka ma lwak neno; rwot bici pud pe omoko profile man.", tierPrivateDesc: "Rwot bici aye ocoyo onyo odano, ka dul makaug oye.", tierVerifiedDesc: "Kineno caden, tye ki lanyut bulu, bedo mukwongo i yeny ki leads.", verifiedPrice: "UGX {price} i dwe", claimBusiness: "Dano bici man", claimTitle: "Dano bici man", claimSubtitle: "Nyut kube ni ki", claimReviewNote: "Dul makaug neno dano acel acel mapwod pe kiloko rwot.", claimantName: "Nyingi lung", claimantRole: "Kube ni ki bici", roleOwner: "Rwot", roleDirector: "Director", roleEmployee: "Latic", roleAgent: "Lakony ma kimiyo twero", proofUrl: "Kakube me caden (pe mite)", proofNotes: "Lok kit ma watwero moko ni in rwot onyo ikwanyo dog bici man", claimConsent: "Amoko ni lok man tye kakare dok aye makaug onen caden.", submitClaim: "Cwal dano me rwot", claimSent: "Kigamo dano me rwot", claimReference: "Namba me dano", sourceFoundGoogle: "Kinongo ki Google Maps", sourceFirstFound: "Nino me acaki", sourceLastRefreshed: "Nino me neno odoco", publicSourceDisclaimer: "Profile mogo kicoko ki i ka ma lwak neno dok makaug pud pe omoko. makaug pe obedo dul i wil mo. Mok ngec, nying, tic ki wel mapwod pe iculo. Rwodi twero dano, yiko onyo kwanyo profile."
   },
   ny: {
     breadcrumbMarketplace: "Akatare", whatsapp: "WhatsApp (yaaba neetaanisa)", website: "Omukutu (tikiteekwa)", social: "Omukutu gwa social media", ursb: "Namba ya URSB (tikiteekwa)", registrationConsent: "Ninkakasa ngu amakuru ga bizinesi aga gahikire kandi nigaabaasa kureebwa gatakashuuruurwa.", whatsappAction: "WhatsApp", sourceLabel: "Oburugo", requestSent: "Okusaba kuhereirwe. Tiimu ya makaug neija kukugarukamu.", registrationSent: "Okuhandiika kwakirwa", registrationRef: "Namba y'okujuriza",
     rating4: "Enyonyoozi 4+", rating3: "Enyonyoozi 3+", newBusiness: "Empya", aiResultsFound: "Aba nibo baheereza b'emitungo abu nashanga.", submitting: "Nikuhereza...",
-    tiersTitle: "Manya amakuru g'akabonero koona", tiersSubtitle: "Buri bizinesi neeyoreka oku amakuru gaayo gaahika ahari makaug.", tierFoundDesc: "Amakuru gakungaanirwe omu burugo bwa boona; bizinesi tekaahandiikire profile egi.", tierPrivateDesc: "Yahandiikirwe nari yakwatwa nyenyo bizinesi kandi tiimu ya makaug yaayikiriza.", tierVerifiedDesc: "Obuhame bureebirwe, akabonero ka bbururu, neebanza omu kurondora kandi efuna leads mbere.", verifiedPrice: "UGX 150,000 buri mwaka", claimBusiness: "Hamya ngu bizinesi egi ni yawe", claimTitle: "Hamya ngu bizinesi egi ni yawe", claimSubtitle: "Yoreka akakwate kaawe na", claimReviewNote: "Tiimu ya makaug neereeba buri kusaba etakahindwire obwanyamuntu.", claimantName: "Eiziina ryawe ryona", claimantRole: "Akakwate kaawe na bizinesi", roleOwner: "Nyenyo", roleDirector: "Dayirekita", roleEmployee: "Omukozi", roleAgent: "Omujwekyerwa owikiriziibwe", proofUrl: "Link y'obuhame bwa boona (tikiteekwa)", proofNotes: "Shoboorora oku turikubaasa kuhamya ngu ori nyenyo nari noojwekyera bizinesi egi", claimConsent: "Ninkakasa ngu okusaba oku n'okwamazima kandi ninyikiriza makaug kureeba obuhame.", submitClaim: "Ohereze okusaba obwanyamuntu", claimSent: "Okusaba obwanyamuntu kwakirwa", claimReference: "Namba y'okusaba", sourceFoundGoogle: "Kishangirwe omuri Google Maps", sourceFirstFound: "Kyabandize kushangwa", sourceLastRefreshed: "Kyaheruka kuhindurwa", publicSourceDisclaimer: "Profile ezimwe zikungaanirwe omu burugo bwa boona kandi makaug tekaazihamize. makaug ti rubaju rw'endagaano yoona. Hamya obukugu, omuntu, omurimo n'ebihembo otakashashure. Banyamuntu babaasa kusaba, kuhindura nari kwihaho profile."
+    tiersTitle: "Manya amakuru g'akabonero koona", tiersSubtitle: "Buri bizinesi neeyoreka oku amakuru gaayo gaahika ahari makaug.", tierFoundDesc: "Amakuru gakungaanirwe omu burugo bwa boona; bizinesi tekaahandiikire profile egi.", tierPrivateDesc: "Yahandiikirwe nari yakwatwa nyenyo bizinesi kandi tiimu ya makaug yaayikiriza.", tierVerifiedDesc: "Obuhame bureebirwe, akabonero ka bbururu, neebanza omu kurondora kandi efuna leads mbere.", verifiedPrice: "UGX {price} buri kwezi", claimBusiness: "Hamya ngu bizinesi egi ni yawe", claimTitle: "Hamya ngu bizinesi egi ni yawe", claimSubtitle: "Yoreka akakwate kaawe na", claimReviewNote: "Tiimu ya makaug neereeba buri kusaba etakahindwire obwanyamuntu.", claimantName: "Eiziina ryawe ryona", claimantRole: "Akakwate kaawe na bizinesi", roleOwner: "Nyenyo", roleDirector: "Dayirekita", roleEmployee: "Omukozi", roleAgent: "Omujwekyerwa owikiriziibwe", proofUrl: "Link y'obuhame bwa boona (tikiteekwa)", proofNotes: "Shoboorora oku turikubaasa kuhamya ngu ori nyenyo nari noojwekyera bizinesi egi", claimConsent: "Ninkakasa ngu okusaba oku n'okwamazima kandi ninyikiriza makaug kureeba obuhame.", submitClaim: "Ohereze okusaba obwanyamuntu", claimSent: "Okusaba obwanyamuntu kwakirwa", claimReference: "Namba y'okusaba", sourceFoundGoogle: "Kishangirwe omuri Google Maps", sourceFirstFound: "Kyabandize kushangwa", sourceLastRefreshed: "Kyaheruka kuhindurwa", publicSourceDisclaimer: "Profile ezimwe zikungaanirwe omu burugo bwa boona kandi makaug tekaazihamize. makaug ti rubaju rw'endagaano yoona. Hamya obukugu, omuntu, omurimo n'ebihembo otakashashure. Banyamuntu babaasa kusaba, kuhindura nari kwihaho profile."
   },
   rn: {
     breadcrumbMarketplace: "Akatare", whatsapp: "WhatsApp (yaaba neetaanisa)", website: "Omukutu (tikiteekwa)", social: "Omukutu gwa social media", ursb: "Namba ya URSB (tikiteekwa)", registrationConsent: "Ninkakasa ngu amakuru ga bizinesi aga gahikire kandi nigaabaasa kureebwa gatakashuuruurwa.", whatsappAction: "WhatsApp", sourceLabel: "Oburugo", requestSent: "Okusaba kuhereirwe. Tiimu ya makaug neija kukugarukamu.", registrationSent: "Okuhandiika kwakirwa", registrationRef: "Namba y'okujuriza",
     rating4: "Enyonyoozi 4+", rating3: "Enyonyoozi 3+", newBusiness: "Empya", aiResultsFound: "Aba nibo baheereza b'emitungo abu nashanga.", submitting: "Nikuhereza...",
-    tiersTitle: "Manya amakuru g'akabonero koona", tiersSubtitle: "Buri bizinesi neeyoreka oku amakuru gaayo gaahika ahari makaug.", tierFoundDesc: "Amakuru gakungaanirwe omu burugo bwa boona; bizinesi tekaahandiikire profile egi.", tierPrivateDesc: "Yahandiikirwe nari yakwatwa nyenyo bizinesi kandi tiimu ya makaug yaayikiriza.", tierVerifiedDesc: "Obuhame bureebirwe, akabonero ka bbururu, neebanza omu kurondora kandi efuna leads mbere.", verifiedPrice: "UGX 150,000 buri mwaka", claimBusiness: "Hamya ngu bizinesi egi ni yawe", claimTitle: "Hamya ngu bizinesi egi ni yawe", claimSubtitle: "Yoreka akakwate kaawe na", claimReviewNote: "Tiimu ya makaug neereeba buri kusaba etakahindwire obwanyamuntu.", claimantName: "Eiziina ryawe ryona", claimantRole: "Akakwate kaawe na bizinesi", roleOwner: "Nyenyo", roleDirector: "Dayirekita", roleEmployee: "Omukozi", roleAgent: "Omujwekyerwa owikiriziibwe", proofUrl: "Link y'obuhame bwa boona (tikiteekwa)", proofNotes: "Shoboorora oku turikubaasa kuhamya ngu ori nyenyo nari noojwekyera bizinesi egi", claimConsent: "Ninkakasa ngu okusaba oku n'okwamazima kandi ninyikiriza makaug kureeba obuhame.", submitClaim: "Ohereze okusaba obwanyamuntu", claimSent: "Okusaba obwanyamuntu kwakirwa", claimReference: "Namba y'okusaba", sourceFoundGoogle: "Kishangirwe omuri Google Maps", sourceFirstFound: "Kyabandize kushangwa", sourceLastRefreshed: "Kyaheruka kuhindurwa", publicSourceDisclaimer: "Profile ezimwe zikungaanirwe omu burugo bwa boona kandi makaug tekaazihamize. makaug ti rubaju rw'endagaano yoona. Hamya obukugu, omuntu, omurimo n'ebihembo otakashashure. Banyamuntu babaasa kusaba, kuhindura nari kwihaho profile."
+    tiersTitle: "Manya amakuru g'akabonero koona", tiersSubtitle: "Buri bizinesi neeyoreka oku amakuru gaayo gaahika ahari makaug.", tierFoundDesc: "Amakuru gakungaanirwe omu burugo bwa boona; bizinesi tekaahandiikire profile egi.", tierPrivateDesc: "Yahandiikirwe nari yakwatwa nyenyo bizinesi kandi tiimu ya makaug yaayikiriza.", tierVerifiedDesc: "Obuhame bureebirwe, akabonero ka bbururu, neebanza omu kurondora kandi efuna leads mbere.", verifiedPrice: "UGX {price} buri kwezi", claimBusiness: "Hamya ngu bizinesi egi ni yawe", claimTitle: "Hamya ngu bizinesi egi ni yawe", claimSubtitle: "Yoreka akakwate kaawe na", claimReviewNote: "Tiimu ya makaug neereeba buri kusaba etakahindwire obwanyamuntu.", claimantName: "Eiziina ryawe ryona", claimantRole: "Akakwate kaawe na bizinesi", roleOwner: "Nyenyo", roleDirector: "Dayirekita", roleEmployee: "Omukozi", roleAgent: "Omujwekyerwa owikiriziibwe", proofUrl: "Link y'obuhame bwa boona (tikiteekwa)", proofNotes: "Shoboorora oku turikubaasa kuhamya ngu ori nyenyo nari noojwekyera bizinesi egi", claimConsent: "Ninkakasa ngu okusaba oku n'okwamazima kandi ninyikiriza makaug kureeba obuhame.", submitClaim: "Ohereze okusaba obwanyamuntu", claimSent: "Okusaba obwanyamuntu kwakirwa", claimReference: "Namba y'okusaba", sourceFoundGoogle: "Kishangirwe omuri Google Maps", sourceFirstFound: "Kyabandize kushangwa", sourceLastRefreshed: "Kyaheruka kuhindurwa", publicSourceDisclaimer: "Profile ezimwe zikungaanirwe omu burugo bwa boona kandi makaug tekaazihamize. makaug ti rubaju rw'endagaano yoona. Hamya obukugu, omuntu, omurimo n'ebihembo otakashashure. Banyamuntu babaasa kusaba, kuhindura nari kwihaho profile."
   },
   sm: {
     breadcrumbMarketplace: "Akatale", whatsapp: "WhatsApp (bwe kiba kya njawulo)", website: "Omukutu (si kya tteeka)", social: "Omukutu gwa social media", ursb: "Namba ya URSB (si kya tteeka)", registrationConsent: "Nkakasa nti ebikwata ku bizinesi bino bituufu era biyinza okukeberebwa nga tebinnalabika.", whatsappAction: "WhatsApp", sourceLabel: "Ensibuko", requestSent: "Okusaba kuweereddwayo. Ttiimu ya makaug ejja kukuddira.", registrationSent: "Okwewandiisa kufunye", registrationRef: "Namba y'okujuliza",
     rating4: "Emmunyeenye 4+", rating3: "Emmunyeenye 3+", newBusiness: "Mpya", aiResultsFound: "Bano be baweereza b'ebintu be nsanze.", submitting: "Kuweereza...",
-    tiersTitle: "Manya amakulu g'akabonero buli kamwe", tiersSubtitle: "Buli bizinesi eraga engeri amakuru gaayo gye gaatuuka ku makaug.", tierFoundDesc: "Amakuru gakungaaniziddwa mu nsibuko ya lukale; bizinesi tennakakasa profile eno.", tierPrivateDesc: "Yawandiikibwa oba yakwatwa nnannyini bizinesi era ttiimu ya makaug n'egikkiriza.", tierVerifiedDesc: "Obujulizi bwakebereddwa, erina akabonero aka bbululu, esooka mu kunoonya era efuna leads okusooka.", verifiedPrice: "UGX 150,000 buli mwaka", claimBusiness: "Gamba nti bizinesi eno yiiyo", claimTitle: "Gamba nti bizinesi eno yiiyo", claimSubtitle: "Laga enkolagana yo ne", claimReviewNote: "Ttiimu ya makaug ekebera buli kusaba nga obwannannyini tebunnakyusibwa.", claimantName: "Erinnya lyo mu bujjuvu", claimantRole: "Enkolagana yo ne bizinesi", roleOwner: "Nnannyini", roleDirector: "Dayirekita", roleEmployee: "Mukozi", roleAgent: "Omubaka alina olukusa", proofUrl: "Link y'obujulizi bwa lukale (si kya tteeka)", proofNotes: "Nhonyola engeri gye tuyinza okukakasa nti bizinesi eno yiiyo oba ogikiikirira", claimConsent: "Nkakasa nti okusaba kuno kwa mazima era nzikiriza makaug okukebere obujulizi.", submitClaim: "Weereza okusaba obwannannyini", claimSent: "Okusaba obwannannyini kufunye", claimReference: "Namba y'okusaba", sourceFoundGoogle: "Kisangiddwa ku Google Maps", sourceFirstFound: "Kyasooka kusangibwa", sourceLastRefreshed: "Kyaddamu okukeberwa", publicSourceDisclaimer: "Profile ezimu zikungaaniziddwa mu nsibuko za lukale era makaug tezinnazikakasa. makaug si ludda mu ndagaano. Kakasa obukugu, omuntu, omulimu n'ebisale nga tonnasasula. Bannannyini bayinza okusaba, okutereeza oba okuggyawo profile."
+    tiersTitle: "Manya amakulu g'akabonero buli kamwe", tiersSubtitle: "Buli bizinesi eraga engeri amakuru gaayo gye gaatuuka ku makaug.", tierFoundDesc: "Amakuru gakungaaniziddwa mu nsibuko ya lukale; bizinesi tennakakasa profile eno.", tierPrivateDesc: "Yawandiikibwa oba yakwatwa nnannyini bizinesi era ttiimu ya makaug n'egikkiriza.", tierVerifiedDesc: "Obujulizi bwakebereddwa, erina akabonero aka bbululu, esooka mu kunoonya era efuna leads okusooka.", verifiedPrice: "UGX {price} buli mwezi", claimBusiness: "Gamba nti bizinesi eno yiiyo", claimTitle: "Gamba nti bizinesi eno yiiyo", claimSubtitle: "Laga enkolagana yo ne", claimReviewNote: "Ttiimu ya makaug ekebera buli kusaba nga obwannannyini tebunnakyusibwa.", claimantName: "Erinnya lyo mu bujjuvu", claimantRole: "Enkolagana yo ne bizinesi", roleOwner: "Nnannyini", roleDirector: "Dayirekita", roleEmployee: "Mukozi", roleAgent: "Omubaka alina olukusa", proofUrl: "Link y'obujulizi bwa lukale (si kya tteeka)", proofNotes: "Nhonyola engeri gye tuyinza okukakasa nti bizinesi eno yiiyo oba ogikiikirira", claimConsent: "Nkakasa nti okusaba kuno kwa mazima era nzikiriza makaug okukebere obujulizi.", submitClaim: "Weereza okusaba obwannannyini", claimSent: "Okusaba obwannannyini kufunye", claimReference: "Namba y'okusaba", sourceFoundGoogle: "Kisangiddwa ku Google Maps", sourceFirstFound: "Kyasooka kusangibwa", sourceLastRefreshed: "Kyaddamu okukeberwa", publicSourceDisclaimer: "Profile ezimu zikungaaniziddwa mu nsibuko za lukale era makaug tezinnazikakasa. makaug si ludda mu ndagaano. Kakasa obukugu, omuntu, omulimu n'ebisale nga tonnasasula. Bannannyini bayinza okusaba, okutereeza oba okuggyawo profile."
   },
   am: {
     breadcrumbMarketplace: "ገበያ", whatsapp: "WhatsApp (የተለየ ከሆነ)", website: "ድህረ ገጽ (አማራጭ)", social: "የማህበራዊ ሚዲያ አገናኝ", ursb: "የURSB ቁጥር (አማራጭ)", registrationConsent: "እነዚህ የንግድ መረጃዎች ትክክል መሆናቸውን እና ከመታተማቸው በፊት ሊመረመሩ እንደሚችሉ አረጋግጣለሁ።", whatsappAction: "WhatsApp", sourceLabel: "ምንጭ", requestSent: "ጥያቄው ተልኳል። የmakaug ቡድን ይከታተላል።", registrationSent: "ምዝገባው ደርሷል", registrationRef: "ማጣቀሻ",
     rating4: "4+ ኮከቦች", rating3: "3+ ኮከቦች", newBusiness: "አዲስ", aiResultsFound: "ያገኘኋቸው የንብረት አገልግሎት ሰጪዎች እነዚህ ናቸው።", submitting: "በመላክ ላይ...",
-    tiersTitle: "የእያንዳንዱን ምልክት ትርጉም ይወቁ", tiersSubtitle: "እያንዳንዱ ንግድ መረጃው ወደ makaug እንዴት እንደደረሰ ያሳያል።", tierFoundDesc: "ከህዝብ ምንጭ የተሰበሰበ ሲሆን ንግዱ መገለጫውን አልጠየቀም ወይም አላረጋገጠም።", tierPrivateDesc: "በንግዱ ባለቤት የቀረበ ወይም የተጠየቀ እና በmakaug ቡድን የጸደቀ።", tierVerifiedDesc: "ማስረጃ የተመረመረ፣ ሰማያዊ ምልክት፣ በፍለጋ ቀዳሚ እና ሊድ ቀድሞ የሚቀበል።", verifiedPrice: "UGX 150,000/ዓመት", claimBusiness: "ይህን ንግድ ይጠይቁ", claimTitle: "ይህን ንግድ ይጠይቁ", claimSubtitle: "ከዚህ ጋር ያለዎትን ግንኙነት ያሳዩ", claimReviewNote: "የmakaug ቡድን ባለቤትነት ከመቀየሩ በፊት እያንዳንዱን ጥያቄ ይመረምራል።", claimantName: "ሙሉ ስምዎ", claimantRole: "ከንግዱ ጋር ያለዎት ግንኙነት", roleOwner: "ባለቤት", roleDirector: "ዳይሬክተር", roleEmployee: "ሰራተኛ", roleAgent: "የተፈቀደ ወኪል", proofUrl: "የህዝብ ማስረጃ አገናኝ (አማራጭ)", proofNotes: "ንግዱን እንደሚያስተዳድሩ ወይም እንደሚወክሉ እንዴት እንደምናረጋግጥ ይግለጹ", claimConsent: "ጥያቄው እውነት መሆኑን አረጋግጣለሁ እና makaug ማስረጃውን እንዲመረምር እስማማለሁ።", submitClaim: "የባለቤትነት ጥያቄ ላክ", claimSent: "የባለቤትነት ጥያቄ ደርሷል", claimReference: "የጥያቄ ማጣቀሻ", sourceFoundGoogle: "በGoogle Maps ተገኝቷል", sourceFirstFound: "መጀመሪያ የተገኘ", sourceLastRefreshed: "መጨረሻ የታደሰ", publicSourceDisclaimer: "አንዳንድ መገለጫዎች ከህዝብ ምንጮች የተሰበሰቡ እና በmakaug ያልተረጋገጡ ናቸው። makaug የማንኛውም ስምምነት አካል አይደለም። ከመክፈል በፊት ብቃት፣ ማንነት፣ ሥራ እና ክፍያን ያረጋግጡ። ባለቤቶች መገለጫን ሊጠይቁ፣ ሊያርሙ ወይም እንዲወገድ ሊጠይቁ ይችላሉ።"
+    tiersTitle: "የእያንዳንዱን ምልክት ትርጉም ይወቁ", tiersSubtitle: "እያንዳንዱ ንግድ መረጃው ወደ makaug እንዴት እንደደረሰ ያሳያል።", tierFoundDesc: "ከህዝብ ምንጭ የተሰበሰበ ሲሆን ንግዱ መገለጫውን አልጠየቀም ወይም አላረጋገጠም።", tierPrivateDesc: "በንግዱ ባለቤት የቀረበ ወይም የተጠየቀ እና በmakaug ቡድን የጸደቀ።", tierVerifiedDesc: "ማስረጃ የተመረመረ፣ ሰማያዊ ምልክት፣ በፍለጋ ቀዳሚ እና ሊድ ቀድሞ የሚቀበል።", verifiedPrice: "UGX {price}/ወር", claimBusiness: "ይህን ንግድ ይጠይቁ", claimTitle: "ይህን ንግድ ይጠይቁ", claimSubtitle: "ከዚህ ጋር ያለዎትን ግንኙነት ያሳዩ", claimReviewNote: "የmakaug ቡድን ባለቤትነት ከመቀየሩ በፊት እያንዳንዱን ጥያቄ ይመረምራል።", claimantName: "ሙሉ ስምዎ", claimantRole: "ከንግዱ ጋር ያለዎት ግንኙነት", roleOwner: "ባለቤት", roleDirector: "ዳይሬክተር", roleEmployee: "ሰራተኛ", roleAgent: "የተፈቀደ ወኪል", proofUrl: "የህዝብ ማስረጃ አገናኝ (አማራጭ)", proofNotes: "ንግዱን እንደሚያስተዳድሩ ወይም እንደሚወክሉ እንዴት እንደምናረጋግጥ ይግለጹ", claimConsent: "ጥያቄው እውነት መሆኑን አረጋግጣለሁ እና makaug ማስረጃውን እንዲመረምር እስማማለሁ።", submitClaim: "የባለቤትነት ጥያቄ ላክ", claimSent: "የባለቤትነት ጥያቄ ደርሷል", claimReference: "የጥያቄ ማጣቀሻ", sourceFoundGoogle: "በGoogle Maps ተገኝቷል", sourceFirstFound: "መጀመሪያ የተገኘ", sourceLastRefreshed: "መጨረሻ የታደሰ", publicSourceDisclaimer: "አንዳንድ መገለጫዎች ከህዝብ ምንጮች የተሰበሰቡ እና በmakaug ያልተረጋገጡ ናቸው። makaug የማንኛውም ስምምነት አካል አይደለም። ከመክፈል በፊት ብቃት፣ ማንነት፣ ሥራ እና ክፍያን ያረጋግጡ። ባለቤቶች መገለጫን ሊጠይቁ፣ ሊያርሙ ወይም እንዲወገድ ሊጠይቁ ይችላሉ።"
   },
   ar: {
     breadcrumbMarketplace: "السوق", whatsappAction: "WhatsApp", sourceLabel: "المصدر", requestSent: "تم إرسال الطلب. سيتابع معك فريق makaug.", registrationSent: "تم استلام التسجيل", registrationRef: "المرجع",
     rating4: "4+ نجوم", rating3: "3+ نجوم", newBusiness: "جديد", aiResultsFound: "هؤلاء هم مقدمو الخدمات العقارية الذين وجدتهم.", submitting: "جار الإرسال...",
-    tiersTitle: "اعرف معنى كل شارة إدراج", tiersSubtitle: "يوضح كل نشاط كيف وصلت معلوماته إلى makaug لتختار على بينة.", tierFoundDesc: "جُمعت من مصدر عام؛ لم يطالب النشاط بهذا الملف ولم يوثقه لدى makaug.", tierPrivateDesc: "قدمه أو طالب به مالك النشاط ووافق عليه فريق makaug.", tierVerifiedDesc: "تمت مراجعة الأدلة، شارة زرقاء، أولوية في البحث واستلام العملاء المحتملين أولا.", verifiedPrice: "150,000 UGX سنويا", claimBusiness: "المطالبة بهذا النشاط", claimTitle: "المطالبة بهذا النشاط", claimSubtitle: "أثبت علاقتك بـ", claimReviewNote: "يراجع فريق makaug كل مطالبة قبل تغيير الملكية.", claimantName: "اسمك الكامل", claimantRole: "علاقتك بالنشاط", roleOwner: "المالك", roleDirector: "المدير", roleEmployee: "موظف", roleAgent: "وكيل مفوض", proofUrl: "رابط إثبات عام (اختياري)", proofNotes: "اشرح كيف يمكننا التأكد من أنك تملك هذا النشاط أو تمثله", claimConsent: "أؤكد أن هذه المطالبة صحيحة وأوافق على تحقق makaug من الأدلة.", submitClaim: "إرسال مطالبة الملكية", claimSent: "تم استلام مطالبة الملكية", claimReference: "مرجع المطالبة", sourceFoundGoogle: "موجود عبر خرائط Google", sourceFirstFound: "تاريخ أول اكتشاف", sourceLastRefreshed: "آخر تحديث", publicSourceDisclaimer: "تُجمع بعض الملفات من مصادر عامة ولم توثقها makaug. makaug ليست طرفا في أي صفقة. تحقق من المؤهلات والهوية والنطاق والرسوم قبل الدفع. يمكن للمالكين المطالبة بالملف أو تصحيحه أو طلب حذفه."
+    tiersTitle: "اعرف معنى كل شارة إدراج", tiersSubtitle: "يوضح كل نشاط كيف وصلت معلوماته إلى makaug لتختار على بينة.", tierFoundDesc: "جُمعت من مصدر عام؛ لم يطالب النشاط بهذا الملف ولم يوثقه لدى makaug.", tierPrivateDesc: "قدمه أو طالب به مالك النشاط ووافق عليه فريق makaug.", tierVerifiedDesc: "تمت مراجعة الأدلة، شارة زرقاء، أولوية في البحث واستلام العملاء المحتملين أولا.", verifiedPrice: "{price} UGX شهريا", claimBusiness: "المطالبة بهذا النشاط", claimTitle: "المطالبة بهذا النشاط", claimSubtitle: "أثبت علاقتك بـ", claimReviewNote: "يراجع فريق makaug كل مطالبة قبل تغيير الملكية.", claimantName: "اسمك الكامل", claimantRole: "علاقتك بالنشاط", roleOwner: "المالك", roleDirector: "المدير", roleEmployee: "موظف", roleAgent: "وكيل مفوض", proofUrl: "رابط إثبات عام (اختياري)", proofNotes: "اشرح كيف يمكننا التأكد من أنك تملك هذا النشاط أو تمثله", claimConsent: "أؤكد أن هذه المطالبة صحيحة وأوافق على تحقق makaug من الأدلة.", submitClaim: "إرسال مطالبة الملكية", claimSent: "تم استلام مطالبة الملكية", claimReference: "مرجع المطالبة", sourceFoundGoogle: "موجود عبر خرائط Google", sourceFirstFound: "تاريخ أول اكتشاف", sourceLastRefreshed: "آخر تحديث", publicSourceDisclaimer: "تُجمع بعض الملفات من مصادر عامة ولم توثقها makaug. makaug ليست طرفا في أي صفقة. تحقق من المؤهلات والهوية والنطاق والرسوم قبل الدفع. يمكن للمالكين المطالبة بالملف أو تصحيحه أو طلب حذفه."
   }
 });
 
 Object.entries(MARKETPLACE_UI_COMPLETIONS).forEach(([language, values]) => {
+  Object.assign(MARKETPLACE_UI_OVERRIDES[language], values);
+});
+
+const MARKETPLACE_POLISH_I18N = Object.freeze({
+  lg: { newBusiness: "Empya", verifiedPrice: "UGX {price} buli mwezi", foundOnlineDescriptionTemplate: "{category} aweereza mu {district}. Kisangiddwa ku {source}; kakasa obuweereza n'obudde obuliwo butereevu ne bizinesi." },
+  sw: { verifiedPrice: "UGX {price} kwa mwezi", foundOnlineDescriptionTemplate: "{category} inayohudumia {district}. Imepatikana kupitia {source}; thibitisha huduma na upatikanaji moja kwa moja na biashara." },
+  ac: { verifiedPrice: "UGX {price} i dwe", foundOnlineDescriptionTemplate: "{category} ma tiyo i {district}. Kinongo ki {source}; mok tic ki kare ma tye atir ki bici." },
+  ny: { verifiedPrice: "UGX {price} buri kwezi", foundOnlineDescriptionTemplate: "{category} erikuheereza omuri {district}. Kishangirwe omuri {source}; hamya obuheereza n'obwire buteekateekire na bizinesi." },
+  rn: { verifiedPrice: "UGX {price} buri kwezi", foundOnlineDescriptionTemplate: "{category} erikuheereza omuri {district}. Kishangirwe omuri {source}; hamya obuheereza n'obwire buteekateekire na bizinesi." },
+  sm: { newBusiness: "Empya", verifiedPrice: "UGX {price} buli mwezi", foundOnlineDescriptionTemplate: "{category} aweereza mu {district}. Kisangiddwa ku {source}; kakasa obuweereza n'obudde obuliwo butereevu ne bizinesi." },
+  am: { verifiedPrice: "UGX {price}/ወር", foundOnlineDescriptionTemplate: "{district}ን የሚያገለግል {category}። በ{source} ላይ ተገኝቷል፤ አገልግሎትና መገኘትን በቀጥታ ከንግዱ ጋር ያረጋግጡ።" },
+  ar: { verifiedPrice: "{price} UGX شهريا", foundOnlineDescriptionTemplate: "{category} يخدم {district}. موجود عبر {source}؛ تحقق من الخدمات والتوفر مباشرة مع النشاط." }
+});
+
+Object.entries(MARKETPLACE_POLISH_I18N).forEach(([language, values]) => {
   Object.assign(MARKETPLACE_UI_OVERRIDES[language], values);
 });
 
@@ -3541,6 +3558,32 @@ const MARKETPLACE_CATEGORY_LABELS = Object.freeze({
   commercial_services: { en: "Commercial property services", lg: "Obuweereza bw'ebizimbe bya bizinesi", sw: "Huduma za mali za biashara", ac: "Tic me ot pa bici", ny: "Obuheereza bw'emitungo ya bizinesi", rn: "Obuheereza bw'emitungo ya bizinesi", sm: "Obuweereza bwa bizinesi", am: "የንግድ ንብረት አገልግሎቶች", ar: "خدمات العقارات التجارية" }
 });
 
+const MARKETPLACE_CATEGORY_PALETTE = Object.freeze({
+  painters: { accent: "#d97706", soft: "#fffbeb" },
+  plumbers: { accent: "#2563eb", soft: "#eff6ff" },
+  electricians: { accent: "#ca8a04", soft: "#fefce8" },
+  builders: { accent: "#ea580c", soft: "#fff7ed" },
+  surveyors: { accent: "#4f46e5", soft: "#eef2ff" },
+  property_lawyers: { accent: "#7c3aed", soft: "#f5f3ff" },
+  brokers: { accent: "#15803d", soft: "#f0fdf4" },
+  valuers: { accent: "#0f766e", soft: "#f0fdfa" },
+  movers: { accent: "#0891b2", soft: "#ecfeff" },
+  architects: { accent: "#e11d48", soft: "#fff1f2" },
+  security: { accent: "#475569", soft: "#f8fafc" },
+  solar: { accent: "#4d7c0f", soft: "#f7fee7" },
+  cleaning: { accent: "#0284c7", soft: "#f0f9ff" },
+  property_managers: { accent: "#047857", soft: "#ecfdf5" },
+  mortgage_providers: { accent: "#1e3a8a", soft: "#eff6ff" },
+  insurance: { accent: "#881337", soft: "#fff1f2" },
+  interior_design: { accent: "#db2777", soft: "#fdf2f8" },
+  borehole_water: { accent: "#0e7490", soft: "#ecfeff" },
+  developers: { accent: "#a16207", soft: "#fefce8" },
+  commercial_services: { accent: "#6b7280", soft: "#f3f4f6" },
+  other: { accent: "#6b7280", soft: "#f3f4f6" }
+});
+
+const MARKETPLACE_DEFAULT_PALETTE = Object.freeze({ accent: "#6b7280", soft: "#f3f4f6" });
+
 const marketplaceState = {
   ready: false,
   loading: false,
@@ -3553,6 +3596,7 @@ const marketplaceState = {
   limit: 20,
   activeCategory: "",
   categoryCounts: {},
+  verifiedPricing: { amount_ugx: 150000, billing_period: "month" },
   profileDetails: {},
   manageToken: "",
   managedBusiness: null,
@@ -3567,12 +3611,48 @@ function marketplaceCategoryLabel(key) {
   return MARKETPLACE_CATEGORY_LABELS[key]?.[currentLang] || MARKETPLACE_CATEGORY_LABELS[key]?.en || key;
 }
 
+function marketplaceInterpolate(template, values = {}) {
+  return String(template || "").replace(/\{([a-z_]+)\}/gi, (_match, key) => String(values[key] ?? ""));
+}
+
+function marketplaceVerifiedPriceLabel() {
+  const amount = Number(marketplaceState.verifiedPricing?.amount_ugx || 150000).toLocaleString("en-US");
+  return marketplaceInterpolate(marketplaceTr("verifiedPrice"), { price: amount });
+}
+
+function marketplaceCategoryTheme(key) {
+  return MARKETPLACE_CATEGORY_PALETTE[key] || MARKETPLACE_DEFAULT_PALETTE;
+}
+
+function marketplaceCategoryStyle(key) {
+  const theme = marketplaceCategoryTheme(key);
+  return `--marketplace-category-accent:${theme.accent};--marketplace-category-soft:${theme.soft}`;
+}
+
+function marketplaceApplyCategoryControlTheme(category = marketplaceState.activeCategory) {
+  const select = document.getElementById("marketplace-category");
+  if (!select) return;
+  select.classList.add("marketplace-category-select");
+  select.setAttribute("style", marketplaceCategoryStyle(category || "other"));
+}
+
+function marketplaceBusinessDescription(business = {}) {
+  const raw = cleanText(business.description || "");
+  const isGenerated = /found online via google maps;?\s*confirm services and availability directly with the business\.?/i.test(raw);
+  if (!isGenerated) return raw;
+  return marketplaceInterpolate(marketplaceTr("foundOnlineDescriptionTemplate"), {
+    category: marketplaceCategoryLabel(business.category),
+    district: cleanText(business.district || business.area || "Uganda"),
+    source: "Google Maps"
+  });
+}
+
 function applyMarketplaceLanguageUI() {
   const root = document.getElementById("page-marketplace");
   if (!root) return;
   document.querySelectorAll("[data-marketplace-i18n]").forEach((element) => {
     const key = element.getAttribute("data-marketplace-i18n");
-    if (key) element.textContent = marketplaceTr(key);
+    if (key) element.textContent = key === "verifiedPrice" ? marketplaceVerifiedPriceLabel() : marketplaceTr(key);
   });
   document.querySelectorAll("[data-marketplace-placeholder]").forEach((element) => {
     const key = element.getAttribute("data-marketplace-placeholder");
@@ -3583,6 +3663,7 @@ function applyMarketplaceLanguageUI() {
     element.dir = currentLang === "ar" ? "rtl" : "ltr";
   });
   populateMarketplaceSelects();
+  marketplaceApplyCategoryControlTheme();
   renderMarketplaceCategoryChips();
   renderMarketplaceBusinesses();
 }
@@ -3607,6 +3688,7 @@ function populateMarketplaceSelects() {
     const filter = document.getElementById("marketplace-category");
     if (filter) filter.value = marketplaceState.activeCategory;
   }
+  marketplaceApplyCategoryControlTheme();
 }
 
 function marketplaceRouteFilters() {
@@ -3630,6 +3712,7 @@ function syncMarketplaceFilterControls(filters = marketplaceRouteFilters()) {
   });
   marketplaceState.activeCategory = filters.category || "";
   marketplaceState.page = filters.page || 1;
+  marketplaceApplyCategoryControlTheme();
 }
 
 function renderMarketplaceLoading() {
@@ -3643,8 +3726,8 @@ function renderMarketplaceLoading() {
 function marketplaceTierHtml(business = {}) {
   const tier = business.tier || "found_online";
   if (tier === "verified") return `<span class="marketplace-verified-seal" title="${adminAttr(marketplaceTr("tierVerified"))}"><i class="fas fa-check text-xs"></i></span>`;
-  if (tier === "private") return `<span class="inline-flex items-center gap-1 rounded-full bg-blue-50 border border-blue-100 text-blue-700 px-2 py-1 text-[11px] font-black"><i class="fas fa-user-check"></i>${adminEscape(marketplaceTr("tierPrivate"))}</span>`;
-  return `<span class="inline-flex items-center gap-1 rounded-full bg-gray-50 border border-gray-200 text-gray-600 px-2 py-1 text-[11px] font-black"><i class="fas fa-globe"></i>${adminEscape(marketplaceTr("tierFound"))}</span>`;
+  if (tier === "private") return `<span class="inline-flex max-w-full items-center gap-1 whitespace-normal rounded-full bg-blue-50 border border-blue-100 text-blue-700 px-2 py-1 text-left text-[11px] leading-4 font-black"><i class="fas fa-user-check shrink-0"></i>${adminEscape(marketplaceTr("tierPrivate"))}</span>`;
+  return `<span class="inline-flex max-w-full items-center gap-1 whitespace-normal rounded-full bg-gray-50 border border-gray-200 text-gray-600 px-2 py-1 text-left text-[11px] leading-4 font-black"><i class="fas fa-globe shrink-0"></i>${adminEscape(marketplaceTr("tierFound"))}</span>`;
 }
 
 function marketplaceContactUrl(type, value = "") {
@@ -3757,28 +3840,31 @@ function renderMarketplaceBusinesses() {
     const sourceUrl = foundOnline ? cleanText(business.source_url || "") : "";
     const firstFound = marketplaceFormatDate(business.first_seen);
     const lastRefreshed = marketplaceFormatDate(business.last_refreshed);
-    const stars = rating ? `<span class="text-amber-500"><i class="fas fa-star"></i></span> ${rating.toFixed(1)} <span class="text-gray-400">(${Number(business.rating_count || 0)})</span>` : `<span class="text-gray-400">${adminEscape(marketplaceTr("newBusiness"))}</span>`;
-    return `<article class="marketplace-business-row bg-white border border-gray-200 rounded-xl p-4" data-tier="${adminAttr(business.tier || "found_online")}">
+    const description = marketplaceBusinessDescription(business);
+    const stars = rating
+      ? `<span class="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-amber-700"><i class="fas fa-star" aria-hidden="true"></i>${rating.toFixed(1)} <span class="text-amber-700/70">(${Number(business.rating_count || 0)})</span></span>`
+      : `<span class="inline-flex items-center rounded-full bg-gray-100 px-2 py-1 text-gray-600">${adminEscape(marketplaceTr("newBusiness"))}</span>`;
+    return `<article class="marketplace-business-row bg-white border border-gray-200 rounded-xl p-4" data-tier="${adminAttr(business.tier || "found_online")}" style="${adminAttr(marketplaceCategoryStyle(business.category))}">
       <div class="flex items-start gap-3">
-        <div class="marketplace-category-icon w-12 h-12 shrink-0 rounded-lg flex items-center justify-center" data-palette="${Math.max(0, (marketplaceState.categories || []).findIndex((item) => item.key === business.category)) % 6}"><i class="fas ${adminAttr(marketplaceState.categories.find((item) => item.key === business.category)?.icon || "fa-briefcase")}"></i></div>
+        <div class="marketplace-category-icon w-12 h-12 shrink-0 rounded-lg flex items-center justify-center"><i class="fas ${adminAttr(marketplaceState.categories.find((item) => item.key === business.category)?.icon || "fa-briefcase")}"></i></div>
         <div class="min-w-0 flex-1">
-          <div class="flex items-start justify-between gap-3">
-            <div class="min-w-0"><h3 class="font-black text-gray-950 truncate">${adminEscape(business.name)}</h3><p class="text-xs font-bold text-[#b3134f] mt-0.5">${adminEscape(category)}</p></div>
-            ${marketplaceTierHtml(business)}
+          <div class="flex flex-col items-start gap-1.5 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+            <div class="min-w-0 w-full"><h3 class="font-black leading-snug text-gray-950 break-words">${adminEscape(business.name)}</h3><p class="marketplace-category-label text-xs font-bold mt-0.5">${adminEscape(category)}</p></div>
+            <div class="w-full sm:w-auto sm:shrink-0">${marketplaceTierHtml(business)}</div>
           </div>
-          <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-600"><span><i class="fas fa-location-dot text-[#b3134f] mr-1"></i>${adminEscape(location || business.district)}</span><span>${stars}</span></div>
-          <p class="mt-2 text-sm text-gray-600 line-clamp-1">${adminEscape(business.description || "")}</p>
+          <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-600"><span class="inline-flex items-center gap-1"><i class="fas fa-location-dot marketplace-category-label" aria-hidden="true"></i>${adminEscape(location || business.district)}</span>${stars}</div>
+          <p class="mt-2 text-sm text-gray-600 line-clamp-2">${adminEscape(description)}</p>
           <div class="mt-3 flex items-center justify-between gap-3 flex-wrap">
             <div class="flex gap-2">
               ${business.phone ? `<a href="${adminAttr(marketplaceContactUrl("phone", business.phone))}" class="w-9 h-9 rounded-lg border border-gray-200 text-gray-700 inline-flex items-center justify-center hover:border-[#b3134f] hover:text-[#b3134f]" title="${adminAttr(marketplaceTr("call"))}" aria-label="${adminAttr(marketplaceTr("call"))}"><i class="fas fa-phone"></i></a>` : ""}
               ${business.whatsapp || business.phone ? `<a href="${adminAttr(marketplaceContactUrl("whatsapp", business.whatsapp || business.phone))}" target="_blank" rel="noopener" class="w-9 h-9 rounded-lg border border-green-200 text-green-700 inline-flex items-center justify-center hover:bg-green-50" title="WhatsApp" aria-label="WhatsApp"><i class="fab fa-whatsapp"></i></a>` : ""}
               ${!business.phone && !business.whatsapp && socialUrl ? `<a href="${adminAttr(socialUrl)}" target="_blank" rel="noopener nofollow" class="w-9 h-9 rounded-lg border border-blue-200 text-blue-700 inline-flex items-center justify-center hover:bg-blue-50" title="Social media" aria-label="Social media"><i class="fas fa-arrow-up-right-from-square"></i></a>` : ""}
             </div>
-            <button type="button" onclick="marketplaceToggleProfile('${adminAttr(business.id)}')" class="text-sm font-black text-[#b3134f] hover:underline">${adminEscape(marketplaceTr("profile"))} <i class="fas fa-chevron-down ml-1 text-[10px]"></i></button>
+            <button type="button" onclick="marketplaceToggleProfile('${adminAttr(business.id)}')" class="marketplace-category-label text-sm font-black hover:underline">${adminEscape(marketplaceTr("profile"))} <i class="fas fa-chevron-down ml-1 text-[10px]"></i></button>
           </div>
           <div id="marketplace-profile-${adminAttr(business.id)}" class="hidden mt-3 border-t border-gray-100 pt-3 text-xs text-gray-600 space-y-1">
             ${Array.isArray(business.profile_images) && business.profile_images.length ? `<div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pb-2">${business.profile_images.slice(0, 4).map((url, index) => `<img src="${adminAttr(url)}" alt="${adminAttr(`${business.name} business photo ${index + 1}`)}" loading="lazy" class="h-24 w-full rounded-lg border border-gray-200 object-cover">`).join("")}</div>` : ""}
-            <div class="text-sm leading-6 text-gray-700">${adminEscape(business.description || "")}</div>
+            <div class="text-sm leading-6 text-gray-700">${adminEscape(description)}</div>
             <div><span class="font-black text-gray-800">${adminEscape(marketplaceTr("serves"))}:</span> ${adminEscape((business.serves_regions || []).join(", ") || business.district)}</div>
             ${business.website ? `<div><a href="${adminAttr(business.website)}" target="_blank" rel="noopener nofollow" class="text-blue-700 font-bold hover:underline">${adminEscape(business.website)}</a></div>` : ""}
             ${socialUrl ? `<div><a href="${adminAttr(socialUrl)}" target="_blank" rel="noopener nofollow" class="text-blue-700 font-bold hover:underline">${adminEscape(socialUrl)}</a></div>` : ""}
@@ -3814,7 +3900,7 @@ function renderMarketplaceCategoryChips() {
   if (!wrap) return;
   const allCount = Object.values(marketplaceState.categoryCounts || {}).reduce((sum, count) => sum + Number(count || 0), 0);
   const items = [{ key: "", label: marketplaceTr("allServices"), icon: "fa-border-all", count: allCount }, ...(marketplaceState.categories || []).map((item) => ({ ...item, label: marketplaceCategoryLabel(item.key), count: Number(marketplaceState.categoryCounts?.[item.key] || 0) }))];
-  wrap.innerHTML = items.map((item) => `<button type="button" onclick="selectMarketplaceCategory('${adminAttr(item.key)}')" class="marketplace-category-chip shrink-0 inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-2 text-xs font-black text-gray-700" aria-pressed="${item.key === marketplaceState.activeCategory ? "true" : "false"}"><i class="fas ${adminAttr(item.icon || "fa-briefcase")}"></i>${adminEscape(item.label)}<span class="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px]">${item.count}</span></button>`).join("");
+  wrap.innerHTML = items.map((item) => `<button type="button" onclick="selectMarketplaceCategory('${adminAttr(item.key)}')" class="marketplace-category-chip shrink-0 inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-2 text-xs font-black" style="${adminAttr(marketplaceCategoryStyle(item.key || "other"))}" aria-pressed="${item.key === marketplaceState.activeCategory ? "true" : "false"}"><i class="fas ${adminAttr(item.icon || "fa-briefcase")}"></i>${adminEscape(item.label)}<span class="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-600">${item.count}</span></button>`).join("");
 }
 
 async function loadMarketplacePage({ force = false } = {}) {
@@ -3826,6 +3912,7 @@ async function loadMarketplacePage({ force = false } = {}) {
       const [configResponse, statsResponse] = await Promise.all([apiRequest("/api/marketplace/config", { skipAuth: true }), apiRequest("/api/marketplace/stats", { skipAuth: true })]);
       marketplaceState.categories = configResponse?.data?.categories || [];
       marketplaceState.districts = configResponse?.data?.districts || [];
+      marketplaceState.verifiedPricing = configResponse?.data?.verified_pricing || marketplaceState.verifiedPricing;
       marketplaceState.categoryCounts = statsResponse?.data?.by_category || {};
       const total = Number(statsResponse?.data?.total || 0);
       const totalEl = document.getElementById("marketplace-live-total");
