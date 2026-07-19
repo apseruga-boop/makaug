@@ -16,6 +16,9 @@ Google's `local_government_office` and `government_office` annotations are
 corroborated against the business name before rejection because Places can add
 those types to legitimate surveyors and law firms. Explicit council, ministry,
 city hall, courthouse, or government-office names are still rejected.
+When an otherwise plausible category name conflicts with a different excluded
+Google type, the row is held for staff review instead of being public or hard
+hidden. Explicit exclusion wording in the name still wins and is hidden.
 
 Thin district searches may produce `no_qualified_results`. Zero is authoritative; the crawler does not pad the directory with unrelated places.
 

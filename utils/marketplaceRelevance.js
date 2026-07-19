@@ -209,14 +209,8 @@ function classifyMarketplaceRelevance(input = {}) {
     .map(clean)
     .filter(Boolean)
     .join(' ');
-  const excludedType = types.find((type) => (
-    GLOBAL_EXCLUDED_TYPES.has(type) && !CONTEXTUAL_EXCLUDED_TYPES.has(type)
-  ));
   if (!policy) {
     return { decision: 'reject', score: 0, reason: 'invalid_category', category, google_types: types };
-  }
-  if (excludedType) {
-    return { decision: 'reject', score: 0, reason: `excluded_google_type:${excludedType}`, category, google_types: types };
   }
   const globalNameExclusion = GLOBAL_NAME_EXCLUSIONS.find((entry) => entry.pattern.test(text));
   if (globalNameExclusion) {
@@ -229,6 +223,24 @@ function classifyMarketplaceRelevance(input = {}) {
   const matchingType = policy.includedType && types.includes(policy.includedType) ? policy.includedType : '';
   const strongMatch = firstPatternMatch(policy.strong, text);
   const weakMatch = firstPatternMatch(policy.weak, text);
+  const excludedType = types.find((type) => (
+    GLOBAL_EXCLUDED_TYPES.has(type) && !CONTEXTUAL_EXCLUDED_TYPES.has(type)
+  ));
+  if (excludedType) {
+    // Places can attach a stray unrelated type to an otherwise plausible
+    // business. Conflicting signals are never public, but staff should review
+    // them rather than losing a legitimate professional to a hard rejection.
+    if (matchingType || strongMatch) {
+      return {
+        decision: 'pending_review',
+        score: 30,
+        reason: `conflicting_google_type:${excludedType}`,
+        category,
+        google_types: types
+      };
+    }
+    return { decision: 'reject', score: 0, reason: `excluded_google_type:${excludedType}`, category, google_types: types };
+  }
   if (matchingType || strongMatch) {
     return {
       decision: 'qualified',
