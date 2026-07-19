@@ -234,6 +234,7 @@ test('protected admin API exposes registry, config, start, pause, import and run
   assert.match(admin, /router\.post\('\/marketplace-drip\/start'/);
   assert.match(admin, /router\.post\('\/marketplace-drip\/pause'/);
   assert.match(admin, /router\.post\('\/marketplace-drip\/run-once'/);
+  assert.match(admin, /router\.post\('\/marketplace-drip\/relevance-audit'/);
 });
 
 test('admin dashboard renders provider truth, coverage, caps, controls and run logs', () => {
@@ -277,7 +278,7 @@ test('server arms the drip scheduler but the scheduler is environment disabled b
 
 test('contactless URSB candidates are hidden for enrichment, never public', async () => {
   const service = read('services/marketplaceNationalDripService.js');
-  assert.match(service, /hidden \? 'hidden' : 'live'/);
+  assert.match(service, /hidden \? 'hidden' : \(relevance\.decision === 'qualified' \? 'live' : 'pending_review'\)/);
   assert.match(service, /source !== 'ursb'/);
   assert.match(service, /business_enrichment_pending/);
   assert.match(service, /contactless_public/);

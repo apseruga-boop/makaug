@@ -25030,7 +25030,7 @@ function marketplaceClaimCardHtml(claim = {}, scope = "staff") {
 function marketplaceDripRunHtml(run = {}) {
   return `<div class="rounded-lg border border-gray-200 bg-white p-2 text-[11px]">
     <div class="font-black text-gray-900">${adminEscape(run.status || "completed")} • ${adminEscape(run.source_offset || 0)} → ${adminEscape(run.next_source_offset || 0)}</div>
-    <div class="mt-1 text-gray-600">Requests ${adminEscape(run.requests || 0)} • fetched ${adminEscape(run.fetched || 0)} • accepted ${adminEscape(run.accepted || 0)} • inserted ${adminEscape(run.inserted || 0)} • existing ${adminEscape(run.existing || 0)} • errors ${adminEscape(run.errors || 0)}</div>
+    <div class="mt-1 text-gray-600">Requests ${adminEscape(run.requests || 0)} • fetched ${adminEscape(run.fetched || 0)} • accepted ${adminEscape(run.accepted || 0)} • inserted ${adminEscape(run.inserted || 0)} • review ${adminEscape(run.queued_relevance || 0)} • irrelevant ${adminEscape(run.rejected_relevance || 0)} • honest zero ${adminEscape(run.no_qualified_results || 0)} • errors ${adminEscape(run.errors || 0)}</div>
     <div class="mt-1 text-gray-400">${adminEscape(run.created_at || "")} • ${adminEscape(run.elapsed_ms || 0)}ms</div>
   </div>`;
 }
@@ -25039,13 +25039,14 @@ function marketplaceDripHtml(data = {}) {
   const state = data.state || {};
   const inventory = data.inventory || {};
   const registry = data.registry || {};
+  const integrity = inventory.integrity || {};
   const sources = Array.isArray(data.sources) ? data.sources : [];
   const runs = Array.isArray(data.recent_runs) ? data.recent_runs : [];
   const target = Number(inventory.target || state.target_businesses || 5000);
   const total = Number(inventory.total || 0);
   const progress = target ? Math.min(100, Math.round((total / target) * 100)) : 0;
   const sourceRows = sources.map((source) => `<tr class="border-t border-gray-100"><td class="py-1.5 pr-2 font-bold">${adminEscape(source.label || source.key)}</td><td class="py-1.5 pr-2">${source.enabled ? "Active" : adminEscape(source.adapter_status || "configured")}</td><td class="py-1.5 pr-2">${source.configured ? "Configured" : "Not configured"}</td><td class="py-1.5"><a href="${adminAttr(source.url || "#")}" target="_blank" rel="noopener" class="text-emerald-700 font-bold hover:underline">Source</a></td></tr>`).join("");
-  return `<div data-marketplace-drip-marker="${adminAttr(data.marker || "marketplace-p2-20260719")}">
+  return `<div data-marketplace-drip-marker="${adminAttr(data.marker || "marketplace-p2-20260719")}" data-marketplace-relevance-marker="${adminAttr(data.relevance_marker || "marketplace-relevance-gate-20260719")}">
     <div class="flex items-start justify-between gap-3 flex-wrap">
       <div>
         <div class="font-black text-gray-950">${adminEscape(data.marker || "marketplace-p2-20260719")} • ${adminEscape(state.status || "paused")}</div>
@@ -25060,15 +25061,18 @@ function marketplaceDripHtml(data = {}) {
       <label class="rounded-lg border border-gray-200 p-2"><span class="block text-[10px] uppercase font-black text-gray-500">Monthly requests</span><input id="admin-marketplace-drip-cap" type="number" min="1" max="100000" value="${adminAttr(state.monthly_request_cap || 300)}" class="mt-1 w-full border border-gray-200 rounded px-2 py-1 text-xs"></label>
       <label class="rounded-lg border border-gray-200 p-2"><span class="block text-[10px] uppercase font-black text-gray-500">Inventory target</span><input id="admin-marketplace-drip-target" type="number" min="100" max="100000" value="${adminAttr(target)}" class="mt-1 w-full border border-gray-200 rounded px-2 py-1 text-xs"></label>
     </div>
-    <div class="mt-3 grid md:grid-cols-2 gap-2">
+    <div class="mt-3 grid md:grid-cols-3 gap-2">
       <div class="rounded-lg border border-emerald-100 bg-emerald-50 p-3"><div class="flex justify-between gap-2 font-black"><span>Public inventory</span><span>${adminEscape(total)} / ${adminEscape(target)}</span></div><div class="mt-2 h-2 rounded-full bg-white overflow-hidden"><div class="h-full bg-emerald-700" style="width:${adminAttr(progress)}%"></div></div><div class="mt-2 text-[11px] text-emerald-900">${adminEscape(inventory.distinct_categories || 0)} categories • ${adminEscape(inventory.distinct_districts || 0)} districts • contactless public ${adminEscape(inventory.contactless_public || 0)}</div></div>
       <div class="rounded-lg border border-blue-100 bg-blue-50 p-3"><div class="font-black text-blue-950">Source registry</div><div class="mt-1 text-[11px] text-blue-900">${adminEscape(registry.registry_total || 0)} queries • ${adminEscape(registry.enabled_queries || 0)} active • ${adminEscape(registry.category_coverage || 0)} categories • ${adminEscape(registry.district_coverage || 0)} districts</div><div class="mt-1 text-[11px] text-blue-800">Monthly used ${adminEscape(state.monthly_request_count || 0)} / ${adminEscape(state.monthly_request_cap || 0)} • remaining ${adminEscape(state.monthly_request_remaining || 0)}</div></div>
+      <div class="rounded-lg border border-violet-100 bg-violet-50 p-3"><div class="font-black text-violet-950">Relevance integrity</div><div class="mt-1 text-[11px] text-violet-900">Exclusion matches public ${adminEscape(integrity.relevance_exclusions_live || 0)} • unchecked public ${adminEscape(integrity.relevance_unchecked_live || 0)} • borderline public ${adminEscape(integrity.relevance_borderline_live || 0)}</div><div class="mt-1 text-[11px] text-violet-800">Qualified live ${adminEscape(integrity.relevance_qualified_live || 0)} • queued review ${adminEscape(integrity.relevance_pending_review || 0)}</div><div class="mt-1 text-[11px] text-violet-700">7 days: checked ${adminEscape(integrity.relevance_checked_7d || 0)} • qualified ${adminEscape(integrity.relevance_qualified_7d || 0)} • review ${adminEscape(integrity.relevance_queued_7d || 0)} • rejected ${adminEscape(integrity.relevance_rejected_7d || 0)}</div></div>
     </div>
     <div class="mt-3 flex gap-2 flex-wrap">
       <button type="button" onclick="adminSeedMarketplaceDripRegistry()" class="border border-blue-200 text-blue-700 rounded-lg px-3 py-2 text-xs font-bold">Build national registry</button>
       <button type="button" onclick="adminSaveMarketplaceDrip()" class="border border-gray-300 text-gray-800 rounded-lg px-3 py-2 text-xs font-bold">Save config</button>
       ${state.enabled ? `<button type="button" onclick="adminPauseMarketplaceDrip()" class="border border-red-200 text-red-700 rounded-lg px-3 py-2 text-xs font-bold">Pause</button>` : `<button type="button" onclick="adminStartMarketplaceDrip()" class="bg-emerald-700 text-white rounded-lg px-3 py-2 text-xs font-bold">Start</button>`}
       <button type="button" onclick="adminRunMarketplaceDripOnce()" class="border border-emerald-200 text-emerald-700 rounded-lg px-3 py-2 text-xs font-bold">Run one batch</button>
+      <button type="button" onclick="adminAuditMarketplaceRelevance(true)" class="border border-violet-200 text-violet-700 rounded-lg px-3 py-2 text-xs font-bold">Preview relevance purge</button>
+      <button type="button" onclick="adminAuditMarketplaceRelevance(false)" class="border border-red-200 text-red-700 rounded-lg px-3 py-2 text-xs font-bold">Hide junk + queue borderline</button>
     </div>
     <details class="mt-3 rounded-lg border border-gray-200 p-3"><summary class="cursor-pointer text-xs font-black text-gray-800">Provider truth (${adminEscape(sources.filter((source) => source.enabled).length)} active)</summary><div class="mt-2 overflow-auto"><table class="min-w-full text-left text-[11px]"><thead><tr><th class="pr-2">Provider</th><th class="pr-2">Adapter</th><th class="pr-2">Config</th><th>Link</th></tr></thead><tbody>${sourceRows}</tbody></table></div></details>
     <div class="mt-3 grid md:grid-cols-2 gap-2">${runs.length ? runs.slice(0, 10).map(marketplaceDripRunHtml).join("") : `<div class="rounded-lg border border-gray-200 p-3 text-xs text-gray-500">No runs logged yet.</div>`}</div>
@@ -25144,6 +25148,25 @@ async function adminRunMarketplaceDripOnce() {
     toast("Marketplace drip batch finished.");
   } catch (error) {
     if (panel) panel.innerHTML = `Marketplace drip run failed: ${adminEscape(error.message || "request failed")}`;
+  }
+}
+
+async function adminAuditMarketplaceRelevance(dryRun = true) {
+  const action = dryRun ? "preview the relevance purge" : "hide confirmed junk and queue borderline businesses";
+  if (!window.confirm(`Run ${action}? Hidden rows are retained for audit and can be restored by staff.`)) return;
+  const panel = document.getElementById("admin-marketplace-drip-panel");
+  try {
+    if (panel) panel.innerHTML = dryRun ? "Auditing Marketplace relevance..." : "Applying Marketplace relevance decisions...";
+    const response = await apiRequest("/api/admin/marketplace-drip/relevance-audit", {
+      method: "POST",
+      headers: adminAuthHeaders(),
+      body: { dry_run: dryRun }
+    });
+    const result = response?.data || {};
+    await adminLoadMarketplaceDrip();
+    toast(`${dryRun ? "Relevance preview" : "Relevance purge"}: ${Number(result.clean || 0)} clean, ${Number(result.hidden || 0)} hidden, ${Number(result.queued_review || 0)} queued.`);
+  } catch (error) {
+    if (panel) panel.innerHTML = `Marketplace relevance action failed: ${adminEscape(error.message || "request failed")}`;
   }
 }
 
