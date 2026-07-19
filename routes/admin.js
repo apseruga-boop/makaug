@@ -4241,6 +4241,7 @@ router.post('/tiktok-autopublish-agent/run', async (req, res, next) => {
 
 router.post('/exact-social-source-posts/import', async (req, res, next) => {
   try {
+    res.set('Cache-Control', 'no-store');
     const posts = Array.isArray(req.body?.posts)
       ? req.body.posts
       : (Array.isArray(req.body) ? req.body : []);

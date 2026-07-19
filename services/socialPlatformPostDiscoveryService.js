@@ -124,7 +124,9 @@ const AREA_HINTS = [
 const AREA_PIN_OVERRIDES = [
   { name: 'Namasuba', district: 'Wakiso', lat: 0.258, lng: 32.558, aliases: ['Namasuba', 'Namasuba Kampala', 'Namasuba Entebbe Road', 'Rahim Foods', 'Rahim Foods Namasuba'] },
   { name: 'Ndejje', district: 'Wakiso', lat: 0.244, lng: 32.553, aliases: ['Ndejje', 'Ndejje Lubugumu'] },
-  { name: 'Bujjuko Akright Estate', district: 'Wakiso', lat: 0.374, lng: 32.389, aliases: ['Bujjuko Akright', 'Bujuuko Akright', 'Akright', 'Bujjuko', 'Bujuuko'] },
+  { name: 'Bujjuko Akright Estate', district: 'Wakiso', lat: 0.374, lng: 32.389, aliases: ['Bujjuko Akright', 'Bujuuko Akright', 'Akright'] },
+  { name: 'Bujjuko', district: 'Wakiso', lat: 0.374, lng: 32.389, aliases: ['Bujjuko', 'Bujuuko', 'Bujuko'] },
+  { name: 'Kitende', district: 'Wakiso', lat: 0.198, lng: 32.533, aliases: ['Kitende'] },
   { name: 'Kakiri', district: 'Wakiso', lat: 0.409, lng: 32.38, aliases: ['Kakiri', 'Kakiri Masulita', 'Kakiri Masulita Hoima Road', 'Hoima Road'] },
   { name: 'Masulita', district: 'Wakiso', lat: 0.51, lng: 32.46, aliases: ['Masulita'] },
   { name: 'Kira', district: 'Wakiso', lat: 0.3978, lng: 32.6414, aliases: ['Kira', 'Kira Town'] },
@@ -177,6 +179,13 @@ function areaPinFromText(value = '') {
     if (new RegExp(`(^|[^a-z0-9])${pattern}([^a-z0-9]|$)`, 'i').test(haystack)) return point;
   }
   return null;
+}
+
+function areaPinFromExplicitLocation(value = '') {
+  const explicit = cleanText(value);
+  if (!explicit) return null;
+  const primaryArea = cleanText(explicit.split(',')[0]);
+  return areaPinFromText(primaryArea) || areaPinFromText(explicit);
 }
 
 function sourceListingTitleFromText(value = '') {
@@ -1177,12 +1186,20 @@ function buildTikTokExactPostImportRows({
       const title = cleanText(seed.title || sourceDerivedTitle || oembed.title || caption || `TikTok property post ${index + 1}`);
       const combinedText = cleanText(`${sourceDerivedTitle} ${title} ${caption} ${visualText} ${commentEvidence}`);
       const rawArea = cleanText(seed.area || seed.location || '');
-      const extractedRawArea = extractArea(rawArea);
-      const areaPin = areaPinFromText(`${rawArea} ${combinedText}`);
+      const primaryRawArea = cleanText(rawArea.split(',')[0]);
+      const extractedRawArea = extractArea(primaryRawArea) || extractArea(rawArea);
+      const areaPin = areaPinFromExplicitLocation(rawArea) || areaPinFromText(combinedText);
+      const combinedArea = extractArea(combinedText);
       const area = areaPin && (!rawArea || rawArea.includes(',') || /^(kampala|wakiso|hoima|greater kampala|uganda)$/i.test(rawArea))
         ? areaPin.name
-        : cleanText(extractedRawArea || rawArea || extractArea(combinedText));
+        : cleanText(extractedRawArea || rawArea || combinedArea);
       const district = cleanText(areaPin?.district || seed.district || districtForArea(area, combinedText));
+      const locationEvidenceConfirmed = Boolean(
+        areaPin
+        || extractedRawArea
+        || combinedArea
+        || DISTRICTS.includes(cleanText(seed.district))
+      );
       const priceText = cleanText(seed.price_text || seed.price || priceTextFromText(combinedText));
       const contactPhone = cleanText(normalizeUgandanPhone(seed.contact_phone || seed.phone || seed.whatsapp || '') || phoneFromText(combinedText));
       const contactEmail = cleanText(seed.contact_email || seed.email || emailFromText(combinedText));
@@ -1229,6 +1246,7 @@ function buildTikTokExactPostImportRows({
         area,
         district,
         location: area || district,
+        location_evidence_confirmed: locationEvidenceConfirmed,
         latitude: seed.latitude || seed.lat || areaPin?.lat || '',
         longitude: seed.longitude || seed.lng || areaPin?.lng || '',
         price_text: priceText,
@@ -1792,12 +1810,20 @@ function buildExactSocialPostImportRows({
       const title = cleanText(seed.title || sourceDerivedTitle || page.title || oembed.title || `Found-online ${platform} property post ${index + 1}`);
       const combinedText = cleanText(`${sourceDerivedTitle} ${title} ${caption} ${visualText} ${commentEvidence}`);
       const rawArea = cleanText(seed.area || seed.location || '');
-      const extractedRawArea = extractArea(rawArea);
-      const areaPin = areaPinFromText(`${rawArea} ${combinedText}`);
+      const primaryRawArea = cleanText(rawArea.split(',')[0]);
+      const extractedRawArea = extractArea(primaryRawArea) || extractArea(rawArea);
+      const areaPin = areaPinFromExplicitLocation(rawArea) || areaPinFromText(combinedText);
+      const combinedArea = extractArea(combinedText);
       const area = areaPin && (!rawArea || rawArea.includes(',') || /^(kampala|wakiso|hoima|greater kampala|uganda)$/i.test(rawArea))
         ? areaPin.name
-        : cleanText(extractedRawArea || rawArea || extractArea(combinedText));
+        : cleanText(extractedRawArea || rawArea || combinedArea);
       const district = cleanText(areaPin?.district || seed.district || districtForArea(area, combinedText));
+      const locationEvidenceConfirmed = Boolean(
+        areaPin
+        || extractedRawArea
+        || combinedArea
+        || DISTRICTS.includes(cleanText(seed.district))
+      );
       const priceText = cleanText(seed.price_text || seed.price || priceTextFromText(combinedText));
       const contactPhone = cleanText(normalizeUgandanPhone(seed.contact_phone || seed.phone || seed.whatsapp || '') || phoneFromText(combinedText));
       const contactEmail = cleanText(seed.contact_email || seed.email || emailFromText(combinedText));
@@ -1859,6 +1885,7 @@ function buildExactSocialPostImportRows({
         area,
         district,
         location: area || district,
+        location_evidence_confirmed: locationEvidenceConfirmed,
         latitude: seed.latitude || seed.lat || areaPin?.lat || '',
         longitude: seed.longitude || seed.lng || areaPin?.lng || '',
         price_text: priceText,
