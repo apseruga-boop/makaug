@@ -7,6 +7,7 @@ const test = require('node:test');
 
 const {
   MARKETPLACE_P2_MARKER,
+  MARKETPLACE_SCALEUP_MARKER,
   PRIORITY_DISTRICTS,
   SOURCE_DEFINITIONS,
   googleCandidate,
@@ -39,6 +40,9 @@ test('registry walks Kampala metro and major urban districts before the national
   assert.deepEqual(firstThirtyDistricts, PRIORITY_DISTRICTS);
   assert.deepEqual(firstThirtyDistricts.slice(0, 3), ['Kampala', 'Wakiso', 'Mukono']);
   assert.equal(PRIORITY_DISTRICTS.every((district) => DISTRICTS.includes(district)), true);
+  assert.deepEqual(googleRows.slice(0, 30).map((row) => row.district), PRIORITY_DISTRICTS);
+  assert.equal(new Set(googleRows.slice(0, 30).map((row) => row.category)).size, 20);
+  assert.equal(googleRows.slice(0, 30).every((row) => row.metadata.rollout_phase === 'national_coverage_first'), true);
 });
 
 test('provider truth only enables Google when a real key is configured', () => {
@@ -46,12 +50,18 @@ test('provider truth only enables Google when a real key is configured', () => {
   const originalPublic = process.env.PUBLIC_GOOGLE_MAPS_API_KEY;
   const originalLinkedIn = process.env.LINKEDIN_ACCESS_TOKEN;
   const originalLinkedInClient = process.env.LINKEDIN_CLIENT_ID;
+  const originalLinkedInSecret = process.env.LINKEDIN_CLIENT_SECRET;
+  const originalLinkedInRedirect = process.env.LINKEDIN_REDIRECT_URI;
+  const originalLinkedInOrganizations = process.env.LINKEDIN_ORGANIZATION_IDS;
   const originalMeta = process.env.META_GRAPH_ACCESS_TOKEN;
   const originalFacebookPages = process.env.FACEBOOK_PAGE_IDS;
   delete process.env.GOOGLE_MAPS_API_KEY;
   delete process.env.PUBLIC_GOOGLE_MAPS_API_KEY;
   delete process.env.LINKEDIN_ACCESS_TOKEN;
   delete process.env.LINKEDIN_CLIENT_ID;
+  delete process.env.LINKEDIN_CLIENT_SECRET;
+  delete process.env.LINKEDIN_REDIRECT_URI;
+  delete process.env.LINKEDIN_ORGANIZATION_IDS;
   delete process.env.META_GRAPH_ACCESS_TOKEN;
   delete process.env.FACEBOOK_PAGE_IDS;
   assert.equal(sourceDefinitions().filter((source) => source.enabled).length, 0);
@@ -59,7 +69,12 @@ test('provider truth only enables Google when a real key is configured', () => {
   assert.equal(sourceDefinitions().find((source) => source.key === 'facebook').configured, false);
   process.env.GOOGLE_MAPS_API_KEY = 'test-key';
   process.env.LINKEDIN_CLIENT_ID = 'linkedin-client';
+  process.env.LINKEDIN_CLIENT_SECRET = 'linkedin-secret';
+  process.env.LINKEDIN_REDIRECT_URI = 'https://makaug.com/api/auth/linkedin/callback';
+  process.env.LINKEDIN_ACCESS_TOKEN = 'linkedin-token';
+  process.env.LINKEDIN_ORGANIZATION_IDS = '12345';
   process.env.META_GRAPH_ACCESS_TOKEN = 'meta-token';
+  process.env.FACEBOOK_PAGE_IDS = '12345';
   const enabled = sourceDefinitions().filter((source) => source.enabled);
   assert.deepEqual(enabled.map((source) => source.key), ['google_maps']);
   assert.equal(sourceDefinitions().find((source) => source.key === 'linkedin').configured, true);
@@ -72,6 +87,12 @@ test('provider truth only enables Google when a real key is configured', () => {
   else process.env.LINKEDIN_ACCESS_TOKEN = originalLinkedIn;
   if (originalLinkedInClient === undefined) delete process.env.LINKEDIN_CLIENT_ID;
   else process.env.LINKEDIN_CLIENT_ID = originalLinkedInClient;
+  if (originalLinkedInSecret === undefined) delete process.env.LINKEDIN_CLIENT_SECRET;
+  else process.env.LINKEDIN_CLIENT_SECRET = originalLinkedInSecret;
+  if (originalLinkedInRedirect === undefined) delete process.env.LINKEDIN_REDIRECT_URI;
+  else process.env.LINKEDIN_REDIRECT_URI = originalLinkedInRedirect;
+  if (originalLinkedInOrganizations === undefined) delete process.env.LINKEDIN_ORGANIZATION_IDS;
+  else process.env.LINKEDIN_ORGANIZATION_IDS = originalLinkedInOrganizations;
   if (originalMeta === undefined) delete process.env.META_GRAPH_ACCESS_TOKEN;
   else process.env.META_GRAPH_ACCESS_TOKEN = originalMeta;
   if (originalFacebookPages === undefined) delete process.env.FACEBOOK_PAGE_IDS;
@@ -181,6 +202,7 @@ test('Google candidates require an exact source URL, canonical Uganda district a
 test('migration creates persistent registry, state and run logs with caps', () => {
   const migration = read('db/migrations/085_marketplace_national_drip.sql');
   const statusMigration = read('db/migrations/086_marketplace_source_status_truth.sql');
+  const scaleupMigration = read('db/migrations/087_marketplace_scaleup.sql');
   assert.match(migration, /CREATE TABLE IF NOT EXISTS marketplace_source_registry/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS marketplace_drip_state/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS marketplace_drip_run_logs/);
@@ -188,6 +210,19 @@ test('migration creates persistent registry, state and run logs with caps', () =
   assert.match(migration, /enabled BOOLEAN NOT NULL DEFAULT FALSE/);
   assert.match(statusMigration, /DROP CONSTRAINT IF EXISTS marketplace_source_registry_adapter_status_check/);
   assert.match(statusMigration, /'requires_configuration'/);
+  assert.match(scaleupMigration, /monthly_request_cap SET DEFAULT 2000/);
+  assert.match(scaleupMigration, /monthly_request_cap = 2000/);
+});
+
+test('scale-up keeps a hard 2,000 request cap and exposes weekly coverage and integrity telemetry', () => {
+  const service = read('services/marketplaceNationalDripService.js');
+  const html = read('index.html');
+  assert.match(service, /MARKETPLACE_DRIP_MONTHLY_REQUEST_CAP \|\| 2000/);
+  assert.match(service, /weekly_category_district_counts/);
+  assert.match(service, /duplicate_groups/);
+  assert.match(service, /competitors_live/);
+  assert.match(service, /contactless_live/);
+  assert.match(html, new RegExp(MARKETPLACE_SCALEUP_MARKER));
 });
 
 test('protected admin API exposes registry, config, start, pause, import and run-once controls', () => {

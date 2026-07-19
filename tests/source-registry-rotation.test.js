@@ -62,7 +62,7 @@ test('channel-upload source sweeps top up from rotated registry search feeds whe
   assert.equal(result.performance.caps.source_limit, 50);
   assert.equal(result.performance.caps.max_results_per_source, 25);
   assert.equal(result.performance.caps.max_pages_per_source, 1);
-  assert.equal(result.performance.caps.import_post_limit, 50);
+  assert.equal(result.performance.caps.import_post_limit, 60, 'launch harvest may capture up to the bounded 60-row import ceiling');
 });
 
 test('source sweeps enforce fast caps and return partial telemetry when the time budget is exhausted', async () => {

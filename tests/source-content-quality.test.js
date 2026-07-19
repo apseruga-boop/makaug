@@ -429,10 +429,11 @@ async function run() {
       published_at: '2026-06-15T00:00:00.000Z',
     }],
   });
-  assert.strictEqual(dryDistrictOnlyClickbait.eligible_to_queue_count, 0, 'district-only clickbait should not queue');
-  assert.strictEqual(dryDistrictOnlyClickbait.low_signal_source_location_count, 1, 'district-only clickbait should be reported separately');
-  assert.strictEqual(dryDistrictOnlyClickbait.source_review_records[0].reason, 'low_signal_source_location');
-  assert.strictEqual(dryDistrictOnlyClickbait.source_review_records[0].intake.district_only_location, true);
+  assert.strictEqual(dryDistrictOnlyClickbait.eligible_to_queue_count, 1, 'launch harvest mode should capture weak property posts for human review');
+  assert.strictEqual(dryDistrictOnlyClickbait.low_signal_source_location_count, 0, 'captured review rows are not dropped into the source-rejection bucket');
+  assert.strictEqual(dryDistrictOnlyClickbait.queued_listings[0].intake.source_quality_low_signal_only, true);
+  assert.strictEqual(dryDistrictOnlyClickbait.queued_listings[0].intake.weak_location_captured_for_review, true);
+  assert.strictEqual(dryDistrictOnlyClickbait.queued_listings[0].intake.district_only_location, true);
 
   const dryEntebbeRoad = await queueFoundOnlineSourcePostListings({
     dryRun: true,
@@ -485,8 +486,9 @@ async function run() {
       published_at: '2026-06-15T00:00:00.000Z',
     }],
   });
-  assert.strictEqual(dryLugandaPromo.eligible_to_queue_count, 0, 'district-only Luganda promo rows should not queue');
-  assert.strictEqual(dryLugandaPromo.source_review_records[0].reason, 'low_signal_source_location');
+  assert.strictEqual(dryLugandaPromo.eligible_to_queue_count, 1, 'launch harvest mode should capture district-only Luganda property posts for review');
+  assert.strictEqual(dryLugandaPromo.queued_listings[0].intake.source_quality_low_signal_only, true);
+  assert.strictEqual(dryLugandaPromo.queued_listings[0].intake.weak_location_captured_for_review, true);
 
   const sql = sourceQualitySuppressedSql('p');
   assert(sql.includes('building[[:space:]]+permit'), 'SQL suppression should include building permit keyword');

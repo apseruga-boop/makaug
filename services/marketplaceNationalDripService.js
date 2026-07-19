@@ -16,12 +16,13 @@ const {
 } = require('./marketplaceService');
 
 const MARKETPLACE_P2_MARKER = 'marketplace-p2-20260719';
+const MARKETPLACE_SCALEUP_MARKER = 'marketplace-scaleup-20260719';
 const DRIP_KEY = 'marketplace_national_v1';
 const GOOGLE_SEARCH_ENDPOINT = 'https://places.googleapis.com/v1/places:searchText';
 const DEFAULT_BASE_URL = 'https://makaug.com';
 const DEFAULT_INTERVAL_MINUTES = 30;
 const DEFAULT_BATCH_SIZE = 5;
-const DEFAULT_MONTHLY_CAP = 300;
+const DEFAULT_MONTHLY_CAP = Math.max(1, Number(process.env.MARKETPLACE_DRIP_MONTHLY_REQUEST_CAP || 2000));
 const SCHEDULER_POLL_MS = Math.max(30000, Number(process.env.MARKETPLACE_DRIP_SCHEDULER_POLL_MS || 60000));
 const PRIORITY_DISTRICTS = Object.freeze([
   'Kampala', 'Wakiso', 'Mukono', 'Jinja', 'Mbarara', 'Gulu', 'Mbale', 'Kabarole', 'Arua', 'Lira',
@@ -148,10 +149,16 @@ function sourceEnabled(definition) {
 function sourceConfigured(definition) {
   if (definition.key === 'google_maps') return Boolean(googleApiKey());
   if (definition.key === 'linkedin') {
-    return Boolean(clean(process.env.LINKEDIN_ACCESS_TOKEN || process.env.LINKEDIN_CLIENT_ID));
+    return Boolean(
+      clean(process.env.LINKEDIN_CLIENT_ID)
+      && clean(process.env.LINKEDIN_CLIENT_SECRET)
+      && clean(process.env.LINKEDIN_REDIRECT_URI)
+      && clean(process.env.LINKEDIN_ACCESS_TOKEN)
+      && clean(process.env.LINKEDIN_ORGANIZATION_IDS)
+    );
   }
   if (definition.key === 'facebook') {
-    return Boolean(clean(process.env.META_GRAPH_ACCESS_TOKEN || process.env.FACEBOOK_PAGE_IDS));
+    return Boolean(clean(process.env.META_GRAPH_ACCESS_TOKEN) && clean(process.env.FACEBOOK_PAGE_IDS));
   }
   return definition.adapter_status !== 'unavailable'
     && definition.adapter_status !== 'requires_configuration';
@@ -176,36 +183,57 @@ function orderedDistricts() {
   return [...priority, ...DISTRICTS.filter((district) => !prioritySet.has(district))];
 }
 
+function orderedCategoryDistrictPairs() {
+  const districts = orderedDistricts();
+  const pairs = [];
+  const seen = new Set();
+  const push = (district, category) => {
+    const key = `${category.key}:${district}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    pairs.push({ district, category });
+  };
+
+  // Prove national coverage first: one category in every district, rotating
+  // through all service categories before deepening any single district.
+  districts.forEach((district, index) => {
+    push(district, MARKETPLACE_CATEGORIES[index % MARKETPLACE_CATEGORIES.length]);
+  });
+  for (const district of districts) {
+    for (const category of MARKETPLACE_CATEGORIES) push(district, category);
+  }
+  return pairs;
+}
+
 function registryRows() {
   const rows = [];
   let cursorOrder = 0;
   const definitions = sourceDefinitions();
-  for (const district of orderedDistricts()) {
-    for (const category of MARKETPLACE_CATEGORIES) {
-      for (const source of definitions) {
-        const queryText = queryFor(category, district);
-        rows.push({
-          source_key: `${source.key}:${category.key}:${district.toLowerCase()}`,
-          source: source.key,
-          category: category.key,
-          district,
-          query_text: queryText,
-          source_url: source.url,
-          enabled: source.enabled,
-          adapter_status: source.adapter_status,
-          priority: source.priority,
-          cursor_order: cursorOrder,
-          metadata: {
-            label: source.label,
-            adapter: source.adapter,
-            query_url: source.key === 'google_maps'
-              ? `https://www.google.com/maps/search/${encodeURIComponent(queryText)}`
-              : source.url
-          }
-        });
-      }
-      cursorOrder += 1;
+  for (const { district, category } of orderedCategoryDistrictPairs()) {
+    for (const source of definitions) {
+      const queryText = queryFor(category, district);
+      rows.push({
+        source_key: `${source.key}:${category.key}:${district.toLowerCase()}`,
+        source: source.key,
+        category: category.key,
+        district,
+        query_text: queryText,
+        source_url: source.url,
+        enabled: source.enabled,
+        adapter_status: source.adapter_status,
+        priority: source.priority,
+        cursor_order: cursorOrder,
+        metadata: {
+          label: source.label,
+          adapter: source.adapter,
+          rollout_phase: cursorOrder < DISTRICTS.length ? 'national_coverage_first' : 'full_matrix',
+          query_url: source.key === 'google_maps'
+            ? `https://www.google.com/maps/search/${encodeURIComponent(queryText)}`
+            : source.url
+        }
+      });
     }
+    cursorOrder += 1;
   }
   return rows;
 }
@@ -785,7 +813,7 @@ async function runMarketplaceDripOnce(db, { force = false, actorId = 'marketplac
 
 async function getMarketplaceDripStatus(db) {
   const state = await ensureState(db);
-  const [runs, inventory, coverage, publicCoverage] = await Promise.all([
+  const [runs, inventory, coverage, publicCoverage, categoryDistrictCoverage, weeklyCoverage, integrity] = await Promise.all([
     db.query(`SELECT * FROM marketplace_drip_run_logs WHERE drip_key = $1 ORDER BY created_at DESC LIMIT 20`, [DRIP_KEY]),
     getMarketplaceStats(db, { force: true }),
     getRegistryCoverage(db),
@@ -796,11 +824,50 @@ async function getMarketplaceDripStatus(db) {
               COUNT(*) FILTER (WHERE source_type = 'found_online' AND (phone IS NULL OR phone = '') AND (whatsapp IS NULL OR whatsapp = '') AND COALESCE(social_links, '{}'::jsonb) = '{}'::jsonb)::int AS contactless_public
          FROM marketplace_businesses
         WHERE status = 'live'`
+    ),
+    db.query(
+      `SELECT category, district, COUNT(*)::int AS businesses
+         FROM marketplace_businesses
+        WHERE status = 'live'
+        GROUP BY category, district
+        ORDER BY district ASC, category ASC`
+    ),
+    db.query(
+      `SELECT category, district, COUNT(*)::int AS businesses
+         FROM marketplace_businesses
+        WHERE status = 'live' AND created_at >= NOW() - INTERVAL '7 days'
+        GROUP BY category, district
+        ORDER BY district ASC, category ASC`
+    ),
+    db.query(
+      `WITH duplicates AS (
+         SELECT LOWER(name) AS name_key, district, COUNT(*)::int AS count
+           FROM marketplace_businesses
+          WHERE status = 'live'
+          GROUP BY LOWER(name), district
+         HAVING COUNT(*) > 1
+       )
+       SELECT
+         (SELECT COUNT(*)::int FROM duplicates) AS duplicate_groups,
+         COUNT(*) FILTER (
+           WHERE status = 'live'
+             AND LOWER(CONCAT_WS(' ', name, website, source_url)) ~
+               '(property24|lamudi|realtor\\.ug|realmuloodi|jiji|jumia house|buyrentkenya|privateproperty)'
+         )::int AS competitors_live,
+         COUNT(*) FILTER (
+           WHERE status = 'live'
+             AND COALESCE(phone, '') = ''
+             AND COALESCE(whatsapp, '') = ''
+             AND COALESCE(social_links, '{}'::jsonb) = '{}'::jsonb
+         )::int AS contactless_live
+       FROM marketplace_businesses`
     )
   ]);
   const publicRow = publicCoverage.rows[0] || {};
+  const integrityRow = integrity.rows[0] || {};
   return {
     marker: MARKETPLACE_P2_MARKER,
+    scaleup_marker: MARKETPLACE_SCALEUP_MARKER,
     state: {
       ...state,
       monthly_request_remaining: Math.max(0, Number(state.monthly_request_cap || 0) - Number(state.monthly_request_count || 0)),
@@ -818,7 +885,14 @@ async function getMarketplaceDripStatus(db) {
       distinct_categories: Number(publicRow.categories || 0),
       distinct_districts: Number(publicRow.districts || 0),
       found_online: Number(publicRow.found_online || 0),
-      contactless_public: Number(publicRow.contactless_public || 0)
+      contactless_public: Number(publicRow.contactless_public || 0),
+      category_district_counts: categoryDistrictCoverage.rows,
+      weekly_category_district_counts: weeklyCoverage.rows,
+      integrity: {
+        duplicate_groups: Number(integrityRow.duplicate_groups || 0),
+        competitors_live: Number(integrityRow.competitors_live || 0),
+        contactless_live: Number(integrityRow.contactless_live || 0)
+      }
     },
     recent_runs: runs.rows
   };
@@ -868,6 +942,7 @@ function startMarketplaceDripScheduler(db) {
 module.exports = {
   DRIP_KEY,
   MARKETPLACE_P2_MARKER,
+  MARKETPLACE_SCALEUP_MARKER,
   PRIORITY_DISTRICTS,
   SOURCE_DEFINITIONS,
   googleCandidate,

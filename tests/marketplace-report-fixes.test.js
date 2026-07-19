@@ -51,6 +51,10 @@ test('public Marketplace exposes provenance, claim UI, disclaimer and full tier 
   assert.match(html, /marketplace-report-fixes-20260719/);
   assert.match(app, /MARKETPLACE_REPORT_FIXES_MARKER = "marketplace-report-fixes-20260719"/);
   assert.match(html, /id="marketplace-tiers"/);
+  assert.match(html, /data-marketplace-i18n="tierFound">Found online/);
+  assert.match(html, /data-marketplace-i18n="tierPrivate">Privately listed/);
+  assert.match(html, /data-marketplace-i18n="tierVerified">Verified/);
+  assert.match(app, /tierPrivate: "Privately listed"/);
   assert.match(html, /UGX 150,000\/year/);
   assert.match(html, /id="marketplace-claim-form"/);
   assert.match(html, /onsubmit="submitMarketplaceClaim\(event\)"/);
@@ -81,4 +85,3 @@ test('new claim, provenance, disclaimer and tier strings are complete in all nin
     assert.deepEqual(missing, [], `${lang} falls back to English for ${missing.join(', ')}`);
   }
 });
-
