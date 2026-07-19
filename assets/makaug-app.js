@@ -942,8 +942,10 @@ const STAFF_SOURCE_SEARCH_SWEEP_MAX_PAGES = 1;
 const STAFF_SOURCE_SWEEP_OFFSET_KEY = "makaug.staff.sourceSweepOffset";
 let adminCurrentPendingListings = [];
 let adminPendingQueueFilter = "all";
-const ADMIN_PENDING_QUEUE_RENDER_STEP = 150;
+const ADMIN_PENDING_QUEUE_RENDER_STEP = 24;
+const ADMIN_REVIEW_QUEUE_PAGE_SIZE = 24;
 let adminPendingQueueVisibleLimit = ADMIN_PENDING_QUEUE_RENDER_STEP;
+let adminPendingQueueRemotePagination = null;
 let adminReviewEvidence = {};
 let adminReviewEvidenceViewed = {};
 let adminReviewWarningOverrides = {};
@@ -15226,7 +15228,9 @@ function adminPendingQueueToolbarHtml(rows = [], filteredRows = [], visibleRows 
   const visibleCount = Array.isArray(visibleRows) ? visibleRows.length : Number(visibleRows || 0);
   const hasMore = filteredRows.length > visibleCount;
   const statusText = isFoundOnlineView
-    ? `${adminEscape(visibleCount)} of ${adminEscape(filteredRows.length)} found-online source property records shown. Approved, live, sold, hidden, rejected, and deleted records are excluded from this queue.`
+    ? (adminPendingQueueRemotePagination?.queue === "found_online"
+      ? `${adminEscape(visibleCount)} found-online source property records shown on page ${adminEscape(adminPendingQueueRemotePagination.page || 1)}. Approved, live, sold, hidden, rejected, and deleted records are excluded.`
+      : `${adminEscape(visibleCount)} of ${adminEscape(filteredRows.length)} found-online source property records shown. Approved, live, sold, hidden, rejected, and deleted records are excluded from this queue.`)
     : isBrokerView
       ? `${adminEscape(visibleCount)} of ${adminEscape(filteredRows.length)} broker-submitted listings shown. These are agent listings waiting for King or staff approval before going public.`
     : `${adminEscape(visibleCount)} of ${adminEscape(filteredRows.length)} matching records shown from ${adminEscape(rows.length)} pending review records. Approved/live records move to Live & Featured and do not stay in Review Queue.`;
@@ -15242,6 +15246,10 @@ function adminPendingQueueToolbarHtml(rows = [], filteredRows = [], visibleRows 
           ${adminPendingQueueFilterButton("found_online", "Found online", counts.found_online)}
           ${adminPendingQueueFilterButton("broker", "Broker", counts.broker)}
           ${adminPendingQueueFilterButton("student", "Student", counts.student)}
+          ${adminPendingQueueRemotePagination?.queue === "found_online" ? `
+            <button type="button" onclick="adminLoadFoundOnlineReviewQueue(${Math.max(1, Number(adminPendingQueueRemotePagination.page || 1) - 1)})" class="bg-white text-blue-700 hover:bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-lg text-xs font-black ${Number(adminPendingQueueRemotePagination.page || 1) <= 1 ? "opacity-40 cursor-not-allowed" : ""}" ${Number(adminPendingQueueRemotePagination.page || 1) <= 1 ? "disabled" : ""}>Previous</button>
+            <button type="button" onclick="adminLoadFoundOnlineReviewQueue(${Number(adminPendingQueueRemotePagination.page || 1) + 1})" class="bg-white text-blue-700 hover:bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-lg text-xs font-black ${adminPendingQueueRemotePagination.hasMore ? "" : "opacity-40 cursor-not-allowed"}" ${adminPendingQueueRemotePagination.hasMore ? "" : "disabled"}>Next</button>
+          ` : ""}
           ${hasMore ? `<button type="button" onclick="adminShowMorePendingQueueRows()" class="bg-white text-blue-700 hover:bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-lg text-xs font-black">Show more</button>` : ""}
         </div>
       </div>
@@ -15252,7 +15260,47 @@ function adminSetPendingQueueFilter(filter = "all") {
   const allowed = new Set(["all", "found_online", "broker", "student"]);
   adminPendingQueueFilter = allowed.has(String(filter)) ? String(filter) : "all";
   adminPendingQueueVisibleLimit = ADMIN_PENDING_QUEUE_RENDER_STEP;
+  if (adminPendingQueueFilter === "found_online") {
+    adminLoadFoundOnlineReviewQueue(1);
+    return;
+  }
+  adminPendingQueueRemotePagination = null;
   renderAdminPendingRows(adminCurrentPendingListings);
+}
+
+async function adminLoadFoundOnlineReviewQueue(page = 1) {
+  if (!canUseLiveAdminApi()) {
+    toast("Sign in as admin or save ADMIN_API_KEY first.");
+    return;
+  }
+  const safePage = Math.max(1, Number(page || 1));
+  const wrap = document.getElementById("admin-pending-table");
+  adminPendingQueueFilter = "found_online";
+  if (wrap) {
+    wrap.innerHTML = `<div class="rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-900">Loading Found Online review page ${adminEscape(safePage)}...</div>`;
+  }
+  try {
+    const response = await apiRequest(`/api/admin/properties/review-queue?include_total=0&include_images=0&queue=found_online&limit=${ADMIN_REVIEW_QUEUE_PAGE_SIZE}&page=${safePage}`, {
+      headers: adminAuthHeaders(),
+      cache: "no-store"
+    });
+    const rows = (Array.isArray(response?.data) ? response.data : []).map(normalizeRemoteAdminListing).filter(adminIsPendingReviewSeedItem);
+    adminPendingQueueRemotePagination = {
+      queue: "found_online",
+      page: safePage,
+      hasMore: response?.meta?.has_more === true,
+      total: Number(response?.pagination?.total || rows.length)
+    };
+    adminPendingQueueVisibleLimit = ADMIN_REVIEW_QUEUE_PAGE_SIZE;
+    renderAdminPendingRows(rows);
+    setAdminWorkflowTab("review");
+  } catch (error) {
+    adminPendingQueueRemotePagination = null;
+    if (wrap) {
+      wrap.innerHTML = `<div class="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">Found Online review could not load: ${adminEscape(error.message || "Unknown error")}</div>`;
+    }
+    toast(`Found Online review failed: ${error.message || "error"}`);
+  }
 }
 
 function adminShowMorePendingQueueRows() {
@@ -15457,6 +15505,9 @@ async function fetchRemoteAdminSnapshot(options = {}) {
   if (whatsappCategory) whatsappParams.set("category", whatsappCategory);
   if (whatsappAiMode) whatsappParams.set("ai_mode", whatsappAiMode);
   const shouldLoadReviewQueue = tabNeeds.reviewQueue;
+  const reviewQueuePath = adminPendingQueueFilter === "found_online"
+    ? "/api/admin/properties/review-queue?include_total=0&include_images=0&queue=found_online"
+    : "/api/admin/properties/review-queue?include_total=0&include_images=0";
   const shouldLoadLiveListings = tabNeeds.liveListings;
   const shouldLoadActionedListings = tabNeeds.actionedListings;
   const shouldLoadAgents = tabNeeds.accounts || tabNeeds.liveListings;
@@ -15470,7 +15521,7 @@ async function fetchRemoteAdminSnapshot(options = {}) {
     adminSafeSnapshotRequest("summary", () => apiRequest("/api/admin/summary", { headers }), { data: {} }),
     adminSafeSnapshotRequest("command centre", () => apiRequest("/api/admin/command-centre", { headers }), { data: {} }),
     adminSafeSnapshotRequest("recent activity", () => apiRequest("/api/admin/recent", { headers }), { data: {} }),
-    shouldLoadReviewQueue ? adminSafeSnapshotRequest("review queue", () => fetchAdminPaginatedRows("/api/admin/properties/review-queue?include_total=0", headers, { maxPages: 3 }), []) : null,
+    shouldLoadReviewQueue ? adminSafeSnapshotRequest("review queue", () => fetchAdminPaginatedRows(reviewQueuePath, headers, { limit: ADMIN_REVIEW_QUEUE_PAGE_SIZE, maxPages: 1 }), []) : null,
     shouldLoadLiveListings ? adminSafeSnapshotRequest("live listings", () => fetchAdminPaginatedRows("/api/admin/properties/live", headers, { maxPages: 10 }), []) : null,
     shouldLoadActionedListings ? adminSafeSnapshotRequest("actioned listings", () => fetchAdminPaginatedRows("/api/admin/properties/actioned?include_total=0", headers, { maxPages: 3 }), []) : null,
     shouldLoadAccounts ? adminSafeSnapshotRequest("users", () => apiRequest(`/api/admin/users?${userParams.toString()}`, { headers }), { data: [] }) : null,
@@ -15500,6 +15551,14 @@ async function fetchRemoteAdminSnapshot(options = {}) {
   const pendingListings = Array.isArray(pendingRows)
     ? pendingRows.map(normalizeRemoteAdminListing).filter(adminIsPendingReviewSeedItem)
     : adminCurrentPendingListings;
+  if (Array.isArray(pendingRows) && adminPendingQueueFilter === "found_online") {
+    adminPendingQueueRemotePagination = {
+      queue: "found_online",
+      page: Number(pendingRows?.adminPagination?.page || 1),
+      hasMore: pendingRows?.adminMeta?.has_more === true,
+      total: Number(pendingRows?.adminPagination?.total || pendingListings.length)
+    };
+  }
   const liveListings = Array.isArray(liveRows)
     ? liveRows.map((row) => normalizeRemoteAdminListing({ ...row, admin_live_endpoint: true }))
     : adminLiveListings;
@@ -16790,7 +16849,9 @@ function adminSocialQuickPasteExample() {
 
 let adminSocialQuickPasteRequestSerial = 0;
 const TIKTOK_INTAKE_GATE_MARKER = "tiktok-intake-gate-20260719";
+const TIKTOK_QUEUE_FIX_MARKER = "tiktok-queue-fix-20260719";
 window.__makaugTikTokIntakeGateMarker = TIKTOK_INTAKE_GATE_MARKER;
+window.__makaugTikTokQueueFixMarker = TIKTOK_QUEUE_FIX_MARKER;
 
 function adminYouTubeQuickPasteExample() {
   return [
@@ -16911,10 +16972,18 @@ function adminSocialQuickPasteResultHtml(data = {}, { dryRun = false } = {}) {
   const duplicateWarnings = Array.isArray(importResult.duplicate_warnings) ? importResult.duplicate_warnings : [];
   const reports = Array.isArray(data.metadata_reports) ? data.metadata_reports : [];
   const previewRows = rows.length ? rows : queued;
+  const eligibleCount = Number(importResult.eligible_to_queue_count || queued.length || 0);
+  const createdCount = Number(importResult.created_properties || 0);
+  const createdReviewCount = Number(importResult.created_review_queue_properties ?? createdCount);
+  const persistenceVerified = importResult.persistence_verified === true;
+  const summaryText = dryRun
+    ? `${eligibleCount} eligible (will enter review when queued). ${Number(importResult.auto_live_properties || autoLive.length || 0)} expected auto-live. ${Number(importResult.existing_properties || 0)} duplicate/existing links blocked. ${sourceReview.length} need more details.`
+    : `${createdCount} new properties persisted. ${createdReviewCount} queued in Review → Found Online. ${Number(importResult.auto_live_properties || autoLive.length || 0)} auto-live. ${Number(importResult.existing_properties || 0)} duplicate/existing links blocked. ${sourceReview.length} need more details.`;
   return `
     <div class="rounded-xl border ${dryRun ? "border-violet-200 bg-violet-50" : "border-emerald-200 bg-emerald-50"} p-3">
       <div class="font-black ${dryRun ? "text-violet-950" : "text-emerald-950"}">${dryRun ? "Preview ready" : "Import finished"}</div>
-      <div class="mt-1">${adminEscape(data.exact_social_url_count || previewRows.length || 0)} exact social URLs processed. ${adminEscape(dryRun ? importResult.eligible_to_queue_count || queued.length || 0 : importResult.created_properties || 0)} ${dryRun ? "eligible" : "new properties processed"}. ${adminEscape(importResult.auto_live_properties || autoLive.length || 0)} auto-live. ${adminEscape(importResult.review_queue_properties || queued.length || 0)} in review. ${adminEscape(importResult.existing_properties || 0)} duplicate/existing links blocked. ${adminEscape(sourceReview.length)} need more details.</div>
+      <div class="mt-1">${adminEscape(data.exact_social_url_count || previewRows.length || 0)} exact social URLs processed. ${adminEscape(summaryText)}</div>
+      ${!dryRun ? `<div class="mt-2 flex items-center gap-2 flex-wrap"><span class="rounded-full px-2 py-1 text-[11px] font-black ${persistenceVerified ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}">${persistenceVerified ? "Storage verified" : "Storage verification unavailable"}</span><button type="button" onclick="adminLoadFoundOnlineReviewQueue(1); adminScrollTo('#admin-pending-table')" class="rounded-lg bg-gray-900 px-3 py-2 text-xs font-black text-white">View in Review → Found Online</button></div>` : ""}
       <div class="mt-1 text-[11px]">Original-poster comments are optional supporting evidence, not an eligibility requirement. Valid Uganda mobile numbers are stored as phone/WhatsApp contact; otherwise makaug sends users back to the exact original source.</div>
       ${reports.length ? `<div class="mt-2 text-[11px]">${adminEscape(reports.filter((item) => item.ok).length)} metadata fetches succeeded • ${adminEscape(reports.filter((item) => !item.ok).length)} need pasted visible details.</div>` : ""}
     </div>
@@ -16935,6 +17004,8 @@ async function adminSubmitSocialQuickPaste({ dryRun = false } = {}) {
     return;
   }
   const requestSerial = ++adminSocialQuickPasteRequestSerial;
+  const controller = new AbortController();
+  const requestTimeout = setTimeout(() => controller.abort(), dryRun ? 45000 : 60000);
   const statusEl = adminSocialStatusElement();
   const button = document.getElementById("admin-import-exact-social-links-btn");
   if (button) {
@@ -16949,11 +17020,13 @@ async function adminSubmitSocialQuickPaste({ dryRun = false } = {}) {
       resultHtml: `${dryRun ? "Previewing" : "Queueing"} exact social links...`
     });
   }
+  toast(dryRun ? "Previewing exact social links..." : "Queueing eligible Found Online properties...");
   try {
     const response = await apiRequest("/api/admin/exact-social-source-posts/import", {
       method: "POST",
       headers: { ...adminAuthHeaders(), "Cache-Control": "no-cache" },
       cache: "no-store",
+      signal: controller.signal,
       body: {
         raw_text: raw,
         dry_run: dryRun,
@@ -16965,30 +17038,32 @@ async function adminSubmitSocialQuickPaste({ dryRun = false } = {}) {
     if (requestSerial !== adminSocialQuickPasteRequestSerial) return;
     const data = response?.data || {};
     const importResult = data.import_result || data;
+    if (!dryRun && Number(importResult.eligible_to_queue_count || 0) > 0
+      && Number(importResult.created_properties || 0) === 0
+      && Number(importResult.existing_properties || 0) === 0) {
+      throw new Error("The server found eligible rows but did not persist or match any records.");
+    }
     if (statusEl) {
       statusEl.innerHTML = adminSocialQuickPastePanelHtml({
         seedText: raw,
         resultHtml: adminSocialQuickPasteResultHtml(data, { dryRun })
       });
     }
-    toast(dryRun ? "Preview is ready." : "Exact social link import finished.");
-    if (!dryRun && (importResult.created_properties || importResult.existing_properties)) {
-      adminPendingQueueFilter = "found_online";
-      await renderAdminDashboard();
-      setAdminWorkflowTab("review");
-      adminScrollTo("#admin-review-queue-control");
-    }
+    toast(dryRun
+      ? "Preview is ready. Eligible rows have not been queued yet."
+      : `${Number(importResult.created_properties || 0)} new properties queued and storage-verified.`);
   } catch (e) {
     if (requestSerial !== adminSocialQuickPasteRequestSerial) return;
     if (statusEl) {
       statusEl.classList.remove("hidden");
       statusEl.innerHTML = adminSocialQuickPastePanelHtml({
         seedText: raw,
-        resultHtml: `<div class="rounded-xl border border-red-200 bg-red-50 p-3 text-red-800">Exact social link import failed: ${adminEscape(e.message || "Unknown error")}</div>`
+        resultHtml: `<div class="rounded-xl border border-red-200 bg-red-50 p-3 text-red-800"><div class="font-black">Nothing was queued</div><div class="mt-1">${adminEscape(e.name === "AbortError" ? "The queue request timed out before storage could be confirmed. Retry once; if it repeats, report this message to Kunta." : (e.message || "Unknown error"))}</div></div>`
       });
     }
     toast(`Social link import failed: ${e.message || "error"}`);
   } finally {
+    clearTimeout(requestTimeout);
     if (requestSerial === adminSocialQuickPasteRequestSerial && button) {
       button.disabled = false;
       button.classList.remove("opacity-60", "cursor-wait");

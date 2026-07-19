@@ -1598,6 +1598,14 @@ const ADMIN_SAFE_QUERY_TIMEOUT_MS = 3500;
 const adminDashboardResponseCache = new Map();
 let adminSummaryLastKnownGoodPayload = null;
 
+function clearAdminReviewQueueCache() {
+  for (const cacheKey of adminDashboardResponseCache.keys()) {
+    if (String(cacheKey).includes('admin-review-queue-v5')) {
+      adminDashboardResponseCache.delete(cacheKey);
+    }
+  }
+}
+
 function cloneJson(value) {
   if (value == null) return value;
   return JSON.parse(JSON.stringify(value));
@@ -3313,6 +3321,14 @@ router.get('/properties/review-queue', async (req, res, next) => {
     const values = [];
     const search = cleanText(req.query.search || req.query.q);
     const listingType = cleanText(req.query.listing_type || req.query.type).toLowerCase();
+    const queueType = cleanText(req.query.queue || req.query.queue_type || req.query.queueType).toLowerCase();
+
+    if (queueType === 'found_online') {
+      filters.push(`(
+        p.source = 'found_online_property_source_v1'
+        OR p.listed_via = 'found_online'
+      )`);
+    }
 
     if (listingType && LISTING_TYPES.includes(listingType)) {
       values.push(listingType);
@@ -3341,7 +3357,8 @@ router.get('/properties/review-queue', async (req, res, next) => {
       includeTotal,
       includeImages,
       search,
-      listingType
+      listingType,
+      queueType
     });
 
     const payload = await adminCachedPayload(cacheKey, ADMIN_REVIEW_QUEUE_CACHE_TTL_MS, async () => {
@@ -3434,6 +3451,7 @@ router.get('/properties/review-queue', async (req, res, next) => {
           include_test_like: includeTestLike,
           include_total: includeTotal,
           include_images: includeImages,
+          queue_type: queueType || 'all',
           has_more: hasMore,
           total_exact: exactTotalAvailable,
           partial_total: !exactTotalAvailable,
@@ -4259,6 +4277,9 @@ router.post('/exact-social-source-posts/import', async (req, res, next) => {
       fetchOembed,
       fetchPublicMetadata
     });
+    if (!dryRun && Number(result.created_properties || 0) > 0) {
+      clearAdminReviewQueueCache();
+    }
     await writeAudit('admin_exact_social_source_posts_imported', {
       source: SOURCED_INVENTORY_CANDIDATE_SOURCE,
       batch_id: SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID,
@@ -4272,6 +4293,19 @@ router.post('/exact-social-source-posts/import', async (req, res, next) => {
     }, adminActorId(req));
     return res.json({ ok: true, data: result });
   } catch (error) {
+    const missingQueueSchema = error?.code === '42703' && /transaction_type/i.test(String(error?.message || ''));
+    const persistenceFailure = missingQueueSchema
+      || error?.code === 'FOUND_ONLINE_PERSISTENCE_CHECK_FAILED'
+      || error?.code === 'FOUND_ONLINE_QUEUE_EMPTY';
+    if (persistenceFailure) {
+      return res.status(503).json({
+        ok: false,
+        error: missingQueueSchema
+          ? 'Found Online queue storage is not ready. Apply database migration 079_commercial_transaction_subtype.sql, then retry.'
+          : 'Found Online rows were not persisted. Nothing was queued; retry after the storage check is repaired.',
+        code: error.code || 'FOUND_ONLINE_QUEUE_UNAVAILABLE'
+      });
+    }
     return next(error);
   }
 });

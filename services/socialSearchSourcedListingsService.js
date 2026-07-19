@@ -2244,6 +2244,26 @@ async function insertListing(client, listing, agentId) {
   };
 }
 
+async function verifyCreatedListingRows(client, created = []) {
+  const ids = created.map((item) => String(item?.id || '').trim()).filter(Boolean);
+  if (!ids.length) return { verified: true, count: 0, ids: [] };
+  const result = await client.query(
+    `SELECT id::text AS id
+     FROM properties
+     WHERE id = ANY($1::uuid[])
+       AND source = $2
+       AND COALESCE(status, '') <> 'deleted'`,
+    [ids, SOCIAL_SEARCH_SOURCE]
+  );
+  const persistedIds = (result.rows || []).map((row) => String(row.id || '')).filter(Boolean);
+  if (persistedIds.length !== ids.length) {
+    const error = new Error(`Found Online queue persistence check failed: expected ${ids.length} rows, found ${persistedIds.length}.`);
+    error.code = 'FOUND_ONLINE_PERSISTENCE_CHECK_FAILED';
+    throw error;
+  }
+  return { verified: true, count: persistedIds.length, ids: persistedIds };
+}
+
 function parseMoneyValue(value) {
   if (value == null || value === '') return null;
   if (typeof value === 'number' && Number.isFinite(value)) return Math.round(value);
@@ -2776,6 +2796,12 @@ async function queueFoundOnlineSourcePostListings({
       created.push(inserted);
     }
 
+    const persistence = await verifyCreatedListingRows(client, created);
+    if (evaluated.some(({ intake }) => intake.eligible) && !created.length && !alreadyPresent.length) {
+      const error = new Error('Eligible Found Online rows were evaluated, but none were created or matched as existing.');
+      error.code = 'FOUND_ONLINE_QUEUE_EMPTY';
+      throw error;
+    }
     await client.query('COMMIT');
     const autoLiveCreated = created.filter((item) => isLiveOrApprovedStatus(item));
     const reviewCreated = created.filter((item) => isReviewQueueStatus(item));
@@ -2832,6 +2858,7 @@ async function queueFoundOnlineSourcePostListings({
       created_properties: created.length,
       existing_properties: alreadyPresent.length,
       created_auto_live_properties: autoLiveCreated.length,
+      created_review_queue_properties: reviewCreated.length,
       existing_auto_live_properties: alreadyLiveOrApproved.length,
       auto_live_properties: autoLiveListings.length,
       review_queue_properties: reviewQueueListings.length,
@@ -2848,6 +2875,9 @@ async function queueFoundOnlineSourcePostListings({
       source_quality_suppressed_count: sourceQualitySuppressedRecords.length,
       low_signal_source_location_count: lowSignalSourceLocationRecords.length,
       source_review_records: skippedListings,
+      persistence_verified: persistence.verified,
+      persisted_property_count: persistence.count,
+      persisted_property_ids: persistence.ids,
       suppressed_source_records: suppressedSourceRecords,
       source_quality_suppressed_records: sourceQualitySuppressedRecords,
       low_signal_source_location_records: lowSignalSourceLocationRecords,
