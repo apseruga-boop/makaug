@@ -46,6 +46,9 @@ const app = express();
 // Required on Render so rate limiting uses the forwarded client IP correctly.
 app.set('trust proxy', 1);
 
+const RUNTIME_BUILD_ID = 'html-cache-consistency-20260719';
+const RUNTIME_STARTED_AT = new Date().toISOString();
+
 const corsOrigins = (process.env.CORS_ORIGINS || '')
   .split(',')
   .map((x) => x.trim())
@@ -84,6 +87,18 @@ const apiLimiter = rateLimit({
 });
 
 app.use('/api', apiLimiter);
+
+app.get('/api/version', (_req, res) => {
+  res.set('Cache-Control', 'no-store');
+  return res.status(200).json({
+    ok: true,
+    service: process.env.RENDER_SERVICE_NAME || 'makaug',
+    build_id: RUNTIME_BUILD_ID,
+    git_commit: process.env.RENDER_GIT_COMMIT || process.env.SOURCE_VERSION || process.env.GIT_COMMIT || null,
+    instance_id: process.env.RENDER_INSTANCE_ID || process.env.HOSTNAME || null,
+    started_at: RUNTIME_STARTED_AT
+  });
+});
 
 app.use('/api/health', healthRoutes);
 app.use('/api/auth', authRoutes);
@@ -403,7 +418,7 @@ function schedulePublicCacheWarmup(baseUrl) {
   if (typeof interval.unref === 'function') interval.unref();
 }
 const PUBLIC_HTML_CACHE_CONTROL = isProduction
-  ? 'public, max-age=60, stale-while-revalidate=300'
+  ? 'no-cache, max-age=0, must-revalidate'
   : 'no-store';
 const LONG_LIVED_STATIC_CACHE_CONTROL = 'public, max-age=604800, immutable';
 
@@ -516,6 +531,10 @@ function sendBufferResponse(req, res, body, options = {}) {
 }
 
 function sendTextResponse(req, res, html, options = {}) {
+  res.setHeader('CDN-Cache-Control', 'no-store');
+  res.setHeader('Surrogate-Control', 'no-store');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
   return sendBufferResponse(req, res, Buffer.from(String(html || ''), 'utf8'), {
     contentType: 'text/html; charset=utf-8',
     ...options
