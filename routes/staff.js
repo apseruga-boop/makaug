@@ -3405,6 +3405,19 @@ router.post('/source-intake/exact-social/import', async (req, res, next) => {
     }
     return res.json({ ok: true, data: await runImport() });
   } catch (error) {
+    const missingQueueSchema = error?.code === '42703' && /transaction_type/i.test(String(error?.message || ''));
+    const persistenceFailure = missingQueueSchema
+      || error?.code === 'FOUND_ONLINE_PERSISTENCE_CHECK_FAILED'
+      || error?.code === 'FOUND_ONLINE_QUEUE_EMPTY';
+    if (persistenceFailure) {
+      return res.status(503).json({
+        ok: false,
+        error: missingQueueSchema
+          ? 'Found Online queue storage is not ready. Apply database migration 079_commercial_transaction_subtype.sql, then retry.'
+          : 'Found Online rows were not persisted. Nothing was queued; retry after the storage check is repaired.',
+        code: error.code || 'FOUND_ONLINE_QUEUE_UNAVAILABLE'
+      });
+    }
     return next(error);
   }
 });
