@@ -6,7 +6,7 @@
   <title>makaug.com | Uganda Property Portal</title>
   <meta name="description" content="Uganda's free property portal. Buy, rent, sell and find brokers across all districts.">
   <meta name="robots" content="index,follow,max-image-preview:large">
-  <meta name="makaug-release-marker" content="ask-ai-topbar-match-20260718 properties-list-count-fast-20260718 admin-summary-fallback-20260718 admin-summary-warm-nozero-20260718 ai-category-colours-20260718 ai-scoped-localized-prompts-20260718 report-claim-pipeline-v2-20260718">
+  <meta name="makaug-release-marker" content="ask-ai-topbar-match-20260718 properties-list-count-fast-20260718 admin-summary-fallback-20260718 admin-summary-warm-nozero-20260718 ai-category-colours-20260718 ai-scoped-localized-prompts-20260718 report-claim-pipeline-v2-20260718 marketplace-p1-20260719">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="makaug.com">
   <meta property="og:title" content="makaug.com | Uganda Property Portal">
@@ -2220,6 +2220,40 @@
         position: static !important;
       }
     }
+    .marketplace-accent { color: #b3134f; }
+    .marketplace-bg { background: #b3134f; }
+    .marketplace-focus:focus { border-color: #b3134f; box-shadow: 0 0 0 3px rgba(179, 19, 79, .12); outline: none; }
+    .marketplace-category-chip[aria-pressed="true"] { border-color: #b3134f; color: #8f0f3f; background: #fff1f6; }
+    .marketplace-business-row { border-left: 3px solid #9ca3af; }
+    .marketplace-business-row[data-tier="verified"] { border-left-color: #16a34a; }
+    .marketplace-business-row[data-tier="private"] { border-left-color: #2563eb; }
+    .marketplace-category-icon[data-palette="0"] { background: linear-gradient(135deg, #fff1f6, #fecddf); color: #9f1239; }
+    .marketplace-category-icon[data-palette="1"] { background: linear-gradient(135deg, #eff6ff, #bfdbfe); color: #1d4ed8; }
+    .marketplace-category-icon[data-palette="2"] { background: linear-gradient(135deg, #ecfdf5, #a7f3d0); color: #047857; }
+    .marketplace-category-icon[data-palette="3"] { background: linear-gradient(135deg, #f5f3ff, #ddd6fe); color: #6d28d9; }
+    .marketplace-category-icon[data-palette="4"] { background: linear-gradient(135deg, #fff7ed, #fed7aa); color: #c2410c; }
+    .marketplace-category-icon[data-palette="5"] { background: linear-gradient(135deg, #ecfeff, #a5f3fc); color: #0e7490; }
+    .marketplace-verified-seal {
+      width: 34px;
+      height: 34px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      background: #2563eb;
+      clip-path: polygon(50% 0%,61% 10%,75% 7%,82% 20%,96% 25%,93% 39%,100% 50%,90% 61%,93% 75%,80% 82%,75% 96%,61% 93%,50% 100%,39% 90%,25% 93%,18% 80%,4% 75%,7% 61%,0 50%,10% 39%,7% 25%,20% 18%,25% 4%,39% 7%);
+      animation: marketplace-seal-pulse 2.4s ease-in-out infinite;
+    }
+    @keyframes marketplace-seal-pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(37,99,235,.2); } 50% { box-shadow: 0 0 0 5px rgba(37,99,235,0); } }
+    .marketplace-ai-shell { border: 1px solid #bfdbfe; background: #eff6ff; }
+    .marketplace-ai-search { min-height: 54px; border-radius: 16px; }
+    .marketplace-ai-search:focus-within { border-color: #1d6ff2; box-shadow: 0 0 0 3px rgba(29, 111, 242, .13); }
+    .marketplace-skeleton { background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%); background-size: 200% 100%; animation: marketplace-shimmer 1.2s infinite; }
+    @keyframes marketplace-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+    @media (min-width: 1024px) and (max-width: 1320px) {
+      nav .nav-item { padding-left: .42rem !important; padding-right: .42rem !important; font-size: .74rem !important; }
+      #nav-list-btn { padding-left: .7rem !important; padding-right: .7rem !important; }
+    }
   </style>
 </head>
 <body class="bg-gray-50">
@@ -2275,7 +2309,8 @@
         <a id="nav-land" href="/land" onclick="showPage('land')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Land</a>
         <a id="nav-brokers" href="/brokers" onclick="showPage('brokers')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Find Brokers</a>
         <a id="nav-mortgage" href="/mortgage" onclick="showPage('mortgage')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Mortgage Finder</a>
-        <a id="nav-ai" href="/discover-ai-chatbot" onclick="showPage('ai-chatbot')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Discover AI Chatbot</a>
+        <a id="nav-ai" href="/discover-ai-chatbot" onclick="showPage('ai-chatbot')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">AI Chatbot</a>
+        <a id="nav-marketplace" href="/marketplace" onclick="showPage('marketplace')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-rose-50 hover:text-[#b3134f] cursor-pointer">Marketplace</a>
         <a id="nav-about" href="/about" onclick="showPage('about')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">About Us</a>
       </div>
       <div class="flex items-center gap-2">
@@ -2291,7 +2326,8 @@
       <a id="mnav-land" href="/land" onclick="showPage('land');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Land</a>
       <a id="mnav-brokers" href="/brokers" onclick="showPage('brokers');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Find Brokers</a>
       <a id="mnav-mortgage" href="/mortgage" onclick="showPage('mortgage');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Mortgage Finder</a>
-      <a id="mnav-ai" href="/discover-ai-chatbot" onclick="showPage('ai-chatbot');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Discover AI Chatbot</a>
+      <a id="mnav-ai" href="/discover-ai-chatbot" onclick="showPage('ai-chatbot');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">AI Chatbot</a>
+      <a id="mnav-marketplace" href="/marketplace" onclick="showPage('marketplace');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-rose-50">Marketplace</a>
       <a id="mnav-about" href="/about" onclick="showPage('about');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">About Us</a>
       <a id="mnav-advertise" data-testid="mobile-list-property-free-cta" href="/list-property" onclick="handleListPropertyFreeCta(event);closeMobile()" class="px-3 py-2 rounded-lg bg-green-700 text-white font-semibold">List Property</a>
     </div>
@@ -3272,6 +3308,135 @@
 		          </div>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="page-marketplace" class="page bg-[#f8faf9]" data-marketplace-marker="marketplace-p1-20260719">
+    <div class="bg-white border-t-[3px] border-[#b3134f] border-b border-gray-100">
+      <div class="max-w-7xl mx-auto px-4 py-8">
+        <div class="text-xs font-bold text-gray-500"><a href="/" class="hover:text-[#b3134f]" data-marketplace-i18n="breadcrumbHome">Home</a> <span aria-hidden="true">/</span> <span class="text-[#b3134f]" data-marketplace-i18n="breadcrumbMarketplace">Marketplace</span></div>
+        <div class="mt-3 flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
+          <div>
+            <p class="text-xs uppercase tracking-wide font-black text-[#b3134f]" data-marketplace-i18n="eyebrow">Uganda property services</p>
+            <h1 class="mt-2 text-3xl md:text-4xl font-black text-gray-950 serif" data-marketplace-i18n="title">Uganda's largest property services directory</h1>
+            <p class="mt-2 text-sm text-gray-600 max-w-3xl"><span data-marketplace-i18n="subtitle">Surveyors, lawyers, builders, brokers, valuers and practical property services across Uganda.</span> <span aria-hidden="true">&middot;</span> <strong id="marketplace-live-total" class="text-[#b3134f]">0</strong> <span data-marketplace-i18n="liveBusinesses">live businesses</span></p>
+          </div>
+          <div class="flex items-center gap-3">
+            <button type="button" onclick="marketplaceScrollToRegister()" class="marketplace-bg text-white rounded-xl px-4 py-3 text-sm font-black hover:bg-[#8f0f3f]" data-marketplace-i18n="registerCta">Register your business</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="max-w-7xl mx-auto px-4 py-7 space-y-6">
+      <section class="marketplace-ai-shell rounded-2xl p-4 md:p-5" aria-labelledby="marketplace-ai-title">
+        <div class="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <h2 id="marketplace-ai-title" class="text-xl font-black text-[#1d4ed8]" data-marketplace-i18n="aiTitle">Ask AI for a property service</h2>
+            <p class="text-sm text-blue-900/70 mt-1" data-marketplace-i18n="aiSubtitle">Describe who you need and where. Search in any language.</p>
+          </div>
+          <span class="rounded-full bg-white border border-blue-200 text-blue-800 px-3 py-1 text-xs font-black" data-marketplace-i18n="aiScope">Searching Marketplace</span>
+        </div>
+        <form class="marketplace-ai-search mt-4 flex items-center gap-2 bg-white border border-blue-200 p-1.5" onsubmit="submitMarketplaceAi(event)">
+          <i class="fas fa-sparkles text-[#1d6ff2] ml-3" aria-hidden="true"></i>
+          <input id="marketplace-ai-input" class="min-w-0 flex-1 h-11 px-2 text-sm bg-transparent outline-none" autocomplete="off" data-marketplace-placeholder="aiPlaceholder" placeholder="Try: surveyor in Wakiso">
+          <button id="marketplace-ai-submit" type="submit" class="shrink-0 bg-[#1d6ff2] text-white rounded-xl px-4 py-3 text-sm font-black hover:bg-blue-700"><i class="fas fa-sparkles mr-1" aria-hidden="true"></i><span data-marketplace-i18n="askAi">Ask AI</span></button>
+        </form>
+        <div id="marketplace-ai-response" class="hidden mt-4" aria-live="polite"></div>
+      </section>
+
+      <section class="bg-white border border-gray-200 rounded-xl p-4" aria-labelledby="marketplace-filter-title">
+        <div class="flex items-center justify-between gap-3 flex-wrap">
+          <h2 id="marketplace-filter-title" class="text-base font-black text-gray-900" data-marketplace-i18n="filterTitle">Find a service</h2>
+          <button type="button" onclick="resetMarketplaceFilters()" class="text-xs font-black text-[#b3134f] hover:underline" data-marketplace-i18n="clearFilters">Clear filters</button>
+        </div>
+        <form id="marketplace-filter-form" class="mt-3 grid sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-2" onsubmit="submitMarketplaceFilters(event)">
+          <input id="marketplace-q" class="marketplace-focus border border-gray-200 rounded-lg px-3 py-2.5 text-sm" autocomplete="off" data-marketplace-placeholder="searchPlaceholder" placeholder="Business or service">
+          <select id="marketplace-category" class="marketplace-focus border border-gray-200 rounded-lg px-3 py-2.5 text-sm bg-white"><option value="" data-marketplace-i18n="allServices">All services</option></select>
+          <select id="marketplace-district" class="marketplace-focus border border-gray-200 rounded-lg px-3 py-2.5 text-sm bg-white"><option value="" data-marketplace-i18n="allDistricts">All districts</option></select>
+          <input id="marketplace-area" class="marketplace-focus border border-gray-200 rounded-lg px-3 py-2.5 text-sm" autocomplete="off" data-marketplace-placeholder="area" placeholder="Area or town">
+          <select id="marketplace-rating" class="marketplace-focus border border-gray-200 rounded-lg px-3 py-2.5 text-sm bg-white">
+            <option value="" data-marketplace-i18n="anyRating">Any rating</option>
+            <option value="4" data-marketplace-i18n="rating4">4+ stars</option>
+            <option value="3" data-marketplace-i18n="rating3">3+ stars</option>
+          </select>
+          <select id="marketplace-tier" class="marketplace-focus border border-gray-200 rounded-lg px-3 py-2.5 text-sm bg-white">
+            <option value="" data-marketplace-i18n="allTiers">All listing tiers</option>
+            <option value="verified" data-marketplace-i18n="tierVerified">Verified</option>
+            <option value="private" data-marketplace-i18n="tierPrivate">Private listing</option>
+            <option value="found_online" data-marketplace-i18n="tierFound">Found online</option>
+          </select>
+          <button type="submit" class="marketplace-bg text-white rounded-lg px-4 py-2.5 text-sm font-black hover:bg-[#8f0f3f]"><i class="fas fa-search mr-1" aria-hidden="true"></i><span data-marketplace-i18n="search">Search</span></button>
+        </form>
+      </section>
+
+      <section aria-labelledby="marketplace-category-title">
+        <h2 id="marketplace-category-title" class="text-base font-black text-gray-900" data-marketplace-i18n="browseCategories">Browse service categories</h2>
+        <div id="marketplace-category-chips" class="mt-3 flex gap-2 overflow-x-auto pb-2" aria-label="Marketplace service categories"></div>
+      </section>
+
+      <section class="flex items-center justify-between gap-3 flex-wrap">
+        <div id="marketplace-result-count" class="text-sm font-black text-gray-900" aria-live="polite">0 businesses</div>
+        <div class="flex flex-wrap gap-2 text-[11px] font-bold text-gray-600">
+          <span class="inline-flex items-center gap-1.5 rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1"><i class="fas fa-certificate text-blue-600"></i><span data-marketplace-i18n="tierVerified">Verified</span></span>
+          <span class="inline-flex items-center gap-1.5 rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1"><i class="fas fa-user-check text-blue-600"></i><span data-marketplace-i18n="tierPrivate">Private listing</span></span>
+          <span class="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-2.5 py-1"><i class="fas fa-globe text-gray-500"></i><span data-marketplace-i18n="tierFound">Found online</span></span>
+        </div>
+      </section>
+
+      <section id="marketplace-results" class="space-y-2" aria-live="polite"></section>
+      <div id="marketplace-empty" class="hidden rounded-xl border border-dashed border-rose-200 bg-white p-7 text-center">
+        <h3 class="font-black text-gray-950" data-marketplace-i18n="emptyTitle">No exact providers found</h3>
+        <p class="mt-1 text-sm text-gray-600" data-marketplace-i18n="emptyText">Tell us what you need and the makaug team will help find it.</p>
+        <button type="button" onclick="marketplaceToggleNeedForm(true)" class="mt-4 marketplace-bg text-white rounded-lg px-4 py-2.5 text-sm font-black" data-marketplace-i18n="tellUs">Tell us what you need</button>
+      </div>
+      <form id="marketplace-need-form" class="hidden rounded-xl border border-blue-100 bg-blue-50 p-5 grid md:grid-cols-2 gap-3" onsubmit="submitMarketplaceNeed(event)">
+        <div class="md:col-span-2"><h3 class="font-black text-blue-950" data-marketplace-i18n="needTitle">Tell makaug what service you need</h3></div>
+        <input id="marketplace-need-name" class="border border-blue-100 rounded-lg px-3 py-2.5 text-sm" data-marketplace-placeholder="name" placeholder="Your name">
+        <input id="marketplace-need-phone" class="border border-blue-100 rounded-lg px-3 py-2.5 text-sm" inputmode="tel" data-marketplace-placeholder="phone" placeholder="Phone or WhatsApp">
+        <input id="marketplace-need-email" class="border border-blue-100 rounded-lg px-3 py-2.5 text-sm" type="email" data-marketplace-placeholder="email" placeholder="Email (optional)">
+        <textarea id="marketplace-need-message" class="border border-blue-100 rounded-lg px-3 py-2.5 text-sm" rows="3" required data-marketplace-placeholder="needPlaceholder" placeholder="What service do you need, and where?"></textarea>
+        <button type="submit" class="md:col-span-2 bg-blue-700 text-white rounded-lg px-4 py-2.5 text-sm font-black" data-marketplace-i18n="sendRequest">Send request</button>
+      </form>
+
+      <nav id="marketplace-pagination" class="hidden flex items-center justify-between border-t border-gray-200 pt-4" aria-label="Marketplace pagination">
+        <button id="marketplace-prev" type="button" onclick="marketplaceChangePage(-1)" class="border border-gray-200 bg-white rounded-lg px-3 py-2 text-sm font-bold disabled:opacity-40" data-marketplace-i18n="previous">Previous</button>
+        <span id="marketplace-page-label" class="text-xs font-bold text-gray-600">Page 1 of 1</span>
+        <button id="marketplace-next" type="button" onclick="marketplaceChangePage(1)" class="border border-gray-200 bg-white rounded-lg px-3 py-2 text-sm font-bold disabled:opacity-40" data-marketplace-i18n="next">Next</button>
+      </nav>
+
+      <section id="marketplace-register" class="bg-white border border-rose-100 rounded-2xl overflow-hidden scroll-mt-28">
+        <div class="border-t-[3px] border-[#b3134f] p-5 md:p-6">
+          <div class="flex items-start justify-between gap-3 flex-wrap">
+            <div>
+              <h2 class="text-xl font-black text-gray-950" data-marketplace-i18n="registerTitle">Register your property service</h2>
+              <p class="mt-1 text-sm text-gray-600" data-marketplace-i18n="registerSubtitle">Private registrations are checked by the makaug team before they appear publicly.</p>
+            </div>
+            <span class="rounded-full bg-rose-50 text-[#b3134f] px-3 py-1 text-xs font-black" data-marketplace-i18n="freeRegistration">Free registration</span>
+          </div>
+          <form id="marketplace-register-form" class="mt-5 grid md:grid-cols-2 gap-3" onsubmit="submitMarketplaceRegistration(event)">
+            <input id="marketplace-register-name" required class="marketplace-focus border border-gray-200 rounded-lg px-3 py-2.5 text-sm" data-marketplace-placeholder="businessName" placeholder="Business name">
+            <select id="marketplace-register-category" required class="marketplace-focus border border-gray-200 rounded-lg px-3 py-2.5 text-sm bg-white"><option value="" data-marketplace-i18n="chooseService">Choose service category</option></select>
+            <select id="marketplace-register-district" required class="marketplace-focus border border-gray-200 rounded-lg px-3 py-2.5 text-sm bg-white"><option value="" data-marketplace-i18n="chooseDistrict">Choose district</option></select>
+            <input id="marketplace-register-area" class="marketplace-focus border border-gray-200 rounded-lg px-3 py-2.5 text-sm" data-marketplace-placeholder="area" placeholder="Area or town">
+            <input id="marketplace-register-phone" required inputmode="tel" class="marketplace-focus border border-gray-200 rounded-lg px-3 py-2.5 text-sm" data-marketplace-placeholder="phone" placeholder="Phone">
+            <input id="marketplace-register-whatsapp" inputmode="tel" class="marketplace-focus border border-gray-200 rounded-lg px-3 py-2.5 text-sm" data-marketplace-placeholder="whatsapp" placeholder="WhatsApp (if different)">
+            <input id="marketplace-register-email" type="email" class="marketplace-focus border border-gray-200 rounded-lg px-3 py-2.5 text-sm" data-marketplace-placeholder="email" placeholder="Email">
+            <input id="marketplace-register-website" type="url" class="marketplace-focus border border-gray-200 rounded-lg px-3 py-2.5 text-sm" data-marketplace-placeholder="website" placeholder="Website (optional)">
+            <input id="marketplace-register-social" class="marketplace-focus border border-gray-200 rounded-lg px-3 py-2.5 text-sm" data-marketplace-placeholder="social" placeholder="Social media URL (optional)">
+            <input id="marketplace-register-ursb" class="marketplace-focus border border-gray-200 rounded-lg px-3 py-2.5 text-sm" data-marketplace-placeholder="ursb" placeholder="URSB number (optional)">
+            <textarea id="marketplace-register-description" required minlength="20" rows="4" class="marketplace-focus md:col-span-2 border border-gray-200 rounded-lg px-3 py-2.5 text-sm" data-marketplace-placeholder="description" placeholder="Describe your services, experience and the places you cover"></textarea>
+            <label class="md:col-span-2 flex items-start gap-2 text-xs text-gray-600"><input id="marketplace-register-consent" required type="checkbox" class="mt-0.5 rounded border-gray-300 text-[#b3134f]"><span data-marketplace-i18n="registrationConsent">I confirm these business details are accurate and may be reviewed before publication.</span></label>
+            <button id="marketplace-register-submit" type="submit" class="md:col-span-2 marketplace-bg text-white rounded-lg px-4 py-3 text-sm font-black hover:bg-[#8f0f3f]" data-marketplace-i18n="submitRegistration">Submit for team review</button>
+          </form>
+          <div id="marketplace-register-result" class="hidden mt-4 rounded-xl p-4 text-sm" aria-live="polite"></div>
+        </div>
+      </section>
+
+      <div class="rounded-xl border border-amber-200 border-l-[3px] border-l-amber-500 bg-white px-4 py-3 text-xs text-gray-600 flex items-start gap-2">
+        <i class="fas fa-circle-info text-[#b3134f] mt-0.5" aria-hidden="true"></i>
+        <p data-marketplace-i18n="disclaimer">makaug is a directory and lead-introduction service. Always confirm qualifications, scope, fees and identity before hiring or paying a provider.</p>
       </div>
     </div>
   </div>
@@ -5458,6 +5623,16 @@
               </div>
               <div id="staff-reports-queue" class="space-y-3 text-sm text-gray-700">Reports loading...</div>
             </div>
+            <div id="staff-marketplace-panel" class="bg-white border border-rose-100 rounded-2xl p-5 scroll-mt-28">
+              <div class="flex items-start justify-between gap-3 flex-wrap mb-3">
+                <div>
+                  <h3 class="text-xl font-black text-gray-900">Marketplace approvals</h3>
+                  <p class="text-xs text-gray-500 mt-1">Check private business registrations before they appear in the public services directory.</p>
+                </div>
+                <button type="button" onclick="refreshMarketplaceModerationQueue('staff')" class="border border-rose-200 text-rose-700 hover:bg-rose-50 px-3 py-1.5 rounded-lg text-xs font-black">Refresh</button>
+              </div>
+              <div id="staff-marketplace-queue" class="space-y-3 text-sm text-gray-700">Marketplace registrations loading...</div>
+            </div>
             <div id="staff-ai-panel" class="bg-white border border-gray-200 rounded-2xl p-5 scroll-mt-28">
               <h3 class="text-xl font-black text-gray-900 mb-3">Staff AI assistant</h3>
               <form onsubmit="askStaffAssistant(event)" class="space-y-3">
@@ -6847,6 +7022,16 @@
               </div>
             </div>
             <div id="admin-reports-queue" class="space-y-3 text-sm text-gray-700">Reports loading...</div>
+          </div>
+          <div class="bg-white border border-rose-100 rounded-2xl p-5 md:col-span-3">
+            <div class="flex items-start justify-between gap-3 flex-wrap mb-3">
+              <div>
+                <h3 class="text-lg font-bold text-gray-800">Marketplace business approvals</h3>
+                <p class="text-xs text-gray-500 mt-1">Approve, hide, or remove private property-service registrations with an audit trail.</p>
+              </div>
+              <button type="button" onclick="refreshMarketplaceModerationQueue('admin')" class="border border-rose-200 text-rose-700 hover:bg-rose-50 px-3 py-2 rounded-xl text-xs font-bold">Refresh</button>
+            </div>
+            <div id="admin-marketplace-queue" class="space-y-3 text-sm text-gray-700">Marketplace registrations loading...</div>
           </div>
           <div class="bg-white border border-gray-200 rounded-2xl p-5">
             <h3 class="text-lg font-bold text-gray-800 mb-3">Recent Users</h3>

@@ -3267,6 +3267,566 @@ function applyAboutLanguageUI() {
   updateAboutPageUi();
 }
 
+const MARKETPLACE_P1_MARKER = "marketplace-p1-20260719";
+const MARKETPLACE_UI_EN = Object.freeze({
+  breadcrumbHome: "Home", breadcrumbMarketplace: "Marketplace", eyebrow: "Uganda property services",
+  title: "Uganda's largest property services directory", subtitle: "Surveyors, lawyers, builders, brokers, valuers and practical property services across Uganda.",
+  liveBusinesses: "live businesses", registerCta: "Register your business", aiTitle: "Ask AI for a property service",
+  aiSubtitle: "Describe who you need and where. Search in any language.", aiScope: "Searching Marketplace", aiPlaceholder: "Try: surveyor in Wakiso", askAi: "Ask AI",
+  filterTitle: "Find a service", clearFilters: "Clear filters", searchPlaceholder: "Business or service", allServices: "All services",
+  allDistricts: "All districts", anyRating: "Any rating", allTiers: "All listing tiers", tierVerified: "Verified",
+  tierPrivate: "Private listing", tierFound: "Found online", search: "Search", browseCategories: "Browse service categories",
+  emptyTitle: "No exact providers found", emptyText: "Tell us what you need and the makaug team will help find it.", tellUs: "Tell us what you need",
+  needTitle: "Tell makaug what service you need", name: "Your name", phone: "Phone or WhatsApp", email: "Email (optional)",
+  needPlaceholder: "What service do you need, and where?", sendRequest: "Send request", previous: "Previous", next: "Next",
+  registerTitle: "Register your property service", registerSubtitle: "Private registrations are checked by the makaug team before they appear publicly.",
+  freeRegistration: "Free registration", businessName: "Business name", chooseService: "Choose service category", chooseDistrict: "Choose district",
+  area: "Area or town", whatsapp: "WhatsApp (if different)", website: "Website (optional)", social: "Social media URL (optional)",
+  ursb: "URSB number (optional)", description: "Describe your services, experience and the places you cover",
+  registrationConsent: "I confirm these business details are accurate and may be reviewed before publication.", submitRegistration: "Submit for team review",
+  disclaimer: "makaug is a directory and lead-introduction service. Always confirm qualifications, scope, fees and identity before hiring or paying a provider.",
+  businesses: "businesses", page: "Page", of: "of", profile: "View profile", call: "Call", whatsappAction: "WhatsApp",
+  serves: "Serves", sourceLabel: "Source", requestSent: "Request sent. The makaug team will follow up.", registrationSent: "Registration received",
+  registrationRef: "Reference", loading: "Loading marketplace businesses...", aiSearching: "makaug AI is searching the Marketplace..."
+  , rating4: "4+ stars", rating3: "3+ stars", newBusiness: "New", aiResultsFound: "Here are the property service providers I found.", submitting: "Submitting..."
+});
+
+const MARKETPLACE_UI_OVERRIDES = Object.freeze({
+  lg: {
+    breadcrumbHome: "Awaka", eyebrow: "Obuweereza bw'eby'obutaka mu Uganda", title: "Funa abakugu b'eby'obutaka abeesigika",
+    subtitle: "Abapima ettaka, bannamateeka, abazimbi, ab'obusenze, ababalirizi n'obuweereza bw'eby'obutaka mu Uganda yonna.", liveBusinesses: "bizinesi eziri ku mukutu",
+    registerCta: "Wandiisa bizinesi yo", aiTitle: "Buuza AI ku buweereza bw'eby'obutaka", aiSubtitle: "Nyonyola gw'oyagala n'ekifo. Noonya mu lulimi lwonna.",
+    aiScope: "Noonya mu Katale", aiPlaceholder: "Gezaako: omupima ettaka e Wakiso", askAi: "Buuza AI", filterTitle: "Funa obuweereza",
+    clearFilters: "Gyawo ebisengejja", searchPlaceholder: "Bizinesi oba obuweereza", allServices: "Obuweereza bwonna", allDistricts: "Disitulikiti zonna",
+    anyRating: "Obubonero bwonna", allTiers: "Emitendera gyonna", tierVerified: "Kikakasiddwa", tierPrivate: "Kiwandiikiddwa butereevu", tierFound: "Kisangiddwa ku mutimbagano",
+    search: "Noonya", browseCategories: "Londa ekika ky'obuweereza", emptyTitle: "Tewali basangiddwa ddala", emptyText: "Tubuulire ky'oyagala, ttiimu ya makaug ekuyambe.",
+    tellUs: "Tubuulire ky'oyagala", needTitle: "Buulira makaug obuweereza bw'oyagala", name: "Erinnya lyo", phone: "Essimu oba WhatsApp", email: "Email (si kya tteeka)",
+    needPlaceholder: "Obuweereza ki bw'oyagala, era wa?", sendRequest: "Weereza okusaba", previous: "Emabega", next: "Ekiddako", registerTitle: "Wandiisa obuweereza bwo",
+    registerSubtitle: "Okwewandiisa kw'obwannannyini kukeberebwa ttiimu ya makaug nga tekunnalabika ku bantu.", freeRegistration: "Okwewandiisa kwa bwereere",
+    businessName: "Erinnya lya bizinesi", chooseService: "Londa ekika ky'obuweereza", chooseDistrict: "Londa disitulikiti", area: "Ekitundu oba tawuni",
+    whatsapp: "WhatsApp (bwe kiba kya njawulo)", website: "Omukutu (si kya tteeka)", social: "Omukutu gwa social media", ursb: "Namba ya URSB",
+    description: "Nyonyola obuweereza, obumanyirivu n'ebitundu by'okoleramu", registrationConsent: "Nkakasa nti ebikwata ku bizinesi bino bituufu era biyinza okukeberebwa.",
+    submitRegistration: "Weereza ttiimu ekebere", disclaimer: "makaug lukalala era eyunga abetaaga obuweereza. Kakasa obukugu, omulimu, ebisale n'omuntu nga tonnapangisa oba kusasula.",
+    businesses: "bizinesi", page: "Omuko", of: "ku", profile: "Laba ebisingawo", call: "Kuba essimu", serves: "Akola mu", loading: "Bizinesi zikyatikkibwa...", aiSearching: "makaug AI enoonya mu Katale..."
+  },
+  sw: {
+    breadcrumbHome: "Nyumbani", eyebrow: "Huduma za mali Uganda", title: "Pata wataalamu wa mali wanaoaminika", subtitle: "Wapima ardhi, wanasheria, wajenzi, mawakala, wakadiriaji na huduma za mali kote Uganda.",
+    liveBusinesses: "biashara hai", registerCta: "Sajili biashara yako", aiTitle: "Uliza AI kuhusu huduma ya mali", aiSubtitle: "Eleza unayemhitaji na eneo. Tafuta kwa lugha yoyote.", aiScope: "Inatafuta Sokoni",
+    aiPlaceholder: "Jaribu: mpima ardhi Wakiso", askAi: "Uliza AI", filterTitle: "Pata huduma", clearFilters: "Futa vichujio", searchPlaceholder: "Biashara au huduma",
+    allServices: "Huduma zote", allDistricts: "Wilaya zote", anyRating: "Ukadiriaji wowote", allTiers: "Aina zote", tierVerified: "Imethibitishwa", tierPrivate: "Orodha binafsi",
+    tierFound: "Imepatikana mtandaoni", search: "Tafuta", browseCategories: "Vinjari aina za huduma", emptyTitle: "Hakuna mtoa huduma kamili", emptyText: "Tuambie unachohitaji na timu ya makaug itasaidia.",
+    tellUs: "Tuambie unachohitaji", needTitle: "Iambie makaug huduma unayohitaji", name: "Jina lako", phone: "Simu au WhatsApp", email: "Barua pepe (si lazima)",
+    needPlaceholder: "Unahitaji huduma gani, na wapi?", sendRequest: "Tuma ombi", previous: "Nyuma", next: "Inayofuata", registerTitle: "Sajili huduma yako ya mali",
+    registerSubtitle: "Usajili binafsi hukaguliwa na timu ya makaug kabla ya kuonekana hadharani.", freeRegistration: "Usajili bure", businessName: "Jina la biashara",
+    chooseService: "Chagua aina ya huduma", chooseDistrict: "Chagua wilaya", area: "Eneo au mji", whatsapp: "WhatsApp (ikiwa tofauti)", website: "Tovuti (si lazima)",
+    social: "Kiungo cha mitandao ya kijamii", ursb: "Nambari ya URSB", description: "Eleza huduma, uzoefu na maeneo unayohudumia", registrationConsent: "Nathibitisha taarifa hizi ni sahihi na zinaweza kukaguliwa kabla ya kuchapishwa.",
+    submitRegistration: "Tuma kwa timu ikague", disclaimer: "makaug ni saraka na huduma ya kuunganisha wateja. Thibitisha sifa, kazi, ada na utambulisho kabla ya kuajiri au kulipa.",
+    businesses: "biashara", page: "Ukurasa", of: "wa", profile: "Tazama wasifu", call: "Piga simu", serves: "Huhudumia", loading: "Inapakia biashara...", aiSearching: "makaug AI inatafuta Sokoni..."
+  },
+  ac: {
+    breadcrumbHome: "Gang", eyebrow: "Tic me ot Uganda", title: "Nong jo tic me ot ma gene", subtitle: "Jo pim ngom, jo cik, jo gedo, jo cat ot, jo neno wel ki tic me ot i Uganda lung.",
+    liveBusinesses: "bici ma tye", registerCta: "Coo bici ni", aiTitle: "Peny AI pi tic me ot", aiSubtitle: "Lok ngat ma imito ki kabedo. Yeny ki leb mo keken.", aiScope: "Yeny i Cuk", aiPlaceholder: "Tem: lapim ngom i Wakiso", askAi: "Peny AI",
+    filterTitle: "Nong tic", clearFilters: "Kwany jami yeny", searchPlaceholder: "Bici onyo tic", allServices: "Tic weng", allDistricts: "Distrik weng", anyRating: "Nying wel mo keken",
+    allTiers: "Kit nying weng", tierVerified: "Kimoko", tierPrivate: "Nying pa dano", tierFound: "Kinongo i intanet", search: "Yeny", browseCategories: "Nen kit tic",
+    emptyTitle: "Pe kinongo ngat ma rwate", emptyText: "Wacwa gin ma imito ka dul makaug bi konyi.", tellUs: "Wacwa gin ma imito", needTitle: "Wac makaug tic ma imito",
+    name: "Nyingi", phone: "Cim onyo WhatsApp", email: "Email (pe mite)", needPlaceholder: "Tic mene ma imito, ki kwene?", sendRequest: "Cwal peny", previous: "Angec", next: "Mukene",
+    registerTitle: "Coo tic ni me ot", registerSubtitle: "Dul makaug neno coc pa dano mapwod pe onyute bot lwak.", freeRegistration: "Coc nono", businessName: "Nying bici",
+    chooseService: "Yer kit tic", chooseDistrict: "Yer distrik", area: "Kabedo onyo taun", description: "Lok tic, ngec ki kabedo ma itiyo iye", submitRegistration: "Cwal bot dul me neno",
+    disclaimer: "makaug obedo nying jo tic ki yo me kube. Mok ngec, tic, wel ki ngat ma peya ikwayo onyo iculo.", businesses: "bici", page: "Pot karatac", of: "me", profile: "Nen profile", call: "Goo cim", serves: "Tiyo i", loading: "Tye ka cano bici...", aiSearching: "makaug AI tye ka yeny i Cuk..."
+  },
+  ny: {
+    breadcrumbHome: "Ahaka", eyebrow: "Obuheereza bw'emitungo Uganda", title: "Shanga abakugu b'emitungo abeesigwa", subtitle: "Abapima eitaka, abanyamateeka, abombeki, ba broker, abacenga omuhendo n'obuheereza bw'emitungo omuri Uganda.",
+    liveBusinesses: "bizinesi eziriho", registerCta: "Handiika bizinesi yawe", aiTitle: "Buuza AI aha buheereza bw'emitungo", aiSubtitle: "Shoboorora ou orikwenda n'ahi. Rondora omu rurimi rwona.", aiScope: "Erondora omu Katale", aiPlaceholder: "Gezaaho: omupima eitaka Wakiso", askAi: "Buuza AI",
+    filterTitle: "Shanga obuheereza", clearFilters: "Ihaho eby'okucencura", searchPlaceholder: "Bizinesi nari obuheereza", allServices: "Obuheereza bwona", allDistricts: "Disiturikiti zoona", anyRating: "Obubonero bwona",
+    allTiers: "Emitendera yoona", tierVerified: "Kihamize", tierPrivate: "Kihandiikirwe nyenyo", tierFound: "Kishangirwe aha mutimbagano", search: "Rondora", browseCategories: "Reeba ebika by'obuheereza",
+    emptyTitle: "Tihariho orikuhikaana", emptyText: "Tugambire eki orikwenda, tiimu ya makaug ekukwase.", tellUs: "Tugambire eki orikwenda", needTitle: "Gambira makaug obuheereza obu orikwenda", name: "Eiziina ryawe",
+    phone: "Esimu nari WhatsApp", email: "Email (tikiteekwa)", needPlaceholder: "Nooyenda buheereza ki, kandi nkahi?", sendRequest: "Ohereze okusaba", previous: "Enyima", next: "Ekikurataho",
+    registerTitle: "Handiika obuheereza bwawe", registerSubtitle: "Okuhandiika kw'obwanyamuntu nikureebwa tiimu ya makaug kutakashuuruurwa.", freeRegistration: "Okuhandiika kwa busha", businessName: "Eiziina rya bizinesi",
+    chooseService: "Toorana ekika ky'obuheereza", chooseDistrict: "Toorana disiturikiti", area: "Omwanya nari tauni", description: "Shoboorora obuheereza, obumanyi n'emyanya ei orikuheereza", submitRegistration: "Ohereze tiimu ereebe",
+    disclaimer: "makaug ni rukarara kandi neeyunga abantu. Hamya obukugu, omurimo, ebihembo n'omuntu otakakoresa nari kushashura.", businesses: "bizinesi", page: "Orupapura", of: "rwa", profile: "Reeba ebisinga", call: "Teera esimu", serves: "Naheereza", loading: "Bizinesi nizitwarwa...", aiSearching: "makaug AI neerondora omu Katale..."
+  },
+  rn: {
+    breadcrumbHome: "Ahaka", eyebrow: "Obuheereza bw'emitungo Uganda", title: "Shanga abakugu b'emitungo abeesigwa", subtitle: "Abapima eitaka, abanyamateeka, abombeki, ba broker, abacenga omuhendo n'obuheereza omuri Uganda.",
+    liveBusinesses: "bizinesi eziriho", registerCta: "Handiika bizinesi yawe", aiTitle: "Buuza AI aha buheereza", aiSubtitle: "Shoboorora ou orikwenda n'ahi. Rondora omu rurimi rwona.", aiScope: "Erondora omu Katale", aiPlaceholder: "Gezaaho: omupima eitaka Wakiso", askAi: "Buuza AI",
+    filterTitle: "Shanga obuheereza", clearFilters: "Ihaho eby'okucencura", searchPlaceholder: "Bizinesi nari obuheereza", allServices: "Obuheereza bwona", allDistricts: "Disiturikiti zoona", anyRating: "Obubonero bwona", allTiers: "Emitendera yoona",
+    tierVerified: "Kihamize", tierPrivate: "Kihandiikirwe nyenyo", tierFound: "Kishangirwe aha mutimbagano", search: "Rondora", browseCategories: "Reeba ebika by'obuheereza", emptyTitle: "Tihariho orikuhikaana",
+    emptyText: "Tugambire eki orikwenda, tiimu ya makaug ekukwase.", tellUs: "Tugambire eki orikwenda", needTitle: "Gambira makaug obuheereza obu orikwenda", name: "Eiziina ryawe", phone: "Esimu nari WhatsApp", email: "Email (tikiteekwa)",
+    needPlaceholder: "Nooyenda buheereza ki, kandi nkahi?", sendRequest: "Ohereze okusaba", previous: "Enyima", next: "Ekikurataho", registerTitle: "Handiika obuheereza bwawe", registerSubtitle: "Okuhandiika nikureebwa tiimu ya makaug kutakashuuruurwa.",
+    freeRegistration: "Okuhandiika kwa busha", businessName: "Eiziina rya bizinesi", chooseService: "Toorana ekika ky'obuheereza", chooseDistrict: "Toorana disiturikiti", area: "Omwanya nari tauni", description: "Shoboorora obuheereza, obumanyi n'emyanya ei orikuheereza",
+    submitRegistration: "Ohereze tiimu ereebe", disclaimer: "makaug ni rukarara kandi neeyunga abantu. Hamya obukugu, omurimo, ebihembo n'omuntu otakakoresa nari kushashura.", businesses: "bizinesi", page: "Orupapura", of: "rwa", profile: "Reeba ebisinga", call: "Teera esimu", serves: "Naheereza", loading: "Bizinesi nizitwarwa...", aiSearching: "makaug AI neerondora omu Katale..."
+  },
+  sm: {
+    breadcrumbHome: "Awaka", eyebrow: "Obuweereza bw'ebintu Uganda", title: "Funa abakugu b'ebintu abeesigika", subtitle: "Abapima eitaka, bannamateeka, abazimbi, aba broker, ababalirizi n'obuweereza mu Uganda yonna.",
+    liveBusinesses: "bizinesi eziri ku mukutu", registerCta: "Wandiisa bizinesi yo", aiTitle: "Buuza AI ku buweereza", aiSubtitle: "Nhonyola gw'oyagala n'ekifo. Noonya mu lulimi lwonna.", aiScope: "Noonya mu Katale", aiPlaceholder: "Gezaaku: omupima eitaka e Wakiso", askAi: "Buuza AI",
+    filterTitle: "Funa obuweereza", clearFilters: "Gyawo ebisengejja", searchPlaceholder: "Bizinesi oba obuweereza", allServices: "Obuweereza bwonna", allDistricts: "Disitulikiti dzonna", anyRating: "Obubonero bwonna", allTiers: "Emitendera gyonna",
+    tierVerified: "Kikakasiddwa", tierPrivate: "Kiwandiikiddwa butereevu", tierFound: "Kisangiddwa ku mutimbagano", search: "Noonya", browseCategories: "Londa ebika by'obuweereza", emptyTitle: "Tewali basangiddwa", emptyText: "Tubuulire ky'oyagala, ttiimu ya makaug ekuyambe.",
+    tellUs: "Tubuulire ky'oyagala", needTitle: "Buulira makaug obuweereza bw'oyagala", name: "Erinnya lyo", phone: "Essimu oba WhatsApp", email: "Email (si kya tteeka)", needPlaceholder: "Obuweereza ki bw'oyagala, era wa?", sendRequest: "Weereza okusaba", previous: "Emabega", next: "Ekiddako",
+    registerTitle: "Wandiisa obuweereza bwo", registerSubtitle: "Okwewandiisa kukeberebwa ttiimu ya makaug nga tekunnalabika.", freeRegistration: "Okwewandiisa kwa bwereere", businessName: "Erinnya lya bizinesi", chooseService: "Londa ekika ky'obuweereza", chooseDistrict: "Londa disitulikiti", area: "Ekitundu oba tawuni", description: "Nhonyola obuweereza n'ebitundu by'okoleramu", submitRegistration: "Weereza ttiimu ekebere",
+    disclaimer: "makaug lukalala era eyunga abetaaga obuweereza. Kakasa obukugu, omulimu, ebisale n'omuntu nga tonnapangisa oba kusasula.", businesses: "bizinesi", page: "Omuko", of: "ku", profile: "Laba ebisingawo", call: "Kuba essimu", serves: "Akola mu", loading: "Bizinesi zikyatikkibwa...", aiSearching: "makaug AI enoonya mu Katale..."
+  },
+  am: {
+    breadcrumbHome: "መነሻ", eyebrow: "የኡጋንዳ ንብረት አገልግሎቶች", title: "የታመኑ የንብረት ባለሙያዎችን ያግኙ", subtitle: "ቀያሾች፣ ጠበቆች፣ ግንበኞች፣ ደላሎች፣ ዋጋ ተማኞች እና የንብረት አገልግሎቶች በመላ ኡጋንዳ።",
+    liveBusinesses: "ንቁ ንግዶች", registerCta: "ንግድዎን ያስመዝግቡ", aiTitle: "ስለ ንብረት አገልግሎት AIን ይጠይቁ", aiSubtitle: "ማንን እና የት እንደሚፈልጉ ይግለጹ። በማንኛውም ቋንቋ ይፈልጉ።", aiScope: "በገበያ ውስጥ ፍለጋ", aiPlaceholder: "ይሞክሩ፦ ቀያሽ በWakiso", askAi: "AIን ይጠይቁ",
+    filterTitle: "አገልግሎት ያግኙ", clearFilters: "ማጣሪያዎችን ያጽዱ", searchPlaceholder: "ንግድ ወይም አገልግሎት", allServices: "ሁሉም አገልግሎቶች", allDistricts: "ሁሉም ዲስትሪክቶች", anyRating: "ማንኛውም ደረጃ", allTiers: "ሁሉም ዓይነቶች", tierVerified: "የተረጋገጠ", tierPrivate: "የግል ዝርዝር", tierFound: "በመስመር ላይ የተገኘ",
+    search: "ፈልግ", browseCategories: "የአገልግሎት ምድቦች", emptyTitle: "ትክክለኛ አቅራቢ አልተገኘም", emptyText: "የሚፈልጉትን ይንገሩን እና የmakaug ቡድን ይረዳዎታል።", tellUs: "የሚፈልጉትን ይንገሩን", needTitle: "የሚፈልጉትን አገልግሎት ለmakaug ይንገሩ", name: "ስምዎ", phone: "ስልክ ወይም WhatsApp", email: "ኢሜይል (አማራጭ)",
+    needPlaceholder: "ምን አገልግሎት እና የት ይፈልጋሉ?", sendRequest: "ጥያቄ ላክ", previous: "ቀዳሚ", next: "ቀጣይ", registerTitle: "የንብረት አገልግሎትዎን ያስመዝግቡ", registerSubtitle: "የግል ምዝገባዎች በሕዝብ ፊት ከመታየታቸው በፊት በmakaug ቡድን ይመረመራሉ።", freeRegistration: "ነፃ ምዝገባ", businessName: "የንግድ ስም", chooseService: "የአገልግሎት ምድብ ይምረጡ", chooseDistrict: "ዲስትሪክት ይምረጡ", area: "አካባቢ ወይም ከተማ",
+    description: "አገልግሎትዎን፣ ልምድዎን እና የሚያገለግሉባቸውን አካባቢዎች ይግለጹ", submitRegistration: "ለቡድን ምርመራ ይላኩ", disclaimer: "makaug ማውጫ እና የመገናኛ አገልግሎት ነው። ከመቅጠር ወይም ከመክፈል በፊት ብቃት፣ ሥራ፣ ክፍያ እና ማንነትን ያረጋግጡ።", businesses: "ንግዶች", page: "ገጽ", of: "ከ", profile: "መገለጫ ይመልከቱ", call: "ይደውሉ", serves: "አገልግሎት", loading: "ንግዶች በመጫን ላይ...", aiSearching: "makaug AI በገበያ ውስጥ እየፈለገ ነው..."
+  },
+  ar: {
+    breadcrumbHome: "الرئيسية", eyebrow: "خدمات العقارات في أوغندا", title: "اعثر على متخصصين موثوقين في العقارات", subtitle: "مساحون ومحامون ومقاولون ووسطاء ومثمنون وخدمات عقارية عملية في جميع أنحاء أوغندا.",
+    liveBusinesses: "شركة نشطة", registerCta: "سجل نشاطك", aiTitle: "اسأل الذكاء الاصطناعي عن خدمة عقارية", aiSubtitle: "صف من تحتاج وأين. ابحث بأي لغة.", aiScope: "البحث في السوق", aiPlaceholder: "جرب: مساح في واكيسو", askAi: "اسأل AI",
+    filterTitle: "اعثر على خدمة", clearFilters: "مسح المرشحات", searchPlaceholder: "نشاط أو خدمة", allServices: "كل الخدمات", allDistricts: "كل المقاطعات", anyRating: "أي تقييم", allTiers: "كل أنواع الإدراج", tierVerified: "موثق", tierPrivate: "إدراج خاص", tierFound: "موجود على الإنترنت",
+    search: "بحث", browseCategories: "تصفح فئات الخدمات", emptyTitle: "لا يوجد مزود مطابق", emptyText: "أخبرنا بما تحتاج وسيساعدك فريق makaug.", tellUs: "أخبرنا بما تحتاج", needTitle: "أخبر makaug بالخدمة التي تحتاجها", name: "اسمك", phone: "الهاتف أو WhatsApp", email: "البريد الإلكتروني (اختياري)",
+    needPlaceholder: "ما الخدمة التي تحتاجها وأين؟", sendRequest: "إرسال الطلب", previous: "السابق", next: "التالي", registerTitle: "سجل خدمتك العقارية", registerSubtitle: "يراجع فريق makaug التسجيلات الخاصة قبل ظهورها للعامة.", freeRegistration: "تسجيل مجاني", businessName: "اسم النشاط", chooseService: "اختر فئة الخدمة", chooseDistrict: "اختر المقاطعة", area: "المنطقة أو المدينة", whatsapp: "WhatsApp (إن كان مختلفا)", website: "الموقع (اختياري)", social: "رابط التواصل الاجتماعي", ursb: "رقم URSB (اختياري)",
+    description: "صف خدماتك وخبرتك والمناطق التي تغطيها", registrationConsent: "أؤكد أن بيانات النشاط صحيحة ويمكن مراجعتها قبل النشر.", submitRegistration: "إرسال لمراجعة الفريق", disclaimer: "makaug دليل وخدمة لربط العملاء. تحقق دائما من المؤهلات ونطاق العمل والرسوم والهوية قبل التعاقد أو الدفع.", businesses: "نشاط", page: "صفحة", of: "من", profile: "عرض الملف", call: "اتصال", serves: "يخدم", loading: "جار تحميل الأنشطة...", aiSearching: "يبحث makaug AI في السوق..."
+  }
+});
+
+const MARKETPLACE_UI_COMPLETIONS = Object.freeze({
+  lg: {
+    breadcrumbMarketplace: "Akatale", whatsappAction: "WhatsApp", sourceLabel: "Ensibuko", requestSent: "Okusaba kuweereddwayo. Ttiimu ya makaug ejja kukuddira.", registrationSent: "Okwewandiisa kufunye", registrationRef: "Namba y'okujuliza",
+    rating4: "Emmunyeenye 4+", rating3: "Emmunyeenye 3+", newBusiness: "Mpya", aiResultsFound: "Bano be baweereza b'eby'obutaka be nsanze.", submitting: "Kuweereza..."
+  },
+  sw: {
+    breadcrumbMarketplace: "Soko", whatsappAction: "WhatsApp", sourceLabel: "Chanzo", requestSent: "Ombi limetumwa. Timu ya makaug itawasiliana nawe.", registrationSent: "Usajili umepokelewa", registrationRef: "Kumbukumbu",
+    rating4: "Nyota 4+", rating3: "Nyota 3+", newBusiness: "Mpya", aiResultsFound: "Hawa ndio watoa huduma za mali niliopata.", submitting: "Inatuma..."
+  },
+  ac: {
+    breadcrumbMarketplace: "Cuk", whatsapp: "WhatsApp (ka pat)", website: "Kakube (pe mite)", social: "Kakube me social media", ursb: "Namba me URSB (pe mite)", registrationConsent: "Amoko ni lok me bici magi tye kakare dok dul twero neno mapwod pe kiyaro.", whatsappAction: "WhatsApp", sourceLabel: "Ka ma oa iye", requestSent: "Kicwalo peny. Dul makaug bi kube kwedi.", registrationSent: "Kigamo coc", registrationRef: "Namba me coc",
+    rating4: "Lacer 4+", rating3: "Lacer 3+", newBusiness: "Manyen", aiResultsFound: "Magi aye jo tic me ot ma anongo.", submitting: "Tye ka cwalo..."
+  },
+  ny: {
+    breadcrumbMarketplace: "Akatare", whatsapp: "WhatsApp (yaaba neetaanisa)", website: "Omukutu (tikiteekwa)", social: "Omukutu gwa social media", ursb: "Namba ya URSB (tikiteekwa)", registrationConsent: "Ninkakasa ngu amakuru ga bizinesi aga gahikire kandi nigaabaasa kureebwa gatakashuuruurwa.", whatsappAction: "WhatsApp", sourceLabel: "Oburugo", requestSent: "Okusaba kuhereirwe. Tiimu ya makaug neija kukugarukamu.", registrationSent: "Okuhandiika kwakirwa", registrationRef: "Namba y'okujuriza",
+    rating4: "Enyonyoozi 4+", rating3: "Enyonyoozi 3+", newBusiness: "Empya", aiResultsFound: "Aba nibo baheereza b'emitungo abu nashanga.", submitting: "Nikuhereza..."
+  },
+  rn: {
+    breadcrumbMarketplace: "Akatare", whatsapp: "WhatsApp (yaaba neetaanisa)", website: "Omukutu (tikiteekwa)", social: "Omukutu gwa social media", ursb: "Namba ya URSB (tikiteekwa)", registrationConsent: "Ninkakasa ngu amakuru ga bizinesi aga gahikire kandi nigaabaasa kureebwa gatakashuuruurwa.", whatsappAction: "WhatsApp", sourceLabel: "Oburugo", requestSent: "Okusaba kuhereirwe. Tiimu ya makaug neija kukugarukamu.", registrationSent: "Okuhandiika kwakirwa", registrationRef: "Namba y'okujuriza",
+    rating4: "Enyonyoozi 4+", rating3: "Enyonyoozi 3+", newBusiness: "Empya", aiResultsFound: "Aba nibo baheereza b'emitungo abu nashanga.", submitting: "Nikuhereza..."
+  },
+  sm: {
+    breadcrumbMarketplace: "Akatale", whatsapp: "WhatsApp (bwe kiba kya njawulo)", website: "Omukutu (si kya tteeka)", social: "Omukutu gwa social media", ursb: "Namba ya URSB (si kya tteeka)", registrationConsent: "Nkakasa nti ebikwata ku bizinesi bino bituufu era biyinza okukeberebwa nga tebinnalabika.", whatsappAction: "WhatsApp", sourceLabel: "Ensibuko", requestSent: "Okusaba kuweereddwayo. Ttiimu ya makaug ejja kukuddira.", registrationSent: "Okwewandiisa kufunye", registrationRef: "Namba y'okujuliza",
+    rating4: "Emmunyeenye 4+", rating3: "Emmunyeenye 3+", newBusiness: "Mpya", aiResultsFound: "Bano be baweereza b'ebintu be nsanze.", submitting: "Kuweereza..."
+  },
+  am: {
+    breadcrumbMarketplace: "ገበያ", whatsapp: "WhatsApp (የተለየ ከሆነ)", website: "ድህረ ገጽ (አማራጭ)", social: "የማህበራዊ ሚዲያ አገናኝ", ursb: "የURSB ቁጥር (አማራጭ)", registrationConsent: "እነዚህ የንግድ መረጃዎች ትክክል መሆናቸውን እና ከመታተማቸው በፊት ሊመረመሩ እንደሚችሉ አረጋግጣለሁ።", whatsappAction: "WhatsApp", sourceLabel: "ምንጭ", requestSent: "ጥያቄው ተልኳል። የmakaug ቡድን ይከታተላል።", registrationSent: "ምዝገባው ደርሷል", registrationRef: "ማጣቀሻ",
+    rating4: "4+ ኮከቦች", rating3: "3+ ኮከቦች", newBusiness: "አዲስ", aiResultsFound: "ያገኘኋቸው የንብረት አገልግሎት ሰጪዎች እነዚህ ናቸው።", submitting: "በመላክ ላይ..."
+  },
+  ar: {
+    breadcrumbMarketplace: "السوق", whatsappAction: "WhatsApp", sourceLabel: "المصدر", requestSent: "تم إرسال الطلب. سيتابع معك فريق makaug.", registrationSent: "تم استلام التسجيل", registrationRef: "المرجع",
+    rating4: "4+ نجوم", rating3: "3+ نجوم", newBusiness: "جديد", aiResultsFound: "هؤلاء هم مقدمو الخدمات العقارية الذين وجدتهم.", submitting: "جار الإرسال..."
+  }
+});
+
+Object.entries(MARKETPLACE_UI_COMPLETIONS).forEach(([language, values]) => {
+  Object.assign(MARKETPLACE_UI_OVERRIDES[language], values);
+});
+
+const MARKETPLACE_CATEGORY_LABELS = Object.freeze({
+  surveyors: { en: "Surveyors", lg: "Abapima ettaka", sw: "Wapima ardhi", ac: "Jo pim ngom", ny: "Abapima eitaka", rn: "Abapima eitaka", sm: "Abapima eitaka", am: "ቀያሾች", ar: "المساحون" },
+  brokers: { en: "Brokers & agents", lg: "Aba broker n'abasenza", sw: "Madalali na mawakala", ac: "Jo cat ot", ny: "Ba broker n'abakozi", rn: "Ba broker n'abakozi", sm: "Aba broker", am: "ደላሎች", ar: "الوسطاء والوكلاء" },
+  developers: { en: "Property developers", lg: "Abakulaakulanya ebizimbe", sw: "Waendelezaji wa mali", ac: "Jo dongo ot", ny: "Abakungu b'okwombeka", rn: "Abakungu b'okwombeka", sm: "Abakulaakulanya", am: "አልሚዎች", ar: "المطورون العقاريون" },
+  property_lawyers: { en: "Property lawyers", lg: "Bannamateeka b'ettaka", sw: "Wanasheria wa mali", ac: "Jo cik me ngom", ny: "Abanyamateeka b'emitungo", rn: "Abanyamateeka b'emitungo", sm: "Bannamateeka", am: "የንብረት ጠበቆች", ar: "محامو العقارات" },
+  valuers: { en: "Valuers", lg: "Ababalirira omuwendo", sw: "Wakadiriaji", ac: "Jo neno wel", ny: "Abacenga omuhendo", rn: "Abacenga omuhendo", sm: "Ababalirizi", am: "ዋጋ ተማኞች", ar: "المثمنون" },
+  mortgage_providers: { en: "Mortgage providers", lg: "Abawa looni z'amaka", sw: "Watoa mikopo ya nyumba", ac: "Jo miyo loan me ot", ny: "Abatanga looni z'amaka", rn: "Abatanga looni z'amaka", sm: "Abawa looni", am: "የቤት ብድር አቅራቢዎች", ar: "مزودو الرهن العقاري" },
+  architects: { en: "Architects", lg: "Abakuba pulaani", sw: "Wasanifu", ac: "Jo yubo plan", ny: "Abakora pulaani", rn: "Abakora pulaani", sm: "Abakuba pulaani", am: "አርክቴክቶች", ar: "المعماريون" },
+  builders: { en: "Builders & contractors", lg: "Abazimbi n'abakozi", sw: "Wajenzi na wakandarasi", ac: "Jo gedo", ny: "Abombeki", rn: "Abombeki", sm: "Abazimbi", am: "ግንበኞች", ar: "المقاولون والبناؤون" },
+  electricians: { en: "Electricians", lg: "Abakozi b'amasannyalaze", sw: "Mafundi umeme", ac: "Jo mac", ny: "Ab'amasanyaraze", rn: "Ab'amasanyaraze", sm: "Ab'amasannyalaze", am: "ኤሌክትሪሻኖች", ar: "الكهربائيون" },
+  plumbers: { en: "Plumbers", lg: "Abakola amazzi", sw: "Mafundi mabomba", ac: "Jo pi", ny: "Abakora amaizi", rn: "Abakora amaizi", sm: "Abakola amazzi", am: "የቧንቧ ባለሙያዎች", ar: "السباكون" },
+  painters: { en: "Painters", lg: "Abasiiga langi", sw: "Wapaka rangi", ac: "Jo rangi", ny: "Abasiiga rangi", rn: "Abasiiga rangi", sm: "Abasiiga langi", am: "ቀለም ቀቢዎች", ar: "الدهانون" },
+  property_managers: { en: "Property managers", lg: "Abaddukanya ebizimbe", sw: "Wasimamizi wa mali", ac: "Jo gwoko ot", ny: "Abaddukanya emitungo", rn: "Abaddukanya emitungo", sm: "Abaddukanya ebizimbe", am: "የንብረት አስተዳዳሪዎች", ar: "مديرو العقارات" },
+  insurance: { en: "Property insurance", lg: "Yinsuwa y'ebizimbe", sw: "Bima ya mali", ac: "Insurance me ot", ny: "Insurance y'emitungo", rn: "Insurance y'emitungo", sm: "Yinsuwa y'ebizimbe", am: "የንብረት መድን", ar: "تأمين العقارات" },
+  movers: { en: "Movers", lg: "Abasengula ebintu", sw: "Wahamishaji", ac: "Jo kobo jami", ny: "Abasengura ebintu", rn: "Abasengura ebintu", sm: "Abasengula ebintu", am: "አጓጓዦች", ar: "خدمات النقل" },
+  interior_design: { en: "Interior design", lg: "Okuteekateeka munda", sw: "Ubunifu wa ndani", ac: "Yub ma i ot", ny: "Okutebeekanisa omunda", rn: "Okutebeekanisa omunda", sm: "Okuteekateeka munda", am: "የውስጥ ዲዛይን", ar: "التصميم الداخلي" },
+  borehole_water: { en: "Borehole & water", lg: "Borehole n'amazzi", sw: "Visima na maji", ac: "Borehole ki pi", ny: "Borehole n'amaizi", rn: "Borehole n'amaizi", sm: "Borehole n'amazzi", am: "ውሃ እና ጉድጓድ", ar: "الآبار والمياه" },
+  solar: { en: "Solar installers", lg: "Abateeka solar", sw: "Wafungaji solar", ac: "Jo keto solar", ny: "Abateeka solar", rn: "Abateeka solar", sm: "Abateeka solar", am: "የፀሐይ ኃይል ጫኚዎች", ar: "تركيب الطاقة الشمسية" },
+  security: { en: "Security services", lg: "Obukuumi", sw: "Huduma za ulinzi", ac: "Tic me gwoko", ny: "Oburinzi", rn: "Oburinzi", sm: "Obukuumi", am: "የደህንነት አገልግሎቶች", ar: "خدمات الأمن" },
+  cleaning: { en: "Cleaning services", lg: "Obuyonjo", sw: "Huduma za usafi", ac: "Tic me yweyo", ny: "Obuyonjo", rn: "Obuyonjo", sm: "Obuyonjo", am: "የጽዳት አገልግሎቶች", ar: "خدمات التنظيف" },
+  commercial_services: { en: "Commercial property services", lg: "Obuweereza bw'ebizimbe bya bizinesi", sw: "Huduma za mali za biashara", ac: "Tic me ot pa bici", ny: "Obuheereza bw'emitungo ya bizinesi", rn: "Obuheereza bw'emitungo ya bizinesi", sm: "Obuweereza bwa bizinesi", am: "የንግድ ንብረት አገልግሎቶች", ar: "خدمات العقارات التجارية" }
+});
+
+const marketplaceState = {
+  ready: false,
+  loading: false,
+  categories: [],
+  districts: [],
+  businesses: [],
+  total: 0,
+  page: 1,
+  totalPages: 1,
+  limit: 20,
+  activeCategory: "",
+  categoryCounts: {}
+};
+
+function marketplaceTr(key) {
+  return MARKETPLACE_UI_OVERRIDES[currentLang]?.[key] || MARKETPLACE_UI_EN[key] || key;
+}
+
+function marketplaceCategoryLabel(key) {
+  return MARKETPLACE_CATEGORY_LABELS[key]?.[currentLang] || MARKETPLACE_CATEGORY_LABELS[key]?.en || key;
+}
+
+function applyMarketplaceLanguageUI() {
+  const root = document.getElementById("page-marketplace");
+  if (!root) return;
+  root.querySelectorAll("[data-marketplace-i18n]").forEach((element) => {
+    const key = element.getAttribute("data-marketplace-i18n");
+    if (key) element.textContent = marketplaceTr(key);
+  });
+  root.querySelectorAll("[data-marketplace-placeholder]").forEach((element) => {
+    const key = element.getAttribute("data-marketplace-placeholder");
+    if (key) element.setAttribute("placeholder", marketplaceTr(key));
+  });
+  root.dir = currentLang === "ar" ? "rtl" : "ltr";
+  populateMarketplaceSelects();
+  renderMarketplaceCategoryChips();
+  renderMarketplaceBusinesses();
+}
+
+function marketplacePopulateSelect(id, items, firstLabel, valueKey = "key", labelFor = (item) => item.label) {
+  const select = document.getElementById(id);
+  if (!select) return;
+  const previous = select.value;
+  select.innerHTML = `<option value="">${adminEscape(firstLabel)}</option>${items.map((item) => `<option value="${adminAttr(item[valueKey] || item)}">${adminEscape(labelFor(item))}</option>`).join("")}`;
+  if (Array.from(select.options).some((option) => option.value === previous)) select.value = previous;
+}
+
+function populateMarketplaceSelects() {
+  const categories = marketplaceState.categories || [];
+  const districts = marketplaceState.districts || [];
+  marketplacePopulateSelect("marketplace-category", categories, marketplaceTr("allServices"), "key", (item) => marketplaceCategoryLabel(item.key));
+  marketplacePopulateSelect("marketplace-register-category", categories, marketplaceTr("chooseService"), "key", (item) => marketplaceCategoryLabel(item.key));
+  marketplacePopulateSelect("marketplace-district", districts, marketplaceTr("allDistricts"), null, (item) => item);
+  marketplacePopulateSelect("marketplace-register-district", districts, marketplaceTr("chooseDistrict"), null, (item) => item);
+  if (marketplaceState.activeCategory) {
+    const filter = document.getElementById("marketplace-category");
+    if (filter) filter.value = marketplaceState.activeCategory;
+  }
+}
+
+function marketplaceRouteFilters() {
+  const params = new URLSearchParams(window.location.search || "");
+  return {
+    q: cleanText(params.get("q") || ""),
+    category: cleanText(params.get("category") || ""),
+    district: cleanText(params.get("district") || ""),
+    area: cleanText(params.get("area") || ""),
+    min_rating: cleanText(params.get("min_rating") || ""),
+    tier: cleanText(params.get("tier") || ""),
+    page: Math.max(1, Number(params.get("page") || 1) || 1)
+  };
+}
+
+function syncMarketplaceFilterControls(filters = marketplaceRouteFilters()) {
+  const pairs = [["marketplace-q", "q"], ["marketplace-category", "category"], ["marketplace-district", "district"], ["marketplace-area", "area"], ["marketplace-rating", "min_rating"], ["marketplace-tier", "tier"]];
+  pairs.forEach(([id, key]) => {
+    const element = document.getElementById(id);
+    if (element) element.value = filters[key] || "";
+  });
+  marketplaceState.activeCategory = filters.category || "";
+  marketplaceState.page = filters.page || 1;
+}
+
+function renderMarketplaceLoading() {
+  const results = document.getElementById("marketplace-results");
+  if (!results) return;
+  results.innerHTML = Array.from({ length: 5 }, () => `<div class="bg-white border border-gray-200 rounded-xl p-4 flex gap-4"><div class="marketplace-skeleton w-12 h-12 rounded-lg"></div><div class="flex-1 space-y-2"><div class="marketplace-skeleton h-4 rounded w-1/3"></div><div class="marketplace-skeleton h-3 rounded w-2/3"></div><div class="marketplace-skeleton h-3 rounded w-1/2"></div></div></div>`).join("");
+  const count = document.getElementById("marketplace-result-count");
+  if (count) count.textContent = marketplaceTr("loading");
+}
+
+function marketplaceTierHtml(business = {}) {
+  const tier = business.tier || "found_online";
+  if (tier === "verified") return `<span class="marketplace-verified-seal" title="${adminAttr(marketplaceTr("tierVerified"))}"><i class="fas fa-check text-xs"></i></span>`;
+  if (tier === "private") return `<span class="inline-flex items-center gap-1 rounded-full bg-blue-50 border border-blue-100 text-blue-700 px-2 py-1 text-[11px] font-black"><i class="fas fa-user-check"></i>${adminEscape(marketplaceTr("tierPrivate"))}</span>`;
+  return `<span class="inline-flex items-center gap-1 rounded-full bg-gray-50 border border-gray-200 text-gray-600 px-2 py-1 text-[11px] font-black"><i class="fas fa-globe"></i>${adminEscape(marketplaceTr("tierFound"))}</span>`;
+}
+
+function marketplaceContactUrl(type, value = "") {
+  const raw = cleanText(value);
+  if (!raw) return "#";
+  if (type === "phone") return `tel:${raw.replace(/[^+\d]/g, "")}`;
+  const digits = raw.replace(/\D/g, "").replace(/^0/, "256");
+  return `https://wa.me/${digits}`;
+}
+
+function marketplacePrimarySocialUrl(business = {}) {
+  const links = business.social_links && typeof business.social_links === "object" ? business.social_links : {};
+  return cleanText(links.primary || links.facebook || links.instagram || links.tiktok || links.linkedin || links.x || "");
+}
+
+function renderMarketplaceBusinesses() {
+  const results = document.getElementById("marketplace-results");
+  const empty = document.getElementById("marketplace-empty");
+  if (!results || !empty) return;
+  const businesses = marketplaceState.businesses || [];
+  results.innerHTML = businesses.map((business) => {
+    const category = marketplaceCategoryLabel(business.category);
+    const location = [business.area, business.district].filter(Boolean).join(", ");
+    const rating = Number(business.rating_avg || 0);
+    const socialUrl = marketplacePrimarySocialUrl(business);
+    const stars = rating ? `<span class="text-amber-500"><i class="fas fa-star"></i></span> ${rating.toFixed(1)} <span class="text-gray-400">(${Number(business.rating_count || 0)})</span>` : `<span class="text-gray-400">${adminEscape(marketplaceTr("newBusiness"))}</span>`;
+    return `<article class="marketplace-business-row bg-white border border-gray-200 rounded-xl p-4" data-tier="${adminAttr(business.tier || "found_online")}">
+      <div class="flex items-start gap-3">
+        <div class="marketplace-category-icon w-12 h-12 shrink-0 rounded-lg flex items-center justify-center" data-palette="${Math.max(0, (marketplaceState.categories || []).findIndex((item) => item.key === business.category)) % 6}"><i class="fas ${adminAttr(marketplaceState.categories.find((item) => item.key === business.category)?.icon || "fa-briefcase")}"></i></div>
+        <div class="min-w-0 flex-1">
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0"><h3 class="font-black text-gray-950 truncate">${adminEscape(business.name)}</h3><p class="text-xs font-bold text-[#b3134f] mt-0.5">${adminEscape(category)}</p></div>
+            ${marketplaceTierHtml(business)}
+          </div>
+          <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-600"><span><i class="fas fa-location-dot text-[#b3134f] mr-1"></i>${adminEscape(location || business.district)}</span><span>${stars}</span></div>
+          <p class="mt-2 text-sm text-gray-600 line-clamp-1">${adminEscape(business.description || "")}</p>
+          <div class="mt-3 flex items-center justify-between gap-3 flex-wrap">
+            <div class="flex gap-2">
+              ${business.phone ? `<a href="${adminAttr(marketplaceContactUrl("phone", business.phone))}" class="w-9 h-9 rounded-lg border border-gray-200 text-gray-700 inline-flex items-center justify-center hover:border-[#b3134f] hover:text-[#b3134f]" title="${adminAttr(marketplaceTr("call"))}" aria-label="${adminAttr(marketplaceTr("call"))}"><i class="fas fa-phone"></i></a>` : ""}
+              ${business.whatsapp || business.phone ? `<a href="${adminAttr(marketplaceContactUrl("whatsapp", business.whatsapp || business.phone))}" target="_blank" rel="noopener" class="w-9 h-9 rounded-lg border border-green-200 text-green-700 inline-flex items-center justify-center hover:bg-green-50" title="WhatsApp" aria-label="WhatsApp"><i class="fab fa-whatsapp"></i></a>` : ""}
+              ${!business.phone && !business.whatsapp && socialUrl ? `<a href="${adminAttr(socialUrl)}" target="_blank" rel="noopener nofollow" class="w-9 h-9 rounded-lg border border-blue-200 text-blue-700 inline-flex items-center justify-center hover:bg-blue-50" title="Social media" aria-label="Social media"><i class="fas fa-arrow-up-right-from-square"></i></a>` : ""}
+            </div>
+            <button type="button" onclick="marketplaceToggleProfile('${adminAttr(business.id)}')" class="text-sm font-black text-[#b3134f] hover:underline">${adminEscape(marketplaceTr("profile"))} <i class="fas fa-chevron-down ml-1 text-[10px]"></i></button>
+          </div>
+          <div id="marketplace-profile-${adminAttr(business.id)}" class="hidden mt-3 border-t border-gray-100 pt-3 text-xs text-gray-600 space-y-1">
+            <div class="text-sm leading-6 text-gray-700">${adminEscape(business.description || "")}</div>
+            <div><span class="font-black text-gray-800">${adminEscape(marketplaceTr("serves"))}:</span> ${adminEscape((business.serves_regions || []).join(", ") || business.district)}</div>
+            ${business.website ? `<div><a href="${adminAttr(business.website)}" target="_blank" rel="noopener nofollow" class="text-blue-700 font-bold hover:underline">${adminEscape(business.website)}</a></div>` : ""}
+            ${socialUrl ? `<div><a href="${adminAttr(socialUrl)}" target="_blank" rel="noopener nofollow" class="text-blue-700 font-bold hover:underline">${adminEscape(socialUrl)}</a></div>` : ""}
+            ${business.ursb_number ? `<div><span class="font-black text-gray-800">URSB:</span> ${adminEscape(business.ursb_number)}</div>` : ""}
+          </div>
+        </div>
+      </div>
+    </article>`;
+  }).join("");
+  empty.classList.toggle("hidden", marketplaceState.total > 0);
+  const count = document.getElementById("marketplace-result-count");
+  if (count) count.textContent = `${Number(marketplaceState.total || 0).toLocaleString()} ${marketplaceTr("businesses")}`;
+  const pagination = document.getElementById("marketplace-pagination");
+  if (pagination) pagination.classList.toggle("hidden", marketplaceState.totalPages <= 1);
+  const pageLabel = document.getElementById("marketplace-page-label");
+  if (pageLabel) pageLabel.textContent = `${marketplaceTr("page")} ${marketplaceState.page} ${marketplaceTr("of")} ${marketplaceState.totalPages}`;
+  const prev = document.getElementById("marketplace-prev");
+  const next = document.getElementById("marketplace-next");
+  if (prev) prev.disabled = marketplaceState.page <= 1;
+  if (next) next.disabled = marketplaceState.page >= marketplaceState.totalPages;
+}
+
+function renderMarketplaceCategoryChips() {
+  const wrap = document.getElementById("marketplace-category-chips");
+  if (!wrap) return;
+  const allCount = Object.values(marketplaceState.categoryCounts || {}).reduce((sum, count) => sum + Number(count || 0), 0);
+  const items = [{ key: "", label: marketplaceTr("allServices"), icon: "fa-border-all", count: allCount }, ...(marketplaceState.categories || []).map((item) => ({ ...item, label: marketplaceCategoryLabel(item.key), count: Number(marketplaceState.categoryCounts?.[item.key] || 0) }))];
+  wrap.innerHTML = items.map((item) => `<button type="button" onclick="selectMarketplaceCategory('${adminAttr(item.key)}')" class="marketplace-category-chip shrink-0 inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-2 text-xs font-black text-gray-700" aria-pressed="${item.key === marketplaceState.activeCategory ? "true" : "false"}"><i class="fas ${adminAttr(item.icon || "fa-briefcase")}"></i>${adminEscape(item.label)}<span class="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px]">${item.count}</span></button>`).join("");
+}
+
+async function loadMarketplacePage({ force = false } = {}) {
+  if (marketplaceState.loading) return;
+  marketplaceState.loading = true;
+  renderMarketplaceLoading();
+  try {
+    if (!marketplaceState.ready || force) {
+      const [configResponse, statsResponse] = await Promise.all([apiRequest("/api/marketplace/config", { skipAuth: true }), apiRequest("/api/marketplace/stats", { skipAuth: true })]);
+      marketplaceState.categories = configResponse?.data?.categories || [];
+      marketplaceState.districts = configResponse?.data?.districts || [];
+      marketplaceState.categoryCounts = statsResponse?.data?.by_category || {};
+      const total = Number(statsResponse?.data?.total || 0);
+      const totalEl = document.getElementById("marketplace-live-total");
+      if (totalEl) totalEl.textContent = total.toLocaleString();
+      marketplaceState.ready = true;
+      populateMarketplaceSelects();
+    }
+    syncMarketplaceFilterControls();
+    await searchMarketplaceBusinesses();
+    applyMarketplaceLanguageUI();
+  } catch (error) {
+    const results = document.getElementById("marketplace-results");
+    if (results) results.innerHTML = `<div class="rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-800">${adminEscape(error.message || "Marketplace could not load.")}</div>`;
+  } finally {
+    marketplaceState.loading = false;
+  }
+}
+
+async function searchMarketplaceBusinesses() {
+  const filters = marketplaceRouteFilters();
+  marketplaceState.page = filters.page;
+  marketplaceState.activeCategory = filters.category;
+  renderMarketplaceCategoryChips();
+  const params = new URLSearchParams({ page: String(filters.page), limit: String(marketplaceState.limit) });
+  Object.entries(filters).forEach(([key, value]) => {
+    if (key !== "page" && value) params.set(key, String(value));
+  });
+  const response = await apiRequest(`/api/marketplace/search?${params}`, { skipAuth: true });
+  marketplaceState.businesses = response?.data?.businesses || [];
+  marketplaceState.total = Number(response?.data?.pagination?.total ?? response?.data?.total ?? 0);
+  marketplaceState.totalPages = Math.max(1, Number(response?.data?.pagination?.total_pages || Math.ceil(marketplaceState.total / marketplaceState.limit) || 1));
+  renderMarketplaceBusinesses();
+  renderMarketplaceCategoryChips();
+}
+
+function updateMarketplaceRoute(filters = {}, { replace = false } = {}) {
+  const params = new URLSearchParams();
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value && !(key === "page" && Number(value) === 1)) params.set(key, String(value));
+  });
+  const url = `/marketplace${params.toString() ? `?${params}` : ""}`;
+  window.history[replace ? "replaceState" : "pushState"]({ page: "marketplace", source: "marketplace_filters" }, "", url);
+}
+
+function submitMarketplaceFilters(event) {
+  event?.preventDefault?.();
+  const filters = {
+    q: cleanText(document.getElementById("marketplace-q")?.value || ""),
+    category: cleanText(document.getElementById("marketplace-category")?.value || ""),
+    district: cleanText(document.getElementById("marketplace-district")?.value || ""),
+    area: cleanText(document.getElementById("marketplace-area")?.value || ""),
+    min_rating: cleanText(document.getElementById("marketplace-rating")?.value || ""),
+    tier: cleanText(document.getElementById("marketplace-tier")?.value || ""),
+    page: 1
+  };
+  updateMarketplaceRoute(filters);
+  syncMarketplaceFilterControls(filters);
+  renderMarketplaceLoading();
+  searchMarketplaceBusinesses().catch((error) => toast(error.message || "Marketplace search failed."));
+}
+
+function selectMarketplaceCategory(category) {
+  const filters = marketplaceRouteFilters();
+  filters.category = category || "";
+  filters.page = 1;
+  updateMarketplaceRoute(filters);
+  syncMarketplaceFilterControls(filters);
+  renderMarketplaceLoading();
+  searchMarketplaceBusinesses().catch((error) => toast(error.message || "Marketplace search failed."));
+}
+
+function resetMarketplaceFilters() {
+  updateMarketplaceRoute({}, { replace: true });
+  syncMarketplaceFilterControls({ q: "", category: "", district: "", area: "", min_rating: "", tier: "", page: 1 });
+  renderMarketplaceLoading();
+  searchMarketplaceBusinesses().catch((error) => toast(error.message || "Marketplace search failed."));
+}
+
+function marketplaceChangePage(delta) {
+  const nextPage = Math.max(1, Math.min(marketplaceState.totalPages, marketplaceState.page + Number(delta || 0)));
+  if (nextPage === marketplaceState.page) return;
+  const filters = marketplaceRouteFilters();
+  filters.page = nextPage;
+  updateMarketplaceRoute(filters);
+  syncMarketplaceFilterControls(filters);
+  renderMarketplaceLoading();
+  searchMarketplaceBusinesses().then(() => document.getElementById("marketplace-results")?.scrollIntoView({ behavior: "smooth", block: "start" })).catch((error) => toast(error.message || "Marketplace page failed."));
+}
+
+function marketplaceToggleProfile(id) {
+  document.getElementById(`marketplace-profile-${id}`)?.classList.toggle("hidden");
+}
+
+function marketplaceToggleNeedForm(show = true) {
+  const form = document.getElementById("marketplace-need-form");
+  if (!form) return;
+  form.classList.toggle("hidden", !show);
+  if (show) form.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+function marketplaceScrollToRegister() {
+  document.getElementById("marketplace-register")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  document.getElementById("marketplace-register-name")?.focus({ preventScroll: true });
+}
+
+async function submitMarketplaceAi(event) {
+  event?.preventDefault?.();
+  const input = document.getElementById("marketplace-ai-input");
+  const responseEl = document.getElementById("marketplace-ai-response");
+  const button = document.getElementById("marketplace-ai-submit");
+  const message = cleanText(input?.value || "");
+  if (!message) return;
+  if (responseEl) {
+    responseEl.classList.remove("hidden");
+    responseEl.innerHTML = `<div class="rounded-xl bg-white border border-blue-100 p-3 text-sm text-blue-900"><i class="fas fa-spinner fa-spin mr-2"></i>${adminEscape(marketplaceTr("aiSearching"))}</div>`;
+  }
+  if (button) button.disabled = true;
+  try {
+    const response = await apiRequest("/api/marketplace/ask", { method: "POST", skipAuth: true, body: { message, language: currentLang } });
+    const data = response?.data || {};
+    if (data.total_matches > 0) {
+      const filters = { category: data.parsed?.category || "", district: data.parsed?.district || "", area: data.parsed?.area || "", q: data.parsed?.category ? "" : message, page: 1 };
+      updateMarketplaceRoute(filters);
+      syncMarketplaceFilterControls(filters);
+      marketplaceState.businesses = data.businesses || [];
+      marketplaceState.total = Number(data.total_matches || 0);
+      marketplaceState.page = 1;
+      marketplaceState.totalPages = Math.max(1, Math.ceil(marketplaceState.total / marketplaceState.limit));
+      renderMarketplaceBusinesses();
+      renderMarketplaceCategoryChips();
+      if (responseEl) responseEl.innerHTML = `<div class="rounded-xl bg-white border border-blue-100 p-3 text-sm text-blue-950 font-bold">${adminEscape(marketplaceTr("aiResultsFound"))}</div>`;
+      document.getElementById("marketplace-results")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else {
+      if (responseEl) responseEl.innerHTML = `<div class="rounded-xl bg-white border border-blue-100 p-4 text-sm text-blue-950"><p>${adminEscape(marketplaceTr("emptyText"))}</p><button type="button" onclick="marketplaceToggleNeedForm(true)" class="mt-3 bg-blue-700 text-white rounded-lg px-3 py-2 text-xs font-black">${adminEscape(marketplaceTr("tellUs"))}</button></div>`;
+    }
+  } catch (error) {
+    if (responseEl) responseEl.innerHTML = `<div class="rounded-xl bg-white border border-red-100 p-3 text-sm text-red-800">${adminEscape(error.message || "AI search failed.")}</div>`;
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
+async function submitMarketplaceNeed(event) {
+  event?.preventDefault?.();
+  const payload = {
+    name: cleanText(document.getElementById("marketplace-need-name")?.value || ""),
+    phone: cleanText(document.getElementById("marketplace-need-phone")?.value || ""),
+    email: cleanText(document.getElementById("marketplace-need-email")?.value || ""),
+    message: cleanText(document.getElementById("marketplace-need-message")?.value || ""),
+    category: marketplaceRouteFilters().category,
+    district: marketplaceRouteFilters().district,
+    query: cleanText(document.getElementById("marketplace-ai-input")?.value || document.getElementById("marketplace-q")?.value || ""),
+    language: currentLang
+  };
+  try {
+    await apiRequest("/api/marketplace/leads", { method: "POST", skipAuth: true, body: payload });
+    event.currentTarget.reset();
+    toast(marketplaceTr("requestSent"));
+    marketplaceToggleNeedForm(false);
+  } catch (error) {
+    toast(error.message || "Request could not be sent.");
+  }
+}
+
+async function submitMarketplaceRegistration(event) {
+  event?.preventDefault?.();
+  const form = event.currentTarget;
+  const button = document.getElementById("marketplace-register-submit");
+  const resultEl = document.getElementById("marketplace-register-result");
+  const socialUrl = cleanText(document.getElementById("marketplace-register-social")?.value || "");
+  const payload = {
+    name: cleanText(document.getElementById("marketplace-register-name")?.value || ""),
+    category: cleanText(document.getElementById("marketplace-register-category")?.value || ""),
+    district: cleanText(document.getElementById("marketplace-register-district")?.value || ""),
+    area: cleanText(document.getElementById("marketplace-register-area")?.value || ""),
+    phone: cleanText(document.getElementById("marketplace-register-phone")?.value || ""),
+    whatsapp: cleanText(document.getElementById("marketplace-register-whatsapp")?.value || ""),
+    email: cleanText(document.getElementById("marketplace-register-email")?.value || ""),
+    website: cleanText(document.getElementById("marketplace-register-website")?.value || ""),
+    social_links: socialUrl ? { primary: socialUrl } : {},
+    ursb_number: cleanText(document.getElementById("marketplace-register-ursb")?.value || ""),
+    description: cleanText(document.getElementById("marketplace-register-description")?.value || ""),
+    language: currentLang
+  };
+  if (button) { button.disabled = true; button.textContent = marketplaceTr("submitting"); }
+  try {
+    const response = await apiRequest("/api/marketplace/register", { method: "POST", skipAuth: true, body: payload });
+    if (resultEl) {
+      resultEl.className = "mt-4 rounded-xl p-4 text-sm border border-green-100 bg-green-50 text-green-900";
+      resultEl.innerHTML = `<div class="font-black">${adminEscape(marketplaceTr("registrationSent"))}</div><div class="mt-1">${adminEscape(marketplaceTr("registrationRef"))}: <span class="font-mono font-black">${adminEscape(response?.data?.reference || "-")}</span></div>`;
+    }
+    form.reset();
+  } catch (error) {
+    if (resultEl) {
+      resultEl.className = "mt-4 rounded-xl p-4 text-sm border border-red-100 bg-red-50 text-red-800";
+      resultEl.textContent = error.message || "Registration could not be sent.";
+    }
+  } finally {
+    if (button) { button.disabled = false; button.textContent = marketplaceTr("submitRegistration"); }
+  }
+}
+
 const ABOUT_PERSONA_ROUTES = {
   renters: "/to-rent",
   buyers: "/for-sale",
@@ -6818,7 +7378,8 @@ function applyLanguageUI() {
   setTextById("nav-land", tr("navLand"));
   setTextById("nav-brokers", tr("navBrokers"));
   setTextById("nav-mortgage", tr("navMortgage"));
-  setTextById("nav-ai", tr("navAI"));
+  setTextById("nav-ai", currentLang === "en" ? "AI Chatbot" : tr("navAI"));
+  setTextById("nav-marketplace", marketplaceTr("breadcrumbMarketplace"));
   setTextById("nav-about", translateListingLabel("About Us"));
   setTextById("mnav-sale", tr("navSale"));
   setTextById("mnav-rent", tr("navRent"));
@@ -6827,7 +7388,8 @@ function applyLanguageUI() {
   setTextById("mnav-land", tr("navLand"));
   setTextById("mnav-brokers", tr("navBrokers"));
   setTextById("mnav-mortgage", tr("navMortgage"));
-  setTextById("mnav-ai", tr("navAI"));
+  setTextById("mnav-ai", currentLang === "en" ? "AI Chatbot" : tr("navAI"));
+  setTextById("mnav-marketplace", marketplaceTr("breadcrumbMarketplace"));
   setTextById("mnav-about", translateListingLabel("About Us"));
   setTextById("nav-list-btn", tr("advertiseProperty"));
   setTextById("mnav-advertise", tr("advertiseProperty"));
@@ -7092,6 +7654,7 @@ function setLang(lang, silent = false, rerender = true) {
   renderMortgageFinder();
   applyLanguageUI();
   updateHomeAskAiLanguageCopy();
+  applyMarketplaceLanguageUI();
   if (!silent) toast(`${tr("languageSet")}: ${currentLang.toUpperCase()}`);
 }
 
@@ -12006,6 +12569,7 @@ async function renderStaffDashboard() {
     }
     const data = res?.data || {};
     applyStaffDashboardData(data, user);
+    refreshMarketplaceModerationQueue("staff", { silent: true });
     if (data.partial) {
       window.setTimeout(() => {
         if (currentPage === "staff-dashboard") {
@@ -17205,6 +17769,7 @@ async function renderAdminDashboard(options = {}) {
 
   gate.classList.add("hidden");
   body.classList.remove("hidden");
+  refreshMarketplaceModerationQueue("admin", { silent: true });
 
   const nameEl = document.getElementById("admin-dashboard-name");
   const statusEl = document.getElementById("admin-dashboard-status");
@@ -18021,6 +18586,7 @@ const PUBLIC_WHATSAPP_CONTEXTS = Object.freeze({
   commercial: "Hi makaug, I'm looking for commercial property for my business. Please help me with location, size, rent or sale price, and viewing options.",
   land: "Hi makaug, I'm looking for land or a plot. Please help me find available land listings, compare details, and contact the seller or broker safely.",
   brokers: "Hi makaug, I'm looking for a trusted broker or agent. Please help me find someone suitable for my area and property need.",
+  marketplace: "Hi makaug, I need help finding a trusted property service provider. Please help me with the service, location, and safest next step.",
   mortgage: "Hi makaug, I need mortgage or affordability help. Please guide me on budget, deposit, monthly payments, and next steps.",
   "ai-chatbot": "Hi makaug, I want to use the AI WhatsApp chatbot. Please help me search property, list property, or get connected to support.",
   about: "Hi makaug, I'm learning about makaug.com and would like property help. Please guide me on the best next step.",
@@ -23900,6 +24466,66 @@ async function refreshStaffReportsQueue(options = {}) {
       : staffEmpty("No open reports or claims are waiting.");
   } catch (error) {
     wrap.innerHTML = staffEmpty(`Reports could not load: ${error.message || "request failed"}`);
+  }
+}
+
+function marketplaceModerationCardHtml(business = {}, scope = "staff") {
+  const location = [business.area, business.district].filter(Boolean).join(", ");
+  const source = business.source_type === "found_online" ? "Found online" : "Private registration";
+  return `<article class="rounded-xl border border-gray-200 bg-white p-3">
+    <div class="flex items-start justify-between gap-3">
+      <div class="min-w-0">
+        <div class="flex flex-wrap gap-2 items-center"><span class="rounded-full bg-rose-50 border border-rose-100 text-rose-700 px-2 py-1 text-[11px] font-black">${adminEscape(source)}</span><span class="rounded-full bg-gray-50 border border-gray-200 text-gray-600 px-2 py-1 text-[11px] font-bold">${adminEscape(marketplaceCategoryLabel(business.category))}</span></div>
+        <h4 class="mt-2 font-black text-gray-950">${adminEscape(business.name)}</h4>
+        <p class="mt-1 text-xs text-gray-500"><i class="fas fa-location-dot mr-1"></i>${adminEscape(location || "Location not supplied")} • ${adminEscape(business.phone || "No phone")}</p>
+        <p class="mt-2 text-xs text-gray-700 line-clamp-3">${adminEscape(business.description || "No description")}</p>
+        ${business.website ? `<a href="${adminAttr(business.website)}" target="_blank" rel="noopener noreferrer" class="mt-2 inline-block text-xs font-bold text-blue-700 hover:underline">${adminEscape(business.website)}</a>` : ""}
+      </div>
+    </div>
+    <div class="mt-3 flex flex-wrap gap-2">
+      <button type="button" onclick="marketplaceModerateBusiness('${adminAttr(business.id)}','approve','${adminAttr(scope)}')" class="bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg px-3 py-1.5 text-xs font-black">Approve live</button>
+      <button type="button" onclick="marketplaceModerateBusiness('${adminAttr(business.id)}','reject','${adminAttr(scope)}')" class="border border-red-200 text-red-700 hover:bg-red-50 rounded-lg px-3 py-1.5 text-xs font-black">Hide with reason</button>
+      <button type="button" onclick="marketplaceModerateBusiness('${adminAttr(business.id)}','remove','${adminAttr(scope)}')" class="border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg px-3 py-1.5 text-xs font-black">Remove</button>
+    </div>
+  </article>`;
+}
+
+async function refreshMarketplaceModerationQueue(scope = "staff", options = {}) {
+  const isAdmin = scope === "admin";
+  const wrap = document.getElementById(isAdmin ? "admin-marketplace-queue" : "staff-marketplace-queue");
+  if (!wrap) return;
+  if (!options.silent) wrap.innerHTML = staffEmpty("Marketplace registrations loading...");
+  try {
+    const requestOptions = isAdmin ? { headers: adminAuthHeaders() } : {};
+    const response = await apiRequest("/api/marketplace/admin/pending?status=pending_review&limit=50", requestOptions);
+    const businesses = response?.data?.businesses || [];
+    wrap.innerHTML = businesses.length
+      ? businesses.map((business) => marketplaceModerationCardHtml(business, scope)).join("")
+      : staffEmpty("No marketplace business registrations are waiting.");
+  } catch (error) {
+    wrap.innerHTML = staffEmpty(`Marketplace registrations could not load: ${error.message || "request failed"}`);
+  }
+}
+
+async function marketplaceModerateBusiness(id, status, scope = "staff") {
+  const hideAction = ["reject", "remove"].includes(status);
+  const notes = hideAction ? (window.prompt("Required moderation reason:", "") || "") : "Approved for the public Marketplace directory.";
+  if (hideAction && !notes.trim()) {
+    toast("A moderation reason is required.");
+    return;
+  }
+  if (status === "remove" && !window.confirm("Remove this business from the Marketplace directory? The audit record will be kept.")) return;
+  try {
+    const requestOptions = {
+      method: "PATCH",
+      body: { status, notes }
+    };
+    if (scope === "admin") requestOptions.headers = adminAuthHeaders();
+    await apiRequest(`/api/marketplace/admin/${encodeURIComponent(id)}/status`, requestOptions);
+    await refreshMarketplaceModerationQueue(scope, { silent: true });
+    toast(status === "approve" ? "Marketplace business approved and sent live." : "Marketplace business updated.");
+  } catch (error) {
+    toast(error.message || "Marketplace moderation failed.");
   }
 }
 
@@ -38136,6 +38762,7 @@ const PAGE_ROUTE_MAP = Object.freeze({
   brokers: "/brokers",
   mortgage: "/mortgage",
   "ai-chatbot": "/discover-ai-chatbot",
+  marketplace: "/marketplace",
   advertise: "/advertise",
   "how-it-works": "/how-it-works",
   careers: "/careers",
@@ -38177,6 +38804,7 @@ const PUBLIC_ROUTE_PAGE_MAP = Object.freeze({
   "/mortgage-finder": "mortgage",
   "/discover-ai-chatbot": "ai-chatbot",
   "/ai-chatbot": "ai-chatbot",
+  "/marketplace": "marketplace",
   "/advertise": "advertise",
   "/how-it-works": "how-it-works",
   "/careers": "careers",
@@ -38472,6 +39100,7 @@ function showPage(page, options = {}) {
   if (targetPage === "advertiser-dashboard") renderAdvertiserDashboard();
   if (targetPage === "admin-dashboard") renderAdminDashboard();
   if (targetPage === "admin-setup-status") renderAdminSetupStatus();
+  if (targetPage === "marketplace") loadMarketplacePage();
   if (targetPage === "list-property") {
     if (previousPage !== "list-property") {
       listWizardStep = 1;
@@ -38523,7 +39152,8 @@ const PUBLIC_ROUTE_SKELETON_LABELS = Object.freeze({
   land: "Land",
   brokers: "Brokers",
   mortgage: "Mortgage Finder",
-  "ai-chatbot": "Discover AI Chatbot",
+  "ai-chatbot": "AI Chatbot",
+  marketplace: "Marketplace",
   advertise: "Advertise",
   "how-it-works": "How it works",
   careers: "Careers",
