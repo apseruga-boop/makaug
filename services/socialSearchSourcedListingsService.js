@@ -2506,8 +2506,8 @@ async function existingFoundOnlineSourcePostListings(client, items = []) {
   const urls = uniqueUrls(items.map((item) => sourceUrlForItem(item)));
   const normalizedUrls = [...new Set(items.map(normalizedSourceUrlForItem).filter(Boolean))];
   if (!keys.length && !urls.length) return new Map();
-  const result = await client.query(
-    `SELECT
+  const lookupUrls = uniqueUrls([...urls, ...normalizedUrls]);
+  const selectExisting = `SELECT
        id::text AS id,
        title,
        status,
@@ -2523,19 +2523,20 @@ async function existingFoundOnlineSourcePostListings(client, items = []) {
          extra_fields->>'video_url',
          extra_fields->>'original_url'
        ) AS source_url
-     FROM properties
-     WHERE COALESCE(status, '') <> 'deleted'
-       AND (
-         extra_fields->>'source_listing_key' = ANY($1::text[])
-         OR extra_fields->>'source_post_url' = ANY($2::text[])
-         OR extra_fields->>'source_url' = ANY($2::text[])
-         OR extra_fields->>'youtube_url' = ANY($2::text[])
-         OR extra_fields->>'video_url' = ANY($2::text[])
-         OR extra_fields->>'original_url' = ANY($2::text[])
-         OR LOWER(REGEXP_REPLACE(COALESCE(extra_fields->>'source_url', extra_fields->>'source_post_url', extra_fields->>'youtube_url', extra_fields->>'video_url', extra_fields->>'original_url', ''), '[?#].*$', '')) = ANY($3::text[])
-       )`,
-    [keys, urls, normalizedUrls]
-  );
+     FROM properties`;
+  const result = lookupUrls.length
+    ? await client.query(
+      `${selectExisting}
+       WHERE COALESCE(status, '') <> 'deleted'
+         AND COALESCE(extra_fields->>'source_url', extra_fields->>'source_post_url', '') = ANY($1::text[])`,
+      [lookupUrls]
+    )
+    : await client.query(
+      `${selectExisting}
+       WHERE COALESCE(status, '') <> 'deleted'
+         AND extra_fields->>'source_listing_key' = ANY($1::text[])`,
+      [keys]
+    );
   const existing = new Map();
   for (const row of result.rows) {
     const payload = {
@@ -2813,7 +2814,9 @@ async function queueFoundOnlineSourcePostListings({
   try {
     await client.query('BEGIN');
     const existing = await existingFoundOnlineSourcePostListings(client, items);
-    existingContactCounts = await existingFoundOnlineContactCounts(client, items);
+    if (shouldCreateSourceProfile()) {
+      existingContactCounts = await existingFoundOnlineContactCounts(client, items);
+    }
     const agentIdsByKey = {};
     const created = [];
     const alreadyPresent = [];
