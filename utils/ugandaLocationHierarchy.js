@@ -3,36 +3,36 @@ const { DISTRICTS } = require('./constants');
 const UG_REGION_DISTRICTS = {
   Central: [
     'Buikwe', 'Bukomansimbi', 'Buvuma', 'Gomba', 'Kalangala', 'Kalungu',
-    'Kampala', 'Kasanda', 'Kayunga', 'Kiboga', 'Kyankwanzi', 'Kyotera',
-    'Luwero', 'Lwengo', 'Lyantonde', 'Masaka', 'Mityana', 'Mpigi',
+    'Kampala', 'Kassanda', 'Kayunga', 'Kiboga', 'Kyankwanzi', 'Kyotera',
+    'Luwero', 'Lwengo', 'Lyantonde', 'Masaka', 'Masaka City', 'Mityana', 'Mpigi',
     'Mubende', 'Mukono', 'Nakaseke', 'Nakasongola', 'Rakai',
     'Sembabule', 'Wakiso', 'Butambala'
   ],
   Eastern: [
     'Budaka', 'Bududa', 'Bugiri', 'Bugweri', 'Bukedea', 'Bukwo',
     'Bulambuli', 'Busia', 'Butaleja', 'Butebo', 'Buyende', 'Iganga',
-    'Jinja', 'Kaberamaido', 'Kalaki', 'Kaliro', 'Kamuli', 'Kapchorwa',
+    'Jinja', 'Jinja City', 'Kaberamaido', 'Kalaki', 'Kaliro', 'Kamuli', 'Kapchorwa',
     'Kapelebyong', 'Katakwi', 'Kibuku', 'Kumi', 'Kween', 'Luuka',
-    'Manafwa', 'Mayuge', 'Mbale', 'Namisindwa', 'Namutumba',
-    'Namayingo', 'Ngora', 'Pallisa', 'Serere', 'Sironko', 'Soroti',
+    'Manafwa', 'Mayuge', 'Mbale', 'Mbale City', 'Namisindwa', 'Namutumba',
+    'Namayingo', 'Ngora', 'Pallisa', 'Serere', 'Sironko', 'Soroti', 'Soroti City',
     'Tororo', 'Amuria'
   ],
   Northern: [
     'Abim', 'Adjumani', 'Agago', 'Alebtong', 'Amolatar', 'Amudat',
-    'Amuru', 'Apac', 'Arua', 'Dokolo', 'Gulu', 'Kaabong', 'Karenga',
-    'Kitgum', 'Koboko', 'Kole', 'Kotido', 'Kwania', 'Lamwo', 'Lira',
+    'Amuru', 'Apac', 'Arua', 'Arua City', 'Dokolo', 'Gulu', 'Gulu City', 'Kaabong', 'Karenga',
+    'Kitgum', 'Koboko', 'Kole', 'Kotido', 'Kwania', 'Lamwo', 'Lira', 'Lira City',
     'Madi-Okollo', 'Maracha', 'Moroto', 'Moyo', 'Nabilatuk',
     'Nakapiripirit', 'Napak', 'Nebbi', 'Nwoya', 'Obongi', 'Omoro',
-    'Otuke', 'Oyam', 'Pader', 'Pakwach', 'Yumbe', 'Zombo'
+    'Otuke', 'Oyam', 'Pader', 'Pakwach', 'Terego', 'Yumbe', 'Zombo'
   ],
   Western: [
     'Buhweju', 'Buliisa', 'Bundibugyo', 'Bunyangabu', 'Bushenyi',
-    'Hoima', 'Ibanda', 'Isingiro', 'Kabale', 'Kabarole', 'Kagadi',
+    'Fort Portal City', 'Hoima', 'Hoima City', 'Ibanda', 'Isingiro', 'Kabale', 'Kabarole', 'Kagadi',
     'Kakumiro', 'Kamwenge', 'Kanungu', 'Kasese', 'Kazo', 'Kibaale',
     'Kitagwenda', 'Kikuube', 'Kiruhura', 'Kiryandongo', 'Kisoro',
-    'Kyegegwa', 'Kyenjojo', 'Masindi', 'Mbarara', 'Mitooma',
+    'Kyegegwa', 'Kyenjojo', 'Masindi', 'Mbarara', 'Mbarara City', 'Mitooma',
     'Ntoroko', 'Ntungamo', 'Rubanda', 'Rubirizi', 'Rukiga',
-    'Rukungiri', 'Sheema'
+    'Rukungiri', 'Rwampara', 'Sheema'
   ]
 };
 
