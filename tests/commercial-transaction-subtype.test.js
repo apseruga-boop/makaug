@@ -78,6 +78,7 @@ test('admin and staff editing persist the commercial transaction axis', () => {
 
 test('commercial public controls are segmented, canonical and carried through URLs', () => {
   assert.match(html, /commercial-transaction-subtype-20260719/);
+  assert.match(html, /commercial-transaction-ui-wiring-20260719/);
   assert.match(html, /id="hero-transaction-f"/);
   assert.match(html, /id="commercial-transaction-f"/);
   assert.match(html, /value="commercial_land">Commercial land/);
@@ -86,6 +87,14 @@ test('commercial public controls are segmented, canonical and carried through UR
   assert.match(app, /data-section-transaction="sale"/);
   assert.match(app, /commercialTransactionForProperty/);
   assert.match(app, /canonicalCommercialTypeForProperty/);
+});
+
+test('section search persists commercial transaction filters before backend hydration', () => {
+  assert.match(app, /function persistSectionSearchRoute\(config, values = \{\}, source = "section_shell"\)/);
+  assert.match(app, /if \(config\.key === "commercial" && filters\.commercialType\)/);
+  assert.match(app, /filters\.propertyType = filters\.commercialType/);
+  assert.match(app, /persistSectionSearchRoute\(config, values, source\);[\s\S]*?filterCommercial\(\)/);
+  assert.match(app, /refreshActivePublicInventoryCategoryFromApi\(\{ silent: true \}\)/);
 });
 
 test('Ask AI parses and passes transaction_type without prematurely relaxing subtype', () => {

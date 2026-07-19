@@ -40571,10 +40571,29 @@ function recordSectionSearchBackendProbe(page, values = {}, resultsCount = 0, so
   }));
 }
 
+function persistSectionSearchRoute(config, values = {}, source = "section_shell") {
+  if (!config || config.key === "brokers") return false;
+  const filters = sectionSearchFilterPayload(config, values);
+  if (config.key === "commercial" && filters.commercialType) {
+    filters.propertyType = filters.commercialType;
+  }
+  if (config.key === "land" && filters.landTitleType) {
+    filters.propertyType = filters.landTitleType;
+  }
+  if (filters.sort === "newest") filters.sort = "";
+  return updateHeroSearchRoute(config.key, {
+    query: values.query || "",
+    area: values.district || values.studentCampus || "",
+    radiusKm: values.radius || "",
+    filters
+  }, source);
+}
+
 function runSectionSearch(page, { source = "section_shell", backend = true } = {}) {
   const config = sectionSearchConfigFor(page);
   if (!config) return false;
   const values = syncSectionSearchToLegacy(config.key) || {};
+  persistSectionSearchRoute(config, values, source);
   let result = [];
   if (config.key === "sale" || config.key === "rent") result = filterListings(config.key) || [];
   if (config.key === "students") result = filterStudents() || [];
@@ -40590,6 +40609,10 @@ function runSectionSearch(page, { source = "section_shell", backend = true } = {
     results_count: resultsCount
   });
   if (backend !== false) recordSectionSearchBackendProbe(config.key, values, resultsCount, source);
+  if (config.key !== "brokers") {
+    refreshActivePublicInventoryCategoryFromApi({ silent: true })
+      .catch((error) => console.warn("Section search backend refresh failed", { page: config.key, error }));
+  }
   return false;
 }
 
