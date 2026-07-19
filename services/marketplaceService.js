@@ -5,6 +5,7 @@ const crypto = require('crypto');
 const { UG_REGION_DISTRICTS, districtForKnownArea, normalizeReviewLocationHierarchy } = require('../utils/ugandaLocationHierarchy');
 
 const MARKETPLACE_P1_MARKER = 'marketplace-p1-20260719';
+const MARKETPLACE_REPORT_FIXES_MARKER = 'marketplace-report-fixes-20260719';
 const MARKETPLACE_STATS_TTL_MS = Math.max(15000, Number(process.env.MARKETPLACE_STATS_TTL_MS || 60000));
 const MARKETPLACE_SEARCH_TTL_MS = Math.max(5000, Number(process.env.MARKETPLACE_SEARCH_TTL_MS || 30000));
 const MARKETPLACE_SEARCH_CACHE_MAX = Math.max(25, Number(process.env.MARKETPLACE_SEARCH_CACHE_MAX || 200));
@@ -74,6 +75,11 @@ function slugify(value = '') {
 function registrationReference() {
   const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
   return `MP-${date}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
+}
+
+function claimReference() {
+  const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  return `MC-${date}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
 }
 
 function isCompetitorPortal(input = {}) {
@@ -166,6 +172,27 @@ function buildSearchFilters(input = {}) {
   };
 }
 
+function validateMarketplaceFilters(input = {}) {
+  const errors = [];
+  const category = clean(input.category);
+  const district = clean(input.district);
+  const tier = clean(input.tier).toLowerCase();
+  const minRatingRaw = clean(input.min_rating ?? input.minRating);
+  const pageRaw = clean(input.page);
+  const limitRaw = clean(input.limit);
+  if (category && !normalizeCategory(category)) errors.push('Unknown marketplace service category.');
+  if (district && !DISTRICTS.includes(district)) errors.push('Unknown Uganda district.');
+  if (tier && !['verified', 'private', 'found_online'].includes(tier)) errors.push('Unknown marketplace listing tier.');
+  if (minRatingRaw && (!Number.isFinite(Number(minRatingRaw)) || Number(minRatingRaw) < 0 || Number(minRatingRaw) > 5)) {
+    errors.push('Minimum rating must be between 0 and 5.');
+  }
+  if (pageRaw && (!/^\d+$/.test(pageRaw) || Number(pageRaw) < 1)) errors.push('Page must be a positive integer.');
+  if (limitRaw && (!/^\d+$/.test(limitRaw) || Number(limitRaw) < 1 || Number(limitRaw) > 50)) {
+    errors.push('Limit must be between 1 and 50.');
+  }
+  return { ok: errors.length === 0, errors };
+}
+
 async function searchMarketplace(db, input = {}) {
   const filters = buildSearchFilters(input);
   const cacheKey = JSON.stringify(filters);
@@ -197,7 +224,8 @@ async function searchMarketplace(db, input = {}) {
     `WITH filtered AS (
        SELECT id, name, slug, category, description, district, area, serves_regions,
               phone, whatsapp, email, website, social_links, ursb_number, tier,
-              rating_avg, rating_count, source_type, updated_at
+              rating_avg, rating_count, source_type, source, source_url,
+              first_seen, last_refreshed, updated_at
        FROM marketplace_businesses
        WHERE ${where.join(' AND ')}
      )
@@ -248,8 +276,10 @@ module.exports = {
   DISTRICTS,
   MARKETPLACE_CATEGORIES,
   MARKETPLACE_P1_MARKER,
+  MARKETPLACE_REPORT_FIXES_MARKER,
   buildSearchFilters,
   categoryByKey,
+  claimReference,
   clean,
   getMarketplaceStats,
   invalidateMarketplaceStats,
@@ -261,5 +291,6 @@ module.exports = {
   registrationReference,
   searchMarketplace,
   slugify,
+  validateMarketplaceFilters,
   validateUgandaLocation
 };

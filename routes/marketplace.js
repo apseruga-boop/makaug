@@ -11,6 +11,8 @@ const {
   DISTRICTS,
   MARKETPLACE_CATEGORIES,
   MARKETPLACE_P1_MARKER,
+  MARKETPLACE_REPORT_FIXES_MARKER,
+  claimReference,
   clean,
   getMarketplaceStats,
   invalidateMarketplaceStats,
@@ -22,6 +24,7 @@ const {
   registrationReference,
   searchMarketplace,
   slugify,
+  validateMarketplaceFilters,
   validateUgandaLocation
 } = require('../services/marketplaceService');
 
@@ -53,6 +56,7 @@ function normalizeUuid(value) {
 }
 
 function publicBusiness(row = {}) {
+  const foundOnline = row.tier === 'found_online' || row.source_type === 'found_online';
   return {
     id: row.id,
     name: row.name,
@@ -72,6 +76,10 @@ function publicBusiness(row = {}) {
     rating_avg: Number(row.rating_avg) || 0,
     rating_count: Number(row.rating_count) || 0,
     source_type: row.source_type,
+    source: foundOnline ? row.source : null,
+    source_url: foundOnline ? row.source_url : null,
+    first_seen: foundOnline ? row.first_seen : null,
+    last_refreshed: foundOnline ? row.last_refreshed : null,
     updated_at: row.updated_at
   };
 }
@@ -81,6 +89,7 @@ router.get('/config', async (_req, res) => {
     ok: true,
     data: {
       marker: MARKETPLACE_P1_MARKER,
+      release_markers: [MARKETPLACE_P1_MARKER, MARKETPLACE_REPORT_FIXES_MARKER],
       categories: MARKETPLACE_CATEGORIES,
       districts: DISTRICTS,
       paid_verification_enabled: false,
@@ -99,6 +108,10 @@ router.get('/stats', async (_req, res, next) => {
 
 router.get('/search', async (req, res, next) => {
   try {
+    const validation = validateMarketplaceFilters(req.query || {});
+    if (!validation.ok) {
+      return res.status(400).json({ ok: false, error: 'Invalid marketplace filters.', details: validation.errors });
+    }
     const result = await searchMarketplace(db, req.query || {});
     return res.json({
       ok: true,
@@ -113,6 +126,89 @@ router.get('/search', async (req, res, next) => {
         }
       }
     });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/claims', async (req, res, next) => {
+  try {
+    const input = req.body || {};
+    const businessId = normalizeUuid(input.business_id);
+    const claimantName = clean(input.claimant_name || input.name);
+    const claimantPhone = normalizePhone(input.claimant_phone || input.phone);
+    const claimantEmail = clean(input.claimant_email || input.email).toLowerCase();
+    const claimantRole = clean(input.claimant_role || input.role);
+    const proofUrl = normalizePublicUrl(input.proof_url);
+    const proofNotes = clean(input.proof_notes || input.notes);
+    const allowedRoles = new Set(['owner', 'director', 'employee', 'authorised_agent']);
+    const errors = [];
+    if (!businessId) errors.push('Choose a valid Marketplace business.');
+    if (claimantName.length < 2) errors.push('Claimant name is required.');
+    if (!claimantPhone || !isValidPhone(claimantPhone)) errors.push('Enter a valid claimant phone number.');
+    if (claimantEmail && !isValidEmail(claimantEmail)) errors.push('Enter a valid claimant email address.');
+    if (!allowedRoles.has(claimantRole)) errors.push('Choose your relationship to the business.');
+    if (clean(input.proof_url) && !proofUrl) errors.push('Proof URL must be a valid HTTP or HTTPS URL.');
+    if (proofNotes.length < 20) errors.push('Explain how the team can verify ownership in at least 20 characters.');
+    if (errors.length) return res.status(400).json({ ok: false, error: 'Validation failed', details: errors });
+
+    const businessResult = await db.query(
+      `SELECT id, name, category, district, tier, status
+       FROM marketplace_businesses
+       WHERE id = $1 AND status = 'live'
+       LIMIT 1`,
+      [businessId]
+    );
+    const business = businessResult.rows[0];
+    if (!business) return res.status(404).json({ ok: false, error: 'Marketplace business not found.' });
+    if (business.tier !== 'found_online') {
+      return res.status(409).json({ ok: false, error: 'This business is already privately listed or verified.' });
+    }
+    const duplicate = await db.query(
+      `SELECT id, reference
+       FROM marketplace_claims
+       WHERE business_id = $1 AND status = 'pending_review'
+         AND (claimant_phone = $2 OR ($3 <> '' AND claimant_email = $3))
+       LIMIT 1`,
+      [businessId, claimantPhone, claimantEmail]
+    );
+    if (duplicate.rows[0]) {
+      return res.status(409).json({ ok: false, error: 'A claim from this contact is already under review.', reference: duplicate.rows[0].reference });
+    }
+    const reference = claimReference();
+    const result = await db.query(
+      `INSERT INTO marketplace_claims (
+         business_id, reference, claimant_name, claimant_phone, claimant_email,
+         claimant_role, proof_url, proof_notes, language
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+       RETURNING id, reference, business_id, status, created_at`,
+      [businessId, reference, claimantName, claimantPhone, claimantEmail || null, claimantRole, proofUrl || null, proofNotes, clean(input.language) || 'en']
+    );
+    const claim = result.rows[0];
+    await recordMarketplaceEvent(db, {
+      businessId,
+      eventType: 'business_claim_submitted',
+      metadata: { claim_id: claim.id, reference, claimant_role: claimantRole }
+    });
+    const crmLead = await createLead(db, {
+      source: 'marketplace_claim',
+      leadType: 'marketplace_business_claim',
+      category: business.category,
+      location: business.district,
+      message: `Marketplace claim ${reference}: ${business.name}`,
+      contact: { name: claimantName, phone: claimantPhone, email: claimantEmail },
+      metadata: { marketplace_claim_id: claim.id, marketplace_business_id: businessId, marketplace_reference: reference }
+    });
+    await logNotification(db, {
+      channel: 'in_app',
+      type: 'marketplace_business_claim',
+      status: 'logged',
+      recipientPhone: claimantPhone,
+      recipientEmail: claimantEmail || null,
+      relatedLeadId: crmLead?.id || null,
+      payloadSummary: { marketplace_claim_id: claim.id, marketplace_business_id: businessId, reference }
+    });
+    return res.status(201).json({ ok: true, data: { marker: MARKETPLACE_REPORT_FIXES_MARKER, reference, claim } });
   } catch (error) {
     return next(error);
   }
@@ -310,9 +406,90 @@ router.get('/admin/pending', requireListingModerationAccess, async (req, res, ne
        LIMIT $2`,
       [status, limit]
     );
-    return res.json({ ok: true, data: { marker: MARKETPLACE_P1_MARKER, status, businesses: result.rows } });
+    const claims = await db.query(
+      `SELECT c.id, c.reference, c.business_id, c.claimant_name, c.claimant_phone,
+              c.claimant_email, c.claimant_role, c.proof_url, c.proof_notes,
+              c.language, c.status, c.moderation_reason, c.created_at,
+              b.name AS business_name, b.category, b.district, b.area, b.source_url
+       FROM marketplace_claims c
+       JOIN marketplace_businesses b ON b.id = c.business_id
+       WHERE c.status = 'pending_review'
+       ORDER BY c.created_at ASC
+       LIMIT $1`,
+      [limit]
+    );
+    return res.json({ ok: true, data: { marker: MARKETPLACE_REPORT_FIXES_MARKER, status, businesses: result.rows, claims: claims.rows } });
   } catch (error) {
     return next(error);
+  }
+});
+
+router.patch('/admin/claims/:id/status', requireListingModerationAccess, async (req, res, next) => {
+  const requested = clean(req.body?.status).toLowerCase();
+  const status = requested === 'approve' || requested === 'approved' ? 'approved' : requested === 'reject' || requested === 'rejected' ? 'rejected' : '';
+  const reason = clean(req.body?.reason || req.body?.notes);
+  if (!status) return res.status(400).json({ ok: false, error: 'Choose approve or reject.' });
+  if (status === 'rejected' && reason.length < 3) return res.status(400).json({ ok: false, error: 'A rejection reason is required.' });
+  const actorId = req.userAuth?.id || req.adminAuth?.userId || null;
+  const client = await db.pool.connect();
+  try {
+    await client.query('BEGIN');
+    const current = await client.query(
+      `SELECT c.*, b.name AS business_name, b.slug AS business_slug
+       FROM marketplace_claims c
+       JOIN marketplace_businesses b ON b.id = c.business_id
+       WHERE c.id = $1 AND c.status = 'pending_review'
+       FOR UPDATE`,
+      [req.params.id]
+    );
+    const claim = current.rows[0];
+    if (!claim) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ ok: false, error: 'Pending Marketplace claim not found.' });
+    }
+    await client.query(
+      `UPDATE marketplace_claims
+       SET status = $2, moderation_reason = NULLIF($3, ''), reviewed_by = $4, reviewed_at = NOW(), updated_at = NOW()
+       WHERE id = $1`,
+      [claim.id, status, reason, actorId]
+    );
+    if (status === 'approved') {
+      await client.query(
+        `UPDATE marketplace_businesses
+         SET tier = 'private', source_type = 'private', reviewed_by = $2, reviewed_at = NOW(), updated_at = NOW(),
+             source_metadata = COALESCE(source_metadata, '{}'::jsonb) || jsonb_build_object(
+               'approved_claim', jsonb_build_object(
+                 'claim_id', $3::text,
+                 'claimant_name', $4::text,
+                 'claimant_phone', $5::text,
+                 'claimant_email', COALESCE($6::text, ''),
+                 'approved_at', NOW()
+               )
+             )
+         WHERE id = $1`,
+        [claim.business_id, actorId, claim.id, claim.claimant_name, claim.claimant_phone, claim.claimant_email]
+      );
+    }
+    await recordMarketplaceEvent(client, {
+      businessId: claim.business_id,
+      actorUserId: actorId,
+      eventType: `business_claim_${status}`,
+      metadata: { claim_id: claim.id, reference: claim.reference, reason }
+    });
+    await client.query('COMMIT');
+    invalidateMarketplaceStats();
+    return res.json({
+      ok: true,
+      data: {
+        marker: MARKETPLACE_REPORT_FIXES_MARKER,
+        claim: { id: claim.id, reference: claim.reference, business_id: claim.business_id, status, moderation_reason: reason || null }
+      }
+    });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    return next(error);
+  } finally {
+    client.release();
   }
 });
 
@@ -358,7 +535,8 @@ router.get('/:slug', async (req, res, next) => {
     const result = await db.query(
       `SELECT id, name, slug, category, description, district, area, serves_regions,
               phone, whatsapp, email, website, social_links, ursb_number, tier,
-              rating_avg, rating_count, source_type, updated_at
+              rating_avg, rating_count, source_type, source, source_url,
+              first_seen, last_refreshed, updated_at
        FROM marketplace_businesses
        WHERE slug = $1 AND status = 'live'
        LIMIT 1`,
