@@ -8,14 +8,14 @@ const { importExactSocialSourcePosts } = require('../services/socialPlatformPost
 const root = path.join(__dirname, '..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 
-function persistenceDb() {
+function persistenceDb({ existingRows = [] } = {}) {
   let inserted = 0;
   const client = {
     async query(sql, params = []) {
       const statement = String(sql || '').trim();
       if (/^(BEGIN|COMMIT|ROLLBACK)$/.test(statement)) return { rows: [], rowCount: 0 };
       if (statement.includes('FROM properties') && statement.includes("extra_fields->>'source_listing_key'")) {
-        return { rows: [], rowCount: 0 };
+        return { rows: existingRows, rowCount: existingRows.length };
       }
       if (statement.startsWith('WITH normalized AS')) return { rows: [], rowCount: 0 };
       if (statement.startsWith('INSERT INTO properties (')) {
@@ -46,16 +46,18 @@ function persistenceDb() {
 }
 
 async function run() {
+  const sourceUrl = 'https://www.tiktok.com/@wamalapropertyservices/video/7487217163334454533';
+  const rawText = [
+    sourceUrl,
+    'title: House for sale in Bujuko, Wakiso',
+    'location: Bujuko, Wakiso',
+    'price: USh 85M',
+    'posted: 2025-03-29',
+    'phone: +256774120320'
+  ].join('\n');
   const result = await importExactSocialSourcePosts({
     db: persistenceDb(),
-    rawText: [
-      'https://www.tiktok.com/@wamalapropertyservices/video/7487217163334454533',
-      'title: House for sale in Bujuko, Wakiso',
-      'location: Bujuko, Wakiso',
-      'price: USh 85M',
-      'posted: 2025-03-29',
-      'phone: +256774120320'
-    ].join('\n'),
+    rawText,
     dryRun: false,
     fetchOembed: false,
     fetchPublicMetadata: false
@@ -69,17 +71,48 @@ async function run() {
   assert.strictEqual(result.persisted_property_ids.length, 1);
   assert.strictEqual(result.queued_listings[0].status, 'pending');
 
+  const duplicatePreview = await importExactSocialSourcePosts({
+    db: persistenceDb({
+      existingRows: [{
+        id: '3440e24d-ac43-43d6-a60a-e7b1b361678d',
+        title: 'House for sale in Bujuko at 85M',
+        status: 'pending',
+        moderation_stage: 'source_review',
+        inquiry_reference: 'MK-TIKTOK-BUJUKO',
+        lister_name: 'Wamala Property Services',
+        source_listing_key: '',
+        source_post_url: sourceUrl,
+        source_url: sourceUrl,
+      }]
+    }),
+    rawText,
+    dryRun: true,
+    fetchOembed: false,
+    fetchPublicMetadata: false
+  });
+  assert.strictEqual(duplicatePreview.eligible_to_queue_count, 1, 'duplicate rows remain eligible source posts');
+  assert.strictEqual(duplicatePreview.existing_properties, 1, 'dry-run must execute the production duplicate lookup');
+  assert.strictEqual(duplicatePreview.duplicate_warning_count, 1, 'dry-run must expose exact-link duplicate warnings');
+  assert.strictEqual(duplicatePreview.would_create_properties, 0, 'dry-run must not predict a duplicate as a new row');
+  assert.strictEqual(duplicatePreview.queued_listings.length, 0, 'duplicate rows must not be described as newly queueable');
+
   const app = read('assets/makaug-app.js');
   const adminRoutes = read('routes/admin.js');
   const staffRoutes = read('routes/staff.js');
   const service = read('services/socialSearchSourcedListingsService.js');
   const migration = read('db/migrations/089_tiktok_found_online_queue.sql');
   assert(app.includes('tiktok-queue-fix-20260719'), 'live bundle needs a queue-fix marker');
+  assert(app.includes('tiktok-queue-visibility-20260719'), 'live bundle needs a queue-visibility marker');
   assert(app.includes('eligible (will enter review when queued)'), 'preview must not claim rows are already in review');
   assert(app.includes('View in Review → Found Online'), 'queue success must provide a direct review action');
   assert(app.includes('adminLoadFoundOnlineReviewQueue'), 'Found Online review must load lazily');
   assert(app.includes('queue=found_online') && app.includes('ADMIN_REVIEW_QUEUE_PAGE_SIZE = 24'), 'Found Online review must request one small page');
+  assert(app.includes('posts: dryRun ? [] : cachedPreviewRows'), 'queue must reuse preview rows instead of repeating metadata fetches');
+  assert(app.includes('fetch_oembed: dryRun') && app.includes('fetch_public_metadata: dryRun'), 'queue must keep external enrichment off the persistence request');
   assert(adminRoutes.includes("queueType === 'found_online'"), 'admin review API must support the Found Online queue filter');
+  assert(adminRoutes.includes('adminFoundOnlineReviewQueueWhere'), 'Found Online review needs a dedicated non-suppressing queue predicate');
+  assert(adminRoutes.includes('adminActionableReviewQueueWhere'), 'dashboard counts must include dedicated Found Online rows');
+  assert(adminRoutes.includes("router.get('/properties/:id', sendAdminPropertyReview)"), 'King needs a direct review endpoint for imported property IDs');
   assert(adminRoutes.includes('clearAdminReviewQueueCache();'), 'a successful queue write must invalidate stale Found Online pages');
   assert(adminRoutes.includes('079_commercial_transaction_subtype.sql'), 'admin queue route must surface missing migration errors');
   assert(staffRoutes.includes('079_commercial_transaction_subtype.sql'), 'staff queue route must surface missing migration errors');

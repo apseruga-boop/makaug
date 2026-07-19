@@ -2551,6 +2551,45 @@ async function existingFoundOnlineSourcePostListings(client, items = []) {
   return existing;
 }
 
+function existingFoundOnlineRowForItem(existing = new Map(), item = {}) {
+  const sourceUrl = sourceUrlForItem(item);
+  return existing.get(item.key)
+    || existing.get(sourceUrl)
+    || existing.get(normalizedSourceUrlForItem(item))
+    || null;
+}
+
+function alreadyPresentFoundOnlineRow(item = {}, agent = {}, existingRow = {}) {
+  return {
+    key: item.key,
+    id: existingRow.id,
+    title: existingRow.title,
+    agent_key: item.agentKey,
+    agent_name: existingRow.lister_name || agent.name || item.agentKey,
+    status: existingRow.status || '',
+    moderation_stage: existingRow.moderation_stage || '',
+    property_url: existingRow.property_url || '',
+    source_url: sourceUrlForItem(item),
+    reason: 'already_queued',
+    already_present: true,
+  };
+}
+
+function duplicateWarningsForFoundOnlineRows(rows = []) {
+  return rows.map((item) => ({
+    type: 'exact_source_url_duplicate',
+    message: 'This exact social/source link has already been imported to makaug.',
+    key: item.key,
+    id: item.id,
+    title: item.title,
+    status: item.status || '',
+    moderation_stage: item.moderation_stage || '',
+    property_url: item.property_url || '',
+    source_url: item.source_url || '',
+    agent_name: item.agent_name || '',
+  }));
+}
+
 async function existingFoundOnlineContactCounts(client, items = []) {
   const phoneKeys = [];
   const emailKeys = [];
@@ -2684,11 +2723,27 @@ async function queueFoundOnlineSourcePostListings({
   const suppressedSourceRecords = sourceReviewRecords.filter((item) => item.intake?.suppressed_source_url);
   const lowSignalSourceLocationRecords = sourceReviewRecords.filter((item) => item.reason === 'low_signal_source_location');
 
+  let previewExisting = new Map();
+  if (dryRun && db?.pool) {
+    const previewClient = await db.pool.connect();
+    try {
+      previewExisting = await existingFoundOnlineSourcePostListings(previewClient, items);
+    } finally {
+      previewClient.release();
+    }
+  }
+
   if (dryRun) {
     const eligible = evaluated.filter(({ intake }) => intake.eligible);
-    const dryRunRows = eligible.map(({ item, agent, intake }) => {
+    const alreadyPresent = [];
+    const dryRunRows = eligible.flatMap(({ item, agent, intake }) => {
+      const existingRow = existingFoundOnlineRowForItem(previewExisting, item);
+      if (existingRow) {
+        alreadyPresent.push(alreadyPresentFoundOnlineRow(item, agent, existingRow));
+        return [];
+      }
       const autoLive = sourcePostAutoLiveStatusFor(item, agent);
-      return {
+      return [{
         key: item.key,
         title: item.title,
         area: item.area,
@@ -2713,10 +2768,11 @@ async function queueFoundOnlineSourcePostListings({
         moderation_stage: autoLive.moderation_stage,
         intake,
         dry_run: true,
-      };
+      }];
     });
     const autoLiveRows = dryRunRows.filter((item) => item.auto_live_ready);
     const reviewRows = dryRunRows.filter((item) => !item.auto_live_ready);
+    const duplicateWarnings = duplicateWarningsForFoundOnlineRows(alreadyPresent);
     return {
       ok: true,
       dry_run: true,
@@ -2728,7 +2784,8 @@ async function queueFoundOnlineSourcePostListings({
       source_quality_suppressed_count: sourceQualitySuppressedRecords.length,
       low_signal_source_location_count: lowSignalSourceLocationRecords.length,
       created_properties: 0,
-      existing_properties: 0,
+      would_create_properties: dryRunRows.length,
+      existing_properties: alreadyPresent.length,
       created_auto_live_properties: 0,
       existing_auto_live_properties: 0,
       auto_live_properties: autoLiveRows.length,
@@ -2736,6 +2793,10 @@ async function queueFoundOnlineSourcePostListings({
       auto_live_listings: autoLiveRows,
       queued_listings: dryRunRows,
       review_queue_listings: reviewRows,
+      already_present_properties: alreadyPresent,
+      duplicate_warning_count: duplicateWarnings.length,
+      duplicate_warnings: duplicateWarnings,
+      duplicate_source_url_records: duplicateWarnings,
       source_review_records: sourceReviewRecords,
       suppressed_source_records: suppressedSourceRecords,
       source_quality_suppressed_records: sourceQualitySuppressedRecords,
@@ -2759,22 +2820,9 @@ async function queueFoundOnlineSourcePostListings({
     const skippedListings = [...sourceReviewRecords];
 
     for (const { item, agent, intake } of evaluated) {
-      const sourceUrl = sourceUrlForItem(item);
-      const existingRow = existing.get(item.key) || existing.get(sourceUrl) || existing.get(normalizedSourceUrlForItem(item));
+      const existingRow = existingFoundOnlineRowForItem(existing, item);
       if (existingRow) {
-        alreadyPresent.push({
-          key: item.key,
-          id: existingRow.id,
-          title: existingRow.title,
-          agent_key: item.agentKey,
-          agent_name: existingRow.lister_name || agent.name || item.agentKey,
-          status: existingRow.status || '',
-          moderation_stage: existingRow.moderation_stage || '',
-          property_url: existingRow.property_url || '',
-          source_url: sourceUrl,
-          reason: 'already_queued',
-          already_present: true,
-        });
+        alreadyPresent.push(alreadyPresentFoundOnlineRow(item, agent, existingRow));
         continue;
       }
       if (!intake.eligible) continue;
@@ -2807,18 +2855,7 @@ async function queueFoundOnlineSourcePostListings({
     const reviewCreated = created.filter((item) => isReviewQueueStatus(item));
     const alreadyPresentReviewQueue = alreadyPresent.filter((item) => isReviewQueueStatus(item));
     const alreadyLiveOrApproved = alreadyPresent.filter((item) => isLiveOrApprovedStatus(item));
-    const duplicateWarnings = alreadyPresent.map((item) => ({
-      type: 'exact_source_url_duplicate',
-      message: 'This exact social/source link has already been imported to makaug.',
-      key: item.key,
-      id: item.id,
-      title: item.title,
-      status: item.status || '',
-      moderation_stage: item.moderation_stage || '',
-      property_url: item.property_url || '',
-      source_url: item.source_url || '',
-      agent_name: item.agent_name || '',
-    }));
+    const duplicateWarnings = duplicateWarningsForFoundOnlineRows(alreadyPresent);
     const reviewQueueListings = [
       ...reviewCreated,
       ...alreadyPresentReviewQueue.map((item) => ({
