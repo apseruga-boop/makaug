@@ -13,7 +13,8 @@ const {
   importMarketplaceSourceCandidates,
   registryRows,
   sourceDefinitions,
-  startMarketplaceDrip
+  startMarketplaceDrip,
+  warmMarketplacePublicCache
 } = require('../services/marketplaceNationalDripService');
 const { DISTRICTS, MARKETPLACE_CATEGORIES } = require('../services/marketplaceService');
 
@@ -106,6 +107,32 @@ test('drip start updates interval without ambiguous PostgreSQL parameter types',
   const configSql = statements.find((sql) => /SET base_interval_minutes/.test(sql));
   assert.match(configSql, /make_interval\(mins => \$2::int\)/);
   assert.equal(result.enabled, true);
+});
+
+test('public Marketplace cache pre-warm hydrates stats and the broad first page', async () => {
+  const statements = [];
+  const db = {
+    query: async (sql, params = []) => {
+      statements.push({ sql, params });
+      if (/GROUP BY category/.test(sql)) return { rows: [{ category: 'surveyors', count: 12 }] };
+      if (/WITH filtered AS/.test(sql)) return { rows: [{ total_count: 12 }] };
+      throw new Error(`Unexpected SQL: ${sql}`);
+    }
+  };
+
+  const result = await warmMarketplacePublicCache(db);
+  assert.equal(result.ok, true);
+  assert.equal(statements.length, 2);
+  const search = statements.find((entry) => /WITH filtered AS/.test(entry.sql));
+  assert.deepEqual(search.params, [20, 0]);
+});
+
+test('scheduled run uses a typed interval and re-warms public caches after inserts', () => {
+  const service = read('services/marketplaceNationalDripService.js');
+  assert.match(service, /make_interval\(mins => \$6::int\)/);
+  assert.doesNotMatch(service, /\(\$6 \|\| ' minutes'\)::interval/);
+  assert.match(service, /invalidateMarketplaceStats\(\);\s*await warmMarketplacePublicCache\(db\);/);
+  assert.match(service, /setTimeout\(\(\) => warmMarketplacePublicCache\(db\), 2000\)/);
 });
 
 function sourceRow(overrides = {}) {

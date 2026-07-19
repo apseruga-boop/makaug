@@ -11,6 +11,7 @@ const {
   isCompetitorPortal,
   normalizeCategory,
   normalizePhone,
+  searchMarketplace,
   slugify
 } = require('./marketplaceService');
 
@@ -33,6 +34,19 @@ let schedulerRunning = false;
 let schedulerArmedAt = null;
 let schedulerLastTickAt = null;
 let schedulerLastResult = null;
+
+async function warmMarketplacePublicCache(db) {
+  try {
+    await Promise.all([
+      getMarketplaceStats(db, { force: true }),
+      searchMarketplace(db, { page: 1, limit: 20 })
+    ]);
+    return { ok: true };
+  } catch (error) {
+    logger.warn('Marketplace public cache pre-warm failed', { error: error.message });
+    return { ok: false, error: error.message };
+  }
+}
 
 const SOURCE_DEFINITIONS = Object.freeze([
   {
@@ -584,7 +598,10 @@ async function importMarketplaceSourceCandidates(db, rows = [], { actorId = 'mar
     if (hidden) summary.hidden_enrichment += 1;
     else summary.inserted += 1;
   }
-  if (summary.inserted) invalidateMarketplaceStats();
+  if (summary.inserted) {
+    invalidateMarketplaceStats();
+    await warmMarketplacePublicCache(db);
+  }
   return { marker: MARKETPLACE_P2_MARKER, ...summary };
 }
 
@@ -753,13 +770,16 @@ async function runMarketplaceDripOnce(db, { force = false, actorId = 'marketplac
             monthly_request_count = monthly_request_count + $3,
             status = $4,
             pause_reason = $5,
-            next_run_at = CASE WHEN $7 THEN NULL ELSE NOW() + ($6 || ' minutes')::interval END,
+            next_run_at = CASE WHEN $7 THEN NULL ELSE NOW() + make_interval(mins => $6::int) END,
             last_result = $8::jsonb,
             updated_at = NOW()
       WHERE drip_key = $1`,
     [DRIP_KEY, summary.next_source_offset, summary.requests, status, blockedReason || null, nextInterval, shouldPause, JSON.stringify(summary)]
   );
-  if (summary.inserted) invalidateMarketplaceStats();
+  if (summary.inserted) {
+    invalidateMarketplaceStats();
+    await warmMarketplacePublicCache(db);
+  }
   return { ok: true, skipped: false, result: summary };
 }
 
@@ -840,6 +860,7 @@ function startMarketplaceDripScheduler(db) {
   schedulerArmedAt = new Date().toISOString();
   schedulerTimer = setInterval(() => tickMarketplaceDripScheduler(db), SCHEDULER_POLL_MS);
   schedulerTimer.unref?.();
+  setTimeout(() => warmMarketplacePublicCache(db), 2000).unref?.();
   setTimeout(() => tickMarketplaceDripScheduler(db), 5000).unref?.();
   logger.info('Marketplace national drip scheduler armed', { poll_ms: SCHEDULER_POLL_MS });
 }
@@ -863,5 +884,6 @@ module.exports = {
   startMarketplaceDripScheduler,
   tickMarketplaceDripScheduler,
   updateMarketplaceDripConfig,
-  upsertMarketplaceCandidate
+  upsertMarketplaceCandidate,
+  warmMarketplacePublicCache
 };
