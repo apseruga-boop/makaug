@@ -61,7 +61,9 @@ const PREAPPROVED_PERMISSION_STATUSES = [
 const SOCIAL_AREA_PIN_OVERRIDES = [
   { name: 'Namasuba', district: 'Wakiso', lat: 0.258, lng: 32.558, aliases: ['Namasuba', 'Namasuba Kampala', 'Namasuba Entebbe Road', 'Rahim Foods', 'Rahim Foods Namasuba'] },
   { name: 'Ndejje', district: 'Wakiso', lat: 0.244, lng: 32.553, aliases: ['Ndejje', 'Ndejje Lubugumu'] },
-  { name: 'Bujjuko Akright Estate', district: 'Wakiso', lat: 0.374, lng: 32.389, aliases: ['Bujjuko Akright', 'Bujuuko Akright', 'Akright', 'Bujjuko', 'Bujuuko'] },
+  { name: 'Bujjuko Akright Estate', district: 'Wakiso', lat: 0.374, lng: 32.389, aliases: ['Bujjuko Akright', 'Bujuuko Akright', 'Akright'] },
+  { name: 'Bujjuko', district: 'Wakiso', lat: 0.374, lng: 32.389, aliases: ['Bujjuko', 'Bujuuko', 'Bujuko'] },
+  { name: 'Kitende', district: 'Wakiso', lat: 0.198, lng: 32.533, aliases: ['Kitende'] },
   { name: 'Kakiri', district: 'Wakiso', lat: 0.409, lng: 32.38, aliases: ['Kakiri', 'Kakiri Masulita', 'Kakiri Masulita Hoima Road', 'Hoima Road'] },
   { name: 'Masulita', district: 'Wakiso', lat: 0.51, lng: 32.46, aliases: ['Masulita'] },
   { name: 'Kira', district: 'Wakiso', lat: 0.3978, lng: 32.6414, aliases: ['Kira', 'Kira Town'] },
@@ -74,7 +76,7 @@ const PUBLIC_SOURCE_CONTACT_POLICY = 'No public phone number is not a blocker wh
 const FOUND_ONLINE_LAUNCH_INTAKE_POLICY = {
   source_window_start: LAUNCH_SOURCE_POST_WINDOW_START,
   target_source_year: 2026,
-  queue_rule: 'Launch harvest mode: queue every supported public social property post from 1 January 2026 onward into review, regardless of poster type. Missing phone, media, price, or exact pin are review notes, not capture blockers. Website-only sources are ignored. Only suppressed URLs, unsupported platforms, old posts, duplicates, clear foreign/non-Uganda property, and obvious non-property content stay out of the property review queue.',
+  queue_rule: 'Launch harvest mode: queue every supported public social property post from 1 January 2026 onward into review, regardless of poster type. Missing phone, media, price, or exact pin are review notes, not capture blockers. Manually supplied exact social-post URLs may also enter King review when older, but must identify a specific property, include a usable Uganda location, and carry an availability/date warning. Original-poster comments are optional. Website-only sources are ignored. Only suppressed URLs, unsupported platforms, old automated posts, duplicates, clear foreign/non-Uganda property, and obvious non-property content stay out of the property review queue.',
   image_rule: 'Found-online/social imports are public discovery results: do not rehost downloaded TikTok, Facebook, Instagram, YouTube, X, LinkedIn, WhatsApp, or website photos/videos as makaug gallery assets unless the rights holder has explicitly supplied or approved them. Public pages should show source links or official embeds first, then makaug rewritten facts and disclosures.',
   facebook_image_rule: 'For Facebook, store the exact public post URL as source evidence. Do not scrape or rehost Meta media without permission or an approved Meta tool/feed; link back to the source and ask the source/agent for authorised images before using photos publicly. Location must still be present before approval.',
   platform_scope: ['YouTube', 'TikTok', 'Instagram', 'Facebook', 'X/Twitter'],
@@ -615,6 +617,13 @@ function socialAreaPinFromText(value = '') {
   return null;
 }
 
+function socialAreaPinFromExplicitLocation(value = '') {
+  const explicit = compactText(value);
+  if (!explicit) return null;
+  const primaryArea = compactText(explicit.split(',')[0]);
+  return socialAreaPinFromText(primaryArea) || socialAreaPinFromText(explicit);
+}
+
 function asTextArray(value = []) {
   if (Array.isArray(value)) return value.map((item) => String(item || '').trim()).filter(Boolean);
   return String(value || '')
@@ -896,6 +905,31 @@ function sourcePriceLabelFor(item = {}) {
   return text && !/\b(?:price\s*)?(?:upon application|on request|poa)\b/i.test(text) ? text : PRICE_UPON_APPLICATION_LABEL;
 }
 
+function isManualExactSocialIntake(item = {}) {
+  const raw = item.raw_source_post || item.rawSourcePost || {};
+  const nestedRaw = raw.raw_source_post || raw.rawSourcePost || {};
+  const importMethod = String(
+    raw.import_method
+      || nestedRaw.import_method
+      || item.import_method
+      || ''
+  ).trim().toLowerCase();
+  return importMethod === 'no_api_exact_social_url_intake'
+    || importMethod === 'tiktok_exact_video_intake';
+}
+
+function hasSpecificPropertySignal(item = {}) {
+  const haystack = compactText([
+    item.title,
+    item.sourceTitle,
+    item.description,
+    item.sourceText,
+    item.sourceVisualText,
+    item.raw_source_post?.caption,
+  ].filter(Boolean).join(' ')).toLowerCase();
+  return /\b(?:for sale|for rent|to let|to rent|bed(?:room)?s?|studio|bedsitter|house|home|apartment|flat|villa|bungalow|mansion|duplex|condo|property|plot|plots|land|acre|acres|decimal|decimals|hostel|room|rooms|shop|office|warehouse|commercial|building)\b/.test(haystack);
+}
+
 function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
   const hasSource = Boolean(sourceUrlForItem(item));
   const allowedSocialSource = itemHasAllowedSocialSource(item, agent);
@@ -910,7 +944,10 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
   const preApproval = sourcePreApprovalStatusFor(item);
   const sourceQuality = sourceQualityReviewForItem(item, agent);
   const positiveListingGate = sourcePositiveListingGateForItem(item, agent);
-  const hasLocation = Boolean(String(item.address || item.area || item.district || '').trim()) || positiveListingGate.has_uganda_location_signal === true;
+  const hasLocation = item.locationEvidenceConfirmed !== false && (
+    Boolean(String(item.address || item.area || item.district || '').trim())
+      || positiveListingGate.has_uganda_location_signal === true
+  );
   const pendingKingSourceReview = !preApproval.preapproved;
   const hasQueuePermission = allowedSocialSource;
   const requiresSpecificSourcePostLocation = item.importedFromSourcePost === true;
@@ -922,17 +959,39 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
       positiveListingGate.reason === 'non_uganda_location'
       && /foreign|outside uganda/i.test(String((positiveListingGate.details || []).join(' ')))
     );
+  const manualExactSocialIntake = isManualExactSocialIntake(item);
+  const specificPropertySignal = hasSpecificPropertySignal(item);
+  const dateWindowAllowsQueue = manualExactSocialIntake || dateStatus !== 'before_2026_source_window';
+  const manualExactPasses = !manualExactSocialIntake || (
+    hasLocation
+      && specificPropertySignal
+      && hasContact
+      && hasImageOrEvidence
+  );
   const captureToReview = Boolean(
     hasSource
       && allowedSocialSource
-      && dateStatus !== 'before_2026_source_window'
+      && dateWindowAllowsQueue
       && !sourceQualityHardBlocked
       && !positiveGateHardBlocked
+      && manualExactPasses
   );
+  const blockingReasons = [
+    !hasSource ? 'missing_exact_source_url' : '',
+    !allowedSocialSource ? 'unsupported_source_platform' : '',
+    manualExactSocialIntake && !hasLocation ? 'missing_uganda_location' : '',
+    manualExactSocialIntake && !hasContact ? 'missing_public_contact_or_source_route' : '',
+    manualExactSocialIntake && !hasImageOrEvidence ? 'missing_source_evidence' : '',
+    manualExactSocialIntake && !specificPropertySignal ? 'not_a_specific_property_listing' : '',
+    !dateWindowAllowsQueue ? 'before_2026_automated_source_window' : '',
+    sourceQualityHardBlocked ? (sourceQuality.reason || 'non_listing_source_content') : '',
+    positiveGateHardBlocked ? (positiveListingGate.reason || 'not_a_listing') : '',
+  ].filter(Boolean);
   return {
     eligible: captureToReview,
+    blocking_reasons: blockingReasons,
     capture_mode: 'launch_review_first',
-    capture_rule: 'supported_social_property_posts_go_to_review_even_when_phone_media_or_exact_location_need_human_confirmation',
+    capture_rule: 'supported_social_property_posts_go_to_review_even_when_phone_media_or_exact_location_need_human_confirmation; manual exact posts require a specific property and Uganda location',
     has_source_url: hasSource,
     allowed_social_source: allowedSocialSource,
     has_location_or_area: hasLocation,
@@ -950,6 +1009,10 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
     has_contact_path: hasContact,
     has_image_or_source_evidence: hasImageOrEvidence,
     date_status: dateStatus,
+    manual_exact_social_intake: manualExactSocialIntake,
+    date_window_allows_queue: dateWindowAllowsQueue,
+    older_exact_source_requires_availability_review: manualExactSocialIntake && dateStatus === 'before_2026_source_window',
+    original_poster_comment_required: false,
     preapproved: preApproval.preapproved,
     consent_confirmed: preApproval.consent_confirmed,
     image_rights_confirmed: preApproval.image_rights_confirmed,
@@ -1417,8 +1480,12 @@ function publicDescriptionFor(item = {}) {
 }
 
 function reviewSteps(item = {}) {
+  const manualOlderExactSource = isManualExactSocialIntake(item)
+    && sourceDateStatusFor(item) === 'before_2026_source_window';
   const steps = [
-    'Confirm the exact source post/listing was first published on or after 1 January 2026',
+    manualOlderExactSource
+      ? 'This manually supplied exact source post predates 2026; confirm that the property is still available before approval'
+      : 'Confirm the exact source post/listing was first published on or after 1 January 2026',
     'Confirm the agent/source still wants this exact listing live on makaug.com',
     `Confirm current availability and price, or keep ${PRICE_UPON_APPLICATION_LABEL} if the source does not publish one`,
     'Confirm the exact road/map pin and update it if the agent gives a better pin',
@@ -1638,6 +1705,9 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
   const sourcePublishedAt = sourcePublishedAtFor(item);
   const sourcePublishedLabel = sourcePublishedLabelFor(item);
   const sourceDateStatus = sourceDateStatusFor(item);
+  const manualExactSocialIntake = isManualExactSocialIntake(item);
+  const olderExactSourceRequiresAvailabilityReview = manualExactSocialIntake
+    && sourceDateStatus === 'before_2026_source_window';
   const preApproval = sourcePreApprovalStatusFor(item);
   const youtubeConfidenceReview = youtubeConfidenceReviewForItem(item);
   const autoLive = sourcePostAutoLiveStatusFor(item, agent);
@@ -1700,6 +1770,9 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
     frame_ocr_text: item.raw_source_post?.frame_ocr_text || item.rawSourcePost?.frame_ocr_text || '',
     source_post_window_start: LAUNCH_SOURCE_POST_WINDOW_START,
     source_post_date_status: sourceDateStatus,
+    manual_exact_social_intake: manualExactSocialIntake,
+    older_exact_source_requires_availability_review: olderExactSourceRequiresAvailabilityReview,
+    original_poster_comment_required: false,
     first_seen_online_at: SOCIAL_SEARCH_FIRST_SEEN_AT,
     first_seen_online_label: 'First picked up by makaug source watch on 20 May 2026',
     first_posted_online_at: sourcePublishedAt || null,
@@ -1797,7 +1870,12 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
     longitude_source: 'manual_public_source_area_pin',
     area_highlights: `${item.area} is a practical Uganda property search area with access to local roads, schools, health facilities, shops, and daily services. Confirm the exact property pin with the listing agent before approval.`,
     nearby_facilities: nearby.map(([name, type, distanceKm]) => ({ name, type, distanceKm })),
-    source_labels: ['found online', sourcePlatformFeedLabel(sourcePlatform), '2026+ social-only intake', sourceContactLabel],
+    source_labels: [
+      'found online',
+      sourcePlatformFeedLabel(sourcePlatform),
+      olderExactSourceRequiresAvailabilityReview ? 'older exact source - availability review required' : '2026+ social-only intake',
+      sourceContactLabel,
+    ],
     source_urls: uniqueUrls([agent.channelUrl, sourceUrl, sourceContactUrl, item.sourceUrls]),
     photo_source_urls: sourceImageRows.map((image) => image.url),
     authorised_photo_urls: imageRows.map((image) => image.url),
@@ -1876,6 +1954,8 @@ function buildSocialSearchListing(item, agentId = null) {
     autoLive.moderation_stage = 'source_review';
     autoLive.reason = 'Commercial transaction and subtype need staff confirmation before publication.';
   }
+  const manualOlderExactSource = isManualExactSocialIntake(item)
+    && sourceDateStatusFor(item) === 'before_2026_source_window';
   return {
     listing_type: listingType,
     transaction_type: transactionType || null,
@@ -1927,7 +2007,7 @@ function buildSocialSearchListing(item, agentId = null) {
     status: autoLive.status,
     moderation_stage: autoLive.moderation_stage,
     reviewed_at: autoLive.approved ? new Date() : null,
-    moderation_notes: `${autoLive.approved ? 'YOUTUBE API AUTO-LIVE IMPORT' : (item.importedFromSourcePost ? 'FOUND-ONLINE SOURCE POST IMPORT' : 'SOCIAL SEARCH LISTING')}. Public source inventory from ${agent.name || 'source'}. Source post: ${sourceUrlForItem(item)}. ${autoLive.approved ? 'Location, 2026 source date, listing category, property signal, and public source/contact route passed the YouTube API auto-live policy; direct phone is not required when the source contact route is available.' : 'Confirm it was first posted on or after 1 January 2026, then confirm location, availability, and price or Price upon application. Location is non-negotiable; other source-review checks can be overridden by King.'}${classificationWarning ? ` ${classificationWarning}` : ''} Batch: ${itemBatchId(item)}.`,
+    moderation_notes: `${autoLive.approved ? 'YOUTUBE API AUTO-LIVE IMPORT' : (item.importedFromSourcePost ? 'FOUND-ONLINE SOURCE POST IMPORT' : 'SOCIAL SEARCH LISTING')}. Public source inventory from ${agent.name || 'source'}. Source post: ${sourceUrlForItem(item)}. ${autoLive.approved ? 'Location, 2026 source date, listing category, property signal, and public source/contact route passed the YouTube API auto-live policy; direct phone is not required when the source contact route is available.' : manualOlderExactSource ? 'This manually supplied exact source post predates 2026; confirm current availability, location, and price or Price upon application before approval.' : 'Confirm it was first posted on or after 1 January 2026, then confirm location, availability, and price or Price upon application. Location is non-negotiable; other source-review checks can be overridden by King.'} Original-poster comments are optional supporting evidence.${classificationWarning ? ` ${classificationWarning}` : ''} Batch: ${itemBatchId(item)}.`,
     moderation_reason: autoLive.approved
       ? autoLive.reason
       : 'Pending King review of public found-online source, exact pin, latest availability, and image/source evidence.',
@@ -2254,10 +2334,16 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
   });
   const sourceDistricts = asTextArray(raw.districts);
   const rawArea = compactText(raw.area || raw.location || raw.neighbourhood || raw.neighborhood || '');
-  const areaPin = socialAreaPinFromText(`${rawArea} ${sourceText}`);
+  const areaPin = socialAreaPinFromExplicitLocation(rawArea) || socialAreaPinFromText(sourceText);
+  const rawAreaMatchesKnownAlias = areaPin && rawArea
+    ? new RegExp(`^${socialAreaAliasPattern(areaPin.alias || areaPin.name)}$`, 'i').test(rawArea)
+    : false;
   const fallbackDistrict = compactText(raw.district || sourceDistricts[0] || raw.city || raw.region || '');
   const district = areaPin?.district || fallbackDistrict || 'Kampala';
-  const area = areaPin && (!rawArea || /^(kampala|wakiso|hoima|greater kampala|uganda)$/i.test(rawArea))
+  const locationEvidenceConfirmed = Object.prototype.hasOwnProperty.call(raw, 'location_evidence_confirmed')
+    ? parseBooleanFlag(raw.location_evidence_confirmed)
+    : Boolean(rawArea || fallbackDistrict || areaPin);
+  const area = areaPin && (!rawArea || rawAreaMatchesKnownAlias || /^(kampala|wakiso|hoima|greater kampala|uganda)$/i.test(rawArea))
     ? areaPin.name
     : (rawArea || areaPin?.name || district);
   const address = String(raw.address || raw.location_label || raw.location || (area && district ? `${area}, ${district}` : area || district)).trim();
@@ -2360,6 +2446,7 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
       || raw.original_posted_at
       || raw.created_at
       || null,
+    locationEvidenceConfirmed,
     area,
     district,
     address,

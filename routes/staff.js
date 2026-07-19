@@ -3315,6 +3315,7 @@ router.patch('/properties/:id/review', async (req, res, next) => {
 
 router.post('/source-intake/exact-social/import', async (req, res, next) => {
   try {
+    res.set('Cache-Control', 'no-store');
     const inputPosts = Array.isArray(req.body?.posts) ? req.body.posts : (Array.isArray(req.body) ? req.body : []);
     const inputUrls = Array.isArray(req.body?.urls) ? req.body.urls : [];
     const rawText = cleanText(req.body?.raw_text || req.body?.rawText || req.body?.text || '');

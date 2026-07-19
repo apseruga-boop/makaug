@@ -8299,7 +8299,8 @@ async function apiRequest(path, options = {}) {
     headers,
     credentials: "same-origin",
     body: body !== undefined ? JSON.stringify(body) : undefined,
-    signal: options.signal
+    signal: options.signal,
+    cache: options.cache
   });
 
   let data = null;
@@ -15877,6 +15878,16 @@ function adminScrubPendingSeedStatusPanel(root) {
 
 function adminSourceReviewReasonLabel(reason = "") {
   const normalized = String(reason || "").toLowerCase();
+  const exactSocialReasons = {
+    missing_exact_source_url: "Needs an exact social post URL",
+    unsupported_source_platform: "Needs a supported social source",
+    missing_uganda_location: "Needs a Uganda location or area",
+    missing_public_contact_or_source_route: "Needs a phone or original-source contact route",
+    missing_source_evidence: "Needs source evidence",
+    not_a_specific_property_listing: "Not yet identifiable as one specific property",
+    before_2026_automated_source_window: "Outside the automated 2026 source window",
+  };
+  if (exactSocialReasons[normalized]) return exactSocialReasons[normalized];
   if (normalized === "agent_missing_public_contact_path" || normalized === "missing_any_public_contact_path") {
     return "Needs source/contact review";
   }
@@ -15891,10 +15902,13 @@ function adminSourceReviewRecordSummaryHtml(item = {}) {
   const sourceContactUrl = String(item.source_contact_url || item.sourceContactUrl || sourceUrl || "").trim();
   const title = item.title || item.source_name || item.name || item.key || "Source record";
   const reason = adminSourceReviewReasonLabel(item.reason);
+  const blockingReasons = Array.isArray(item.intake?.blocking_reasons)
+    ? item.intake.blocking_reasons.map(adminSourceReviewReasonLabel).filter(Boolean)
+    : [];
   return `
     <div class="rounded-lg border border-amber-100 bg-white p-2">
       <div class="font-bold text-amber-950">${adminEscape(title)}</div>
-      <div class="text-[11px] text-amber-800 mt-0.5">${adminEscape(reason)}</div>
+      <div class="text-[11px] text-amber-800 mt-0.5">${adminEscape(blockingReasons.length ? blockingReasons.join(" • ") : reason)}</div>
       <div class="mt-1 flex gap-2 flex-wrap">
         ${sourceUrl ? `<a href="${adminAttr(sourceUrl)}" target="_blank" rel="noopener" class="border border-amber-300 text-amber-800 hover:bg-amber-50 px-2 py-1 rounded text-[11px] font-bold">Open source</a>` : ""}
         ${sourceContactUrl && sourceContactUrl !== sourceUrl ? `<a href="${adminAttr(sourceContactUrl)}" target="_blank" rel="noopener" class="border border-emerald-300 text-emerald-800 hover:bg-emerald-50 px-2 py-1 rounded text-[11px] font-bold">Open source contact</a>` : ""}
@@ -16774,6 +16788,10 @@ function adminSocialQuickPasteExample() {
   ].join("\n");
 }
 
+let adminSocialQuickPasteRequestSerial = 0;
+const TIKTOK_INTAKE_GATE_MARKER = "tiktok-intake-gate-20260719";
+window.__makaugTikTokIntakeGateMarker = TIKTOK_INTAKE_GATE_MARKER;
+
 function adminYouTubeQuickPasteExample() {
   return [
     "https://www.youtube.com/watch?v=abc123XYZ90",
@@ -16823,13 +16841,13 @@ function adminSocialQuickPastePanelHtml({ seedText = "", resultHtml = "", busy =
   const text = seedText || "";
   return `
     <div class="font-black text-violet-950">Paste TikTok / YouTube / Social Links</div>
-    <div class="mt-1">Paste one exact TikTok, YouTube, X, Instagram, or Facebook post link per block. YouTube watch and Shorts links use the same preview-and-queue flow as TikTok videos: add copied caption text, visible video-frame text, original-poster comments/replies, location, price, and phone number underneath.</div>
+    <div class="mt-1">Paste one exact TikTok, YouTube, X, Instagram, or Facebook post link per block. Add copied caption text, visible video-frame text, location, price, and phone number underneath; original-poster comments/replies are optional supporting evidence.</div>
     <div class="mt-2 grid md:grid-cols-3 gap-2">
       <div class="rounded-lg border border-violet-100 bg-white p-2"><div class="font-bold">1. Paste link/text</div><div class="mt-1 text-[11px]">Use exact video/post URLs. Hashtag pages are discovery only; exact posts become property candidates.</div></div>
       <div class="rounded-lg border border-violet-100 bg-white p-2"><div class="font-bold">2. Preview extracted info</div><div class="mt-1 text-[11px]">The parser reads title, location, price, source, posted date, comments, and Uganda phone numbers.</div></div>
       <div class="rounded-lg border border-violet-100 bg-white p-2"><div class="font-bold">3. Queue for King</div><div class="mt-1 text-[11px]">Duplicates are blocked. Location remains non-negotiable before approval; missing prices become Price upon application.</div></div>
     </div>
-    <textarea id="admin-social-quick-paste-input" class="mt-3 w-full rounded-xl border border-violet-200 bg-white p-3 text-xs font-mono min-h-[190px]" placeholder="${adminAttr(adminSocialQuickPasteExample())}">${adminEscape(text)}</textarea>
+    <textarea id="admin-social-quick-paste-input" class="mt-3 w-full rounded-xl border border-violet-200 bg-white p-3 text-xs font-mono min-h-[190px]" placeholder="${adminAttr(adminSocialQuickPasteExample())}" ${busy ? "readonly" : ""}>${adminEscape(text)}</textarea>
     <div class="mt-2 flex items-center gap-2 flex-wrap">
       <button id="admin-social-quick-preview-btn" type="button" onclick="adminPreviewSocialQuickPaste()" class="bg-violet-700 hover:bg-violet-800 text-white px-3 py-2 rounded-lg text-xs font-bold ${busy ? "opacity-60 cursor-wait" : ""}" ${busy ? "disabled" : ""}>Preview Extracted Properties</button>
       <button id="admin-social-quick-queue-btn" type="button" onclick="adminQueueSocialQuickPaste()" class="bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-2 rounded-lg text-xs font-bold ${busy ? "opacity-60 cursor-wait" : ""}" ${busy ? "disabled" : ""}>Queue Found Online</button>
@@ -16897,7 +16915,7 @@ function adminSocialQuickPasteResultHtml(data = {}, { dryRun = false } = {}) {
     <div class="rounded-xl border ${dryRun ? "border-violet-200 bg-violet-50" : "border-emerald-200 bg-emerald-50"} p-3">
       <div class="font-black ${dryRun ? "text-violet-950" : "text-emerald-950"}">${dryRun ? "Preview ready" : "Import finished"}</div>
       <div class="mt-1">${adminEscape(data.exact_social_url_count || previewRows.length || 0)} exact social URLs processed. ${adminEscape(dryRun ? importResult.eligible_to_queue_count || queued.length || 0 : importResult.created_properties || 0)} ${dryRun ? "eligible" : "new properties processed"}. ${adminEscape(importResult.auto_live_properties || autoLive.length || 0)} auto-live. ${adminEscape(importResult.review_queue_properties || queued.length || 0)} in review. ${adminEscape(importResult.existing_properties || 0)} duplicate/existing links blocked. ${adminEscape(sourceReview.length)} need more details.</div>
-      <div class="mt-1 text-[11px]">Paste comments from the original poster when they answer price, location, viewing, or phone questions. Valid Uganda mobile numbers are stored as phone/WhatsApp contact; otherwise makaug sends users back to the original source.</div>
+      <div class="mt-1 text-[11px]">Original-poster comments are optional supporting evidence, not an eligibility requirement. Valid Uganda mobile numbers are stored as phone/WhatsApp contact; otherwise makaug sends users back to the exact original source.</div>
       ${reports.length ? `<div class="mt-2 text-[11px]">${adminEscape(reports.filter((item) => item.ok).length)} metadata fetches succeeded • ${adminEscape(reports.filter((item) => !item.ok).length)} need pasted visible details.</div>` : ""}
     </div>
     ${autoLive.length ? `<div class="mt-3 rounded-xl border border-emerald-100 bg-white p-3"><div class="font-black text-emerald-950">Auto-live properties</div><div class="mt-2 space-y-2">${autoLive.slice(0, 12).map((item) => adminSeededListingSummaryHtml(item, { pendingPanel: false })).join("")}</div></div>` : ""}
@@ -16916,6 +16934,7 @@ async function adminSubmitSocialQuickPaste({ dryRun = false } = {}) {
     toast("Paste at least one exact social post link or copied source text.");
     return;
   }
+  const requestSerial = ++adminSocialQuickPasteRequestSerial;
   const statusEl = adminSocialStatusElement();
   const button = document.getElementById("admin-import-exact-social-links-btn");
   if (button) {
@@ -16933,14 +16952,17 @@ async function adminSubmitSocialQuickPaste({ dryRun = false } = {}) {
   try {
     const response = await apiRequest("/api/admin/exact-social-source-posts/import", {
       method: "POST",
-      headers: adminAuthHeaders(),
+      headers: { ...adminAuthHeaders(), "Cache-Control": "no-cache" },
+      cache: "no-store",
       body: {
         raw_text: raw,
         dry_run: dryRun,
         fetch_oembed: true,
-        fetch_public_metadata: true
+        fetch_public_metadata: true,
+        preview_request_id: `${Date.now()}-${requestSerial}`
       }
     });
+    if (requestSerial !== adminSocialQuickPasteRequestSerial) return;
     const data = response?.data || {};
     const importResult = data.import_result || data;
     if (statusEl) {
@@ -16957,6 +16979,7 @@ async function adminSubmitSocialQuickPaste({ dryRun = false } = {}) {
       adminScrollTo("#admin-review-queue-control");
     }
   } catch (e) {
+    if (requestSerial !== adminSocialQuickPasteRequestSerial) return;
     if (statusEl) {
       statusEl.classList.remove("hidden");
       statusEl.innerHTML = adminSocialQuickPastePanelHtml({
@@ -16966,7 +16989,7 @@ async function adminSubmitSocialQuickPaste({ dryRun = false } = {}) {
     }
     toast(`Social link import failed: ${e.message || "error"}`);
   } finally {
-    if (button) {
+    if (requestSerial === adminSocialQuickPasteRequestSerial && button) {
       button.disabled = false;
       button.classList.remove("opacity-60", "cursor-wait");
     }
