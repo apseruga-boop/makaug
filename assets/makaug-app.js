@@ -3818,9 +3818,24 @@ async function loadMarketplacePage({ force = false } = {}) {
       populateMarketplaceSelects();
     }
     syncMarketplaceFilterControls();
+
+    // Owner magic links and direct profile URLs should never wait behind the
+    // broad directory query. These routes already have narrow indexed APIs.
+    if (marketplaceManageTokenFromRoute()) {
+      applyMarketplaceLanguageUI();
+      await marketplaceOpenOwnerJourneyFromRoute();
+      return;
+    }
+    const directBusinessSlug = cleanText(new URLSearchParams(window.location.search || "").get("business") || "");
+    if (directBusinessSlug) {
+      await marketplaceOpenDirectBusinessFromRoute();
+      await marketplaceOpenOwnerJourneyFromRoute();
+      applyMarketplaceLanguageUI();
+      return;
+    }
+
     await searchMarketplaceBusinesses();
     applyMarketplaceLanguageUI();
-    await marketplaceOpenDirectBusinessFromRoute();
     await marketplaceOpenOwnerJourneyFromRoute();
   } catch (error) {
     const results = document.getElementById("marketplace-results");
