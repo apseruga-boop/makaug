@@ -33,16 +33,38 @@ test('national registry covers every category, district and declared source exac
 test('provider truth only enables Google when a real key is configured', () => {
   const originalGoogle = process.env.GOOGLE_MAPS_API_KEY;
   const originalPublic = process.env.PUBLIC_GOOGLE_MAPS_API_KEY;
+  const originalLinkedIn = process.env.LINKEDIN_ACCESS_TOKEN;
+  const originalLinkedInClient = process.env.LINKEDIN_CLIENT_ID;
+  const originalMeta = process.env.META_GRAPH_ACCESS_TOKEN;
+  const originalFacebookPages = process.env.FACEBOOK_PAGE_IDS;
   delete process.env.GOOGLE_MAPS_API_KEY;
   delete process.env.PUBLIC_GOOGLE_MAPS_API_KEY;
+  delete process.env.LINKEDIN_ACCESS_TOKEN;
+  delete process.env.LINKEDIN_CLIENT_ID;
+  delete process.env.META_GRAPH_ACCESS_TOKEN;
+  delete process.env.FACEBOOK_PAGE_IDS;
   assert.equal(sourceDefinitions().filter((source) => source.enabled).length, 0);
+  assert.equal(sourceDefinitions().find((source) => source.key === 'linkedin').configured, false);
+  assert.equal(sourceDefinitions().find((source) => source.key === 'facebook').configured, false);
   process.env.GOOGLE_MAPS_API_KEY = 'test-key';
+  process.env.LINKEDIN_CLIENT_ID = 'linkedin-client';
+  process.env.META_GRAPH_ACCESS_TOKEN = 'meta-token';
   const enabled = sourceDefinitions().filter((source) => source.enabled);
   assert.deepEqual(enabled.map((source) => source.key), ['google_maps']);
+  assert.equal(sourceDefinitions().find((source) => source.key === 'linkedin').configured, true);
+  assert.equal(sourceDefinitions().find((source) => source.key === 'facebook').configured, true);
   if (originalGoogle === undefined) delete process.env.GOOGLE_MAPS_API_KEY;
   else process.env.GOOGLE_MAPS_API_KEY = originalGoogle;
   if (originalPublic === undefined) delete process.env.PUBLIC_GOOGLE_MAPS_API_KEY;
   else process.env.PUBLIC_GOOGLE_MAPS_API_KEY = originalPublic;
+  if (originalLinkedIn === undefined) delete process.env.LINKEDIN_ACCESS_TOKEN;
+  else process.env.LINKEDIN_ACCESS_TOKEN = originalLinkedIn;
+  if (originalLinkedInClient === undefined) delete process.env.LINKEDIN_CLIENT_ID;
+  else process.env.LINKEDIN_CLIENT_ID = originalLinkedInClient;
+  if (originalMeta === undefined) delete process.env.META_GRAPH_ACCESS_TOKEN;
+  else process.env.META_GRAPH_ACCESS_TOKEN = originalMeta;
+  if (originalFacebookPages === undefined) delete process.env.FACEBOOK_PAGE_IDS;
+  else process.env.FACEBOOK_PAGE_IDS = originalFacebookPages;
 });
 
 function sourceRow(overrides = {}) {
