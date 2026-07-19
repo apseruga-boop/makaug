@@ -71,7 +71,7 @@ const SOURCE_DEFINITIONS = Object.freeze([
     label: 'LinkedIn company pages',
     url: 'https://www.linkedin.com/',
     adapter: 'requires_approved_api_or_exact_url',
-    adapter_status: 'configured',
+    adapter_status: 'requires_configuration',
     enabled: false,
     priority: 70
   },
@@ -80,7 +80,7 @@ const SOURCE_DEFINITIONS = Object.freeze([
     label: 'Facebook business pages',
     url: 'https://www.facebook.com/',
     adapter: 'requires_graph_api_or_exact_url',
-    adapter_status: 'configured',
+    adapter_status: 'requires_configuration',
     enabled: false,
     priority: 80
   },
@@ -126,11 +126,23 @@ function sourceEnabled(definition) {
   return definition.adapter_status === 'active' && process.env[envKey] === 'true';
 }
 
+function sourceConfigured(definition) {
+  if (definition.key === 'google_maps') return Boolean(googleApiKey());
+  if (definition.key === 'linkedin') {
+    return Boolean(clean(process.env.LINKEDIN_ACCESS_TOKEN || process.env.LINKEDIN_CLIENT_ID));
+  }
+  if (definition.key === 'facebook') {
+    return Boolean(clean(process.env.META_GRAPH_ACCESS_TOKEN || process.env.FACEBOOK_PAGE_IDS));
+  }
+  return definition.adapter_status !== 'unavailable'
+    && definition.adapter_status !== 'requires_configuration';
+}
+
 function sourceDefinitions() {
   return SOURCE_DEFINITIONS.map((definition) => ({
     ...definition,
     enabled: sourceEnabled(definition),
-    configured: definition.key === 'google_maps' ? Boolean(googleApiKey()) : definition.adapter_status !== 'unavailable'
+    configured: sourceConfigured(definition)
   }));
 }
 
