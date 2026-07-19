@@ -12,7 +12,8 @@ const {
   googleCandidate,
   importMarketplaceSourceCandidates,
   registryRows,
-  sourceDefinitions
+  sourceDefinitions,
+  startMarketplaceDrip
 } = require('../services/marketplaceNationalDripService');
 const { DISTRICTS, MARKETPLACE_CATEGORIES } = require('../services/marketplaceService');
 
@@ -74,6 +75,37 @@ test('provider truth only enables Google when a real key is configured', () => {
   else process.env.META_GRAPH_ACCESS_TOKEN = originalMeta;
   if (originalFacebookPages === undefined) delete process.env.FACEBOOK_PAGE_IDS;
   else process.env.FACEBOOK_PAGE_IDS = originalFacebookPages;
+});
+
+test('drip start updates interval without ambiguous PostgreSQL parameter types', async () => {
+  const statements = [];
+  const baseState = {
+    drip_key: 'marketplace_national_v1',
+    enabled: false,
+    cursor_offset: 5,
+    source_count: 2920,
+    base_interval_minutes: 30,
+    batch_size: 5,
+    target_businesses: 5000,
+    monthly_request_cap: 300,
+    request_month: new Date().toISOString().slice(0, 7)
+  };
+  const db = {
+    query: async (sql) => {
+      statements.push(sql);
+      if (/COUNT\(\*\).*marketplace_source_registry/s.test(sql)) return { rows: [{ count: 2920 }] };
+      if (/INSERT INTO marketplace_drip_state/.test(sql)) return { rows: [] };
+      if (/SELECT \* FROM marketplace_drip_state/.test(sql)) return { rows: [baseState] };
+      if (/SET base_interval_minutes/.test(sql)) return { rows: [{ ...baseState, base_interval_minutes: 15 }] };
+      if (/SET enabled = TRUE/.test(sql)) return { rows: [{ ...baseState, enabled: true, status: 'scheduled' }] };
+      throw new Error(`Unexpected SQL: ${sql}`);
+    }
+  };
+
+  const result = await startMarketplaceDrip(db, { base_interval_minutes: 15 });
+  const configSql = statements.find((sql) => /SET base_interval_minutes/.test(sql));
+  assert.match(configSql, /make_interval\(mins => \$2::int\)/);
+  assert.equal(result.enabled, true);
 });
 
 function sourceRow(overrides = {}) {

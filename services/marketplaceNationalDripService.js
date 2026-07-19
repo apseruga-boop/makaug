@@ -312,7 +312,7 @@ async function updateMarketplaceDripConfig(db, input = {}) {
             cursor_offset = $4,
             target_businesses = $5,
             monthly_request_cap = $6,
-            next_run_at = CASE WHEN enabled THEN NOW() + ($2 || ' minutes')::interval ELSE next_run_at END,
+            next_run_at = CASE WHEN enabled THEN NOW() + make_interval(mins => $2::int) ELSE next_run_at END,
             updated_at = NOW()
       WHERE drip_key = $1
       RETURNING *`,
