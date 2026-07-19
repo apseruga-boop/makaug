@@ -16848,10 +16848,13 @@ function adminSocialQuickPasteExample() {
 }
 
 let adminSocialQuickPasteRequestSerial = 0;
+let adminSocialQuickPastePreviewCache = { raw: "", rows: [] };
 const TIKTOK_INTAKE_GATE_MARKER = "tiktok-intake-gate-20260719";
 const TIKTOK_QUEUE_FIX_MARKER = "tiktok-queue-fix-20260719";
+const TIKTOK_QUEUE_VISIBILITY_MARKER = "tiktok-queue-visibility-20260719";
 window.__makaugTikTokIntakeGateMarker = TIKTOK_INTAKE_GATE_MARKER;
 window.__makaugTikTokQueueFixMarker = TIKTOK_QUEUE_FIX_MARKER;
+window.__makaugTikTokQueueVisibilityMarker = TIKTOK_QUEUE_VISIBILITY_MARKER;
 
 function adminYouTubeQuickPasteExample() {
   return [
@@ -16924,6 +16927,7 @@ function adminSocialQuickPastePanelHtml({ seedText = "", resultHtml = "", busy =
 function adminOpenSocialQuickPastePanel(seedText = "") {
   const statusEl = adminSocialStatusElement();
   if (!statusEl) return;
+  adminSocialQuickPastePreviewCache = { raw: "", rows: [] };
   statusEl.classList.remove("hidden");
   statusEl.innerHTML = adminSocialQuickPastePanelHtml({ seedText });
   adminScrollTo(`#${statusEl.id || "admin-found-online-status"}`);
@@ -17003,9 +17007,25 @@ async function adminSubmitSocialQuickPaste({ dryRun = false } = {}) {
     toast("Paste at least one exact social post link or copied source text.");
     return;
   }
+  const cachedPreviewRows = !dryRun && adminSocialQuickPastePreviewCache.raw === raw
+    ? adminSocialQuickPastePreviewCache.rows
+    : [];
+  if (!dryRun && !cachedPreviewRows.length) {
+    const statusEl = adminSocialStatusElement();
+    const message = "Preview these links first. Queue uses the reviewed preview rows so it can persist them without repeating slow TikTok metadata calls.";
+    if (statusEl) {
+      statusEl.classList.remove("hidden");
+      statusEl.innerHTML = adminSocialQuickPastePanelHtml({
+        seedText: raw,
+        resultHtml: `<div class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-900"><div class="font-black">Preview required</div><div class="mt-1">${adminEscape(message)}</div></div>`
+      });
+    }
+    toast(message);
+    return;
+  }
   const requestSerial = ++adminSocialQuickPasteRequestSerial;
   const controller = new AbortController();
-  const requestTimeout = setTimeout(() => controller.abort(), dryRun ? 45000 : 60000);
+  const requestTimeout = setTimeout(() => controller.abort(), dryRun ? 90000 : 20000);
   const statusEl = adminSocialStatusElement();
   const button = document.getElementById("admin-import-exact-social-links-btn");
   if (button) {
@@ -17028,16 +17048,24 @@ async function adminSubmitSocialQuickPaste({ dryRun = false } = {}) {
       cache: "no-store",
       signal: controller.signal,
       body: {
-        raw_text: raw,
+        posts: dryRun ? [] : cachedPreviewRows,
+        raw_text: dryRun ? raw : "",
         dry_run: dryRun,
-        fetch_oembed: true,
-        fetch_public_metadata: true,
+        fetch_oembed: dryRun,
+        fetch_public_metadata: dryRun,
+        prepared_from_preview: !dryRun,
         preview_request_id: `${Date.now()}-${requestSerial}`
       }
     });
     if (requestSerial !== adminSocialQuickPasteRequestSerial) return;
     const data = response?.data || {};
     const importResult = data.import_result || data;
+    if (dryRun) {
+      adminSocialQuickPastePreviewCache = {
+        raw,
+        rows: Array.isArray(data.exact_social_import_rows) ? data.exact_social_import_rows : []
+      };
+    }
     if (!dryRun && Number(importResult.eligible_to_queue_count || 0) > 0
       && Number(importResult.created_properties || 0) === 0
       && Number(importResult.existing_properties || 0) === 0) {

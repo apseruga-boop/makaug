@@ -299,6 +299,26 @@ function adminDefaultReviewQueueWhere(alias = 'p') {
   )`;
 }
 
+function adminFoundOnlineReviewQueueWhere(alias = 'p') {
+  const source = adminColumn(alias, 'source');
+  const listedVia = adminColumn(alias, 'listed_via');
+  return `(
+    ${adminPendingReviewFastWhere(alias)}
+    AND (
+      ${source} = 'found_online_property_source_v1'
+      OR ${listedVia} = 'found_online'
+    )
+    AND NOT ${adminLaunchTestListingFastCondition(alias)}
+  )`;
+}
+
+function adminActionableReviewQueueWhere(alias = 'p') {
+  return `(
+    ${adminDefaultReviewQueueWhere(alias)}
+    OR ${adminFoundOnlineReviewQueueWhere(alias)}
+  )`;
+}
+
 function adminLaunchTestListingCondition(alias = 'p') {
   const col = (column) => adminColumn(alias, column);
   return `(
@@ -1600,7 +1620,12 @@ let adminSummaryLastKnownGoodPayload = null;
 
 function clearAdminReviewQueueCache() {
   for (const cacheKey of adminDashboardResponseCache.keys()) {
-    if (String(cacheKey).includes('admin-review-queue-v5')) {
+    const key = String(cacheKey);
+    if (
+      key.includes('admin-review-queue-v')
+      || key.includes('admin-command-centre-v4')
+      || key.includes('admin-summary-v5-properties-list-count-fast')
+    ) {
       adminDashboardResponseCache.delete(cacheKey);
     }
   }
@@ -1849,7 +1874,7 @@ async function loadAdminPropertiesSummaryFast() {
       { total: 0 },
       { timeoutMs: 500 }
     ),
-    adminSummaryCount(`SELECT COUNT(*)::int AS total FROM properties p WHERE ${adminDefaultReviewQueueWhere('p')}`, [], { timeoutMs: 700 }),
+    adminSummaryCount(`SELECT COUNT(*)::int AS total FROM properties p WHERE ${adminActionableReviewQueueWhere('p')}`, [], { timeoutMs: 700 }),
     adminSummaryCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'approved'", [], { timeoutMs: 700 }),
     adminSummaryCount(
       `SELECT COUNT(*)::int AS total
@@ -3100,7 +3125,7 @@ router.get('/command-centre', async (_req, res, next) => {
       testUsers,
       propertyRequests
     ] = await Promise.all([
-      safeCount(`SELECT COUNT(*)::int AS total FROM properties p WHERE ${adminDefaultReviewQueueWhere('p')}`),
+      safeCount(`SELECT COUNT(*)::int AS total FROM properties p WHERE ${adminActionableReviewQueueWhere('p')}`),
       safeCount(`SELECT COUNT(*)::int AS total FROM properties p WHERE ${adminPublicLiveListingFastWhere('p')}`),
       safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'deleted'"),
       safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'hidden'"),
@@ -3317,18 +3342,13 @@ router.get('/properties/review-queue', async (req, res, next) => {
     const includeTestLike = parseBooleanLike(req.query.include_test_like || req.query.includeTestLike, false);
     const includeTotal = parseBooleanLike(req.query.include_total || req.query.includeTotal, false);
     const includeImages = parseBooleanLike(req.query.include_images || req.query.includeImages, false);
-    const filters = [includeTestLike ? adminActiveReviewQueueWhere('p') : adminDefaultReviewQueueWhere('p')];
+    const queueType = cleanText(req.query.queue || req.query.queue_type || req.query.queueType).toLowerCase();
+    const filters = [queueType === 'found_online'
+      ? adminFoundOnlineReviewQueueWhere('p')
+      : (includeTestLike ? adminActiveReviewQueueWhere('p') : adminActionableReviewQueueWhere('p'))];
     const values = [];
     const search = cleanText(req.query.search || req.query.q);
     const listingType = cleanText(req.query.listing_type || req.query.type).toLowerCase();
-    const queueType = cleanText(req.query.queue || req.query.queue_type || req.query.queueType).toLowerCase();
-
-    if (queueType === 'found_online') {
-      filters.push(`(
-        p.source = 'found_online_property_source_v1'
-        OR p.listed_via = 'found_online'
-      )`);
-    }
 
     if (listingType && LISTING_TYPES.includes(listingType)) {
       values.push(listingType);
@@ -3457,7 +3477,9 @@ router.get('/properties/review-queue', async (req, res, next) => {
           partial_total: !exactTotalAvailable,
           count_fallback_reason: countFallbackReason,
           row_fallback_reason: rowFallbackReason,
-          count_filter: includeTestLike ? 'admin_active_review_queue' : 'admin_default_review_queue',
+          count_filter: queueType === 'found_online'
+            ? 'admin_found_online_review_queue'
+            : (includeTestLike ? 'admin_active_review_queue' : 'admin_actionable_review_queue'),
           source_quality_filter: 'stored_suppression_flag_only',
           pending_statuses: ADMIN_PENDING_REVIEW_STATUSES,
           final_statuses_excluded: ADMIN_FINAL_REVIEW_STATUSES
@@ -4277,7 +4299,10 @@ router.post('/exact-social-source-posts/import', async (req, res, next) => {
       fetchOembed,
       fetchPublicMetadata
     });
-    if (!dryRun && Number(result.created_properties || 0) > 0) {
+    if (!dryRun && (
+      Number(result.created_properties || 0) > 0
+      || Number(result.existing_properties || 0) > 0
+    )) {
       clearAdminReviewQueueCache();
     }
     await writeAudit('admin_exact_social_source_posts_imported', {
@@ -4705,7 +4730,7 @@ router.post('/test-listings/cleanup-live', async (req, res, next) => {
   }
 });
 
-router.get('/properties/:id/review', async (req, res, next) => {
+async function sendAdminPropertyReview(req, res, next) {
   try {
     const review = await loadPropertyReview(req.params.id);
     if (!review) {
@@ -4716,7 +4741,10 @@ router.get('/properties/:id/review', async (req, res, next) => {
   } catch (error) {
     return next(error);
   }
-});
+}
+
+router.get('/properties/:id', sendAdminPropertyReview);
+router.get('/properties/:id/review', sendAdminPropertyReview);
 
 router.get('/properties/:id/id-document', async (req, res, next) => {
   const actorId = adminActorId(req);
