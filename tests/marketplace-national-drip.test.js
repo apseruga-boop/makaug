@@ -121,11 +121,14 @@ test('Google candidates require an exact source URL, canonical Uganda district a
 
 test('migration creates persistent registry, state and run logs with caps', () => {
   const migration = read('db/migrations/085_marketplace_national_drip.sql');
+  const statusMigration = read('db/migrations/086_marketplace_source_status_truth.sql');
   assert.match(migration, /CREATE TABLE IF NOT EXISTS marketplace_source_registry/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS marketplace_drip_state/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS marketplace_drip_run_logs/);
   assert.match(migration, /batch_size BETWEEN 1 AND 25/);
   assert.match(migration, /enabled BOOLEAN NOT NULL DEFAULT FALSE/);
+  assert.match(statusMigration, /DROP CONSTRAINT IF EXISTS marketplace_source_registry_adapter_status_check/);
+  assert.match(statusMigration, /'requires_configuration'/);
 });
 
 test('protected admin API exposes registry, config, start, pause, import and run-once controls', () => {
