@@ -20,6 +20,14 @@ assert(
   'summary_only responses should expose the fast-count marker header'
 );
 assert(
+  propertiesRoute.includes('const fastPublicCardFields = !adminAccess'),
+  'anonymous property lists should use the compact public query instead of the wide moderation row'
+);
+assert(
+  propertiesRoute.includes('if (cardFieldsOnly && !adminAccess)'),
+  'only explicit card-only searches should switch to exact lightweight location matching'
+);
+assert(
   propertiesRoute.includes("count_cache"),
   'properties route should surface count cache/fallback metadata'
 );
