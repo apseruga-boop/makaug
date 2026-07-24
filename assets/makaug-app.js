@@ -40392,10 +40392,10 @@ function renderValuationComparable(row = {}) {
   const location = [row.area, row.district].filter(Boolean).join(", ");
   return `
     <article class="bg-white border border-[#e4ece8] rounded-lg overflow-hidden">
-      <div class="aspect-[16/9] bg-[#f6f9f7]">
+      <div class="relative aspect-[16/9] overflow-hidden bg-[#f6f9f7]">
         ${image
-          ? `<img src="${adminAttr(image)}" alt="" class="h-full w-full object-cover" loading="lazy">`
-          : `<div class="h-full w-full flex items-center justify-center text-xs font-bold text-gray-400">${adminEscape(valuationTr("noImage"))}</div>`}
+          ? `<img src="${adminAttr(image)}" alt="" class="absolute inset-0 h-full w-full object-cover" loading="lazy">`
+          : `<div class="absolute inset-0 flex items-center justify-center text-xs font-bold text-gray-400">${adminEscape(valuationTr("noImage"))}</div>`}
       </div>
       <div class="p-4">
         <div class="text-lg font-black text-[#15603f]">${adminEscape(formatValuationUgx(row.normalized_price || row.price))}</div>

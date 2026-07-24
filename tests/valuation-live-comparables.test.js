@@ -136,6 +136,10 @@ assert.ok(app.includes('refreshValuationLocations'), 'valuation category changes
 assert.ok(app.includes('unit_rate_decimal'), 'land valuation must render the per-decimal rate');
 assert.ok(app.includes('basisSemester'), 'student valuation must disclose the semester basis');
 assert.ok(app.includes('function safeImageUrl'), 'valuation evidence cards must guard image URLs');
+assert.ok(
+  app.includes('relative aspect-[16/9] overflow-hidden') && app.includes('absolute inset-0 h-full w-full object-cover'),
+  'valuation evidence images must stay inside a stable 16:9 card frame'
+);
 assert.ok(!app.includes('UGANDA_DISTRICTS'), 'valuation selectors must use the canonical DISTRICTS registry');
 
 function frozenObject(name) {
