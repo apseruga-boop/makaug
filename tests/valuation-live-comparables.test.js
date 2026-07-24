@@ -43,6 +43,7 @@ assert.strictEqual(estimate.sufficient, true);
 assert.strictEqual(estimate.estimate, 110_000_000);
 assert.strictEqual(estimate.comparable_count, 3);
 assert.strictEqual(estimate.price_basis, 'total');
+assert.strictEqual(estimate.confidence, 'low');
 
 const landEstimate = helpers.buildEstimate({
   category: 'land',
@@ -168,6 +169,28 @@ assert.strictEqual(evidenceEstimate.range_low, Math.round(helpers.percentile(dis
 assert.strictEqual(evidenceEstimate.range_high, Math.round(helpers.percentile(displayedValues, 0.9)));
 assert.strictEqual(evidenceEstimate.methodology.displayed_range_only, true);
 assert.strictEqual(evidenceEstimate.view_all_url, '/for-sale?area=Kira');
+assert.strictEqual(evidenceEstimate.confidence, 'high');
+
+assert.strictEqual(helpers.canonicalizeUgandaLocation('Kira Town', 'Wakiso').name, 'Kira');
+assert.strictEqual(helpers.canonicalizeUgandaLocation('Kira Town', 'Wakiso').district, 'Wakiso');
+assert.strictEqual(helpers.canonicalizeUgandaLocation('Naalya Estate', 'Wakiso').name, 'Naalya');
+assert.strictEqual(helpers.canonicalizeUgandaLocation('Entebbe', 'Kampala').district, 'Wakiso');
+assert.strictEqual(helpers.canonicalizeUgandaLocation('Lake Victoria', 'Wakiso'), null);
+assert.deepStrictEqual(
+  helpers.canonicalizeLocationRows([
+    { location: 'Kira', district: 'Wakiso', listing_count: 2 },
+    { location: 'Kira Town', district: 'Wakiso', listing_count: 3 },
+    { location: 'Bombo Road', district: 'Kampala', listing_count: 9 }
+  ]),
+  [{
+    location: 'Kira',
+    district: 'Wakiso',
+    level: 'city',
+    latitude: 0.3978,
+    longitude: 32.6414,
+    listing_count: 5
+  }]
+);
 
 const root = path.join(__dirname, '..');
 const server = fs.readFileSync(path.join(root, 'server.js'), 'utf8');
@@ -175,6 +198,10 @@ const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const app = fs.readFileSync(path.join(root, 'assets', 'makaug-app.js'), 'utf8');
 const routeSource = fs.readFileSync(path.join(root, 'routes', 'valuation.js'), 'utf8');
 const metricsSource = fs.readFileSync(path.join(root, 'services', 'publicInventoryMetricsService.js'), 'utf8');
+const canonicalLocationMigration = fs.readFileSync(
+  path.join(root, 'db', 'migrations', '091_valuation_canonical_location_performance.sql'),
+  'utf8'
+);
 
 assert.ok(server.includes("app.use('/api/valuation', valuationRoutes)"), 'valuation API must be mounted');
 assert.ok(
@@ -182,7 +209,7 @@ assert.ok(
   'the common broad Kira search must be warmed before consumers arrive'
 );
 assert.ok(html.includes('id="page-valuation"'), 'valuation page must render');
-assert.ok(html.includes('valuation-land-currency-media-20260725'), 'valuation marker must render');
+assert.ok(html.includes('valuation-canonical-confidence-cards-20260725'), 'valuation marker must render');
 assert.ok(html.includes('Property Value Calculator'), 'valuation H1 must use the approved calculator label');
 assert.ok(html.includes('id="nav-valuation"') && html.includes('>Property Value</a>'), 'valuation navigation must use the shorter label');
 assert.ok(html.includes('id="valuation-view-all"'), 'valuation evidence must include a view-all control');
@@ -209,17 +236,26 @@ assert.ok(app.includes('unit_rate_decimal'), 'land valuation must render the per
 assert.ok(app.includes('basisSemester'), 'student valuation must disclose the semester basis');
 assert.ok(app.includes('function safeImageUrl'), 'valuation evidence cards must guard image URLs');
 assert.ok(
-  app.includes('relative aspect-[16/9] overflow-hidden')
-    && app.includes('style="aspect-ratio: 16 / 9;"')
-    && app.includes('absolute inset-0 h-full w-full object-cover'),
-  'valuation evidence images must stay inside a stable 16:9 card frame'
+  app.includes('return propCard(valuationComparableProperty(row, category)')
+    && app.includes('return socialImportListingCardHtml(p, options)'),
+  'valuation evidence must reuse the shared property card and playable found-online card paths'
 );
+assert.ok(html.includes('id="valuation-confidence-badge"'), 'valuation results must show confidence');
+assert.ok(html.includes('id="valuation-disclaimer"'), 'valuation results must show the red disclaimer');
+assert.ok(app.includes('limitedDisclaimerBody'), 'thin or widened evidence must render the stronger warning');
+assert.ok(app.includes('methodLegal'), 'methodology must include the liability limitation');
 assert.ok(!app.includes('UGANDA_DISTRICTS'), 'valuation selectors must use the canonical DISTRICTS registry');
 assert.ok(
   routeSource.includes('withTransientDatabaseRetry')
     && routeSource.includes('hasAmbiguousForeignCurrency')
-    && routeSource.includes('parseLandSizeText'),
-  'valuation must retry transient database failures, reject ambiguous foreign currency, and parse legacy land sizes'
+    && routeSource.includes('parseLandSizeText')
+    && routeSource.includes("loadComparableRows(input, 'nearby')"),
+  'valuation must retry transient database failures, reject ambiguous foreign currency, parse legacy land sizes, and try nearby canonical areas before district widening'
+);
+assert.ok(
+  canonicalLocationMigration.includes('idx_properties_valuation_public_type_normalized_area_created')
+    && canonicalLocationMigration.includes('REGEXP_REPLACE'),
+  'canonical valuation matching must have a production expression index'
 );
 
 function frozenObject(name) {

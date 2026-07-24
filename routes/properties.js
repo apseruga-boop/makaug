@@ -220,6 +220,25 @@ function addFilter(filters, values, clause, ...vals) {
   filters.push(prepared);
 }
 
+function isTransientPublicPropertyDatabaseError(error = {}) {
+  if (['POOL_TIMEOUT', 'ETIMEDOUT', 'ECONNRESET', '53300', '57P01', '57P02', '57P03', '08000', '08003', '08006'].includes(error.code)) {
+    return true;
+  }
+  return /client acquisition timed out|connection timeout|connection terminated|timeout exceeded/i.test(
+    String(error.message || '')
+  );
+}
+
+async function withPublicPropertyDatabaseRetry(operation) {
+  try {
+    return await operation();
+  } catch (error) {
+    if (!isTransientPublicPropertyDatabaseError(error)) throw error;
+    await new Promise((resolve) => setTimeout(resolve, 125));
+    return operation();
+  }
+}
+
 function normalizeListingOrigin(value = '') {
   const origin = cleanText(value).toLowerCase().replace(/[\s-]+/g, '_');
   const aliases = {
@@ -2540,7 +2559,7 @@ async function listPropertiesHandler(req, res, next) {
         LIMIT 1
       ) img ON true
       ORDER BY public_page.__page_order`;
-    const listResult = await db.query(listSql, listValues);
+    const listResult = await withPublicPropertyDatabaseRetry(() => db.query(listSql, listValues));
     const hasMoreRows = !includeSummary && listResult.rows.length > limit;
     const responseRows = hasMoreRows ? listResult.rows.slice(0, limit) : listResult.rows;
     const pagination = includeSummary

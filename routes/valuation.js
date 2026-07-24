@@ -5,15 +5,25 @@ const { cleanText, toNullableFloat, toNullableInt } = require('../middleware/val
 const { publicLivePropertyStatusSql } = require('../utils/publicInventoryStatus');
 const { publicLaunchTestListingFastCondition } = require('../services/publicInventoryMetricsService');
 const { DISTRICTS } = require('../utils/constants');
+const {
+  canonicalizeUgandaLocation,
+  canonicalizeLocationRows,
+  aliasesForCanonicalLocation,
+  aliasesForDistrict,
+  normalizeDistrict,
+  normalizeLocationKey,
+  haversineKm
+} = require('../utils/ugandaLocationRegistry');
 
 const router = express.Router();
 
-const VALUATION_MARKER = 'valuation-land-currency-media-20260725';
+const VALUATION_MARKER = 'valuation-canonical-confidence-cards-20260725';
 const CACHE_TTL_MS = Math.max(30_000, Number(process.env.VALUATION_CACHE_TTL_MS || 180_000));
 const MIN_COMPARABLES = 3;
 const DISTRICT_WIDEN_THRESHOLD = MIN_COMPARABLES;
 const EVIDENCE_LIMIT = 10;
 const MAX_PRICE_UGX = 100_000_000_000;
+const NEARBY_RADIUS_KM = 12;
 const SQM_PER_ACRE = 4046.8564224;
 const SQM_PER_DECIMAL = SQM_PER_ACRE / 100;
 const SQM_PER_SQUARE_FOOT = 0.09290304;
@@ -261,16 +271,30 @@ async function loadComparableRows(input, scope) {
   if (categoryCondition.includes('$CATEGORY')) add(categoryCondition.replace('$CATEGORY', '?'), input.category);
   else where.push(categoryCondition);
 
-  if (scope === 'district') {
-    add('LOWER(COALESCE(p.district, \'\')) = LOWER(?)', input.district);
-  } else {
-    add(
-      "LOWER(TRIM(SPLIT_PART(COALESCE(p.area, ''), ',', 1))) = LOWER(?)",
-      input.location
-    );
-    if (input.district) {
-      add('LOWER(TRIM(COALESCE(p.district, \'\'))) = LOWER(?)', input.district);
+  const canonicalLocation = input.canonical_location
+    || canonicalizeUgandaLocation(input.location, input.district);
+  const normalizedAreaSql = "REGEXP_REPLACE(LOWER(TRIM(SPLIT_PART(COALESCE(p.area, ''), ',', 1))), '[^a-z0-9]+', ' ', 'g')";
+  if (scope === 'district' || scope === 'nearby') {
+    const districtAliases = aliasesForDistrict(input.district);
+    values.push(input.district);
+    const districtParam = `$${values.length}`;
+    if (districtAliases.length) {
+      values.push(districtAliases);
+      const aliasParam = `$${values.length}`;
+      where.push(`(
+        LOWER(TRIM(COALESCE(p.district, ''))) = LOWER(${districtParam})
+        OR ${normalizedAreaSql} = ANY(${aliasParam}::text[])
+      )`);
+    } else {
+      where.push(`LOWER(TRIM(COALESCE(p.district, ''))) = LOWER(${districtParam})`);
     }
+  } else {
+    const areaAliases = aliasesForCanonicalLocation(canonicalLocation || {
+      name: input.location,
+      district: input.district
+    });
+    values.push(areaAliases.length ? areaAliases : [normalizeLocationKey(input.location)]);
+    where.push(`${normalizedAreaSql} = ANY($${values.length}::text[])`);
   }
 
   if (input.bedrooms != null && ['sale', 'rent', 'student'].includes(input.category)) {
@@ -319,6 +343,10 @@ async function loadComparableRows(input, scope) {
        p.nearest_university,
        p.room_type,
        p.students_welcome,
+       p.source,
+       p.listed_via,
+       p.status,
+       p.created_at,
        p.extra_fields,
        (
          SELECT i.url
@@ -330,13 +358,43 @@ async function loadComparableRows(input, scope) {
      FROM properties p
      WHERE ${where.join('\n       AND ')}
      ORDER BY p.created_at DESC
-     LIMIT 300`,
+     LIMIT 500`,
     values
   );
-  return result.rows || [];
+  const rows = (result.rows || []).map((row) => {
+    const canonical = canonicalizeUgandaLocation(row.area, row.district);
+    const distance = canonicalLocation && canonical
+      ? haversineKm(canonicalLocation, canonical)
+      : null;
+    return {
+      ...row,
+      area: canonical?.name || cleanText(row.area),
+      district: canonical?.district || normalizeDistrict(row.district) || cleanText(row.district),
+      canonical_location: canonical,
+      valuation_distance_km: distance
+    };
+  });
+  if (!canonicalLocation) return rows;
+  if (scope === 'area') {
+    return rows.filter((row) => row.canonical_location?.key === canonicalLocation.key);
+  }
+  if (scope === 'nearby') {
+    return rows
+      .filter((row) => (
+        row.canonical_location?.district === canonicalLocation.district
+        && Number.isFinite(row.valuation_distance_km)
+        && row.valuation_distance_km <= NEARBY_RADIUS_KM
+      ))
+      .sort((a, b) => (
+        Number(a.valuation_distance_km || 0) - Number(b.valuation_distance_km || 0)
+      ));
+  }
+  return rows.filter((row) => row.district === input.district);
 }
 
 async function inferDistrictForLocation(location) {
+  const canonical = canonicalizeUgandaLocation(location);
+  if (canonical?.district) return canonical.district;
   const result = await db.query(
     `SELECT TRIM(COALESCE(p.district, '')) AS district, COUNT(*)::int AS listing_count
      FROM properties p
@@ -430,6 +488,7 @@ function buildEstimate(input, rows, scope, widened = scope === 'district') {
     .map((row) => ({
       id: row.id,
       title: row.title,
+      description: row.description,
       area: row.area,
       district: row.district,
       price: Number(row.price),
@@ -438,11 +497,23 @@ function buildEstimate(input, rows, scope, widened = scope === 'district') {
       price_period: row.price_period,
       bedrooms: row.bedrooms,
       bathrooms: row.bathrooms,
+      listing_type: row.listing_type,
+      transaction_type: row.transaction_type,
       property_type: row.property_type,
+      room_type: row.room_type,
+      students_welcome: row.students_welcome,
+      nearest_university: row.nearest_university,
       land_size_value: row.land_size_value,
       land_size_unit: row.land_size_unit,
       size_sqm: row.sizeSqm ? Math.round(row.sizeSqm * 10) / 10 : null,
       image_url: row.image_url || null,
+      source: row.source || null,
+      listed_via: row.listed_via || null,
+      status: row.status || null,
+      created_at: row.created_at || null,
+      extra_fields: row.extra_fields && typeof row.extra_fields === 'object'
+        ? row.extra_fields
+        : {},
       url: `/property/${encodeURIComponent(row.id)}`
     }));
   const evidenceValues = ranked.map((row) => row.valuation_value);
@@ -450,6 +521,9 @@ function buildEstimate(input, rows, scope, widened = scope === 'district') {
   const high = percentile(evidenceValues, 0.9);
   const sufficient = analysisValues.length >= MIN_COMPARABLES;
   const scopeAreas = Array.from(new Set(ranked.map((row) => cleanText(row.area)).filter(Boolean)));
+  const confidence = !sufficient || widened || analysisValues.length < 5
+    ? 'low'
+    : (analysisValues.length >= 10 ? 'high' : 'medium');
 
   return {
     sufficient,
@@ -461,6 +535,7 @@ function buildEstimate(input, rows, scope, widened = scope === 'district') {
     raw_comparable_count: prepared.length,
     scope,
     widened,
+    confidence,
     scope_areas: scopeAreas,
     target_size_sqm: targetSizeSqm ? Math.round(targetSizeSqm * 10) / 10 : null,
     unit_rate_sqm: unitRate ? Math.round(unitRate) : null,
@@ -487,16 +562,20 @@ function buildEstimate(input, rows, scope, widened = scope === 'district') {
 router.post('/estimate', async (req, res, next) => {
   try {
     const category = normalizeCategory(req.body?.category);
-    const location = cleanText(req.body?.location || req.body?.area);
+    const locationRaw = cleanText(req.body?.location || req.body?.area);
     const districtRaw = cleanText(req.body?.district);
-    let district = DISTRICTS.find((item) => item.toLowerCase() === districtRaw.toLowerCase())
-      || DISTRICTS.find((item) => item.toLowerCase() === location.toLowerCase())
+    const canonicalLocation = canonicalizeUgandaLocation(locationRaw, districtRaw);
+    const location = canonicalLocation?.name || locationRaw;
+    let district = canonicalLocation?.district
+      || normalizeDistrict(districtRaw)
+      || normalizeDistrict(location)
       || '';
     const transactionType = cleanText(req.body?.transaction_type).toLowerCase();
     const input = {
       category,
       location,
       district,
+      canonical_location: canonicalLocation,
       bedrooms: toNullableInt(req.body?.bedrooms),
       property_type: cleanText(req.body?.property_type),
       transaction_type: ['rent', 'sale'].includes(transactionType) ? transactionType : '',
@@ -515,7 +594,8 @@ router.post('/estimate', async (req, res, next) => {
     if (input.category === 'commercial' && !input.transaction_type) {
       return res.status(400).json({ ok: false, error: 'Choose whether the commercial property is for rent or sale.' });
     }
-    const locationIsDistrict = DISTRICTS.some((item) => item.toLowerCase() === location.toLowerCase());
+    const locationIsDistrict = canonicalLocation?.level === 'district'
+      || DISTRICTS.some((item) => item.toLowerCase() === location.toLowerCase());
     if (!locationIsDistrict) {
       const inferredDistrict = await withTransientDatabaseRetry(() => inferDistrictForLocation(location));
       if (inferredDistrict) {
@@ -536,9 +616,20 @@ router.post('/estimate', async (req, res, next) => {
     let rows = await withTransientDatabaseRetry(() => loadComparableRows(input, scope));
     const exactCompatibleCount = rows.filter((row) => isCategoryCompatibleComparable(row, input)).length;
     if (scope === 'area' && exactCompatibleCount < DISTRICT_WIDEN_THRESHOLD && district) {
-      scope = 'district';
-      widened = true;
-      rows = await withTransientDatabaseRetry(() => loadComparableRows(input, scope));
+      if (canonicalLocation && Number.isFinite(canonicalLocation.lat) && Number.isFinite(canonicalLocation.lng)) {
+        const nearbyRows = await withTransientDatabaseRetry(() => loadComparableRows(input, 'nearby'));
+        const nearbyCompatibleCount = nearbyRows.filter((row) => isCategoryCompatibleComparable(row, input)).length;
+        if (nearbyCompatibleCount >= DISTRICT_WIDEN_THRESHOLD) {
+          scope = 'nearby';
+          widened = true;
+          rows = nearbyRows;
+        }
+      }
+      if (scope === 'area') {
+        scope = 'district';
+        widened = true;
+        rows = await withTransientDatabaseRetry(() => loadComparableRows(input, scope));
+      }
     }
     const result = buildEstimate(input, rows, scope, widened);
     const payload = {
@@ -547,7 +638,9 @@ router.post('/estimate', async (req, res, next) => {
       input,
       ...result,
       scope_label: widened
-        ? `Not enough exact matches in ${location}; using ${district} District comparables.`
+        ? (scope === 'nearby'
+          ? `Not enough exact matches in ${location}; using nearby ${district} comparables.`
+          : `Not enough exact matches in ${location}; using ${district} District comparables.`)
         : `Using comparable listings in ${scope === 'district' ? `${district} District` : location}.`,
       currency: 'UGX',
       generated_at: new Date().toISOString(),
@@ -587,14 +680,15 @@ router.get('/locations', async (req, res, next) => {
        WHERE ${where.join('\n         AND ')}
        GROUP BY 1, 2
        ORDER BY COUNT(*) DESC, 1 ASC
-       LIMIT 500`,
+       LIMIT 1500`,
       values
     );
+    const canonicalRows = canonicalizeLocationRows(rows.rows || []);
     return res.status(200).json({
       ok: true,
       marker: VALUATION_MARKER,
       category,
-      data: rows.rows || []
+      data: canonicalRows
     });
   } catch (error) {
     return next(error);
@@ -627,5 +721,8 @@ module.exports._test = {
   isCategoryCompatibleComparable,
   isTransientDatabaseError,
   categoryResultsPath,
-  buildEstimate
+  buildEstimate,
+  canonicalizeUgandaLocation,
+  canonicalizeLocationRows,
+  aliasesForCanonicalLocation
 };

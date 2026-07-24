@@ -40028,9 +40028,19 @@ const VALUATION_UI_EN = Object.freeze({
   basisMonth: "Comparable rents normalised per month",
   basisSemester: "Student prices normalised per semester",
   scopeArea: "Using comparable listings in {location}.",
+  scopeNearby: "Not enough exact matches in {location}; using nearby {district} comparables.",
   scopeDistrict: "Not enough exact matches in {location}; using {district} District comparables.",
+  guideDisclaimerTitle: "This is a guide, not a valuation.",
+  guideDisclaimerBody: "This estimate is calculated only from approved listings on makaug.com. It is an average for similar properties, and a starting point to help you plan. The real price may be higher or lower. It cannot be used for a loan, a sale, or a legal purpose. Before you buy, sell, or borrow, always ask a licensed surveyor or valuer to inspect the property.",
+  limitedDisclaimerTitle: "Limited data — treat this number with extra care.",
+  limitedDisclaimerBody: "We found only a few similar listings or used prices from across a wider area, so this is less reliable than usual. The real price could be quite different. It cannot be used for a loan, a sale, or a legal purpose. Before you buy, sell, or borrow, always ask a licensed surveyor or valuer to inspect the property.",
+  findLicensedValuer: "Find a licensed valuer",
+  confidenceLow: "Low confidence",
+  confidenceMedium: "Medium confidence",
+  confidenceHigh: "High confidence",
   methodText: "The estimate uses a trimmed mean. With 10 or more comparable listings, the highest and lowest 10% are removed. The displayed range is the 10th–90th percentile.",
   methodExample: "Worked example: {count} comparable prices produced a trimmed estimate of {estimate} and a range of {low} to {high}.",
+  methodLegal: "Estimates are averages computed from our own approved listings. They are a guide only — not a formal valuation — and makaug.com accepts no liability for decisions based on them. Always engage a licensed surveyor or valuer before transacting.",
   noImage: "No photo",
   viewListing: "View listing"
 });
@@ -40169,6 +40179,13 @@ const VALUATION_UI_SUPPLEMENTS = Object.freeze({
     scopeDistrict: "Ebirango mu {location} tebimala; tukozesa ebya {district} District.",
     methodText: "Tubala trimmed mean. Bwe waba ebirango 10 oba okusingawo, tuggyamu 10% ebisinga n'ebitono. Ekkomo liri ku 10–90%.",
     methodExample: "Ekyokulabirako: emiwendo {count} giwadde estimate ya {estimate}, wakati wa {low} ne {high}.",
+    scopeNearby: "Ebirango mu {location} tebimala; tukozesa ebiri okumpi mu {district}.",
+    guideDisclaimerTitle: "Kino kya kukuyamba, si valuation.",
+    guideDisclaimerBody: "Omuwendo guno gubaliddwa okuva mu birango ebikkiriziddwa ku makaug.com. Gwa kukuyamba okuteekateeka, naye omuwendo gwennyini guyinza okuba waggulu oba wansi. Tegukozesebwa ku looni, kutunda oba mu mateeka. Nga tonnagula, kutunda oba kwewola, funa surveyor oba valuer alina olukusa akebera property.",
+    limitedDisclaimerTitle: "Data ntono — omuwendo guno gukozese n'obwegendereza.",
+    limitedDisclaimerBody: "Tufunye ebirango bitono oba tukozesezza emiwendo gy'ekitundu ekinene, kale omuwendo guno tegwesigika nga bulijjo. Omuwendo gwennyini guyinza okwawukana nnyo. Tegukozesebwa ku looni, kutunda oba mu mateeka. Funa surveyor oba valuer alina olukusa akebera property.",
+    findLicensedValuer: "Funa valuer alina olukusa", confidenceLow: "Obwesige butono", confidenceMedium: "Obwesige bwa wakati", confidenceHigh: "Obwesige bungi",
+    methodLegal: "Emiwendo gino average okuva mu birango byaffe ebikkiriziddwa. Gya kukuyamba kwokka, si valuation entongole, era makaug.com tevunaanyizibwa ku by'osalawo ng'ogikozesezza. Bulijjo funa surveyor oba valuer alina olukusa nga tonnakola ddiiru.",
     noImage: "Tewali kifaananyi"
   },
   sw: {
@@ -40185,6 +40202,13 @@ const VALUATION_UI_SUPPLEMENTS = Object.freeze({
     scopeDistrict: "Hakuna matokeo ya kutosha {location}; tunatumia matangazo ya Wilaya ya {district}.",
     methodText: "Makadirio hutumia wastani uliopunguzwa. Kwa matangazo 10 au zaidi, asilimia 10 ya juu na ya chini huondolewa. Kiwango ni asilimia 10–90.",
     methodExample: "Mfano: bei {count} zilitoa makadirio ya {estimate} na kiwango cha {low} hadi {high}.",
+    scopeNearby: "Hakuna matokeo ya kutosha {location}; tunatumia matangazo ya karibu katika {district}.",
+    guideDisclaimerTitle: "Huu ni mwongozo, si uthamini.",
+    guideDisclaimerBody: "Makadirio haya yanatokana tu na matangazo yaliyoidhinishwa kwenye makaug.com. Ni wastani wa mali zinazofanana na sehemu ya kuanzia kupanga. Bei halisi inaweza kuwa juu au chini. Hayatumiki kwa mkopo, uuzaji au kazi ya kisheria. Kabla ya kununua, kuuza au kukopa, mwombe mpimaji au mthamini mwenye leseni akague mali.",
+    limitedDisclaimerTitle: "Data ni chache — tumia nambari hii kwa tahadhari zaidi.",
+    limitedDisclaimerBody: "Tumepata matangazo machache yanayofanana au tumetumia bei kutoka eneo pana, kwa hiyo makadirio haya si ya kuaminika kama kawaida. Bei halisi inaweza kutofautiana sana. Hayatumiki kwa mkopo, uuzaji au kazi ya kisheria. Mwombe mpimaji au mthamini mwenye leseni akague mali.",
+    findLicensedValuer: "Tafuta mthamini mwenye leseni", confidenceLow: "Uhakika mdogo", confidenceMedium: "Uhakika wa kati", confidenceHigh: "Uhakika mkubwa",
+    methodLegal: "Makadirio ni wastani kutoka matangazo yetu yaliyoidhinishwa. Ni mwongozo tu, si uthamini rasmi, na makaug.com haiwajibiki kwa maamuzi yanayotegemea makadirio hayo. Daima tumia mpimaji au mthamini mwenye leseni kabla ya kufanya muamala.",
     noImage: "Hakuna picha"
   },
   ac: {
@@ -40201,7 +40225,15 @@ const VALUATION_UI_SUPPLEMENTS = Object.freeze({
     basisMonth: "Wel me bongo kiporo pi dwe", basisSemester: "Wel pa lutino kwan kiporo pi semester",
     scopeArea: "Watio ki listing ma tye i {location}.", scopeDistrict: "Listing i {location} pe oromo; watio ki me District {district}.",
     methodText: "Lapim tiyo ki trimmed mean. Ka listing tye 10 onyo makato, kigolo 10% ma malo ki ma piny. Range obedo 10–90%.",
-    methodExample: "Labole: wel {count} omiyo estimate {estimate} ki range {low} wa {high}.", noImage: "Cal pe"
+    methodExample: "Labole: wel {count} omiyo estimate {estimate} ki range {low} wa {high}.",
+    scopeNearby: "Listing i {location} pe oromo; watio ki listing ma cok i {district}.",
+    guideDisclaimerTitle: "Man obedo lacim, pe valuation.",
+    guideDisclaimerBody: "Lapim man aa ki listing ma gimoko i makaug.com keken. Obedo average pa property ma rom ki kabedo me cak yub. Wel kikome twero bedo malo onyo piny. Pe kitiyo kwede pi loan, cato onyo cik. Ma pud pe iwilo, icato onyo ikwayo loan, myero surveyor onyo valuer ma tye ki license onen property.",
+    limitedDisclaimerTitle: "Data nok — ti ki wel man ki gwok madit.",
+    limitedDisclaimerBody: "Wanongo listing manok onyo watio ki wel pa district malac, pi meno lapim man pe genne calo kare ducu. Wel kikome twero bedo mapat tutwal. Pe kitiyo kwede pi loan, cato onyo cik. Nong surveyor onyo valuer ma tye ki license.",
+    findLicensedValuer: "Nong valuer ma tye ki license", confidenceLow: "Gen nok", confidenceMedium: "Gen ma rom", confidenceHigh: "Gen madit",
+    methodLegal: "Lapim obedo average ki listing ma gimoko. Obedo lacim keken, pe valuation me cik, ki makaug.com pe mako tic pi moko ma kitiyo kwede. Tii ki surveyor onyo valuer ma tye ki license ma pud pe itimo transaction.",
+    noImage: "Cal pe"
   },
   ny: {
     formSubtitle: "Nitugyeragyeranisa n'ebyamamaza ebiri aha makaug.", transaction: "Enkora", forRent: "Y'okupangisa", forSale: "Y'okutunda",
@@ -40217,7 +40249,15 @@ const VALUATION_UI_SUPPLEMENTS = Object.freeze({
     basisMonth: "Emihendo y'okupangisa eteekateekirwe buri kwezi", basisSemester: "Emihendo y'abeegi eteekateekirwe buri semester",
     scopeArea: "Nitukoresa ebyamamaza omuri {location}.", scopeDistrict: "Ebyamamaza omuri {location} tibikumara; nitukoresa ebya District ya {district}.",
     methodText: "Nitukoresa trimmed mean. Hariho listing 10 nari ezirikukira, nitwiihamu 10% eya haiguru n'eya ahansi. Range ni 10–90%.",
-    methodExample: "Ekyokureeberaho: emihendo {count} yaahereza estimate {estimate}, kuruga {low} kuhika {high}.", noImage: "Tihariho kishushani"
+    methodExample: "Ekyokureeberaho: emihendo {count} yaahereza estimate {estimate}, kuruga {low} kuhika {high}.",
+    scopeNearby: "Ebyamamaza omuri {location} tibikumara; nitukoresa ebiri haihi omuri {district}.",
+    guideDisclaimerTitle: "N'obuhabuzi, ti valuation.",
+    guideDisclaimerBody: "Omuhendo ogu nigubarwa kuruga omu byamamaza ebihamiibwe aha makaug.com. Ni average ya property ezirikushushana kandi n'entandikiro y'okuteekateeka. Omuhendo gw'amazima nigubaasa kuba haiguru nari ahansi. Tigushemereire kukoresibwa aha loan, okutunda nari omu mateeka. Otakagwire, okutunda nari kweguza, shaba surveyor nari valuer owine license ashwijume property.",
+    limitedDisclaimerTitle: "Data ni nkye — omuhendo ogu gukoresese n'obwegyendesereza.",
+    limitedDisclaimerBody: "Tuboine ebyamamaza bikye nari tukoresize emihendo y'ekicweka kihango, n'ahabw'ekyo omuhendo ogu tigwesigwa nk'obutoosha. Omuhendo gw'amazima nigubaasa kwahukana munonga. Shaba surveyor nari valuer owine license ashwijume property.",
+    findLicensedValuer: "Shaka valuer owine license", confidenceLow: "Obwesigwa bukye", confidenceMedium: "Obwesigwa bwa hagati", confidenceHigh: "Obwesigwa bwingi",
+    methodLegal: "Emihendo ni average kuruga omu byamamaza byaitu ebihamiibwe. N'obuhabuzi kwonka, ti valuation entongore, kandi makaug.com terikujunanizibwa aha ncwamu ezikozire. Buriijo shaka surveyor nari valuer owine license otakakozire transaction.",
+    noImage: "Tihariho kishushani"
   },
   rn: {
     formSubtitle: "Nitugyeragyeranisa na listing z'amazima aha makaug.", transaction: "Enkora", forRent: "Y'okupangisa", forSale: "Y'okutunda",
@@ -40233,7 +40273,15 @@ const VALUATION_UI_SUPPLEMENTS = Object.freeze({
     basisMonth: "Emihendo y'okupangisa ebariirwe buri kwezi", basisSemester: "Emihendo y'abeegi ebariirwe buri semester",
     scopeArea: "Nitukoresa listing eziri omuri {location}.", scopeDistrict: "Listing omuri {location} tizaamala; nitukoresa eza District ya {district}.",
     methodText: "Nitukoresa trimmed mean. Hariho listing 10 nari ezirikukira, nitwiihamu 10% eya haiguru n'eya ahansi. Range ni 10–90%.",
-    methodExample: "Ekyokureeberaho: emihendo {count} yaahereza estimate {estimate}, kuruga {low} kuhika {high}.", noImage: "Tihariho kishushani"
+    methodExample: "Ekyokureeberaho: emihendo {count} yaahereza estimate {estimate}, kuruga {low} kuhika {high}.",
+    scopeNearby: "Listing omuri {location} tizaamala; nitukoresa eziri haihi omuri {district}.",
+    guideDisclaimerTitle: "N'obuhabuzi, ti valuation.",
+    guideDisclaimerBody: "Omuhendo ogu nigubarwa kuruga omu listing ezihamiibwe aha makaug.com. Ni average ya property ezirikushushana kandi n'entandikiro y'okuteekateeka. Omuhendo gw'amazima nigubaasa kuba haiguru nari ahansi. Tigushemereire kukoresibwa aha loan, okutunda nari omu mateeka. Otakagwire, okutunda nari kweguza, shaba surveyor nari valuer owine license ashwijume property.",
+    limitedDisclaimerTitle: "Data ni nkye — omuhendo ogu gukoresese n'obwegyendesereza.",
+    limitedDisclaimerBody: "Tuboine listing nkye nari tukoresize emihendo y'ekicweka kihango, n'ahabw'ekyo omuhendo ogu tigwesigwa nk'obutoosha. Omuhendo gw'amazima nigubaasa kwahukana munonga. Shaba surveyor nari valuer owine license ashwijume property.",
+    findLicensedValuer: "Shaka valuer owine license", confidenceLow: "Obwesigwa bukye", confidenceMedium: "Obwesigwa bwa hagati", confidenceHigh: "Obwesigwa bwingi",
+    methodLegal: "Emihendo ni average kuruga omu listing zaitu ezihamiibwe. N'obuhabuzi kwonka, ti valuation entongore, kandi makaug.com terikujunanizibwa aha ncwamu ezikozire. Buriijo shaka surveyor nari valuer owine license otakakozire transaction.",
+    noImage: "Tihariho kishushani"
   },
   sm: {
     formSubtitle: "Tugeraageranya n'ebirango eby'amazima ku makaug.", transaction: "Enkola", forRent: "Kupangisa", forSale: "Kutunda",
@@ -40249,7 +40297,15 @@ const VALUATION_UI_SUPPLEMENTS = Object.freeze({
     basisMonth: "Emiwendo gy'obupangisa gitegekeddwa buli mwezi", basisSemester: "Emiwendo gy'abeegi gitegekeddwa buli semester",
     scopeArea: "Tukozesa ebirango ebiri mu {location}.", scopeDistrict: "Ebirango mu {location} tebimala; tukozesa ebya District ya {district}.",
     methodText: "Tubala trimmed mean. Bwe waba ebirango 10 oba okusingawo, tuggyamu 10% ebisinga n'ebitono. Range eri ku 10–90%.",
-    methodExample: "Ekyokulabirako: emiwendo {count} giwadde estimate {estimate}, wakati wa {low} ne {high}.", noImage: "Tewali kifaananyi"
+    methodExample: "Ekyokulabirako: emiwendo {count} giwadde estimate {estimate}, wakati wa {low} ne {high}.",
+    scopeNearby: "Ebirango mu {location} tebimala; tukozesa ebiri okumpi mu {district}.",
+    guideDisclaimerTitle: "Kino kya kukuyamba, si valuation.",
+    guideDisclaimerBody: "Omuwendo guno gubaliddwa okuva mu birango ebikkiriziddwa ku makaug.com. Gwa kukuyamba okuteekateeka, naye omuwendo gwennyini guyinza okuba waggulu oba wansi. Tegukozesebwa ku looni, kutunda oba mu mateeka. Nga tonnagula, kutunda oba kwewola, funa surveyor oba valuer alina olukusa akebera property.",
+    limitedDisclaimerTitle: "Data ntono — omuwendo guno gukozese n'obwegendereza.",
+    limitedDisclaimerBody: "Tufunye ebirango bitono oba tukozesezza emiwendo gy'ekitundu ekinene, kale omuwendo guno tegwesigika nga bulijjo. Omuwendo gwennyini guyinza okwawukana nnyo. Funa surveyor oba valuer alina olukusa akebera property.",
+    findLicensedValuer: "Funa valuer alina olukusa", confidenceLow: "Obwesige butono", confidenceMedium: "Obwesige bwa wakati", confidenceHigh: "Obwesige bungi",
+    methodLegal: "Emiwendo gino average okuva mu birango byaffe ebikkiriziddwa. Gya kukuyamba kwokka, si valuation entongole, era makaug.com tevunaanyizibwa ku by'osalawo ng'ogikozesezza. Bulijjo funa surveyor oba valuer alina olukusa nga tonnakola ddiiru.",
+    noImage: "Tewali kifaananyi"
   },
   am: {
     formSubtitle: "በmakaug ላይ ካሉ እውነተኛ ዝርዝሮች ጋር እናወዳድራለን።",
@@ -40267,7 +40323,15 @@ const VALUATION_UI_SUPPLEMENTS = Object.freeze({
     scopeArea: "በ{location} ያሉ ተመሳሳይ ዝርዝሮችን እንጠቀማለን።",
     scopeDistrict: "በ{location} በቂ ውጤት የለም፤ የ{district} ዲስትሪክት ዝርዝሮችን እንጠቀማለን።",
     methodText: "ግምቱ የተቀነሰ አማካይን ይጠቀማል። 10 ወይም ከዚያ በላይ ዝርዝሮች ሲኖሩ ከፍተኛና ዝቅተኛ 10% ይወገዳል። ክልሉ 10–90% ነው።",
-    methodExample: "ምሳሌ፦ {count} ዋጋዎች {estimate} ግምትና ከ{low} እስከ {high} ክልል ሰጡ።", noImage: "ፎቶ የለም"
+    methodExample: "ምሳሌ፦ {count} ዋጋዎች {estimate} ግምትና ከ{low} እስከ {high} ክልል ሰጡ።",
+    scopeNearby: "በ{location} በቂ ውጤት የለም፤ በ{district} አቅራቢያ ያሉ ዝርዝሮችን እንጠቀማለን።",
+    guideDisclaimerTitle: "ይህ መመሪያ ነው፣ ግምገማ አይደለም።",
+    guideDisclaimerBody: "ይህ ግምት የተሰላው በmakaug.com ላይ ካሉ የተፈቀዱ ዝርዝሮች ብቻ ነው። የተመሳሳይ ንብረቶች አማካይና ለእቅድ መነሻ ነው። እውነተኛው ዋጋ ከፍ ወይም ዝቅ ሊል ይችላል። ለብድር፣ ለሽያጭ ወይም ለሕጋዊ ዓላማ አይጠቀሙበት። ከመግዛት፣ ከመሸጥ ወይም ከመበደር በፊት ፈቃድ ያለው ቀያሽ ወይም ገማች ንብረቱን ይመርምር።",
+    limitedDisclaimerTitle: "መረጃው ውስን ነው — ቁጥሩን በጥንቃቄ ይጠቀሙ።",
+    limitedDisclaimerBody: "ጥቂት ተመሳሳይ ዝርዝሮች ብቻ አግኝተናል ወይም ከሰፊ አካባቢ ዋጋዎችን ተጠቅመናል፣ ስለዚህ ይህ ከመደበኛው ያነሰ አስተማማኝ ነው። እውነተኛው ዋጋ በጣም ሊለያይ ይችላል። ፈቃድ ያለው ቀያሽ ወይም ገማች ንብረቱን ይመርምር።",
+    findLicensedValuer: "ፈቃድ ያለው ገማች ያግኙ", confidenceLow: "ዝቅተኛ እምነት", confidenceMedium: "መካከለኛ እምነት", confidenceHigh: "ከፍተኛ እምነት",
+    methodLegal: "ግምቶች ከራሳችን የተፈቀዱ ዝርዝሮች የተሰሉ አማካዮች ናቸው። መመሪያ ብቻ ናቸው፣ መደበኛ ግምገማ አይደሉም፣ እና makaug.com በእነሱ ላይ ለተመሰረቱ ውሳኔዎች ኃላፊነት አይቀበልም። ሁልጊዜ ፈቃድ ያለው ባለሙያ ይጠቀሙ።",
+    noImage: "ፎቶ የለም"
   },
   ar: {
     locationPlaceholder: "مثال: Ntinda", propertyTypePlaceholder: "مثال: شقة",
@@ -40280,6 +40344,13 @@ const VALUATION_UI_SUPPLEMENTS = Object.freeze({
     scopeDistrict: "لا توجد نتائج كافية في {location}؛ نستخدم إعلانات مقاطعة {district}.",
     methodText: "يستخدم التقدير متوسطاً مشذباً. عند وجود 10 إعلانات أو أكثر نحذف أعلى وأدنى 10٪. النطاق المعروض هو النسبة المئوية 10–90.",
     methodExample: "مثال: أعطت {count} أسعار تقديراً قدره {estimate} ونطاقاً من {low} إلى {high}.",
+    scopeNearby: "لا توجد نتائج كافية في {location}؛ نستخدم إعلانات قريبة في {district}.",
+    guideDisclaimerTitle: "هذا دليل وليس تقييماً.",
+    guideDisclaimerBody: "يُحسب هذا التقدير فقط من الإعلانات المعتمدة على makaug.com. وهو متوسط لعقارات مشابهة ونقطة بداية للتخطيط. قد يكون السعر الحقيقي أعلى أو أقل. لا يجوز استخدامه لقرض أو بيع أو غرض قانوني. قبل الشراء أو البيع أو الاقتراض، اطلب دائماً من مسّاح أو مثمّن مرخّص فحص العقار.",
+    limitedDisclaimerTitle: "البيانات محدودة — تعامل مع هذا الرقم بحذر إضافي.",
+    limitedDisclaimerBody: "وجدنا عدداً قليلاً فقط من الإعلانات المشابهة أو استخدمنا أسعاراً من منطقة أوسع، لذلك فهذا أقل موثوقية من المعتاد. قد يختلف السعر الحقيقي كثيراً. لا يجوز استخدامه لقرض أو بيع أو غرض قانوني. اطلب من مسّاح أو مثمّن مرخّص فحص العقار.",
+    findLicensedValuer: "ابحث عن مثمّن مرخّص", confidenceLow: "ثقة منخفضة", confidenceMedium: "ثقة متوسطة", confidenceHigh: "ثقة عالية",
+    methodLegal: "التقديرات متوسطات محسوبة من إعلاناتنا المعتمدة. هي دليل فقط وليست تقييماً رسمياً، ولا تتحمل makaug.com المسؤولية عن القرارات المبنية عليها. استعِن دائماً بمسّاح أو مثمّن مرخّص قبل إجراء أي معاملة.",
     noImage: "لا توجد صورة"
   }
 });
@@ -40308,6 +40379,7 @@ function applyValuationLanguageUI() {
     const key = element.dataset.valuationPlaceholder;
     if (key) element.placeholder = valuationTr(key);
   });
+  if (lastValuationResponse) applyValuationResultLanguage(lastValuationResponse);
 }
 
 function populateValuationLocations() {
@@ -40433,54 +40505,134 @@ function safeImageUrl(value = "") {
   }
 }
 
-function renderValuationComparable(row = {}) {
-  const image = safeImageUrl(row.image_url || "");
-  const location = [row.area, row.district].filter(Boolean).join(", ");
-  return `
-    <article class="bg-white border border-[#e4ece8] rounded-lg overflow-hidden">
-      <div class="relative aspect-[16/9] overflow-hidden bg-[#f6f9f7]" style="aspect-ratio: 16 / 9;">
-        ${image
-          ? `<img src="${adminAttr(image)}" alt="" class="absolute inset-0 h-full w-full object-cover" loading="lazy">`
-          : `<div class="absolute inset-0 flex items-center justify-center text-xs font-bold text-gray-400">${adminEscape(valuationTr("noImage"))}</div>`}
-      </div>
-      <div class="p-4">
-        <div class="text-lg font-black text-[#15603f]">${adminEscape(formatValuationUgx(row.normalized_price || row.price))}</div>
-        <h3 class="mt-1 line-clamp-2 text-sm font-black text-[#16241d]">${adminEscape(row.title || "Property")}</h3>
-        <p class="mt-1 text-xs text-[#5b6b62]">${adminEscape(location)}</p>
-        <a href="${adminAttr(row.url || `/property/${row.id}`)}" onclick="return navigatePublicRoute(this.href, event)" class="mt-3 inline-flex min-h-[40px] items-center text-xs font-black text-[#15603f] hover:underline">${adminEscape(valuationTr("viewListing"))} →</a>
-      </div>
-    </article>`;
+function valuationComparableProperty(row = {}, category = "") {
+  const extra = row.extra_fields && typeof row.extra_fields === "object" ? row.extra_fields : {};
+  const image = safeImageUrl(
+    row.image_url
+    || extra.image_url
+    || extra.thumbnail_url
+    || extra.source_thumbnail_url
+    || ""
+  );
+  const landSize = row.land_size_value && row.land_size_unit
+    ? `${row.land_size_value} ${row.land_size_unit}`
+    : "";
+  const floorSize = Number(row.size_sqm) > 0 ? `${Number(row.size_sqm).toLocaleString()} m²` : "";
+  const type = category === "student" ? "student" : (category || row.listing_type || "sale");
+  return {
+    id: String(row.id || ""),
+    backend_id: String(row.id || ""),
+    title: row.title || "Property",
+    desc: row.description || "",
+    description: row.description || "",
+    area: row.area || "",
+    district: row.district || "",
+    price: Number(row.normalized_price || row.price) || 0,
+    period: row.price_period || (category === "student" ? "sem" : ""),
+    listing_type: row.listing_type || type,
+    transaction_type: row.transaction_type || "",
+    type,
+    property_type: row.property_type || "",
+    subtype: row.property_type || "",
+    beds: Number(row.bedrooms) || 0,
+    baths: Number(row.bathrooms) || 0,
+    size: landSize || floorSize,
+    img: image,
+    images: image ? [{ url: image, is_main: true }] : [],
+    source: row.source || "",
+    listed_via: row.listed_via || "",
+    status: row.status || "approved",
+    created_at: row.created_at || "",
+    found_online: row.found_online === true || extra.found_online === true,
+    source_url: row.source_url || extra.source_url || "",
+    tiktok_url: row.tiktok_url || extra.tiktok_url || "",
+    video_url: row.video_url || extra.video_url || "",
+    extra_fields: extra
+  };
+}
+
+function renderValuationComparable(row = {}, category = "") {
+  return propCard(valuationComparableProperty(row, category), {
+    student: category === "student",
+    categoryPage: category,
+    showTypeBadge: true
+  });
+}
+
+let lastValuationResponse = null;
+
+function valuationConfidenceClasses(level = "low") {
+  if (level === "high") return "border-emerald-300 bg-emerald-50 text-emerald-900";
+  if (level === "medium") return "border-amber-300 bg-amber-50 text-amber-900";
+  return "border-red-300 bg-red-50 text-red-900";
+}
+
+function renderValuationMethodology(response = {}) {
+  const methodology = document.getElementById("valuation-methodology");
+  if (!methodology) return;
+  methodology.innerHTML = `
+    <p>${adminEscape(valuationTr("methodText"))}</p>
+    <p class="font-bold text-[#16241d]">${adminEscape(valuationTr("methodExample", {
+      count: Number(response.analysis_comparable_count || response.comparable_count || 0),
+      estimate: formatValuationUgx(response.estimate),
+      low: formatValuationUgx(response.range_low),
+      high: formatValuationUgx(response.range_high)
+    }))}</p>
+    <p class="border-t border-[#e4ece8] pt-3 text-xs leading-5 text-[#5b6b62]">${adminEscape(valuationTr("methodLegal"))}</p>`;
+}
+
+function applyValuationResultLanguage(response = {}) {
+  const scope = document.getElementById("valuation-scope-note");
+  const confidenceBadge = document.getElementById("valuation-confidence-badge");
+  const disclaimerTitle = document.getElementById("valuation-disclaimer-title");
+  const disclaimerBody = document.getElementById("valuation-disclaimer-body");
+  const valuerLink = document.getElementById("valuation-find-valuer");
+  const location = response.input?.canonical_location || response.input?.location || "";
+  const district = response.input?.district || "";
+  const analysisCount = Number(response.analysis_comparable_count || response.comparable_count || 0);
+  const limited = response.confidence === "low" || response.widened === true || analysisCount < 10;
+
+  if (scope) {
+    if (response.scope === "nearby") {
+      scope.textContent = valuationTr("scopeNearby", { location, district });
+    } else if (response.scope === "district" || response.widened) {
+      scope.textContent = valuationTr("scopeDistrict", { location, district });
+    } else {
+      scope.textContent = valuationTr("scopeArea", { location });
+    }
+  }
+  if (confidenceBadge) {
+    const level = ["high", "medium", "low"].includes(response.confidence) ? response.confidence : "low";
+    confidenceBadge.className = `rounded-full border px-3 py-1 text-xs font-black ${valuationConfidenceClasses(level)}`;
+    confidenceBadge.textContent = valuationTr(`confidence${level[0].toUpperCase()}${level.slice(1)}`);
+  }
+  if (disclaimerTitle) disclaimerTitle.textContent = valuationTr(limited ? "limitedDisclaimerTitle" : "guideDisclaimerTitle");
+  if (disclaimerBody) disclaimerBody.textContent = valuationTr(limited ? "limitedDisclaimerBody" : "guideDisclaimerBody");
+  if (valuerLink) valuerLink.textContent = `${valuationTr("findLicensedValuer")} →`;
+  renderValuationMethodology(response);
 }
 
 function renderValuationEstimate(response = {}) {
   const results = document.getElementById("valuation-results");
-  const scope = document.getElementById("valuation-scope-note");
   const estimate = document.getElementById("valuation-estimate");
   const range = document.getElementById("valuation-range");
   const count = document.getElementById("valuation-comparable-count");
   const unitRate = document.getElementById("valuation-unit-rate");
   const comparables = document.getElementById("valuation-comparables");
-  const methodology = document.getElementById("valuation-methodology");
   const viewAll = document.getElementById("valuation-view-all");
-  if (!results || !scope || !estimate || !range || !count || !unitRate || !comparables || !methodology) return;
+  if (!results || !estimate || !range || !count || !unitRate || !comparables) return;
 
+  lastValuationResponse = response;
   results.classList.remove("hidden");
-  scope.textContent = response.widened
-    ? valuationTr("scopeDistrict", { location: response.input?.location || "", district: response.input?.district || "" })
-    : valuationTr("scopeArea", {
-      location: response.scope === "district"
-        ? `${response.input?.district || response.input?.location || ""} District`
-        : (response.input?.location || "")
-    });
   count.textContent = Number(response.comparable_count || 0).toLocaleString();
 
   if (!response.sufficient || !response.estimate) {
     estimate.textContent = valuationTr("insufficient");
-    estimate.className = "mt-2 text-xl md:text-2xl font-black text-[#16241d]";
+    estimate.className = "text-xl md:text-2xl font-black text-[#16241d]";
     range.textContent = "";
   } else {
     estimate.textContent = formatValuationUgx(response.estimate);
-    estimate.className = "mt-2 text-3xl md:text-5xl font-black text-[#15603f]";
+    estimate.className = "text-3xl md:text-5xl font-black text-[#15603f]";
     range.textContent = valuationTr("range", {
       low: formatValuationUgx(response.range_low),
       high: formatValuationUgx(response.range_high)
@@ -40498,20 +40650,15 @@ function renderValuationEstimate(response = {}) {
   } else {
     unitRate.textContent = "";
   }
-  comparables.innerHTML = (response.comparables || []).map(renderValuationComparable).join("");
+  comparables.innerHTML = (response.comparables || [])
+    .map((row) => renderValuationComparable(row, category))
+    .join("");
   if (viewAll) {
     const href = String(response.view_all_url || "").trim();
     viewAll.classList.toggle("hidden", !href);
     if (href) viewAll.href = href;
   }
-  methodology.innerHTML = `
-    <p>${adminEscape(valuationTr("methodText"))}</p>
-    <p class="font-bold text-[#16241d]">${adminEscape(valuationTr("methodExample", {
-      count: Number(response.analysis_comparable_count || response.comparable_count || 0),
-      estimate: formatValuationUgx(response.estimate),
-      low: formatValuationUgx(response.range_low),
-      high: formatValuationUgx(response.range_high)
-    }))}</p>`;
+  applyValuationResultLanguage(response);
   results.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
