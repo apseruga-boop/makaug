@@ -9,6 +9,7 @@ const databaseConfig = fs.readFileSync(path.join(root, 'config/database.js'), 'u
 const serverSource = fs.readFileSync(path.join(root, 'server.js'), 'utf8');
 const metricsService = fs.readFileSync(path.join(root, 'services/publicInventoryMetricsService.js'), 'utf8');
 const migration = fs.readFileSync(path.join(root, 'db/migrations/077_properties_list_count_performance.sql'), 'utf8');
+const exactCountMigration = fs.readFileSync(path.join(root, 'db/migrations/092_public_inventory_exact_count_index.sql'), 'utf8');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 
 assert(
@@ -30,6 +31,11 @@ assert(
 assert(
   propertiesRoute.includes("count_cache"),
   'properties route should surface count cache/fallback metadata'
+);
+assert(
+  propertiesRoute.includes("Public property list is continuing without a cold summary")
+    && propertiesRoute.includes("total_pages: null"),
+  'a cold count failure must not turn an otherwise healthy public list into a 500'
 );
 assert(
   !/function addPublicLaunchSeedFilter[\s\S]*?\n}\n[\s\S]*?COALESCE\(p\.extra_fields::text/.test(
@@ -83,6 +89,11 @@ assert(
   serverSource.includes("await db.warmPool()") && serverSource.includes("Database pool warmed before accepting traffic"),
   'server startup should warm the database pool before accepting requests'
 );
+assert(
+  serverSource.includes("await loadPublicOpportunitySummary({ timeoutMs: 5000 })")
+    && serverSource.includes("Public inventory summary warmed before accepting traffic"),
+  'server startup should pre-warm the authoritative public inventory summary before accepting requests'
+);
 
 assert(
   metricsService.includes("PUBLIC_INVENTORY_METRICS_MARKER = 'properties-list-count-fast-20260718'"),
@@ -112,6 +123,12 @@ assert(
   assert(migration.includes(indexName), `migration 077 should create ${indexName}`);
 });
 assert(
+  exactCountMigration.includes('idx_properties_public_visible_bucket_count_v2')
+    && exactCountMigration.includes('MAKAUG TRAINING')
+    && exactCountMigration.includes('REMOVE AFTER QA'),
+  'migration 092 should match the complete current public inventory predicate'
+);
+assert(
   html.includes('properties-list-count-fast-20260718'),
   'production HTML should include the properties-list-count-fast marker'
 );
@@ -122,6 +139,10 @@ assert(
 assert(
   html.includes('admin-summary-warm-nozero-20260718'),
   'production HTML should include the admin summary warm/no-zero marker'
+);
+assert(
+  html.includes('properties-summary-cold-fallback-20260725'),
+  'production HTML should include the cold-summary fallback marker'
 );
 
 console.log('properties-list-count-performance: ok');

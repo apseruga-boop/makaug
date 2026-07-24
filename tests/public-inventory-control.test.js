@@ -215,8 +215,8 @@ test('anonymous public property APIs suppress launch seed QA listings', () => {
   assert.match(appSource, /publicListingsApiTotal = Number\.isFinite\(apiTotal\) \? apiTotal : rows\.length/);
   assert.match(appSource, /apiRequest\(`\$\{path\}\$\{separator\}limit=\$\{limit\}&page=\$\{page\}\$\{summaryParam\}`, \{ skipAuth: true \}\)/);
   assert.match(routeSource, /} else \{\s*opportunitySummary = null;\s*\}/);
-  assert.match(routeSource, /const rowLimit = includeSummary \? limit : limit \+ 1/);
-  assert.match(routeSource, /const pagination = includeSummary[\s\S]*approximatePublicPagination/);
+  assert.match(routeSource, /const rowLimit = hasOpportunitySummary \? limit : limit \+ 1/);
+  assert.match(routeSource, /const pagination = hasOpportunitySummary[\s\S]*approximatePublicPagination/);
   assert.match(routeSource, /newest: 'p\.created_at DESC, p\.id DESC'/);
   assert(routeSource.includes('const priceSortRankSql'), 'public inventory route should rank unpriced/outlier rows last for price sorting');
   assert.match(routeSource, /price_asc: `\$\{priceSortRankSql\} ASC, p\.price ASC NULLS LAST, p\.created_at DESC, p\.id DESC`/);
@@ -597,7 +597,7 @@ test('public properties API is cacheable and uses the fast public summary path',
   assert.match(propertiesRouteSource, /loadPublicOpportunitySummary\(\{/);
   assert.match(propertiesRouteSource, /X-Makaug-Properties-Count-Marker/);
   assert.match(propertiesRouteSource, /function approximatePublicPagination/);
-  assert.match(propertiesRouteSource, /public_opportunities: includeSummary \? opportunitySummary : null/);
+  assert.match(propertiesRouteSource, /public_opportunities: hasOpportunitySummary \? opportunitySummary : null/);
   assert.doesNotMatch(propertiesRouteSource, /SELECT COUNT\(\*\)::int AS total\s+FROM properties p\s+\$\{where\}/);
   assert.match(propertiesRouteSource, /WITH public_page_source AS/);
   assert.match(propertiesRouteSource, /COALESCE\(p\.extra_fields, '\{\}'::jsonb\)\s+- 'raw_source_post'/);
