@@ -23,6 +23,8 @@ const MIN_COMPARABLES = 3;
 const DISTRICT_WIDEN_THRESHOLD = MIN_COMPARABLES;
 const EVIDENCE_LIMIT = 10;
 const MAX_PRICE_UGX = 100_000_000_000;
+const MIN_RECURRING_PRICE_UGX = 10_000;
+const MIN_TOTAL_PRICE_UGX = 1_000_000;
 const NEARBY_RADIUS_KM = 12;
 const SQM_PER_ACRE = 4046.8564224;
 const SQM_PER_DECIMAL = SQM_PER_ACRE / 100;
@@ -189,15 +191,28 @@ function hasAmbiguousForeignCurrency(row = {}) {
   return /(?:\bUSD\b|\bUS\s*DOLLARS?\b|US\$|\$|€|£)/i.test(valuationSourceText(row));
 }
 
+function minimumPlausiblePrice(input = {}) {
+  if (input.category === 'rent' || input.category === 'student') return MIN_RECURRING_PRICE_UGX;
+  if (input.category === 'commercial' && input.transaction_type === 'rent') return MIN_RECURRING_PRICE_UGX;
+  return MIN_TOTAL_PRICE_UGX;
+}
+
 function isCategoryCompatibleComparable(row = {}, input = {}) {
   const category = input.category;
+  const rawPrice = Number(row.price);
   const listingType = cleanText(row.listing_type).toLowerCase();
   const transactionType = cleanText(row.transaction_type).toLowerCase();
   const period = cleanText(row.price_period).toLowerCase();
   const text = comparableText(row);
   const recurringPeriod = ['week', 'weekly', 'wk', 'month', 'monthly', 'mo', 'per_month', 'semester', 'term', 'year', 'yearly', 'annual', 'annually'].includes(period);
   const constructionOnly = /\b(?:cost to build|cost of building|construction cost|building cost|to start building|house plan|building plan|how to build|build this house)\b/i.test(text);
-  if (constructionOnly || hasAmbiguousForeignCurrency(row)) return false;
+  if (
+    !Number.isFinite(rawPrice)
+    || rawPrice < minimumPlausiblePrice(input)
+    || rawPrice > MAX_PRICE_UGX
+    || constructionOnly
+    || hasAmbiguousForeignCurrency(row)
+  ) return false;
 
   if (category === 'student') {
     const studentInventory = ['student', 'students'].includes(listingType)
@@ -255,11 +270,12 @@ function setCachedValue(key, value) {
 }
 
 async function loadComparableRows(input, scope) {
+  const minimumPrice = minimumPlausiblePrice(input);
   const values = [];
   const where = [
     publicLivePropertyStatusSql('p'),
     `NOT ${publicLaunchTestListingFastCondition('p')}`,
-    'p.price > 0',
+    `p.price >= ${minimumPrice}`,
     `p.price <= ${MAX_PRICE_UGX}`
   ];
   const add = (sql, value) => {
@@ -722,6 +738,7 @@ module.exports._test = {
   isTransientDatabaseError,
   categoryResultsPath,
   buildEstimate,
+  minimumPlausiblePrice,
   canonicalizeUgandaLocation,
   canonicalizeLocationRows,
   aliasesForCanonicalLocation

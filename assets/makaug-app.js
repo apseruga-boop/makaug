@@ -40587,7 +40587,7 @@ function applyValuationResultLanguage(response = {}) {
   const disclaimerTitle = document.getElementById("valuation-disclaimer-title");
   const disclaimerBody = document.getElementById("valuation-disclaimer-body");
   const valuerLink = document.getElementById("valuation-find-valuer");
-  const location = response.input?.canonical_location || response.input?.location || "";
+  const location = response.input?.canonical_location?.name || response.input?.location || "";
   const district = response.input?.district || "";
   const analysisCount = Number(response.analysis_comparable_count || response.comparable_count || 0);
   const limited = response.confidence === "low" || response.widened === true || analysisCount < 10;
