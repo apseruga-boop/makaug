@@ -63,6 +63,19 @@ async function main() {
   assert.strictEqual(foreignIntake.eligible, false, 'obvious foreign property noise should still stay out');
   assert.strictEqual(foreignIntake.positive_listing_gate_hard_blocked, true, 'foreign hard blocks should remain in place');
 
+  const noCountryPost = {
+    ...weakXPost,
+    key: 'launch-capture-no-country-test',
+    area: '',
+    district: '',
+    address: '',
+    sourceText: 'House for sale. Three bedrooms. Price 250 million.',
+  };
+  const noCountryIntake = sourcePostMeetsLaunchIntakeRule(noCountryPost, {});
+  assert.strictEqual(noCountryIntake.eligible, false, 'automated drip rows need a positive Uganda country signal');
+  assert.strictEqual(noCountryIntake.positive_listing_gate_reason, 'non_uganda_location');
+  assert.strictEqual(noCountryIntake.positive_listing_gate_hard_blocked, true);
+
   console.log('ok - launch harvest capture widens intake to review while preserving hard non-property/foreign blocks');
 }
 

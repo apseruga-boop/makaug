@@ -6,7 +6,7 @@
   <title>makaug.com | Uganda Property Portal</title>
   <meta name="description" content="Uganda's free property portal. Buy, rent, sell and find brokers across all districts.">
   <meta name="robots" content="index,follow,max-image-preview:large">
-  <meta name="makaug-release-marker" content="ask-ai-topbar-match-20260718 properties-list-count-fast-20260718 admin-summary-fallback-20260718 admin-summary-warm-nozero-20260718 ai-category-colours-20260718 ai-scoped-localized-prompts-20260718 report-claim-pipeline-v2-20260718 marketplace-p1-20260719 marketplace-report-fixes-20260719 marketplace-enrich-20260719 marketplace-regjourney-20260719 marketplace-owner-direct-fast-20260719">
+  <meta name="makaug-release-marker" content="ask-ai-topbar-match-20260718 properties-list-count-fast-20260718 admin-summary-fallback-20260718 admin-summary-warm-nozero-20260718 ai-category-colours-20260718 ai-scoped-localized-prompts-20260718 report-claim-pipeline-v2-20260718 marketplace-p1-20260719 marketplace-report-fixes-20260719 marketplace-enrich-20260719 marketplace-regjourney-20260719 marketplace-owner-direct-fast-20260719 foreign-country-gate-purge-20260724 property-origin-filter-20260724 listing-removal-confirmation-20260724 valuation-live-comparables-20260724 advertising-selfserve-checkout-20260724 crm-lead-bundles-export-20260724 tracked-poster-fingerprint-dedupe-20260724">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="makaug.com">
   <meta property="og:title" content="makaug.com | Uganda Property Portal">
@@ -348,6 +348,7 @@
     window.__makaugReleaseMarkers += "-ai-chatbot-submit-bootstrap-20260713";
     window.__makaugReleaseMarkers += "-staff-review-queue-panel-retry-20260713-listing-confirmations-redesign-20260713-list-property-desc-live-translate-20260713-about-page-full-copy-20260713-about-page-visual-refine-20260713-about-cta-primary-20260713-about-hero-contrast-fix-20260713-about-land-steps-20260713-social-import-tiles-20260713-monetization-spine-v1-20260715-x-search-registry-localized-20260715";
     window.__makaugReleaseMarkers += "-commercial-transaction-subtype-20260719-commercial-transaction-ui-wiring-20260719-html-cache-consistency-20260719-bundle-version-commit-key-20260719";
+    window.__makaugReleaseMarkers += "-adaptive-ai-refine-prefill-20260724";
     window.__makaugPublicSummaryPath = "/api/properties?status=approved&public_only=1&limit=1&page=1&summary_only=1&include_summary=1";
     if (window.fetch && !window.__makaugPublicSummaryPromise) {
       window.__makaugPublicSummaryPromise = fetch(window.__makaugPublicSummaryPath, { credentials: "same-origin" })
@@ -2311,6 +2312,7 @@
         <a id="nav-land" href="/land" onclick="showPage('land')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Land</a>
         <a id="nav-brokers" href="/brokers" onclick="showPage('brokers')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Find Brokers</a>
         <a id="nav-mortgage" href="/mortgage" onclick="showPage('mortgage')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Mortgage Finder</a>
+        <a id="nav-valuation" href="/valuation" onclick="showPage('valuation')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Valuation</a>
         <a id="nav-ai" href="/discover-ai-chatbot" onclick="showPage('ai-chatbot')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">AI Chatbot</a>
         <a id="nav-marketplace" href="/marketplace" onclick="showPage('marketplace')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-rose-50 hover:text-[#b3134f] cursor-pointer">Marketplace</a>
         <a id="nav-about" href="/about" onclick="showPage('about')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">About Us</a>
@@ -2328,6 +2330,7 @@
       <a id="mnav-land" href="/land" onclick="showPage('land');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Land</a>
       <a id="mnav-brokers" href="/brokers" onclick="showPage('brokers');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Find Brokers</a>
       <a id="mnav-mortgage" href="/mortgage" onclick="showPage('mortgage');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Mortgage Finder</a>
+      <a id="mnav-valuation" href="/valuation" onclick="showPage('valuation');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Valuation</a>
       <a id="mnav-ai" href="/discover-ai-chatbot" onclick="showPage('ai-chatbot');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">AI Chatbot</a>
       <a id="mnav-marketplace" href="/marketplace" onclick="showPage('marketplace');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-rose-50">Marketplace</a>
       <a id="mnav-about" href="/about" onclick="showPage('about');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">About Us</a>
@@ -2647,6 +2650,12 @@
               <option value="garden">Garden</option>
               <option value="servants quarter">Servants quarter</option>
             </select>
+            <select id="sale-origin-f" onchange="filterListings('sale')" class="h-10 rounded-lg border border-white/20 bg-green-950/50 text-white px-3 text-sm outline-none focus:ring-2 focus:ring-green-400/40">
+              <option value="">All listing origins</option>
+              <option value="found_online">Found online</option>
+              <option value="private">Privately listed</option>
+              <option value="agent">Agent listed</option>
+            </select>
           </div>
 
           <div class="mt-2 flex justify-end">
@@ -2805,6 +2814,12 @@
               <option value="wifi">Wi-Fi</option>
               <option value="pet friendly">Pet friendly</option>
             </select>
+            <select id="rent-origin-f" onchange="filterListings('rent')" class="h-10 rounded-lg border border-white/20 bg-blue-950/50 text-white px-3 text-sm outline-none focus:ring-2 focus:ring-blue-400/40">
+              <option value="">All listing origins</option>
+              <option value="found_online">Found online</option>
+              <option value="private">Privately listed</option>
+              <option value="agent">Agent listed</option>
+            </select>
           </div>
           <div class="mt-2 flex justify-end">
             <select id="rent-sort-f" onchange="filterListings('rent')" class="h-10 rounded-lg border border-white/20 bg-blue-950/50 text-white px-3 text-sm outline-none focus:ring-2 focus:ring-blue-400/40">
@@ -2949,6 +2964,12 @@
               <option value="2">Within 2 km</option>
               <option value="5">Within 5 km</option>
               <option value="10">Within 10 km</option>
+            </select>
+            <select id="student-origin-f" onchange="filterStudents()" class="h-10 rounded-lg border border-white/20 bg-purple-950/50 text-white px-3 text-sm outline-none focus:ring-2 focus:ring-purple-400/40">
+              <option value="">All listing origins</option>
+              <option value="found_online">Found online</option>
+              <option value="private">Privately listed</option>
+              <option value="agent">Agent listed</option>
             </select>
             <select id="student-sort-f" onchange="filterStudents()" class="h-10 rounded-lg border border-white/20 bg-purple-950/50 text-white px-3 text-sm outline-none focus:ring-2 focus:ring-purple-400/40">
               <option value="newest">Sort: Newest</option>
@@ -3103,6 +3124,12 @@
               <option value="500">500</option>
               <option value="1000">1000</option>
             </select>
+            <select id="commercial-origin-f" onchange="filterCommercial()" class="h-10 rounded-lg border border-white/20 bg-amber-900/30 text-white px-3 text-sm outline-none focus:ring-2 focus:ring-amber-300/40">
+              <option value="">All listing origins</option>
+              <option value="found_online">Found online</option>
+              <option value="private">Privately listed</option>
+              <option value="agent">Agent listed</option>
+            </select>
             <select id="commercial-sort-f" onchange="filterCommercial()" class="h-10 rounded-lg border border-white/20 bg-amber-900/30 text-white px-3 text-sm outline-none focus:ring-2 focus:ring-amber-300/40">
               <option value="newest">Sort: Newest</option>
               <option value="price_asc">Sort: Price low to high</option>
@@ -3242,6 +3269,12 @@
               <option value="freehold">Freehold</option>
               <option value="leasehold">Leasehold</option>
               <option value="customary">Customary</option>
+            </select>
+            <select id="land-origin-f" onchange="filterLand()" class="h-10 rounded-lg border border-white/20 bg-teal-950/40 text-white px-3 text-sm outline-none focus:ring-2 focus:ring-teal-400/40">
+              <option value="">All listing origins</option>
+              <option value="found_online">Found online</option>
+              <option value="private">Privately listed</option>
+              <option value="agent">Agent listed</option>
             </select>
             <select id="land-sort-f" onchange="filterLand()" class="h-10 rounded-lg border border-white/20 bg-teal-950/40 text-white px-3 text-sm outline-none focus:ring-2 focus:ring-teal-400/40">
               <option value="newest">Sort: Newest</option>
@@ -3888,6 +3921,285 @@
         </div>
       </div>
     </div>
+  </div>
+
+  <div id="page-advertise" class="page bg-[#f6f9f7]" data-advertising-marker="advertising-selfserve-checkout-20260724">
+    <section class="bg-[#0f3d2e] py-10 text-white">
+      <div class="max-w-6xl mx-auto px-4">
+        <p class="text-xs font-black uppercase tracking-wide text-emerald-200">Self-serve advertising</p>
+        <h1 class="mt-2 text-3xl md:text-4xl font-black serif">Create a makaug campaign</h1>
+        <p class="mt-2 max-w-3xl text-sm md:text-base text-emerald-50">Choose placement, see the price, and prepare the advert. After review and approval, pay through secure hosted checkout before the campaign goes live.</p>
+      </div>
+    </section>
+
+    <main class="max-w-6xl mx-auto px-4 py-8">
+      <div class="grid lg:grid-cols-[minmax(0,1fr)_340px] gap-6 items-start">
+        <section class="bg-white border border-[#e4ece8] rounded-xl p-5 md:p-6">
+          <div class="grid grid-cols-4 gap-2" aria-label="Campaign steps">
+            <div class="advertise-step-tab rounded-lg bg-emerald-50 px-2 py-2 text-center text-xs font-black text-[#15603f]" data-advertise-step-tab="1">1. Placement</div>
+            <div class="advertise-step-tab rounded-lg bg-gray-50 px-2 py-2 text-center text-xs font-black text-gray-500" data-advertise-step-tab="2">2. Creative</div>
+            <div class="advertise-step-tab rounded-lg bg-gray-50 px-2 py-2 text-center text-xs font-black text-gray-500" data-advertise-step-tab="3">3. Contact</div>
+            <div class="advertise-step-tab rounded-lg bg-gray-50 px-2 py-2 text-center text-xs font-black text-gray-500" data-advertise-step-tab="4">4. Review</div>
+          </div>
+
+          <form id="advertise-selfserve-form" class="mt-6" onsubmit="submitAdvertisingSelfServe(event)">
+            <div data-advertise-step="1">
+              <h2 class="text-xl font-black text-[#16241d]">Choose where you want to appear</h2>
+              <p class="mt-1 text-sm text-[#5b6b62]">Prices and campaign duration come from the live makaug rate card.</p>
+              <div id="advertise-package-options" class="mt-4 grid md:grid-cols-2 gap-3">
+                <div class="h-28 rounded-xl bg-gray-50 animate-pulse"></div>
+                <div class="h-28 rounded-xl bg-gray-50 animate-pulse"></div>
+              </div>
+              <div class="mt-4 grid sm:grid-cols-2 gap-3">
+                <label class="block">
+                  <span class="block text-xs font-bold text-gray-600 mb-1">Target areas</span>
+                  <input name="target_locations" class="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm" placeholder="Kampala, Wakiso, Mukono">
+                </label>
+                <label class="block">
+                  <span class="block text-xs font-bold text-gray-600 mb-1">Property audience</span>
+                  <select name="target_listing_types" class="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm bg-white">
+                    <option value="all">All property seekers</option>
+                    <option value="sale">For sale</option>
+                    <option value="rent">To rent</option>
+                    <option value="land">Land</option>
+                    <option value="commercial">Commercial</option>
+                    <option value="student">Student accommodation</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+
+            <div data-advertise-step="2" class="hidden">
+              <h2 class="text-xl font-black text-[#16241d]">Prepare the advert</h2>
+              <p class="mt-1 text-sm text-[#5b6b62]">Add the message customers should see. Card and payment details are never collected by makaug.</p>
+              <div class="mt-4 grid gap-3">
+                <label class="block">
+                  <span class="block text-xs font-bold text-gray-600 mb-1">Campaign name</span>
+                  <input name="campaign_name" required class="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm" placeholder="July Kampala property campaign">
+                </label>
+                <label class="block">
+                  <span class="block text-xs font-bold text-gray-600 mb-1">Headline</span>
+                  <input name="creative_headline" required maxlength="80" class="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm" placeholder="Find your next home in Kampala">
+                </label>
+                <label class="block">
+                  <span class="block text-xs font-bold text-gray-600 mb-1">Advert copy</span>
+                  <textarea name="creative_body" required rows="4" maxlength="280" class="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm" placeholder="Describe the property, service, or offer clearly."></textarea>
+                </label>
+                <div class="grid sm:grid-cols-2 gap-3">
+                  <label class="block">
+                    <span class="block text-xs font-bold text-gray-600 mb-1">Call to action</span>
+                    <select name="creative_cta" class="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm bg-white">
+                      <option>View property</option>
+                      <option>Learn more</option>
+                      <option>Contact advertiser</option>
+                      <option>Book a viewing</option>
+                    </select>
+                  </label>
+                  <label class="block">
+                    <span class="block text-xs font-bold text-gray-600 mb-1">Destination link</span>
+                    <input name="destination_url" type="url" class="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm" placeholder="https://makaug.com/property/...">
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div data-advertise-step="3" class="hidden">
+              <h2 class="text-xl font-black text-[#16241d]">Your contact details</h2>
+              <p class="mt-1 text-sm text-[#5b6b62]">Campaign owners need an advertiser account so approved campaigns can receive a hosted checkout link.</p>
+              <div class="mt-4 grid sm:grid-cols-2 gap-3">
+                <input name="full_name" required class="border border-gray-200 rounded-xl px-3 py-3 text-sm" placeholder="Full name">
+                <input name="business_name" required class="border border-gray-200 rounded-xl px-3 py-3 text-sm" placeholder="Business or brand">
+                <input name="email" type="email" class="border border-gray-200 rounded-xl px-3 py-3 text-sm" placeholder="Email">
+                <input name="phone" class="border border-gray-200 rounded-xl px-3 py-3 text-sm" placeholder="+256 phone / WhatsApp">
+              </div>
+              <label class="mt-3 block">
+                <span class="block text-xs font-bold text-gray-600 mb-1">Preferred contact</span>
+                <select name="preferred_contact_channel" class="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm bg-white">
+                  <option value="whatsapp">WhatsApp</option>
+                  <option value="email">Email</option>
+                  <option value="phone">Phone call</option>
+                </select>
+              </label>
+            </div>
+
+            <div data-advertise-step="4" class="hidden">
+              <h2 class="text-xl font-black text-[#16241d]">Review and continue</h2>
+              <p class="mt-1 text-sm text-[#5b6b62]">Your campaign enters makaug review. Approved campaigns receive secure hosted checkout; only paid campaigns can go live.</p>
+              <div id="advertise-review-summary" class="mt-4 rounded-xl border border-[#e4ece8] bg-[#f6f9f7] p-4 text-sm text-gray-700"></div>
+              <label class="mt-4 flex items-start gap-3 rounded-xl border border-gray-200 p-3 text-sm">
+                <input name="review_confirmed" type="checkbox" required class="mt-1 accent-[#15603f]">
+                <span>I confirm the advert is accurate and that makaug may review it before publication.</span>
+              </label>
+              <button type="submit" class="mt-4 w-full bg-[#15603f] hover:bg-[#0f3d2e] text-white rounded-xl px-4 py-3 font-black">Submit campaign for review</button>
+            </div>
+
+            <div class="mt-6 flex items-center justify-between gap-3">
+              <button id="advertise-prev" type="button" onclick="setAdvertisingSelfServeStep(advertisingSelfServeStep - 1)" class="hidden border border-gray-300 text-gray-700 rounded-xl px-4 py-2.5 text-sm font-bold">Back</button>
+              <button id="advertise-next" type="button" onclick="advanceAdvertisingSelfServe()" class="ml-auto bg-[#15603f] text-white rounded-xl px-5 py-2.5 text-sm font-black">Continue</button>
+            </div>
+            <div id="advertise-selfserve-status" class="hidden mt-4 rounded-xl border p-3 text-sm" aria-live="polite"></div>
+          </form>
+        </section>
+
+        <aside class="space-y-4 lg:sticky lg:top-24">
+          <div class="bg-white border border-[#e4ece8] rounded-xl p-5">
+            <p class="text-xs font-black uppercase tracking-wide text-[#15603f]">Live quote</p>
+            <div id="advertise-quote-label" class="mt-2 text-sm font-bold text-[#16241d]">Choose a package</div>
+            <div id="advertise-quote-amount" class="mt-1 text-3xl font-black text-[#15603f]">UGX 0</div>
+            <div id="advertise-quote-duration" class="mt-1 text-xs text-[#5b6b62]">No package selected</div>
+          </div>
+          <div class="bg-white border border-[#e4ece8] rounded-xl p-5">
+            <p class="text-xs font-black uppercase tracking-wide text-[#15603f]">Payment</p>
+            <div id="advertise-payment-readiness" class="mt-2 text-sm text-[#5b6b62]">Checking secure checkout…</div>
+            <p class="mt-2 text-xs text-gray-500">Mobile money and card details stay inside the payment provider’s hosted flow. makaug never stores them.</p>
+          </div>
+          <a href="/advertiser-dashboard" class="block rounded-xl border border-[#cdddd3] bg-white px-4 py-3 text-center text-sm font-black text-[#15603f]">Open advertiser dashboard</a>
+        </aside>
+      </div>
+    </main>
+  </div>
+
+  <div id="page-valuation" class="page bg-[#f6f9f7]" data-valuation-marker="valuation-live-comparables-20260724">
+    <section class="bg-[#0f3d2e] py-10 text-white">
+      <div class="max-w-6xl mx-auto px-4">
+        <p class="text-xs font-black uppercase tracking-wide text-emerald-200" data-valuation-i18n="eyebrow">Evidence from live makaug listings</p>
+        <h1 class="mt-2 text-3xl md:text-4xl font-black serif" data-valuation-i18n="title">Estimate a property value</h1>
+        <p class="mt-2 max-w-3xl text-sm md:text-base text-emerald-50" data-valuation-i18n="subtitle">Compare approved public listings in the same area. This is a market guide, not a formal valuation.</p>
+      </div>
+    </section>
+
+    <main class="max-w-6xl mx-auto px-4 py-8 space-y-8">
+      <section class="grid lg:grid-cols-[minmax(0,1.05fr)_minmax(300px,.65fr)] gap-6 items-start">
+        <form id="valuation-form" class="bg-white border border-[#e4ece8] rounded-xl p-5 md:p-6 shadow-sm" onsubmit="submitValuationEstimate(event)">
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <h2 class="text-xl font-black text-[#16241d]" data-valuation-i18n="formTitle">Tell us about the property</h2>
+              <p class="mt-1 text-sm text-[#5b6b62]" data-valuation-i18n="formSubtitle">We will compare it with real listings already on makaug.</p>
+            </div>
+            <span class="shrink-0 rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-[#15603f]" data-valuation-i18n="free">Free guide</span>
+          </div>
+
+          <div class="mt-5 grid sm:grid-cols-2 gap-4">
+            <label class="block text-sm font-bold text-[#16241d]">
+              <span data-valuation-i18n="category">Property category</span>
+              <select id="valuation-category" required onchange="renderValuationCategoryFields()" class="mt-1.5 w-full h-12 rounded-lg border border-[#dbe8e0] bg-white px-3 text-sm focus:border-[#15603f] focus:outline-none focus:ring-2 focus:ring-emerald-100">
+                <option value="sale" data-valuation-i18n="categorySale">Residential for sale</option>
+                <option value="rent" data-valuation-i18n="categoryRent">Residential to rent</option>
+                <option value="land" data-valuation-i18n="categoryLand">Land</option>
+                <option value="commercial" data-valuation-i18n="categoryCommercial">Commercial</option>
+                <option value="student" data-valuation-i18n="categoryStudent">Student accommodation</option>
+              </select>
+            </label>
+            <label id="valuation-transaction-wrap" class="hidden text-sm font-bold text-[#16241d]">
+              <span data-valuation-i18n="transaction">Transaction</span>
+              <select id="valuation-transaction" class="mt-1.5 w-full h-12 rounded-lg border border-[#dbe8e0] bg-white px-3 text-sm">
+                <option value="rent" data-valuation-i18n="forRent">For rent</option>
+                <option value="sale" data-valuation-i18n="forSale">For sale</option>
+              </select>
+            </label>
+            <label class="block text-sm font-bold text-[#16241d]">
+              <span data-valuation-i18n="location">Area or town</span>
+              <input id="valuation-location" required list="valuation-location-list" autocomplete="off" class="mt-1.5 w-full h-12 rounded-lg border border-[#dbe8e0] px-3 text-sm focus:border-[#15603f] focus:outline-none focus:ring-2 focus:ring-emerald-100" placeholder="e.g. Ntinda" data-valuation-placeholder="locationPlaceholder">
+              <datalist id="valuation-location-list"></datalist>
+            </label>
+            <label class="block text-sm font-bold text-[#16241d]">
+              <span data-valuation-i18n="district">District (helps when an area has few matches)</span>
+              <select id="valuation-district" class="mt-1.5 w-full h-12 rounded-lg border border-[#dbe8e0] bg-white px-3 text-sm">
+                <option value="" data-valuation-i18n="chooseDistrict">Choose district</option>
+              </select>
+            </label>
+            <label id="valuation-beds-wrap" class="block text-sm font-bold text-[#16241d]">
+              <span data-valuation-i18n="bedrooms">Bedrooms</span>
+              <select id="valuation-bedrooms" class="mt-1.5 w-full h-12 rounded-lg border border-[#dbe8e0] bg-white px-3 text-sm">
+                <option value="" data-valuation-i18n="anyBedrooms">Any bedrooms</option>
+                <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+                <option value="4">4</option><option value="5">5</option><option value="6">6+</option>
+              </select>
+            </label>
+            <label id="valuation-property-type-wrap" class="block text-sm font-bold text-[#16241d]">
+              <span data-valuation-i18n="propertyType">Property type</span>
+              <input id="valuation-property-type" autocomplete="off" class="mt-1.5 w-full h-12 rounded-lg border border-[#dbe8e0] px-3 text-sm" placeholder="e.g. Apartment" data-valuation-placeholder="propertyTypePlaceholder">
+            </label>
+            <label id="valuation-size-value-wrap" class="hidden text-sm font-bold text-[#16241d]">
+              <span data-valuation-i18n="landSize">Land size</span>
+              <input id="valuation-size-value" type="number" min="0" step="0.01" class="mt-1.5 w-full h-12 rounded-lg border border-[#dbe8e0] px-3 text-sm" placeholder="e.g. 30">
+            </label>
+            <label id="valuation-size-unit-wrap" class="hidden text-sm font-bold text-[#16241d]">
+              <span data-valuation-i18n="sizeUnit">Size unit</span>
+              <select id="valuation-size-unit" class="mt-1.5 w-full h-12 rounded-lg border border-[#dbe8e0] bg-white px-3 text-sm">
+                <option value="decimals" data-valuation-i18n="decimals">Decimals</option>
+                <option value="acres" data-valuation-i18n="acres">Acres</option>
+                <option value="hectares" data-valuation-i18n="hectares">Hectares</option>
+                <option value="sqm" data-valuation-i18n="squareMetres">Square metres</option>
+              </select>
+            </label>
+            <label id="valuation-commercial-size-wrap" class="hidden text-sm font-bold text-[#16241d]">
+              <span data-valuation-i18n="commercialSize">Floor area (m²)</span>
+              <input id="valuation-commercial-size" type="number" min="0" step="1" class="mt-1.5 w-full h-12 rounded-lg border border-[#dbe8e0] px-3 text-sm" placeholder="e.g. 120">
+            </label>
+            <label id="valuation-university-wrap" class="hidden text-sm font-bold text-[#16241d]">
+              <span data-valuation-i18n="university">Nearby university</span>
+              <input id="valuation-university" autocomplete="off" class="mt-1.5 w-full h-12 rounded-lg border border-[#dbe8e0] px-3 text-sm" placeholder="e.g. Makerere University" data-valuation-placeholder="universityPlaceholder">
+            </label>
+          </div>
+
+          <div id="valuation-form-status" class="hidden mt-4 rounded-lg border px-3 py-2 text-sm" role="status" aria-live="polite"></div>
+          <button id="valuation-submit" type="submit" class="mt-5 inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-lg bg-[#15603f] px-5 text-sm font-black text-white hover:bg-[#0f4d33] disabled:cursor-wait disabled:opacity-60">
+            <i class="fas fa-chart-line" aria-hidden="true"></i>
+            <span data-valuation-i18n="estimateButton">Estimate value</span>
+          </button>
+        </form>
+
+        <aside class="space-y-4">
+          <div class="border-l-4 border-[#15603f] bg-white p-5">
+            <h2 class="font-black text-[#16241d]" data-valuation-i18n="howTitle">How the estimate works</h2>
+            <ol class="mt-3 space-y-3 text-sm text-[#5b6b62]">
+              <li class="flex gap-3"><strong class="text-[#15603f]">1</strong><span data-valuation-i18n="howOne">We find approved public listings in the same area and category.</span></li>
+              <li class="flex gap-3"><strong class="text-[#15603f]">2</strong><span data-valuation-i18n="howTwo">We remove the top and bottom 10% when the sample is large enough.</span></li>
+              <li class="flex gap-3"><strong class="text-[#15603f]">3</strong><span data-valuation-i18n="howThree">We show the 10th–90th percentile range and the comparable listings.</span></li>
+            </ol>
+          </div>
+          <div class="bg-[#f0f6f2] border border-[#dbe8e0] rounded-xl p-5">
+            <h2 class="font-black text-[#16241d]" data-valuation-i18n="professionalTitle">Need a formal valuation?</h2>
+            <p class="mt-1 text-sm text-[#5b6b62]" data-valuation-i18n="professionalText">A registered surveyor can inspect the property and prepare a professional report.</p>
+            <a href="/marketplace?category=surveyors" onclick="return navigatePublicRoute(this.href, event)" class="mt-4 inline-flex min-h-[44px] items-center gap-2 rounded-lg bg-white border border-[#cdddd3] px-4 text-sm font-black text-[#15603f]">
+              <i class="fas fa-user-check" aria-hidden="true"></i><span data-valuation-i18n="findSurveyor">Find a surveyor</span>
+            </a>
+          </div>
+        </aside>
+      </section>
+
+      <section id="valuation-results" class="hidden space-y-6" aria-live="polite">
+        <div id="valuation-scope-note" class="rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-900"></div>
+        <div class="grid md:grid-cols-3 gap-4">
+          <article class="bg-white border border-[#e4ece8] rounded-lg p-5 md:col-span-2">
+            <p class="text-xs font-black uppercase tracking-wide text-[#5b6b62]" data-valuation-i18n="estimatedValue">Estimated market guide</p>
+            <div id="valuation-estimate" class="mt-2 text-3xl md:text-5xl font-black text-[#15603f]">—</div>
+            <p id="valuation-range" class="mt-2 text-sm font-bold text-[#16241d]"></p>
+          </article>
+          <article class="bg-white border border-[#e4ece8] rounded-lg p-5">
+            <p class="text-xs font-black uppercase tracking-wide text-[#5b6b62]" data-valuation-i18n="evidence">Evidence</p>
+            <div id="valuation-comparable-count" class="mt-2 text-3xl font-black text-[#16241d]">0</div>
+            <p class="mt-1 text-sm text-[#5b6b62]" data-valuation-i18n="comparableListings">comparable listings</p>
+            <p id="valuation-unit-rate" class="mt-3 text-xs font-bold text-[#15603f]"></p>
+          </article>
+        </div>
+        <div>
+          <div class="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 class="text-xl font-black text-[#16241d]" data-valuation-i18n="comparablesTitle">Comparable listings used</h2>
+              <p class="mt-1 text-sm text-[#5b6b62]" data-valuation-i18n="comparablesSubtitle">Open any listing to inspect the evidence.</p>
+            </div>
+            <a href="/?ask_ai=1" onclick="return navigatePublicRoute(this.href, event)" class="text-sm font-black text-[#15603f] hover:underline" data-valuation-i18n="askAi">Ask makaug AI about your search</a>
+          </div>
+          <div id="valuation-comparables" class="mt-4 grid sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+        </div>
+        <details class="bg-white border border-[#e4ece8] rounded-lg p-4">
+          <summary class="cursor-pointer font-black text-[#16241d]" data-valuation-i18n="methodTitle">Methodology and worked example</summary>
+          <div id="valuation-methodology" class="mt-3 space-y-2 text-sm text-[#5b6b62]"></div>
+        </details>
+      </section>
+    </main>
   </div>
 
   <div id="page-ai-chatbot" class="page">
@@ -7059,7 +7371,17 @@
                   <h4 class="text-lg font-bold text-gray-800">CRM Leads</h4>
                   <p class="text-xs text-gray-500 mt-1">Latest leads from WhatsApp, saved searches, viewings, callbacks, advertising, support, and no-results flows.</p>
                 </div>
+                <button type="button" onclick="exportAdminCrmLeadsCsv()" class="border border-green-300 bg-white text-green-800 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-black">Export CSV</button>
               </div>
+              <form id="admin-crm-lead-filters" onsubmit="applyAdminCrmLeadFilters(event)" class="grid sm:grid-cols-2 xl:grid-cols-6 gap-2 mb-3">
+                <input name="category" class="border border-gray-200 rounded-lg px-2.5 py-2 text-xs" placeholder="Category">
+                <input name="location" class="border border-gray-200 rounded-lg px-2.5 py-2 text-xs" placeholder="Area / district">
+                <input name="date_from" type="date" class="border border-gray-200 rounded-lg px-2.5 py-2 text-xs" aria-label="Lead date from">
+                <input name="date_to" type="date" class="border border-gray-200 rounded-lg px-2.5 py-2 text-xs" aria-label="Lead date to">
+                <input name="bundle_tag" class="border border-gray-200 rounded-lg px-2.5 py-2 text-xs" placeholder="Bundle tag">
+                <button class="bg-green-700 hover:bg-green-600 text-white rounded-lg px-3 py-2 text-xs font-black">Apply filters</button>
+              </form>
+              <div id="admin-crm-filter-status" class="mb-3 text-xs text-gray-500">Showing the latest leads.</div>
               <div id="admin-crm-leads-table" class="space-y-3"></div>
             </div>
             <div class="border border-gray-200 rounded-2xl p-4 bg-gray-50">
@@ -8210,6 +8532,7 @@
         </select>
         <div id="report-structured-fields" class="space-y-2"></div>
         <textarea id="report-details" rows="4" class="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm" placeholder="Details"></textarea>
+        <div id="report-submit-status" class="hidden rounded-xl border px-3 py-2 text-sm font-semibold" role="status" aria-live="polite"></div>
         <button id="report-submit-btn" onclick="submitReportListing()" class="w-full bg-green-700 text-white py-3 rounded-xl font-semibold">Submit Report</button>
       </div>
     </div>

@@ -117,6 +117,33 @@ async function run() {
   assert.strictEqual(foreignTextListing.ok, false, 'foreign listings without coordinates must not pass the positive listing gate');
   assert.strictEqual(foreignTextListing.reason, 'non_uganda_location');
 
+  const lahoreMarlaListing = sourcePositiveListingGateForRecord({
+    title: '5 Marla house for sale in Lahore',
+    description: 'Luxury 3 BHK home. Contact for price.',
+    district: 'Kampala',
+    area: 'Lahore',
+    listing_type: 'sale',
+  });
+  assert.strictEqual(lahoreMarlaListing.ok, false, 'a defaulted Uganda district must not rescue a Lahore/Marla listing');
+  assert.strictEqual(lahoreMarlaListing.reason, 'non_uganda_location');
+
+  const chennaiRupeeListing = sourcePositiveListingGateForRecord({
+    title: 'House for sale in Chennai ₹ 85 lakh',
+    description: 'சென்னையில் வீடு விற்பனைக்கு',
+    district: 'Kampala',
+    listing_type: 'sale',
+  });
+  assert.strictEqual(chennaiRupeeListing.ok, false, 'rupee and Tamil-market rows must stay out of Uganda intake');
+  assert.strictEqual(chennaiRupeeListing.reason, 'non_uganda_location');
+
+  const ugandaPhoneWithoutResolvedDistrict = sourcePositiveListingGateForRecord({
+    title: 'Two bedroom apartment for rent',
+    description: 'Call +256 772 123 456 for viewing. UGX 1,200,000 per month.',
+    listing_type: 'rent',
+    bedrooms: 2,
+  });
+  assert.strictEqual(ugandaPhoneWithoutResolvedDistrict.ok, true, 'a valid Uganda phone is an accepted positive country signal');
+
   const cleanKiraListing = sourcePositiveListingGateForRecord({
     title: '5 bedroom mansion for sale in Kira Kampala Uganda',
     description: 'House for sale with 5 bedrooms and 6 bathrooms',
@@ -146,6 +173,17 @@ async function run() {
   });
   assert.strictEqual(dateOnlyTitle.ok, false, 'date-only imported titles must not pass through extracted property fields');
   assert.strictEqual(dateOnlyTitle.reason, 'not_a_listing');
+
+  const roadProjectVideo = sourcePositiveListingGateForRecord({
+    title: 'Massive Upgrade on Virus Research Road - Progress Update',
+    description: 'Road construction works and heavy machinery on a Shs 22.6 billion infrastructure project in Entebbe.',
+    district: 'Wakiso',
+    area: 'Entebbe',
+    price: 22600000000,
+    listing_type: 'sale',
+  });
+  assert.strictEqual(roadProjectVideo.ok, false, 'road-construction budgets must not be misread as property asking prices');
+  assert.strictEqual(roadProjectVideo.reason, 'not_a_listing');
 
   const filatomPromo = sourcePositiveListingGateForRecord({
     title: 'Ever wondered what FILATOM means? Find Invest Lease Acquire Trade Own Manage',
@@ -392,6 +430,18 @@ async function run() {
   assert.strictEqual(dryNewsBlocked.eligible_to_queue_count, 0, 'news clips should not enter source review as property listings');
   assert.strictEqual(dryNewsBlocked.source_review_records[0].reason, 'not_a_listing');
   assert.strictEqual(dryNewsBlocked.source_review_records[0].intake.positive_listing_gate_passed, false);
+
+  const roadConstructionBudget = sourcePositiveListingGateForRecord({
+    title: 'From Dust to Tarmac: Virus Research Road project in Entebbe',
+    description: 'UGX 22.6 billion road construction budget with heavy machinery.',
+    district: 'Wakiso',
+    area: 'Entebbe',
+    property_type: 'land',
+    price: 22600000000,
+    source_name: 'Vibes. With. Kayz',
+  });
+  assert.strictEqual(roadConstructionBudget.ok, false, 'road-project budgets must not become property asking prices');
+  assert.strictEqual(roadConstructionBudget.reason, 'not_a_listing');
 
   const dryAllowed = await queueFoundOnlineSourcePostListings({
     dryRun: true,

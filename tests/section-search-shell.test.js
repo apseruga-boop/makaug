@@ -52,7 +52,7 @@ test('direct category route query links prefill and run section search', () => {
   assert.match(appSource, /const routePayload = routeSearchHandoffPayload\(config\.key\)/);
   assert.match(appSource, /shell\.dataset\.routeQueryApplied !== routeKey/);
   assert.match(appSource, /function syncActiveRouteSearchHandoff\(source = "route_query_sync"\)/);
-  assert.match(appSource, /if \(!page \|\| !routeQueryValueForSectionPage\(\)\) return false/);
+  assert.match(appSource, /if \(!page \|\| !routeSearchHandoffPayload\(page\)\) return false/);
   assert.match(appSource, /syncActiveRouteSearchHandoff\("deep_link_route_query"\)/);
   assert.match(appSource, /startup_route_query_retry/);
   assert.match(appSource, /public_inventory_route_query/);

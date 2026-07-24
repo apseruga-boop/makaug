@@ -220,6 +220,44 @@ function addFilter(filters, values, clause, ...vals) {
   filters.push(prepared);
 }
 
+function normalizeListingOrigin(value = '') {
+  const origin = cleanText(value).toLowerCase().replace(/[\s-]+/g, '_');
+  const aliases = {
+    found: 'found_online',
+    online: 'found_online',
+    sourced: 'found_online',
+    owner: 'private',
+    privately_listed: 'private',
+    broker: 'agent',
+    agency: 'agent',
+    agent_listed: 'agent'
+  };
+  const normalized = aliases[origin] || origin;
+  return ['found_online', 'private', 'agent'].includes(normalized) ? normalized : '';
+}
+
+function foundOnlinePropertySql(alias = 'p') {
+  const a = alias ? `${alias}.` : '';
+  return `(
+    LOWER(COALESCE(${a}source, '')) = 'found_online_property_source_v1'
+    OR LOWER(COALESCE(${a}listed_via, '')) = 'found_online'
+    OR LOWER(COALESCE(${a}extra_fields->>'source_badge', '')) IN ('found_online', 'found online', 'sourced_online', 'sourced online')
+    OR LOWER(COALESCE(${a}extra_fields->>'found_online', 'false')) IN ('true', '1', 'yes')
+    OR LOWER(COALESCE(${a}extra_fields->>'found_online_candidate', 'false')) IN ('true', '1', 'yes')
+    OR LOWER(COALESCE(${a}extra_fields->>'social_search_candidate', 'false')) IN ('true', '1', 'yes')
+    OR LOWER(COALESCE(${a}extra_fields->>'sourced_inventory_candidate', 'false')) IN ('true', '1', 'yes')
+  )`;
+}
+
+function listingOriginSql(alias = 'p') {
+  const a = alias ? `${alias}.` : '';
+  return `(CASE
+    WHEN ${foundOnlinePropertySql(alias)} THEN 'found_online'
+    WHEN ${a}agent_id IS NOT NULL OR LOWER(COALESCE(${a}lister_type, '')) = 'agent' THEN 'agent'
+    ELSE 'private'
+  END)`;
+}
+
 function normalizePublicSearchNeedle(value = '') {
   return cleanText(value).toLowerCase().replace(/\s+/g, ' ').trim();
 }
@@ -1045,6 +1083,7 @@ function compactPublicCardRow(row = {}, currency = 'UGX') {
     distance_km: distanceKm,
     distance_miles: distanceMiles,
     listed_by: row.listed_by || null,
+    listing_origin: row.listing_origin || (foundOnlinePublic ? 'found_online' : (row.listed_by || 'private')),
     registration_status: row.registration_status || null,
     public_contact_phone: publicContactPhone || null,
     contact_phone: publicContactPhone || null,
@@ -1564,7 +1603,8 @@ function publicPropertyRow(property, images = []) {
     primary_image_url: foundOnlinePublic ? null : safeProperty.primary_image_url,
     image: foundOnlinePublic ? null : safeProperty.image,
     images: foundOnlinePublic ? [] : images,
-    third_party_discovery_result: foundOnlinePublic
+    third_party_discovery_result: foundOnlinePublic,
+    listing_origin: foundOnlinePublic ? 'found_online' : (safeProperty.listed_by || (safeProperty.agent_id || safeProperty.lister_type === 'agent' ? 'agent' : 'private'))
   };
 }
 
@@ -2001,6 +2041,7 @@ async function listPropertiesHandler(req, res, next) {
     const maxBeds = toNullableInt(req.query.max_beds);
     const bathrooms = toNullableInt(req.query.bathrooms);
     const propertyType = cleanText(req.query.property_type || req.query.propertyType);
+    const listingOrigin = normalizeListingOrigin(req.query.listing_origin || req.query.listingOrigin || req.query.origin_type);
     const amenities = asArray(req.query.amenities).map((item) => cleanText(item).toLowerCase()).filter(Boolean);
     const furnished = cleanText(req.query.furnished || req.query.furnishing).toLowerCase();
     const minSize = toNullableFloat(req.query.min_size || req.query.minSize || req.query.min_area_sqm || req.query.minAreaSqm || req.query.min_acres || req.query.minAcres);
@@ -2114,6 +2155,9 @@ async function listPropertiesHandler(req, res, next) {
       } else {
         filters.push("(COALESCE(p.extra_fields->>'featured', 'false') NOT IN ('true', '1', 'yes'))");
       }
+    }
+    if (listingOrigin) {
+      addFilter(filters, values, `${listingOriginSql('p')} = ?`, listingOrigin);
     }
 
     if (minPrice != null) addFilter(filters, values, 'p.price >= ?', minPrice);
@@ -2291,7 +2335,8 @@ async function listPropertiesHandler(req, res, next) {
               land_title_type: landTitleType || null,
               land_title_available: landTitleAvailable || null,
               commercial_type: commercialType || null,
-              transaction_type: transactionType || null
+              transaction_type: transactionType || null,
+              listing_origin: listingOrigin || null
             },
             location: hasRadiusSearch ? {
               lat: Number(searchLat.toFixed(5)),
@@ -2390,6 +2435,7 @@ async function listPropertiesHandler(req, res, next) {
             WHEN p.agent_id IS NOT NULL OR p.lister_type = 'agent' THEN 'agent'
             ELSE 'private'
           END AS listed_by,
+          ${listingOriginSql('p')} AS listing_origin,
           COALESCE(p.extra_fields->>'lister_registration_status', 'not_registered') AS registration_status,
           img.url AS primary_image_url
         FROM properties p
@@ -2459,6 +2505,7 @@ async function listPropertiesHandler(req, res, next) {
             WHEN p.agent_id IS NOT NULL OR p.lister_type = 'agent' THEN 'agent'
             ELSE 'private'
           END AS listed_by,
+          ${listingOriginSql('p')} AS listing_origin,
           CASE
             WHEN p.agent_id IS NOT NULL THEN COALESCE(a.registration_status, 'not_registered')
             WHEN p.lister_type = 'agent' THEN COALESCE(p.extra_fields->>'lister_registration_status', 'not_registered')
@@ -2609,6 +2656,7 @@ async function listPropertiesHandler(req, res, next) {
           verification_status: row.registration_status || null,
           availability: row.status,
           sponsored: row.featured === true,
+          listing_origin: row.listing_origin || (foundOnlinePublic ? 'found_online' : (row.listed_by || 'private')),
           distance_km: distanceKm,
           distanceKm,
           distance_miles: distanceKm == null ? null : Number(kmToMiles(Number(distanceKm)).toFixed(2)),

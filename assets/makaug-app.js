@@ -7980,6 +7980,7 @@ function applyLanguageUI() {
   setTextById("nav-land", tr("navLand"));
   setTextById("nav-brokers", tr("navBrokers"));
   setTextById("nav-mortgage", tr("navMortgage"));
+  setTextById("nav-valuation", valuationTr("title"));
   setTextById("nav-ai", currentLang === "en" ? "AI Chatbot" : tr("navAI"));
   setTextById("nav-marketplace", marketplaceTr("breadcrumbMarketplace"));
   setTextById("nav-about", translateListingLabel("About Us"));
@@ -7990,6 +7991,7 @@ function applyLanguageUI() {
   setTextById("mnav-land", tr("navLand"));
   setTextById("mnav-brokers", tr("navBrokers"));
   setTextById("mnav-mortgage", tr("navMortgage"));
+  setTextById("mnav-valuation", valuationTr("title"));
   setTextById("mnav-ai", currentLang === "en" ? "AI Chatbot" : tr("navAI"));
   setTextById("mnav-marketplace", marketplaceTr("breadcrumbMarketplace"));
   setTextById("mnav-about", translateListingLabel("About Us"));
@@ -8035,6 +8037,7 @@ function applyLanguageUI() {
   setPageHeading("page-land", tr("pageLand"));
   setPageHeading("page-brokers", tr("pageBrokers"));
   setPageHeading("page-mortgage", tr("pageMortgage"));
+  setPageHeading("page-valuation", valuationTr("title"));
   setPageHeading("page-ai-chatbot", tr("pageAI"));
   setPageHeading("page-list-property", tr("pageList"));
   setPageHeading("page-about", tr("pageAbout"));
@@ -8047,6 +8050,7 @@ function applyLanguageUI() {
   applyListingWizardLanguageUI();
   applySavePropertyLanguageUI();
   applyMortgageLanguageUI();
+  applyValuationLanguageUI();
   applyAiChatbotLanguageUI();
   applyFraudLanguageUI();
   applyMapAssistLanguageUI();
@@ -16269,7 +16273,7 @@ function adminXSourceDripRunHtml(run = {}) {
       : "border-slate-200 bg-white text-slate-800";
   return `<div class="rounded-lg border ${statusClass} p-2">
     <div class="font-black">${adminEscape(status)} • offset ${adminEscape(run.source_offset ?? summary.source_offset ?? 0)} → ${adminEscape(run.next_source_offset ?? summary.next_source_offset ?? 0)}</div>
-    <div class="mt-1 text-[11px]">Since ${adminEscape((run.published_after || summary.published_after || "").slice(0, 10) || "-")} • Fetched ${adminEscape(run.fetched_posts_count || summary.fetched_posts_count || 0)} • Discovered ${adminEscape(run.discovered_posts_count || summary.discovered_posts_count || 0)} • Created ${adminEscape(run.created_properties || summary.created_properties || 0)} • Review ${adminEscape(run.review_queue_properties || summary.review_queue_properties || 0)} • Existing ${adminEscape(run.existing_properties || summary.existing_properties || 0)} • 429s ${adminEscape(run.rate_limited_count || summary.rate_limited_count || 0)}</div>
+    <div class="mt-1 text-[11px]">Since ${adminEscape((run.published_after || summary.published_after || "").slice(0, 10) || "-")} • Fetched ${adminEscape(run.fetched_posts_count || summary.fetched_posts_count || 0)} • Discovered ${adminEscape(run.discovered_posts_count || summary.discovered_posts_count || 0)} • Created ${adminEscape(run.created_properties || summary.created_properties || 0)} • Review ${adminEscape(run.review_queue_properties || summary.review_queue_properties || 0)} • Existing ${adminEscape(run.existing_properties || summary.existing_properties || 0)} • Foreign rejected ${adminEscape(run.foreign_rejected_count || summary.foreign_rejected_count || 0)} • 429s ${adminEscape(run.rate_limited_count || summary.rate_limited_count || 0)}</div>
     <div class="mt-1 text-[11px] text-slate-500">${adminEscape(run.created_at || "")}${summary.reason ? ` • ${adminEscape(summary.reason)}` : ""}</div>
   </div>`;
 }
@@ -18014,6 +18018,91 @@ function renderAdminCrmOverview(summary = {}) {
   ].join("");
 }
 
+let adminCrmLeadFilterQuery = "";
+
+function adminCrmLeadFiltersQuery() {
+  const form = document.getElementById("admin-crm-lead-filters");
+  if (!form) return adminCrmLeadFilterQuery;
+  const params = new URLSearchParams();
+  const data = new FormData(form);
+  ["category", "location", "date_from", "date_to", "bundle_tag"].forEach((key) => {
+    const value = String(data.get(key) || "").trim();
+    if (value) params.set(key, value);
+  });
+  params.set("limit", "250");
+  adminCrmLeadFilterQuery = params.toString();
+  return adminCrmLeadFilterQuery;
+}
+
+async function applyAdminCrmLeadFilters(event) {
+  if (event) event.preventDefault();
+  if (!canUseLiveAdminApi()) {
+    toast("Sign in as admin to filter CRM leads.");
+    return false;
+  }
+  const query = adminCrmLeadFiltersQuery();
+  const status = document.getElementById("admin-crm-filter-status");
+  if (status) status.textContent = "Loading filtered leads…";
+  try {
+    const response = await apiRequest(`/api/admin/leads?${query}`, { headers: adminAuthHeaders() });
+    adminCrmLeads = Array.isArray(response?.data) ? response.data : [];
+    renderAdminCrmLeadsRows(adminCrmLeads);
+    if (status) status.textContent = `${Number(response?.pagination?.total || adminCrmLeads.length)} matching lead${Number(response?.pagination?.total || adminCrmLeads.length) === 1 ? "" : "s"}.`;
+  } catch (error) {
+    if (status) status.textContent = error?.message || "Lead filters failed.";
+    toast(`Lead filters failed: ${error?.message || "request failed"}`);
+  }
+  return false;
+}
+
+async function exportAdminCrmLeadsCsv() {
+  if (!canUseLiveAdminApi()) {
+    toast("Sign in as admin to export CRM leads.");
+    return false;
+  }
+  const query = adminCrmLeadFiltersQuery();
+  try {
+    const response = await fetch(`/api/admin/leads-export.csv?${query}`, {
+      headers: adminAuthHeaders(),
+      credentials: "same-origin"
+    });
+    if (!response.ok) throw new Error(`Export failed (${response.status})`);
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `makaug-leads-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+    toast("CRM lead CSV downloaded.");
+  } catch (error) {
+    toast(error?.message || "CRM lead export failed.");
+  }
+  return false;
+}
+
+async function tagAdminCrmLeadBundle(leadId, inputId) {
+  const field = document.getElementById(inputId);
+  if (!leadId || !field) return false;
+  try {
+    await apiRequest(`/api/admin/leads/${encodeURIComponent(leadId)}`, {
+      method: "PATCH",
+      headers: adminAuthHeaders(),
+      body: {
+        bundle_tag: String(field.value || "").trim(),
+        note: "Lead bundle tag updated in King CRM."
+      }
+    });
+    toast("Lead bundle tag saved.");
+    await applyAdminCrmLeadFilters();
+  } catch (error) {
+    toast(`Could not save bundle tag: ${error?.message || "request failed"}`);
+  }
+  return false;
+}
+
 function renderAdminCrmLeadsRows(leads = []) {
   const wrap = document.getElementById("admin-crm-leads-table");
   if (!wrap) return;
@@ -18046,6 +18135,8 @@ function renderAdminCrmLeadsRows(leads = []) {
 	    const bankHandoffStatus = metadata.bank_handoff_status || "";
 	    const isMortgageBankLead = String(lead.source || "").toLowerCase() === "mortgage_bank_callback" || String(metadata.lead_context || "").toLowerCase() === "bank_provider";
 	    const leadIdArg = JSON.stringify(String(lead.id || ""));
+      const bundleTag = String(metadata.bundle_tag || "");
+      const bundleInputId = `admin-lead-bundle-${String(lead.id || "").replace(/[^a-z0-9_-]/gi, "")}`;
 	    return `<div class="border border-gray-200 rounded-xl p-4 bg-white">
       <div class="flex items-start justify-between gap-3 flex-wrap">
         <div>
@@ -18064,6 +18155,10 @@ function renderAdminCrmLeadsRows(leads = []) {
         <button type="button" onclick="adminOpenLeadMatchMessage(${leadIdArg})" class="bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Message Match</button>
         <button type="button" onclick="adminOpenDecision('whatsapp', '#admin-whatsapp-control')" class="border border-green-200 text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Open Inbox</button>
       </div>` : ""}
+      <div class="mt-3 flex items-center gap-2 flex-wrap border-t border-gray-100 pt-3">
+        <input id="${adminAttr(bundleInputId)}" value="${adminAttr(bundleTag)}" class="min-w-[180px] flex-1 border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs" placeholder="Bundle tag, e.g. Kampala-rent-Jul">
+        <button type="button" onclick="tagAdminCrmLeadBundle(${leadIdArg}, ${JSON.stringify(bundleInputId).replace(/</g, "\\u003c")})" class="border border-green-300 text-green-800 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-black">Save bundle</button>
+      </div>
     </div>`;
   }).join("");
 }
@@ -20132,7 +20227,7 @@ function renderAdminAdvertisingCampaigns(campaigns) {
         ` : ""}
         ${campaign.payment_url ? `<div class="mt-2 text-xs"><a href="${adminAttr(campaign.payment_url)}" target="_blank" rel="noopener noreferrer" class="text-green-700 font-semibold hover:underline">Open payment link</a></div>` : ""}
         <div class="mt-3 flex flex-wrap gap-2">
-          <button onclick="adminSetAdCampaignPaymentLink(${idArg})" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Payment Link</button>
+          <button onclick="adminSetAdCampaignPaymentLink(${idArg})" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Generate Payment Link</button>
           <button onclick="adminMarkAdCampaignPaid(${idArg})" class="border border-green-300 text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Mark Paid</button>
           <button onclick="adminSetAdCampaignStatus(${idArg}, 'live')" class="bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Set Live</button>
           <button onclick="adminSetAdCampaignStatus(${idArg}, 'paused')" class="border border-yellow-300 text-yellow-700 hover:bg-yellow-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Pause</button>
@@ -20318,22 +20413,20 @@ async function adminSetAdCampaignStatus(campaignId, status) {
 
 async function adminSetAdCampaignPaymentLink(campaignId) {
   const campaign = adminAdvertisingCampaigns.find((item) => String(item.id) === String(campaignId)) || {};
-  const paymentUrl = prompt("Payment link to send/store for this campaign", campaign.payment_url || "");
-  if (paymentUrl === null) return;
+  if (campaign.advertiser_approval_status !== "approved") {
+    toast("Approve the campaign creative before generating payment.");
+    return;
+  }
   try {
-    await apiRequest(`/api/admin/advertising/campaigns/${encodeURIComponent(campaignId)}`, {
-      method: "PATCH",
-      headers: adminAuthHeaders(),
-      body: {
-        payment_url: paymentUrl.trim(),
-        status: paymentUrl.trim() ? "awaiting_payment" : campaign.status || "draft",
-        payment_status: paymentUrl.trim() ? "invoiced" : campaign.payment_status || "unpaid"
-      }
+    const response = await apiRequest(`/api/advertising/campaigns/${encodeURIComponent(campaignId)}/payment-link`, {
+      method: "POST",
+      body: { amount: Number(campaign.quoted_amount_ugx || 0), currency: "UGX" }
     });
     await renderAdminDashboard();
-    toast("Payment link updated.");
+    const link = response?.data?.paymentLink?.checkout_url || "";
+    toast(link ? "Secure hosted payment link created." : "Invoice saved; payment provider still needs configuration.");
   } catch (e) {
-    toast(`Payment link update failed: ${e.message || "error"}`);
+    toast(`Payment link failed: ${e.message || "error"}`);
   }
 }
 
@@ -29691,15 +29784,26 @@ async function submitReportListing() {
   const source = (modal?.dataset.requestSource || "").trim();
   const linkedPropertyId = (modal?.dataset.propertyId || "").trim();
   const structuredFields = collectReportStructuredFields();
+  const statusEl = document.getElementById("report-submit-status");
+  const setStatus = (message = "", tone = "error") => {
+    if (!statusEl) return;
+    statusEl.textContent = message;
+    statusEl.className = message
+      ? `rounded-xl border px-3 py-2 text-sm font-semibold ${tone === "success" ? "border-green-200 bg-green-50 text-green-800" : "border-red-200 bg-red-50 text-red-800"}`
+      : "hidden";
+  };
 
   if (!propertyReference || !reason) {
-    toast(translateListingLabel("Please provide listing reference and reason."));
+    const message = translateListingLabel("Please provide listing reference and reason.");
+    setStatus(message);
+    toast(message);
     return;
   }
 
+  setStatus("");
   setButtonLoading("report-submit-btn", true);
   try {
-    await apiRequest("/api/contact/report-listing", {
+    const response = await apiRequest("/api/contact/report-listing", {
       method: "POST",
       body: {
         property_reference: propertyReference,
@@ -29714,10 +29818,18 @@ async function submitReportListing() {
       }
     });
     await trackEvent("report_listing_submit", { reason, request_type: requestType || "report" });
-    toast(translateListingLabel("Request submitted. makaug will review it."));
-    closeModal("report-modal");
+    const reference = response?.data?.reference || response?.data?.id || "";
+    const message = [
+      translateListingLabel("Request submitted. makaug will review it."),
+      reference ? `${translateListingLabel("Reference")}: ${reference}` : ""
+    ].filter(Boolean).join(" ");
+    setStatus(message, "success");
+    toast(message);
+    if (detailsEl) detailsEl.value = "";
   } catch (error) {
-    toast(error.message || "Could not submit report.");
+    const message = error.message || translateListingLabel("Could not submit report. Please try again.");
+    setStatus(message);
+    toast(message);
   } finally {
     setButtonLoading("report-submit-btn", false, translateListingLabel("Submit Report"));
   }
@@ -29735,6 +29847,7 @@ function resetReportListingModal() {
   const referenceEl = document.getElementById("report-reference");
   const contactEl = document.getElementById("report-contact");
   const detailsEl = document.getElementById("report-details");
+  const statusEl = document.getElementById("report-submit-status");
   if (titleEl) titleEl.textContent = translateListingLabel("Report a Listing");
   if (subEl) subEl.textContent = translateListingLabel("Help us keep listings safe and accurate.");
   if (referenceEl) referenceEl.value = "";
@@ -29744,6 +29857,10 @@ function resetReportListingModal() {
     detailsEl.value = "";
     detailsEl.placeholder = translateListingLabel("Details");
     delete detailsEl.dataset.defaultDetails;
+  }
+  if (statusEl) {
+    statusEl.textContent = "";
+    statusEl.className = "hidden";
   }
   const structured = document.getElementById("report-structured-fields");
   if (structured) structured.innerHTML = "";
@@ -34138,6 +34255,87 @@ function aiAssistantNeedCaptureHtml(data = {}, copy = getAiAssistantPromptCopy()
     </details>`;
 }
 
+function setAiAssistantFilterControl(id, value, options = {}) {
+  const control = document.getElementById(id);
+  const normalized = String(value ?? "").trim();
+  if (!control || !normalized) return false;
+  if (control.tagName === "SELECT") {
+    const option = Array.from(control.options || []).find((row) => String(row.value) === normalized);
+    if (!option) {
+      if (options.fallbackId) return setAiAssistantFilterControl(options.fallbackId, normalized);
+      return false;
+    }
+  }
+  control.value = normalized;
+  return true;
+}
+
+function aiAssistantRefinePageKey(searchType = "") {
+  const normalized = String(searchType || "").trim().toLowerCase();
+  if (normalized === "student") return "students";
+  if (["sale", "rent", "commercial", "land"].includes(normalized)) return normalized;
+  return "";
+}
+
+function prefillAiAssistantRefineControls(data = {}, context = {}) {
+  if (typeof document === "undefined") return false;
+  const filters = data?.filters && typeof data.filters === "object" ? data.filters : {};
+  const page = aiAssistantRefinePageKey(data?.search_type || filters.search_type);
+  if (!page) return false;
+  const location = String(filters.area || filters.district || "").trim();
+  const bedrooms = Number(filters.bedrooms) > 0 ? String(Math.round(Number(filters.bedrooms))) : "";
+  const maxPrice = Number(filters.max_price) > 0 ? String(Math.round(Number(filters.max_price))) : "";
+  const propertyType = String(filters.property_type || "").trim().toLowerCase();
+  const transactionType = String(filters.transaction_type || "").trim().toLowerCase();
+  let applied = 0;
+  const set = (id, value, options = {}) => {
+    if (setAiAssistantFilterControl(id, value, options)) applied += 1;
+  };
+
+  if (currentPage === "home") {
+    const heroTab = document.getElementById(`hero-tab-${page === "sale" ? "buy" : page}`);
+    if (heroTab) setTab(heroTab, page);
+    set("hero-q", location);
+    set("hero-bedrooms-f", bedrooms);
+    set("hero-max-price-f", maxPrice);
+    set("hero-property-type-f", propertyType);
+    if (transactionType) setHeroTransactionType(transactionType);
+    if (applied) toggleHeroAdvancedFilters(true);
+  } else if (normalizePageKey(currentPage) === page) {
+    const locationId = page === "sale" ? "sale-location-f"
+      : page === "rent" ? "rent-location-f"
+      : page === "students" ? "student-q-f"
+      : `${page}-q-f`;
+    set(locationId, location);
+    if (page === "sale" || page === "rent") {
+      set(`${page}-min-beds-f`, bedrooms);
+      set(`${page}-price-f`, maxPrice, { fallbackId: `${page}-max-price-custom-f` });
+      set(`${page}-type-f`, propertyType);
+    } else if (page === "students") {
+      set("student-budget-f", maxPrice, { fallbackId: "student-budget-custom-f" });
+      set("student-type-quick-f", propertyType);
+      set("student-uni-f", location);
+    } else if (page === "commercial") {
+      set("commercial-price-f", maxPrice, { fallbackId: "commercial-max-price-custom-f" });
+      set("commercial-type-f", propertyType);
+      set("commercial-transaction-f", transactionType);
+    } else if (page === "land") {
+      set("land-price-f", maxPrice, { fallbackId: "land-max-price-custom-f" });
+      set("land-type-f", propertyType);
+      set("land-transaction-f", transactionType);
+    }
+  }
+
+  if (!applied) return false;
+  trackEvent("ai_assistant_refine_controls_prefilled", {
+    source_page: currentPage,
+    search_type: page,
+    source: context.source || "ai_assistant",
+    field_count: applied
+  });
+  return true;
+}
+
 function renderAiAssistantResponse(responseBox, data = {}, context = {}) {
   if (!responseBox) return;
   responseBox.classList.remove("hidden");
@@ -34270,7 +34468,9 @@ async function requestAiAssistantResults({ message, intent, responseBox, button,
         }
       }
     });
-    renderAiAssistantResponse(responseBox, response?.data || response || {}, { source });
+    const responseData = response?.data || response || {};
+    prefillAiAssistantRefineControls(responseData, { source });
+    renderAiAssistantResponse(responseBox, responseData, { source });
     trackEvent("ai_chatbot_prompt_submitted", { intent: searchIntent, source_page: currentPage, language: currentLang || "en", source, search_scope: normalizedScope });
     return response;
   } catch (error) {
@@ -35074,6 +35274,7 @@ const INLINE_REVENUE_PLACEMENTS = [
   { anchorId: "student-grid", slotKey: "student-grid", context: "Student Accommodation" },
   { anchorId: "commercial-grid", slotKey: "commercial-grid", context: "Commercial Listings" },
   { anchorId: "land-grid", slotKey: "land-grid", context: "Land Listings" },
+  { anchorId: "marketplace-results", slotKey: "marketplace-results", context: "Marketplace Directory" },
   { anchorId: "brokers-grid", slotKey: "brokers-grid", context: "Broker Directory" },
   { anchorId: "mortgage-results", slotKey: "mortgage-results", context: "Mortgage Finder" },
   { anchorId: "detail-content", slotKey: "property-detail", context: "Property Detail" }
@@ -35085,6 +35286,12 @@ const INHOUSE_AD_SAMPLES = {
     label: "Premium homepage sponsor",
     headline: "Own the first impression",
     body: "Hero visibility for banks, developers, insurers, and home brands."
+  },
+  "home-brokers": {
+    image: "https://images.unsplash.com/photo-1560250097-0b93528c311a?w=900&q=80",
+    label: "Homepage agent sponsor",
+    headline: "Put your property team in front",
+    body: "Promote a trusted agency, broker team, or national property service."
   },
   "sale-grid": {
     image: "https://images.unsplash.com/photo-1568605114967-8130f3a36994?w=900&q=80",
@@ -35115,6 +35322,12 @@ const INHOUSE_AD_SAMPLES = {
     label: "Land sponsor",
     headline: "Reach land buyers",
     body: "Surveyors, title support, developers, plots, and agricultural services."
+  },
+  "marketplace-results": {
+    image: "https://images.unsplash.com/photo-1524758631624-e2822e304c36?w=900&q=80",
+    label: "Marketplace sponsor",
+    headline: "Reach owners who need property services",
+    body: "Promote a verified surveyor, lawyer, builder, mover, insurer, or home-service business."
   },
   "brokers-grid": {
     image: "https://images.unsplash.com/photo-1521791136064-7986c2920216?w=900&q=80",
@@ -35976,6 +36189,7 @@ function routeSearchHandoffPayload(page) {
   const filters = {
     propertyType: normalizeInput(qs.get("property_type") || qs.get("propertyType") || qs.get("room_type") || qs.get("commercial_type") || qs.get("land_title_type") || ""),
     transactionType: normalizeInput(qs.get("transaction_type") || qs.get("transactionType") || ""),
+    listingOrigin: normalizeInput(qs.get("listing_origin") || qs.get("listingOrigin") || qs.get("origin_type") || ""),
     minPrice: normalizeInput(qs.get("min_price") || qs.get("minPrice") || ""),
     maxPrice: normalizeInput(qs.get("max_price") || qs.get("maxPrice") || qs.get("budget") || ""),
     bedrooms: normalizeInput(qs.get("bedrooms") || qs.get("beds") || ""),
@@ -36013,6 +36227,7 @@ function heroSearchRouteUrl(page, payload = {}) {
   else if (payload.radiusMiles) params.set("radiusKm", String(Number(milesToKm(payload.radiusMiles).toFixed(3))));
   if (filters.propertyType) params.set("property_type", filters.propertyType);
   if (filters.transactionType) params.set("transaction_type", filters.transactionType);
+  if (filters.listingOrigin) params.set("listing_origin", filters.listingOrigin);
   if (filters.minPrice) params.set("min_price", String(filters.minPrice));
   if (filters.maxPrice) params.set("max_price", String(filters.maxPrice));
   if (filters.bedrooms) params.set("bedrooms", String(filters.bedrooms));
@@ -39709,6 +39924,833 @@ function renderAll() {
   syncPublicWhatsappLinks();
 }
 
+const VALUATION_UI_EN = Object.freeze({
+  eyebrow: "Evidence from live makaug listings",
+  title: "Estimate a property value",
+  subtitle: "Compare approved public listings in the same area. This is a market guide, not a formal valuation.",
+  formTitle: "Tell us about the property",
+  formSubtitle: "We will compare it with real listings already on makaug.",
+  free: "Free guide",
+  category: "Property category",
+  categorySale: "Residential for sale",
+  categoryRent: "Residential to rent",
+  categoryLand: "Land",
+  categoryCommercial: "Commercial",
+  categoryStudent: "Student accommodation",
+  transaction: "Transaction",
+  forRent: "For rent",
+  forSale: "For sale",
+  location: "Area or town",
+  locationPlaceholder: "e.g. Ntinda",
+  district: "District (helps when an area has few matches)",
+  chooseDistrict: "Choose district",
+  bedrooms: "Bedrooms",
+  anyBedrooms: "Any bedrooms",
+  propertyType: "Property type",
+  propertyTypePlaceholder: "e.g. Apartment",
+  landSize: "Land size",
+  sizeUnit: "Size unit",
+  decimals: "Decimals",
+  acres: "Acres",
+  hectares: "Hectares",
+  squareMetres: "Square metres",
+  commercialSize: "Floor area (m²)",
+  university: "Nearby university",
+  universityPlaceholder: "e.g. Makerere University",
+  estimateButton: "Estimate value",
+  howTitle: "How the estimate works",
+  howOne: "We find approved public listings in the same area and category.",
+  howTwo: "We remove the top and bottom 10% when the sample is large enough.",
+  howThree: "We show the 10th–90th percentile range and the comparable listings.",
+  professionalTitle: "Need a formal valuation?",
+  professionalText: "A registered surveyor can inspect the property and prepare a professional report.",
+  findSurveyor: "Find a surveyor",
+  estimatedValue: "Estimated market guide",
+  evidence: "Evidence",
+  comparableListings: "comparable listings",
+  comparablesTitle: "Comparable listings used",
+  comparablesSubtitle: "Open any listing to inspect the evidence.",
+  askAi: "Ask makaug AI about your search",
+  methodTitle: "Methodology and worked example",
+  loading: "Comparing live listings…",
+  failed: "We could not calculate the estimate right now. Please try again.",
+  insufficient: "There are not enough comparable listings for an honest estimate yet.",
+  range: "Likely range: {low} – {high}",
+  perSqm: "Trimmed average: {rate} per m²",
+  perDecimal: "Trimmed average: {rate} per decimal",
+  basisMonth: "Comparable rents normalised per month",
+  basisSemester: "Student prices normalised per semester",
+  scopeArea: "Using comparable listings in {location}.",
+  scopeDistrict: "Not enough exact matches in {location}; using {district} District comparables.",
+  methodText: "The estimate uses a trimmed mean. With 10 or more comparable listings, the highest and lowest 10% are removed. The displayed range is the 10th–90th percentile.",
+  methodExample: "Worked example: {count} comparable prices produced a trimmed estimate of {estimate} and a range of {low} to {high}.",
+  noImage: "No photo",
+  viewListing: "View listing"
+});
+
+const VALUATION_UI_OVERRIDES = Object.freeze({
+  lg: {
+    eyebrow: "Obujulizi okuva ku bifo ebiri ku makaug",
+    title: "Balirira omuwendo gw'ekibanja oba ennyumba",
+    subtitle: "Geraageranya n'ebifo ebikkiriziddwa mu kitundu kye kimu. Kino kya kukuyamba, si valuation ya mateeka.",
+    formTitle: "Tubuulire ku kifo",
+    formSubtitle: "Tugenda okukigeraageranya n'ebifo ebiri ku makaug.",
+    free: "Obuyambi bwa bwereere",
+    category: "Ekika ky'ekifo", categorySale: "Ennyumba etundibwa", categoryRent: "Ennyumba epangisibwa",
+    categoryLand: "Ettaka", categoryCommercial: "Eby'obusuubuzi", categoryStudent: "Amayumba g'abayizi",
+    transaction: "Enkola", forRent: "Kupangisa", forSale: "Kutunda", location: "Ekitundu oba kibuga",
+    district: "Disitulikiti", chooseDistrict: "Londa disitulikiti", bedrooms: "Ebisenge", anyBedrooms: "Ebisenge byonna",
+    propertyType: "Ekika ky'ennyumba", landSize: "Obunene bw'ettaka", sizeUnit: "Ekipimo",
+    commercialSize: "Obugazi bwa wansi (m²)", university: "Yunivasite eri okumpi", estimateButton: "Balirira omuwendo",
+    howTitle: "Engeri gye tubalirira", professionalTitle: "Oyagala valuation entongole?",
+    findSurveyor: "Funa surveyor", estimatedValue: "Omuwendo ogulowoozebwa", evidence: "Obujulizi",
+    comparableListings: "ebifo ebigeraageranyiziddwa", comparablesTitle: "Ebifo ebikozeseddwa",
+    comparablesSubtitle: "Ggulawo listing yonna olabe obujulizi.", askAi: "Buuza makaug AI ku kunoonya kwo",
+    methodTitle: "Enkola n'ekyokulabirako", loading: "Tugeraageranya ebifo…",
+    failed: "Tetusoobodde kubalirira kati. Ddamu ogezeeko.", insufficient: "Ebifo ebigeraageranyizibwa tebimala okukola omuwendo omwesigwa.",
+    range: "Omuwendo guyinza okuba: {low} – {high}", viewListing: "Laba ekifo"
+  },
+  sw: {
+    eyebrow: "Ushahidi kutoka matangazo ya moja kwa moja ya makaug",
+    title: "Kadiria thamani ya mali",
+    subtitle: "Linganisha matangazo yaliyoidhinishwa katika eneo moja. Huu ni mwongozo wa soko, si uthamini rasmi.",
+    formTitle: "Tuambie kuhusu mali", formSubtitle: "Tutailinganisha na matangazo halisi kwenye makaug.", free: "Mwongozo wa bure",
+    category: "Aina ya mali", categorySale: "Nyumba za kuuza", categoryRent: "Nyumba za kukodisha", categoryLand: "Ardhi",
+    categoryCommercial: "Biashara", categoryStudent: "Malazi ya wanafunzi", transaction: "Muamala", forRent: "Ya kukodisha",
+    forSale: "Ya kuuza", location: "Eneo au mji", district: "Wilaya", chooseDistrict: "Chagua wilaya",
+    bedrooms: "Vyumba vya kulala", anyBedrooms: "Idadi yoyote", propertyType: "Aina ya mali", landSize: "Ukubwa wa ardhi",
+    sizeUnit: "Kipimo", commercialSize: "Eneo la sakafu (m²)", university: "Chuo kikuu kilicho karibu",
+    estimateButton: "Kadiria thamani", howTitle: "Jinsi makadirio yanavyofanya kazi", professionalTitle: "Unahitaji uthamini rasmi?",
+    professionalText: "Mpimaji aliyesajiliwa anaweza kukagua mali na kuandaa ripoti rasmi.", findSurveyor: "Tafuta mpimaji",
+    estimatedValue: "Mwongozo wa thamani ya soko", evidence: "Ushahidi", comparableListings: "matangazo yanayolingana",
+    comparablesTitle: "Matangazo yaliyotumika", comparablesSubtitle: "Fungua tangazo lolote kuona ushahidi.",
+    askAi: "Uliza makaug AI kuhusu utafutaji wako", methodTitle: "Mbinu na mfano", loading: "Tunalinganisha matangazo…",
+    failed: "Hatukuweza kukadiria sasa. Jaribu tena.", insufficient: "Hakuna matangazo ya kutosha kwa makadirio ya kuaminika.",
+    range: "Kiwango kinachowezekana: {low} – {high}", viewListing: "Tazama tangazo"
+  },
+  ac: {
+    eyebrow: "Caden ki listing ma makaug", title: "Pim wel pa ot ki lobo", subtitle: "Por ki listing ma gimoko i kabedo acel. Man obedo lacim me cato, pe valuation me cik.",
+    formTitle: "Waci botwa lok kom property", free: "Lacim me nono", category: "Kit property", categorySale: "Ot me cato",
+    categoryRent: "Ot me bongo", categoryLand: "Ngom", categoryCommercial: "Commercial", categoryStudent: "Kabedo pa lutino kwan",
+    location: "Kabedo onyo town", district: "District", chooseDistrict: "Yer district", bedrooms: "Ot nino",
+    propertyType: "Kit ot", landSize: "Dit pa ngom", estimateButton: "Pim wel", howTitle: "Kit ma wapimo kwede",
+    professionalTitle: "Imito valuation me cik?", findSurveyor: "Nong surveyor", estimatedValue: "Wel ma wapimo",
+    evidence: "Caden", comparableListings: "listing ma kiporo", comparablesTitle: "Listing ma watio kwede",
+    loading: "Waporo listing…", failed: "Pe watwero pimo kombedi. Tem doki.", insufficient: "Listing ma kiporo pe oromo.",
+    viewListing: "Nen listing"
+  },
+  ny: {
+    eyebrow: "Obuhame kuruga aha makaug", title: "Teekateeka omuhendo gw'itaka nari enju", subtitle: "Gyeragyeranisa n'ebyamamaza ebihamiibwe omu mwanya gumwe. N'obuhabuzi, ti valuation y'amateeka.",
+    formTitle: "Tugambire aha property", free: "Obuhabuzi bwa busha", category: "Ekika kya property", categorySale: "Enju y'okutunda",
+    categoryRent: "Enju y'okupangisa", categoryLand: "Itaka", categoryCommercial: "Eby'obushuubuzi", categoryStudent: "Amacumbi g'abeegi",
+    location: "Omwanya nari town", district: "District", chooseDistrict: "Toorana district", bedrooms: "Ebishenge",
+    propertyType: "Ekika ky'enju", landSize: "Obwingi bw'itaka", estimateButton: "Teekateeka omuhendo",
+    howTitle: "Oku omuhendo guteekateekwa", professionalTitle: "Nooyenda valuation ey'ekikugu?", findSurveyor: "Shaka surveyor",
+    estimatedValue: "Omuhendo oguteekateekirwe", evidence: "Obuhame", comparableListings: "ebyogerwa ebigyeragyeranisibwe",
+    comparablesTitle: "Ebyogerwa ebikozesibwe", loading: "Nitugyeragyeranisa…", failed: "Titwabaasize kuteekateeka hati.",
+    insufficient: "Ebyogerwa tibikumara.", viewListing: "Reeba listing"
+  },
+  rn: {
+    eyebrow: "Obuhame kuruga aha makaug", title: "Bara omuhendo gwa property", subtitle: "Gyeragyeranisa na listing ezihamiibwe omu mwanya gumwe. N'obuhabuzi bw'akatale.",
+    formTitle: "Tugambire ahari property", free: "Obuhabuzi bwa busha", category: "Ekika kya property", categorySale: "Enju y'okutunda",
+    categoryRent: "Enju y'okupangisa", categoryLand: "Itaka", categoryCommercial: "Commercial", categoryStudent: "Amacumbi g'abeegi",
+    location: "Omwanya nari town", district: "District", chooseDistrict: "Toorana district", bedrooms: "Ebishenge",
+    propertyType: "Ekika ky'enju", landSize: "Obwingi bw'itaka", estimateButton: "Bara omuhendo", howTitle: "Oku tubara omuhendo",
+    professionalTitle: "Nooyenda valuation ey'ekikugu?", findSurveyor: "Shaka surveyor", estimatedValue: "Omuhendo ogubariirwe",
+    evidence: "Obuhame", comparableListings: "listing ezigyeragyeranisibwe", comparablesTitle: "Listing ezikozesibwe",
+    loading: "Nitugyeragyeranisa listing…", failed: "Titwabaasize kubara hati.", insufficient: "Listing tizaamala.",
+    viewListing: "Reeba listing"
+  },
+  sm: {
+    eyebrow: "Obujulizi okuva ku makaug", title: "Balirira omuwendo gwa property", subtitle: "Geraageranya n'ebirango ebikkirizibwa mu kifo kye kimu. Kino kya kukuyamba.",
+    formTitle: "Tukobere ku property", free: "Obuyambi bwa bwereere", category: "Ekika kya property", categorySale: "Ennyumba etundibwa",
+    categoryRent: "Ennyumba epangisibwa", categoryLand: "Ettaka", categoryCommercial: "Eby'obusuubuzi", categoryStudent: "Amayumba g'abeegi",
+    location: "Ekifo oba kibuga", district: "Disitulikiti", chooseDistrict: "Londa disitulikiti", bedrooms: "Ebisenge",
+    propertyType: "Ekika ky'ennyumba", landSize: "Obunene bw'ettaka", estimateButton: "Balirira omuwendo", howTitle: "Engeri gye tubalirira",
+    professionalTitle: "Oyenda valuation entongole?", findSurveyor: "Funa surveyor", estimatedValue: "Omuwendo ogubaliriddwa",
+    evidence: "Obujulizi", comparableListings: "ebirango ebigeraageranyiziddwa", comparablesTitle: "Ebirango ebikozeseddwa",
+    loading: "Tugeraageranya ebirango…", failed: "Tetusoobodde kubalirira kati.", insufficient: "Ebirango tebimala.",
+    viewListing: "Laba ekirango"
+  },
+  am: {
+    eyebrow: "ከቀጥታ makaug ዝርዝሮች የተገኘ ማስረጃ", title: "የንብረት ዋጋ ግምት", subtitle: "በተመሳሳይ አካባቢ የተፈቀዱ ዝርዝሮችን ያወዳድሩ። ይህ የገበያ መመሪያ ነው።",
+    formTitle: "ስለ ንብረቱ ይንገሩን", free: "ነፃ መመሪያ", category: "የንብረት አይነት", categorySale: "ለሽያጭ መኖሪያ",
+    categoryRent: "ለኪራይ መኖሪያ", categoryLand: "መሬት", categoryCommercial: "ንግድ", categoryStudent: "የተማሪ መኖሪያ",
+    transaction: "ግብይት", forRent: "ለኪራይ", forSale: "ለሽያጭ", location: "አካባቢ ወይም ከተማ", district: "ዲስትሪክት",
+    chooseDistrict: "ዲስትሪክት ይምረጡ", bedrooms: "መኝታ ቤቶች", propertyType: "የንብረት አይነት", landSize: "የመሬት መጠን",
+    estimateButton: "ዋጋ ገምት", howTitle: "ግምቱ እንዴት እንደሚሰራ", professionalTitle: "መደበኛ ግምገማ ይፈልጋሉ?",
+    findSurveyor: "ቀያሽ ያግኙ", estimatedValue: "የተገመተ የገበያ ዋጋ", evidence: "ማስረጃ",
+    comparableListings: "ተመሳሳይ ዝርዝሮች", comparablesTitle: "ያገለገሉ ተመሳሳይ ዝርዝሮች",
+    loading: "ቀጥታ ዝርዝሮችን እያወዳደርን ነው…", failed: "አሁን ግምቱን ማስላት አልቻልንም።", insufficient: "ታማኝ ግምት ለመስጠት በቂ ዝርዝሮች የሉም።",
+    viewListing: "ዝርዝሩን ይመልከቱ"
+  },
+  ar: {
+    eyebrow: "أدلة من إعلانات makaug المباشرة", title: "قدّر قيمة العقار", subtitle: "قارن بالإعلانات العامة المعتمدة في المنطقة نفسها. هذا دليل سوقي وليس تقييماً رسمياً.",
+    formTitle: "أخبرنا عن العقار", formSubtitle: "سنقارنه بإعلانات حقيقية على makaug.", free: "دليل مجاني",
+    category: "فئة العقار", categorySale: "سكني للبيع", categoryRent: "سكني للإيجار", categoryLand: "أرض",
+    categoryCommercial: "تجاري", categoryStudent: "سكن طلاب", transaction: "المعاملة", forRent: "للإيجار", forSale: "للبيع",
+    location: "المنطقة أو المدينة", district: "المقاطعة", chooseDistrict: "اختر المقاطعة", bedrooms: "غرف النوم",
+    anyBedrooms: "أي عدد", propertyType: "نوع العقار", landSize: "مساحة الأرض", sizeUnit: "وحدة المساحة",
+    commercialSize: "مساحة الطابق (م²)", university: "الجامعة القريبة", estimateButton: "تقدير القيمة",
+    howTitle: "كيف يعمل التقدير", howOne: "نبحث عن إعلانات عامة معتمدة في المنطقة والفئة نفسهما.",
+    howTwo: "نحذف أعلى وأدنى 10٪ عندما تكون العينة كبيرة بما يكفي.", howThree: "نعرض نطاق النسبة المئوية 10–90 والإعلانات المقارنة.",
+    professionalTitle: "هل تحتاج إلى تقييم رسمي؟", professionalText: "يمكن لمسّاح مسجل فحص العقار وإعداد تقرير مهني.",
+    findSurveyor: "ابحث عن مسّاح", estimatedValue: "دليل القيمة السوقية", evidence: "الأدلة",
+    comparableListings: "إعلانات مقارنة", comparablesTitle: "الإعلانات المقارنة المستخدمة",
+    comparablesSubtitle: "افتح أي إعلان لفحص الأدلة.", askAi: "اسأل makaug AI عن بحثك",
+    methodTitle: "المنهجية ومثال عملي", loading: "جارٍ مقارنة الإعلانات المباشرة…",
+    failed: "تعذر حساب التقدير الآن. حاول مرة أخرى.", insufficient: "لا توجد إعلانات مقارنة كافية لتقدير موثوق.",
+    range: "النطاق المحتمل: {low} – {high}", viewListing: "عرض الإعلان"
+  }
+});
+
+const VALUATION_UI_SUPPLEMENTS = Object.freeze({
+  lg: {
+    locationPlaceholder: "okugeza Ntinda", propertyTypePlaceholder: "okugeza Apartment",
+    decimals: "Desimolo", acres: "Acre", hectares: "Hekita", squareMetres: "Mita za square",
+    universityPlaceholder: "okugeza Makerere University",
+    howOne: "Tunoonya ebirango ebikkiriziddwa mu kitundu n'ekika kye kimu.",
+    howTwo: "Sampulo bw'eba nnene, tuggyamu ebitundu 10% ebya waggulu n'ebya wansi.",
+    howThree: "Tulaga ekkomo lya 10–90% n'ebirango bye tugeraageranyizza.",
+    professionalText: "Surveyor alina olukusa asobola okukebera ekifo n'okukola lipoota ey'ekikugu.",
+    perSqm: "Average esaliddwa: {rate} buli m²", perDecimal: "Average esaliddwa: {rate} buli decimal",
+    basisMonth: "Emiwendo gy'obupangisa gitegekeddwa buli mwezi",
+    basisSemester: "Emiwendo gy'abayizi gitegekeddwa buli semester",
+    scopeArea: "Tukozesa ebirango ebiri mu {location}.",
+    scopeDistrict: "Ebirango mu {location} tebimala; tukozesa ebya {district} District.",
+    methodText: "Tubala trimmed mean. Bwe waba ebirango 10 oba okusingawo, tuggyamu 10% ebisinga n'ebitono. Ekkomo liri ku 10–90%.",
+    methodExample: "Ekyokulabirako: emiwendo {count} giwadde estimate ya {estimate}, wakati wa {low} ne {high}.",
+    noImage: "Tewali kifaananyi"
+  },
+  sw: {
+    locationPlaceholder: "mfano Ntinda", propertyTypePlaceholder: "mfano Apartment",
+    decimals: "Desimali", acres: "Ekari", hectares: "Hekta", squareMetres: "Mita za mraba",
+    universityPlaceholder: "mfano Chuo Kikuu cha Makerere",
+    howOne: "Tunatafuta matangazo ya umma yaliyoidhinishwa katika eneo na aina hiyo.",
+    howTwo: "Sampuli ikiwa kubwa, tunaondoa asilimia 10 ya juu na ya chini.",
+    howThree: "Tunaonyesha kiwango cha asilimia 10–90 na matangazo ya kulinganisha.",
+    perSqm: "Wastani uliopunguzwa: {rate} kwa m²", perDecimal: "Wastani uliopunguzwa: {rate} kwa desimali",
+    basisMonth: "Kodi za kulinganisha zimewekwa kwa mwezi",
+    basisSemester: "Bei za wanafunzi zimewekwa kwa muhula",
+    scopeArea: "Tunatumia matangazo yanayolingana katika {location}.",
+    scopeDistrict: "Hakuna matokeo ya kutosha {location}; tunatumia matangazo ya Wilaya ya {district}.",
+    methodText: "Makadirio hutumia wastani uliopunguzwa. Kwa matangazo 10 au zaidi, asilimia 10 ya juu na ya chini huondolewa. Kiwango ni asilimia 10–90.",
+    methodExample: "Mfano: bei {count} zilitoa makadirio ya {estimate} na kiwango cha {low} hadi {high}.",
+    noImage: "Hakuna picha"
+  },
+  ac: {
+    formSubtitle: "Wabiporo ki listing ada ma tye i makaug.", transaction: "Kit cato", forRent: "Me bongo", forSale: "Me cato",
+    locationPlaceholder: "labole Ntinda", anyBedrooms: "Ot nino mo keken", propertyTypePlaceholder: "labole Apartment",
+    sizeUnit: "Kit lapim", decimals: "Decimal", acres: "Acre", hectares: "Hectare", squareMetres: "Mita ma square",
+    commercialSize: "Dit pa floor (m²)", university: "University ma cok", universityPlaceholder: "labole Makerere University",
+    howOne: "Wanongo listing ma gimoko i kabedo ki kit acel.", howTwo: "Ka listing opol, wagolo 10% ma malo ki ma piny.",
+    howThree: "Wanyuto range 10–90% ki listing ma kiporo.",
+    professionalText: "Surveyor ma gicoyo twero neno property ki yubo report me tic.",
+    comparablesSubtitle: "Yab listing mo wek inen caden.", askAi: "Penj makaug AI pi yeny mamegi",
+    methodTitle: "Kit lapim ki labole", range: "Range ma twero bedo: {low} – {high}",
+    perSqm: "Average ma kigolo: {rate} pi m²", perDecimal: "Average ma kigolo: {rate} pi decimal",
+    basisMonth: "Wel me bongo kiporo pi dwe", basisSemester: "Wel pa lutino kwan kiporo pi semester",
+    scopeArea: "Watio ki listing ma tye i {location}.", scopeDistrict: "Listing i {location} pe oromo; watio ki me District {district}.",
+    methodText: "Lapim tiyo ki trimmed mean. Ka listing tye 10 onyo makato, kigolo 10% ma malo ki ma piny. Range obedo 10–90%.",
+    methodExample: "Labole: wel {count} omiyo estimate {estimate} ki range {low} wa {high}.", noImage: "Cal pe"
+  },
+  ny: {
+    formSubtitle: "Nitugyeragyeranisa n'ebyamamaza ebiri aha makaug.", transaction: "Enkora", forRent: "Y'okupangisa", forSale: "Y'okutunda",
+    locationPlaceholder: "nk'ekyokureeberaho Ntinda", anyBedrooms: "Ebishenge byona", propertyTypePlaceholder: "nk'ekyokureeberaho Apartment",
+    sizeUnit: "Ekipimo", decimals: "Decimal", acres: "Acre", hectares: "Hectare", squareMetres: "Square metres",
+    commercialSize: "Obugazi bwa floor (m²)", university: "Yunivasite eri haihi", universityPlaceholder: "nk'ekyokureeberaho Makerere University",
+    howOne: "Nitushaka ebyamamaza ebihamiibwe omu mwanya n'ekika kimwe.", howTwo: "Sample yaaba mpango, nitwiihamu 10% eya haiguru n'eya ahansi.",
+    howThree: "Nitworeka range ya 10–90% n'ebyamamaza ebigyeragyeranisibwe.",
+    professionalText: "Surveyor owahandiikire naabaasa kushwijuma property akakora report y'ekikugu.",
+    comparablesSubtitle: "Iguraho listing yoona oreebe obuhame.", askAi: "Buuza makaug AI aha kushaka kwawe",
+    methodTitle: "Enkora n'ekyokureeberaho", range: "Omuhendo nigubaasa kuba: {low} – {high}",
+    perSqm: "Average eteekateekirwe: {rate} buri m²", perDecimal: "Average eteekateekirwe: {rate} buri decimal",
+    basisMonth: "Emihendo y'okupangisa eteekateekirwe buri kwezi", basisSemester: "Emihendo y'abeegi eteekateekirwe buri semester",
+    scopeArea: "Nitukoresa ebyamamaza omuri {location}.", scopeDistrict: "Ebyamamaza omuri {location} tibikumara; nitukoresa ebya District ya {district}.",
+    methodText: "Nitukoresa trimmed mean. Hariho listing 10 nari ezirikukira, nitwiihamu 10% eya haiguru n'eya ahansi. Range ni 10–90%.",
+    methodExample: "Ekyokureeberaho: emihendo {count} yaahereza estimate {estimate}, kuruga {low} kuhika {high}.", noImage: "Tihariho kishushani"
+  },
+  rn: {
+    formSubtitle: "Nitugyeragyeranisa na listing z'amazima aha makaug.", transaction: "Enkora", forRent: "Y'okupangisa", forSale: "Y'okutunda",
+    locationPlaceholder: "nk'ekyokureeberaho Ntinda", anyBedrooms: "Ebishenge byona", propertyTypePlaceholder: "nk'ekyokureeberaho Apartment",
+    sizeUnit: "Ekipimo", decimals: "Decimal", acres: "Acre", hectares: "Hectare", squareMetres: "Square metres",
+    commercialSize: "Obugazi bwa floor (m²)", university: "Yunivasite eri haihi", universityPlaceholder: "nk'ekyokureeberaho Makerere University",
+    howOne: "Nitushaka listing ezihamiibwe omu mwanya n'ekika kimwe.", howTwo: "Listing zaaba nyingi, nitwiihamu 10% eya haiguru n'eya ahansi.",
+    howThree: "Nitworeka range ya 10–90% na listing ezigyeragyeranisibwe.",
+    professionalText: "Surveyor owahandiikire naabaasa kushwijuma property akakora report y'ekikugu.",
+    comparablesSubtitle: "Iguraho listing yoona oreebe obuhame.", askAi: "Buuza makaug AI aha kushaka kwawe",
+    methodTitle: "Enkora n'ekyokureeberaho", range: "Omuhendo nigubaasa kuba: {low} – {high}",
+    perSqm: "Average ebariirwe: {rate} buri m²", perDecimal: "Average ebariirwe: {rate} buri decimal",
+    basisMonth: "Emihendo y'okupangisa ebariirwe buri kwezi", basisSemester: "Emihendo y'abeegi ebariirwe buri semester",
+    scopeArea: "Nitukoresa listing eziri omuri {location}.", scopeDistrict: "Listing omuri {location} tizaamala; nitukoresa eza District ya {district}.",
+    methodText: "Nitukoresa trimmed mean. Hariho listing 10 nari ezirikukira, nitwiihamu 10% eya haiguru n'eya ahansi. Range ni 10–90%.",
+    methodExample: "Ekyokureeberaho: emihendo {count} yaahereza estimate {estimate}, kuruga {low} kuhika {high}.", noImage: "Tihariho kishushani"
+  },
+  sm: {
+    formSubtitle: "Tugeraageranya n'ebirango eby'amazima ku makaug.", transaction: "Enkola", forRent: "Kupangisa", forSale: "Kutunda",
+    locationPlaceholder: "okugeza Ntinda", anyBedrooms: "Ebisenge byonna", propertyTypePlaceholder: "okugeza Apartment",
+    sizeUnit: "Ekipimo", decimals: "Desimolo", acres: "Acre", hectares: "Hekita", squareMetres: "Mita za square",
+    commercialSize: "Obugazi bwa floor (m²)", university: "Yunivasite eri okumpi", universityPlaceholder: "okugeza Makerere University",
+    howOne: "Tunoonya ebirango ebikkirizibwa mu kifo n'ekika kye kimu.", howTwo: "Ebirango bwe biba bingi, tuggyamu 10% ebya waggulu n'ebya wansi.",
+    howThree: "Tulaga range ya 10–90% n'ebirango ebigeraageranyiziddwa.",
+    professionalText: "Surveyor awandiikiddwa asobola okukebera property n'akola report ey'ekikugu.",
+    comparablesSubtitle: "Ggulawo ekirango olabe obujulizi.", askAi: "Buuza makaug AI ku kunoonya kwo",
+    methodTitle: "Enkola n'ekyokulabirako", range: "Omuwendo guyinza okuba: {low} – {high}",
+    perSqm: "Average esaliddwa: {rate} buli m²", perDecimal: "Average esaliddwa: {rate} buli decimal",
+    basisMonth: "Emiwendo gy'obupangisa gitegekeddwa buli mwezi", basisSemester: "Emiwendo gy'abeegi gitegekeddwa buli semester",
+    scopeArea: "Tukozesa ebirango ebiri mu {location}.", scopeDistrict: "Ebirango mu {location} tebimala; tukozesa ebya District ya {district}.",
+    methodText: "Tubala trimmed mean. Bwe waba ebirango 10 oba okusingawo, tuggyamu 10% ebisinga n'ebitono. Range eri ku 10–90%.",
+    methodExample: "Ekyokulabirako: emiwendo {count} giwadde estimate {estimate}, wakati wa {low} ne {high}.", noImage: "Tewali kifaananyi"
+  },
+  am: {
+    formSubtitle: "በmakaug ላይ ካሉ እውነተኛ ዝርዝሮች ጋር እናወዳድራለን።",
+    locationPlaceholder: "ለምሳሌ Ntinda", anyBedrooms: "ማንኛውም ብዛት", propertyTypePlaceholder: "ለምሳሌ Apartment",
+    sizeUnit: "የመጠን ክፍል", decimals: "ዴሲማል", acres: "ኤከር", hectares: "ሄክታር", squareMetres: "ካሬ ሜትር",
+    commercialSize: "የወለል ስፋት (m²)", university: "በአቅራቢያ ያለ ዩኒቨርሲቲ", universityPlaceholder: "ለምሳሌ Makerere University",
+    howOne: "በተመሳሳይ አካባቢና ምድብ የተፈቀዱ ዝርዝሮችን እናገኛለን።",
+    howTwo: "ናሙናው በቂ ሲሆን ከፍተኛውንና ዝቅተኛውን 10% እናስወግዳለን።",
+    howThree: "የ10–90 ፐርሰንታይል ክልልና ተመሳሳይ ዝርዝሮችን እናሳያለን።",
+    professionalText: "የተመዘገበ ቀያሽ ንብረቱን መርምሮ የሙያ ሪፖርት ሊያዘጋጅ ይችላል።",
+    comparablesSubtitle: "ማስረጃውን ለማየት ማንኛውንም ዝርዝር ይክፈቱ።", askAi: "ስለ ፍለጋዎ makaug AIን ይጠይቁ",
+    methodTitle: "ዘዴ እና የሥራ ምሳሌ", range: "ሊሆን የሚችል ክልል፦ {low} – {high}",
+    perSqm: "የተቀነሰ አማካይ፦ {rate} በm²", perDecimal: "የተቀነሰ አማካይ፦ {rate} በዴሲማል",
+    basisMonth: "የኪራይ ዋጋዎች በወር ተደርገዋል", basisSemester: "የተማሪ ዋጋዎች በሴሚስተር ተደርገዋል",
+    scopeArea: "በ{location} ያሉ ተመሳሳይ ዝርዝሮችን እንጠቀማለን።",
+    scopeDistrict: "በ{location} በቂ ውጤት የለም፤ የ{district} ዲስትሪክት ዝርዝሮችን እንጠቀማለን።",
+    methodText: "ግምቱ የተቀነሰ አማካይን ይጠቀማል። 10 ወይም ከዚያ በላይ ዝርዝሮች ሲኖሩ ከፍተኛና ዝቅተኛ 10% ይወገዳል። ክልሉ 10–90% ነው።",
+    methodExample: "ምሳሌ፦ {count} ዋጋዎች {estimate} ግምትና ከ{low} እስከ {high} ክልል ሰጡ።", noImage: "ፎቶ የለም"
+  },
+  ar: {
+    locationPlaceholder: "مثال: Ntinda", propertyTypePlaceholder: "مثال: شقة",
+    decimals: "ديسمل", acres: "فدان", hectares: "هكتار", squareMetres: "متر مربع",
+    universityPlaceholder: "مثال: جامعة Makerere",
+    perSqm: "المتوسط المشذب: {rate} لكل م²", perDecimal: "المتوسط المشذب: {rate} لكل ديسمل",
+    basisMonth: "تم توحيد الإيجارات المقارنة على أساس شهري",
+    basisSemester: "تم توحيد أسعار الطلاب على أساس الفصل الدراسي",
+    scopeArea: "نستخدم الإعلانات المقارنة في {location}.",
+    scopeDistrict: "لا توجد نتائج كافية في {location}؛ نستخدم إعلانات مقاطعة {district}.",
+    methodText: "يستخدم التقدير متوسطاً مشذباً. عند وجود 10 إعلانات أو أكثر نحذف أعلى وأدنى 10٪. النطاق المعروض هو النسبة المئوية 10–90.",
+    methodExample: "مثال: أعطت {count} أسعار تقديراً قدره {estimate} ونطاقاً من {low} إلى {high}.",
+    noImage: "لا توجد صورة"
+  }
+});
+
+function valuationTr(key, vars = {}) {
+  const pack = {
+    ...(VALUATION_UI_SUPPLEMENTS[currentLang] || {}),
+    ...(VALUATION_UI_OVERRIDES[currentLang] || {})
+  };
+  let text = pack[key] || VALUATION_UI_EN[key] || key;
+  Object.entries(vars).forEach(([name, value]) => {
+    text = text.replaceAll(`{${name}}`, String(value ?? ""));
+  });
+  return text;
+}
+
+function applyValuationLanguageUI() {
+  const root = document.getElementById("page-valuation");
+  if (!root) return;
+  root.dir = currentLang === "ar" ? "rtl" : "ltr";
+  root.querySelectorAll("[data-valuation-i18n]").forEach((element) => {
+    const key = element.dataset.valuationI18n;
+    if (key) element.textContent = valuationTr(key);
+  });
+  root.querySelectorAll("[data-valuation-placeholder]").forEach((element) => {
+    const key = element.dataset.valuationPlaceholder;
+    if (key) element.placeholder = valuationTr(key);
+  });
+}
+
+function populateValuationLocations() {
+  const districtSelect = document.getElementById("valuation-district");
+  const locationList = document.getElementById("valuation-location-list");
+  if (districtSelect && districtSelect.options.length <= 1) {
+    UGANDA_DISTRICTS.forEach((district) => {
+      const option = document.createElement("option");
+      option.value = district;
+      option.textContent = district;
+      districtSelect.appendChild(option);
+    });
+  }
+  if (locationList) {
+    const names = new Set(UGANDA_DISTRICTS);
+    getPublicListings().forEach((property) => {
+      [property?.area, property?.district, property?.city, property?.neighborhood]
+        .map((value) => String(value || "").trim())
+        .filter(Boolean)
+        .forEach((value) => names.add(value));
+    });
+    locationList.innerHTML = Array.from(names)
+      .sort((a, b) => a.localeCompare(b))
+      .slice(0, 600)
+      .map((value) => `<option value="${adminAttr(value)}"></option>`)
+      .join("");
+  }
+}
+
+const valuationLocationRowsByCategory = new Map();
+
+function renderValuationLocationRows(rows = []) {
+  const districtSelect = document.getElementById("valuation-district");
+  const locationList = document.getElementById("valuation-location-list");
+  const safeRows = Array.isArray(rows) ? rows : [];
+  if (locationList && safeRows.length) {
+    locationList.innerHTML = safeRows.map((row) => {
+      const location = String(row.location || "").trim();
+      const district = String(row.district || "").trim();
+      const count = Math.max(0, Number(row.listing_count) || 0);
+      const label = [location, district && district.toLowerCase() !== location.toLowerCase() ? district : "", `${count} listings`]
+        .filter(Boolean)
+        .join(" · ");
+      return `<option value="${adminAttr(location)}" label="${adminAttr(label)}"></option>`;
+    }).join("");
+  }
+  if (districtSelect && safeRows.length) {
+    const counts = new Map();
+    safeRows.forEach((row) => {
+      const district = String(row.district || "").trim();
+      if (!district) return;
+      counts.set(district, (counts.get(district) || 0) + (Math.max(0, Number(row.listing_count) || 0)));
+    });
+    const current = districtSelect.value;
+    districtSelect.innerHTML = `<option value="">${adminEscape(valuationTr("chooseDistrict"))}</option>`
+      + UGANDA_DISTRICTS.map((district) => {
+        const count = counts.get(district) || 0;
+        return `<option value="${adminAttr(district)}">${adminEscape(`${district}${count ? ` (${count})` : ""}`)}</option>`;
+      }).join("");
+    if (current && Array.from(districtSelect.options).some((option) => option.value === current)) districtSelect.value = current;
+  }
+}
+
+async function refreshValuationLocations() {
+  const category = document.getElementById("valuation-category")?.value || "sale";
+  if (valuationLocationRowsByCategory.has(category)) {
+    renderValuationLocationRows(valuationLocationRowsByCategory.get(category));
+    return;
+  }
+  try {
+    const response = await apiRequest(`/api/valuation/locations?category=${encodeURIComponent(category)}`, { skipAuth: true });
+    const rows = Array.isArray(response?.data) ? response.data : [];
+    valuationLocationRowsByCategory.set(category, rows);
+    renderValuationLocationRows(rows);
+  } catch (error) {
+    // Keep the static canonical district list if the count endpoint is unavailable.
+  }
+}
+
+function renderValuationCategoryFields() {
+  const category = document.getElementById("valuation-category")?.value || "sale";
+  const toggle = (id, visible) => document.getElementById(id)?.classList.toggle("hidden", !visible);
+  toggle("valuation-transaction-wrap", category === "commercial");
+  toggle("valuation-beds-wrap", ["sale", "rent", "student"].includes(category));
+  toggle("valuation-property-type-wrap", ["sale", "rent", "commercial", "student"].includes(category));
+  toggle("valuation-size-value-wrap", category === "land");
+  toggle("valuation-size-unit-wrap", category === "land");
+  toggle("valuation-commercial-size-wrap", category === "commercial");
+  toggle("valuation-university-wrap", category === "student");
+  refreshValuationLocations();
+}
+
+function initializeValuationPage() {
+  populateValuationLocations();
+  renderValuationCategoryFields();
+  applyValuationLanguageUI();
+}
+
+function setValuationStatus(message, type = "info") {
+  const status = document.getElementById("valuation-form-status");
+  if (!status) return;
+  status.classList.remove("hidden", "border-red-200", "bg-red-50", "text-red-800", "border-emerald-200", "bg-emerald-50", "text-emerald-900");
+  if (type === "error") status.classList.add("border-red-200", "bg-red-50", "text-red-800");
+  else status.classList.add("border-emerald-200", "bg-emerald-50", "text-emerald-900");
+  status.textContent = message;
+}
+
+function formatValuationUgx(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) return "—";
+  return `UGX ${new Intl.NumberFormat("en-UG", { maximumFractionDigits: 0 }).format(Math.round(numeric))}`;
+}
+
+function renderValuationComparable(row = {}) {
+  const image = safeImageUrl(row.image_url || "");
+  const location = [row.area, row.district].filter(Boolean).join(", ");
+  return `
+    <article class="bg-white border border-[#e4ece8] rounded-lg overflow-hidden">
+      <div class="aspect-[16/9] bg-[#f6f9f7]">
+        ${image
+          ? `<img src="${adminAttr(image)}" alt="" class="h-full w-full object-cover" loading="lazy">`
+          : `<div class="h-full w-full flex items-center justify-center text-xs font-bold text-gray-400">${adminEscape(valuationTr("noImage"))}</div>`}
+      </div>
+      <div class="p-4">
+        <div class="text-lg font-black text-[#15603f]">${adminEscape(formatValuationUgx(row.normalized_price || row.price))}</div>
+        <h3 class="mt-1 line-clamp-2 text-sm font-black text-[#16241d]">${adminEscape(row.title || "Property")}</h3>
+        <p class="mt-1 text-xs text-[#5b6b62]">${adminEscape(location)}</p>
+        <a href="${adminAttr(row.url || `/property/${row.id}`)}" onclick="return navigatePublicRoute(this.href, event)" class="mt-3 inline-flex min-h-[40px] items-center text-xs font-black text-[#15603f] hover:underline">${adminEscape(valuationTr("viewListing"))} →</a>
+      </div>
+    </article>`;
+}
+
+function renderValuationEstimate(response = {}) {
+  const results = document.getElementById("valuation-results");
+  const scope = document.getElementById("valuation-scope-note");
+  const estimate = document.getElementById("valuation-estimate");
+  const range = document.getElementById("valuation-range");
+  const count = document.getElementById("valuation-comparable-count");
+  const unitRate = document.getElementById("valuation-unit-rate");
+  const comparables = document.getElementById("valuation-comparables");
+  const methodology = document.getElementById("valuation-methodology");
+  if (!results || !scope || !estimate || !range || !count || !unitRate || !comparables || !methodology) return;
+
+  results.classList.remove("hidden");
+  scope.textContent = response.widened
+    ? valuationTr("scopeDistrict", { location: response.input?.location || "", district: response.input?.district || "" })
+    : valuationTr("scopeArea", { location: response.input?.location || "" });
+  count.textContent = Number(response.comparable_count || 0).toLocaleString();
+
+  if (!response.sufficient || !response.estimate) {
+    estimate.textContent = valuationTr("insufficient");
+    estimate.className = "mt-2 text-xl md:text-2xl font-black text-[#16241d]";
+    range.textContent = "";
+  } else {
+    estimate.textContent = formatValuationUgx(response.estimate);
+    estimate.className = "mt-2 text-3xl md:text-5xl font-black text-[#15603f]";
+    range.textContent = valuationTr("range", {
+      low: formatValuationUgx(response.range_low),
+      high: formatValuationUgx(response.range_high)
+    });
+  }
+  const category = response.input?.category || "";
+  if (category === "land" && response.unit_rate_decimal) {
+    unitRate.textContent = valuationTr("perDecimal", { rate: formatValuationUgx(response.unit_rate_decimal) });
+  } else if (category === "commercial" && response.unit_rate_sqm) {
+    unitRate.textContent = valuationTr("perSqm", { rate: formatValuationUgx(response.unit_rate_sqm) });
+  } else if (response.price_basis === "semester") {
+    unitRate.textContent = valuationTr("basisSemester");
+  } else if (response.price_basis === "month") {
+    unitRate.textContent = valuationTr("basisMonth");
+  } else {
+    unitRate.textContent = "";
+  }
+  comparables.innerHTML = (response.comparables || []).map(renderValuationComparable).join("");
+  methodology.innerHTML = `
+    <p>${adminEscape(valuationTr("methodText"))}</p>
+    <p class="font-bold text-[#16241d]">${adminEscape(valuationTr("methodExample", {
+      count: Number(response.comparable_count || 0),
+      estimate: formatValuationUgx(response.estimate),
+      low: formatValuationUgx(response.range_low),
+      high: formatValuationUgx(response.range_high)
+    }))}</p>`;
+  results.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+async function submitValuationEstimate(event) {
+  event?.preventDefault();
+  const button = document.getElementById("valuation-submit");
+  const category = document.getElementById("valuation-category")?.value || "sale";
+  const body = {
+    category,
+    location: document.getElementById("valuation-location")?.value?.trim() || "",
+    district: document.getElementById("valuation-district")?.value || "",
+    bedrooms: document.getElementById("valuation-bedrooms")?.value || null,
+    property_type: document.getElementById("valuation-property-type")?.value?.trim() || "",
+    transaction_type: category === "commercial" ? (document.getElementById("valuation-transaction")?.value || "rent") : "",
+    size_value: category === "land" ? (document.getElementById("valuation-size-value")?.value || null) : null,
+    size_unit: category === "land" ? (document.getElementById("valuation-size-unit")?.value || "") : "",
+    size_sqm: category === "commercial" ? (document.getElementById("valuation-commercial-size")?.value || null) : null,
+    university: category === "student" ? (document.getElementById("valuation-university")?.value?.trim() || "") : ""
+  };
+  if (!body.location) {
+    setValuationStatus(valuationTr("location"), "error");
+    return false;
+  }
+  if (button) button.disabled = true;
+  setValuationStatus(valuationTr("loading"));
+  try {
+    const response = await apiRequest("/api/valuation/estimate", {
+      method: "POST",
+      skipAuth: true,
+      body
+    });
+    renderValuationEstimate(response);
+    setValuationStatus(response.sufficient ? response.scope_label || valuationTr("scopeArea", { location: body.location }) : valuationTr("insufficient"));
+    trackEvent("valuation_estimate_completed", {
+      category,
+      location: body.location,
+      district: body.district,
+      comparable_count: Number(response.comparable_count || 0),
+      widened: Boolean(response.widened)
+    });
+  } catch (error) {
+    setValuationStatus(error?.message || valuationTr("failed"), "error");
+  } finally {
+    if (button) button.disabled = false;
+  }
+  return false;
+}
+
+function openValuationForProperty(propertyId) {
+  const property = findPropertyForUi(propertyId);
+  if (!property) {
+    showPage("valuation");
+    return false;
+  }
+  const type = normalizeType(property.type);
+  const category = type === "students"
+    ? "student"
+    : (["sale", "rent", "land", "commercial", "student"].includes(type) ? type : "sale");
+  showPage("valuation");
+  initializeValuationPage();
+  const setValue = (id, value) => {
+    const element = document.getElementById(id);
+    if (element && value != null) element.value = String(value);
+  };
+  setValue("valuation-category", category);
+  renderValuationCategoryFields();
+  setValue("valuation-location", property.area || property.city || property.district || "");
+  setValue("valuation-district", property.district || "");
+  setValue("valuation-bedrooms", property.beds || property.bedrooms || "");
+  setValue("valuation-property-type", property.subtype || property.property_type || "");
+  if (category === "commercial") {
+    setValue("valuation-transaction", property.transaction_type || (String(property.period || "").toLowerCase() === "month" ? "rent" : "sale"));
+    setValue("valuation-commercial-size", property.floor_area_sqm || property.usable_size_sqm || "");
+  }
+  if (category === "land") {
+    setValue("valuation-size-value", property.land_size_value || property.extra_fields?.land_size_value || "");
+    setValue("valuation-size-unit", property.land_size_unit || property.extra_fields?.land_size_unit || "decimals");
+  }
+  if (category === "student") setValue("valuation-university", property.nearest_university || "");
+  document.getElementById("valuation-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  trackEvent("valuation_opened_from_listing", { property_id: property.id, category });
+  return false;
+}
+
+let advertisingSelfServeStep = 1;
+let advertisingSelfServePackages = [];
+
+function advertisingSelectedPackage() {
+  const key = document.querySelector("#advertise-selfserve-form input[name='package_key']:checked")?.value || "";
+  return advertisingSelfServePackages.find((item) => item.key === key) || null;
+}
+
+function setAdvertisingStatus(message = "", tone = "info") {
+  const element = document.getElementById("advertise-selfserve-status");
+  if (!element) return;
+  if (!message) {
+    element.classList.add("hidden");
+    element.textContent = "";
+    return;
+  }
+  const styles = tone === "error"
+    ? ["border-red-200", "bg-red-50", "text-red-800"]
+    : tone === "success"
+      ? ["border-green-200", "bg-green-50", "text-green-800"]
+      : ["border-blue-200", "bg-blue-50", "text-blue-800"];
+  element.className = `mt-4 rounded-xl border p-3 text-sm ${styles.join(" ")}`;
+  element.innerHTML = message;
+}
+
+function updateAdvertisingQuote() {
+  const selected = advertisingSelectedPackage();
+  setTextById("advertise-quote-label", selected?.label || "Choose a package");
+  setTextById("advertise-quote-amount", `UGX ${Number(selected?.price_ugx || 0).toLocaleString("en-UG")}`);
+  setTextById(
+    "advertise-quote-duration",
+    selected
+      ? `${Number(selected.duration_days || 0) || 1} day${Number(selected.duration_days || 0) === 1 ? "" : "s"} · ${String(selected.pricing_model || "fixed").replace(/_/g, " ")}`
+      : "No package selected"
+  );
+  if (advertisingSelfServeStep === 4) renderAdvertisingReviewSummary();
+}
+
+function setAdvertisingSelfServeStep(step) {
+  advertisingSelfServeStep = Math.min(4, Math.max(1, Number(step || 1)));
+  document.querySelectorAll("[data-advertise-step]").forEach((panel) => {
+    panel.classList.toggle("hidden", Number(panel.dataset.advertiseStep || 0) !== advertisingSelfServeStep);
+  });
+  document.querySelectorAll("[data-advertise-step-tab]").forEach((tab) => {
+    const active = Number(tab.dataset.advertiseStepTab || 0) === advertisingSelfServeStep;
+    tab.classList.toggle("bg-emerald-50", active);
+    tab.classList.toggle("text-[#15603f]", active);
+    tab.classList.toggle("bg-gray-50", !active);
+    tab.classList.toggle("text-gray-500", !active);
+  });
+  document.getElementById("advertise-prev")?.classList.toggle("hidden", advertisingSelfServeStep === 1);
+  document.getElementById("advertise-next")?.classList.toggle("hidden", advertisingSelfServeStep === 4);
+  if (advertisingSelfServeStep === 4) renderAdvertisingReviewSummary();
+  setAdvertisingStatus("");
+}
+
+function validateAdvertisingStep(step = advertisingSelfServeStep) {
+  const form = document.getElementById("advertise-selfserve-form");
+  if (!form) return false;
+  if (step === 1 && !advertisingSelectedPackage()) {
+    setAdvertisingStatus("Choose an advertising package before continuing.", "error");
+    return false;
+  }
+  const requiredByStep = {
+    2: ["campaign_name", "creative_headline", "creative_body"],
+    3: ["full_name", "business_name"]
+  }[step] || [];
+  for (const name of requiredByStep) {
+    const field = form.elements.namedItem(name);
+    if (!field?.value?.trim()) {
+      field?.focus();
+      setAdvertisingStatus("Complete the required fields before continuing.", "error");
+      return false;
+    }
+  }
+  if (step === 3) {
+    const data = new FormData(form);
+    if (!String(data.get("email") || "").trim() && !String(data.get("phone") || "").trim()) {
+      setAdvertisingStatus("Add an email or phone number so makaug can contact you.", "error");
+      return false;
+    }
+  }
+  return true;
+}
+
+function advanceAdvertisingSelfServe() {
+  if (!validateAdvertisingStep()) return false;
+  setAdvertisingSelfServeStep(advertisingSelfServeStep + 1);
+  return false;
+}
+
+function renderAdvertisingReviewSummary() {
+  const form = document.getElementById("advertise-selfserve-form");
+  const wrap = document.getElementById("advertise-review-summary");
+  const selected = advertisingSelectedPackage();
+  if (!form || !wrap) return;
+  const data = new FormData(form);
+  wrap.innerHTML = `
+    <dl class="grid sm:grid-cols-2 gap-3">
+      <div><dt class="text-xs font-bold text-gray-500">Package</dt><dd class="mt-1 font-black text-gray-900">${adminEscape(selected?.label || "-")}</dd></div>
+      <div><dt class="text-xs font-bold text-gray-500">Price</dt><dd class="mt-1 font-black text-[#15603f]">UGX ${Number(selected?.price_ugx || 0).toLocaleString("en-UG")}</dd></div>
+      <div><dt class="text-xs font-bold text-gray-500">Campaign</dt><dd class="mt-1 font-bold text-gray-900">${adminEscape(data.get("campaign_name") || "-")}</dd></div>
+      <div><dt class="text-xs font-bold text-gray-500">Business</dt><dd class="mt-1 font-bold text-gray-900">${adminEscape(data.get("business_name") || "-")}</dd></div>
+      <div class="sm:col-span-2"><dt class="text-xs font-bold text-gray-500">Advert</dt><dd class="mt-1 text-gray-700">${adminEscape(data.get("creative_headline") || "-")} · ${adminEscape(data.get("creative_body") || "-")}</dd></div>
+    </dl>`;
+}
+
+async function initializeAdvertisingSelfServe() {
+  const packageWrap = document.getElementById("advertise-package-options");
+  if (!packageWrap || packageWrap.dataset.loaded === "1") {
+    setAdvertisingSelfServeStep(advertisingSelfServeStep);
+    return;
+  }
+  packageWrap.dataset.loaded = "1";
+  const form = document.getElementById("advertise-selfserve-form");
+  const user = authState?.user || {};
+  const setIfEmpty = (name, value) => {
+    const field = form?.elements?.namedItem(name);
+    if (field && !field.value && value) field.value = value;
+  };
+  setIfEmpty("full_name", [user.first_name, user.last_name].filter(Boolean).join(" "));
+  setIfEmpty("email", user.email);
+  setIfEmpty("phone", user.phone);
+  try {
+    const [packageResponse, readinessResponse] = await Promise.all([
+      apiRequest("/api/advertising/packages", { skipAuth: true }),
+      apiRequest("/api/advertising/readiness", { skipAuth: true })
+    ]);
+    advertisingSelfServePackages = Array.isArray(packageResponse?.data) ? packageResponse.data : [];
+    packageWrap.innerHTML = advertisingSelfServePackages.map((item, index) => `
+      <label class="block rounded-xl border border-[#e4ece8] p-4 cursor-pointer hover:border-[#15603f]">
+        <div class="flex items-start gap-3">
+          <input type="radio" name="package_key" value="${adminAttr(item.key)}" ${index === 0 ? "checked" : ""} onchange="updateAdvertisingQuote()" class="mt-1 accent-[#15603f]">
+          <span class="min-w-0">
+            <strong class="block text-sm text-[#16241d]">${adminEscape(item.label)}</strong>
+            <span class="mt-1 block text-xs leading-relaxed text-[#5b6b62]">${adminEscape(item.description || "")}</span>
+            <span class="mt-2 block text-sm font-black text-[#15603f]">UGX ${Number(item.price_ugx || 0).toLocaleString("en-UG")} · ${Number(item.duration_days || 0) || 1} day${Number(item.duration_days || 0) === 1 ? "" : "s"}</span>
+          </span>
+        </div>
+      </label>`).join("");
+    const readiness = readinessResponse?.data || {};
+    setTextById(
+      "advertise-payment-readiness",
+      readiness.provider_configured
+        ? `${String(readiness.provider || "Payment provider")} hosted checkout is ready.`
+        : "Campaign submission is available; hosted checkout is waiting for provider configuration."
+    );
+  } catch (error) {
+    packageWrap.innerHTML = `<div class="rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-800">The live rate card could not be loaded. Please try again.</div>`;
+    setTextById("advertise-payment-readiness", "Payment readiness could not be checked.");
+  }
+  updateAdvertisingQuote();
+  setAdvertisingSelfServeStep(1);
+}
+
+async function submitAdvertisingSelfServe(event) {
+  event.preventDefault();
+  if (!validateAdvertisingStep(3)) return false;
+  const form = event.currentTarget;
+  const selected = advertisingSelectedPackage();
+  const data = new FormData(form);
+  const submit = form.querySelector("button[type='submit']");
+  const payload = {
+    full_name: String(data.get("full_name") || "").trim(),
+    business_name: String(data.get("business_name") || "").trim(),
+    email: String(data.get("email") || "").trim(),
+    phone: normalizePhoneInput(data.get("phone") || ""),
+    preferred_contact_channel: String(data.get("preferred_contact_channel") || "whatsapp"),
+    package_key: selected?.key || "",
+    product_interests: selected ? [selected.key] : [],
+    campaign_name: String(data.get("campaign_name") || "").trim(),
+    target_locations: String(data.get("target_locations") || "").trim(),
+    target_listing_types: String(data.get("target_listing_types") || "").trim(),
+    desired_duration_days: Number(selected?.duration_days || 0) || 1,
+    budget_ugx: Number(selected?.price_ugx || 0),
+    creative_headline: String(data.get("creative_headline") || "").trim(),
+    creative_body: String(data.get("creative_body") || "").trim(),
+    creative_cta: String(data.get("creative_cta") || "").trim(),
+    creative_brief: [
+      String(data.get("creative_body") || "").trim(),
+      data.get("destination_url") ? `Destination: ${String(data.get("destination_url")).trim()}` : ""
+    ].filter(Boolean).join("\n"),
+    message: String(data.get("creative_body") || "").trim(),
+    source: "advertising_selfserve"
+  };
+  if (!selected) {
+    setAdvertisingStatus("Choose an advertising package.", "error");
+    return false;
+  }
+  if (submit) {
+    submit.disabled = true;
+    submit.textContent = "Submitting campaign…";
+  }
+  setAdvertisingStatus("Saving the campaign request…");
+  try {
+    const mode = derivePortalMode(authState?.user, authState?.user?.portal_mode);
+    if (authState?.user && ["advertiser", "admin"].includes(mode)) {
+      const created = await apiRequest("/api/advertising/campaigns", { method: "POST", body: payload });
+      const campaignId = created?.data?.campaign?.id;
+      if (!campaignId) throw new Error("Campaign reference was not returned.");
+      setAdvertisingStatus(
+        `Campaign <strong>${adminEscape(campaignId)}</strong> is saved for review. `
+        + "After approval, your advertiser dashboard will show the secure hosted payment link. The campaign can go live only after payment.",
+        "success"
+      );
+    } else {
+      const inquiry = await apiRequest("/api/advertising/inquiries", { method: "POST", skipAuth: true, body: payload });
+      setAdvertisingStatus(
+        `Campaign brief saved with reference <strong>${adminEscape(inquiry?.data?.id || "pending")}</strong>. `
+        + `<button type="button" onclick="openAuthSignUp('advertiser')" class="underline font-black">Create an advertiser account</button> or `
+        + `<button type="button" onclick="openAuthSignIn('advertiser')" class="underline font-black">sign in</button> to create the order and continue to secure payment.`,
+        "success"
+      );
+    }
+    trackEvent("advertising_selfserve_submitted", { package_key: selected.key, authenticated: Boolean(authState?.user) });
+  } catch (error) {
+    setAdvertisingStatus(adminEscape(error?.message || "Campaign submission failed. Please try again."), "error");
+  } finally {
+    if (submit) {
+      submit.disabled = false;
+      submit.textContent = "Submit campaign for review";
+    }
+  }
+  return false;
+}
+
 const PAGE_ROUTE_MAP = Object.freeze({
   home: "/",
   sale: "/for-sale",
@@ -39718,6 +40760,7 @@ const PAGE_ROUTE_MAP = Object.freeze({
   land: "/land",
   brokers: "/brokers",
   mortgage: "/mortgage",
+  valuation: "/valuation",
   "ai-chatbot": "/discover-ai-chatbot",
   marketplace: "/marketplace",
   advertise: "/advertise",
@@ -39759,6 +40802,8 @@ const PUBLIC_ROUTE_PAGE_MAP = Object.freeze({
   "/find-brokers": "brokers",
   "/mortgage": "mortgage",
   "/mortgage-finder": "mortgage",
+  "/valuation": "valuation",
+  "/property-valuation": "valuation",
   "/discover-ai-chatbot": "ai-chatbot",
   "/ai-chatbot": "ai-chatbot",
   "/marketplace": "marketplace",
@@ -40058,6 +41103,8 @@ function showPage(page, options = {}) {
   if (targetPage === "admin-dashboard") renderAdminDashboard();
   if (targetPage === "admin-setup-status") renderAdminSetupStatus();
   if (targetPage === "marketplace") loadMarketplacePage();
+  if (targetPage === "advertise") initializeAdvertisingSelfServe();
+  if (targetPage === "valuation") initializeValuationPage();
   if (targetPage === "list-property") {
     if (previousPage !== "list-property") {
       listWizardStep = 1;
@@ -40109,6 +41156,7 @@ const PUBLIC_ROUTE_SKELETON_LABELS = Object.freeze({
   land: "Land",
   brokers: "Brokers",
   mortgage: "Mortgage Finder",
+  valuation: "Valuation",
   "ai-chatbot": "AI Chatbot",
   marketplace: "Marketplace",
   advertise: "Advertise",
@@ -40747,21 +41795,21 @@ function hasActivePublicCategoryFilter(category) {
   const key = publicPaginationKey(category);
   if (key === "sale" || key === "rent") return hasActiveListingFilter(key);
   if (key === "students") {
-    const fieldIds = ["student-q-f", "student-district-f", "student-type-quick-f", "student-budget-f", "student-budget-custom-f", "student-uni-f", "student-amenity-f", "student-category-f", "student-distance-f"];
+    const fieldIds = ["student-q-f", "student-district-f", "student-type-quick-f", "student-budget-f", "student-budget-custom-f", "student-uni-f", "student-amenity-f", "student-category-f", "student-distance-f", "student-origin-f"];
     return fieldIds.some((id) => publicListingFilterValue(id))
       || getRadiusKmFromSelect("student-radius-f") > 0
       || Boolean(getNearMeSearchState("students"))
       || Boolean(publicCategorySortValue("students") !== "newest");
   }
   if (key === "commercial") {
-    const fieldIds = ["commercial-q-f", "commercial-district-f", "commercial-type-f", "commercial-transaction-f", "commercial-min-price-f", "commercial-price-f", "commercial-min-price-custom-f", "commercial-max-price-custom-f", "commercial-size-f", "commercial-max-size-f"];
+    const fieldIds = ["commercial-q-f", "commercial-district-f", "commercial-type-f", "commercial-transaction-f", "commercial-min-price-f", "commercial-price-f", "commercial-min-price-custom-f", "commercial-max-price-custom-f", "commercial-size-f", "commercial-max-size-f", "commercial-origin-f"];
     return fieldIds.some((id) => publicListingFilterValue(id))
       || getRadiusKmFromSelect("commercial-radius-f") > 0
       || Boolean(getNearMeSearchState("commercial"))
       || Boolean(publicCategorySortValue("commercial") !== "newest");
   }
   if (key === "land") {
-    const fieldIds = ["land-q-f", "land-district-f", "land-type-f", "land-transaction-f", "land-min-price-f", "land-price-f", "land-min-price-custom-f", "land-max-price-custom-f", "land-min-size-f", "land-max-size-f", "land-title-f"];
+    const fieldIds = ["land-q-f", "land-district-f", "land-type-f", "land-transaction-f", "land-min-price-f", "land-price-f", "land-min-price-custom-f", "land-max-price-custom-f", "land-min-size-f", "land-max-size-f", "land-title-f", "land-origin-f"];
     return fieldIds.some((id) => publicListingFilterValue(id))
       || getRadiusKmFromSelect("land-radius-f") > 0
       || Boolean(getNearMeSearchState("land"))
@@ -41110,6 +42158,7 @@ function publicInventoryRouteSearchPath(category) {
   if (filters.commercialType) params.set("commercial_type", String(filters.commercialType));
   if (filters.transactionType) params.set("transaction_type", String(filters.transactionType));
   if (filters.landTitleType) params.set("land_title_type", String(filters.landTitleType));
+  if (filters.listingOrigin) params.set("listing_origin", String(filters.listingOrigin));
   if (filters.sort) params.set("sort", String(filters.sort));
   return `/api/properties/search?${params.toString()}`;
 }
@@ -41162,6 +42211,7 @@ function publicCategoryControlSearchPath(category) {
       active = true;
     }
   }
+  add("listing_origin", publicListingFilterValue(`${page === "students" ? "student" : page}-origin-f`));
 
   if (page === "sale") {
     add("min_price", publicFilterNumberOrSelect("sale-min-price-custom-f", "sale-min-price-f"));
@@ -41846,6 +42896,7 @@ const SECTION_SEARCH_CONFIGS = {
       { id: "sale-beds-f", key: "maxBeds" },
       { id: "sale-baths-f", key: "bathrooms" },
       { id: "sale-type-f", key: "propertyType" },
+      { id: "sale-origin-f", key: "listingOrigin" },
       { id: "sale-amenity-f", key: "amenities" }
     ]
   },
@@ -41865,6 +42916,7 @@ const SECTION_SEARCH_CONFIGS = {
       { id: "rent-beds-f", key: "maxBeds" },
       { id: "rent-baths-f", key: "bathrooms" },
       { id: "rent-type-f", key: "propertyType" },
+      { id: "rent-origin-f", key: "listingOrigin" },
       { id: "rent-furnished-f", key: "furnished" },
       { id: "rent-amenity-f", key: "amenities" }
     ]
@@ -41882,6 +42934,7 @@ const SECTION_SEARCH_CONFIGS = {
       { id: "student-budget-f", key: "maxPrice" },
       { id: "student-uni-f", key: "studentCampus" },
       { id: "student-amenity-f", key: "amenities" },
+      { id: "student-origin-f", key: "listingOrigin" },
       { id: "student-sort-f", key: "sort" }
     ]
   },
@@ -41898,6 +42951,7 @@ const SECTION_SEARCH_CONFIGS = {
       { id: "land-min-price-f", key: "minPrice" },
       { id: "land-price-f", key: "maxPrice" },
       { id: "land-min-size-f", key: "minSize" },
+      { id: "land-origin-f", key: "listingOrigin" },
       { id: "land-sort-f", key: "sort" }
     ]
   },
@@ -41915,6 +42969,7 @@ const SECTION_SEARCH_CONFIGS = {
       { id: "commercial-min-price-f", key: "minPrice" },
       { id: "commercial-price-f", key: "maxPrice" },
       { id: "commercial-size-f", key: "minSize" },
+      { id: "commercial-origin-f", key: "listingOrigin" },
       { id: "commercial-sort-f", key: "sort" }
     ]
   },
@@ -42025,7 +43080,7 @@ function syncSectionSearchShell(page, options = {}) {
 
 function syncActiveRouteSearchHandoff(source = "route_query_sync") {
   const page = pageForPublicRoute(window.location.pathname || "/");
-  if (!page || !routeQueryValueForSectionPage()) return false;
+  if (!page || !routeSearchHandoffPayload(page)) return false;
   syncSectionSearchShell(page, { forceRouteQuery: true });
   if (publicInventoryRouteSearchPath(activePublicInventoryCategoryFromRoute()) && /backend_results|route_query|route_search|public_inventory|active_route_search|initial_route_search/i.test(source)) {
     return true;
@@ -42097,6 +43152,7 @@ function sectionSearchFilterPayload(config, values = {}) {
   const filters = {
     propertyType: values.propertyType || "",
     transactionType: values.transactionType || "",
+    listingOrigin: values.listingOrigin || "",
     minPrice: parseInt(values.minPrice || "0", 10) || 0,
     maxPrice: parseInt(values.maxPrice || "0", 10) || 0,
     bedrooms: values.bedrooms || "",
@@ -42515,6 +43571,18 @@ function publicListingFilterText(property) {
   ].join(" ").toLowerCase();
 }
 
+function publicListingOrigin(property = {}) {
+  if (isFoundOnlineListing(property)) return "found_online";
+  const explicit = String(property.listing_origin || "").trim().toLowerCase();
+  if (["private", "agent"].includes(explicit)) return explicit;
+  return listingSourceMeta(property).key;
+}
+
+function publicListingMatchesOrigin(property = {}, wanted = "") {
+  const origin = String(wanted || "").trim().toLowerCase();
+  return !origin || publicListingOrigin(property) === origin;
+}
+
 function publicListingMatchesFurnishing(text, value) {
   const wanted = String(value || "").toLowerCase().trim();
   if (!wanted) return true;
@@ -42528,8 +43596,8 @@ function publicListingMatchesFurnishing(text, value) {
 function hasActiveListingFilter(page) {
   const key = page === "rent" ? "rent" : "sale";
   const fieldIds = key === "rent"
-    ? ["rent-location-f", "rent-district-f", "rent-min-price-f", "rent-price-f", "rent-min-price-custom-f", "rent-max-price-custom-f", "rent-min-beds-f", "rent-beds-f", "rent-type-f", "rent-baths-f", "rent-furnished-f", "rent-amenity-f"]
-    : ["sale-location-f", "sale-district-f", "sale-min-price-f", "sale-price-f", "sale-min-price-custom-f", "sale-max-price-custom-f", "sale-min-beds-f", "sale-beds-f", "sale-type-f", "sale-baths-f", "sale-title-f", "sale-amenity-f"];
+    ? ["rent-location-f", "rent-district-f", "rent-min-price-f", "rent-price-f", "rent-min-price-custom-f", "rent-max-price-custom-f", "rent-min-beds-f", "rent-beds-f", "rent-type-f", "rent-baths-f", "rent-furnished-f", "rent-amenity-f", "rent-origin-f"]
+    : ["sale-location-f", "sale-district-f", "sale-min-price-f", "sale-price-f", "sale-min-price-custom-f", "sale-max-price-custom-f", "sale-min-beds-f", "sale-beds-f", "sale-type-f", "sale-baths-f", "sale-title-f", "sale-amenity-f", "sale-origin-f"];
   const hasFieldFilter = fieldIds.some((id) => publicListingFilterValue(id));
   const sortValue = publicCategorySortValue(key);
   const radiusKm = getRadiusKmFromSelect(`${key}-radius-f`);
@@ -42552,6 +43620,7 @@ function filterListings(page, options = {}) {
     const minBaths = parseInt(document.getElementById("sale-baths-f")?.value || "0", 10);
     const titleType = (document.getElementById("sale-title-f")?.value || "").toLowerCase().trim();
     const amenity = (document.getElementById("sale-amenity-f")?.value || "").toLowerCase().trim();
+    const origin = (document.getElementById("sale-origin-f")?.value || "").toLowerCase().trim();
     const sort = publicCategorySortValue("sale");
     syncPublicCategorySortValue("sale", sort);
     list = list.filter((p) => {
@@ -42566,7 +43635,8 @@ function filterListings(page, options = {}) {
       const typeMatch = !type || ((p.subtype || "").toLowerCase().includes(type) || text.includes(type));
       const titleMatch = !titleType || text.includes(titleType);
       const amenityMatch = !amenity || text.includes(amenity);
-      return qMatch && dMatch && minBedsMatch && maxBedsMatch && minBathsMatch && minMatch && maxMatch && typeMatch && titleMatch && amenityMatch;
+      const originMatch = publicListingMatchesOrigin(p, origin);
+      return qMatch && dMatch && minBedsMatch && maxBedsMatch && minBathsMatch && minMatch && maxMatch && typeMatch && titleMatch && amenityMatch && originMatch;
     });
     if (sort === "price_asc") list.sort(comparePublicPriceAsc);
     if (sort === "price_desc") list.sort(comparePublicPriceDesc);
@@ -42596,6 +43666,7 @@ function filterListings(page, options = {}) {
     const minBaths = parseInt(document.getElementById("rent-baths-f")?.value || "0", 10);
     const furnishing = (document.getElementById("rent-furnished-f")?.value || "").toLowerCase().trim();
     const amenity = (document.getElementById("rent-amenity-f")?.value || "").toLowerCase().trim();
+    const origin = (document.getElementById("rent-origin-f")?.value || "").toLowerCase().trim();
     const sort = publicCategorySortValue("rent");
     syncPublicCategorySortValue("rent", sort);
     list = list.filter((p) => {
@@ -42610,7 +43681,8 @@ function filterListings(page, options = {}) {
       const typeMatch = !type || ((p.subtype || "").toLowerCase().includes(type) || text.includes(type));
       const furnishingMatch = publicListingMatchesFurnishing(text, furnishing);
       const amenityMatch = !amenity || text.includes(amenity);
-      return qMatch && dMatch && minBedsMatch && maxBedsMatch && minBathsMatch && minMatch && maxMatch && typeMatch && furnishingMatch && amenityMatch;
+      const originMatch = publicListingMatchesOrigin(p, origin);
+      return qMatch && dMatch && minBedsMatch && maxBedsMatch && minBathsMatch && minMatch && maxMatch && typeMatch && furnishingMatch && amenityMatch && originMatch;
     });
     if (sort === "price_asc") list.sort(comparePublicPriceAsc);
     if (sort === "price_desc") list.sort(comparePublicPriceDesc);
@@ -42645,6 +43717,7 @@ function filterStudents(options = {}) {
   syncPublicCategorySortValue("students", sort);
   const max = publicListingFilterNumber("student-budget-custom-f") || parseInt(document.getElementById("student-budget-f")?.value || "0", 10);
   const maxDistance = parseFloat(document.getElementById("student-distance-f")?.value || "0");
+  const origin = (document.getElementById("student-origin-f")?.value || "").toLowerCase().trim();
   let list = getPublicListings().filter((p) => isStudentDiscoverable(p));
   list = list.filter((p) => {
     const text = publicListingFilterText(p);
@@ -42665,7 +43738,8 @@ function filterStudents(options = {}) {
     const vMatch = !verifiedOnly || !!p.student_verified || !!p.students_welcome;
     const maxMatch = !max || p.price <= max;
     const distanceMatch = !maxDistance || (typeof p.distance_to_uni_km === "number" && p.distance_to_uni_km <= maxDistance);
-    return typeMatch && qMatch && dMatch && uMatch && aMatch && cMatch && vMatch && maxMatch && distanceMatch;
+    const originMatch = publicListingMatchesOrigin(p, origin);
+    return typeMatch && qMatch && dMatch && uMatch && aMatch && cMatch && vMatch && maxMatch && distanceMatch && originMatch;
   });
   if (sort === "price_asc") list.sort(comparePublicPriceAsc);
   if (sort === "price_desc") list.sort(comparePublicPriceDesc);
@@ -46787,6 +47861,7 @@ function filterCommercial(options = {}) {
   const max = publicListingFilterNumber("commercial-max-price-custom-f") || parseInt(document.getElementById("commercial-price-f")?.value || "0", 10);
   const minSize = parseFloat(document.getElementById("commercial-size-f")?.value || "0");
   const maxSize = parseFloat(document.getElementById("commercial-max-size-f")?.value || "0");
+  const origin = (document.getElementById("commercial-origin-f")?.value || "").toLowerCase().trim();
   const sort = publicCategorySortValue("commercial");
   syncPublicCategorySortValue("commercial", sort);
   let list = getPublicListings().filter((p) => normalizeType(p.type) === "commercial");
@@ -46801,7 +47876,8 @@ function filterCommercial(options = {}) {
     const maxMatch = !max || p.price <= max;
     const sizeMatch = !minSize || sizeNum >= minSize;
     const maxSizeMatch = !maxSize || sizeNum <= maxSize;
-    return qMatch && dMatch && tMatch && transactionMatch && minMatch && maxMatch && sizeMatch && maxSizeMatch;
+    const originMatch = publicListingMatchesOrigin(p, origin);
+    return qMatch && dMatch && tMatch && transactionMatch && minMatch && maxMatch && sizeMatch && maxSizeMatch && originMatch;
   });
   if (sort === "price_asc") list.sort(comparePublicPriceAsc);
   if (sort === "price_desc") list.sort(comparePublicPriceDesc);
@@ -46833,6 +47909,7 @@ function filterLand(options = {}) {
   const minSize = parseFloat(document.getElementById("land-min-size-f")?.value || "0");
   const maxSize = parseFloat(document.getElementById("land-max-size-f")?.value || "0");
   const titleType = (document.getElementById("land-title-f")?.value || "").toLowerCase().trim();
+  const origin = (document.getElementById("land-origin-f")?.value || "").toLowerCase().trim();
   const sort = publicCategorySortValue("land");
   syncPublicCategorySortValue("land", sort);
   let list = getPublicListings().filter((p) => normalizeType(p.type) === "land");
@@ -46848,7 +47925,8 @@ function filterLand(options = {}) {
     const sizeMatch = !minSize || sizeNum >= minSize;
     const maxSizeMatch = !maxSize || sizeNum <= maxSize;
     const titleMatch = !titleType || text.includes(titleType);
-    return qMatch && dMatch && tMatch && transactionMatch && minMatch && maxMatch && sizeMatch && maxSizeMatch && titleMatch;
+    const originMatch = publicListingMatchesOrigin(p, origin);
+    return qMatch && dMatch && tMatch && transactionMatch && minMatch && maxMatch && sizeMatch && maxSizeMatch && titleMatch && originMatch;
   });
   if (sort === "price_asc") list.sort(comparePublicPriceAsc);
   if (sort === "price_desc") list.sort(comparePublicPriceDesc);
@@ -48684,6 +49762,9 @@ async function openDetail(id, options = {}) {
             ${sourceContactUrl && !publicWhatsappPhone ? `<p class="text-[11px] text-gray-500 mb-2">${adminEscape(sourceContactCopy || translatePropertyUi("No phone number is published. Use the source page to contact the lister."))}</p>` : ""}
           `}
           <button id="detail-save-btn" type="button" onclick="toggleSave(${detailIdArg})" class="${getDetailSaveButtonClasses(p.id)}">${getDetailSaveButtonContent(p.id)}</button>
+          <button type="button" onclick="openValuationForProperty(${detailIdArg})" class="mt-2 w-full border border-emerald-200 bg-emerald-50 text-emerald-800 py-2.5 rounded-xl font-semibold hover:bg-emerald-100">
+            <i class="fas fa-chart-line mr-1" aria-hidden="true"></i> ${adminEscape(valuationTr("estimateButton"))}
+          </button>
           ${!isFoundOnlineContact ? foundOnlineContactPanelHtml : ""}
           ${internalInquiryFormHtml}
           ${showMortgageWidget ? `<div class="mt-4 pt-4 border-t border-gray-100">

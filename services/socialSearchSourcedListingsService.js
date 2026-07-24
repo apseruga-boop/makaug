@@ -955,10 +955,7 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
   const lowSignalOnlySuppressed = sourceQuality.suppressed && /^low_signal_/i.test(String(sourceQuality.reason || ''));
   const sourceQualityHardBlocked = sourceQuality.suppressed && !lowSignalOnlySuppressed;
   const positiveGateHardBlocked = positiveListingGate.reason === 'not_a_listing'
-    || (
-      positiveListingGate.reason === 'non_uganda_location'
-      && /foreign|outside uganda/i.test(String((positiveListingGate.details || []).join(' ')))
-    );
+    || positiveListingGate.reason === 'non_uganda_location';
   const manualExactSocialIntake = isManualExactSocialIntake(item);
   const specificPropertySignal = hasSpecificPropertySignal(item);
   const dateWindowAllowsQueue = manualExactSocialIntake || dateStatus !== 'before_2026_source_window';
@@ -1226,6 +1223,15 @@ function normalizedContactKeyForSource(agent = {}, item = {}) {
   if (email) return `email:${email}`;
   const contactUrl = sourceContactUrlForAgent(agent, item).trim().toLowerCase().replace(/\/+$/g, '');
   return contactUrl ? `source:${contactUrl}` : '';
+}
+
+function contentFingerprintForSourceItem(item = {}, agent = sourceAgentForItem(item)) {
+  const phone = normalizedContactPhoneKey(agent.phone || agent.phoneAlt || item.phone || item.contactPhone || '').replace(/^phone:/, '');
+  const area = compactText(item.area || item.location || item.district || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const listingType = normalizeFoundOnlineListingType(item.listingType || item.listing_type || item.property_type || item.title || '');
+  const price = Math.max(0, Math.round(Number(item.price || item.price_ugx || 0) || 0));
+  if (!phone || !area || !listingType || !price) return '';
+  return [phone, area, listingType, price].join('|');
 }
 
 function sourceContactMethodForAgent(agent = {}) {
@@ -1742,6 +1748,7 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
     source_batch: itemBatchId(item),
     source_listing_key: item.key,
     source_registry_key: agent.key || item.agentKey || '',
+    content_fingerprint: contentFingerprintForSourceItem(item, agent),
     source_platform: sourcePlatform,
     source_type: item.sourceType || item.source_type || 'found_online_source_post',
     transaction_type: item.transactionType || item.transaction_type || null,
@@ -2505,7 +2512,8 @@ async function existingFoundOnlineSourcePostListings(client, items = []) {
   const keys = items.map((item) => item.key).filter(Boolean);
   const urls = uniqueUrls(items.map((item) => sourceUrlForItem(item)));
   const normalizedUrls = [...new Set(items.map(normalizedSourceUrlForItem).filter(Boolean))];
-  if (!keys.length && !urls.length) return new Map();
+  const fingerprints = [...new Set(items.map((item) => contentFingerprintForSourceItem(item)).filter(Boolean))];
+  if (!keys.length && !urls.length && !fingerprints.length) return new Map();
   const lookupUrls = uniqueUrls([...urls, ...normalizedUrls]);
   const selectExisting = `SELECT
        id::text AS id,
@@ -2515,6 +2523,7 @@ async function existingFoundOnlineSourcePostListings(client, items = []) {
        inquiry_reference,
        lister_name,
        extra_fields->>'source_listing_key' AS source_listing_key,
+       extra_fields->>'content_fingerprint' AS content_fingerprint,
        extra_fields->>'source_post_url' AS source_post_url,
        COALESCE(
          extra_fields->>'source_url',
@@ -2524,19 +2533,19 @@ async function existingFoundOnlineSourcePostListings(client, items = []) {
          extra_fields->>'original_url'
        ) AS source_url
      FROM properties`;
-  const result = lookupUrls.length
-    ? await client.query(
-      `${selectExisting}
-       WHERE COALESCE(status, '') <> 'deleted'
-         AND COALESCE(extra_fields->>'source_url', extra_fields->>'source_post_url', '') = ANY($1::text[])`,
-      [lookupUrls]
-    )
-    : await client.query(
-      `${selectExisting}
-       WHERE COALESCE(status, '') <> 'deleted'
-         AND extra_fields->>'source_listing_key' = ANY($1::text[])`,
-      [keys]
-    );
+  const result = await client.query(
+    `${selectExisting}
+     WHERE COALESCE(status, '') <> 'deleted'
+       AND (
+         COALESCE(extra_fields->>'source_url', extra_fields->>'source_post_url', '') = ANY($1::text[])
+         OR COALESCE(extra_fields->>'source_listing_key', '') = ANY($2::text[])
+         OR (
+           COALESCE(extra_fields->>'content_fingerprint', '') <> ''
+           AND extra_fields->>'content_fingerprint' = ANY($3::text[])
+         )
+       )`,
+    [lookupUrls, keys, fingerprints]
+  );
   const existing = new Map();
   for (const row of result.rows) {
     const payload = {
@@ -2546,6 +2555,7 @@ async function existingFoundOnlineSourcePostListings(client, items = []) {
     if (row.source_listing_key) existing.set(row.source_listing_key, payload);
     if (row.source_post_url) existing.set(row.source_post_url, payload);
     if (row.source_url) existing.set(row.source_url, payload);
+    if (row.content_fingerprint) existing.set(`fingerprint:${row.content_fingerprint}`, payload);
     const normalized = normalizeSourceUrl(row.source_post_url) || normalizeSourceUrl(row.source_url);
     if (normalized) existing.set(normalized, payload);
   }
@@ -2554,10 +2564,14 @@ async function existingFoundOnlineSourcePostListings(client, items = []) {
 
 function existingFoundOnlineRowForItem(existing = new Map(), item = {}) {
   const sourceUrl = sourceUrlForItem(item);
-  return existing.get(item.key)
+  const exact = existing.get(item.key)
     || existing.get(sourceUrl)
     || existing.get(normalizedSourceUrlForItem(item))
     || null;
+  if (exact) return { ...exact, duplicate_match_type: 'exact_source_url_duplicate' };
+  const fingerprint = contentFingerprintForSourceItem(item);
+  const contentMatch = fingerprint ? existing.get(`fingerprint:${fingerprint}`) : null;
+  return contentMatch ? { ...contentMatch, duplicate_match_type: 'content_fingerprint_duplicate' } : null;
 }
 
 function alreadyPresentFoundOnlineRow(item = {}, agent = {}, existingRow = {}) {
@@ -2571,15 +2585,18 @@ function alreadyPresentFoundOnlineRow(item = {}, agent = {}, existingRow = {}) {
     moderation_stage: existingRow.moderation_stage || '',
     property_url: existingRow.property_url || '',
     source_url: sourceUrlForItem(item),
-    reason: 'already_queued',
+    reason: existingRow.duplicate_match_type || 'already_queued',
+    duplicate_match_type: existingRow.duplicate_match_type || 'exact_source_url_duplicate',
     already_present: true,
   };
 }
 
 function duplicateWarningsForFoundOnlineRows(rows = []) {
   return rows.map((item) => ({
-    type: 'exact_source_url_duplicate',
-    message: 'This exact social/source link has already been imported to makaug.',
+    type: item.duplicate_match_type || 'exact_source_url_duplicate',
+    message: item.duplicate_match_type === 'content_fingerprint_duplicate'
+      ? 'A listing with the same phone, area, property type, and price has already been imported.'
+      : 'This exact social/source link has already been imported to makaug.',
     key: item.key,
     id: item.id,
     title: item.title,
@@ -2723,6 +2740,7 @@ async function queueFoundOnlineSourcePostListings({
   const sourceQualitySuppressedRecords = sourceReviewRecords.filter((item) => item.intake?.source_quality_suppressed);
   const suppressedSourceRecords = sourceReviewRecords.filter((item) => item.intake?.suppressed_source_url);
   const lowSignalSourceLocationRecords = sourceReviewRecords.filter((item) => item.reason === 'low_signal_source_location');
+  const foreignRejectedRecords = sourceReviewRecords.filter((item) => item.reason === 'non_uganda_location');
 
   let previewExisting = new Map();
   if (dryRun && db?.pool) {
@@ -2784,6 +2802,7 @@ async function queueFoundOnlineSourcePostListings({
       suppressed_source_count: suppressedSourceRecords.length,
       source_quality_suppressed_count: sourceQualitySuppressedRecords.length,
       low_signal_source_location_count: lowSignalSourceLocationRecords.length,
+      foreign_rejected_count: foreignRejectedRecords.length,
       created_properties: 0,
       would_create_properties: dryRunRows.length,
       existing_properties: alreadyPresent.length,
@@ -2802,6 +2821,7 @@ async function queueFoundOnlineSourcePostListings({
       suppressed_source_records: suppressedSourceRecords,
       source_quality_suppressed_records: sourceQualitySuppressedRecords,
       low_signal_source_location_records: lowSignalSourceLocationRecords,
+      foreign_rejected_records: foreignRejectedRecords,
       daily_target_status: {
         ...socialSearchDailyTargetStatus(),
         imported_post_eligible_count: eligible.length,
@@ -2914,6 +2934,7 @@ async function queueFoundOnlineSourcePostListings({
       suppressed_source_count: suppressedSourceRecords.length,
       source_quality_suppressed_count: sourceQualitySuppressedRecords.length,
       low_signal_source_location_count: lowSignalSourceLocationRecords.length,
+      foreign_rejected_count: foreignRejectedRecords.length,
       source_review_records: skippedListings,
       persistence_verified: persistence.verified,
       persisted_property_count: persistence.count,
@@ -2921,6 +2942,7 @@ async function queueFoundOnlineSourcePostListings({
       suppressed_source_records: suppressedSourceRecords,
       source_quality_suppressed_records: sourceQualitySuppressedRecords,
       low_signal_source_location_records: lowSignalSourceLocationRecords,
+      foreign_rejected_records: foreignRejectedRecords,
       daily_target_status: {
         ...socialSearchDailyTargetStatus({ createdCount: created.length, alreadyPresentCount: alreadyPresent.length }),
         imported_post_eligible_count: evaluated.filter(({ intake }) => intake.eligible).length,
@@ -3631,6 +3653,7 @@ module.exports = {
   socialSearchDailyTargetStatus,
   sourcePostAutoLiveStatusFor,
   sourcePostMeetsLaunchIntakeRule,
+  contentFingerprintForSourceItem,
   sourceUrlForItem,
   sourceImageRowsFor,
   whatsappShareMessage,
