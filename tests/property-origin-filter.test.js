@@ -15,6 +15,10 @@ assert(routes.includes("normalizeListingOrigin"), 'properties API must normalize
 assert(routes.includes("listing_origin || req.query.listingOrigin"), 'properties API must accept listing_origin');
 assert(routes.includes("${listingOriginSql('p')} = ?"), 'properties API must filter against one canonical origin expression');
 assert(routes.includes("AS listing_origin"), 'public property rows must expose their canonical origin');
+assert(
+  routes.includes('const summaryTimeoutMs = listingOrigin ? 4000 : (summaryOnly ? 500 : undefined)'),
+  'cold origin-filter counts must have a bounded production-safe query budget'
+);
 
 ['sale', 'rent', 'student', 'commercial', 'land'].forEach((category) => {
   assert(html.includes(`id="${category}-origin-f"`), `${category} refine panel must include an origin filter`);

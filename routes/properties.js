@@ -2286,10 +2286,13 @@ async function listPropertiesHandler(req, res, next) {
     let opportunitySummary;
     let opportunitySummaryMeta = null;
     if (includeSummary) {
+      // Origin classification reads a handful of legacy JSON markers. Give that
+      // bounded count path enough time to finish on a cold production cache.
+      const summaryTimeoutMs = listingOrigin ? 4000 : (summaryOnly ? 500 : undefined);
       const summaryResult = await loadPublicOpportunitySummary({
         where,
         values,
-        timeoutMs: summaryOnly ? 500 : undefined
+        timeoutMs: summaryTimeoutMs
       });
       opportunitySummary = summaryResult.summary;
       opportunitySummaryMeta = summaryResult.meta;
