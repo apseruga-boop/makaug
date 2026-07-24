@@ -14,7 +14,9 @@ assert.strictEqual(helpers.trimmedMean([1, 2, 3, 4, 5, 6, 7, 8, 9, 100]), 5.5);
 assert.ok(Math.abs(helpers.targetLandSizeSqm(1, 'acres') - 4046.8564224) < 0.01);
 assert.ok(Math.abs(helpers.targetLandSizeSqm(100, 'decimals') - 4046.8564224) < 0.01);
 assert.ok(Math.abs(helpers.parseLandSizeText('Size 50ft X 100ft') - 464.5152) < 0.01);
+assert.ok(Math.abs(helpers.parseLandSizeText('50*100 in Najjera') - 464.5152) < 0.01);
 assert.ok(Math.abs(helpers.parseLandSizeText('Magnificent Prime 2Acres') - 8093.7128448) < 0.01);
+assert.ok(Math.abs(helpers.parseLandSizeText('20 DCMLS title land') - 809.37128448) < 0.01);
 assert.ok(Math.abs(helpers.landSizeSqm({
   title: 'Plot in Najjera',
   extra_fields: { source_hover_description: 'Size 50ft X 100ft' }
