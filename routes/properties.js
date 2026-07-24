@@ -2286,9 +2286,12 @@ async function listPropertiesHandler(req, res, next) {
     let opportunitySummary;
     let opportunitySummaryMeta = null;
     if (includeSummary) {
-      // Origin classification reads a handful of legacy JSON markers. Give that
-      // bounded count path enough time to finish on a cold production cache.
-      const summaryTimeoutMs = listingOrigin ? 4000 : (summaryOnly ? 500 : undefined);
+      // Filtered counts can touch canonical-location and legacy-origin markers.
+      // Keep the work bounded, but do not kill an otherwise healthy search at
+      // the generic 900 ms cold-cache budget.
+      const summaryTimeoutMs = (listingOrigin || area || district || propertyType)
+        ? 4000
+        : (summaryOnly ? 500 : undefined);
       const summaryResult = await loadPublicOpportunitySummary({
         where,
         values,
@@ -2719,6 +2722,18 @@ async function listPropertiesHandler(req, res, next) {
 
 router.get('/search', listPropertiesHandler);
 router.get('/', listPropertiesHandler);
+
+const PROPERTY_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+router.param('id', (req, res, next, id) => {
+  if (!PROPERTY_UUID_PATTERN.test(String(id || '').trim())) {
+    return res.status(400).json({
+      ok: false,
+      error: 'Invalid property id'
+    });
+  }
+  return next();
+});
 
 router.get('/:id', async (req, res, next) => {
   try {

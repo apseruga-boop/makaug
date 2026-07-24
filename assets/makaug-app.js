@@ -7980,7 +7980,7 @@ function applyLanguageUI() {
   setTextById("nav-land", tr("navLand"));
   setTextById("nav-brokers", tr("navBrokers"));
   setTextById("nav-mortgage", tr("navMortgage"));
-  setTextById("nav-valuation", valuationTr("title"));
+  setTextById("nav-valuation", valuationTr("navTitle"));
   setTextById("nav-ai", currentLang === "en" ? "AI Chatbot" : tr("navAI"));
   setTextById("nav-marketplace", marketplaceTr("breadcrumbMarketplace"));
   setTextById("nav-about", translateListingLabel("About Us"));
@@ -7991,7 +7991,7 @@ function applyLanguageUI() {
   setTextById("mnav-land", tr("navLand"));
   setTextById("mnav-brokers", tr("navBrokers"));
   setTextById("mnav-mortgage", tr("navMortgage"));
-  setTextById("mnav-valuation", valuationTr("title"));
+  setTextById("mnav-valuation", valuationTr("navTitle"));
   setTextById("mnav-ai", currentLang === "en" ? "AI Chatbot" : tr("navAI"));
   setTextById("mnav-marketplace", marketplaceTr("breadcrumbMarketplace"));
   setTextById("mnav-about", translateListingLabel("About Us"));
@@ -39926,7 +39926,8 @@ function renderAll() {
 
 const VALUATION_UI_EN = Object.freeze({
   eyebrow: "Evidence from live makaug listings",
-  title: "Estimate a property value",
+  navTitle: "Property Value",
+  title: "Property Value Calculator",
   subtitle: "Compare approved public listings in the same area. This is a market guide, not a formal valuation.",
   formTitle: "Tell us about the property",
   formSubtitle: "We will compare it with real listings already on makaug.",
@@ -39968,7 +39969,7 @@ const VALUATION_UI_EN = Object.freeze({
   estimatedValue: "Estimated market guide",
   evidence: "Evidence",
   comparableListings: "comparable listings",
-  comparablesTitle: "Comparable listings used",
+  comparablesTitle: "Properties used in this estimate",
   comparablesSubtitle: "Open any listing to inspect the evidence.",
   askAi: "Ask makaug AI about your search",
   methodTitle: "Methodology and worked example",
@@ -39991,7 +39992,8 @@ const VALUATION_UI_EN = Object.freeze({
 const VALUATION_UI_OVERRIDES = Object.freeze({
   lg: {
     eyebrow: "Obujulizi okuva ku bifo ebiri ku makaug",
-    title: "Balirira omuwendo gw'ekibanja oba ennyumba",
+    navTitle: "Omuwendo gw'ekifo",
+    title: "Ekyuma ekibalirira omuwendo gw'ekifo",
     subtitle: "Geraageranya n'ebifo ebikkiriziddwa mu kitundu kye kimu. Kino kya kukuyamba, si valuation ya mateeka.",
     formTitle: "Tubuulire ku kifo",
     formSubtitle: "Tugenda okukigeraageranya n'ebifo ebiri ku makaug.",
@@ -40012,7 +40014,8 @@ const VALUATION_UI_OVERRIDES = Object.freeze({
   },
   sw: {
     eyebrow: "Ushahidi kutoka matangazo ya moja kwa moja ya makaug",
-    title: "Kadiria thamani ya mali",
+    navTitle: "Thamani ya Mali",
+    title: "Kikokotoo cha Thamani ya Mali",
     subtitle: "Linganisha matangazo yaliyoidhinishwa katika eneo moja. Huu ni mwongozo wa soko, si uthamini rasmi.",
     formTitle: "Tuambie kuhusu mali", formSubtitle: "Tutailinganisha na matangazo halisi kwenye makaug.", free: "Mwongozo wa bure",
     category: "Aina ya mali", categorySale: "Nyumba za kuuza", categoryRent: "Nyumba za kukodisha", categoryLand: "Ardhi",
@@ -40029,7 +40032,7 @@ const VALUATION_UI_OVERRIDES = Object.freeze({
     range: "Kiwango kinachowezekana: {low} – {high}", viewListing: "Tazama tangazo"
   },
   ac: {
-    eyebrow: "Caden ki listing ma makaug", title: "Pim wel pa ot ki lobo", subtitle: "Por ki listing ma gimoko i kabedo acel. Man obedo lacim me cato, pe valuation me cik.",
+    eyebrow: "Caden ki listing ma makaug", navTitle: "Wel pa property", title: "Lacal wel pa property", subtitle: "Por ki listing ma gimoko i kabedo acel. Man obedo lacim me cato, pe valuation me cik.",
     formTitle: "Waci botwa lok kom property", free: "Lacim me nono", category: "Kit property", categorySale: "Ot me cato",
     categoryRent: "Ot me bongo", categoryLand: "Ngom", categoryCommercial: "Commercial", categoryStudent: "Kabedo pa lutino kwan",
     location: "Kabedo onyo town", district: "District", chooseDistrict: "Yer district", bedrooms: "Ot nino",
@@ -40040,7 +40043,7 @@ const VALUATION_UI_OVERRIDES = Object.freeze({
     viewListing: "Nen listing"
   },
   ny: {
-    eyebrow: "Obuhame kuruga aha makaug", title: "Teekateeka omuhendo gw'itaka nari enju", subtitle: "Gyeragyeranisa n'ebyamamaza ebihamiibwe omu mwanya gumwe. N'obuhabuzi, ti valuation y'amateeka.",
+    eyebrow: "Obuhame kuruga aha makaug", navTitle: "Omuhendo gwa property", title: "Ekyoma ky'okubara omuhendo gwa property", subtitle: "Gyeragyeranisa n'ebyamamaza ebihamiibwe omu mwanya gumwe. N'obuhabuzi, ti valuation y'amateeka.",
     formTitle: "Tugambire aha property", free: "Obuhabuzi bwa busha", category: "Ekika kya property", categorySale: "Enju y'okutunda",
     categoryRent: "Enju y'okupangisa", categoryLand: "Itaka", categoryCommercial: "Eby'obushuubuzi", categoryStudent: "Amacumbi g'abeegi",
     location: "Omwanya nari town", district: "District", chooseDistrict: "Toorana district", bedrooms: "Ebishenge",
@@ -40051,7 +40054,7 @@ const VALUATION_UI_OVERRIDES = Object.freeze({
     insufficient: "Ebyogerwa tibikumara.", viewListing: "Reeba listing"
   },
   rn: {
-    eyebrow: "Obuhame kuruga aha makaug", title: "Bara omuhendo gwa property", subtitle: "Gyeragyeranisa na listing ezihamiibwe omu mwanya gumwe. N'obuhabuzi bw'akatale.",
+    eyebrow: "Obuhame kuruga aha makaug", navTitle: "Omuhendo gwa property", title: "Ekyoma ky'okubara omuhendo gwa property", subtitle: "Gyeragyeranisa na listing ezihamiibwe omu mwanya gumwe. N'obuhabuzi bw'akatale.",
     formTitle: "Tugambire ahari property", free: "Obuhabuzi bwa busha", category: "Ekika kya property", categorySale: "Enju y'okutunda",
     categoryRent: "Enju y'okupangisa", categoryLand: "Itaka", categoryCommercial: "Commercial", categoryStudent: "Amacumbi g'abeegi",
     location: "Omwanya nari town", district: "District", chooseDistrict: "Toorana district", bedrooms: "Ebishenge",
@@ -40062,7 +40065,7 @@ const VALUATION_UI_OVERRIDES = Object.freeze({
     viewListing: "Reeba listing"
   },
   sm: {
-    eyebrow: "Obujulizi okuva ku makaug", title: "Balirira omuwendo gwa property", subtitle: "Geraageranya n'ebirango ebikkirizibwa mu kifo kye kimu. Kino kya kukuyamba.",
+    eyebrow: "Obujulizi okuva ku makaug", navTitle: "Omuwendo gwa property", title: "Ekyuma ekibalirira omuwendo gwa property", subtitle: "Geraageranya n'ebirango ebikkirizibwa mu kifo kye kimu. Kino kya kukuyamba.",
     formTitle: "Tukobere ku property", free: "Obuyambi bwa bwereere", category: "Ekika kya property", categorySale: "Ennyumba etundibwa",
     categoryRent: "Ennyumba epangisibwa", categoryLand: "Ettaka", categoryCommercial: "Eby'obusuubuzi", categoryStudent: "Amayumba g'abeegi",
     location: "Ekifo oba kibuga", district: "Disitulikiti", chooseDistrict: "Londa disitulikiti", bedrooms: "Ebisenge",
@@ -40073,7 +40076,7 @@ const VALUATION_UI_OVERRIDES = Object.freeze({
     viewListing: "Laba ekirango"
   },
   am: {
-    eyebrow: "ከቀጥታ makaug ዝርዝሮች የተገኘ ማስረጃ", title: "የንብረት ዋጋ ግምት", subtitle: "በተመሳሳይ አካባቢ የተፈቀዱ ዝርዝሮችን ያወዳድሩ። ይህ የገበያ መመሪያ ነው።",
+    eyebrow: "ከቀጥታ makaug ዝርዝሮች የተገኘ ማስረጃ", navTitle: "የንብረት ዋጋ", title: "የንብረት ዋጋ ማስሊያ", subtitle: "በተመሳሳይ አካባቢ የተፈቀዱ ዝርዝሮችን ያወዳድሩ። ይህ የገበያ መመሪያ ነው።",
     formTitle: "ስለ ንብረቱ ይንገሩን", free: "ነፃ መመሪያ", category: "የንብረት አይነት", categorySale: "ለሽያጭ መኖሪያ",
     categoryRent: "ለኪራይ መኖሪያ", categoryLand: "መሬት", categoryCommercial: "ንግድ", categoryStudent: "የተማሪ መኖሪያ",
     transaction: "ግብይት", forRent: "ለኪራይ", forSale: "ለሽያጭ", location: "አካባቢ ወይም ከተማ", district: "ዲስትሪክት",
@@ -40085,7 +40088,7 @@ const VALUATION_UI_OVERRIDES = Object.freeze({
     viewListing: "ዝርዝሩን ይመልከቱ"
   },
   ar: {
-    eyebrow: "أدلة من إعلانات makaug المباشرة", title: "قدّر قيمة العقار", subtitle: "قارن بالإعلانات العامة المعتمدة في المنطقة نفسها. هذا دليل سوقي وليس تقييماً رسمياً.",
+    eyebrow: "أدلة من إعلانات makaug المباشرة", navTitle: "قيمة العقار", title: "حاسبة قيمة العقار", subtitle: "قارن بالإعلانات العامة المعتمدة في المنطقة نفسها. هذا دليل سوقي وليس تقييماً رسمياً.",
     formTitle: "أخبرنا عن العقار", formSubtitle: "سنقارنه بإعلانات حقيقية على makaug.", free: "دليل مجاني",
     category: "فئة العقار", categorySale: "سكني للبيع", categoryRent: "سكني للإيجار", categoryLand: "أرض",
     categoryCommercial: "تجاري", categoryStudent: "سكن طلاب", transaction: "المعاملة", forRent: "للإيجار", forSale: "للبيع",
@@ -40265,7 +40268,7 @@ function populateValuationLocations() {
   const districtSelect = document.getElementById("valuation-district");
   const locationList = document.getElementById("valuation-location-list");
   if (districtSelect && districtSelect.options.length <= 1) {
-    UGANDA_DISTRICTS.forEach((district) => {
+    DISTRICTS.forEach((district) => {
       const option = document.createElement("option");
       option.value = district;
       option.textContent = district;
@@ -40273,7 +40276,7 @@ function populateValuationLocations() {
     });
   }
   if (locationList) {
-    const names = new Set(UGANDA_DISTRICTS);
+    const names = new Set(DISTRICTS);
     getPublicListings().forEach((property) => {
       [property?.area, property?.district, property?.city, property?.neighborhood]
         .map((value) => String(value || "").trim())
@@ -40314,7 +40317,7 @@ function renderValuationLocationRows(rows = []) {
     });
     const current = districtSelect.value;
     districtSelect.innerHTML = `<option value="">${adminEscape(valuationTr("chooseDistrict"))}</option>`
-      + UGANDA_DISTRICTS.map((district) => {
+      + DISTRICTS.map((district) => {
         const count = counts.get(district) || 0;
         return `<option value="${adminAttr(district)}">${adminEscape(`${district}${count ? ` (${count})` : ""}`)}</option>`;
       }).join("");
@@ -40372,6 +40375,18 @@ function formatValuationUgx(value) {
   return `UGX ${new Intl.NumberFormat("en-UG", { maximumFractionDigits: 0 }).format(Math.round(numeric))}`;
 }
 
+function safeImageUrl(value = "") {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  if (/^\/(?!\/)/.test(raw)) return raw;
+  try {
+    const parsed = new URL(raw, window.location.origin);
+    return ["http:", "https:"].includes(parsed.protocol) ? parsed.href : "";
+  } catch {
+    return "";
+  }
+}
+
 function renderValuationComparable(row = {}) {
   const image = safeImageUrl(row.image_url || "");
   const location = [row.area, row.district].filter(Boolean).join(", ");
@@ -40400,12 +40415,17 @@ function renderValuationEstimate(response = {}) {
   const unitRate = document.getElementById("valuation-unit-rate");
   const comparables = document.getElementById("valuation-comparables");
   const methodology = document.getElementById("valuation-methodology");
+  const viewAll = document.getElementById("valuation-view-all");
   if (!results || !scope || !estimate || !range || !count || !unitRate || !comparables || !methodology) return;
 
   results.classList.remove("hidden");
   scope.textContent = response.widened
     ? valuationTr("scopeDistrict", { location: response.input?.location || "", district: response.input?.district || "" })
-    : valuationTr("scopeArea", { location: response.input?.location || "" });
+    : valuationTr("scopeArea", {
+      location: response.scope === "district"
+        ? `${response.input?.district || response.input?.location || ""} District`
+        : (response.input?.location || "")
+    });
   count.textContent = Number(response.comparable_count || 0).toLocaleString();
 
   if (!response.sufficient || !response.estimate) {
@@ -40433,10 +40453,15 @@ function renderValuationEstimate(response = {}) {
     unitRate.textContent = "";
   }
   comparables.innerHTML = (response.comparables || []).map(renderValuationComparable).join("");
+  if (viewAll) {
+    const href = String(response.view_all_url || "").trim();
+    viewAll.classList.toggle("hidden", !href);
+    if (href) viewAll.href = href;
+  }
   methodology.innerHTML = `
     <p>${adminEscape(valuationTr("methodText"))}</p>
     <p class="font-bold text-[#16241d]">${adminEscape(valuationTr("methodExample", {
-      count: Number(response.comparable_count || 0),
+      count: Number(response.analysis_comparable_count || response.comparable_count || 0),
       estimate: formatValuationUgx(response.estimate),
       low: formatValuationUgx(response.range_low),
       high: formatValuationUgx(response.range_high)

@@ -8,10 +8,11 @@ const { DISTRICTS } = require('../utils/constants');
 
 const router = express.Router();
 
-const VALUATION_MARKER = 'valuation-live-comparables-20260724';
+const VALUATION_MARKER = 'valuation-evidence-locality-20260725';
 const CACHE_TTL_MS = Math.max(30_000, Number(process.env.VALUATION_CACHE_TTL_MS || 180_000));
 const MIN_COMPARABLES = 3;
 const DISTRICT_WIDEN_THRESHOLD = 5;
+const EVIDENCE_LIMIT = 10;
 const MAX_PRICE_UGX = 100_000_000_000;
 const SQM_PER_ACRE = 4046.8564224;
 const SQM_PER_DECIMAL = SQM_PER_ACRE / 100;
@@ -75,6 +76,7 @@ function normalizeRecurringPrice(row = {}, category = '') {
   if (!Number.isFinite(raw) || raw <= 0) return null;
   const period = cleanText(row.price_period).toLowerCase();
   if (category === 'student') {
+    if (['once', 'total', 'sale'].includes(period)) return null;
     if (['week', 'weekly', 'wk'].includes(period)) return raw * 17.38;
     if (['month', 'monthly'].includes(period)) return raw * 4;
     if (['year', 'yearly', 'annual', 'annually'].includes(period)) return raw / 3;
@@ -102,9 +104,57 @@ function comparableSizeSqm(row = {}, category = '') {
   return null;
 }
 
+function comparableText(row = {}) {
+  return [
+    row.title,
+    row.description,
+    row.property_type,
+    row.room_type,
+    row.extra_fields?.room_type,
+    row.extra_fields?.commercial_type
+  ].map((value) => cleanText(value).toLowerCase()).filter(Boolean).join(' ');
+}
+
+function isCategoryCompatibleComparable(row = {}, input = {}) {
+  const category = input.category;
+  const listingType = cleanText(row.listing_type).toLowerCase();
+  const transactionType = cleanText(row.transaction_type).toLowerCase();
+  const period = cleanText(row.price_period).toLowerCase();
+  const text = comparableText(row);
+  const recurringPeriod = ['week', 'weekly', 'wk', 'month', 'monthly', 'mo', 'per_month', 'semester', 'term', 'year', 'yearly', 'annual', 'annually'].includes(period);
+  const constructionOnly = /\b(?:cost to build|cost of building|construction cost|building cost|to start building|house plan|building plan|how to build|build this house)\b/i.test(text);
+  if (constructionOnly) return false;
+
+  if (category === 'student') {
+    const studentInventory = ['student', 'students'].includes(listingType)
+      || (listingType === 'rent' && row.students_welcome === true);
+    if (!studentInventory || transactionType === 'sale') return false;
+    if (['once', 'total', 'sale'].includes(period)) return false;
+    if (/\b(?:land|plot|acre|decimal|commercial property|hostel for sale|property for sale)\b/i.test(text)) return false;
+    return true;
+  }
+  if (category === 'land') {
+    return listingType === 'land' && transactionType !== 'rent' && !recurringPeriod;
+  }
+  if (category === 'sale') {
+    return listingType === 'sale' && transactionType !== 'rent' && !recurringPeriod;
+  }
+  if (category === 'rent') {
+    return listingType === 'rent' && transactionType !== 'sale' && !['once', 'total', 'sale'].includes(period);
+  }
+  if (category === 'commercial') {
+    if (listingType !== 'commercial') return false;
+    if (input.transaction_type && transactionType && transactionType !== input.transaction_type) return false;
+    if (input.transaction_type === 'sale' && recurringPeriod) return false;
+    if (input.transaction_type === 'rent' && ['once', 'total', 'sale'].includes(period)) return false;
+    return true;
+  }
+  return false;
+}
+
 function categorySql(category) {
   if (category === 'student') {
-    return "(p.listing_type IN ('student','students') OR p.students_welcome = TRUE OR p.nearest_university IS NOT NULL)";
+    return "(p.listing_type IN ('student','students') OR (p.listing_type = 'rent' AND p.students_welcome = TRUE))";
   }
   return 'p.listing_type = $CATEGORY';
 }
@@ -150,16 +200,13 @@ async function loadComparableRows(input, scope) {
   if (scope === 'district') {
     add('LOWER(COALESCE(p.district, \'\')) = LOWER(?)', input.district);
   } else {
-    const needle = `%${input.location}%`;
-    values.push(needle);
-    const param = `$${values.length}`;
-    where.push(`(
-      COALESCE(p.area, '') ILIKE ${param}
-      OR COALESCE(p.address, '') ILIKE ${param}
-      OR COALESCE(p.extra_fields->>'neighborhood', '') ILIKE ${param}
-      OR COALESCE(p.extra_fields->>'city', '') ILIKE ${param}
-      OR LOWER(COALESCE(p.district, '')) = LOWER($${values.push(input.location)})
-    )`);
+    add(
+      "LOWER(TRIM(SPLIT_PART(COALESCE(p.area, ''), ',', 1))) = LOWER(?)",
+      input.location
+    );
+    if (input.district) {
+      add('LOWER(TRIM(COALESCE(p.district, \'\'))) = LOWER(?)', input.district);
+    }
   }
 
   if (input.bedrooms != null && ['sale', 'rent', 'student'].includes(input.category)) {
@@ -191,6 +238,7 @@ async function loadComparableRows(input, scope) {
     `SELECT
        p.id,
        p.title,
+       p.description,
        p.area,
        p.district,
        p.price,
@@ -206,6 +254,7 @@ async function loadComparableRows(input, scope) {
        p.usable_size_sqm,
        p.nearest_university,
        p.room_type,
+       p.students_welcome,
        p.extra_fields,
        (
          SELECT i.url
@@ -223,8 +272,42 @@ async function loadComparableRows(input, scope) {
   return result.rows || [];
 }
 
-function buildEstimate(input, rows, scope) {
+async function inferDistrictForLocation(location) {
+  const result = await db.query(
+    `SELECT TRIM(COALESCE(p.district, '')) AS district, COUNT(*)::int AS listing_count
+     FROM properties p
+     WHERE ${publicLivePropertyStatusSql('p')}
+       AND NOT ${publicLaunchTestListingFastCondition('p')}
+       AND LOWER(TRIM(SPLIT_PART(COALESCE(p.area, ''), ',', 1))) = LOWER($1)
+       AND NULLIF(TRIM(COALESCE(p.district, '')), '') IS NOT NULL
+     GROUP BY 1
+     ORDER BY COUNT(*) DESC, 1 ASC
+     LIMIT 1`,
+    [location]
+  );
+  const candidate = cleanText(result.rows[0]?.district);
+  return DISTRICTS.find((district) => district.toLowerCase() === candidate.toLowerCase()) || '';
+}
+
+function categoryResultsPath(input = {}) {
+  const paths = {
+    sale: '/for-sale',
+    rent: '/to-rent',
+    land: '/land',
+    commercial: '/commercial',
+    student: '/student-accommodation'
+  };
+  const params = new URLSearchParams();
+  params.set('area', input.location);
+  if (input.category === 'commercial' && input.transaction_type) {
+    params.set('transaction_type', input.transaction_type);
+  }
+  return `${paths[input.category] || '/for-sale'}?${params.toString()}`;
+}
+
+function buildEstimate(input, rows, scope, widened = scope === 'district') {
   const prepared = rows
+    .filter((row) => isCategoryCompatibleComparable(row, input))
     .map((row) => {
       const normalizedPrice = normalizeRecurringPrice(row, input.category);
       const sizeSqm = comparableSizeSqm(row, input.category);
@@ -242,19 +325,25 @@ function buildEstimate(input, rows, scope) {
     : (input.category === 'commercial' ? input.size_sqm : null);
   const rateRows = prepared.filter((row) => Number.isFinite(row.ratePerSqm) && row.ratePerSqm > 0);
   const useRate = targetSizeSqm && rateRows.length >= MIN_COMPARABLES;
-  const values = useRate
-    ? rateRows.map((row) => row.ratePerSqm * targetSizeSqm)
-    : prepared.map((row) => row.normalizedPrice);
-  const estimate = trimmedMean(values);
-  const low = percentile(values, 0.1);
-  const high = percentile(values, 0.9);
+  const evidencePool = useRate ? rateRows : prepared;
+  const analysisValues = evidencePool.map((row) => (
+    useRate ? row.ratePerSqm * targetSizeSqm : row.normalizedPrice
+  ));
+  const estimate = trimmedMean(analysisValues);
   const unitRate = rateRows.length >= MIN_COMPARABLES
     ? trimmedMean(rateRows.map((row) => row.ratePerSqm))
     : null;
-  const ranked = prepared
-    .map((row) => ({ ...row, valuationDifference: estimate == null ? 0 : Math.abs(row.normalizedPrice - estimate) }))
+  const ranked = evidencePool
+    .map((row) => {
+      const valuationValue = useRate ? row.ratePerSqm * targetSizeSqm : row.normalizedPrice;
+      return {
+        ...row,
+        valuationValue,
+        valuationDifference: estimate == null ? 0 : Math.abs(valuationValue - estimate)
+      };
+    })
     .sort((a, b) => a.valuationDifference - b.valuationDifference)
-    .slice(0, 6)
+    .slice(0, EVIDENCE_LIMIT)
     .map((row) => ({
       id: row.id,
       title: row.title,
@@ -262,6 +351,7 @@ function buildEstimate(input, rows, scope) {
       district: row.district,
       price: Number(row.price),
       normalized_price: Math.round(row.normalizedPrice),
+      valuation_value: Math.round(row.valuationValue),
       price_period: row.price_period,
       bedrooms: row.bedrooms,
       bathrooms: row.bathrooms,
@@ -272,16 +362,23 @@ function buildEstimate(input, rows, scope) {
       image_url: row.image_url || null,
       url: `/property/${encodeURIComponent(row.id)}`
     }));
+  const evidenceValues = ranked.map((row) => row.valuation_value);
+  const low = percentile(evidenceValues, 0.1);
+  const high = percentile(evidenceValues, 0.9);
+  const sufficient = analysisValues.length >= MIN_COMPARABLES;
+  const scopeAreas = Array.from(new Set(ranked.map((row) => cleanText(row.area)).filter(Boolean)));
 
   return {
-    sufficient: values.length >= MIN_COMPARABLES,
-    estimate: values.length >= MIN_COMPARABLES && estimate != null ? Math.round(estimate) : null,
-    range_low: values.length >= MIN_COMPARABLES && low != null ? Math.round(low) : null,
-    range_high: values.length >= MIN_COMPARABLES && high != null ? Math.round(high) : null,
-    comparable_count: values.length,
+    sufficient,
+    estimate: sufficient && estimate != null ? Math.round(estimate) : null,
+    range_low: sufficient && low != null ? Math.round(low) : null,
+    range_high: sufficient && high != null ? Math.round(high) : null,
+    comparable_count: ranked.length,
+    analysis_comparable_count: analysisValues.length,
     raw_comparable_count: prepared.length,
     scope,
-    widened: scope === 'district',
+    widened,
+    scope_areas: scopeAreas,
     target_size_sqm: targetSizeSqm ? Math.round(targetSizeSqm * 10) / 10 : null,
     unit_rate_sqm: unitRate ? Math.round(unitRate) : null,
     unit_rate_decimal: input.category === 'land' && unitRate
@@ -289,13 +386,17 @@ function buildEstimate(input, rows, scope) {
       : null,
     price_basis: valuationPriceBasis(input),
     comparables: ranked,
+    view_all_url: categoryResultsPath(input),
     methodology: {
       estimator: 'trimmed_mean',
-      trim_each_side_percent: prepared.length >= 10 ? 10 : 0,
+      trim_each_side_percent: analysisValues.length >= 10 ? 10 : 0,
       range_percentiles: [10, 90],
       price_normalization: valuationPriceBasis(input),
       minimum_comparables: MIN_COMPARABLES,
-      size_adjusted: Boolean(useRate)
+      size_adjusted: Boolean(useRate),
+      analysis_comparable_count: analysisValues.length,
+      displayed_evidence_count: ranked.length,
+      displayed_range_only: true
     }
   };
 }
@@ -305,7 +406,7 @@ router.post('/estimate', async (req, res, next) => {
     const category = normalizeCategory(req.body?.category);
     const location = cleanText(req.body?.location || req.body?.area);
     const districtRaw = cleanText(req.body?.district);
-    const district = DISTRICTS.find((item) => item.toLowerCase() === districtRaw.toLowerCase())
+    let district = DISTRICTS.find((item) => item.toLowerCase() === districtRaw.toLowerCase())
       || DISTRICTS.find((item) => item.toLowerCase() === location.toLowerCase())
       || '';
     const transactionType = cleanText(req.body?.transaction_type).toLowerCase();
@@ -331,6 +432,10 @@ router.post('/estimate', async (req, res, next) => {
     if (input.category === 'commercial' && !input.transaction_type) {
       return res.status(400).json({ ok: false, error: 'Choose whether the commercial property is for rent or sale.' });
     }
+    if (!district) {
+      district = await inferDistrictForLocation(location);
+      input.district = district;
+    }
 
     const key = cacheKey(input);
     const cached = cachedValue(key);
@@ -339,21 +444,25 @@ router.post('/estimate', async (req, res, next) => {
       return res.status(200).json(cached);
     }
 
-    let scope = 'area';
+    const locationIsDistrict = DISTRICTS.some((item) => item.toLowerCase() === location.toLowerCase());
+    let scope = locationIsDistrict ? 'district' : 'area';
+    let widened = false;
     let rows = await loadComparableRows(input, scope);
-    if (rows.length < DISTRICT_WIDEN_THRESHOLD && district) {
+    const exactCompatibleCount = rows.filter((row) => isCategoryCompatibleComparable(row, input)).length;
+    if (scope === 'area' && exactCompatibleCount < DISTRICT_WIDEN_THRESHOLD && district) {
       scope = 'district';
+      widened = true;
       rows = await loadComparableRows(input, scope);
     }
-    const result = buildEstimate(input, rows, scope);
+    const result = buildEstimate(input, rows, scope, widened);
     const payload = {
       ok: true,
       marker: VALUATION_MARKER,
       input,
       ...result,
-      scope_label: scope === 'district'
+      scope_label: widened
         ? `Not enough exact matches in ${location}; using ${district} District comparables.`
-        : `Using comparable listings in ${location}.`,
+        : `Using comparable listings in ${scope === 'district' ? `${district} District` : location}.`,
       currency: 'UGX',
       generated_at: new Date().toISOString(),
       cache_ttl_seconds: Math.round(CACHE_TTL_MS / 1000)
@@ -427,5 +536,7 @@ module.exports._test = {
   targetLandSizeSqm,
   normalizeRecurringPrice,
   valuationPriceBasis,
+  isCategoryCompatibleComparable,
+  categoryResultsPath,
   buildEstimate
 };
