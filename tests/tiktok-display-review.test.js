@@ -17,6 +17,7 @@ const html = read('index.html');
 const frontend = read('assets/makaug-app.js');
 const route = read('routes/tiktok-display.js');
 const server = read('server.js');
+const tiktokService = read('services/tiktokDisplayService.js');
 const publicHtmlSanitizer = read('services/publicHtmlSanitizer.js');
 const migration = read('db/migrations/090_tiktok_display_connections.sql');
 const envExample = read('.env.example');
@@ -48,6 +49,8 @@ assert(!encrypted.includes('tiktok-access-token'));
 assert.strictEqual(decryptSecret(encrypted, tokenEnv), 'tiktok-access-token');
 
 assert(server.includes("app.use('/api/tiktok-display', tiktokDisplayRoutes)"));
+assert(tiktokService.includes("'open_id,union_id,avatar_url,display_name'"));
+assert(!tiktokService.includes("'open_id,avatar_url,display_name,profile_deep_link'"));
 assert(route.includes("purpose: 'tiktok_display_oauth'"));
 assert(route.includes("res.set('Cache-Control', 'no-store')"));
 assert(route.includes('disable_auto_auth'));

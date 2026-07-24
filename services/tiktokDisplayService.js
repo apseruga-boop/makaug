@@ -118,7 +118,7 @@ async function refreshAccessToken({ refreshToken, config, fetchImpl = fetch }) {
 
 async function fetchTikTokProfile(accessToken, fetchImpl = fetch) {
   const endpoint = new URL(TIKTOK_USER_INFO_URL);
-  endpoint.searchParams.set('fields', 'open_id,avatar_url,display_name,profile_deep_link');
+  endpoint.searchParams.set('fields', 'open_id,union_id,avatar_url,display_name');
   const data = await fetchTikTokJson(endpoint, {
     headers: { Authorization: `Bearer ${accessToken}` }
   }, fetchImpl);
@@ -166,4 +166,3 @@ module.exports = {
   fetchTikTokVideos,
   tokenExpiryDate
 };
-
