@@ -13,6 +13,12 @@ assert.strictEqual(helpers.percentile([10, 20, 30, 40, 50], 0.9), 46);
 assert.strictEqual(helpers.trimmedMean([1, 2, 3, 4, 5, 6, 7, 8, 9, 100]), 5.5);
 assert.ok(Math.abs(helpers.targetLandSizeSqm(1, 'acres') - 4046.8564224) < 0.01);
 assert.ok(Math.abs(helpers.targetLandSizeSqm(100, 'decimals') - 4046.8564224) < 0.01);
+assert.ok(Math.abs(helpers.parseLandSizeText('Size 50ft X 100ft') - 464.5152) < 0.01);
+assert.ok(Math.abs(helpers.parseLandSizeText('Magnificent Prime 2Acres') - 8093.7128448) < 0.01);
+assert.ok(Math.abs(helpers.landSizeSqm({
+  title: 'Plot in Najjera',
+  extra_fields: { source_hover_description: 'Size 50ft X 100ft' }
+}) - 464.5152) < 0.01);
 assert.strictEqual(helpers.normalizeRecurringPrice({ price: 4_000_000, price_period: 'semester' }, 'student'), 4_000_000);
 assert.strictEqual(helpers.normalizeRecurringPrice({ price: 1_000_000, price_period: 'month' }, 'student'), 4_000_000);
 assert.strictEqual(helpers.normalizeRecurringPrice({ price: 12_000_000, price_period: 'year' }, 'student'), 4_000_000);
@@ -50,6 +56,47 @@ assert.strictEqual(landEstimate.estimate, 100_000_000);
 assert.strictEqual(landEstimate.unit_rate_decimal, 2_000_000);
 assert.strictEqual(landEstimate.methodology.size_adjusted, true);
 
+const legacyLandEstimate = helpers.buildEstimate({
+  category: 'land',
+  size_value: 50,
+  size_unit: 'decimals',
+  size_sqm: null
+}, [
+  {
+    id: 'legacy-50x100',
+    listing_type: 'land',
+    price: 75_000_000,
+    price_period: 'once',
+    title: 'Plot in Najjera',
+    extra_fields: { source_hover_description: 'Size 50ft X 100ft' }
+  },
+  {
+    id: 'legacy-acre',
+    listing_type: 'land',
+    price: 600_000_000,
+    price_period: 'once',
+    title: '1 acre in Najjera'
+  },
+  {
+    id: 'legacy-decimals',
+    listing_type: 'land',
+    price: 150_000_000,
+    price_period: 'once',
+    title: '25 decimals in Najjera'
+  },
+  {
+    id: 'legacy-usd',
+    listing_type: 'land',
+    price: 11_400,
+    price_period: 'once',
+    title: '$3Million USD Per Acre'
+  }
+], 'area');
+assert.strictEqual(legacyLandEstimate.methodology.size_adjusted, true);
+assert.strictEqual(legacyLandEstimate.analysis_comparable_count, 3);
+assert.strictEqual(legacyLandEstimate.comparables.some((row) => row.id === 'legacy-usd'), false);
+assert.ok(legacyLandEstimate.unit_rate_decimal > 0);
+
 const studentEstimate = helpers.buildEstimate({
   category: 'student',
   location: 'Makerere',
@@ -79,6 +126,25 @@ assert.strictEqual(helpers.isCategoryCompatibleComparable({
   price_period: 'month',
   title: 'Land for monthly rent'
 }, { category: 'land' }), false);
+assert.strictEqual(helpers.hasAmbiguousForeignCurrency({
+  listing_type: 'land',
+  price: 11_400,
+  title: '$3Million USD Per Acre'
+}), true);
+assert.strictEqual(helpers.isCategoryCompatibleComparable({
+  listing_type: 'land',
+  price: 11_400,
+  price_period: 'once',
+  title: '$3Million USD Per Acre'
+}, { category: 'land' }), false);
+assert.strictEqual(helpers.isCategoryCompatibleComparable({
+  listing_type: 'land',
+  price: 85_000_000,
+  price_period: 'once',
+  title: 'Land in Bujjuko at UGX 85M'
+}, { category: 'land' }), true);
+assert.strictEqual(helpers.isTransientDatabaseError({ code: 'POOL_TIMEOUT' }), true);
+assert.strictEqual(helpers.isTransientDatabaseError({ code: '23505' }), false);
 
 const evidenceEstimate = helpers.buildEstimate({
   category: 'sale',
@@ -109,8 +175,12 @@ const routeSource = fs.readFileSync(path.join(root, 'routes', 'valuation.js'), '
 const metricsSource = fs.readFileSync(path.join(root, 'services', 'publicInventoryMetricsService.js'), 'utf8');
 
 assert.ok(server.includes("app.use('/api/valuation', valuationRoutes)"), 'valuation API must be mounted');
+assert.ok(
+  server.includes('/api/properties?status=approved&public_only=1&search=Kira&limit=24&page=1&include_summary=1'),
+  'the common broad Kira search must be warmed before consumers arrive'
+);
 assert.ok(html.includes('id="page-valuation"'), 'valuation page must render');
-assert.ok(html.includes('valuation-evidence-locality-20260725'), 'valuation marker must render');
+assert.ok(html.includes('valuation-land-currency-media-20260725'), 'valuation marker must render');
 assert.ok(html.includes('Property Value Calculator'), 'valuation H1 must use the approved calculator label');
 assert.ok(html.includes('id="nav-valuation"') && html.includes('>Property Value</a>'), 'valuation navigation must use the shorter label');
 assert.ok(html.includes('id="valuation-view-all"'), 'valuation evidence must include a view-all control');
@@ -137,10 +207,18 @@ assert.ok(app.includes('unit_rate_decimal'), 'land valuation must render the per
 assert.ok(app.includes('basisSemester'), 'student valuation must disclose the semester basis');
 assert.ok(app.includes('function safeImageUrl'), 'valuation evidence cards must guard image URLs');
 assert.ok(
-  app.includes('relative aspect-[16/9] overflow-hidden') && app.includes('absolute inset-0 h-full w-full object-cover'),
+  app.includes('relative aspect-[16/9] overflow-hidden')
+    && app.includes('style="aspect-ratio: 16 / 9;"')
+    && app.includes('absolute inset-0 h-full w-full object-cover'),
   'valuation evidence images must stay inside a stable 16:9 card frame'
 );
 assert.ok(!app.includes('UGANDA_DISTRICTS'), 'valuation selectors must use the canonical DISTRICTS registry');
+assert.ok(
+  routeSource.includes('withTransientDatabaseRetry')
+    && routeSource.includes('hasAmbiguousForeignCurrency')
+    && routeSource.includes('parseLandSizeText'),
+  'valuation must retry transient database failures, reject ambiguous foreign currency, and parse legacy land sizes'
+);
 
 function frozenObject(name) {
   const token = `const ${name} = Object.freeze(`;

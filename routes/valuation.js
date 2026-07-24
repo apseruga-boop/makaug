@@ -8,7 +8,7 @@ const { DISTRICTS } = require('../utils/constants');
 
 const router = express.Router();
 
-const VALUATION_MARKER = 'valuation-evidence-locality-20260725';
+const VALUATION_MARKER = 'valuation-land-currency-media-20260725';
 const CACHE_TTL_MS = Math.max(30_000, Number(process.env.VALUATION_CACHE_TTL_MS || 180_000));
 const MIN_COMPARABLES = 3;
 const DISTRICT_WIDEN_THRESHOLD = MIN_COMPARABLES;
@@ -16,6 +16,8 @@ const EVIDENCE_LIMIT = 10;
 const MAX_PRICE_UGX = 100_000_000_000;
 const SQM_PER_ACRE = 4046.8564224;
 const SQM_PER_DECIMAL = SQM_PER_ACRE / 100;
+const SQM_PER_SQUARE_FOOT = 0.09290304;
+const TRANSIENT_DATABASE_RETRY_MS = 125;
 const valuationCache = new Map();
 
 function normalizeCategory(value) {
@@ -48,19 +50,70 @@ function trimmedMean(values, trimFraction = 0.1) {
   return kept.reduce((sum, value) => sum + value, 0) / kept.length;
 }
 
+function valuationSourceText(row = {}) {
+  const extra = row.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
+  return [
+    row.title,
+    row.description,
+    row.size_raw,
+    extra.source_hover_description,
+    extra.source_card_description,
+    extra.source_caption,
+    extra.source_description,
+    extra.land_size,
+    extra.size_raw
+  ].map((value) => cleanText(value)).filter(Boolean).join(' ');
+}
+
+function parseLandSizeText(value = '') {
+  const text = cleanText(value, 4000)
+    .replace(/,/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!text) return null;
+
+  const dimensions = text.match(
+    /\b(\d+(?:\.\d+)?)\s*(?:ft|feet|foot|')?\s*[x×]\s*(\d+(?:\.\d+)?)\s*(?:ft|feet|foot|')?\b/i
+  );
+  if (dimensions) {
+    const width = Number(dimensions[1]);
+    const length = Number(dimensions[2]);
+    if (Number.isFinite(width) && width > 0 && Number.isFinite(length) && length > 0) {
+      return width * length * SQM_PER_SQUARE_FOOT;
+    }
+  }
+
+  const units = [
+    { pattern: /\b(\d+(?:\.\d+)?)\s*(?:hectares?|hectres?|ha)\b/i, multiplier: 10_000 },
+    { pattern: /\b(\d+(?:\.\d+)?)\s*(?:acres?|ac)\b/i, multiplier: SQM_PER_ACRE },
+    { pattern: /\b(\d+(?:\.\d+)?)\s*(?:decimals?|dec)\b/i, multiplier: SQM_PER_DECIMAL },
+    { pattern: /\b(\d+(?:\.\d+)?)\s*(?:square\s*met(?:res?|ers?)|sq\.?\s*m|sqm|m²|m2)\b/i, multiplier: 1 },
+    { pattern: /\b(\d+(?:\.\d+)?)\s*(?:square\s*feet|sq\.?\s*ft|ft²|ft2)\b/i, multiplier: SQM_PER_SQUARE_FOOT }
+  ];
+  for (const unit of units) {
+    const match = text.match(unit.pattern);
+    const number = Number(match?.[1]);
+    if (Number.isFinite(number) && number > 0) return number * unit.multiplier;
+  }
+  return null;
+}
+
 function landSizeSqm(row = {}) {
   const extra = row.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
   const direct = Number(extra.land_size_sqm || extra.size_sqm);
   if (Number.isFinite(direct) && direct > 0) return direct;
   const value = Number(row.land_size_value || extra.land_size_value);
   const unit = cleanText(row.land_size_unit || extra.land_size_unit).toLowerCase();
-  if (!Number.isFinite(value) || value <= 0) return null;
-  if (unit.includes('hectare') || unit === 'ha') return value * 10_000;
-  if (unit.includes('acre')) return value * SQM_PER_ACRE;
-  if (unit.includes('decimal')) return value * SQM_PER_DECIMAL;
-  if (unit.includes('square') || unit.includes('sqm') || unit.includes('m²') || unit === 'm2') return value;
-  if (unit.includes('sq ft') || unit.includes('square feet') || unit === 'ft2') return value * 0.09290304;
-  return null;
+  if (Number.isFinite(value) && value > 0) {
+    if (unit.includes('hectare') || unit === 'ha') return value * 10_000;
+    if (unit.includes('acre')) return value * SQM_PER_ACRE;
+    if (unit.includes('decimal')) return value * SQM_PER_DECIMAL;
+    if (unit.includes('square') || unit.includes('sqm') || unit.includes('m²') || unit === 'm2') return value;
+    if (unit.includes('sq ft') || unit.includes('square feet') || unit === 'ft2') {
+      return value * SQM_PER_SQUARE_FOOT;
+    }
+  }
+  return parseLandSizeText(valuationSourceText(row));
 }
 
 function targetLandSizeSqm(value, unit) {
@@ -115,6 +168,17 @@ function comparableText(row = {}) {
   ].map((value) => cleanText(value).toLowerCase()).filter(Boolean).join(' ');
 }
 
+function hasAmbiguousForeignCurrency(row = {}) {
+  const extra = row.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
+  const currency = cleanText(
+    row.currency || extra.currency || extra.price_currency || extra.source_currency
+  ).toUpperCase();
+  if (currency && !['UGX', 'USH', 'UGANDA SHILLINGS', 'UGANDA SHILLING'].includes(currency)) {
+    return true;
+  }
+  return /(?:\bUSD\b|\bUS\s*DOLLARS?\b|US\$|\$|€|£)/i.test(valuationSourceText(row));
+}
+
 function isCategoryCompatibleComparable(row = {}, input = {}) {
   const category = input.category;
   const listingType = cleanText(row.listing_type).toLowerCase();
@@ -123,7 +187,7 @@ function isCategoryCompatibleComparable(row = {}, input = {}) {
   const text = comparableText(row);
   const recurringPeriod = ['week', 'weekly', 'wk', 'month', 'monthly', 'mo', 'per_month', 'semester', 'term', 'year', 'yearly', 'annual', 'annually'].includes(period);
   const constructionOnly = /\b(?:cost to build|cost of building|construction cost|building cost|to start building|house plan|building plan|how to build|build this house)\b/i.test(text);
-  if (constructionOnly) return false;
+  if (constructionOnly || hasAmbiguousForeignCurrency(row)) return false;
 
   if (category === 'student') {
     const studentInventory = ['student', 'students'].includes(listingType)
@@ -289,6 +353,25 @@ async function inferDistrictForLocation(location) {
   return DISTRICTS.find((district) => district.toLowerCase() === candidate.toLowerCase()) || '';
 }
 
+function isTransientDatabaseError(error = {}) {
+  if (['POOL_TIMEOUT', 'ETIMEDOUT', 'ECONNRESET', '53300', '57P01', '57P02', '57P03', '08000', '08003', '08006'].includes(error.code)) {
+    return true;
+  }
+  return /client acquisition timed out|connection timeout|connection terminated|timeout exceeded/i.test(
+    String(error.message || '')
+  );
+}
+
+async function withTransientDatabaseRetry(operation) {
+  try {
+    return await operation();
+  } catch (error) {
+    if (!isTransientDatabaseError(error)) throw error;
+    await new Promise((resolve) => setTimeout(resolve, TRANSIENT_DATABASE_RETRY_MS));
+    return operation();
+  }
+}
+
 function categoryResultsPath(input = {}) {
   const paths = {
     sale: '/for-sale',
@@ -432,9 +515,13 @@ router.post('/estimate', async (req, res, next) => {
     if (input.category === 'commercial' && !input.transaction_type) {
       return res.status(400).json({ ok: false, error: 'Choose whether the commercial property is for rent or sale.' });
     }
-    if (!district) {
-      district = await inferDistrictForLocation(location);
-      input.district = district;
+    const locationIsDistrict = DISTRICTS.some((item) => item.toLowerCase() === location.toLowerCase());
+    if (!locationIsDistrict) {
+      const inferredDistrict = await withTransientDatabaseRetry(() => inferDistrictForLocation(location));
+      if (inferredDistrict) {
+        district = inferredDistrict;
+        input.district = inferredDistrict;
+      }
     }
 
     const key = cacheKey(input);
@@ -444,15 +531,14 @@ router.post('/estimate', async (req, res, next) => {
       return res.status(200).json(cached);
     }
 
-    const locationIsDistrict = DISTRICTS.some((item) => item.toLowerCase() === location.toLowerCase());
     let scope = locationIsDistrict ? 'district' : 'area';
     let widened = false;
-    let rows = await loadComparableRows(input, scope);
+    let rows = await withTransientDatabaseRetry(() => loadComparableRows(input, scope));
     const exactCompatibleCount = rows.filter((row) => isCategoryCompatibleComparable(row, input)).length;
     if (scope === 'area' && exactCompatibleCount < DISTRICT_WIDEN_THRESHOLD && district) {
       scope = 'district';
       widened = true;
-      rows = await loadComparableRows(input, scope);
+      rows = await withTransientDatabaseRetry(() => loadComparableRows(input, scope));
     }
     const result = buildEstimate(input, rows, scope, widened);
     const payload = {
@@ -532,11 +618,14 @@ module.exports._test = {
   normalizeCategory,
   percentile,
   trimmedMean,
+  parseLandSizeText,
   landSizeSqm,
   targetLandSizeSqm,
   normalizeRecurringPrice,
   valuationPriceBasis,
+  hasAmbiguousForeignCurrency,
   isCategoryCompatibleComparable,
+  isTransientDatabaseError,
   categoryResultsPath,
   buildEstimate
 };
