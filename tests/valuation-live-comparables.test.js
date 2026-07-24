@@ -54,6 +54,7 @@ const server = fs.readFileSync(path.join(root, 'server.js'), 'utf8');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const app = fs.readFileSync(path.join(root, 'assets', 'makaug-app.js'), 'utf8');
 const routeSource = fs.readFileSync(path.join(root, 'routes', 'valuation.js'), 'utf8');
+const metricsSource = fs.readFileSync(path.join(root, 'services', 'publicInventoryMetricsService.js'), 'utf8');
 
 assert.ok(server.includes("app.use('/api/valuation', valuationRoutes)"), 'valuation API must be mounted');
 assert.ok(html.includes('id="page-valuation"'), 'valuation page must render');
@@ -67,6 +68,10 @@ assert.ok(routeSource.includes('COUNT(*)::int AS listing_count'), 'valuation loc
 assert.ok(
   routeSource.includes("publicLaunchTestListingFastCondition('p')"),
   'valuation evidence and location counts must exclude launch and QA listings'
+);
+assert.ok(
+  metricsSource.includes("'MAKAUG TRAINING'") && metricsSource.includes("'REMOVE AFTER QA'"),
+  'the shared public exclusion must recognize legacy training rows'
 );
 assert.ok(app.includes('refreshValuationLocations'), 'valuation category changes must refresh counted locations');
 assert.ok(app.includes('unit_rate_decimal'), 'land valuation must render the per-decimal rate');

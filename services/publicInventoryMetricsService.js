@@ -18,7 +18,12 @@ const PUBLIC_INVENTORY_METRICS_CACHE_MAX_ENTRIES = Math.max(
   Math.min(300, parseInt(process.env.PUBLIC_INVENTORY_METRICS_CACHE_MAX_ENTRIES || '120', 10) || 120)
 );
 
-const LAUNCH_SEED_LISTING_MARKERS = ['SOFT LAUNCH TEST - DELETE', 'QA TEST - DELETE'];
+const LAUNCH_SEED_LISTING_MARKERS = [
+  'SOFT LAUNCH TEST - DELETE',
+  'QA TEST - DELETE',
+  'MAKAUG TRAINING',
+  'REMOVE AFTER QA'
+];
 const LAUNCH_DUMMY_LISTING_TITLES = ['sdgsdgd', 'sgsgsgsgs'];
 const publicInventoryMetricsCache = new Map();
 
