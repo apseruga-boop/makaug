@@ -116,30 +116,41 @@ async function handleReportListing(req, res, next) {
     const report = result.rows[0];
     const supportEmail = getSupportEmail();
     const whatsappUrl = getSupportWhatsappUrl();
-    const lead = await createLead(db, {
-      source: requestSource,
-      leadType: 'fraud',
-      category: reason,
-      message: details || `Fraud or suspicious listing report: ${propertyReference}`,
-      priority: 'high',
-      contact: {
-        name: reporterContact || 'Fraud reporter',
-        email: reporterContact && isValidEmail(reporterContact) ? reporterContact : null,
-        phone: reporterContact && isValidPhone(reporterContact) ? reporterContact : null,
-        preferredContactChannel: reporterContact && isValidEmail(reporterContact) ? 'email' : 'whatsapp',
-        roleType: 'fraud_reporter'
-      },
-      activityType: 'fraud_report_received',
-      metadata: {
-        report_id: report.id,
-        property_reference: propertyReference,
-        reason,
-        request_type: requestType,
-        request_source: requestSource,
-        linked_property_id: linkedPropertyId,
-        structured_fields: structuredFields
-      }
-    });
+    let lead = null;
+    let leadLinkError = null;
+    try {
+      lead = await createLead(db, {
+        source: requestSource,
+        leadType: requestType === 'fraud' || requestType === 'report' ? 'fraud' : 'listing_request',
+        category: reason,
+        message: details || `${requestType || 'Listing'} request: ${propertyReference}`,
+        priority: ['fraud', 'removal'].includes(requestType) ? 'high' : 'medium',
+        contact: {
+          name: reporterContact || 'Listing request reporter',
+          email: reporterContact && isValidEmail(reporterContact) ? reporterContact : null,
+          phone: reporterContact && isValidPhone(reporterContact) ? reporterContact : null,
+          preferredContactChannel: reporterContact && isValidEmail(reporterContact) ? 'email' : 'whatsapp',
+          roleType: `${requestType || 'report'}_requester`
+        },
+        activityType: `${requestType || 'report'}_request_received`,
+        metadata: {
+          report_id: report.id,
+          property_reference: propertyReference,
+          reason,
+          request_type: requestType,
+          request_source: requestSource,
+          linked_property_id: linkedPropertyId,
+          structured_fields: structuredFields
+        }
+      });
+    } catch (leadError) {
+      leadLinkError = leadError;
+      logger.warn('Listing request was saved but CRM lead linking failed', {
+        reportId: report.id,
+        requestType,
+        error: leadError.message || 'lead_link_failed'
+      });
+    }
     let adminDelivery = { sent: false, reason: 'not_attempted' };
     let userDelivery = { sent: false, reason: 'not_attempted' };
 
@@ -231,7 +242,15 @@ async function handleReportListing(req, res, next) {
       })
     ]);
 
-    return res.status(201).json({ ok: true, data: report });
+    return res.status(201).json({
+      ok: true,
+      data: {
+        ...report,
+        reference: report.id,
+        lead_linked: Boolean(lead?.id),
+        follow_up_degraded: Boolean(leadLinkError)
+      }
+    });
   } catch (error) {
     return next(error);
   }

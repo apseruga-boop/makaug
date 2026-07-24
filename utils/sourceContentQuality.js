@@ -15,11 +15,14 @@ const UGANDA_DISTRICT_SET = new Set(DISTRICTS.map((district) => district.toLower
 const POSITIVE_PROPERTY_NOUN_PATTERN = /\b(?:bedroom|bdrm|beds?|plots?|land|acres?|house|home|apartment|studio|rental|hostel|shop|office|warehouse|duplex|bungalow|mansion|condo|villa|villas|townhouse|townhouses|self[-\s]*contained|single\s+room|double\s+room|bedsitter|bed\s*sitter|roommate|non[-\s]*residential|residential\s+hostel)\b/i;
 const POSITIVE_LISTING_INTENT_WITH_NOUN_PATTERN = /\b(?:for\s+sale|on\s+sale|for\s+rent|to\s+let|to\s+rent|selling|available\s+(?:for\s+)?(?:sale|rent|lease))\b[\s\S]{0,80}\b(?:bedroom|bdrm|beds?|plots?|land|acres?|house|home|apartment|studio|rental|hostel|shop|office|warehouse|duplex|bungalow|mansion|condo|villa|villas|townhouse|townhouses|self[-\s]*contained|single\s+room|double\s+room|bedsitter|bed\s*sitter|roommate|non[-\s]*residential|residential\s+hostel)\b|\b(?:bedroom|bdrm|beds?|plots?|land|acres?|house|home|apartment|studio|rental|hostel|shop|office|warehouse|duplex|bungalow|mansion|condo|villa|villas|townhouse|townhouses|self[-\s]*contained|single\s+room|double\s+room|bedsitter|bed\s*sitter|roommate|non[-\s]*residential|residential\s+hostel)\b[\s\S]{0,80}\b(?:for\s+sale|on\s+sale|for\s+rent|to\s+let|to\s+rent|selling|available\s+(?:for\s+)?(?:sale|rent|lease))\b/i;
 const POSITIVE_PROPERTY_COUNT_PATTERN = /\b\d+(?:\.\d+)?\s*(?:bed(?:room)?s?|bdrm|plots?|acres?|rooms?)\b|\b(?:bed(?:room)?s?|bdrm|plots?|acres?|rooms?)\s*\d+(?:\.\d+)?\b|\b(?:single\s+room|double\s+room|self[-\s]*contained|bedsitter|bed\s*sitter|per\s+semester)\b/i;
-const POSITIVE_FOREIGN_LOCATION_PATTERN = /(^|\b)(ajah|lekki|ibeju|lagos|abuja|ikeja|ikoyi|nigeria|naira|nairobi|mombasa|kenya|accra|ghana|east\s+legon|dar\s+es\s+salaam|tanzania|kigali|rwanda|johannesburg|cape\s+town|south\s+africa|dubai|uae|texas|florida|london|uk|canada|portugal|golden\s+visa|passport|citizenship|residency|owerri|asaba|enugu|awka|onitsha|nnewi|imo|anambra|delta\s+state|edo|certificate\s+of\s+occupancy|ibusa|apogazi|avu|sangotedo|ibeju|eneka|port\s+harcourt|gra\s+phase|ph\s+city|shell\s+cooperative\s+estate|cooperative\s+estate\s+ph|kolkata|west\s+bengal|bengal|warangal|hanumakonda|telugu|hyderabad|telangana|andhra\s+pradesh|mumbai|delhi|pune|india|indian\s+real\s+estate|ranchi|jharkhand|usha\s+martin\s+university|munnar|lakshmi|viripara|kerala|decimal|decimals|cent|cents|gunta|bigha|katha|lakh|crore|sobha|emaar|damac|rwf|kanombe|ada\s+george|aluu|omoko|rivers\s+state|ksh|tzs|ota|sango|ogun|ogborhill|aba|abia|cantonment|trasacco|murakaza\s+neza|tubafitiye|turabafitiye)(\b|$)|\bc\s*(?:of|\/|-)\s*o\b|\b(?:apogazi\s+nike|nike\s+enugu)\b|\b[1-9]\s*bhk\b|\b\d+\s*decimals?\b|\+233\b|\u20a6/i;
+const POSITIVE_FOREIGN_LOCATION_PATTERN = /(^|\b)(ajah|lekki|ibeju|lagos|abuja|ikeja|ikoyi|nigeria|naira|nairobi|mombasa|kenya|accra|ghana|east\s+legon|dar\s+es\s+salaam|tanzania|kigali|rwanda|johannesburg|cape\s+town|south\s+africa|dubai|uae|texas|florida|london|uk|canada|portugal|golden\s+visa|passport|citizenship|residency|owerri|asaba|enugu|awka|onitsha|nnewi|imo|anambra|delta\s+state|edo|certificate\s+of\s+occupancy|ibusa|apogazi|avu|sangotedo|ibeju|eneka|port\s+harcourt|gra\s+phase|ph\s+city|shell\s+cooperative\s+estate|cooperative\s+estate\s+ph|kolkata|west\s+bengal|bengal|warangal|hanumakonda|telugu|hyderabad|telangana|andhra\s+pradesh|mumbai|delhi|new\s+delhi|delhi\s+ncr|chennai|tamil\s+nadu|pune|india|indian\s+real\s+estate|lahore|karachi|islamabad|rawalpindi|pakistan|marla|ranchi|jharkhand|usha\s+martin\s+university|munnar|lakshmi|viripara|kerala|decimal|decimals|cent|cents|gunta|bigha|katha|lakh|lakhs|crore|crores|sobha|emaar|damac|rwf|kanombe|ada\s+george|aluu|omoko|rivers\s+state|ksh|tzs|ota|sango|ogun|ogborhill|aba|abia|cantonment|trasacco|murakaza\s+neza|tubafitiye|turabafitiye)(\b|$)|\bc\s*(?:of|\/|-)\s*o\b|\b(?:apogazi\s+nike|nike\s+enugu)\b|\b[1-9]\s*bhk\b|\b\d+\s*(?:marla|decimals?)\b|\+233\b|\+234\b|\+91\b|\u20a6|\u20b9|[\u0900-\u097f\u0b80-\u0bff]/i;
+const UGANDA_PHONE_PATTERN = /(?:\+?256[\s()-]*|(?:^|\D))0?7\d{2}[\s()-]*\d{3}[\s()-]*\d{3}(?:\D|$)/;
+const UGANDA_DOMAIN_PATTERN = /(?:https?:\/\/)?(?:[\w-]+\.)+ug(?:[/:?#]|$)/i;
+const UGANDA_NAME_PATTERN = /\buganda(?:n)?\b/i;
 const POSITIVE_CLICKBAIT_PATTERN = /^\s*what\s+\$/i;
 const POSITIVE_EXPLAINER_PATTERN = /(?:\$\s*\d{2,}\s*k?\s+can\s+(?:buy|get)|\b\d+\s+countries\b|\bgolden\s+visa\b|\bland\s+banking\b|\bhow\s+to\b|\btop\s+\d+\b|\bexplained\b|\btour\s+of\b|\bforget\s+\$|\bltd\b|\blimited\b|\bcompany\b|welcome\s+to|well\s*come\s+to|\bep\s?\d+\b|\bepisode\b|podcast|ifma|association|new\s+chapter|your\s+(?:construction|real\s+estate)|ai[- ]powered|ecosystem|getting\s+smarter|real\s+estate\s+ltd|consultants\s+ltd|agencies\b|real\s+estate\s+empire|future\s+is\s+in\s+real\s+estate|what\s+rich\s+homes\s+look\s+like|what(?:'|’)?s\s+your\s+budget|\bvs\s+real\s+estate\b|physical\s+development\s+plan|don't\s+buy\s+this\s+house|no\s+road\s+access|\bscam\b|invest(?:ing)?\s+(?:in\s+)?real\s+estate|areas?\s+to\s+invest|first\s+time\s+investor|real\s+estate\s+investment\s+in\s+uganda|real\s+estate\s+tips|\btips?\b|\bu24\s+television\b|real\s+estate\s+detective|#shorts\b|#viral\b|\bexpo\b|housing\s+expo|\boverview\b|industry\s+(?:overview|insights)|real\s+estate\s+(?:industry|market|transformation|business|climate|sector)|development\s+climate|dangers\s+in|smarter\s+way\s+to\s+enter|how\s+to\s+(?:enter|invest)|women\s+(?:admiring|joining)|sharing\s+ideas|highlights\s+from|edition\s+of|market\s+(?:update|insights|trends)|\bebola\b)/i;
 const POSITIVE_NEWS_POLITICS_PATTERN = /\b(?:mps?|opposition|speaker|bill|parliament|minister|president|drama|arrested|scandal|police|election|cdf|warns|robber(?:y|ies)|thie(?:f|ves)|fraud|lukwago|baryomunsi|bobi\s+wine|government|counsel|kasokoso|hot\s+air)\b/i;
-const POSITIVE_VLOG_EVENT_PATTERN = /(?:latest\s+updates|city\s+streets|streets\s+\d|rainy\s+day|\bparties\b|sunrise|\bvlog\b|presentation|\bproject\b|walkthrough|drone|timelapse|nightlife|worship|church|\bmix\b|whatsapp\s+video|\bvillage\b|i\s+found|why\s+everyone|moving\s+to|trusted\s+real\s+estate\s+partner|be\s+aware|lucky\s+winner|price\s+reduction|inflated\s+uganda\s+real\s+estate|\bsalon\b|home\s+service|opening\s+soon|new\s+\w+\s+office|closed\s+testing|\bfilatom\b|what(?:'s|\s+is)\s+in\s+the\s+box|ever\s+wondered|^\s*\d{1,2}\s+(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+\d{4}\s*$)/i;
+const POSITIVE_VLOG_EVENT_PATTERN = /(?:latest\s+updates|city\s+streets|streets\s+\d|rainy\s+day|\bparties\b|sunrise|\bvlog\b|presentation|\bproject\b|walkthrough|drone|timelapse|nightlife|worship|church|\bmix\b|whatsapp\s+video|\bvillage\b|i\s+found|why\s+everyone|moving\s+to|trusted\s+real\s+estate\s+partner|be\s+aware|lucky\s+winner|price\s+reduction|inflated\s+uganda\s+real\s+estate|\bsalon\b|home\s+service|opening\s+soon|new\s+\w+\s+office|closed\s+testing|\bfilatom\b|what(?:'s|\s+is)\s+in\s+the\s+box|ever\s+wondered|road\s+(?:construction|upgrade|project|works?)|infrastructure\s+project|from\s+dust\s+to\s+tarmac|heavy\s+machinery|^\s*\d{1,2}\s+(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+\d{4}\s*$)/i;
 const POSITIVE_TITLE_ONLY_NON_LISTING_PATTERN = /^\s*\d{1,2}\s+(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+\d{4}\s*$|^joint\s+venture\s+available\s*$|future\s+is\s+in\s+real\s+estate|what(?:'|’)?s\s+your\s+budget/i;
 const BROAD_PROPERTY_TYPE_LABELS = new Set(['property', 'other', 'unknown', 'not stated', 'n/a', 'na']);
 const LISTING_INTENT_PROPERTY_TYPES = new Set([
@@ -201,6 +204,68 @@ function sourceCanonicalUgandaDistrict(record = {}) {
   return district && UGANDA_DISTRICT_SET.has(district.toLowerCase()) ? district : '';
 }
 
+function sourceHasPositiveUgandaSignal(record = {}, {
+  coordinates = sourcePositiveListingCoordinates(record),
+  canonicalDistrict = sourceCanonicalUgandaDistrict(record),
+  strongOnly = false,
+} = {}) {
+  const extra = record.extra_fields && typeof record.extra_fields === 'object' && !Array.isArray(record.extra_fields)
+    ? record.extra_fields
+    : {};
+  const rawSourcePost = extra.raw_source_post && typeof extra.raw_source_post === 'object'
+    ? extra.raw_source_post
+    : {};
+  const contactText = [
+    record.phone,
+    record.phoneAlt,
+    record.contact_phone,
+    record.lister_phone,
+    record.whatsapp,
+    record.source_url,
+    record.source_contact_url,
+    record.channel_url,
+    extra.public_contact_phone,
+    extra.contact_phone,
+    extra.source_url,
+    extra.source_contact_url,
+    extra.source_channel_url,
+    rawSourcePost.phone,
+    rawSourcePost.contact_phone,
+    rawSourcePost.whatsapp,
+    rawSourcePost.source_url,
+    sourceQualityText(record),
+  ].map(compactText).filter(Boolean).join(' ');
+  const explicitLocationText = [
+    record.address,
+    record.area,
+    record.location,
+    record.location_label,
+    record.title,
+    record.sourceTitle,
+    record.source_title,
+    record.caption,
+    record.description,
+    extra.resolved_location_label,
+    extra.map_pin_label,
+    extra.source_title,
+    extra.source_caption,
+    extra.youtube_source_title,
+    rawSourcePost.title,
+    rawSourcePost.caption,
+    rawSourcePost.description,
+  ].map(compactText).filter(Boolean).join(' ');
+  const explicitDistrict = canonicalDistrict && new RegExp(`\\b${canonicalDistrict.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(explicitLocationText);
+  const strongSignal = Boolean(
+    sourceCoordinatesInsideUganda(coordinates)
+      || UGANDA_PHONE_PATTERN.test(contactText)
+      || UGANDA_DOMAIN_PATTERN.test(contactText)
+      || UGANDA_NAME_PATTERN.test(explicitLocationText)
+      || explicitDistrict
+  );
+  if (strongOnly) return strongSignal;
+  return strongSignal || Boolean(canonicalDistrict && compactText(explicitLocationText));
+}
+
 function sourceHasConcreteListingSignal(record = {}) {
   const extra = record.extra_fields && typeof record.extra_fields === 'object' && !Array.isArray(record.extra_fields)
     ? record.extra_fields
@@ -231,6 +296,15 @@ function sourcePositiveListingGateForRecord(record = {}) {
   const coords = sourcePositiveListingCoordinates(record);
   const canonicalDistrict = sourceCanonicalUgandaDistrict(record);
   const hasInUgandaCoordinates = sourceCoordinatesInsideUganda(coords);
+  const hasPositiveUgandaSignal = sourceHasPositiveUgandaSignal(record, {
+    coordinates: coords,
+    canonicalDistrict,
+  });
+  const hasStrongPositiveUgandaSignal = sourceHasPositiveUgandaSignal(record, {
+    coordinates: coords,
+    canonicalDistrict,
+    strongOnly: true,
+  });
   if (coords && !hasInUgandaCoordinates) {
     return {
       ok: false,
@@ -242,7 +316,7 @@ function sourcePositiveListingGateForRecord(record = {}) {
       district: canonicalDistrict,
     };
   }
-  if (POSITIVE_FOREIGN_LOCATION_PATTERN.test(text)) {
+  if (POSITIVE_FOREIGN_LOCATION_PATTERN.test(text) && !hasStrongPositiveUgandaSignal) {
     return {
       ok: false,
       reason: 'non_uganda_location',
@@ -253,11 +327,11 @@ function sourcePositiveListingGateForRecord(record = {}) {
       district: canonicalDistrict,
     };
   }
-  if (!canonicalDistrict && !hasInUgandaCoordinates) {
+  if (!hasPositiveUgandaSignal) {
     return {
       ok: false,
       reason: 'non_uganda_location',
-      details: ['Canonical Uganda district or in-Uganda coordinates are required.'],
+      details: ['Positive Uganda signal required: a resolved Uganda location, Uganda phone number, in-Uganda coordinates, or .ug source.'],
       has_uganda_location_signal: false,
       has_listing_signal: false,
       coordinates: coords,

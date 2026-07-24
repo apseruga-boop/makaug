@@ -546,7 +546,7 @@ test('found-online social search batch accepts curated YouTube source records', 
   const listings = plannedSocialSearchListings(Object.fromEntries(SOCIAL_SEARCH_AGENTS.map((agent, index) => [agent.key, `agent-${index}`])));
   assert.strictEqual(SOCIAL_SEARCH_BATCH_ID, 'social_search_authorised_20260520');
   assert.strictEqual(summary.count, 18, 'social search batch should contain the high-confidence recent public YouTube property records');
-  assert.strictEqual(summary.seed_eligible_count, 15, 'strict positive gates should keep only the publishable curated exact YouTube source rows eligible');
+  assert.strictEqual(summary.seed_eligible_count, 17, 'strict positive gates should keep publishable Uganda rows while foreign and non-listing rows remain held');
   assert.strictEqual(summary.agents_count, 0, 'social search batch should not auto-create public broker profiles from source discovery');
   assert.strictEqual(summary.source_profiles_deferred_count, SOCIAL_SEARCH_AGENTS.length, 'all source-only profiles should stay deferred until the source owner registers or claims them');
   assert(/registers or claims/i.test(summary.profile_policy), 'summary should expose the source-profile claim/registration policy');

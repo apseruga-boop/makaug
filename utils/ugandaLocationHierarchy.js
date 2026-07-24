@@ -58,6 +58,7 @@ const UG_LOCATION_TREE = {
         { name: 'Kisaasi', lat: 0.364, lng: 32.589 },
         { name: 'Kyanja', lat: 0.384, lng: 32.596 },
         { name: 'Kiwatule', lat: 0.372, lng: 32.625 },
+        { name: 'Banda', lat: 0.341, lng: 32.633 },
         { name: 'Bugolobi', lat: 0.317, lng: 32.612 }
       ]
     },

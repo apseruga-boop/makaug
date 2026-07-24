@@ -15,7 +15,8 @@ const {
 const {
   createHostedPayment,
   getPaymentStatus,
-  handlePaymentWebhook
+  handlePaymentWebhook,
+  paymentProviderConfigured
 } = require('../services/paymentProviderService');
 
 const router = express.Router();
@@ -97,6 +98,24 @@ router.get('/packages', (_req, res) => {
   return res.json({
     ok: true,
     data: getAdvertisingPackages()
+  });
+});
+
+router.get('/readiness', (_req, res) => {
+  const provider = cleanText(process.env.UGANDA_PAYMENT_PROVIDER || process.env.PAYMENT_PROVIDER || 'flutterwave').toLowerCase();
+  const configured = paymentProviderConfigured();
+  return res.json({
+    ok: true,
+    data: {
+      marker: 'advertising-selfserve-checkout-20260724',
+      provider,
+      provider_configured: configured,
+      hosted_checkout_only: true,
+      supported_methods: provider.includes('flutterwave')
+        ? ['mobile_money', 'card']
+        : [],
+      status: configured ? 'ready' : 'configuration_required'
+    }
   });
 });
 
@@ -246,7 +265,7 @@ router.post('/campaigns', requireAdvertiserAuth, async (req, res, next) => {
         audience_segments, creative_brief, ai_copy, advertiser_approval_status,
         report_cadence, target_pages, pricing_model, quoted_amount_ugx, status, payment_status
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10::jsonb,$11::jsonb,$12,$13::jsonb,'sent','weekly',$14::jsonb,$15,$16,'draft','unpaid')
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10::jsonb,$11::jsonb,$12,$13::jsonb,'draft','weekly',$14::jsonb,$15,$16,'draft','unpaid')
       RETURNING *`,
       [
         inquiry.rows[0].id,
@@ -305,7 +324,9 @@ router.post('/campaigns', requireAdvertiserAuth, async (req, res, next) => {
 router.post('/campaigns/:id/payment-link', requireAdvertiserAuth, async (req, res, next) => {
   try {
     const values = [req.params.id];
-    const ownerWhere = campaignOwnerClause(req.userAuth, values);
+    const ownerWhere = req.userAuth.role === 'admin'
+      ? 'TRUE'
+      : campaignOwnerClause(req.userAuth, values);
     const campaign = await db.query(
       `SELECT *
        FROM advertising_campaigns
@@ -315,6 +336,34 @@ router.post('/campaigns/:id/payment-link', requireAdvertiserAuth, async (req, re
     );
     if (!campaign.rows.length) return res.status(404).json({ ok: false, error: 'Campaign not found' });
     const item = campaign.rows[0];
+    if (item.advertiser_approval_status !== 'approved') {
+      return res.status(409).json({
+        ok: false,
+        error: 'Campaign approval is required before payment.',
+        code: 'campaign_approval_required'
+      });
+    }
+    const existingLink = await db.query(
+      `SELECT *
+       FROM payment_links
+       WHERE related_campaign_id = $1
+         AND status IN ('created', 'pending')
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [item.id]
+    );
+    if (existingLink.rows.length) {
+      return res.status(200).json({
+        ok: true,
+        data: {
+          paymentLink: existingLink.rows[0],
+          providerConfigured: Boolean(existingLink.rows[0].checkout_url),
+          providerMissing: !existingLink.rows[0].checkout_url,
+          reused: true,
+          message: 'Existing payment link returned.'
+        }
+      });
+    }
     const amount = Math.max(0, parseInt(req.body.amount || item.quoted_amount_ugx || 0, 10) || 0);
     const invoice = await db.query(
       `INSERT INTO invoices (

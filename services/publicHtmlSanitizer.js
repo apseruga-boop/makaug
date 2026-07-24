@@ -84,8 +84,10 @@ const PUBLIC_PAGE_IDS = [
   'page-land',
   'page-brokers',
   'page-mortgage',
+  'page-valuation',
   'page-ai-chatbot',
   'page-marketplace',
+  'page-advertise',
   'page-fraud',
   'page-broker-profile',
   'page-detail',
@@ -108,9 +110,12 @@ const PUBLIC_ROUTE_PAGE_MAP = {
   '/find-brokers': ['page-brokers'],
   '/mortgage': ['page-mortgage'],
   '/mortgage-finder': ['page-mortgage'],
+  '/valuation': ['page-valuation'],
+  '/property-valuation': ['page-valuation'],
   '/discover-ai-chatbot': ['page-ai-chatbot'],
   '/ai-chatbot': ['page-ai-chatbot'],
   '/marketplace': ['page-marketplace'],
+  '/advertise': ['page-advertise'],
   '/fraud': ['page-fraud'],
   '/anti-fraud': ['page-fraud'],
   '/safety': ['page-fraud'],
@@ -132,13 +137,6 @@ const AUTH_ROUTE_PREFIXES = [
 ];
 
 const SYNTHETIC_PUBLIC_ROUTE_CONTENT = {
-  '/advertise': {
-    title: 'Advertise with makaug',
-    eyebrow: 'Paid advertising campaigns',
-    body: 'Run paid sponsored listings, broker spotlights, student accommodation campaigns, mortgage partner placements, and WhatsApp-first lead campaigns. Free property listing lives on List Property; this page is for campaign packages, review, payment links, and advertiser dashboard access.',
-    ctas: ['Start advertising', 'Create advertiser account', 'Ask makaug about advertising on WhatsApp'],
-    links: ['/advertiser-signup', '/advertiser-dashboard', 'https://wa.me/256760112587?text=Hello%20makaug,%20I%20want%20to%20advertise']
-  },
   '/how-it-works': {
     title: 'How makaug Works',
     eyebrow: 'Step-by-step property journeys',

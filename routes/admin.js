@@ -6679,6 +6679,14 @@ router.patch('/advertising/campaigns/:id', async (req, res, next) => {
     if (req.body.status) {
       const status = String(req.body.status).trim().toLowerCase();
       if (!allowedStatuses.includes(status)) return res.status(400).json({ ok: false, error: 'Invalid campaign status' });
+      const effectivePaymentStatus = String(req.body.payment_status || previousCampaign.payment_status || '').trim().toLowerCase();
+      const effectiveApprovalStatus = String(req.body.advertiser_approval_status || previousCampaign.advertiser_approval_status || '').trim().toLowerCase();
+      if (status === 'live' && effectiveApprovalStatus !== 'approved') {
+        return res.status(409).json({ ok: false, error: 'Advertiser approval is required before a campaign can go live.' });
+      }
+      if (status === 'live' && !['paid', 'waived'].includes(effectivePaymentStatus)) {
+        return res.status(409).json({ ok: false, error: 'Paid or waived payment status is required before a campaign can go live.' });
+      }
       add('status', status);
       if (status === 'live') add('activated_at', new Date().toISOString(), '::timestamptz');
     }
@@ -9603,6 +9611,11 @@ function buildAdminLeadFilters(query = {}) {
   if (query.source) addFilter('source = ?', String(query.source).trim());
   if (query.type) addFilter('lead_type = ?', String(query.type).trim());
   if (query.priority) addFilter('priority = ?', String(query.priority).trim());
+  if (query.category) addFilter('category ILIKE ?', `%${String(query.category).trim()}%`);
+  if (query.location) addFilter('location ILIKE ?', `%${String(query.location).trim()}%`);
+  if (query.bundle_tag) addFilter(`COALESCE(metadata->>'bundle_tag', '') = ?`, String(query.bundle_tag).trim());
+  if (query.date_from) addFilter('created_at >= ?::timestamptz', String(query.date_from).trim());
+  if (query.date_to) addFilter(`created_at < (?::date + INTERVAL '1 day')`, String(query.date_to).trim());
   if (query.search) {
     values.push(`%${String(query.search).trim()}%`);
     filters.push(`(message ILIKE $${values.length} OR location ILIKE $${values.length} OR contact_name ILIKE $${values.length} OR contact_phone ILIKE $${values.length} OR contact_email ILIKE $${values.length})`);
@@ -9731,6 +9744,49 @@ router.get('/leads', async (req, res, next) => {
   } catch (error) {
     if (['42P01', '42703'].includes(error.code)) {
       return res.json({ ok: true, data: [], pagination: toPagination(0, 1, 50), provider_missing: true });
+    }
+    return next(error);
+  }
+});
+
+function csvCell(value) {
+  const text = value == null
+    ? ''
+    : (typeof value === 'object' ? JSON.stringify(value) : String(value));
+  const safeText = /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
+  return `"${safeText.replace(/"/g, '""')}"`;
+}
+
+router.get('/leads-export.csv', async (req, res, next) => {
+  try {
+    const { values, where } = buildAdminLeadFilters(req.query);
+    const rows = await db.query(
+      `${adminLeadUnionSql()}
+       SELECT *
+       FROM all_leads
+       ${where}
+       ORDER BY created_at DESC
+       LIMIT 10000`,
+      values
+    );
+    const columns = [
+      'id', 'created_at', 'lead_status', 'lifecycle_stage', 'priority', 'source',
+      'lead_type', 'category', 'location', 'budget', 'contact_name', 'contact_phone',
+      'contact_email', 'contact_whatsapp', 'message', 'listing_title', 'bundle_tag'
+    ];
+    const lines = [columns.map(csvCell).join(',')];
+    rows.rows.forEach((row) => {
+      const output = { ...row, bundle_tag: row.metadata?.bundle_tag || '' };
+      lines.push(columns.map((column) => csvCell(output[column])).join(','));
+    });
+    const stamp = new Date().toISOString().slice(0, 10);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="makaug-leads-${stamp}.csv"`);
+    return res.send(`\uFEFF${lines.join('\n')}`);
+  } catch (error) {
+    if (['42P01', '42703'].includes(error.code)) {
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      return res.send('id,created_at,lead_status,category,location\n');
     }
     return next(error);
   }
@@ -9980,6 +10036,15 @@ router.patch('/leads/:id', async (req, res, next) => {
     if (Object.prototype.hasOwnProperty.call(req.body, 'assigned_to_user_id')) add('assigned_to_user_id', cleanText(req.body.assigned_to_user_id) || null);
     if (Object.prototype.hasOwnProperty.call(req.body, 'next_follow_up_at')) add('next_follow_up_at', cleanText(req.body.next_follow_up_at) || null, '::timestamptz');
     if (Object.prototype.hasOwnProperty.call(req.body, 'last_contacted_at')) add('last_contacted_at', cleanText(req.body.last_contacted_at) || null, '::timestamptz');
+    if (Object.prototype.hasOwnProperty.call(req.body, 'bundle_tag')) {
+      const bundleTag = cleanText(req.body.bundle_tag);
+      add(
+        'metadata',
+        JSON.stringify(bundleTag ? { bundle_tag: bundleTag } : { bundle_tag: null }),
+        "::jsonb"
+      );
+      updates[updates.length - 1] = `metadata = COALESCE(metadata, '{}'::jsonb) || $${values.length}::jsonb`;
+    }
     if (!updates.length) return res.status(400).json({ ok: false, error: 'No lead updates provided' });
     values.push(leadId);
     const updated = await db.query(
