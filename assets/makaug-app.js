@@ -32732,10 +32732,10 @@ function accountPolicyPreview(kind = "terms") {
       items: [
         `We collect account, listing, contact, WhatsApp/email/SMS, saved-search, alert, and support data needed to run ${publicBrand()}.`,
         "For third-party property results, we may collect limited publicly available property facts, source names, source links, and publicly displayed contact routes for discovery and attribution.",
+        "If you connect TikTok, we use only the basic-profile and public-video permissions you approve. The authorization is read-only and can be disconnected at any time.",
         "We use this data for account access, listings, alerts, enquiries, safety checks, fraud prevention, advertising operations, and support.",
         "You can manage contact preferences, opt out of marketing, and request access, correction, export, or deletion where applicable.",
-        `${publicBrand()} applies Uganda data protection principles and GDPR-style rights where relevant. AI/data use must be consent-aware and privacy-safe.`,
-        `Legal review note: the full policy should be reviewed by ${publicBrand()} legal counsel before formal reliance.`
+        `${publicBrand()} applies Uganda data protection principles and GDPR-style rights where relevant. Contact info@makaug.com with a privacy request.`
       ]
     };
   }
@@ -32745,10 +32745,11 @@ function accountPolicyPreview(kind = "terms") {
     items: [
       `${publicBrand()} is a property search and discovery platform; third-party property results are previews, not makaug-owned listings unless clearly claimed or verified.`,
       "makaug does not claim ownership of third-party photos, videos, captions, descriptions, trademarks, or contact details.",
+      "Connecting TikTok is optional and read-only. makaug requests only basic-profile and public-video permissions and cannot post, edit, or delete TikTok content.",
       "Users must provide accurate account, listing, pricing, location, and contact information and must not misuse the platform.",
       "Do not pay before viewing, verification, or proper due diligence. Report suspicious listings or payment pressure.",
       "Advertising, sponsored placements, and payment links are subject to review, approval, and applicable campaign terms.",
-      `Legal review note: the full terms should be reviewed by ${publicBrand()} legal counsel before formal reliance.`
+      `Questions about these Terms can be sent to info@makaug.com.`
     ]
   };
 }
@@ -34586,7 +34587,7 @@ const PAGE_CONTENT = {
     <div class="hidden rounded-3xl bg-white border border-green-100 p-5" data-howto-video-grid="how-it-works"></div>`,
   terms: `
     <h2 class="text-2xl font-bold text-gray-800 mb-1">Terms & Conditions</h2>
-    <p class="text-xs text-gray-500 mb-4">Last updated: 28 May 2026</p>
+    <p class="text-xs text-gray-500 mb-4">Last updated: 25 July 2026</p>
     <p class="mb-3">
       These Terms govern your use of makaug.com. By using the platform, you agree to comply with these Terms,
       all applicable Ugandan laws, and any listing or safety standards published on the site.
@@ -34624,6 +34625,19 @@ const PAGE_CONTENT = {
       <li>Contact for third-party property results is handled through the original source unless the owner or broker claims and verifies the listing.</li>
       <li>makaug.com should use official embeds, links, approved APIs, approved feeds, or permission where available, and should not rehost third-party videos or copied social media photos without permission.</li>
     </ul>
+    <h3 class="font-bold text-gray-800 mb-1">4A. Optional TikTok Connection</h3>
+    <p class="mb-2 text-sm">
+      A user may choose to connect a TikTok account so makaug.com can display that user's basic TikTok profile
+      and public-video metadata for review. The connection uses TikTok's authorization flow and is limited to
+      the <strong>user.info.basic</strong> and <strong>video.list</strong> permissions approved by the user.
+    </p>
+    <ul class="list-disc pl-5 space-y-1 text-sm mb-3">
+      <li>The TikTok connection is optional and read-only. makaug.com cannot post, edit, or delete content on TikTok.</li>
+      <li>The user chooses whether to use an original TikTok video link as supporting evidence for a property listing.</li>
+      <li>TikTok content and profile information remain subject to TikTok's terms and the rights of the account holder.</li>
+      <li>The user may disconnect at any time. Disconnecting removes the stored TikTok authorization from makaug.com.</li>
+      <li>makaug.com is not affiliated with, endorsed by, or sponsored by TikTok.</li>
+    </ul>
     <h3 class="font-bold text-gray-800 mb-1">5. Correction, Claim, Removal, and Reports</h3>
     <p class="mb-3 text-sm">
       Rights holders, brokers, owners, creators, photographers, or authorised representatives may request that a third-party
@@ -34659,16 +34673,18 @@ const PAGE_CONTENT = {
     </p>`,
   privacy: `
     <h2 class="text-2xl font-bold text-gray-800 mb-1">Privacy Policy</h2>
-    <p class="text-xs text-gray-500 mb-4">Last updated: 28 May 2026</p>
+    <p class="text-xs text-gray-500 mb-4">Last updated: 25 July 2026</p>
     <p class="mb-3 text-sm">
       makaug.com processes personal data in line with the Data Protection and Privacy Act, 2019 and related Ugandan regulations.
-      This policy explains what we collect, why we collect it, and how users can exercise privacy rights.
+      makaug.com is responsible for the processing described in this policy. This policy explains what we collect,
+      why we collect it, and how users can exercise privacy rights. Privacy questions may be sent to info@makaug.com.
     </p>
     <h3 class="font-bold text-gray-800 mb-1">1. Data We Collect</h3>
     <ul class="list-disc pl-5 space-y-1 text-sm mb-3">
       <li>Account data: name, phone number, email, password credentials.</li>
       <li>Listing data: property details, photos, district/area, pricing, and contact preferences.</li>
       <li>Third-party discovery data: limited publicly available property information such as property location, guide price, property type, source platform, source link, source name, and publicly displayed contact routes.</li>
+      <li>TikTok connection data, when a user chooses to connect: TikTok open ID, display name, avatar, profile link, approved scopes, public-video metadata such as title, description, cover image, share/embed link and creation time, plus OAuth access and refresh tokens.</li>
       <li>Verification data where applicable: identity information and compliance documents.</li>
       <li>Technical data: device/browser data, IP address, session logs, and fraud-risk signals.</li>
     </ul>
@@ -34676,35 +34692,65 @@ const PAGE_CONTENT = {
     <ul class="list-disc pl-5 space-y-1 text-sm mb-3">
       <li>Account creation, platform delivery, and listing publication.</li>
       <li>Property search and discovery, including directing users back to original third-party sources.</li>
+      <li>Displaying a connected user's public TikTok videos so that user can choose an original source link for a property listing.</li>
       <li>User support, fraud prevention, moderation, and dispute handling.</li>
       <li>Security monitoring and legal/regulatory compliance.</li>
       <li>Performance analytics to improve usability and listing quality.</li>
     </ul>
-    <h3 class="font-bold text-gray-800 mb-1">3. Third-party Property Results</h3>
+    <h3 class="font-bold text-gray-800 mb-1">3. TikTok Login Kit and Display API</h3>
+    <p class="mb-2 text-sm">
+      Connecting TikTok is optional. When a user selects “Connect TikTok,” TikTok asks the user to authorize
+      <strong>user.info.basic</strong> and <strong>video.list</strong>. We use those permissions only to show the
+      connected user's basic profile and public videos inside makaug.com. We do not request permission to publish,
+      edit, or delete TikTok content.
+    </p>
+    <ul class="list-disc pl-5 space-y-1 text-sm mb-3">
+      <li>OAuth tokens are encrypted at rest and are not placed in public pages, listing/search payloads, analytics, logs, or browser storage.</li>
+      <li>Profile and video data is shown only to the browser session associated with the connection.</li>
+      <li>A user can disconnect on the TikTok connection page. This immediately deletes the stored makaug.com connection record and encrypted tokens.</li>
+      <li>A user may also revoke access in TikTok. After revocation or expiry, makaug.com requires a new authorization before it can access data again.</li>
+      <li>If a user deliberately attaches an original TikTok source link to a property listing, that source link may remain with the listing until it is removed, corrected, or the listing is deleted.</li>
+    </ul>
+    <h3 class="font-bold text-gray-800 mb-1">4. Third-party Property Results</h3>
     <p class="mb-3 text-sm">
       Where personal data is included in a third-party property result, makaug.com will only display what is necessary for
       property discovery, source attribution, fraud prevention, and user safety. Contact for third-party results should point
       users back to the original source unless the owner or broker has claimed and approved the listing. Individuals may
       request correction or removal of their personal data by contacting makaug.com.
     </p>
-    <h3 class="font-bold text-gray-800 mb-1">4. Data Sharing</h3>
+    <h3 class="font-bold text-gray-800 mb-1">5. Data Sharing and International Processing</h3>
     <p class="mb-3 text-sm">
       We do not sell personal data. Data may be shared with service providers supporting hosting, messaging, analytics,
-      and fraud controls under confidentiality and security obligations, or with lawful authorities when legally required.
+      fraud controls, and authorized integrations such as TikTok under confidentiality and security obligations, or with
+      lawful authorities when legally required. Some providers may process data outside Uganda; where this happens, we
+      use reasonable contractual and technical safeguards appropriate to the service and applicable law.
     </p>
-    <h3 class="font-bold text-gray-800 mb-1">5. Retention</h3>
+    <h3 class="font-bold text-gray-800 mb-1">6. Retention and Security</h3>
     <p class="mb-3 text-sm">
       Data is retained only as long as necessary for platform operations, legal obligations, fraud investigation,
-      and audit requirements, then securely deleted or anonymized.
+      and audit requirements, then securely deleted or anonymized. TikTok connection records and encrypted OAuth tokens
+      are deleted immediately when the user disconnects from makaug.com. We use access controls, encryption, secure cookies,
+      and monitoring to protect account and integration data, but no internet service can guarantee absolute security.
     </p>
-    <h3 class="font-bold text-gray-800 mb-1">6. Your Rights</h3>
+    <h3 class="font-bold text-gray-800 mb-1">7. Your Rights and Choices</h3>
     <ul class="list-disc pl-5 space-y-1 text-sm mb-3">
       <li>Request access to personal data we hold about you.</li>
       <li>Request correction of inaccurate or incomplete data.</li>
       <li>Request deletion where retention is no longer required by law.</li>
       <li>Object to certain processing or request restrictions where applicable.</li>
+      <li>Disconnect TikTok at /tiktok-connect or revoke makaug.com through TikTok account settings.</li>
     </ul>
-    <h3 class="font-bold text-gray-800 mb-1">7. Contact and Complaints</h3>
+    <h3 class="font-bold text-gray-800 mb-1">8. Children</h3>
+    <p class="mb-3 text-sm">
+      makaug.com is a property marketplace intended for adults. We do not knowingly use the TikTok connection
+      to collect personal data from children.
+    </p>
+    <h3 class="font-bold text-gray-800 mb-1">9. Policy Changes</h3>
+    <p class="mb-3 text-sm">
+      We may update this policy when services, integrations, or legal requirements change. The date above identifies
+      the current version, and material changes will be presented through the platform where appropriate.
+    </p>
+    <h3 class="font-bold text-gray-800 mb-1">10. Contact and Complaints</h3>
     <p class="text-sm">
       For privacy queries, contact info@makaug.com. If unresolved, users may escalate concerns through appropriate
       Ugandan data protection channels.
@@ -40550,6 +40596,120 @@ function openValuationForProperty(propertyId) {
   return false;
 }
 
+function setTikTokDisplayStatus(message, tone = "info") {
+  const element = document.getElementById("tiktok-display-status");
+  if (!element) return;
+  const styles = tone === "error"
+    ? ["border-red-200", "bg-red-50", "text-red-800"]
+    : tone === "success"
+      ? ["border-emerald-200", "bg-emerald-50", "text-emerald-900"]
+      : ["border-[#dbe8e0]", "bg-[#f0f6f2]", "text-[#16241d]"];
+  element.className = `mt-4 rounded-lg border px-4 py-3 text-sm ${styles.join(" ")}`;
+  element.textContent = message;
+}
+
+function renderTikTokDisplayVideo(video = {}) {
+  const sourceUrl = safeImageUrl(video.share_url || video.embed_link || "");
+  const coverUrl = safeImageUrl(video.cover_image_url || "");
+  const description = String(video.video_description || video.title || "Public TikTok video").trim();
+  const listingUrl = sourceUrl
+    ? `/list-property?video_url=${encodeURIComponent(sourceUrl)}`
+    : "/list-property";
+  return `
+    <article class="overflow-hidden rounded-lg border border-[#e4ece8] bg-white">
+      <div class="relative overflow-hidden bg-[#f6f9f7]" style="aspect-ratio: 9 / 16;">
+        ${coverUrl
+          ? `<img src="${adminAttr(coverUrl)}" alt="" class="absolute inset-0 h-full w-full object-cover" loading="lazy">`
+          : `<div class="absolute inset-0 grid place-items-center text-4xl text-gray-300"><i class="fab fa-tiktok" aria-hidden="true"></i></div>`}
+      </div>
+      <div class="p-4">
+        <h3 class="line-clamp-3 text-sm font-black text-[#16241d]">${adminEscape(description)}</h3>
+        <div class="mt-4 grid gap-2">
+          ${sourceUrl
+            ? `<a href="${adminAttr(sourceUrl)}" target="_blank" rel="noopener noreferrer" class="inline-flex min-h-[42px] items-center justify-center rounded-lg border border-[#cdddd3] px-3 text-xs font-black text-[#15603f]">View on TikTok</a>`
+            : ""}
+          <a href="${adminAttr(listingUrl)}" onclick="return navigatePublicRoute(this.href, event)" class="inline-flex min-h-[42px] items-center justify-center rounded-lg bg-[#15603f] px-3 text-xs font-black text-white">Use in a property listing</a>
+        </div>
+      </div>
+    </article>`;
+}
+
+function renderTikTokDisplayConnection(data = {}) {
+  const connected = data.connected === true;
+  const connectButton = document.getElementById("tiktok-display-connect-button");
+  const profile = document.getElementById("tiktok-display-profile");
+  const videosSection = document.getElementById("tiktok-display-videos-section");
+  connectButton?.classList.toggle("hidden", connected);
+  profile?.classList.toggle("hidden", !connected);
+  videosSection?.classList.toggle("hidden", !connected);
+  if (!connected) {
+    setTikTokDisplayStatus(
+      data.configured
+        ? "TikTok is ready. Connect your account to review your public videos."
+        : "TikTok connection is being configured. Please try again shortly.",
+      data.configured ? "info" : "error"
+    );
+    return;
+  }
+
+  const profileData = data.profile || {};
+  const avatar = document.getElementById("tiktok-display-avatar");
+  const avatarUrl = safeImageUrl(profileData.avatar_url || "");
+  if (avatar) {
+    avatar.src = avatarUrl;
+    avatar.classList.toggle("hidden", !avatarUrl);
+  }
+  setTextById("tiktok-display-name", profileData.display_name || "TikTok creator");
+  const videos = Array.isArray(data.videos) ? data.videos : [];
+  setTextById("tiktok-display-count", `${videos.length} public video${videos.length === 1 ? "" : "s"}`);
+  const grid = document.getElementById("tiktok-display-videos");
+  if (grid) {
+    grid.innerHTML = videos.length
+      ? videos.map(renderTikTokDisplayVideo).join("")
+      : `<div class="sm:col-span-2 lg:col-span-3 rounded-lg border border-[#e4ece8] bg-white p-5 text-sm text-[#5b6b62]">No public TikTok videos were returned for this account.</div>`;
+  }
+  setTikTokDisplayStatus("TikTok connected. Only the public videos authorized by this account are shown.", "success");
+}
+
+async function initializeTikTokDisplayPage() {
+  const page = document.getElementById("page-tiktok-connect");
+  if (!page) return;
+  const params = new URLSearchParams(window.location.search);
+  const resultState = params.get("tiktok") || "";
+  if (resultState === "error") {
+    setTikTokDisplayStatus(params.get("message") || "TikTok authorization could not be completed.", "error");
+  } else if (resultState === "connected") {
+    setTikTokDisplayStatus("TikTok authorization completed. Loading public videos…", "success");
+  } else {
+    setTikTokDisplayStatus("Checking TikTok connection…");
+  }
+  try {
+    const status = await apiRequest("/api/tiktok-display/status", { skipAuth: true });
+    renderTikTokDisplayConnection(status?.data || {});
+  } catch (error) {
+    renderTikTokDisplayConnection({ connected: false, configured: true });
+    setTikTokDisplayStatus(error?.message || "TikTok connection could not be loaded.", "error");
+  }
+}
+
+async function disconnectTikTokDisplay() {
+  const confirmed = window.confirm("Disconnect TikTok and delete the stored authorization from makaug?");
+  if (!confirmed) return false;
+  setTikTokDisplayStatus("Disconnecting TikTok…");
+  try {
+    await apiRequest("/api/tiktok-display/disconnect", {
+      method: "POST",
+      skipAuth: true,
+      body: {}
+    });
+    renderTikTokDisplayConnection({ connected: false, configured: true });
+    setTikTokDisplayStatus("TikTok disconnected. The stored authorization was deleted.", "success");
+  } catch (error) {
+    setTikTokDisplayStatus(error?.message || "TikTok could not be disconnected.", "error");
+  }
+  return false;
+}
+
 let advertisingSelfServeStep = 1;
 let advertisingSelfServePackages = [];
 
@@ -40786,6 +40946,7 @@ const PAGE_ROUTE_MAP = Object.freeze({
   brokers: "/brokers",
   mortgage: "/mortgage",
   valuation: "/valuation",
+  "tiktok-connect": "/tiktok-connect",
   "ai-chatbot": "/discover-ai-chatbot",
   marketplace: "/marketplace",
   advertise: "/advertise",
@@ -40829,6 +40990,7 @@ const PUBLIC_ROUTE_PAGE_MAP = Object.freeze({
   "/mortgage-finder": "mortgage",
   "/valuation": "valuation",
   "/property-valuation": "valuation",
+  "/tiktok-connect": "tiktok-connect",
   "/discover-ai-chatbot": "ai-chatbot",
   "/ai-chatbot": "ai-chatbot",
   "/marketplace": "marketplace",
@@ -41130,6 +41292,7 @@ function showPage(page, options = {}) {
   if (targetPage === "marketplace") loadMarketplacePage();
   if (targetPage === "advertise") initializeAdvertisingSelfServe();
   if (targetPage === "valuation") initializeValuationPage();
+  if (targetPage === "tiktok-connect") initializeTikTokDisplayPage();
   if (targetPage === "list-property") {
     if (previousPage !== "list-property") {
       listWizardStep = 1;
@@ -41151,6 +41314,15 @@ function showPage(page, options = {}) {
       const success = document.getElementById("lp-success-box");
       if (success) success.classList.add("hidden");
       renderLpVideoPreview();
+    }
+    const routeVideoUrl = new URLSearchParams(window.location.search).get("video_url") || "";
+    if (/^https:\/\/(www\.)?tiktok\.com\/@[^/]+\/video\/\d+/i.test(routeVideoUrl)) {
+      const videoInput = document.getElementById("lp-video-url");
+      if (videoInput && !videoInput.value) {
+        videoInput.value = routeVideoUrl;
+        renderLpVideoPreview();
+        updateListPreview();
+      }
     }
     const routeType = getListPropertyRouteType();
     if (routeType) setListChoiceType(routeType);
@@ -41182,6 +41354,7 @@ const PUBLIC_ROUTE_SKELETON_LABELS = Object.freeze({
   brokers: "Brokers",
   mortgage: "Mortgage Finder",
   valuation: "Valuation",
+  "tiktok-connect": "Connect TikTok",
   "ai-chatbot": "AI Chatbot",
   marketplace: "Marketplace",
   advertise: "Advertise",

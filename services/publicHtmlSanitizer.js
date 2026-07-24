@@ -85,6 +85,7 @@ const PUBLIC_PAGE_IDS = [
   'page-brokers',
   'page-mortgage',
   'page-valuation',
+  'page-tiktok-connect',
   'page-ai-chatbot',
   'page-marketplace',
   'page-advertise',
@@ -112,6 +113,7 @@ const PUBLIC_ROUTE_PAGE_MAP = {
   '/mortgage-finder': ['page-mortgage'],
   '/valuation': ['page-valuation'],
   '/property-valuation': ['page-valuation'],
+  '/tiktok-connect': ['page-tiktok-connect'],
   '/discover-ai-chatbot': ['page-ai-chatbot'],
   '/ai-chatbot': ['page-ai-chatbot'],
   '/marketplace': ['page-marketplace'],
@@ -272,10 +274,15 @@ const SYNTHETIC_PUBLIC_ROUTE_CONTENT = {
   },
   '/terms': {
     title: 'makaug Terms and Conditions',
-    eyebrow: 'Legal review required',
+    eyebrow: 'Platform terms',
     body: 'makaug operates as a property search and discovery platform. Third-party property results are discovery previews, not makaug-owned or verified listings unless clearly marked as claimed or verified.',
     extraHtml: `
       <div class="mt-5 space-y-4 text-sm text-gray-700">
+        <p class="text-xs text-gray-500">Last updated: 25 July 2026</p>
+        <section>
+          <h3 class="font-black text-gray-900">Platform scope and accounts</h3>
+          <p class="mt-1">By using makaug.com, you agree to comply with these Terms, applicable Ugandan law, and the platform's safety and listing standards. Users must provide accurate information, protect account credentials, and only market property they own or are authorised to list. makaug is not an escrow service, law firm, or party to transactions between users.</p>
+        </section>
         <section>
           <h3 class="font-black text-gray-900">Third-party property results</h3>
           <p class="mt-1">Some property results may be sourced from publicly available third-party websites, social media pages, property portals, or other online sources. These results are provided for discovery and reference only.</p>
@@ -292,6 +299,22 @@ const SYNTHETIC_PUBLIC_ROUTE_CONTENT = {
           <h3 class="font-black text-gray-900">Correction, claim, and removal</h3>
           <p class="mt-1">Owners, brokers, creators, photographers, rights holders, or authorised representatives may request correction, claim, or removal of a third-party result. makaug will review valid requests and remove or update disputed content within 48 hours where appropriate.</p>
         </section>
+        <section>
+          <h3 class="font-black text-gray-900">Optional TikTok connection</h3>
+          <p class="mt-1">A user may choose to connect TikTok through TikTok's authorization flow. makaug requests only <strong>user.info.basic</strong> and <strong>video.list</strong> so the user can review their basic profile and public videos and choose an original TikTok link for a property listing. The connection is read-only: makaug cannot post, edit, or delete TikTok content. The user can disconnect at any time, which deletes the stored makaug authorization. TikTok content remains subject to TikTok's terms and the rights of the account holder. makaug is not affiliated with or endorsed by TikTok.</p>
+        </section>
+        <section>
+          <h3 class="font-black text-gray-900">Prohibited conduct and safety</h3>
+          <p class="mt-1">Fraud, impersonation, deceptive listings, document forgery, malicious links, attempts to bypass security, and unauthorised copying or rehosting of third-party media are prohibited. Users must independently verify identity, authority, property details, title or tenure, and payment instructions before transacting.</p>
+        </section>
+        <section>
+          <h3 class="font-black text-gray-900">Fees, liability, and governing law</h3>
+          <p class="mt-1">Free listings, advertising, featured placements, and other paid services may be subject to separate published or written terms. makaug does not guarantee availability, transaction completion, title validity, seller performance, tenancy performance, or freedom from third-party disputes. These Terms are governed by Ugandan law and disputes are subject to competent Ugandan courts.</p>
+        </section>
+        <section>
+          <h3 class="font-black text-gray-900">Contact</h3>
+          <p class="mt-1">Questions about these Terms can be sent to <a class="font-bold text-green-700" href="mailto:info@makaug.com">info@makaug.com</a>.</p>
+        </section>
       </div>`,
     ctas: ['Contact support', 'Privacy policy', 'Cookie policy'],
     links: ['/help', '/privacy-policy', '/cookie-policy']
@@ -299,9 +322,14 @@ const SYNTHETIC_PUBLIC_ROUTE_CONTENT = {
   '/privacy-policy': {
     title: 'makaug Privacy Policy',
     eyebrow: 'Data protection',
-    body: 'makaug uses personal data for account access, property enquiries, saved searches, alerts, fraud prevention, support, advertising operations, source attribution, and consent-aware analytics.',
+    body: 'makaug.com is responsible for the personal data processing described here. We use personal data to provide accounts, property discovery, enquiries, alerts, safety, support, advertising operations, approved integrations, and consent-aware analytics in line with Uganda data protection law.',
     extraHtml: `
       <div class="mt-5 space-y-4 text-sm text-gray-700">
+        <p class="text-xs text-gray-500">Last updated: 25 July 2026</p>
+        <section>
+          <h3 class="font-black text-gray-900">Data we collect</h3>
+          <p class="mt-1">Depending on the service used, we collect account and contact details, property and listing information, verification records, device and security logs, support communications, and limited publicly available source information needed for property discovery and attribution.</p>
+        </section>
         <section>
           <h3 class="font-black text-gray-900">Publicly available source information</h3>
           <p class="mt-1">makaug may collect limited publicly available property information from third-party sources, including property location, guide price, property type, source link, source name, and publicly displayed contact routes.</p>
@@ -313,6 +341,30 @@ const SYNTHETIC_PUBLIC_ROUTE_CONTENT = {
         <section>
           <h3 class="font-black text-gray-900">Correction and removal</h3>
           <p class="mt-1">Where personal data is included in a third-party property result, makaug displays only what is necessary for discovery, attribution, fraud prevention, and user safety. Individuals may request correction or removal of personal data by contacting makaug.</p>
+        </section>
+        <section>
+          <h3 class="font-black text-gray-900">TikTok Login Kit and Display API</h3>
+          <p class="mt-1">Connecting TikTok is optional. If a user authorizes it, makaug receives the user's TikTok open ID, display name, avatar, profile link, approved scopes, public-video metadata such as titles, descriptions, cover images, share or embed links and creation times, and OAuth access and refresh tokens. The requested scopes are <strong>user.info.basic</strong> and <strong>video.list</strong>. We use them only to show the connected user's basic profile and public videos so that user can choose an original source link for a property listing. We do not request permission to publish, edit, or delete TikTok content.</p>
+        </section>
+        <section>
+          <h3 class="font-black text-gray-900">TikTok security, control, and retention</h3>
+          <p class="mt-1">TikTok OAuth tokens are encrypted at rest and are not placed in public pages, listing or search payloads, analytics, logs, or browser storage. Profile and video data is shown only to the browser session associated with the connection. A user can disconnect at <a class="font-bold text-green-700" href="/tiktok-connect">/tiktok-connect</a> or revoke access through TikTok settings. Disconnecting immediately deletes the stored makaug TikTok connection record and encrypted tokens. An original TikTok source link deliberately attached to a listing may remain with that listing until the listing or source is removed.</p>
+        </section>
+        <section>
+          <h3 class="font-black text-gray-900">Sharing and international processing</h3>
+          <p class="mt-1">We do not sell personal data. We may use service providers for hosting, messaging, analytics, fraud prevention, and authorised integrations such as TikTok, or disclose data where lawfully required. Some providers may process data outside Uganda; we use reasonable contractual and technical safeguards appropriate to the service and applicable law.</p>
+        </section>
+        <section>
+          <h3 class="font-black text-gray-900">Retention and security</h3>
+          <p class="mt-1">We keep data only as long as needed for the service, legal obligations, fraud investigation, and audits, then delete or anonymise it. We use access controls, encryption, secure cookies, and monitoring, although no internet service can guarantee absolute security.</p>
+        </section>
+        <section>
+          <h3 class="font-black text-gray-900">Your rights and choices</h3>
+          <p class="mt-1">You may request access, correction, deletion, restriction, or objection where applicable, update communication preferences, disconnect integrations, and ask for removal of source information. makaug is intended for adults and does not knowingly use its TikTok connection to collect personal data from children.</p>
+        </section>
+        <section>
+          <h3 class="font-black text-gray-900">Contact and policy changes</h3>
+          <p class="mt-1">For privacy questions or requests, email <a class="font-bold text-green-700" href="mailto:info@makaug.com">info@makaug.com</a>. We may update this policy as services, integrations, or legal requirements change; the date above identifies the current version.</p>
         </section>
       </div>`,
     ctas: ['Data request', 'Update preferences', 'Contact privacy support'],
