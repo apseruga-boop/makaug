@@ -41316,7 +41316,15 @@ function showPage(page, options = {}) {
       renderLpVideoPreview();
     }
     const routeVideoUrl = new URLSearchParams(window.location.search).get("video_url") || "";
-    if (/^https:\/\/(www\.)?tiktok\.com\/@[^/]+\/video\/\d+/i.test(routeVideoUrl)) {
+    const tiktokVideoAttached = /^https:\/\/(www\.)?tiktok\.com\/@[^/]+\/video\/\d+/i.test(routeVideoUrl);
+    const tiktokVideoBanner = document.getElementById("lp-tiktok-video-attached");
+    const tiktokVideoBannerLink = document.getElementById("lp-tiktok-video-attached-link");
+    if (tiktokVideoBanner) tiktokVideoBanner.classList.toggle("hidden", !tiktokVideoAttached);
+    if (tiktokVideoBannerLink) {
+      if (tiktokVideoAttached) tiktokVideoBannerLink.href = routeVideoUrl;
+      else tiktokVideoBannerLink.removeAttribute("href");
+    }
+    if (tiktokVideoAttached) {
       const videoInput = document.getElementById("lp-video-url");
       if (videoInput && !videoInput.value) {
         videoInput.value = routeVideoUrl;

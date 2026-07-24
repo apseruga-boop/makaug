@@ -72,11 +72,15 @@ assert(html.includes('id="tiktok-display-videos"'));
 assert(html.includes('href="/privacy-policy"'));
 assert(html.includes('href="/terms"'));
 assert(html.includes('id="footer-link-tiktok"'));
+assert(html.includes('id="lp-tiktok-video-attached"'));
+assert(html.includes('data-tiktok-listing-handoff="1"'));
 
 assert(frontend.includes('async function initializeTikTokDisplayPage()'));
 assert(frontend.includes('async function disconnectTikTokDisplay()'));
 assert(frontend.includes('"tiktok-connect": "/tiktok-connect"'));
 assert(frontend.includes('get("video_url")'));
+assert(frontend.includes('const tiktokVideoAttached ='));
+assert(frontend.includes('lp-tiktok-video-attached-link'));
 assert(frontend.includes('user.info.basic'));
 assert(frontend.includes('video.list'));
 assert(frontend.includes('OAuth tokens are encrypted at rest'));
