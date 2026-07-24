@@ -146,6 +146,16 @@ assert.strictEqual(helpers.isCategoryCompatibleComparable({
   price_period: 'once',
   title: 'Land in Bujjuko at UGX 85M'
 }, { category: 'land' }), true);
+assert.strictEqual(helpers.minimumPlausiblePrice({ category: 'sale' }), 1_000_000);
+assert.strictEqual(helpers.minimumPlausiblePrice({ category: 'land' }), 1_000_000);
+assert.strictEqual(helpers.minimumPlausiblePrice({ category: 'rent' }), 10_000);
+assert.strictEqual(helpers.minimumPlausiblePrice({ category: 'commercial', transaction_type: 'rent' }), 10_000);
+assert.strictEqual(helpers.isCategoryCompatibleComparable({
+  listing_type: 'sale',
+  price: 3,
+  price_period: 'once',
+  title: 'Outside a 450m UGX three bedroom house'
+}, { category: 'sale' }), false);
 assert.strictEqual(helpers.isTransientDatabaseError({ code: 'POOL_TIMEOUT' }), true);
 assert.strictEqual(helpers.isTransientDatabaseError({ code: '23505' }), false);
 
@@ -243,6 +253,10 @@ assert.ok(
 assert.ok(html.includes('id="valuation-confidence-badge"'), 'valuation results must show confidence');
 assert.ok(html.includes('id="valuation-disclaimer"'), 'valuation results must show the red disclaimer');
 assert.ok(app.includes('limitedDisclaimerBody'), 'thin or widened evidence must render the stronger warning');
+assert.ok(
+  app.includes('response.input?.canonical_location?.name || response.input?.location'),
+  'translated valuation scope must render the canonical name instead of the canonical object'
+);
 assert.ok(app.includes('methodLegal'), 'methodology must include the liability limitation');
 assert.ok(!app.includes('UGANDA_DISTRICTS'), 'valuation selectors must use the canonical DISTRICTS registry');
 assert.ok(
