@@ -212,6 +212,14 @@ function comparableSizeSqm(row = {}, category = '') {
   return null;
 }
 
+function landPriceUnitSqm(row = {}) {
+  const text = valuationSourceText(row);
+  if (/\b(?:per|each)\s+acre\b|\bacre\b[^.]{0,40}\beach\b/i.test(text)) return SQM_PER_ACRE;
+  if (/\b(?:per|each)\s+decimal\b|\bdecimal\b[^.]{0,40}\beach\b/i.test(text)) return SQM_PER_DECIMAL;
+  if (/\b(?:per|each)\s+(?:square\s+metre|square\s+meter|sqm|m2|m²)\b/i.test(text)) return 1;
+  return null;
+}
+
 function comparableText(row = {}) {
   return [
     row.title,
@@ -610,11 +618,14 @@ function buildEstimate(input, rows, scope, widened = scope === 'district') {
     .map((row) => {
       const normalizedPrice = normalizeRecurringPrice(row, input.category);
       const sizeSqm = comparableSizeSqm(row, input.category);
+      const quotedUnitSqm = input.category === 'land' ? landPriceUnitSqm(row) : null;
       return {
         ...row,
         normalizedPrice,
         sizeSqm,
-        ratePerSqm: normalizedPrice && sizeSqm ? normalizedPrice / sizeSqm : null
+        ratePerSqm: normalizedPrice && (quotedUnitSqm || sizeSqm)
+          ? normalizedPrice / (quotedUnitSqm || sizeSqm)
+          : null
       };
     })
     .filter((row) => Number.isFinite(row.normalizedPrice) && row.normalizedPrice > 0);
@@ -976,6 +987,7 @@ module.exports._test = {
   parseLandSizeText,
   landSizeSqm,
   targetLandSizeSqm,
+  landPriceUnitSqm,
   normalizeRecurringPrice,
   valuationPriceBasis,
   hasAmbiguousForeignCurrency,
