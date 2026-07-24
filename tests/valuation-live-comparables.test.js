@@ -13,6 +13,15 @@ assert.strictEqual(helpers.percentile([10, 20, 30, 40, 50], 0.9), 46);
 assert.strictEqual(helpers.trimmedMean([1, 2, 3, 4, 5, 6, 7, 8, 9, 100]), 5.5);
 assert.ok(Math.abs(helpers.targetLandSizeSqm(1, 'acres') - 4046.8564224) < 0.01);
 assert.ok(Math.abs(helpers.targetLandSizeSqm(100, 'decimals') - 4046.8564224) < 0.01);
+assert.ok(Math.abs(helpers.landPriceUnitSqm({
+  title: '10 acres in Mukono at UGX 75M per acre'
+}) - 4046.8564224) < 0.01);
+assert.ok(Math.abs(helpers.landPriceUnitSqm({
+  description: 'Plots are UGX 2M each decimal'
+}) - 40.468564224) < 0.01);
+assert.equal(helpers.landPriceUnitSqm({
+  title: 'One acre for UGX 75M total'
+}), null);
 assert.ok(Math.abs(helpers.parseLandSizeText('Size 50ft X 100ft') - 464.5152) < 0.01);
 assert.ok(Math.abs(helpers.parseLandSizeText('50*100 in Najjera') - 464.5152) < 0.01);
 assert.ok(Math.abs(helpers.parseLandSizeText('Magnificent Prime 2Acres') - 8093.7128448) < 0.01);
