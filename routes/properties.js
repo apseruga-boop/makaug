@@ -2308,23 +2308,33 @@ async function listPropertiesHandler(req, res, next) {
     let opportunitySummary;
     let opportunitySummaryMeta = null;
     if (includeSummary) {
-      // Filtered counts can touch canonical-location and legacy-origin markers.
-      // Keep the work bounded, but do not kill an otherwise healthy search at
-      // the generic 900 ms cold-cache budget.
-      const summaryTimeoutMs = (listingOrigin || area || district || propertyType)
-        ? 4000
-        : (summaryOnly ? 500 : undefined);
-      const summaryResult = await loadPublicOpportunitySummary({
-        where,
-        values,
-        timeoutMs: summaryTimeoutMs
-      });
-      opportunitySummary = summaryResult.summary;
-      opportunitySummaryMeta = summaryResult.meta;
+      try {
+        const summaryResult = await loadPublicOpportunitySummary({
+          where,
+          values,
+          timeoutMs: 4000
+        });
+        opportunitySummary = summaryResult.summary;
+        opportunitySummaryMeta = summaryResult.meta;
+      } catch (error) {
+        logger.warn('Public property list is continuing without a cold summary', {
+          code: error?.code,
+          message: error?.message
+        });
+        opportunitySummary = null;
+        opportunitySummaryMeta = {
+          cache: 'unavailable',
+          marker: PUBLIC_INVENTORY_METRICS_MARKER,
+          fallback_reason: error?.code === '57014'
+            ? 'statement_timeout'
+            : error?.code === 'POOL_TIMEOUT' ? 'pool_timeout' : 'query_failed'
+        };
+      }
     } else {
       opportunitySummary = null;
     }
-    const total = opportunitySummary?.total || 0;
+    const hasOpportunitySummary = Boolean(opportunitySummary);
+    const total = hasOpportunitySummary ? Number(opportunitySummary.total || 0) : null;
     if (summaryOnly) {
       if (opportunitySummaryMeta?.marker) res.set('X-Makaug-Properties-Count-Marker', opportunitySummaryMeta.marker);
       return res.json({
@@ -2333,7 +2343,9 @@ async function listPropertiesHandler(req, res, next) {
         summary: {
           public_opportunities: opportunitySummary || null
         },
-        pagination: toPagination(total, page, limit),
+        pagination: hasOpportunitySummary
+          ? toPagination(total, page, limit)
+          : { page, limit, total: null, total_pages: null },
         meta: {
           marker: PUBLIC_INVENTORY_METRICS_MARKER,
           count_cache: opportunitySummaryMeta?.cache || 'unknown',
@@ -2341,7 +2353,7 @@ async function listPropertiesHandler(req, res, next) {
         }
       });
     }
-    if (includeSummary && total === 0) {
+    if (hasOpportunitySummary && total === 0) {
       try {
         await db.query(
           `INSERT INTO property_search_requests (user_phone, payload)
@@ -2417,7 +2429,7 @@ async function listPropertiesHandler(req, res, next) {
     const extraFieldsSelectSql = adminAccess
       ? 'p.extra_fields AS admin_extra_fields'
       : `${publicExtraFieldsSql} AS admin_extra_fields`;
-    const rowLimit = includeSummary ? limit : limit + 1;
+    const rowLimit = hasOpportunitySummary ? limit : limit + 1;
     const listValues = [...values, rowLimit, offset];
 
     const listSql = fastPublicCardFields
@@ -2563,9 +2575,9 @@ async function listPropertiesHandler(req, res, next) {
       ) img ON true
       ORDER BY public_page.__page_order`;
     const listResult = await withPublicPropertyDatabaseRetry(() => db.query(listSql, listValues));
-    const hasMoreRows = !includeSummary && listResult.rows.length > limit;
+    const hasMoreRows = !hasOpportunitySummary && listResult.rows.length > limit;
     const responseRows = hasMoreRows ? listResult.rows.slice(0, limit) : listResult.rows;
-    const pagination = includeSummary
+    const pagination = hasOpportunitySummary
       ? toPagination(total, page, limit)
       : approximatePublicPagination({
         page,
@@ -2724,7 +2736,7 @@ async function listPropertiesHandler(req, res, next) {
         }
       } : null,
       summary: {
-        public_opportunities: includeSummary ? opportunitySummary : null
+        public_opportunities: hasOpportunitySummary ? opportunitySummary : null
       },
       pagination,
       meta: {

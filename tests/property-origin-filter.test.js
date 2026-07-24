@@ -16,7 +16,7 @@ assert(routes.includes("listing_origin || req.query.listingOrigin"), 'properties
 assert(routes.includes("${listingOriginSql('p')} = ?"), 'properties API must filter against one canonical origin expression');
 assert(routes.includes("AS listing_origin"), 'public property rows must expose their canonical origin');
 assert(
-  routes.includes('const summaryTimeoutMs = (listingOrigin || area || district || propertyType)'),
+  routes.includes('timeoutMs: 4000'),
   'cold origin and filtered counts must have a bounded production-safe query budget'
 );
 assert(routes.includes("router.get('/search', listPropertiesHandler);")

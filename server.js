@@ -47,6 +47,7 @@ const { startYouTubeSourceDripScheduler } = require('./services/youtubeSourceDri
 const { startMarketplaceLifecycleScheduler } = require('./services/marketplaceLifecycleService');
 const { startMarketplaceDripScheduler } = require('./services/marketplaceNationalDripService');
 const { DISTRICTS: MARKETPLACE_DISTRICTS, MARKETPLACE_CATEGORIES } = require('./services/marketplaceService');
+const { loadPublicOpportunitySummary } = require('./services/publicInventoryMetricsService');
 const { applyUgandaHomepage } = require('./packages/shared-country-core');
 
 const app = express();
@@ -1025,6 +1026,20 @@ async function start() {
       logger.info('Database pool warmed before accepting traffic', warmResult);
     } catch (error) {
       logger.warn('Database pool warmup failed; continuing startup', {
+        code: error?.code,
+        message: error?.message
+      });
+    }
+  }
+  if (process.env.DATABASE_URL) {
+    try {
+      const publicInventory = await loadPublicOpportunitySummary({ timeoutMs: 5000 });
+      logger.info('Public inventory summary warmed before accepting traffic', {
+        total: publicInventory?.summary?.total ?? null,
+        cache: publicInventory?.meta?.cache || null
+      });
+    } catch (error) {
+      logger.warn('Public inventory summary warmup failed; list routes will use bounded fallback', {
         code: error?.code,
         message: error?.message
       });
