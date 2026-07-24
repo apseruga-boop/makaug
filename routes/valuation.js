@@ -3,6 +3,7 @@ const express = require('express');
 const db = require('../config/database');
 const { cleanText, toNullableFloat, toNullableInt } = require('../middleware/validation');
 const { publicLivePropertyStatusSql } = require('../utils/publicInventoryStatus');
+const { publicLaunchTestListingFastCondition } = require('../services/publicInventoryMetricsService');
 const { DISTRICTS } = require('../utils/constants');
 
 const router = express.Router();
@@ -133,6 +134,7 @@ async function loadComparableRows(input, scope) {
   const values = [];
   const where = [
     publicLivePropertyStatusSql('p'),
+    `NOT ${publicLaunchTestListingFastCondition('p')}`,
     'p.price > 0',
     `p.price <= ${MAX_PRICE_UGX}`
   ];
@@ -371,6 +373,7 @@ router.get('/locations', async (req, res, next) => {
     const values = [];
     const where = [
       publicLivePropertyStatusSql('p'),
+      `NOT ${publicLaunchTestListingFastCondition('p')}`,
       `NULLIF(TRIM(COALESCE(p.area, p.district, '')), '') IS NOT NULL`
     ];
     const categoryCondition = categorySql(category);
