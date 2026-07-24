@@ -1,0 +1,28 @@
+name: Country homepage parity watch
+
+on:
+  schedule:
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Compare live country homepage contracts
+        run: node scripts/check-country-homepage-parity.js
+      - name: Preserve parity evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: country-homepage-parity-report
+          path: country-homepage-parity-report.json
+          if-no-files-found: error

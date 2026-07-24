@@ -1,0 +1,99 @@
+<body class="bg-gray-50">
+  <div class="bg-green-900 text-white text-sm py-2">
+    <div class="max-w-7xl mx-auto px-4 flex justify-between gap-3 flex-wrap">
+      <div class="topbar-left flex items-center gap-4">
+        <a id="topbar-whatsapp-link" href="https://wa.me/256760112587" target="_blank" rel="noopener noreferrer" class="hover:text-green-200" data-public-whatsapp-link data-whatsapp-context="auto"><i class="fab fa-whatsapp text-green-300"></i> WhatsApp 0760112587</a>
+        <a href="mailto:info@makaug.com" class="hover:text-green-200 hidden sm:block"><i class="fas fa-envelope text-green-300"></i> info@makaug.com</a>
+      </div>
+      <div class="topbar-actions flex items-center gap-2 flex-wrap">
+        <span id="top-language-label" class="inline-flex items-center gap-1.5 bg-green-800 border border-green-700 rounded-full px-2.5 py-1 text-xs font-semibold">
+          <i class="fas fa-language text-green-200"></i> Language
+        </span>
+        <select id="lang-sel" class="bg-green-800 border border-green-700 rounded px-2 py-1 text-xs" onchange="setLang(this.value)">
+          <option value="en">English</option>
+          <option value="lg">Luganda</option>
+          <option value="sw">Kiswahili</option>
+          <option value="ac">Acholi</option>
+          <option value="ny">Runyankole</option>
+          <option value="rn">Rukiga</option>
+          <option value="sm">Lusoga</option>
+          <option value="am">Amharic</option>
+          <option value="ar">Arabic</option>
+        </select>
+        <select id="cur-sel" class="bg-green-800 border border-green-700 rounded px-2 py-1 text-xs" onchange="setCurrency(this.value)">
+          <option value="UGX">USh (UGX)</option>
+          <option value="USD">$ (USD)</option>
+          <option value="GBP">£ (GBP)</option>
+          <option value="EUR">€ (EUR)</option>
+        </select>
+        <a id="top-saved-link" href="/saved" onclick="handleSavedClick(event)" class="cursor-pointer hover:text-green-200 hidden sm:block"><i class="fas fa-heart text-green-300"></i> Saved</a>
+        <a id="top-dashboard-link" onclick="openSignedInDashboard()" class="cursor-pointer hover:text-green-200 hidden"></a>
+        <a id="top-signin-link" href="/login" onclick="openAuthSignIn('finder', event)" class="cursor-pointer hover:text-green-200"><i class="fas fa-user text-green-300"></i> Sign In</a>
+        <a id="top-signout-link" onclick="signOut()" class="cursor-pointer hover:text-green-200 hidden"></a>
+      </div>
+    </div>
+  </div>
+
+  <nav class="bg-white border-b border-gray-200 sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
+      <a id="brand-home-link" onclick="handleBrandClick(event)" class="cursor-pointer flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-green-700 text-white font-black text-xl flex items-center justify-center serif">M</div>
+        <div>
+          <div class="text-2xl font-black text-green-800 serif">makaug<span class="text-amber-500">.com</span></div>
+          <div id="brand-subtitle" class="text-xs text-gray-400 -mt-1">UGANDA PROPERTY</div>
+        </div>
+      </a>
+      <div class="hidden lg:flex items-center gap-0.5">
+        <a id="nav-sale" href="/for-sale" onclick="showPage('sale')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">For Sale</a>
+        <a id="nav-rent" href="/to-rent" onclick="showPage('rent')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">To Rent</a>
+        <a id="nav-students" href="/student-accommodation" onclick="showPage('students')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Students</a>
+        <a id="nav-commercial" href="/commercial" onclick="showPage('commercial')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Commercial</a>
+        <a id="nav-land" href="/land" onclick="showPage('land')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Land</a>
+        <a id="nav-brokers" href="/brokers" onclick="showPage('brokers')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Find Brokers</a>
+        <a id="nav-mortgage" href="/mortgage" onclick="showPage('mortgage')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Mortgage Finder</a>
+        <a id="nav-ai" href="/discover-ai-chatbot" onclick="showPage('ai-chatbot')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">AI Chatbot</a>
+        <a id="nav-marketplace" href="/marketplace" onclick="showPage('marketplace')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-rose-50 hover:text-[#b3134f] cursor-pointer">Marketplace</a>
+        <a id="nav-about" href="/about" onclick="showPage('about')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">About Us</a>
+      </div>
+      <div class="flex items-center gap-2">
+        <a id="nav-list-btn" data-testid="list-property-free-cta" href="/list-property" onclick="handleListPropertyFreeCta(event)" class="hidden md:block bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-green-600">List Property</a>
+        <button id="mob-toggle" class="lg:hidden text-gray-700 p-2" onclick="toggleMobile()"><i class="fas fa-bars text-xl"></i></button>
+      </div>
+    </div>
+    <div id="mobile-menu" class="lg:hidden border-t border-gray-100 flex-col gap-1 px-4 py-3 bg-white">
+      <a id="mnav-sale" href="/for-sale" onclick="showPage('sale');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">For Sale</a>
+      <a id="mnav-rent" href="/to-rent" onclick="showPage('rent');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">To Rent</a>
+      <a id="mnav-students" href="/student-accommodation" onclick="showPage('students');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Students</a>
+      <a id="mnav-commercial" href="/commercial" onclick="showPage('commercial');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Commercial</a>
+      <a id="mnav-land" href="/land" onclick="showPage('land');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Land</a>
+      <a id="mnav-brokers" href="/brokers" onclick="showPage('brokers');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Find Brokers</a>
+      <a id="mnav-mortgage" href="/mortgage" onclick="showPage('mortgage');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Mortgage Finder</a>
+      <a id="mnav-ai" href="/discover-ai-chatbot" onclick="showPage('ai-chatbot');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">AI Chatbot</a>
+      <a id="mnav-marketplace" href="/marketplace" onclick="showPage('marketplace');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-rose-50">Marketplace</a>
+      <a id="mnav-about" href="/about" onclick="showPage('about');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">About Us</a>
+      <a id="mnav-advertise" data-testid="mobile-list-property-free-cta" href="/list-property" onclick="handleListPropertyFreeCta(event);closeMobile()" class="px-3 py-2 rounded-lg bg-green-700 text-white font-semibold">List Property</a>
+    </div>
+  </nav>
+
+  <div id="language-spotlight" class="bg-green-50 border-b border-green-100">
+    <div class="max-w-7xl mx-auto px-4 py-2.5 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+      <div class="text-sm text-green-900 font-semibold inline-flex items-center gap-2">
+        <i class="fas fa-language text-green-700"></i>
+        <span id="lang-spotlight-copy">Use makaug in 9 languages</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <label id="lang-spotlight-label" for="lang-sel-spotlight" class="text-xs font-bold uppercase tracking-wide text-green-800">Language</label>
+        <select id="lang-sel-spotlight" class="lang-spotlight-select" onchange="setLang(this.value)">
+          <option value="en">English</option>
+          <option value="lg">Luganda</option>
+          <option value="sw">Kiswahili</option>
+          <option value="ac">Acholi</option>
+          <option value="ny">Runyankole</option>
+          <option value="rn">Rukiga</option>
+          <option value="sm">Lusoga</option>
+          <option value="am">Amharic</option>
+          <option value="ar">Arabic</option>
+        </select>
+      </div>
+    </div>
+  </div>

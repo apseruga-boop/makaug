@@ -45,6 +45,7 @@ const { startYouTubeSourceDripScheduler } = require('./services/youtubeSourceDri
 const { startMarketplaceLifecycleScheduler } = require('./services/marketplaceLifecycleService');
 const { startMarketplaceDripScheduler } = require('./services/marketplaceNationalDripService');
 const { DISTRICTS: MARKETPLACE_DISTRICTS, MARKETPLACE_CATEGORIES } = require('./services/marketplaceService');
+const { applyUgandaHomepage } = require('./packages/shared-country-core');
 
 const app = express();
 // Required on Render so rate limiting uses the forwarded client IP correctly.
@@ -766,7 +767,10 @@ function renderPublicHtml(pathname) {
   const normalizedBasePath = basePath.length > 1 ? basePath.replace(/\/+$/, '') : basePath;
   const key = normalizedBasePath === '/login' ? rawPath : normalizedBasePath;
   if (isProduction && publicHtmlCache.has(key)) return publicHtmlCache.get(key);
-  const rendered = sanitizePublicHtml(readIndexHtml(), { pathname: rawPath });
+  let rendered = sanitizePublicHtml(readIndexHtml(), { pathname: rawPath });
+  if (normalizedBasePath === '/' && process.env.SHARED_CORE_PHASE1_ENABLED !== 'false') {
+    rendered = applyUgandaHomepage(rendered);
+  }
   if (isProduction) publicHtmlCache.set(key, rendered);
   return rendered;
 }

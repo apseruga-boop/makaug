@@ -1,0 +1,80 @@
+<footer class="bg-green-900 text-white pt-12 pb-6">
+    <div class="max-w-7xl mx-auto px-4">
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+        <div>
+          <div class="text-2xl font-black serif" id="footer-brand-title">makaug.com</div>
+          <p id="footer-brand-copy" class="text-green-200 text-sm mt-3 leading-relaxed">
+            Uganda's first completely free property platform. List, search, and connect via website or WhatsApp. Covering all 146 districts.
+          </p>
+          <div class="mt-4 space-y-2 text-sm text-green-200">
+            <a id="footer-whatsapp-label" href="https://wa.me/256760112587" target="_blank" rel="noopener noreferrer" class="block hover:text-white" data-public-whatsapp-link data-whatsapp-context="auto">📲 WhatsApp: 0760112587</a>
+            <a id="footer-email-label" href="mailto:info@makaug.com" class="block hover:text-white">📧 Email: info@makaug.com</a>
+            <a id="footer-chat-whatsapp" href="https://wa.me/256760112587" target="_blank" rel="noopener noreferrer" class="block hover:text-white" data-public-whatsapp-link data-whatsapp-context="auto">💬 Chat on WhatsApp</a>
+            <span id="footer-location-label" class="block">📍 Kampala, Uganda</span>
+          </div>
+        </div>
+
+        <div>
+          <h4 id="footer-col-properties" class="text-xs font-bold uppercase tracking-widest text-green-400 mb-3">Properties</h4>
+          <div class="space-y-2 text-sm text-green-200">
+            <a id="footer-link-sale" href="/for-sale" onclick="showPage('sale')" class="block cursor-pointer hover:text-white">Houses for Sale</a>
+            <a id="footer-link-rent" href="/to-rent" onclick="showPage('rent')" class="block cursor-pointer hover:text-white">Houses for Rent</a>
+            <a id="footer-link-students" href="/student-accommodation" onclick="showPage('students')" class="block cursor-pointer hover:text-white">Student Housing</a>
+            <a id="footer-link-commercial" href="/commercial" onclick="showPage('commercial')" class="block cursor-pointer hover:text-white">Commercial</a>
+            <a id="footer-link-land" href="/land" onclick="showPage('land')" class="block cursor-pointer hover:text-white">Land for Sale</a>
+            <a id="footer-link-mortgage" href="/mortgage" onclick="showPage('mortgage')" class="block cursor-pointer hover:text-white">Mortgage Finder</a>
+            <a id="footer-link-list-free" href="/list-property" onclick="return navigatePublicRoute('/list-property', event)" class="block cursor-pointer hover:text-white">List Property</a>
+            <a id="footer-link-looking" href="/dashboard?intent=property-need" onclick="handlePropertyNeedCta(event)" class="block cursor-pointer hover:text-white">Looking For...</a>
+          </div>
+        </div>
+
+        <div>
+          <h4 id="footer-col-company" class="text-xs font-bold uppercase tracking-widest text-green-400 mb-3">Company</h4>
+          <div class="space-y-2 text-sm text-green-200">
+            <a id="footer-link-about" href="/about" onclick="showPage('about')" class="block cursor-pointer hover:text-white">About Us</a>
+            <a id="footer-link-how" href="/how-it-works" onclick="showPage('how-it-works')" class="block cursor-pointer hover:text-white">How It Works</a>
+            <a id="footer-link-broker" href="/brokers" onclick="showPage('brokers')" class="block cursor-pointer hover:text-white">Find a Broker</a>
+            <a id="footer-link-register-broker" href="/broker-signup" onclick="openModal('broker-reg-modal')" class="block cursor-pointer hover:text-white">Register as Broker</a>
+            <a id="footer-link-advertise" href="/advertise" onclick="handleAdvertisePropertyCta(event)" class="block cursor-pointer hover:text-white">Advertise with Us</a>
+            <a id="footer-link-careers" href="/careers" onclick="showPage('careers')" class="block cursor-pointer hover:text-white">Careers</a>
+          </div>
+        </div>
+
+        <div>
+          <h4 id="footer-col-legal" class="text-xs font-bold uppercase tracking-widest text-green-400 mb-3">Legal & Support</h4>
+          <div class="space-y-2 text-sm text-green-200">
+            <a id="footer-link-terms" href="/terms" onclick="showPage('terms')" class="block cursor-pointer hover:text-white">Terms & Conditions</a>
+            <a id="footer-link-privacy" href="/privacy-policy" onclick="showPage('privacy-policy')" class="block cursor-pointer hover:text-white">Privacy Policy</a>
+            <a id="footer-link-cookies" href="/cookie-policy" onclick="showPage('cookie-policy')" class="block cursor-pointer hover:text-white">Cookie Policy</a>
+            <a id="footer-link-anti-fraud" href="/anti-fraud" onclick="showPage('fraud')" class="block cursor-pointer hover:text-white">Anti-Fraud Policy</a>
+            <a id="footer-link-help" href="/help" onclick="showPage('help')" class="block cursor-pointer hover:text-white">Help Centre</a>
+            <a id="footer-link-report" href="/report-fraud" onclick="showPage('fraud')" class="block cursor-pointer hover:text-white">Report a Listing</a>
+            <a id="footer-link-safety" href="/safety" onclick="showPage('safety')" class="block cursor-pointer hover:text-white">Safety Tips</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="border-t border-green-800 mt-8 pt-4">
+        <div class="flex items-center justify-between flex-wrap gap-3">
+          <div class="flex items-center gap-2 text-green-200">
+            <a href="https://instagram.com/makaugcom" target="_blank" rel="noopener noreferrer" class="w-9 h-9 rounded-full border border-green-700 hover:border-green-500 hover:text-white flex items-center justify-center transition-all" aria-label="Instagram">
+              <i class="fab fa-instagram"></i>
+            </a>
+            <a href="https://www.linkedin.com/company/makaug" target="_blank" rel="noopener noreferrer" class="w-9 h-9 rounded-full border border-green-700 hover:border-green-500 hover:text-white flex items-center justify-center transition-all" aria-label="LinkedIn">
+              <i class="fab fa-linkedin-in"></i>
+            </a>
+            <a href="https://youtube.com/@makaug" target="_blank" rel="noopener noreferrer" class="w-9 h-9 rounded-full border border-green-700 hover:border-green-500 hover:text-white flex items-center justify-center transition-all" aria-label="YouTube">
+              <i class="fab fa-youtube"></i>
+            </a>
+            <a href="https://facebook.com/makaugcom" target="_blank" rel="noopener noreferrer" class="w-9 h-9 rounded-full border border-green-700 hover:border-green-500 hover:text-white flex items-center justify-center transition-all" aria-label="Facebook">
+              <i class="fab fa-facebook-f"></i>
+            </a>
+          </div>
+          <div class="text-xs text-green-300" id="footer-growth-note">In-house sponsored placements and SEO indexing enabled for growth campaigns.</div>
+        </div>
+        <div id="footer-copyright" class="text-xs text-green-400 mt-3">
+          © 2026 makaug.com. All rights reserved.
+        </div>
+      </div>
+    </div>
+  </footer>
