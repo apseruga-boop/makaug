@@ -17,6 +17,9 @@ assert.ok(Math.abs(helpers.landPriceUnitSqm({
   title: '10 acres in Mukono at UGX 75M per acre'
 }) - 4046.8564224) < 0.01);
 assert.ok(Math.abs(helpers.landPriceUnitSqm({
+  title: '5 acres of land for sale at UGX 600M each'
+}) - 4046.8564224) < 0.01);
+assert.ok(Math.abs(helpers.landPriceUnitSqm({
   description: 'Plots are UGX 2M each decimal'
 }) - 40.468564224) < 0.01);
 assert.equal(helpers.landPriceUnitSqm({

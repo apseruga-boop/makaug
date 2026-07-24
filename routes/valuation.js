@@ -214,8 +214,8 @@ function comparableSizeSqm(row = {}, category = '') {
 
 function landPriceUnitSqm(row = {}) {
   const text = valuationSourceText(row);
-  if (/\b(?:per|each)\s+acre\b|\bacre\b[^.]{0,40}\beach\b/i.test(text)) return SQM_PER_ACRE;
-  if (/\b(?:per|each)\s+decimal\b|\bdecimal\b[^.]{0,40}\beach\b/i.test(text)) return SQM_PER_DECIMAL;
+  if (/\b(?:per|each)\s+acres?\b|\bacres?\b[^.]{0,100}\beach\b/i.test(text)) return SQM_PER_ACRE;
+  if (/\b(?:per|each)\s+decimals?\b|\bdecimals?\b[^.]{0,100}\beach\b/i.test(text)) return SQM_PER_DECIMAL;
   if (/\b(?:per|each)\s+(?:square\s+metre|square\s+meter|sqm|m2|m²)\b/i.test(text)) return 1;
   return null;
 }
