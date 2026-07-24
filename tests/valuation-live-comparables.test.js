@@ -125,6 +125,10 @@ assert.ok(
   'valuation evidence and location counts must exclude launch and QA listings'
 );
 assert.ok(
+  routeSource.includes('const DISTRICT_WIDEN_THRESHOLD = MIN_COMPARABLES'),
+  'valuation must keep three or more exact-area comparables instead of widening prematurely'
+);
+assert.ok(
   metricsSource.includes("'MAKAUG TRAINING'") && metricsSource.includes("'REMOVE AFTER QA'"),
   'the shared public exclusion must recognize legacy training rows'
 );
