@@ -2119,7 +2119,10 @@ async function listPropertiesHandler(req, res, next) {
       return res.json(publicCache.payload);
     }
 
-    const fastPublicCardFields = cardFieldsOnly && !adminAccess;
+    // Anonymous list callers only need public card data. Keep moderation fields
+    // on authenticated paths so the common public route avoids the heavier
+    // agent join and wide row materialization.
+    const fastPublicCardFields = !adminAccess;
 
     if (publicOnly || !adminAccess) {
       addPublicLaunchSeedFilter(filters, values);
@@ -2136,7 +2139,7 @@ async function listPropertiesHandler(req, res, next) {
     }
 
     if (area) {
-      if (fastPublicCardFields) {
+      if (cardFieldsOnly && !adminAccess) {
         addPublicCardLocationSearchFilter(filters, values, area);
       } else if (publicOnly || !adminAccess) {
         addPublicLocationSearchFilter(filters, values, area);
