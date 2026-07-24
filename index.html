@@ -4059,7 +4059,7 @@
     </main>
   </div>
 
-  <div id="page-valuation" class="page bg-[#f6f9f7]" data-valuation-marker="valuation-canonical-confidence-cards-20260725" data-valuation-punchlist-marker="valuation-final-punchlist-20260725" data-properties-search-count-marker="properties-location-search-count-fast-20260725">
+  <div id="page-valuation" class="page bg-[#f6f9f7]" data-valuation-marker="valuation-canonical-confidence-cards-20260725" data-valuation-punchlist-marker="valuation-final-punchlist-20260725" data-valuation-ux-marker="valuation-k17-simple-range-20260725" data-properties-search-count-marker="properties-location-search-count-fast-20260725">
     <section class="bg-[#0f3d2e] py-10 text-white">
       <div class="max-w-6xl mx-auto px-4">
         <p class="text-xs font-black uppercase tracking-wide text-emerald-200" data-valuation-i18n="eyebrow">Evidence from live makaug listings</p>
@@ -4079,74 +4079,63 @@
             <span class="shrink-0 rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-[#15603f]" data-valuation-i18n="free">Free guide</span>
           </div>
 
-          <div class="mt-5 grid sm:grid-cols-2 gap-4">
-            <label class="block text-sm font-bold text-[#16241d]">
-              <span data-valuation-i18n="category">Property category</span>
-              <select id="valuation-category" required onchange="renderValuationCategoryFields()" class="mt-1.5 w-full h-12 rounded-lg border border-[#dbe8e0] bg-white px-3 text-sm focus:border-[#15603f] focus:outline-none focus:ring-2 focus:ring-emerald-100">
-                <option value="sale" data-valuation-i18n="categorySale">Residential for sale</option>
-                <option value="rent" data-valuation-i18n="categoryRent">Residential to rent</option>
-                <option value="land" data-valuation-i18n="categoryLand">Land</option>
-                <option value="commercial" data-valuation-i18n="categoryCommercial">Commercial</option>
-                <option value="student" data-valuation-i18n="categoryStudent">Student accommodation</option>
-              </select>
-            </label>
-            <label id="valuation-transaction-wrap" class="hidden text-sm font-bold text-[#16241d]">
-              <span data-valuation-i18n="transaction">Transaction</span>
-              <select id="valuation-transaction" class="mt-1.5 w-full h-12 rounded-lg border border-[#dbe8e0] bg-white px-3 text-sm">
-                <option value="rent" data-valuation-i18n="forRent">For rent</option>
-                <option value="sale" data-valuation-i18n="forSale">For sale</option>
-              </select>
-            </label>
-            <label class="block text-sm font-bold text-[#16241d]">
+          <div class="mt-5 space-y-5">
+            <label class="relative block text-sm font-bold text-[#16241d]">
               <span data-valuation-i18n="location">Area or town</span>
-              <input id="valuation-location" required list="valuation-location-list" autocomplete="off" class="mt-1.5 w-full h-12 rounded-lg border border-[#dbe8e0] px-3 text-sm focus:border-[#15603f] focus:outline-none focus:ring-2 focus:ring-emerald-100" placeholder="e.g. Ntinda" data-valuation-placeholder="locationPlaceholder">
-              <datalist id="valuation-location-list"></datalist>
+              <div class="relative mt-1.5">
+                <i class="fas fa-map-marker-alt pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[#15603f]" aria-hidden="true"></i>
+                <input id="valuation-location" required autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="valuation-location-suggestions" class="h-14 w-full rounded-xl border border-[#cdddd3] bg-white pl-11 pr-4 text-base focus:border-[#15603f] focus:outline-none focus:ring-4 focus:ring-emerald-100" placeholder="Start typing an area or town" data-valuation-placeholder="locationPlaceholder">
+                <input id="valuation-district" type="hidden" value="">
+                <input id="valuation-location-key" type="hidden" value="">
+                <div id="valuation-location-suggestions" class="absolute z-40 mt-2 hidden max-h-72 w-full overflow-y-auto rounded-xl border border-[#dbe8e0] bg-white p-1 shadow-xl" role="listbox"></div>
+              </div>
+              <p class="mt-1.5 text-xs font-normal text-[#5b6b62]" data-valuation-i18n="locationHelp">Choose one suggestion so we can match the correct district automatically.</p>
             </label>
-            <label class="block text-sm font-bold text-[#16241d]">
-              <span data-valuation-i18n="district">District (helps when an area has few matches)</span>
-              <select id="valuation-district" class="mt-1.5 w-full h-12 rounded-lg border border-[#dbe8e0] bg-white px-3 text-sm">
-                <option value="" data-valuation-i18n="chooseDistrict">Choose district</option>
-              </select>
-            </label>
-            <label id="valuation-beds-wrap" class="block text-sm font-bold text-[#16241d]">
-              <span data-valuation-i18n="bedrooms">Bedrooms</span>
-              <select id="valuation-bedrooms" class="mt-1.5 w-full h-12 rounded-lg border border-[#dbe8e0] bg-white px-3 text-sm">
-                <option value="" data-valuation-i18n="anyBedrooms">Any bedrooms</option>
-                <option value="1">1</option><option value="2">2</option><option value="3">3</option>
-                <option value="4">4</option><option value="5">5</option><option value="6">6+</option>
-              </select>
-            </label>
-            <label id="valuation-property-type-wrap" class="block text-sm font-bold text-[#16241d]">
-              <span data-valuation-i18n="propertyType">Property type</span>
-              <input id="valuation-property-type" autocomplete="off" class="mt-1.5 w-full h-12 rounded-lg border border-[#dbe8e0] px-3 text-sm" placeholder="e.g. Apartment" data-valuation-placeholder="propertyTypePlaceholder">
-            </label>
-            <label id="valuation-size-value-wrap" class="hidden text-sm font-bold text-[#16241d]">
-              <span data-valuation-i18n="landSize">Land size</span>
-              <input id="valuation-size-value" type="number" min="0" step="0.01" class="mt-1.5 w-full h-12 rounded-lg border border-[#dbe8e0] px-3 text-sm" placeholder="e.g. 30">
-            </label>
-            <label id="valuation-size-unit-wrap" class="hidden text-sm font-bold text-[#16241d]">
-              <span data-valuation-i18n="sizeUnit">Size unit</span>
-              <select id="valuation-size-unit" class="mt-1.5 w-full h-12 rounded-lg border border-[#dbe8e0] bg-white px-3 text-sm">
-                <option value="decimals" data-valuation-i18n="decimals">Decimals</option>
-                <option value="acres" data-valuation-i18n="acres">Acres</option>
-                <option value="hectares" data-valuation-i18n="hectares">Hectares</option>
-                <option value="sqm" data-valuation-i18n="squareMetres">Square metres</option>
-              </select>
-            </label>
-            <label id="valuation-commercial-size-wrap" class="hidden text-sm font-bold text-[#16241d]">
-              <span data-valuation-i18n="commercialSize">Floor area (m²)</span>
-              <input id="valuation-commercial-size" type="number" min="0" step="1" class="mt-1.5 w-full h-12 rounded-lg border border-[#dbe8e0] px-3 text-sm" placeholder="e.g. 120">
-            </label>
-            <label id="valuation-university-wrap" class="hidden text-sm font-bold text-[#16241d]">
-              <span data-valuation-i18n="university">Nearby university</span>
-              <input id="valuation-university" autocomplete="off" class="mt-1.5 w-full h-12 rounded-lg border border-[#dbe8e0] px-3 text-sm" placeholder="e.g. Makerere University" data-valuation-placeholder="universityPlaceholder">
-            </label>
+
+            <fieldset>
+              <legend class="text-sm font-bold text-[#16241d]" data-valuation-i18n="journey">What are you valuing?</legend>
+              <input id="valuation-category" type="hidden" value="sale">
+              <div id="valuation-category-chips" class="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-5">
+                <button type="button" data-valuation-category="sale" aria-pressed="true" class="min-h-[44px] rounded-lg border border-[#15603f] bg-[#15603f] px-3 text-sm font-black text-white" data-valuation-i18n="journeySale">Buy / Sell</button>
+                <button type="button" data-valuation-category="rent" aria-pressed="false" class="min-h-[44px] rounded-lg border border-[#cdddd3] bg-white px-3 text-sm font-black text-[#15603f]" data-valuation-i18n="journeyRent">Rent</button>
+                <button type="button" data-valuation-category="land" aria-pressed="false" class="min-h-[44px] rounded-lg border border-[#cdddd3] bg-white px-3 text-sm font-black text-[#15603f]" data-valuation-i18n="categoryLand">Land</button>
+                <button type="button" data-valuation-category="commercial" aria-pressed="false" class="min-h-[44px] rounded-lg border border-[#cdddd3] bg-white px-3 text-sm font-black text-[#15603f]" data-valuation-i18n="categoryCommercial">Commercial</button>
+                <button type="button" data-valuation-category="student" aria-pressed="false" class="min-h-[44px] rounded-lg border border-[#cdddd3] bg-white px-3 text-sm font-black text-[#15603f]" data-valuation-i18n="categoryStudent">Student</button>
+              </div>
+            </fieldset>
+
+            <fieldset id="valuation-transaction-wrap" class="hidden">
+              <legend class="text-sm font-bold text-[#16241d]" data-valuation-i18n="commercialTransaction">Commercial transaction</legend>
+              <input id="valuation-transaction" type="hidden" value="rent">
+              <div class="mt-2 grid grid-cols-2 gap-2">
+                <button type="button" data-valuation-transaction="rent" aria-pressed="true" class="min-h-[44px] rounded-lg border border-[#15603f] bg-[#15603f] px-3 text-sm font-black text-white" data-valuation-i18n="forRent">For rent</button>
+                <button type="button" data-valuation-transaction="sale" aria-pressed="false" class="min-h-[44px] rounded-lg border border-[#cdddd3] bg-white px-3 text-sm font-black text-[#15603f]" data-valuation-i18n="forSale">For sale</button>
+              </div>
+            </fieldset>
+
+            <fieldset id="valuation-beds-wrap">
+              <legend class="text-sm font-bold text-[#16241d]" data-valuation-i18n="bedrooms">Bedrooms</legend>
+              <input id="valuation-bedrooms" type="hidden" value="">
+              <div id="valuation-bedroom-chips" class="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-6">
+                <button type="button" data-valuation-bedrooms="" aria-pressed="true" class="min-h-[42px] rounded-lg border border-[#15603f] bg-emerald-50 px-3 text-sm font-black text-[#15603f]" data-valuation-i18n="anyBedrooms">Any</button>
+                <button type="button" data-valuation-bedrooms="1" aria-pressed="false" class="min-h-[42px] rounded-lg border border-[#cdddd3] bg-white px-3 text-sm font-bold text-[#16241d]">1</button>
+                <button type="button" data-valuation-bedrooms="2" aria-pressed="false" class="min-h-[42px] rounded-lg border border-[#cdddd3] bg-white px-3 text-sm font-bold text-[#16241d]">2</button>
+                <button type="button" data-valuation-bedrooms="3" aria-pressed="false" class="min-h-[42px] rounded-lg border border-[#cdddd3] bg-white px-3 text-sm font-bold text-[#16241d]">3</button>
+                <button type="button" data-valuation-bedrooms="4" aria-pressed="false" class="min-h-[42px] rounded-lg border border-[#cdddd3] bg-white px-3 text-sm font-bold text-[#16241d]">4</button>
+                <button type="button" data-valuation-bedrooms="5+" aria-pressed="false" class="min-h-[42px] rounded-lg border border-[#cdddd3] bg-white px-3 text-sm font-bold text-[#16241d]">5+</button>
+              </div>
+            </fieldset>
+
+            <div id="valuation-match-counter" class="hidden rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-950" aria-live="polite">
+              <i class="fas fa-check-circle mr-1 text-[#15603f]" aria-hidden="true"></i>
+              <span id="valuation-match-counter-text"></span>
+            </div>
           </div>
 
           <div id="valuation-form-status" class="hidden mt-4 rounded-lg border px-3 py-2 text-sm" role="status" aria-live="polite"></div>
           <button id="valuation-submit" type="submit" class="mt-5 inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-lg bg-[#15603f] px-5 text-sm font-black text-white hover:bg-[#0f4d33] disabled:cursor-wait disabled:opacity-60">
             <i class="fas fa-chart-line" aria-hidden="true"></i>
-            <span data-valuation-i18n="estimateButton">Estimate value</span>
+            <span data-valuation-i18n="estimateButton">Show my price range</span>
           </button>
         </form>
 
@@ -4173,12 +4162,13 @@
         <div id="valuation-scope-note" class="rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-900"></div>
         <div class="grid md:grid-cols-3 gap-4">
           <article class="bg-white border border-[#e4ece8] rounded-lg p-5 md:col-span-2">
-            <p class="text-xs font-black uppercase tracking-wide text-[#5b6b62]" data-valuation-i18n="estimatedValue">Estimated market guide</p>
+            <p class="text-xs font-black uppercase tracking-wide text-[#5b6b62]" data-valuation-i18n="likelyRange">Likely price range</p>
             <div class="mt-2 flex flex-wrap items-center gap-3">
-              <div id="valuation-estimate" class="text-3xl md:text-5xl font-black text-[#15603f]">—</div>
+              <div id="valuation-range" class="text-3xl md:text-5xl font-black text-[#15603f]">—</div>
               <span id="valuation-confidence-badge" class="hidden rounded-full border px-3 py-1 text-xs font-black"></span>
             </div>
-            <p id="valuation-range" class="mt-2 text-sm font-bold text-[#16241d]"></p>
+            <p id="valuation-estimate" class="mt-2 text-sm font-bold text-[#16241d]"></p>
+            <p id="valuation-confidence-explanation" class="mt-1 text-xs leading-5 text-[#5b6b62]"></p>
             <div id="valuation-disclaimer" class="mt-4 rounded-lg border-2 border-red-300 bg-red-50 p-4 text-red-950">
               <h2 id="valuation-disclaimer-title" class="text-base font-black" data-valuation-i18n="guideDisclaimerTitle">This is a guide, not a valuation.</h2>
               <p id="valuation-disclaimer-body" class="mt-1 text-sm leading-6" data-valuation-i18n="guideDisclaimerBody">This estimate is calculated only from approved listings on makaug.com. It is an average for similar properties, and a starting point to help you plan. The real price may be higher or lower. It cannot be used for a loan, a sale, or a legal purpose. Before you buy, sell, or borrow, always ask a licensed surveyor or valuer to inspect the property.</p>
@@ -4194,6 +4184,85 @@
             <p id="valuation-unit-rate" class="mt-3 text-xs font-bold text-[#15603f]"></p>
           </article>
         </div>
+        <details id="valuation-improve" class="bg-white border border-[#e4ece8] rounded-xl p-4">
+          <summary class="cursor-pointer font-black text-[#16241d]">
+            <span data-valuation-i18n="improveTitle">Improve this estimate</span>
+            <span class="ml-1 text-xs font-normal text-[#5b6b62]" data-valuation-i18n="optional">Optional</span>
+          </summary>
+          <p class="mt-2 text-sm text-[#5b6b62]" data-valuation-i18n="improveSubtitle">Add what you know. We only use an answer when enough comparable listings contain that detail.</p>
+          <div class="mt-4 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <label id="valuation-bathrooms-wrap" class="block text-sm font-bold text-[#16241d]">
+              <span data-valuation-i18n="bathrooms">Bathrooms</span>
+              <select id="valuation-bathrooms" class="mt-1.5 h-11 w-full rounded-lg border border-[#dbe8e0] bg-white px-3 text-sm">
+                <option value="" data-valuation-i18n="notSpecified">Not specified</option>
+                <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+                <option value="4">4</option><option value="5">5</option>
+              </select>
+            </label>
+            <label id="valuation-property-type-wrap" class="block text-sm font-bold text-[#16241d]">
+              <span data-valuation-i18n="propertyType">Property type</span>
+              <input id="valuation-property-type" autocomplete="off" class="mt-1.5 h-11 w-full rounded-lg border border-[#dbe8e0] px-3 text-sm" placeholder="e.g. Apartment" data-valuation-placeholder="propertyTypePlaceholder">
+            </label>
+            <label id="valuation-size-sqm-wrap" class="block text-sm font-bold text-[#16241d]">
+              <span data-valuation-i18n="floorSize">Floor area (m²)</span>
+              <input id="valuation-commercial-size" type="number" min="0" step="1" class="mt-1.5 h-11 w-full rounded-lg border border-[#dbe8e0] px-3 text-sm" placeholder="e.g. 120">
+            </label>
+            <label id="valuation-size-value-wrap" class="hidden text-sm font-bold text-[#16241d]">
+              <span data-valuation-i18n="landSize">Land size</span>
+              <input id="valuation-size-value" type="number" min="0" step="0.01" class="mt-1.5 h-11 w-full rounded-lg border border-[#dbe8e0] px-3 text-sm" placeholder="e.g. 30">
+            </label>
+            <label id="valuation-size-unit-wrap" class="hidden text-sm font-bold text-[#16241d]">
+              <span data-valuation-i18n="sizeUnit">Size unit</span>
+              <select id="valuation-size-unit" class="mt-1.5 h-11 w-full rounded-lg border border-[#dbe8e0] bg-white px-3 text-sm">
+                <option value="decimals" data-valuation-i18n="decimals">Decimals</option>
+                <option value="acres" data-valuation-i18n="acres">Acres</option>
+                <option value="hectares" data-valuation-i18n="hectares">Hectares</option>
+                <option value="sqm" data-valuation-i18n="squareMetres">Square metres</option>
+              </select>
+            </label>
+            <label id="valuation-university-wrap" class="hidden text-sm font-bold text-[#16241d]">
+              <span data-valuation-i18n="university">Nearby university</span>
+              <input id="valuation-university" autocomplete="off" class="mt-1.5 h-11 w-full rounded-lg border border-[#dbe8e0] px-3 text-sm" placeholder="e.g. Makerere University" data-valuation-placeholder="universityPlaceholder">
+            </label>
+            <label id="valuation-condition-wrap" class="block text-sm font-bold text-[#16241d]">
+              <span data-valuation-i18n="condition">Condition</span>
+              <select id="valuation-condition" class="mt-1.5 h-11 w-full rounded-lg border border-[#dbe8e0] bg-white px-3 text-sm">
+                <option value="" data-valuation-i18n="notSpecified">Not specified</option>
+                <option value="new" data-valuation-i18n="conditionNew">New</option>
+                <option value="excellent" data-valuation-i18n="conditionExcellent">Excellent</option>
+                <option value="good" data-valuation-i18n="conditionGood">Good</option>
+                <option value="needs work" data-valuation-i18n="conditionNeedsWork">Needs work</option>
+              </select>
+            </label>
+            <label id="valuation-tenure-wrap" class="block text-sm font-bold text-[#16241d]">
+              <span data-valuation-i18n="tenure">Tenure</span>
+              <select id="valuation-tenure" class="mt-1.5 h-11 w-full rounded-lg border border-[#dbe8e0] bg-white px-3 text-sm">
+                <option value="" data-valuation-i18n="notSpecified">Not specified</option>
+                <option value="mailo" data-valuation-i18n="tenureMailo">Mailo</option>
+                <option value="freehold" data-valuation-i18n="tenureFreehold">Freehold</option>
+                <option value="leasehold" data-valuation-i18n="tenureLeasehold">Leasehold</option>
+              </select>
+            </label>
+            <label id="valuation-furnished-wrap" class="block text-sm font-bold text-[#16241d]">
+              <span data-valuation-i18n="furnished">Furnished</span>
+              <select id="valuation-furnished" class="mt-1.5 h-11 w-full rounded-lg border border-[#dbe8e0] bg-white px-3 text-sm">
+                <option value="" data-valuation-i18n="notSpecified">Not specified</option>
+                <option value="furnished" data-valuation-i18n="furnishedYes">Furnished</option>
+                <option value="semi furnished" data-valuation-i18n="furnishedSemi">Semi-furnished</option>
+                <option value="unfurnished" data-valuation-i18n="furnishedNo">Unfurnished</option>
+              </select>
+            </label>
+            <label id="valuation-parking-wrap" class="block text-sm font-bold text-[#16241d]">
+              <span data-valuation-i18n="parking">Parking</span>
+              <select id="valuation-parking" class="mt-1.5 h-11 w-full rounded-lg border border-[#dbe8e0] bg-white px-3 text-sm">
+                <option value="" data-valuation-i18n="notSpecified">Not specified</option>
+                <option value="yes" data-valuation-i18n="yes">Yes</option>
+                <option value="no" data-valuation-i18n="no">No</option>
+              </select>
+            </label>
+          </div>
+          <div id="valuation-refinement-feedback" class="mt-4 hidden rounded-lg border border-amber-100 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-950"></div>
+        </details>
         <div>
           <div class="flex flex-wrap items-end justify-between gap-3">
             <div>
@@ -4201,7 +4270,7 @@
               <p class="mt-1 text-sm text-[#5b6b62]" data-valuation-i18n="comparablesSubtitle">Open any listing to inspect the evidence.</p>
             </div>
             <div class="flex flex-wrap items-center gap-4">
-              <a id="valuation-view-all" href="/for-sale" onclick="return navigatePublicRoute(this.href, event)" class="text-sm font-black text-[#15603f] hover:underline"><span data-valuation-i18n="viewAllArea">View all in this area</span> <span aria-hidden="true">→</span></a>
+              <a id="valuation-view-all" href="/for-sale" onclick="return navigatePublicRoute(this.href, event)" class="text-sm font-black text-[#15603f] hover:underline"><span id="valuation-view-all-label">View all similar listings</span> <span aria-hidden="true">→</span></a>
               <a href="/?ask_ai=1" onclick="return navigatePublicRoute(this.href, event)" class="text-sm font-black text-[#15603f] hover:underline" data-valuation-i18n="askAi">Ask makaug AI about your search</a>
             </div>
           </div>

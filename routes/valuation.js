@@ -8,6 +8,7 @@ const { DISTRICTS } = require('../utils/constants');
 const {
   canonicalizeUgandaLocation,
   canonicalizeLocationRows,
+  canonicalLocationOptions,
   aliasesForCanonicalLocation,
   aliasesForDistrict,
   normalizeDistrict,
@@ -19,6 +20,7 @@ const router = express.Router();
 
 const VALUATION_MARKER = 'valuation-canonical-confidence-cards-20260725';
 const VALUATION_PUNCHLIST_MARKER = 'valuation-final-punchlist-20260725';
+const VALUATION_K17_MARKER = 'valuation-k17-simple-range-20260725';
 const CACHE_TTL_MS = Math.max(30_000, Number(process.env.VALUATION_CACHE_TTL_MS || 180_000));
 const MIN_COMPARABLES = 3;
 const DISTRICT_WIDEN_THRESHOLD = MIN_COMPARABLES;
@@ -36,7 +38,7 @@ const valuationCache = new Map();
 function valuationConfidenceLevel({ sufficient, widened, comparableCount }) {
   const count = Number(comparableCount) || 0;
   if (!sufficient || widened || count < 5) return 'low';
-  return count >= 10 ? 'high' : 'medium';
+  return count >= 20 ? 'high' : 'medium';
 }
 
 function stableComparableImageUrl(row = {}) {
@@ -203,7 +205,7 @@ function valuationPriceBasis(input = {}) {
 
 function comparableSizeSqm(row = {}, category = '') {
   if (category === 'land') return landSizeSqm(row);
-  if (category === 'commercial') {
+  if (['sale', 'rent', 'commercial'].includes(category)) {
     const value = Number(row.floor_area_sqm || row.usable_size_sqm);
     return Number.isFinite(value) && value > 0 ? value : null;
   }
@@ -282,6 +284,112 @@ function isCategoryCompatibleComparable(row = {}, input = {}) {
   return false;
 }
 
+function comparableFacetText(row = {}, facet = '') {
+  const extra = row.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
+  const values = {
+    property_type: [
+      row.property_type,
+      row.room_type,
+      extra.room_type,
+      extra.commercial_type,
+      extra.property_type
+    ],
+    condition: [extra.condition, extra.property_condition, row.description],
+    tenure: [extra.tenure, extra.land_tenure, row.description],
+    furnished: [row.furnishing, extra.furnished, extra.furnishing, row.description]
+  };
+  return (values[facet] || [])
+    .map((value) => cleanText(value).toLowerCase())
+    .filter(Boolean)
+    .join(' ');
+}
+
+function normalizedRefinementValue(value = '') {
+  return cleanText(value).toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function applyOptionalRefinements(rows = [], input = {}) {
+  let refined = rows;
+  const feedback = {};
+  const definitions = [
+    {
+      key: 'bathrooms',
+      requested: input.bathrooms,
+      available: (row) => Number(row.bathrooms) > 0,
+      matches: (row) => Number(row.bathrooms) === Number(input.bathrooms)
+    },
+    {
+      key: 'property_type',
+      requested: input.property_type,
+      available: (row) => Boolean(comparableFacetText(row, 'property_type')),
+      matches: (row) => comparableFacetText(row, 'property_type').includes(normalizedRefinementValue(input.property_type))
+    },
+    {
+      key: 'condition',
+      requested: input.condition,
+      available: (row) => /\b(?:brand new|new build|newly built|excellent condition|good condition|needs work|needs renovation|fixer upper)\b/.test(
+        comparableFacetText(row, 'condition')
+      ),
+      matches: (row) => comparableFacetText(row, 'condition').includes(normalizedRefinementValue(input.condition))
+    },
+    {
+      key: 'tenure',
+      requested: input.tenure,
+      available: (row) => /\b(?:mailo|freehold|leasehold)\b/.test(comparableFacetText(row, 'tenure')),
+      matches: (row) => comparableFacetText(row, 'tenure').includes(normalizedRefinementValue(input.tenure))
+    },
+    {
+      key: 'furnished',
+      requested: input.furnished,
+      available: (row) => /\b(?:furnished|unfurnished|semi furnished|part furnished)\b/.test(
+        comparableFacetText(row, 'furnished')
+      ),
+      matches: (row) => {
+        const text = comparableFacetText(row, 'furnished');
+        const requested = normalizedRefinementValue(input.furnished);
+        if (requested === 'unfurnished') return /\bunfurnished\b|\bnot furnished\b/.test(text);
+        if (requested === 'semi furnished') return /\bsemi furnished\b|\bpart furnished\b/.test(text);
+        return /\bfurnished\b/.test(text) && !/\bunfurnished\b|\bsemi furnished\b|\bpart furnished\b/.test(text);
+      }
+    },
+    {
+      key: 'parking',
+      requested: input.parking,
+      available: (row) => {
+        const extra = row.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
+        return Number.isFinite(Number(row.parking_bays))
+          || extra.parking != null
+          || extra.has_parking != null;
+      },
+      matches: (row) => {
+        const extra = row.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
+        const hasParking = Number(row.parking_bays) > 0
+          || extra.parking === true
+          || extra.has_parking === true
+          || ['yes', 'true', 'available'].includes(normalizedRefinementValue(extra.parking || extra.has_parking));
+        return normalizedRefinementValue(input.parking) === 'yes' ? hasParking : !hasParking;
+      }
+    }
+  ];
+
+  definitions.forEach((definition) => {
+    if (definition.requested == null || definition.requested === '') return;
+    const availableRows = refined.filter(definition.available);
+    const matchingRows = availableRows.filter(definition.matches);
+    const applied = matchingRows.length >= MIN_COMPARABLES;
+    feedback[definition.key] = {
+      requested: definition.requested,
+      applied,
+      available_count: availableRows.length,
+      matching_count: matchingRows.length,
+      reason: applied ? 'applied' : 'insufficient_facet_data'
+    };
+    if (applied) refined = matchingRows;
+  });
+
+  return { rows: refined, feedback };
+}
+
 function categorySql(category) {
   if (category === 'student') {
     return "(p.listing_type IN ('student','students') OR (p.listing_type = 'rent' AND p.students_welcome = TRUE))";
@@ -310,7 +418,7 @@ function setCachedValue(key, value) {
   }
 }
 
-async function loadComparableRows(input, scope) {
+async function loadComparableRows(input, scope, { includeImages = true } = {}) {
   const minimumPrice = minimumPlausiblePrice(input);
   const values = [];
   const where = [
@@ -355,16 +463,7 @@ async function loadComparableRows(input, scope) {
   }
 
   if (input.bedrooms != null && ['sale', 'rent', 'student'].includes(input.category)) {
-    add('p.bedrooms = ?', input.bedrooms);
-  }
-  if (input.property_type) {
-    values.push(`%${input.property_type}%`);
-    const param = `$${values.length}`;
-    where.push(`(
-      COALESCE(p.property_type, '') ILIKE ${param}
-      OR COALESCE(p.extra_fields->>'room_type', '') ILIKE ${param}
-      OR COALESCE(p.extra_fields->>'commercial_type', '') ILIKE ${param}
-    )`);
+    add(input.bedrooms_plus ? 'p.bedrooms >= ?' : 'p.bedrooms = ?', input.bedrooms);
   }
   if (input.university && input.category === 'student') {
     values.push(`%${input.university}%`);
@@ -393,6 +492,8 @@ async function loadComparableRows(input, scope) {
        p.property_type,
        p.bedrooms,
        p.bathrooms,
+       p.furnishing,
+       p.parking_bays,
        p.land_size_value,
        p.land_size_unit,
        p.floor_area_sqm,
@@ -405,13 +506,13 @@ async function loadComparableRows(input, scope) {
        p.status,
        p.created_at,
        p.extra_fields,
-       (
+       ${includeImages ? `(
          SELECT i.url
          FROM property_images i
          WHERE i.property_id = p.id
          ORDER BY i.is_primary DESC, i.sort_order ASC, i.created_at ASC
          LIMIT 1
-       ) AS image_url
+       )` : 'NULL'} AS image_url
      FROM properties p
      WHERE ${where.join('\n       AND ')}
      ORDER BY p.created_at DESC
@@ -504,7 +605,7 @@ function categoryResultsPath(input = {}) {
 }
 
 function buildEstimate(input, rows, scope, widened = scope === 'district') {
-  const prepared = rows
+  const compatibleRows = rows
     .filter((row) => isCategoryCompatibleComparable(row, input))
     .map((row) => {
       const normalizedPrice = normalizeRecurringPrice(row, input.category);
@@ -517,12 +618,23 @@ function buildEstimate(input, rows, scope, widened = scope === 'district') {
       };
     })
     .filter((row) => Number.isFinite(row.normalizedPrice) && row.normalizedPrice > 0);
+  const refinementResult = applyOptionalRefinements(compatibleRows, input);
+  const prepared = refinementResult.rows;
 
   const targetSizeSqm = input.category === 'land'
     ? targetLandSizeSqm(input.size_value, input.size_unit)
-    : (input.category === 'commercial' ? input.size_sqm : null);
+    : (['sale', 'rent', 'commercial'].includes(input.category) ? input.size_sqm : null);
   const rateRows = prepared.filter((row) => Number.isFinite(row.ratePerSqm) && row.ratePerSqm > 0);
   const useRate = targetSizeSqm && rateRows.length >= MIN_COMPARABLES;
+  if (targetSizeSqm) {
+    refinementResult.feedback.size = {
+      requested: targetSizeSqm,
+      applied: Boolean(useRate),
+      available_count: rateRows.length,
+      matching_count: rateRows.length,
+      reason: useRate ? 'applied' : 'insufficient_facet_data'
+    };
+  }
   const evidencePool = useRate ? rateRows : prepared;
   const analysisValues = evidencePool.map((row) => (
     useRate ? row.ratePerSqm * targetSizeSqm : row.normalizedPrice
@@ -602,6 +714,7 @@ function buildEstimate(input, rows, scope, widened = scope === 'district') {
       ? Math.round(unitRate * SQM_PER_DECIMAL)
       : null,
     price_basis: valuationPriceBasis(input),
+    refinement_feedback: refinementResult.feedback,
     comparables: ranked,
     view_all_url: categoryResultsPath(input),
     methodology: {
@@ -618,33 +731,77 @@ function buildEstimate(input, rows, scope, widened = scope === 'district') {
   };
 }
 
+async function valuationInputFromBody(body = {}) {
+  const category = normalizeCategory(body.category);
+  const locationRaw = cleanText(body.location || body.area);
+  const districtRaw = cleanText(body.district);
+  const canonicalLocation = canonicalizeUgandaLocation(locationRaw, districtRaw);
+  const location = canonicalLocation?.name || locationRaw;
+  let district = canonicalLocation?.district
+    || normalizeDistrict(districtRaw)
+    || normalizeDistrict(location)
+    || '';
+  const transactionType = cleanText(body.transaction_type).toLowerCase();
+  const bedroomsRaw = cleanText(body.bedrooms);
+  const input = {
+    category,
+    location,
+    district,
+    canonical_location: canonicalLocation,
+    bedrooms: toNullableInt(bedroomsRaw.replace('+', '')),
+    bedrooms_plus: bedroomsRaw.includes('+') || body.bedrooms_plus === true,
+    bathrooms: toNullableInt(body.bathrooms),
+    property_type: cleanText(body.property_type),
+    transaction_type: ['rent', 'sale'].includes(transactionType) ? transactionType : '',
+    size_value: toNullableFloat(body.size_value),
+    size_unit: cleanText(body.size_unit),
+    size_sqm: toNullableFloat(body.size_sqm),
+    university: cleanText(body.university),
+    condition: normalizedRefinementValue(body.condition),
+    tenure: normalizedRefinementValue(body.tenure),
+    furnished: normalizedRefinementValue(body.furnished),
+    parking: normalizedRefinementValue(body.parking)
+  };
+  const locationIsDistrict = canonicalLocation?.level === 'district'
+    || DISTRICTS.some((item) => item.toLowerCase() === location.toLowerCase());
+  if (!locationIsDistrict && !district) {
+    district = await withTransientDatabaseRetry(() => inferDistrictForLocation(location));
+    input.district = district;
+  }
+  return { input, locationIsDistrict };
+}
+
+router.post('/matches', async (req, res, next) => {
+  try {
+    const { input, locationIsDistrict } = await valuationInputFromBody(req.body || {});
+    if (!input.category || !input.location) {
+      return res.status(400).json({ ok: false, error: 'Choose a location and property category.' });
+    }
+    if (input.category === 'commercial' && !input.transaction_type) {
+      return res.status(400).json({ ok: false, error: 'Choose commercial rent or sale.' });
+    }
+    const scope = locationIsDistrict ? 'district' : 'area';
+    const rows = await withTransientDatabaseRetry(() => loadComparableRows(input, scope, { includeImages: false }));
+    const summary = buildEstimate(input, rows, scope, false);
+    return res.status(200).json({
+      ok: true,
+      marker: VALUATION_K17_MARKER,
+      location: input.location,
+      district: input.district,
+      scope,
+      matching_count: summary.analysis_comparable_count,
+      refinement_feedback: summary.refinement_feedback
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.post('/estimate', async (req, res, next) => {
   try {
-    const category = normalizeCategory(req.body?.category);
-    const locationRaw = cleanText(req.body?.location || req.body?.area);
-    const districtRaw = cleanText(req.body?.district);
-    const canonicalLocation = canonicalizeUgandaLocation(locationRaw, districtRaw);
-    const location = canonicalLocation?.name || locationRaw;
-    let district = canonicalLocation?.district
-      || normalizeDistrict(districtRaw)
-      || normalizeDistrict(location)
-      || '';
-    const transactionType = cleanText(req.body?.transaction_type).toLowerCase();
-    const input = {
-      category,
-      location,
-      district,
-      canonical_location: canonicalLocation,
-      bedrooms: toNullableInt(req.body?.bedrooms),
-      property_type: cleanText(req.body?.property_type),
-      transaction_type: ['rent', 'sale'].includes(transactionType) ? transactionType : '',
-      size_value: toNullableFloat(req.body?.size_value),
-      size_unit: cleanText(req.body?.size_unit),
-      size_sqm: toNullableFloat(req.body?.size_sqm),
-      university: cleanText(req.body?.university)
-    };
+    const { input, locationIsDistrict } = await valuationInputFromBody(req.body || {});
 
-    if (!category || !location) {
+    if (!input.category || !input.location) {
       return res.status(400).json({
         ok: false,
         error: 'Choose a property category and enter a Uganda area or district.'
@@ -652,15 +809,6 @@ router.post('/estimate', async (req, res, next) => {
     }
     if (input.category === 'commercial' && !input.transaction_type) {
       return res.status(400).json({ ok: false, error: 'Choose whether the commercial property is for rent or sale.' });
-    }
-    const locationIsDistrict = canonicalLocation?.level === 'district'
-      || DISTRICTS.some((item) => item.toLowerCase() === location.toLowerCase());
-    if (!locationIsDistrict) {
-      const inferredDistrict = await withTransientDatabaseRetry(() => inferDistrictForLocation(location));
-      if (inferredDistrict) {
-        district = inferredDistrict;
-        input.district = inferredDistrict;
-      }
     }
 
     const key = cacheKey(input);
@@ -673,11 +821,15 @@ router.post('/estimate', async (req, res, next) => {
     let scope = locationIsDistrict ? 'district' : 'area';
     let widened = false;
     let rows = await withTransientDatabaseRetry(() => loadComparableRows(input, scope));
-    const exactCompatibleCount = rows.filter((row) => isCategoryCompatibleComparable(row, input)).length;
-    if (scope === 'area' && exactCompatibleCount < DISTRICT_WIDEN_THRESHOLD && district) {
-      if (canonicalLocation && Number.isFinite(canonicalLocation.lat) && Number.isFinite(canonicalLocation.lng)) {
+    const exactCompatibleCount = buildEstimate(input, rows, scope, false).analysis_comparable_count;
+    if (scope === 'area' && exactCompatibleCount < DISTRICT_WIDEN_THRESHOLD && input.district) {
+      if (
+        input.canonical_location
+        && Number.isFinite(input.canonical_location.lat)
+        && Number.isFinite(input.canonical_location.lng)
+      ) {
         const nearbyRows = await withTransientDatabaseRetry(() => loadComparableRows(input, 'nearby'));
-        const nearbyCompatibleCount = nearbyRows.filter((row) => isCategoryCompatibleComparable(row, input)).length;
+        const nearbyCompatibleCount = buildEstimate(input, nearbyRows, 'nearby', true).analysis_comparable_count;
         if (nearbyCompatibleCount >= DISTRICT_WIDEN_THRESHOLD) {
           scope = 'nearby';
           widened = true;
@@ -690,22 +842,52 @@ router.post('/estimate', async (req, res, next) => {
         rows = await withTransientDatabaseRetry(() => loadComparableRows(input, scope));
       }
     }
-    const result = buildEstimate(input, rows, scope, widened);
+    let result = buildEstimate(input, rows, scope, widened);
+    if (!result.sufficient && input.district) {
+      const broadInput = {
+        ...input,
+        bedrooms: null,
+        bedrooms_plus: false,
+        bathrooms: null,
+        property_type: '',
+        size_value: null,
+        size_unit: '',
+        size_sqm: null,
+        university: '',
+        condition: '',
+        tenure: '',
+        furnished: '',
+        parking: ''
+      };
+      const broadRows = await withTransientDatabaseRetry(() => loadComparableRows(broadInput, 'district'));
+      const broadResult = buildEstimate(broadInput, broadRows, 'district_average', true);
+      if (broadResult.sufficient) {
+        result = {
+          ...broadResult,
+          input,
+          broad_average: true,
+          refinement_feedback: result.refinement_feedback
+        };
+      }
+    }
     const payload = {
       ok: true,
       marker: VALUATION_MARKER,
       fix_marker: VALUATION_PUNCHLIST_MARKER,
+      ux_marker: VALUATION_K17_MARKER,
       input,
       ...result,
       exact_comparable_count: exactCompatibleCount,
       widen_reason: widened
         ? `Only ${exactCompatibleCount} exact compatible comparable${exactCompatibleCount === 1 ? '' : 's'} found; at least ${MIN_COMPARABLES} are required.`
         : null,
-      scope_label: widened
+      scope_label: result.broad_average
+        ? `Broad ${input.district} District average — not an estimate for this property.`
+        : widened
         ? (scope === 'nearby'
-          ? `Not enough exact matches in ${location}; using nearby ${district} comparables.`
-          : `Not enough exact matches in ${location}; using ${district} District comparables.`)
-        : `Using comparable listings in ${scope === 'district' ? `${district} District` : location}.`,
+          ? `Not enough exact matches in ${input.location}; using nearby ${input.district} comparables.`
+          : `Not enough exact matches in ${input.location}; using ${input.district} District comparables.`)
+        : `Using comparable listings in ${scope === 'district' ? `${input.district} District` : input.location}.`,
       currency: 'UGX',
       generated_at: new Date().toISOString(),
       cache_ttl_seconds: Math.round(CACHE_TTL_MS / 1000)
@@ -748,12 +930,24 @@ router.get('/locations', async (req, res, next) => {
       values
     );
     const canonicalRows = canonicalizeLocationRows(rows.rows || []);
+    const counts = new Map(canonicalRows.map((row) => [row.canonical_key, row.listing_count]));
+    const locationOptions = canonicalLocationOptions()
+      .map((row) => ({
+        ...row,
+        listing_count: counts.get(row.canonical_key) || 0
+      }))
+      .sort((a, b) => (
+        b.listing_count - a.listing_count
+        || a.district.localeCompare(b.district)
+        || a.location.localeCompare(b.location)
+      ));
     return res.status(200).json({
       ok: true,
       marker: VALUATION_MARKER,
       fix_marker: VALUATION_PUNCHLIST_MARKER,
+      ux_marker: VALUATION_K17_MARKER,
       category,
-      data: canonicalRows
+      data: locationOptions
     });
   } catch (error) {
     return next(error);
@@ -766,6 +960,7 @@ router.get('/config', (_req, res) => {
     ok: true,
     marker: VALUATION_MARKER,
     fix_marker: VALUATION_PUNCHLIST_MARKER,
+    ux_marker: VALUATION_K17_MARKER,
     categories: ['sale', 'rent', 'land', 'commercial', 'student'],
     districts: DISTRICTS,
     minimum_comparables: MIN_COMPARABLES,
@@ -788,10 +983,12 @@ module.exports._test = {
   isTransientDatabaseError,
   categoryResultsPath,
   buildEstimate,
+  applyOptionalRefinements,
   valuationConfidenceLevel,
   stableComparableImageUrl,
   minimumPlausiblePrice,
   canonicalizeUgandaLocation,
   canonicalizeLocationRows,
+  canonicalLocationOptions,
   aliasesForCanonicalLocation
 };
