@@ -133,6 +133,7 @@ const PUBLIC_PROPERTIES_CACHE_MAX_AGE_SECONDS = Math.max(1, Math.floor(PUBLIC_PR
 const PUBLIC_PROPERTIES_CACHE_STALE_SECONDS = 300;
 const PUBLIC_PROPERTIES_CACHE_MAX_ENTRIES = 120;
 const PUBLIC_PROPERTIES_CACHE_REFRESH_AGENT = 'makaug-public-inventory-cache-warmup';
+const PUBLIC_LOCATION_SEARCH_PERFORMANCE_MARKER = 'properties-location-search-count-fast-20260725';
 const PUBLIC_PROPERTIES_CACHE_IGNORED_QUERY_KEYS = new Set(['cache_refresh', 'cacheRefresh', 'deploy_probe', 'v', '_']);
 const PUBLIC_LOCATION_SEARCH_COLUMNS = Object.freeze([
   "p.area",
@@ -2348,6 +2349,7 @@ async function listPropertiesHandler(req, res, next) {
           : { page, limit, total: null, total_pages: null },
         meta: {
           marker: PUBLIC_INVENTORY_METRICS_MARKER,
+          ...(area ? { search_count_marker: PUBLIC_LOCATION_SEARCH_PERFORMANCE_MARKER } : {}),
           count_cache: opportunitySummaryMeta?.cache || 'unknown',
           ...(opportunitySummaryMeta?.fallback_reason ? { count_fallback_reason: opportunitySummaryMeta.fallback_reason } : {})
         }
@@ -2741,6 +2743,7 @@ async function listPropertiesHandler(req, res, next) {
       pagination,
       meta: {
         marker: PUBLIC_INVENTORY_METRICS_MARKER,
+        ...(area ? { search_count_marker: PUBLIC_LOCATION_SEARCH_PERFORMANCE_MARKER } : {}),
         ...(includeSummary ? { count_cache: opportunitySummaryMeta?.cache || 'unknown' } : {}),
         ...(opportunitySummaryMeta?.fallback_reason ? { count_fallback_reason: opportunitySummaryMeta.fallback_reason } : {})
       }

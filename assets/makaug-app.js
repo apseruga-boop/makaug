@@ -40042,6 +40042,7 @@ const VALUATION_UI_EN = Object.freeze({
   methodExample: "Worked example: {count} comparable prices produced a trimmed estimate of {estimate} and a range of {low} to {high}.",
   methodLegal: "Estimates are averages computed from our own approved listings. They are a guide only — not a formal valuation — and makaug.com accepts no liability for decisions based on them. Always engage a licensed surveyor or valuer before transacting.",
   noImage: "No photo",
+  viewAllArea: "View all in this area",
   viewListing: "View listing"
 });
 
@@ -40066,7 +40067,7 @@ const VALUATION_UI_OVERRIDES = Object.freeze({
     comparablesSubtitle: "Ggulawo listing yonna olabe obujulizi.", askAi: "Buuza makaug AI ku kunoonya kwo",
     methodTitle: "Enkola n'ekyokulabirako", loading: "Tugeraageranya ebifo…",
     failed: "Tetusoobodde kubalirira kati. Ddamu ogezeeko.", insufficient: "Ebifo ebigeraageranyizibwa tebimala okukola omuwendo omwesigwa.",
-    range: "Omuwendo guyinza okuba: {low} – {high}", viewListing: "Laba ekifo"
+    range: "Omuwendo guyinza okuba: {low} – {high}", viewAllArea: "Laba byonna mu kitundu kino", viewListing: "Laba ekifo"
   },
   sw: {
     eyebrow: "Ushahidi kutoka matangazo ya moja kwa moja ya makaug",
@@ -40085,7 +40086,7 @@ const VALUATION_UI_OVERRIDES = Object.freeze({
     comparablesTitle: "Matangazo yaliyotumika", comparablesSubtitle: "Fungua tangazo lolote kuona ushahidi.",
     askAi: "Uliza makaug AI kuhusu utafutaji wako", methodTitle: "Mbinu na mfano", loading: "Tunalinganisha matangazo…",
     failed: "Hatukuweza kukadiria sasa. Jaribu tena.", insufficient: "Hakuna matangazo ya kutosha kwa makadirio ya kuaminika.",
-    range: "Kiwango kinachowezekana: {low} – {high}", viewListing: "Tazama tangazo"
+    range: "Kiwango kinachowezekana: {low} – {high}", viewAllArea: "Tazama yote katika eneo hili", viewListing: "Tazama tangazo"
   },
   ac: {
     eyebrow: "Caden ki listing ma makaug", navTitle: "Wel pa property", title: "Lacal wel pa property", subtitle: "Por ki listing ma gimoko i kabedo acel. Man obedo lacim me cato, pe valuation me cik.",
@@ -40096,7 +40097,7 @@ const VALUATION_UI_OVERRIDES = Object.freeze({
     professionalTitle: "Imito valuation me cik?", findSurveyor: "Nong surveyor", estimatedValue: "Wel ma wapimo",
     evidence: "Caden", comparableListings: "listing ma kiporo", comparablesTitle: "Listing ma watio kwede",
     loading: "Waporo listing…", failed: "Pe watwero pimo kombedi. Tem doki.", insufficient: "Listing ma kiporo pe oromo.",
-    viewListing: "Nen listing"
+    viewAllArea: "Nen weng i kabedo man", viewListing: "Nen listing"
   },
   ny: {
     eyebrow: "Obuhame kuruga aha makaug", navTitle: "Omuhendo gwa property", title: "Ekyoma ky'okubara omuhendo gwa property", subtitle: "Gyeragyeranisa n'ebyamamaza ebihamiibwe omu mwanya gumwe. N'obuhabuzi, ti valuation y'amateeka.",
@@ -40107,7 +40108,7 @@ const VALUATION_UI_OVERRIDES = Object.freeze({
     howTitle: "Oku omuhendo guteekateekwa", professionalTitle: "Nooyenda valuation ey'ekikugu?", findSurveyor: "Shaka surveyor",
     estimatedValue: "Omuhendo oguteekateekirwe", evidence: "Obuhame", comparableListings: "ebyogerwa ebigyeragyeranisibwe",
     comparablesTitle: "Ebyogerwa ebikozesibwe", loading: "Nitugyeragyeranisa…", failed: "Titwabaasize kuteekateeka hati.",
-    insufficient: "Ebyogerwa tibikumara.", viewListing: "Reeba listing"
+    insufficient: "Ebyogerwa tibikumara.", viewAllArea: "Reeba byona omu mwanya ogu", viewListing: "Reeba listing"
   },
   rn: {
     eyebrow: "Obuhame kuruga aha makaug", navTitle: "Omuhendo gwa property", title: "Ekyoma ky'okubara omuhendo gwa property", subtitle: "Gyeragyeranisa na listing ezihamiibwe omu mwanya gumwe. N'obuhabuzi bw'akatale.",
@@ -40118,7 +40119,7 @@ const VALUATION_UI_OVERRIDES = Object.freeze({
     professionalTitle: "Nooyenda valuation ey'ekikugu?", findSurveyor: "Shaka surveyor", estimatedValue: "Omuhendo ogubariirwe",
     evidence: "Obuhame", comparableListings: "listing ezigyeragyeranisibwe", comparablesTitle: "Listing ezikozesibwe",
     loading: "Nitugyeragyeranisa listing…", failed: "Titwabaasize kubara hati.", insufficient: "Listing tizaamala.",
-    viewListing: "Reeba listing"
+    viewAllArea: "Reeba byona omu mwanya ogu", viewListing: "Reeba listing"
   },
   sm: {
     eyebrow: "Obujulizi okuva ku makaug", navTitle: "Omuwendo gwa property", title: "Ekyuma ekibalirira omuwendo gwa property", subtitle: "Geraageranya n'ebirango ebikkirizibwa mu kifo kye kimu. Kino kya kukuyamba.",
@@ -40129,7 +40130,7 @@ const VALUATION_UI_OVERRIDES = Object.freeze({
     professionalTitle: "Oyenda valuation entongole?", findSurveyor: "Funa surveyor", estimatedValue: "Omuwendo ogubaliriddwa",
     evidence: "Obujulizi", comparableListings: "ebirango ebigeraageranyiziddwa", comparablesTitle: "Ebirango ebikozeseddwa",
     loading: "Tugeraageranya ebirango…", failed: "Tetusoobodde kubalirira kati.", insufficient: "Ebirango tebimala.",
-    viewListing: "Laba ekirango"
+    viewAllArea: "Laba byonna mu kifo kino", viewListing: "Laba ekirango"
   },
   am: {
     eyebrow: "ከቀጥታ makaug ዝርዝሮች የተገኘ ማስረጃ", navTitle: "የንብረት ዋጋ", title: "የንብረት ዋጋ ማስሊያ", subtitle: "በተመሳሳይ አካባቢ የተፈቀዱ ዝርዝሮችን ያወዳድሩ። ይህ የገበያ መመሪያ ነው።",
@@ -40141,7 +40142,7 @@ const VALUATION_UI_OVERRIDES = Object.freeze({
     findSurveyor: "ቀያሽ ያግኙ", estimatedValue: "የተገመተ የገበያ ዋጋ", evidence: "ማስረጃ",
     comparableListings: "ተመሳሳይ ዝርዝሮች", comparablesTitle: "ያገለገሉ ተመሳሳይ ዝርዝሮች",
     loading: "ቀጥታ ዝርዝሮችን እያወዳደርን ነው…", failed: "አሁን ግምቱን ማስላት አልቻልንም።", insufficient: "ታማኝ ግምት ለመስጠት በቂ ዝርዝሮች የሉም።",
-    viewListing: "ዝርዝሩን ይመልከቱ"
+    viewAllArea: "በዚህ አካባቢ ያሉትን ሁሉ ይመልከቱ", viewListing: "ዝርዝሩን ይመልከቱ"
   },
   ar: {
     eyebrow: "أدلة من إعلانات makaug المباشرة", navTitle: "قيمة العقار", title: "حاسبة قيمة العقار", subtitle: "قارن بالإعلانات العامة المعتمدة في المنطقة نفسها. هذا دليل سوقي وليس تقييماً رسمياً.",
@@ -40159,7 +40160,7 @@ const VALUATION_UI_OVERRIDES = Object.freeze({
     comparablesSubtitle: "افتح أي إعلان لفحص الأدلة.", askAi: "اسأل makaug AI عن بحثك",
     methodTitle: "المنهجية ومثال عملي", loading: "جارٍ مقارنة الإعلانات المباشرة…",
     failed: "تعذر حساب التقدير الآن. حاول مرة أخرى.", insufficient: "لا توجد إعلانات مقارنة كافية لتقدير موثوق.",
-    range: "النطاق المحتمل: {low} – {high}", viewListing: "عرض الإعلان"
+    range: "النطاق المحتمل: {low} – {high}", viewAllArea: "عرض الكل في هذه المنطقة", viewListing: "عرض الإعلان"
   }
 });
 
@@ -40505,15 +40506,38 @@ function safeImageUrl(value = "") {
   }
 }
 
+function stableValuationComparableImageUrl(row = {}, extra = {}) {
+  const persistent = [
+    extra.tiktok_thumbnail_cache_url,
+    extra.thumbnail_cache_url,
+    extra.source_thumbnail_cache_url,
+    extra.cached_thumbnail_url,
+    extra.cached_image_url
+  ].map(safeImageUrl).find(Boolean);
+  if (persistent) return persistent;
+
+  const fallback = [
+    row.image_url,
+    extra.image_url,
+    extra.thumbnail_url,
+    extra.source_thumbnail_url
+  ].map(safeImageUrl).find(Boolean) || "";
+  if (!fallback) return "";
+
+  const sourceText = [
+    row.source,
+    row.listed_via,
+    extra.source_platform,
+    extra.source_url,
+    extra.source_post_url
+  ].map((value) => String(value || "").toLowerCase()).join(" ");
+  const transientTikTokImage = /(?:tiktokcdn|byteimg|p16-|p19-|p77-|tos-)/i.test(fallback);
+  return sourceText.includes("tiktok") && transientTikTokImage ? "" : fallback;
+}
+
 function valuationComparableProperty(row = {}, category = "") {
   const extra = row.extra_fields && typeof row.extra_fields === "object" ? row.extra_fields : {};
-  const image = safeImageUrl(
-    row.image_url
-    || extra.image_url
-    || extra.thumbnail_url
-    || extra.source_thumbnail_url
-    || ""
-  );
+  const image = stableValuationComparableImageUrl(row, extra);
   const landSize = row.land_size_value && row.land_size_unit
     ? `${row.land_size_value} ${row.land_size_unit}`
     : "";

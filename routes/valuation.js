@@ -18,6 +18,7 @@ const {
 const router = express.Router();
 
 const VALUATION_MARKER = 'valuation-canonical-confidence-cards-20260725';
+const VALUATION_PUNCHLIST_MARKER = 'valuation-final-punchlist-20260725';
 const CACHE_TTL_MS = Math.max(30_000, Number(process.env.VALUATION_CACHE_TTL_MS || 180_000));
 const MIN_COMPARABLES = 3;
 const DISTRICT_WIDEN_THRESHOLD = MIN_COMPARABLES;
@@ -31,6 +32,46 @@ const SQM_PER_DECIMAL = SQM_PER_ACRE / 100;
 const SQM_PER_SQUARE_FOOT = 0.09290304;
 const TRANSIENT_DATABASE_RETRY_MS = 125;
 const valuationCache = new Map();
+
+function valuationConfidenceLevel({ sufficient, widened, comparableCount }) {
+  const count = Number(comparableCount) || 0;
+  if (!sufficient || widened || count < 5) return 'low';
+  return count >= 10 ? 'high' : 'medium';
+}
+
+function stableComparableImageUrl(row = {}) {
+  const extra = row.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
+  const firstUrl = (values) => values
+    .map((value) => cleanText(value, 2000))
+    .find((value) => /^https?:\/\//i.test(value)) || null;
+  const persistent = firstUrl([
+    extra.tiktok_thumbnail_cache_url,
+    extra.thumbnail_cache_url,
+    extra.source_thumbnail_cache_url,
+    extra.cached_thumbnail_url,
+    extra.cached_image_url
+  ]);
+  if (persistent) return persistent;
+
+  const fallback = firstUrl([
+    row.image_url,
+    extra.image_url,
+    extra.thumbnail_url,
+    extra.source_thumbnail_url
+  ]);
+  if (!fallback) return null;
+
+  const sourceText = [
+    row.source,
+    row.listed_via,
+    extra.source_platform,
+    extra.source_url,
+    extra.source_post_url
+  ].map((value) => cleanText(value).toLowerCase()).join(' ');
+  const isTikTok = sourceText.includes('tiktok');
+  const looksTransientTikTokImage = /(?:tiktokcdn|byteimg|p16-|p19-|p77-|tos-)/i.test(fallback);
+  return isTikTok && looksTransientTikTokImage ? null : fallback;
+}
 
 function normalizeCategory(value) {
   const key = cleanText(value).toLowerCase();
@@ -522,7 +563,7 @@ function buildEstimate(input, rows, scope, widened = scope === 'district') {
       land_size_value: row.land_size_value,
       land_size_unit: row.land_size_unit,
       size_sqm: row.sizeSqm ? Math.round(row.sizeSqm * 10) / 10 : null,
-      image_url: row.image_url || null,
+      image_url: stableComparableImageUrl(row),
       source: row.source || null,
       listed_via: row.listed_via || null,
       status: row.status || null,
@@ -537,9 +578,11 @@ function buildEstimate(input, rows, scope, widened = scope === 'district') {
   const high = percentile(evidenceValues, 0.9);
   const sufficient = analysisValues.length >= MIN_COMPARABLES;
   const scopeAreas = Array.from(new Set(ranked.map((row) => cleanText(row.area)).filter(Boolean)));
-  const confidence = !sufficient || widened || analysisValues.length < 5
-    ? 'low'
-    : (analysisValues.length >= 10 ? 'high' : 'medium');
+  const confidence = valuationConfidenceLevel({
+    sufficient,
+    widened,
+    comparableCount: analysisValues.length
+  });
 
   return {
     sufficient,
@@ -651,8 +694,13 @@ router.post('/estimate', async (req, res, next) => {
     const payload = {
       ok: true,
       marker: VALUATION_MARKER,
+      fix_marker: VALUATION_PUNCHLIST_MARKER,
       input,
       ...result,
+      exact_comparable_count: exactCompatibleCount,
+      widen_reason: widened
+        ? `Only ${exactCompatibleCount} exact compatible comparable${exactCompatibleCount === 1 ? '' : 's'} found; at least ${MIN_COMPARABLES} are required.`
+        : null,
       scope_label: widened
         ? (scope === 'nearby'
           ? `Not enough exact matches in ${location}; using nearby ${district} comparables.`
@@ -703,6 +751,7 @@ router.get('/locations', async (req, res, next) => {
     return res.status(200).json({
       ok: true,
       marker: VALUATION_MARKER,
+      fix_marker: VALUATION_PUNCHLIST_MARKER,
       category,
       data: canonicalRows
     });
@@ -716,6 +765,7 @@ router.get('/config', (_req, res) => {
   return res.status(200).json({
     ok: true,
     marker: VALUATION_MARKER,
+    fix_marker: VALUATION_PUNCHLIST_MARKER,
     categories: ['sale', 'rent', 'land', 'commercial', 'student'],
     districts: DISTRICTS,
     minimum_comparables: MIN_COMPARABLES,
@@ -738,6 +788,8 @@ module.exports._test = {
   isTransientDatabaseError,
   categoryResultsPath,
   buildEstimate,
+  valuationConfidenceLevel,
+  stableComparableImageUrl,
   minimumPlausiblePrice,
   canonicalizeUgandaLocation,
   canonicalizeLocationRows,
