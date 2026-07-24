@@ -6,7 +6,7 @@
   <title>makaug.com | Uganda Property Portal</title>
   <meta name="description" content="Uganda's free property portal. Buy, rent, sell and find brokers across all districts.">
   <meta name="robots" content="index,follow,max-image-preview:large">
-  <meta name="makaug-release-marker" content="ask-ai-topbar-match-20260718 properties-list-count-fast-20260718 admin-summary-fallback-20260718 admin-summary-warm-nozero-20260718 ai-category-colours-20260718 ai-scoped-localized-prompts-20260718 report-claim-pipeline-v2-20260718 marketplace-p1-20260719 marketplace-report-fixes-20260719 marketplace-enrich-20260719 marketplace-regjourney-20260719 marketplace-owner-direct-fast-20260719 foreign-country-gate-purge-20260724 property-origin-filter-20260724 listing-removal-confirmation-20260724 valuation-live-comparables-20260724 advertising-selfserve-checkout-20260724 crm-lead-bundles-export-20260724 tracked-poster-fingerprint-dedupe-20260724">
+  <meta name="makaug-release-marker" content="ask-ai-topbar-match-20260718 properties-list-count-fast-20260718 admin-summary-fallback-20260718 admin-summary-warm-nozero-20260718 ai-category-colours-20260718 ai-scoped-localized-prompts-20260718 report-claim-pipeline-v2-20260718 marketplace-p1-20260719 marketplace-report-fixes-20260719 marketplace-enrich-20260719 marketplace-regjourney-20260719 marketplace-owner-direct-fast-20260719 foreign-country-gate-purge-20260724 property-origin-filter-20260724 listing-removal-confirmation-20260724 valuation-live-comparables-20260724 advertising-selfserve-checkout-20260724 crm-lead-bundles-export-20260724 tracked-poster-fingerprint-dedupe-20260724 property-value-calculator-20260725 valuation-evidence-locality-20260725 properties-search-reliability-20260725">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="makaug.com">
   <meta property="og:title" content="makaug.com | Uganda Property Portal">
@@ -2312,7 +2312,7 @@
         <a id="nav-land" href="/land" onclick="showPage('land')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Land</a>
         <a id="nav-brokers" href="/brokers" onclick="showPage('brokers')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Find Brokers</a>
         <a id="nav-mortgage" href="/mortgage" onclick="showPage('mortgage')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Mortgage Finder</a>
-        <a id="nav-valuation" href="/valuation" onclick="showPage('valuation')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Valuation</a>
+        <a id="nav-valuation" href="/valuation" onclick="showPage('valuation')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Property Value</a>
         <a id="nav-ai" href="/discover-ai-chatbot" onclick="showPage('ai-chatbot')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">AI Chatbot</a>
         <a id="nav-marketplace" href="/marketplace" onclick="showPage('marketplace')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-rose-50 hover:text-[#b3134f] cursor-pointer">Marketplace</a>
         <a id="nav-about" href="/about" onclick="showPage('about')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">About Us</a>
@@ -2330,7 +2330,7 @@
       <a id="mnav-land" href="/land" onclick="showPage('land');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Land</a>
       <a id="mnav-brokers" href="/brokers" onclick="showPage('brokers');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Find Brokers</a>
       <a id="mnav-mortgage" href="/mortgage" onclick="showPage('mortgage');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Mortgage Finder</a>
-      <a id="mnav-valuation" href="/valuation" onclick="showPage('valuation');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Valuation</a>
+      <a id="mnav-valuation" href="/valuation" onclick="showPage('valuation');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Property Value</a>
       <a id="mnav-ai" href="/discover-ai-chatbot" onclick="showPage('ai-chatbot');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">AI Chatbot</a>
       <a id="mnav-marketplace" href="/marketplace" onclick="showPage('marketplace');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-rose-50">Marketplace</a>
       <a id="mnav-about" href="/about" onclick="showPage('about');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">About Us</a>
@@ -2372,7 +2372,7 @@
           <p id="hero-subtitle" class="text-base md:text-xl text-white/90 font-semibold max-w-4xl mx-auto">
             <span id="hero-subtitle-prefix">makaug uses AI-powered search algorithms to scan public online property sources across Uganda, organising</span>
             <span id="hero-property-counter" class="hero-opportunity-counter" role="button" tabindex="0" aria-describedby="hero-property-counter-tooltip" title="Property opportunity breakdown">
-              <span id="hero-property-count">0</span>
+              <span id="hero-property-count">thousands of</span>
               <span id="hero-property-counter-tooltip" class="hero-opportunity-tooltip" role="tooltip">Loading property breakdown...</span>
             </span>
             <span id="hero-property-count-label">property opportunities</span>
@@ -4059,11 +4059,11 @@
     </main>
   </div>
 
-  <div id="page-valuation" class="page bg-[#f6f9f7]" data-valuation-marker="valuation-live-comparables-20260724">
+  <div id="page-valuation" class="page bg-[#f6f9f7]" data-valuation-marker="valuation-evidence-locality-20260725">
     <section class="bg-[#0f3d2e] py-10 text-white">
       <div class="max-w-6xl mx-auto px-4">
         <p class="text-xs font-black uppercase tracking-wide text-emerald-200" data-valuation-i18n="eyebrow">Evidence from live makaug listings</p>
-        <h1 class="mt-2 text-3xl md:text-4xl font-black serif" data-valuation-i18n="title">Estimate a property value</h1>
+        <h1 class="mt-2 text-3xl md:text-4xl font-black serif" data-valuation-i18n="title">Property Value Calculator</h1>
         <p class="mt-2 max-w-3xl text-sm md:text-base text-emerald-50" data-valuation-i18n="subtitle">Compare approved public listings in the same area. This is a market guide, not a formal valuation.</p>
       </div>
     </section>
@@ -4187,16 +4187,21 @@
         <div>
           <div class="flex flex-wrap items-end justify-between gap-3">
             <div>
-              <h2 class="text-xl font-black text-[#16241d]" data-valuation-i18n="comparablesTitle">Comparable listings used</h2>
+              <h2 class="text-xl font-black text-[#16241d]" data-valuation-i18n="comparablesTitle">Properties used in this estimate</h2>
               <p class="mt-1 text-sm text-[#5b6b62]" data-valuation-i18n="comparablesSubtitle">Open any listing to inspect the evidence.</p>
             </div>
-            <a href="/?ask_ai=1" onclick="return navigatePublicRoute(this.href, event)" class="text-sm font-black text-[#15603f] hover:underline" data-valuation-i18n="askAi">Ask makaug AI about your search</a>
+            <div class="flex flex-wrap items-center gap-4">
+              <a id="valuation-view-all" href="/for-sale" onclick="return navigatePublicRoute(this.href, event)" class="text-sm font-black text-[#15603f] hover:underline">View all in this area →</a>
+              <a href="/?ask_ai=1" onclick="return navigatePublicRoute(this.href, event)" class="text-sm font-black text-[#15603f] hover:underline" data-valuation-i18n="askAi">Ask makaug AI about your search</a>
+            </div>
           </div>
           <div id="valuation-comparables" class="mt-4 grid sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
         </div>
         <details class="bg-white border border-[#e4ece8] rounded-lg p-4">
           <summary class="cursor-pointer font-black text-[#16241d]" data-valuation-i18n="methodTitle">Methodology and worked example</summary>
-          <div id="valuation-methodology" class="mt-3 space-y-2 text-sm text-[#5b6b62]"></div>
+          <div id="valuation-methodology" class="mt-3 space-y-2 text-sm text-[#5b6b62]">
+            <p data-valuation-i18n="methodText">The estimate uses a trimmed mean. With 10 or more comparable listings, the highest and lowest 10% are removed. The displayed range is the 10th–90th percentile.</p>
+          </div>
         </details>
       </section>
     </main>

@@ -16,6 +16,7 @@ assert.ok(Math.abs(helpers.targetLandSizeSqm(100, 'decimals') - 4046.8564224) < 
 assert.strictEqual(helpers.normalizeRecurringPrice({ price: 4_000_000, price_period: 'semester' }, 'student'), 4_000_000);
 assert.strictEqual(helpers.normalizeRecurringPrice({ price: 1_000_000, price_period: 'month' }, 'student'), 4_000_000);
 assert.strictEqual(helpers.normalizeRecurringPrice({ price: 12_000_000, price_period: 'year' }, 'student'), 4_000_000);
+assert.strictEqual(helpers.normalizeRecurringPrice({ price: 90_000_000, price_period: 'once' }, 'student'), null);
 assert.strictEqual(helpers.normalizeRecurringPrice({ price: 1_000_000, price_period: 'month' }, 'rent'), 1_000_000);
 assert.strictEqual(helpers.valuationPriceBasis({ category: 'student' }), 'semester');
 assert.strictEqual(helpers.valuationPriceBasis({ category: 'rent' }), 'month');
@@ -26,9 +27,9 @@ const estimate = helpers.buildEstimate({
   size_unit: '',
   size_sqm: null
 }, [
-  { id: '1', price: 100_000_000, title: 'A' },
-  { id: '2', price: 110_000_000, title: 'B' },
-  { id: '3', price: 120_000_000, title: 'C' }
+  { id: '1', listing_type: 'sale', price: 100_000_000, title: 'A' },
+  { id: '2', listing_type: 'sale', price: 110_000_000, title: 'B' },
+  { id: '3', listing_type: 'sale', price: 120_000_000, title: 'C' }
 ], 'area');
 assert.strictEqual(estimate.sufficient, true);
 assert.strictEqual(estimate.estimate, 110_000_000);
@@ -41,13 +42,64 @@ const landEstimate = helpers.buildEstimate({
   size_unit: 'decimals',
   size_sqm: null
 }, [
-  { id: 'l1', price: 100_000_000, title: 'A', land_size_value: 50, land_size_unit: 'decimals' },
-  { id: 'l2', price: 120_000_000, title: 'B', land_size_value: 60, land_size_unit: 'decimals' },
-  { id: 'l3', price: 80_000_000, title: 'C', land_size_value: 40, land_size_unit: 'decimals' }
+  { id: 'l1', listing_type: 'land', price: 100_000_000, title: 'A', land_size_value: 50, land_size_unit: 'decimals' },
+  { id: 'l2', listing_type: 'land', price: 120_000_000, title: 'B', land_size_value: 60, land_size_unit: 'decimals' },
+  { id: 'l3', listing_type: 'land', price: 80_000_000, title: 'C', land_size_value: 40, land_size_unit: 'decimals' }
 ], 'area');
 assert.strictEqual(landEstimate.estimate, 100_000_000);
 assert.strictEqual(landEstimate.unit_rate_decimal, 2_000_000);
 assert.strictEqual(landEstimate.methodology.size_adjusted, true);
+
+const studentEstimate = helpers.buildEstimate({
+  category: 'student',
+  location: 'Makerere',
+  size_value: null,
+  size_unit: '',
+  size_sqm: null
+}, [
+  { id: 's1', listing_type: 'student', price: 1_000_000, price_period: 'semester', title: 'Student room' },
+  { id: 's2', listing_type: 'student', price: 1_200_000, price_period: 'semester', title: 'Hostel room' },
+  { id: 's3', listing_type: 'rent', students_welcome: true, price: 350_000, price_period: 'month', title: 'Student bedsitter' },
+  { id: 'bad-land', listing_type: 'land', price: 5_000_000_000, price_period: 'once', title: 'Land near university' },
+  { id: 'bad-sale', listing_type: 'student', transaction_type: 'sale', price: 800_000_000, price_period: 'once', title: 'Hostel for sale' }
+], 'area');
+assert.strictEqual(studentEstimate.sufficient, true);
+assert.strictEqual(studentEstimate.analysis_comparable_count, 3);
+assert.deepStrictEqual(studentEstimate.comparables.map((row) => row.id).sort(), ['s1', 's2', 's3']);
+assert.ok(studentEstimate.estimate < 2_000_000, 'student estimate must stay on a semester-rent scale');
+
+assert.strictEqual(helpers.isCategoryCompatibleComparable({
+  listing_type: 'sale',
+  title: 'Cost to build a three-bedroom house',
+  description: 'Construction cost guide'
+}, { category: 'sale' }), false);
+assert.strictEqual(helpers.isCategoryCompatibleComparable({
+  listing_type: 'land',
+  transaction_type: 'rent',
+  price_period: 'month',
+  title: 'Land for monthly rent'
+}, { category: 'land' }), false);
+
+const evidenceEstimate = helpers.buildEstimate({
+  category: 'sale',
+  location: 'Kira',
+  size_value: null,
+  size_unit: '',
+  size_sqm: null
+}, Array.from({ length: 14 }, (_, index) => ({
+  id: `e${index + 1}`,
+  listing_type: 'sale',
+  price: (index + 1) * 10_000_000,
+  title: `Sale ${index + 1}`
+})), 'area');
+assert.strictEqual(evidenceEstimate.analysis_comparable_count, 14);
+assert.strictEqual(evidenceEstimate.comparable_count, 10);
+assert.strictEqual(evidenceEstimate.comparables.length, 10);
+const displayedValues = evidenceEstimate.comparables.map((row) => row.valuation_value);
+assert.strictEqual(evidenceEstimate.range_low, Math.round(helpers.percentile(displayedValues, 0.1)));
+assert.strictEqual(evidenceEstimate.range_high, Math.round(helpers.percentile(displayedValues, 0.9)));
+assert.strictEqual(evidenceEstimate.methodology.displayed_range_only, true);
+assert.strictEqual(evidenceEstimate.view_all_url, '/for-sale?area=Kira');
 
 const root = path.join(__dirname, '..');
 const server = fs.readFileSync(path.join(root, 'server.js'), 'utf8');
@@ -58,7 +110,10 @@ const metricsSource = fs.readFileSync(path.join(root, 'services', 'publicInvento
 
 assert.ok(server.includes("app.use('/api/valuation', valuationRoutes)"), 'valuation API must be mounted');
 assert.ok(html.includes('id="page-valuation"'), 'valuation page must render');
-assert.ok(html.includes('valuation-live-comparables-20260724'), 'valuation marker must render');
+assert.ok(html.includes('valuation-evidence-locality-20260725'), 'valuation marker must render');
+assert.ok(html.includes('Property Value Calculator'), 'valuation H1 must use the approved calculator label');
+assert.ok(html.includes('id="nav-valuation"') && html.includes('>Property Value</a>'), 'valuation navigation must use the shorter label');
+assert.ok(html.includes('id="valuation-view-all"'), 'valuation evidence must include a view-all control');
 assert.ok(html.includes('/marketplace?category=surveyors'), 'valuation must route to surveyors');
 assert.ok(app.includes('"/valuation": "valuation"'), 'public route must resolve to valuation page');
 assert.ok(app.includes('openValuationForProperty'), 'property detail must link into valuation');
@@ -76,6 +131,8 @@ assert.ok(
 assert.ok(app.includes('refreshValuationLocations'), 'valuation category changes must refresh counted locations');
 assert.ok(app.includes('unit_rate_decimal'), 'land valuation must render the per-decimal rate');
 assert.ok(app.includes('basisSemester'), 'student valuation must disclose the semester basis');
+assert.ok(app.includes('function safeImageUrl'), 'valuation evidence cards must guard image URLs');
+assert.ok(!app.includes('UGANDA_DISTRICTS'), 'valuation selectors must use the canonical DISTRICTS registry');
 
 function frozenObject(name) {
   const token = `const ${name} = Object.freeze(`;
