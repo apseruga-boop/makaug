@@ -53,6 +53,11 @@ assert.strictEqual(helpers.valuationConfidenceLevel({
   sufficient: true,
   widened: false,
   comparableCount: 10
+}), 'medium');
+assert.strictEqual(helpers.valuationConfidenceLevel({
+  sufficient: true,
+  widened: false,
+  comparableCount: 20
 }), 'high');
 assert.strictEqual(helpers.valuationConfidenceLevel({
   sufficient: true,
@@ -86,6 +91,32 @@ const landEstimate = helpers.buildEstimate({
 assert.strictEqual(landEstimate.estimate, 100_000_000);
 assert.strictEqual(landEstimate.unit_rate_decimal, 2_000_000);
 assert.strictEqual(landEstimate.methodology.size_adjusted, true);
+assert.strictEqual(landEstimate.refinement_feedback.size.applied, true);
+
+const refinedEstimate = helpers.buildEstimate({
+  category: 'sale',
+  bathrooms: 2,
+  condition: 'excellent',
+  size_value: null,
+  size_unit: '',
+  size_sqm: null
+}, [
+  { id: 'r1', listing_type: 'sale', price: 100_000_000, bathrooms: 2, title: 'A', description: 'Excellent condition' },
+  { id: 'r2', listing_type: 'sale', price: 110_000_000, bathrooms: 2, title: 'B', description: 'Excellent condition' },
+  { id: 'r3', listing_type: 'sale', price: 120_000_000, bathrooms: 2, title: 'C', description: 'Excellent condition' },
+  { id: 'r4', listing_type: 'sale', price: 400_000_000, bathrooms: 4, title: 'D', description: 'Good condition' }
+], 'area');
+assert.strictEqual(refinedEstimate.analysis_comparable_count, 3);
+assert.strictEqual(refinedEstimate.refinement_feedback.bathrooms.applied, true);
+assert.strictEqual(refinedEstimate.refinement_feedback.condition.applied, true);
+
+const unavailableRefinement = helpers.applyOptionalRefinements([
+  { id: 'u1', bathrooms: 1 },
+  { id: 'u2', bathrooms: null },
+  { id: 'u3', bathrooms: null }
+], { bathrooms: 1 });
+assert.strictEqual(unavailableRefinement.rows.length, 3);
+assert.strictEqual(unavailableRefinement.feedback.bathrooms.applied, false);
 
 const legacyLandEstimate = helpers.buildEstimate({
   category: 'land',
@@ -207,7 +238,7 @@ assert.strictEqual(evidenceEstimate.range_low, Math.round(helpers.percentile(dis
 assert.strictEqual(evidenceEstimate.range_high, Math.round(helpers.percentile(displayedValues, 0.9)));
 assert.strictEqual(evidenceEstimate.methodology.displayed_range_only, true);
 assert.strictEqual(evidenceEstimate.view_all_url, '/for-sale?area=Kira');
-assert.strictEqual(evidenceEstimate.confidence, 'high');
+assert.strictEqual(evidenceEstimate.confidence, 'medium');
 
 assert.strictEqual(helpers.canonicalizeUgandaLocation('Kira Town', 'Wakiso').name, 'Kira');
 assert.strictEqual(helpers.canonicalizeUgandaLocation('Kira Town', 'Wakiso').district, 'Wakiso');
@@ -221,13 +252,23 @@ assert.deepStrictEqual(
     { location: 'Bombo Road', district: 'Kampala', listing_count: 9 }
   ]),
   [{
+    canonical_key: 'wakiso:kira',
     location: 'Kira',
     district: 'Wakiso',
     level: 'city',
     latitude: 0.3978,
     longitude: 32.6414,
+    aliases: ['Kira', 'Kira Town', 'Kira Municipality'],
     listing_count: 5
   }]
+);
+assert.ok(
+  helpers.canonicalLocationOptions().some((row) => (
+    row.location === 'Entebbe'
+    && row.district === 'Wakiso'
+    && row.canonical_key === 'wakiso:entebbe'
+  )),
+  'the smart location registry must expose Entebbe under Wakiso'
 );
 
 const root = path.join(__dirname, '..');
@@ -249,14 +290,24 @@ assert.ok(
 assert.ok(html.includes('id="page-valuation"'), 'valuation page must render');
 assert.ok(html.includes('valuation-canonical-confidence-cards-20260725'), 'valuation marker must render');
 assert.ok(html.includes('valuation-final-punchlist-20260725'), 'valuation punch-list marker must render');
+assert.ok(html.includes('valuation-k17-simple-range-20260725'), 'valuation K17 UX marker must render');
 assert.ok(html.includes('Property Value Calculator'), 'valuation H1 must use the approved calculator label');
 assert.ok(html.includes('id="nav-valuation"') && html.includes('>Property Value</a>'), 'valuation navigation must use the shorter label');
 assert.ok(html.includes('id="valuation-view-all"'), 'valuation evidence must include a view-all control');
+assert.ok(!html.includes('<select id="valuation-district"'), 'valuation must not make customers choose a district');
+assert.ok(html.includes('id="valuation-location-suggestions"'), 'valuation must render the canonical location listbox');
+assert.ok(html.includes('id="valuation-match-counter"'), 'valuation must show a live comparable counter');
+assert.ok(html.includes('id="valuation-improve"'), 'valuation must progressively disclose optional refinements');
+assert.ok(
+  html.indexOf('id="valuation-range"') < html.indexOf('id="valuation-estimate"'),
+  'the likely range must lead before the midpoint'
+);
 assert.ok(html.includes('/marketplace?category=surveyors'), 'valuation must route to surveyors');
 assert.ok(app.includes('"/valuation": "valuation"'), 'public route must resolve to valuation page');
 assert.ok(app.includes('openValuationForProperty'), 'property detail must link into valuation');
 assert.ok(app.includes('applyValuationLanguageUI'), 'valuation UI must participate in language changes');
 assert.ok(routeSource.includes("router.get('/locations'"), 'valuation location counts endpoint must exist');
+assert.ok(routeSource.includes("router.post('/matches'"), 'valuation live match-count endpoint must exist');
 assert.ok(routeSource.includes('COUNT(*)::int AS listing_count'), 'valuation locations must expose real listing counts');
 assert.ok(
   routeSource.includes("publicLaunchTestListingFastCondition('p')"),
@@ -271,6 +322,8 @@ assert.ok(
   'the shared public exclusion must recognize legacy training rows'
 );
 assert.ok(app.includes('refreshValuationLocations'), 'valuation category changes must refresh counted locations');
+assert.ok(app.includes('scheduleValuationMatchCount'), 'valuation refinements must update the live count');
+assert.ok(app.includes('renderValuationRefinementFeedback'), 'valuation must explain unused refinement data');
 assert.ok(app.includes('unit_rate_decimal'), 'land valuation must render the per-decimal rate');
 assert.ok(app.includes('basisSemester'), 'student valuation must disclose the semester basis');
 assert.ok(app.includes('function safeImageUrl'), 'valuation evidence cards must guard image URLs');
@@ -343,8 +396,13 @@ function frozenObject(name) {
 const valuationEnglish = frozenObject('VALUATION_UI_EN');
 const valuationOverrides = frozenObject('VALUATION_UI_OVERRIDES');
 const valuationSupplements = frozenObject('VALUATION_UI_SUPPLEMENTS');
+const valuationK17 = frozenObject('VALUATION_UI_K17');
 for (const language of ['lg', 'sw', 'ac', 'ny', 'rn', 'sm', 'am', 'ar']) {
-  const translated = { ...(valuationSupplements[language] || {}), ...(valuationOverrides[language] || {}) };
+  const translated = {
+    ...(valuationSupplements[language] || {}),
+    ...(valuationOverrides[language] || {}),
+    ...(valuationK17[language] || {})
+  };
   assert.deepStrictEqual(
     Object.keys(valuationEnglish).filter((key) => !translated[key]),
     [],

@@ -39988,7 +39988,12 @@ const VALUATION_UI_EN = Object.freeze({
   forRent: "For rent",
   forSale: "For sale",
   location: "Area or town",
-  locationPlaceholder: "e.g. Ntinda",
+  locationPlaceholder: "Start typing an area or town",
+  locationHelp: "Choose one suggestion so we can match the correct district automatically.",
+  journey: "What are you valuing?",
+  journeySale: "Buy / Sell",
+  journeyRent: "Rent",
+  commercialTransaction: "Commercial transaction",
   district: "District (helps when an area has few matches)",
   chooseDistrict: "Choose district",
   bedrooms: "Bedrooms",
@@ -40004,7 +40009,9 @@ const VALUATION_UI_EN = Object.freeze({
   commercialSize: "Floor area (m²)",
   university: "Nearby university",
   universityPlaceholder: "e.g. Makerere University",
-  estimateButton: "Estimate value",
+  estimateButton: "Show my price range",
+  matchingCount: "Matching {count} similar listings in {location}",
+  matchingCountZero: "No exact matching listings in {location} yet. We may use nearby evidence and will label it clearly.",
   howTitle: "How the estimate works",
   howOne: "We find approved public listings in the same area and category.",
   howTwo: "We remove the top and bottom 10% when the sample is large enough.",
@@ -40013,6 +40020,12 @@ const VALUATION_UI_EN = Object.freeze({
   professionalText: "A registered surveyor can inspect the property and prepare a professional report.",
   findSurveyor: "Find a surveyor",
   estimatedValue: "Estimated market guide",
+  likelyRange: "Likely price range",
+  midpoint: "Midpoint: {estimate}",
+  confidenceLowHelp: "Low confidence: fewer than 5 exact matches or a wider-area comparison.",
+  confidenceMediumHelp: "Medium confidence: 5–19 similar listings in this area.",
+  confidenceHighHelp: "High confidence: 20+ similar listings in this area.",
+  broadAverage: "Broad {district} District average — not an estimate for this property.",
   evidence: "Evidence",
   comparableListings: "comparable listings",
   comparablesTitle: "Properties used in this estimate",
@@ -40023,6 +40036,7 @@ const VALUATION_UI_EN = Object.freeze({
   failed: "We could not calculate the estimate right now. Please try again.",
   insufficient: "There are not enough comparable listings for an honest estimate yet.",
   range: "Likely range: {low} – {high}",
+  rangeHeadline: "{low} – {high}",
   perSqm: "Trimmed average: {rate} per m²",
   perDecimal: "Trimmed average: {rate} per decimal",
   basisMonth: "Comparable rents normalised per month",
@@ -40043,6 +40057,31 @@ const VALUATION_UI_EN = Object.freeze({
   methodLegal: "Estimates are averages computed from our own approved listings. They are a guide only — not a formal valuation — and makaug.com accepts no liability for decisions based on them. Always engage a licensed surveyor or valuer before transacting.",
   noImage: "No photo",
   viewAllArea: "View all in this area",
+  viewAllCount: "View all {count} similar listings",
+  improveTitle: "Improve this estimate",
+  optional: "Optional",
+  improveSubtitle: "Add what you know. We only use an answer when enough comparable listings contain that detail.",
+  bathrooms: "Bathrooms",
+  floorSize: "Floor area (m²)",
+  condition: "Condition",
+  conditionNew: "New",
+  conditionExcellent: "Excellent",
+  conditionGood: "Good",
+  conditionNeedsWork: "Needs work",
+  tenure: "Tenure",
+  tenureMailo: "Mailo",
+  tenureFreehold: "Freehold",
+  tenureLeasehold: "Leasehold",
+  furnished: "Furnished",
+  furnishedYes: "Furnished",
+  furnishedSemi: "Semi-furnished",
+  furnishedNo: "Unfurnished",
+  parking: "Parking",
+  yes: "Yes",
+  no: "No",
+  notSpecified: "Not specified",
+  refinementApplied: "{label} refined the estimate using {count} matching listings.",
+  refinementUnavailable: "We do not have {label} data for enough listings here yet, so this answer did not change the range.",
   viewListing: "View listing"
 });
 
@@ -40356,10 +40395,199 @@ const VALUATION_UI_SUPPLEMENTS = Object.freeze({
   }
 });
 
+const VALUATION_UI_K17 = Object.freeze({
+  lg: {
+    locationPlaceholder: "Tandika okuwandiika ekitundu oba ekibuga",
+    locationHelp: "Londa ku bikuweereddwa tusobole okumanya disitulikiti entuufu.",
+    journey: "Kiki ky'oyagala okubalirira?", journeySale: "Gula / Tunda", journeyRent: "Pangisa",
+    commercialTransaction: "Enkola y'ekifo ky'obusuubuzi", estimateButton: "Laga ekkomo ly'omuwendo",
+    matchingCount: "Ebifo {count} ebifaanagana mu {location}", matchingCountZero: "Tewali bifo bituufu mu {location} kati. Bwe tukozesa ebiri okumpi tujja kukiraga bulungi.",
+    likelyRange: "Ekkomo ly'omuwendo", midpoint: "Omuwendo ogw'akati: {estimate}",
+    confidenceLowHelp: "Obwesige butono: ebifo ebituufu biri wansi wa 5 oba twakozesa ekitundu ekigazi.",
+    confidenceMediumHelp: "Obwesige obwa wakati: ebifo 5–19 ebifaanagana mu kitundu kino.",
+    confidenceHighHelp: "Obwesige obungi: ebifo 20 oba okusingawo mu kitundu kino.",
+    broadAverage: "Average ya {district} District — si valuation y'ekifo kino.",
+    rangeHeadline: "{low} – {high}", viewAllCount: "Laba ebifo byonna {count} ebifaanagana",
+    improveTitle: "Yongera obutuufu", optional: "Ssi kya tteeka",
+    improveSubtitle: "Yongerako ky'omanyi. Tukikozesa ebifo ebimala bwe biba n'amawulire ago.",
+    bathrooms: "Ebinabiro", floorSize: "Obugazi bwa wansi (m²)", condition: "Embeera",
+    conditionNew: "Kiggya", conditionExcellent: "Kirungi nnyo", conditionGood: "Kirungi", conditionNeedsWork: "Kyetaaga okuddaabirizibwa",
+    tenure: "Obwannannyini bw'ettaka", tenureMailo: "Mailo", tenureFreehold: "Freehold", tenureLeasehold: "Leasehold",
+    furnished: "Kirimu ebintu", furnishedYes: "Kirimu ebintu",
+    furnishedSemi: "Kirimu ebintu ebimu", furnishedNo: "Tekirimu bintu", parking: "Parking",
+    yes: "Yee", no: "Nedda", notSpecified: "Tekitegeezeddwa",
+    refinementApplied: "{label} kikozesezza ebifo {count} okutereeza omuwendo.",
+    refinementUnavailable: "Tetulina mawulire ga {label} ku bifo ebimala wano; kino tekikyusizza kkomo."
+  },
+  sw: {
+    locationPlaceholder: "Anza kuandika eneo au mji",
+    locationHelp: "Chagua pendekezo moja ili tulinganishe wilaya sahihi moja kwa moja.",
+    journey: "Unakadiria nini?", journeySale: "Nunua / Uza", journeyRent: "Kodisha",
+    commercialTransaction: "Muamala wa biashara", estimateButton: "Onyesha kiwango cha bei",
+    matchingCount: "Matangazo {count} yanayofanana katika {location}",
+    matchingCountZero: "Hakuna matangazo yanayolingana moja kwa moja katika {location}. Tukitumia maeneo ya karibu tutasema wazi.",
+    likelyRange: "Kiwango cha bei kinachowezekana", midpoint: "Bei ya katikati: {estimate}",
+    confidenceLowHelp: "Uhakika mdogo: chini ya matangazo 5 ya moja kwa moja au ushahidi wa eneo pana.",
+    confidenceMediumHelp: "Uhakika wa kati: matangazo 5–19 yanayofanana katika eneo hili.",
+    confidenceHighHelp: "Uhakika mkubwa: matangazo 20+ yanayofanana katika eneo hili.",
+    broadAverage: "Wastani mpana wa Wilaya ya {district} — si makadirio ya mali hii.",
+    rangeHeadline: "{low} – {high}", viewAllCount: "Tazama matangazo yote {count} yanayofanana",
+    improveTitle: "Boresha makadirio haya", optional: "Si lazima",
+    improveSubtitle: "Ongeza unachojua. Tunatumia jibu tu ikiwa matangazo ya kutosha yana taarifa hiyo.",
+    bathrooms: "Bafu", floorSize: "Eneo la sakafu (m²)", condition: "Hali",
+    conditionNew: "Mpya", conditionExcellent: "Bora sana", conditionGood: "Nzuri", conditionNeedsWork: "Inahitaji matengenezo",
+    tenure: "Umiliki", tenureMailo: "Mailo", tenureFreehold: "Umiliki huru", tenureLeasehold: "Ukodishaji wa muda",
+    furnished: "Samani", furnishedYes: "Ina samani",
+    furnishedSemi: "Ina baadhi ya samani", furnishedNo: "Haina samani", parking: "Maegesho",
+    yes: "Ndiyo", no: "Hapana", notSpecified: "Haijatajwa",
+    refinementApplied: "{label} imeboresha makadirio kwa matangazo {count}.",
+    refinementUnavailable: "Hatuna data ya {label} kwa matangazo ya kutosha hapa; jibu hili halijabadilisha kiwango."
+  },
+  ac: {
+    locationPlaceholder: "Cak coyo kabedo onyo town",
+    locationHelp: "Yer acel ki i jami ma kinyutu wek wanong district ma atir.",
+    journey: "Itye ka pimo ngo?", journeySale: "Wil / Cat", journeyRent: "Bongo",
+    commercialTransaction: "Kit commercial", estimateButton: "Nyut wel ma romo",
+    matchingCount: "Listing {count} ma rom i {location}", matchingCountZero: "Listing ma rwate kikome pe i {location}. Ka watio ki kabedo macok wabinyutu maber.",
+    likelyRange: "Wel ma romo", midpoint: "Wel me dyere: {estimate}",
+    confidenceLowHelp: "Gen nok: listing kikome pe romo 5 onyo watiyo ki kabedo malac.",
+    confidenceMediumHelp: "Gen me dyere: listing 5–19 ma rom i kabedo man.",
+    confidenceHighHelp: "Gen madit: listing 20 onyo makato i kabedo man.",
+    broadAverage: "Average pa {district} District — pe valuation pa property man.",
+    rangeHeadline: "{low} – {high}", viewAllCount: "Nen listing {count} weng ma rom",
+    improveTitle: "Med ber pa estimate", optional: "Pe mitte",
+    improveSubtitle: "Med gin ma inge. Watio kwede ka listing ma rom tye ki ngec meno.",
+    bathrooms: "Kabedo me lwok", floorSize: "Dit pa floor (m²)", condition: "Kit ma tye kwede",
+    conditionNew: "Manyen", conditionExcellent: "Ber tutwal", conditionGood: "Ber", conditionNeedsWork: "Mito yubu",
+    tenure: "Rwom me lobo", tenureMailo: "Mailo", tenureFreehold: "Freehold", tenureLeasehold: "Leasehold",
+    furnished: "Jami i ot", furnishedYes: "Tye ki jami",
+    furnishedSemi: "Tye ki jami mogo", furnishedNo: "Pe ki jami", parking: "Kabedo pa motoka",
+    yes: "Ee", no: "Pe", notSpecified: "Pe kinyutu",
+    refinementApplied: "{label} oyubo estimate ki listing {count}.",
+    refinementUnavailable: "Pe watye ki ngec pa {label} i listing ma rom; pe oloko range."
+  },
+  ny: {
+    locationPlaceholder: "Tandika kuhandika omwanya nari tauni",
+    locationHelp: "Toorana kimwe aha birikukuhabura tubone district ehikire.",
+    journey: "Noobara ki?", journeySale: "Gura / Tunda", journeyRent: "Pangisa",
+    commercialTransaction: "Enkora ya commercial", estimateButton: "Yoreka omwanya gw'omuhendo",
+    matchingCount: "Listing {count} ezirikushushana omuri {location}", matchingCountZero: "Tihari listing ezirikushushana kimwe omuri {location}. Twakoresa eziri haihi nitwija kukigamba.",
+    likelyRange: "Omwanya gw'omuhendo", midpoint: "Omuhendo gw'ahagati: {estimate}",
+    confidenceLowHelp: "Obwesigye bukye: listing ezihikire ziri ahansi ya 5 nari twakoresa omwanya mugazi.",
+    confidenceMediumHelp: "Obwesigye bw'ahagati: listing 5–19 ezirikushushana.",
+    confidenceHighHelp: "Obwesigye bwingi: listing 20 nari ezirikukira.",
+    broadAverage: "Average ya {district} District — ti valuation ya property egi.",
+    rangeHeadline: "{low} – {high}", viewAllCount: "Reeba listing {count} zoona ezirikushushana",
+    improveTitle: "Yongyera estimate", optional: "Tikyetengyesa",
+    improveSubtitle: "Yongyeraho eki orikumanya. Nitukikoresa data ya listing yaaba nebumara.",
+    bathrooms: "Obwogero", floorSize: "Obugazi bwa floor (m²)", condition: "Embeera",
+    conditionNew: "Mpyaka", conditionExcellent: "Nungi munonga", conditionGood: "Nungi", conditionNeedsWork: "Neyenda kugarurwa",
+    tenure: "Obutaka", tenureMailo: "Mailo", tenureFreehold: "Freehold", tenureLeasehold: "Leasehold",
+    furnished: "Erimu ebintu", furnishedYes: "Erimu ebintu",
+    furnishedSemi: "Erimu ebintu bikye", furnishedNo: "Terimu bintu", parking: "Parking",
+    yes: "Eego", no: "Ngaaha", notSpecified: "Tikiragiriirwe",
+    refinementApplied: "{label} ekoreise listing {count} kutereeza estimate.",
+    refinementUnavailable: "Titurina data ya {label} ebumara; ekigarukwamu eki tikihindwire range."
+  },
+  rn: {
+    locationPlaceholder: "Tandika kuhandika omwanya nari tauni",
+    locationHelp: "Toorana kimwe aha birikukuhabura tumanye district ehikire.",
+    journey: "Noobara ki?", journeySale: "Gura / Tunda", journeyRent: "Pangisa",
+    commercialTransaction: "Enkora ya commercial", estimateButton: "Yoreka omwanya gw'omuhendo",
+    matchingCount: "Listing {count} ezirikushushana omuri {location}", matchingCountZero: "Tihari listing ezihikire omuri {location}. Twakoresa eziri haihi nitwija kukigamba.",
+    likelyRange: "Omwanya gw'omuhendo", midpoint: "Omuhendo gw'ahagati: {estimate}",
+    confidenceLowHelp: "Obwesigye bukye: listing ezihikire ziri ahansi ya 5 nari omwanya mugazi.",
+    confidenceMediumHelp: "Obwesigye bw'ahagati: listing 5–19 ezirikushushana.",
+    confidenceHighHelp: "Obwesigye bwingi: listing 20 nari ezirikukira.",
+    broadAverage: "Average ya {district} District — ti valuation ya property egi.",
+    rangeHeadline: "{low} – {high}", viewAllCount: "Reeba listing {count} zoona ezirikushushana",
+    improveTitle: "Yongyera estimate", optional: "Tikyetengyesa",
+    improveSubtitle: "Yongyeraho eki orikumanya. Nitukikoresa data yaaba nebumara.",
+    bathrooms: "Obwogero", floorSize: "Obugazi bwa floor (m²)", condition: "Embeera",
+    conditionNew: "Mpyaka", conditionExcellent: "Nungi munonga", conditionGood: "Nungi", conditionNeedsWork: "Neyenda kugarurwa",
+    tenure: "Obutaka", tenureMailo: "Mailo", tenureFreehold: "Freehold", tenureLeasehold: "Leasehold",
+    furnished: "Erimu ebintu", furnishedYes: "Erimu ebintu",
+    furnishedSemi: "Erimu ebintu bikye", furnishedNo: "Terimu bintu", parking: "Parking",
+    yes: "Eego", no: "Ngaaha", notSpecified: "Tikiragiriirwe",
+    refinementApplied: "{label} ekoreise listing {count} kutereeza estimate.",
+    refinementUnavailable: "Titurina data ya {label} ebumara; tikihindwire range."
+  },
+  sm: {
+    locationPlaceholder: "Tandika okuwandiika ekifo oba ekibuga",
+    locationHelp: "Londa ku bikuweereddwa tumanye disitulikiti entuufu.",
+    journey: "Kiki ky'obalirira?", journeySale: "Gula / Tunda", journeyRent: "Pangisa",
+    commercialTransaction: "Enkola y'obusuubuzi", estimateButton: "Laga ekkomo ly'omuwendo",
+    matchingCount: "Ebirango {count} ebifaanagana mu {location}", matchingCountZero: "Tewali birango bituufu mu {location}. Bwe tukozesa ebiri okumpi tujja kukiraga.",
+    likelyRange: "Ekkomo ly'omuwendo", midpoint: "Omuwendo ogw'akati: {estimate}",
+    confidenceLowHelp: "Obwesige butono: ebirango bituufu biri wansi wa 5 oba ekitundu kigazi.",
+    confidenceMediumHelp: "Obwesige obwa wakati: ebirango 5–19 ebifaanagana.",
+    confidenceHighHelp: "Obwesige obungi: ebirango 20 oba okusingawo.",
+    broadAverage: "Average ya {district} District — si valuation ya property eno.",
+    rangeHeadline: "{low} – {high}", viewAllCount: "Laba ebirango byonna {count} ebifaanagana",
+    improveTitle: "Yongera obutuufu", optional: "Ssi kya tteeka",
+    improveSubtitle: "Yongerako ky'omanyi. Tukikozesa ebirango ebimala bwe biba n'amawulire ago.",
+    bathrooms: "Ebinabiro", floorSize: "Obugazi bwa floor (m²)", condition: "Embeera",
+    conditionNew: "Kiggya", conditionExcellent: "Kirungi nnyo", conditionGood: "Kirungi", conditionNeedsWork: "Kyetaaga okuddaabirizibwa",
+    tenure: "Obwannannyini bw'ettaka", tenureMailo: "Mailo", tenureFreehold: "Freehold", tenureLeasehold: "Leasehold",
+    furnished: "Kirimu ebintu", furnishedYes: "Kirimu ebintu",
+    furnishedSemi: "Kirimu ebintu ebimu", furnishedNo: "Tekirimu bintu", parking: "Parking",
+    yes: "Yee", no: "Nedda", notSpecified: "Tekitegeezeddwa",
+    refinementApplied: "{label} kikozesezza ebirango {count} okutereeza estimate.",
+    refinementUnavailable: "Tetulina mawulire ga {label} ku birango ebimala; tekikyusizza range."
+  },
+  am: {
+    locationPlaceholder: "አካባቢ ወይም ከተማ መጻፍ ይጀምሩ",
+    locationHelp: "ትክክለኛውን ዲስትሪክት በራስ-ሰር እንድናዛምድ አንድ ጥቆማ ይምረጡ።",
+    journey: "ምን እየገመቱ ነው?", journeySale: "ግዢ / ሽያጭ", journeyRent: "ኪራይ",
+    commercialTransaction: "የንግድ ግብይት", estimateButton: "የዋጋ ክልሉን አሳይ",
+    matchingCount: "በ{location} {count} ተመሳሳይ ዝርዝሮች", matchingCountZero: "በ{location} ትክክለኛ ተመሳሳይ ዝርዝር የለም። በአቅራቢያ ያለን መረጃ ከተጠቀምን በግልጽ እናሳያለን።",
+    likelyRange: "ሊሆን የሚችል የዋጋ ክልል", midpoint: "መካከለኛ ዋጋ: {estimate}",
+    confidenceLowHelp: "ዝቅተኛ እምነት፦ ከ5 ያነሱ ትክክለኛ ዝርዝሮች ወይም ሰፊ አካባቢ መረጃ።",
+    confidenceMediumHelp: "መካከለኛ እምነት፦ በዚህ አካባቢ 5–19 ተመሳሳይ ዝርዝሮች።",
+    confidenceHighHelp: "ከፍተኛ እምነት፦ በዚህ አካባቢ 20+ ተመሳሳይ ዝርዝሮች።",
+    broadAverage: "የ{district} ዲስትሪክት ሰፊ አማካይ — ለዚህ ንብረት ግምት አይደለም።",
+    rangeHeadline: "{low} – {high}", viewAllCount: "ሁሉንም {count} ተመሳሳይ ዝርዝሮች ይመልከቱ",
+    improveTitle: "ይህን ግምት ያሻሽሉ", optional: "አማራጭ",
+    improveSubtitle: "የሚያውቁትን ያክሉ። በቂ ዝርዝሮች ያንን መረጃ ሲኖራቸው ብቻ እንጠቀማለን።",
+    bathrooms: "መታጠቢያ ቤቶች", floorSize: "የወለል ስፋት (m²)", condition: "ሁኔታ",
+    conditionNew: "አዲስ", conditionExcellent: "በጣም ጥሩ", conditionGood: "ጥሩ", conditionNeedsWork: "ጥገና ያስፈልገዋል",
+    tenure: "የመሬት ይዞታ", tenureMailo: "ማይሎ", tenureFreehold: "ፍሪሆልድ", tenureLeasehold: "ሊዝሆልድ",
+    furnished: "ዕቃ ያለው", furnishedYes: "ዕቃ ያለው",
+    furnishedSemi: "ከፊል ዕቃ ያለው", furnishedNo: "ዕቃ የሌለው", parking: "መኪና ማቆሚያ",
+    yes: "አዎ", no: "አይ", notSpecified: "አልተገለጸም",
+    refinementApplied: "{label} በ{count} ተመሳሳይ ዝርዝሮች ግምቱን አሻሽሏል።",
+    refinementUnavailable: "ለ{label} በቂ መረጃ የለንም፤ ይህ መልስ ክልሉን አልቀየረም።"
+  },
+  ar: {
+    locationPlaceholder: "ابدأ بكتابة المنطقة أو المدينة",
+    locationHelp: "اختر اقتراحاً واحداً حتى نطابق المقاطعة الصحيحة تلقائياً.",
+    journey: "ما الذي تريد تقدير قيمته؟", journeySale: "شراء / بيع", journeyRent: "إيجار",
+    commercialTransaction: "المعاملة التجارية", estimateButton: "اعرض نطاق السعر",
+    matchingCount: "{count} إعلاناً مشابهاً في {location}", matchingCountZero: "لا توجد إعلانات مطابقة تماماً في {location}. إذا استخدمنا مناطق قريبة فسنوضح ذلك.",
+    likelyRange: "نطاق السعر المحتمل", midpoint: "السعر الأوسط: {estimate}",
+    confidenceLowHelp: "ثقة منخفضة: أقل من 5 مطابقات دقيقة أو مقارنة بمنطقة أوسع.",
+    confidenceMediumHelp: "ثقة متوسطة: 5–19 إعلاناً مشابهاً في هذه المنطقة.",
+    confidenceHighHelp: "ثقة عالية: 20 إعلاناً مشابهاً أو أكثر في هذه المنطقة.",
+    broadAverage: "متوسط عام لمقاطعة {district} — وليس تقديراً لهذا العقار.",
+    rangeHeadline: "{low} – {high}", viewAllCount: "عرض جميع الإعلانات المشابهة وعددها {count}",
+    improveTitle: "حسّن هذا التقدير", optional: "اختياري",
+    improveSubtitle: "أضف ما تعرفه. نستخدم الإجابة فقط عندما تتوفر هذه المعلومة في عدد كافٍ من الإعلانات.",
+    bathrooms: "الحمامات", floorSize: "مساحة الطابق (م²)", condition: "الحالة",
+    conditionNew: "جديد", conditionExcellent: "ممتاز", conditionGood: "جيد", conditionNeedsWork: "يحتاج إلى صيانة",
+    tenure: "نوع الحيازة", tenureMailo: "مايلو", tenureFreehold: "ملكية حرة", tenureLeasehold: "حق إيجار",
+    furnished: "التأثيث", furnishedYes: "مفروش",
+    furnishedSemi: "مفروش جزئياً", furnishedNo: "غير مفروش", parking: "موقف سيارات",
+    yes: "نعم", no: "لا", notSpecified: "غير محدد",
+    refinementApplied: "حسّن {label} التقدير باستخدام {count} إعلاناً مطابقاً.",
+    refinementUnavailable: "لا تتوفر لدينا بيانات {label} لعدد كافٍ من الإعلانات هنا؛ لذلك لم تتغير النتيجة."
+  }
+});
+
 function valuationTr(key, vars = {}) {
   const pack = {
     ...(VALUATION_UI_SUPPLEMENTS[currentLang] || {}),
-    ...(VALUATION_UI_OVERRIDES[currentLang] || {})
+    ...(VALUATION_UI_OVERRIDES[currentLang] || {}),
+    ...(VALUATION_UI_K17[currentLang] || {})
   };
   let text = pack[key] || VALUATION_UI_EN[key] || key;
   Object.entries(vars).forEach(([name, value]) => {
@@ -40380,68 +40608,22 @@ function applyValuationLanguageUI() {
     const key = element.dataset.valuationPlaceholder;
     if (key) element.placeholder = valuationTr(key);
   });
+  renderValuationLocationSuggestions(document.getElementById("valuation-location")?.value || "");
+  if (lastValuationMatchResponse) renderValuationMatchCounter(lastValuationMatchResponse);
   if (lastValuationResponse) applyValuationResultLanguage(lastValuationResponse);
 }
 
-function populateValuationLocations() {
-  const districtSelect = document.getElementById("valuation-district");
-  const locationList = document.getElementById("valuation-location-list");
-  if (districtSelect && districtSelect.options.length <= 1) {
-    DISTRICTS.forEach((district) => {
-      const option = document.createElement("option");
-      option.value = district;
-      option.textContent = district;
-      districtSelect.appendChild(option);
-    });
-  }
-  if (locationList) {
-    const names = new Set(DISTRICTS);
-    getPublicListings().forEach((property) => {
-      [property?.area, property?.district, property?.city, property?.neighborhood]
-        .map((value) => String(value || "").trim())
-        .filter(Boolean)
-        .forEach((value) => names.add(value));
-    });
-    locationList.innerHTML = Array.from(names)
-      .sort((a, b) => a.localeCompare(b))
-      .slice(0, 600)
-      .map((value) => `<option value="${adminAttr(value)}"></option>`)
-      .join("");
-  }
-}
-
 const valuationLocationRowsByCategory = new Map();
+let activeValuationLocationRows = [];
+let selectedValuationLocation = null;
+let lastValuationMatchResponse = null;
+let valuationMatchTimer = null;
+let valuationAutoEstimateTimer = null;
+let valuationMatchSerial = 0;
 
 function renderValuationLocationRows(rows = []) {
-  const districtSelect = document.getElementById("valuation-district");
-  const locationList = document.getElementById("valuation-location-list");
-  const safeRows = Array.isArray(rows) ? rows : [];
-  if (locationList && safeRows.length) {
-    locationList.innerHTML = safeRows.map((row) => {
-      const location = String(row.location || "").trim();
-      const district = String(row.district || "").trim();
-      const count = Math.max(0, Number(row.listing_count) || 0);
-      const label = [location, district && district.toLowerCase() !== location.toLowerCase() ? district : "", `${count} listings`]
-        .filter(Boolean)
-        .join(" · ");
-      return `<option value="${adminAttr(location)}" label="${adminAttr(label)}"></option>`;
-    }).join("");
-  }
-  if (districtSelect && safeRows.length) {
-    const counts = new Map();
-    safeRows.forEach((row) => {
-      const district = String(row.district || "").trim();
-      if (!district) return;
-      counts.set(district, (counts.get(district) || 0) + (Math.max(0, Number(row.listing_count) || 0)));
-    });
-    const current = districtSelect.value;
-    districtSelect.innerHTML = `<option value="">${adminEscape(valuationTr("chooseDistrict"))}</option>`
-      + DISTRICTS.map((district) => {
-        const count = counts.get(district) || 0;
-        return `<option value="${adminAttr(district)}">${adminEscape(`${district}${count ? ` (${count})` : ""}`)}</option>`;
-      }).join("");
-    if (current && Array.from(districtSelect.options).some((option) => option.value === current)) districtSelect.value = current;
-  }
+  activeValuationLocationRows = Array.isArray(rows) ? rows : [];
+  renderValuationLocationSuggestions(document.getElementById("valuation-location")?.value || "");
 }
 
 async function refreshValuationLocations() {
@@ -40460,21 +40642,282 @@ async function refreshValuationLocations() {
   }
 }
 
+function valuationLocationSearchText(row = {}) {
+  return [
+    row.location,
+    row.district,
+    ...(Array.isArray(row.aliases) ? row.aliases : [])
+  ].map((value) => String(value || "").toLowerCase()).join(" ");
+}
+
+function renderValuationLocationSuggestions(query = "") {
+  const input = document.getElementById("valuation-location");
+  const suggestions = document.getElementById("valuation-location-suggestions");
+  if (!input || !suggestions) return;
+  const needle = String(query || "").trim().toLowerCase();
+  if (!needle) {
+    suggestions.classList.add("hidden");
+    input.setAttribute("aria-expanded", "false");
+    return;
+  }
+  const matches = activeValuationLocationRows
+    .filter((row) => valuationLocationSearchText(row).includes(needle))
+    .sort((a, b) => {
+      const aName = String(a.location || "").toLowerCase();
+      const bName = String(b.location || "").toLowerCase();
+      const aStarts = aName.startsWith(needle) ? 1 : 0;
+      const bStarts = bName.startsWith(needle) ? 1 : 0;
+      return bStarts - aStarts
+        || Number(b.listing_count || 0) - Number(a.listing_count || 0)
+        || aName.localeCompare(bName);
+    })
+    .slice(0, 10);
+  if (!matches.length) {
+    suggestions.innerHTML = `<div class="px-3 py-3 text-sm text-[#5b6b62]">${adminEscape(valuationTr("matchingCountZero", { location: query }))}</div>`;
+  } else {
+    suggestions.innerHTML = matches.map((row) => {
+      const count = Math.max(0, Number(row.listing_count) || 0);
+      const district = String(row.district || "").trim();
+      return `<button type="button" role="option" data-valuation-location-key="${adminAttr(row.canonical_key || "")}" class="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-[#f0f6f2] focus:bg-[#f0f6f2] focus:outline-none">
+        <span class="min-w-0">
+          <strong class="block truncate text-sm text-[#16241d]">${adminEscape(row.location || "")}</strong>
+          <span class="block truncate text-xs text-[#5b6b62]">${adminEscape(`${district} District`)}</span>
+        </span>
+        <span class="shrink-0 rounded-full bg-emerald-50 px-2 py-1 text-xs font-black text-[#15603f]">${count.toLocaleString()} ${adminEscape(valuationTr("comparableListings"))}</span>
+      </button>`;
+    }).join("");
+  }
+  suggestions.classList.remove("hidden");
+  input.setAttribute("aria-expanded", "true");
+}
+
+function selectValuationLocation(key = "") {
+  const row = activeValuationLocationRows.find((item) => String(item.canonical_key || "") === String(key || ""));
+  if (!row) return;
+  selectedValuationLocation = row;
+  const input = document.getElementById("valuation-location");
+  const district = document.getElementById("valuation-district");
+  const keyInput = document.getElementById("valuation-location-key");
+  if (input) input.value = row.location || "";
+  if (district) district.value = row.district || "";
+  if (keyInput) keyInput.value = row.canonical_key || "";
+  document.getElementById("valuation-location-suggestions")?.classList.add("hidden");
+  input?.setAttribute("aria-expanded", "false");
+  scheduleValuationMatchCount();
+}
+
+function setValuationChipState(selector, activeValue, attribute) {
+  document.querySelectorAll(selector).forEach((button) => {
+    const active = String(button.dataset[attribute] ?? "") === String(activeValue ?? "");
+    button.setAttribute("aria-pressed", active ? "true" : "false");
+    button.classList.toggle("bg-[#15603f]", active && attribute !== "valuationBedrooms");
+    button.classList.toggle("bg-emerald-50", active && attribute === "valuationBedrooms");
+    button.classList.toggle("text-white", active && attribute !== "valuationBedrooms");
+    button.classList.toggle("text-[#15603f]", !active || attribute === "valuationBedrooms");
+    button.classList.toggle("border-[#15603f]", active);
+    button.classList.toggle("border-[#cdddd3]", !active);
+    button.classList.toggle("bg-white", !active);
+  });
+}
+
+function selectValuationCategory(category = "sale") {
+  const value = ["sale", "rent", "land", "commercial", "student"].includes(category) ? category : "sale";
+  const input = document.getElementById("valuation-category");
+  if (input) input.value = value;
+  setValuationChipState("[data-valuation-category]", value, "valuationCategory");
+  renderValuationCategoryFields();
+  scheduleValuationMatchCount();
+}
+
+function selectValuationTransaction(transaction = "rent") {
+  const value = transaction === "sale" ? "sale" : "rent";
+  const input = document.getElementById("valuation-transaction");
+  if (input) input.value = value;
+  setValuationChipState("[data-valuation-transaction]", value, "valuationTransaction");
+  scheduleValuationMatchCount();
+}
+
+function selectValuationBedrooms(bedrooms = "") {
+  const numericBedrooms = Number(bedrooms);
+  const value = Number.isFinite(numericBedrooms) && numericBedrooms >= 5 ? "5+" : String(bedrooms || "");
+  const input = document.getElementById("valuation-bedrooms");
+  if (input) input.value = value;
+  setValuationChipState("[data-valuation-bedrooms]", value, "valuationBedrooms");
+  scheduleValuationMatchCount();
+}
+
 function renderValuationCategoryFields() {
   const category = document.getElementById("valuation-category")?.value || "sale";
   const toggle = (id, visible) => document.getElementById(id)?.classList.toggle("hidden", !visible);
   toggle("valuation-transaction-wrap", category === "commercial");
   toggle("valuation-beds-wrap", ["sale", "rent", "student"].includes(category));
+  toggle("valuation-bathrooms-wrap", ["sale", "rent", "student"].includes(category));
   toggle("valuation-property-type-wrap", ["sale", "rent", "commercial", "student"].includes(category));
   toggle("valuation-size-value-wrap", category === "land");
   toggle("valuation-size-unit-wrap", category === "land");
-  toggle("valuation-commercial-size-wrap", category === "commercial");
+  toggle("valuation-size-sqm-wrap", ["sale", "rent", "commercial"].includes(category));
   toggle("valuation-university-wrap", category === "student");
+  toggle("valuation-condition-wrap", category !== "land");
+  toggle("valuation-tenure-wrap", ["sale", "land"].includes(category));
+  toggle("valuation-furnished-wrap", ["sale", "rent", "student"].includes(category));
+  toggle("valuation-parking-wrap", category !== "land");
   refreshValuationLocations();
 }
 
+function collectValuationRequestBody() {
+  const category = document.getElementById("valuation-category")?.value || "sale";
+  const bedrooms = document.getElementById("valuation-bedrooms")?.value || "";
+  return {
+    category,
+    location: document.getElementById("valuation-location")?.value?.trim() || "",
+    district: document.getElementById("valuation-district")?.value || "",
+    bedrooms: bedrooms || null,
+    bedrooms_plus: bedrooms.includes("+"),
+    bathrooms: document.getElementById("valuation-bathrooms")?.value || null,
+    property_type: document.getElementById("valuation-property-type")?.value?.trim() || "",
+    transaction_type: category === "commercial" ? (document.getElementById("valuation-transaction")?.value || "rent") : "",
+    size_value: category === "land" ? (document.getElementById("valuation-size-value")?.value || null) : null,
+    size_unit: category === "land" ? (document.getElementById("valuation-size-unit")?.value || "") : "",
+    size_sqm: ["sale", "rent", "commercial"].includes(category)
+      ? (document.getElementById("valuation-commercial-size")?.value || null)
+      : null,
+    university: category === "student" ? (document.getElementById("valuation-university")?.value?.trim() || "") : "",
+    condition: document.getElementById("valuation-condition")?.value || "",
+    tenure: document.getElementById("valuation-tenure")?.value || "",
+    furnished: document.getElementById("valuation-furnished")?.value || "",
+    parking: document.getElementById("valuation-parking")?.value || ""
+  };
+}
+
+function renderValuationMatchCounter(response = {}) {
+  lastValuationMatchResponse = response;
+  const wrap = document.getElementById("valuation-match-counter");
+  const text = document.getElementById("valuation-match-counter-text");
+  if (!wrap || !text) return;
+  const count = Math.max(0, Number(response.matching_count) || 0);
+  const location = response.location || document.getElementById("valuation-location")?.value || "";
+  text.textContent = valuationTr(count > 0 ? "matchingCount" : "matchingCountZero", {
+    count: count.toLocaleString(),
+    location
+  });
+  wrap.classList.remove("hidden");
+}
+
+async function refreshValuationMatchCount() {
+  const body = collectValuationRequestBody();
+  if (!body.location || !body.district) {
+    document.getElementById("valuation-match-counter")?.classList.add("hidden");
+    return;
+  }
+  const serial = ++valuationMatchSerial;
+  try {
+    const response = await apiRequest("/api/valuation/matches", {
+      method: "POST",
+      skipAuth: true,
+      body
+    });
+    if (serial === valuationMatchSerial) renderValuationMatchCounter(response);
+  } catch (error) {
+    if (serial === valuationMatchSerial) document.getElementById("valuation-match-counter")?.classList.add("hidden");
+  }
+}
+
+function scheduleValuationMatchCount({ refineEstimate = true } = {}) {
+  window.clearTimeout(valuationMatchTimer);
+  valuationMatchTimer = window.setTimeout(refreshValuationMatchCount, 350);
+  if (refineEstimate && lastValuationResponse) {
+    window.clearTimeout(valuationAutoEstimateTimer);
+    valuationAutoEstimateTimer = window.setTimeout(() => submitValuationEstimate(null, { auto: true }), 650);
+  }
+}
+
+function bindValuationControls() {
+  const root = document.getElementById("page-valuation");
+  if (!root || root.dataset.controlsBound === "1") return;
+  root.dataset.controlsBound = "1";
+  root.querySelectorAll("[data-valuation-category]").forEach((button) => {
+    button.addEventListener("click", () => selectValuationCategory(button.dataset.valuationCategory));
+  });
+  root.querySelectorAll("[data-valuation-transaction]").forEach((button) => {
+    button.addEventListener("click", () => selectValuationTransaction(button.dataset.valuationTransaction));
+  });
+  root.querySelectorAll("[data-valuation-bedrooms]").forEach((button) => {
+    button.addEventListener("click", () => selectValuationBedrooms(button.dataset.valuationBedrooms || ""));
+  });
+  const locationInput = document.getElementById("valuation-location");
+  locationInput?.addEventListener("input", () => {
+    if (selectedValuationLocation && locationInput.value !== selectedValuationLocation.location) {
+      selectedValuationLocation = null;
+      document.getElementById("valuation-district").value = "";
+      document.getElementById("valuation-location-key").value = "";
+    }
+    renderValuationLocationSuggestions(locationInput.value);
+  });
+  locationInput?.addEventListener("focus", () => renderValuationLocationSuggestions(locationInput.value));
+  locationInput?.addEventListener("keydown", (event) => {
+    const suggestionButtons = Array.from(
+      document.querySelectorAll("#valuation-location-suggestions [data-valuation-location-key]")
+    );
+    if (!suggestionButtons.length) return;
+    const focusedIndex = suggestionButtons.indexOf(document.activeElement);
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      suggestionButtons[Math.min(suggestionButtons.length - 1, Math.max(0, focusedIndex + 1))]?.focus();
+    } else if (event.key === "Enter" && focusedIndex === -1) {
+      event.preventDefault();
+      selectValuationLocation(suggestionButtons[0].dataset.valuationLocationKey);
+    } else if (event.key === "Escape") {
+      document.getElementById("valuation-location-suggestions")?.classList.add("hidden");
+      locationInput.setAttribute("aria-expanded", "false");
+    }
+  });
+  document.getElementById("valuation-location-suggestions")?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-valuation-location-key]");
+    if (button) selectValuationLocation(button.dataset.valuationLocationKey);
+  });
+  document.getElementById("valuation-location-suggestions")?.addEventListener("keydown", (event) => {
+    const button = event.target.closest("[data-valuation-location-key]");
+    if (!button) return;
+    const suggestionButtons = Array.from(
+      document.querySelectorAll("#valuation-location-suggestions [data-valuation-location-key]")
+    );
+    const focusedIndex = suggestionButtons.indexOf(button);
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      suggestionButtons[Math.min(suggestionButtons.length - 1, focusedIndex + 1)]?.focus();
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      if (focusedIndex === 0) locationInput?.focus();
+      else suggestionButtons[Math.max(0, focusedIndex - 1)]?.focus();
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      document.getElementById("valuation-location-suggestions")?.classList.add("hidden");
+      locationInput?.setAttribute("aria-expanded", "false");
+      locationInput?.focus();
+    }
+  });
+  document.addEventListener("click", (event) => {
+    if (!event.target.closest("#valuation-location") && !event.target.closest("#valuation-location-suggestions")) {
+      document.getElementById("valuation-location-suggestions")?.classList.add("hidden");
+      locationInput?.setAttribute("aria-expanded", "false");
+    }
+  });
+  [
+    "valuation-bathrooms", "valuation-property-type", "valuation-commercial-size",
+    "valuation-size-value", "valuation-size-unit", "valuation-university",
+    "valuation-condition", "valuation-tenure", "valuation-furnished", "valuation-parking"
+  ].forEach((id) => {
+    const element = document.getElementById(id);
+    const eventName = element?.tagName === "INPUT" ? "input" : "change";
+    element?.addEventListener(eventName, () => scheduleValuationMatchCount());
+  });
+}
+
 function initializeValuationPage() {
-  populateValuationLocations();
+  bindValuationControls();
+  selectValuationCategory(document.getElementById("valuation-category")?.value || "sale");
+  selectValuationBedrooms(document.getElementById("valuation-bedrooms")?.value || "");
+  selectValuationTransaction(document.getElementById("valuation-transaction")?.value || "rent");
   renderValuationCategoryFields();
   applyValuationLanguageUI();
 }
@@ -40608,6 +41051,9 @@ function renderValuationMethodology(response = {}) {
 function applyValuationResultLanguage(response = {}) {
   const scope = document.getElementById("valuation-scope-note");
   const confidenceBadge = document.getElementById("valuation-confidence-badge");
+  const confidenceExplanation = document.getElementById("valuation-confidence-explanation");
+  const range = document.getElementById("valuation-range");
+  const estimate = document.getElementById("valuation-estimate");
   const disclaimerTitle = document.getElementById("valuation-disclaimer-title");
   const disclaimerBody = document.getElementById("valuation-disclaimer-body");
   const valuerLink = document.getElementById("valuation-find-valuer");
@@ -40616,8 +41062,22 @@ function applyValuationResultLanguage(response = {}) {
   const analysisCount = Number(response.analysis_comparable_count || response.comparable_count || 0);
   const limited = response.confidence === "low" || response.widened === true || analysisCount < 10;
 
+  if (range && estimate) {
+    if (!response.sufficient || !response.estimate) {
+      range.textContent = valuationTr("insufficient");
+      estimate.textContent = "";
+    } else {
+      range.textContent = valuationTr("rangeHeadline", {
+        low: formatValuationUgx(response.range_low),
+        high: formatValuationUgx(response.range_high)
+      });
+      estimate.textContent = valuationTr("midpoint", { estimate: formatValuationUgx(response.estimate) });
+    }
+  }
   if (scope) {
-    if (response.scope === "nearby") {
+    if (response.broad_average) {
+      scope.textContent = valuationTr("broadAverage", { district });
+    } else if (response.scope === "nearby") {
       scope.textContent = valuationTr("scopeNearby", { location, district });
     } else if (response.scope === "district" || response.widened) {
       scope.textContent = valuationTr("scopeDistrict", { location, district });
@@ -40629,14 +41089,52 @@ function applyValuationResultLanguage(response = {}) {
     const level = ["high", "medium", "low"].includes(response.confidence) ? response.confidence : "low";
     confidenceBadge.className = `rounded-full border px-3 py-1 text-xs font-black ${valuationConfidenceClasses(level)}`;
     confidenceBadge.textContent = valuationTr(`confidence${level[0].toUpperCase()}${level.slice(1)}`);
+    if (confidenceExplanation) {
+      confidenceExplanation.textContent = valuationTr(`confidence${level[0].toUpperCase()}${level.slice(1)}Help`);
+    }
   }
   if (disclaimerTitle) disclaimerTitle.textContent = valuationTr(limited ? "limitedDisclaimerTitle" : "guideDisclaimerTitle");
   if (disclaimerBody) disclaimerBody.textContent = valuationTr(limited ? "limitedDisclaimerBody" : "guideDisclaimerBody");
   if (valuerLink) valuerLink.textContent = `${valuationTr("findLicensedValuer")} →`;
+  const viewAllLabel = document.getElementById("valuation-view-all-label");
+  if (viewAllLabel) {
+    viewAllLabel.textContent = valuationTr("viewAllCount", {
+      count: Number(response.analysis_comparable_count || response.comparable_count || 0).toLocaleString()
+    });
+  }
+  renderValuationRefinementFeedback(response);
   renderValuationMethodology(response);
 }
 
-function renderValuationEstimate(response = {}) {
+function renderValuationRefinementFeedback(response = {}) {
+  const wrap = document.getElementById("valuation-refinement-feedback");
+  if (!wrap) return;
+  const feedback = response.refinement_feedback && typeof response.refinement_feedback === "object"
+    ? response.refinement_feedback
+    : {};
+  const labels = {
+    bathrooms: valuationTr("bathrooms"),
+    property_type: valuationTr("propertyType"),
+    condition: valuationTr("condition"),
+    tenure: valuationTr("tenure"),
+    furnished: valuationTr("furnished"),
+    parking: valuationTr("parking"),
+    size: response.input?.category === "land" ? valuationTr("landSize") : valuationTr("floorSize")
+  };
+  const rows = Object.entries(feedback).map(([key, item]) => {
+    const label = labels[key] || key;
+    return valuationTr(item?.applied ? "refinementApplied" : "refinementUnavailable", {
+      label,
+      count: Number(item?.matching_count || 0).toLocaleString()
+    });
+  });
+  wrap.classList.toggle("hidden", !rows.length);
+  wrap.innerHTML = rows.length
+    ? `<ul class="space-y-1">${rows.map((row) => `<li>• ${adminEscape(row)}</li>`).join("")}</ul>`
+    : "";
+}
+
+function renderValuationEstimate(response = {}, { auto = false } = {}) {
   const results = document.getElementById("valuation-results");
   const estimate = document.getElementById("valuation-estimate");
   const range = document.getElementById("valuation-range");
@@ -40651,21 +41149,21 @@ function renderValuationEstimate(response = {}) {
   count.textContent = Number(response.comparable_count || 0).toLocaleString();
 
   if (!response.sufficient || !response.estimate) {
-    estimate.textContent = valuationTr("insufficient");
-    estimate.className = "text-xl md:text-2xl font-black text-[#16241d]";
-    range.textContent = "";
+    range.textContent = valuationTr("insufficient");
+    range.className = "text-xl md:text-2xl font-black text-[#16241d]";
+    estimate.textContent = "";
   } else {
-    estimate.textContent = formatValuationUgx(response.estimate);
-    estimate.className = "text-3xl md:text-5xl font-black text-[#15603f]";
-    range.textContent = valuationTr("range", {
+    range.textContent = valuationTr("rangeHeadline", {
       low: formatValuationUgx(response.range_low),
       high: formatValuationUgx(response.range_high)
     });
+    range.className = "text-3xl md:text-5xl font-black text-[#15603f]";
+    estimate.textContent = valuationTr("midpoint", { estimate: formatValuationUgx(response.estimate) });
   }
   const category = response.input?.category || "";
   if (category === "land" && response.unit_rate_decimal) {
     unitRate.textContent = valuationTr("perDecimal", { rate: formatValuationUgx(response.unit_rate_decimal) });
-  } else if (category === "commercial" && response.unit_rate_sqm) {
+  } else if (["sale", "rent", "commercial"].includes(category) && response.unit_rate_sqm) {
     unitRate.textContent = valuationTr("perSqm", { rate: formatValuationUgx(response.unit_rate_sqm) });
   } else if (response.price_basis === "semester") {
     unitRate.textContent = valuationTr("basisSemester");
@@ -40681,41 +41179,61 @@ function renderValuationEstimate(response = {}) {
     const href = String(response.view_all_url || "").trim();
     viewAll.classList.toggle("hidden", !href);
     if (href) viewAll.href = href;
+    const label = document.getElementById("valuation-view-all-label");
+    if (label) {
+      label.textContent = valuationTr("viewAllCount", {
+        count: Number(response.analysis_comparable_count || response.comparable_count || 0).toLocaleString()
+      });
+    }
   }
+  renderValuationRefinementFeedback(response);
   applyValuationResultLanguage(response);
-  results.scrollIntoView({ behavior: "smooth", block: "start" });
+  if (!auto) results.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-async function submitValuationEstimate(event) {
+async function submitValuationEstimate(event, { auto = false } = {}) {
   event?.preventDefault();
   const button = document.getElementById("valuation-submit");
-  const category = document.getElementById("valuation-category")?.value || "sale";
-  const body = {
-    category,
-    location: document.getElementById("valuation-location")?.value?.trim() || "",
-    district: document.getElementById("valuation-district")?.value || "",
-    bedrooms: document.getElementById("valuation-bedrooms")?.value || null,
-    property_type: document.getElementById("valuation-property-type")?.value?.trim() || "",
-    transaction_type: category === "commercial" ? (document.getElementById("valuation-transaction")?.value || "rent") : "",
-    size_value: category === "land" ? (document.getElementById("valuation-size-value")?.value || null) : null,
-    size_unit: category === "land" ? (document.getElementById("valuation-size-unit")?.value || "") : "",
-    size_sqm: category === "commercial" ? (document.getElementById("valuation-commercial-size")?.value || null) : null,
-    university: category === "student" ? (document.getElementById("valuation-university")?.value?.trim() || "") : ""
-  };
+  const typedLocation = document.getElementById("valuation-location")?.value?.trim() || "";
+  if (!document.getElementById("valuation-district")?.value && typedLocation) {
+    const exact = activeValuationLocationRows.find((row) => (
+      String(row.location || "").toLowerCase() === typedLocation.toLowerCase()
+      || (Array.isArray(row.aliases) && row.aliases.some((alias) => (
+        String(alias || "").toLowerCase() === typedLocation.toLowerCase()
+      )))
+    ));
+    if (exact) selectValuationLocation(exact.canonical_key);
+  }
+  const body = collectValuationRequestBody();
+  const category = body.category;
   if (!body.location) {
     setValuationStatus(valuationTr("location"), "error");
     return false;
   }
+  if (!body.district) {
+    setValuationStatus(valuationTr("locationHelp"), "error");
+    renderValuationLocationSuggestions(body.location);
+    return false;
+  }
   if (button) button.disabled = true;
-  setValuationStatus(valuationTr("loading"));
+  if (!auto) setValuationStatus(valuationTr("loading"));
   try {
     const response = await apiRequest("/api/valuation/estimate", {
       method: "POST",
       skipAuth: true,
       body
     });
-    renderValuationEstimate(response);
-    setValuationStatus(response.sufficient ? response.scope_label || valuationTr("scopeArea", { location: body.location }) : valuationTr("insufficient"));
+    renderValuationEstimate(response, { auto });
+    const statusKey = response.broad_average
+      ? "broadAverage"
+      : response.scope === "nearby"
+        ? "scopeNearby"
+        : (response.scope === "district" || response.widened)
+          ? "scopeDistrict"
+          : "scopeArea";
+    setValuationStatus(response.sufficient
+      ? valuationTr(statusKey, { location: body.location, district: body.district })
+      : valuationTr("insufficient"));
     trackEvent("valuation_estimate_completed", {
       category,
       location: body.location,
@@ -40747,14 +41265,13 @@ function openValuationForProperty(propertyId) {
     const element = document.getElementById(id);
     if (element && value != null) element.value = String(value);
   };
-  setValue("valuation-category", category);
-  renderValuationCategoryFields();
+  selectValuationCategory(category);
   setValue("valuation-location", property.area || property.city || property.district || "");
   setValue("valuation-district", property.district || "");
-  setValue("valuation-bedrooms", property.beds || property.bedrooms || "");
+  selectValuationBedrooms(String(property.beds || property.bedrooms || ""));
   setValue("valuation-property-type", property.subtype || property.property_type || "");
   if (category === "commercial") {
-    setValue("valuation-transaction", property.transaction_type || (String(property.period || "").toLowerCase() === "month" ? "rent" : "sale"));
+    selectValuationTransaction(property.transaction_type || (String(property.period || "").toLowerCase() === "month" ? "rent" : "sale"));
     setValue("valuation-commercial-size", property.floor_area_sqm || property.usable_size_sqm || "");
   }
   if (category === "land") {
@@ -40762,6 +41279,7 @@ function openValuationForProperty(propertyId) {
     setValue("valuation-size-unit", property.land_size_unit || property.extra_fields?.land_size_unit || "decimals");
   }
   if (category === "student") setValue("valuation-university", property.nearest_university || "");
+  scheduleValuationMatchCount({ refineEstimate: false });
   document.getElementById("valuation-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
   trackEvent("valuation_opened_from_listing", { property_id: property.id, category });
   return false;

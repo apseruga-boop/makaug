@@ -249,11 +249,13 @@ function canonicalizeLocationRows(rows = []) {
     if (!canonical) return;
     const count = Math.max(0, Number(row.listing_count) || 0);
     const existing = aggregates.get(canonical.key) || {
+      canonical_key: canonical.key,
       location: canonical.name,
       district: canonical.district,
       level: canonical.level,
       latitude: Number.isFinite(canonical.lat) ? canonical.lat : null,
       longitude: Number.isFinite(canonical.lng) ? canonical.lng : null,
+      aliases: canonical.aliases || [canonical.name],
       listing_count: 0
     };
     existing.listing_count += count;
@@ -262,6 +264,19 @@ function canonicalizeLocationRows(rows = []) {
   return Array.from(aggregates.values())
     .filter((row) => row.listing_count > 0)
     .sort((a, b) => b.listing_count - a.listing_count || a.location.localeCompare(b.location));
+}
+
+function canonicalLocationOptions() {
+  return registry.map((entry) => ({
+    canonical_key: entry.key,
+    location: entry.name,
+    district: entry.district,
+    level: entry.level,
+    latitude: Number.isFinite(entry.lat) ? entry.lat : null,
+    longitude: Number.isFinite(entry.lng) ? entry.lng : null,
+    aliases: entry.aliases,
+    listing_count: 0
+  }));
 }
 
 function haversineKm(a = {}, b = {}) {
@@ -278,6 +293,7 @@ module.exports = {
   CANONICAL_LOCATION_COUNT: registry.length,
   canonicalizeUgandaLocation,
   canonicalizeLocationRows,
+  canonicalLocationOptions,
   aliasesForCanonicalLocation,
   aliasesForDistrict,
   normalizeDistrict,
