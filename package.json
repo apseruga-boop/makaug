@@ -13,6 +13,7 @@
     "dev:bot": "tsx watch src/server.ts",
     "start:bot": "node dist/server.js",
     "build:css": "tailwindcss -c tailwind.config.cjs -i assets/tailwind.input.css -o assets/tailwind.css --minify",
+    "build:shared-homepage": "node scripts/build-shared-homepage-core.js",
     "build:bot": "npm run build:css && tsc -p tsconfig.json",
     "typecheck:bot": "tsc -p tsconfig.json --noEmit",
     "test:bot": "vitest run",
@@ -54,13 +55,21 @@
     "probe:backend-connections": "node scripts/probe-backend-connections.js",
     "probe:route-transitions": "node scripts/probe-route-transitions.js",
     "probe:performance": "node scripts/probe-performance.js",
+    "parity:country-homepages": "node scripts/check-country-homepage-parity.js",
     "check": "node --check server.js",
     "test:go-live-p0": "node tests/go-live-p0.test.js",
+    "test:shared-core-phase1": "node tests/shared-core-phase1.test.js",
     "smoke": "bash scripts/smoke-test.sh",
     "prelaunch": "bash scripts/prelaunch-check.sh"
   },
   "engines": {
     "node": "20.x"
+  },
+  "files": [
+    "packages/shared-country-core"
+  ],
+  "exports": {
+    "./shared-country-core": "./packages/shared-country-core/index.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
