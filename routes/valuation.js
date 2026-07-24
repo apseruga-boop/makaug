@@ -73,7 +73,7 @@ function parseLandSizeText(value = '') {
   if (!text) return null;
 
   const dimensions = text.match(
-    /\b(\d+(?:\.\d+)?)\s*(?:ft|feet|foot|')?\s*[x×]\s*(\d+(?:\.\d+)?)\s*(?:ft|feet|foot|')?\b/i
+    /\b(\d+(?:\.\d+)?)\s*(?:ft|feet|foot|')?\s*[*x×]\s*(\d+(?:\.\d+)?)\s*(?:ft|feet|foot|')?\b/i
   );
   if (dimensions) {
     const width = Number(dimensions[1]);
@@ -86,7 +86,7 @@ function parseLandSizeText(value = '') {
   const units = [
     { pattern: /\b(\d+(?:\.\d+)?)\s*(?:hectares?|hectres?|ha)\b/i, multiplier: 10_000 },
     { pattern: /\b(\d+(?:\.\d+)?)\s*(?:acres?|ac)\b/i, multiplier: SQM_PER_ACRE },
-    { pattern: /\b(\d+(?:\.\d+)?)\s*(?:decimals?|dec)\b/i, multiplier: SQM_PER_DECIMAL },
+    { pattern: /\b(\d+(?:\.\d+)?)\s*(?:decimals?|dec|dcmls?)\b/i, multiplier: SQM_PER_DECIMAL },
     { pattern: /\b(\d+(?:\.\d+)?)\s*(?:square\s*met(?:res?|ers?)|sq\.?\s*m|sqm|m²|m2)\b/i, multiplier: 1 },
     { pattern: /\b(\d+(?:\.\d+)?)\s*(?:square\s*feet|sq\.?\s*ft|ft²|ft2)\b/i, multiplier: SQM_PER_SQUARE_FOOT }
   ];
