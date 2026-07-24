@@ -64,6 +64,10 @@ assert.ok(app.includes('openValuationForProperty'), 'property detail must link i
 assert.ok(app.includes('applyValuationLanguageUI'), 'valuation UI must participate in language changes');
 assert.ok(routeSource.includes("router.get('/locations'"), 'valuation location counts endpoint must exist');
 assert.ok(routeSource.includes('COUNT(*)::int AS listing_count'), 'valuation locations must expose real listing counts');
+assert.ok(
+  routeSource.includes("publicLaunchTestListingFastCondition('p')"),
+  'valuation evidence and location counts must exclude launch and QA listings'
+);
 assert.ok(app.includes('refreshValuationLocations'), 'valuation category changes must refresh counted locations');
 assert.ok(app.includes('unit_rate_decimal'), 'land valuation must render the per-decimal rate');
 assert.ok(app.includes('basisSemester'), 'student valuation must disclose the semester basis');
