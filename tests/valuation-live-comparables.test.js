@@ -44,6 +44,34 @@ assert.strictEqual(estimate.estimate, 110_000_000);
 assert.strictEqual(estimate.comparable_count, 3);
 assert.strictEqual(estimate.price_basis, 'total');
 assert.strictEqual(estimate.confidence, 'low');
+assert.strictEqual(helpers.valuationConfidenceLevel({
+  sufficient: true,
+  widened: false,
+  comparableCount: 5
+}), 'medium');
+assert.strictEqual(helpers.valuationConfidenceLevel({
+  sufficient: true,
+  widened: false,
+  comparableCount: 10
+}), 'high');
+assert.strictEqual(helpers.valuationConfidenceLevel({
+  sufficient: true,
+  widened: true,
+  comparableCount: 20
+}), 'low');
+
+assert.strictEqual(helpers.stableComparableImageUrl({
+  source: 'tiktok',
+  image_url: 'https://p16-sign-va.tiktokcdn.com/transient.jpeg',
+  extra_fields: {
+    tiktok_thumbnail_cache_url: 'https://media.makaug.com/source-previews/tiktok/cached.jpeg'
+  }
+}), 'https://media.makaug.com/source-previews/tiktok/cached.jpeg');
+assert.strictEqual(helpers.stableComparableImageUrl({
+  source: 'tiktok',
+  image_url: 'https://p16-sign-va.tiktokcdn.com/transient.jpeg',
+  extra_fields: {}
+}), null);
 
 const landEstimate = helpers.buildEstimate({
   category: 'land',
@@ -220,6 +248,7 @@ assert.ok(
 );
 assert.ok(html.includes('id="page-valuation"'), 'valuation page must render');
 assert.ok(html.includes('valuation-canonical-confidence-cards-20260725'), 'valuation marker must render');
+assert.ok(html.includes('valuation-final-punchlist-20260725'), 'valuation punch-list marker must render');
 assert.ok(html.includes('Property Value Calculator'), 'valuation H1 must use the approved calculator label');
 assert.ok(html.includes('id="nav-valuation"') && html.includes('>Property Value</a>'), 'valuation navigation must use the shorter label');
 assert.ok(html.includes('id="valuation-view-all"'), 'valuation evidence must include a view-all control');
@@ -245,6 +274,16 @@ assert.ok(app.includes('refreshValuationLocations'), 'valuation category changes
 assert.ok(app.includes('unit_rate_decimal'), 'land valuation must render the per-decimal rate');
 assert.ok(app.includes('basisSemester'), 'student valuation must disclose the semester basis');
 assert.ok(app.includes('function safeImageUrl'), 'valuation evidence cards must guard image URLs');
+assert.ok(
+  app.includes('stableValuationComparableImageUrl')
+    && routeSource.includes('stableComparableImageUrl'),
+  'valuation evidence must prefer persistent cached TikTok images'
+);
+assert.ok(
+  routeSource.includes('exact_comparable_count')
+    && routeSource.includes('widen_reason'),
+  'valuation widening must disclose the exact compatible inventory count'
+);
 assert.ok(
   app.includes('return propCard(valuationComparableProperty(row, category)')
     && app.includes('return socialImportListingCardHtml(p, options)'),

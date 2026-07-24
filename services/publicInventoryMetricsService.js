@@ -7,7 +7,7 @@ const { publicLivePropertyStatusSql } = require('../utils/publicInventoryStatus'
 const PUBLIC_INVENTORY_METRICS_MARKER = 'properties-list-count-fast-20260718';
 const PUBLIC_INVENTORY_METRICS_CACHE_TTL_MS = Math.max(
   1000,
-  Math.min(120000, parseInt(process.env.PUBLIC_INVENTORY_METRICS_CACHE_TTL_MS || '30000', 10) || 30000)
+  Math.min(600000, parseInt(process.env.PUBLIC_INVENTORY_METRICS_CACHE_TTL_MS || '180000', 10) || 180000)
 );
 const PUBLIC_INVENTORY_METRICS_TIMEOUT_MS = Math.max(
   250,

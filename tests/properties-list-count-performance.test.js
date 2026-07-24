@@ -10,6 +10,7 @@ const serverSource = fs.readFileSync(path.join(root, 'server.js'), 'utf8');
 const metricsService = fs.readFileSync(path.join(root, 'services/publicInventoryMetricsService.js'), 'utf8');
 const migration = fs.readFileSync(path.join(root, 'db/migrations/077_properties_list_count_performance.sql'), 'utf8');
 const exactCountMigration = fs.readFileSync(path.join(root, 'db/migrations/092_public_inventory_exact_count_index.sql'), 'utf8');
+const locationCountMigration = fs.readFileSync(path.join(root, 'db/migrations/093_public_location_search_count_indexes.sql'), 'utf8');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 
 assert(
@@ -100,6 +101,11 @@ assert(
   'public inventory metrics service should carry the release marker'
 );
 assert(
+  metricsService.includes("PUBLIC_INVENTORY_METRICS_CACHE_TTL_MS || '180000'")
+    && metricsService.includes('Math.min(600000'),
+  'public count cache should outlive the 45-second warm-up cycle without becoming long-lived'
+);
+assert(
   metricsService.includes("statement_timeout"),
   'public inventory metrics query should be time-bounded'
 );
@@ -127,6 +133,20 @@ assert(
     && exactCountMigration.includes('MAKAUG TRAINING')
     && exactCountMigration.includes('REMOVE AFTER QA'),
   'migration 092 should match the complete current public inventory predicate'
+);
+assert(
+  locationCountMigration.includes('idx_properties_public_live_normalized_area_count')
+    && locationCountMigration.includes('idx_properties_public_live_normalized_district_count'),
+  'migration 093 should index exact public area and district count predicates separately'
+);
+assert(
+  propertiesRoute.includes('properties-location-search-count-fast-20260725')
+    && propertiesRoute.includes('search_count_marker'),
+  'location-search responses should expose the dedicated count-performance marker'
+);
+assert(
+  html.includes('properties-location-search-count-fast-20260725'),
+  'production HTML should expose the location count marker'
 );
 assert(
   html.includes('properties-list-count-fast-20260718'),
