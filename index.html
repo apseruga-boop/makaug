@@ -6,7 +6,7 @@
   <title>makaug.com | Uganda Property Portal</title>
   <meta name="description" content="Uganda's free property portal. Buy, rent, sell and find brokers across all districts.">
   <meta name="robots" content="index,follow,max-image-preview:large">
-  <meta name="makaug-release-marker" content="ask-ai-topbar-match-20260718 properties-list-count-fast-20260718 admin-summary-fallback-20260718 admin-summary-warm-nozero-20260718 ai-category-colours-20260718 ai-scoped-localized-prompts-20260718 report-claim-pipeline-v2-20260718 marketplace-p1-20260719 marketplace-report-fixes-20260719 marketplace-enrich-20260719 marketplace-regjourney-20260719 marketplace-owner-direct-fast-20260719 foreign-country-gate-purge-20260724 property-origin-filter-20260724 listing-removal-confirmation-20260724 valuation-live-comparables-20260724 advertising-selfserve-checkout-20260724 crm-lead-bundles-export-20260724 tracked-poster-fingerprint-dedupe-20260724 property-value-calculator-20260725 valuation-evidence-locality-20260725 properties-search-reliability-20260725 valuation-land-currency-media-20260725 properties-search-warmup-20260725 tiktok-display-review-20260725">
+  <meta name="makaug-release-marker" content="ask-ai-topbar-match-20260718 properties-list-count-fast-20260718 admin-summary-fallback-20260718 admin-summary-warm-nozero-20260718 ai-category-colours-20260718 ai-scoped-localized-prompts-20260718 report-claim-pipeline-v2-20260718 marketplace-p1-20260719 marketplace-report-fixes-20260719 marketplace-enrich-20260719 marketplace-regjourney-20260719 marketplace-owner-direct-fast-20260719 foreign-country-gate-purge-20260724 property-origin-filter-20260724 listing-removal-confirmation-20260724 valuation-live-comparables-20260724 advertising-selfserve-checkout-20260724 crm-lead-bundles-export-20260724 tracked-poster-fingerprint-dedupe-20260724 property-value-calculator-20260725 valuation-evidence-locality-20260725 properties-search-reliability-20260725 valuation-land-currency-media-20260725 properties-search-warmup-20260725 tiktok-display-review-20260725 valuation-canonical-confidence-cards-20260725">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="makaug.com">
   <meta property="og:title" content="makaug.com | Uganda Property Portal">
@@ -4059,7 +4059,7 @@
     </main>
   </div>
 
-  <div id="page-valuation" class="page bg-[#f6f9f7]" data-valuation-marker="valuation-land-currency-media-20260725">
+  <div id="page-valuation" class="page bg-[#f6f9f7]" data-valuation-marker="valuation-canonical-confidence-cards-20260725">
     <section class="bg-[#0f3d2e] py-10 text-white">
       <div class="max-w-6xl mx-auto px-4">
         <p class="text-xs font-black uppercase tracking-wide text-emerald-200" data-valuation-i18n="eyebrow">Evidence from live makaug listings</p>
@@ -4174,8 +4174,18 @@
         <div class="grid md:grid-cols-3 gap-4">
           <article class="bg-white border border-[#e4ece8] rounded-lg p-5 md:col-span-2">
             <p class="text-xs font-black uppercase tracking-wide text-[#5b6b62]" data-valuation-i18n="estimatedValue">Estimated market guide</p>
-            <div id="valuation-estimate" class="mt-2 text-3xl md:text-5xl font-black text-[#15603f]">—</div>
+            <div class="mt-2 flex flex-wrap items-center gap-3">
+              <div id="valuation-estimate" class="text-3xl md:text-5xl font-black text-[#15603f]">—</div>
+              <span id="valuation-confidence-badge" class="hidden rounded-full border px-3 py-1 text-xs font-black"></span>
+            </div>
             <p id="valuation-range" class="mt-2 text-sm font-bold text-[#16241d]"></p>
+            <div id="valuation-disclaimer" class="mt-4 rounded-lg border-2 border-red-300 bg-red-50 p-4 text-red-950">
+              <h2 id="valuation-disclaimer-title" class="text-base font-black" data-valuation-i18n="guideDisclaimerTitle">This is a guide, not a valuation.</h2>
+              <p id="valuation-disclaimer-body" class="mt-1 text-sm leading-6" data-valuation-i18n="guideDisclaimerBody">This estimate is calculated only from approved listings on makaug.com. It is an average for similar properties, and a starting point to help you plan. The real price may be higher or lower. It cannot be used for a loan, a sale, or a legal purpose. Before you buy, sell, or borrow, always ask a licensed surveyor or valuer to inspect the property.</p>
+              <a href="/marketplace?category=surveyors" onclick="return navigatePublicRoute(this.href, event)" class="mt-3 inline-flex min-h-[42px] items-center gap-2 rounded-lg bg-red-700 px-4 text-sm font-black text-white hover:bg-red-800">
+                <i class="fas fa-user-check" aria-hidden="true"></i><span id="valuation-find-valuer" data-valuation-i18n="findLicensedValuer">Find a licensed valuer</span>
+              </a>
+            </div>
           </article>
           <article class="bg-white border border-[#e4ece8] rounded-lg p-5">
             <p class="text-xs font-black uppercase tracking-wide text-[#5b6b62]" data-valuation-i18n="evidence">Evidence</p>
@@ -4201,6 +4211,7 @@
           <summary class="cursor-pointer font-black text-[#16241d]" data-valuation-i18n="methodTitle">Methodology and worked example</summary>
           <div id="valuation-methodology" class="mt-3 space-y-2 text-sm text-[#5b6b62]">
             <p data-valuation-i18n="methodText">The estimate uses a trimmed mean. With 10 or more comparable listings, the highest and lowest 10% are removed. The displayed range is the 10th–90th percentile.</p>
+            <p class="border-t border-[#e4ece8] pt-3 text-xs" data-valuation-i18n="methodLegal">Estimates are averages computed from our own approved listings. They are a guide only — not a formal valuation — and makaug.com accepts no liability for decisions based on them. Always engage a licensed surveyor or valuer before transacting.</p>
           </div>
         </details>
       </section>

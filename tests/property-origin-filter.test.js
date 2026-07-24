@@ -22,6 +22,10 @@ assert(
 assert(routes.includes("router.get('/search', listPropertiesHandler);")
   && routes.includes("router.get('/', listPropertiesHandler);"),
 'search and catalogue routes must share one listing-origin implementation');
+assert(
+  routes.includes('withPublicPropertyDatabaseRetry(() => db.query(listSql, listValues))'),
+  'public list/search should retry one transient pool failure instead of returning a first-hit 500'
+);
 assert(routes.includes("error: 'Invalid property id'"), 'malformed property IDs must return a controlled client error');
 
 ['sale', 'rent', 'student', 'commercial', 'land'].forEach((category) => {
