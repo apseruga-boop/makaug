@@ -38446,8 +38446,19 @@ function socialImportTileMediaHtml(p = {}, idArg = "''") {
     </div>`;
 }
 
+const PUBLIC_CANONICAL_LOCATION_MATCH_BY_PROPERTY_ID = new Map();
+
+function propertyLocationMatchForUi(p = {}) {
+  const direct = p?.location_match && typeof p.location_match === "object" ? p.location_match : null;
+  if (direct) return direct;
+  const page = activePublicInventoryCategoryFromRoute();
+  if (!page || !canonicalLocationStateFor(page).selected.length) return null;
+  const id = String(p?.backend_id || p?.id || "").trim();
+  return id ? (PUBLIC_CANONICAL_LOCATION_MATCH_BY_PROPERTY_ID.get(id) || null) : null;
+}
+
 function propertyLocationMatchHtml(p = {}, fallbackLabel = "") {
-  const locationMatch = p?.location_match && typeof p.location_match === "object" ? p.location_match : null;
+  const locationMatch = propertyLocationMatchForUi(p);
   if (locationMatch?.type === "nearby") {
     const distance = Number(locationMatch.distance_km);
     const distanceLabel = Number.isFinite(distance)
@@ -42765,6 +42776,15 @@ async function fetchPublicPaginatedRows(path, options = {}) {
 
 function applyPublicRowsForUi(publicRowsSnapshot, responseSnapshot, options = {}) {
   const rows = Array.isArray(publicRowsSnapshot) ? publicRowsSnapshot.filter((p) => !adminRecordLooksLikeTest(p)) : [];
+  if (responseSnapshot?.meta?.location_search?.canonical === true) {
+    PUBLIC_CANONICAL_LOCATION_MATCH_BY_PROPERTY_ID.clear();
+    rows.forEach((row) => {
+      const id = String(row?.id || row?.backend_id || "").trim();
+      if (id && row?.location_match && typeof row.location_match === "object") {
+        PUBLIC_CANONICAL_LOCATION_MATCH_BY_PROPERTY_ID.set(id, row.location_match);
+      }
+    });
+  }
   const nextStats = normalizeHeroOpportunityStats(responseSnapshot?.summary?.public_opportunities || responseSnapshot?.summary) || null;
   if (nextStats) publicListingsApiStats = nextStats;
   const exactResponseTotalValue = responseSnapshot?.pagination?.approximate ? null : Number(responseSnapshot?.pagination?.total);

@@ -83,6 +83,8 @@ test('public category search is canonical-only and includes visible nearby and a
   assert.match(app, /Nearby match/);
   assert.match(app, /data-location-match="nearby"/);
   assert.match(app, /socialImportListingCardHtml[\s\S]+propertyLocationMatchHtml/);
+  assert.match(app, /PUBLIC_CANONICAL_LOCATION_MATCH_BY_PROPERTY_ID/);
+  assert.match(app, /responseSnapshot\?\.meta\?\.location_search\?\.canonical === true/);
   assert.match(app, /fetchCanonicalAutoWidenedFirstPage/);
   assert.match(app, /maximum price was widened by 20%/);
   assert.match(app, /Similar properties nearby/);
