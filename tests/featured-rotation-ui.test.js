@@ -10,6 +10,7 @@ const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 const html = read('index.html');
 const app = read('assets/makaug-app.js');
 const adminRoute = read('routes/admin.js');
+const propertiesRoute = read('routes/properties.js');
 const server = read('server.js');
 const migration = read('db/migrations/094_featured_daily_rotation_and_period_repair.sql');
 
@@ -29,6 +30,7 @@ test('found-online cards expose category labels and category-correct fallback su
   assert.match(app, /student: "Student accommodation"/);
   assert.match(app, /commercial: "Commercial property"/);
   assert.match(app, /subtype: p\?\.property_type \|\| p\?\.subtype \|\| defaultSubtype/);
+  assert.match(propertiesRoute, /type === 'student' \|\| type === 'students'/);
 });
 
 test('rotation is scheduled, auditable and exposed to protected admin controls', () => {
@@ -42,4 +44,3 @@ test('rotation is scheduled, auditable and exposed to protected admin controls',
   assert.match(migration, /id::text LIKE '956ce9d6%'/);
   assert.match(migration, /id::text LIKE '39e9513e%'/);
 });
-
