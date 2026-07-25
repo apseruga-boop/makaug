@@ -38446,6 +38446,21 @@ function socialImportTileMediaHtml(p = {}, idArg = "''") {
     </div>`;
 }
 
+function propertyLocationMatchHtml(p = {}, fallbackLabel = "") {
+  const locationMatch = p?.location_match && typeof p.location_match === "object" ? p.location_match : null;
+  if (locationMatch?.type === "nearby") {
+    const distance = Number(locationMatch.distance_km);
+    const distanceLabel = Number.isFinite(distance)
+      ? ` · ${distance.toFixed(1)} km from your selected area`
+      : "";
+    return `<p class="mt-1 text-xs font-semibold text-teal-700" data-location-match="nearby"><i class="fas fa-route mr-1"></i>Nearby match${distanceLabel}</p>`;
+  }
+  if (locationMatch?.type === "descendant") {
+    return `<p class="mt-1 text-xs font-semibold text-sky-700" data-location-match="descendant"><i class="fas fa-map-marked-alt mr-1"></i>Included area · ${adminEscape(locationMatch.label || fallbackLabel)}</p>`;
+  }
+  return "";
+}
+
 function socialImportListingCardHtml(p = {}, options = {}) {
   const idArg = propertyIdArg(p.id);
   const displayTitle = getLocalizedPropertyTitle(p);
@@ -38463,6 +38478,7 @@ function socialImportListingCardHtml(p = {}, options = {}) {
         ${propertyOriginalCurrencyGuideHtml(p)}
         <h3 class="social-import-card-title line-clamp-1">${adminEscape(displayTitle)}</h3>
         <p class="social-import-card-location"><i class="ti-map-pin fas fa-map-marker-alt"></i>${adminEscape(displayLocation)}</p>
+        ${propertyLocationMatchHtml(p, displayLocation)}
         ${socialImportSpecsHtml(p)}
         ${socialImportProvenanceHtml(p)}
         ${renderListingBoostHook(p, { compact: true })}
@@ -39829,12 +39845,7 @@ function studentCardFooterText(p = {}) {
   const photoSrc = publicImageSrc(p.img, "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=900&q=80");
   const displayTitle = getLocalizedPropertyTitle(p);
   const displayLocation = publicPropertyLocationLabel(p);
-  const locationMatch = p?.location_match && typeof p.location_match === "object" ? p.location_match : null;
-  const widenedLocationHtml = locationMatch?.type === "nearby"
-    ? `<p class="mt-1 text-xs font-semibold text-teal-700"><i class="fas fa-route mr-1"></i>Nearby match${Number.isFinite(Number(locationMatch.distance_km)) ? ` · ${Number(locationMatch.distance_km).toFixed(1)} km from your selected area` : ""}</p>`
-    : locationMatch?.type === "descendant"
-      ? `<p class="mt-1 text-xs font-semibold text-sky-700"><i class="fas fa-map-marked-alt mr-1"></i>Included area · ${adminEscape(locationMatch.label || displayLocation)}</p>`
-      : "";
+  const widenedLocationHtml = propertyLocationMatchHtml(p, displayLocation);
   const studentMode = options.student === true;
   const displayType = studentMode ? "student" : p.type;
   const theme = publicCardTheme(displayType, { student: studentMode });
