@@ -38,7 +38,7 @@ assert(app.includes('firstCategoryState.totalAuthoritative = firstCategoryExactT
 assert(app.includes('firstPageState.totalAuthoritative = exactPublicPaginationTotalValue(firstPageResponse) != null'), 'initial category hydration should mark exact API totals authoritative');
 assert(app.includes('publicCategoryStateHasAuthoritativeTotal(category, state)'), 'category total selection should prefer exact category totals over global opportunity stats');
 assert(app.includes('function authoritativePublicCategoryPageRows'), 'renderAll should keep using exact active-route API rows after broader catalogue hydration');
-assert(app.includes('if (key !== "students") return null'), 'authoritative cache guard must remain student-only so sale/rent/land/commercial keep API pagination totals');
+assert(app.includes('if (key !== "students" && !publicCategoryActiveSearchPath(key)) return null'), 'authoritative cache guard must preserve student rows and active API-search rows without replacing normal category totals');
 assert(app.includes('state.sourcePath !== activePath || state.mode !== "api"'), 'authoritative route rows must only apply to the matching active API source');
 assert(app.includes('renderPublicCategoryPageWithAuthoritativeCache("students"'), 'student render path must use the authoritative active-route cache');
 assert(app.includes('const authoritative = authoritativePublicCategoryPageRows(key);\n  const total = authoritative'), 'pagination controls must prefer authoritative route totals over stale passed totals');

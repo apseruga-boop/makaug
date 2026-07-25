@@ -43004,8 +43004,8 @@ function publicCategoryRenderTotal(category, list = [], filtered = false) {
 
 function authoritativePublicCategoryPageRows(category) {
   const key = publicPaginationKey(category);
-  if (key !== "students") return null;
   if (!key || key !== publicPaginationKey(activePublicInventoryCategoryFromRoute())) return null;
+  if (key !== "students" && !publicCategoryActiveSearchPath(key)) return null;
   const state = publicPaginationStateFor(key);
   const activePath = publicCategoryApiPathForPagination(key);
   if (!state?.totalAuthoritative || !activePath || state.sourcePath !== activePath || state.mode !== "api") return null;
