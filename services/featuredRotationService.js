@@ -91,6 +91,7 @@ function featuredCleanliness(row = {}) {
   if (category === 'land' && recurring) reasons.push('land_priced_recurring');
   if (category === 'sale' && recurring) reasons.push('sale_priced_recurring');
   if (category === 'rent' && oneOff) reasons.push('rent_priced_once');
+  if (category === 'student' && oneOff) reasons.push('student_sale_asset');
   if (recurring && price >= 400_000_000) reasons.push('implausible_high_recurring_price');
   if (category === 'student' && recurring && price > 5_000_000) reasons.push('implausible_student_monthly_price');
   if (category === 'commercial' && clean(row.property_type).toLowerCase() === 'commercial_land' && recurring) {

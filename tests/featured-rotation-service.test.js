@@ -69,6 +69,13 @@ test('cleanliness gate blocks the launch price and location failure modes', () =
     })).reasons.includes('implausible_student_monthly_price')
   );
   assert.ok(
+    featuredCleanliness(row('student', 'student-sale-asset', '2026-07-25', {
+      title: 'Apartment block for sale in Ntinda',
+      price: 1450000000,
+      price_period: 'once'
+    })).reasons.includes('student_sale_asset')
+  );
+  assert.ok(
     featuredCleanliness(row('sale', 'sale-monthly', '2026-07-25', {
       price_period: 'month'
     })).reasons.includes('sale_priced_recurring')
@@ -88,4 +95,3 @@ test('Kampala rotation window uses East Africa time rather than server time', ()
     { dateKey: '2026-07-25', hour: 7, minute: 0 }
   );
 });
-
