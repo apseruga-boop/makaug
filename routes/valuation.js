@@ -68,6 +68,22 @@ function stableComparableImageUrl(row = {}) {
   return looksTransientTikTokImage ? null : fallback;
 }
 
+function publicComparableExtraFields(row = {}) {
+  const extra = row.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
+  const safeUrl = (value) => {
+    const url = cleanText(value, 2000);
+    if (!/^https?:\/\//i.test(url)) return null;
+    return /(?:tiktokcdn|byteimg|p16-|p19-|p77-|tos-)/i.test(url) ? null : url;
+  };
+  const fields = {
+    found_online: extra.found_online === true || extra.found_online === 'true',
+    source_url: safeUrl(extra.source_url || row.source_url),
+    tiktok_url: safeUrl(extra.tiktok_url || row.tiktok_url),
+    video_url: safeUrl(extra.video_url || row.video_url)
+  };
+  return Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== null && value !== false));
+}
+
 function normalizeCategory(value) {
   const key = cleanText(value).toLowerCase();
   if (['sale', 'residential_sale', 'buy'].includes(key)) return 'sale';
@@ -252,7 +268,14 @@ function filterComparablePriceOutliers(rows = [], input = {}) {
     };
   }
   const medianPrice = percentile(normalizedRows.map((row) => row.normalizedPrice), 0.5);
-  const priceFloor = Math.max(minimumPlausiblePrice(input), Number(medianPrice || 0) * 0.01);
+  const recurring = input.category === 'rent'
+    || input.category === 'student'
+    || (input.category === 'commercial' && input.transaction_type === 'rent');
+  const lowerMedianFactor = recurring ? 0.01 : 0.05;
+  const priceFloor = Math.max(
+    minimumPlausiblePrice(input),
+    Number(medianPrice || 0) * lowerMedianFactor
+  );
   const priceCeiling = Math.min(MAX_PRICE_UGX, Number(medianPrice || MAX_PRICE_UGX) * 100);
   const filteredRows = normalizedRows.filter((row) => (
     row.normalizedPrice >= priceFloor
@@ -711,9 +734,7 @@ function buildEstimate(input, rows, scope, widened = scope === 'district') {
       listed_via: row.listed_via || null,
       status: row.status || null,
       created_at: row.created_at || null,
-      extra_fields: row.extra_fields && typeof row.extra_fields === 'object'
-        ? row.extra_fields
-        : {},
+      extra_fields: publicComparableExtraFields(row),
       url: `/property/${encodeURIComponent(row.id)}`
     }));
   const evidenceValues = ranked.map((row) => row.valuation_value);
