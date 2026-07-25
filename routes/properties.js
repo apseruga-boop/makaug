@@ -849,7 +849,7 @@ function thirdPartyTypeLabel(property = {}) {
   if (type === 'land') return 'land';
   if (type === 'rent') return 'property for rent';
   if (type === 'commercial') return 'commercial property';
-  if (type === 'student') return 'student accommodation';
+  if (type === 'student' || type === 'students') return 'student accommodation';
   return 'property for sale';
 }
 
