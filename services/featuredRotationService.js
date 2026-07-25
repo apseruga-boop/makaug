@@ -80,7 +80,8 @@ function featuredCleanliness(row = {}) {
   const price = Number(row.price);
   const period = normalizedPeriod(row);
   const text = rowEvidenceText(row);
-  const recurring = ['month', 'monthly', 'mo', 'per_month', 'week', 'weekly', 'per_week', 'night', 'nightly', 'day', 'daily'].includes(period);
+  const recurring = ['month', 'monthly', 'mo', 'per_month', 'week', 'weekly', 'per_week', 'night', 'nightly', 'day', 'daily', 'semester', 'sem', 'term', 'year', 'yearly', 'annual', 'annually'].includes(period);
+  const nightly = ['night', 'nightly', 'day', 'daily'].includes(period);
   const oneOff = ['once', 'one_off', 'total', 'sale', 'cash'].includes(period);
   const sourceSaysSale = /\b(for sale|on sale|available for sale|selling|asking price)\b/.test(text);
   const sourceSaysRent = /\b(for rent|to rent|to let|for lease|monthly rent|per month)\b/.test(text);
@@ -93,6 +94,13 @@ function featuredCleanliness(row = {}) {
   if (category === 'rent' && oneOff) reasons.push('rent_priced_once');
   if (category === 'student' && oneOff) reasons.push('student_sale_asset');
   if (recurring && price >= 400_000_000) reasons.push('implausible_high_recurring_price');
+  if (
+    recurring
+    && !nightly
+    && price > 1
+    && price < 30_000
+    && ['rent', 'student'].includes(category)
+  ) reasons.push('implausible_low_recurring_price');
   if (category === 'student' && recurring && price > 5_000_000) reasons.push('implausible_student_monthly_price');
   if (category === 'commercial' && clean(row.property_type).toLowerCase() === 'commercial_land' && recurring) {
     reasons.push('commercial_land_priced_recurring');

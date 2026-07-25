@@ -39,6 +39,16 @@ assert.strictEqual(helpers.normalizeRecurringPrice({ price: 12_000_000, price_pe
 assert.strictEqual(helpers.normalizeRecurringPrice({ price: 90_000_000, price_period: 'once' }, 'student'), null);
 assert.strictEqual(helpers.normalizeRecurringPrice({ price: 1_000_000, price_period: 'month' }, 'rent'), 1_000_000);
 assert.strictEqual(helpers.valuationPriceBasis({ category: 'student' }), 'semester');
+assert.strictEqual(
+  helpers.isCategoryCompatibleComparable({
+    listing_type: 'sale',
+    price: 120_000_000,
+    price_period: 'sem',
+    title: 'House for sale in Entebbe'
+  }, { category: 'sale' }),
+  false,
+  'semester shorthand must not leak into total-price sale comparables'
+);
 assert.strictEqual(helpers.valuationPriceBasis({ category: 'rent' }), 'month');
 
 const estimate = helpers.buildEstimate({
@@ -288,8 +298,8 @@ assert.strictEqual(helpers.isCategoryCompatibleComparable({
 }, { category: 'land' }), true);
 assert.strictEqual(helpers.minimumPlausiblePrice({ category: 'sale' }), 1_000_000);
 assert.strictEqual(helpers.minimumPlausiblePrice({ category: 'land' }), 1_000_000);
-assert.strictEqual(helpers.minimumPlausiblePrice({ category: 'rent' }), 10_000);
-assert.strictEqual(helpers.minimumPlausiblePrice({ category: 'commercial', transaction_type: 'rent' }), 10_000);
+assert.strictEqual(helpers.minimumPlausiblePrice({ category: 'rent' }), 30_000);
+assert.strictEqual(helpers.minimumPlausiblePrice({ category: 'commercial', transaction_type: 'rent' }), 30_000);
 assert.strictEqual(helpers.isCategoryCompatibleComparable({
   listing_type: 'sale',
   price: 3,
@@ -365,7 +375,7 @@ const canonicalLocationMigration = fs.readFileSync(
 
 assert.ok(server.includes("app.use('/api/valuation', valuationRoutes)"), 'valuation API must be mounted');
 assert.ok(
-  server.includes('/api/properties?status=approved&public_only=1&search=Kira&limit=24&page=1&include_summary=1'),
+  server.includes('/api/properties/search?search=Kira'),
   'the common broad Kira search must be warmed before consumers arrive'
 );
 assert.ok(html.includes('id="page-valuation"'), 'valuation page must render');

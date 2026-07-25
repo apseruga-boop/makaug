@@ -11,8 +11,18 @@ const RECURRING_PERIODS = new Set([
   'night',
   'nightly',
   'day',
-  'daily'
+  'daily',
+  'semester',
+  'sem',
+  'term',
+  'year',
+  'yearly',
+  'annual',
+  'annually'
 ]);
+
+const LOW_RECURRING_PRICE_UGX = 30_000;
+const NIGHTLY_PERIODS = new Set(['night', 'nightly', 'day', 'daily']);
 
 function clean(value = '') {
   return String(value ?? '').trim();
@@ -74,6 +84,7 @@ function listingPriceQuality(row = {}, options = {}) {
   const price = Number(row.price);
   const evidence = sourceEvidenceText(row);
   const recurring = RECURRING_PERIODS.has(period);
+  const oneOff = ['once', 'one_off', 'total', 'sale', 'cash'].includes(period);
   const explicitSale = hasExplicitSaleEvidence(evidence);
   const explicitRent = hasExplicitRentEvidence(evidence);
   const wholeProperty = ['sale', 'land', 'commercial'].includes(category);
@@ -93,6 +104,8 @@ function listingPriceQuality(row = {}, options = {}) {
 
   if (category === 'sale' && recurring) reasons.push('sale_price_marked_recurring');
   if (category === 'land' && recurring) reasons.push('land_price_marked_recurring');
+  if (category === 'rent' && oneOff) reasons.push('rent_price_marked_one_off');
+  if (category === 'student' && oneOff) reasons.push('student_price_marked_one_off');
 
   if (category === 'commercial' && recurring) {
     if (explicitSale || clean(row.transaction_type || row.transactionType).toLowerCase() === 'sale') {
@@ -108,6 +121,17 @@ function listingPriceQuality(row = {}, options = {}) {
     } else {
       reasons.push('high_monthly_price_requires_staff_confirmation');
     }
+  }
+
+  if (
+    recurring
+    && !NIGHTLY_PERIODS.has(period)
+    && Number.isFinite(price)
+    && price > 1
+    && price < LOW_RECURRING_PRICE_UGX
+    && ['rent', 'student'].includes(category)
+  ) {
+    reasons.push('recurring_price_below_30k');
   }
 
   if (category === 'student' && recurring && Number.isFinite(price) && price > 5_000_000) {
@@ -134,6 +158,7 @@ function listingPriceQuality(row = {}, options = {}) {
 
 module.exports = {
   RECURRING_PERIODS,
+  LOW_RECURRING_PRICE_UGX,
   hasExplicitRentEvidence,
   hasExplicitSaleEvidence,
   hasPriceFigureEvidence,
