@@ -46,6 +46,7 @@ const { startXSourceDripScheduler } = require('./services/xSourceDripService');
 const { startYouTubeSourceDripScheduler } = require('./services/youtubeSourceDripService');
 const { startMarketplaceLifecycleScheduler } = require('./services/marketplaceLifecycleService');
 const { startMarketplaceDripScheduler } = require('./services/marketplaceNationalDripService');
+const { startFeaturedRotationScheduler } = require('./services/featuredRotationService');
 const { DISTRICTS: MARKETPLACE_DISTRICTS, MARKETPLACE_CATEGORIES } = require('./services/marketplaceService');
 const { loadPublicOpportunitySummary } = require('./services/publicInventoryMetricsService');
 const { applyUgandaHomepage } = require('./packages/shared-country-core');
@@ -1049,6 +1050,7 @@ async function start() {
   startYouTubeSourceDripScheduler(db);
   startMarketplaceLifecycleScheduler(db);
   startMarketplaceDripScheduler(db);
+  startFeaturedRotationScheduler(db);
 
   app.listen(port, () => {
     logger.info(`makaug backend running on http://localhost:${port}`);

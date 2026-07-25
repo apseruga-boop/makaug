@@ -37,12 +37,58 @@ function normalizeCommercialTransactionType(value, options = {}) {
   if (aliases[explicit]) return aliases[explicit];
 
   const text = compactText(options.text, options.title, options.description).toLowerCase();
-  if (/\b(for rent|to rent|to let|for lease|available to rent|rental)\b/.test(text)) return 'rent';
   if (/\b(for sale|on sale|available for sale|selling|purchase)\b/.test(text)) return 'sale';
+  if (/\b(for rent|to rent|to let|for lease|available to rent|rental)\b/.test(text)) return 'rent';
 
   const period = compactText(options.pricePeriod, options.price_period).toLowerCase().replace(/[\s-]+/g, '_');
   if (['month', 'monthly', 'mo', 'per_month', 'week', 'weekly', 'per_week', 'night', 'daily'].includes(period)) return 'rent';
   if (['once', 'one_off', 'total', 'sale', 'cash', 'plot', 'acre'].includes(period)) return 'sale';
+  return '';
+}
+
+function normalizeListingPricePeriod(value, options = {}) {
+  const listingType = compactText(options.listingType, options.listing_type)
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_');
+  const text = compactText(options.text, options.title, options.description).toLowerCase();
+
+  // Source wording is stronger evidence than a period guessed from the source
+  // registry category. Check sale first because "rental property for sale"
+  // describes an income-producing asset sale, not a monthly rental.
+  if (/\b(for sale|on sale|available for sale|selling|purchase|asking price)\b/.test(text)) return 'once';
+  if (/\b(for rent|to rent|to let|for lease|available to rent|monthly rent|per month)\b/.test(text)) return 'month';
+
+  const explicit = compactText(value).toLowerCase().replace(/[\s-]+/g, '_');
+  const recurring = {
+    month: 'month',
+    monthly: 'month',
+    mo: 'month',
+    per_month: 'month',
+    week: 'week',
+    weekly: 'week',
+    per_week: 'week',
+    night: 'night',
+    nightly: 'night',
+    day: 'day',
+    daily: 'day',
+    semester: 'sem',
+    sem: 'sem',
+    term: 'sem'
+  };
+  const oneOff = {
+    once: 'once',
+    one_off: 'once',
+    total: 'once',
+    sale: 'once',
+    cash: 'once',
+    plot: 'once',
+    acre: 'once'
+  };
+  if (recurring[explicit]) return recurring[explicit];
+  if (oneOff[explicit]) return oneOff[explicit];
+  if (listingType === 'sale' || listingType === 'land') return 'once';
+  if (listingType === 'rent') return 'month';
+  if (listingType === 'student' || listingType === 'students') return 'sem';
   return '';
 }
 
@@ -111,6 +157,7 @@ module.exports = {
   COMMERCIAL_TRANSACTION_TYPES,
   COMMERCIAL_PROPERTY_TYPES,
   normalizeCommercialTransactionType,
+  normalizeListingPricePeriod,
   normalizeCommercialPropertyType,
   commercialMisclassificationWarning
 };

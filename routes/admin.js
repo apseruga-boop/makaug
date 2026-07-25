@@ -151,6 +151,11 @@ const {
   updateYouTubeSourceDripConfig
 } = require('../services/youtubeSourceDripService');
 const {
+  FEATURED_ROTATION_MARKER,
+  loadFeaturedRotationStatus,
+  runFeaturedRotation
+} = require('../services/featuredRotationService');
+const {
   auditMarketplaceRelevance,
   getMarketplaceDripStatus,
   importMarketplaceSourceCandidates,
@@ -3988,6 +3993,39 @@ router.patch('/x-source-drip', async (req, res, next) => {
       }
     }, adminActorId(req));
     return res.json({ ok: true, data: await getXSourceDripStatus(db) });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/featured-rotation', async (_req, res, next) => {
+  try {
+    return res.json({
+      ok: true,
+      data: await loadFeaturedRotationStatus(db)
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/featured-rotation/run-once', async (req, res, next) => {
+  try {
+    const actorId = adminActorId(req);
+    const result = await runFeaturedRotation(db, {
+      force: true,
+      actorId
+    });
+    await writeAudit('admin_featured_rotation_run_once', {
+      marker: FEATURED_ROTATION_MARKER,
+      status: result.status || result.reason || '',
+      changed: result.changed === true,
+      selected_count: Number(result.selected_count || 0),
+      selected_ids: result.selected_ids || [],
+      missing: result.missing || [],
+      rejection_summary: result.rejection_summary || {}
+    }, actorId);
+    return res.status(result.ok === false ? 409 : 200).json({ ok: result.ok !== false, data: result });
   } catch (error) {
     return next(error);
   }
