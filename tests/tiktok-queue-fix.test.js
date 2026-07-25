@@ -114,7 +114,7 @@ async function run() {
   assert(adminRoutes.includes('adminFoundOnlineReviewQueueWhere'), 'Found Online review needs a dedicated non-suppressing queue predicate');
   assert(adminRoutes.includes('adminActionableReviewQueueWhere'), 'dashboard counts must include dedicated Found Online rows');
   assert(adminRoutes.includes('adminActionableReviewQueueCount'), 'dashboard counts need an indexed Found Online count fallback');
-  assert(adminRoutes.includes("admin-actionable-review-count-v1"), 'the actionable count must be cached and invalidated after imports');
+  assert(adminRoutes.includes("admin-actionable-review-count-v2-authoritative-status"), 'the actionable count must be cached and use the authoritative queue predicate');
   assert(adminRoutes.includes("router.get('/properties/:id', sendAdminPropertyReview)"), 'King needs a direct review endpoint for imported property IDs');
   assert(adminRoutes.includes('clearAdminReviewQueueCache();'), 'a successful queue write must invalidate stale Found Online pages');
   assert(adminRoutes.includes('079_commercial_transaction_subtype.sql'), 'admin queue route must surface missing migration errors');

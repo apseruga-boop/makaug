@@ -75,6 +75,23 @@ test('review queue uses indexed pending status predicates and never converts row
   assert.match(reviewQueueRoute, /final_property_status_overrides_stale_moderation_stage/);
 });
 
+test('command-centre pending count uses the same authoritative actionable queue predicate', () => {
+  const admin = read('routes/admin.js');
+  const countHelper = admin.slice(
+    admin.indexOf('async function adminActionableReviewQueueCount'),
+    admin.indexOf('function adminSummaryFallbackReason')
+  );
+  const html = read('index.html');
+
+  assert.match(countHelper, /admin-actionable-review-count-v2-authoritative-status/);
+  assert.match(countHelper, /WHERE \$\{adminActionableReviewQueueWhere\('p'\)\}/);
+  assert.match(countHelper, /adminTimedQuery/);
+  assert.doesNotMatch(countHelper, /safeCount/);
+  assert.doesNotMatch(countHelper, /moderation_stage, ''\) IN/);
+  assert.match(countHelper, /final_property_status_overrides_stale_moderation_stage/);
+  assert.match(html, /admin-review-queue-count-parity-20260725/);
+});
+
 test('USD currency metadata is carried through import, API, moderation, and public UI', () => {
   const importer = read('services/socialSearchSourcedListingsService.js');
   const properties = read('routes/properties.js');
