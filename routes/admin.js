@@ -80,6 +80,7 @@ const {
   getAdvertisingPackages,
   getAdvertisingRateCard,
   mergePlacementWithCatalog,
+  mergePlacementRowsWithCatalog,
   summarizeAdvertisingPackageKeys
 } = require('../services/advertisingCatalogService');
 const { addLeadActivity, createLead } = require('../services/leadService');
@@ -6362,10 +6363,10 @@ router.get('/advertising/placements', async (_req, res, next) => {
        FROM advertising_placements
        ORDER BY sort_order ASC, label ASC`
     );
-    const data = rows.rows.length ? rows.rows.map((row) => mergePlacementWithCatalog(row)) : getAdvertisingPlacements();
+    const data = mergePlacementRowsWithCatalog(rows.rows);
     return res.json({ ok: true, data });
   } catch (error) {
-    if (String(error.message || '').includes('advertising_placements')) {
+    if (['42P01', '42703'].includes(error.code) || String(error.message || '').includes('advertising_placements')) {
       return res.json({ ok: true, data: getAdvertisingPlacements() });
     }
     return next(error);
@@ -6386,6 +6387,17 @@ router.patch('/advertising/placements/:key', async (req, res, next) => {
     if (Object.prototype.hasOwnProperty.call(req.body, 'base_price_ugx')) add('base_price_ugx', Math.max(0, parseInt(req.body.base_price_ugx, 10) || 0));
     if (Object.prototype.hasOwnProperty.call(req.body, 'notes')) add('notes', String(req.body.notes || '').trim() || null);
     if (Object.prototype.hasOwnProperty.call(req.body, 'preview_image_url')) add('preview_image_url', String(req.body.preview_image_url || '').trim() || null);
+    if (Object.prototype.hasOwnProperty.call(req.body, 'headline')) add('headline', String(req.body.headline || '').trim() || null);
+    if (Object.prototype.hasOwnProperty.call(req.body, 'cta_label')) add('cta_label', String(req.body.cta_label || '').trim() || null);
+    if (Object.prototype.hasOwnProperty.call(req.body, 'cta_url')) add('cta_url', String(req.body.cta_url || '').trim() || null);
+    if (Object.prototype.hasOwnProperty.call(req.body, 'background_position')) add('background_position', String(req.body.background_position || '').trim() || null);
+    if (Object.prototype.hasOwnProperty.call(req.body, 'copy_side')) {
+      const copySide = String(req.body.copy_side || '').trim().toLowerCase();
+      if (!['left', 'right'].includes(copySide)) {
+        return res.status(400).json({ ok: false, error: 'copy_side must be left or right' });
+      }
+      add('copy_side', copySide);
+    }
 
     if (!updates.length) return res.status(400).json({ ok: false, error: 'No placement updates provided' });
 
@@ -6400,7 +6412,7 @@ router.patch('/advertising/placements/:key', async (req, res, next) => {
     );
     if (!updated.rows.length) return res.status(404).json({ ok: false, error: 'Advertising placement not found' });
     await writeAudit('advertising_placement_updated', { placement_key: placementKey }, adminActorId(req));
-    return res.json({ ok: true, data: updated.rows[0] });
+    return res.json({ ok: true, data: mergePlacementWithCatalog(updated.rows[0]) });
   } catch (error) {
     return next(error);
   }

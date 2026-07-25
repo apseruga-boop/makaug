@@ -8227,7 +8227,6 @@ function setLang(lang, silent = false, rerender = true) {
   persistMakaugLanguagePreference(currentLang);
 
   applyLanguageUI();
-  document.querySelectorAll(".ad-wrap").forEach((el) => el.remove());
   addAdUnits();
   const keepRegion = lpVal("lp-region");
   const keepDistrict = lpVal("list-district-sel");
@@ -20081,6 +20080,7 @@ function renderAdminAdvertisingPlacements(placements) {
         <div class="mt-1 text-xs text-gray-500">${adminEscape(slot.notes || "")}</div>
         <div class="mt-3 flex gap-2 flex-wrap">
           <button onclick="adminUpdateAdPlacementPrice(${keyArg})" class="border border-green-300 text-green-700 hover:bg-white px-3 py-1.5 rounded-lg text-xs font-semibold">Change Price</button>
+          ${slot.slot_type === "house_band" ? `<button onclick="adminUpdateHousePlacementCreative(${keyArg})" class="border border-blue-300 text-blue-700 hover:bg-white px-3 py-1.5 rounded-lg text-xs font-semibold">Change Creative</button>` : ""}
           <button onclick="adminCopyAdPrompt(${keyArg})" class="border border-amber-300 text-amber-700 hover:bg-white px-3 py-1.5 rounded-lg text-xs font-semibold">Copy Prompt</button>
           <button onclick="adminToggleAdPlacement(${keyArg}, ${slot.is_active ? "false" : "true"})" class="border border-gray-300 text-gray-700 hover:bg-white px-3 py-1.5 rounded-lg text-xs font-semibold">${slot.is_active ? "Pause Slot" : "Activate Slot"}</button>
         </div>
@@ -20383,6 +20383,34 @@ async function adminUpdateAdPlacementPrice(placementKey) {
     toast("Placement price updated.");
   } catch (e) {
     toast(`Placement update failed: ${e.message || "error"}`);
+  }
+}
+
+async function adminUpdateHousePlacementCreative(placementKey) {
+  const slot = adminAdvertisingPlacements.find((item) => String(item.key) === String(placementKey)) || {};
+  const image = window.prompt("Creative image URL", String(slot.preview_image_url || ""));
+  if (image == null) return;
+  const headline = window.prompt("Headline", String(slot.headline || ""));
+  if (headline == null) return;
+  const position = window.prompt("Image position (for example: left center)", String(slot.background_position || "left center"));
+  if (position == null) return;
+  const copySide = window.prompt("Copy side: left or right", String(slot.copy_side || "right"));
+  if (copySide == null) return;
+  try {
+    await apiRequest(`/api/admin/advertising/placements/${encodeURIComponent(placementKey)}`, {
+      method: "PATCH",
+      headers: adminAuthHeaders(),
+      body: {
+        preview_image_url: image.trim(),
+        headline: headline.trim(),
+        background_position: position.trim(),
+        copy_side: copySide.trim().toLowerCase()
+      }
+    });
+    await renderAdminDashboard();
+    toast("Placement creative updated.");
+  } catch (e) {
+    toast(`Creative update failed: ${e.message || "error"}`);
   }
 }
 
@@ -35364,42 +35392,12 @@ async function submitAdvertisingInquiry(event) {
 }
 
 function addAdUnits() {
-  const pages = document.querySelectorAll(".page");
-  pages.forEach((page) => {
-    if (page.querySelector(".ad-wrap")) return;
-    const pageName = (page.id || "").replace("page-", "").replace(/-/g, " ").trim() || "page";
-    const adSlot = String(GOOGLE_ADSENSE_SLOTS[page.id] || GOOGLE_ADSENSE_SLOTS.default || "").trim();
-    const hasLiveAds = GOOGLE_ADSENSE_CLIENT && adSlot;
-    const sponsoredLabel = translateListingLabel("Sponsored");
-    const placementLabel = translateListingLabel("Sponsored makaug placement");
-    const reachLabel = translateListingLabel("Reach active property seekers on");
-    const bookSlotLabel = translateListingLabel("Book this slot");
-    const wrap = document.createElement("div");
-    wrap.className = "ad-wrap";
-    wrap.innerHTML = `
-      <div class="max-w-7xl mx-auto px-4 py-3">
-        <div class="ad-unit">
-          <span class="ad-tag"><i class="fas fa-bullhorn"></i> ${sponsoredLabel}</span>
-          <span class="text-sm text-green-900 font-semibold">${placementLabel} • ${reachLabel} ${translateListingLabel(pageName)}</span>
-          ${hasLiveAds
-            ? `<div class="ad-slot" data-adsense-client="${GOOGLE_ADSENSE_CLIENT}" data-adsense-slot="${adSlot}" data-ads-loaded="0"></div>`
-            : `<button type="button" onclick="openPageMod('advertise')" class="text-sm font-bold text-green-700 hover:underline">${bookSlotLabel}</button>`
-          }
-        </div>
-      </div>`;
-
-    if (page.children.length > 1) {
-      page.insertBefore(wrap, page.children[1]);
-    } else {
-      page.appendChild(wrap);
-    }
-  });
-  renderGoogleAdsSlots();
+  ensureRevenuePlacements();
 }
 
 function renderGoogleAdsSlots() {
   if (!window.adsbygoogle) return;
-  document.querySelectorAll(".ad-slot[data-adsense-client]").forEach((slot) => {
+  document.querySelectorAll(".mk-paid-placement[data-adsense-client]").forEach((slot) => {
     if (slot.dataset.adsLoaded === "1") return;
     const client = slot.dataset.adsenseClient || "";
     const adSlot = slot.dataset.adsenseSlot || "";
@@ -35444,103 +35442,122 @@ const INLINE_REVENUE_PLACEMENTS = [
   { anchorId: "detail-content", slotKey: "property-detail", context: "Property Detail" }
 ];
 
-const INHOUSE_AD_SAMPLES = {
+const HOUSE_AD_SAMPLES = {
   "home-featured": {
-    image: "https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=900&q=80",
-    label: "Premium homepage sponsor",
-    headline: "Own the first impression",
-    body: "Hero visibility for banks, developers, insurers, and home brands."
+    image: "/assets/house-ads-v3/home-hero.webp",
+    mobileImage: "/assets/house-ads-v3/home-hero-mobile.webp",
+    headline: "Home starts here.",
+    backgroundPosition: "left center"
   },
   "home-brokers": {
-    image: "https://images.unsplash.com/photo-1560250097-0b93528c311a?w=900&q=80",
-    label: "Homepage agent sponsor",
-    headline: "Put your property team in front",
-    body: "Promote a trusted agency, broker team, or national property service."
+    image: "/assets/house-ads-v3/agents.webp",
+    mobileImage: "/assets/house-ads-v3/agents-mobile.webp",
+    headline: "The right hands for your keys.",
+    backgroundPosition: "left center",
+    strongScrim: true
   },
   "sale-grid": {
-    image: "https://images.unsplash.com/photo-1568605114967-8130f3a36994?w=900&q=80",
-    label: "Sponsored sale result",
-    headline: "Featured where buyers search",
-    body: "Promote a listing, agency, mortgage offer, or launch by district."
+    image: "/assets/house-ads-v3/sale.webp",
+    mobileImage: "/assets/house-ads-v3/sale-mobile.webp",
+    headline: "Say hello to yours.",
+    backgroundPosition: "center 30%",
+    strongScrim: true
   },
   "rent-grid": {
-    image: "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=900&q=80",
-    label: "Rental sponsor",
-    headline: "Reach active tenants",
-    body: "Target renters by area, budget, and move-in intent."
+    image: "/assets/house-ads-v3/rent.webp",
+    mobileImage: "/assets/house-ads-v3/rent-mobile.webp",
+    headline: "Move in Monday.",
+    backgroundPosition: "left center"
   },
   "student-grid": {
-    image: "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?w=900&q=80",
-    label: "Student sponsor",
-    headline: "Campus-ready visibility",
-    body: "Hostels, student services, transport, data, and essentials."
+    image: "/assets/house-ads-v3/students.webp",
+    mobileImage: "/assets/house-ads-v3/students-mobile.webp",
+    headline: "Your campus. Your room.",
+    backgroundPosition: "left 25%",
+    studentsScrim: true
   },
   "commercial-grid": {
-    image: "https://images.unsplash.com/photo-1497366216548-37526070297c?w=900&q=80",
-    label: "Commercial sponsor",
-    headline: "Find business movers",
-    body: "Offices, shops, warehouses, fit-out, finance, and insurance."
+    image: "/assets/house-ads-v3/commercial.webp",
+    mobileImage: "/assets/house-ads-v3/commercial-mobile.webp",
+    headline: "Open for business.",
+    backgroundPosition: "right center",
+    copySide: "left"
   },
   "land-grid": {
-    image: "https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=900&q=80",
-    label: "Land sponsor",
-    headline: "Reach land buyers",
-    body: "Surveyors, title support, developers, plots, and agricultural services."
+    image: "/assets/house-ads-v3/land.webp",
+    mobileImage: "/assets/house-ads-v3/land-mobile.webp",
+    headline: "Own the hill.",
+    backgroundPosition: "center 40%"
   },
   "marketplace-results": {
-    image: "https://images.unsplash.com/photo-1524758631624-e2822e304c36?w=900&q=80",
-    label: "Marketplace sponsor",
-    headline: "Reach owners who need property services",
-    body: "Promote a verified surveyor, lawyer, builder, mover, insurer, or home-service business."
+    image: "/assets/house-ads-v3/marketplace.webp",
+    mobileImage: "/assets/house-ads-v3/marketplace-mobile.webp",
+    headline: "Built by people who care.",
+    backgroundPosition: "left center"
   },
   "brokers-grid": {
-    image: "https://images.unsplash.com/photo-1521791136064-7986c2920216?w=900&q=80",
-    label: "Broker spotlight",
-    headline: "Stand out in the agent directory",
-    body: "Promote a verified broker, agency, or regional expert."
+    image: "/assets/house-ads-v3/brokers.webp",
+    mobileImage: "/assets/house-ads-v3/brokers-mobile.webp",
+    headline: "Walk in with an expert.",
+    backgroundPosition: "20% center",
+    strongScrim: true
   },
   "mortgage-results": {
-    image: "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=900&q=80",
-    label: "Finance sponsor",
-    headline: "Be seen when budgets are being planned",
-    body: "Mortgage, savings, insurance, valuation, and legal partners."
+    image: "/assets/house-ads-v3/mortgage.webp",
+    mobileImage: "/assets/house-ads-v3/mortgage-mobile.webp",
+    headline: "Closer than you think.",
+    backgroundPosition: "25% 30%",
+    strongScrim: true
   },
   "property-detail": {
-    image: "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=900&q=80",
-    label: "Property detail MPU",
-    headline: "Advertise beside high-intent views",
-    body: "A contextual placement beside photos, maps, and enquiry actions."
-  },
-  default: {
-    image: "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=900&q=80",
-    label: "makaug sponsored placement",
-    headline: "Book this ad slot",
-    body: "A live in-house placement ready for campaigns and boosts."
+    image: "/assets/house-ads-v3/detail.webp",
+    mobileImage: "/assets/house-ads-v3/detail-mobile.webp",
+    headline: "Open the door.",
+    backgroundPosition: "left center"
   }
 };
 
+const liveRevenuePlacements = new Map();
+let revenuePlacementCatalogPromise = null;
+
+function safeHouseAdUrl(value, fallback) {
+  const candidate = String(value || "").trim();
+  if (candidate.startsWith("/") || /^https:\/\//i.test(candidate)) return candidate;
+  return fallback;
+}
+
 function buildRevenuePlacementMarkup(slotKey, context) {
-  const adSlot = String(GOOGLE_ADSENSE_SLOTS[slotKey] || GOOGLE_ADSENSE_SLOTS.default || "").trim();
-  const hasLiveAds = GOOGLE_ADSENSE_CLIENT && adSlot;
-  const sample = INHOUSE_AD_SAMPLES[slotKey] || INHOUSE_AD_SAMPLES.default;
+  const fallback = HOUSE_AD_SAMPLES[slotKey];
+  if (!fallback) return "";
+  const configured = liveRevenuePlacements.get(slotKey);
+  if (configured?.is_active === false) return "";
+  const image = safeHouseAdUrl(configured?.preview_image_url, fallback.image);
+  const usingBundledImage = image === fallback.image;
+  const mobileImage = usingBundledImage ? fallback.mobileImage : image;
+  const headlineKey = String(configured?.headline || fallback.headline).trim();
+  const headline = translateListingLabel(headlineKey);
+  const ctaLabel = translateListingLabel(String(configured?.cta_label || "Advertise here").trim());
+  const ctaUrl = safeHouseAdUrl(configured?.cta_url, "/advertise");
+  const copySide = String(configured?.copy_side || fallback.copySide || "right").toLowerCase() === "left" ? "left" : "right";
+  const backgroundPosition = String(configured?.background_position || fallback.backgroundPosition || "left center").trim();
+  const scrimClass = fallback.studentsScrim
+    ? " mk-house-band--students"
+    : (fallback.strongScrim ? " mk-house-band--strong" : "");
+  const sponsorLabel = `${translateListingLabel("Sponsored")} — ${ctaLabel}`;
   return `
-    <div class="max-w-7xl mx-auto px-0 py-4">
-      <div class="ad-unit">
-        <span class="ad-tag"><i class="fas fa-bullhorn"></i> Sponsored</span>
-        <div class="inhouse-ad-preview">
-          <img src="${adminAttr(sample.image)}" alt="${adminAttr(sample.label)}">
-          <div class="inhouse-ad-preview-body">
-            <div class="text-[11px] uppercase tracking-wide text-green-700 font-black">${adminEscape(sample.label)}</div>
-            <div class="text-sm font-black text-gray-900">${adminEscape(sample.headline)}</div>
-            <div class="text-xs text-gray-600">${adminEscape(sample.body)}</div>
-            <div class="text-[11px] text-gray-400">Slot: ${adminEscape(context || "makaug.com")}</div>
-          </div>
+    <div class="mk-house-band-wrap max-w-7xl mx-auto">
+      <section class="mk-house-band${scrimClass}" data-copy-side="${copySide}" data-house-placement="${adminAttr(slotKey)}" aria-label="${adminAttr(`${context || "makaug.com"} sponsored placement`)}">
+        <picture>
+          <source media="(max-width: 640px)" srcset="${adminAttr(mobileImage)}">
+          <img class="mk-house-band__image" src="${adminAttr(image)}" alt="" style="object-position:${adminAttr(backgroundPosition)}" loading="lazy" decoding="async">
+        </picture>
+        <div class="mk-house-band__scrim" aria-hidden="true"></div>
+        <div class="mk-house-band__copy">
+          <h2 class="mk-house-band__headline">${adminEscape(headline)}</h2>
+          <a class="mk-house-band__pill" href="/" aria-label="makaug.com">makaug.com</a>
         </div>
-        ${hasLiveAds
-          ? `<div class="ad-slot" data-adsense-client="${GOOGLE_ADSENSE_CLIENT}" data-adsense-slot="${adSlot}" data-ads-loaded="0"></div>`
-          : `<button type="button" onclick="openPageMod('advertise')" class="text-sm font-bold text-green-700 hover:underline whitespace-nowrap">Advertise here</button>`
-        }
-      </div>
+        <a class="mk-house-band__tag" href="${adminAttr(ctaUrl)}">${adminEscape(sponsorLabel)}</a>
+      </section>
     </div>`;
 }
 
@@ -35557,8 +35574,32 @@ function ensureRevenuePlacements() {
       anchor.insertAdjacentElement("afterend", node);
     }
     node.innerHTML = buildRevenuePlacementMarkup(placement.slotKey, placement.context);
+    node.hidden = !node.innerHTML.trim();
   });
-  renderGoogleAdsSlots();
+}
+
+async function hydrateRevenuePlacementCatalog() {
+  if (revenuePlacementCatalogPromise) return revenuePlacementCatalogPromise;
+  revenuePlacementCatalogPromise = fetch("/api/advertising/placements", {
+    headers: { Accept: "application/json" },
+    credentials: "same-origin"
+  })
+    .then(async (response) => {
+      if (!response.ok) throw new Error(`Placement request failed (${response.status})`);
+      const payload = await response.json();
+      const placements = Array.isArray(payload?.data) ? payload.data : [];
+      placements.forEach((placement) => {
+        const key = String(placement?.key || "").trim();
+        if (key) liveRevenuePlacements.set(key, placement);
+      });
+      ensureRevenuePlacements();
+      return placements;
+    })
+    .catch((error) => {
+      console.warn("Using bundled house placements", error);
+      return [];
+    });
+  return revenuePlacementCatalogPromise;
 }
 
 function populateDistricts() {
@@ -47399,6 +47440,134 @@ Object.assign(LISTING_LABEL_I18N_SUPPLEMENTAL.ar ||= {}, {
   });
 })();
 
+(function registerHouseAdsV3Labels() {
+  const labelsByLanguage = {
+    lg: {
+      "Home starts here.": "Awaka watandikira wano.",
+      "The right hands for your keys.": "Emikono emituufu ku bisumuluzo byo.",
+      "Say hello to yours.": "Sanyukira ekyo ekikyo.",
+      "Move in Monday.": "Yingira ku Mmande.",
+      "Your campus. Your room.": "Campus yo. Ekisenge kyo.",
+      "Open for business.": "Waggulewo bizinensi.",
+      "Own the hill.": "Weefunire olusozi.",
+      "Built by people who care.": "Kizimbiddwa abantu abafaayo.",
+      "Walk in with an expert.": "Yingira n'omukugu.",
+      "Closer than you think.": "Kiri kumpi okusinga bw'olowooza.",
+      "Open the door.": "Ggulawo oluggi.",
+      "Advertise here": "Langa wano",
+      "Sponsored": "Kyasasuliddwa"
+    },
+    sw: {
+      "Home starts here.": "Nyumbani huanzia hapa.",
+      "The right hands for your keys.": "Mikono sahihi kwa funguo zako.",
+      "Say hello to yours.": "Salimia nyumba yako.",
+      "Move in Monday.": "Hamia Jumatatu.",
+      "Your campus. Your room.": "Kampasi yako. Chumba chako.",
+      "Open for business.": "Fungua biashara.",
+      "Own the hill.": "Miliki kilima.",
+      "Built by people who care.": "Imejengwa na watu wanaojali.",
+      "Walk in with an expert.": "Ingia na mtaalamu.",
+      "Closer than you think.": "Karibu kuliko unavyodhani.",
+      "Open the door.": "Fungua mlango.",
+      "Advertise here": "Tangaza hapa",
+      "Sponsored": "Imedhaminiwa"
+    },
+    ac: {
+      "Home starts here.": "Gang acake ki kany.",
+      "The right hands for your keys.": "Cing ma opore pi lagonyi.",
+      "Say hello to yours.": "Mok gangi.",
+      "Move in Monday.": "Dony i nino dwec.",
+      "Your campus. Your room.": "Kampas meri. Ot meri.",
+      "Open for business.": "Yab pi tic cente.",
+      "Own the hill.": "Bed rwot wi got.",
+      "Built by people who care.": "Jo ma paro aye ogedo.",
+      "Walk in with an expert.": "Dony iye kacel ki ngat ma ngeyo.",
+      "Closer than you think.": "Cok loyo ma itamo.",
+      "Open the door.": "Yab dogola.",
+      "Advertise here": "Mi ngene kany",
+      "Sponsored": "Kicwako"
+    },
+    ny: {
+      "Home starts here.": "Amaka gatandikira aha.",
+      "The right hands for your keys.": "Emikono ehikire y'ebisumuluzo byawe.",
+      "Say hello to yours.": "Yakiira ekyawe.",
+      "Move in Monday.": "Taaha Orwokubanza.",
+      "Your campus. Your room.": "Kampasi yawe. Ekishengye kyawe.",
+      "Open for business.": "Iguuraho bizinesi.",
+      "Own the hill.": "Tunga akashozi.",
+      "Built by people who care.": "Kyombekirwe abantu abafaayo.",
+      "Walk in with an expert.": "Taaha n'omukugu.",
+      "Closer than you think.": "Kiri haihi okukira oku orikuteekateeka.",
+      "Open the door.": "Iguura orwigi.",
+      "Advertise here": "Ranga aha",
+      "Sponsored": "Kishashwirwe"
+    },
+    rn: {
+      "Home starts here.": "Aha niho amaka gatandikira.",
+      "The right hands for your keys.": "Amaboko aboneire ku mfunguzo zawe.",
+      "Say hello to yours.": "Yakiira ekyawe.",
+      "Move in Monday.": "Taaha Orwokubanza.",
+      "Your campus. Your room.": "Kampasi yawe. Ekishengye kyawe.",
+      "Open for business.": "Iguuraho bizinesi.",
+      "Own the hill.": "Tunga akashozi.",
+      "Built by people who care.": "Kyombekirwe abantu abafaayo.",
+      "Walk in with an expert.": "Taaha n'omukugu.",
+      "Closer than you think.": "Kiri haihi okukira oku orikuteekateeka.",
+      "Open the door.": "Iguura orwigi.",
+      "Advertise here": "Ranga aha",
+      "Sponsored": "Kishashwirwe"
+    },
+    sm: {
+      "Home starts here.": "Amaka gatandikira wano.",
+      "The right hands for your keys.": "Emikono emituufu ku bisumuluzo byo.",
+      "Say hello to yours.": "Sanyukira ekikyo.",
+      "Move in Monday.": "Yingira ku Balaza.",
+      "Your campus. Your room.": "Campus yo. Ekisenge kyo.",
+      "Open for business.": "Waggulewo bizinensi.",
+      "Own the hill.": "Weefunire akasozi.",
+      "Built by people who care.": "Kizimbiddwa abantu abafaayo.",
+      "Walk in with an expert.": "Yingira n'omukugu.",
+      "Closer than you think.": "Kiri kumpi okusinga bw'olowooza.",
+      "Open the door.": "Ggulawo oluggi.",
+      "Advertise here": "Langa wano",
+      "Sponsored": "Kyasasuliddwa"
+    },
+    am: {
+      "Home starts here.": "ቤት ከዚህ ይጀምራል።",
+      "The right hands for your keys.": "ቁልፎችዎ በትክክለኛ እጅ ውስጥ።",
+      "Say hello to yours.": "የራስዎን ቤት ያግኙ።",
+      "Move in Monday.": "ሰኞ ይግቡ።",
+      "Your campus. Your room.": "ካምፓስዎ። ክፍልዎ።",
+      "Open for business.": "ለንግድ ይክፈቱ።",
+      "Own the hill.": "ኮረብታውን የራስዎ ያድርጉ።",
+      "Built by people who care.": "በሚያስቡ ሰዎች የተገነባ።",
+      "Walk in with an expert.": "ከባለሙያ ጋር ይግቡ።",
+      "Closer than you think.": "ከሚያስቡት የበለጠ ቅርብ።",
+      "Open the door.": "በሩን ይክፈቱ።",
+      "Advertise here": "እዚህ ያስተዋውቁ",
+      "Sponsored": "የተደገፈ"
+    },
+    ar: {
+      "Home starts here.": "المنزل يبدأ من هنا.",
+      "The right hands for your keys.": "مفاتيحك في الأيدي المناسبة.",
+      "Say hello to yours.": "رحّب بمنزلك.",
+      "Move in Monday.": "انتقل يوم الاثنين.",
+      "Your campus. Your room.": "جامعتك. غرفتك.",
+      "Open for business.": "افتح أبواب عملك.",
+      "Own the hill.": "امتلك التل.",
+      "Built by people who care.": "بناه أشخاص يهتمون.",
+      "Walk in with an expert.": "ادخل مع خبير.",
+      "Closer than you think.": "أقرب مما تتخيل.",
+      "Open the door.": "افتح الباب.",
+      "Advertise here": "أعلن هنا",
+      "Sponsored": "برعاية"
+    }
+  };
+  Object.entries(labelsByLanguage).forEach(([lang, labels]) => {
+    Object.assign(LISTING_LABEL_I18N_SUPPLEMENTAL[lang] ||= {}, labels);
+  });
+})();
+
 function translateListingLabel(text) {
   const lang = currentLang || "en";
   const fallback = LANG_FALLBACK[lang] || "en";
@@ -51788,6 +51957,7 @@ function initializeMakaugApp() {
   onLpVerifyEmailInput();
   onLpVerifyNinInput();
   renderAll();
+  hydrateRevenuePlacementCatalog();
   renderHowToVideoSections();
   refreshPublicListingsFromApi({ silent: true }).then((loaded) => {
     if (loaded) {
