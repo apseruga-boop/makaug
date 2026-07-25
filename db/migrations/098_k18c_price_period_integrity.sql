@@ -38,8 +38,34 @@ rent_period_repairs AS (
   JOIN evidence e ON e.id = p.id
   WHERE LOWER(TRIM(COALESCE(p.listing_type, ''))) = 'rent'
     AND LOWER(TRIM(COALESCE(p.price_period, ''))) IN ('once', 'one_off', 'total', 'sale', 'cash')
-    AND e.source_text ~ '\m(for rent|to rent|to let|for lease|available to rent|rental|monthly rent|rent per month|per month|/month|/mo)\M'
-    AND e.source_text !~ '\m(for sale|on sale|available for sale|selling|guide price|asking price|cash price|purchase price)\M'
+    AND (
+      e.source_text LIKE ANY (ARRAY[
+        '%for rent%',
+        '%to rent%',
+        '%to let%',
+        '%for lease%',
+        '%available to rent%',
+        '%monthly rent%',
+        '%rent per month%',
+        '%per month%',
+        '%/month%',
+        '%/mo%',
+        '%renting at%',
+        '%rent at%',
+        '%rent only%'
+      ])
+      OR e.source_text ~ '(^|[^a-z0-9])rent(al|als)?([^a-z0-9]|$)'
+    )
+    AND NOT (e.source_text LIKE ANY (ARRAY[
+      '%for sale%',
+      '%on sale%',
+      '%available for sale%',
+      '%selling%',
+      '%guide price%',
+      '%asking price%',
+      '%cash price%',
+      '%purchase price%'
+    ]))
 )
 UPDATE properties p
 SET
@@ -83,8 +109,28 @@ sale_category_repairs AS (
     AND (
       p.id::text LIKE '8f0deb37%'
       OR (
-        e.source_text ~ '\m(for sale|on sale|available for sale|selling|guide price|asking price|cash price|purchase price)\M'
-        AND e.source_text !~ '\m(for rent|to rent|to let|for lease|available to rent|rental|monthly rent|rent per month|per month|/month|/mo)\M'
+        e.source_text LIKE ANY (ARRAY[
+          '%for sale%',
+          '%on sale%',
+          '%available for sale%',
+          '%selling%',
+          '%guide price%',
+          '%asking price%',
+          '%cash price%',
+          '%purchase price%'
+        ])
+        AND NOT (e.source_text LIKE ANY (ARRAY[
+          '%for rent%',
+          '%to rent%',
+          '%to let%',
+          '%for lease%',
+          '%available to rent%',
+          '%monthly rent%',
+          '%rent per month%',
+          '%per month%',
+          '%/month%',
+          '%/mo%'
+        ]))
       )
     )
 )

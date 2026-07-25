@@ -55,4 +55,18 @@ test('API paths are excluded from every SPA index fallback', () => {
 
 test('release marker identifies the K18c deployment', () => {
   assert.match(read('index.html'), /k18c-price-period-integrity-20260725/);
+  assert.match(read('index.html'), /k18c-rent-evidence-followup-20260725/);
+});
+
+test('rent period backfill uses explicit phrases and protects sale evidence', () => {
+  const initialMigration = read('db/migrations/098_k18c_price_period_integrity.sql');
+  const followupMigration = read('db/migrations/099_k18c_rent_evidence_followup.sql');
+
+  for (const source of [initialMigration, followupMigration]) {
+    assert.match(source, /source_text LIKE ANY \(ARRAY\[/);
+    assert.match(source, /'%for rent%'/);
+    assert.match(source, /NOT \(e\.source_text LIKE ANY \(ARRAY\[/);
+    assert.match(source, /'%for sale%'/);
+  }
+  assert.match(followupMigration, /explicit_rent_source_evidence_v2/);
 });
