@@ -2,6 +2,26 @@ const jwt = require('jsonwebtoken');
 
 const db = require('../config/database');
 
+function authenticationError(message = 'Invalid token') {
+  const error = new Error(message);
+  error.code = 'AUTH_TOKEN_INVALID';
+  error.status = 401;
+  return error;
+}
+
+function transientAuthenticationBackendError(error) {
+  const wrapped = new Error('Authentication service is temporarily unavailable');
+  wrapped.code = 'AUTH_BACKEND_UNAVAILABLE';
+  wrapped.status = 503;
+  wrapped.cause = error;
+  return wrapped;
+}
+
+function isAuthenticationError(error) {
+  return error?.code === 'AUTH_TOKEN_INVALID'
+    || ['JsonWebTokenError', 'TokenExpiredError', 'NotBeforeError'].includes(error?.name);
+}
+
 function tokenFromRequest(req) {
   const authHeader = req.get('authorization') || '';
   if (authHeader.startsWith('Bearer ')) return authHeader.slice(7);
@@ -24,14 +44,24 @@ async function loadActiveUserFromToken(req) {
   const token = tokenFromRequest(req);
   if (!token || !process.env.JWT_SECRET) return null;
 
-  const decoded = jwt.verify(token, process.env.JWT_SECRET);
+  let decoded;
+  try {
+    decoded = jwt.verify(token, process.env.JWT_SECRET);
+  } catch (_error) {
+    throw authenticationError('Invalid or expired token');
+  }
   const userId = decoded?.sub;
-  if (!userId) return null;
+  if (!userId) throw authenticationError('Invalid token');
 
-  const result = await db.query(
-    'SELECT id, first_name, last_name, phone, email, role, status, preferred_language, preferred_contact_channel, profile_data FROM users WHERE id = $1 LIMIT 1',
-    [userId]
-  );
+  let result;
+  try {
+    result = await db.query(
+      'SELECT id, first_name, last_name, phone, email, role, status, preferred_language, preferred_contact_channel, profile_data FROM users WHERE id = $1 LIMIT 1',
+      [userId]
+    );
+  } catch (error) {
+    throw transientAuthenticationBackendError(error);
+  }
   const user = result.rows[0];
   if (!user || user.status !== 'active') return null;
   return user;
@@ -46,6 +76,7 @@ async function isAdminBearerToken(req) {
     req.userAuth = user;
     return true;
   } catch (_error) {
+    if (!isAuthenticationError(_error)) throw _error;
     return false;
   }
 }
@@ -123,6 +154,7 @@ async function requireStaffAccess(req, res, next) {
     req.staffAuth = { userId: user.id, role: user.role };
     return next();
   } catch (_error) {
+    if (!isAuthenticationError(_error)) return next(_error);
     return res.status(401).json({ ok: false, error: 'Sign in required' });
   }
 }
@@ -138,6 +170,7 @@ async function requireListingModerationAccess(req, res, next) {
     req.adminAuth = { type: 'moderator', userId: user.id, role: user.role };
     return next();
   } catch (_error) {
+    if (!isAuthenticationError(_error)) return next(_error);
     return res.status(401).json({ ok: false, error: 'Unauthorized' });
   }
 }

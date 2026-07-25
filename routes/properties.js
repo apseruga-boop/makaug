@@ -93,6 +93,7 @@ const {
   commercialMisclassificationWarning
 } = require('../utils/commercialClassification');
 const { listingPriceQuality } = require('../utils/listingPriceQuality');
+const { propertyPriceMetadata } = require('../utils/propertyPriceCurrency');
 
 const router = express.Router();
 const LAUNCH_SEED_LISTING_MARKERS = ['SOFT LAUNCH TEST - DELETE', 'QA TEST - DELETE'];
@@ -1096,6 +1097,10 @@ function compactPublicCardRow(row = {}, currency = 'UGX') {
     area: row.area,
     address: row.address,
     price: row.price,
+    price_currency: row.price_currency || 'UGX',
+    price_original: row.price_original,
+    price_fx_rate_ugx: row.price_fx_rate_ugx,
+    price_fx_as_of: row.price_fx_as_of,
     price_period: row.price_period,
     transaction_type: row.transaction_type || null,
     bedrooms: row.bedrooms,
@@ -1556,6 +1561,10 @@ function publicExtraFields(extraFields = {}) {
     area_highlights: cleanPublicListingCopy(extra.area_highlights || ''),
     nearby_facilities: Array.isArray(extra.nearby_facilities) ? extra.nearby_facilities : [],
     size_raw: extra.size_raw || '',
+    price_currency: extra.price_currency || null,
+    price_original: extra.price_original ?? null,
+    price_fx_rate_ugx: extra.price_fx_rate_ugx ?? null,
+    price_fx_as_of: extra.price_fx_as_of || null,
     featured: extra.featured === true,
     featured_at: extra.featured_at || null
   };
@@ -2467,6 +2476,10 @@ async function listPropertiesHandler(req, res, next) {
           p.area,
           p.address,
           p.price,
+          p.price_currency,
+          p.price_original,
+          p.price_fx_rate_ugx,
+          p.price_fx_as_of,
           p.price_period,
           p.transaction_type,
           p.bedrooms,
@@ -2525,6 +2538,10 @@ async function listPropertiesHandler(req, res, next) {
           p.area,
           p.address,
           p.price,
+          p.price_currency,
+          p.price_original,
+          p.price_fx_rate_ugx,
+          p.price_fx_as_of,
           p.price_period,
           p.transaction_type,
           p.bedrooms,
@@ -3217,7 +3234,11 @@ router.post('/', async (req, res, next) => {
     const district = cleanText(body.district);
     const area = cleanText(body.area);
     const description = cleanText(body.description);
-    const price = toNullableInt(body.price);
+    const priceMetadata = propertyPriceMetadata(body.price, {
+      currency: body.price_currency || body.currency,
+      fxAsOf: body.price_fx_as_of || undefined
+    });
+    const price = priceMetadata.price;
     const transactionType = normalizeCommercialTransactionType(
       body.transaction_type || body.transactionType || body.commercial_mode || body.commercial_intent,
       {
@@ -3237,7 +3258,9 @@ router.post('/', async (req, res, next) => {
     if (!district) errors.push('district is required');
     if (!area) errors.push('area is required');
     if (!description) errors.push('description is required');
-    if (price == null || price < 10000) errors.push('price must be provided in UGX');
+    if (price == null || price < 10000) {
+      errors.push('price must be provided in UGX or USD and convert to at least UGX 10,000');
+    }
     if (listingType === 'commercial' && !transactionType) {
       errors.push('transaction_type is required for commercial listings and must be rent or sale');
     }
@@ -3392,6 +3415,13 @@ router.post('/', async (req, res, next) => {
     if (['phone', 'whatsapp', 'email', 'both'].includes(preferredContactMethod)) {
       extraFields.preferred_contact_method = preferredContactMethod;
     }
+    extraFields.price_currency = priceMetadata.price_currency;
+    extraFields.price_original = priceMetadata.price_original;
+    extraFields.price_fx_rate_ugx = priceMetadata.price_fx_rate_ugx;
+    extraFields.price_fx_as_of = priceMetadata.price_fx_as_of;
+    extraFields.price_conversion_basis = priceMetadata.price_currency === 'USD'
+      ? 'Original submitted USD guide converted to canonical UGX for search and valuation.'
+      : 'Original submitted UGX guide stored without conversion.';
     const landTitleAvailable = normalizeLandTitleAvailability(
       body.land_title_available
         ?? body.landTitleAvailable
@@ -3460,6 +3490,10 @@ router.post('/', async (req, res, next) => {
         area,
         address,
         price,
+        price_currency,
+        price_original,
+        price_fx_rate_ugx,
+        price_fx_as_of,
         price_period,
         bedrooms,
         bathrooms,
@@ -3506,7 +3540,8 @@ router.post('/', async (req, res, next) => {
         $11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
         $21,$22,$23,$24,$25,$26,$27,$28,$29,$30,
         $31,$32,$33,$34,$35,$36,$37,$38,$39,$40,
-        $41,$42,$43,$44,$45,$46,$47,$48,$49
+        $41,$42,$43,$44,$45,$46,$47,$48,$49,$50,
+        $51,$52,$53
       ) RETURNING id, created_at`,
       [
         listingType,
@@ -3517,6 +3552,10 @@ router.post('/', async (req, res, next) => {
         area,
         cleanText(body.address) || null,
         price,
+        priceMetadata.price_currency,
+        priceMetadata.price_original,
+        priceMetadata.price_fx_rate_ugx,
+        priceMetadata.price_fx_as_of,
         cleanText(body.price_period) || null,
         toNullableInt(body.bedrooms),
         toNullableInt(body.bathrooms),

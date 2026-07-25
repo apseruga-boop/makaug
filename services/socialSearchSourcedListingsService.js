@@ -28,6 +28,10 @@ const {
   commercialMisclassificationWarning,
 } = require('../utils/commercialClassification');
 const { listingPriceQuality } = require('../utils/listingPriceQuality');
+const {
+  configuredUsdToUgxRate,
+  propertyPriceMetadata
+} = require('../utils/propertyPriceCurrency');
 
 const SOCIAL_SEARCH_BATCH_ID = 'social_search_authorised_20260520';
 const LEGACY_SOURCED_INVENTORY_CANDIDATE_SOURCE = SOURCE;
@@ -38,7 +42,7 @@ const FOUND_ONLINE_SOURCE_POST_IMPORT_BATCH_ID = 'found_online_source_post_impor
 const SOCIAL_SEARCH_FIRST_SEEN_AT = '2026-05-20T00:00:00.000Z';
 const SOCIAL_SEARCH_ADDED_TO_MAKAUG_AT = '2026-05-20T00:00:00.000Z';
 const PRICE_UPON_APPLICATION_LABEL = 'Price upon application';
-const USD_TO_UGX_GUIDE_RATE = 3800;
+const USD_TO_UGX_GUIDE_RATE = configuredUsdToUgxRate();
 const ALLOWED_SOCIAL_SOURCE_PLATFORMS = ['youtube', 'tiktok', 'instagram', 'facebook', 'x', 'twitter'];
 const STUDENT_SOURCE_LISTING_PATTERN = /\b(?:students?|hostel|campus|self[-\s]*contained|single\s+room|double\s+room|bedsitter|bed\s*sitter|roommate|per\s+semester|non[-\s]*residential|residential\s+hostel|rooms?\s+near\s+campus)\b/i;
 const STUDENT_RENTISH_SOURCE_PATTERN = /\b(?:rent|rental|to\s+let|room|hostel|bedsitter|bed\s*sitter|self[-\s]*contained|per\s+semester|students?|campus)\b/i;
@@ -1828,6 +1832,13 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
     source_no_phone_policy: PUBLIC_SOURCE_CONTACT_POLICY,
     price_label: sourcePriceLabelFor(item),
     source_price_label: sourcePriceLabelFor(item),
+    price_currency: item.priceCurrency || item.price_currency || 'UGX',
+    price_original: item.priceOriginal ?? item.price_original ?? item.price ?? null,
+    price_fx_rate_ugx: item.priceFxRateUgx ?? item.price_fx_rate_ugx ?? null,
+    price_fx_as_of: item.priceFxAsOf || item.price_fx_as_of || null,
+    price_conversion_basis: (item.priceCurrency || item.price_currency) === 'USD'
+      ? 'Original public USD guide converted to canonical UGX for search and valuation.'
+      : 'Original public UGX guide stored without conversion.',
     price_upon_application: !hasPublishedPriceOrGuidePrice(item),
     price_status: hasPublishedPriceOrGuidePrice(item) ? 'published_price_or_guide_price' : 'price_upon_application',
     source_price_policy: 'If the public social source does not publish a price, makaug shows Price upon application and King confirms the price during review/follow-up.',
@@ -2014,6 +2025,10 @@ function buildSocialSearchListing(item, agentId = null) {
     area: item.area,
     address: item.address,
     price: Number(item.price || 0) > 0 ? item.price : null,
+    price_currency: item.priceCurrency || item.price_currency || 'UGX',
+    price_original: item.priceOriginal ?? item.price_original ?? item.price ?? null,
+    price_fx_rate_ugx: item.priceFxRateUgx ?? item.price_fx_rate_ugx ?? null,
+    price_fx_as_of: item.priceFxAsOf || item.price_fx_as_of || null,
     price_period: pricePeriod || (transactionType === 'rent' ? 'month' : 'once'),
     bedrooms: item.beds,
     bathrooms: item.baths,
@@ -2187,7 +2202,8 @@ async function insertListing(client, listing, agentId) {
   const autoLive = sourcePostAutoLiveStatusFor(listing.source_item, sourceAgentForItem(listing.source_item));
   const inserted = await client.query(
     `INSERT INTO properties (
-      listing_type, transaction_type, title, description, district, area, address, price, price_period,
+      listing_type, transaction_type, title, description, district, area, address, price,
+      price_currency, price_original, price_fx_rate_ugx, price_fx_as_of, price_period,
       bedrooms, bathrooms, property_type, title_type, year_built, furnishing,
       contract_months, deposit_amount, land_size_value, land_size_unit,
       floor_area_sqm, usable_size_sqm, parking_bays, nearest_university,
@@ -2202,12 +2218,14 @@ async function insertListing(client, listing, agentId) {
       $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
       $11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
       $21,$22,$23,$24,$25,$26,$27,$28,$29,$30,
-      $31,$32,$33,$34,$35,$36,$37::jsonb,$38::jsonb,$39,$40,
-      $41,$42,$43,$44,$45,$46,$47,$48,$49,$50,$51,$52
+      $31,$32,$33,$34,$35,$36,$37,$38,$39,$40,
+      $41::jsonb,$42::jsonb,$43,$44,$45,$46,$47,$48,$49,$50,
+      $51,$52,$53,$54,$55,$56
     ) RETURNING id::text AS id`,
     [
       listing.listing_type, listing.transaction_type, listing.title, listing.description, listing.district,
-      listing.area, listing.address, listing.price, listing.price_period,
+      listing.area, listing.address, listing.price, listing.price_currency, listing.price_original,
+      listing.price_fx_rate_ugx, listing.price_fx_as_of, listing.price_period,
       listing.bedrooms, listing.bathrooms, listing.property_type, listing.title_type,
       listing.year_built, listing.furnishing, listing.contract_months,
       listing.deposit_amount, listing.land_size_value, listing.land_size_unit,
@@ -2317,25 +2335,9 @@ async function verifyCreatedListingRows(client, created = []) {
 }
 
 function parseMoneyValue(value) {
-  if (value == null || value === '') return null;
-  if (typeof value === 'number' && Number.isFinite(value)) return Math.round(value);
-  const raw = String(value || '').toLowerCase().replace(/,/g, '').trim();
-  const match = raw.match(/(\d+(?:\.\d+)?)/);
-  if (!match) return null;
-  const amount = Number(match[1]);
-  if (!Number.isFinite(amount)) return null;
-  const multiplier = /\d(?:\.\d+)?\s*(b|bn|billions?)\b/.test(raw)
-    ? 1000000000
-    : /\d(?:\.\d+)?\s*(m|mn|millions?)\b/.test(raw)
-      ? 1000000
-      : /\d(?:\.\d+)?\s*(k|thousands?)\b/.test(raw)
-        ? 1000
-        : 1;
-  if (/^(?:\$|us\$|usd)\s*\d/.test(raw)) return Math.round(amount * multiplier * USD_TO_UGX_GUIDE_RATE);
-  if (/\d(?:\.\d+)?\s*(b|bn|billions?)\b/.test(raw)) return Math.round(amount * 1000000000);
-  if (/\d(?:\.\d+)?\s*(m|mn|millions?)\b/.test(raw)) return Math.round(amount * 1000000);
-  if (/\d(?:\.\d+)?\s*(k|thousands?)\b/.test(raw)) return Math.round(amount * 1000);
-  return Math.round(amount);
+  return propertyPriceMetadata(value, {
+    usdToUgxRate: USD_TO_UGX_GUIDE_RATE
+  }).price;
 }
 
 function numberOrNull(value) {
@@ -2467,6 +2469,12 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
     address
   });
   const youtubeId = raw.youtube_id || raw.youtubeId || raw.youtube_video_id || raw.youtubeVideoId || youtubeIdFromUrl(sourceUrl);
+  const sourcePrice = raw.price ?? raw.guide_price ?? raw.price_text ?? raw.asking_price;
+  const sourcePriceMetadata = propertyPriceMetadata(sourcePrice, {
+    currency: raw.price_currency || raw.currency || raw.source_currency,
+    usdToUgxRate: configuredUsdToUgxRate(),
+    fxAsOf: raw.price_fx_as_of || raw.source_published_at || raw.published_at || undefined
+  });
   const sourceAgent = {
     key: sourceKey,
     name: sourceName,
@@ -2534,7 +2542,11 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
     area,
     district,
     address,
-    price: parseMoneyValue(raw.price ?? raw.guide_price ?? raw.price_text ?? raw.asking_price),
+    price: sourcePriceMetadata.price,
+    priceCurrency: sourcePriceMetadata.price_currency,
+    priceOriginal: sourcePriceMetadata.price_original,
+    priceFxRateUgx: sourcePriceMetadata.price_fx_rate_ugx,
+    priceFxAsOf: sourcePriceMetadata.price_fx_as_of,
     priceText: raw.price_text || raw.price_label || '',
     price_period: pricePeriod,
     transactionType: transactionType || null,
@@ -3152,22 +3164,26 @@ async function updateExistingFoundOnlineSourcePostListing(client, existingRow = 
          area = $7,
          address = $8,
          price = $9,
-         price_period = $10,
-         bedrooms = $11,
-         bathrooms = $12,
-         property_type = $13,
-         land_size_value = $14,
-         land_size_unit = $15,
-         latitude = $16,
-         longitude = $17,
-         students_welcome = $18,
-         amenities = $19::jsonb,
-         status = $20,
-         moderation_stage = $21,
-         reviewed_at = CASE WHEN $22::boolean THEN COALESCE(reviewed_at, NOW()) ELSE reviewed_at END,
-         moderation_notes = $23,
-         moderation_reason = $24,
-         extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $25::jsonb,
+         price_currency = $10,
+         price_original = $11,
+         price_fx_rate_ugx = $12,
+         price_fx_as_of = $13,
+         price_period = $14,
+         bedrooms = $15,
+         bathrooms = $16,
+         property_type = $17,
+         land_size_value = $18,
+         land_size_unit = $19,
+         latitude = $20,
+         longitude = $21,
+         students_welcome = $22,
+         amenities = $23::jsonb,
+         status = $24,
+         moderation_stage = $25,
+         reviewed_at = CASE WHEN $26::boolean THEN COALESCE(reviewed_at, NOW()) ELSE reviewed_at END,
+         moderation_notes = $27,
+         moderation_reason = $28,
+         extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $29::jsonb,
          updated_at = NOW()
      WHERE id = $1
      RETURNING id::text AS id, title, status, moderation_stage`,
@@ -3181,6 +3197,10 @@ async function updateExistingFoundOnlineSourcePostListing(client, existingRow = 
       listing.area,
       listing.address,
       listing.price,
+      listing.price_currency,
+      listing.price_original,
+      listing.price_fx_rate_ugx,
+      listing.price_fx_as_of,
       listing.price_period,
       listing.bedrooms,
       listing.bathrooms,

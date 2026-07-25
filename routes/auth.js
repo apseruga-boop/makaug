@@ -31,19 +31,31 @@ const {
 
 const router = express.Router();
 
-function authCookieOptions(req) {
+const STAFF_SESSION_ROLES = new Set(['moderator', 'admin', 'super_admin']);
+const CUSTOMER_SESSION_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const STAFF_SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+
+function isStaffSessionRole(role = '') {
+  return STAFF_SESSION_ROLES.has(String(role || '').trim().toLowerCase());
+}
+
+function authCookieOptions(req, token = '') {
+  const decoded = token ? jwt.decode(token) : null;
+  const tokenMaxAge = Number(decoded?.exp || 0) > 0
+    ? Math.max(1000, (Number(decoded.exp) * 1000) - Date.now())
+    : CUSTOMER_SESSION_MAX_AGE_MS;
   return {
     httpOnly: true,
     sameSite: 'lax',
     secure: req.secure || req.get('x-forwarded-proto') === 'https' || process.env.NODE_ENV === 'production',
-    maxAge: 7 * 24 * 60 * 60 * 1000,
+    maxAge: Math.min(tokenMaxAge, STAFF_SESSION_MAX_AGE_MS),
     path: '/'
   };
 }
 
 function setAuthCookie(req, res, token) {
   if (token) {
-    res.cookie('makaug_auth_token', token, authCookieOptions(req));
+    res.cookie('makaug_auth_token', token, authCookieOptions(req, token));
   }
 }
 
@@ -196,6 +208,9 @@ function createToken(user) {
     ? user.profile_data
     : {};
 
+  const expiresIn = isStaffSessionRole(user.role)
+    ? (process.env.STAFF_JWT_EXPIRES_IN || '30d')
+    : (process.env.JWT_EXPIRES_IN || '7d');
   return jwt.sign(
     {
       sub: user.id,
@@ -205,7 +220,7 @@ function createToken(user) {
       account_kind: profile.account_kind || profile.audience || ''
     },
     secret,
-    { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+    { expiresIn }
   );
 }
 
@@ -1782,7 +1797,22 @@ router.get('/me', async (req, res, next) => {
       return res.status(404).json({ ok: false, error: 'User not found' });
     }
 
-    return res.json({ ok: true, data: { user: publicUser(result.rows[0]) } });
+    const user = result.rows[0];
+    const rollingToken = isStaffSessionRole(user.role) ? createToken(user) : null;
+    if (rollingToken) setAuthCookie(req, res, rollingToken);
+    return res.json({
+      ok: true,
+      data: {
+        user: publicUser(user),
+        ...(rollingToken ? {
+          session: {
+            token: rollingToken,
+            rolling: true,
+            expires_in: process.env.STAFF_JWT_EXPIRES_IN || '30d'
+          }
+        } : {})
+      }
+    });
   } catch (error) {
     return next(error);
   }
