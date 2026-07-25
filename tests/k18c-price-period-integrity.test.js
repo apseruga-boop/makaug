@@ -56,6 +56,23 @@ test('API paths are excluded from every SPA index fallback', () => {
 test('release marker identifies the K18c deployment', () => {
   assert.match(read('index.html'), /k18c-price-period-integrity-20260725/);
   assert.match(read('index.html'), /k18c-rent-evidence-followup-20260725/);
+  assert.match(read('index.html'), /k18c-source-evidence-precedence-20260725/);
+});
+
+test('source evidence precedence repairs unambiguous periods and holds contradictions', () => {
+  const migration = read('db/migrations/100_k18c_source_evidence_precedence.sql');
+
+  assert.match(migration, /p\.extra_fields->>'source_caption'/);
+  assert.doesNotMatch(
+    migration.match(/CREATE TEMP TABLE[\s\S]*?FROM properties p/)?.[0] || '',
+    /p\.description/,
+    'generated descriptions must not influence the source-evidence decision'
+  );
+  assert.match(migration, /price_period = 'night'/);
+  assert.match(migration, /price_period = 'month'/);
+  assert.match(migration, /listing_type = 'sale'/);
+  assert.match(migration, /conflicting_rent_sale_source_evidence/);
+  assert.match(migration, /status = 'pending'/);
 });
 
 test('rent period backfill uses explicit phrases and protects sale evidence', () => {
