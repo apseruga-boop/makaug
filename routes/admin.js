@@ -1651,7 +1651,7 @@ function clearAdminReviewQueueCache() {
       key.includes('admin-review-queue-v')
       || key.includes('admin-command-centre-v4')
       || key.includes('admin-summary-v5-properties-list-count-fast')
-      || key.includes('admin-actionable-review-count-v1')
+      || key.includes('admin-actionable-review-count-v')
     ) {
       adminDashboardResponseCache.delete(cacheKey);
     }
@@ -1824,42 +1824,18 @@ async function safeCount(sql, values = [], options = {}) {
 }
 
 async function adminActionableReviewQueueCount({ timeoutMs = ADMIN_SAFE_QUERY_TIMEOUT_MS } = {}) {
-  const payload = await adminCachedPayload('admin-actionable-review-count-v1', ADMIN_DASHBOARD_CACHE_TTL_MS, async () => {
-    const standardWhere = `(
-      ${adminDefaultReviewQueueWhere('p')}
-      AND COALESCE(p.source, '') <> 'found_online_property_source_v1'
-      AND COALESCE(p.listed_via, '') <> 'found_online'
-    )`;
-    const pendingStatuses = adminSqlList(ADMIN_PENDING_REVIEW_STATUSES);
-    const foundOnlinePending = `(
-      COALESCE(p.status, '') IN (${pendingStatuses})
-      OR COALESCE(p.moderation_stage, '') IN (${pendingStatuses})
-    )`;
-
-    // Keep this sequential: command-centre already launches its widgets in parallel,
-    // so nested parallel queries can exhaust the pool on a cold dashboard load.
-    const standard = await safeCount(
-      `SELECT COUNT(*)::int AS total FROM properties p WHERE ${standardWhere}`,
+  const payload = await adminCachedPayload('admin-actionable-review-count-v2-authoritative-status', ADMIN_DASHBOARD_CACHE_TTL_MS, async () => {
+    const result = await adminTimedQuery(
+      `SELECT COUNT(*)::int AS total
+       FROM properties p
+       WHERE ${adminActionableReviewQueueWhere('p')}`,
       [],
-      { timeoutMs }
+      timeoutMs
     );
-    const foundOnline = await safeCount(
-      `SELECT (
-         SELECT COUNT(*)::int
-         FROM properties p
-         WHERE p.source = 'found_online_property_source_v1'
-           AND ${foundOnlinePending}
-       ) + (
-         SELECT COUNT(*)::int
-         FROM properties p
-         WHERE p.listed_via = 'found_online'
-           AND p.source IS DISTINCT FROM 'found_online_property_source_v1'
-           AND ${foundOnlinePending}
-       ) AS total`,
-      [],
-      { timeoutMs }
-    );
-    return { total: standard + foundOnline, standard, found_online: foundOnline };
+    return {
+      total: Number(result.rows[0]?.total || 0),
+      status_precedence: 'final_property_status_overrides_stale_moderation_stage'
+    };
   });
   return Number(payload?.total || 0);
 }

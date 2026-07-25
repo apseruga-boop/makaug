@@ -67,8 +67,8 @@ test('admin live controls use paginated backend snapshots', () => {
   assert.match(adminRouteSource, /function adminActiveReviewQueueWhere\(alias = 'p'\)/);
   assert.match(adminRouteSource, /function adminDefaultReviewQueueWhere\(alias = 'p'\)/);
   assert.match(adminRouteSource, /async function loadAdminPropertiesSummaryFast\(\)/);
-  assert.match(adminRouteSource, /const standardWhere = `\([\s\S]*\$\{adminDefaultReviewQueueWhere\('p'\)\}[\s\S]*COALESCE\(p\.source, ''\) <> 'found_online_property_source_v1'/);
-  assert.match(adminRouteSource, /safeCount\(\s*`SELECT COUNT\(\*\)::int AS total FROM properties p WHERE \$\{standardWhere\}`/);
+  assert.match(adminRouteSource, /admin-actionable-review-count-v2-authoritative-status/);
+  assert.match(adminRouteSource, /SELECT COUNT\(\*\)::int AS total[\s\S]*WHERE \$\{adminActionableReviewQueueWhere\('p'\)\}/);
   const reviewQueueRouteSource = routeSource(adminRouteSource, "router.get('/properties/review-queue'");
   assert.match(reviewQueueRouteSource, /const filters = \[queueType === 'found_online'[\s\S]*adminFoundOnlineReviewQueueWhere\('p'\)[\s\S]*includeTestLike \? adminActiveReviewQueueWhere\('p'\) : adminActionableReviewQueueWhere\('p'\)/);
   assert.match(reviewQueueRouteSource, /source_quality_filter: 'stored_suppression_flag_only'/);
