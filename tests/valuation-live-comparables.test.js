@@ -119,6 +119,46 @@ assert.strictEqual(
   'widened evidence must not retain implausible low-price rows'
 );
 
+const liveShapeOutlierEstimate = helpers.buildEstimate({
+  category: 'sale',
+  location: 'Entebbe',
+  bedrooms: 2,
+  size_value: null,
+  size_unit: '',
+  size_sqm: null
+}, [
+  { id: 'junk-live-1', listing_type: 'sale', price: 1_000_000, title: 'Bad low parsed amount' },
+  { id: 'junk-live-2', listing_type: 'sale', price: 1_000_000, title: 'Bad low parsed amount duplicate' },
+  { id: 'valid-live-1', listing_type: 'sale', price: 25_000_000, title: 'House one' },
+  { id: 'valid-live-2', listing_type: 'sale', price: 45_000_000, title: 'House two' },
+  { id: 'valid-live-3', listing_type: 'sale', price: 90_000_000, title: 'House three' },
+  { id: 'valid-live-4', listing_type: 'sale', price: 90_000_000, title: 'House four' },
+  {
+    id: 'valid-live-5',
+    listing_type: 'sale',
+    price: 220_000_000,
+    title: 'House five',
+    extra_fields: {
+      source_url: 'https://www.tiktok.com/@example/video/123',
+      photo_source_urls: ['https://p19-common-sign.tiktokcdn-us.com/transient.jpeg'],
+      authorised_photo_urls: ['https://p19-common-sign.tiktokcdn-us.com/transient.jpeg']
+    }
+  },
+  { id: 'valid-live-6', listing_type: 'sale', price: 700_000_000, title: 'House six' }
+], 'district', true);
+assert.strictEqual(liveShapeOutlierEstimate.outlier_excluded_count, 2);
+assert.ok(liveShapeOutlierEstimate.range_low > 1_000_000);
+assert.strictEqual(
+  JSON.stringify(liveShapeOutlierEstimate).includes('tiktokcdn'),
+  false,
+  'public valuation payloads must not leak transient TikTok URLs through nested metadata'
+);
+assert.strictEqual(
+  liveShapeOutlierEstimate.comparables.some((row) => row.extra_fields.source_url === 'https://www.tiktok.com/@example/video/123'),
+  true,
+  'stable public source links must remain available to comparable cards'
+);
+
 const landEstimate = helpers.buildEstimate({
   category: 'land',
   size_value: 50,
