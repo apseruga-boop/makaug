@@ -514,7 +514,7 @@ test('public shell uses precompiled Tailwind CSS instead of the runtime Play CDN
   assert.doesNotMatch(htmlSource, /cdn\.tailwindcss\.com/);
   assert.match(htmlSource, /tailwind-static-css-20260710/);
   assert.match(serverSource, /tailwindStaticCssVersion = 'tailwind-static-css-20260710'/);
-  assert.match(packageSource, /"build:css": "tailwindcss -c tailwind\.config\.cjs -i assets\/tailwind\.input\.css -o assets\/tailwind\.css --minify"/);
+  assert.match(packageSource, /"build:css": "(?:BROWSERSLIST_IGNORE_OLD_DATA=true )?tailwindcss -c tailwind\.config\.cjs -i assets\/tailwind\.input\.css -o assets\/tailwind\.css --minify"/);
   assert.match(packageSource, /"build:bot": "npm run build:css && tsc -p tsconfig\.json"/);
   assert.match(tailwindConfigSource, /content: \['\.\/index\.html', '\.\/assets\/makaug-app\.js'\]/);
   assert.ok(tailwindCssSource.length > 100000, 'compiled Tailwind CSS should be present, not an empty placeholder');
