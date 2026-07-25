@@ -53,6 +53,42 @@ test('price gate blocks recurring sale or land and requires confirmation above 1
   );
 });
 
+test('price gate blocks implausibly low recurring rent and one-off rent periods', () => {
+  assert.ok(
+    listingPriceQuality({
+      listing_type: 'rent',
+      price: 2_000,
+      price_period: 'month',
+      description: 'House for rent in Kira at UGX 2,000 per month'
+    }).reasons.includes('recurring_price_below_30k')
+  );
+  assert.ok(
+    listingPriceQuality({
+      listing_type: 'student',
+      price: 6_840,
+      price_period: 'sem',
+      description: 'Hostel room near Makerere'
+    }).reasons.includes('recurring_price_below_30k')
+  );
+  assert.ok(
+    listingPriceQuality({
+      listing_type: 'rent',
+      price: 1_500_000,
+      price_period: 'once',
+      description: 'Apartment for rent in Ntinda'
+    }).reasons.includes('rent_price_marked_one_off')
+  );
+  assert.equal(
+    listingPriceQuality({
+      listing_type: 'rent',
+      price: 60_000,
+      price_period: 'night',
+      description: 'Najjera short-stay apartment at UGX 60,000 nightly'
+    }).ok,
+    true
+  );
+});
+
 test('source intake repairs explicit sale language and routes missing price evidence to review', () => {
   const sale = normalizeFoundOnlineSourcePost({
     listing_type: 'commercial',
@@ -95,6 +131,7 @@ test('all approval paths and historic repair migration use the shared gate', () 
   const app = read('assets/makaug-app.js');
   const migration = read('db/migrations/095_listing_price_quality_gate.sql');
   const missingPriceMigration = read('db/migrations/096_listing_price_quality_missing_price_hold.sql');
+  const k18cMigration = read('db/migrations/098_k18c_price_period_integrity.sql');
 
   assert.match(properties, /Listing price data must be corrected or confirmed before approval/);
   assert.match(properties, /high_monthly_price_confirmed/);
@@ -110,4 +147,8 @@ test('all approval paths and historic repair migration use the shared gate', () 
   assert.match(missingPriceMigration, /p\.price IS NULL OR p\.price <= 1/);
   assert.match(missingPriceMigration, /missing_or_placeholder_price/);
   assert.match(missingPriceMigration, /status = 'pending'/);
+  assert.match(k18cMigration, /explicit_rent_source_evidence/);
+  assert.match(k18cMigration, /p\.id::text LIKE '8f0deb37%'/);
+  assert.match(k18cMigration, /p\.price < 30000/);
+  assert.doesNotMatch(k18cMigration, /extra_fields,\s*'\{\}'::jsonb\)::text/);
 });

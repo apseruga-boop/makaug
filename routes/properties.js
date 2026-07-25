@@ -2000,8 +2000,13 @@ router.get('/suggestions', async (req, res, next) => {
     const values = [`%${query}%`];
     let whereType = '';
     if (listingTypeFilter) {
-      values.push(listingTypeFilter === 'student' ? 'student' : listingTypeFilter);
-      whereType = ` AND listing_type = $2`;
+      if (listingTypeFilter === 'student') {
+        values.push('student', 'students');
+        whereType = ` AND listing_type IN ($2, $3)`;
+      } else {
+        values.push(listingTypeFilter);
+        whereType = ` AND listing_type = $2`;
+      }
     }
 
     const areas = await db.query(
@@ -2144,9 +2149,13 @@ async function listPropertiesHandler(req, res, next) {
     }
 
     if (studentPortal) {
-      addFilter(filters, values, "(p.listing_type = ? OR (p.listing_type = ? AND p.students_welcome = ?))", 'student', 'rent', true);
+      addFilter(filters, values, "(p.listing_type IN (?, ?) OR (p.listing_type = ? AND p.students_welcome = ?))", 'student', 'students', 'rent', true);
     } else if (listingType && LISTING_TYPES.includes(listingType)) {
-      addFilter(filters, values, 'p.listing_type = ?', listingType);
+      if (listingType === 'student') {
+        addFilter(filters, values, 'p.listing_type IN (?, ?)', 'student', 'students');
+      } else {
+        addFilter(filters, values, 'p.listing_type = ?', listingType);
+      }
     }
 
     if (district) {

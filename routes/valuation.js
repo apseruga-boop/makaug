@@ -27,7 +27,7 @@ const MIN_COMPARABLES = 3;
 const DISTRICT_WIDEN_THRESHOLD = MIN_COMPARABLES;
 const EVIDENCE_LIMIT = 10;
 const MAX_PRICE_UGX = 100_000_000_000;
-const MIN_RECURRING_PRICE_UGX = 10_000;
+const MIN_RECURRING_PRICE_UGX = 30_000;
 const MIN_TOTAL_PRICE_UGX = 1_000_000;
 const NEARBY_RADIUS_KM = 12;
 const SQM_PER_ACRE = 4046.8564224;
@@ -296,7 +296,7 @@ function isCategoryCompatibleComparable(row = {}, input = {}) {
   const transactionType = cleanText(row.transaction_type).toLowerCase();
   const period = cleanText(row.price_period).toLowerCase();
   const text = comparableText(row);
-  const recurringPeriod = ['week', 'weekly', 'wk', 'month', 'monthly', 'mo', 'per_month', 'semester', 'term', 'year', 'yearly', 'annual', 'annually'].includes(period);
+  const recurringPeriod = ['week', 'weekly', 'wk', 'month', 'monthly', 'mo', 'per_month', 'semester', 'sem', 'term', 'year', 'yearly', 'annual', 'annually'].includes(period);
   const constructionOnly = /\b(?:cost to build|cost of building|construction cost|building cost|to start building|house plan|building plan|how to build|build this house)\b/i.test(text);
   if (
     !Number.isFinite(rawPrice)
@@ -740,6 +740,9 @@ function buildEstimate(input, rows, scope, widened = scope === 'district') {
   const evidenceValues = ranked.map((row) => row.valuation_value);
   const low = percentile(evidenceValues, 0.1);
   const high = percentile(evidenceValues, 0.9);
+  const boundedEstimate = estimate == null || low == null || high == null
+    ? estimate
+    : Math.min(high, Math.max(low, estimate));
   const sufficient = analysisValues.length >= MIN_COMPARABLES;
   const scopeAreas = Array.from(new Set(ranked.map((row) => cleanText(row.area)).filter(Boolean)));
   const confidence = valuationConfidenceLevel({
@@ -750,7 +753,7 @@ function buildEstimate(input, rows, scope, widened = scope === 'district') {
 
   return {
     sufficient,
-    estimate: sufficient && estimate != null ? Math.round(estimate) : null,
+    estimate: sufficient && boundedEstimate != null ? Math.round(boundedEstimate) : null,
     range_low: sufficient && low != null ? Math.round(low) : null,
     range_high: sufficient && high != null ? Math.round(high) : null,
     comparable_count: ranked.length,
