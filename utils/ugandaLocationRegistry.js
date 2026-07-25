@@ -10,7 +10,7 @@ const DETAILED_LOCATIONS = [
   { name: 'Nakawa', district: 'Kampala', lat: 0.334, lng: 32.61 },
   { name: 'Ntinda', district: 'Kampala', lat: 0.357, lng: 32.612 },
   { name: 'Naguru', district: 'Kampala', lat: 0.338, lng: 32.611 },
-  { name: 'Bukoto', district: 'Kampala', lat: 0.346, lng: 32.591 },
+  { name: 'Bukoto', district: 'Kampala', lat: 0.346, lng: 32.591, aliases: ['Bukoto', 'Bukotto'] },
   { name: 'Kisaasi', district: 'Kampala', lat: 0.364, lng: 32.589, aliases: ['Kisaasi', 'Kisasi'] },
   { name: 'Kyanja', district: 'Kampala', lat: 0.384, lng: 32.596, aliases: ['Kyanja', 'Komamboga Kyanja'] },
   { name: 'Komamboga', district: 'Kampala', lat: 0.394, lng: 32.598 },
@@ -26,7 +26,7 @@ const DETAILED_LOCATIONS = [
   { name: 'Munyonyo', district: 'Kampala', lat: 0.236, lng: 32.623, aliases: ['Munyonyo', 'Munyonjo'] },
   { name: 'Rubaga', district: 'Kampala', lat: 0.298, lng: 32.545, aliases: ['Rubaga', 'Lubaga'] },
   { name: 'Nateete', district: 'Kampala', lat: 0.318, lng: 32.536 },
-  { name: 'Mengo', district: 'Kampala', lat: 0.306, lng: 32.557 },
+  { name: 'Mengo', district: 'Kampala', lat: 0.306, lng: 32.557, aliases: ['Mengo', 'Mmengo'] },
   { name: 'Lungujja', district: 'Kampala', lat: 0.302, lng: 32.548 },
   { name: 'Kasubi', district: 'Kampala', lat: 0.333, lng: 32.555 },
   { name: 'Kikoni', district: 'Kampala', lat: 0.333, lng: 32.565 },
@@ -47,7 +47,7 @@ const DETAILED_LOCATIONS = [
   { name: 'Ndejje', district: 'Wakiso', lat: 0.244, lng: 32.553 },
   { name: 'Lubugumu', district: 'Wakiso', lat: 0.239, lng: 32.554 },
   { name: 'Seguku', district: 'Wakiso', lat: 0.247, lng: 32.555, aliases: ['Seguku', 'Sseguku'] },
-  { name: 'Kira', district: 'Wakiso', level: 'city', lat: 0.3978, lng: 32.6414, aliases: ['Kira', 'Kira Town', 'Kira Municipality'] },
+  { name: 'Kira', district: 'Wakiso', level: 'city', lat: 0.3978, lng: 32.6414, aliases: ['Kira', 'Kiira', 'Kira Town', 'Kiira Town', 'Kira Municipality'] },
   { name: 'Namugongo', district: 'Wakiso', lat: 0.363, lng: 32.636 },
   { name: 'Bweyogerere', district: 'Wakiso', lat: 0.351, lng: 32.676 },
   { name: 'Kyaliwajjala', district: 'Wakiso', lat: 0.377, lng: 32.639 },
@@ -176,6 +176,24 @@ const registry = DETAILED_LOCATIONS.map((entry) => ({
   key: `${normalizeLocationKey(entry.district)}:${normalizeLocationKey(entry.name)}`
 }));
 
+// Every valid Uganda district is a searchable canonical node, including
+// districts whose neighborhood centroids have not been mapped yet.
+Array.from(new Set(canonicalDistrictByKey.values())).forEach((district) => {
+  const key = `${normalizeLocationKey(district)}:${normalizeLocationKey(district)}`;
+  if (registry.some((entry) => entry.key === key)) return;
+  const representative = registry.find((entry) => entry.district === district && entry.level === 'city')
+    || registry.find((entry) => entry.district === district);
+  registry.push({
+    name: district,
+    district,
+    level: 'district',
+    lat: Number.isFinite(representative?.lat) ? representative.lat : null,
+    lng: Number.isFinite(representative?.lng) ? representative.lng : null,
+    aliases: [district, `${district} District`],
+    key
+  });
+});
+
 const aliasRows = registry
   .flatMap((entry) => entry.aliases.map((alias) => ({
     alias,
@@ -210,6 +228,7 @@ function canonicalizeUgandaLocation(area = '', district = '') {
   if (matched) return { ...matched.entry };
 
   const areaDistrict = normalizeDistrict(rawArea);
+  if (rawArea && !areaDistrict) return null;
   const fallbackDistrict = areaDistrict || districtName;
   if (!fallbackDistrict) return null;
   const existing = registry.find((entry) => entry.level === 'district' && entry.district === fallbackDistrict);
@@ -279,6 +298,109 @@ function canonicalLocationOptions() {
   }));
 }
 
+function canonicalLocationByKey(value = '') {
+  const key = String(value || '').trim().toLowerCase();
+  if (!key) return null;
+  const matched = registry.find((entry) => entry.key === key);
+  return matched ? { ...matched, aliases: [...matched.aliases] } : null;
+}
+
+function trigrams(value = '') {
+  const normalized = `  ${normalizeLocationKey(value)} `;
+  const grams = new Set();
+  for (let index = 0; index <= normalized.length - 3; index += 1) {
+    grams.add(normalized.slice(index, index + 3));
+  }
+  return grams;
+}
+
+function trigramSimilarity(left = '', right = '') {
+  const a = trigrams(left);
+  const b = trigrams(right);
+  if (!a.size || !b.size) return 0;
+  let overlap = 0;
+  a.forEach((gram) => {
+    if (b.has(gram)) overlap += 1;
+  });
+  return (2 * overlap) / (a.size + b.size);
+}
+
+function canonicalLocationSuggestions(query = '', counts = new Map(), limit = 8) {
+  const needle = normalizeLocationKey(query);
+  if (!needle) return [];
+  const scoreEntry = (entry) => {
+    const aliasKeys = entry.aliases.map(normalizeLocationKey).filter(Boolean);
+    const exact = aliasKeys.includes(needle);
+    const prefix = aliasKeys.some((alias) => alias.startsWith(needle));
+    const contains = aliasKeys.some((alias) => alias.includes(needle));
+    const fuzzy = Math.max(...aliasKeys.map((alias) => trigramSimilarity(needle, alias)), 0);
+    const matchRank = exact ? 4 : prefix ? 3 : contains ? 2 : fuzzy >= 0.3 ? 1 : 0;
+    if (!matchRank) return null;
+    return {
+      canonical_key: entry.key,
+      location: entry.name,
+      district: entry.district,
+      level: entry.level,
+      latitude: Number.isFinite(entry.lat) ? entry.lat : null,
+      longitude: Number.isFinite(entry.lng) ? entry.lng : null,
+      aliases: [...entry.aliases],
+      listing_count: Number(counts.get(entry.key) || 0),
+      match: exact ? 'exact_alias' : prefix ? 'prefix' : contains ? 'contains' : 'fuzzy',
+      did_you_mean: !exact && !prefix && !contains,
+      match_rank: matchRank,
+      score: matchRank * 10 + fuzzy,
+    };
+  };
+  return registry
+    .map(scoreEntry)
+    .filter(Boolean)
+    .sort((a, b) => b.match_rank - a.match_rank || b.listing_count - a.listing_count || b.score - a.score || a.location.localeCompare(b.location))
+    .slice(0, Math.max(1, Math.min(8, Number(limit) || 8)));
+}
+
+function canonicalLocationSearchScope(keys = [], nearbyKm = 0) {
+  const selected = Array.from(new Set(keys))
+    .map(canonicalLocationByKey)
+    .filter(Boolean)
+    .slice(0, 5);
+  const exact = new Map();
+  const nearby = new Map();
+  selected.forEach((location) => {
+    exact.set(location.key, location);
+    if (location.level === 'district') {
+      registry
+        .filter((entry) => entry.district === location.district)
+        .forEach((entry) => exact.set(entry.key, entry));
+      return;
+    }
+    if (location.level === 'city') {
+      registry
+        .filter((entry) => entry.district === location.district)
+        .filter((entry) => {
+          const distance = haversineKm(location, entry);
+          return distance != null && distance <= 7;
+        })
+        .forEach((entry) => exact.set(entry.key, entry));
+      return;
+    }
+    const radius = Math.max(0, Math.min(7, Number(nearbyKm) || 0));
+    if (!radius) return;
+    registry
+      .filter((entry) => entry.level !== 'district' && entry.key !== location.key)
+      .forEach((entry) => {
+        const distance = haversineKm(location, entry);
+        if (distance != null && distance <= radius && !exact.has(entry.key)) {
+          nearby.set(entry.key, { ...entry, distance_km: Number(distance.toFixed(2)) });
+        }
+      });
+  });
+  return {
+    selected,
+    exact: Array.from(exact.values()),
+    nearby: Array.from(nearby.values()).sort((a, b) => a.distance_km - b.distance_km),
+  };
+}
+
 function haversineKm(a = {}, b = {}) {
   if (![a.lat, a.lng, b.lat, b.lng].every((value) => Number.isFinite(Number(value)))) return null;
   const toRadians = (degrees) => (Number(degrees) * Math.PI) / 180;
@@ -291,13 +413,17 @@ function haversineKm(a = {}, b = {}) {
 
 module.exports = {
   CANONICAL_LOCATION_COUNT: registry.length,
+  canonicalLocationByKey,
   canonicalizeUgandaLocation,
   canonicalizeLocationRows,
   canonicalLocationOptions,
+  canonicalLocationSearchScope,
+  canonicalLocationSuggestions,
   aliasesForCanonicalLocation,
   aliasesForDistrict,
   normalizeDistrict,
   normalizeLocationKey,
   haversineKm,
-  isExcludedLocationOnly
+  isExcludedLocationOnly,
+  trigramSimilarity
 };

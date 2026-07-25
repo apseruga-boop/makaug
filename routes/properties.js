@@ -94,10 +94,20 @@ const {
 } = require('../utils/commercialClassification');
 const { listingPriceQuality } = require('../utils/listingPriceQuality');
 const { propertyPriceMetadata } = require('../utils/propertyPriceCurrency');
+const {
+  canonicalLocationByKey,
+  canonicalizeLocationRows,
+  canonicalizeUgandaLocation,
+  canonicalLocationSearchScope,
+  canonicalLocationSuggestions,
+  normalizeLocationKey
+} = require('../utils/ugandaLocationRegistry');
 
 const router = express.Router();
 const LAUNCH_SEED_LISTING_MARKERS = ['SOFT LAUNCH TEST - DELETE', 'QA TEST - DELETE'];
 const LAUNCH_DUMMY_LISTING_TITLES = new Set(['sdgsdgd', 'sgsgsgsgs']);
+const PUBLIC_LOCATION_SUGGEST_CACHE_TTL_MS = 2 * 60 * 1000;
+const publicLocationSuggestCache = new Map();
 
 function readPositiveIntegerEnv(names, fallback) {
   for (const name of names) {
@@ -334,6 +344,82 @@ function addPublicCardLocationSearchFilter(filters, values, value = '') {
     raw
   );
   return true;
+}
+
+function canonicalSearchAliases(locations = []) {
+  return Array.from(new Set(
+    locations.flatMap((location) => [
+      location.name,
+      ...(Array.isArray(location.aliases) ? location.aliases : [])
+    ])
+      .map((value) => String(value || '').trim().toLowerCase())
+      .filter(Boolean)
+  ));
+}
+
+function addCanonicalLocationSearchFilter(filters, values, scope = {}) {
+  const locations = [...(scope.exact || []), ...(scope.nearby || [])];
+  if (!locations.length) return false;
+  const canonicalKeys = locations.map((location) => location.key).filter(Boolean);
+  const aliases = canonicalSearchAliases(locations);
+  addFilter(
+    filters,
+    values,
+    `(
+      COALESCE(p.extra_fields->>'canonical_location_id', '') = ANY(?::text[])
+      OR LOWER(TRIM(COALESCE(p.area, ''))) = ANY(?::text[])
+      OR LOWER(TRIM(COALESCE(p.extra_fields->>'city', ''))) = ANY(?::text[])
+      OR LOWER(TRIM(COALESCE(p.extra_fields->>'neighborhood', ''))) = ANY(?::text[])
+      OR (
+        LOWER(TRIM(COALESCE(p.district, ''))) = ANY(?::text[])
+        AND LOWER(TRIM(COALESCE(p.area, ''))) = LOWER(TRIM(COALESCE(p.district, '')))
+      )
+    )`,
+    canonicalKeys,
+    aliases,
+    aliases,
+    aliases,
+    aliases
+  );
+  return true;
+}
+
+function parseCanonicalLocationKeys(query = {}) {
+  const rawValues = [
+    ...asArray(query.location_ids),
+    ...asArray(query.location_id),
+    ...asArray(query.locations)
+  ];
+  return Array.from(new Set(
+    rawValues
+      .flatMap((value) => String(value || '').split(','))
+      .map((value) => value.trim().toLowerCase())
+      .filter(Boolean)
+  )).slice(0, 5);
+}
+
+function publicLocationMatchForRow(row = {}, scope = {}) {
+  const canonical = canonicalLocationByKey(row.canonical_location_id)
+    || canonicalizeUgandaLocation(row.area, row.district);
+  if (!canonical) return null;
+  const selectedKeys = new Set((scope.selected || []).map((location) => location.key));
+  const exactKeys = new Set((scope.exact || []).map((location) => location.key));
+  const nearbyByKey = new Map((scope.nearby || []).map((location) => [location.key, location]));
+  if (selectedKeys.has(canonical.key)) {
+    return { type: 'exact', label: canonical.name, canonical_location_id: canonical.key };
+  }
+  if (nearbyByKey.has(canonical.key)) {
+    return {
+      type: 'nearby',
+      label: `Nearby · ${canonical.name}`,
+      canonical_location_id: canonical.key,
+      distance_km: nearbyByKey.get(canonical.key).distance_km
+    };
+  }
+  if (exactKeys.has(canonical.key)) {
+    return { type: 'descendant', label: canonical.name, canonical_location_id: canonical.key };
+  }
+  return null;
 }
 
 function isLaunchSeedListing(row = {}) {
@@ -1048,7 +1134,7 @@ function publicContactPhoneForRow(row = {}, safeExtra = null) {
   return safeExtraPhone || extraPhone || rowPhone || '';
 }
 
-function compactPublicCardRow(row = {}, currency = 'UGX') {
+function compactPublicCardRow(row = {}, currency = 'UGX', locationScope = {}) {
   const safeExtra = publicExtraFields(row.admin_extra_fields || row.extra_fields || {});
   const foundOnlinePublic = isFoundOnlinePublicRow(row, safeExtra);
   const locationOverride = publicLocationOverrideForListing(row, safeExtra);
@@ -1067,6 +1153,7 @@ function compactPublicCardRow(row = {}, currency = 'UGX') {
   const publicContactPhone = publicContactPhoneForRow(row, safeExtra);
   const distanceKm = row.distance_km == null ? null : Number(Number(row.distance_km).toFixed(3));
   const distanceMiles = distanceKm == null ? null : Number(kmToMiles(Number(distanceKm)).toFixed(2));
+  const locationMatch = publicLocationMatchForRow(row, locationScope);
   const publicExtra = {
     source_platform: safeExtra.source_platform || null,
     source_badge: safeExtra.source_badge || null,
@@ -1124,6 +1211,8 @@ function compactPublicCardRow(row = {}, currency = 'UGX') {
     listed_by: row.listed_by || null,
     listing_origin: row.listing_origin || (foundOnlinePublic ? 'found_online' : (row.listed_by || 'private')),
     registration_status: row.registration_status || null,
+    canonical_location_id: locationMatch?.canonical_location_id || row.canonical_location_id || null,
+    location_match: locationMatch,
     public_contact_phone: publicContactPhone || null,
     contact_phone: publicContactPhone || null,
     extra_fields: publicExtra,
@@ -1523,6 +1612,10 @@ function publicExtraFields(extraFields = {}) {
     source_batch: extra.source_batch || null,
     source_registry_key: extra.source_registry_key || null,
     source_listing_key: extra.source_listing_key || null,
+    canonical_location_id: extra.canonical_location_id || null,
+    canonical_location_level: extra.canonical_location_level || null,
+    location_resolution_status: extra.location_resolution_status || null,
+    location_resolution_confidence: toNullableFloat(extra.location_resolution_confidence),
     source_platform: sourcePlatform || null,
     source_type: extra.source_type || null,
     source_name: extra.source_name || null,
@@ -1995,6 +2088,76 @@ function sourcedCandidateRecordHasApprovalLocation(row = {}) {
   );
 }
 
+router.get('/locations/suggest', async (req, res, next) => {
+  try {
+    const query = cleanText(req.query.q || req.query.query).slice(0, 120);
+    const listingType = normalizeListingType(req.query.listing_type || req.query.type || req.query.category);
+    const studentPortal = parseBooleanLike(req.query.student_portal, false);
+    const limit = Math.max(1, Math.min(8, toNullableInt(req.query.limit) || 8));
+    if (!query) {
+      return res.json({ ok: true, data: [], meta: { canonical: true, max_results: limit } });
+    }
+
+    const cacheKey = studentPortal ? 'student' : (LISTING_TYPES.includes(listingType) ? listingType : 'all');
+    let cached = publicLocationSuggestCache.get(cacheKey);
+    if (!cached || (Date.now() - cached.createdAt) > PUBLIC_LOCATION_SUGGEST_CACHE_TTL_MS) {
+      const values = [];
+      const filters = [
+        publicLivePropertyStatusSql('p'),
+        `NOT ${publicLaunchTestListingFastCondition('p')}`
+      ];
+      if (studentPortal || listingType === 'student') {
+        addFilter(filters, values, '(p.listing_type IN (?, ?) OR (p.listing_type = ? AND p.students_welcome = ?))', 'student', 'students', 'rent', true);
+      } else if (LISTING_TYPES.includes(listingType)) {
+        addFilter(filters, values, 'p.listing_type = ?', listingType);
+      }
+      const result = await withPublicPropertyDatabaseRetry(() => db.query(
+        `SELECT p.area, p.district, COUNT(*)::int AS listing_count
+         FROM properties p
+         WHERE ${filters.join(' AND ')}
+         GROUP BY p.area, p.district`,
+        values
+      ));
+      const canonicalRows = canonicalizeLocationRows(result.rows);
+      cached = {
+        createdAt: Date.now(),
+        counts: new Map(canonicalRows.map((row) => [row.canonical_key, Number(row.listing_count) || 0]))
+      };
+      publicLocationSuggestCache.set(cacheKey, cached);
+    }
+
+    const suggestions = canonicalLocationSuggestions(query, cached.counts, limit);
+    return res.json({
+      ok: true,
+      data: suggestions.map((item) => ({
+        id: item.canonical_key,
+        canonical_location_id: item.canonical_key,
+        name: item.location,
+        label: item.location,
+        district: item.district,
+        level: item.level,
+        type_label: item.level === 'district'
+          ? 'District'
+          : item.level === 'city' ? 'Town / city' : 'Neighborhood',
+        parent_path: item.level === 'district' ? 'Uganda' : `${item.district} District`,
+        listing_count: item.listing_count,
+        match: item.match,
+        did_you_mean: item.did_you_mean,
+        latitude: item.latitude,
+        longitude: item.longitude
+      })),
+      meta: {
+        canonical: true,
+        query,
+        max_results: limit,
+        did_you_mean: suggestions.length > 0 && suggestions.every((item) => item.did_you_mean)
+      }
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.get('/suggestions', async (req, res, next) => {
   try {
     const query = cleanText(req.query.query).toLowerCase();
@@ -2082,6 +2245,18 @@ async function listPropertiesHandler(req, res, next) {
     const studentPortal = parseBooleanLike(req.query.student_portal, false);
     const district = cleanText(req.query.district);
     const area = cleanText(req.query.area || req.query.search || req.query.query);
+    const canonicalLocationKeys = parseCanonicalLocationKeys(req.query);
+    const nearbyKm = Math.max(0, Math.min(7, toNullableFloat(req.query.nearby_km || req.query.nearbyKm) ?? 3));
+    const canonicalLocationScope = canonicalLocationSearchScope(canonicalLocationKeys, nearbyKm);
+    if (canonicalLocationKeys.length !== canonicalLocationScope.selected.length) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Choose a valid suggested Uganda location before searching.',
+        data: {
+          invalid_location_ids: canonicalLocationKeys.filter((key) => !canonicalLocationByKey(key))
+        }
+      });
+    }
     const status = cleanText(req.query.status || 'approved').toLowerCase();
     const minPrice = toNullableInt(req.query.min_price || req.query.minPrice);
     const maxPrice = toNullableInt(req.query.max_price || req.query.maxPrice);
@@ -2167,11 +2342,13 @@ async function listPropertiesHandler(req, res, next) {
       }
     }
 
-    if (district) {
+    if (district && !canonicalLocationScope.selected.length) {
       addFilter(filters, values, 'p.district = ?', district);
     }
 
-    if (area) {
+    if (canonicalLocationScope.selected.length) {
+      addCanonicalLocationSearchFilter(filters, values, canonicalLocationScope);
+    } else if (area) {
       if (cardFieldsOnly && !adminAccess) {
         addPublicCardLocationSearchFilter(filters, values, area);
       } else if (publicOnly || !adminAccess) {
@@ -2382,6 +2559,18 @@ async function listPropertiesHandler(req, res, next) {
         meta: {
           marker: PUBLIC_INVENTORY_METRICS_MARKER,
           ...(area ? { search_count_marker: PUBLIC_LOCATION_SEARCH_PERFORMANCE_MARKER } : {}),
+          ...(canonicalLocationScope.selected.length ? {
+            location_search: {
+              canonical: true,
+              selected: canonicalLocationScope.selected.map((location) => ({
+                id: location.key,
+                name: location.name,
+                district: location.district,
+                level: location.level
+              })),
+              nearby_km: nearbyKm
+            }
+          } : {}),
           count_cache: opportunitySummaryMeta?.cache || 'unknown',
           ...(opportunitySummaryMeta?.fallback_reason ? { count_fallback_reason: opportunitySummaryMeta.fallback_reason } : {})
         }
@@ -2506,6 +2695,7 @@ async function listPropertiesHandler(req, res, next) {
           p.extra_fields->>'preferred_contact_method' AS preferred_contact_method,
           p.extra_fields->>'region' AS region,
           p.extra_fields->>'resolved_location_label' AS resolved_location_label,
+          p.extra_fields->>'canonical_location_id' AS canonical_location_id,
           ${distanceSql} AS distance_km,
           (COALESCE(p.extra_fields->>'featured', 'false') IN ('true', '1', 'yes')) AS featured,
           p.extra_fields->>'featured_at' AS featured_at,
@@ -2580,6 +2770,7 @@ async function listPropertiesHandler(req, res, next) {
           p.extra_fields->>'preferred_contact_method' AS preferred_contact_method,
           p.extra_fields->>'region' AS region,
           p.extra_fields->>'resolved_location_label' AS resolved_location_label,
+          p.extra_fields->>'canonical_location_id' AS canonical_location_id,
           ${distanceSql} AS distance_km,
           (COALESCE(p.extra_fields->>'featured', 'false') IN ('true', '1', 'yes')) AS featured,
           p.extra_fields->>'featured_at' AS featured_at,
@@ -2675,7 +2866,7 @@ async function listPropertiesHandler(req, res, next) {
       ok: true,
       data: responseRows.map((row) => {
         if (cardFieldsOnly && !adminAccess) {
-          return compactPublicCardRow(row, currency);
+          return compactPublicCardRow(row, currency, canonicalLocationScope);
         }
         const {
           admin_extra_fields: adminExtraFields,
@@ -2739,6 +2930,8 @@ async function listPropertiesHandler(req, res, next) {
           availability: row.status,
           sponsored: row.featured === true,
           listing_origin: row.listing_origin || (foundOnlinePublic ? 'found_online' : (row.listed_by || 'private')),
+          canonical_location_id: publicLocationMatchForRow(row, canonicalLocationScope)?.canonical_location_id || row.canonical_location_id || null,
+          location_match: publicLocationMatchForRow(row, canonicalLocationScope),
           distance_km: distanceKm,
           distanceKm,
           distance_miles: distanceKm == null ? null : Number(kmToMiles(Number(distanceKm)).toFixed(2)),
@@ -2784,6 +2977,24 @@ async function listPropertiesHandler(req, res, next) {
       meta: {
         marker: PUBLIC_INVENTORY_METRICS_MARKER,
         ...(area ? { search_count_marker: PUBLIC_LOCATION_SEARCH_PERFORMANCE_MARKER } : {}),
+        ...(canonicalLocationScope.selected.length ? {
+          location_search: {
+            canonical: true,
+            selected: canonicalLocationScope.selected.map((location) => ({
+              id: location.key,
+              name: location.name,
+              district: location.district,
+              level: location.level
+            })),
+            nearby_km: nearbyKm,
+            nearby_locations: canonicalLocationScope.nearby.map((location) => ({
+              id: location.key,
+              name: location.name,
+              district: location.district,
+              distance_km: location.distance_km
+            }))
+          }
+        } : {}),
         ...(includeSummary ? { count_cache: opportunitySummaryMeta?.cache || 'unknown' } : {}),
         ...(opportunitySummaryMeta?.fallback_reason ? { count_fallback_reason: opportunitySummaryMeta.fallback_reason } : {})
       }
@@ -3415,6 +3626,14 @@ router.post('/', async (req, res, next) => {
     if (['phone', 'whatsapp', 'email', 'both'].includes(preferredContactMethod)) {
       extraFields.preferred_contact_method = preferredContactMethod;
     }
+    const canonicalLocation = canonicalizeUgandaLocation(area, district);
+    extraFields.raw_location = cleanText(body.location || body.address || [area, district].filter(Boolean).join(', '));
+    extraFields.canonical_location_id = canonicalLocation?.key || null;
+    extraFields.canonical_location_level = canonicalLocation?.level || null;
+    extraFields.location_resolution_status = canonicalLocation ? 'canonical_match' : 'unresolved';
+    extraFields.location_resolution_confidence = canonicalLocation
+      ? (normalizeLocationKey(canonicalLocation.name) === normalizeLocationKey(area) ? 1 : 0.65)
+      : 0;
     extraFields.price_currency = priceMetadata.price_currency;
     extraFields.price_original = priceMetadata.price_original;
     extraFields.price_fx_rate_ugx = priceMetadata.price_fx_rate_ugx;

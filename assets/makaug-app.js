@@ -36477,6 +36477,10 @@ function updateHeroSearchRoute(page, payload = {}, source = "hero_search_route")
   if (currentPathWithQueryAndHash() === nextUrl) return true;
   try {
     window.history.replaceState({ page: normalizePageKey(page), source }, "", nextUrl);
+    const config = sectionSearchConfigFor(page);
+    if (config && isCanonicalPropertySearchPage(config.key)) {
+      window.setTimeout(() => hydrateCanonicalLocationSeoRoute(config), 0);
+    }
     return true;
   } catch (error) {
     return false;
@@ -39825,6 +39829,12 @@ function studentCardFooterText(p = {}) {
   const photoSrc = publicImageSrc(p.img, "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=900&q=80");
   const displayTitle = getLocalizedPropertyTitle(p);
   const displayLocation = publicPropertyLocationLabel(p);
+  const locationMatch = p?.location_match && typeof p.location_match === "object" ? p.location_match : null;
+  const widenedLocationHtml = locationMatch?.type === "nearby"
+    ? `<p class="mt-1 text-xs font-semibold text-teal-700"><i class="fas fa-route mr-1"></i>Nearby match${Number.isFinite(Number(locationMatch.distance_km)) ? ` · ${Number(locationMatch.distance_km).toFixed(1)} km from your selected area` : ""}</p>`
+    : locationMatch?.type === "descendant"
+      ? `<p class="mt-1 text-xs font-semibold text-sky-700"><i class="fas fa-map-marked-alt mr-1"></i>Included area · ${adminEscape(locationMatch.label || displayLocation)}</p>`
+      : "";
   const studentMode = options.student === true;
   const displayType = studentMode ? "student" : p.type;
   const theme = publicCardTheme(displayType, { student: studentMode });
@@ -39852,6 +39862,7 @@ function studentCardFooterText(p = {}) {
         <h3 class="font-bold text-gray-800 line-clamp-1">${adminEscape(displayTitle)}</h3>
         ${propertyOriginalCurrencyGuideHtml(p)}
         <p class="text-sm text-gray-500 mt-1"><i class="fas fa-map-marker-alt ${theme.iconText}"></i> ${adminEscape(displayLocation)}</p>
+        ${widenedLocationHtml}
         ${nearDistance ? `<p class="text-xs font-semibold ${theme.accentText} mt-1"><i class="fas fa-location-arrow mr-1"></i>${nearDistance}</p>` : ""}
         <div class="mt-2 text-sm text-gray-500 flex gap-3 flex-wrap">
           ${p.beds ? `<span><i class="fas fa-bed ${theme.iconText}"></i> ${p.beds} ${countLabel(p.beds, "bed", "beds")}</span>` : ""}
@@ -41919,7 +41930,11 @@ function routeForPage(page) {
 }
 
 function pageForPublicRoute(path) {
-  return PUBLIC_ROUTE_PAGE_MAP[normalizeRoutePath(path)] || "";
+  const normalized = normalizeRoutePath(path);
+  const exact = PUBLIC_ROUTE_PAGE_MAP[normalized];
+  if (exact) return exact;
+  const landing = normalized.match(/^\/(for-sale|to-rent|land|commercial|student-accommodation)\/[a-z0-9-]+$/i);
+  return landing ? normalizePageKey(landing[1]) : "";
 }
 
 function normalizeLegacyHashPublicRoute() {
@@ -42583,6 +42598,8 @@ function mapRemotePropertyForUi(p, options = {}) {
     cover_image_url: sourceCoverImageUrl,
     thumbnail_url: p?.thumbnail_url || extraFields.thumbnail_url || sourceCoverImageUrl,
     source_thumbnail_url: p?.source_thumbnail_url || extraFields.source_thumbnail_url || sourceCoverImageUrl,
+    canonical_location_id: p?.canonical_location_id || extraFields.canonical_location_id || "",
+    location_match: p?.location_match && typeof p.location_match === "object" ? p.location_match : null,
     media_type: p?.media_type || extraFields.media_type || "",
     media_duration: p?.media_duration || p?.video_duration || extraFields.media_duration || extraFields.video_duration || "",
     image_count: Number(p?.image_count || extraFields.image_count || extraFields.photo_count || 0) || null,
@@ -43121,6 +43138,9 @@ function renderPublicCategoryPage(category, list = [], options = {}) {
   }
   const mapId = publicPaginationMapId(key);
   if (mapId) setMapMarkers(mapId, pageRows);
+  renderCanonicalWideningNotice(key);
+  renderCanonicalThinResultsAlert(key, total);
+  updateCanonicalMobileFilterCount(key, total);
   renderPublicCategoryPagination(key, { total, page: state.page, loading: state.loading });
   return pageRows;
 }
@@ -43229,6 +43249,7 @@ function publicInventoryRouteSearchPath(category) {
   if (controlPath) return controlPath;
   const payload = routeSearchHandoffPayload(page);
   const config = sectionSearchConfigFor(page);
+  if (config && isCanonicalPropertySearchPage(config.key)) return "";
   if (!payload || !config) return "";
   const query = normalizeInput(payload.query || payload.area || "");
   const area = normalizeInput(payload.area || "");
@@ -43286,17 +43307,23 @@ function publicCategoryControlSearchPath(category) {
   const add = (key, value) => {
     if (addPublicSearchParam(params, key, value)) active = true;
   };
-  add("query", publicListingFilterValue(config.queryId));
-  add("district", publicListingFilterValue(`${page === "students" ? "student" : page}-district-f`));
+  const canonicalState = isCanonicalPropertySearchPage(page) ? canonicalLocationStateFor(page) : null;
+  const selectedCanonicalIds = canonicalState?.selected.map((item) => item.id).filter(Boolean) || [];
+  const canonicalIds = canonicalState?.autoWidened?.locationIds || selectedCanonicalIds;
+  if (canonicalIds.length) {
+    params.set("location_ids", canonicalIds.join(","));
+    params.set("nearby_km", String(canonicalState?.autoWidened?.nearbyKm ?? canonicalState.nearbyKm));
+    active = true;
+  }
   const radiusKm = getRadiusKmFromSelect(`${page === "students" ? "student" : page}-radius-f`);
   const nearState = getNearMeSearchState(page);
-  if (nearState?.lat != null && nearState?.lng != null && radiusKm) {
+  if (!canonicalIds.length && nearState?.lat != null && nearState?.lng != null && radiusKm) {
     params.set("lat", String(nearState.lat));
     params.set("lng", String(nearState.lng));
     params.set("radiusKm", String(radiusKm));
     params.set("radius_unit", "km");
     active = true;
-  } else if (radiusKm) {
+  } else if (!canonicalIds.length && radiusKm) {
     const districtOrQuery = publicListingFilterValue(`${page === "students" ? "student" : page}-district-f`) || publicListingFilterValue(config.queryId);
     const center = getDistrictCenter(districtOrQuery);
     if (center?.lat != null && center?.lng != null) {
@@ -43357,6 +43384,10 @@ function publicCategoryControlSearchPath(category) {
     add("max_size", publicListingFilterValue("land-max-size-f"));
     const sort = publicCategorySortValue("land");
     if (sort !== "newest") { params.set("sort", sort); active = true; } else if (active) params.set("sort", sort);
+  }
+  if (canonicalState?.autoWidened?.maxPrice) {
+    params.set("max_price", String(canonicalState.autoWidened.maxPrice));
+    active = true;
   }
   return active ? `${PUBLIC_FILTER_SEARCH_ENDPOINT}?${params.toString()}` : "";
 }
@@ -43423,14 +43454,23 @@ async function refreshActivePublicInventoryCategoryFromApi({ silent = true } = {
   }
   const hydrationPromise = (async () => {
     try {
-      const { rows: firstCategoryRows, firstResponse: firstCategoryResponse } = await fetchPublicPaginatedRows(activeCategoryPath, {
+      let { rows: firstCategoryRows, firstResponse: firstCategoryResponse } = await fetchPublicPaginatedRows(activeCategoryPath, {
         limit: PUBLIC_RESULTS_PAGE_SIZE,
         maxPages: 1,
         includeSummary: Boolean(activeRouteSearchPath)
       });
+      let resolvedCategoryPath = activeCategoryPath;
+      if (activeRouteSearchPath && (exactPublicPaginationTotalValue(firstCategoryResponse) ?? firstCategoryRows.length) === 0) {
+        const widened = await fetchCanonicalAutoWidenedFirstPage(activeCategory, activeCategoryPath);
+        if (widened) {
+          firstCategoryRows = widened.rows;
+          firstCategoryResponse = widened.firstResponse;
+          resolvedCategoryPath = widened.path;
+        }
+      }
       if (activeCategory !== activePublicInventoryCategoryFromRoute()) return false;
       if (activeRouteSearchPath) {
-        syncPublicCategoryPaginationSource(activeCategory, activeCategoryPath);
+        syncPublicCategoryPaginationSource(activeCategory, resolvedCategoryPath);
         applyPublicRowsForUi(firstCategoryRows, firstCategoryResponse);
         const firstPageRows = cachePublicCategoryPageRows(activeCategory, 1, firstCategoryRows);
         const firstCategoryState = publicPaginationStateFor(activeCategory);
@@ -43441,7 +43481,7 @@ async function refreshActivePublicInventoryCategoryFromApi({ silent = true } = {
           firstCategoryState.total = firstCategoryTotal;
           firstCategoryState.totalAuthoritative = firstCategoryExactTotal != null;
           firstCategoryState.mode = "api";
-          firstCategoryState.sourcePath = activeCategoryPath;
+          firstCategoryState.sourcePath = resolvedCategoryPath;
         }
         renderPublicCategoryPage(activeCategory, firstPageRows, {
           page: 1,
@@ -43449,7 +43489,7 @@ async function refreshActivePublicInventoryCategoryFromApi({ silent = true } = {
           response: firstCategoryResponse,
           rowsOverride: firstPageRows,
           mode: "api",
-          sourcePath: activeCategoryPath,
+          sourcePath: resolvedCategoryPath,
           filtered: true
         });
         syncActiveRouteSearchHandoff(activeRouteSearchPath ? "active_route_search_first_page" : "active_category_first_page");
@@ -44104,6 +44144,408 @@ function sectionSearchLegacyContainer(config) {
   return query.closest(config.legacySelector) || query.closest("section") || query.parentElement;
 }
 
+const PUBLIC_CANONICAL_LOCATION_STATE = new Map();
+
+function canonicalLocationStateFor(page) {
+  const key = normalizePageKey(page);
+  if (!PUBLIC_CANONICAL_LOCATION_STATE.has(key)) {
+    PUBLIC_CANONICAL_LOCATION_STATE.set(key, {
+      selected: [],
+      nearbyKm: 3,
+      suggestions: [],
+      requestSeq: 0,
+      suggestionTimer: null,
+      autoWidened: null
+    });
+  }
+  return PUBLIC_CANONICAL_LOCATION_STATE.get(key);
+}
+
+function isCanonicalPropertySearchPage(page) {
+  return ["sale", "rent", "students", "commercial", "land"].includes(normalizePageKey(page));
+}
+
+function canonicalLocationLabelFromId(id = "") {
+  const name = String(id || "").split(":").pop().replace(/-/g, " ").trim();
+  return name.replace(/\b\w/g, (letter) => letter.toUpperCase()) || "Selected area";
+}
+
+function canonicalDistrictIdFromLocation(item = {}) {
+  const id = String(item.id || item.canonical_location_id || "").trim().toLowerCase();
+  const districtKey = id.split(":")[0];
+  return districtKey ? `${districtKey}:${districtKey}` : "";
+}
+
+function resetCanonicalLocationWidening(page) {
+  const key = normalizePageKey(page);
+  canonicalLocationStateFor(key).autoWidened = null;
+  document.getElementById(`canonical-location-widening-${key}`)?.remove();
+}
+
+function restoreCanonicalLocationRouteState(config) {
+  if (!config || !isCanonicalPropertySearchPage(config.key)) return;
+  const state = canonicalLocationStateFor(config.key);
+  if (state.selected.length) return;
+  const params = new URLSearchParams(window.location.search || "");
+  const ids = String(params.get("locations") || params.get("location_ids") || "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .slice(0, 5);
+  state.selected = ids.map((id) => ({
+    id,
+    canonical_location_id: id,
+    name: canonicalLocationLabelFromId(id),
+    level: "",
+    parent_path: ""
+  }));
+  const nearby = Number(params.get("nearby") || params.get("nearby_km"));
+  if ([0, 3, 7].includes(nearby)) state.nearbyKm = nearby;
+}
+
+async function hydrateCanonicalLocationSeoRoute(config) {
+  if (!config || !isCanonicalPropertySearchPage(config.key)) return;
+  const state = canonicalLocationStateFor(config.key);
+  if (state.selected.length || state.seoHydrating) return;
+  const route = routeForPage(config.key);
+  const path = normalizeRoutePath(window.location.pathname || "/");
+  const paramsFromRoute = new URLSearchParams(window.location.search || "");
+  let query = normalizeInput(
+    paramsFromRoute.get("q")
+    || paramsFromRoute.get("query")
+    || paramsFromRoute.get("area")
+    || paramsFromRoute.get("district")
+    || ""
+  );
+  let district = normalizeInput(paramsFromRoute.get("district") || paramsFromRoute.get("area") || "");
+  if (!query && route && path.startsWith(`${route}/`)) {
+    const slug = path.slice(route.length + 1);
+    const parts = slug.split("-").filter(Boolean);
+    if (parts.length >= 2) {
+      district = parts.pop();
+      query = parts.join(" ");
+    }
+  }
+  if (!query) return;
+  state.seoHydrating = true;
+  const params = new URLSearchParams({ q: query, limit: "8" });
+  if (config.backendCategory === "students") params.set("student_portal", "1");
+  else params.set("listing_type", config.backendCategory);
+  try {
+    const response = await fetch(`/api/properties/locations/suggest?${params.toString()}`, { credentials: "same-origin" });
+    const body = await response.json().catch(() => ({}));
+    const suggestions = Array.isArray(body.data) ? body.data : [];
+    const selected = suggestions.find((item) => district && String(item.district || "").toLowerCase() === district.toLowerCase())
+      || suggestions.find((item) => item.match === "exact_alias")
+      || suggestions[0];
+    if (response.ok && selected) selectCanonicalLocationSuggestion(config, selected);
+  } catch (error) {
+    console.warn("Canonical SEO location hydration failed", error);
+  } finally {
+    state.seoHydrating = false;
+  }
+}
+
+function renderCanonicalLocationState(config) {
+  if (!config || !isCanonicalPropertySearchPage(config.key)) return;
+  const shell = document.getElementById(sectionSearchShellId(config.key));
+  if (!shell) return;
+  const state = canonicalLocationStateFor(config.key);
+  const chips = shell.querySelector("[data-canonical-location-chips]");
+  const nearby = shell.querySelector("[data-canonical-nearby]");
+  const status = shell.querySelector("[data-canonical-location-status]");
+  if (nearby) nearby.value = String(state.nearbyKm);
+  if (chips) {
+    chips.innerHTML = state.selected.map((item) => `
+      <span class="canonical-location-chip">
+        <i class="fas fa-map-marker-alt" aria-hidden="true"></i>
+        ${adminEscape(item.name || item.label || canonicalLocationLabelFromId(item.id))}
+        <button type="button" data-remove-canonical-location="${adminAttr(item.id)}" aria-label="${adminAttr(`Remove ${item.name || "area"}`)}">
+          <i class="fas fa-times" aria-hidden="true"></i>
+        </button>
+      </span>`).join("");
+    chips.querySelectorAll("[data-remove-canonical-location]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const id = button.getAttribute("data-remove-canonical-location") || "";
+        resetCanonicalLocationWidening(config.key);
+        state.selected = state.selected.filter((item) => item.id !== id);
+        renderCanonicalLocationState(config);
+        runSectionSearch(config.key, { source: "canonical_location_removed" });
+      });
+    });
+  }
+  if (status && !status.classList.contains("error")) {
+    const names = state.selected.map((item) => item.name || item.label).filter(Boolean);
+    status.textContent = names.length
+      ? `${names.length} ${names.length === 1 ? "area" : "areas"} selected · ${state.nearbyKm ? `include listings within ${state.nearbyKm} km` : "exact area only"}`
+      : "Choose a suggested location to search. You can add up to 5 areas.";
+  }
+}
+
+function closeCanonicalLocationSuggestions(config) {
+  const shell = document.getElementById(sectionSearchShellId(config.key));
+  const panel = shell?.querySelector("[data-canonical-location-suggestions]");
+  if (!panel) return;
+  panel.classList.remove("open");
+  panel.innerHTML = "";
+}
+
+function selectCanonicalLocationSuggestion(config, suggestion) {
+  const state = canonicalLocationStateFor(config.key);
+  const id = suggestion?.canonical_location_id || suggestion?.id;
+  if (!id || state.selected.some((item) => item.id === id)) return;
+  if (state.selected.length >= 5) {
+    const status = document.querySelector(`#${sectionSearchShellId(config.key)} [data-canonical-location-status]`);
+    if (status) {
+      status.textContent = "You can compare up to 5 areas at once.";
+      status.classList.add("error");
+    }
+    return;
+  }
+  resetCanonicalLocationWidening(config.key);
+  state.selected.push({ ...suggestion, id });
+  const shell = document.getElementById(sectionSearchShellId(config.key));
+  const input = shell?.querySelector(".section-search-text-input");
+  const legacyInput = document.getElementById(config.queryId);
+  if (input) input.value = "";
+  if (legacyInput) legacyInput.value = "";
+  shell?.querySelector("[data-canonical-location-status]")?.classList.remove("error");
+  closeCanonicalLocationSuggestions(config);
+  renderCanonicalLocationState(config);
+  runSectionSearch(config.key, { source: "canonical_location_selected" });
+}
+
+function renderCanonicalLocationSuggestions(config, response = {}) {
+  const shell = document.getElementById(sectionSearchShellId(config.key));
+  const panel = shell?.querySelector("[data-canonical-location-suggestions]");
+  if (!panel) return;
+  const suggestions = Array.isArray(response.data) ? response.data.slice(0, 8) : [];
+  canonicalLocationStateFor(config.key).suggestions = suggestions;
+  if (!suggestions.length) {
+    panel.innerHTML = `<div class="canonical-location-empty">No matching Uganda location. Try a nearby town or district.</div>`;
+    panel.classList.add("open");
+    return;
+  }
+  const prefix = response.meta?.did_you_mean
+    ? `<div class="canonical-location-empty"><strong>Did you mean?</strong></div>`
+    : "";
+  panel.innerHTML = `${prefix}${suggestions.map((item, index) => `
+    <button type="button" class="canonical-location-suggestion" data-canonical-location-index="${index}">
+      <strong>${adminEscape(item.name || item.label || "")}</strong>
+      <small>${adminEscape(`${item.type_label || "Location"} · ${item.parent_path || item.district || "Uganda"}`)}</small>
+      <span>${Number(item.listing_count) || 0} live</span>
+    </button>`).join("")}`;
+  panel.classList.add("open");
+  panel.querySelectorAll("[data-canonical-location-index]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const index = Number(button.getAttribute("data-canonical-location-index"));
+      selectCanonicalLocationSuggestion(config, suggestions[index]);
+    });
+  });
+}
+
+async function fetchCanonicalLocationSuggestions(config, query) {
+  const state = canonicalLocationStateFor(config.key);
+  const requestSeq = state.requestSeq + 1;
+  state.requestSeq = requestSeq;
+  const params = new URLSearchParams({ q: query, limit: "8" });
+  if (config.backendCategory === "students") params.set("student_portal", "1");
+  else params.set("listing_type", config.backendCategory);
+  try {
+    const response = await fetch(`/api/properties/locations/suggest?${params.toString()}`, {
+      credentials: "same-origin",
+      headers: { Accept: "application/json" }
+    });
+    const body = await response.json().catch(() => ({}));
+    if (state.requestSeq !== requestSeq) return;
+    if (!response.ok) throw new Error(body?.error || "Location lookup failed");
+    renderCanonicalLocationSuggestions(config, body);
+  } catch (error) {
+    if (state.requestSeq !== requestSeq) return;
+    const shell = document.getElementById(sectionSearchShellId(config.key));
+    const status = shell?.querySelector("[data-canonical-location-status]");
+    if (status) {
+      status.textContent = "Location suggestions are unavailable. Please try again.";
+      status.classList.add("error");
+    }
+    closeCanonicalLocationSuggestions(config);
+  }
+}
+
+function wireCanonicalLocationSearchShell(config) {
+  const shell = document.getElementById(sectionSearchShellId(config.key));
+  const input = shell?.querySelector(".section-search-text-input");
+  if (!shell || !input || input.dataset.canonicalLocationWired === "1") return;
+  input.dataset.canonicalLocationWired = "1";
+  const state = canonicalLocationStateFor(config.key);
+  input.addEventListener("input", () => {
+    shell.dataset.userEdited = "1";
+    const query = input.value.trim();
+    window.clearTimeout(state.suggestionTimer);
+    if (query.length < 2) {
+      closeCanonicalLocationSuggestions(config);
+      return;
+    }
+    state.suggestionTimer = window.setTimeout(() => fetchCanonicalLocationSuggestions(config, query), 180);
+  });
+  input.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") return;
+    const first = state.suggestions[0];
+    if (input.value.trim() && first) {
+      event.preventDefault();
+      selectCanonicalLocationSuggestion(config, first);
+    }
+  });
+  shell.querySelector("[data-canonical-nearby]")?.addEventListener("change", (event) => {
+    resetCanonicalLocationWidening(config.key);
+    state.nearbyKm = [0, 3, 7].includes(Number(event.target.value)) ? Number(event.target.value) : 3;
+    renderCanonicalLocationState(config);
+    if (state.selected.length) runSectionSearch(config.key, { source: "canonical_nearby_changed" });
+  });
+  document.addEventListener("click", (event) => {
+    if (!shell.contains(event.target)) closeCanonicalLocationSuggestions(config);
+  });
+  renderCanonicalLocationState(config);
+  hydrateCanonicalLocationSeoRoute(config);
+}
+
+function openCanonicalLocationAlert(page) {
+  const config = sectionSearchConfigFor(page);
+  const state = canonicalLocationStateFor(page);
+  const names = state.selected.map((item) => item.name || item.label).filter(Boolean);
+  const categoryLabels = {
+    sale: "For sale",
+    rent: "To rent",
+    students: "Student accommodation",
+    commercial: "Commercial property",
+    land: "Land"
+  };
+  const need = document.getElementById("looking-need");
+  const location = document.getElementById("looking-location");
+  const details = document.getElementById("looking-details");
+  if (need) need.value = categoryLabels[config?.key] || "";
+  if (location) location.value = names.join(", ");
+  if (details) details.value = `Please alert me when new ${String(categoryLabels[config?.key] || "property").toLowerCase()} listings are available in ${names.join(" or ")}.`;
+  handlePropertyNeedCta();
+}
+
+function renderCanonicalThinResultsAlert(category, total = 0) {
+  const key = normalizePageKey(category);
+  const grid = document.getElementById(publicPaginationGridId(key));
+  if (!grid?.parentElement || !isCanonicalPropertySearchPage(key)) return;
+  const existing = document.getElementById(`canonical-location-alert-${key}`);
+  const state = canonicalLocationStateFor(key);
+  if (!state.selected.length || Number(total) > 3) {
+    existing?.remove();
+    return;
+  }
+  const names = state.selected.map((item) => item.name || item.label).filter(Boolean).join(" or ");
+  const box = existing || document.createElement("aside");
+  box.id = `canonical-location-alert-${key}`;
+  box.className = "mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-950";
+  box.innerHTML = `
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <strong class="block text-sm">${Number(total) ? `Only ${Number(total)} current ${Number(total) === 1 ? "match" : "matches"} near ${adminEscape(names)}` : `No current matches near ${adminEscape(names)}`}</strong>
+        <span class="text-xs text-emerald-800">Tell us what you need and we will alert you when a suitable property is listed.</span>
+      </div>
+      <button type="button" class="min-h-[40px] rounded-lg bg-emerald-700 px-4 text-sm font-bold text-white" onclick="openCanonicalLocationAlert('${adminAttr(key)}')">
+        Create property alert
+      </button>
+    </div>`;
+  if (!existing) grid.parentElement.insertBefore(box, grid);
+}
+
+function renderCanonicalWideningNotice(category) {
+  const key = normalizePageKey(category);
+  const grid = document.getElementById(publicPaginationGridId(key));
+  if (!grid?.parentElement || !isCanonicalPropertySearchPage(key)) return;
+  const state = canonicalLocationStateFor(key);
+  const existing = document.getElementById(`canonical-location-widening-${key}`);
+  if (!state.autoWidened?.label) {
+    existing?.remove();
+    return;
+  }
+  const notice = existing || document.createElement("aside");
+  notice.id = `canonical-location-widening-${key}`;
+  notice.className = "mb-4 rounded-xl border border-sky-200 bg-sky-50 p-4 text-sky-950";
+  notice.innerHTML = `
+    <strong class="block text-sm">Similar properties nearby</strong>
+    <span class="text-xs text-sky-800">${adminEscape(state.autoWidened.label)}</span>`;
+  if (!existing) grid.parentElement.insertBefore(notice, grid);
+}
+
+function canonicalAutoWideningSteps(category, initialPath) {
+  const key = normalizePageKey(category);
+  const state = canonicalLocationStateFor(key);
+  if (!state.selected.length) return [];
+  const initialUrl = new URL(initialPath, window.location.origin);
+  const currentMaxPrice = Number(initialUrl.searchParams.get("max_price") || 0);
+  const districtIds = Array.from(new Set(state.selected.map(canonicalDistrictIdFromLocation).filter(Boolean)));
+  const selectedIds = state.selected.map((item) => item.id).filter(Boolean);
+  const districtNames = districtIds.map(canonicalLocationLabelFromId);
+  const steps = [];
+  if (state.nearbyKm < 7) {
+    steps.push({
+      stage: "nearby_7km",
+      locationIds: selectedIds,
+      nearbyKm: 7,
+      label: "No exact matches, so the search expanded to clearly labeled listings within 7 km."
+    });
+  }
+  if (districtIds.length && districtIds.join(",") !== selectedIds.join(",")) {
+    steps.push({
+      stage: "parent_district",
+      locationIds: districtIds,
+      nearbyKm: 0,
+      label: `Still no match, so the search expanded to ${districtNames.join(" or ")} District.`
+    });
+  }
+  if (currentMaxPrice > 0) {
+    const previous = steps[steps.length - 1] || {
+      locationIds: selectedIds,
+      nearbyKm: state.nearbyKm
+    };
+    steps.push({
+      stage: "price_20",
+      locationIds: previous.locationIds,
+      nearbyKm: previous.nearbyKm,
+      maxPrice: Math.round(currentMaxPrice * 1.2),
+      label: "Still no match, so the maximum price was widened by 20%."
+    });
+  }
+  return steps;
+}
+
+async function fetchCanonicalAutoWidenedFirstPage(category, initialPath) {
+  const key = normalizePageKey(category);
+  const state = canonicalLocationStateFor(key);
+  const steps = canonicalAutoWideningSteps(key, initialPath);
+  let lastAttempt = null;
+  for (const step of steps) {
+    state.autoWidened = step;
+    const path = publicCategoryControlSearchPath(key);
+    if (!path || path === initialPath) continue;
+    const attempt = await fetchPublicPaginatedRows(path, {
+      limit: PUBLIC_RESULTS_PAGE_SIZE,
+      maxPages: 1,
+      includeSummary: true
+    });
+    const total = exactPublicPaginationTotalValue(attempt.firstResponse) ?? attempt.rows.length;
+    lastAttempt = { ...attempt, path, total };
+    if (total > 0) return lastAttempt;
+  }
+  return lastAttempt;
+}
+
+function updateCanonicalMobileFilterCount(category, total = 0) {
+  const shell = document.getElementById(sectionSearchShellId(category));
+  const count = shell?.querySelector("[data-canonical-mobile-result-count]");
+  const close = shell?.querySelector("[data-canonical-mobile-apply-count]");
+  if (count) count.textContent = `${Math.max(0, Number(total) || 0)} results`;
+  if (close) close.textContent = `Show ${Math.max(0, Number(total) || 0)} results`;
+}
+
 function sectionSearchSelectMarkup(config, field) {
   const source = document.getElementById(field.id);
   const options = source
@@ -44123,6 +44565,7 @@ function sectionSearchSelectMarkup(config, field) {
 function syncSectionSearchShell(page, options = {}) {
   const config = sectionSearchConfigFor(page);
   if (!config) return false;
+  restoreCanonicalLocationRouteState(config);
   const shell = document.getElementById(sectionSearchShellId(config.key));
   if (!shell) return false;
   const shellInput = shell.querySelector(".section-search-text-input");
@@ -44132,7 +44575,7 @@ function syncSectionSearchShell(page, options = {}) {
   const canApplyRouteQuery = routePayload
     && shell.dataset.userEdited !== "1"
     && (options.forceRouteQuery || shell.dataset.routeQueryApplied !== routeKey);
-  if (canApplyRouteQuery) {
+  if (canApplyRouteQuery && !isCanonicalPropertySearchPage(config.key)) {
     const routeQuery = routePayload.query || routePayload.area || "";
     if (legacyInput && (!legacyInput.value || options.forceRouteQuery)) legacyInput.value = routeQuery;
     if (shellInput && (!shellInput.value || options.forceRouteQuery)) shellInput.value = routeQuery;
@@ -44146,7 +44589,9 @@ function syncSectionSearchShell(page, options = {}) {
     });
     shell.dataset.routeQueryApplied = routeKey;
   }
-  if (shellInput && legacyInput && shellInput.value !== legacyInput.value) shellInput.value = legacyInput.value || "";
+  if (!isCanonicalPropertySearchPage(config.key) && shellInput && legacyInput && shellInput.value !== legacyInput.value) {
+    shellInput.value = legacyInput.value || "";
+  }
   config.filters.forEach((field) => {
     const source = document.getElementById(field.id);
     const target = document.getElementById(sectionSearchFieldId(config, field));
@@ -44171,6 +44616,7 @@ function syncSectionSearchShell(page, options = {}) {
       target.setAttribute("aria-label", translateListingLabel("Transaction"));
     }
   });
+  renderCanonicalLocationState(config);
   return true;
 }
 
@@ -44203,6 +44649,10 @@ function applyRouteQueryToVisibleSectionSearch(page, source = "route_visible_que
   const config = sectionSearchConfigFor(page);
   const query = routeQueryValueForSectionPage();
   if (!config || !query) return false;
+  if (isCanonicalPropertySearchPage(config.key)) {
+    hydrateCanonicalLocationSeoRoute(config);
+    return true;
+  }
   const shell = document.getElementById(sectionSearchShellId(config.key));
   if (!shell || shell.dataset.userEdited === "1") return false;
   const shellInput = document.getElementById(`section-search-${config.key}-query`) || shell.querySelector(".section-search-text-input");
@@ -44300,6 +44750,14 @@ function recordSectionSearchBackendProbe(page, values = {}, resultsCount = 0, so
       });
     return;
   }
+  if (isCanonicalPropertySearchPage(config.key)) {
+    trackEvent("canonical_location_search_backend_delegated", {
+      page: config.key,
+      selected_location_count: canonicalLocationStateFor(config.key).selected.length,
+      source
+    });
+    return;
+  }
   recordHeroSearchBackendPayload(buildHeroSearchBackendPayload({
     query: values.query || "",
     area: values.district || values.studentCampus || "",
@@ -44320,12 +44778,26 @@ function persistSectionSearchRoute(config, values = {}, source = "section_shell"
     filters.propertyType = filters.landTitleType;
   }
   if (filters.sort === "newest") filters.sort = "";
-  return updateHeroSearchRoute(config.key, {
+  const updated = updateHeroSearchRoute(config.key, {
     query: values.query || "",
     area: values.district || values.studentCampus || "",
     radiusKm: values.radius || "",
     filters
   }, source);
+  if (updated && isCanonicalPropertySearchPage(config.key)) {
+    const state = canonicalLocationStateFor(config.key);
+    const url = new URL(window.location.href);
+    ["q", "query", "search", "area", "district", "location", "campus", "university"].forEach((key) => url.searchParams.delete(key));
+    if (state.selected.length) {
+      url.searchParams.set("locations", state.selected.map((item) => item.id).join(","));
+      url.searchParams.set("nearby", String(state.nearbyKm));
+    } else {
+      url.searchParams.delete("locations");
+      url.searchParams.delete("nearby");
+    }
+    window.history.replaceState({ page: config.key, source }, "", `${url.pathname}${url.search}`);
+  }
+  return updated;
 }
 
 function runSectionSearch(page, { source = "section_shell", backend = true } = {}) {
@@ -44360,18 +44832,29 @@ function wireSectionSearchShell(config) {
   if (!shell || shell.dataset.sectionSearchWired === "1") return;
   shell.dataset.sectionSearchWired = "1";
   const input = shell.querySelector(".section-search-text-input");
-  if (input) {
+  if (input && !isCanonicalPropertySearchPage(config.key)) {
     input.addEventListener("input", () => {
       shell.dataset.userEdited = "1";
       runSectionSearch(config.key, { source: "section_shell_input", backend: false });
     });
     wireInputTypeahead(input.id, () => config.key === "brokers" ? getBrokerSuggestionPool() : getLocationSuggestionPool(config.key === "students"), () => runSectionSearch(config.key, { source: "section_shell_typeahead" }));
   }
+  if (isCanonicalPropertySearchPage(config.key)) wireCanonicalLocationSearchShell(config);
+  shell.querySelector("[data-section-mobile-filters-open]")?.addEventListener("click", () => {
+    shell.querySelector(".section-search-filter-row")?.classList.add("mobile-open");
+  });
+  shell.querySelector("[data-section-mobile-filters-close]")?.addEventListener("click", () => {
+    shell.querySelector(".section-search-filter-row")?.classList.remove("mobile-open");
+  });
   shell.querySelectorAll("[data-section-search-field]").forEach((field) => {
-    field.addEventListener("change", () => runSectionSearch(config.key, { source: "section_shell_filter" }));
+    field.addEventListener("change", () => {
+      if (isCanonicalPropertySearchPage(config.key)) resetCanonicalLocationWidening(config.key);
+      runSectionSearch(config.key, { source: "section_shell_filter" });
+    });
   });
   shell.querySelectorAll("[data-section-transaction]").forEach((button) => {
     button.addEventListener("click", () => {
+      if (isCanonicalPropertySearchPage(config.key)) resetCanonicalLocationWidening(config.key);
       const select = shell.querySelector('[data-section-search-field="transactionType"]');
       if (!select) return;
       select.value = button.getAttribute("data-section-transaction") || "";
@@ -44384,6 +44867,16 @@ function wireSectionSearchShell(config) {
   const form = shell.querySelector("form");
   form?.addEventListener("submit", (event) => {
     event.preventDefault();
+    if (isCanonicalPropertySearchPage(config.key) && input?.value.trim() && !canonicalLocationStateFor(config.key).selected.length) {
+      const status = shell.querySelector("[data-canonical-location-status]");
+      if (status) {
+        status.textContent = "Choose a location from the suggestions before searching.";
+        status.classList.add("error");
+      }
+      fetchCanonicalLocationSuggestions(config, input.value.trim());
+      return;
+    }
+    if (isCanonicalPropertySearchPage(config.key)) resetCanonicalLocationWidening(config.key);
     runSectionSearch(config.key, { source: "section_shell_submit" });
   });
   shell.querySelector("[data-section-search-location]")?.addEventListener("click", () => {
@@ -44408,25 +44901,55 @@ function mountSectionSearchShell(page) {
     wireSectionSearchShell(config);
     return true;
   }
+  restoreCanonicalLocationRouteState(config);
+  const canonicalSearch = isCanonicalPropertySearchPage(config.key);
   const shell = document.createElement("section");
   shell.id = shellId;
   shell.className = "section-search-shell";
   shell.setAttribute("data-section-search-shell", config.key);
-  const locationButton = config.locationButtonId
+  const locationButton = canonicalSearch
+    ? `<label class="canonical-location-nearby">
+        <i class="fas fa-location-arrow" aria-hidden="true"></i>
+        Nearby
+        <select data-canonical-nearby aria-label="Include nearby properties">
+          <option value="0">Exact</option>
+          <option value="3" selected>+3 km</option>
+          <option value="7">+7 km</option>
+        </select>
+      </label>`
+    : config.locationButtonId
     ? `<button type="button" class="section-search-location" data-section-search-location="1"><i class="fas fa-location-crosshairs"></i>Use my location</button>`
     : `<button type="button" class="section-search-location" data-section-search-register="1"><i class="fas fa-id-card"></i>Register as agent</button>`;
+  const queryControl = canonicalSearch
+    ? `<div class="canonical-location-control">
+        <label class="section-search-query" for="section-search-${adminAttr(config.key)}-query">
+          <i class="fas fa-search"></i>
+          <input id="section-search-${adminAttr(config.key)}-query" class="section-search-text-input" autocomplete="off" placeholder="City, town or neighborhood" aria-autocomplete="list">
+        </label>
+        <div class="canonical-location-suggestions" data-canonical-location-suggestions role="listbox"></div>
+      </div>`
+    : `<label class="section-search-query" for="section-search-${adminAttr(config.key)}-query">
+        <i class="fas fa-search"></i>
+        <input id="section-search-${adminAttr(config.key)}-query" class="section-search-text-input" autocomplete="off" placeholder="${adminAttr(config.placeholder)}">
+      </label>`;
   shell.innerHTML = `
     <div class="section-search-inner">
       <form class="section-search-form">
-        <label class="section-search-query" for="section-search-${adminAttr(config.key)}-query">
-          <i class="fas fa-search"></i>
-          <input id="section-search-${adminAttr(config.key)}-query" class="section-search-text-input" autocomplete="off" placeholder="${adminAttr(config.placeholder)}">
-        </label>
+        ${queryControl}
         ${locationButton}
         <button type="submit" class="section-search-submit"><i class="fas fa-search"></i>Search</button>
       </form>
+      ${canonicalSearch ? `
+        <div class="canonical-location-chips" data-canonical-location-chips aria-live="polite"></div>
+        <div class="canonical-location-status" data-canonical-location-status>Choose a suggested location to search. You can add up to 5 areas.</div>
+        <button type="button" class="section-search-mobile-filter-btn" data-section-mobile-filters-open>
+          <span><i class="fas fa-sliders-h mr-1" aria-hidden="true"></i>More filters</span>
+          <span data-canonical-mobile-result-count>View results</span>
+        </button>
+      ` : ""}
       <div class="section-search-filter-row">
-        ${config.filters.map((field) => sectionSearchSelectMarkup(config, field)).join("")}
+        ${canonicalSearch ? `<button type="button" class="section-search-mobile-filter-close" data-section-mobile-filters-close><i class="fas fa-check" aria-hidden="true"></i><span data-canonical-mobile-apply-count>Show results</span></button>` : ""}
+        ${config.filters.filter((field) => !canonicalSearch || field.key !== "district").map((field) => sectionSearchSelectMarkup(config, field)).join("")}
       </div>
     </div>
   `;
