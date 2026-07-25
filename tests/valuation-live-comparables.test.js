@@ -349,7 +349,7 @@ assert.deepStrictEqual(
     level: 'city',
     latitude: 0.3978,
     longitude: 32.6414,
-    aliases: ['Kira', 'Kira Town', 'Kira Municipality'],
+    aliases: ['Kira', 'Kiira', 'Kira Town', 'Kiira Town', 'Kira Municipality'],
     listing_count: 5
   }]
 );
