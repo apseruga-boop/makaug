@@ -131,6 +131,29 @@ function selectFeaturedCandidates(rows = [], perCategory = DEFAULT_PER_CATEGORY)
   return { selected, selectedRows, rejected, missing };
 }
 
+function featuredPoolHealth(rows = [], perCategory = DEFAULT_PER_CATEGORY) {
+  const byCategory = Object.fromEntries(FEATURED_CATEGORIES.map((category) => [category, 0]));
+  const dirty = [];
+
+  for (const row of rows) {
+    const category = featuredCategory(row);
+    if (FEATURED_CATEGORIES.includes(category)) byCategory[category] += 1;
+    const assessment = featuredCleanliness(row);
+    if (!assessment.clean) dirty.push({ id: row.id, category, reasons: assessment.reasons });
+  }
+
+  const expectedTotal = FEATURED_CATEGORIES.length * perCategory;
+  const wrongCounts = FEATURED_CATEGORIES.filter((category) => byCategory[category] !== perCategory);
+  return {
+    healthy: rows.length === expectedTotal && wrongCounts.length === 0 && dirty.length === 0,
+    total: rows.length,
+    expectedTotal,
+    byCategory,
+    wrongCounts,
+    dirty
+  };
+}
+
 function timeZoneParts(now = new Date(), timeZone = DEFAULT_TIME_ZONE) {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone,
@@ -218,13 +241,31 @@ async function runFeaturedRotation(db, options = {}) {
         [dateKey]
       );
       if (prior.rows[0]) {
-        return {
-          ok: true,
-          skipped: true,
-          reason: 'already_completed',
+        const currentFeatured = await client.query(
+          `SELECT
+             p.id, p.listing_type, p.title, p.description, p.district, p.area,
+             p.price, p.price_period, p.property_type, p.transaction_type,
+             p.extra_fields, p.created_at
+           FROM properties p
+           WHERE ${publicVisibleInventoryWhere('p')}
+             AND COALESCE(p.extra_fields->>'featured', 'false') IN ('true', '1', 'yes')`
+        );
+        const health = featuredPoolHealth(currentFeatured.rows, perCategory);
+        if (health.healthy) {
+          return {
+            ok: true,
+            skipped: true,
+            reason: 'already_completed',
+            rotation_date: dateKey,
+            selected_count: Number(prior.rows[0].selected_count || 0)
+          };
+        }
+        await writeRotationAudit(client, actorId, {
+          marker: FEATURED_ROTATION_MARKER,
           rotation_date: dateKey,
-          selected_count: Number(prior.rows[0].selected_count || 0)
-        };
+          status: 'repairing_unhealthy_pool',
+          health
+        });
       }
     }
 
@@ -431,6 +472,7 @@ module.exports = {
   FEATURED_CATEGORIES,
   featuredCategory,
   featuredCleanliness,
+  featuredPoolHealth,
   loadFeaturedRotationStatus,
   runFeaturedRotation,
   selectFeaturedCandidates,
