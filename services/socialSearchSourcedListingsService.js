@@ -32,6 +32,15 @@ const {
   configuredUsdToUgxRate,
   propertyPriceMetadata
 } = require('../utils/propertyPriceCurrency');
+const {
+  foreignSourceMarketStatus,
+  normalizeUgandanSourcePhone,
+  safeSourcePriceCandidate,
+  ugandanPhoneFromSourceText,
+} = require('../utils/sourceIntakeIntegrity');
+const {
+  canonicalizeUgandaLocation,
+} = require('../utils/ugandaLocationRegistry');
 
 const SOCIAL_SEARCH_BATCH_ID = 'social_search_authorised_20260520';
 const LEGACY_SOURCED_INVENTORY_CANDIDATE_SOURCE = SOURCE;
@@ -950,6 +959,7 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
   const preApproval = sourcePreApprovalStatusFor(item);
   const sourceQuality = sourceQualityReviewForItem(item, agent);
   const positiveListingGate = sourcePositiveListingGateForItem(item, agent);
+  const countryGate = item.countryGate || item.country_gate || { allowed: true, reason: '', matched: '' };
   const hasLocation = item.locationEvidenceConfirmed !== false && (
     Boolean(String(item.address || item.area || item.district || '').trim())
       || positiveListingGate.has_uganda_location_signal === true
@@ -974,6 +984,7 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
   const captureToReview = Boolean(
     hasSource
       && allowedSocialSource
+      && countryGate.allowed !== false
       && dateWindowAllowsQueue
       && !sourceQualityHardBlocked
       && !positiveGateHardBlocked
@@ -982,6 +993,7 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
   const blockingReasons = [
     !hasSource ? 'missing_exact_source_url' : '',
     !allowedSocialSource ? 'unsupported_source_platform' : '',
+    countryGate.allowed === false ? (countryGate.reason || 'non_uganda_country_or_currency') : '',
     manualExactSocialIntake && !hasLocation ? 'missing_uganda_location' : '',
     manualExactSocialIntake && !hasContact ? 'missing_public_contact_or_source_route' : '',
     manualExactSocialIntake && !hasImageOrEvidence ? 'missing_source_evidence' : '',
@@ -997,6 +1009,9 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
     capture_rule: 'supported_social_property_posts_go_to_review_even_when_phone_media_or_exact_location_need_human_confirmation; manual exact posts require a specific property and Uganda location',
     has_source_url: hasSource,
     allowed_social_source: allowedSocialSource,
+    country_gate_passed: countryGate.allowed !== false,
+    country_gate_reason: countryGate.reason || '',
+    country_gate_matched: countryGate.matched || '',
     has_location_or_area: hasLocation,
     has_specific_location: locationQuality.ok,
     requires_specific_source_post_location: requiresSpecificSourcePostLocation,
@@ -1048,6 +1063,7 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
 
 function sourceReviewReasonForIntake(intake = {}) {
   if (intake.suppressed_source_url) return 'skipped_suppressed';
+  if (intake.country_gate_passed === false) return 'non_uganda_location';
   if (intake.source_quality_suppressed && /^low_signal_/i.test(String(intake.source_quality_reason || ''))) {
     return 'low_signal_source_location';
   }
@@ -1755,6 +1771,13 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
     source_listing_key: item.key,
     source_registry_key: agent.key || item.agentKey || '',
     content_fingerprint: contentFingerprintForSourceItem(item, agent),
+    canonical_location_id: item.canonicalLocationId || item.canonical_location_id || null,
+    canonical_location_level: item.canonicalLocationLevel || item.canonical_location_level || null,
+    location_resolution_status: item.locationResolutionStatus || item.location_resolution_status || null,
+    location_resolution_confidence: item.locationResolutionConfidence ?? item.location_resolution_confidence ?? null,
+    raw_location: item.rawLocation || item.raw_location || null,
+    country_gate: item.countryGate || item.country_gate || null,
+    source_price_rejection_reason: item.sourcePriceRejectionReason || item.source_price_rejection_reason || null,
     source_platform: sourcePlatform,
     source_type: item.sourceType || item.source_type || 'found_online_source_post',
     transaction_type: item.transactionType || item.transaction_type || null,
@@ -2346,20 +2369,11 @@ function numberOrNull(value) {
 }
 
 function normalizeUgandanPublicPhone(value = '') {
-  const digits = String(value || '').replace(/\D/g, '');
-  if (/^2567\d{8}$/.test(digits)) return `+${digits}`;
-  if (/^07\d{8}$/.test(digits)) return `+256${digits.slice(1)}`;
-  if (/^7\d{8}$/.test(digits)) return `+256${digits}`;
-  return '';
+  return normalizeUgandanSourcePhone(value);
 }
 
 function publicPhoneFromText(text = '') {
-  const candidates = String(text || '').match(/(?:\+?256|0|7)\s*[\d\s().-]{7,14}\d/g) || [];
-  for (const candidate of candidates) {
-    const normalized = normalizeUgandanPublicPhone(candidate);
-    if (normalized) return normalized;
-  }
-  return '';
+  return ugandanPhoneFromSourceText(text);
 }
 
 function publicEmailFromText(text = '') {
@@ -2418,13 +2432,15 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
     ? new RegExp(`^${socialAreaAliasPattern(areaPin.alias || areaPin.name)}$`, 'i').test(rawArea)
     : false;
   const fallbackDistrict = compactText(raw.district || sourceDistricts[0] || raw.city || raw.region || '');
-  const district = areaPin?.district || fallbackDistrict || 'Kampala';
+  const canonicalLocation = canonicalizeUgandaLocation(
+    areaPin?.name || rawArea,
+    areaPin?.district || fallbackDistrict
+  );
+  const district = canonicalLocation?.district || '';
   const locationEvidenceConfirmed = Object.prototype.hasOwnProperty.call(raw, 'location_evidence_confirmed')
     ? parseBooleanFlag(raw.location_evidence_confirmed)
-    : Boolean(rawArea || fallbackDistrict || areaPin);
-  const area = areaPin && (!rawArea || rawAreaMatchesKnownAlias || /^(kampala|wakiso|hoima|greater kampala|uganda)$/i.test(rawArea))
-    ? areaPin.name
-    : (rawArea || areaPin?.name || district);
+    : Boolean(canonicalLocation);
+  const area = canonicalLocation?.name || '';
   const address = String(raw.address || raw.location_label || raw.location || (area && district ? `${area}, ${district}` : area || district)).trim();
   const rawListingType = normalizeFoundOnlineListingType(
     raw.listing_type || raw.listingType || raw.property_type || raw.category || raw.title || raw.description
@@ -2469,11 +2485,23 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
     address
   });
   const youtubeId = raw.youtube_id || raw.youtubeId || raw.youtube_video_id || raw.youtubeVideoId || youtubeIdFromUrl(sourceUrl);
-  const sourcePrice = raw.price ?? raw.guide_price ?? raw.price_text ?? raw.asking_price;
-  const sourcePriceMetadata = propertyPriceMetadata(sourcePrice, {
+  const countryGate = foreignSourceMarketStatus([
+    sourceText,
+    raw.price_currency,
+    raw.currency,
+    raw.source_currency,
+    raw.country,
+    raw.market,
+  ].filter(Boolean).join(' '));
+  const unsafeSourcePrice = raw.price ?? raw.guide_price ?? raw.price_text ?? raw.asking_price;
+  const safePrice = countryGate.allowed
+    ? safeSourcePriceCandidate(unsafeSourcePrice, sourceText)
+    : { value: null, reason: countryGate.reason };
+  const ingestedAt = raw.ingested_at || raw.imported_at || raw.first_seen_at || new Date().toISOString();
+  const sourcePriceMetadata = propertyPriceMetadata(safePrice.value, {
     currency: raw.price_currency || raw.currency || raw.source_currency,
     usdToUgxRate: configuredUsdToUgxRate(),
-    fxAsOf: raw.price_fx_as_of || raw.source_published_at || raw.published_at || undefined
+    fxAsOf: raw.price_fx_as_of || ingestedAt
   });
   const sourceAgent = {
     key: sourceKey,
@@ -2539,15 +2567,22 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
       || raw.created_at
       || null,
     locationEvidenceConfirmed,
+    locationResolutionStatus: canonicalLocation ? 'canonical_match' : 'unresolved',
+    locationResolutionConfidence: canonicalLocation ? (areaPin ? 1 : 0.85) : 0,
+    canonicalLocationId: canonicalLocation?.key || null,
+    canonicalLocationLevel: canonicalLocation?.level || null,
+    rawLocation: rawArea || fallbackDistrict || null,
     area,
     district,
     address,
+    countryGate,
+    sourcePriceRejectionReason: safePrice.reason || sourcePriceMetadata.rejection_reason || '',
     price: sourcePriceMetadata.price,
     priceCurrency: sourcePriceMetadata.price_currency,
     priceOriginal: sourcePriceMetadata.price_original,
     priceFxRateUgx: sourcePriceMetadata.price_fx_rate_ugx,
     priceFxAsOf: sourcePriceMetadata.price_fx_as_of,
-    priceText: raw.price_text || raw.price_label || '',
+    priceText: safePrice.value == null ? '' : (raw.price_text || raw.price_label || ''),
     price_period: pricePeriod,
     transactionType: transactionType || null,
     transaction_type: transactionType || null,
@@ -2641,6 +2676,23 @@ function existingFoundOnlineRowForItem(existing = new Map(), item = {}) {
   const fingerprint = contentFingerprintForSourceItem(item);
   const contentMatch = fingerprint ? existing.get(`fingerprint:${fingerprint}`) : null;
   return contentMatch ? { ...contentMatch, duplicate_match_type: 'content_fingerprint_duplicate' } : null;
+}
+
+function registerExistingFoundOnlineItem(existing = new Map(), item = {}, row = {}) {
+  const payload = {
+    ...row,
+    source_listing_key: item.key,
+    source_url: sourceUrlForItem(item),
+    source_post_url: sourceUrlForItem(item),
+    content_fingerprint: contentFingerprintForSourceItem(item),
+  };
+  if (item.key) existing.set(item.key, payload);
+  const sourceUrl = sourceUrlForItem(item);
+  if (sourceUrl) existing.set(sourceUrl, payload);
+  const normalizedUrl = normalizedSourceUrlForItem(item);
+  if (normalizedUrl) existing.set(normalizedUrl, payload);
+  if (payload.content_fingerprint) existing.set(`fingerprint:${payload.content_fingerprint}`, payload);
+  return payload;
 }
 
 function alreadyPresentFoundOnlineRow(item = {}, agent = {}, existingRow = {}) {
@@ -2824,14 +2876,15 @@ async function queueFoundOnlineSourcePostListings({
   if (dryRun) {
     const eligible = evaluated.filter(({ intake }) => intake.eligible);
     const alreadyPresent = [];
+    const previewCombined = new Map(previewExisting);
     const dryRunRows = eligible.flatMap(({ item, agent, intake }) => {
-      const existingRow = existingFoundOnlineRowForItem(previewExisting, item);
+      const existingRow = existingFoundOnlineRowForItem(previewCombined, item);
       if (existingRow) {
         alreadyPresent.push(alreadyPresentFoundOnlineRow(item, agent, existingRow));
         return [];
       }
       const autoLive = sourcePostAutoLiveStatusFor(item, agent);
-      return [{
+      const row = {
         key: item.key,
         title: item.title,
         area: item.area,
@@ -2856,7 +2909,16 @@ async function queueFoundOnlineSourcePostListings({
         moderation_stage: autoLive.moderation_stage,
         intake,
         dry_run: true,
-      }];
+      };
+      registerExistingFoundOnlineItem(previewCombined, item, {
+        id: `dry-run:${item.key}`,
+        title: item.title,
+        status: row.status,
+        moderation_stage: row.moderation_stage,
+        lister_name: agent.name || item.agentKey,
+        property_url: '',
+      });
+      return [row];
     });
     const autoLiveRows = dryRunRows.filter((item) => item.auto_live_ready);
     const reviewRows = dryRunRows.filter((item) => !item.auto_live_ready);
@@ -2912,12 +2974,23 @@ async function queueFoundOnlineSourcePostListings({
     const skippedListings = [...sourceReviewRecords];
 
     for (const { item, agent, intake } of evaluated) {
-      const existingRow = existingFoundOnlineRowForItem(existing, item);
+      let existingRow = existingFoundOnlineRowForItem(existing, item);
       if (existingRow) {
         alreadyPresent.push(alreadyPresentFoundOnlineRow(item, agent, existingRow));
         continue;
       }
       if (!intake.eligible) continue;
+      const fingerprint = contentFingerprintForSourceItem(item);
+      if (fingerprint) {
+        await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`found-online:${fingerprint}`]);
+        const lockedExisting = await existingFoundOnlineSourcePostListings(client, [item]);
+        existingRow = existingFoundOnlineRowForItem(lockedExisting, item);
+        if (existingRow) {
+          alreadyPresent.push(alreadyPresentFoundOnlineRow(item, agent, existingRow));
+          registerExistingFoundOnlineItem(existing, item, existingRow);
+          continue;
+        }
+      }
       const createProfile = shouldCreateSourceProfile(item, agent);
       const profileKey = sourceProfileKeyForItem(item, agent);
       if (createProfile && !agentIdsByKey[profileKey]) {
@@ -2934,6 +3007,10 @@ async function queueFoundOnlineSourcePostListings({
       inserted.profile_key = createProfile ? profileKey : null;
       inserted.profile_policy = FOUND_ONLINE_PROFILE_CREATION_POLICY.rule;
       created.push(inserted);
+      registerExistingFoundOnlineItem(existing, item, {
+        ...inserted,
+        lister_name: agent.name || item.agentKey,
+      });
     }
 
     const persistence = await verifyCreatedListingRows(client, created);
