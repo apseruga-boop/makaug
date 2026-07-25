@@ -27,6 +27,7 @@ const {
   normalizeCommercialPropertyType,
   commercialMisclassificationWarning,
 } = require('../utils/commercialClassification');
+const { listingPriceQuality } = require('../utils/listingPriceQuality');
 
 const SOCIAL_SEARCH_BATCH_ID = 'social_search_authorised_20260520';
 const LEGACY_SOURCED_INVENTORY_CANDIDATE_SOURCE = SOURCE;
@@ -1979,6 +1980,29 @@ function buildSocialSearchListing(item, agentId = null) {
     autoLive.moderation_stage = 'source_review';
     autoLive.reason = 'Commercial transaction and subtype need staff confirmation before publication.';
   }
+  const priceQuality = listingPriceQuality({
+    ...item,
+    listing_type: listingType,
+    transaction_type: transactionType || null,
+    price: item.price,
+    price_period: pricePeriod,
+    title: item.title,
+    description: [
+      item.description,
+      item.sourceText,
+      item.source_text,
+      item.sourceTitle,
+      item.source_title
+    ].filter(Boolean).join(' ')
+  }, {
+    requireSourcePriceEvidence: true
+  });
+  if (!priceQuality.ok) {
+    autoLive.approved = false;
+    autoLive.status = 'pending';
+    autoLive.moderation_stage = 'source_review';
+    autoLive.reason = `Price evidence needs staff review: ${priceQuality.reasons.join(', ')}.`;
+  }
   const manualOlderExactSource = isManualExactSocialIntake(item)
     && sourceDateStatusFor(item) === 'before_2026_source_window';
   return {
@@ -2021,7 +2045,10 @@ function buildSocialSearchListing(item, agentId = null) {
     amenities: JSON.stringify(item.listingType === 'land'
       ? ['Found online', 'Road access to verify', 'Title to verify', 'Agent follow-up required']
       : ['Found online', `${sourcePlatformFor(agent, item)} source evidence`, 'Agent follow-up required', 'HD photos to verify']),
-    extra_fields: JSON.stringify(extraFieldsFor(item, agentId)),
+    extra_fields: JSON.stringify({
+      ...extraFieldsFor(item, agentId),
+      price_quality: priceQuality
+    }),
     lister_name: agent.name || 'Found-online Source Desk',
     lister_phone: agent.phone || null,
     lister_email: agent.email || null,
@@ -3679,6 +3706,7 @@ module.exports = {
   queueFoundOnlineSourcePostListings,
   reprocessExistingFoundOnlineSourcePostListings,
   normalizeFoundOnlineSourcePost,
+  buildSocialSearchListing,
   summarizeSocialSearchListings,
   socialSearchDailyTargetStatus,
   sourcePostAutoLiveStatusFor,

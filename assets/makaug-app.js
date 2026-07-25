@@ -13431,17 +13431,51 @@ async function moderationLoadIdentityDocument(prefix, propertyId, scope = "staff
 }
 
 function moderationUpdateApprovalGate(prefix) {
-  const button = document.querySelector(`[data-identity-approve-prefix="${adminAttr(prefix)}"]`);
-  if (!button) return;
-  const required = button.dataset.identityRequired === "true";
-  const ok = !required || moderationIdentityCheckbox(prefix)?.checked === true;
-  button.disabled = !ok;
-  button.classList.toggle("bg-green-700", ok && prefix === "admin-review");
-  button.classList.toggle("hover:bg-green-600", ok && prefix === "admin-review");
-  button.classList.toggle("bg-emerald-700", ok && prefix !== "admin-review");
-  button.classList.toggle("hover:bg-emerald-600", ok && prefix !== "admin-review");
-  button.classList.toggle("bg-gray-300", !ok);
-  button.classList.toggle("cursor-not-allowed", !ok);
+  const buttons = Array.from(document.querySelectorAll(
+    `[data-identity-approve-prefix="${adminAttr(prefix)}"], [data-price-approve-prefix="${adminAttr(prefix)}"]`
+  ));
+  buttons.forEach((button) => {
+    const identityRequired = button.dataset.identityRequired === "true";
+    const priceRequired = button.dataset.priceConfirmationRequired === "true";
+    const identityOk = !identityRequired || moderationIdentityCheckbox(prefix)?.checked === true;
+    const priceOk = !priceRequired || document.getElementById(`${prefix}-price-basis-confirmed`)?.checked === true;
+    const ok = identityOk && priceOk;
+    const sourceOverrideButton = button.hasAttribute("data-price-approve-prefix");
+    button.disabled = !ok;
+    button.classList.toggle("bg-green-700", ok && prefix === "admin-review" && !sourceOverrideButton);
+    button.classList.toggle("hover:bg-green-600", ok && prefix === "admin-review" && !sourceOverrideButton);
+    button.classList.toggle("bg-blue-700", ok && sourceOverrideButton);
+    button.classList.toggle("hover:bg-blue-600", ok && sourceOverrideButton);
+    button.classList.toggle("bg-emerald-700", ok && prefix !== "admin-review");
+    button.classList.toggle("hover:bg-emerald-600", ok && prefix !== "admin-review");
+    button.classList.toggle("bg-gray-300", !ok);
+    button.classList.toggle("cursor-not-allowed", !ok);
+  });
+}
+
+function moderationRequiresHighMonthlyPriceConfirmation(review = {}) {
+  const price = Number(review.price || 0);
+  const period = String(review.price_period || review.period || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+  return price >= 100000000 && ["month", "monthly", "mo", "per_month", "week", "weekly", "per_week", "night", "nightly", "day", "daily"].includes(period);
+}
+
+function moderationPriceBasisAlreadyVerified(review = {}) {
+  return review?.extra_fields?.price_basis_verified === true
+    || String(review?.extra_fields?.price_basis_verified || "").toLowerCase() === "true";
+}
+
+function moderationPriceBasisConfirmationHtml(review = {}, prefix = "admin-review") {
+  if (!moderationRequiresHighMonthlyPriceConfirmation(review)) return "";
+  const verified = moderationPriceBasisAlreadyVerified(review);
+  return `
+    <div class="mt-3 rounded-xl border border-red-200 bg-red-50 p-3">
+      <div class="text-xs font-black uppercase tracking-wide text-red-800">High recurring price verification required</div>
+      <p class="mt-1 text-xs text-red-800">This listing is at least UGX 100M on a recurring basis. Compare the source evidence and confirm that this is genuinely the recurring rent, not a sale price.</p>
+      <label class="mt-2 flex items-start gap-2 text-xs font-bold text-red-950">
+        <input id="${adminAttr(prefix)}-price-basis-confirmed" type="checkbox" ${verified ? "checked" : ""} onchange="moderationUpdateApprovalGate('${adminAttr(prefix)}')" class="mt-0.5 rounded border-red-300 text-red-700">
+        I verified the recurring price and its period against the source evidence.
+      </label>
+    </div>`;
 }
 
 function moderationInitIdentityPanel(prefix, review = {}, scope = "staff") {
@@ -13480,6 +13514,8 @@ function renderStaffListingPreviewModal(preview = {}) {
   const sourceUrl = String(source.source_url || "").trim();
   const identityRequired = moderationRequiresIdentity(preview);
   const identityGateOpen = moderationIdentityAlreadyVerified(preview);
+  const priceConfirmationRequired = moderationRequiresHighMonthlyPriceConfirmation(preview);
+  const priceConfirmationOpen = moderationPriceBasisAlreadyVerified(preview);
   adminActiveReview = preview;
   const modal = document.createElement("div");
   modal.id = "staff-listing-preview-modal";
@@ -13528,6 +13564,7 @@ function renderStaffListingPreviewModal(preview = {}) {
           <section class="rounded-xl border border-gray-200 p-4">
             <h4 class="font-black text-gray-900">Internal review notes</h4>
             <textarea id="admin-review-notes" class="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm min-h-[90px]" placeholder="What did you verify?">${adminEscape(preview.review?.notes || preview.moderation_notes || "")}</textarea>
+            ${moderationPriceBasisConfirmationHtml(preview, "staff-preview")}
             ${moderationStructuredReasonControlsHtml("staff-preview")}
             <textarea id="admin-review-reason" class="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm min-h-[80px]" placeholder="Approval/rejection reason">${adminEscape(preview.review?.reason || preview.moderation_reason || "")}</textarea>
           </section>
@@ -13535,7 +13572,7 @@ function renderStaffListingPreviewModal(preview = {}) {
             <h4 class="font-black text-gray-900">Decision</h4>
             <div class="mt-3 grid gap-2">
               <button type="button" onclick="saveStaffListingPreview(${propertyIdArg(preview.id)})" class="border border-slate-300 text-slate-800 hover:bg-slate-50 rounded-xl px-4 py-2 text-sm font-black">Save preview changes</button>
-              <button type="button" data-staff-approve-id="${adminAttr(String(preview.id || ""))}" data-identity-approve-prefix="staff-preview" data-identity-required="${identityRequired ? "true" : "false"}" ${identityRequired && !identityGateOpen ? "disabled" : ""} class="${identityRequired && !identityGateOpen ? "bg-gray-300 cursor-not-allowed" : "bg-emerald-700 hover:bg-emerald-600"} text-white rounded-xl px-4 py-2 text-sm font-black">Approve live after preview</button>
+              <button type="button" data-staff-approve-id="${adminAttr(String(preview.id || ""))}" data-identity-approve-prefix="staff-preview" data-identity-required="${identityRequired ? "true" : "false"}" data-price-confirmation-required="${priceConfirmationRequired ? "true" : "false"}" ${(identityRequired && !identityGateOpen) || (priceConfirmationRequired && !priceConfirmationOpen) ? "disabled" : ""} class="${(identityRequired && !identityGateOpen) || (priceConfirmationRequired && !priceConfirmationOpen) ? "bg-gray-300 cursor-not-allowed" : "bg-emerald-700 hover:bg-emerald-600"} text-white rounded-xl px-4 py-2 text-sm font-black">Approve live after preview</button>
               <button type="button" onclick="staffRejectPreviewListing(${propertyIdArg(preview.id)})" class="bg-red-600 hover:bg-red-500 text-white rounded-xl px-4 py-2 text-sm font-black">Reject with reason</button>
               <button type="button" onclick="staffModerateListing(${propertyIdArg(preview.id)}, 'pending')" class="border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-xl px-4 py-2 text-sm font-black">Keep pending</button>
             </div>
@@ -13940,6 +13977,7 @@ async function staffApprovePreviewListing(propertyId) {
       identity_verified: identityRequired ? true : review.identity_verified === true,
       identity_document_verified: identityRequired ? true : review.identity_verified === true,
       id_document_clear_and_matches: identityRequired ? true : review.identity_verified === true,
+      high_monthly_price_confirmed: document.getElementById("staff-preview-price-basis-confirmed")?.checked === true,
       warning_overrides: warningOverrides,
       fast_admin_render: true,
       manual_notification_only: true
@@ -24288,7 +24326,12 @@ function renderAdminReviewPanel(review) {
   const pendingWarningOverrides = getAdminPendingWarningOverrideLabels(review);
   const identityRequired = moderationRequiresIdentity(review);
   const identityGateOpen = moderationIdentityAlreadyVerified(review);
-  const approvalUnlocked = canApprove && pendingWarningOverrides.length === 0 && (!identityRequired || identityGateOpen);
+  const priceConfirmationRequired = moderationRequiresHighMonthlyPriceConfirmation(review);
+  const priceConfirmationOpen = moderationPriceBasisAlreadyVerified(review);
+  const approvalUnlocked = canApprove
+    && pendingWarningOverrides.length === 0
+    && (!identityRequired || identityGateOpen)
+    && (!priceConfirmationRequired || priceConfirmationOpen);
   const events = Array.isArray(review.events) ? review.events : [];
   const reviewIdArg = adminListingIdArg(review.id);
   const listerVerificationStatus = review.extra_fields?.lister_registration_status || review.registration_status || "not_registered";
@@ -24508,6 +24551,7 @@ function renderAdminReviewPanel(review) {
         <div class="border border-gray-200 rounded-xl p-4">
           <label class="block text-sm font-semibold text-gray-700 mb-1">Review notes</label>
           <textarea id="admin-review-notes" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm min-h-[90px]" placeholder="Internal notes for this review">${adminEscape(review?.review?.notes || "")}</textarea>
+          ${moderationPriceBasisConfirmationHtml(review, "admin-review")}
           <label class="block text-sm font-semibold text-gray-700 mt-3 mb-1">Decision reason</label>
           ${moderationStructuredReasonControlsHtml("admin-review")}
           <textarea id="admin-review-reason" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm min-h-[110px]" placeholder="Required for rejection, optional for other statuses">${adminEscape(decisionReason)}</textarea>
@@ -24522,8 +24566,8 @@ function renderAdminReviewPanel(review) {
             <button onclick="adminCreateShareablePreviewLink(${reviewIdArg})" class="border border-amber-300 text-amber-800 hover:bg-amber-50 px-3 py-2 rounded-lg text-xs font-semibold">Copy Private Preview Link</button>
             <button onclick="saveAdminListingReview()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-semibold">Save Review</button>
             ${generatedDecisionReason ? `<button onclick="useAdminGeneratedDecisionReason()" class="border border-amber-300 text-amber-800 hover:bg-amber-50 px-3 py-2 rounded-lg text-xs font-semibold">Use Suggested Reason</button>` : ""}
-            <button onclick="adminSetListingStatus(${reviewIdArg}, 'approved', ${reviewIdArg})" data-identity-approve-prefix="admin-review" data-identity-required="${identityRequired ? "true" : "false"}" ${approvalUnlocked ? "" : "disabled"} class="${approvalUnlocked ? "bg-green-700 hover:bg-green-600" : "bg-gray-300 cursor-not-allowed"} text-white px-3 py-2 rounded-lg text-xs font-semibold">Approve & Notify</button>
-            ${isSourcedCandidate ? `<button onclick="adminApproveSourcedCandidateOverride(${reviewIdArg})" ${sourcedCandidateOverrideReady ? "" : "disabled"} class="${sourcedCandidateOverrideReady ? "bg-blue-700 hover:bg-blue-600" : "bg-gray-300 cursor-not-allowed"} text-white px-3 py-2 rounded-lg text-xs font-semibold">Approve Found Online</button>` : ""}
+            <button onclick="adminSetListingStatus(${reviewIdArg}, 'approved', ${reviewIdArg})" data-identity-approve-prefix="admin-review" data-identity-required="${identityRequired ? "true" : "false"}" data-price-confirmation-required="${priceConfirmationRequired ? "true" : "false"}" ${approvalUnlocked ? "" : "disabled"} class="${approvalUnlocked ? "bg-green-700 hover:bg-green-600" : "bg-gray-300 cursor-not-allowed"} text-white px-3 py-2 rounded-lg text-xs font-semibold">Approve & Notify</button>
+            ${isSourcedCandidate ? `<button onclick="adminApproveSourcedCandidateOverride(${reviewIdArg})" data-price-approve-prefix="admin-review" data-price-confirmation-required="${priceConfirmationRequired ? "true" : "false"}" ${sourcedCandidateOverrideReady && (!priceConfirmationRequired || priceConfirmationOpen) ? "" : "disabled"} class="${sourcedCandidateOverrideReady && (!priceConfirmationRequired || priceConfirmationOpen) ? "bg-blue-700 hover:bg-blue-600" : "bg-gray-300 cursor-not-allowed"} text-white px-3 py-2 rounded-lg text-xs font-semibold">Approve Found Online</button>` : ""}
             <button onclick="adminSetListingStatus(${reviewIdArg}, 'rejected', ${reviewIdArg})" class="bg-red-600 hover:bg-red-500 text-white px-3 py-2 rounded-lg text-xs font-semibold">Reject & Notify</button>
           </div>
           ${canApprove ? "" : `<div class="text-xs text-red-600 mt-2">${isSourcedCandidate ? (sourcedCandidateOverrideReady ? "Standard approval is blocked by owner-flow checks. Use Approve Found Online after source review; location is present." : "Found-online approval is blocked until a location or area is added.") : "Approval is blocked until non-overrideable red checks are resolved."}</div>`}
@@ -24862,6 +24906,17 @@ async function adminSetListingStatus(localId, nextStatus, backendId = "", option
     const ok = window.confirm("Delete this listing from public pages? You can restore it from the admin dashboard.");
     if (!ok) return;
   }
+  if (
+    normalizedStatus === "approved"
+    && adminActiveReview?.id
+    && String(adminActiveReview.id) === String(backendId)
+    && moderationRequiresHighMonthlyPriceConfirmation(adminActiveReview)
+    && document.getElementById("admin-review-price-basis-confirmed")?.checked !== true
+  ) {
+    toast("Verify the high recurring price against the source evidence before approving.");
+    document.getElementById("admin-review-price-basis-confirmed")?.focus();
+    return;
+  }
   if (normalizedStatus === "approved" && adminActiveReview?.id && String(adminActiveReview.id) === String(backendId) && !isSourcedCandidateOverride) {
     const activeListingType = normalizeType(document.getElementById("admin-review-listing-type-edit")?.value || adminActiveReview.listing_type || "");
     if (activeListingType === "commercial") {
@@ -24960,6 +25015,7 @@ async function adminSetListingStatus(localId, nextStatus, backendId = "", option
             identity_verified: identityRequired ? true : moderationIdentityConfirmed("admin-review", adminActiveReview),
             identity_document_verified: identityRequired ? true : moderationIdentityConfirmed("admin-review", adminActiveReview),
             id_document_clear_and_matches: identityRequired ? true : moderationIdentityConfirmed("admin-review", adminActiveReview),
+            high_monthly_price_confirmed: document.getElementById("admin-review-price-basis-confirmed")?.checked === true,
             structured_rejection_reasons: structuredRejectionReasons,
 	          warning_overrides: getAdminReviewWarningOverrides(adminActiveReview)
         }

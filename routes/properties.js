@@ -92,6 +92,7 @@ const {
   normalizeCommercialPropertyType,
   commercialMisclassificationWarning
 } = require('../utils/commercialClassification');
+const { listingPriceQuality } = require('../utils/listingPriceQuality');
 
 const router = express.Router();
 const LAUNCH_SEED_LISTING_MARKERS = ['SOFT LAUNCH TEST - DELETE', 'QA TEST - DELETE'];
@@ -4144,6 +4145,27 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
       current = listingPatchResult.property || current;
       approvalWarnings.push(`Listing facts updated before moderation status change: ${listingPatchResult.changed_fields.join(', ')}`);
     }
+    const highMonthlyPriceConfirmed = parseBooleanLike(
+      req.body.high_monthly_price_confirmed
+        || req.body.highMonthlyPriceConfirmed
+        || req.body.price_basis_confirmed
+        || req.body.priceBasisConfirmed,
+      false
+    );
+    if (nextStatus === 'approved') {
+      const priceQuality = listingPriceQuality(current, { highMonthlyPriceConfirmed });
+      if (!priceQuality.ok) {
+        return res.status(400).json({
+          ok: false,
+          error: 'Listing price data must be corrected or confirmed before approval',
+          details: priceQuality.reasons,
+          price_quality: priceQuality
+        });
+      }
+      if (priceQuality.warnings.length) {
+        approvalWarnings.push(`Price basis confirmed by staff: ${priceQuality.warnings.join(', ')}`);
+      }
+    }
     const actorId = req.adminAuth?.userId || req.adminAuth?.type || 'admin_api_key';
     const reviewerUserId = toUuidOrNull(req.adminAuth?.userId);
     const isSourcedCandidate = isSourcedInventoryCandidateRecord(current);
@@ -4315,10 +4337,18 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
         structured_rejection_message: moderationReason
       }
       : null;
+    const priceBasisExtraFields = nextStatus === 'approved' && highMonthlyPriceConfirmed
+      ? {
+        price_basis_verified: true,
+        price_basis_verified_at: new Date().toISOString(),
+        price_basis_verified_by: actorId
+      }
+      : null;
     const moderationExtraFields = {
       ...(sourcedCandidateExtraFields || {}),
       ...(identityVerificationExtraFields || {}),
-      ...(structuredRejectionExtraFields || {})
+      ...(structuredRejectionExtraFields || {}),
+      ...(priceBasisExtraFields || {})
     };
     const moderationExtraFieldsJson = Object.keys(moderationExtraFields).length
       ? JSON.stringify(moderationExtraFields)
