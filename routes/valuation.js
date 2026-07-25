@@ -21,6 +21,7 @@ const router = express.Router();
 const VALUATION_MARKER = 'valuation-canonical-confidence-cards-20260725';
 const VALUATION_PUNCHLIST_MARKER = 'valuation-final-punchlist-20260725';
 const VALUATION_K17_MARKER = 'valuation-k17-simple-range-20260725';
+const VALUATION_CLOSEOUT_MARKER = 'valuation-k17-closeout-20260725';
 const CACHE_TTL_MS = Math.max(30_000, Number(process.env.VALUATION_CACHE_TTL_MS || 180_000));
 const MIN_COMPARABLES = 3;
 const DISTRICT_WIDEN_THRESHOLD = MIN_COMPARABLES;
@@ -63,16 +64,8 @@ function stableComparableImageUrl(row = {}) {
   ]);
   if (!fallback) return null;
 
-  const sourceText = [
-    row.source,
-    row.listed_via,
-    extra.source_platform,
-    extra.source_url,
-    extra.source_post_url
-  ].map((value) => cleanText(value).toLowerCase()).join(' ');
-  const isTikTok = sourceText.includes('tiktok');
   const looksTransientTikTokImage = /(?:tiktokcdn|byteimg|p16-|p19-|p77-|tos-)/i.test(fallback);
-  return isTikTok && looksTransientTikTokImage ? null : fallback;
+  return looksTransientTikTokImage ? null : fallback;
 }
 
 function normalizeCategory(value) {
@@ -246,6 +239,31 @@ function minimumPlausiblePrice(input = {}) {
   if (input.category === 'rent' || input.category === 'student') return MIN_RECURRING_PRICE_UGX;
   if (input.category === 'commercial' && input.transaction_type === 'rent') return MIN_RECURRING_PRICE_UGX;
   return MIN_TOTAL_PRICE_UGX;
+}
+
+function filterComparablePriceOutliers(rows = [], input = {}) {
+  const normalizedRows = rows.filter((row) => Number.isFinite(row.normalizedPrice) && row.normalizedPrice > 0);
+  if (normalizedRows.length < MIN_COMPARABLES) {
+    return {
+      rows: normalizedRows,
+      excluded_count: 0,
+      price_floor: minimumPlausiblePrice(input),
+      price_ceiling: MAX_PRICE_UGX
+    };
+  }
+  const medianPrice = percentile(normalizedRows.map((row) => row.normalizedPrice), 0.5);
+  const priceFloor = Math.max(minimumPlausiblePrice(input), Number(medianPrice || 0) * 0.01);
+  const priceCeiling = Math.min(MAX_PRICE_UGX, Number(medianPrice || MAX_PRICE_UGX) * 100);
+  const filteredRows = normalizedRows.filter((row) => (
+    row.normalizedPrice >= priceFloor
+    && row.normalizedPrice <= priceCeiling
+  ));
+  return {
+    rows: filteredRows,
+    excluded_count: normalizedRows.length - filteredRows.length,
+    price_floor: Math.round(priceFloor),
+    price_ceiling: Math.round(priceCeiling)
+  };
 }
 
 function isCategoryCompatibleComparable(row = {}, input = {}) {
@@ -613,7 +631,7 @@ function categoryResultsPath(input = {}) {
 }
 
 function buildEstimate(input, rows, scope, widened = scope === 'district') {
-  const compatibleRows = rows
+  const normalizedCompatibleRows = rows
     .filter((row) => isCategoryCompatibleComparable(row, input))
     .map((row) => {
       const normalizedPrice = normalizeRecurringPrice(row, input.category);
@@ -629,6 +647,8 @@ function buildEstimate(input, rows, scope, widened = scope === 'district') {
       };
     })
     .filter((row) => Number.isFinite(row.normalizedPrice) && row.normalizedPrice > 0);
+  const outlierResult = filterComparablePriceOutliers(normalizedCompatibleRows, input);
+  const compatibleRows = outlierResult.rows;
   const refinementResult = applyOptionalRefinements(compatibleRows, input);
   const prepared = refinementResult.rows;
 
@@ -714,7 +734,8 @@ function buildEstimate(input, rows, scope, widened = scope === 'district') {
     range_high: sufficient && high != null ? Math.round(high) : null,
     comparable_count: ranked.length,
     analysis_comparable_count: analysisValues.length,
-    raw_comparable_count: prepared.length,
+    raw_comparable_count: normalizedCompatibleRows.length,
+    outlier_excluded_count: outlierResult.excluded_count,
     scope,
     widened,
     confidence,
@@ -735,6 +756,9 @@ function buildEstimate(input, rows, scope, widened = scope === 'district') {
       price_normalization: valuationPriceBasis(input),
       minimum_comparables: MIN_COMPARABLES,
       size_adjusted: Boolean(useRate),
+      outlier_excluded_count: outlierResult.excluded_count,
+      outlier_price_floor: outlierResult.price_floor,
+      outlier_price_ceiling: outlierResult.price_ceiling,
       analysis_comparable_count: analysisValues.length,
       displayed_evidence_count: ranked.length,
       displayed_range_only: true
@@ -797,6 +821,7 @@ router.post('/matches', async (req, res, next) => {
     return res.status(200).json({
       ok: true,
       marker: VALUATION_K17_MARKER,
+      closeout_marker: VALUATION_CLOSEOUT_MARKER,
       location: input.location,
       district: input.district,
       scope,
@@ -886,6 +911,7 @@ router.post('/estimate', async (req, res, next) => {
       marker: VALUATION_MARKER,
       fix_marker: VALUATION_PUNCHLIST_MARKER,
       ux_marker: VALUATION_K17_MARKER,
+      closeout_marker: VALUATION_CLOSEOUT_MARKER,
       input,
       ...result,
       exact_comparable_count: exactCompatibleCount,
@@ -957,6 +983,7 @@ router.get('/locations', async (req, res, next) => {
       marker: VALUATION_MARKER,
       fix_marker: VALUATION_PUNCHLIST_MARKER,
       ux_marker: VALUATION_K17_MARKER,
+      closeout_marker: VALUATION_CLOSEOUT_MARKER,
       category,
       data: locationOptions
     });
@@ -972,6 +999,7 @@ router.get('/config', (_req, res) => {
     marker: VALUATION_MARKER,
     fix_marker: VALUATION_PUNCHLIST_MARKER,
     ux_marker: VALUATION_K17_MARKER,
+    closeout_marker: VALUATION_CLOSEOUT_MARKER,
     categories: ['sale', 'rent', 'land', 'commercial', 'student'],
     districts: DISTRICTS,
     minimum_comparables: MIN_COMPARABLES,
@@ -998,6 +1026,7 @@ module.exports._test = {
   applyOptionalRefinements,
   valuationConfidenceLevel,
   stableComparableImageUrl,
+  filterComparablePriceOutliers,
   minimumPlausiblePrice,
   canonicalizeUgandaLocation,
   canonicalizeLocationRows,
