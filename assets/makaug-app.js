@@ -18696,6 +18696,9 @@ async function renderAdminDashboard(options = {}) {
   renderAdminActionedRows(remoteSnap?.actionedListings || remoteSnap?.allListings || localSnap.allListings || []);
   renderAdminLiveParitySummary(remoteSnap || localSnap, adminLiveRows);  renderAdminLiveListingsRows(adminLiveRows);
   renderAdminFeaturedRows(adminLiveRows);
+  renderAdminFeaturedRotationStatus().catch((error) => {
+    console.warn("Unable to load featured rotation status", error);
+  });
   renderAdminOutreachOverview({
     summary,
     users: adminUsers,
@@ -25099,6 +25102,65 @@ async function adminSetListingFeatured(propertyId, featured) {
     toast(featured ? "Listing added to Featured Properties." : "Listing removed from Featured Properties.");
   } catch (e) {
     toast(`Featured update failed: ${e.message || "error"}`);
+  }
+}
+
+async function renderAdminFeaturedRotationStatus() {
+  const wrap = document.getElementById("admin-featured-rotation-status");
+  if (!wrap) return;
+  if (!canUseLiveAdminApi()) {
+    wrap.innerHTML = `<div class="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">Sign in as King/admin to view the daily rotation status.</div>`;
+    return;
+  }
+  wrap.innerHTML = `<div class="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-500">Loading daily rotation status…</div>`;
+  const response = await apiRequest("/api/admin/featured-rotation", {
+    headers: adminAuthHeaders()
+  });
+  const data = response?.data || {};
+  const latest = data.latest_run || {};
+  const current = data.current_featured || {};
+  const counts = ["sale", "rent", "land", "commercial", "student"]
+    .map((category) => `${category}: ${Number(current[category] || 0)}`)
+    .join(" · ");
+  const completed = latest.completed_at ? formatListingDate(latest.completed_at) : "not run yet";
+  const stateClass = latest.status === "completed"
+    ? "border-green-200 bg-green-50 text-green-950"
+    : "border-amber-200 bg-amber-50 text-amber-950";
+  wrap.innerHTML = `
+    <div class="rounded-lg border ${stateClass} px-3 py-2 text-xs">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <strong>Daily 07:00 Kampala rotation: ${adminEscape(latest.status || "awaiting first run")}</strong>
+        <span>${adminEscape(completed)}</span>
+      </div>
+      <div class="mt-1">Current pool: ${Number(current.total || 0)} · ${adminEscape(counts)}</div>
+      ${latest.error_message ? `<div class="mt-1 font-semibold">${adminEscape(latest.error_message)}</div>` : ""}
+    </div>`;
+}
+
+async function adminRunFeaturedRotation() {
+  if (!canUseLiveAdminApi()) {
+    toast("Sign in as King/admin to run the featured rotation.");
+    return;
+  }
+  const proceed = window.confirm("Replace the public featured pool with the two newest clean listings from each category?");
+  if (!proceed) return;
+  try {
+    const response = await apiRequest("/api/admin/featured-rotation/run-once", {
+      method: "POST",
+      headers: adminAuthHeaders(),
+      body: {}
+    });
+    const result = response?.data || {};
+    await refreshPublicListingsFromApi({ silent: true });
+    renderAll();
+    await renderAdminDashboard({ source: "featured_rotation" });
+    toast(`Featured pool rotated: ${Number(result.selected_count || 0)} listings selected.`);
+  } catch (error) {
+    const missing = Array.isArray(error?.response?.data?.missing)
+      ? ` Missing: ${error.response.data.missing.join(", ")}.`
+      : "";
+    toast(`Featured rotation did not change the pool: ${error.message || "request failed"}.${missing}`);
+    await renderAdminFeaturedRotationStatus().catch(() => {});
   }
 }
 
@@ -38264,6 +38326,10 @@ function socialImportListingCardHtml(p = {}, options = {}) {
       ${propertyDescriptionHoverHtml(p)}
       ${socialImportTileMediaHtml(p, idArg)}
       <div class="social-import-card-body">
+        <div class="mb-2 flex flex-wrap items-center gap-1.5">${listingBadgeRowHtml(p, {
+          student: options.student === true,
+          compact: true
+        })}</div>
         ${socialImportPriceHtml(p, { student: options.student === true })}
         <h3 class="social-import-card-title line-clamp-1">${adminEscape(displayTitle)}</h3>
         <p class="social-import-card-location"><i class="ti-map-pin fas fa-map-marker-alt"></i>${adminEscape(displayLocation)}</p>
@@ -39700,6 +39766,11 @@ function noResultsCardForGrid(id) {
       cls: "border-teal-100 bg-teal-50 text-teal-950 md:col-span-2",
       title: "No exact matches yet. No land listings match this search yet.",
       body: "Save Search, Create Alert, Ask makaug.com on WhatsApp, or tell makaug.com what plot you need. Always verify title and ownership before payment."
+    },
+    "featured-grid": {
+      cls: "border-emerald-100 bg-emerald-50 text-emerald-950",
+      title: "Featured listings are being refreshed.",
+      body: "Please check again shortly. The daily selection only includes approved listings that pass the public quality checks."
     }
   };
   const state = states[id] || {
@@ -39934,6 +40005,7 @@ function renderAll() {
   const landFiltered = hasActivePublicCategoryFilter("land");
   renderHeroPropertyOpportunityCounter();
   renderGrid("home-grid", getHomepageFeaturedListings(publicListings).slice(0, 3));
+  renderGrid("featured-grid", getHomepageFeaturedListings(publicListings));
   renderPublicCategoryPageWithAuthoritativeCache("sale", saleListings, {
     total: publicCategoryRenderTotal("sale", saleListings, saleFiltered),
     filtered: saleFiltered,
@@ -41620,6 +41692,7 @@ async function submitAdvertisingSelfServe(event) {
 
 const PAGE_ROUTE_MAP = Object.freeze({
   home: "/",
+  featured: "/featured",
   sale: "/for-sale",
   rent: "/to-rent",
   students: "/student-accommodation",
@@ -41658,6 +41731,7 @@ const PAGE_ROUTE_MAP = Object.freeze({
 
 const PUBLIC_ROUTE_PAGE_MAP = Object.freeze({
   "/": "home",
+  "/featured": "featured",
   "/for-sale": "sale",
   "/sale": "sale",
   "/to-rent": "rent",
@@ -42312,6 +42386,13 @@ function mapRemotePropertyForUi(p, options = {}) {
   const publicImageItems = thirdPartyDiscovery ? [] : imageItems;
   const normalizedListingType = normalizeType(p?.listing_type || p?.type);
   const publicListingType = normalizedListingType || getHeroPropertyOpportunityBucket(p);
+  const defaultSubtype = {
+    sale: "Home for sale",
+    rent: "Rental property",
+    land: "Land",
+    commercial: "Commercial property",
+    student: "Student accommodation"
+  }[publicListingType] || "Property";
   const sourceVideoUrl = p?.video_url || extraFields.video_url || extraFields.youtube_url || extraFields.tiktok_url || extraFields.source_url || "";
   const sourceCoverImageUrl = p?.cover_image_url
     || p?.thumbnail_url
@@ -42336,7 +42417,7 @@ function mapRemotePropertyForUi(p, options = {}) {
     title: p?.title || "Untitled listing",
     type: publicListingType,
     transaction_type: p?.transaction_type || extraFields.transaction_type || null,
-    subtype: p?.property_type || p?.subtype || "Property",
+    subtype: p?.property_type || p?.subtype || defaultSubtype,
     title_type: p?.title_type || extraFields.title_type || "",
     land_title_available: getLandTitleAvailabilityValue(p),
     beds: p?.bedrooms,

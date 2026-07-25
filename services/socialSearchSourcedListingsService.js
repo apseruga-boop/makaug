@@ -23,6 +23,7 @@ const {
 } = require('./suppressedSourceService');
 const {
   normalizeCommercialTransactionType,
+  normalizeListingPricePeriod,
   normalizeCommercialPropertyType,
   commercialMisclassificationWarning,
 } = require('../utils/commercialClassification');
@@ -1938,11 +1939,28 @@ function buildSocialSearchListing(item, agentId = null) {
       : '');
   const studentListing = explicitlyStudent || Boolean(nearestUniversity && rentishNearCampus);
   const listingType = studentListing ? 'students' : originalListingType;
+  const pricePeriod = normalizeListingPricePeriod(item.price_period || item.pricePeriod, {
+    listingType,
+    title: item.title,
+    description: [
+      item.description,
+      item.sourceText,
+      item.source_text,
+      item.sourceTitle,
+      item.source_title
+    ].filter(Boolean).join(' ')
+  });
   const transactionType = ['commercial', 'land'].includes(listingType)
     ? normalizeCommercialTransactionType(item.transactionType || item.transaction_type, {
-      pricePeriod: item.price_period || item.pricePeriod,
+      pricePeriod,
       title: item.title,
-      description: item.description
+      description: [
+        item.description,
+        item.sourceText,
+        item.source_text,
+        item.sourceTitle,
+        item.source_title
+      ].filter(Boolean).join(' ')
     })
     : '';
   const propertyType = listingType === 'commercial'
@@ -1972,7 +1990,7 @@ function buildSocialSearchListing(item, agentId = null) {
     area: item.area,
     address: item.address,
     price: Number(item.price || 0) > 0 ? item.price : null,
-    price_period: item.price_period || item.pricePeriod || (transactionType === 'rent' ? 'month' : 'once'),
+    price_period: pricePeriod || (transactionType === 'rent' ? 'month' : 'once'),
     bedrooms: item.beds,
     bathrooms: item.baths,
     property_type: propertyType || null,
@@ -2323,9 +2341,14 @@ function publicEmailFromText(text = '') {
 function normalizeFoundOnlineListingType(value = '') {
   const raw = String(value || '').toLowerCase();
   const hasDwelling = /\b(apartment|flat|house|home|villa|mansion|duplex|bungalow|bedroom|bedrooms|beds?|living room|sitting room)\b/.test(raw);
-  if (STUDENT_SOURCE_LISTING_PATTERN.test(raw)) return 'students';
-  if (raw.includes('rent') || raw.includes('rental') || raw.includes('let')) return 'rent';
+  if (/\b(rental|income|investment)\s+(property|building|block)\s+(?:available\s+)?for sale\b/.test(raw)) return 'sale';
   if (raw.includes('commercial') || raw.includes('shop') || raw.includes('office') || raw.includes('warehouse')) return 'commercial';
+  if (STUDENT_SOURCE_LISTING_PATTERN.test(raw)) return 'students';
+  const saleAsset = /\b(for sale|on sale|available for sale|selling)\b/.test(raw)
+    && /\b(property|building|block|apartment|flat|house|home|villa|mansion|duplex|bungalow|bedroom|bedrooms|rental income)\b/.test(raw)
+    && !/\b(student|hostel|campus|university|college|student accommodation)\b/.test(raw);
+  if (saleAsset) return 'sale';
+  if (raw.includes('rent') || raw.includes('rental') || raw.includes('let')) return 'rent';
   if (hasDwelling && (raw.includes('sale') || raw.includes('selling') || raw.includes('buy'))) return 'sale';
   if ((raw.includes('land') || raw.includes('plot') || raw.includes('acre') || raw.includes('decimal') || raw.includes('mailo')) && !hasDwelling) return 'land';
   return 'sale';
@@ -2374,17 +2397,24 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
     ? areaPin.name
     : (rawArea || areaPin?.name || district);
   const address = String(raw.address || raw.location_label || raw.location || (area && district ? `${area}, ${district}` : area || district)).trim();
-  const listingType = normalizeFoundOnlineListingType(raw.listing_type || raw.listingType || raw.property_type || raw.category || raw.title || raw.description);
+  const rawListingType = normalizeFoundOnlineListingType(
+    raw.listing_type || raw.listingType || raw.property_type || raw.category || raw.title || raw.description
+  );
+  const sourceHasExplicitTransaction = /\b(for sale|on sale|available for sale|for rent|to rent|to let|for lease)\b/i.test(sourceText);
+  const listingType = sourceHasExplicitTransaction
+    ? normalizeFoundOnlineListingType(sourceText)
+    : rawListingType;
   const title = String(raw.title || raw.source_title || raw.caption || `${listingType === 'land' ? 'Land' : 'Property'} in ${area}`).trim();
   const baseDescription = compactText(raw.description || raw.caption || raw.summary || title);
   const description = compactText([
     baseDescription,
     sourceVisualText ? `Visible video/still text adds: ${sourceVisualText}` : '',
   ].filter(Boolean).join(' '));
-  const pricePeriod = raw.price_period || raw.pricePeriod || raw.period
-    || ((listingType === 'rent' || listingType === 'students')
-      ? 'month'
-      : (listingType === 'commercial' ? '' : 'once'));
+  const pricePeriod = normalizeListingPricePeriod(raw.price_period || raw.pricePeriod || raw.period, {
+    listingType,
+    title,
+    description: `${description} ${sourceText}`
+  });
   const transactionType = ['commercial', 'land'].includes(listingType)
     ? normalizeCommercialTransactionType(
       raw.transaction_type || raw.transactionType || raw.commercial_mode || raw.commercial_intent,
