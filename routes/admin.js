@@ -253,18 +253,18 @@ function adminLowerColumn(alias, column) {
 function adminPendingReviewWhere(alias = 'p') {
   const statusExpr = adminLowerColumn(alias, 'status');
   const stageExpr = adminLowerColumn(alias, 'moderation_stage');
-  const final = adminSqlList(ADMIN_FINAL_REVIEW_STATUSES);
+  const pending = adminSqlList(ADMIN_PENDING_REVIEW_STATUSES);
   return `(
-    ${statusExpr} NOT IN (${final})
-    AND ${stageExpr} NOT IN (${final})
+    ${statusExpr} IN (${pending})
+    OR ${stageExpr} IN (${pending})
   )`;
 }
 
 function adminPendingReviewFastWhere(alias = 'p') {
-  const final = adminSqlList(ADMIN_FINAL_REVIEW_STATUSES);
+  const pending = adminSqlList(ADMIN_PENDING_REVIEW_STATUSES);
   return `(
-    COALESCE(${adminColumn(alias, 'status')}, '') NOT IN (${final})
-    AND COALESCE(${adminColumn(alias, 'moderation_stage')}, '') NOT IN (${final})
+    COALESCE(${adminColumn(alias, 'status')}, '') IN (${pending})
+    OR COALESCE(${adminColumn(alias, 'moderation_stage')}, '') IN (${pending})
   )`;
 }
 
@@ -319,9 +319,16 @@ function adminFoundOnlineReviewQueueWhere(alias = 'p') {
 }
 
 function adminActionableReviewQueueWhere(alias = 'p') {
+  const source = adminColumn(alias, 'source');
+  const listedVia = adminColumn(alias, 'listed_via');
   return `(
-    ${adminDefaultReviewQueueWhere(alias)}
-    OR ${adminFoundOnlineReviewQueueWhere(alias)}
+    ${adminPendingReviewWhere(alias)}
+    AND NOT ${adminLaunchTestListingFastCondition(alias)}
+    AND (
+      NOT ${adminSourceQualitySuppressedFlagSql(alias)}
+      OR ${source} = 'found_online_property_source_v1'
+      OR ${listedVia} = 'found_online'
+    )
   )`;
 }
 
@@ -1621,6 +1628,10 @@ function missingProviderEnv(provider) {
 const ADMIN_DASHBOARD_CACHE_TTL_MS = 15000;
 const ADMIN_REVIEW_QUEUE_CACHE_TTL_MS = 8000;
 const ADMIN_SAFE_QUERY_TIMEOUT_MS = 3500;
+const ADMIN_REVIEW_QUEUE_QUERY_TIMEOUT_MS = Math.max(
+  1000,
+  Number(process.env.ADMIN_REVIEW_QUEUE_QUERY_TIMEOUT_MS || 4000)
+);
 const adminDashboardResponseCache = new Map();
 let adminSummaryLastKnownGoodPayload = null;
 
@@ -3418,7 +3429,7 @@ router.get('/properties/review-queue', async (req, res, next) => {
 
     const where = `WHERE ${filters.join(' AND ')}`;
     const cacheKey = JSON.stringify({
-      route: 'admin-review-queue-v5',
+      route: 'admin-review-queue-v6-indexed-status',
       page,
       limit,
       includeTestLike,
@@ -3456,10 +3467,7 @@ router.get('/properties/review-queue', async (req, res, next) => {
          ) img ON true`
         : '';
       const rowLimit = limit + 1;
-      let rowFallbackReason = '';
-      let rawRows = [];
-      try {
-        const rows = await adminTimedQuery(
+      const rows = await adminTimedQuery(
           `SELECT
              p.id,
              p.title,
@@ -3468,6 +3476,10 @@ router.get('/properties/review-queue', async (req, res, next) => {
              p.district,
              p.area,
              p.price,
+             p.price_currency,
+             p.price_original,
+             p.price_fx_rate_ugx,
+             p.price_fx_as_of,
              p.price_period,
              p.status,
              p.moderation_stage,
@@ -3492,14 +3504,10 @@ router.get('/properties/review-queue', async (req, res, next) => {
            ORDER BY p.updated_at DESC NULLS LAST, p.created_at DESC NULLS LAST, p.id DESC
            LIMIT $${values.length + 1}
            OFFSET $${values.length + 2}`,
-          [...values, rowLimit, offset],
-          9000
-        );
-        rawRows = rows.rows || [];
-      } catch (error) {
-        rowFallbackReason = adminSafeQueryFallbackReason(error);
-        if (!rowFallbackReason) throw error;
-      }
+        [...values, rowLimit, offset],
+        ADMIN_REVIEW_QUEUE_QUERY_TIMEOUT_MS
+      );
+      const rawRows = rows.rows || [];
 
       const hasMore = rawRows.length > limit;
       const responseRows = rawRows.slice(0, limit);
@@ -3514,7 +3522,7 @@ router.get('/properties/review-queue', async (req, res, next) => {
         pagination,
         meta: {
           status: 'review_queue',
-          cache: 'admin_review_queue_v5',
+          cache: 'admin_review_queue_v6_indexed_status',
           cache_ttl_ms: ADMIN_REVIEW_QUEUE_CACHE_TTL_MS,
           include_test_like: includeTestLike,
           include_total: includeTotal,
@@ -3524,7 +3532,7 @@ router.get('/properties/review-queue', async (req, res, next) => {
           total_exact: exactTotalAvailable,
           partial_total: !exactTotalAvailable,
           count_fallback_reason: countFallbackReason,
-          row_fallback_reason: rowFallbackReason,
+          row_fallback_reason: '',
           count_filter: queueType === 'found_online'
             ? 'admin_found_online_review_queue'
             : (includeTestLike ? 'admin_active_review_queue' : 'admin_actionable_review_queue'),
@@ -3626,6 +3634,10 @@ router.get('/properties/actioned', async (req, res, next) => {
              p.district,
              p.area,
              p.price,
+             p.price_currency,
+             p.price_original,
+             p.price_fx_rate_ugx,
+             p.price_fx_as_of,
              p.price_period,
              p.status,
              p.moderation_stage,

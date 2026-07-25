@@ -8151,6 +8151,27 @@ function fmtP(v, p) {
   return (CURRENCIES[activeCur] || CURRENCIES.UGX).fmt(numeric, localizePricePeriod(p));
 }
 
+function propertyOriginalCurrencyGuide(p = {}) {
+  const extra = p?.extra_fields && typeof p.extra_fields === "object" ? p.extra_fields : {};
+  const currency = String(p?.price_currency || extra.price_currency || "UGX").trim().toUpperCase();
+  if (currency !== "USD") return "";
+  const original = Number(p?.price_original ?? extra.price_original);
+  const canonicalUgx = Number(p?.price || 0);
+  const rate = Number(p?.price_fx_rate_ugx ?? extra.price_fx_rate_ugx);
+  if (!Number.isFinite(original) || original <= 0 || !Number.isFinite(canonicalUgx) || canonicalUgx <= 0) return "";
+  const usd = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(Math.round(original));
+  const ugx = `USh ${formatCompact(Math.round(canonicalUgx))}`;
+  const rateLabel = Number.isFinite(rate) && rate > 0
+    ? ` @ ${new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(rate)} UGX/USD`
+    : "";
+  return `USD ${usd} · ≈ ${ugx}${rateLabel}`;
+}
+
+function propertyOriginalCurrencyGuideHtml(p = {}, className = "mt-1 text-[11px] font-semibold text-sky-700") {
+  const guide = propertyOriginalCurrencyGuide(p);
+  return guide ? `<div class="${className}" data-price-currency-guide="USD">${adminEscape(guide)}</div>` : "";
+}
+
 function setCurrency(cur) {
   activeCur = cur;
   renderAll();
@@ -24456,7 +24477,7 @@ function renderAdminReviewPanel(review) {
           </div>
           <div class="grid sm:grid-cols-2 gap-2 mt-4 text-sm text-gray-700">
             <div><span class="text-gray-500">Type:</span> ${adminEscape(review.listing_type || "-")}</div>
-            <div><span class="text-gray-500">Price:</span> ${fmtP(review.price || 0, review.price_period || "")}</div>
+            <div><span class="text-gray-500">Price:</span> ${fmtP(review.price || 0, review.price_period || "")}${propertyOriginalCurrencyGuideHtml(review, "mt-1 text-[11px] font-semibold text-sky-700")}</div>
             <div><span class="text-gray-500">Lister:</span> ${adminEscape(review.lister_name || "-")}</div>
             <div><span class="text-gray-500">Phone:</span> ${adminEscape(review.lister_phone || "-")}</div>
             <div><span class="text-gray-500">Email:</span> ${adminEscape(review.lister_email || "-")}</div>
@@ -26001,10 +26022,17 @@ async function refreshAuthSession() {
     if (tokenAtStart !== authState?.token) return;
     const user = me?.data?.user;
     if (!user) throw new Error("Invalid session");
-    persistAuthState(authState.token, { ...user, portal_mode: authState?.user?.portal_mode || derivePortalMode(user) });
+    const rollingToken = me?.data?.session?.token || authState.token;
+    persistAuthState(rollingToken, { ...user, portal_mode: authState?.user?.portal_mode || derivePortalMode(user) });
   } catch (error) {
     if (tokenAtStart !== authState?.token) return;
-    clearAuthState();
+    if (isAuthSessionFailure(error) || Number(error?.status || 0) === 401) {
+      clearAuthState();
+      return;
+    }
+    window.setTimeout(() => {
+      if (authState?.token === tokenAtStart) refreshAuthSession();
+    }, 10000);
   }
 }
 
@@ -38428,6 +38456,7 @@ function socialImportListingCardHtml(p = {}, options = {}) {
           compact: true
         })}</div>
         ${socialImportPriceHtml(p, { student: options.student === true })}
+        ${propertyOriginalCurrencyGuideHtml(p)}
         <h3 class="social-import-card-title line-clamp-1">${adminEscape(displayTitle)}</h3>
         <p class="social-import-card-location"><i class="ti-map-pin fas fa-map-marker-alt"></i>${adminEscape(displayLocation)}</p>
         ${socialImportSpecsHtml(p)}
@@ -39821,6 +39850,7 @@ function studentCardFooterText(p = {}) {
       </div>
       <div class="p-4">
         <h3 class="font-bold text-gray-800 line-clamp-1">${adminEscape(displayTitle)}</h3>
+        ${propertyOriginalCurrencyGuideHtml(p)}
         <p class="text-sm text-gray-500 mt-1"><i class="fas fa-map-marker-alt ${theme.iconText}"></i> ${adminEscape(displayLocation)}</p>
         ${nearDistance ? `<p class="text-xs font-semibold ${theme.accentText} mt-1"><i class="fas fa-location-arrow mr-1"></i>${nearDistance}</p>` : ""}
         <div class="mt-2 text-sm text-gray-500 flex gap-3 flex-wrap">
@@ -50870,6 +50900,7 @@ async function openDetail(id, options = {}) {
               </div>
               <div class="text-right">
                 <div class="text-3xl font-black text-green-700">${fmtP(p.price, p.period)}</div>
+                ${propertyOriginalCurrencyGuideHtml(p, "mt-1 text-xs font-semibold text-sky-700")}
               </div>
             </div>
             <div class="mt-3 flex items-center gap-2">
