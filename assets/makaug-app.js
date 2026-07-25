@@ -44199,8 +44199,11 @@ function restoreCanonicalLocationRouteState(config) {
     level: "",
     parent_path: ""
   }));
-  const nearby = Number(params.get("nearby") || params.get("nearby_km"));
-  if ([0, 3, 7].includes(nearby)) state.nearbyKm = nearby;
+  const nearbyParam = params.get("nearby") ?? params.get("nearby_km");
+  if (nearbyParam !== null && nearbyParam !== "") {
+    const nearby = Number(nearbyParam);
+    if ([0, 3, 7].includes(nearby)) state.nearbyKm = nearby;
+  }
 }
 
 async function hydrateCanonicalLocationSeoRoute(config) {

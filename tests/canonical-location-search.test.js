@@ -77,6 +77,7 @@ test('public category search is canonical-only and includes visible nearby and a
   const migration = read('db/migrations/105_canonical_location_search.sql');
 
   assert.match(app, /location_ids/);
+  assert.match(app, /nearbyParam !== null && nearbyParam !== ""/);
   assert.match(app, /Choose a location from the suggestions before searching/);
   assert.match(app, /canonical-location-chip/);
   assert.match(app, /Nearby match/);
