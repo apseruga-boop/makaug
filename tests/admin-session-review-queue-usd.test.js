@@ -30,6 +30,15 @@ test('USD guide prices preserve original value and produce canonical UGX', () =>
   assert.equal(ugx.price_fx_rate_ugx, null);
 });
 
+test('USD shorthand keeps the original source amount before canonical conversion', () => {
+  const parsed = propertyPriceMetadata('$6k', {
+    fxAsOf: '2026-07-25T00:00:00.000Z'
+  });
+  assert.equal(parsed.price_currency, 'USD');
+  assert.equal(parsed.price_original, 6000);
+  assert.equal(parsed.price, 22800000);
+});
+
 test('staff sessions roll for 30 days and transient auth backend failures do not become 401', () => {
   const authRoute = read('routes/auth.js');
   const authMiddleware = read('middleware/auth.js');
@@ -68,6 +77,7 @@ test('USD currency metadata is carried through import, API, moderation, and publ
   const admin = read('routes/admin.js');
   const app = read('assets/makaug-app.js');
   const migration = read('db/migrations/102_property_price_currency.sql');
+  const correction = read('db/migrations/103_property_usd_source_amount_correction.sql');
   const html = read('index.html');
 
   for (const field of ['price_currency', 'price_original', 'price_fx_rate_ugx', 'price_fx_as_of']) {
@@ -78,5 +88,8 @@ test('USD currency metadata is carried through import, API, moderation, and publ
   }
   assert.match(app, /function propertyOriginalCurrencyGuide\(p = \{\}\)/);
   assert.match(app, /data-price-currency-guide="USD"/);
+  assert.match(correction, /price_source_amount_corrected/);
+  assert.match(correction, /THOUSAND\|THOUSANDS\|K/);
+  assert.match(correction, /ROUND\(a\.original_amount \* 3800\)/);
   assert.match(html, /admin-session-review-queue-usd-20260725/);
 });
