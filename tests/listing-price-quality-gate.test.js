@@ -94,6 +94,7 @@ test('all approval paths and historic repair migration use the shared gate', () 
   const staff = read('routes/staff.js');
   const app = read('assets/makaug-app.js');
   const migration = read('db/migrations/095_listing_price_quality_gate.sql');
+  const missingPriceMigration = read('db/migrations/096_listing_price_quality_missing_price_hold.sql');
 
   assert.match(properties, /Listing price data must be corrected or confirmed before approval/);
   assert.match(properties, /high_monthly_price_confirmed/);
@@ -106,4 +107,7 @@ test('all approval paths and historic repair migration use the shared gate', () 
   assert.match(migration, /status = 'pending'/);
   assert.match(migration, /'featured', false/);
   assert.match(migration, /price_quality_previous_status/);
+  assert.match(missingPriceMigration, /p\.price IS NULL OR p\.price <= 1/);
+  assert.match(missingPriceMigration, /missing_or_placeholder_price/);
+  assert.match(missingPriceMigration, /status = 'pending'/);
 });
