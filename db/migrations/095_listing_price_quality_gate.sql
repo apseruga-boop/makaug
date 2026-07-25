@@ -92,9 +92,11 @@ UPDATE properties p
 SET
   status = 'pending',
   moderation_stage = 'source_review',
-  featured = FALSE,
   moderation_reason = 'Price data requires staff review before public approval.',
   extra_fields = COALESCE(p.extra_fields, '{}'::jsonb) || jsonb_build_object(
+    'featured', false,
+    'featured_removed_at', NOW()::text,
+    'featured_removed_by', 'listing-price-quality-gate-20260725',
     'price_quality_held_at', NOW()::text,
     'price_quality_marker', 'listing-price-quality-gate-20260725',
     'price_quality_previous_status', p.status,
