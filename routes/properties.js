@@ -98,6 +98,7 @@ const {
   canonicalLocationByKey,
   canonicalizeLocationRows,
   canonicalizeUgandaLocation,
+  canonicalLocationRollupCounts,
   canonicalLocationSearchScope,
   canonicalLocationSuggestions,
   normalizeLocationKey
@@ -2119,9 +2120,10 @@ router.get('/locations/suggest', async (req, res, next) => {
         values
       ));
       const canonicalRows = canonicalizeLocationRows(result.rows);
+      const directCounts = new Map(canonicalRows.map((row) => [row.canonical_key, Number(row.listing_count) || 0]));
       cached = {
         createdAt: Date.now(),
-        counts: new Map(canonicalRows.map((row) => [row.canonical_key, Number(row.listing_count) || 0]))
+        counts: canonicalLocationRollupCounts(directCounts)
       };
       publicLocationSuggestCache.set(cacheKey, cached);
     }

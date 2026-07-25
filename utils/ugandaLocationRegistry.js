@@ -401,6 +401,18 @@ function canonicalLocationSearchScope(keys = [], nearbyKm = 0) {
   };
 }
 
+function canonicalLocationRollupCounts(counts = new Map()) {
+  const direct = counts instanceof Map ? counts : new Map(Object.entries(counts || {}));
+  const rolled = new Map(direct);
+  registry.forEach((location) => {
+    if (!['city', 'district'].includes(location.level)) return;
+    const scope = canonicalLocationSearchScope([location.key], 0);
+    const total = scope.exact.reduce((sum, child) => sum + Math.max(0, Number(direct.get(child.key)) || 0), 0);
+    rolled.set(location.key, total);
+  });
+  return rolled;
+}
+
 function haversineKm(a = {}, b = {}) {
   if (![a.lat, a.lng, b.lat, b.lng].every((value) => Number.isFinite(Number(value)))) return null;
   const toRadians = (degrees) => (Number(degrees) * Math.PI) / 180;
@@ -417,6 +429,7 @@ module.exports = {
   canonicalizeUgandaLocation,
   canonicalizeLocationRows,
   canonicalLocationOptions,
+  canonicalLocationRollupCounts,
   canonicalLocationSearchScope,
   canonicalLocationSuggestions,
   aliasesForCanonicalLocation,
