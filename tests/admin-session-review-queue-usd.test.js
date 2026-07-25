@@ -60,15 +60,19 @@ test('review queue uses indexed pending status predicates and never converts row
     admin.indexOf("router.get('/properties/review-queue'"),
     admin.indexOf("router.get('/properties/actioned'")
   );
-  const migration = read('db/migrations/101_admin_review_queue_status_indexes.sql');
+  const migration = read('db/migrations/106_admin_review_queue_authoritative_status.sql');
 
-  assert.match(admin, /admin-review-queue-v6-indexed-status/);
+  assert.match(admin, /admin-review-queue-v7-authoritative-status/);
   assert.match(admin, /ADMIN_REVIEW_QUEUE_QUERY_TIMEOUT_MS/);
-  assert.match(admin, /function adminPendingReviewWhere\(alias = 'p'\)[\s\S]*IN \(\$\{pending\}\)/);
+  assert.match(
+    admin,
+    /function adminPendingReviewWhere\(alias = 'p'\)[\s\S]*rawStatusExpr[\s\S]*\$\{rawStatusExpr\} = ''[\s\S]*\$\{stageExpr\} IN \(\$\{pending\}\)/
+  );
   assert.doesNotMatch(reviewQueueRoute, /rowFallbackReason = adminSafeQueryFallbackReason/);
-  assert.match(migration, /idx_properties_admin_review_status_order_v2/);
-  assert.match(migration, /idx_properties_admin_review_stage_order_v2/);
-  assert.match(migration, /idx_properties_admin_found_online_review_status_v2/);
+  assert.match(migration, /idx_properties_admin_actionable_review_order_v3/);
+  assert.match(migration, /idx_properties_admin_found_online_review_order_v3/);
+  assert.match(migration, /COALESCE\(status, ''\) = ''[\s\S]*LOWER\(COALESCE\(moderation_stage, ''\)\) IN/);
+  assert.match(reviewQueueRoute, /final_property_status_overrides_stale_moderation_stage/);
 });
 
 test('USD currency metadata is carried through import, API, moderation, and public UI', () => {

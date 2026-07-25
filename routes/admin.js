@@ -253,18 +253,27 @@ function adminLowerColumn(alias, column) {
 function adminPendingReviewWhere(alias = 'p') {
   const statusExpr = adminLowerColumn(alias, 'status');
   const stageExpr = adminLowerColumn(alias, 'moderation_stage');
+  const rawStatusExpr = `COALESCE(${adminColumn(alias, 'status')}, '')`;
   const pending = adminSqlList(ADMIN_PENDING_REVIEW_STATUSES);
   return `(
     ${statusExpr} IN (${pending})
-    OR ${stageExpr} IN (${pending})
+    OR (
+      ${rawStatusExpr} = ''
+      AND ${stageExpr} IN (${pending})
+    )
   )`;
 }
 
 function adminPendingReviewFastWhere(alias = 'p') {
+  const status = adminColumn(alias, 'status');
+  const stage = adminColumn(alias, 'moderation_stage');
   const pending = adminSqlList(ADMIN_PENDING_REVIEW_STATUSES);
   return `(
-    COALESCE(${adminColumn(alias, 'status')}, '') IN (${pending})
-    OR COALESCE(${adminColumn(alias, 'moderation_stage')}, '') IN (${pending})
+    COALESCE(${status}, '') IN (${pending})
+    OR (
+      COALESCE(${status}, '') = ''
+      AND COALESCE(${stage}, '') IN (${pending})
+    )
   )`;
 }
 
@@ -3429,7 +3438,7 @@ router.get('/properties/review-queue', async (req, res, next) => {
 
     const where = `WHERE ${filters.join(' AND ')}`;
     const cacheKey = JSON.stringify({
-      route: 'admin-review-queue-v6-indexed-status',
+      route: 'admin-review-queue-v7-authoritative-status',
       page,
       limit,
       includeTestLike,
@@ -3522,7 +3531,7 @@ router.get('/properties/review-queue', async (req, res, next) => {
         pagination,
         meta: {
           status: 'review_queue',
-          cache: 'admin_review_queue_v6_indexed_status',
+          cache: 'admin_review_queue_v7_authoritative_status',
           cache_ttl_ms: ADMIN_REVIEW_QUEUE_CACHE_TTL_MS,
           include_test_like: includeTestLike,
           include_total: includeTotal,
@@ -3537,6 +3546,7 @@ router.get('/properties/review-queue', async (req, res, next) => {
             ? 'admin_found_online_review_queue'
             : (includeTestLike ? 'admin_active_review_queue' : 'admin_actionable_review_queue'),
           source_quality_filter: 'stored_suppression_flag_only',
+          status_precedence: 'final_property_status_overrides_stale_moderation_stage',
           pending_statuses: ADMIN_PENDING_REVIEW_STATUSES,
           final_statuses_excluded: ADMIN_FINAL_REVIEW_STATUSES
         }
