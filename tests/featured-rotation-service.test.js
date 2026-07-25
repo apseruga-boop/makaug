@@ -6,6 +6,7 @@ const test = require('node:test');
 const {
   FEATURED_CATEGORIES,
   featuredCleanliness,
+  featuredPoolHealth,
   selectFeaturedCandidates,
   timeZoneParts
 } = require('../services/featuredRotationService');
@@ -87,6 +88,22 @@ test('cleanliness gate blocks the launch price and location failure modes', () =
       district: 'Wakiso'
     })).reasons.includes('title_location_conflict')
   );
+});
+
+test('completed daily rotation repairs a pool that no longer passes current cleanliness rules', () => {
+  const healthyRows = FEATURED_CATEGORIES.flatMap((category, categoryIndex) => [
+    row(category, `${category}-a`, `2026-07-25T0${categoryIndex}:00:00.000Z`),
+    row(category, `${category}-b`, `2026-07-24T0${categoryIndex}:00:00.000Z`)
+  ]);
+
+  assert.equal(featuredPoolHealth(healthyRows, 2).healthy, true);
+  const unhealthyRows = healthyRows.map((item) => ({ ...item }));
+  const studentIndex = unhealthyRows.findIndex((item) => item.listing_type === 'student');
+  unhealthyRows[studentIndex].price_period = 'once';
+  unhealthyRows[studentIndex].price = 1450000000;
+  const result = featuredPoolHealth(unhealthyRows, 2);
+  assert.equal(result.healthy, false);
+  assert.deepEqual(result.dirty[0].reasons, ['student_sale_asset']);
 });
 
 test('Kampala rotation window uses East Africa time rather than server time', () => {
