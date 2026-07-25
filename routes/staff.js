@@ -11,6 +11,7 @@ const {
   normalizeCommercialTransactionType,
   normalizeCommercialPropertyType,
 } = require('../utils/commercialClassification');
+const { listingPriceQuality } = require('../utils/listingPriceQuality');
 const {
   districtForKnownArea,
   normalizeReviewLocationHierarchy,
@@ -2403,6 +2404,16 @@ function staffBulkModerationDecision(row = {}, approvedIndex = {}) {
   if (spamReason) return { id: row.id, title: row.title, decision: 'hold', reason: 'spam', details: [spamReason] };
   if (String(row.listing_type || '').toLowerCase() === 'sale' && Number(row.price || 0) > 0 && Number(row.price || 0) < 20000000) {
     return { id: row.id, title: row.title, decision: 'hold', reason: 'misclassified_sale' };
+  }
+  const priceQuality = listingPriceQuality(row);
+  if (!priceQuality.ok) {
+    return {
+      id: row.id,
+      title: row.title,
+      decision: 'hold',
+      reason: 'price_data_quality',
+      details: priceQuality.reasons
+    };
   }
   const duplicate = staffBulkDuplicateMatch(row, approvedIndex);
   if (duplicate) {
