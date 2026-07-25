@@ -104,6 +104,6 @@ test('all approval paths and historic repair migration use the shared gate', () 
   assert.match(app, /data-price-confirmation-required/);
   assert.match(migration, /explicit_source_sale_language/);
   assert.match(migration, /status = 'pending'/);
-  assert.match(migration, /featured = FALSE/);
+  assert.match(migration, /'featured', false/);
   assert.match(migration, /price_quality_previous_status/);
 });
