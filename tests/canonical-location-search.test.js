@@ -86,6 +86,9 @@ test('public category search is canonical-only and includes visible nearby and a
   assert.match(app, /PUBLIC_CANONICAL_LOCATION_MATCH_BY_PROPERTY_ID/);
   assert.match(app, /responseSnapshot\?\.meta\?\.location_search\?\.canonical === true/);
   assert.match(app, /key !== "students" && !publicCategoryActiveSearchPath\(key\)/);
+  assert.match(app, /restoredRouteSearchPath = publicInventoryRouteSearchPath\(activeCategory\)/);
+  assert.match(app, /activeCategoryPath = restoredRouteSearchPath/);
+  assert.match(app, /currentRouteSearchPath && currentRouteSearchPath !== firstPagePath/);
   assert.match(app, /fetchCanonicalAutoWidenedFirstPage/);
   assert.match(app, /maximum price was widened by 20%/);
   assert.match(app, /Similar properties nearby/);

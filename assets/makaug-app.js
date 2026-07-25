@@ -43476,8 +43476,8 @@ async function fetchPublicCategoryRows(category, totalCount = 0, options = {}) {
 async function refreshActivePublicInventoryCategoryFromApi({ silent = true } = {}) {
   const activeCategory = activePublicInventoryCategoryFromRoute();
   if (!activeCategory) return false;
-  const activeRouteSearchPath = publicInventoryRouteSearchPath(activeCategory);
-  const activeCategoryPath = activeRouteSearchPath || publicInventoryCategoryPath(activeCategory);
+  let activeRouteSearchPath = publicInventoryRouteSearchPath(activeCategory);
+  let activeCategoryPath = activeRouteSearchPath || publicInventoryCategoryPath(activeCategory);
   if (!activeCategoryPath) return false;
   const hydrationKey = `${activeCategory}::${activeCategoryPath}`;
   if (publicActiveCategoryHydrationPromises.has(hydrationKey)) {
@@ -43490,6 +43490,16 @@ async function refreshActivePublicInventoryCategoryFromApi({ silent = true } = {
         maxPages: 1,
         includeSummary: Boolean(activeRouteSearchPath)
       });
+      const restoredRouteSearchPath = publicInventoryRouteSearchPath(activeCategory);
+      if (!activeRouteSearchPath && restoredRouteSearchPath) {
+        activeRouteSearchPath = restoredRouteSearchPath;
+        activeCategoryPath = restoredRouteSearchPath;
+        ({ rows: firstCategoryRows, firstResponse: firstCategoryResponse } = await fetchPublicPaginatedRows(activeCategoryPath, {
+          limit: PUBLIC_RESULTS_PAGE_SIZE,
+          maxPages: 1,
+          includeSummary: true
+        }));
+      }
       let resolvedCategoryPath = activeCategoryPath;
       if (activeRouteSearchPath && (exactPublicPaginationTotalValue(firstCategoryResponse) ?? firstCategoryRows.length) === 0) {
         const widened = await fetchCanonicalAutoWidenedFirstPage(activeCategory, activeCategoryPath);
@@ -43646,6 +43656,12 @@ async function refreshPublicListingsFromApi({ silent = true } = {}) {
       includeSummary: Boolean(activeRouteSearchPath)
     });
     const { rows: firstPageRows, firstResponse: firstPageResponse } = await firstPageRowsPromise;
+    const currentRouteSearchPath = activeCategory ? publicInventoryRouteSearchPath(activeCategory) : "";
+    if (currentRouteSearchPath && currentRouteSearchPath !== firstPagePath) {
+      await refreshActivePublicInventoryCategoryFromApi({ silent });
+      await summaryStatsPromise;
+      return true;
+    }
     applyPublicRowsForUi(firstPageRows, firstPageResponse);
     if (activeCategory) {
       syncPublicCategoryPaginationSource(activeCategory, firstPagePath);
