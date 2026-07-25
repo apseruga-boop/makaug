@@ -15,6 +15,12 @@ const {
   storeRemoteImageUrl,
 } = require('./cloudMediaStorageService');
 const { DISTRICTS } = require('../utils/constants');
+const { canonicalizeUgandaLocation } = require('../utils/ugandaLocationRegistry');
+const {
+  maskPhonesForPriceExtraction,
+  normalizeUgandanSourcePhone,
+  ugandanPhoneFromSourceText,
+} = require('../utils/sourceIntakeIntegrity');
 
 const SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID = 'social_platform_post_discovery_20260525';
 const DEFAULT_MAX_SOURCES = 40;
@@ -3612,6 +3618,8 @@ function extractArea(text = '') {
 function districtForArea(area = '', text = '') {
   const candidate = cleanText(area) || extractArea(text);
   const haystack = cleanText(`${candidate} ${text}`);
+  const canonicalLocation = canonicalizeUgandaLocation(candidate, '');
+  if (canonicalLocation?.district) return canonicalLocation.district;
   const areaPin = areaPinFromText(haystack);
   if (areaPin?.district) return areaPin.district;
   if (DISTRICTS.includes(candidate)) return candidate;
@@ -3620,7 +3628,7 @@ function districtForArea(area = '', text = '') {
   if (/katosi|mpunge|mpungwe|mukono|ucu|goma|nakisunga/i.test(haystack)) return 'Mukono';
   if (/kira|naalya|najjera|namugongo|bwebajja|kajansi|kitende|akright|wakiso|bujjuko|bujuuko|namayumba|kakiri|masulita|hoima road|kigo|kawuku|kisubi|nkumba|ndejje|lubugumu|kyaliwajjala|kireka|sonde|kungu|bulindo|gayaza|matugga|nansana|nabweru|buloba|kyengera|busega|mpererwe|garuga|kiwafu/i.test(haystack)) return 'Wakiso';
   if (/kampala|ntinda|bukoto|naguru|kololo|namanve|muyenga|makindye|kansanga|makerere|kyambogo|kikoni|nakawa|banda|ndeeba|kikuubo|industrial area|lugogo|nateete|kawempe|kyebando/i.test(haystack)) return 'Kampala';
-  return 'Kampala';
+  return '';
 }
 
 function listingTypeFromText(text = '') {
@@ -3635,7 +3643,7 @@ function listingTypeFromText(text = '') {
 }
 
 function priceTextFromText(text = '') {
-  const raw = cleanText(text);
+  const raw = maskPhonesForPriceExtraction(cleanText(text));
   const localPriceMatch = raw.match(/\b(?:bei|omuwendo|price|ugx|ush|shs?)?\s*\d+(?:\.\d+)?\s*(?:obukadde|akakadde|bukadde|emitwalo|mitwalo|laki|lakhs?)\b(?:\s*(?:negotiable|asking|only|za mwezi|per month|monthly))?/i);
   if (localPriceMatch) return cleanText(localPriceMatch[0]);
   const negotiableMatch = raw.match(/\b(?:UGX|USh|Shs?)?\s*\d[\d,.]*(?:\s*(?:bn|billion|billions|m|mn|million|millions|k|thousand|thousands))\s*(?:negotiable|asking|only)\b/i);
@@ -3654,20 +3662,11 @@ function priceTextFromText(text = '') {
 }
 
 function normalizeUgandanPhone(value = '') {
-  const digits = String(value || '').replace(/\D/g, '');
-  if (/^2567\d{8}$/.test(digits)) return `+${digits}`;
-  if (/^07\d{8}$/.test(digits)) return `+256${digits.slice(1)}`;
-  if (/^7\d{8}$/.test(digits)) return `+256${digits}`;
-  return '';
+  return normalizeUgandanSourcePhone(value);
 }
 
 function phoneFromText(text = '') {
-  const candidates = cleanText(text).match(/(?:\+?256|0|7)\s*[\d\s().-]{7,14}\d/g) || [];
-  for (const candidate of candidates) {
-    const normalized = normalizeUgandanPhone(candidate);
-    if (normalized) return normalized;
-  }
-  return '';
+  return ugandanPhoneFromSourceText(text);
 }
 
 function emailFromText(text = '') {
@@ -4832,6 +4831,9 @@ module.exports = {
   normalizeExactSocialPostUrl,
   normalizeYouTubeApiPost,
   normalizeXApiPost,
+  priceTextFromText,
+  normalizeUgandanPhone,
+  phoneFromText,
   youtubeSearchQuotaExceededFromReports,
   runSocialPlatformPostSweep,
 };

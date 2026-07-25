@@ -56,7 +56,7 @@ function normalizeListingPricePeriod(value, options = {}) {
   // registry category. Check sale first because "rental property for sale"
   // describes an income-producing asset sale, not a monthly rental.
   if (/\b(for sale|on sale|available for sale|selling|purchase|asking price)\b/.test(text)) return 'once';
-  if (/\b(for rent|to rent|to let|for lease|available to rent|monthly rent|per month)\b/.test(text)) return 'month';
+  if (/\b(for rent|to rent|to let|for lease|available to rent|monthly rent|per month)\b|\/(?:month|mo)\b/.test(text)) return 'month';
 
   const explicit = compactText(value).toLowerCase().replace(/[\s-]+/g, '_');
   const recurring = {

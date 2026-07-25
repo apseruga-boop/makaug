@@ -14,6 +14,7 @@ function persistenceDb({ existingRows = [] } = {}) {
     async query(sql, params = []) {
       const statement = String(sql || '').trim();
       if (/^(BEGIN|COMMIT|ROLLBACK)$/.test(statement)) return { rows: [], rowCount: 0 };
+      if (statement.startsWith('SELECT pg_advisory_xact_lock')) return { rows: [{}], rowCount: 1 };
       if (statement.includes('FROM properties') && statement.includes("extra_fields->>'source_listing_key'")) {
         return { rows: existingRows, rowCount: existingRows.length };
       }

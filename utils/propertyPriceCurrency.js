@@ -11,13 +11,14 @@ function configuredUsdToUgxRate() {
 function normalizePropertyPriceCurrency(value = 'UGX') {
   const normalized = String(value || 'UGX').trim().toUpperCase();
   if (normalized === 'USH' || normalized === 'UGS') return 'UGX';
-  return SUPPORTED_PROPERTY_PRICE_CURRENCIES.has(normalized) ? normalized : 'UGX';
+  return SUPPORTED_PROPERTY_PRICE_CURRENCIES.has(normalized) ? normalized : '';
 }
 
 function sourceCurrencyForValue(value, explicitCurrency = '') {
   const explicit = String(explicitCurrency || '').trim();
   if (explicit) return normalizePropertyPriceCurrency(explicit);
   const raw = String(value ?? '').trim();
+  if (/\b(?:RWF|FRW|KES|KSH|TZS|TSH|INR|LKR)\b|₹/i.test(raw)) return '';
   return /(?:^|\s)(?:USD|US\$)\s*[\d.]|\$\s*[\d.]/i.test(raw) ? 'USD' : 'UGX';
 }
 
@@ -40,18 +41,31 @@ function sourcePriceAmount(value) {
 }
 
 function propertyPriceMetadata(value, options = {}) {
+  const currency = sourceCurrencyForValue(value, options.currency);
+  if (!currency) {
+    return {
+      price: null,
+      price_currency: null,
+      price_original: null,
+      price_fx_rate_ugx: null,
+      price_fx_as_of: null,
+      supported: false,
+      rejection_reason: 'unsupported_property_price_currency'
+    };
+  }
   const originalAmount = sourcePriceAmount(value);
   if (!Number.isFinite(originalAmount) || originalAmount <= 0) {
     return {
       price: null,
-      price_currency: normalizePropertyPriceCurrency(options.currency),
+      price_currency: currency,
       price_original: null,
       price_fx_rate_ugx: null,
-      price_fx_as_of: null
+      price_fx_as_of: null,
+      supported: true,
+      rejection_reason: ''
     };
   }
 
-  const currency = sourceCurrencyForValue(value, options.currency);
   const fxRate = currency === 'USD'
     ? Number(options.usdToUgxRate || configuredUsdToUgxRate())
     : 1;
@@ -62,7 +76,9 @@ function propertyPriceMetadata(value, options = {}) {
     price_fx_rate_ugx: currency === 'USD' ? fxRate : null,
     price_fx_as_of: currency === 'USD'
       ? (options.fxAsOf || new Date().toISOString())
-      : null
+      : null,
+    supported: true,
+    rejection_reason: ''
   };
 }
 
