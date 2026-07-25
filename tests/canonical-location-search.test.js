@@ -7,6 +7,7 @@ const test = require('node:test');
 
 const {
   canonicalLocationByKey,
+  canonicalLocationRollupCounts,
   canonicalizeUgandaLocation,
   canonicalLocationSearchScope,
   canonicalLocationSuggestions,
@@ -40,6 +41,19 @@ test('location suggestions rank exact aliases first and never exceed eight', () 
   assert.equal(suggestions[0].match, 'exact_alias');
   assert.equal(suggestions[0].listing_count, 120);
   assert.ok(suggestions.length <= 8);
+});
+
+test('city and district suggestion counts use the same descendant scope as search', () => {
+  const direct = new Map([
+    ['wakiso:kira', 10],
+    ['wakiso:najjera', 4],
+    ['wakiso:namugongo', 3],
+    ['kampala:ntinda', 7],
+  ]);
+  const rolled = canonicalLocationRollupCounts(direct);
+  assert.ok(rolled.get('wakiso:kira') > direct.get('wakiso:kira'));
+  assert.ok(rolled.get('wakiso:wakiso') >= 17);
+  assert.equal(rolled.get('kampala:ntinda'), 7);
 });
 
 test('multi-select location scope supports exact and nearby results without silent district rollup', () => {
