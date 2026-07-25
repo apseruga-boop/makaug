@@ -9,7 +9,9 @@ const { captureLearningEvent } = require('../services/aiLearningCaptureService')
 const { createLead } = require('../services/leadService');
 const {
   estimateAdvertisingQuote,
+  getAdvertisingPlacements,
   getAdvertisingPackages,
+  mergePlacementRowsWithCatalog,
   summarizeAdvertisingPackageKeys
 } = require('../services/advertisingCatalogService');
 const {
@@ -122,15 +124,20 @@ router.get('/readiness', (_req, res) => {
 router.get('/placements', async (_req, res, next) => {
   try {
     const rows = await db.query(
-      `SELECT key, label, page_key, slot_type, size_label, is_premium, base_price_ugx, preview_image_url, notes
+      `SELECT *
        FROM advertising_placements
        WHERE is_active = true
        ORDER BY sort_order ASC, label ASC`
     );
-    return res.json({ ok: true, data: rows.rows });
+    const data = mergePlacementRowsWithCatalog(rows.rows);
+    return res.json({ ok: true, data });
   } catch (error) {
-    if (String(error.message || '').includes('advertising_placements')) {
-      return res.json({ ok: true, data: [] });
+    if (['42P01', '42703'].includes(error.code) || String(error.message || '').includes('advertising_placements')) {
+      return res.json({
+        ok: true,
+        data: getAdvertisingPlacements(),
+        meta: { fallback: true }
+      });
     }
     return next(error);
   }
