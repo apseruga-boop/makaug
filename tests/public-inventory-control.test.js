@@ -78,13 +78,13 @@ test('admin live controls use paginated backend snapshots', () => {
   assert.match(adminRouteSource, /safeCount\(`SELECT COUNT\(\*\)::int AS total FROM properties p WHERE \$\{adminPublicLiveListingFastWhere\('p'\)\}`\)/);
   assert.match(adminRouteSource, /'source_review'/);
   assert.match(adminRouteSource, /'queued'/);
-  assert.match(adminRouteSource, /function adminPendingReviewWhere\(alias = 'p'\)[\s\S]*\$\{statusExpr\} IN \(\$\{pending\}\)[\s\S]*\$\{stageExpr\} IN \(\$\{pending\}\)/);
+  assert.match(adminRouteSource, /function adminPendingReviewWhere\(alias = 'p'\)[\s\S]*\$\{statusExpr\} IN \(\$\{pending\}\)[\s\S]*\$\{rawStatusExpr\} = ''[\s\S]*\$\{stageExpr\} IN \(\$\{pending\}\)/);
   assert.doesNotMatch(adminRouteSource, /\$\{statusExpr\} NOT IN \(\$\{final\}\)/);
   assert.match(appSource, /const reviewQueuePath = adminPendingQueueFilter === "found_online"[\s\S]*"\/api\/admin\/properties\/review-queue\?include_total=0&include_images=0&queue=found_online"[\s\S]*"\/api\/admin\/properties\/review-queue\?include_total=0&include_images=0"/);
   assert.match(appSource, /King dashboard refresh already running; skipping duplicate render\./);
   assert.match(adminRouteSource, /adminCachedPayload\('admin-summary-v5-properties-list-count-fast'/);
   assert.match(adminRouteSource, /adminCachedPayload\('admin-command-centre-v4'/);
-  assert.match(adminRouteSource, /admin-review-queue-v6-indexed-status/);
+  assert.match(adminRouteSource, /admin-review-queue-v7-authoritative-status/);
   assert.match(adminRouteSource, /const includeTotal = parseBooleanLike\(req\.query\.include_total \|\| req\.query\.includeTotal, false\)/);
   assert.match(adminRouteSource, /const rowLimit = limit \+ 1/);
   assert.match(adminRouteSource, /has_more: hasMore/);
