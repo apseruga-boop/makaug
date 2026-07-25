@@ -149,22 +149,18 @@ assert(
   html.includes('properties-location-search-cache-key-20260725'),
   'production HTML should expose the location count marker'
 );
+assert(
+  serverSource.includes("'/api/properties/search?search=Kira'"),
+  'the production cache warmer should prime the exact default Kira search shape used by clients'
+);
 const warmedKiraCacheKey = propertiesRouteModule._test.publicPropertiesCacheKey({
   query: {
-    status: 'approved',
-    public_only: '1',
-    search: 'Kira',
-    limit: '24',
-    page: '1',
-    include_summary: '1'
+    search: 'Kira'
   }
 });
 const browserKiraCacheKey = propertiesRouteModule._test.publicPropertiesCacheKey({
   query: {
     search: 'Kira',
-    limit: '24',
-    page: '1',
-    include_summary: '1',
     _cb: 'browser-cold-probe-123'
   }
 });

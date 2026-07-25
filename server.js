@@ -395,7 +395,7 @@ const textAssetCache = new Map();
 const PUBLIC_HTML_WARMUP_PATHS = ['/'];
 const PUBLIC_INVENTORY_WARMUP_PATHS = [
   '/api/properties?status=approved&public_only=1&limit=1&page=1&include_summary=1',
-  '/api/properties?status=approved&public_only=1&search=Kira&limit=24&page=1&include_summary=1',
+  '/api/properties/search?search=Kira',
   '/api/properties?status=approved&public_only=1&limit=8&page=1&include_summary=0',
   '/api/properties?status=approved&public_only=1&listing_type=sale&limit=8&page=1&include_summary=0',
   '/api/properties?status=approved&public_only=1&listing_type=rent&limit=8&page=1&include_summary=0',
