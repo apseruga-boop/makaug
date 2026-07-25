@@ -40967,15 +40967,8 @@ function stableValuationComparableImageUrl(row = {}, extra = {}) {
   ].map(safeImageUrl).find(Boolean) || "";
   if (!fallback) return "";
 
-  const sourceText = [
-    row.source,
-    row.listed_via,
-    extra.source_platform,
-    extra.source_url,
-    extra.source_post_url
-  ].map((value) => String(value || "").toLowerCase()).join(" ");
   const transientTikTokImage = /(?:tiktokcdn|byteimg|p16-|p19-|p77-|tos-)/i.test(fallback);
-  return sourceText.includes("tiktok") && transientTikTokImage ? "" : fallback;
+  return transientTikTokImage ? "" : fallback;
 }
 
 function valuationComparableProperty(row = {}, category = "") {

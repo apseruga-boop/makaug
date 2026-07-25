@@ -89,6 +89,35 @@ assert.strictEqual(helpers.stableComparableImageUrl({
   image_url: 'https://p16-sign-va.tiktokcdn.com/transient.jpeg',
   extra_fields: {}
 }), null);
+assert.strictEqual(helpers.stableComparableImageUrl({
+  source: '',
+  image_url: 'https://p16-sign-va.tiktokcdn-us.com/transient-with-missing-source-label.jpeg',
+  extra_fields: {}
+}), null, 'raw signed TikTok thumbnails must never leak when source metadata is incomplete');
+
+const widenedOutlierEstimate = helpers.buildEstimate({
+  category: 'sale',
+  location: 'Entebbe',
+  bedrooms: 2,
+  size_value: null,
+  size_unit: '',
+  size_sqm: null
+}, [
+  { id: 'junk-1', listing_type: 'sale', price: 1_000_000, title: 'Bad low parsed amount' },
+  { id: 'junk-2', listing_type: 'sale', price: 1_000_000, title: 'Bad low parsed amount duplicate' },
+  { id: 'valid-1', listing_type: 'sale', price: 180_000_000, title: 'House one' },
+  { id: 'valid-2', listing_type: 'sale', price: 240_000_000, title: 'House two' },
+  { id: 'valid-3', listing_type: 'sale', price: 320_000_000, title: 'House three' },
+  { id: 'valid-4', listing_type: 'sale', price: 400_000_000, title: 'House four' }
+], 'district', true);
+assert.strictEqual(widenedOutlierEstimate.sufficient, true);
+assert.strictEqual(widenedOutlierEstimate.outlier_excluded_count, 2);
+assert.ok(widenedOutlierEstimate.range_low > 1_000_000);
+assert.strictEqual(
+  widenedOutlierEstimate.comparables.some((row) => row.id.startsWith('junk-')),
+  false,
+  'widened evidence must not retain implausible low-price rows'
+);
 
 const landEstimate = helpers.buildEstimate({
   category: 'land',
@@ -303,6 +332,7 @@ assert.ok(html.includes('id="page-valuation"'), 'valuation page must render');
 assert.ok(html.includes('valuation-canonical-confidence-cards-20260725'), 'valuation marker must render');
 assert.ok(html.includes('valuation-final-punchlist-20260725'), 'valuation punch-list marker must render');
 assert.ok(html.includes('valuation-k17-simple-range-20260725'), 'valuation K17 UX marker must render');
+assert.ok(html.includes('valuation-k17-closeout-20260725'), 'valuation K17 closeout marker must render');
 assert.ok(html.includes('Property Value Calculator'), 'valuation H1 must use the approved calculator label');
 assert.ok(html.includes('id="nav-valuation"') && html.includes('>Property Value</a>'), 'valuation navigation must use the shorter label');
 assert.ok(html.includes('id="valuation-view-all"'), 'valuation evidence must include a view-all control');
@@ -348,6 +378,21 @@ assert.ok(
   routeSource.includes('exact_comparable_count')
     && routeSource.includes('widen_reason'),
   'valuation widening must disclose the exact compatible inventory count'
+);
+assert.ok(
+  routeSource.includes("VALUATION_CLOSEOUT_MARKER = 'valuation-k17-closeout-20260725'")
+    && routeSource.includes('closeout_marker: VALUATION_CLOSEOUT_MARKER'),
+  'valuation API responses must expose the closeout marker'
+);
+assert.ok(
+  routeSource.includes('Broad ${input.district} District average — not an estimate for this property.')
+    && routeSource.includes("loadComparableRows(broadInput, 'district')"),
+  'insufficient district evidence must degrade to a clearly labelled broad average'
+);
+assert.ok(
+  routeSource.includes('filterComparablePriceOutliers')
+    && routeSource.includes('outlier_excluded_count'),
+  'exact and widened valuation pools must share robust price-outlier filtering'
 );
 assert.ok(
   app.includes('return propCard(valuationComparableProperty(row, category)')

@@ -12,6 +12,7 @@ const migration = fs.readFileSync(path.join(root, 'db/migrations/077_properties_
 const exactCountMigration = fs.readFileSync(path.join(root, 'db/migrations/092_public_inventory_exact_count_index.sql'), 'utf8');
 const locationCountMigration = fs.readFileSync(path.join(root, 'db/migrations/093_public_location_search_count_indexes.sql'), 'utf8');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+const propertiesRouteModule = require('../routes/properties');
 
 assert(
   propertiesRoute.includes("loadPublicOpportunitySummary"),
@@ -140,13 +141,37 @@ assert(
   'migration 093 should index exact public area and district count predicates separately'
 );
 assert(
-  propertiesRoute.includes('properties-location-search-count-fast-20260725')
+  propertiesRoute.includes('properties-location-search-cache-key-20260725')
     && propertiesRoute.includes('search_count_marker'),
   'location-search responses should expose the dedicated count-performance marker'
 );
 assert(
-  html.includes('properties-location-search-count-fast-20260725'),
+  html.includes('properties-location-search-cache-key-20260725'),
   'production HTML should expose the location count marker'
+);
+const warmedKiraCacheKey = propertiesRouteModule._test.publicPropertiesCacheKey({
+  query: {
+    status: 'approved',
+    public_only: '1',
+    search: 'Kira',
+    limit: '24',
+    page: '1',
+    include_summary: '1'
+  }
+});
+const browserKiraCacheKey = propertiesRouteModule._test.publicPropertiesCacheKey({
+  query: {
+    search: 'Kira',
+    limit: '24',
+    page: '1',
+    include_summary: '1',
+    _cb: 'browser-cold-probe-123'
+  }
+});
+assert.strictEqual(
+  browserKiraCacheKey,
+  warmedKiraCacheKey,
+  'browser cache-busters and implicit public defaults must reuse the pre-warmed Kira response'
 );
 assert(
   html.includes('properties-list-count-fast-20260718'),

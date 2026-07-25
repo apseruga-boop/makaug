@@ -588,7 +588,11 @@ test('public properties API is cacheable and uses the fast public summary path',
   assert.match(propertiesRouteSource, /60 \* 1000/);
   assert.match(propertiesRouteSource, /function publicPropertiesCacheControl\(\)/);
   assert.match(propertiesRouteSource, /function clearPublicPropertiesCache\(reason = 'public_inventory_changed'\)/);
-  assert.match(propertiesRouteSource, /PUBLIC_PROPERTIES_CACHE_IGNORED_QUERY_KEYS = new Set\(\['cache_refresh', 'cacheRefresh', 'deploy_probe', 'v', '_'\]\)/);
+  assert.match(propertiesRouteSource, /PUBLIC_PROPERTIES_CACHE_IGNORED_QUERY_KEYS = new Set\(\[/);
+  assert.match(propertiesRouteSource, /'_cb'/);
+  assert.match(propertiesRouteSource, /'cb'/);
+  assert.match(propertiesRouteSource, /normalized\.set\('public_only', '1'\)/);
+  assert.match(propertiesRouteSource, /normalized\.set\('area', normalizePublicSearchNeedle\(area\)\)/);
   assert.match(propertiesRouteSource, /function isPublicCacheRefreshRequest\(req\)/);
   assert.match(propertiesRouteSource, /X-Makaug-Properties-Cache', 'HIT'/);
   assert.match(propertiesRouteSource, /forcePublicCacheRefresh \? 'REFRESH' : 'MISS'/);

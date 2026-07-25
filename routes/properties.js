@@ -133,8 +133,16 @@ const PUBLIC_PROPERTIES_CACHE_MAX_AGE_SECONDS = Math.max(1, Math.floor(PUBLIC_PR
 const PUBLIC_PROPERTIES_CACHE_STALE_SECONDS = 300;
 const PUBLIC_PROPERTIES_CACHE_MAX_ENTRIES = 120;
 const PUBLIC_PROPERTIES_CACHE_REFRESH_AGENT = 'makaug-public-inventory-cache-warmup';
-const PUBLIC_LOCATION_SEARCH_PERFORMANCE_MARKER = 'properties-location-search-count-fast-20260725';
-const PUBLIC_PROPERTIES_CACHE_IGNORED_QUERY_KEYS = new Set(['cache_refresh', 'cacheRefresh', 'deploy_probe', 'v', '_']);
+const PUBLIC_LOCATION_SEARCH_PERFORMANCE_MARKER = 'properties-location-search-cache-key-20260725';
+const PUBLIC_PROPERTIES_CACHE_IGNORED_QUERY_KEYS = new Set([
+  'cache_refresh',
+  'cacheRefresh',
+  'deploy_probe',
+  'v',
+  '_',
+  '_cb',
+  'cb'
+]);
 const PUBLIC_LOCATION_SEARCH_COLUMNS = Object.freeze([
   "p.area",
   "p.district"
@@ -159,12 +167,11 @@ function publicPropertiesCacheKey(req) {
   for (const [rawKey, rawValue] of Object.entries(query)) {
     const key = String(rawKey);
     if (PUBLIC_PROPERTIES_CACHE_IGNORED_QUERY_KEYS.has(key)) continue;
+    if (['area', 'search', 'query'].includes(key)) continue;
+    if (['listing_type', 'type', 'category'].includes(key)) continue;
+    if (['status', 'public_only', 'publicOnly'].includes(key)) continue;
     if (['include_summary', 'includeSummary', 'summary'].includes(key)) {
       normalized.set('include_summary', parseBooleanLike(rawValue, true) ? '1' : '0');
-      continue;
-    }
-    if (['public_only', 'publicOnly'].includes(key)) {
-      normalized.set('public_only', parseBooleanLike(rawValue, false) ? '1' : '0');
       continue;
     }
     if (['featured', 'is_featured', 'isFeatured'].includes(key)) {
@@ -173,6 +180,12 @@ function publicPropertiesCacheKey(req) {
     }
     normalized.set(key, Array.isArray(rawValue) ? rawValue.map(String).sort().join(',') : String(rawValue));
   }
+  const area = cleanText(query.area || query.search || query.query);
+  const listingType = normalizeListingType(query.listing_type || query.type || query.category);
+  normalized.set('status', cleanText(query.status || 'approved').toLowerCase());
+  normalized.set('public_only', '1');
+  if (area) normalized.set('area', normalizePublicSearchNeedle(area));
+  if (listingType) normalized.set('listing_type', listingType);
   const { page, limit } = parsePagination(query);
   normalized.set('page', String(page));
   normalized.set('limit', String(limit));
@@ -4595,3 +4608,6 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
 });
 
 module.exports = router;
+module.exports._test = {
+  publicPropertiesCacheKey
+};
