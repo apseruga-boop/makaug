@@ -59,6 +59,7 @@ const WHATSAPP_API_VERSION = (process.env.WHATSAPP_API_VERSION || 'v20.0').trim(
 const WHATSAPP_ACCESS_TOKEN = (process.env.WHATSAPP_ACCESS_TOKEN || '').trim();
 const WHATSAPP_PHONE_NUMBER_ID = (process.env.WHATSAPP_PHONE_NUMBER_ID || '').trim();
 const WHATSAPP_VERIFY_TOKEN = (process.env.WHATSAPP_VERIFY_TOKEN || '').trim();
+const WHATSAPP_APP_SECRET = (process.env.WHATSAPP_APP_SECRET || '').trim();
 const WHATSAPP_WEB_BRIDGE_TOKEN = getWhatsappWebBridgeToken();
 const WHATSAPP_FAST_ASSISTANT_TIMEOUT_MS = Math.min(
   2500,
@@ -2350,6 +2351,21 @@ function isMetaWebhookPayload(payload = {}) {
   return payload
     && payload.object === 'whatsapp_business_account'
     && Array.isArray(payload.entry);
+}
+
+function hasValidMetaWebhookSignature(req) {
+  if (!WHATSAPP_APP_SECRET || !Buffer.isBuffer(req.rawBody)) return false;
+  const supplied = String(req.get('x-hub-signature-256') || '').trim();
+  if (!supplied.startsWith('sha256=')) return false;
+
+  const expected = `sha256=${crypto
+    .createHmac('sha256', WHATSAPP_APP_SECRET)
+    .update(req.rawBody)
+    .digest('hex')}`;
+  const suppliedBuffer = Buffer.from(supplied);
+  const expectedBuffer = Buffer.from(expected);
+  return suppliedBuffer.length === expectedBuffer.length
+    && crypto.timingSafeEqual(suppliedBuffer, expectedBuffer);
 }
 
 function normalizePhoneForMeta(value) {
@@ -8144,6 +8160,98 @@ async function processInboundRuntime({
   return { message, nextStep };
 }
 
+async function processMetaWebhookPayload(payload) {
+  const inboundCalls = parseMetaCallEvents(payload);
+  const inboundMessages = await parseMetaInboundMessages(payload);
+
+  for (const call of inboundCalls) {
+    try {
+      const { message, nextStep, duplicate } = await handleWhatsappCallEvent({
+        phone: call.phone,
+        provider: 'meta',
+        callId: call.callId,
+        status: call.status,
+        callType: call.callType,
+        metadata: call.metadata
+      });
+
+      if (message && !duplicate) {
+        await sendMetaTextMessage(call.phone, message);
+        await logWhatsappMessage({
+          userPhone: call.phone,
+          waMessageId: null,
+          direction: 'outbound',
+          messageType: 'text',
+          payload: {
+            provider: 'meta',
+            reply: message,
+            nextStep,
+            source: 'whatsapp_missed_call'
+          }
+        });
+        await syncWhatsappConversationState({
+          phone: call.phone,
+          direction: 'outbound',
+          preferredLanguage: 'en',
+          currentStep: nextStep,
+          provider: 'meta',
+          messageType: 'text',
+          ai: true,
+          metadata: {
+            source: 'whatsapp_missed_call',
+            call_id: call.callId || null,
+            last_reply_preview: String(message || '').slice(0, 240)
+          }
+        });
+      }
+    } catch (error) {
+      logger.error(`Meta call event processing failed for ${call.phone}`, error);
+    }
+  }
+
+  for (const inbound of inboundMessages) {
+    try {
+      const { message, nextStep } = await processInboundRuntime({
+        phone: inbound.phone,
+        inboundMessageId: inbound.inboundMessageId,
+        body: inbound.body,
+        mediaUrl: inbound.mediaUrl,
+        mediaType: inbound.mediaType,
+        sharedLocation: inbound.sharedLocation,
+        provider: 'meta'
+      });
+
+      await sendMetaTextMessage(inbound.phone, message);
+      await logWhatsappMessage({
+        userPhone: inbound.phone,
+        waMessageId: null,
+        direction: 'outbound',
+        messageType: 'text',
+        payload: {
+          provider: 'meta',
+          reply: message,
+          nextStep
+        }
+      });
+      await syncWhatsappConversationState({
+        phone: inbound.phone,
+        direction: 'outbound',
+        preferredLanguage: nextStep === 'choose_language' ? 'en' : null,
+        currentStep: nextStep,
+        provider: 'meta',
+        messageType: 'text',
+        ai: true,
+        metadata: {
+          source: 'whatsapp_runtime',
+          last_reply_preview: String(message || '').slice(0, 240)
+        }
+      });
+    } catch (error) {
+      logger.error(`Meta inbound processing failed for ${inbound.phone}`, error);
+    }
+  }
+}
+
 // GET /api/whatsapp/webhook
 // WhatsApp Cloud API verification endpoint
 router.get('/webhook', (req, res) => {
@@ -8168,99 +8276,20 @@ router.post('/webhook', async (req, res) => {
   try {
     // Meta WhatsApp Cloud API mode
     if (isMetaWebhookPayload(req.body)) {
-      const inboundCalls = parseMetaCallEvents(req.body);
-      const inboundMessages = await parseMetaInboundMessages(req.body);
-      if (!inboundMessages.length && !inboundCalls.length) return res.status(200).json({ ok: true, ignored: true });
-
-      for (const call of inboundCalls) {
-        try {
-          const { message, nextStep, duplicate } = await handleWhatsappCallEvent({
-            phone: call.phone,
-            provider: 'meta',
-            callId: call.callId,
-            status: call.status,
-            callType: call.callType,
-            metadata: call.metadata
-          });
-
-          if (message && !duplicate) {
-            await sendMetaTextMessage(call.phone, message);
-            await logWhatsappMessage({
-              userPhone: call.phone,
-              waMessageId: null,
-              direction: 'outbound',
-              messageType: 'text',
-              payload: {
-                provider: 'meta',
-                reply: message,
-                nextStep,
-                source: 'whatsapp_missed_call'
-              }
-            });
-            await syncWhatsappConversationState({
-              phone: call.phone,
-              direction: 'outbound',
-              preferredLanguage: 'en',
-              currentStep: nextStep,
-              provider: 'meta',
-              messageType: 'text',
-              ai: true,
-              metadata: {
-                source: 'whatsapp_missed_call',
-                call_id: call.callId || null,
-                last_reply_preview: String(message || '').slice(0, 240)
-              }
-            });
-          }
-        } catch (err) {
-          logger.error(`Meta call event processing failed for ${call.phone}`, err);
-        }
+      if (!hasValidMetaWebhookSignature(req)) {
+        logger.warn('Rejected Meta WhatsApp webhook with missing or invalid signature');
+        return res.status(401).json({ ok: false, error: 'invalid_whatsapp_signature' });
       }
 
-      for (const inbound of inboundMessages) {
-        try {
-          const { message, nextStep } = await processInboundRuntime({
-            phone: inbound.phone,
-            inboundMessageId: inbound.inboundMessageId,
-            body: inbound.body,
-            mediaUrl: inbound.mediaUrl,
-            mediaType: inbound.mediaType,
-            sharedLocation: inbound.sharedLocation,
-            provider: 'meta'
-          });
+      const payload = req.body;
+      setImmediate(() => {
+        processMetaWebhookPayload(payload).catch((error) => {
+          logger.error('Meta WhatsApp background processing failed', error);
+        });
+      });
 
-          await sendMetaTextMessage(inbound.phone, message);
-          await logWhatsappMessage({
-            userPhone: inbound.phone,
-            waMessageId: null,
-            direction: 'outbound',
-            messageType: 'text',
-            payload: {
-              provider: 'meta',
-              reply: message,
-              nextStep
-            }
-          });
-          await syncWhatsappConversationState({
-            phone: inbound.phone,
-            direction: 'outbound',
-            preferredLanguage: nextStep === 'choose_language' ? 'en' : null,
-            currentStep: nextStep,
-            provider: 'meta',
-            messageType: 'text',
-            ai: true,
-            metadata: {
-              source: 'whatsapp_runtime',
-              last_reply_preview: String(message || '').slice(0, 240)
-            }
-          });
-        } catch (err) {
-          logger.error(`Meta inbound processing failed for ${inbound.phone}`, err);
-        }
-      }
-
-      // Meta expects a quick 200 ACK.
-      return res.status(200).json({ ok: true });
+      // Meta expects a quick ACK; AI/search/media work continues after this response.
+      return res.status(200).json({ ok: true, accepted: true });
     }
 
     // Twilio fallback mode
@@ -8858,5 +8887,6 @@ module.exports.__test = {
   formatAffordabilityAdviceMessage,
   formatPropertySearchMessage,
   whatsappSearchResultsUrl,
-  WHATSAPP_PROPERTY_RESULT_LIMIT
+  WHATSAPP_PROPERTY_RESULT_LIMIT,
+  hasValidMetaWebhookSignature
 };

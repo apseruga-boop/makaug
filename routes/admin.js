@@ -1592,10 +1592,69 @@ function missingBackupStorageEnv() {
 function backupStorageConfigured() {
   return storageEnvConfigured({ bucket: process.env.DATA_BACKUP_BUCKET }) && missingBackupStorageEnv().length === 0;}
 
+const META_WHATSAPP_REQUIRED_ENV = [
+  'WHATSAPP_ACCESS_TOKEN',
+  'WHATSAPP_PHONE_NUMBER_ID',
+  'WHATSAPP_VERIFY_TOKEN',
+  'WHATSAPP_APP_SECRET'
+];
+
+function metaWhatsappConfigured() {
+  return META_WHATSAPP_REQUIRED_ENV.every((key) => envSet(key));
+}
+
+function whatsappWebBridgeConfigured() {
+  return String(process.env.WHATSAPP_WEB_BRIDGE_ENABLED || '').trim().toLowerCase() === 'true'
+    && envSet('WHATSAPP_WEB_BRIDGE_TOKEN');
+}
+
+function twilioWhatsappConfigured() {
+  const hasSender = envSet('TWILIO_WHATSAPP_FROM')
+    || envSet('TWILIO_FROM_WHATSAPP')
+    || envSet('WHATSAPP_FROM');
+  return envSet('TWILIO_ACCOUNT_SID') && envSet('TWILIO_AUTH_TOKEN') && hasSender;
+}
+
+function whatsappProviderConfigured() {
+  return metaWhatsappConfigured() || whatsappWebBridgeConfigured() || twilioWhatsappConfigured();
+}
+
+function missingWhatsappEnv() {
+  const deliveryMode = String(process.env.WHATSAPP_DELIVERY_MODE || '').trim().toLowerCase();
+  const hasMetaSignal = deliveryMode === 'provider'
+    || META_WHATSAPP_REQUIRED_ENV.some((key) => envSet(key));
+  const hasBridgeSignal = deliveryMode === 'web_bridge'
+    || envSet('WHATSAPP_WEB_BRIDGE_ENABLED')
+    || envSet('WHATSAPP_WEB_BRIDGE_TOKEN');
+  const hasTwilioSignal = deliveryMode === 'twilio'
+    || envSet('TWILIO_WHATSAPP_FROM')
+    || envSet('TWILIO_FROM_WHATSAPP')
+    || envSet('WHATSAPP_FROM');
+
+  if (hasMetaSignal) return missingEnv(META_WHATSAPP_REQUIRED_ENV);
+  if (hasBridgeSignal) {
+    const missing = [];
+    if (String(process.env.WHATSAPP_WEB_BRIDGE_ENABLED || '').trim().toLowerCase() !== 'true') {
+      missing.push('WHATSAPP_WEB_BRIDGE_ENABLED');
+    }
+    if (!envSet('WHATSAPP_WEB_BRIDGE_TOKEN')) missing.push('WHATSAPP_WEB_BRIDGE_TOKEN');
+    return missing;
+  }
+  if (hasTwilioSignal) {
+    const missing = [];
+    if (!envSet('TWILIO_ACCOUNT_SID')) missing.push('TWILIO_ACCOUNT_SID');
+    if (!envSet('TWILIO_AUTH_TOKEN')) missing.push('TWILIO_AUTH_TOKEN');
+    if (!envSet('TWILIO_WHATSAPP_FROM') && !envSet('TWILIO_FROM_WHATSAPP') && !envSet('WHATSAPP_FROM')) {
+      missing.push('TWILIO_WHATSAPP_FROM');
+    }
+    return missing;
+  }
+  return [...META_WHATSAPP_REQUIRED_ENV];
+}
+
 function providerConfigured(provider) {
   const keyGroups = {
     email: ['RESEND_API_KEY', 'SMTP_HOST', 'MAIL_WEBHOOK_URL', 'MS_GRAPH_CLIENT_ID'],
-    whatsapp: ['WHATSAPP_PROVIDER', 'WHATSAPP_WEB_BRIDGE_ENABLED', 'WHATSAPP_WEB_BRIDGE_TOKEN', 'TWILIO_ACCOUNT_SID', 'META_WHATSAPP_TOKEN', 'AFRICASTALKING_API_KEY'],
     google_places: ['GOOGLE_MAPS_API_KEY', 'PUBLIC_GOOGLE_MAPS_API_KEY'],
     openai_llm: ['OPENAI_API_KEY', 'LLM_API_KEY', 'OLLAMA_BASE_URL'],
     payment_link: ['PAYMENT_LINK_BASE_URL', 'PAYMENT_PROVIDER_API_KEY', 'PAYMENT_PROVIDER_WEBHOOK_SECRET'],
@@ -1603,6 +1662,7 @@ function providerConfigured(provider) {
     public_base_url: ['PUBLIC_BASE_URL', 'APP_BASE_URL']
   };
   if (provider === 'sms') return africasTalkingSmsConfigured() || twilioSmsConfigured();
+  if (provider === 'whatsapp') return whatsappProviderConfigured();
   if (provider === 'media_storage') return mediaStorageConfigured();
   if (provider === 'backups') return backupStorageConfigured();
   return anyEnv(keyGroups[provider] || []);
@@ -1611,7 +1671,7 @@ function providerConfigured(provider) {
 function providerEnvKeys(provider) {
   const keyGroups = {
     email: ['RESEND_API_KEY', 'SMTP_HOST', 'SMTP_USER', 'SMTP_PASS', 'EMAIL_FROM'],
-    whatsapp: ['WHATSAPP_PROVIDER', 'WHATSAPP_WEB_BRIDGE_ENABLED', 'WHATSAPP_WEB_BRIDGE_TOKEN', 'TWILIO_ACCOUNT_SID', 'META_WHATSAPP_TOKEN'],
+    whatsapp: ['WHATSAPP_ACCESS_TOKEN', 'WHATSAPP_PHONE_NUMBER_ID', 'WHATSAPP_VERIFY_TOKEN', 'WHATSAPP_APP_SECRET', 'WHATSAPP_WEB_BRIDGE_ENABLED', 'WHATSAPP_WEB_BRIDGE_TOKEN', 'TWILIO_ACCOUNT_SID'],
     sms: ['SMS_PROVIDER', 'TWILIO_ACCOUNT_SID', 'AFRICASTALKING_API_KEY', 'AFRICASTALKING_USERNAME'],
     media_storage: mediaStorageRequiredEnv(),
     google_places: ['GOOGLE_MAPS_API_KEY', 'PUBLIC_GOOGLE_MAPS_API_KEY'],
@@ -1630,8 +1690,10 @@ function missingEnv(keys = []) {
 
 function missingProviderEnv(provider) {
   if (provider === 'sms') return missingSmsEnv();
+  if (provider === 'whatsapp') return missingWhatsappEnv();
   if (provider === 'media_storage') return missingMediaStorageEnv();
-  if (provider === 'backups') return missingBackupStorageEnv();  return missingEnv(providerEnvKeys(provider));
+  if (provider === 'backups') return missingBackupStorageEnv();
+  return missingEnv(providerEnvKeys(provider));
 }
 
 const ADMIN_DASHBOARD_CACHE_TTL_MS = 15000;

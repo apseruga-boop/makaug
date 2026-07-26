@@ -100,7 +100,7 @@ assert(
 );
 
 assert(
-  cloudReadinessScript.includes("const providerEnvNames = ['WHATSAPP_ACCESS_TOKEN', 'WHATSAPP_PHONE_NUMBER_ID', 'WHATSAPP_VERIFY_TOKEN']")
+  cloudReadinessScript.includes("const providerEnvNames = ['WHATSAPP_ACCESS_TOKEN', 'WHATSAPP_PHONE_NUMBER_ID', 'WHATSAPP_VERIFY_TOKEN', 'WHATSAPP_APP_SECRET']")
     && cloudReadinessScript.includes('hasProviderSignal')
     && cloudReadinessScript.includes('Meta WhatsApp Cloud API configuration is present.'),
   'cloud readiness must block partial Meta WhatsApp Cloud API provider configuration'

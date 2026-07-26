@@ -25,6 +25,8 @@ services:
         sync: false
       - key: WHATSAPP_VERIFY_TOKEN
         sync: false
+      - key: WHATSAPP_APP_SECRET
+        sync: false
       - key: WHATSAPP_WEB_BRIDGE_ENABLED
         value: "true"
       - key: WHATSAPP_WEB_BRIDGE_TOKEN
