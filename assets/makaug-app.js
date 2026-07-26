@@ -925,6 +925,7 @@ let adminDashboardTabRefreshTimer = null;
 let adminLiveAuthFailure = null;
 let staffModerationRefreshTimer = null;
 const STAFF_MODERATION_WRITE_TIMEOUT_MS = 18000;
+const STAFF_DASHBOARD_FAST_TIMEOUT_MS = 9000;
 const STAFF_DASHBOARD_PANEL_TIMEOUT_MS = 10000;
 const STAFF_MODERATION_PUBLIC_PROOF_TIMEOUT_MS = 6000;
 const STAFF_SOURCE_INTAKE_SUBMIT_TIMEOUT_MS = 15000;
@@ -942,6 +943,7 @@ const STAFF_SOURCE_SEARCH_SWEEP_MAX_PAGES = 1;
 const STAFF_SOURCE_SWEEP_OFFSET_KEY = "makaug.staff.sourceSweepOffset";
 let adminCurrentPendingListings = [];
 let adminPendingQueueFilter = "all";
+let adminPendingQueueTotals = { all: null, found_online: null };
 const ADMIN_PENDING_QUEUE_RENDER_STEP = 24;
 const ADMIN_REVIEW_QUEUE_PAGE_SIZE = 24;
 let adminPendingQueueVisibleLimit = ADMIN_PENDING_QUEUE_RENDER_STEP;
@@ -12193,6 +12195,15 @@ function staffEmpty(label) {
   return `<div class="rounded-xl bg-gray-50 border border-gray-200 p-4 text-sm text-gray-500">${adminEscape(label)}</div>`;
 }
 
+function staffAuthIdentityKey(user = {}) {
+  return String(user?.id || user?.email || user?.phone || "").trim().toLowerCase();
+}
+
+function staffDashboardRequestMatchesUser(userIdentityAtStart = "") {
+  return Boolean(userIdentityAtStart)
+    && userIdentityAtStart === staffAuthIdentityKey(authState?.user || {});
+}
+
 function staffStatCopy(definitions = {}, key = "") {
   const item = definitions?.[key] || {};
   const meaning = item.meaning || "";
@@ -12691,7 +12702,7 @@ function applyStaffDashboardData(data = {}, user = {}) {
   });
 }
 
-async function hydrateStaffDashboardPanels(endpoint = "/api/staff/dashboard?panels=1", tokenAtStart = "", userIdAtStart = "") {
+async function hydrateStaffDashboardPanels(endpoint = "/api/staff/dashboard?panels=1", userIdentityAtStart = "") {
   if (staffDashboardPanelHydrating) return;
   staffDashboardPanelHydrating = true;
   const seq = staffDashboardPanelHydrationSeq + 1;
@@ -12703,13 +12714,11 @@ async function hydrateStaffDashboardPanels(endpoint = "/api/staff/dashboard?pane
       STAFF_DASHBOARD_PANEL_TIMEOUT_MS,
       "Staff dashboard panels"
     );
-    const sameUser = tokenAtStart === (authState?.token || "")
-      && userIdAtStart === String(authState?.user?.id || authState?.user?.email || authState?.user?.phone || "");
+    const sameUser = staffDashboardRequestMatchesUser(userIdentityAtStart);
     if (!sameUser || seq !== staffDashboardPanelHydrationSeq) return;
     applyStaffDashboardData(mergeStaffDashboardPanelData(staffDashboardData, res?.data || {}), authState?.user || {});
   } catch (error) {
-    const sameUser = tokenAtStart === (authState?.token || "")
-      && userIdAtStart === String(authState?.user?.id || authState?.user?.email || authState?.user?.phone || "");
+    const sameUser = staffDashboardRequestMatchesUser(userIdentityAtStart);
     if (sameUser) {
       setTextById("staff-source-monitor-status", "Live cards loaded. Heavy panels are still catching up; continue with the visible queue and retry shortly.");
       scheduleStaffDashboardPanelRetry("panel request");
@@ -13184,14 +13193,18 @@ async function renderStaffDashboard() {
   gate.classList.add("hidden");
   body.classList.remove("hidden");
   const user = authState.user || {};
-  const tokenAtStart = authState?.token || "";
-  const userIdAtStart = String(user.id || user.email || user.phone || "");
+  const userIdentityAtStart = staffAuthIdentityKey(user);
   setTextById("staff-dashboard-name", `${user.first_name || "Staff"} ${user.last_name || ""}`.trim() || "Staff Operations Dashboard");
   setTextById("staff-dashboard-status", `Role: ${mapRoleLabel(user.role)} • ${user.email || user.phone || "staff account"}`);
   if (!staffDashboardHasLiveData) setStaffDashboardLoadingState();
   try {
-    const res = await apiRequest("/api/staff/dashboard?fast=1");
-    if (tokenAtStart !== (authState?.token || "") || userIdAtStart !== String(authState?.user?.id || authState?.user?.email || authState?.user?.phone || "")) {
+    const res = await staffApiRequestWithTimeout(
+      "/api/staff/dashboard?fast=1",
+      {},
+      STAFF_DASHBOARD_FAST_TIMEOUT_MS,
+      "Staff dashboard"
+    );
+    if (!staffDashboardRequestMatchesUser(userIdentityAtStart)) {
       return;
     }
     const data = res?.data || {};
@@ -13200,13 +13213,12 @@ async function renderStaffDashboard() {
     if (data.partial) {
       window.setTimeout(() => {
         if (currentPage === "staff-dashboard") {
-          hydrateStaffDashboardPanels(data.deferred_dashboard_endpoint || "/api/staff/dashboard?panels=1", tokenAtStart, userIdAtStart);
+          hydrateStaffDashboardPanels(data.deferred_dashboard_endpoint || "/api/staff/dashboard?panels=1", userIdentityAtStart);
         }
       }, 50);
     }
   } catch (error) {
-    const staleAuthRequest = tokenAtStart !== (authState?.token || "")
-      || userIdAtStart !== String(authState?.user?.id || authState?.user?.email || authState?.user?.phone || "");
+    const staleAuthRequest = !staffDashboardRequestMatchesUser(userIdentityAtStart);
     const authSessionFailure = isAuthSessionFailure(error);
     const signInRequired = authSessionFailure || error?.status === 401 || error?.status === 403 || /sign in required|jwt|token/i.test(error?.message || "");
     if (staleAuthRequest) {
@@ -15288,14 +15300,24 @@ function adminPendingQueueToolbarHtml(rows = [], filteredRows = [], visibleRows 
   const isFoundOnlineView = adminPendingQueueFilter === "found_online";
   const isBrokerView = adminPendingQueueFilter === "broker";
   const visibleCount = Array.isArray(visibleRows) ? visibleRows.length : Number(visibleRows || 0);
+  const rawAuthoritativeTotal = adminPendingQueueFilter === "found_online"
+    ? adminPendingQueueTotals.found_online
+    : adminPendingQueueTotals.all;
+  const authoritativeTotal = Number(rawAuthoritativeTotal);
+  const totalAvailable = rawAuthoritativeTotal !== null
+    && Number.isFinite(authoritativeTotal)
+    && authoritativeTotal >= 0;
+  if (adminPendingQueueFilter === "all" && totalAvailable) counts.all = authoritativeTotal;
+  if (adminPendingQueueFilter === "found_online" && totalAvailable) counts.found_online = authoritativeTotal;
+  const matchingCount = totalAvailable ? authoritativeTotal : filteredRows.length;
   const hasMore = filteredRows.length > visibleCount;
   const statusText = isFoundOnlineView
     ? (adminPendingQueueRemotePagination?.queue === "found_online"
-      ? `${adminEscape(visibleCount)} found-online source property records shown on page ${adminEscape(adminPendingQueueRemotePagination.page || 1)}. Approved, live, sold, hidden, rejected, and deleted records are excluded.`
+      ? `${adminEscape(visibleCount)} of ${adminEscape(matchingCount)} found-online source property records shown on page ${adminEscape(adminPendingQueueRemotePagination.page || 1)}. Approved, live, sold, hidden, rejected, and deleted records are excluded.`
       : `${adminEscape(visibleCount)} of ${adminEscape(filteredRows.length)} found-online source property records shown. Approved, live, sold, hidden, rejected, and deleted records are excluded from this queue.`)
     : isBrokerView
       ? `${adminEscape(visibleCount)} of ${adminEscape(filteredRows.length)} broker-submitted listings shown. These are agent listings waiting for King or staff approval before going public.`
-    : `${adminEscape(visibleCount)} of ${adminEscape(filteredRows.length)} matching records shown from ${adminEscape(rows.length)} pending review records. Approved/live records move to Live & Featured and do not stay in Review Queue.`;
+    : `${adminEscape(visibleCount)} of ${adminEscape(matchingCount)} matching records shown from ${adminEscape(matchingCount)} pending review records. Approved/live records move to Live & Featured and do not stay in Review Queue.`;
   return `
     <div class="mb-4 rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs text-blue-950">
       <div class="flex items-start justify-between gap-3 flex-wrap">
@@ -15342,7 +15364,7 @@ async function adminLoadFoundOnlineReviewQueue(page = 1) {
     wrap.innerHTML = `<div class="rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-900">Loading Found Online review page ${adminEscape(safePage)}...</div>`;
   }
   try {
-    const response = await apiRequest(`/api/admin/properties/review-queue?include_total=0&include_images=0&queue=found_online&limit=${ADMIN_REVIEW_QUEUE_PAGE_SIZE}&page=${safePage}`, {
+    const response = await apiRequest(`/api/admin/properties/review-queue?include_total=1&include_images=0&queue=found_online&limit=${ADMIN_REVIEW_QUEUE_PAGE_SIZE}&page=${safePage}`, {
       headers: adminAuthHeaders(),
       cache: "no-store"
     });
@@ -15353,6 +15375,9 @@ async function adminLoadFoundOnlineReviewQueue(page = 1) {
       hasMore: response?.meta?.has_more === true,
       total: Number(response?.pagination?.total || rows.length)
     };
+    if (response?.meta?.total_exact === true) {
+      adminPendingQueueTotals.found_online = Number(response?.pagination?.total || 0);
+    }
     adminPendingQueueVisibleLimit = ADMIN_REVIEW_QUEUE_PAGE_SIZE;
     renderAdminPendingRows(rows);
     setAdminWorkflowTab("review");
@@ -15568,8 +15593,8 @@ async function fetchRemoteAdminSnapshot(options = {}) {
   if (whatsappAiMode) whatsappParams.set("ai_mode", whatsappAiMode);
   const shouldLoadReviewQueue = tabNeeds.reviewQueue;
   const reviewQueuePath = adminPendingQueueFilter === "found_online"
-    ? "/api/admin/properties/review-queue?include_total=0&include_images=0&queue=found_online"
-    : "/api/admin/properties/review-queue?include_total=0&include_images=0";
+    ? "/api/admin/properties/review-queue?include_total=1&include_images=0&queue=found_online"
+    : "/api/admin/properties/review-queue?include_total=1&include_images=0";
   const shouldLoadLiveListings = tabNeeds.liveListings;
   const shouldLoadActionedListings = tabNeeds.actionedListings;
   const shouldLoadAgents = tabNeeds.accounts || tabNeeds.liveListings;
@@ -15613,6 +15638,14 @@ async function fetchRemoteAdminSnapshot(options = {}) {
   const pendingListings = Array.isArray(pendingRows)
     ? pendingRows.map(normalizeRemoteAdminListing).filter(adminIsPendingReviewSeedItem)
     : adminCurrentPendingListings;
+  const pendingQueueKey = adminPendingQueueFilter === "found_online" ? "found_online" : "all";
+  if (Array.isArray(pendingRows) && pendingRows?.adminMeta?.total_exact === true) {
+    adminPendingQueueTotals[pendingQueueKey] = Number(pendingRows?.adminPagination?.total || 0);
+  }
+  const commandPendingTotal = Number(commandCentreRes?.data?.metrics?.pending_listings);
+  if (pendingQueueKey === "all" && Number.isFinite(commandPendingTotal) && commandPendingTotal >= 0) {
+    adminPendingQueueTotals.all = commandPendingTotal;
+  }
   if (Array.isArray(pendingRows) && adminPendingQueueFilter === "found_online") {
     adminPendingQueueRemotePagination = {
       queue: "found_online",
@@ -25848,7 +25881,7 @@ function renderActiveAuthDashboard(user = authState?.user) {
   if (currentPage === "admin-dashboard") renderAdminDashboard();
 }
 
-function persistAuthState(token, user) {
+function persistAuthState(token, user, options = {}) {
   const previousUser = authState?.user || null;
   let resolvedUser = user || null;
   if (resolvedUser) {
@@ -25875,7 +25908,7 @@ function persistAuthState(token, user) {
   loadSavedIdsForCurrentUser();
   const pendingSaveId = applyPendingSaveAfterAuth();
   applyAuthUi();
-  renderActiveAuthDashboard();
+  if (options.renderDashboard !== false) renderActiveAuthDashboard();
   if (authState?.token) syncSavedStateAfterAuth(pendingSaveId);
   if (pendingSaveId) toast("Property saved to your account.");
 }
@@ -26023,7 +26056,11 @@ async function refreshAuthSession() {
     const user = me?.data?.user;
     if (!user) throw new Error("Invalid session");
     const rollingToken = me?.data?.session?.token || authState.token;
-    persistAuthState(rollingToken, { ...user, portal_mode: authState?.user?.portal_mode || derivePortalMode(user) });
+    persistAuthState(
+      rollingToken,
+      { ...user, portal_mode: authState?.user?.portal_mode || derivePortalMode(user) },
+      { renderDashboard: false }
+    );
   } catch (error) {
     if (tokenAtStart !== authState?.token) return;
     if (isAuthSessionFailure(error) || Number(error?.status || 0) === 401) {

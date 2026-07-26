@@ -34,9 +34,19 @@ const router = express.Router();
 const STAFF_SESSION_ROLES = new Set(['moderator', 'admin', 'super_admin']);
 const CUSTOMER_SESSION_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const STAFF_SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+const STAFF_SESSION_REFRESH_THRESHOLD_SECONDS = Math.max(
+  60,
+  Number.parseInt(process.env.STAFF_JWT_REFRESH_THRESHOLD_SECONDS || String(7 * 24 * 60 * 60), 10) || (7 * 24 * 60 * 60)
+);
 
 function isStaffSessionRole(role = '') {
   return STAFF_SESSION_ROLES.has(String(role || '').trim().toLowerCase());
+}
+
+function staffSessionNeedsRefresh(decoded = {}) {
+  const expiresAt = Number(decoded?.exp || 0);
+  if (!expiresAt) return true;
+  return expiresAt - Math.floor(Date.now() / 1000) <= STAFF_SESSION_REFRESH_THRESHOLD_SECONDS;
 }
 
 function authCookieOptions(req, token = '') {
@@ -460,7 +470,7 @@ function getAuthUserIdFromRequest(req) {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    return { userId: decoded.sub };
+    return { userId: decoded.sub, decoded };
   } catch (error) {
     return { error: 'Invalid token' };
   }
@@ -1798,17 +1808,25 @@ router.get('/me', async (req, res, next) => {
     }
 
     const user = result.rows[0];
-    const rollingToken = isStaffSessionRole(user.role) ? createToken(user) : null;
+    const rollingStaffSession = isStaffSessionRole(user.role);
+    const rollingToken = rollingStaffSession && staffSessionNeedsRefresh(auth.decoded)
+      ? createToken(user)
+      : null;
+    const activeTokenPayload = rollingToken ? jwt.decode(rollingToken) : auth.decoded;
     if (rollingToken) setAuthCookie(req, res, rollingToken);
     return res.json({
       ok: true,
       data: {
         user: publicUser(user),
-        ...(rollingToken ? {
+        ...(rollingStaffSession ? {
           session: {
-            token: rollingToken,
+            ...(rollingToken ? { token: rollingToken } : {}),
             rolling: true,
-            expires_in: process.env.STAFF_JWT_EXPIRES_IN || '30d'
+            rotated: Boolean(rollingToken),
+            expires_in: process.env.STAFF_JWT_EXPIRES_IN || '30d',
+            expires_at: Number(activeTokenPayload?.exp || 0) > 0
+              ? new Date(Number(activeTokenPayload.exp) * 1000).toISOString()
+              : null
           }
         } : {})
       }

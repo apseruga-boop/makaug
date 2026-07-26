@@ -39,18 +39,26 @@ test('USD shorthand keeps the original source amount before canonical conversion
   assert.equal(parsed.price, 22800000);
 });
 
-test('staff sessions roll for 30 days and transient auth backend failures do not become 401', () => {
+test('staff sessions roll near expiry without invalidating same-user dashboard hydration', () => {
   const authRoute = read('routes/auth.js');
   const authMiddleware = read('middleware/auth.js');
   const app = read('assets/makaug-app.js');
 
   assert.match(authRoute, /STAFF_JWT_EXPIRES_IN \|\| '30d'/);
+  assert.match(authRoute, /STAFF_SESSION_REFRESH_THRESHOLD_SECONDS/);
+  assert.match(authRoute, /staffSessionNeedsRefresh\(auth\.decoded\)/);
   assert.match(authRoute, /rolling: true/);
+  assert.match(authRoute, /rotated: Boolean\(rollingToken\)/);
   assert.match(authRoute, /setAuthCookie\(req, res, rollingToken\)/);
   assert.match(authMiddleware, /AUTH_BACKEND_UNAVAILABLE/);
   assert.match(authMiddleware, /wrapped\.status = 503/);
   assert.match(authMiddleware, /if \(!isAuthenticationError\(_error\)\) return next\(_error\)/);
   assert.match(app, /const rollingToken = me\?\.data\?\.session\?\.token \|\| authState\.token/);
+  assert.match(app, /function staffAuthIdentityKey\(user = \{\}\)/);
+  assert.match(app, /function staffDashboardRequestMatchesUser\(userIdentityAtStart = ""\)/);
+  assert.match(app, /STAFF_DASHBOARD_FAST_TIMEOUT_MS/);
+  assert.match(app, /"Staff dashboard"[\s\S]*STAFF_DASHBOARD_FAST_TIMEOUT_MS|STAFF_DASHBOARD_FAST_TIMEOUT_MS[\s\S]*"Staff dashboard"/);
+  assert.match(app, /\{ renderDashboard: false \}/);
   assert.match(app, /window\.setTimeout\(\(\) => \{[\s\S]*refreshAuthSession\(\)/);
 });
 
