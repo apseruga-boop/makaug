@@ -204,6 +204,10 @@ function run() {
   assert(staffPanelsBody.includes('WITH panel_candidates AS MATERIALIZED'), 'staff panels endpoint should pre-scan ordered pending IDs through the review queue index');
   assert(staffPanelsBody.includes("WHERE ${actionablePendingReviewWhere('p')}"), 'staff panels endpoint should use the authoritative actionable-review partial index inside the candidate scan');
   assert(staffRoutes.includes('indexedSourceQualitySuppressedFlagSql'), 'staff actionable panels should match the suppression predicate used by the ordered partial index');
+  assert(staffRoutes.includes('buildStaffFastListingSummary'), 'staff first paint should use dedicated index-aligned inventory and review counts');
+  assert(staffRoutes.includes('publicVisibleInventoryWhere'), 'staff live count should share the public inventory source of truth');
+  assert(staffRoutes.includes('Staff database client acquisition timed out'), 'staff dashboard queries should not wait indefinitely for a saturated connection pool');
+  assert(html.includes('staff-dashboard-fast-counts-k21-20260726'), 'staff fast-count deployment should expose a live release marker');
   assert(staffPanelsBody.includes('[STAFF_DASHBOARD_PANEL_SCAN_LIMIT]'), 'staff panels endpoint should bound its single candidate scan');
   assert(staffPanelsBody.includes('reviewResult.rows.filter(rowIsBrokerReview)'), 'staff panels endpoint should derive broker rows from the shared candidate set');
   assert(staffPanelsBody.includes('reviewResult.rows.filter(rowIsFoundOnlineReview)'), 'staff panels endpoint should derive found-online rows from the shared candidate set');
