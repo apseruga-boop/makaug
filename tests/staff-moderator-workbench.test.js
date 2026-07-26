@@ -203,6 +203,7 @@ function run() {
   assert(staffPanelsBody.includes('staffModerationPanelRows(reviewResult.rows, queueLimit)'), 'staff panels endpoint should render SQL-parity rows directly instead of filtering them to zero in JS');
   assert(staffPanelsBody.includes('WITH panel_candidates AS MATERIALIZED'), 'staff panels endpoint should pre-scan ordered pending IDs through the review queue index');
   assert(staffPanelsBody.includes("WHERE ${actionablePendingReviewWhere('p')}"), 'staff panels endpoint should use the authoritative actionable-review partial index inside the candidate scan');
+  assert(staffRoutes.includes('indexedSourceQualitySuppressedFlagSql'), 'staff actionable panels should match the suppression predicate used by the ordered partial index');
   assert(staffPanelsBody.includes('[STAFF_DASHBOARD_PANEL_SCAN_LIMIT]'), 'staff panels endpoint should bound its single candidate scan');
   assert(staffPanelsBody.includes('reviewResult.rows.filter(rowIsBrokerReview)'), 'staff panels endpoint should derive broker rows from the shared candidate set');
   assert(staffPanelsBody.includes('reviewResult.rows.filter(rowIsFoundOnlineReview)'), 'staff panels endpoint should derive found-online rows from the shared candidate set');
