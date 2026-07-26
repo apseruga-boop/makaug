@@ -1649,7 +1649,7 @@ function clearAdminReviewQueueCache() {
     const key = String(cacheKey);
     if (
       key.includes('admin-review-queue-v')
-      || key.includes('admin-command-centre-v4')
+      || key.includes('admin-command-centre-v')
       || key.includes('admin-summary-v5-properties-list-count-fast')
       || key.includes('admin-actionable-review-count-v')
     ) {
@@ -1821,6 +1821,29 @@ async function safeRows(sql, values = [], options = {}) {
 async function safeCount(sql, values = [], options = {}) {
   const row = await safeOne(sql, values, { total: 0 }, options);
   return Number(row.total || 0);
+}
+
+async function adminCommandCentreMetric(key, producer, fallback = 0) {
+  try {
+    return {
+      key,
+      value: Number(await producer()) || 0,
+      fallback_reason: null
+    };
+  } catch (error) {
+    const fallbackReason = adminSummaryFallbackReason(error);
+    logger.warn('Admin command-centre metric fell back after query failure', {
+      metric: key,
+      reason: fallbackReason,
+      code: error?.code,
+      message: error?.message
+    });
+    return {
+      key,
+      value: Number(fallback) || 0,
+      fallback_reason: fallbackReason
+    };
+  }
 }
 
 async function adminActionableReviewQueueCount({ timeoutMs = ADMIN_SAFE_QUERY_TIMEOUT_MS } = {}) {
@@ -3147,60 +3170,65 @@ router.get('/summary', async (req, res, next) => {
 
 router.get('/command-centre', async (_req, res, next) => {
   try {
-    const payload = await adminCachedPayload('admin-command-centre-v4', ADMIN_DASHBOARD_CACHE_TTL_MS, async () => {
-    const [
-      pendingListings,
-      liveListings,
-      deletedListings,
-      hiddenListings,
-      brokerPending,
-      brokerApproved,
-      crmLeads,
-      hotLeads,
-      overdueTasks,
-      whatsappNeedsHuman,
-      failedEmails,
-      failedWhatsapp,
-      adOpenLeads,
-      liveAds,
-      paidRevenue,
-      quotedPipeline,
-      testListings,
-      testUsers,
-      propertyRequests
-    ] = await Promise.all([
-      adminActionableReviewQueueCount({ timeoutMs: 3000 }),
-      safeCount(`SELECT COUNT(*)::int AS total FROM properties p WHERE ${adminPublicLiveListingFastWhere('p')}`),
-      safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'deleted'"),
-      safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'hidden'"),
-      safeCount("SELECT COUNT(*)::int AS total FROM agents WHERE status = 'pending' OR COALESCE(registration_status, 'not_registered') <> 'registered'"),
-      safeCount("SELECT COUNT(*)::int AS total FROM agents WHERE status = 'approved' AND COALESCE(registration_status, 'not_registered') = 'registered'"),
-      safeCount(`${adminLeadUnionSql()} SELECT COUNT(*)::int AS total FROM all_leads WHERE lead_status = 'open'`),
-      safeCount(`${adminLeadUnionSql()} SELECT COUNT(*)::int AS total FROM all_leads WHERE priority IN ('high','urgent') OR lead_score >= 50`),
-      safeCount("SELECT COUNT(*)::int AS total FROM lead_tasks WHERE status = 'open' AND due_at < NOW()"),
-      safeCount("SELECT COUNT(*)::int AS total FROM whatsapp_conversation_state WHERE status IN ('needs_human','escalated')"),
-      safeCount("SELECT COUNT(*)::int AS total FROM email_logs WHERE status IN ('failed','provider_missing','bounced','error')"),
-      safeCount("SELECT COUNT(*)::int AS total FROM whatsapp_message_logs WHERE status IN ('failed','provider_missing','error')"),
-      safeCount("SELECT COUNT(*)::int AS total FROM advertising_inquiries WHERE status IN ('new','contacted','proposal_sent')"),
-      safeCount("SELECT COUNT(*)::int AS total FROM advertising_campaigns WHERE status = 'live'"),
-      safeOne("SELECT COALESCE(SUM(paid_amount_ugx), 0)::bigint AS total FROM advertising_campaigns WHERE payment_status = 'paid'", [], { total: 0 }).then((row) => Number(row.total || 0)),
-      safeOne("SELECT COALESCE(SUM(quoted_amount_ugx), 0)::bigint AS total FROM advertising_campaigns WHERE status NOT IN ('cancelled')", [], { total: 0 }).then((row) => Number(row.total || 0)),
-      safeCount(
+    const payload = await adminCachedPayload('admin-command-centre-v5-partial-safe', ADMIN_DASHBOARD_CACHE_TTL_MS, async () => {
+    const metricResults = await Promise.all([
+      adminCommandCentreMetric('pending_listings', () => adminActionableReviewQueueCount({ timeoutMs: 3000 })),
+      adminCommandCentreMetric('live_listings', () => safeCount(`SELECT COUNT(*)::int AS total FROM properties p WHERE ${adminPublicLiveListingFastWhere('p')}`)),
+      adminCommandCentreMetric('deleted_listings', () => safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'deleted'")),
+      adminCommandCentreMetric('hidden_listings', () => safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'hidden'")),
+      adminCommandCentreMetric('broker_pending', () => safeCount("SELECT COUNT(*)::int AS total FROM agents WHERE status = 'pending' OR COALESCE(registration_status, 'not_registered') <> 'registered'")),
+      adminCommandCentreMetric('broker_approved', () => safeCount("SELECT COUNT(*)::int AS total FROM agents WHERE status = 'approved' AND COALESCE(registration_status, 'not_registered') = 'registered'")),
+      adminCommandCentreMetric('open_leads', () => safeCount(`${adminLeadUnionSql()} SELECT COUNT(*)::int AS total FROM all_leads WHERE lead_status = 'open'`)),
+      adminCommandCentreMetric('hot_leads', () => safeCount(`${adminLeadUnionSql()} SELECT COUNT(*)::int AS total FROM all_leads WHERE priority IN ('high','urgent') OR lead_score >= 50`)),
+      adminCommandCentreMetric('overdue_tasks', () => safeCount("SELECT COUNT(*)::int AS total FROM lead_tasks WHERE status = 'open' AND due_at < NOW()")),
+      adminCommandCentreMetric('whatsapp_needs_human', () => safeCount("SELECT COUNT(*)::int AS total FROM whatsapp_conversation_state WHERE status IN ('needs_human','escalated')")),
+      adminCommandCentreMetric('failed_emails', () => safeCount("SELECT COUNT(*)::int AS total FROM email_logs WHERE status IN ('failed','provider_missing','bounced','error')")),
+      adminCommandCentreMetric('failed_whatsapp', () => safeCount("SELECT COUNT(*)::int AS total FROM whatsapp_message_logs WHERE status IN ('failed','provider_missing','error')")),
+      adminCommandCentreMetric('advertising_open_leads', () => safeCount("SELECT COUNT(*)::int AS total FROM advertising_inquiries WHERE status IN ('new','contacted','proposal_sent')")),
+      adminCommandCentreMetric('live_ads', () => safeCount("SELECT COUNT(*)::int AS total FROM advertising_campaigns WHERE status = 'live'")),
+      adminCommandCentreMetric('paid_revenue_ugx', () => safeOne("SELECT COALESCE(SUM(paid_amount_ugx), 0)::bigint AS total FROM advertising_campaigns WHERE payment_status = 'paid'", [], { total: 0 }).then((row) => Number(row.total || 0))),
+      adminCommandCentreMetric('quoted_pipeline_ugx', () => safeOne("SELECT COALESCE(SUM(quoted_amount_ugx), 0)::bigint AS total FROM advertising_campaigns WHERE status NOT IN ('cancelled')", [], { total: 0 }).then((row) => Number(row.total || 0))),
+      adminCommandCentreMetric('test_listings', () => safeCount(
         `SELECT COUNT(*)::int AS total
          FROM properties
          WHERE COALESCE(extra_fields->>'is_test', '') = 'true'
             OR COALESCE(extra_fields->>'launch_proof', '') = 'true'
             OR LOWER(COALESCE(title, '')) ~ '(qa|test|delete|dummy|sample|launch proof)'
             OR LOWER(COALESCE(lister_email, '')) LIKE '%makaug.invalid%'`
-      ),
-      safeCount(
+      )),
+      adminCommandCentreMetric('test_users', () => safeCount(
         `SELECT COUNT(*)::int AS total
          FROM users
          WHERE LOWER(COALESCE(email, '')) LIKE '%makaug.invalid%'
             OR LOWER(CONCAT_WS(' ', first_name, last_name, email)) ~ '(qa|test|delete|dummy|sample)'`
-      ),
-      safeCount('SELECT COUNT(*)::int AS total FROM property_requests')
+      )),
+      adminCommandCentreMetric('property_requests', () => safeCount('SELECT COUNT(*)::int AS total FROM property_requests'))
     ]);
+    const metricsByKey = Object.fromEntries(metricResults.map((metric) => [metric.key, metric.value]));
+    const metricFallbacks = metricResults
+      .filter((metric) => metric.fallback_reason)
+      .map((metric) => ({ metric: metric.key, reason: metric.fallback_reason }));
+    const {
+      pending_listings: pendingListings,
+      live_listings: liveListings,
+      deleted_listings: deletedListings,
+      hidden_listings: hiddenListings,
+      broker_pending: brokerPending,
+      broker_approved: brokerApproved,
+      open_leads: crmLeads,
+      hot_leads: hotLeads,
+      overdue_tasks: overdueTasks,
+      whatsapp_needs_human: whatsappNeedsHuman,
+      failed_emails: failedEmails,
+      failed_whatsapp: failedWhatsapp,
+      advertising_open_leads: adOpenLeads,
+      live_ads: liveAds,
+      paid_revenue_ugx: paidRevenue,
+      quoted_pipeline_ugx: quotedPipeline,
+      test_listings: testListings,
+      test_users: testUsers,
+      property_requests: propertyRequests
+    } = metricsByKey;
 
     const decisions = [
       {
@@ -3295,8 +3323,11 @@ router.get('/command-centre', async (_req, res, next) => {
         decisions
       },
       meta: {
-        cache: 'admin_command_centre_v4',
-        cache_ttl_ms: ADMIN_DASHBOARD_CACHE_TTL_MS
+        cache: 'admin_command_centre_v5_partial_safe',
+        cache_ttl_ms: ADMIN_DASHBOARD_CACHE_TTL_MS,
+        generated_at: new Date().toISOString(),
+        partial: metricFallbacks.length > 0,
+        metric_fallbacks: metricFallbacks
       }
     };
     });
