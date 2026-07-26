@@ -7,6 +7,7 @@ const { cleanText, isValidEmail, isValidPhone } = require('../middleware/validat
 const { parsePagination, toPagination } = require('../utils/pagination');
 const { DISTRICTS, LISTING_TYPES } = require('../utils/constants');
 const { publicLivePropertyStatusSql } = require('../utils/publicInventoryStatus');
+const { publicVisibleInventoryWhere } = require('../services/publicInventoryMetricsService');
 const {
   normalizeCommercialTransactionType,
   normalizeCommercialPropertyType,
@@ -82,6 +83,8 @@ const STAFF_DASHBOARD_QUEUE_SCAN_LIMIT = STAFF_DASHBOARD_QUEUE_LIMIT * 20;
 const STAFF_DASHBOARD_PANEL_SCAN_LIMIT = STAFF_DASHBOARD_PANEL_LIMIT * 20;
 const STAFF_DASHBOARD_PANEL_QUERY_TIMEOUT_MS = Math.max(1000, parseInt(process.env.STAFF_DASHBOARD_PANEL_QUERY_TIMEOUT_MS || '5000', 10) || 5000);
 const STAFF_DASHBOARD_PANEL_CACHE_TTL_MS = Math.max(500, parseInt(process.env.STAFF_DASHBOARD_PANEL_CACHE_TTL_MS || '30000', 10) || 30000);
+const STAFF_DASHBOARD_FAST_COUNT_TIMEOUT_MS = Math.max(500, parseInt(process.env.STAFF_DASHBOARD_FAST_COUNT_TIMEOUT_MS || '2500', 10) || 2500);
+const STAFF_DASHBOARD_FAST_WIDGET_TIMEOUT_MS = Math.max(250, parseInt(process.env.STAFF_DASHBOARD_FAST_WIDGET_TIMEOUT_MS || '700', 10) || 700);
 const STAFF_REVIEW_QUEUE_QUERY_TIMEOUT_MS = Math.max(1500, parseInt(process.env.STAFF_REVIEW_QUEUE_QUERY_TIMEOUT_MS || '4000', 10) || 4000);
 const STAFF_PREVIEW_QUERY_TIMEOUT_MS = Math.max(500, parseInt(process.env.STAFF_PREVIEW_QUERY_TIMEOUT_MS || '900', 10) || 900);
 const STAFF_MODERATION_WRITE_TIMEOUT_MS = Math.max(1000, parseInt(process.env.STAFF_MODERATION_WRITE_TIMEOUT_MS || '5000', 10) || 5000);
@@ -1084,7 +1087,35 @@ async function staffNotifyReporterOutcome(row = {}, status = '', note = '') {
 async function staffQuery(sql, params = [], options = {}) {
   const timeoutMs = Math.max(0, Number(options.timeoutMs || 0) || 0);
   if (!timeoutMs) return db.query(sql, params);
-  const client = await db.getClient();
+  let acquireTimedOut = false;
+  let acquireTimer = null;
+  const acquireTimeoutMs = Math.max(250, Math.min(timeoutMs, 900));
+  const clientPromise = db.getClient().then((client) => {
+    if (acquireTimedOut) {
+      client.release();
+      return null;
+    }
+    return client;
+  });
+  const acquireTimeout = new Promise((_, reject) => {
+    acquireTimer = setTimeout(() => {
+      acquireTimedOut = true;
+      const error = new Error('Staff database client acquisition timed out');
+      error.code = 'POOL_TIMEOUT';
+      reject(error);
+    }, acquireTimeoutMs);
+  });
+  let client;
+  try {
+    client = await Promise.race([clientPromise, acquireTimeout]);
+  } finally {
+    if (acquireTimer) clearTimeout(acquireTimer);
+  }
+  if (!client) {
+    const error = new Error('Staff database client acquisition timed out');
+    error.code = 'POOL_TIMEOUT';
+    throw error;
+  }
   try {
     await client.query('BEGIN');
     await client.query(`SET LOCAL statement_timeout = ${Math.max(1, Math.floor(timeoutMs))}`);
@@ -1290,6 +1321,54 @@ async function dashboardPanelsPayload(req) {
   };
 }
 
+async function buildStaffFastListingSummary() {
+  const [inventoryRow, reviewRow, totalRow] = await Promise.all([
+    safeOne(
+      `SELECT COUNT(*)::int AS live
+       FROM properties p
+       WHERE ${publicVisibleInventoryWhere('p')}`,
+      [],
+      { live: 0 },
+      { timeoutMs: STAFF_DASHBOARD_FAST_COUNT_TIMEOUT_MS }
+    ),
+    safeOne(
+      `WITH actionable AS MATERIALIZED (
+         SELECT p.listed_via, p.source, p.lister_type, p.agent_id, p.extra_fields
+         FROM properties p
+         WHERE ${actionablePendingReviewWhere('p')}
+       )
+       SELECT
+         COUNT(*)::int AS pending_review,
+         COUNT(*) FILTER (WHERE ${brokerReviewWhere('actionable')})::int AS broker_pending_review
+       FROM actionable`,
+      [],
+      { pending_review: 0, broker_pending_review: 0 },
+      { timeoutMs: STAFF_DASHBOARD_FAST_COUNT_TIMEOUT_MS }
+    ),
+    safeOne(
+      `SELECT GREATEST(COALESCE(reltuples::bigint, 0), 0)::int AS database_total
+       FROM pg_class
+       WHERE oid = 'properties'::regclass`,
+      [],
+      { database_total: 0 },
+      { timeoutMs: STAFF_DASHBOARD_FAST_WIDGET_TIMEOUT_MS }
+    )
+  ]);
+  const databaseTotal = safeNumber(totalRow, 'database_total');
+  return {
+    database_total: databaseTotal,
+    staff_visible_total: databaseTotal,
+    pending_review: safeNumber(reviewRow, 'pending_review'),
+    broker_pending_review: safeNumber(reviewRow, 'broker_pending_review'),
+    source_quality_suppressed_pending: 0,
+    live: safeNumber(inventoryRow, 'live'),
+    staff_removed: 0,
+    found_online: 0,
+    website_submitted: 0,
+    count_source: 'indexed_public_and_actionable_review_predicates'
+  };
+}
+
 async function buildDashboardFastPayload(req) {
   const staffId = actorId(req);
   const [
@@ -1302,21 +1381,7 @@ async function buildDashboardFastPayload(req) {
     mortgageSummary,
     paymentSummary
   ] = await Promise.all([
-    safeOne(
-      `SELECT
-         COUNT(*)::int AS database_total,
-         COUNT(*) FILTER (WHERE ${staffVisiblePropertyWhere('p')})::int AS staff_visible_total,
-         COUNT(*) FILTER (WHERE ${activePendingReviewWhere('p')})::int AS pending_review,
-         COUNT(*) FILTER (WHERE ${activePendingReviewWhere('p')} AND ${brokerReviewWhere('p')})::int AS broker_pending_review,
-         COUNT(*) FILTER (WHERE ${sourceQualitySuppressedPendingWhere('p')})::int AS source_quality_suppressed_pending,
-         COUNT(*) FILTER (WHERE ${publicCustomerVisiblePropertyWhere('p')})::int AS live,
-         COUNT(*) FILTER (WHERE LOWER(COALESCE(p.status, '')) IN (${sqlList(STAFF_REMOVED_STATUSES)}))::int AS staff_removed,
-         COUNT(*) FILTER (WHERE ${staffVisiblePropertyWhere('p')} AND COALESCE(p.extra_fields->>'found_online', p.extra_fields->>'found_online_candidate', p.extra_fields->>'social_search_candidate', '') ~* '^(true|1|yes)$')::int AS found_online,
-         COUNT(*) FILTER (WHERE ${staffVisiblePropertyWhere('p')} AND LOWER(COALESCE(p.source, p.listed_via, '')) IN ('website','web'))::int AS website_submitted
-       FROM properties p`,
-      [],
-      { database_total: 0, staff_visible_total: 0, pending_review: 0, broker_pending_review: 0, source_quality_suppressed_pending: 0, live: 0, staff_removed: 0, found_online: 0, website_submitted: 0 }
-    ),
+    buildStaffFastListingSummary(),
     safeOne(
       `SELECT
          COUNT(*)::int AS total_actions,
@@ -1326,7 +1391,8 @@ async function buildDashboardFastPayload(req) {
        FROM property_moderation_events
        WHERE actor_id = $1`,
       [staffId],
-      { total_actions: 0, approvals: 0, rejections: 0, actions_24h: 0 }
+      { total_actions: 0, approvals: 0, rejections: 0, actions_24h: 0 },
+      { timeoutMs: STAFF_DASHBOARD_FAST_WIDGET_TIMEOUT_MS }
     ),
     safeOne(
       `SELECT
@@ -1336,7 +1402,8 @@ async function buildDashboardFastPayload(req) {
          COUNT(*) FILTER (WHERE next_follow_up_at < NOW() AND lead_status = 'open')::int AS overdue
        FROM leads`,
       [OPEN_LEAD_STATUSES, staffId],
-      { open: 0, assigned_to_me: 0, hot: 0, overdue: 0 }
+      { open: 0, assigned_to_me: 0, hot: 0, overdue: 0 },
+      { timeoutMs: STAFF_DASHBOARD_FAST_WIDGET_TIMEOUT_MS }
     ),
     safeOne(
       `SELECT
@@ -1346,7 +1413,8 @@ async function buildDashboardFastPayload(req) {
          COALESCE(SUM(estimated_value_ugx) FILTER (WHERE status IN ('proposal_sent','won')), 0)::bigint AS staff_visible_pipeline_ugx
        FROM advertising_inquiries`,
       [OPEN_AD_STATUSES, staffId],
-      { open_inquiries: 0, assigned_to_me: 0, won_inquiries: 0, staff_visible_pipeline_ugx: 0 }
+      { open_inquiries: 0, assigned_to_me: 0, won_inquiries: 0, staff_visible_pipeline_ugx: 0 },
+      { timeoutMs: STAFF_DASHBOARD_FAST_WIDGET_TIMEOUT_MS }
     ),
     safeOne(
       `SELECT
@@ -1356,7 +1424,8 @@ async function buildDashboardFastPayload(req) {
          COUNT(*) FILTER (WHERE assigned_to = $1)::int AS assigned_to_me
        FROM whatsapp_conversation_state`,
       [staffId],
-      { needs_human: 0, open: 0, active_7d: 0, assigned_to_me: 0 }
+      { needs_human: 0, open: 0, active_7d: 0, assigned_to_me: 0 },
+      { timeoutMs: STAFF_DASHBOARD_FAST_WIDGET_TIMEOUT_MS }
     ),
     safeOne(
       `SELECT
@@ -1369,7 +1438,8 @@ async function buildDashboardFastPayload(req) {
          COUNT(*) FILTER (WHERE can_contact_directly = true)::int AS direct_contact_sources
        FROM property_source_registry`,
       [],
-      { total_sources: 0, active_sources: 0, tiktok_sources: 0, youtube_sources: 0, facebook_sources: 0, x_sources: 0, direct_contact_sources: 0 }
+      { total_sources: 0, active_sources: 0, tiktok_sources: 0, youtube_sources: 0, facebook_sources: 0, x_sources: 0, direct_contact_sources: 0 },
+      { timeoutMs: STAFF_DASHBOARD_FAST_WIDGET_TIMEOUT_MS }
     ),
     safeOne(
       `SELECT
@@ -1378,7 +1448,8 @@ async function buildDashboardFastPayload(req) {
          COUNT(*) FILTER (WHERE user_phone IS NOT NULL AND user_phone <> '')::int AS with_phone
        FROM mortgage_enquiries`,
       [],
-      { total: 0, last_7_days: 0, with_phone: 0 }
+      { total: 0, last_7_days: 0, with_phone: 0 },
+      { timeoutMs: STAFF_DASHBOARD_FAST_WIDGET_TIMEOUT_MS }
     ),
     safeOne(
       `SELECT
@@ -1387,7 +1458,8 @@ async function buildDashboardFastPayload(req) {
          (SELECT COUNT(*)::int FROM invoices WHERE status = 'paid') AS paid_invoices
        `,
       [],
-      { open_payment_links: 0, open_invoices: 0, paid_invoices: 0 }
+      { open_payment_links: 0, open_invoices: 0, paid_invoices: 0 },
+      { timeoutMs: STAFF_DASHBOARD_FAST_WIDGET_TIMEOUT_MS }
     )
   ]);
 
