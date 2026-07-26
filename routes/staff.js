@@ -53,6 +53,24 @@ const router = express.Router();
 router.use(requireStaffAccess);
 
 const PENDING_REVIEW_STATUSES = ['pending', 'pending_review', 'submitted', 'in_review', 'under_review'];
+const ACTIONABLE_PENDING_REVIEW_STATUSES = [
+  'pending',
+  'pending_review',
+  'test_pending_review',
+  'pending_review_hidden',
+  'draft',
+  'submitted',
+  'resubmitted',
+  'in_review',
+  'under_review',
+  'needs_review',
+  'awaiting_review',
+  'queued',
+  'source_review',
+  'source_review_required',
+  'pending_king_source_review',
+  'king_review'
+];
 const FINAL_REVIEW_STATUSES = ['approved', 'live', 'published', 'sold', 'hidden', 'deleted', 'rejected', 'declined', 'fraud', 'archived'];
 const STAFF_REMOVED_STATUSES = ['deleted', 'rejected', 'declined', 'fraud', 'archived', 'test_pending_review'];
 const OPEN_LEAD_STATUSES = ['open', 'new', 'contacted', 'qualified'];
@@ -63,7 +81,7 @@ const STAFF_DASHBOARD_PANEL_LIMIT = 8;
 const STAFF_DASHBOARD_QUEUE_SCAN_LIMIT = STAFF_DASHBOARD_QUEUE_LIMIT * 20;
 const STAFF_DASHBOARD_PANEL_SCAN_LIMIT = STAFF_DASHBOARD_PANEL_LIMIT * 20;
 const STAFF_DASHBOARD_PANEL_QUERY_TIMEOUT_MS = Math.max(1000, parseInt(process.env.STAFF_DASHBOARD_PANEL_QUERY_TIMEOUT_MS || '5000', 10) || 5000);
-const STAFF_DASHBOARD_PANEL_CACHE_TTL_MS = Math.max(500, parseInt(process.env.STAFF_DASHBOARD_PANEL_CACHE_TTL_MS || '3000', 10) || 3000);
+const STAFF_DASHBOARD_PANEL_CACHE_TTL_MS = Math.max(500, parseInt(process.env.STAFF_DASHBOARD_PANEL_CACHE_TTL_MS || '30000', 10) || 30000);
 const STAFF_REVIEW_QUEUE_QUERY_TIMEOUT_MS = Math.max(1500, parseInt(process.env.STAFF_REVIEW_QUEUE_QUERY_TIMEOUT_MS || '4000', 10) || 4000);
 const STAFF_PREVIEW_QUERY_TIMEOUT_MS = Math.max(500, parseInt(process.env.STAFF_PREVIEW_QUERY_TIMEOUT_MS || '900', 10) || 900);
 const STAFF_MODERATION_WRITE_TIMEOUT_MS = Math.max(1000, parseInt(process.env.STAFF_MODERATION_WRITE_TIMEOUT_MS || '5000', 10) || 5000);
@@ -680,6 +698,58 @@ function brokerReviewWhere(alias = 'p') {
     OR COALESCE(${prefix}extra_fields->>'broker_submission', '') IN ('true', '1', 'yes')
     OR NULLIF(${prefix}extra_fields->>'broker_agent_id', '') IS NOT NULL
   )`;
+}
+
+function launchTestListingWhere(alias = 'p') {
+  const prefix = alias ? `${alias}.` : '';
+  return `(
+    COALESCE(${prefix}source, '') ~* '(qa|test|demo|soft_launch|launch_proof)'
+    OR COALESCE(${prefix}listed_via, '') ~* '(qa|test|demo|soft_launch|launch_proof)'
+    OR COALESCE(${prefix}lister_email, '') ~* '(makaug\\.invalid|test@|qa@|dummy|sample)'
+    OR COALESCE(${prefix}inquiry_reference, '') ~* '^(SLT|QA|TEST|DUMMY|SAMPLE)-'
+    OR COALESCE(${prefix}extra_fields->>'is_test', '') ~* '^(true|1|yes)$'
+    OR COALESCE(${prefix}extra_fields->>'qa_test_delete', '') ~* '^(true|1|yes)$'
+    OR COALESCE(${prefix}extra_fields->>'soft_launch_test', '') ~* '^(true|1|yes)$'
+    OR COALESCE(${prefix}extra_fields->>'launch_proof', '') ~* '^(true|1|yes)$'
+    OR COALESCE(${prefix}extra_fields->>'non_public_test', '') ~* '^(true|1|yes)$'
+  )`;
+}
+
+function actionablePendingReviewWhere(alias = 'p') {
+  const prefix = alias ? `${alias}.` : '';
+  return `(
+    (
+      LOWER(COALESCE(${prefix}status, '')) IN (${sqlList(ACTIONABLE_PENDING_REVIEW_STATUSES)})
+      OR (
+        COALESCE(${prefix}status, '') = ''
+        AND LOWER(COALESCE(${prefix}moderation_stage, '')) IN (${sqlList(ACTIONABLE_PENDING_REVIEW_STATUSES)})
+      )
+    )
+    AND NOT ${launchTestListingWhere(alias)}
+    AND (
+      NOT ${sourceQualitySuppressedFlagSql(alias)}
+      OR ${prefix}source = 'found_online_property_source_v1'
+      OR ${prefix}listed_via = 'found_online'
+    )
+  )`;
+}
+
+function rowIsBrokerReview(row = {}) {
+  const extra = safeJsonObject(row.extra_fields, {});
+  return /broker/i.test(cleanText(row.listed_via))
+    || /broker/i.test(cleanText(row.source))
+    || ['agent', 'broker'].includes(cleanText(row.lister_type).toLowerCase())
+    || Boolean(row.agent_id)
+    || boolLike(extra.broker_submission)
+    || Boolean(cleanText(extra.broker_agent_id));
+}
+
+function rowIsFoundOnlineReview(row = {}) {
+  const extra = safeJsonObject(row.extra_fields, {});
+  return boolLike(extra.found_online)
+    || boolLike(extra.found_online_candidate)
+    || boolLike(extra.social_search_candidate)
+    || Boolean(staffListingSourceUrl(row));
 }
 
 function staffVisiblePropertyWhere(alias = 'p') {
@@ -1715,9 +1785,8 @@ async function buildDashboardPanelsPayload(req) {
   const staffId = actorId(req);
   const queueLimit = STAFF_DASHBOARD_QUEUE_LIMIT;
   const panelLimit = STAFF_DASHBOARD_PANEL_LIMIT;
-  const queueScanLimit = queueLimit;
   const panelQueryOptions = { timeoutMs: STAFF_DASHBOARD_PANEL_QUERY_TIMEOUT_MS };
-  const [recentActivity, reviewResult, brokerReviewResult, sourceQueueRows] = await Promise.all([
+  const [recentActivity, reviewResult] = await Promise.all([
     safeRows(
       `SELECT id, action, target_type, target_id, metadata, created_at
        FROM staff_activity_logs
@@ -1731,7 +1800,7 @@ async function buildDashboardPanelsPayload(req) {
       `WITH panel_candidates AS MATERIALIZED (
          SELECT p.id
          FROM properties p
-         WHERE ${activePendingReviewWhere('p')}
+         WHERE ${actionablePendingReviewWhere('p')}
          ORDER BY p.updated_at DESC NULLS LAST, p.created_at DESC NULLS LAST, p.id DESC
          LIMIT $1
        )
@@ -1742,76 +1811,42 @@ async function buildDashboardPanelsPayload(req) {
               p.lister_type, p.agent_id,
               jsonb_build_object(
                 'broker_submission', p.extra_fields->>'broker_submission',
-                'broker_agent_id', p.extra_fields->>'broker_agent_id'
+                'broker_agent_id', p.extra_fields->>'broker_agent_id',
+                'found_online', p.extra_fields->>'found_online',
+                'found_online_candidate', p.extra_fields->>'found_online_candidate',
+                'social_search_candidate', p.extra_fields->>'social_search_candidate',
+                'source_url', p.extra_fields->>'source_url',
+                'source_post_url', p.extra_fields->>'source_post_url',
+                'tiktok_url', p.extra_fields->>'tiktok_url',
+                'youtube_url', p.extra_fields->>'youtube_url',
+                'video_url', p.extra_fields->>'video_url',
+                'source_name', p.extra_fields->>'source_name',
+                'source_platform', p.extra_fields->>'source_platform'
               ) AS extra_fields,
               COALESCE(p.extra_fields->>'source_url', p.extra_fields->>'source_post_url', p.extra_fields->>'tiktok_url', p.extra_fields->>'youtube_url', p.extra_fields->>'video_url') AS source_url,
               COALESCE(p.extra_fields->>'source_platform', p.extra_fields->>'source_badge', p.source, p.listed_via) AS source_platform,
-              0::int AS duplicate_count,
-              NULL::text AS primary_image_url
-       FROM properties p
-       JOIN panel_candidates c ON c.id = p.id
-       ORDER BY p.updated_at DESC NULLS LAST, p.created_at DESC NULLS LAST, p.id DESC
-       LIMIT $2`,
-      [queueScanLimit, queueLimit],
-      { ...panelQueryOptions, label: 'staff_panel_review_queue' }
-    ),
-    safeRowsResult(
-      `WITH panel_candidates AS MATERIALIZED (
-         SELECT p.id
-         FROM properties p
-         WHERE ${activePendingReviewWhere('p')}
-           AND ${brokerReviewWhere('p')}
-         ORDER BY p.updated_at DESC NULLS LAST, p.created_at DESC NULLS LAST, p.id DESC
-         LIMIT $1
-       )
-       SELECT p.id, p.title, p.listing_type, p.property_type, p.district, p.area,
-              p.price,
-              p.status, p.moderation_stage, p.moderation_reason, p.created_at, p.updated_at,
-              p.inquiry_reference, p.lister_name, p.lister_phone, p.lister_email, p.source, p.listed_via,
-              p.lister_type, p.agent_id,
-              jsonb_build_object(
-                'broker_submission', p.extra_fields->>'broker_submission',
-                'broker_agent_id', p.extra_fields->>'broker_agent_id'
-              ) AS extra_fields,
-              COALESCE(p.extra_fields->>'source_url', p.extra_fields->>'source_post_url', p.extra_fields->>'tiktok_url', p.extra_fields->>'youtube_url', p.extra_fields->>'video_url') AS source_url,
-              COALESCE(p.extra_fields->>'source_platform', p.extra_fields->>'source_badge', p.source, p.listed_via) AS source_platform,
-              0::int AS duplicate_count,
-              NULL::text AS primary_image_url
-       FROM properties p
-       JOIN panel_candidates c ON c.id = p.id
-       ORDER BY p.updated_at DESC NULLS LAST, p.created_at DESC NULLS LAST, p.id DESC
-       LIMIT $2`,
-      [queueScanLimit, queueLimit],
-      { ...panelQueryOptions, label: 'staff_panel_broker_review_queue' }
-    ),
-    safeRows(
-      `SELECT p.id, p.title, p.area, p.district, p.status, p.updated_at,
-              COALESCE(p.extra_fields->>'source_platform', p.source, p.listed_via) AS platform,
-              COALESCE(p.extra_fields->>'source_url', p.extra_fields->>'source_post_url', p.extra_fields->>'youtube_url', p.extra_fields->>'tiktok_url') AS source_url,
-              p.lister_phone,
+              COALESCE(p.extra_fields->>'source_platform', p.extra_fields->>'source_badge', p.source, p.listed_via) AS platform,
               COALESCE(p.extra_fields->>'source_name', p.lister_name, 'Found online') AS source_name,
-              p.extra_fields
+              0::int AS duplicate_count,
+              NULL::text AS primary_image_url
        FROM properties p
-       WHERE ${activePendingReviewWhere('p')}
-         AND (
-           COALESCE(p.extra_fields->>'found_online', p.extra_fields->>'found_online_candidate', p.extra_fields->>'social_search_candidate', '') ~* '^(true|1|yes)$'
-           OR COALESCE(p.extra_fields->>'source_url', p.extra_fields->>'source_post_url', p.extra_fields->>'youtube_url', p.extra_fields->>'tiktok_url', '') <> ''
-         )
-       ORDER BY COALESCE(p.updated_at, p.created_at) DESC, p.id DESC
+       JOIN panel_candidates c ON c.id = p.id
+       ORDER BY p.updated_at DESC NULLS LAST, p.created_at DESC NULLS LAST, p.id DESC
        LIMIT $1`,
       [STAFF_DASHBOARD_PANEL_SCAN_LIMIT],
-      panelQueryOptions
+      { ...panelQueryOptions, label: 'staff_panel_review_queue' }
     )
   ]);
   const reviewQueue = staffModerationPanelRows(reviewResult.rows, queueLimit);
-  const brokerReviewQueue = staffModerationPanelRows(brokerReviewResult.rows, queueLimit);
+  const brokerReviewQueue = staffModerationPanelRows(reviewResult.rows.filter(rowIsBrokerReview), queueLimit);
+  const sourceQueueRows = reviewResult.rows.filter(rowIsFoundOnlineReview);
 
   return {
     staff: publicStaffUser(req.userAuth),
     panel_payload: true,
     review_queue: reviewQueue,
     review_queue_meta: {
-      count_filter: 'staff_active_pending_review',
+      count_filter: 'staff_actionable_pending_review',
       source_quality_filter: 'stored_suppression_flag_only',
       returned_count: reviewQueue.length,
       query_ok: reviewResult.ok,
@@ -1821,13 +1856,13 @@ async function buildDashboardPanelsPayload(req) {
     },
     broker_review_queue: brokerReviewQueue,
     broker_review_queue_meta: {
-      count_filter: 'staff_active_pending_review_and_broker',
+      count_filter: 'staff_actionable_pending_review_and_broker',
       source_quality_filter: 'stored_suppression_flag_only',
       returned_count: brokerReviewQueue.length,
-      query_ok: brokerReviewResult.ok,
-      query_error: brokerReviewResult.error,
-      timed_out: brokerReviewResult.timed_out,
-      empty_is_authoritative: brokerReviewResult.ok
+      query_ok: reviewResult.ok,
+      query_error: reviewResult.error,
+      timed_out: reviewResult.timed_out,
+      empty_is_authoritative: reviewResult.ok
     },
     recent_activity: recentActivity,
     source_intake: {
