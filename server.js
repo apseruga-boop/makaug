@@ -98,7 +98,14 @@ app.use(
 );
 
 app.use(express.urlencoded({ extended: true, limit: '15mb' }));
-app.use(express.json({ limit: '15mb' }));
+app.use(express.json({
+  limit: '15mb',
+  verify: (req, _res, buffer) => {
+    if (req.originalUrl === '/api/whatsapp/webhook') {
+      req.rawBody = Buffer.from(buffer);
+    }
+  }
+}));
 
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
