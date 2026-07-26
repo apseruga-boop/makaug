@@ -83,7 +83,7 @@ test('admin live controls use paginated backend snapshots', () => {
   assert.match(appSource, /const reviewQueuePath = adminPendingQueueFilter === "found_online"[\s\S]*"\/api\/admin\/properties\/review-queue\?include_total=0&include_images=0&queue=found_online"[\s\S]*"\/api\/admin\/properties\/review-queue\?include_total=0&include_images=0"/);
   assert.match(appSource, /King dashboard refresh already running; skipping duplicate render\./);
   assert.match(adminRouteSource, /adminCachedPayload\('admin-summary-v5-properties-list-count-fast'/);
-  assert.match(adminRouteSource, /adminCachedPayload\('admin-command-centre-v4'/);
+  assert.match(adminRouteSource, /adminCachedPayload\('admin-command-centre-v5-partial-safe'/);
   assert.match(adminRouteSource, /admin-review-queue-v7-authoritative-status/);
   assert.match(adminRouteSource, /const includeTotal = parseBooleanLike\(req\.query\.include_total \|\| req\.query\.includeTotal, false\)/);
   assert.match(adminRouteSource, /const rowLimit = limit \+ 1/);
