@@ -293,6 +293,14 @@ function sourceQualitySuppressedFlagSql(alias = 'p') {
   )`;
 }
 
+function indexedSourceQualitySuppressedFlagSql(alias = 'p') {
+  const prefix = alias ? `${alias}.` : '';
+  return `(
+    COALESCE(${prefix}extra_fields->'source_quality_review'->>'suppressed', '') ~* '^(true|1|yes)$'
+    OR COALESCE(${prefix}extra_fields->>'source_quality_suppressed', '') ~* '^(true|1|yes)$'
+  )`;
+}
+
 function rowSourceQualitySuppressed(row = {}) {
   const extra = safeJsonObject(row.extra_fields, {});
   const sourceQuality = safeJsonObject(extra.source_quality_review, {});
@@ -727,7 +735,7 @@ function actionablePendingReviewWhere(alias = 'p') {
     )
     AND NOT ${launchTestListingWhere(alias)}
     AND (
-      NOT ${sourceQualitySuppressedFlagSql(alias)}
+      NOT ${indexedSourceQualitySuppressedFlagSql(alias)}
       OR ${prefix}source = 'found_online_property_source_v1'
       OR ${prefix}listed_via = 'found_online'
     )
