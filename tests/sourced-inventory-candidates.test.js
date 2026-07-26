@@ -281,6 +281,7 @@ test('found-online seed panel hides approved and live records from pending moder
     'remote pending rows should drop approved/live records before rendering'
   );
   assert(frontend.includes('fetchAdminPaginatedRows(reviewQueuePath, headers, { limit: ADMIN_REVIEW_QUEUE_PAGE_SIZE, maxPages: 1 })'), 'dashboard should lazy-load one bounded protected review-queue page without overloading King dashboard');
+  assert(frontend.includes('include_total=1&include_images=0'), 'bounded review queue should request the indexed authoritative total for honest pagination copy');
   assert(frontend.includes('adminApplyLaunchCleanFilter(listings).filter(adminIsPendingReviewSeedItem)'), 'pending renderer should refuse final-state records even if an API response leaks them');
   assert(html.includes('found-online-pending-filter-20260521'), 'index should bump the app asset version so production browsers fetch the fixed admin JS');
   assert(html.includes('source-fishing-policy-20260523'), 'index should bump the app asset version so production browsers fetch the source-fishing policy UI');
