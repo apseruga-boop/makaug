@@ -19,6 +19,19 @@ test('direct-agent onboarding remains protected and records explicit authority c
   assert.match(source, /direct_agent_whatsapp/);
 });
 
+test('direct-agent onboarding reuses a matching pending listing from the same contact', () => {
+  const source = read('routes/admin.js');
+  const app = read('assets/makaug-app.js');
+
+  assert.match(source, /regexp_replace\(COALESCE\(lister_phone/);
+  assert.match(source, /LOWER\(COALESCE\(lister_email/);
+  assert.match(source, /direct_agent_existing_listing_linked/);
+  assert.match(source, /existing_image_count/);
+  assert.match(source, /extra_fields = COALESCE\(extra_fields, '\{\}'::jsonb\) \|\| \$6::jsonb/);
+  assert.match(app, /existingImageCount < 5/);
+  assert.match(app, /existing photos preserved/);
+});
+
 test('direct-agent publish gate requires evidence, photos, videos, and moderation audit', () => {
   const source = read('routes/admin.js');
   assert.match(source, /router\.post\('\/properties\/:id\/direct-publish'/);
