@@ -20864,8 +20864,8 @@ async function adminCreateDirectAgentListing(event) {
   }
   const imageFiles = [...(document.getElementById("admin-direct-property-images")?.files || [])];
   const videoFiles = [...(document.getElementById("admin-direct-property-videos")?.files || [])];
-  if (!imageFiles.length || !videoFiles.length) {
-    toast("Add at least one property photo and one MP4 video.");
+  if (!videoFiles.length) {
+    toast("Add at least one MP4 property video.");
     return;
   }
   if (videoFiles.length > 8) {
@@ -20934,30 +20934,37 @@ async function adminCreateDirectAgentListing(event) {
     const agentId = created?.data?.agent_id;
     const propertyId = created?.data?.property_id;
     if (!agentId || !propertyId) throw new Error("Direct onboarding did not return agent and property IDs.");
+    const existingImageCount = Number(created?.data?.existing_image_count || 0);
+    if (!imageFiles.length && existingImageCount < 5) {
+      throw new Error("Add at least five property photos before publishing this listing.");
+    }
 
-    setProgress(`Profile and pending listing saved. Preparing ${imageFiles.length} photo(s)...`);
-    const images = [];
-    for (const [index, file] of imageFiles.entries()) {
-      const payload = await adminReadDirectMediaFile(file, 6 * 1024 * 1024, `Photo ${index + 1}`);
-      images.push({
-        url: payload.data_url,
-        room_label: file.name.replace(/\.[^.]+$/, ""),
-        is_primary: index === 0,
-        sort_order: index
+    if (imageFiles.length) {
+      setProgress(`Profile and pending listing saved. Preparing ${imageFiles.length} photo(s)...`);
+      const images = [];
+      for (const [index, file] of imageFiles.entries()) {
+        const payload = await adminReadDirectMediaFile(file, 6 * 1024 * 1024, `Photo ${index + 1}`);
+        images.push({
+          url: payload.data_url,
+          room_label: file.name.replace(/\.[^.]+$/, ""),
+          is_primary: index === 0,
+          sort_order: index
+        });
+      }
+      await apiRequest(`/api/admin/properties/${encodeURIComponent(propertyId)}/images`, {
+        method: "POST",
+        headers: adminAuthHeaders(),
+        body: {
+          confirm_rights: true,
+          replace_all: true,
+          images
+        }
       });
     }
-    await apiRequest(`/api/admin/properties/${encodeURIComponent(propertyId)}/images`, {
-      method: "POST",
-      headers: adminAuthHeaders(),
-      body: {
-        confirm_rights: true,
-        replace_all: true,
-        images
-      }
-    });
 
     for (const [index, file] of videoFiles.entries()) {
-      setProgress(`Photos saved. Uploading video ${index + 1} of ${videoFiles.length}...`);
+      const imageStatus = imageFiles.length ? "Photos saved." : `${existingImageCount} existing photos preserved.`;
+      setProgress(`${imageStatus} Uploading video ${index + 1} of ${videoFiles.length}...`);
       const payload = await adminReadDirectMediaFile(file, 8 * 1024 * 1024, `Video ${index + 1}`);
       await apiRequest(`/api/admin/properties/${encodeURIComponent(propertyId)}/videos`, {
         method: "POST",
