@@ -110,6 +110,7 @@ const {
 } = require('../services/outlookAiEmailAgentService');
 const { sendPhoneOtp } = require('../services/phoneOtpDeliveryService');
 const { buildListingReference } = require('../services/listingReferenceService');
+const { propertyPriceMetadata } = require('../utils/propertyPriceCurrency');
 const SOURCED_INVENTORY_CANDIDATE_SOURCE = 'sourced_inventory_candidate_v1';
 const {
   BAKAIMA_BATCH_ID,
@@ -195,6 +196,9 @@ const FIELD_AGENT_UPLOAD_MAX_BYTES = 2 * 1024 * 1024;
 const FIELD_AGENT_DIRECTORY_LIMIT = 10000;
 const ADMIN_LISTING_IMAGE_MAX_BYTES = 6 * 1024 * 1024;
 const ADMIN_LISTING_IMAGE_MAX_COUNT = 20;
+const ADMIN_LISTING_VIDEO_MAX_BYTES = 8 * 1024 * 1024;
+const ADMIN_LISTING_VIDEO_MAX_COUNT = 8;
+const DIRECT_AGENT_PROFILE_MARKER = '[DIRECT_AGENT_AUTHORISED]';
 const LAUNCH_TEST_LISTING_MARKERS = ['SOFT LAUNCH TEST - DELETE', 'QA TEST - DELETE'];
 const LAUNCH_TEST_DUMMY_TITLES = ['sdgsdgd', 'sgsgsgsgs'];
 const PUBLIC_SITE_URL = String(process.env.PUBLIC_BASE_URL || process.env.APP_BASE_URL || 'https://makaug.com').replace(/\/+$/, '');
@@ -820,6 +824,44 @@ function cleanAdminListingImageUpload(value = {}, fallbackLabel = 'Authorised pr
     is_primary: parseBooleanLike(value.is_primary || value.primary, false),
     sort_order: Math.max(0, parseInt(value.sort_order, 10) || 0)
   };
+}
+
+function cleanAdminListingVideoUpload(value = {}, fallbackLabel = 'Authorised property video') {
+  if (!value || typeof value !== 'object') return null;
+  const url = String(value.url || value.data_url || value.dataUrl || '').trim();
+  if (!url) return null;
+  const isMp4DataUrl = /^data:video\/mp4;base64,/i.test(url);
+  const isRemoteVideoUrl = /^https:\/\/.+(?:\.mp4)(?:[?#].*)?$/i.test(url);
+  if (!isMp4DataUrl && !isRemoteVideoUrl) {
+    const err = new Error('Listing video must be an MP4 upload or HTTPS MP4 URL.');
+    err.status = 400;
+    throw err;
+  }
+  if (isMp4DataUrl && dataUrlApproxBytes(url) > ADMIN_LISTING_VIDEO_MAX_BYTES) {
+    const err = new Error('Listing video is too large. Each MP4 must be 8MB or smaller.');
+    err.status = 400;
+    throw err;
+  }
+  return {
+    url,
+    label: cleanText(value.label || value.room_label || fallbackLabel).slice(0, 120) || fallbackLabel,
+    sort_order: Math.max(0, parseInt(value.sort_order, 10) || 0)
+  };
+}
+
+function directAgentProfileReason(note = '') {
+  const detail = cleanText(note).slice(0, 800);
+  return [
+    DIRECT_AGENT_PROFILE_MARKER,
+    'Direct agent-authorised submission. Profile identity verification and account claim are pending.',
+    detail
+  ].filter(Boolean).join(' ');
+}
+
+function isDirectAgentAuthorisedRecord(row = {}) {
+  const extra = row.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
+  return extra.direct_agent_authorised === true
+    || String(row.verification_reason || '').includes(DIRECT_AGENT_PROFILE_MARKER);
 }
 
 function normalizeFieldAgentCode(value = '') {
@@ -5075,6 +5117,257 @@ router.post('/properties/:id/images', async (req, res, next) => {
   }
 });
 
+router.post('/properties/:id/videos', async (req, res, next) => {
+  const actorId = adminActorId(req);
+  const client = await db.pool.connect();
+  try {
+    const confirmRights = parseBooleanLike(req.body?.confirm_rights || req.body?.video_rights_confirmed, false);
+    if (!confirmRights) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Admin video upload requires video rights confirmation'
+      });
+    }
+    const requestedVideos = Array.isArray(req.body?.videos) ? req.body.videos : [req.body || {}];
+    const uploads = requestedVideos
+      .map((item, index) => cleanAdminListingVideoUpload(item, `Property video ${index + 1}`))
+      .filter(Boolean);
+    if (!uploads.length) {
+      return res.status(400).json({ ok: false, error: 'No listing videos were provided' });
+    }
+    if (uploads.length > ADMIN_LISTING_VIDEO_MAX_COUNT) {
+      return res.status(400).json({ ok: false, error: `Upload no more than ${ADMIN_LISTING_VIDEO_MAX_COUNT} listing videos at once` });
+    }
+
+    await client.query('BEGIN');
+    const property = await client.query(
+      'SELECT id, status, extra_fields FROM properties WHERE id = $1 LIMIT 1 FOR UPDATE',
+      [req.params.id]
+    );
+    if (!property.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ ok: false, error: 'Property not found' });
+    }
+    const existingExtra = property.rows[0].extra_fields && typeof property.rows[0].extra_fields === 'object'
+      ? property.rows[0].extra_fields
+      : {};
+    const existingUrls = Array.isArray(existingExtra.video_urls)
+      ? existingExtra.video_urls.filter((url) => /^https?:\/\//i.test(String(url || '')))
+      : [];
+    const stored = [];
+    for (const [index, video] of uploads.entries()) {
+      const url = await prepareMediaUrlForStorage(video.url, {
+        keyPrefix: `properties/${req.params.id}/admin-videos`,
+        filename: video.label || `property-video-${index + 1}`,
+        isPrivate: false,
+        allowedMimeTypes: ['video/mp4'],
+        maxBytes: ADMIN_LISTING_VIDEO_MAX_BYTES,
+        label: 'Admin listing video'
+      });
+      stored.push({ url, label: video.label, sort_order: video.sort_order || index });
+    }
+    const mergedUrls = [...new Set([...existingUrls, ...stored.map((item) => item.url)])]
+      .slice(0, ADMIN_LISTING_VIDEO_MAX_COUNT);
+    const videoMetadata = mergedUrls.map((url, index) => {
+      const uploaded = stored.find((item) => item.url === url);
+      return {
+        url,
+        label: uploaded?.label || `Property video ${index + 1}`,
+        sort_order: uploaded?.sort_order ?? index
+      };
+    });
+    await client.query(
+      `UPDATE properties
+       SET extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $2::jsonb,
+           updated_at = NOW()
+       WHERE id = $1`,
+      [
+        req.params.id,
+        JSON.stringify({
+          video_url: mergedUrls[0] || null,
+          video_urls: mergedUrls,
+          video_tours: videoMetadata,
+          video_count: mergedUrls.length,
+          video_rights_confirmed: true,
+          video_rights_status: 'admin_uploaded_authorised_videos',
+          listing_media_pending: false,
+          admin_video_upload: {
+            at: new Date().toISOString(),
+            actor_id: actorId,
+            added_count: stored.length
+          }
+        })
+      ]
+    );
+    await client.query(
+      `INSERT INTO property_moderation_events (
+         property_id, actor_id, action, status_from, status_to, reason, notes, delivery
+       ) VALUES ($1,$2,'admin_listing_videos_uploaded',$3,$3,$4,$5,$6::jsonb)`,
+      [
+        req.params.id,
+        actorId,
+        property.rows[0].status,
+        'Admin confirmed video rights.',
+        `${stored.length} authorised MP4 video(s) added to the listing.`,
+        JSON.stringify({ added_count: stored.length, video_count: mergedUrls.length })
+      ]
+    );
+    await client.query('COMMIT');
+    await writeAudit('admin_listing_videos_uploaded', {
+      property_id: req.params.id,
+      added_count: stored.length,
+      video_count: mergedUrls.length
+    }, actorId);
+    return res.json({
+      ok: true,
+      data: {
+        property_id: req.params.id,
+        videos: videoMetadata,
+        video_count: mergedUrls.length
+      }
+    });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    if (error.status) return res.status(error.status).json({ ok: false, error: error.message });
+    return next(error);
+  } finally {
+    client.release();
+  }
+});
+
+router.post('/properties/:id/direct-publish', async (req, res, next) => {
+  const actorId = adminActorId(req);
+  const client = await db.pool.connect();
+  try {
+    const confirmations = {
+      source_reviewed: parseBooleanLike(req.body?.source_reviewed, false),
+      location_confirmed: parseBooleanLike(req.body?.location_confirmed, false),
+      listing_facts_confirmed: parseBooleanLike(req.body?.listing_facts_confirmed, false),
+      contact_permission_confirmed: parseBooleanLike(req.body?.contact_permission_confirmed, false),
+      media_rights_confirmed: parseBooleanLike(req.body?.media_rights_confirmed, false)
+    };
+    const missingConfirmations = Object.entries(confirmations)
+      .filter(([, value]) => !value)
+      .map(([key]) => key);
+    if (missingConfirmations.length) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Direct publication confirmation is incomplete',
+        details: missingConfirmations
+      });
+    }
+
+    await client.query('BEGIN');
+    const propertyResult = await client.query(
+      `SELECT p.*, a.verification_reason
+       FROM properties p
+       LEFT JOIN agents a ON a.id = p.agent_id
+       WHERE p.id = $1
+       LIMIT 1
+       FOR UPDATE OF p`,
+      [req.params.id]
+    );
+    if (!propertyResult.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ ok: false, error: 'Property not found' });
+    }
+    const property = propertyResult.rows[0];
+    if (!isDirectAgentAuthorisedRecord(property) || property.source !== 'direct_agent_whatsapp') {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ ok: false, error: 'Direct publication is limited to authorised direct-agent records' });
+    }
+    const imageCount = await client.query(
+      'SELECT COUNT(*)::int AS count FROM property_images WHERE property_id = $1',
+      [req.params.id]
+    );
+    const extra = property.extra_fields && typeof property.extra_fields === 'object' ? property.extra_fields : {};
+    const videoUrls = Array.isArray(extra.video_urls)
+      ? extra.video_urls.filter((url) => /^https?:\/\//i.test(String(url || '')))
+      : [];
+    const blockers = [];
+    if (!property.agent_id) blockers.push('agent profile');
+    if (!property.district || !property.area) blockers.push('location');
+    if (!property.price || property.price <= 0) blockers.push('price');
+    if (!property.lister_phone) blockers.push('agent contact');
+    if (Number(imageCount.rows[0]?.count || 0) < 1) blockers.push('property photo');
+    if (videoUrls.length < 1) blockers.push('property video');
+    if (blockers.length) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        ok: false,
+        error: 'Direct listing is not ready to publish',
+        details: blockers
+      });
+    }
+
+    const checklist = {
+      source_reviewed: true,
+      location_confirmed: true,
+      listing_facts_confirmed: true,
+      contact_permission_confirmed: true,
+      media_rights_confirmed: true,
+      duplicate_checked: true,
+      direct_agent_identity_pending_disclosed: true
+    };
+    const updated = await client.query(
+      `UPDATE properties
+       SET status = 'approved',
+           moderation_stage = 'approved',
+           moderation_checklist = $2::jsonb,
+           moderation_notes = $3,
+           moderation_reason = $4,
+           reviewed_at = NOW(),
+           approved_at = NOW(),
+           reviewed_by = COALESCE($5::uuid, reviewed_by),
+           extra_fields = COALESCE(extra_fields, '{}'::jsonb)
+             || jsonb_build_object(
+               'direct_agent_published', true,
+               'direct_agent_published_at', NOW()::text,
+               'direct_agent_published_by', $6::text,
+               'listing_media_pending', false
+             ),
+           updated_at = NOW()
+       WHERE id = $1
+       RETURNING id, title, status, moderation_stage, approved_at, agent_id, extra_fields`,
+      [
+        req.params.id,
+        JSON.stringify(checklist),
+        'King reviewed the direct agent evidence, property facts, location, contact permission, photos, and videos.',
+        'Approved as a direct agent-authorised listing. Agent identity verification and profile claim remain pending.',
+        req.adminAuth?.userId || null,
+        actorId
+      ]
+    );
+    await client.query(
+      `INSERT INTO property_moderation_events (
+         property_id, actor_id, action, status_from, status_to, checklist, reason, notes, delivery
+       ) VALUES ($1,$2,'direct_agent_listing_published',$3,'approved',$4::jsonb,$5,$6,$7::jsonb)`,
+      [
+        req.params.id,
+        actorId,
+        property.status,
+        JSON.stringify(checklist),
+        'Direct agent submission approved after evidence review.',
+        'Profile remains unverified and claim-pending until identity evidence is supplied.',
+        JSON.stringify({ image_count: Number(imageCount.rows[0]?.count || 0), video_count: videoUrls.length })
+      ]
+    );
+    await client.query('COMMIT');
+    await writeAudit('admin_direct_agent_listing_published', {
+      property_id: req.params.id,
+      agent_id: updated.rows[0].agent_id,
+      image_count: Number(imageCount.rows[0]?.count || 0),
+      video_count: videoUrls.length
+    }, actorId);
+    return res.json({ ok: true, data: updated.rows[0] });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    return next(error);
+  } finally {
+    client.release();
+  }
+});
+
 router.patch('/properties/:id/images/:imageId', async (req, res, next) => {
   const actorId = adminActorId(req);
   const client = await db.pool.connect();
@@ -7802,6 +8095,277 @@ router.get('/agents', async (req, res, next) => {
     });
   } catch (error) {
     return next(error);
+  }
+});
+
+router.post('/agents/direct-onboarding', async (req, res, next) => {
+  const client = await db.pool.connect();
+  try {
+    const body = req.body || {};
+    const fullName = cleanText(body.full_name || body.agent_name).slice(0, 160);
+    const companyName = cleanText(body.company_name || fullName).slice(0, 160);
+    const phone = normalizeUgPhone(body.phone || body.whatsapp);
+    const whatsapp = normalizeUgPhone(body.whatsapp || body.phone);
+    const email = normalizeEmail(body.email);
+    const district = cleanText(body.district).slice(0, 120);
+    const area = cleanText(body.area).slice(0, 160);
+    const address = cleanText(body.address || body.location || area).slice(0, 300);
+    const title = cleanText(body.title).slice(0, 240);
+    const description = cleanText(body.description).slice(0, 5000);
+    const propertyType = cleanText(body.property_type || 'house').slice(0, 100);
+    const bedrooms = toNullableInt(body.bedrooms);
+    const bathrooms = toNullableInt(body.bathrooms);
+    const featureAgent = parseBooleanLike(body.feature_agent, false);
+    const sourceConfirmed = parseBooleanLike(body.direct_submission_confirmed, false);
+    const contactPermissionConfirmed = parseBooleanLike(body.contact_permission_confirmed, false);
+    const mediaRightsConfirmed = parseBooleanLike(body.media_rights_confirmed, false);
+    const priceMetadata = propertyPriceMetadata(body.price, {
+      currency: body.price_currency || body.currency || 'UGX',
+      fxAsOf: body.price_fx_as_of || undefined
+    });
+    const errors = [];
+
+    if (!fullName) errors.push('Agent name is required');
+    if (!phone || !isValidPhone(phone)) errors.push('A valid Uganda agent phone is required');
+    if (email && !isValidEmail(email)) errors.push('Agent email is invalid');
+    if (!district || !DISTRICTS.includes(district)) errors.push('A valid Uganda district is required');
+    if (!area) errors.push('Property area is required');
+    if (!title) errors.push('Property title is required');
+    if (!description) errors.push('Property description is required');
+    if (!bedrooms || bedrooms < 1) errors.push('Bedroom count is required');
+    if (!priceMetadata.price || priceMetadata.price < 10000) errors.push('A valid UGX or USD property price is required');
+    if (!sourceConfirmed) errors.push('Confirm that the agent directly authorised the submission');
+    if (!contactPermissionConfirmed) errors.push('Confirm permission to publish the agent contact route');
+    if (!mediaRightsConfirmed) errors.push('Confirm rights to publish the supplied media');
+    if (errors.length) {
+      return res.status(400).json({ ok: false, error: 'Direct agent onboarding validation failed', details: errors });
+    }
+
+    const specializations = asArray(body.specializations)
+      .map((value) => cleanText(value).slice(0, 120))
+      .filter(Boolean)
+      .slice(0, 12);
+    const amenities = asArray(body.amenities)
+      .map((value) => cleanText(value).slice(0, 120))
+      .filter(Boolean)
+      .slice(0, 30);
+    const bio = cleanText(body.bio).slice(0, 1500)
+      || `${fullName} handles residential sales and property opportunities in ${area} and surrounding areas.`;
+    const evidenceFiles = asArray(body.source_evidence_files)
+      .map((value) => cleanText(value).slice(0, 180))
+      .filter(Boolean)
+      .slice(0, 20);
+    const verificationReason = directAgentProfileReason(body.verification_note);
+    const licenceNumber = `DIRECT-${crypto.randomUUID().replace(/-/g, '').slice(0, 16).toUpperCase()}`;
+    const inquiryReference = buildListingReference();
+    const actorId = adminActorId(req);
+
+    await client.query('BEGIN');
+    const existingAgent = await client.query(
+      `SELECT id, user_id, registration_status, verification_reason
+       FROM agents
+       WHERE ($1::text <> '' AND regexp_replace(COALESCE(phone, ''), '\\D', '', 'g') = regexp_replace($1, '\\D', '', 'g'))
+          OR ($2::text <> '' AND LOWER(COALESCE(email, '')) = LOWER($2))
+          OR LOWER(COALESCE(company_name, '')) = LOWER($3)
+       ORDER BY user_id IS NOT NULL DESC, updated_at DESC
+       LIMIT 1`,
+      [phone || '', email || '', companyName]
+    );
+
+    let agentId;
+    if (existingAgent.rows[0]?.id) {
+      const existing = existingAgent.rows[0];
+      const updatedAgent = await client.query(
+        `UPDATE agents
+         SET full_name = $2,
+             company_name = $3,
+             phone = COALESCE(NULLIF($4, ''), phone),
+             whatsapp = COALESCE(NULLIF($5, ''), whatsapp),
+             email = COALESCE(NULLIF($6, ''), email),
+             districts_covered = ARRAY[$7]::text[],
+             specializations = $8::text[],
+             bio = $9,
+             status = 'approved',
+             approved_at = COALESCE(approved_at, NOW()),
+             featured_homepage = $10,
+             featured_at = CASE WHEN $10::boolean THEN COALESCE(featured_at, NOW()) ELSE featured_at END,
+             registration_status = CASE WHEN user_id IS NULL THEN 'not_registered' ELSE registration_status END,
+             verification_reason = CASE WHEN user_id IS NULL THEN $11 ELSE verification_reason END,
+             updated_at = NOW()
+         WHERE id = $1
+         RETURNING id`,
+        [
+          existing.id,
+          fullName,
+          companyName,
+          phone,
+          whatsapp,
+          email,
+          district,
+          specializations,
+          bio,
+          featureAgent,
+          verificationReason
+        ]
+      );
+      agentId = updatedAgent.rows[0].id;
+    } else {
+      const insertedAgent = await client.query(
+        `INSERT INTO agents (
+           full_name, company_name, licence_number, phone, whatsapp, email,
+           districts_covered, specializations, bio, status, approved_at,
+           registration_status, listing_limit, featured_homepage, featured_at,
+           verification_reason
+         ) VALUES (
+           $1,$2,$3,$4,$5,$6,ARRAY[$7]::text[],$8::text[],$9,
+           'approved',NOW(),'not_registered',5,$10,
+           CASE WHEN $10::boolean THEN NOW() ELSE NULL END,$11
+         )
+         RETURNING id`,
+        [
+          fullName,
+          companyName,
+          licenceNumber,
+          phone,
+          whatsapp,
+          email || null,
+          district,
+          specializations,
+          bio,
+          featureAgent,
+          verificationReason
+        ]
+      );
+      agentId = insertedAgent.rows[0].id;
+    }
+
+    const existingProperty = await client.query(
+      `SELECT id, status
+       FROM properties
+       WHERE agent_id = $1
+         AND LOWER(COALESCE(title, '')) = LOWER($2)
+         AND LOWER(COALESCE(area, '')) = LOWER($3)
+         AND COALESCE(price, 0) = $4
+         AND COALESCE(status, '') <> 'deleted'
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [agentId, title, area, priceMetadata.price]
+    );
+
+    let propertyId = existingProperty.rows[0]?.id || null;
+    let propertyCreated = false;
+    if (!propertyId) {
+      const extraFields = {
+        direct_agent_authorised: true,
+        direct_agent_profile_claim_pending: true,
+        direct_agent_identity_verification_status: 'pending',
+        direct_agent_submission_channel: 'whatsapp',
+        direct_agent_submission_confirmed: true,
+        direct_agent_contact_permission_confirmed: true,
+        media_rights_confirmed: true,
+        image_rights_confirmed: true,
+        consent_confirmed: true,
+        source_platform: 'whatsapp',
+        source_name: fullName,
+        source_contact_phone: phone,
+        source_evidence_files: evidenceFiles,
+        source_evidence_reviewed_by: actorId,
+        source_evidence_reviewed_at: new Date().toISOString(),
+        price_currency: priceMetadata.price_currency,
+        price_original: priceMetadata.price_original,
+        price_fx_rate_ugx: priceMetadata.price_fx_rate_ugx,
+        price_fx_as_of: priceMetadata.price_fx_as_of,
+        price_conversion_basis: priceMetadata.price_currency === 'USD'
+          ? 'Original agent-supplied USD guide converted to canonical UGX for search and valuation.'
+          : 'Original agent-supplied UGX price.',
+        development_status_note: cleanText(body.development_status_note).slice(0, 500),
+        video_urls: [],
+        listing_media_pending: true,
+        lister_registration_status: 'not_registered',
+        profile_claim_pending: true
+      };
+      const insertedProperty = await client.query(
+        `INSERT INTO properties (
+           listing_type, transaction_type, title, description, district, area, address,
+           price, price_currency, price_original, price_fx_rate_ugx, price_fx_as_of,
+           price_period, bedrooms, bathrooms, property_type, amenities, extra_fields,
+           lister_name, lister_phone, lister_email, lister_type, agent_id, source,
+           listed_via, status, moderation_stage, moderation_notes, moderation_reason,
+           inquiry_reference, new_until, verification_terms_accepted
+         ) VALUES (
+           'sale','sale',$1,$2,$3,$4,$5,
+           $6,$7,$8,$9,$10,'once',$11,$12,$13,$14::jsonb,$15::jsonb,
+           $16,$17,$18,'agent',$19,'direct_agent_whatsapp',
+           'admin_direct_agent_onboarding','pending','in_review',
+           'Direct agent submission created by King; media upload and final moderation pending.',
+           'Direct submission evidence reviewed; identity verification and account claim remain pending.',
+           $20,NOW() + INTERVAL '5 days',TRUE
+         )
+         RETURNING id`,
+        [
+          title,
+          description,
+          district,
+          area,
+          address,
+          priceMetadata.price,
+          priceMetadata.price_currency,
+          priceMetadata.price_original,
+          priceMetadata.price_fx_rate_ugx,
+          priceMetadata.price_fx_as_of,
+          bedrooms,
+          bathrooms,
+          propertyType,
+          JSON.stringify(amenities),
+          JSON.stringify(extraFields),
+          fullName,
+          phone,
+          email || null,
+          agentId,
+          inquiryReference
+        ]
+      );
+      propertyId = insertedProperty.rows[0].id;
+      propertyCreated = true;
+      await client.query(
+        `INSERT INTO property_moderation_events (
+           property_id, actor_id, action, status_from, status_to, reason, notes, delivery
+         ) VALUES ($1,$2,'direct_agent_submission_created',NULL,'pending',$3,$4,$5::jsonb)`,
+        [
+          propertyId,
+          actorId,
+          'Agent authority, contact permission, and media rights confirmed by King.',
+          'Property facts and source evidence saved. Identity verification and profile claim remain pending.',
+          JSON.stringify({ agent_id: agentId, evidence_files: evidenceFiles })
+        ]
+      );
+    }
+
+    await client.query('COMMIT');
+    await writeAudit('admin_direct_agent_onboarding_saved', {
+      agent_id: agentId,
+      property_id: propertyId,
+      property_created: propertyCreated,
+      featured_homepage: featureAgent,
+      evidence_file_count: evidenceFiles.length
+    }, actorId);
+
+    return res.status(propertyCreated ? 201 : 200).json({
+      ok: true,
+      data: {
+        agent_id: agentId,
+        property_id: propertyId,
+        property_created: propertyCreated,
+        profile_claim_pending: true,
+        identity_verification_status: 'pending'
+      }
+    });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    if (error.status) return res.status(error.status).json({ ok: false, error: error.message });
+    return next(error);
+  } finally {
+    client.release();
   }
 });
 

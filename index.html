@@ -7346,6 +7346,88 @@
             </div>
             <button onclick="renderAdminDashboard()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Refresh Accounts</button>
           </div>
+          <form id="admin-direct-agent-form" data-release-marker="direct-agent-first-listing-20260729" onsubmit="adminCreateDirectAgentListing(event)" class="mb-5 rounded-2xl border border-sky-200 bg-sky-50/40 p-4 space-y-4">
+            <div class="flex items-start justify-between gap-3 flex-wrap">
+              <div>
+                <h4 class="text-lg font-bold text-gray-900">Direct Agent + Property Onboarding</h4>
+                <p class="text-xs text-gray-600 mt-1">For an agent who has directly authorised makaug to publish their contact and media. The profile remains claim-pending until identity verification is completed.</p>
+              </div>
+              <span class="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-bold text-amber-900">Not a verified-agent shortcut</span>
+            </div>
+            <div class="grid md:grid-cols-3 gap-3">
+              <label class="text-xs font-semibold text-gray-700">Agent / public name
+                <input id="admin-direct-agent-name" required class="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm" placeholder="Agent name">
+              </label>
+              <label class="text-xs font-semibold text-gray-700">Email
+                <input id="admin-direct-agent-email" type="email" class="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm" placeholder="agent@example.com">
+              </label>
+              <label class="text-xs font-semibold text-gray-700">Phone / WhatsApp
+                <input id="admin-direct-agent-phone" required class="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm" placeholder="+256 7XX XXX XXX">
+              </label>
+            </div>
+            <div class="grid md:grid-cols-3 gap-3">
+              <label class="text-xs font-semibold text-gray-700">Listing title
+                <input id="admin-direct-property-title" required class="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm" placeholder="3-bedroom home for sale">
+              </label>
+              <label class="text-xs font-semibold text-gray-700">District
+                <select id="admin-direct-property-district" required class="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm">
+                  <option value="">Select district</option>
+                  <option value="Kampala">Kampala</option>
+                  <option value="Wakiso">Wakiso</option>
+                  <option value="Mukono">Mukono</option>
+                </select>
+              </label>
+              <label class="text-xs font-semibold text-gray-700">Area / road
+                <input id="admin-direct-property-area" required class="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm" placeholder="Kigo">
+              </label>
+            </div>
+            <div class="grid md:grid-cols-5 gap-3">
+              <label class="md:col-span-2 text-xs font-semibold text-gray-700">Address
+                <input id="admin-direct-property-address" class="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm" placeholder="Kigo Road">
+              </label>
+              <label class="text-xs font-semibold text-gray-700">Price
+                <input id="admin-direct-property-price" required class="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm" placeholder="250000">
+              </label>
+              <label class="text-xs font-semibold text-gray-700">Currency
+                <select id="admin-direct-property-currency" class="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm">
+                  <option value="UGX">UGX</option>
+                  <option value="USD">USD</option>
+                </select>
+              </label>
+              <label class="text-xs font-semibold text-gray-700">Bedrooms
+                <input id="admin-direct-property-bedrooms" type="number" min="1" required class="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm" placeholder="3">
+              </label>
+            </div>
+            <label class="block text-xs font-semibold text-gray-700">Property description
+              <textarea id="admin-direct-property-description" required rows="5" class="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm" placeholder="Describe only confirmed facts, then state anything the buyer still needs to confirm."></textarea>
+            </label>
+            <div class="grid md:grid-cols-2 gap-3">
+              <label class="text-xs font-semibold text-gray-700">Agent profile bio
+                <textarea id="admin-direct-agent-bio" rows="3" class="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm"></textarea>
+              </label>
+              <label class="text-xs font-semibold text-gray-700">Amenities (comma-separated)
+                <textarea id="admin-direct-property-amenities" rows="3" class="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm"></textarea>
+              </label>
+            </div>
+            <div class="grid md:grid-cols-2 gap-3">
+              <label class="text-xs font-semibold text-gray-700">Property photos
+                <input id="admin-direct-property-images" type="file" accept="image/jpeg,image/png,image/webp" multiple required class="mt-1 block w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm">
+              </label>
+              <label class="text-xs font-semibold text-gray-700">MP4 video tours
+                <input id="admin-direct-property-videos" type="file" accept="video/mp4" multiple required class="mt-1 block w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm">
+              </label>
+            </div>
+            <div class="grid md:grid-cols-2 gap-2 text-xs text-gray-700">
+              <label class="flex items-start gap-2"><input id="admin-direct-source-confirmed" type="checkbox" class="mt-0.5">The agent directly authorised this submission.</label>
+              <label class="flex items-start gap-2"><input id="admin-direct-contact-confirmed" type="checkbox" class="mt-0.5">The agent contact route may be published.</label>
+              <label class="flex items-start gap-2"><input id="admin-direct-media-confirmed" type="checkbox" class="mt-0.5">The supplied photos/videos may be published.</label>
+              <label class="flex items-start gap-2"><input id="admin-direct-facts-confirmed" type="checkbox" class="mt-0.5">I reviewed the price, property facts and location.</label>
+              <label class="flex items-start gap-2"><input id="admin-direct-feature-agent" type="checkbox" class="mt-0.5">Feature this agent on the homepage.</label>
+              <label class="flex items-start gap-2"><input id="admin-direct-publish-now" type="checkbox" class="mt-0.5">Publish after all media uploads succeed.</label>
+            </div>
+            <button id="admin-direct-agent-submit" type="submit" class="w-full rounded-xl bg-sky-700 px-4 py-3 text-sm font-bold text-white hover:bg-sky-600">Create agent, upload media and publish</button>
+            <div id="admin-direct-agent-result" class="rounded-xl border border-sky-100 bg-white p-3 text-xs text-gray-600">No direct agent submission has been started.</div>
+          </form>
           <div class="grid xl:grid-cols-[1.2fr,0.8fr] gap-5 mb-5">
             <div class="border border-gray-200 rounded-2xl p-4 bg-gray-50">
               <div class="flex items-center justify-between gap-3 flex-wrap">

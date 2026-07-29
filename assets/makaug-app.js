@@ -222,6 +222,7 @@ function mapRemoteAgentForUi(agent = {}) {
   const area = covered.length ? covered.slice(0, 3).join(" • ") : (agent.area || "Uganda");
   const specializations = Array.isArray(agent.specializations) ? agent.specializations.filter(Boolean) : [];
   const socials = normalizeBrokerSocialLinks(agent);
+  const directAgentAuthorised = String(agent.verification_reason || "").includes("[DIRECT_AGENT_AUTHORISED]");
   return {
     id: String(agent.id || ""),
     makaug_agent_number: agent.makaug_agent_number || agent.agent_number || "",
@@ -267,6 +268,8 @@ function mapRemoteAgentForUi(agent = {}) {
     identity_document_type: agent.identity_document_type || "",
     identity_document_uploaded_at: agent.identity_document_uploaded_at || "",
     verification_reason: agent.verification_reason || "",
+    direct_agent_authorised: directAgentAuthorised,
+    profile_claim_pending: directAgentAuthorised && !agent.user_id,
     privacy_consent_accepted: agent.privacy_consent_accepted === true,
     privacy_consent_at: agent.privacy_consent_at || "",
     data_retention_notice_accepted: agent.data_retention_notice_accepted === true,
@@ -20823,6 +20826,191 @@ function renderAdminUsersRows(users) {
   }).join("");
 }
 
+function adminReadDirectMediaFile(file, maxBytes, label) {
+  return new Promise((resolve, reject) => {
+    if (!file) return reject(new Error(`${label} is missing.`));
+    if (file.size > maxBytes) {
+      return reject(new Error(`${label} must be ${Math.floor(maxBytes / (1024 * 1024))}MB or smaller.`));
+    }
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error(`${label} could not be read.`));
+    reader.onload = () => resolve({
+      name: file.name,
+      type: file.type,
+      size: file.size,
+      data_url: String(reader.result || "")
+    });
+    reader.readAsDataURL(file);
+  });
+}
+
+async function adminCreateDirectAgentListing(event) {
+  event?.preventDefault();
+  const result = document.getElementById("admin-direct-agent-result");
+  const button = document.getElementById("admin-direct-agent-submit");
+  if (!canUseLiveAdminApi()) {
+    toast("Sign in as King or admin before onboarding a direct agent.");
+    return;
+  }
+  const checked = (id) => document.getElementById(id)?.checked === true;
+  const sourceConfirmed = checked("admin-direct-source-confirmed");
+  const contactConfirmed = checked("admin-direct-contact-confirmed");
+  const mediaConfirmed = checked("admin-direct-media-confirmed");
+  const factsConfirmed = checked("admin-direct-facts-confirmed");
+  const publishNow = checked("admin-direct-publish-now");
+  if (!sourceConfirmed || !contactConfirmed || !mediaConfirmed || !factsConfirmed) {
+    toast("Confirm the source, contact permission, media rights, and listing facts.");
+    return;
+  }
+  const imageFiles = [...(document.getElementById("admin-direct-property-images")?.files || [])];
+  const videoFiles = [...(document.getElementById("admin-direct-property-videos")?.files || [])];
+  if (!imageFiles.length || !videoFiles.length) {
+    toast("Add at least one property photo and one MP4 video.");
+    return;
+  }
+  if (videoFiles.length > 8) {
+    toast("Upload no more than eight MP4 videos.");
+    return;
+  }
+
+  const originalLabel = button?.textContent || "Create agent, upload media and publish";
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Saving agent and listing...";
+  }
+  const setProgress = (message) => {
+    if (result) result.textContent = message;
+  };
+  try {
+    const agentName = (document.getElementById("admin-direct-agent-name")?.value || "").trim();
+    const email = (document.getElementById("admin-direct-agent-email")?.value || "").trim();
+    const phone = (document.getElementById("admin-direct-agent-phone")?.value || "").trim();
+    const title = (document.getElementById("admin-direct-property-title")?.value || "").trim();
+    const district = (document.getElementById("admin-direct-property-district")?.value || "").trim();
+    const area = (document.getElementById("admin-direct-property-area")?.value || "").trim();
+    const address = (document.getElementById("admin-direct-property-address")?.value || "").trim();
+    const price = (document.getElementById("admin-direct-property-price")?.value || "").trim();
+    const currency = (document.getElementById("admin-direct-property-currency")?.value || "UGX").trim();
+    const bedrooms = Number(document.getElementById("admin-direct-property-bedrooms")?.value || 0);
+    const description = (document.getElementById("admin-direct-property-description")?.value || "").trim();
+    const bio = (document.getElementById("admin-direct-agent-bio")?.value || "").trim();
+    const amenities = (document.getElementById("admin-direct-property-amenities")?.value || "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean);
+    const sourceEvidenceFiles = [
+      ...imageFiles.map((file) => file.name),
+      ...videoFiles.map((file) => file.name)
+    ];
+    const created = await apiRequest("/api/admin/agents/direct-onboarding", {
+      method: "POST",
+      headers: adminAuthHeaders(),
+      body: {
+        full_name: agentName,
+        company_name: agentName,
+        email,
+        phone,
+        whatsapp: phone,
+        district,
+        area,
+        address,
+        title,
+        description,
+        property_type: "house",
+        bedrooms,
+        price,
+        price_currency: currency,
+        bio,
+        specializations: ["Residential sales", "Off-plan property", "Smart homes"],
+        amenities,
+        development_status_note: "Agent offers smart, semi-smart and standard configurations. Confirm exact unit completion status and specification before purchase.",
+        direct_submission_confirmed: sourceConfirmed,
+        contact_permission_confirmed: contactConfirmed,
+        media_rights_confirmed: mediaConfirmed,
+        feature_agent: checked("admin-direct-feature-agent"),
+        source_evidence_files: sourceEvidenceFiles
+      }
+    });
+    const agentId = created?.data?.agent_id;
+    const propertyId = created?.data?.property_id;
+    if (!agentId || !propertyId) throw new Error("Direct onboarding did not return agent and property IDs.");
+
+    setProgress(`Profile and pending listing saved. Preparing ${imageFiles.length} photo(s)...`);
+    const images = [];
+    for (const [index, file] of imageFiles.entries()) {
+      const payload = await adminReadDirectMediaFile(file, 6 * 1024 * 1024, `Photo ${index + 1}`);
+      images.push({
+        url: payload.data_url,
+        room_label: file.name.replace(/\.[^.]+$/, ""),
+        is_primary: index === 0,
+        sort_order: index
+      });
+    }
+    await apiRequest(`/api/admin/properties/${encodeURIComponent(propertyId)}/images`, {
+      method: "POST",
+      headers: adminAuthHeaders(),
+      body: {
+        confirm_rights: true,
+        replace_all: true,
+        images
+      }
+    });
+
+    for (const [index, file] of videoFiles.entries()) {
+      setProgress(`Photos saved. Uploading video ${index + 1} of ${videoFiles.length}...`);
+      const payload = await adminReadDirectMediaFile(file, 8 * 1024 * 1024, `Video ${index + 1}`);
+      await apiRequest(`/api/admin/properties/${encodeURIComponent(propertyId)}/videos`, {
+        method: "POST",
+        headers: adminAuthHeaders(),
+        body: {
+          confirm_rights: true,
+          videos: [{
+            data_url: payload.data_url,
+            label: `Property walkthrough ${index + 1}`,
+            sort_order: index
+          }]
+        }
+      });
+    }
+
+    let published = null;
+    if (publishNow) {
+      setProgress("All media saved. Running the protected publication checks...");
+      published = await apiRequest(`/api/admin/properties/${encodeURIComponent(propertyId)}/direct-publish`, {
+        method: "POST",
+        headers: adminAuthHeaders(),
+        body: {
+          source_reviewed: true,
+          location_confirmed: factsConfirmed,
+          listing_facts_confirmed: factsConfirmed,
+          contact_permission_confirmed: contactConfirmed,
+          media_rights_confirmed: mediaConfirmed
+        }
+      });
+    }
+    const status = published?.data?.status || "pending";
+    if (result) {
+      result.innerHTML = `
+        <div class="font-bold text-green-800">Saved successfully · ${adminEscape(status)}</div>
+        <div class="mt-1">Agent profile: ${adminEscape(agentId)} · Property: ${adminEscape(propertyId)} · ${videoFiles.length} videos uploaded.</div>
+        <div class="mt-2 flex flex-wrap gap-2">
+          <button type="button" onclick="openBrokerProfile(${adminListingIdArg(agentId)})" class="rounded-lg border border-green-700 px-3 py-1.5 font-bold text-green-800">Open agent profile</button>
+          <button type="button" onclick="openDetail(${adminListingIdArg(propertyId)})" class="rounded-lg border border-sky-700 px-3 py-1.5 font-bold text-sky-800">Open property</button>
+        </div>`;
+    }
+    toast(publishNow ? "Direct agent profile and listing are live." : "Direct agent profile and listing are saved for review.");
+    await renderAdminDashboard();
+  } catch (error) {
+    setProgress(`Direct onboarding failed: ${error.message || "request failed"}`);
+    toast(`Direct onboarding failed: ${error.message || "request failed"}`);
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = originalLabel;
+    }
+  }
+}
+
 function renderAdminBrokerRows(agents) {
   const wrap = document.getElementById("admin-broker-accounts-table");
   if (!wrap) return;
@@ -28964,6 +29152,7 @@ function renderVideoEmbedCard(url, options = {}) {
   if (!/^https?:\/\//i.test(safeUrl)) return "";
   const embedUrl = getYouTubeEmbedUrl(safeUrl);
   const tiktokEmbedUrl = !embedUrl ? getTikTokEmbedUrl(safeUrl) : "";
+  const isDirectMp4 = !embedUrl && !tiktokEmbedUrl && /\.mp4(?:[?#].*)?$/i.test(safeUrl);
   const title = options.title || translateListingLabel("Video tour");
   const sub = options.sub || translateListingLabel("Play the walkthrough without leaving this page.");
   if (embedUrl) {
@@ -28998,6 +29187,24 @@ function renderVideoEmbedCard(url, options = {}) {
       </div>
     `;
   }
+  if (isDirectMp4) {
+    return `
+      <div class="rounded-2xl border border-sky-100 bg-white overflow-hidden shadow-sm">
+        <div class="flex items-center justify-between gap-3 p-3">
+          <div>
+            <div class="text-sm font-bold text-gray-900"><i class="fas fa-video text-sky-700"></i> ${title}</div>
+            <div class="text-xs text-gray-500 mt-0.5">${sub}</div>
+          </div>
+          <a href="${adminAttr(safeUrl)}" target="_blank" rel="noopener noreferrer" class="text-xs font-bold text-sky-700 hover:underline">${translateListingLabel("Open video")}</a>
+        </div>
+        <div class="aspect-video bg-black">
+          <video controls preload="metadata" playsinline class="w-full h-full object-contain" aria-label="${adminAttr(title)}">
+            <source src="${adminAttr(safeUrl)}" type="video/mp4">
+          </video>
+        </div>
+      </div>
+    `;
+  }
   return `
     <div class="rounded-2xl border border-green-100 bg-green-50 p-3">
       <div class="text-sm font-bold text-gray-900">${title}</div>
@@ -29005,6 +29212,21 @@ function renderVideoEmbedCard(url, options = {}) {
       <a href="${adminAttr(safeUrl)}" target="_blank" rel="noopener noreferrer" class="mt-2 inline-flex items-center gap-2 text-green-700 font-semibold text-sm hover:underline"><i class="fas fa-play-circle"></i>${translateListingLabel("Open video link")}</a>
     </div>
   `;
+}
+
+function propertyVideoUrls(property = {}) {
+  const extra = property?.extra_fields && typeof property.extra_fields === "object" ? property.extra_fields : {};
+  const raw = [
+    ...(Array.isArray(extra.video_urls) ? extra.video_urls : []),
+    ...(Array.isArray(extra.video_tours) ? extra.video_tours.map((item) => item?.url || item) : []),
+    property?.video_url,
+    property?.youtube_url,
+    property?.tiktok_url,
+    extra.video_url,
+    extra.youtube_url,
+    extra.tiktok_url
+  ];
+  return [...new Set(raw.map((value) => String(value || "").trim()).filter((value) => /^https?:\/\//i.test(value)))];
 }
 
 function renderLpVideoPreview() {
@@ -37430,6 +37652,13 @@ function listingBadgeRowHtml(p = {}, options = {}) {
 }
 
 function brokerRegistrationMeta(broker) {
+  if (broker?.direct_agent_authorised && broker?.profile_claim_pending) {
+    return {
+      label: translateListingLabel("Direct profile · claim pending"),
+      cls: "bg-amber-50 text-amber-800",
+      icon: "fas fa-user-clock"
+    };
+  }
   const isRegistered = (broker?.registration_status || "not_registered") === "registered";
   if (isRegistered) {
     return {
@@ -51408,9 +51637,21 @@ async function openDetail(id, options = {}) {
   const contactMessageArg = adminAttr(JSON.stringify(contactMessage));
   const ownerPhoneArg = adminAttr(JSON.stringify(ownerPhone || ""));
   const brokerWhatsAppArg = adminAttr(JSON.stringify(brokerWhatsapp || ""));
-  const videoUrl = String(p.video_url || p.youtube_url || p.tiktok_url || p.extra_fields?.video_url || p.extra_fields?.youtube_url || p.extra_fields?.tiktok_url || "").trim();
-  const safeVideoUrl = /^https?:\/\//i.test(videoUrl) ? videoUrl : "";
-  const safeVideoIsTikTok = /tiktok\.com/i.test(safeVideoUrl);
+  const detailVideoUrls = propertyVideoUrls(p);
+  const detailVideoGalleryHtml = detailVideoUrls.length && !thirdPartyDetail
+    ? `<div class="mt-4">
+        <div class="mb-3 flex items-center justify-between gap-3">
+          <h3 class="text-lg font-black text-gray-900">${translateListingLabel("Property video tours")}</h3>
+          <span class="rounded-full bg-sky-50 px-2.5 py-1 text-xs font-bold text-sky-800">${detailVideoUrls.length} ${translateListingLabel(detailVideoUrls.length === 1 ? "video" : "videos")}</span>
+        </div>
+        <div class="grid md:grid-cols-2 gap-4">
+          ${detailVideoUrls.map((url, index) => renderVideoEmbedCard(url, {
+            title: /tiktok\.com/i.test(url) ? translateListingLabel("TikTok video") : `${translateListingLabel("Video tour")} ${index + 1}`,
+            sub: translateListingLabel("Watch the walkthrough before you enquire.")
+          })).join("")}
+        </div>
+      </div>`
+    : "";
   const directionsUrl = propertyDirectionsUrl(p);
   const contactTitle = isFoundOnlineContact ? translatePropertyUi("Original source") : (broker ? translatePropertyUi("Contact Broker") : translatePropertyUi("Contact Lister"));
   const photoCountLabel = translateListingLabel(detailGalleryPhotos.length === 1 ? "Photo" : "Photos");
@@ -51524,10 +51765,7 @@ async function openDetail(id, options = {}) {
             </div>
             ` : ""}
             <div class="mt-4 text-sm text-gray-700">${localizedDescription}</div>
-            ${safeVideoUrl && !thirdPartyDetail ? `<div class="mt-4">${renderVideoEmbedCard(safeVideoUrl, {
-              title: safeVideoIsTikTok ? translateListingLabel("TikTok video") : translateListingLabel("Video tour"),
-              sub: translateListingLabel("Watch the walkthrough before you enquire.")
-            })}</div>` : ""}
+            ${detailVideoGalleryHtml}
             <div class="mt-4 bg-green-50 border border-green-100 rounded-xl p-3">
               <div class="text-xs uppercase tracking-wide text-green-700 font-semibold mb-1">${translateListingLabel("Area Highlights")}</div>
               <p class="text-sm text-gray-700">${localizedHighlights}</p>
@@ -51685,7 +51923,11 @@ async function openBrokerProfile(id) {
   const photoSrc = publicImageSrc(b.photo || b.profile_photo_url, `https://ui-avatars.com/api/?name=${encodeURIComponent(b.name)}&background=dcfce7&color=166534&size=300`);
   const status = String(b.status || "").toLowerCase();
   const isApprovedBroker = status === "approved";
-  const statusLabel = isApprovedBroker ? "Approved makaug broker" : "Under makaug review";
+  const isDirectClaimPending = b.direct_agent_authorised === true && b.profile_claim_pending === true;
+  const statusLabel = isDirectClaimPending
+    ? "Direct agent submission · identity verification pending"
+    : (isApprovedBroker ? "Approved makaug broker" : "Under makaug review");
+  const totalVideoTours = list.reduce((sum, property) => sum + propertyVideoUrls(property).length, 0);
   const phoneDigits = String(b.phone || "").replace(/\s+/g, "");
   const firstName = String(b.name || "broker").split(/\s+/)[0] || "broker";
   content.innerHTML = `
@@ -51707,7 +51949,7 @@ async function openBrokerProfile(id) {
               <p class="text-gray-500 mt-1">${b.company}</p>
 	              <div class="mt-2 flex flex-wrap gap-2">
 	                ${renderBrokerRegistrationBadge(b)}
-	                <span class="inline-flex items-center gap-1 ${isApprovedBroker ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-800"} text-xs font-semibold px-2.5 py-1 rounded-full"><i class="fas fa-shield-halved"></i> ${statusLabel}</span>
+	                <span class="inline-flex items-center gap-1 ${isApprovedBroker && !isDirectClaimPending ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-800"} text-xs font-semibold px-2.5 py-1 rounded-full"><i class="fas fa-shield-halved"></i> ${statusLabel}</span>
 	              </div>
             </div>
             <div class="text-sm text-gray-600">
@@ -51725,11 +51967,12 @@ async function openBrokerProfile(id) {
               <div class="text-2xl font-bold text-gray-900">${list.length}</div>
               <div class="text-xs text-gray-500">Active Listings</div>
             </div>
-            <div class="bg-green-50 rounded-xl p-3 text-center">
-              <div class="text-2xl font-bold text-gray-900">${brokerMetric(getBrokerProfileViewCount(b.id))}</div>
-              <div class="text-xs text-gray-500">Profile Views</div>
-            </div>
+	            <div class="bg-green-50 rounded-xl p-3 text-center">
+	              <div class="text-2xl font-bold text-gray-900">${brokerMetric(getBrokerProfileViewCount(b.id))}</div>
+	              <div class="text-xs text-gray-500">Profile Views</div>
+	            </div>
 	          </div>
+          ${totalVideoTours ? `<div class="mt-3 rounded-xl border border-sky-100 bg-sky-50 px-3 py-2 text-center text-sm font-semibold text-sky-800"><i class="fas fa-video mr-1"></i>${totalVideoTours} property video tour${totalVideoTours === 1 ? "" : "s"}</div>` : ""}
 
           <div class="mt-5 flex flex-wrap gap-2">
             ${(b.specialties || []).map((s) => `<span class="bg-gray-100 text-gray-700 text-xs font-medium px-2.5 py-1 rounded-full">${s}</span>`).join("")}
