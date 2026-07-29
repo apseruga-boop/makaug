@@ -1491,12 +1491,29 @@ function publicExtraFields(extraFields = {}) {
       || (/youtube\.com|youtu\.be/i.test(String(extra.video_url || '')) ? extra.video_url : '')
       || (/youtube\.com|youtu\.be/i.test(String(sourceUrl || '')) ? sourceUrl : '')
   );
-  const videoUrl = safePublicSourceUrl(
-    extra.video_url
-      || youtubeUrl
-      || tiktokUrl
-      || (/youtube\.com|youtu\.be|tiktok\.com/i.test(String(sourceUrl || '')) ? sourceUrl : '')
-  );
+  const rawVideoTours = Array.isArray(extra.video_tours) ? extra.video_tours : [];
+  const safeVideoUrls = [...new Set([
+    ...(Array.isArray(extra.video_urls) ? extra.video_urls : []),
+    ...rawVideoTours.map((item) => item && typeof item === 'object' ? item.url : item),
+    extra.video_url,
+    youtubeUrl,
+    tiktokUrl,
+    /youtube\.com|youtu\.be|tiktok\.com/i.test(String(sourceUrl || '')) ? sourceUrl : ''
+  ]
+    .map((url) => safePublicSourceUrl(url))
+    .filter(Boolean))]
+    .slice(0, 8);
+  const safeVideoTours = safeVideoUrls.map((url, index) => {
+    const metadata = rawVideoTours.find((item) => (
+      item && typeof item === 'object' && safePublicSourceUrl(item.url) === url
+    ));
+    return {
+      url,
+      label: cleanText(metadata?.label || `Property video ${index + 1}`).slice(0, 120),
+      sort_order: Number.isFinite(Number(metadata?.sort_order)) ? Number(metadata.sort_order) : index
+    };
+  });
+  const videoUrl = safeVideoUrls[0] || null;
   const sourceHasTikTokVideoPost = isPublicTikTokVideoUrl(sourceUrl)
     || isPublicTikTokVideoUrl(tiktokUrl)
     || isPublicTikTokVideoUrl(videoUrl);
@@ -1586,6 +1603,8 @@ function publicExtraFields(extraFields = {}) {
     land_title_available: landTitleAvailable || null,
     land_title_available_label: landTitleAvailabilityLabel(landTitleAvailable) || null,
     video_url: videoUrl || null,
+    video_urls: safeVideoUrls,
+    video_tours: safeVideoTours,
     youtube_url: youtubeUrl || null,
     tiktok_url: tiktokUrl || null,
     thumbnail_url: sourceThumbnailUrl || null,
