@@ -8239,50 +8239,60 @@ router.post('/agents/direct-onboarding', async (req, res, next) => {
       agentId = insertedAgent.rows[0].id;
     }
 
+    const directEvidenceFields = {
+      direct_agent_authorised: true,
+      direct_agent_profile_claim_pending: true,
+      direct_agent_identity_verification_status: 'pending',
+      direct_agent_submission_channel: 'whatsapp',
+      direct_agent_submission_confirmed: true,
+      direct_agent_contact_permission_confirmed: true,
+      media_rights_confirmed: true,
+      image_rights_confirmed: true,
+      consent_confirmed: true,
+      source_platform: 'whatsapp',
+      source_name: fullName,
+      source_contact_phone: phone,
+      source_evidence_files: evidenceFiles,
+      source_evidence_reviewed_by: actorId,
+      source_evidence_reviewed_at: new Date().toISOString(),
+      price_currency: priceMetadata.price_currency,
+      price_original: priceMetadata.price_original,
+      price_fx_rate_ugx: priceMetadata.price_fx_rate_ugx,
+      price_fx_as_of: priceMetadata.price_fx_as_of,
+      price_conversion_basis: priceMetadata.price_currency === 'USD'
+        ? 'Original agent-supplied USD guide converted to canonical UGX for search and valuation.'
+        : 'Original agent-supplied UGX price.',
+      development_status_note: cleanText(body.development_status_note).slice(0, 500),
+      lister_registration_status: 'not_registered',
+      profile_claim_pending: true
+    };
     const existingProperty = await client.query(
-      `SELECT id, status
+      `SELECT id, status, agent_id, source
        FROM properties
-       WHERE agent_id = $1
-         AND LOWER(COALESCE(title, '')) = LOWER($2)
+       WHERE LOWER(COALESCE(title, '')) = LOWER($2)
          AND LOWER(COALESCE(area, '')) = LOWER($3)
          AND COALESCE(price, 0) = $4
          AND COALESCE(status, '') <> 'deleted'
+         AND (
+           agent_id = $1
+           OR (
+             ($5::text <> '' AND regexp_replace(COALESCE(lister_phone, ''), '\\D', '', 'g') = regexp_replace($5, '\\D', '', 'g'))
+             OR ($6::text <> '' AND LOWER(COALESCE(lister_email, '')) = LOWER($6))
+           )
+         )
        ORDER BY created_at DESC
        LIMIT 1`,
-      [agentId, title, area, priceMetadata.price]
+      [agentId, title, area, priceMetadata.price, phone || '', email || '']
     );
 
     let propertyId = existingProperty.rows[0]?.id || null;
     let propertyCreated = false;
+    let propertyLinked = false;
     if (!propertyId) {
       const extraFields = {
-        direct_agent_authorised: true,
-        direct_agent_profile_claim_pending: true,
-        direct_agent_identity_verification_status: 'pending',
-        direct_agent_submission_channel: 'whatsapp',
-        direct_agent_submission_confirmed: true,
-        direct_agent_contact_permission_confirmed: true,
-        media_rights_confirmed: true,
-        image_rights_confirmed: true,
-        consent_confirmed: true,
-        source_platform: 'whatsapp',
-        source_name: fullName,
-        source_contact_phone: phone,
-        source_evidence_files: evidenceFiles,
-        source_evidence_reviewed_by: actorId,
-        source_evidence_reviewed_at: new Date().toISOString(),
-        price_currency: priceMetadata.price_currency,
-        price_original: priceMetadata.price_original,
-        price_fx_rate_ugx: priceMetadata.price_fx_rate_ugx,
-        price_fx_as_of: priceMetadata.price_fx_as_of,
-        price_conversion_basis: priceMetadata.price_currency === 'USD'
-          ? 'Original agent-supplied USD guide converted to canonical UGX for search and valuation.'
-          : 'Original agent-supplied UGX price.',
-        development_status_note: cleanText(body.development_status_note).slice(0, 500),
+        ...directEvidenceFields,
         video_urls: [],
         listing_media_pending: true,
-        lister_registration_status: 'not_registered',
-        profile_claim_pending: true
       };
       const insertedProperty = await client.query(
         `INSERT INTO properties (
@@ -8339,13 +8349,65 @@ router.post('/agents/direct-onboarding', async (req, res, next) => {
           JSON.stringify({ agent_id: agentId, evidence_files: evidenceFiles })
         ]
       );
+    } else {
+      const matched = existingProperty.rows[0];
+      propertyLinked = String(matched.agent_id || '') !== String(agentId)
+        || matched.source !== 'direct_agent_whatsapp';
+      await client.query(
+        `UPDATE properties
+         SET agent_id = $2,
+             lister_name = $3,
+             lister_phone = $4,
+             lister_email = NULLIF($5, ''),
+             lister_type = 'agent',
+             source = 'direct_agent_whatsapp',
+             listed_via = 'admin_direct_agent_onboarding',
+             verification_terms_accepted = TRUE,
+             extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $6::jsonb,
+             moderation_notes = CASE
+               WHEN COALESCE(moderation_notes, '') ILIKE '%Direct agent submission%'
+                 THEN moderation_notes
+               ELSE CONCAT_WS(' ', NULLIF(moderation_notes, ''), 'Direct agent authority, contact permission, and media rights confirmed by King.')
+             END,
+             moderation_reason = 'Direct submission evidence reviewed; identity verification and account claim remain pending.',
+             updated_at = NOW()
+         WHERE id = $1`,
+        [
+          propertyId,
+          agentId,
+          fullName,
+          phone,
+          email || '',
+          JSON.stringify(directEvidenceFields)
+        ]
+      );
+      if (propertyLinked) {
+        await client.query(
+          `INSERT INTO property_moderation_events (
+             property_id, actor_id, action, status_from, status_to, reason, notes, delivery
+           ) VALUES ($1,$2,'direct_agent_existing_listing_linked',$3,$3,$4,$5,$6::jsonb)`,
+          [
+            propertyId,
+            actorId,
+            matched.status || 'pending',
+            'Existing matching listing linked to the directly authorised agent profile.',
+            'The existing listing and media were preserved; direct-agent evidence and claim-pending disclosure were added.',
+            JSON.stringify({ agent_id: agentId, evidence_files: evidenceFiles })
+          ]
+        );
+      }
     }
 
+    const propertyImageCount = await client.query(
+      'SELECT COUNT(*)::int AS count FROM property_images WHERE property_id = $1',
+      [propertyId]
+    );
     await client.query('COMMIT');
     await writeAudit('admin_direct_agent_onboarding_saved', {
       agent_id: agentId,
       property_id: propertyId,
       property_created: propertyCreated,
+      property_linked: propertyLinked,
       featured_homepage: featureAgent,
       evidence_file_count: evidenceFiles.length
     }, actorId);
@@ -8356,6 +8418,8 @@ router.post('/agents/direct-onboarding', async (req, res, next) => {
         agent_id: agentId,
         property_id: propertyId,
         property_created: propertyCreated,
+        property_linked: propertyLinked,
+        existing_image_count: Number(propertyImageCount.rows[0]?.count || 0),
         profile_claim_pending: true,
         identity_verification_status: 'pending'
       }
