@@ -54,12 +54,15 @@ test('public direct profile is claim-pending, not presented as identity verified
 
 test('authorised MP4 tours upload to cloud storage and render as a multi-video gallery', () => {
   const admin = read('routes/admin.js');
+  const properties = read('routes/properties.js');
   const storage = read('services/cloudMediaStorageService.js');
   const app = read('assets/makaug-app.js');
 
   assert.match(admin, /router\.post\('\/properties\/:id\/videos'/);
   assert.match(admin, /allowedMimeTypes: \['video\/mp4'\]/);
   assert.match(storage, /'video\/mp4': 'mp4'/);
+  assert.match(properties, /video_urls: safeVideoUrls/);
+  assert.match(properties, /video_tours: safeVideoTours/);
   assert.match(app, /function propertyVideoUrls/);
   assert.match(app, /<video controls preload="metadata" playsinline/);
   assert.match(app, /Property video tours/);
