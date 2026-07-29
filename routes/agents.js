@@ -53,6 +53,8 @@ const KNOWN_AGENT_SOCIAL_LINKS = [
 ];
 const PUBLIC_AGENT_SUPPRESSED_MARKERS = ['QA TEST - DELETE', 'SOFT LAUNCH TEST - DELETE', 'TRAINING', 'DEMO', 'SAMPLE', 'PLACEHOLDER'];
 const PUBLIC_AGENT_MIN_LIVE_LISTINGS = 2;
+const PUBLIC_DIRECT_AGENT_MIN_LIVE_LISTINGS = 1;
+const DIRECT_AGENT_PROFILE_MARKER = '[DIRECT_AGENT_AUTHORISED]';
 
 function sqlLiteral(value = '') {
   return String(value).replace(/'/g, "''");
@@ -108,15 +110,32 @@ function addPublicAgentLaunchTestFilter(filters, values) {
 
 function addPublicAgentInventoryFilter(filters) {
   filters.push(`(
-    SELECT COUNT(*)::int
-    FROM properties p
-    WHERE p.agent_id = a.id
-      AND p.status = 'approved'
-  ) >= ${PUBLIC_AGENT_MIN_LIVE_LISTINGS}`);
+    (
+      COALESCE(a.verification_reason, '') ILIKE '%${DIRECT_AGENT_PROFILE_MARKER}%'
+      AND (
+        SELECT COUNT(*)::int
+        FROM properties p
+        WHERE p.agent_id = a.id
+          AND p.status = 'approved'
+      ) >= ${PUBLIC_DIRECT_AGENT_MIN_LIVE_LISTINGS}
+    )
+    OR (
+      COALESCE(a.verification_reason, '') NOT ILIKE '%${DIRECT_AGENT_PROFILE_MARKER}%'
+      AND (
+        SELECT COUNT(*)::int
+        FROM properties p
+        WHERE p.agent_id = a.id
+          AND p.status = 'approved'
+      ) >= ${PUBLIC_AGENT_MIN_LIVE_LISTINGS}
+    )
+  )`);
 }
 
 function addPublicAgentSelfRegistrationFilter(filters) {
-  filters.push('a.user_id IS NOT NULL');
+  filters.push(`(
+    a.user_id IS NOT NULL
+    OR COALESCE(a.verification_reason, '') ILIKE '%${DIRECT_AGENT_PROFILE_MARKER}%'
+  )`);
   filters.push("COALESCE(a.verification_reason, '') NOT ILIKE '%public social source onboarding%'");
   filters.push("COALESCE(a.verification_reason, '') NOT ILIKE '%source profile%'");
   filters.push("COALESCE(a.licence_number, '') !~* '^(SOCIAL|FOUND-ONLINE|TIKTOK|FACEBOOK|X)-'");
@@ -494,12 +513,14 @@ router.get('/', async (req, res, next) => {
         a.phone,
         a.whatsapp,
         a.email,
+        a.user_id,
         a.registration_status,
         a.featured_homepage,
         a.featured_at,
         a.bio,
         a.profile_photo_url,
         a.licence_number,
+        a.verification_reason,
         a.status,
         a.rating,
         a.sales_count,
@@ -540,6 +561,7 @@ router.get('/:id', async (req, res, next) => {
         a.phone,
         a.whatsapp,
         a.email,
+        a.user_id,
         a.registration_status,
         a.featured_homepage,
         a.featured_at,
@@ -553,6 +575,7 @@ router.get('/:id', async (req, res, next) => {
         a.specializations,
         a.experience_years,
         a.makaug_agent_number,
+        a.verification_reason,
         ${knownAgentSocialSelect('a')},
         COALESCE(p.active_listings, 0) AS listings_count
       FROM agents a
@@ -562,7 +585,10 @@ router.get('/:id', async (req, res, next) => {
         WHERE p.agent_id = a.id AND p.status = 'approved'
       ) p ON true
       WHERE a.id = $1
-        AND a.user_id IS NOT NULL
+        AND (
+          a.user_id IS NOT NULL
+          OR COALESCE(a.verification_reason, '') ILIKE '%${DIRECT_AGENT_PROFILE_MARKER}%'
+        )
         AND LOWER(COALESCE(a.status, 'pending')) NOT IN ('rejected', 'declined', 'suspended', 'deleted', 'removed', 'blocked')
         AND COALESCE(a.verification_reason, '') NOT ILIKE '%public social source onboarding%'
         AND COALESCE(a.verification_reason, '') NOT ILIKE '%source profile%'
@@ -597,6 +623,10 @@ router.get('/:id', async (req, res, next) => {
          p.area,
          p.address,
          p.price,
+         p.price_currency,
+         p.price_original,
+         p.price_fx_rate_ugx,
+         p.price_fx_as_of,
          p.price_period,
          p.bedrooms,
          p.bathrooms,
