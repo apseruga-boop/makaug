@@ -24604,9 +24604,10 @@ function renderAdminReviewPanel(review) {
   const warningOverrides = getAdminReviewWarningOverrides(review);
   if (reviewOverrideKey) adminReviewWarningOverrides[reviewOverrideKey] = warningOverrides;
   const pendingWarningOverrides = getAdminPendingWarningOverrideLabels(review);
-  const identityRequired = moderationRequiresIdentity(review);
+  const isSourcedCandidate = adminIsSourcedInventoryCandidate(review);
+  const identityRequired = !isSourcedCandidate && moderationRequiresIdentity(review);
   const identityGateOpen = moderationIdentityAlreadyVerified(review);
-  const priceConfirmationRequired = moderationRequiresHighMonthlyPriceConfirmation(review);
+  const priceConfirmationRequired = !isSourcedCandidate && moderationRequiresHighMonthlyPriceConfirmation(review);
   const priceConfirmationOpen = moderationPriceBasisAlreadyVerified(review);
   const approvalUnlocked = canApprove
     && pendingWarningOverrides.length === 0
@@ -24617,7 +24618,6 @@ function renderAdminReviewPanel(review) {
   const listerVerificationStatus = review.extra_fields?.lister_registration_status || review.registration_status || "not_registered";
   const listerVerification = adminVerificationBadge(listerVerificationStatus);
   const ownerVerificationRequested = review.extra_fields?.ownership_verification_requested || review.extra_fields?.verify?.ownership_verification_requested;
-  const isSourcedCandidate = adminIsSourcedInventoryCandidate(review);
   const sourcedCandidateBadge = adminSourcedInventoryCandidateBadge(review);
   const sourcedCandidateSourceLinks = adminSourcedCandidateSourceLinks(review);
   const hasGeneratedPlaceholderPhotos = images.some((img) => adminIsGeneratedPlaceholderPhoto(review, img));
@@ -24831,7 +24831,7 @@ function renderAdminReviewPanel(review) {
         <div class="border border-gray-200 rounded-xl p-4">
           <label class="block text-sm font-semibold text-gray-700 mb-1">Review notes</label>
           <textarea id="admin-review-notes" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm min-h-[90px]" placeholder="Internal notes for this review">${adminEscape(review?.review?.notes || "")}</textarea>
-          ${moderationPriceBasisConfirmationHtml(review, "admin-review")}
+          ${isSourcedCandidate ? "" : moderationPriceBasisConfirmationHtml(review, "admin-review")}
           <label class="block text-sm font-semibold text-gray-700 mt-3 mb-1">Decision reason</label>
           ${moderationStructuredReasonControlsHtml("admin-review")}
           <textarea id="admin-review-reason" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm min-h-[110px]" placeholder="Required for rejection, optional for other statuses">${adminEscape(decisionReason)}</textarea>
