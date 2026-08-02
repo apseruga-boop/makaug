@@ -12188,7 +12188,8 @@ let staffPreviewPreviousAdminReview = null;
 let staffSourceIntakePollTimer = null;
 
 function staffNumber(value) {
-  return Number(value || 0).toLocaleString("en-UG");
+  if (value == null || value === "" || !Number.isFinite(Number(value))) return "—";
+  return Number(value).toLocaleString("en-UG");
 }
 
 function staffDate(value) {
@@ -13548,9 +13549,10 @@ function renderStaffListingPreviewModal(preview = {}) {
   const duplicates = preview.duplicate_review || {};
   const location = preview.location_review || {};
   const sourceUrl = String(source.source_url || "").trim();
-  const identityRequired = moderationRequiresIdentity(preview);
+  const foundOnlineApproval = staffSafeFoundOnlineApproval(preview);
+  const identityRequired = !foundOnlineApproval && moderationRequiresIdentity(preview);
   const identityGateOpen = moderationIdentityAlreadyVerified(preview);
-  const priceConfirmationRequired = moderationRequiresHighMonthlyPriceConfirmation(preview);
+  const priceConfirmationRequired = !foundOnlineApproval && moderationRequiresHighMonthlyPriceConfirmation(preview);
   const priceConfirmationOpen = moderationPriceBasisAlreadyVerified(preview);
   adminActiveReview = preview;
   const modal = document.createElement("div");
@@ -13659,7 +13661,7 @@ function staffListingPreviewPatch() {
     return collectAdminReviewListingPatch();
   }
   const get = (id) => document.getElementById(id)?.value ?? "";
-  return {
+  return Object.fromEntries(Object.entries({
     title: get("staff-preview-title"),
     description: get("staff-preview-description"),
     listing_type: get("staff-preview-listing-type"),
@@ -13678,7 +13680,7 @@ function staffListingPreviewPatch() {
     lister_email: get("staff-preview-lister-email"),
     bedrooms: get("staff-preview-bedrooms"),
     bathrooms: get("staff-preview-bathrooms")
-  };
+  }).filter(([, value]) => String(value ?? "").trim() !== ""));
 }
 
 function staffReviewPatch() {
@@ -13984,7 +13986,8 @@ async function staffApprovePreviewListing(propertyId) {
   const propertyIdForRequest = String(propertyId || adminActiveReview?.id || "").trim();
   try {
     if (!propertyIdForRequest) throw new Error("Missing listing id for approval request");
-    const identityRequired = moderationRequiresIdentity(adminActiveReview);
+    const foundOnlineApproval = staffSafeFoundOnlineApproval(adminActiveReview);
+    const identityRequired = !foundOnlineApproval && moderationRequiresIdentity(adminActiveReview);
     if (identityRequired && !moderationIdentityConfirmed("staff-preview", adminActiveReview)) {
       toast("Confirm that the ID photo is clear and matches the ID number before approving.");
       moderationIdentityCheckbox("staff-preview")?.focus();
@@ -13996,7 +13999,6 @@ async function staffApprovePreviewListing(propertyId) {
     await new Promise((resolve) => window.setTimeout(resolve, 0));
     const review = staffSafeReviewPatch();
     const warningOverrides = staffSafeReviewWarningOverrides(adminActiveReview);
-    const foundOnlineApproval = staffSafeFoundOnlineApproval(adminActiveReview);
     const statusPath = `/api/properties/${encodeURIComponent(propertyIdForRequest)}/status`;
     const statusBody = {
       ...(foundOnlineApproval ? {

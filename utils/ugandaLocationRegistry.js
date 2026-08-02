@@ -43,6 +43,8 @@ const DETAILED_LOCATIONS = [
   { name: 'Kitende', district: 'Wakiso', lat: 0.198, lng: 32.533 },
   { name: 'Kajjansi', district: 'Wakiso', lat: 0.208, lng: 32.552, aliases: ['Kajjansi', 'Kajansi'] },
   { name: 'Bwebajja', district: 'Wakiso', lat: 0.179, lng: 32.541 },
+  { name: 'Kigo', district: 'Wakiso', lat: 0.196, lng: 32.615, aliases: ['Kigo', 'Kigo Road'] },
+  { name: 'Lubowa', district: 'Wakiso', lat: 0.237, lng: 32.576, aliases: ['Lubowa', 'Lubowa Estate', 'Lubowa Entebbe Road'] },
   { name: 'Namasuba', district: 'Wakiso', lat: 0.258, lng: 32.558 },
   { name: 'Ndejje', district: 'Wakiso', lat: 0.244, lng: 32.553 },
   { name: 'Lubugumu', district: 'Wakiso', lat: 0.239, lng: 32.554 },

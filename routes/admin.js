@@ -1775,7 +1775,7 @@ function hasUsefulAdminSummaryNumbers(payload = {}) {
 }
 
 function rememberAdminSummaryLastKnownGood(payload = {}) {
-  if (!hasUsefulAdminSummaryNumbers(payload)) return payload;
+  if (payload?.meta?.partial || payload?.meta?.stale || !hasUsefulAdminSummaryNumbers(payload)) return payload;
   adminSummaryLastKnownGoodPayload = cloneJson(payload);
   return payload;
 }
@@ -1813,6 +1813,27 @@ async function adminCachedPayload(cacheKey, ttlMs, producer) {
   const promise = Promise.resolve()
     .then(producer)
     .then((value) => {
+      if (String(cacheKey).startsWith('admin-summary') && value?.meta?.partial) {
+        if (existing?.value && !existing.value?.meta?.partial) {
+          const stalePayload = cloneJson(existing.value);
+          stalePayload.meta = {
+            ...(stalePayload.meta || {}),
+            cache: `${cacheKey}_last_known_good`,
+            stale: true,
+            partial: true,
+            fallback_reason: value.meta.fallback_reason || 'partial_query_fallback',
+            generated_at: new Date().toISOString(),
+            last_known_good_generated_at: stalePayload.meta?.generated_at || null
+          };
+          adminDashboardResponseCache.set(cacheKey, {
+            value: stalePayload,
+            expiresAt: Date.now() + Math.max(1000, Math.min(Number(ttlMs) || ADMIN_DASHBOARD_CACHE_TTL_MS, 5000))
+          });
+          return stalePayload;
+        }
+        adminDashboardResponseCache.delete(cacheKey);
+        return value;
+      }
       adminDashboardResponseCache.set(cacheKey, {
         value,
         expiresAt: Date.now() + Math.max(1000, Number(ttlMs) || ADMIN_DASHBOARD_CACHE_TTL_MS)
@@ -1998,9 +2019,11 @@ async function adminSummaryRows(sql, values = [], options = {}) {
   }
 }
 
-async function adminSummaryCount(sql, values = [], options = {}) {
-  const row = await adminSummaryOne(sql, values, { total: 0 }, options);
-  return Number(row.total || 0);
+function adminNullableSummaryRow(row = {}) {
+  if (!row?._fallback_reason) return row;
+  return Object.fromEntries(Object.entries(row).map(([key, value]) => (
+    key.startsWith('_') ? [key, value] : [key, null]
+  )));
 }
 
 function zeroPublicInventorySummary() {
@@ -2028,15 +2051,8 @@ async function loadAdminPropertiesSummaryFast() {
   const [
     publicInventory,
     totalRow,
-    pending,
-    approved,
-    publicFeatured,
-    rejected,
-    hidden,
-    deleted,
-    privateListed,
-    agentListed,
-    studentDiscoverable
+    pendingResult,
+    statusRow
   ] = await Promise.all([
     safePublicInventorySummaryForAdmin(),
     adminSummaryOne(
@@ -2045,25 +2061,57 @@ async function loadAdminPropertiesSummaryFast() {
       { total: 0 },
       { timeoutMs: 500 }
     ),
-    adminActionableReviewQueueCount({ timeoutMs: 2500 }),
-    adminSummaryCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'approved'", [], { timeoutMs: 700 }),
-    adminSummaryCount(
-      `SELECT COUNT(*)::int AS total
-       FROM properties p
-       WHERE ${publicVisibleInventoryWhere('p')}
-         AND ${adminFeaturedListingCondition('p')}`,
+    adminActionableReviewQueueCount({ timeoutMs: 2500 })
+      .then((value) => ({ value, fallback_reason: null }))
+      .catch((error) => ({ value: null, fallback_reason: adminSummaryFallbackReason(error) })),
+    adminSummaryOne(
+      `SELECT
+         COUNT(*) FILTER (WHERE status = 'approved')::int AS approved,
+         COUNT(*) FILTER (
+           WHERE ${publicVisibleInventoryWhere('p')}
+             AND ${adminFeaturedListingCondition('p')}
+         )::int AS public_featured,
+         COUNT(*) FILTER (WHERE status = 'rejected')::int AS rejected,
+         COUNT(*) FILTER (WHERE status = 'hidden')::int AS hidden,
+         COUNT(*) FILTER (WHERE status = 'deleted')::int AS deleted,
+         COUNT(*) FILTER (WHERE COALESCE(lister_type, 'owner') <> 'agent' AND agent_id IS NULL)::int AS private_listed,
+         COUNT(*) FILTER (WHERE COALESCE(lister_type, 'owner') = 'agent' OR agent_id IS NOT NULL)::int AS agent_listed,
+         COUNT(*) FILTER (WHERE listing_type = 'student' OR students_welcome = TRUE)::int AS student_discoverable
+       FROM properties p`,
       [],
-      { timeoutMs: 700 }
-    ),
-    adminSummaryCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'rejected'", [], { timeoutMs: 700 }),
-    adminSummaryCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'hidden'", [], { timeoutMs: 700 }),
-    adminSummaryCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'deleted'", [], { timeoutMs: 700 }),
-    adminSummaryCount("SELECT COUNT(*)::int AS total FROM properties WHERE COALESCE(lister_type, 'owner') <> 'agent' AND agent_id IS NULL", [], { timeoutMs: 700 }),
-    adminSummaryCount("SELECT COUNT(*)::int AS total FROM properties WHERE COALESCE(lister_type, 'owner') = 'agent' OR agent_id IS NOT NULL", [], { timeoutMs: 700 }),
-    adminSummaryCount("SELECT COUNT(*)::int AS total FROM properties WHERE listing_type = 'student' OR students_welcome = TRUE", [], { timeoutMs: 700 })
+      {
+        approved: 0,
+        public_featured: 0,
+        rejected: 0,
+        hidden: 0,
+        deleted: 0,
+        private_listed: 0,
+        agent_listed: 0,
+        student_discoverable: 0
+      },
+      { timeoutMs: 2500 }
+    )
   ]);
-  const total = Number(totalRow?.total || 0) || 0;
-  const publicLive = Number(publicInventory?.summary?.total || 0) || 0;
+  const total = totalRow?._fallback_reason ? null : Number(totalRow?.total || 0);
+  const publicLive = publicInventory?.meta?.fallback_reason
+    ? null
+    : Number(publicInventory?.summary?.total || 0);
+  const statusUnavailable = Boolean(statusRow?._fallback_reason);
+  const pending = pendingResult.value;
+  const approved = statusUnavailable ? null : Number(statusRow.approved || 0);
+  const publicFeatured = statusUnavailable ? null : Number(statusRow.public_featured || 0);
+  const rejected = statusUnavailable ? null : Number(statusRow.rejected || 0);
+  const hidden = statusUnavailable ? null : Number(statusRow.hidden || 0);
+  const deleted = statusUnavailable ? null : Number(statusRow.deleted || 0);
+  const privateListed = statusUnavailable ? null : Number(statusRow.private_listed || 0);
+  const agentListed = statusUnavailable ? null : Number(statusRow.agent_listed || 0);
+  const studentDiscoverable = statusUnavailable ? null : Number(statusRow.student_discoverable || 0);
+  const fallbackReasons = [
+    totalRow?._fallback_reason,
+    publicInventory?.meta?.fallback_reason,
+    pendingResult.fallback_reason,
+    statusRow?._fallback_reason
+  ].filter(Boolean);
   return {
     total,
     pending,
@@ -2076,12 +2124,12 @@ async function loadAdminPropertiesSummaryFast() {
     private: privateListed,
     agent_listed: agentListed,
     student_discoverable: studentDiscoverable,
-    approval_rate_pct: total ? Math.round((publicLive / total) * 100) : 0,
-    rejection_rate_pct: total ? Math.round((rejected / total) * 100) : 0,
-    public_opportunities: publicInventory.summary || zeroPublicInventorySummary(),
+    approval_rate_pct: total != null && publicLive != null && total > 0 ? Math.round((publicLive / total) * 100) : null,
+    rejection_rate_pct: total != null && rejected != null && total > 0 ? Math.round((rejected / total) * 100) : null,
+    public_opportunities: publicInventory.summary || null,
     public_count_marker: publicInventory.meta?.marker || PUBLIC_INVENTORY_METRICS_MARKER,
     public_count_cache: publicInventory.meta?.cache || 'unknown',
-    ...(publicInventory.meta?.fallback_reason ? { _fallback_reason: publicInventory.meta.fallback_reason } : {})
+    ...(fallbackReasons.length ? { _fallback_reason: [...new Set(fallbackReasons)].join(',') } : {})
   };
 }
 
@@ -3231,18 +3279,21 @@ router.get('/summary', async (req, res, next) => {
         )
       ]);
 
+      const fallbackReasons = [properties, agents, reports, requests, inquiries, users, engagement, engagement48h]
+        .map((row) => row?._fallback_reason)
+        .filter(Boolean);
       return rememberAdminSummaryLastKnownGood({
       ok: true,
       data: {
         properties,
-        agents,
-        users,
-        reports,
-        propertyRequests: requests,
-        inquiries,
-        engagement,
+        agents: adminNullableSummaryRow(agents),
+        users: adminNullableSummaryRow(users),
+        reports: adminNullableSummaryRow(reports),
+        propertyRequests: adminNullableSummaryRow(requests),
+        inquiries: adminNullableSummaryRow(inquiries),
+        engagement: adminNullableSummaryRow(engagement),
         ai_insights: {
-          last_48h: engagement48h,
+          last_48h: adminNullableSummaryRow(engagement48h),
           top_areas: topAreas48h,
           top_listing_types: topListingTypes48h
         }
@@ -3252,7 +3303,8 @@ router.get('/summary', async (req, res, next) => {
         cache_ttl_ms: ADMIN_DASHBOARD_CACHE_TTL_MS,
         public_count_marker: PUBLIC_INVENTORY_METRICS_MARKER,
         generated_at: new Date().toISOString(),
-        partial: [properties, agents, reports, requests, inquiries, users, engagement, engagement48h].some((row) => row?._fallback_reason)
+        partial: fallbackReasons.length > 0,
+        ...(fallbackReasons.length ? { fallback_reason: [...new Set(fallbackReasons)].join(',') } : {})
       }
       });
     });

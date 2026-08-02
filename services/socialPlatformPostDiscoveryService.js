@@ -133,6 +133,9 @@ const AREA_PIN_OVERRIDES = [
   { name: 'Bujjuko Akright Estate', district: 'Wakiso', lat: 0.374, lng: 32.389, aliases: ['Bujjuko Akright', 'Bujuuko Akright', 'Akright'] },
   { name: 'Bujjuko', district: 'Wakiso', lat: 0.374, lng: 32.389, aliases: ['Bujjuko', 'Bujuuko', 'Bujuko'] },
   { name: 'Kitende', district: 'Wakiso', lat: 0.198, lng: 32.533, aliases: ['Kitende'] },
+  { name: 'Kigo', district: 'Wakiso', lat: 0.196, lng: 32.615, aliases: ['Kigo', 'Kigo Road'] },
+  { name: 'Lubowa', district: 'Wakiso', lat: 0.237, lng: 32.576, aliases: ['Lubowa', 'Lubowa Estate', 'Lubowa Entebbe Road'] },
+  { name: 'Bwebajja', district: 'Wakiso', lat: 0.179, lng: 32.541, aliases: ['Bwebajja', 'Bwebajja Entebbe Road'] },
   { name: 'Kakiri', district: 'Wakiso', lat: 0.409, lng: 32.38, aliases: ['Kakiri', 'Kakiri Masulita', 'Kakiri Masulita Hoima Road', 'Hoima Road'] },
   { name: 'Masulita', district: 'Wakiso', lat: 0.51, lng: 32.46, aliases: ['Masulita'] },
   { name: 'Kira', district: 'Wakiso', lat: 0.3978, lng: 32.6414, aliases: ['Kira', 'Kira Town'] },
@@ -3607,8 +3610,10 @@ function buildXSearchJobs({ sources = sourcesForPlatform('x'), limit = DEFAULT_M
 
 function extractArea(text = '') {
   const haystack = cleanText(text);
+  const pinnedArea = areaPinFromText(haystack);
+  if (pinnedArea?.name) return pinnedArea.name;
   const orderedHints = [
-    ...AREA_HINTS.filter((name) => !DISTRICTS.includes(name)),
+    ...AREA_HINTS.filter((name) => !DISTRICTS.includes(name)).reverse(),
     ...AREA_HINTS.filter((name) => DISTRICTS.includes(name)),
   ];
   const area = orderedHints.find((name) => new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(haystack));
@@ -3648,7 +3653,9 @@ function priceTextFromText(text = '') {
   if (localPriceMatch) return cleanText(localPriceMatch[0]);
   const negotiableMatch = raw.match(/\b(?:UGX|USh|Shs?)?\s*\d[\d,.]*(?:\s*(?:bn|billion|billions|m|mn|million|millions|k|thousand|thousands))\s*(?:negotiable|asking|only)\b/i);
   if (negotiableMatch) return cleanText(negotiableMatch[0]);
-  const usdMatch = raw.match(/(?:\$|US\$|USD)\s*\d[\d,.]*(?:\/month| per month| monthly|\/mo)?/i);
+  const gluedLocalMatch = raw.match(/\b\d+(?:\.\d+)?\s*(?:bn|billion|billions|m|mn|million|millions|k|thousand|thousands)(?:UGX|USh|Shs?)\b(?:\/month| per month| monthly)?/i);
+  if (gluedLocalMatch) return cleanText(gluedLocalMatch[0]);
+  const usdMatch = raw.match(/(?:\$|US\$|USD)\s*\d[\d,.]*(?:\s*(?:bn|billion|billions|m|mn|million|millions|k|thousand|thousands))?(?:\/month| per month| monthly|\/mo)?/i);
   if (usdMatch) return cleanText(usdMatch[0]);
   const patterns = [
     /\b(?:UGX|USh|Shs?)\s*\d[\d,.]*(?:\s*(?:bn|billion|billions|m|mn|million|millions|k|thousand|thousands))?(?:\/month| per month| monthly| kwa mwezi| za mwezi)?/i,
@@ -4831,6 +4838,7 @@ module.exports = {
   normalizeExactSocialPostUrl,
   normalizeYouTubeApiPost,
   normalizeXApiPost,
+  extractArea,
   priceTextFromText,
   normalizeUgandanPhone,
   phoneFromText,
