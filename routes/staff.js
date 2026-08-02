@@ -7,7 +7,10 @@ const { cleanText, isValidEmail, isValidPhone } = require('../middleware/validat
 const { parsePagination, toPagination } = require('../utils/pagination');
 const { DISTRICTS, LISTING_TYPES } = require('../utils/constants');
 const { publicLivePropertyStatusSql } = require('../utils/publicInventoryStatus');
-const { publicVisibleInventoryWhere } = require('../services/publicInventoryMetricsService');
+const {
+  loadPublicOpportunitySummary,
+  publicVisibleInventoryWhere
+} = require('../services/publicInventoryMetricsService');
 const {
   normalizeCommercialTransactionType,
   normalizeCommercialPropertyType,
@@ -83,7 +86,7 @@ const STAFF_DASHBOARD_QUEUE_SCAN_LIMIT = STAFF_DASHBOARD_QUEUE_LIMIT * 20;
 const STAFF_DASHBOARD_PANEL_SCAN_LIMIT = STAFF_DASHBOARD_PANEL_LIMIT * 20;
 const STAFF_DASHBOARD_PANEL_QUERY_TIMEOUT_MS = Math.max(1000, parseInt(process.env.STAFF_DASHBOARD_PANEL_QUERY_TIMEOUT_MS || '5000', 10) || 5000);
 const STAFF_DASHBOARD_PANEL_CACHE_TTL_MS = Math.max(500, parseInt(process.env.STAFF_DASHBOARD_PANEL_CACHE_TTL_MS || '30000', 10) || 30000);
-const STAFF_DASHBOARD_FAST_COUNT_TIMEOUT_MS = Math.max(500, parseInt(process.env.STAFF_DASHBOARD_FAST_COUNT_TIMEOUT_MS || '2500', 10) || 2500);
+const STAFF_DASHBOARD_FAST_COUNT_TIMEOUT_MS = Math.max(500, parseInt(process.env.STAFF_DASHBOARD_FAST_COUNT_TIMEOUT_MS || '4000', 10) || 4000);
 const STAFF_DASHBOARD_FAST_WIDGET_TIMEOUT_MS = Math.max(250, parseInt(process.env.STAFF_DASHBOARD_FAST_WIDGET_TIMEOUT_MS || '700', 10) || 700);
 const STAFF_REVIEW_QUEUE_QUERY_TIMEOUT_MS = Math.max(1500, parseInt(process.env.STAFF_REVIEW_QUEUE_QUERY_TIMEOUT_MS || '4000', 10) || 4000);
 const STAFF_PREVIEW_QUERY_TIMEOUT_MS = Math.max(500, parseInt(process.env.STAFF_PREVIEW_QUERY_TIMEOUT_MS || '900', 10) || 900);
@@ -156,6 +159,7 @@ const STAFF_SOURCE_MONITOR_GUIDE = {
 };
 const staffFastDashboardCache = new Map();
 const staffFastDashboardRefreshes = new Map();
+const staffFastDashboardRefreshBackoff = new Map();
 const staffDashboardPanelsCache = new Map();
 const staffSourceIntakeJobs = new Map();
 
@@ -866,6 +870,18 @@ function safeNumber(row, key) {
   return Number(row?.[key] || 0) || 0;
 }
 
+function safeNumberOrNull(row, key) {
+  if (row?._fallback_reason || row?.[key] == null || !Number.isFinite(Number(row[key]))) return null;
+  return Number(row[key]);
+}
+
+function dashboardNullableRow(row = {}) {
+  if (!row?._fallback_reason) return row;
+  return Object.fromEntries(Object.entries(row).map(([key, value]) => (
+    key.startsWith('_') ? [key, value] : [key, null]
+  )));
+}
+
 async function safeOne(sql, params = [], fallback = {}, options = {}) {
   try {
     const result = await staffQuery(sql, params, options);
@@ -874,7 +890,14 @@ async function safeOne(sql, params = [], fallback = {}, options = {}) {
     if (!['42P01', '42703'].includes(error.code)) {
       logger.warn('Staff dashboard query failed', { message: error.message });
     }
-    return fallback;
+    return {
+      ...fallback,
+      _fallback_reason: error.code === '57014'
+        ? 'statement_timeout'
+        : error.code === 'POOL_TIMEOUT' || /client acquisition timed out|connection timeout|timeout exceeded/i.test(String(error.message || ''))
+          ? 'pool_timeout'
+          : error.code || 'query_failed'
+    };
   }
 }
 
@@ -1244,16 +1267,49 @@ function cloneDashboardPayload(payload = {}) {
 
 function clearStaffFastDashboardCache() {
   staffFastDashboardCache.clear();
+  staffFastDashboardRefreshBackoff.clear();
   staffDashboardPanelsCache.clear();
 }
 
+function staffFastDashboardFallbackReasons(payload = {}) {
+  const reasons = new Set();
+  const visit = (value) => {
+    if (!value || typeof value !== 'object') return;
+    if (value._fallback_reason) reasons.add(String(value._fallback_reason));
+    Object.values(value).forEach(visit);
+  };
+  visit(payload);
+  return [...reasons];
+}
+
+function staffFastDashboardRefreshIsBackedOff(cacheKey, now = Date.now()) {
+  return Number(staffFastDashboardRefreshBackoff.get(cacheKey)?.nextRetryAt || 0) > now;
+}
+
+function recordStaffFastDashboardRefreshFailure(cacheKey) {
+  const previous = staffFastDashboardRefreshBackoff.get(cacheKey) || { failures: 0 };
+  const failures = Math.min(6, Number(previous.failures || 0) + 1);
+  const delayMs = Math.min(60000, 1000 * (2 ** (failures - 1)));
+  staffFastDashboardRefreshBackoff.set(cacheKey, { failures, nextRetryAt: Date.now() + delayMs });
+}
+
 function refreshStaffFastDashboardCache(req, cacheKey) {
-  if (staffFastDashboardRefreshes.has(cacheKey)) return;
+  if (staffFastDashboardRefreshes.has(cacheKey) || staffFastDashboardRefreshIsBackedOff(cacheKey)) return;
   const refresh = buildDashboardFastPayload(req)
     .then((payload) => {
+      const fallbackReasons = staffFastDashboardFallbackReasons(payload);
+      if (fallbackReasons.length) {
+        const error = new Error(`staff_dashboard_partial:${fallbackReasons.join(',')}`);
+        error.code = fallbackReasons[0];
+        throw error;
+      }
       staffFastDashboardCache.set(cacheKey, { at: Date.now(), payload: cloneDashboardPayload(payload) });
+      staffFastDashboardRefreshBackoff.delete(cacheKey);
     })
-    .catch((error) => logger.warn('Staff fast dashboard cache refresh failed', { message: error.message }))
+    .catch((error) => {
+      recordStaffFastDashboardRefreshFailure(cacheKey);
+      logger.warn('Staff fast dashboard cache refresh failed; retaining last-known-good values', { message: error.message });
+    })
     .finally(() => staffFastDashboardRefreshes.delete(cacheKey));
   staffFastDashboardRefreshes.set(cacheKey, refresh);
 }
@@ -1269,17 +1325,30 @@ async function dashboardFastPayload(req) {
     return {
       ...cloneDashboardPayload(cached.payload),
       cache: {
-        status: now - cached.at > STAFF_FAST_DASHBOARD_CACHE_TTL_MS ? 'stale_refreshing' : 'hit',
+        status: now - cached.at > STAFF_FAST_DASHBOARD_CACHE_TTL_MS
+          ? (staffFastDashboardRefreshIsBackedOff(cacheKey, now) ? 'stale_backoff' : 'stale_refreshing')
+          : 'hit',
         age_ms: now - cached.at,
         ttl_ms: STAFF_FAST_DASHBOARD_CACHE_TTL_MS
       }
     };
   }
   const payload = await buildDashboardFastPayload(req);
-  staffFastDashboardCache.set(cacheKey, { at: Date.now(), payload: cloneDashboardPayload(payload) });
+  const fallbackReasons = staffFastDashboardFallbackReasons(payload);
+  if (!fallbackReasons.length) {
+    staffFastDashboardCache.set(cacheKey, { at: Date.now(), payload: cloneDashboardPayload(payload) });
+    staffFastDashboardRefreshBackoff.delete(cacheKey);
+  } else {
+    recordStaffFastDashboardRefreshFailure(cacheKey);
+  }
   return {
     ...payload,
-    cache: { status: 'miss', age_ms: 0, ttl_ms: STAFF_FAST_DASHBOARD_CACHE_TTL_MS }
+    cache: {
+      status: fallbackReasons.length ? 'miss_degraded_not_cached' : 'miss',
+      age_ms: 0,
+      ttl_ms: STAFF_FAST_DASHBOARD_CACHE_TTL_MS,
+      fallback_reasons: fallbackReasons
+    }
   };
 }
 
@@ -1322,15 +1391,16 @@ async function dashboardPanelsPayload(req) {
 }
 
 async function buildStaffFastListingSummary() {
-  const [inventoryRow, reviewRow, totalRow] = await Promise.all([
-    safeOne(
-      `SELECT COUNT(*)::int AS live
-       FROM properties p
-       WHERE ${publicVisibleInventoryWhere('p')}`,
-      [],
-      { live: 0 },
-      { timeoutMs: STAFF_DASHBOARD_FAST_COUNT_TIMEOUT_MS }
-    ),
+  const [publicInventory, reviewRow, totalRow] = await Promise.all([
+    loadPublicOpportunitySummary({ timeoutMs: STAFF_DASHBOARD_FAST_COUNT_TIMEOUT_MS })
+      .catch((error) => ({
+        summary: null,
+        meta: {
+          fallback_reason: error.code === '57014'
+            ? 'statement_timeout'
+            : error.code === 'POOL_TIMEOUT' ? 'pool_timeout' : error.code || 'query_failed'
+        }
+      })),
     safeOne(
       `WITH actionable AS MATERIALIZED (
          SELECT p.listed_via, p.source, p.lister_type, p.agent_id, p.extra_fields
@@ -1354,25 +1424,48 @@ async function buildStaffFastListingSummary() {
       { timeoutMs: STAFF_DASHBOARD_FAST_WIDGET_TIMEOUT_MS }
     )
   ]);
-  const databaseTotal = safeNumber(totalRow, 'database_total');
+  const databaseTotal = safeNumberOrNull(totalRow, 'database_total');
+  const publicLive = publicInventory?.summary && Number.isFinite(Number(publicInventory.summary.total))
+    ? Number(publicInventory.summary.total)
+    : null;
+  const fallbackReasons = [
+    reviewRow?._fallback_reason,
+    totalRow?._fallback_reason,
+    publicInventory?.meta?.fallback_reason
+  ].filter(Boolean);
   return {
     database_total: databaseTotal,
     staff_visible_total: databaseTotal,
-    pending_review: safeNumber(reviewRow, 'pending_review'),
-    broker_pending_review: safeNumber(reviewRow, 'broker_pending_review'),
+    pending_review: safeNumberOrNull(reviewRow, 'pending_review'),
+    broker_pending_review: safeNumberOrNull(reviewRow, 'broker_pending_review'),
     source_quality_suppressed_pending: 0,
-    live: safeNumber(inventoryRow, 'live'),
+    live: publicLive,
     staff_removed: 0,
     found_online: 0,
     website_submitted: 0,
-    count_source: 'indexed_public_and_actionable_review_predicates'
+    count_source: 'shared_public_inventory_and_authoritative_actionable_review_predicate',
+    ...(fallbackReasons.length ? { _fallback_reason: [...new Set(fallbackReasons)].join(',') } : {})
   };
+}
+
+async function runStaffDashboardTasks(tasks = [], concurrency = 3) {
+  const results = new Array(tasks.length);
+  let nextIndex = 0;
+  const workers = Array.from({ length: Math.min(Math.max(1, concurrency), tasks.length) }, async () => {
+    while (nextIndex < tasks.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      results[index] = await tasks[index]();
+    }
+  });
+  await Promise.all(workers);
+  return results;
 }
 
 async function buildDashboardFastPayload(req) {
   const staffId = actorId(req);
+  const listingSummary = await buildStaffFastListingSummary();
   const [
-    listingSummary,
     myModeration,
     leadSummary,
     adSummary,
@@ -1380,9 +1473,8 @@ async function buildDashboardFastPayload(req) {
     sourceSummary,
     mortgageSummary,
     paymentSummary
-  ] = await Promise.all([
-    buildStaffFastListingSummary(),
-    safeOne(
+  ] = await runStaffDashboardTasks([
+    () => safeOne(
       `SELECT
          COUNT(*)::int AS total_actions,
          COUNT(*) FILTER (WHERE status_to IN ('approved','live','published'))::int AS approvals,
@@ -1394,7 +1486,7 @@ async function buildDashboardFastPayload(req) {
       { total_actions: 0, approvals: 0, rejections: 0, actions_24h: 0 },
       { timeoutMs: STAFF_DASHBOARD_FAST_WIDGET_TIMEOUT_MS }
     ),
-    safeOne(
+    () => safeOne(
       `SELECT
          COUNT(*) FILTER (WHERE lead_status = ANY($1::text[]))::int AS open,
          COUNT(*) FILTER (WHERE assigned_to_user_id = $2)::int AS assigned_to_me,
@@ -1405,7 +1497,7 @@ async function buildDashboardFastPayload(req) {
       { open: 0, assigned_to_me: 0, hot: 0, overdue: 0 },
       { timeoutMs: STAFF_DASHBOARD_FAST_WIDGET_TIMEOUT_MS }
     ),
-    safeOne(
+    () => safeOne(
       `SELECT
          COUNT(*) FILTER (WHERE status = ANY($1::text[]))::int AS open_inquiries,
          COUNT(*) FILTER (WHERE assigned_to_user_id = $2)::int AS assigned_to_me,
@@ -1416,7 +1508,7 @@ async function buildDashboardFastPayload(req) {
       { open_inquiries: 0, assigned_to_me: 0, won_inquiries: 0, staff_visible_pipeline_ugx: 0 },
       { timeoutMs: STAFF_DASHBOARD_FAST_WIDGET_TIMEOUT_MS }
     ),
-    safeOne(
+    () => safeOne(
       `SELECT
          COUNT(*) FILTER (WHERE status IN ('needs_human','escalated'))::int AS needs_human,
          COUNT(*) FILTER (WHERE status IN ('open','ai_active','awaiting_customer','needs_human','escalated'))::int AS open,
@@ -1427,7 +1519,7 @@ async function buildDashboardFastPayload(req) {
       { needs_human: 0, open: 0, active_7d: 0, assigned_to_me: 0 },
       { timeoutMs: STAFF_DASHBOARD_FAST_WIDGET_TIMEOUT_MS }
     ),
-    safeOne(
+    () => safeOne(
       `SELECT
          COUNT(*)::int AS total_sources,
          COUNT(*) FILTER (WHERE status = 'active')::int AS active_sources,
@@ -1441,7 +1533,7 @@ async function buildDashboardFastPayload(req) {
       { total_sources: 0, active_sources: 0, tiktok_sources: 0, youtube_sources: 0, facebook_sources: 0, x_sources: 0, direct_contact_sources: 0 },
       { timeoutMs: STAFF_DASHBOARD_FAST_WIDGET_TIMEOUT_MS }
     ),
-    safeOne(
+    () => safeOne(
       `SELECT
          COUNT(*)::int AS total,
          COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days')::int AS last_7_days,
@@ -1451,7 +1543,7 @@ async function buildDashboardFastPayload(req) {
       { total: 0, last_7_days: 0, with_phone: 0 },
       { timeoutMs: STAFF_DASHBOARD_FAST_WIDGET_TIMEOUT_MS }
     ),
-    safeOne(
+    () => safeOne(
       `SELECT
          (SELECT COUNT(*)::int FROM payment_links WHERE status IN ('created','pending','sent')) AS open_payment_links,
          (SELECT COUNT(*)::int FROM invoices WHERE status IN ('draft','sent','unpaid','pending')) AS open_invoices,
@@ -1461,22 +1553,33 @@ async function buildDashboardFastPayload(req) {
       { open_payment_links: 0, open_invoices: 0, paid_invoices: 0 },
       { timeoutMs: STAFF_DASHBOARD_FAST_WIDGET_TIMEOUT_MS }
     )
-  ]);
+  ], 3);
+
+  const widgetRows = {
+    my_moderation: dashboardNullableRow(myModeration),
+    leads: dashboardNullableRow(leadSummary),
+    advertising: dashboardNullableRow(adSummary),
+    whatsapp: dashboardNullableRow(whatsappSummary),
+    sources: dashboardNullableRow(sourceSummary),
+    bank_leads: dashboardNullableRow(mortgageSummary),
+    payments: dashboardNullableRow(paymentSummary)
+  };
+  const fallbackReasons = staffFastDashboardFallbackReasons({ listingSummary, widgetRows });
 
   return {
     staff: publicStaffUser(req.userAuth),
-    partial: true,
+    partial: fallbackReasons.length > 0,
     deferred_dashboard_endpoint: '/api/staff/dashboard?panels=1',
     summary: {
       listings: listingSummary,
-      my_moderation: myModeration,
-      leads: leadSummary,
-      advertising: adSummary,
-      whatsapp: { ...whatsappSummary, bridge: { status: 'loading' } },
-      sources: sourceSummary,
+      my_moderation: widgetRows.my_moderation,
+      leads: widgetRows.leads,
+      advertising: widgetRows.advertising,
+      whatsapp: { ...widgetRows.whatsapp, bridge: { status: 'loading' } },
+      sources: widgetRows.sources,
       duplicates: { possible_duplicates: 0 },
-      bank_leads: mortgageSummary,
-      payments: paymentSummary,
+      bank_leads: widgetRows.bank_leads,
+      payments: widgetRows.payments,
       definitions: staffMetricDefinitions()
     },
     review_queue: [],
@@ -1485,7 +1588,7 @@ async function buildDashboardFastPayload(req) {
     whatsapp_conversations: [],
     source_intake: {
       batch_id: SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID,
-      summary: sourceSummary,
+      summary: widgetRows.sources,
       possible_duplicates: 0,
       monitor: staffSourceMonitorGuide(),
       source_presets: STAFF_SOURCE_PRESETS,
@@ -1494,14 +1597,18 @@ async function buildDashboardFastPayload(req) {
       exact_import_endpoint: '/api/staff/source-intake/exact-social/import',
       sweep_endpoint: '/api/staff/source-intake/social-sweep'
     },
-    bank_leads: { summary: mortgageSummary, rows: [] },
+    bank_leads: { summary: widgetRows.bank_leads, rows: [] },
     payments: {
-      summary: paymentSummary,
+      summary: widgetRows.payments,
       staff_payment_profile: publicStaffUser(req.userAuth).payment_profile,
       note: 'Staff can save their payout details here. Payment confirmation, paid invoices, discounts, and refunds remain King/admin controlled.'
     },
     recent_activity: [],
     training: trainingGuide(),
+    meta: {
+      partial: fallbackReasons.length > 0,
+      fallback_reasons: fallbackReasons
+    },
     ai: {
       provider: getProviderMeta(),
       assistant_endpoint: '/api/staff/assistant/query'

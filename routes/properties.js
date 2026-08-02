@@ -4433,6 +4433,9 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
       current = listingPatchResult.property || current;
       approvalWarnings.push(`Listing facts updated before moderation status change: ${listingPatchResult.changed_fields.join(', ')}`);
     }
+    const isSourcedCandidate = isSourcedInventoryCandidateRecord(current);
+    const requestedSourcedCandidateOverride = nextStatus === 'approved'
+      && parseBooleanLike(req.body.sourced_candidate_override || req.body.sourced_candidate_special_dispensation, false);
     const highMonthlyPriceConfirmed = parseBooleanLike(
       req.body.high_monthly_price_confirmed
         || req.body.highMonthlyPriceConfirmed
@@ -4440,7 +4443,7 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
         || req.body.priceBasisConfirmed,
       false
     );
-    if (nextStatus === 'approved') {
+    if (nextStatus === 'approved' && !(requestedSourcedCandidateOverride && isSourcedCandidate)) {
       const priceQuality = listingPriceQuality(current, { highMonthlyPriceConfirmed });
       if (!priceQuality.ok) {
         return res.status(400).json({
@@ -4456,7 +4459,6 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
     }
     const actorId = req.adminAuth?.userId || req.adminAuth?.type || 'admin_api_key';
     const reviewerUserId = toUuidOrNull(req.adminAuth?.userId);
-    const isSourcedCandidate = isSourcedInventoryCandidateRecord(current);
     if (nextStatus === 'approved' && normalizeListingType(current.listing_type) === 'commercial') {
       const commercialTransactionType = normalizeCommercialTransactionType(current.transaction_type);
       const commercialPropertyType = normalizeCommercialPropertyType(current.property_type, {
@@ -4476,8 +4478,6 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
       const classificationWarning = commercialMisclassificationWarning(current);
       if (classificationWarning) approvalWarnings.push(classificationWarning);
     }
-    const requestedSourcedCandidateOverride = nextStatus === 'approved'
-      && parseBooleanLike(req.body.sourced_candidate_override || req.body.sourced_candidate_special_dispensation, false);
     const sourcedCandidateConsentConfirmed = parseBooleanLike(req.body.consent_confirmed, false);
     const sourcedCandidateImageRightsConfirmed = parseBooleanLike(req.body.image_rights_confirmed, false);
     const sourcedCandidateLocationConfirmed = parseBooleanLike(req.body.found_online_location_confirmed || req.body.location_confirmed, false);

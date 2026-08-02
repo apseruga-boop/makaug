@@ -10,6 +10,7 @@ const {
   sourcePostMeetsLaunchIntakeRule,
 } = require('../services/socialSearchSourcedListingsService');
 const {
+  extractArea,
   phoneFromText,
   priceTextFromText,
 } = require('../services/socialPlatformPostDiscoveryService');
@@ -151,6 +152,41 @@ test('unsupported currency metadata is rejected instead of silently becoming UGX
   assert.equal(metadata.price, null);
   assert.equal(metadata.price_currency, null);
   assert.equal(metadata.rejection_reason, 'unsupported_property_price_currency');
+});
+
+test('glued currency suffixes and abbreviated USD prices keep their full magnitude', () => {
+  assert.equal(priceTextFromText('Smart house in Kigo at 700mugx'), '700mugx');
+  assert.equal(propertyPriceMetadata(priceTextFromText('Smart house in Kigo at 700mugx')).price, 700000000);
+  assert.equal(priceTextFromText('Villa in Lubowa asking 2.2bnugx'), '2.2bnugx');
+  assert.equal(propertyPriceMetadata(priceTextFromText('Villa in Lubowa asking 2.2bnugx')).price, 2200000000);
+  assert.equal(priceTextFromText('House for sale in Bwebajja for $400k'), '$400k');
+  const usd = propertyPriceMetadata(priceTextFromText('House for sale in Bwebajja for $400k'));
+  assert.equal(usd.price_currency, 'USD');
+  assert.equal(usd.price_original, 400000);
+});
+
+test('specific Entebbe Road areas win over the generic road and city wording', () => {
+  assert.equal(extractArea('Smart house on Kigo Road near Entebbe'), 'Kigo');
+  assert.equal(extractArea('Apartment in Lubowa on Entebbe Road'), 'Lubowa');
+  assert.equal(extractArea('Home in Bwebajja along Entebbe Road'), 'Bwebajja');
+});
+
+test('a newly observed exact TikTok property is reviewable when the source date is unavailable', () => {
+  const listing = normalizeFoundOnlineSourcePost(sourcePost({
+    source_url: 'https://www.tiktok.com/@ugandaagent/video/7000000000000000005',
+    title: 'Smart house for sale on Kigo Road',
+    caption: 'Three-bedroom smart house for sale on Kigo Road, Wakiso at 700mugx. Call 0700000000.',
+    area: 'Kigo',
+    district: 'Wakiso',
+    price: '700mugx',
+    published_at: '',
+    ingested_at: '2026-08-02T08:00:00.000Z',
+  }));
+  const intake = sourcePostMeetsLaunchIntakeRule(listing, listing.sourceAgent);
+  assert.equal(listing.area, 'Kigo');
+  assert.equal(listing.price, 700000000);
+  assert.equal(intake.date_status, 'needs_source_platform_date_confirmation');
+  assert.equal(intake.eligible, true);
 });
 
 test('same-batch fingerprint registration and integrity marker are shipped', () => {

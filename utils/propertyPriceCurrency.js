@@ -30,11 +30,11 @@ function sourcePriceAmount(value) {
   if (!match) return null;
   const amount = Number(match[1]);
   if (!Number.isFinite(amount)) return null;
-  const multiplier = /\d(?:\.\d+)?\s*(b|bn|billions?)\b/.test(raw)
+  const multiplier = /\d(?:\.\d+)?\s*(b|bn|billions?)(?=\s*(?:ugx|ush|shs?)\b|\b|$)/.test(raw)
     ? 1000000000
-    : /\d(?:\.\d+)?\s*(m|mn|millions?)\b/.test(raw)
+    : /\d(?:\.\d+)?\s*(m|mn|millions?)(?=\s*(?:ugx|ush|shs?)\b|\b|$)/.test(raw)
       ? 1000000
-      : /\d(?:\.\d+)?\s*(k|thousands?)\b/.test(raw)
+      : /\d(?:\.\d+)?\s*(k|thousands?)(?=\s*(?:ugx|ush|shs?)\b|\b|$)/.test(raw)
         ? 1000
         : 1;
   return Math.round(amount * multiplier);
