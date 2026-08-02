@@ -102,8 +102,10 @@ async function run() {
   const staffRoutes = read('routes/staff.js');
   const service = read('services/socialSearchSourcedListingsService.js');
   const migration = read('db/migrations/089_tiktok_found_online_queue.sql');
+  const manualQueueMigration = read('db/migrations/107_tiktok_manual_found_online_queue_performance.sql');
   assert(app.includes('tiktok-queue-fix-20260719'), 'live bundle needs a queue-fix marker');
   assert(app.includes('tiktok-queue-visibility-20260719'), 'live bundle needs a queue-visibility marker');
+  assert(app.includes('tiktok-manual-review-ready-20260802'), 'live bundle needs a manual TikTok review-readiness marker');
   assert(app.includes('eligible (will enter review when queued)'), 'preview must not claim rows are already in review');
   assert(app.includes('View in Review → Found Online'), 'queue success must provide a direct review action');
   assert(app.includes('adminLoadFoundOnlineReviewQueue'), 'Found Online review must load lazily');
@@ -121,6 +123,8 @@ async function run() {
   assert(staffRoutes.includes('079_commercial_transaction_subtype.sql'), 'staff queue route must surface missing migration errors');
   assert(service.includes('FOUND_ONLINE_PERSISTENCE_CHECK_FAILED'), 'service must fail rather than report an unverified queue success');
   assert(migration.includes('idx_properties_found_online_review_queue'), 'Found Online review needs a targeted pagination index');
+  assert(manualQueueMigration.includes('idx_properties_tiktok_manual_found_online_review_order'), 'manual TikTok review needs an ordered Found Online index');
+  assert(manualQueueMigration.includes("COALESCE(status, '') IN"), 'manual TikTok queue index must match the route raw-status predicate');
 
   console.log('ok - TikTok queue persists eligible rows, reports proof, and lazy-loads Found Online review');
 }

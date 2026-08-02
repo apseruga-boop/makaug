@@ -4,6 +4,7 @@ const BrandConfig = Object.freeze({
   legalOrInternalName: "makaug",
   tagline: "Uganda Property"
 });
+const TIKTOK_MANUAL_REVIEW_READY_MARKER = "tiktok-manual-review-ready-20260802";
 const publicBrand = () => BrandConfig.productDisplayName;
 const normalizeType = (t) => {
   const value = String(t || "").toLowerCase().trim();
