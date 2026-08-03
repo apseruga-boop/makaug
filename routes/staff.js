@@ -51,6 +51,7 @@ const {
 const { sendSupportEmail } = require('../services/emailService');
 const { logEmailEvent } = require('../services/emailLogService');
 const { logNotification, notificationStatusFromDelivery } = require('../services/notificationLogService');
+const { hideReportedProperty } = require('../services/reportListingModerationService');
 
 const router = express.Router();
 
@@ -1035,27 +1036,13 @@ async function staffListReportRows({ status = '', search = '', limit = 20, offse
 async function staffHidePropertyForReport({ propertyId, reportId, note, actor }) {
   const id = cleanText(propertyId);
   if (!id) return null;
-  const updated = await staffQuery(
-    `UPDATE properties
-     SET
-       status = 'hidden',
-       moderation_stage = 'hidden',
-       moderation_reason = $3,
-       moderation_notes = CONCAT_WS(E'\n', NULLIF(moderation_notes, ''), $3),
-       extra_fields = COALESCE(extra_fields, '{}'::jsonb)
-         || jsonb_build_object(
-           'hidden_by_report_id', $1::text,
-           'hidden_by_report_at', NOW()::text,
-           'hidden_by_report_by', $4::text,
-           'hidden_by_report_note', $3::text
-         ),
-       updated_at = NOW()
-     WHERE id = $2
-     RETURNING id, title, status, updated_at`,
-    [reportId, id, note, actor || 'staff_user'],
-    { timeoutMs: STAFF_MODERATION_WRITE_TIMEOUT_MS }
-  );
-  return updated.rows[0] || null;
+  return hideReportedProperty({
+    query: (sql, params) => staffQuery(sql, params, { timeoutMs: STAFF_MODERATION_WRITE_TIMEOUT_MS }),
+    propertyId: id,
+    reportId,
+    note,
+    actorId: actor || 'staff_user'
+  });
 }
 
 async function staffNotifyReporterOutcome(row = {}, status = '', note = '') {
@@ -3070,12 +3057,6 @@ router.patch('/reports/:id/status', async (req, res, next) => {
     const actor = actorId(req) || 'staff_user';
     const requestedPropertyId = cleanText(req.body.property_id || req.body.linked_property_id);
     const propertyId = extractStaffReportPropertyId(requestedPropertyId) || current.linked_property_id;
-    const hiddenProperty = hideListing ? await staffHidePropertyForReport({
-      propertyId,
-      reportId: req.params.id,
-      note: resolutionNote,
-      actor
-    }) : null;
 
     let updated;
     try {
@@ -3108,6 +3089,13 @@ router.patch('/reports/:id/status', async (req, res, next) => {
         { timeoutMs: STAFF_MODERATION_WRITE_TIMEOUT_MS }
       );
     }
+
+    const hiddenProperty = hideListing ? await staffHidePropertyForReport({
+      propertyId,
+      reportId: req.params.id,
+      note: resolutionNote,
+      actor
+    }) : null;
 
     const row = normalizeStaffReportRow(updated.rows[0] || {});
     await Promise.allSettled([
