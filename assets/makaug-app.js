@@ -950,6 +950,7 @@ let adminPendingQueueFilter = "all";
 let adminPendingQueueTotals = { all: null, found_online: null };
 const ADMIN_PENDING_QUEUE_RENDER_STEP = 24;
 const ADMIN_REVIEW_QUEUE_PAGE_SIZE = 24;
+const ADMIN_SNAPSHOT_PANEL_TIMEOUT_MS = 8000;
 let adminPendingQueueVisibleLimit = ADMIN_PENDING_QUEUE_RENDER_STEP;
 let adminPendingQueueRemotePagination = null;
 let adminReviewEvidence = {};
@@ -15530,14 +15531,26 @@ function hydrateAdminAllListingsInBackground(headers) {
 }
 
 async function adminSafeSnapshotRequest(label, requestFn, fallback) {
+  let timeoutId = null;
   try {
-    return await requestFn();
+    return await Promise.race([
+      requestFn(),
+      new Promise((_, reject) => {
+        timeoutId = window.setTimeout(() => {
+          const error = new Error(`${label} timed out after ${Math.round(ADMIN_SNAPSHOT_PANEL_TIMEOUT_MS / 1000)} seconds`);
+          error.code = "ADMIN_SNAPSHOT_TIMEOUT";
+          reject(error);
+        }, ADMIN_SNAPSHOT_PANEL_TIMEOUT_MS);
+      })
+    ]);
   } catch (error) {
     if (Number(error?.status || 0) === 401) {
       adminLiveAuthFailure = error;
     }
     console.warn(`Admin dashboard ${label} unavailable`, error?.message || error);
     return adminUnavailableFallback(label, fallback, error);
+  } finally {
+    if (timeoutId) window.clearTimeout(timeoutId);
   }
 }
 
@@ -15620,8 +15633,8 @@ async function fetchRemoteAdminSnapshot(options = {}) {
     adminSafeSnapshotRequest("command centre", () => apiRequest("/api/admin/command-centre", { headers }), { data: {} }),
     adminSafeSnapshotRequest("recent activity", () => apiRequest("/api/admin/recent", { headers }), { data: {} }),
     shouldLoadReviewQueue ? adminSafeSnapshotRequest("review queue", () => fetchAdminPaginatedRows(reviewQueuePath, headers, { limit: ADMIN_REVIEW_QUEUE_PAGE_SIZE, maxPages: 1 }), []) : null,
-    shouldLoadLiveListings ? adminSafeSnapshotRequest("live listings", () => fetchAdminPaginatedRows("/api/admin/properties/live", headers, { maxPages: 10 }), []) : null,
-    shouldLoadActionedListings ? adminSafeSnapshotRequest("actioned listings", () => fetchAdminPaginatedRows("/api/admin/properties/actioned?include_total=0", headers, { maxPages: 3 }), []) : null,
+    shouldLoadLiveListings ? adminSafeSnapshotRequest("live listings", () => fetchAdminPaginatedRows("/api/admin/properties/live", headers, { limit: 100, maxPages: 1 }), []) : null,
+    shouldLoadActionedListings ? adminSafeSnapshotRequest("actioned listings", () => fetchAdminPaginatedRows("/api/admin/properties/actioned?include_total=0", headers, { limit: 100, maxPages: 1 }), []) : null,
     shouldLoadAccounts ? adminSafeSnapshotRequest("users", () => apiRequest(`/api/admin/users?${userParams.toString()}`, { headers }), { data: [] }) : null,
     shouldLoadAgents ? adminSafeSnapshotRequest("agents", () => apiRequest("/api/admin/agents?limit=100", { headers }), { data: [] }) : null,
     shouldLoadAccounts ? adminSafeSnapshotRequest("property requests", () => apiRequest(`/api/admin/property-requests?${propertyRequestParams.toString()}`, { headers }), { data: [] }) : null,

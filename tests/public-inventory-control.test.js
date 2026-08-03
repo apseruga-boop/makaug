@@ -91,7 +91,7 @@ test('admin live controls use paginated backend snapshots', () => {
   assert.match(appSource, /function adminAuthHeaders\(\) \{\s*const headers = \{\};[\s\S]*headers\["x-api-key"\] = adminApiKey;[\s\S]*headers\.Authorization = `Bearer \$\{authState\.token\}`;[\s\S]*return headers;/);
   assert.match(appSource, /async function adminSafeSnapshotRequest\(label, requestFn, fallback\)/);
   assert.match(appSource, /adminSafeSnapshotRequest\("review queue", \(\) => fetchAdminPaginatedRows\(reviewQueuePath, headers, \{ limit: ADMIN_REVIEW_QUEUE_PAGE_SIZE, maxPages: 1 \}\), \[\]\)/);
-  assert.match(appSource, /adminSafeSnapshotRequest\("actioned listings", \(\) => fetchAdminPaginatedRows\("\/api\/admin\/properties\/actioned\?include_total=0", headers, \{ maxPages: 3 \}\), \[\]\)/);
+  assert.match(appSource, /adminSafeSnapshotRequest\("actioned listings", \(\) => fetchAdminPaginatedRows\("\/api\/admin\/properties\/actioned\?include_total=0", headers, \{ limit: 100, maxPages: 1 \}\), \[\]\)/);
   assert.match(appSource, /adminSafeSnapshotRequest\("whatsapp insights"/);
   assert.match(appSource, /function adminUnavailableFallback\(label, fallback, error\)/);
   assert.match(appSource, /partialLiveData: unavailablePanels\.length > 0/);
@@ -103,7 +103,7 @@ test('admin live controls use paginated backend snapshots', () => {
   assert.match(htmlSource, /review-queue-list-count-parity-20260711/);
   assert.match(appSource, /fetchAdminPaginatedRows\("\/api\/properties\?status=all", headers, \{ limit: 100, maxPages: 1 \}\)/);
   assert.match(appSource, /if \(activeTab === "listings"\) hydrateAdminAllListingsInBackground\(headers\)/);
-  assert.match(appSource, /fetchAdminPaginatedRows\("\/api\/admin\/properties\/live", headers, \{ maxPages: 10 \}\)/);
+  assert.match(appSource, /fetchAdminPaginatedRows\("\/api\/admin\/properties\/live", headers, \{ limit: 100, maxPages: 1 \}\)/);
   assert.match(appSource, /Object\.defineProperties\(rows, \{/);
   assert.match(appSource, /adminSummary: \{ value: lastResponse\?\.summary \|\| firstResponse\?\.summary \|\| null \}/);
   assert.match(appSource, /const adminLiveRows = remoteSnap\?\.liveListings \|\| localSnap\.liveListings \|\| \[\]/);
