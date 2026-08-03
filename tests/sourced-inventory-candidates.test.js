@@ -1002,7 +1002,8 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
   assert(frontend.includes('ADMIN_YOUTUBE_SWEEP_WINDOW_START = "2026-01-01T00:00:00.000Z"'), 'King dashboard should sweep YouTube from January 2026 onward');
   assert(frontend.includes('getTikTokEmbedUrl'), 'public property detail should support TikTok video embeds');
   assert(frontend.includes('https://www.tiktok.com/embed/v2/'), 'TikTok source videos should render with TikTok embed URLs');
-  assert(frontend.includes('safeVideoIsTikTok'), 'TikTok videos should be labelled separately from YouTube videos');
+  assert(frontend.includes('getSourceVideoEmbedMeta'), 'property source videos should use the platform-aware embed metadata path');
+  assert(frontend.includes('platform: "TikTok"'), 'TikTok videos should be labelled separately from YouTube videos');
   assert(propertiesRoute.includes('tiktok_url: tiktokUrl || null'), 'public property API should expose exact TikTok source video URLs');
   assert(frontend.includes('Sweep X Posts'), 'King dashboard should expose X post sweep action');
   assert(frontend.includes('Student Housing Sweep'), 'King dashboard should expose a dedicated student housing sweep action');

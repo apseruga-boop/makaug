@@ -117,7 +117,7 @@ const AREA_HINTS = [
   'Komamboga', 'Kiwatule', 'Bukoto', 'Naguru', 'Kololo', 'Nakasero', 'Luzira',
   'Lubowa', 'Seguku', 'Kitende', 'Kajansi', 'Akright', 'Garuga', 'Kiwafu',
   'Munyonyo', 'Makindye', 'Kansanga', 'Mengo', 'Makerere', 'Kyambogo', 'MUBS',
-  'Namanve', 'Namasuba', 'Rahim Foods', 'Katosi', 'Mpunge', 'Mpungwe', 'Lake Victoria', 'Luweero', 'Masaka',
+  'Namanve', 'Namasuba', 'Rahim Foods', 'Katosi', 'Mpunge', 'Mpungwe', 'Luweero', 'Masaka',
   'Mbarara', 'Mbale', 'Gulu', 'Arua',
   'Bujjuko', 'Bujuuko', 'Namayumba', 'Kakiri', 'Masulita', 'Hoima Road',
   'Mityana Road', 'Entebbe Road', 'Jinja Road', 'Kigo', 'Kawuku', 'Kisubi',
@@ -3657,6 +3657,8 @@ function priceTextFromText(text = '') {
   if (gluedLocalMatch) return cleanText(gluedLocalMatch[0]);
   const usdMatch = raw.match(/(?:\$|US\$|USD)\s*\d[\d,.]*(?:\s*(?:bn|billion|billions|m|mn|million|millions|k|thousand|thousands))?(?:\/month| per month| monthly|\/mo)?/i);
   if (usdMatch) return cleanText(usdMatch[0]);
+  const contextualPlainAmount = raw.match(/\b(?:price|asking(?:\s+price)?|guide\s+price|at|only|going\s+for|selling\s+at|rent(?:ed)?\s+at)\s*(?:is|of|:|-)?\s*(?:UGX|USh|Shs?)?\s*(?:\d{1,3}(?:,\d{3})+|\d{5,})(?:\/month| per month| monthly)?/i);
+  if (contextualPlainAmount) return cleanText(contextualPlainAmount[0]);
   const patterns = [
     /\b(?:UGX|USh|Shs?)\s*\d[\d,.]*(?:\s*(?:bn|billion|billions|m|mn|million|millions|k|thousand|thousands))?(?:\/month| per month| monthly| kwa mwezi| za mwezi)?/i,
     /\b\d+(?:\.\d+)?\s*(?:bn|billion|billions|m|mn|million|millions|k|thousand|thousands)\b(?:\/month| per month| monthly)?/i,

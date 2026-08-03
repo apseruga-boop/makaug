@@ -1,12 +1,16 @@
 'use strict';
 
+const { sourcePriceAmount } = require('./propertyPriceCurrency');
+
 const FOREIGN_MARKET_SIGNALS = [
   { pattern: /\b(?:rwf|frw|rwandan francs?)\b/i, reason: 'foreign_currency_rwf' },
   { pattern: /\b(?:kes|kshs?|kenyan shillings?)\b/i, reason: 'foreign_currency_kes' },
   { pattern: /\b(?:tzs|tshs?|tanzanian shillings?)\b/i, reason: 'foreign_currency_tzs' },
   { pattern: /(?:₹|\binr\b|\bindian rupees?\b)/i, reason: 'foreign_currency_inr' },
   { pattern: /\b(?:lkr|sri lankan rupees?)\b/i, reason: 'foreign_currency_lkr' },
-  { pattern: /\b(?:rwanda|kigali|kenya|nairobi|mombasa|tanzania|dar es salaam|sri lanka|sinhala|india|kolkata|hyderabad|mumbai|delhi)\b/i, reason: 'foreign_market_location' },
+  { pattern: /(?:£|\bgbp\b|\bpounds?\s+sterling\b|\d\s*pcm\b)/i, reason: 'foreign_currency_gbp' },
+  { pattern: /(?:₦|\bngn\b|\bnaira\b)/i, reason: 'foreign_currency_ngn' },
+  { pattern: /\b(?:rwanda|kigali|kenya|nairobi|mombasa|tanzania|dar es salaam|sri lanka|sinhala|india|kolkata|kolhapur|hyderabad|mumbai|delhi|nigeria|abuja|lagos|memphis|ridgecrest|fort garland|little rock|united states|usa|united kingdom)\b/i, reason: 'foreign_market_location' },
   { pattern: /[\u0D80-\u0DFF\u0900-\u097F\u0B80-\u0BFF]/u, reason: 'foreign_market_script' },
 ];
 
@@ -14,6 +18,9 @@ const EXPLICIT_LISTING_INTENT_PATTERN = /\b(?:for sale|on sale|selling|for rent|
 const CONSTRUCTION_COST_PATTERN = /\b(?:build(?:ing)? costs?|cost to build|construction costs?|material costs?|cost breakdown|roofing materials?|bill of quantities|boq)\b/i;
 const FOREIGN_INTERNATIONAL_PHONE_PATTERN = /\+(?!256)\d{1,3}(?:[\s().-]*\d){7,14}/g;
 const UGANDA_PHONE_CANDIDATE_PATTERN = /(^|[^\d+])((?:\+?256[\s().-]*|0)7\d{2}[\s().-]*\d{3}[\s().-]*\d{3}|7\d{2}[\s().-]*\d{3}[\s().-]*\d{3})(?=$|[^\d])/g;
+const SOURCE_PRICE_EVIDENCE_PATTERN = /(?:\b(?:ugx|ush|shs?)\s*|(?:\$|us\$|usd)\s*)?\d[\d,.]*(?:\s*(?:bn|billion|billions|m|mn|million|millions|k|thousand|thousands))?(?:\s*(?:ugx|ush|shs?))?(?:\s*(?:\/\s*(?:month|mo)|per\s+month|monthly))?/gi;
+const SOURCE_PRICE_CONTEXT_PATTERN = /\b(?:price|asking|guide\s+price|at|only|going\s+for|selling\s+at|rent(?:ed)?\s+at)\s*(?:is|of|:|-)?\s*((?:ugx|ush|shs?)?\s*\d[\d,.]*(?:\s*(?:bn|billion|billions|m|mn|million|millions|k|thousand|thousands))?(?:\s*(?:ugx|ush|shs?))?)/gi;
+const SOURCE_PRICE_MAX_RELATIVE_DRIFT = 0.001;
 
 function compactText(value = '') {
   return String(value || '').replace(/\s+/g, ' ').trim();
@@ -90,6 +97,31 @@ function sourcePriceMatchesPhone(value, text = '') {
     || candidateDigits === `0${localPhone}`;
 }
 
+function sourcePriceEvidenceAmounts(text = '') {
+  const masked = maskPhonesForPriceExtraction(text);
+  const candidates = [];
+  for (const match of masked.matchAll(SOURCE_PRICE_EVIDENCE_PATTERN)) {
+    const token = compactText(match[0]);
+    if (!token || !/(?:ugx|ush|shs?|usd|us\$|\$|bn|billion|m(?:n|illion)?|k|thousand|\/\s*(?:month|mo)|per\s+month|monthly)/i.test(token)) continue;
+    const amount = sourcePriceAmount(token);
+    if (Number.isFinite(amount) && amount > 0) candidates.push(amount);
+  }
+  for (const match of masked.matchAll(SOURCE_PRICE_CONTEXT_PATTERN)) {
+    const amount = sourcePriceAmount(match[1]);
+    if (Number.isFinite(amount) && amount > 0) candidates.push(amount);
+  }
+  return [...new Set(candidates)];
+}
+
+function sourcePriceHasEvidence(value, text = '') {
+  const candidate = sourcePriceAmount(value);
+  if (!Number.isFinite(candidate) || candidate <= 0) return false;
+  return sourcePriceEvidenceAmounts(text).some((amount) => {
+    const drift = Math.abs(amount - candidate) / Math.max(amount, candidate);
+    return drift <= SOURCE_PRICE_MAX_RELATIVE_DRIFT;
+  });
+}
+
 function safeSourcePriceCandidate(value, text = '') {
   const sourceText = compactText(text);
   if (value == null || value === '') {
@@ -101,6 +133,17 @@ function safeSourcePriceCandidate(value, text = '') {
   if (CONSTRUCTION_COST_PATTERN.test(sourceText) && !EXPLICIT_LISTING_INTENT_PATTERN.test(sourceText)) {
     return { value: null, reason: 'construction_cost_is_not_listing_price' };
   }
+  const numericValue = sourcePriceAmount(value);
+  if (!Number.isFinite(numericValue) || numericValue <= 0) {
+    return { value: null, reason: 'invalid_source_price' };
+  }
+  const explicitUsdValue = /(?:\$|\b(?:usd|us\$)\b)/i.test(String(value));
+  if (numericValue < 10000 && !explicitUsdValue) {
+    return { value: null, reason: 'implausible_unit_count_is_not_price' };
+  }
+  if (!sourcePriceHasEvidence(value, sourceText)) {
+    return { value: null, reason: 'source_price_not_in_evidence' };
+  }
   return { value, reason: '' };
 }
 
@@ -109,6 +152,8 @@ module.exports = {
   maskPhonesForPriceExtraction,
   normalizeUgandanSourcePhone,
   safeSourcePriceCandidate,
+  sourcePriceEvidenceAmounts,
+  sourcePriceHasEvidence,
   sourcePriceMatchesPhone,
   ugandanPhoneFromSourceText,
 };

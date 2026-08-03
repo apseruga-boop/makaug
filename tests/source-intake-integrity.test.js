@@ -6,6 +6,7 @@ const path = require('node:path');
 const test = require('node:test');
 
 const {
+  buildSocialSearchListing,
   normalizeFoundOnlineSourcePost,
   sourcePostMeetsLaunchIntakeRule,
 } = require('../services/socialSearchSourcedListingsService');
@@ -195,4 +196,137 @@ test('same-batch fingerprint registration and integrity marker are shipped', () 
   assert.match(importer, /registerExistingFoundOnlineItem\(existing, item/);
   assert.match(importer, /registerExistingFoundOnlineItem\(previewCombined, item/);
   assert.match(html, /source-intake-integrity-20260725/);
+  assert.match(html, /k24-intake-integrity-20260803/);
+});
+
+test('spaced Uganda phone formats are masked and never become prices', () => {
+  const international = 'Apartment in Kira for rent at 900k. Call 256 702 968 650.';
+  const local = 'Apartment in Kira for rent at 900k. Call 0751 281954.';
+  assert.equal(phoneFromText(international), '+256702968650');
+  assert.equal(phoneFromText(local), '+256751281954');
+  assert.equal(priceTextFromText(international).toLowerCase(), '900k');
+
+  const listing = normalizeFoundOnlineSourcePost(sourcePost({
+    caption: international,
+    title: 'Apartment in Kira for rent',
+    listing_type: 'rent',
+    price: 256702968650,
+  }));
+  assert.equal(listing.price, null);
+  assert.equal(listing.sourcePriceRejectionReason, 'phone_number_is_not_price');
+});
+
+test('unit counts and prices absent from the source evidence are rejected', () => {
+  const count = normalizeFoundOnlineSourcePost(sourcePost({
+    caption: 'Block of 11 apartment units for sale in Kira.',
+    title: 'Block of apartment units for sale',
+    price: 11,
+  }));
+  assert.equal(count.price, null);
+  assert.equal(count.sourcePriceRejectionReason, 'implausible_unit_count_is_not_price');
+
+  const fabricated = normalizeFoundOnlineSourcePost(sourcePost({
+    caption: 'House for sale in Kira. Call for the price.',
+    price: 420000000,
+  }));
+  assert.equal(fabricated.price, null);
+  assert.equal(fabricated.sourcePriceRejectionReason, 'source_price_not_in_evidence');
+});
+
+test('clean caption prices parse and low-price dwelling captions normalize to monthly rent', () => {
+  const caption = 'One Bedroom Apartment at only 900k in Kireka Namugongo Road. Call 0751 281954.';
+  assert.equal(priceTextFromText(caption).toLowerCase(), '900k');
+  const normalized = normalizeFoundOnlineSourcePost(sourcePost({
+    title: 'One Bedroom Apartment at only 900k',
+    caption,
+    area: '',
+    district: '',
+    listing_type: 'sale',
+    price: 900000,
+  }));
+  const persisted = buildSocialSearchListing(normalized);
+  assert.equal(normalized.area, 'Kireka');
+  assert.equal(normalized.district, 'Wakiso');
+  assert.equal(normalized.listingType, 'rent');
+  assert.equal(normalized.price, 900000);
+  assert.equal(normalized.price_period, 'month');
+  assert.equal(persisted.listing_type, 'rent');
+  assert.equal(persisted.price_period, 'month');
+});
+
+test('ordinary rentals and house sales near universities do not become student listings', () => {
+  const rental = normalizeFoundOnlineSourcePost(sourcePost({
+    title: 'Single room for rent in Kireka',
+    caption: 'Single room for rent in Kireka at UGX 350,000 per month.',
+    area: 'Kireka',
+    district: 'Wakiso',
+    listing_type: 'rent',
+    price: 350000,
+  }));
+  assert.equal(buildSocialSearchListing(rental).listing_type, 'rent');
+
+  const sale = normalizeFoundOnlineSourcePost(sourcePost({
+    title: 'Four bedroom house for sale in Kyambogo',
+    caption: 'Four bedroom house for sale in Kyambogo at UGX 300M.',
+    area: 'Kyambogo',
+    district: 'Kampala',
+    listing_type: 'sale',
+    price: 300000000,
+    latitude: 0.3489,
+    longitude: 32.6301,
+  }));
+  assert.equal(buildSocialSearchListing(sale).listing_type, 'sale');
+});
+
+test('expanded foreign-market gate catches GBP, Nigeria, US and Kolhapur rows', () => {
+  const samples = [
+    'Flat to rent in London for £635 pcm.',
+    'House for sale in Abuja, Nigeria for NGN 90M.',
+    'Home for sale in Memphis, USA for $250k.',
+    '2 BHK apartment for sale in Kolhapur, India.',
+  ];
+  samples.forEach((caption, index) => {
+    const listing = normalizeFoundOnlineSourcePost(sourcePost({
+      source_url: `https://www.youtube.com/watch?v=foreign-${index}`,
+      title: caption,
+      caption,
+      area: 'Kampala',
+      district: 'Kampala',
+      price: 250000000,
+    }));
+    assert.equal(listing.countryGate.allowed, false, caption);
+    assert.equal(sourcePostMeetsLaunchIntakeRule(listing, listing.sourceAgent).eligible, false, caption);
+  });
+});
+
+test('politics, pageants and memes are rejected even when upstream metadata looks property-like', () => {
+  const listing = normalizeFoundOnlineSourcePost(sourcePost({
+    title: 'Miss Uganda pageant winner receives a three bedroom house',
+    caption: 'Miss Uganda pageant news in Kampala: winner receives a three bedroom house worth UGX 250M.',
+    area: 'Kampala',
+    district: 'Kampala',
+    price: 250000000,
+    listing_type: 'sale',
+  }));
+  const intake = sourcePostMeetsLaunchIntakeRule(listing, listing.sourceAgent);
+  assert.equal(intake.eligible, false);
+  assert.ok(intake.blocking_reasons.includes('not_a_listing'));
+});
+
+test('commercial source rows carry transaction and subtype without a staff pre-patch', () => {
+  const listing = normalizeFoundOnlineSourcePost(sourcePost({
+    title: 'Office to rent in Ntinda',
+    caption: 'Commercial office to rent in Ntinda at UGX 5M per month.',
+    area: 'Ntinda',
+    district: 'Kampala',
+    listing_type: 'commercial',
+    property_type: 'commercial',
+    price: 5000000,
+  }));
+  assert.equal(listing.listingType, 'commercial');
+  assert.equal(listing.transaction_type, 'rent');
+  assert.equal(listing.subtype, 'office');
+  const persisted = buildSocialSearchListing(listing);
+  assert.equal(persisted.transaction_type, 'rent');
+  assert.equal(persisted.property_type, 'office');
 });

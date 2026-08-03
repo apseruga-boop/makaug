@@ -3117,6 +3117,111 @@ router.patch('/reports/:id/status', async (req, res, next) => {
   }
 });
 
+router.get('/properties', async (req, res, next) => {
+  try {
+    const { page, limit, offset } = parsePagination(req.query);
+    const includeTotalParam = req.query?.include_total ?? req.query?.includeTotal;
+    const includeTotal = includeTotalParam == null ? true : boolLike(includeTotalParam);
+    const search = cleanText(req.query.search || req.query.q);
+    const listingType = cleanText(req.query.listing_type || req.query.type).toLowerCase();
+    const status = cleanText(req.query.status).toLowerCase();
+    const values = [];
+    const filters = [];
+
+    if (['pending', 'pending_review', 'review'].includes(status)) {
+      filters.push(activePendingReviewWhere('p'));
+    } else {
+      filters.push(staffVisiblePropertyWhere('p'));
+      if (status) {
+        const statusGroups = {
+          live: ['approved', 'live', 'published'],
+          approved: ['approved', 'live', 'published'],
+          hidden: ['hidden'],
+          sold: ['sold'],
+        };
+        const allowed = statusGroups[status] || (ACTIONABLE_PENDING_REVIEW_STATUSES.includes(status) ? [status] : []);
+        if (!allowed.length) {
+          return res.status(400).json({ ok: false, error: 'Unsupported property status filter' });
+        }
+        filters.push(`LOWER(COALESCE(p.status, '')) IN (${sqlList(allowed)})`);
+      }
+    }
+    if (listingType && LISTING_TYPES.includes(listingType)) {
+      values.push(listingType);
+      filters.push(`p.listing_type = $${values.length}`);
+    }
+    if (search) {
+      values.push(`%${search}%`);
+      const idx = values.length;
+      filters.push(`(
+        p.title ILIKE $${idx}
+        OR p.area ILIKE $${idx}
+        OR p.district ILIKE $${idx}
+        OR COALESCE(p.inquiry_reference, '') ILIKE $${idx}
+        OR COALESCE(p.lister_phone, '') ILIKE $${idx}
+      )`);
+    }
+
+    const where = `WHERE ${filters.join(' AND ')}`;
+    const rowLimit = limit + 1;
+    const rowsPromise = safeRowsResult(
+      `SELECT p.id, p.title, p.listing_type, p.property_type, p.district, p.area, p.address,
+              p.price, p.price_period, p.status, p.moderation_stage, p.moderation_reason,
+              p.created_at, p.updated_at, p.inquiry_reference, p.lister_name, p.lister_phone,
+              p.lister_email, p.source, p.listed_via, p.extra_fields,
+              COALESCE(p.extra_fields->>'source_url', p.extra_fields->>'source_post_url', p.extra_fields->>'tiktok_url', p.extra_fields->>'youtube_url', p.extra_fields->>'video_url') AS source_url
+       FROM properties p
+       ${where}
+       ORDER BY p.updated_at DESC NULLS LAST, p.created_at DESC NULLS LAST, p.id DESC
+       LIMIT $${values.length + 1}
+       OFFSET $${values.length + 2}`,
+      [...values, rowLimit, offset],
+      { timeoutMs: STAFF_REVIEW_QUEUE_QUERY_TIMEOUT_MS, label: 'staff_properties_list' }
+    );
+    const countPromise = includeTotal
+      ? staffQuery(
+        `SELECT COUNT(*)::int AS total FROM properties p ${where}`,
+        values,
+        { timeoutMs: STAFF_REVIEW_QUEUE_QUERY_TIMEOUT_MS }
+      ).then((result) => ({ ok: true, row: result.rows[0] || { total: 0 } }))
+        .catch((error) => ({ ok: false, error }))
+      : Promise.resolve({ ok: true, row: null });
+    const [rowsResult, countResult] = await Promise.all([rowsPromise, countPromise]);
+    if (!rowsResult.ok || !countResult.ok) {
+      const error = rowsResult.ok ? countResult.error : rowsResult.error;
+      return res.status(503).json({
+        ok: false,
+        error: 'staff_properties_query_failed',
+        details: [error?.code || error?.message || 'query_failed'],
+        meta: { query_ok: false, timed_out: error?.code === '57014', empty_is_authoritative: false }
+      });
+    }
+
+    const rows = rowsResult.rows.slice(0, limit);
+    const hasMore = rowsResult.rows.length > limit;
+    const total = includeTotal
+      ? safeNumber(countResult.row, 'total')
+      : offset + rows.length + (hasMore ? 1 : 0);
+    const pagination = toPagination(total, page, limit);
+    if (!includeTotal) pagination.totalPages = page + (hasMore ? 1 : 0);
+    return res.json({
+      ok: true,
+      data: rows,
+      pagination,
+      meta: {
+        status: status || 'all_staff_visible',
+        include_total: includeTotal,
+        has_more: hasMore,
+        total_exact: includeTotal,
+        query_ok: true,
+        returned_count: rows.length,
+      }
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.get('/properties/review-queue', async (req, res, next) => {
   try {
     const { page, limit, offset } = parsePagination(req.query);

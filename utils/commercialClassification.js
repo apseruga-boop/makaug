@@ -122,7 +122,7 @@ function normalizeCommercialPropertyType(value, options = {}) {
     commercial: 'other',
     commercial_space: 'other'
   };
-  if (aliases[explicit]) return aliases[explicit];
+  if (aliases[explicit] && !['commercial', 'commercial_space'].includes(explicit)) return aliases[explicit];
 
   const text = compactText(value, options.text, options.title, options.description).toLowerCase();
   if (/\b(commercial land|commercial plot|land|plots?|acre|acres|decimal|decimals)\b/.test(text)) return 'commercial_land';
