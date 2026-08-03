@@ -58,6 +58,11 @@ function run() {
 
   assert(staffRoutes.includes("router.get('/dashboard'"), 'staff dashboard API route should exist');
   assert(staffRoutes.includes("router.get('/properties/review-queue'"), 'staff review queue API route should exist instead of 404ing');
+  assert(staffRoutes.includes("router.get('/properties'"), 'staff must have a protected paginated property list route instead of falling back to public APIs');
+  assert(staffRoutes.includes("label: 'staff_properties_list'"), 'staff property list should use the bounded indexed query path');
+  assert(adminRoutes.includes('loadAdminCoreSummarySnapshot'), 'admin summary should consolidate core counts onto one bounded DB snapshot');
+  assert(adminRoutes.includes('loadAdminEngagementSummarySnapshot'), 'admin summary should consolidate engagement totals and 48-hour counts');
+  assert(adminRoutes.includes('const fallbackReasons = [properties, coreSnapshot, engagementSnapshot]'), 'admin summary should preserve explicit partial diagnostics for consolidated snapshots');
   assert(staffRoutes.includes("router.post('/properties/bulk-review'"), 'staff bulk review API route should exist for high-volume moderation');
   assert(staffRoutes.includes("router.post('/properties/bulk-reject'"), 'staff bulk reject API route should exist for clear-junk suppression');
   assert(staffRoutes.includes("router.patch('/profile'"), 'staff profile/settings save API should exist');

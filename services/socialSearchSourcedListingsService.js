@@ -30,7 +30,8 @@ const {
 const { listingPriceQuality } = require('../utils/listingPriceQuality');
 const {
   configuredUsdToUgxRate,
-  propertyPriceMetadata
+  propertyPriceMetadata,
+  sourcePriceAmount,
 } = require('../utils/propertyPriceCurrency');
 const {
   foreignSourceMarketStatus,
@@ -53,8 +54,7 @@ const SOCIAL_SEARCH_ADDED_TO_MAKAUG_AT = '2026-05-20T00:00:00.000Z';
 const PRICE_UPON_APPLICATION_LABEL = 'Price upon application';
 const USD_TO_UGX_GUIDE_RATE = configuredUsdToUgxRate();
 const ALLOWED_SOCIAL_SOURCE_PLATFORMS = ['youtube', 'tiktok', 'instagram', 'facebook', 'x', 'twitter'];
-const STUDENT_SOURCE_LISTING_PATTERN = /\b(?:students?|hostel|campus|self[-\s]*contained|single\s+room|double\s+room|bedsitter|bed\s*sitter|roommate|per\s+semester|non[-\s]*residential|residential\s+hostel|rooms?\s+near\s+campus)\b/i;
-const STUDENT_RENTISH_SOURCE_PATTERN = /\b(?:rent|rental|to\s+let|room|hostel|bedsitter|bed\s*sitter|self[-\s]*contained|per\s+semester|students?|campus)\b/i;
+const STUDENT_SOURCE_LISTING_PATTERN = /\b(?:students?|student\s+accommodation|hostel|campus|university|college|per\s+semester|residential\s+hostel|rooms?\s+near\s+(?:campus|university|college)|near\s+(?:makerere|kyambogo|mubs|ucu|must|nkumba))\b/i;
 const STUDENT_NEAR_CAMPUS_RADIUS_KM = 2;
 const STUDENT_CAMPUS_COORDINATES = [
   { name: 'Makerere University', lat: 0.3356, lng: 32.5686 },
@@ -87,6 +87,7 @@ const SOCIAL_AREA_PIN_OVERRIDES = [
   { name: 'Kira', district: 'Wakiso', lat: 0.3978, lng: 32.6414, aliases: ['Kira', 'Kira Town'] },
   { name: 'Kira-Mulawa', district: 'Wakiso', lat: 0.412, lng: 32.65, aliases: ['Kira-Mulawa', 'Kira Mulawa', 'Mulawa'] },
   { name: 'Kira-Nsasa', district: 'Wakiso', lat: 0.428, lng: 32.665, aliases: ['Kira-Nsasa', 'Kira Nsasa', 'Nsasa'] },
+  { name: 'Kireka', district: 'Wakiso', lat: 0.347, lng: 32.649, aliases: ['Kireka', 'Kireka Namugongo Road', 'Kireka-Namugongo Road'] },
   { name: 'Katosi', district: 'Mukono', lat: 0.181, lng: 32.797, aliases: ['Katosi', 'Mpunge', 'Mpungwe', 'Katosi Mpunge'] },
   { name: 'Kololo', district: 'Kampala', lat: 0.356, lng: 32.612, aliases: ['Kololo'] }
 ];
@@ -669,6 +670,8 @@ function sourceVisualTextForRawPost(raw = {}) {
 }
 
 function sourceTextForRawPost(raw = {}) {
+  const explicitPriceText = [raw.price_text, raw.guide_price, raw.asking_price]
+    .filter((value) => typeof value === 'string' && /[^\d\s.,]/.test(value));
   return [
     raw.title,
     raw.source_title,
@@ -677,6 +680,7 @@ function sourceTextForRawPost(raw = {}) {
     raw.summary,
     raw.raw_text,
     raw.source_text,
+    ...explicitPriceText,
     sourceVisualTextForRawPost(raw),
     raw.comments,
     raw.comment,
@@ -1690,9 +1694,9 @@ function isStudentSourceListing(item = {}) {
 
 function nearestUniversityForSourceItem(item = {}) {
   const extra = item.extra_fields && typeof item.extra_fields === 'object' ? item.extra_fields : {};
+  if (!isStudentSourceListing(item) && !inferNearestUniversityFromListing(item)) return '';
   const campusByCoords = nearestCampusByCoordinates(item);
   if (campusByCoords) return campusByCoords.name;
-  if (!isStudentSourceListing(item) && !inferNearestUniversityFromListing(item)) return '';
   return normalizeUniversityName(
     item.nearest_university
     || item.nearestUniversity
@@ -1956,26 +1960,12 @@ function buildSocialSearchListing(item, agentId = null) {
   const agent = sourceAgentForItem(item);
   const autoLive = sourcePostAutoLiveStatusFor(item, agent);
   const originalListingType = item.listingType || 'sale';
-  const studentText = [
-    item.title,
-    item.description,
-    item.caption,
-    item.sourceTitle,
-    item.source_title,
-    item.sourceText,
-    item.source_text,
-    item.area,
-    item.address,
-  ].map((value) => String(value || '')).join(' ');
   const explicitlyStudent = isStudentSourceListing({ ...item, listingType: originalListingType });
-  const rentishNearCampus = /^(rent|rental|students|student)$/i.test(String(originalListingType || ''))
-    || STUDENT_RENTISH_SOURCE_PATTERN.test(studentText);
-  const campusByCoords = (explicitlyStudent || rentishNearCampus) ? nearestCampusByCoordinates(item) : null;
-  const nearestUniversity = campusByCoords?.name
-    || ((explicitlyStudent || rentishNearCampus)
-      ? nearestUniversityForSourceItem({ ...item, listingType: originalListingType })
-      : '');
-  const studentListing = explicitlyStudent || Boolean(nearestUniversity && rentishNearCampus);
+  const campusByCoords = explicitlyStudent ? nearestCampusByCoordinates(item) : null;
+  const nearestUniversity = explicitlyStudent
+    ? (campusByCoords?.name || nearestUniversityForSourceItem({ ...item, listingType: originalListingType }))
+    : '';
+  const studentListing = explicitlyStudent;
   const listingType = studentListing ? 'students' : originalListingType;
   const pricePeriod = normalizeListingPricePeriod(item.price_period || item.pricePeriod, {
     listingType,
@@ -2384,7 +2374,7 @@ function publicEmailFromText(text = '') {
   return match ? match[0] : '';
 }
 
-function normalizeFoundOnlineListingType(value = '') {
+function normalizeFoundOnlineListingType(value = '', options = {}) {
   const raw = String(value || '').toLowerCase();
   const hasDwelling = /\b(apartment|flat|house|home|villa|mansion|duplex|bungalow|bedroom|bedrooms|beds?|living room|sitting room)\b/.test(raw);
   if (/\b(rental|income|investment)\s+(property|building|block)\s+(?:available\s+)?for sale\b/.test(raw)) return 'sale';
@@ -2397,6 +2387,8 @@ function normalizeFoundOnlineListingType(value = '') {
   if (raw.includes('rent') || raw.includes('rental') || raw.includes('let')) return 'rent';
   if (hasDwelling && (raw.includes('sale') || raw.includes('selling') || raw.includes('buy'))) return 'sale';
   if ((raw.includes('land') || raw.includes('plot') || raw.includes('acre') || raw.includes('decimal') || raw.includes('mailo')) && !hasDwelling) return 'land';
+  const sourceAmount = sourcePriceAmount(options.price);
+  if (hasDwelling && Number.isFinite(sourceAmount) && sourceAmount >= 10000 && sourceAmount <= 15000000) return 'rent';
   return 'sale';
 }
 
@@ -2445,12 +2437,15 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
     : Boolean(canonicalLocation);
   const area = canonicalLocation?.name || '';
   const address = String(raw.address || raw.location_label || raw.location || (area && district ? `${area}, ${district}` : area || district)).trim();
+  const unsafeSourcePrice = raw.price ?? raw.guide_price ?? raw.price_text ?? raw.asking_price;
   const rawListingType = normalizeFoundOnlineListingType(
-    raw.listing_type || raw.listingType || raw.property_type || raw.category || raw.title || raw.description
+    raw.listing_type || raw.listingType || raw.property_type || raw.category || raw.title || raw.description,
+    { price: unsafeSourcePrice }
   );
   const sourceHasExplicitTransaction = /\b(for sale|on sale|available for sale|for rent|to rent|to let|for lease)\b/i.test(sourceText);
-  const listingType = sourceHasExplicitTransaction
-    ? normalizeFoundOnlineListingType(sourceText)
+  const sourceHasPropertyCategorySignal = /\b(?:apartment|flat|house|home|villa|mansion|duplex|bungalow|bedroom|beds?|land|plot|acre|decimal|hostel|student|campus|commercial|office|shop|retail|warehouse|factory|showroom)\b/i.test(sourceText);
+  const listingType = (sourceHasExplicitTransaction || sourceHasPropertyCategorySignal)
+    ? normalizeFoundOnlineListingType(sourceText, { price: unsafeSourcePrice })
     : rawListingType;
   const title = String(raw.title || raw.source_title || raw.caption || `${listingType === 'land' ? 'Land' : 'Property'} in ${area}`).trim();
   const baseDescription = compactText(raw.description || raw.caption || raw.summary || title);
@@ -2475,7 +2470,7 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
       description: `${description} ${sourceText}`
     })
     : (raw.subtype || raw.property_type || null);
-  const nearestUniversity = nearestUniversityForSourceItem({
+  const normalizedStudentSource = isStudentSourceListing({
     ...raw,
     listingType,
     title,
@@ -2487,6 +2482,20 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
     district,
     address
   });
+  const nearestUniversity = normalizedStudentSource
+    ? nearestUniversityForSourceItem({
+      ...raw,
+      listingType,
+      title,
+      sourceTitle: raw.source_title || raw.caption || title,
+      description,
+      sourceText,
+      sourceVisualText,
+      area,
+      district,
+      address
+    })
+    : '';
   const youtubeId = raw.youtube_id || raw.youtubeId || raw.youtube_video_id || raw.youtubeVideoId || youtubeIdFromUrl(sourceUrl);
   const countryGate = foreignSourceMarketStatus([
     sourceText,
@@ -2496,7 +2505,6 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
     raw.country,
     raw.market,
   ].filter(Boolean).join(' '));
-  const unsafeSourcePrice = raw.price ?? raw.guide_price ?? raw.price_text ?? raw.asking_price;
   const safePrice = countryGate.allowed
     ? safeSourcePriceCandidate(unsafeSourcePrice, sourceText)
     : { value: null, reason: countryGate.reason };

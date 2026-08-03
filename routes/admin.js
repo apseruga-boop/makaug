@@ -2047,6 +2047,59 @@ async function safePublicInventorySummaryForAdmin() {
   }
 }
 
+async function loadAdminCoreSummarySnapshot() {
+  return adminSummaryOne(
+    `SELECT
+       (SELECT COUNT(*)::int FROM agents) AS agents_total,
+       (SELECT COUNT(*)::int FROM agents WHERE status = 'pending') AS agents_pending,
+       (SELECT COUNT(*)::int FROM agents WHERE status = 'approved') AS agents_approved,
+       (SELECT COUNT(*)::int FROM report_listings) AS reports_total,
+       (SELECT COUNT(*)::int FROM report_listings WHERE status = 'open') AS reports_open,
+       (SELECT COUNT(*)::int FROM property_requests) AS property_requests_total,
+       (SELECT COUNT(*)::int FROM property_inquiries) AS inquiries_total,
+       (SELECT COUNT(*)::int FROM users) AS users_total,
+       (SELECT COUNT(*)::int FROM users WHERE status = 'active') AS users_active,
+       (SELECT COUNT(*)::int FROM users WHERE status = 'suspended') AS users_suspended,
+       (SELECT COUNT(*)::int FROM users WHERE phone_verified = TRUE) AS users_phone_verified,
+       (SELECT COUNT(*)::int FROM users WHERE weekly_tips_opt_in = TRUE) AS users_weekly_tips_opt_in,
+       (SELECT COUNT(*)::int FROM users WHERE marketing_opt_in = TRUE) AS users_marketing_opt_in,
+       (SELECT COUNT(*)::int FROM users WHERE oauth_provider IS NOT NULL) AS users_social_linked`,
+    [],
+    {},
+    { timeoutMs: 1200 }
+  );
+}
+
+async function loadAdminEngagementSummarySnapshot() {
+  return adminSummaryOne(
+    `SELECT
+       COUNT(*) FILTER (WHERE event_name IN ('property_open','property_view'))::int AS property_views,
+       COUNT(*) FILTER (WHERE event_name IN ('property_save','property_saved','save_property'))::int AS property_saves,
+       COUNT(*) FILTER (WHERE event_name IN ('broker_profile_open','broker_profile_view'))::int AS broker_profile_views,
+       COUNT(*) FILTER (WHERE event_name IN ('property_inquiry_submit','property_inquiry'))::int AS property_inquiries,
+       COUNT(*) FILTER (WHERE event_name IN ('property_directions_open','directions_open','route_time_view'))::int AS route_events,
+       COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '2 days' AND event_name IN ('property_open','property_view'))::int AS property_views_48h,
+       COUNT(DISTINCT client_id) FILTER (WHERE created_at >= NOW() - INTERVAL '2 days' AND event_name IN ('property_open','property_view','page_view','property_search'))::int AS unique_visitors_48h,
+       COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '2 days' AND event_name IN ('property_save','property_saved','save_property'))::int AS property_saves_48h,
+       COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '2 days' AND event_name IN ('property_inquiry_submit','property_inquiry'))::int AS property_inquiries_48h,
+       COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '2 days' AND event_name IN ('property_directions_open','directions_open','route_time_view'))::int AS route_events_48h
+     FROM analytics_events`,
+    [],
+    {},
+    { timeoutMs: 1200 }
+  );
+}
+
+function adminSummarySlice(snapshot = {}, fields = {}) {
+  if (snapshot?._fallback_reason) {
+    return Object.fromEntries([
+      ...Object.keys(fields).map((key) => [key, null]),
+      ['_fallback_reason', snapshot._fallback_reason]
+    ]);
+  }
+  return Object.fromEntries(Object.entries(fields).map(([key, sourceKey]) => [key, Number(snapshot[sourceKey] || 0)]));
+}
+
 async function loadAdminPropertiesSummaryFast() {
   const [
     publicInventory,
@@ -3180,77 +3233,14 @@ router.get('/summary', async (req, res, next) => {
     const payload = await adminCachedPayload('admin-summary-v5-properties-list-count-fast', ADMIN_DASHBOARD_CACHE_TTL_MS, async () => {
       const [
         properties,
-        agents,
-        reports,
-        requests,
-        inquiries,
-        users,
-        engagement,
-        engagement48h,
+        coreSnapshot,
+        engagementSnapshot,
         topAreas48h,
         topListingTypes48h
       ] = await Promise.all([
         loadAdminPropertiesSummaryFast(),
-        adminSummaryOne(
-          `SELECT
-            COUNT(*)::int AS total,
-            COUNT(*) FILTER (WHERE status = 'pending')::int AS pending,
-            COUNT(*) FILTER (WHERE status = 'approved')::int AS approved
-           FROM agents`,
-          [],
-          { total: 0, pending: 0, approved: 0 },
-          { timeoutMs: 650 }
-        ),
-        adminSummaryOne(
-          `SELECT
-            COUNT(*)::int AS total,
-            COUNT(*) FILTER (WHERE status = 'open')::int AS open
-           FROM report_listings`,
-          [],
-          { total: 0, open: 0 },
-          { timeoutMs: 650 }
-        ),
-        adminSummaryOne('SELECT COUNT(*)::int AS total FROM property_requests', [], { total: 0 }, { timeoutMs: 650 }),
-        adminSummaryOne('SELECT COUNT(*)::int AS total FROM property_inquiries', [], { total: 0 }, { timeoutMs: 650 }),
-        adminSummaryOne(
-          `SELECT
-            COUNT(*)::int AS total,
-            COUNT(*) FILTER (WHERE status = 'active')::int AS active,
-            COUNT(*) FILTER (WHERE status = 'suspended')::int AS suspended,
-            COUNT(*) FILTER (WHERE phone_verified = TRUE)::int AS phone_verified,
-            COUNT(*) FILTER (WHERE weekly_tips_opt_in = TRUE)::int AS weekly_tips_opt_in,
-            COUNT(*) FILTER (WHERE marketing_opt_in = TRUE)::int AS marketing_opt_in,
-            COUNT(*) FILTER (WHERE oauth_provider IS NOT NULL)::int AS social_linked
-           FROM users`,
-          [],
-          { total: 0, active: 0, suspended: 0, phone_verified: 0, weekly_tips_opt_in: 0, marketing_opt_in: 0, social_linked: 0 },
-          { timeoutMs: 650 }
-        ),
-        adminSummaryOne(
-          `SELECT
-            COUNT(*) FILTER (WHERE event_name IN ('property_open','property_view'))::int AS property_views,
-            COUNT(*) FILTER (WHERE event_name IN ('property_save','property_saved','save_property'))::int AS property_saves,
-            COUNT(*) FILTER (WHERE event_name IN ('broker_profile_open','broker_profile_view'))::int AS broker_profile_views,
-            COUNT(*) FILTER (WHERE event_name IN ('property_inquiry_submit','property_inquiry'))::int AS property_inquiries,
-            COUNT(*) FILTER (WHERE event_name IN ('property_directions_open','directions_open','route_time_view'))::int AS route_events
-           FROM analytics_events`,
-          [],
-          { property_views: 0, property_saves: 0, broker_profile_views: 0, property_inquiries: 0, route_events: 0 },
-          { timeoutMs: 650 }
-        ),
-        adminSummaryOne(
-          `SELECT
-            COUNT(*) FILTER (WHERE event_name IN ('property_open','property_view'))::int AS property_views,
-            COUNT(DISTINCT client_id) FILTER (WHERE event_name IN ('property_open','property_view','page_view','property_search'))::int AS unique_visitors,
-            COUNT(*) FILTER (WHERE event_name IN ('property_save','property_saved','save_property'))::int AS property_saves,
-            COUNT(*) FILTER (WHERE event_name IN ('property_inquiry_submit','property_inquiry'))::int AS property_inquiries,
-            COUNT(*) FILTER (WHERE event_name IN ('property_directions_open','directions_open','route_time_view'))::int AS route_events
-           FROM analytics_events
-           WHERE created_at >= NOW() - INTERVAL '2 days'`,
-          [],
-          { property_views: 0, unique_visitors: 0, property_saves: 0, property_inquiries: 0, route_events: 0 },
-          { timeoutMs: 650 }
-        ),
+        loadAdminCoreSummarySnapshot(),
+        loadAdminEngagementSummarySnapshot(),
         adminSummaryRows(
           `SELECT
             COALESCE(NULLIF(payload->>'area', ''), NULLIF(payload->>'district', ''), 'Unknown area') AS area,
@@ -3279,7 +3269,38 @@ router.get('/summary', async (req, res, next) => {
         )
       ]);
 
-      const fallbackReasons = [properties, agents, reports, requests, inquiries, users, engagement, engagement48h]
+      const agents = adminSummarySlice(coreSnapshot, {
+        total: 'agents_total',
+        pending: 'agents_pending',
+        approved: 'agents_approved'
+      });
+      const reports = adminSummarySlice(coreSnapshot, { total: 'reports_total', open: 'reports_open' });
+      const requests = adminSummarySlice(coreSnapshot, { total: 'property_requests_total' });
+      const inquiries = adminSummarySlice(coreSnapshot, { total: 'inquiries_total' });
+      const users = adminSummarySlice(coreSnapshot, {
+        total: 'users_total',
+        active: 'users_active',
+        suspended: 'users_suspended',
+        phone_verified: 'users_phone_verified',
+        weekly_tips_opt_in: 'users_weekly_tips_opt_in',
+        marketing_opt_in: 'users_marketing_opt_in',
+        social_linked: 'users_social_linked'
+      });
+      const engagement = adminSummarySlice(engagementSnapshot, {
+        property_views: 'property_views',
+        property_saves: 'property_saves',
+        broker_profile_views: 'broker_profile_views',
+        property_inquiries: 'property_inquiries',
+        route_events: 'route_events'
+      });
+      const engagement48h = adminSummarySlice(engagementSnapshot, {
+        property_views: 'property_views_48h',
+        unique_visitors: 'unique_visitors_48h',
+        property_saves: 'property_saves_48h',
+        property_inquiries: 'property_inquiries_48h',
+        route_events: 'route_events_48h'
+      });
+      const fallbackReasons = [properties, coreSnapshot, engagementSnapshot]
         .map((row) => row?._fallback_reason)
         .filter(Boolean);
       return rememberAdminSummaryLastKnownGood({

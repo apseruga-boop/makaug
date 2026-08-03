@@ -51,6 +51,7 @@ const DETAILED_LOCATIONS = [
   { name: 'Seguku', district: 'Wakiso', lat: 0.247, lng: 32.555, aliases: ['Seguku', 'Sseguku'] },
   { name: 'Kira', district: 'Wakiso', level: 'city', lat: 0.3978, lng: 32.6414, aliases: ['Kira', 'Kiira', 'Kira Town', 'Kiira Town', 'Kira Municipality'] },
   { name: 'Namugongo', district: 'Wakiso', lat: 0.363, lng: 32.636 },
+  { name: 'Kireka', district: 'Wakiso', lat: 0.347, lng: 32.649, aliases: ['Kireka', 'Kireka Namugongo Road', 'Kireka-Namugongo Road'] },
   { name: 'Bweyogerere', district: 'Wakiso', lat: 0.351, lng: 32.676 },
   { name: 'Kyaliwajjala', district: 'Wakiso', lat: 0.377, lng: 32.639 },
   { name: 'Naalya', district: 'Wakiso', lat: 0.366, lng: 32.636, aliases: ['Naalya', 'Naalya Estate'] },

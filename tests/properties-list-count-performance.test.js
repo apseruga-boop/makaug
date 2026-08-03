@@ -67,7 +67,7 @@ assert(
   'admin summary queries should bound database client acquisition, not only statement execution'
 );
 assert(
-  adminRoute.includes("adminSummaryOne") && adminRoute.includes("adminSummaryRows") && adminRoute.includes("adminSummaryCount"),
+  adminRoute.includes("adminSummaryOne") && adminRoute.includes("adminSummaryRows") && adminRoute.includes("adminSummarySlice"),
   'admin summary widgets should use non-fatal wrappers so one slow widget cannot blank the dashboard'
 );
 assert(
