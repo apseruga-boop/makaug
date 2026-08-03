@@ -14530,19 +14530,23 @@ function buildAdminAiSnapshot(remoteSnap, localSnap, sourceLabel = "") {
   const users = summary?.users || {};
   const engagement = summary?.engagement || {};
   const localSummary = localSnap?.summary || {};
+  const liveMetric = (value, localValue = 0) => {
+    const selected = remoteSnap ? value : localValue;
+    return selected == null ? "—" : Number(selected);
+  };
   const topAreas = Array.isArray(insights.top_areas) && insights.top_areas.length
     ? insights.top_areas
-    : buildLocalAdminAreaInsights(localSnap?.allListings || []);
+    : (remoteSnap ? [] : buildLocalAdminAreaInsights(localSnap?.allListings || []));
   const topListingTypes = Array.isArray(insights.top_listing_types) ? insights.top_listing_types : [];
   return {
     source: sourceLabel || "Dashboard data",
-    views48h: Number(insights.last_48h?.property_views ?? 0),
-    visitors48h: Number(insights.last_48h?.unique_visitors ?? 0),
-    routeEvents48h: Number(insights.last_48h?.route_events ?? 0),
-    inquiries48h: Number(insights.last_48h?.property_inquiries ?? 0),
-    totalViews: Number(engagement.property_views ?? localSummary.totalViews ?? 0),
-    totalSaves: Number(engagement.property_saves ?? localSummary.totalSaves ?? 0),
-    weeklyTips: Number(users.weekly_tips_opt_in ?? (localSnap?.recentUsers || []).filter((u) => u.weekly_tips_opt_in !== false).length ?? 0),
+    views48h: liveMetric(insights.last_48h?.property_views),
+    visitors48h: liveMetric(insights.last_48h?.unique_visitors),
+    routeEvents48h: liveMetric(insights.last_48h?.route_events),
+    inquiries48h: liveMetric(insights.last_48h?.property_inquiries),
+    totalViews: liveMetric(engagement.property_views, localSummary.totalViews),
+    totalSaves: liveMetric(engagement.property_saves, localSummary.totalSaves),
+    weeklyTips: liveMetric(users.weekly_tips_opt_in, (localSnap?.recentUsers || []).filter((u) => u.weekly_tips_opt_in !== false).length),
     totalUsers: Number(users.total ?? localSummary.totalUsers ?? 0),
     pendingListings: Number(commandMetrics.pending_listings ?? summary?.properties?.pending ?? localSummary.pendingListings ?? 0),
     approvedListings: adminPreferNonZeroMetric(commandMetrics.live_listings, summary?.properties?.public_live ?? summary?.properties?.approved ?? localSummary.approvedListings ?? 0),

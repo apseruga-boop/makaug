@@ -73,6 +73,9 @@ test('K25 moderation queues recover without poisoned cache or catalogue flooding
   assert.match(app, /fetchAdminPaginatedRows\("\/api\/admin\/properties\/live", headers, \{ limit: 100, maxPages: 1 \}\)/);
   assert.match(app, /fetchAdminPaginatedRows\("\/api\/admin\/properties\/actioned\?include_total=0", headers, \{ limit: 100, maxPages: 1 \}\)/);
   assert.match(app, /remoteValue == null \? "—" : remoteValue/);
+  assert.match(app, /const liveMetric = \(value, localValue = 0\) => \{/);
+  assert.match(app, /return selected == null \? "—" : Number\(selected\)/);
+  assert.match(app, /remoteSnap \? \[\] : buildLocalAdminAreaInsights/);
 
   assert.match(migration, /idx_properties_staff_visible_order_v2/);
   assert.match(migration, /updated_at DESC NULLS LAST/);
