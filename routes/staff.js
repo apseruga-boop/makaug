@@ -1375,7 +1375,13 @@ async function dashboardPanelsPayload(req) {
   }
   const promise = buildDashboardPanelsPayload(req)
     .then((payload) => {
-      staffDashboardPanelsCache.set(cacheKey, { at: Date.now(), payload: cloneDashboardPayload(payload) });
+      const queryOk = payload?.review_queue_meta?.query_ok === true
+        && payload?.broker_review_queue_meta?.query_ok === true;
+      if (queryOk) {
+        staffDashboardPanelsCache.set(cacheKey, { at: Date.now(), payload: cloneDashboardPayload(payload) });
+      } else {
+        staffDashboardPanelsCache.delete(cacheKey);
+      }
       return payload;
     })
     .catch((error) => {
@@ -1384,9 +1390,15 @@ async function dashboardPanelsPayload(req) {
     });
   staffDashboardPanelsCache.set(cacheKey, { at: now, promise });
   const payload = await promise;
+  const queryOk = payload?.review_queue_meta?.query_ok === true
+    && payload?.broker_review_queue_meta?.query_ok === true;
   return {
     ...payload,
-    cache: { status: 'miss', age_ms: 0, ttl_ms: STAFF_DASHBOARD_PANEL_CACHE_TTL_MS }
+    cache: {
+      status: queryOk ? 'miss' : 'miss_degraded_not_cached',
+      age_ms: 0,
+      ttl_ms: queryOk ? STAFF_DASHBOARD_PANEL_CACHE_TTL_MS : 0
+    }
   };
 }
 
@@ -3121,7 +3133,7 @@ router.get('/properties', async (req, res, next) => {
   try {
     const { page, limit, offset } = parsePagination(req.query);
     const includeTotalParam = req.query?.include_total ?? req.query?.includeTotal;
-    const includeTotal = includeTotalParam == null ? true : boolLike(includeTotalParam);
+    const includeTotal = includeTotalParam == null ? false : boolLike(includeTotalParam);
     const search = cleanText(req.query.search || req.query.q);
     const listingType = cleanText(req.query.listing_type || req.query.type).toLowerCase();
     const status = cleanText(req.query.status).toLowerCase();
@@ -3129,10 +3141,10 @@ router.get('/properties', async (req, res, next) => {
     const filters = [];
 
     if (['pending', 'pending_review', 'review'].includes(status)) {
-      filters.push(activePendingReviewWhere('p'));
+      filters.push(actionablePendingReviewWhere('p'));
     } else {
       filters.push(staffVisiblePropertyWhere('p'));
-      if (status) {
+      if (status && status !== 'all') {
         const statusGroups = {
           live: ['approved', 'live', 'published'],
           approved: ['approved', 'live', 'published'],
