@@ -12727,15 +12727,46 @@ async function hydrateStaffDashboardPanels(endpoint = "/api/staff/dashboard?pane
     );
     const sameUser = staffDashboardRequestMatchesUser(userIdentityAtStart);
     if (!sameUser || seq !== staffDashboardPanelHydrationSeq) return;
-    applyStaffDashboardData(mergeStaffDashboardPanelData(staffDashboardData, res?.data || {}), authState?.user || {});
+    const mergedData = mergeStaffDashboardPanelData(staffDashboardData, res?.data || {});
+    applyStaffDashboardData(mergedData, authState?.user || {});
+    if (mergedData?.review_queue_meta?.query_ok !== true && Number(mergedData?.summary?.listings?.pending_review || 0) > 0) {
+      await hydrateStaffReviewQueueFallback(userIdentityAtStart);
+    }
   } catch (error) {
     const sameUser = staffDashboardRequestMatchesUser(userIdentityAtStart);
     if (sameUser) {
       setTextById("staff-source-monitor-status", "Live cards loaded. Heavy panels are still catching up; continue with the visible queue and retry shortly.");
-      scheduleStaffDashboardPanelRetry("panel request");
+      const fallbackLoaded = await hydrateStaffReviewQueueFallback(userIdentityAtStart);
+      if (!fallbackLoaded) scheduleStaffDashboardPanelRetry("panel request");
     }
   } finally {
     if (seq === staffDashboardPanelHydrationSeq) staffDashboardPanelHydrating = false;
+  }
+}
+
+async function hydrateStaffReviewQueueFallback(userIdentityAtStart = "") {
+  try {
+    const response = await staffApiRequestWithTimeout(
+      staffPanelRetryEndpoint("/api/staff/properties?status=pending&limit=24&include_total=0"),
+      {},
+      STAFF_DASHBOARD_PANEL_TIMEOUT_MS,
+      "Staff moderation queue"
+    );
+    if (!staffDashboardRequestMatchesUser(userIdentityAtStart)) return false;
+    const rows = Array.isArray(response?.data) ? response.data : [];
+    if (!rows.length) return false;
+    renderStaffReviewQueue(rows, { query_ok: true, returned_count: rows.length, fallback_route: true });
+    const brokerRows = rows.filter((row) => adminIsBrokerSubmissionListing(row));
+    if (brokerRows.length) {
+      renderStaffBrokerReviewQueue(brokerRows, { query_ok: true, returned_count: brokerRows.length, fallback_route: true });
+    } else {
+      const brokerWrap = document.getElementById("staff-broker-review-queue");
+      if (brokerWrap) brokerWrap.innerHTML = staffEmpty("Broker listings remain available in the main moderation queue while the broker-only view catches up.");
+    }
+    setTextById("staff-source-monitor-status", "Moderation rows loaded through the protected fast queue.");
+    return true;
+  } catch (error) {
+    return false;
   }
 }
 
