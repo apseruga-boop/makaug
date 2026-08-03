@@ -72,6 +72,9 @@ test('K25 moderation queues recover without poisoned cache or catalogue flooding
   assert.match(app, /Promise\.race\(\[\s*requestFn\(\)/);
   assert.match(app, /fetchAdminPaginatedRows\("\/api\/admin\/properties\/live", headers, \{ limit: 100, maxPages: 1 \}\)/);
   assert.match(app, /fetchAdminPaginatedRows\("\/api\/admin\/properties\/actioned\?include_total=0", headers, \{ limit: 100, maxPages: 1 \}\)/);
+  assert.match(app, /hydrateStaffReviewQueueFallback\(userIdentityAtStart\)/);
+  assert.match(app, /\/api\/staff\/properties\?status=pending&limit=24&include_total=0/);
+  assert.match(app, /Moderation rows loaded through the protected fast queue\./);
   assert.match(app, /remoteValue == null \? "—" : remoteValue/);
   assert.match(app, /const liveMetric = \(value, localValue = 0\) => \{/);
   assert.match(app, /return selected == null \? "—" : Number\(selected\)/);
