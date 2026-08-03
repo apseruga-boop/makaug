@@ -12729,7 +12729,7 @@ async function hydrateStaffDashboardPanels(endpoint = "/api/staff/dashboard?pane
     if (!sameUser || seq !== staffDashboardPanelHydrationSeq) return;
     const mergedData = mergeStaffDashboardPanelData(staffDashboardData, res?.data || {});
     applyStaffDashboardData(mergedData, authState?.user || {});
-    if (mergedData?.review_queue_meta?.query_ok !== true && Number(mergedData?.summary?.listings?.pending_review || 0) > 0) {
+    if (mergedData?.review_queue_meta?.query_ok !== true) {
       await hydrateStaffReviewQueueFallback(userIdentityAtStart);
     }
   } catch (error) {
