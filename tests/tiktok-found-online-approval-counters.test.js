@@ -48,3 +48,30 @@ test('launch markers are present', () => {
   assert.match(html, /tiktok-found-online-approval-20260802/);
   assert.match(html, /staff-dashboard-nonzero-fallback-20260802/);
 });
+
+test('K25 moderation queues recover without poisoned cache or catalogue flooding', () => {
+  const staff = read('routes/staff.js');
+  const app = read('assets/makaug-app.js');
+  const html = read('index.html');
+  const migration = read('db/migrations/109_k25_staff_queue_recovery.sql');
+
+  assert.match(staff, /payload\?\.review_queue_meta\?\.query_ok === true/);
+  assert.match(staff, /status: queryOk \? 'miss' : 'miss_degraded_not_cached'/);
+  assert.match(staff, /ttl_ms: queryOk \? STAFF_DASHBOARD_PANEL_CACHE_TTL_MS : 0/);
+  assert.match(staff, /const includeTotal = includeTotalParam == null \? false/);
+  assert.match(staff, /filters\.push\(actionablePendingReviewWhere\('p'\)\)/);
+  assert.match(staff, /status && status !== 'all'/);
+
+  assert.match(app, /function staffPanelRetryEndpoint/);
+  assert.match(app, /cache_bypass=1&_cb=/);
+  assert.match(app, /hydrateStaffDashboardPanels\(\s*"\/api\/staff\/dashboard\?panels=1",\s*String\(authState\?\.user\?\.id/);
+  assert.doesNotMatch(app, /hydrateStaffDashboardPanels\(\s*"\/api\/staff\/dashboard\?panels=1",\s*authState\.token/);
+  assert.match(app, /fetchAdminPaginatedRows\("\/api\/properties\?status=all", headers, \{ limit: 100, maxPages: 1 \}\)/);
+  assert.doesNotMatch(app, /fetchAdminPaginatedRows\("\/api\/properties\?status=all", headers, \{ maxPages: 500 \}\)/);
+  assert.match(app, /remoteSnap && remoteValue == null \? "—"/);
+
+  assert.match(migration, /idx_properties_staff_visible_order_v2/);
+  assert.match(migration, /updated_at DESC NULLS LAST/);
+  assert.match(html, /k24-intake-integrity-20260803/);
+  assert.match(html, /k25-moderation-queue-recovery-20260803/);
+});

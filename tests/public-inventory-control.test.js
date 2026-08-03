@@ -101,7 +101,7 @@ test('admin live controls use paginated backend snapshots', () => {
   assert.match(appSource, /function adminShowMorePendingQueueRows\(\)/);
   assert.match(appSource, /function hydrateAdminAllListingsInBackground\(headers\)/);
   assert.match(htmlSource, /review-queue-list-count-parity-20260711/);
-  assert.match(appSource, /fetchAdminPaginatedRows\("\/api\/properties\?status=all", headers, \{ maxPages: 500 \}\)/);
+  assert.match(appSource, /fetchAdminPaginatedRows\("\/api\/properties\?status=all", headers, \{ limit: 100, maxPages: 1 \}\)/);
   assert.match(appSource, /if \(activeTab === "listings"\) hydrateAdminAllListingsInBackground\(headers\)/);
   assert.match(appSource, /fetchAdminPaginatedRows\("\/api\/admin\/properties\/live", headers, \{ maxPages: 10 \}\)/);
   assert.match(appSource, /Object\.defineProperties\(rows, \{/);

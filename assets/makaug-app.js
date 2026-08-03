@@ -12378,6 +12378,11 @@ function staffPanelQueueNeedsRetry(rows = [], meta = {}) {
     || Number(meta?.expected_count || 0) > 0;
 }
 
+function staffPanelRetryEndpoint(endpoint = "/api/staff/dashboard?panels=1") {
+  const separator = String(endpoint).includes("?") ? "&" : "?";
+  return `${endpoint}${separator}cache_bypass=1&_cb=${Date.now()}`;
+}
+
 function scheduleStaffDashboardPanelRetry(reason = "review_queue") {
   if (staffDashboardPanelRetryTimer || staffDashboardPanelRetryCount >= STAFF_DASHBOARD_PANEL_RETRY_LIMIT) return;
   if (currentPage !== "staff-dashboard" || !authState?.token) return;
@@ -12388,7 +12393,6 @@ function scheduleStaffDashboardPanelRetry(reason = "review_queue") {
     if (currentPage !== "staff-dashboard" || !authState?.token) return;
     hydrateStaffDashboardPanels(
       "/api/staff/dashboard?panels=1",
-      authState.token,
       String(authState?.user?.id || authState?.user?.email || authState?.user?.phone || "")
     );
   }, delay);
@@ -12713,8 +12717,9 @@ async function hydrateStaffDashboardPanels(endpoint = "/api/staff/dashboard?pane
   const seq = staffDashboardPanelHydrationSeq + 1;
   staffDashboardPanelHydrationSeq = seq;
   try {
+    const requestEndpoint = staffPanelRetryEndpoint(endpoint || "/api/staff/dashboard?panels=1");
     const res = await staffApiRequestWithTimeout(
-      endpoint || "/api/staff/dashboard?panels=1",
+      requestEndpoint,
       {},
       STAFF_DASHBOARD_PANEL_TIMEOUT_MS,
       "Staff dashboard panels"
@@ -15510,7 +15515,7 @@ let adminAllListingsHydrationInFlight = null;
 
 function hydrateAdminAllListingsInBackground(headers) {
   if (adminAllListingsHydrationInFlight || !canUseLiveAdminApi()) return;
-  adminAllListingsHydrationInFlight = fetchAdminPaginatedRows("/api/properties?status=all", headers, { maxPages: 500 })
+  adminAllListingsHydrationInFlight = fetchAdminPaginatedRows("/api/properties?status=all", headers, { limit: 100, maxPages: 1 })
     .then((rows) => {
       const allListings = (rows || []).map(normalizeRemoteAdminListing);
       if (!allListings.length) return;
@@ -18741,9 +18746,12 @@ async function renderAdminDashboard(options = {}) {
   const deletedListings = summary?.properties?.deleted ?? commandMetrics.deleted_listings ?? localSnap.summary.deletedListings;
   const totalAgents = summary?.agents?.total ?? localSnap.summary.totalAgents;
   const totalUsers = summary?.users?.total ?? localSnap.summary.totalUsers;
-  const totalViews = summary?.engagement?.property_views ?? localSnap.summary.totalViews;
-  const totalSaves = summary?.engagement?.property_saves ?? localSnap.summary.totalSaves;
-  const totalBrokerViews = summary?.engagement?.broker_profile_views ?? localSnap.summary.totalBrokerViews;
+  const remoteMetricOrFallback = (remoteValue, fallbackValue) => (
+    remoteSnap && remoteValue == null ? "—" : (remoteValue ?? fallbackValue)
+  );
+  const totalViews = remoteMetricOrFallback(summary?.engagement?.property_views, localSnap.summary.totalViews);
+  const totalSaves = remoteMetricOrFallback(summary?.engagement?.property_saves, localSnap.summary.totalSaves);
+  const totalBrokerViews = remoteMetricOrFallback(summary?.engagement?.broker_profile_views, localSnap.summary.totalBrokerViews);
   const privateListings = summary?.properties?.private ?? localSnap.summary.privateListings;
   const agentListings = summary?.properties?.agent_listed ?? localSnap.summary.agentListings;
   const studentDiscoverableListings = summary?.properties?.student_discoverable ?? localSnap.summary.studentDiscoverableListings;
@@ -18751,8 +18759,8 @@ async function renderAdminDashboard(options = {}) {
   const notRegisteredAgents = summary?.agents?.not_registered ?? commandMetrics.broker_pending ?? localSnap.summary.notRegisteredAgents;
   const approvalRate = summary?.properties?.approval_rate_pct ?? localSnap.summary.approvalRate;
   const rejectionRate = summary?.properties?.rejection_rate_pct ?? localSnap.summary.rejectionRate;
-  const avgViewsPerListing = summary?.engagement?.avg_views_per_listing ?? localSnap.summary.avgViewsPerListing;
-  const saveToViewRatio = summary?.engagement?.save_to_view_ratio_pct ?? localSnap.summary.saveToViewRatio;
+  const avgViewsPerListing = remoteMetricOrFallback(summary?.engagement?.avg_views_per_listing, localSnap.summary.avgViewsPerListing);
+  const saveToViewRatio = remoteMetricOrFallback(summary?.engagement?.save_to_view_ratio_pct, localSnap.summary.saveToViewRatio);
 
   const setText = (id, value) => {
     const el = document.getElementById(id);
@@ -18775,7 +18783,7 @@ async function renderAdminDashboard(options = {}) {
   setText("admin-stat-approval-rate", `${approvalRate}%`);
   setText("admin-stat-rejection-rate", `${rejectionRate}%`);
   setText("admin-stat-avg-views", avgViewsPerListing);
-  setText("admin-stat-save-view-ratio", `${saveToViewRatio}%`);
+  setText("admin-stat-save-view-ratio", saveToViewRatio === "—" ? "—" : `${saveToViewRatio}%`);
   setText("admin-stat-registered-agents", registeredAgents);
   setText("admin-stat-not-registered-agents", notRegisteredAgents);
   setText("admin-stat-ad-leads", remoteSnap?.advertisingSummary?.open_inquiries ?? commandMetrics.advertising_open_leads ?? 0);
