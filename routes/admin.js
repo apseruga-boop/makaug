@@ -110,6 +110,7 @@ const {
 } = require('../services/outlookAiEmailAgentService');
 const { sendPhoneOtp } = require('../services/phoneOtpDeliveryService');
 const { buildListingReference } = require('../services/listingReferenceService');
+const { hideReportedProperty } = require('../services/reportListingModerationService');
 const { propertyPriceMetadata } = require('../utils/propertyPriceCurrency');
 const SOURCED_INVENTORY_CANDIDATE_SOURCE = 'sourced_inventory_candidate_v1';
 const {
@@ -8829,26 +8830,13 @@ async function listReportRows({ status = '', search = '', limit = 20, offset = 0
 async function hidePropertyForReport({ propertyId, reportId, note, actorId }) {
   const id = cleanText(propertyId);
   if (!id) return null;
-  const updated = await db.query(
-    `UPDATE properties
-     SET
-       status = 'hidden',
-       moderation_stage = 'hidden',
-       moderation_reason = $3,
-       moderation_notes = CONCAT_WS(E'\n', NULLIF(moderation_notes, ''), $3),
-       extra_fields = COALESCE(extra_fields, '{}'::jsonb)
-         || jsonb_build_object(
-           'hidden_by_report_id', $1::text,
-           'hidden_by_report_at', NOW()::text,
-           'hidden_by_report_by', $4::text,
-           'hidden_by_report_note', $3::text
-         ),
-       updated_at = NOW()
-     WHERE id = $2
-     RETURNING id, title, status, updated_at`,
-    [reportId, id, note, actorId]
-  );
-  return updated.rows[0] || null;
+  return hideReportedProperty({
+    query: (sql, params) => db.query(sql, params),
+    propertyId: id,
+    reportId,
+    note,
+    actorId
+  });
 }
 
 async function notifyReporterOfReportOutcome(row = {}, status = '', note = '') {
@@ -8937,12 +8925,6 @@ async function updateReportStatusWithAction(req, { actorId = 'admin_api_key', au
   const current = normalizeReportRow(existing.rows[0]);
   const requestedPropertyId = cleanText(req.body.property_id || req.body.linked_property_id);
   const propertyId = extractLinkedPropertyIdFromReference(requestedPropertyId) || current.linked_property_id;
-  const hiddenProperty = hideListing ? await hidePropertyForReport({
-    propertyId,
-    reportId: req.params.id,
-    note: resolutionNote,
-    actorId
-  }) : null;
 
   let updated;
   try {
@@ -8973,6 +8955,13 @@ async function updateReportStatusWithAction(req, { actorId = 'admin_api_key', au
       [req.params.id, status, resolutionNote]
     );
   }
+
+  const hiddenProperty = hideListing ? await hidePropertyForReport({
+    propertyId,
+    reportId: req.params.id,
+    note: resolutionNote,
+    actorId
+  }) : null;
 
   const row = normalizeReportRow(updated.rows[0] || {});
   await Promise.allSettled([

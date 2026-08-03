@@ -15,6 +15,7 @@ const frontend = read('assets/makaug-app.js');
 const propertiesRoute = read('routes/properties.js');
 const whatsappRoute = read('routes/whatsapp.js');
 const socialSearchService = read('services/socialSearchSourcedListingsService.js');
+const sourceContentQuality = read('utils/sourceContentQuality.js');
 
 assert.strictEqual(normalizeUniversityName('Makerere'), 'Makerere University');
 assert.strictEqual(normalizeUniversityName('UCU'), 'Uganda Christian University (UCU)');
@@ -44,7 +45,7 @@ assert(whatsappRoute.includes('🎓 ${studentUniversityLine}'), 'WhatsApp result
 assert(socialSearchService.includes('function nearestUniversityForSourceItem'), 'found-online ingestion should infer the nearest university');
 assert(socialSearchService.includes('nearest_university: nearestUniversity || null'), 'found-online listings should persist nearest_university');
 assert(socialSearchService.includes('student_universities: nearestUniversity ? normalizeUniversityList([nearestUniversity]) : []'), 'found-online listings should persist student_universities');
-assert(socialSearchService.includes('self[-\\s]*contained'), 'found-online ingestion should recognize self-contained student room vocabulary');
+assert(sourceContentQuality.includes('self[-\\s]*contained'), 'shared found-online quality rules should recognize self-contained student room vocabulary');
 assert(socialSearchService.includes('STUDENT_NEAR_CAMPUS_RADIUS_KM = 2'), 'found-online ingestion should apply the 2km near-campus student supply rule');
 assert(socialSearchService.includes("const listingType = studentListing ? 'students' : originalListingType"), 'found-online ingestion should route student supply to the student category');
 
