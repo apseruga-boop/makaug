@@ -18746,8 +18746,8 @@ async function renderAdminDashboard(options = {}) {
   const deletedListings = summary?.properties?.deleted ?? commandMetrics.deleted_listings ?? localSnap.summary.deletedListings;
   const totalAgents = summary?.agents?.total ?? localSnap.summary.totalAgents;
   const totalUsers = summary?.users?.total ?? localSnap.summary.totalUsers;
-  const remoteMetricOrFallback = (remoteValue, fallbackValue) => (
-    remoteSnap && remoteValue == null ? "—" : (remoteValue ?? fallbackValue)
+  const remoteMetricOrFallback = (remoteValue) => (
+    remoteValue == null ? "—" : remoteValue
   );
   const totalViews = remoteMetricOrFallback(summary?.engagement?.property_views, localSnap.summary.totalViews);
   const totalSaves = remoteMetricOrFallback(summary?.engagement?.property_saves, localSnap.summary.totalSaves);

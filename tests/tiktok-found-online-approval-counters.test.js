@@ -68,7 +68,7 @@ test('K25 moderation queues recover without poisoned cache or catalogue flooding
   assert.doesNotMatch(app, /hydrateStaffDashboardPanels\(\s*"\/api\/staff\/dashboard\?panels=1",\s*authState\.token/);
   assert.match(app, /fetchAdminPaginatedRows\("\/api\/properties\?status=all", headers, \{ limit: 100, maxPages: 1 \}\)/);
   assert.doesNotMatch(app, /fetchAdminPaginatedRows\("\/api\/properties\?status=all", headers, \{ maxPages: 500 \}\)/);
-  assert.match(app, /remoteSnap && remoteValue == null \? "—"/);
+  assert.match(app, /remoteValue == null \? "—" : remoteValue/);
 
   assert.match(migration, /idx_properties_staff_visible_order_v2/);
   assert.match(migration, /updated_at DESC NULLS LAST/);
