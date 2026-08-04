@@ -52,9 +52,16 @@ const { handleOwnerWhatsappCommand } = require('../services/aiCeoControlService'
 const { captureLearningEvent } = require('../services/aiLearningCaptureService');
 const { isLlmEnabled } = require('../services/llmProvider');
 const { buildUgNlisAssistantReply } = require('../services/ugnlisLandVerificationService');
+const { buildListingReference } = require('../services/listingReferenceService');
+const {
+  createOwnerEditToken,
+  hashOwnerEditToken,
+  ownerEditTokenExpiry
+} = require('../services/listingModerationService');
 
 const router = express.Router();
 const HOME_URL = (process.env.PUBLIC_BASE_URL || 'https://makaug.com').replace(/\/+$/, '');
+const WHATSAPP_NATURAL_SELLER_FLOW_MARKER = 'whatsapp-natural-seller-flow-20260804';
 const WHATSAPP_API_VERSION = (process.env.WHATSAPP_API_VERSION || 'v20.0').trim();
 const WHATSAPP_ACCESS_TOKEN = (process.env.WHATSAPP_ACCESS_TOKEN || '').trim();
 const WHATSAPP_PHONE_NUMBER_ID = (process.env.WHATSAPP_PHONE_NUMBER_ID || '').trim();
@@ -910,6 +917,19 @@ function isGreetingText(text) {
   return !!detectGreetingLanguage(text).code;
 }
 
+function isGenericWebsiteHelpLaunch(text = '') {
+  const clean = normalizeInput(text).toLowerCase();
+  if (!clean || !/\bmakaug(?:\.com)?\b/i.test(clean)) return false;
+  const asksForGuidance = /\b(?:need|want|would like)\s+(?:property\s+)?help\b/i.test(clean)
+    || /\bguide me\b.{0,80}\b(?:next step|property|makaug)\b/i.test(clean);
+  const pageMatch = clean.match(/\bpage:\s*(?:https?:\/\/)?(?:www\.)?makaug\.com(?:\/([^\s?#]*))?/i);
+  const path = normalizeInput(pageMatch?.[1] || '')
+    .replace(/^\/+|\/+$/g, '')
+    .replace(/[.,;:!]+$/g, '')
+    .toLowerCase();
+  return asksForGuidance && !path;
+}
+
 function fastWhatsappRuntimeHints({
   text,
   sessionLang = 'en',
@@ -944,7 +964,7 @@ function fastWhatsappRuntimeHints({
       language.code = explicitLanguage;
       language.source = 'intent_entity';
       language.confidence = 0.99;
-    } else if (isGreetingText(clean)) {
+    } else if (isGreetingText(clean) || isGenericWebsiteHelpLaunch(clean)) {
       intent = 'greeting';
       const greetingLanguage = detectGreetingLanguage(clean);
       if (greetingLanguage.code) {
@@ -1189,17 +1209,34 @@ function friendlyGreetingReply(lang, sessionData = {}) {
   const lead = timeGreetingWithName(code, sessionData);
   const languageLine = languageComfortLine(code);
   const messages = {
-    en: `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n${languageLine}\n\n*Choose what you need*\n1️⃣ List my property\n2️⃣ Search for a property\n3️⃣ Find an agent\n\nType naturally too: "2 bedroom house in Kampala", "student room near me", or share your location.`,
-    lg: `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n${languageLine}\n\n*Londa ky'oyagala*\n1️⃣ Listing y'ennyumba yo\n2️⃣ Noonya ennyumba\n3️⃣ Funa agent\n\nWandika nga: "ennyumba e Ntinda", "abayizi okumpi nange", oba weereza location yo.`,
-    sw: `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n${languageLine}\n\n*Chagua unachohitaji*\n1️⃣ Orodhesha mali yangu\n2️⃣ Tafuta nyumba/mali\n3️⃣ Tafuta agent\n\nAndika kawaida: "nyumba ya vyumba 2 Kampala", "student room karibu nami", au share location.`,
-    ac: `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n${languageLine}\n\n*Yer gin ma imito*\n1️⃣ Ket property mamegi\n2️⃣ Yeny property\n3️⃣ Nong agent\n\nI romo coc ki leb ma yot onyo share location mamegi.`,
-    ny: `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n${languageLine}\n\n*Toorana eki orikwenda*\n1️⃣ Handiika property yaawe\n2️⃣ Shaka property\n3️⃣ Shaka agent\n\nNoobaasa kuhandiika nk'omuntu arikugamba, ninga share location yaawe.`,
-    rn: `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n${languageLine}\n\n*Hitamo ico ukeneye*\n1️⃣ Shyira property yaaweho\n2️⃣ Shaka property\n3️⃣ Shaka agent\n\nMushobora kwandika bisanzwe cyangwa mugasangiza location.`,
-    sm: `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n${languageLine}\n\n*Londa ky'oyagala*\n1️⃣ Listing y'ennyumba yo\n2️⃣ Noonya ennyumba\n3️⃣ Funa agent\n\nWandika nga: "ennyumba e Jinja", "abayizi okumpi nange", oba weereza location yo.`,
-    am: `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n${languageLine}\n\n*የሚፈልጉትን ይምረጡ*\n1️⃣ ንብረቴን ዘርዝር\n2️⃣ ንብረት ፈልግ\n3️⃣ ወኪል ፈልግ\n\nበተፈጥሮ መጻፍም ይችላሉ: "2 bedroom house in Kampala", "student room near me", ወይም locationዎን ያጋሩ።`,
-    ar: `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n${languageLine}\n\n*اختر ما تحتاجه*\n1️⃣ أدرج عقاري\n2️⃣ ابحث عن عقار\n3️⃣ ابحث عن وكيل\n\nيمكنك أيضاً الكتابة بشكل طبيعي: "2 bedroom house in Kampala"، "student room near me"، أو مشاركة location.`
+    en: `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n${languageLine}\n\nTell me what you need in your own words. For example:\n• "I want to sell my house in Rubaga"\n• "I need a 2-bedroom rental in Ntinda"\n• "Find me an agent in Wakiso"\n\nYou can also reply LIST, SEARCH or AGENT.`,
+    lg: `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n${languageLine}\n\nMbuulira ky'oyagala mu bigambo byo. Okugeza:\n• "Njagala okutunda ennyumba yange e Rubaga"\n• "Njagala ennyumba ya bedrooms 2 e Ntinda"\n• "Nfunira agent e Wakiso"\n\nOsobola n'okuddamu LIST, SEARCH oba AGENT.`,
+    sw: `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n${languageLine}\n\nNiambie unachohitaji kwa maneno yako. Kwa mfano:\n• "Nataka kuuza nyumba yangu Rubaga"\n• "Nahitaji nyumba ya vyumba 2 Ntinda"\n• "Nitafutie agent Wakiso"\n\nUnaweza pia kujibu LIST, SEARCH au AGENT.`,
+    ac: `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n${languageLine}\n\nCoo gin ma imito ki lok mamegi. Labolle:\n• "Amito cato ot mega i Gulu"\n• "Amito ot me bedroom 2 i Kampala"\n• "Nong agent i Wakiso"\n\nI romo bene dwoko LIST, SEARCH onyo AGENT.`,
+    ny: `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n${languageLine}\n\nGamba eki orikwenda omu bigambo byawe. Nk'ekyokureeberaho:\n• "Ninyenda kugurisha enju yangye mu Mbarara"\n• "Ninyenda enju ya bedrooms 2 omu Ntinda"\n• "Shaka agent omu Wakiso"\n\nNoobaasa n'okugarukamu LIST, SEARCH nari AGENT.`,
+    rn: `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n${languageLine}\n\nAndika ico ukeneye mu majambo yawe. Nk'akarorero:\n• "Nshaka kugurisha inzu yanje kuri Kabale"\n• "Nshaka inzu y'ivyumba 2 muri Ntinda"\n• "Nshakira agent muri Wakiso"\n\nUshobora kandi kwishura LIST, SEARCH canke AGENT.`,
+    sm: `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n${languageLine}\n\nMbuulira ky'oyagala mu bigambo byo. Okugeza:\n• "Nhenda okutunda ennyumba yange e Jinja"\n• "Nhenda ennyumba ya bedrooms 2 e Ntinda"\n• "Nfunira agent e Wakiso"\n\nOsobola n'okuddamu LIST, SEARCH oba AGENT.`,
+    am: `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n${languageLine}\n\nየሚፈልጉትን በራስዎ ቃላት ይንገሩኝ። ለምሳሌ፦\n• "ቤቴን በ Rubaga መሸጥ ፈልጋለሁ"\n• "በ Ntinda ሁለት መኝታ ቤት እፈልጋለሁ"\n• "በ Wakiso ወኪል ፈልግልኝ"\n\nLIST፣ SEARCH ወይም AGENT ብለውም መመለስ ይችላሉ።`,
+    ar: `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n${languageLine}\n\nاكتب ما تحتاجه بطريقتك، مثلاً:\n• "أريد بيع منزلي في Rubaga"\n• "أحتاج منزلاً بغرفتين في Ntinda"\n• "ابحث لي عن وكيل في Wakiso"\n\nيمكنك أيضاً الرد LIST أو SEARCH أو AGENT.`
   };
   return `${messages[code] || messages.en}\n\n${t(code, 'menuHint')}`;
+}
+
+function whatsappContactConfirmationPrompt(lang, phone) {
+  const code = resolveLangCode(lang);
+  const displayPhone = normalizeContactPhone(phone) || 'this WhatsApp number';
+  const messages = {
+    en: `Should viewers contact you on *${displayPhone}*, the WhatsApp number you are using now? Reply *YES* or *NO*.`,
+    lg: `Abalabi bakukubire ku *${displayPhone}*, ennamba ya WhatsApp gy'okozesa kati? Ddamu *YES* oba *NO*.`,
+    sw: `Watazamaji wakupigie *${displayPhone}*, namba hii ya WhatsApp unayotumia sasa? Jibu *YES* au *NO*.`,
+    ac: `Jo ma nen listing gulwongi i *${displayPhone}*, namba me WhatsApp ma itiyo kwede kombedi? Dwok *YES* onyo *NO*.`,
+    ny: `Abareebi bakuhikye aha *${displayPhone}*, enamba ya WhatsApp ei orikukoresa hati? Garukamu *YES* nari *NO*.`,
+    rn: `Ababona bakuvugishe kuri *${displayPhone}*, nimero ya WhatsApp ukoresha ubu? Subiza *YES* canke *NO*.`,
+    sm: `Abalabi bakukubire ku *${displayPhone}*, ennamba ya WhatsApp gy'okozesa kati? Ddamu *YES* oba *NO*.`,
+    am: `ተመልካቾች አሁን በሚጠቀሙበት WhatsApp ቁጥር *${displayPhone}* ያግኙዎት? *YES* ወይም *NO* ብለው ይመልሱ።`,
+    ar: `هل يتواصل معك المهتمون على *${displayPhone}*، رقم WhatsApp الذي تستخدمه الآن؟ أجب *YES* أو *NO*.`
+  };
+  return messages[code] || messages.en;
 }
 
 function languageComfortLine(lang) {
@@ -1236,6 +1273,7 @@ function stepPromptFor(lang, step) {
     ask_university: t(code, 'askUniversity'),
     ask_distance: t(code, 'askDistance'),
     ask_public_name: t(code, 'askPublicName'),
+    confirm_whatsapp_contact: whatsappContactConfirmationPrompt(code, ''),
     ask_contact_method: t(code, 'askContactMethod'),
     ask_contact_value: t(code, 'askContactValuePhone'),
     ask_id_number: t(code, 'askIDNumber'),
@@ -1632,23 +1670,41 @@ function inferListingTypeFromStartRequest(input, entities = {}) {
   if (/\b(commercial|office|retail|warehouse|shop|business space)\b/i.test(text)) return 'commercial';
   if (/\b(land|plot|plots|acre|acres|farm)\b/i.test(text)) return 'land';
   if (/\b(to rent|for rent|rent out|rental|lease|letting)\b/i.test(text)) return 'rent';
-  if (/\b(for sale|sale|sell|selling)\b/i.test(text)) return 'sale';
+  if (/\b(?:njagala|nhenda)\s+okupangisa\b/i.test(text)) return 'rent';
+  if (/\b(?:nataka|ninataka)\s+kupangisha\b/i.test(text)) return 'rent';
+  if (/\b(?:ninyenda|nshaka)\s+kukodisa\b/i.test(text)) return 'rent';
+  if (/\b(for sale|sale|sell|selling|want to sale|want to sell)\b/i.test(text)) return 'sale';
+  if (/\b(?:njagala|nhenda)\s+okutunda\b/i.test(text)) return 'sale';
+  if (/\b(?:nataka|ninataka)\s+kuuza\b/i.test(text)) return 'sale';
+  if (/\b(?:ninyenda|nshaka)\s+kugurisha\b/i.test(text)) return 'sale';
+  if (/\bamito\s+cato\b/i.test(text)) return 'sale';
+  if (/(?:ቤቴን|ንብረቴን).{0,30}(?:መሸጥ|ሽያጭ)/u.test(text)) return 'sale';
+  if (/(?:أريد|اريد).{0,30}(?:بيع|أبيع).{0,30}(?:منزلي|بيتي|عقاري|أرضي)/u.test(text)) return 'sale';
   return null;
 }
 
 function isNaturalSellerListingStatement(input) {
   const text = normalizeInput(input).toLowerCase();
   if (!text || isDeletedWhatsappMessagePlaceholder(text)) return false;
-  if (/\b(looking for|search(?:ing)? for|find me|need to buy|want to buy|want to rent|need rent|available rentals?)\b/i.test(text)) {
+  if (/\b(looking for|search(?:ing)? for|find me|need to buy|want to buy|want to rent(?!\s+out)|need rent|available rentals?)\b/i.test(text)) {
     return false;
   }
 
   const propertyObject = '(?:property|house|home|land|plot|plots|farm|apartment|flat|condo|condos|condominium|room|rental|hostel|commercial|shop|office|building)';
   return (
-    new RegExp(`\\b(?:am|i am|i'm|im|we are|we're)\\s+selling\\b.{0,140}\\b${propertyObject}\\b`, 'i').test(text)
+    new RegExp(`\\b(?:i|we)\\s+(?:want|need|would like|wish)\\s+to\\s+(?:sell|sale|list|post|upload)\\s+(?:my|our)\\s+${propertyObject}\\b`, 'i').test(text)
+    || new RegExp(`\\b(?:i|we)\\s+(?:want|need|would like|wish)\\s+to\\s+(?:rent out|let|lease|list|post)\\s+(?:my|our)\\s+${propertyObject}\\b`, 'i').test(text)
+    || new RegExp(`\\b(?:am|i am|i'm|im|we are|we're)\\s+selling\\b.{0,140}\\b${propertyObject}\\b`, 'i').test(text)
     || new RegExp(`\\b(?:selling|sell)\\s+(?:my|our|the|a|an)?\\s*.{0,100}\\b${propertyObject}\\b`, 'i').test(text)
     || new RegExp(`\\b(?:my|our)\\s+${propertyObject}\\b.{0,100}\\b(?:for sale|on sale|available for sale)\\b`, 'i').test(text)
-    || /\b(?:owner|landlord|seller)\b.{0,120}\b(?:selling|sell|for sale|list|listing)\b/i.test(text)
+    || new RegExp(`\\b(?:my|our)\\s+${propertyObject}\\b.{0,100}\\b(?:for rent|to rent|available to rent|available for rent)\\b`, 'i').test(text)
+    || /\b(?:owner|landlord|seller)\b.{0,120}\b(?:selling|sell|sale|for sale|list|listing)\b/i.test(text)
+    || /\b(?:njagala|nhenda)\s+(?:okutunda|okupangisa|okuteeka)\b.{0,100}\b(?:ennyumba|ettaka|amaka|property|plot)\b/i.test(text)
+    || /\b(?:nataka|ninataka)\s+(?:kuuza|kupangisha|kuorodhesha)\b.{0,100}\b(?:nyumba|mali|ardhi|shamba|kiwanja|property)\b/i.test(text)
+    || /\b(?:ninyenda|nshaka)\s+(?:kugurisha|kukodisa|kuhandiika)\b.{0,100}\b(?:enju|inzu|itaka|obutaka|property|plot)\b/i.test(text)
+    || /\bamito\s+(?:cato|keto)\b.{0,100}\b(?:ot|ngom|property|plot)\b/i.test(text)
+    || /(?:ቤቴን|ንብረቴን|መሬቴን).{0,40}(?:መሸጥ|ሽያጭ)/u.test(text)
+    || /(?:أريد|اريد).{0,40}(?:بيع|أبيع).{0,40}(?:منزلي|بيتي|عقاري|أرضي)/u.test(text)
   );
 }
 
@@ -1734,12 +1790,13 @@ function isBadSellerAreaHint(candidate) {
 }
 
 function parseSellerListingAreaHint(input) {
-  const clean = stripMakaugBrandLocationNoise(input);
+  const clean = normalizeInput(input);
   if (!clean) return null;
-  const match = clean.match(/\b(?:in|at|around|near|from|on)\s+([a-z][a-z\s'-]{2,80})/i);
+  const match = clean.match(/\b(?:in|at|around|near|from|on|kwenye|katika|eneo la|mu|kuri)\s+([a-z][a-z\s'-]{2,80})/i)
+    || clean.match(/\b(?:e|i)\s+([A-Z][a-zA-Z\s'-]{2,80})/);
   if (!match?.[1]) return null;
-  const candidate = match[1]
-    .split(/\b(?:with|has|have|it's|its|price|selling|for sale|land title|title|decimals?|acres?|photos?|pictures?|call|phone|whatsapp)\b/i)[0]
+  const candidate = stripMakaugBrandLocationNoise(match[1])
+    .split(/\b(?:with|has|have|it's|its|price|selling|for sale|to rent|for rent|available|land title|title|decimals?|acres?|photos?|pictures?|call|phone|whatsapp)\b/i)[0]
     .replace(/[^a-z\s'-]/gi, ' ')
     .replace(/\s+/g, ' ')
     .trim();
@@ -1823,7 +1880,7 @@ function isNaturalListingDetailReply(input) {
   if (normalizeFieldAgentCode(clean)) return false;
   if (/^\d+(?:\s*(?:,|and|&|-)\s*\d+)*\s*(?:bedrooms?|beds?)?$/i.test(clean)) return false;
   if (/^\+?[0-9\s-]{7,}$/.test(clean)) return false;
-  return /\b(i\s+have|we\s+have|available|off[-\s]?plan|condos?|apartments?|flats?|houses?|homes?|bedrooms?|beds?|land|plots?|commercial|shops?|offices?|road|estate|for sale|for rent|rentals?)\b/i.test(lower);
+  return /\b(i\s+have|we\s+have|available|off[-\s]?plan|condos?|apartments?|flats?|houses?|homes?|bedrooms?|beds?|land|plots?|commercial|shops?|offices?|hostels?|student accommodation|road|estate|for sale|for rent|rentals?)\b/i.test(lower);
 }
 
 function naturalListingTitleFromText(input) {
@@ -1946,6 +2003,8 @@ function nextListingDraftStep(draft = {}) {
   if (isDraftMissingValue(draft, 'description')) return 'description';
   if (!Array.isArray(draft.photos) || draft.photos.length < 5) return 'photos';
   if (isDraftMissingValue(draft, 'lister_name') && isDraftMissingValue(draft, 'contact_display_name')) return 'ask_public_name';
+  if (isDraftMissingValue(draft, 'preferred_contact_channel')) return 'confirm_whatsapp_contact';
+  if (isDraftMissingValue(draft, 'otp_identifier')) return 'ask_contact_value';
   if (isDraftMissingValue(draft, 'selfie_url')) return 'ask_selfie';
   if (isDraftMissingValue(draft, 'national_id_number')) return 'ask_id_number';
   return 'submitted';
@@ -2004,6 +2063,10 @@ function fastListingProgressReply(lang, patch = {}, updatedDraft = {}, intro = '
 async function submitWhatsappListingDraft({ phone, lang, draft }) {
   try {
     const d = draft || {};
+    const inquiryReference = buildListingReference();
+    const ownerEditToken = createOwnerEditToken();
+    const ownerEditTokenHash = hashOwnerEditToken(ownerEditToken);
+    const ownerEditTokenExpiresAt = ownerEditTokenExpiry();
     const expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
     const contactPhone = d.owner_phone || d.lister_phone || normalizeContactPhone(phone);
     const preferredChannel = d.preferred_contact_channel || 'phone';
@@ -2021,9 +2084,14 @@ async function submitWhatsappListingDraft({ phone, lang, draft }) {
         deposit_amount, contract_months, bedrooms,
         nearest_university, distance_to_uni_km,
         lister_name, lister_phone, lister_email, lister_type, extra_fields,
-        status, listed_via, source, expires_at, id_number, id_document_url
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'pending','whatsapp','whatsapp',$17,$18,$19)
-      RETURNING id`,
+        inquiry_reference, id_number, id_document_name, id_document_url,
+        verification_terms_accepted, owner_edit_token_hash, owner_edit_token_expires_at,
+        status, moderation_stage, listed_via, source, expires_at
+      ) VALUES (
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,
+        $17,$18,$19,$20,TRUE,$21,$22,'pending','submitted','whatsapp','whatsapp',$23
+      )
+      RETURNING id, inquiry_reference`,
       [
         d.listing_type, d.title, d.description, d.district, d.area, d.price,
         d.deposit_amount || null, d.contract_months || null, d.bedrooms || null,
@@ -2036,18 +2104,27 @@ async function submitWhatsappListingDraft({ phone, lang, draft }) {
           contact_display_name: d.contact_display_name || d.lister_name || null,
           preferred_contact_channel: preferredChannel,
           whatsapp_listing_flow: true,
-          verification_channel: 'whatsapp_sender',
+          whatsapp_sender_contact_confirmed: d.whatsapp_sender_contact_confirmed === true,
+          whatsapp_sender_phone: phone,
+          verification_channel: d.verification_channel || 'whatsapp_sender',
           verification_otp_required: false,
+          identity_review_required: true,
+          nin_match_confirmed: Boolean(d.national_id_number && d.selfie_url),
           verify: verifyFields,
           assisted_by_field_agent: d.assisted_by_field_agent === true,
           field_agent_reference: normalizeFieldAgentCode(d.field_agent_reference) || null,
           bedroom_options_text: d.bedroom_options_text || null,
           bedroom_options_min: d.bedroom_options_min || null,
-          bedroom_options_max: d.bedroom_options_max || null
+          bedroom_options_max: d.bedroom_options_max || null,
+          removal_command: `REMOVE ${inquiryReference}`
         },
-        expiresAt,
+        inquiryReference,
         d.national_id_number || null,
-        d.selfie_url || null
+        d.selfie_url ? 'WhatsApp identity photo' : null,
+        d.selfie_url || null,
+        ownerEditTokenHash,
+        ownerEditTokenExpiresAt,
+        expiresAt
       ]
     );
 
@@ -2084,9 +2161,8 @@ async function submitWhatsappListingDraft({ phone, lang, draft }) {
       );
     }
 
-    const refCode = String(propertyId).substring(0, 8).toUpperCase();
     if (d.photos && d.photos.length) {
-      const photos = d.photos.slice(0, 5);
+      const photos = d.photos.slice(0, 10);
       const labels = ['front/outside', 'sitting room/main room', 'bedroom', 'kitchen', 'bathroom'];
       const slots = ['front', 'sitting_room', 'bedroom', 'kitchen', 'bathroom'];
       for (let i = 0; i < photos.length; i += 1) {
@@ -2097,17 +2173,197 @@ async function submitWhatsappListingDraft({ phone, lang, draft }) {
       }
     }
 
+    const photoCount = Array.isArray(d.photos) ? Math.min(d.photos.filter(Boolean).length, 10) : 0;
+    const lead = await createLead(db, {
+      listingId: propertyId,
+      contact: {
+        name: d.lister_name || d.contact_display_name || 'WhatsApp listing owner',
+        phone: contactPhone || phone,
+        email: d.lister_email || null,
+        preferredContactChannel: preferredChannel,
+        preferredLanguage: resolveLangCode(lang),
+        roleType: d.lister_type || 'listing_owner',
+        locationInterest: [d.area, d.district].filter(Boolean).join(', '),
+        categoryInterest: d.listing_type || '',
+        budgetRange: d.price ? String(d.price) : ''
+      },
+      source: 'whatsapp_listing_submission',
+      leadType: 'listing_owner',
+      category: d.listing_type || null,
+      location: [d.area, d.district].filter(Boolean).join(', '),
+      budget: d.price || null,
+      message: `Property submitted from WhatsApp for review: ${d.title || inquiryReference}`,
+      activityType: 'listing_submitted',
+      metadata: {
+        inquiry_reference: inquiryReference,
+        image_count: photoCount,
+        listed_via: 'whatsapp',
+        whatsapp_contact_confirmed: d.whatsapp_sender_contact_confirmed === true
+      }
+    }).catch((error) => {
+      logger.warn('WhatsApp listing lead creation failed:', error.message || String(error));
+      return null;
+    });
+
+    await db.query(
+      `INSERT INTO property_moderation_events (property_id, actor_id, action, status_to, delivery)
+       VALUES ($1, 'system', 'whatsapp_listing_submitted_for_review', 'pending', $2::jsonb)`,
+      [propertyId, JSON.stringify({
+        channel: 'whatsapp',
+        inquiry_reference: inquiryReference,
+        lead_id: lead?.id || null,
+        image_count: photoCount,
+        whatsapp_contact_confirmed: d.whatsapp_sender_contact_confirmed === true
+      })]
+    ).catch((error) => logger.warn('WhatsApp moderation event write failed:', error.message || String(error)));
+
+    await Promise.allSettled([
+      logNotification(db, {
+        recipientPhone: contactPhone || phone,
+        channel: 'whatsapp',
+        type: 'listing_submitted',
+        status: 'logged',
+        payloadSummary: { inquiry_reference: inquiryReference, property_id: propertyId, image_count: photoCount },
+        relatedListingId: propertyId,
+        relatedLeadId: lead?.id || null
+      }),
+      logNotification(db, {
+        recipientEmail: getSupportEmail(),
+        channel: 'in_app',
+        type: 'listing_pending_review',
+        status: 'logged',
+        payloadSummary: { inquiry_reference: inquiryReference, title: d.title || null, source: 'whatsapp' },
+        relatedListingId: propertyId,
+        relatedLeadId: lead?.id || null
+      }),
+      sendSupportEmail({
+        to: getSupportEmail(),
+        subject: `New WhatsApp listing pending review - ${inquiryReference}`,
+        text: [
+          'A property submitted through the makaug WhatsApp assistant is ready for moderation.',
+          `Reference: ${inquiryReference}`,
+          `Title: ${d.title || '-'}`,
+          `Location: ${[d.area, d.district].filter(Boolean).join(', ') || '-'}`,
+          `Photos: ${photoCount}`,
+          `Admin: ${HOME_URL}/admin`
+        ].join('\n')
+      })
+    ]);
+
+    captureLearningEvent({
+      eventName: 'whatsapp_property_listing_submitted',
+      source: 'whatsapp',
+      channel: 'whatsapp',
+      sessionId: `whatsapp_listing:${propertyId}`,
+      externalUserId: phone,
+      inputText: [d.title, d.description, d.area, d.district].filter(Boolean).join(' | '),
+      responseText: 'Listing submitted to the pending moderation queue.',
+      payload: {
+        property_id: propertyId,
+        inquiry_reference: inquiryReference,
+        image_count: photoCount,
+        lead_id: lead?.id || null
+      },
+      entities: {
+        listing_type: d.listing_type || null,
+        location: [d.area, d.district].filter(Boolean).join(', '),
+        budget_ugx: d.price || null
+      },
+      dedupeKey: `whatsapp_listing_submitted:${propertyId}`
+    });
+
     await db.query(
       "UPDATE whatsapp_sessions SET current_step = 'submitted', listing_draft = '{}', session_data = '{}' WHERE phone = $1",
       [phone]
     );
 
-    const msg = t(lang, 'listingSubmitted').replace('#{ref}', refCode);
-    return { message: `${msg}\n\n🔗 Once approved: ${HOME_URL}/property/${propertyId}`, nextStep: 'submitted' };
+    const msg = t(lang, 'listingSubmitted').replace('#{ref}', inquiryReference);
+    return {
+      propertyId,
+      inquiryReference,
+      message: `${msg}\n\nOnce approved: ${HOME_URL}/property/${propertyId}\nTo remove it later, reply *REMOVE ${inquiryReference}* from this WhatsApp number.`,
+      nextStep: 'submitted'
+    };
   } catch (err) {
     logger.error('WhatsApp listing save error:', err);
     return { message: tt(lang, 'genericSaveError', { url: HOME_URL }), nextStep: 'submitted' };
   }
+}
+
+async function handleWhatsappListingRemovalCommand({ phone, text = '' }) {
+  const clean = normalizeInput(text);
+  const match = clean.match(/^remove\s+#?([a-z0-9-]{6,40})$/i);
+  if (!match) return { handled: false };
+
+  const reference = match[1].toUpperCase();
+  const phoneDigits = String(phone || '').replace(/\D/g, '');
+  if (phoneDigits.length < 9) {
+    return { handled: true, message: 'I could not verify this WhatsApp number. Please contact makaug support.' };
+  }
+
+  const result = await db.query(
+    `SELECT id, title, status, inquiry_reference
+       FROM properties
+      WHERE (
+        UPPER(COALESCE(inquiry_reference, '')) = $1
+        OR UPPER(LEFT(id::text, 8)) = $1
+      )
+        AND RIGHT(regexp_replace(COALESCE(lister_phone, ''), '\\D', '', 'g'), 9) = RIGHT($2, 9)
+      ORDER BY created_at DESC
+      LIMIT 1`,
+    [reference, phoneDigits]
+  );
+  const listing = result.rows[0];
+  if (!listing) {
+    return {
+      handled: true,
+      message: `I could not find listing *${reference}* linked to this WhatsApp number. Check the reference or contact makaug support.`
+    };
+  }
+  if (['hidden', 'deleted', 'rejected'].includes(String(listing.status || '').toLowerCase())) {
+    return { handled: true, message: `Listing *${listing.inquiry_reference || reference}* is already off the public site.` };
+  }
+
+  await db.query(
+    `UPDATE properties
+        SET status = 'hidden',
+            moderation_stage = 'removed_by_owner',
+            moderation_reason = 'Owner requested removal from the verified listing WhatsApp number.',
+            updated_at = NOW(),
+            extra_fields = COALESCE(extra_fields, '{}'::jsonb) || jsonb_build_object(
+              'owner_removed_via_whatsapp', TRUE,
+              'owner_removed_at', NOW()::text
+            )
+      WHERE id = $1`,
+    [listing.id]
+  );
+  await db.query(
+    `INSERT INTO property_moderation_events (property_id, actor_id, action, status_from, status_to, reason, delivery)
+     VALUES ($1, 'whatsapp-owner', 'owner_removed_via_whatsapp', $2, 'hidden', $3, $4::jsonb)`,
+    [
+      listing.id,
+      listing.status,
+      'Owner requested removal from the verified listing WhatsApp number.',
+      JSON.stringify({ channel: 'whatsapp', phone_suffix: phoneDigits.slice(-4) })
+    ]
+  ).catch((error) => logger.warn('WhatsApp owner removal event write failed:', error.message || String(error)));
+
+  captureLearningEvent({
+    eventName: 'whatsapp_owner_listing_removed',
+    source: 'whatsapp',
+    channel: 'whatsapp',
+    sessionId: `whatsapp_listing:${listing.id}`,
+    externalUserId: phone,
+    inputText: clean,
+    responseText: 'Listing removed from public inventory.',
+    payload: { property_id: listing.id, inquiry_reference: listing.inquiry_reference || reference },
+    dedupeKey: `whatsapp_listing_removed:${listing.id}`
+  });
+
+  return {
+    handled: true,
+    message: `Done. Listing *${listing.inquiry_reference || reference}* is now off the public site. If this was a mistake, contact makaug support and quote the same reference.`
+  };
 }
 
 function listingStartReply(lang, listingType, hints = {}) {
@@ -5977,6 +6233,7 @@ function isActionableStepReply(step, value = '') {
   if (currentStep === 'listing_type') return Boolean(mapListingTypeInput(clean));
   if (currentStep === 'ownership') return Boolean(mapListingTypeInput(clean)) || ['1', '2', 'owner', 'agent'].includes(clean);
   if (currentStep === 'ask_field_agent') return isAffirmativeReply(clean) || isNegativeReply(clean) || isNaturalListingDetailReply(clean);
+  if (currentStep === 'confirm_whatsapp_contact') return isAffirmativeReply(clean) || isNegativeReply(clean);
   if (currentStep === 'ask_contact_method') return ['1', '2', 'phone', 'whatsapp', 'sms', 'call', 'email', 'mail', 'e-mail'].includes(clean);
   if (currentStep === 'search_type') return Boolean(mapSearchTypeInput(clean)) || isAnyAreaReply(clean);
   if (currentStep === 'search_area') return isAnyAreaReply(clean) || clean.length >= 2;
@@ -6050,7 +6307,7 @@ function landSafetyReply(lang) {
 const STEPS = [
   'greeting', 'choose_language', 'main_menu', 'listing_type', 'ownership', 'ask_field_agent', 'ask_field_agent_details', 'title', 'district',
   'area', 'price', 'bedrooms', 'description', 'photos', 'ask_deposit', 'ask_contract',
-  'ask_university', 'ask_distance', 'ask_public_name', 'ask_contact_method', 'ask_contact_value',
+  'ask_university', 'ask_distance', 'ask_public_name', 'confirm_whatsapp_contact', 'ask_contact_method', 'ask_contact_value',
   'ask_id_number', 'ask_selfie', 'ask_phone', 'search_type', 'search_area', 'agent_area',
   'verify_otp', 'missed_call_need', 'missed_call_resolved', 'submitted'
 ];
@@ -6265,10 +6522,14 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     return routeExplicitListingStart();
   }
 
+  if (isGenericWebsiteHelpLaunch(cleanBody) && ['greeting', 'main_menu', 'submitted'].includes(step)) {
+    return respond(friendlyGreetingReply(lang, sessionData), 'main_menu');
+  }
+
   const listingFlowSteps = [
     'listing_type', 'ownership', 'ask_field_agent', 'ask_field_agent_details', 'title', 'district',
     'area', 'price', 'bedrooms', 'description', 'ask_deposit', 'ask_contract', 'ask_university',
-    'ask_distance', 'ask_public_name', 'ask_contact_method', 'ask_contact_value', 'ask_selfie', 'ask_id_number',
+    'ask_distance', 'ask_public_name', 'confirm_whatsapp_contact', 'ask_contact_method', 'ask_contact_value', 'ask_selfie', 'ask_id_number',
     'ask_phone', 'verify_otp'
   ];
   const hasListingContext = Boolean(
@@ -7605,11 +7866,28 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     if (cleanBody.length < 2) return respond(t(lang, 'askPublicName'), 'ask_public_name');
     await patchDraft(phone, {
       lister_name: cleanBody,
-      contact_display_name: cleanBody,
-      owner_phone: normalizeContactPhone(phone),
-      lister_phone: normalizeContactPhone(phone),
-      preferred_contact_channel: 'phone',
-      otp_channel: 'not_required'
+      contact_display_name: cleanBody
+    });
+    return respond(whatsappContactConfirmationPrompt(lang, phone), 'confirm_whatsapp_contact');
+  }
+
+  if (step === 'confirm_whatsapp_contact') {
+    if (isNegativeReply(cleanBody)) {
+      await patchDraft(phone, { whatsapp_sender_contact_confirmed: false });
+      return respond(t(lang, 'askContactMethod'), 'ask_contact_method');
+    }
+    if (!isAffirmativeReply(cleanBody)) {
+      return respond(whatsappContactConfirmationPrompt(lang, phone), 'confirm_whatsapp_contact');
+    }
+    const confirmedPhone = normalizeContactPhone(phone);
+    await patchDraft(phone, {
+      preferred_contact_channel: 'whatsapp',
+      owner_phone: confirmedPhone,
+      lister_phone: confirmedPhone,
+      otp_identifier: confirmedPhone,
+      otp_channel: 'whatsapp',
+      whatsapp_sender_contact_confirmed: true,
+      verification_channel: 'whatsapp_sender'
     });
     return respond(t(lang, 'askSelfie'), 'ask_selfie');
   }
@@ -7637,7 +7915,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       if (!isValidContactPhone(contactPhone)) return respond(t(lang, 'askContactValuePhone'), 'ask_contact_value');
       await patchDraft(phone, { owner_phone: contactPhone, lister_phone: contactPhone, otp_identifier: contactPhone, otp_channel: 'phone' });
     }
-    return respond(t(lang, 'askIDNumber'), 'ask_id_number');
+    return respond(t(lang, 'askSelfie'), 'ask_selfie');
   }
 
   // NATIONAL ID
@@ -7647,12 +7925,14 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     const updatedDraft = {
       ...draft,
       national_id_number: nationalIdNumber,
-      owner_phone: draft.owner_phone || normalizeContactPhone(phone),
-      lister_phone: draft.lister_phone || normalizeContactPhone(phone),
-      preferred_contact_channel: draft.preferred_contact_channel || 'phone',
+      verification_channel: draft.whatsapp_sender_contact_confirmed ? 'whatsapp_sender' : (draft.otp_channel || 'contact_supplied'),
       otp_channel: 'not_required'
     };
-    await patchDraft(phone, updatedDraft);
+    await patchDraft(phone, {
+      national_id_number: nationalIdNumber,
+      verification_channel: updatedDraft.verification_channel,
+      otp_channel: 'not_required'
+    });
     const result = await submitWhatsappListingDraft({ phone, lang, draft: updatedDraft });
     return respond(result.message, result.nextStep);
   }
@@ -7993,6 +8273,20 @@ async function processInboundRuntime({
     });
     return {
       message: reply,
+      nextStep: sessionStep
+    };
+  }
+
+  const listingRemoval = await handleWhatsappListingRemovalCommand({
+    phone,
+    text: effectiveBody
+  }).catch((error) => {
+    logger.warn('WhatsApp owner listing removal failed:', error.message || String(error));
+    return { handled: true, message: 'I could not remove that listing right now. Please contact makaug support.' };
+  });
+  if (listingRemoval.handled) {
+    return {
+      message: listingRemoval.message,
       nextStep: sessionStep
     };
   }
@@ -8721,6 +9015,7 @@ router.get('/web-bridge/status', async (req, res) => {
   return res.json({
     ok: true,
     data: {
+      release_marker: WHATSAPP_NATURAL_SELLER_FLOW_MARKER,
       summary: bridgeStatus.summary,
       readiness,
       clients: (bridgeStatus.clients || []).map(summarizeWhatsappBridgeClient)

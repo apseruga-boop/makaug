@@ -54,6 +54,7 @@ assert(whatsappRoute.includes("return respond(t(lang, 'askSelfie'), 'ask_selfie'
 assert(whatsappRoute.includes("return respond(t(lang, 'askIDNumber'), 'ask_id_number');"), 'WhatsApp listing flow must ask for NIN after ID photo');
 assert(whatsappRoute.includes("otp_channel: 'not_required'"), 'WhatsApp listing flow must mark OTP as not required');
 assert(whatsappRoute.includes('submitWhatsappListingDraft({ phone, lang, draft: updatedDraft })'), 'WhatsApp listing flow must submit after NIN without asking for phone again');
-assert(!whatsappRoute.includes("return respond(t(lang, 'askContactMethod'), 'ask_contact_method');\n  }\n\n  // CONTACT METHOD"), 'new WhatsApp listing path must not route public-name step to contact-method prompt');
+assert(whatsappRoute.includes("return respond(whatsappContactConfirmationPrompt(lang, phone), 'confirm_whatsapp_contact');"), 'WhatsApp listing path must confirm the sender number after the public contact name');
+assert(whatsappRoute.includes("if (isNegativeReply(cleanBody))"), 'WhatsApp listing path must let the owner provide a different contact when the sender number is not public');
 
 console.log('List-property contact and ID correction tests passed');

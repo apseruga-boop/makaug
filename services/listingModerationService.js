@@ -403,7 +403,11 @@ function buildAutomatedListingReview({
     return !samePhone && !sameEmail;
   });
   const hasMapPin = (listing.latitude != null && listing.longitude != null) || !!extra.map_pin_confirmed || !!extra.coordinates;
-  const hasContact = !!listing.lister_phone && !!listing.lister_email;
+  const whatsappSenderConfirmed = extra.whatsapp_sender_contact_confirmed === true
+    && extra.verification_channel === 'whatsapp_sender';
+  const hasContact = whatsappSenderConfirmed
+    ? !!listing.lister_phone
+    : !!listing.lister_phone && !!listing.lister_email;
   const hasRequiredCore = !!(listing.title && listing.description && listing.district && listing.area && listing.listing_type);
   const priceUponApplication = !!(extra.price_upon_application || /price\s+upon\s+application/i.test(String(extra.price_label || extra.source_price_label || '')));
   const hasPrice = String(listing.listing_type || '').toLowerCase() === 'student'
@@ -425,8 +429,15 @@ function buildAutomatedListingReview({
     checkResult(
       'contact_details_verified',
       hasContact ? 'pass' : 'fail',
-      hasContact ? 'Phone and email are present.' : 'Phone and email are both required for owner notifications.',
-      { phone: listing.lister_phone || null, email: listing.lister_email || null, matching_users: matchingUsers.length }
+      hasContact
+        ? (whatsappSenderConfirmed ? 'The listing contact was confirmed from the authenticated WhatsApp conversation.' : 'Phone and email are present.')
+        : 'A verified WhatsApp number, or both phone and email, is required for owner notifications.',
+      {
+        phone: listing.lister_phone || null,
+        email: listing.lister_email || null,
+        whatsapp_sender_confirmed: whatsappSenderConfirmed,
+        matching_users: matchingUsers.length
+      }
     ),
     checkResult(
       'identity_number_supplied',
@@ -599,13 +610,15 @@ function buildOwnerStatusMessage({ listing = {}, status, reason }) {
         `Facebook: ${shareLinks.facebook}`,
         '',
         'We will let you know when people view or save your listing. Need a change? Just reply to this email.',
+        `To remove this listing, send REMOVE ${reference} from the WhatsApp number used to submit it.`,
         `Need help? ${supportEmail}`
       ].join('\n'),
       html: buildListingLiveEmailHtml({ listing }),
       whatsapp: [
         `Great news ${listing?.lister_name || 'there'} - your listing is *live* on makaug \u{1F389}`,
         `${title} - ${location} - ${price}`,
-        `View & share: ${publicUrl}`
+        `View & share: ${publicUrl}`,
+        `To remove it, reply REMOVE ${reference} from the WhatsApp number used to submit it.`
       ].join('\n')
     };
   }
