@@ -387,7 +387,9 @@ router.get('/me', async (req, res, next) => {
         },
         capabilities: {
           can_skip_listing_otp: true,
-          can_skip_listing_identity_upload: Boolean(agent?.identity_document_url && agent?.contact_phone_verified_at),
+          can_skip_listing_identity_upload: Boolean(
+            agent?.identity_document_url && (agent?.phone || agent?.whatsapp)
+          ),
           listings_require_admin_approval: true,
           can_boost_properties: true
         }
@@ -484,11 +486,9 @@ router.post('/me/verification', async (req, res, next) => {
     const body = req.body || {};
     const phone = normalizeUgPhone(body.phone || body.whatsapp);
     const nin = cleanText(body.nin || body.national_id_number).slice(0, 80);
-    const otpToken = cleanText(body.listing_otp_token || body.phone_verification_token);
     const identityDocument = cleanBrokerUpload(body.identity_document || body.national_id_document, 'National ID photo');
     const privacyConsentAccepted = parseBooleanLike(body.privacy_consent_accepted, false);
     const retentionNoticeAccepted = parseBooleanLike(body.data_retention_notice_accepted, false);
-    const verified = verifyListingSubmitToken(otpToken);
     const errors = [];
 
     if (!phone || !isValidPhone(phone)) errors.push('A valid Uganda phone is required');
@@ -498,9 +498,6 @@ router.post('/me/verification', async (req, res, next) => {
     }
     if (!privacyConsentAccepted) errors.push('Privacy consent is required');
     if (!retentionNoticeAccepted) errors.push('Data-retention notice acceptance is required');
-    if (!verified.ok || verified.channel !== 'phone' || verified.identifier !== phone) {
-      errors.push('Verify this phone number with the latest OTP before continuing');
-    }
     if (errors.length) {
       return res.status(400).json({ ok: false, error: 'Broker verification validation failed', details: errors });
     }
@@ -519,9 +516,8 @@ router.post('/me/verification', async (req, res, next) => {
            privacy_consent_at = COALESCE(privacy_consent_at, NOW()),
            data_retention_notice_accepted = TRUE,
            data_retention_notice_at = COALESCE(data_retention_notice_at, NOW()),
-           contact_phone_verified_at = NOW(),
            registration_status = 'registered',
-           verification_reason = CONCAT_WS(' ', NULLIF(verification_reason, ''), '[BROKER_SELF_VERIFICATION_SUBMITTED] Phone OTP and National ID received for Makaug review.'),
+           verification_reason = CONCAT_WS(' ', NULLIF(verification_reason, ''), '[BROKER_SELF_VERIFICATION_SUBMITTED] Phone contact and National ID received for manual Makaug review.'),
            updated_at = NOW()
        WHERE id = $1
        RETURNING *`,
@@ -537,7 +533,6 @@ router.post('/me/verification', async (req, res, next) => {
     await client.query(
       `UPDATE users
        SET phone = $2,
-           phone_verified = TRUE,
            profile_data = COALESCE(profile_data, '{}'::jsonb) || $3::jsonb,
            updated_at = NOW()
        WHERE id = $1`,
@@ -552,6 +547,7 @@ router.post('/me/verification', async (req, res, next) => {
           broker_privacy_consent_accepted: true,
           broker_data_retention_notice_accepted: true,
           broker_phone_verification_required: false,
+          broker_manual_phone_review_required: true,
           broker_identity_verification_required: false,
           broker_onboarding_completed_at: new Date().toISOString(),
           broker_review_status: 'pending_admin_review'
@@ -569,7 +565,7 @@ router.post('/me/verification', async (req, res, next) => {
       status: 'logged',
       payloadSummary: {
         agent_id: agent.id,
-        phone_verified: true,
+        phone_submitted_for_manual_review: true,
         identity_document_uploaded: true,
         admin_review_required: true
       }
@@ -579,10 +575,11 @@ router.post('/me/verification', async (req, res, next) => {
       ok: true,
       data: {
         agent: updatedAgent.rows[0],
-        phone_verified: true,
+        phone_verified: false,
+        phone_submitted_for_manual_review: true,
         identity_document_uploaded: true,
         admin_review_required: true,
-        message: 'Verification details received. You can prepare listings while Makaug completes the broker review.'
+        message: 'Trust details received. You can submit listings while Makaug manually reviews the phone and National ID.'
       }
     });
   } catch (error) {
