@@ -29557,8 +29557,6 @@ function validateListStep3() {
   const terms = document.getElementById("lp-verify-terms")?.checked;
   const fraud = document.getElementById("lp-verify-fraud")?.checked;
   const consent = document.getElementById("lp-verify-consent")?.checked;
-  const fieldAgentAssisted = (lpVal("lp-field-agent-assisted") || "no") === "yes";
-  const fieldAgentId = lpVal("lp-field-agent-id");
   if (!email) {
     if (!email) markLpFieldError("lp-verify-email", "Email is required.");
     toast("Please add your email so makaug can send review updates.");
@@ -29604,11 +29602,6 @@ function validateListStep3() {
     if (!fraud) markLpFieldError("lp-verify-fraud", "Confirm anti-fraud declaration.");
     if (!consent) markLpFieldError("lp-verify-consent", "Consent is required.");
     toast("Please accept the verification declarations.");
-    return false;
-  }
-  if (fieldAgentAssisted && !normalizeFieldAgentCode(fieldAgentId)) {
-    markLpFieldError("lp-field-agent-id", "Use Field Agent ID format FA-7301.");
-    toast("Enter the Field Agent ID in FA-7301 format, or set Field Agent assisted to No.");
     return false;
   }
   return true;
@@ -29714,8 +29707,6 @@ function buildListPropertyPayload(photoUploadUrls = lpPhotoUploadUrls) {
   });
   const areaHighlights = lpVal("lp-area-highlights-edit") || autoAreaHighlights;
   const studentsWelcome = type === "student" || extra.students_welcome === "yes";
-  const fieldAgentAssisted = (lpVal("lp-field-agent-assisted") || "no") === "yes";
-  const fieldAgentId = fieldAgentAssisted ? (normalizeFieldAgentCode(lpVal("lp-field-agent-id")) || lpVal("lp-field-agent-id") || null) : null;
   const videoUrl = lpVal("lp-video-url");
   const contactPref = lpVal("lp-contact-pref") || "both";
   const availableFrom = lpVal("lp-available-from");
@@ -29819,12 +29810,8 @@ function buildListPropertyPayload(photoUploadUrls = lpPhotoUploadUrls) {
         nin_match_confirmed: !!document.getElementById("lp-verify-nin-match")?.checked,
         public_display_name: publicDisplayName || null,
         otp_channel: "not_required",
-        field_agent_assisted: fieldAgentAssisted,
-        field_agent_id: fieldAgentAssisted ? fieldAgentId : null,
         ownership_verification_requested: ownerVerificationRequested
-      },
-      field_agent_assisted: fieldAgentAssisted,
-	      field_agent_id: fieldAgentAssisted ? fieldAgentId : null
+	      }
 	    }
 	  };
 
@@ -29923,10 +29910,6 @@ function renderListReviewSummary() {
   const termsOk = (document.getElementById("lp-verify-terms")?.checked && document.getElementById("lp-verify-fraud")?.checked)
     ? translateListingLabel("Accepted")
     : translateListingLabel("Pending");
-  const fieldAgentAssisted = payload?.extra_fields?.field_agent_assisted;
-  const fieldAgentTag = fieldAgentAssisted
-    ? `${translateListingLabel("Yes")} (${payload?.extra_fields?.field_agent_id || "-"})`
-    : translateListingLabel("No");
   const landTitleLabel = landTitleAvailabilityLabel(getLandTitleAvailabilityValue(payload)) || translateListingLabel("Not set");
   wrap.innerHTML = `
     <div class="grid md:grid-cols-2 gap-3">
@@ -29961,7 +29944,6 @@ function renderListReviewSummary() {
               ? "Phone + WhatsApp"
               : "Phone Call"
         )}</div>
-        <div class="text-xs text-gray-500 mt-1">${translateListingLabel("Field Agent assisted?")}: ${fieldAgentTag}</div>
         <div class="text-xs text-gray-500 mt-1">${translateListingLabel("Land title")}: ${landTitleLabel}</div>
       </div>
     </div>
@@ -30839,8 +30821,6 @@ async function submitAgentApplication() {
   const privacyConsentAccepted = document.getElementById("agent-privacy-consent")?.checked === true;
   const retentionNoticeAccepted = document.getElementById("agent-retention-consent")?.checked === true;
   const registrationStatus = "not_registered";
-  const fieldAgentAssisted = (document.getElementById("agent-field-assisted")?.value || "no") === "yes";
-  const fieldAgentId = normalizeFieldAgentCode(document.getElementById("agent-field-id")?.value || "");
   const otpChannel = agentOtpChannel === "email" ? "email" : "phone";
   const resolvedLicenceNumber = licenceNumber || `PENDING-${Date.now()}`;
 
@@ -30893,10 +30873,6 @@ async function submitAgentApplication() {
       : "Please verify phone OTP before submitting.");
     return;
   }
-  if (fieldAgentAssisted && !fieldAgentId) {
-    toast("Please enter Field Agent ID in FA-7301 format or set assisted to No.");
-    return;
-  }
 
   setButtonLoading("agent-submit-btn", true);
   try {
@@ -30933,8 +30909,7 @@ async function submitAgentApplication() {
           type: "image/jpeg",
           size: Math.round((agentIdentityPhotoDataUrl || "").length * 0.75),
           data_url: agentIdentityPhotoDataUrl
-        },
-        bio: fieldAgentAssisted ? `Onboarded with Field Agent ${fieldAgentId}` : undefined
+        }
       }
     });
     await trackEvent("agent_register_submit", { district_scope: districtsCovered });
@@ -44428,12 +44403,8 @@ async function parseInitialDeepLink() {
   }
 
   if (path === "/field-agent-dashboard") {
-    if (authState?.user && derivePortalMode(authState.user, authState.user.portal_mode) === "field_agent") {
-      showPage("field-dashboard", { history: false, source: "deep_link" });
-      renderFieldDashboard();
-    } else {
-      openAuthSignIn("field_agent");
-    }
+    showPage("home", { history: false, source: "retired_field_agent_route" });
+    window.history.replaceState({ page: "home" }, "", "/");
     return true;
   }
 

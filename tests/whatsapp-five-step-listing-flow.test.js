@@ -53,7 +53,7 @@ assert(
   'Explicit listing-start routing must patch bedrooms from the first message before asking follow-up questions'
 );
 assert(
-  source.includes('function addInferredBedroomPatch') && (source.match(/addInferredBedroomPatch\(draft, patch\)/g) || []).length >= 3,
+  source.includes('function addInferredBedroomPatch') && (source.match(/addInferredBedroomPatch\(draft, patch\)/g) || []).length >= 2,
   'Follow-up steps should infer saved bedroom text before repeating the bedroom prompt'
 );
 assert(
@@ -61,8 +61,8 @@ assert(
   'Listing field handlers should use the fast progress reply after saving data'
 );
 assert(
-  source.includes("let patch = { assisted_by_field_agent: false }") && source.includes("return respond(fastReply.message, fastReply.nextStep);"),
-  'Field-agent No reply should continue to the next missing field instead of restarting the old title loop'
+  source.includes("lister_type: chosen") && source.includes("assisted_by_field_agent: false") && source.includes("return respond(fastReply.message, fastReply.nextStep);"),
+  'Ownership reply should continue directly to the next missing listing field without a Field Agent question'
 );
 assert(
   source.includes("const bedroomDraft = parseBedroomDraft(cleanBody) || { bedrooms: parseInt(cleanBody, 10) || 0 }"),

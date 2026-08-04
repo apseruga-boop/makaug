@@ -246,6 +246,9 @@ function resolveChromeExecutablePath() {
 }
 
 const VOICE_AUDIO_MAX_BYTES = 8_000_000;
+const LISTING_IMAGE_PREVIEW_MAX_DIMENSION = 1280;
+const LISTING_IMAGE_PREVIEW_QUALITY = 0.78;
+const LISTING_IMAGE_PREVIEW_MAX_BYTES = 1_500_000;
 const seenBrowserMessageIds = new Set();
 const seenCallEventKeys = new Map();
 const recentlySentReplyKeys = new Map();
@@ -1812,6 +1815,128 @@ async function hydrateVoiceSnapshot(page, snapshot) {
   return snapshot;
 }
 
+async function hydrateImageSnapshot(page, snapshot) {
+  if (!snapshot || snapshot.mediaType !== 'image' || snapshot.imagePreviews?.length) return snapshot;
+  const messageId = String(snapshot.messageId || '').trim();
+  if (!messageId) return snapshot;
+
+  try {
+    const previews = await page.evaluate(async ({
+      targetMessageId,
+      maxDimension,
+      quality,
+      maxBytes
+    }) => {
+      const nodes = Array.from(document.querySelectorAll('[data-id]'));
+      const root = nodes.find((el) => el.getAttribute('data-id') === targetMessageId);
+      if (!root) return [];
+
+      const visibleImages = Array.from(root.querySelectorAll('img')).filter((img) => {
+        const rect = img.getBoundingClientRect();
+        const className = String(img.className || '').toLowerCase();
+        const alt = String(img.alt || '').toLowerCase();
+        if (className.includes('emoji') || alt.includes('emoji') || alt.includes('avatar')) return false;
+        return (img.naturalWidth >= 160 && img.naturalHeight >= 120)
+          || (rect.width >= 140 && rect.height >= 100);
+      }).slice(0, 5);
+
+      const encodeImage = async (sourceImage) => {
+        if (!sourceImage.complete) {
+          await new Promise((resolve) => {
+            const finish = () => resolve();
+            sourceImage.addEventListener('load', finish, { once: true });
+            sourceImage.addEventListener('error', finish, { once: true });
+            setTimeout(finish, 1200);
+          });
+        }
+
+        const sourceWidth = sourceImage.naturalWidth || Math.round(sourceImage.getBoundingClientRect().width);
+        const sourceHeight = sourceImage.naturalHeight || Math.round(sourceImage.getBoundingClientRect().height);
+        if (!sourceWidth || !sourceHeight) return null;
+        const scale = Math.min(1, maxDimension / Math.max(sourceWidth, sourceHeight));
+        const width = Math.max(1, Math.round(sourceWidth * scale));
+        const height = Math.max(1, Math.round(sourceHeight * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const context = canvas.getContext('2d', { alpha: false });
+        if (!context) return null;
+        context.fillStyle = '#ffffff';
+        context.fillRect(0, 0, width, height);
+        context.drawImage(sourceImage, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+        const bytes = Math.floor((dataUrl.length * 3) / 4);
+        if (!dataUrl || bytes > maxBytes) return null;
+
+        const hashCanvas = document.createElement('canvas');
+        hashCanvas.width = 9;
+        hashCanvas.height = 8;
+        const hashContext = hashCanvas.getContext('2d', { willReadFrequently: true });
+        if (!hashContext) return { dataUrl, mimeType: 'image/jpeg', bytes, perceptualHash: '' };
+        hashContext.drawImage(sourceImage, 0, 0, 9, 8);
+        const pixels = hashContext.getImageData(0, 0, 9, 8).data;
+        let bits = '';
+        for (let y = 0; y < 8; y += 1) {
+          for (let x = 0; x < 8; x += 1) {
+            const left = (y * 9 + x) * 4;
+            const right = left + 4;
+            const leftGray = pixels[left] * 0.299 + pixels[left + 1] * 0.587 + pixels[left + 2] * 0.114;
+            const rightGray = pixels[right] * 0.299 + pixels[right + 1] * 0.587 + pixels[right + 2] * 0.114;
+            bits += leftGray > rightGray ? '1' : '0';
+          }
+        }
+        let perceptualHash = '';
+        for (let index = 0; index < bits.length; index += 4) {
+          perceptualHash += Number.parseInt(bits.slice(index, index + 4), 2).toString(16);
+        }
+        return { dataUrl, mimeType: 'image/jpeg', bytes, perceptualHash };
+      };
+
+      const results = [];
+      for (const img of visibleImages) {
+        try {
+          const encoded = await encodeImage(img);
+          if (encoded?.dataUrl) results.push(encoded);
+        } catch (_error) {
+          // A tainted or unavailable thumbnail is skipped and fails closed server-side.
+        }
+      }
+      return results;
+    }, {
+      targetMessageId: messageId,
+      maxDimension: LISTING_IMAGE_PREVIEW_MAX_DIMENSION,
+      quality: LISTING_IMAGE_PREVIEW_QUALITY,
+      maxBytes: LISTING_IMAGE_PREVIEW_MAX_BYTES
+    });
+
+    if (Array.isArray(previews) && previews.length) {
+      const imagePreviews = previews.map((item) => ({
+        dataUrl: item.dataUrl,
+        mimeType: item.mimeType || 'image/jpeg',
+        bytes: Number(item.bytes || 0),
+        sha256: crypto.createHash('sha256').update(String(item.dataUrl || '')).digest('hex'),
+        perceptualHash: String(item.perceptualHash || '').toLowerCase()
+      }));
+      return {
+        ...snapshot,
+        imagePreviews,
+        mediaCount: imagePreviews.length
+      };
+    }
+    return { ...snapshot, imagePreviewError: 'image_preview_unavailable' };
+  } catch (error) {
+    return {
+      ...snapshot,
+      imagePreviewError: error.message || String(error)
+    };
+  }
+}
+
+async function hydrateMediaSnapshot(page, snapshot) {
+  const voiceHydrated = await hydrateVoiceSnapshot(page, snapshot);
+  return hydrateImageSnapshot(page, voiceHydrated);
+}
+
 function isLikelyVoiceAudioResponse(response) {
   const headers = response.headers();
   const contentType = String(headers['content-type'] || '').toLowerCase();
@@ -2026,6 +2151,16 @@ async function ingestSnapshot({ snapshot, row = {}, source = 'unread_scan' }) {
           voice_audio_mime_type: snapshot.voiceAudioMimeType || '',
           voice_audio_bytes: snapshot.voiceAudioBytes || 0,
           voice_audio_error: snapshot.voiceAudioError || snapshot.voiceAudioSkipped || '',
+          image_previews: Array.isArray(snapshot.imagePreviews)
+            ? snapshot.imagePreviews.map((item) => ({
+              data_url: item.dataUrl || '',
+              mime_type: item.mimeType || 'image/jpeg',
+              bytes: Number(item.bytes || 0),
+              sha256: item.sha256 || '',
+              perceptual_hash: item.perceptualHash || ''
+            }))
+            : [],
+          image_preview_error: snapshot.imagePreviewError || '',
           unread_preview: row.preview || '',
           source
         }
@@ -2068,7 +2203,7 @@ async function ingestUnreadChats(page) {
     for (const snapshot of snapshots) {
       const browserMessageKey = browserMessageKeyFor(snapshot, row);
       if (browserMessageKey && seenBrowserMessageIds.has(browserMessageKey)) continue;
-      const hydrated = await hydrateVoiceSnapshot(page, {
+      const hydrated = await hydrateMediaSnapshot(page, {
         ...snapshot,
         browserMessageKey
       });
@@ -2148,7 +2283,7 @@ async function ingestRecentChatsSweep(page, limit = RECENT_CHAT_SWEEP_LIMIT) {
         rowObserved = true;
         continue;
       }
-      const hydrated = await hydrateVoiceSnapshot(page, {
+      const hydrated = await hydrateMediaSnapshot(page, {
         ...snapshot,
         browserMessageKey
       });
@@ -2194,7 +2329,7 @@ async function ingestActiveChat(page) {
     const row = { title: snapshot.chatKey, preview: '' };
     const browserMessageKey = browserMessageKeyFor(snapshot, row);
     if (browserMessageKey && seenBrowserMessageIds.has(browserMessageKey)) continue;
-    const hydrated = await hydrateVoiceSnapshot(page, {
+    const hydrated = await hydrateMediaSnapshot(page, {
       ...snapshot,
       browserMessageKey
     });

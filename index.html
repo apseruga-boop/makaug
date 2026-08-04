@@ -8,7 +8,7 @@
   <meta name="robots" content="index,follow,max-image-preview:large">
   <meta name="makaug-k24-marker" content="k24-intake-integrity-20260803">
   <meta name="facebook-domain-verification" content="wn68k5n1hmg16xalket31iuwsqwa51">
-  <meta name="makaug-release-marker" content="ask-ai-topbar-match-20260718 properties-list-count-fast-20260718 admin-summary-fallback-20260718 admin-summary-warm-nozero-20260718 ai-category-colours-20260718 ai-scoped-localized-prompts-20260718 report-claim-pipeline-v2-20260718 marketplace-p1-20260719 marketplace-report-fixes-20260719 marketplace-enrich-20260719 marketplace-regjourney-20260719 marketplace-owner-direct-fast-20260719 foreign-country-gate-purge-20260724 property-origin-filter-20260724 listing-removal-confirmation-20260724 valuation-live-comparables-20260724 advertising-selfserve-checkout-20260724 crm-lead-bundles-export-20260724 tracked-poster-fingerprint-dedupe-20260724 property-value-calculator-20260725 valuation-evidence-locality-20260725 properties-search-reliability-20260725 valuation-land-currency-media-20260725 properties-search-warmup-20260725 tiktok-display-review-20260725 valuation-canonical-confidence-cards-20260725 properties-summary-cold-fallback-20260725 featured-daily-rotation-20260725 listing-price-quality-gate-20260725 house-ads-v3-20260725 k18c-price-period-integrity-20260725 k18c-rent-evidence-followup-20260725 k18c-source-evidence-precedence-20260725 admin-session-review-queue-usd-20260725 source-intake-integrity-20260725 canonical-location-search-20260725 admin-review-queue-authoritative-status-20260725 admin-review-queue-count-parity-20260725 admin-command-centre-partial-safe-20260726 meta-domain-verification-20260730 tiktok-manual-review-ready-20260802 tiktok-found-online-approval-20260802 staff-dashboard-nonzero-fallback-20260802 k24-intake-integrity-20260803 k25-moderation-queue-recovery-20260803 k26-report-hide-cascade-20260803">
+  <meta name="makaug-release-marker" content="ask-ai-topbar-match-20260718 properties-list-count-fast-20260718 admin-summary-fallback-20260718 admin-summary-warm-nozero-20260718 ai-category-colours-20260718 ai-scoped-localized-prompts-20260718 report-claim-pipeline-v2-20260718 marketplace-p1-20260719 marketplace-report-fixes-20260719 marketplace-enrich-20260719 marketplace-regjourney-20260719 marketplace-owner-direct-fast-20260719 foreign-country-gate-purge-20260724 property-origin-filter-20260724 listing-removal-confirmation-20260724 valuation-live-comparables-20260724 advertising-selfserve-checkout-20260724 crm-lead-bundles-export-20260724 tracked-poster-fingerprint-dedupe-20260724 property-value-calculator-20260725 valuation-evidence-locality-20260725 properties-search-reliability-20260725 valuation-land-currency-media-20260725 properties-search-warmup-20260725 tiktok-display-review-20260725 valuation-canonical-confidence-cards-20260725 properties-summary-cold-fallback-20260725 featured-daily-rotation-20260725 listing-price-quality-gate-20260725 house-ads-v3-20260725 k18c-price-period-integrity-20260725 k18c-rent-evidence-followup-20260725 k18c-source-evidence-precedence-20260725 admin-session-review-queue-usd-20260725 source-intake-integrity-20260725 canonical-location-search-20260725 admin-review-queue-authoritative-status-20260725 admin-review-queue-count-parity-20260725 admin-command-centre-partial-safe-20260726 meta-domain-verification-20260730 tiktok-manual-review-ready-20260802 tiktok-found-online-approval-20260802 staff-dashboard-nonzero-fallback-20260802 k24-intake-integrity-20260803 k25-moderation-queue-recovery-20260803 k26-report-hide-cascade-20260803 whatsapp-listing-photo-flow-20260804">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="makaug.com">
   <meta property="og:title" content="makaug.com | Uganda Property Portal">
@@ -5374,19 +5374,6 @@
               <input id="lp-verify-nin" oninput="onLpVerifyNinInput()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="CMXXXXXXXXXXXX">
               <p id="lp-verify-nin-msg" class="text-xs text-gray-500 mt-1">Required. Write your ID number here. Uganda NIN format check is enabled.</p>
             </div>
-            <div>
-              <label id="lp-field-agent-assisted-label" class="block text-sm font-semibold text-gray-700 mb-1.5">Field Agent assisted?</label>
-              <select id="lp-field-agent-assisted" onchange="toggleLpFieldAgentId();renderListReviewSummary()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white">
-                <option value="no">No</option>
-                <option value="yes">Yes</option>
-              </select>
-              <p id="lp-field-agent-assisted-help" class="text-xs text-gray-500 mt-1">A Field Agent is someone who helped you fill this form. Only select yes if makaug or a broker assistant supported you.</p>
-            </div>
-            <div id="lp-field-agent-id-wrap" class="hidden">
-              <label id="lp-field-agent-id-label" class="block text-sm font-semibold text-gray-700 mb-1.5">Field Agent ID</label>
-              <input id="lp-field-agent-id" oninput="renderListReviewSummary()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="e.g. FA-7301">
-              <p id="lp-field-agent-id-help" class="text-xs text-gray-500 mt-1">Only fill this if a Field Agent assisted you.</p>
-            </div>
           </div>
 
           <label id="lp-verify-nin-match-wrap" class="mt-3 flex items-start gap-2 text-sm text-gray-700">
@@ -8901,7 +8888,6 @@
           <button id="auth-audience-finder" title="Property Finder: someone searching for properties to buy or rent." type="button" onclick="setAuthSignInAudience('finder')" class="flex-1 py-2.5 rounded-lg text-sm font-semibold bg-green-800 text-white">Property Finder</button>
           <button id="auth-audience-student" title="Student: someone searching for student accommodation." type="button" onclick="setAuthSignInAudience('student')" class="flex-1 py-2.5 rounded-lg text-sm font-semibold text-green-700">Student</button>
           <button id="auth-audience-agent" title="Broker: a property professional who lists and manages properties." type="button" onclick="setAuthSignInAudience('agent')" class="flex-1 py-2.5 rounded-lg text-sm font-semibold text-green-700">Broker</button>
-          <button id="auth-audience-field" title="Field Agent: signs up owners/brokers/properties and tracks approved output." type="button" onclick="setAuthSignInAudience('field_agent')" class="flex-1 py-2.5 rounded-lg text-sm font-semibold text-green-700">Field Agent</button>
           <button id="auth-audience-advertiser" title="Advertiser: creates campaign requests and tracks advertising follow-up." type="button" onclick="setAuthSignInAudience('advertiser')" class="flex-1 py-2.5 rounded-lg text-sm font-semibold text-green-700">Advertiser</button>
           <button id="auth-audience-admin" data-private-admin="1" title="Admin: internal control access for approvals, moderation, and platform operations." type="button" onclick="setAuthSignInAudience('admin')" class="hidden flex-1 py-2.5 rounded-lg text-sm font-semibold text-green-700">Admin</button>
         </div>
@@ -8911,17 +8897,6 @@
         <button id="auth-admin-access-btn" type="button" onclick="setAuthSignInAudience('admin')" class="text-[11px] text-gray-400 hover:text-gray-600 underline underline-offset-2 mb-4">
           Admin access
         </button>
-
-        <div id="auth-field-login-wrap" class="hidden grid sm:grid-cols-2 gap-3 mb-4">
-          <div>
-            <label class="block text-sm font-medium text-gray-800 mb-2">Field Agent ID</label>
-            <input id="auth-field-employee-number" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="e.g. FA-7301">
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-800 mb-2">4-digit PIN</label>
-            <input id="auth-field-agent-number" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="Private PIN from admin">
-          </div>
-        </div>
 
         <div id="auth-standard-login-wrap" class="mb-4">
           <label id="auth-signin-identifier-label" class="block text-sm font-medium text-gray-800 mb-2">Phone Number or Email</label>
@@ -8943,7 +8918,6 @@
           <button id="auth-signup-audience-finder" title="Create account to save properties and track searches." type="button" onclick="setAuthSignUpAudience('finder')" class="flex-1 py-2.5 rounded-lg text-sm font-semibold bg-green-800 text-white">Property Finder</button>
           <button id="auth-signup-audience-student" title="Create account for student accommodation search, alerts, and viewings." type="button" onclick="setAuthSignUpAudience('student')" class="flex-1 py-2.5 rounded-lg text-sm font-semibold text-green-700">Student</button>
           <button id="auth-signup-audience-agent" title="Create account to list properties as a broker." type="button" onclick="setAuthSignUpAudience('agent')" class="flex-1 py-2.5 rounded-lg text-sm font-semibold text-green-700">Broker</button>
-          <button id="auth-signup-audience-field" title="Apply to become a makaug.com Field Agent." type="button" onclick="setAuthSignUpAudience('field_agent')" class="flex-1 py-2.5 rounded-lg text-sm font-semibold text-green-700">Field Agent</button>
           <button id="auth-signup-audience-advertiser" title="Create advertiser account for campaign requests." type="button" onclick="setAuthSignUpAudience('advertiser')" class="flex-1 py-2.5 rounded-lg text-sm font-semibold text-green-700">Advertiser</button>
         </div>
         <p id="auth-signup-help" class="text-xs text-gray-500 mb-4">
@@ -8951,10 +8925,6 @@
         </p>
         <input id="auth-signup-role" type="hidden" value="Buyer / Renter">
 
-        <div id="auth-field-signup-note" class="hidden mb-4 bg-blue-50 border border-blue-200 rounded-xl p-3 text-sm text-blue-800">
-          Field Agent applications are reviewed by makaug operations before work access is activated.
-          <div class="mt-1">Complete the form below with your territory, languages, availability, and experience. You will see a pending-review status after OTP verification.</div>
-        </div>
 
         <div id="auth-signup-form-wrap">
           <div id="auth-signup-agent-registration-wrap" class="hidden mb-4 rounded-xl border border-green-100 bg-green-50 p-3">
@@ -8991,12 +8961,6 @@
               <input id="auth-profile-agent-company" data-profile-group="agent" class="hidden border border-green-100 rounded-xl px-3 py-2.5 text-sm bg-white" placeholder="Agency / brokerage name">
               <input id="auth-profile-agent-districts" data-profile-group="agent" class="hidden border border-green-100 rounded-xl px-3 py-2.5 text-sm bg-white" placeholder="Districts you cover">
               <input id="auth-profile-agent-specialities" data-profile-group="agent" class="hidden border border-green-100 rounded-xl px-3 py-2.5 text-sm bg-white sm:col-span-2" placeholder="Specialities, e.g. land, rentals, commercial">
-              <input id="auth-profile-field-territory" data-profile-group="field_agent" class="hidden border border-green-100 rounded-xl px-3 py-2.5 text-sm bg-white" placeholder="Main territory / district">
-              <input id="auth-profile-field-areas" data-profile-group="field_agent" class="hidden border border-green-100 rounded-xl px-3 py-2.5 text-sm bg-white" placeholder="Areas you can cover">
-              <input id="auth-profile-field-languages" data-profile-group="field_agent" class="hidden border border-green-100 rounded-xl px-3 py-2.5 text-sm bg-white" placeholder="Languages spoken">
-              <input id="auth-profile-field-availability" data-profile-group="field_agent" class="hidden border border-green-100 rounded-xl px-3 py-2.5 text-sm bg-white" placeholder="Availability, e.g. weekdays / weekends">
-              <input id="auth-profile-field-experience" data-profile-group="field_agent" class="hidden border border-green-100 rounded-xl px-3 py-2.5 text-sm bg-white sm:col-span-2" placeholder="Relevant property, sales, or field experience">
-              <input id="auth-profile-field-reason" data-profile-group="field_agent" class="hidden border border-green-100 rounded-xl px-3 py-2.5 text-sm bg-white sm:col-span-2" placeholder="Why do you want to become a makaug.com Field Agent?">
             </div>
           </div>
 
@@ -9239,18 +9203,6 @@
         <div>
           <label class="block text-sm font-medium text-gray-800 mb-2">Areas Specialised In *</label>
           <input id="agent-areas" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="e.g. Kampala, Wakiso, Mukono">
-        </div>
-
-        <div class="bg-gray-50 border border-gray-200 rounded-xl p-3">
-          <label class="block text-sm font-medium text-gray-800 mb-1.5">Field Agent assisted?</label>
-          <select id="agent-field-assisted" onchange="toggleAgentFieldIdInput()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white">
-            <option value="no">No</option>
-            <option value="yes">Yes</option>
-          </select>
-          <p class="text-xs text-gray-500 mt-1">If a Field Agent helped with this registration, choose Yes and enter their ID.</p>
-          <div id="agent-field-id-wrap" class="hidden mt-2">
-            <input id="agent-field-id" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white" placeholder="Field Agent ID (e.g. FA-7301)">
-          </div>
         </div>
 
         <div id="agent-certificate-wrap">

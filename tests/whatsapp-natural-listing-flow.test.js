@@ -17,22 +17,22 @@ assert(
   'WhatsApp listing flow must detect natural property detail replies'
 );
 assert(
-  whatsappRoute.includes("if (currentStep === 'ask_field_agent') return isAffirmativeReply(clean) || isNegativeReply(clean) || isNaturalListingDetailReply(clean);"),
-  'Idle resume must treat natural property details as an active field-agent-step reply'
+  whatsappRoute.includes("if (step === 'ask_field_agent' || step === 'ask_field_agent_details')"),
+  'Legacy Field Agent listing sessions must be migrated without showing the retired question'
 );
 
-const fieldAgentIndex = whatsappRoute.indexOf("if (step === 'ask_field_agent')");
-const fieldAgentBlock = whatsappRoute.slice(fieldAgentIndex, whatsappRoute.indexOf("if (step === 'ask_field_agent_details')"));
-assert(fieldAgentBlock.includes('buildNaturalListingDetailDraft(cleanBody, draft)'), 'Field-agent step must save natural listing detail instead of repeating invalid input');
 assert(
-  fieldAgentBlock.includes('listingDetailSavedReply(lang') || fieldAgentBlock.includes('fastListingProgressReply(lang'),
-  'Field-agent natural detail path must acknowledge saved details before the next prompt'
+  whatsappRoute.includes('field_agent_prompt_retired_at'),
+  'Retired Field Agent steps must be auditable when an in-progress session is migrated'
 );
-assert(fieldAgentBlock.includes("assisted_by_field_agent: false"), 'Natural detail path must default field-agent credit to No');
+assert(
+  whatsappRoute.includes("assisted_by_field_agent: false") && whatsappRoute.includes("field_agent_reference: null"),
+  'New WhatsApp listings must not ask for or assign Field Agent credit'
+);
 
 assert(
-  whatsappRoute.includes('function photoStepReminderMessage') && whatsappRoute.includes('photoStepReminderMessage(lang, step)'),
-  'Photo recovery should use a short next-step reminder instead of full resume copy'
+  whatsappRoute.includes('function photoStepReminderMessage') && whatsappRoute.includes('validateAndStoreListingPhotos'),
+  'Early listing photos must be validated and acknowledged in the same next-step message'
 );
 assert(
   whatsappRoute.includes('function parseBedroomDraft') && whatsappRoute.includes('bedroom_options_text'),
