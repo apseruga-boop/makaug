@@ -1149,6 +1149,55 @@ async function sendBrokerApprovalEmail({ to, firstName = 'there', agent = {}, te
   return sendSupportEmail({ to: recipient, subject, text, html });
 }
 
+async function sendBrokerInvitationEmail({ to, firstName = 'there', agent = {}, temporaryPassword = '', dashboardUrl = `${getPublicSiteUrl()}/broker-dashboard`, supportUrl = getSupportWhatsappUrl() }) {
+  const recipient = String(to || '').trim();
+  if (!recipient) return { sent: false, reason: 'no_recipient' };
+  const safeFirstName = cleanText(firstName || agent.full_name || agent.company_name || 'there');
+  const hasTemporaryPassword = Boolean(String(temporaryPassword || '').trim());
+  const subject = 'Your makaug.com broker profile is ready to complete';
+  const text = [
+    `Hello ${safeFirstName},`,
+    '',
+    'Makaug has prepared your broker workspace and public profile draft.',
+    '',
+    `Email: ${recipient}`,
+    hasTemporaryPassword ? `Temporary password: ${temporaryPassword}` : 'Use your existing makaug.com password to sign in.',
+    `Broker profile: ${agent.company_name || agent.full_name || 'Broker account'}`,
+    `Dashboard: ${dashboardUrl}`,
+    '',
+    hasTemporaryPassword
+      ? 'Please sign in and change this temporary password immediately.'
+      : 'Sign in with your existing password.',
+    'On your first visit, confirm your working phone number by OTP and upload a clear photo of your National ID. These details stay private and are reviewed for trust and fraud prevention.',
+    'You can then prepare property listings, attach photos and video-tour links, and send them to Makaug review. Nothing is published automatically.',
+    '',
+    `Need help? WhatsApp Makaug: ${supportUrl}`,
+    '',
+    'Welcome to Makaug.'
+  ].join('\n');
+  const html = buildWelcomeEmailHtml({
+    firstName: safeFirstName,
+    roleContent: welcomeRoleContent({ role: 'agent_broker', profile_data: { audience: 'agent' } }),
+    preferredLanguage: 'English',
+    preferredChannel: 'WhatsApp',
+    siteUrl: getPublicSiteUrl(),
+    whatsappUrl: supportUrl,
+    weeklyTipsEnabled: true
+  }).replace(
+    '<p style="margin:22px 0 0;color:#6b7280;font-size:12px;line-height:1.6;">You can update your contact details, password, language, and preferences from Account Settings. We never send or reveal your password.</p>',
+    `<div style="margin-top:22px;border:1px solid #bbf7d0;background:#f0fdf4;border-radius:16px;padding:16px;">
+      <div style="font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.1em;color:#166534;">Broker invitation</div>
+      <div style="font-size:14px;color:#111827;line-height:1.7;margin-top:8px;"><strong>Email:</strong> ${escapeHtml(recipient)}<br>${hasTemporaryPassword ? `<strong>Temporary password:</strong> ${escapeHtml(temporaryPassword)}<br>` : ''}<strong>Dashboard:</strong> <a href="${escapeHtml(dashboardUrl)}" style="color:#166534;font-weight:800;">Open broker workspace</a></div>
+    </div>
+    <div style="margin-top:14px;border:1px solid #fde68a;background:#fffbeb;border-radius:16px;padding:16px;color:#78350f;font-size:13px;line-height:1.7;">
+      <strong>Complete before fast-track listing:</strong> change the temporary password, verify a working phone number by OTP, and upload a clear National ID photo. Listings you submit still go to Makaug review before publication.
+    </div>
+    <p style="margin:18px 0 0;color:#6b7280;font-size:12px;line-height:1.6;">Makaug keeps identity documents private and uses them only for verification, safety, fraud prevention, and legal compliance.</p>`
+  );
+
+  return sendSupportEmail({ to: recipient, subject, text, html });
+}
+
 module.exports = {
   emailProviderConfigured,
   emailProviderDiagnostic,
@@ -1160,6 +1209,7 @@ module.exports = {
   sendOtpEmail,
   sendSupportEmail,
   sendBrokerApprovalEmail,
+  sendBrokerInvitationEmail,
   sendPropertySubmissionNotification,
   sendListingModerationNotification,
   sendWelcomeEmail
