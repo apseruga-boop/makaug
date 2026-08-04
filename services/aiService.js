@@ -393,8 +393,16 @@ function heuristicIntent(text) {
   }
   if (
     /(list|advertise|post|submit|upload|my property|teeka|kwandika|orodhesha|listing)/.test(t)
-    || /\b(?:am|i am|i'm|im|we are|we're)\s+selling\b.{0,140}\b(?:property|house|home|land|plot|plots|farm|apartment|flat|room|rental|hostel|commercial|shop|office|building)\b/.test(t)
-    || /\b(?:selling|sell)\s+(?:my|our|the|a|an)?\s*.{0,100}\b(?:property|house|home|land|plot|plots|farm|apartment|flat|room|rental|hostel|commercial|shop|office|building)\b/.test(t)
+    || /\b(?:i|we)\s+(?:want|need|would like|wish)\s+to\s+(?:sell|sale|list|post|upload)\s+(?:my|our)\s+(?:property|house|home|land|plot|farm|apartment|flat|condo|condos|condominium|room|hostel|shop|office|building)\b/.test(t)
+    || /\b(?:i|we)\s+(?:want|need|would like|wish)\s+to\s+(?:rent out|let|lease|list|post)\s+(?:my|our)\s+(?:property|house|home|land|plot|farm|apartment|flat|condo|condos|condominium|room|hostel|shop|office|building)\b/.test(t)
+    || /\b(?:am|i am|i'm|im|we are|we're)\s+selling\b.{0,140}\b(?:property|house|home|land|plot|plots|farm|apartment|flat|condo|condos|condominium|room|rental|hostel|commercial|shop|office|building)\b/.test(t)
+    || /\b(?:selling|sell)\s+(?:my|our|the|a|an)?\s*.{0,100}\b(?:property|house|home|land|plot|plots|farm|apartment|flat|condo|condos|condominium|room|rental|hostel|commercial|shop|office|building)\b/.test(t)
+    || /\b(?:njagala|nhenda)\s+(?:okutunda|okupangisa|okuteeka)\b.{0,100}\b(?:ennyumba|ettaka|amaka|property|plot)\b/.test(t)
+    || /\b(?:nataka|ninataka)\s+(?:kuuza|kupangisha|kuorodhesha)\b.{0,100}\b(?:nyumba|mali|ardhi|shamba|kiwanja|property)\b/.test(t)
+    || /\b(?:ninyenda|nshaka)\s+(?:kugurisha|kukodisa|kuhandiika)\b.{0,100}\b(?:enju|inzu|itaka|obutaka|property|plot)\b/.test(t)
+    || /\bamito\s+(?:cato|keto)\b.{0,100}\b(?:ot|ngom|property|plot)\b/.test(t)
+    || /(?:ቤቴን|ንብረቴን|መሬቴን).{0,40}(?:መሸጥ|ሽያጭ)/u.test(t)
+    || /(?:أريد|اريد).{0,40}(?:بيع|أبيع).{0,40}(?:منزلي|بيتي|عقاري|أرضي)/u.test(t)
   ) {
     return { intent: 'property_listing', confidence: 0.67, entities: {} };
   }
@@ -1013,7 +1021,7 @@ Return strict JSON only:
 Rules:
 - Property search includes natural requests in any supported language, e.g. "2 bed in Kampala", "Natafuta shamba Mbale", "Noonya enju eya rent".
 - Property search also includes conversational affordability questions such as "what is the cheapest area to stay in?", "what is the cheapest area?", "can I get a house for $2 million?", "houses for 2 million", and equivalents in supported languages.
-- Property listing must win when the user says they want to list, post, upload, submit, add, create, advertise, or sell their own property/listing, including natural seller messages like "am selling my land with a land title" or "hello am selling the land on Entebbe main road", even when the same message says "for sale" or "to rent".
+- Property listing must win when the user says they want to list, post, upload, submit, add, create, advertise, or sell their own property/listing, including natural seller messages like "I want to sale my house in Rubaga", "am selling my land with a land title" or "hello am selling the land on Entebbe main road", even when the same message says "for sale" or "to rent". Treat common grammar and spelling variants such as "want to sale my house" as seller intent, not buyer search.
 - search_near_me means the user wants the compact website Location control or WhatsApp shared location search. shared_location_search means a WhatsApp latitude/longitude was provided. Default radius is 10 miles / 16.1 km.
 - apply_filters means the user is refining by property type, min price, max price, bedrooms, bathrooms, amenities, campus, title type, or commercial type.
 - Do not present makaug as an official title-checking, legal-clearance, or government records service. The assistant should mirror the website: search/list properties, contact sellers/brokers, use safety guidance, and recommend independent professional review before payment.

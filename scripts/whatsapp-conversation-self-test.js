@@ -28,7 +28,7 @@ const scenarios = [
     name: 'English greeting starts friendly menu',
     messages: ['Hello'],
     expect: [
-      { step: 'main_menu', includes: ['property assistant', 'List my property'] }
+      { step: 'main_menu', includes: ['property assistant', 'assistant in your pocket', 'I want to sell my house'] }
     ]
   },
   {
@@ -49,7 +49,7 @@ const scenarios = [
     name: 'Kiswahili greeting keeps language',
     messages: ['Habari'],
     expect: [
-      { step: 'main_menu', includes: ['makaug', 'Tafuta'] }
+      { step: 'main_menu', includes: ['makaug', 'Niambie unachohitaji'] }
     ]
   },
   {
@@ -590,7 +590,7 @@ const scenarios = [
     expectLast: { step: 'ask_public_name', includesAny: ['public contact name', 'Amina'] }
   },
   {
-    name: 'Listing contact details continue after photos to OTP',
+    name: 'Listing contact confirmation continues to identity without OTP',
     messages: [
       '1',
       '1',
@@ -609,12 +609,9 @@ const scenarios = [
       { mediaUrl: 'whatsapp-web://kitchen', mediaType: 'image' },
       { mediaUrl: 'whatsapp-web://bathroom', mediaType: 'image' },
       'Amina',
-      '1',
-      '+256760112587',
-      'CM1234567890ABCD',
-      { mediaUrl: 'whatsapp-web://selfie', mediaType: 'image' }
+      'YES'
     ],
-    expectLast: { step: 'verify_otp', includesAny: ['6-digit code', 'SMS'] }
+    expectLast: { step: 'ask_selfie', includesAny: ['National ID', 'photo'], excludes: ['6-digit code', 'OTP'] }
   },
   {
     name: 'Listing identity step rejects National ID PDF uploads',
@@ -636,9 +633,7 @@ const scenarios = [
       { mediaUrl: 'whatsapp-web://kitchen', mediaType: 'image' },
       { mediaUrl: 'whatsapp-web://bathroom', mediaType: 'image' },
       'Amina',
-      '1',
-      '+256760112587',
-      'CM1234567890ABCD',
+      'YES',
       { mediaUrl: 'whatsapp-web://national-id.pdf', mediaType: 'application/pdf' }
     ],
     expectLast: { step: 'ask_selfie', includesAny: ['No PDFs', 'photo'], excludes: ['6-digit code'] }
