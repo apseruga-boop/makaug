@@ -1287,7 +1287,8 @@ async function provisionApprovedBrokerAccount(agent = {}, req = null, options = 
     approved_by_admin: !pendingVerification,
     broker_approved_at: pendingVerification ? (existingProfile.broker_approved_at || '') : nowIso,
     broker_invited_at: pendingVerification ? (existingProfile.broker_invited_at || nowIso) : (existingProfile.broker_invited_at || ''),
-    broker_phone_verification_required: pendingVerification,
+    broker_phone_verification_required: false,
+    broker_manual_phone_review_required: pendingVerification,
     broker_identity_verification_required: pendingVerification,
     broker_account_provisioned_at: existingProfile.broker_account_provisioned_at || nowIso,
     force_password_change: Boolean(temporaryPassword) || existingProfile.force_password_change === true
@@ -8249,7 +8250,7 @@ router.post('/agents/invite', async (req, res, next) => {
              listing_limit = 2147483647,
              status = CASE WHEN status = 'approved' THEN status ELSE 'pending' END,
              agent_application_channel = COALESCE(NULLIF(agent_application_channel, ''), 'admin_invite'),
-             verification_reason = CONCAT_WS(' ', NULLIF(verification_reason, ''), '[ADMIN_BROKER_INVITE] Identity and phone verification required on first login.'),
+             verification_reason = CONCAT_WS(' ', NULLIF(verification_reason, ''), '[ADMIN_BROKER_INVITE] National ID and phone contact require manual staff review after first login; no OTP.'),
              updated_at = NOW()
          WHERE id = $1
          RETURNING *`,
@@ -8276,7 +8277,7 @@ router.post('/agents/invite', async (req, res, next) => {
            bio, status, agent_application_channel, verification_reason
          ) VALUES (
            $1,$2,$3,'registered',2147483647,$4,$5,$6,$7::text[],$8::text[],NULLIF($9,''),$10,
-           'pending','admin_invite','[ADMIN_BROKER_INVITE] Identity and phone verification required on first login.'
+           'pending','admin_invite','[ADMIN_BROKER_INVITE] National ID and phone contact require manual staff review after first login; no OTP.'
          )
          RETURNING *`,
         [
@@ -8315,6 +8316,7 @@ router.post('/agents/invite', async (req, res, next) => {
         registration_status: agent.registration_status,
         identity_verification_status: agent.identity_document_url ? 'uploaded' : 'pending',
         phone_verification_status: agent.contact_phone_verified_at ? 'verified' : 'pending',
+        phone_review_mode: 'manual_staff_review',
         account_provisioning: accountProvisioning
       }
     });

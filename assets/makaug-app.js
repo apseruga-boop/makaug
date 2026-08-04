@@ -11595,10 +11595,8 @@ function startBrokerOnlineListing() {
   }, 150);
 }
 
-let brokerVerificationOtpToken = "";
-
 function brokerVerificationComplete(broker = {}) {
-  return Boolean(broker.identity_document_url && broker.contact_phone_verified_at);
+  return Boolean(broker.identity_document_url && (broker.phone || broker.whatsapp));
 }
 
 function showBrokerInviteWelcomeIfNeeded(broker = {}, profile = {}) {
@@ -11638,69 +11636,6 @@ function setBrokerVerificationStatus(message, tone = "neutral") {
   status.classList.remove("hidden");
 }
 
-async function sendBrokerVerificationOtp() {
-  const phone = normalizePhoneInput(document.getElementById("broker-verification-phone")?.value || "");
-  const button = document.getElementById("broker-verification-send-otp");
-  if (!phone) {
-    setBrokerVerificationStatus("Enter the working Uganda phone number first.", "error");
-    return;
-  }
-  if (button) {
-    button.disabled = true;
-    button.textContent = "Sending...";
-  }
-  try {
-    await apiRequest("/api/properties/request-submit-otp", {
-      method: "POST",
-      body: { channel: "phone", phone, audience: "agent", preferred_language: currentLang }
-    });
-    brokerVerificationOtpToken = "";
-    const phoneStatus = document.getElementById("broker-verification-phone-status");
-    if (phoneStatus) phoneStatus.textContent = "Code sent. Enter it before it expires.";
-    setBrokerVerificationStatus("Verification code sent to the phone number.", "success");
-  } catch (error) {
-    setBrokerVerificationStatus(error.message || "Could not send the phone code.", "error");
-  } finally {
-    if (button) {
-      button.disabled = false;
-      button.textContent = "Send code";
-    }
-  }
-}
-
-async function confirmBrokerVerificationOtp() {
-  const phone = normalizePhoneInput(document.getElementById("broker-verification-phone")?.value || "");
-  const code = (document.getElementById("broker-verification-code")?.value || "").trim();
-  const button = document.getElementById("broker-verification-confirm-otp");
-  if (!phone || !code) {
-    setBrokerVerificationStatus("Enter the phone number and OTP code.", "error");
-    return;
-  }
-  if (button) {
-    button.disabled = true;
-    button.textContent = "Checking...";
-  }
-  try {
-    const response = await apiRequest("/api/properties/verify-submit-otp", {
-      method: "POST",
-      body: { channel: "phone", phone, code }
-    });
-    brokerVerificationOtpToken = response?.data?.listing_otp_token || "";
-    if (!brokerVerificationOtpToken) throw new Error("Phone verification did not return a secure token.");
-    const phoneStatus = document.getElementById("broker-verification-phone-status");
-    if (phoneStatus) phoneStatus.textContent = "Phone verified. Complete the National ID step.";
-    setBrokerVerificationStatus("Phone verified successfully.", "success");
-  } catch (error) {
-    brokerVerificationOtpToken = "";
-    setBrokerVerificationStatus(error.message || "The code is invalid or expired.", "error");
-  } finally {
-    if (button) {
-      button.disabled = false;
-      button.textContent = "Verify phone";
-    }
-  }
-}
-
 async function submitBrokerVerification() {
   const phone = normalizePhoneInput(document.getElementById("broker-verification-phone")?.value || "");
   const nin = (document.getElementById("broker-verification-nin")?.value || "").trim();
@@ -11708,8 +11643,8 @@ async function submitBrokerVerification() {
   const privacy = document.getElementById("broker-verification-privacy")?.checked === true;
   const retention = document.getElementById("broker-verification-retention")?.checked === true;
   const button = document.getElementById("broker-verification-submit");
-  if (!brokerVerificationOtpToken) {
-    setBrokerVerificationStatus("Verify the working phone number first.", "error");
+  if (!phone) {
+    setBrokerVerificationStatus("Enter a valid working Uganda phone number.", "error");
     return;
   }
   if (!nin || !file || !privacy || !retention) {
@@ -11732,7 +11667,6 @@ async function submitBrokerVerification() {
         phone,
         nin,
         identity_document: identityDocument,
-        listing_otp_token: brokerVerificationOtpToken,
         privacy_consent_accepted: privacy,
         data_retention_notice_accepted: retention
       }
@@ -11740,6 +11674,7 @@ async function submitBrokerVerification() {
     const profileData = {
       ...(authState?.user?.profile_data || {}),
       broker_phone_verification_required: false,
+      broker_manual_phone_review_required: true,
       broker_identity_verification_required: false,
       broker_identity_document_uploaded: true,
       broker_onboarding_completed_at: new Date().toISOString(),
@@ -11748,10 +11683,8 @@ async function submitBrokerVerification() {
     persistAuthState(authState?.token, {
       ...authState.user,
       phone,
-      phone_verified: true,
       profile_data: profileData
     });
-    brokerVerificationOtpToken = "";
     setBrokerVerificationStatus(response?.data?.message || "Verification details received.", "success");
     window.setTimeout(() => renderAgentDashboard(), 500);
   } catch (error) {
@@ -21114,7 +21047,7 @@ async function adminInviteBroker(event) {
     if (result) {
       result.innerHTML = `
         <div class="font-black text-green-900">Broker workspace created</div>
-        <div class="mt-1">${adminEscape(data.company_name || "Agent")} is pending phone and National ID verification. Access email status: ${adminEscape(emailStatus)}.</div>
+        <div class="mt-1">${adminEscape(data.company_name || "Agent")} is pending manual phone and National ID review. Access email status: ${adminEscape(emailStatus)}. No OTP is required.</div>
         <div class="mt-2 text-[11px] text-gray-500">No property was created. Listings submitted by this agent will enter Makaug review before publication.</div>`;
     }
     toast(emailStatus === "sent" ? "Broker invited and access email sent." : "Broker workspace created; check the email delivery status.");
@@ -21329,6 +21262,7 @@ function renderAdminBrokerRows(agents) {
     const hasPrivacyConsent = agent.privacy_consent_accepted === true && agent.data_retention_notice_accepted === true;
     const makaugAgentNumber = agent.makaug_agent_number || "Pending number";
     const phoneVerified = Boolean(agent.contact_phone_verified_at);
+    const phoneReviewLabel = phoneVerified ? "staff verified" : (agent.phone ? "submitted for staff review" : "missing");
     const expiryLabel = agent.id_expiry_date ? formatDateShort(agent.id_expiry_date) : "missing";
     const experienceLabel = agent.experience_years || agent.experience_years === 0
       ? `${agent.experience_years} year${Number(agent.experience_years) === 1 ? "" : "s"}`
@@ -21343,7 +21277,7 @@ function renderAdminBrokerRows(agents) {
             <div class="text-xs text-gray-500 mt-1">${adminEscape(agent.company || "makaug")} • ${adminEscape(contact)}</div>
             <div class="text-xs text-gray-500 mt-1">${adminEscape(agent.area || "Uganda")} • ${adminEscape(agent.licence || "No licence recorded")}</div>
             <div class="text-[11px] text-gray-500 mt-1">Agent No: <strong>${adminEscape(makaugAgentNumber)}</strong> • Channel: ${adminEscape(channelLabel)}${agent.user_id ? ` • User linked: ${adminEscape(agent.user_id)}` : ""}</div>
-            <div class="text-[11px] text-gray-500 mt-1">NIN: ${adminEscape(agent.nin ? "provided" : "missing")} • ID expiry: ${adminEscape(expiryLabel)} • ID photo: ${idDocumentUploaded ? "uploaded" : "missing"} • Profile photo: ${agent.profile_photo_url ? "uploaded" : "missing"} • Phone OTP: ${phoneVerified ? "verified" : "missing"} • Experience: ${adminEscape(experienceLabel)} • Privacy: ${hasPrivacyConsent ? "accepted" : "missing"}</div>
+            <div class="text-[11px] text-gray-500 mt-1">NIN: ${adminEscape(agent.nin ? "provided" : "missing")} • ID expiry: ${adminEscape(expiryLabel)} • ID photo: ${idDocumentUploaded ? "uploaded" : "missing"} • Profile photo: ${agent.profile_photo_url ? "uploaded" : "missing"} • Phone review: ${adminEscape(phoneReviewLabel)} • Experience: ${adminEscape(experienceLabel)} • Privacy: ${hasPrivacyConsent ? "accepted" : "missing"}</div>
           </div>
           <div class="flex gap-1.5 flex-wrap justify-end">
             <span class="text-[11px] font-semibold px-2 py-1 rounded ${statusMeta.cls}">${statusMeta.label}</span>
@@ -29541,8 +29475,7 @@ function isSignedInBrokerListing() {
 function isBrokerListingFastTrackReady() {
   const details = brokerListingContactDetails();
   return isSignedInBrokerListing()
-    && brokerVerificationComplete(details.broker)
-    && authState?.user?.phone_verified === true;
+    && brokerVerificationComplete(details.broker);
 }
 
 function brokerListingContactDetails() {
@@ -29579,7 +29512,7 @@ function prefillBrokerListingIdentity() {
   const details = brokerListingContactDetails();
   if (!isBrokerListingFastTrackReady()) {
     document.getElementById("lp-broker-fast-track-note")?.classList.add("hidden");
-    setTextById("lp-otp-status", "Complete the private phone and National ID trust check in your broker dashboard before submitting a broker listing.");
+    setTextById("lp-otp-status", "Submit your phone and National ID trust check in the broker dashboard before sending a listing to review. No OTP is required.");
     renderListReviewSummary();
     return;
   }
@@ -29598,7 +29531,7 @@ function prefillBrokerListingIdentity() {
   });
   const note = document.getElementById("lp-broker-fast-track-note");
   if (note) note.classList.remove("hidden");
-  setTextById("lp-otp-status", "Broker account verified. No extra OTP is needed for broker listings.");
+  setTextById("lp-otp-status", "Broker trust details submitted. No OTP is required; listings still enter Makaug review.");
   renderListReviewSummary();
 }
 
@@ -29606,7 +29539,7 @@ function validateListStep3() {
   clearLpValidationErrors("#lp-step-3");
   if (isSignedInBrokerListing()) {
     if (!isBrokerListingFastTrackReady()) {
-      toast("Complete phone and National ID verification in your broker dashboard before submitting a listing.");
+      toast("Submit your phone and National ID trust check in the broker dashboard before listing. No OTP is required.");
       return false;
     }
     prefillBrokerListingIdentity();

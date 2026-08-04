@@ -1168,7 +1168,7 @@ async function sendBrokerInvitationEmail({ to, firstName = 'there', agent = {}, 
     hasTemporaryPassword
       ? 'Please sign in and change this temporary password immediately.'
       : 'Sign in with your existing password.',
-    'On your first visit, confirm your working phone number by OTP and upload a clear photo of your National ID. These details stay private and are reviewed for trust and fraud prevention.',
+    'On your first visit, submit your working phone number and upload a clear photo of your National ID. No OTP is required; Makaug staff review these details for trust and fraud prevention.',
     'You can then prepare property listings, attach photos and video-tour links, and send them to Makaug review. Nothing is published automatically.',
     '',
     `Need help? WhatsApp Makaug: ${supportUrl}`,
@@ -1190,7 +1190,7 @@ async function sendBrokerInvitationEmail({ to, firstName = 'there', agent = {}, 
       <div style="font-size:14px;color:#111827;line-height:1.7;margin-top:8px;"><strong>Email:</strong> ${escapeHtml(recipient)}<br>${hasTemporaryPassword ? `<strong>Temporary password:</strong> ${escapeHtml(temporaryPassword)}<br>` : ''}<strong>Dashboard:</strong> <a href="${escapeHtml(dashboardUrl)}" style="color:#166534;font-weight:800;">Open broker workspace</a></div>
     </div>
     <div style="margin-top:14px;border:1px solid #fde68a;background:#fffbeb;border-radius:16px;padding:16px;color:#78350f;font-size:13px;line-height:1.7;">
-      <strong>Complete before fast-track listing:</strong> change the temporary password, verify a working phone number by OTP, and upload a clear National ID photo. Listings you submit still go to Makaug review before publication.
+      <strong>Complete before listing:</strong> change the temporary password, submit a working phone number, and upload a clear National ID photo. No OTP is required. Makaug staff review the trust details and every listing before publication.
     </div>
     <p style="margin:18px 0 0;color:#6b7280;font-size:12px;line-height:1.6;">Makaug keeps identity documents private and uses them only for verification, safety, fraud prevention, and legal compliance.</p>`
   );
