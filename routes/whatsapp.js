@@ -83,7 +83,7 @@ const WHATSAPP_NATURAL_SEARCH_AI_MODE = String(process.env.WHATSAPP_NATURAL_SEAR
 const WHATSAPP_REPLY_AI_MODE = String(process.env.WHATSAPP_REPLY_AI_MODE || 'fast').trim().toLowerCase();
 const WHATSAPP_PROPERTY_RESULT_LIMIT = 10;
 const MIN_PUBLIC_WHATSAPP_PRICE_UGX = 10000;
-const WHATSAPP_LISTING_PHOTO_FLOW_MARKER = 'whatsapp-listing-photo-flow-20260804';
+const WHATSAPP_LISTING_PHOTO_FLOW_MARKER = 'whatsapp-web-modern-media-20260804';
 const WHATSAPP_MIN_LISTING_PHOTOS = 5;
 
 // Language Translations

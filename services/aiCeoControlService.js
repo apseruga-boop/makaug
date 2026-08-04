@@ -16,29 +16,6 @@ const DEFAULT_KILL_SWITCHES = {
   founder_approval_required_for_external_actions: true
 };
 
-const PHONE_COMMAND_KEYWORDS = [
-  'ceo',
-  'md',
-  'report',
-  'morning',
-  'status',
-  'visitors',
-  'visited',
-  'listings',
-  'pending',
-  'leads',
-  'whatsapp',
-  'email',
-  'reply',
-  'respond',
-  'send',
-  'revenue',
-  'advertising',
-  'agents',
-  'brokers',
-  'health'
-];
-
 const CEO_FINAL_LISTING_STATUSES = [
   'approved',
   'live',
@@ -195,8 +172,7 @@ function isAiCeoPhoneCommand(text = '') {
   if (!clean) return false;
   const prefix = String(process.env.AI_CEO_OWNER_COMMAND_PREFIX || '').trim().toLowerCase();
   if (prefix && clean.startsWith(prefix)) return true;
-  if (/^(ceo|ai ceo|md|boss|maka ceo|makaug ceo)\b/.test(clean)) return true;
-  return PHONE_COMMAND_KEYWORDS.some((keyword) => clean.includes(keyword));
+  return /^(ceo|ai ceo|md|boss|maka ceo|makaug ceo)\b/.test(clean);
 }
 
 async function safeOne(sql, params = [], fallback = {}) {
