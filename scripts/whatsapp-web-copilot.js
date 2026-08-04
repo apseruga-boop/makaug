@@ -1260,7 +1260,7 @@ async function openChatByIndex(page, index) {
 function unreadPreviewSnapshot(row = {}, source = 'unread_preview_fallback') {
   const text = normalizeReplyText(row.preview || '');
   if (!row.unread || !row.title || !text) return null;
-  if (/^(?:photo|image|video|voice message|sticker|gif)$/i.test(text)) return null;
+  if (/^(?:photo|image|video|voice message|sticker|gif|\+\d+)$/i.test(text)) return null;
   return {
     chatKey: row.title,
     contactName: row.title,
@@ -1299,6 +1299,18 @@ async function getActiveChatSnapshot(page) {
     const dataIdForNode = (node) => node?.closest?.('[data-id]')?.getAttribute('data-id')
       || node?.getAttribute?.('data-id')
       || '';
+    const modernMessageRootForNode = (node) => node?.closest?.('[data-testid^="conv-msg-"]')
+      || (node?.matches?.('[data-testid^="conv-msg-"]') ? node : null);
+    const canonicalMessageRootForNode = (node) => modernMessageRootForNode(node)
+      || node?.closest?.('[data-id], .message-in, .message-out')
+      || node;
+    const messageIdForNode = (node) => {
+      const root = canonicalMessageRootForNode(node);
+      return root?.getAttribute?.('data-id')
+        || root?.getAttribute?.('data-testid')
+        || dataIdForNode(node)
+        || '';
+    };
     const phoneFromNode = (node) => phoneFromMessageDataId(dataIdForNode(node));
     const directionFromDataId = (value) => {
       const text = String(value || '');
@@ -1308,6 +1320,12 @@ async function getActiveChatSnapshot(page) {
     };
     const isLikelyOutgoingSender = (value) => /^(?:you|me|makaug(?:\.com)?)$/i.test(String(value || '').trim());
     const isTimestampOnlyText = (value) => /^\s*\d{1,2}:\d{2}\s*(?:AM|PM)?\s*$/i.test(String(value || '').trim());
+    const cleanRenderedMessageText = (value, mediaType = 'text') => {
+      const lines = String(value || '').split('\n').map((line) => line.trim()).filter(Boolean);
+      const withoutTime = lines.filter((line) => !isTimestampOnlyText(line));
+      if (mediaType === 'image' && withoutTime.every((line) => /^\+\d+$/.test(line))) return '';
+      return withoutTime.join('\n').trim();
+    };
     const parseCoords = (value) => {
       const raw = String(value || '');
       const decoded = (() => {
@@ -1373,7 +1391,7 @@ async function getActiveChatSnapshot(page) {
       for (let depth = 0; current && current !== document.body && depth < 10; depth += 1) {
         const text = current.innerText || current.textContent || '';
         if (hasCallLog(current, text)) best = current;
-        if (best && current.matches?.('.message-in, .message-out, [data-id], [role="row"]')) return current;
+        if (best && current.matches?.('.message-in, .message-out, [data-id], [data-testid^="conv-msg-"], [role="row"]')) return current;
         current = current.parentElement;
       }
       return best;
@@ -1381,9 +1399,28 @@ async function getActiveChatSnapshot(page) {
     const chatRoot = document.querySelector('#main')
       || document.querySelector('[data-testid="conversation-panel-wrapper"]')
       || document.body;
+    const directionForNode = (node, senderLabel = '') => {
+      const root = canonicalMessageRootForNode(node);
+      if (root?.closest?.('.message-out')) return 'out';
+      if (root?.closest?.('.message-in')) return 'in';
+      const dataDirection = directionFromDataId(messageIdForNode(root));
+      if (dataDirection) return dataDirection;
+      const container = root?.querySelector?.('[data-testid="msg-container"]')
+        || (root?.matches?.('[data-testid="msg-container"]') ? root : null)
+        || root;
+      const rootRect = chatRoot.getBoundingClientRect();
+      const rect = container?.getBoundingClientRect?.();
+      if (rect && rect.width > 0 && rootRect.width > 0) {
+        const messageCenter = rect.left + rect.width / 2;
+        const panelCenter = rootRect.left + rootRect.width / 2;
+        return messageCenter < panelCenter ? 'in' : 'out';
+      }
+      return senderLabel ? (isLikelyOutgoingSender(senderLabel) ? 'out' : 'in') : 'unknown';
+    };
 
     const copyNodes = Array.from(chatRoot.querySelectorAll('div.copyable-text[data-pre-plain-text]'));
-    const mediaOnlyNodes = Array.from(chatRoot.querySelectorAll('[data-id]')).filter((el) => {
+    const modernMessageNodes = Array.from(chatRoot.querySelectorAll('[data-testid^="conv-msg-"]'));
+    const mediaOnlyNodes = Array.from(chatRoot.querySelectorAll('[data-id], [data-testid^="conv-msg-"]')).filter((el) => {
       if (el.querySelector('div.copyable-text[data-pre-plain-text]')) return false;
       const text = el.innerText || el.textContent || '';
       return !!el.querySelector('img, video, audio') || hasVoiceNote(el, text) || hasCallLog(el, text);
@@ -1393,7 +1430,8 @@ async function getActiveChatSnapshot(page) {
       .filter(Boolean)
       .filter((el, idx, arr) => arr.indexOf(el) === idx)
       .filter((el) => hasCallLog(el, el.innerText || el.textContent || ''));
-    const nodes = [...copyNodes, ...mediaOnlyNodes, ...callLogNodes]
+    const nodes = [...copyNodes, ...modernMessageNodes, ...mediaOnlyNodes, ...callLogNodes]
+      .map(canonicalMessageRootForNode)
       .filter((el, idx, arr) => arr.indexOf(el) === idx)
       .sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1));
     const last = nodes[nodes.length - 1];
@@ -1421,39 +1459,32 @@ async function getActiveChatSnapshot(page) {
         .replace(/^\[[^\]]+\]\s*/, '')
         .replace(/:\s*$/, '')
         .trim();
-      const nodeDirection = node.closest('.message-out')
-        ? 'out'
-        : node.closest('.message-in')
-          ? 'in'
-          : directionFromDataId(dataIdForNode(node));
+      const nodeDirection = directionForNode(node, nodeSender);
       const nodeDigits = phoneLike(nodeSender) || (nodeDirection === 'in' ? phoneFromNode(node) : '');
       if (nodeDigits && nodeDirection !== 'out') {
         fallbackChatKey = nodeDigits;
         fallbackContactName = nodeSender;
       }
     }
-    const timestampLabel = (pre.match(/^\[(.*?)\]/) || [])[1] || '';
+    const renderedText = (last.innerText || last.textContent || '').trim();
+    const timestampLabel = (pre.match(/^\[(.*?)\]/) || [])[1]
+      || (renderedText.match(/(?:^|\n)(\d{1,2}:\d{2}\s*(?:AM|PM)?)(?:\n|$)/i) || [])[1]
+      || '';
     const senderLabel = pre
       .replace(/^\[[^\]]+\]\s*/, '')
       .replace(/:\s*$/, '')
       .trim();
-    const messageId = last.closest('[data-id]')?.getAttribute('data-id')
-      || last.getAttribute('data-id')
-      || '';
+    const messageId = messageIdForNode(last);
     const dataIdDigits = phoneFromMessageDataId(messageId);
     const dataIdDirection = directionFromDataId(messageId);
     const senderDigits = phoneLike(senderLabel);
     const headerDigits = phoneLike(headerTitle);
-    const direction = last.closest('.message-out')
-      ? 'out'
-      : last.closest('.message-in')
-        ? 'in'
-        : dataIdDirection || (senderLabel ? (isLikelyOutgoingSender(senderLabel) ? 'out' : 'in') : 'unknown');
+    const direction = directionForNode(last, senderLabel) || dataIdDirection;
     const resolvedChatKey = senderDigits || headerDigits || dataIdDigits || fallbackChatKey || headerTitle || senderLabel;
     const contactName = senderDigits || dataIdDigits
       ? headerTitle
       : (headerDigits ? senderLabel : (fallbackContactName || headerTitle || senderLabel));
-    const text = (last.innerText || last.textContent || '').trim();
+    const text = renderedText;
     const mediaFingerprint = [
       nodes.indexOf(last),
       ...Array.from(last.querySelectorAll('img, video, a')).map((el) => (
@@ -1469,9 +1500,12 @@ async function getActiveChatSnapshot(page) {
       const alt = img.getAttribute('alt') || '';
       return !src.startsWith('data:image/gif') && !img.className.includes('emoji') && !alt.match(/^\p{Emoji}+$/u);
     });
-    const hasNonEmojiImage = nonEmojiImages.length > 0;
+    const highResolutionImages = nonEmojiImages.filter((img) => img.naturalWidth >= 160 && img.naturalHeight >= 120);
+    const hasNonEmojiImage = highResolutionImages.length > 0 || nonEmojiImages.length > 0;
     const extraImageMatch = text.match(/\+(\d+)/);
-    const mediaCount = hasNonEmojiImage ? Math.max(1, extraImageMatch ? Number(extraImageMatch[1]) + 1 : 1) : 0;
+    const mediaCount = hasNonEmojiImage
+      ? Math.max(1, highResolutionImages.length, extraImageMatch ? Number(extraImageMatch[1]) + 2 : 1)
+      : 0;
     const sharedLocation = extractSharedLocation(last);
     const voiceNote = hasVoiceNote(last, text);
     const callLog = hasCallLog(last, text);
@@ -1488,11 +1522,12 @@ async function getActiveChatSnapshot(page) {
       : last.querySelector('video')
           ? 'media'
           : 'text';
+    const cleanText = cleanRenderedMessageText(text, mediaType);
 
     return {
       chatKey: resolvedChatKey,
       contactName,
-      text: text || (mediaType === 'call' ? '[missed call]' : mediaType === 'image' ? '[image]' : mediaType === 'voice' ? '[voice note]' : mediaType === 'media' ? '[media]' : ''),
+      text: cleanText || (mediaType === 'call' ? '[missed call]' : mediaType === 'image' ? '[image]' : mediaType === 'voice' ? '[voice note]' : mediaType === 'media' ? '[media]' : ''),
       timestampLabel,
       messageId,
       direction,
@@ -1521,6 +1556,21 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
         || text.match(/\b(\d{9,16})@(?:c\.us|s\.whatsapp\.net)\b/i);
       return match?.[1] || '';
     };
+    const dataIdForNode = (node) => node?.closest?.('[data-id]')?.getAttribute('data-id')
+      || node?.getAttribute?.('data-id')
+      || '';
+    const modernMessageRootForNode = (node) => node?.closest?.('[data-testid^="conv-msg-"]')
+      || (node?.matches?.('[data-testid^="conv-msg-"]') ? node : null);
+    const canonicalMessageRootForNode = (node) => modernMessageRootForNode(node)
+      || node?.closest?.('[data-id], .message-in, .message-out')
+      || node;
+    const messageIdForNode = (node) => {
+      const root = canonicalMessageRootForNode(node);
+      return root?.getAttribute?.('data-id')
+        || root?.getAttribute?.('data-testid')
+        || dataIdForNode(node)
+        || '';
+    };
     const directionFromDataId = (value) => {
       const text = String(value || '');
       if (/^true_/.test(text)) return 'out';
@@ -1529,6 +1579,12 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
     };
     const isLikelyOutgoingSender = (value) => /^(?:you|me|makaug(?:\.com)?)$/i.test(String(value || '').trim());
     const isTimestampOnlyText = (value) => /^\s*\d{1,2}:\d{2}\s*(?:AM|PM)?\s*$/i.test(String(value || '').trim());
+    const cleanRenderedMessageText = (value, mediaType = 'text') => {
+      const lines = String(value || '').split('\n').map((line) => line.trim()).filter(Boolean);
+      const withoutTime = lines.filter((line) => !isTimestampOnlyText(line));
+      if (mediaType === 'image' && withoutTime.every((line) => /^\+\d+$/.test(line))) return '';
+      return withoutTime.join('\n').trim();
+    };
     const parseCoords = (value) => {
       const raw = String(value || '');
       const decoded = (() => {
@@ -1594,7 +1650,7 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
       for (let depth = 0; current && current !== document.body && depth < 10; depth += 1) {
         const text = current.innerText || current.textContent || '';
         if (hasCallLog(current, text)) best = current;
-        if (best && current.matches?.('.message-in, .message-out, [data-id], [role="row"]')) return current;
+        if (best && current.matches?.('.message-in, .message-out, [data-id], [data-testid^="conv-msg-"], [role="row"]')) return current;
         current = current.parentElement;
       }
       return best;
@@ -1602,9 +1658,28 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
     const chatRoot = document.querySelector('#main')
       || document.querySelector('[data-testid="conversation-panel-wrapper"]')
       || document.body;
+    const directionForNode = (node, senderLabel = '') => {
+      const root = canonicalMessageRootForNode(node);
+      if (root?.closest?.('.message-out')) return 'out';
+      if (root?.closest?.('.message-in')) return 'in';
+      const dataDirection = directionFromDataId(messageIdForNode(root));
+      if (dataDirection) return dataDirection;
+      const container = root?.querySelector?.('[data-testid="msg-container"]')
+        || (root?.matches?.('[data-testid="msg-container"]') ? root : null)
+        || root;
+      const rootRect = chatRoot.getBoundingClientRect();
+      const rect = container?.getBoundingClientRect?.();
+      if (rect && rect.width > 0 && rootRect.width > 0) {
+        const messageCenter = rect.left + rect.width / 2;
+        const panelCenter = rootRect.left + rootRect.width / 2;
+        return messageCenter < panelCenter ? 'in' : 'out';
+      }
+      return senderLabel ? (isLikelyOutgoingSender(senderLabel) ? 'out' : 'in') : 'unknown';
+    };
 
     const copyNodes = Array.from(chatRoot.querySelectorAll('div.copyable-text[data-pre-plain-text]'));
-    const mediaOnlyNodes = Array.from(chatRoot.querySelectorAll('[data-id]')).filter((el) => {
+    const modernMessageNodes = Array.from(chatRoot.querySelectorAll('[data-testid^="conv-msg-"]'));
+    const mediaOnlyNodes = Array.from(chatRoot.querySelectorAll('[data-id], [data-testid^="conv-msg-"]')).filter((el) => {
       if (el.querySelector('div.copyable-text[data-pre-plain-text]')) return false;
       const text = el.innerText || el.textContent || '';
       return !!el.querySelector('img, video, audio') || hasVoiceNote(el, text) || hasCallLog(el, text);
@@ -1614,7 +1689,8 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
       .filter(Boolean)
       .filter((el, idx, arr) => arr.indexOf(el) === idx)
       .filter((el) => hasCallLog(el, el.innerText || el.textContent || ''));
-    const nodes = [...copyNodes, ...mediaOnlyNodes, ...callLogNodes]
+    const nodes = [...copyNodes, ...modernMessageNodes, ...mediaOnlyNodes, ...callLogNodes]
+      .map(canonicalMessageRootForNode)
       .filter((el, idx, arr) => arr.indexOf(el) === idx)
       .sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1));
     const snapshots = [];
@@ -1625,21 +1701,18 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
           ? node
           : node.querySelector('div.copyable-text[data-pre-plain-text]');
         const pre = copyNode?.getAttribute('data-pre-plain-text') || '';
-        const timestampLabel = (pre.match(/^\[(.*?)\]/) || [])[1] || '';
+        const renderedText = (node.innerText || node.textContent || '').trim();
+        const timestampLabel = (pre.match(/^\[(.*?)\]/) || [])[1]
+          || (renderedText.match(/(?:^|\n)(\d{1,2}:\d{2}\s*(?:AM|PM)?)(?:\n|$)/i) || [])[1]
+          || '';
         const senderLabel = pre
           .replace(/^\[[^\]]+\]\s*/, '')
           .replace(/:\s*$/, '')
           .trim();
-        const messageId = node.closest('[data-id]')?.getAttribute('data-id')
-          || node.getAttribute('data-id')
-          || '';
+        const messageId = messageIdForNode(node);
         const dataIdDirection = directionFromDataId(messageId);
-        const direction = node.closest('.message-out')
-          ? 'out'
-          : node.closest('.message-in')
-            ? 'in'
-            : dataIdDirection || (senderLabel ? (isLikelyOutgoingSender(senderLabel) ? 'out' : 'in') : 'unknown');
-        const rawText = (node.innerText || node.textContent || '').trim();
+        const direction = directionForNode(node, senderLabel) || dataIdDirection;
+        const rawText = renderedText;
         const mediaFingerprint = [
           nodes.indexOf(node),
           ...Array.from(node.querySelectorAll('img, video, a')).map((el) => (
@@ -1655,9 +1728,12 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
           const alt = img.getAttribute('alt') || '';
           return !src.startsWith('data:image/gif') && !img.className.includes('emoji') && !alt.match(/^\p{Emoji}+$/u);
         });
-        const hasNonEmojiImage = nonEmojiImages.length > 0;
+        const highResolutionImages = nonEmojiImages.filter((img) => img.naturalWidth >= 160 && img.naturalHeight >= 120);
+        const hasNonEmojiImage = highResolutionImages.length > 0 || nonEmojiImages.length > 0;
         const extraImageMatch = rawText.match(/\+(\d+)/);
-        const mediaCount = hasNonEmojiImage ? Math.max(1, extraImageMatch ? Number(extraImageMatch[1]) + 1 : 1) : 0;
+        const mediaCount = hasNonEmojiImage
+          ? Math.max(1, highResolutionImages.length, extraImageMatch ? Number(extraImageMatch[1]) + 2 : 1)
+          : 0;
         const sharedLocation = extractSharedLocation(node);
         const voiceNote = hasVoiceNote(node, rawText);
         const callLog = hasCallLog(node, rawText);
@@ -1674,7 +1750,8 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
             : node.querySelector('img')
               ? 'image'
               : 'text';
-        const text = rawText || (mediaType === 'image'
+        const cleanText = cleanRenderedMessageText(rawText, mediaType);
+        const text = cleanText || (mediaType === 'image'
           ? '[image]'
           : mediaType === 'call'
             ? '[missed call]'
@@ -1727,8 +1804,11 @@ async function hydrateVoiceSnapshot(page, snapshot) {
 
   try {
     const audio = await page.evaluate(async (targetMessageId) => {
-      const nodes = Array.from(document.querySelectorAll('[data-id]'));
-      const root = nodes.find((el) => el.getAttribute('data-id') === targetMessageId);
+      const nodes = Array.from(document.querySelectorAll('[data-id], [data-testid^="conv-msg-"]'));
+      const root = nodes.find((el) => (
+        el.getAttribute('data-id') === targetMessageId
+        || el.getAttribute('data-testid') === targetMessageId
+      ));
       if (!root) return null;
       let audioEl = root.querySelector('audio');
       let sourceEl = root.querySelector('audio source, source[type^="audio/"]');
@@ -1827,18 +1907,26 @@ async function hydrateImageSnapshot(page, snapshot) {
       quality,
       maxBytes
     }) => {
-      const nodes = Array.from(document.querySelectorAll('[data-id]'));
-      const root = nodes.find((el) => el.getAttribute('data-id') === targetMessageId);
+      const nodes = Array.from(document.querySelectorAll('[data-id], [data-testid^="conv-msg-"]'));
+      const root = nodes.find((el) => (
+        el.getAttribute('data-id') === targetMessageId
+        || el.getAttribute('data-testid') === targetMessageId
+      ));
       if (!root) return [];
 
-      const visibleImages = Array.from(root.querySelectorAll('img')).filter((img) => {
+      const imageCandidates = Array.from(root.querySelectorAll('img')).filter((img) => {
         const rect = img.getBoundingClientRect();
         const className = String(img.className || '').toLowerCase();
         const alt = String(img.alt || '').toLowerCase();
         if (className.includes('emoji') || alt.includes('emoji') || alt.includes('avatar')) return false;
-        return (img.naturalWidth >= 160 && img.naturalHeight >= 120)
-          || (rect.width >= 140 && rect.height >= 100);
-      }).slice(0, 5);
+        return img.naturalWidth >= 160 && img.naturalHeight >= 120
+          && rect.width >= 24 && rect.height >= 24;
+      });
+      const uniqueImageCandidates = Array.from(new Map(imageCandidates.map((img) => {
+        const key = img.currentSrc || img.src || `${img.naturalWidth}x${img.naturalHeight}:${img.alt || ''}`;
+        return [key, img];
+      })).values());
+      const visibleImages = uniqueImageCandidates.slice(0, 5);
 
       const encodeImage = async (sourceImage) => {
         if (!sourceImage.complete) {
@@ -2381,9 +2469,23 @@ async function waitForReplyComposer(page, timeoutMs = 15000) {
 async function getOutgoingMessageState(page) {
   return page.evaluate(() => {
     const normalize = (value) => String(value || '').replace(/\s+/g, ' ').trim();
-    const nodes = Array.from(document.querySelectorAll([
+    const chatRoot = document.querySelector('#main')
+      || document.querySelector('[data-testid="conversation-panel-wrapper"]')
+      || document.body;
+    const isModernOutgoing = (node) => {
+      const root = node.closest?.('[data-testid^="conv-msg-"]') || node;
+      const container = root.querySelector?.('[data-testid="msg-container"]')
+        || (root.matches?.('[data-testid="msg-container"]') ? root : null)
+        || root;
+      const panelRect = chatRoot.getBoundingClientRect();
+      const rect = container?.getBoundingClientRect?.();
+      if (!rect || rect.width <= 0 || panelRect.width <= 0) return false;
+      return rect.left + rect.width / 2 >= panelRect.left + panelRect.width / 2;
+    };
+    const nodes = Array.from(chatRoot.querySelectorAll([
       '.message-out',
       '[data-id^="true_"]',
+      '[data-testid^="conv-msg-"]',
       '[data-testid="msg-container"]',
       '[role="row"]'
     ].join(','))).filter((node) => {
@@ -2392,16 +2494,27 @@ async function getOutgoingMessageState(page) {
       if (dataId.startsWith('true_')) return true;
       if (node.classList?.contains('message-out') || node.closest?.('.message-out')) return true;
       const aria = String(node.getAttribute?.('aria-label') || '');
-      return /^you[:\s]/i.test(aria);
+      if (/^you[:\s]/i.test(aria)) return true;
+      return isModernOutgoing(node);
     });
-    const uniqueNodes = Array.from(new Set(nodes.map((node) => node.closest?.('[data-id]') || node)));
+    const uniqueNodes = Array.from(new Set(nodes.map((node) => (
+      node.closest?.('[data-testid^="conv-msg-"]')
+      || node.closest?.('[data-id]')
+      || node
+    ))));
     const texts = uniqueNodes
       .map((node) => normalize(node.innerText || node.textContent || node.getAttribute?.('aria-label') || ''))
       .filter(Boolean);
+    const messageIds = uniqueNodes.map((node, index) => (
+      node.getAttribute?.('data-id')
+      || node.getAttribute?.('data-testid')
+      || `outgoing-${index}-${normalize(node.innerText || node.textContent || '').slice(0, 80)}`
+    ));
     return {
       count: uniqueNodes.length,
       lastText: texts[texts.length - 1] || '',
-      recentTexts: texts.slice(-10)
+      recentTexts: texts.slice(-10),
+      recentMessageIds: messageIds.slice(-10)
     };
   });
 }
@@ -2510,6 +2623,7 @@ async function waitForOutgoingReplyConfirmation(page, expectedText, beforeState 
   const expectedPrefix = expected.slice(0, 120);
   const beforeCount = Number(beforeState.count || 0);
   const beforeLastText = normalizeReplyText(beforeState.lastText || '');
+  const beforeMessageIds = new Set(Array.isArray(beforeState.recentMessageIds) ? beforeState.recentMessageIds : []);
   const deadline = Date.now() + timeoutMs;
 
   while (Date.now() < deadline) {
@@ -2517,6 +2631,8 @@ async function waitForOutgoingReplyConfirmation(page, expectedText, beforeState 
     const recentTexts = Array.isArray(state.recentTexts)
       ? state.recentTexts.map((text) => normalizeReplyText(text)).filter(Boolean)
       : [];
+    const hasNewMessageId = Array.isArray(state.recentMessageIds)
+      && state.recentMessageIds.some((id) => id && !beforeMessageIds.has(id));
     const addedCount = Math.max(0, Number(state.count || 0) - beforeCount);
     const newTailTexts = addedCount > 0 ? recentTexts.slice(-Math.max(1, addedCount)) : [];
     const matchedNewText = expectedPrefix
@@ -2527,6 +2643,9 @@ async function waitForOutgoingReplyConfirmation(page, expectedText, beforeState 
     }
 
     const lastText = normalizeReplyText(state.lastText || '');
+    if (hasNewMessageId && (!expectedPrefix || (lastText && lastText.includes(expectedPrefix)))) {
+      return true;
+    }
     if (expectedPrefix && lastText && lastText !== beforeLastText && lastText.includes(expectedPrefix)) {
       return true;
     }

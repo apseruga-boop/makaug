@@ -30,6 +30,8 @@ assert(service.includes('REPORT_RECIPIENT_READ_ONLY_INTENTS'), 'Report-only What
 assert(service.includes('dryrun:'), 'AI CEO owner phone matching must work for WhatsApp web-bridge dry-run tests');
 assert(service.includes('isAiCeoOwnerPhone'), 'AI CEO service must verify owner phone before WhatsApp control');
 assert(service.includes('handleOwnerWhatsappCommand'), 'AI CEO service must expose WhatsApp owner command handling');
+assert(!service.includes('PHONE_COMMAND_KEYWORDS.some'), 'Ordinary WhatsApp words must never trigger privileged CEO control');
+assert(service.includes('/^(ceo|ai ceo|md|boss|maka ceo|makaug ceo)\\b/'), 'CEO phone commands must require an explicit privileged prefix');
 assert(service.includes('AI_CEO_EMAIL_SEND_MODE'), 'AI CEO email sending must have a direct/draft mode kill switch');
 assert(!service.includes("reportType = channel === 'whatsapp_owner'"), 'Owner phone commands must use an ai_ceo_reports report_type accepted by the live schema');
 assert(service.includes('queueFounderApprovalAction'), 'AI CEO must queue risky actions for founder approval');
