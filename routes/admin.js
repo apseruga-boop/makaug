@@ -69,6 +69,7 @@ const {
   getSupportWhatsappUrl,
   lookupResendDomainRecords,
   sendBrokerApprovalEmail,
+  sendBrokerInvitationEmail,
   sendSupportEmail
 } = require('../services/emailService');
 const {
@@ -989,8 +990,8 @@ function splitBrokerName(fullName = '') {
 function generateBrokerTemporaryPassword() {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
   let output = 'Mk';
-  for (let i = 0; i < 10; i += 1) {
-    output += alphabet[Math.floor(Math.random() * alphabet.length)];
+  for (let i = 0; i < 12; i += 1) {
+    output += alphabet[crypto.randomInt(0, alphabet.length)];
   }
   return `${output}!`;
 }
@@ -1233,7 +1234,8 @@ async function upsertModeratorStaffAccount(input = {}, req = null, fallbackIndex
   return publicStaffAccount(saved, temporaryPassword);
 }
 
-async function provisionApprovedBrokerAccount(agent = {}, req = null) {
+async function provisionApprovedBrokerAccount(agent = {}, req = null, options = {}) {
+  const pendingVerification = options.pendingVerification === true;
   const email = normalizeEmail(agent.email);
   const phone = normalizeUgPhone(agent.phone) || cleanText(agent.phone);
   if (!email) {
@@ -1265,8 +1267,8 @@ async function provisionApprovedBrokerAccount(agent = {}, req = null) {
     ...existingProfile,
     audience: 'agent',
     account_kind: 'agent',
-    broker_review_status: 'approved',
-    broker_account_status: 'approved',
+    broker_review_status: pendingVerification ? 'pending_verification' : 'approved',
+    broker_account_status: pendingVerification ? 'invited' : 'approved',
     broker_agent_id: agent.id,
     makaug_agent_number: agent.makaug_agent_number || '',
     broker_company: agent.company_name || '',
@@ -1282,8 +1284,11 @@ async function provisionApprovedBrokerAccount(agent = {}, req = null) {
     broker_privacy_consent_accepted: agent.privacy_consent_accepted === true,
     broker_data_retention_notice_accepted: agent.data_retention_notice_accepted === true,
     broker_verification_reason: agent.verification_reason || '',
-    approved_by_admin: true,
-    broker_approved_at: nowIso,
+    approved_by_admin: !pendingVerification,
+    broker_approved_at: pendingVerification ? (existingProfile.broker_approved_at || '') : nowIso,
+    broker_invited_at: pendingVerification ? (existingProfile.broker_invited_at || nowIso) : (existingProfile.broker_invited_at || ''),
+    broker_phone_verification_required: pendingVerification,
+    broker_identity_verification_required: pendingVerification,
     broker_account_provisioned_at: existingProfile.broker_account_provisioned_at || nowIso,
     force_password_change: Boolean(temporaryPassword) || existingProfile.force_password_change === true
   };
@@ -1298,7 +1303,7 @@ async function provisionApprovedBrokerAccount(agent = {}, req = null) {
            email = $5,
            role = 'agent_broker',
            password_hash = CASE WHEN $6::text IS NULL THEN password_hash ELSE $6 END,
-           phone_verified = TRUE,
+           phone_verified = CASE WHEN $8::boolean THEN phone_verified ELSE TRUE END,
            status = 'active',
            preferred_contact_channel = 'whatsapp',
            profile_data = COALESCE(profile_data, '{}'::jsonb) || $7::jsonb,
@@ -1312,7 +1317,8 @@ async function provisionApprovedBrokerAccount(agent = {}, req = null) {
         phone,
         email,
         passwordHash,
-        JSON.stringify(profilePatch)
+        JSON.stringify(profilePatch),
+        pendingVerification
       ]
     );
     saved = updated.rows[0];
@@ -1332,7 +1338,7 @@ async function provisionApprovedBrokerAccount(agent = {}, req = null) {
         preferred_contact_channel,
         preferred_language,
         profile_data
-      ) VALUES ($1,$2,$3,$4,'agent_broker',$5,TRUE,'active',TRUE,TRUE,'whatsapp','en',$6::jsonb)
+      ) VALUES ($1,$2,$3,$4,'agent_broker',$5,$7::boolean,'active',TRUE,TRUE,'whatsapp','en',$6::jsonb)
       RETURNING id, first_name, last_name, phone, email, role, status, phone_verified, preferred_language, profile_data, created_at, updated_at`,
       [
         firstName,
@@ -1340,7 +1346,8 @@ async function provisionApprovedBrokerAccount(agent = {}, req = null) {
         phone,
         email,
         passwordHash,
-        JSON.stringify(profilePatch)
+        JSON.stringify(profilePatch),
+        !pendingVerification
       ]
     );
     saved = inserted.rows[0];
@@ -1350,10 +1357,10 @@ async function provisionApprovedBrokerAccount(agent = {}, req = null) {
     `UPDATE agents
      SET user_id = $2,
          approved_user_id = $2,
-         approved_at = COALESCE(approved_at, NOW()),
+         approved_at = CASE WHEN $3::boolean THEN approved_at ELSE COALESCE(approved_at, NOW()) END,
          updated_at = NOW()
      WHERE id = $1`,
-    [agent.id, saved.id]
+    [agent.id, saved.id, pendingVerification]
   );
 
   const siteUrl = String(process.env.PUBLIC_BASE_URL || process.env.APP_BASE_URL || 'https://makaug.com').replace(/\/$/, '');
@@ -1361,7 +1368,8 @@ async function provisionApprovedBrokerAccount(agent = {}, req = null) {
   const supportUrl = getSupportWhatsappUrl();
   let emailDelivery = { sent: false, reason: 'email_provider_missing' };
   if (emailProviderConfigured()) {
-    emailDelivery = await sendBrokerApprovalEmail({
+    const sendBrokerAccessEmail = pendingVerification ? sendBrokerInvitationEmail : sendBrokerApprovalEmail;
+    emailDelivery = await sendBrokerAccessEmail({
       to: email,
       firstName,
       agent,
@@ -1375,12 +1383,16 @@ async function provisionApprovedBrokerAccount(agent = {}, req = null) {
     : 'provider_missing';
 
   await logEmailEvent(db, {
-    eventType: 'broker_account_approved',
+    eventType: pendingVerification ? 'broker_account_invited' : 'broker_account_approved',
     recipientUserId: saved.id,
     recipientEmail: email,
     recipientRole: 'agent_broker',
-    templateKey: temporaryPassword ? 'broker_account_approved_temp_password' : 'broker_account_approved_existing_login',
-    subject: temporaryPassword ? 'Your makaug.com broker account is ready' : 'Your makaug.com broker account has been approved',
+    templateKey: pendingVerification
+      ? (temporaryPassword ? 'broker_account_invited_temp_password' : 'broker_account_invited_existing_login')
+      : (temporaryPassword ? 'broker_account_approved_temp_password' : 'broker_account_approved_existing_login'),
+    subject: pendingVerification
+      ? 'Your makaug.com broker profile is ready to complete'
+      : (temporaryPassword ? 'Your makaug.com broker account is ready' : 'Your makaug.com broker account has been approved'),
     language: saved.preferred_language || 'en',
     status: emailStatus,
     provider: emailDelivery.provider || null,
@@ -1393,7 +1405,7 @@ async function provisionApprovedBrokerAccount(agent = {}, req = null) {
     recipientPhone: phone,
     recipientEmail: email,
     channel: 'email',
-    type: 'broker_account_approved',
+    type: pendingVerification ? 'broker_account_invited' : 'broker_account_approved',
     status: emailStatus,
     failureReason: emailDelivery.error || emailDelivery.reason || null,
     payloadSummary: {
@@ -1404,7 +1416,7 @@ async function provisionApprovedBrokerAccount(agent = {}, req = null) {
       dashboard_url: dashboardUrl
     }
   });
-  await writeAudit('broker_account_provisioned', {
+  await writeAudit(pendingVerification ? 'broker_account_invited' : 'broker_account_provisioned', {
     agent_id: agent.id,
     makaug_agent_number: agent.makaug_agent_number || null,
     user_id: saved.id,
@@ -1417,7 +1429,8 @@ async function provisionApprovedBrokerAccount(agent = {}, req = null) {
     user_id: saved.id,
     email_status: emailStatus,
     temporary_password_issued: Boolean(temporaryPassword),
-    force_password_change: Boolean(profilePatch.force_password_change)
+    force_password_change: Boolean(profilePatch.force_password_change),
+    pending_verification: pendingVerification
   };
 }
 
@@ -8168,6 +8181,147 @@ router.get('/agents', async (req, res, next) => {
       pagination: toPagination(total, page, limit)
     });
   } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/agents/invite', async (req, res, next) => {
+  try {
+    const body = req.body || {};
+    const fullName = cleanText(body.full_name || body.agent_name || body.company_name).slice(0, 160);
+    const companyName = cleanText(body.company_name || fullName).slice(0, 160);
+    const email = normalizeEmail(body.email);
+    const phone = normalizeUgPhone(body.phone || body.whatsapp);
+    const whatsapp = normalizeUgPhone(body.whatsapp || body.phone);
+    const districtsCovered = asArray(body.districts_covered || body.districts)
+      .flatMap((value) => String(value || '').split(','))
+      .map((value) => cleanText(value))
+      .filter((value) => DISTRICTS.includes(value))
+      .slice(0, 20);
+    const specializations = asArray(body.specializations)
+      .flatMap((value) => String(value || '').split(','))
+      .map((value) => cleanText(value).slice(0, 120))
+      .filter(Boolean)
+      .slice(0, 20);
+    const bio = cleanText(body.bio).slice(0, 1500);
+    const profilePhotoUrl = cleanText(body.profile_photo_url).slice(0, 5 * 1024 * 1024);
+    const errors = [];
+
+    if (!fullName) errors.push('Agent or agency name is required');
+    if (!companyName) errors.push('Company name is required');
+    if (!email || !isValidEmail(email)) errors.push('A valid agent email is required');
+    if (!phone || !isValidPhone(phone)) errors.push('A valid Uganda phone is required');
+    if (!districtsCovered.length) errors.push('At least one valid Uganda district is required');
+    if (!bio) errors.push('A public broker bio is required');
+    if (profilePhotoUrl && !(/^data:image\//i.test(profilePhotoUrl) || /^https?:\/\//i.test(profilePhotoUrl))) {
+      errors.push('Profile photo must be an image data URL or public HTTPS URL');
+    }
+    if (errors.length) {
+      return res.status(400).json({ ok: false, error: 'Broker invitation validation failed', details: errors });
+    }
+
+    const existingResult = await db.query(
+      `SELECT *
+       FROM agents
+       WHERE LOWER(COALESCE(email, '')) = LOWER($1)
+          OR regexp_replace(COALESCE(phone, ''), '\\D', '', 'g') = regexp_replace($2, '\\D', '', 'g')
+          OR LOWER(COALESCE(company_name, '')) = LOWER($3)
+       ORDER BY user_id IS NOT NULL DESC, updated_at DESC
+       LIMIT 1`,
+      [email, phone, companyName]
+    );
+    const existingAgent = existingResult.rows[0] || null;
+    let agent;
+
+    if (existingAgent) {
+      const updated = await db.query(
+        `UPDATE agents
+         SET full_name = $2,
+             company_name = $3,
+             phone = $4,
+             whatsapp = $5,
+             email = $6,
+             districts_covered = $7::text[],
+             specializations = $8::text[],
+             bio = $9,
+             profile_photo_url = COALESCE(NULLIF($10, ''), profile_photo_url),
+             registration_status = 'registered',
+             listing_limit = 2147483647,
+             status = CASE WHEN status = 'approved' THEN status ELSE 'pending' END,
+             agent_application_channel = COALESCE(NULLIF(agent_application_channel, ''), 'admin_invite'),
+             verification_reason = CONCAT_WS(' ', NULLIF(verification_reason, ''), '[ADMIN_BROKER_INVITE] Identity and phone verification required on first login.'),
+             updated_at = NOW()
+         WHERE id = $1
+         RETURNING *`,
+        [
+          existingAgent.id,
+          fullName,
+          companyName,
+          phone,
+          whatsapp,
+          email,
+          districtsCovered,
+          specializations,
+          bio,
+          profilePhotoUrl
+        ]
+      );
+      agent = updated.rows[0];
+    } else {
+      const licenceNumber = `INVITE-${crypto.randomUUID().replace(/-/g, '').slice(0, 16).toUpperCase()}`;
+      const inserted = await db.query(
+        `INSERT INTO agents (
+           full_name, company_name, licence_number, registration_status, listing_limit,
+           phone, whatsapp, email, districts_covered, specializations, profile_photo_url,
+           bio, status, agent_application_channel, verification_reason
+         ) VALUES (
+           $1,$2,$3,'registered',2147483647,$4,$5,$6,$7::text[],$8::text[],NULLIF($9,''),$10,
+           'pending','admin_invite','[ADMIN_BROKER_INVITE] Identity and phone verification required on first login.'
+         )
+         RETURNING *`,
+        [
+          fullName,
+          companyName,
+          licenceNumber,
+          phone,
+          whatsapp,
+          email,
+          districtsCovered,
+          specializations,
+          profilePhotoUrl,
+          bio
+        ]
+      );
+      agent = inserted.rows[0];
+    }
+
+    const accountProvisioning = await provisionApprovedBrokerAccount(agent, req, { pendingVerification: true });
+    await writeAudit(existingAgent ? 'admin_broker_invitation_updated' : 'admin_broker_invitation_created', {
+      agent_id: agent.id,
+      company_name: companyName,
+      email,
+      phone_last_digits: phoneLastDigits(phone),
+      districts_covered: districtsCovered,
+      account_status: accountProvisioning.status,
+      email_status: accountProvisioning.email_status
+    }, adminActorId(req));
+
+    return res.status(existingAgent ? 200 : 201).json({
+      ok: true,
+      data: {
+        agent_id: agent.id,
+        company_name: companyName,
+        status: agent.status,
+        registration_status: agent.registration_status,
+        identity_verification_status: agent.identity_document_url ? 'uploaded' : 'pending',
+        phone_verification_status: agent.contact_phone_verified_at ? 'verified' : 'pending',
+        account_provisioning: accountProvisioning
+      }
+    });
+  } catch (error) {
+    if (error.code === '23505') {
+      return res.status(409).json({ ok: false, error: 'An account already uses that email, phone, or broker identity' });
+    }
     return next(error);
   }
 });

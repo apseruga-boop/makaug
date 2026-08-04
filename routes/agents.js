@@ -387,7 +387,7 @@ router.get('/me', async (req, res, next) => {
         },
         capabilities: {
           can_skip_listing_otp: true,
-          can_skip_listing_identity_upload: true,
+          can_skip_listing_identity_upload: Boolean(agent?.identity_document_url && agent?.contact_phone_verified_at),
           listings_require_admin_approval: true,
           can_boost_properties: true
         }
@@ -468,6 +468,131 @@ router.patch('/me', async (req, res, next) => {
     return res.json({ ok: true, data: updated.rows[0] });
   } catch (error) {
     return next(error);
+  }
+});
+
+router.post('/me/verification', async (req, res, next) => {
+  const client = await db.pool.connect();
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user) return res.status(401).json({ ok: false, error: 'Sign in required' });
+    if (user.role !== 'agent_broker') return res.status(403).json({ ok: false, error: 'Broker account required' });
+
+    const agent = await fetchBrokerAgentForUser(user);
+    if (!agent?.id) return res.status(404).json({ ok: false, error: 'Broker profile not found' });
+
+    const body = req.body || {};
+    const phone = normalizeUgPhone(body.phone || body.whatsapp);
+    const nin = cleanText(body.nin || body.national_id_number).slice(0, 80);
+    const otpToken = cleanText(body.listing_otp_token || body.phone_verification_token);
+    const identityDocument = cleanBrokerUpload(body.identity_document || body.national_id_document, 'National ID photo');
+    const privacyConsentAccepted = parseBooleanLike(body.privacy_consent_accepted, false);
+    const retentionNoticeAccepted = parseBooleanLike(body.data_retention_notice_accepted, false);
+    const verified = verifyListingSubmitToken(otpToken);
+    const errors = [];
+
+    if (!phone || !isValidPhone(phone)) errors.push('A valid Uganda phone is required');
+    if (!nin) errors.push('National ID number is required');
+    if (!identityDocument || !String(identityDocument.type || '').toLowerCase().startsWith('image/')) {
+      errors.push('A clear National ID photo is required; PDFs are not accepted');
+    }
+    if (!privacyConsentAccepted) errors.push('Privacy consent is required');
+    if (!retentionNoticeAccepted) errors.push('Data-retention notice acceptance is required');
+    if (!verified.ok || verified.channel !== 'phone' || verified.identifier !== phone) {
+      errors.push('Verify this phone number with the latest OTP before continuing');
+    }
+    if (errors.length) {
+      return res.status(400).json({ ok: false, error: 'Broker verification validation failed', details: errors });
+    }
+
+    await client.query('BEGIN');
+    const updatedAgent = await client.query(
+      `UPDATE agents
+       SET phone = $2,
+           whatsapp = $2,
+           nin = $3,
+           identity_document_name = $4,
+           identity_document_url = $5,
+           identity_document_type = $6,
+           identity_document_uploaded_at = NOW(),
+           privacy_consent_accepted = TRUE,
+           privacy_consent_at = COALESCE(privacy_consent_at, NOW()),
+           data_retention_notice_accepted = TRUE,
+           data_retention_notice_at = COALESCE(data_retention_notice_at, NOW()),
+           contact_phone_verified_at = NOW(),
+           registration_status = 'registered',
+           verification_reason = CONCAT_WS(' ', NULLIF(verification_reason, ''), '[BROKER_SELF_VERIFICATION_SUBMITTED] Phone OTP and National ID received for Makaug review.'),
+           updated_at = NOW()
+       WHERE id = $1
+       RETURNING *`,
+      [
+        agent.id,
+        phone,
+        nin,
+        identityDocument.name,
+        identityDocument.data_url || identityDocument.url,
+        identityDocument.type
+      ]
+    );
+    await client.query(
+      `UPDATE users
+       SET phone = $2,
+           phone_verified = TRUE,
+           profile_data = COALESCE(profile_data, '{}'::jsonb) || $3::jsonb,
+           updated_at = NOW()
+       WHERE id = $1`,
+      [
+        user.id,
+        phone,
+        JSON.stringify({
+          broker_agent_id: agent.id,
+          broker_identity_document_uploaded: true,
+          broker_identity_document_name: identityDocument.name,
+          broker_identity_document_uploaded_at: identityDocument.uploaded_at,
+          broker_privacy_consent_accepted: true,
+          broker_data_retention_notice_accepted: true,
+          broker_phone_verification_required: false,
+          broker_identity_verification_required: false,
+          broker_onboarding_completed_at: new Date().toISOString(),
+          broker_review_status: 'pending_admin_review'
+        })
+      ]
+    );
+    await client.query('COMMIT');
+
+    await logNotification(db, {
+      userId: user.id,
+      recipientPhone: phone,
+      recipientEmail: user.email,
+      channel: 'in_app',
+      type: 'broker_verification_submitted',
+      status: 'logged',
+      payloadSummary: {
+        agent_id: agent.id,
+        phone_verified: true,
+        identity_document_uploaded: true,
+        admin_review_required: true
+      }
+    });
+
+    return res.json({
+      ok: true,
+      data: {
+        agent: updatedAgent.rows[0],
+        phone_verified: true,
+        identity_document_uploaded: true,
+        admin_review_required: true,
+        message: 'Verification details received. You can prepare listings while Makaug completes the broker review.'
+      }
+    });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    if (error.code === '23505') {
+      return res.status(409).json({ ok: false, error: 'That phone number is already used by another Makaug account' });
+    }
+    return next(error);
+  } finally {
+    client.release();
   }
 });
 

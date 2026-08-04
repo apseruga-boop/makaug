@@ -11595,6 +11595,175 @@ function startBrokerOnlineListing() {
   }, 150);
 }
 
+let brokerVerificationOtpToken = "";
+
+function brokerVerificationComplete(broker = {}) {
+  return Boolean(broker.identity_document_url && broker.contact_phone_verified_at);
+}
+
+function showBrokerInviteWelcomeIfNeeded(broker = {}, profile = {}) {
+  const modal = document.getElementById("agent-invite-welcome");
+  if (!modal) return;
+  const invitedAt = profile.broker_invited_at || "";
+  const key = `makaug_broker_invite_welcome_${broker.id || authState?.user?.id || "account"}`;
+  let seen = false;
+  try { seen = localStorage.getItem(key) === "seen"; } catch (e) {}
+  const shouldShow = Boolean(invitedAt && !seen);
+  modal.classList.toggle("hidden", !shouldShow);
+  modal.classList.toggle("flex", shouldShow);
+  if (shouldShow) modal.dataset.welcomeKey = key;
+}
+
+function dismissBrokerInviteWelcome() {
+  const modal = document.getElementById("agent-invite-welcome");
+  if (!modal) return;
+  try {
+    if (modal.dataset.welcomeKey) localStorage.setItem(modal.dataset.welcomeKey, "seen");
+  } catch (e) {}
+  modal.classList.add("hidden");
+  modal.classList.remove("flex");
+  document.getElementById("agent-verification-notice")?.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+function setBrokerVerificationStatus(message, tone = "neutral") {
+  const status = document.getElementById("broker-verification-result");
+  if (!status) return;
+  const tones = {
+    success: "border-green-200 bg-green-50 text-green-900",
+    error: "border-red-200 bg-red-50 text-red-900",
+    neutral: "border-blue-200 bg-white text-blue-900"
+  };
+  status.className = `mt-3 rounded-xl border px-3 py-2 text-sm ${tones[tone] || tones.neutral}`;
+  status.textContent = message;
+  status.classList.remove("hidden");
+}
+
+async function sendBrokerVerificationOtp() {
+  const phone = normalizePhoneInput(document.getElementById("broker-verification-phone")?.value || "");
+  const button = document.getElementById("broker-verification-send-otp");
+  if (!phone) {
+    setBrokerVerificationStatus("Enter the working Uganda phone number first.", "error");
+    return;
+  }
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Sending...";
+  }
+  try {
+    await apiRequest("/api/properties/request-submit-otp", {
+      method: "POST",
+      body: { channel: "phone", phone, audience: "agent", preferred_language: currentLang }
+    });
+    brokerVerificationOtpToken = "";
+    const phoneStatus = document.getElementById("broker-verification-phone-status");
+    if (phoneStatus) phoneStatus.textContent = "Code sent. Enter it before it expires.";
+    setBrokerVerificationStatus("Verification code sent to the phone number.", "success");
+  } catch (error) {
+    setBrokerVerificationStatus(error.message || "Could not send the phone code.", "error");
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = "Send code";
+    }
+  }
+}
+
+async function confirmBrokerVerificationOtp() {
+  const phone = normalizePhoneInput(document.getElementById("broker-verification-phone")?.value || "");
+  const code = (document.getElementById("broker-verification-code")?.value || "").trim();
+  const button = document.getElementById("broker-verification-confirm-otp");
+  if (!phone || !code) {
+    setBrokerVerificationStatus("Enter the phone number and OTP code.", "error");
+    return;
+  }
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Checking...";
+  }
+  try {
+    const response = await apiRequest("/api/properties/verify-submit-otp", {
+      method: "POST",
+      body: { channel: "phone", phone, code }
+    });
+    brokerVerificationOtpToken = response?.data?.listing_otp_token || "";
+    if (!brokerVerificationOtpToken) throw new Error("Phone verification did not return a secure token.");
+    const phoneStatus = document.getElementById("broker-verification-phone-status");
+    if (phoneStatus) phoneStatus.textContent = "Phone verified. Complete the National ID step.";
+    setBrokerVerificationStatus("Phone verified successfully.", "success");
+  } catch (error) {
+    brokerVerificationOtpToken = "";
+    setBrokerVerificationStatus(error.message || "The code is invalid or expired.", "error");
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = "Verify phone";
+    }
+  }
+}
+
+async function submitBrokerVerification() {
+  const phone = normalizePhoneInput(document.getElementById("broker-verification-phone")?.value || "");
+  const nin = (document.getElementById("broker-verification-nin")?.value || "").trim();
+  const file = document.getElementById("broker-verification-id-photo")?.files?.[0];
+  const privacy = document.getElementById("broker-verification-privacy")?.checked === true;
+  const retention = document.getElementById("broker-verification-retention")?.checked === true;
+  const button = document.getElementById("broker-verification-submit");
+  if (!brokerVerificationOtpToken) {
+    setBrokerVerificationStatus("Verify the working phone number first.", "error");
+    return;
+  }
+  if (!nin || !file || !privacy || !retention) {
+    setBrokerVerificationStatus("Add the ID number and photo, then accept both privacy notices.", "error");
+    return;
+  }
+  if (!file.type?.startsWith("image/")) {
+    setBrokerVerificationStatus("Upload a National ID photo image. PDFs are not accepted.", "error");
+    return;
+  }
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Submitting securely...";
+  }
+  try {
+    const identityDocument = await adminReadDirectMediaFile(file, 5 * 1024 * 1024, "National ID photo");
+    const response = await apiRequest("/api/agents/me/verification", {
+      method: "POST",
+      body: {
+        phone,
+        nin,
+        identity_document: identityDocument,
+        listing_otp_token: brokerVerificationOtpToken,
+        privacy_consent_accepted: privacy,
+        data_retention_notice_accepted: retention
+      }
+    });
+    const profileData = {
+      ...(authState?.user?.profile_data || {}),
+      broker_phone_verification_required: false,
+      broker_identity_verification_required: false,
+      broker_identity_document_uploaded: true,
+      broker_onboarding_completed_at: new Date().toISOString(),
+      broker_review_status: "pending_admin_review"
+    };
+    persistAuthState(authState?.token, {
+      ...authState.user,
+      phone,
+      phone_verified: true,
+      profile_data: profileData
+    });
+    brokerVerificationOtpToken = "";
+    setBrokerVerificationStatus(response?.data?.message || "Verification details received.", "success");
+    window.setTimeout(() => renderAgentDashboard(), 500);
+  } catch (error) {
+    setBrokerVerificationStatus(error.message || "Could not submit verification details.", "error");
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = "Submit trust check for review";
+    }
+  }
+}
+
 async function renderAgentDashboard() {
   const gate = document.getElementById("agent-auth-gate");
   const body = document.getElementById("agent-body");
@@ -11625,6 +11794,7 @@ async function renderAgentDashboard() {
   const profile = authState.user.profile_data || {};
   const forcePasswordChange = profile.force_password_change === true || String(profile.force_password_change || "").toLowerCase() === "true";
   document.getElementById("agent-password-notice")?.classList.toggle("hidden", !forcePasswordChange);
+  const verificationNotice = document.getElementById("agent-verification-notice");
   const nameEl = document.getElementById("agent-dashboard-name");
   const statusEl = document.getElementById("agent-dashboard-status");
   const summaryEl = document.getElementById("agent-dashboard-summary");
@@ -11668,6 +11838,12 @@ async function renderAgentDashboard() {
     hydrateBrokerSettingsForm(fallbackBroker);
     return;
   }
+
+  const verificationComplete = brokerVerificationComplete(broker);
+  verificationNotice?.classList.toggle("hidden", verificationComplete);
+  const verificationPhone = document.getElementById("broker-verification-phone");
+  if (verificationPhone && !verificationPhone.value) verificationPhone.value = brokerDisplayPhone(broker) || authState.user.phone || "";
+  showBrokerInviteWelcomeIfNeeded(broker, profile);
 
   const myListings = mergeBrokerDashboardListings(payload?.listings || [], broker);
   const stats = payload?.stats || {};
@@ -20903,6 +21079,57 @@ function adminReadDirectMediaFile(file, maxBytes, label) {
   });
 }
 
+async function adminInviteBroker(event) {
+  event?.preventDefault();
+  const result = document.getElementById("admin-broker-invite-result");
+  const button = document.getElementById("admin-broker-invite-submit");
+  if (!canUseLiveAdminApi()) {
+    toast("Sign in as King or admin before inviting an agent.");
+    return;
+  }
+  const originalLabel = button?.textContent || "Create profile and send secure access email";
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Creating broker workspace...";
+  }
+  if (result) result.textContent = "Saving the broker profile and sending secure temporary access...";
+  try {
+    const response = await apiRequest("/api/admin/agents/invite", {
+      method: "POST",
+      headers: adminAuthHeaders(),
+      body: {
+        full_name: (document.getElementById("admin-broker-invite-name")?.value || "").trim(),
+        company_name: (document.getElementById("admin-broker-invite-company")?.value || "").trim(),
+        email: (document.getElementById("admin-broker-invite-email")?.value || "").trim(),
+        phone: (document.getElementById("admin-broker-invite-phone")?.value || "").trim(),
+        whatsapp: (document.getElementById("admin-broker-invite-phone")?.value || "").trim(),
+        districts_covered: (document.getElementById("admin-broker-invite-districts")?.value || "").trim(),
+        specializations: (document.getElementById("admin-broker-invite-specializations")?.value || "").trim(),
+        profile_photo_url: (document.getElementById("admin-broker-invite-photo")?.value || "").trim(),
+        bio: (document.getElementById("admin-broker-invite-bio")?.value || "").trim()
+      }
+    });
+    const data = response?.data || {};
+    const emailStatus = data.account_provisioning?.email_status || "unknown";
+    if (result) {
+      result.innerHTML = `
+        <div class="font-black text-green-900">Broker workspace created</div>
+        <div class="mt-1">${adminEscape(data.company_name || "Agent")} is pending phone and National ID verification. Access email status: ${adminEscape(emailStatus)}.</div>
+        <div class="mt-2 text-[11px] text-gray-500">No property was created. Listings submitted by this agent will enter Makaug review before publication.</div>`;
+    }
+    toast(emailStatus === "sent" ? "Broker invited and access email sent." : "Broker workspace created; check the email delivery status.");
+    await renderAdminDashboard();
+  } catch (error) {
+    if (result) result.textContent = `Broker invitation failed: ${error.message || "request failed"}`;
+    toast(`Broker invitation failed: ${error.message || "request failed"}`);
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = originalLabel;
+    }
+  }
+}
+
 async function adminCreateDirectAgentListing(event) {
   event?.preventDefault();
   const result = document.getElementById("admin-direct-agent-result");
@@ -29311,6 +29538,13 @@ function isSignedInBrokerListing() {
   return authState?.user?.role === "agent_broker";
 }
 
+function isBrokerListingFastTrackReady() {
+  const details = brokerListingContactDetails();
+  return isSignedInBrokerListing()
+    && brokerVerificationComplete(details.broker)
+    && authState?.user?.phone_verified === true;
+}
+
 function brokerListingContactDetails() {
   const broker = brokerDashboardCache?.broker || resolveCurrentAgentProfile() || {};
   const user = authState?.user || {};
@@ -29343,6 +29577,12 @@ function prefillBrokerListingIdentity() {
   }
   updateBrokerListingContextBanner();
   const details = brokerListingContactDetails();
+  if (!isBrokerListingFastTrackReady()) {
+    document.getElementById("lp-broker-fast-track-note")?.classList.add("hidden");
+    setTextById("lp-otp-status", "Complete the private phone and National ID trust check in your broker dashboard before submitting a broker listing.");
+    renderListReviewSummary();
+    return;
+  }
   const set = (id, value) => {
     const el = document.getElementById(id);
     if (el && !el.value) el.value = value || "";
@@ -29365,6 +29605,10 @@ function prefillBrokerListingIdentity() {
 function validateListStep3() {
   clearLpValidationErrors("#lp-step-3");
   if (isSignedInBrokerListing()) {
+    if (!isBrokerListingFastTrackReady()) {
+      toast("Complete phone and National ID verification in your broker dashboard before submitting a listing.");
+      return false;
+    }
     prefillBrokerListingIdentity();
     const details = brokerListingContactDetails();
     if (!details.email && !details.phone) {
@@ -29651,7 +29895,7 @@ function buildListPropertyPayload(photoUploadUrls = lpPhotoUploadUrls) {
 	    }
 	  };
 
-	  if (isSignedInBrokerListing()) {
+	  if (isBrokerListingFastTrackReady()) {
 	    const details = brokerListingContactDetails();
 	    payload.listed_via = "broker_dashboard";
 	    payload.source = "broker_dashboard";
