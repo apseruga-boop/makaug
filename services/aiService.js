@@ -1162,6 +1162,117 @@ async function transcribeAudioFromDataUrl(dataUrl, mediaType = 'audio/ogg') {
   return transcribeAudioBuffer(buffer, detectedType, { source: 'web_bridge_data_url', bytes: buffer.length });
 }
 
+async function classifyWhatsappListingPhoto({ imageDataUrl = '', expectedSlot = '' } = {}) {
+  const rawImage = String(imageDataUrl || '').trim();
+  const safeSlot = cleanText(expectedSlot, 80) || 'property photo';
+  if (!/^data:image\/(?:jpeg|jpg|png|webp);base64,/i.test(rawImage)) {
+    return {
+      accepted: false,
+      verdict: 'unavailable',
+      scene_type: 'unknown',
+      matches_expected_slot: false,
+      confidence: 0,
+      reason: 'image_preview_missing'
+    };
+  }
+
+  const approxBytes = Math.floor((rawImage.length * 3) / 4);
+  if (approxBytes > 3_000_000) {
+    return {
+      accepted: false,
+      verdict: 'unavailable',
+      scene_type: 'unknown',
+      matches_expected_slot: false,
+      confidence: 0,
+      reason: 'image_preview_too_large'
+    };
+  }
+
+  const client = getClient();
+  if (!client) {
+    return {
+      accepted: false,
+      verdict: 'unavailable',
+      scene_type: 'unknown',
+      matches_expected_slot: false,
+      confidence: 0,
+      reason: 'vision_provider_unavailable'
+    };
+  }
+
+  const model = getTaskModel('whatsapp_photo', process.env.OPENAI_WHATSAPP_PHOTO_MODEL || 'gpt-4.1-mini');
+  try {
+    const completion = await createChatCompletionResilient(client, {
+      model,
+      temperature: 0,
+      messages: [
+        {
+          role: 'system',
+          content: `You validate photos for a Uganda property listing form. Return JSON only with: is_property_photo (boolean), is_screenshot_or_document (boolean), scene_type (exterior|living_room|bedroom|kitchen|bathroom|other_property|non_property), matches_expected_slot (boolean), confidence (0..1), reason (short string). Reject screenshots, documents, app screens, chats, email screens, memes, people-only photos, products, food, and unrelated images. A real building exterior or interior is a property photo. Be conservative.`
+        },
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: `Expected photo: ${safeSlot}. Decide whether this is a real property photo and whether it matches that requested scene.`
+            },
+            {
+              type: 'image_url',
+              image_url: { url: rawImage, detail: 'low' }
+            }
+          ]
+        }
+      ]
+    }, { preferJson: true });
+
+    const parsed = safeJsonParse(completion?.choices?.[0]?.message?.content || '{}', {});
+    const confidence = clamp(parsed.confidence || 0, 0, 1);
+    const isPropertyPhoto = parsed.is_property_photo === true;
+    const isScreenshot = parsed.is_screenshot_or_document === true;
+    const matchesExpectedSlot = parsed.matches_expected_slot !== false;
+    const accepted = isPropertyPhoto && !isScreenshot && matchesExpectedSlot && confidence >= 0.62;
+    const result = {
+      accepted,
+      verdict: accepted ? 'accepted' : (isScreenshot ? 'screenshot_or_document' : (isPropertyPhoto ? 'wrong_property_scene' : 'non_property')),
+      scene_type: cleanText(parsed.scene_type, 40).toLowerCase() || 'unknown',
+      matches_expected_slot: matchesExpectedSlot,
+      confidence,
+      reason: cleanText(parsed.reason, 160) || (accepted ? 'property_photo' : 'photo_not_accepted'),
+      model
+    };
+
+    await logAiModelEvent({
+      eventType: 'whatsapp_listing_photo_validation',
+      source: 'whatsapp',
+      inputPayload: { expected_slot: safeSlot, image_bytes_approx: approxBytes },
+      outputPayload: result,
+      modelName: model,
+      qualityScore: confidence
+    });
+    return result;
+  } catch (error) {
+    logger.warn('WhatsApp listing photo validation failed:', error.message);
+    await logAiModelEvent({
+      eventType: 'whatsapp_listing_photo_validation_error',
+      source: 'whatsapp',
+      inputPayload: { expected_slot: safeSlot, image_bytes_approx: approxBytes },
+      outputPayload: { accepted: false },
+      modelName: model,
+      errorMessage: error.message
+    });
+    return {
+      accepted: false,
+      verdict: 'unavailable',
+      scene_type: 'unknown',
+      matches_expected_slot: false,
+      confidence: 0,
+      reason: 'vision_validation_failed',
+      model
+    };
+  }
+}
+
 async function transcribeAudioFromUrl(mediaUrl, mediaType = 'audio/ogg') {
   if (!mediaUrl) return null;
   if (String(mediaUrl).startsWith('data:')) {
@@ -1795,6 +1906,7 @@ module.exports = {
   heuristicNaturalPropertyQuery,
   transcribeAudioFromUrl,
   transcribeAudioFromDataUrl,
+  classifyWhatsappListingPhoto,
   generateCampaignCopy,
   generateListingIntelligence,
   translateFreeText,

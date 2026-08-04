@@ -10,6 +10,7 @@ const {
   suggestWhatsappAssistantReply,
   transcribeAudioFromUrl,
   transcribeAudioFromDataUrl,
+  classifyWhatsappListingPhoto,
   extractNaturalPropertyQuery
 } = require('../services/aiService');
 const {
@@ -51,6 +52,7 @@ const {
 const { handleOwnerWhatsappCommand } = require('../services/aiCeoControlService');
 const { captureLearningEvent } = require('../services/aiLearningCaptureService');
 const { isLlmEnabled } = require('../services/llmProvider');
+const { storeDataUrl } = require('../services/cloudMediaStorageService');
 const { buildUgNlisAssistantReply } = require('../services/ugnlisLandVerificationService');
 const { buildListingReference } = require('../services/listingReferenceService');
 const {
@@ -81,6 +83,8 @@ const WHATSAPP_NATURAL_SEARCH_AI_MODE = String(process.env.WHATSAPP_NATURAL_SEAR
 const WHATSAPP_REPLY_AI_MODE = String(process.env.WHATSAPP_REPLY_AI_MODE || 'fast').trim().toLowerCase();
 const WHATSAPP_PROPERTY_RESULT_LIMIT = 10;
 const MIN_PUBLIC_WHATSAPP_PRICE_UGX = 10000;
+const WHATSAPP_LISTING_PHOTO_FLOW_MARKER = 'whatsapp-listing-photo-flow-20260804';
+const WHATSAPP_MIN_LISTING_PHOTOS = 5;
 
 // Language Translations
 const T = {
@@ -89,8 +93,6 @@ const T = {
     chooseLanguage: 'Choose your language / ቋንቋዎን ይምረጡ / اختر لغتك:\n1. English\n2. Luganda\n3. Kiswahili\n4. Acholi\n5. Runyankole\n6. Rukiga\n7. Lusoga\n8. Amharic / አማርኛ\n9. Arabic / العربية',
     askListingType: '🏠 What are you listing?\n1️⃣ House/Property for SALE\n2️⃣ House/Property for RENT\n3️⃣ Land/Plot\n4️⃣ Student accommodation\n5️⃣ Commercial property',
     askOwnership: '✅ Are you the owner of this property, or an agent listing on behalf of an owner?\n1️⃣ I am the owner\n2️⃣ I am an agent',
-    askFieldAgent: '🤝 Did a makaug.com Field Agent help you with this listing?\n1️⃣ Yes\n2️⃣ No\n\nIf not, reply 2. You can also type the property details and I will save them.',
-    askFieldAgentDetails: 'Please send the Field Agent ID, for example FA-0001, so we can credit the right person.',
     askTitle: '✏️ Give your property a short title (e.g. "3-bedroom house in Ntinda Kampala"):',
     askDistrict: '📍 Which district is the property in? If there is more than one, list them all. (e.g. Kampala, Wakiso, Mukono, Jinja...)',
     askArea: '🗺️ What area or neighbourhood? If there is more than one, list them all. (e.g. Kololo, Ntinda, Bugolobi...)',
@@ -171,8 +173,6 @@ const T = {
     chooseLanguage: 'Choose your language / ቋንቋዎን ይምረጡ / اختر لغتك:\n1. English\n2. Luganda\n3. Kiswahili\n4. Acholi\n5. Runyankole\n6. Rukiga\n7. Lusoga\n8. Amharic / አማርኛ\n9. Arabic / العربية',
     askListingType: "🏠 Kyoyetaagadde okutereka kya ki?\n1️⃣ Enju/Ensi okutunda\n2️⃣ Enju okusasula\n3️⃣ Ttaka\n4️⃣ Eby'okulala by'abayizi\n5️⃣ Ensi ez'ebikolwa",
     askOwnership: "✅ Ggwe nnyini ensi ono oba agent?\n1️⃣ Nze nnyini\n2️⃣ Nze agent",
-    askFieldAgent: '🤝 Waliwo Field Agent wa makaug.com eyakuyambye ku listing eno?\n1️⃣ Yee\n2️⃣ Nedda',
-    askFieldAgentDetails: 'Mpandiikira Field Agent ID, okugeza FA-0001, tumuwe credit entuufu.',
     askTitle: '✏️ Nyumba yoyo ejjiire etya? (e.g. "Enyumba esatu Ntinda Kampala"):',
     askDistrict: '📍 Ensi eno eri mu kitundu ki? (e.g. Kampala, Wakiso, Mukono...)',
     askArea: '🗺️ Ekitundu ekitonotono ki? (e.g. Kololo, Ntinda, Bugolobi...)',
@@ -327,8 +327,6 @@ Object.assign(T.sw, {
   languageUpdated: '✅ Lugha imesasishwa.',
   restarted: '🔄 Mazungumzo yameanza upya.',
   askOwnership: '✅ Wewe ndiye mmiliki wa mali hii, au ni wakala?\n1️⃣ Mimi ni mmiliki\n2️⃣ Mimi ni wakala',
-  askFieldAgent: '🤝 Je, Field Agent wa makaug.com amekusaidia na tangazo hili?\n1️⃣ Ndiyo\n2️⃣ Hapana',
-  askFieldAgentDetails: 'Tuma Field Agent ID, mfano FA-0001, ili tumpe credit sahihi.',
   askBedrooms: '🛏 Mali ina vyumba vingapi vya kulala? (Andika nambari, au 0 kama haihusiki)',
   askDescription: '📝 Eleza mali yako kwa sentensi chache (eneo, vipengele, hali...)',
   askPublicName: '👤 Jina gani lionekane kwenye tangazo? (mfano Amina, Amina Properties, au Private Owner)',
@@ -351,8 +349,6 @@ Object.assign(T.sw, {
 Object.assign(T.ac, {
   askListingType: '🏠 Itye keto ngo?\n1️⃣ Ot/property me acata\n2️⃣ Ot/property me rent\n3️⃣ Ngom/plot\n4️⃣ Kabedo me students\n5️⃣ Property me business',
   askOwnership: '✅ In aye won property man, onyo agent?\n1️⃣ An won-ne\n2️⃣ An agent',
-  askFieldAgent: '🤝 Field Agent pa makaug.com okonyi ki listing man?\n1️⃣ Eyo\n2️⃣ Pe',
-  askFieldAgentDetails: 'Coo Field Agent ID, labol FA-0001, wek wami credit bot dano matye atir.',
   askTitle: '✏️ Coo nying property macek:',
   askDistrict: '📍 Property man tye i district mene?',
   askArea: '🗺️ Kabedo/neighbourhood mene?',
@@ -410,8 +406,6 @@ Object.assign(T.ac, {
 Object.assign(T.ny, {
   askListingType: '🏠 Niki eki orikuteeka?\n1️⃣ Enju/property kugurisha\n2️⃣ Enju/property kukodisa\n3️⃣ Itaka/plot\n4️⃣ Ebyokutuuramu byaba students\n5️⃣ Commercial property',
   askOwnership: '✅ Niwe nyini property egi, nari ori agent?\n1️⃣ Ndi nyini\n2️⃣ Ndi agent',
-  askFieldAgent: '🤝 Hari Field Agent wa makaug.com owakuhwereire ahari listing egi?\n1️⃣ Eego\n2️⃣ Ngaaha',
-  askFieldAgentDetails: 'Handiika Field Agent ID, nka FA-0001, kugira tumuhe credit eyaahikire.',
   askTitle: '✏️ Ha property yaawe omutwe mugufi:',
   askDistrict: '📍 Property eri mu district ki?',
   askArea: '🗺️ Area/neighbourhood ki?',
@@ -446,8 +440,6 @@ Object.assign(T.ny, {
 Object.assign(T.rn, {
   askListingType: '🏠 Uriko ushira ikiho?\n1️⃣ Inzu/property yo kugurisha\n2️⃣ Inzu/property yo gukodesha\n3️⃣ Ubutaka/plot\n4️⃣ Aho abanyeshuri baba\n5️⃣ Commercial property',
   askOwnership: '✅ Ni wewe nyiri property, canke uri agent?\n1️⃣ Ndi nyiri\n2️⃣ Ndi agent',
-  askFieldAgent: '🤝 Hari Field Agent wa makaug.com yabafashije kuri iyi listing?\n1️⃣ Ego\n2️⃣ Oya',
-  askFieldAgentDetails: 'Andika Field Agent ID, nka FA-0001. Niba utayizi, andika NO.',
   askTitle: '✏️ Andika umutwe mugufi wa property:',
   askDistrict: '📍 Property iri muri district iyihe?',
   askArea: '🗺️ Area/neighbourhood iyihe?',
@@ -482,8 +474,6 @@ Object.assign(T.rn, {
 Object.assign(T.sm, {
   askListingType: "🏠 Oteeka ki?\n1️⃣ Ennyumba/property okutunda\n2️⃣ Ennyumba/property okukodisa\n3️⃣ Ettaka/plot\n4️⃣ Obutuuze bw'abayizi\n5️⃣ Commercial property",
   askOwnership: '✅ Ggwe nyini property eno, oba agent?\n1️⃣ Nze nyini\n2️⃣ Nze agent',
-  askFieldAgent: '🤝 Waliwo Field Agent wa makaug.com eyakuyambye ku listing eno?\n1️⃣ Yee\n2️⃣ Nedda',
-  askFieldAgentDetails: 'Mpandiikira Field Agent ID, okugeza FA-0001, tumuwe credit entuufu.',
   askTitle: '✏️ Wa property yo omutwe omumpi:',
   askDistrict: '📍 Property eri mu district ki?',
   askArea: '🗺️ Area/neighbourhood ki?',
@@ -522,8 +512,6 @@ T.am = Object.assign({}, T.en, {
   chooseLanguage: WHATSAPP_LANGUAGE_MENU,
   askListingType: '🏠 ምን እየዘረዘሩ ነው?\n1️⃣ ለሽያጭ ቤት/ንብረት\n2️⃣ ለኪራይ ቤት/ንብረት\n3️⃣ መሬት/ፕሎት\n4️⃣ የተማሪ መኖሪያ\n5️⃣ የንግድ ንብረት',
   askOwnership: '✅ የዚህ ንብረት ባለቤት ነዎት ወይስ በባለቤት ስም የሚዘረዝር ወኪል?\n1️⃣ ባለቤት ነኝ\n2️⃣ ወኪል ነኝ',
-  askFieldAgent: '🤝 የ makaug.com Field Agent በዚህ ዝርዝር ረድቶዎታል?\n1️⃣ አዎ\n2️⃣ አይ',
-  askFieldAgentDetails: 'እባክዎ Field Agent ID ይላኩ፣ ለምሳሌ FA-0001።',
   askTitle: '✏️ ለንብረቱ አጭር ርዕስ ይስጡ፣ ለምሳሌ "3-bedroom house in Ntinda Kampala":',
   askDistrict: '📍 ንብረቱ በየትኛው ዲስትሪክት ነው? ለምሳሌ Kampala, Wakiso, Mukono',
   askArea: '🗺️ የትኛው አካባቢ/መንደር ነው?',
@@ -604,8 +592,6 @@ T.ar = Object.assign({}, T.en, {
   chooseLanguage: WHATSAPP_LANGUAGE_MENU,
   askListingType: '🏠 ماذا تريد أن تدرج؟\n1️⃣ بيت/عقار للبيع\n2️⃣ بيت/عقار للإيجار\n3️⃣ أرض/قطعة\n4️⃣ سكن طلاب\n5️⃣ عقار تجاري',
   askOwnership: '✅ هل أنت مالك هذا العقار أم وكيل يدرجه نيابة عن المالك؟\n1️⃣ أنا المالك\n2️⃣ أنا وكيل',
-  askFieldAgent: '🤝 هل ساعدك Field Agent من makaug.com في هذا الإعلان؟\n1️⃣ نعم\n2️⃣ لا',
-  askFieldAgentDetails: 'أرسل Field Agent ID، مثلاً FA-0001، حتى نعطي الشخص الصحيح credit.',
   askTitle: '✏️ أعط العقار عنواناً قصيراً، مثل "3-bedroom house in Ntinda Kampala":',
   askDistrict: '📍 في أي district يقع العقار؟ مثال: Kampala, Wakiso, Mukono',
   askArea: '🗺️ ما المنطقة أو الحي؟',
@@ -1152,10 +1138,24 @@ function photoRequirementLabel(index, lang = 'en') {
     ny: ['front/outside', 'sitting room nari main room', 'bedroom', 'kitchen', 'bathroom', 'ekishushani ekindi'],
     rn: ['front/outside', 'sitting room canke main room', 'bedroom', 'kitchen', 'bathroom', 'ifoto yindi ifasha'],
     sm: ['front/outside', 'sitting room oba ekisenge ekikulu', 'bedroom', 'kitchen', 'bathroom', 'ekifaananyi ekirala'],
-    am: ['front/outside', 'sitting room ወይም ዋና ክፍል', 'bedroom', 'kitchen', 'bathroom', 'ተጨማሪ ጠቃሚ ፎቶ']
+    am: ['front/outside', 'sitting room ወይም ዋና ክፍል', 'bedroom', 'kitchen', 'bathroom', 'ተጨማሪ ጠቃሚ ፎቶ'],
+    ar: ['الواجهة/الخارج', 'غرفة الجلوس أو الغرفة الرئيسية', 'غرفة النوم', 'المطبخ', 'الحمام', 'صورة إضافية مفيدة']
   };
   const row = labels[code] || labels.en;
   return row[index] || row[5];
+}
+
+function photoChecklistPrompt(lang, count = 0) {
+  const code = resolveLangCode(lang);
+  const safeCount = Math.max(0, Math.min(WHATSAPP_MIN_LISTING_PHOTOS, Number(count) || 0));
+  const nextLabel = photoRequirementLabel(safeCount, code);
+  const messages = {
+    en: `📸 Please send at least 5 different, clear property photos. You can send them one at a time or together:\n1️⃣ Front/outside\n2️⃣ Sitting room or main room\n3️⃣ Bedroom\n4️⃣ Kitchen\n5️⃣ Bathroom\n\nI will check and confirm each photo. Screenshots, documents and duplicate photos do not count.\n\nStart with the *${nextLabel}* photo.`,
+    lg: `📸 Weereza waakiri ebifaananyi 5 eby'enjawulo era ebitegeerekeka: front/outside, sitting room oba main room, bedroom, kitchen ne bathroom. Osobola okubisindika kimu ku kimu oba wamu. Nja kukakasa buli kifaananyi. Screenshot, document oba ekifaananyi ekiddiddwa tekibalibwa.\n\nTandika n'ekifaananyi kya *${nextLabel}*.`,
+    sw: `📸 Tuma angalau picha 5 tofauti na wazi za mali: mbele/nje, sebule au chumba kikuu, chumba cha kulala, jikoni na bafu. Unaweza kutuma moja moja au pamoja. Nitathibitisha kila picha. Screenshot, hati au picha iliyorudiwa haitahesabiwa.\n\nAnza na picha ya *${nextLabel}*.`,
+    ar: `📸 أرسل 5 صور مختلفة وواضحة للعقار على الأقل: الواجهة/الخارج، غرفة الجلوس، غرفة النوم، المطبخ، والحمام. يمكنك إرسالها واحدة تلو الأخرى أو معاً. سأتحقق من كل صورة. لقطات الشاشة والمستندات والصور المكررة لا تُحتسب.\n\nابدأ بصورة *${nextLabel}*.`
+  };
+  return messages[code] || messages.en;
 }
 
 function photoNextPrompt(lang, count = 0) {
@@ -1163,7 +1163,7 @@ function photoNextPrompt(lang, count = 0) {
   const safeCount = Math.max(0, Number(count) || 0);
   if (safeCount >= 5) {
     const done = {
-      en: `✅ I have the 5 key photos. Type *DONE* to continue, or send any extra helpful photos.`,
+      en: `✅ I have the 5 key photos. I will continue with your contact details now.`,
       lg: `✅ Ebifaananyi 5 ebikulu bifuniddwa. Wandiika *DONE* okugenda mu maaso, oba weereza ebirala bw'oba obirina.`,
       sw: `✅ Nimepata picha 5 muhimu. Andika *DONE* kuendelea, au tuma picha nyingine kama zipo.`,
       ac: `✅ Atye ki photos 5 ma pire tek. Coo *DONE* me mede anyim, onyo cwal photos mukene ma konyo.`,
@@ -1186,6 +1186,57 @@ function photoNextPrompt(lang, count = 0) {
     am: `📸 ቀጣይ: እባክዎ የ *${label}* ፎቶ ይላኩ።`
   };
   return prompts[code] || prompts.en;
+}
+
+function photoAcceptedPrompt(lang, count = 1) {
+  const code = resolveLangCode(lang);
+  const safeCount = Math.max(1, Number(count) || 1);
+  const remaining = Math.max(0, WHATSAPP_MIN_LISTING_PHOTOS - safeCount);
+  const nextLabel = photoRequirementLabel(safeCount, code);
+  const messages = {
+    en: remaining > 0
+      ? `✅ Photo ${safeCount} accepted. ${remaining} key photo${remaining === 1 ? '' : 's'} remaining.\n📸 Next: please send the *${nextLabel}* photo.`
+      : `✅ Photo ${safeCount} accepted. I now have the 5 key property photos.`,
+    lg: remaining > 0
+      ? `✅ Ekifaananyi ${safeCount} kikkiriziddwa. Ebifaananyi ebikulu ${remaining} bisigadde.\n📸 Ekiddako: weereza ekifaananyi kya *${nextLabel}*.`
+      : `✅ Ekifaananyi ${safeCount} kikkiriziddwa. Ebifaananyi 5 ebikulu biwedde.`,
+    sw: remaining > 0
+      ? `✅ Picha ${safeCount} imekubaliwa. Picha muhimu ${remaining} zimebaki.\n📸 Inayofuata: tuma picha ya *${nextLabel}*.`
+      : `✅ Picha ${safeCount} imekubaliwa. Sasa nina picha 5 muhimu za mali.`,
+    ar: remaining > 0
+      ? `✅ تم قبول الصورة ${safeCount}. تبقّت ${remaining} صور أساسية.\n📸 التالية: أرسل صورة *${nextLabel}*.`
+      : `✅ تم قبول الصورة ${safeCount}. لدي الآن الصور الخمس الأساسية للعقار.`
+  };
+  return messages[code] || messages.en;
+}
+
+function photoRejectedPrompt(lang, count = 0, reason = 'non_property') {
+  const code = resolveLangCode(lang);
+  const nextLabel = photoRequirementLabel(count, code);
+  const reasonText = reason === 'wrong_property_scene'
+    ? 'That looks like a property photo, but it is not the requested room/view.'
+    : reason === 'unavailable'
+      ? 'I could not verify that image safely.'
+      : 'That looks like a screenshot, document, or unrelated image rather than a property photo.';
+  const messages = {
+    en: `⚠️ ${reasonText} It has not been counted.\n📸 Please resend a clear *${nextLabel}* property photo.`,
+    lg: `⚠️ Ekifaananyi ekyo tekibaliddwa kubanga si kifaananyi kya property ekisaanira ekifo kino.\n📸 Weereza nate ekifaananyi ekitegeerekeka kya *${nextLabel}*.`,
+    sw: `⚠️ Picha hiyo haijahesabiwa kwa sababu si picha sahihi ya mali kwa hatua hii.\n📸 Tafadhali tuma picha wazi ya *${nextLabel}*.`,
+    ar: `⚠️ لم تُحتسب هذه الصورة لأنها ليست صورة العقار المطلوبة لهذه الخطوة.\n📸 أرسل صورة عقار واضحة لـ *${nextLabel}*.`
+  };
+  return messages[code] || messages.en;
+}
+
+function photoDuplicatePrompt(lang, count = 0) {
+  const code = resolveLangCode(lang);
+  const nextLabel = photoRequirementLabel(count, code);
+  const messages = {
+    en: `⚠️ That photo has already been received, so I did not count it twice.\n📸 Next: please send a different *${nextLabel}* photo.`,
+    lg: `⚠️ Ekifaananyi ekyo wakisindika dda, kale sikibalidde emirundi ebiri.\n📸 Ekiddako: weereza ekifaananyi ekirala kya *${nextLabel}*.`,
+    sw: `⚠️ Picha hiyo tayari imepokelewa, kwa hiyo sijaihesabu mara mbili.\n📸 Inayofuata: tuma picha tofauti ya *${nextLabel}*.`,
+    ar: `⚠️ تم استلام هذه الصورة من قبل، لذلك لم أحتسبها مرتين.\n📸 التالية: أرسل صورة مختلفة لـ *${nextLabel}*.`
+  };
+  return messages[code] || messages.en;
 }
 
 function photoCompletePrompt(lang, count = 5) {
@@ -1281,8 +1332,6 @@ function stepPromptFor(lang, step) {
     ask_phone: t(code, 'askPhone'),
     search_type: t(code, 'askSearchType'),
     search_area: t(code, 'askSearchArea'),
-    ask_field_agent: t(code, 'askFieldAgent'),
-    ask_field_agent_details: t(code, 'askFieldAgentDetails'),
     agent_area: t(code, 'askAgentArea'),
     verify_otp: t(code, 'verifyOTP')
   };
@@ -1933,9 +1982,9 @@ function buildNaturalListingDetailDraft(input, draft = {}) {
 function listingDetailSavedReply(lang, nextPrompt) {
   const code = resolveLangCode(lang);
   const messages = {
-    en: `Got it - I saved those property details and marked Field Agent as No.\n\n${nextPrompt}`,
-    lg: `Kale - nterese details za property era ntegedde nti tewali Field Agent.\n\n${nextPrompt}`,
-    sw: `Sawa - nimehifadhi maelezo hayo ya mali na kuweka Field Agent kuwa Hapana.\n\n${nextPrompt}`
+    en: `Got it - I saved those property details.\n\n${nextPrompt}`,
+    lg: `Kale - nterese details za property.\n\n${nextPrompt}`,
+    sw: `Sawa - nimehifadhi maelezo hayo ya mali.\n\n${nextPrompt}`
   };
   return messages[code] || messages.en;
 }
@@ -1970,9 +2019,9 @@ function parseBedroomDraft(input) {
 function savedDescriptionPrompt(lang) {
   const code = resolveLangCode(lang);
   const messages = {
-    en: `I saved your property description already.\n\n${t(code, 'askPhotos')}\n${photoNextPrompt(code, 0)}`,
-    lg: `${t(code, 'askPhotos')}\n${photoNextPrompt(code, 0)}`,
-    sw: `${t(code, 'askPhotos')}\n${photoNextPrompt(code, 0)}`
+    en: `I saved your property description already.\n\n${photoChecklistPrompt(code, 0)}`,
+    lg: photoChecklistPrompt(code, 0),
+    sw: photoChecklistPrompt(code, 0)
   };
   return messages[code] || messages.en;
 }
@@ -1988,8 +2037,6 @@ function isDraftMissingValue(draft = {}, key) {
 function nextListingDraftStep(draft = {}) {
   if (isDraftMissingValue(draft, 'listing_type')) return 'listing_type';
   if (isDraftMissingValue(draft, 'lister_type')) return 'ownership';
-  if (draft.assisted_by_field_agent === undefined || draft.assisted_by_field_agent === null) return 'ask_field_agent';
-  if (draft.assisted_by_field_agent === true && isDraftMissingValue(draft, 'field_agent_reference')) return 'ask_field_agent_details';
   if (isDraftMissingValue(draft, 'title')) return 'title';
   if (isDraftMissingValue(draft, 'district')) return 'district';
   if (isDraftMissingValue(draft, 'area')) return 'area';
@@ -2001,7 +2048,7 @@ function nextListingDraftStep(draft = {}) {
   if (draft.listing_type === 'student' && isDraftMissingValue(draft, 'distance_to_uni_km')) return 'ask_distance';
   if (isDraftMissingValue(draft, 'bedrooms')) return 'bedrooms';
   if (isDraftMissingValue(draft, 'description')) return 'description';
-  if (!Array.isArray(draft.photos) || draft.photos.length < 5) return 'photos';
+  if (!Array.isArray(draft.photos) || draft.photos.length < WHATSAPP_MIN_LISTING_PHOTOS) return 'photos';
   if (isDraftMissingValue(draft, 'lister_name') && isDraftMissingValue(draft, 'contact_display_name')) return 'ask_public_name';
   if (isDraftMissingValue(draft, 'preferred_contact_channel')) return 'confirm_whatsapp_contact';
   if (isDraftMissingValue(draft, 'otp_identifier')) return 'ask_contact_value';
@@ -2051,7 +2098,7 @@ function fastListingProgressReply(lang, patch = {}, updatedDraft = {}, intro = '
   if (nextStep === 'photos') {
     return {
       nextStep,
-      message: `✅ ${savedLine}\n\n${t(lang, 'askPhotos')}\n${photoNextPrompt(lang, Array.isArray(updatedDraft.photos) ? updatedDraft.photos.length : 0)}`
+      message: `✅ ${savedLine}\n\n${photoChecklistPrompt(lang, Array.isArray(updatedDraft.photos) ? updatedDraft.photos.length : 0)}`
     };
   }
   return {
@@ -2107,12 +2154,11 @@ async function submitWhatsappListingDraft({ phone, lang, draft }) {
           whatsapp_sender_contact_confirmed: d.whatsapp_sender_contact_confirmed === true,
           whatsapp_sender_phone: phone,
           verification_channel: d.verification_channel || 'whatsapp_sender',
+          whatsapp_listing_photo_flow_marker: WHATSAPP_LISTING_PHOTO_FLOW_MARKER,
           verification_otp_required: false,
           identity_review_required: true,
           nin_match_confirmed: Boolean(d.national_id_number && d.selfie_url),
           verify: verifyFields,
-          assisted_by_field_agent: d.assisted_by_field_agent === true,
-          field_agent_reference: normalizeFieldAgentCode(d.field_agent_reference) || null,
           bedroom_options_text: d.bedroom_options_text || null,
           bedroom_options_min: d.bedroom_options_min || null,
           bedroom_options_max: d.bedroom_options_max || null,
@@ -2387,24 +2433,126 @@ function isListingPhotoMedia(mediaType, mediaUrl) {
     || String(mediaUrl || '').startsWith('whatsapp-web://inline-image-');
 }
 
-function appendIncomingListingPhotos(existingPhotos = [], mediaUrl = '', mediaCount = 1) {
-  const photos = Array.isArray(existingPhotos)
-    ? existingPhotos.filter(Boolean).slice(0, 10)
+function listingPhotoCandidates(runtime = {}, mediaUrl = '') {
+  const incoming = Array.isArray(runtime.photoCandidates)
+    ? runtime.photoCandidates
     : [];
-  if (!mediaUrl) return { photos, added: 0 };
+  const normalized = incoming.slice(0, 10).map((item, index) => {
+    const dataUrl = normalizeInput(item?.data_url || item?.dataUrl || '');
+    const suppliedHash = normalizeInput(item?.sha256 || item?.hash || '').toLowerCase();
+    const hash = suppliedHash || (dataUrl
+      ? crypto.createHash('sha256').update(dataUrl).digest('hex')
+      : '');
+    return {
+      dataUrl,
+      hash,
+      perceptualHash: normalizeInput(item?.perceptual_hash || item?.perceptualHash || '').toLowerCase(),
+      mediaUrl: normalizeInput(item?.media_url || item?.mediaUrl || '') || (index === 0 ? mediaUrl : ''),
+      mimeType: normalizeInput(item?.mime_type || item?.mimeType || '') || 'image/jpeg'
+    };
+  }).filter((item) => item.dataUrl || item.mediaUrl);
 
-  const incomingCount = Math.max(1, Math.min(10, Number(mediaCount || 0) || 1));
-  const availableSlots = Math.max(0, 10 - photos.length);
-  const toAdd = Math.min(incomingCount, availableSlots);
-  let added = 0;
-  for (let i = 0; i < toAdd; i += 1) {
-    const nextUrl = toAdd === 1 ? mediaUrl : `${mediaUrl}#${i + 1}`;
-    if (!photos.includes(nextUrl)) {
-      photos.push(nextUrl);
-      added += 1;
+  if (normalized.length) return normalized;
+  return mediaUrl ? [{ dataUrl: '', hash: '', mediaUrl, mimeType: 'image/jpeg' }] : [];
+}
+
+function perceptualHashDistance(left = '', right = '') {
+  const a = String(left || '').trim().toLowerCase();
+  const b = String(right || '').trim().toLowerCase();
+  if (!a || !b || a.length !== b.length || !/^[0-9a-f]+$/.test(a) || !/^[0-9a-f]+$/.test(b)) return Infinity;
+  let distance = 0;
+  for (let index = 0; index < a.length; index += 1) {
+    let xor = Number.parseInt(a[index], 16) ^ Number.parseInt(b[index], 16);
+    while (xor) {
+      distance += xor & 1;
+      xor >>= 1;
     }
   }
-  return { photos, added };
+  return distance;
+}
+
+async function validateAndStoreListingPhotos({ phone, lang, draft = {}, runtime = {}, mediaUrl = '' } = {}) {
+  const photos = Array.isArray(draft.photos) ? draft.photos.filter(Boolean).slice(0, 10) : [];
+  const photoHashes = Array.isArray(draft.photo_hashes) ? draft.photo_hashes.filter(Boolean).slice(0, 10) : [];
+  const photoPerceptualHashes = Array.isArray(draft.photo_perceptual_hashes)
+    ? draft.photo_perceptual_hashes.filter(Boolean).slice(0, 10)
+    : [];
+  const photoValidation = Array.isArray(draft.photo_validation) ? draft.photo_validation.slice(0, 10) : [];
+  const candidates = listingPhotoCandidates(runtime, mediaUrl);
+  const outcomes = [];
+
+  for (const candidate of candidates) {
+    if (photos.length >= WHATSAPP_MIN_LISTING_PHOTOS) break;
+    const expectedSlot = photoRequirementLabel(photos.length, 'en');
+    const isExactDuplicate = candidate.hash && photoHashes.includes(candidate.hash);
+    const isVisualDuplicate = candidate.perceptualHash && photoPerceptualHashes.some(
+      (existingHash) => perceptualHashDistance(candidate.perceptualHash, existingHash) <= 6
+    );
+    if (isExactDuplicate || isVisualDuplicate) {
+      outcomes.push({ status: 'duplicate', expectedSlot });
+      continue;
+    }
+
+    const validation = await withTimeout(
+      classifyWhatsappListingPhoto({
+        imageDataUrl: candidate.dataUrl,
+        expectedSlot
+      }),
+      Math.max(2500, Number(process.env.WHATSAPP_PHOTO_VALIDATION_TIMEOUT_MS || 7000)),
+      {
+        accepted: false,
+        verdict: 'unavailable',
+        scene_type: 'unknown',
+        matches_expected_slot: false,
+        confidence: 0,
+        reason: 'vision_validation_timeout'
+      },
+      'WhatsApp listing photo validation'
+    );
+
+    if (!validation?.accepted) {
+      outcomes.push({ status: 'rejected', expectedSlot, validation });
+      continue;
+    }
+
+    let storedUrl = '';
+    if (candidate.dataUrl) {
+      storedUrl = await storeDataUrl(candidate.dataUrl, {
+        keyPrefix: 'whatsapp-listings/photos',
+        filename: `${String(phone || 'listing').replace(/\D/g, '').slice(-8) || 'listing'}-${photos.length + 1}.jpg`,
+        label: `WhatsApp listing photo ${photos.length + 1}`,
+        allowedMimeTypes: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'],
+        maxBytes: 3_000_000,
+        isPrivate: false
+      }).catch((error) => {
+        logger.warn('WhatsApp listing photo cloud upload failed:', error.message || String(error));
+        return '';
+      });
+    }
+    if (!storedUrl && /^https:\/\//i.test(candidate.mediaUrl)) storedUrl = candidate.mediaUrl;
+    if (!storedUrl) {
+      outcomes.push({
+        status: 'rejected',
+        expectedSlot,
+        validation: { ...validation, verdict: 'unavailable', reason: 'photo_storage_unavailable' }
+      });
+      continue;
+    }
+
+    photos.push(storedUrl);
+    if (candidate.hash) photoHashes.push(candidate.hash);
+    if (candidate.perceptualHash) photoPerceptualHashes.push(candidate.perceptualHash);
+    photoValidation.push({
+      slot: expectedSlot,
+      scene_type: validation.scene_type || 'unknown',
+      confidence: Number(validation.confidence || 0),
+      model: validation.model || null,
+      accepted_at: new Date().toISOString()
+    });
+    outcomes.push({ status: 'accepted', expectedSlot, validation, count: photos.length });
+  }
+
+  return { photos, photoHashes, photoPerceptualHashes, photoValidation, outcomes };
 }
 
 function isListingStartRequest(input, intentResult = {}) {
@@ -6341,13 +6489,28 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     const directPrice = parseListingPriceDraft(cleanBody);
     const directBedroomDraft = parseBedroomDraft(cleanBody);
     const mediaPatch = isListingPhotoMedia(runtime.mediaType, mediaUrl)
-      ? appendIncomingListingPhotos(draft.photos || [], mediaUrl, runtime.mediaCount || 1)
-      : { photos: draft.photos || [], added: 0 };
+      ? await validateAndStoreListingPhotos({ phone, lang, draft, runtime, mediaUrl })
+      : {
+        photos: draft.photos || [],
+        photoHashes: draft.photo_hashes || [],
+        photoPerceptualHashes: draft.photo_perceptual_hashes || [],
+        photoValidation: draft.photo_validation || [],
+        outcomes: []
+      };
+    const acceptedMedia = mediaPatch.outcomes.filter((item) => item.status === 'accepted');
+    const duplicateMedia = mediaPatch.outcomes.find((item) => item.status === 'duplicate');
+    const rejectedMedia = mediaPatch.outcomes.find((item) => item.status === 'rejected');
     const draftPatch = {
       ...draftHintPatch,
       ...(directPrice ? { price: directPrice } : {}),
       ...(directBedroomDraft || {}),
-      ...(mediaPatch.added > 0 ? { photos: mediaPatch.photos } : {})
+      ...(isListingPhotoMedia(runtime.mediaType, mediaUrl) ? {
+        photos: mediaPatch.photos,
+        photo_hashes: mediaPatch.photoHashes,
+        photo_perceptual_hashes: mediaPatch.photoPerceptualHashes,
+        photo_validation: mediaPatch.photoValidation,
+        photo_flow_marker: WHATSAPP_LISTING_PHOTO_FLOW_MARKER
+      } : {})
     };
     await patchSessionData(phone, {
       idle_resume_prompt: null,
@@ -6358,7 +6521,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       listing_start_source_step: step,
       listing_start_text: cleanBody,
       listing_start_natural_seller: isNaturalSellerListingStatement(cleanBody),
-      listing_start_media_count: mediaPatch.added || 0
+      listing_start_media_count: acceptedMedia.length
     });
     if (Object.keys(draftPatch).length) {
       await patchDraft(phone, draftPatch);
@@ -6367,7 +6530,14 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       await patchDraft(phone, { listing_type: inferredListingType });
     }
     if (inferredListingType) {
-      const reply = listingStartReply(lang, inferredListingType, draftHints);
+      const photoNote = acceptedMedia.length
+        ? photoAcceptedPrompt(lang, mediaPatch.photos.length)
+        : duplicateMedia
+          ? photoDuplicatePrompt(lang, mediaPatch.photos.length)
+          : rejectedMedia
+            ? photoRejectedPrompt(lang, mediaPatch.photos.length, rejectedMedia.validation?.verdict || 'non_property')
+            : '';
+      const reply = [listingStartReply(lang, inferredListingType, draftHints), photoNote].filter(Boolean).join('\n\n');
       captureWhatsappLearningAsync({
         eventName: 'whatsapp_listing_intent_recovered',
         phone,
@@ -6378,7 +6548,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
           listing_type: inferredListingType,
           area: draftHints.area || null,
           land_size_text: draftHints.land_size_text || null,
-          media_count: mediaPatch.added || 0
+          media_count: acceptedMedia.length
         },
         payload: {
           source_step: step,
@@ -6395,6 +6565,23 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
   if (!STEPS.includes(step)) {
     await updateSession(phone, { current_step: 'greeting' });
     return respond(welcomeMessage(lang, sessionData), 'main_menu');
+  }
+
+  // Retire the consumer Field Agent question without abandoning people who
+  // were already sitting on that legacy step when this release shipped.
+  if (step === 'ask_field_agent' || step === 'ask_field_agent_details') {
+    const migratedDraft = {
+      ...draft,
+      assisted_by_field_agent: false,
+      field_agent_reference: null
+    };
+    await patchDraft(phone, {
+      assisted_by_field_agent: false,
+      field_agent_reference: null,
+      field_agent_prompt_retired_at: new Date().toISOString()
+    });
+    step = nextListingDraftStep(migratedDraft);
+    await updateSession(phone, { current_step: step });
   }
 
   if (bodyUpper === 'RESET' || bodyUpper === 'RESTART') {
@@ -6527,7 +6714,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
   }
 
   const listingFlowSteps = [
-    'listing_type', 'ownership', 'ask_field_agent', 'ask_field_agent_details', 'title', 'district',
+    'listing_type', 'ownership', 'title', 'district',
     'area', 'price', 'bedrooms', 'description', 'ask_deposit', 'ask_contract', 'ask_university',
     'ask_distance', 'ask_public_name', 'confirm_whatsapp_contact', 'ask_contact_method', 'ask_contact_value', 'ask_selfie', 'ask_id_number',
     'ask_phone', 'verify_otp'
@@ -6544,17 +6731,31 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     && step !== 'ask_selfie'
     && (listingFlowSteps.includes(step) || hasListingContext)
   ) {
-    const mediaPatch = appendIncomingListingPhotos(draft.photos || [], mediaUrl, runtime.mediaCount || 1);
-    if (mediaPatch.added > 0) {
-      await patchDraft(phone, { photos: mediaPatch.photos });
+    const mediaPatch = await validateAndStoreListingPhotos({ phone, lang, draft, runtime, mediaUrl });
+    const accepted = mediaPatch.outcomes.filter((item) => item.status === 'accepted');
+    const duplicate = mediaPatch.outcomes.find((item) => item.status === 'duplicate');
+    const rejected = mediaPatch.outcomes.find((item) => item.status === 'rejected');
+    await patchDraft(phone, {
+      photos: mediaPatch.photos,
+      photo_hashes: mediaPatch.photoHashes,
+      photo_perceptual_hashes: mediaPatch.photoPerceptualHashes,
+      photo_validation: mediaPatch.photoValidation,
+      photo_flow_marker: WHATSAPP_LISTING_PHOTO_FLOW_MARKER
+    });
+    if (accepted.length > 0) {
       await patchSessionData(phone, {
         last_listing_media_recovered_at: new Date().toISOString(),
         last_listing_media_recovered_step: step,
-        last_listing_media_recovered_count: mediaPatch.added
+        last_listing_media_recovered_count: accepted.length
       });
     }
     const count = mediaPatch.photos.length;
-    const reply = `${tt(lang, 'photoReceived', { count })}\n\n${photoStepReminderMessage(lang, step)}`;
+    const photoReply = accepted.length
+      ? photoAcceptedPrompt(lang, count)
+      : duplicate
+        ? photoDuplicatePrompt(lang, count)
+        : photoRejectedPrompt(lang, count, rejected?.validation?.verdict || 'unavailable');
+    const reply = `${photoReply}\n\n${photoStepReminderMessage(lang, step)}`;
     captureWhatsappLearningAsync({
       eventName: 'whatsapp_listing_media_attached',
       phone,
@@ -6564,14 +6765,16 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       entities: {
         step,
         photo_count: count,
-        added: mediaPatch.added
+        added: accepted.length,
+        rejected: rejected ? 1 : 0,
+        duplicate: duplicate ? 1 : 0
       },
       payload: {
         route: 'listing_media_recovery',
         current_step: step,
         media_type: runtime.mediaType || null
       },
-      dedupeKey: `whatsapp:listing-media:${phone}:${crypto.createHash('sha1').update(String(mediaUrl || '')).digest('hex').slice(0, 16)}`
+      dedupeKey: `whatsapp:listing-media:${phone}:${mediaPatch.photoHashes.at(-1) || crypto.createHash('sha1').update(String(mediaUrl || '')).digest('hex').slice(0, 16)}`
     });
     return respond(reply, step);
   }
@@ -7563,61 +7766,14 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
     const chosen = ownershipReply;
     if (!chosen) return respond(t(lang, 'invalidInput') + '\n\n' + t(lang, 'askOwnership'), 'ownership');
-    await patchDraft(phone, { lister_type: chosen });
-    return respond(t(lang, 'askFieldAgent'), 'ask_field_agent');
-  }
-
-  // FIELD AGENT CREDIT
-  if (step === 'ask_field_agent') {
-    if (isAffirmativeReply(cleanBody)) {
-      await patchDraft(phone, { assisted_by_field_agent: true });
-      return respond(t(lang, 'askFieldAgentDetails'), 'ask_field_agent_details');
-    }
-    if (isNegativeReply(cleanBody)) {
-      let patch = { assisted_by_field_agent: false };
-      let mergedDraft = { ...draft, ...patch };
-      ({ patch, mergedDraft } = addInferredBedroomPatch(draft, patch));
-      await patchDraft(phone, patch);
-      const fastReply = fastListingProgressReply(lang, patch, mergedDraft, 'Saved');
-      return respond(fastReply.message, fastReply.nextStep);
-    }
-    const naturalDetailDraft = buildNaturalListingDetailDraft(cleanBody, draft);
-    if (naturalDetailDraft) {
-      const patch = {
-        ...naturalDetailDraft,
-        assisted_by_field_agent: false
-      };
-      const mergedDraft = {
-        ...draft,
-        ...patch
-      };
-      await patchDraft(phone, patch);
-      const fastReply = fastListingProgressReply(lang, patch, mergedDraft, 'Saved property details');
-      return respond(fastReply.message, fastReply.nextStep);
-    }
-    return respond(t(lang, 'invalidInput') + '\n\n' + t(lang, 'askFieldAgent'), 'ask_field_agent');
-  }
-
-  if (step === 'ask_field_agent_details') {
-    const fieldAgentReference = normalizeFieldAgentCode(cleanBody);
-    if (!fieldAgentReference) {
-      return respond(t(lang, 'invalidInput') + '\n\n' + t(lang, 'askFieldAgentDetails'), 'ask_field_agent_details');
-    }
-    await patchDraft(phone, {
-      assisted_by_field_agent: true,
-      field_agent_reference: fieldAgentReference
-    });
-    const mergedDraft = {
-      ...draft,
-      assisted_by_field_agent: true,
-      field_agent_reference: fieldAgentReference
+    const patch = {
+      lister_type: chosen,
+      assisted_by_field_agent: false,
+      field_agent_reference: null
     };
-    const fastReply = fastListingProgressReply(
-      lang,
-      { assisted_by_field_agent: true, field_agent_reference: fieldAgentReference },
-      mergedDraft,
-      'Saved'
-    );
+    const mergedDraft = { ...draft, ...patch };
+    await patchDraft(phone, patch);
+    const fastReply = fastListingProgressReply(lang, patch, mergedDraft, 'Saved');
     return respond(fastReply.message, fastReply.nextStep);
   }
 
@@ -7756,109 +7912,42 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
   // PHOTOS
   if (step === 'photos') {
-    if (!mediaUrl && cleanBody && bodyUpper !== 'DONE') {
-      let naturalFilters = await resolveNaturalSearchFilters({
-        text: cleanBody,
-        entities: intentResult?.entities || {},
-        fallbackType: 'any',
-        language: lang,
-        sessionData
-      });
-      if (!naturalFilters.hasSignal || !naturalFilters.area) {
-        const fallbackFilters = fallbackNaturalSearchSentence(cleanBody);
-        if (fallbackFilters.hasSignal && fallbackFilters.area) {
-          naturalFilters = {
-            ...naturalFilters,
-            ...fallbackFilters,
-            hasSignal: true
-          };
-        }
-      }
-
-      const likelySearch = ['property_search', 'looking_for_property_lead'].includes(intentResult?.intent)
-        || /\b(looking for|search|find|need|student accommodation|house|home|apartment|flat|land|commercial|rent|buy)\b/i.test(cleanBody);
-
-      if (likelySearch || naturalFilters.hasSignal) {
-        await patchSessionData(phone, {
-          interrupted_step: 'photos',
-          interrupted_at: new Date().toISOString(),
-          interrupted_by_intent: 'property_search',
-          interrupted_text: cleanBody,
-          listing_draft_saved: true,
-          search_type: naturalFilters.searchType || 'any',
-          pending_search_filters: naturalFilters.hasSignal ? naturalFilters : null,
-          natural_query_text: cleanBody
-        });
-
-        const draftNote = listingDraftSavedNote(lang);
-        if (naturalFilters.useSharedLocation) {
-          return respond(
-            `${draftNote}\n\n${naturalSearchPrompt(lang, naturalFilters, 'location')}`,
-            'search_area'
-          );
-        }
-
-        if (!naturalFilters.area) {
-          return respond(
-            `${draftNote}\n\n${naturalSearchPrompt(lang, naturalFilters, 'area')}`,
-            'search_area'
-          );
-        }
-
-        const rows = await findPropertiesByNaturalFilters(naturalFilters);
-        await logPropertySearchRequest({
-          userPhone: phone,
-          searchType: naturalFilters.searchType || 'any',
-          queryText: cleanBody,
-          location: null,
-          resultRows: rows,
-          usedNearestFallback: false
-        });
-
-        if (!rows.length) {
-          const reply = await formatNoMatchOrFallbackReply({
-            lang,
-            userPhone: phone,
-            searchType: naturalFilters.searchType || 'any',
-            area: naturalFilters.area,
-            queryText: cleanBody,
-            filters: naturalFilters,
-            notes: `No approved listings found for natural query during photo upload: ${cleanBody}`
-          });
-          return respond(`${draftNote}\n\n${reply}`, 'main_menu');
-        }
-
-        return respond(
-          `${draftNote}\n\n${describeNaturalFilters(naturalFilters, lang) ? `✅ Filters applied: ${describeNaturalFilters(naturalFilters, lang)}\n` : ''}${formatPropertySearchMessage(lang, rows, naturalFilters.area, naturalFilters.searchType || 'any')}`,
-          'main_menu'
-        );
-      }
-    }
-
-    if (bodyUpper === 'DONE' && !mediaUrl) {
-      const currentPhotos = draft.photos || [];
-      if (currentPhotos.length < 5) return respond(t(lang, 'needExactlyFivePhotos'), 'photos');
-      return respond(t(lang, 'askPublicName'), 'ask_public_name');
-    }
     if (mediaUrl) {
-      const photos = draft.photos || [];
-      const incomingCount = Math.max(1, Math.min(10, Number(runtime.mediaCount || 0) || 1));
-      if (photos.length >= 10) {
-        return respond(tt(lang, 'photosUploaded', { count: photos.length }), 'photos');
-      }
-      const availableSlots = Math.max(0, 10 - photos.length);
-      const toAdd = Math.min(incomingCount, availableSlots);
-      for (let i = 0; i < toAdd; i += 1) {
-        photos.push(toAdd === 1 ? mediaUrl : `${mediaUrl}#${i + 1}`);
-      }
-      await patchDraft(phone, { photos });
-      const count = photos.length;
-      if (count >= 5) {
+      const result = await validateAndStoreListingPhotos({ phone, lang, draft, runtime, mediaUrl });
+      await patchDraft(phone, {
+        photos: result.photos,
+        photo_hashes: result.photoHashes,
+        photo_perceptual_hashes: result.photoPerceptualHashes,
+        photo_validation: result.photoValidation,
+        photo_flow_marker: WHATSAPP_LISTING_PHOTO_FLOW_MARKER
+      });
+
+      const count = result.photos.length;
+      const accepted = result.outcomes.filter((item) => item.status === 'accepted');
+      const duplicate = result.outcomes.find((item) => item.status === 'duplicate');
+      const rejected = result.outcomes.find((item) => item.status === 'rejected');
+      if (count >= WHATSAPP_MIN_LISTING_PHOTOS) {
         return respond(`${photoCompletePrompt(lang, count)}\n\n${t(lang, 'askPublicName')}`, 'ask_public_name');
       }
-      return respond(`${tt(lang, 'photoReceived', { count })}\n${photoNextPrompt(lang, count)}`, 'photos');
+      if (accepted.length) {
+        return respond(photoAcceptedPrompt(lang, count), 'photos');
+      }
+      if (duplicate) {
+        return respond(photoDuplicatePrompt(lang, count), 'photos');
+      }
+      if (rejected) {
+        return respond(photoRejectedPrompt(lang, count, rejected.validation?.verdict || 'non_property'), 'photos');
+      }
+      return respond(photoRejectedPrompt(lang, count, 'unavailable'), 'photos');
     }
-    return respond(t(lang, 'invalidInput') + '\n\n' + photoNextPrompt(lang, (draft.photos || []).length), 'photos');
+
+    if (bodyUpper === 'DONE') {
+      return respond(t(lang, 'needExactlyFivePhotos') + '\n\n' + photoNextPrompt(lang, (draft.photos || []).length), 'photos');
+    }
+
+    // An active listing never changes into property search because a caption,
+    // screenshot label, or unrelated sentence arrived during photo collection.
+    return respond(photoChecklistPrompt(lang, (draft.photos || []).length), 'photos');
   }
 
   // PUBLIC CONTACT NAME
@@ -8128,6 +8217,18 @@ async function processInboundRuntime({
   let voiceTranscriptionUnavailable = false;
   const normalizedMediaType = String(mediaType || '').toLowerCase();
   const inboundMediaCount = Math.max(0, Math.min(10, Number(inboundMetadata.media_count || inboundMetadata.mediaCount || 0) || 0));
+  const inboundPhotoCandidates = Array.isArray(inboundMetadata.image_previews)
+    ? inboundMetadata.image_previews.slice(0, 10)
+    : [];
+  const loggedInboundMetadata = {
+    ...inboundMetadata,
+    image_previews: inboundPhotoCandidates.map((item) => ({
+      mime_type: normalizeInput(item?.mime_type || item?.mimeType || '') || 'image/jpeg',
+      bytes: Number(item?.bytes || 0),
+      sha256: normalizeInput(item?.sha256 || ''),
+      perceptual_hash: normalizeInput(item?.perceptual_hash || item?.perceptualHash || '')
+    }))
+  };
   const hasInlineImagePlaceholder = !mediaUrl
     && (normalizedMediaType === 'image' || normalizedMediaType.startsWith('image/'))
     && (inboundMediaCount > 0 || /^\s*\[image\]\s*$/i.test(String(body || '')));
@@ -8208,7 +8309,7 @@ async function processInboundRuntime({
       mediaUrl: effectiveMediaUrl,
       mediaType: normalizedMediaType,
       sharedLocation,
-      metadata: inboundMetadata
+      metadata: loggedInboundMetadata
     }
   });
 
@@ -8406,6 +8507,7 @@ async function processInboundRuntime({
       session: sessionForMessage,
       mediaType: normalizedMediaType,
       mediaCount: inboundMediaCount,
+      photoCandidates: inboundPhotoCandidates,
       transcript: transcriptRecord?.text || null
     }
   );
@@ -9015,7 +9117,9 @@ router.get('/web-bridge/status', async (req, res) => {
   return res.json({
     ok: true,
     data: {
-      release_marker: WHATSAPP_NATURAL_SELLER_FLOW_MARKER,
+      release_marker: WHATSAPP_LISTING_PHOTO_FLOW_MARKER,
+      conversation_marker: WHATSAPP_NATURAL_SELLER_FLOW_MARKER,
+      marker: WHATSAPP_LISTING_PHOTO_FLOW_MARKER,
       summary: bridgeStatus.summary,
       readiness,
       clients: (bridgeStatus.clients || []).map(summarizeWhatsappBridgeClient)
