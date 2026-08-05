@@ -59,7 +59,10 @@ assert(admin.includes('traffic_sources'), 'King needs source/medium reporting');
 assert(html.includes('admin-ai-visitors-live'), 'King launch traffic UI must render live visitors');
 assert(html.includes('k32-launch-traffic-20260805'), 'K32 release marker must be present');
 assert(server.includes('k32-launch-traffic-load-shed-20260805'), 'public warmup must expose the K32 load-shed marker');
+assert(server.includes('k32-launch-warmup-opt-in-20260805'), 'public warmup must expose the opt-in marker');
+assert(server.includes("process.env.PUBLIC_INVENTORY_CACHE_WARMUP || 'false'"), 'public warmup must be disabled unless explicitly enabled');
 assert(fs.readFileSync(path.join(root, 'routes', 'ai.js'), 'utf8').includes('assistantSearchPrewarmInFlight'), 'Ask AI prewarm must never overlap itself');
+assert(fs.readFileSync(path.join(root, 'routes', 'ai.js'), 'utf8').includes("process.env.ASSISTANT_SEARCH_PREWARM_ENABLED || 'false'"), 'Ask AI prewarm must be disabled unless explicitly enabled');
 assert(migration.includes('idx_properties_public_price_desc_launch'));
 assert(migration.includes('idx_analytics_events_launch_visitors'));
 

@@ -473,7 +473,9 @@ const PUBLIC_INVENTORY_WARMUP_PATHS = [
 const PUBLIC_CACHE_WARMUP_INTERVAL_MS = 4 * 60 * 1000;
 const PUBLIC_CACHE_WARMUP_REQUEST_TIMEOUT_MS = 5000;
 const PUBLIC_CACHE_WARMUP_LOAD_SHED_MARKER = 'k32-launch-traffic-load-shed-20260805';
+const PUBLIC_CACHE_WARMUP_OPT_IN_MARKER = 'k32-launch-warmup-opt-in-20260805';
 const PUBLIC_CACHE_WARMUP_USER_AGENT = 'makaug-public-inventory-cache-warmup';
+const PUBLIC_CACHE_WARMUP_ENABLED = String(process.env.PUBLIC_INVENTORY_CACHE_WARMUP || 'false').toLowerCase() === 'true';
 let publicCacheWarmupInFlight = false;
 
 function addPublicCacheRefreshParam(pathName) {
@@ -482,7 +484,7 @@ function addPublicCacheRefreshParam(pathName) {
 }
 
 async function warmPublicCache(baseUrl) {
-  if (process.env.PUBLIC_INVENTORY_CACHE_WARMUP === 'false' || typeof fetch !== 'function') return;
+  if (!PUBLIC_CACHE_WARMUP_ENABLED || typeof fetch !== 'function') return;
   for (const pathName of [...PUBLIC_HTML_WARMUP_PATHS, ...PUBLIC_INVENTORY_WARMUP_PATHS]) {
     const requestPath = addPublicCacheRefreshParam(pathName);
     const controller = new AbortController();
@@ -511,6 +513,12 @@ async function warmPublicCache(baseUrl) {
 }
 
 function schedulePublicCacheWarmup(baseUrl) {
+  if (!PUBLIC_CACHE_WARMUP_ENABLED) {
+    logger.info('Public cache warmup disabled; real requests have priority', {
+      marker: PUBLIC_CACHE_WARMUP_OPT_IN_MARKER
+    });
+    return;
+  }
   const run = () => {
     if (publicCacheWarmupInFlight) return;
     publicCacheWarmupInFlight = true;
