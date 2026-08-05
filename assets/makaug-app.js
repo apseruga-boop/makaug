@@ -33937,7 +33937,7 @@ function renderHowToVideoSections() {
         <h2 class="text-2xl font-black text-gray-900 serif mt-1">Short property guides</h2>
         <p class="text-sm text-gray-600 mt-1">Watch quick walkthroughs for searching, listing, safety, WhatsApp contact, and AI property help.</p>
       </div>
-      <a href="https://youtube.com/@makaug" target="_blank" rel="noopener" class="text-sm font-bold text-green-700">YouTube channel</a>
+      <a href="https://www.youtube.com/@makaugproperty" target="_blank" rel="noopener" class="text-sm font-bold text-green-700">YouTube channel</a>
     </div>
     <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">${videos.map(renderHowToVideoCard).join("")}</div>`;
     trackEvent("howto_video_shown", { source_page: currentPage, context, count: videos.length });
@@ -35202,7 +35202,7 @@ function openHowToVideo(key) {
     cta.textContent = video.ctaLabel || "Continue";
     cta.href = video.ctaUrl || "/help";
   }
-  const youtubeUrl = video.youtubeUrl || (video.youtubeVideoId ? `https://www.youtube.com/watch?v=${video.youtubeVideoId}` : "https://youtube.com/@makaug");
+  const youtubeUrl = video.youtubeUrl || (video.youtubeVideoId ? `https://www.youtube.com/watch?v=${video.youtubeVideoId}` : "https://www.youtube.com/@makaugproperty");
   if (youtube) youtube.href = youtubeUrl;
   if (wrap) {
     if (video.youtubeVideoId) {
