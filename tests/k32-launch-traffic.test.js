@@ -52,6 +52,7 @@ assert(app.includes('stripTransactionFromPropertyType'), 'duplicate sale/rent su
 assert(app.includes('collapseDuplicateTransactionTitle'), 'stored card titles must collapse duplicate transaction wording');
 assert(!app.includes('sale: "Home for sale"'), 'default sale subtype must not contain the transaction twice');
 assert(properties.includes('collapseDuplicatePublicTransaction'), 'API-generated public titles must collapse duplicate transaction wording');
+assert(properties.includes('WITH public_page_ids AS MATERIALIZED'), 'public card searches must limit indexed IDs before hydrating image data');
 assert(server.includes('collapseDuplicatePublicTransaction'), 'detail SEO metadata must collapse duplicate transaction wording');
 assert(app.includes('renderCanonicalSeoLandingIntro'), 'area routes need visible count and cross-links');
 assert(admin.includes('unique_visitors_30m'), 'King needs a live 30-minute visitor count');

@@ -2717,7 +2717,21 @@ async function listPropertiesHandler(req, res, next) {
     const listValues = [...values, rowLimit, offset];
 
     const listSql = fastPublicCardFields
-      ? `SELECT
+      ? `WITH public_page_ids AS MATERIALIZED (
+          SELECT
+            p.id,
+            ${distanceSql} AS distance_km
+          FROM properties p
+          ${where}
+          ORDER BY ${orderBy}
+          LIMIT $${values.length + 1}
+          OFFSET $${values.length + 2}
+        ),
+        public_page AS (
+          SELECT public_page_ids.*, ROW_NUMBER() OVER () AS __page_order
+          FROM public_page_ids
+        )
+        SELECT
           p.id,
           p.listing_type,
           p.title,
@@ -2757,7 +2771,7 @@ async function listPropertiesHandler(req, res, next) {
           p.extra_fields->>'region' AS region,
           p.extra_fields->>'resolved_location_label' AS resolved_location_label,
           p.extra_fields->>'canonical_location_id' AS canonical_location_id,
-          ${distanceSql} AS distance_km,
+          public_page.distance_km,
           (COALESCE(p.extra_fields->>'featured', 'false') IN ('true', '1', 'yes')) AS featured,
           p.extra_fields->>'featured_at' AS featured_at,
           CASE
@@ -2767,7 +2781,8 @@ async function listPropertiesHandler(req, res, next) {
           ${listingOriginSql('p')} AS listing_origin,
           COALESCE(p.extra_fields->>'lister_registration_status', 'not_registered') AS registration_status,
           img.url AS primary_image_url
-        FROM properties p
+        FROM public_page
+        JOIN properties p ON p.id = public_page.id
         LEFT JOIN LATERAL (
           SELECT i.url
           FROM property_images i
@@ -2775,10 +2790,7 @@ async function listPropertiesHandler(req, res, next) {
           ORDER BY i.is_primary DESC, i.sort_order ASC, i.created_at ASC
           LIMIT 1
         ) img ON true
-        ${where}
-        ORDER BY ${orderBy}
-        LIMIT $${values.length + 1}
-        OFFSET $${values.length + 2}`
+        ORDER BY public_page.__page_order`
       : `WITH public_page_source AS (
         SELECT
           p.id,
