@@ -17,6 +17,7 @@ const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const admin = fs.readFileSync(path.join(root, 'routes', 'admin.js'), 'utf8');
 const properties = fs.readFileSync(path.join(root, 'routes', 'properties.js'), 'utf8');
 const migration = fs.readFileSync(path.join(root, 'db', 'migrations', '110_k32_launch_traffic.sql'), 'utf8');
+const googleVerification = fs.readFileSync(path.join(root, 'google033e19e2016a21c2.html'), 'utf8').trim();
 
 for (const [areaRoute, pageId] of Object.entries({
   '/for-sale/ntinda-kampala': 'page-sale',
@@ -61,6 +62,7 @@ assert(!sitemap.some((entry) => entry.loc.includes('/to-rent/ntinda-kampala')), 
 
 assert(server.includes("app.get('/robots.txt'"), 'robots route must be explicit');
 assert(server.includes("app.get('/sitemap.xml'"), 'property sitemap route must be explicit');
+assert.equal(googleVerification, 'google-site-verification: google033e19e2016a21c2.html');
 assert(server.includes('patchPublicPageSeoMeta'), 'category and detail metadata must share one patcher');
 assert(server.includes("'makaug:listing-count'"), 'area HTML must expose the authoritative server count to the client');
 assert(fs.readFileSync(path.join(root, 'services', 'publicSeoService.js'), 'utf8').includes("publicVisibleInventoryWhere('properties')"), 'SEO counts and sitemap must use the authoritative public predicate');
