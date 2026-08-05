@@ -38,18 +38,19 @@ const snapshot = buildPublicSeoSnapshot([
   { id: 'sale-1', listing_type: 'sale', area: 'Ntinda', district: 'Kampala', updated_at: '2026-08-05T08:00:00.000Z' },
   { id: 'sale-2', listing_type: 'sale', area: 'Ntinda', district: 'Kampala', updated_at: '2026-08-05T08:01:00.000Z' },
   { id: 'sale-3', listing_type: 'sale', area: 'Ntinda Town', district: 'Kampala', canonical_location_id: 'kampala:ntinda' },
+  { id: 'sale-4', listing_type: 'sale', area: '', district: 'Kampala', neighborhood: 'Ntinda' },
   { id: 'rent-1', listing_type: 'rent', students_welcome: true, area: 'Makerere', district: 'Kampala' },
   { id: 'land-1', listing_type: 'land', area: 'Kira', district: 'Wakiso' }
 ]);
 
-assert.equal(snapshot.counts.sale.get('kampala:ntinda'), 3, 'Ntinda sale count should prefer the stored canonical location ID');
+assert.equal(snapshot.counts.sale.get('kampala:ntinda'), 4, 'Ntinda sale count should use the same normalized fields as public search');
 assert.equal(snapshot.counts.students.get('kampala:makerere'), 1, 'student-welcome rent should appear in student SEO counts');
 assert.equal(canonicalLocationRouteSlug({ location: 'Ntinda', district: 'Kampala' }), 'ntinda-kampala');
 
 const areaMeta = categoryPageSeoMeta('/for-sale/ntinda-kampala', snapshot);
 assert(areaMeta, 'area metadata should resolve');
-assert.equal(areaMeta.count, 3);
-assert(areaMeta.title.includes('Ntinda, Kampala (3)'), 'area title should include location and honest count');
+assert.equal(areaMeta.count, 4);
+assert(areaMeta.title.includes('Ntinda, Kampala (4)'), 'area title should include location and honest count');
 assert.equal(areaMeta.canonical, 'https://makaug.com/for-sale/ntinda-kampala');
 assert.equal(areaMeta.image, 'https://makaug.com/assets/house-ads-v3/sale.webp');
 
