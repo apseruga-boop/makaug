@@ -97,15 +97,23 @@ function emptyCounts() {
   return Object.fromEntries(Object.keys(CATEGORY_SEO).map((key) => [key, new Map()]));
 }
 
+function canonicalLocationsForSeoRow(row = {}) {
+  const locations = [
+    canonicalLocationByKey(row.canonical_location_id),
+    canonicalizeUgandaLocation(row.area, row.district),
+    canonicalizeUgandaLocation(row.city, row.district),
+    canonicalizeUgandaLocation(row.neighborhood, row.district)
+  ].filter(Boolean);
+  return Array.from(new Map(locations.map((location) => [location.key, location])).values());
+}
+
 function buildPublicSeoSnapshot(rows = [], generatedAt = new Date().toISOString()) {
   const directCounts = emptyCounts();
   const properties = [];
   for (const row of rows) {
     const categories = publicCategoryKeysForRow(row);
     if (!categories.length) continue;
-    const canonical = canonicalLocationByKey(row.canonical_location_id)
-      || canonicalizeUgandaLocation(row.area, row.district);
-    if (canonical) {
+    for (const canonical of canonicalLocationsForSeoRow(row)) {
       for (const category of categories) {
         directCounts[category].set(canonical.key, Number(directCounts[category].get(canonical.key) || 0) + 1);
       }
@@ -132,6 +140,8 @@ async function loadPublicSeoInventorySnapshot(db, options = {}) {
     const result = await db.query(
       `SELECT id, listing_type, students_welcome, area, district,
               extra_fields->>'canonical_location_id' AS canonical_location_id,
+              extra_fields->>'city' AS city,
+              extra_fields->>'neighborhood' AS neighborhood,
               updated_at, created_at
      FROM properties
      WHERE ${publicVisibleInventoryWhere('properties')}
@@ -221,6 +231,7 @@ module.exports = {
   categoryForPath,
   locationForRouteSlug,
   publicCategoryKeysForRow,
+  canonicalLocationsForSeoRow,
   buildPublicSeoSnapshot,
   loadPublicSeoInventorySnapshot,
   categoryPageSeoMeta,
