@@ -2114,6 +2114,36 @@ async function loadAdminEngagementSummarySnapshot() {
   );
 }
 
+async function loadAdminLaunchTrafficSnapshot() {
+  return adminSummaryOne(
+    `SELECT
+       COUNT(*) FILTER (WHERE event_name IN ('property_open','property_view'))::int AS property_views_48h,
+       COUNT(DISTINCT client_id) FILTER (WHERE event_name IN ('property_open','property_view','page_view','property_search'))::int AS unique_visitors_48h,
+       COUNT(DISTINCT client_id) FILTER (
+         WHERE created_at >= NOW() - INTERVAL '30 minutes'
+           AND event_name IN ('property_open','property_view','page_view','property_search','page_open')
+       )::int AS unique_visitors_30m,
+       COUNT(DISTINCT client_id) FILTER (
+         WHERE created_at >= ((NOW() AT TIME ZONE 'Africa/Kampala')::date AT TIME ZONE 'Africa/Kampala')
+           AND event_name IN ('property_open','property_view','page_view','property_search','page_open')
+       )::int AS unique_visitors_today,
+       COUNT(*) FILTER (WHERE event_name IN ('property_save','property_saved','save_property'))::int AS property_saves_48h,
+       COUNT(*) FILTER (WHERE event_name IN ('property_inquiry_submit','property_inquiry'))::int AS property_inquiries_48h,
+       COUNT(*) FILTER (WHERE event_name IN ('property_directions_open','directions_open','route_time_view'))::int AS route_events_48h
+     FROM analytics_events
+     WHERE created_at >= NOW() - INTERVAL '2 days'
+       AND event_name IN (
+         'property_open','property_view','page_view','property_search','page_open',
+         'property_save','property_saved','save_property',
+         'property_inquiry_submit','property_inquiry',
+         'property_directions_open','directions_open','route_time_view'
+       )`,
+    [],
+    {},
+    { timeoutMs: 1200 }
+  );
+}
+
 function adminSummarySlice(snapshot = {}, fields = {}) {
   if (snapshot?._fallback_reason) {
     return Object.fromEntries([
@@ -3295,6 +3325,7 @@ router.get('/summary', async (req, res, next) => {
         properties,
         coreSnapshot,
         engagementSnapshot,
+        launchTrafficSnapshot,
         topAreas48h,
         topListingTypes48h,
         trafficSources48h
@@ -3302,6 +3333,7 @@ router.get('/summary', async (req, res, next) => {
         loadAdminPropertiesSummaryFast(),
         loadAdminCoreSummarySnapshot(),
         loadAdminEngagementSummarySnapshot(),
+        loadAdminLaunchTrafficSnapshot(),
         adminSummaryRows(
           `SELECT
             COALESCE(NULLIF(payload->>'area', ''), NULLIF(payload->>'district', ''), 'Unknown area') AS area,
@@ -3313,7 +3345,7 @@ router.get('/summary', async (req, res, next) => {
            ORDER BY events DESC, area ASC
            LIMIT 5`,
           [],
-          { timeoutMs: 650 }
+          { timeoutMs: 1200 }
         ),
         adminSummaryRows(
           `SELECT
@@ -3341,7 +3373,7 @@ router.get('/summary', async (req, res, next) => {
            ORDER BY visitors DESC, events DESC, source ASC
            LIMIT 8`,
           [],
-          { timeoutMs: 650 }
+          { timeoutMs: 1200 }
         )
       ]);
 
@@ -3369,18 +3401,18 @@ router.get('/summary', async (req, res, next) => {
         property_inquiries: 'property_inquiries',
         route_events: 'route_events'
       });
-      const engagement48h = adminSummarySlice(engagementSnapshot, {
+      const engagement48h = adminSummarySlice(launchTrafficSnapshot, {
         property_views: 'property_views_48h',
         unique_visitors: 'unique_visitors_48h',
         property_saves: 'property_saves_48h',
         property_inquiries: 'property_inquiries_48h',
         route_events: 'route_events_48h'
       });
-      const launchTraffic = adminSummarySlice(engagementSnapshot, {
+      const launchTraffic = adminSummarySlice(launchTrafficSnapshot, {
         unique_visitors_30m: 'unique_visitors_30m',
         unique_visitors_today: 'unique_visitors_today'
       });
-      const fallbackReasons = [properties, coreSnapshot, engagementSnapshot]
+      const fallbackReasons = [properties, coreSnapshot, engagementSnapshot, launchTrafficSnapshot]
         .map((row) => row?._fallback_reason)
         .filter(Boolean);
       return rememberAdminSummaryLastKnownGood({
