@@ -127,6 +127,15 @@ const PUBLIC_ROUTE_PAGE_MAP = {
   '/saved': ['page-saved']
 };
 
+const PUBLIC_AREA_ROUTE_PAGE_MAP = Object.freeze({
+  '/for-sale/': 'page-sale',
+  '/to-rent/': 'page-rent',
+  '/student-accommodation/': 'page-students',
+  '/students/': 'page-students',
+  '/commercial/': 'page-commercial',
+  '/land/': 'page-land'
+});
+
 const AUTH_ROUTE_PREFIXES = [
   '/login',
   '/signup',
@@ -478,6 +487,9 @@ function getPublicPageIdsForRoute(pathname = '/') {
   if (SYNTHETIC_PUBLIC_ROUTE_CONTENT[pathName]) return [];
   if (pathName.startsWith('/property/')) return ['page-detail'];
   if (pathName.startsWith('/agents/') || pathName.startsWith('/broker/')) return ['page-broker-profile'];
+  const areaPage = Object.entries(PUBLIC_AREA_ROUTE_PAGE_MAP)
+    .find(([prefix]) => pathName.startsWith(prefix))?.[1];
+  if (areaPage) return [areaPage];
   return PUBLIC_ROUTE_PAGE_MAP[pathName] || ['page-home'];
 }
 
