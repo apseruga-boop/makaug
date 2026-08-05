@@ -915,6 +915,9 @@ function patchStructuredData(html, structuredData) {
 function patchPublicPageSeoMeta(html, meta = {}) {
   let patched = patchDocumentTitle(html, meta.title);
   patched = patchMetaTag(patched, 'description', meta.description);
+  if (Number.isFinite(Number(meta.count))) {
+    patched = patchMetaTag(patched, 'makaug:listing-count', String(meta.count));
+  }
   patched = patchCanonicalLink(patched, meta.canonical);
   patched = patchMetaTag(patched, 'og:type', meta.ogType || 'website');
   patched = patchMetaTag(patched, 'og:title', meta.title);
