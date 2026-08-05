@@ -45502,14 +45502,25 @@ function persistSectionSearchRoute(config, values = {}, source = "section_shell"
     filters.propertyType = filters.landTitleType;
   }
   if (filters.sort === "newest") filters.sort = "";
-  const updated = updateHeroSearchRoute(config.key, {
+  const state = isCanonicalPropertySearchPage(config.key) ? canonicalLocationStateFor(config.key) : null;
+  const currentPath = normalizeRoutePath(window.location.pathname || "/");
+  const selectedSeoLocation = state?.selected.length === 1 ? state.selected[0] : null;
+  const canonicalSeoPath = selectedSeoLocation
+    ? `${routeForPage(config.key)}/${canonicalSeoRouteSlug(selectedSeoLocation)}`
+    : "";
+  const preserveCanonicalSeoPath = source === "canonical_location_selected"
+    && currentPath === canonicalSeoPath;
+  const updated = preserveCanonicalSeoPath || updateHeroSearchRoute(config.key, {
     query: values.query || "",
     area: values.district || values.studentCampus || "",
     radiusKm: values.radius || "",
     filters
   }, source);
   if (updated && isCanonicalPropertySearchPage(config.key)) {
-    const state = canonicalLocationStateFor(config.key);
+    if (preserveCanonicalSeoPath) {
+      window.history.replaceState({ page: config.key, source }, "", currentPath);
+      return true;
+    }
     const url = new URL(window.location.href);
     ["q", "query", "search", "area", "district", "location", "campus", "university"].forEach((key) => url.searchParams.delete(key));
     if (state.selected.length) {
