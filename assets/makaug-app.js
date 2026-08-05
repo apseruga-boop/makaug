@@ -44872,6 +44872,10 @@ async function hydrateCanonicalLocationSeoRoute(config) {
   const route = routeForPage(config.key);
   const path = normalizeRoutePath(window.location.pathname || "/");
   const paramsFromRoute = new URLSearchParams(window.location.search || "");
+  const isCanonicalSeoPath = Boolean(route && path.startsWith(`${route}/`));
+  if (isCanonicalSeoPath && !paramsFromRoute.has("nearby") && !paramsFromRoute.has("nearby_km")) {
+    state.nearbyKm = 0;
+  }
   let query = normalizeInput(
     paramsFromRoute.get("q")
     || paramsFromRoute.get("query")
@@ -44880,7 +44884,7 @@ async function hydrateCanonicalLocationSeoRoute(config) {
     || ""
   );
   let district = normalizeInput(paramsFromRoute.get("district") || paramsFromRoute.get("area") || "");
-  if (!query && route && path.startsWith(`${route}/`)) {
+  if (!query && isCanonicalSeoPath) {
     const slug = path.slice(route.length + 1);
     const parts = slug.split("-").filter(Boolean);
     if (parts.length >= 2) {
