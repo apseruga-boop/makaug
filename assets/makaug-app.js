@@ -8385,11 +8385,59 @@ function currentAnalyticsPagePath() {
   return hash ? `${path}${hash}` : path;
 }
 
+function trafficAttributionParams() {
+  const storageKey = "makaug_traffic_attribution_v1";
+  const query = new URLSearchParams(window.location.search || "");
+  const campaignSource = String(query.get("utm_source") || "").trim().toLowerCase();
+  const campaignMedium = String(query.get("utm_medium") || "").trim().toLowerCase();
+  const campaignName = String(query.get("utm_campaign") || "").trim();
+  let current = null;
+  try {
+    current = JSON.parse(window.sessionStorage.getItem(storageKey) || "null");
+  } catch (error) {}
+  if (campaignSource) {
+    current = {
+      traffic_source: campaignSource,
+      traffic_medium: campaignMedium || "campaign",
+      traffic_campaign: campaignName || "",
+      landing_page: currentAnalyticsPagePath()
+    };
+  } else if (!current) {
+    let source = "direct";
+    let medium = "none";
+    try {
+      const referrer = document.referrer ? new URL(document.referrer) : null;
+      const host = String(referrer?.hostname || "").replace(/^www\./, "").toLowerCase();
+      if (host && host !== window.location.hostname.replace(/^www\./, "").toLowerCase()) {
+        source = host.includes("google.") ? "google"
+          : host.includes("bing.") ? "bing"
+          : host.includes("facebook.") || host.includes("instagram.") ? "meta"
+          : host.includes("tiktok.") ? "tiktok"
+          : host.includes("youtube.") || host.includes("youtu.be") ? "youtube"
+          : host.includes("twitter.") || host === "x.com" ? "x"
+          : host;
+        medium = ["google", "bing"].includes(source) ? "organic" : "referral";
+      }
+    } catch (error) {}
+    current = {
+      traffic_source: source,
+      traffic_medium: medium,
+      traffic_campaign: "",
+      landing_page: currentAnalyticsPagePath()
+    };
+  }
+  try {
+    window.sessionStorage.setItem(storageKey, JSON.stringify(current));
+  } catch (error) {}
+  return current || { traffic_source: "direct", traffic_medium: "none", traffic_campaign: "" };
+}
+
 function analyticsEventParams(params = {}) {
   return {
     page_path: currentAnalyticsPagePath(),
     page_location: window.location.href,
     page_title: document.title || "makaug.com",
+    ...trafficAttributionParams(),
     ...params
   };
 }
@@ -14672,6 +14720,7 @@ function buildAdminAiSnapshot(remoteSnap, localSnap, sourceLabel = "") {
   const insights = summary?.ai_insights || {};
   const users = summary?.users || {};
   const engagement = summary?.engagement || {};
+  const launchTraffic = insights?.launch_traffic || {};
   const localSummary = localSnap?.summary || {};
   const liveMetric = (value, localValue = 0) => {
     const selected = remoteSnap ? value : localValue;
@@ -14685,6 +14734,8 @@ function buildAdminAiSnapshot(remoteSnap, localSnap, sourceLabel = "") {
     source: sourceLabel || "Dashboard data",
     views48h: liveMetric(insights.last_48h?.property_views),
     visitors48h: liveMetric(insights.last_48h?.unique_visitors),
+    visitorsLive: liveMetric(launchTraffic.unique_visitors_30m),
+    visitorsToday: liveMetric(launchTraffic.unique_visitors_today),
     routeEvents48h: liveMetric(insights.last_48h?.route_events),
     inquiries48h: liveMetric(insights.last_48h?.property_inquiries),
     totalViews: liveMetric(engagement.property_views, localSummary.totalViews),
@@ -14694,7 +14745,8 @@ function buildAdminAiSnapshot(remoteSnap, localSnap, sourceLabel = "") {
     pendingListings: Number(commandMetrics.pending_listings ?? summary?.properties?.pending ?? localSummary.pendingListings ?? 0),
     approvedListings: adminPreferNonZeroMetric(commandMetrics.live_listings, summary?.properties?.public_live ?? summary?.properties?.approved ?? localSummary.approvedListings ?? 0),
     topAreas,
-    topListingTypes
+    topListingTypes,
+    trafficSources: Array.isArray(insights.traffic_sources) ? insights.traffic_sources : []
   };
 }
 
@@ -14706,13 +14758,26 @@ function renderAdminAiAssistant(remoteSnap, localSnap, sourceLabel = "") {
   };
   setText("admin-ai-views-48h", adminAiSnapshot.views48h);
   setText("admin-ai-visitors-48h", adminAiSnapshot.visitors48h);
+  setText("admin-ai-visitors-live", adminAiSnapshot.visitorsLive);
+  setText("admin-ai-visitors-today", adminAiSnapshot.visitorsToday);
   setText("admin-ai-weekly-tips", adminAiSnapshot.weeklyTips);
   setText("admin-ai-top-area", adminAiSnapshot.topAreas[0]?.area || "-");
   setText("admin-ai-source", remoteSnap ? "Live data" : "Local data");
+  const trafficSources = document.getElementById("admin-ai-traffic-sources");
+  if (trafficSources) {
+    trafficSources.innerHTML = adminAiSnapshot.trafficSources.length
+      ? adminAiSnapshot.trafficSources.slice(0, 8).map((item) => `
+          <div class="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+            <div class="font-black text-gray-900">${adminEscape(item.source || "direct")} / ${adminEscape(item.medium || "none")}</div>
+            <div class="text-xs text-gray-500">${Number(item.visitors || 0)} visitors · ${Number(item.events || 0)} events</div>
+          </div>`).join("")
+      : '<div class="text-gray-500">No attributed traffic yet.</div>';
+  }
   const answer = document.getElementById("admin-ai-answer");
   if (answer) {
     answer.innerHTML = `
       <div class="font-semibold text-gray-900">Snapshot ready.</div>
+      <div class="mt-1">Launch now: <strong>${adminAiSnapshot.visitorsLive}</strong> visitors in the last 30 minutes and <strong>${adminAiSnapshot.visitorsToday}</strong> today.</div>
       <div class="mt-1">Last 48h: <strong>${adminAiSnapshot.views48h}</strong> property views, <strong>${adminAiSnapshot.visitors48h}</strong> visitors, <strong>${adminAiSnapshot.routeEvents48h}</strong> direction opens, and <strong>${adminAiSnapshot.inquiries48h}</strong> enquiries.</div>
       <div class="mt-1">Top area: <strong>${adminEscape(adminAiSnapshot.topAreas[0]?.area || "not enough data yet")}</strong>.</div>`;
   }
@@ -39108,22 +39173,34 @@ function getPropertyShareUrl(property) {
   return `${origin}${getPropertyDetailPath(property)}`;
 }
 
+function getTrackedPropertyShareUrl(property, channel = "share") {
+  try {
+    const url = new URL(getPropertyShareUrl(property), window.location.origin || "https://makaug.com");
+    url.searchParams.set("utm_source", channel === "twitter" ? "x" : channel);
+    url.searchParams.set("utm_medium", "share");
+    url.searchParams.set("utm_campaign", "property_share");
+    return url.toString();
+  } catch (error) {
+    return getPropertyShareUrl(property);
+  }
+}
+
 function buildPropertyShareTitle(property = {}) {
   return String(property?.title || translatePropertyUi("Property listing") || "Property listing").trim();
 }
 
-function buildPropertyShareText(property = {}) {
-  const shareUrl = getPropertyShareUrl(property);
+function buildPropertyShareText(property = {}, channel = "share") {
+  const shareUrl = getTrackedPropertyShareUrl(property, channel);
   const title = buildPropertyShareTitle(property);
   const location = [property?.area, property?.district].filter(Boolean).join(", ");
   const price = fmtP(property?.price || 0, property?.period || property?.price_period || "");
   const headline = [title, location, price].filter(Boolean).join(" • ");
-  return [headline, shareUrl].filter(Boolean).join("\n");
+  return [`Look at this on makaug.com: ${headline}`, shareUrl].filter(Boolean).join("\n");
 }
 
 function getPropertyShareHref(property = {}, channel = "copy") {
-  const shareUrl = getPropertyShareUrl(property);
-  const shareText = buildPropertyShareText(property);
+  const shareUrl = getTrackedPropertyShareUrl(property, channel);
+  const shareText = buildPropertyShareText(property, channel);
   const title = buildPropertyShareTitle(property);
   if (channel === "whatsapp") return `https://wa.me/?text=${encodeURIComponent(shareText)}`;
   if (channel === "facebook") return `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`;
@@ -39219,8 +39296,9 @@ function showCopyFallbackLink(text, label = "Link") {
 async function sharePropertyListing(id, channel = "native") {
   const property = findPropertyForUi(id);
   if (!property) return;
-  const shareUrl = getPropertyShareUrl(property);
-  const shareText = buildPropertyShareText(property);
+  const trackingChannel = channel === "native" ? "native" : channel;
+  const shareUrl = getTrackedPropertyShareUrl(property, trackingChannel);
+  const shareText = buildPropertyShareText(property, trackingChannel);
   const shareTitle = buildPropertyShareTitle(property);
   try {
     if (channel === "native" && navigator.share) {
@@ -39682,15 +39760,31 @@ function thirdPartyTitlePhrase(text) {
   return THIRD_PARTY_TITLE_PHRASES[currentLang]?.[text] || text;
 }
 
+function stripTransactionFromPropertyType(value = "") {
+  return String(value || "")
+    .replace(/\s+(?:for\s+sale|for\s+rent|to\s+rent)\s*$/i, "")
+    .trim();
+}
+
+function collapseDuplicateTransactionTitle(value = "") {
+  return String(value || "")
+    .replace(/\bfor\s+sale\s+for\s+sale\b/gi, "for sale")
+    .replace(/\bfor\s+rent\s+for\s+rent\b/gi, "for rent")
+    .replace(/\bto\s+rent\s+for\s+rent\b/gi, "to rent")
+    .trim();
+}
+
 function getLocalizedPropertyTitle(property = {}) {
   const translated = getLocalizedListingText(property, "title", "");
-  if (translated) return translated;
-  if (!isFoundOnlineListing(property)) return property?.title || translatePropertyUi("Property");
+  if (translated) return collapseDuplicateTransactionTitle(translated);
+  if (!isFoundOnlineListing(property)) return collapseDuplicateTransactionTitle(property?.title) || translatePropertyUi("Property");
   const normalizedType = normalizeType(property?.type || property?.listing_type || property?.category || "");
   const location = getPropertyLocationDisplay(property) || [property?.area, property?.district].filter(Boolean).join(", ") || translateListingLabel("Uganda");
   const beds = Number(property?.beds ?? property?.bedrooms);
   const bedPrefix = Number.isFinite(beds) && beds > 0 && normalizedType !== "land" ? `${beds}-${translateListingLabel("bed")} ` : "";
-  const propertyType = property?.subtype || property?.property_type || (normalizedType === "land" ? "Land" : "Property");
+  const propertyType = stripTransactionFromPropertyType(
+    property?.subtype || property?.property_type || (normalizedType === "land" ? "Land" : "Property")
+  ) || (normalizedType === "land" ? "Land" : "Property");
   const typeLabel = translateListingLabel(propertyType);
   if (normalizedType === "rent") return `${bedPrefix}${typeLabel} ${thirdPartyTitlePhrase("for rent")} - ${location}`.trim();
   if (normalizedType === "sale") return `${bedPrefix}${typeLabel} ${thirdPartyTitlePhrase("for sale")} - ${location}`.trim();
@@ -43073,7 +43167,7 @@ function mapRemotePropertyForUi(p, options = {}) {
   const normalizedListingType = normalizeType(p?.listing_type || p?.type);
   const publicListingType = normalizedListingType || getHeroPropertyOpportunityBucket(p);
   const defaultSubtype = {
-    sale: "Home for sale",
+    sale: "Home",
     rent: "Rental property",
     land: "Land",
     commercial: "Commercial property",
@@ -44814,6 +44908,67 @@ async function hydrateCanonicalLocationSeoRoute(config) {
   }
 }
 
+function canonicalSeoRouteSlug(item = {}) {
+  const slugPart = (value) => String(value || "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return [slugPart(item.name || item.label), slugPart(item.district)].filter(Boolean).join("-");
+}
+
+function renderCanonicalSeoLandingIntro(config) {
+  const existing = document.getElementById(`canonical-seo-landing-${config.key}`);
+  const route = routeForPage(config.key);
+  const path = normalizeRoutePath(window.location.pathname || "/");
+  const state = canonicalLocationStateFor(config.key);
+  const selected = state.selected[0];
+  if (!route || !path.startsWith(`${route}/`) || !selected || state.selected.length !== 1) {
+    existing?.remove();
+    return;
+  }
+  const shell = document.getElementById(sectionSearchShellId(config.key));
+  if (!shell) return;
+  const labels = {
+    sale: "property for sale",
+    rent: "property to rent",
+    land: "land",
+    commercial: "commercial property",
+    students: "student accommodation"
+  };
+  const nav = [
+    ["sale", "For sale"],
+    ["rent", "To rent"],
+    ["land", "Land"],
+    ["commercial", "Commercial"],
+    ["students", "Student accommodation"]
+  ];
+  const accent = {
+    sale: "#166534",
+    rent: "#1e40af",
+    land: "#0f766e",
+    commercial: "#b45309",
+    students: "#6b21a8"
+  }[config.key] || "#166534";
+  const count = Math.max(0, Number(selected.listing_count) || 0);
+  const location = [selected.name || selected.label, selected.district].filter(Boolean).join(", ");
+  const slug = canonicalSeoRouteSlug(selected);
+  const section = existing || document.createElement("section");
+  section.id = `canonical-seo-landing-${config.key}`;
+  section.className = "canonical-seo-landing";
+  section.style.setProperty("--category-accent", accent);
+  section.innerHTML = `
+    <div class="canonical-seo-landing-inner">
+      <h2>${adminEscape(`${count ? `${count} ` : ""}${labels[config.key] || "properties"} in ${location}`)}</h2>
+      <p>Browse live listings for this area, then compare other property categories in the same location.</p>
+      <nav class="canonical-seo-crosslinks" aria-label="Property categories in ${adminAttr(location)}">
+        ${nav.filter(([key]) => key !== config.key).map(([key, label]) => `<a href="${adminAttr(`${routeForPage(key)}/${slug}`)}">${adminEscape(`${label} in ${selected.name || selected.label}`)}</a>`).join("")}
+      </nav>
+    </div>`;
+  if (!existing) shell.insertAdjacentElement("afterend", section);
+}
+
 function renderCanonicalLocationState(config) {
   if (!config || !isCanonicalPropertySearchPage(config.key)) return;
   const shell = document.getElementById(sectionSearchShellId(config.key));
@@ -44848,6 +45003,7 @@ function renderCanonicalLocationState(config) {
       ? `${names.length} ${names.length === 1 ? "area" : "areas"} selected · ${state.nearbyKm ? `include listings within ${state.nearbyKm} km` : "exact area only"}`
       : "Choose a suggested location to search. You can add up to 5 areas.";
   }
+  renderCanonicalSeoLandingIntro(config);
 }
 
 function closeCanonicalLocationSuggestions(config) {

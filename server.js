@@ -50,6 +50,12 @@ const { startFeaturedRotationScheduler } = require('./services/featuredRotationS
 const { DISTRICTS: MARKETPLACE_DISTRICTS, MARKETPLACE_CATEGORIES } = require('./services/marketplaceService');
 const { loadPublicOpportunitySummary } = require('./services/publicInventoryMetricsService');
 const { applyUgandaHomepage } = require('./packages/shared-country-core');
+const {
+  CATEGORY_SEO,
+  loadPublicSeoInventorySnapshot,
+  categoryPageSeoMeta,
+  sitemapEntries
+} = require('./services/publicSeoService');
 
 const app = express();
 // Required on Render so rate limiting uses the forwarded client IP correctly.
@@ -163,6 +169,46 @@ app.get('/marketplace-sitemap.xml', (_req, res) => {
   }
   const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map((url) => `  <url><loc>${escapeXml(url)}</loc><changefreq>weekly</changefreq></url>`).join('\n')}\n</urlset>`;
   res.type('application/xml').set('Cache-Control', 'public, max-age=3600').send(xml);
+});
+
+app.get('/robots.txt', (_req, res) => {
+  const baseUrl = String(process.env.PUBLIC_BASE_URL || process.env.APP_BASE_URL || 'https://makaug.com').replace(/\/+$/, '');
+  res.type('text/plain').set('Cache-Control', 'public, max-age=3600').send([
+    'User-agent: *',
+    'Allow: /',
+    'Disallow: /admin',
+    'Disallow: /king',
+    'Disallow: /staff',
+    'Disallow: /dashboard',
+    'Disallow: /api/',
+    `Sitemap: ${baseUrl}/sitemap.xml`,
+    `Sitemap: ${baseUrl}/marketplace-sitemap.xml`,
+    ''
+  ].join('\n'));
+});
+
+app.get('/sitemap.xml', async (_req, res, next) => {
+  try {
+    const baseUrl = String(process.env.PUBLIC_BASE_URL || process.env.APP_BASE_URL || 'https://makaug.com').replace(/\/+$/, '');
+    let snapshot = { counts: {}, properties: [] };
+    try {
+      snapshot = await loadPublicSeoInventorySnapshot(db);
+    } catch (error) {
+      logger.warn('Property sitemap is serving stable routes while inventory is unavailable', { message: error.message });
+    }
+    const urls = sitemapEntries(snapshot, baseUrl);
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map((entry) => [
+      '  <url>',
+      `    <loc>${escapeXml(entry.loc)}</loc>`,
+      entry.lastmod ? `    <lastmod>${escapeXml(entry.lastmod)}</lastmod>` : '',
+      entry.changefreq ? `    <changefreq>${escapeXml(entry.changefreq)}</changefreq>` : '',
+      entry.priority ? `    <priority>${escapeXml(entry.priority)}</priority>` : '',
+      '  </url>'
+    ].filter(Boolean).join('\n')).join('\n')}\n</urlset>`;
+    return res.type('application/xml').set('Cache-Control', 'public, max-age=300, stale-while-revalidate=3600').send(xml);
+  } catch (error) {
+    return next(error);
+  }
 });
 
 // Never expose local/private operator tools on public host.
@@ -400,13 +446,25 @@ const publicAppVersionSuffixes = [
 let cachedIndexHtml = null;
 const publicHtmlCache = new Map();
 const textAssetCache = new Map();
-const PUBLIC_HTML_WARMUP_PATHS = ['/'];
+const PUBLIC_HTML_WARMUP_PATHS = [
+  '/',
+  '/sitemap.xml',
+  '/for-sale',
+  '/to-rent',
+  '/land',
+  '/commercial',
+  '/student-accommodation'
+];
 const PUBLIC_INVENTORY_WARMUP_PATHS = [
   '/api/properties?status=approved&public_only=1&limit=1&page=1&include_summary=1',
   '/api/properties/search?search=Kira',
   '/api/properties?status=approved&public_only=1&limit=8&page=1&include_summary=0',
   '/api/properties?status=approved&public_only=1&listing_type=sale&limit=8&page=1&include_summary=0',
   '/api/properties?status=approved&public_only=1&listing_type=rent&limit=8&page=1&include_summary=0',
+  '/api/properties/search?status=approved&public_only=1&listing_type=sale&limit=24&page=1&sort=price_desc',
+  '/api/properties/search?status=approved&public_only=1&listing_type=rent&limit=24&page=1&sort=price_asc',
+  '/api/properties/search?status=approved&public_only=1&listing_type=land&limit=24&page=1&sort=price_desc',
+  '/api/properties/search?status=approved&public_only=1&listing_type=commercial&limit=24&page=1&sort=price_desc',
   '/api/properties?status=approved&featured=true&limit=12&page=1&public_only=1&sort=featured&include_summary=0'
 ];
 const PUBLIC_CACHE_WARMUP_INTERVAL_MS = 45 * 1000;
@@ -809,23 +867,63 @@ function patchMetaTag(html, propertyName, content) {
   const safeContent = escapeMetaContent(content);
   const safeName = escapeMetaContent(propertyName);
   const escapedName = propertyName.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
-  const attribute = propertyName.startsWith('twitter:') ? 'name' : 'property';
+  const attribute = propertyName.startsWith('og:') ? 'property' : 'name';
   const replacement = `<meta ${attribute}="${safeName}" content="${safeContent}">`;
   const tagPattern = new RegExp(`<meta\\b(?=[^>]*(?:property|name)=["']${escapedName}["'])[^>]*>`, 'i');
   if (tagPattern.test(html)) return html.replace(tagPattern, replacement);
   return html.replace('</head>', `  ${replacement}\n</head>`);
 }
 
-function patchListingOpenGraphMeta(html, meta = {}) {
-  let patched = html;
+function patchDocumentTitle(html, title) {
+  const replacement = `<title>${escapeMetaContent(title)}</title>`;
+  return /<title>[^<]*<\/title>/i.test(html)
+    ? html.replace(/<title>[^<]*<\/title>/i, replacement)
+    : html.replace('</head>', `  ${replacement}\n</head>`);
+}
+
+function patchCanonicalLink(html, canonical) {
+  const replacement = `<link rel="canonical" href="${escapeMetaContent(canonical)}">`;
+  return /<link\b(?=[^>]*rel=["']canonical["'])[^>]*>/i.test(html)
+    ? html.replace(/<link\b(?=[^>]*rel=["']canonical["'])[^>]*>/i, replacement)
+    : html.replace('</head>', `  ${replacement}\n</head>`);
+}
+
+function patchStructuredData(html, structuredData) {
+  if (!structuredData) return html;
+  const payload = JSON.stringify(structuredData).replace(/</g, '\\u003c');
+  const replacement = `<script type="application/ld+json" id="makaug-route-structured-data">${payload}</script>`;
+  const pattern = /<script\b(?=[^>]*id=["']makaug-route-structured-data["'])[^>]*>[\s\S]*?<\/script>/i;
+  return pattern.test(html)
+    ? html.replace(pattern, replacement)
+    : html.replace('</head>', `  ${replacement}\n</head>`);
+}
+
+function patchPublicPageSeoMeta(html, meta = {}) {
+  let patched = patchDocumentTitle(html, meta.title);
+  patched = patchMetaTag(patched, 'description', meta.description);
+  patched = patchCanonicalLink(patched, meta.canonical);
+  patched = patchMetaTag(patched, 'og:type', meta.ogType || 'website');
   patched = patchMetaTag(patched, 'og:title', meta.title);
   patched = patchMetaTag(patched, 'og:description', meta.description);
+  patched = patchMetaTag(patched, 'og:url', meta.canonical);
   patched = patchMetaTag(patched, 'og:image', meta.image);
   patched = patchMetaTag(patched, 'twitter:title', meta.title);
   patched = patchMetaTag(patched, 'twitter:description', meta.description);
   patched = patchMetaTag(patched, 'twitter:image', meta.image);
   patched = patchMetaTag(patched, 'twitter:card', 'summary_large_image');
-  return patched;
+  return patchStructuredData(patched, meta.structuredData);
+}
+
+function patchListingOpenGraphMeta(html, meta = {}) {
+  return patchPublicPageSeoMeta(html, meta);
+}
+
+function collapseDuplicatePublicTransaction(value = '') {
+  return String(value || '')
+    .replace(/\bfor\s+sale\s+for\s+sale\b/gi, 'for sale')
+    .replace(/\bfor\s+rent\s+for\s+rent\b/gi, 'for rent')
+    .replace(/\bto\s+rent\s+for\s+rent\b/gi, 'to rent')
+    .trim();
 }
 
 async function loadPublicListingOpenGraphMeta(propertyId) {
@@ -862,12 +960,75 @@ async function loadPublicListingOpenGraphMeta(propertyId) {
   const description = [location, price, 'View and share this Uganda property on makaug.com.']
     .filter(Boolean)
     .join(' - ');
+  const publicTitle = collapseDuplicatePublicTransaction(row.title) || 'Uganda property';
   return {
-    title: `${row.title || 'Uganda property'} | makaug.com`,
+    title: `${publicTitle} | makaug.com`,
     description,
-    image: absolutePublicUrl(row.primary_image_url || '/assets/og-cover.jpg')
+    image: absolutePublicUrl(row.primary_image_url || '/assets/house-ads-v3/home-hero.webp'),
+    canonical: absolutePublicUrl(`/property/${encodeURIComponent(row.id)}`),
+    ogType: 'article',
+    structuredData: {
+      '@context': 'https://schema.org',
+      '@type': 'RealEstateListing',
+      name: publicTitle,
+      description,
+      url: absolutePublicUrl(`/property/${encodeURIComponent(row.id)}`),
+      image: absolutePublicUrl(row.primary_image_url || '/assets/house-ads-v3/home-hero.webp'),
+      address: {
+        '@type': 'PostalAddress',
+        addressLocality: row.area || '',
+        addressRegion: row.district || '',
+        addressCountry: 'UG'
+      },
+      ...(Number(row.price || 0) > 0 ? {
+        offers: {
+          '@type': 'Offer',
+          price: Number(row.price),
+          priceCurrency: 'UGX',
+          url: absolutePublicUrl(`/property/${encodeURIComponent(row.id)}`)
+        }
+      } : {})
+    }
   };
 }
+
+app.get(Object.values(CATEGORY_SEO).flatMap((config) => [config.route, `${config.route}/:locationSlug`]), async (req, res, next) => {
+  try {
+    res.set('X-makaug-Public-Sanitized', '1');
+    let snapshot = null;
+    try {
+      snapshot = await loadPublicSeoInventorySnapshot(db);
+    } catch (error) {
+      logger.warn('Category SEO is continuing without an inventory count', { path: req.path, message: error.message });
+    }
+    const meta = categoryPageSeoMeta(req.path, snapshot, absolutePublicUrl('/'));
+    let html = renderPublicHtml(req.originalUrl || req.url || req.path);
+    if (meta) {
+      html = patchPublicPageSeoMeta(html, {
+        ...meta,
+        structuredData: {
+          '@context': 'https://schema.org',
+          '@type': 'CollectionPage',
+          name: meta.title.replace(/\s*\|\s*makaug\.com$/i, ''),
+          description: meta.description,
+          url: meta.canonical,
+          isPartOf: { '@type': 'WebSite', name: 'makaug.com', url: absolutePublicUrl('/') },
+          ...(meta.location ? {
+            about: {
+              '@type': 'Place',
+              name: `${meta.location.location}, ${meta.location.district}`,
+              address: { '@type': 'PostalAddress', addressRegion: meta.location.district, addressCountry: 'UG' }
+            }
+          } : {})
+        }
+      });
+      res.set('X-makaug-Category-SEO', meta.location ? 'area' : 'category');
+    }
+    return sendTextResponse(req, res, html, { cacheControl: PUBLIC_HTML_CACHE_CONTROL });
+  } catch (error) {
+    return next(error);
+  }
+});
 
 app.get('/assets/makaug-app.js', (req, res, next) => {
   try {

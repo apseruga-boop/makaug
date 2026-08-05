@@ -51,7 +51,7 @@ assert(
   'admin summary should use the split fast properties summary helper'
 );
 assert(
-  adminRoute.includes("admin-summary-v5-properties-list-count-fast"),
+  adminRoute.includes("admin-summary-v6-launch-traffic"),
   'admin summary cache key should roll for the fast count deployment'
 );
 assert(
