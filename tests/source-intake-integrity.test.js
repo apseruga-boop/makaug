@@ -199,7 +199,7 @@ test('same-batch fingerprint registration and integrity marker are shipped', () 
   assert.match(html, /k24-intake-integrity-20260803/);
 });
 
-test('spaced Uganda phone formats are masked and never become prices', () => {
+test('spaced Uganda phones are masked while a separate caption price remains usable', () => {
   const international = 'Apartment in Kira for rent at 900k. Call 256 702 968 650.';
   const local = 'Apartment in Kira for rent at 900k. Call 0751 281954.';
   assert.equal(phoneFromText(international), '+256702968650');
@@ -212,8 +212,8 @@ test('spaced Uganda phone formats are masked and never become prices', () => {
     listing_type: 'rent',
     price: 256702968650,
   }));
-  assert.equal(listing.price, null);
-  assert.equal(listing.sourcePriceRejectionReason, 'phone_number_is_not_price');
+  assert.equal(listing.price, 900000);
+  assert.equal(listing.sourcePriceRejectionReason, '');
 });
 
 test('unit counts and prices absent from the source evidence are rejected', () => {

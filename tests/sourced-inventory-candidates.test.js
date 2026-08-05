@@ -232,9 +232,9 @@ test('admin-only endpoint rejects retired generic sourced candidates', () => {
   assert(!adminRoute.includes('seedSourcedInventoryCandidates({'), 'admin endpoint should not call the generic seed service');
 });
 
-test('sourced candidate approval override is server-side limited and audited', () => {
+test('sourced candidate approval exemption follows stored provenance and is audited', () => {
   assert(propertiesRoute.includes('function isSourcedInventoryCandidateRecord'), 'status route should identify sourced candidate records server-side');
-  assert(propertiesRoute.includes('sourced_candidate_override'), 'status route should require explicit sourced override flag');
+  assert(propertiesRoute.includes('usesExemption: approvalRequested && isSourcedCandidate'), 'stored found-online provenance should activate the exemption without a client-only flag');
   assert(propertiesRoute.includes('found_online_location_confirmed'), 'override should record location confirmation');
   assert(propertiesRoute.includes('sourcedCandidateRecordHasApprovalLocation'), 'override should verify location from the stored record, not only the request body');
   assert(propertiesRoute.includes('Location is required before found-online approval'), 'override error should explain that location is required');
@@ -242,6 +242,7 @@ test('sourced candidate approval override is server-side limited and audited', (
   assert(propertiesRoute.includes('non-location review checks'), 'override should document that non-location checks are overridden');
   assert(propertiesRoute.includes('Found-online approval is only available'), 'override should reject ordinary listings');
   assert(propertiesRoute.includes('sourced_candidate_special_dispensation'), 'override should be stored on the property record');
+  assert(propertiesRoute.includes("source_review_confirmation: sourcedCandidateSourceReviewed"), 'approval action should record how source review was confirmed');
   assert(propertiesRoute.includes('found_online_approval_used'), 'override should be written to moderation history');
 });
 

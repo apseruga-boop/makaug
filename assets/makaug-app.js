@@ -17230,6 +17230,29 @@ function adminSocialQuickImportRowHtml(row = {}, index = 0) {
   </div>`;
 }
 
+function adminSocialQuickPerUrlResultHtml(item = {}, index = 0) {
+  const outcome = String(item.outcome || "skipped").toLowerCase();
+  const outcomeStyles = outcome === "created"
+    ? "bg-emerald-100 text-emerald-800"
+    : outcome === "existing"
+      ? "bg-blue-100 text-blue-800"
+      : outcome === "would_create"
+        ? "bg-violet-100 text-violet-800"
+        : "bg-amber-100 text-amber-800";
+  const title = item.title || item.source_url || `Source URL ${index + 1}`;
+  const detail = [item.platform, item.reason, item.status].filter(Boolean).join(" • ");
+  return `<div class="rounded-lg border border-gray-100 bg-white p-2">
+    <div class="flex items-start justify-between gap-2">
+      <div class="min-w-0">
+        <div class="truncate text-[11px] font-bold text-gray-900" title="${adminAttr(title)}">${adminEscape(title)}</div>
+        ${detail ? `<div class="mt-1 text-[10px] text-gray-600">${adminEscape(detail)}</div>` : ""}
+      </div>
+      <span class="shrink-0 rounded-full px-2 py-1 text-[10px] font-black ${outcomeStyles}">${adminEscape(outcome.replace(/_/g, " "))}</span>
+    </div>
+    ${item.source_url ? `<a href="${adminAttr(item.source_url)}" target="_blank" rel="noopener" class="mt-1 block truncate text-[10px] font-bold text-violet-700">${adminEscape(item.source_url)}</a>` : ""}
+  </div>`;
+}
+
 function adminSocialQuickPasteResultHtml(data = {}, { dryRun = false } = {}) {
   const importResult = data.import_result || data || {};
   const rows = Array.isArray(data.exact_social_import_rows) ? data.exact_social_import_rows : [];
@@ -17238,6 +17261,10 @@ function adminSocialQuickPasteResultHtml(data = {}, { dryRun = false } = {}) {
   const sourceReview = Array.isArray(importResult.source_review_records) ? importResult.source_review_records : [];
   const duplicateWarnings = Array.isArray(importResult.duplicate_warnings) ? importResult.duplicate_warnings : [];
   const reports = Array.isArray(data.metadata_reports) ? data.metadata_reports : [];
+  const perUrlResults = Array.isArray(importResult.per_url_results) ? importResult.per_url_results : [];
+  const perUrlSummary = importResult.per_url_summary && typeof importResult.per_url_summary === "object"
+    ? importResult.per_url_summary
+    : {};
   const previewRows = rows.length ? rows : queued;
   const eligibleCount = Number(importResult.eligible_to_queue_count || queued.length || 0);
   const createdCount = Number(importResult.created_properties || 0);
@@ -17254,6 +17281,7 @@ function adminSocialQuickPasteResultHtml(data = {}, { dryRun = false } = {}) {
       <div class="mt-1 text-[11px]">Original-poster comments are optional supporting evidence, not an eligibility requirement. Valid Uganda mobile numbers are stored as phone/WhatsApp contact; otherwise makaug sends users back to the exact original source.</div>
       ${reports.length ? `<div class="mt-2 text-[11px]">${adminEscape(reports.filter((item) => item.ok).length)} metadata fetches succeeded • ${adminEscape(reports.filter((item) => !item.ok).length)} need pasted visible details.</div>` : ""}
     </div>
+    ${perUrlResults.length ? `<div class="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3"><div class="flex items-center justify-between gap-3"><div class="font-black text-gray-950">Per-URL outcome</div><div class="text-[10px] font-bold text-gray-600">${adminEscape(Object.entries(perUrlSummary).map(([key, value]) => `${key.replace(/_/g, " ")}: ${value}`).join(" • "))}</div></div><div class="mt-2 grid gap-2 md:grid-cols-2">${perUrlResults.map((item, index) => adminSocialQuickPerUrlResultHtml(item, index)).join("")}</div></div>` : ""}
     ${autoLive.length ? `<div class="mt-3 rounded-xl border border-emerald-100 bg-white p-3"><div class="font-black text-emerald-950">Auto-live properties</div><div class="mt-2 space-y-2">${autoLive.slice(0, 12).map((item) => adminSeededListingSummaryHtml(item, { pendingPanel: false })).join("")}</div></div>` : ""}
     ${previewRows.length ? `<div class="mt-3 space-y-2">${previewRows.slice(0, 20).map((row, index) => adminSocialQuickImportRowHtml(row, index)).join("")}</div>` : ""}
     ${adminDuplicateSourceWarningHtml(duplicateWarnings)}

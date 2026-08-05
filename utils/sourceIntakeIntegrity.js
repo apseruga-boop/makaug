@@ -18,8 +18,8 @@ const EXPLICIT_LISTING_INTENT_PATTERN = /\b(?:for sale|on sale|selling|for rent|
 const CONSTRUCTION_COST_PATTERN = /\b(?:build(?:ing)? costs?|cost to build|construction costs?|material costs?|cost breakdown|roofing materials?|bill of quantities|boq)\b/i;
 const FOREIGN_INTERNATIONAL_PHONE_PATTERN = /\+(?!256)\d{1,3}(?:[\s().-]*\d){7,14}/g;
 const UGANDA_PHONE_CANDIDATE_PATTERN = /(^|[^\d+])((?:\+?256[\s().-]*|0)7\d{2}[\s().-]*\d{3}[\s().-]*\d{3}|7\d{2}[\s().-]*\d{3}[\s().-]*\d{3})(?=$|[^\d])/g;
-const SOURCE_PRICE_EVIDENCE_PATTERN = /(?:\b(?:ugx|ush|shs?)\s*|(?:\$|us\$|usd)\s*)?\d[\d,.]*(?:\s*(?:bn|billion|billions|m|mn|million|millions|k|thousand|thousands))?(?:\s*(?:ugx|ush|shs?))?(?:\s*(?:\/\s*(?:month|mo)|per\s+month|monthly))?/gi;
-const SOURCE_PRICE_CONTEXT_PATTERN = /\b(?:price|asking|guide\s+price|at|only|going\s+for|selling\s+at|rent(?:ed)?\s+at)\s*(?:is|of|:|-)?\s*((?:ugx|ush|shs?)?\s*\d[\d,.]*(?:\s*(?:bn|billion|billions|m|mn|million|millions|k|thousand|thousands))?(?:\s*(?:ugx|ush|shs?))?)/gi;
+const SOURCE_PRICE_EVIDENCE_PATTERN = /(?:\b(?:ugx|ush|shs?)\s*|(?:\$|us\$|usd)\s*)?\d[\d,.]*(?:\s*(?:bn|b|billion|billions|m|mn|million|millions|k|thousand|thousands))?(?:\s*(?:ugx|ush|shs?))?(?:\s*(?:\/\s*(?:month|mo)|per\s+month|monthly))?/gi;
+const SOURCE_PRICE_CONTEXT_PATTERN = /\b(?:price|asking|guide\s+price|at|only|going\s+for|selling\s+at|rent(?:ed)?\s+at)\s*(?:is|of|:|-)?\s*((?:ugx|ush|shs?)?\s*\d[\d,.]*(?:\s*(?:bn|b|billion|billions|m|mn|million|millions|k|thousand|thousands))?(?:\s*(?:ugx|ush|shs?))?)/gi;
 const SOURCE_PRICE_MAX_RELATIVE_DRIFT = 0.001;
 
 function compactText(value = '') {
@@ -102,7 +102,7 @@ function sourcePriceEvidenceAmounts(text = '') {
   const candidates = [];
   for (const match of masked.matchAll(SOURCE_PRICE_EVIDENCE_PATTERN)) {
     const token = compactText(match[0]);
-    if (!token || !/(?:ugx|ush|shs?|usd|us\$|\$|bn|billion|m(?:n|illion)?|k|thousand|\/\s*(?:month|mo)|per\s+month|monthly)/i.test(token)) continue;
+    if (!token || !/(?:ugx|ush|shs?|usd|us\$|\$|bn|b|billion|m(?:n|illion)?|k|thousand|\/\s*(?:month|mo)|per\s+month|monthly)/i.test(token)) continue;
     const amount = sourcePriceAmount(token);
     if (Number.isFinite(amount) && amount > 0) candidates.push(amount);
   }

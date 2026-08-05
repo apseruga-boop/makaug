@@ -2075,8 +2075,21 @@ async function getPrimaryImageUrlForProperty(propertyId) {
   }
 }
 
+function propertyExtraFieldsObject(row = {}) {
+  return (() => {
+    if (row.extra_fields && typeof row.extra_fields === 'object') return row.extra_fields;
+    if (typeof row.extra_fields !== 'string') return {};
+    try {
+      const parsed = JSON.parse(row.extra_fields);
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (_) {
+      return {};
+    }
+  })();
+}
+
 function isSourcedInventoryCandidateRecord(row = {}) {
-  const extra = row.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
+  const extra = propertyExtraFieldsObject(row);
   const source = cleanText(row.source || extra.source).toLowerCase();
   const listedVia = cleanText(row.listed_via || extra.listed_via).toLowerCase();
   return row.sourced_inventory_candidate === true
@@ -2090,8 +2103,20 @@ function isSourcedInventoryCandidateRecord(row = {}) {
     || listedVia === 'found_online';
 }
 
+function sourcedInventoryApprovalPolicy({ nextStatus = '', row = {}, requestedOverride = false } = {}) {
+  const isSourcedCandidate = isSourcedInventoryCandidateRecord(row);
+  const approvalRequested = cleanText(nextStatus).toLowerCase() === 'approved';
+  return {
+    isSourcedCandidate,
+    requestedOverride: approvalRequested && requestedOverride === true,
+    usesExemption: approvalRequested && isSourcedCandidate,
+    invalidOverride: approvalRequested && requestedOverride === true && !isSourcedCandidate,
+    hasLocation: sourcedCandidateRecordHasApprovalLocation(row)
+  };
+}
+
 function sourcedCandidateRecordHasApprovalLocation(row = {}) {
-  const extra = row.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
+  const extra = propertyExtraFieldsObject(row);
   const hasCoordinates = row.latitude != null && row.longitude != null;
   return Boolean(
     cleanText(row.area)
@@ -4394,14 +4419,6 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
           error: 'Moderator accounts can only approve, reject, or return listings to pending review'
         });
       }
-      const moderatorRequestedSourcedOverride = parseBooleanLike(req.body.sourced_candidate_override || req.body.sourced_candidate_special_dispensation, false);
-      const moderatorConfirmedSourceReview = parseBooleanLike(req.body.source_reviewed || req.body.staff_source_reviewed, false);
-      if (moderatorRequestedSourcedOverride && !moderatorConfirmedSourceReview) {
-        return res.status(403).json({
-          ok: false,
-          error: 'Found-online staff approval requires source review confirmation'
-        });
-      }
     }
 
     if (nextStatus === 'rejected' && !moderationReason) {
@@ -4433,9 +4450,14 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
       current = listingPatchResult.property || current;
       approvalWarnings.push(`Listing facts updated before moderation status change: ${listingPatchResult.changed_fields.join(', ')}`);
     }
-    const isSourcedCandidate = isSourcedInventoryCandidateRecord(current);
     const requestedSourcedCandidateOverride = nextStatus === 'approved'
       && parseBooleanLike(req.body.sourced_candidate_override || req.body.sourced_candidate_special_dispensation, false);
+    const sourcedApprovalPolicy = sourcedInventoryApprovalPolicy({
+      nextStatus,
+      row: current,
+      requestedOverride: requestedSourcedCandidateOverride
+    });
+    const isSourcedCandidate = sourcedApprovalPolicy.isSourcedCandidate;
     const highMonthlyPriceConfirmed = parseBooleanLike(
       req.body.high_monthly_price_confirmed
         || req.body.highMonthlyPriceConfirmed
@@ -4443,7 +4465,7 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
         || req.body.priceBasisConfirmed,
       false
     );
-    if (nextStatus === 'approved' && !(requestedSourcedCandidateOverride && isSourcedCandidate)) {
+    if (nextStatus === 'approved' && !sourcedApprovalPolicy.usesExemption) {
       const priceQuality = listingPriceQuality(current, { highMonthlyPriceConfirmed });
       if (!priceQuality.ok) {
         return res.status(400).json({
@@ -4483,14 +4505,14 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
     const sourcedCandidateLocationConfirmed = parseBooleanLike(req.body.found_online_location_confirmed || req.body.location_confirmed, false);
     const sourcedCandidateSourceReviewed = parseBooleanLike(req.body.source_reviewed || req.body.staff_source_reviewed, false);
 
-    if (requestedSourcedCandidateOverride && !isSourcedCandidate) {
+    if (sourcedApprovalPolicy.invalidOverride) {
       return res.status(403).json({
         ok: false,
         error: 'Found-online approval is only available for found-online intake records'
       });
     }
 
-    if (requestedSourcedCandidateOverride && !sourcedCandidateRecordHasApprovalLocation(current)) {
+    if (sourcedApprovalPolicy.usesExemption && !sourcedApprovalPolicy.hasLocation) {
       return res.status(400).json({
         ok: false,
         error: 'Location is required before found-online approval',
@@ -4501,12 +4523,11 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
       });
     }
 
-    const sourcedCandidateOverride = requestedSourcedCandidateOverride && isSourcedCandidate;
+    const sourcedCandidateOverride = sourcedApprovalPolicy.usesExemption;
     let automatedReview = null;
     const canSkipAutomatedReviewForSourcedOverride = nextStatus === 'approved'
       && sourcedCandidateOverride
-      && sourcedCandidateSourceReviewed
-      && sourcedCandidateRecordHasApprovalLocation(current);
+      && sourcedApprovalPolicy.hasLocation;
     if (nextStatus === 'approved' && !canSkipAutomatedReviewForSourcedOverride) {
       try {
         automatedReview = await loadAutomatedReviewForProperty(req.params.id);
@@ -4596,7 +4617,11 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
         actor_id: actorId,
         approval_policy: 'location_required_non_location_checks_staff_or_admin_override',
         location_confirmed: sourcedCandidateLocationConfirmed || sourcedCandidateRecordHasApprovalLocation(current),
-        source_reviewed: sourcedCandidateSourceReviewed,
+        source_reviewed: true,
+        source_review_confirmation: sourcedCandidateSourceReviewed
+          ? 'explicit_request_confirmation'
+          : 'moderation_approval_action',
+        override_requested: sourcedApprovalPolicy.requestedOverride,
         consent_confirmed: sourcedCandidateConsentConfirmed,
         image_rights_confirmed: sourcedCandidateImageRightsConfirmed,
         missing_checks_overridden: missingChecks,
@@ -4927,5 +4952,8 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
 
 module.exports = router;
 module.exports._test = {
-  publicPropertiesCacheKey
+  publicPropertiesCacheKey,
+  isSourcedInventoryCandidateRecord,
+  sourcedCandidateRecordHasApprovalLocation,
+  sourcedInventoryApprovalPolicy
 };

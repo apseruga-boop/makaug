@@ -17,8 +17,9 @@ test('Found Online approval bypasses owner identity and price confirmation witho
   assert.match(app, /identityRequired\s*=\s*!isSourcedCandidate && moderationRequiresIdentity\(review\)/);
   assert.match(app, /priceConfirmationRequired\s*=\s*!isSourcedCandidate && moderationRequiresHighMonthlyPriceConfirmation\(review\)/);
   assert.match(app, /isSourcedCandidate \? "" : moderationPriceBasisConfirmationHtml\(review, "admin-review"\)/);
-  assert.match(properties, /requestedSourcedCandidateOverride\s*=\s*nextStatus === 'approved'[\s\S]*?parseBooleanLike\(req\.body\.sourced_candidate_override/);
-  assert.match(properties, /if \(nextStatus === 'approved' && !\(requestedSourcedCandidateOverride && isSourcedCandidate\)\)/);
+  assert.match(properties, /sourcedInventoryApprovalPolicy\(\{[\s\S]*?nextStatus,[\s\S]*?row: current/);
+  assert.match(properties, /usesExemption:\s*approvalRequested && isSourcedCandidate/);
+  assert.match(properties, /if \(nextStatus === 'approved' && !sourcedApprovalPolicy\.usesExemption\)/);
 });
 
 test('partial review edits cannot erase an existing area by omission', () => {
