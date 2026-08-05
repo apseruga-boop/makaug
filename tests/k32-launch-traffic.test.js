@@ -30,6 +30,8 @@ for (const [areaRoute, pageId] of Object.entries({
   assert(!areaRouteHtml.includes('id="page-home"'), `${areaRoute} must not fall back to the homepage`);
 }
 assert(app.includes('path.startsWith("/for-sale/")'), 'area routes must keep the matching public inventory category active');
+assert(app.includes('preserveCanonicalSeoPath'), 'initial area hydration must preserve the canonical landing URL');
+assert(app.includes('source === "canonical_location_selected"'), 'only the automatic canonical hydration may preserve the landing URL');
 
 const snapshot = buildPublicSeoSnapshot([
   { id: 'sale-1', listing_type: 'sale', area: 'Ntinda', district: 'Kampala', updated_at: '2026-08-05T08:00:00.000Z' },
