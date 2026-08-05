@@ -8444,9 +8444,53 @@ function analyticsEventParams(params = {}) {
   };
 }
 
+function fireClientMetaPixelEvent(eventName, params = {}) {
+  if (typeof window.fbq !== "function" || window.__makaugMetaPixelReady !== true) return false;
+  const common = {
+    page_path: currentAnalyticsPagePath(),
+    site_country: "UG"
+  };
+  if (eventName === "page_view") {
+    window.fbq("track", "PageView", { ...common, page_name: params.page || currentPage || "home" });
+    return true;
+  }
+  if (eventName === "property_open") {
+    const value = Number(params.value || 0);
+    window.fbq("track", "ViewContent", {
+      ...common,
+      content_ids: [String(params.property_id || "")].filter(Boolean),
+      content_name: String(params.content_name || "makaug property"),
+      content_type: "product",
+      content_category: String(params.listing_type || "property"),
+      currency: "UGX",
+      ...(Number.isFinite(value) && value > 0 ? { value } : {})
+    });
+    return true;
+  }
+  if (["property_search", "section_search_run", "ai_chatbot_prompt_submitted"].includes(eventName)) {
+    const searchString = String(
+      params.query
+        || params.search_string
+        || params.district_or_university
+        || params.search_scope
+        || params.page
+        || "property"
+    ).trim();
+    window.fbq("track", "Search", {
+      ...common,
+      search_string: searchString || "property",
+      content_category: String(params.listing_type || params.backend_category || params.search_scope || "property"),
+      ...(Number.isFinite(Number(params.results_count)) ? { results_count: Number(params.results_count) } : {})
+    });
+    return true;
+  }
+  return false;
+}
+
 async function trackEvent(eventName, params = {}) {
   const analyticsParams = analyticsEventParams(params);
   fireClientGaEvent(eventName, analyticsParams);
+  fireClientMetaPixelEvent(eventName, analyticsParams);
   try {
     await apiRequest("/api/analytics/event", {
       method: "POST",
@@ -52020,6 +52064,8 @@ async function openDetail(id, options = {}) {
   recordUserPropertyView(p.backend_id || p.id, options.source || "property_detail");
   trackEvent("property_open", {
     property_id: p.id,
+    content_name: getLocalizedPropertyTitle(p),
+    value: Number(p.price) || 0,
     source: options.source || "property_detail",
     listing_type: normalizeType(p.type),
     district: p.district,

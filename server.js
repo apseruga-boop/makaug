@@ -678,6 +678,16 @@ function injectRuntimeBundleVersion(html) {
   );
 }
 
+function injectRuntimeMetaPixelId(html) {
+  if (!html) return html;
+  const configuredId = String(process.env.META_PIXEL_ID || '').trim();
+  const pixelId = /^\d{6,24}$/.test(configuredId) ? configuredId : '';
+  return html.replace(
+    'window.__makaugMetaPixelId = "__MAKAUG_META_PIXEL_ID__";',
+    `window.__makaugMetaPixelId = ${JSON.stringify(pixelId)};`
+  );
+}
+
 const captureHelperUsabilityScriptPatch = `
 ;(() => {
   const version = "${captureHelperUsabilityVersion}";
@@ -842,7 +852,7 @@ const captureHelperUsabilityScriptPatch = `
 function readIndexHtml() {
   if (isProduction && cachedIndexHtml) return cachedIndexHtml;
   const patchedHtml = applyCaptureHelperUsabilityIndexPatch(fs.readFileSync(indexPath, 'utf8'));
-  const html = injectRuntimeBundleVersion(patchedHtml);
+  const html = injectRuntimeMetaPixelId(injectRuntimeBundleVersion(patchedHtml));
   if (isProduction) cachedIndexHtml = html;
   return html;
 }
