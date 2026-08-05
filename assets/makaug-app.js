@@ -71,7 +71,8 @@ const LOCATION_HINTS = [
   "Industrial Area","Nakawa","Luzira","Munyonyo","Kireka Namugongo Road","Bombo Road","Gayaza Road","Kyanja","Kyanja Ring Road","Kiwatule",
   "Kyebando","Naguru","Makerere","Old Kampala","Mengo","Kasubi","Lungujja","Nateete","Salaama","Bunga","Kabalagala","Muyenga Bukasa",
   "Kitende","Kajjansi","Seguku","Bwebajja","Kitukutwe","Bulindo","Sonde","Naalya Estate","Namanve","Goma","Bweyogerere Industrial Park",
-  "Mbarara Town","Jinja Town","Mbale Town","Arua Town","Lira City","Gulu City","Masaka City","Hoima City","Masindi Town","Soroti City","Kabale Town","Fort Portal City"
+  "Mbarara Town","Jinja Town","Mbale Town","Arua Town","Lira City","Gulu City","Masaka City","Hoima City","Masindi Town","Soroti City","Kabale Town","Fort Portal City",
+  "Luwero","Luweero","Luwero Town","Luweero Town","Ndibulungi"
 ];
 
 const PROPERTIES = [
@@ -434,7 +435,9 @@ const UG_AREA_PIN_OVERRIDES = [
   { name: "Kikoni", district: "Kampala", lat: 0.333, lng: 32.565, aliases: ["Kikoni"] },
   { name: "Nakawa", district: "Kampala", lat: 0.334, lng: 32.61, aliases: ["Nakawa"] },
   { name: "Ndeeba", district: "Kampala", lat: 0.301, lng: 32.548, aliases: ["Ndeeba"] },
-  { name: "Kikuubo", district: "Kampala", lat: 0.314, lng: 32.576, aliases: ["Kikuubo"] }
+  { name: "Kikuubo", district: "Kampala", lat: 0.314, lng: 32.576, aliases: ["Kikuubo"] },
+  { name: "Luwero", district: "Luwero", lat: 0.8492, lng: 32.4731, specificity: 1, aliases: ["Luwero", "Luweero", "Luwero Town", "Luweero Town"] },
+  { name: "Ndibulungi", district: "Luwero", specificity: 6, aliases: ["Ndibulungi", "Luwero Ndibulungi", "Luweero Ndibulungi"] }
 ];
 
 function findHierarchyLocationForKnownArea(district = "", area = "") {
@@ -23312,7 +23315,7 @@ function adminReviewKnownLocationCandidates() {
         neighborhood: enriched.neighborhood,
         lat: enriched.lat,
         lng: enriched.lng,
-        specificity: 5
+        specificity: Number(point.specificity) || 5
       });
     });
   });
@@ -23970,6 +23973,10 @@ function adminReviewApplySpecificKnownLocation(location = {}, options = {}) {
   const point = adminReviewKnownLocationPoint(enriched);
   if (point && (options.forceCoordinates || !adminReviewCurrentCoordinatesPoint())) {
     adminReviewSetLocationInputs(point.lat, point.lng, options.message || "Source area pin found");
+  } else if (!point && options.forceCoordinates) {
+    adminSetReviewEditValue("admin-review-latitude-edit", "");
+    adminSetReviewEditValue("admin-review-longitude-edit", "");
+    adminReviewLocationStatus("District corrected from source evidence. Find and confirm the exact pin.", "amber");
   }
   return true;
 }
@@ -24081,6 +24088,7 @@ async function adminReviewFindAddressOrPlace(options = {}) {
 function adminReviewLocationAutofillText(review = {}, facts = {}) {
   const extra = adminReviewExtraFields(review);
   return uniqueTextParts([
+    adminReviewSourceText(review),
     review.resolved_location_label,
     extra.resolved_location_label,
     review.address,
@@ -24093,8 +24101,7 @@ function adminReviewLocationAutofillText(review = {}, facts = {}) {
     review.area,
     facts.area,
     review.district,
-    facts.district,
-    adminReviewSourceText(review)
+    facts.district
   ]).join(", ");
 }
 
@@ -24170,15 +24177,13 @@ function adminReviewListingEditPanel(review = {}) {
     ? { lat: adminReviewCoordinateNumber(review.latitude), lng: adminReviewCoordinateNumber(review.longitude) }
     : null;
   const locationSeedText = uniqueTextParts([
-    facts.area,
-    facts.district,
     review.title,
     review.address,
     extra.source_location,
     extra.location_label,
     extra.source_area,
-    extra.location_town,
     adminReviewSourceText(review),
+    extra.location_town,
     review.resolved_location_label,
     extra.resolved_location_label,
     review.neighborhood,
@@ -24187,13 +24192,18 @@ function adminReviewListingEditPanel(review = {}) {
     extra.city,
     extra.town,
     review.area,
-    review.district
+    review.district,
+    facts.area,
+    facts.district
   ]).join(", ");
   const sourceLocation = adminReviewBestKnownLocationFromText(locationSeedText);
   const sourcePoint = adminReviewKnownLocationPoint(sourceLocation);
+  const sourceDistrictConflict = sourceLocation?.district
+    && review.district
+    && sourceLocation.district !== review.district;
   const initialPoint = sourcePoint && (!reviewPoint || adminReviewPointDistanceKm(reviewPoint, sourceLocation) > 15)
     ? sourcePoint
-    : reviewPoint;
+    : (sourceDistrictConflict ? null : reviewPoint);
   const inferredHierarchy = adminReviewInferHierarchyFromText(locationSeedText, initialPoint, facts.district || review.district || "");
   const initialDistrict = inferredHierarchy.district || facts.district || review.district || "";
   const initialRegion = initialDistrict ? regionForDistrict(initialDistrict) : (inferredHierarchy.region || review.region || extra.region || "");
@@ -46083,6 +46093,15 @@ const UG_LOCATION_TREE = {
         { name: "Masulita", lat: 0.51, lng: 32.46 },
         { name: "Kasanje", lat: 0.217, lng: 32.383 },
         { name: "Nabweru South", lat: 0.367, lng: 32.526 }
+      ]
+    }
+  ],
+  Luwero: [
+    {
+      city: "Luwero Town",
+      neighborhoods: [
+        { name: "Luwero", lat: 0.8492, lng: 32.4731 },
+        { name: "Ndibulungi" }
       ]
     }
   ],

@@ -18,6 +18,7 @@ const {
 const { listingPriceQuality } = require('../utils/listingPriceQuality');
 const {
   districtForKnownArea,
+  districtsForKnownLocationText,
   normalizeReviewLocationHierarchy,
   regionForDistrict
 } = require('../utils/ugandaLocationHierarchy');
@@ -499,6 +500,22 @@ function staffLocationWarnings(row = {}) {
   const district = cleanText(row.district);
   const knownDistrict = districtForKnownArea(area);
   if (knownDistrict && knownDistrict !== district) warnings.push(`${area} belongs to ${knownDistrict}, not ${district}`);
+  const extra = safeJsonObject(row.extra_fields, {});
+  const evidenceText = [
+    row.title,
+    row.description,
+    row.address,
+    extra.caption,
+    extra.source_caption,
+    extra.source_description,
+    extra.source_text,
+    extra.source_location
+  ].map((value) => cleanText(value)).filter(Boolean).join(' | ');
+  districtsForKnownLocationText(evidenceText)
+    .filter((evidenceDistrict) => district && evidenceDistrict !== district)
+    .forEach((evidenceDistrict) => {
+      warnings.push(`Source/title/address evidence points to ${evidenceDistrict}, not ${district}`);
+    });
   return warnings;
 }
 
@@ -2473,9 +2490,7 @@ async function loadStaffPropertyPreview(propertyId) {
       city: firstNonEmpty(extra.city),
       neighborhood: firstNonEmpty(extra.neighborhood),
       known_area_district: districtForKnownArea(property.area) || '',
-      warnings: districtForKnownArea(property.area) && districtForKnownArea(property.area) !== property.district
-        ? [`${property.area} belongs to ${districtForKnownArea(property.area)}, not ${property.district}`]
-        : []
+      warnings: staffLocationWarnings(property)
     },
     review: {
       checklist: automatedReview.checklist || safeJsonObject(property.moderation_checklist, {}),

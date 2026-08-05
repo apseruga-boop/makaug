@@ -112,6 +112,9 @@ const DETAILED_LOCATIONS = [
   { name: 'Awindiri', district: 'Arua', lat: 3.006, lng: 30.89 },
   { name: 'Pokea', district: 'Arua', lat: 3.028, lng: 30.932 },
 
+  { name: 'Luwero', district: 'Luwero', level: 'district', lat: 0.8492, lng: 32.4731, aliases: ['Luwero', 'Luweero', 'Luwero Town', 'Luweero Town'] },
+  { name: 'Ndibulungi', district: 'Luwero', aliases: ['Ndibulungi', 'Luwero Ndibulungi', 'Luweero Ndibulungi'] },
+
   { name: 'Fort Portal', district: 'Kabarole', level: 'city', lat: 0.671, lng: 30.254, aliases: ['Fort Portal', 'Fort Portal City', 'Fort Portal Central'] },
   { name: 'Kijura', district: 'Kabarole', lat: 0.679, lng: 30.272 },
   { name: 'Boma', district: 'Kabarole', lat: 0.675, lng: 30.248 },
@@ -164,6 +167,7 @@ DISTRICTS.forEach((district) => {
   }
 });
 canonicalDistrictByKey.set('fort portal', 'Kabarole');
+canonicalDistrictByKey.set('luweero', 'Luwero');
 
 function normalizeDistrict(value = '') {
   const key = normalizeLocationKey(value)

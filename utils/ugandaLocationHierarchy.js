@@ -137,6 +137,15 @@ const UG_LOCATION_TREE = {
       ]
     }
   ],
+  Luwero: [
+    {
+      city: 'Luwero Town',
+      neighborhoods: [
+        { name: 'Luwero', lat: 0.8492, lng: 32.4731 },
+        { name: 'Ndibulungi' }
+      ]
+    }
+  ],
   Masindi: [
     {
       city: 'Masindi Municipality',
@@ -167,6 +176,11 @@ const UG_LOCATION_TREE = {
       ]
     }
   ]
+};
+
+const KNOWN_AREA_DISTRICT_ALIASES = {
+  luweero: 'Luwero',
+  'luweero town': 'Luwero'
 };
 
 const DISTRICT_TO_REGION = Object.entries(UG_REGION_DISTRICTS).reduce((map, [region, districts]) => {
@@ -203,6 +217,7 @@ function getDistrictLocationTree(district) {
 function districtForKnownArea(area) {
   const needle = clean(area).toLowerCase();
   if (!needle) return '';
+  if (KNOWN_AREA_DISTRICT_ALIASES[needle]) return KNOWN_AREA_DISTRICT_ALIASES[needle];
   if (DISTRICTS.some((district) => district.toLowerCase() === needle)) {
     return DISTRICTS.find((district) => district.toLowerCase() === needle) || '';
   }
@@ -215,6 +230,36 @@ function districtForKnownArea(area) {
     }
   }
   return '';
+}
+
+function districtsForKnownLocationText(value = '') {
+  const text = clean(value).toLowerCase();
+  if (!text) return [];
+  const matches = [];
+  const add = (label, district) => {
+    const needle = clean(label).toLowerCase();
+    if (!needle || !district) return;
+    const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
+    const match = text.match(new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, 'i'));
+    if (!match) return;
+    matches.push({ district, index: match.index, length: needle.length });
+  };
+
+  DISTRICTS.forEach((district) => add(district, district));
+  Object.entries(KNOWN_AREA_DISTRICT_ALIASES).forEach(([alias, district]) => add(alias, district));
+  Object.entries(UG_LOCATION_TREE).forEach(([district, tree]) => {
+    (tree || []).forEach((cityNode) => {
+      add(cityNode.city, district);
+      (cityNode.neighborhoods || []).forEach((item) => add(item.name, district));
+    });
+  });
+
+  matches.sort((a, b) => (a.index - b.index) || (b.length - a.length));
+  return Array.from(new Set(matches.map((match) => match.district)));
+}
+
+function districtForKnownLocationText(value = '') {
+  return districtsForKnownLocationText(value)[0] || '';
 }
 
 function normalizeReviewLocationHierarchy(fields = {}) {
@@ -276,5 +321,7 @@ module.exports = {
   regionForDistrict,
   getDistrictLocationTree,
   districtForKnownArea,
+  districtForKnownLocationText,
+  districtsForKnownLocationText,
   normalizeReviewLocationHierarchy
 };
