@@ -82,7 +82,8 @@ test('admin live controls use paginated backend snapshots', () => {
   assert.doesNotMatch(adminRouteSource, /\$\{statusExpr\} NOT IN \(\$\{final\}\)/);
   assert.match(appSource, /const reviewQueuePath = adminPendingQueueFilter === "found_online"[\s\S]*"\/api\/admin\/properties\/review-queue\?include_total=1&include_images=0&queue=found_online"[\s\S]*"\/api\/admin\/properties\/review-queue\?include_total=1&include_images=0"/);
   assert.match(appSource, /King dashboard refresh already running; skipping duplicate render\./);
-  assert.match(adminRouteSource, /adminCachedPayload\('admin-summary-v5-properties-list-count-fast'/);
+  assert.match(adminRouteSource, /adminCachedPayload\('admin-summary-v6-launch-traffic'/);
+  assert.match(adminRouteSource, /key\.includes\('admin-summary-v'\)/);
   assert.match(adminRouteSource, /adminCachedPayload\('admin-command-centre-v5-partial-safe'/);
   assert.match(adminRouteSource, /admin-review-queue-v7-authoritative-status/);
   assert.match(adminRouteSource, /const includeTotal = parseBooleanLike\(req\.query\.include_total \|\| req\.query\.includeTotal, false\)/);
@@ -606,7 +607,7 @@ test('public properties API is cacheable and uses the fast public summary path',
   assert.match(propertiesRouteSource, /WITH public_page_source AS/);
   assert.match(propertiesRouteSource, /COALESCE\(p\.extra_fields, '\{\}'::jsonb\)\s+- 'raw_source_post'/);
   assert.match(propertiesRouteSource, /WHERE i\.property_id = public_page\.id/);
-  assert.match(serverSource, /PUBLIC_HTML_WARMUP_PATHS = \['\/'\]/);
+  assert.match(serverSource, /PUBLIC_HTML_WARMUP_PATHS = \[[\s\S]*'\/'[\s\S]*'\/sitemap\.xml'[\s\S]*'\/for-sale'[\s\S]*'\/to-rent'/);
   assert.match(serverSource, /PUBLIC_INVENTORY_WARMUP_PATHS = \[/);
   assert.match(serverSource, /PUBLIC_CACHE_WARMUP_INTERVAL_MS = 45 \* 1000/);
   assert.match(serverSource, /function addPublicCacheRefreshParam\(pathName\)/);

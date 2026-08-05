@@ -1773,7 +1773,7 @@ function clearAdminReviewQueueCache() {
     if (
       key.includes('admin-review-queue-v')
       || key.includes('admin-command-centre-v')
-      || key.includes('admin-summary-v5-properties-list-count-fast')
+      || key.includes('admin-summary-v')
       || key.includes('admin-actionable-review-count-v')
     ) {
       adminDashboardResponseCache.delete(cacheKey);
@@ -2099,6 +2099,11 @@ async function loadAdminEngagementSummarySnapshot() {
        COUNT(*) FILTER (WHERE event_name IN ('property_directions_open','directions_open','route_time_view'))::int AS route_events,
        COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '2 days' AND event_name IN ('property_open','property_view'))::int AS property_views_48h,
        COUNT(DISTINCT client_id) FILTER (WHERE created_at >= NOW() - INTERVAL '2 days' AND event_name IN ('property_open','property_view','page_view','property_search'))::int AS unique_visitors_48h,
+       COUNT(DISTINCT client_id) FILTER (WHERE created_at >= NOW() - INTERVAL '30 minutes' AND event_name IN ('property_open','property_view','page_view','property_search','page_open'))::int AS unique_visitors_30m,
+       COUNT(DISTINCT client_id) FILTER (
+         WHERE created_at >= ((NOW() AT TIME ZONE 'Africa/Kampala')::date AT TIME ZONE 'Africa/Kampala')
+           AND event_name IN ('property_open','property_view','page_view','property_search','page_open')
+       )::int AS unique_visitors_today,
        COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '2 days' AND event_name IN ('property_save','property_saved','save_property'))::int AS property_saves_48h,
        COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '2 days' AND event_name IN ('property_inquiry_submit','property_inquiry'))::int AS property_inquiries_48h,
        COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '2 days' AND event_name IN ('property_directions_open','directions_open','route_time_view'))::int AS route_events_48h
@@ -3285,13 +3290,14 @@ function adminReviewListingPatchFromBody(body = {}) {
 
 router.get('/summary', async (req, res, next) => {
   try {
-    const payload = await adminCachedPayload('admin-summary-v5-properties-list-count-fast', ADMIN_DASHBOARD_CACHE_TTL_MS, async () => {
+    const payload = await adminCachedPayload('admin-summary-v6-launch-traffic', ADMIN_DASHBOARD_CACHE_TTL_MS, async () => {
       const [
         properties,
         coreSnapshot,
         engagementSnapshot,
         topAreas48h,
-        topListingTypes48h
+        topListingTypes48h,
+        trafficSources48h
       ] = await Promise.all([
         loadAdminPropertiesSummaryFast(),
         loadAdminCoreSummarySnapshot(),
@@ -3319,6 +3325,21 @@ router.get('/summary', async (req, res, next) => {
            GROUP BY 1
            ORDER BY events DESC, listing_type ASC
            LIMIT 5`,
+          [],
+          { timeoutMs: 650 }
+        ),
+        adminSummaryRows(
+          `SELECT
+            COALESCE(NULLIF(payload->>'traffic_source', ''), NULLIF(payload->>'utm_source', ''), NULLIF(source, ''), 'direct') AS source,
+            COALESCE(NULLIF(payload->>'traffic_medium', ''), NULLIF(payload->>'utm_medium', ''), 'none') AS medium,
+            COUNT(DISTINCT client_id)::int AS visitors,
+            COUNT(*)::int AS events
+           FROM analytics_events
+           WHERE created_at >= NOW() - INTERVAL '2 days'
+             AND event_name IN ('property_open','property_view','page_view','property_search','page_open')
+           GROUP BY 1, 2
+           ORDER BY visitors DESC, events DESC, source ASC
+           LIMIT 8`,
           [],
           { timeoutMs: 650 }
         )
@@ -3355,6 +3376,10 @@ router.get('/summary', async (req, res, next) => {
         property_inquiries: 'property_inquiries_48h',
         route_events: 'route_events_48h'
       });
+      const launchTraffic = adminSummarySlice(engagementSnapshot, {
+        unique_visitors_30m: 'unique_visitors_30m',
+        unique_visitors_today: 'unique_visitors_today'
+      });
       const fallbackReasons = [properties, coreSnapshot, engagementSnapshot]
         .map((row) => row?._fallback_reason)
         .filter(Boolean);
@@ -3369,13 +3394,15 @@ router.get('/summary', async (req, res, next) => {
         inquiries: adminNullableSummaryRow(inquiries),
         engagement: adminNullableSummaryRow(engagement),
         ai_insights: {
+          launch_traffic: adminNullableSummaryRow(launchTraffic),
           last_48h: adminNullableSummaryRow(engagement48h),
           top_areas: topAreas48h,
-          top_listing_types: topListingTypes48h
+          top_listing_types: topListingTypes48h,
+          traffic_sources: trafficSources48h
         }
       },
       meta: {
-        cache: 'admin_summary_v5_properties_list_count_fast',
+        cache: 'admin_summary_v6_launch_traffic',
         cache_ttl_ms: ADMIN_DASHBOARD_CACHE_TTL_MS,
         public_count_marker: PUBLIC_INVENTORY_METRICS_MARKER,
         generated_at: new Date().toISOString(),

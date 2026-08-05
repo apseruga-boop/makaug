@@ -950,9 +950,24 @@ function publicPriceLabelFor(property = {}) {
   return `USh ${Math.round(amount).toLocaleString('en-US')}${period === 'month' ? '/month' : ''}`;
 }
 
+function stripTransactionFromPublicPropertyType(value = '') {
+  return redactThirdPartyPublicText(value)
+    .replace(/\s+(?:for\s+sale|for\s+rent|to\s+rent)\s*$/i, '')
+    .trim()
+    .toLowerCase();
+}
+
+function collapseDuplicatePublicTransaction(value = '') {
+  return redactThirdPartyPublicText(value)
+    .replace(/\bfor\s+sale\s+for\s+sale\b/gi, 'for sale')
+    .replace(/\bfor\s+rent\s+for\s+rent\b/gi, 'for rent')
+    .replace(/\bto\s+rent\s+for\s+rent\b/gi, 'to rent')
+    .trim();
+}
+
 function buildThirdPartyPublicTitle(property = {}, extra = {}) {
   const reviewedFields = Array.isArray(extra.king_review_corrected_fields) ? extra.king_review_corrected_fields : [];
-  const reviewedTitle = redactThirdPartyPublicText(property.title || '');
+  const reviewedTitle = collapseDuplicatePublicTransaction(property.title || '');
   const reviewedTitleLooksCopied = String(property.title || '').includes('#')
     || reviewedTitle.length > 120
     || reviewedTitle.split(/\s+/).filter(Boolean).length > 14;
@@ -969,7 +984,7 @@ function buildThirdPartyPublicTitle(property = {}, extra = {}) {
   const type = thirdPartyTypeLabel(property);
   const beds = Number(property.bedrooms);
   const roomLabel = Number.isFinite(beds) && beds > 0 && type !== 'land' ? `${beds}-bed ` : '';
-  const propertyType = redactThirdPartyPublicText(property.property_type || '').toLowerCase();
+  const propertyType = stripTransactionFromPublicPropertyType(property.property_type || '');
   if (type === 'land') {
     const size = redactThirdPartyPublicText(extra.size_raw || property.land_size || '');
     return `${size ? `${size} ` : ''}Land in ${area}`.trim();
