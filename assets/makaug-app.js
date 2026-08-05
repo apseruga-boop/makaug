@@ -7970,7 +7970,9 @@ function renderHeroPropertyOpportunityCounter() {
 }
 
 function applyLanguageUI() {
-  document.title = tr("siteTitle");
+  const pathname = normalizeRoutePath(window.location.pathname || "/");
+  const hasCanonicalAreaSeoTitle = /^\/(for-sale|to-rent|land|commercial|student-accommodation)\/[a-z0-9-]+$/i.test(pathname);
+  if (!hasCanonicalAreaSeoTitle) document.title = tr("siteTitle");
   setTextById("brand-subtitle", tr("brandSubtitle"));
 
   const savedEl = document.getElementById("top-saved-link");
@@ -44955,7 +44957,11 @@ function renderCanonicalSeoLandingIntro(config) {
     commercial: "#b45309",
     students: "#6b21a8"
   }[config.key] || "#166534";
-  const count = Math.max(0, Number(selected.listing_count) || 0);
+  const serverCountValue = document.querySelector('meta[name="makaug:listing-count"]')?.getAttribute("content");
+  const serverCount = serverCountValue === null || serverCountValue === "" ? Number.NaN : Number(serverCountValue);
+  const count = Number.isFinite(serverCount)
+    ? Math.max(0, serverCount)
+    : Math.max(0, Number(selected.listing_count) || 0);
   const location = [selected.name || selected.label, selected.district].filter(Boolean).join(", ");
   const slug = canonicalSeoRouteSlug(selected);
   const section = existing || document.createElement("section");

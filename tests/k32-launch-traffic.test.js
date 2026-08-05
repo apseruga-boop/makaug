@@ -62,6 +62,7 @@ assert(!sitemap.some((entry) => entry.loc.includes('/to-rent/ntinda-kampala')), 
 assert(server.includes("app.get('/robots.txt'"), 'robots route must be explicit');
 assert(server.includes("app.get('/sitemap.xml'"), 'property sitemap route must be explicit');
 assert(server.includes('patchPublicPageSeoMeta'), 'category and detail metadata must share one patcher');
+assert(server.includes("'makaug:listing-count'"), 'area HTML must expose the authoritative server count to the client');
 assert(fs.readFileSync(path.join(root, 'services', 'publicSeoService.js'), 'utf8').includes("publicVisibleInventoryWhere('properties')"), 'SEO counts and sitemap must use the authoritative public predicate');
 assert(server.includes('RealEstateListing'), 'detail pages should expose listing structured data');
 assert(!server.includes('/assets/og-cover.jpg'), 'SEO metadata must not reference a missing fallback image');
@@ -74,6 +75,8 @@ assert(properties.includes('collapseDuplicatePublicTransaction'), 'API-generated
 assert(properties.includes('WITH public_page_ids AS MATERIALIZED'), 'public card searches must limit indexed IDs before hydrating image data');
 assert(server.includes('collapseDuplicatePublicTransaction'), 'detail SEO metadata must collapse duplicate transaction wording');
 assert(app.includes('renderCanonicalSeoLandingIntro'), 'area routes need visible count and cross-links');
+assert(app.includes('meta[name="makaug:listing-count"]'), 'area intro must prefer the authoritative server count');
+assert(app.includes('hasCanonicalAreaSeoTitle'), 'language refresh must preserve the server-rendered canonical area title');
 assert(admin.includes('unique_visitors_30m'), 'King needs a live 30-minute visitor count');
 assert(admin.includes('traffic_sources'), 'King needs source/medium reporting');
 assert(html.includes('admin-ai-visitors-live'), 'King launch traffic UI must render live visitors');
