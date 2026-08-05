@@ -3000,7 +3000,9 @@ async function updatePropertyEditableFields({ propertyId, patch = {} }) {
     transaction_type: { column: 'transaction_type', value: normalizeCommercialTransactionType(normalizedPatch.transaction_type) || null },
     property_type: { column: 'property_type', value: cleanText(normalizedPatch.property_type) || null },
     title_type: { column: 'title_type', value: cleanText(normalizedPatch.title_type) || null },
+    lister_name: { column: 'lister_name', value: cleanText(normalizedPatch.lister_name) || null },
     lister_phone: { column: 'lister_phone', value: cleanText(normalizeUgPhone(normalizedPatch.lister_phone)) || null },
+    lister_email: { column: 'lister_email', value: normalizeEmail(normalizedPatch.lister_email) || null },
     bedrooms: { column: 'bedrooms', value: toNullableInt(normalizedPatch.bedrooms) },
     bathrooms: { column: 'bathrooms', value: toNullableInt(normalizedPatch.bathrooms) },
     nearest_university: { column: 'nearest_university', value: cleanText(normalizedPatch.nearest_university) || null },
@@ -3046,6 +3048,11 @@ async function updatePropertyEditableFields({ propertyId, patch = {} }) {
   if (Object.prototype.hasOwnProperty.call(normalizedPatch, 'lister_phone')) {
     const phone = cleanText(normalizeUgPhone(normalizedPatch.lister_phone));
     if (phone && !isValidPhone(phone)) errors.push('lister_phone is invalid');
+  }
+
+  if (Object.prototype.hasOwnProperty.call(normalizedPatch, 'lister_email')) {
+    const email = normalizeEmail(normalizedPatch.lister_email);
+    if (email && !isValidEmail(email)) errors.push('lister_email is invalid');
   }
 
   if (Object.prototype.hasOwnProperty.call(normalizedPatch, 'listing_type')) {
@@ -3241,6 +3248,46 @@ async function updatePropertyEditableFields({ propertyId, patch = {} }) {
   );
 
   return updated.rows[0] || null;
+}
+
+const ADMIN_REVIEW_STAGES = new Set([
+  'submitted',
+  'source_review',
+  'review_queue',
+  'pending_review',
+  'in_review',
+  'under_review',
+  'needs_more_details',
+  'held',
+  'resubmitted'
+]);
+
+const ADMIN_REVIEW_EDITABLE_FIELDS = new Set([
+  'title', 'description', 'listing_type', 'listingType', 'type', 'category',
+  'property_type', 'price', 'price_period', 'transaction_type', 'transactionType',
+  'commercial_mode', 'commercial_intent', 'title_type', 'region', 'district',
+  'city', 'neighborhood', 'area', 'address', 'street_name', 'location_name',
+  'location_confidence', 'geocoding_provider', 'place_id', 'map_pin_source',
+  'latitude', 'longitude', 'lat', 'lng', 'lon', 'long', 'lister_name',
+  'lister_phone', 'lister_email', 'bedrooms', 'bathrooms', 'amenities',
+  'nearest_university', 'distance_to_uni_km', 'room_type', 'room_arrangement',
+  'gender_pref', 'students_welcome', 'student_universities',
+  'student_room_label', 'land_title_available', 'landTitleAvailable',
+  'title_available', 'titleAvailable'
+]);
+
+function adminReviewListingPatchFromBody(body = {}) {
+  const nested = body.listing && typeof body.listing === 'object' && !Array.isArray(body.listing)
+    ? body.listing
+    : (body.listing_patch && typeof body.listing_patch === 'object' && !Array.isArray(body.listing_patch)
+      ? body.listing_patch
+      : (body.listingPatch && typeof body.listingPatch === 'object' && !Array.isArray(body.listingPatch)
+        ? body.listingPatch
+        : null));
+  if (nested) return { ...nested };
+  return Object.fromEntries(
+    Object.entries(body || {}).filter(([key]) => ADMIN_REVIEW_EDITABLE_FIELDS.has(key))
+  );
 }
 
 router.get('/summary', async (req, res, next) => {
@@ -5685,8 +5732,8 @@ router.patch('/properties/:id/review', async (req, res, next) => {
       return res.status(404).json({ ok: false, error: 'Property not found' });
     }
 
-    const listingPatch = req.body?.listing && typeof req.body.listing === 'object' ? req.body.listing : null;
-    if (listingPatch) {
+    const listingPatch = adminReviewListingPatchFromBody(req.body || {});
+    if (Object.keys(listingPatch).length) {
       await updatePropertyEditableFields({ propertyId: req.params.id, patch: listingPatch });
     }
 
@@ -5696,6 +5743,13 @@ router.patch('/properties/:id/review', async (req, res, next) => {
     const notes = cleanText(req.body.notes || req.body.review_notes) || null;
     const reason = cleanText(req.body.reason) || null;
     const stage = cleanText(req.body.stage) || 'in_review';
+    if (!ADMIN_REVIEW_STAGES.has(stage)) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Invalid moderation stage',
+        details: [`stage must be one of: ${Array.from(ADMIN_REVIEW_STAGES).join(', ')}`]
+      });
+    }
     const warningOverrides = req.body.warning_overrides && typeof req.body.warning_overrides === 'object'
       ? req.body.warning_overrides
       : (existing.rows[0].extra_fields?.review_warning_overrides || {});
@@ -5733,7 +5787,7 @@ router.patch('/properties/:id/review', async (req, res, next) => {
       [
         req.params.id,
         actorId,
-        listingPatch ? 'listing_review_updated_with_listing_edits' : 'listing_review_updated',
+        Object.keys(listingPatch).length ? 'listing_review_updated_with_listing_edits' : 'listing_review_updated',
         JSON.stringify(checklist),
         reason,
         notes
@@ -5743,7 +5797,8 @@ router.patch('/properties/:id/review', async (req, res, next) => {
     await writeAudit('admin_property_review_updated', {
       property_id: req.params.id,
       stage,
-      listing_edited: !!listingPatch,
+      listing_edited: Object.keys(listingPatch).length > 0,
+      listing_edited_fields: Object.keys(listingPatch),
       warning_override_count: Object.keys(warningOverrides || {}).length
     }, actorId);
 
@@ -12074,3 +12129,7 @@ router.post('/whatsapp-message-logs/:id/retry', async (req, res, next) => {
 });
 
 module.exports = router;
+module.exports._test = {
+  ADMIN_REVIEW_STAGES,
+  adminReviewListingPatchFromBody
+};

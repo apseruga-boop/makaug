@@ -1209,7 +1209,7 @@ function buildTikTokExactPostImportRows({
         || combinedArea
         || DISTRICTS.includes(cleanText(seed.district))
       );
-      const priceText = cleanText(seed.price_text || seed.price || priceTextFromText(combinedText));
+      const priceText = cleanText(seed.price_text || priceTextFromText(combinedText) || seed.price);
       const contactPhone = cleanText(normalizeUgandanPhone(seed.contact_phone || seed.phone || seed.whatsapp || '') || phoneFromText(combinedText));
       const contactEmail = cleanText(seed.contact_email || seed.email || emailFromText(combinedText));
       const imageUrls = [
@@ -1833,7 +1833,7 @@ function buildExactSocialPostImportRows({
         || combinedArea
         || DISTRICTS.includes(cleanText(seed.district))
       );
-      const priceText = cleanText(seed.price_text || seed.price || priceTextFromText(combinedText));
+      const priceText = cleanText(seed.price_text || priceTextFromText(combinedText) || seed.price);
       const contactPhone = cleanText(normalizeUgandanPhone(seed.contact_phone || seed.phone || seed.whatsapp || '') || phoneFromText(combinedText));
       const contactEmail = cleanText(seed.contact_email || seed.email || emailFromText(combinedText));
       const firstPostedAt = cleanText(
@@ -3651,17 +3651,17 @@ function priceTextFromText(text = '') {
   const raw = maskPhonesForPriceExtraction(cleanText(text));
   const localPriceMatch = raw.match(/\b(?:bei|omuwendo|price|ugx|ush|shs?)?\s*\d+(?:\.\d+)?\s*(?:obukadde|akakadde|bukadde|emitwalo|mitwalo|laki|lakhs?)\b(?:\s*(?:negotiable|asking|only|za mwezi|per month|monthly))?/i);
   if (localPriceMatch) return cleanText(localPriceMatch[0]);
-  const negotiableMatch = raw.match(/\b(?:UGX|USh|Shs?)?\s*\d[\d,.]*(?:\s*(?:bn|billion|billions|m|mn|million|millions|k|thousand|thousands))\s*(?:negotiable|asking|only)\b/i);
+  const negotiableMatch = raw.match(/\b(?:UGX|USh|Shs?)?\s*\d[\d,.]*(?:\s*(?:bn|b|billion|billions|m|mn|million|millions|k|thousand|thousands))\s*(?:negotiable|asking|only)\b/i);
   if (negotiableMatch) return cleanText(negotiableMatch[0]);
-  const gluedLocalMatch = raw.match(/\b\d+(?:\.\d+)?\s*(?:bn|billion|billions|m|mn|million|millions|k|thousand|thousands)(?:UGX|USh|Shs?)\b(?:\/month| per month| monthly)?/i);
+  const gluedLocalMatch = raw.match(/\b\d+(?:\.\d+)?\s*(?:bn|b|billion|billions|m|mn|million|millions|k|thousand|thousands)(?:UGX|USh|Shs?)\b(?:\/month| per month| monthly)?/i);
   if (gluedLocalMatch) return cleanText(gluedLocalMatch[0]);
-  const usdMatch = raw.match(/(?:\$|US\$|USD)\s*\d[\d,.]*(?:\s*(?:bn|billion|billions|m|mn|million|millions|k|thousand|thousands))?(?:\/month| per month| monthly|\/mo)?/i);
+  const usdMatch = raw.match(/(?:\$|US\$|USD)\s*\d[\d,.]*(?:\s*(?:bn|b|billion|billions|m|mn|million|millions|k|thousand|thousands))?(?:\/month| per month| monthly|\/mo)?/i);
   if (usdMatch) return cleanText(usdMatch[0]);
   const contextualPlainAmount = raw.match(/\b(?:price|asking(?:\s+price)?|guide\s+price|at|only|going\s+for|selling\s+at|rent(?:ed)?\s+at)\s*(?:is|of|:|-)?\s*(?:UGX|USh|Shs?)?\s*(?:\d{1,3}(?:,\d{3})+|\d{5,})(?:\/month| per month| monthly)?/i);
   if (contextualPlainAmount) return cleanText(contextualPlainAmount[0]);
   const patterns = [
-    /\b(?:UGX|USh|Shs?)\s*\d[\d,.]*(?:\s*(?:bn|billion|billions|m|mn|million|millions|k|thousand|thousands))?(?:\/month| per month| monthly| kwa mwezi| za mwezi)?/i,
-    /\b\d+(?:\.\d+)?\s*(?:bn|billion|billions|m|mn|million|millions|k|thousand|thousands)\b(?:\/month| per month| monthly)?/i,
+    /\b(?:UGX|USh|Shs?)\s*\d[\d,.]*(?:\s*(?:bn|b|billion|billions|m|mn|million|millions|k|thousand|thousands))?(?:\/month| per month| monthly| kwa mwezi| za mwezi)?/i,
+    /\b\d+(?:\.\d+)?\s*(?:bn|b|billion|billions|m|mn|million|millions|k|thousand|thousands)\b(?:\/month| per month| monthly)?/i,
   ];
   for (const pattern of patterns) {
     const match = raw.match(pattern);

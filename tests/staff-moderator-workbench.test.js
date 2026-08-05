@@ -99,7 +99,9 @@ function run() {
 
   assert(propertyRoutes.includes('requireListingModerationAccess'), 'property status route should use listing moderation access');
   assert(propertyRoutes.includes("actorRole === 'moderator'"), 'moderator-specific publish restrictions should exist');
-  assert(propertyRoutes.includes('Found-online staff approval requires source review confirmation'), 'moderator found-online approval should require explicit source review confirmation');
+  assert(propertyRoutes.includes("source_review_confirmation: sourcedCandidateSourceReviewed"), 'moderator found-online approval should audit whether source review was explicit or recorded by the approval action');
+  assert(propertyRoutes.includes("? 'explicit_request_confirmation'"), 'explicit source review confirmation should remain distinguishable in the audit trail');
+  assert(propertyRoutes.includes(": 'moderation_approval_action'"), 'a deliberate moderation approval should provide the provenance-backed source review confirmation');
   assert(propertyRoutes.includes('found_online_source_reviewed'), 'found-online approvals should persist source review confirmation');
   assert(propertyRoutes.includes('staff_listing_approved'), 'moderator approvals should be logged');
   assert(propertyRoutes.includes('canSkipAutomatedReviewForSourcedOverride'), 'source-reviewed found-online approvals should skip the heavy automated review on the write path');

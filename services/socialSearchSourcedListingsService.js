@@ -694,6 +694,35 @@ function sourceTextForRawPost(raw = {}) {
   ].map((value) => compactText(value)).filter(Boolean).join(' ');
 }
 
+function explicitSourcePriceTextFromEvidence(text = '') {
+  const sourceText = compactText(text);
+  const patterns = [
+    /(?:\b(?:UGX|USh|Shs?|USD|US\$)\s*|\$\s*)\d[\d,.]*(?:\s*(?:bn|b|billion|billions|m|mn|million|millions|k|thousand|thousands))?(?:\s*(?:UGX|USh|Shs?))?/i,
+    /\b\d+(?:\.\d+)?\s*(?:bn|b|billion|billions|m|mn|million|millions|k|thousand|thousands)\b(?:\s*(?:UGX|USh|Shs?))?/i
+  ];
+  for (const pattern of patterns) {
+    const match = sourceText.match(pattern);
+    if (match) return compactText(match[0]);
+  }
+  return '';
+}
+
+function strongestSourcePriceCandidate(raw = {}, sourceText = '') {
+  const candidates = [
+    raw.price_text,
+    raw.price_label,
+    raw.asking_price,
+    raw.guide_price,
+    explicitSourcePriceTextFromEvidence(sourceText),
+    raw.price
+  ].filter((value) => value != null && value !== '');
+  for (const candidate of candidates) {
+    const safe = safeSourcePriceCandidate(candidate, sourceText);
+    if (safe.value != null && safe.value !== '') return safe;
+  }
+  return safeSourcePriceCandidate(candidates[0] ?? null, sourceText);
+}
+
 function itemBatchId(item = {}) {
   return String(item.sourceBatch || item.source_batch || SOCIAL_SEARCH_BATCH_ID).trim() || SOCIAL_SEARCH_BATCH_ID;
 }
@@ -2437,7 +2466,8 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
     : Boolean(canonicalLocation);
   const area = canonicalLocation?.name || '';
   const address = String(raw.address || raw.location_label || raw.location || (area && district ? `${area}, ${district}` : area || district)).trim();
-  const unsafeSourcePrice = raw.price ?? raw.guide_price ?? raw.price_text ?? raw.asking_price;
+  const priceCandidate = strongestSourcePriceCandidate(raw, sourceText);
+  const unsafeSourcePrice = priceCandidate.value;
   const rawListingType = normalizeFoundOnlineListingType(
     raw.listing_type || raw.listingType || raw.property_type || raw.category || raw.title || raw.description,
     { price: unsafeSourcePrice }
@@ -2506,7 +2536,7 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
     raw.market,
   ].filter(Boolean).join(' '));
   const safePrice = countryGate.allowed
-    ? safeSourcePriceCandidate(unsafeSourcePrice, sourceText)
+    ? priceCandidate
     : { value: null, reason: countryGate.reason };
   const ingestedAt = raw.ingested_at || raw.imported_at || raw.first_seen_at || new Date().toISOString();
   const sourcePriceMetadata = propertyPriceMetadata(safePrice.value, {
@@ -2740,6 +2770,98 @@ function duplicateWarningsForFoundOnlineRows(rows = []) {
   }));
 }
 
+function foundOnlinePerUrlResults(items = [], {
+  created = [],
+  alreadyPresent = [],
+  sourceReviewRecords = [],
+  dryRunRows = [],
+  dryRun = false,
+} = {}) {
+  const matchFor = (rows, item) => {
+    const itemUrl = normalizedSourceUrlForItem(item);
+    return rows.find((row) => {
+      if (row?.key && item.key && String(row.key) === String(item.key)) return true;
+      const rowUrl = normalizeSourceUrl(row?.source_url || row?.sourceUrl || row?.post_url || '');
+      return Boolean(itemUrl && rowUrl && itemUrl === rowUrl);
+    }) || null;
+  };
+  const results = items.map((item) => {
+    const sourceUrl = sourceUrlForItem(item);
+    const createdRow = matchFor(created, item);
+    const existingRow = matchFor(alreadyPresent, item);
+    const skippedRow = matchFor(sourceReviewRecords, item);
+    const dryRunRow = matchFor(dryRunRows, item);
+    if (createdRow) {
+      return {
+        key: item.key,
+        source_url: sourceUrl,
+        platform: item.sourcePlatform || '',
+        outcome: 'created',
+        reason: isLiveOrApprovedStatus(createdRow) ? 'created_auto_live' : 'created_in_review_queue',
+        property_id: createdRow.id || null,
+        status: createdRow.status || '',
+        moderation_stage: createdRow.moderation_stage || '',
+        title: createdRow.title || item.title || ''
+      };
+    }
+    if (existingRow) {
+      return {
+        key: item.key,
+        source_url: sourceUrl,
+        platform: item.sourcePlatform || '',
+        outcome: 'existing',
+        reason: existingRow.reason || existingRow.duplicate_match_type || 'already_queued',
+        property_id: existingRow.id || null,
+        status: existingRow.status || '',
+        moderation_stage: existingRow.moderation_stage || '',
+        title: existingRow.title || item.title || ''
+      };
+    }
+    if (skippedRow) {
+      return {
+        key: item.key,
+        source_url: sourceUrl,
+        platform: item.sourcePlatform || '',
+        outcome: 'skipped',
+        reason: skippedRow.reason || 'source_review_required',
+        property_id: null,
+        status: '',
+        moderation_stage: 'source_review',
+        title: skippedRow.title || item.title || ''
+      };
+    }
+    if (dryRun && dryRunRow) {
+      return {
+        key: item.key,
+        source_url: sourceUrl,
+        platform: item.sourcePlatform || '',
+        outcome: 'would_create',
+        reason: dryRunRow.auto_live_ready ? 'would_create_auto_live' : 'would_create_in_review_queue',
+        property_id: null,
+        status: dryRunRow.status || '',
+        moderation_stage: dryRunRow.moderation_stage || '',
+        title: dryRunRow.title || item.title || ''
+      };
+    }
+    return {
+      key: item.key,
+      source_url: sourceUrl,
+      platform: item.sourcePlatform || '',
+      outcome: 'skipped',
+      reason: 'unaccounted_import_result',
+      property_id: null,
+      status: '',
+      moderation_stage: '',
+      title: item.title || ''
+    };
+  });
+  const summary = results.reduce((counts, item) => {
+    counts[item.outcome] = (counts[item.outcome] || 0) + 1;
+    return counts;
+  }, {});
+  return { results, summary };
+}
+
 async function existingFoundOnlineContactCounts(client, items = []) {
   const phoneKeys = [];
   const emailKeys = [];
@@ -2934,6 +3056,12 @@ async function queueFoundOnlineSourcePostListings({
     const autoLiveRows = dryRunRows.filter((item) => item.auto_live_ready);
     const reviewRows = dryRunRows.filter((item) => !item.auto_live_ready);
     const duplicateWarnings = duplicateWarningsForFoundOnlineRows(alreadyPresent);
+    const perUrl = foundOnlinePerUrlResults(items, {
+      alreadyPresent,
+      sourceReviewRecords,
+      dryRunRows,
+      dryRun: true,
+    });
     return {
       ok: true,
       dry_run: true,
@@ -2959,6 +3087,8 @@ async function queueFoundOnlineSourcePostListings({
       duplicate_warning_count: duplicateWarnings.length,
       duplicate_warnings: duplicateWarnings,
       duplicate_source_url_records: duplicateWarnings,
+      per_url_results: perUrl.results,
+      per_url_summary: perUrl.summary,
       source_review_records: sourceReviewRecords,
       suppressed_source_records: suppressedSourceRecords,
       source_quality_suppressed_records: sourceQualitySuppressedRecords,
@@ -3036,6 +3166,12 @@ async function queueFoundOnlineSourcePostListings({
     const alreadyPresentReviewQueue = alreadyPresent.filter((item) => isReviewQueueStatus(item));
     const alreadyLiveOrApproved = alreadyPresent.filter((item) => isLiveOrApprovedStatus(item));
     const duplicateWarnings = duplicateWarningsForFoundOnlineRows(alreadyPresent);
+    const perUrl = foundOnlinePerUrlResults(items, {
+      created,
+      alreadyPresent,
+      sourceReviewRecords: skippedListings,
+      dryRun: false,
+    });
     const reviewQueueListings = [
       ...reviewCreated,
       ...alreadyPresentReviewQueue.map((item) => ({
@@ -3087,6 +3223,8 @@ async function queueFoundOnlineSourcePostListings({
       duplicate_warning_count: duplicateWarnings.length,
       duplicate_warnings: duplicateWarnings,
       duplicate_source_url_records: duplicateWarnings,
+      per_url_results: perUrl.results,
+      per_url_summary: perUrl.summary,
       source_review_count: skippedListings.length,
       suppressed_source_count: suppressedSourceRecords.length,
       source_quality_suppressed_count: sourceQualitySuppressedRecords.length,
@@ -3819,6 +3957,7 @@ module.exports = {
   socialSearchDailyTargetStatus,
   sourcePostAutoLiveStatusFor,
   sourcePostMeetsLaunchIntakeRule,
+  foundOnlinePerUrlResults,
   contentFingerprintForSourceItem,
   sourceUrlForItem,
   sourceImageRowsFor,
