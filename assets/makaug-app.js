@@ -43430,11 +43430,11 @@ function applyPublicRowsForUi(publicRowsSnapshot, responseSnapshot, options = {}
 
 function activePublicInventoryCategoryFromRoute() {
   const path = String(window.location.pathname || "").replace(/\/+$/, "") || "/";
-  if (path === "/for-sale") return "sale";
-  if (path === "/to-rent") return "rent";
-  if (path === "/commercial") return "commercial";
-  if (path === "/land") return "land";
-  if (path === "/student-accommodation" || path === "/students") return "student";
+  if (path === "/for-sale" || path.startsWith("/for-sale/")) return "sale";
+  if (path === "/to-rent" || path.startsWith("/to-rent/")) return "rent";
+  if (path === "/commercial" || path.startsWith("/commercial/")) return "commercial";
+  if (path === "/land" || path.startsWith("/land/")) return "land";
+  if (path === "/student-accommodation" || path.startsWith("/student-accommodation/") || path === "/students" || path.startsWith("/students/")) return "student";
   return "";
 }
 

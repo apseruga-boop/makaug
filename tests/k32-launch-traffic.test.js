@@ -8,6 +8,7 @@ const {
   categoryPageSeoMeta,
   sitemapEntries
 } = require('../services/publicSeoService');
+const { sanitizePublicHtml } = require('../services/publicHtmlSanitizer');
 
 const root = path.join(__dirname, '..');
 const server = fs.readFileSync(path.join(root, 'server.js'), 'utf8');
@@ -16,6 +17,19 @@ const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const admin = fs.readFileSync(path.join(root, 'routes', 'admin.js'), 'utf8');
 const properties = fs.readFileSync(path.join(root, 'routes', 'properties.js'), 'utf8');
 const migration = fs.readFileSync(path.join(root, 'db', 'migrations', '110_k32_launch_traffic.sql'), 'utf8');
+
+for (const [areaRoute, pageId] of Object.entries({
+  '/for-sale/ntinda-kampala': 'page-sale',
+  '/to-rent/ntinda-kampala': 'page-rent',
+  '/land/kira-wakiso': 'page-land',
+  '/commercial/kololo-kampala': 'page-commercial',
+  '/student-accommodation/makerere-kampala': 'page-students'
+})) {
+  const areaRouteHtml = sanitizePublicHtml(html, { pathname: areaRoute });
+  assert.match(areaRouteHtml, new RegExp(`id="${pageId}"[^>]*class="[^"]*\\bactive\\b[^"]*"`, 'i'), `${areaRoute} must render ${pageId}`);
+  assert(!areaRouteHtml.includes('id="page-home"'), `${areaRoute} must not fall back to the homepage`);
+}
+assert(app.includes('path.startsWith("/for-sale/")'), 'area routes must keep the matching public inventory category active');
 
 const snapshot = buildPublicSeoSnapshot([
   { id: 'sale-1', listing_type: 'sale', area: 'Ntinda', district: 'Kampala', updated_at: '2026-08-05T08:00:00.000Z' },
