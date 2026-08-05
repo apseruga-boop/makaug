@@ -467,7 +467,12 @@ const PUBLIC_INVENTORY_WARMUP_PATHS = [
   '/api/properties/search?status=approved&public_only=1&listing_type=commercial&limit=24&page=1&sort=price_desc',
   '/api/properties?status=approved&featured=true&limit=12&page=1&public_only=1&sort=featured&include_summary=0'
 ];
-const PUBLIC_CACHE_WARMUP_INTERVAL_MS = 45 * 1000;
+// The warmup traverses several database-backed routes. Running it every 45
+// seconds kept the single production instance permanently busy and delayed
+// real category searches behind its own refresh traffic.
+const PUBLIC_CACHE_WARMUP_INTERVAL_MS = 4 * 60 * 1000;
+const PUBLIC_CACHE_WARMUP_REQUEST_TIMEOUT_MS = 5000;
+const PUBLIC_CACHE_WARMUP_LOAD_SHED_MARKER = 'k32-launch-traffic-load-shed-20260805';
 const PUBLIC_CACHE_WARMUP_USER_AGENT = 'makaug-public-inventory-cache-warmup';
 let publicCacheWarmupInFlight = false;
 
@@ -481,7 +486,7 @@ async function warmPublicCache(baseUrl) {
   for (const pathName of [...PUBLIC_HTML_WARMUP_PATHS, ...PUBLIC_INVENTORY_WARMUP_PATHS]) {
     const requestPath = addPublicCacheRefreshParam(pathName);
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 20000);
+    const timeout = setTimeout(() => controller.abort(), PUBLIC_CACHE_WARMUP_REQUEST_TIMEOUT_MS);
     try {
       const response = await fetch(`${baseUrl}${requestPath}`, {
         headers: { 'User-Agent': PUBLIC_CACHE_WARMUP_USER_AGENT },
@@ -490,7 +495,8 @@ async function warmPublicCache(baseUrl) {
       logger.info('Public cache warmup completed', {
         path: pathName,
         status: response.status,
-        cache: response.headers.get('x-makaug-properties-cache') || null
+        cache: response.headers.get('x-makaug-properties-cache') || null,
+        marker: PUBLIC_CACHE_WARMUP_LOAD_SHED_MARKER
       });
       await response.arrayBuffer();
     } catch (error) {

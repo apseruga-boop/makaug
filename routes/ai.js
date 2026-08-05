@@ -432,11 +432,11 @@ const ASSISTANT_SEARCH_RESULT_CACHE_MAX_ENTRIES = Math.max(80, Math.min(300, par
 const ASSISTANT_SEARCH_PREWARM_ENABLED = String(process.env.ASSISTANT_SEARCH_PREWARM_ENABLED || 'true').toLowerCase() !== 'false';
 const ASSISTANT_SEARCH_PREWARM_INTERVAL_MS = Math.max(
   60 * 1000,
-  Math.min(15 * 60 * 1000, parseInt(process.env.ASSISTANT_SEARCH_PREWARM_INTERVAL_MS || `${2 * 60 * 1000}`, 10) || (2 * 60 * 1000))
+  Math.min(15 * 60 * 1000, parseInt(process.env.ASSISTANT_SEARCH_PREWARM_INTERVAL_MS || `${4 * 60 * 1000}`, 10) || (4 * 60 * 1000))
 );
 const ASSISTANT_SEARCH_PREWARM_START_DELAY_MS = Math.max(
   5000,
-  Math.min(120000, parseInt(process.env.ASSISTANT_SEARCH_PREWARM_START_DELAY_MS || '5000', 10) || 5000)
+  Math.min(120000, parseInt(process.env.ASSISTANT_SEARCH_PREWARM_START_DELAY_MS || '90000', 10) || 90000)
 );
 const ASSISTANT_SEARCH_PREWARM_REFRESH_MS = Math.max(
   30 * 1000,
@@ -446,9 +446,11 @@ const ASSISTANT_SEARCH_PREWARM_REFRESH_MS = Math.max(
       || Math.floor(ASSISTANT_SEARCH_RESULT_CACHE_TTL_MS * 0.55)
   )
 );
-const ASSISTANT_SEARCH_PREWARM_DELAY_MS = Math.max(0, Math.min(500, parseInt(process.env.ASSISTANT_SEARCH_PREWARM_DELAY_MS || '50', 10) || 50));
+const ASSISTANT_SEARCH_PREWARM_DELAY_MS = Math.max(0, Math.min(500, parseInt(process.env.ASSISTANT_SEARCH_PREWARM_DELAY_MS || '200', 10) || 200));
 const assistantSearchResultCache = new Map();
 let assistantSearchPrewarmStarted = false;
+let assistantSearchPrewarmInFlight = false;
+const ASSISTANT_SEARCH_PREWARM_LOAD_SHED_MARKER = 'k32-launch-traffic-load-shed-20260805';
 
 const ASSISTANT_SEARCH_PREWARM_BROAD_AREAS = Object.freeze([
   'Kira',
@@ -626,9 +628,21 @@ function startAssistantSearchPrewarmLoop() {
   if (!ASSISTANT_SEARCH_PREWARM_ENABLED || assistantSearchPrewarmStarted || process.env.NODE_ENV === 'test') return;
   assistantSearchPrewarmStarted = true;
   const run = () => {
-    prewarmAssistantSearchCacheOnce().catch((error) => {
-      console.warn('Ask AI search prewarm loop failed', error?.message || error);
-    });
+    if (assistantSearchPrewarmInFlight) return;
+    assistantSearchPrewarmInFlight = true;
+    prewarmAssistantSearchCacheOnce()
+      .then((result) => {
+        if (process.env.NODE_ENV !== 'test') console.info('Ask AI search prewarm completed', {
+          ...result,
+          marker: ASSISTANT_SEARCH_PREWARM_LOAD_SHED_MARKER
+        });
+      })
+      .catch((error) => {
+        console.warn('Ask AI search prewarm loop failed', error?.message || error);
+      })
+      .finally(() => {
+        assistantSearchPrewarmInFlight = false;
+      });
   };
   const first = setTimeout(run, ASSISTANT_SEARCH_PREWARM_START_DELAY_MS);
   if (typeof first.unref === 'function') first.unref();
