@@ -429,7 +429,9 @@ const ASSISTANT_SEARCH_RESULT_CACHE_TTL_MS = Math.max(
 );
 const ASSISTANT_SEARCH_TIMEOUT_MS = Math.max(1200, Math.min(8000, parseInt(process.env.ASSISTANT_SEARCH_TIMEOUT_MS || '5000', 10) || 5000));
 const ASSISTANT_SEARCH_RESULT_CACHE_MAX_ENTRIES = Math.max(80, Math.min(300, parseInt(process.env.ASSISTANT_SEARCH_CACHE_MAX_ENTRIES || '200', 10) || 200));
-const ASSISTANT_SEARCH_PREWARM_ENABLED = String(process.env.ASSISTANT_SEARCH_PREWARM_ENABLED || 'true').toLowerCase() !== 'false';
+// Prewarming can fan out across dozens of search variants. Keep it opt-in so
+// the single production instance cannot starve real category and AI searches.
+const ASSISTANT_SEARCH_PREWARM_ENABLED = String(process.env.ASSISTANT_SEARCH_PREWARM_ENABLED || 'false').toLowerCase() === 'true';
 const ASSISTANT_SEARCH_PREWARM_INTERVAL_MS = Math.max(
   60 * 1000,
   Math.min(15 * 60 * 1000, parseInt(process.env.ASSISTANT_SEARCH_PREWARM_INTERVAL_MS || `${4 * 60 * 1000}`, 10) || (4 * 60 * 1000))
