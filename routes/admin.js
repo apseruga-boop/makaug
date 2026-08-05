@@ -7,7 +7,11 @@ const { requireAdminApiKey } = require('../middleware/auth');
 const { asArray, cleanText, toNullableInt, toNullableFloat, isValidEmail, isValidPhone } = require('../middleware/validation');
 const { parsePagination, toPagination } = require('../utils/pagination');
 const { DISTRICTS, LISTING_TYPES } = require('../utils/constants');
-const { normalizeReviewLocationHierarchy, districtForKnownArea } = require('../utils/ugandaLocationHierarchy');
+const {
+  normalizeReviewLocationHierarchy,
+  districtForKnownArea,
+  districtForKnownLocationText
+} = require('../utils/ugandaLocationHierarchy');
 const { normalizeEmail, normalizeUgPhone } = require('../utils/adminOtpOverride');
 const {
   normalizeCommercialTransactionType,
@@ -2947,17 +2951,6 @@ async function loadPropertyReview(propertyId) {
     },
     events: events.rows
   };
-}
-
-function districtForKnownLocationText(value = '') {
-  const text = cleanText(value);
-  if (!text) return '';
-  const direct = districtForKnownArea(text);
-  if (direct) return direct;
-  return text
-    .split(/[,;|/]+/)
-    .map((part) => districtForKnownArea(part))
-    .find(Boolean) || '';
 }
 
 async function updatePropertyEditableFields({ propertyId, patch = {} }) {
