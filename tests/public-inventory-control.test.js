@@ -609,7 +609,9 @@ test('public properties API is cacheable and uses the fast public summary path',
   assert.match(propertiesRouteSource, /WHERE i\.property_id = public_page\.id/);
   assert.match(serverSource, /PUBLIC_HTML_WARMUP_PATHS = \[[\s\S]*'\/'[\s\S]*'\/sitemap\.xml'[\s\S]*'\/for-sale'[\s\S]*'\/to-rent'/);
   assert.match(serverSource, /PUBLIC_INVENTORY_WARMUP_PATHS = \[/);
-  assert.match(serverSource, /PUBLIC_CACHE_WARMUP_INTERVAL_MS = 45 \* 1000/);
+  assert.match(serverSource, /PUBLIC_CACHE_WARMUP_INTERVAL_MS = 4 \* 60 \* 1000/);
+  assert.match(serverSource, /PUBLIC_CACHE_WARMUP_REQUEST_TIMEOUT_MS = 5000/);
+  assert.match(serverSource, /k32-launch-traffic-load-shed-20260805/);
   assert.match(serverSource, /function addPublicCacheRefreshParam\(pathName\)/);
   assert.match(serverSource, /function schedulePublicCacheWarmup\(baseUrl\)/);
   assert.match(serverSource, /publicInventoryPerformanceVersion = 'public-inventory-performance-20260629'/);
