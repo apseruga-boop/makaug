@@ -1,5 +1,6 @@
 const {
   canonicalizeUgandaLocation,
+  canonicalLocationByKey,
   canonicalLocationOptions,
   canonicalLocationRollupCounts
 } = require('../utils/ugandaLocationRegistry');
@@ -102,7 +103,8 @@ function buildPublicSeoSnapshot(rows = [], generatedAt = new Date().toISOString(
   for (const row of rows) {
     const categories = publicCategoryKeysForRow(row);
     if (!categories.length) continue;
-    const canonical = canonicalizeUgandaLocation(row.area, row.district);
+    const canonical = canonicalLocationByKey(row.canonical_location_id)
+      || canonicalizeUgandaLocation(row.area, row.district);
     if (canonical) {
       for (const category of categories) {
         directCounts[category].set(canonical.key, Number(directCounts[category].get(canonical.key) || 0) + 1);
@@ -128,7 +130,9 @@ async function loadPublicSeoInventorySnapshot(db, options = {}) {
   }
   try {
     const result = await db.query(
-      `SELECT id, listing_type, students_welcome, area, district, updated_at, created_at
+      `SELECT id, listing_type, students_welcome, area, district,
+              extra_fields->>'canonical_location_id' AS canonical_location_id,
+              updated_at, created_at
      FROM properties
      WHERE ${publicVisibleInventoryWhere('properties')}
        ORDER BY updated_at DESC NULLS LAST, created_at DESC, id DESC`
