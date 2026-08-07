@@ -1055,9 +1055,9 @@ async function loadPublicAgentOpenGraphMeta(agentId, options = {}) {
   const description = specializations.length
     ? `${specializations.join(' - ')}. Review my property profile on makaug.com.`
     : 'Review my property profile on makaug.com.';
-  const isFrancisApprovalPreview = options.previewVersion === AGENT_SHARE_PREVIEW_VERSION
-    && String(row.id) === FRANCIS_ISABIRYE_AGENT_ID;
-  const image = isFrancisApprovalPreview
+  const isApprovedFrancisShare = String(row.id) === FRANCIS_ISABIRYE_AGENT_ID
+    && (options.approvedShare === true || options.previewVersion === AGENT_SHARE_PREVIEW_VERSION);
+  const image = isApprovedFrancisShare
     ? absolutePublicUrl('/assets/marketing/francis-isabirye-agent-share-v2.png')
     : absolutePublicUrl(row.profile_photo_url || '/assets/house-ads-v3/agents.webp');
   return {
@@ -1153,15 +1153,24 @@ app.get('/agents/:id', async (req, res, next) => {
     res.set('X-makaug-Public-Sanitized', '1');
     let html = renderPublicHtml(req.originalUrl || req.url || req.path);
     const previewVersion = String(req.query.share || '').trim();
-    if (previewVersion === AGENT_SHARE_PREVIEW_VERSION) {
-      const meta = await loadPublicAgentOpenGraphMeta(req.params.id, { previewVersion });
+    const isApprovedFrancisProfile = String(req.params.id || '') === FRANCIS_ISABIRYE_AGENT_ID;
+    if (previewVersion === AGENT_SHARE_PREVIEW_VERSION || isApprovedFrancisProfile) {
+      const meta = await loadPublicAgentOpenGraphMeta(req.params.id, {
+        previewVersion,
+        approvedShare: isApprovedFrancisProfile
+      });
       if (meta) {
         html = patchPublicPageSeoMeta(html, meta);
-        res.set('X-makaug-Agent-OG-Preview', AGENT_SHARE_PREVIEW_VERSION);
+        res.set(
+          isApprovedFrancisProfile ? 'X-makaug-Agent-OG' : 'X-makaug-Agent-OG-Preview',
+          isApprovedFrancisProfile ? 'francis-v2' : AGENT_SHARE_PREVIEW_VERSION
+        );
       }
     }
     return sendTextResponse(req, res, html, {
-      cacheControl: previewVersion ? 'public, max-age=60, s-maxage=60' : PUBLIC_HTML_CACHE_CONTROL
+      cacheControl: previewVersion || isApprovedFrancisProfile
+        ? 'public, max-age=60, s-maxage=60'
+        : PUBLIC_HTML_CACHE_CONTROL
     });
   } catch (error) {
     return next(error);
