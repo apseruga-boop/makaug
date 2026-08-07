@@ -1019,6 +1019,65 @@ async function loadPublicListingOpenGraphMeta(propertyId) {
   };
 }
 
+const FRANCIS_ISABIRYE_AGENT_ID = '5674f6cb-37a0-4e1e-904f-06e03ec401ab';
+const AGENT_SHARE_PREVIEW_VERSION = 'preview-v2';
+
+async function loadPublicAgentOpenGraphMeta(agentId, options = {}) {
+  const safeId = String(agentId || '').trim();
+  if (!safeId) return null;
+  const result = await db.query(
+    `SELECT
+       a.id,
+       a.full_name,
+       a.company_name,
+       a.bio,
+       a.profile_photo_url,
+       a.specializations
+     FROM agents a
+     WHERE a.id::text = $1
+       AND LOWER(COALESCE(a.status, 'pending')) NOT IN ('rejected', 'declined', 'suspended', 'deleted', 'removed', 'blocked')
+       AND EXISTS (
+         SELECT 1
+         FROM properties p
+         WHERE p.agent_id = a.id
+           AND p.status = 'approved'
+       )
+     LIMIT 1`,
+    [safeId]
+  );
+  const row = result.rows[0];
+  if (!row) return null;
+  const name = String(row.full_name || row.company_name || 'MakaUG property agent').trim();
+  const profilePath = `/agents/${encodeURIComponent(row.id)}`;
+  const specializations = Array.isArray(row.specializations)
+    ? row.specializations.map((value) => String(value || '').trim()).filter(Boolean).slice(0, 3)
+    : [];
+  const description = specializations.length
+    ? `${specializations.join(' - ')}. Review my property profile on makaug.com.`
+    : 'Review my property profile on makaug.com.';
+  const isFrancisApprovalPreview = options.previewVersion === AGENT_SHARE_PREVIEW_VERSION
+    && String(row.id) === FRANCIS_ISABIRYE_AGENT_ID;
+  const image = isFrancisApprovalPreview
+    ? absolutePublicUrl('/assets/marketing/francis-isabirye-agent-share-v2.png')
+    : absolutePublicUrl(row.profile_photo_url || '/assets/house-ads-v3/agents.webp');
+  return {
+    title: `${name} | Property agent on MakaUG`,
+    description,
+    image,
+    canonical: absolutePublicUrl(profilePath),
+    ogType: 'profile',
+    structuredData: {
+      '@context': 'https://schema.org',
+      '@type': 'RealEstateAgent',
+      name,
+      description: String(row.bio || description).trim(),
+      url: absolutePublicUrl(profilePath),
+      image,
+      areaServed: 'Uganda'
+    }
+  };
+}
+
 app.get(Object.values(CATEGORY_SEO).flatMap((config) => [config.route, `${config.route}/:locationSlug`]), async (req, res, next) => {
   try {
     res.set('X-makaug-Public-Sanitized', '1');
@@ -1083,6 +1142,26 @@ app.get('/property/:id', async (req, res, next) => {
     }
     return sendTextResponse(req, res, html, {
       cacheControl: PUBLIC_HTML_CACHE_CONTROL
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+app.get('/agents/:id', async (req, res, next) => {
+  try {
+    res.set('X-makaug-Public-Sanitized', '1');
+    let html = renderPublicHtml(req.originalUrl || req.url || req.path);
+    const previewVersion = String(req.query.share || '').trim();
+    if (previewVersion === AGENT_SHARE_PREVIEW_VERSION) {
+      const meta = await loadPublicAgentOpenGraphMeta(req.params.id, { previewVersion });
+      if (meta) {
+        html = patchPublicPageSeoMeta(html, meta);
+        res.set('X-makaug-Agent-OG-Preview', AGENT_SHARE_PREVIEW_VERSION);
+      }
+    }
+    return sendTextResponse(req, res, html, {
+      cacheControl: previewVersion ? 'public, max-age=60, s-maxage=60' : PUBLIC_HTML_CACHE_CONTROL
     });
   } catch (error) {
     return next(error);
