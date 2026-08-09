@@ -12399,6 +12399,49 @@ function staffNumber(value) {
   return Number(value).toLocaleString("en-UG");
 }
 
+function openHarvestSubmissionModal() {
+  const modal = document.getElementById("harvest-submission-modal");
+  if (!modal) return;
+  modal.classList.add("open");
+  document.getElementById("harvest-submission-url")?.focus();
+}
+
+function closeHarvestSubmissionModal() {
+  document.getElementById("harvest-submission-modal")?.classList.remove("open");
+}
+
+async function submitHarvestSourceLink(event) {
+  event?.preventDefault?.();
+  const button = document.getElementById("harvest-submission-button");
+  const status = document.getElementById("harvest-submission-status");
+  const sourceUrl = document.getElementById("harvest-submission-url")?.value || "";
+  if (!sourceUrl.trim()) return;
+  if (button) button.disabled = true;
+  if (status) status.textContent = "Checking the source and adding it to review…";
+  try {
+    const response = await fetch("/api/harvest/submissions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({
+        source_url: sourceUrl,
+        note: document.getElementById("harvest-submission-note")?.value || "",
+        website: document.getElementById("harvest-submission-website")?.value || ""
+      })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || "Could not submit that source link");
+    if (status) status.innerHTML = `<span class="font-black text-green-800">${adminEscape(payload?.data?.message || "Saved for human review.")}</span>`;
+    const urlInput = document.getElementById("harvest-submission-url");
+    const noteInput = document.getElementById("harvest-submission-note");
+    if (urlInput) urlInput.value = "";
+    if (noteInput) noteInput.value = "";
+  } catch (error) {
+    if (status) status.textContent = error.message || "Could not submit that source link.";
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
 function staffDate(value) {
   return value ? formatListingDate(value) : "not recorded";
 }
@@ -12779,7 +12822,7 @@ function renderStaffSourceIntake(data = {}) {
   const monitorRules = document.getElementById("staff-source-monitor-rules");
   if (monitorRules) {
     const rules = [
-      { label: "Auto-live gate", value: monitor.auto_live_rule || "" },
+      { label: "Publishing gate", value: monitor.auto_live_rule || "" },
       { label: "Review gate", value: monitor.review_rule || "" },
       { label: "Trigger path", value: monitor.render_trigger_path || "" },
       { label: "Board update", value: monitor.board_update || "" }
@@ -12832,6 +12875,137 @@ function renderStaffSourceIntake(data = {}) {
         <div class="text-xs text-gray-600 mt-1">${adminEscape([row.contact_phone, row.contact_email].filter(Boolean).join(" • ") || "public source route")}</div>
       </div>
     `).join("") : staffEmpty("No source registry rows returned.");
+  }
+}
+
+function harvestSummaryHtml(data = {}) {
+  const freshness = Array.isArray(data.platform_freshness) ? data.platform_freshness : [];
+  const channels = Array.isArray(data.channel_coverage) ? data.channel_coverage : [];
+  const submissions = Array.isArray(data.public_submissions) ? data.public_submissions : [];
+  const reasons = Array.isArray(data.dropped_reasons) ? data.dropped_reasons : [];
+  const daily = Array.isArray(data.daily_counts) ? data.daily_counts : [];
+  const sourceDaily = Array.isArray(data.source_daily_counts) ? data.source_daily_counts : [];
+  const outcomeTotals = daily.reduce((totals, row) => {
+    totals[row.outcome] = (totals[row.outcome] || 0) + Number(row.count || 0);
+    return totals;
+  }, {});
+  const droppedClassTotals = reasons.reduce((totals, row) => {
+    totals[row.reason] = (totals[row.reason] || 0) + Number(row.count || 0);
+    return totals;
+  }, {});
+  const approvedTotal = sourceDaily.reduce((sum, row) => sum + Number(row.approved || 0), 0);
+  return `
+    <div class="grid sm:grid-cols-2 lg:grid-cols-6 gap-2">
+      ${[
+        ["Created in review", outcomeTotals.created || 0],
+        ["Duplicates", outcomeTotals.duplicate || 0],
+        ["Non-Uganda", droppedClassTotals.non_uganda || 0],
+        ["Not listings", droppedClassTotals.not_a_listing || 0],
+        ["Skipped", outcomeTotals.skipped || 0],
+        ["Approved after review", approvedTotal]
+      ].map(([label, value]) => `<div class="rounded-lg border border-gray-100 bg-gray-50 p-2"><div class="text-[10px] font-black uppercase text-gray-500">${adminEscape(label)}</div><div class="mt-1 text-xl font-black text-gray-900">${staffNumber(value)}</div></div>`).join("")}
+    </div>
+    <div class="mt-3 grid lg:grid-cols-3 gap-3">
+      <div><div class="font-black text-gray-900">Platform freshness</div>${freshness.map((row) => `<div class="mt-1">${adminEscape(row.platform)}: <strong>${staffNumber(row.last_24h || 0)}</strong> in 24h • ${adminEscape(staffDate(row.newest_ingested_at))}</div>`).join("") || `<div class="mt-1 text-gray-500">No ingestion events yet.</div>`}</div>
+      <div><div class="font-black text-gray-900">Tracked coverage</div>${channels.map((row) => `<div class="mt-1">${adminEscape(row.platform)} / ${adminEscape(row.subscription_status)}: <strong>${staffNumber(row.count || 0)}</strong></div>`).join("") || `<div class="mt-1 text-gray-500">No tracked channels yet.</div>`}<div class="mt-2">Public submissions: <strong>${staffNumber(submissions.reduce((sum, row) => sum + Number(row.count || 0), 0))}</strong></div></div>
+      <div><div class="font-black text-gray-900">Top drop reasons</div>${reasons.slice(0, 6).map((row) => `<div class="mt-1">${adminEscape(row.platform)} • ${adminEscape(row.reason)}: <strong>${staffNumber(row.count || 0)}</strong></div>`).join("") || `<div class="mt-1 text-gray-500">No dropped rows recorded.</div>`}</div>
+    </div>
+    <div class="mt-3"><div class="font-black text-gray-900">Newest per-source activity</div><div class="mt-1 grid md:grid-cols-2 gap-1">${sourceDaily.slice(0, 8).map((row) => `<div>${adminEscape(row.platform)} / ${adminEscape(row.source_key)}: ${staffNumber(row.discovered || 0)} discovered • ${staffNumber(row.imported || 0)} imported • ${staffNumber(row.duplicate || 0)} duplicate • ${staffNumber(row.dropped || 0)} dropped • ${staffNumber(row.approved || 0)} approved</div>`).join("") || `<div class="text-gray-500">No per-source events yet.</div>`}</div></div>
+    <div class="mt-2 font-bold text-emerald-800">Review-only: ${data.review_only === true ? "confirmed" : "status unavailable"}</div>`;
+}
+
+function renderStaffHarvestSummary(data = {}) {
+  const wrap = document.getElementById("staff-harvest-summary");
+  if (!wrap) return;
+  wrap.innerHTML = harvestSummaryHtml(data);
+}
+
+async function loadStaffHarvestSummary() {
+  const wrap = document.getElementById("staff-harvest-summary");
+  if (wrap) wrap.textContent = "Loading Harvest coverage…";
+  try {
+    const response = await apiRequest("/api/staff/harvest/summary?days=14");
+    renderStaffHarvestSummary(response?.data || {});
+  } catch (error) {
+    if (wrap) wrap.textContent = `Harvest coverage unavailable: ${error.message || "request failed"}`;
+  }
+}
+
+async function adminLoadHarvestSummary() {
+  if (!canUseLiveAdminApi()) {
+    toast("Sign in as admin or save ADMIN_API_KEY first.");
+    return;
+  }
+  const wrap = document.getElementById("admin-harvest-summary-body");
+  const button = document.getElementById("admin-harvest-summary-btn");
+  if (wrap) wrap.textContent = "Loading the latest Harvest coverage…";
+  if (button) button.disabled = true;
+  try {
+    const response = await apiRequest("/api/admin/harvest/summary?days=14", { headers: adminAuthHeaders() });
+    if (wrap) wrap.innerHTML = harvestSummaryHtml(response?.data || {});
+  } catch (error) {
+    if (wrap) wrap.textContent = `Harvest coverage unavailable: ${error.message || "request failed"}`;
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
+let staffHarvestCreator = null;
+
+function renderStaffHarvestCreator(creator = null) {
+  const wrap = document.getElementById("staff-harvest-creator-card");
+  if (!wrap) return;
+  staffHarvestCreator = creator;
+  if (!creator) {
+    wrap.textContent = "No tracked creator is available for this platform.";
+    return;
+  }
+  wrap.innerHTML = `<div class="rounded-lg border border-pink-100 bg-white p-3"><div class="font-black text-gray-900">${adminEscape(creator.display_name || creator.source_key || "Tracked creator")}</div><div class="mt-1 break-all text-gray-500">${adminEscape(creator.profile_url || "Profile URL unavailable")}</div><div class="mt-2 flex flex-wrap gap-2"><button type="button" onclick="staffOpenCurrentHarvestCreator()" class="rounded-lg bg-pink-700 px-3 py-2 font-black text-white">Open creator profile</button><button type="button" onclick="staffMarkCurrentHarvestCreatorChecked()" class="rounded-lg border border-pink-200 px-3 py-2 font-black text-pink-800">Done — show next</button></div></div>`;
+}
+
+async function staffLoadNextHarvestCreator() {
+  const platform = document.getElementById("staff-harvest-creator-platform")?.value || "tiktok";
+  const wrap = document.getElementById("staff-harvest-creator-card");
+  if (wrap) wrap.textContent = "Loading the next tracked creator…";
+  try {
+    const response = await apiRequest(`/api/staff/harvest/creators/next?platform=${encodeURIComponent(platform)}`);
+    renderStaffHarvestCreator(response?.data?.creator || null);
+  } catch (error) {
+    if (wrap) wrap.textContent = `Creator rotation unavailable: ${error.message || "request failed"}`;
+  }
+}
+
+function staffOpenCurrentHarvestCreator() {
+  const profileUrl = String(staffHarvestCreator?.profile_url || "");
+  if (!/^https?:\/\//i.test(profileUrl)) return toast("This creator does not have a valid public profile URL.");
+  window.open(profileUrl, "_blank", "noopener,noreferrer");
+}
+
+async function staffMarkCurrentHarvestCreatorChecked() {
+  const sourceKey = String(staffHarvestCreator?.source_key || "");
+  if (!sourceKey) return;
+  const platform = document.getElementById("staff-harvest-creator-platform")?.value || "tiktok";
+  try {
+    await apiRequest(`/api/staff/harvest/creators/${encodeURIComponent(sourceKey)}/checked`, {
+      method: "POST",
+      body: JSON.stringify({ platform })
+    });
+    await staffLoadNextHarvestCreator();
+  } catch (error) {
+    toast(error.message || "Could not update the creator rotation.");
+  }
+}
+
+async function staffOpenTikTokDiscoverHelper() {
+  const hashtag = String(document.getElementById("staff-harvest-discover-hashtag")?.value || "").replace(/^#/, "").trim();
+  if (!hashtag) return toast("Enter a TikTok hashtag first.");
+  try {
+    const response = await apiRequest(`/api/staff/source-intake/discover-helper?platform=tiktok&hashtag=${encodeURIComponent(hashtag)}`);
+    const discoverUrl = String(response?.data?.discover_url || "");
+    if (!/^https?:\/\//i.test(discoverUrl)) throw new Error("Discover URL was not returned");
+    window.open(discoverUrl, "_blank", "noopener,noreferrer");
+  } catch (error) {
+    toast(error.message || "Could not open the public Discover helper.");
   }
 }
 
@@ -12892,6 +13066,7 @@ function applyStaffDashboardData(data = {}, user = {}) {
   setStaffStat("staff-stat-bank", data.summary?.bank_leads?.total, definitions, "bank_leads");
   renderStaffProfileSettings(data.staff || user, data.payments || {});
   renderStaffSourceIntake(data.source_intake || {});
+  loadStaffHarvestSummary();
   renderStaffTraining(data.training || {});
   if (data.partial) {
     renderStaffDeferredPanelLoading();
@@ -13079,7 +13254,7 @@ function renderStaffSourceImportResult(data = {}, dryRun = true) {
           <div>Batch inputs: <strong>${staffNumber(result.exact_input_count || 0)}</strong></div>
           <div>Source batch: <strong>${staffNumber(result.requested_source_count || 0)}</strong></div>
           <div>Discovered posts: <strong>${staffNumber(summary.discovered_posts_count || 0)}</strong></div>
-          <div>Auto-live properties: <strong>${staffNumber(summary.auto_live_properties || 0)}</strong></div>
+          <div>Published automatically: <strong>0</strong></div>
           <div>Created properties: <strong>${staffNumber(summary.created_properties || 0)}</strong></div>
           <div>Existing/duplicates blocked: <strong>${staffNumber(summary.existing_properties || 0)}</strong></div>
           <div>Review queue rows: <strong>${staffNumber(summary.review_queue_properties || 0)}</strong></div>
@@ -13092,12 +13267,19 @@ function renderStaffSourceImportResult(data = {}, dryRun = true) {
     return;
   }
   const importResult = result.import_result || result;
-  const autoLiveCount = importResult.auto_live_properties || result.auto_live_properties || 0;
   const metadataNote = result.metadata_skipped_for_large_batch
     ? `<div class="mt-2 rounded-lg border border-amber-100 bg-amber-50 p-2 text-amber-900">Large batch mode: external metadata fetches were skipped for speed. Paste title, location, price, posted date, phone, and visible source text under each exact link before queueing.</div>`
     : result.metadata_tiktok_oembed_enabled
       ? `<div class="mt-2 rounded-lg border border-pink-100 bg-pink-50 p-2 text-pink-900">TikTok oEmbed mode: makaug fetched public TikTok captions/authors for these exact video links and used that text for location, price, and title extraction.</div>`
     : "";
+  const perUrlRows = Array.isArray(importResult.per_url_results) ? importResult.per_url_results : [];
+  const perUrlHtml = perUrlRows.length ? `
+    <details class="mt-3 rounded-lg border border-gray-200 bg-white p-2" open>
+      <summary class="cursor-pointer font-black text-gray-900">Per-link outcomes (${staffNumber(perUrlRows.length)})</summary>
+      <div class="mt-2 max-h-64 overflow-auto space-y-1">
+        ${perUrlRows.map((row) => `<div class="grid sm:grid-cols-[110px,1fr] gap-2 rounded-lg bg-gray-50 p-2"><strong>${adminEscape(row.classification || row.outcome || "unknown")}</strong><span class="break-all">${adminEscape(row.source_url || "missing URL")} • ${adminEscape(row.reason || "")}</span></div>`).join("")}
+      </div>
+    </details>` : "";
   wrap.innerHTML = `
     <div class="rounded-xl border ${dryRun ? "border-violet-100 bg-violet-50" : "border-emerald-100 bg-emerald-50"} p-3 text-xs">
       <div class="font-black ${dryRun ? "text-violet-900" : "text-emerald-900"}">${dryRun ? "Preview complete" : "Import complete"}</div>
@@ -13105,14 +13287,15 @@ function renderStaffSourceImportResult(data = {}, dryRun = true) {
         <div>Exact social URLs: <strong>${staffNumber(result.exact_social_url_count || result.exact_video_url_count || 0)}</strong></div>
         <div>Batch inputs: <strong>${staffNumber(result.exact_input_count || result.exact_social_url_count || 0)}</strong> / 500</div>
         <div>Created properties: <strong>${staffNumber(importResult.created_properties || result.created_properties || 0)}</strong></div>
-        <div>Auto-live properties: <strong>${staffNumber(autoLiveCount)}</strong></div>
+        <div>Published automatically: <strong>0</strong></div>
         <div>Existing/duplicates blocked: <strong>${staffNumber(importResult.existing_properties || result.existing_properties || 0)}</strong></div>
         <div>Review queue rows: <strong>${staffNumber(importResult.review_queue_properties || result.review_queue_properties || 0)}</strong></div>
         <div>Source-review only: <strong>${staffNumber(importResult.source_review_count || result.source_review_count || 0)}</strong></div>
         <div>Discovered posts: <strong>${staffNumber(result.discovered_posts_count || 0)}</strong></div>
       </div>
       ${metadataNote}
-      <div class="mt-2 text-gray-600">${dryRun ? "If the preview looks right, queue it. Hashtag rows that pass location/date/category/source-contact checks can go live immediately." : "Auto-live rows are public now; pending rows stay in shared review."}</div>
+      ${perUrlHtml}
+      <div class="mt-2 text-gray-600">${dryRun ? "If the preview looks right, queue it. Every harvested row remains pending for human review." : "Imported rows remain in shared review; nothing was published automatically."}</div>
     </div>`;
 }
 
@@ -17385,8 +17568,8 @@ function adminSocialQuickPasteResultHtml(data = {}, { dryRun = false } = {}) {
   const createdReviewCount = Number(importResult.created_review_queue_properties ?? createdCount);
   const persistenceVerified = importResult.persistence_verified === true;
   const summaryText = dryRun
-    ? `${eligibleCount} eligible (will enter review when queued). ${Number(importResult.auto_live_properties || autoLive.length || 0)} expected auto-live. ${Number(importResult.existing_properties || 0)} duplicate/existing links blocked. ${sourceReview.length} need more details.`
-    : `${createdCount} new properties persisted. ${createdReviewCount} queued in Review → Found Online. ${Number(importResult.auto_live_properties || autoLive.length || 0)} auto-live. ${Number(importResult.existing_properties || 0)} duplicate/existing links blocked. ${sourceReview.length} need more details.`;
+    ? `${eligibleCount} eligible (will enter review when queued). Nothing will auto-publish. ${Number(importResult.existing_properties || 0)} duplicate/existing links blocked. ${sourceReview.length} need more details.`
+    : `${createdCount} new properties persisted. ${createdReviewCount} queued in Review → Found Online. Nothing auto-published. ${Number(importResult.existing_properties || 0)} duplicate/existing links blocked. ${sourceReview.length} need more details.`;
   return `
     <div class="rounded-xl border ${dryRun ? "border-violet-200 bg-violet-50" : "border-emerald-200 bg-emerald-50"} p-3">
       <div class="font-black ${dryRun ? "text-violet-950" : "text-emerald-950"}">${dryRun ? "Preview ready" : "Import finished"}</div>
@@ -17396,7 +17579,7 @@ function adminSocialQuickPasteResultHtml(data = {}, { dryRun = false } = {}) {
       ${reports.length ? `<div class="mt-2 text-[11px]">${adminEscape(reports.filter((item) => item.ok).length)} metadata fetches succeeded • ${adminEscape(reports.filter((item) => !item.ok).length)} need pasted visible details.</div>` : ""}
     </div>
     ${perUrlResults.length ? `<div class="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3"><div class="flex items-center justify-between gap-3"><div class="font-black text-gray-950">Per-URL outcome</div><div class="text-[10px] font-bold text-gray-600">${adminEscape(Object.entries(perUrlSummary).map(([key, value]) => `${key.replace(/_/g, " ")}: ${value}`).join(" • "))}</div></div><div class="mt-2 grid gap-2 md:grid-cols-2">${perUrlResults.map((item, index) => adminSocialQuickPerUrlResultHtml(item, index)).join("")}</div></div>` : ""}
-    ${autoLive.length ? `<div class="mt-3 rounded-xl border border-emerald-100 bg-white p-3"><div class="font-black text-emerald-950">Auto-live properties</div><div class="mt-2 space-y-2">${autoLive.slice(0, 12).map((item) => adminSeededListingSummaryHtml(item, { pendingPanel: false })).join("")}</div></div>` : ""}
+    ${autoLive.length ? `<div class="mt-3 rounded-xl border border-red-100 bg-white p-3"><div class="font-black text-red-950">Policy warning: harvested rows reported as live</div><div class="mt-2 text-red-800">Do not continue until these rows are returned to review.</div></div>` : ""}
     ${previewRows.length ? `<div class="mt-3 space-y-2">${previewRows.slice(0, 20).map((row, index) => adminSocialQuickImportRowHtml(row, index)).join("")}</div>` : ""}
     ${adminDuplicateSourceWarningHtml(duplicateWarnings)}
     ${sourceReview.length ? `<div class="mt-3 rounded-xl border border-amber-100 bg-amber-50 p-3 text-amber-900"><div class="font-black">Needs more source details</div><div class="mt-1">Add missing location/area, contact route, or visible posted date/source evidence, then preview again.</div><div class="mt-2 space-y-2">${sourceReview.slice(0, 12).map((item) => adminSourceReviewRecordSummaryHtml(item)).join("")}</div></div>` : ""}`;
@@ -17668,7 +17851,7 @@ function adminSocialPlatformSweepHtml(data = {}, platform = "all") {
     </div>`).join("");
   return `
     <div class="font-black">Social platform sweep finished</div>
-    <div class="mt-1">Platform: ${adminEscape(platform)} • ${adminEscape(data.discovered_posts_count || 0)} exact posts discovered • ${adminEscape(importResult.created_properties || 0)} new properties processed • ${adminEscape(importResult.auto_live_properties || autoLive.length || 0)} auto-live • ${adminEscape(importResult.review_queue_properties || queued.length || 0)} review queue • ${adminEscape(importResult.existing_properties || 0)} duplicate/existing links were blocked.</div>
+    <div class="mt-1">Platform: ${adminEscape(platform)} • ${adminEscape(data.discovered_posts_count || 0)} exact posts discovered • ${adminEscape(importResult.created_properties || 0)} new properties processed • 0 auto-published • ${adminEscape(importResult.review_queue_properties || queued.length || 0)} review queue • ${adminEscape(importResult.existing_properties || 0)} duplicate/existing links were blocked.</div>
     <div class="mt-1 text-[11px]">Profile rule: ${adminEscape(data.policy?.profile_creation_rule || "Source-only broker profiles are not created automatically; the source owner must register or claim one.")}</div>
     ${data.focus === "students" ? `<div class="mt-2 rounded-xl border border-purple-100 bg-purple-50 p-3 text-purple-950"><div class="font-black">Student housing focus</div><div class="mt-1">This sweep only uses campus, hostel, student accommodation, university, and student-room signals. It prepares TikTok/Facebook/Instagram exact-link capture tasks and runs YouTube/X exact-post jobs when API keys are configured.</div><div class="mt-2 flex gap-2 flex-wrap"><button type="button" onclick="adminImportYouTubeExactPosts(adminStudentHousingYouTubeQuickPasteExample())" class="border border-red-200 bg-white text-red-700 hover:bg-red-50 px-2 py-1 rounded text-[11px] font-bold">Paste YouTube Student Videos</button><button type="button" onclick="adminOpenSocialQuickPastePanel(adminStudentHousingQuickPasteExample())" class="border border-purple-200 bg-white text-purple-700 hover:bg-purple-50 px-2 py-1 rounded text-[11px] font-bold">Paste Student Source Links</button></div></div>` : ""}
     <div class="mt-2 rounded-xl border border-indigo-100 bg-indigo-50 p-3 text-indigo-950">
@@ -17689,7 +17872,7 @@ function adminSocialPlatformSweepHtml(data = {}, platform = "all") {
       <div class="mt-3 rounded-xl border border-red-100 bg-red-50 p-3 text-red-950">
         <div class="font-black">YouTube video sweep</div>
         <div class="mt-1">${adminEscape(youtube.search_job_count)} YouTube search jobs prepared from ${adminEscape(youtube.published_after || ADMIN_YOUTUBE_SWEEP_WINDOW_START)}. API configured: ${youtube.api_configured ? "Yes" : "No"}${youtube.skipped_reason ? ` • ${adminEscape(youtube.skipped_reason)}` : ""}</div>
-        <div class="mt-1 text-[11px]">Quality: ${adminEscape(youtubeConfidence.auto_live_ready_count || 0)} hashtag auto-live with location/date/source contact • ${adminEscape(youtubeConfidence.live_ready_count || 0)} total live-ready • ${adminEscape(youtubeConfidence.source_contact_only_count || 0)} source-contact-only • ${adminEscape(youtubeConfidence.location_review_count || 0)} need location review • Types ${adminEscape(JSON.stringify(youtubeConfidence.by_listing_type || {}))}</div>
+        <div class="mt-1 text-[11px]">Quality: ${adminEscape(youtubeConfidence.auto_live_ready_count || 0)} high-confidence rows ready for human review • ${adminEscape(youtubeConfidence.source_contact_only_count || 0)} source-contact-only • ${adminEscape(youtubeConfidence.location_review_count || 0)} need location review • Types ${adminEscape(JSON.stringify(youtubeConfidence.by_listing_type || {}))}</div>
         <div class="mt-1 text-[11px]">Batch source offset ${adminEscape(youtubeSourceOffset)} with ${adminEscape(youtubeBatchSize)} jobs per click. Next broad YouTube batch starts at offset ${adminEscape(youtubeNextSourceOffset)}. YouTube search returns Shorts and long-form videos, and makaug stores the exact video URL plus YouTube snippet published date as First posted online.</div>
         ${youtubeQuotaExceeded ? `<div class="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-2 text-amber-900 font-bold">YouTube daily search quota is exhausted. This is a Google quota limit, not a makaug parsing failure. Wait for the quota reset or request a higher YouTube Data API quota, then click Sweep YouTube Videos again to continue from this batch offset.</div>` : ""}
         <button type="button" onclick="adminImportYouTubeExactPosts(${data.focus === "students" ? "adminStudentHousingYouTubeQuickPasteExample()" : ""})" class="mt-2 border border-red-300 bg-white text-red-700 hover:bg-red-50 px-2 py-1 rounded text-[11px] font-bold">Import YouTube Videos</button>
@@ -17709,7 +17892,7 @@ function adminSocialPlatformSweepHtml(data = {}, platform = "all") {
         <div class="mt-1">${adminEscape(facebookTasks.length + instagramTasks.length)} source feeds are ready for exact-link capture. Open the source/feed, click the makaug Capture Posts bookmark, then paste exact public post or reel URLs into Paste Captured Links.</div>
         <div class="mt-2 space-y-2">${manualCaptureTaskHtml}</div>
       </div>` : ""}
-    ${autoLive.length ? `<div class="mt-3 rounded-xl border border-emerald-100 bg-white p-3"><div class="font-black text-emerald-950">Auto-live properties</div><div class="mt-2 space-y-2">${autoLive.slice(0, 12).map((item) => adminSeededListingSummaryHtml(item, { pendingPanel: false })).join("")}</div></div>` : ""}
+    ${autoLive.length ? `<div class="mt-3 rounded-xl border border-red-100 bg-white p-3"><div class="font-black text-red-950">Policy warning: harvested rows reported as live</div><div class="mt-2 text-red-800">Do not continue until these rows are returned to review.</div></div>` : ""}
     ${queued.length ? `<div class="mt-3 rounded-xl border border-blue-100 bg-white p-3"><div class="font-black text-blue-950">Review queue properties</div><div class="mt-2 space-y-2">${queued.slice(0, 12).map((item) => adminSeededListingSummaryHtml(item, { pendingPanel: true })).join("")}</div></div>` : ""}
     ${sourceReview.length ? `<div class="mt-3 rounded-xl border border-amber-100 bg-amber-50 p-3 text-amber-900"><div class="font-black">Posts needing source review</div><div class="mt-2 space-y-2">${sourceReview.slice(0, 12).map((item) => adminSourceReviewRecordSummaryHtml(item)).join("")}</div></div>` : ""}`;
 }
@@ -17806,7 +17989,7 @@ function adminStaffSocialSweepJobHtml(data = {}) {
         <div>Already running: <strong>${data.already_running ? "Yes" : "No"}</strong></div>
         <div>Discovered posts: <strong>${staffNumber(summary.discovered_posts_count || 0)}</strong></div>
         <div>Created properties: <strong>${staffNumber(summary.created_properties || 0)}</strong></div>
-        <div>Auto-live properties: <strong>${staffNumber(summary.auto_live_properties || 0)}</strong></div>
+        <div>Published automatically: <strong>0</strong></div>
         <div>Review queue rows: <strong>${staffNumber(summary.review_queue_properties || 0)}</strong></div>
         <div>Existing/duplicates: <strong>${staffNumber(summary.existing_properties || 0)}</strong></div>
         <div>Source-review only: <strong>${staffNumber(summary.source_review_count || 0)}</strong></div>
@@ -24344,6 +24527,11 @@ function adminReviewListingEditPanel(review = {}) {
     ["night", "Per night"],
     ["sem", "Per semester"]
   ].map(([value, label]) => `<option value="${value}" ${String(review.price_period || "") === value ? "selected" : ""}>${label}</option>`).join("");
+  const currentPriceCurrency = String(review.price_currency || extra.price_currency || "UGX").toUpperCase() === "USD" ? "USD" : "UGX";
+  const priceCurrencyOptions = [
+    ["UGX", "UGX — Uganda shillings"],
+    ["USD", "USD — US dollars"]
+  ].map(([value, label]) => `<option value="${value}" ${currentPriceCurrency === value ? "selected" : ""}>${label}</option>`).join("");
   const currentTitleType = review.title_type || extra.title_type || "";
   const titleTypeOptions = ["", "Freehold", "Leasehold", "Mailo", "Private Mailo", "Customary"].map((value) => {
     const label = value || "Not stated";
@@ -24427,6 +24615,15 @@ function adminReviewListingEditPanel(review = {}) {
         </label>
         <label class="block text-xs font-bold text-gray-700">Price
           <input id="admin-review-price-edit" type="number" min="0" step="1" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.price || "")}">
+        </label>
+        <label class="block text-xs font-bold text-gray-700">Source currency
+          <select id="admin-review-price-currency-edit" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm">${priceCurrencyOptions}</select>
+        </label>
+        <label class="block text-xs font-bold text-gray-700">Original source amount
+          <input id="admin-review-price-original-edit" type="number" min="0" step="0.01" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.price_original ?? extra.price_original ?? review.price ?? "")}">
+        </label>
+        <label class="block text-xs font-bold text-gray-700">USD → UGX rate
+          <input id="admin-review-price-fx-rate-edit" type="number" min="0" step="0.01" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.price_fx_rate_ugx ?? extra.price_fx_rate_ugx ?? (currentPriceCurrency === "USD" ? 3800 : ""))}" placeholder="Only required for USD">
         </label>
         <label class="block text-xs font-bold text-gray-700">Price period
           <select id="admin-review-price-period-edit" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm">${periodOptions}</select>
@@ -24842,6 +25039,9 @@ function collectAdminReviewListingPatch() {
     street_name: get("admin-review-street-edit"),
     address: get("admin-review-address-edit"),
     price: get("admin-review-price-edit"),
+    price_currency: get("admin-review-price-currency-edit"),
+    price_original: get("admin-review-price-original-edit"),
+    price_fx_rate_ugx: get("admin-review-price-fx-rate-edit"),
     price_period: get("admin-review-price-period-edit"),
     transaction_type: listingType === "commercial" ? get("admin-review-transaction-type-edit") : "",
     property_type: listingType === "commercial" ? get("admin-review-commercial-type-edit") : get("admin-review-property-type-edit"),

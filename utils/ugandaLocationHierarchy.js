@@ -137,6 +137,19 @@ const UG_LOCATION_TREE = {
       ]
     }
   ],
+  Mukono: [
+    {
+      city: 'Mukono Municipality',
+      neighborhoods: [
+        { name: 'Mukono', lat: 0.353, lng: 32.753 },
+        { name: 'Seeta', lat: 0.361, lng: 32.705 },
+        { name: 'Goma', lat: 0.383, lng: 32.742 },
+        { name: 'Namanve', lat: 0.348, lng: 32.697 },
+        { name: 'Kalagi', lat: 0.531, lng: 32.743 },
+        { name: 'Katosi', lat: 0.181, lng: 32.797 }
+      ]
+    }
+  ],
   Luwero: [
     {
       city: 'Luwero Town',

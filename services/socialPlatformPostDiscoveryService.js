@@ -21,6 +21,12 @@ const {
   normalizeUgandanSourcePhone,
   ugandanPhoneFromSourceText,
 } = require('../utils/sourceIntakeIntegrity');
+const { resolveSourceShortUrl } = require('../utils/sourceUrlNormalization');
+const {
+  buildHarvestFingerprints,
+  primaryImagePerceptualHashes,
+} = require('./propertyHarvestDedupService');
+const { recordHarvestImportResult } = require('./propertyHarvestMonitoringService');
 
 const SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID = 'social_platform_post_discovery_20260525';
 const DEFAULT_MAX_SOURCES = 40;
@@ -29,6 +35,7 @@ const SOCIAL_SWEEP_FAST_MAX_SOURCES = 60;
 const SOCIAL_SWEEP_FAST_DEFAULT_SOURCES = 50;
 const SOCIAL_SWEEP_FAST_MAX_RESULTS_PER_SOURCE = 25;
 const SOCIAL_SWEEP_FAST_MAX_PAGES_PER_SOURCE = 1;
+const SOCIAL_SWEEP_BACKFILL_MAX_PAGES_PER_SOURCE = 10;
 const SOCIAL_SWEEP_TIKTOK_DATA_SOURCE_MAX_POSTS = 200;
 const SOCIAL_SWEEP_IMPORT_POST_LIMIT = 60;
 const DEFAULT_SOCIAL_SWEEP_TIME_BUDGET_MS = 45000;
@@ -40,8 +47,11 @@ const SOCIAL_SWEEP_REQUEST_TIMEOUT_MS = 5500;
 const SOCIAL_SWEEP_SOURCE_START_MIN_REMAINING_MS = SOCIAL_SWEEP_COMMIT_RESERVE_MS + SOCIAL_SWEEP_REQUEST_TIMEOUT_MS;
 const SOCIAL_SWEEP_BACKLOG_REPROCESS_LIMIT = 5;
 const DEFAULT_X_RESULTS_PER_SOURCE = 25;
+const X_TWEET_LOOKUP_URL = 'https://api.x.com/2/tweets';
 const X_RECENT_SEARCH_URL = 'https://api.x.com/2/tweets/search/recent';
 const X_FULL_ARCHIVE_SEARCH_URL = 'https://api.x.com/2/tweets/search/all';
+const X_USER_TIMELINE_URL_BASE = 'https://api.x.com/2/users';
+const DEFAULT_X_AUTHOR_EXPANSION_LIMIT = 3;
 const X_BEARER_ENV_NAMES = ['X_BEARER_TOKEN', 'TWITTER_BEARER_TOKEN', 'X_API_BEARER_TOKEN'];
 const X_FULL_ARCHIVE_SEARCH_PACING_MS = 1100;
 const DEFAULT_YOUTUBE_RESULTS_PER_SOURCE = 25;
@@ -79,6 +89,31 @@ function delay(ms = 0) {
   return new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
 }
 
+function metadataReportIsRetryable(report = {}) {
+  const status = Number(report.status || 0);
+  return !status || status === 408 || status === 425 || status === 429 || status >= 500;
+}
+
+async function fetchMetadataWithRetry(fetcher, {
+  maxAttempts = 3,
+  baseDelayMs = 50,
+  fallbackReason = 'metadata_fetch_failed',
+} = {}) {
+  let report = null;
+  const attempts = Math.max(1, Number(maxAttempts) || 1);
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      report = await fetcher();
+    } catch (error) {
+      report = { ok: false, reason: error.message || fallbackReason };
+    }
+    report = { ...(report || {}), attempts: attempt, retried: attempt > 1 };
+    if (report.ok === true || !metadataReportIsRetryable(report) || attempt === attempts) return report;
+    await delay(baseDelayMs * (2 ** (attempt - 1)));
+  }
+  return report || { ok: false, reason: fallbackReason, attempts: 0, retried: false };
+}
+
 const CORE_PROPERTY_QUERY = [
   'property', 'house', 'home', 'apartment', 'land', 'plot', 'rent', 'rental',
   '"for sale"', '"to let"', 'hostel', '"student accommodation"', 'commercial', 'warehouse',
@@ -114,12 +149,12 @@ const UGANDA_LOCATION_QUERY = [
 const AREA_HINTS = [
   'Kampala', 'Wakiso', 'Mukono', 'Entebbe', 'Jinja', 'Kira', 'Ntinda', 'Naalya',
   'Najjera', 'Namugongo', 'Muyenga', 'Bweyogerere', 'Bwebajja', 'Kyanja',
-  'Komamboga', 'Kiwatule', 'Bukoto', 'Naguru', 'Kololo', 'Nakasero', 'Luzira',
+  'Komamboga', 'Kiwatule', 'Kisaasi', 'Bukoto', 'Naguru', 'Kololo', 'Nakasero', 'Luzira',
   'Lubowa', 'Seguku', 'Kitende', 'Kajansi', 'Akright', 'Garuga', 'Kiwafu',
   'Munyonyo', 'Makindye', 'Kansanga', 'Mengo', 'Makerere', 'Kyambogo', 'MUBS',
   'Namanve', 'Namasuba', 'Rahim Foods', 'Katosi', 'Mpunge', 'Mpungwe', 'Luweero', 'Masaka',
   'Mbarara', 'Mbale', 'Gulu', 'Arua',
-  'Bujjuko', 'Bujuuko', 'Namayumba', 'Kakiri', 'Masulita', 'Hoima Road',
+  'Bujjuko', 'Bujuuko', 'Namayumba', 'Kakiri', 'Masulita', 'Kalagi', 'Hoima Road',
   'Mityana Road', 'Entebbe Road', 'Jinja Road', 'Kigo', 'Kawuku', 'Kisubi',
   'Nkumba', 'Kyaliwajjala', 'Kireka', 'Sonde', 'Kungu', 'Bulindo', 'Gayaza',
   'Matugga', 'Nansana', 'Nabweru', 'Kyebando', 'Kawempe', 'Kikoni', 'Nakawa',
@@ -144,6 +179,8 @@ const AREA_PIN_OVERRIDES = [
   { name: 'Garuga', district: 'Wakiso', lat: 0.106, lng: 32.495, aliases: ['Garuga', 'Garuga Road'] },
   { name: 'Kiwafu', district: 'Wakiso', lat: 0.08, lng: 32.478, aliases: ['Kiwafu'] },
   { name: 'Katosi', district: 'Mukono', lat: 0.181, lng: 32.797, aliases: ['Katosi', 'Mpunge', 'Mpungwe', 'Katosi Mpunge'] },
+  { name: 'Kalagi', district: 'Mukono', lat: 0.531, lng: 32.743, aliases: ['Kalagi', 'Kalagi Town', 'Kalagi Trading Centre', 'Kalagi Trading Center'] },
+  { name: 'Kisaasi', district: 'Kampala', lat: 0.364, lng: 32.589, aliases: ['Kisaasi', 'Kisasi'] },
   { name: 'Kololo', district: 'Kampala', lat: 0.356, lng: 32.612, aliases: ['Kololo'] }
 ];
 
@@ -1307,14 +1344,16 @@ async function importTikTokExactVideoPosts({
   if (fetchOembed) {
     for (const seed of seeds) {
       if (oembedByUrl[seed.post_url]) continue;
-      const report = await fetchTikTokOEmbed(seed.post_url, { fetchImpl }).catch((error) => ({
-        ok: false,
-        reason: error.message || 'tiktok_oembed_failed',
-      }));
+      const report = await fetchMetadataWithRetry(
+        () => fetchTikTokOEmbed(seed.post_url, { fetchImpl }),
+        { fallbackReason: 'tiktok_oembed_failed' }
+      );
       const reportSummary = {
         post_url: seed.post_url,
         ok: report.ok === true,
         status: report.status || null,
+        attempts: report.attempts || 1,
+        retried: report.retried === true,
         reason: report.ok ? '' : (report.reason || 'tiktok_oembed_failed'),
       };
       if (report.ok && report.payload) {
@@ -1447,15 +1486,17 @@ async function fetchTikTokDataSourcePosts({
       }
       seedsForImport.push(seed);
       if (!seed.post_url || oembedByUrl[seed.post_url] || oembedReportsByUrl[seed.post_url]) continue;
-      const report = await fetchTikTokOEmbed(seed.post_url, { fetchImpl }).catch((error) => ({
-        ok: false,
-        reason: sourceSweepErrorReason(error) || error.message || 'tiktok_oembed_failed',
-      }));
+      const report = await fetchMetadataWithRetry(
+        () => fetchTikTokOEmbed(seed.post_url, { fetchImpl }),
+        { fallbackReason: 'tiktok_oembed_failed' }
+      );
       if (/source_sweep/.test(report.reason || '')) timedOut = true;
       const reportSummary = {
         post_url: seed.post_url,
         ok: report.ok === true,
         status: report.status || null,
+        attempts: report.attempts || 1,
+        retried: report.retried === true,
         reason: report.ok ? '' : (report.reason || 'tiktok_oembed_failed'),
       };
       if (report.ok && report.payload) {
@@ -1665,10 +1706,10 @@ async function enrichPendingTikTokSourceThumbnailRows({
         reports.push({ property_id: row.id, ok: false, skipped: true, reason: 'missing_exact_tiktok_video_url' });
         continue;
       }
-      const report = await fetchTikTokOEmbed(sourceUrl, { fetchImpl }).catch((error) => ({
-        ok: false,
-        reason: sourceSweepErrorReason(error) || error.message || 'tiktok_oembed_failed',
-      }));
+      const report = await fetchMetadataWithRetry(
+        () => fetchTikTokOEmbed(sourceUrl, { fetchImpl }),
+        { fallbackReason: 'tiktok_oembed_failed' }
+      );
       if (/source_sweep/.test(report.reason || '')) timedOut = true;
       const sourceHealth = sourceUnavailableFromMetadataReport({
         ok: report.ok === true,
@@ -1791,6 +1832,7 @@ function buildExactSocialPostImportRows({
       const sourceUrl = seed.post_url;
       const platform = cleanText(seed.platform || platformForExactSocialPostUrl(sourceUrl));
       const metadata = metadataByUrl[sourceUrl] || {};
+      seed = { ...(metadata.x_post || {}), ...seed };
       const oembed = metadata.oembed || {};
       const page = metadata.page || {};
       const sourceHealth = sourceUnavailableFromMetadataReport(metadata.oembed_error)
@@ -1946,9 +1988,47 @@ async function importExactSocialSourcePosts({
   dryRun = false,
   fetchOembed = true,
   fetchPublicMetadata = true,
+  xBearerToken = '',
   fetchImpl = fetch,
 } = {}) {
-  const seeds = socialSeedsFromInputs({ posts, urls, rawText });
+  const resolutionReports = [];
+  const resolveInputUrl = async (value = '') => {
+    const rawUrl = cleanText(value);
+    if (!/(?:vt|vm)\.tiktok\.com|fb\.watch/i.test(rawUrl)) return rawUrl;
+    const resolved = await fetchMetadataWithRetry(
+      () => resolveSourceShortUrl(rawUrl, { fetchImpl }).then((url) => url
+        ? { ok: true, payload: url }
+        : { ok: false, reason: 'short_url_resolution_failed' }),
+      { fallbackReason: 'short_url_resolution_failed', maxAttempts: 2 }
+    );
+    resolutionReports.push({
+      input_url: rawUrl,
+      resolved_url: resolved.payload || '',
+      ok: resolved.ok === true,
+      attempts: resolved.attempts || 1,
+      reason: resolved.ok ? '' : resolved.reason,
+    });
+    return resolved.payload || rawUrl;
+  };
+  const resolvedPosts = [];
+  for (const input of Array.isArray(posts) ? posts : []) {
+    if (typeof input === 'string') resolvedPosts.push(await resolveInputUrl(input));
+    else resolvedPosts.push({
+      ...input,
+      post_url: await resolveInputUrl(input?.post_url || input?.source_url || input?.url || input?.video_url || ''),
+    });
+  }
+  const resolvedUrls = [];
+  for (const input of Array.isArray(urls) ? urls : []) resolvedUrls.push(await resolveInputUrl(input));
+  let resolvedRawText = String(rawText || '');
+  const shortUrls = [...new Set((resolvedRawText.match(SOCIAL_URL_GLOBAL_PATTERN) || [])
+    .map((url) => cleanText(url).replace(/[),.;]+$/g, ''))
+    .filter((url) => /(?:vt|vm)\.tiktok\.com|fb\.watch/i.test(url)))];
+  for (const shortUrl of shortUrls) {
+    const resolved = await resolveInputUrl(shortUrl);
+    if (resolved && resolved !== shortUrl) resolvedRawText = resolvedRawText.split(shortUrl).join(resolved);
+  }
+  const seeds = socialSeedsFromInputs({ posts: resolvedPosts, urls: resolvedUrls, rawText: resolvedRawText });
   const metadataByUrl = {};
   const metadataReports = [];
   for (const seed of seeds) {
@@ -1957,16 +2037,18 @@ async function importExactSocialSourcePosts({
     const platform = platformForExactSocialPostUrl(url);
     const metadata = {};
     if (fetchOembed && platform === 'TikTok') {
-      const report = await fetchTikTokOEmbed(url, { fetchImpl }).catch((error) => ({
-        ok: false,
-        reason: error.message || 'tiktok_oembed_failed',
-      }));
+      const report = await fetchMetadataWithRetry(
+        () => fetchTikTokOEmbed(url, { fetchImpl }),
+        { fallbackReason: 'tiktok_oembed_failed' }
+      );
       metadataReports.push({
         post_url: url,
         platform,
         method: 'tiktok_oembed',
         ok: report.ok === true,
         status: report.status || null,
+        attempts: report.attempts || 1,
+        retried: report.retried === true,
         reason: report.ok ? '' : (report.reason || 'tiktok_oembed_failed'),
       });
       if (report.ok && report.payload) {
@@ -1981,36 +2063,59 @@ async function importExactSocialSourcePosts({
       if (!report.ok) metadata.oembed_error = { ok: false, status: report.status || null, reason: report.reason || 'tiktok_oembed_failed' };
     }
     if (fetchOembed && platform === 'YouTube') {
-      const report = await fetchYouTubeOEmbed(url, { fetchImpl }).catch((error) => ({
-        ok: false,
-        reason: error.message || 'youtube_oembed_failed',
-      }));
+      const report = await fetchMetadataWithRetry(
+        () => fetchYouTubeOEmbed(url, { fetchImpl }),
+        { fallbackReason: 'youtube_oembed_failed' }
+      );
       metadataReports.push({
         post_url: url,
         platform,
         method: 'youtube_oembed',
         ok: report.ok === true,
         status: report.status || null,
+        attempts: report.attempts || 1,
+        retried: report.retried === true,
         reason: report.ok ? '' : (report.reason || 'youtube_oembed_failed'),
       });
       if (report.ok && report.payload) metadata.oembed = report.payload;
       if (!report.ok) metadata.oembed_error = { ok: false, status: report.status || null, reason: report.reason || 'youtube_oembed_failed' };
     }
     if (fetchPublicMetadata && platform === 'YouTube') {
-      const report = await fetchPublicPageMetadata(url, { fetchImpl }).catch((error) => ({
-        ok: false,
-        reason: error.message || 'public_page_metadata_failed',
-      }));
+      const report = await fetchMetadataWithRetry(
+        () => fetchPublicPageMetadata(url, { fetchImpl }),
+        { fallbackReason: 'public_page_metadata_failed' }
+      );
       metadataReports.push({
         post_url: url,
         platform,
         method: 'public_page_metadata',
         ok: report.ok === true,
         status: report.status || null,
+        attempts: report.attempts || 1,
+        retried: report.retried === true,
         reason: report.ok ? '' : (report.reason || 'public_page_metadata_failed'),
       });
       if (report.ok && report.payload) metadata.page = report.payload;
       if (!report.ok) metadata.page_error = { ok: false, status: report.status || null, reason: report.reason || 'public_page_metadata_failed' };
+    }
+    if (platform === 'X') {
+      const report = await fetchMetadataWithRetry(
+        () => fetchXPostMetadata(url, { bearerToken: xBearerToken, fetchImpl }),
+        { fallbackReason: 'x_post_lookup_failed' }
+      );
+      metadataReports.push({
+        post_url: url,
+        platform,
+        method: 'x_api_v2_tweet_lookup',
+        ok: report.ok === true,
+        status: report.status || null,
+        attempts: report.attempts || 1,
+        retried: report.retried === true,
+        reason: report.ok ? '' : (report.reason || 'x_post_lookup_failed'),
+        required_any_of: report.required_any_of || undefined,
+      });
+      if (report.ok && report.payload) metadata.x_post = report.payload;
+      if (!report.ok) metadata.x_error = { ok: false, status: report.status || null, reason: report.reason || 'x_post_lookup_failed' };
     }
     metadataByUrl[url] = metadata;
   }
@@ -2018,6 +2123,32 @@ async function importExactSocialSourcePosts({
     posts: seeds,
     metadataByUrl,
   });
+  const configuredImageHashLookups = Number(process.env.HARVEST_IMAGE_HASH_LOOKUP_LIMIT ?? 20);
+  const maxImageHashLookups = Math.max(
+    0,
+    Math.min(50, Number.isFinite(configuredImageHashLookups) ? configuredImageHashLookups : 20)
+  );
+  let imageHashLookups = 0;
+  for (const row of importRows) {
+    const imageUrl = row.thumbnail_url || row.source_thumbnail_url || row.image_urls?.[0] || '';
+    let imageHashReport = { dhash: '', phash: '', reason: imageUrl ? 'image_hash_lookup_limit' : 'missing_remote_image' };
+    if (imageUrl && imageHashLookups < maxImageHashLookups) {
+      imageHashLookups += 1;
+      imageHashReport = await primaryImagePerceptualHashes(imageUrl, { fetchImpl });
+    }
+    const fingerprints = buildHarvestFingerprints(row, {
+      imageHash: imageHashReport.dhash || imageHashReport.hash || '',
+      imagePHash: imageHashReport.phash || '',
+    });
+    Object.assign(row, fingerprints);
+    row.raw_source_post = {
+      ...(row.raw_source_post || {}),
+      harvest_dedup: {
+        ...fingerprints,
+        primary_image_hash_status: imageHashReport.dhash || imageHashReport.phash ? 'computed' : imageHashReport.reason,
+      },
+    };
+  }
   const importResult = await queueFoundOnlineSourcePostListings({
     db,
     posts: importRows,
@@ -2031,6 +2162,8 @@ async function importExactSocialSourcePosts({
     exact_social_url_count: importRows.length,
     exact_social_import_rows: importRows,
     metadata_fetch_count: metadataReports.length,
+    short_url_resolution_reports: resolutionReports,
+    image_hash_lookup_count: imageHashLookups,
     metadata_reports: metadataReports,
     import_result: importResult,
     ...importResult,
@@ -2505,6 +2638,7 @@ function buildYouTubeSearchJobs({
   limit = DEFAULT_MAX_SOURCES,
   offset = 0,
   publishedAfter = YOUTUBE_SOURCE_POST_WINDOW_START,
+  publishedBefore = '',
   maxPagesPerSource = DEFAULT_YOUTUBE_PAGES_PER_SOURCE,
   jobMode = 'all',
 } = {}) {
@@ -2550,6 +2684,7 @@ function buildYouTubeSearchJobs({
         endpoint: searchMethod === 'channel_uploads' ? YOUTUBE_PLAYLIST_ITEMS_URL : YOUTUBE_SEARCH_URL,
         channel_lookup_endpoint: searchMethod === 'channel_uploads' ? YOUTUBE_CHANNELS_URL : '',
         published_after: start,
+        published_before: cleanText(publishedBefore),
         max_results: DEFAULT_YOUTUBE_RESULTS_PER_SOURCE,
         max_pages: pageLimit,
         includes_shorts_and_long_form: true,
@@ -3171,6 +3306,7 @@ async function fetchYouTubeSearchJob(job = {}, {
   url.searchParams.set('order', 'date');
   url.searchParams.set('q', job.query);
   url.searchParams.set('publishedAfter', job.published_after || YOUTUBE_SOURCE_POST_WINDOW_START);
+  if (job.published_before) url.searchParams.set('publishedBefore', job.published_before);
   url.searchParams.set('maxResults', String(cappedNumber(maxResults, DEFAULT_YOUTUBE_RESULTS_PER_SOURCE, 1, 50)));
   url.searchParams.set('safeSearch', 'none');
   if (pageToken) url.searchParams.set('pageToken', pageToken);
@@ -3215,12 +3351,13 @@ function youtubePublishedAtForItem(item = {}) {
   return item.contentDetails?.videoPublishedAt || item.snippet?.publishedAt || '';
 }
 
-function youtubePublishedInWindow(item = {}, publishedAfter = YOUTUBE_SOURCE_POST_WINDOW_START) {
+function youtubePublishedInWindow(item = {}, publishedAfter = YOUTUBE_SOURCE_POST_WINDOW_START, publishedBefore = '') {
   const publishedAt = youtubePublishedAtForItem(item);
   const date = publishedAt ? new Date(publishedAt) : null;
   const start = new Date(cleanText(publishedAfter) || YOUTUBE_SOURCE_POST_WINDOW_START);
   if (!date || Number.isNaN(date.getTime()) || Number.isNaN(start.getTime())) return false;
-  return date >= start;
+  const end = cleanText(publishedBefore) ? new Date(publishedBefore) : null;
+  return date >= start && (!end || Number.isNaN(end.getTime()) || date < end);
 }
 
 async function fetchYouTubeChannelDetails(job = {}, {
@@ -3319,7 +3456,11 @@ async function fetchYouTubeChannelUploadsJob(job = {}, {
     };
   }
   const rows = Array.isArray(payload.items) ? payload.items : [];
-  const inWindowRows = rows.filter((row) => youtubePublishedInWindow(row, job.published_after || YOUTUBE_SOURCE_POST_WINDOW_START));
+  const inWindowRows = rows.filter((row) => youtubePublishedInWindow(
+    row,
+    job.published_after || YOUTUBE_SOURCE_POST_WINDOW_START,
+    job.published_before || ''
+  ));
   const normalizedJob = {
     ...job,
     channel_id: details.channel_id,
@@ -3360,7 +3501,12 @@ async function fetchYouTubePostsForJobs(jobs = [], options = {}) {
   let jobsSkippedDueToTimeBudget = 0;
   const deadlineAt = Number(options.deadlineAt || 0) || 0;
   const minRemainingMs = Math.max(0, Number(options.minRemainingMs ?? SOCIAL_SWEEP_SOURCE_START_MIN_REMAINING_MS) || 0);
-  const maxPages = cappedNumber(options.maxPagesPerSource || options.maxPages || DEFAULT_YOUTUBE_PAGES_PER_SOURCE, DEFAULT_YOUTUBE_PAGES_PER_SOURCE, 1, SOCIAL_SWEEP_FAST_MAX_PAGES_PER_SOURCE);
+  const maxPages = cappedNumber(
+    options.maxPagesPerSource || options.maxPages || DEFAULT_YOUTUBE_PAGES_PER_SOURCE,
+    DEFAULT_YOUTUBE_PAGES_PER_SOURCE,
+    1,
+    options.backfillMode === true ? SOCIAL_SWEEP_BACKFILL_MAX_PAGES_PER_SOURCE : SOCIAL_SWEEP_FAST_MAX_PAGES_PER_SOURCE
+  );
   const env = options.env || process.env;
   const commentLookupBudget = options.youtubeCommentLookupBudget || {
     remaining: cappedNumber(
@@ -3747,6 +3893,61 @@ function normalizeXApiPost(tweet = {}, includes = {}, job = {}) {
   };
 }
 
+function xPostIdFromUrl(url = '') {
+  return cleanText(url).match(/\/status\/(\d+)/i)?.[1] || '';
+}
+
+async function fetchXPostMetadata(url = '', {
+  bearerToken = '',
+  fetchImpl = fetch,
+} = {}) {
+  const postId = xPostIdFromUrl(normalizeXPostUrl(url));
+  if (!postId) return { ok: false, skipped: true, reason: 'missing_exact_x_post_url' };
+  const token = cleanText(bearerToken) || envBearerToken().token;
+  if (!token) {
+    return {
+      ok: false,
+      skipped: true,
+      reason: 'missing_x_bearer_token',
+      required_any_of: X_BEARER_ENV_NAMES,
+    };
+  }
+  const endpoint = new URL(X_TWEET_LOOKUP_URL);
+  endpoint.searchParams.set('ids', postId);
+  endpoint.searchParams.set('tweet.fields', 'author_id,created_at,attachments,entities,geo,lang,public_metrics');
+  endpoint.searchParams.set('expansions', 'author_id,attachments.media_keys,geo.place_id');
+  endpoint.searchParams.set('user.fields', 'username,name,url,description,public_metrics,verified');
+  endpoint.searchParams.set('media.fields', 'media_key,type,url,preview_image_url,width,height');
+  const response = await fetchImpl(endpoint, {
+    headers: {
+      Accept: 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    return {
+      ok: false,
+      status: response.status,
+      reason: payload?.title || payload?.detail || payload?.error || 'x_post_lookup_failed',
+      errors: payload?.errors || [],
+    };
+  }
+  const tweet = Array.isArray(payload.data) ? payload.data[0] : payload.data;
+  if (!tweet?.id) {
+    return { ok: false, status: 404, reason: 'x_post_not_returned', errors: payload?.errors || [] };
+  }
+  const originalHandle = cleanText(url).match(/(?:x|twitter)\.com\/([^/]+)\/status/i)?.[1] || '';
+  return {
+    ok: true,
+    payload: normalizeXApiPost(tweet, payload.includes || {}, {
+      platform: 'x',
+      source_name: originalHandle,
+      source_url: originalHandle ? `https://x.com/${originalHandle}` : '',
+    }),
+  };
+}
+
 async function fetchXSearchJob(job = {}, {
   bearerToken = '',
   maxResults = DEFAULT_X_RESULTS_PER_SOURCE,
@@ -3769,6 +3970,7 @@ async function fetchXSearchJob(job = {}, {
   url.searchParams.set('expansions', 'author_id,attachments.media_keys,geo.place_id');
   url.searchParams.set('user.fields', 'username,name,url,description,public_metrics,verified');
   url.searchParams.set('media.fields', 'media_key,type,url,preview_image_url,width,height');
+  if (searchMode === 'recent' && job.since_id) url.searchParams.set('since_id', String(job.since_id));
   if (searchMode !== 'recent') url.searchParams.set('start_time', job.start_time || LAUNCH_SOURCE_POST_WINDOW_START);
   const response = await fetchImpl(url, {
     headers: { Authorization: `Bearer ${bearerToken}` },
@@ -3866,12 +4068,82 @@ async function fetchXPostsForJobs(jobs = [], options = {}) {
       status: report.status,
       reason: report.reason,
       result_count: report.result_count || 0,
+      since_id: job.since_id || '',
+      newest_id: report.meta?.newest_id || '',
       error_count: Array.isArray(report.errors) ? report.errors.length : 0,
     });
     posts.push(...(report.posts || []));
     if (timedOut) break;
   }
   return { posts, reports, timed_out: timedOut, jobs_attempted_count: jobsAttemptedCount, jobs_skipped_due_to_time_budget: jobsSkippedDueToTimeBudget };
+}
+
+function xHashtagTerms(posts = []) {
+  return [...new Set((Array.isArray(posts) ? posts : []).flatMap((post) => {
+    const text = cleanText(post.caption || post.description || post.title);
+    return [...text.matchAll(/#([a-z0-9_]{2,50})/gi)].map((match) => match[1].toLowerCase());
+  }))].slice(0, 100);
+}
+
+async function fetchXAuthorExpansion(seedPosts = [], {
+  bearerToken = '',
+  fetchImpl = fetch,
+  authorLimit = DEFAULT_X_AUTHOR_EXPANSION_LIMIT,
+  maxResults = 10,
+  deadlineAt = 0,
+} = {}) {
+  const seeds = [...new Map((Array.isArray(seedPosts) ? seedPosts : [])
+    .map((post) => [cleanText(post.raw_source_post?.tweet?.author_id), post])
+    .filter(([authorId]) => authorId)).entries()]
+    .slice(0, cappedNumber(authorLimit, DEFAULT_X_AUTHOR_EXPANSION_LIMIT, 0, 10));
+  const posts = [];
+  const reports = [];
+  for (const [authorId, seedPost] of seeds) {
+    if (sweepDeadlineReached(deadlineAt, SOCIAL_SWEEP_SOURCE_START_MIN_REMAINING_MS)) {
+      reports.push({ author_id: authorId, ok: false, skipped: true, reason: 'source_sweep_time_budget_exhausted' });
+      break;
+    }
+    const endpoint = new URL(`${X_USER_TIMELINE_URL_BASE}/${encodeURIComponent(authorId)}/tweets`);
+    endpoint.searchParams.set('max_results', String(cappedNumber(maxResults, 10, 5, 100)));
+    endpoint.searchParams.set('exclude', 'retweets,replies');
+    endpoint.searchParams.set('tweet.fields', 'author_id,created_at,attachments,entities,geo,lang,public_metrics');
+    endpoint.searchParams.set('expansions', 'author_id,attachments.media_keys,geo.place_id');
+    endpoint.searchParams.set('user.fields', 'username,name,url,description,public_metrics,verified');
+    endpoint.searchParams.set('media.fields', 'media_key,type,url,preview_image_url,width,height');
+    try {
+      const response = await fetchImpl(endpoint, { headers: { Authorization: `Bearer ${bearerToken}` } });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        reports.push({
+          author_id: authorId,
+          ok: false,
+          status: response.status,
+          reason: payload?.title || payload?.detail || payload?.error || 'x_author_timeline_failed',
+        });
+        continue;
+      }
+      const rows = Array.isArray(payload.data) ? payload.data : [];
+      const authorPosts = rows
+        .map((tweet) => normalizeXApiPost(tweet, payload.includes || {}, {
+          platform: 'x',
+          source_key: `x-author-${authorId}`,
+          source_name: seedPost.source_name,
+          source_url: seedPost.source_page_url || seedPost.source_urls?.[0] || '',
+        }))
+        .filter((post) => post.source_url);
+      posts.push(...authorPosts);
+      reports.push({
+        author_id: authorId,
+        ok: true,
+        result_count: authorPosts.length,
+        display_name: seedPost.source_name || '',
+        profile_url: seedPost.source_page_url || seedPost.source_urls?.[0] || '',
+      });
+    } catch (error) {
+      reports.push({ author_id: authorId, ok: false, reason: sourceSweepErrorReason(error) });
+    }
+  }
+  return { posts: uniquePosts(posts), reports, hashtag_terms: xHashtagTerms(posts) };
 }
 
 function uniquePosts(posts = []) {
@@ -4305,7 +4577,10 @@ async function runSocialPlatformPostSweep({
   lookbackDays = 0,
   fetchX = true,
   fetchYouTube = true,
+  useSavedCursors = true,
+  backfillMode = false,
   youtubePublishedAfter = YOUTUBE_SOURCE_POST_WINDOW_START,
+  youtubePublishedBefore = '',
   xPublishedAfter = '',
   publishedAfter = '',
   env = process.env,
@@ -4332,7 +4607,12 @@ async function runSocialPlatformPostSweep({
       : [normalizedPlatform];
   const sourceLimit = cappedNumber(maxSources, SOCIAL_SWEEP_FAST_DEFAULT_SOURCES, 1, SOCIAL_SWEEP_FAST_MAX_SOURCES);
   const resultLimit = cappedNumber(maxResultsPerSource, DEFAULT_X_RESULTS_PER_SOURCE, 1, SOCIAL_SWEEP_FAST_MAX_RESULTS_PER_SOURCE);
-  const pageLimit = cappedNumber(maxPagesPerSource, DEFAULT_YOUTUBE_PAGES_PER_SOURCE, 1, SOCIAL_SWEEP_FAST_MAX_PAGES_PER_SOURCE);
+  const pageLimit = cappedNumber(
+    maxPagesPerSource,
+    DEFAULT_YOUTUBE_PAGES_PER_SOURCE,
+    1,
+    backfillMode ? SOCIAL_SWEEP_BACKFILL_MAX_PAGES_PER_SOURCE : SOCIAL_SWEEP_FAST_MAX_PAGES_PER_SOURCE
+  );
   const importPostLimit = Math.min(SOCIAL_SWEEP_IMPORT_POST_LIMIT, Math.max(sourceLimit, sourceLimit * resultLimit));
   const normalizedSourceOffset = cappedOffset(sourceOffset);
   const tiktokSources = requestedPlatforms.includes('tiktok') ? sourcesForPlatform('tiktok') : [];
@@ -4353,10 +4633,10 @@ async function runSocialPlatformPostSweep({
     : [];
   const normalizedYoutubeJobMode = normalizeYouTubeJobMode(youtubeJobMode);
   const unfilteredYoutubeSearchJobs = requestedPlatforms.includes('youtube')
-    ? buildYouTubeSearchJobs({ sources: youtubeSources, limit: sourceLimit, offset: normalizedSourceOffset, publishedAfter: youtubeStartTime, maxPagesPerSource: pageLimit, jobMode: 'all' })
+    ? buildYouTubeSearchJobs({ sources: youtubeSources, limit: sourceLimit, offset: normalizedSourceOffset, publishedAfter: youtubeStartTime, publishedBefore: youtubePublishedBefore, maxPagesPerSource: pageLimit, jobMode: 'all' })
     : [];
   const primaryYoutubeSearchJobs = requestedPlatforms.includes('youtube')
-    ? buildYouTubeSearchJobs({ sources: youtubeSources, limit: sourceLimit, offset: normalizedSourceOffset, publishedAfter: youtubeStartTime, maxPagesPerSource: pageLimit, jobMode: normalizedYoutubeJobMode })
+    ? buildYouTubeSearchJobs({ sources: youtubeSources, limit: sourceLimit, offset: normalizedSourceOffset, publishedAfter: youtubeStartTime, publishedBefore: youtubePublishedBefore, maxPagesPerSource: pageLimit, jobMode: normalizedYoutubeJobMode })
     : [];
   const primaryYoutubeSourceKeys = new Set(primaryYoutubeSearchJobs.map((item) => item.source_key));
   const youtubeRegistryFillSearchJobs = requestedPlatforms.includes('youtube') && normalizedYoutubeJobMode === 'channel_uploads' && primaryYoutubeSearchJobs.length < sourceLimit
@@ -4365,14 +4645,50 @@ async function runSocialPlatformPostSweep({
       limit: sourceLimit - primaryYoutubeSearchJobs.length,
       offset: normalizedSourceOffset,
       publishedAfter: youtubeStartTime,
+      publishedBefore: youtubePublishedBefore,
       maxPagesPerSource: pageLimit,
+      backfillMode,
       jobMode: 'search',
     }).filter((job) => !primaryYoutubeSourceKeys.has(job.source_key))
     : [];
-  const youtubeSearchJobs = [...primaryYoutubeSearchJobs, ...youtubeRegistryFillSearchJobs];
-  const xSearchJobs = requestedPlatforms.includes('x')
+  let youtubeSearchJobs = [...primaryYoutubeSearchJobs, ...youtubeRegistryFillSearchJobs];
+  if (useSavedCursors && youtubeSearchJobs.length && db?.query) {
+    try {
+      const cursorRows = await db.query(
+        `SELECT source_key, published_after
+         FROM property_harvest_cursors
+         WHERE platform = 'youtube' AND source_key = ANY($1::text[])`,
+        [youtubeSearchJobs.map((job) => job.source_key)]
+      );
+      const publishedAfterBySource = new Map(cursorRows.rows.map((row) => [
+        row.source_key,
+        row.published_after ? new Date(row.published_after).toISOString() : '',
+      ]));
+      youtubeSearchJobs = youtubeSearchJobs.map((job) => ({
+        ...job,
+        published_after: publishedAfterBySource.get(job.source_key) || job.published_after,
+      }));
+    } catch (error) {
+      if (error?.code !== '42P01') throw error;
+    }
+  }
+  let xSearchJobs = requestedPlatforms.includes('x')
     ? buildXSearchJobs({ sources: xSourceWindow.sources, limit: sourceLimit, searchMode, startTime: xStartTime })
     : [];
+  if (searchMode === 'recent' && xSearchJobs.length && db?.query) {
+    try {
+      const cursorRows = await db.query(
+        `SELECT source_key, since_id
+         FROM property_harvest_cursors
+         WHERE platform = 'x' AND source_key = ANY($1::text[])`,
+        [xSearchJobs.map((job) => job.source_key)]
+      );
+      const sinceIdBySource = new Map(cursorRows.rows.map((row) => [row.source_key, row.since_id]));
+      xSearchJobs = xSearchJobs.map((job) => ({ ...job, since_id: sinceIdBySource.get(job.source_key) || '' }));
+    } catch (error) {
+      if (error?.code !== '42P01') throw error;
+    }
+  }
   const facebookCaptureTasks = requestedPlatforms.includes('facebook')
     ? buildManualSocialCaptureTasks({ sources: facebookSourceWindow.sources, platform: 'facebook', limit: sourceLimit })
     : [];
@@ -4443,6 +4759,7 @@ async function runSocialPlatformPostSweep({
       apiKey: youtubeApi.apiKey,
       maxResults: resultLimit,
       maxPagesPerSource: pageLimit,
+      backfillMode,
       env,
       fetchImpl: sweepFetchImpl,
       youtubeCommentLookupBudget,
@@ -4481,7 +4798,9 @@ async function runSocialPlatformPostSweep({
         limit: sourceLimit,
         offset: 0,
         publishedAfter: youtubeStartTime,
+        publishedBefore: youtubePublishedBefore,
         maxPagesPerSource: pageLimit,
+        backfillMode,
         jobMode: 'channel_uploads',
       }).filter((job) => job.search_method === 'channel_uploads' && !existingJobKeys.has(job.source_key))
       : [];
@@ -4502,6 +4821,7 @@ async function runSocialPlatformPostSweep({
         apiKey: youtubeApi.apiKey,
         maxResults: resultLimit,
         maxPagesPerSource: pageLimit,
+        backfillMode,
         env,
         fetchImpl: sweepFetchImpl,
         youtubeCommentLookupBudget,
@@ -4535,6 +4855,31 @@ async function runSocialPlatformPostSweep({
       load_reason: 'time_budget_guard',
     };
   }
+  if (!dryRun && db?.query && youtubeFetch.posts.length) {
+    const newestPublishedAtBySource = new Map();
+    for (const post of youtubeFetch.posts) {
+      const sourceKeyValue = cleanText(post.source_registry_key || post.raw_source_post?.source_job?.source_key);
+      const publishedAt = cleanText(post.first_posted_at || post.published_at || post.youtube_published_at);
+      const publishedTime = Date.parse(publishedAt);
+      if (!sourceKeyValue || !Number.isFinite(publishedTime)) continue;
+      const current = newestPublishedAtBySource.get(sourceKeyValue);
+      if (!current || publishedTime > Date.parse(current)) newestPublishedAtBySource.set(sourceKeyValue, new Date(publishedTime).toISOString());
+    }
+    for (const [sourceKeyValue, newestPublishedAt] of newestPublishedAtBySource.entries()) {
+      await db.query(
+        `INSERT INTO property_harvest_cursors (platform, source_key, published_after, last_polled_at, metadata)
+         VALUES ('youtube',$1,$2::timestamptz,NOW(),$3::jsonb)
+         ON CONFLICT (platform, source_key) DO UPDATE
+           SET published_after = GREATEST(property_harvest_cursors.published_after, EXCLUDED.published_after),
+               last_polled_at = NOW(),
+               metadata = property_harvest_cursors.metadata || EXCLUDED.metadata,
+               updated_at = NOW()`,
+        [sourceKeyValue, newestPublishedAt, JSON.stringify({ newest_published_at: newestPublishedAt })]
+      ).catch((error) => {
+        if (error?.code !== '42P01') throw error;
+      });
+    }
+  }
   const bearer = envBearerToken(env);
   let xFetch = {
     api_configured: Boolean(bearer.token),
@@ -4565,6 +4910,63 @@ async function runSocialPlatformPostSweep({
       jobs_skipped_due_to_time_budget: fetched.jobs_skipped_due_to_time_budget || 0,
       skipped_reason: '',
     };
+    if (searchMode === 'recent') {
+      const authorExpansion = await fetchXAuthorExpansion(xFetch.posts, {
+        bearerToken: bearer.token,
+        fetchImpl: sweepFetchImpl,
+        authorLimit: cappedNumber(env.X_AUTHOR_EXPANSION_LIMIT, DEFAULT_X_AUTHOR_EXPANSION_LIMIT, 0, 10),
+        maxResults: cappedNumber(env.X_AUTHOR_EXPANSION_MAX_RESULTS, 10, 5, 100),
+        deadlineAt: sweepDeadlineAt,
+      });
+      xFetch = {
+        ...xFetch,
+        posts: uniquePosts([...xFetch.posts, ...authorExpansion.posts]),
+        author_expansion: authorExpansion,
+      };
+      if (!dryRun && db?.query) {
+        for (const report of authorExpansion.reports.filter((item) => item.ok)) {
+          await db.query(
+            `INSERT INTO property_harvest_channels (
+               platform, source_key, display_name, profile_url, external_channel_id,
+               subscription_status, last_checked_at, metadata
+             ) VALUES ('x',$1,$2,$3,$4,'official_author_timeline',NOW(),$5::jsonb)
+             ON CONFLICT (platform, source_key) DO UPDATE
+               SET display_name = COALESCE(NULLIF(EXCLUDED.display_name, ''), property_harvest_channels.display_name),
+                   profile_url = COALESCE(NULLIF(EXCLUDED.profile_url, ''), property_harvest_channels.profile_url),
+                   external_channel_id = EXCLUDED.external_channel_id,
+                   subscription_status = EXCLUDED.subscription_status,
+                   last_checked_at = NOW(),
+                   metadata = property_harvest_channels.metadata || EXCLUDED.metadata,
+                   updated_at = NOW()`,
+            [
+              `x-author-${report.author_id}`,
+              report.display_name || `X author ${report.author_id}`,
+              report.profile_url || null,
+              report.author_id,
+              JSON.stringify({ hashtag_term_seeds: authorExpansion.hashtag_terms, latest_result_count: report.result_count }),
+            ]
+          ).catch((error) => {
+            if (error?.code !== '42P01') throw error;
+          });
+        }
+      }
+    }
+    if (!dryRun && db?.query) {
+      for (const report of xFetch.reports.filter((item) => item.ok && item.newest_id && item.source_key)) {
+        await db.query(
+          `INSERT INTO property_harvest_cursors (platform, source_key, since_id, last_polled_at, metadata)
+           VALUES ('x',$1,$2,NOW(),$3::jsonb)
+           ON CONFLICT (platform, source_key) DO UPDATE
+             SET since_id = EXCLUDED.since_id,
+                 last_polled_at = NOW(),
+                 metadata = property_harvest_cursors.metadata || EXCLUDED.metadata,
+                 updated_at = NOW()`,
+          [report.source_key, report.newest_id, JSON.stringify({ query: report.query, result_count: report.result_count })]
+        ).catch((error) => {
+          if (error?.code !== '42P01') throw error;
+        });
+      }
+    }
   }
   const allDiscoveredPosts = uniquePosts([
     ...tiktokDataSourceFetch.posts,
@@ -4592,6 +4994,33 @@ async function runSocialPlatformPostSweep({
       queued_listings: [],
       source_review_records: [],
     };
+  const harvestEventLog = !dryRun
+    ? await recordHarvestImportResult(db, importResult, { eventType: 'scheduled_social_sweep' }).catch((error) => ({
+      ok: false,
+      recorded: 0,
+      reason: error.message || 'harvest_event_log_failed',
+    }))
+    : { ok: true, skipped: true, reason: 'dry_run', recorded: 0 };
+  let youtubeChannelRegistry = {
+    ok: true,
+    skipped: true,
+    reason: dryRun ? 'dry_run' : 'no_discovered_youtube_channels',
+    discovered_channel_count: 0,
+    reports: [],
+  };
+  if (!dryRun && youtubeFetch.posts.length && db?.query && !sweepDeadlineReached(sweepDeadlineAt, SOCIAL_SWEEP_MIN_REMAINING_MS)) {
+    const { registerDiscoveredYouTubeChannels } = require('./youtubeWebSubService');
+    youtubeChannelRegistry = await registerDiscoveredYouTubeChannels(db, youtubeFetch.posts, {
+      autoSubscribe: true,
+      fetchImpl: sweepFetchImpl,
+      env,
+    }).catch((error) => ({
+      ok: false,
+      reason: error.message || 'youtube_channel_registry_failed',
+      discovered_channel_count: 0,
+      reports: [],
+    }));
+  }
   const canRunYouTubeBacklog = requestedPlatforms.includes('youtube') && fetchYouTube && youtubeApi.apiKey
     && !sweepDeadlineReached(sweepDeadlineAt, SOCIAL_SWEEP_BACKLOG_MIN_REMAINING_MS);
   const pendingYouTubeBacklogReprocess = canRunYouTubeBacklog
@@ -4736,6 +5165,7 @@ async function runSocialPlatformPostSweep({
       confidence_summary: summarizeYouTubeConfidence(youtubeFetch.posts),
       known_channel_fallback: youtubeKnownChannelFallback,
       pending_backlog_reprocess: pendingYouTubeBacklogReprocess,
+      websub_channel_registry: youtubeChannelRegistry,
     },
     x: {
       source_count: xSources.length,
@@ -4751,6 +5181,7 @@ async function runSocialPlatformPostSweep({
       skipped_reason: xFetch.skipped_reason,
       search_jobs: xSearchJobs,
       fetch_reports: xFetch.reports,
+      author_expansion: xFetch.author_expansion || { posts: [], reports: [], hashtag_terms: [] },
       fetched_posts_count: xFetch.posts.length,
     },
     facebook: {
@@ -4782,6 +5213,7 @@ async function runSocialPlatformPostSweep({
     discovered_posts_count: discoveredPosts.length,
     discovered_posts: discoveredPosts.slice(0, 50),
     import_result: importResult,
+    harvest_event_log: harvestEventLog,
     pending_backlog_reprocess_result: pendingYouTubeBacklogReprocess,
   };
 }
@@ -4806,6 +5238,7 @@ module.exports = {
   YOUTUBE_SOURCE_TEXT_ENRICHMENT_VERSION,
   YOUTUBE_API_KEY_ENV_NAMES,
   X_BEARER_ENV_NAMES,
+  X_TWEET_LOOKUP_URL,
   META_GRAPH_ACCESS_TOKEN_ENV_NAMES,
   FACEBOOK_PAGE_ID_ENV_NAMES,
   INSTAGRAM_BUSINESS_ACCOUNT_ID_ENV_NAMES,
@@ -4834,7 +5267,9 @@ module.exports = {
   filterYouTubeJobsByMode,
   normalizeYouTubeJobMode,
   buildXSearchJobs,
+  fetchXAuthorExpansion,
   fetchXPostsForJobs,
+  fetchXPostMetadata,
   importExactSocialSourcePosts,
   importTikTokExactVideoPosts,
   normalizeExactSocialPostUrl,

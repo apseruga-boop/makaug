@@ -39,6 +39,7 @@ const {
   normalizeReviewChecklist,
   ownerEditTokenExpiry
 } = require('../services/listingModerationService');
+const { loadHarvestSummary } = require('../services/propertyHarvestMonitoringService');
 const {
   getCachedExternalDuplicateScan,
   scanAndCacheExternalDuplicates
@@ -194,6 +195,18 @@ const {
 const router = express.Router();
 
 router.use(requireAdminApiKey);
+
+router.get('/harvest/summary', async (req, res, next) => {
+  try {
+    const data = await loadHarvestSummary(db, { days: req.query.days });
+    return res.json({ ok: true, data });
+  } catch (error) {
+    if (error?.code === '42P01') {
+      return res.status(503).json({ ok: false, error: 'Apply migration 112_always_on_property_harvest.sql before opening Harvest monitoring.' });
+    }
+    return next(error);
+  }
+});
 
 const FIELD_AGENT_DEFAULT_PAYOUT_UGX = 5000;
 const FIELD_AGENT_PAYOUT_DAY = 'Friday';
@@ -4638,7 +4651,8 @@ router.post('/tiktok-source-posts/import', async (req, res, next) => {
 router.post('/tiktok-autopublish-agent/run', async (req, res, next) => {
   try {
     const dryRun = req.body?.dry_run !== false && req.body?.dryRun !== false;
-    const confirmLive = req.body?.confirm_live === true || req.body?.confirmLive === true;
+    const confirmReview = req.body?.confirm_review === true || req.body?.confirmReview === true
+      || req.body?.confirm_live === true || req.body?.confirmLive === true;
     const posts = Array.isArray(req.body?.posts)
       ? req.body.posts
       : (Array.isArray(req.body) ? req.body : []);
@@ -4655,7 +4669,7 @@ router.post('/tiktok-autopublish-agent/run', async (req, res, next) => {
       reviewLimit: req.body?.review_limit || req.body?.reviewLimit || 100,
       scanLimit: req.body?.scan_limit || req.body?.scanLimit || 250,
       dryRun,
-      confirmLive,
+      confirmReview,
       posts,
       urls,
       rawText: req.body?.raw_text || req.body?.rawText || req.body?.text || '',
@@ -4664,7 +4678,8 @@ router.post('/tiktok-autopublish-agent/run', async (req, res, next) => {
     await writeAudit('admin_tiktok_autopublish_agent_run', {
       batch_id: SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID,
       dry_run: dryRun,
-      confirm_live: confirmLive,
+      confirm_review: confirmReview,
+      legacy_confirm_live_alias_used: req.body?.confirm_live === true || req.body?.confirmLive === true,
       hashtag: result.hashtag,
       review_queue_before: result.review_queue_before,
       review_queue_after: result.review_queue_after,
