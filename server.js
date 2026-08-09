@@ -361,7 +361,9 @@ const aboutHeroContrastFixVersion = 'about-hero-contrast-fix-20260713';
 const aboutLandStepsVersion = 'about-land-steps-20260713';
 const socialImportTilesVersion = 'social-import-tiles-20260713';
 const kingHarvesterRouteContractVersion = 'king-harvester-route-contract-20260809';
+const kingTikTokHarvesterE2eVersion = 'king-tiktok-harvester-e2e-20260809';
 const publicAppVersionSuffixes = [
+  kingTikTokHarvesterE2eVersion,
   kingHarvesterRouteContractVersion,
   captureHelperUsabilityVersion,
   studentNearestUniversityVersion,

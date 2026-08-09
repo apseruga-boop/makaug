@@ -77,6 +77,7 @@ const TIKTOK_CLIENT_KEY_ENV_NAMES = ['TIKTOK_CLIENT_KEY'];
 const TIKTOK_CLIENT_SECRET_ENV_NAMES = ['TIKTOK_CLIENT_SECRET'];
 const TIKTOK_DATA_SOURCE_URL_ENV_NAMES = ['TIKTOK_DATA_SOURCE_URL', 'TIKTOK_SOURCE_FEED_URL', 'TIKTOK_SEARCH_EXPORT_URL'];
 const TIKTOK_OEMBED_URL = 'https://www.tiktok.com/oembed';
+const KING_TIKTOK_HARVEST_E2E_MARKER = 'king-tiktok-harvester-e2e-20260809';
 const TIKTOK_OEMBED_THUMBNAIL_REPROCESS_VERSION = 'tiktok-oembed-thumbnail-reprocess-20260709';
 const TIKTOK_OEMBED_THUMBNAIL_CACHE_VERSION = 'tiktok-oembed-thumbnail-cache-20260709';
 const DEFAULT_TIKTOK_PENDING_REPROCESS_LIMIT = 80;
@@ -2045,11 +2046,17 @@ async function importExactSocialSourcePosts({
         post_url: url,
         platform,
         method: 'tiktok_oembed',
+        server_side: true,
+        provider_endpoint: TIKTOK_OEMBED_URL,
         ok: report.ok === true,
         status: report.status || null,
         attempts: report.attempts || 1,
         retried: report.retried === true,
         reason: report.ok ? '' : (report.reason || 'tiktok_oembed_failed'),
+        verified_author_name: cleanText(report.payload?.author_name || ''),
+        verified_author_url: cleanText(report.payload?.author_url || ''),
+        caption_received: Boolean(cleanText(report.payload?.title || '')),
+        thumbnail_received: Boolean(cleanText(report.payload?.thumbnail_url || '')),
       });
       if (report.ok && report.payload) {
         const cached = await cacheTikTokOEmbedThumbnail(report.payload, url, { fetchImpl });
@@ -2155,8 +2162,10 @@ async function importExactSocialSourcePosts({
     dryRun,
     createProfilesForRepeatedSourcesOnly: false,
   });
+  const tiktokOembedReports = metadataReports.filter((report) => report.method === 'tiktok_oembed');
   return {
     ok: true,
+    marker: KING_TIKTOK_HARVEST_E2E_MARKER,
     batch_id: SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID,
     dry_run: dryRun,
     exact_social_url_count: importRows.length,
@@ -2165,6 +2174,27 @@ async function importExactSocialSourcePosts({
     short_url_resolution_reports: resolutionReports,
     image_hash_lookup_count: imageHashLookups,
     metadata_reports: metadataReports,
+    server_enrichment: {
+      marker: KING_TIKTOK_HARVEST_E2E_MARKER,
+      requested: fetchOembed === true && seeds.some((seed) => platformForExactSocialPostUrl(seed.post_url) === 'TikTok'),
+      server_side: true,
+      provider: 'tiktok_oembed',
+      provider_endpoint: TIKTOK_OEMBED_URL,
+      attempted: tiktokOembedReports.length,
+      succeeded: tiktokOembedReports.filter((report) => report.ok).length,
+      failed: tiktokOembedReports.filter((report) => !report.ok).length,
+      verified_posts: tiktokOembedReports.map((report) => ({
+        post_url: report.post_url,
+        ok: report.ok,
+        status: report.status,
+        attempts: report.attempts,
+        author_name: report.verified_author_name,
+        author_url: report.verified_author_url,
+        caption_received: report.caption_received,
+        thumbnail_received: report.thumbnail_received,
+        reason: report.reason,
+      })),
+    },
     import_result: importResult,
     ...importResult,
   };
