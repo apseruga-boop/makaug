@@ -1989,6 +1989,7 @@ async function importExactSocialSourcePosts({
   dryRun = false,
   fetchOembed = true,
   fetchPublicMetadata = true,
+  skipImageHashLookup = false,
   xBearerToken = '',
   fetchImpl = fetch,
 } = {}) {
@@ -2059,13 +2060,29 @@ async function importExactSocialSourcePosts({
         thumbnail_received: Boolean(cleanText(report.payload?.thumbnail_url || '')),
       });
       if (report.ok && report.payload) {
-        const cached = await cacheTikTokOEmbedThumbnail(report.payload, url, { fetchImpl });
-        metadata.oembed = cached.payload;
-        metadata.thumbnail_cache_report = cached.report;
         const latestReport = metadataReports[metadataReports.length - 1];
-        latestReport.thumbnail_cache_status = cached.payload.thumbnail_cache_status || '';
-        latestReport.thumbnail_cached = cached.report.cached === true;
-        latestReport.thumbnail_cache_reason = cached.report.reason || '';
+        if (dryRun) {
+          metadata.oembed = {
+            ...report.payload,
+            thumbnail_original_url: report.payload.thumbnail_url || '',
+            thumbnail_cache_status: 'preview_metadata_only',
+          };
+          metadata.thumbnail_cache_report = {
+            ok: true,
+            skipped: true,
+            reason: 'preview_metadata_only',
+          };
+          latestReport.thumbnail_cache_status = 'preview_metadata_only';
+          latestReport.thumbnail_cached = false;
+          latestReport.thumbnail_cache_reason = 'preview_metadata_only';
+        } else {
+          const cached = await cacheTikTokOEmbedThumbnail(report.payload, url, { fetchImpl });
+          metadata.oembed = cached.payload;
+          metadata.thumbnail_cache_report = cached.report;
+          latestReport.thumbnail_cache_status = cached.payload.thumbnail_cache_status || '';
+          latestReport.thumbnail_cached = cached.report.cached === true;
+          latestReport.thumbnail_cache_reason = cached.report.reason || '';
+        }
       }
       if (!report.ok) metadata.oembed_error = { ok: false, status: report.status || null, reason: report.reason || 'tiktok_oembed_failed' };
     }
@@ -2131,9 +2148,12 @@ async function importExactSocialSourcePosts({
     metadataByUrl,
   });
   const configuredImageHashLookups = Number(process.env.HARVEST_IMAGE_HASH_LOOKUP_LIMIT ?? 20);
+  const imageHashLookupEnabled = dryRun !== true && skipImageHashLookup !== true;
   const maxImageHashLookups = Math.max(
     0,
-    Math.min(50, Number.isFinite(configuredImageHashLookups) ? configuredImageHashLookups : 20)
+    imageHashLookupEnabled
+      ? Math.min(50, Number.isFinite(configuredImageHashLookups) ? configuredImageHashLookups : 20)
+      : 0
   );
   let imageHashLookups = 0;
   for (const row of importRows) {
@@ -2173,6 +2193,7 @@ async function importExactSocialSourcePosts({
     metadata_fetch_count: metadataReports.length,
     short_url_resolution_reports: resolutionReports,
     image_hash_lookup_count: imageHashLookups,
+    image_hash_lookup_skipped_reason: imageHashLookupEnabled ? '' : (dryRun ? 'preview_metadata_only' : 'prepared_preview_reused'),
     metadata_reports: metadataReports,
     server_enrichment: {
       marker: KING_TIKTOK_HARVEST_E2E_MARKER,

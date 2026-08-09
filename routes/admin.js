@@ -4782,6 +4782,7 @@ router.post('/exact-social-source-posts/import', async (req, res, next) => {
     const dryRun = req.body?.dry_run === true || req.body?.dryRun === true;
     const fetchOembed = req.body?.fetch_oembed !== false && req.body?.fetchOembed !== false;
     const fetchPublicMetadata = req.body?.fetch_public_metadata !== false && req.body?.fetchPublicMetadata !== false;
+    const preparedFromPreview = req.body?.prepared_from_preview === true || req.body?.preparedFromPreview === true;
     const result = await importExactSocialSourcePosts({
       db,
       posts,
@@ -4789,7 +4790,8 @@ router.post('/exact-social-source-posts/import', async (req, res, next) => {
       rawText,
       dryRun,
       fetchOembed,
-      fetchPublicMetadata
+      fetchPublicMetadata,
+      skipImageHashLookup: dryRun || preparedFromPreview
     });
     if (!dryRun && (
       Number(result.created_properties || 0) > 0
@@ -4803,6 +4805,8 @@ router.post('/exact-social-source-posts/import', async (req, res, next) => {
       dry_run: dryRun,
       exact_social_url_count: result.exact_social_url_count,
       metadata_fetch_count: result.metadata_fetch_count,
+      image_hash_lookup_count: result.image_hash_lookup_count,
+      prepared_from_preview: preparedFromPreview,
       tiktok_oembed_attempted: result.server_enrichment?.attempted || 0,
       tiktok_oembed_succeeded: result.server_enrichment?.succeeded || 0,
       tiktok_oembed_failed: result.server_enrichment?.failed || 0,

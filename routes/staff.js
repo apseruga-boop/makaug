@@ -3744,7 +3744,8 @@ router.post('/source-intake/exact-social/import', async (req, res, next) => {
       rawText,
       dryRun,
       fetchOembed,
-      fetchPublicMetadata
+      fetchPublicMetadata,
+      skipImageHashLookup: dryRun || req.body?.prepared_from_preview === true || req.body?.preparedFromPreview === true
     };
     const runImport = async () => {
       const result = await importExactSocialSourcePosts(importPayload);
