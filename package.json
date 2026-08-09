@@ -42,6 +42,7 @@
     "inventory:continuous-monitor": "node scripts/run-continuous-social-monitor.js",
     "inventory:import-source-posts": "node scripts/import-found-online-source-posts.js",
     "inventory:sweep-social-platforms": "node scripts/sweep-social-platform-posts.js",
+    "inventory:youtube-backfill": "node scripts/backfill-youtube-harvest.js",
     "inventory:tiktok-autopublish": "node scripts/run-tiktok-autopublish-agent.js",
     "inventory:prepare-video-stills": "node scripts/prepare-found-online-video-stills.js",
     "inventory:import-found-online-images": "node scripts/import-found-online-images.js",
@@ -84,6 +85,7 @@
     "openai": "^4.104.0",
     "pg": "^8.12.0",
     "playwright-core": "^1.59.1",
+    "sharp": "^0.35.3",
     "twilio": "^5.3.3",
     "uuid": "^10.0.0"
   },

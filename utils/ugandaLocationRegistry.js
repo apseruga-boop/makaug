@@ -73,6 +73,8 @@ const DETAILED_LOCATIONS = [
   { name: 'Kasangati', district: 'Wakiso', lat: 0.434, lng: 32.61, aliases: ['Kasangati', 'Kasangati-Nangabo', 'Kasangati Nangabo', 'Nangabo'] },
   { name: 'Gayaza', district: 'Wakiso', lat: 0.452, lng: 32.606, aliases: ['Gayaza', 'Gayaza Town', 'Gayaza Road'] },
 
+  { name: 'Kalagi', district: 'Mukono', lat: 0.531, lng: 32.743, aliases: ['Kalagi', 'Kalagi Town', 'Kalagi Trading Centre', 'Kalagi Trading Center'] },
+
   { name: 'Mukono', district: 'Mukono', level: 'district', lat: 0.353, lng: 32.753, aliases: ['Mukono', 'Mukono Town'] },
   { name: 'Seeta', district: 'Mukono', lat: 0.361, lng: 32.705 },
   { name: 'Goma', district: 'Mukono', lat: 0.383, lng: 32.742 },

@@ -36,8 +36,12 @@ const {
 } = require('../services/socialPlatformPostDiscoveryService');
 const {
   PROPERTY_SOURCE_REGISTRY_BATCH_ID,
-  PROPERTY_SOURCE_REGISTRY_TARGET_COUNT
+  PROPERTY_SOURCE_REGISTRY_TARGET_COUNT,
+  getPropertySourceRegistry,
 } = require('../services/propertySourceRegistryService');
+const {
+  requestYouTubeWebSubSubscription,
+} = require('../services/youtubeWebSubService');
 const {
   sourcePositiveListingGateForRecord,
   sourceQualitySuppressionForRecord
@@ -46,6 +50,7 @@ const {
   normalizeSourceUrl,
   upsertSuppressedSourceRows
 } = require('../services/suppressedSourceService');
+const { harvestAutomationEnabled } = require('../utils/harvestFeatureFlags');
 const {
   buildListingIdentityDocumentPayload
 } = require('../services/listingIdentityDocumentService');
@@ -53,6 +58,10 @@ const { sendSupportEmail } = require('../services/emailService');
 const { logEmailEvent } = require('../services/emailLogService');
 const { logNotification, notificationStatusFromDelivery } = require('../services/notificationLogService');
 const { hideReportedProperty } = require('../services/reportListingModerationService');
+const {
+  loadHarvestSummary,
+  recordHarvestImportResult,
+} = require('../services/propertyHarvestMonitoringService');
 
 const router = express.Router();
 
@@ -155,8 +164,8 @@ const STAFF_SOURCE_MONITOR_GUIDE = {
   source_registry_target_count: PROPERTY_SOURCE_REGISTRY_TARGET_COUNT,
   social_platform_batch_id: SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID,
   audit_log_action: 'continuous_social_monitor_run',
-  auto_live_rule: 'Auto-live only when the source is dated from 2026 onward, location is strong, category is clear, source/contact evidence exists, and duplicate checks pass. Phone number is optional when the source contact path is usable.',
-  review_rule: 'If location, category, date, source evidence, or duplicate confidence is weak, the row stays in King/staff review.',
+  auto_live_rule: 'Disabled for all harvesting. No harvested source can publish automatically.',
+  review_rule: 'Every harvested candidate stays pending for King/staff review. Explicit foreign and obvious non-listing rows remain visible in outcome monitoring with their reason.',
   board_update: 'Staff see the same queue, source registry, cadence, commands, and rules in this dashboard before running any source work.'
 };
 const staffFastDashboardCache = new Map();
@@ -2128,6 +2137,29 @@ function normalizeStaffListingPatch(existing = {}, patch = {}) {
     errors.push('district must be one of Uganda\'s valid districts');
   }
 
+  if (Object.prototype.hasOwnProperty.call(normalized, 'price_currency')) {
+    normalized.price_currency = cleanText(normalized.price_currency).toUpperCase();
+    if (!['UGX', 'USD'].includes(normalized.price_currency)) {
+      errors.push('price_currency must be UGX or USD');
+    }
+  }
+  const effectiveCurrency = normalized.price_currency || existing.price_currency || 'UGX';
+  if (effectiveCurrency === 'USD' && Object.prototype.hasOwnProperty.call(normalized, 'price_original')) {
+    const originalAmount = toNullableFloat(normalized.price_original);
+    const fxRate = toNullableFloat(normalized.price_fx_rate_ugx ?? existing.price_fx_rate_ugx);
+    if (originalAmount == null || originalAmount <= 0) errors.push('price_original must be a positive USD amount');
+    if (fxRate == null || fxRate <= 0) errors.push('price_fx_rate_ugx must be positive for USD prices');
+    if (originalAmount > 0 && fxRate > 0) {
+      normalized.price = Math.round(originalAmount * fxRate);
+      normalized.price_fx_as_of = cleanText(normalized.price_fx_as_of || existing.price_fx_as_of || new Date().toISOString());
+    }
+  }
+  if (effectiveCurrency === 'UGX' && Object.prototype.hasOwnProperty.call(normalized, 'price')) {
+    normalized.price_original = toNullableFloat(normalized.price);
+    normalized.price_fx_rate_ugx = null;
+    normalized.price_fx_as_of = null;
+  }
+
   return {
     patch: normalized,
     hierarchy,
@@ -2177,6 +2209,10 @@ async function updateStaffEditableListing(req, propertyId, listingPatch = {}, re
     district: (value) => cleanText(value),
     address: (value) => cleanText(value) || null,
     price: (value) => toNullableInt(value),
+    price_currency: (value) => cleanText(value).toUpperCase(),
+    price_original: (value) => toNullableFloat(value),
+    price_fx_rate_ugx: (value) => toNullableFloat(value),
+    price_fx_as_of: (value) => cleanText(value) || null,
     price_period: (value) => cleanText(value) || null,
     transaction_type: (value) => normalizeCommercialTransactionType(value) || null,
     property_type: (value) => cleanText(value) || null,
@@ -3707,6 +3743,11 @@ router.post('/source-intake/exact-social/import', async (req, res, next) => {
     };
     const runImport = async () => {
       const result = await importExactSocialSourcePosts(importPayload);
+      if (!dryRun) {
+        await recordHarvestImportResult(db, result, { eventType: 'exact_social_import' }).catch((error) => {
+          logger.warn('Harvest import event logging failed', { message: error.message });
+        });
+      }
       const responseData = {
         ...result,
         exact_input_count: exactInputCount,
@@ -3782,6 +3823,146 @@ router.get('/source-intake/jobs/:jobId', async (req, res) => {
     return res.status(404).json({ ok: false, error: 'Source intake job not found or already expired.' });
   }
   return res.json({ ok: true, data: publicStaffSourceIntakeJob(job) });
+});
+
+router.get('/harvest/summary', async (req, res, next) => {
+  try {
+    const data = await loadHarvestSummary(db, { days: req.query.days });
+    return res.json({ ok: true, data });
+  } catch (error) {
+    if (error?.code === '42P01') {
+      return res.status(503).json({ ok: false, error: 'Apply migration 112_always_on_property_harvest.sql before opening Harvest monitoring.' });
+    }
+    return next(error);
+  }
+});
+
+router.get('/source-intake/discover-helper', (req, res) => {
+  const platform = cleanText(req.query.platform || 'tiktok').toLowerCase();
+  const hashtag = cleanText(req.query.hashtag || req.query.q || '').replace(/^#/, '').replace(/[^\p{L}\p{N}_-]+/gu, '');
+  if (platform !== 'tiktok') {
+    return res.status(400).json({ ok: false, error: 'The assisted discover helper currently supports TikTok only.' });
+  }
+  if (!hashtag) return res.status(400).json({ ok: false, error: 'Enter a TikTok hashtag.' });
+  return res.json({
+    ok: true,
+    data: {
+      platform: 'tiktok',
+      hashtag,
+      discover_url: `https://www.tiktok.com/discover/${encodeURIComponent(hashtag)}`,
+      mode: 'assisted_logged_out_capture',
+      instructions: 'Open the public Discover page, copy exact /@handle/video/id links from visible listing cards, then paste those links into the exact social import panel. The server does not scrape the page.',
+    },
+  });
+});
+
+router.post('/harvest/youtube/subscriptions', async (req, res, next) => {
+  try {
+    if (!harvestAutomationEnabled()) {
+      return res.status(503).json({ ok: false, error: 'Harvest automation is disabled pending Dave verification.' });
+    }
+    const channelId = cleanText(req.body?.channel_id || req.body?.channelId);
+    if (!channelId) return res.status(400).json({ ok: false, error: 'channel_id is required' });
+    const data = await requestYouTubeWebSubSubscription(db, channelId);
+    return res.status(data.ok ? 202 : 400).json({ ok: data.ok, data, error: data.ok ? undefined : data.reason });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/harvest/youtube/subscriptions/renew', async (_req, res, next) => {
+  try {
+    if (!harvestAutomationEnabled()) {
+      return res.status(503).json({ ok: false, error: 'Harvest automation is disabled pending Dave verification.' });
+    }
+    const due = await db.query(
+      `SELECT external_channel_id
+       FROM property_harvest_channels
+       WHERE platform = 'youtube'
+         AND external_channel_id IS NOT NULL
+         AND (lease_expires_at IS NULL OR lease_expires_at < NOW() + INTERVAL '2 days')
+       ORDER BY lease_expires_at NULLS FIRST
+       LIMIT 25`
+    );
+    const reports = [];
+    for (const row of due.rows) reports.push(await requestYouTubeWebSubSubscription(db, row.external_channel_id));
+    return res.status(202).json({ ok: true, data: { requested: reports.length, reports } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/harvest/creators/next', async (req, res, next) => {
+  try {
+    const platform = cleanText(req.query.platform || 'tiktok').toLowerCase();
+    const registryRows = getPropertySourceRegistry()
+      .filter((source) => cleanText(source.platform).toLowerCase() === platform)
+      .filter((source) => cleanText(source.url || source.source_url));
+    const seededCreators = [];
+    const seenSourceKeys = new Set();
+    for (const source of registryRows.slice(0, 250)) {
+      const sourceKey = cleanText(source.key || source.source_key || source.handle || source.name);
+      if (!sourceKey || seenSourceKeys.has(sourceKey)) continue;
+      seenSourceKeys.add(sourceKey);
+      seededCreators.push({
+        source_key: sourceKey,
+        display_name: cleanText(source.name || source.source_name || source.handle || 'Tracked source'),
+        profile_url: cleanText(source.url || source.source_url),
+        metadata: { registry_batch: PROPERTY_SOURCE_REGISTRY_BATCH_ID },
+      });
+    }
+    if (seededCreators.length) {
+      await db.query(
+        `INSERT INTO property_harvest_channels (
+           platform, source_key, display_name, profile_url, subscription_status, metadata
+         )
+         SELECT $1, seed.source_key, seed.display_name, seed.profile_url,
+                'assisted_rotation', seed.metadata
+         FROM jsonb_to_recordset($2::jsonb) AS seed(
+           source_key text, display_name text, profile_url text, metadata jsonb
+         )
+         ON CONFLICT (platform, source_key) DO UPDATE
+           SET display_name = EXCLUDED.display_name,
+               profile_url = EXCLUDED.profile_url,
+               metadata = property_harvest_channels.metadata || EXCLUDED.metadata,
+           updated_at = NOW()`,
+        [platform, JSON.stringify(seededCreators)]
+      );
+    }
+    const nextCreator = await db.query(
+      `SELECT * FROM property_harvest_channels
+       WHERE platform = $1 AND profile_url IS NOT NULL
+       ORDER BY last_checked_at NULLS FIRST, updated_at ASC
+       LIMIT 1`,
+      [platform]
+    );
+    return res.json({
+      ok: true,
+      data: {
+        creator: nextCreator.rows[0] || null,
+        workflow: 'Open the public profile, copy only new exact post URLs, then paste them into the exact social import panel. No automated scraping is performed.',
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/harvest/creators/:sourceKey/checked', async (req, res, next) => {
+  try {
+    const platform = cleanText(req.body?.platform || 'tiktok').toLowerCase();
+    const result = await db.query(
+      `UPDATE property_harvest_channels
+       SET last_checked_at = NOW(), updated_at = NOW()
+       WHERE platform = $1 AND source_key = $2
+       RETURNING *`,
+      [platform, cleanText(req.params.sourceKey)]
+    );
+    if (!result.rows.length) return res.status(404).json({ ok: false, error: 'Tracked creator not found' });
+    return res.json({ ok: true, data: result.rows[0] });
+  } catch (error) {
+    return next(error);
+  }
 });
 
 router.post('/source-intake/social-sweep', async (req, res, next) => {
@@ -4159,3 +4340,4 @@ router.post('/assistant/query', async (req, res, next) => {
 });
 
 module.exports = router;
+module.exports._test = { normalizeStaffListingPatch };

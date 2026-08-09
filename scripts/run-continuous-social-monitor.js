@@ -12,6 +12,7 @@ const {
   SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID,
   runSocialPlatformPostSweep,
 } = require('../services/socialPlatformPostDiscoveryService');
+const { harvestAutomationEnabled } = require('../utils/harvestFeatureFlags');
 
 const args = process.argv.slice(2);
 const MONITOR_AUDIT_ACTION = 'continuous_social_monitor_run';
@@ -129,6 +130,9 @@ async function main() {
   if (!dryRun && !confirm) {
     usage();
     process.exit(2);
+  }
+  if (confirm && !harvestAutomationEnabled()) {
+    throw new Error('Harvest automation is disabled. Set HARVEST_AUTOMATION_ENABLED=true only after Dave verification.');
   }
 
   const targetCount = numberValue('--source-target', PROPERTY_SOURCE_REGISTRY_TARGET_COUNT, { min: 1 });

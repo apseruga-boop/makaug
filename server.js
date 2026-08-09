@@ -34,6 +34,7 @@ const propertySeekerRoutes = require('./routes/property-seeker');
 const studentRoutes = require('./routes/student');
 const fieldAgentRoutes = require('./routes/field-agent');
 const staffRoutes = require('./routes/staff');
+const harvestRoutes = require('./routes/harvest');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 const { runMigrations } = require('./scripts/migrate');
 const {
@@ -171,6 +172,7 @@ app.use('/api/property-seeker', propertySeekerRoutes);
 app.use('/api/student', studentRoutes);
 app.use('/api/field-agent', fieldAgentRoutes);
 app.use('/api/staff', staffRoutes);
+app.use('/api/harvest', harvestRoutes);
 
 app.get('/marketplace-sitemap.xml', (_req, res) => {
   const baseUrl = String(process.env.PUBLIC_BASE_URL || process.env.APP_BASE_URL || 'https://makaug.com').replace(/\/+$/, '');

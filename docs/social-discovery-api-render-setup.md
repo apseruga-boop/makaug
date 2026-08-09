@@ -15,6 +15,9 @@ This is the production setup for Makaug found-online property discovery. The job
 Add these in Render Dashboard -> Makaug web service -> Environment -> Environment Variables, then save and deploy.
 
 ```bash
+HARVEST_AUTOMATION_ENABLED=false
+HARVEST_PUBLIC_SUBMISSIONS_ENABLED=false
+
 YOUTUBE_API_KEY=
 GOOGLE_YOUTUBE_API_KEY=
 GOOGLE_API_KEY=
@@ -39,6 +42,8 @@ TIKTOK_CLIENT_SECRET=
 ```
 
 Use one YouTube key env and one X bearer env. The aliases are accepted so old Render names can keep working.
+
+Keep both rollout flags `false` for the initial production deploy. Dave's authenticated King/staff creator rotation, TikTok Discover helper, exact-link preview, and review-queue import remain available while these flags are off. `HARVEST_AUTOMATION_ENABLED` gates confirmed provider-driven jobs, TikTok agent writes, and YouTube WebSub. `HARVEST_PUBLIC_SUBMISSIONS_ENABLED` separately gates anonymous public link submissions.
 
 ## Where To Get Credentials
 
