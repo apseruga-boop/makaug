@@ -360,7 +360,9 @@ const aboutCtaPrimaryVersion = 'about-cta-primary-20260713';
 const aboutHeroContrastFixVersion = 'about-hero-contrast-fix-20260713';
 const aboutLandStepsVersion = 'about-land-steps-20260713';
 const socialImportTilesVersion = 'social-import-tiles-20260713';
+const kingHarvesterRouteContractVersion = 'king-harvester-route-contract-20260809';
 const publicAppVersionSuffixes = [
+  kingHarvesterRouteContractVersion,
   captureHelperUsabilityVersion,
   studentNearestUniversityVersion,
   staffOperationsDashboardVersion,

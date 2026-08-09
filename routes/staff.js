@@ -62,6 +62,11 @@ const {
   loadHarvestSummary,
   recordHarvestImportResult,
 } = require('../services/propertyHarvestMonitoringService');
+const {
+  listHarvestCreators,
+  loadNextHarvestCreator,
+  markHarvestCreatorChecked,
+} = require('../services/propertyHarvestCreatorRotationService');
 
 const router = express.Router();
 
@@ -3894,55 +3899,27 @@ router.post('/harvest/youtube/subscriptions/renew', async (_req, res, next) => {
 
 router.get('/harvest/creators/next', async (req, res, next) => {
   try {
-    const platform = cleanText(req.query.platform || 'tiktok').toLowerCase();
-    const registryRows = getPropertySourceRegistry()
-      .filter((source) => cleanText(source.platform).toLowerCase() === platform)
-      .filter((source) => cleanText(source.url || source.source_url));
-    const seededCreators = [];
-    const seenSourceKeys = new Set();
-    for (const source of registryRows.slice(0, 250)) {
-      const sourceKey = cleanText(source.key || source.source_key || source.handle || source.name);
-      if (!sourceKey || seenSourceKeys.has(sourceKey)) continue;
-      seenSourceKeys.add(sourceKey);
-      seededCreators.push({
-        source_key: sourceKey,
-        display_name: cleanText(source.name || source.source_name || source.handle || 'Tracked source'),
-        profile_url: cleanText(source.url || source.source_url),
-        metadata: { registry_batch: PROPERTY_SOURCE_REGISTRY_BATCH_ID },
-      });
-    }
-    if (seededCreators.length) {
-      await db.query(
-        `INSERT INTO property_harvest_channels (
-           platform, source_key, display_name, profile_url, subscription_status, metadata
-         )
-         SELECT $1, seed.source_key, seed.display_name, seed.profile_url,
-                'assisted_rotation', seed.metadata
-         FROM jsonb_to_recordset($2::jsonb) AS seed(
-           source_key text, display_name text, profile_url text, metadata jsonb
-         )
-         ON CONFLICT (platform, source_key) DO UPDATE
-           SET display_name = EXCLUDED.display_name,
-               profile_url = EXCLUDED.profile_url,
-               metadata = property_harvest_channels.metadata || EXCLUDED.metadata,
-           updated_at = NOW()`,
-        [platform, JSON.stringify(seededCreators)]
-      );
-    }
-    const nextCreator = await db.query(
-      `SELECT * FROM property_harvest_channels
-       WHERE platform = $1 AND profile_url IS NOT NULL
-       ORDER BY last_checked_at NULLS FIRST, updated_at ASC
-       LIMIT 1`,
-      [platform]
-    );
-    return res.json({
-      ok: true,
-      data: {
-        creator: nextCreator.rows[0] || null,
-        workflow: 'Open the public profile, copy only new exact post URLs, then paste them into the exact social import panel. No automated scraping is performed.',
-      },
+    return res.json({ ok: true, data: await loadNextHarvestCreator(db, { platform: req.query.platform }) });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/harvest/creators', async (req, res, next) => {
+  try {
+    const data = await listHarvestCreators(db, {
+      platform: req.query.platform,
+      limit: req.query.limit,
     });
+    return res.json({ ok: true, data });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/harvest/next-creator', async (req, res, next) => {
+  try {
+    return res.json({ ok: true, data: await loadNextHarvestCreator(db, { platform: req.query.platform }) });
   } catch (error) {
     return next(error);
   }
@@ -3950,16 +3927,12 @@ router.get('/harvest/creators/next', async (req, res, next) => {
 
 router.post('/harvest/creators/:sourceKey/checked', async (req, res, next) => {
   try {
-    const platform = cleanText(req.body?.platform || 'tiktok').toLowerCase();
-    const result = await db.query(
-      `UPDATE property_harvest_channels
-       SET last_checked_at = NOW(), updated_at = NOW()
-       WHERE platform = $1 AND source_key = $2
-       RETURNING *`,
-      [platform, cleanText(req.params.sourceKey)]
-    );
-    if (!result.rows.length) return res.status(404).json({ ok: false, error: 'Tracked creator not found' });
-    return res.json({ ok: true, data: result.rows[0] });
+    const creator = await markHarvestCreatorChecked(db, {
+      platform: req.body?.platform,
+      sourceKey: req.params.sourceKey,
+    });
+    if (!creator) return res.status(404).json({ ok: false, error: 'Tracked creator not found' });
+    return res.json({ ok: true, data: creator });
   } catch (error) {
     return next(error);
   }

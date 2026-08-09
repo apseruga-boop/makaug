@@ -41,6 +41,12 @@ const {
 } = require('../services/listingModerationService');
 const { loadHarvestSummary } = require('../services/propertyHarvestMonitoringService');
 const {
+  KING_HARVEST_ROUTE_CONTRACT_MARKER,
+  listHarvestCreators,
+  loadNextHarvestCreator,
+  markHarvestCreatorChecked,
+} = require('../services/propertyHarvestCreatorRotationService');
+const {
   getCachedExternalDuplicateScan,
   scanAndCacheExternalDuplicates
 } = require('../services/externalDuplicateScanService');
@@ -205,6 +211,69 @@ router.get('/harvest/summary', async (req, res, next) => {
     if (error?.code === '42P01') {
       return res.status(503).json({ ok: false, error: 'Apply migration 112_always_on_property_harvest.sql before opening Harvest monitoring.' });
     }
+    return next(error);
+  }
+});
+
+router.get('/harvest/coverage', async (req, res, next) => {
+  try {
+    const data = await loadHarvestSummary(db, { days: req.query.days });
+    return res.json({
+      ok: true,
+      data: {
+        ...data,
+        marker: KING_HARVEST_ROUTE_CONTRACT_MARKER,
+        review_only: true,
+      },
+    });
+  } catch (error) {
+    if (error?.code === '42P01') {
+      return res.status(503).json({ ok: false, error: 'Apply migration 112_always_on_property_harvest.sql before opening Harvest monitoring.' });
+    }
+    return next(error);
+  }
+});
+
+router.get('/harvest/creators', async (req, res, next) => {
+  try {
+    const data = await listHarvestCreators(db, {
+      platform: req.query.platform,
+      limit: req.query.limit,
+    });
+    return res.json({ ok: true, data });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+async function sendAdminNextHarvestCreator(req, res, next) {
+  try {
+    const data = await loadNextHarvestCreator(db, { platform: req.query.platform });
+    return res.json({ ok: true, data });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+router.get('/harvest/creators/next', sendAdminNextHarvestCreator);
+router.get('/harvest/next-creator', sendAdminNextHarvestCreator);
+
+router.post('/harvest/creators/:sourceKey/checked', async (req, res, next) => {
+  try {
+    const creator = await markHarvestCreatorChecked(db, {
+      platform: req.body?.platform,
+      sourceKey: req.params.sourceKey,
+    });
+    if (!creator) return res.status(404).json({ ok: false, error: 'Tracked creator not found' });
+    return res.json({
+      ok: true,
+      data: {
+        ...creator,
+        marker: KING_HARVEST_ROUTE_CONTRACT_MARKER,
+        review_only: true,
+      },
+    });
+  } catch (error) {
     return next(error);
   }
 });
