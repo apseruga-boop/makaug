@@ -12,7 +12,6 @@ const { sanitizePublicHtml } = require('../services/publicHtmlSanitizer');
 
 const root = path.join(__dirname, '..');
 const server = fs.readFileSync(path.join(root, 'server.js'), 'utf8');
-const publicSeoRenderer = fs.readFileSync(path.join(root, 'services', 'publicSeoRenderService.js'), 'utf8');
 const app = fs.readFileSync(path.join(root, 'assets', 'makaug-app.js'), 'utf8');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const admin = fs.readFileSync(path.join(root, 'routes', 'admin.js'), 'utf8');
@@ -52,7 +51,7 @@ assert.equal(canonicalLocationRouteSlug({ location: 'Ntinda', district: 'Kampala
 const areaMeta = categoryPageSeoMeta('/for-sale/ntinda-kampala', snapshot);
 assert(areaMeta, 'area metadata should resolve');
 assert.equal(areaMeta.count, 4);
-assert(areaMeta.title.includes('Ntinda, Kampala — 4 Listings'), 'area title should include location and honest count');
+assert(areaMeta.title.includes('Ntinda, Kampala (4)'), 'area title should include location and honest count');
 assert.equal(areaMeta.canonical, 'https://makaug.com/for-sale/ntinda-kampala');
 assert.equal(areaMeta.image, 'https://makaug.com/assets/house-ads-v3/sale.webp');
 
@@ -67,7 +66,7 @@ assert.equal(googleVerification, 'google-site-verification: google033e19e2016a21
 assert(server.includes('patchPublicPageSeoMeta'), 'category and detail metadata must share one patcher');
 assert(server.includes("'makaug:listing-count'"), 'area HTML must expose the authoritative server count to the client');
 assert(fs.readFileSync(path.join(root, 'services', 'publicSeoService.js'), 'utf8').includes("publicVisibleInventoryWhere('properties')"), 'SEO counts and sitemap must use the authoritative public predicate');
-assert(publicSeoRenderer.includes('RealEstateListing'), 'detail pages should expose listing structured data');
+assert(server.includes('RealEstateListing'), 'detail pages should expose listing structured data');
 assert(!server.includes('/assets/og-cover.jpg'), 'SEO metadata must not reference a missing fallback image');
 assert(app.includes('Look at this on makaug.com:'), 'property share copy must use the launch wording');
 assert(app.includes('utm_campaign", "property_share'), 'property shares must be attributed');
@@ -76,7 +75,7 @@ assert(app.includes('collapseDuplicateTransactionTitle'), 'stored card titles mu
 assert(!app.includes('sale: "Home for sale"'), 'default sale subtype must not contain the transaction twice');
 assert(properties.includes('collapseDuplicatePublicTransaction'), 'API-generated public titles must collapse duplicate transaction wording');
 assert(properties.includes('WITH public_page_ids AS MATERIALIZED'), 'public card searches must limit indexed IDs before hydrating image data');
-assert(publicSeoRenderer.includes('collapseDuplicatePublicTransaction'), 'detail SEO metadata must collapse duplicate transaction wording');
+assert(server.includes('collapseDuplicatePublicTransaction'), 'detail SEO metadata must collapse duplicate transaction wording');
 assert(app.includes('renderCanonicalSeoLandingIntro'), 'area routes need visible count and cross-links');
 assert(app.includes('meta[name="makaug:listing-count"]'), 'area intro must prefer the authoritative server count');
 assert(app.includes('hasCanonicalAreaSeoTitle'), 'language refresh must preserve the server-rendered canonical area title');

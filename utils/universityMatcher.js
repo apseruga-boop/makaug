@@ -1,7 +1,67 @@
-const { UNIVERSITIES, UNIVERSITY_ALIASES } = require('./constants');
+const { UNIVERSITIES } = require('./constants');
 
-const UNIVERSITY_ALIAS_GROUPS = Object.entries(UNIVERSITY_ALIASES)
-  .map(([name, aliases]) => ({ name, aliases }));
+const UNIVERSITY_ALIAS_GROUPS = [
+  {
+    name: 'Makerere University',
+    aliases: ['makerere', 'makerere university', 'muk', 'kikoni', 'wandegeya', 'mulago']
+  },
+  {
+    name: 'Makerere University Business School (MUBS)',
+    aliases: ['mubs', 'makerere university business school', 'nakawa campus', 'nakawa']
+  },
+  {
+    name: 'Kyambogo University',
+    aliases: ['kyambogo', 'kyambogo university', 'banda', 'ntinda']
+  },
+  {
+    name: 'Uganda Christian University (UCU)',
+    aliases: ['ucu', 'uganda christian university', 'bishop tucker', 'mukono campus', 'mukono town', 'mukono']
+  },
+  {
+    name: 'Kampala International University (KIU)',
+    aliases: ['kiu', 'kampala international university', 'kansanga', 'kabalagala']
+  },
+  {
+    name: 'Nkumba University',
+    aliases: ['nkumba', 'nkumba university', 'entebbe']
+  },
+  {
+    name: 'Ndejje University',
+    aliases: ['ndejje', 'ndejje university']
+  },
+  {
+    name: 'Uganda Martyrs University (UMU)',
+    aliases: ['umu', 'uganda martyrs university', 'nkozi']
+  },
+  {
+    name: 'Mbarara University of Science and Technology (MUST)',
+    aliases: ['must', 'mbarara university', 'mbarara university of science and technology', 'mbarara']
+  },
+  {
+    name: 'Gulu University',
+    aliases: ['gulu university', 'gulu']
+  },
+  {
+    name: 'Kabale University',
+    aliases: ['kabale university', 'kabale']
+  },
+  {
+    name: 'Lira University',
+    aliases: ['lira university', 'lira']
+  },
+  {
+    name: 'Busitema University',
+    aliases: ['busitema', 'busitema university']
+  },
+  {
+    name: 'Soroti University',
+    aliases: ['soroti university', 'soroti']
+  },
+  {
+    name: 'Islamic University in Uganda (IUIU)',
+    aliases: ['iuiu', 'islamic university in uganda', 'mbale campus']
+  }
+];
 
 const CANONICAL_UNIVERSITIES = Array.from(new Set([
   ...UNIVERSITIES,

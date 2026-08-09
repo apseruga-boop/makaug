@@ -7971,10 +7971,8 @@ function renderHeroPropertyOpportunityCounter() {
 
 function applyLanguageUI() {
   const pathname = normalizeRoutePath(window.location.pathname || "/");
-  const hasCanonicalAreaSeoTitle = /^\/(?:for-sale|to-rent|land|commercial|student-accommodation)(?:\/[a-z0-9-]+)+$/i.test(pathname)
-    || /^\/hostels\/[a-z0-9-]+$/i.test(pathname);
-  const hasCanonicalPropertySeoTitle = /^\/property\/[^/?#]+$/i.test(pathname);
-  if (!hasCanonicalAreaSeoTitle && !hasCanonicalPropertySeoTitle) document.title = tr("siteTitle");
+  const hasCanonicalAreaSeoTitle = /^\/(for-sale|to-rent|land|commercial|student-accommodation)\/[a-z0-9-]+$/i.test(pathname);
+  if (!hasCanonicalAreaSeoTitle) document.title = tr("siteTitle");
   setTextById("brand-subtitle", tr("brandSubtitle"));
 
   const savedEl = document.getElementById("top-saved-link");
@@ -37041,34 +37039,6 @@ function consumeHeroSearchHandoff(page) {
   }
 }
 
-function seoRouteStateHandoffPayload(page) {
-  const targetPage = normalizePageKey(page);
-  const stateElement = document.getElementById("makaug-seo-route-state");
-  if (!stateElement || normalizePageKey(stateElement.dataset.page || "") !== targetPage) return null;
-  const propertyType = normalizeInput(stateElement.dataset.propertyType || "");
-  const bedrooms = normalizeInput(stateElement.dataset.bedrooms || "");
-  const studentCampus = normalizeInput(stateElement.dataset.studentCampus || "");
-  const area = normalizeInput(studentCampus || stateElement.dataset.area || "");
-  return {
-    page: targetPage,
-    query: area,
-    area,
-    filters: {
-      propertyType,
-      commercialType: targetPage === "commercial" ? propertyType : "",
-      transactionType: normalizeInput(stateElement.dataset.transactionType || ""),
-      minPrice: normalizeInput(stateElement.dataset.minPrice || ""),
-      maxPrice: normalizeInput(stateElement.dataset.maxPrice || ""),
-      bedrooms,
-      exactBedrooms: bedrooms,
-      landTitleType: normalizeInput(stateElement.dataset.landTitleType || ""),
-      studentCampus
-    },
-    preservePath: stateElement.dataset.preservePath === "1",
-    source: "seo_facet_route"
-  };
-}
-
 function routeSearchHandoffPayload(page) {
   const targetPage = normalizePageKey(page);
   if (!sectionSearchConfigFor(targetPage)) return null;
@@ -37087,7 +37057,7 @@ function routeSearchHandoffPayload(page) {
     sort: normalizeInput(qs.get("sort") || "")
   };
   const hasFilters = Object.values(filters).some(Boolean);
-  if (!query && !area && !hasFilters) return seoRouteStateHandoffPayload(targetPage);
+  if (!query && !area && !hasFilters) return null;
   const radiusKmParam = normalizeInput(qs.get("radiusKm") || qs.get("radius_km") || "");
   const radiusMilesParam = normalizeInput(qs.get("radiusMiles") || qs.get("radius_miles") || qs.get("radius") || "");
   const radiusKmFromLegacyMiles = radiusKmParam ? "" : (radiusMilesParam ? radiusKmSelectValue(milesToKm(radiusMilesParam)) : "");
@@ -37146,7 +37116,7 @@ function updateHeroSearchRoute(page, payload = {}, source = "hero_search_route")
 function applyHeroSearchHandoff(page) {
   const payload = consumeHeroSearchHandoff(page) || routeSearchHandoffPayload(page);
   if (!payload) return false;
-  if (!payload.preservePath) updateHeroSearchRoute(page, payload, payload.source || "hero_search_handoff");
+  updateHeroSearchRoute(page, payload, payload.source || "hero_search_handoff");
   const rawRadiusValue = payload.radiusKm || payload.radius || "";
   const radiusValue = rawRadiusValue ? (radiusKmSelectValue(rawRadiusValue) || String(rawRadiusValue)) : "";
   if (payload.nearState) {
@@ -37162,21 +37132,15 @@ function applyHeroSearchHandoff(page) {
     if (!el) return;
     el.value = value || "";
   };
-  const setSelectWithFallback = (selectId, fallbackId, value) => {
-    setValue(selectId, "");
-    setValue(fallbackId, "");
-    if (value) setAiAssistantFilterControl(selectId, String(value), { fallbackId });
-  };
   const filters = payload.filters || {};
   if (page === "rent") {
     setValue("rent-location-f", payload.query);
     setValue("rent-district-f", payload.area);
     if (radiusValue) setValue("rent-radius-f", radiusValue);
     setValue("rent-min-beds-f", /^\d+$/.test(String(filters.bedrooms || "")) ? filters.bedrooms : payload.context);
-    setSelectWithFallback("rent-min-price-f", "rent-min-price-custom-f", filters.minPrice);
-    setSelectWithFallback("rent-price-f", "rent-max-price-custom-f", filters.maxPrice);
+    setValue("rent-min-price-f", filters.minPrice ? String(filters.minPrice) : "");
+    setValue("rent-price-f", filters.maxPrice ? String(filters.maxPrice) : "");
     setValue("rent-type-f", filters.bedrooms === "studio" ? "studio" : filters.propertyType || "");
-    if (filters.exactBedrooms) setValue("rent-beds-f", filters.exactBedrooms);
     setValue("rent-baths-f", filters.bathrooms || "");
     setValue("rent-amenity-f", filters.amenities || "");
     setValue("rent-sort-f", filters.sort || "newest");
@@ -37186,7 +37150,7 @@ function applyHeroSearchHandoff(page) {
     setValue("student-uni-f", payload.area);
     if (radiusValue) setValue("student-radius-f", radiusValue);
     setValue("student-type-quick-f", filters.propertyType || payload.context);
-    setSelectWithFallback("student-budget-f", "student-budget-custom-f", filters.maxPrice);
+    setValue("student-budget-f", filters.maxPrice ? String(filters.maxPrice) : "");
     setValue("student-sort-f", filters.sort || "newest");
     filterStudents();
   } else if (page === "commercial") {
@@ -37195,8 +37159,8 @@ function applyHeroSearchHandoff(page) {
     if (radiusValue) setValue("commercial-radius-f", radiusValue);
     setValue("commercial-type-f", filters.propertyType || payload.context);
     setValue("commercial-transaction-f", filters.transactionType || "");
-    setSelectWithFallback("commercial-min-price-f", "commercial-min-price-custom-f", filters.minPrice);
-    setSelectWithFallback("commercial-price-f", "commercial-max-price-custom-f", filters.maxPrice);
+    setValue("commercial-min-price-f", filters.minPrice ? String(filters.minPrice) : "");
+    setValue("commercial-price-f", filters.maxPrice ? String(filters.maxPrice) : "");
     setValue("commercial-sort-f", filters.sort || "newest");
     filterCommercial();
   } else if (page === "land") {
@@ -37205,9 +37169,8 @@ function applyHeroSearchHandoff(page) {
     if (radiusValue) setValue("land-radius-f", radiusValue);
     setValue("land-type-f", filters.propertyType || payload.context);
     setValue("land-transaction-f", filters.transactionType || "");
-    setSelectWithFallback("land-min-price-f", "land-min-price-custom-f", filters.minPrice);
-    setSelectWithFallback("land-price-f", "land-max-price-custom-f", filters.maxPrice);
-    setValue("land-title-f", filters.landTitleType || "");
+    setValue("land-min-price-f", filters.minPrice ? String(filters.minPrice) : "");
+    setValue("land-price-f", filters.maxPrice ? String(filters.maxPrice) : "");
     setValue("land-sort-f", filters.sort || "newest");
     filterLand();
   } else if (page === "sale") {
@@ -37215,10 +37178,9 @@ function applyHeroSearchHandoff(page) {
     setValue("sale-district-f", payload.area);
     if (radiusValue) setValue("sale-radius-f", radiusValue);
     setValue("sale-min-beds-f", /^\d+$/.test(String(filters.bedrooms || "")) ? filters.bedrooms : payload.context);
-    setSelectWithFallback("sale-min-price-f", "sale-min-price-custom-f", filters.minPrice);
-    setSelectWithFallback("sale-price-f", "sale-max-price-custom-f", filters.maxPrice);
+    setValue("sale-min-price-f", filters.minPrice ? String(filters.minPrice) : "");
+    setValue("sale-price-f", filters.maxPrice ? String(filters.maxPrice) : "");
     setValue("sale-type-f", filters.bedrooms === "studio" ? "studio" : filters.propertyType || "");
-    if (filters.exactBedrooms) setValue("sale-beds-f", filters.exactBedrooms);
     setValue("sale-baths-f", filters.bathrooms || "");
     setValue("sale-amenity-f", filters.amenities || "");
     setValue("sale-sort-f", filters.sort || "newest");
@@ -39145,7 +39107,6 @@ function propertyLocationMatchHtml(p = {}, fallbackLabel = "") {
 
 function socialImportListingCardHtml(p = {}, options = {}) {
   const idArg = propertyIdArg(p.id);
-  const detailPath = getPropertyDetailPath(p);
   const displayTitle = getLocalizedPropertyTitle(p);
   const displayLocation = publicPropertyLocationLabel(p);
   return `
@@ -39159,7 +39120,7 @@ function socialImportListingCardHtml(p = {}, options = {}) {
         })}</div>
         ${socialImportPriceHtml(p, { student: options.student === true })}
         ${propertyOriginalCurrencyGuideHtml(p)}
-        <h3 class="social-import-card-title line-clamp-1"><a href="${adminAttr(detailPath)}" onclick="return openPropertyLinkDetail(event, ${idArg}, 'property_card_title')" class="hover:underline">${adminEscape(displayTitle)}</a></h3>
+        <h3 class="social-import-card-title line-clamp-1">${adminEscape(displayTitle)}</h3>
         <p class="social-import-card-location"><i class="ti-map-pin fas fa-map-marker-alt"></i>${adminEscape(displayLocation)}</p>
         ${propertyLocationMatchHtml(p, displayLocation)}
         ${socialImportSpecsHtml(p)}
@@ -40556,7 +40517,6 @@ function studentCardFooterText(p = {}) {
   const nearDistance = distanceMiles != null && Number.isFinite(Number(distanceMiles)) ? `${Number(distanceMiles).toFixed(1)} mi away` : "";
   const photoSrc = publicImageSrc(p.img, "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=900&q=80");
   const displayTitle = getLocalizedPropertyTitle(p);
-  const detailPath = getPropertyDetailPath(p);
   const displayLocation = publicPropertyLocationLabel(p);
   const widenedLocationHtml = propertyLocationMatchHtml(p, displayLocation);
   const studentMode = options.student === true;
@@ -40583,7 +40543,7 @@ function studentCardFooterText(p = {}) {
         <div class="absolute bottom-2 right-2 ${theme.priceBg} text-white px-2 py-1 rounded text-sm font-bold">${fmtP(p.price, studentMode ? (p.period || "sem") : p.period)}</div>
       </div>
       <div class="p-4">
-        <h3 class="font-bold text-gray-800 line-clamp-1"><a href="${adminAttr(detailPath)}" onclick="return openPropertyLinkDetail(event, ${idArg}, 'property_card_title')" class="hover:text-green-700 hover:underline">${adminEscape(displayTitle)}</a></h3>
+        <h3 class="font-bold text-gray-800 line-clamp-1">${adminEscape(displayTitle)}</h3>
         ${propertyOriginalCurrencyGuideHtml(p)}
         <p class="text-sm text-gray-500 mt-1"><i class="fas fa-map-marker-alt ${theme.iconText}"></i> ${adminEscape(displayLocation)}</p>
         ${widenedLocationHtml}
@@ -42657,8 +42617,7 @@ function pageForPublicRoute(path) {
   const normalized = normalizeRoutePath(path);
   const exact = PUBLIC_ROUTE_PAGE_MAP[normalized];
   if (exact) return exact;
-  if (/^\/hostels\/[a-z0-9-]+$/i.test(normalized)) return "students";
-  const landing = normalized.match(/^\/(for-sale|to-rent|land|commercial|student-accommodation)(?:\/[a-z0-9-]+)+$/i);
+  const landing = normalized.match(/^\/(for-sale|to-rent|land|commercial|student-accommodation)\/[a-z0-9-]+$/i);
   return landing ? normalizePageKey(landing[1]) : "";
 }
 
@@ -43521,7 +43480,7 @@ function activePublicInventoryCategoryFromRoute() {
   if (path === "/to-rent" || path.startsWith("/to-rent/")) return "rent";
   if (path === "/commercial" || path.startsWith("/commercial/")) return "commercial";
   if (path === "/land" || path.startsWith("/land/")) return "land";
-  if (path === "/student-accommodation" || path.startsWith("/student-accommodation/") || path === "/students" || path.startsWith("/students/") || path.startsWith("/hostels/")) return "student";
+  if (path === "/student-accommodation" || path.startsWith("/student-accommodation/") || path === "/students" || path.startsWith("/students/")) return "student";
   return "";
 }
 
@@ -44932,19 +44891,6 @@ function restoreCanonicalLocationRouteState(config) {
   if (!config || !isCanonicalPropertySearchPage(config.key)) return;
   const state = canonicalLocationStateFor(config.key);
   if (state.selected.length) return;
-  const seoState = document.getElementById("makaug-seo-route-state");
-  const seoLocationId = String(seoState?.dataset.locationId || "").trim();
-  if (seoLocationId && normalizePageKey(seoState?.dataset.page || "") === normalizePageKey(config.key)) {
-    state.selected = [{
-      id: seoLocationId,
-      canonical_location_id: seoLocationId,
-      name: normalizeInput(seoState?.dataset.area || canonicalLocationLabelFromId(seoLocationId)),
-      level: seoLocationId.split(":")[0] === seoLocationId.split(":")[1] ? "district" : "area",
-      parent_path: ""
-    }];
-    state.nearbyKm = 0;
-    return;
-  }
   const params = new URLSearchParams(window.location.search || "");
   const ids = String(params.get("locations") || params.get("location_ids") || "")
     .split(",")
@@ -46599,21 +46545,22 @@ const UGANDA_UNIVERSITIES = [
   "Victoria University Uganda",
   "ISBAT University",
   "International University of East Africa (IUEA)",
-  "Universal Technology and Management University (UTAMU)",
+  "Uganda Technology and Management University (UTAMU)",
   "African Bible University",
   "Africa Renewal University",
   "All Saints University Lango",
   "Ankole Western University",
+  "Busoga University",
   "Kumi University",
   "Muteesa I Royal University",
   "Uganda Pentecostal University",
   "University of Kisubi",
-  "King Ceasar University",
+  "King Ceasor University",
   "Great Lakes Regional University",
   "Metropolitan International University",
   "Clarke International University",
   "St. Lawrence University Uganda",
-  "Livingstone International University",
+  "LivingStone International University",
   "TEAM University",
   "Ibanda University",
   "Kampala University",
@@ -46621,10 +46568,6 @@ const UGANDA_UNIVERSITIES = [
   "Aga Khan University (Uganda Campus)",
   "Makerere University Business School (MUBS)",
   "Uganda Management Institute (UMI)",
-  "Nexus International University",
-  "Uganda National Institute for Teacher Education (UNITE)",
-  "Valley University of Science & Technology",
-  "University of Saint Joseph Mbarara",
   "Other / Not Listed"
 ];
 
@@ -46643,14 +46586,7 @@ const STUDENT_UNIVERSITY_ALIAS_GROUPS = [
   { name: "Lira University", aliases: ["lira university", "lira"] },
   { name: "Busitema University", aliases: ["busitema", "busitema university"] },
   { name: "Soroti University", aliases: ["soroti university", "soroti"] },
-  { name: "Islamic University in Uganda (IUIU)", aliases: ["iuiu", "islamic university in uganda", "mbale campus"] },
-  { name: "Clarke International University", aliases: ["international health sciences university"] },
-  { name: "King Ceasar University", aliases: ["king caesar university", "king ceasor university", "st. augustine international university"] },
-  { name: "Nexus International University", aliases: ["virtual university uganda", "virtual university of uganda"] },
-  { name: "Universal Technology and Management University (UTAMU)", aliases: ["uganda technology and management university", "utamu"] },
-  { name: "Livingstone International University", aliases: ["livingstone international university", "livingstone university"] },
-  { name: "TEAM University", aliases: ["team university"] },
-  { name: "St. Lawrence University Uganda", aliases: ["st. lawrence university", "saint lawrence university"] }
+  { name: "Islamic University in Uganda (IUIU)", aliases: ["iuiu", "islamic university in uganda", "mbale campus"] }
 ];
 
 function simplifyStudentUniversityText(value = "") {
@@ -52112,18 +52048,6 @@ async function hydrateDetailSimilarProperties(property = {}) {
   return request;
 }
 
-function setPropertyDetailDocumentTitle(property = {}, displayTitle = "") {
-  const routePropertyId = String(window.location.pathname || "").split("/property/")[1]?.split("/")[0] || "";
-  const ssrDetail = document.querySelector("[data-ssr-property-detail]");
-  if (routePropertyId
-    && String(ssrDetail?.getAttribute("data-ssr-property-detail") || "") === routePropertyId
-    && /\|\s*makaug\.com$/i.test(document.title || "")) return;
-  const title = String(displayTitle || getLocalizedPropertyTitle(property) || "Uganda property")
-    .replace(/\s+/g, " ")
-    .trim();
-  document.title = `${title} | makaug.com`;
-}
-
 async function openDetail(id, options = {}) {
   let p = id && typeof id === "object" ? id : findPropertyForUi(id);
   if (p?.id) upsertPropertyForUi(p);
@@ -52156,7 +52080,6 @@ async function openDetail(id, options = {}) {
   const suggestedNearbyRaw = getNearbyAmenitySuggestions({ lat: detailMapPoint.lat, lng: detailMapPoint.lng, district: p.district, city: p.city, area: p.area });
   const detailNearby = mergeNearbyPlacesForUi(savedNearbyRaw, suggestedNearbyRaw);
   const displayTitle = getLocalizedPropertyTitle(p);
-  setPropertyDetailDocumentTitle(p, displayTitle);
   const localizedDescription = getLocalizedPropertyDescription(p, detailNearby);
   const localizedHighlights = getLocalizedPropertyHighlights(p, detailNearby);
 	      const addedMeta = listingDateMeta(p);

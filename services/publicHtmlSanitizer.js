@@ -77,7 +77,6 @@ const PUBLIC_MODAL_IDS = [
 
 const PUBLIC_PAGE_IDS = [
   'page-home',
-  'page-featured',
   'page-sale',
   'page-rent',
   'page-students',
@@ -100,7 +99,6 @@ const PUBLIC_PAGE_IDS = [
 
 const PUBLIC_ROUTE_PAGE_MAP = {
   '/': ['page-home'],
-  '/featured': ['page-featured'],
   '/for-sale': ['page-sale'],
   '/sale': ['page-sale'],
   '/to-rent': ['page-rent'],
@@ -135,8 +133,7 @@ const PUBLIC_AREA_ROUTE_PAGE_MAP = Object.freeze({
   '/student-accommodation/': 'page-students',
   '/students/': 'page-students',
   '/commercial/': 'page-commercial',
-  '/land/': 'page-land',
-  '/hostels/': 'page-students'
+  '/land/': 'page-land'
 });
 
 const AUTH_ROUTE_PREFIXES = [

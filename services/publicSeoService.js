@@ -2,17 +2,9 @@ const {
   canonicalizeUgandaLocation,
   canonicalLocationByKey,
   canonicalLocationOptions,
-  canonicalLocationRollupCounts,
-  canonicalLocationSearchScope
+  canonicalLocationRollupCounts
 } = require('../utils/ugandaLocationRegistry');
 const { publicVisibleInventoryWhere } = require('./publicInventoryMetricsService');
-const {
-  SEO_FACET_MIN_LISTINGS,
-  FACET_DEFINITIONS,
-  facetSlugsForRow,
-  commercialTransactionSlugsForRow,
-  universityLandingForRow
-} = require('../utils/publicSeoFacets');
 
 const PUBLIC_SITE_URL = 'https://makaug.com';
 const PUBLIC_SEO_CACHE_TTL_MS = 5 * 60 * 1000;
@@ -105,50 +97,6 @@ function emptyCounts() {
   return Object.fromEntries(Object.keys(CATEGORY_SEO).map((key) => [key, new Map()]));
 }
 
-function incrementMapCount(map, key) {
-  map.set(key, Number(map.get(key) || 0) + 1);
-}
-
-function setMinimumPrice(map, key, value) {
-  const price = Number(value || 0);
-  if (!(price > 0)) return;
-  const current = Number(map.get(key) || 0);
-  if (!(current > 0) || price < current) map.set(key, price);
-}
-
-function rollupLocationMinimumPrices(values = new Map()) {
-  const direct = values instanceof Map ? values : new Map(Object.entries(values || {}));
-  const rolled = new Map(direct);
-  for (const location of canonicalLocationOptions()) {
-    if (!['city', 'district'].includes(location.level)) continue;
-    const scope = canonicalLocationSearchScope([location.canonical_key], 0);
-    const prices = scope.exact.map((child) => Number(direct.get(child.key) || 0)).filter((price) => price > 0);
-    if (prices.length) rolled.set(location.canonical_key, Math.min(...prices));
-  }
-  return rolled;
-}
-
-function rollupFacetCountMap(values = new Map(), facetSlugs = []) {
-  const rolled = new Map();
-  for (const facetSlug of facetSlugs) {
-    const direct = new Map();
-    for (const [compositeKey, count] of values) {
-      const separator = compositeKey.lastIndexOf('|');
-      if (separator === -1 || compositeKey.slice(separator + 1) !== facetSlug) continue;
-      direct.set(compositeKey.slice(0, separator), Number(count || 0));
-    }
-    for (const [locationKey, count] of canonicalLocationRollupCounts(direct)) {
-      rolled.set(`${locationKey}|${facetSlug}`, count);
-    }
-  }
-  return rolled;
-}
-
-function facetLocationSlug(location = {}) {
-  if (location.level === 'district') return slugifySeoPart(location.district || location.location || location.name);
-  return canonicalLocationRouteSlug(location);
-}
-
 function canonicalLocationsForSeoRow(row = {}) {
   const locations = [
     canonicalLocationByKey(row.canonical_location_id),
@@ -161,40 +109,15 @@ function canonicalLocationsForSeoRow(row = {}) {
 
 function buildPublicSeoSnapshot(rows = [], generatedAt = new Date().toISOString()) {
   const directCounts = emptyCounts();
-  const directPriceFloors = Object.fromEntries(Object.keys(CATEGORY_SEO).map((key) => [key, new Map()]));
-  const categoryTotals = Object.fromEntries(Object.keys(CATEGORY_SEO).map((key) => [key, 0]));
-  const categoryPriceFloors = Object.fromEntries(Object.keys(CATEGORY_SEO).map((key) => [key, 0]));
-  const facetCounts = Object.fromEntries(Object.keys(CATEGORY_SEO).map((key) => [key, new Map()]));
-  const commercialTransactionCounts = new Map();
-  const universityCounts = new Map();
   const properties = [];
   for (const row of rows) {
     const categories = publicCategoryKeysForRow(row);
     if (!categories.length) continue;
-    const locations = canonicalLocationsForSeoRow(row);
-    for (const category of categories) {
-      categoryTotals[category] += 1;
-      const price = Number(row.price || 0);
-      if (price > 0 && (!(categoryPriceFloors[category] > 0) || price < categoryPriceFloors[category])) {
-        categoryPriceFloors[category] = price;
-      }
-    }
-    for (const canonical of locations) {
+    for (const canonical of canonicalLocationsForSeoRow(row)) {
       for (const category of categories) {
         directCounts[category].set(canonical.key, Number(directCounts[category].get(canonical.key) || 0) + 1);
-        setMinimumPrice(directPriceFloors[category], canonical.key, row.price);
-        for (const facetSlug of facetSlugsForRow(category, row)) {
-          incrementMapCount(facetCounts[category], `${canonical.key}|${facetSlug}`);
-        }
-        if (category === 'commercial') {
-          for (const transactionSlug of commercialTransactionSlugsForRow(row)) {
-            incrementMapCount(commercialTransactionCounts, `${canonical.key}|${transactionSlug}`);
-          }
-        }
       }
     }
-    const university = categories.includes('students') ? universityLandingForRow(row) : null;
-    if (university) incrementMapCount(universityCounts, university.slug);
     if (row.id) {
       properties.push({
         id: String(row.id),
@@ -205,24 +128,7 @@ function buildPublicSeoSnapshot(rows = [], generatedAt = new Date().toISOString(
   const counts = Object.fromEntries(
     Object.entries(directCounts).map(([key, values]) => [key, canonicalLocationRollupCounts(values)])
   );
-  const locationPriceFloors = Object.fromEntries(
-    Object.entries(directPriceFloors).map(([key, values]) => [key, rollupLocationMinimumPrices(values)])
-  );
-  const rolledFacetCounts = Object.fromEntries(
-    Object.entries(facetCounts).map(([key, values]) => [key, rollupFacetCountMap(values, Object.keys(FACET_DEFINITIONS[key] || {}))])
-  );
-  const rolledCommercialTransactionCounts = rollupFacetCountMap(commercialTransactionCounts, ['for-rent', 'for-sale']);
-  return {
-    counts,
-    categoryTotals,
-    categoryPriceFloors,
-    locationPriceFloors,
-    facetCounts: rolledFacetCounts,
-    commercialTransactionCounts: rolledCommercialTransactionCounts,
-    universityCounts,
-    properties,
-    generatedAt
-  };
+  return { counts, properties, generatedAt };
 }
 
 async function loadPublicSeoInventorySnapshot(db, options = {}) {
@@ -233,8 +139,6 @@ async function loadPublicSeoInventorySnapshot(db, options = {}) {
   try {
     const result = await db.query(
       `SELECT id, listing_type, students_welcome, area, district,
-              title, description, price, price_period, bedrooms, property_type,
-              transaction_type, title_type, nearest_university, extra_fields,
               extra_fields->>'canonical_location_id' AS canonical_location_id,
               extra_fields->>'city' AS city,
               extra_fields->>'neighborhood' AS neighborhood,
@@ -260,32 +164,19 @@ function categoryPageSeoMeta(pathname = '/', snapshot = null, baseUrl = PUBLIC_S
   const slug = cleanPath === config.route ? '' : cleanPath.slice(config.route.length + 1);
   const location = locationForRouteSlug(slug);
   const count = location ? Number(snapshot?.counts?.[key]?.get(location.canonical_key) || 0) : null;
-  const total = Number(snapshot?.categoryTotals?.[key]);
-  const listingCount = location ? count : (Number.isFinite(total) ? total : null);
-  const priceFloor = location
-    ? Number(snapshot?.locationPriceFloors?.[key]?.get(location.canonical_key) || 0)
-    : Number(snapshot?.categoryPriceFloors?.[key] || 0);
   const locationLabel = location ? `${location.location}, ${location.district}` : 'Uganda';
-  const countPrefix = Number.isFinite(listingCount) && listingCount > 0 ? `${listingCount} ` : '';
-  const freshnessDate = new Date(snapshot?.generatedAt || '');
-  const freshness = Number.isNaN(freshnessDate.getTime())
-    ? ''
-    : new Intl.DateTimeFormat('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(freshnessDate);
-  const listingLabel = Number.isFinite(listingCount) ? `${listingCount} ${listingCount === 1 ? 'Listing' : 'Listings'}` : '';
+  const countPrefix = Number.isFinite(count) && count > 0 ? `${count} ` : '';
   const title = location
-    ? `${config.subject} in ${locationLabel}${listingLabel ? ` — ${listingLabel}` : ''} | makaug.com`
-    : (listingLabel && freshness ? `${config.subject} in Uganda — ${listingLabel}, ${freshness} | makaug.com` : config.title);
-  const floorCopy = priceFloor > 0
-    ? ` Prices start from USh ${new Intl.NumberFormat('en-UG', { maximumFractionDigits: 0 }).format(priceFloor)}.`
-    : '';
-  const description = `Browse ${countPrefix}${config.subject.toLowerCase()} ${location ? `in ${locationLabel}` : 'across Uganda'}.${floorCopy} Compare reviewed listings, photos, maps and source information on makaug.com.`;
+    ? `${config.subject} in ${locationLabel}${count > 0 ? ` (${count})` : ''} | makaug.com`
+    : config.title;
+  const description = location
+    ? `Browse ${countPrefix}${config.subject.toLowerCase()} in ${locationLabel}. Compare real Uganda listings, prices, photos and source information on makaug.com.`
+    : `Browse ${config.subject.toLowerCase()} across Uganda. Compare real listings, prices, photos and source information on makaug.com.`;
   return {
     key,
     config,
     location,
     count,
-    total: listingCount,
-    priceFloor,
     title,
     description,
     canonical: `${String(baseUrl || PUBLIC_SITE_URL).replace(/\/+$/, '')}${location ? `${config.route}/${canonicalLocationRouteSlug(location)}` : config.route}`,
@@ -295,11 +186,9 @@ function categoryPageSeoMeta(pathname = '/', snapshot = null, baseUrl = PUBLIC_S
 
 function sitemapEntries(snapshot = {}, baseUrl = PUBLIC_SITE_URL) {
   const root = String(baseUrl || PUBLIC_SITE_URL).replace(/\/+$/, '');
-  const generatedDate = new Date(snapshot?.generatedAt || '');
-  const inventoryLastmod = Number.isNaN(generatedDate.getTime()) ? '' : generatedDate.toISOString();
   const entries = [
     { loc: `${root}/`, changefreq: 'daily', priority: '1.0' },
-    ...Object.values(CATEGORY_SEO).map((config) => ({ loc: `${root}${config.route}`, lastmod: inventoryLastmod, changefreq: 'hourly', priority: '0.9' })),
+    ...Object.values(CATEGORY_SEO).map((config) => ({ loc: `${root}${config.route}`, changefreq: 'hourly', priority: '0.9' })),
     { loc: `${root}/marketplace`, changefreq: 'daily', priority: '0.8' },
     { loc: `${root}/valuation`, changefreq: 'weekly', priority: '0.7' },
     { loc: `${root}/mortgage`, changefreq: 'weekly', priority: '0.7' },
@@ -310,51 +199,13 @@ function sitemapEntries(snapshot = {}, baseUrl = PUBLIC_SITE_URL) {
     const counts = snapshot?.counts?.[key] || new Map();
     for (const location of canonicalLocationOptions()) {
       const count = Number(counts.get(location.canonical_key) || 0);
-      if (count < SEO_FACET_MIN_LISTINGS) continue;
+      if (count <= 0) continue;
       entries.push({
         loc: `${root}${config.route}/${canonicalLocationRouteSlug(location)}`,
-        lastmod: inventoryLastmod,
         changefreq: 'daily',
         priority: location.level === 'district' ? '0.8' : '0.7'
       });
     }
-  }
-  for (const [key, config] of Object.entries(CATEGORY_SEO)) {
-    const counts = snapshot?.facetCounts?.[key] || new Map();
-    for (const location of canonicalLocationOptions()) {
-      const locationSlug = facetLocationSlug(location);
-      for (const facetSlug of Object.keys(FACET_DEFINITIONS[key] || {})) {
-        const count = Number(counts.get(`${location.canonical_key}|${facetSlug}`) || 0);
-        if (count < SEO_FACET_MIN_LISTINGS) continue;
-        entries.push({
-          loc: `${root}${config.route}/${locationSlug}/${facetSlug}`,
-          lastmod: inventoryLastmod,
-          changefreq: 'daily',
-          priority: '0.7'
-        });
-      }
-    }
-  }
-  for (const location of canonicalLocationOptions()) {
-    for (const transactionSlug of ['for-rent', 'for-sale']) {
-      const count = Number(snapshot?.commercialTransactionCounts?.get(`${location.canonical_key}|${transactionSlug}`) || 0);
-      if (count < SEO_FACET_MIN_LISTINGS) continue;
-      entries.push({
-        loc: `${root}/commercial/${transactionSlug}/${facetLocationSlug(location)}`,
-        lastmod: inventoryLastmod,
-        changefreq: 'daily',
-        priority: '0.8'
-      });
-    }
-  }
-  for (const [universitySlug, countValue] of snapshot?.universityCounts || new Map()) {
-    if (Number(countValue || 0) < SEO_FACET_MIN_LISTINGS) continue;
-    entries.push({
-      loc: `${root}/student-accommodation/university/${universitySlug}`,
-      lastmod: inventoryLastmod,
-      changefreq: 'daily',
-      priority: '0.8'
-    });
   }
   for (const property of snapshot?.properties || []) {
     entries.push({
@@ -377,7 +228,6 @@ module.exports = {
   PUBLIC_SEO_CACHE_TTL_MS,
   slugifySeoPart,
   canonicalLocationRouteSlug,
-  facetLocationSlug,
   categoryForPath,
   locationForRouteSlug,
   publicCategoryKeysForRow,
