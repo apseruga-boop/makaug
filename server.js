@@ -56,6 +56,19 @@ const {
   categoryPageSeoMeta,
   sitemapEntries
 } = require('./services/publicSeoService');
+const {
+  loadPublicSeoListings,
+  loadPublicSeoListing,
+  renderCategorySeoHtml,
+  renderPropertySeoHtml,
+  renderHomepageSeoHtml
+} = require('./services/publicSeoRenderService');
+const {
+  SEO_FACET_MIN_LISTINGS,
+  resolvePublicSeoLanding,
+  publicSeoLandingMeta,
+  siblingFacetLinks
+} = require('./services/publicSeoLandingService');
 
 const app = express();
 // Required on Render so rate limiting uses the forwarded client IP correctly.
@@ -945,80 +958,6 @@ function patchListingOpenGraphMeta(html, meta = {}) {
   return patchPublicPageSeoMeta(html, meta);
 }
 
-function collapseDuplicatePublicTransaction(value = '') {
-  return String(value || '')
-    .replace(/\bfor\s+sale\s+for\s+sale\b/gi, 'for sale')
-    .replace(/\bfor\s+rent\s+for\s+rent\b/gi, 'for rent')
-    .replace(/\bto\s+rent\s+for\s+rent\b/gi, 'to rent')
-    .trim();
-}
-
-async function loadPublicListingOpenGraphMeta(propertyId) {
-  const safeId = String(propertyId || '').trim();
-  if (!safeId) return null;
-  const result = await db.query(
-    `SELECT
-       p.id,
-       p.title,
-       p.description,
-       p.area,
-       p.district,
-       p.price,
-       p.price_period,
-       (
-         SELECT i.url
-         FROM property_images i
-         WHERE i.property_id = p.id
-         ORDER BY i.is_primary DESC, i.sort_order ASC, i.created_at ASC
-         LIMIT 1
-       ) AS primary_image_url
-     FROM properties p
-     WHERE p.id::text = $1
-       AND p.status IN ('approved', 'live', 'published')
-     LIMIT 1`,
-    [safeId]
-  );
-  const row = result.rows[0];
-  if (!row) return null;
-  const location = [row.area, row.district].filter(Boolean).join(', ');
-  const price = Number(row.price || 0) > 0
-    ? `USh ${new Intl.NumberFormat('en-UG', { maximumFractionDigits: 0 }).format(Number(row.price))}${row.price_period && row.price_period !== 'once' ? `/${row.price_period}` : ''}`
-    : 'Price on application';
-  const description = [location, price, 'View and share this Uganda property on makaug.com.']
-    .filter(Boolean)
-    .join(' - ');
-  const publicTitle = collapseDuplicatePublicTransaction(row.title) || 'Uganda property';
-  return {
-    title: `${publicTitle} | makaug.com`,
-    description,
-    image: absolutePublicUrl(row.primary_image_url || '/assets/house-ads-v3/home-hero.webp'),
-    canonical: absolutePublicUrl(`/property/${encodeURIComponent(row.id)}`),
-    ogType: 'article',
-    structuredData: {
-      '@context': 'https://schema.org',
-      '@type': 'RealEstateListing',
-      name: publicTitle,
-      description,
-      url: absolutePublicUrl(`/property/${encodeURIComponent(row.id)}`),
-      image: absolutePublicUrl(row.primary_image_url || '/assets/house-ads-v3/home-hero.webp'),
-      address: {
-        '@type': 'PostalAddress',
-        addressLocality: row.area || '',
-        addressRegion: row.district || '',
-        addressCountry: 'UG'
-      },
-      ...(Number(row.price || 0) > 0 ? {
-        offers: {
-          '@type': 'Offer',
-          price: Number(row.price),
-          priceCurrency: 'UGX',
-          url: absolutePublicUrl(`/property/${encodeURIComponent(row.id)}`)
-        }
-      } : {})
-    }
-  };
-}
-
 const FRANCIS_ISABIRYE_AGENT_ID = '5674f6cb-37a0-4e1e-904f-06e03ec401ab';
 const AGENT_SHARE_PREVIEW_VERSION = 'preview-v2';
 
@@ -1078,6 +1017,70 @@ async function loadPublicAgentOpenGraphMeta(agentId, options = {}) {
   };
 }
 
+app.get([
+  '/student-accommodation/university/:universitySlug',
+  '/hostels/:universitySlug',
+  '/commercial/:transactionSlug/:locationSlug',
+  '/for-sale/:locationSlug/:facetSlug',
+  '/to-rent/:locationSlug/:facetSlug',
+  '/land/:locationSlug/:facetSlug',
+  '/commercial/:locationSlug/:facetSlug'
+], async (req, res, next) => {
+  try {
+    res.set('X-makaug-Public-Sanitized', '1');
+    const landing = resolvePublicSeoLanding(req.path);
+    if (!landing) {
+      res.set('X-Robots-Tag', 'noindex, noarchive');
+      return res.status(404).send('Property landing page not found');
+    }
+    if (landing.kind === 'university-alias' || req.path !== landing.canonicalPath) {
+      return res.redirect(301, landing.canonicalPath);
+    }
+    let snapshot = null;
+    try {
+      snapshot = await loadPublicSeoInventorySnapshot(db);
+    } catch (error) {
+      logger.warn('Facet SEO is continuing without its cached inventory snapshot', { path: req.path, message: error.message });
+    }
+    let listings = [];
+    try {
+      listings = await loadPublicSeoListings(db, {
+        categoryKey: landing.categoryKey,
+        location: landing.location || null,
+        facet: landing.facet || null,
+        facetSlug: landing.facetSlug || '',
+        university: landing.university || null,
+        limit: 24
+      });
+    } catch (error) {
+      logger.warn('Facet SEO is continuing without server-rendered cards', { path: req.path, message: error.message });
+    }
+    const count = listings.length ? Number(listings[0].seo_total || listings.length) : 0;
+    const meta = publicSeoLandingMeta(landing, snapshot, absolutePublicUrl('/'), { count });
+    let html = renderPublicHtml(req.originalUrl || req.url || req.path);
+    const renderedSeo = renderCategorySeoHtml(html, {
+      meta,
+      snapshot,
+      listings,
+      siblingLinks: siblingFacetLinks(snapshot, landing),
+      baseUrl: absolutePublicUrl('/')
+    });
+    html = patchPublicPageSeoMeta(renderedSeo.html, {
+      ...meta,
+      structuredData: renderedSeo.structuredData
+    });
+    if (count < SEO_FACET_MIN_LISTINGS) {
+      html = patchMetaTag(html, 'robots', 'noindex,follow');
+      res.set('X-Robots-Tag', 'noindex, follow');
+    }
+    res.set('X-makaug-SEO-Facet', landing.kind);
+    res.set('X-makaug-SEO-Listings', String(count));
+    return sendTextResponse(req, res, html, { cacheControl: PUBLIC_HTML_CACHE_CONTROL });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 app.get(Object.values(CATEGORY_SEO).flatMap((config) => [config.route, `${config.route}/:locationSlug`]), async (req, res, next) => {
   try {
     res.set('X-makaug-Public-Sanitized', '1');
@@ -1088,27 +1091,39 @@ app.get(Object.values(CATEGORY_SEO).flatMap((config) => [config.route, `${config
       logger.warn('Category SEO is continuing without an inventory count', { path: req.path, message: error.message });
     }
     const meta = categoryPageSeoMeta(req.path, snapshot, absolutePublicUrl('/'));
+    if (req.params.locationSlug && !meta?.location) {
+      res.set('X-Robots-Tag', 'noindex, noarchive');
+      return res.status(404).send('Property area not found');
+    }
     let html = renderPublicHtml(req.originalUrl || req.url || req.path);
     if (meta) {
+      let listings = [];
+      try {
+        listings = await loadPublicSeoListings(db, {
+          categoryKey: meta.key,
+          location: meta.location,
+          limit: 12
+        });
+      } catch (error) {
+        logger.warn('Category SEO is continuing without server-rendered cards', { path: req.path, message: error.message });
+      }
+      const renderedSeo = renderCategorySeoHtml(html, {
+        meta,
+        snapshot,
+        listings,
+        baseUrl: absolutePublicUrl('/')
+      });
+      html = renderedSeo.html;
       html = patchPublicPageSeoMeta(html, {
         ...meta,
-        structuredData: {
-          '@context': 'https://schema.org',
-          '@type': 'CollectionPage',
-          name: meta.title.replace(/\s*\|\s*makaug\.com$/i, ''),
-          description: meta.description,
-          url: meta.canonical,
-          isPartOf: { '@type': 'WebSite', name: 'makaug.com', url: absolutePublicUrl('/') },
-          ...(meta.location ? {
-            about: {
-              '@type': 'Place',
-              name: `${meta.location.location}, ${meta.location.district}`,
-              address: { '@type': 'PostalAddress', addressRegion: meta.location.district, addressCountry: 'UG' }
-            }
-          } : {})
-        }
+        structuredData: renderedSeo.structuredData
       });
+      if (meta.location && snapshot && Number(meta.count || 0) < SEO_FACET_MIN_LISTINGS) {
+        html = patchMetaTag(html, 'robots', 'noindex,follow');
+        res.set('X-Robots-Tag', 'noindex, follow');
+      }
       res.set('X-makaug-Category-SEO', meta.location ? 'area' : 'category');
+      res.set('X-makaug-SEO-Listings', String(listings.length));
     }
     return sendTextResponse(req, res, html, { cacheControl: PUBLIC_HTML_CACHE_CONTROL });
   } catch (error) {
@@ -1135,14 +1150,59 @@ app.get('/property/:id', async (req, res, next) => {
   try {
     res.set('X-makaug-Public-Sanitized', '1');
     let html = renderPublicHtml(req.originalUrl || req.url || req.path);
-    const meta = await loadPublicListingOpenGraphMeta(req.params.id);
-    if (meta) {
-      html = patchListingOpenGraphMeta(html, meta);
-      res.set('X-makaug-Listing-OG', '1');
+    const [listing, detailSnapshot] = await Promise.all([
+      loadPublicSeoListing(db, req.params.id),
+      loadPublicSeoInventorySnapshot(db).catch((error) => {
+        logger.warn('Detail SEO is continuing without popular-area footer links', { propertyId: req.params.id, message: error.message });
+        return null;
+      })
+    ]);
+    if (!listing) {
+      res.set('X-Robots-Tag', 'noindex, noarchive');
+      return res.status(404).send('Property not found');
     }
+    const renderedSeo = renderPropertySeoHtml(html, listing, { snapshot: detailSnapshot, baseUrl: absolutePublicUrl('/') });
+    html = patchListingOpenGraphMeta(renderedSeo.html, {
+      ...renderedSeo.meta,
+      structuredData: renderedSeo.structuredData
+    });
+    res.set('X-makaug-Listing-OG', '1');
+    res.set('X-makaug-Listing-SSR', '1');
     return sendTextResponse(req, res, html, {
       cacheControl: PUBLIC_HTML_CACHE_CONTROL
     });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+app.get(['/', '/index.html'], async (req, res, next) => {
+  try {
+    res.set('X-makaug-Public-Sanitized', '1');
+    let snapshot = null;
+    let listings = [];
+    try {
+      [snapshot, listings] = await Promise.all([
+        loadPublicSeoInventorySnapshot(db),
+        loadPublicSeoListings(db, { limit: 6 })
+      ]);
+    } catch (error) {
+      logger.warn('Homepage SEO is continuing with the available server-rendered data', { message: error.message });
+    }
+    const renderedSeo = renderHomepageSeoHtml(renderPublicHtml(req.originalUrl || req.url || req.path), {
+      snapshot,
+      listings,
+      baseUrl: absolutePublicUrl('/')
+    });
+    const html = patchPublicPageSeoMeta(renderedSeo.html, {
+      title: 'makaug.com | Houses for Rent and Sale in Uganda',
+      description: "Find houses for rent, homes for sale, land, commercial property and student accommodation across Uganda on makaug.com.",
+      canonical: absolutePublicUrl('/'),
+      image: absolutePublicUrl('/assets/house-ads-v3/home-hero.webp'),
+      structuredData: renderedSeo.structuredData
+    });
+    res.set('X-makaug-Homepage-SSR', String(listings.length));
+    return sendTextResponse(req, res, html, { cacheControl: PUBLIC_HTML_CACHE_CONTROL });
   } catch (error) {
     return next(error);
   }

@@ -93,7 +93,7 @@ test('public category search is canonical-only and includes visible nearby and a
   assert.match(app, /maximum price was widened by 20%/);
   assert.match(app, /Similar properties nearby/);
   assert.match(app, /Create property alert/);
-  assert.match(app, /student-accommodation\)\\\/\[a-z0-9-\]\+\$/);
+  assert.ok(app.includes('(?:for-sale|to-rent|land|commercial|student-accommodation)(?:\\/[a-z0-9-]+)+$/i.test(pathname)'), 'nested canonical SEO routes must preserve their server title');
   assert.match(html, /canonical-location-search-20260725/);
   assert.match(route, /router\.get\('\/locations\/suggest'/);
   assert.match(route, /invalid_location_ids/);
