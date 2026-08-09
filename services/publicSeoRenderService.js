@@ -13,7 +13,12 @@ const SEO_LISTING_CACHE_TTL_MS = Math.max(
   30 * 1000,
   Math.min(10 * 60 * 1000, Number(process.env.PUBLIC_SEO_LISTING_CACHE_TTL_MS || 180000) || 180000)
 );
+const SEO_LISTING_CACHE_MAX_ENTRIES = Math.max(
+  50,
+  Math.min(2000, Number(process.env.PUBLIC_SEO_LISTING_CACHE_MAX_ENTRIES || 500) || 500)
+);
 const listingCache = new Map();
+const listingCacheInFlight = new Map();
 
 const CATEGORY_GRID_IDS = Object.freeze({
   sale: 'sale-grid',
@@ -72,6 +77,81 @@ function absoluteUrl(value = '', baseUrl = 'https://makaug.com') {
   return `${root}${raw.startsWith('/') ? '' : '/'}${raw}`;
 }
 
+function regexEscape(value = '') {
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function postgresWordPattern(values = []) {
+  const alternatives = Array.from(new Set(values.map((value) => String(value || '').trim()).filter(Boolean)))
+    .map(regexEscape);
+  return alternatives.length ? `\\m(?:${alternatives.join('|')})\\M` : '';
+}
+
+function facetTextExpressions(alias = 'p') {
+  return [
+    `LOWER(TRIM(COALESCE(${alias}.property_type, '')))`,
+    `LOWER(TRIM(COALESCE(${alias}.title, '')))`,
+    `LOWER(TRIM(COALESCE(${alias}.extra_fields->>'room_type', '')))`,
+    `LOWER(TRIM(COALESCE(${alias}.extra_fields->>'commercial_type', '')))`
+  ];
+}
+
+function regexAnyExpression(expressions, ref) {
+  return `(${expressions.map((expression) => `${expression} ~* ${ref}`).join('\n        OR ')})`;
+}
+
+function getSeoListingCacheEntry(key, now = Date.now()) {
+  const cached = listingCache.get(key);
+  if (!cached) return null;
+  if (now - cached.cachedAt >= SEO_LISTING_CACHE_TTL_MS) {
+    listingCache.delete(key);
+    return null;
+  }
+  // Refresh insertion order so the first key remains the least recently used.
+  listingCache.delete(key);
+  listingCache.set(key, cached);
+  return cached;
+}
+
+function setSeoListingCacheEntry(key, value, now = Date.now()) {
+  listingCache.delete(key);
+  listingCache.set(key, { ...value, cachedAt: now });
+  while (listingCache.size > SEO_LISTING_CACHE_MAX_ENTRIES) {
+    const oldestKey = listingCache.keys().next().value;
+    if (oldestKey === undefined) break;
+    listingCache.delete(oldestKey);
+  }
+}
+
+function clearSeoListingCache() {
+  listingCache.clear();
+  listingCacheInFlight.clear();
+}
+
+async function loadSeoListingCacheEntry(key, loader, { force = false } = {}) {
+  if (!force) {
+    const cached = getSeoListingCacheEntry(key);
+    if (cached) return cached;
+    const pending = listingCacheInFlight.get(key);
+    if (pending) return pending;
+  }
+
+  const pending = Promise.resolve()
+    .then(loader)
+    .then((value) => {
+      setSeoListingCacheEntry(key, value);
+      return getSeoListingCacheEntry(key);
+    });
+  if (force) return pending;
+
+  listingCacheInFlight.set(key, pending);
+  try {
+    return await pending;
+  } finally {
+    if (listingCacheInFlight.get(key) === pending) listingCacheInFlight.delete(key);
+  }
+}
+
 function categoryPredicate(key, alias = 'p') {
   if (key === 'students') {
     return `(LOWER(COALESCE(${alias}.listing_type, '')) IN ('student', 'students') OR (LOWER(COALESCE(${alias}.listing_type, '')) = 'rent' AND ${alias}.students_welcome = TRUE))`;
@@ -89,19 +169,17 @@ function locationPredicate(location, values, alias = 'p') {
   if (location.level === 'district') {
     return `AND (LOWER(COALESCE(${alias}.extra_fields->>'canonical_location_id', '')) = LOWER(${canonicalRef}) OR LOWER(COALESCE(${alias}.district, '')) = ${districtRef})`;
   }
-  const aliases = Array.from(new Set([location.location, ...(location.aliases || [])]))
-    .map((value) => `%${String(value || '').trim().toLowerCase()}%`)
-    .filter((value) => value !== '%%');
-  values.push(aliases);
+  const aliases = Array.from(new Set([location.location, ...(location.aliases || [])]));
+  values.push(postgresWordPattern(aliases));
   const aliasesRef = `$${values.length}`;
   return `AND (
     LOWER(COALESCE(${alias}.extra_fields->>'canonical_location_id', '')) = LOWER(${canonicalRef})
     OR (
       LOWER(COALESCE(${alias}.district, '')) = ${districtRef}
       AND (
-        LOWER(COALESCE(${alias}.area, '')) LIKE ANY(${aliasesRef}::text[])
-        OR LOWER(COALESCE(${alias}.extra_fields->>'city', '')) LIKE ANY(${aliasesRef}::text[])
-        OR LOWER(COALESCE(${alias}.extra_fields->>'neighborhood', '')) LIKE ANY(${aliasesRef}::text[])
+        LOWER(TRIM(COALESCE(${alias}.area, ''))) ~* ${aliasesRef}
+        OR LOWER(TRIM(COALESCE(${alias}.extra_fields->>'city', ''))) ~* ${aliasesRef}
+        OR LOWER(TRIM(COALESCE(${alias}.extra_fields->>'neighborhood', ''))) ~* ${aliasesRef}
       )
     )
   )`;
@@ -116,17 +194,15 @@ function facetPredicate(options, values, alias = 'p') {
       .replace(/\buniversity\b/gi, ' ')
       .replace(/\s+/g, ' ')
       .trim();
-    const needles = Array.from(new Set([options.university.name, shortName, acronym]))
-      .map((value) => `%${String(value || '').trim().toLowerCase()}%`)
-      .filter((value) => value !== '%%');
-    values.push(needles);
+    const needles = [options.university.name, shortName, acronym, ...(options.university.aliases || [])];
+    values.push(postgresWordPattern(needles));
     const ref = `$${values.length}`;
-    return `AND (
-      LOWER(COALESCE(${alias}.nearest_university, '')) LIKE ANY(${ref}::text[])
-      OR LOWER(COALESCE(${alias}.extra_fields->>'nearest_university', '')) LIKE ANY(${ref}::text[])
-      OR LOWER(COALESCE(${alias}.extra_fields->>'student_university', '')) LIKE ANY(${ref}::text[])
-      OR LOWER(COALESCE(${alias}.extra_fields->>'student_campus', '')) LIKE ANY(${ref}::text[])
-    )`;
+    return `AND ${regexAnyExpression([
+      `LOWER(TRIM(COALESCE(${alias}.nearest_university, '')))`,
+      `LOWER(TRIM(COALESCE(${alias}.extra_fields->>'nearest_university', '')))`,
+      `LOWER(TRIM(COALESCE(${alias}.extra_fields->>'student_university', '')))`,
+      `LOWER(TRIM(COALESCE(${alias}.extra_fields->>'student_campus', '')))`
+    ], ref)}`;
   }
   if (!definition) return '';
   if (definition.kind === 'bedrooms') {
@@ -137,21 +213,21 @@ function facetPredicate(options, values, alias = 'p') {
     values.push(Number(definition.value));
     const priceRef = `$${values.length}`;
     if (!definition.pattern) return `AND ${alias}.price > 0 AND ${alias}.price <= ${priceRef}`;
-    values.push(`(${definition.pattern})`);
+    values.push(`\\m(?:${definition.pattern})\\M`);
     return `AND ${alias}.price > 0 AND ${alias}.price <= ${priceRef}
-      AND LOWER(CONCAT_WS(' ', ${alias}.property_type, ${alias}.title, ${alias}.description, ${alias}.extra_fields->>'room_type', ${alias}.extra_fields->>'commercial_type')) ~* $${values.length}`;
+      AND ${regexAnyExpression(facetTextExpressions(alias), `$${values.length}`)}`;
   }
   if (definition.kind === 'min_price') {
     values.push(Number(definition.value));
     const priceRef = `$${values.length}`;
     if (!definition.pattern) return `AND ${alias}.price >= ${priceRef}`;
-    values.push(`(${definition.pattern})`);
+    values.push(`\\m(?:${definition.pattern})\\M`);
     return `AND ${alias}.price >= ${priceRef}
-      AND LOWER(CONCAT_WS(' ', ${alias}.property_type, ${alias}.title, ${alias}.description, ${alias}.extra_fields->>'room_type', ${alias}.extra_fields->>'commercial_type')) ~* $${values.length}`;
+      AND ${regexAnyExpression(facetTextExpressions(alias), `$${values.length}`)}`;
   }
   if (definition.kind === 'title_type') {
-    values.push(`%${String(definition.value).toLowerCase()}%`);
-    return `AND LOWER(COALESCE(${alias}.title_type, ${alias}.extra_fields->>'title_type', '')) LIKE $${values.length}`;
+    values.push(postgresWordPattern([definition.value]));
+    return `AND LOWER(TRIM(COALESCE(${alias}.title_type, ${alias}.extra_fields->>'title_type', ''))) ~* $${values.length}`;
   }
   if (definition.kind === 'transaction_type') {
     values.push(String(definition.value));
@@ -163,8 +239,8 @@ function facetPredicate(options, values, alias = 'p') {
     )`;
   }
   if (definition.kind === 'property_type') {
-    values.push(`(${definition.pattern})`);
-    return `AND LOWER(CONCAT_WS(' ', ${alias}.property_type, ${alias}.title, ${alias}.description, ${alias}.extra_fields->>'room_type', ${alias}.extra_fields->>'commercial_type')) ~* $${values.length}`;
+    values.push(`\\m(?:${definition.pattern})\\M`);
+    return `AND ${regexAnyExpression(facetTextExpressions(alias), `$${values.length}`)}`;
   }
   return '';
 }
@@ -200,17 +276,15 @@ async function loadPublicSeoListings(db, options = {}) {
   const limit = Math.max(1, Math.min(24, Number(options.limit || 12) || 12));
   const facetCacheKey = options.university?.slug || options.facetSlug || options.facet?.label || 'all';
   const cacheKey = `${key || 'all'}:${location?.canonical_key || 'uganda'}:${facetCacheKey}:${limit}`;
-  const cached = listingCache.get(cacheKey);
-  if (!options.force && cached && Date.now() - cached.cachedAt < SEO_LISTING_CACHE_TTL_MS) return cached.rows;
-
-  const values = [];
-  const categoryWhere = categoryPredicate(key, 'p');
-  const locationWhere = locationPredicate(location, values, 'p');
-  const facetWhere = facetPredicate(options, values, 'p');
-  values.push(limit);
-  const limitRef = `$${values.length}`;
-  const result = await db.query(
-    `SELECT
+  const cached = await loadSeoListingCacheEntry(cacheKey, async () => {
+    const values = [];
+    const categoryWhere = categoryPredicate(key, 'p');
+    const locationWhere = locationPredicate(location, values, 'p');
+    const facetWhere = facetPredicate(options, values, 'p');
+    values.push(limit);
+    const limitRef = `$${values.length}`;
+    const result = await db.query(
+      `SELECT
        p.id, p.listing_type, p.title, p.description, p.area, p.district,
        p.price, p.price_period, p.transaction_type, p.bedrooms, p.bathrooms, p.property_type,
        p.extra_fields->>'canonical_location_id' AS canonical_location_id,
@@ -232,22 +306,21 @@ async function loadPublicSeoListings(db, options = {}) {
        ${locationWhere}
        ${facetWhere}
      ORDER BY p.updated_at DESC NULLS LAST, p.created_at DESC, p.id DESC
-     LIMIT ${limitRef}`,
-    values
-  );
-  const rows = result.rows.map(normalizeSeoListingRow);
-  listingCache.set(cacheKey, { cachedAt: Date.now(), rows });
-  return rows;
+       LIMIT ${limitRef}`,
+      values
+    );
+    return { rows: result.rows.map(normalizeSeoListingRow) };
+  }, { force: options.force });
+  return cached.rows;
 }
 
 async function loadPublicSeoListing(db, propertyId) {
   const safeId = String(propertyId || '').trim();
   if (!safeId) return null;
   const cacheKey = `property:${safeId}`;
-  const cached = listingCache.get(cacheKey);
-  if (cached && Date.now() - cached.cachedAt < SEO_LISTING_CACHE_TTL_MS) return cached.row;
-  const result = await db.query(
-    `SELECT
+  const cached = await loadSeoListingCacheEntry(cacheKey, async () => {
+    const result = await db.query(
+      `SELECT
        p.id, p.listing_type, p.title, p.description, p.area, p.district,
        p.price, p.price_period, p.transaction_type, p.bedrooms, p.bathrooms, p.property_type,
        p.extra_fields->>'canonical_location_id' AS canonical_location_id,
@@ -266,12 +339,12 @@ async function loadPublicSeoListing(db, propertyId) {
      ) image ON TRUE
      WHERE p.id::text = $1
        AND ${publicVisibleInventoryWhere('p')}
-     LIMIT 1`,
-    [safeId]
-  );
-  const row = result.rows[0] ? normalizeSeoListingRow(result.rows[0]) : null;
-  listingCache.set(cacheKey, { cachedAt: Date.now(), row });
-  return row;
+       LIMIT 1`,
+      [safeId]
+    );
+    return { row: result.rows[0] ? normalizeSeoListingRow(result.rows[0]) : null };
+  });
+  return cached.row;
 }
 
 function priceLabel(listing = {}) {
@@ -667,6 +740,7 @@ function renderHomepageSeoHtml(html, options = {}) {
 
 module.exports = {
   SEO_LISTING_CACHE_TTL_MS,
+  SEO_LISTING_CACHE_MAX_ENTRIES,
   CATEGORY_GRID_IDS,
   CATEGORY_PAGE_IDS,
   escapeHtml,
@@ -689,5 +763,11 @@ module.exports = {
   renderCategorySeoHtml,
   renderPropertySeoHtml,
   renderHomepageSeoHtml,
-  breadcrumbStructuredData
+  breadcrumbStructuredData,
+  __seoListingCache: Object.freeze({
+    clear: clearSeoListingCache,
+    get: getSeoListingCacheEntry,
+    set: setSeoListingCacheEntry,
+    size: () => listingCache.size
+  })
 };

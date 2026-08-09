@@ -46599,22 +46599,21 @@ const UGANDA_UNIVERSITIES = [
   "Victoria University Uganda",
   "ISBAT University",
   "International University of East Africa (IUEA)",
-  "Uganda Technology and Management University (UTAMU)",
+  "Universal Technology and Management University (UTAMU)",
   "African Bible University",
   "Africa Renewal University",
   "All Saints University Lango",
   "Ankole Western University",
-  "Busoga University",
   "Kumi University",
   "Muteesa I Royal University",
   "Uganda Pentecostal University",
   "University of Kisubi",
-  "King Ceasor University",
+  "King Ceasar University",
   "Great Lakes Regional University",
   "Metropolitan International University",
   "Clarke International University",
   "St. Lawrence University Uganda",
-  "LivingStone International University",
+  "Livingstone International University",
   "TEAM University",
   "Ibanda University",
   "Kampala University",
@@ -46622,6 +46621,10 @@ const UGANDA_UNIVERSITIES = [
   "Aga Khan University (Uganda Campus)",
   "Makerere University Business School (MUBS)",
   "Uganda Management Institute (UMI)",
+  "Nexus International University",
+  "Uganda National Institute for Teacher Education (UNITE)",
+  "Valley University of Science & Technology",
+  "University of Saint Joseph Mbarara",
   "Other / Not Listed"
 ];
 
@@ -46640,7 +46643,14 @@ const STUDENT_UNIVERSITY_ALIAS_GROUPS = [
   { name: "Lira University", aliases: ["lira university", "lira"] },
   { name: "Busitema University", aliases: ["busitema", "busitema university"] },
   { name: "Soroti University", aliases: ["soroti university", "soroti"] },
-  { name: "Islamic University in Uganda (IUIU)", aliases: ["iuiu", "islamic university in uganda", "mbale campus"] }
+  { name: "Islamic University in Uganda (IUIU)", aliases: ["iuiu", "islamic university in uganda", "mbale campus"] },
+  { name: "Clarke International University", aliases: ["international health sciences university"] },
+  { name: "King Ceasar University", aliases: ["king caesar university", "king ceasor university", "st. augustine international university"] },
+  { name: "Nexus International University", aliases: ["virtual university uganda", "virtual university of uganda"] },
+  { name: "Universal Technology and Management University (UTAMU)", aliases: ["uganda technology and management university", "utamu"] },
+  { name: "Livingstone International University", aliases: ["livingstone international university", "livingstone university"] },
+  { name: "TEAM University", aliases: ["team university"] },
+  { name: "St. Lawrence University Uganda", aliases: ["st. lawrence university", "saint lawrence university"] }
 ];
 
 function simplifyStudentUniversityText(value = "") {
