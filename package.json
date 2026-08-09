@@ -58,6 +58,7 @@
     "parity:country-homepages": "node scripts/check-country-homepage-parity.js",
     "check": "node --check server.js",
     "test:go-live-p0": "node tests/go-live-p0.test.js",
+    "test:seo-ssr": "node tests/seo-ssr-crawlability.test.js",
     "test:shared-core-phase1": "node tests/shared-core-phase1.test.js",
     "smoke": "bash scripts/smoke-test.sh",
     "prelaunch": "bash scripts/prelaunch-check.sh"
