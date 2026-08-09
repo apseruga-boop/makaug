@@ -213,6 +213,7 @@ function publicStaffSourceIntakeJob(job = {}) {
     result: job.status === 'completed' ? result : undefined,
     result_summary: job.status === 'completed' ? {
       discovered_posts_count: Number(result.discovered_posts_count || 0),
+      tiktok_capture_task_count: Number(result.tiktok?.capture_task_count || 0),
       auto_live_properties: Number(importResult.auto_live_properties || result.auto_live_properties || 0),
       created_properties: Number(importResult.created_properties || result.created_properties || 0),
       existing_properties: Number(importResult.existing_properties || result.existing_properties || 0),
