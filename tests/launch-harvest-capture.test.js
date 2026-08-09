@@ -72,9 +72,9 @@ async function main() {
     sourceText: 'House for sale. Three bedrooms. Price 250 million.',
   };
   const noCountryIntake = sourcePostMeetsLaunchIntakeRule(noCountryPost, {});
-  assert.strictEqual(noCountryIntake.eligible, true, 'unknown place names should remain recoverable in Uganda review');
-  assert.strictEqual(noCountryIntake.positive_listing_gate_reason, 'unknown_uganda_location_review');
-  assert.strictEqual(noCountryIntake.positive_listing_gate_hard_blocked, false);
+  assert.strictEqual(noCountryIntake.eligible, false, 'automated drip rows need a positive Uganda country signal');
+  assert.strictEqual(noCountryIntake.positive_listing_gate_reason, 'non_uganda_location');
+  assert.strictEqual(noCountryIntake.positive_listing_gate_hard_blocked, true);
 
   console.log('ok - launch harvest capture widens intake to review while preserving hard non-property/foreign blocks');
 }

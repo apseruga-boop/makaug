@@ -8,7 +8,6 @@ const {
   DEFAULT_HASHTAG,
   runTikTokAutopublishAgent,
 } = require('../services/tiktokAutopublishAgentService');
-const { harvestAutomationEnabled } = require('../utils/harvestFeatureFlags');
 
 const args = process.argv.slice(2);
 
@@ -24,7 +23,7 @@ function usage() {
   console.error([
     'Usage:',
     '  node scripts/run-tiktok-autopublish-agent.js --dry-run --hashtag=ugandarealestate',
-    '  node scripts/run-tiktok-autopublish-agent.js --confirm-review --hashtag=ugandarealestate --review-limit=100',
+    '  node scripts/run-tiktok-autopublish-agent.js --confirm-live --hashtag=ugandarealestate --live-limit=5 --review-limit=100',
     '',
     'Optional exact source input:',
     '  --url=https://www.tiktok.com/@handle/video/1234567890',
@@ -32,17 +31,14 @@ function usage() {
     '  --policy-mode=relaxed',
     '',
     'Rules:',
-    '  The legacy command name is retained for scheduler compatibility, but live publishing is disabled.',
-    '  Exact TikTok /@handle/video/id records are scored and remain pending for human review.',
+    '  The agent only publishes exact TikTok /@handle/video/id records that pass all hard gates.',
+    '  Hashtag pages are capture tasks only; they are not enough evidence to publish a listing.',
   ].join('\n'));
 }
 
 async function main() {
-  const confirmReview = args.includes('--confirm-review') || args.includes('--confirm-live');
-  const dryRun = args.includes('--dry-run') || !confirmReview;
-  if (confirmReview && !harvestAutomationEnabled()) {
-    throw new Error('Harvest automation is disabled. Set HARVEST_AUTOMATION_ENABLED=true only after Dave verification.');
-  }
+  const dryRun = args.includes('--dry-run') || !args.includes('--confirm-live');
+  const confirmLive = args.includes('--confirm-live');
   const urls = args
     .filter((arg) => String(arg || '').startsWith('--url='))
     .map((arg) => arg.slice('--url='.length))
@@ -60,14 +56,13 @@ async function main() {
     reviewLimit: argValue('--review-limit', '100'),
     scanLimit: argValue('--scan-limit', '250'),
     dryRun,
-    confirmReview,
+    confirmLive,
     urls,
     fetchOembed: !args.includes('--no-oembed'),
   });
   console.log(JSON.stringify({
     ok: result.ok !== false,
-    action: 'tiktok_review_queue_agent',
-    review_only: true,
+    action: 'tiktok_autopublish_agent',
     ...result,
   }, null, 2));
   if (result.ok === false) process.exit(2);

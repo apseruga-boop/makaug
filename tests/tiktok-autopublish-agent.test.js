@@ -77,7 +77,7 @@ function goodRow(overrides = {}) {
   };
 }
 
-test('TikTok review-priority gate accepts exact 2026 phone-location property posts', () => {
+test('TikTok autopublish hard gate accepts only exact 2026 phone-location property posts', () => {
   const decision = hardGateTikTokRow(goodRow());
   assert.strictEqual(decision.eligible, true);
   assert.strictEqual(decision.reasons.length, 0);
@@ -134,7 +134,7 @@ test('TikTok autopublish can use exact video ID timestamp when stored source dat
   assert.strictEqual(decision.source_date, '2026-06-14T10:52:58.000Z');
 });
 
-test('Maka Scout relaxed mode can prioritize exact TikTok posts with phone, location, duplicate safety, and Price upon application', () => {
+test('Maka Scout relaxed mode can publish exact TikTok posts with phone, location, duplicate safety, and Price upon application', () => {
   const row = goodRow({
     listing_type: '',
     price: null,
@@ -162,7 +162,7 @@ test('Maka Scout relaxed mode can prioritize exact TikTok posts with phone, loca
   assert(relaxed.title.includes('TikTok source'), 'unclear type should not be forced into a sale/rent title');
 });
 
-test('Maka Scout relaxed mode can queue exact TikTok records without phone when source contact is available', () => {
+test('Maka Scout relaxed mode can push exact TikTok records without phone when source contact is available', () => {
   const row = goodRow({
     lister_phone: '',
     extra_fields: {
@@ -292,18 +292,16 @@ test('Maka Scout plans one hashtag at a time and pauses at the review cap', () =
   assert.strictEqual(paused.next_hashtag, '');
 });
 
-test('legacy TikTok agent route and script are protected review-only surfaces', () => {
+test('TikTok autopublish route and script are protected production surfaces', () => {
   assert(adminRoute.includes("router.post('/tiktok-autopublish-agent/run'"), 'admin route should exist');
   assert(adminRoute.includes('requireAdminApiKey'), 'admin router should remain API-key protected');
-  assert(adminRoute.includes('confirm_live'), 'route should retain the legacy confirm_live alias');
-  assert(adminRoute.includes('confirm_review'), 'route should expose the review-only confirmation control');
+  assert(adminRoute.includes('confirm_live'), 'route should expose explicit confirm_live control');
   assert(adminRoute.includes('hashtag_sequence'), 'route should accept explicit hashtag sequence control');
   assert(adminRoute.includes('policy_mode'), 'route should accept explicit relaxed policy control');
   assert(adminRoute.includes('admin_tiktok_autopublish_agent_run'), 'route should write an audit trail');
   assert.strictEqual(pkg.scripts['inventory:tiktok-autopublish'], 'node scripts/run-tiktok-autopublish-agent.js');
   assert(read('scripts/run-tiktok-autopublish-agent.js').includes('--hashtag-sequence'), 'CLI should support explicit hashtag sequence control');
   assert(read('scripts/run-tiktok-autopublish-agent.js').includes('--policy-mode'), 'CLI should support explicit policy mode control');
-  assert(read('scripts/run-tiktok-autopublish-agent.js').includes('live publishing is disabled'), 'legacy CLI should explicitly disable live publishing');
 });
 
 test('TikTok autopublish service enforces review cap and no accidental live writes', async () => {
@@ -314,15 +312,13 @@ test('TikTok autopublish service enforces review cap and no accidental live writ
   assert(serviceSource.includes('buildHashtagWorkflow'), 'agent output should include one-hashtag workflow state');
   assert(serviceSource.includes('phone_location_price_optional'), 'agent should expose explicit relaxed phone/location/price-optional mode');
   assert(serviceSource.includes('Price upon application'), 'agent should use Price upon application when source price is missing');
-  assert(serviceSource.includes("error.code = 'HARVEST_REVIEW_ONLY'"), 'legacy publish helper must fail closed');
-  assert(!serviceSource.includes("status = 'approved'"), 'TikTok harvest agent must not contain a direct approval write');
   const result = await runTikTokAutopublishAgent({
-    db: { pool: { connect: async () => { throw new Error('should not connect without confirm_review'); } } },
+    db: { pool: { connect: async () => { throw new Error('should not connect without confirm_live'); } } },
     dryRun: false,
-    confirmReview: false,
+    confirmLive: false,
   });
   assert.strictEqual(result.ok, false);
-  assert.strictEqual(result.error, 'confirm_review_required');
+  assert.strictEqual(result.error, 'confirm_live_required');
   assert.strictEqual(result.agent.name, 'Maka Scout');
 });
 

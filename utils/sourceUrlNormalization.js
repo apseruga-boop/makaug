@@ -12,15 +12,6 @@ function normalizedPath(pathname = '') {
   return path || '';
 }
 
-const TRACKING_QUERY_KEYS = new Set([
-  'fbclid', 'gclid', 'igshid', 'si', 'ref', 'refer', 'referrer', 'feature', 'source',
-]);
-
-function isTrackingQueryKey(key = '') {
-  const normalized = String(key || '').toLowerCase();
-  return TRACKING_QUERY_KEYS.has(normalized) || normalized.startsWith('utm_');
-}
-
 function normalizeSourceUrl(value = '') {
   const raw = cleanUrlText(value);
   if (!/^https?:\/\//i.test(raw)) return '';
@@ -60,59 +51,7 @@ function normalizeSourceUrl(value = '') {
     if (match) return `https://www.instagram.com/${match[1].toLowerCase()}/${match[2]}`;
   }
 
-  if (/(^|\.)facebook\.com$/i.test(host) || /^fb\.watch$/i.test(host)) {
-    const reel = path.match(/^\/(?:reel|videos)\/(\d+)/i);
-    if (reel) return `https://www.facebook.com/reel/${reel[1]}`;
-    const post = path.match(/^\/([^/]+)\/(?:posts|videos)\/([^/]+)/i);
-    if (post) return `https://www.facebook.com/${post[1].toLowerCase()}/posts/${post[2]}`;
-    const storyId = parsed.searchParams.get('story_fbid') || parsed.searchParams.get('fbid');
-    const ownerId = parsed.searchParams.get('id');
-    if (storyId) return `https://www.facebook.com/permalink.php?story_fbid=${encodeURIComponent(storyId)}${ownerId ? `&id=${encodeURIComponent(ownerId)}` : ''}`;
-  }
-
-  const keptQuery = [...parsed.searchParams.entries()]
-    .filter(([key]) => !isTrackingQueryKey(key));
-  const query = keptQuery.length ? `?${new URLSearchParams(keptQuery).toString()}` : '';
-  return `${parsed.protocol.toLowerCase()}//${host}${path}${query}`;
-}
-
-function stablePlatformPostIdentity(value = '') {
-  const normalized = normalizeSourceUrl(value);
-  if (!normalized) return { platform: '', id: '', key: '', canonical_url: '' };
-  const checks = [
-    ['youtube', normalized.match(/[?&]v=([^&#]+)/i)?.[1]],
-    ['tiktok', normalized.match(/\/video\/(\d+)/i)?.[1]],
-    ['x', normalized.match(/\/status\/(\d+)/i)?.[1]],
-    ['instagram', normalized.match(/\/(?:p|reel|tv)\/([^/?#]+)/i)?.[1]],
-    ['facebook', normalized.match(/\/(?:posts|reel|videos)\/([^/?#]+)/i)?.[1] || new URL(normalized).searchParams.get('story_fbid')],
-  ];
-  const [platform, id] = checks.find(([, candidate]) => candidate) || ['', ''];
-  return {
-    platform,
-    id: id || '',
-    key: platform && id ? `${platform}:${id}` : '',
-    canonical_url: normalized,
-  };
-}
-
-async function resolveSourceShortUrl(value = '', { fetchImpl = fetch } = {}) {
-  const raw = cleanUrlText(value);
-  if (!/^https?:\/\//i.test(raw)) return '';
-  let parsed;
-  try {
-    parsed = new URL(raw);
-  } catch (_) {
-    return '';
-  }
-  const needsRedirect = /(^|\.)(?:vt|vm)\.tiktok\.com$/i.test(parsed.hostname)
-    || /^fb\.watch$/i.test(parsed.hostname);
-  if (!needsRedirect) return normalizeSourceUrl(raw);
-  const response = await fetchImpl(raw, {
-    method: 'HEAD',
-    redirect: 'follow',
-    headers: { 'User-Agent': 'makaug-harvest-url-resolver/1.0' },
-  });
-  return normalizeSourceUrl(response.url || raw);
+  return `${parsed.protocol.toLowerCase()}//${host}${path}`;
 }
 
 function uniqueNormalizedSourceUrls(values = []) {
@@ -129,7 +68,5 @@ function uniqueNormalizedSourceUrls(values = []) {
 
 module.exports = {
   normalizeSourceUrl,
-  resolveSourceShortUrl,
-  stablePlatformPostIdentity,
   uniqueNormalizedSourceUrls,
 };

@@ -35,7 +35,6 @@ const {
 } = require('../utils/propertyPriceCurrency');
 const {
   foreignSourceMarketStatus,
-  maskConstructionCostsForPriceExtraction,
   normalizeUgandanSourcePhone,
   safeSourcePriceCandidate,
   ugandanPhoneFromSourceText,
@@ -43,10 +42,6 @@ const {
 const {
   canonicalizeUgandaLocation,
 } = require('../utils/ugandaLocationRegistry');
-const {
-  buildHarvestFingerprints,
-  hammingDistanceHex,
-} = require('./propertyHarvestDedupService');
 
 const SOCIAL_SEARCH_BATCH_ID = 'social_search_authorised_20260520';
 const LEGACY_SOURCED_INVENTORY_CANDIDATE_SOURCE = SOURCE;
@@ -94,14 +89,13 @@ const SOCIAL_AREA_PIN_OVERRIDES = [
   { name: 'Kira-Nsasa', district: 'Wakiso', lat: 0.428, lng: 32.665, aliases: ['Kira-Nsasa', 'Kira Nsasa', 'Nsasa'] },
   { name: 'Kireka', district: 'Wakiso', lat: 0.347, lng: 32.649, aliases: ['Kireka', 'Kireka Namugongo Road', 'Kireka-Namugongo Road'] },
   { name: 'Katosi', district: 'Mukono', lat: 0.181, lng: 32.797, aliases: ['Katosi', 'Mpunge', 'Mpungwe', 'Katosi Mpunge'] },
-  { name: 'Kalagi', district: 'Mukono', lat: 0.531, lng: 32.743, aliases: ['Kalagi', 'Kalagi Town', 'Kalagi Trading Centre', 'Kalagi Trading Center'] },
   { name: 'Kololo', district: 'Kampala', lat: 0.356, lng: 32.612, aliases: ['Kololo'] }
 ];
 const PUBLIC_SOURCE_CONTACT_POLICY = 'No public phone number is not a blocker when a public social profile or platform message route exists; makaug shows Contact via social source until the agent adds a direct number. Website-only source/contact routes are not accepted for found-online launch inventory.';
 const FOUND_ONLINE_LAUNCH_INTAKE_POLICY = {
   source_window_start: LAUNCH_SOURCE_POST_WINDOW_START,
   target_source_year: 2026,
-  queue_rule: 'Always-on harvest mode: queue every supported public social property post from 1 January 2026 onward into review, regardless of poster type. Missing phone, media, price, exact pin, or a recognized location spelling are review notes, not capture blockers. Manually supplied exact social-post URLs may also enter King review when older, but must identify a specific property and carry an availability/date warning. Unknown locations stay pending for staff verification; explicit foreign listings are classified separately. Original-poster comments are optional. Website-only sources are ignored. Nothing harvested publishes automatically.',
+  queue_rule: 'Launch harvest mode: queue every supported public social property post from 1 January 2026 onward into review, regardless of poster type. Missing phone, media, price, or exact pin are review notes, not capture blockers. Manually supplied exact social-post URLs may also enter King review when older, but must identify a specific property, include a usable Uganda location, and carry an availability/date warning. Original-poster comments are optional. Website-only sources are ignored. Only suppressed URLs, unsupported platforms, old automated posts, duplicates, clear foreign/non-Uganda property, and obvious non-property content stay out of the property review queue.',
   image_rule: 'Found-online/social imports are public discovery results: do not rehost downloaded TikTok, Facebook, Instagram, YouTube, X, LinkedIn, WhatsApp, or website photos/videos as makaug gallery assets unless the rights holder has explicitly supplied or approved them. Public pages should show source links or official embeds first, then makaug rewritten facts and disclosures.',
   facebook_image_rule: 'For Facebook, store the exact public post URL as source evidence. Do not scrape or rehost Meta media without permission or an approved Meta tool/feed; link back to the source and ask the source/agent for authorised images before using photos publicly. Location must still be present before approval.',
   platform_scope: ['YouTube', 'TikTok', 'Instagram', 'Facebook', 'X/Twitter'],
@@ -700,17 +694,17 @@ function sourceTextForRawPost(raw = {}) {
   ].map((value) => compactText(value)).filter(Boolean).join(' ');
 }
 
-function explicitSourcePriceTextsFromEvidence(text = '') {
-  const sourceText = maskConstructionCostsForPriceExtraction(compactText(text));
+function explicitSourcePriceTextFromEvidence(text = '') {
+  const sourceText = compactText(text);
   const patterns = [
-    /(?:\b(?:UGX|USh|Shs?|USD|US\$)\s*|\$\s*)\d[\d,.]*(?:\s*(?:bn|b|billion|billions|m|mn|million|millions|k|thousand|thousands))?(?:\s*(?:UGX|USh|Shs?))?/gi,
-    /\b\d+(?:\.\d+)?\s*(?:bn|b|billion|billions|m|mn|million|millions|k|thousand|thousands)\b(?:\s*(?:UGX|USh|Shs?))?/gi
+    /(?:\b(?:UGX|USh|Shs?|USD|US\$)\s*|\$\s*)\d[\d,.]*(?:\s*(?:bn|b|billion|billions|m|mn|million|millions|k|thousand|thousands))?(?:\s*(?:UGX|USh|Shs?))?/i,
+    /\b\d+(?:\.\d+)?\s*(?:bn|b|billion|billions|m|mn|million|millions|k|thousand|thousands)\b(?:\s*(?:UGX|USh|Shs?))?/i
   ];
-  const matches = [];
   for (const pattern of patterns) {
-    for (const match of sourceText.matchAll(pattern)) matches.push(compactText(match[0]));
+    const match = sourceText.match(pattern);
+    if (match) return compactText(match[0]);
   }
-  return [...new Set(matches)].filter(Boolean);
+  return '';
 }
 
 function strongestSourcePriceCandidate(raw = {}, sourceText = '') {
@@ -719,7 +713,7 @@ function strongestSourcePriceCandidate(raw = {}, sourceText = '') {
     raw.price_label,
     raw.asking_price,
     raw.guide_price,
-    ...explicitSourcePriceTextsFromEvidence(sourceText),
+    explicitSourcePriceTextFromEvidence(sourceText),
     raw.price
   ].filter((value) => value != null && value !== '');
   for (const candidate of candidates) {
@@ -1018,7 +1012,8 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
   const specificPropertySignal = hasSpecificPropertySignal(item);
   const dateWindowAllowsQueue = manualExactSocialIntake || dateStatus !== 'before_2026_source_window';
   const manualExactPasses = !manualExactSocialIntake || (
-    specificPropertySignal
+    hasLocation
+      && specificPropertySignal
       && hasContact
       && hasImageOrEvidence
   );
@@ -1035,6 +1030,7 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
     !hasSource ? 'missing_exact_source_url' : '',
     !allowedSocialSource ? 'unsupported_source_platform' : '',
     countryGate.allowed === false ? (countryGate.reason || 'non_uganda_country_or_currency') : '',
+    manualExactSocialIntake && !hasLocation ? 'missing_uganda_location' : '',
     manualExactSocialIntake && !hasContact ? 'missing_public_contact_or_source_route' : '',
     manualExactSocialIntake && !hasImageOrEvidence ? 'missing_source_evidence' : '',
     manualExactSocialIntake && !specificPropertySignal ? 'not_a_specific_property_listing' : '',
@@ -1046,7 +1042,7 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
     eligible: captureToReview,
     blocking_reasons: blockingReasons,
     capture_mode: 'launch_review_first',
-    capture_rule: 'supported social property posts go to review even when phone, media, or exact Uganda location needs human confirmation; only explicit foreign evidence is location-rejected',
+    capture_rule: 'supported_social_property_posts_go_to_review_even_when_phone_media_or_exact_location_need_human_confirmation; manual exact posts require a specific property and Uganda location',
     has_source_url: hasSource,
     allowed_social_source: allowedSocialSource,
     country_gate_passed: countryGate.allowed !== false,
@@ -1212,16 +1208,19 @@ function sourcePostAutoLiveStatusFor(item = {}, agent = sourceAgentForItem(item)
       && allowedSocialSource
       && sourceUrlForItem(item)
   );
-  const readyForHumanReview = Boolean(hashtagReady || youtubeApiReady);
+  const approved = Boolean(
+    hashtagReady || youtubeApiReady
+  );
   return {
-    approved: false,
-    status: 'pending',
-    moderation_stage: 'submitted',
-    policy: 'always_on_harvest_review_only_v1',
-    reason: readyForHumanReview
-      ? 'High-confidence harvested listing is ready for human review; harvesting never auto-publishes.'
-      : 'Harvested listing remains pending while source, location, category, date, contact, or duplicate evidence is reviewed.',
-    ready_for_human_review: readyForHumanReview,
+    approved,
+    status: approved ? 'approved' : 'pending',
+    moderation_stage: approved ? 'approved' : 'submitted',
+    policy: sourceIsHashtag
+      ? 'youtube_hashtag_location_source_contact_2026_auto_live'
+      : 'youtube_api_location_source_contact_2026_auto_live',
+    reason: approved
+      ? 'Auto-approved from a YouTube API source because the 2026 post has a property signal, area-level location, category, source evidence, and a public source/contact route. A direct phone is not required when the source contact route is available.'
+      : 'Pending King review because the YouTube API auto-live policy did not fully pass.',
     source_is_hashtag: sourceIsHashtag,
     source_is_youtube_api: sourceIsYouTubeApi,
     review_status: review.status || '',
@@ -1291,31 +1290,6 @@ function contentFingerprintForSourceItem(item = {}, agent = sourceAgentForItem(i
   const price = Math.max(0, Math.round(Number(item.price || item.price_ugx || 0) || 0));
   if (!phone || !area || !listingType || !price) return '';
   return [phone, area, listingType, price].join('|');
-}
-
-function harvestFingerprintsForItem(item = {}) {
-  const raw = item.raw_source_post || item.rawSourcePost || {};
-  const nested = raw.harvest_dedup || {};
-  const preserved = Object.fromEntries(Object.entries(nested).filter(([, value]) => value != null && value !== ''));
-  return {
-    ...buildHarvestFingerprints({
-      ...raw,
-      source_url: sourceUrlForItem(item),
-      caption: item.caption || item.sourceTitle || raw.caption,
-      title: item.title,
-      description: item.description,
-      source_text: item.sourceText || raw.source_text,
-      contact_phone: item.sourceAgent?.phone || raw.contact_phone,
-      source_contact_url: item.sourceContactUrl || raw.source_contact_url,
-      area: item.area,
-      district: item.district,
-      price: item.price,
-    }, {
-      imageHash: nested.primary_image_dhash || raw.primary_image_dhash || '',
-      imagePHash: nested.primary_image_phash || raw.primary_image_phash || '',
-    }),
-    ...preserved,
-  };
 }
 
 function sourceContactMethodForAgent(agent = {}) {
@@ -1833,7 +1807,6 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
     source_listing_key: item.key,
     source_registry_key: agent.key || item.agentKey || '',
     content_fingerprint: contentFingerprintForSourceItem(item, agent),
-    ...harvestFingerprintsForItem(item),
     canonical_location_id: item.canonicalLocationId || item.canonical_location_id || null,
     canonical_location_level: item.canonicalLocationLevel || item.canonical_location_level || null,
     location_resolution_status: item.locationResolutionStatus || item.location_resolution_status || null,
@@ -2143,11 +2116,13 @@ function buildSocialSearchListing(item, agentId = null) {
     agent_id: agentId,
     source: SOCIAL_SEARCH_SOURCE,
     listed_via: 'found_online',
-    status: 'pending',
-    moderation_stage: 'submitted',
-    reviewed_at: null,
-    moderation_notes: `${item.importedFromSourcePost ? 'FOUND-ONLINE SOURCE POST IMPORT' : 'SOCIAL SEARCH LISTING'}. Public source inventory from ${agent.name || 'source'}. Source post: ${sourceUrlForItem(item)}. ${manualOlderExactSource ? 'This manually supplied exact source post predates 2026; confirm current availability, location, and price or Price upon application before approval.' : 'Confirm source date, location, availability, category, contact route, and price or Price upon application before approval.'} Harvesting is review-only and cannot publish this listing. Original-poster comments are optional supporting evidence.${classificationWarning ? ` ${classificationWarning}` : ''} Batch: ${itemBatchId(item)}.`,
-    moderation_reason: `Pending King review of public found-online source, exact pin, latest availability, price, and image/source evidence. ${autoLive.reason}`,
+    status: autoLive.status,
+    moderation_stage: autoLive.moderation_stage,
+    reviewed_at: autoLive.approved ? new Date() : null,
+    moderation_notes: `${autoLive.approved ? 'YOUTUBE API AUTO-LIVE IMPORT' : (item.importedFromSourcePost ? 'FOUND-ONLINE SOURCE POST IMPORT' : 'SOCIAL SEARCH LISTING')}. Public source inventory from ${agent.name || 'source'}. Source post: ${sourceUrlForItem(item)}. ${autoLive.approved ? 'Location, 2026 source date, listing category, property signal, and public source/contact route passed the YouTube API auto-live policy; direct phone is not required when the source contact route is available.' : manualOlderExactSource ? 'This manually supplied exact source post predates 2026; confirm current availability, location, and price or Price upon application before approval.' : 'Confirm it was first posted on or after 1 January 2026, then confirm location, availability, and price or Price upon application. Location is non-negotiable; other source-review checks can be overridden by King.'} Original-poster comments are optional supporting evidence.${classificationWarning ? ` ${classificationWarning}` : ''} Batch: ${itemBatchId(item)}.`,
+    moderation_reason: autoLive.approved
+      ? autoLive.reason
+      : 'Pending King review of public found-online source, exact pin, latest availability, and image/source evidence.',
     images: listingImageRowsFor(item),
     source_item: item,
   };
@@ -2338,14 +2313,14 @@ async function insertListing(client, listing, agentId) {
     ) VALUES ($1, $2, $3, NULL, $4, $5::jsonb, $6, $7, $8::jsonb)`,
     [
       propertyId,
-      'always_on_harvest_engine',
-      'harvested_listing_created_for_review',
+      autoLive.approved ? 'youtube_hashtag_auto_live_importer' : 'social_search_authorised_seed',
+      autoLive.approved ? 'youtube_hashtag_auto_live_listing_approved' : 'social_search_authorised_listing_created',
       listing.status || 'pending',
       JSON.stringify({
         found_online_candidate: true,
         social_search_candidate: true,
         found_online: true,
-        auto_live_source_import: false,
+        auto_live_source_import: autoLive.approved,
         auto_live_policy: autoLive.policy,
         auto_live_review_status: autoLive.review_status,
         preapproved_source_post: sourcePreApprovalStatusFor(listing.source_item).preapproved,
@@ -2675,15 +2650,6 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
       source_text: raw.source_text || sourceText,
       source_visual_text: raw.source_visual_text || sourceVisualText,
     },
-    harvestDedup: raw.harvest_dedup || {
-      canonical_source_url: raw.canonical_source_url || '',
-      source_platform_id: raw.source_platform_id || '',
-      caption_simhash: raw.caption_simhash || '',
-      primary_image_dhash: raw.primary_image_dhash || '',
-      primary_image_phash: raw.primary_image_phash || '',
-      contact_cluster_key: raw.contact_cluster_key || '',
-      composite_listing_key: raw.composite_listing_key || '',
-    },
   };
 }
 
@@ -2692,33 +2658,17 @@ async function existingFoundOnlineSourcePostListings(client, items = []) {
   const urls = uniqueUrls(items.map((item) => sourceUrlForItem(item)));
   const normalizedUrls = [...new Set(items.map(normalizedSourceUrlForItem).filter(Boolean))];
   const fingerprints = [...new Set(items.map((item) => contentFingerprintForSourceItem(item)).filter(Boolean))];
-  const harvestFingerprints = items.map(harvestFingerprintsForItem);
-  const platformIds = [...new Set(harvestFingerprints.map((item) => item.source_platform_id).filter(Boolean))];
-  const captionHashes = [...new Set(harvestFingerprints.map((item) => item.caption_simhash).filter(Boolean))];
-  const imageHashes = [...new Set(harvestFingerprints.map((item) => item.primary_image_dhash).filter(Boolean))];
-  const imagePHashes = [...new Set(harvestFingerprints.map((item) => item.primary_image_phash).filter(Boolean))];
-  const compositeKeys = [...new Set(harvestFingerprints.map((item) => item.composite_listing_key).filter(Boolean))];
-  const contactKeys = [...new Set(harvestFingerprints.map((item) => item.contact_cluster_key).filter(Boolean))];
-  if (!keys.length && !urls.length && !fingerprints.length && !platformIds.length && !captionHashes.length && !imageHashes.length && !imagePHashes.length && !compositeKeys.length && !contactKeys.length) return new Map();
+  if (!keys.length && !urls.length && !fingerprints.length) return new Map();
   const lookupUrls = uniqueUrls([...urls, ...normalizedUrls]);
   const selectExisting = `SELECT
        id::text AS id,
        title,
-       area,
-       district,
-       price,
        status,
        moderation_stage,
        inquiry_reference,
        lister_name,
        extra_fields->>'source_listing_key' AS source_listing_key,
        extra_fields->>'content_fingerprint' AS content_fingerprint,
-       extra_fields->>'source_platform_id' AS source_platform_id,
-       extra_fields->>'caption_simhash' AS caption_simhash,
-       extra_fields->>'primary_image_dhash' AS primary_image_dhash,
-       extra_fields->>'primary_image_phash' AS primary_image_phash,
-       extra_fields->>'contact_cluster_key' AS contact_cluster_key,
-       extra_fields->>'composite_listing_key' AS composite_listing_key,
        extra_fields->>'source_post_url' AS source_post_url,
        COALESCE(
          extra_fields->>'source_url',
@@ -2738,14 +2688,8 @@ async function existingFoundOnlineSourcePostListings(client, items = []) {
            COALESCE(extra_fields->>'content_fingerprint', '') <> ''
            AND extra_fields->>'content_fingerprint' = ANY($3::text[])
          )
-         OR COALESCE(extra_fields->>'source_platform_id', '') = ANY($4::text[])
-         OR COALESCE(extra_fields->>'caption_simhash', '') = ANY($5::text[])
-         OR COALESCE(extra_fields->>'primary_image_dhash', '') = ANY($6::text[])
-         OR COALESCE(extra_fields->>'primary_image_phash', '') = ANY($7::text[])
-         OR COALESCE(extra_fields->>'composite_listing_key', '') = ANY($8::text[])
-         OR COALESCE(extra_fields->>'contact_cluster_key', '') = ANY($9::text[])
        )`,
-    [lookupUrls, keys, fingerprints, platformIds, captionHashes, imageHashes, imagePHashes, compositeKeys, contactKeys]
+    [lookupUrls, keys, fingerprints]
   );
   const existing = new Map();
   for (const row of result.rows) {
@@ -2757,15 +2701,6 @@ async function existingFoundOnlineSourcePostListings(client, items = []) {
     if (row.source_post_url) existing.set(row.source_post_url, payload);
     if (row.source_url) existing.set(row.source_url, payload);
     if (row.content_fingerprint) existing.set(`fingerprint:${row.content_fingerprint}`, payload);
-    if (row.source_platform_id) existing.set(`platform:${row.source_platform_id}`, payload);
-    if (row.caption_simhash) existing.set(`caption:${row.caption_simhash}`, payload);
-    if (row.primary_image_dhash) existing.set(`image:${row.primary_image_dhash}`, payload);
-    if (row.primary_image_phash) existing.set(`phash:${row.primary_image_phash}`, payload);
-    if (row.composite_listing_key) existing.set(`composite:${row.composite_listing_key}`, payload);
-    if (row.contact_cluster_key) {
-      const candidateKey = `contact-candidates:${row.contact_cluster_key}`;
-      existing.set(candidateKey, [...(existing.get(candidateKey) || []), payload]);
-    }
     const normalized = normalizeSourceUrl(row.source_post_url) || normalizeSourceUrl(row.source_url);
     if (normalized) existing.set(normalized, payload);
   }
@@ -2781,63 +2716,16 @@ function existingFoundOnlineRowForItem(existing = new Map(), item = {}) {
   if (exact) return { ...exact, duplicate_match_type: 'exact_source_url_duplicate' };
   const fingerprint = contentFingerprintForSourceItem(item);
   const contentMatch = fingerprint ? existing.get(`fingerprint:${fingerprint}`) : null;
-  if (contentMatch) return { ...contentMatch, duplicate_match_type: 'content_fingerprint_duplicate' };
-  const harvest = harvestFingerprintsForItem(item);
-  const contactCandidates = harvest.contact_cluster_key
-    ? existing.get(`contact-candidates:${harvest.contact_cluster_key}`) || []
-    : [];
-  const itemAreaToken = compactText(item.area || item.district || '').toLowerCase();
-  const itemPrice = Number(item.price || 0) || 0;
-  const contextualContactCandidates = contactCandidates.filter((row) => {
-    const rowAreaToken = compactText(row.area || row.district || '').toLowerCase();
-    const rowPrice = Number(row.price || 0) || 0;
-    const sameArea = !itemAreaToken || !rowAreaToken || itemAreaToken === rowAreaToken;
-    const similarPrice = !itemPrice || !rowPrice || Math.abs(itemPrice - rowPrice) / Math.max(itemPrice, rowPrice) <= 0.25;
-    return sameArea && similarPrice;
-  });
-  const nearImageMatch = harvest.primary_image_dhash
-    ? contextualContactCandidates.find((row) => {
-      const distance = hammingDistanceHex(harvest.primary_image_dhash, row.primary_image_dhash || '');
-      return distance != null && distance <= 8;
-    })
-    : null;
-  const nearPHashMatch = harvest.primary_image_phash
-    ? contextualContactCandidates.find((row) => {
-      const distance = hammingDistanceHex(harvest.primary_image_phash, row.primary_image_phash || '');
-      return distance != null && distance <= 10;
-    })
-    : null;
-  const nearCaptionMatch = harvest.caption_simhash
-    ? contextualContactCandidates.find((row) => {
-      const distance = hammingDistanceHex(harvest.caption_simhash, row.caption_simhash || '');
-      return distance != null && distance <= 16;
-    })
-    : null;
-  const matches = [
-    ['stable_platform_id_duplicate', harvest.source_platform_id && existing.get(`platform:${harvest.source_platform_id}`)],
-    ['composite_listing_duplicate', harvest.composite_listing_key && existing.get(`composite:${harvest.composite_listing_key}`)],
-    ['primary_image_dhash_duplicate', harvest.primary_image_dhash && existing.get(`image:${harvest.primary_image_dhash}`)],
-    ['primary_image_dhash_near_duplicate', nearImageMatch],
-    ['primary_image_phash_duplicate', harvest.primary_image_phash && existing.get(`phash:${harvest.primary_image_phash}`)],
-    ['primary_image_phash_near_duplicate', nearPHashMatch],
-    ['caption_simhash_duplicate', harvest.caption_simhash && existing.get(`caption:${harvest.caption_simhash}`)],
-    ['caption_simhash_near_duplicate', nearCaptionMatch],
-  ];
-  const matched = matches.find(([, row]) => row);
-  return matched ? { ...matched[1], duplicate_match_type: matched[0] } : null;
+  return contentMatch ? { ...contentMatch, duplicate_match_type: 'content_fingerprint_duplicate' } : null;
 }
 
 function registerExistingFoundOnlineItem(existing = new Map(), item = {}, row = {}) {
   const payload = {
     ...row,
-    area: row.area || item.area || '',
-    district: row.district || item.district || '',
-    price: row.price || item.price || null,
     source_listing_key: item.key,
     source_url: sourceUrlForItem(item),
     source_post_url: sourceUrlForItem(item),
     content_fingerprint: contentFingerprintForSourceItem(item),
-    ...harvestFingerprintsForItem(item),
   };
   if (item.key) existing.set(item.key, payload);
   const sourceUrl = sourceUrlForItem(item);
@@ -2845,15 +2733,6 @@ function registerExistingFoundOnlineItem(existing = new Map(), item = {}, row = 
   const normalizedUrl = normalizedSourceUrlForItem(item);
   if (normalizedUrl) existing.set(normalizedUrl, payload);
   if (payload.content_fingerprint) existing.set(`fingerprint:${payload.content_fingerprint}`, payload);
-  if (payload.source_platform_id) existing.set(`platform:${payload.source_platform_id}`, payload);
-  if (payload.caption_simhash) existing.set(`caption:${payload.caption_simhash}`, payload);
-  if (payload.primary_image_dhash) existing.set(`image:${payload.primary_image_dhash}`, payload);
-  if (payload.primary_image_phash) existing.set(`phash:${payload.primary_image_phash}`, payload);
-  if (payload.composite_listing_key) existing.set(`composite:${payload.composite_listing_key}`, payload);
-  if (payload.contact_cluster_key) {
-    const candidateKey = `contact-candidates:${payload.contact_cluster_key}`;
-    existing.set(candidateKey, [...(existing.get(candidateKey) || []), payload]);
-  }
   return payload;
 }
 
@@ -2879,13 +2758,7 @@ function duplicateWarningsForFoundOnlineRows(rows = []) {
     type: item.duplicate_match_type || 'exact_source_url_duplicate',
     message: item.duplicate_match_type === 'content_fingerprint_duplicate'
       ? 'A listing with the same phone, area, property type, and price has already been imported.'
-      : /^caption_simhash/.test(item.duplicate_match_type || '')
-        ? 'A near-identical source caption has already been imported.'
-        : /^primary_image_(?:dhash|phash)/.test(item.duplicate_match_type || '')
-          ? 'The primary source image matches an existing harvested listing.'
-          : item.duplicate_match_type === 'composite_listing_duplicate'
-            ? 'The seller, area, price, and source-media fingerprint match an existing listing.'
-            : 'This exact social/source link or stable platform post ID has already been imported to makaug.',
+      : 'This exact social/source link has already been imported to makaug.',
     key: item.key,
     id: item.id,
     title: item.title,
@@ -2921,11 +2794,10 @@ function foundOnlinePerUrlResults(items = [], {
     if (createdRow) {
       return {
         key: item.key,
-        source_key: item.agentKey || '',
         source_url: sourceUrl,
         platform: item.sourcePlatform || '',
         outcome: 'created',
-        reason: 'created_in_review_queue',
+        reason: isLiveOrApprovedStatus(createdRow) ? 'created_auto_live' : 'created_in_review_queue',
         property_id: createdRow.id || null,
         status: createdRow.status || '',
         moderation_stage: createdRow.moderation_stage || '',
@@ -2935,11 +2807,9 @@ function foundOnlinePerUrlResults(items = [], {
     if (existingRow) {
       return {
         key: item.key,
-        source_key: item.agentKey || '',
         source_url: sourceUrl,
         platform: item.sourcePlatform || '',
-        outcome: 'duplicate',
-        classification: 'duplicate',
+        outcome: 'existing',
         reason: existingRow.reason || existingRow.duplicate_match_type || 'already_queued',
         property_id: existingRow.id || null,
         status: existingRow.status || '',
@@ -2948,19 +2818,12 @@ function foundOnlinePerUrlResults(items = [], {
       };
     }
     if (skippedRow) {
-      const reason = skippedRow.reason || 'source_review_required';
       return {
         key: item.key,
-        source_key: item.agentKey || '',
         source_url: sourceUrl,
         platform: item.sourcePlatform || '',
         outcome: 'skipped',
-        classification: reason === 'non_uganda_location'
-          ? 'non_uganda'
-          : reason === 'not_a_listing' || reason === 'non_listing_source_content'
-            ? 'not_a_listing'
-            : 'launch_intake',
-        reason,
+        reason: skippedRow.reason || 'source_review_required',
         property_id: null,
         status: '',
         moderation_stage: 'source_review',
@@ -2970,11 +2833,10 @@ function foundOnlinePerUrlResults(items = [], {
     if (dryRun && dryRunRow) {
       return {
         key: item.key,
-        source_key: item.agentKey || '',
         source_url: sourceUrl,
         platform: item.sourcePlatform || '',
         outcome: 'would_create',
-        reason: 'would_create_in_review_queue',
+        reason: dryRunRow.auto_live_ready ? 'would_create_auto_live' : 'would_create_in_review_queue',
         property_id: null,
         status: dryRunRow.status || '',
         moderation_stage: dryRunRow.moderation_stage || '',
@@ -2983,7 +2845,6 @@ function foundOnlinePerUrlResults(items = [], {
     }
     return {
       key: item.key,
-      source_key: item.agentKey || '',
       source_url: sourceUrl,
       platform: item.sourcePlatform || '',
       outcome: 'skipped',
@@ -4101,9 +3962,4 @@ module.exports = {
   sourceUrlForItem,
   sourceImageRowsFor,
   whatsappShareMessage,
-  _harvestDedupTest: {
-    existingFoundOnlineRowForItem,
-    harvestFingerprintsForItem,
-    registerExistingFoundOnlineItem,
-  },
 };

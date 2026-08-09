@@ -141,10 +141,10 @@ const AGENT_VISUAL_PROFILE = {
   name: AGENT_NAME,
   display_name: AGENT_DISPLAY_NAME,
   initials: 'MS',
-  role: 'TikTok property scout and review-queue assistant',
+  role: 'TikTok property scout and safe-publish assistant',
   avatar_prompt: 'A warm, sharp Uganda property scout AI wearing a clean green Makaug jacket, holding a phone and map pin, friendly but professional.',
   chat_route: AGENT_CHAT_ROUTE,
-  status_label: 'Scans one TikTok hashtag at a time, sends every candidate to human review, and stops at 100 review items.',
+  status_label: 'Scans one TikTok hashtag at a time, publishes only high-confidence listings, sends uncertain posts to review, and stops at 100 review items.',
 };
 
 const REVIEW_STATUSES = [
@@ -584,13 +584,131 @@ async function loadTikTokCandidates(client, limit) {
 }
 
 async function publishTikTokCandidate(client, row, decision, { dryRun = false } = {}) {
-  void client;
-  void row;
-  void decision;
-  void dryRun;
-  const error = new Error('Harvested TikTok candidates are review-only and cannot be auto-published.');
-  error.code = 'HARVEST_REVIEW_ONLY';
-  throw error;
+  if (dryRun) {
+    return {
+      id: row.id,
+      title: decision.title,
+      source_url: decision.source_url,
+      location: decision.location,
+      dry_run: true,
+    };
+  }
+
+  const extraPatch = {
+    tiktok_ai_agent: {
+      status: 'approved_live',
+      approved_at: new Date().toISOString(),
+      actor: AGENT_ACTOR_ID,
+      source_url: decision.source_url,
+      source_date: decision.source_date,
+      source_date_method: 'stored_platform_date_or_tiktok_video_id_timestamp',
+      source_text_length: decision.source_text_length,
+      policy_mode: decision.policy_mode || 'strict',
+      price_label: decision.price_label || PRICE_UPON_APPLICATION_LABEL,
+      price_status: decision.price_status || 'price_upon_application',
+      phone_missing_but_source_contact_allowed: Boolean(decision.phone_missing_but_source_contact_allowed),
+      source_contact_url: decision.source_contact_url || decision.source_url,
+      checks: {
+        exact_tiktok_video_url: true,
+        source_date_2026_plus: decision.policy_mode === 'strict',
+        phone_number_present: Boolean(decision.phone),
+        source_contact_path_present: Boolean(decision.source_contact_url || decision.source_url),
+        source_contact_required: !decision.phone,
+        specific_location_present: true,
+        listing_type_clear: decision.policy_mode === 'strict',
+        duplicate_safe: true,
+        price_captured_or_price_upon_application: true,
+      },
+    },
+    found_online_location_confirmed: true,
+    found_online_approval_policy: decision.policy_mode === 'phone_location_price_optional'
+      ? 'maka_scout_relaxed_exact_post_phone_location_price_optional_duplicate_gate'
+      : 'tiktok_ai_agent_exact_post_2026_phone_location_duplicate_gate',
+    found_online_non_location_checks_overridden: Boolean(decision.phone_missing_but_source_contact_allowed),
+    price_label: decision.price_label || PRICE_UPON_APPLICATION_LABEL,
+    source_price_label: decision.price_label || PRICE_UPON_APPLICATION_LABEL,
+    price_upon_application: (decision.price_status || '') === 'price_upon_application',
+    price_status: decision.price_status || 'price_upon_application',
+    source_contact_url: decision.source_contact_url || decision.source_url,
+    found_online_contact_status: decision.phone ? 'source_phone_confirmed' : 'source_contact_required',
+    source_phone_missing_at_publish: !decision.phone,
+  };
+
+  const result = await client.query(
+    `UPDATE properties
+     SET title = $2,
+         description = $3,
+         status = 'approved',
+         moderation_stage = 'approved',
+         reviewed_at = NOW(),
+         approved_at = COALESCE(approved_at, NOW()),
+         moderation_reason = $4,
+         moderation_notes = $5,
+         extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $6::jsonb,
+         updated_at = NOW()
+     WHERE id = $1
+     RETURNING id::text AS id, title, status, moderation_stage, approved_at`,
+    [
+      row.id,
+      decision.title,
+      decision.description,
+      decision.phone_missing_but_source_contact_allowed
+        ? 'Maka Scout source-contact mode approved after exact TikTok URL, specific location, source contact path, duplicate-safe check, and price captured or Price upon application. Source phone number still needs staff verification.'
+        : decision.policy_mode === 'phone_location_price_optional'
+        ? 'Maka Scout relaxed mode approved after exact TikTok URL, phone, specific location, duplicate-safe check, and price captured or Price upon application.'
+        : 'TikTok AI autopublish agent approved only after exact URL, 2026 date, phone, specific location, listing type, source text, and duplicate checks passed.',
+      `Autopublished from exact TikTok source: ${decision.source_url}`,
+      JSON.stringify(extraPatch),
+    ]
+  );
+
+  await client.query(
+    `INSERT INTO property_moderation_events (
+       property_id, actor_id, action, status_from, status_to, checklist, reason, notes, delivery
+     ) VALUES ($1, $2, $3, $4, 'approved', $5::jsonb, $6, $7, $8::jsonb)`,
+    [
+      row.id,
+      AGENT_ACTOR_ID,
+      'tiktok_ai_autopublish_agent_approved',
+      row.status || row.moderation_stage || 'pending',
+      JSON.stringify({
+        exact_tiktok_video_url: true,
+        confirmed_2026_source_date: decision.policy_mode === 'strict',
+        phone_number_present: Boolean(decision.phone),
+        source_contact_path_present: Boolean(decision.source_contact_url || decision.source_url),
+        source_contact_required: !decision.phone,
+        specific_location_present: true,
+        listing_type_clear: decision.policy_mode === 'strict',
+        duplicate_safe: true,
+      }),
+      decision.phone
+        ? 'AI agent approved a high-confidence TikTok property source.'
+        : 'AI agent approved a TikTok property source with source-contact follow-up required because no phone was captured.',
+      decision.description,
+      JSON.stringify({
+        source_url: decision.source_url,
+        source_contact_url: decision.source_contact_url || decision.source_url,
+        source_date: decision.source_date,
+        location: decision.location,
+        phone_present: Boolean(decision.phone),
+        source_contact_required: !decision.phone,
+        policy_mode: decision.policy_mode,
+        price_label: decision.price_label || PRICE_UPON_APPLICATION_LABEL,
+        price_status: decision.price_status || 'price_upon_application',
+      }),
+    ]
+  );
+
+  return {
+    id: result.rows[0]?.id || row.id,
+    title: result.rows[0]?.title || decision.title,
+    status: result.rows[0]?.status || 'approved',
+    moderation_stage: result.rows[0]?.moderation_stage || 'approved',
+    property_url: `/property/${result.rows[0]?.id || row.id}`,
+    source_url: decision.source_url,
+    location: decision.location,
+    approved_at: result.rows[0]?.approved_at || null,
+  };
 }
 
 async function markReadyReviewDecision(client, row, decision, { dryRun = false } = {}) {
@@ -632,7 +750,6 @@ async function runTikTokAutopublishAgent({
   reviewLimit = DEFAULT_REVIEW_LIMIT,
   scanLimit = MAX_SCAN_LIMIT,
   dryRun = true,
-  confirmReview = false,
   confirmLive = false,
   posts = [],
   urls = [],
@@ -650,14 +767,13 @@ async function runTikTokAutopublishAgent({
     || (Array.isArray(urls) && urls.length)
     || cleanText(rawText);
 
-  const reviewWriteConfirmed = confirmReview === true || confirmLive === true;
-  if (!dryRun && !reviewWriteConfirmed) {
+  if (!dryRun && !confirmLive) {
     return {
       agent: agentProfile(),
       ok: false,
       dry_run: false,
-      error: 'confirm_review_required',
-      message: 'Set confirm_review=true to authorize a review-scoring run. Live publishing is disabled; confirm_live is accepted only as a legacy alias.',
+      error: 'confirm_live_required',
+      message: 'Set confirm_live=true to let the TikTok AI agent publish passing listings.',
     };
   }
 
@@ -691,9 +807,13 @@ async function runTikTokAutopublishAgent({
     try {
       for (const row of candidates) {
         const decision = hardGateTikTokRow(row, { policyMode: normalizedMode });
-        const reviewItem = await markReadyReviewDecision(client, row, decision, { dryRun });
-        if (readyReview.length < maxReview) readyReview.push(reviewItem);
-        else blocked.push({ ...reviewItem, reasons: ['review_queue_cap_reached', ...reviewItem.reasons] });
+        if (decision.eligible && published.length < maxLive) {
+          published.push(await publishTikTokCandidate(client, row, decision, { dryRun }));
+        } else {
+          const reviewItem = await markReadyReviewDecision(client, row, decision, { dryRun });
+          if (readyReview.length < maxReview) readyReview.push(reviewItem);
+          else blocked.push({ ...reviewItem, reasons: ['review_queue_cap_reached', ...reviewItem.reasons] });
+        }
       }
       await client.query('COMMIT');
     } catch (error) {
@@ -716,7 +836,7 @@ async function runTikTokAutopublishAgent({
       source_url: `https://www.tiktok.com/tag/${normalizedHashtag}`,
       exact_video_url_required: true,
       exact_video_url_pattern: TIKTOK_EXACT_VIDEO_URL_PATTERN.source,
-      reason: 'TikTok hashtag feeds are discovery surfaces; the agent can only import exact /@handle/video/id posts with captured source evidence into human review.',
+      reason: 'TikTok hashtag feeds are discovery surfaces; the agent can only import/publish exact /@handle/video/id posts with captured source evidence.',
     };
 
     return {
@@ -727,14 +847,12 @@ async function runTikTokAutopublishAgent({
       hashtag_workflow,
       policy: {
         mode: normalizedMode,
-        review_only: true,
-        publish_gate: 'disabled',
-        human_review_priority: [
+        publish_gate: [
           'exact TikTok video URL',
           'Ugandan phone number present',
           'specific area and district present',
           normalizedMode === 'strict' ? 'source platform date confirmed on or after 2026-01-01' : 'source date preserved when known; not a relaxed-mode live blocker',
-          normalizedMode === 'strict' ? 'listing type is clear' : 'listing type is preserved when known; relaxed mode can still queue a generic property listing for review',
+          normalizedMode === 'strict' ? 'listing type is clear' : 'listing type is preserved when known; relaxed mode can still publish a generic property listing',
           normalizedMode === 'strict' ? 'caption/transcript/visual text evidence present' : 'caption/transcript/visual text is preserved when available',
           'price captured when visible, otherwise Price upon application',
           'no exact-source or live contact/location duplicate',
@@ -756,7 +874,9 @@ async function runTikTokAutopublishAgent({
       ready_review: readyReview,
       blocked,
       capture_task: captureTask,
-      not_100_percent_reason: 'Live publishing is disabled. Every harvested candidate requires human moderation.',
+      not_100_percent_reason: published.length < maxLive
+        ? `Only ${published.length} TikTok records passed all live-publish gates. Need ${maxLive}.`
+        : '',
     };
   } finally {
     client.release();

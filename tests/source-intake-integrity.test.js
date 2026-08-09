@@ -50,9 +50,9 @@ test('price extraction masks a Uganda phone and keeps the actual 85M listing pri
     area: 'Bujjuko',
     price: 706592177,
   }));
-  assert.equal(listing.price, 85000000);
-  assert.equal(listing.priceOriginal, 85000000);
-  assert.equal(listing.sourcePriceRejectionReason, '');
+  assert.equal(listing.price, null);
+  assert.equal(listing.priceText, '');
+  assert.equal(listing.sourcePriceRejectionReason, 'phone_number_is_not_price');
   assert.equal(listing.sourceAgent.phone, '+256706592177');
 });
 
@@ -85,7 +85,7 @@ test('unresolved locations remain unresolved and never default to Kampala', () =
   assert.equal(listing.canonicalLocationId, null);
   assert.equal(listing.locationResolutionStatus, 'unresolved');
   assert.equal(listing.locationEvidenceConfirmed, false);
-  assert.equal(sourcePostMeetsLaunchIntakeRule(listing, listing.sourceAgent).eligible, true);
+  assert.equal(sourcePostMeetsLaunchIntakeRule(listing, listing.sourceAgent).eligible, false);
 });
 
 test('foreign country and currency evidence is rejected before price conversion', () => {

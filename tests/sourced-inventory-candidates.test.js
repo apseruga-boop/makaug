@@ -1528,9 +1528,8 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
   assert.deepStrictEqual(normalizedYoutube.image_urls, ['https://i.ytimg.com/vi/abc123XYZ90/hqdefault.jpg']);
   const normalizedYoutubeForQueue = normalizeFoundOnlineSourcePost(normalizedYoutube);
   const youtubeApiAutoLiveStatus = sourcePostAutoLiveStatusFor(normalizedYoutubeForQueue, normalizedYoutubeForQueue.sourceAgent);
-  assert.strictEqual(youtubeApiAutoLiveStatus.approved, false, 'confident YouTube API posts must remain review-only');
-  assert.strictEqual(youtubeApiAutoLiveStatus.status, 'pending', 'confident YouTube API posts must be stored pending');
-  assert.strictEqual(youtubeApiAutoLiveStatus.source_is_youtube_api, true, 'review gate should record the YouTube API source path');
+  assert.strictEqual(youtubeApiAutoLiveStatus.approved, true, 'confident YouTube API posts should auto-live without needing a hashtag-only path');
+  assert.strictEqual(youtubeApiAutoLiveStatus.source_is_youtube_api, true, 'auto-live gate should record the YouTube API source path');
   const normalizedHashtagYoutube = normalizeYouTubeApiPost({
     id: { videoId: 'hash123XYZ90' },
     snippet: {
@@ -1548,9 +1547,8 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
   assert.strictEqual(normalizedHashtagYoutube.raw_source_post.youtube_confidence_review.phone_status, 'source_contact_only_ok');
   const normalizedHashtagForQueue = normalizeFoundOnlineSourcePost(normalizedHashtagYoutube);
   const autoLiveStatus = sourcePostAutoLiveStatusFor(normalizedHashtagForQueue, normalizedHashtagForQueue.sourceAgent);
-  assert.strictEqual(autoLiveStatus.approved, false, 'hashtag YouTube posts must remain review-only even with strong source evidence');
-  assert.strictEqual(autoLiveStatus.status, 'pending', 'hashtag importer should create pending review rows, not public inventory');
-  assert.strictEqual(autoLiveStatus.ready_for_human_review, true, 'strong hashtag evidence should still be marked ready for human review');
+  assert.strictEqual(autoLiveStatus.approved, true, 'hashtag YouTube posts with area-level location and source contact should auto-live without a phone');
+  assert.strictEqual(autoLiveStatus.status, 'approved', 'hashtag auto-live importer should create public inventory, not pending review rows');
   assert.strictEqual(YOUTUBE_VIDEOS_URL, 'https://www.googleapis.com/youtube/v3/videos', 'YouTube sweeps should enrich search results with full video descriptions');
   assert.strictEqual(YOUTUBE_COMMENT_THREADS_URL, 'https://www.googleapis.com/youtube/v3/commentThreads', 'YouTube sweeps should support bounded comment evidence enrichment');
   assert.strictEqual(YOUTUBE_SOURCE_TEXT_ENRICHMENT_VERSION, 'youtube-source-text-enrichment-20260707', 'YouTube enrichment should mark processed pending rows by version');
@@ -1590,7 +1588,7 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
   assert.strictEqual(normalizedDescriptionEnrichedYoutube.raw_source_post.youtube_confidence_review.status, 'youtube_hashtag_auto_live_ready', 'description-enriched hashtag posts should pass the same auto-live gate');
   const descriptionEnrichedQueue = normalizeFoundOnlineSourcePost(normalizedDescriptionEnrichedYoutube);
   assert.strictEqual(descriptionEnrichedQueue.area, 'Ndejje', 'generic found-online normalizer should keep the enriched YouTube area');
-  assert.strictEqual(sourcePostAutoLiveStatusFor(descriptionEnrichedQueue, descriptionEnrichedQueue.sourceAgent).approved, false, 'description-enriched YouTube rows must remain review-only');
+  assert.strictEqual(sourcePostAutoLiveStatusFor(descriptionEnrichedQueue, descriptionEnrichedQueue.sourceAgent).approved, true, 'description-enriched YouTube rows should auto-live through the shared gate');
   const normalizedCommentEnrichedYoutube = normalizeYouTubeApiPost({
     id: { videoId: 'comment123XYZ90' },
     snippet: {
@@ -1760,23 +1758,21 @@ test('found-online social search admin path and share cards are protected and au
   assert(frontend.includes('ADMIN_YOUTUBE_SWEEP_MAX_PAGES'), 'King dashboard should send the YouTube pagination depth');
   assert(frontend.includes('adminYouTubeSweepMethodLabel'), 'King dashboard should distinguish YouTube search feeds from channel-upload scans');
   assert(frontend.includes('in_window_result_count'), 'King dashboard should show how many channel videos are inside the 2026 source window');
-  assert(frontend.includes('ready for human review'), 'King dashboard should display high-confidence human-review counts');
-  assert(html.includes('always-on-harvest-review-only-20260809'), 'index should cache-bust the review-only harvesting engine');
+  assert(frontend.includes('hashtag auto-live with location/date/source contact'), 'King dashboard should display hashtag auto-live confidence counts');
   assert(html.includes('youtube-channel-upload-sweep-20260630'), 'index should cache-bust the channel-upload YouTube sweep dashboard fix');
   assert(html.includes('youtube-hashtag-auto-live-20260630'), 'index should cache-bust the hashtag auto-live dashboard fix');
   assert(html.includes('youtube-api-auto-live-20260630'), 'index should cache-bust the YouTube API auto-live dashboard fix');
   assert(html.includes('youtube-api-scorer-auto-live-20260630'), 'index should cache-bust the YouTube API scorer auto-live fix');
   assert(html.includes('youtube-known-channel-fallback-20260630'), 'index should cache-bust the YouTube known-channel fallback fix');
   assert(socialPlatformSweepServiceSource.includes('youtube_confidence_review'), 'YouTube API imports should store confidence evidence for King review');
-  assert(socialPlatformSweepServiceSource.includes('youtube_api_auto_live_ready'), 'legacy YouTube confidence evidence should remain readable during migration');
-  assert(socialPlatformSweepServiceSource.includes('youtube_hashtag_auto_live_ready'), 'legacy hashtag confidence evidence should remain readable during migration');
+  assert(socialPlatformSweepServiceSource.includes('youtube_api_auto_live_ready'), 'YouTube API confidence should auto-live posts with location/date/category/source contact');
+  assert(socialPlatformSweepServiceSource.includes('youtube_hashtag_auto_live_ready'), 'YouTube API confidence should allow hashtag posts with location and source contact to become live-ready');
   assert(socialPlatformSweepServiceSource.includes('known_channel_fallback'), 'YouTube sweeps should report the stored-channel fallback when Search quota is exhausted');
   assert(socialPlatformSweepServiceSource.includes("extra_fields->>'source_contact_url'"), 'YouTube known-channel fallback should derive sources from stored source contact URLs');
-  assert(socialSearchServiceSource.includes('sourcePostAutoLiveStatusFor'), 'source-post importer should centralize the harvesting publication gate');
+  assert(socialSearchServiceSource.includes('sourcePostAutoLiveStatusFor'), 'source-post importer should centralize the hashtag auto-live approval gate');
   assert(socialSearchServiceSource.includes('sourcePostIsYouTubeApiPost'), 'source-post importer should detect YouTube API posts outside the hashtag-only path');
-  assert(socialSearchServiceSource.includes("policy: 'always_on_harvest_review_only_v1'"), 'harvested rows should use the review-only policy');
-  assert(socialSearchServiceSource.includes('status: autoLive.status'), 'harvested imports should use the centralized pending status');
-  assert(frontend.includes('Nothing auto-published'), 'King dashboard should explicitly report that harvesting never auto-publishes');
+  assert(socialSearchServiceSource.includes('status: autoLive.status'), 'hashtag auto-live imports should insert approved public records instead of pending rows');
+  assert(frontend.includes('Auto-live properties'), 'King dashboard should show auto-live imports separately from review queue rows');
   assert(socialPlatformSweepServiceSource.includes('YOUTUBE_CHANNELS_URL'), 'YouTube sweep should resolve channel handles before scanning trusted source uploads');
   assert(socialPlatformSweepServiceSource.includes('YOUTUBE_PLAYLIST_ITEMS_URL'), 'YouTube sweep should scan trusted channel upload playlists');
   assert(read('services/socialSearchSourcedListingsService.js').includes('function sourcePlatformFor'), 'daily found-online sweeps should normalize source platform metadata');
