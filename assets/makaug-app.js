@@ -12913,7 +12913,8 @@ function harvestSummaryHtml(data = {}) {
       <div><div class="font-black text-gray-900">Top drop reasons</div>${reasons.slice(0, 6).map((row) => `<div class="mt-1">${adminEscape(row.platform)} • ${adminEscape(row.reason)}: <strong>${staffNumber(row.count || 0)}</strong></div>`).join("") || `<div class="mt-1 text-gray-500">No dropped rows recorded.</div>`}</div>
     </div>
     <div class="mt-3"><div class="font-black text-gray-900">Newest per-source activity</div><div class="mt-1 grid md:grid-cols-2 gap-1">${sourceDaily.slice(0, 8).map((row) => `<div>${adminEscape(row.platform)} / ${adminEscape(row.source_key)}: ${staffNumber(row.discovered || 0)} discovered • ${staffNumber(row.imported || 0)} imported • ${staffNumber(row.duplicate || 0)} duplicate • ${staffNumber(row.dropped || 0)} dropped • ${staffNumber(row.approved || 0)} approved</div>`).join("") || `<div class="text-gray-500">No per-source events yet.</div>`}</div></div>
-    <div class="mt-2 font-bold text-emerald-800">Review-only: ${data.review_only === true ? "confirmed" : "status unavailable"}</div>`;
+    <div class="mt-2 font-bold text-emerald-800">Review-only: ${data.review_only === true ? "confirmed" : "status unavailable"}</div>
+    ${data.marker ? `<div class="mt-1 font-mono text-[10px] text-gray-400">${adminEscape(data.marker)}</div>` : ""}`;
 }
 
 function renderStaffHarvestSummary(data = {}) {
@@ -12943,12 +12944,77 @@ async function adminLoadHarvestSummary() {
   if (wrap) wrap.textContent = "Loading the latest Harvest coverage…";
   if (button) button.disabled = true;
   try {
-    const response = await apiRequest("/api/admin/harvest/summary?days=14", { headers: adminAuthHeaders() });
+    let response;
+    try {
+      response = await apiRequest("/api/admin/harvest/coverage?days=14", { headers: adminAuthHeaders() });
+    } catch (_) {
+      response = await apiRequest("/api/admin/harvest/summary?days=14", { headers: adminAuthHeaders() });
+    }
     if (wrap) wrap.innerHTML = harvestSummaryHtml(response?.data || {});
   } catch (error) {
     if (wrap) wrap.textContent = `Harvest coverage unavailable: ${error.message || "request failed"}`;
   } finally {
     if (button) button.disabled = false;
+  }
+}
+
+const KING_HARVEST_ROUTE_CONTRACT_MARKER = "king-harvester-route-contract-20260809";
+window.__makaugKingHarvestRouteContractMarker = KING_HARVEST_ROUTE_CONTRACT_MARKER;
+
+let adminHarvestCreator = null;
+
+function renderAdminHarvestCreator(creator = null, marker = KING_HARVEST_ROUTE_CONTRACT_MARKER) {
+  const wrap = document.getElementById("admin-harvest-creator-card");
+  if (!wrap) return;
+  adminHarvestCreator = creator;
+  if (!creator) {
+    wrap.innerHTML = `<div class="rounded-lg border border-pink-100 bg-white p-3">No tracked creator is available for this platform.<div class="mt-1 font-mono text-[10px] text-gray-400">${adminEscape(marker)}</div></div>`;
+    return;
+  }
+  wrap.innerHTML = `<div class="rounded-lg border border-pink-100 bg-white p-3"><div class="font-black text-gray-900">${adminEscape(creator.display_name || creator.source_key || "Tracked creator")}</div><div class="mt-1 break-all text-gray-500">${adminEscape(creator.profile_url || "Profile URL unavailable")}</div><div class="mt-2 flex flex-wrap gap-2"><button type="button" onclick="adminOpenCurrentHarvestCreator()" class="rounded-lg bg-pink-700 px-3 py-2 font-black text-white">Open creator profile</button><button type="button" onclick="adminMarkCurrentHarvestCreatorChecked()" class="rounded-lg border border-pink-200 px-3 py-2 font-black text-pink-800">Done — show next</button></div><div class="mt-2 font-mono text-[10px] text-gray-400">${adminEscape(marker)}</div></div>`;
+}
+
+async function adminLoadNextHarvestCreator() {
+  if (!canUseLiveAdminApi()) {
+    toast("Sign in as admin or save ADMIN_API_KEY first.");
+    return;
+  }
+  const platform = document.getElementById("admin-harvest-creator-platform")?.value || "tiktok";
+  const wrap = document.getElementById("admin-harvest-creator-card");
+  const button = document.getElementById("admin-harvest-next-creator-btn");
+  if (wrap) wrap.textContent = "Loading the next tracked creator…";
+  if (button) button.disabled = true;
+  try {
+    const response = await apiRequest(`/api/admin/harvest/next-creator?platform=${encodeURIComponent(platform)}`, {
+      headers: adminAuthHeaders()
+    });
+    renderAdminHarvestCreator(response?.data?.creator || null, response?.data?.marker);
+  } catch (error) {
+    if (wrap) wrap.textContent = `Creator rotation unavailable: ${error.message || "request failed"}`;
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
+function adminOpenCurrentHarvestCreator() {
+  const profileUrl = String(adminHarvestCreator?.profile_url || "");
+  if (!/^https?:\/\//i.test(profileUrl)) return toast("This creator does not have a valid public profile URL.");
+  window.open(profileUrl, "_blank", "noopener,noreferrer");
+}
+
+async function adminMarkCurrentHarvestCreatorChecked() {
+  const sourceKey = String(adminHarvestCreator?.source_key || "");
+  if (!sourceKey) return;
+  const platform = document.getElementById("admin-harvest-creator-platform")?.value || "tiktok";
+  try {
+    await apiRequest(`/api/admin/harvest/creators/${encodeURIComponent(sourceKey)}/checked`, {
+      method: "POST",
+      headers: adminAuthHeaders(),
+      body: { platform }
+    });
+    await adminLoadNextHarvestCreator();
+  } catch (error) {
+    toast(error.message || "Could not update the creator rotation.");
   }
 }
 
