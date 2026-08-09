@@ -48,7 +48,10 @@ const { startYouTubeSourceDripScheduler } = require('./services/youtubeSourceDri
 const { startMarketplaceLifecycleScheduler } = require('./services/marketplaceLifecycleService');
 const { startMarketplaceDripScheduler } = require('./services/marketplaceNationalDripService');
 const { startFeaturedRotationScheduler } = require('./services/featuredRotationService');
-const { applyHarvestPublicSubmissionVisibility } = require('./utils/harvestFeatureFlags');
+const {
+  applyHarvestPublicSubmissionVisibility,
+  harvestAutomationEnabled
+} = require('./utils/harvestFeatureFlags');
 const { DISTRICTS: MARKETPLACE_DISTRICTS, MARKETPLACE_CATEGORIES } = require('./services/marketplaceService');
 const { loadPublicOpportunitySummary } = require('./services/publicInventoryMetricsService');
 const { applyUgandaHomepage } = require('./packages/shared-country-core');
@@ -1393,8 +1396,12 @@ async function start() {
       });
     }
   }
-  startXSourceDripScheduler(db);
-  startYouTubeSourceDripScheduler(db);
+  if (harvestAutomationEnabled()) {
+    startXSourceDripScheduler(db);
+    startYouTubeSourceDripScheduler(db);
+  } else {
+    logger.info('Harvest automation schedulers disabled by rollout flag');
+  }
   startMarketplaceLifecycleScheduler(db);
   startMarketplaceDripScheduler(db);
   startFeaturedRotationScheduler(db);

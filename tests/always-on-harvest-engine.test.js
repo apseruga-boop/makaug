@@ -271,10 +271,13 @@ async function run() {
   assert.strictEqual(usdPatch.patch.price_currency, 'USD');
 
   const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const serverSource = fs.readFileSync(path.join(root, 'server.js'), 'utf8');
   const migration = fs.readFileSync(path.join(root, 'db/migrations/112_always_on_property_harvest.sql'), 'utf8');
   assert(html.includes('always-on-harvest-review-only-20260809'));
   assert(html.includes('Paste listing link'));
   assert(html.includes('Source Fishing / Harvest coverage'));
+  assert(serverSource.includes('if (harvestAutomationEnabled())'));
+  assert(serverSource.includes('Harvest automation schedulers disabled by rollout flag'));
   const frontend = fs.readFileSync(path.join(root, 'assets/makaug-app.js'), 'utf8');
   assert(frontend.includes('/api/admin/harvest/summary?days=14'));
   assert(frontend.includes('/api/staff/harvest/creators/next'));
