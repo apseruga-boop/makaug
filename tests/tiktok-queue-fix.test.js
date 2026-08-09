@@ -98,40 +98,35 @@ async function run() {
   assert.strictEqual(duplicatePreview.queued_listings.length, 0, 'duplicate rows must not be described as newly queueable');
 
   const fetchCalls = [];
-  const previousHashLimit = process.env.HARVEST_IMAGE_HASH_LOOKUP_LIMIT;
-  process.env.HARVEST_IMAGE_HASH_LOOKUP_LIMIT = '0';
-  let verifiedPreview;
-  try {
-    verifiedPreview = await importExactSocialSourcePosts({
-      db: persistenceDb(),
-      rawText,
-      dryRun: true,
-      fetchOembed: true,
-      fetchPublicMetadata: false,
-      fetchImpl: async (input) => {
-        const requestUrl = String(input);
-        fetchCalls.push(requestUrl);
-        assert(requestUrl.startsWith('https://www.tiktok.com/oembed?url='), 'TikTok verification must call the official oEmbed endpoint');
-        return {
-          ok: true,
-          status: 200,
-          async json() {
-            return {
-              title: 'House for sale at Bujuko asking price 85m. Call 0774120320.',
-              author_name: 'Wamala Property Services',
-              author_url: 'https://www.tiktok.com/@wamalapropertyservices',
-              thumbnail_url: 'https://p16-common-sign.tiktokcdn.com/tiktok-cover.jpg',
-              provider_name: 'TikTok'
-            };
-          }
-        };
-      }
-    });
-  } finally {
-    if (previousHashLimit === undefined) delete process.env.HARVEST_IMAGE_HASH_LOOKUP_LIMIT;
-    else process.env.HARVEST_IMAGE_HASH_LOOKUP_LIMIT = previousHashLimit;
-  }
+  const verifiedPreview = await importExactSocialSourcePosts({
+    db: persistenceDb(),
+    rawText,
+    dryRun: true,
+    fetchOembed: true,
+    fetchPublicMetadata: false,
+    fetchImpl: async (input) => {
+      const requestUrl = String(input);
+      fetchCalls.push(requestUrl);
+      assert(requestUrl.startsWith('https://www.tiktok.com/oembed?url='), 'TikTok verification must call the official oEmbed endpoint');
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {
+            title: 'House for sale at Bujuko asking price 85m. Call 0774120320.',
+            author_name: 'Wamala Property Services',
+            author_url: 'https://www.tiktok.com/@wamalapropertyservices',
+            thumbnail_url: 'https://p16-common-sign.tiktokcdn.com/tiktok-cover.jpg',
+            provider_name: 'TikTok'
+          };
+        }
+      };
+    }
+  });
   assert.strictEqual(fetchCalls.length, 1, 'preview must perform one real server-side fetch per unique exact TikTok URL');
+  assert.strictEqual(verifiedPreview.image_hash_lookup_count, 0, 'preview must not block on remote image hashing');
+  assert.strictEqual(verifiedPreview.image_hash_lookup_skipped_reason, 'preview_metadata_only');
+  assert.strictEqual(verifiedPreview.metadata_reports[0].thumbnail_cache_status, 'preview_metadata_only', 'preview must return oEmbed thumbnail metadata without downloading it');
   assert.strictEqual(verifiedPreview.server_enrichment.provider, 'tiktok_oembed');
   assert.strictEqual(verifiedPreview.server_enrichment.server_side, true);
   assert.strictEqual(verifiedPreview.server_enrichment.attempted, 1);
