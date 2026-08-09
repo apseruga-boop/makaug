@@ -35,13 +35,21 @@ async function ensureSuppressedSourcesTable(executor) {
 async function suppressedSourceRowsForUrls(executor, urls = []) {
   const normalized = uniqueNormalizedSourceUrls(urls);
   if (!normalized.length) return new Map();
-  await ensureSuppressedSourcesTable(executor);
-  const result = await executor.query(
+  const selectRows = () => executor.query(
     `SELECT source_url, reason, rejected_property_id::text AS rejected_property_id, created_at
      FROM suppressed_sources
      WHERE source_url = ANY($1::text[])`,
     [normalized]
   );
+  let result;
+  try {
+    result = await selectRows();
+    ensuredSuppressedSourcesTable = true;
+  } catch (error) {
+    if (error?.code !== '42P01') throw error;
+    await ensureSuppressedSourcesTable(executor);
+    result = await selectRows();
+  }
   return new Map(result.rows.map((row) => [row.source_url, row]));
 }
 

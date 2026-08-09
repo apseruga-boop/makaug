@@ -2688,6 +2688,8 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
 }
 
 async function existingFoundOnlineSourcePostListings(client, items = []) {
+  // king-harvester-duplicate-lookup-20260809: keep each fingerprint lookup in
+  // its own indexable branch instead of forcing one broad JSON expression scan.
   const keys = items.map((item) => item.key).filter(Boolean);
   const urls = uniqueUrls(items.map((item) => sourceUrlForItem(item)));
   const normalizedUrls = [...new Set(items.map(normalizedSourceUrlForItem).filter(Boolean))];
@@ -2702,7 +2704,7 @@ async function existingFoundOnlineSourcePostListings(client, items = []) {
   if (!keys.length && !urls.length && !fingerprints.length && !platformIds.length && !captionHashes.length && !imageHashes.length && !imagePHashes.length && !compositeKeys.length && !contactKeys.length) return new Map();
   const lookupUrls = uniqueUrls([...urls, ...normalizedUrls]);
   const selectExisting = `SELECT
-       id::text AS id,
+       properties.id::text AS id,
        title,
        area,
        district,
@@ -2729,22 +2731,54 @@ async function existingFoundOnlineSourcePostListings(client, items = []) {
        ) AS source_url
      FROM properties`;
   const result = await client.query(
-    `${selectExisting}
-     WHERE COALESCE(status, '') <> 'deleted'
-       AND (
-         COALESCE(extra_fields->>'source_url', extra_fields->>'source_post_url', '') = ANY($1::text[])
-         OR COALESCE(extra_fields->>'source_listing_key', '') = ANY($2::text[])
-         OR (
-           COALESCE(extra_fields->>'content_fingerprint', '') <> ''
-           AND extra_fields->>'content_fingerprint' = ANY($3::text[])
-         )
-         OR COALESCE(extra_fields->>'source_platform_id', '') = ANY($4::text[])
-         OR COALESCE(extra_fields->>'caption_simhash', '') = ANY($5::text[])
-         OR COALESCE(extra_fields->>'primary_image_dhash', '') = ANY($6::text[])
-         OR COALESCE(extra_fields->>'primary_image_phash', '') = ANY($7::text[])
-         OR COALESCE(extra_fields->>'composite_listing_key', '') = ANY($8::text[])
-         OR COALESCE(extra_fields->>'contact_cluster_key', '') = ANY($9::text[])
-       )`,
+    `WITH matching_property_ids AS (
+       SELECT id FROM properties
+       WHERE COALESCE(status, '') <> 'deleted'
+         AND COALESCE(extra_fields->>'source_url', extra_fields->>'source_post_url', '') <> ''
+         AND COALESCE(extra_fields->>'source_url', extra_fields->>'source_post_url', '') = ANY($1::text[])
+       UNION
+       SELECT id FROM properties
+       WHERE COALESCE(status, '') <> 'deleted'
+         AND COALESCE(extra_fields->>'source_listing_key', '') <> ''
+         AND extra_fields->>'source_listing_key' = ANY($2::text[])
+       UNION
+       SELECT id FROM properties
+       WHERE COALESCE(status, '') <> 'deleted'
+         AND COALESCE(extra_fields->>'content_fingerprint', '') <> ''
+         AND extra_fields->>'content_fingerprint' = ANY($3::text[])
+       UNION
+       SELECT id FROM properties
+       WHERE COALESCE(status, '') <> 'deleted'
+         AND COALESCE(extra_fields->>'source_platform_id', '') <> ''
+         AND extra_fields->>'source_platform_id' = ANY($4::text[])
+       UNION
+       SELECT id FROM properties
+       WHERE COALESCE(status, '') <> 'deleted'
+         AND COALESCE(extra_fields->>'caption_simhash', '') <> ''
+         AND extra_fields->>'caption_simhash' = ANY($5::text[])
+       UNION
+       SELECT id FROM properties
+       WHERE COALESCE(status, '') <> 'deleted'
+         AND COALESCE(extra_fields->>'primary_image_dhash', '') <> ''
+         AND extra_fields->>'primary_image_dhash' = ANY($6::text[])
+       UNION
+       SELECT id FROM properties
+       WHERE COALESCE(status, '') <> 'deleted'
+         AND COALESCE(extra_fields->>'primary_image_phash', '') <> ''
+         AND extra_fields->>'primary_image_phash' = ANY($7::text[])
+       UNION
+       SELECT id FROM properties
+       WHERE COALESCE(status, '') <> 'deleted'
+         AND COALESCE(extra_fields->>'composite_listing_key', '') <> ''
+         AND extra_fields->>'composite_listing_key' = ANY($8::text[])
+       UNION
+       SELECT id FROM properties
+       WHERE COALESCE(status, '') <> 'deleted'
+         AND COALESCE(extra_fields->>'contact_cluster_key', '') <> ''
+         AND extra_fields->>'contact_cluster_key' = ANY($9::text[])
+     )
+     ${selectExisting}
+     INNER JOIN matching_property_ids ON matching_property_ids.id = properties.id`,
     [lookupUrls, keys, fingerprints, platformIds, captionHashes, imageHashes, imagePHashes, compositeKeys, contactKeys]
   );
   const existing = new Map();
