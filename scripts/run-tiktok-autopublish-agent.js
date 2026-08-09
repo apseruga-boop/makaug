@@ -8,6 +8,7 @@ const {
   DEFAULT_HASHTAG,
   runTikTokAutopublishAgent,
 } = require('../services/tiktokAutopublishAgentService');
+const { harvestAutomationEnabled } = require('../utils/harvestFeatureFlags');
 
 const args = process.argv.slice(2);
 
@@ -39,6 +40,9 @@ function usage() {
 async function main() {
   const confirmReview = args.includes('--confirm-review') || args.includes('--confirm-live');
   const dryRun = args.includes('--dry-run') || !confirmReview;
+  if (confirmReview && !harvestAutomationEnabled()) {
+    throw new Error('Harvest automation is disabled. Set HARVEST_AUTOMATION_ENABLED=true only after Dave verification.');
+  }
   const urls = args
     .filter((arg) => String(arg || '').startsWith('--url='))
     .map((arg) => arg.slice('--url='.length))
