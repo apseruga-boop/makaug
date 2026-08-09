@@ -37,6 +37,7 @@ const {
 const { sourcePositiveListingGateForRecord } = require('../utils/sourceContentQuality');
 const { normalizeSourceUrl, stablePlatformPostIdentity } = require('../utils/sourceUrlNormalization');
 const {
+  applyHarvestPublicSubmissionVisibility,
   envFlagEnabled,
   harvestAutomationEnabled,
   harvestPublicSubmissionsEnabled,
@@ -53,6 +54,12 @@ async function run() {
   assert.strictEqual(harvestAutomationEnabled({ HARVEST_AUTOMATION_ENABLED: 'true' }), true);
   assert.strictEqual(harvestPublicSubmissionsEnabled({}), false);
   assert.strictEqual(harvestPublicSubmissionsEnabled({ HARVEST_PUBLIC_SUBMISSIONS_ENABLED: '1' }), true);
+  const publicHarvestControl = '<button data-harvest-public-submission>Paste listing link</button>';
+  assert.match(applyHarvestPublicSubmissionVisibility(publicHarvestControl, {}), /display:none!important/);
+  assert.strictEqual(
+    applyHarvestPublicSubmissionVisibility(publicHarvestControl, { HARVEST_PUBLIC_SUBMISSIONS_ENABLED: 'true' }),
+    publicHarvestControl
+  );
   assert.strictEqual(
     normalizeSourceUrl('https://twitter.com/Agent/status/1890000000000000000?utm_source=test'),
     'https://x.com/agent/status/1890000000000000000'

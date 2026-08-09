@@ -2638,7 +2638,7 @@
         <a id="nav-about" href="/about" onclick="showPage('about')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">About Us</a>
       </div>
       <div class="flex items-center gap-2">
-        <button type="button" onclick="openHarvestSubmissionModal()" class="hidden lg:block border border-green-700 text-green-800 px-3 py-2 rounded-lg text-sm font-semibold hover:bg-green-50">Paste listing link</button>
+        <button type="button" data-harvest-public-submission onclick="openHarvestSubmissionModal()" class="hidden lg:block border border-green-700 text-green-800 px-3 py-2 rounded-lg text-sm font-semibold hover:bg-green-50">Paste listing link</button>
         <a id="nav-list-btn" data-testid="list-property-free-cta" href="/list-property" onclick="handleListPropertyFreeCta(event)" class="hidden md:block bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-green-600">List Property</a>
         <button id="mob-toggle" class="lg:hidden text-gray-700 p-2" onclick="toggleMobile()"><i class="fas fa-bars text-xl"></i></button>
       </div>
@@ -2655,7 +2655,7 @@
       <a id="mnav-ai" href="/discover-ai-chatbot" onclick="showPage('ai-chatbot');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">AI Chatbot</a>
       <a id="mnav-marketplace" href="/marketplace" onclick="showPage('marketplace');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-rose-50">Marketplace</a>
       <a id="mnav-about" href="/about" onclick="showPage('about');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">About Us</a>
-      <button type="button" onclick="closeMobile();openHarvestSubmissionModal()" class="px-3 py-2 rounded-lg border border-green-700 text-green-800 font-semibold text-left">Paste TikTok / FB link</button>
+      <button type="button" data-harvest-public-submission onclick="closeMobile();openHarvestSubmissionModal()" class="px-3 py-2 rounded-lg border border-green-700 text-green-800 font-semibold text-left">Paste TikTok / FB link</button>
       <a id="mnav-advertise" data-testid="mobile-list-property-free-cta" href="/list-property" onclick="handleListPropertyFreeCta(event);closeMobile()" class="px-3 py-2 rounded-lg bg-green-700 text-white font-semibold">List Property</a>
     </div>
   </nav>
@@ -9396,7 +9396,7 @@
     </div>
   </div>
 
-  <div id="harvest-submission-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="harvest-submission-title">
+  <div id="harvest-submission-modal" data-harvest-public-submission class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="harvest-submission-title">
     <div class="modal-box" style="max-width:620px">
       <button type="button" onclick="closeHarvestSubmissionModal()" class="absolute top-3 right-3 text-gray-400" aria-label="Close">✕</button>
       <div class="text-xs uppercase tracking-wide font-black text-green-700">Help makaug find Uganda property</div>

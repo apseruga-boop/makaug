@@ -12,7 +12,17 @@ function harvestPublicSubmissionsEnabled(env = process.env) {
   return envFlagEnabled(env.HARVEST_PUBLIC_SUBMISSIONS_ENABLED);
 }
 
+function applyHarvestPublicSubmissionVisibility(html, env = process.env) {
+  const source = String(html || '');
+  if (harvestPublicSubmissionsEnabled(env)) return source;
+  return source.replace(
+    /(<(?:button|div)\b(?=[^>]*\bdata-harvest-public-submission\b)[^>]*)(>)/gi,
+    '$1 hidden aria-hidden="true" style="display:none!important"$2'
+  );
+}
+
 module.exports = {
+  applyHarvestPublicSubmissionVisibility,
   envFlagEnabled,
   harvestAutomationEnabled,
   harvestPublicSubmissionsEnabled,

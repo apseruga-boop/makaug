@@ -48,6 +48,7 @@ const { startYouTubeSourceDripScheduler } = require('./services/youtubeSourceDri
 const { startMarketplaceLifecycleScheduler } = require('./services/marketplaceLifecycleService');
 const { startMarketplaceDripScheduler } = require('./services/marketplaceNationalDripService');
 const { startFeaturedRotationScheduler } = require('./services/featuredRotationService');
+const { applyHarvestPublicSubmissionVisibility } = require('./utils/harvestFeatureFlags');
 const { DISTRICTS: MARKETPLACE_DISTRICTS, MARKETPLACE_CATEGORIES } = require('./services/marketplaceService');
 const { loadPublicOpportunitySummary } = require('./services/publicInventoryMetricsService');
 const { applyUgandaHomepage } = require('./packages/shared-country-core');
@@ -882,6 +883,7 @@ function renderPublicHtml(pathname) {
   if (normalizedBasePath === '/' && process.env.SHARED_CORE_PHASE1_ENABLED !== 'false') {
     rendered = applyUgandaHomepage(rendered);
   }
+  rendered = applyHarvestPublicSubmissionVisibility(rendered);
   if (isProduction) publicHtmlCache.set(key, rendered);
   return rendered;
 }
