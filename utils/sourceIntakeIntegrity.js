@@ -18,9 +18,10 @@ const EXPLICIT_LISTING_INTENT_PATTERN = /\b(?:for sale|on sale|selling|for rent|
 const CONSTRUCTION_COST_PATTERN = /\b(?:build(?:ing)? costs?|cost to build|construction costs?|material costs?|cost breakdown|roofing materials?|bill of quantities|boq)\b/i;
 const FOREIGN_INTERNATIONAL_PHONE_PATTERN = /\+(?!256)\d{1,3}(?:[\s().-]*\d){7,14}/g;
 const UGANDA_PHONE_CANDIDATE_PATTERN = /(^|[^\d+])((?:\+?256[\s().-]*|0)7\d{2}[\s().-]*\d{3}[\s().-]*\d{3}|7\d{2}[\s().-]*\d{3}[\s().-]*\d{3})(?=$|[^\d])/g;
-const SOURCE_PRICE_EVIDENCE_PATTERN = /(?:\b(?:ugx|ush|shs?)\s*|(?:\$|us\$|usd)\s*)?\d[\d,.]*(?:\s*(?:bn|b|billion|billions|m|mn|million|millions|k|thousand|thousands))?(?:\s*(?:ugx|ush|shs?))?(?:\s*(?:\/\s*(?:month|mo)|per\s+month|monthly))?/gi;
+const SOURCE_PRICE_EVIDENCE_PATTERN = /(?:\b(?:ugx|ush|shs?)\s*|(?:\$|us\$|usd)\s*)?\d[\d,.]*(?:\s*(?:bn|b|billion|billions|m|mn|million|millions|k|thousand|thousands)(?![a-z]))?(?:\s*(?:ugx|ush|shs?))?(?:\s*(?:\/\s*(?:month|mo)|per\s+month|monthly))?/gi;
 const SOURCE_PRICE_CONTEXT_PATTERN = /\b(?:price|asking|guide\s+price|at|only|going\s+for|selling\s+at|rent(?:ed)?\s+at)\s*(?:is|of|:|-)?\s*((?:ugx|ush|shs?)?\s*\d[\d,.]*(?:\s*(?:bn|b|billion|billions|m|mn|million|millions|k|thousand|thousands))?(?:\s*(?:ugx|ush|shs?))?)/gi;
 const SOURCE_PRICE_MAX_RELATIVE_DRIFT = 0.001;
+const CONSTRUCTION_MONEY_TOKEN_SOURCE = '(?:(?:ugx|ush|shs?|usd|us\\$|\\$)\\s*)?\\d[\\d,.]*(?:\\s*(?:bn|b|billion|billions|m|mn|million|millions|k|thousand|thousands))?';
 
 function compactText(value = '') {
   return String(value || '').replace(/\s+/g, ' ').trim();
@@ -85,6 +86,14 @@ function maskPhonesForPriceExtraction(text = '') {
     .trim();
 }
 
+function maskConstructionCostsForPriceExtraction(text = '') {
+  const afterCostLabel = new RegExp(`(${CONSTRUCTION_COST_PATTERN.source})(?:\\s+(?:is|of|at|around|approximately|about))?\\s*[:=-]?\\s*(${CONSTRUCTION_MONEY_TOKEN_SOURCE})`, 'gi');
+  const beforeCostLabel = new RegExp(`(${CONSTRUCTION_MONEY_TOKEN_SOURCE})\\s*(?:for|in)?\\s*(${CONSTRUCTION_COST_PATTERN.source})`, 'gi');
+  return compactText(text)
+    .replace(afterCostLabel, '$1 [construction-cost]')
+    .replace(beforeCostLabel, '[construction-cost] $2');
+}
+
 function sourcePriceMatchesPhone(value, text = '') {
   if (value == null || value === '') return false;
   const candidateDigits = String(value).replace(/\D/g, '');
@@ -98,7 +107,7 @@ function sourcePriceMatchesPhone(value, text = '') {
 }
 
 function sourcePriceEvidenceAmounts(text = '') {
-  const masked = maskPhonesForPriceExtraction(text);
+  const masked = maskConstructionCostsForPriceExtraction(maskPhonesForPriceExtraction(text));
   const candidates = [];
   for (const match of masked.matchAll(SOURCE_PRICE_EVIDENCE_PATTERN)) {
     const token = compactText(match[0]);
@@ -149,6 +158,7 @@ function safeSourcePriceCandidate(value, text = '') {
 
 module.exports = {
   foreignSourceMarketStatus,
+  maskConstructionCostsForPriceExtraction,
   maskPhonesForPriceExtraction,
   normalizeUgandanSourcePhone,
   safeSourcePriceCandidate,

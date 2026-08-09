@@ -77,8 +77,8 @@ const noLocationRows = buildExactSocialPostImportRows({
 const noLocation = normalizeFoundOnlineSourcePost(noLocationRows[0]);
 const noLocationIntake = sourcePostMeetsLaunchIntakeRule(noLocation, noLocation.sourceAgent);
 assert.strictEqual(noLocation.locationEvidenceConfirmed, false);
-assert.strictEqual(noLocationIntake.eligible, false);
-assert(noLocationIntake.blocking_reasons.includes('missing_uganda_location'));
+assert.strictEqual(noLocationIntake.eligible, true);
+assert.deepStrictEqual(noLocationIntake.blocking_reasons, []);
 
 assert(frontend.includes('cache: "no-store"'));
 assert(frontend.includes('preview_request_id'));
@@ -89,4 +89,4 @@ assert(frontend.includes('Original-poster comments are optional supporting evide
 assert(adminRoute.includes("res.set('Cache-Control', 'no-store')"));
 assert(staffRoute.includes("res.set('Cache-Control', 'no-store')"));
 
-console.log('ok - TikTok manual intake gate accepts complete older exact posts and preserves Uganda location requirements');
+console.log('ok - TikTok manual intake gate keeps complete and unknown-location exact posts in human review');
