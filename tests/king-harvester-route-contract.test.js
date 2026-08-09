@@ -57,6 +57,10 @@ async function run() {
   assert(app.includes('Verify with TikTok & Preview'), 'TikTok import must expose the server verification action');
   assert(app.includes('normalized !== "tiktok"'), 'TikTok sweep must not be blocked behind a native confirmation dialog');
   assert(app.includes('data-tiktok-server-enrichment'), 'TikTok preview must display server-side provider evidence');
+  assert(app.includes('TikTok source/capture tasks'), 'completed async sweeps must expose the prepared TikTok task list');
+  assert(app.includes('summary.tiktok_capture_task_count'), 'completed async sweeps must report capture-task count separately from discovered exact posts');
+  assert(app.includes('Open TikTok source'), 'completed async sweeps must provide clickable source URLs');
+  assert(staffRoutes.includes('tiktok_capture_task_count'), 'the async job summary must retain TikTok capture-task evidence');
   assert(app.includes('admin-harvest-summary-btn') && app.includes('admin-harvest-next-creator-btn'), 'dynamic dashboard recovery must restore both Harvest controls');
 
   for (const table of [

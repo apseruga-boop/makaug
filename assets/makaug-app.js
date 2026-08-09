@@ -18030,6 +18030,9 @@ function adminStaffSocialSweepProfile(normalized = "all", studentFocus = false) 
 
 function adminStaffSocialSweepJobHtml(data = {}) {
   const summary = data.result_summary || {};
+  const tiktokCaptureTasks = Array.isArray(data.result?.tiktok?.capture_tasks)
+    ? data.result.tiktok.capture_tasks
+    : [];
   const status = String(data.status || "queued").toLowerCase();
   const completionState = String(data.completion_state || status).toLowerCase();
   const completed = status === "completed";
@@ -18050,6 +18053,7 @@ function adminStaffSocialSweepJobHtml(data = {}) {
         <div>Requested sources: <strong>${staffNumber(data.requested_source_count || 0)}</strong></div>
         <div>Already running: <strong>${data.already_running ? "Yes" : "No"}</strong></div>
         <div>Discovered posts: <strong>${staffNumber(summary.discovered_posts_count || 0)}</strong></div>
+        <div>TikTok capture tasks: <strong>${staffNumber(summary.tiktok_capture_task_count || tiktokCaptureTasks.length || 0)}</strong></div>
         <div>Created properties: <strong>${staffNumber(summary.created_properties || 0)}</strong></div>
         <div>Published automatically: <strong>0</strong></div>
         <div>Review queue rows: <strong>${staffNumber(summary.review_queue_properties || 0)}</strong></div>
@@ -18061,6 +18065,7 @@ function adminStaffSocialSweepJobHtml(data = {}) {
         <div>Batch cap: <strong>${staffNumber(summary.sweep_source_cap || 0)} sources / ${staffNumber(summary.sweep_max_pages_per_source || 0)} page</strong></div>
         <div>Import cap: <strong>${staffNumber(summary.sweep_import_post_cap || 0)} posts</strong></div>
       </div>
+      ${tiktokCaptureTasks.length ? `<details class="mt-3 rounded-lg border border-pink-200 bg-white/90 p-2" open><summary class="cursor-pointer font-black text-pink-950">TikTok source/capture tasks (${adminEscape(tiktokCaptureTasks.length)})</summary><div class="mt-2 text-[11px] text-pink-900">Open a source, copy suitable exact <span class="font-mono">/@handle/video/id</span> links, then use Import TikTok Videos. These are discovery tasks only; nothing is published automatically.</div><div class="mt-2 grid gap-2 md:grid-cols-2">${tiktokCaptureTasks.slice(0, 16).map((task) => `<div class="rounded-lg border border-pink-100 bg-pink-50 p-2"><div class="font-bold">${adminEscape(task.query || task.source_name || "TikTok source")}</div><div class="mt-0.5 text-[10px] text-pink-700">${adminEscape(task.source_record_kind || "source")} • exact video URL required</div>${task.source_url ? `<a href="${adminAttr(task.source_url)}" target="_blank" rel="noopener" class="mt-1 inline-flex rounded border border-pink-200 bg-white px-2 py-1 font-bold text-pink-700">Open TikTok source</a>` : ""}</div>`).join("")}</div></details>` : ""}
       ${data.error ? `<div class="mt-2 rounded-lg bg-white/80 border border-red-100 p-2 text-red-800">${adminEscape(data.error)}</div>` : ""}
     </div>`;
 }
