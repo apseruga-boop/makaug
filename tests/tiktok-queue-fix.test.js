@@ -97,6 +97,52 @@ async function run() {
   assert.strictEqual(duplicatePreview.would_create_properties, 0, 'dry-run must not predict a duplicate as a new row');
   assert.strictEqual(duplicatePreview.queued_listings.length, 0, 'duplicate rows must not be described as newly queueable');
 
+  const fetchCalls = [];
+  const previousHashLimit = process.env.HARVEST_IMAGE_HASH_LOOKUP_LIMIT;
+  process.env.HARVEST_IMAGE_HASH_LOOKUP_LIMIT = '0';
+  let verifiedPreview;
+  try {
+    verifiedPreview = await importExactSocialSourcePosts({
+      db: persistenceDb(),
+      rawText,
+      dryRun: true,
+      fetchOembed: true,
+      fetchPublicMetadata: false,
+      fetchImpl: async (input) => {
+        const requestUrl = String(input);
+        fetchCalls.push(requestUrl);
+        assert(requestUrl.startsWith('https://www.tiktok.com/oembed?url='), 'TikTok verification must call the official oEmbed endpoint');
+        return {
+          ok: true,
+          status: 200,
+          async json() {
+            return {
+              title: 'House for sale at Bujuko asking price 85m. Call 0774120320.',
+              author_name: 'Wamala Property Services',
+              author_url: 'https://www.tiktok.com/@wamalapropertyservices',
+              thumbnail_url: 'https://p16-common-sign.tiktokcdn.com/tiktok-cover.jpg',
+              provider_name: 'TikTok'
+            };
+          }
+        };
+      }
+    });
+  } finally {
+    if (previousHashLimit === undefined) delete process.env.HARVEST_IMAGE_HASH_LOOKUP_LIMIT;
+    else process.env.HARVEST_IMAGE_HASH_LOOKUP_LIMIT = previousHashLimit;
+  }
+  assert.strictEqual(fetchCalls.length, 1, 'preview must perform one real server-side fetch per unique exact TikTok URL');
+  assert.strictEqual(verifiedPreview.server_enrichment.provider, 'tiktok_oembed');
+  assert.strictEqual(verifiedPreview.server_enrichment.server_side, true);
+  assert.strictEqual(verifiedPreview.server_enrichment.attempted, 1);
+  assert.strictEqual(verifiedPreview.server_enrichment.succeeded, 1);
+  assert.strictEqual(verifiedPreview.server_enrichment.failed, 0);
+  assert.strictEqual(verifiedPreview.server_enrichment.verified_posts[0].author_url, 'https://www.tiktok.com/@wamalapropertyservices');
+  assert.strictEqual(verifiedPreview.server_enrichment.verified_posts[0].caption_received, true);
+  assert.strictEqual(verifiedPreview.server_enrichment.verified_posts[0].thumbnail_received, true);
+  assert.strictEqual(verifiedPreview.metadata_reports[0].method, 'tiktok_oembed');
+  assert.strictEqual(verifiedPreview.metadata_reports[0].server_side, true);
+
   const app = read('assets/makaug-app.js');
   const adminRoutes = read('routes/admin.js');
   const staffRoutes = read('routes/staff.js');
@@ -112,6 +158,7 @@ async function run() {
   assert(app.includes('queue=found_online') && app.includes('ADMIN_REVIEW_QUEUE_PAGE_SIZE = 24'), 'Found Online review must request one small page');
   assert(app.includes('posts: dryRun ? [] : cachedPreviewRows'), 'queue must reuse preview rows instead of repeating metadata fetches');
   assert(app.includes('fetch_oembed: dryRun') && app.includes('fetch_public_metadata: dryRun'), 'queue must keep external enrichment off the persistence request');
+  assert(app.includes('Server-side TikTok verification'), 'King must see explicit provider proof after preview');
   assert(adminRoutes.includes("queueType === 'found_online'"), 'admin review API must support the Found Online queue filter');
   assert(adminRoutes.includes('adminFoundOnlineReviewQueueWhere'), 'Found Online review needs a dedicated non-suppressing queue predicate');
   assert(adminRoutes.includes('adminActionableReviewQueueWhere'), 'dashboard counts must include dedicated Found Online rows');

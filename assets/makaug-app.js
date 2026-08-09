@@ -12959,7 +12959,9 @@ async function adminLoadHarvestSummary() {
 }
 
 const KING_HARVEST_ROUTE_CONTRACT_MARKER = "king-harvester-route-contract-20260809";
+const KING_TIKTOK_HARVEST_E2E_MARKER = "king-tiktok-harvester-e2e-20260809";
 window.__makaugKingHarvestRouteContractMarker = KING_HARVEST_ROUTE_CONTRACT_MARKER;
+window.__makaugKingTikTokHarvestE2eMarker = KING_TIKTOK_HARVEST_E2E_MARKER;
 
 let adminHarvestCreator = null;
 
@@ -16419,6 +16421,22 @@ function ensureAdminFoundOnlineControls() {
     dripPanel.className = "hidden mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-950";
     table.parentNode.insertBefore(dripPanel, table);
   }
+  if (!document.getElementById("admin-harvest-summary")) {
+    const harvestPanel = document.createElement("section");
+    harvestPanel.id = "admin-harvest-summary";
+    harvestPanel.className = "mb-4 rounded-xl border border-emerald-100 bg-white p-3 text-xs text-gray-700";
+    harvestPanel.innerHTML = `<div class="flex items-center justify-between gap-3"><div><div class="font-black text-gray-900">Source Fishing / Harvest coverage</div><div class="mt-1 text-gray-500">Daily review intake, duplicates, exclusions, freshness, and tracked creator coverage.</div></div><button type="button" onclick="adminLoadHarvestSummary()" class="border border-emerald-200 text-emerald-800 hover:bg-emerald-50 px-3 py-1.5 rounded-lg text-xs font-bold">Refresh</button></div><div id="admin-harvest-summary-body" class="mt-3">Select Harvest Coverage to load the latest 14-day review-only report.</div>`;
+    table.parentNode.insertBefore(harvestPanel, table);
+  }
+  if (!document.getElementById("admin-harvest-creator")) {
+    const creatorPanel = document.createElement("section");
+    creatorPanel.id = "admin-harvest-creator";
+    creatorPanel.dataset.kingHarvestRouteContract = KING_HARVEST_ROUTE_CONTRACT_MARKER;
+    creatorPanel.dataset.kingTikTokHarvestE2e = KING_TIKTOK_HARVEST_E2E_MARKER;
+    creatorPanel.className = "mb-4 rounded-xl border border-pink-100 bg-pink-50 p-3 text-xs text-gray-700";
+    creatorPanel.innerHTML = `<div class="flex items-center justify-between gap-3 flex-wrap"><div><div class="font-black text-gray-900">Assisted creator rotation</div><div class="mt-1 text-gray-500">Open one tracked public creator profile, copy only new exact post links, then use Import TikTok Videos. Nothing is scraped or published automatically.</div></div><div class="flex items-center gap-2"><select id="admin-harvest-creator-platform" class="rounded-lg border border-pink-200 bg-white px-3 py-2 text-xs"><option value="tiktok">TikTok creators</option><option value="facebook">Facebook sources</option><option value="instagram">Instagram creators</option></select><button type="button" onclick="adminLoadNextHarvestCreator()" class="rounded-lg border border-pink-300 bg-white px-3 py-2 text-xs font-black text-pink-800">Harvest next creator</button></div></div><div id="admin-harvest-creator-card" class="mt-3">Select Harvest next creator when ready.</div>`;
+    table.parentNode.insertBefore(creatorPanel, table);
+  }
   if (
     document.getElementById("admin-seed-bakaima-listings-btn")
     && document.getElementById("admin-seed-carnelian-listings-btn")
@@ -16435,6 +16453,8 @@ function ensureAdminFoundOnlineControls() {
     && document.getElementById("admin-import-exact-social-links-btn")
     && document.getElementById("admin-seed-source-registry-btn")
     && document.getElementById("admin-load-source-registry-btn")
+    && document.getElementById("admin-harvest-summary-btn")
+    && document.getElementById("admin-harvest-next-creator-btn")
   ) return;
   const header = panel.querySelector(".flex.items-center.justify-between") || panel.firstElementChild;
   const actions = document.createElement("div");
@@ -16487,6 +16507,12 @@ function ensureAdminFoundOnlineControls() {
   }
   if (!document.getElementById("admin-load-source-registry-btn")) {
     missingButtons.push(`<button id="admin-load-source-registry-btn" type="button" onclick="adminLoadPropertySourceRegistry()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-bold">View Source Database</button>`);
+  }
+  if (!document.getElementById("admin-harvest-summary-btn")) {
+    missingButtons.push(`<button id="admin-harvest-summary-btn" type="button" onclick="adminLoadHarvestSummary()" class="border border-emerald-300 text-emerald-800 hover:bg-emerald-50 px-3 py-2 rounded-lg text-xs font-bold">Harvest Coverage</button>`);
+  }
+  if (!document.getElementById("admin-harvest-next-creator-btn")) {
+    missingButtons.push(`<button id="admin-harvest-next-creator-btn" type="button" onclick="adminLoadNextHarvestCreator()" class="border border-pink-300 text-pink-800 hover:bg-pink-50 px-3 py-2 rounded-lg text-xs font-bold">Harvest next creator</button>`);
   }
   missingButtons.push(`<button type="button" onclick="renderAdminDashboard()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-bold">Refresh Queue</button>`);
   actions.innerHTML = missingButtons.join("");
@@ -17377,66 +17403,13 @@ function adminTikTokExactImportPrompt(seedText = "") {
   ].join("\n");
 }
 
-async function adminImportTikTokExactPosts(seedText = "") {
+function adminImportTikTokExactPosts(seedText = "") {
   if (!canUseLiveAdminApi()) {
     toast("Sign in as admin or save ADMIN_API_KEY first.");
     return;
   }
-  const raw = window.prompt(adminTikTokExactImportPrompt(seedText), seedText || "");
-  if (!raw) return;
-  const statusEl = document.getElementById("admin-found-online-status");
-  const button = document.getElementById("admin-import-tiktok-posts-btn");
-  if (button) {
-    button.disabled = true;
-    button.classList.add("opacity-60", "cursor-wait");
-  }
-  if (statusEl) {
-    statusEl.classList.remove("hidden");
-    statusEl.innerHTML = "Importing exact TikTok videos into Found Online review...";
-  }
-  try {
-    const response = await apiRequest("/api/admin/tiktok-source-posts/import", {
-      method: "POST",
-      headers: adminAuthHeaders(),
-      body: {
-        raw_text: raw,
-        dry_run: false,
-        fetch_oembed: true
-      }
-    });
-    const data = response?.data || {};
-    const importResult = data.import_result || data;
-    const queued = Array.isArray(importResult.queued_listings) ? importResult.queued_listings : [];
-    const sourceReview = Array.isArray(importResult.source_review_records) ? importResult.source_review_records : [];
-    const duplicateWarnings = Array.isArray(importResult.duplicate_warnings) ? importResult.duplicate_warnings : [];
-    if (statusEl) {
-      statusEl.innerHTML = `
-        <div class="font-black">TikTok exact videos imported</div>
-        <div class="mt-1">${adminEscape(data.exact_video_url_count || 0)} exact TikTok video URLs processed. ${adminEscape(importResult.created_properties || 0)} new properties queued. ${adminEscape(importResult.existing_properties || 0)} duplicate/existing videos were blocked. ${adminEscape(sourceReview.length)} need more source details.</div>
-        <div class="mt-1 text-[11px]">TikTok rule: hashtags/search pages stay as capture work; exact /@handle/video/id posts become Found Online review records when the caption/details include location or area and a public contact route. If no price is published, makaug queues it as Price upon application. Missing platform date, consent, or image rights stay visible for King review, but only missing location blocks approval.</div>
-        ${queued.length ? `<div class="mt-2 space-y-2">${queued.slice(0, 12).map((item) => adminSeededListingSummaryHtml(item, { pendingPanel: true })).join("")}</div>` : ""}
-        ${adminDuplicateSourceWarningHtml(duplicateWarnings)}
-        ${sourceReview.length ? `<div class="mt-2 rounded-xl border border-amber-100 bg-amber-50 p-3 text-amber-900"><div class="font-black">Needs more TikTok details</div><div class="mt-1">Add missing location/area, public contact route, or source evidence, then import again. Price is optional and becomes Price upon application when missing.</div><div class="mt-2 space-y-2">${sourceReview.slice(0, 12).map((item) => adminSourceReviewRecordSummaryHtml(item)).join("")}</div></div>` : ""}`;
-    }
-    toast("TikTok exact-video import finished.");
-    if (importResult.created_properties || importResult.existing_properties) {
-      adminPendingQueueFilter = "found_online";
-      await renderAdminDashboard();
-      setAdminWorkflowTab("review");
-      adminScrollTo("#admin-review-queue-control");
-    }
-  } catch (e) {
-    if (statusEl) {
-      statusEl.classList.remove("hidden");
-      statusEl.innerHTML = `TikTok exact-video import failed: ${adminEscape(e.message || "Unknown error")}`;
-    }
-    toast(`TikTok import failed: ${e.message || "error"}`);
-  } finally {
-    if (button) {
-      button.disabled = false;
-      button.classList.remove("opacity-60", "cursor-wait");
-    }
-  }
+  adminOpenSocialQuickPastePanel(seedText, { mode: "tiktok" });
+  toast("Paste exact TikTok video links, then select Verify with TikTok & Preview.");
 }
 
 function adminExactSocialLinksImportPrompt(seedText = "") {
@@ -17464,19 +17437,19 @@ function adminExactSocialLinksImportPrompt(seedText = "") {
 
 function adminSocialQuickPasteExample() {
   return [
-    "https://www.tiktok.com/@handle/video/7608944105338457364",
-    "title: Luxury Kampala apartment, 3 bedrooms, 3 washrooms",
-    "location: Ndejje, Wakiso",
-    "price: USh 3.5M/month",
-    "source: Space Residences Uganda",
-    "posted: 2026-05-20",
-    "phone: 0706110456",
-    "comments: Poster replied: viewing is available this weekend; WhatsApp for exact pin.",
+    "https://www.tiktok.com/@wamalapropertyservices/video/7487217163334454533",
+    "title: House for sale in Bujuko",
+    "location: Bujuko, Wakiso",
+    "price: USh 85M",
+    "source: Wamala Property Services",
+    "posted: 2025-03-29",
+    "phone: 0774120320",
   ].join("\n");
 }
 
 let adminSocialQuickPasteRequestSerial = 0;
 let adminSocialQuickPastePreviewCache = { raw: "", rows: [] };
+let adminSocialQuickPasteMode = "all";
 const TIKTOK_INTAKE_GATE_MARKER = "tiktok-intake-gate-20260719";
 const TIKTOK_QUEUE_FIX_MARKER = "tiktok-queue-fix-20260719";
 const TIKTOK_QUEUE_VISIBILITY_MARKER = "tiktok-queue-visibility-20260719";
@@ -17529,11 +17502,12 @@ function adminStudentHousingYouTubeQuickPasteExample() {
   ].join("\n");
 }
 
-function adminSocialQuickPastePanelHtml({ seedText = "", resultHtml = "", busy = false } = {}) {
+function adminSocialQuickPastePanelHtml({ seedText = "", resultHtml = "", busy = false, mode = adminSocialQuickPasteMode } = {}) {
   const text = seedText || "";
+  const tiktokOnly = mode === "tiktok";
   return `
-    <div class="font-black text-violet-950">Paste TikTok / YouTube / Social Links</div>
-    <div class="mt-1">Paste one exact TikTok, YouTube, X, Instagram, or Facebook post link per block. Add copied caption text, visible video-frame text, location, price, and phone number underneath; original-poster comments/replies are optional supporting evidence.</div>
+    <div class="font-black text-violet-950">${tiktokOnly ? "Import TikTok Videos" : "Paste TikTok / YouTube / Social Links"}</div>
+    <div class="mt-1">${tiktokOnly ? "Paste one exact TikTok /@handle/video/id link per block. Preview asks the Makaug server to verify each URL through TikTok oEmbed and enrich it with the real caption, author, and thumbnail before anything can enter review." : "Paste one exact TikTok, YouTube, X, Instagram, or Facebook post link per block. Add copied caption text, visible video-frame text, location, price, and phone number underneath; original-poster comments/replies are optional supporting evidence."}</div>
     <div class="mt-2 grid md:grid-cols-3 gap-2">
       <div class="rounded-lg border border-violet-100 bg-white p-2"><div class="font-bold">1. Paste link/text</div><div class="mt-1 text-[11px]">Use exact video/post URLs. Hashtag pages are discovery only; exact posts become property candidates.</div></div>
       <div class="rounded-lg border border-violet-100 bg-white p-2"><div class="font-bold">2. Preview extracted info</div><div class="mt-1 text-[11px]">The parser reads title, location, price, source, posted date, comments, and Uganda phone numbers.</div></div>
@@ -17541,23 +17515,23 @@ function adminSocialQuickPastePanelHtml({ seedText = "", resultHtml = "", busy =
     </div>
     <textarea id="admin-social-quick-paste-input" class="mt-3 w-full rounded-xl border border-violet-200 bg-white p-3 text-xs font-mono min-h-[190px]" placeholder="${adminAttr(adminSocialQuickPasteExample())}" ${busy ? "readonly" : ""}>${adminEscape(text)}</textarea>
     <div class="mt-2 flex items-center gap-2 flex-wrap">
-      <button id="admin-social-quick-preview-btn" type="button" onclick="adminPreviewSocialQuickPaste()" class="bg-violet-700 hover:bg-violet-800 text-white px-3 py-2 rounded-lg text-xs font-bold ${busy ? "opacity-60 cursor-wait" : ""}" ${busy ? "disabled" : ""}>Preview Extracted Properties</button>
+      <button id="admin-social-quick-preview-btn" type="button" onclick="adminPreviewSocialQuickPaste()" class="bg-violet-700 hover:bg-violet-800 text-white px-3 py-2 rounded-lg text-xs font-bold ${busy ? "opacity-60 cursor-wait" : ""}" ${busy ? "disabled" : ""}>${tiktokOnly ? "Verify with TikTok & Preview" : "Preview Extracted Properties"}</button>
       <button id="admin-social-quick-queue-btn" type="button" onclick="adminQueueSocialQuickPaste()" class="bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-2 rounded-lg text-xs font-bold ${busy ? "opacity-60 cursor-wait" : ""}" ${busy ? "disabled" : ""}>Queue Found Online</button>
       <button type="button" onclick="adminCopySocialCaptureHelper()" class="border border-indigo-200 text-indigo-700 hover:bg-indigo-50 px-3 py-2 rounded-lg text-xs font-bold">Set Up Capture Bookmark</button>
-      <button type="button" onclick="adminOpenSocialQuickPastePanel(adminYouTubeQuickPasteExample())" class="border border-red-200 text-red-700 hover:bg-red-50 px-3 py-2 rounded-lg text-xs font-bold">Load YouTube Example</button>
-      <button type="button" onclick="adminOpenSocialQuickPastePanel(adminStudentHousingYouTubeQuickPasteExample())" class="border border-purple-200 text-purple-700 hover:bg-purple-50 px-3 py-2 rounded-lg text-xs font-bold">Load Student Example</button>
-      <button type="button" onclick="adminOpenSocialQuickPastePanel(adminSocialQuickPasteExample())" class="border border-gray-200 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-bold">Load TikTok Example</button>
+      ${tiktokOnly ? "" : `<button type="button" onclick="adminOpenSocialQuickPastePanel(adminYouTubeQuickPasteExample())" class="border border-red-200 text-red-700 hover:bg-red-50 px-3 py-2 rounded-lg text-xs font-bold">Load YouTube Example</button><button type="button" onclick="adminOpenSocialQuickPastePanel(adminStudentHousingYouTubeQuickPasteExample())" class="border border-purple-200 text-purple-700 hover:bg-purple-50 px-3 py-2 rounded-lg text-xs font-bold">Load Student Example</button>`}
+      <button type="button" onclick="adminOpenSocialQuickPastePanel(adminSocialQuickPasteExample(), { mode: 'tiktok' })" class="border border-gray-200 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-bold">Load TikTok Example</button>
     </div>
     <div class="mt-2 text-[11px] text-violet-900">Tip: when the video itself shows extra writing, paste it as <span class="font-mono">video_text:</span> or <span class="font-mono">source_visual_text:</span>. When comments contain the original poster's extra details, paste those lines as <span class="font-mono">comments:</span>. If the text contains a valid Uganda mobile number, makaug stores it as the public contact route; otherwise the contact route stays as the source/profile link.</div>
     <div id="admin-social-quick-paste-results" class="mt-3">${resultHtml || ""}</div>`;
 }
 
-function adminOpenSocialQuickPastePanel(seedText = "") {
+function adminOpenSocialQuickPastePanel(seedText = "", options = {}) {
   const statusEl = adminSocialStatusElement();
   if (!statusEl) return;
+  adminSocialQuickPasteMode = options.mode === "tiktok" ? "tiktok" : "all";
   adminSocialQuickPastePreviewCache = { raw: "", rows: [] };
   statusEl.classList.remove("hidden");
-  statusEl.innerHTML = adminSocialQuickPastePanelHtml({ seedText });
+  statusEl.innerHTML = adminSocialQuickPastePanelHtml({ seedText, mode: adminSocialQuickPasteMode });
   adminScrollTo(`#${statusEl.id || "admin-found-online-status"}`);
 }
 
@@ -17626,6 +17600,13 @@ function adminSocialQuickPasteResultHtml(data = {}, { dryRun = false } = {}) {
   const sourceReview = Array.isArray(importResult.source_review_records) ? importResult.source_review_records : [];
   const duplicateWarnings = Array.isArray(importResult.duplicate_warnings) ? importResult.duplicate_warnings : [];
   const reports = Array.isArray(data.metadata_reports) ? data.metadata_reports : [];
+  const serverEnrichment = data.server_enrichment && typeof data.server_enrichment === "object"
+    && (data.server_enrichment.requested === true || Number(data.server_enrichment.attempted || 0) > 0)
+    ? data.server_enrichment
+    : null;
+  const verifiedTikTokPosts = Array.isArray(serverEnrichment?.verified_posts)
+    ? serverEnrichment.verified_posts
+    : [];
   const perUrlResults = Array.isArray(importResult.per_url_results) ? importResult.per_url_results : [];
   const perUrlSummary = importResult.per_url_summary && typeof importResult.per_url_summary === "object"
     ? importResult.per_url_summary
@@ -17645,6 +17626,7 @@ function adminSocialQuickPasteResultHtml(data = {}, { dryRun = false } = {}) {
       ${!dryRun ? `<div class="mt-2 flex items-center gap-2 flex-wrap"><span class="rounded-full px-2 py-1 text-[11px] font-black ${persistenceVerified ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}">${persistenceVerified ? "Storage verified" : "Storage verification unavailable"}</span><button type="button" onclick="adminLoadFoundOnlineReviewQueue(1); adminScrollTo('#admin-pending-table')" class="rounded-lg bg-gray-900 px-3 py-2 text-xs font-black text-white">View in Review → Found Online</button></div>` : ""}
       <div class="mt-1 text-[11px]">Original-poster comments are optional supporting evidence, not an eligibility requirement. Valid Uganda mobile numbers are stored as phone/WhatsApp contact; otherwise makaug sends users back to the exact original source.</div>
       ${reports.length ? `<div class="mt-2 text-[11px]">${adminEscape(reports.filter((item) => item.ok).length)} metadata fetches succeeded • ${adminEscape(reports.filter((item) => !item.ok).length)} need pasted visible details.</div>` : ""}
+      ${serverEnrichment ? `<div class="mt-2 rounded-lg border border-blue-100 bg-white p-2 text-[11px] text-blue-950" data-tiktok-server-enrichment="${adminAttr(serverEnrichment.marker || "")}"><div class="font-black">Server-side TikTok verification</div><div class="mt-1">Makaug server → ${adminEscape(serverEnrichment.provider_endpoint || "TikTok oEmbed")} • attempted ${adminEscape(serverEnrichment.attempted || 0)} • verified ${adminEscape(serverEnrichment.succeeded || 0)} • failed ${adminEscape(serverEnrichment.failed || 0)}.</div>${verifiedTikTokPosts.length ? `<div class="mt-2 space-y-1">${verifiedTikTokPosts.map((post) => `<div class="rounded border border-blue-50 bg-blue-50 p-2"><span class="font-bold">${adminEscape(post.author_name || post.author_url || "TikTok author")}</span> • caption ${post.caption_received ? "received" : "missing"} • thumbnail ${post.thumbnail_received ? "received" : "missing"} • ${post.ok ? "verified" : adminEscape(post.reason || "failed")}</div>`).join("")}</div>` : ""}<div class="mt-1 text-blue-700">In the browser Network panel, look for the POST to Makaug. The TikTok request is server-to-server and is evidenced here by provider, attempts, verified author/caption/thumbnail fields, and marker ${adminEscape(serverEnrichment.marker || data.marker || "")}. It will not appear as a browser → TikTok request.</div></div>` : ""}
     </div>
     ${perUrlResults.length ? `<div class="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3"><div class="flex items-center justify-between gap-3"><div class="font-black text-gray-950">Per-URL outcome</div><div class="text-[10px] font-bold text-gray-600">${adminEscape(Object.entries(perUrlSummary).map(([key, value]) => `${key.replace(/_/g, " ")}: ${value}`).join(" • "))}</div></div><div class="mt-2 grid gap-2 md:grid-cols-2">${perUrlResults.map((item, index) => adminSocialQuickPerUrlResultHtml(item, index)).join("")}</div></div>` : ""}
     ${autoLive.length ? `<div class="mt-3 rounded-xl border border-red-100 bg-white p-3"><div class="font-black text-red-950">Policy warning: harvested rows reported as live</div><div class="mt-2 text-red-800">Do not continue until these rows are returned to review.</div></div>` : ""}
@@ -17661,6 +17643,18 @@ async function adminSubmitSocialQuickPaste({ dryRun = false } = {}) {
   const raw = adminReadSocialQuickPasteText();
   if (!raw) {
     toast("Paste at least one exact social post link or copied source text.");
+    return;
+  }
+  if (adminSocialQuickPasteMode === "tiktok" && !/https?:\/\/(?:www\.)?tiktok\.com\/@[^/\s?#]+\/video\/\d+/i.test(raw)) {
+    const statusEl = adminSocialStatusElement();
+    const message = "Paste at least one exact TikTok /@handle/video/id URL. Hashtag, search, and profile pages are discovery sources, not importable property posts.";
+    if (statusEl) {
+      statusEl.innerHTML = adminSocialQuickPastePanelHtml({
+        seedText: raw,
+        resultHtml: `<div class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-900"><div class="font-black">Exact TikTok video URL required</div><div class="mt-1">${adminEscape(message)}</div></div>`
+      });
+    }
+    toast(message);
     return;
   }
   const cachedPreviewRows = !dryRun && adminSocialQuickPastePreviewCache.raw === raw
@@ -18168,8 +18162,10 @@ async function adminSweepSocialPlatformPosts(platform = "all") {
   if (canUseStaffSourceIntakeApi()) {
     const profile = adminStaffSocialSweepProfile(normalized, studentFocus);
     const sourceOffset = staffStoredSweepOffset(profile.offsetKey);
-    const ok = window.confirm(`Submit ${profile.label.toLowerCase()} to the async source-intake queue from source offset ${sourceOffset}? You can keep using the dashboard while it runs.`);
-    if (!ok) return;
+    if (normalized !== "tiktok") {
+      const ok = window.confirm(`Submit ${profile.label.toLowerCase()} to the async source-intake queue from source offset ${sourceOffset}? You can keep using the dashboard while it runs.`);
+      if (!ok) return;
+    }
     return adminRunStaffSocialSweepFallback(normalized, studentFocus);
   }
   const dryRun = normalized === "tiktok";
@@ -18187,8 +18183,10 @@ async function adminSweepSocialPlatformPosts(platform = "all") {
       : normalized === "x"
         ? "Sweep tracked X/Twitter sources through the X API and queue every eligible exact 2026+ post as found-online property candidates? X_BEARER_TOKEN must be configured on the server."
         : "Sweep all tracked social sources across TikTok, YouTube, and X/Twitter? TikTok becomes exact-video capture tasks; YouTube/X queue eligible exact posts when API keys are configured.";
-  const ok = window.confirm(confirmCopy);
-  if (!ok) return;
+  if (normalized !== "tiktok") {
+    const ok = window.confirm(confirmCopy);
+    if (!ok) return;
+  }
   const statusEl = adminSocialStatusElement();
   const buttonId = adminSweepButtonId(normalized, studentFocus);
   const button = document.getElementById(buttonId);
