@@ -16,6 +16,10 @@ const {
   verifyYouTubeWebSubChallenge,
 } = require('../services/youtubeWebSubService');
 const { stablePlatformPostIdentity } = require('../utils/sourceUrlNormalization');
+const {
+  harvestAutomationEnabled,
+  harvestPublicSubmissionsEnabled,
+} = require('../utils/harvestFeatureFlags');
 
 const router = express.Router();
 
@@ -41,6 +45,12 @@ function requestFingerprint(req) {
 router.post('/submissions', submissionLimiter, async (req, res, next) => {
   try {
     res.set('Cache-Control', 'no-store');
+    if (!harvestPublicSubmissionsEnabled()) {
+      return res.status(503).json({
+        ok: false,
+        error: 'Public source submissions are disabled while the harvest rollout is verified.',
+      });
+    }
     if (clean(req.body?.website || req.body?.company_website)) {
       return res.status(202).json({ ok: true, data: { status: 'pending_review' } });
     }
@@ -130,6 +140,7 @@ router.post('/submissions', submissionLimiter, async (req, res, next) => {
 
 router.get('/youtube/websub', async (req, res, next) => {
   try {
+    if (!harvestAutomationEnabled()) return res.status(503).send('Harvest automation is disabled');
     const result = await verifyYouTubeWebSubChallenge(db, req.query || {});
     if (!result.ok) return res.status(result.status || 404).send('Not found');
     return res.status(200).type('text/plain').send(result.challenge);
@@ -139,6 +150,7 @@ router.get('/youtube/websub', async (req, res, next) => {
 });
 
 router.post('/youtube/websub', express.raw({ type: ['application/atom+xml', 'application/xml', 'text/xml'], limit: '1mb' }), (req, res) => {
+  if (!harvestAutomationEnabled()) return res.status(503).send('Harvest automation is disabled');
   const rawBody = Buffer.isBuffer(req.body) ? req.body : Buffer.from(String(req.body || ''));
   const signature = req.get('x-hub-signature') || req.get('x-hub-signature-256') || '';
   if (!process.env.YOUTUBE_WEBSUB_SECRET) return res.status(503).send('WebSub secret is not configured');

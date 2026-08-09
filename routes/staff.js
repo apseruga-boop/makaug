@@ -50,6 +50,7 @@ const {
   normalizeSourceUrl,
   upsertSuppressedSourceRows
 } = require('../services/suppressedSourceService');
+const { harvestAutomationEnabled } = require('../utils/harvestFeatureFlags');
 const {
   buildListingIdentityDocumentPayload
 } = require('../services/listingIdentityDocumentService');
@@ -3857,6 +3858,9 @@ router.get('/source-intake/discover-helper', (req, res) => {
 
 router.post('/harvest/youtube/subscriptions', async (req, res, next) => {
   try {
+    if (!harvestAutomationEnabled()) {
+      return res.status(503).json({ ok: false, error: 'Harvest automation is disabled pending Dave verification.' });
+    }
     const channelId = cleanText(req.body?.channel_id || req.body?.channelId);
     if (!channelId) return res.status(400).json({ ok: false, error: 'channel_id is required' });
     const data = await requestYouTubeWebSubSubscription(db, channelId);
@@ -3868,6 +3872,9 @@ router.post('/harvest/youtube/subscriptions', async (req, res, next) => {
 
 router.post('/harvest/youtube/subscriptions/renew', async (_req, res, next) => {
   try {
+    if (!harvestAutomationEnabled()) {
+      return res.status(503).json({ ok: false, error: 'Harvest automation is disabled pending Dave verification.' });
+    }
     const due = await db.query(
       `SELECT external_channel_id
        FROM property_harvest_channels

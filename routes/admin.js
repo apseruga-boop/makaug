@@ -118,6 +118,7 @@ const { sendPhoneOtp } = require('../services/phoneOtpDeliveryService');
 const { buildListingReference } = require('../services/listingReferenceService');
 const { hideReportedProperty } = require('../services/reportListingModerationService');
 const { propertyPriceMetadata } = require('../utils/propertyPriceCurrency');
+const { harvestAutomationEnabled } = require('../utils/harvestFeatureFlags');
 const SOURCED_INVENTORY_CANDIDATE_SOURCE = 'sourced_inventory_candidate_v1';
 const {
   BAKAIMA_BATCH_ID,
@@ -4651,6 +4652,12 @@ router.post('/tiktok-source-posts/import', async (req, res, next) => {
 router.post('/tiktok-autopublish-agent/run', async (req, res, next) => {
   try {
     const dryRun = req.body?.dry_run !== false && req.body?.dryRun !== false;
+    if (!dryRun && !harvestAutomationEnabled()) {
+      return res.status(503).json({
+        ok: false,
+        error: 'Harvest automation is disabled pending Dave verification.',
+      });
+    }
     const confirmReview = req.body?.confirm_review === true || req.body?.confirmReview === true
       || req.body?.confirm_live === true || req.body?.confirmLive === true;
     const posts = Array.isArray(req.body?.posts)
