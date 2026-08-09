@@ -20,7 +20,10 @@ const {
 } = require('../services/publicSeoLandingService');
 const { UNIVERSITIES } = require('../utils/constants');
 const { facetDefinition, facetMatchesRow } = require('../utils/publicSeoFacets');
+const { normalizeUniversityName } = require('../utils/universityMatcher');
 const {
+  SEO_LISTING_CACHE_MAX_ENTRIES,
+  __seoListingCache,
   loadPublicSeoListings,
   loadPublicSeoListing,
   renderCategorySeoHtml,
@@ -32,6 +35,7 @@ const root = path.join(__dirname, '..');
 const rawHtml = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const frontendSource = fs.readFileSync(path.join(root, 'assets', 'makaug-app.js'), 'utf8');
 const serverSource = fs.readFileSync(path.join(root, 'server.js'), 'utf8');
+const seoFacetMigration = fs.readFileSync(path.join(root, 'db', 'migrations', '111_public_seo_facet_performance.sql'), 'utf8');
 
 const listing = {
   id: '11111111-1111-4111-8111-111111111111',
@@ -153,8 +157,25 @@ async function run() {
   assert.equal(SEO_FACET_MIN_LISTINGS, 3, 'facet pages must default to a minimum of three live listings');
   assert(facetMatchesRow(facetDefinition('sale', 'cheap'), { price: 200000000, property_type: 'House' }), 'cheap sale intent must match houses in budget');
   assert(!facetMatchesRow(facetDefinition('sale', 'cheap'), { price: 200000000, property_type: 'Apartment' }), 'cheap house intent must not silently broaden to apartments');
+  assert(facetMatchesRow(facetDefinition('sale', 'cheap'), { price: 250000000, property_type: 'Town house' }), 'cheap sale price and type boundaries must be inclusive');
+  assert(!facetMatchesRow(facetDefinition('sale', 'cheap'), { price: 250000001, property_type: 'Town house' }), 'cheap sale price must stop above USh 250M');
+  assert(facetMatchesRow(facetDefinition('rent', 'affordable'), { price: 1500000, property_type: 'House' }), 'affordable rent must include the USh 1.5M boundary');
+  assert(!facetMatchesRow(facetDefinition('land', 'residential-plots'), { property_type: 'Commercial plot' }), 'residential facets must not claim generic commercial plots');
+  assert(facetMatchesRow(facetDefinition('land', 'residential-plots'), { property_type: 'Residential plot' }), 'residential facets must match explicit residential plots');
+  assert(facetMatchesRow(facetDefinition('land', 'residential-plots'), { property_type: 'Residential' }), 'residential facets must retain the stored Residential enum');
+  assert(facetMatchesRow(facetDefinition('land', 'commercial-plots'), { property_type: 'Commercial land' }), 'commercial land must match the commercial plot facet');
+  assert.equal(UNIVERSITIES.length, 48, 'the supported student-search catalogue must contain the agreed 48 canonical institutions');
   assert.equal(UNIVERSITY_LANDINGS.length, UNIVERSITIES.length, 'SEO university routes must cover the authoritative backend catalogue');
   assert.equal(new Set(UNIVERSITY_LANDINGS.map((item) => item.slug)).size, UNIVERSITY_LANDINGS.length, 'university landing slugs must be unique');
+  const frontendUniversityBlock = frontendSource.match(/const UGANDA_UNIVERSITIES = \[([\s\S]*?)\n\];/);
+  assert(frontendUniversityBlock, 'the browser university catalogue must remain explicit and testable');
+  const frontendUniversities = [...frontendUniversityBlock[1].matchAll(/"([^"]+)"/g)]
+    .map((match) => match[1])
+    .filter((name) => name !== 'Other / Not Listed');
+  assert.deepEqual(frontendUniversities, UNIVERSITIES, 'browser filters and backend SEO must use the same canonical university catalogue');
+  assert.equal(normalizeUniversityName('Virtual University Uganda'), 'Nexus International University', 'retired university names must map to one canonical landing');
+  assert.equal(normalizeUniversityName('King Ceasor University'), 'King Ceasar University', 'spelling variants must not create duplicate university landings');
+  assert.equal(normalizeUniversityName('International Health Sciences University'), 'Clarke International University', 'renamed institutions must retain inventory matching');
   UNIVERSITY_LANDINGS.forEach((university) => {
     const landing = resolvePublicSeoLanding(`/student-accommodation/university/${university.slug}`);
     assert.equal(landing?.university?.name, university.name, `university route must resolve: ${university.slug}`);
@@ -195,9 +216,23 @@ async function run() {
   assert(sitemapUrls.includes('https://makaug.com/commercial/for-rent/kampala'), 'qualified commercial transaction pages must enter the sitemap');
   assert(sitemapUrls.includes('https://makaug.com/student-accommodation/university/makerere'), 'qualified university pages must enter the sitemap');
   assert.equal(sitemapEntries(snapshot).find((entry) => entry.loc.endsWith('/to-rent/ntinda-kampala/2-bedroom'))?.lastmod, '2026-08-09T06:00:00.000Z', 'generated facet URLs must carry lastmod');
+  assert.equal(sitemapEntries(snapshot).find((entry) => entry.loc.endsWith(`/property/${rentListings[0].id}`))?.lastmod, rentListings[0].updated_at, 'detail sitemap URLs must carry listing lastmod');
   const thinSnapshot = buildPublicSeoSnapshot(rentListings.slice(0, 2));
   assert(!sitemapEntries(thinSnapshot).some((entry) => entry.loc.endsWith('/to-rent/ntinda-kampala/2-bedroom')), 'thin facet pages must stay out of the sitemap');
   assert(!sitemapEntries(thinSnapshot).some((entry) => entry.loc.endsWith('/to-rent/ntinda-kampala')), 'thin area pages must stay out of the sitemap');
+
+  const cacheNow = Date.now();
+  __seoListingCache.clear();
+  __seoListingCache.set('oldest', { rows: [] }, cacheNow);
+  for (let index = 1; index < SEO_LISTING_CACHE_MAX_ENTRIES; index += 1) {
+    __seoListingCache.set(`entry:${index}`, { rows: [] }, cacheNow);
+  }
+  assert(__seoListingCache.get('oldest', cacheNow), 'an LRU read must refresh recency');
+  __seoListingCache.set('overflow', { rows: [] }, cacheNow);
+  assert.equal(__seoListingCache.size(), SEO_LISTING_CACHE_MAX_ENTRIES, 'listing cache must never exceed its configured cap');
+  assert.equal(__seoListingCache.get('entry:1', cacheNow), null, 'the least recently used cache entry must be evicted first');
+  assert(__seoListingCache.get('oldest', cacheNow), 'the refreshed cache entry must survive eviction');
+  __seoListingCache.clear();
 
   const queries = [];
   const db = {
@@ -218,9 +253,37 @@ async function run() {
   assert(queries[0].sql.includes("LOWER(COALESCE(p.listing_type, '')) = 'rent'"), 'SSR category rows must be type-scoped');
   assert(queries[0].sql.includes("extra_fields->>'canonical_location_id'"), 'SSR area rows must use canonical location fields');
 
+  await loadPublicSeoListings(db, {
+    categoryKey: 'rent',
+    location: meta.location,
+    facet: facetDefinition('rent', 'houses'),
+    facetSlug: 'houses',
+    limit: 12,
+    force: true
+  });
+  const facetQuery = queries[1];
+  assert(!facetQuery.sql.includes('CONCAT_WS'), 'facet queries must use indexable field-level predicates instead of concatenated scans');
+  assert(facetQuery.sql.includes("LOWER(TRIM(COALESCE(p.property_type, ''))) ~*"), 'facet type matching must align with the trigram index expression');
+  assert(String(facetQuery.values.at(-2)).startsWith('\\m(?:house|home'), 'facet SQL regexes must be word-bounded');
+
+  await loadPublicSeoListings(db, {
+    categoryKey: 'students',
+    university: UNIVERSITY_LANDINGS.find((item) => item.name === 'Makerere University'),
+    limit: 12,
+    force: true
+  });
+  const universityQuery = queries[2];
+  assert(!universityQuery.sql.includes('LIKE ANY'), 'university crawls must not use leading-wildcard array scans');
+  assert(universityQuery.sql.includes("LOWER(TRIM(COALESCE(p.nearest_university, ''))) ~*"), 'university queries must align with their trigram index');
+  assert(universityQuery.values[0].includes('makerere'), 'university queries must preserve canonical and alias terms');
+
   const loadedDetail = await loadPublicSeoListing(db, listing.id);
   assert.equal(loadedDetail.id, listing.id);
-  assert(queries[1].sql.includes('qa_test_delete'), 'SSR detail routes must use the same public/test exclusion predicate');
+  assert(queries[3].sql.includes('qa_test_delete'), 'SSR detail routes must use the same public/test exclusion predicate');
+
+  assert(seoFacetMigration.includes('idx_properties_public_live_title_trgm'), 'facet title regexes must have a matching trigram index');
+  assert(seoFacetMigration.includes('idx_properties_public_live_nearest_university_trgm'), 'university regexes must have a matching trigram index');
+  assert(seoFacetMigration.includes('idx_properties_public_live_type_updated'), 'crawler listing order must have a public partial index');
 
   assert(frontendSource.includes('href="${adminAttr(detailPath)}"'), 'hydrated property cards must preserve real anchors');
   assert(frontendSource.includes('setPropertyDetailDocumentTitle(p, displayTitle)'), 'detail hydration must keep the listing-specific document title');
@@ -239,6 +302,13 @@ async function run() {
   assert(serverSource.includes("Number(meta.count || 0) < SEO_FACET_MIN_LISTINGS"), 'valid thin area pages must be noindexed');
   assert(serverSource.includes("res.set('X-Robots-Tag', 'noindex, noarchive')"), 'missing/unpublished details must be noindexed');
   assert(serverSource.includes("return res.status(404).send('Property not found')"), 'missing/unpublished details must return a real 404');
+  const homepageRouteIndex = serverSource.indexOf("app.get(['/', '/index.html']");
+  const spaFallbackIndex = serverSource.indexOf('function shouldServeIndex(req)');
+  const staticHandlerIndex = serverSource.indexOf('app.use(express.static');
+  assert(homepageRouteIndex >= 0, 'the homepage SSR route must be registered');
+  assert(homepageRouteIndex < spaFallbackIndex, 'the homepage SSR route must register before the generic SPA fallback');
+  assert(homepageRouteIndex < staticHandlerIndex, 'the homepage SSR route must register before the static file handler');
+  assert(serverSource.slice(homepageRouteIndex, spaFallbackIndex).includes("res.set('X-makaug-Homepage-SSR'"), 'the homepage SSR route must retain its deploy diagnostic header');
 
   console.log('SEO SSR crawlability tests passed');
 }

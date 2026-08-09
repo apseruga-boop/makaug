@@ -1,6 +1,6 @@
 'use strict';
 
-const { UNIVERSITIES } = require('./constants');
+const { UNIVERSITIES, UNIVERSITY_ALIASES } = require('./constants');
 const { normalizeUniversityName } = require('./universityMatcher');
 
 const SEO_FACET_MIN_LISTINGS = Math.max(3, Number(process.env.PUBLIC_SEO_FACET_MIN_LISTINGS || 3) || 3);
@@ -15,8 +15,8 @@ const FACET_DEFINITIONS = Object.freeze({
     '3-bedroom': { label: '3-bedroom property for sale', kind: 'bedrooms', value: 3 },
     '4-bedroom': { label: '4-bedroom property for sale', kind: 'bedrooms', value: 4 },
     '5-bedroom': { label: '5-bedroom property for sale', kind: 'bedrooms', value: 5 },
-    cheap: { label: 'Affordable houses for sale', kind: 'max_price', value: 250000000, pattern: 'house|home|bungalow|villa|townhouse|mansion' },
-    luxury: { label: 'Luxury houses for sale', kind: 'min_price', value: 800000000, pattern: 'house|home|bungalow|villa|townhouse|mansion' }
+    cheap: { label: 'Affordable houses for sale', kind: 'max_price', value: 250000000, pattern: 'house|home|bungalow|villa|townhouse|town house|mansion' },
+    luxury: { label: 'Luxury houses for sale', kind: 'min_price', value: 800000000, pattern: 'house|home|bungalow|villa|townhouse|town house|mansion' }
   }),
   rent: Object.freeze({
     apartments: { label: 'Apartments for rent', kind: 'property_type', pattern: 'apartment|flat', searchValue: 'apartment' },
@@ -25,12 +25,12 @@ const FACET_DEFINITIONS = Object.freeze({
     '1-bedroom': { label: '1-bedroom property for rent', kind: 'bedrooms', value: 1 },
     '2-bedroom': { label: '2-bedroom property for rent', kind: 'bedrooms', value: 2 },
     '3-bedroom': { label: '3-bedroom property for rent', kind: 'bedrooms', value: 3 },
-    affordable: { label: 'Affordable houses for rent', kind: 'max_price', value: 1500000, pattern: 'house|home|bungalow|villa|townhouse' }
+    affordable: { label: 'Affordable houses for rent', kind: 'max_price', value: 1500000, pattern: 'house|home|bungalow|villa|townhouse|town house' }
   }),
   land: Object.freeze({
-    'residential-plots': { label: 'Residential plots for sale', kind: 'property_type', pattern: 'residential|housing|estate plot|plot', searchValue: 'Residential' },
+    'residential-plots': { label: 'Residential plots for sale', kind: 'property_type', pattern: 'residential|housing|estate plot', searchValue: 'Residential' },
     agricultural: { label: 'Agricultural land for sale', kind: 'property_type', pattern: 'agricultural|farm|farmland|ranch', searchValue: 'Agricultural' },
-    'commercial-plots': { label: 'Commercial plots for sale', kind: 'property_type', pattern: 'commercial|business|industrial', searchValue: 'Commercial' },
+    'commercial-plots': { label: 'Commercial plots for sale', kind: 'property_type', pattern: 'commercial|business plot|industrial', searchValue: 'Commercial' },
     mailo: { label: 'Mailo land for sale', kind: 'title_type', value: 'mailo' },
     freehold: { label: 'Freehold land for sale', kind: 'title_type', value: 'freehold' },
     leasehold: { label: 'Leasehold land for sale', kind: 'title_type', value: 'leasehold' },
@@ -56,7 +56,10 @@ const UNIVERSITY_SLUG_OVERRIDES = Object.freeze({
   'Uganda Christian University (UCU)': 'ucu-mukono',
   'Kampala International University (KIU)': 'kiu',
   'Uganda Martyrs University (UMU)': 'umu-nkozi',
-  'Islamic University in Uganda (IUIU)': 'iuiu'
+  'Islamic University in Uganda (IUIU)': 'iuiu',
+  'Uganda Management Institute (UMI)': 'umi',
+  'Universal Technology and Management University (UTAMU)': 'utamu',
+  'Uganda National Institute for Teacher Education (UNITE)': 'unite'
 });
 
 function slugify(value = '') {
@@ -75,7 +78,11 @@ function universitySlug(name = '') {
   return UNIVERSITY_SLUG_OVERRIDES[name] || slugify(name);
 }
 
-const UNIVERSITY_LANDINGS = Object.freeze(UNIVERSITIES.map((name) => ({ name, slug: universitySlug(name) })));
+const UNIVERSITY_LANDINGS = Object.freeze(UNIVERSITIES.map((name) => Object.freeze({
+  name,
+  slug: universitySlug(name),
+  aliases: Object.freeze([...(UNIVERSITY_ALIASES[name] || [])])
+})));
 
 function universityForSlug(slug = '') {
   const key = slugify(slug);
@@ -93,7 +100,7 @@ function commercialTransactionFacet(slug) {
 function facetMatchesRow(definition, row = {}) {
   if (!definition) return false;
   const extra = row.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
-  const typeText = [row.property_type, row.title, row.description, extra.room_type, extra.commercial_type]
+  const typeText = [row.property_type, row.title, extra.room_type, extra.commercial_type]
     .filter(Boolean).join(' ').toLowerCase();
   const matchesPattern = !definition.pattern || new RegExp(`\\b(?:${definition.pattern})\\b`, 'i').test(typeText);
   if (definition.kind === 'bedrooms') return Number(row.bedrooms || 0) === Number(definition.value);
