@@ -6,8 +6,10 @@ const path = require('path');
 
 const { sanitizePublicHtml, PUBLIC_FORBIDDEN_STRINGS } = require('../services/publicHtmlSanitizer');
 const {
+  __seoSnapshotCache,
   buildPublicSeoSnapshot,
   categoryPageSeoMeta,
+  loadPublicSeoInventorySnapshot,
   sitemapEntries
 } = require('../services/publicSeoService');
 const {
@@ -233,6 +235,28 @@ async function run() {
   assert.equal(__seoListingCache.get('entry:1', cacheNow), null, 'the least recently used cache entry must be evicted first');
   assert(__seoListingCache.get('oldest', cacheNow), 'the refreshed cache entry must survive eviction');
   __seoListingCache.clear();
+
+  __seoSnapshotCache.clear();
+  let snapshotQueryCount = 0;
+  let snapshotQuerySql = '';
+  const snapshotDb = {
+    async query(sql) {
+      snapshotQueryCount += 1;
+      snapshotQuerySql = sql;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      return { rows: rentListings };
+    }
+  };
+  const coldSnapshotLoads = await Promise.all(
+    Array.from({ length: 12 }, () => loadPublicSeoInventorySnapshot(snapshotDb))
+  );
+  assert.equal(snapshotQueryCount, 1, 'concurrent cold SSR requests must share one inventory snapshot query');
+  assert(coldSnapshotLoads.every((value) => value === coldSnapshotLoads[0]), 'concurrent callers must share the same snapshot value');
+  assert(snapshotQuerySql.includes('jsonb_strip_nulls(jsonb_build_object('), 'the snapshot query must project only bounded SEO metadata');
+  assert(!/nearest_university,\s*extra_fields,/.test(snapshotQuerySql), 'the snapshot query must not parse full property extra_fields documents');
+  assert.equal(__seoSnapshotCache.inFlight(), false, 'the in-flight snapshot reference must clear after completion');
+  assert.equal(__seoSnapshotCache.hasValue(), true, 'a completed snapshot must be cached for later requests');
+  __seoSnapshotCache.clear();
 
   const queries = [];
   const db = {

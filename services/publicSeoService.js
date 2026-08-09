@@ -61,6 +61,12 @@ const CATEGORY_SEO = Object.freeze({
 });
 
 let snapshotCache = null;
+let snapshotCacheInFlight = null;
+
+function clearPublicSeoSnapshotCache() {
+  snapshotCache = null;
+  snapshotCacheInFlight = null;
+}
 
 function slugifySeoPart(value = '') {
   return String(value || '')
@@ -230,25 +236,43 @@ async function loadPublicSeoInventorySnapshot(db, options = {}) {
   if (!options.force && snapshotCache && now - snapshotCache.cachedAt < PUBLIC_SEO_CACHE_TTL_MS) {
     return snapshotCache.value;
   }
-  try {
+  if (!options.force && snapshotCacheInFlight) return snapshotCacheInFlight;
+
+  const pending = (async () => {
     const result = await db.query(
       `SELECT id, listing_type, students_welcome, area, district,
               title, description, price, price_period, bedrooms, property_type,
-              transaction_type, title_type, nearest_university, extra_fields,
+              transaction_type, title_type, nearest_university,
+              jsonb_strip_nulls(jsonb_build_object(
+                'room_type', extra_fields->>'room_type',
+                'commercial_type', extra_fields->>'commercial_type',
+                'title_type', extra_fields->>'title_type',
+                'transaction_type', extra_fields->>'transaction_type',
+                'nearest_university', extra_fields->>'nearest_university',
+                'student_university', extra_fields->>'student_university',
+                'student_campus', extra_fields->>'student_campus'
+              )) AS extra_fields,
               extra_fields->>'canonical_location_id' AS canonical_location_id,
               extra_fields->>'city' AS city,
               extra_fields->>'neighborhood' AS neighborhood,
               updated_at, created_at
-     FROM properties
-     WHERE ${publicVisibleInventoryWhere('properties')}
+       FROM properties
+       WHERE ${publicVisibleInventoryWhere('properties')}
        ORDER BY updated_at DESC NULLS LAST, created_at DESC, id DESC`
     );
     const value = buildPublicSeoSnapshot(result.rows);
-    snapshotCache = { cachedAt: now, value };
+    snapshotCache = { cachedAt: Date.now(), value };
     return value;
+  })();
+
+  if (!options.force) snapshotCacheInFlight = pending;
+  try {
+    return await pending;
   } catch (error) {
     if (snapshotCache?.value) return snapshotCache.value;
     throw error;
+  } finally {
+    if (snapshotCacheInFlight === pending) snapshotCacheInFlight = null;
   }
 }
 
@@ -385,5 +409,10 @@ module.exports = {
   buildPublicSeoSnapshot,
   loadPublicSeoInventorySnapshot,
   categoryPageSeoMeta,
-  sitemapEntries
+  sitemapEntries,
+  __seoSnapshotCache: Object.freeze({
+    clear: clearPublicSeoSnapshotCache,
+    hasValue: () => Boolean(snapshotCache?.value),
+    inFlight: () => Boolean(snapshotCacheInFlight)
+  })
 };
