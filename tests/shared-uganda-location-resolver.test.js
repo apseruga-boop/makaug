@@ -74,6 +74,20 @@ test('junk and non-exact spelling never auto-resolve', () => {
   assert.ok(canonicalLocationSuggestions('Band', new Map(), 8).every((item) => item.auto_resolvable === false));
 });
 
+test('suggestions retain the canonical town needed to populate the full form cascade', () => {
+  const expected = {
+    Sentema: ['Wakiso', 'Wakiso'],
+    Namasuba: ['Wakiso', 'Makindye-Ssabagabo'],
+    MUBS: ['Kampala', 'Kampala']
+  };
+  Object.entries(expected).forEach(([query, [district, town]]) => {
+    const exact = canonicalLocationSuggestions(query, new Map(), 8)
+      .find((item) => item.match === 'exact_alias' && item.auto_resolvable === true);
+    assert.equal(exact?.district, district, query);
+    assert.equal(exact?.town, town, query);
+  });
+});
+
 test('harvest captions use the same exact-alias resolver without district guessing', () => {
   const sentema = resolveCanonicalUgandaLocationFromText('House for sale in Sentema, Wakiso at UGX 90M.');
   assert.equal(sentema.status, 'matched');

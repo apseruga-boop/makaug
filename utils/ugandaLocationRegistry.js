@@ -659,6 +659,7 @@ function canonicalLocationSuggestions(query = '', counts = new Map(), limit = 8)
       canonical_key: entry.key,
       location: entry.name,
       district: entry.district,
+      town: entry.town,
       level: entry.level,
       latitude: Number.isFinite(entry.lat) ? entry.lat : null,
       longitude: Number.isFinite(entry.lng) ? entry.lng : null,
