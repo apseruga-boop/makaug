@@ -118,10 +118,12 @@ test('nightly and hospitality posts are rejected by intake, never converted to m
 
 test('commercial category shorthand becomes a real subtype filter', () => {
   const route = read('routes/properties.js');
-  assert.match(route, /COMMERCIAL_PROPERTY_TYPES\.includes\(categoryToken\)/);
-  assert.match(route, /categoryCommercialType \? 'commercial'/);
-  assert.match(route, /commercial_type \|\| categoryCommercialType/);
-  assert.match(route, /LOWER\(COALESCE\(p\.property_type, p\.extra_fields->>'commercial_type', ''\)\) = \?/);
+  const handlerStart = route.indexOf('async function listPropertiesHandler');
+  const listHandler = route.slice(handlerStart, route.indexOf("router.get('/search'", handlerStart));
+  assert.match(listHandler, /const categoryCommercialType = COMMERCIAL_PROPERTY_TYPES\.includes\(categoryToken\)/);
+  assert.match(listHandler, /categoryCommercialType \? 'commercial'/);
+  assert.match(listHandler, /commercial_type \|\| categoryCommercialType/);
+  assert.match(listHandler, /LOWER\(COALESCE\(p\.property_type, p\.extra_fields->>'commercial_type', ''\)\) = \?/);
 });
 
 test('all publication paths use the integrity gate and invalidate count cache', () => {
