@@ -37,12 +37,12 @@ assert(app.includes('source === "canonical_location_selected"'), 'only the autom
 assert(app.includes('state.nearbyKm = 0'), 'canonical area landings must default to the exact area so counts and results agree');
 
 const snapshot = buildPublicSeoSnapshot([
-  { id: 'sale-1', listing_type: 'sale', area: 'Ntinda', district: 'Kampala', updated_at: '2026-08-05T08:00:00.000Z' },
-  { id: 'sale-2', listing_type: 'sale', area: 'Ntinda', district: 'Kampala', updated_at: '2026-08-05T08:01:00.000Z' },
+  { id: 'sale-1', listing_type: 'sale', area: 'Ntinda', district: 'Kampala', canonical_location_id: 'kampala:ntinda', updated_at: '2026-08-05T08:00:00.000Z' },
+  { id: 'sale-2', listing_type: 'sale', area: 'Ntinda', district: 'Kampala', canonical_location_id: 'kampala:ntinda', updated_at: '2026-08-05T08:01:00.000Z' },
   { id: 'sale-3', listing_type: 'sale', area: 'Ntinda Town', district: 'Kampala', canonical_location_id: 'kampala:ntinda' },
-  { id: 'sale-4', listing_type: 'sale', area: '', district: 'Kampala', neighborhood: 'Ntinda' },
-  { id: 'rent-1', listing_type: 'rent', students_welcome: true, area: 'Makerere', district: 'Kampala' },
-  { id: 'land-1', listing_type: 'land', area: 'Kira', district: 'Wakiso' }
+  { id: 'sale-4', listing_type: 'sale', area: '', district: 'Kampala', neighborhood: 'Ntinda', canonical_location_id: 'kampala:ntinda' },
+  { id: 'rent-1', listing_type: 'rent', students_welcome: true, area: 'Makerere', district: 'Kampala', canonical_location_id: 'kampala:makerere' },
+  { id: 'land-1', listing_type: 'land', area: 'Kira', district: 'Wakiso', canonical_location_id: 'wakiso:kira' }
 ]);
 
 assert.equal(snapshot.counts.sale.get('kampala:ntinda'), 4, 'Ntinda sale count should use the same normalized fields as public search');

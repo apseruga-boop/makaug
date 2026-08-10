@@ -356,7 +356,8 @@ test('student public listings are discoverable from backend listing aliases', ()
   assert.match(appSource, /studentCard\(p, \{ categoryPage: "students" \}\)/);
   assert.match(appSource, /function publicCardTheme\(type, options = \{\}\)/);
   assert.match(appSource, /student: "bg-purple-700"/);
-  assert.match(propertiesRouteSource, /const listingType = normalizeListingType\(req\.query\.listing_type \|\| req\.query\.type \|\| req\.query\.category\)/);
+  assert.match(propertiesRouteSource, /const rawListingCategory = cleanText\(req\.query\.listing_type \|\| req\.query\.type \|\| req\.query\.category\)/);
+  assert.match(propertiesRouteSource, /const listingType = categoryCommercialType \? 'commercial' : normalizeListingType\(rawListingCategory\)/);
   assert.match(propertiesRouteSource, /p\.listing_type IN \(\?, \?\) OR \(p\.listing_type = \? AND p\.students_welcome = \?\)/);
   assert.match(propertiesRouteSource, /WHEN \$\{directType\} = 'rent' AND \$\{a\}\.students_welcome = TRUE THEN 'student'/);
   assert(appSource.includes('if (t !== "rent") return false;'), 'student page should not accept sale/commercial listings through students_welcome');

@@ -27,6 +27,17 @@ const LAUNCH_SEED_LISTING_MARKERS = [
 const LAUNCH_DUMMY_LISTING_TITLES = ['sdgsdgd', 'sgsgsgsgs'];
 const publicInventoryMetricsCache = new Map();
 
+function invalidatePublicInventoryMetricsCache(reason = 'public_inventory_changed') {
+  const cleared = publicInventoryMetricsCache.size;
+  publicInventoryMetricsCache.clear();
+  logger.info('Public inventory metrics cache invalidated', {
+    marker: PUBLIC_INVENTORY_METRICS_MARKER,
+    reason,
+    cleared
+  });
+  return cleared;
+}
+
 function sqlLiteral(value = '') {
   return String(value).replace(/'/g, "''");
 }
@@ -235,6 +246,7 @@ async function loadPublicOpportunitySummary({ where = '', values = [], timeoutMs
 
 module.exports = {
   PUBLIC_INVENTORY_METRICS_MARKER,
+  invalidatePublicInventoryMetricsCache,
   loadPublicOpportunitySummary,
   normalizePublicOpportunitySummary,
   publicLaunchTestListingFastCondition,

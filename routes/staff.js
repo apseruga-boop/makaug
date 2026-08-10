@@ -8,6 +8,7 @@ const { parsePagination, toPagination } = require('../utils/pagination');
 const { DISTRICTS, LISTING_TYPES } = require('../utils/constants');
 const { publicLivePropertyStatusSql } = require('../utils/publicInventoryStatus');
 const {
+  invalidatePublicInventoryMetricsCache,
   loadPublicOpportunitySummary,
   publicVisibleInventoryWhere
 } = require('../services/publicInventoryMetricsService');
@@ -16,12 +17,14 @@ const {
   normalizeCommercialPropertyType,
 } = require('../utils/commercialClassification');
 const { listingPriceQuality } = require('../utils/listingPriceQuality');
+const { listingDataIntegrityReport } = require('../utils/listingDataIntegrity');
 const {
   districtForKnownArea,
   districtsForKnownLocationText,
   normalizeReviewLocationHierarchy,
   regionForDistrict
 } = require('../utils/ugandaLocationHierarchy');
+const { canonicalizeUgandaLocation } = require('../utils/ugandaLocationRegistry');
 const { addLeadActivity } = require('../services/leadService');
 const { buildAutomatedListingReview, normalizeReviewChecklist } = require('../services/listingModerationService');
 const { getCachedExternalDuplicateScan } = require('../services/externalDuplicateScanService');
@@ -2131,6 +2134,15 @@ function normalizeStaffListingPatch(existing = {}, patch = {}) {
   }
   const hierarchy = normalizeReviewLocationHierarchy(base);
   errors.push(...hierarchy.errors);
+  const canonical = hierarchy.canonical || canonicalizeUgandaLocation(base.area, base.district);
+  if (canonical && !['district', 'region'].includes(canonical.level)) {
+    normalized.area = canonical.name;
+    normalized.district = canonical.district;
+    normalized.region = regionForDistrict(canonical.district);
+    base.area = canonical.name;
+    base.district = canonical.district;
+    base.region = normalized.region;
+  }
 
   const listingTypeRaw = cleanText(normalized.listing_type || normalized.listingType || normalized.type || normalized.category);
   if (listingTypeRaw) {
@@ -2143,13 +2155,15 @@ function normalizeStaffListingPatch(existing = {}, patch = {}) {
     errors.push('district must be one of Uganda\'s valid districts');
   }
 
-  if (Object.prototype.hasOwnProperty.call(normalized, 'price_currency')) {
-    normalized.price_currency = cleanText(normalized.price_currency).toUpperCase();
-    if (!['UGX', 'USD'].includes(normalized.price_currency)) {
-      errors.push('price_currency must be UGX or USD');
+  const sourceCurrencyInput = normalized.price_original_currency ?? normalized.price_currency;
+  if (sourceCurrencyInput != null) {
+    normalized.price_original_currency = cleanText(sourceCurrencyInput).toUpperCase();
+    if (!['UGX', 'USD'].includes(normalized.price_original_currency)) {
+      errors.push('price_original_currency must be UGX or USD');
     }
+    normalized.price_currency = 'UGX';
   }
-  const effectiveCurrency = normalized.price_currency || existing.price_currency || 'UGX';
+  const effectiveCurrency = normalized.price_original_currency || existing.price_original_currency || 'UGX';
   if (effectiveCurrency === 'USD' && Object.prototype.hasOwnProperty.call(normalized, 'price_original')) {
     const originalAmount = toNullableFloat(normalized.price_original);
     const fxRate = toNullableFloat(normalized.price_fx_rate_ugx ?? existing.price_fx_rate_ugx);
@@ -2164,6 +2178,15 @@ function normalizeStaffListingPatch(existing = {}, patch = {}) {
     normalized.price_original = toNullableFloat(normalized.price);
     normalized.price_fx_rate_ugx = null;
     normalized.price_fx_as_of = null;
+  }
+  if (Object.prototype.hasOwnProperty.call(normalized, 'price_on_application')) {
+    normalized.price_on_application = boolLike(normalized.price_on_application);
+    if (normalized.price_on_application) {
+      normalized.price = null;
+      normalized.price_original = null;
+      normalized.price_fx_rate_ugx = null;
+      normalized.price_fx_as_of = null;
+    }
   }
 
   return {
@@ -2216,9 +2239,11 @@ async function updateStaffEditableListing(req, propertyId, listingPatch = {}, re
     address: (value) => cleanText(value) || null,
     price: (value) => toNullableInt(value),
     price_currency: (value) => cleanText(value).toUpperCase(),
+    price_original_currency: (value) => cleanText(value).toUpperCase(),
     price_original: (value) => toNullableFloat(value),
     price_fx_rate_ugx: (value) => toNullableFloat(value),
     price_fx_as_of: (value) => cleanText(value) || null,
+    price_on_application: (value) => boolLike(value),
     price_period: (value) => cleanText(value) || null,
     transaction_type: (value) => normalizeCommercialTransactionType(value) || null,
     property_type: (value) => cleanText(value) || null,
@@ -2277,6 +2302,14 @@ async function updateStaffEditableListing(req, propertyId, listingPatch = {}, re
   if (hierarchy.region) extraPatch.region = hierarchy.region;
   if (hierarchy.city) extraPatch.city = hierarchy.city;
   if (hierarchy.neighborhood) extraPatch.neighborhood = hierarchy.neighborhood;
+  const canonical = hierarchy.canonical || canonicalizeUgandaLocation(patch.area, patch.district);
+  if (canonical && !['district', 'region'].includes(canonical.level)) {
+    extraPatch.staff_area_input_raw = cleanText(listingPatch.area) || canonical.name;
+    extraPatch.canonical_location_id = canonical.key;
+    extraPatch.canonical_location_level = canonical.level;
+    extraPatch.location_resolution_status = 'canonical_staff_edit';
+    extraPatch.location_resolution_confidence = 1;
+  }
   if (Object.prototype.hasOwnProperty.call(patch, 'amenities')) {
     values.push(JSON.stringify(cleanArray(patch.amenities)));
     setParts.push(`amenities = $${values.length}::jsonb`);
@@ -2658,6 +2691,16 @@ function staffBulkModerationDecision(row = {}, approvedIndex = {}) {
   if (String(row.status || '').toLowerCase() === 'approved') {
     return { id: row.id, title: row.title, decision: 'hold', reason: 'already_approved' };
   }
+  const rowExtraFields = safeJsonObject(row.extra_fields, {});
+  if (boolLike(rowExtraFields.location_review_required)) {
+    return {
+      id: row.id,
+      title: row.title,
+      decision: 'hold',
+      reason: 'location_reclassification_requires_individual_review',
+      details: ['Open this listing in King, compare the source and proposed canonical location, save a specific area, and confirm it individually.']
+    };
+  }
   if (!isStaffSourcedInventoryCandidate(row)) {
     return { id: row.id, title: row.title, decision: 'hold', reason: 'not_found_online' };
   }
@@ -2691,6 +2734,16 @@ function staffBulkModerationDecision(row = {}, approvedIndex = {}) {
       decision: 'hold',
       reason: 'price_data_quality',
       details: priceQuality.reasons
+    };
+  }
+  const dataIntegrity = listingDataIntegrityReport(row);
+  if (!dataIntegrity.ok) {
+    return {
+      id: row.id,
+      title: row.title,
+      decision: 'hold',
+      reason: 'data_integrity',
+      details: dataIntegrity.issue_codes
     };
   }
   const duplicate = staffBulkDuplicateMatch(row, approvedIndex);
@@ -3515,6 +3568,7 @@ router.post('/properties/bulk-review', async (req, res, next) => {
         client.release();
       }
       clearStaffFastDashboardCache();
+      invalidatePublicInventoryMetricsCache('staff_bulk_found_online_review');
       logStaffActivityInBackground(req, 'staff_bulk_found_online_review', {
         targetType: 'property',
         metadata: {

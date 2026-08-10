@@ -36,7 +36,8 @@ assert(
 );
 assert.strictEqual(canonicalizeUgandaLocation('Luweero')?.district, 'Luwero');
 assert.strictEqual(canonicalizeUgandaLocation('Ndibulungi')?.district, 'Luwero');
-assert(frontend.includes('"Luweero", "Luwero Town", "Luweero Town"'));
+assert(frontend.includes('Luwero: ['));
+assert(frontend.includes('{ name: "Ndibulungi" }'));
 assert(frontend.includes('city: "Luwero Town"'));
 assert(frontend.includes('specificity: 6, aliases: ["Ndibulungi"'));
 assert(frontend.includes('adminReviewSourceText(review),\n    review.resolved_location_label'));

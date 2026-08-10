@@ -47,6 +47,10 @@ const {
   buildHarvestFingerprints,
   hammingDistanceHex,
 } = require('./propertyHarvestDedupService');
+const {
+  deriveListingClassification,
+  listingDataIntegrityReport,
+} = require('../utils/listingDataIntegrity');
 
 const SOCIAL_SEARCH_BATCH_ID = 'social_search_authorised_20260520';
 const LEGACY_SOURCED_INVENTORY_CANDIDATE_SOURCE = SOURCE;
@@ -1001,6 +1005,19 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
   const preApproval = sourcePreApprovalStatusFor(item);
   const sourceQuality = sourceQualityReviewForItem(item, agent);
   const positiveListingGate = sourcePositiveListingGateForItem(item, agent);
+  const dataIntegrity = item.dataIntegrity || item.data_integrity || listingDataIntegrityReport({
+    ...item,
+    listing_type: item.listingType || item.listing_type,
+    price_currency: item.priceCurrency || item.price_currency,
+    price_original_currency: item.priceOriginalCurrency || item.price_original_currency,
+    price_original: item.priceOriginal ?? item.price_original,
+    price_fx_rate_ugx: item.priceFxRateUgx ?? item.price_fx_rate_ugx,
+    price_on_application: !hasPublishedPriceOrGuidePrice(item),
+    lister_phone: agent.phone || agent.phoneAlt || item.phone || '',
+    source_contact_url: sourceContactUrlForAgent(agent, item),
+    source_url: sourceUrlForItem(item),
+    extra_fields: item.raw_source_post || item.rawSourcePost || {},
+  });
   const countryGate = item.countryGate || item.country_gate || { allowed: true, reason: '', matched: '' };
   const hasLocation = item.locationEvidenceConfirmed !== false && (
     Boolean(String(item.address || item.area || item.district || '').trim())
@@ -1014,6 +1031,7 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
   const sourceQualityHardBlocked = sourceQuality.suppressed && !lowSignalOnlySuppressed;
   const positiveGateHardBlocked = positiveListingGate.reason === 'not_a_listing'
     || positiveListingGate.reason === 'non_uganda_location';
+  const integrityHardBlocked = dataIntegrity.issue_codes.includes('unsupported_hospitality_or_nightly');
   const manualExactSocialIntake = isManualExactSocialIntake(item);
   const specificPropertySignal = hasSpecificPropertySignal(item);
   const dateWindowAllowsQueue = manualExactSocialIntake || dateStatus !== 'before_2026_source_window';
@@ -1029,6 +1047,7 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
       && dateWindowAllowsQueue
       && !sourceQualityHardBlocked
       && !positiveGateHardBlocked
+      && !integrityHardBlocked
       && manualExactPasses
   );
   const blockingReasons = [
@@ -1041,6 +1060,7 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
     !dateWindowAllowsQueue ? 'before_2026_automated_source_window' : '',
     sourceQualityHardBlocked ? (sourceQuality.reason || 'non_listing_source_content') : '',
     positiveGateHardBlocked ? (positiveListingGate.reason || 'not_a_listing') : '',
+    integrityHardBlocked ? 'unsupported_hospitality_or_nightly' : '',
   ].filter(Boolean);
   return {
     eligible: captureToReview,
@@ -1098,6 +1118,8 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
     weak_location_captured_for_review: !locationPassesIntake || !locationQuality.ok,
     has_uganda_location_signal: positiveListingGate.has_uganda_location_signal === true,
     has_concrete_listing_signal: positiveListingGate.has_listing_signal === true,
+    data_integrity: dataIntegrity,
+    data_integrity_hard_blocked: integrityHardBlocked,
   };
 }
 
@@ -1919,10 +1941,11 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
     price_label: sourcePriceLabelFor(item),
     source_price_label: sourcePriceLabelFor(item),
     price_currency: item.priceCurrency || item.price_currency || 'UGX',
+    price_original_currency: item.priceOriginalCurrency || item.price_original_currency || 'UGX',
     price_original: item.priceOriginal ?? item.price_original ?? item.price ?? null,
     price_fx_rate_ugx: item.priceFxRateUgx ?? item.price_fx_rate_ugx ?? null,
     price_fx_as_of: item.priceFxAsOf || item.price_fx_as_of || null,
-    price_conversion_basis: (item.priceCurrency || item.price_currency) === 'USD'
+    price_conversion_basis: (item.priceOriginalCurrency || item.price_original_currency) === 'USD'
       ? 'Original public USD guide converted to canonical UGX for search and valuation.'
       : 'Original public UGX guide stored without conversion.',
     price_upon_application: !hasPublishedPriceOrGuidePrice(item),
@@ -2086,6 +2109,27 @@ function buildSocialSearchListing(item, agentId = null) {
     autoLive.moderation_stage = 'source_review';
     autoLive.reason = `Price evidence needs staff review: ${priceQuality.reasons.join(', ')}.`;
   }
+  const dataIntegrity = listingDataIntegrityReport({
+    ...item,
+    listing_type: listingType,
+    transaction_type: transactionType || null,
+    property_type: propertyType || null,
+    price_currency: item.priceCurrency || item.price_currency || 'UGX',
+    price_original_currency: item.priceOriginalCurrency || item.price_original_currency || 'UGX',
+    price_original: item.priceOriginal ?? item.price_original ?? item.price ?? null,
+    price_fx_rate_ugx: item.priceFxRateUgx ?? item.price_fx_rate_ugx ?? null,
+    price_on_application: !hasPublishedPriceOrGuidePrice(item),
+    lister_phone: agent.phone || agent.phoneAlt || '',
+    source_contact_url: sourceContactUrlForAgent(agent, item),
+    source_url: sourceUrlForItem(item),
+    extra_fields: item.raw_source_post || item.rawSourcePost || {},
+  }, { requireCompleteEvidence: true });
+  if (!dataIntegrity.ok) {
+    autoLive.approved = false;
+    autoLive.status = 'pending';
+    autoLive.moderation_stage = 'source_review';
+    autoLive.reason = `Data integrity review required: ${dataIntegrity.issue_codes.join(', ')}.`;
+  }
   const manualOlderExactSource = isManualExactSocialIntake(item)
     && sourceDateStatusFor(item) === 'before_2026_source_window';
   return {
@@ -2098,10 +2142,12 @@ function buildSocialSearchListing(item, agentId = null) {
     address: item.address,
     price: Number(item.price || 0) > 0 ? item.price : null,
     price_currency: item.priceCurrency || item.price_currency || 'UGX',
+    price_original_currency: item.priceOriginalCurrency || item.price_original_currency || 'UGX',
     price_original: item.priceOriginal ?? item.price_original ?? item.price ?? null,
     price_fx_rate_ugx: item.priceFxRateUgx ?? item.price_fx_rate_ugx ?? null,
     price_fx_as_of: item.priceFxAsOf || item.price_fx_as_of || null,
     price_period: pricePeriod || (transactionType === 'rent' ? 'month' : 'once'),
+    price_on_application: !hasPublishedPriceOrGuidePrice(item),
     bedrooms: item.beds,
     bathrooms: item.baths,
     property_type: propertyType || null,
@@ -2134,7 +2180,8 @@ function buildSocialSearchListing(item, agentId = null) {
       : ['Found online', `${sourcePlatformFor(agent, item)} source evidence`, 'Agent follow-up required', 'HD photos to verify']),
     extra_fields: JSON.stringify({
       ...extraFieldsFor(item, agentId),
-      price_quality: priceQuality
+      price_quality: priceQuality,
+      data_integrity_review: dataIntegrity
     }),
     lister_name: agent.name || 'Found-online Source Desk',
     lister_phone: agent.phone || null,
@@ -2273,7 +2320,8 @@ async function insertListing(client, listing, agentId) {
   const inserted = await client.query(
     `INSERT INTO properties (
       listing_type, transaction_type, title, description, district, area, address, price,
-      price_currency, price_original, price_fx_rate_ugx, price_fx_as_of, price_period,
+      price_currency, price_original_currency, price_original, price_fx_rate_ugx, price_fx_as_of, price_period,
+      price_on_application,
       bedrooms, bathrooms, property_type, title_type, year_built, furnishing,
       contract_months, deposit_amount, land_size_value, land_size_unit,
       floor_area_sqm, usable_size_sqm, parking_bays, nearest_university,
@@ -2289,13 +2337,14 @@ async function insertListing(client, listing, agentId) {
       $11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
       $21,$22,$23,$24,$25,$26,$27,$28,$29,$30,
       $31,$32,$33,$34,$35,$36,$37,$38,$39,$40,
-      $41::jsonb,$42::jsonb,$43,$44,$45,$46,$47,$48,$49,$50,
-      $51,$52,$53,$54,$55,$56
+      $41,$42,$43::jsonb,$44::jsonb,$45,$46,$47,$48,$49,$50,
+      $51,$52,$53,$54,$55,$56,$57,$58
     ) RETURNING id::text AS id`,
     [
       listing.listing_type, listing.transaction_type, listing.title, listing.description, listing.district,
-      listing.area, listing.address, listing.price, listing.price_currency, listing.price_original,
-      listing.price_fx_rate_ugx, listing.price_fx_as_of, listing.price_period,
+      listing.area, listing.address, listing.price, listing.price_currency, listing.price_original_currency,
+      listing.price_original, listing.price_fx_rate_ugx, listing.price_fx_as_of, listing.price_period,
+      listing.price_on_application === true,
       listing.bedrooms, listing.bathrooms, listing.property_type, listing.title_type,
       listing.year_built, listing.furnishing, listing.contract_months,
       listing.deposit_amount, listing.land_size_value, listing.land_size_unit,
@@ -2499,16 +2548,28 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
   );
   const sourceHasExplicitTransaction = /\b(for sale|on sale|available for sale|for rent|to rent|to let|for lease)\b/i.test(sourceText);
   const sourceHasPropertyCategorySignal = /\b(?:apartment|flat|house|home|villa|mansion|duplex|bungalow|bedroom|beds?|land|plot|acre|decimal|hostel|student|campus|commercial|office|shop|retail|warehouse|factory|showroom)\b/i.test(sourceText);
-  const listingType = (sourceHasExplicitTransaction || sourceHasPropertyCategorySignal)
+  const sourceTextListingType = sourceHasPropertyCategorySignal
     ? normalizeFoundOnlineListingType(sourceText, { price: unsafeSourcePrice })
     : rawListingType;
+  const evidenceClassification = deriveListingClassification({
+    ...raw,
+    title: raw.title || raw.source_title,
+    description: raw.description || raw.caption,
+    source_text: sourceText,
+    source_visual_text: sourceVisualText,
+    listing_type: sourceTextListingType,
+  });
+  let listingType = (sourceHasExplicitTransaction || sourceHasPropertyCategorySignal)
+    ? (evidenceClassification.listing_type || normalizeFoundOnlineListingType(sourceText, { price: unsafeSourcePrice }))
+    : rawListingType;
+  if (listingType === 'student' && rawListingType === 'students') listingType = 'students';
   const title = String(raw.title || raw.source_title || raw.caption || `${listingType === 'land' ? 'Land' : 'Property'} in ${area}`).trim();
   const baseDescription = compactText(raw.description || raw.caption || raw.summary || title);
   const description = compactText([
     baseDescription,
     sourceVisualText ? `Visible video/still text adds: ${sourceVisualText}` : '',
   ].filter(Boolean).join(' '));
-  const pricePeriod = normalizeListingPricePeriod(raw.price_period || raw.pricePeriod || raw.period, {
+  const pricePeriod = evidenceClassification.price_period || normalizeListingPricePeriod(raw.price_period || raw.pricePeriod || raw.period, {
     listingType,
     title,
     description: `${description} ${sourceText}`
@@ -2517,13 +2578,13 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
     ? normalizeCommercialTransactionType(
       raw.transaction_type || raw.transactionType || raw.commercial_mode || raw.commercial_intent,
       { pricePeriod, title, description: `${description} ${sourceText}` }
-    )
+    ) || evidenceClassification.transaction_type
     : '';
   const commercialSubtype = listingType === 'commercial'
     ? normalizeCommercialPropertyType(raw.subtype || raw.property_type || raw.commercial_type, {
       title,
       description: `${description} ${sourceText}`
-    })
+    }) || evidenceClassification.commercial_type
     : (raw.subtype || raw.property_type || null);
   const normalizedStudentSource = isStudentSourceListing({
     ...raw,
@@ -2591,6 +2652,31 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
     bio: raw.source_bio || `Public ${platform} source imported for makaug found-online launch intake.`,
     audienceLabel: raw.audience_label || raw.followers_label || raw.source_followers_label || '',
   };
+  const dataIntegrity = listingDataIntegrityReport({
+    ...raw,
+    title,
+    description,
+    source_text: sourceText,
+    source_visual_text: sourceVisualText,
+    listing_type: listingType,
+    transaction_type: transactionType,
+    property_type: commercialSubtype,
+    area,
+    district,
+    canonical_location_id: canonicalLocation?.key,
+    canonical_location_level: canonicalLocation?.level,
+    price: sourcePriceMetadata.price,
+    price_currency: sourcePriceMetadata.price_currency,
+    price_original_currency: sourcePriceMetadata.price_original_currency,
+    price_original: sourcePriceMetadata.price_original,
+    price_fx_rate_ugx: sourcePriceMetadata.price_fx_rate_ugx,
+    price_period: pricePeriod,
+    price_on_application: !Number(sourcePriceMetadata.price || 0),
+    lister_phone: sourceAgent.phone,
+    source_contact_url: sourceAgent.channelUrl,
+    source_url: sourceUrl,
+    bedrooms: raw.bedrooms ?? raw.beds,
+  });
   return {
     key: postKey,
     agentKey: sourceKey,
@@ -2645,6 +2731,7 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
     sourcePriceRejectionReason: safePrice.reason || sourcePriceMetadata.rejection_reason || '',
     price: sourcePriceMetadata.price,
     priceCurrency: sourcePriceMetadata.price_currency,
+    priceOriginalCurrency: sourcePriceMetadata.price_original_currency,
     priceOriginal: sourcePriceMetadata.price_original,
     priceFxRateUgx: sourcePriceMetadata.price_fx_rate_ugx,
     priceFxAsOf: sourcePriceMetadata.price_fx_as_of,
@@ -2684,6 +2771,7 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
       contact_cluster_key: raw.contact_cluster_key || '',
       composite_listing_key: raw.composite_listing_key || '',
     },
+    dataIntegrity,
   };
 }
 

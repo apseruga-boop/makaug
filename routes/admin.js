@@ -12,6 +12,7 @@ const {
   districtForKnownArea,
   districtForKnownLocationText
 } = require('../utils/ugandaLocationHierarchy');
+const { canonicalLocationByKey, canonicalizeUgandaLocation } = require('../utils/ugandaLocationRegistry');
 const { normalizeEmail, normalizeUgPhone } = require('../utils/adminOtpOverride');
 const {
   normalizeCommercialTransactionType,
@@ -104,6 +105,7 @@ const { logWhatsAppMessage } = require('../services/whatsappMessageLogService');
 const { prepareMediaUrlForStorage, prepareUploadObjectForStorage, uploadBufferToS3 } = require('../services/cloudMediaStorageService');
 const {
   PUBLIC_INVENTORY_METRICS_MARKER,
+  invalidatePublicInventoryMetricsCache,
   loadPublicOpportunitySummary,
   normalizePublicOpportunitySummary,
   publicVisibleInventoryWhere
@@ -124,6 +126,7 @@ const { sendPhoneOtp } = require('../services/phoneOtpDeliveryService');
 const { buildListingReference } = require('../services/listingReferenceService');
 const { hideReportedProperty } = require('../services/reportListingModerationService');
 const { propertyPriceMetadata } = require('../utils/propertyPriceCurrency');
+const { listingDataIntegrityReport } = require('../utils/listingDataIntegrity');
 const { harvestAutomationEnabled } = require('../utils/harvestFeatureFlags');
 const SOURCED_INVENTORY_CANDIDATE_SOURCE = 'sourced_inventory_candidate_v1';
 const {
@@ -3129,15 +3132,27 @@ async function updatePropertyEditableFields({ propertyId, patch = {} }) {
   const extraPatch = {};
   let idx = 2;
 
-  const hasLocationHierarchyPatch = ['region', 'district', 'city', 'neighborhood'].some((key) => (
+  const hasLocationHierarchyPatch = ['region', 'district', 'city', 'neighborhood', 'area'].some((key) => (
     Object.prototype.hasOwnProperty.call(normalizedPatch, key)
   ));
   if (hasLocationHierarchyPatch) {
+    const sourceAreaRaw = cleanText(normalizedPatch.area);
     const hierarchy = normalizeReviewLocationHierarchy(normalizedPatch);
     errors.push(...hierarchy.errors);
     if (hierarchy.region) normalizedPatch.region = hierarchy.region;
     if (Object.prototype.hasOwnProperty.call(normalizedPatch, 'city')) normalizedPatch.city = hierarchy.city;
     if (Object.prototype.hasOwnProperty.call(normalizedPatch, 'neighborhood')) normalizedPatch.neighborhood = hierarchy.neighborhood;
+    const canonical = hierarchy.canonical || canonicalizeUgandaLocation(normalizedPatch.area, normalizedPatch.district);
+    if (canonical && !['district', 'region'].includes(canonical.level)) {
+      normalizedPatch.area = canonical.name;
+      normalizedPatch.district = canonical.district;
+      fieldMap.area.value = canonical.name;
+      extraPatch.moderator_area_input_raw = sourceAreaRaw || canonical.name;
+      extraPatch.canonical_location_id = canonical.key;
+      extraPatch.canonical_location_level = canonical.level;
+      extraPatch.location_resolution_status = 'canonical_moderator_edit';
+      extraPatch.location_resolution_confidence = 1;
+    }
   }
   const selectedDistrict = cleanText(normalizedPatch.district);
   if (selectedDistrict && Object.prototype.hasOwnProperty.call(normalizedPatch, 'address')) {
@@ -3419,13 +3434,17 @@ router.get('/summary', async (req, res, next) => {
         loadAdminLaunchTrafficSnapshot(),
         adminSummaryRows(
           `SELECT
-            COALESCE(NULLIF(payload->>'area', ''), NULLIF(payload->>'district', ''), 'Unknown area') AS area,
+            p.extra_fields->>'canonical_location_id' AS canonical_location_id,
             COUNT(*)::int AS events
-           FROM analytics_events
-           WHERE created_at >= NOW() - INTERVAL '2 days'
-             AND event_name IN ('property_open','property_view','property_search','near_me_search')
+           FROM analytics_events e
+           JOIN properties p
+             ON p.id::text = COALESCE(NULLIF(e.payload->>'property_id', ''), NULLIF(e.payload->>'listing_id', ''))
+           WHERE e.created_at >= NOW() - INTERVAL '2 days'
+             AND e.event_name IN ('property_open','property_view','property_search','near_me_search')
+             AND COALESCE(p.extra_fields->>'canonical_location_id', '') <> ''
+             AND COALESCE(p.extra_fields->>'canonical_location_level', '') NOT IN ('district', 'region')
            GROUP BY 1
-           ORDER BY events DESC, area ASC
+           ORDER BY events DESC, canonical_location_id ASC
            LIMIT 5`,
           [],
           { timeoutMs: 1200 }
@@ -3511,7 +3530,15 @@ router.get('/summary', async (req, res, next) => {
         ai_insights: {
           launch_traffic: adminNullableSummaryRow(launchTraffic),
           last_48h: adminNullableSummaryRow(engagement48h),
-          top_areas: topAreas48h,
+          top_areas: topAreas48h.map((row) => {
+            const canonical = canonicalLocationByKey(row.canonical_location_id);
+            return canonical ? {
+              area: `${canonical.name}, ${canonical.district}`,
+              canonical_location_id: canonical.key,
+              canonical_location_level: canonical.level,
+              events: row.events
+            } : null;
+          }).filter(Boolean),
           top_listing_types: topListingTypes48h,
           traffic_sources: trafficSources48h
         }
@@ -3867,9 +3894,11 @@ router.get('/properties/review-queue', async (req, res, next) => {
              p.area,
              p.price,
              p.price_currency,
+             p.price_original_currency,
              p.price_original,
              p.price_fx_rate_ugx,
              p.price_fx_as_of,
+             p.price_on_application,
              p.price_period,
              p.status,
              p.moderation_stage,
@@ -4026,9 +4055,11 @@ router.get('/properties/actioned', async (req, res, next) => {
              p.area,
              p.price,
              p.price_currency,
+             p.price_original_currency,
              p.price_original,
              p.price_fx_rate_ugx,
              p.price_fx_as_of,
+             p.price_on_application,
              p.price_period,
              p.status,
              p.moderation_stage,
@@ -5571,12 +5602,17 @@ router.post('/properties/:id/direct-publish', async (req, res, next) => {
       ? extra.video_urls.filter((url) => /^https?:\/\//i.test(String(url || '')))
       : [];
     const blockers = [];
+    if (parseBooleanLike(extra.location_review_required, false)) {
+      blockers.push('individual canonical location reclassification review');
+    }
     if (!property.agent_id) blockers.push('agent profile');
     if (!property.district || !property.area) blockers.push('location');
     if (!property.price || property.price <= 0) blockers.push('price');
     if (!property.lister_phone) blockers.push('agent contact');
     if (Number(imageCount.rows[0]?.count || 0) < 1) blockers.push('property photo');
     if (videoUrls.length < 1) blockers.push('property video');
+    const dataIntegrity = listingDataIntegrityReport(property);
+    if (!dataIntegrity.ok) blockers.push(...dataIntegrity.issue_codes.map((code) => `data integrity: ${code}`));
     if (blockers.length) {
       await client.query('ROLLBACK');
       return res.status(400).json({
@@ -5639,6 +5675,7 @@ router.post('/properties/:id/direct-publish', async (req, res, next) => {
       ]
     );
     await client.query('COMMIT');
+    invalidatePublicInventoryMetricsCache('admin_direct_agent_listing_published');
     await writeAudit('admin_direct_agent_listing_published', {
       property_id: req.params.id,
       agent_id: updated.rows[0].agent_id,
@@ -8692,10 +8729,12 @@ router.post('/agents/direct-onboarding', async (req, res, next) => {
       source_evidence_reviewed_by: actorId,
       source_evidence_reviewed_at: new Date().toISOString(),
       price_currency: priceMetadata.price_currency,
+      price_original_currency: priceMetadata.price_original_currency,
       price_original: priceMetadata.price_original,
       price_fx_rate_ugx: priceMetadata.price_fx_rate_ugx,
       price_fx_as_of: priceMetadata.price_fx_as_of,
-      price_conversion_basis: priceMetadata.price_currency === 'USD'
+      price_on_application: false,
+      price_conversion_basis: priceMetadata.price_original_currency === 'USD'
         ? 'Original agent-supplied USD guide converted to canonical UGX for search and valuation.'
         : 'Original agent-supplied UGX price.',
       development_status_note: cleanText(body.development_status_note).slice(0, 500),
@@ -8733,19 +8772,19 @@ router.post('/agents/direct-onboarding', async (req, res, next) => {
       const insertedProperty = await client.query(
         `INSERT INTO properties (
            listing_type, transaction_type, title, description, district, area, address,
-           price, price_currency, price_original, price_fx_rate_ugx, price_fx_as_of,
-           price_period, bedrooms, bathrooms, property_type, amenities, extra_fields,
+           price, price_currency, price_original_currency, price_original, price_fx_rate_ugx, price_fx_as_of,
+           price_period, price_on_application, bedrooms, bathrooms, property_type, amenities, extra_fields,
            lister_name, lister_phone, lister_email, lister_type, agent_id, source,
            listed_via, status, moderation_stage, moderation_notes, moderation_reason,
            inquiry_reference, new_until, verification_terms_accepted
          ) VALUES (
            'sale','sale',$1,$2,$3,$4,$5,
-           $6,$7,$8,$9,$10,'once',$11,$12,$13,$14::jsonb,$15::jsonb,
-           $16,$17,$18,'agent',$19,'direct_agent_whatsapp',
+           $6,$7,$8,$9,$10,$11,'once',FALSE,$12,$13,$14,$15::jsonb,$16::jsonb,
+           $17,$18,$19,'agent',$20,'direct_agent_whatsapp',
            'admin_direct_agent_onboarding','pending','in_review',
            'Direct agent submission created by King; media upload and final moderation pending.',
            'Direct submission evidence reviewed; identity verification and account claim remain pending.',
-           $20,NOW() + INTERVAL '5 days',TRUE
+           $21,NOW() + INTERVAL '5 days',TRUE
          )
          RETURNING id`,
         [
@@ -8756,6 +8795,7 @@ router.post('/agents/direct-onboarding', async (req, res, next) => {
           address,
           priceMetadata.price,
           priceMetadata.price_currency,
+          priceMetadata.price_original_currency,
           priceMetadata.price_original,
           priceMetadata.price_fx_rate_ugx,
           priceMetadata.price_fx_as_of,

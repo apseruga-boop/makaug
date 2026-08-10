@@ -8,9 +8,10 @@ const { DISTRICTS } = require('../utils/constants');
 const {
   canonicalizeUgandaLocation,
   canonicalizeLocationRows,
+  canonicalLocationByKey,
   canonicalLocationOptions,
+  canonicalLocationSearchScope,
   aliasesForCanonicalLocation,
-  aliasesForDistrict,
   normalizeDistrict,
   normalizeLocationKey,
   haversineKm
@@ -487,28 +488,15 @@ async function loadComparableRows(input, scope, { includeImages = true } = {}) {
 
   const canonicalLocation = input.canonical_location
     || canonicalizeUgandaLocation(input.location, input.district);
-  const normalizedAreaSql = "REGEXP_REPLACE(LOWER(TRIM(SPLIT_PART(COALESCE(p.area, ''), ',', 1))), '[^a-z0-9]+', ' ', 'g')";
   if (scope === 'district' || scope === 'nearby') {
-    const districtAliases = aliasesForDistrict(input.district);
-    values.push(input.district);
-    const districtParam = `$${values.length}`;
-    if (districtAliases.length) {
-      values.push(districtAliases);
-      const aliasParam = `$${values.length}`;
-      where.push(`(
-        LOWER(TRIM(COALESCE(p.district, ''))) = LOWER(${districtParam})
-        OR ${normalizedAreaSql} = ANY(${aliasParam}::text[])
-      )`);
-    } else {
-      where.push(`LOWER(TRIM(COALESCE(p.district, ''))) = LOWER(${districtParam})`);
-    }
+    const district = normalizeDistrict(input.district);
+    const districtKey = district ? `${normalizeLocationKey(district)}:${normalizeLocationKey(district)}` : '';
+    const districtScope = canonicalLocationSearchScope([districtKey], 0);
+    values.push(districtScope.exact.map((item) => item.key));
+    where.push(`COALESCE(p.extra_fields->>'canonical_location_id', '') = ANY($${values.length}::text[])`);
   } else {
-    const areaAliases = aliasesForCanonicalLocation(canonicalLocation || {
-      name: input.location,
-      district: input.district
-    });
-    values.push(areaAliases.length ? areaAliases : [normalizeLocationKey(input.location)]);
-    where.push(`${normalizedAreaSql} = ANY($${values.length}::text[])`);
+    values.push(canonicalLocation?.key ? [canonicalLocation.key] : []);
+    where.push(`COALESCE(p.extra_fields->>'canonical_location_id', '') = ANY($${values.length}::text[])`);
   }
 
   if (input.bedrooms != null && ['sale', 'rent', 'student'].includes(input.category)) {
@@ -569,7 +557,8 @@ async function loadComparableRows(input, scope, { includeImages = true } = {}) {
     values
   );
   const rows = (result.rows || []).map((row) => {
-    const canonical = canonicalizeUgandaLocation(row.area, row.district);
+    const canonical = canonicalLocationByKey(row.extra_fields?.canonical_location_id)
+      || canonicalizeUgandaLocation('', row.district);
     const distance = canonicalLocation && canonical
       ? haversineKm(canonicalLocation, canonical)
       : null;
@@ -602,20 +591,7 @@ async function loadComparableRows(input, scope, { includeImages = true } = {}) {
 async function inferDistrictForLocation(location) {
   const canonical = canonicalizeUgandaLocation(location);
   if (canonical?.district) return canonical.district;
-  const result = await db.query(
-    `SELECT TRIM(COALESCE(p.district, '')) AS district, COUNT(*)::int AS listing_count
-     FROM properties p
-     WHERE ${publicLivePropertyStatusSql('p')}
-       AND NOT ${publicLaunchTestListingFastCondition('p')}
-       AND LOWER(TRIM(SPLIT_PART(COALESCE(p.area, ''), ',', 1))) = LOWER($1)
-       AND NULLIF(TRIM(COALESCE(p.district, '')), '') IS NOT NULL
-     GROUP BY 1
-     ORDER BY COUNT(*) DESC, 1 ASC
-     LIMIT 1`,
-    [location]
-  );
-  const candidate = cleanText(result.rows[0]?.district);
-  return DISTRICTS.find((district) => district.toLowerCase() === candidate.toLowerCase()) || '';
+  return '';
 }
 
 function isTransientDatabaseError(error = {}) {
@@ -969,7 +945,7 @@ router.get('/locations', async (req, res, next) => {
     const where = [
       publicLivePropertyStatusSql('p'),
       `NOT ${publicLaunchTestListingFastCondition('p')}`,
-      `NULLIF(TRIM(COALESCE(p.area, p.district, '')), '') IS NOT NULL`
+      `COALESCE(p.extra_fields->>'canonical_location_id', '') <> ''`
     ];
     const categoryCondition = categorySql(category);
     if (categoryCondition.includes('$CATEGORY')) {
@@ -980,8 +956,10 @@ router.get('/locations', async (req, res, next) => {
     }
     const rows = await db.query(
       `SELECT
-         TRIM(COALESCE(NULLIF(p.area, ''), p.district)) AS location,
-         TRIM(COALESCE(p.district, '')) AS district,
+         p.extra_fields->>'canonical_location_id' AS canonical_location_id,
+         p.extra_fields->>'canonical_location_level' AS canonical_location_level,
+         MIN(p.area) AS location,
+         MIN(p.district) AS district,
          COUNT(*)::int AS listing_count
        FROM properties p
        WHERE ${where.join('\n         AND ')}

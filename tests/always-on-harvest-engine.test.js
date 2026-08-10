@@ -130,7 +130,8 @@ async function run() {
     source_page_url: 'https://x.com/agent',
     first_posted_at: '2026-08-01T00:00:00.000Z',
   });
-  assert.strictEqual(normalizedUsd.priceCurrency, 'USD');
+  assert.strictEqual(normalizedUsd.priceCurrency, 'UGX');
+  assert.strictEqual(normalizedUsd.priceOriginalCurrency, 'USD');
   assert.strictEqual(normalizedUsd.priceOriginal, 800);
   assert.strictEqual(normalizedUsd.price, 800 * normalizedUsd.priceFxRateUgx);
   assert.strictEqual(normalizedUsd.area, 'Kalagi');
@@ -268,7 +269,8 @@ async function run() {
   });
   assert.deepStrictEqual(usdPatch.errors, []);
   assert.strictEqual(usdPatch.patch.price, 4560000);
-  assert.strictEqual(usdPatch.patch.price_currency, 'USD');
+  assert.strictEqual(usdPatch.patch.price_currency, 'UGX');
+  assert.strictEqual(usdPatch.patch.price_original_currency, 'USD');
 
   const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
   const serverSource = fs.readFileSync(path.join(root, 'server.js'), 'utf8');

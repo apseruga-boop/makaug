@@ -156,13 +156,9 @@ function facetLocationSlug(location = {}) {
 }
 
 function canonicalLocationsForSeoRow(row = {}) {
-  const locations = [
-    canonicalLocationByKey(row.canonical_location_id),
-    canonicalizeUgandaLocation(row.area, row.district),
-    canonicalizeUgandaLocation(row.city, row.district),
-    canonicalizeUgandaLocation(row.neighborhood, row.district)
-  ].filter(Boolean);
-  return Array.from(new Map(locations.map((location) => [location.key, location])).values());
+  const canonical = canonicalLocationByKey(row.canonical_location_id || row?.extra_fields?.canonical_location_id)
+    || canonicalizeUgandaLocation('', row.district);
+  return canonical ? [canonical] : [];
 }
 
 function buildPublicSeoSnapshot(rows = [], generatedAt = new Date().toISOString()) {

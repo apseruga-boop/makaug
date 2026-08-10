@@ -149,7 +149,11 @@ app.get('/api/version', (_req, res) => {
     build_id: RUNTIME_BUILD_ID,
     git_commit: process.env.RENDER_GIT_COMMIT || process.env.SOURCE_VERSION || process.env.GIT_COMMIT || null,
     instance_id: process.env.RENDER_INSTANCE_ID || process.env.HOSTNAME || null,
-    started_at: RUNTIME_STARTED_AT
+    started_at: RUNTIME_STARTED_AT,
+    markers: [
+      'canonical-location-source-review-115',
+      'master-data-integrity-116'
+    ]
   });
 });
 

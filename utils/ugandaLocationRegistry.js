@@ -32,6 +32,20 @@ const DETAILED_LOCATIONS = [
   { name: 'Kikoni', district: 'Kampala', lat: 0.333, lng: 32.565 },
   { name: 'Ndeeba', district: 'Kampala', lat: 0.301, lng: 32.548 },
   { name: 'Kikuubo', district: 'Kampala', lat: 0.314, lng: 32.576 },
+  { name: 'Kawempe', district: 'Kampala', level: 'city', lat: 0.379, lng: 32.557, aliases: ['Kawempe', 'Kawempe Division'] },
+  { name: 'Bwaise', district: 'Kampala', lat: 0.36, lng: 32.557 },
+  { name: 'Kalerwe', district: 'Kampala', lat: 0.371, lng: 32.57 },
+  { name: 'Mulago', district: 'Kampala', lat: 0.34, lng: 32.577 },
+  { name: 'Kanyanya', district: 'Kampala', lat: 0.389, lng: 32.578 },
+  { name: 'Mpererwe', district: 'Kampala', lat: 0.411, lng: 32.585 },
+  { name: 'Kyebando', district: 'Kampala', lat: 0.365, lng: 32.574 },
+  { name: 'Kamwokya', district: 'Kampala', lat: 0.349, lng: 32.598 },
+  { name: 'Nsambya', district: 'Kampala', lat: 0.303, lng: 32.589 },
+  { name: 'Katwe', district: 'Kampala', lat: 0.305, lng: 32.574 },
+  { name: 'Namirembe', district: 'Kampala', lat: 0.315, lng: 32.559 },
+  { name: 'Kabowa', district: 'Kampala', lat: 0.285, lng: 32.54 },
+  { name: 'Bukesa', district: 'Kampala', lat: 0.325, lng: 32.567 },
+  { name: 'Busega', district: 'Kampala', lat: 0.309, lng: 32.526 },
 
   { name: 'Wakiso', district: 'Wakiso', level: 'district', lat: 0.4044, lng: 32.4594, aliases: ['Wakiso', 'Wakiso District'] },
   { name: 'Entebbe', district: 'Wakiso', level: 'city', lat: 0.0512, lng: 32.4637, aliases: ['Entebbe', 'Entebbe Town', 'Entebbe Municipality'] },
@@ -43,15 +57,15 @@ const DETAILED_LOCATIONS = [
   { name: 'Kitende', district: 'Wakiso', lat: 0.198, lng: 32.533 },
   { name: 'Kajjansi', district: 'Wakiso', lat: 0.208, lng: 32.552, aliases: ['Kajjansi', 'Kajansi'] },
   { name: 'Bwebajja', district: 'Wakiso', lat: 0.179, lng: 32.541 },
-  { name: 'Kigo', district: 'Wakiso', lat: 0.196, lng: 32.615, aliases: ['Kigo', 'Kigo Road'] },
-  { name: 'Lubowa', district: 'Wakiso', lat: 0.237, lng: 32.576, aliases: ['Lubowa', 'Lubowa Estate', 'Lubowa Entebbe Road'] },
-  { name: 'Namasuba', district: 'Wakiso', lat: 0.258, lng: 32.558 },
+  { name: 'Kigo', district: 'Wakiso', lat: 0.196, lng: 32.615 },
+  { name: 'Lubowa', district: 'Wakiso', lat: 0.237, lng: 32.576, aliases: ['Lubowa', 'Lubowa Estate'] },
+  { name: 'Namasuba', district: 'Wakiso', lat: 0.258, lng: 32.558, aliases: ['Namasuba', 'Namasuba Ndejje', 'Ndejje Namasuba'] },
   { name: 'Ndejje', district: 'Wakiso', lat: 0.244, lng: 32.553 },
   { name: 'Lubugumu', district: 'Wakiso', lat: 0.239, lng: 32.554 },
   { name: 'Seguku', district: 'Wakiso', lat: 0.247, lng: 32.555, aliases: ['Seguku', 'Sseguku'] },
   { name: 'Kira', district: 'Wakiso', level: 'city', lat: 0.3978, lng: 32.6414, aliases: ['Kira', 'Kiira', 'Kira Town', 'Kiira Town', 'Kira Municipality'] },
   { name: 'Namugongo', district: 'Wakiso', lat: 0.363, lng: 32.636 },
-  { name: 'Kireka', district: 'Wakiso', lat: 0.347, lng: 32.649, aliases: ['Kireka', 'Kireka Namugongo Road', 'Kireka-Namugongo Road'] },
+  { name: 'Kireka', district: 'Wakiso', lat: 0.347, lng: 32.649 },
   { name: 'Bweyogerere', district: 'Wakiso', lat: 0.351, lng: 32.676 },
   { name: 'Kyaliwajjala', district: 'Wakiso', lat: 0.377, lng: 32.639 },
   { name: 'Naalya', district: 'Wakiso', lat: 0.366, lng: 32.636, aliases: ['Naalya', 'Naalya Estate'] },
@@ -64,14 +78,22 @@ const DETAILED_LOCATIONS = [
   { name: 'Nabweru', district: 'Wakiso', lat: 0.378, lng: 32.525 },
   { name: 'Wamala', district: 'Wakiso', lat: 0.373, lng: 32.506 },
   { name: 'Gganda', district: 'Wakiso', lat: 0.352, lng: 32.536 },
-  { name: 'Kyebando', district: 'Wakiso', lat: 0.347, lng: 32.558 },
   { name: 'Wakiso Central', district: 'Wakiso', lat: 0.404, lng: 32.459 },
   { name: 'Kakiri', district: 'Wakiso', lat: 0.409, lng: 32.38 },
   { name: 'Bujjuko', district: 'Wakiso', lat: 0.374, lng: 32.389, aliases: ['Bujjuko', 'Bujuuko', 'Bujjuko Akright', 'Bujuuko Akright', 'Akright'] },
   { name: 'Masulita', district: 'Wakiso', lat: 0.51, lng: 32.46 },
   { name: 'Kasanje', district: 'Wakiso', lat: 0.217, lng: 32.383 },
   { name: 'Kasangati', district: 'Wakiso', lat: 0.434, lng: 32.61, aliases: ['Kasangati', 'Kasangati-Nangabo', 'Kasangati Nangabo', 'Nangabo'] },
-  { name: 'Gayaza', district: 'Wakiso', lat: 0.452, lng: 32.606, aliases: ['Gayaza', 'Gayaza Town', 'Gayaza Road'] },
+  { name: 'Gayaza', district: 'Wakiso', lat: 0.452, lng: 32.606, aliases: ['Gayaza', 'Gayaza Town'] },
+  { name: 'Matugga', district: 'Wakiso', lat: 0.463, lng: 32.525 },
+  { name: 'Maya', district: 'Wakiso', lat: 0.253, lng: 32.418 },
+  { name: 'Garuga', district: 'Wakiso', lat: 0.09, lng: 32.543 },
+  { name: 'Buloba', district: 'Wakiso', lat: 0.328, lng: 32.444 },
+  { name: 'Nsangi', district: 'Wakiso', lat: 0.24, lng: 32.456 },
+  { name: 'Zana', district: 'Wakiso', lat: 0.251, lng: 32.56 },
+  { name: 'Kisubi', district: 'Wakiso', lat: 0.119, lng: 32.533 },
+  { name: 'Nabbingo', district: 'Wakiso', lat: 0.295, lng: 32.477 },
+  { name: 'Kyengera', district: 'Wakiso', level: 'city', lat: 0.294, lng: 32.501, aliases: ['Kyengera', 'Kyengera Town'] },
 
   { name: 'Kalagi', district: 'Mukono', lat: 0.531, lng: 32.743, aliases: ['Kalagi', 'Kalagi Town', 'Kalagi Trading Centre', 'Kalagi Trading Center'] },
 
@@ -83,7 +105,6 @@ const DETAILED_LOCATIONS = [
   { name: 'Katosi', district: 'Mukono', lat: 0.181, lng: 32.797, aliases: ['Katosi', 'Mpunge', 'Mpungwe', 'Katosi Mpunge'] },
 
   { name: 'Jinja', district: 'Jinja', level: 'district', lat: 0.424, lng: 33.204, aliases: ['Jinja', 'Jinja City', 'Jinja Town', 'Jinja Central'] },
-  { name: 'Njeru', district: 'Jinja', lat: 0.449, lng: 33.177 },
   { name: 'Masese', district: 'Jinja', lat: 0.406, lng: 33.209 },
   { name: 'Nalufenya', district: 'Jinja', lat: 0.427, lng: 33.222 },
   { name: 'Bugembe', district: 'Jinja', lat: 0.457, lng: 33.231 },
@@ -142,13 +163,61 @@ const DETAILED_LOCATIONS = [
   { name: 'Kabale', district: 'Kabale', level: 'district', lat: -1.249, lng: 29.989, aliases: ['Kabale', 'Kabale Town', 'Kabale Municipality', 'Kabale Central'] },
   { name: 'Rutooma', district: 'Kabale', lat: -1.257, lng: 29.996 },
   { name: 'Kekubo', district: 'Kabale', lat: -1.241, lng: 29.981 },
-  { name: 'Butobere', district: 'Kabale', lat: -1.253, lng: 30.001 }
+  { name: 'Butobere', district: 'Kabale', lat: -1.253, lng: 30.001 },
+
+  // Canonical coverage for districts that have appeared in marketplace inventory.
+  // These are real towns/sub-counties, never generated "Central/East/West" placeholders.
+  { name: 'Njeru', district: 'Buikwe', level: 'city', lat: 0.449, lng: 33.177 },
+  { name: 'Lugazi', district: 'Buikwe', level: 'city', lat: 0.378, lng: 32.924 },
+  { name: 'Najjembe', district: 'Buikwe', lat: 0.423, lng: 32.99 },
+  { name: 'Buwama', district: 'Mpigi', level: 'city', lat: 0.057, lng: 32.096 },
+  { name: 'Kammengo', district: 'Mpigi', lat: 0.16, lng: 32.2 },
+  { name: 'Muduuma', district: 'Mpigi', lat: 0.31, lng: 32.25 },
+  { name: 'Busunju', district: 'Mityana', level: 'city', lat: 0.568, lng: 32.21 },
+  { name: 'Zigoti', district: 'Mityana', lat: 0.48, lng: 32.18 },
+  { name: 'Ttamu', district: 'Mityana', lat: 0.43, lng: 32.09 },
+  { name: 'Kangulumira', district: 'Kayunga', lat: 0.516, lng: 32.75 },
+  { name: 'Nazigo', district: 'Kayunga', lat: 0.538, lng: 32.82 },
+  { name: 'Bbaale', district: 'Kayunga', lat: 1.01, lng: 32.88 },
+  { name: 'Bugulumbya', district: 'Kamuli', lat: 0.95, lng: 33.12 },
+  { name: 'Namwendwa', district: 'Kamuli', lat: 1.08, lng: 33.16 },
+  { name: 'Mbulamuti', district: 'Kamuli', lat: 0.74, lng: 33.14 },
+  { name: 'Busei', district: 'Iganga', lat: 0.62, lng: 33.47 },
+  { name: 'Nakalama', district: 'Iganga', lat: 0.66, lng: 33.48 },
+  { name: 'Nambale', district: 'Iganga', lat: 0.56, lng: 33.52 },
+  { name: 'Dabani', district: 'Busia', lat: 0.5, lng: 34.0 },
+  { name: 'Masafu', district: 'Busia', lat: 0.45, lng: 34.02 },
+  { name: 'Lumino', district: 'Busia', lat: 0.33, lng: 33.98 },
+  { name: 'Malaba', district: 'Tororo', level: 'city', lat: 0.635, lng: 34.268 },
+  { name: 'Nagongera', district: 'Tororo', lat: 0.77, lng: 34.02 },
+  { name: 'Osukuru', district: 'Tororo', lat: 0.67, lng: 34.12 },
+  { name: 'Madera', district: 'Soroti', lat: 1.72, lng: 33.61 },
+  { name: 'Nakatunya', district: 'Soroti', lat: 1.69, lng: 33.62 },
+  { name: 'Pamba', district: 'Soroti', lat: 1.71, lng: 33.6 },
+  { name: 'Nyamwamba', district: 'Kasese', lat: 0.18, lng: 30.08 },
+  { name: 'Kilembe', district: 'Kasese', lat: 0.2, lng: 30.02 },
+  { name: 'Hima', district: 'Kasese', level: 'city', lat: 0.29, lng: 30.18 },
+  { name: 'Ishaka', district: 'Bushenyi', level: 'city', lat: -0.54, lng: 30.14 },
+  { name: 'Nyakabirizi', district: 'Bushenyi', lat: -0.56, lng: 30.19 },
+  { name: 'Ruharo', district: 'Bushenyi', lat: -0.53, lng: 30.21 },
+  { name: 'Rubaare', district: 'Ntungamo', lat: -0.79, lng: 30.26 },
+  { name: 'Rwashamaire', district: 'Ntungamo', lat: -0.76, lng: 30.31 },
+  { name: 'Itojo', district: 'Ntungamo', lat: -0.93, lng: 30.25 },
+  { name: 'Buyanja', district: 'Rukungiri', lat: -0.79, lng: 29.93 },
+  { name: 'Kebisoni', district: 'Rukungiri', lat: -0.73, lng: 29.98 },
+  { name: 'Nyakagyeme', district: 'Rukungiri', lat: -0.84, lng: 29.96 },
+  { name: 'Kabwohe', district: 'Sheema', level: 'city', lat: -0.58, lng: 30.38 },
+  { name: 'Itendero', district: 'Sheema', lat: -0.55, lng: 30.35 },
+  { name: 'Kigarama', district: 'Sheema', lat: -0.62, lng: 30.33 },
+  { name: 'Kacheera', district: 'Rakai', lat: -0.94, lng: 31.05 },
+  { name: 'Ddwaniro', district: 'Rakai', lat: -0.76, lng: 31.16 },
+  { name: 'Lwamaggwa', district: 'Rakai', lat: -0.88, lng: 31.18 }
 ];
 
 const EXCLUDED_LOCATION_ONLY_PATTERNS = [
-  /\b(?:lake victoria|victoria lake|lake albert|lake kyoga)\b/i,
-  /^(?:kampala|entebbe|gayaza|bombo|hoima|masaka|jinja|mityana|fort portal)\s+road$/i,
-  /^(?:northern|southern|eastern|western)\s+bypass$/i
+  /\b(?:lake victoria|victoria lake|lake albert|lake kyoga|lake edward|lake george)\b/i,
+  /\b(?:central|eastern|northern|western|greater kampala metropolitan)\s+region\b/i,
+  /\b(?:road|rd|street|st|avenue|ave|highway|bypass|expressway)\b/i
 ];
 
 function normalizeLocationKey(value = '') {
@@ -233,7 +302,7 @@ function canonicalizeUgandaLocation(area = '', district = '') {
   const matched = aliasRows.find((row) => {
     if (!aliasAppearsInValue(row.aliasKey, areaKey)) return false;
     if (!districtName || row.entry.district === districtName) return true;
-    return row.aliasKey === areaKey;
+    return false;
   });
   if (matched) return { ...matched.entry };
 
@@ -274,7 +343,11 @@ function aliasesForDistrict(district = '') {
 function canonicalizeLocationRows(rows = []) {
   const aggregates = new Map();
   rows.forEach((row) => {
-    const canonical = canonicalizeUgandaLocation(row.location || row.area, row.district);
+    const canonicalId = row.canonical_location_id
+      || row?.extra_fields?.canonical_location_id
+      || row?.admin_extra_fields?.canonical_location_id;
+    const canonical = canonicalLocationByKey(canonicalId)
+      || canonicalizeUgandaLocation('', row.district);
     if (!canonical) return;
     const count = Math.max(0, Number(row.listing_count) || 0);
     const existing = aggregates.get(canonical.key) || {
@@ -315,6 +388,29 @@ function canonicalLocationByKey(value = '') {
   return matched ? { ...matched, aliases: [...matched.aliases] } : null;
 }
 
+function canonicalLocationForRow(row = {}) {
+  const extra = row?.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
+  const adminExtra = row?.admin_extra_fields && typeof row.admin_extra_fields === 'object' ? row.admin_extra_fields : {};
+  const canonicalId = row.canonical_location_id
+    || extra.canonical_location_id
+    || adminExtra.canonical_location_id;
+  return canonicalLocationByKey(canonicalId)
+    || canonicalizeUgandaLocation('', row.district);
+}
+
+function canonicalDisplayLocationForRow(row = {}) {
+  const canonical = canonicalLocationForRow(row);
+  if (!canonical) {
+    return { canonical: null, area: null, district: normalizeDistrict(row.district) || null, level: null };
+  }
+  return {
+    canonical,
+    area: ['district', 'region'].includes(canonical.level) ? null : canonical.name,
+    district: canonical.district,
+    level: canonical.level
+  };
+}
+
 function trigrams(value = '') {
   const normalized = `  ${normalizeLocationKey(value)} `;
   const grams = new Set();
@@ -337,14 +433,14 @@ function trigramSimilarity(left = '', right = '') {
 
 function canonicalLocationSuggestions(query = '', counts = new Map(), limit = 8) {
   const needle = normalizeLocationKey(query);
-  if (!needle) return [];
+  if (!needle || isExcludedLocationOnly(query)) return [];
   const scoreEntry = (entry) => {
     const aliasKeys = entry.aliases.map(normalizeLocationKey).filter(Boolean);
     const exact = aliasKeys.includes(needle);
     const prefix = aliasKeys.some((alias) => alias.startsWith(needle));
     const contains = aliasKeys.some((alias) => alias.includes(needle));
     const fuzzy = Math.max(...aliasKeys.map((alias) => trigramSimilarity(needle, alias)), 0);
-    const matchRank = exact ? 4 : prefix ? 3 : contains ? 2 : fuzzy >= 0.3 ? 1 : 0;
+    const matchRank = exact ? 4 : prefix ? 3 : contains ? 2 : (needle.length >= 5 && fuzzy >= 0.72) ? 1 : 0;
     if (!matchRank) return null;
     return {
       canonical_key: entry.key,
@@ -359,6 +455,7 @@ function canonicalLocationSuggestions(query = '', counts = new Map(), limit = 8)
       did_you_mean: !exact && !prefix && !contains,
       match_rank: matchRank,
       score: matchRank * 10 + fuzzy,
+      confidence: exact ? 1 : prefix ? 0.94 : contains ? 0.88 : Number(fuzzy.toFixed(3)),
     };
   };
   return registry
@@ -436,6 +533,8 @@ function haversineKm(a = {}, b = {}) {
 module.exports = {
   CANONICAL_LOCATION_COUNT: registry.length,
   canonicalLocationByKey,
+  canonicalLocationForRow,
+  canonicalDisplayLocationForRow,
   canonicalizeUgandaLocation,
   canonicalizeLocationRows,
   canonicalLocationOptions,

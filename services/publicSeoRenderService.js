@@ -8,6 +8,7 @@ const {
 } = require('./publicSeoService');
 const { publicVisibleInventoryWhere } = require('./publicInventoryMetricsService');
 const { SEO_FACET_MIN_LISTINGS, FACET_DEFINITIONS, COMMERCIAL_TRANSACTION_FACETS } = require('../utils/publicSeoFacets');
+const { canonicalDisplayLocationForRow, canonicalLocationSearchScope } = require('../utils/ugandaLocationRegistry');
 
 const SEO_LISTING_CACHE_TTL_MS = Math.max(
   30 * 1000,
@@ -162,27 +163,10 @@ function categoryPredicate(key, alias = 'p') {
 
 function locationPredicate(location, values, alias = 'p') {
   if (!location) return '';
-  values.push(location.canonical_key);
-  const canonicalRef = `$${values.length}`;
-  values.push(String(location.district || '').toLowerCase());
-  const districtRef = `$${values.length}`;
-  if (location.level === 'district') {
-    return `AND (LOWER(COALESCE(${alias}.extra_fields->>'canonical_location_id', '')) = LOWER(${canonicalRef}) OR LOWER(COALESCE(${alias}.district, '')) = ${districtRef})`;
-  }
-  const aliases = Array.from(new Set([location.location, ...(location.aliases || [])]));
-  values.push(postgresWordPattern(aliases));
-  const aliasesRef = `$${values.length}`;
-  return `AND (
-    LOWER(COALESCE(${alias}.extra_fields->>'canonical_location_id', '')) = LOWER(${canonicalRef})
-    OR (
-      LOWER(COALESCE(${alias}.district, '')) = ${districtRef}
-      AND (
-        LOWER(TRIM(COALESCE(${alias}.area, ''))) ~* ${aliasesRef}
-        OR LOWER(TRIM(COALESCE(${alias}.extra_fields->>'city', ''))) ~* ${aliasesRef}
-        OR LOWER(TRIM(COALESCE(${alias}.extra_fields->>'neighborhood', ''))) ~* ${aliasesRef}
-      )
-    )
-  )`;
+  const scope = canonicalLocationSearchScope([location.canonical_key], 0);
+  const canonicalKeys = scope.exact.map((item) => item.key);
+  values.push(canonicalKeys.length ? canonicalKeys : [location.canonical_key]);
+  return `AND LOWER(COALESCE(${alias}.extra_fields->>'canonical_location_id', '')) = ANY($${values.length}::text[])`;
 }
 
 function facetPredicate(options, values, alias = 'p') {
@@ -247,13 +231,14 @@ function facetPredicate(options, values, alias = 'p') {
 
 function normalizeSeoListingRow(row = {}) {
   const foundOnline = ['true', '1', 'yes'].includes(String(row.found_online_candidate || '').toLowerCase());
+  const canonicalDisplay = canonicalDisplayLocationForRow(row);
   return {
     id: String(row.id || ''),
     listing_type: String(row.listing_type || ''),
     title: collapseDuplicatePublicTransaction(row.title) || 'Uganda property',
     description: plainText(row.description),
-    area: plainText(row.area),
-    district: plainText(row.district),
+    area: plainText(canonicalDisplay.area),
+    district: plainText(canonicalDisplay.district),
     price: Number(row.price || 0) || 0,
     price_period: plainText(row.price_period),
     transaction_type: plainText(row.transaction_type),
@@ -486,7 +471,11 @@ function areaLinksForCategory(snapshot, categoryKey, currentLocation = null, lim
   const { canonicalLocationOptions } = require('../utils/ugandaLocationRegistry');
   return canonicalLocationOptions()
     .map((location) => ({ ...location, count: Number(counts.get(location.canonical_key) || 0) }))
-    .filter((location) => location.count >= SEO_FACET_MIN_LISTINGS && location.canonical_key !== currentLocation?.canonical_key)
+    .filter((location) => (
+      !['district', 'region'].includes(location.level)
+      && location.count >= SEO_FACET_MIN_LISTINGS
+      && location.canonical_key !== currentLocation?.canonical_key
+    ))
     .sort((left, right) => {
       const leftNeighbor = currentLocation && left.district === currentLocation.district ? 1 : 0;
       const rightNeighbor = currentLocation && right.district === currentLocation.district ? 1 : 0;
@@ -496,7 +485,8 @@ function areaLinksForCategory(snapshot, categoryKey, currentLocation = null, lim
     .map((location) => ({
       href: `${config.route}/${canonicalLocationRouteSlug(location)}`,
       label: location.level === 'district' ? location.district : `${location.location}, ${location.district}`,
-      count: location.count
+      count: location.count,
+      level: location.level
     }));
 }
 
@@ -525,21 +515,28 @@ function facetLinksForArea(snapshot, meta) {
 function popularAreaLinks(snapshot, limit = 15) {
   return Object.keys(CATEGORY_SEO)
     .flatMap((categoryKey) => areaLinksForCategory(snapshot, categoryKey, null, limit).map((link) => ({ ...link, categoryKey })))
+    .filter((link) => !['district', 'region'].includes(String(link.level || '').toLowerCase()))
     .sort((left, right) => right.count - left.count || left.label.localeCompare(right.label))
     .slice(0, Math.max(0, limit));
 }
 
+function neighborhoodAreaLinks(links = []) {
+  return links.filter((link) => !['district', 'region'].includes(String(link?.level || '').toLowerCase()));
+}
+
 function renderAreaLinks(links = [], heading = 'Popular property areas') {
-  if (!links.length) return '';
+  const safeLinks = neighborhoodAreaLinks(links);
+  if (!safeLinks.length) return '';
   return `<nav aria-label="${escapeHtml(heading)}" class="mb-6 rounded-2xl border border-green-100 bg-green-50 p-4" data-ssr-area-links="1">
     <h2 class="font-black text-green-950">${escapeHtml(heading)}</h2>
-    <div class="mt-3 flex flex-wrap gap-2">${links.map((link) => `<a href="${escapeHtml(link.href)}" class="rounded-full border border-green-200 bg-white px-3 py-1.5 text-sm font-semibold text-green-800 hover:bg-green-100">${escapeHtml(link.label)} <span aria-label="${link.count} listings">(${link.count})</span></a>`).join('')}</div>
+    <div class="mt-3 flex flex-wrap gap-2">${safeLinks.map((link) => `<a href="${escapeHtml(link.href)}" class="rounded-full border border-green-200 bg-white px-3 py-1.5 text-sm font-semibold text-green-800 hover:bg-green-100">${escapeHtml(link.label)} <span aria-label="${link.count} listings">(${link.count})</span></a>`).join('')}</div>
   </nav>`;
 }
 
 function renderFooterAreaLinks(links = []) {
-  if (!links.length) return '';
-  return `<section class="max-w-7xl mx-auto px-4 pb-6" data-ssr-footer-area-links="1"><h2 class="font-black text-white">Popular property areas</h2><div class="mt-3 flex flex-wrap gap-3">${links.map((link) => `<a href="${escapeHtml(link.href)}" class="text-sm text-green-100 hover:text-white hover:underline">${escapeHtml(link.label)}</a>`).join('')}</div></section>`;
+  const safeLinks = neighborhoodAreaLinks(links);
+  if (!safeLinks.length) return '';
+  return `<section class="max-w-7xl mx-auto px-4 pb-6" data-ssr-footer-area-links="1"><h2 class="font-black text-white">Popular property areas</h2><div class="mt-3 flex flex-wrap gap-3">${safeLinks.map((link) => `<a href="${escapeHtml(link.href)}" class="text-sm text-green-100 hover:text-white hover:underline">${escapeHtml(link.label)}</a>`).join('')}</div></section>`;
 }
 
 function breadcrumbItems(meta, baseUrl) {
@@ -755,6 +752,8 @@ module.exports = {
   areaLinksForCategory,
   popularAreaLinks,
   facetLinksForArea,
+  neighborhoodAreaLinks,
+  renderAreaLinks,
   renderFooterAreaLinks,
   renderSeoListingCard,
   replaceElementInnerHtml,

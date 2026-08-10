@@ -209,7 +209,7 @@ const propertyRoute = read('routes/properties.js');
 includes(propertyRoute, 'cardFieldsOnly', 'properties route must parse the card_fields fast-path flag');
 includes(propertyRoute, 'compactPublicCardRow', 'properties route must expose a compact public card mapper');
 includes(propertyRoute, 'if (cardFieldsOnly && !adminAccess)', 'card_fields fast path must be public-only and avoid admin payloads');
-includes(propertyRoute, 'addPublicCardLocationSearchFilter(filters, values, area)', 'card_fields AI searches must use the narrow exact-location filter');
-includes(propertyRoute, "p.extra_fields->>'resolved_location_label' = ?", 'card_fields location filter should include resolved labels without scanning long text columns');
+includes(propertyRoute, 'legacyCanonicalLocation = canonicalizeUgandaLocation(area, district)', 'legacy AI searches must resolve through the canonical registry');
+includes(propertyRoute, 'addCanonicalLocationSearchFilter(filters, values, canonicalLocationScope)', 'card_fields AI searches must use canonical location IDs');
 
 console.log('ask-ai-results-hero test passed');

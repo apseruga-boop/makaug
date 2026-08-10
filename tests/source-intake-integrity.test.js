@@ -140,7 +140,8 @@ test('USD monthly prices preserve source amount and ingest-time FX provenance', 
     price_currency: 'USD',
     ingested_at: '2026-07-25T20:00:00.000Z',
   }));
-  assert.equal(listing.priceCurrency, 'USD');
+  assert.equal(listing.priceCurrency, 'UGX');
+  assert.equal(listing.priceOriginalCurrency, 'USD');
   assert.equal(listing.priceOriginal, 2500);
   assert.equal(listing.price, 9500000);
   assert.equal(listing.priceFxAsOf, '2026-07-25T20:00:00.000Z');
@@ -162,7 +163,8 @@ test('glued currency suffixes and abbreviated USD prices keep their full magnitu
   assert.equal(propertyPriceMetadata(priceTextFromText('Villa in Lubowa asking 2.2bnugx')).price, 2200000000);
   assert.equal(priceTextFromText('House for sale in Bwebajja for $400k'), '$400k');
   const usd = propertyPriceMetadata(priceTextFromText('House for sale in Bwebajja for $400k'));
-  assert.equal(usd.price_currency, 'USD');
+  assert.equal(usd.price_currency, 'UGX');
+  assert.equal(usd.price_original_currency, 'USD');
   assert.equal(usd.price_original, 400000);
 });
 
