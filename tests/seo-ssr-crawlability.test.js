@@ -26,8 +26,10 @@ const { normalizeUniversityName } = require('../utils/universityMatcher');
 const {
   SEO_LISTING_CACHE_MAX_ENTRIES,
   __seoListingCache,
+  areaLinksForCategory,
   loadPublicSeoListings,
   loadPublicSeoListing,
+  popularAreaLinks,
   renderCategorySeoHtml,
   renderPropertySeoHtml,
   renderHomepageSeoHtml
@@ -94,6 +96,16 @@ async function run() {
     extra_fields: { canonical_location_id: 'kampala:kikoni', nearest_university: 'Makerere University' }
   }));
   const snapshot = buildPublicSeoSnapshot([...rentListings, ...commercialListings, ...studentListings], '2026-08-09T06:00:00.000Z');
+  assert.equal(
+    areaLinksForCategory(snapshot, 'commercial').some((link) => link.label === 'Kampala'),
+    false,
+    'district nodes must not render as Popular areas'
+  );
+  assert.equal(
+    popularAreaLinks(snapshot).some((link) => link.label === 'Kampala'),
+    false,
+    'district nodes belong in Browse by district, never Popular areas'
+  );
   const meta = categoryPageSeoMeta('/to-rent/ntinda-kampala', snapshot);
   const rentCategoryMeta = categoryPageSeoMeta('/to-rent', snapshot);
   assert(rentCategoryMeta.title.includes('3 Listings, August 2026'), 'category titles must include honest inventory and freshness');

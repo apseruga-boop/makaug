@@ -47,17 +47,21 @@ SET price_original_currency = CASE
       END,
       'price_integrity_marker', 'master-data-integrity-116'
     )
-WHERE price_original_currency IS NULL
-   OR price_currency IS DISTINCT FROM 'UGX'
-   OR price_on_application IS DISTINCT FROM (
-     CASE WHEN price IS NOT NULL AND price > 0 THEN FALSE ELSE
-       COALESCE(price_on_application, FALSE)
-       OR LOWER(COALESCE(extra_fields->>'price_on_application', '')) IN ('true', '1', 'yes')
-       OR LOWER(COALESCE(extra_fields->>'price_upon_application', '')) IN ('true', '1', 'yes')
-       OR CONCAT_WS(' ', extra_fields->>'price_label', extra_fields->>'source_price_label')
-         ~* '(^|[^a-z])(poa|price[[:space:]]+(upon[[:space:]]+application|on[[:space:]]+request))([^a-z]|$)'
-     END
-   );
+WHERE status IN ('approved', 'pending')
+  AND status NOT IN ('rejected', 'deleted')
+  AND (
+    price_original_currency IS NULL
+    OR price_currency IS DISTINCT FROM 'UGX'
+    OR price_on_application IS DISTINCT FROM (
+      CASE WHEN price IS NOT NULL AND price > 0 THEN FALSE ELSE
+        COALESCE(price_on_application, FALSE)
+        OR LOWER(COALESCE(extra_fields->>'price_on_application', '')) IN ('true', '1', 'yes')
+        OR LOWER(COALESCE(extra_fields->>'price_upon_application', '')) IN ('true', '1', 'yes')
+        OR CONCAT_WS(' ', extra_fields->>'price_label', extra_fields->>'source_price_label')
+          ~* '(^|[^a-z])(poa|price[[:space:]]+(upon[[:space:]]+application|on[[:space:]]+request))([^a-z]|$)'
+      END
+    )
+  );
 
 -- Correct repeated FX multiplication only when the preserved source amount and
 -- rate produce a positive canonical value inside the safety clamp.
@@ -71,6 +75,8 @@ SET price = ROUND(price_original * price_fx_rate_ugx),
     ),
     updated_at = NOW()
 WHERE price_original_currency = 'USD'
+  AND status IN ('approved', 'pending')
+  AND status NOT IN ('rejected', 'deleted')
   AND price_original > 0
   AND price_fx_rate_ugx BETWEEN 1000 AND 10000
   AND ROUND(price_original * price_fx_rate_ugx) BETWEEN 1 AND 100000000000
@@ -81,10 +87,16 @@ ALTER TABLE properties DROP CONSTRAINT IF EXISTS properties_price_original_curre
 
 ALTER TABLE properties
   ALTER COLUMN price_currency SET DEFAULT 'UGX',
-  ALTER COLUMN price_currency SET NOT NULL,
-  ADD CONSTRAINT properties_price_currency_supported CHECK (price_currency = 'UGX'),
+  ADD CONSTRAINT properties_price_currency_supported CHECK (
+    status NOT IN ('approved', 'pending')
+    OR price_currency IS NOT DISTINCT FROM 'UGX'
+  ),
   ADD CONSTRAINT properties_price_original_currency_supported
-    CHECK (price_original_currency IS NULL OR price_original_currency IN ('UGX', 'USD'));
+    CHECK (
+      status NOT IN ('approved', 'pending')
+      OR price_original_currency IS NULL
+      OR price_original_currency IN ('UGX', 'USD')
+    );
 
 CREATE INDEX IF NOT EXISTS idx_properties_price_on_application_status
   ON properties (price_on_application, status, created_at DESC);
@@ -107,7 +119,8 @@ WITH evidence AS (
     LOWER(TRIM(COALESCE(p.price_period, ''))) AS stored_period,
     LOWER(TRIM(COALESCE(p.transaction_type, ''))) AS stored_transaction
   FROM properties p
-  WHERE COALESCE(p.status, '') NOT IN ('deleted', 'rejected', 'declined', 'fraud', 'archived')
+  WHERE p.status IN ('approved', 'pending')
+    AND p.status NOT IN ('rejected', 'deleted')
 ), classified AS (
   SELECT e.*,
     CASE
@@ -176,7 +189,8 @@ WITH duplicate_candidates AS (
       ORDER BY created_at NULLS LAST, id
     ) AS duplicate_rank
   FROM properties
-  WHERE COALESCE(status, '') NOT IN ('deleted', 'rejected', 'declined', 'fraud', 'archived')
+  WHERE status IN ('approved', 'pending')
+    AND status NOT IN ('rejected', 'deleted')
 ), duplicate_rows AS (
   SELECT id, status FROM duplicate_candidates WHERE duplicate_rank > 1
 )
@@ -188,13 +202,16 @@ SET issue_codes = ARRAY(SELECT DISTINCT unnest(integrity_review_116.issue_codes 
 
 WITH queued AS (
   UPDATE properties p
-  SET status = 'pending',
-      moderation_stage = 'source_review',
-      moderation_reason = 'Master data-integrity review required before publication.',
+  SET status = CASE WHEN p.status = 'approved' THEN 'pending' ELSE p.status END,
+      moderation_stage = CASE WHEN p.status = 'approved' THEN 'source_review' ELSE p.moderation_stage END,
+      moderation_reason = CASE
+        WHEN p.status = 'approved' THEN 'Master data-integrity review required before publication.'
+        ELSE p.moderation_reason
+      END,
       moderation_notes = CONCAT_WS(' ', NULLIF(p.moderation_notes, ''),
         'Migration 116 issues: ' || ARRAY_TO_STRING(q.issue_codes, ', ') || '.'),
-      reviewed_at = NOW(),
-      approved_at = NULL,
+      reviewed_at = CASE WHEN p.status = 'approved' THEN NOW() ELSE p.reviewed_at END,
+      approved_at = CASE WHEN p.status = 'approved' THEN NULL ELSE p.approved_at END,
       price_on_application = CASE WHEN p.price IS NOT NULL AND p.price > 0 THEN FALSE ELSE p.price_on_application END,
       extra_fields = COALESCE(p.extra_fields, '{}'::jsonb) || jsonb_build_object(
         'data_integrity_review_required', TRUE,
@@ -208,6 +225,8 @@ WITH queued AS (
       updated_at = NOW()
   FROM integrity_review_116 q
   WHERE p.id = q.id
+    AND p.status IN ('approved', 'pending')
+    AND p.status NOT IN ('rejected', 'deleted')
     AND COALESCE(p.extra_fields->>'data_integrity_review_marker', '') <> 'master-data-integrity-116'
   RETURNING p.id, q.previous_status, q.issue_codes
 )
@@ -218,6 +237,7 @@ SELECT id, 'migration-116', 'master_data_integrity_source_review', previous_stat
   'Master data-integrity review required before publication.',
   'Issues: ' || ARRAY_TO_STRING(issue_codes, ', '),
   jsonb_build_object('marker', 'master-data-integrity-116', 'automatic_publish', false)
-FROM queued;
+FROM queued
+WHERE previous_status = 'approved';
 
 ANALYZE properties;

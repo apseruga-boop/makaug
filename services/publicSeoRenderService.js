@@ -471,7 +471,11 @@ function areaLinksForCategory(snapshot, categoryKey, currentLocation = null, lim
   const { canonicalLocationOptions } = require('../utils/ugandaLocationRegistry');
   return canonicalLocationOptions()
     .map((location) => ({ ...location, count: Number(counts.get(location.canonical_key) || 0) }))
-    .filter((location) => location.count >= SEO_FACET_MIN_LISTINGS && location.canonical_key !== currentLocation?.canonical_key)
+    .filter((location) => (
+      !['district', 'region'].includes(location.level)
+      && location.count >= SEO_FACET_MIN_LISTINGS
+      && location.canonical_key !== currentLocation?.canonical_key
+    ))
     .sort((left, right) => {
       const leftNeighbor = currentLocation && left.district === currentLocation.district ? 1 : 0;
       const rightNeighbor = currentLocation && right.district === currentLocation.district ? 1 : 0;

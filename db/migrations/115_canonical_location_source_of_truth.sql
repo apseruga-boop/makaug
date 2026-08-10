@@ -10,6 +10,8 @@ SET extra_fields = COALESCE(extra_fields, '{}'::jsonb) || jsonb_build_object(
   'source_area_raw', COALESCE(NULLIF(extra_fields->>'source_area_raw', ''), NULLIF(TRIM(area), ''))
 )
 WHERE COALESCE(extra_fields->>'source_area_raw', '') = ''
+  AND status IN ('approved', 'pending')
+  AND status NOT IN ('rejected', 'deleted')
   AND NULLIF(TRIM(COALESCE(area, '')), '') IS NOT NULL;
 
 -- Snapshot only the fields used to decide whether the migration genuinely
@@ -30,7 +32,9 @@ SELECT
   extra_fields->>'location_resolution_status' AS previous_resolution_status,
   approved_at AS previous_approved_at,
   reviewed_at AS previous_reviewed_at
-FROM properties;
+FROM properties
+WHERE status IN ('approved', 'pending')
+  AND status NOT IN ('rejected', 'deleted');
 
 CREATE UNIQUE INDEX location_snapshot_115_id_idx ON location_snapshot_115(id);
 
@@ -46,6 +50,8 @@ SET district = 'Kampala',
       'location_resolution_confidence', 1
     )
 WHERE LOWER(COALESCE(extra_fields->>'canonical_location_id', '')) = 'wakiso:kyebando'
+  AND status IN ('approved', 'pending')
+  AND status NOT IN ('rejected', 'deleted')
   AND (
     district IS DISTINCT FROM 'Kampala'
     OR area IS DISTINCT FROM 'Kyebando'
@@ -65,6 +71,8 @@ SET district = 'Buikwe',
       'location_resolution_confidence', 1
     )
 WHERE LOWER(COALESCE(extra_fields->>'canonical_location_id', '')) = 'jinja:njeru'
+  AND status IN ('approved', 'pending')
+  AND status NOT IN ('rejected', 'deleted')
   AND (
     district IS DISTINCT FROM 'Buikwe'
     OR area IS DISTINCT FROM 'Njeru'
@@ -125,6 +133,8 @@ WITH canonical_map(alias_key, canonical_key, canonical_label, canonical_district
     LOWER(CONCAT_WS(' ', p.area, p.address, p.title, p.description, p.extra_fields->>'resolved_location_label')) AS evidence_text,
     LOWER(COALESCE(p.extra_fields->>'canonical_location_id', '')) AS existing_key
   FROM properties p
+  WHERE p.status IN ('approved', 'pending')
+    AND p.status NOT IN ('rejected', 'deleted')
 ), resolved AS (
   SELECT n.id, m.*
   FROM normalized n
@@ -152,6 +162,8 @@ SET district = r.canonical_district,
     )
 FROM resolved r
 WHERE p.id = r.id
+  AND p.status IN ('approved', 'pending')
+  AND p.status NOT IN ('rejected', 'deleted')
   AND (
     p.district IS DISTINCT FROM r.canonical_district
     OR p.area IS DISTINCT FROM r.canonical_label
@@ -171,6 +183,8 @@ WITH canonicalized AS (
     LOWER(COALESCE(extra_fields->>'canonical_location_level', '')) AS canonical_level
   FROM properties
   WHERE COALESCE(extra_fields->>'canonical_location_id', '') LIKE '%:%'
+    AND status IN ('approved', 'pending')
+    AND status NOT IN ('rejected', 'deleted')
 ), labels AS (
   SELECT
     id,
@@ -210,6 +224,8 @@ SET district = l.canonical_district,
     )
 FROM labels l
 WHERE p.id = l.id
+  AND p.status IN ('approved', 'pending')
+  AND p.status NOT IN ('rejected', 'deleted')
   AND (
     p.district IS DISTINCT FROM l.canonical_district
     OR p.area IS DISTINCT FROM CASE WHEN l.canonical_level IN ('district', 'region') THEN '' ELSE l.canonical_area END
@@ -263,8 +279,12 @@ WITH inventory_districts(alias_key, canonical_district, canonical_key) AS (
       'g'
     )) AS district_key
   FROM properties
-  WHERE COALESCE(extra_fields->>'canonical_location_id', '') = ''
-     OR COALESCE(extra_fields->>'canonical_location_level', '') = ''
+  WHERE status IN ('approved', 'pending')
+    AND status NOT IN ('rejected', 'deleted')
+    AND (
+      COALESCE(extra_fields->>'canonical_location_id', '') = ''
+      OR COALESCE(extra_fields->>'canonical_location_level', '') = ''
+    )
 ), matched AS (
   SELECT
     u.id,
@@ -291,7 +311,9 @@ SET district = m.canonical_district,
       'location_resolution_confidence', 0.5
     )
 FROM matched m
-WHERE p.id = m.id;
+WHERE p.id = m.id
+  AND p.status IN ('approved', 'pending')
+  AND p.status NOT IN ('rejected', 'deleted');
 
 WITH inventory_districts(alias_key) AS (
   VALUES
@@ -302,7 +324,9 @@ WITH inventory_districts(alias_key) AS (
 ), unmatched AS (
   SELECT p.id
   FROM properties p
-  WHERE (
+  WHERE p.status IN ('approved', 'pending')
+    AND p.status NOT IN ('rejected', 'deleted')
+    AND (
       COALESCE(p.extra_fields->>'canonical_location_id', '') = ''
       OR COALESCE(p.extra_fields->>'canonical_location_level', '') = ''
     )
@@ -329,7 +353,9 @@ SET area = '',
       'location_resolution_confidence', 0
     )
 FROM unmatched u
-WHERE p.id = u.id;
+WHERE p.id = u.id
+  AND p.status IN ('approved', 'pending')
+  AND p.status NOT IN ('rejected', 'deleted');
 
 -- Arthur's B0 gate: any listing whose location assignment changed, or which
 -- was newly classified as unmatched, leaves public inventory and returns to
@@ -358,12 +384,16 @@ WITH affected AS (
     p.extra_fields->>'location_resolution_status' AS proposed_resolution_status
   FROM properties p
   JOIN location_snapshot_115 s ON s.id = p.id
-  WHERE p.area IS DISTINCT FROM s.previous_area
-     OR p.district IS DISTINCT FROM s.previous_district
-     OR p.extra_fields->>'region' IS DISTINCT FROM s.previous_region
-     OR p.extra_fields->>'canonical_location_id' IS DISTINCT FROM s.previous_canonical_location_id
-     OR p.extra_fields->>'canonical_location_level' IS DISTINCT FROM s.previous_canonical_location_level
-     OR p.extra_fields->>'location_resolution_status' IS DISTINCT FROM s.previous_resolution_status
+  WHERE p.status IN ('approved', 'pending')
+    AND p.status NOT IN ('rejected', 'deleted')
+    AND (
+      p.area IS DISTINCT FROM s.previous_area
+      OR p.district IS DISTINCT FROM s.previous_district
+      OR p.extra_fields->>'region' IS DISTINCT FROM s.previous_region
+      OR p.extra_fields->>'canonical_location_id' IS DISTINCT FROM s.previous_canonical_location_id
+      OR p.extra_fields->>'canonical_location_level' IS DISTINCT FROM s.previous_canonical_location_level
+      OR p.extra_fields->>'location_resolution_status' IS DISTINCT FROM s.previous_resolution_status
+    )
 ), review_queue AS (
   SELECT
     a.*,
@@ -378,16 +408,19 @@ WITH affected AS (
   FROM affected a
 ), queued AS (
   UPDATE properties p
-  SET status = 'pending',
-      moderation_stage = 'source_review',
-      moderation_reason = 'Location auto-reclassified; confirm canonical location before re-publish.',
+  SET status = CASE WHEN p.status = 'approved' THEN 'pending' ELSE p.status END,
+      moderation_stage = CASE WHEN p.status = 'approved' THEN 'source_review' ELSE p.moderation_stage END,
+      moderation_reason = CASE
+        WHEN p.status = 'approved' THEN 'Location auto-reclassified; confirm canonical location before re-publish.'
+        ELSE p.moderation_reason
+      END,
       moderation_notes = CASE
         WHEN POSITION(q.review_note IN COALESCE(p.moderation_notes, '')) > 0 THEN p.moderation_notes
         ELSE CONCAT_WS(E'\n', NULLIF(p.moderation_notes, ''), q.review_note)
       END,
-      reviewed_at = NULL,
-      reviewed_by = NULL,
-      approved_at = NULL,
+      reviewed_at = CASE WHEN p.status = 'approved' THEN NULL ELSE p.reviewed_at END,
+      reviewed_by = CASE WHEN p.status = 'approved' THEN NULL ELSE p.reviewed_by END,
+      approved_at = CASE WHEN p.status = 'approved' THEN NULL ELSE p.approved_at END,
       extra_fields = COALESCE(p.extra_fields, '{}'::jsonb) || jsonb_build_object(
         'location_review_required', true,
         'location_review_marker', 'canonical-location-source-review-115',
@@ -413,6 +446,8 @@ WITH affected AS (
       updated_at = NOW()
   FROM review_queue q
   WHERE p.id = q.id
+    AND p.status IN ('approved', 'pending')
+    AND p.status NOT IN ('rejected', 'deleted')
     AND COALESCE(p.extra_fields->>'location_review_queued_at', '') = ''
   RETURNING p.id, q.previous_status, q.review_note
 )
@@ -435,7 +470,8 @@ SELECT
   'Location auto-reclassified; human confirmation required.',
   q.review_note,
   jsonb_build_object('marker', 'canonical-location-source-review-115', 'automatic_publish', false)
-FROM queued q;
+FROM queued q
+WHERE q.previous_status = 'approved';
 
 DROP TABLE location_snapshot_115;
 

@@ -138,16 +138,35 @@ test('all publication paths use the integrity gate and invalidate count cache', 
 
 test('migration 116 is additive, review-only, auditable, and contains the one-off dedupe pass', () => {
   const migration = read('db/migrations/116_master_data_integrity.sql');
+  const server = read('server.js');
   assert.match(migration, /ADD COLUMN IF NOT EXISTS price_original_currency TEXT/);
   assert.match(migration, /ADD COLUMN IF NOT EXISTS price_on_application BOOLEAN NOT NULL DEFAULT FALSE/);
-  assert.match(migration, /CHECK \(price_currency = 'UGX'\)/);
+  assert.match(migration, /status NOT IN \('approved', 'pending'\)[\s\S]*price_currency IS NOT DISTINCT FROM 'UGX'/);
   assert.match(migration, /price > 100000000000/);
   assert.match(migration, /unsupported_hospitality_or_nightly/);
   assert.match(migration, /duplicate_property_fingerprint/);
-  assert.match(migration, /status = 'pending'/);
-  assert.match(migration, /moderation_stage = 'source_review'/);
+  assert.match(migration, /status = CASE WHEN p\.status = 'approved' THEN 'pending' ELSE p\.status END/);
+  assert.match(migration, /WHERE previous_status = 'approved'/);
+  assert.match(migration, /moderation_stage = CASE WHEN p\.status = 'approved' THEN 'source_review'/);
   assert.match(migration, /automatic_publish', FALSE/);
-  assert.doesNotMatch(migration, /status\s*=\s*'approved'/i);
+  assert.doesNotMatch(migration, /SET status\s*=\s*'approved'/i);
+  assert.match(server, /markers:\s*\[[\s\S]*'canonical-location-source-review-115'[\s\S]*'master-data-integrity-116'/);
+});
+
+test('migration 116 transforms only active rows and creates demotion events only for approved rows', () => {
+  const migration = read('db/migrations/116_master_data_integrity.sql');
+  const propertyUpdates = [...migration.matchAll(/UPDATE properties(?:\s+p)?[\s\S]*?;/gi)].map((match) => match[0]);
+
+  assert.equal(propertyUpdates.length, 3, 'all three property updates must be covered by the active-row gate');
+  propertyUpdates.forEach((statement, index) => {
+    assert.match(statement, /status IN \('approved', 'pending'\)/, `update ${index + 1} must target active rows only`);
+    assert.match(statement, /status NOT IN \('rejected', 'deleted'\)/, `update ${index + 1} must explicitly protect rejected and deleted rows`);
+  });
+  assert.match(migration, /WITH evidence AS[\s\S]*WHERE p\.status IN \('approved', 'pending'\)/);
+  assert.match(migration, /WITH duplicate_candidates AS[\s\S]*WHERE status IN \('approved', 'pending'\)/);
+  assert.match(migration, /status = CASE WHEN p\.status = 'approved' THEN 'pending' ELSE p\.status END/);
+  assert.match(migration, /FROM queued\s+WHERE previous_status = 'approved'/);
+  assert.doesNotMatch(migration, /SET status = 'pending'/);
 });
 
 test('King review edits source currency and POA without changing canonical currency semantics', () => {

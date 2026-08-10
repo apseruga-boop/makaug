@@ -24,6 +24,31 @@ const {
 const root = path.resolve(__dirname, '..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 
+function sqlStatements(source = '') {
+  const sql = String(source).replace(/^\s*--.*$/gm, '');
+  const statements = [];
+  let current = '';
+  let inString = false;
+  for (let index = 0; index < sql.length; index += 1) {
+    const character = sql[index];
+    current += character;
+    if (character === "'") {
+      if (inString && sql[index + 1] === "'") {
+        current += sql[index + 1];
+        index += 1;
+      } else {
+        inString = !inString;
+      }
+    }
+    if (character === ';' && !inString) {
+      statements.push(current);
+      current = '';
+    }
+  }
+  if (current.trim()) statements.push(current);
+  return statements;
+}
+
 test('common Uganda spelling aliases resolve to stable canonical nodes', () => {
   assert.equal(canonicalizeUgandaLocation('Kiira', 'Wakiso')?.name, 'Kira');
   assert.equal(canonicalizeUgandaLocation('Bukotto', 'Kampala')?.name, 'Bukoto');
@@ -210,8 +235,9 @@ test('public category search is canonical-only and includes visible nearby and a
   assert.match(repairMigration, /district_only_needs_review/);
   assert.match(repairMigration, /unmatched_needs_review/);
   assert.match(repairMigration, /- 'canonical_location_id'/);
-  assert.match(repairMigration, /status = 'pending'/);
-  assert.match(repairMigration, /moderation_stage = 'source_review'/);
+  assert.match(repairMigration, /status = CASE WHEN p\.status = 'approved' THEN 'pending' ELSE p\.status END/);
+  assert.match(repairMigration, /WHERE q\.previous_status = 'approved'/);
+  assert.match(repairMigration, /moderation_stage = CASE WHEN p\.status = 'approved' THEN 'source_review'/);
   assert.match(repairMigration, /location_review_required', true/);
   assert.match(repairMigration, /location_review_previous_area/);
   assert.match(repairMigration, /location_review_proposed_canonical_location_id/);
@@ -238,4 +264,20 @@ test('public category search is canonical-only and includes visible nearby and a
   assert.doesNotMatch(app, /Kakiri Masulita Hoima Road/);
   assert.doesNotMatch(app, /const UGANDA_REGIONS/);
   assert.doesNotMatch(app, /name: "Kampala Road"/);
+});
+
+test('migration 115 transforms only active rows and demotes only affected approved rows', () => {
+  const migration = read('db/migrations/115_canonical_location_source_of_truth.sql');
+  const propertyUpdates = sqlStatements(migration).filter((statement) => /\bUPDATE properties(?:\s+p)?\b/i.test(statement));
+
+  assert.equal(propertyUpdates.length, 8, 'all eight property updates must be covered by the active-row gate');
+  propertyUpdates.forEach((statement, index) => {
+    assert.match(statement, /status IN \('approved', 'pending'\)/, `update ${index + 1} must target active rows only`);
+    assert.match(statement, /status NOT IN \('rejected', 'deleted'\)/, `update ${index + 1} must explicitly protect rejected and deleted rows`);
+  });
+  assert.match(migration, /CREATE TEMP TABLE location_snapshot_115[\s\S]*WHERE status IN \('approved', 'pending'\)/);
+  assert.match(migration, /status = CASE WHEN p\.status = 'approved' THEN 'pending' ELSE p\.status END/);
+  assert.match(migration, /moderation_stage = CASE WHEN p\.status = 'approved' THEN 'source_review' ELSE p\.moderation_stage END/);
+  assert.match(migration, /FROM queued q\s+WHERE q\.previous_status = 'approved'/);
+  assert.doesNotMatch(migration, /SET status = 'pending'/);
 });
