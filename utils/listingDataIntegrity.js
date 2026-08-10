@@ -12,12 +12,15 @@ const MIN_RECURRING_PRICE_UGX = 30_000;
 
 const HOSPITALITY_PATTERN = /\b(?:air\s*&?\s*b(?:n|and)?\s*b|airbnb|short[-\s]*stay|short[-\s]*term\s+stay|per\s+night|nightly|bed\s*(?:and|&)\s*breakfast|booking\.com|holiday\s+home|vacation\s+rental|guest\s*house|guesthouse|hotel\s+room|lodge\s+room|resort\s+stay)\b/i;
 const SPECIFIC_PROPERTY_PATTERN = /\b(?:bed(?:room)?s?|studio|bedsitter|house|home|apartment|flat|villa|bungalow|mansion|duplex|condo|townhouse|plot|plots|land|acre|acres|decimal|decimals|hostel|room|rooms|shop|office|warehouse|factory|arcade|showroom|commercial\s+(?:space|land|plot)|building)\b/i;
-const DWELLING_PATTERN = /\b(?:bed(?:room)?s?|house|home|apartment|flat|villa|bungalow|mansion|duplex|condo|townhouse|residence|residential)\b/i;
-const LAND_PATTERN = /\b(?:land\s+for\s+sale|plots?\s+for\s+sale|commercial\s+(?:land|plot)|vacant\s+land|titled\s+land|\d+(?:\.\d+)?\s*(?:acres?|decimals?)|plots?)\b/i;
+const DWELLING_PATTERN = /\b(?:bed(?:room)?s?|bath(?:room)?s?|house|home|apartment(?:\s+block)?|flat|villa|bungalow|mansion|duplex|condo|townhouse|residence|residential|self[-\s]*contained|rentals?|rental\s+units?)\b/i;
+const STRONG_LAND_PATTERN = /\b(?:(?:prime|vacant|bare|titled)\s+land|(?:land|plots?|ettaka|kibanja|bibanja)\s+(?:is\s+)?(?:for|on)\s+sale|\d+(?:\.\d+)?\s*(?:acres?|decimals?|square\s+(?:miles?|kilomet(?:er|re)s?))(?:\s+of\s+land)?\s+(?:for|on)\s+sale|square\s+(?:miles?|kilomet(?:er|re)s?)\s+of\s+land)\b/i;
+const LAND_PATTERN = /\b(?:land|plots?|acres?|decimals?|square\s+(?:miles?|kilomet(?:er|re)s?)(?:\s+of\s+land)?|bare[-\s]+land|ettaka|kibanja|bibanja)\b/i;
 const COMMERCIAL_PATTERN = /\b(?:office|shop|retail|warehouse|industrial|factory|arcade|showroom|business\s+premises|commercial\s+(?:building|property|premises|space|land|plot))\b/i;
 const STUDENT_PATTERN = /\b(?:student\s+(?:accommodation|hostel|room)|hostel\s+(?:room|bed|space)|campus|university|college|per\s+semester)\b/i;
 const SALE_PATTERN = /\b(?:for\s+sale|on\s+sale|available\s+for\s+sale|selling|asking\s+price|guide\s+price|purchase\s+price)\b/i;
-const RENT_PATTERN = /\b(?:for\s+rent|to\s+rent|to\s+let|for\s+lease|available\s+to\s+rent|monthly\s+rent|per\s+month|\/month|\/mo)\b/i;
+const DIRECT_RENT_PATTERN = /\b(?:for\s+rent|to\s+rent|to\s+let|for\s+lease|available\s+to\s+rent|monthly\s+rent)\b/i;
+const PERIODIC_RENT_PATTERN = /(?:\bper\s+month\b|\/month\b|\/mo\b)/i;
+const YIELD_PATTERN = /\b(?:monthly|rental)\s+income\b|\b(?:collects?|generates?|earns?|brings?|making)\b.{0,80}\b(?:income|monthly|per\s+month|\/month)\b/i;
 
 function compact(value = '') {
   return String(value ?? '').replace(/\s+/g, ' ').trim();
@@ -57,6 +60,20 @@ function listingEvidenceText(record = {}) {
     raw.caption,
     raw.description,
     raw.source_text,
+  ].map(compact).filter(Boolean).join(' ');
+}
+
+function primaryListingEvidenceText(record = {}) {
+  const extra = object(record.extra_fields);
+  const raw = object(extra.raw_source_post);
+  return [
+    record.title,
+    record.source_title,
+    record.caption,
+    extra.source_title,
+    extra.source_caption,
+    raw.title,
+    raw.caption,
   ].map(compact).filter(Boolean).join(' ');
 }
 
@@ -105,35 +122,76 @@ function hasSpecificLocation(record = {}) {
 
 function deriveListingClassification(record = {}) {
   const text = listingEvidenceText(record);
+  const primaryText = primaryListingEvidenceText(record) || text;
   const currentType = normalizedListingType(record.listing_type || record.listingType || record.category);
-  const hasDwelling = DWELLING_PATTERN.test(text) || Number(record.bedrooms || record.beds || 0) > 0;
+  const bedroomBathroomEvidence = Number(record.bedrooms || record.beds || 0) > 0
+    || Number(record.bathrooms || record.baths || 0) > 0
+    || /\b\d+\s*(?:bed(?:room)?s?|bath(?:room)?s?)\b/i.test(primaryText);
+  const primaryDwelling = DWELLING_PATTERN.test(primaryText);
+  const primaryCommercial = COMMERCIAL_PATTERN.test(primaryText);
+  const primaryStrongLand = STRONG_LAND_PATTERN.test(primaryText);
+  const hasDwelling = DWELLING_PATTERN.test(text) || bedroomBathroomEvidence;
   const hasCommercial = COMMERCIAL_PATTERN.test(text);
-  const explicitCommercialAsset = /\bcommercial\s+(?:building|property|space|land|plot|premises)\b/i.test(text);
+  const hasStrongLand = STRONG_LAND_PATTERN.test(text);
   const hasLand = LAND_PATTERN.test(text);
   const hasStudent = STUDENT_PATTERN.test(text);
   const explicitStudentAccommodation = /\b(?:student\s+(?:accommodation|hostel|room)|hostel\s+(?:room|bed|space)|per\s+semester)\b/i.test(text);
-  const explicitSale = SALE_PATTERN.test(text);
-  const explicitRent = RENT_PATTERN.test(text);
+  const primarySale = SALE_PATTERN.test(primaryText);
+  const primaryDirectRent = DIRECT_RENT_PATTERN.test(primaryText);
+  const primaryPeriodicRent = PERIODIC_RENT_PATTERN.test(primaryText) && !YIELD_PATTERN.test(primaryText);
+  const evidenceSale = SALE_PATTERN.test(text);
+  const evidenceDirectRent = DIRECT_RENT_PATTERN.test(text);
+  const evidencePeriodicRent = PERIODIC_RENT_PATTERN.test(text) && !YIELD_PATTERN.test(text);
   const hospitality = HOSPITALITY_PATTERN.test(text)
     || ['night', 'nightly', 'day', 'daily'].includes(compact(record.price_period || record.pricePeriod).toLowerCase());
 
-  let listingType = '';
-  if ((explicitStudentAccommodation || (currentType === 'student' && hasStudent)) && !explicitSale) listingType = 'student';
-  else if (hasCommercial && (explicitCommercialAsset || !(hasDwelling && !/\b(?:office|shop|warehouse|factory|arcade|showroom)\b/i.test(text)))) listingType = 'commercial';
-  else if (hasDwelling) {
-    if (explicitRent && !explicitSale) listingType = 'rent';
-    else if (explicitSale && !explicitRent) listingType = 'sale';
-    else if (['sale', 'rent'].includes(currentType)) listingType = currentType;
-    else listingType = 'sale';
+  let transactionIntent = '';
+  let categoryAmbiguous = false;
+  let ambiguityReason = '';
+  if (primarySale && primaryDirectRent) {
+    categoryAmbiguous = true;
+    ambiguityReason = 'Source title contains both sale and rent intent.';
+  } else if (primarySale) {
+    transactionIntent = 'sale';
+  } else if (primaryDirectRent || primaryPeriodicRent) {
+    transactionIntent = 'rent';
+  } else if (evidenceSale && evidenceDirectRent) {
+    categoryAmbiguous = true;
+    ambiguityReason = 'Source evidence contains both sale and rent intent.';
+  } else if (evidenceSale) {
+    transactionIntent = 'sale';
+  } else if (evidenceDirectRent || evidencePeriodicRent) {
+    transactionIntent = 'rent';
   }
-  else if (hasLand) listingType = 'land';
-  else if (currentType) listingType = currentType;
 
-  if (listingType === 'sale' && explicitRent && !explicitSale) listingType = 'rent';
-  if (listingType === 'rent' && explicitSale && !explicitRent) listingType = 'sale';
+  let physicalType = '';
+  if ((explicitStudentAccommodation || (currentType === 'student' && hasStudent)) && !evidenceSale) physicalType = 'student';
+  else if (bedroomBathroomEvidence) physicalType = 'residential';
+  else if (primaryStrongLand) physicalType = 'land';
+  else if (primaryDwelling) physicalType = 'residential';
+  else if (primaryCommercial) physicalType = 'commercial';
+  else if (hasStrongLand) physicalType = 'land';
+  else if (hasDwelling) physicalType = 'residential';
+  else if (hasCommercial) physicalType = 'commercial';
+  else if (hasLand) physicalType = 'land';
+
+  let listingType = currentType;
+  if (!categoryAmbiguous) {
+    if (physicalType === 'student') listingType = 'student';
+    else if (physicalType === 'land') listingType = 'land';
+    else if (physicalType === 'commercial') listingType = 'commercial';
+    else if (physicalType === 'residential' && transactionIntent) listingType = transactionIntent;
+    else if (physicalType === 'residential' && !['sale', 'rent'].includes(currentType)) {
+      categoryAmbiguous = true;
+      ambiguityReason = 'Residential evidence has no clear sale or rent intent.';
+      listingType = currentType;
+    }
+  }
 
   const transactionType = ['commercial', 'land'].includes(listingType)
-    ? normalizeCommercialTransactionType('', { text }) || (listingType === 'land' ? 'sale' : '')
+    ? transactionIntent
+      || normalizeCommercialTransactionType(record.transaction_type || record.transactionType)
+      || (listingType === 'land' ? 'sale' : '')
     : '';
   const commercialType = listingType === 'commercial'
     ? normalizeCommercialPropertyType(record.property_type || record.commercial_type, { text })
@@ -150,9 +208,13 @@ function deriveListingClassification(record = {}) {
     price_period: pricePeriod,
     hospitality,
     has_specific_property: SPECIFIC_PROPERTY_PATTERN.test(text),
-    explicit_sale: explicitSale,
-    explicit_rent: explicitRent,
-    confidence: listingType && (explicitSale || explicitRent || hasStudent || hasCommercial || hasLand || hasDwelling) ? 'strong' : 'weak',
+    explicit_sale: evidenceSale,
+    explicit_rent: evidenceDirectRent || evidencePeriodicRent,
+    transaction_intent: transactionIntent || null,
+    physical_type: physicalType || null,
+    category_ambiguous: categoryAmbiguous,
+    ambiguity_reason: ambiguityReason || null,
+    confidence: !categoryAmbiguous && listingType && physicalType && (transactionIntent || ['student', 'land', 'commercial'].includes(physicalType)) ? 'strong' : 'weak',
   };
 }
 
@@ -250,7 +312,11 @@ function listingDataIntegrityReport(record = {}, options = {}) {
     }
   }
 
-  if (classification.confidence === 'strong' && classification.listing_type && category && classification.listing_type !== category) {
+  if (classification.category_ambiguous) {
+    add('category_ambiguous', classification.ambiguity_reason || 'Category evidence is contradictory or incomplete.', {
+      proposed_listing_type: category || classification.listing_type,
+    });
+  } else if (classification.confidence === 'strong' && classification.listing_type && category && classification.listing_type !== category) {
     add('category_conflicts_with_source_evidence', `Source evidence indicates ${classification.listing_type}, not ${category}.`, {
       proposed_listing_type: classification.listing_type,
     });

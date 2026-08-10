@@ -124,32 +124,84 @@ CREATE TEMP TABLE integrity_review_116 (
 WITH evidence AS (
   SELECT
     p.*,
+    LOWER(CONCAT_WS(' ', p.title,
+      p.extra_fields->>'source_title', p.extra_fields->>'source_caption')) AS title_evidence,
     LOWER(CONCAT_WS(' ', p.title, p.description, p.property_type, p.address, p.area,
       p.extra_fields->>'source_title', p.extra_fields->>'source_caption',
       p.extra_fields->>'source_text', p.extra_fields->>'source_visual_text')) AS source_evidence,
-    LOWER(TRIM(COALESCE(p.listing_type, ''))) AS stored_type,
+    CASE WHEN LOWER(TRIM(COALESCE(p.listing_type, ''))) = 'students' THEN 'student'
+      ELSE LOWER(TRIM(COALESCE(p.listing_type, ''))) END AS stored_type,
     LOWER(TRIM(COALESCE(p.price_period, ''))) AS stored_period,
     LOWER(TRIM(COALESCE(p.transaction_type, ''))) AS stored_transaction
   FROM properties p
   WHERE p.status IN ('approved', 'pending')
     AND p.status NOT IN ('rejected', 'deleted')
-), classified AS (
+), signals AS (
   SELECT e.*,
+    COALESCE(e.bedrooms, 0) > 0
+      OR COALESCE(e.bathrooms, 0) > 0
+      OR e.title_evidence ~ '(^|[^a-z0-9])[0-9]+[[:space:]]*(bed(room)?s?|bath(room)?s?)([^a-z]|$)' AS bedroom_bathroom_evidence,
+    e.title_evidence ~ '((prime|vacant|bare|titled)[[:space:]]+land|(land|plots?|ettaka|kibanja|bibanja)[[:space:]]+(is[[:space:]]+)?(for|on)[[:space:]]+sale|[0-9]+([.][0-9]+)?[[:space:]]*(acres?|decimals?|square[[:space:]]+(miles?|kilomet(er|re)s?))([[:space:]]+of[[:space:]]+land)?[[:space:]]+(for|on)[[:space:]]+sale|square[[:space:]]+(miles?|kilomet(er|re)s?)[[:space:]]+of[[:space:]]+land)' AS title_strong_land,
+    e.title_evidence ~ '(bed(room)?s?|bath(room)?s?|house|home|apartment([[:space:]]+block)?|flat|villa|bungalow|mansion|duplex|condo|townhouse|residence|residential|self[-[:space:]]*contained|rentals?|rental[[:space:]]+units?)' AS title_dwelling,
+    e.title_evidence ~ '(office|shop|retail|warehouse|industrial|factory|arcade|showroom|business[[:space:]]+premises|commercial[[:space:]]+(building|property|premises|space|land|plot))' AS title_commercial,
+    e.source_evidence ~ '((prime|vacant|bare|titled)[[:space:]]+land|(land|plots?|ettaka|kibanja|bibanja)[[:space:]]+(is[[:space:]]+)?(for|on)[[:space:]]+sale|[0-9]+([.][0-9]+)?[[:space:]]*(acres?|decimals?|square[[:space:]]+(miles?|kilomet(er|re)s?))([[:space:]]+of[[:space:]]+land)?[[:space:]]+(for|on)[[:space:]]+sale|square[[:space:]]+(miles?|kilomet(er|re)s?)[[:space:]]+of[[:space:]]+land)' AS source_strong_land,
+    e.source_evidence ~ '(bed(room)?s?|bath(room)?s?|house|home|apartment([[:space:]]+block)?|flat|villa|bungalow|mansion|duplex|condo|townhouse|residence|residential|self[-[:space:]]*contained|rentals?|rental[[:space:]]+units?)' AS source_dwelling,
+    e.source_evidence ~ '(office|shop|retail|warehouse|industrial|factory|arcade|showroom|business[[:space:]]+premises|commercial[[:space:]]+(building|property|premises|space|land|plot))' AS source_commercial,
+    e.source_evidence ~ '(land|plots?|acres?|decimals?|square[[:space:]]+(miles?|kilomet(er|re)s?)([[:space:]]+of[[:space:]]+land)?|bare[-[:space:]]+land|ettaka|kibanja|bibanja)' AS source_land,
+    e.source_evidence ~ '(student[[:space:]]+(accommodation|hostel|room)|hostel[[:space:]]+(room|bed|space)|campus|university|college|per[[:space:]]+semester)' AS student_evidence,
+    e.title_evidence ~ '(for[[:space:]]+sale|on[[:space:]]+sale|available[[:space:]]+for[[:space:]]+sale|selling|asking[[:space:]]+price|guide[[:space:]]+price|purchase[[:space:]]+price)' AS title_sale,
+    e.title_evidence ~ '(for[[:space:]]+rent|to[[:space:]]+rent|to[[:space:]]+let|for[[:space:]]+lease|available[[:space:]]+to[[:space:]]+rent|monthly[[:space:]]+rent)' AS title_direct_rent,
+    e.title_evidence ~ '(per[[:space:]]+month|/month|/mo)'
+      AND e.title_evidence !~ '((monthly|rental)[[:space:]]+income|(collects?|generates?|earns?|brings?|making).{0,80}(income|monthly|per[[:space:]]+month|/month))' AS title_periodic_rent,
+    e.source_evidence ~ '(for[[:space:]]+sale|on[[:space:]]+sale|available[[:space:]]+for[[:space:]]+sale|selling|asking[[:space:]]+price|guide[[:space:]]+price|purchase[[:space:]]+price)' AS source_sale,
+    e.source_evidence ~ '(for[[:space:]]+rent|to[[:space:]]+rent|to[[:space:]]+let|for[[:space:]]+lease|available[[:space:]]+to[[:space:]]+rent|monthly[[:space:]]+rent)' AS source_direct_rent,
+    e.source_evidence ~ '(per[[:space:]]+month|/month|/mo)'
+      AND e.source_evidence !~ '((monthly|rental)[[:space:]]+income|(collects?|generates?|earns?|brings?|making).{0,80}(income|monthly|per[[:space:]]+month|/month))' AS source_periodic_rent
+  FROM evidence e
+), classified AS (
+  SELECT s.*,
     CASE
-      WHEN source_evidence ~ '(student[[:space:]]+(accommodation|hostel|room)|hostel[[:space:]]+(room|bed|space)|campus|university|college)'
-        AND source_evidence !~ '(for[[:space:]]+sale|selling|asking[[:space:]]+price)' THEN 'student'
-      WHEN source_evidence ~ '(office|shop|retail|warehouse|industrial|factory|arcade|showroom|business[[:space:]]+premises|commercial[[:space:]]+(space|land|plot))' THEN 'commercial'
-      WHEN source_evidence ~ '(bed(room)?s?|house|home|apartment|flat|villa|bungalow|mansion|duplex|condo|townhouse)'
-        THEN CASE WHEN source_evidence ~ '(for[[:space:]]+rent|to[[:space:]]+let|for[[:space:]]+lease|per[[:space:]]+month|/month)' THEN 'rent' ELSE 'sale' END
-      WHEN source_evidence ~ '(land[[:space:]]+for[[:space:]]+sale|plots?[[:space:]]+for[[:space:]]+sale|vacant[[:space:]]+land|titled[[:space:]]+land|[0-9]+([.][0-9]+)?[[:space:]]*(acres?|decimals?))' THEN 'land'
+      WHEN s.student_evidence AND NOT s.source_sale THEN 'student'
+      WHEN s.bedroom_bathroom_evidence THEN 'residential'
+      WHEN s.title_strong_land THEN 'land'
+      WHEN s.title_dwelling THEN 'residential'
+      WHEN s.title_commercial THEN 'commercial'
+      WHEN s.source_strong_land THEN 'land'
+      WHEN s.source_dwelling THEN 'residential'
+      WHEN s.source_commercial THEN 'commercial'
+      WHEN s.source_land THEN 'land'
       ELSE NULL
-    END AS proposed_type,
+    END AS physical_type,
     CASE
-      WHEN source_evidence ~ '(air[[:space:]&]*(bnb|b[[:space:]]*&[[:space:]]*b)|short[-[:space:]]*(stay|term[[:space:]]+stay)|per[[:space:]]+night|nightly|guest[[:space:]]*house|hotel[[:space:]]+room|lodge[[:space:]]+room)' THEN TRUE
-      WHEN stored_period IN ('night', 'nightly', 'day', 'daily') THEN TRUE
+      WHEN s.title_sale AND s.title_direct_rent THEN NULL
+      WHEN s.title_sale THEN 'sale'
+      WHEN s.title_direct_rent OR s.title_periodic_rent THEN 'rent'
+      WHEN s.source_sale AND s.source_direct_rent THEN NULL
+      WHEN s.source_sale THEN 'sale'
+      WHEN s.source_direct_rent OR s.source_periodic_rent THEN 'rent'
+      ELSE NULL
+    END AS transaction_intent,
+    (s.title_sale AND s.title_direct_rent)
+      OR (NOT s.title_sale AND NOT s.title_direct_rent AND s.source_sale AND s.source_direct_rent) AS transaction_ambiguous,
+    CASE
+      WHEN s.source_evidence ~ '(air[[:space:]&]*(bnb|b[[:space:]]*&[[:space:]]*b)|short[-[:space:]]*(stay|term[[:space:]]+stay)|per[[:space:]]+night|nightly|guest[[:space:]]*house|hotel[[:space:]]+room|lodge[[:space:]]+room)' THEN TRUE
+      WHEN s.stored_period IN ('night', 'nightly', 'day', 'daily') THEN TRUE
       ELSE FALSE
     END AS hospitality
-  FROM evidence e
+  FROM signals s
+), proposed AS (
+  SELECT c.*,
+    CASE
+      WHEN c.transaction_ambiguous THEN c.stored_type
+      WHEN c.physical_type = 'student' THEN 'student'
+      WHEN c.physical_type = 'land' THEN 'land'
+      WHEN c.physical_type = 'commercial' THEN 'commercial'
+      WHEN c.physical_type = 'residential' AND c.transaction_intent IN ('sale', 'rent') THEN c.transaction_intent
+      ELSE c.stored_type
+    END AS proposed_type,
+    c.transaction_ambiguous
+      OR (c.physical_type = 'residential' AND c.transaction_intent IS NULL AND c.stored_type NOT IN ('sale', 'rent')) AS category_ambiguous
+  FROM classified c
 ), issues AS (
   SELECT c.id, c.status AS previous_status, c.proposed_type,
     CASE c.proposed_type WHEN 'sale' THEN 'once' WHEN 'land' THEN 'once'
@@ -166,7 +218,8 @@ WITH evidence AS (
         REGEXP_REPLACE(COALESCE(c.extra_fields->>'contact_phone', ''), '[^0-9]', '', 'g'),
         REGEXP_REPLACE(COALESCE(c.extra_fields->>'public_contact_phone', ''), '[^0-9]', '', 'g')
       ) THEN 'phone_number_stored_as_price' END,
-      CASE WHEN c.proposed_type IS NOT NULL AND c.proposed_type <> CASE WHEN c.stored_type = 'students' THEN 'student' ELSE c.stored_type END
+      CASE WHEN c.category_ambiguous THEN 'category_ambiguous' END,
+      CASE WHEN NOT c.category_ambiguous AND c.proposed_type IS NOT NULL AND c.proposed_type <> c.stored_type
         THEN 'category_conflicts_with_source_evidence' END,
       CASE WHEN c.stored_type = 'land' AND COALESCE(c.bedrooms, 0) > 0 THEN 'bedrooms_on_land_category' END,
       CASE WHEN c.stored_type = 'commercial'
@@ -176,12 +229,12 @@ WITH evidence AS (
         THEN 'price_period_conflicts_with_category' END,
       CASE WHEN c.stored_type IN ('rent', 'student', 'students') AND c.stored_period NOT IN ('', 'month', 'monthly', 'mo', 'per_month', 'sem', 'semester', 'term')
         THEN 'price_period_conflicts_with_category' END,
-      CASE WHEN c.source_evidence ~ '(for[[:space:]]+sale|selling|asking[[:space:]]+price)' AND c.stored_transaction = 'rent'
+      CASE WHEN NOT c.category_ambiguous AND c.transaction_intent = 'sale' AND c.stored_transaction = 'rent'
         THEN 'transaction_conflicts_with_sale_evidence' END,
-      CASE WHEN c.source_evidence ~ '(for[[:space:]]+rent|to[[:space:]]+let|for[[:space:]]+lease)' AND c.stored_transaction = 'sale'
+      CASE WHEN NOT c.category_ambiguous AND c.transaction_intent = 'rent' AND c.stored_transaction = 'sale'
         THEN 'transaction_conflicts_with_rent_evidence' END
     ], NULL) AS issue_codes
-  FROM classified c
+  FROM proposed c
 )
 INSERT INTO integrity_review_116 (id, previous_status, issue_codes, proposed_listing_type, proposed_price_period)
 SELECT id, previous_status, issue_codes, proposed_type, proposed_period

@@ -81,6 +81,120 @@ test('phone-as-price, junk floors, category and period contradictions are review
   assert(contradiction.issue_codes.includes('price_period_conflicts_with_category'));
 });
 
+test('category classifier gives physical property type and explicit transaction intent precedence', () => {
+  const cases = [
+    {
+      title: 'Apartment for sale with 12m monthly income',
+      listing_type: 'student',
+      expected: 'sale',
+    },
+    {
+      title: 'Rentals for sale in Mpererwe',
+      listing_type: 'student',
+      expected: 'sale',
+    },
+    {
+      title: 'House for rent in Rubaga',
+      description: 'Three bedrooms and two bathrooms.',
+      listing_type: 'commercial',
+      bedrooms: 3,
+      bathrooms: 2,
+      expected: 'rent',
+    },
+    {
+      title: 'Prime land for sale in Kyanja',
+      description: 'Ideal for a residential apartment development.',
+      listing_type: 'rent',
+      expected: 'land',
+    },
+    {
+      title: 'Plots for sale in Kiwenda',
+      listing_type: 'sale',
+      expected: 'land',
+    },
+    {
+      title: '7-bedroom mansion for sale collecting 20m monthly income',
+      listing_type: 'student',
+      bedrooms: 7,
+      expected: 'sale',
+    },
+    {
+      title: 'Apartment block for sale making UGX 12m per month',
+      listing_type: 'commercial',
+      expected: 'sale',
+    },
+    {
+      title: '4 acres for sale in Makerere',
+      description: 'Suitable for homes and apartments.',
+      listing_type: 'student',
+      expected: 'land',
+    },
+    {
+      title: 'Office space for rent in Ntinda',
+      listing_type: 'sale',
+      expected: 'commercial',
+      expectedTransaction: 'rent',
+    },
+    {
+      title: 'Hostel near Makerere per semester',
+      listing_type: 'rent',
+      expected: 'student',
+    },
+  ];
+
+  for (const fixture of cases) {
+    const classification = deriveListingClassification(fixture);
+    assert.equal(classification.listing_type, fixture.expected, fixture.title);
+    if (fixture.expectedTransaction) {
+      assert.equal(classification.transaction_type, fixture.expectedTransaction, fixture.title);
+    }
+    assert.equal(classification.category_ambiguous, false, fixture.title);
+  }
+});
+
+test('genuinely contradictory transaction evidence stays in its original category for review', () => {
+  const record = validRent({
+    listing_type: 'sale',
+    title: 'House for sale and for rent in Kira',
+    description: 'Contact the owner for clarification.',
+  });
+  const classification = deriveListingClassification(record);
+  const report = listingDataIntegrityReport(record);
+
+  assert.equal(classification.listing_type, 'sale');
+  assert.equal(classification.category_ambiguous, true);
+  assert(report.issue_codes.includes('category_ambiguous'));
+  assert.equal(report.issues.find((issue) => issue.code === 'category_ambiguous').proposed_listing_type, 'sale');
+});
+
+test('found-online intake uses the shared precedence classifier for future harvested rows', () => {
+  const cases = [
+    ['Apartment for sale with 12m monthly income', 'sale'],
+    ['Rentals for sale in Mpererwe', 'sale'],
+    ['House for rent in Rubaga', 'rent'],
+    ['Prime land for sale in Kyanja', 'land'],
+    ['Plots for sale in Kiwenda', 'land'],
+    ['7-bedroom mansion for sale collecting 20m monthly income', 'sale'],
+    ['Apartment block for sale making UGX 12m per month', 'sale'],
+    ['4 acres for sale in Makerere', 'land'],
+    ['Office space for rent in Ntinda', 'commercial'],
+    ['Hostel near Makerere per semester', 'student'],
+  ];
+
+  cases.forEach(([title, expected], index) => {
+    const listing = normalizeFoundOnlineSourcePost({
+      source_url: `https://www.tiktok.com/@precedence/video/${7000000000000000200n + BigInt(index)}`,
+      source_platform: 'tiktok',
+      title,
+      listing_type: 'student',
+      area: 'Ntinda',
+      district: 'Kampala',
+      price: 100000000,
+    });
+    assert.equal(listing.listingType === 'students' ? 'student' : listing.listingType, expected, title);
+  });
+});
+
 test('POA is explicit and mutually exclusive with a numeric price', () => {
   const validPoa = listingDataIntegrityReport(validRent({
     price: null,
@@ -155,6 +269,7 @@ test('migration 116 is additive, review-only, auditable, and contains the one-of
   assert.match(migration, /moderation_stage = CASE WHEN p\.status = 'approved' THEN 'source_review'/);
   assert.match(migration, /automatic_publish', FALSE/);
   assert.doesNotMatch(migration, /SET status\s*=\s*'approved'/i);
+  assert.doesNotMatch(migration, /SET[\s\S]{0,160}listing_type\s*=/i);
   assert.match(server, /markers:\s*\[[\s\S]*'canonical-location-source-review-115'[\s\S]*'master-data-integrity-116'/);
 });
 
