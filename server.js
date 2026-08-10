@@ -152,7 +152,8 @@ app.get('/api/version', (_req, res) => {
     started_at: RUNTIME_STARTED_AT,
     markers: [
       'canonical-location-source-review-115',
-      'master-data-integrity-116'
+      'master-data-integrity-116',
+      'shared-uganda-location-resolver-coverage'
     ]
   });
 });

@@ -81,12 +81,12 @@ test('definitive coverage additions resolve to the correct district and region',
     Njeru: 'Buikwe'
   };
   Object.entries(expected).forEach(([area, district]) => {
-    const canonical = canonicalizeUgandaLocation(area);
+    const canonical = canonicalizeUgandaLocation(area, district);
     assert.equal(canonical?.district, district, `${area} must resolve to ${district}`);
     assert.equal(regionForDistrict(canonical?.district), 'Central');
   });
-  assert.equal(canonicalLocationByKey('wakiso:kyebando'), null);
-  assert.equal(canonicalLocationByKey('jinja:njeru'), null);
+  assert.equal(canonicalizeUgandaLocation('Kanyanya'), null, 'duplicate place names require a district hint');
+  assert.equal(canonicalizeUgandaLocation('Njeru'), null, 'duplicate place names require a district hint');
 });
 
 test('roads, regions, water bodies and impossible district combinations stay unmatched', () => {
@@ -94,8 +94,8 @@ test('roads, regions, water bodies and impossible district combinations stay unm
     assert.equal(canonicalizeUgandaLocation(query, 'Kampala'), null, query);
     assert.deepEqual(canonicalLocationSuggestions(query), [], query);
   });
-  assert.equal(canonicalizeUgandaLocation('Kyebando', 'Wakiso'), null);
-  assert.equal(canonicalizeUgandaLocation('Njeru', 'Jinja'), null);
+  assert.equal(canonicalizeUgandaLocation('Sentema', 'Arua'), null);
+  assert.equal(canonicalizeUgandaLocation('Namasuba', 'Kampala'), null);
   assert.deepEqual(canonicalLocationSuggestions('Imaginary Estate'), []);
 });
 
@@ -127,8 +127,8 @@ test('canonical row ids drive aggregation and public display instead of raw area
 test('moderation hierarchy rejects unknown, road and cross-district area values', () => {
   assert.ok(normalizeReviewLocationHierarchy({ area: 'Kampala Road', district: 'Kampala' }).errors.length);
   assert.ok(normalizeReviewLocationHierarchy({ area: 'Imaginary Estate', district: 'Kampala' }).errors.length);
-  assert.ok(normalizeReviewLocationHierarchy({ area: 'Kyebando', district: 'Wakiso' }).errors.length);
-  assert.deepEqual(normalizeReviewLocationHierarchy({ area: 'Kyebando', district: 'Kampala' }).errors, []);
+  assert.ok(normalizeReviewLocationHierarchy({ area: 'Sentema', district: 'Arua' }).errors.length);
+  assert.deepEqual(normalizeReviewLocationHierarchy({ area: 'Sentema', district: 'Wakiso' }).errors, []);
 });
 
 test('30 inventory districts have real canonical neighbourhood choices and no fabricated compass areas', () => {
@@ -142,7 +142,7 @@ test('30 inventory districts have real canonical neighbourhood choices and no fa
     assert.ok(tree.length, `${district} must have a canonical location tree`);
     const names = tree.flatMap((item) => (item.neighborhoods || []).map((area) => area.name));
     assert.ok(names.length, `${district} must have canonical area choices`);
-    assert.ok(names.every((name) => !new RegExp(`^${district} (East|West)$`, 'i').test(name)));
+    assert.ok(!tree.some((item) => item.city === `${district} locations`), `${district} must not use a fabricated fallback group`);
   });
 });
 
@@ -226,7 +226,7 @@ test('public category search is canonical-only and includes visible nearby and a
   assert.match(route, /location_match/);
   assert.match(route, /canonicalDisplayLocationForRow/);
   assert.match(route, /location: \[publicArea, publicDistrict\]/);
-  assert.match(route, /unmatched: suggestions\.length === 0/);
+  assert.match(route, /unmatched: exactSuggestions\.length === 0/);
   assert.match(route, /COALESCE\(p\.extra_fields->>'canonical_location_id', ''\) = ANY/);
   assert.doesNotMatch(route, /OR LOWER\(TRIM\(COALESCE\(p\.area, ''\)\)\) = ANY/);
   assert.match(migration, /canonical_location_id/);

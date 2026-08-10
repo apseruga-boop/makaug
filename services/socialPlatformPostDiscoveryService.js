@@ -14,8 +14,10 @@ const {
   cloudMediaStorageConfigured,
   storeRemoteImageUrl,
 } = require('./cloudMediaStorageService');
-const { DISTRICTS } = require('../utils/constants');
-const { canonicalizeUgandaLocation } = require('../utils/ugandaLocationRegistry');
+const {
+  resolveCanonicalUgandaLocation,
+  resolveCanonicalUgandaLocationFromText,
+} = require('../utils/ugandaLocationRegistry');
 const {
   maskPhonesForPriceExtraction,
   normalizeUgandanSourcePhone,
@@ -147,44 +149,6 @@ const UGANDA_LOCATION_QUERY = [
   'MUBS', 'UCU', 'Ndejje', 'Nakawa', 'Banda', 'Kikoni', 'Namanve', 'Kikuubo',
 ].join(' OR ');
 
-const AREA_HINTS = [
-  'Kampala', 'Wakiso', 'Mukono', 'Entebbe', 'Jinja', 'Kira', 'Ntinda', 'Naalya',
-  'Najjera', 'Namugongo', 'Muyenga', 'Bweyogerere', 'Bwebajja', 'Kyanja',
-  'Komamboga', 'Kiwatule', 'Kisaasi', 'Bukoto', 'Naguru', 'Kololo', 'Nakasero', 'Luzira',
-  'Lubowa', 'Seguku', 'Kitende', 'Kajansi', 'Akright', 'Garuga', 'Kiwafu',
-  'Munyonyo', 'Makindye', 'Kansanga', 'Mengo', 'Makerere', 'Kyambogo', 'MUBS',
-  'Namanve', 'Namasuba', 'Rahim Foods', 'Katosi', 'Mpunge', 'Mpungwe', 'Luweero', 'Masaka',
-  'Mbarara', 'Mbale', 'Gulu', 'Arua',
-  'Bujjuko', 'Bujuuko', 'Namayumba', 'Kakiri', 'Masulita', 'Kalagi', 'Hoima Road',
-  'Mityana Road', 'Entebbe Road', 'Jinja Road', 'Kigo', 'Kawuku', 'Kisubi',
-  'Nkumba', 'Kyaliwajjala', 'Kireka', 'Sonde', 'Kungu', 'Bulindo', 'Gayaza',
-  'Matugga', 'Nansana', 'Nabweru', 'Kyebando', 'Kawempe', 'Kikoni', 'Nakawa',
-  'Banda', 'UCU Mukono', 'Ndejje', 'Ndeeba', 'Kikuubo', 'Industrial Area',
-  'Lugogo', 'Nateete', 'Buloba', 'Kyengera', 'Busega', 'Mpererwe', 'Katosi Road',
-];
-
-const AREA_PIN_OVERRIDES = [
-  { name: 'Namasuba', district: 'Wakiso', lat: 0.258, lng: 32.558, aliases: ['Namasuba', 'Namasuba Kampala', 'Namasuba Entebbe Road', 'Rahim Foods', 'Rahim Foods Namasuba'] },
-  { name: 'Ndejje', district: 'Wakiso', lat: 0.244, lng: 32.553, aliases: ['Ndejje', 'Ndejje Lubugumu'] },
-  { name: 'Bujjuko Akright Estate', district: 'Wakiso', lat: 0.374, lng: 32.389, aliases: ['Bujjuko Akright', 'Bujuuko Akright', 'Akright'] },
-  { name: 'Bujjuko', district: 'Wakiso', lat: 0.374, lng: 32.389, aliases: ['Bujjuko', 'Bujuuko', 'Bujuko'] },
-  { name: 'Kitende', district: 'Wakiso', lat: 0.198, lng: 32.533, aliases: ['Kitende'] },
-  { name: 'Kigo', district: 'Wakiso', lat: 0.196, lng: 32.615, aliases: ['Kigo', 'Kigo Road'] },
-  { name: 'Lubowa', district: 'Wakiso', lat: 0.237, lng: 32.576, aliases: ['Lubowa', 'Lubowa Estate', 'Lubowa Entebbe Road'] },
-  { name: 'Bwebajja', district: 'Wakiso', lat: 0.179, lng: 32.541, aliases: ['Bwebajja', 'Bwebajja Entebbe Road'] },
-  { name: 'Kakiri', district: 'Wakiso', lat: 0.409, lng: 32.38, aliases: ['Kakiri', 'Kakiri Masulita', 'Kakiri Masulita Hoima Road', 'Hoima Road'] },
-  { name: 'Masulita', district: 'Wakiso', lat: 0.51, lng: 32.46, aliases: ['Masulita'] },
-  { name: 'Kira', district: 'Wakiso', lat: 0.3978, lng: 32.6414, aliases: ['Kira', 'Kira Town'] },
-  { name: 'Kira-Mulawa', district: 'Wakiso', lat: 0.412, lng: 32.65, aliases: ['Kira-Mulawa', 'Kira Mulawa', 'Mulawa'] },
-  { name: 'Kira-Nsasa', district: 'Wakiso', lat: 0.428, lng: 32.665, aliases: ['Kira-Nsasa', 'Kira Nsasa', 'Nsasa'] },
-  { name: 'Garuga', district: 'Wakiso', lat: 0.106, lng: 32.495, aliases: ['Garuga', 'Garuga Road'] },
-  { name: 'Kiwafu', district: 'Wakiso', lat: 0.08, lng: 32.478, aliases: ['Kiwafu'] },
-  { name: 'Katosi', district: 'Mukono', lat: 0.181, lng: 32.797, aliases: ['Katosi', 'Mpunge', 'Mpungwe', 'Katosi Mpunge'] },
-  { name: 'Kalagi', district: 'Mukono', lat: 0.531, lng: 32.743, aliases: ['Kalagi', 'Kalagi Town', 'Kalagi Trading Centre', 'Kalagi Trading Center'] },
-  { name: 'Kisaasi', district: 'Kampala', lat: 0.364, lng: 32.589, aliases: ['Kisaasi', 'Kisasi'] },
-  { name: 'Kololo', district: 'Kampala', lat: 0.356, lng: 32.612, aliases: ['Kololo'] }
-];
-
 function cleanText(value = '') {
   return String(value || '').replace(/\s+/g, ' ').trim();
 }
@@ -205,34 +169,6 @@ function sourceVisualTextFromObject(source = {}) {
     source.ocr_text,
   ].flatMap((value) => (Array.isArray(value) ? value : [value]));
   return cleanText(values.filter(Boolean).join(' '));
-}
-
-function areaAliasPattern(alias = '') {
-  return cleanText(alias)
-    .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    .replace(/\s+/g, '\\s+')
-    .replace(/-/g, '[-\\s]+');
-}
-
-function areaPinFromText(value = '') {
-  const haystack = cleanText(value);
-  if (!haystack) return null;
-  const sorted = AREA_PIN_OVERRIDES
-    .flatMap((point) => (point.aliases || [point.name]).map((alias) => ({ ...point, alias })))
-    .sort((a, b) => String(b.alias || '').length - String(a.alias || '').length);
-  for (const point of sorted) {
-    const pattern = areaAliasPattern(point.alias);
-    if (!pattern) continue;
-    if (new RegExp(`(^|[^a-z0-9])${pattern}([^a-z0-9]|$)`, 'i').test(haystack)) return point;
-  }
-  return null;
-}
-
-function areaPinFromExplicitLocation(value = '') {
-  const explicit = cleanText(value);
-  if (!explicit) return null;
-  const primaryArea = cleanText(explicit.split(',')[0]);
-  return areaPinFromText(primaryArea) || areaPinFromText(explicit);
 }
 
 function sourceListingTitleFromText(value = '') {
@@ -1233,20 +1169,13 @@ function buildTikTokExactPostImportRows({
       const title = cleanText(seed.title || sourceDerivedTitle || oembed.title || caption || `TikTok property post ${index + 1}`);
       const combinedText = cleanText(`${sourceDerivedTitle} ${title} ${caption} ${visualText} ${commentEvidence}`);
       const rawArea = cleanText(seed.area || seed.location || '');
-      const primaryRawArea = cleanText(rawArea.split(',')[0]);
-      const extractedRawArea = extractArea(primaryRawArea) || extractArea(rawArea);
-      const areaPin = areaPinFromExplicitLocation(rawArea) || areaPinFromText(combinedText);
-      const combinedArea = extractArea(combinedText);
-      const area = areaPin && (!rawArea || rawArea.includes(',') || /^(kampala|wakiso|hoima|greater kampala|uganda)$/i.test(rawArea))
-        ? areaPin.name
-        : cleanText(extractedRawArea || rawArea || combinedArea);
-      const district = cleanText(areaPin?.district || seed.district || districtForArea(area, combinedText));
-      const locationEvidenceConfirmed = Boolean(
-        areaPin
-        || extractedRawArea
-        || combinedArea
-        || DISTRICTS.includes(cleanText(seed.district))
-      );
+      const locationResolution = canonicalSocialLocation(rawArea, seed.district, combinedText);
+      const canonicalLocation = locationResolution.status === 'matched' ? locationResolution.match : null;
+      const area = canonicalLocation && !['district', 'region'].includes(canonicalLocation.level)
+        ? canonicalLocation.name
+        : '';
+      const district = canonicalLocation?.district || '';
+      const locationEvidenceConfirmed = Boolean(canonicalLocation);
       const priceText = cleanText(seed.price_text || priceTextFromText(combinedText) || seed.price);
       const contactPhone = cleanText(normalizeUgandanPhone(seed.contact_phone || seed.phone || seed.whatsapp || '') || phoneFromText(combinedText));
       const contactEmail = cleanText(seed.contact_email || seed.email || emailFromText(combinedText));
@@ -1294,8 +1223,8 @@ function buildTikTokExactPostImportRows({
         district,
         location: area || district,
         location_evidence_confirmed: locationEvidenceConfirmed,
-        latitude: seed.latitude || seed.lat || areaPin?.lat || '',
-        longitude: seed.longitude || seed.lng || areaPin?.lng || '',
+        latitude: seed.latitude || seed.lat || canonicalLocation?.lat || '',
+        longitude: seed.longitude || seed.lng || canonicalLocation?.lng || '',
         price_text: priceText,
         listing_type: seed.listing_type || listingTypeFromText(`${combinedText} ${rawArea}`),
         bedrooms: seed.bedrooms || bedroomsFromText(combinedText),
@@ -1862,20 +1791,13 @@ function buildExactSocialPostImportRows({
       const title = cleanText(seed.title || sourceDerivedTitle || page.title || oembed.title || `Found-online ${platform} property post ${index + 1}`);
       const combinedText = cleanText(`${sourceDerivedTitle} ${title} ${caption} ${visualText} ${commentEvidence}`);
       const rawArea = cleanText(seed.area || seed.location || '');
-      const primaryRawArea = cleanText(rawArea.split(',')[0]);
-      const extractedRawArea = extractArea(primaryRawArea) || extractArea(rawArea);
-      const areaPin = areaPinFromExplicitLocation(rawArea) || areaPinFromText(combinedText);
-      const combinedArea = extractArea(combinedText);
-      const area = areaPin && (!rawArea || rawArea.includes(',') || /^(kampala|wakiso|hoima|greater kampala|uganda)$/i.test(rawArea))
-        ? areaPin.name
-        : cleanText(extractedRawArea || rawArea || combinedArea);
-      const district = cleanText(areaPin?.district || seed.district || districtForArea(area, combinedText));
-      const locationEvidenceConfirmed = Boolean(
-        areaPin
-        || extractedRawArea
-        || combinedArea
-        || DISTRICTS.includes(cleanText(seed.district))
-      );
+      const locationResolution = canonicalSocialLocation(rawArea, seed.district, combinedText);
+      const canonicalLocation = locationResolution.status === 'matched' ? locationResolution.match : null;
+      const area = canonicalLocation && !['district', 'region'].includes(canonicalLocation.level)
+        ? canonicalLocation.name
+        : '';
+      const district = canonicalLocation?.district || '';
+      const locationEvidenceConfirmed = Boolean(canonicalLocation);
       const priceText = cleanText(seed.price_text || priceTextFromText(combinedText) || seed.price);
       const contactPhone = cleanText(normalizeUgandanPhone(seed.contact_phone || seed.phone || seed.whatsapp || '') || phoneFromText(combinedText));
       const contactEmail = cleanText(seed.contact_email || seed.email || emailFromText(combinedText));
@@ -1938,8 +1860,8 @@ function buildExactSocialPostImportRows({
         district,
         location: area || district,
         location_evidence_confirmed: locationEvidenceConfirmed,
-        latitude: seed.latitude || seed.lat || areaPin?.lat || '',
-        longitude: seed.longitude || seed.lng || areaPin?.lng || '',
+        latitude: seed.latitude || seed.lat || canonicalLocation?.lat || '',
+        longitude: seed.longitude || seed.lng || canonicalLocation?.lng || '',
         price_text: priceText,
         listing_type: seed.listing_type || listingTypeFromText(`${combinedText} ${rawArea}`),
         bedrooms: seed.bedrooms || bedroomsFromText(combinedText),
@@ -3806,31 +3728,25 @@ function buildXSearchJobs({ sources = sourcesForPlatform('x'), limit = DEFAULT_M
 }
 
 function extractArea(text = '') {
-  const haystack = cleanText(text);
-  const pinnedArea = areaPinFromText(haystack);
-  if (pinnedArea?.name) return pinnedArea.name;
-  const orderedHints = [
-    ...AREA_HINTS.filter((name) => !DISTRICTS.includes(name)).reverse(),
-    ...AREA_HINTS.filter((name) => DISTRICTS.includes(name)),
-  ];
-  const area = orderedHints.find((name) => new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(haystack));
-  return area || '';
+  const resolution = resolveCanonicalUgandaLocationFromText(cleanText(text));
+  return resolution.status === 'matched' ? resolution.match.name : '';
 }
 
 function districtForArea(area = '', text = '') {
-  const candidate = cleanText(area) || extractArea(text);
-  const haystack = cleanText(`${candidate} ${text}`);
-  const canonicalLocation = canonicalizeUgandaLocation(candidate, '');
-  if (canonicalLocation?.district) return canonicalLocation.district;
-  const areaPin = areaPinFromText(haystack);
-  if (areaPin?.district) return areaPin.district;
-  if (DISTRICTS.includes(candidate)) return candidate;
-  const district = DISTRICTS.find((name) => new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(haystack));
-  if (district) return district;
-  if (/katosi|mpunge|mpungwe|mukono|ucu|goma|nakisunga/i.test(haystack)) return 'Mukono';
-  if (/kira|naalya|najjera|namugongo|bwebajja|kajansi|kitende|akright|wakiso|bujjuko|bujuuko|namayumba|kakiri|masulita|hoima road|kigo|kawuku|kisubi|nkumba|ndejje|lubugumu|kyaliwajjala|kireka|sonde|kungu|bulindo|gayaza|matugga|nansana|nabweru|buloba|kyengera|busega|mpererwe|garuga|kiwafu/i.test(haystack)) return 'Wakiso';
-  if (/kampala|ntinda|bukoto|naguru|kololo|namanve|muyenga|makindye|kansanga|makerere|kyambogo|kikoni|nakawa|banda|ndeeba|kikuubo|industrial area|lugogo|nateete|kawempe|kyebando/i.test(haystack)) return 'Kampala';
-  return '';
+  const explicit = resolveCanonicalUgandaLocation(cleanText(area));
+  if (explicit.status === 'matched') return explicit.match.district;
+  const resolution = resolveCanonicalUgandaLocationFromText(cleanText(`${area} ${text}`));
+  return resolution.status === 'matched' ? resolution.match.district : '';
+}
+
+function canonicalSocialLocation(rawArea = '', suppliedDistrict = '', sourceText = '') {
+  const explicit = resolveCanonicalUgandaLocation(rawArea, suppliedDistrict);
+  if (explicit.status === 'matched' && !['district', 'region'].includes(explicit.match.level)) {
+    return explicit;
+  }
+  const fromText = resolveCanonicalUgandaLocationFromText(`${rawArea} ${sourceText}`, suppliedDistrict);
+  if (fromText.status === 'matched') return fromText;
+  return explicit.status === 'matched' ? explicit : fromText;
 }
 
 function listingTypeFromText(text = '') {

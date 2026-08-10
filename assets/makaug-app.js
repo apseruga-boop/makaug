@@ -395,147 +395,12 @@ function getHierarchyPointForArea(district, area) {
   return null;
 }
 
-const UG_AREA_PIN_OVERRIDES = [
-  { name: "Namasuba", district: "Wakiso", lat: 0.258, lng: 32.558, aliases: ["Namasuba", "Namasuba Kampala", "Rahim Foods", "Rahim Foods Namasuba"] },
-  { name: "Ndejje", district: "Wakiso", lat: 0.244, lng: 32.553, aliases: ["Ndejje", "Ndejje Lubugumu"] },
-  { name: "Munyonyo", district: "Kampala", lat: 0.236, lng: 32.623, aliases: ["Munyonyo", "Munyonjo", "Munyonyo Kampala", "Munyonyo Uganda"] },
-  { name: "Bujjuko Akright Estate", district: "Wakiso", lat: 0.374, lng: 32.389, aliases: ["Bujjuko Akright", "Bujuuko Akright", "Akright", "Bujjuko", "Bujuuko"] },
-  { name: "Kakiri", district: "Wakiso", lat: 0.409, lng: 32.38, aliases: ["Kakiri", "Kakiri Masulita"] },
-  { name: "Masulita", district: "Wakiso", lat: 0.51, lng: 32.46, aliases: ["Masulita"] },
-  { name: "Masindi", district: "Masindi", lat: 1.683, lng: 31.715, aliases: ["Masindi", "Masindi Town", "Masindi Municipality"] },
-  { name: "Kira", district: "Wakiso", lat: 0.3978, lng: 32.6414, aliases: ["Kira", "Kira Town"] },
-  { name: "Kira-Mulawa", district: "Wakiso", lat: 0.412, lng: 32.65, aliases: ["Kira-Mulawa", "Kira Mulawa", "Mulawa"] },
-  { name: "Kira-Nsasa", district: "Wakiso", lat: 0.428, lng: 32.665, aliases: ["Kira-Nsasa", "Kira Nsasa", "Nsasa"] },
-  { name: "Nansana", district: "Wakiso", lat: 0.364, lng: 32.52, aliases: ["Nansana", "Nansana Municipality", "Nansana Town"] },
-  { name: "Namugongo", district: "Wakiso", lat: 0.363, lng: 32.636, aliases: ["Namugongo"] },
-  { name: "Najjera", district: "Wakiso", lat: 0.396, lng: 32.615, aliases: ["Najjera", "Najjeera"] },
-  { name: "Kitende", district: "Wakiso", lat: 0.197, lng: 32.535, aliases: ["Kitende"] },
-  { name: "Kajjansi", district: "Wakiso", lat: 0.216, lng: 32.552, aliases: ["Kajjansi", "Kajansi"] },
-  { name: "Bwebajja Akright", district: "Wakiso", lat: 0.198, lng: 32.535, aliases: ["Bwebajja Akright", "Bwebajja"] },
-  { name: "Seguku", district: "Wakiso", lat: 0.247, lng: 32.555, aliases: ["Seguku", "Sseguku"] },
-  { name: "Kasangati-Nangabo", district: "Wakiso", lat: 0.434, lng: 32.61, aliases: ["Kasangati-Nangabo", "Kasangati Nangabo", "Kasangati", "Nangabo"] },
-  { name: "Katosi", district: "Mukono", lat: 0.181, lng: 32.797, aliases: ["Katosi", "Mpunge", "Mpungwe", "Katosi Mpunge"] },
-  { name: "Kololo", district: "Kampala", lat: 0.356, lng: 32.612, aliases: ["Kololo"] },
-  { name: "Komamboga / Kyanja", district: "Kampala", lat: 0.394, lng: 32.598, aliases: ["Komamboga", "Kyanja", "Komamboga Kyanja"] },
-  { name: "Kyebando", district: "Kampala", lat: 0.368, lng: 32.584, aliases: ["Kyebando"] },
-  { name: "Kikoni", district: "Kampala", lat: 0.333, lng: 32.565, aliases: ["Kikoni"] },
-  { name: "Nakawa", district: "Kampala", lat: 0.334, lng: 32.61, aliases: ["Nakawa"] },
-  { name: "Ndeeba", district: "Kampala", lat: 0.301, lng: 32.548, aliases: ["Ndeeba"] },
-  { name: "Kikuubo", district: "Kampala", lat: 0.314, lng: 32.576, aliases: ["Kikuubo"] },
-  { name: "Luwero", district: "Luwero", lat: 0.8492, lng: 32.4731, specificity: 1, aliases: ["Luwero", "Luweero", "Luwero Town", "Luweero Town"] },
-  { name: "Ndibulungi", district: "Luwero", specificity: 6, aliases: ["Ndibulungi", "Luwero Ndibulungi", "Luweero Ndibulungi"] }
-];
-
-function findHierarchyLocationForKnownArea(district = "", area = "") {
-  const needle = String(area || "").trim().toLowerCase();
-  if (!needle) return null;
-  const districtNames = district ? [district] : Object.keys(UG_LOCATION_TREE || {});
-  for (const districtName of districtNames) {
-    const tree = getDistrictLocationTree(districtName);
-    for (const cityNode of tree || []) {
-      if (String(cityNode.city || "").trim().toLowerCase() === needle) {
-        const point = getCityPoint(districtName, cityNode.city) || {};
-        return {
-          district: districtName,
-          city: cityNode.city,
-          neighborhood: "",
-          lat: Number(point.lat),
-          lng: Number(point.lng)
-        };
-      }
-      const neighborhood = (cityNode.neighborhoods || []).find((item) => String(item.name || "").trim().toLowerCase() === needle);
-      if (neighborhood) {
-        return {
-          district: districtName,
-          city: cityNode.city,
-          neighborhood: neighborhood.name,
-          lat: Number(neighborhood.lat),
-          lng: Number(neighborhood.lng)
-        };
-      }
-    }
-  }
-  return null;
-}
-
-function enrichKnownUgandaAreaPoint(point = {}, matchedArea = "") {
-  const hierarchy = findHierarchyLocationForKnownArea(point.district, matchedArea)
-    || findHierarchyLocationForKnownArea(point.district, point.name);
-  const lat = Number(point.lat);
-  const lng = Number(point.lng);
-  return {
-    ...point,
-    district: point.district || hierarchy?.district || "",
-    city: point.city || hierarchy?.city || "",
-    neighborhood: point.neighborhood || hierarchy?.neighborhood || "",
-    lat: Number.isFinite(lat) ? lat : Number(hierarchy?.lat),
-    lng: Number.isFinite(lng) ? lng : Number(hierarchy?.lng)
-  };
-}
-
-function knownAreaAliasPattern(alias = "") {
-  return String(alias || "")
-    .trim()
-    .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-    .replace(/\s+/g, "\\s+")
-    .replace(/-/g, "[-\\s]+");
-}
-
-function findKnownUgandaAreaPointFromText(value = "") {
-  const haystack = String(value || "").trim();
-  if (!haystack) return null;
-  const sorted = UG_AREA_PIN_OVERRIDES
-    .flatMap((point) => (point.aliases || [point.name]).map((alias) => ({ ...point, alias })))
-    .sort((a, b) => String(b.alias || "").length - String(a.alias || "").length);
-  for (const point of sorted) {
-    const pattern = knownAreaAliasPattern(point.alias);
-    if (!pattern) continue;
-    if (new RegExp(`(^|[^a-z0-9])${pattern}([^a-z0-9]|$)`, "i").test(haystack)) {
-      const enriched = enrichKnownUgandaAreaPoint(point, point.alias);
-      return {
-        lat: enriched.lat,
-        lng: enriched.lng,
-        district: enriched.district,
-        city: enriched.city,
-        neighborhood: enriched.neighborhood,
-        area: enriched.neighborhood || enriched.city || enriched.name
-      };
-    }
-  }
-  return null;
-}
-
-function getKnownUgandaAreaPoint(property = {}) {
-  const extra = property?.extra_fields && typeof property.extra_fields === "object" ? property.extra_fields : {};
-  const candidates = [
-    property?.area,
-    property?.neighborhood,
-    extra.neighborhood,
-    property?.city,
-    extra.city,
-    property?.resolved_location_label,
-    extra.resolved_location_label,
-    property?.address,
-    property?.title,
-    property?.desc,
-    property?.description
-  ];
-  for (const candidate of candidates) {
-    const point = findKnownUgandaAreaPointFromText(candidate);
-    if (point) return point;
-  }
-  return null;
-}
-
 function getListingMapPoint(property = {}) {
   const rawLat = Number(property?.lat ?? property?.latitude);
   const rawLng = Number(property?.lng ?? property?.longitude);
   if (Number.isFinite(rawLat) && Number.isFinite(rawLng) && isLikelyUgandaCoordinate(rawLat, rawLng)) {
     return { lat: rawLat, lng: rawLng, exact: true };
   }
-
-  const knownAreaPoint = getKnownUgandaAreaPoint(property);
-  if (knownAreaPoint) return { ...knownAreaPoint, exact: false, source: "area_override" };
 
   const district = property?.district || "";
   const city = property?.city || property?.location_town || "";
@@ -948,6 +813,7 @@ let adminReviewWarningOverrides = {};
 let adminReviewLocationMap = null;
 let adminReviewLocationMarker = null;
 let adminReviewLocationProvider = "";
+let adminReviewCanonicalLocationResolution = null;
 let adminWhatsAppDraft = null;
 let adminAiSnapshot = null;
 let adminLatestCommandCentreMetrics = null;
@@ -1012,6 +878,7 @@ let lpPhotoQualityIssues = [];
 let lpIdentityFileMeta = null;
 let lpInquiryReference = "";
 let lpResolvedLocationLabel = "";
+let lpCanonicalLocationResolution = null;
 let lpResolvedAltitudeM = null;
 let lpReverseGeoTimer = null;
 let lpAddressGeoTimer = null;
@@ -23647,88 +23514,6 @@ function adminReviewSourceText(review = {}) {
   ].filter(Boolean).join(" ");
 }
 
-function adminReviewKnownLocationCandidates() {
-  const candidates = [];
-  const add = (candidate = {}) => {
-    const name = String(candidate.name || "").trim();
-    const alias = String(candidate.alias || name).trim();
-    if (!name || !alias) return;
-    candidates.push({
-      name,
-      alias,
-      district: String(candidate.district || "").trim(),
-      city: String(candidate.city || "").trim(),
-      neighborhood: String(candidate.neighborhood || "").trim(),
-      lat: Number(candidate.lat),
-      lng: Number(candidate.lng),
-      specificity: Number(candidate.specificity) || 0
-    });
-  };
-
-  (UG_AREA_PIN_OVERRIDES || []).forEach((point) => {
-    (point.aliases || [point.name]).forEach((alias) => {
-      const enriched = enrichKnownUgandaAreaPoint(point, alias);
-      add({
-        name: enriched.neighborhood || enriched.city || enriched.name,
-        alias,
-        district: enriched.district,
-        city: enriched.city,
-        neighborhood: enriched.neighborhood,
-        lat: enriched.lat,
-        lng: enriched.lng,
-        specificity: Number(point.specificity) || 5
-      });
-    });
-  });
-
-  Object.entries(UG_LOCATION_TREE || {}).forEach(([district, tree]) => {
-    (tree || []).forEach((cityNode) => {
-      add({
-        name: cityNode.city,
-        alias: cityNode.city,
-        district,
-        city: cityNode.city,
-        specificity: 3
-      });
-      (cityNode.neighborhoods || []).forEach((neighborhood) => add({
-        name: neighborhood.name,
-        alias: neighborhood.name,
-        district,
-        city: cityNode.city,
-        neighborhood: neighborhood.name,
-        specificity: 4
-      }));
-    });
-  });
-
-  DISTRICTS.forEach((district) => add({ name: district, alias: district, district, specificity: 1 }));
-  return candidates;
-}
-
-function adminReviewBestKnownLocationFromText(text = "") {
-  const haystack = String(text || "");
-  if (!haystack.trim()) return null;
-  const matches = [];
-  for (const candidate of adminReviewKnownLocationCandidates()) {
-    const pattern = knownAreaAliasPattern(candidate.alias);
-    if (!pattern) continue;
-    const match = haystack.match(new RegExp(`(^|[^a-z0-9])${pattern}([^a-z0-9]|$)`, "i"));
-    if (!match) continue;
-    matches.push({
-      ...candidate,
-      index: match.index,
-      aliasLength: String(candidate.alias || "").length
-    });
-  }
-  if (!matches.length) return null;
-  matches.sort((a, b) => (
-    (b.specificity - a.specificity)
-    || (a.index - b.index)
-    || (b.aliasLength - a.aliasLength)
-  ));
-  return matches[0];
-}
-
 function adminReviewMoneyFromText(text = "") {
   const raw = String(text || "").replace(/,/g, "");
   const billion = raw.match(/(?:ugx|ush|ugshs|shs)?\s*([0-9]+(?:\.[0-9]+)?)\s*(?:b|bn|billion)\b/i);
@@ -23751,14 +23536,7 @@ function adminReviewFirstNumber(text = "", pattern) {
 }
 
 function adminReviewDetectedLocation(text = "", review = {}) {
-  const specificLocation = adminReviewBestKnownLocationFromText(text);
-  if (specificLocation?.district && specificLocation.name) {
-    return { area: specificLocation.name, district: specificLocation.district };
-  }
-  const district = DISTRICTS.find((name) => new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(text))
-    || review.district
-    || "";
-  return { area: review.area || "", district };
+  return { area: review.area || "", district: review.district || "" };
 }
 
 function adminReviewPropertyTypeFromText(text = "") {
@@ -24140,6 +23918,7 @@ function adminReviewRefreshHierarchyControls(options = {}) {
 }
 
 function adminReviewOnRegionChange() {
+  adminReviewCanonicalLocationResolution = null;
   const region = document.getElementById("admin-review-region-edit")?.value || "";
   adminReviewSetOptions("admin-review-district-edit", adminReviewDistrictOptionsHtml(region, ""), "");
   adminReviewSetOptions("admin-review-city-edit", adminReviewCityOptionsHtml("", ""), "");
@@ -24147,190 +23926,143 @@ function adminReviewOnRegionChange() {
   adminReviewScheduleLocationSync();
 }
 
-function adminReviewOnDistrictChange() {
+async function adminReviewOnDistrictChange() {
+  adminReviewCanonicalLocationResolution = null;
   const district = document.getElementById("admin-review-district-edit")?.value || "";
   const region = district ? regionForDistrict(district) : (document.getElementById("admin-review-region-edit")?.value || "");
   adminSetReviewEditValue("admin-review-region-edit", region);
+  await loadSharedLocationCatalogForDistrict(district);
   adminReviewSetOptions("admin-review-city-edit", adminReviewCityOptionsHtml(district, ""), "");
   adminReviewSetOptions("admin-review-neighborhood-edit", adminReviewNeighborhoodOptionsHtml(district, "", ""), "");
   adminReviewScheduleLocationSync();
 }
 
 function adminReviewOnCityChange() {
+  adminReviewCanonicalLocationResolution = null;
   const district = document.getElementById("admin-review-district-edit")?.value || "";
   const city = document.getElementById("admin-review-city-edit")?.value || "";
   adminReviewSetOptions("admin-review-neighborhood-edit", adminReviewNeighborhoodOptionsHtml(district, city, ""), "");
   adminReviewScheduleLocationSync();
 }
 
-function adminReviewOnNeighborhoodChange() {
+async function adminReviewOnNeighborhoodChange() {
   adminReviewSetAreaFromNeighborhood();
+  const resolution = await resolveUgandaLocationFromSharedRegistry(uniqueTextParts([
+    document.getElementById("admin-review-neighborhood-edit")?.value,
+    document.getElementById("admin-review-district-edit")?.value
+  ]).join(", "));
+  if (resolution.status === "matched") applyAdminReviewCanonicalLocation(resolution.location);
+  else adminReviewCanonicalLocationResolution = null;
   adminReviewScheduleLocationSync();
 }
 
-function adminReviewOnAreaInput() {
+async function adminReviewOnAreaInput() {
   const areaEl = document.getElementById("admin-review-area-edit");
   if (areaEl) areaEl.dataset.auto = "0";
+  const resolution = await resolveUgandaLocationFromSharedRegistry(uniqueTextParts([
+    areaEl?.value,
+    document.getElementById("admin-review-district-edit")?.value
+  ]).join(", "));
+  if (resolution.status === "matched") applyAdminReviewCanonicalLocation(resolution.location);
+  else adminReviewCanonicalLocationResolution = null;
   adminReviewScheduleLocationSync();
 }
 
-function adminReviewHierarchyMatchInDistrict(district = "", text = "", point = null) {
-  const tree = getDistrictLocationTree(district);
-  if (!district || !tree.length) return null;
-  const haystack = String(text || "").toLowerCase();
-  const cityTextMatch = haystack ? findLpLocationOptionByText(tree, (item) => item.city, haystack) : null;
-  let neighborhoodTextMatch = null;
-  for (const cityNode of tree) {
-    const matchedNeighborhood = haystack
-      ? findLpLocationOptionByText(cityNode.neighborhoods || [], (item) => item.name, haystack)
-      : null;
-    if (matchedNeighborhood?.name) {
-      neighborhoodTextMatch = { city: cityNode.city, neighborhood: matchedNeighborhood.name };
-      break;
-    }
-  }
-  const nearest = findClosestLpHierarchyOption(district, point);
-  const city = cityTextMatch?.city || neighborhoodTextMatch?.city || nearest?.city || "";
-  const cityNode = tree.find((item) => item.city === city) || null;
-  const neighborhood = neighborhoodTextMatch?.neighborhood
-    || (nearest?.city === city ? nearest.neighborhood : "")
-    || "";
-  return {
-    district,
-    region: regionForDistrict(district),
-    city: cityNode?.city || city,
-    neighborhood
-  };
-}
-
-function adminReviewInferHierarchyFromText(label = "", point = null, districtHint = "") {
-  const rawText = String(label || "");
-  const text = rawText.toLowerCase();
-  const pinPoint = Number.isFinite(Number(point?.lat)) && Number.isFinite(Number(point?.lng))
-    ? { lat: Number(point.lat), lng: Number(point.lng) }
-    : null;
-  const nearestDistrict = pinPoint ? findNearestDistrictFromCoords(pinPoint.lat, pinPoint.lng)?.district || "" : "";
-  const specificLocation = adminReviewBestKnownLocationFromText(rawText);
-  const districtFromText = text
-    ? DISTRICTS.find((item) => text.includes(item.toLowerCase())) || ""
-    : "";
-  const preferredDistrict = specificLocation?.district
-    || districtFromText
-    || (DISTRICTS.includes(districtHint) ? districtHint : "")
-    || nearestDistrict
-    || "";
-  let match = preferredDistrict ? adminReviewHierarchyMatchInDistrict(preferredDistrict, text, pinPoint) : null;
-  if (specificLocation?.district) {
-    match = {
-      district: specificLocation.district,
-      region: regionForDistrict(specificLocation.district),
-      city: specificLocation.city || match?.city || "",
-      neighborhood: specificLocation.neighborhood || match?.neighborhood || ""
+async function resolveUgandaLocationFromSharedRegistry(query = "") {
+  const cleanQuery = String(query || "").trim();
+  if (!cleanQuery) return { status: "unmatched", location: null, candidates: [] };
+  try {
+    const response = await apiRequest(`/api/properties/locations/resolve?q=${encodeURIComponent(cleanQuery)}`, { skipAuth: true });
+    return {
+      status: response?.meta?.status || (response?.data ? "matched" : "unmatched"),
+      location: response?.data || null,
+      candidates: Array.isArray(response?.meta?.candidates) ? response.meta.candidates : []
     };
+  } catch (_) {
+    return { status: "unmatched", location: null, candidates: [] };
   }
-  if ((!match?.city && !match?.neighborhood) && text) {
-    for (const district of DISTRICTS) {
-      const candidate = adminReviewHierarchyMatchInDistrict(district, text, pinPoint);
-      if (candidate?.city || candidate?.neighborhood) {
-        match = candidate;
-        break;
-      }
-    }
+}
+
+async function resolveUgandaLocationWithLabelFallback(query = "", label = "") {
+  const primary = await resolveUgandaLocationFromSharedRegistry(query);
+  if (primary.status === "matched" || !String(label || "").trim() || String(label).trim() === String(query).trim()) return primary;
+  return resolveUgandaLocationFromSharedRegistry(label);
+}
+
+function ensureSelectHasValue(id, value = "", label = "") {
+  const el = document.getElementById(id);
+  if (!el || !value) return;
+  if (!Array.from(el.options || []).some((option) => option.value === value)) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = label || value;
+    el.appendChild(option);
   }
-  if (!match && preferredDistrict) {
-    match = {
-      district: preferredDistrict,
-      region: regionForDistrict(preferredDistrict),
-      city: "",
-      neighborhood: ""
-    };
-  }
-  return match || { district: "", region: "", city: "", neighborhood: "" };
+  el.value = value;
 }
 
-function adminReviewApplyHierarchyFromText(label = "", point = null) {
-  const current = adminReviewCurrentLocationFields();
-  const inferred = adminReviewInferHierarchyFromText(label, point, current.district);
-  const district = inferred.district || current.district;
-  if (!district) return;
-  const region = inferred.region || regionForDistrict(district);
-  adminSetReviewEditValue("admin-review-region-edit", region);
-  adminReviewSetOptions("admin-review-district-edit", adminReviewDistrictOptionsHtml(region, district), district);
-  const city = adminReviewSetOptions("admin-review-city-edit", adminReviewCityOptionsHtml(district, inferred.city || ""), inferred.city || "");
-  adminReviewSetOptions("admin-review-neighborhood-edit", adminReviewNeighborhoodOptionsHtml(district, city, inferred.neighborhood || ""), inferred.neighborhood || "");
-  adminReviewSetAreaFromNeighborhood();
+function clearAdminReviewCanonicalLocation() {
+  adminReviewCanonicalLocationResolution = null;
+  adminSetReviewEditValue("admin-review-region-edit", "");
+  adminReviewSetOptions("admin-review-district-edit", adminReviewDistrictOptionsHtml("", ""), "");
+  adminReviewSetOptions("admin-review-city-edit", adminReviewCityOptionsHtml("", ""), "");
+  adminReviewSetOptions("admin-review-neighborhood-edit", adminReviewNeighborhoodOptionsHtml("", "", ""), "");
+  adminSetReviewEditValue("admin-review-area-edit", "");
 }
 
-function adminReviewKnownLocationPoint(location = {}) {
-  const lat = Number(location?.lat);
-  const lng = Number(location?.lng);
-  if (Number.isFinite(lat) && Number.isFinite(lng) && isLikelyUgandaCoordinate(lat, lng)) {
-    return { lat, lng };
-  }
-  const hierarchy = findHierarchyLocationForKnownArea(location?.district, location?.neighborhood || location?.name || location?.city || location?.alias);
-  const hLat = Number(hierarchy?.lat);
-  const hLng = Number(hierarchy?.lng);
-  if (Number.isFinite(hLat) && Number.isFinite(hLng) && isLikelyUgandaCoordinate(hLat, hLng)) {
-    return { lat: hLat, lng: hLng };
-  }
-  return null;
-}
-
-function adminReviewCurrentCoordinatesPoint() {
-  const latValue = document.getElementById("admin-review-latitude-edit")?.value;
-  const lngValue = document.getElementById("admin-review-longitude-edit")?.value;
-  if (!adminReviewHasUsableCoordinates(latValue, lngValue)) return null;
-  return {
-    lat: adminReviewCoordinateNumber(latValue),
-    lng: adminReviewCoordinateNumber(lngValue)
-  };
-}
-
-function adminReviewPointDistanceKm(point, location) {
-  const locationPoint = adminReviewKnownLocationPoint(location);
-  if (!point || !locationPoint) return Infinity;
-  return distanceBetweenPointsKm(point, locationPoint);
-}
-
-function adminReviewLocationConflictsWithKnownLocation(location = {}) {
-  const fields = adminReviewCurrentLocationFields();
-  const enriched = enrichKnownUgandaAreaPoint(location, location.neighborhood || location.name || location.alias);
-  if (fields.district && enriched.district && fields.district !== enriched.district) return true;
-  if (fields.city && enriched.city && fields.city !== enriched.city) return true;
-  if (fields.neighborhood && enriched.neighborhood && fields.neighborhood !== enriched.neighborhood) return true;
-  const areaLocation = adminReviewBestKnownLocationFromText(fields.area);
-  if (areaLocation?.district && enriched.district && areaLocation.district !== enriched.district) return true;
-  return false;
-}
-
-function adminReviewApplySpecificKnownLocation(location = {}, options = {}) {
-  const enriched = enrichKnownUgandaAreaPoint(location, location.neighborhood || location.name || location.alias);
-  const district = enriched.district || "";
-  if (!district) return false;
-  const region = regionForDistrict(district);
-  const cityValue = enriched.city || "";
-  const neighborhoodValue = enriched.neighborhood || "";
-  adminSetReviewEditValue("admin-review-region-edit", region);
-  adminReviewSetOptions("admin-review-district-edit", adminReviewDistrictOptionsHtml(region, district), district);
-  const city = adminReviewSetOptions("admin-review-city-edit", adminReviewCityOptionsHtml(district, cityValue), cityValue);
-  adminReviewSetOptions("admin-review-neighborhood-edit", adminReviewNeighborhoodOptionsHtml(district, city, neighborhoodValue), neighborhoodValue);
-
+function applyAdminReviewCanonicalLocation(location = {}) {
+  if (!location?.canonical_location_id || location.match !== "exact_alias" || Number(location.confidence) !== 1) return false;
+  adminReviewCanonicalLocationResolution = location;
+  adminSetReviewEditValue("admin-review-region-edit", location.region || regionForDistrict(location.district));
+  adminReviewSetOptions("admin-review-district-edit", adminReviewDistrictOptionsHtml(location.region, location.district), location.district);
+  adminReviewSetOptions("admin-review-city-edit", adminReviewCityOptionsHtml(location.district, location.town), location.town);
+  ensureSelectHasValue("admin-review-city-edit", location.town, location.town);
+  adminReviewSetOptions("admin-review-neighborhood-edit", adminReviewNeighborhoodOptionsHtml(location.district, location.town, location.name), location.name);
+  ensureSelectHasValue("admin-review-neighborhood-edit", location.name, location.name);
   const areaEl = document.getElementById("admin-review-area-edit");
-  const area = neighborhoodValue || enriched.name || cityValue || "";
-  if (areaEl && area && (options.forceArea || !areaEl.value.trim() || areaEl.dataset.auto === "1" || adminReviewLocationConflictsWithKnownLocation(enriched))) {
-    areaEl.value = area;
+  if (areaEl) {
+    areaEl.value = location.name;
     areaEl.dataset.auto = "1";
   }
+  return true;
+}
 
-  const point = adminReviewKnownLocationPoint(enriched);
-  if (point && (options.forceCoordinates || !adminReviewCurrentCoordinatesPoint())) {
-    adminReviewSetLocationInputs(point.lat, point.lng, options.message || "Source area pin found");
-  } else if (!point && options.forceCoordinates) {
-    adminSetReviewEditValue("admin-review-latitude-edit", "");
-    adminSetReviewEditValue("admin-review-longitude-edit", "");
-    adminReviewLocationStatus("District corrected from source evidence. Find and confirm the exact pin.", "amber");
+function clearLpCanonicalLocationCascade() {
+  lpCanonicalLocationResolution = null;
+  populateLpRegionOptions("");
+  populateLpDistrictOptions("", "");
+  populateLpCityOptions("");
+  populateLpNeighborhoodOptions("", "");
+  const areaEl = document.getElementById("lp-area");
+  if (areaEl) {
+    areaEl.value = "";
+    areaEl.dataset.auto = "0";
+  }
+}
+
+function applyLpCanonicalLocation(location = {}) {
+  if (!location?.canonical_location_id || location.match !== "exact_alias" || Number(location.confidence) !== 1) return false;
+  lpCanonicalLocationResolution = location;
+  const region = location.region || regionForDistrict(location.district);
+  populateLpRegionOptions(region);
+  populateLpDistrictOptions(region, location.district);
+  populateLpCityOptions(location.district, location.town);
+  ensureSelectHasValue("lp-city", location.town, location.town);
+  populateLpNeighborhoodOptions(location.district, location.town, location.name);
+  ensureSelectHasValue("lp-neighborhood", location.name, location.name);
+  const areaEl = document.getElementById("lp-area");
+  if (areaEl) {
+    areaEl.value = location.name;
+    areaEl.dataset.auto = "1";
   }
   return true;
+}
+
+async function resolveLpCanonicalLocation(query = "", label = "") {
+  const resolution = await resolveUgandaLocationWithLabelFallback(query, label);
+  if (resolution.status === "matched" && applyLpCanonicalLocation(resolution.location)) return resolution.location;
+  clearLpCanonicalLocationCascade();
+  return null;
 }
 
 function adminReviewSetAddressSearchStatus(message = "", tone = "blue") {
@@ -24401,26 +24133,21 @@ async function adminReviewFindAddressOrPlace(options = {}) {
   }
   if (!point) point = await geocodeWithNominatim(query);
   if (!point) {
-    const fallbackDistrict = guessDistrictFromText(query) || document.getElementById("admin-review-district-edit")?.value || "";
-    const fallback = getDistrictCenter(fallbackDistrict) || MAP_DEFAULT_CENTER;
+    const canonicalResolution = await resolveUgandaLocationFromSharedRegistry(query);
+    const canonicalLocation = canonicalResolution.status === "matched" ? canonicalResolution.location : null;
+    if (canonicalLocation) applyAdminReviewCanonicalLocation(canonicalLocation);
+    else clearAdminReviewCanonicalLocation();
+    const fallback = getDistrictCenter(canonicalLocation?.district || "") || MAP_DEFAULT_CENTER;
     adminReviewSetLocationInputs(fallback.lat, fallback.lng, "Approximate fallback pin");
     adminReviewMoveLocationPin(fallback.lat, fallback.lng, { zoom: MAP_DISTRICT_ZOOM });
     adminSetReviewEditValue("admin-review-address-edit", query);
-    adminReviewApplyHierarchyFromText(query, fallback);
-    adminReviewSetAddressSearchStatus("No exact match found. Fallback pin is ready; move it if needed.", "amber");
+    adminReviewSetAddressSearchStatus(canonicalLocation
+      ? "Location resolved, but the exact address pin was not found. Move and confirm the pin before approval."
+      : "Location not recognised — pin set but region/district/area could NOT be auto-filled.", "amber");
     return false;
   }
-  const knownLocation = adminReviewBestKnownLocationFromText(point.label || query);
-  const knownPoint = adminReviewKnownLocationPoint(knownLocation);
-  if (knownLocation && knownPoint && adminReviewPointDistanceKm(point, knownLocation) > 15) {
-    point = {
-      ...point,
-      lat: knownPoint.lat,
-      lng: knownPoint.lng,
-      provider: point.provider || "known_area",
-      confidence: Math.max(Number(point.confidence) || 0, 0.7)
-    };
-  }
+  const canonicalResolution = await resolveUgandaLocationWithLabelFallback(query, point.label || "");
+  const canonicalLocation = canonicalResolution.status === "matched" ? canonicalResolution.location : null;
   if (input && point.label) input.value = point.label;
   adminSetReviewEditValue("admin-review-address-edit", point.label || query);
   if (point.streetName && !document.getElementById("admin-review-street-edit")?.value?.trim()) {
@@ -24429,12 +24156,14 @@ async function adminReviewFindAddressOrPlace(options = {}) {
   adminSetReviewEditValue("admin-review-geocoding-provider-edit", point.provider || "google");
   adminSetReviewEditValue("admin-review-location-confidence-edit", point.confidence != null ? String(point.confidence) : "0.65");
   adminSetReviewEditValue("admin-review-place-id-edit", point.placeId || "");
-  if (knownLocation) adminReviewApplySpecificKnownLocation(knownLocation, { forceArea: true });
-  else adminReviewApplyHierarchyFromText(point.label || query, point);
+  if (canonicalLocation) applyAdminReviewCanonicalLocation(canonicalLocation);
+  else clearAdminReviewCanonicalLocation();
   adminReviewSetLocationInputs(point.lat, point.lng, "Address pin found");
   adminReviewMoveLocationPin(point.lat, point.lng, { zoom: MAP_PROPERTY_ZOOM });
-  adminReviewSetAddressSearchStatus("Address found. Check the pin and use it before approval.", "green");
-  return true;
+  adminReviewSetAddressSearchStatus(canonicalLocation
+    ? "Address and canonical location found. Check the full cascade and pin before approval."
+    : "Location not recognised — pin set but region/district/area could NOT be auto-filled.", canonicalLocation ? "green" : "amber");
+  return Boolean(canonicalLocation);
 }
 
 function adminReviewLocationAutofillText(review = {}, facts = {}) {
@@ -24457,67 +24186,33 @@ function adminReviewLocationAutofillText(review = {}, facts = {}) {
   ]).join(", ");
 }
 
-function adminReviewAutoPopulateLocationFromSource(review = {}) {
+async function adminReviewAutoPopulateLocationFromSource(review = {}) {
   const facts = adminExtractReviewFacts(review);
-  const reviewPoint = adminReviewHasUsableCoordinates(review.latitude, review.longitude)
-    ? { lat: adminReviewCoordinateNumber(review.latitude), lng: adminReviewCoordinateNumber(review.longitude) }
-    : null;
-  const seedText = adminReviewLocationAutofillText(review, facts);
-  if (seedText || reviewPoint) {
-    adminReviewApplyHierarchyFromText(seedText, reviewPoint);
-  }
-  const sourceLocation = adminReviewBestKnownLocationFromText(seedText);
-  if (sourceLocation?.district) {
-    const currentPoint = adminReviewCurrentCoordinatesPoint();
-    const replaceCoordinates = !currentPoint || adminReviewPointDistanceKm(currentPoint, sourceLocation) > 15;
-    const replaceArea = adminReviewLocationConflictsWithKnownLocation(sourceLocation)
-      || !document.getElementById("admin-review-area-edit")?.value?.trim();
-    adminReviewApplySpecificKnownLocation(sourceLocation, {
-      forceArea: replaceArea,
-      forceCoordinates: replaceCoordinates,
-      message: "Source area pin found"
-    });
-  }
-  const latest = adminReviewCurrentLocationFields();
-  const areaEl = document.getElementById("admin-review-area-edit");
-  const autoArea = latest.neighborhood || facts.area || review.area || "";
-  if (areaEl && autoArea && !areaEl.value.trim()) {
-    areaEl.value = autoArea;
-    areaEl.dataset.auto = "1";
-  }
+  const extra = adminReviewExtraFields(review);
+  const query = uniqueTextParts([
+    facts.area,
+    review.area,
+    review.district,
+    review.address,
+    review.resolved_location_label
+  ]).join(", ");
   const searchEl = document.getElementById("admin-review-address-search-edit");
   const addressEl = document.getElementById("admin-review-address-edit");
-  const query = uniqueTextParts([
-    latest.street_name,
-    latest.address,
-    latest.neighborhood || autoArea,
-    latest.city,
-    latest.district,
-    latest.region
-  ]).join(", ");
   if (searchEl && !searchEl.value.trim() && query) searchEl.value = query;
   if (addressEl && !addressEl.value.trim() && query) addressEl.value = query;
+  const resolution = await resolveUgandaLocationFromSharedRegistry(uniqueTextParts([
+    extra.location_review_proposed_area || review.area || facts.area,
+    extra.location_review_proposed_district || review.district || facts.district
+  ]).join(", "));
+  if (String(adminActiveReview?.id || "") !== String(review.id || "")) return;
+  if (resolution.status === "matched") {
+    applyAdminReviewCanonicalLocation(resolution.location);
+    adminReviewSetAddressSearchStatus("Stored area resolved through the shared canonical registry. Confirm the pin before approval.", "green");
+  } else {
+    clearAdminReviewCanonicalLocation();
+    adminReviewSetAddressSearchStatus("Location not recognised — pin set but region/district/area could NOT be auto-filled.", "amber");
+  }
   adminReviewScheduleLocationSync();
-
-  const coordinates = adminReviewNormalizeCoordinateInputs(
-    document.getElementById("admin-review-latitude-edit")?.value,
-    document.getElementById("admin-review-longitude-edit")?.value
-  );
-  const shouldTryOnlineAutofill = !coordinates.exact && searchEl?.value?.trim()?.length >= 3;
-  if (!shouldTryOnlineAutofill) return;
-  const reviewId = String(review.id || "");
-  window.setTimeout(() => {
-    if (reviewId && String(adminActiveReview?.id || "") !== reviewId) return;
-    const latestCoordinates = adminReviewNormalizeCoordinateInputs(
-      document.getElementById("admin-review-latitude-edit")?.value,
-      document.getElementById("admin-review-longitude-edit")?.value
-    );
-    const latestQuery = (document.getElementById("admin-review-address-search-edit")?.value || "").trim();
-    if (latestCoordinates.exact || latestQuery.length < 3) return;
-    adminReviewFindAddressOrPlace({ auto: true }).catch(() => {
-      adminReviewSetAddressSearchStatus("Online place lookup was not available. Use the hierarchy fields and map pin.", "amber");
-    });
-  }, 500);
 }
 
 function adminLocationReclassificationReviewHtml(extra = {}) {
@@ -24603,29 +24298,18 @@ function adminReviewListingEditPanel(review = {}) {
     facts.area,
     facts.district
   ]).join(", ");
-  const sourceLocation = adminReviewBestKnownLocationFromText(locationSeedText);
-  const sourcePoint = adminReviewKnownLocationPoint(sourceLocation);
-  const sourceDistrictConflict = sourceLocation?.district
-    && review.district
-    && sourceLocation.district !== review.district;
-  const initialPoint = sourcePoint && (!reviewPoint || adminReviewPointDistanceKm(reviewPoint, sourceLocation) > 15)
-    ? sourcePoint
-    : (sourceDistrictConflict ? null : reviewPoint);
-  const inferredHierarchy = adminReviewInferHierarchyFromText(locationSeedText, initialPoint, facts.district || review.district || "");
+  const initialPoint = reviewPoint;
   const locationReviewRequired = extra.location_review_required === true || String(extra.location_review_required || "").toLowerCase() === "true";
   const proposedArea = locationReviewRequired ? String(extra.location_review_proposed_area || review.area || "").trim() : "";
   const proposedDistrict = locationReviewRequired ? String(extra.location_review_proposed_district || review.district || "").trim() : "";
   const proposedRegion = locationReviewRequired ? String(extra.location_review_proposed_region || "").trim() : "";
-  const proposedHierarchy = locationReviewRequired
-    ? adminReviewInferHierarchyFromText([proposedArea, proposedDistrict].filter(Boolean).join(", "), initialPoint, proposedDistrict)
-    : null;
-  const initialDistrict = proposedDistrict || inferredHierarchy.district || facts.district || review.district || "";
-  const initialRegion = proposedRegion || (initialDistrict ? regionForDistrict(initialDistrict) : (inferredHierarchy.region || review.region || extra.region || ""));
-  const cityCandidate = proposedHierarchy?.city || inferredHierarchy.city || review.city || extra.city || extra.town || "";
+  const initialDistrict = proposedDistrict || review.district || facts.district || "";
+  const initialRegion = proposedRegion || (initialDistrict ? regionForDistrict(initialDistrict) : (review.region || extra.region || ""));
+  const cityCandidate = review.city || extra.city || extra.town || "";
   const initialCity = adminReviewCityBelongsToDistrict(initialDistrict, cityCandidate) ? cityCandidate : "";
-  const neighborhoodCandidate = proposedHierarchy?.neighborhood || inferredHierarchy.neighborhood || review.neighborhood || extra.neighborhood || "";
+  const neighborhoodCandidate = review.neighborhood || extra.neighborhood || "";
   const initialNeighborhood = adminReviewNeighborhoodBelongsToCity(initialDistrict, initialCity, neighborhoodCandidate) ? neighborhoodCandidate : "";
-  const initialArea = proposedArea || proposedHierarchy?.neighborhood || proposedHierarchy?.city || inferredHierarchy.neighborhood || facts.area || inferredHierarchy.city || review.area || "";
+  const initialArea = proposedArea || review.area || facts.area || "";
   const initialLatitude = initialPoint ? Number(initialPoint.lat).toFixed(6) : (review.latitude ?? "");
   const initialLongitude = initialPoint ? Number(initialPoint.lng).toFixed(6) : (review.longitude ?? "");
   const initialStreet = review.street_name || extra.street_name || "";
@@ -24797,25 +24481,19 @@ function adminSetReviewEditValue(id, value) {
   el.value = value == null ? "" : String(value);
 }
 
-function adminApplyExtractedReviewFacts() {
+async function adminApplyExtractedReviewFacts() {
   if (!adminActiveReview) return;
   const facts = adminExtractReviewFacts(adminActiveReview);
   adminSetReviewEditValue("admin-review-title-edit", facts.title || adminActiveReview.title || "");
   adminSetReviewEditValue("admin-review-listing-type-edit", facts.listing_type || adminActiveReview.listing_type || "");
   adminReviewOnListingTypeChange();
   adminSetReviewEditValue("admin-review-lister-phone-edit", facts.contact_phone || adminActiveReview.lister_phone || "");
-  const sourceLocationText = adminReviewLocationAutofillText(adminActiveReview, facts);
-  const sourceLocation = adminReviewBestKnownLocationFromText(sourceLocationText);
-  const sourcePoint = adminReviewKnownLocationPoint(sourceLocation);
-  adminSetReviewEditValue("admin-review-area-edit", sourceLocation?.neighborhood || sourceLocation?.name || facts.area || adminActiveReview.area || "");
-  adminReviewApplyHierarchyFromText(sourceLocationText || [facts.area, facts.district, adminActiveReview.address].filter(Boolean).join(", "), sourcePoint);
-  if (sourceLocation?.district) {
-    adminReviewApplySpecificKnownLocation(sourceLocation, {
-      forceArea: true,
-      forceCoordinates: true,
-      message: "Source area pin found"
-    });
-  }
+  const locationResolution = await resolveUgandaLocationFromSharedRegistry(uniqueTextParts([
+    facts.area || adminActiveReview.area,
+    facts.district || adminActiveReview.district
+  ]).join(", "));
+  if (locationResolution.status === "matched") applyAdminReviewCanonicalLocation(locationResolution.location);
+  else clearAdminReviewCanonicalLocation();
   adminSetReviewEditValue("admin-review-property-type-edit", facts.property_type || adminActiveReview.property_type || "");
   adminSetReviewEditValue("admin-review-transaction-type-edit", commercialTransactionForProperty({ ...adminActiveReview, ...facts }));
   adminSetReviewEditValue("admin-review-commercial-type-edit", canonicalCommercialTypeForProperty({ ...adminActiveReview, ...facts }));
@@ -25090,53 +24768,19 @@ async function initAdminReviewLocationMap(review = adminActiveReview) {
 function collectAdminReviewListingPatch() {
   const get = (id) => document.getElementById(id)?.value ?? "";
   const listingType = normalizeType(get("admin-review-listing-type-edit"));
-  let district = get("admin-review-district-edit");
-  let region = district ? regionForDistrict(district) : get("admin-review-region-edit");
-  let city = get("admin-review-city-edit");
-  if (city && !adminReviewCityBelongsToDistrict(district, city)) city = "";
-  let neighborhood = get("admin-review-neighborhood-edit");
-  if (neighborhood && !adminReviewNeighborhoodBelongsToCity(district, city, neighborhood)) neighborhood = "";
-  let area = get("admin-review-area-edit");
-  const areaLocation = adminReviewBestKnownLocationFromText(area);
-  if (areaLocation?.district && district && areaLocation.district !== district) {
-    area = neighborhood || city || district;
-  }
-  let coordinates = adminReviewNormalizeCoordinateInputs(
+  const canonical = adminReviewCanonicalLocationResolution?.match === "exact_alias"
+    && Number(adminReviewCanonicalLocationResolution?.confidence) === 1
+    ? adminReviewCanonicalLocationResolution
+    : null;
+  const district = canonical?.district || get("admin-review-district-edit");
+  const region = canonical?.region || (district ? regionForDistrict(district) : get("admin-review-region-edit"));
+  const city = canonical?.town || get("admin-review-city-edit");
+  const neighborhood = canonical?.name || get("admin-review-neighborhood-edit");
+  const area = canonical?.name || get("admin-review-area-edit");
+  const coordinates = adminReviewNormalizeCoordinateInputs(
     get("admin-review-latitude-edit"),
     get("admin-review-longitude-edit")
   );
-  const sourceLocation = adminReviewBestKnownLocationFromText(uniqueTextParts([
-    get("admin-review-address-edit"),
-    get("admin-review-address-search-edit"),
-    area,
-    neighborhood,
-    city,
-    district
-  ]).join(", "));
-  if (sourceLocation?.district && (
-    !district
-    || sourceLocation.district !== district
-    || (sourceLocation.neighborhood && sourceLocation.neighborhood !== neighborhood)
-    || (sourceLocation.city && sourceLocation.city !== city)
-  )) {
-    const enriched = enrichKnownUgandaAreaPoint(sourceLocation, sourceLocation.neighborhood || sourceLocation.name || sourceLocation.alias);
-    district = enriched.district || district;
-    region = district ? regionForDistrict(district) : region;
-    city = enriched.city || "";
-    neighborhood = enriched.neighborhood || "";
-    area = neighborhood || enriched.name || area;
-  }
-  const sourcePoint = adminReviewKnownLocationPoint(sourceLocation);
-  if (sourcePoint && (!coordinates.exact || adminReviewPointDistanceKm({
-    lat: Number(coordinates.latitude),
-    lng: Number(coordinates.longitude)
-  }, sourceLocation) > 15)) {
-    coordinates = {
-      latitude: Number(sourcePoint.lat).toFixed(6),
-      longitude: Number(sourcePoint.lng).toFixed(6),
-      exact: true
-    };
-  }
   const amenities = get("admin-review-amenities-edit")
     .split(/[,;\n]/)
     .map((item) => item.trim())
@@ -25182,6 +24826,9 @@ function collectAdminReviewListingPatch() {
     geocoding_provider: get("admin-review-geocoding-provider-edit"),
     place_id: get("admin-review-place-id-edit"),
     location_confidence: get("admin-review-location-confidence-edit"),
+    canonical_location_id: canonical?.canonical_location_id || "",
+    canonical_location_level: canonical?.level || "",
+    location_resolution_status: canonical ? "canonical_shared_resolver" : "unresolved",
     map_pin_source: coordinates.exact ? "king_review" : "king_review_area",
     amenities: mergedAmenities,
     nearest_university: listingType === "student" ? nearestUniversity : "",
@@ -25275,6 +24922,7 @@ function adminSocialSourceTrustHtml(review = {}) {
 
 function renderAdminReviewPanel(review) {
   adminActiveReview = review;
+  adminReviewCanonicalLocationResolution = null;
   adminReviewEvidence = {};
   const panel = document.getElementById("admin-review-panel");
   const content = document.getElementById("admin-review-content");
@@ -25884,6 +25532,14 @@ async function adminSetListingStatus(localId, nextStatus, backendId = "", option
   const locationReclassificationReviewRequired = activeReviewExtraFields.location_review_required === true
     || String(activeReviewExtraFields.location_review_required || "").toLowerCase() === "true";
   const locationReclassificationConfirmed = document.getElementById("admin-review-location-reclassification-confirm")?.checked === true;
+  const canonicalLocationConfirmed = adminReviewCanonicalLocationResolution?.match === "exact_alias"
+    && Number(adminReviewCanonicalLocationResolution?.confidence) === 1
+    && Boolean(adminReviewCanonicalLocationResolution?.canonical_location_id);
+  if (normalizedStatus === "approved" && !canonicalLocationConfirmed) {
+    toast("Resolve the area through the shared canonical location registry before approving.");
+    document.getElementById("admin-review-address-search-edit")?.focus();
+    return;
+  }
   if (normalizedStatus === "approved" && locationReclassificationReviewRequired && !locationReclassificationConfirmed) {
     toast("Compare and confirm the reclassified canonical location before approving.");
     document.getElementById("admin-review-location-reclassification-confirm")?.focus();
@@ -28516,7 +28172,7 @@ async function geocodeWithNominatim(query) {
   }
 }
 
-function applyLpAddressPlaceResult(point, query = "") {
+async function applyLpAddressPlaceResult(point, query = "") {
   if (!point || !Number.isFinite(Number(point.lat)) || !Number.isFinite(Number(point.lng))) return false;
   const label = point.label || query || "";
   const addressEl = document.getElementById("lp-address");
@@ -28533,15 +28189,17 @@ function applyLpAddressPlaceResult(point, query = "") {
   setLpHiddenValue("lp-geocoded-at", new Date().toISOString());
   setLpHiddenValue("lp-location-confidence", point.confidence != null ? String(point.confidence) : "0.65");
   setLpResolvedLocationLabel(label);
-  applyResolvedAddressHierarchy(label, point);
   setListPinCoords(point.lat, point.lng, true, true);
+  const canonicalLocation = await resolveLpCanonicalLocation(query, label);
   const confirmEl = document.getElementById("lp-location-confirm");
   if (confirmEl) confirmEl.checked = false;
   updateLpLocationConfirmButton();
   updateListPreview();
   renderListReviewSummary();
-  setLpAddressSearchStatus(translateListingLabel("Address found. Check the pin and confirm the location."), "success");
-  return true;
+  setLpAddressSearchStatus(canonicalLocation
+    ? translateListingLabel("Address and canonical location found. Check the full location cascade and pin.")
+    : translateListingLabel("Location not recognised — pin set but region/district/area could NOT be auto-filled."), canonicalLocation ? "success" : "error");
+  return Boolean(canonicalLocation);
 }
 
 function onLpAddressSearchInput() {
@@ -28602,9 +28260,8 @@ async function findLpAddressOrPlace() {
     point = await geocodeWithNominatim(query);
   }
   if (!point) {
-    const region = lpVal("lp-region");
-    const district = lpVal("list-district-sel") || guessDistrictFromText(query);
-    const fallback = getDistrictCenter(district) || getRegionCenter(region) || MAP_DEFAULT_CENTER;
+    const canonicalLocation = await resolveLpCanonicalLocation(query);
+    const fallback = getDistrictCenter(canonicalLocation?.district || "") || MAP_DEFAULT_CENTER;
     setListPinCoords(fallback.lat, fallback.lng, true, true);
     const addressEl = document.getElementById("lp-address");
     if (addressEl) {
@@ -28616,10 +28273,12 @@ async function findLpAddressOrPlace() {
     setLpHiddenValue("lp-geocoded-at", new Date().toISOString());
     setLpHiddenValue("lp-location-confidence", "0.25");
     setLpResolvedLocationLabel(query);
-    setLpAddressSearchStatus(translateListingLabel("We could not find an exact match. The map is ready for you to place the pin manually."), "error");
+    setLpAddressSearchStatus(canonicalLocation
+      ? translateListingLabel("Canonical location found, but no address pin was returned. Place and confirm the pin manually.")
+      : translateListingLabel("Location not recognised — pin set but region/district/area could NOT be auto-filled."), canonicalLocation ? "info" : "error");
     return false;
   }
-  return applyLpAddressPlaceResult(point, query);
+  return await applyLpAddressPlaceResult(point, query);
 }
 
 function setLpCurrentLocationStatus(message = "", tone = "info") {
@@ -29367,7 +29026,7 @@ function refreshListPinMapFromInputs() {
   if (!lpPinMap) return;
   const region = lpVal("lp-region");
   const area = lpVal("lp-area");
-  const district = lpVal("list-district-sel") || guessDistrictFromText(area);
+  const district = lpVal("list-district-sel");
   const city = lpVal("lp-city");
   const neighborhood = lpVal("lp-neighborhood");
   const streetName = lpVal("lp-street-name");
@@ -29578,7 +29237,12 @@ function validateListStep1() {
   }
   const selectedDistrict = lpVal("list-district-sel");
   const selectedArea = lpVal("lp-area");
-  const canonicalArea = findLpCanonicalAreaOption(selectedArea, selectedDistrict);
+  const canonicalArea = lpCanonicalLocationResolution?.match === "exact_alias"
+    && Number(lpCanonicalLocationResolution?.confidence) === 1
+    && lpCanonicalLocationResolution?.district === selectedDistrict
+    && String(lpCanonicalLocationResolution?.name || "").trim().toLowerCase() === String(selectedArea || "").trim().toLowerCase()
+    ? lpCanonicalLocationResolution
+    : null;
   if (!lpVal("lp-region")) {
     missing.push("Region");
     markLpFieldError("lp-region", "Select the region for this property.");
@@ -29589,7 +29253,7 @@ function validateListStep1() {
   }
   if (!selectedArea || !canonicalArea) {
     missing.push("Canonical area");
-    markLpFieldError("lp-area", "Choose a neighbourhood from the canonical suggestions for this district.");
+    markLpFieldError("lp-area", "Find or choose an exact area from the shared canonical location registry.");
   }
   if (!parseIntSafe(lpVal("lp-price"))) {
     missing.push("Price");
@@ -30154,6 +29818,10 @@ function buildListPropertyPayload(photoUploadUrls = lpPhotoUploadUrls) {
   const neighborhood = lpVal("lp-neighborhood");
   const streetName = lpVal("lp-street-name");
   const area = lpVal("lp-area") || neighborhood || city;
+  const canonicalLocation = lpCanonicalLocationResolution?.match === "exact_alias"
+    && Number(lpCanonicalLocationResolution?.confidence) === 1
+    ? lpCanonicalLocationResolution
+    : null;
   const description = lpVal("lp-description");
   const price = parseIntSafe(lpVal("lp-price"));
   const landTitleAvailability = normalizeLandTitleAvailabilityValue(extra.land_title_available)
@@ -30261,6 +29929,11 @@ function buildListPropertyPayload(photoUploadUrls = lpPhotoUploadUrls) {
     })),
     extra_fields: {
       ...extra,
+      canonical_location_id: canonicalLocation?.canonical_location_id || null,
+      canonical_location_level: canonicalLocation?.level || null,
+      canonical_location_match: canonicalLocation?.match || null,
+      canonical_location_confidence: canonicalLocation?.confidence ?? 0,
+      location_resolution_status: canonicalLocation ? "canonical_shared_resolver" : "unresolved",
       region: region || null,
       size_raw: sizeRaw || null,
       land_size_value: landParsed.value,
@@ -36739,13 +36412,43 @@ function findLpLocationOptionByText(options = [], getValue, text = "") {
 
 function getDistrictLocationTree(district) {
   if (!district) return [];
-  if (UG_LOCATION_TREE[district]) return UG_LOCATION_TREE[district];
-  const canonicalAreas = UG_MAJOR_DISTRICT_LOCATIONS[district] || [];
-  if (!canonicalAreas.length) return [];
-  return [{
-    city: `${district} locations`,
-    neighborhoods: canonicalAreas.map((name) => ({ name }))
-  }];
+  return UG_LOCATION_TREE[district] || [];
+}
+
+const sharedLocationCatalogRequests = new Map();
+
+async function loadSharedLocationCatalogForDistrict(district = "") {
+  const cleanDistrict = String(district || "").trim();
+  if (!cleanDistrict) return [];
+  if (Array.isArray(UG_LOCATION_TREE[cleanDistrict]) && UG_LOCATION_TREE[cleanDistrict].length) {
+    return UG_LOCATION_TREE[cleanDistrict];
+  }
+  if (sharedLocationCatalogRequests.has(cleanDistrict)) return sharedLocationCatalogRequests.get(cleanDistrict);
+  const request = apiRequest(`/api/properties/locations/catalog?district=${encodeURIComponent(cleanDistrict)}`, { skipAuth: true })
+    .then((response) => {
+      const groups = new Map();
+      (Array.isArray(response?.data) ? response.data : []).forEach((item) => {
+        if (!item?.name || item.district !== cleanDistrict) return;
+        const town = item.town || `${cleanDistrict} Town`;
+        if (!groups.has(town)) groups.set(town, new Map());
+        groups.get(town).set(item.name, {
+          name: item.name,
+          ...(Number.isFinite(item.latitude) ? { lat: item.latitude } : {}),
+          ...(Number.isFinite(item.longitude) ? { lng: item.longitude } : {})
+        });
+      });
+      UG_LOCATION_TREE[cleanDistrict] = Array.from(groups.entries())
+        .map(([city, neighborhoods]) => ({
+          city,
+          neighborhoods: Array.from(neighborhoods.values()).sort((a, b) => a.name.localeCompare(b.name))
+        }))
+        .sort((a, b) => a.city.localeCompare(b.city));
+      return UG_LOCATION_TREE[cleanDistrict];
+    })
+    .catch(() => [])
+    .finally(() => sharedLocationCatalogRequests.delete(cleanDistrict));
+  sharedLocationCatalogRequests.set(cleanDistrict, request);
+  return request;
 }
 
 function findLpCanonicalAreaOption(value, district = "") {
@@ -36829,17 +36532,13 @@ function syncLpAreaFromHierarchy() {
   updateLpLocationStepLocks();
 }
 
-function onLpAreaManualInput() {
+async function onLpAreaManualInput() {
   lpAreaManualOverride = true;
   const areaValue = lpVal("lp-area");
-  const canonicalSelection = findLpCanonicalAreaOption(areaValue);
-  if (canonicalSelection) {
-    const region = regionForDistrict(canonicalSelection.district);
-    populateLpRegionOptions(region);
-    populateLpDistrictOptions(region, canonicalSelection.district);
-    populateLpCityOptions(canonicalSelection.district, canonicalSelection.city);
-    populateLpNeighborhoodOptions(canonicalSelection.district, canonicalSelection.city, canonicalSelection.neighborhood);
-  }
+  const district = lpVal("list-district-sel");
+  const resolution = await resolveUgandaLocationFromSharedRegistry(uniqueTextParts([areaValue, district]).join(", "));
+  if (resolution.status === "matched") applyLpCanonicalLocation(resolution.location);
+  else lpCanonicalLocationResolution = null;
   populateListAddressSuggestions({
     district: lpVal("list-district-sel"),
     city: lpVal("lp-city"),
@@ -36952,6 +36651,7 @@ function improveLpDescription() {
 }
 
 function onLpRegionChange() {
+  lpCanonicalLocationResolution = null;
   const region = lpVal("lp-region");
   const keepDistrict = lpVal("list-district-sel");
   populateLpDistrictOptions(region, keepDistrict);
@@ -36971,12 +36671,14 @@ function onLpRegionChange() {
   updateLpLocationStepLocks();
 }
 
-function onLpDistrictChange() {
+async function onLpDistrictChange() {
+  lpCanonicalLocationResolution = null;
   const district = lpVal("list-district-sel");
   const regionEl = document.getElementById("lp-region");
   if (regionEl && district) {
     regionEl.value = regionForDistrict(district);
   }
+  await loadSharedLocationCatalogForDistrict(district);
   populateLpCityOptions(district);
   populateLpNeighborhoodOptions(district, "");
   lpAreaManualOverride = false;
@@ -36993,6 +36695,7 @@ function onLpDistrictChange() {
 }
 
 function onLpCityChange() {
+  lpCanonicalLocationResolution = null;
   const district = lpVal("list-district-sel");
   const city = lpVal("lp-city");
   populateLpNeighborhoodOptions(district, city);
@@ -37009,7 +36712,7 @@ function onLpCityChange() {
   updateLpLocationStepLocks();
 }
 
-function onLpNeighborhoodChange() {
+async function onLpNeighborhoodChange() {
   lpAreaManualOverride = false;
   lpStreetManualOverride = false;
   lpAddressManualOverride = false;
@@ -37018,6 +36721,12 @@ function onLpNeighborhoodChange() {
   if (streetEl) streetEl.value = "";
   if (addressEl) addressEl.value = "";
   syncLpAreaFromHierarchy();
+  const resolution = await resolveUgandaLocationFromSharedRegistry(uniqueTextParts([
+    lpVal("lp-neighborhood"),
+    lpVal("list-district-sel")
+  ]).join(", "));
+  if (resolution.status === "matched") applyLpCanonicalLocation(resolution.location);
+  else lpCanonicalLocationResolution = null;
   updateListPreview();
   refreshListPinMapFromInputs();
   updateLpLocationStepLocks();
@@ -37728,22 +37437,6 @@ function applyNearMe(page) {
     timeout: 12000,
     maximumAge: 60000
   });
-}
-
-function guessDistrictFromText(text) {
-  const q = String(text || "").toLowerCase().trim();
-  if (!q) return "";
-  const exact = DISTRICTS.find((d) => d.toLowerCase() === q);
-  if (exact) return exact;
-  const starts = DISTRICTS.find((d) => d.toLowerCase().startsWith(q));
-  if (starts) return starts;
-  const fuzzy = DISTRICTS.find((d) => q.includes(d.toLowerCase()) || d.toLowerCase().includes(q));
-  if (fuzzy) return fuzzy;
-  const areaHit = PROPERTIES.find((p) => {
-    const area = (p.area || "").toLowerCase();
-    return area && (area.includes(q) || q.includes(area));
-  });
-  return areaHit?.district || "";
 }
 
 function buildDistrictCenterCache() {
@@ -45548,15 +45241,24 @@ function renderCanonicalLocationSuggestions(config, response = {}) {
   const shell = document.getElementById(sectionSearchShellId(config.key));
   const panel = shell?.querySelector("[data-canonical-location-suggestions]");
   if (!panel) return;
-  const suggestions = Array.isArray(response.data) ? response.data.slice(0, 8) : [];
+  const exactSuggestions = Array.isArray(response.data) ? response.data : [];
+  const disambiguationSuggestions = Array.isArray(response.meta?.disambiguation_suggestions)
+    ? response.meta.disambiguation_suggestions.map((item) => ({ ...item, explicit_selection_required: true }))
+    : [];
+  const didYouMeanSuggestions = Array.isArray(response.meta?.did_you_mean_suggestions)
+    ? response.meta.did_you_mean_suggestions.map((item) => ({ ...item, explicit_selection_required: true }))
+    : [];
+  const suggestions = [...exactSuggestions, ...disambiguationSuggestions, ...didYouMeanSuggestions].slice(0, 8);
   canonicalLocationStateFor(config.key).suggestions = suggestions;
   if (!suggestions.length) {
     panel.innerHTML = `<div class="canonical-location-empty">No matching Uganda location. Try a nearby town or district.</div>`;
     panel.classList.add("open");
     return;
   }
-  const prefix = response.meta?.did_you_mean
-    ? `<div class="canonical-location-empty"><strong>Did you mean?</strong></div>`
+  const prefix = response.meta?.disambiguation_required
+    ? `<div class="canonical-location-empty"><strong>Choose the correct district — this name exists in more than one place.</strong></div>`
+    : response.meta?.did_you_mean
+      ? `<div class="canonical-location-empty"><strong>Did you mean? Choose a suggestion explicitly.</strong></div>`
     : "";
   panel.innerHTML = `${prefix}${suggestions.map((item, index) => `
     <button type="button" class="canonical-location-suggestion" data-canonical-location-index="${index}">
@@ -46667,284 +46369,7 @@ function numericValue(v) {
   return match ? parseFloat(match[0]) : 0;
 }
 
-const UG_LOCATION_TREE = {
-  Kampala: [
-    {
-      city: "Central Kampala",
-      neighborhoods: [
-        { name: "Nakasero", lat: 0.318, lng: 32.582 },
-        { name: "Kololo", lat: 0.356, lng: 32.612 },
-        { name: "Old Kampala", lat: 0.313, lng: 32.569 },
-        { name: "Makerere", lat: 0.335, lng: 32.568 },
-        { name: "Wandegeya", lat: 0.336, lng: 32.57 }
-      ]
-    },
-    {
-      city: "Kawempe",
-      neighborhoods: [
-        { name: "Kawempe", lat: 0.379, lng: 32.557 },
-        { name: "Bwaise", lat: 0.36, lng: 32.557 },
-        { name: "Kalerwe", lat: 0.371, lng: 32.57 },
-        { name: "Mulago", lat: 0.34, lng: 32.577 },
-        { name: "Kanyanya", lat: 0.389, lng: 32.578 },
-        { name: "Mpererwe", lat: 0.411, lng: 32.585 },
-        { name: "Kyebando", lat: 0.365, lng: 32.574 },
-        { name: "Komamboga", lat: 0.394, lng: 32.598 }
-      ]
-    },
-    {
-      city: "Nakawa",
-      neighborhoods: [
-        { name: "Ntinda", lat: 0.357, lng: 32.612 },
-        { name: "Naguru", lat: 0.338, lng: 32.611 },
-        { name: "Bukoto", lat: 0.346, lng: 32.591 },
-        { name: "Kisaasi", lat: 0.364, lng: 32.589 },
-        { name: "Kyanja", lat: 0.384, lng: 32.596 },
-        { name: "Kiwatule", lat: 0.372, lng: 32.625 },
-        { name: "Bugolobi", lat: 0.317, lng: 32.612 }
-      ]
-    },
-    {
-      city: "Makindye",
-      neighborhoods: [
-        { name: "Muyenga", lat: 0.285, lng: 32.594 },
-        { name: "Ggaba", lat: 0.274, lng: 32.619 },
-        { name: "Kansanga", lat: 0.289, lng: 32.607 },
-        { name: "Buziga", lat: 0.277, lng: 32.596 },
-        { name: "Bunga", lat: 0.262, lng: 32.623 },
-        { name: "Kabalagala", lat: 0.298, lng: 32.603 },
-        { name: "Makindye", lat: 0.301, lng: 32.586 },
-        { name: "Nsambya", lat: 0.303, lng: 32.589 },
-        { name: "Katwe", lat: 0.305, lng: 32.574 }
-      ]
-    },
-    {
-      city: "Rubaga",
-      neighborhoods: [
-        { name: "Rubaga", lat: 0.298, lng: 32.545 },
-        { name: "Nateete", lat: 0.318, lng: 32.536 },
-        { name: "Mengo", lat: 0.306, lng: 32.557 },
-        { name: "Lungujja", lat: 0.302, lng: 32.548 },
-        { name: "Kasubi", lat: 0.333, lng: 32.555 },
-        { name: "Namirembe", lat: 0.315, lng: 32.559 },
-        { name: "Kabowa", lat: 0.285, lng: 32.54 },
-        { name: "Bukesa", lat: 0.325, lng: 32.567 },
-        { name: "Busega", lat: 0.309, lng: 32.526 }
-      ]
-    }
-  ],
-  Wakiso: [
-    {
-      city: "Entebbe",
-      neighborhoods: [
-        { name: "Kitoro", lat: 0.055, lng: 32.464 },
-        { name: "Nakiwogo", lat: 0.061, lng: 32.458 },
-        { name: "Bugonga", lat: 0.045, lng: 32.453 },
-        { name: "Katabi", lat: 0.071, lng: 32.499 },
-        { name: "Abayita Ababiri", lat: 0.106, lng: 32.525 },
-        { name: "Kitende", lat: 0.198, lng: 32.533 },
-        { name: "Kajjansi", lat: 0.208, lng: 32.552 },
-        { name: "Bwebajja", lat: 0.179, lng: 32.541 },
-        { name: "Namasuba", lat: 0.258, lng: 32.558 },
-        { name: "Ndejje", lat: 0.244, lng: 32.553 },
-        { name: "Lubugumu", lat: 0.239, lng: 32.554 }
-      ]
-    },
-    {
-      city: "Kira",
-      neighborhoods: [
-        { name: "Namugongo", lat: 0.363, lng: 32.636 },
-        { name: "Bweyogerere", lat: 0.351, lng: 32.676 },
-        { name: "Kyaliwajjala", lat: 0.377, lng: 32.639 },
-        { name: "Naalya", lat: 0.366, lng: 32.636 },
-        { name: "Najjera", lat: 0.396, lng: 32.615 },
-        { name: "Bulindo", lat: 0.418, lng: 32.633 },
-        { name: "Sonde", lat: 0.378, lng: 32.698 }
-      ]
-    },
-    {
-      city: "Nansana",
-      neighborhoods: [
-        { name: "Nansana", lat: 0.364, lng: 32.52 },
-        { name: "Nabweru", lat: 0.378, lng: 32.525 },
-        { name: "Wamala", lat: 0.373, lng: 32.506 },
-        { name: "Gganda", lat: 0.352, lng: 32.536 }
-      ]
-    },
-    {
-      city: "Wakiso Town",
-      neighborhoods: [
-        { name: "Wakiso Central", lat: 0.404, lng: 32.459 },
-        { name: "Kakiri", lat: 0.409, lng: 32.38 },
-        { name: "Bujjuko", lat: 0.374, lng: 32.389 },
-        { name: "Masulita", lat: 0.51, lng: 32.46 },
-        { name: "Kasanje", lat: 0.217, lng: 32.383 },
-        { name: "Nabweru South", lat: 0.367, lng: 32.526 },
-        { name: "Matugga", lat: 0.463, lng: 32.525 },
-        { name: "Maya", lat: 0.253, lng: 32.418 },
-        { name: "Garuga", lat: 0.09, lng: 32.543 },
-        { name: "Buloba", lat: 0.328, lng: 32.444 },
-        { name: "Nsangi", lat: 0.24, lng: 32.456 },
-        { name: "Zana", lat: 0.251, lng: 32.56 },
-        { name: "Kisubi", lat: 0.119, lng: 32.533 },
-        { name: "Nabbingo", lat: 0.295, lng: 32.477 },
-        { name: "Kyengera", lat: 0.294, lng: 32.501 }
-      ]
-    }
-  ],
-  Luwero: [
-    {
-      city: "Luwero Town",
-      neighborhoods: [
-        { name: "Luwero", lat: 0.8492, lng: 32.4731 },
-        { name: "Ndibulungi" }
-      ]
-    }
-  ],
-  Mukono: [
-    {
-      city: "Mukono",
-      neighborhoods: [
-        { name: "Mukono Town", lat: 0.353, lng: 32.753 },
-        { name: "Seeta", lat: 0.361, lng: 32.705 },
-        { name: "Goma", lat: 0.383, lng: 32.742 },
-        { name: "Namanve", lat: 0.348, lng: 32.697 },
-        { name: "Bajjo", lat: 0.333, lng: 32.741 }
-      ]
-    }
-  ],
-  Jinja: [
-    {
-      city: "Jinja City",
-      neighborhoods: [
-        { name: "Jinja Central", lat: 0.424, lng: 33.204 },
-        { name: "Masese", lat: 0.406, lng: 33.209 },
-        { name: "Nalufenya", lat: 0.427, lng: 33.222 },
-        { name: "Bugembe", lat: 0.457, lng: 33.231 }
-      ]
-    }
-  ],
-  Mbarara: [
-    {
-      city: "Mbarara City",
-      neighborhoods: [
-        { name: "Mbarara Town", lat: -0.607, lng: 30.654 },
-        { name: "Nyamitanga", lat: -0.62, lng: 30.646 },
-        { name: "Kakoba", lat: -0.605, lng: 30.664 },
-        { name: "Ruti", lat: -0.633, lng: 30.654 },
-        { name: "Biharwe", lat: -0.556, lng: 30.643 }
-      ]
-    }
-  ],
-  Gulu: [
-    {
-      city: "Gulu City",
-      neighborhoods: [
-        { name: "Gulu Central", lat: 2.775, lng: 32.299 },
-        { name: "Pece", lat: 2.789, lng: 32.293 },
-        { name: "Layibi", lat: 2.767, lng: 32.292 },
-        { name: "Bardege", lat: 2.787, lng: 32.315 },
-        { name: "Kanyagoga", lat: 2.755, lng: 32.301 }
-      ]
-    }
-  ],
-  Mbale: [
-    {
-      city: "Mbale City",
-      neighborhoods: [
-        { name: "Mbale Central", lat: 1.062, lng: 34.175 },
-        { name: "Industrial Area", lat: 1.061, lng: 34.186 },
-        { name: "Namatala", lat: 1.08, lng: 34.19 },
-        { name: "Senior Quarters", lat: 1.055, lng: 34.17 }
-      ]
-    }
-  ],
-  Lira: [
-    {
-      city: "Lira City",
-      neighborhoods: [
-        { name: "Lira Central", lat: 2.249, lng: 32.899 },
-        { name: "Adyel", lat: 2.268, lng: 32.895 },
-        { name: "Barapwo", lat: 2.234, lng: 32.887 },
-        { name: "Ireda", lat: 2.241, lng: 32.912 }
-      ]
-    }
-  ],
-  Arua: [
-    {
-      city: "Arua City",
-      neighborhoods: [
-        { name: "Arua Central", lat: 3.02, lng: 30.91 },
-        { name: "Olua", lat: 3.037, lng: 30.912 },
-        { name: "Awindiri", lat: 3.006, lng: 30.89 },
-        { name: "Pokea", lat: 3.028, lng: 30.932 }
-      ]
-    }
-  ],
-  Kabarole: [
-    {
-      city: "Fort Portal",
-      neighborhoods: [
-        { name: "Fort Portal Central", lat: 0.671, lng: 30.254 },
-        { name: "Kijura", lat: 0.679, lng: 30.272 },
-        { name: "Boma", lat: 0.675, lng: 30.248 },
-        { name: "Rwengoma", lat: 0.665, lng: 30.243 }
-      ]
-    }
-  ],
-  Hoima: [
-    {
-      city: "Hoima City",
-      neighborhoods: [
-        { name: "Hoima Central", lat: 1.434, lng: 31.352 },
-        { name: "Kasingo", lat: 1.446, lng: 31.361 },
-        { name: "Busiisi", lat: 1.419, lng: 31.344 },
-        { name: "Kyentale", lat: 1.441, lng: 31.337 }
-      ]
-    }
-  ],
-  Masindi: [
-    {
-      city: "Masindi Municipality",
-      neighborhoods: [
-        { name: "Masindi", lat: 1.683, lng: 31.715 },
-        { name: "Masindi Central", lat: 1.683, lng: 31.715 },
-        { name: "Kijura", lat: 1.69, lng: 31.72 },
-        { name: "Kisanja", lat: 1.676, lng: 31.711 },
-        { name: "Nyangahya", lat: 1.704, lng: 31.725 }
-      ]
-    },
-    {
-      city: "Masindi Town",
-      neighborhoods: [
-        { name: "Masindi Town", lat: 1.683, lng: 31.715 },
-        { name: "Kigulya", lat: 1.697, lng: 31.706 }
-      ]
-    }
-  ],
-  Masaka: [
-    {
-      city: "Masaka City",
-      neighborhoods: [
-        { name: "Masaka Central", lat: -0.333, lng: 31.733 },
-        { name: "Nyendo", lat: -0.343, lng: 31.725 },
-        { name: "Ssenyange", lat: -0.326, lng: 31.737 },
-        { name: "Kimaanya", lat: -0.325, lng: 31.724 }
-      ]
-    }
-  ],
-  Kabale: [
-    {
-      city: "Kabale Municipality",
-      neighborhoods: [
-        { name: "Kabale Central", lat: -1.249, lng: 29.989 },
-        { name: "Rutooma", lat: -1.257, lng: 29.996 },
-        { name: "Kekubo", lat: -1.241, lng: 29.981 },
-        { name: "Butobere", lat: -1.253, lng: 30.001 }
-      ]
-    }
-  ]
-};
+const UG_LOCATION_TREE = {};
 
 const UG_REGIONS = ["Central", "Eastern", "Northern", "Western"];
 const UG_REGION_CENTERS = {
@@ -46998,23 +46423,7 @@ const DISTRICT_TO_REGION = (() => {
 
 // Canonical, real place names for inventory districts not covered by the
 // detailed coordinate tree. Never manufacture "Central/East/West" areas.
-const UG_MAJOR_DISTRICT_LOCATIONS = {
-  Buikwe: ["Njeru", "Lugazi", "Najjembe"],
-  Mpigi: ["Buwama", "Kammengo", "Muduuma"],
-  Mityana: ["Busunju", "Zigoti", "Ttamu"],
-  Kayunga: ["Kangulumira", "Nazigo", "Bbaale"],
-  Kamuli: ["Bugulumbya", "Namwendwa", "Mbulamuti"],
-  Iganga: ["Busei", "Nakalama", "Nambale"],
-  Busia: ["Dabani", "Masafu", "Lumino"],
-  Tororo: ["Malaba", "Nagongera", "Osukuru"],
-  Soroti: ["Madera", "Nakatunya", "Pamba"],
-  Kasese: ["Nyamwamba", "Kilembe", "Hima"],
-  Bushenyi: ["Ishaka", "Nyakabirizi", "Ruharo"],
-  Ntungamo: ["Rubaare", "Rwashamaire", "Itojo"],
-  Rukungiri: ["Buyanja", "Kebisoni", "Nyakagyeme"],
-  Sheema: ["Kabwohe", "Itendero", "Kigarama"],
-  Rakai: ["Kacheera", "Ddwaniro", "Lwamaggwa"]
-};
+const UG_MAJOR_DISTRICT_LOCATIONS = {};
 
 const UGANDA_UNIVERSITIES = [
   "Makerere University",

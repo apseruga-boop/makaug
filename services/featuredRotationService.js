@@ -3,7 +3,8 @@
 const logger = require('../config/logger');
 const {
   canonicalizeUgandaLocation,
-  normalizeLocationKey
+  normalizeLocationKey,
+  resolveCanonicalUgandaLocationFromText,
 } = require('../utils/ugandaLocationRegistry');
 const { publicVisibleInventoryWhere } = require('./publicInventoryMetricsService');
 
@@ -57,7 +58,8 @@ function titleLocationContradictsRow(row = {}) {
 
   // Do not bias title parsing with the stored district: the purpose of this
   // check is to catch a title that names a different place.
-  const titleLocation = canonicalizeUgandaLocation(title);
+  const titleResolution = resolveCanonicalUgandaLocationFromText(title);
+  const titleLocation = titleResolution.status === 'matched' ? titleResolution.match : null;
   const areaLocation = canonicalizeUgandaLocation(area, district);
   if (!titleLocation || !areaLocation) return false;
 
