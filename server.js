@@ -1415,7 +1415,7 @@ async function start() {
   startMarketplaceDripScheduler(db);
   startFeaturedRotationScheduler(db);
 
-  app.listen(port, () => {
+  app.listen(port, '0.0.0.0', () => {
     logger.info(`makaug backend running on http://localhost:${port}`);
     schedulePublicCacheWarmup(`http://127.0.0.1:${port}`);
   });
