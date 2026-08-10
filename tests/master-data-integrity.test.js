@@ -140,6 +140,37 @@ test('category classifier gives physical property type and explicit transaction 
       listing_type: 'rent',
       expected: 'student',
     },
+    {
+      title: 'Two bedrooms home at 400k #housesforrent',
+      description: 'Browse houses for sale across Uganda.',
+      listing_type: 'rent',
+      bedrooms: 2,
+      expected: 'rent',
+    },
+    {
+      title: 'This apartment is going for UGX 1.5M a month',
+      description: 'Generic property catalogue with homes for sale.',
+      listing_type: 'rent',
+      expected: 'rent',
+    },
+    {
+      title: '#house Forrent 2bedrooms 2bathrooms in Kira',
+      listing_type: 'rent',
+      bedrooms: 2,
+      expected: 'rent',
+    },
+    {
+      title: 'Kitende land deal - 3 acres with Milo title',
+      description: 'Suitable for homes and apartments.',
+      listing_type: 'commercial',
+      expected: 'land',
+    },
+    {
+      title: '42-decimal plot in Mbalwa',
+      description: 'Residential development opportunity.',
+      listing_type: 'sale',
+      expected: 'land',
+    },
   ];
 
   for (const fixture of cases) {
@@ -167,6 +198,21 @@ test('genuinely contradictory transaction evidence stays in its original categor
   assert.equal(report.issues.find((issue) => issue.code === 'category_ambiguous').proposed_listing_type, 'sale');
 });
 
+test('generated description boilerplate cannot invent a transaction for an ambiguous source title', () => {
+  const record = validRent({
+    listing_type: 'rent',
+    title: 'A brand new spacious 2 bedroom apartment',
+    description: 'Browse houses for sale and rent across Uganda.',
+    source_title: 'comfortpropertyconsulta',
+  });
+  const classification = deriveListingClassification(record);
+  const report = listingDataIntegrityReport(record);
+
+  assert.equal(classification.listing_type, 'rent');
+  assert.equal(classification.category_ambiguous, true);
+  assert(report.issue_codes.includes('category_ambiguous'));
+});
+
 test('found-online intake uses the shared precedence classifier for future harvested rows', () => {
   const cases = [
     ['Apartment for sale with 12m monthly income', 'sale'],
@@ -179,6 +225,11 @@ test('found-online intake uses the shared precedence classifier for future harve
     ['4 acres for sale in Makerere', 'land'],
     ['Office space for rent in Ntinda', 'commercial'],
     ['Hostel near Makerere per semester', 'student'],
+    ['Two bedrooms home at 400k #housesforrent', 'rent'],
+    ['This apartment is going for UGX 1.5M a month', 'rent'],
+    ['#house Forrent 2bedrooms 2bathrooms in Kira', 'rent'],
+    ['Kitende land deal - 3 acres with Milo title', 'land'],
+    ['42-decimal plot in Mbalwa', 'land'],
   ];
 
   cases.forEach(([title, expected], index) => {

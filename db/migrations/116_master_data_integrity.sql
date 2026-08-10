@@ -126,7 +126,7 @@ WITH evidence AS (
     p.*,
     LOWER(CONCAT_WS(' ', p.title,
       p.extra_fields->>'source_title', p.extra_fields->>'source_caption')) AS title_evidence,
-    LOWER(CONCAT_WS(' ', p.title, p.description, p.property_type, p.address, p.area,
+    LOWER(CONCAT_WS(' ', p.title,
       p.extra_fields->>'source_title', p.extra_fields->>'source_caption',
       p.extra_fields->>'source_text', p.extra_fields->>'source_visual_text')) AS source_evidence,
     CASE WHEN LOWER(TRIM(COALESCE(p.listing_type, ''))) = 'students' THEN 'student'
@@ -142,20 +142,31 @@ WITH evidence AS (
       OR COALESCE(e.bathrooms, 0) > 0
       OR e.title_evidence ~ '(^|[^a-z0-9])[0-9]+[[:space:]]*(bed(room)?s?|bath(room)?s?)([^a-z]|$)' AS bedroom_bathroom_evidence,
     e.title_evidence ~ '((prime|vacant|bare|titled)[[:space:]]+land|(land|plots?|ettaka|kibanja|bibanja)[[:space:]]+(is[[:space:]]+)?(for|on)[[:space:]]+sale|[0-9]+([.][0-9]+)?[[:space:]]*(acres?|decimals?|square[[:space:]]+(miles?|kilomet(er|re)s?))([[:space:]]+of[[:space:]]+land)?[[:space:]]+(for|on)[[:space:]]+sale|square[[:space:]]+(miles?|kilomet(er|re)s?)[[:space:]]+of[[:space:]]+land)' AS title_strong_land,
+    (
+      e.title_evidence ~ '(plots?|acres?|decimals?|farmland|bare[-[:space:]]+land|vacant[[:space:]]+land|prime[[:space:]]+land|square[[:space:]]+(miles?|kilomet(er|re)s?)([[:space:]]+of[[:space:]]+land)?|ettaka|kibanja|bibanja)'
+      OR (
+        REGEXP_REPLACE(e.title_evidence, '((private|milo|mailo|freehold|leasehold|kabaka)[[:space:]]+)?land[[:space:]]+title', ' ', 'g') ~ '(^|[^a-z])land([^a-z]|$)'
+      )
+    ) AS title_land,
     e.title_evidence ~ '(bed(room)?s?|bath(room)?s?|house|home|apartment([[:space:]]+block)?|flat|villa|bungalow|mansion|duplex|condo|townhouse|residence|residential|self[-[:space:]]*contained|rentals?|rental[[:space:]]+units?)' AS title_dwelling,
     e.title_evidence ~ '(office|shop|retail|warehouse|industrial|factory|arcade|showroom|business[[:space:]]+premises|commercial[[:space:]]+(building|property|premises|space|land|plot))' AS title_commercial,
     e.source_evidence ~ '((prime|vacant|bare|titled)[[:space:]]+land|(land|plots?|ettaka|kibanja|bibanja)[[:space:]]+(is[[:space:]]+)?(for|on)[[:space:]]+sale|[0-9]+([.][0-9]+)?[[:space:]]*(acres?|decimals?|square[[:space:]]+(miles?|kilomet(er|re)s?))([[:space:]]+of[[:space:]]+land)?[[:space:]]+(for|on)[[:space:]]+sale|square[[:space:]]+(miles?|kilomet(er|re)s?)[[:space:]]+of[[:space:]]+land)' AS source_strong_land,
     e.source_evidence ~ '(bed(room)?s?|bath(room)?s?|house|home|apartment([[:space:]]+block)?|flat|villa|bungalow|mansion|duplex|condo|townhouse|residence|residential|self[-[:space:]]*contained|rentals?|rental[[:space:]]+units?)' AS source_dwelling,
     e.source_evidence ~ '(office|shop|retail|warehouse|industrial|factory|arcade|showroom|business[[:space:]]+premises|commercial[[:space:]]+(building|property|premises|space|land|plot))' AS source_commercial,
-    e.source_evidence ~ '(land|plots?|acres?|decimals?|square[[:space:]]+(miles?|kilomet(er|re)s?)([[:space:]]+of[[:space:]]+land)?|bare[-[:space:]]+land|ettaka|kibanja|bibanja)' AS source_land,
+    (
+      e.source_evidence ~ '(plots?|acres?|decimals?|farmland|bare[-[:space:]]+land|vacant[[:space:]]+land|prime[[:space:]]+land|square[[:space:]]+(miles?|kilomet(er|re)s?)([[:space:]]+of[[:space:]]+land)?|ettaka|kibanja|bibanja)'
+      OR (
+        REGEXP_REPLACE(e.source_evidence, '((private|milo|mailo|freehold|leasehold|kabaka)[[:space:]]+)?land[[:space:]]+title', ' ', 'g') ~ '(^|[^a-z])land([^a-z]|$)'
+      )
+    ) AS source_land,
     e.source_evidence ~ '(student[[:space:]]+(accommodation|hostel|room)|hostel[[:space:]]+(room|bed|space)|campus|university|college|per[[:space:]]+semester)' AS student_evidence,
-    e.title_evidence ~ '(for[[:space:]]+sale|on[[:space:]]+sale|available[[:space:]]+for[[:space:]]+sale|selling|asking[[:space:]]+price|guide[[:space:]]+price|purchase[[:space:]]+price)' AS title_sale,
-    e.title_evidence ~ '(for[[:space:]]+rent|to[[:space:]]+rent|to[[:space:]]+let|for[[:space:]]+lease|available[[:space:]]+to[[:space:]]+rent|monthly[[:space:]]+rent)' AS title_direct_rent,
-    e.title_evidence ~ '(per[[:space:]]+month|/month|/mo)'
+    e.title_evidence ~ '(for[[:space:]]+(sale|sell)|on[[:space:]]+sale|available[[:space:]]+for[[:space:]]+sale|selling|asking[[:space:]]+price|guide[[:space:]]+price|purchase[[:space:]]+price)' AS title_sale,
+    e.title_evidence ~ '(for[[:space:]]*rent|to[[:space:]]*rent|to[[:space:]]*let|for[[:space:]]+lease|available[[:space:]]+to[[:space:]]*rent|monthly[[:space:]]+rent|forrent|housesforrent|propertiesforrent|apartmentsforrent|rooms?forrent)' AS title_direct_rent,
+    e.title_evidence ~ '((per|a)[[:space:]]+month|/month|/mo|monthly)'
       AND e.title_evidence !~ '((monthly|rental)[[:space:]]+income|(collects?|generates?|earns?|brings?|making).{0,80}(income|monthly|per[[:space:]]+month|/month))' AS title_periodic_rent,
-    e.source_evidence ~ '(for[[:space:]]+sale|on[[:space:]]+sale|available[[:space:]]+for[[:space:]]+sale|selling|asking[[:space:]]+price|guide[[:space:]]+price|purchase[[:space:]]+price)' AS source_sale,
-    e.source_evidence ~ '(for[[:space:]]+rent|to[[:space:]]+rent|to[[:space:]]+let|for[[:space:]]+lease|available[[:space:]]+to[[:space:]]+rent|monthly[[:space:]]+rent)' AS source_direct_rent,
-    e.source_evidence ~ '(per[[:space:]]+month|/month|/mo)'
+    e.source_evidence ~ '(for[[:space:]]+(sale|sell)|on[[:space:]]+sale|available[[:space:]]+for[[:space:]]+sale|selling|asking[[:space:]]+price|guide[[:space:]]+price|purchase[[:space:]]+price)' AS source_sale,
+    e.source_evidence ~ '(for[[:space:]]*rent|to[[:space:]]*rent|to[[:space:]]*let|for[[:space:]]+lease|available[[:space:]]+to[[:space:]]*rent|monthly[[:space:]]+rent|forrent|housesforrent|propertiesforrent|apartmentsforrent|rooms?forrent)' AS source_direct_rent,
+    e.source_evidence ~ '((per|a)[[:space:]]+month|/month|/mo|monthly)'
       AND e.source_evidence !~ '((monthly|rental)[[:space:]]+income|(collects?|generates?|earns?|brings?|making).{0,80}(income|monthly|per[[:space:]]+month|/month))' AS source_periodic_rent
   FROM evidence e
 ), classified AS (
@@ -163,13 +174,12 @@ WITH evidence AS (
     CASE
       WHEN s.student_evidence AND NOT s.source_sale THEN 'student'
       WHEN s.bedroom_bathroom_evidence THEN 'residential'
-      WHEN s.title_strong_land THEN 'land'
+      WHEN s.title_strong_land OR s.title_land THEN 'land'
       WHEN s.title_dwelling THEN 'residential'
       WHEN s.title_commercial THEN 'commercial'
-      WHEN s.source_strong_land THEN 'land'
+      WHEN s.source_strong_land OR s.source_land THEN 'land'
       WHEN s.source_dwelling THEN 'residential'
       WHEN s.source_commercial THEN 'commercial'
-      WHEN s.source_land THEN 'land'
       ELSE NULL
     END AS physical_type,
     CASE
@@ -200,7 +210,7 @@ WITH evidence AS (
       ELSE c.stored_type
     END AS proposed_type,
     c.transaction_ambiguous
-      OR (c.physical_type = 'residential' AND c.transaction_intent IS NULL AND c.stored_type NOT IN ('sale', 'rent')) AS category_ambiguous
+      OR (c.physical_type = 'residential' AND c.transaction_intent IS NULL) AS category_ambiguous
   FROM classified c
 ), issues AS (
   SELECT c.id, c.status AS previous_status, c.proposed_type,

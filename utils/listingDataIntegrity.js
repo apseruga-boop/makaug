@@ -15,11 +15,13 @@ const SPECIFIC_PROPERTY_PATTERN = /\b(?:bed(?:room)?s?|studio|bedsitter|house|ho
 const DWELLING_PATTERN = /\b(?:bed(?:room)?s?|bath(?:room)?s?|house|home|apartment(?:\s+block)?|flat|villa|bungalow|mansion|duplex|condo|townhouse|residence|residential|self[-\s]*contained|rentals?|rental\s+units?)\b/i;
 const STRONG_LAND_PATTERN = /\b(?:(?:prime|vacant|bare|titled)\s+land|(?:land|plots?|ettaka|kibanja|bibanja)\s+(?:is\s+)?(?:for|on)\s+sale|\d+(?:\.\d+)?\s*(?:acres?|decimals?|square\s+(?:miles?|kilomet(?:er|re)s?))(?:\s+of\s+land)?\s+(?:for|on)\s+sale|square\s+(?:miles?|kilomet(?:er|re)s?)\s+of\s+land)\b/i;
 const LAND_PATTERN = /\b(?:land|plots?|acres?|decimals?|square\s+(?:miles?|kilomet(?:er|re)s?)(?:\s+of\s+land)?|bare[-\s]+land|ettaka|kibanja|bibanja)\b/i;
+const LAND_ASSET_PATTERN = /\b(?:plots?|acres?|decimals?|farmland|bare[-\s]+land|vacant\s+land|prime\s+land|square\s+(?:miles?|kilomet(?:er|re)s?)(?:\s+of\s+land)?|ettaka|kibanja|bibanja)\b/i;
+const LAND_TITLE_PATTERN = /\b(?:(?:private|milo|mailo|freehold|leasehold|kabaka)\s+)?land\s+title\b/gi;
 const COMMERCIAL_PATTERN = /\b(?:office|shop|retail|warehouse|industrial|factory|arcade|showroom|business\s+premises|commercial\s+(?:building|property|premises|space|land|plot))\b/i;
 const STUDENT_PATTERN = /\b(?:student\s+(?:accommodation|hostel|room)|hostel\s+(?:room|bed|space)|campus|university|college|per\s+semester)\b/i;
-const SALE_PATTERN = /\b(?:for\s+sale|on\s+sale|available\s+for\s+sale|selling|asking\s+price|guide\s+price|purchase\s+price)\b/i;
-const DIRECT_RENT_PATTERN = /\b(?:for\s+rent|to\s+rent|to\s+let|for\s+lease|available\s+to\s+rent|monthly\s+rent)\b/i;
-const PERIODIC_RENT_PATTERN = /(?:\bper\s+month\b|\/month\b|\/mo\b)/i;
+const SALE_PATTERN = /\b(?:for\s+(?:sale|sell)|on\s+sale|available\s+for\s+sale|selling|asking\s+price|guide\s+price|purchase\s+price)\b/i;
+const DIRECT_RENT_PATTERN = /\b(?:for\s*rent|to\s*rent|to\s*let|for\s+lease|available\s+to\s*rent|monthly\s+rent|forrent|housesforrent|propertiesforrent|apartmentsforrent|rooms?forrent)\b/i;
+const PERIODIC_RENT_PATTERN = /(?:\b(?:per|a)\s+month\b|\/month\b|\/mo\b|\bmonthly\b)/i;
 const YIELD_PATTERN = /\b(?:monthly|rental)\s+income\b|\b(?:collects?|generates?|earns?|brings?|making)\b.{0,80}\b(?:income|monthly|per\s+month|\/month)\b/i;
 
 function compact(value = '') {
@@ -77,6 +79,26 @@ function primaryListingEvidenceText(record = {}) {
   ].map(compact).filter(Boolean).join(' ');
 }
 
+function sourceClassificationEvidenceText(record = {}) {
+  const extra = object(record.extra_fields);
+  const raw = object(extra.raw_source_post);
+  return [
+    primaryListingEvidenceText(record),
+    record.source_text,
+    record.source_visual_text,
+    extra.source_text,
+    extra.source_visual_text,
+    raw.source_text,
+  ].map(compact).filter(Boolean).join(' ');
+}
+
+function hasLandAssetEvidence(value = '') {
+  const text = compact(value);
+  if (!text) return false;
+  if (LAND_ASSET_PATTERN.test(text) || STRONG_LAND_PATTERN.test(text)) return true;
+  return LAND_PATTERN.test(text.replace(LAND_TITLE_PATTERN, ' '));
+}
+
 function hasPriceOnApplication(record = {}) {
   const extra = object(record.extra_fields);
   return record.price_on_application === true
@@ -123,6 +145,7 @@ function hasSpecificLocation(record = {}) {
 function deriveListingClassification(record = {}) {
   const text = listingEvidenceText(record);
   const primaryText = primaryListingEvidenceText(record) || text;
+  const classificationText = sourceClassificationEvidenceText(record) || primaryText;
   const currentType = normalizedListingType(record.listing_type || record.listingType || record.category);
   const bedroomBathroomEvidence = Number(record.bedrooms || record.beds || 0) > 0
     || Number(record.bathrooms || record.baths || 0) > 0
@@ -130,18 +153,19 @@ function deriveListingClassification(record = {}) {
   const primaryDwelling = DWELLING_PATTERN.test(primaryText);
   const primaryCommercial = COMMERCIAL_PATTERN.test(primaryText);
   const primaryStrongLand = STRONG_LAND_PATTERN.test(primaryText);
-  const hasDwelling = DWELLING_PATTERN.test(text) || bedroomBathroomEvidence;
-  const hasCommercial = COMMERCIAL_PATTERN.test(text);
-  const hasStrongLand = STRONG_LAND_PATTERN.test(text);
-  const hasLand = LAND_PATTERN.test(text);
-  const hasStudent = STUDENT_PATTERN.test(text);
-  const explicitStudentAccommodation = /\b(?:student\s+(?:accommodation|hostel|room)|hostel\s+(?:room|bed|space)|per\s+semester)\b/i.test(text);
+  const primaryLand = hasLandAssetEvidence(primaryText);
+  const hasDwelling = DWELLING_PATTERN.test(classificationText) || bedroomBathroomEvidence;
+  const hasCommercial = COMMERCIAL_PATTERN.test(classificationText);
+  const hasStrongLand = STRONG_LAND_PATTERN.test(classificationText);
+  const hasLand = hasLandAssetEvidence(classificationText);
+  const hasStudent = STUDENT_PATTERN.test(classificationText);
+  const explicitStudentAccommodation = /\b(?:student\s+(?:accommodation|hostel|room)|hostel\s+(?:room|bed|space)|per\s+semester)\b/i.test(classificationText);
   const primarySale = SALE_PATTERN.test(primaryText);
   const primaryDirectRent = DIRECT_RENT_PATTERN.test(primaryText);
   const primaryPeriodicRent = PERIODIC_RENT_PATTERN.test(primaryText) && !YIELD_PATTERN.test(primaryText);
-  const evidenceSale = SALE_PATTERN.test(text);
-  const evidenceDirectRent = DIRECT_RENT_PATTERN.test(text);
-  const evidencePeriodicRent = PERIODIC_RENT_PATTERN.test(text) && !YIELD_PATTERN.test(text);
+  const evidenceSale = SALE_PATTERN.test(classificationText);
+  const evidenceDirectRent = DIRECT_RENT_PATTERN.test(classificationText);
+  const evidencePeriodicRent = PERIODIC_RENT_PATTERN.test(classificationText) && !YIELD_PATTERN.test(classificationText);
   const hospitality = HOSPITALITY_PATTERN.test(text)
     || ['night', 'nightly', 'day', 'daily'].includes(compact(record.price_period || record.pricePeriod).toLowerCase());
 
@@ -167,13 +191,12 @@ function deriveListingClassification(record = {}) {
   let physicalType = '';
   if ((explicitStudentAccommodation || (currentType === 'student' && hasStudent)) && !evidenceSale) physicalType = 'student';
   else if (bedroomBathroomEvidence) physicalType = 'residential';
-  else if (primaryStrongLand) physicalType = 'land';
+  else if (primaryStrongLand || primaryLand) physicalType = 'land';
   else if (primaryDwelling) physicalType = 'residential';
   else if (primaryCommercial) physicalType = 'commercial';
-  else if (hasStrongLand) physicalType = 'land';
+  else if (hasStrongLand || hasLand) physicalType = 'land';
   else if (hasDwelling) physicalType = 'residential';
   else if (hasCommercial) physicalType = 'commercial';
-  else if (hasLand) physicalType = 'land';
 
   let listingType = currentType;
   if (!categoryAmbiguous) {
@@ -181,7 +204,7 @@ function deriveListingClassification(record = {}) {
     else if (physicalType === 'land') listingType = 'land';
     else if (physicalType === 'commercial') listingType = 'commercial';
     else if (physicalType === 'residential' && transactionIntent) listingType = transactionIntent;
-    else if (physicalType === 'residential' && !['sale', 'rent'].includes(currentType)) {
+    else if (physicalType === 'residential' && !transactionIntent) {
       categoryAmbiguous = true;
       ambiguityReason = 'Residential evidence has no clear sale or rent intent.';
       listingType = currentType;
