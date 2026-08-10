@@ -62,19 +62,6 @@ function cleanText(value = "") {
 const DISTRICTS = [
   "Abim","Adjumani","Agago","Alebtong","Amolatar","Amudat","Amuria","Amuru","Apac","Arua","Budaka","Bududa","Bugiri","Bugweri","Buhweju","Buikwe","Bukedea","Bukomansimbi","Bukwo","Bulambuli","Buliisa","Bundibugyo","Bunyangabu","Bushenyi","Busia","Butaleja","Butambala","Butebo","Buvuma","Buyende","Dokolo","Gomba","Gulu","Hoima","Ibanda","Iganga","Isingiro","Jinja","Kaabong","Kabale","Kabarole","Kaberamaido","Kagadi","Kakumiro","Kalaki","Kalangala","Kaliro","Kalungu","Kampala","Kamuli","Kamwenge","Kanungu","Kapchorwa","Kapelebyong","Karenga","Kasanda","Kasese","Katakwi","Kayunga","Kazo","Kibaale","Kiboga","Kibuku","Kikuube","Kiruhura","Kiryandongo","Kisoro","Kitagwenda","Kitgum","Koboko","Kole","Kotido","Kumi","Kwania","Kween","Kyankwanzi","Kyegegwa","Kyenjojo","Kyotera","Lamwo","Lira","Luuka","Luwero","Lwengo","Lyantonde","Madi-Okollo","Manafwa","Maracha","Masaka","Masindi","Mayuge","Mbale","Mbarara","Mitooma","Mityana","Moroto","Moyo","Mpigi","Mubende","Mukono","Nabilatuk","Nakapiripirit","Nakaseke","Nakasongola","Namayingo","Namisindwa","Namutumba","Napak","Nebbi","Ngora","Ntoroko","Ntungamo","Nwoya","Obongi","Omoro","Otuke","Oyam","Pader","Pakwach","Pallisa","Rakai","Rubanda","Rubirizi","Rukiga","Rukungiri","Sembabule","Serere","Sheema","Sironko","Soroti","Tororo","Wakiso","Yumbe","Zombo"
 ];
-const UGANDA_REGIONS = ["Central Region","Western Region","Eastern Region","Northern Region","Greater Kampala Metropolitan Area"];
-const LOCATION_HINTS = [
-  "Kampala","Entebbe","Mukono","Wakiso","Jinja","Mbarara","Gulu","Mbale","Arua","Lira","Masaka","Hoima","Masindi","Kabale","Fort Portal","Soroti","Iganga",
-  "Mukono Town","Kira","Nansana","Bweyogerere","Kira Town","Kasangati","Kireka","Naalya","Namugongo","Gayaza","Lugazi","Njeru","Seeta","Busega",
-  "Makindye","Muyenga","Bugolobi","Kololo","Nakasero","Ntinda","Kyaliwajjala","Kisaasi","Bukoto","Najjera","Mutungo","Mbuya","Wandegeya","Kikoni",
-  "Kamwokya","Kawempe","Rubaga","Najjanankumbi","Katwe","Kibuli","Lubowa","Buziga","Ggaba","Kansanga","Muyenga Tank Hill","Kampala Road",
-  "Industrial Area","Nakawa","Luzira","Munyonyo","Kireka Namugongo Road","Bombo Road","Gayaza Road","Kyanja","Kyanja Ring Road","Kiwatule",
-  "Kyebando","Naguru","Makerere","Old Kampala","Mengo","Kasubi","Lungujja","Nateete","Salaama","Bunga","Kabalagala","Muyenga Bukasa",
-  "Kitende","Kajjansi","Seguku","Bwebajja","Kitukutwe","Bulindo","Sonde","Naalya Estate","Namanve","Goma","Bweyogerere Industrial Park",
-  "Mbarara Town","Jinja Town","Mbale Town","Arua Town","Lira City","Gulu City","Masaka City","Hoima City","Masindi Town","Soroti City","Kabale Town","Fort Portal City",
-  "Luwero","Luweero","Luwero Town","Luweero Town","Ndibulungi"
-];
-
 const PROPERTIES = [
   { id: 1, title: "Luxury Villa in Kololo", area: "Kololo", district: "Kampala", type: "sale", subtype: "Villa", beds: 5, baths: 4, price: 950000000, size: "450 sqm", img: "https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=900&q=80", featured: true, lat: 0.356, lng: 32.612, desc: "Luxury 5-bedroom villa with pool and garden.", agent: 1 },
   { id: 2, title: "3-Bed Apartment - Nakasero", area: "Nakasero", district: "Kampala", type: "rent", subtype: "Apartment", beds: 3, baths: 2, price: 5500000, size: "180 sqm", img: "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=900&q=80", featured: true, lat: 0.318, lng: 32.581, desc: "Premium apartment in central Kampala.", agent: 2, period: "mo" },
@@ -409,11 +396,11 @@ function getHierarchyPointForArea(district, area) {
 }
 
 const UG_AREA_PIN_OVERRIDES = [
-  { name: "Namasuba", district: "Wakiso", lat: 0.258, lng: 32.558, aliases: ["Namasuba", "Namasuba Kampala", "Namasuba Entebbe Road", "Rahim Foods", "Rahim Foods Namasuba"] },
+  { name: "Namasuba", district: "Wakiso", lat: 0.258, lng: 32.558, aliases: ["Namasuba", "Namasuba Kampala", "Rahim Foods", "Rahim Foods Namasuba"] },
   { name: "Ndejje", district: "Wakiso", lat: 0.244, lng: 32.553, aliases: ["Ndejje", "Ndejje Lubugumu"] },
   { name: "Munyonyo", district: "Kampala", lat: 0.236, lng: 32.623, aliases: ["Munyonyo", "Munyonjo", "Munyonyo Kampala", "Munyonyo Uganda"] },
   { name: "Bujjuko Akright Estate", district: "Wakiso", lat: 0.374, lng: 32.389, aliases: ["Bujjuko Akright", "Bujuuko Akright", "Akright", "Bujjuko", "Bujuuko"] },
-  { name: "Kakiri", district: "Wakiso", lat: 0.409, lng: 32.38, aliases: ["Kakiri", "Kakiri Masulita", "Kakiri Masulita Hoima Road", "Hoima Road"] },
+  { name: "Kakiri", district: "Wakiso", lat: 0.409, lng: 32.38, aliases: ["Kakiri", "Kakiri Masulita"] },
   { name: "Masulita", district: "Wakiso", lat: 0.51, lng: 32.46, aliases: ["Masulita"] },
   { name: "Masindi", district: "Masindi", lat: 1.683, lng: 31.715, aliases: ["Masindi", "Masindi Town", "Masindi Municipality"] },
   { name: "Kira", district: "Wakiso", lat: 0.3978, lng: 32.6414, aliases: ["Kira", "Kira Town"] },
@@ -426,7 +413,6 @@ const UG_AREA_PIN_OVERRIDES = [
   { name: "Kajjansi", district: "Wakiso", lat: 0.216, lng: 32.552, aliases: ["Kajjansi", "Kajansi"] },
   { name: "Bwebajja Akright", district: "Wakiso", lat: 0.198, lng: 32.535, aliases: ["Bwebajja Akright", "Bwebajja"] },
   { name: "Seguku", district: "Wakiso", lat: 0.247, lng: 32.555, aliases: ["Seguku", "Sseguku"] },
-  { name: "Entebbe Road", district: "Wakiso", lat: 0.216, lng: 32.552, aliases: ["Entebbe Road"] },
   { name: "Kasangati-Nangabo", district: "Wakiso", lat: 0.434, lng: 32.61, aliases: ["Kasangati-Nangabo", "Kasangati Nangabo", "Kasangati", "Nangabo"] },
   { name: "Katosi", district: "Mukono", lat: 0.181, lng: 32.797, aliases: ["Katosi", "Mpunge", "Mpungwe", "Katosi Mpunge"] },
   { name: "Kololo", district: "Kampala", lat: 0.356, lng: 32.612, aliases: ["Kololo"] },
@@ -8167,7 +8153,7 @@ function fmtP(v, p) {
 
 function propertyOriginalCurrencyGuide(p = {}) {
   const extra = p?.extra_fields && typeof p.extra_fields === "object" ? p.extra_fields : {};
-  const currency = String(p?.price_currency || extra.price_currency || "UGX").trim().toUpperCase();
+  const currency = String(p?.price_original_currency || extra.price_original_currency || "UGX").trim().toUpperCase();
   if (currency !== "USD") return "";
   const original = Number(p?.price_original ?? extra.price_original);
   const canonicalUgx = Number(p?.price || 0);
@@ -15004,11 +14990,21 @@ function buildLocalAdminSnapshot() {
 function buildLocalAdminAreaInsights(listings = []) {
   const counts = {};
   (listings || []).forEach((p) => {
-    const key = [p.area, p.district].filter(Boolean).join(", ") || "Unknown area";
-    counts[key] = (counts[key] || 0) + getPropertyViewCount(p.id);
+    const level = String(p.canonical_location_level || p.extra_fields?.canonical_location_level || "").toLowerCase();
+    const canonicalId = String(p.canonical_location_id || p.extra_fields?.canonical_location_id || "").trim();
+    const canonicalDisplay = canonicalUiLocationForProperty(p, p.extra_fields || {});
+    if (!canonicalId || ["district", "region"].includes(level) || !canonicalDisplay.area) return;
+    const key = canonicalId.toLowerCase();
+    const current = counts[key] || {
+      area: [canonicalDisplay.area, canonicalDisplay.district].filter(Boolean).join(", "),
+      canonical_location_id: canonicalId,
+      canonical_location_level: level,
+      events: 0
+    };
+    current.events += getPropertyViewCount(p.id);
+    counts[key] = current;
   });
-  return Object.entries(counts)
-    .map(([area, events]) => ({ area, events }))
+  return Object.values(counts)
     .sort((a, b) => b.events - a.events)
     .slice(0, 5);
 }
@@ -23705,10 +23701,6 @@ function adminReviewKnownLocationCandidates() {
     });
   });
 
-  (LOCATION_HINTS || []).forEach((name) => {
-    const district = DISTRICTS.includes(name) ? name : "";
-    add({ name, alias: name, district, specificity: district ? 1 : 2 });
-  });
   DISTRICTS.forEach((district) => add({ name: district, alias: district, district, specificity: 1 }));
   return candidates;
 }
@@ -23766,12 +23758,7 @@ function adminReviewDetectedLocation(text = "", review = {}) {
   const district = DISTRICTS.find((name) => new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(text))
     || review.district
     || "";
-  const sortedHints = [...LOCATION_HINTS].sort((a, b) => b.length - a.length);
-  const area = sortedHints.find((name) => new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(text))
-    || (/kampala/i.test(text) ? "Kampala" : "")
-    || review.area
-    || "";
-  return { area, district: district || (area === "Kampala" ? "Kampala" : "") };
+  return { area: review.area || "", district };
 }
 
 function adminReviewPropertyTypeFromText(text = "") {
@@ -24533,6 +24520,61 @@ function adminReviewAutoPopulateLocationFromSource(review = {}) {
   }, 500);
 }
 
+function adminLocationReclassificationReviewHtml(extra = {}) {
+  if (extra.location_review_required !== true && String(extra.location_review_required || "").toLowerCase() !== "true") return "";
+  const previous = [
+    extra.location_review_previous_area,
+    extra.location_review_previous_district,
+    extra.location_review_previous_region
+  ].filter(Boolean).join(", ") || "Unmatched";
+  const proposed = [
+    extra.location_review_proposed_area,
+    extra.location_review_proposed_district,
+    extra.location_review_proposed_region
+  ].filter(Boolean).join(", ") || "Unmatched — choose a canonical location";
+  return `
+    <div class="mt-3 rounded-xl border-2 border-red-300 bg-red-50 p-3" data-location-reclassification-review="1">
+      <div class="text-xs font-black uppercase tracking-wide text-red-900">Location reclassification requires human confirmation</div>
+      <p class="mt-1 text-xs font-semibold text-red-900">This listing was removed from public inventory. Compare the source wording with the proposed canonical location, correct it if necessary, confirm the map pin, then re-approve.</p>
+      <div class="mt-3 grid gap-2 md:grid-cols-2 text-xs">
+        <div class="rounded-lg border border-red-200 bg-white p-2">
+          <div class="font-black text-red-900">Source / previous classification</div>
+          <div class="mt-1 text-gray-800">${adminEscape(previous)}</div>
+          <div class="mt-1 text-gray-500">Raw source area: ${adminEscape(extra.source_area_raw || "Not recorded")}</div>
+          <div class="mt-1 text-gray-500">Canonical: ${adminEscape(extra.location_review_previous_canonical_location_id || "Unmatched")}</div>
+        </div>
+        <div class="rounded-lg border border-green-200 bg-white p-2">
+          <div class="font-black text-green-900">Proposed canonical classification</div>
+          <div class="mt-1 text-gray-800">${adminEscape(proposed)}</div>
+          <div class="mt-1 text-gray-500">Canonical: ${adminEscape(extra.location_review_proposed_canonical_location_id || "Unmatched")}</div>
+          <div class="mt-1 text-gray-500">Level: ${adminEscape(extra.location_review_proposed_canonical_location_level || "Needs selection")}</div>
+        </div>
+      </div>
+      <div class="mt-2 rounded-lg bg-white p-2 text-xs text-red-900">${adminEscape(extra.location_review_note || "Confirm the canonical location before re-publishing.")}</div>
+      <label class="mt-2 flex items-start gap-2 rounded-lg border border-red-200 bg-white p-2 text-xs font-bold text-red-950">
+        <input id="admin-review-location-reclassification-confirm" type="checkbox" class="mt-0.5 h-4 w-4 rounded border-red-300 text-red-700">
+        <span>I compared the raw source location with the saved canonical area, corrected it where needed, and confirmed the map pin. Re-publishing is now authorised.</span>
+      </label>
+    </div>`;
+}
+
+function adminDataIntegrityReviewHtml(extra = {}) {
+  if (extra.data_integrity_review_required !== true && String(extra.data_integrity_review_required || "").toLowerCase() !== "true") return "";
+  const issues = Array.isArray(extra.data_integrity_issue_codes) ? extra.data_integrity_issue_codes : [];
+  const proposed = [
+    extra.data_integrity_proposed_listing_type ? `Category: ${extra.data_integrity_proposed_listing_type}` : "",
+    extra.data_integrity_proposed_price_period ? `Period: ${extra.data_integrity_proposed_price_period}` : ""
+  ].filter(Boolean);
+  return `
+    <div class="mt-3 rounded-xl border-2 border-orange-300 bg-orange-50 p-3" data-data-integrity-review="1">
+      <div class="text-xs font-black uppercase tracking-wide text-orange-950">Data-integrity review required</div>
+      <p class="mt-1 text-xs font-semibold text-orange-900">Correct every flagged fact below. Approval will remain blocked until the saved record passes the shared integrity gate.</p>
+      <div class="mt-2 flex flex-wrap gap-2">${issues.map((issue) => `<span class="rounded-full border border-orange-300 bg-white px-2 py-1 text-[11px] font-bold text-orange-950">${adminEscape(String(issue).replace(/_/g, " "))}</span>`).join("") || '<span class="text-xs text-orange-900">Open the moderation notes for the recorded issue.</span>'}</div>
+      ${proposed.length ? `<div class="mt-2 text-xs font-bold text-orange-950">Suggested from source evidence: ${adminEscape(proposed.join(" · "))}. Confirm rather than accepting blindly.</div>` : ""}
+      <div class="mt-1 text-[11px] text-orange-800">Previous public state: ${adminEscape(extra.data_integrity_previous_status || "unknown")} · Automatic publication: off</div>
+    </div>`;
+}
+
 function adminReviewListingEditPanel(review = {}) {
   const facts = adminExtractReviewFacts(review);
   const amenities = Array.isArray(review.amenities) ? review.amenities.join(", ") : "";
@@ -24570,13 +24612,20 @@ function adminReviewListingEditPanel(review = {}) {
     ? sourcePoint
     : (sourceDistrictConflict ? null : reviewPoint);
   const inferredHierarchy = adminReviewInferHierarchyFromText(locationSeedText, initialPoint, facts.district || review.district || "");
-  const initialDistrict = inferredHierarchy.district || facts.district || review.district || "";
-  const initialRegion = initialDistrict ? regionForDistrict(initialDistrict) : (inferredHierarchy.region || review.region || extra.region || "");
-  const cityCandidate = inferredHierarchy.city || review.city || extra.city || extra.town || "";
+  const locationReviewRequired = extra.location_review_required === true || String(extra.location_review_required || "").toLowerCase() === "true";
+  const proposedArea = locationReviewRequired ? String(extra.location_review_proposed_area || review.area || "").trim() : "";
+  const proposedDistrict = locationReviewRequired ? String(extra.location_review_proposed_district || review.district || "").trim() : "";
+  const proposedRegion = locationReviewRequired ? String(extra.location_review_proposed_region || "").trim() : "";
+  const proposedHierarchy = locationReviewRequired
+    ? adminReviewInferHierarchyFromText([proposedArea, proposedDistrict].filter(Boolean).join(", "), initialPoint, proposedDistrict)
+    : null;
+  const initialDistrict = proposedDistrict || inferredHierarchy.district || facts.district || review.district || "";
+  const initialRegion = proposedRegion || (initialDistrict ? regionForDistrict(initialDistrict) : (inferredHierarchy.region || review.region || extra.region || ""));
+  const cityCandidate = proposedHierarchy?.city || inferredHierarchy.city || review.city || extra.city || extra.town || "";
   const initialCity = adminReviewCityBelongsToDistrict(initialDistrict, cityCandidate) ? cityCandidate : "";
-  const neighborhoodCandidate = inferredHierarchy.neighborhood || review.neighborhood || extra.neighborhood || "";
+  const neighborhoodCandidate = proposedHierarchy?.neighborhood || inferredHierarchy.neighborhood || review.neighborhood || extra.neighborhood || "";
   const initialNeighborhood = adminReviewNeighborhoodBelongsToCity(initialDistrict, initialCity, neighborhoodCandidate) ? neighborhoodCandidate : "";
-  const initialArea = inferredHierarchy.neighborhood || facts.area || inferredHierarchy.city || review.area || "";
+  const initialArea = proposedArea || proposedHierarchy?.neighborhood || proposedHierarchy?.city || inferredHierarchy.neighborhood || facts.area || inferredHierarchy.city || review.area || "";
   const initialLatitude = initialPoint ? Number(initialPoint.lat).toFixed(6) : (review.latitude ?? "");
   const initialLongitude = initialPoint ? Number(initialPoint.lng).toFixed(6) : (review.longitude ?? "");
   const initialStreet = review.street_name || extra.street_name || "";
@@ -24598,7 +24647,7 @@ function adminReviewListingEditPanel(review = {}) {
     ["night", "Per night"],
     ["sem", "Per semester"]
   ].map(([value, label]) => `<option value="${value}" ${String(review.price_period || "") === value ? "selected" : ""}>${label}</option>`).join("");
-  const currentPriceCurrency = String(review.price_currency || extra.price_currency || "UGX").toUpperCase() === "USD" ? "USD" : "UGX";
+  const currentPriceCurrency = String(review.price_original_currency || extra.price_original_currency || "UGX").toUpperCase() === "USD" ? "USD" : "UGX";
   const priceCurrencyOptions = [
     ["UGX", "UGX — Uganda shillings"],
     ["USD", "USD — US dollars"]
@@ -24631,6 +24680,8 @@ function adminReviewListingEditPanel(review = {}) {
         <div class="text-[11px] font-black uppercase tracking-wide text-amber-900">Extracted from source text</div>
         <div class="mt-2">${adminReviewFactBadgesHtml(facts)}</div>
       </div>
+      ${adminLocationReclassificationReviewHtml(extra)}
+      ${adminDataIntegrityReviewHtml(extra)}
       <div class="mt-3 grid md:grid-cols-2 gap-3">
         <label class="block text-xs font-bold text-gray-700">Public title
           <input id="admin-review-title-edit" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.title || "")}">
@@ -24684,7 +24735,7 @@ function adminReviewListingEditPanel(review = {}) {
         <label class="block text-xs font-bold text-gray-700">Land title available
           <select id="admin-review-land-title-available-edit" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm">${landTitleAvailabilityOptions}</select>
         </label>
-        <label class="block text-xs font-bold text-gray-700">Price
+        <label class="block text-xs font-bold text-gray-700">Canonical price (UGX)
           <input id="admin-review-price-edit" type="number" min="0" step="1" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.price || "")}">
         </label>
         <label class="block text-xs font-bold text-gray-700">Source currency
@@ -24698,6 +24749,10 @@ function adminReviewListingEditPanel(review = {}) {
         </label>
         <label class="block text-xs font-bold text-gray-700">Price period
           <select id="admin-review-price-period-edit" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm">${periodOptions}</select>
+        </label>
+        <label class="flex items-center gap-2 rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs font-bold text-gray-700">
+          <input id="admin-review-price-on-application-edit" type="checkbox" ${review.price_on_application === true || extra.price_on_application === true || extra.price_upon_application === true ? "checked" : ""}>
+          Price on application (no numeric price)
         </label>
         <label class="block text-xs font-bold text-gray-700">Bedrooms
           <input id="admin-review-bedrooms-edit" type="number" min="0" step="1" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.bedrooms ?? "")}">
@@ -25110,10 +25165,12 @@ function collectAdminReviewListingPatch() {
     street_name: get("admin-review-street-edit"),
     address: get("admin-review-address-edit"),
     price: get("admin-review-price-edit"),
-    price_currency: get("admin-review-price-currency-edit"),
+    price_currency: "UGX",
+    price_original_currency: get("admin-review-price-currency-edit"),
     price_original: get("admin-review-price-original-edit"),
     price_fx_rate_ugx: get("admin-review-price-fx-rate-edit"),
     price_period: get("admin-review-price-period-edit"),
+    price_on_application: document.getElementById("admin-review-price-on-application-edit")?.checked === true,
     transaction_type: listingType === "commercial" ? get("admin-review-transaction-type-edit") : "",
     property_type: listingType === "commercial" ? get("admin-review-commercial-type-edit") : get("admin-review-property-type-edit"),
     title_type: get("admin-review-title-type-edit"),
@@ -25823,6 +25880,15 @@ async function adminSetListingStatus(localId, nextStatus, backendId = "", option
     const ok = window.confirm("Delete this listing from public pages? You can restore it from the admin dashboard.");
     if (!ok) return;
   }
+  const activeReviewExtraFields = adminReviewExtraFields(adminActiveReview || listing);
+  const locationReclassificationReviewRequired = activeReviewExtraFields.location_review_required === true
+    || String(activeReviewExtraFields.location_review_required || "").toLowerCase() === "true";
+  const locationReclassificationConfirmed = document.getElementById("admin-review-location-reclassification-confirm")?.checked === true;
+  if (normalizedStatus === "approved" && locationReclassificationReviewRequired && !locationReclassificationConfirmed) {
+    toast("Compare and confirm the reclassified canonical location before approving.");
+    document.getElementById("admin-review-location-reclassification-confirm")?.focus();
+    return;
+  }
   if (
     normalizedStatus === "approved"
     && adminActiveReview?.id
@@ -25934,7 +26000,8 @@ async function adminSetListingStatus(localId, nextStatus, backendId = "", option
             id_document_clear_and_matches: identityRequired ? true : moderationIdentityConfirmed("admin-review", adminActiveReview),
             high_monthly_price_confirmed: document.getElementById("admin-review-price-basis-confirmed")?.checked === true,
             structured_rejection_reasons: structuredRejectionReasons,
-	          warning_overrides: getAdminReviewWarningOverrides(adminActiveReview)
+	          warning_overrides: getAdminReviewWarningOverrides(adminActiveReview),
+            location_reclassification_confirmed: locationReclassificationConfirmed
         }
       });
       statusResponse = response?.data || null;
@@ -28205,18 +28272,14 @@ function extractStreetNameFromGoogleResult(result = {}) {
 	      const hasLocationScope = !!(district || city || neighborhood || area);
 	      const scopedProperties = getLocationScopedProperties({ district, city, neighborhood, area });
 	      const curatedStreets = getCuratedStreetSuggestions({ district, city, neighborhood, area });
-  if (areaEl) {
-    const hierarchyAreas = [];
-    DISTRICTS.forEach((district) => {
-      const tree = getDistrictLocationTree(district);
-      tree.forEach((cityNode) => {
-        hierarchyAreas.push(cityNode.city);
-        (cityNode.neighborhoods || []).forEach((n) => hierarchyAreas.push(n.name));
-      });
-    });
-    const areas = Array.from(new Set([...LOCATION_HINTS, ...hierarchyAreas, ...PROPERTIES.map((p) => p.area).filter(Boolean)])).slice(0, 400);
-    areaEl.innerHTML = areas.map((name) => `<option value="${name}"></option>`).join("");
-  }
+	  if (areaEl) {
+	    const tree = getDistrictLocationTree(district);
+	    const selectedCityNodes = city ? tree.filter((cityNode) => cityNode.city === city) : tree;
+	    const areas = Array.from(new Set(selectedCityNodes.flatMap((cityNode) => (
+	      (cityNode.neighborhoods || []).map((n) => n.name)
+	    )))).slice(0, 200);
+	    areaEl.innerHTML = areas.map((name) => `<option value="${name}"></option>`).join("");
+	  }
   if (streetEl) {
 	        const streetNames = Array.from(new Set(
 	          [
@@ -29512,6 +29575,21 @@ function validateListStep1() {
   if (!lpVal("lp-description")) {
     missing.push("Description");
     markLpFieldError("lp-description", "Description is required.");
+  }
+  const selectedDistrict = lpVal("list-district-sel");
+  const selectedArea = lpVal("lp-area");
+  const canonicalArea = findLpCanonicalAreaOption(selectedArea, selectedDistrict);
+  if (!lpVal("lp-region")) {
+    missing.push("Region");
+    markLpFieldError("lp-region", "Select the region for this property.");
+  }
+  if (!selectedDistrict) {
+    missing.push("District");
+    markLpFieldError("list-district-sel", "Select the district for this property.");
+  }
+  if (!selectedArea || !canonicalArea) {
+    missing.push("Canonical area");
+    markLpFieldError("lp-area", "Choose a neighbourhood from the canonical suggestions for this district.");
   }
   if (!parseIntSafe(lpVal("lp-price"))) {
     missing.push("Price");
@@ -36662,16 +36740,29 @@ function findLpLocationOptionByText(options = [], getValue, text = "") {
 function getDistrictLocationTree(district) {
   if (!district) return [];
   if (UG_LOCATION_TREE[district]) return UG_LOCATION_TREE[district];
-  return [
-    {
-      city: `${district} ${translateListingLabel("Town")}`,
-      neighborhoods: [
-        { name: `${district} ${translateListingLabel("Central")}` },
-        { name: `${district} ${translateListingLabel("East")}` },
-        { name: `${district} ${translateListingLabel("West")}` }
-      ]
+  const canonicalAreas = UG_MAJOR_DISTRICT_LOCATIONS[district] || [];
+  if (!canonicalAreas.length) return [];
+  return [{
+    city: `${district} locations`,
+    neighborhoods: canonicalAreas.map((name) => ({ name }))
+  }];
+}
+
+function findLpCanonicalAreaOption(value, district = "") {
+  const needle = String(value || "").trim().toLowerCase();
+  if (!needle) return null;
+  const districts = district ? [district] : DISTRICTS;
+  for (const candidateDistrict of districts) {
+    for (const cityNode of getDistrictLocationTree(candidateDistrict)) {
+      const neighborhood = (cityNode.neighborhoods || []).find((item) => (
+        String(item.name || "").trim().toLowerCase() === needle
+      ));
+      if (neighborhood) {
+        return { district: candidateDistrict, city: cityNode.city, neighborhood: neighborhood.name };
+      }
     }
-  ];
+  }
+  return null;
 }
 
 function populateLpCityOptions(district, keepCity = "") {
@@ -36740,6 +36831,15 @@ function syncLpAreaFromHierarchy() {
 
 function onLpAreaManualInput() {
   lpAreaManualOverride = true;
+  const areaValue = lpVal("lp-area");
+  const canonicalSelection = findLpCanonicalAreaOption(areaValue);
+  if (canonicalSelection) {
+    const region = regionForDistrict(canonicalSelection.district);
+    populateLpRegionOptions(region);
+    populateLpDistrictOptions(region, canonicalSelection.district);
+    populateLpCityOptions(canonicalSelection.district, canonicalSelection.city);
+    populateLpNeighborhoodOptions(canonicalSelection.district, canonicalSelection.city, canonicalSelection.neighborhood);
+  }
   populateListAddressSuggestions({
     district: lpVal("list-district-sel"),
     city: lpVal("lp-city"),
@@ -38013,11 +38113,12 @@ function addSugg(map, value, kind) {
 function getLocationSuggestionPool(includeUniversities = false) {
   const map = new Map();
   DISTRICTS.forEach((d) => addSugg(map, d, "District"));
-  UGANDA_REGIONS.forEach((r) => addSugg(map, r, "Region"));
-  LOCATION_HINTS.forEach((a) => addSugg(map, a, "Area"));
-  PROPERTIES.forEach((p) => {
-    addSugg(map, p.area, "Area");
-    addSugg(map, p.district, "District");
+  UG_REGIONS.forEach((r) => addSugg(map, r, "Region"));
+  DISTRICTS.forEach((district) => {
+    getDistrictLocationTree(district).forEach((node) => {
+      addSugg(map, node.city, "Area");
+      (node.neighborhoods || []).forEach((area) => addSugg(map, area.name, "Area"));
+    });
   });
   if (includeUniversities) UGANDA_UNIVERSITIES.forEach((u) => addSugg(map, u, "University"));
   return Array.from(map.values());
@@ -43505,9 +43606,33 @@ function returnToLastPageFromDetail() {
   return false;
 }
 
+function canonicalUiLocationForProperty(property = {}, extraFields = {}) {
+  const canonicalId = String(property.canonical_location_id || extraFields.canonical_location_id || "").trim().toLowerCase();
+  const level = String(property.canonical_location_level || extraFields.canonical_location_level || "").trim().toLowerCase();
+  const [districtKey = "", areaKey = ""] = canonicalId.split(":");
+  if (!districtKey || !areaKey) return { area: "", district: String(property.district || "").trim(), level: "" };
+  const normalize = (value) => String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const district = DISTRICTS.find((item) => normalize(item) === districtKey)
+    || (districtKey === "luwero" ? "Luwero" : districtKey.replace(/\b\w/g, (char) => char.toUpperCase()));
+  if (["district", "region"].includes(level) || districtKey === areaKey) {
+    return { area: "", district, level: level || "district" };
+  }
+  for (const cityNode of getDistrictLocationTree(district)) {
+    if (normalize(cityNode.city) === areaKey) return { area: cityNode.city, district, level: level || "city" };
+    const neighborhood = (cityNode.neighborhoods || []).find((item) => normalize(item.name) === areaKey);
+    if (neighborhood) return { area: neighborhood.name, district, level: level || "area" };
+  }
+  return {
+    area: areaKey.replace(/\b\w/g, (char) => char.toUpperCase()),
+    district,
+    level: level || "area"
+  };
+}
+
 function mapRemotePropertyForUi(p, options = {}) {
   const images = Array.isArray(p?.images) ? p.images : [];
   const extraFields = p?.extra_fields && typeof p.extra_fields === "object" ? p.extra_fields : {};
+  const canonicalDisplay = canonicalUiLocationForProperty(p || {}, extraFields);
   const imageItems = images.map((item, index) => ({
     url: item.url || item,
     is_main: item.is_primary === true || index === 0,
@@ -43515,7 +43640,7 @@ function mapRemotePropertyForUi(p, options = {}) {
     slot_key: item.slot_key || item.slot || "",
     slot: item.slot_key || item.slot || "",
     room_label: /^photo\s*\d+$/i.test(String(item.room_label || "").trim()) ? "" : (item.room_label || ""),
-    location_label: [p.area, p.district].filter(Boolean).join(", ")
+    location_label: [canonicalDisplay.area, canonicalDisplay.district].filter(Boolean).join(", ")
   })).filter((item) => item.url);
   const id = String(p?.id || "");
   const thirdPartyDiscovery = isFoundOnlineListing(p);
@@ -43562,6 +43687,8 @@ function mapRemotePropertyForUi(p, options = {}) {
     period: p?.price_period || p?.period || "",
     img: thirdPartyDiscovery ? "" : (p?.primary_image_url || p?.img || publicImageItems[0]?.url || "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=900&q=80"),
     desc: p?.description || p?.desc || "",
+    area: canonicalDisplay.area,
+    district: canonicalDisplay.district,
     address: p?.address || "",
     lat: parseFloatSafe(p?.latitude ?? p?.lat),
     lng: parseFloatSafe(p?.longitude ?? p?.lng),
@@ -43593,6 +43720,7 @@ function mapRemotePropertyForUi(p, options = {}) {
     thumbnail_url: p?.thumbnail_url || extraFields.thumbnail_url || sourceCoverImageUrl,
     source_thumbnail_url: p?.source_thumbnail_url || extraFields.source_thumbnail_url || sourceCoverImageUrl,
     canonical_location_id: p?.canonical_location_id || extraFields.canonical_location_id || "",
+    canonical_location_level: p?.canonical_location_level || extraFields.canonical_location_level || "",
     location_match: p?.location_match && typeof p.location_match === "object" ? p.location_match : null,
     media_type: p?.media_type || extraFields.media_type || "",
     media_duration: p?.media_duration || p?.video_duration || extraFields.media_duration || extraFields.video_duration || "",
@@ -46546,10 +46674,22 @@ const UG_LOCATION_TREE = {
       neighborhoods: [
         { name: "Nakasero", lat: 0.318, lng: 32.582 },
         { name: "Kololo", lat: 0.356, lng: 32.612 },
-        { name: "Kampala Road", lat: 0.314, lng: 32.577 },
         { name: "Old Kampala", lat: 0.313, lng: 32.569 },
         { name: "Makerere", lat: 0.335, lng: 32.568 },
         { name: "Wandegeya", lat: 0.336, lng: 32.57 }
+      ]
+    },
+    {
+      city: "Kawempe",
+      neighborhoods: [
+        { name: "Kawempe", lat: 0.379, lng: 32.557 },
+        { name: "Bwaise", lat: 0.36, lng: 32.557 },
+        { name: "Kalerwe", lat: 0.371, lng: 32.57 },
+        { name: "Mulago", lat: 0.34, lng: 32.577 },
+        { name: "Kanyanya", lat: 0.389, lng: 32.578 },
+        { name: "Mpererwe", lat: 0.411, lng: 32.585 },
+        { name: "Kyebando", lat: 0.365, lng: 32.574 },
+        { name: "Komamboga", lat: 0.394, lng: 32.598 }
       ]
     },
     {
@@ -46573,7 +46713,9 @@ const UG_LOCATION_TREE = {
         { name: "Buziga", lat: 0.277, lng: 32.596 },
         { name: "Bunga", lat: 0.262, lng: 32.623 },
         { name: "Kabalagala", lat: 0.298, lng: 32.603 },
-        { name: "Makindye", lat: 0.301, lng: 32.586 }
+        { name: "Makindye", lat: 0.301, lng: 32.586 },
+        { name: "Nsambya", lat: 0.303, lng: 32.589 },
+        { name: "Katwe", lat: 0.305, lng: 32.574 }
       ]
     },
     {
@@ -46583,7 +46725,11 @@ const UG_LOCATION_TREE = {
         { name: "Nateete", lat: 0.318, lng: 32.536 },
         { name: "Mengo", lat: 0.306, lng: 32.557 },
         { name: "Lungujja", lat: 0.302, lng: 32.548 },
-        { name: "Kasubi", lat: 0.333, lng: 32.555 }
+        { name: "Kasubi", lat: 0.333, lng: 32.555 },
+        { name: "Namirembe", lat: 0.315, lng: 32.559 },
+        { name: "Kabowa", lat: 0.285, lng: 32.54 },
+        { name: "Bukesa", lat: 0.325, lng: 32.567 },
+        { name: "Busega", lat: 0.309, lng: 32.526 }
       ]
     }
   ],
@@ -46608,7 +46754,6 @@ const UG_LOCATION_TREE = {
       city: "Kira",
       neighborhoods: [
         { name: "Namugongo", lat: 0.363, lng: 32.636 },
-        { name: "Kira Town", lat: 0.392, lng: 32.647 },
         { name: "Bweyogerere", lat: 0.351, lng: 32.676 },
         { name: "Kyaliwajjala", lat: 0.377, lng: 32.639 },
         { name: "Naalya", lat: 0.366, lng: 32.636 },
@@ -46623,8 +46768,7 @@ const UG_LOCATION_TREE = {
         { name: "Nansana", lat: 0.364, lng: 32.52 },
         { name: "Nabweru", lat: 0.378, lng: 32.525 },
         { name: "Wamala", lat: 0.373, lng: 32.506 },
-        { name: "Gganda", lat: 0.352, lng: 32.536 },
-        { name: "Kyebando", lat: 0.347, lng: 32.558 }
+        { name: "Gganda", lat: 0.352, lng: 32.536 }
       ]
     },
     {
@@ -46633,10 +46777,18 @@ const UG_LOCATION_TREE = {
         { name: "Wakiso Central", lat: 0.404, lng: 32.459 },
         { name: "Kakiri", lat: 0.409, lng: 32.38 },
         { name: "Bujjuko", lat: 0.374, lng: 32.389 },
-        { name: "Bujuuko", lat: 0.374, lng: 32.389 },
         { name: "Masulita", lat: 0.51, lng: 32.46 },
         { name: "Kasanje", lat: 0.217, lng: 32.383 },
-        { name: "Nabweru South", lat: 0.367, lng: 32.526 }
+        { name: "Nabweru South", lat: 0.367, lng: 32.526 },
+        { name: "Matugga", lat: 0.463, lng: 32.525 },
+        { name: "Maya", lat: 0.253, lng: 32.418 },
+        { name: "Garuga", lat: 0.09, lng: 32.543 },
+        { name: "Buloba", lat: 0.328, lng: 32.444 },
+        { name: "Nsangi", lat: 0.24, lng: 32.456 },
+        { name: "Zana", lat: 0.251, lng: 32.56 },
+        { name: "Kisubi", lat: 0.119, lng: 32.533 },
+        { name: "Nabbingo", lat: 0.295, lng: 32.477 },
+        { name: "Kyengera", lat: 0.294, lng: 32.501 }
       ]
     }
   ],
@@ -46666,7 +46818,6 @@ const UG_LOCATION_TREE = {
       city: "Jinja City",
       neighborhoods: [
         { name: "Jinja Central", lat: 0.424, lng: 33.204 },
-        { name: "Njeru", lat: 0.449, lng: 33.177 },
         { name: "Masese", lat: 0.406, lng: 33.209 },
         { name: "Nalufenya", lat: 0.427, lng: 33.222 },
         { name: "Bugembe", lat: 0.457, lng: 33.231 }
@@ -46844,6 +46995,26 @@ const DISTRICT_TO_REGION = (() => {
   });
   return map;
 })();
+
+// Canonical, real place names for inventory districts not covered by the
+// detailed coordinate tree. Never manufacture "Central/East/West" areas.
+const UG_MAJOR_DISTRICT_LOCATIONS = {
+  Buikwe: ["Njeru", "Lugazi", "Najjembe"],
+  Mpigi: ["Buwama", "Kammengo", "Muduuma"],
+  Mityana: ["Busunju", "Zigoti", "Ttamu"],
+  Kayunga: ["Kangulumira", "Nazigo", "Bbaale"],
+  Kamuli: ["Bugulumbya", "Namwendwa", "Mbulamuti"],
+  Iganga: ["Busei", "Nakalama", "Nambale"],
+  Busia: ["Dabani", "Masafu", "Lumino"],
+  Tororo: ["Malaba", "Nagongera", "Osukuru"],
+  Soroti: ["Madera", "Nakatunya", "Pamba"],
+  Kasese: ["Nyamwamba", "Kilembe", "Hima"],
+  Bushenyi: ["Ishaka", "Nyakabirizi", "Ruharo"],
+  Ntungamo: ["Rubaare", "Rwashamaire", "Itojo"],
+  Rukungiri: ["Buyanja", "Kebisoni", "Nyakagyeme"],
+  Sheema: ["Kabwohe", "Itendero", "Kigarama"],
+  Rakai: ["Kacheera", "Ddwaniro", "Lwamaggwa"]
+};
 
 const UGANDA_UNIVERSITIES = [
   "Makerere University",

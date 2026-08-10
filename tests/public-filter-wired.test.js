@@ -84,8 +84,9 @@ assert(propertiesRoute.includes('const minSize = toNullableFloat'), 'backend mus
 assert(propertiesRoute.includes('const priceSortRankSql'), 'backend must rank unpriced/outlier listings last for price sorting');
 assert(propertiesRoute.includes('price_desc: `${priceSortRankSql} ASC, p.price DESC NULLS LAST'), 'backend must sort priced listings high-to-low before unpriced/outliers');
 assert(propertiesRoute.includes("oldest: 'p.created_at ASC, p.id ASC'"), 'backend must support oldest sort');
-assert(propertiesRoute.includes('function addPublicLocationSearchFilter'), 'public searches must use the stricter location search helper');
-assert(propertiesRoute.includes('if (publicOnly || !adminAccess)') && propertiesRoute.includes('addPublicLocationSearchFilter(filters, values, area)'), 'anonymous/public location searches must not use broad title/description fallback');
+assert(propertiesRoute.includes('legacyCanonicalLocation = canonicalizeUgandaLocation(area, district)'), 'legacy public searches must resolve through the canonical registry');
+assert(propertiesRoute.includes('addCanonicalLocationSearchFilter(filters, values, canonicalLocationScope)'), 'anonymous/public location searches must filter on canonical IDs');
+assert(propertiesRoute.includes("filters.push('FALSE')"), 'an unmatched public location must return no rows instead of matching raw text');
 assert(!propertiesRoute.includes('"COALESCE(p.extra_fields->>\'neighborhood\', \'\')"'), 'public visible-location search must not match hidden neighborhood labels');
 assert(!propertiesRoute.includes('OR LOWER(TRIM(COALESCE(${columnSql}, \'\'))) LIKE'), 'public location searches must use exact indexed area/district equality');
 assert(propertiesRoute.includes('\\btest zone\\b'), 'public QA/test listings must be suppressed from consumer results');

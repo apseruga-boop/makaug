@@ -46,6 +46,7 @@ function propertyPriceMetadata(value, options = {}) {
     return {
       price: null,
       price_currency: null,
+      price_original_currency: null,
       price_original: null,
       price_fx_rate_ugx: null,
       price_fx_as_of: null,
@@ -57,7 +58,8 @@ function propertyPriceMetadata(value, options = {}) {
   if (!Number.isFinite(originalAmount) || originalAmount <= 0) {
     return {
       price: null,
-      price_currency: currency,
+      price_currency: 'UGX',
+      price_original_currency: currency,
       price_original: null,
       price_fx_rate_ugx: null,
       price_fx_as_of: null,
@@ -71,7 +73,10 @@ function propertyPriceMetadata(value, options = {}) {
     : 1;
   return {
     price: Math.round(originalAmount * fxRate),
-    price_currency: currency,
+    // `price` is the canonical value used by search, sorting and valuation and
+    // is always stored in UGX. Preserve source-currency provenance separately.
+    price_currency: 'UGX',
+    price_original_currency: currency,
     price_original: originalAmount,
     price_fx_rate_ugx: currency === 'USD' ? fxRate : null,
     price_fx_as_of: currency === 'USD'

@@ -17,7 +17,8 @@ test('USD guide prices preserve original value and produce canonical UGX', () =>
     usdToUgxRate: DEFAULT_USD_TO_UGX_RATE,
     fxAsOf: '2026-07-25T00:00:00.000Z'
   });
-  assert.equal(parsed.price_currency, 'USD');
+  assert.equal(parsed.price_currency, 'UGX');
+  assert.equal(parsed.price_original_currency, 'USD');
   assert.equal(parsed.price_original, 270000);
   assert.equal(parsed.price, 1026000000);
   assert.equal(parsed.price_fx_rate_ugx, 3800);
@@ -34,7 +35,8 @@ test('USD shorthand keeps the original source amount before canonical conversion
   const parsed = propertyPriceMetadata('$6k', {
     fxAsOf: '2026-07-25T00:00:00.000Z'
   });
-  assert.equal(parsed.price_currency, 'USD');
+  assert.equal(parsed.price_currency, 'UGX');
+  assert.equal(parsed.price_original_currency, 'USD');
   assert.equal(parsed.price_original, 6000);
   assert.equal(parsed.price, 22800000);
 });

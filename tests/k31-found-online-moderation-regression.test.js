@@ -111,8 +111,8 @@ test('K31 import response accounts for every normalized source URL', () => {
     alreadyPresent: [{ id: 'p2', key: items[1].key, source_url: items[1].sourceUrl, status: 'approved', reason: 'exact_source_url_duplicate', title: 'Existing' }],
     sourceReviewRecords: [{ key: items[2].key, source_url: items[2].sourceUrl, reason: 'low_signal_source_location', title: 'Skipped' }]
   });
-  assert.deepEqual(breakdown.results.map((item) => item.outcome), ['created', 'existing', 'skipped']);
-  assert.deepEqual(breakdown.summary, { created: 1, existing: 1, skipped: 1 });
+  assert.deepEqual(breakdown.results.map((item) => item.outcome), ['created', 'duplicate', 'skipped']);
+  assert.deepEqual(breakdown.summary, { created: 1, duplicate: 1, skipped: 1 });
   assert.equal(breakdown.results.every((item) => item.source_url && item.reason), true);
 });
 

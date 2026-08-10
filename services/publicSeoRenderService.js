@@ -8,6 +8,7 @@ const {
 } = require('./publicSeoService');
 const { publicVisibleInventoryWhere } = require('./publicInventoryMetricsService');
 const { SEO_FACET_MIN_LISTINGS, FACET_DEFINITIONS, COMMERCIAL_TRANSACTION_FACETS } = require('../utils/publicSeoFacets');
+const { canonicalDisplayLocationForRow, canonicalLocationSearchScope } = require('../utils/ugandaLocationRegistry');
 
 const SEO_LISTING_CACHE_TTL_MS = Math.max(
   30 * 1000,
@@ -162,27 +163,10 @@ function categoryPredicate(key, alias = 'p') {
 
 function locationPredicate(location, values, alias = 'p') {
   if (!location) return '';
-  values.push(location.canonical_key);
-  const canonicalRef = `$${values.length}`;
-  values.push(String(location.district || '').toLowerCase());
-  const districtRef = `$${values.length}`;
-  if (location.level === 'district') {
-    return `AND (LOWER(COALESCE(${alias}.extra_fields->>'canonical_location_id', '')) = LOWER(${canonicalRef}) OR LOWER(COALESCE(${alias}.district, '')) = ${districtRef})`;
-  }
-  const aliases = Array.from(new Set([location.location, ...(location.aliases || [])]));
-  values.push(postgresWordPattern(aliases));
-  const aliasesRef = `$${values.length}`;
-  return `AND (
-    LOWER(COALESCE(${alias}.extra_fields->>'canonical_location_id', '')) = LOWER(${canonicalRef})
-    OR (
-      LOWER(COALESCE(${alias}.district, '')) = ${districtRef}
-      AND (
-        LOWER(TRIM(COALESCE(${alias}.area, ''))) ~* ${aliasesRef}
-        OR LOWER(TRIM(COALESCE(${alias}.extra_fields->>'city', ''))) ~* ${aliasesRef}
-        OR LOWER(TRIM(COALESCE(${alias}.extra_fields->>'neighborhood', ''))) ~* ${aliasesRef}
-      )
-    )
-  )`;
+  const scope = canonicalLocationSearchScope([location.canonical_key], 0);
+  const canonicalKeys = scope.exact.map((item) => item.key);
+  values.push(canonicalKeys.length ? canonicalKeys : [location.canonical_key]);
+  return `AND LOWER(COALESCE(${alias}.extra_fields->>'canonical_location_id', '')) = ANY($${values.length}::text[])`;
 }
 
 function facetPredicate(options, values, alias = 'p') {
@@ -247,13 +231,14 @@ function facetPredicate(options, values, alias = 'p') {
 
 function normalizeSeoListingRow(row = {}) {
   const foundOnline = ['true', '1', 'yes'].includes(String(row.found_online_candidate || '').toLowerCase());
+  const canonicalDisplay = canonicalDisplayLocationForRow(row);
   return {
     id: String(row.id || ''),
     listing_type: String(row.listing_type || ''),
     title: collapseDuplicatePublicTransaction(row.title) || 'Uganda property',
     description: plainText(row.description),
-    area: plainText(row.area),
-    district: plainText(row.district),
+    area: plainText(canonicalDisplay.area),
+    district: plainText(canonicalDisplay.district),
     price: Number(row.price || 0) || 0,
     price_period: plainText(row.price_period),
     transaction_type: plainText(row.transaction_type),

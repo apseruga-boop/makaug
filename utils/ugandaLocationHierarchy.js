@@ -1,4 +1,10 @@
 const { DISTRICTS } = require('./constants');
+const {
+  canonicalLocationOptions,
+  canonicalizeUgandaLocation,
+  isExcludedLocationOnly,
+  normalizeDistrict
+} = require('./ugandaLocationRegistry');
 
 const UG_REGION_DISTRICTS = {
   Central: [
@@ -43,10 +49,22 @@ const UG_LOCATION_TREE = {
       neighborhoods: [
         { name: 'Nakasero', lat: 0.318, lng: 32.582 },
         { name: 'Kololo', lat: 0.356, lng: 32.612 },
-        { name: 'Kampala Road', lat: 0.314, lng: 32.577 },
         { name: 'Old Kampala', lat: 0.313, lng: 32.569 },
         { name: 'Makerere', lat: 0.335, lng: 32.568 },
         { name: 'Wandegeya', lat: 0.336, lng: 32.57 }
+      ]
+    },
+    {
+      city: 'Kawempe',
+      neighborhoods: [
+        { name: 'Kawempe', lat: 0.379, lng: 32.557 },
+        { name: 'Bwaise', lat: 0.36, lng: 32.557 },
+        { name: 'Kalerwe', lat: 0.371, lng: 32.57 },
+        { name: 'Mulago', lat: 0.34, lng: 32.577 },
+        { name: 'Kanyanya', lat: 0.389, lng: 32.578 },
+        { name: 'Mpererwe', lat: 0.411, lng: 32.585 },
+        { name: 'Kyebando', lat: 0.365, lng: 32.574 },
+        { name: 'Komamboga', lat: 0.394, lng: 32.598 }
       ]
     },
     {
@@ -71,7 +89,9 @@ const UG_LOCATION_TREE = {
         { name: 'Buziga', lat: 0.277, lng: 32.596 },
         { name: 'Bunga', lat: 0.262, lng: 32.623 },
         { name: 'Kabalagala', lat: 0.298, lng: 32.603 },
-        { name: 'Makindye', lat: 0.301, lng: 32.586 }
+        { name: 'Makindye', lat: 0.301, lng: 32.586 },
+        { name: 'Nsambya', lat: 0.303, lng: 32.589 },
+        { name: 'Katwe', lat: 0.305, lng: 32.574 }
       ]
     },
     {
@@ -81,7 +101,11 @@ const UG_LOCATION_TREE = {
         { name: 'Nateete', lat: 0.318, lng: 32.536 },
         { name: 'Mengo', lat: 0.306, lng: 32.557 },
         { name: 'Lungujja', lat: 0.302, lng: 32.548 },
-        { name: 'Kasubi', lat: 0.333, lng: 32.555 }
+        { name: 'Kasubi', lat: 0.333, lng: 32.555 },
+        { name: 'Namirembe', lat: 0.315, lng: 32.559 },
+        { name: 'Kabowa', lat: 0.285, lng: 32.54 },
+        { name: 'Bukesa', lat: 0.325, lng: 32.567 },
+        { name: 'Busega', lat: 0.309, lng: 32.526 }
       ]
     }
   ],
@@ -105,7 +129,6 @@ const UG_LOCATION_TREE = {
       city: 'Kira',
       neighborhoods: [
         { name: 'Namugongo', lat: 0.363, lng: 32.636 },
-        { name: 'Kira Town', lat: 0.392, lng: 32.647 },
         { name: 'Bweyogerere', lat: 0.351, lng: 32.676 },
         { name: 'Kyaliwajjala', lat: 0.377, lng: 32.639 },
         { name: 'Naalya', lat: 0.366, lng: 32.636 },
@@ -120,8 +143,7 @@ const UG_LOCATION_TREE = {
         { name: 'Nansana', lat: 0.364, lng: 32.52 },
         { name: 'Nabweru', lat: 0.378, lng: 32.525 },
         { name: 'Wamala', lat: 0.373, lng: 32.506 },
-        { name: 'Gganda', lat: 0.352, lng: 32.536 },
-        { name: 'Kyebando', lat: 0.347, lng: 32.558 }
+        { name: 'Gganda', lat: 0.352, lng: 32.536 }
       ]
     },
     {
@@ -130,10 +152,18 @@ const UG_LOCATION_TREE = {
         { name: 'Wakiso Central', lat: 0.404, lng: 32.459 },
         { name: 'Kakiri', lat: 0.409, lng: 32.38 },
         { name: 'Bujjuko', lat: 0.374, lng: 32.389 },
-        { name: 'Bujuuko', lat: 0.374, lng: 32.389 },
         { name: 'Masulita', lat: 0.51, lng: 32.46 },
         { name: 'Kasanje', lat: 0.217, lng: 32.383 },
-        { name: 'Nabweru South', lat: 0.367, lng: 32.526 }
+        { name: 'Nabweru South', lat: 0.367, lng: 32.526 },
+        { name: 'Matugga', lat: 0.463, lng: 32.525 },
+        { name: 'Maya', lat: 0.253, lng: 32.418 },
+        { name: 'Garuga', lat: 0.09, lng: 32.543 },
+        { name: 'Buloba', lat: 0.328, lng: 32.444 },
+        { name: 'Nsangi', lat: 0.24, lng: 32.456 },
+        { name: 'Zana', lat: 0.251, lng: 32.56 },
+        { name: 'Kisubi', lat: 0.119, lng: 32.533 },
+        { name: 'Nabbingo', lat: 0.295, lng: 32.477 },
+        { name: 'Kyengera', lat: 0.294, lng: 32.501 }
       ]
     }
   ],
@@ -208,28 +238,33 @@ function clean(value) {
 }
 
 function regionForDistrict(district) {
-  return DISTRICT_TO_REGION[clean(district)] || '';
+  return DISTRICT_TO_REGION[normalizeDistrict(district) || clean(district)] || '';
 }
 
 function getDistrictLocationTree(district) {
-  const cleanDistrict = clean(district);
+  const cleanDistrict = normalizeDistrict(district) || clean(district);
   if (!cleanDistrict || !DISTRICTS.includes(cleanDistrict)) return [];
   if (UG_LOCATION_TREE[cleanDistrict]) return UG_LOCATION_TREE[cleanDistrict];
-  return [
-    {
-      city: `${cleanDistrict} Town`,
-      neighborhoods: [
-        { name: `${cleanDistrict} Central` },
-        { name: `${cleanDistrict} East` },
-        { name: `${cleanDistrict} West` }
-      ]
-    }
-  ];
+  const locations = canonicalLocationOptions()
+    .filter((item) => item.district === cleanDistrict && !['district', 'region'].includes(item.level));
+  if (!locations.length) return [];
+  const city = locations.find((item) => item.level === 'city');
+  return [{
+    city: city?.location || `${cleanDistrict} locations`,
+    neighborhoods: locations.map((item) => ({
+      name: item.location,
+      ...(Number.isFinite(item.latitude) ? { lat: item.latitude } : {}),
+      ...(Number.isFinite(item.longitude) ? { lng: item.longitude } : {})
+    }))
+  }];
 }
 
 function districtForKnownArea(area) {
   const needle = clean(area).toLowerCase();
   if (!needle) return '';
+  if (isExcludedLocationOnly(area)) return '';
+  const canonical = canonicalizeUgandaLocation(area);
+  if (canonical) return canonical.district;
   if (KNOWN_AREA_DISTRICT_ALIASES[needle]) return KNOWN_AREA_DISTRICT_ALIASES[needle];
   if (DISTRICTS.some((district) => district.toLowerCase() === needle)) {
     return DISTRICTS.find((district) => district.toLowerCase() === needle) || '';
@@ -266,6 +301,10 @@ function districtsForKnownLocationText(value = '') {
       (cityNode.neighborhoods || []).forEach((item) => add(item.name, district));
     });
   });
+  canonicalLocationOptions().forEach((item) => {
+    add(item.location, item.district);
+    (item.aliases || []).forEach((alias) => add(alias, item.district));
+  });
 
   matches.sort((a, b) => (a.index - b.index) || (b.length - a.length));
   return Array.from(new Set(matches.map((match) => match.district)));
@@ -278,7 +317,7 @@ function districtForKnownLocationText(value = '') {
 function normalizeReviewLocationHierarchy(fields = {}) {
   const errors = [];
   const area = clean(fields.area);
-  const district = clean(fields.district);
+  const district = normalizeDistrict(fields.district) || clean(fields.district);
   const requestedRegion = clean(fields.region);
   let city = clean(fields.city);
   let neighborhood = clean(fields.neighborhood);
@@ -287,11 +326,11 @@ function normalizeReviewLocationHierarchy(fields = {}) {
     if (city || neighborhood || requestedRegion) {
       errors.push('district is required before city or neighbourhood can be saved');
     }
-    return { region: requestedRegion, district, city, neighborhood, errors };
+    return { region: requestedRegion, district, city, neighborhood, canonical: null, errors };
   }
 
   if (!DISTRICTS.includes(district)) {
-    return { region: requestedRegion, district, city, neighborhood, errors };
+    return { region: requestedRegion, district, city, neighborhood, canonical: null, errors };
   }
 
   const region = regionForDistrict(district);
@@ -303,6 +342,14 @@ function normalizeReviewLocationHierarchy(fields = {}) {
   const areaDistrict = districtForKnownArea(area);
   if (areaDistrict && areaDistrict !== district) {
     errors.push('area/neighbourhood must match the selected district');
+  }
+  const canonical = area ? canonicalizeUgandaLocation(area, district) : null;
+  if (area && !canonical) {
+    errors.push(isExcludedLocationOnly(area)
+      ? 'area/neighbourhood must be a place, not a road, region, or water body'
+      : 'area/neighbourhood must match a canonical Uganda location');
+  } else if (canonical && ['district', 'region'].includes(canonical.level)) {
+    errors.push('area/neighbourhood must be more specific than a district');
   }
 
   const tree = getDistrictLocationTree(district);
@@ -324,7 +371,7 @@ function normalizeReviewLocationHierarchy(fields = {}) {
     }
   }
 
-  return { region, district, city, neighborhood, errors };
+  return { region, district, city, neighborhood, canonical, errors };
 }
 
 module.exports = {

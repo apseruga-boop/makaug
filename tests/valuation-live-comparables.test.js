@@ -334,15 +334,24 @@ assert.strictEqual(evidenceEstimate.confidence, 'medium');
 assert.strictEqual(helpers.canonicalizeUgandaLocation('Kira Town', 'Wakiso').name, 'Kira');
 assert.strictEqual(helpers.canonicalizeUgandaLocation('Kira Town', 'Wakiso').district, 'Wakiso');
 assert.strictEqual(helpers.canonicalizeUgandaLocation('Naalya Estate', 'Wakiso').name, 'Naalya');
-assert.strictEqual(helpers.canonicalizeUgandaLocation('Entebbe', 'Kampala').district, 'Wakiso');
+assert.strictEqual(helpers.canonicalizeUgandaLocation('Entebbe', 'Kampala'), null);
 assert.strictEqual(helpers.canonicalizeUgandaLocation('Lake Victoria', 'Wakiso'), null);
 assert.deepStrictEqual(
   helpers.canonicalizeLocationRows([
-    { location: 'Kira', district: 'Wakiso', listing_count: 2 },
-    { location: 'Kira Town', district: 'Wakiso', listing_count: 3 },
+    { location: 'Kira', district: 'Wakiso', canonical_location_id: 'wakiso:kira', listing_count: 2 },
+    { location: 'Kira Town', district: 'Wakiso', canonical_location_id: 'wakiso:kira', listing_count: 3 },
     { location: 'Bombo Road', district: 'Kampala', listing_count: 9 }
   ]),
   [{
+    canonical_key: 'kampala:kampala',
+    location: 'Kampala',
+    district: 'Kampala',
+    level: 'district',
+    latitude: 0.3476,
+    longitude: 32.5825,
+    aliases: ['Kampala', 'Kampala City', 'Central Kampala'],
+    listing_count: 9
+  }, {
     canonical_key: 'wakiso:kira',
     location: 'Kira',
     district: 'Wakiso',

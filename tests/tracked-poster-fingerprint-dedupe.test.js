@@ -38,10 +38,9 @@ assert.strictEqual(
   '',
   'multi-token Mbarara road names must not be substring-mapped to Banda, Kampala'
 );
-assert.deepStrictEqual(
-  normalizeReviewLocationHierarchy({ area: 'Ibanda Rd', district: 'Mbarara' }).errors,
-  [],
-  'an explicit Mbarara district must remain valid for Ibanda Rd'
+assert(
+  normalizeReviewLocationHierarchy({ area: 'Ibanda Rd', district: 'Mbarara' }).errors.includes('area/neighbourhood must be a place, not a road, region, or water body'),
+  'road text must remain source evidence and cannot be saved as the canonical area'
 );
 
 console.log('tracked-poster fingerprint dedupe tests passed');

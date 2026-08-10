@@ -82,6 +82,7 @@ const {
 } = require('../utils/universityMatcher');
 const {
   PUBLIC_INVENTORY_METRICS_MARKER,
+  invalidatePublicInventoryMetricsCache,
   loadPublicOpportunitySummary,
   publicLaunchTestListingFastCondition
 } = require('../services/publicInventoryMetricsService');
@@ -93,14 +94,18 @@ const {
   commercialMisclassificationWarning
 } = require('../utils/commercialClassification');
 const { listingPriceQuality } = require('../utils/listingPriceQuality');
+const { listingDataIntegrityReport } = require('../utils/listingDataIntegrity');
 const { propertyPriceMetadata } = require('../utils/propertyPriceCurrency');
 const {
   canonicalLocationByKey,
+  canonicalDisplayLocationForRow,
+  canonicalLocationForRow,
   canonicalizeLocationRows,
   canonicalizeUgandaLocation,
   canonicalLocationRollupCounts,
   canonicalLocationSearchScope,
   canonicalLocationSuggestions,
+  normalizeDistrict,
   normalizeLocationKey
 } = require('../utils/ugandaLocationRegistry');
 
@@ -155,10 +160,6 @@ const PUBLIC_PROPERTIES_CACHE_IGNORED_QUERY_KEYS = new Set([
   '_',
   '_cb',
   'cb'
-]);
-const PUBLIC_LOCATION_SEARCH_COLUMNS = Object.freeze([
-  "p.area",
-  "p.district"
 ]);
 const publicPropertiesResponseCache = new Map();
 
@@ -308,79 +309,15 @@ function normalizePublicSearchNeedle(value = '') {
   return cleanText(value).toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
-function addPublicLocationSearchFilter(filters, values, value = '') {
-  const needle = normalizePublicSearchNeedle(value);
-  if (!needle) return false;
-  const clauses = [];
-  PUBLIC_LOCATION_SEARCH_COLUMNS.forEach((columnSql) => {
-    values.push(needle);
-    const exactRef = `$${values.length}`;
-    clauses.push(`(
-      LOWER(TRIM(COALESCE(${columnSql}, ''))) = ${exactRef}
-    )`);
-  });
-  filters.push(`(${clauses.join(' OR ')})`);
-  return true;
-}
-
-function addPublicCardLocationSearchFilter(filters, values, value = '') {
-  const raw = cleanText(value, 120);
-  if (!raw) return false;
-  addFilter(
-    filters,
-    values,
-    `(
-      p.area = ?
-      OR p.district = ?
-      OR p.extra_fields->>'city' = ?
-      OR p.extra_fields->>'neighborhood' = ?
-      OR p.extra_fields->>'region' = ?
-      OR p.extra_fields->>'resolved_location_label' = ?
-    )`,
-    raw,
-    raw,
-    raw,
-    raw,
-    raw,
-    raw
-  );
-  return true;
-}
-
-function canonicalSearchAliases(locations = []) {
-  return Array.from(new Set(
-    locations.flatMap((location) => [
-      location.name,
-      ...(Array.isArray(location.aliases) ? location.aliases : [])
-    ])
-      .map((value) => String(value || '').trim().toLowerCase())
-      .filter(Boolean)
-  ));
-}
-
 function addCanonicalLocationSearchFilter(filters, values, scope = {}) {
   const locations = [...(scope.exact || []), ...(scope.nearby || [])];
   if (!locations.length) return false;
   const canonicalKeys = locations.map((location) => location.key).filter(Boolean);
-  const aliases = canonicalSearchAliases(locations);
   addFilter(
     filters,
     values,
-    `(
-      COALESCE(p.extra_fields->>'canonical_location_id', '') = ANY(?::text[])
-      OR LOWER(TRIM(COALESCE(p.area, ''))) = ANY(?::text[])
-      OR LOWER(TRIM(COALESCE(p.extra_fields->>'city', ''))) = ANY(?::text[])
-      OR LOWER(TRIM(COALESCE(p.extra_fields->>'neighborhood', ''))) = ANY(?::text[])
-      OR (
-        LOWER(TRIM(COALESCE(p.district, ''))) = ANY(?::text[])
-        AND LOWER(TRIM(COALESCE(p.area, ''))) = LOWER(TRIM(COALESCE(p.district, '')))
-      )
-    )`,
-    canonicalKeys,
-    aliases,
-    aliases,
-    aliases,
-    aliases
+    `COALESCE(p.extra_fields->>'canonical_location_id', '') = ANY(?::text[])`,
+    canonicalKeys
   );
   return true;
 }
@@ -400,8 +337,7 @@ function parseCanonicalLocationKeys(query = {}) {
 }
 
 function publicLocationMatchForRow(row = {}, scope = {}) {
-  const canonical = canonicalLocationByKey(row.canonical_location_id)
-    || canonicalizeUgandaLocation(row.area, row.district);
+  const canonical = canonicalLocationForRow(row);
   if (!canonical) return null;
   const selectedKeys = new Set((scope.selected || []).map((location) => location.key));
   const exactKeys = new Set((scope.exact || []).map((location) => location.key));
@@ -474,6 +410,12 @@ function statusListingPatchFromBody(body = {}) {
 async function applyStatusListingPatchBeforeModeration(req, propertyId, existing = {}, rawPatch = {}) {
   const patch = statusListingPatchFromBody({ listing: rawPatch });
   if (!Object.keys(patch).length) return { changed_fields: [], property: existing };
+  const validateError = (message, details = []) => {
+    const error = new Error(message);
+    error.status = 400;
+    error.details = details.length ? details : undefined;
+    return error;
+  };
   if (!Object.prototype.hasOwnProperty.call(patch, 'listing_type')) {
     const alias = patch.listingType ?? patch.type ?? patch.category;
     if (alias != null) patch.listing_type = alias;
@@ -493,6 +435,39 @@ async function applyStatusListingPatchBeforeModeration(req, propertyId, existing
       description: patch.description || existing.description
     });
   }
+  const sourceCurrencyInput = patch.price_original_currency ?? patch.price_currency;
+  if (sourceCurrencyInput != null) {
+    const sourceCurrency = cleanText(sourceCurrencyInput).toUpperCase();
+    if (!['UGX', 'USD'].includes(sourceCurrency)) {
+      throw validateError('price_original_currency must be UGX or USD');
+    }
+    patch.price_currency = 'UGX';
+    patch.price_original_currency = sourceCurrency;
+    if (sourceCurrency === 'USD') {
+      const originalAmount = toNullableFloat(patch.price_original ?? existing.price_original);
+      const fxRate = toNullableFloat(patch.price_fx_rate_ugx ?? existing.price_fx_rate_ugx);
+      if (!(originalAmount > 0) || !(fxRate > 0)) {
+        throw validateError('A positive original USD amount and UGX FX rate are required');
+      }
+      patch.price = Math.round(originalAmount * fxRate);
+      patch.price_original = originalAmount;
+      patch.price_fx_rate_ugx = fxRate;
+      patch.price_fx_as_of = cleanText(patch.price_fx_as_of || existing.price_fx_as_of || new Date().toISOString());
+    } else if (Object.prototype.hasOwnProperty.call(patch, 'price')) {
+      patch.price_original = toNullableFloat(patch.price);
+      patch.price_fx_rate_ugx = null;
+      patch.price_fx_as_of = null;
+    }
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'price_on_application')) {
+    patch.price_on_application = parseBooleanLike(patch.price_on_application, false);
+    if (patch.price_on_application) {
+      patch.price = null;
+      patch.price_original = null;
+      patch.price_fx_rate_ugx = null;
+      patch.price_fx_as_of = null;
+    }
+  }
 
   const setParts = [];
   const values = [propertyId];
@@ -501,12 +476,6 @@ async function applyStatusListingPatchBeforeModeration(req, propertyId, existing
     values.push(value);
     setParts.push(`${column} = $${values.length}${cast}`);
     changed.push(column);
-  };
-  const validateError = (message, details = []) => {
-    const error = new Error(message);
-    error.status = 400;
-    error.details = details.length ? details : undefined;
-    return error;
   };
   const fieldMap = {
     title: (value) => cleanText(value),
@@ -528,6 +497,12 @@ async function applyStatusListingPatchBeforeModeration(req, propertyId, existing
     },
     address: (value) => cleanText(value) || null,
     price: (value) => toNullableInt(value),
+    price_currency: () => 'UGX',
+    price_original_currency: (value) => cleanText(value).toUpperCase() || 'UGX',
+    price_original: (value) => toNullableFloat(value),
+    price_fx_rate_ugx: (value) => toNullableFloat(value),
+    price_fx_as_of: (value) => cleanText(value) || null,
+    price_on_application: (value) => parseBooleanLike(value, false),
     price_period: (value) => cleanText(value) || null,
     transaction_type: (value) => {
       const transactionType = normalizeCommercialTransactionType(value);
@@ -1152,10 +1127,15 @@ function publicContactPhoneForRow(row = {}, safeExtra = null) {
 
 function compactPublicCardRow(row = {}, currency = 'UGX', locationScope = {}) {
   const safeExtra = publicExtraFields(row.admin_extra_fields || row.extra_fields || {});
+  const canonicalDisplay = canonicalDisplayLocationForRow({
+    ...row,
+    canonical_location_id: row.canonical_location_id || safeExtra.canonical_location_id,
+    extra_fields: safeExtra
+  });
   const foundOnlinePublic = isFoundOnlinePublicRow(row, safeExtra);
   const locationOverride = publicLocationOverrideForListing(row, safeExtra);
   const hasUsablePublicPin = isUsablePublicCoordinate(row.latitude, row.longitude);
-  const publicDistrict = locationOverride?.district || row.district;
+  const publicDistrict = canonicalDisplay.district;
   const publicLatitude = !hasUsablePublicPin && locationOverride ? locationOverride.latitude : row.latitude;
   const publicLongitude = !hasUsablePublicPin && locationOverride ? locationOverride.longitude : row.longitude;
   const primaryImageUrl = foundOnlinePublic ? null : normalizePublicImageUrl(row.primary_image_url);
@@ -1197,14 +1177,16 @@ function compactPublicCardRow(row = {}, currency = 'UGX', locationScope = {}) {
     title: publicTitle,
     description: publicDescription,
     district: publicDistrict,
-    area: row.area,
+    area: canonicalDisplay.area,
     address: row.address,
     price: row.price,
     price_currency: row.price_currency || 'UGX',
+    price_original_currency: row.price_original_currency || safeExtra.price_original_currency || 'UGX',
     price_original: row.price_original,
     price_fx_rate_ugx: row.price_fx_rate_ugx,
     price_fx_as_of: row.price_fx_as_of,
     price_period: row.price_period,
+    price_on_application: row.price_on_application === true || safeExtra.price_on_application === true || safeExtra.price_upon_application === true,
     transaction_type: row.transaction_type || null,
     bedrooms: row.bedrooms,
     bathrooms: row.bathrooms,
@@ -1227,7 +1209,8 @@ function compactPublicCardRow(row = {}, currency = 'UGX', locationScope = {}) {
     listed_by: row.listed_by || null,
     listing_origin: row.listing_origin || (foundOnlinePublic ? 'found_online' : (row.listed_by || 'private')),
     registration_status: row.registration_status || null,
-    canonical_location_id: locationMatch?.canonical_location_id || row.canonical_location_id || null,
+    canonical_location_id: locationMatch?.canonical_location_id || canonicalDisplay.canonical?.key || null,
+    canonical_location_level: canonicalDisplay.level,
     location_match: locationMatch,
     public_contact_phone: publicContactPhone || null,
     contact_phone: publicContactPhone || null,
@@ -1690,6 +1673,7 @@ function publicExtraFields(extraFields = {}) {
     nearby_facilities: Array.isArray(extra.nearby_facilities) ? extra.nearby_facilities : [],
     size_raw: extra.size_raw || '',
     price_currency: extra.price_currency || null,
+    price_original_currency: extra.price_original_currency || null,
     price_original: extra.price_original ?? null,
     price_fx_rate_ugx: extra.price_fx_rate_ugx ?? null,
     price_fx_as_of: extra.price_fx_as_of || null,
@@ -1729,6 +1713,11 @@ function publicPropertyRow(property, images = []) {
     ...safeProperty
   } = property || {};
   const safeExtra = publicExtraFields(property?.extra_fields);
+  const canonicalDisplay = canonicalDisplayLocationForRow({
+    ...safeProperty,
+    canonical_location_id: safeProperty.canonical_location_id || safeExtra.canonical_location_id,
+    extra_fields: safeExtra
+  });
   const foundOnlinePublic = isFoundOnlinePublicRow(property, safeExtra);
   const locationOverride = publicLocationOverrideForListing(safeProperty, safeExtra);
   const hasUsablePublicPin = isUsablePublicCoordinate(safeProperty.latitude, safeProperty.longitude);
@@ -1755,7 +1744,10 @@ function publicPropertyRow(property, images = []) {
     ...safeProperty,
     title: publicTitle,
     description: publicDescription,
-    district: locationOverride?.district || safeProperty.district,
+    area: canonicalDisplay.area,
+    district: canonicalDisplay.district,
+    canonical_location_id: canonicalDisplay.canonical?.key || null,
+    canonical_location_level: canonicalDisplay.level,
     latitude: !hasUsablePublicPin && locationOverride ? locationOverride.latitude : safeProperty.latitude,
     longitude: !hasUsablePublicPin && locationOverride ? locationOverride.longitude : safeProperty.longitude,
     nearest_university: studentContext.nearest_university || safeProperty.nearest_university || null,
@@ -2151,7 +2143,10 @@ function sourcedCandidateRecordHasApprovalLocation(row = {}) {
 router.get('/locations/suggest', async (req, res, next) => {
   try {
     const query = cleanText(req.query.q || req.query.query).slice(0, 120);
-    const listingType = normalizeListingType(req.query.listing_type || req.query.type || req.query.category);
+    const rawListingCategory = cleanText(req.query.listing_type || req.query.type || req.query.category);
+    const categoryToken = rawListingCategory.toLowerCase().replace(/[\s/.-]+/g, '_');
+    const categoryCommercialType = COMMERCIAL_PROPERTY_TYPES.includes(categoryToken) ? categoryToken : '';
+    const listingType = categoryCommercialType ? 'commercial' : normalizeListingType(rawListingCategory);
     const studentPortal = parseBooleanLike(req.query.student_portal, false);
     const limit = Math.max(1, Math.min(8, toNullableInt(req.query.limit) || 8));
     if (!query) {
@@ -2172,10 +2167,19 @@ router.get('/locations/suggest', async (req, res, next) => {
         addFilter(filters, values, 'p.listing_type = ?', listingType);
       }
       const result = await withPublicPropertyDatabaseRetry(() => db.query(
-        `SELECT p.area, p.district, COUNT(*)::int AS listing_count
+        `SELECT
+           p.extra_fields->>'canonical_location_id' AS canonical_location_id,
+           p.extra_fields->>'canonical_location_level' AS canonical_location_level,
+           p.area,
+           p.district,
+           COUNT(*)::int AS listing_count
          FROM properties p
          WHERE ${filters.join(' AND ')}
-         GROUP BY p.area, p.district`,
+         GROUP BY
+           p.extra_fields->>'canonical_location_id',
+           p.extra_fields->>'canonical_location_level',
+           p.area,
+           p.district`,
         values
       ));
       const canonicalRows = canonicalizeLocationRows(result.rows);
@@ -2204,6 +2208,7 @@ router.get('/locations/suggest', async (req, res, next) => {
         listing_count: item.listing_count,
         match: item.match,
         did_you_mean: item.did_you_mean,
+        confidence: item.confidence,
         latitude: item.latitude,
         longitude: item.longitude
       })),
@@ -2211,7 +2216,8 @@ router.get('/locations/suggest', async (req, res, next) => {
         canonical: true,
         query,
         max_results: limit,
-        did_you_mean: suggestions.length > 0 && suggestions.every((item) => item.did_you_mean)
+        did_you_mean: suggestions.length > 0 && suggestions.every((item) => item.did_you_mean),
+        unmatched: suggestions.length === 0
       }
     });
   } catch (error) {
@@ -2306,7 +2312,11 @@ async function listPropertiesHandler(req, res, next) {
     const studentPortal = parseBooleanLike(req.query.student_portal, false);
     const district = cleanText(req.query.district);
     const area = cleanText(req.query.area || req.query.search || req.query.query);
-    const canonicalLocationKeys = parseCanonicalLocationKeys(req.query);
+    let canonicalLocationKeys = parseCanonicalLocationKeys(req.query);
+    if (!canonicalLocationKeys.length && (area || district)) {
+      const legacyCanonicalLocation = canonicalizeUgandaLocation(area, district);
+      if (legacyCanonicalLocation) canonicalLocationKeys = [legacyCanonicalLocation.key];
+    }
     const nearbyKm = Math.max(0, Math.min(7, toNullableFloat(req.query.nearby_km || req.query.nearbyKm) ?? 3));
     const canonicalLocationScope = canonicalLocationSearchScope(canonicalLocationKeys, nearbyKm);
     if (canonicalLocationKeys.length !== canonicalLocationScope.selected.length) {
@@ -2334,7 +2344,7 @@ async function listPropertiesHandler(req, res, next) {
     const studentCampus = cleanText(req.query.studentCampus || req.query.student_campus);
     const landTitleType = cleanText(req.query.landTitleType || req.query.land_title_type);
     const landTitleAvailable = normalizeLandTitleAvailability(req.query.landTitleAvailable ?? req.query.land_title_available ?? req.query.titleAvailable ?? req.query.title_available);
-    const commercialType = cleanText(req.query.commercialType || req.query.commercial_type);
+    const commercialType = cleanText(req.query.commercialType || req.query.commercial_type || categoryCommercialType);
     const transactionType = normalizeCommercialTransactionType(req.query.transactionType || req.query.transaction_type);
     const currency = cleanText(req.query.currency || 'UGX').toUpperCase();
     const source = cleanText(req.query.source || 'web_search');
@@ -2404,16 +2414,15 @@ async function listPropertiesHandler(req, res, next) {
     }
 
     if (district && !canonicalLocationScope.selected.length) {
-      addFilter(filters, values, 'p.district = ?', district);
+      if (publicOnly || !adminAccess) filters.push('FALSE');
+      else addFilter(filters, values, 'p.district = ?', district);
     }
 
     if (canonicalLocationScope.selected.length) {
       addCanonicalLocationSearchFilter(filters, values, canonicalLocationScope);
     } else if (area) {
-      if (cardFieldsOnly && !adminAccess) {
-        addPublicCardLocationSearchFilter(filters, values, area);
-      } else if (publicOnly || !adminAccess) {
-        addPublicLocationSearchFilter(filters, values, area);
+      if (publicOnly || !adminAccess) {
+        filters.push('FALSE');
       } else {
         addFilter(
           filters,
@@ -2741,10 +2750,12 @@ async function listPropertiesHandler(req, res, next) {
           p.address,
           p.price,
           p.price_currency,
+          p.price_original_currency,
           p.price_original,
           p.price_fx_rate_ugx,
           p.price_fx_as_of,
           p.price_period,
+          p.price_on_application,
           p.transaction_type,
           p.bedrooms,
           p.bathrooms,
@@ -2802,10 +2813,12 @@ async function listPropertiesHandler(req, res, next) {
           p.address,
           p.price,
           p.price_currency,
+          p.price_original_currency,
           p.price_original,
           p.price_fx_rate_ugx,
           p.price_fx_as_of,
           p.price_period,
+          p.price_on_application,
           p.transaction_type,
           p.bedrooms,
           p.bathrooms,
@@ -2957,11 +2970,17 @@ async function listPropertiesHandler(req, res, next) {
         } = row;
         const distanceKm = row.distance_km == null ? null : Number(Number(row.distance_km).toFixed(3));
         const safeExtra = publicExtraFields(adminExtraFields || {});
+        const canonicalDisplay = canonicalDisplayLocationForRow({
+          ...row,
+          canonical_location_id: row.canonical_location_id || safeExtra.canonical_location_id,
+          extra_fields: safeExtra
+        });
         const foundOnlinePublic = isFoundOnlinePublicRow(row, safeExtra);
         const primaryImageUrl = foundOnlinePublic ? null : normalizePublicImageUrl(row.primary_image_url);
         const locationOverride = publicLocationOverrideForListing(row, safeExtra);
         const hasUsablePublicPin = isUsablePublicCoordinate(row.latitude, row.longitude);
-        const publicDistrict = locationOverride?.district || row.district;
+        const publicDistrict = canonicalDisplay.district;
+        const publicArea = canonicalDisplay.area;
         const publicLatitude = !hasUsablePublicPin && locationOverride ? locationOverride.latitude : row.latitude;
         const publicLongitude = !hasUsablePublicPin && locationOverride ? locationOverride.longitude : row.longitude;
         const publicTitle = foundOnlinePublic
@@ -2987,6 +3006,7 @@ async function listPropertiesHandler(req, res, next) {
           ...publicRow,
           title: publicTitle,
           description: publicDescription,
+          area: publicArea,
           district: publicDistrict,
           latitude: publicLatitude,
           longitude: publicLongitude,
@@ -2997,13 +3017,14 @@ async function listPropertiesHandler(req, res, next) {
           url: `/property/${row.id}`,
           category: row.listing_type,
           currency,
-          location: [row.area, publicDistrict].filter(Boolean).join(', '),
+          location: [publicArea, publicDistrict].filter(Boolean).join(', '),
           image: primaryImageUrl,
           verification_status: row.registration_status || null,
           availability: row.status,
           sponsored: row.featured === true,
           listing_origin: row.listing_origin || (foundOnlinePublic ? 'found_online' : (row.listed_by || 'private')),
           canonical_location_id: publicLocationMatchForRow(row, canonicalLocationScope)?.canonical_location_id || row.canonical_location_id || null,
+          canonical_location_level: canonicalDisplay.level,
           location_match: publicLocationMatchForRow(row, canonicalLocationScope),
           distance_km: distanceKm,
           distanceKm,
@@ -3515,14 +3536,17 @@ router.post('/', async (req, res, next) => {
 
     const listingType = normalizeListingType(body.listing_type);
     const title = cleanText(body.title);
-    const district = cleanText(body.district);
-    const area = cleanText(body.area);
+    let district = cleanText(body.district);
+    let area = cleanText(body.area);
+    const sourceAreaRaw = area;
+    let canonicalLocation = null;
     const description = cleanText(body.description);
     const priceMetadata = propertyPriceMetadata(body.price, {
       currency: body.price_currency || body.currency,
       fxAsOf: body.price_fx_as_of || undefined
     });
     const price = priceMetadata.price;
+    const priceOnApplication = parseBooleanLike(body.price_on_application || body.priceOnApplication, false);
     const transactionType = normalizeCommercialTransactionType(
       body.transaction_type || body.transactionType || body.commercial_mode || body.commercial_intent,
       {
@@ -3542,9 +3566,10 @@ router.post('/', async (req, res, next) => {
     if (!district) errors.push('district is required');
     if (!area) errors.push('area is required');
     if (!description) errors.push('description is required');
-    if (price == null || price < 10000) {
+    if (!priceOnApplication && (price == null || price < 10000)) {
       errors.push('price must be provided in UGX or USD and convert to at least UGX 10,000');
     }
+    if (priceOnApplication && price != null && price > 0) errors.push('price and price_on_application cannot both be set');
     if (listingType === 'commercial' && !transactionType) {
       errors.push('transaction_type is required for commercial listings and must be rent or sale');
     }
@@ -3554,6 +3579,25 @@ router.post('/', async (req, res, next) => {
 
     if (district && !DISTRICTS.includes(district)) {
       errors.push('district must be one of Uganda\'s valid districts');
+    }
+    if (district && area && DISTRICTS.includes(district)) {
+      const canonicalAreaWithoutDistrict = canonicalizeUgandaLocation(area);
+      const normalizedSubmittedDistrict = normalizeDistrict(district) || district;
+      canonicalLocation = canonicalizeUgandaLocation(area, district);
+      if (
+        canonicalAreaWithoutDistrict
+        && canonicalAreaWithoutDistrict.level !== 'district'
+        && canonicalAreaWithoutDistrict.district !== normalizedSubmittedDistrict
+      ) {
+        errors.push(`area belongs to ${canonicalAreaWithoutDistrict.district}, not ${normalizedSubmittedDistrict}`);
+      } else if (!canonicalLocation) {
+        errors.push('area must match a canonical Uganda location and cannot be a road, region, or water body');
+      } else if (['district', 'region'].includes(canonicalLocation.level)) {
+        errors.push('area must be more specific than a district');
+      } else {
+        district = canonicalLocation.district;
+        area = canonicalLocation.name;
+      }
     }
 
     const brokerFullName = cleanText([authUser?.first_name, authUser?.last_name].filter(Boolean).join(' '));
@@ -3699,8 +3743,8 @@ router.post('/', async (req, res, next) => {
     if (['phone', 'whatsapp', 'email', 'both'].includes(preferredContactMethod)) {
       extraFields.preferred_contact_method = preferredContactMethod;
     }
-    const canonicalLocation = canonicalizeUgandaLocation(area, district);
     extraFields.raw_location = cleanText(body.location || body.address || [area, district].filter(Boolean).join(', '));
+    extraFields.source_area_raw = sourceAreaRaw || null;
     extraFields.canonical_location_id = canonicalLocation?.key || null;
     extraFields.canonical_location_level = canonicalLocation?.level || null;
     extraFields.location_resolution_status = canonicalLocation ? 'canonical_match' : 'unresolved';
@@ -3708,10 +3752,12 @@ router.post('/', async (req, res, next) => {
       ? (normalizeLocationKey(canonicalLocation.name) === normalizeLocationKey(area) ? 1 : 0.65)
       : 0;
     extraFields.price_currency = priceMetadata.price_currency;
+    extraFields.price_original_currency = priceMetadata.price_original_currency;
     extraFields.price_original = priceMetadata.price_original;
     extraFields.price_fx_rate_ugx = priceMetadata.price_fx_rate_ugx;
     extraFields.price_fx_as_of = priceMetadata.price_fx_as_of;
-    extraFields.price_conversion_basis = priceMetadata.price_currency === 'USD'
+    extraFields.price_on_application = priceOnApplication;
+    extraFields.price_conversion_basis = priceMetadata.price_original_currency === 'USD'
       ? 'Original submitted USD guide converted to canonical UGX for search and valuation.'
       : 'Original submitted UGX guide stored without conversion.';
     const landTitleAvailable = normalizeLandTitleAvailability(
@@ -3783,10 +3829,12 @@ router.post('/', async (req, res, next) => {
         address,
         price,
         price_currency,
+        price_original_currency,
         price_original,
         price_fx_rate_ugx,
         price_fx_as_of,
         price_period,
+        price_on_application,
         bedrooms,
         bathrooms,
         property_type,
@@ -3833,7 +3881,7 @@ router.post('/', async (req, res, next) => {
         $21,$22,$23,$24,$25,$26,$27,$28,$29,$30,
         $31,$32,$33,$34,$35,$36,$37,$38,$39,$40,
         $41,$42,$43,$44,$45,$46,$47,$48,$49,$50,
-        $51,$52,$53
+        $51,$52,$53,$54,$55
       ) RETURNING id, created_at`,
       [
         listingType,
@@ -3845,10 +3893,12 @@ router.post('/', async (req, res, next) => {
         cleanText(body.address) || null,
         price,
         priceMetadata.price_currency,
+        priceMetadata.price_original_currency,
         priceMetadata.price_original,
         priceMetadata.price_fx_rate_ugx,
         priceMetadata.price_fx_as_of,
         cleanText(body.price_period) || null,
+        priceOnApplication,
         toNullableInt(body.bedrooms),
         toNullableInt(body.bathrooms),
         commercialPropertyType || null,
@@ -4506,8 +4556,71 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
         approvalWarnings.push(`Price basis confirmed by staff: ${priceQuality.warnings.join(', ')}`);
       }
     }
+    if (nextStatus === 'approved') {
+      const dataIntegrity = listingDataIntegrityReport(current);
+      if (!dataIntegrity.ok) {
+        return res.status(400).json({
+          ok: false,
+          error: 'Listing data integrity issues must be corrected before approval',
+          details: dataIntegrity.issues.map((issue) => issue.message),
+          data_integrity: dataIntegrity
+        });
+      }
+    }
     const actorId = req.adminAuth?.userId || req.adminAuth?.type || 'admin_api_key';
     const reviewerUserId = toUuidOrNull(req.adminAuth?.userId);
+    const currentExtraFields = current.extra_fields && typeof current.extra_fields === 'object'
+      ? current.extra_fields
+      : {};
+    const locationReclassificationReviewRequired = parseBooleanLike(
+      currentExtraFields.location_review_required,
+      false
+    );
+    let locationReclassificationExtraFields = null;
+    if (nextStatus === 'approved' && locationReclassificationReviewRequired) {
+      const locationReclassificationConfirmed = parseBooleanLike(
+        req.body.location_reclassification_confirmed,
+        false
+      );
+      if (!locationReclassificationConfirmed) {
+        return res.status(400).json({
+          ok: false,
+          error: 'Human confirmation of the reclassified location is required before approval',
+          details: [
+            'Compare the raw source location with the proposed canonical location, correct it if necessary, confirm the map pin, and tick the location reclassification confirmation.'
+          ]
+        });
+      }
+      const confirmedCanonicalLocation = canonicalLocationForRow(current);
+      const canonicalLocationIsSpecific = confirmedCanonicalLocation
+        && !['district', 'region'].includes(confirmedCanonicalLocation.level);
+      const canonicalLocationMatchesStoredFields = canonicalLocationIsSpecific
+        && normalizeLocationKey(current.area) === normalizeLocationKey(confirmedCanonicalLocation.name)
+        && normalizeDistrict(current.district) === normalizeDistrict(confirmedCanonicalLocation.district);
+      if (!canonicalLocationMatchesStoredFields) {
+        return res.status(400).json({
+          ok: false,
+          error: 'Choose and save a specific canonical area before approval',
+          details: [
+            'District-only, region-only, unmatched, or stale canonical assignments must remain in source review.',
+            'Save the corrected area and district in King, then confirm the location reclassification again.'
+          ]
+        });
+      }
+      const confirmedAt = new Date().toISOString();
+      locationReclassificationExtraFields = {
+        location_review_required: false,
+        location_review_confirmed_at: confirmedAt,
+        location_review_confirmed_by: actorId,
+        location_review_confirmation: 'individual_king_moderation_approval',
+        location_review_confirmed_canonical_location_id: confirmedCanonicalLocation.key,
+        location_review_confirmed_canonical_location_level: confirmedCanonicalLocation.level,
+        location_review_confirmed_area: confirmedCanonicalLocation.name,
+        location_review_confirmed_district: confirmedCanonicalLocation.district,
+        location_resolution_status: 'canonical_human_confirmed'
+      };
+      approvalWarnings.push(`Canonical location reclassification confirmed by King: ${confirmedCanonicalLocation.name}, ${confirmedCanonicalLocation.district}.`);
+    }
     if (nextStatus === 'approved' && normalizeListingType(current.listing_type) === 'commercial') {
       const commercialTransactionType = normalizeCommercialTransactionType(current.transaction_type);
       const commercialPropertyType = normalizeCommercialPropertyType(current.property_type, {
@@ -4571,6 +4684,7 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
     const checklistSource = automatedReview?.checklist
       || (req.body.checklist && typeof req.body.checklist === 'object' ? req.body.checklist : current.moderation_checklist);
     const checklist = { ...normalizeReviewChecklist(checklistSource) };
+    if (locationReclassificationExtraFields) checklist.location_confirmed = true;
     const missingChecks = nextStatus === 'approved'
       ? (automatedReview?.checks || [])
         .filter((item) => {
@@ -4688,7 +4802,13 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
       ...(sourcedCandidateExtraFields || {}),
       ...(identityVerificationExtraFields || {}),
       ...(structuredRejectionExtraFields || {}),
-      ...(priceBasisExtraFields || {})
+      ...(priceBasisExtraFields || {}),
+      ...(locationReclassificationExtraFields || {}),
+      ...(nextStatus === 'approved' ? {
+        data_integrity_review_required: false,
+        data_integrity_review_confirmed_at: new Date().toISOString(),
+        data_integrity_review_confirmed_by: actorId
+      } : {})
     };
     const moderationExtraFieldsJson = Object.keys(moderationExtraFields).length
       ? JSON.stringify(moderationExtraFields)
@@ -4838,6 +4958,7 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
           ...notification,
           ...(sourcedCandidateDispensation ? { sourced_candidate_special_dispensation: sourcedCandidateDispensation } : {}),
           ...(identityVerificationExtraFields ? { identity_verification: identityVerificationExtraFields.identity_verification } : {}),
+          ...(locationReclassificationExtraFields ? { location_reclassification_confirmation: locationReclassificationExtraFields } : {}),
           ...(structuredRejectionReasons.length ? { structured_rejection_reasons: structuredRejectionReasons } : {})
         };
         await db.query(
@@ -4937,6 +5058,7 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
 
     if (fastAdminRender && manualNotificationOnly && ['approved', 'rejected', 'pending'].includes(nextStatus)) {
       clearPublicPropertiesCache(`listing_status_${current.status || 'unknown'}_to_${nextStatus}`);
+      invalidatePublicInventoryMetricsCache(`listing_status_${current.status || 'unknown'}_to_${nextStatus}`);
       runPublicInventoryFollowup(
         writeModerationAuditEvents,
         'Deferred fast moderation audit failed',
@@ -4961,6 +5083,7 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
       alertMatching = await matchListingToSavedSearches(db, { ...current, ...listing });
     }
     clearPublicPropertiesCache(`listing_status_${current.status || 'unknown'}_to_${nextStatus}`);
+    invalidatePublicInventoryMetricsCache(`listing_status_${current.status || 'unknown'}_to_${nextStatus}`);
 
     return res.json(buildStatusResponse(alertMatching));
   } catch (error) {
@@ -4979,6 +5102,8 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
 
 module.exports = router;
 module.exports._test = {
+  compactPublicCardRow,
+  publicPropertyRow,
   publicPropertiesCacheKey,
   isSourcedInventoryCandidateRecord,
   sourcedCandidateRecordHasApprovalLocation,
