@@ -4,7 +4,9 @@
 const { Pool } = require('pg');
 const fixture = require('../tests/fixtures/uganda-location-coverage-worklist.json');
 const {
-  resolveCanonicalUgandaLocation
+  isExcludedLocationOnly,
+  resolveCanonicalUgandaLocation,
+  resolveCanonicalUgandaLocationFromText
 } = require('../utils/ugandaLocationRegistry');
 
 function probe(values = []) {
@@ -45,7 +47,56 @@ async function corpusProbe(connectionString) {
       source_area: row.area,
       source_address: row.address
     })).filter((row) => row.query);
-    return probe(values);
+    const report = {
+      total: values.length,
+      matched: 0,
+      ambiguous: 0,
+      wrong_parent: 0,
+      embedded_match: 0,
+      non_location: 0,
+      candidate_gap: 0,
+      candidate_gap_values: []
+    };
+    const nonLocationPattern = /(?:#|•|\b(?:acres?|ago|bedrooms?|bills? of quantities|construction|district|episode|for rent|for sale|house tour|interior design|kitchen|luxury apartments?|only \d|owerri|ready title|review|soft launch|test zone|the estate|tiktok|uganda|ugx|views?)\b|\d{2,})/i;
+    values.forEach((value) => {
+      const strict = resolveCanonicalUgandaLocation(value.query, value.district);
+      if (strict.status === 'matched') {
+        report.matched += 1;
+        return;
+      }
+      const unqualified = resolveCanonicalUgandaLocation(value.query);
+      if (unqualified.status === 'matched') {
+        report[unqualified.match.district === value.district ? 'matched' : 'wrong_parent'] += 1;
+        return;
+      }
+      if (strict.status === 'ambiguous' || unqualified.status === 'ambiguous') {
+        report.ambiguous += 1;
+        return;
+      }
+      const embedded = resolveCanonicalUgandaLocationFromText(value.query);
+      const addressSegments = String(value.source_address || '')
+        .split(',')
+        .map((segment) => segment.trim())
+        .filter(Boolean);
+      const addressResolution = addressSegments
+        .map((segment) => resolveCanonicalUgandaLocation(segment))
+        .find((resolution) => resolution.status === 'matched');
+      if (embedded.status === 'matched' || addressResolution) {
+        report.embedded_match += 1;
+        return;
+      }
+      if (embedded.status === 'ambiguous') {
+        report.ambiguous += 1;
+        return;
+      }
+      if (isExcludedLocationOnly(value.query) || nonLocationPattern.test(value.query)) {
+        report.non_location += 1;
+        return;
+      }
+      report.candidate_gap += 1;
+      report.candidate_gap_values.push(value);
+    });
+    return report;
   } finally {
     client.release();
     await pool.end();
@@ -53,7 +104,9 @@ async function corpusProbe(connectionString) {
 }
 
 async function main() {
-  const connectionString = process.argv.find((arg) => arg.startsWith('--database-url='))?.slice('--database-url='.length) || '';
+  const connectionString = process.argv.find((arg) => arg.startsWith('--database-url='))?.slice('--database-url='.length)
+    || process.env.LOCATION_PROBE_DATABASE_URL
+    || '';
   const summaryOnly = process.argv.includes('--summary');
   const report = {
     generated_at: new Date().toISOString(),
@@ -72,8 +125,11 @@ async function main() {
         total: report.corpus.total,
         matched: report.corpus.matched,
         ambiguous: report.corpus.ambiguous,
-        unmatched: report.corpus.unmatched,
-        unmatched_values: report.corpus.unmatched_values
+        wrong_parent: report.corpus.wrong_parent,
+        embedded_match: report.corpus.embedded_match,
+        non_location: report.corpus.non_location,
+        candidate_gap: report.corpus.candidate_gap,
+        candidate_gap_values: report.corpus.candidate_gap_values
       };
     }
   }

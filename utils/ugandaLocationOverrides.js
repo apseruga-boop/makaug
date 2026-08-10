@@ -71,6 +71,16 @@ const CURATED_UGANDA_LOCATION_OVERRIDES = [
     source: 'makaug_verified_location_override'
   },
   {
+    name: 'Nakawa', district: 'Kampala', town: 'Kampala', level: 'area',
+    aliases: ['Nakawa', 'MUBS', 'Makerere University Business School'],
+    source: 'makaug_verified_location_override'
+  },
+  {
+    name: 'Akright City', district: 'Wakiso', town: 'Bwebajja', level: 'area',
+    aliases: ['Akright', 'Arkright', 'Akright City', 'Arkright City', 'Akright Estate', 'Arkright Estate'],
+    source: 'makaug_verified_location_override'
+  },
+  {
     name: 'Ndejje', district: 'Wakiso', town: 'Makindye-Ssabagabo', level: 'area',
     aliases: ['Ndejje', 'Ndejje Lubugumu'], lat: 0.244, lng: 32.553,
     source: 'makaug_verified_location_override'
@@ -93,11 +103,36 @@ const CURATED_UGANDA_LOCATION_OVERRIDES = [
 
   ...rows([
     'Ssabagabo', 'Maganjo', 'Kawanda', 'Namulonge', 'Bunamwaya', 'Kiwenda',
-    'Ssisa', 'Mutungo', 'Sentema', 'Buwaate', 'Kirinya', 'Lweza', 'Katalemwa',
+    'Ssisa', 'Mutungo', 'Sentema', 'Kirinya', 'Katalemwa',
     'Kabojja', 'Kawuku', 'Nkumba', 'Nyanama', 'Wampewo', 'Kitala', 'Bulenga',
     'Buwambo', 'Kabubbu', 'Busabala', 'Namulanda', 'Busukuma', 'Masajja',
     'Kigungu', 'Nakawuka', 'Bwerenga', 'Nsamizi'
   ], 'Wakiso', 'Wakiso'),
+
+  {
+    name: 'Buwaate', district: 'Wakiso', town: 'Wakiso', level: 'area',
+    aliases: ['Buwaate', 'Buwate'],
+    source: 'openstreetmap_verified_override'
+  },
+  {
+    name: 'Lweza', district: 'Wakiso', town: 'Wakiso', level: 'area',
+    aliases: ['Lweza', 'Lweeza', 'Upper Lweza'],
+    source: 'makaug_verified_spelling_alias'
+  },
+  ...rows(['Mbalwa', 'Nakwero', 'Nsaggu'], 'Wakiso', 'Wakiso'),
+  ...rows(['Mayangayanga'], 'Mukono', 'Mukono'),
+
+  // These names have more than one verified Uganda parent. Keeping one node
+  // per parent makes an unqualified exact lookup ambiguous by construction;
+  // a supplied district can still select the intended canonical node.
+  ...rows(['Gobero'], 'Wakiso', 'Wakiso'),
+  ...rows(['Gobero'], 'Mukono', 'Mukono'),
+  ...rows(['Nakasajja'], 'Wakiso', 'Wakiso'),
+  ...rows(['Nakasajja'], 'Mukono', 'Mukono'),
+  ...rows(['Busika'], 'Luwero', 'Luwero'),
+  ...rows(['Busika'], 'Kyankwanzi', 'Kyankwanzi'),
+  ...rows(['Lugogo'], 'Kampala', 'Kampala'),
+  ...rows(['Lugogo'], 'Nakasongola', 'Nakasongola'),
 
   ...rows([
     'Nakifuma', 'Kasawo', 'Kyampisi', 'Bukerere', 'Namilyango', 'Namataba',

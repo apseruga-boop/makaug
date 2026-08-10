@@ -32,7 +32,15 @@ test('wrong-region regression names resolve only as unique confidence-one aliase
     Bugongi: ['Sheema', 'Western'],
     'Senior Quarters': ['Gulu', 'Northern'],
     Sentema: ['Wakiso', 'Central'],
-    Namasuba: ['Wakiso', 'Central']
+    Namasuba: ['Wakiso', 'Central'],
+    Akright: ['Wakiso', 'Central'],
+    Buwate: ['Wakiso', 'Central'],
+    Lweeza: ['Wakiso', 'Central'],
+    Mbalwa: ['Wakiso', 'Central'],
+    Nakwero: ['Wakiso', 'Central'],
+    Mayangayanga: ['Mukono', 'Central'],
+    Nsaggu: ['Wakiso', 'Central'],
+    MUBS: ['Kampala', 'Central']
   };
   Object.entries(expected).forEach(([query, [district, region]]) => {
     const result = resolveCanonicalUgandaLocation(query);
@@ -42,6 +50,18 @@ test('wrong-region regression names resolve only as unique confidence-one aliase
     assert.equal(result.match?.district, district, query);
     assert.equal(regionForDistrict(result.match?.district), region, query);
   });
+});
+
+test('duplicate place names require an exact parent hint before auto-resolution', () => {
+  ['Gobero', 'Nakasajja', 'Busika', 'Lugogo'].forEach((query) => {
+    const result = resolveCanonicalUgandaLocation(query);
+    assert.equal(result.status, 'ambiguous', query);
+    assert.equal(result.confidence, 0, query);
+  });
+  assert.equal(resolveCanonicalUgandaLocation('Gobero', 'Wakiso').match.district, 'Wakiso');
+  assert.equal(resolveCanonicalUgandaLocation('Nakasajja', 'Mukono').match.district, 'Mukono');
+  assert.equal(resolveCanonicalUgandaLocation('Busika', 'Luwero').match.district, 'Luwero');
+  assert.equal(resolveCanonicalUgandaLocation('Lugogo', 'Kampala').match.district, 'Kampala');
 });
 
 test('junk and non-exact spelling never auto-resolve', () => {
