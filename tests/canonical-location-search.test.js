@@ -243,6 +243,11 @@ test('public category search is canonical-only and includes visible nearby and a
   assert.match(repairMigration, /location_review_proposed_canonical_location_id/);
   assert.match(repairMigration, /location_auto_reclassified_source_review/);
   assert.match(repairMigration, /automatic_publish', false/);
+  assert.match(repairMigration, /CREATE TABLE IF NOT EXISTS migration_115_location_decisions/);
+  assert.match(repairMigration, /kept_live_high_confidence/);
+  assert.match(repairMigration, /demoted_low_confidence/);
+  assert.match(repairMigration, /proposed_resolution_confidence = 1/);
+  assert.match(repairMigration, /WHERE d\.requires_review = TRUE/);
   assert.doesNotMatch(repairMigration, /area = NULL/);
   assert.match(app, /data-location-reclassification-review="1"/);
   assert.match(app, /admin-review-location-reclassification-confirm/);
@@ -266,7 +271,7 @@ test('public category search is canonical-only and includes visible nearby and a
   assert.doesNotMatch(app, /name: "Kampala Road"/);
 });
 
-test('migration 115 transforms only active rows and demotes only affected approved rows', () => {
+test('migration 115 transforms only active rows and demotes only low-confidence approved rows', () => {
   const migration = read('db/migrations/115_canonical_location_source_of_truth.sql');
   const propertyUpdates = sqlStatements(migration).filter((statement) => /\bUPDATE properties(?:\s+p)?\b/i.test(statement));
 
@@ -276,6 +281,12 @@ test('migration 115 transforms only active rows and demotes only affected approv
     assert.match(statement, /status NOT IN \('rejected', 'deleted'\)/, `update ${index + 1} must explicitly protect rejected and deleted rows`);
   });
   assert.match(migration, /CREATE TEMP TABLE location_snapshot_115[\s\S]*WHERE status IN \('approved', 'pending'\)/);
+  assert.match(migration, /CREATE TEMP TABLE location_decisions_115/);
+  assert.match(migration, /proposed_resolution_confidence = 1/);
+  assert.match(migration, /proposed_canonical_location_level[\s\S]*NOT IN \('', 'district', 'region'\)/);
+  assert.match(migration, /kept_live_high_confidence/);
+  assert.match(migration, /demoted_low_confidence/);
+  assert.match(migration, /WHERE d\.requires_review = TRUE/);
   assert.match(migration, /status = CASE WHEN p\.status = 'approved' THEN 'pending' ELSE p\.status END/);
   assert.match(migration, /moderation_stage = CASE WHEN p\.status = 'approved' THEN 'source_review' ELSE p\.moderation_stage END/);
   assert.match(migration, /FROM queued q\s+WHERE q\.previous_status = 'approved'/);

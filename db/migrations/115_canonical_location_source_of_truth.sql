@@ -21,6 +21,7 @@ CREATE TEMP TABLE location_snapshot_115 AS
 SELECT
   id,
   status AS previous_status,
+  listing_type AS previous_listing_type,
   moderation_stage AS previous_moderation_stage,
   moderation_reason AS previous_moderation_reason,
   moderation_notes AS previous_moderation_notes,
@@ -357,14 +358,43 @@ WHERE p.id = u.id
   AND p.status IN ('approved', 'pending')
   AND p.status NOT IN ('rejected', 'deleted');
 
--- Arthur's B0 gate: any listing whose location assignment changed, or which
--- was newly classified as unmatched, leaves public inventory and returns to
--- human source review. The proposed canonical assignment and the complete
--- before-state stay visible to moderators in extra_fields.
+-- Arthur's confidence gate: exact, unambiguous canonical matches are repaired
+-- in place without changing publication state. Only fuzzy, district-only,
+-- unmatched, incomplete, or otherwise ambiguous resolutions return approved
+-- inventory to human source review. Every decision remains queryable for the
+-- staging audit and production rollback evidence.
+CREATE TABLE IF NOT EXISTS migration_115_location_decisions (
+  property_id UUID PRIMARY KEY,
+  previous_status TEXT NOT NULL,
+  previous_listing_type TEXT,
+  previous_area TEXT,
+  previous_district TEXT,
+  previous_region TEXT,
+  previous_canonical_location_id TEXT,
+  previous_canonical_location_level TEXT,
+  proposed_listing_type TEXT,
+  proposed_area TEXT,
+  proposed_district TEXT,
+  proposed_region TEXT,
+  proposed_canonical_location_id TEXT,
+  proposed_canonical_location_level TEXT,
+  proposed_resolution_status TEXT,
+  proposed_resolution_confidence NUMERIC,
+  requires_review BOOLEAN NOT NULL,
+  decision TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_migration_115_location_decisions_review
+  ON migration_115_location_decisions (requires_review, previous_status, decision);
+
+CREATE TEMP TABLE location_decisions_115 AS
 WITH affected AS (
   SELECT
     p.id,
     s.previous_status,
+    s.previous_listing_type,
     s.previous_moderation_stage,
     s.previous_moderation_reason,
     s.previous_moderation_notes,
@@ -381,7 +411,9 @@ WITH affected AS (
     p.extra_fields->>'region' AS proposed_region,
     p.extra_fields->>'canonical_location_id' AS proposed_canonical_location_id,
     p.extra_fields->>'canonical_location_level' AS proposed_canonical_location_level,
-    p.extra_fields->>'location_resolution_status' AS proposed_resolution_status
+    p.extra_fields->>'location_resolution_status' AS proposed_resolution_status,
+    COALESCE(NULLIF(p.extra_fields->>'location_resolution_confidence', '')::NUMERIC, 0) AS proposed_resolution_confidence,
+    p.listing_type AS proposed_listing_type
   FROM properties p
   JOIN location_snapshot_115 s ON s.id = p.id
   WHERE p.status IN ('approved', 'pending')
@@ -394,18 +426,120 @@ WITH affected AS (
       OR p.extra_fields->>'canonical_location_level' IS DISTINCT FROM s.previous_canonical_location_level
       OR p.extra_fields->>'location_resolution_status' IS DISTINCT FROM s.previous_resolution_status
     )
-), review_queue AS (
+), classified AS (
   SELECT
     a.*,
+    (
+      a.proposed_resolution_confidence = 1
+      AND COALESCE(a.proposed_canonical_location_id, '') ~ '^[a-z0-9][a-z0-9 -]*:[a-z0-9][a-z0-9 -]*$'
+      AND LOWER(COALESCE(a.proposed_canonical_location_level, '')) NOT IN ('', 'district', 'region')
+      AND COALESCE(a.proposed_area, '') <> ''
+      AND COALESCE(a.proposed_district, '') <> ''
+      AND COALESCE(a.proposed_resolution_status, '') IN (
+        'canonical_registry_repair',
+        'canonical_backfill_115',
+        'canonical_materialized_115'
+      )
+    ) AS high_confidence
+  FROM affected a
+)
+SELECT
+  c.*,
+  NOT c.high_confidence AS requires_review,
+  CASE
+    WHEN c.high_confidence AND c.previous_status = 'approved' THEN 'kept_live_high_confidence'
+    WHEN c.high_confidence THEN 'kept_pending_high_confidence'
+    WHEN c.previous_status = 'approved' THEN 'demoted_low_confidence'
+    ELSE 'kept_pending_low_confidence'
+  END AS decision,
+  CASE
+    WHEN c.high_confidence THEN 'exact_alias_or_validated_canonical_node'
+    WHEN COALESCE(c.proposed_canonical_location_id, '') = '' THEN 'unmatched_or_missing_canonical_location'
+    WHEN LOWER(COALESCE(c.proposed_canonical_location_level, '')) IN ('district', 'region') THEN 'district_or_region_only'
+    WHEN COALESCE(c.proposed_area, '') = '' THEN 'specific_area_missing'
+    WHEN c.proposed_resolution_confidence < 1 THEN 'location_confidence_below_one'
+    ELSE 'ambiguous_resolution_status'
+  END AS reason
+FROM classified c;
+
+INSERT INTO migration_115_location_decisions (
+  property_id,
+  previous_status,
+  previous_listing_type,
+  previous_area,
+  previous_district,
+  previous_region,
+  previous_canonical_location_id,
+  previous_canonical_location_level,
+  proposed_listing_type,
+  proposed_area,
+  proposed_district,
+  proposed_region,
+  proposed_canonical_location_id,
+  proposed_canonical_location_level,
+  proposed_resolution_status,
+  proposed_resolution_confidence,
+  requires_review,
+  decision,
+  reason
+)
+SELECT
+  id,
+  previous_status,
+  previous_listing_type,
+  previous_area,
+  previous_district,
+  previous_region,
+  previous_canonical_location_id,
+  previous_canonical_location_level,
+  proposed_listing_type,
+  proposed_area,
+  proposed_district,
+  proposed_region,
+  proposed_canonical_location_id,
+  proposed_canonical_location_level,
+  proposed_resolution_status,
+  proposed_resolution_confidence,
+  requires_review,
+  decision,
+  reason
+FROM location_decisions_115
+ON CONFLICT (property_id) DO UPDATE SET
+  previous_status = EXCLUDED.previous_status,
+  previous_listing_type = EXCLUDED.previous_listing_type,
+  previous_area = EXCLUDED.previous_area,
+  previous_district = EXCLUDED.previous_district,
+  previous_region = EXCLUDED.previous_region,
+  previous_canonical_location_id = EXCLUDED.previous_canonical_location_id,
+  previous_canonical_location_level = EXCLUDED.previous_canonical_location_level,
+  proposed_listing_type = EXCLUDED.proposed_listing_type,
+  proposed_area = EXCLUDED.proposed_area,
+  proposed_district = EXCLUDED.proposed_district,
+  proposed_region = EXCLUDED.proposed_region,
+  proposed_canonical_location_id = EXCLUDED.proposed_canonical_location_id,
+  proposed_canonical_location_level = EXCLUDED.proposed_canonical_location_level,
+  proposed_resolution_status = EXCLUDED.proposed_resolution_status,
+  proposed_resolution_confidence = EXCLUDED.proposed_resolution_confidence,
+  requires_review = EXCLUDED.requires_review,
+  decision = EXCLUDED.decision,
+  reason = EXCLUDED.reason,
+  created_at = NOW();
+
+WITH review_queue AS (
+  SELECT
+    d.*,
     CONCAT(
       'Location auto-reclassified from "',
-      COALESCE(NULLIF(CONCAT_WS(', ', NULLIF(a.previous_area, ''), NULLIF(a.previous_district, ''), NULLIF(a.previous_region, '')), ''), '[unmatched]'),
+      COALESCE(NULLIF(CONCAT_WS(', ', NULLIF(d.previous_area, ''), NULLIF(d.previous_district, ''), NULLIF(d.previous_region, '')), ''), '[unmatched]'),
       '" to "',
-      COALESCE(NULLIF(CONCAT_WS(', ', NULLIF(a.proposed_area, ''), NULLIF(a.proposed_district, ''), NULLIF(a.proposed_region, '')), ''), '[unmatched]'),
-      '" (', COALESCE(NULLIF(a.proposed_canonical_location_id, ''), 'unmatched'),
-      '); confirm before re-publish.'
+      COALESCE(NULLIF(CONCAT_WS(', ', NULLIF(d.proposed_area, ''), NULLIF(d.proposed_district, ''), NULLIF(d.proposed_region, '')), ''), '[unmatched]'),
+      '" (', COALESCE(NULLIF(d.proposed_canonical_location_id, ''), 'unmatched'),
+      '); confidence ', d.proposed_resolution_confidence,
+      '; reason ', d.reason,
+      '; confirm before re-publish.'
     ) AS review_note
-  FROM affected a
+  FROM location_decisions_115 d
+  WHERE d.requires_review = TRUE
 ), queued AS (
   UPDATE properties p
   SET status = CASE WHEN p.status = 'approved' THEN 'pending' ELSE p.status END,
@@ -426,6 +560,8 @@ WITH affected AS (
         'location_review_marker', 'canonical-location-source-review-115',
         'location_review_queued_at', NOW()::text,
         'location_review_note', q.review_note,
+        'location_review_confidence', q.proposed_resolution_confidence,
+        'location_review_reason', q.reason,
         'location_review_previous_status', q.previous_status,
         'location_review_previous_moderation_stage', q.previous_moderation_stage,
         'location_review_previous_moderation_reason', q.previous_moderation_reason,
@@ -449,7 +585,7 @@ WITH affected AS (
     AND p.status IN ('approved', 'pending')
     AND p.status NOT IN ('rejected', 'deleted')
     AND COALESCE(p.extra_fields->>'location_review_queued_at', '') = ''
-  RETURNING p.id, q.previous_status, q.review_note
+  RETURNING p.id, q.previous_status, q.review_note, q.reason
 )
 INSERT INTO property_moderation_events (
   property_id,
@@ -467,12 +603,17 @@ SELECT
   'location_auto_reclassified_source_review',
   q.previous_status,
   'pending',
-  'Location auto-reclassified; human confirmation required.',
+  'Location auto-reclassified with low or ambiguous confidence; human confirmation required.',
   q.review_note,
-  jsonb_build_object('marker', 'canonical-location-source-review-115', 'automatic_publish', false)
+  jsonb_build_object(
+    'marker', 'canonical-location-source-review-115',
+    'automatic_publish', false,
+    'reason', q.reason
+  )
 FROM queued q
 WHERE q.previous_status = 'approved';
 
+DROP TABLE location_decisions_115;
 DROP TABLE location_snapshot_115;
 
 CREATE INDEX IF NOT EXISTS idx_properties_canonical_location_level_public

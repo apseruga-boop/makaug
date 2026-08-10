@@ -9,6 +9,18 @@ ALTER TABLE properties
   ADD COLUMN IF NOT EXISTS price_original_currency TEXT,
   ADD COLUMN IF NOT EXISTS price_on_application BOOLEAN NOT NULL DEFAULT FALSE;
 
+CREATE TEMP TABLE price_snapshot_116 ON COMMIT DROP AS
+SELECT
+  id,
+  status AS previous_status,
+  UPPER(TRIM(COALESCE(price_currency, ''))) AS previous_price_currency,
+  price AS previous_price,
+  price_original AS previous_price_original,
+  price_fx_rate_ugx AS previous_price_fx_rate_ugx
+FROM properties
+WHERE status IN ('approved', 'pending')
+  AND status NOT IN ('rejected', 'deleted');
+
 UPDATE properties
 SET price_original_currency = CASE
       WHEN UPPER(COALESCE(price_currency, '')) = 'USD' THEN 'USD'
@@ -175,6 +187,46 @@ INSERT INTO integrity_review_116 (id, previous_status, issue_codes, proposed_lis
 SELECT id, previous_status, issue_codes, proposed_type, proposed_period
 FROM issues
 WHERE CARDINALITY(issue_codes) > 0;
+
+-- A currency label can be normalised in place when the stored source amount
+-- and FX basis already prove the canonical UGX value. Actual magnitude repairs
+-- and unsupported/unproven conversions remain review work.
+WITH currency_issues AS (
+  SELECT
+    p.id,
+    s.previous_status,
+    ARRAY_REMOVE(ARRAY[
+      CASE
+        WHEN p.extra_fields->>'price_fx_magnitude_repaired' = 'true'
+          THEN 'fx_magnitude_repaired_requires_review'
+      END,
+      CASE
+        WHEN s.previous_price_currency NOT IN ('', 'UGX')
+          AND NOT (
+            s.previous_price_currency = 'USD'
+            AND s.previous_price_original > 0
+            AND s.previous_price_fx_rate_ugx BETWEEN 1000 AND 10000
+            AND p.price IS NOT DISTINCT FROM ROUND(s.previous_price_original * s.previous_price_fx_rate_ugx)
+          )
+          THEN 'currency_conversion_requires_review'
+      END
+    ], NULL) AS issue_codes
+  FROM properties p
+  JOIN price_snapshot_116 s ON s.id = p.id
+  WHERE p.status IN ('approved', 'pending')
+    AND p.status NOT IN ('rejected', 'deleted')
+), flagged AS (
+  SELECT id, previous_status, issue_codes
+  FROM currency_issues
+  WHERE CARDINALITY(issue_codes) > 0
+)
+INSERT INTO integrity_review_116 (id, previous_status, issue_codes)
+SELECT id, previous_status, issue_codes
+FROM flagged
+ON CONFLICT (id) DO UPDATE
+SET issue_codes = ARRAY(
+  SELECT DISTINCT unnest(integrity_review_116.issue_codes || EXCLUDED.issue_codes)
+);
 
 -- Duplicate source URLs and exact property fingerprints: keep the earliest row
 -- as the review candidate and demote every other non-deleted copy.

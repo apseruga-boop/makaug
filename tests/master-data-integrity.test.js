@@ -147,6 +147,9 @@ test('migration 116 is additive, review-only, auditable, and contains the one-of
   assert.match(migration, /price > 100000000000/);
   assert.match(migration, /unsupported_hospitality_or_nightly/);
   assert.match(migration, /duplicate_property_fingerprint/);
+  assert.match(migration, /CREATE TEMP TABLE price_snapshot_116/);
+  assert.match(migration, /fx_magnitude_repaired_requires_review/);
+  assert.match(migration, /currency_conversion_requires_review/);
   assert.match(migration, /status = CASE WHEN p\.status = 'approved' THEN 'pending' ELSE p\.status END/);
   assert.match(migration, /WHERE previous_status = 'approved'/);
   assert.match(migration, /moderation_stage = CASE WHEN p\.status = 'approved' THEN 'source_review'/);

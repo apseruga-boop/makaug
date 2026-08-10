@@ -30,6 +30,8 @@ const {
   loadPublicSeoListings,
   loadPublicSeoListing,
   popularAreaLinks,
+  renderAreaLinks,
+  renderFooterAreaLinks,
   renderCategorySeoHtml,
   renderPropertySeoHtml,
   renderHomepageSeoHtml
@@ -106,6 +108,19 @@ async function run() {
     false,
     'district nodes belong in Browse by district, never Popular areas'
   );
+  const rendererBoundaryLinks = [
+    { href: '/for-sale/kampala-kampala', label: 'Kampala', count: 123, level: 'district' },
+    { href: '/land/central-central', label: 'Central', count: 80, level: 'region' },
+    { href: '/for-sale/ntinda-kampala', label: 'Ntinda, Kampala', count: 12, level: 'area' }
+  ];
+  const globalAreas = renderAreaLinks(rendererBoundaryLinks, 'Popular property areas in Uganda');
+  const globalFooterAreas = renderFooterAreaLinks(rendererBoundaryLinks);
+  for (const output of [globalAreas, globalFooterAreas]) {
+    assert(output.includes('Ntinda, Kampala'), 'global area renderers must retain neighbourhood links');
+    assert(!output.includes('Kampala (123)'), 'global area renderers must reject bare district chips');
+    assert(!output.includes('/for-sale/kampala-kampala'), 'global area renderers must reject district routes');
+    assert(!output.includes('/land/central-central'), 'global area renderers must reject region routes');
+  }
   const meta = categoryPageSeoMeta('/to-rent/ntinda-kampala', snapshot);
   const rentCategoryMeta = categoryPageSeoMeta('/to-rent', snapshot);
   assert(rentCategoryMeta.title.includes('3 Listings, August 2026'), 'category titles must include honest inventory and freshness');
@@ -164,6 +179,7 @@ async function run() {
   assert.equal(h1Count(homepage.html), 1, 'the homepage must retain exactly one H1');
   assert(homepage.html.includes('data-ssr-property-card'), 'the homepage must ship at least one rendered card when inventory exists');
   assert(homepage.html.includes('data-ssr-area-links'), 'the homepage must expose crawlable popular-area links');
+  assert(!homepage.html.includes('/for-sale/kampala-kampala'), 'the homepage and its footer must not emit a bare district route');
   assert.deepEqual(structuredTypes(homepage.structuredData), ['Organization', 'WebSite']);
   assert.equal(homepage.structuredData['@graph'][1].potentialAction['@type'], 'SearchAction');
   assert(homepage.html.includes('style="min-height:24rem"'), 'the homepage grid must reserve first-paint space to reduce layout shift');
