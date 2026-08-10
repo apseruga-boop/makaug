@@ -124,8 +124,10 @@ CREATE TEMP TABLE integrity_review_116 (
 WITH evidence AS (
   SELECT
     p.*,
-    LOWER(CONCAT_WS(' ', p.title,
-      p.extra_fields->>'source_title', p.extra_fields->>'source_caption')) AS title_evidence,
+    LOWER(CASE
+      WHEN NULLIF(TRIM(COALESCE(p.title, '')), '') IS NOT NULL THEN p.title
+      ELSE CONCAT_WS(' ', p.extra_fields->>'source_title', p.extra_fields->>'source_caption')
+    END) AS title_evidence,
     LOWER(CONCAT_WS(' ', p.title,
       p.extra_fields->>'source_title', p.extra_fields->>'source_caption',
       p.extra_fields->>'source_text', p.extra_fields->>'source_visual_text')) AS source_evidence,
@@ -148,10 +150,10 @@ WITH evidence AS (
         REGEXP_REPLACE(e.title_evidence, '((private|milo|mailo|freehold|leasehold|kabaka)[[:space:]]+)?land[[:space:]]+title', ' ', 'g') ~ '(^|[^a-z])land([^a-z]|$)'
       )
     ) AS title_land,
-    e.title_evidence ~ '(bed(room)?s?|bath(room)?s?|house|home|apartment([[:space:]]+block)?|flat|villa|bungalow|mansion|duplex|condo|townhouse|residence|residential|self[-[:space:]]*contained|rentals?|rental[[:space:]]+units?)' AS title_dwelling,
+    e.title_evidence ~ '(bed(room)?s?|bath(room)?s?|house|home|app?artment([[:space:]]+block)?|flat|villa|bungalow|mansion|duplex|condo|townhouse|residence|residential|self[-[:space:]]*contained|rentals?|rental[[:space:]]+units?)' AS title_dwelling,
     e.title_evidence ~ '(office|shop|retail|warehouse|industrial|factory|arcade|showroom|business[[:space:]]+premises|commercial[[:space:]]+(building|property|premises|space|land|plot))' AS title_commercial,
     e.source_evidence ~ '((prime|vacant|bare|titled)[[:space:]]+land|(land|plots?|ettaka|kibanja|bibanja)[[:space:]]+(is[[:space:]]+)?(for|on)[[:space:]]+sale|[0-9]+([.][0-9]+)?[[:space:]]*(acres?|decimals?|square[[:space:]]+(miles?|kilomet(er|re)s?))([[:space:]]+of[[:space:]]+land)?[[:space:]]+(for|on)[[:space:]]+sale|square[[:space:]]+(miles?|kilomet(er|re)s?)[[:space:]]+of[[:space:]]+land)' AS source_strong_land,
-    e.source_evidence ~ '(bed(room)?s?|bath(room)?s?|house|home|apartment([[:space:]]+block)?|flat|villa|bungalow|mansion|duplex|condo|townhouse|residence|residential|self[-[:space:]]*contained|rentals?|rental[[:space:]]+units?)' AS source_dwelling,
+    e.source_evidence ~ '(bed(room)?s?|bath(room)?s?|house|home|app?artment([[:space:]]+block)?|flat|villa|bungalow|mansion|duplex|condo|townhouse|residence|residential|self[-[:space:]]*contained|rentals?|rental[[:space:]]+units?)' AS source_dwelling,
     e.source_evidence ~ '(office|shop|retail|warehouse|industrial|factory|arcade|showroom|business[[:space:]]+premises|commercial[[:space:]]+(building|property|premises|space|land|plot))' AS source_commercial,
     (
       e.source_evidence ~ '(plots?|acres?|decimals?|farmland|bare[-[:space:]]+land|vacant[[:space:]]+land|prime[[:space:]]+land|square[[:space:]]+(miles?|kilomet(er|re)s?)([[:space:]]+of[[:space:]]+land)?|ettaka|kibanja|bibanja)'
@@ -177,7 +179,7 @@ WITH evidence AS (
       WHEN s.title_strong_land OR s.title_land THEN 'land'
       WHEN s.title_dwelling THEN 'residential'
       WHEN s.title_commercial THEN 'commercial'
-      WHEN s.source_strong_land OR s.source_land THEN 'land'
+      WHEN s.source_strong_land OR (s.source_land AND (s.stored_type = 'land' OR s.source_sale)) THEN 'land'
       WHEN s.source_dwelling THEN 'residential'
       WHEN s.source_commercial THEN 'commercial'
       ELSE NULL
@@ -199,19 +201,35 @@ WITH evidence AS (
       ELSE FALSE
     END AS hospitality
   FROM signals s
+), ambiguity AS (
+  SELECT c.*,
+    c.transaction_ambiguous
+      OR c.physical_type IS NULL
+      OR (
+        NOT c.bedroom_bathroom_evidence
+        AND NOT c.title_strong_land
+        AND NOT c.title_land
+        AND NOT c.title_dwelling
+        AND NOT c.title_commercial
+        AND (
+          ((c.source_strong_land OR c.source_land) AND c.source_dwelling)
+          OR ((c.source_strong_land OR c.source_land) AND c.source_commercial)
+          OR (c.source_dwelling AND c.source_commercial)
+        )
+      )
+      OR (c.physical_type = 'residential' AND c.transaction_intent IS NULL) AS category_ambiguous
+  FROM classified c
 ), proposed AS (
   SELECT c.*,
     CASE
-      WHEN c.transaction_ambiguous THEN c.stored_type
+      WHEN c.category_ambiguous THEN c.stored_type
       WHEN c.physical_type = 'student' THEN 'student'
       WHEN c.physical_type = 'land' THEN 'land'
       WHEN c.physical_type = 'commercial' THEN 'commercial'
       WHEN c.physical_type = 'residential' AND c.transaction_intent IN ('sale', 'rent') THEN c.transaction_intent
       ELSE c.stored_type
-    END AS proposed_type,
-    c.transaction_ambiguous
-      OR (c.physical_type = 'residential' AND c.transaction_intent IS NULL) AS category_ambiguous
-  FROM classified c
+    END AS proposed_type
+  FROM ambiguity c
 ), issues AS (
   SELECT c.id, c.status AS previous_status, c.proposed_type,
     CASE c.proposed_type WHEN 'sale' THEN 'once' WHEN 'land' THEN 'once'

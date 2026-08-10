@@ -171,6 +171,19 @@ test('category classifier gives physical property type and explicit transaction 
       listing_type: 'sale',
       expected: 'land',
     },
+    {
+      title: 'New appartment for rent in Wakiso town',
+      source_caption: '#affordableplots #landforsale #newbuilding',
+      listing_type: 'rent',
+      expected: 'rent',
+    },
+    {
+      title: '34 rental units apartment block fully occupied for sale',
+      source_caption: 'Making monthly income, seated on 38 decimals with a Mailo land title.',
+      listing_type: 'sale',
+      bedrooms: 34,
+      expected: 'sale',
+    },
   ];
 
   for (const fixture of cases) {
@@ -213,6 +226,29 @@ test('generated description boilerplate cannot invent a transaction for an ambig
   assert(report.issue_codes.includes('category_ambiguous'));
 });
 
+test('editorial and non-listing source text stays in the original category for review', () => {
+  const cases = [
+    {
+      listing_type: 'rent',
+      title: 'Kampala property investment playbook',
+      source_text: 'A discussion about buying land, apartments, offices and professional property management.',
+    },
+    {
+      listing_type: 'rent',
+      title: 'Community gathering this evening',
+      source_text: 'Meet at Plot 47 Kigo at 5:30 PM.',
+    },
+  ];
+
+  for (const record of cases) {
+    const classification = deriveListingClassification(record);
+    const report = listingDataIntegrityReport({ ...validRent(), ...record });
+    assert.equal(classification.listing_type, record.listing_type);
+    assert.equal(classification.category_ambiguous, true);
+    assert(report.issue_codes.includes('category_ambiguous'));
+  }
+});
+
 test('found-online intake uses the shared precedence classifier for future harvested rows', () => {
   const cases = [
     ['Apartment for sale with 12m monthly income', 'sale'],
@@ -230,6 +266,8 @@ test('found-online intake uses the shared precedence classifier for future harve
     ['#house Forrent 2bedrooms 2bathrooms in Kira', 'rent'],
     ['Kitende land deal - 3 acres with Milo title', 'land'],
     ['42-decimal plot in Mbalwa', 'land'],
+    ['New appartment for rent in Wakiso town', 'rent'],
+    ['34 rental units apartment block fully occupied for sale', 'sale'],
   ];
 
   cases.forEach(([title, expected], index) => {

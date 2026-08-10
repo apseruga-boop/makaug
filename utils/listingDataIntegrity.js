@@ -11,8 +11,8 @@ const MIN_WHOLE_PROPERTY_PRICE_UGX = 1_000_000;
 const MIN_RECURRING_PRICE_UGX = 30_000;
 
 const HOSPITALITY_PATTERN = /\b(?:air\s*&?\s*b(?:n|and)?\s*b|airbnb|short[-\s]*stay|short[-\s]*term\s+stay|per\s+night|nightly|bed\s*(?:and|&)\s*breakfast|booking\.com|holiday\s+home|vacation\s+rental|guest\s*house|guesthouse|hotel\s+room|lodge\s+room|resort\s+stay)\b/i;
-const SPECIFIC_PROPERTY_PATTERN = /\b(?:bed(?:room)?s?|studio|bedsitter|house|home|apartment|flat|villa|bungalow|mansion|duplex|condo|townhouse|plot|plots|land|acre|acres|decimal|decimals|hostel|room|rooms|shop|office|warehouse|factory|arcade|showroom|commercial\s+(?:space|land|plot)|building)\b/i;
-const DWELLING_PATTERN = /\b(?:bed(?:room)?s?|bath(?:room)?s?|house|home|apartment(?:\s+block)?|flat|villa|bungalow|mansion|duplex|condo|townhouse|residence|residential|self[-\s]*contained|rentals?|rental\s+units?)\b/i;
+const SPECIFIC_PROPERTY_PATTERN = /\b(?:bed(?:room)?s?|studio|bedsitter|house|home|app?artment|flat|villa|bungalow|mansion|duplex|condo|townhouse|plot|plots|land|acre|acres|decimal|decimals|hostel|room|rooms|shop|office|warehouse|factory|arcade|showroom|commercial\s+(?:space|land|plot)|building)\b/i;
+const DWELLING_PATTERN = /\b(?:bed(?:room)?s?|bath(?:room)?s?|house|home|app?artment(?:\s+block)?|flat|villa|bungalow|mansion|duplex|condo|townhouse|residence|residential|self[-\s]*contained|rentals?|rental\s+units?)\b/i;
 const STRONG_LAND_PATTERN = /\b(?:(?:prime|vacant|bare|titled)\s+land|(?:land|plots?|ettaka|kibanja|bibanja)\s+(?:is\s+)?(?:for|on)\s+sale|\d+(?:\.\d+)?\s*(?:acres?|decimals?|square\s+(?:miles?|kilomet(?:er|re)s?))(?:\s+of\s+land)?\s+(?:for|on)\s+sale|square\s+(?:miles?|kilomet(?:er|re)s?)\s+of\s+land)\b/i;
 const LAND_PATTERN = /\b(?:land|plots?|acres?|decimals?|square\s+(?:miles?|kilomet(?:er|re)s?)(?:\s+of\s+land)?|bare[-\s]+land|ettaka|kibanja|bibanja)\b/i;
 const LAND_ASSET_PATTERN = /\b(?:plots?|acres?|decimals?|farmland|bare[-\s]+land|vacant\s+land|prime\s+land|square\s+(?:miles?|kilomet(?:er|re)s?)(?:\s+of\s+land)?|ettaka|kibanja|bibanja)\b/i;
@@ -68,8 +68,9 @@ function listingEvidenceText(record = {}) {
 function primaryListingEvidenceText(record = {}) {
   const extra = object(record.extra_fields);
   const raw = object(extra.raw_source_post);
+  const title = compact(record.title);
+  if (title) return title;
   return [
-    record.title,
     record.source_title,
     record.caption,
     extra.source_title,
@@ -168,6 +169,16 @@ function deriveListingClassification(record = {}) {
   const evidencePeriodicRent = PERIODIC_RENT_PATTERN.test(classificationText) && !YIELD_PATTERN.test(classificationText);
   const hospitality = HOSPITALITY_PATTERN.test(text)
     || ['night', 'nightly', 'day', 'daily'].includes(compact(record.price_period || record.pricePeriod).toLowerCase());
+  const hasPrimaryPhysicalEvidence = bedroomBathroomEvidence
+    || primaryStrongLand
+    || primaryLand
+    || primaryDwelling
+    || primaryCommercial;
+  const fallbackPhysicalTypeCount = [
+    hasStrongLand || hasLand,
+    hasDwelling,
+    hasCommercial,
+  ].filter(Boolean).length;
 
   let transactionIntent = '';
   let categoryAmbiguous = false;
@@ -194,9 +205,17 @@ function deriveListingClassification(record = {}) {
   else if (primaryStrongLand || primaryLand) physicalType = 'land';
   else if (primaryDwelling) physicalType = 'residential';
   else if (primaryCommercial) physicalType = 'commercial';
-  else if (hasStrongLand || hasLand) physicalType = 'land';
+  else if (hasStrongLand || (hasLand && (currentType === 'land' || evidenceSale))) physicalType = 'land';
   else if (hasDwelling) physicalType = 'residential';
   else if (hasCommercial) physicalType = 'commercial';
+
+  if (!hasPrimaryPhysicalEvidence && fallbackPhysicalTypeCount > 1) {
+    categoryAmbiguous = true;
+    ambiguityReason = 'Fallback source evidence contains multiple physical property types.';
+  } else if (!physicalType) {
+    categoryAmbiguous = true;
+    ambiguityReason = 'Source evidence does not identify a specific physical property type.';
+  }
 
   let listingType = currentType;
   if (!categoryAmbiguous) {
