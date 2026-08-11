@@ -10,6 +10,10 @@ configuration uses one free staging web service and one isolated paid South
 Africa PostgreSQL database. Production, workers, custom domains, DNS changes,
 social accounts and production listings remain separate gates.
 
+The free web tier does not support Render pre-deploy commands. Staging therefore
+runs the existing guarded migrations during application startup. The ZA seed
+isolation guard still refuses a reset when user records exist.
+
 Seshaikhaya is a `ZA` tenant of the shared country platform. It is not a fork of
 the Uganda application. The same server, listing engine, moderation workflow,
 Ask AI framework, sourced-intake services, WhatsApp framework, and shared

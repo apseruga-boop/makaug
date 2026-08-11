@@ -21,7 +21,6 @@ projects:
             plan: free
             branch: codex/seshaikhaya-launch-za-20260811
             buildCommand: npm ci && npm run build:css && npm run typecheck:bot
-            preDeployCommand: npm run migrate
             startCommand: npm start
             healthCheckPath: /api/health
             autoDeployTrigger: commit
@@ -41,7 +40,7 @@ projects:
               - key: DB_SSL
                 value: "true"
               - key: RUN_MIGRATIONS_ON_START
-                value: "false"
+                value: "true"
               - key: SOUTH_AFRICA_BOOTSTRAP_RESET_SEEDED_DATA
                 value: "true"
               - key: HARVEST_AUTOMATION_ENABLED
