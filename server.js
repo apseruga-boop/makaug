@@ -1556,6 +1556,14 @@ async function start() {
   }
   runtimeReady = true;
   logger.info(`${ACTIVE_TENANT.brandName} backend ready for traffic`);
+  if (typeof process.send === 'function' && process.connected) {
+    const sendRenderHeartbeat = () => {
+      if (process.connected) process.send({ type: 'runtime_heartbeat' });
+    };
+    process.send({ type: 'runtime_ready' });
+    const renderHeartbeatTimer = setInterval(sendRenderHeartbeat, 1000);
+    renderHeartbeatTimer.unref?.();
+  }
   schedulePublicCacheWarmup(`http://127.0.0.1:${port}`);
 }
 

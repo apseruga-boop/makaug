@@ -10,6 +10,8 @@ const host = '0.0.0.0';
 let appReady = false;
 let shuttingDown = false;
 let appProcess = null;
+let lastAppHeartbeatAt = 0;
+const APP_HEARTBEAT_TIMEOUT_MS = 5000;
 
 const HOP_BY_HOP_HEADERS = new Set([
   'connection',
@@ -100,42 +102,14 @@ const earlyHttpServer = http.createServer((req, res) => {
   return proxyToApp(req, res);
 });
 
-function waitForAppReadiness() {
-  let settled = false;
-  const finish = (ready) => {
-    if (settled) return;
-    settled = true;
-    const becameReady = ready && !appReady;
-    appReady = ready;
-    if (becameReady) {
-      console.log('Render application process ready behind liveness proxy', { port: appPort });
-    }
-    if (!shuttingDown) setTimeout(waitForAppReadiness, 1000).unref?.();
-  };
-  const request = http.get({
-    hostname: '127.0.0.1',
-    port: appPort,
-    path: '/healthz',
-    timeout: 3000
-  }, (response) => {
-    let body = '';
-    response.setEncoding('utf8');
-    response.on('data', (chunk) => { body += chunk; });
-    response.on('end', () => {
-      try {
-        finish(response.statusCode === 200 && JSON.parse(body).ready === true);
-      } catch {
-        finish(false);
-      }
-    });
-  });
-  request.on('timeout', () => {
-    finish(false);
-    request.destroy();
-  });
-  request.on('error', () => {
-    finish(false);
-  });
+function recordAppHeartbeat(message = {}) {
+  if (!['runtime_ready', 'runtime_heartbeat'].includes(message.type)) return;
+  const becameReady = !appReady;
+  lastAppHeartbeatAt = Date.now();
+  appReady = true;
+  if (becameReady) {
+    console.log('Render application process ready behind liveness proxy', { port: appPort });
+  }
 }
 
 function shutdown(signal) {
@@ -163,13 +137,19 @@ earlyHttpServer.listen(port, host, () => {
     env: { ...process.env, PORT: String(appPort) },
     stdio: ['inherit', 'inherit', 'inherit', 'ipc']
   });
+  appProcess.on('message', recordAppHeartbeat);
   appProcess.on('exit', (code, signal) => {
     appReady = false;
     if (shuttingDown) return;
     console.error('Render application process exited', { code, signal });
     process.exit(code || 1);
   });
-  waitForAppReadiness();
+  const heartbeatMonitor = setInterval(() => {
+    if (appReady && Date.now() - lastAppHeartbeatAt > APP_HEARTBEAT_TIMEOUT_MS) {
+      appReady = false;
+    }
+  }, 1000);
+  heartbeatMonitor.unref?.();
 });
 
 process.on('SIGTERM', () => shutdown('SIGTERM'));
