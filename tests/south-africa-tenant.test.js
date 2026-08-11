@@ -116,6 +116,18 @@ const city = registry.resolveCanonicalSouthAfricaLocation('Cape Town, Western Ca
 const exactScope = registry.canonicalLocationSearchScope([seaPoint.match.key], 0);
 assert.deepEqual(exactScope.nearby, [], 'nearby=0 must never widen the selected suburb');
 
+const campsBay = registry.resolveCanonicalSouthAfricaLocation('Camps Bay, Cape Town, Western Cape').match;
+const rolledLocationCounts = registry.canonicalLocationRollupCounts(new Map([
+  [province.key, 5],
+  [city.key, 3],
+  [seaPoint.match.key, 2],
+  [campsBay.key, 7],
+  ['unknown:orphan', 13]
+]));
+assert.equal(rolledLocationCounts.get(city.key), 12, 'city count must include its direct and suburb inventory');
+assert.equal(rolledLocationCounts.get(province.key), 17, 'province count must include all direct, city, and suburb inventory');
+assert.equal(rolledLocationCounts.get('unknown:orphan'), 13, 'non-registry direct counts must remain intact');
+
 const provinceFilters = [];
 const provinceValues = [];
 assert.equal(propertiesRoute._test.addCanonicalLocationSearchFilter(

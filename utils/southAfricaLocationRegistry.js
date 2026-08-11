@@ -264,12 +264,25 @@ function canonicalLocationSearchScope(keys = [], nearbyKm = 0) {
 function canonicalLocationRollupCounts(counts = new Map()) {
   const direct = counts instanceof Map ? counts : new Map(Object.entries(counts || {}));
   const rolled = new Map(direct);
-  registry.filter((entry) => entry.level !== 'suburb').forEach((parent) => {
-    const descendants = registry.filter((entry) => parent.level === 'province'
-      ? entry.province === parent.province
-      : entry.province === parent.province && entry.city === parent.city);
-    rolled.set(parent.key, descendants.reduce((sum, child) => sum + Math.max(0, Number(direct.get(child.key)) || 0), 0));
-  });
+  const provinceTotals = new Map();
+  const cityTotals = new Map();
+
+  for (const entry of registry) {
+    const count = Math.max(0, Number(direct.get(entry.key)) || 0);
+    provinceTotals.set(entry.province, (provinceTotals.get(entry.province) || 0) + count);
+    if (entry.city) {
+      const cityKey = `${entry.province}\u0000${entry.city}`;
+      cityTotals.set(cityKey, (cityTotals.get(cityKey) || 0) + count);
+    }
+  }
+
+  for (const parent of registry) {
+    if (parent.level === 'province') {
+      rolled.set(parent.key, provinceTotals.get(parent.province) || 0);
+    } else if (parent.level === 'city') {
+      rolled.set(parent.key, cityTotals.get(`${parent.province}\u0000${parent.city}`) || 0);
+    }
+  }
   return rolled;
 }
 
