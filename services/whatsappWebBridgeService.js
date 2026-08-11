@@ -142,6 +142,8 @@ async function upsertWhatsappWebBridgeClient({
 async function queueWhatsappWebBridgeMessage({
   recipient,
   text,
+  mediaUrl = '',
+  mediaType = 'text',
   source = 'system',
   actorId = 'system',
   metadata = {},
@@ -160,8 +162,28 @@ async function queueWhatsappWebBridgeMessage({
     throw error;
   }
 
+  const normalizedMediaUrl = (() => {
+    const candidate = String(mediaUrl || '').trim();
+    if (!candidate || candidate.length > 2000) return '';
+    try {
+      const parsed = new URL(candidate);
+      if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) return '';
+      return parsed.toString();
+    } catch (_error) {
+      return '';
+    }
+  })();
+  const normalizedMediaType = normalizedMediaUrl && String(mediaType || '').trim().toLowerCase() === 'image'
+    ? 'image'
+    : 'text';
+
   const payload = {
-    text: body
+    text: body,
+    ...(normalizedMediaUrl ? {
+      caption: body,
+      media_url: normalizedMediaUrl,
+      media_type: normalizedMediaType
+    } : {})
   };
 
   const meta = {

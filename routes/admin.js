@@ -72,6 +72,7 @@ const {
   isWhatsappWebBridgeEnabled,
   queueWhatsappWebBridgeMessage
 } = require('../services/whatsappWebBridgeService');
+const { buildWhatsappPropertyCard } = require('../services/whatsappPropertyCardService');
 const { evaluateHostedWhatsappBridgeReadiness } = require('../services/whatsappBridgeReadiness');
 const {
   emailProviderConfigured: emailProviderConfiguredByService,
@@ -9609,7 +9610,9 @@ router.post('/whatsapp/conversations/:phone/suggest-reply', async (req, res, nex
 router.post('/whatsapp/conversations/:phone/reply', async (req, res, next) => {
   try {
     const phone = normalizeConversationPhone(req.params.phone);
-    const text = String(req.body.text || '').trim();
+    let text = String(req.body.text || '').trim();
+    let mediaUrl = String(req.body.media_url || req.body.mediaUrl || '').trim();
+    const propertyId = cleanText(req.body.property_id || req.body.propertyId);
     const source = String(req.body.source || 'human').trim().toLowerCase();
     const requestedStatus = req.body.status ? normalizeConversationStatus(req.body.status) : null;
     const requestedDeliveryMode = String(req.body.delivery_mode || '').trim().toLowerCase();
@@ -9617,6 +9620,31 @@ router.post('/whatsapp/conversations/:phone/reply', async (req, res, next) => {
 
     if (!phone) {
       return res.status(400).json({ ok: false, error: 'Invalid destination phone' });
+    }
+    if (propertyId) {
+      const propertyResult = await db.query(
+        `SELECT p.id, p.title, p.listing_type, p.transaction_type, p.district, p.area,
+                p.price, p.price_period, p.extra_fields, img.url AS primary_image_url
+         FROM properties p
+         LEFT JOIN LATERAL (
+           SELECT CASE WHEN url ~* '^https?://' AND length(url) < 2000 THEN url ELSE NULL END AS url
+           FROM property_images
+           WHERE property_id = p.id
+           ORDER BY is_primary DESC, sort_order ASC, created_at ASC
+           LIMIT 1
+         ) img ON TRUE
+         WHERE p.id = $1 AND p.status = 'approved'
+         LIMIT 1`,
+        [propertyId]
+      );
+      if (!propertyResult.rows[0]) {
+        return res.status(404).json({ ok: false, error: 'Approved property not found' });
+      }
+      const card = buildWhatsappPropertyCard(propertyResult.rows[0], {
+        homeUrl: (process.env.PUBLIC_BASE_URL || 'https://makaug.com').replace(/\/+$/, '')
+      });
+      text = card.caption;
+      mediaUrl = card.imageUrl;
     }
     if (!text) {
       return res.status(400).json({ ok: false, error: 'Reply text is required' });
@@ -9638,6 +9666,8 @@ router.post('/whatsapp/conversations/:phone/reply', async (req, res, next) => {
       const queued = await queueWhatsappWebBridgeMessage({
         recipient: phone,
         text,
+        mediaUrl,
+        mediaType: mediaUrl ? 'image' : 'text',
         source: source === 'ai' ? 'admin_ai_reply' : 'admin_human_reply',
         actorId: actor,
         metadata: {
@@ -9659,6 +9689,8 @@ router.post('/whatsapp/conversations/:phone/reply', async (req, res, next) => {
         const queued = await queueWhatsappWebBridgeMessage({
           recipient: phone,
           text,
+          mediaUrl,
+          mediaType: mediaUrl ? 'image' : 'text',
           source: source === 'ai' ? 'admin_ai_reply' : 'admin_human_reply',
           actorId: actor,
           metadata: {
