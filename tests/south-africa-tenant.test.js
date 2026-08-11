@@ -107,6 +107,12 @@ assert(zaJavaScript.includes('productDisplayName: "seshaikhaya.com"'));
 assert(zaJavaScript.includes('let activeCur = "ZAR"'));
 assert(zaJavaScript.includes('const PROPERTIES = [];'));
 assert(zaJavaScript.includes('const BROKERS = [];'));
+for (const ugandaPromptPlace of [
+  'Gayaza', 'Makerere', 'Kololo', 'Bukoto', 'Muyenga', 'Kira',
+  'Namugongo', 'Mukono', 'Matugga', 'Nakasero', 'Kyambogo', 'MUBS'
+]) {
+  assert(!new RegExp(`\\b${ugandaPromptPlace}\\b`).test(zaJavaScript), `ZA AI examples leaked ${ugandaPromptPlace}`);
+}
 for (const code of za.languages.map((language) => language.code)) {
   assert(zaJavaScript.includes(`${code}:` ) || code === 'en', `ZA JavaScript language patch is missing ${code}`);
 }
