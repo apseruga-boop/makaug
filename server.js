@@ -91,6 +91,7 @@ const IS_SOUTH_AFRICA = ACTIVE_COUNTRY_CODE === 'ZA';
 
 const RUNTIME_BUILD_ID = 'bundle-version-commit-key-20260719';
 const RUNTIME_STARTED_AT = new Date().toISOString();
+let runtimeReady = false;
 
 function escapeXml(value = '') {
   return String(value).replace(/[<>&'\"]/g, (character) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '\"': '&quot;' }[character]));
@@ -150,7 +151,18 @@ app.get('/healthz', (_req, res) => {
     ok: true,
     service: process.env.RENDER_SERVICE_NAME || ACTIVE_TENANT.brandName,
     country_code: ACTIVE_COUNTRY_CODE,
+    ready: runtimeReady,
     started_at: RUNTIME_STARTED_AT
+  });
+});
+
+app.use((_req, res, next) => {
+  if (runtimeReady) return next();
+  res.set('Cache-Control', 'no-store');
+  return res.status(503).json({
+    ok: false,
+    error: 'service_starting',
+    country_code: ACTIVE_COUNTRY_CODE
   });
 });
 
@@ -1425,6 +1437,30 @@ app.use(errorHandler);
 const port = parseInt(process.env.PORT || '8080', 10);
 
 async function start() {
+  const httpServer = http.createServer(app);
+  httpServer.keepAliveTimeout = 120_000;
+  httpServer.headersTimeout = 121_000;
+  httpServer.on('error', (error) => {
+    logger.error('HTTP server failed', {
+      code: error?.code,
+      message: error?.message,
+      port
+    });
+  });
+  await new Promise((resolve, reject) => {
+    httpServer.once('error', reject);
+    httpServer.listen(port, '0.0.0.0', () => {
+      httpServer.removeListener('error', reject);
+      resolve();
+    });
+  });
+  const address = httpServer.address();
+  logger.info(`${ACTIVE_TENANT.brandName} liveness endpoint accepting traffic`, {
+    host: typeof address === 'object' && address ? address.address : '0.0.0.0',
+    port: typeof address === 'object' && address ? address.port : port,
+    family: typeof address === 'object' && address ? address.family : null
+  });
+
   if (process.env.DATABASE_URL && process.env.RUN_MIGRATIONS_ON_START !== 'false') {
     await runMigrations();
   } else if (!process.env.DATABASE_URL) {
@@ -1466,26 +1502,9 @@ async function start() {
     startMarketplaceDripScheduler(db);
   }
   startFeaturedRotationScheduler(db);
-
-  const httpServer = http.createServer(app);
-  httpServer.keepAliveTimeout = 120_000;
-  httpServer.headersTimeout = 121_000;
-  httpServer.on('error', (error) => {
-    logger.error('HTTP server failed', {
-      code: error?.code,
-      message: error?.message,
-      port
-    });
-  });
-  httpServer.listen(port, '0.0.0.0', () => {
-    const address = httpServer.address();
-    logger.info(`${ACTIVE_TENANT.brandName} backend accepting traffic`, {
-      host: typeof address === 'object' && address ? address.address : '0.0.0.0',
-      port: typeof address === 'object' && address ? address.port : port,
-      family: typeof address === 'object' && address ? address.family : null
-    });
-    schedulePublicCacheWarmup(`http://127.0.0.1:${port}`);
-  });
+  runtimeReady = true;
+  logger.info(`${ACTIVE_TENANT.brandName} backend ready for traffic`);
+  schedulePublicCacheWarmup(`http://127.0.0.1:${port}`);
 }
 
 start().catch((error) => {

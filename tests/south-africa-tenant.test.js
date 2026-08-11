@@ -73,6 +73,12 @@ const zaJavaScript = applySouthAfricaJavaScript(rawJavaScript);
 const serverSource = fs.readFileSync(path.join(root, 'server.js'), 'utf8');
 assert(serverSource.includes("app.get('/healthz'"), 'Render process health endpoint is missing');
 assert(serverSource.includes("app.use('/api/health', healthRoutes)"), 'Database health endpoint must remain available');
+assert(
+  serverSource.indexOf("httpServer.listen(port, '0.0.0.0'") < serverSource.indexOf('await runMigrations()'),
+  'Render liveness listener must bind before database migrations'
+);
+assert(serverSource.includes('if (runtimeReady) return next();'), 'Non-health traffic must wait for startup readiness');
+assert(serverSource.includes('runtimeReady = true;'), 'Startup must release the readiness gate');
 assert(zaJavaScript.includes('productDisplayName: "seshaikhaya.com"'));
 assert(zaJavaScript.includes('let activeCur = "ZAR"'));
 assert(zaJavaScript.includes('const PROPERTIES = [];'));
