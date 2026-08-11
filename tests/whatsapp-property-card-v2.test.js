@@ -103,6 +103,8 @@ assert(bridgeService.includes('media_url: normalizedMediaUrl'), 'bridge queue mu
 assert(whatsappRoute.includes("media_type: row.payload?.media_type || 'text'"), 'outbox API must expose media metadata');
 assert(bridgeWorker.includes('typeAndSendImageReply'), 'hosted bridge must send an actual WhatsApp image message');
 assert(bridgeWorker.includes('sending the clean text card instead'), 'image failure must fall back to text-only');
+assert(bridgeWorker.includes('dismissPendingMediaSelection'), 'image failure must close WhatsApp media selection before text fallback');
+assert(bridgeWorker.includes('waitForMediaSendConfirmation'), 'media delivery must confirm the closed image composer without retrying a sent card');
 assert(adminRoute.includes('req.body.property_id || req.body.propertyId'), 'admin confirmation send must support a reviewed property card');
 assert(server.includes("'whatsapp-property-card-v2'"), 'production version marker must identify this release');
 

@@ -2934,6 +2934,80 @@ async function setMediaCaption(page, caption) {
   return false;
 }
 
+async function getMediaComposerState(page) {
+  return page.evaluate(({ captionSelectors }) => {
+    const isVisible = (node) => {
+      if (!node) return false;
+      const style = window.getComputedStyle(node);
+      const rect = node.getBoundingClientRect();
+      return style.display !== 'none'
+        && style.visibility !== 'hidden'
+        && Number(style.opacity || 1) !== 0
+        && rect.width > 8
+        && rect.height > 8;
+    };
+    const captionVisible = captionSelectors.some((selector) => (
+      Array.from(document.querySelectorAll(selector)).some(isVisible)
+    ));
+    const discardDialog = Array.from(document.querySelectorAll('[role="dialog"]')).find((node) => (
+      isVisible(node)
+      && /discard selection/i.test(`${node.getAttribute('aria-label') || ''} ${node.innerText || ''}`)
+    ));
+    return {
+      captionVisible,
+      discardDialogVisible: Boolean(discardDialog)
+    };
+  }, { captionSelectors: MEDIA_CAPTION_SELECTORS }).catch(() => ({
+    captionVisible: false,
+    discardDialogVisible: false
+  }));
+}
+
+async function dismissPendingMediaSelection(page) {
+  let state = await getMediaComposerState(page);
+  if (!state.captionVisible && !state.discardDialogVisible) return true;
+
+  if (state.captionVisible && !state.discardDialogVisible) {
+    await page.keyboard.press('Escape').catch(() => null);
+    await page.waitForTimeout(150);
+    state = await getMediaComposerState(page);
+  }
+
+  if (state.discardDialogVisible) {
+    const dialog = page.getByRole('dialog', { name: /Discard selection/i }).last();
+    const discardButton = dialog.getByRole('button', { name: /Discard|Yes/i }).last();
+    if (await discardButton.count().catch(() => 0)) {
+      await discardButton.click({ timeout: 2500 }).catch(() => null);
+    } else {
+      await page.keyboard.press('Enter').catch(() => null);
+    }
+    await page.waitForTimeout(200);
+  }
+
+  state = await getMediaComposerState(page);
+  return !state.captionVisible && !state.discardDialogVisible;
+}
+
+async function waitForMediaSendConfirmation(page, caption, beforeState, timeoutMs = 10000) {
+  const deadline = Date.now() + timeoutMs;
+  let composerGoneSamples = 0;
+  while (Date.now() < deadline) {
+    if (await waitForOutgoingReplyConfirmation(page, caption, beforeState, 250)) return true;
+    const state = await getMediaComposerState(page);
+    if (!state.captionVisible && !state.discardDialogVisible) {
+      composerGoneSamples += 1;
+      if (composerGoneSamples >= 3) {
+        log('outgoing image bubble was not readable quickly; accepting closed media composer as sent');
+        return true;
+      }
+    } else {
+      composerGoneSamples = 0;
+    }
+    await page.waitForTimeout(100);
+  }
+  return false;
+}
+
 async function typeAndSendImageReply(page, mediaUrl, caption) {
   const media = await fetchOutboundPropertyImage(mediaUrl);
   const beforeState = await getOutgoingMessageState(page).catch(() => ({ count: 0, recentTexts: [] }));
@@ -2969,7 +3043,7 @@ async function typeAndSendImageReply(page, mediaUrl, caption) {
   if (!await clickFirstVisible(page, MEDIA_SEND_BUTTON_SELECTORS)) {
     throw new Error('Could not find the WhatsApp media send button');
   }
-  const confirmed = await waitForOutgoingReplyConfirmation(page, caption, beforeState, Math.max(10000, SEND_CONFIRM_MS));
+  const confirmed = await waitForMediaSendConfirmation(page, caption, beforeState, Math.max(10000, SEND_CONFIRM_MS));
   if (!confirmed) throw new Error('WhatsApp image send was not confirmed in the chat');
   return true;
 }
@@ -3022,6 +3096,10 @@ async function processOutbox(page, { recipient = '', maxSends = OUTBOX_SENDS_PER
           mediaSent = true;
         } catch (mediaError) {
           log(`property image unavailable for ${item.recipient}; sending the clean text card instead: ${mediaError.message || mediaError}`);
+          const mediaComposerReset = await dismissPendingMediaSelection(page);
+          if (!mediaComposerReset) {
+            throw new Error(`Could not reset WhatsApp media composer after image failure: ${mediaError.message || mediaError}`);
+          }
           await typeAndSendReply(page, item.text);
         }
       } else {
