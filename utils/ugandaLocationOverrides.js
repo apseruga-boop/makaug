@@ -134,6 +134,59 @@ const CURATED_UGANDA_LOCATION_OVERRIDES = [
   ...rows(['Lugogo'], 'Kampala', 'Kampala'),
   ...rows(['Lugogo'], 'Nakasongola', 'Nakasongola'),
 
+  // Dave's 1,019-place audit exposed five aliases for which the UBOS import
+  // contained only one district instance. List every verified parent here so
+  // the bare name is disambiguated instead of silently selecting one region.
+  {
+    name: 'Mateete', district: 'Kyenjojo', town: 'Butunduzi', level: 'parish',
+    aliases: ['Mateete'], source: 'ubos_and_openstreetmap_verified_override'
+  },
+  {
+    name: 'Mateete', district: 'Sembabule', town: 'Mateete', level: 'town',
+    aliases: ['Mateete'], source: 'ubos_and_openstreetmap_verified_override'
+  },
+  {
+    name: 'Migyera', district: 'Isingiro', town: 'Ruhiira', level: 'neighborhood',
+    aliases: ['Migyera'], source: 'ubos_and_openstreetmap_verified_override'
+  },
+  {
+    name: 'Migyera', district: 'Nakasongola', town: 'Migyera', level: 'town',
+    aliases: ['Migyera', 'Migeera'], source: 'ubos_and_openstreetmap_verified_override'
+  },
+  {
+    name: 'Labongo', district: 'Masindi', town: 'Labongo', level: 'parish',
+    aliases: ['Labongo'], source: 'ubos_and_openstreetmap_verified_override'
+  },
+  {
+    name: 'Labongo', district: 'Kitgum', town: 'Kitgum', level: 'area',
+    aliases: ['Labongo'], source: 'ubos_and_openstreetmap_verified_override'
+  },
+  {
+    name: 'Labongo', district: 'Pader', town: 'Pader', level: 'area',
+    aliases: ['Labongo'], source: 'openstreetmap_verified_override'
+  },
+  {
+    name: 'Bukuuku', district: 'Nakaseke', town: 'Kaasangombe', level: 'parish',
+    aliases: ['Bukuuku'], source: 'ubos_and_openstreetmap_verified_override'
+  },
+  {
+    name: 'Bukuuku', district: 'Kabarole', town: 'Fort Portal', level: 'area',
+    aliases: ['Bukuuku'], source: 'openstreetmap_verified_override'
+  },
+  {
+    name: 'Kyeeya', district: 'Kamuli', town: 'Namwendwa', level: 'parish',
+    aliases: ['Kyeeya'], source: 'ubos_verified_override'
+  },
+  {
+    name: 'Kyeeya', district: 'Kyenjojo', town: 'Kyenjojo', level: 'area',
+    aliases: ['Kyeeya'], source: 'openstreetmap_verified_override'
+  },
+  {
+    name: 'Bushenyi-Ishaka', district: 'Bushenyi', town: 'Bushenyi-Ishaka', level: 'city',
+    aliases: ['Bushenyi-Ishaka', 'Bushenyi Ishaka', 'Bushenyi-Ishaka Municipality'],
+    source: 'ubos_verified_municipality_alias'
+  },
+
   ...rows([
     'Nakifuma', 'Kasawo', 'Kyampisi', 'Bukerere', 'Namilyango', 'Namataba',
     'Kasenge', 'Kabembe', 'Kojja', 'Kibuye'

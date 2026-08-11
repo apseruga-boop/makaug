@@ -53,7 +53,7 @@ test('wrong-region regression names resolve only as unique confidence-one aliase
 });
 
 test('duplicate place names require an exact parent hint before auto-resolution', () => {
-  ['Gobero', 'Nakasajja', 'Busika', 'Lugogo'].forEach((query) => {
+  ['Gobero', 'Nakasajja', 'Busika', 'Lugogo', 'Mateete', 'Migyera', 'Labongo', 'Bukuuku', 'Kyeeya'].forEach((query) => {
     const result = resolveCanonicalUgandaLocation(query);
     assert.equal(result.status, 'ambiguous', query);
     assert.equal(result.confidence, 0, query);
@@ -62,6 +62,33 @@ test('duplicate place names require an exact parent hint before auto-resolution'
   assert.equal(resolveCanonicalUgandaLocation('Nakasajja', 'Mukono').match.district, 'Mukono');
   assert.equal(resolveCanonicalUgandaLocation('Busika', 'Luwero').match.district, 'Luwero');
   assert.equal(resolveCanonicalUgandaLocation('Lugogo', 'Kampala').match.district, 'Kampala');
+});
+
+test('Dave hand-back duplicates retain every verified parent and never auto-resolve bare names', () => {
+  const expectedParents = {
+    Mateete: ['Kyenjojo', 'Sembabule'],
+    Migyera: ['Isingiro', 'Nakasongola'],
+    Labongo: ['Kitgum', 'Masindi', 'Pader'],
+    Bukuuku: ['Kabarole', 'Nakaseke'],
+    Kyeeya: ['Kamuli', 'Kyenjojo']
+  };
+  Object.entries(expectedParents).forEach(([query, districts]) => {
+    const result = resolveCanonicalUgandaLocation(query);
+    assert.equal(result.status, 'ambiguous', query);
+    assert.equal(result.match, null, query);
+    assert.equal(result.confidence, 0, query);
+    assert.deepEqual([...new Set(result.candidates.map((item) => item.district))].sort(), districts, query);
+  });
+});
+
+test('Bushenyi-Ishaka municipality spellings resolve to Bushenyi in Western region', () => {
+  ['Bushenyi-Ishaka', 'Bushenyi Ishaka', 'Bushenyi-Ishaka Municipality'].forEach((query) => {
+    const result = resolveCanonicalUgandaLocation(query);
+    assert.equal(result.status, 'matched', query);
+    assert.equal(result.match?.district, 'Bushenyi', query);
+    assert.equal(result.match?.level, 'city', query);
+    assert.equal(regionForDistrict(result.match?.district), 'Western', query);
+  });
 });
 
 test('junk and non-exact spelling never auto-resolve', () => {
