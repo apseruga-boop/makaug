@@ -15,7 +15,7 @@ const {
   normalizeDistrict,
   normalizeLocationKey,
   haversineKm
-} = require('../utils/ugandaLocationRegistry');
+} = require('../utils/locationRegistry');
 
 const router = express.Router();
 

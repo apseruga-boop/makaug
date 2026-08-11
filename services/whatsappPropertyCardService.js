@@ -1,6 +1,10 @@
 'use strict';
 
-const DEFAULT_HOME_URL = 'https://makaug.com';
+const { tenantFor } = require('../packages/shared-country-core');
+
+const ACTIVE_COUNTRY_CODE = String(process.env.COUNTRY_CODE || 'UG').trim().toUpperCase();
+const ACTIVE_TENANT = tenantFor(ACTIVE_COUNTRY_CODE);
+const DEFAULT_HOME_URL = ACTIVE_TENANT.domain;
 
 function cleanText(value = '') {
   return String(value || '')
@@ -44,7 +48,7 @@ function whatsappListingTypeLabel(row = {}) {
 }
 
 function generatedWhatsappTitle(row = {}) {
-  const area = cleanText(row.area || row.district || 'Uganda');
+  const area = cleanText(row.area || row.district || ACTIVE_TENANT.countryName);
   const type = normalizedListingType(row);
   if (type === 'rent') return `Property for rent in ${area}`;
   if (type === 'student') return `Student accommodation in ${area}`;
@@ -104,9 +108,9 @@ function formatWhatsappPropertyPrice(row = {}) {
   if (amount >= 1_000_000_000) amountText = compactNumber(amount, 1_000_000_000, 'B');
   else if (amount >= 1_000_000) amountText = compactNumber(amount, 1_000_000, 'M');
   else if (amount >= 1_000) amountText = compactNumber(amount, 1_000, 'K');
-  else amountText = Math.round(amount).toLocaleString('en-UG');
+  else amountText = Math.round(amount).toLocaleString(ACTIVE_TENANT.dateLocale || 'en-UG');
   const period = meaningfulWhatsappPeriod(row);
-  return `USh ${amountText}${period ? `/${period}` : ''}`;
+  return `${ACTIVE_TENANT.currencyLabel} ${amountText}${period ? `/${period}` : ''}`;
 }
 
 function publicMediaUrl(value = '') {
@@ -173,7 +177,7 @@ function propertyUrlForWhatsapp(row = {}, homeUrl = DEFAULT_HOME_URL) {
 
 function buildWhatsappPropertyCard(row = {}, { homeUrl = DEFAULT_HOME_URL } = {}) {
   const base = safeHomeUrl(homeUrl).replace(/\/+$/, '');
-  const location = [cleanText(row.area), cleanText(row.district)].filter(Boolean).join(', ') || 'Uganda';
+  const location = [cleanText(row.area), cleanText(row.district)].filter(Boolean).join(', ') || ACTIVE_TENANT.countryName;
   const propertyUrl = propertyUrlForWhatsapp(row, base);
   const caption = [
     `🏡 ${cleanWhatsappPropertyTitle(row)}`,

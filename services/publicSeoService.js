@@ -4,7 +4,7 @@ const {
   canonicalLocationOptions,
   canonicalLocationRollupCounts,
   canonicalLocationSearchScope
-} = require('../utils/ugandaLocationRegistry');
+} = require('../utils/locationRegistry');
 const { publicVisibleInventoryWhere } = require('./publicInventoryMetricsService');
 const {
   SEO_FACET_MIN_LISTINGS,

@@ -10,6 +10,14 @@ const UGANDA_BOUNDS = {
   minLng: 29.2,
   maxLng: 35.2
 };
+const SOUTH_AFRICA_BOUNDS = {
+  minLat: -35.0,
+  maxLat: -22.0,
+  minLng: 16.0,
+  maxLng: 33.0
+};
+const ACTIVE_COUNTRY_CODE = String(process.env.COUNTRY_CODE || 'UG').trim().toUpperCase();
+const ACTIVE_COUNTRY_BOUNDS = ACTIVE_COUNTRY_CODE === 'ZA' ? SOUTH_AFRICA_BOUNDS : UGANDA_BOUNDS;
 
 function toFiniteNumber(value) {
   const num = Number(value);
@@ -44,10 +52,10 @@ function isPointInUganda(lat, lng) {
   const nLat = toFiniteNumber(lat);
   const nLng = toFiniteNumber(lng);
   if (nLat == null || nLng == null) return false;
-  return nLat >= UGANDA_BOUNDS.minLat
-    && nLat <= UGANDA_BOUNDS.maxLat
-    && nLng >= UGANDA_BOUNDS.minLng
-    && nLng <= UGANDA_BOUNDS.maxLng;
+  return nLat >= ACTIVE_COUNTRY_BOUNDS.minLat
+    && nLat <= ACTIVE_COUNTRY_BOUNDS.maxLat
+    && nLng >= ACTIVE_COUNTRY_BOUNDS.minLng
+    && nLng <= ACTIVE_COUNTRY_BOUNDS.maxLng;
 }
 
 function haversineKm(lat1, lng1, lat2, lng2) {
@@ -84,6 +92,8 @@ module.exports = {
   MIN_SEARCH_RADIUS_MILES,
   MAX_SEARCH_RADIUS_MILES,
   UGANDA_BOUNDS,
+  SOUTH_AFRICA_BOUNDS,
+  ACTIVE_COUNTRY_BOUNDS,
   milesToKm,
   kmToMiles,
   normalizeRadiusMiles,

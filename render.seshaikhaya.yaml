@@ -1,0 +1,163 @@
+projects:
+  - name: seshaikhaya
+    environments:
+      - name: staging
+        databases:
+          - name: seshaikhaya-staging-db
+            plan: basic-256mb
+            region: frankfurt
+            databaseName: seshaikhaya_staging
+            user: seshaikhaya_staging
+            ipAllowList: []
+        services:
+          - type: web
+            name: seshaikhaya-staging-web
+            runtime: node
+            region: frankfurt
+            plan: starter
+            branch: codex/seshaikhaya-launch-za-20260811
+            buildCommand: npm ci && npm run build:css && npm run typecheck:bot
+            preDeployCommand: npm run migrate
+            startCommand: npm start
+            healthCheckPath: /api/health
+            autoDeployTrigger: commit
+            domains:
+              - staging.seshaikhaya.com
+            envVars:
+              - key: NODE_ENV
+                value: production
+              - key: COUNTRY_CODE
+                value: ZA
+              - key: PUBLIC_BASE_URL
+                value: https://staging.seshaikhaya.com
+              - key: CORS_ORIGINS
+                value: https://staging.seshaikhaya.com
+              - key: DATABASE_URL
+                fromDatabase:
+                  name: seshaikhaya-staging-db
+                  property: connectionString
+              - key: DB_SSL
+                value: "true"
+              - key: RUN_MIGRATIONS_ON_START
+                value: "false"
+              - key: SOUTH_AFRICA_BOOTSTRAP_RESET_SEEDED_DATA
+                value: "true"
+              - key: HARVEST_AUTOMATION_ENABLED
+                value: "false"
+              - key: HARVEST_PUBLIC_SUBMISSIONS_ENABLED
+                value: "false"
+              - key: FEATURED_ROTATION_TIMEZONE
+                value: Africa/Johannesburg
+              - key: WHATSAPP_DELIVERY_MODE
+                value: test
+              - key: WHATSAPP_WEB_BRIDGE_ENABLED
+                value: "false"
+              - key: JWT_SECRET
+                generateValue: true
+              - key: ADMIN_API_KEY
+                generateValue: true
+              - key: SUPER_ADMIN_KEY
+                generateValue: true
+              - key: WHATSAPP_WEB_BRIDGE_TOKEN
+                generateValue: true
+          - type: worker
+            name: seshaikhaya-staging-whatsapp-worker
+            runtime: docker
+            region: frankfurt
+            plan: starter
+            branch: codex/seshaikhaya-launch-za-20260811
+            dockerfilePath: ./Dockerfile.whatsapp-agent
+            dockerContext: .
+            autoDeployTrigger: commit
+            envVars:
+              - key: NODE_ENV
+                value: production
+              - key: COUNTRY_CODE
+                value: ZA
+              - key: WHATSAPP_DELIVERY_MODE
+                value: test
+              - key: WHATSAPP_WEB_BRIDGE_ENABLED
+                value: "false"
+              - key: WHATSAPP_WEB_COPILOT_BASE_URL
+                value: https://staging.seshaikhaya.com
+      - name: production
+        permissions:
+          protection: enabled
+        databases:
+          - name: seshaikhaya-production-db
+            plan: basic-256mb
+            region: frankfurt
+            databaseName: seshaikhaya_production
+            user: seshaikhaya_production
+            ipAllowList: []
+        services:
+          - type: web
+            name: seshaikhaya-production-web
+            runtime: node
+            region: frankfurt
+            plan: starter
+            branch: codex/seshaikhaya-launch-za-20260811
+            buildCommand: npm ci && npm run build:css && npm run typecheck:bot
+            preDeployCommand: npm run migrate
+            startCommand: npm start
+            healthCheckPath: /api/health
+            autoDeployTrigger: "off"
+            domains:
+              - seshaikhaya.com
+            envVars:
+              - key: NODE_ENV
+                value: production
+              - key: COUNTRY_CODE
+                value: ZA
+              - key: PUBLIC_BASE_URL
+                value: https://seshaikhaya.com
+              - key: CORS_ORIGINS
+                value: https://seshaikhaya.com,https://www.seshaikhaya.com
+              - key: DATABASE_URL
+                fromDatabase:
+                  name: seshaikhaya-production-db
+                  property: connectionString
+              - key: DB_SSL
+                value: "true"
+              - key: RUN_MIGRATIONS_ON_START
+                value: "false"
+              - key: SOUTH_AFRICA_BOOTSTRAP_RESET_SEEDED_DATA
+                value: "true"
+              - key: HARVEST_AUTOMATION_ENABLED
+                value: "false"
+              - key: HARVEST_PUBLIC_SUBMISSIONS_ENABLED
+                value: "false"
+              - key: FEATURED_ROTATION_TIMEZONE
+                value: Africa/Johannesburg
+              - key: WHATSAPP_DELIVERY_MODE
+                value: test
+              - key: WHATSAPP_WEB_BRIDGE_ENABLED
+                value: "false"
+              - key: JWT_SECRET
+                generateValue: true
+              - key: ADMIN_API_KEY
+                generateValue: true
+              - key: SUPER_ADMIN_KEY
+                generateValue: true
+              - key: WHATSAPP_WEB_BRIDGE_TOKEN
+                generateValue: true
+          - type: worker
+            name: seshaikhaya-production-whatsapp-worker
+            runtime: docker
+            region: frankfurt
+            plan: starter
+            branch: codex/seshaikhaya-launch-za-20260811
+            dockerfilePath: ./Dockerfile.whatsapp-agent
+            dockerContext: .
+            autoDeployTrigger: "off"
+            envVars:
+              - key: NODE_ENV
+                value: production
+              - key: COUNTRY_CODE
+                value: ZA
+              - key: WHATSAPP_DELIVERY_MODE
+                value: test
+              - key: WHATSAPP_WEB_BRIDGE_ENABLED
+                value: "false"
+              - key: WHATSAPP_WEB_COPILOT_BASE_URL
+                value: https://seshaikhaya.com

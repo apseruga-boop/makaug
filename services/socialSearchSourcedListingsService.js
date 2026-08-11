@@ -29,6 +29,8 @@ const {
 } = require('../utils/commercialClassification');
 const { listingPriceQuality } = require('../utils/listingPriceQuality');
 const {
+  CANONICAL_PROPERTY_CURRENCY,
+  configuredRateToCanonicalCurrency,
   configuredUsdToUgxRate,
   propertyPriceMetadata,
   sourcePriceAmount,
@@ -43,7 +45,7 @@ const {
 const {
   resolveCanonicalUgandaLocation,
   resolveCanonicalUgandaLocationFromText,
-} = require('../utils/ugandaLocationRegistry');
+} = require('../utils/locationRegistry');
 const {
   buildHarvestFingerprints,
   hammingDistanceHex,
@@ -53,16 +55,27 @@ const {
   listingDataIntegrityReport,
 } = require('../utils/listingDataIntegrity');
 
+const ACTIVE_COUNTRY_CODE = String(process.env.COUNTRY_CODE || 'UG').trim().toUpperCase();
+const IS_SOUTH_AFRICA = ACTIVE_COUNTRY_CODE === 'ZA';
+const TARGET_COUNTRY_NAME = IS_SOUTH_AFRICA ? 'South Africa' : 'Uganda';
+const TARGET_BRAND_NAME = IS_SOUTH_AFRICA ? 'seshaikhaya' : 'makaug';
+const TARGET_PUBLIC_BASE_URL = IS_SOUTH_AFRICA ? 'https://seshaikhaya.com' : 'https://makaug.com';
+const TARGET_DIAL_DIGITS = IS_SOUTH_AFRICA ? '27' : '256';
+const TARGET_LOCAL_PHONE_PATTERN = IS_SOUTH_AFRICA ? '^[6-8]' : '^[37]';
+const NON_TARGET_LOCATION_REASON = IS_SOUTH_AFRICA ? 'non_south_africa_location' : 'non_uganda_location';
+
 const SOCIAL_SEARCH_BATCH_ID = 'social_search_authorised_20260520';
-const LEGACY_SOURCED_INVENTORY_CANDIDATE_SOURCE = SOURCE;
+const LEGACY_SOURCED_INVENTORY_CANDIDATE_SOURCE = IS_SOUTH_AFRICA ? 'south_africa_source_registry' : SOURCE;
 const SOCIAL_SEARCH_SOURCE = 'found_online_property_source_v1';
 const DAILY_FOUND_ONLINE_PROPERTY_TARGET = 200;
 const LAUNCH_SOURCE_POST_WINDOW_START = '2026-01-01T00:00:00.000Z';
 const FOUND_ONLINE_SOURCE_POST_IMPORT_BATCH_ID = 'found_online_source_post_import';
 const SOCIAL_SEARCH_FIRST_SEEN_AT = '2026-05-20T00:00:00.000Z';
 const SOCIAL_SEARCH_ADDED_TO_MAKAUG_AT = '2026-05-20T00:00:00.000Z';
-const PRICE_UPON_APPLICATION_LABEL = 'Price upon application';
-const USD_TO_UGX_GUIDE_RATE = configuredUsdToUgxRate();
+const PRICE_UPON_APPLICATION_LABEL = 'Price on application';
+const USD_TO_CANONICAL_GUIDE_RATE = IS_SOUTH_AFRICA
+  ? configuredRateToCanonicalCurrency('USD')
+  : configuredUsdToUgxRate();
 const ALLOWED_SOCIAL_SOURCE_PLATFORMS = ['youtube', 'tiktok', 'instagram', 'facebook', 'x', 'twitter'];
 const STUDENT_SOURCE_LISTING_PATTERN = /\b(?:students?|student\s+accommodation|hostel|campus|university|college|per\s+semester|residential\s+hostel|rooms?\s+near\s+(?:campus|university|college)|near\s+(?:makerere|kyambogo|mubs|ucu|must|nkumba))\b/i;
 const STUDENT_NEAR_CAMPUS_RADIUS_KM = 2;
@@ -98,7 +111,7 @@ const FOUND_ONLINE_PROFILE_CREATION_POLICY = {
   rule: 'Do not automatically create public Makaug agent/broker profiles from found-online or social-source discovery. Store the original poster/source as source attribution only. A public profile is created only when the agent/broker registers or claims the listing through the approved Makaug broker process.',
 };
 
-const SOCIAL_SEARCH_AGENTS = [
+const UGANDA_SOCIAL_SEARCH_AGENTS = [
   {
     key: 'lady-property-agent-ug',
     name: 'Lady Property Agent UG',
@@ -201,6 +214,7 @@ const SOCIAL_SEARCH_AGENTS = [
     bio: 'Realtor Mahad presents Uganda real estate, investment, and property management content. The profile is prepared for makaug review from founder-reported permission and public channel details.',
   },
 ];
+const SOCIAL_SEARCH_AGENTS = IS_SOUTH_AFRICA ? [] : UGANDA_SOCIAL_SEARCH_AGENTS;
 
 const NEARBY = {
   kyanja: [
@@ -254,7 +268,7 @@ const NEARBY = {
   ],
 };
 
-const SOCIAL_SEARCH_LISTINGS = [
+const UGANDA_SOCIAL_SEARCH_LISTINGS = [
   {
     agentKey: 'lady-property-agent-ug',
     key: 'lady-komamboga-kyanja-4bed-900m',
@@ -584,9 +598,10 @@ const SOCIAL_SEARCH_LISTINGS = [
     nearbyKey: 'kajjansi',
   },
 ];
+const SOCIAL_SEARCH_LISTINGS = IS_SOUTH_AFRICA ? [] : UGANDA_SOCIAL_SEARCH_LISTINGS;
 
 function publicBaseUrl() {
-  return (process.env.PUBLIC_BASE_URL || 'https://makaug.com').replace(/\/+$/, '');
+  return (process.env.PUBLIC_BASE_URL || TARGET_PUBLIC_BASE_URL).replace(/\/+$/, '');
 }
 
 function agentByKey(key) {
@@ -605,6 +620,20 @@ function slugKey(value = '', fallback = 'source') {
 
 function compactText(value = '') {
   return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function cleanSourceListingTitle(value = '', fallback = 'Property listing') {
+  const cleaned = compactText(value)
+    .replace(/https?:\/\/\S+/gi, ' ')
+    .replace(/#[\p{L}\p{N}_-]+/gu, ' ')
+    .replace(/\+?\d[\d\s().-]{7,}\d/g, ' ')
+    .replace(/[\p{Extended_Pictographic}\p{Symbol}\uFE0F]/gu, ' ')
+    .replace(/\b(?:call|whatsapp|wa)\s*[:.-]?\s*$/i, ' ')
+    .replace(/[|•]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/^[\s,.;:–—-]+|[\s,.;:–—-]+$/g, '')
+    .trim();
+  return (cleaned || compactText(fallback) || 'Property listing').slice(0, 180);
 }
 
 function asTextArray(value = []) {
@@ -660,10 +689,15 @@ function sourceTextForRawPost(raw = {}) {
 
 function explicitSourcePriceTextsFromEvidence(text = '') {
   const sourceText = maskConstructionCostsForPriceExtraction(compactText(text));
-  const patterns = [
-    /(?:\b(?:UGX|USh|Shs?|USD|US\$)\s*|\$\s*)\d[\d,.]*(?:\s*(?:bn|b|billion|billions|m|mn|million|millions|k|thousand|thousands))?(?:\s*(?:UGX|USh|Shs?))?/gi,
-    /\b\d+(?:\.\d+)?\s*(?:bn|b|billion|billions|m|mn|million|millions|k|thousand|thousands)\b(?:\s*(?:UGX|USh|Shs?))?/gi
-  ];
+  const patterns = IS_SOUTH_AFRICA
+    ? [
+      /(?:\b(?:ZAR|R|USD|US\$|EUR|GBP)\s*|[R$€£]\s*)\d[\d,.]*(?:\s*(?:bn|b|billion|billions|m|mn|million|millions|k|thousand|thousands))?(?:\s*(?:ZAR|USD|EUR|GBP))?/gi,
+      /\b\d+(?:\.\d+)?\s*(?:bn|b|billion|billions|m|mn|million|millions|k|thousand|thousands)\b(?:\s*(?:ZAR|R))?/gi
+    ]
+    : [
+      /(?:\b(?:UGX|USh|Shs?|USD|US\$)\s*|\$\s*)\d[\d,.]*(?:\s*(?:bn|b|billion|billions|m|mn|million|millions|k|thousand|thousands))?(?:\s*(?:UGX|USh|Shs?))?/gi,
+      /\b\d+(?:\.\d+)?\s*(?:bn|b|billion|billions|m|mn|million|millions|k|thousand|thousands)\b(?:\s*(?:UGX|USh|Shs?))?/gi
+    ];
   const matches = [];
   for (const pattern of patterns) {
     for (const match of sourceText.matchAll(pattern)) matches.push(compactText(match[0]));
@@ -945,6 +979,24 @@ function hasSpecificPropertySignal(item = {}) {
   return /\b(?:for sale|for rent|to let|to rent|bed(?:room)?s?|studio|bedsitter|house|home|apartment|flat|villa|bungalow|mansion|duplex|condo|property|plot|plots|land|acre|acres|decimal|decimals|hostel|room|rooms|shop|office|warehouse|commercial|building)\b/.test(haystack);
 }
 
+function isPureHashtagSourceJunk(item = {}) {
+  const raw = item.raw_source_post || item.rawSourcePost || {};
+  const text = compactText([
+    raw.title,
+    raw.caption,
+    raw.description,
+    item.sourceTitle,
+    item.sourceText,
+  ].filter(Boolean).join(' '));
+  if (!text || !/#\w+/u.test(text)) return false;
+  const meaningful = text
+    .replace(/https?:\/\/\S+/gi, ' ')
+    .replace(/#[\p{L}\p{N}_-]+/gu, ' ')
+    .replace(/[\p{Extended_Pictographic}\p{Symbol}\uFE0F\s.,;:|/\\()[\]{}!?-]+/gu, ' ')
+    .trim();
+  return meaningful.length < 4;
+}
+
 function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
   const hasSource = Boolean(sourceUrlForItem(item));
   const allowedSocialSource = itemHasAllowedSocialSource(item, agent);
@@ -984,10 +1036,11 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
   const lowSignalOnlySuppressed = sourceQuality.suppressed && /^low_signal_/i.test(String(sourceQuality.reason || ''));
   const sourceQualityHardBlocked = sourceQuality.suppressed && !lowSignalOnlySuppressed;
   const positiveGateHardBlocked = positiveListingGate.reason === 'not_a_listing'
-    || positiveListingGate.reason === 'non_uganda_location';
+    || positiveListingGate.reason === NON_TARGET_LOCATION_REASON;
   const integrityHardBlocked = dataIntegrity.issue_codes.includes('unsupported_hospitality_or_nightly');
   const manualExactSocialIntake = isManualExactSocialIntake(item);
   const specificPropertySignal = hasSpecificPropertySignal(item);
+  const pureHashtagJunk = isPureHashtagSourceJunk(item);
   const dateWindowAllowsQueue = manualExactSocialIntake || dateStatus !== 'before_2026_source_window';
   const manualExactPasses = !manualExactSocialIntake || (
     specificPropertySignal
@@ -1002,12 +1055,13 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
       && !sourceQualityHardBlocked
       && !positiveGateHardBlocked
       && !integrityHardBlocked
+      && !pureHashtagJunk
       && manualExactPasses
   );
   const blockingReasons = [
     !hasSource ? 'missing_exact_source_url' : '',
     !allowedSocialSource ? 'unsupported_source_platform' : '',
-    countryGate.allowed === false ? (countryGate.reason || 'non_uganda_country_or_currency') : '',
+    countryGate.allowed === false ? (countryGate.reason || `non_${ACTIVE_COUNTRY_CODE.toLowerCase()}_country_or_currency`) : '',
     manualExactSocialIntake && !hasContact ? 'missing_public_contact_or_source_route' : '',
     manualExactSocialIntake && !hasImageOrEvidence ? 'missing_source_evidence' : '',
     manualExactSocialIntake && !specificPropertySignal ? 'not_a_specific_property_listing' : '',
@@ -1015,12 +1069,13 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
     sourceQualityHardBlocked ? (sourceQuality.reason || 'non_listing_source_content') : '',
     positiveGateHardBlocked ? (positiveListingGate.reason || 'not_a_listing') : '',
     integrityHardBlocked ? 'unsupported_hospitality_or_nightly' : '',
+    pureHashtagJunk ? 'pure_hashtag_source_junk' : '',
   ].filter(Boolean);
   return {
     eligible: captureToReview,
     blocking_reasons: blockingReasons,
     capture_mode: 'launch_review_first',
-    capture_rule: 'supported social property posts go to review even when phone, media, or exact Uganda location needs human confirmation; only explicit foreign evidence is location-rejected',
+    capture_rule: `supported social property posts go to review even when phone, media, or exact ${TARGET_COUNTRY_NAME} location needs human confirmation; only explicit foreign evidence is location-rejected`,
     has_source_url: hasSource,
     allowed_social_source: allowedSocialSource,
     country_gate_passed: countryGate.allowed !== false,
@@ -1074,12 +1129,13 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
     has_concrete_listing_signal: positiveListingGate.has_listing_signal === true,
     data_integrity: dataIntegrity,
     data_integrity_hard_blocked: integrityHardBlocked,
+    pure_hashtag_source_junk: pureHashtagJunk,
   };
 }
 
 function sourceReviewReasonForIntake(intake = {}) {
   if (intake.suppressed_source_url) return 'skipped_suppressed';
-  if (intake.country_gate_passed === false) return 'non_uganda_location';
+  if (intake.country_gate_passed === false) return NON_TARGET_LOCATION_REASON;
   if (intake.source_quality_suppressed && /^low_signal_/i.test(String(intake.source_quality_reason || ''))) {
     return 'low_signal_source_location';
   }
@@ -1389,7 +1445,7 @@ function sourceEvidenceCardDataUrl(item = {}, agent = {}) {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="820" viewBox="0 0 1280 820">
   <rect width="1280" height="820" fill="#f8fafc"/>
   <rect x="0" y="0" width="1280" height="145" fill="#155e75"/>
-  <text x="82" y="90" font-family="Arial, sans-serif" font-size="43" font-weight="800" fill="#ffffff">makaug.com | found-online source evidence</text>
+  <text x="82" y="90" font-family="Arial, sans-serif" font-size="43" font-weight="800" fill="#ffffff">${TARGET_BRAND_NAME} | found-online source evidence</text>
   <rect x="84" y="205" width="1112" height="470" rx="24" fill="#ffffff" stroke="#bae6fd" stroke-width="5"/>
   <text x="124" y="285" font-family="Arial, sans-serif" font-size="40" font-weight="800" fill="#0f172a">${escapeSvg(title)}</text>
   <text x="124" y="355" font-family="Arial, sans-serif" font-size="31" fill="#334155">${escapeSvg(area)}</text>
@@ -1430,7 +1486,9 @@ function sourceImageRowsFor(item = {}) {
 }
 
 function money(value) {
-  return `USh ${Number(value || 0).toLocaleString('en-UG')}`;
+  return IS_SOUTH_AFRICA
+    ? `R ${Number(value || 0).toLocaleString('en-ZA')}`
+    : `USh ${Number(value || 0).toLocaleString('en-UG')}`;
 }
 
 function escapeSvg(value) {
@@ -1463,7 +1521,7 @@ function landSizeDiagramDataUrl(item = {}) {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="820" viewBox="0 0 1280 820">
   <rect width="1280" height="820" fill="#f7fbef"/>
   <rect x="0" y="0" width="1280" height="145" fill="#2f7d42"/>
-  <text x="92" y="90" font-family="Arial, sans-serif" font-size="44" font-weight="800" fill="#ffffff">makaug.com | land size guide</text>
+  <text x="92" y="90" font-family="Arial, sans-serif" font-size="44" font-weight="800" fill="#ffffff">${TARGET_BRAND_NAME} | land size guide</text>
   <rect x="88" y="205" width="530" height="430" rx="28" fill="#ffffff" stroke="#2f7d42" stroke-width="7"/>
   <rect x="198" y="288" width="310" height="250" rx="8" fill="#dff4e7" stroke="#2f7d42" stroke-width="8" stroke-dasharray="18 14"/>
   <text x="230" y="425" font-family="Arial, sans-serif" font-size="42" font-weight="800" fill="#205b31">LAND</text>
@@ -1522,7 +1580,7 @@ function publicDescriptionFor(item = {}) {
   const area = item.address || [item.area, item.district].filter(Boolean).join(', ');
   const priceText = hasPublishedPriceOrGuidePrice(item)
     ? ` The guide price shown in the source is ${sourcePriceLabelFor(item)}.`
-    : ` The source did not publish a price, so makaug shows ${PRICE_UPON_APPLICATION_LABEL} until the source confirms it.`;
+    : ` The source did not publish a price, so ${TARGET_BRAND_NAME} shows ${PRICE_UPON_APPLICATION_LABEL} until the source confirms it.`;
   const roomText = item.beds
     ? ` It is presented as a ${item.beds}-bedroom ${item.subtype || 'property'}${item.baths ? ` with ${item.baths} bathrooms` : ''}.`
     : item.landSizeValue
@@ -1552,7 +1610,7 @@ function reviewSteps(item = {}) {
     manualOlderExactSource
       ? 'This manually supplied exact source post predates 2026; confirm that the property is still available before approval'
       : 'Confirm the exact source post/listing was first published on or after 1 January 2026',
-    'Confirm the agent/source still wants this exact listing live on makaug.com',
+    `Confirm the agent/source still wants this exact listing live on ${publicBaseUrl()}`,
     `Confirm current availability and price, or keep ${PRICE_UPON_APPLICATION_LABEL} if the source does not publish one`,
     'Confirm the exact road/map pin and update it if the agent gives a better pin',
     'Confirm title/ownership evidence or broker authority before public approval',
@@ -1894,17 +1952,17 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
     source_no_phone_policy: PUBLIC_SOURCE_CONTACT_POLICY,
     price_label: sourcePriceLabelFor(item),
     source_price_label: sourcePriceLabelFor(item),
-    price_currency: item.priceCurrency || item.price_currency || 'UGX',
-    price_original_currency: item.priceOriginalCurrency || item.price_original_currency || 'UGX',
+    price_currency: item.priceCurrency || item.price_currency || CANONICAL_PROPERTY_CURRENCY,
+    price_original_currency: item.priceOriginalCurrency || item.price_original_currency || CANONICAL_PROPERTY_CURRENCY,
     price_original: item.priceOriginal ?? item.price_original ?? item.price ?? null,
     price_fx_rate_ugx: item.priceFxRateUgx ?? item.price_fx_rate_ugx ?? null,
     price_fx_as_of: item.priceFxAsOf || item.price_fx_as_of || null,
     price_conversion_basis: (item.priceOriginalCurrency || item.price_original_currency) === 'USD'
-      ? 'Original public USD guide converted to canonical UGX for search and valuation.'
-      : 'Original public UGX guide stored without conversion.',
+      ? `Original public USD guide converted to canonical ${CANONICAL_PROPERTY_CURRENCY} for search and sorting.`
+      : `Original public ${CANONICAL_PROPERTY_CURRENCY} guide stored without conversion.`,
     price_upon_application: !hasPublishedPriceOrGuidePrice(item),
     price_status: hasPublishedPriceOrGuidePrice(item) ? 'published_price_or_guide_price' : 'price_upon_application',
-    source_price_policy: 'If the public social source does not publish a price, makaug shows Price upon application and King confirms the price during review/follow-up.',
+    source_price_policy: `If the public social source does not publish a price, ${TARGET_BRAND_NAME} shows Price on application and King confirms the price during review/follow-up.`,
     source_quality_review: sourceQualityReviewForItem(item, agent),
     source_positive_listing_gate: positiveListingGate,
     source_positive_listing_gate_passed: positiveListingGate.ok === true,
@@ -1951,7 +2009,7 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
     map_pin_confirmed: false,
     latitude_source: 'manual_public_source_area_pin',
     longitude_source: 'manual_public_source_area_pin',
-    area_highlights: `${item.area} is a practical Uganda property search area with access to local roads, schools, health facilities, shops, and daily services. Confirm the exact property pin with the listing agent before approval.`,
+    area_highlights: `${item.area} is a ${TARGET_COUNTRY_NAME} property search area. Confirm the exact property pin and local amenities with the listing agent before approval.`,
     nearby_facilities: nearby.map(([name, type, distanceKm]) => ({ name, type, distanceKm })),
     source_labels: [
       'found online',
@@ -1977,7 +2035,7 @@ function whatsappShareMessage(item, propertyUrl, ownerPreviewUrl = '') {
   const priceLabel = sourcePriceLabelFor(item);
   return [
     `Hi, this is ${agent.name || 'the listing agent'}.`,
-    `${item.title} is prepared on makaug.com for King review as a found-online authorised listing.`,
+    `${item.title} is prepared on ${publicBaseUrl()} for King review as a found-online listing.`,
     `Location: ${item.address}`,
     `Price: ${priceLabel}.`,
     `${item.youtubeId ? 'Source video' : 'Source post'}: ${sourceUrl}`,
@@ -2068,8 +2126,8 @@ function buildSocialSearchListing(item, agentId = null) {
     listing_type: listingType,
     transaction_type: transactionType || null,
     property_type: propertyType || null,
-    price_currency: item.priceCurrency || item.price_currency || 'UGX',
-    price_original_currency: item.priceOriginalCurrency || item.price_original_currency || 'UGX',
+    price_currency: item.priceCurrency || item.price_currency || CANONICAL_PROPERTY_CURRENCY,
+    price_original_currency: item.priceOriginalCurrency || item.price_original_currency || CANONICAL_PROPERTY_CURRENCY,
     price_original: item.priceOriginal ?? item.price_original ?? item.price ?? null,
     price_fx_rate_ugx: item.priceFxRateUgx ?? item.price_fx_rate_ugx ?? null,
     price_on_application: !hasPublishedPriceOrGuidePrice(item),
@@ -2095,8 +2153,8 @@ function buildSocialSearchListing(item, agentId = null) {
     area: item.area,
     address: item.address,
     price: Number(item.price || 0) > 0 ? item.price : null,
-    price_currency: item.priceCurrency || item.price_currency || 'UGX',
-    price_original_currency: item.priceOriginalCurrency || item.price_original_currency || 'UGX',
+    price_currency: item.priceCurrency || item.price_currency || CANONICAL_PROPERTY_CURRENCY,
+    price_original_currency: item.priceOriginalCurrency || item.price_original_currency || CANONICAL_PROPERTY_CURRENCY,
     price_original: item.priceOriginal ?? item.price_original ?? item.price ?? null,
     price_fx_rate_ugx: item.priceFxRateUgx ?? item.price_fx_rate_ugx ?? null,
     price_fx_as_of: item.priceFxAsOf || item.price_fx_as_of || null,
@@ -2409,7 +2467,9 @@ async function verifyCreatedListingRows(client, created = []) {
 
 function parseMoneyValue(value) {
   return propertyPriceMetadata(value, {
-    usdToUgxRate: USD_TO_UGX_GUIDE_RATE
+    ...(IS_SOUTH_AFRICA
+      ? { usdToZarRate: USD_TO_CANONICAL_GUIDE_RATE }
+      : { usdToUgxRate: USD_TO_CANONICAL_GUIDE_RATE })
   }).price;
 }
 
@@ -2483,7 +2543,7 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
   const explicitLocation = resolveCanonicalUgandaLocation(rawArea, fallbackDistrict);
   const textLocation = resolveCanonicalUgandaLocationFromText(`${rawArea} ${sourceText}`, fallbackDistrict);
   const locationResolution = explicitLocation.status === 'matched'
-    && !['district', 'region'].includes(explicitLocation.match.level)
+    && !['district', 'region', 'province'].includes(explicitLocation.match.level)
     ? explicitLocation
     : textLocation.status === 'matched'
       ? textLocation
@@ -2491,7 +2551,9 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
         ? explicitLocation
         : textLocation;
   const canonicalLocation = locationResolution.status === 'matched' ? locationResolution.match : null;
-  const district = canonicalLocation?.district || '';
+  const district = canonicalLocation?.province || canonicalLocation?.district || '';
+  const city = canonicalLocation?.city || canonicalLocation?.town || '';
+  const suburb = canonicalLocation?.suburb || (canonicalLocation?.level === 'suburb' ? canonicalLocation?.name : '');
   const locationEvidenceConfirmed = Object.prototype.hasOwnProperty.call(raw, 'location_evidence_confirmed')
     ? parseBooleanFlag(raw.location_evidence_confirmed)
     : Boolean(canonicalLocation);
@@ -2520,7 +2582,10 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
     ? (evidenceClassification.listing_type || normalizeFoundOnlineListingType(sourceText, { price: unsafeSourcePrice }))
     : rawListingType;
   if (listingType === 'student' && rawListingType === 'students') listingType = 'students';
-  const title = String(raw.title || raw.source_title || raw.caption || `${listingType === 'land' ? 'Land' : 'Property'} in ${area}`).trim();
+  const title = cleanSourceListingTitle(
+    raw.title || raw.source_title || raw.caption,
+    `${listingType === 'land' ? 'Land' : 'Property'}${area ? ` in ${area}` : ''}`
+  );
   const baseDescription = compactText(raw.description || raw.caption || raw.summary || title);
   const description = compactText([
     baseDescription,
@@ -2553,6 +2618,9 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
     sourceVisualText,
     area,
     district,
+    province: district,
+    city,
+    suburb,
     address
   });
   const nearestUniversity = normalizedStudentSource
@@ -2584,7 +2652,9 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
   const ingestedAt = raw.ingested_at || raw.imported_at || raw.first_seen_at || new Date().toISOString();
   const sourcePriceMetadata = propertyPriceMetadata(safePrice.value, {
     currency: raw.price_currency || raw.currency || raw.source_currency,
-    usdToUgxRate: configuredUsdToUgxRate(),
+    ...(IS_SOUTH_AFRICA
+      ? { usdToZarRate: USD_TO_CANONICAL_GUIDE_RATE }
+      : { usdToUgxRate: USD_TO_CANONICAL_GUIDE_RATE }),
     fxAsOf: raw.price_fx_as_of || ingestedAt
   });
   const sourceAgent = {
@@ -2603,10 +2673,10 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
     xUrl: raw.x_url || raw.twitter_url || (/(^|\/\/)(x|twitter)\.com/i.test(sourceUrl) ? sourceUrl : ''),
     platform,
     sourcePlatform: platform,
-    districts: asTextArray(raw.districts || district || 'Uganda'),
+    districts: asTextArray(raw.districts || district || TARGET_COUNTRY_NAME),
     specializations: asTextArray(raw.specializations || [listingType]),
     profilePhotoUrl: raw.profile_photo_url || raw.avatar_url || null,
-    bio: raw.source_bio || `Public ${platform} source imported for makaug found-online launch intake.`,
+    bio: raw.source_bio || `Public ${platform} source imported for ${TARGET_BRAND_NAME} found-online launch intake.`,
     audienceLabel: raw.audience_label || raw.followers_label || raw.source_followers_label || '',
   };
   const dataIntegrity = listingDataIntegrityReport({
@@ -2620,6 +2690,9 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
     property_type: commercialSubtype,
     area,
     district,
+    province: district,
+    city,
+    suburb,
     canonical_location_id: canonicalLocation?.key,
     canonical_location_level: canonicalLocation?.level,
     price: sourcePriceMetadata.price,
@@ -2683,6 +2756,9 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
     rawLocation: rawArea || fallbackDistrict || null,
     area,
     district,
+    province: district,
+    city,
+    suburb,
     address,
     countryGate,
     sourcePriceRejectionReason: safePrice.reason || sourcePriceMetadata.rejection_reason || '',
@@ -2964,7 +3040,7 @@ function duplicateWarningsForFoundOnlineRows(rows = []) {
           ? 'The primary source image matches an existing harvested listing.'
           : item.duplicate_match_type === 'composite_listing_duplicate'
             ? 'The seller, area, price, and source-media fingerprint match an existing listing.'
-            : 'This exact social/source link or stable platform post ID has already been imported to makaug.',
+            : `This exact social/source link or stable platform post ID has already been imported to ${TARGET_BRAND_NAME}.`,
     key: item.key,
     id: item.id,
     title: item.title,
@@ -3034,8 +3110,8 @@ function foundOnlinePerUrlResults(items = [], {
         source_url: sourceUrl,
         platform: item.sourcePlatform || '',
         outcome: 'skipped',
-        classification: reason === 'non_uganda_location'
-          ? 'non_uganda'
+        classification: reason === NON_TARGET_LOCATION_REASON
+          ? (IS_SOUTH_AFRICA ? 'non_south_africa' : 'non_uganda')
           : reason === 'not_a_listing' || reason === 'non_listing_source_content'
             ? 'not_a_listing'
             : 'launch_intake',
@@ -3100,9 +3176,9 @@ async function existingFoundOnlineContactCounts(client, items = []) {
        SELECT
          CASE
            WHEN LENGTH(phone_digits) = 10 AND phone_digits LIKE '0%'
-             THEN '256' || SUBSTRING(phone_digits FROM 2)
-           WHEN LENGTH(phone_digits) = 9 AND phone_digits ~ '^[37]'
-             THEN '256' || phone_digits
+             THEN '${TARGET_DIAL_DIGITS}' || SUBSTRING(phone_digits FROM 2)
+           WHEN LENGTH(phone_digits) = 9 AND phone_digits ~ '${TARGET_LOCAL_PHONE_PATTERN}'
+             THEN '${TARGET_DIAL_DIGITS}' || phone_digits
            ELSE phone_digits
          END AS phone_key,
          LOWER(COALESCE(lister_email, '')) AS email_key,
@@ -3212,7 +3288,7 @@ async function queueFoundOnlineSourcePostListings({
   const sourceQualitySuppressedRecords = sourceReviewRecords.filter((item) => item.intake?.source_quality_suppressed);
   const suppressedSourceRecords = sourceReviewRecords.filter((item) => item.intake?.suppressed_source_url);
   const lowSignalSourceLocationRecords = sourceReviewRecords.filter((item) => item.reason === 'low_signal_source_location');
-  const foreignRejectedRecords = sourceReviewRecords.filter((item) => item.reason === 'non_uganda_location');
+  const foreignRejectedRecords = sourceReviewRecords.filter((item) => item.reason === NON_TARGET_LOCATION_REASON);
 
   let previewExisting = new Map();
   if (dryRun && db?.pool) {
@@ -4177,6 +4253,7 @@ module.exports = {
   sourcePostMeetsLaunchIntakeRule,
   foundOnlinePerUrlResults,
   contentFingerprintForSourceItem,
+  cleanSourceListingTitle,
   sourceUrlForItem,
   sourceImageRowsFor,
   whatsappShareMessage,

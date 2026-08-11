@@ -1,6 +1,12 @@
 const fs = require("fs");
 const path = require("path");
 const { SHARED_CORE_PHASE1_MARKER, TENANTS, tenantFor } = require("./config/tenants");
+const {
+  SESHAIKHAYA_LAUNCH_MARKER,
+  SOUTH_AFRICA_PROVINCES,
+  applySouthAfricaHtml,
+  applySouthAfricaJavaScript
+} = require("./south-africa");
 
 const COMPONENT_DIR = path.join(__dirname, "components");
 const ASSET_DIR = path.join(__dirname, "assets");
@@ -75,6 +81,19 @@ function assertCanonicalComponents(html) {
 function applyUgandaHomepage(html) {
   assertCanonicalComponents(html);
   return injectMarker(html);
+}
+
+function applyCountryHtml(html, countryCode = "UG", { homepage = false } = {}) {
+  const tenant = tenantFor(countryCode);
+  if (tenant.countryCode === "ZA") return applySouthAfricaHtml(html);
+  if (tenant.countryCode === "UG" && homepage) return applyUgandaHomepage(html);
+  return String(html || "");
+}
+
+function applyCountryJavaScript(source, countryCode = "UG") {
+  const tenant = tenantFor(countryCode);
+  if (tenant.countryCode === "ZA") return applySouthAfricaJavaScript(source);
+  return String(source || "");
 }
 
 function replaceLanguageOptions(html, tenant) {
@@ -220,6 +239,12 @@ module.exports = {
   COMPONENT_NAMES,
   SHARED_CORE_PHASE1_MARKER,
   TENANTS,
+  SESHAIKHAYA_LAUNCH_MARKER,
+  SOUTH_AFRICA_PROVINCES,
+  applyCountryHtml,
+  applyCountryJavaScript,
+  applySouthAfricaHtml,
+  applySouthAfricaJavaScript,
   applyUgandaHomepage,
   assertCanonicalComponents,
   extractHomepageComponents,

@@ -5,7 +5,7 @@ const {
   canonicalizeUgandaLocation,
   normalizeLocationKey,
   resolveCanonicalUgandaLocationFromText,
-} = require('../utils/ugandaLocationRegistry');
+} = require('../utils/locationRegistry');
 const { publicVisibleInventoryWhere } = require('./publicInventoryMetricsService');
 
 const FEATURED_ROTATION_MARKER = 'featured-daily-rotation-20260725';

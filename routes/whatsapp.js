@@ -24,7 +24,7 @@ const {
   normalizeRadiusMiles,
   roundLocationForAnalytics
 } = require('../services/locationSearchService');
-const { canonicalLocationSearchScope } = require('../utils/ugandaLocationRegistry');
+const { canonicalLocationSearchScope } = require('../utils/locationRegistry');
 const { regionForDistrict } = require('../utils/ugandaLocationHierarchy');
 const {
   canonicalizeWhatsappSearchFilters,
@@ -62,6 +62,7 @@ const { captureLearningEvent } = require('../services/aiLearningCaptureService')
 const { isLlmEnabled } = require('../services/llmProvider');
 const { storeDataUrl } = require('../services/cloudMediaStorageService');
 const { buildUgNlisAssistantReply } = require('../services/ugnlisLandVerificationService');
+const { tenantFor } = require('../packages/shared-country-core');
 const { buildListingReference } = require('../services/listingReferenceService');
 const {
   buildWhatsappPropertyCard,
@@ -74,7 +75,15 @@ const {
 } = require('../services/listingModerationService');
 
 const router = express.Router();
-const HOME_URL = (process.env.PUBLIC_BASE_URL || 'https://makaug.com').replace(/\/+$/, '');
+const ACTIVE_COUNTRY_CODE = String(process.env.COUNTRY_CODE || 'UG').trim().toUpperCase();
+const IS_SOUTH_AFRICA = ACTIVE_COUNTRY_CODE === 'ZA';
+const ACTIVE_TENANT = tenantFor(ACTIVE_COUNTRY_CODE);
+const ACTIVE_BRAND = ACTIVE_TENANT.publicName || ACTIVE_TENANT.brandName;
+const ACTIVE_COUNTRY_NAME = ACTIVE_TENANT.countryName;
+const ACTIVE_CURRENCY = ACTIVE_TENANT.currencyCode;
+const ACTIVE_LOCATION_LABEL = IS_SOUTH_AFRICA ? 'province, city or suburb' : 'area or district';
+const UGANDA_WHATSAPP_BRAND_HEADER = '🟩🟨 *makaug.com*';
+const HOME_URL = (process.env.PUBLIC_BASE_URL || ACTIVE_TENANT.domain).replace(/\/+$/, '');
 const WHATSAPP_NATURAL_SELLER_FLOW_MARKER = 'whatsapp-natural-seller-flow-20260804';
 const WHATSAPP_API_VERSION = (process.env.WHATSAPP_API_VERSION || 'v20.0').trim();
 const WHATSAPP_ACCESS_TOKEN = (process.env.WHATSAPP_ACCESS_TOKEN || '').trim();
@@ -94,7 +103,7 @@ const WHATSAPP_LANGUAGE_AI_MODE = String(process.env.WHATSAPP_LANGUAGE_AI_MODE |
 const WHATSAPP_NATURAL_SEARCH_AI_MODE = String(process.env.WHATSAPP_NATURAL_SEARCH_AI_MODE || 'fast').trim().toLowerCase();
 const WHATSAPP_REPLY_AI_MODE = String(process.env.WHATSAPP_REPLY_AI_MODE || 'fast').trim().toLowerCase();
 const WHATSAPP_PROPERTY_RESULT_LIMIT = 10;
-const MIN_PUBLIC_WHATSAPP_PRICE_UGX = 10000;
+const MIN_PUBLIC_WHATSAPP_PRICE_UGX = IS_SOUTH_AFRICA ? 500 : 10000;
 const WHATSAPP_LISTING_PHOTO_FLOW_MARKER = 'whatsapp-web-modern-media-20260804';
 const WHATSAPP_MIN_LISTING_PHOTOS = 5;
 
@@ -517,7 +526,9 @@ Object.assign(T.sm, {
   voiceTranscriptEcho: '🎙️ Mpulidde nti: "{transcript}"'
 });
 
-const WHATSAPP_LANGUAGE_MENU = 'Choose your language / ቋንቋዎን ይምረጡ / اختر لغتك:\n1. English\n2. Luganda\n3. Kiswahili\n4. Acholi\n5. Runyankole\n6. Rukiga\n7. Lusoga\n8. Amharic / አማርኛ\n9. Arabic / العربية';
+const WHATSAPP_LANGUAGE_MENU = IS_SOUTH_AFRICA
+  ? 'Choose your written language:\n1. English\n2. Afrikaans\n3. isiZulu\n4. isiXhosa\n5. Sepedi\n6. Setswana\n7. Sesotho\n8. Xitsonga\n9. siSwati\n10. Tshivenda\n11. isiNdebele'
+  : 'Choose your language / ቋንቋዎን ይምረጡ / اختر لغتك:\n1. English\n2. Luganda\n3. Kiswahili\n4. Acholi\n5. Runyankole\n6. Rukiga\n7. Lusoga\n8. Amharic / አማርኛ\n9. Arabic / العربية';
 
 T.am = Object.assign({}, T.en, {
   welcome: "🏠 ወደ *makaug* እንኳን በደህና መጡ - የኡጋንዳ ነፃ የንብረት መድረክ!\n\nምን ማድረግ ይፈልጋሉ?\n1️⃣ ንብረቴን ዘርዝር\n2️⃣ ንብረት ፈልግ\n3️⃣ ወኪል ፈልግ\n\n1፣ 2 ወይም 3 ብለው ይመልሱ",
@@ -679,6 +690,34 @@ T.ar = Object.assign({}, T.en, {
   genericWebhookError: 'عذراً، حدث خطأ. حاول مرة أخرى أو زر {url}'
 });
 
+if (IS_SOUTH_AFRICA) {
+  Object.assign(T.en, {
+    welcome: `🏠 Welcome to *${ACTIVE_BRAND}* — South Africa's property platform!\n\nWhat would you like to do?\n1️⃣ List my property\n2️⃣ Search for a property\n3️⃣ Find an agent\n\nReply with 1, 2, or 3`,
+    chooseLanguage: WHATSAPP_LANGUAGE_MENU,
+    askTitle: '✏️ Give your property a short title (for example, "3-bedroom house in Sea Point, Cape Town"):',
+    askDistrict: '📍 Which province is the property in? (for example, Western Cape, Gauteng or KwaZulu-Natal)',
+    askArea: '🗺️ Which city and suburb? (for example, Cape Town, Sea Point)',
+    askPrice: '💰 What is your asking price in South African rand? You can type R8500, R1.2m or 2500000.',
+    askContactValuePhone: '📱 Please send the South African WhatsApp/phone number for listing enquiries.\nFormat: +27 XX XXX XXXX',
+    askIDNumber: '🪪 Enter the 13-digit South African ID number. If the lister does not have one, reply with PASSPORT: followed by the passport number, or FOREIGN ID: followed by the document number. Identity evidence is private and must be reviewed before approval.',
+    askSelfie: '🪪 Please send a clear photo of the identity document. Do not send a PDF. It is used only for verification and fraud prevention and is never shown publicly.',
+    askPhone: '📱 What is your South African mobile number for verification?\nFormat: +27 XX XXX XXXX',
+    listingSubmitted: `🎉 *Your listing has been submitted!*\n\nOur team will verify the source, identity, location and availability before publication.\n\nReference: #{ref}\n\nYou will receive a ${ACTIVE_BRAND} link if the listing is approved.`,
+    askDeposit: '💵 What deposit is required? (in ZAR)',
+    askSearchArea: `📍 Which ${ACTIVE_LOCATION_LABEL} are you looking in? You can also share your WhatsApp location.`,
+    outsideUgandaLocation: `Sorry, this pin appears to be outside ${ACTIVE_COUNTRY_NAME}. Please choose a South African province, city, suburb, road or landmark, or type *all South Africa*.`,
+    askAgentArea: '👔 Which province, city or suburb do you need an agent for? (for example, Gauteng, Johannesburg or Sandton)',
+    invalidPrice: '❌ Please enter a valid price in ZAR (for example, R8500 or R1.2m).',
+    invalidNin: '❌ Enter a valid 13-digit South African ID, or prefix another document with PASSPORT: or FOREIGN ID: for manual review.',
+    invalidPhone: '❌ Invalid South African phone format. Try +27 82 123 4567 or 082 123 4567.',
+    genericSaveError: `❌ Something went wrong saving your listing. Please try again or visit ${HOME_URL}`,
+    genericWebhookError: `Sorry, something went wrong. Please try again or visit ${HOME_URL}`
+  });
+  for (const code of ['af', 'zu', 'xh', 'nso', 'tn', 'st', 'ts', 'ss', 've', 'nr']) {
+    T[code] = Object.assign({}, T.en);
+  }
+}
+
 Object.keys(T).forEach((lang) => {
   T[lang].chooseLanguage = WHATSAPP_LANGUAGE_MENU;
 });
@@ -687,6 +726,7 @@ Object.keys(T).forEach((lang) => {
 function resolveLangCode(lang) {
   const raw = normalizeInput(lang).toLowerCase();
   if (!raw) return 'en';
+  if (IS_SOUTH_AFRICA && ['en', 'af', 'zu', 'xh', 'nso', 'tn', 'st', 'ts', 'ss', 've', 'nr'].includes(raw)) return raw;
   if (shouldUseEnglishFallback(raw)) return 'en';
   const legacy = toLegacyLanguageCode(raw);
   if (shouldUseEnglishFallback(legacy)) return 'en';
@@ -716,12 +756,13 @@ function tt(lang, key, vars = {}) {
 
 function whatsappBrandHeader(title = '') {
   const safeTitle = normalizeInput(title);
-  return safeTitle ? `🟩🟨 *makaug.com* | *${safeTitle}*` : '🟩🟨 *makaug.com*';
+  const brandHeader = IS_SOUTH_AFRICA ? `🟩🟨 *${ACTIVE_BRAND}*` : UGANDA_WHATSAPP_BRAND_HEADER;
+  return safeTitle ? `${brandHeader} | *${safeTitle}*` : brandHeader;
 }
 
 function getUgandaDayPart(date = new Date()) {
   const parts = new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'Africa/Kampala',
+    timeZone: ACTIVE_TENANT.timezone || 'Africa/Kampala',
     hour: 'numeric',
     hour12: false
   }).formatToParts(date);
@@ -1029,6 +1070,17 @@ function fastWhatsappRuntimeHints({
 function parseLanguageChange(text) {
   const clean = normalizeInput(text).toLowerCase();
   if (!clean) return '';
+  if (IS_SOUTH_AFRICA) {
+    const aliases = {
+      english: 'en', afrikaans: 'af', isizulu: 'zu', zulu: 'zu', isixhosa: 'xh', xhosa: 'xh',
+      sepedi: 'nso', 'northern sotho': 'nso', setswana: 'tn', tswana: 'tn', sesotho: 'st', sotho: 'st',
+      xitsonga: 'ts', tsonga: 'ts', siswati: 'ss', swati: 'ss', tshivenda: 've', venda: 've',
+      isindebele: 'nr', ndebele: 'nr'
+    };
+    for (const [label, code] of Object.entries(aliases)) {
+      if (clean === label || new RegExp(`\\b(?:in|to|use|speak|language)\\s+${label.replace(/\s+/g, '\\s+')}\\b`, 'i').test(clean)) return code;
+    }
+  }
   const explicit = clean.match(/\b(?:change|switch|set|speak|use|talk|continue|carry on|carry|respond|reply|answer|write)\s+(?:the\s+conversation\s+)?(?:my\s+)?(?:language\s+)?(?:to\s+|in\s+|with\s+)?(english|luganda|lugandan|lunganda|lugand|kiswahili|ki swahili|swahili|acholi|runyankole|rukiga|lusoga|amharic|amharinya|amhara|አማርኛ|arabic|عربي|العربية)\b/u);
   const direct = clean.match(/^(english|luganda|lugandan|lunganda|lugand|kiswahili|ki swahili|swahili|acholi|runyankole|rukiga|lusoga|amharic|amharinya|amhara|አማርኛ|arabic|عربي|العربية)$/u);
   const value = (explicit || direct || [])[1] || '';
@@ -2613,6 +2665,14 @@ function typeLabel(type, lang) {
 function formatPrice(price, period) {
   if (!price || Number.isNaN(Number(price))) return 'Price upon application';
   const v = Number(price);
+  if (IS_SOUTH_AFRICA) {
+    const amount = v >= 1_000_000
+      ? `${(v / 1_000_000).toFixed(v >= 10_000_000 ? 0 : 1).replace(/\.0$/, '')}M`
+      : v >= 1_000
+        ? `${(v / 1_000).toFixed(v >= 100_000 ? 0 : 1).replace(/\.0$/, '')}K`
+        : v.toLocaleString('en-ZA');
+    return `R ${amount}${period ? `/${period}` : ''}`;
+  }
   if (v >= 1_000_000_000) {
     return `USh ${(v / 1_000_000_000).toFixed(1)}B${period ? `/${period}` : ''}`;
   }
@@ -2627,7 +2687,12 @@ function isValidEmailAddress(value) {
 }
 
 function normalizeContactPhone(value) {
-  return String(value || '').replace(/\s+/g, '').trim();
+  const raw = String(value || '').trim();
+  if (!IS_SOUTH_AFRICA) return raw.replace(/\s+/g, '');
+  const digits = raw.replace(/\D/g, '');
+  if (/^27\d{9}$/.test(digits)) return `+${digits}`;
+  if (/^0\d{9}$/.test(digits)) return `+27${digits.slice(1)}`;
+  return raw.replace(/[\s().-]+/g, '');
 }
 
 function normalizeWhatsappNin(value) {
@@ -2635,10 +2700,31 @@ function normalizeWhatsappNin(value) {
 }
 
 function isValidWhatsappUgNin(value) {
+  if (IS_SOUTH_AFRICA) {
+    const raw = normalizeWhatsappNin(value);
+    if (/^(?:PASSPORT|FOREIGNID|FOREIGN-ID):?[A-Z0-9-]{6,30}$/.test(raw)) return true;
+    if (!/^\d{13}$/.test(raw)) return false;
+    const month = Number(raw.slice(2, 4));
+    const day = Number(raw.slice(4, 6));
+    if (month < 1 || month > 12 || day < 1 || day > 31 || !/[01]/.test(raw[10])) return false;
+    let sum = 0;
+    let doubleDigit = false;
+    for (let index = raw.length - 1; index >= 0; index -= 1) {
+      let digit = Number(raw[index]);
+      if (doubleDigit) {
+        digit *= 2;
+        if (digit > 9) digit -= 9;
+      }
+      sum += digit;
+      doubleDigit = !doubleDigit;
+    }
+    return sum % 10 === 0;
+  }
   return /^(CM|CF|PM|PF)[A-Z0-9]{12}$/.test(normalizeWhatsappNin(value));
 }
 
 function isValidContactPhone(value) {
+  if (IS_SOUTH_AFRICA) return /^\+27\d{9}$/.test(normalizeContactPhone(value));
   return /^\+?[0-9]{10,15}$/.test(normalizeContactPhone(value));
 }
 
@@ -3281,7 +3367,7 @@ function parseBudget(text) {
   const raw = stripLinksAndIdsForNumericParsing(text);
   if (!raw) return null;
   const lower = raw.toLowerCase().replace(/us dollars?/g, 'usd');
-  const rx = /(?:(usd|\$|ugx|ush|shs)\s*)?(\d[\d,\s]*(?:\.\d+)?)\s*(thousand|thousands|million|millions|billion|billions|bn|k|m|b)?\s*(usd|ugx|ush|shs)?/gi;
+  const rx = /(?:(usd|\$|eur|€|gbp|£|zar|r|ugx|ush|shs)\s*)?(\d[\d,\s]*(?:\.\d+)?)\s*(thousand|thousands|million|millions|billion|billions|bn|k|m|b)?\s*(usd|eur|gbp|zar|ugx|ush|shs)?/gi;
   const candidates = [];
 
   let m;
@@ -3292,7 +3378,7 @@ function parseBudget(text) {
     const amount = parseNumberToken(m[2], suffix);
     if (!amount) continue;
 
-    const currency = curA || curB || (m[0].includes('$') ? 'usd' : 'ugx');
+    const currency = curA || curB || (m[0].includes('$') ? 'usd' : (IS_SOUTH_AFRICA ? 'zar' : 'ugx'));
     const start = Math.max(0, (m.index || 0) - 28);
     const end = Math.min(lower.length, (m.index || 0) + m[0].length + 28);
     const context = lower.slice(start, end);
@@ -3317,9 +3403,14 @@ function parseBudget(text) {
   const best = candidates[0];
   if (best.score < -1) return null;
 
-  const rate = Number(process.env.USD_TO_UGX_RATE || 3800);
-  const ugxAmount = best.currency === 'usd' || best.currency === '$'
-    ? Math.round(best.amount * (Number.isFinite(rate) && rate > 0 ? rate : 3800))
+  const foreignRate = IS_SOUTH_AFRICA
+    ? ({ usd: Number(process.env.ZAR_PER_USD || 18), '$': Number(process.env.ZAR_PER_USD || 18), eur: Number(process.env.ZAR_PER_EUR || 21), '€': Number(process.env.ZAR_PER_EUR || 21), gbp: Number(process.env.ZAR_PER_GBP || 24), '£': Number(process.env.ZAR_PER_GBP || 24) }[best.currency] || 1)
+    : Number(process.env.USD_TO_UGX_RATE || 3800);
+  const convertedFromForeign = IS_SOUTH_AFRICA
+    ? ['usd', '$', 'eur', '€', 'gbp', '£'].includes(best.currency)
+    : ['usd', '$'].includes(best.currency);
+  const ugxAmount = convertedFromForeign
+    ? Math.round(best.amount * (Number.isFinite(foreignRate) && foreignRate > 0 ? foreignRate : 1))
     : Math.round(best.amount);
 
   let period = null;
@@ -3333,7 +3424,10 @@ function parseBudget(text) {
     currency: best.currency === '$' ? 'usd' : best.currency,
     maxBudgetUgx: ugxAmount,
     period,
-    convertedFromUsd: best.currency === 'usd' || best.currency === '$'
+    convertedFromUsd: best.currency === 'usd' || best.currency === '$',
+    convertedFromForeign,
+    fxRate: convertedFromForeign ? foreignRate : null,
+    canonicalCurrency: ACTIVE_CURRENCY
   };
 }
 
@@ -3485,6 +3579,9 @@ function extractNaturalSearchFilters(text, entities = {}, fallbackType = 'any', 
     budgetPeriod,
     useSharedLocation,
     convertedFromUsd: Boolean(budgetParsed?.convertedFromUsd),
+    convertedFromForeign: Boolean(budgetParsed?.convertedFromForeign),
+    budgetCurrency: budgetParsed?.currency || null,
+    fxRate: Number(budgetParsed?.fxRate || 0) || null,
     sourceText: clean
   };
 }
@@ -3503,6 +3600,9 @@ function mergeNaturalSearchFilters(primary = {}, secondary = {}) {
     budgetPeriod: normalizeInput(p.budgetPeriod || s.budgetPeriod) || null,
     useSharedLocation: Boolean(p.useSharedLocation || s.useSharedLocation),
     convertedFromUsd: Boolean(p.convertedFromUsd || s.convertedFromUsd),
+    convertedFromForeign: Boolean(p.convertedFromForeign || s.convertedFromForeign),
+    budgetCurrency: normalizeInput(p.budgetCurrency || s.budgetCurrency) || null,
+    fxRate: Number(p.fxRate || s.fxRate || 0) || null,
     sourceText: normalizeInput(p.sourceText || s.sourceText || ''),
     aiConfidence: Number(p.confidence || 0) || 0
   };
@@ -3659,6 +3759,14 @@ function addWhatsappCanonicalLocationFilter(where, values, filters = {}, alias =
   const scope = canonicalLocationSearchScope([canonicalId], 0);
   const selected = scope.selected?.[0];
   if (!selected) return where;
+  if (IS_SOUTH_AFRICA && selected.level === 'province') {
+    values.push(selected.province || selected.name);
+    return `${where} AND COALESCE(${safeAlias}.extra_fields->>'province', ${safeAlias}.district, '') = $${values.length}`;
+  }
+  if (IS_SOUTH_AFRICA && selected.level === 'city') {
+    values.push(selected.province || selected.district, selected.city || selected.name);
+    return `${where} AND COALESCE(${safeAlias}.extra_fields->>'province', ${safeAlias}.district, '') = $${values.length - 1} AND COALESCE(${safeAlias}.extra_fields->>'city', '') = $${values.length}`;
+  }
   if (selected.level === 'district') {
     values.push(selected.district);
     return `${where} AND ${safeAlias}.district = $${values.length}`;
@@ -3690,24 +3798,37 @@ function isAffordabilityAdviceQuestion(value) {
   if (
     budget.maxBudgetUgx > 0
     && /\b(?:house|houses|home|homes|apartment|apartments|flat|flats|room|rooms|rental|rentals|rent|land|plot|plots|property|properties|student|hostel|office|shop|commercial)\b/i.test(clean)
-    && /(?:\$|\bugx\b|\bush\b|\bshs\b|\bshillings?\b|\bthousand\b|\bthousands\b|\bmillion\b|\bmillions\b|\bbillion\b|\bbillions\b|\b\d+(?:\.\d+)?\s*[kmb]\b)/i.test(clean)
+    && /(?:\$|€|£|\bzar\b|\brand\b|\bugx\b|\bush\b|\bshs\b|\bshillings?\b|\bthousand\b|\bthousands\b|\bmillion\b|\bmillions\b|\bbillion\b|\bbillions\b|\b\d+(?:\.\d+)?\s*[kmb]\b)/i.test(clean)
   ) return true;
   if (/\b(?:area|place|neighbourhood|neighborhood|district)\b/i.test(clean) && /\b(?:stay|live|rent|buy|house|room|student|hostel|land|plot)\b/i.test(clean) && /\b(?:budget|price|cost|cheap|afford)\b/i.test(clean)) return true;
   return AFFORDABILITY_KEYWORDS.some((keyword) => keyword && clean.includes(keyword.toLowerCase()));
 }
 
 function parseBudgetFromQuestion(text) {
-  const fallback = { maxBudgetUgx: 0, budgetPeriod: null, convertedFromUsd: false };
+  const fallback = { maxBudgetUgx: 0, budgetPeriod: null, convertedFromUsd: false, convertedFromForeign: false };
   try {
     const parsed = extractNaturalSearchFilters(text, {}, 'any', {});
     return {
       maxBudgetUgx: Number(parsed?.maxBudgetUgx || 0) || 0,
       budgetPeriod: parsed?.budgetPeriod || null,
-      convertedFromUsd: Boolean(parsed?.convertedFromUsd)
+      convertedFromUsd: Boolean(parsed?.convertedFromUsd),
+      convertedFromForeign: Boolean(parsed?.convertedFromForeign),
+      budgetCurrency: parsed?.budgetCurrency || null,
+      fxRate: Number(parsed?.fxRate || 0) || null
     };
   } catch (_error) {
     return fallback;
   }
+}
+
+function whatsappBudgetFxNote(filters = {}, { parentheses = false } = {}) {
+  if (!filters.convertedFromForeign && !filters.convertedFromUsd) return '';
+  const currency = String(filters.budgetCurrency || 'usd').toUpperCase();
+  const rate = Number(filters.fxRate || (IS_SOUTH_AFRICA ? process.env.ZAR_PER_USD || 18 : process.env.USD_TO_UGX_RATE || 3800));
+  const body = IS_SOUTH_AFRICA
+    ? `Using indicative FX for matching: 1 ${currency} = R ${Number.isFinite(rate) ? rate : 18}.`
+    : `Using approximate FX for matching: 1 USD = 3,800 UGX.`;
+  return parentheses ? `\n(${body})\n` : `\n${body}\n`;
 }
 
 function inferAffordabilitySearchType(text, filters = {}) {
@@ -3725,7 +3846,7 @@ function inferAffordabilitySearchType(text, filters = {}) {
 function affordabilityExactLabel(lang, exactMatch = true) {
   const code = resolveLangCode(lang);
   const copy = {
-    en: exactMatch ? 'Here are the cheapest live makaug matches I found.' : 'I did not find an exact match inside that budget, so here are the cheapest live makaug options I can see.',
+    en: exactMatch ? `Here are the cheapest live ${ACTIVE_BRAND} matches I found.` : `I did not find an exact match inside that budget, so here are the cheapest live ${ACTIVE_BRAND} options I can see.`,
     lg: exactMatch ? 'Zino ze live makaug matches ezisinga obuseere ze nfubye.' : 'Sirabye exact match mu budget eyo, naye zino ze live makaug options ezisinga obuseere ze ndaba.',
     sw: exactMatch ? 'Hizi ndizo match za makaug za bei nafuu zaidi nilizopata.' : 'Sijapata match kamili ndani ya budget hiyo, kwa hiyo hizi ndizo chaguo za makaug za bei nafuu zaidi ninazoona.',
     ac: exactMatch ? 'Man aye live makaug matches ma price piny loyo ma anongo.' : 'Pe anongo exact match i budget meno, ento man aye makaug options ma price piny loyo ma aneno.',
@@ -3752,7 +3873,7 @@ function formatCheapestAreasLine(lang, areaStats = []) {
   }[code] || 'Cheapest areas from live listings';
   const rows = areaStats.slice(0, 5).map((row, index) => {
     const area = [row.area_label, row.district].filter(Boolean).join(', ');
-    return `${index + 1}. ${area || 'Uganda'} - from ${formatPrice(row.min_price, row.price_period || '')} (${row.listing_count} listing${Number(row.listing_count) === 1 ? '' : 's'})`;
+    return `${index + 1}. ${area || ACTIVE_COUNTRY_NAME} - from ${formatPrice(row.min_price, row.price_period || '')} (${row.listing_count} listing${Number(row.listing_count) === 1 ? '' : 's'})`;
   });
   return `\n${heading}:\n${rows.join('\n')}\n`;
 }
@@ -3765,7 +3886,7 @@ function formatAffordabilityAdviceMessage(lang, rows = [], areaStats = [], filte
   if (budget > 0) filterBits.push(`up to ${formatPrice(budget, filters.budgetPeriod || '')}`);
   if (Number(filters.bedsMin || 0) > 0) filterBits.push(`${Number(filters.bedsMin)}+ bed`);
   if (filters.propertyType) filterBits.push(filters.propertyType);
-  const fxNote = filters.convertedFromUsd ? '\nUsing approx FX: 1 USD = 3,800 UGX for matching.\n' : '';
+  const fxNote = whatsappBudgetFxNote(filters);
   const header = `${whatsappBrandHeader('Affordability search')}\n${affordabilityExactLabel(lang, exactMatch)}\n🎯 ${filterBits.join(' • ')}${fxNote}`;
   const areaLine = formatCheapestAreasLine(lang, areaStats);
   if (!rows.length) {
@@ -4027,7 +4148,7 @@ async function findAffordableWhatsappAreaStats(filters = {}, { includeBudget = t
   const limitIdx = values.length;
   const result = await db.query(
     `SELECT
-       COALESCE(NULLIF(TRIM(p.area), ''), NULLIF(TRIM(p.district), ''), 'Uganda') AS area_label,
+       COALESCE(NULLIF(TRIM(p.area), ''), NULLIF(TRIM(p.district), ''), '${ACTIVE_COUNTRY_NAME.replace(/'/g, "''")}') AS area_label,
        NULLIF(TRIM(p.district), '') AS district,
        MIN(p.price) AS min_price,
        (ARRAY_AGG(NULLIF(p.price_period, '') ORDER BY p.price ASC NULLS LAST))[1] AS price_period,
@@ -4052,6 +4173,9 @@ async function buildAffordabilityAdviceReply({ phone, text, lang, filters = {} }
     normalizedFilters.maxBudgetUgx = parsedBudget.maxBudgetUgx;
     normalizedFilters.budgetPeriod = normalizedFilters.budgetPeriod || parsedBudget.budgetPeriod;
     normalizedFilters.convertedFromUsd = Boolean(normalizedFilters.convertedFromUsd || parsedBudget.convertedFromUsd);
+    normalizedFilters.convertedFromForeign = Boolean(normalizedFilters.convertedFromForeign || parsedBudget.convertedFromForeign);
+    normalizedFilters.budgetCurrency = normalizedFilters.budgetCurrency || parsedBudget.budgetCurrency || null;
+    normalizedFilters.fxRate = normalizedFilters.fxRate || parsedBudget.fxRate || null;
   }
 
   let rows = await findAffordableWhatsappListings(normalizedFilters, { includeBudget: true });
@@ -6296,12 +6420,12 @@ function menuRouteReply(lang, route) {
   if (route === 'agent_area') return { message: t(lang, 'askAgentArea'), nextStep: 'agent_area' };
   if (route === 'agent_registration') {
     return {
-      message: `${whatsappBrandHeader('Broker sign-up')}\nIf you want to join makaug.com as an agent or broker, start here:\n${HOME_URL}/broker-signup\n\nAlready have an account? Log in here:\n${HOME_URL}/login\n\nYou can list properties free, receive WhatsApp leads, and use nine website languages.\n\n${t(lang, 'menuHint')}`,
+      message: `${whatsappBrandHeader('Broker sign-up')}\nIf you want to join ${ACTIVE_BRAND} as an agent or broker, start here:\n${HOME_URL}/broker-signup\n\nAlready have an account? Log in here:\n${HOME_URL}/login\n\nYou can list properties free, receive enquiries, and use ${ACTIVE_TENANT.languages.length} written website languages.\n\n${t(lang, 'menuHint')}`,
       nextStep: 'main_menu'
     };
   }
   if (route === 'mortgage_help') {
-    return { message: `🏦 Use Mortgage Finder here: ${HOME_URL}/#page-mortgage\n\n${t(lang, 'menuHint')}`, nextStep: 'main_menu' };
+    return { message: `🏦 Use ${IS_SOUTH_AFRICA ? 'Bond Finder' : 'Mortgage Finder'} here: ${HOME_URL}/#page-mortgage\n\n${t(lang, 'menuHint')}`, nextStep: 'main_menu' };
   }
   if (route === 'account_help') {
     return {
@@ -6311,13 +6435,13 @@ function menuRouteReply(lang, route) {
   }
   if (route === 'report_listing') {
     return {
-      message: `🚨 Report a listing: ${HOME_URL}/#page-report\nSupport: ${process.env.SUPPORT_PHONE || '+256760112587'} | ${process.env.SUPPORT_EMAIL || 'info@makaug.com'}`,
+      message: `🚨 Report a listing: ${HOME_URL}/#page-report\nSupport: ${[process.env.SUPPORT_PHONE, process.env.SUPPORT_EMAIL || ACTIVE_TENANT.email].filter(Boolean).join(' | ')}`,
       nextStep: 'main_menu'
     };
   }
   if (route === 'support') {
     return {
-      message: `👋 Human support: ${process.env.SUPPORT_PHONE || '+256760112587'}\n📧 ${process.env.SUPPORT_EMAIL || 'info@makaug.com'}\n\n${t(lang, 'menuHint')}`,
+      message: `👋 Human support\n${process.env.SUPPORT_PHONE ? `📱 ${process.env.SUPPORT_PHONE}\n` : ''}📧 ${process.env.SUPPORT_EMAIL || ACTIVE_TENANT.email}\n\n${t(lang, 'menuHint')}`,
       nextStep: 'main_menu'
     };
   }
@@ -7024,7 +7148,9 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
   // CHOOSE LANGUAGE
   if (step === 'choose_language') {
-    const langMap = { '1': 'en', '2': 'lg', '3': 'sw', '4': 'ac', '5': 'ny', '6': 'rn', '7': 'sm', '8': 'am', '9': 'ar' };
+    const langMap = IS_SOUTH_AFRICA
+      ? { '1': 'en', '2': 'af', '3': 'zu', '4': 'xh', '5': 'nso', '6': 'tn', '7': 'st', '8': 'ts', '9': 'ss', '10': 've', '11': 'nr' }
+      : { '1': 'en', '2': 'lg', '3': 'sw', '4': 'ac', '5': 'ny', '6': 'rn', '7': 'sm', '8': 'am', '9': 'ar' };
     const chosen = langMap[cleanBody] || 'en';
     await updateSession(phone, { language: chosen });
     await clearSessionData(phone);
@@ -7196,9 +7322,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
         return respond(reply, 'main_menu');
       }
 
-      const fxNote = naturalFilters.convertedFromUsd
-        ? '\n(Using approx FX: 1 USD = 3,800 UGX for matching.)\n'
-        : '\n';
+      const fxNote = whatsappBudgetFxNote(naturalFilters, { parentheses: true }) || '\n';
       return respond(
         `${describeNaturalFilters(naturalFilters, lang) ? `✅ Filters applied: ${describeNaturalFilters(naturalFilters, lang)}${fxNote}` : ''}${formatPropertySearchMessage(lang, rows, naturalFilters.area, naturalFilters.searchType || 'any')}`,
         'main_menu'
@@ -9300,7 +9424,7 @@ router.post('/web-bridge/outbox/:id/failed', async (req, res) => {
 router.post('/test', async (req, res) => {
   if (process.env.NODE_ENV === 'production') return res.status(404).json({ error: 'Not found' });
 
-  const { phone = '+256760112587', body = '1', mediaUrl, mediaType = '' } = req.body;
+  const { phone = IS_SOUTH_AFRICA ? '+27821234567' : '+256760112587', body = '1', mediaUrl, mediaType = '' } = req.body;
   const sharedLocation = parseInboundLocation(req.body.location || req.body);
 
   const session = await getSession(phone);
@@ -9331,6 +9455,17 @@ router.delete('/reset/:phone', async (req, res) => {
 
 module.exports = router;
 module.exports.__test = {
+  ACTIVE_COUNTRY_CODE,
+  ACTIVE_CURRENCY,
+  addWhatsappCanonicalLocationFilter,
+  formatPrice,
+  isValidContactPhone,
+  isValidWhatsappUgNin,
+  normalizeContactPhone,
+  parseBudget,
+  parseLanguageChange,
+  resolveLangCode,
+  t,
   processInboundRuntime,
   contextualPageRouteFromMessage,
   fastWhatsappRuntimeHints,
