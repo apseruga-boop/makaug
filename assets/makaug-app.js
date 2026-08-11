@@ -879,6 +879,7 @@ let lpIdentityFileMeta = null;
 let lpInquiryReference = "";
 let lpResolvedLocationLabel = "";
 let lpCanonicalLocationResolution = null;
+let lpCanonicalLocationAttempted = false;
 let lpResolvedAltitudeM = null;
 let lpReverseGeoTimer = null;
 let lpAddressGeoTimer = null;
@@ -24029,6 +24030,7 @@ function applyAdminReviewCanonicalLocation(location = {}) {
 
 function clearLpCanonicalLocationCascade() {
   lpCanonicalLocationResolution = null;
+  lpCanonicalLocationAttempted = true;
   populateLpRegionOptions("");
   populateLpDistrictOptions("", "");
   populateLpCityOptions("");
@@ -24038,11 +24040,13 @@ function clearLpCanonicalLocationCascade() {
     areaEl.value = "";
     areaEl.dataset.auto = "0";
   }
+  updateLpCanonicalLocationGuardState();
 }
 
 function applyLpCanonicalLocation(location = {}) {
   if (!location?.canonical_location_id || location.match !== "exact_alias" || Number(location.confidence) !== 1) return false;
   lpCanonicalLocationResolution = location;
+  lpCanonicalLocationAttempted = true;
   const region = location.region || regionForDistrict(location.district);
   populateLpRegionOptions(region);
   populateLpDistrictOptions(region, location.district);
@@ -24055,6 +24059,7 @@ function applyLpCanonicalLocation(location = {}) {
     areaEl.value = location.name;
     areaEl.dataset.auto = "1";
   }
+  updateLpCanonicalLocationGuardState();
   return true;
 }
 
@@ -30382,6 +30387,7 @@ async function submitListProperty() {
     toast(error.message || "Could not submit listing. Please try again.");
   } finally {
     setButtonLoading("lp-submit-btn", false, "Submit Listing");
+    updateLpCanonicalLocationGuardState();
   }
 }
 
@@ -36360,6 +36366,38 @@ function updateLpLocationStepLocks() {
     syncBtn.classList.toggle("cursor-not-allowed", !canSync);
   }
   updateLpLocationConfirmButton();
+  updateLpCanonicalLocationGuardState();
+}
+
+function hasResolvedLpCanonicalLocation() {
+  const selectedDistrict = lpVal("list-district-sel");
+  const selectedArea = lpVal("lp-area");
+  return Boolean(
+    lpCanonicalLocationResolution?.canonical_location_id
+    && lpCanonicalLocationResolution?.match === "exact_alias"
+    && Number(lpCanonicalLocationResolution?.confidence) === 1
+    && lpCanonicalLocationResolution?.district === selectedDistrict
+    && String(lpCanonicalLocationResolution?.name || "").trim().toLowerCase() === String(selectedArea || "").trim().toLowerCase()
+  );
+}
+
+function updateLpCanonicalLocationGuardState() {
+  const resolved = hasResolvedLpCanonicalLocation();
+  const notice = document.getElementById("lp-location-unresolved-notice");
+  const message = document.getElementById("lp-location-unresolved-message");
+  const submitBtn = document.getElementById("lp-submit-btn");
+  const unresolvedText = translateListingLabel("Location not recognised. Choose an exact Uganda area from the location results or the region, district, town and neighbourhood fields before submitting.");
+
+  if (notice) notice.classList.toggle("hidden", resolved || !lpCanonicalLocationAttempted);
+  if (message) message.textContent = unresolvedText;
+  if (submitBtn) {
+    submitBtn.disabled = !resolved;
+    submitBtn.setAttribute("aria-disabled", resolved ? "false" : "true");
+    submitBtn.title = resolved ? "" : unresolvedText;
+    submitBtn.classList.toggle("opacity-60", !resolved);
+    submitBtn.classList.toggle("cursor-not-allowed", !resolved);
+  }
+  return resolved;
 }
 
 function populateLpRegionOptions(keepRegion = "") {
@@ -36538,7 +36576,10 @@ async function onLpAreaManualInput() {
   const district = lpVal("list-district-sel");
   const resolution = await resolveUgandaLocationFromSharedRegistry(uniqueTextParts([areaValue, district]).join(", "));
   if (resolution.status === "matched") applyLpCanonicalLocation(resolution.location);
-  else lpCanonicalLocationResolution = null;
+  else {
+    lpCanonicalLocationResolution = null;
+    lpCanonicalLocationAttempted = true;
+  }
   populateListAddressSuggestions({
     district: lpVal("list-district-sel"),
     city: lpVal("lp-city"),
@@ -36652,6 +36693,7 @@ function improveLpDescription() {
 
 function onLpRegionChange() {
   lpCanonicalLocationResolution = null;
+  lpCanonicalLocationAttempted = true;
   const region = lpVal("lp-region");
   const keepDistrict = lpVal("list-district-sel");
   populateLpDistrictOptions(region, keepDistrict);
@@ -36673,6 +36715,7 @@ function onLpRegionChange() {
 
 async function onLpDistrictChange() {
   lpCanonicalLocationResolution = null;
+  lpCanonicalLocationAttempted = true;
   const district = lpVal("list-district-sel");
   const regionEl = document.getElementById("lp-region");
   if (regionEl && district) {
@@ -36696,6 +36739,7 @@ async function onLpDistrictChange() {
 
 function onLpCityChange() {
   lpCanonicalLocationResolution = null;
+  lpCanonicalLocationAttempted = true;
   const district = lpVal("list-district-sel");
   const city = lpVal("lp-city");
   populateLpNeighborhoodOptions(district, city);
@@ -36726,7 +36770,10 @@ async function onLpNeighborhoodChange() {
     lpVal("list-district-sel")
   ]).join(", "));
   if (resolution.status === "matched") applyLpCanonicalLocation(resolution.location);
-  else lpCanonicalLocationResolution = null;
+  else {
+    lpCanonicalLocationResolution = null;
+    lpCanonicalLocationAttempted = true;
+  }
   updateListPreview();
   refreshListPinMapFromInputs();
   updateLpLocationStepLocks();
@@ -36746,6 +36793,8 @@ function clearListPropertyDraft() {
   lpIdentityFileMeta = null;
   lpInquiryReference = "";
   lpResolvedLocationLabel = "";
+  lpCanonicalLocationResolution = null;
+  lpCanonicalLocationAttempted = false;
   lpResolvedAltitudeM = null;
   lpAddressGeoSeq = 0;
   lpHierarchyGeoSeq = 0;

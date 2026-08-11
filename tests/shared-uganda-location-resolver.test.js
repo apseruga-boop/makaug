@@ -163,6 +163,7 @@ test('the full supplied missing-worklist has registry coverage without unsafe am
 
 test('public and King forms use the same resolver and clear stale hierarchy on unmatched pins', () => {
   const app = read('assets/makaug-app.js');
+  const page = read('index.html');
   const route = read('routes/properties.js');
   assert.match(app, /async function resolveUgandaLocationFromSharedRegistry/);
   assert.match(app, /async function adminReviewFindAddressOrPlace[\s\S]+resolveUgandaLocationWithLabelFallback/);
@@ -170,6 +171,11 @@ test('public and King forms use the same resolver and clear stale hierarchy on u
   assert.match(app, /Location not recognised — pin set but region\/district\/area could NOT be auto-filled\./);
   assert.match(app, /function clearAdminReviewCanonicalLocation[\s\S]+admin-review-region-edit[\s\S]+admin-review-area-edit/);
   assert.match(app, /function clearLpCanonicalLocationCascade[\s\S]+populateLpRegionOptions\(""\)[\s\S]+lp-area/);
+  assert.match(app, /function updateLpCanonicalLocationGuardState[\s\S]+lp-location-unresolved-notice[\s\S]+lp-submit-btn[\s\S]+aria-disabled/);
+  assert.match(app, /function applyLpCanonicalLocation[\s\S]+updateLpCanonicalLocationGuardState\(\)/);
+  assert.match(app, /async function submitListProperty[\s\S]+finally[\s\S]+updateLpCanonicalLocationGuardState\(\)/);
+  assert.match(page, /id="lp-location-unresolved-notice" role="alert" aria-live="polite" class="hidden/);
+  assert.match(page, /id="lp-submit-btn"[^>]+disabled[^>]+aria-disabled="true"[^>]+aria-describedby="lp-location-unresolved-notice"/);
   assert.match(app, /Resolve the area through the shared canonical location registry before approving/);
   assert.match(route, /router\.get\('\/locations\/resolve'/);
   assert.match(route, /Canonical location confirmation is required before approval/);
