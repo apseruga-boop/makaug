@@ -1464,25 +1464,12 @@ app.use(notFound);
 app.use(errorHandler);
 
 const port = parseInt(process.env.PORT || '8080', 10);
+const listenHost = process.env.RENDER_INTERNAL_APP === 'true' ? '127.0.0.1' : '0.0.0.0';
 
 async function start() {
   const httpServer = http.createServer(app);
   httpServer.keepAliveTimeout = 120_000;
   httpServer.headersTimeout = 121_000;
-  httpServer.on('connection', () => {
-    if (typeof process.send === 'function' && process.connected) {
-      process.send({ type: 'runtime_http_connection' });
-    }
-  });
-  httpServer.on('request', (req) => {
-    if (typeof process.send === 'function' && process.connected) {
-      process.send({
-        type: 'runtime_http_request',
-        method: String(req.method || 'GET').toUpperCase(),
-        path: String(req.url || '').split('?')[0]
-      });
-    }
-  });
   httpServer.on('error', (error) => {
     logger.error('HTTP server failed', {
       code: error?.code,
@@ -1492,14 +1479,14 @@ async function start() {
   });
   await new Promise((resolve, reject) => {
     httpServer.once('error', reject);
-    httpServer.listen(port, '0.0.0.0', () => {
+    httpServer.listen(port, listenHost, () => {
       httpServer.removeListener('error', reject);
       resolve();
     });
   });
   const address = httpServer.address();
   logger.info(`${ACTIVE_TENANT.brandName} liveness endpoint accepting traffic`, {
-    host: typeof address === 'object' && address ? address.address : '0.0.0.0',
+    host: typeof address === 'object' && address ? address.address : listenHost,
     port: typeof address === 'object' && address ? address.port : port,
     family: typeof address === 'object' && address ? address.family : null
   });

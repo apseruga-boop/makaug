@@ -128,3 +128,6 @@ deployment to its previous Render commit instead.
   staging proxy therefore allows a 30-second heartbeat window while retaining
   bounded upstream requests, preventing healthy instances from intermittently
   presenting as `service_starting`.
+- The application child listens on loopback only. Render otherwise detects the
+  internal child as a second public port and repeatedly probes its homepage,
+  starving real staging traffic on the free CPU allocation.

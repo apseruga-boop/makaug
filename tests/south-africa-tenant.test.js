@@ -112,8 +112,10 @@ assert(renderStartSource.includes("proxyRequest.end();"), 'Render proxy must exp
 assert(renderStartSource.includes('runtime_heartbeat'), 'Render proxy must monitor child IPC heartbeats');
 assert(renderStartSource.includes('lastAppHeartbeatAt'), 'Render proxy must expire stale child readiness');
 assert(renderStartSource.includes('process.env.APP_HEARTBEAT_TIMEOUT_MS || 30000'), 'Render proxy must tolerate free-tier heartbeat jitter');
+assert(renderStartSource.includes("RENDER_INTERNAL_APP: 'true'"), 'Render proxy must keep its child listener private to the instance');
 assert(renderStartSource.includes('APP_PROXY_TIMEOUT'), 'Render proxy requests must have a bounded timeout');
 assert(serverSource.includes("process.send({ type: 'runtime_ready' })"), 'ZA app must signal readiness to the Render parent');
+assert(serverSource.includes("process.env.RENDER_INTERNAL_APP === 'true' ? '127.0.0.1' : '0.0.0.0'"), 'Render child must bind to loopback so Render does not probe it as another public port');
 assert(serverSource.includes('function readCountryAppAsset()'), 'ZA public JavaScript must have a transformed asset cache');
 assert(serverSource.includes("renderPublicHtml('/');"), 'ZA public HTML must warm before readiness');
 assert(serverSource.includes('etag: adapted.etag'), 'ZA public JavaScript must reuse its transformed asset cache');

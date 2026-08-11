@@ -49,8 +49,6 @@ function jsonResponse(res, statusCode, payload) {
 
 function proxyToApp(req, res) {
   const method = String(req.method || 'GET').toUpperCase();
-  const requestPath = String(req.url || '').split('?')[0];
-  const startedAt = Date.now();
   const headers = proxyHeaders(req.headers, { request: true });
   if (method === 'GET' || method === 'HEAD') delete headers['content-length'];
   const proxyRequest = http.request({
@@ -60,12 +58,6 @@ function proxyToApp(req, res) {
     method,
     headers
   }, (proxyResponse) => {
-    console.log('Render application proxy response received', {
-      method,
-      path: requestPath,
-      status: proxyResponse.statusCode || 502,
-      elapsed_ms: Date.now() - startedAt
-    });
     res.writeHead(proxyResponse.statusCode || 502, proxyHeaders(proxyResponse.headers));
     proxyResponse.pipe(res);
   });
@@ -74,25 +66,13 @@ function proxyToApp(req, res) {
     console.error('Render application proxy request failed', {
       code: error.code || null,
       method,
-      path: requestPath,
-      elapsed_ms: Date.now() - startedAt
+      path: String(req.url || '').split('?')[0]
     });
     return jsonResponse(res, 502, {
       ok: false,
       error: 'application_unavailable',
       country_code: process.env.COUNTRY_CODE || 'ZA'
     });
-  });
-  proxyRequest.on('socket', (socket) => {
-    if (socket.connecting) {
-      socket.once('connect', () => {
-        console.log('Render application proxy socket connected', {
-          method,
-          path: requestPath,
-          elapsed_ms: Date.now() - startedAt
-        });
-      });
-    }
   });
   proxyRequest.setTimeout(30000, () => {
     const error = new Error('Render application proxy request timed out');
@@ -126,14 +106,6 @@ const earlyHttpServer = http.createServer((req, res) => {
 });
 
 function recordAppHeartbeat(message = {}) {
-  if (message.type === 'runtime_http_connection' || message.type === 'runtime_http_request') {
-    console.log('Render application child HTTP activity', {
-      type: message.type,
-      method: message.method || null,
-      path: message.path || null
-    });
-    return;
-  }
   if (!['runtime_ready', 'runtime_heartbeat'].includes(message.type)) return;
   const becameReady = !appReady;
   lastAppHeartbeatAt = Date.now();
@@ -165,7 +137,11 @@ earlyHttpServer.listen(port, host, () => {
   });
 
   appProcess = fork(path.join(__dirname, '..', 'server.js'), [], {
-    env: { ...process.env, PORT: String(appPort) },
+    env: {
+      ...process.env,
+      PORT: String(appPort),
+      RENDER_INTERNAL_APP: 'true'
+    },
     stdio: ['inherit', 'inherit', 'inherit', 'ipc']
   });
   appProcess.on('message', recordAppHeartbeat);
