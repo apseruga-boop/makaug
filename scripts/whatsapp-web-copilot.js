@@ -106,6 +106,7 @@ function resolvePlaywrightCoreModule() {
 }
 
 const { chromium } = requireWithReadRetry(resolvePlaywrightCoreModule());
+const { isIgnoredWhatsappSystemChat } = requireWithReadRetry('../services/whatsappWebChatFilter');
 
 if (typeof dns.setDefaultResultOrder === 'function') {
   dns.setDefaultResultOrder('ipv4first');
@@ -2196,6 +2197,11 @@ async function ingestSnapshot({ snapshot, row = {}, source = 'unread_scan' }) {
     ? '[shared location]'
     : String(snapshot.text || row.preview || '').trim();
 
+  if (isIgnoredWhatsappSystemChat(chatKey)) {
+    log(`ignored WhatsApp system chat during ${source}`);
+    return { processed: 0, skipped: 'whatsapp_system_chat' };
+  }
+
   if (mediaType === 'call' || mediaType === 'call_log') {
     return ingestCallSnapshot({ snapshot, row, source, chatKey, text });
   }
@@ -2270,7 +2276,8 @@ async function ingestSnapshot({ snapshot, row = {}, source = 'unread_scan' }) {
 }
 
 async function ingestUnreadChats(page) {
-  const unreadRows = await scanUnreadChats(page);
+  const unreadRows = (await scanUnreadChats(page))
+    .filter((row) => !isIgnoredWhatsappSystemChat(row.title));
   let processed = 0;
 
   for (const row of unreadRows) {
@@ -2338,6 +2345,7 @@ async function ingestRecentChatsSweep(page, limit = RECENT_CHAT_SWEEP_LIMIT) {
 
   for (const row of rows) {
     scanned += 1;
+    if (isIgnoredWhatsappSystemChat(row.title)) continue;
     const rowKey = recentChatRowKey(row);
     if (!row.unread && shouldSkipRecentChatRow(rowKey)) continue;
 
@@ -3303,8 +3311,13 @@ async function main() {
             sent_outbound: sentCount || 0
           },
           metadata: {
+            ready_state: readyState,
+            phase: 'online',
+            note: 'Hosted WhatsApp browser connected',
             login_screenshot_data_url: null,
-            login_screenshot_captured_at: null
+            login_screenshot_captured_at: null,
+            login_phone_pairing: null,
+            login_qr_refresh: null
           }
         });
         lastHeartbeat = now;
