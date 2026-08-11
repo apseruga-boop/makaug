@@ -46,6 +46,22 @@ assert.equal(
   '2bdrm Apartment for Sale in Lynnwood, Gauteng — R 1 450 000 | seshaikhaya.com'
 );
 assert.doesNotMatch(priceLabel({ price: 1_450_000 }), /USh|UGX/);
+const publicSourceSummary = propertiesRoute._test.buildThirdPartyPublicSummary({
+  listing_type: 'sale',
+  property_type: 'Apartment',
+  area: 'Lynnwood',
+  district: 'Gauteng',
+  price: 1_450_000,
+  price_period: 'once',
+  bedrooms: 2,
+  bathrooms: 1
+}, {
+  source_name: 'Pam Golding Pretoria',
+  source_platform: 'x'
+});
+assert.match(publicSourceSummary, /seshaikhaya\.com provides a search and discovery preview/);
+assert.match(publicSourceSummary, /seshaikhaya\.com has not verified ownership/);
+assert.doesNotMatch(publicSourceSummary, /Makaug|makaug\.com/);
 assert.equal(mortgageRoute.ACTIVE_COUNTRY_CODE, 'ZA');
 assert.deepEqual(
   mortgageRoute.FALLBACK_MORTGAGE_PROVIDERS.map((provider) => provider.name),

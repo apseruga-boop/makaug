@@ -133,6 +133,7 @@ const ACTIVE_PRIMARY_REGIONS = IS_SOUTH_AFRICA ? (PROVINCES || []) : DISTRICTS;
 const ACTIVE_PRICE_CURRENCIES = IS_SOUTH_AFRICA ? ['ZAR', 'USD', 'EUR', 'GBP'] : ['UGX', 'USD'];
 const ACTIVE_BRAND_NAME = IS_SOUTH_AFRICA ? 'seshaikhaya' : 'makaug';
 const ACTIVE_PUBLIC_DOMAIN = IS_SOUTH_AFRICA ? 'seshaikhaya.com' : 'makaug.com';
+const ACTIVE_PUBLIC_BRAND_LABEL = IS_SOUTH_AFRICA ? ACTIVE_PUBLIC_DOMAIN : 'Makaug';
 const activeRegionForDistrict = (district) => IS_SOUTH_AFRICA ? cleanText(district) : regionForDistrict(district);
 const LAUNCH_SEED_LISTING_MARKERS = ['SOFT LAUNCH TEST - DELETE', 'QA TEST - DELETE'];
 const LAUNCH_DUMMY_LISTING_TITLES = new Set(['sdgsdgd', 'sgsgsgsgs']);
@@ -1010,7 +1011,7 @@ function buildThirdPartyPublicSummary(property = {}, extra = {}) {
   const reviewedDescription = redactThirdPartyPublicText(property.description || '');
   const reviewedDescriptionLooksCopied = !reviewedDescription
     || reviewedDescription.length > 420
-    || /\boriginal post date\b|\bsource post\b|\bthird-party\b|makaug has not verified/i.test(reviewedDescription);
+    || /\boriginal post date\b|\bsource post\b|\bthird-party\b|(?:makaug|seshaikhaya(?:\.com)?) has not verified/i.test(reviewedDescription);
   const price = publicPriceLabelFor(property);
   const bedrooms = Number(property.bedrooms);
   const bathrooms = Number(property.bathrooms);
@@ -1040,11 +1041,11 @@ function buildThirdPartyPublicSummary(property = {}, extra = {}) {
     && (extra.king_review_facts_confirmed === true || reviewedFields.includes('description'))
     && !reviewedDescriptionLooksCopied
   ) {
-    return `${reviewedDescription} Third-party property result found from ${source}. Makaug provides a search and discovery preview using limited factual information only. Makaug has not verified ownership, availability, price, land title, seller authority, image rights, or contact details. Open the original source before contacting the seller, arranging a viewing, or making any payment.`
+    return `${reviewedDescription} Third-party property result found from ${source}. ${ACTIVE_PUBLIC_BRAND_LABEL} provides a search and discovery preview using limited factual information only. ${ACTIVE_PUBLIC_BRAND_LABEL} has not verified ownership, availability, price, land title, seller authority, image rights, or contact details. Open the original source before contacting the seller, arranging a viewing, or making any payment.`
       .replace(/\s+/g, ' ')
       .trim();
   }
-  return `${buildThirdPartyPublicTitle(property, extra)} is a third-party property result found from ${source}. Makaug provides a search and discovery preview using limited factual information only. ${facts}. Makaug has not verified ownership, availability, price, land title, seller authority, image rights, or contact details. Open the original source before contacting the seller, arranging a viewing, or making any payment.`
+  return `${buildThirdPartyPublicTitle(property, extra)} is a third-party property result found from ${source}. ${ACTIVE_PUBLIC_BRAND_LABEL} provides a search and discovery preview using limited factual information only. ${facts}. ${ACTIVE_PUBLIC_BRAND_LABEL} has not verified ownership, availability, price, land title, seller authority, image rights, or contact details. Open the original source before contacting the seller, arranging a viewing, or making any payment.`
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -5504,5 +5505,6 @@ module.exports._test = {
   publicPropertiesCacheKey,
   isSourcedInventoryCandidateRecord,
   sourcedCandidateRecordHasApprovalLocation,
-  sourcedInventoryApprovalPolicy
+  sourcedInventoryApprovalPolicy,
+  buildThirdPartyPublicSummary
 };
