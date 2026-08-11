@@ -250,6 +250,7 @@ const VOICE_AUDIO_MAX_BYTES = 8_000_000;
 const LISTING_IMAGE_PREVIEW_MAX_DIMENSION = 1280;
 const LISTING_IMAGE_PREVIEW_QUALITY = 0.78;
 const LISTING_IMAGE_PREVIEW_MAX_BYTES = 1_500_000;
+const OUTBOUND_PROPERTY_IMAGE_MAX_BYTES = 15_000_000;
 const seenBrowserMessageIds = new Set();
 const seenCallEventKeys = new Map();
 const recentlySentReplyKeys = new Map();
@@ -266,6 +267,29 @@ const SEND_BUTTON_SELECTORS = [
   '[data-testid="compose-btn-send"]',
   'footer button[aria-label*="Send"]',
   'footer span[data-icon="send"]',
+  'span[data-icon="send"]'
+];
+const ATTACH_BUTTON_SELECTORS = [
+  'footer button[aria-label*="Attach"]',
+  'footer button[title*="Attach"]',
+  'footer span[data-icon="plus-rounded"]',
+  'footer span[data-icon="clip"]',
+  'span[data-icon="plus-rounded"]',
+  'span[data-icon="clip"]'
+];
+const OUTBOUND_IMAGE_INPUT_SELECTORS = [
+  'input[type="file"][accept*="image"]',
+  'input[type="file"][accept*="video"]'
+];
+const MEDIA_CAPTION_SELECTORS = [
+  '[data-testid="media-caption-input-container"] [contenteditable="true"]',
+  '[role="dialog"] div[role="textbox"][contenteditable="true"]',
+  'div[aria-label*="caption" i][contenteditable="true"]'
+];
+const MEDIA_SEND_BUTTON_SELECTORS = [
+  '[data-testid="media-send"]',
+  '[role="dialog"] button[aria-label*="Send"]',
+  '[role="dialog"] span[data-icon="send"]',
   'span[data-icon="send"]'
 ];
 
@@ -2841,6 +2865,115 @@ async function typeAndSendReply(page, text) {
   throw new Error('WhatsApp send was not confirmed in the chat');
 }
 
+async function fetchOutboundPropertyImage(mediaUrl) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15000);
+  try {
+    const response = await fetch(String(mediaUrl || ''), {
+      redirect: 'follow',
+      signal: controller.signal,
+      headers: {
+        Accept: 'image/jpeg,image/png,image/webp,image/*;q=0.8',
+        'User-Agent': BROWSER_USER_AGENT
+      }
+    });
+    if (!response.ok) throw new Error(`Property image returned HTTP ${response.status}`);
+    const mimeType = String(response.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+    if (!mimeType.startsWith('image/')) throw new Error(`Property media is not an image (${mimeType || 'unknown type'})`);
+    const declaredLength = Number(response.headers.get('content-length') || 0);
+    if (declaredLength > OUTBOUND_PROPERTY_IMAGE_MAX_BYTES) throw new Error('Property image is too large for WhatsApp');
+    const buffer = Buffer.from(await response.arrayBuffer());
+    if (!buffer.length || buffer.length > OUTBOUND_PROPERTY_IMAGE_MAX_BYTES) throw new Error('Property image is empty or too large');
+    const extension = mimeType === 'image/png' ? 'png' : mimeType === 'image/webp' ? 'webp' : 'jpg';
+    return { buffer, mimeType, fileName: `makaug-property.${extension}` };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function clickFirstVisible(page, selectors) {
+  for (const selector of selectors) {
+    const matches = page.locator(selector);
+    const count = await matches.count().catch(() => 0);
+    for (let index = count - 1; index >= 0; index -= 1) {
+      const candidate = matches.nth(index);
+      if (!await candidate.isVisible().catch(() => false)) continue;
+      try {
+        await candidate.click({ timeout: 2500 });
+        return true;
+      } catch (_error) {
+        // Try the next visible selector.
+      }
+    }
+  }
+  return false;
+}
+
+async function findAttachedFileInput(page) {
+  for (const selector of OUTBOUND_IMAGE_INPUT_SELECTORS) {
+    const matches = page.locator(selector);
+    const count = await matches.count().catch(() => 0);
+    if (count) return matches.nth(count - 1);
+  }
+  return null;
+}
+
+async function setMediaCaption(page, caption) {
+  for (const selector of MEDIA_CAPTION_SELECTORS) {
+    const matches = page.locator(selector);
+    const count = await matches.count().catch(() => 0);
+    for (let index = count - 1; index >= 0; index -= 1) {
+      const candidate = matches.nth(index);
+      if (!await candidate.isVisible().catch(() => false)) continue;
+      await candidate.click({ timeout: 2500 });
+      await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A').catch(() => null);
+      await page.keyboard.insertText(String(caption || ''));
+      return true;
+    }
+  }
+  return false;
+}
+
+async function typeAndSendImageReply(page, mediaUrl, caption) {
+  const media = await fetchOutboundPropertyImage(mediaUrl);
+  const beforeState = await getOutgoingMessageState(page).catch(() => ({ count: 0, recentTexts: [] }));
+
+  let fileInput = await findAttachedFileInput(page);
+  if (!fileInput) {
+    const opened = await clickFirstVisible(page, ATTACH_BUTTON_SELECTORS);
+    if (!opened) throw new Error('Could not open the WhatsApp attachment picker');
+    await page.waitForTimeout(200);
+    fileInput = await findAttachedFileInput(page);
+  }
+  if (!fileInput) throw new Error('Could not find the WhatsApp image upload control');
+
+  await fileInput.setInputFiles({
+    name: media.fileName,
+    mimeType: media.mimeType,
+    buffer: media.buffer
+  });
+
+  const captionReady = await page.waitForFunction((selectors) => selectors.some((selector) => {
+    const nodes = Array.from(document.querySelectorAll(selector));
+    return nodes.some((node) => {
+      const style = window.getComputedStyle(node);
+      const rect = node.getBoundingClientRect();
+      return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 8 && rect.height > 8;
+    });
+  }), MEDIA_CAPTION_SELECTORS, { timeout: 10000 }).then(() => true).catch(() => false);
+  if (!captionReady || !await setMediaCaption(page, caption)) {
+    await page.keyboard.press('Escape').catch(() => null);
+    throw new Error('Could not prepare the WhatsApp image caption');
+  }
+
+  if (!await clickFirstVisible(page, MEDIA_SEND_BUTTON_SELECTORS)) {
+    throw new Error('Could not find the WhatsApp media send button');
+  }
+  const confirmed = await waitForOutgoingReplyConfirmation(page, caption, beforeState, Math.max(10000, SEND_CONFIRM_MS));
+  if (!confirmed) throw new Error('WhatsApp image send was not confirmed in the chat');
+  return true;
+}
+
 async function processOutbox(page, { recipient = '', maxSends = OUTBOX_SENDS_PER_LOOP } = {}) {
   const sendLimit = Math.min(
     OUTBOX_CLAIM_LIMIT,
@@ -2882,7 +3015,18 @@ async function processOutbox(page, { recipient = '', maxSends = OUTBOX_SENDS_PER
         throw new Error(`Could not open chat for ${item.recipient}`);
       }
 
-      await typeAndSendReply(page, item.text);
+      let mediaSent = false;
+      if (item.media_type === 'image' && item.media_url) {
+        try {
+          await typeAndSendImageReply(page, item.media_url, item.caption || item.text);
+          mediaSent = true;
+        } catch (mediaError) {
+          log(`property image unavailable for ${item.recipient}; sending the clean text card instead: ${mediaError.message || mediaError}`);
+          await typeAndSendReply(page, item.text);
+        }
+      } else {
+        await typeAndSendReply(page, item.text);
+      }
       rememberRecentlySentReply(item);
       log(`sent queued reply to ${item.recipient}`);
 
@@ -2890,7 +3034,8 @@ async function processOutbox(page, { recipient = '', maxSends = OUTBOX_SENDS_PER
         method: 'POST',
         body: {
           client_id: CLIENT_ID,
-          bridge_message_id: `webbridge-out:${Date.now()}:${item.id}`
+          bridge_message_id: `webbridge-out:${Date.now()}:${item.id}`,
+          media_sent: mediaSent
         }
       });
       sent += 1;

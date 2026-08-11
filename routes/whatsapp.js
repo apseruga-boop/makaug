@@ -64,6 +64,10 @@ const { storeDataUrl } = require('../services/cloudMediaStorageService');
 const { buildUgNlisAssistantReply } = require('../services/ugnlisLandVerificationService');
 const { buildListingReference } = require('../services/listingReferenceService');
 const {
+  buildWhatsappPropertyCard,
+  propertyIdFromWhatsappReply
+} = require('../services/whatsappPropertyCardService');
+const {
   createOwnerEditToken,
   hashOwnerEditToken,
   ownerEditTokenExpiry
@@ -4327,12 +4331,40 @@ async function queueWhatsappWebBridgeAutoReply({
   source = 'whatsapp_runtime',
   actorId = 'system'
 }) {
-  const text = String(message || '').trim();
+  let text = String(message || '').trim();
   if (!text) return null;
+  let mediaUrl = '';
+  let mediaType = 'text';
+  const propertyId = propertyIdFromWhatsappReply(text, HOME_URL);
+  if (propertyId) {
+    const result = await db.query(
+      `SELECT p.id, p.title, p.listing_type, p.transaction_type, p.district, p.area,
+              p.price, p.price_period, p.extra_fields, img.url AS primary_image_url
+       FROM properties p
+       LEFT JOIN LATERAL (
+         SELECT CASE WHEN url ~* '^https?://' AND length(url) < 2000 THEN url ELSE NULL END AS url
+         FROM property_images
+         WHERE property_id = p.id
+         ORDER BY is_primary DESC, sort_order ASC, created_at ASC
+         LIMIT 1
+       ) img ON TRUE
+       WHERE p.id = $1 AND p.status = 'approved'
+       LIMIT 1`,
+      [propertyId]
+    );
+    if (result.rows[0]) {
+      const card = buildWhatsappPropertyCard(result.rows[0], { homeUrl: HOME_URL });
+      text = card.caption;
+      mediaUrl = card.imageUrl;
+      mediaType = mediaUrl ? 'image' : 'text';
+    }
+  }
 
   return queueWhatsappWebBridgeMessage({
     recipient: phone,
     text,
+    mediaUrl,
+    mediaType,
     source,
     actorId,
     metadata: {
@@ -6042,6 +6074,15 @@ async function formatNoMatchOrFallbackReply({
 }
 
 function formatPropertySearchMessage(lang, rows, location, searchType) {
+  void lang;
+  void location;
+  void searchType;
+  const row = Array.isArray(rows) ? rows[0] : null;
+  if (!row) return `No approved properties are available right now.\n🔎 View all properties: ${HOME_URL}`;
+  return buildWhatsappPropertyCard(row, { homeUrl: HOME_URL }).caption;
+}
+
+function formatPropertySearchMessageLegacy(lang, rows, location, searchType) {
   const code = resolveLangCode(lang);
   const cardCopy = {
     en: {
@@ -9155,6 +9196,9 @@ router.get('/web-bridge/outbox', async (req, res) => {
       id: row.id,
       recipient: row.user_phone,
       text: row.payload?.text || '',
+      caption: row.payload?.caption || row.payload?.text || '',
+      media_url: row.payload?.media_url || '',
+      media_type: row.payload?.media_type || 'text',
       source: row.metadata?.source || 'system',
       actor_id: row.metadata?.actor_id || null,
       metadata: row.metadata || {},
@@ -9185,16 +9229,19 @@ router.post('/web-bridge/outbox/:id/sent', async (req, res) => {
   }
 
   const replyText = String(updated.payload?.text || '').trim();
+  const replyMediaUrl = String(updated.payload?.media_url || '').trim();
   const source = String(updated.metadata?.source || '').trim().toLowerCase();
 
   await logWhatsappMessage({
     userPhone: updated.user_phone,
     waMessageId: req.body.bridge_message_id || null,
     direction: 'outbound',
-    messageType: 'text',
+    messageType: replyMediaUrl ? 'image' : 'text',
     payload: {
       provider: 'web_bridge',
       reply: replyText,
+      media_url: replyMediaUrl || null,
+      media_sent: req.body.media_sent === true || String(req.body.media_sent || '').toLowerCase() === 'true',
       source: source || 'web_bridge',
       bridge_client_id: req.body.client_id || null
     }
