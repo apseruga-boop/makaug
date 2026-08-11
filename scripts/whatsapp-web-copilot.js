@@ -3204,6 +3204,17 @@ async function waitForMediaSendConfirmation(page, caption, beforeState, timeoutM
   return false;
 }
 
+async function waitForMediaCaptionReady(page, timeoutMs = 10000) {
+  return page.waitForFunction((selectors) => selectors.some((selector) => {
+    const nodes = Array.from(document.querySelectorAll(selector));
+    return nodes.some((node) => {
+      const style = window.getComputedStyle(node);
+      const rect = node.getBoundingClientRect();
+      return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 8 && rect.height > 8;
+    });
+  }), MEDIA_CAPTION_SELECTORS, { timeout: timeoutMs }).then(() => true).catch(() => false);
+}
+
 async function typeAndSendImageReply(page, mediaUrl, caption) {
   const media = await fetchOutboundPropertyImage(mediaUrl);
   const beforeState = await getOutgoingMessageState(page).catch(() => ({ count: 0, recentTexts: [] }));
@@ -3219,47 +3230,25 @@ async function typeAndSendImageReply(page, mediaUrl, caption) {
   const drawerInput = await findPhotoVideoMenuFileInput(page);
   const chooserPromise = page.waitForEvent('filechooser', { timeout: 4000 }).catch(() => null);
   const photosOpened = await clickPhotoVideoMenuItem(page);
-  if (!photosOpened) {
-    const controls = await describeVisibleMediaControls(page);
-    log(`Photos & videos menu item unavailable: ${JSON.stringify(controls)}`);
-    throw new Error('Could not select Photos & videos in WhatsApp');
+  let captionReady = false;
+  if (photosOpened) {
+    const fileChooser = await chooserPromise;
+    const fileInput = fileChooser ? null : ((await findAttachedFileInput(page)) || drawerInput);
+    if (fileChooser || fileInput) {
+      const upload = {
+        name: media.fileName,
+        mimeType: media.mimeType,
+        buffer: media.buffer
+      };
+      if (fileChooser) await fileChooser.setFiles(upload);
+      else await fileInput.setInputFiles(upload);
+      captionReady = await waitForMediaCaptionReady(page);
+    }
   }
-  const fileChooser = await chooserPromise;
-  const fileInput = fileChooser ? null : ((await findAttachedFileInput(page)) || drawerInput);
-  if (!fileChooser && !fileInput) throw new Error('Could not find the WhatsApp image upload control');
-
-  const upload = {
-    name: media.fileName,
-    mimeType: media.mimeType,
-    buffer: media.buffer
-  };
-  if (fileChooser) {
-    await fileChooser.setFiles(upload);
-  } else {
-    await fileInput.setInputFiles(upload);
-  }
-
-  let captionReady = await page.waitForFunction((selectors) => selectors.some((selector) => {
-    const nodes = Array.from(document.querySelectorAll(selector));
-    return nodes.some((node) => {
-      const style = window.getComputedStyle(node);
-      const rect = node.getBoundingClientRect();
-      return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 8 && rect.height > 8;
-    });
-  }), MEDIA_CAPTION_SELECTORS, { timeout: 10000 }).then(() => true).catch(() => false);
   if (!captionReady) {
     await page.keyboard.press('Escape').catch(() => null);
     const pasted = await pasteImageIntoComposer(page, media);
-    if (pasted) {
-      captionReady = await page.waitForFunction((selectors) => selectors.some((selector) => {
-        const nodes = Array.from(document.querySelectorAll(selector));
-        return nodes.some((node) => {
-          const style = window.getComputedStyle(node);
-          const rect = node.getBoundingClientRect();
-          return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 8 && rect.height > 8;
-        });
-      }), MEDIA_CAPTION_SELECTORS, { timeout: 10000 }).then(() => true).catch(() => false);
-    }
+    if (pasted) captionReady = await waitForMediaCaptionReady(page);
   }
   if (!captionReady || !await setMediaCaption(page, caption)) {
     const controls = await describeVisibleMediaControls(page);
