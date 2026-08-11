@@ -4,6 +4,11 @@ const BrandConfig = Object.freeze({
   legalOrInternalName: "makaug",
   tagline: "Uganda Property"
 });
+const ACTIVE_LOCATION_COUNTRY = Object.freeze({
+  countryCode: String(window.__COUNTRY_CONFIG__?.countryCode || "UG").trim().toUpperCase(),
+  countryName: String(window.__COUNTRY_CONFIG__?.countryName || "Uganda").trim() || "Uganda"
+});
+const ACTIVE_LOCATION_COUNTRY_CODE_LOWER = ACTIVE_LOCATION_COUNTRY.countryCode.toLowerCase();
 const TIKTOK_MANUAL_REVIEW_READY_MARKER = "tiktok-manual-review-ready-20260802";
 const publicBrand = () => BrandConfig.productDisplayName;
 const normalizeType = (t) => {
@@ -24177,7 +24182,7 @@ async function adminReviewFindAddressOrPlace(options = {}) {
   adminReviewSetAddressSearchStatus(auto ? "Auto-filling the closest matching place in Uganda..." : "Finding the nearest matching place in Uganda...", "blue");
   let point = null;
   try {
-    point = await geocodeWithGoogle(uniqueTextParts([query, "Uganda"]).join(", "));
+    point = await geocodeWithGoogle(uniqueTextParts([query, ACTIVE_LOCATION_COUNTRY.countryName]).join(", "));
     if (point) {
       point.provider = "google";
       point.confidence = 0.75;
@@ -24200,7 +24205,7 @@ async function adminReviewFindAddressOrPlace(options = {}) {
       : "Location not recognised — pin set but region/district/area could NOT be auto-filled.", "amber");
     return false;
   }
-  const canonicalResolution = await resolveUgandaLocationWithLabelFallback(query, point.label || "");
+  const canonicalResolution = await resolveUgandaLocationWithLabelFallback(query, point.canonicalQuery || "");
   const canonicalLocation = canonicalResolution.status === "matched" ? canonicalResolution.location : null;
   if (input && point.label) input.value = point.label;
   adminSetReviewEditValue("admin-review-address-edit", point.label || query);
@@ -27944,6 +27949,28 @@ function extractStreetNameFromGoogleResult(result = {}) {
   return normalizeStreetCandidate([streetNumber, route || premise].filter(Boolean).join(" ") || route || premise);
 }
 
+function extractCanonicalLocationQueryFromGoogleResult(result = {}) {
+  const components = Array.isArray(result?.address_components) ? result.address_components : [];
+  const localityTypes = [
+    "neighborhood",
+    "sublocality_level_4",
+    "sublocality_level_3",
+    "sublocality_level_2",
+    "sublocality_level_1",
+    "sublocality",
+    "locality",
+    "postal_town",
+    "administrative_area_level_3",
+    "administrative_area_level_2"
+  ];
+  for (const type of localityTypes) {
+    const match = components.find((item) => Array.isArray(item.types) && item.types.includes(type));
+    const value = String(match?.long_name || match?.short_name || "").trim();
+    if (value) return value;
+  }
+  return "";
+}
+
 	    function extractStreetNameFromNominatimAddress(address = {}) {
 	      return normalizeStreetCandidate(
 	        address?.road
@@ -28091,7 +28118,7 @@ function resizeListMap(map, provider, center = null, zoom = null, delay = 120) {
 
 function buildHierarchyLocationQuery({ region = "", district = "", city = "", neighborhood = "", area = "" } = {}) {
   const areaPart = area && area !== neighborhood && area !== city ? area : "";
-  return uniqueTextParts([neighborhood, areaPart, city, district, region, "Uganda"]).join(", ");
+  return uniqueTextParts([neighborhood, areaPart, city, district, region, ACTIVE_LOCATION_COUNTRY.countryName]).join(", ");
 }
 
 function distanceBetweenPointsKm(a, b) {
@@ -28146,7 +28173,7 @@ async function getGooglePlacePredictions(query) {
   return new Promise((resolve) => {
     service.getPlacePredictions({
       input: query,
-      componentRestrictions: { country: "ug" },
+      componentRestrictions: { country: ACTIVE_LOCATION_COUNTRY_CODE_LOWER },
       types: ["geocode"]
     }, (predictions, status) => {
       if (status !== "OK" || !Array.isArray(predictions)) {
@@ -28168,7 +28195,7 @@ async function geocodeWithGoogle(query, options = {}) {
   return new Promise((resolve) => {
     const request = {
       address: query,
-      componentRestrictions: { country: "UG" }
+      componentRestrictions: { country: ACTIVE_LOCATION_COUNTRY.countryCode }
     };
     if (options.bounds) request.bounds = options.bounds;
     geocoder.geocode(request, (results, status) => {
@@ -28187,6 +28214,7 @@ async function geocodeWithGoogle(query, options = {}) {
         lat: loc.lat(),
         lng: loc.lng(),
         label: results[0].formatted_address || query,
+        canonicalQuery: extractCanonicalLocationQueryFromGoogleResult(results[0]),
         placeId: results[0].place_id || "",
         streetName
       });
@@ -28208,9 +28236,9 @@ function setLpHiddenValue(id, value = "") {
 }
 
 async function geocodeWithNominatim(query) {
-  const q = uniqueTextParts([query, "Uganda"]).join(", ");
+  const q = uniqueTextParts([query, ACTIVE_LOCATION_COUNTRY.countryName]).join(", ");
   try {
-    const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&addressdetails=1&countrycodes=ug&q=${encodeURIComponent(q)}`;
+    const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&addressdetails=1&countrycodes=${encodeURIComponent(ACTIVE_LOCATION_COUNTRY_CODE_LOWER)}&q=${encodeURIComponent(q)}`;
     const response = await fetch(url, { headers: { Accept: "application/json" } });
     if (!response.ok) return null;
     const rows = await response.json();
@@ -28224,6 +28252,17 @@ async function geocodeWithNominatim(query) {
       lat,
       lng,
       label: row?.display_name || query,
+      canonicalQuery: String(
+        row?.address?.neighbourhood
+        || row?.address?.suburb
+        || row?.address?.quarter
+        || row?.address?.village
+        || row?.address?.town
+        || row?.address?.city
+        || row?.address?.municipality
+        || row?.address?.county
+        || ""
+      ).trim(),
       placeId: row?.place_id ? `osm:${row.place_id}` : "",
       streetName,
       provider: "nominatim",
@@ -28252,7 +28291,7 @@ async function applyLpAddressPlaceResult(point, query = "") {
   setLpHiddenValue("lp-location-confidence", point.confidence != null ? String(point.confidence) : "0.65");
   setLpResolvedLocationLabel(label);
   setListPinCoords(point.lat, point.lng, true, true);
-  const canonicalLocation = await resolveLpCanonicalLocation(query, label);
+  const canonicalLocation = await resolveLpCanonicalLocation(query, point.canonicalQuery || "");
   const confirmEl = document.getElementById("lp-location-confirm");
   if (confirmEl) confirmEl.checked = false;
   updateLpLocationConfirmButton();
@@ -28310,7 +28349,7 @@ async function findLpAddressOrPlace() {
   ensureListPinMap();
   let point = null;
   try {
-    point = await geocodeWithGoogle(uniqueTextParts([query, "Uganda"]).join(", "));
+    point = await geocodeWithGoogle(uniqueTextParts([query, ACTIVE_LOCATION_COUNTRY.countryName]).join(", "));
     if (point) {
       point.provider = "google";
       point.confidence = 0.75;
@@ -28497,9 +28536,9 @@ async function resolveHierarchyMapAnchor({ region = "", district = "", city = ""
 
   const queries = Array.from(new Set([
     buildHierarchyLocationQuery({ region, district, city, neighborhood, area }),
-    uniqueTextParts([city, district, region, "Uganda"]).join(", "),
-    uniqueTextParts([district, region, "Uganda"]).join(", "),
-    uniqueTextParts([district, "Uganda"]).join(", ")
+    uniqueTextParts([city, district, region, ACTIVE_LOCATION_COUNTRY.countryName]).join(", "),
+    uniqueTextParts([district, region, ACTIVE_LOCATION_COUNTRY.countryName]).join(", "),
+    uniqueTextParts([district, ACTIVE_LOCATION_COUNTRY.countryName]).join(", ")
   ].filter(Boolean)));
 
   for (const query of queries) {
@@ -28513,7 +28552,7 @@ async function resolveHierarchyMapAnchor({ region = "", district = "", city = ""
 
   for (const query of queries) {
     try {
-      const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=ug&q=${encodeURIComponent(query)}`;
+      const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=${encodeURIComponent(ACTIVE_LOCATION_COUNTRY_CODE_LOWER)}&q=${encodeURIComponent(query)}`;
       const response = await fetch(url, { headers: { Accept: "application/json" } });
       if (!response.ok) continue;
       const rows = await response.json();
@@ -28951,7 +28990,7 @@ async function resolveListPinLocation(lat, lng) {
         hydrateStreetSuggestionsForSelection({ lat: Number(lat), lng: Number(lng) });
         return;
       }
-      const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}&zoom=18&addressdetails=1&countrycodes=ug`;
+      const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}&zoom=18&addressdetails=1&countrycodes=${encodeURIComponent(ACTIVE_LOCATION_COUNTRY_CODE_LOWER)}`;
       const response = await fetch(url, { headers: { Accept: "application/json" } });
       if (!response.ok) throw new Error(`Reverse geocode failed (${response.status})`);
       const data = await response.json();
@@ -29004,11 +29043,11 @@ async function geocodeListAddressToMap(anchorCenter = null) {
     const reqSeq = ++lpAddressGeoSeq;
     try {
       const hierarchyAnchor = anchorCenter || await resolveHierarchyMapAnchor({ region, district, city, neighborhood, area: lpVal("lp-area") });
-      const query = uniqueTextParts([streetName, address, neighborhood, city, district, region, "Uganda"]).join(", ");
+      const query = uniqueTextParts([streetName, address, neighborhood, city, district, region, ACTIVE_LOCATION_COUNTRY.countryName]).join(", ");
       const googlePoint = await geocodeWithGoogle(query, {
         bounds: hierarchyAnchor ? buildGoogleBoundsFromCenter(hierarchyAnchor, streetName ? 22 : 35) : null
       });
-      const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=ug&q=${encodeURIComponent(query)}`;
+      const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=${encodeURIComponent(ACTIVE_LOCATION_COUNTRY_CODE_LOWER)}&q=${encodeURIComponent(query)}`;
       if (googlePoint && pointMatchesHierarchyAnchor(googlePoint, hierarchyAnchor, streetName ? 45 : 75)) {
         if (reqSeq !== lpAddressGeoSeq) return;
         setListPinCoords(googlePoint.lat, googlePoint.lng, true, true);
@@ -29049,13 +29088,13 @@ async function geocodeListHierarchyToMap(anchorCenter = null) {
     const reqSeq = ++lpHierarchyGeoSeq;
     try {
       const areaPart = area && area !== neighborhood ? area : "";
-      const query = uniqueTextParts([streetName, neighborhood, areaPart, city, district, region, "Uganda"]).join(", ");
+      const query = uniqueTextParts([streetName, neighborhood, areaPart, city, district, region, ACTIVE_LOCATION_COUNTRY.countryName]).join(", ");
       if (!query) return;
       const hierarchyAnchor = anchorCenter || await resolveHierarchyMapAnchor({ region, district, city, neighborhood, area });
       const googlePoint = await geocodeWithGoogle(query, {
         bounds: hierarchyAnchor ? buildGoogleBoundsFromCenter(hierarchyAnchor, streetName ? 20 : 30) : null
       });
-      const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=ug&q=${encodeURIComponent(query)}`;
+      const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=${encodeURIComponent(ACTIVE_LOCATION_COUNTRY_CODE_LOWER)}&q=${encodeURIComponent(query)}`;
       if (googlePoint && pointMatchesHierarchyAnchor(googlePoint, hierarchyAnchor, streetName ? 40 : 70)) {
         if (reqSeq !== lpHierarchyGeoSeq) return;
         setListPinCoords(googlePoint.lat, googlePoint.lng, true, true);

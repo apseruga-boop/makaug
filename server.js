@@ -191,6 +191,8 @@ app.get('/api/version', (_req, res) => {
       'canonical-location-source-review-115',
       'master-data-integrity-116',
       'shared-uganda-location-resolver-coverage',
+      'location-query-normalization-prominence-20260811',
+      'shared-country-location-query-normalization-20260811',
       'whatsapp-shared-location-resolver',
       'prelaunch-backlog-gates',
       'whatsapp-property-card-v2',

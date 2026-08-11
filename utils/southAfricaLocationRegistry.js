@@ -1,6 +1,10 @@
 'use strict';
 
 const gazetteer = require('./southAfricaLocationGazetteer.generated.json');
+const {
+  locationQueryAttempts,
+  normalizeLocationQueryCandidates
+} = require('./locationQueryNormalization');
 
 const PROVINCES = Object.freeze([
   'Western Cape', 'Gauteng', 'KwaZulu-Natal', 'Eastern Cape', 'Free State',
@@ -32,6 +36,13 @@ provinceByKey.set('north west province', 'North West');
 
 function normalizeDistrict(value = '') {
   return provinceByKey.get(normalizeLocationKey(value).replace(/\s+province$/, '')) || '';
+}
+
+function southAfricaLocationQueryAttempts(value = '') {
+  return locationQueryAttempts(value, {
+    countryCode: 'ZA',
+    normalizeKey: normalizeLocationKey
+  });
 }
 
 function entryKey(province, city, suburb = '') {
@@ -217,16 +228,24 @@ const prominentExactDefaults = new Map([
   ['jbay', entryKey('Eastern Cape', 'Jeffreys Bay')]
 ]);
 
-function exactCandidates(value = '', suppliedProvince = '') {
+function provinceHintFromQuery(value = '', suppliedProvince = '') {
+  const supplied = normalizeDistrict(suppliedProvince);
+  if (supplied) return supplied;
+  return String(value || '')
+    .split(',')
+    .map(normalizeDistrict)
+    .find(Boolean) || '';
+}
+
+function exactCandidates(value = '', suppliedProvince = '', options = {}) {
   const raw = String(value || '').trim();
-  const fullKey = normalizeLocationKey(raw);
-  const firstKey = normalizeLocationKey(raw.split(',')[0]);
-  const provinceHint = normalizeDistrict(suppliedProvince)
-    || raw.split(',').slice(1).map(normalizeDistrict).find(Boolean)
-    || '';
+  const needle = normalizeLocationKey(raw);
+  const provinceHint = normalizeDistrict(suppliedProvince);
+  if (!needle || (options.noiseStripped && normalizeDistrict(raw))) return [];
   const matches = aliasRows
-    .filter((row) => row.aliasKey === fullKey || row.aliasKey === firstKey)
+    .filter((row) => row.aliasKey === needle)
     .filter((row) => !provinceHint || row.entry.province === provinceHint)
+    .filter((row) => !(options.noiseStripped && row.entry.level === 'province'))
     .map((row) => row.entry);
   const candidates = Array.from(new Map(matches.map((entry) => [entry.key, entry])).values());
   const grouped = new Map();
@@ -236,15 +255,15 @@ function exactCandidates(value = '', suppliedProvince = '') {
     if (!grouped.has(groupKey)) grouped.set(groupKey, []);
     grouped.get(groupKey).push(entry);
   }
-  const preferredKey = prominentExactDefaults.get(firstKey);
+  const preferredKey = prominentExactDefaults.get(needle);
   const collapsed = Array.from(grouped.values()).map((entries) => {
     const preferred = preferredKey ? entries.find((entry) => entry.key === preferredKey) : null;
     if (preferred) return preferred;
     return entries.sort((a, b) => {
       const score = (entry) => (
         (entry.level === 'city' ? 100 : entry.level === 'suburb' ? 50 : 10)
-        + (normalizeLocationKey(entry.city) === firstKey ? 20 : 0)
-        + (normalizeLocationKey(entry.name) === firstKey ? 10 : 0)
+        + (normalizeLocationKey(entry.city) === needle ? 20 : 0)
+        + (normalizeLocationKey(entry.name) === needle ? 10 : 0)
         + (/\bnu$/i.test(entry.city || '') ? -5 : 0)
       );
       return score(b) - score(a) || a.key.localeCompare(b.key);
@@ -265,19 +284,29 @@ function sameAdministrativePlace(left = {}, right = {}) {
 }
 
 function resolveCanonicalSouthAfricaLocation(value = '', suppliedProvince = '') {
-  const candidates = exactCandidates(value, suppliedProvince);
-  if (!candidates.length) return { status: 'unmatched', match: null, candidates: [], confidence: 0, match_type: 'unmatched' };
-  const inputKey = normalizeLocationKey(String(value || '').split(',')[0]);
+  const provinceHint = provinceHintFromQuery(value, suppliedProvince);
+  const attempts = southAfricaLocationQueryAttempts(value);
+  let candidates = [];
+  let matchedAttempt = null;
+  for (const attempt of attempts) {
+    candidates = exactCandidates(attempt.value, provinceHint, { noiseStripped: attempt.noise_stripped });
+    if (candidates.length) {
+      matchedAttempt = attempt;
+      break;
+    }
+  }
+  if (!candidates.length) return { status: 'unmatched', match: null, candidates: [], confidence: 0, match_type: 'unmatched', matched_query: null };
+  const inputKey = matchedAttempt?.normalized || '';
   const preferredKey = prominentExactDefaults.get(inputKey);
   const preferred = preferredKey ? candidates.find((entry) => entry.key === preferredKey) : null;
   if (preferred) {
-    return { status: 'matched', match: clone(preferred), candidates: candidates.map(clone), confidence: 1, match_type: 'exact_alias' };
+    return { status: 'matched', match: clone(preferred), candidates: candidates.map(clone), confidence: 1, match_type: 'exact_alias', matched_query: matchedAttempt.value };
   }
   const keys = new Set(candidates.map((entry) => entry.key));
   if (keys.size !== 1) {
-    return { status: 'ambiguous', match: null, candidates: candidates.map(clone), confidence: 0, match_type: 'ambiguous_exact_alias' };
+    return { status: 'ambiguous', match: null, candidates: candidates.map(clone), confidence: 0, match_type: 'ambiguous_exact_alias', matched_query: matchedAttempt.value };
   }
-  return { status: 'matched', match: clone(candidates[0]), candidates: candidates.map(clone), confidence: 1, match_type: 'exact_alias' };
+  return { status: 'matched', match: clone(candidates[0]), candidates: candidates.map(clone), confidence: 1, match_type: 'exact_alias', matched_query: matchedAttempt.value };
 }
 
 function aliasAppears(aliasKey, valueKey) {
@@ -365,14 +394,16 @@ function canonicalLocationOptions() {
 }
 
 function canonicalLocationSuggestions(query = '', counts = new Map(), limit = 8) {
-  const needle = normalizeLocationKey(query);
-  if (!needle) return [];
+  const attempts = southAfricaLocationQueryAttempts(query);
+  if (!attempts.length) return [];
   const exact = resolveCanonicalSouthAfricaLocation(query);
+  const exactQueryKey = normalizeLocationKey(exact.matched_query || '');
   const matchedEntries = new Map();
   for (const row of aliasRows) {
-    const isExact = row.aliasKey === needle;
-    const isPrefix = !isExact && row.aliasKey.startsWith(needle);
-    const isContains = !isExact && !isPrefix && needle.length >= 3 && row.aliasKey.includes(needle);
+    const isExact = Boolean(exactQueryKey && row.aliasKey === exactQueryKey);
+    const searchable = exactQueryKey ? [] : attempts.map((attempt) => attempt.normalized);
+    const isPrefix = !isExact && searchable.some((needle) => row.aliasKey.startsWith(needle));
+    const isContains = !isExact && !isPrefix && searchable.some((needle) => needle.length >= 3 && row.aliasKey.includes(needle));
     if (!isExact && !isPrefix && !isContains) continue;
     const rank = isExact ? 3 : isPrefix ? 2 : 1;
     const existing = matchedEntries.get(row.entry.key);
@@ -488,6 +519,10 @@ module.exports = {
   isExcludedLocationOnly,
   normalizeDistrict,
   normalizeLocationKey,
+  normalizeLocationQueryCandidates: (value = '') => normalizeLocationQueryCandidates(value, {
+    countryCode: 'ZA',
+    normalizeKey: normalizeLocationKey
+  }),
   resolveCanonicalSouthAfricaLocation,
   resolveCanonicalSouthAfricaLocationFromText,
   resolveCanonicalUgandaLocation: resolveCanonicalSouthAfricaLocation,

@@ -50,6 +50,73 @@ for (const { place, province, resolution } of auditResults) {
   );
 }
 
+function resolutionFingerprint(resolution = {}) {
+  return {
+    status: resolution.status,
+    match: resolution.match?.key || null,
+    candidates: (resolution.candidates || []).map((entry) => entry.key).sort()
+  };
+}
+
+function suggestionFingerprint(suggestions = []) {
+  return suggestions.map((item) => ({
+    canonical_key: item.canonical_key,
+    match: item.match,
+    auto_resolvable: item.auto_resolvable,
+    did_you_mean: item.did_you_mean
+  }));
+}
+
+// Audit #2: every country-qualified form must preserve the exact result of the
+// bare 53-place battery, including the selected canonical key and province.
+for (const { place, province } of auditPlaces) {
+  const bare = registry.resolveCanonicalSouthAfricaLocation(place);
+  const bareSuggestions = registry.canonicalLocationSuggestions(place);
+  for (const qualified of [`${place}, South Africa`, `${place}, ZA`, `${place}, RSA`]) {
+    const resolution = registry.resolveCanonicalSouthAfricaLocation(qualified);
+    assert.deepEqual(resolutionFingerprint(resolution), resolutionFingerprint(bare), `${qualified} diverged from bare resolution`);
+    assert.equal(resolution.match?.province, province, `${qualified} resolved to the wrong province`);
+    assert.deepEqual(
+      suggestionFingerprint(registry.canonicalLocationSuggestions(qualified)),
+      suggestionFingerprint(bareSuggestions),
+      `${qualified} diverged from bare suggestions`
+    );
+  }
+}
+
+const daveSuffixBattery = [
+  'Sea Point', 'Sandton', 'Umhlanga', 'Camps Bay', 'Centurion', 'Ballito',
+  'Stellenbosch', 'Gqeberha', 'Nelspruit', 'Durban', 'Cape Town',
+  'Johannesburg', 'Pretoria', 'Soweto', 'Randburg', 'Midrand',
+  'Bloemfontein', 'Polokwane', 'Kimberley', 'Rustenburg', 'Claremont',
+  'Constantia', 'Milnerton', 'Westville', 'Menlyn', 'George', 'Paarl',
+  'Mthatha', 'Welkom', 'Tzaneen'
+];
+assert.equal(daveSuffixBattery.length, 30);
+for (const place of daveSuffixBattery) {
+  const bare = registry.resolveCanonicalSouthAfricaLocation(place);
+  const suffixed = registry.resolveCanonicalSouthAfricaLocation(`${place}, South Africa`);
+  assert.deepEqual(resolutionFingerprint(suffixed), resolutionFingerprint(bare), `${place} suffix parity failed`);
+}
+assert.equal(daveSuffixBattery.filter((place) => registry.resolveCanonicalSouthAfricaLocation(place).status === 'matched').length, 28);
+assert.equal(daveSuffixBattery.filter((place) => registry.resolveCanonicalSouthAfricaLocation(place).status === 'ambiguous').length, 2);
+
+const seaPointFormatted = registry.resolveCanonicalSouthAfricaLocation('12 Main Road, Sea Point, Cape Town, Western Cape, South Africa');
+assert.equal(seaPointFormatted.status, 'matched');
+assert.equal(seaPointFormatted.match.key, registry.resolveCanonicalSouthAfricaLocation('Sea Point').match.key);
+assert(!/main road|south africa/i.test(seaPointFormatted.matched_query), 'The matched canonical query must discard road/country noise');
+assert.deepEqual(
+  suggestionFingerprint(registry.canonicalLocationSuggestions('12 Main Road, Sea Point, Cape Town, Western Cape, South Africa')),
+  suggestionFingerprint(registry.canonicalLocationSuggestions('Sea Point')),
+  'The suggestion endpoint must consume the locality after discarding road/country noise'
+);
+for (const query of ['South Africa, Sandton', 'South Africa Sandton', 'Sandton South Africa', 'ZA Sandton', 'Sandton RSA']) {
+  assert.equal(registry.resolveCanonicalSouthAfricaLocation(query).match?.key, registry.resolveCanonicalSouthAfricaLocation('Sandton').match.key, `${query} affix stripping failed`);
+}
+for (const query of ['South Africa', 'ZA', 'RSA', 'Zzxq, South Africa']) {
+  assert.equal(registry.resolveCanonicalSouthAfricaLocation(query).status, 'unmatched', `${query} must remain blocked`);
+}
+
 const suggestionBatteryStartedAt = Date.now();
 for (const { place } of auditPlaces) registry.canonicalLocationSuggestions(place);
 const suggestionBatteryMs = Date.now() - suggestionBatteryStartedAt;
@@ -98,9 +165,30 @@ assert.equal(secondarySandton?.province, 'Limpopo', 'The secondary Sandton must 
 const fourways = registry.resolveCanonicalSouthAfricaLocation('Fourways');
 assert.equal(fourways.status, 'ambiguous', 'Fourways must remain ambiguous across distinct municipalities');
 assert.equal(new Set(fourways.candidates.map((entry) => entry.municipality)).size, 2);
+assert.deepEqual(
+  resolutionFingerprint(registry.resolveCanonicalSouthAfricaLocation('Fourways, South Africa')),
+  resolutionFingerprint(fourways),
+  'Country stripping must not bypass Fourways disambiguation'
+);
 
 const propertiesSource = fs.readFileSync(path.join(__dirname, '..', 'routes', 'properties.js'), 'utf8');
 assert(propertiesSource.includes('district: IS_SOUTH_AFRICA ? municipality : item.district'));
 assert(propertiesSource.includes('municipality,'));
+assert(propertiesSource.includes('matched_query: resolution.matched_query || null'));
+
+const sharedNormalizerSource = fs.readFileSync(path.join(__dirname, '..', 'utils', 'locationQueryNormalization.js'), 'utf8');
+const southAfricaRegistrySource = fs.readFileSync(path.join(__dirname, '..', 'utils', 'southAfricaLocationRegistry.js'), 'utf8');
+const ugandaRegistrySource = fs.readFileSync(path.join(__dirname, '..', 'utils', 'ugandaLocationRegistry.js'), 'utf8');
+assert(southAfricaRegistrySource.includes("require('./locationQueryNormalization')"));
+assert(ugandaRegistrySource.includes("require('./locationQueryNormalization')"));
+assert(sharedNormalizerSource.includes("ZA: Object.freeze(['south africa', 'za', 'rsa', 'republic of south africa'])"));
+assert(sharedNormalizerSource.includes("UG: Object.freeze(['uganda', 'ug', 'republic of uganda', 'east africa'])"));
+
+const ugandaRegistry = require('../utils/ugandaLocationRegistry');
+const bareKira = ugandaRegistry.resolveCanonicalUgandaLocation('Kira');
+for (const query of ['Kira, Uganda', 'Uganda, Kira', 'Kira UG', '12 Main Road, Kira, Wakiso, Uganda']) {
+  assert.deepEqual(resolutionFingerprint(ugandaRegistry.resolveCanonicalUgandaLocation(query)), resolutionFingerprint(bareKira), `${query} regressed Uganda suffix handling`);
+}
+assert.equal(ugandaRegistry.resolveCanonicalUgandaLocation('Zzxq, Uganda').status, 'unmatched');
 
 console.log('south-africa 53-place location audit tests passed');

@@ -128,6 +128,14 @@ assert(
   'Render Blueprint must use the early liveness bootstrap'
 );
 assert(zaJavaScript.includes('productDisplayName: "seshaikhaya.com"'));
+assert(zaJavaScript.includes('window.__COUNTRY_CONFIG__ = window.__COUNTRY_CONFIG__ ||'));
+assert(zaJavaScript.includes('componentRestrictions: { country: ACTIVE_LOCATION_COUNTRY.countryCode }'));
+assert(zaJavaScript.includes('componentRestrictions: { country: ACTIVE_LOCATION_COUNTRY_CODE_LOWER }'));
+assert(zaJavaScript.includes('canonicalQuery: extractCanonicalLocationQueryFromGoogleResult(results[0])'));
+assert(zaJavaScript.includes('resolveLpCanonicalLocation(query, point.canonicalQuery || "")'));
+assert(!zaJavaScript.includes('componentRestrictions: { country: "UG" }'));
+assert(!zaJavaScript.includes('componentRestrictions: { country: "ug" }'));
+assert(!zaJavaScript.includes('countrycodes=ug'));
 assert(zaJavaScript.includes('let activeCur = "ZAR"'));
 assert(zaJavaScript.includes('const PROPERTIES = [];'));
 assert(zaJavaScript.includes('const BROKERS = [];'));
