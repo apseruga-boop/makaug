@@ -2,17 +2,20 @@
 
 Status: active launch track, opened 11 August 2026.
 
-Current state: the application, staging infrastructure specification and local
-release proof are complete. Arthur authorised a hard infrastructure cap of
-approximately USD 13/month on 11 August 2026. Render's live checkout priced a
-Starter web service plus the database at USD 17.50/month, so the authorised
-configuration uses one free staging web service and one isolated paid South
-Africa PostgreSQL database. Production, workers, custom domains, DNS changes,
-social accounts and production listings remain separate gates.
+Current state: South Africa staging is provisioned and live at
+<https://seshaikhaya-staging-web.onrender.com>. Arthur authorised a hard
+infrastructure cap of USD 13/month on 11 August 2026. Render's live checkout
+priced a Starter web service plus the database at USD 17.50/month, so that plan
+was not deployed. The live authorised configuration costs USD 10.50/month: one
+free staging web service and one isolated Basic-256mb South Africa PostgreSQL
+database. Production, workers, custom domains, DNS changes, social accounts and
+production listings remain separate gates.
 
 The free web tier does not support Render pre-deploy commands. Staging therefore
 runs the existing guarded migrations during application startup. The ZA seed
-isolation guard still refuses a reset when user records exist.
+isolation guard still refuses a reset when user records exist. The free web
+service can cold-start slowly; process-heartbeat readiness prevents the proxy
+from presenting a stalled application as ready.
 
 Seshaikhaya is a `ZA` tenant of the shared country platform. It is not a fork of
 the Uganda application. The same server, listing engine, moderation workflow,
@@ -55,6 +58,16 @@ deployment to its previous Render commit instead.
 
 ## Release evidence (11 August 2026)
 
+- The Render Blueprint `seshaikhaya-staging` (`exs-d9thm3f40ujc73ec57fg`)
+  contains only project `prj-d9thn3e417fc73eesuog`, staging environment
+  `evm-d9thn3e417fc73eesupg`, free web service
+  `srv-d9thnf6417fc73eetrg0`, and database
+  `dpg-d9thn3e417fc73eesvfg-a`.
+- Deployment `dep-d9tioahsrm7s73ahechg` is live from verified runtime commit
+  `fd0dbac4c46dbcebca21099d48f42e0b7861453b`.
+- The isolated database is migrated through migration 116, contains 19 tables,
+  carries marker `za-separate-db-seed-isolation-v1-20260811`, and has zero
+  inherited property inventory.
 - The official 22,108-row place source expands to 33,876 canonical province,
   city and suburb nodes across all nine provinces.
 - Exact Sea Point resolution succeeds; ambiguous Fourways and unknown Banda
@@ -64,21 +77,30 @@ deployment to its previous Render commit instead.
 - The transformed public application compiles, TypeScript checks pass and the
   Vitest suite passes.
 - The Render Blueprint validates against Render's published Blueprint schema.
-- Browser QA proves English and isiZulu selection, ZAR price bands, South
-  Africa-only navigation and zero inherited listings.
+- Live public checks prove the homepage, application bundle, health and version
+  endpoints remain responsive in sequence. Property Value and Marketplace
+  endpoints remain absent.
+- Browser QA proves English and isiZulu selection, translated isiZulu
+  navigation, ZAR price bands, South Africa-only AI examples and zero inherited
+  listings. Uganda how-to, contribution and district residues are absent.
+- A free-tier cold start can exceed 50 seconds and a warm homepage response was
+  about nine seconds during launch QA. This is acceptable for staging, not a
+  production performance approval.
+- `npm audit` reports four inherited dependency findings: one moderate and
+  three high. They remain tracked and are not represented as resolved.
 
 ## Operator gates still open
 
-1. Provision only the authorised free staging web service and isolated paid
-   PostgreSQL database; do not add a worker, custom domain or production
-   service under this approval.
-2. Verify the resulting staging service and database migrations, then perform
-   Dave's authenticated moderation audit.
-3. Change GoDaddy DNS only after staging proof, then verify the production
-   service, custom domain and TLS independently.
-4. Moderate at least five current, source-backed listings with exact map pins
+1. Perform Dave's authenticated moderation audit against the live staging
+   service; public and database proof do not replace this gate.
+2. Change GoDaddy DNS only after production is separately authorised, then
+   verify the production service, custom domain and TLS independently.
+3. Moderate at least five current, source-backed listings with exact map pins
    and availability checks; do not count candidates as live listings.
-5. Social-account creation is explicitly on hold until the company email is
+4. Social-account creation is explicitly on hold until the company email is
    ready. Do not use a personal phone as the 2FA dependency.
-6. Connect a real WhatsApp number after test transport proof; until then the
+5. Connect a real WhatsApp number after test transport proof; until then the
    UI must continue to state that the number is pending.
+6. Keep the total live staging footprint at USD 10.50/month. Do not add a
+   worker, paid web service, custom domain or production service under the
+   current approval.
