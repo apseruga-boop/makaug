@@ -13,6 +13,7 @@ const {
 const registry = require('../utils/southAfricaLocationRegistry');
 const mortgageRoute = require('../routes/mortgage');
 const propertiesRoute = require('../routes/properties');
+const { buildPublicSeoSnapshot } = require('../services/publicSeoService');
 
 const root = path.resolve(__dirname, '..');
 const rawHtml = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
@@ -67,6 +68,14 @@ for (const forbidden of [
 }
 assert(!head.includes('marketplace-sitemap.xml'), 'ZA head leaked Marketplace sitemap');
 assert(!html.includes('256760112587'), 'ZA public HTML leaked Uganda WhatsApp number');
+for (const forbidden of ['makaug how-to video', 'Help makaug find', '>District<']) {
+  assert(!html.includes(forbidden), `ZA public HTML leaked ${forbidden}`);
+}
+
+const emptySeoSnapshot = buildPublicSeoSnapshot([]);
+assert(Object.values(emptySeoSnapshot.counts).every((counts) => counts.size === 0));
+assert(Object.values(emptySeoSnapshot.locationPriceFloors).every((prices) => prices.size === 0));
+assert.deepEqual(emptySeoSnapshot.properties, []);
 
 const rawJavaScript = fs.readFileSync(path.join(root, 'assets', 'makaug-app.js'), 'utf8');
 const zaJavaScript = applySouthAfricaJavaScript(rawJavaScript);

@@ -170,6 +170,20 @@ function buildPublicSeoSnapshot(rows = [], generatedAt = new Date().toISOString(
   const commercialTransactionCounts = new Map();
   const universityCounts = new Map();
   const properties = [];
+  if (!rows.length) {
+    return {
+      directCounts,
+      counts: emptyCounts(),
+      categoryTotals,
+      categoryPriceFloors,
+      locationPriceFloors: directPriceFloors,
+      facetCounts,
+      commercialTransactionCounts,
+      universityCounts,
+      properties,
+      generatedAt
+    };
+  }
   for (const row of rows) {
     const categories = publicCategoryKeysForRow(row);
     if (!categories.length) continue;
