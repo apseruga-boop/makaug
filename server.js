@@ -141,6 +141,18 @@ app.use(express.json({
   }
 }));
 
+// Render's process-level health probe must not wait on database work. The
+// existing /api/health route remains the deeper database readiness check.
+app.get('/healthz', (_req, res) => {
+  res.set('Cache-Control', 'no-store');
+  return res.status(200).json({
+    ok: true,
+    service: process.env.RENDER_SERVICE_NAME || ACTIVE_TENANT.brandName,
+    country_code: ACTIVE_COUNTRY_CODE,
+    started_at: RUNTIME_STARTED_AT
+  });
+});
+
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 1000,

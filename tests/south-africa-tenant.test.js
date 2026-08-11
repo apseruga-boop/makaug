@@ -70,6 +70,9 @@ assert(!html.includes('256760112587'), 'ZA public HTML leaked Uganda WhatsApp nu
 
 const rawJavaScript = fs.readFileSync(path.join(root, 'assets', 'makaug-app.js'), 'utf8');
 const zaJavaScript = applySouthAfricaJavaScript(rawJavaScript);
+const serverSource = fs.readFileSync(path.join(root, 'server.js'), 'utf8');
+assert(serverSource.includes("app.get('/healthz'"), 'Render process health endpoint is missing');
+assert(serverSource.includes("app.use('/api/health', healthRoutes)"), 'Database health endpoint must remain available');
 assert(zaJavaScript.includes('productDisplayName: "seshaikhaya.com"'));
 assert(zaJavaScript.includes('let activeCur = "ZAR"'));
 assert(zaJavaScript.includes('const PROPERTIES = [];'));
