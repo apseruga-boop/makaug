@@ -152,7 +152,8 @@ app.get('/api/version', (_req, res) => {
     started_at: RUNTIME_STARTED_AT,
     markers: [
       'canonical-location-source-review-115',
-      'master-data-integrity-116'
+      'master-data-integrity-116',
+      'shared-uganda-location-resolver-coverage'
     ]
   });
 });
@@ -1414,7 +1415,7 @@ async function start() {
   startMarketplaceDripScheduler(db);
   startFeaturedRotationScheduler(db);
 
-  app.listen(port, () => {
+  app.listen(port, '0.0.0.0', () => {
     logger.info(`makaug backend running on http://localhost:${port}`);
     schedulePublicCacheWarmup(`http://127.0.0.1:${port}`);
   });

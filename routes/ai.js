@@ -11,6 +11,11 @@ const {
   normalizeCommercialPropertyType,
 } = require('../utils/commercialClassification');
 const {
+  canonicalLocationSuggestions,
+  resolveCanonicalUgandaLocation,
+  resolveCanonicalUgandaLocationFromText,
+} = require('../utils/ugandaLocationRegistry');
+const {
   SUPPORTED_AI_LANGUAGES,
   extractNaturalPropertyQuery,
   heuristicNaturalPropertyQuery,
@@ -263,6 +268,69 @@ function prepareAssistantParsedQuery({ parsed = {}, intent = '', userMessage = '
       transactionType: transactionType || null
     },
     searchType
+  };
+}
+
+function resolveAssistantParsedLocation(parsed = {}, userMessage = '') {
+  const rawArea = cleanText(parsed?.area, 120);
+  const rawDistrict = cleanText(parsed?.district, 120);
+  const hasStructuredLocation = Boolean(rawArea || rawDistrict);
+  const resolution = rawArea
+    ? resolveCanonicalUgandaLocation(rawArea, rawDistrict)
+    : rawDistrict
+      ? resolveCanonicalUgandaLocation(rawDistrict)
+      : resolveCanonicalUgandaLocationFromText(userMessage);
+  if (resolution.status === 'matched') {
+    const location = resolution.match;
+    return {
+      parsed: {
+        ...parsed,
+        area: ['district', 'region'].includes(location.level) ? null : location.name,
+        district: location.district,
+        canonicalLocationId: location.key,
+      },
+      requested: hasStructuredLocation,
+      resolution: {
+        status: 'matched',
+        match: resolution.match_type,
+        confidence: 1,
+        canonical_location_id: location.key,
+        area: ['district', 'region'].includes(location.level) ? null : location.name,
+        district: location.district,
+        candidates: []
+      }
+    };
+  }
+  const suggestions = hasStructuredLocation
+    ? canonicalLocationSuggestions(rawArea || rawDistrict, new Map(), 5)
+      .filter((item) => item.auto_resolvable !== true)
+      .map((item) => ({
+        canonical_location_id: item.canonical_key,
+        area: item.level === 'district' ? null : item.location,
+        district: item.district,
+        match: item.match,
+        confidence: item.confidence
+      }))
+    : [];
+  return {
+    parsed: hasStructuredLocation ? { ...parsed, area: null, district: null, canonicalLocationId: null } : parsed,
+    requested: hasStructuredLocation,
+    resolution: {
+      status: resolution.status,
+      match: resolution.match_type,
+      confidence: 0,
+      canonical_location_id: null,
+      area: null,
+      district: null,
+      candidates: resolution.candidates.map((item) => ({
+        canonical_location_id: item.key,
+        area: item.level === 'district' ? null : item.name,
+        district: item.district,
+        match: resolution.match_type,
+        confidence: 0
+      })),
+      did_you_mean_suggestions: suggestions
+    }
   };
 }
 
@@ -1009,12 +1077,15 @@ router.post('/assistant-reply', async (req, res, next) => {
           model: 'heuristic-fast'
         };
       const prepared = prepareAssistantParsedQuery({ parsed: extracted, intent: effectiveIntent, userMessage });
-      const parsed = prepared.parsed;
+      const locationPrepared = resolveAssistantParsedLocation(prepared.parsed, userMessage);
+      const parsed = locationPrepared.parsed;
+      const locationResolution = locationPrepared.resolution;
+      const locationConfirmationRequired = locationPrepared.requested && locationResolution.status !== 'matched';
       const searchType = prepared.searchType;
       const publicPath = publicSearchPathForType(searchType);
       const hasSearchSignal = assistantHasSearchSignal(parsed, searchType, userMessage);
 
-      if (!hasSearchSignal) {
+      if (!hasSearchSignal || locationConfirmationRequired) {
         response = assistantFastResponse(
           assistantLeadText({ total: 0, parsed, searchType, language, needsInput: true }),
           language,
@@ -1043,6 +1114,8 @@ router.post('/assistant-reply', async (req, res, next) => {
           search_path: publicPath,
           zero_results: false,
           needs_search_input: true,
+          needs_location_confirmation: locationConfirmationRequired,
+          location_resolution: locationResolution,
           capture_available: false,
           match_quality: 'needs_input',
           exact_match: false,
@@ -1096,6 +1169,8 @@ router.post('/assistant-reply', async (req, res, next) => {
           searchPayload = {
             parsed_query: extracted,
             effective_query: effectiveParsed,
+            location_resolution: locationResolution,
+            needs_location_confirmation: false,
             relaxed_filters: relaxedFilters,
             filters: {
               search_type: searchType,
@@ -1134,6 +1209,8 @@ router.post('/assistant-reply', async (req, res, next) => {
           searchPayload = {
             parsed_query: extracted,
             effective_query: parsed,
+            location_resolution: locationResolution,
+            needs_location_confirmation: false,
             relaxed_filters: [],
             filters: {
               search_type: searchType,

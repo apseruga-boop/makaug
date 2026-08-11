@@ -102,12 +102,15 @@ const {
   canonicalLocationForRow,
   canonicalizeLocationRows,
   canonicalizeUgandaLocation,
+  canonicalLocationOptions,
   canonicalLocationRollupCounts,
   canonicalLocationSearchScope,
   canonicalLocationSuggestions,
+  resolveCanonicalUgandaLocation,
   normalizeDistrict,
   normalizeLocationKey
 } = require('../utils/ugandaLocationRegistry');
+const { regionForDistrict } = require('../utils/ugandaLocationHierarchy');
 
 const router = express.Router();
 const LAUNCH_SEED_LISTING_MARKERS = ['SOFT LAUNCH TEST - DELETE', 'QA TEST - DELETE'];
@@ -697,66 +700,20 @@ function approximatePublicPagination({ page, limit, offset, rowCount, hasMore })
   };
 }
 
-const PUBLIC_AREA_PIN_OVERRIDES = [
-  { name: 'Namasuba', district: 'Wakiso', latitude: 0.258, longitude: 32.558, aliases: ['Namasuba', 'Namasuba Kampala', 'Namasuba Entebbe Road', 'Rahim Foods', 'Rahim Foods Namasuba'] },
-  { name: 'Ndejje', district: 'Wakiso', latitude: 0.244, longitude: 32.553, aliases: ['Ndejje', 'Ndejje Lubugumu'] },
-  { name: 'Munyonyo', district: 'Kampala', latitude: 0.236, longitude: 32.623, aliases: ['Munyonyo', 'Munyonjo', 'Munyonyo Kampala', 'Munyonyo Uganda'] },
-  { name: 'Bujjuko Akright Estate', district: 'Wakiso', latitude: 0.374, longitude: 32.389, aliases: ['Bujjuko Akright', 'Bujuuko Akright', 'Akright', 'Bujjuko', 'Bujuuko'] },
-  { name: 'Kakiri', district: 'Wakiso', latitude: 0.409, longitude: 32.38, aliases: ['Kakiri', 'Kakiri Masulita', 'Kakiri Masulita Hoima Road', 'Hoima Road'] },
-  { name: 'Masulita', district: 'Wakiso', latitude: 0.51, longitude: 32.46, aliases: ['Masulita'] },
-  { name: 'Masindi', district: 'Masindi', latitude: 1.683, longitude: 31.715, aliases: ['Masindi', 'Masindi Town', 'Masindi Municipality'] },
-  { name: 'Kira', district: 'Wakiso', latitude: 0.3978, longitude: 32.6414, aliases: ['Kira', 'Kira Town'] },
-  { name: 'Kira-Mulawa', district: 'Wakiso', latitude: 0.412, longitude: 32.65, aliases: ['Kira-Mulawa', 'Kira Mulawa', 'Mulawa'] },
-  { name: 'Kira-Nsasa', district: 'Wakiso', latitude: 0.428, longitude: 32.665, aliases: ['Kira-Nsasa', 'Kira Nsasa', 'Nsasa'] },
-  { name: 'Nansana', district: 'Wakiso', latitude: 0.364, longitude: 32.52, aliases: ['Nansana', 'Nansana Municipality', 'Nansana Town'] },
-  { name: 'Namugongo', district: 'Wakiso', latitude: 0.363, longitude: 32.636, aliases: ['Namugongo'] },
-  { name: 'Najjera', district: 'Wakiso', latitude: 0.396, longitude: 32.615, aliases: ['Najjera', 'Najjeera'] },
-  { name: 'Kitende', district: 'Wakiso', latitude: 0.197, longitude: 32.535, aliases: ['Kitende'] },
-  { name: 'Kajjansi', district: 'Wakiso', latitude: 0.216, longitude: 32.552, aliases: ['Kajjansi', 'Kajansi'] },
-  { name: 'Bwebajja Akright', district: 'Wakiso', latitude: 0.198, longitude: 32.535, aliases: ['Bwebajja Akright', 'Bwebajja'] },
-  { name: 'Seguku', district: 'Wakiso', latitude: 0.247, longitude: 32.555, aliases: ['Seguku', 'Sseguku'] },
-  { name: 'Entebbe Road', district: 'Wakiso', latitude: 0.216, longitude: 32.552, aliases: ['Entebbe Road'] },
-  { name: 'Kasangati-Nangabo', district: 'Wakiso', latitude: 0.434, longitude: 32.61, aliases: ['Kasangati-Nangabo', 'Kasangati Nangabo', 'Kasangati', 'Nangabo'] },
-  { name: 'Katosi', district: 'Mukono', latitude: 0.181, longitude: 32.797, aliases: ['Katosi', 'Mpunge', 'Mpungwe', 'Katosi Mpunge'] },
-  { name: 'Kololo', district: 'Kampala', latitude: 0.356, longitude: 32.612, aliases: ['Kololo'] },
-  { name: 'Komamboga / Kyanja', district: 'Kampala', latitude: 0.394, longitude: 32.598, aliases: ['Komamboga', 'Kyanja', 'Komamboga Kyanja'] },
-  { name: 'Kyebando', district: 'Kampala', latitude: 0.368, longitude: 32.584, aliases: ['Kyebando'] },
-  { name: 'Kikoni', district: 'Kampala', latitude: 0.333, longitude: 32.565, aliases: ['Kikoni'] },
-  { name: 'Nakawa', district: 'Kampala', latitude: 0.334, longitude: 32.61, aliases: ['Nakawa'] },
-  { name: 'Ndeeba', district: 'Kampala', latitude: 0.301, longitude: 32.548, aliases: ['Ndeeba'] },
-  { name: 'Kikuubo', district: 'Kampala', latitude: 0.314, longitude: 32.576, aliases: ['Kikuubo'] }
-];
-
-function publicAreaAliasPattern(alias = '') {
-  return String(alias || '')
-    .trim()
-    .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    .replace(/\s+/g, '\\s+')
-    .replace(/-/g, '[-\\s]+');
-}
-
-function publicLocationOverrideFromText(value = '') {
-  const haystack = cleanText(value);
-  if (!haystack) return null;
-  const sorted = PUBLIC_AREA_PIN_OVERRIDES
-    .flatMap((point) => (point.aliases || [point.name]).map((alias) => ({ ...point, alias })))
-    .sort((a, b) => String(b.alias || '').length - String(a.alias || '').length);
-  for (const point of sorted) {
-    const pattern = publicAreaAliasPattern(point.alias);
-    if (!pattern) continue;
-    if (new RegExp(`(^|[^a-z0-9])${pattern}([^a-z0-9]|$)`, 'i').test(haystack)) return point;
-  }
-  return null;
-}
-
 function publicLocationOverrideForListing(row = {}, extra = row.extra_fields || {}) {
-  return publicLocationOverrideFromText([
-    row.area,
-    row.address,
-    extra.resolved_location_label,
-    row.title,
-    row.description
-  ].filter(Boolean).join(' '));
+  const canonicalId = row.canonical_location_id
+    || extra.canonical_location_id
+    || row.admin_extra_fields?.canonical_location_id;
+  const canonicalLocation = canonicalLocationByKey(canonicalId)
+    || canonicalizeUgandaLocation(row.area, row.district);
+  if (!canonicalLocation || !Number.isFinite(canonicalLocation.lat) || !Number.isFinite(canonicalLocation.lng)) {
+    return null;
+  }
+  return {
+    latitude: Number(canonicalLocation.lat),
+    longitude: Number(canonicalLocation.lng),
+    canonical_location_id: canonicalLocation.key
+  };
 }
 
 function isUsablePublicCoordinate(latitude, longitude) {
@@ -2140,6 +2097,86 @@ function sourcedCandidateRecordHasApprovalLocation(row = {}) {
   );
 }
 
+function canonicalApprovalLocationForRecord(row = {}) {
+  const extra = propertyExtraFieldsObject(row);
+  const stored = canonicalLocationByKey(extra.canonical_location_id);
+  const exact = canonicalizeUgandaLocation(row.area, row.district);
+  const candidate = stored || exact;
+  if (!candidate || ['district', 'region'].includes(candidate.level)) return null;
+  if (exact && stored && exact.key !== stored.key) return null;
+  if (normalizeDistrict(row.district) !== candidate.district) return null;
+  if (normalizeLocationKey(row.area) !== normalizeLocationKey(candidate.name)) return null;
+  return candidate;
+}
+
+function publicCanonicalLocationPayload(item = {}) {
+  return {
+    id: item.canonical_key || item.key,
+    canonical_location_id: item.canonical_key || item.key,
+    name: item.location || item.name,
+    label: item.location || item.name,
+    district: item.district,
+    town: item.town || '',
+    region: regionForDistrict(item.district),
+    level: item.level,
+    type_label: item.level === 'district'
+      ? 'District'
+      : ['city', 'town'].includes(item.level) ? 'Town / city' : 'Neighborhood',
+    parent_path: item.level === 'district' ? 'Uganda' : `${item.district} District`,
+    listing_count: Number(item.listing_count) || 0,
+    match: item.match || 'exact_alias',
+    did_you_mean: item.did_you_mean === true,
+    auto_resolvable: Object.prototype.hasOwnProperty.call(item, 'auto_resolvable')
+      ? item.auto_resolvable === true
+      : item.match === 'exact_alias',
+    confidence: Number(item.confidence) || 0,
+    latitude: Number.isFinite(item.latitude ?? item.lat) ? Number(item.latitude ?? item.lat) : null,
+    longitude: Number.isFinite(item.longitude ?? item.lng) ? Number(item.longitude ?? item.lng) : null
+  };
+}
+
+router.get('/locations/catalog', (req, res) => {
+  const district = normalizeDistrict(req.query.district);
+  const locations = canonicalLocationOptions()
+    .filter((item) => !district || item.district === district)
+    .filter((item) => !['district', 'region'].includes(item.level))
+    .map((item) => publicCanonicalLocationPayload({ ...item, match: 'exact_alias', confidence: 1, auto_resolvable: true }));
+  return res.json({
+    ok: true,
+    data: locations,
+    meta: { canonical: true, district: district || null, count: locations.length }
+  });
+});
+
+router.get('/locations/resolve', (req, res) => {
+  const query = cleanText(req.query.q || req.query.query).slice(0, 180);
+  const district = cleanText(req.query.district).slice(0, 80);
+  const resolution = resolveCanonicalUgandaLocation(query, district);
+  const match = resolution.match
+    ? publicCanonicalLocationPayload({ ...resolution.match, match: resolution.match_type, confidence: resolution.confidence, auto_resolvable: true })
+    : null;
+  const candidates = resolution.candidates.map((item) => publicCanonicalLocationPayload({
+    ...item,
+    match: resolution.match_type,
+    confidence: resolution.status === 'matched' ? 1 : 0,
+    auto_resolvable: resolution.status === 'matched'
+  }));
+  return res.json({
+    ok: true,
+    data: match,
+    meta: {
+      canonical: true,
+      query,
+      status: resolution.status,
+      unmatched: resolution.status !== 'matched',
+      approval_blocked: resolution.status !== 'matched',
+      match: resolution.match_type,
+      confidence: resolution.confidence,
+      candidates
+    }
+  });
+});
+
 router.get('/locations/suggest', async (req, res, next) => {
   try {
     const query = cleanText(req.query.q || req.query.query).slice(0, 120);
@@ -2192,32 +2229,22 @@ router.get('/locations/suggest', async (req, res, next) => {
     }
 
     const suggestions = canonicalLocationSuggestions(query, cached.counts, limit);
+    const exactSuggestions = suggestions.filter((item) => item.match === 'exact_alias' && item.auto_resolvable === true);
+    const disambiguationSuggestions = suggestions.filter((item) => item.match === 'exact_alias' && item.auto_resolvable !== true);
+    const didYouMeanSuggestions = suggestions.filter((item) => item.match !== 'exact_alias');
     return res.json({
       ok: true,
-      data: suggestions.map((item) => ({
-        id: item.canonical_key,
-        canonical_location_id: item.canonical_key,
-        name: item.location,
-        label: item.location,
-        district: item.district,
-        level: item.level,
-        type_label: item.level === 'district'
-          ? 'District'
-          : item.level === 'city' ? 'Town / city' : 'Neighborhood',
-        parent_path: item.level === 'district' ? 'Uganda' : `${item.district} District`,
-        listing_count: item.listing_count,
-        match: item.match,
-        did_you_mean: item.did_you_mean,
-        confidence: item.confidence,
-        latitude: item.latitude,
-        longitude: item.longitude
-      })),
+      data: exactSuggestions.map(publicCanonicalLocationPayload),
       meta: {
         canonical: true,
         query,
         max_results: limit,
-        did_you_mean: suggestions.length > 0 && suggestions.every((item) => item.did_you_mean),
-        unmatched: suggestions.length === 0
+        did_you_mean: didYouMeanSuggestions.length > 0,
+        did_you_mean_suggestions: didYouMeanSuggestions.map(publicCanonicalLocationPayload),
+        disambiguation_required: disambiguationSuggestions.length > 0,
+        disambiguation_suggestions: disambiguationSuggestions.map(publicCanonicalLocationPayload),
+        unmatched: exactSuggestions.length === 0,
+        approval_blocked: exactSuggestions.length === 0
       }
     });
   } catch (error) {
@@ -3751,9 +3778,12 @@ router.post('/', async (req, res, next) => {
     extraFields.canonical_location_id = canonicalLocation?.key || null;
     extraFields.canonical_location_level = canonicalLocation?.level || null;
     extraFields.location_resolution_status = canonicalLocation ? 'canonical_match' : 'unresolved';
-    extraFields.location_resolution_confidence = canonicalLocation
-      ? (normalizeLocationKey(canonicalLocation.name) === normalizeLocationKey(area) ? 1 : 0.65)
-      : 0;
+    extraFields.location_resolution_confidence = canonicalLocation ? 1 : 0;
+    if (canonicalLocation) {
+      extraFields.region = regionForDistrict(canonicalLocation.district);
+      extraFields.city = canonicalLocation.town || extraFields.city || null;
+      extraFields.neighborhood = canonicalLocation.name;
+    }
     extraFields.price_currency = priceMetadata.price_currency;
     extraFields.price_original_currency = priceMetadata.price_original_currency;
     extraFields.price_original = priceMetadata.price_original;
@@ -4529,6 +4559,21 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
     if (listingPatchResult.changed_fields.length) {
       current = listingPatchResult.property || current;
       approvalWarnings.push(`Listing facts updated before moderation status change: ${listingPatchResult.changed_fields.join(', ')}`);
+    }
+    if (nextStatus === 'approved') {
+      const canonicalApprovalLocation = canonicalApprovalLocationForRecord(current);
+      if (!canonicalApprovalLocation) {
+        return res.status(400).json({
+          ok: false,
+          error: 'Canonical location confirmation is required before approval',
+          details: [
+            'Use Find to resolve an exact Uganda locality. A map pin or free-text address alone cannot approve a listing.',
+            'Unmatched or ambiguous locations must keep region, district, town, neighbourhood, and area unverified.'
+          ],
+          location_resolution_status: 'unverified',
+          approval_blocked: true
+        });
+      }
     }
     const requestedSourcedCandidateOverride = nextStatus === 'approved'
       && parseBooleanLike(req.body.sourced_candidate_override || req.body.sourced_candidate_special_dispensation, false);

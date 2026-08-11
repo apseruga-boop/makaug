@@ -1,4 +1,6 @@
 const { DISTRICTS } = require('./constants');
+const administrativeGazetteer = require('./ugandaLocationGazetteer.generated.json');
+const { CURATED_UGANDA_LOCATION_OVERRIDES } = require('./ugandaLocationOverrides');
 
 const DETAILED_LOCATIONS = [
   { name: 'Kampala', district: 'Kampala', level: 'district', lat: 0.3476, lng: 32.5825, aliases: ['Kampala', 'Kampala City', 'Central Kampala'] },
@@ -124,7 +126,7 @@ const DETAILED_LOCATIONS = [
   { name: 'Mbale', district: 'Mbale', level: 'district', lat: 1.062, lng: 34.175, aliases: ['Mbale', 'Mbale City', 'Mbale Town', 'Mbale Central'] },
   { name: 'Industrial Area', district: 'Mbale', lat: 1.061, lng: 34.186 },
   { name: 'Namatala', district: 'Mbale', lat: 1.08, lng: 34.19 },
-  { name: 'Senior Quarters', district: 'Mbale', lat: 1.055, lng: 34.17 },
+  { name: 'Senior Quarters Mbale', district: 'Mbale', lat: 1.055, lng: 34.17, aliases: ['Senior Quarters Mbale'] },
 
   { name: 'Lira', district: 'Lira', level: 'district', lat: 2.249, lng: 32.899, aliases: ['Lira', 'Lira City', 'Lira Central'] },
   { name: 'Adyel', district: 'Lira', lat: 2.268, lng: 32.895 },
@@ -248,18 +250,50 @@ function normalizeDistrict(value = '') {
   return canonicalDistrictByKey.get(key) || '';
 }
 
-const registry = DETAILED_LOCATIONS.map((entry) => ({
-  ...entry,
-  level: entry.level || 'area',
-  aliases: Array.from(new Set([entry.name, ...(entry.aliases || [])])),
-  key: `${normalizeLocationKey(entry.district)}:${normalizeLocationKey(entry.name)}`
-}));
+const overrideAliasKeys = new Set(
+  CURATED_UGANDA_LOCATION_OVERRIDES
+    .flatMap((entry) => [entry.name, ...(entry.aliases || [])])
+    .map(normalizeLocationKey)
+    .filter(Boolean)
+);
+
+const sourceLocations = [
+  ...CURATED_UGANDA_LOCATION_OVERRIDES,
+  ...DETAILED_LOCATIONS,
+  ...(administrativeGazetteer.locations || [])
+];
+
+const registryByKey = new Map();
+sourceLocations.forEach((entry, index) => {
+  const name = String(entry.name || '').trim();
+  const district = normalizeDistrict(entry.district) || String(entry.district || '').trim();
+  if (!name || !DISTRICTS.includes(district)) return;
+  const isOverride = index < CURATED_UGANDA_LOCATION_OVERRIDES.length;
+  const sourceAliasKeys = [name, ...(entry.aliases || [])].map(normalizeLocationKey).filter(Boolean);
+  if (!isOverride && sourceAliasKeys.some((aliasKey) => overrideAliasKeys.has(aliasKey))) return;
+  const key = `${normalizeLocationKey(district)}:${normalizeLocationKey(name)}`;
+  if (registryByKey.has(key)) return;
+  registryByKey.set(key, {
+    ...entry,
+    name,
+    district,
+    town: String(entry.town || '').trim()
+      || (entry.level === 'city' ? name : `${district} Town`),
+    level: entry.level || 'area',
+    aliases: Array.from(new Set([name, ...(entry.aliases || [])])).filter(Boolean),
+    key
+  });
+});
+
+const registry = Array.from(registryByKey.values());
 
 // Every valid Uganda district is a searchable canonical node, including
 // districts whose neighborhood centroids have not been mapped yet.
 Array.from(new Set(canonicalDistrictByKey.values())).forEach((district) => {
   const key = `${normalizeLocationKey(district)}:${normalizeLocationKey(district)}`;
-  if (registry.some((entry) => entry.key === key)) return;
+  const existingIndex = registry.findIndex((entry) => entry.key === key);
+  if (existingIndex >= 0 && registry[existingIndex].level === 'district') return;
+  if (existingIndex >= 0) registry.splice(existingIndex, 1);
   const representative = registry.find((entry) => entry.district === district && entry.level === 'city')
     || registry.find((entry) => entry.district === district);
   registry.push({
@@ -292,19 +326,196 @@ function aliasAppearsInValue(aliasKey, valueKey) {
   return (` ${valueKey} `).includes(` ${aliasKey} `);
 }
 
+const LOCATION_LEVEL_PRIORITY = Object.freeze({
+  neighborhood: 7,
+  area: 7,
+  parish: 7,
+  town: 6,
+  city: 6,
+  subcounty: 5,
+  county: 4,
+  district: 1,
+  region: 0
+});
+
+function districtHintFromQuery(value = '', suppliedDistrict = '') {
+  const supplied = normalizeDistrict(suppliedDistrict);
+  if (supplied) return supplied;
+  const parts = String(value || '').split(',').map((part) => part.trim()).filter(Boolean);
+  for (const part of parts.slice(1)) {
+    const district = normalizeDistrict(part);
+    if (district) return district;
+  }
+  return '';
+}
+
+function exactAliasCandidates(value = '', suppliedDistrict = '') {
+  const raw = String(value || '').trim();
+  const firstSegment = raw.split(',')[0].trim();
+  const needle = normalizeLocationKey(firstSegment || raw);
+  const districtHint = districtHintFromQuery(raw, suppliedDistrict);
+  if (!needle || isExcludedLocationOnly(firstSegment || raw)) return [];
+  const matches = aliasRows
+    .filter((row) => row.aliasKey === needle)
+    .filter((row) => !districtHint || row.entry.district === districtHint)
+    .map((row) => row.entry);
+  const unique = new Map(matches.map((entry) => [entry.key, entry]));
+  return Array.from(unique.values()).sort((a, b) => (
+    (LOCATION_LEVEL_PRIORITY[b.level] || 0) - (LOCATION_LEVEL_PRIORITY[a.level] || 0)
+    || a.name.localeCompare(b.name)
+  ));
+}
+
+function resolveCanonicalUgandaLocation(value = '', suppliedDistrict = '') {
+  const candidates = exactAliasCandidates(value, suppliedDistrict);
+  if (!candidates.length) {
+    return { status: 'unmatched', match: null, candidates: [], confidence: 0, match_type: 'unmatched' };
+  }
+  const firstSegmentKey = normalizeLocationKey(String(value || '').split(',')[0]);
+  const directDistrict = candidates.find((entry) => (
+    entry.level === 'district'
+    && normalizeLocationKey(entry.district) === firstSegmentKey
+  ));
+  if (directDistrict && !suppliedDistrict) {
+    return {
+      status: 'matched',
+      match: { ...directDistrict },
+      candidates: [{ ...directDistrict }],
+      confidence: 1,
+      match_type: 'exact_alias'
+    };
+  }
+  const districts = new Set(candidates.map((entry) => entry.district));
+  if (districts.size > 1 && !districtHintFromQuery(value, suppliedDistrict)) {
+    return {
+      status: 'ambiguous',
+      match: null,
+      candidates: candidates.map((entry) => ({ ...entry })),
+      confidence: 0,
+      match_type: 'ambiguous_exact_alias'
+    };
+  }
+  return {
+    status: 'matched',
+    match: { ...candidates[0] },
+    candidates: candidates.map((entry) => ({ ...entry })),
+    confidence: 1,
+    match_type: 'exact_alias'
+  };
+}
+
+const TEXT_LOCATION_ALIAS_STOP_KEYS = new Set([
+  'central', 'city', 'district', 'division', 'east', 'home', 'north', 'parish',
+  'region', 'south', 'town', 'uganda', 'ward', 'west'
+]);
+
+function resolveCanonicalUgandaLocationFromText(value = '', suppliedDistrict = '') {
+  const valueKey = normalizeLocationKey(value);
+  const suppliedDistrictName = normalizeDistrict(suppliedDistrict);
+  if (!valueKey) {
+    return { status: 'unmatched', match: null, candidates: [], confidence: 0, match_type: 'unmatched' };
+  }
+
+  const found = aliasRows
+    .filter((row) => row.aliasKey.length >= 4)
+    .filter((row) => !TEXT_LOCATION_ALIAS_STOP_KEYS.has(row.aliasKey))
+    .filter((row) => aliasAppearsInValue(row.aliasKey, valueKey))
+    .filter((row) => {
+      const aliasDistrict = normalizeDistrict(row.aliasKey);
+      return !aliasDistrict
+        || row.entry.district === aliasDistrict
+        || suppliedDistrictName === row.entry.district;
+    })
+    .filter((row) => !suppliedDistrictName || row.entry.district === suppliedDistrictName)
+    .map((row) => ({
+      ...row,
+      tokenCount: row.aliasKey.split(' ').length,
+      levelPriority: LOCATION_LEVEL_PRIORITY[row.entry.level] || 0
+    }));
+
+  if (!found.length) {
+    return { status: 'unmatched', match: null, candidates: [], confidence: 0, match_type: 'unmatched' };
+  }
+
+  const bestTokenCount = Math.max(...found.map((row) => row.tokenCount));
+  const tokenMatches = found.filter((row) => row.tokenCount === bestTokenCount);
+  const bestLevelPriority = Math.max(...tokenMatches.map((row) => row.levelPriority));
+  let bestMatches = tokenMatches.filter((row) => row.levelPriority === bestLevelPriority);
+  const bestAliasLength = Math.max(...bestMatches.map((row) => row.aliasKey.length));
+  bestMatches = bestMatches.filter((row) => row.aliasKey.length === bestAliasLength);
+
+  const unique = new Map(bestMatches.map((row) => [row.entry.key, row.entry]));
+  let candidates = Array.from(unique.values());
+  if (candidates.length > 1 && !suppliedDistrictName) {
+    const mentionedDistricts = Array.from(new Set(
+      registry
+        .filter((entry) => entry.level === 'district')
+        .filter((entry) => entry.aliases.some((alias) => aliasAppearsInValue(normalizeLocationKey(alias), valueKey)))
+        .map((entry) => entry.district)
+    ));
+    if (mentionedDistricts.length === 1) {
+      const districtMatches = candidates.filter((entry) => entry.district === mentionedDistricts[0]);
+      if (districtMatches.length) candidates = districtMatches;
+    }
+  }
+
+  if (candidates.length !== 1) {
+    return {
+      status: 'ambiguous',
+      match: null,
+      candidates: candidates.map((entry) => ({ ...entry })),
+      confidence: 0,
+      match_type: 'ambiguous_exact_alias_in_text'
+    };
+  }
+  return {
+    status: 'matched',
+    match: { ...candidates[0] },
+    candidates: candidates.map((entry) => ({ ...entry })),
+    confidence: 1,
+    match_type: 'exact_alias_in_text'
+  };
+}
+
+function canonicalUgandaDistrictsMentionedInText(value = '') {
+  const valueKey = normalizeLocationKey(value);
+  if (!valueKey) return [];
+  const aliases = new Map();
+  aliasRows
+    .filter((row) => row.aliasKey.length >= 4)
+    .filter((row) => !TEXT_LOCATION_ALIAS_STOP_KEYS.has(row.aliasKey))
+    .filter((row) => aliasAppearsInValue(row.aliasKey, valueKey))
+    .forEach((row) => {
+      if (!aliases.has(row.aliasKey)) aliases.set(row.aliasKey, new Set());
+      aliases.get(row.aliasKey).add(row.entry.district);
+    });
+
+  const mentions = [];
+  aliases.forEach((districts, aliasKey) => {
+    // An unqualified alias shared by districts is not safe evidence.
+    if (districts.size !== 1) return;
+    mentions.push({
+      district: Array.from(districts)[0],
+      position: (` ${valueKey} `).indexOf(` ${aliasKey} `)
+    });
+  });
+  return Array.from(new Map(
+    mentions
+      .sort((a, b) => a.position - b.position)
+      .map((mention) => [mention.district, mention.district])
+  ).values());
+}
+
 function canonicalizeUgandaLocation(area = '', district = '') {
   const rawArea = String(area || '').split(',')[0].trim();
-  const areaKey = normalizeLocationKey(rawArea);
   const districtName = normalizeDistrict(district);
-  if (!areaKey && !districtName) return null;
+  if (!rawArea && !districtName) return null;
   if (rawArea && isExcludedLocationOnly(rawArea)) return null;
 
-  const matched = aliasRows.find((row) => {
-    if (!aliasAppearsInValue(row.aliasKey, areaKey)) return false;
-    if (!districtName || row.entry.district === districtName) return true;
-    return false;
-  });
-  if (matched) return { ...matched.entry };
+  if (rawArea) {
+    const resolution = resolveCanonicalUgandaLocation(area, districtName);
+    if (resolution.status === 'matched') return resolution.match;
+  }
 
   const areaDistrict = normalizeDistrict(rawArea);
   if (rawArea && !areaDistrict) return null;
@@ -373,6 +584,7 @@ function canonicalLocationOptions() {
     canonical_key: entry.key,
     location: entry.name,
     district: entry.district,
+    town: entry.town,
     level: entry.level,
     latitude: Number.isFinite(entry.lat) ? entry.lat : null,
     longitude: Number.isFinite(entry.lng) ? entry.lng : null,
@@ -434,6 +646,7 @@ function trigramSimilarity(left = '', right = '') {
 function canonicalLocationSuggestions(query = '', counts = new Map(), limit = 8) {
   const needle = normalizeLocationKey(query);
   if (!needle || isExcludedLocationOnly(query)) return [];
+  const exactResolution = resolveCanonicalUgandaLocation(query);
   const scoreEntry = (entry) => {
     const aliasKeys = entry.aliases.map(normalizeLocationKey).filter(Boolean);
     const exact = aliasKeys.includes(needle);
@@ -446,6 +659,7 @@ function canonicalLocationSuggestions(query = '', counts = new Map(), limit = 8)
       canonical_key: entry.key,
       location: entry.name,
       district: entry.district,
+      town: entry.town,
       level: entry.level,
       latitude: Number.isFinite(entry.lat) ? entry.lat : null,
       longitude: Number.isFinite(entry.lng) ? entry.lng : null,
@@ -456,6 +670,9 @@ function canonicalLocationSuggestions(query = '', counts = new Map(), limit = 8)
       match_rank: matchRank,
       score: matchRank * 10 + fuzzy,
       confidence: exact ? 1 : prefix ? 0.94 : contains ? 0.88 : Number(fuzzy.toFixed(3)),
+      auto_resolvable: exact
+        && exactResolution.status === 'matched'
+        && exactResolution.match?.key === entry.key,
     };
   };
   return registry
@@ -536,6 +753,9 @@ module.exports = {
   canonicalLocationForRow,
   canonicalDisplayLocationForRow,
   canonicalizeUgandaLocation,
+  resolveCanonicalUgandaLocation,
+  resolveCanonicalUgandaLocationFromText,
+  canonicalUgandaDistrictsMentionedInText,
   canonicalizeLocationRows,
   canonicalLocationOptions,
   canonicalLocationRollupCounts,

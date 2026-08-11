@@ -493,8 +493,8 @@ test('Carnelian admin path and dashboard action are protected and auditable', ()
   assert(frontend.includes('formatNearbyDistanceKm'), 'public detail should render nearby amenities with km distances');
   assert(frontend.includes('const detailMapPoint = getListingMapPoint(p);'), 'public detail amenities should use the same resolved point as the map');
   assert(frontend.includes('getNearbyAmenitySuggestions({ lat: detailMapPoint.lat, lng: detailMapPoint.lng'), 'nearby amenities should be calculated from the visible map pin');
-  assert(frontend.includes('UG_AREA_PIN_OVERRIDES'), 'public map resolver should carry known Uganda area pins for social imports without exact coordinates');
-  assert(frontend.includes('getKnownUgandaAreaPoint(property)'), 'public map resolver should use the listing area/address/title before falling back to district centres');
+  assert(!frontend.includes('UG_AREA_PIN_OVERRIDES'), 'public map resolver must not carry a private copy of Uganda locations');
+  assert(!frontend.includes('getKnownUgandaAreaPoint(property)'), 'public map resolver must not guess coordinates from copied area aliases');
   assert(frontend.includes('if (district && !hasCoords)'), 'nearby amenities should not lock to a wrong district when a resolved map pin is available');
   assert(propertiesRoute.includes('publicLocationOverrideForListing'), 'public API should correct social-source district/lat/lng from visible area evidence');
   assert(propertiesRoute.includes('cleanPublicListingCopy'), 'public API should strip review/approval instructions from public listing copy');
@@ -1879,11 +1879,11 @@ test('King review can correct sourced listing facts before approval', () => {
   assert(frontend.includes('nearest_university: listingType === "student"') && frontend.includes('student_universities: listingType === "student"'), 'King review save should collect student accommodation metadata');
   assert(frontend.includes('admin-review-region-edit') && frontend.includes('admin-review-city-edit') && frontend.includes('admin-review-neighborhood-edit'), 'King review should mirror the public guided region/city/neighbourhood location flow');
   assert(frontend.includes('adminReviewFindAddressOrPlace'), 'King review should reuse address/place search before approval');
-  assert(frontend.includes('function adminReviewInferHierarchyFromText'), 'King review should infer town/city and neighbourhood from the same guided location tree used by public search/listing');
-  assert(frontend.includes('function findHierarchyLocationForKnownArea'), 'King review should map known source areas like Namasuba to their guided district/city/neighbourhood hierarchy');
-  assert(frontend.includes('{ name: "Namasuba", lat: 0.258, lng: 32.558 }'), 'King review hierarchy should include Namasuba so the form does not keep stale city/neighbourhood values');
-  assert(frontend.includes('adminReviewApplySpecificKnownLocation'), 'King review should apply a specific source location over stale broad district/city/neighbourhood fields');
-  assert(frontend.includes('forceCoordinates: true'), 'King review source extraction should replace stale exact pins when a specific source area pin is known');
+  assert(frontend.includes('function resolveUgandaLocationFromSharedRegistry'), 'King review should resolve town/city and neighbourhood through the shared server registry');
+  assert(frontend.includes('function applyAdminReviewCanonicalLocation'), 'King review should apply the exact canonical hierarchy returned by the shared registry');
+  assert(!frontend.includes('function adminReviewInferHierarchyFromText'), 'King review must not retain a private text-to-location guesser');
+  assert(!frontend.includes('function findHierarchyLocationForKnownArea'), 'King review must not retain a copied locality hierarchy');
+  assert(!frontend.includes('adminReviewApplySpecificKnownLocation'), 'King review source extraction must not bypass the shared resolver with hard-coded areas');
   assert(frontend.includes('adminReviewAutoPopulateLocationFromSource(review)'), 'King review should auto-populate missing guided location fields when a review record opens');
   assert(frontend.includes('adminReviewOnAddressSearchInput') && frontend.includes('getGooglePlacePredictions(query)'), 'King review address search should offer the same local/online suggestions as the public listing flow');
   assert(frontend.includes('admin-review-place-id-edit') && frontend.includes('place_id: get("admin-review-place-id-edit")'), 'King review should persist online place lookup IDs with edited location facts');
@@ -1893,7 +1893,7 @@ test('King review can correct sourced listing facts before approval', () => {
   assert(frontend.includes('REVIEW_USD_TO_UGX_GUIDE_RATE'), 'King review source extraction should understand dollar rent prices');
   assert(frontend.includes('adminReviewHasUsableCoordinates'), 'King review should reject 0,0 and other unusable map pins before syncing');
   assert(frontend.includes('adminReviewScheduleLocationSync'), 'King review should move the review map as area/district fields change');
-  assert(frontend.includes('Munyonyo'), 'King review should include a Munyonyo area pin for rentals around Lake Victoria');
+  assert(frontend.includes('resolveUgandaLocationFromSharedRegistry'), 'King review should obtain Munyonyo and every other area from the shared registry');
   assert(frontend.includes('getLocalizedPropertyTitle'), 'public cards/details should use language-aware sourced listing titles instead of copied captions');
   assert(adminRoute.includes('king_review_corrected_fields'), 'admin review edits should keep correction traceability');
   assert(adminRoute.includes('map_pin_source') && frontend.includes('map_pin_source: coordinates.exact ? "king_review" : "king_review_area"'), 'admin review coordinate edits should mark the map pin source');
@@ -1902,7 +1902,7 @@ test('King review can correct sourced listing facts before approval', () => {
   assert(socialPlatformSweepServiceSource.includes('const usdMatch'), 'social import should extract dollar price text');
   assert(socialSearchServiceSource.includes('USD_TO_UGX_GUIDE_RATE'), 'source post normalizer should convert dollar guide prices to UGX');
   assert(propertiesRoute.includes('isUsablePublicCoordinate'), 'public routes should ignore invalid stored coordinates and use responsible area pins');
-  assert(propertiesRoute.includes('Munyonyo'), 'public routes should include a Munyonyo area fallback pin');
+  assert(propertiesRoute.includes('canonicalLocationByKey(canonicalId)'), 'public routes should obtain fallback pins from the shared canonical registry');
   assert(propertiesRoute.includes('reviewedDescription'), 'public third-party summaries should use King-reviewed short descriptions when clean');
   assert(propertiesRoute.includes('reviewedFields.includes') && propertiesRoute.includes('reviewedTitleLooksCopied'), 'public third-party titles should respect clean King edits without exposing copied captions');
   assert(frontend.includes('Shorten description'), 'King review should provide a concise public description action');

@@ -36,13 +36,11 @@ assert(
 );
 assert.strictEqual(canonicalizeUgandaLocation('Luweero')?.district, 'Luwero');
 assert.strictEqual(canonicalizeUgandaLocation('Ndibulungi')?.district, 'Luwero');
-assert(frontend.includes('Luwero: ['));
-assert(frontend.includes('{ name: "Ndibulungi" }'));
-assert(frontend.includes('city: "Luwero Town"'));
-assert(frontend.includes('specificity: 6, aliases: ["Ndibulungi"'));
-assert(frontend.includes('adminReviewSourceText(review),\n    review.resolved_location_label'));
-assert(frontend.includes('sourceDistrictConflict ? null : reviewPoint'));
-assert(frontend.includes('District corrected from source evidence. Find and confirm the exact pin.'));
+assert(frontend.includes('async function resolveUgandaLocationFromSharedRegistry'));
+assert(frontend.includes('/api/properties/locations/resolve?q='));
+assert(frontend.includes('function clearAdminReviewCanonicalLocation()'));
+assert(frontend.includes('Location not recognised — pin set but region/district/area could NOT be auto-filled.'));
+assert(frontend.includes('Resolve the area through the shared canonical location registry before approving.'));
 assert(staffRoute.includes('Source/title/address evidence points to ${evidenceDistrict}, not ${district}'));
 assert(staffRoute.includes('warnings: staffLocationWarnings(property)'));
 

@@ -41,7 +41,8 @@ const {
   ugandanPhoneFromSourceText,
 } = require('../utils/sourceIntakeIntegrity');
 const {
-  canonicalizeUgandaLocation,
+  resolveCanonicalUgandaLocation,
+  resolveCanonicalUgandaLocationFromText,
 } = require('../utils/ugandaLocationRegistry');
 const {
   buildHarvestFingerprints,
@@ -81,25 +82,6 @@ const PREAPPROVED_PERMISSION_STATUSES = [
   'agent_authorised_listing',
   'agent_preapproved',
   'owner_agent_preapproved',
-];
-const SOCIAL_AREA_PIN_OVERRIDES = [
-  { name: 'Namasuba', district: 'Wakiso', lat: 0.258, lng: 32.558, aliases: ['Namasuba', 'Namasuba Kampala', 'Namasuba Entebbe Road', 'Rahim Foods', 'Rahim Foods Namasuba'] },
-  { name: 'Ndejje', district: 'Wakiso', lat: 0.244, lng: 32.553, aliases: ['Ndejje', 'Ndejje Lubugumu'] },
-  { name: 'Bujjuko Akright Estate', district: 'Wakiso', lat: 0.374, lng: 32.389, aliases: ['Bujjuko Akright', 'Bujuuko Akright', 'Akright'] },
-  { name: 'Bujjuko', district: 'Wakiso', lat: 0.374, lng: 32.389, aliases: ['Bujjuko', 'Bujuuko', 'Bujuko'] },
-  { name: 'Kitende', district: 'Wakiso', lat: 0.198, lng: 32.533, aliases: ['Kitende'] },
-  { name: 'Kigo', district: 'Wakiso', lat: 0.196, lng: 32.615, aliases: ['Kigo', 'Kigo Road'] },
-  { name: 'Lubowa', district: 'Wakiso', lat: 0.237, lng: 32.576, aliases: ['Lubowa', 'Lubowa Estate', 'Lubowa Entebbe Road'] },
-  { name: 'Bwebajja', district: 'Wakiso', lat: 0.179, lng: 32.541, aliases: ['Bwebajja', 'Bwebajja Entebbe Road'] },
-  { name: 'Kakiri', district: 'Wakiso', lat: 0.409, lng: 32.38, aliases: ['Kakiri', 'Kakiri Masulita', 'Kakiri Masulita Hoima Road', 'Hoima Road'] },
-  { name: 'Masulita', district: 'Wakiso', lat: 0.51, lng: 32.46, aliases: ['Masulita'] },
-  { name: 'Kira', district: 'Wakiso', lat: 0.3978, lng: 32.6414, aliases: ['Kira', 'Kira Town'] },
-  { name: 'Kira-Mulawa', district: 'Wakiso', lat: 0.412, lng: 32.65, aliases: ['Kira-Mulawa', 'Kira Mulawa', 'Mulawa'] },
-  { name: 'Kira-Nsasa', district: 'Wakiso', lat: 0.428, lng: 32.665, aliases: ['Kira-Nsasa', 'Kira Nsasa', 'Nsasa'] },
-  { name: 'Kireka', district: 'Wakiso', lat: 0.347, lng: 32.649, aliases: ['Kireka', 'Kireka Namugongo Road', 'Kireka-Namugongo Road'] },
-  { name: 'Katosi', district: 'Mukono', lat: 0.181, lng: 32.797, aliases: ['Katosi', 'Mpunge', 'Mpungwe', 'Katosi Mpunge'] },
-  { name: 'Kalagi', district: 'Mukono', lat: 0.531, lng: 32.743, aliases: ['Kalagi', 'Kalagi Town', 'Kalagi Trading Centre', 'Kalagi Trading Center'] },
-  { name: 'Kololo', district: 'Kampala', lat: 0.356, lng: 32.612, aliases: ['Kololo'] }
 ];
 const PUBLIC_SOURCE_CONTACT_POLICY = 'No public phone number is not a blocker when a public social profile or platform message route exists; makaug shows Contact via social source until the agent adds a direct number. Website-only source/contact routes are not accepted for found-online launch inventory.';
 const FOUND_ONLINE_LAUNCH_INTAKE_POLICY = {
@@ -623,34 +605,6 @@ function slugKey(value = '', fallback = 'source') {
 
 function compactText(value = '') {
   return String(value || '').replace(/\s+/g, ' ').trim();
-}
-
-function socialAreaAliasPattern(alias = '') {
-  return compactText(alias)
-    .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    .replace(/\s+/g, '\\s+')
-    .replace(/-/g, '[-\\s]+');
-}
-
-function socialAreaPinFromText(value = '') {
-  const haystack = compactText(value);
-  if (!haystack) return null;
-  const sorted = SOCIAL_AREA_PIN_OVERRIDES
-    .flatMap((point) => (point.aliases || [point.name]).map((alias) => ({ ...point, alias })))
-    .sort((a, b) => String(b.alias || '').length - String(a.alias || '').length);
-  for (const point of sorted) {
-    const pattern = socialAreaAliasPattern(point.alias);
-    if (!pattern) continue;
-    if (new RegExp(`(^|[^a-z0-9])${pattern}([^a-z0-9]|$)`, 'i').test(haystack)) return point;
-  }
-  return null;
-}
-
-function socialAreaPinFromExplicitLocation(value = '') {
-  const explicit = compactText(value);
-  if (!explicit) return null;
-  const primaryArea = compactText(explicit.split(',')[0]);
-  return socialAreaPinFromText(primaryArea) || socialAreaPinFromText(explicit);
 }
 
 function asTextArray(value = []) {
@@ -2525,15 +2479,18 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
   });
   const sourceDistricts = asTextArray(raw.districts);
   const rawArea = compactText(raw.area || raw.location || raw.neighbourhood || raw.neighborhood || '');
-  const areaPin = socialAreaPinFromExplicitLocation(rawArea) || socialAreaPinFromText(sourceText);
-  const rawAreaMatchesKnownAlias = areaPin && rawArea
-    ? new RegExp(`^${socialAreaAliasPattern(areaPin.alias || areaPin.name)}$`, 'i').test(rawArea)
-    : false;
   const fallbackDistrict = compactText(raw.district || sourceDistricts[0] || raw.city || raw.region || '');
-  const canonicalLocation = canonicalizeUgandaLocation(
-    areaPin?.name || rawArea,
-    areaPin?.district || fallbackDistrict
-  );
+  const explicitLocation = resolveCanonicalUgandaLocation(rawArea, fallbackDistrict);
+  const textLocation = resolveCanonicalUgandaLocationFromText(`${rawArea} ${sourceText}`, fallbackDistrict);
+  const locationResolution = explicitLocation.status === 'matched'
+    && !['district', 'region'].includes(explicitLocation.match.level)
+    ? explicitLocation
+    : textLocation.status === 'matched'
+      ? textLocation
+      : explicitLocation.status === 'matched'
+        ? explicitLocation
+        : textLocation;
+  const canonicalLocation = locationResolution.status === 'matched' ? locationResolution.match : null;
   const district = canonicalLocation?.district || '';
   const locationEvidenceConfirmed = Object.prototype.hasOwnProperty.call(raw, 'location_evidence_confirmed')
     ? parseBooleanFlag(raw.location_evidence_confirmed)
@@ -2720,7 +2677,7 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
       || null,
     locationEvidenceConfirmed,
     locationResolutionStatus: canonicalLocation ? 'canonical_match' : 'unresolved',
-    locationResolutionConfidence: canonicalLocation ? (areaPin ? 1 : 0.85) : 0,
+    locationResolutionConfidence: canonicalLocation ? 1 : 0,
     canonicalLocationId: canonicalLocation?.key || null,
     canonicalLocationLevel: canonicalLocation?.level || null,
     rawLocation: rawArea || fallbackDistrict || null,
@@ -2747,8 +2704,8 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
     baths: numberOrNull(raw.bathrooms ?? raw.baths),
     landSizeValue: numberOrNull(raw.land_size_value ?? raw.landSizeValue),
     landSizeUnit: raw.land_size_unit || raw.landSizeUnit || null,
-    lat: numberOrNull(raw.latitude ?? raw.lat) ?? areaPin?.lat ?? null,
-    lng: numberOrNull(raw.longitude ?? raw.lng) ?? areaPin?.lng ?? null,
+    lat: numberOrNull(raw.latitude ?? raw.lat) ?? canonicalLocation?.lat ?? null,
+    lng: numberOrNull(raw.longitude ?? raw.lng) ?? canonicalLocation?.lng ?? null,
     imageUrls: asTextArray(raw.image_urls || raw.images || raw.photo_urls || raw.media_urls),
     photoUrls: asTextArray(raw.photo_urls),
     mediaUrls: asTextArray(raw.media_urls),
