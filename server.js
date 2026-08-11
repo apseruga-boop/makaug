@@ -1437,9 +1437,7 @@ app.use(errorHandler);
 const port = parseInt(process.env.PORT || '8080', 10);
 
 async function start() {
-  const earlyHttpServer = global.__MAKAUG_RENDER_HTTP_SERVER__;
-  const httpServer = earlyHttpServer || http.createServer(app);
-  if (earlyHttpServer) global.__MAKAUG_RENDER_HTTP_HANDLER__ = app;
+  const httpServer = http.createServer(app);
   httpServer.keepAliveTimeout = 120_000;
   httpServer.headersTimeout = 121_000;
   httpServer.on('error', (error) => {
@@ -1449,15 +1447,13 @@ async function start() {
       port
     });
   });
-  if (!httpServer.listening) {
-    await new Promise((resolve, reject) => {
-      httpServer.once('error', reject);
-      httpServer.listen(port, '0.0.0.0', () => {
-        httpServer.removeListener('error', reject);
-        resolve();
-      });
+  await new Promise((resolve, reject) => {
+    httpServer.once('error', reject);
+    httpServer.listen(port, '0.0.0.0', () => {
+      httpServer.removeListener('error', reject);
+      resolve();
     });
-  }
+  });
   const address = httpServer.address();
   logger.info(`${ACTIVE_TENANT.brandName} liveness endpoint accepting traffic`, {
     host: typeof address === 'object' && address ? address.address : '0.0.0.0',

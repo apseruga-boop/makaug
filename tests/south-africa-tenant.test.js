@@ -82,10 +82,12 @@ assert(
 assert(serverSource.includes('if (runtimeReady) return next();'), 'Non-health traffic must wait for startup readiness');
 assert(serverSource.includes('runtimeReady = true;'), 'Startup must release the readiness gate');
 assert(
-  renderStartSource.indexOf('earlyHttpServer.listen') < renderStartSource.indexOf("require('../server')"),
-  'Render bootstrap must bind before loading the full application'
+  renderStartSource.indexOf('earlyHttpServer.listen') < renderStartSource.indexOf('appProcess = fork('),
+  'Render bootstrap must bind before forking the full application'
 );
 assert(renderStartSource.includes("=== '/healthz'"), 'Render bootstrap health endpoint is missing');
+assert(renderStartSource.includes("hostname: '127.0.0.1'"), 'Render bootstrap must proxy to the isolated app process');
+assert(renderStartSource.includes('PORT: String(appPort)'), 'Render app process must use a separate internal port');
 assert(
   renderBlueprintSource.includes('startCommand: node scripts/render-start.js'),
   'Render Blueprint must use the early liveness bootstrap'

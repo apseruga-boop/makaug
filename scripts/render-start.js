@@ -1,35 +1,100 @@
 'use strict';
 
 const http = require('http');
+const path = require('path');
+const { fork } = require('child_process');
 
 const port = parseInt(process.env.PORT || '10000', 10);
+const appPort = port + 1;
 const host = '0.0.0.0';
+let appReady = false;
+let shuttingDown = false;
+let appProcess = null;
 
-const earlyHttpServer = http.createServer((req, res) => {
-  const appHandler = global.__MAKAUG_RENDER_HTTP_HANDLER__;
-  if (typeof appHandler === 'function') return appHandler(req, res);
-
+function jsonResponse(res, statusCode, payload) {
+  res.statusCode = statusCode;
   res.setHeader('Cache-Control', 'no-store');
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  return res.end(JSON.stringify(payload));
+}
+
+function proxyToApp(req, res) {
+  const proxyRequest = http.request({
+    hostname: '127.0.0.1',
+    port: appPort,
+    path: req.url,
+    method: req.method,
+    headers: req.headers
+  }, (proxyResponse) => {
+    res.writeHead(proxyResponse.statusCode || 502, proxyResponse.headers);
+    proxyResponse.pipe(res);
+  });
+  proxyRequest.on('error', (error) => {
+    if (res.headersSent) return res.destroy(error);
+    return jsonResponse(res, 502, {
+      ok: false,
+      error: 'application_unavailable',
+      country_code: process.env.COUNTRY_CODE || 'ZA'
+    });
+  });
+  req.pipe(proxyRequest);
+}
+
+const earlyHttpServer = http.createServer((req, res) => {
   if (String(req.url || '').split('?')[0] === '/healthz') {
-    res.statusCode = 200;
-    return res.end(JSON.stringify({
+    return jsonResponse(res, 200, {
       ok: true,
       service: process.env.RENDER_SERVICE_NAME || 'seshaikhaya',
       country_code: process.env.COUNTRY_CODE || 'ZA',
-      ready: false
-    }));
+      ready: appReady
+    });
   }
-
-  res.statusCode = 503;
-  return res.end(JSON.stringify({
-    ok: false,
-    error: 'service_starting',
-    country_code: process.env.COUNTRY_CODE || 'ZA'
-  }));
+  if (!appReady) {
+    return jsonResponse(res, 503, {
+      ok: false,
+      error: 'service_starting',
+      country_code: process.env.COUNTRY_CODE || 'ZA'
+    });
+  }
+  return proxyToApp(req, res);
 });
 
-global.__MAKAUG_RENDER_HTTP_SERVER__ = earlyHttpServer;
+function waitForAppReadiness() {
+  const request = http.get({
+    hostname: '127.0.0.1',
+    port: appPort,
+    path: '/healthz',
+    timeout: 1000
+  }, (response) => {
+    let body = '';
+    response.setEncoding('utf8');
+    response.on('data', (chunk) => { body += chunk; });
+    response.on('end', () => {
+      try {
+        appReady = response.statusCode === 200 && JSON.parse(body).ready === true;
+      } catch {
+        appReady = false;
+      }
+      if (appReady) {
+        console.log('Render application process ready behind liveness proxy', { port: appPort });
+      } else if (!shuttingDown) {
+        setTimeout(waitForAppReadiness, 250).unref?.();
+      }
+    });
+  });
+  request.on('timeout', () => request.destroy());
+  request.on('error', () => {
+    if (!shuttingDown) setTimeout(waitForAppReadiness, 250).unref?.();
+  });
+}
+
+function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  appProcess?.kill(signal);
+  earlyHttpServer.close(() => process.exit(0));
+  setTimeout(() => process.exit(0), 5000).unref?.();
+}
 
 earlyHttpServer.on('error', (error) => {
   console.error('Render bootstrap HTTP server failed', error);
@@ -43,5 +108,19 @@ earlyHttpServer.listen(port, host, () => {
     port: typeof address === 'object' && address ? address.port : port,
     family: typeof address === 'object' && address ? address.family : null
   });
-  require('../server');
+
+  appProcess = fork(path.join(__dirname, '..', 'server.js'), [], {
+    env: { ...process.env, PORT: String(appPort) },
+    stdio: ['inherit', 'inherit', 'inherit', 'ipc']
+  });
+  appProcess.on('exit', (code, signal) => {
+    appReady = false;
+    if (shuttingDown) return;
+    console.error('Render application process exited', { code, signal });
+    process.exit(code || 1);
+  });
+  waitForAppReadiness();
 });
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
