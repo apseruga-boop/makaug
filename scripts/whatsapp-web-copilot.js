@@ -2927,6 +2927,44 @@ async function findAttachedFileInput(page) {
   return null;
 }
 
+async function findPhotoVideoMenuFileInput(page) {
+  for (const selector of PHOTO_VIDEO_MENU_SELECTORS) {
+    const matches = page.locator(selector);
+    const count = await matches.count().catch(() => 0);
+    for (let index = count - 1; index >= 0; index -= 1) {
+      const menuItem = matches.nth(index);
+      if (!await menuItem.isVisible().catch(() => false)) continue;
+
+      // WhatsApp mounts the active image input inside (or immediately around)
+      // the open Photos & videos menu item. Bind that input directly instead
+      // of an older hidden input that remains mounted in the chat shell.
+      let scope = menuItem;
+      for (let depth = 0; depth < 4; depth += 1) {
+        const inputs = scope.locator('input[type="file"][accept*="image"]');
+        const inputCount = await inputs.count().catch(() => 0);
+        if (inputCount) return inputs.nth(inputCount - 1);
+        scope = scope.locator('xpath=..');
+      }
+    }
+  }
+  return null;
+}
+
+async function describeFileInputs(page) {
+  return page.evaluate(() => Array.from(document.querySelectorAll('input[type="file"]')).map((node, index) => {
+    const owner = node.closest('[role="menuitem"],button,[aria-label],[data-testid]');
+    return {
+      index,
+      accept: node.getAttribute('accept') || '',
+      multiple: node.hasAttribute('multiple'),
+      disabled: Boolean(node.disabled),
+      ownerRole: owner?.getAttribute?.('role') || '',
+      ownerAriaLabel: owner?.getAttribute?.('aria-label') || '',
+      ownerDataTestid: owner?.getAttribute?.('data-testid') || ''
+    };
+  })).catch(() => []);
+}
+
 async function setMediaCaption(page, caption) {
   for (const selector of MEDIA_CAPTION_SELECTORS) {
     const matches = page.locator(selector);
@@ -3098,10 +3136,14 @@ async function typeAndSendImageReply(page, mediaUrl, caption) {
   const opened = await clickFirstVisible(page, ATTACH_BUTTON_SELECTORS);
   if (!opened) throw new Error('Could not open the WhatsApp attachment picker');
   await page.waitForTimeout(250);
-  const chooserPromise = page.waitForEvent('filechooser', { timeout: 4000 }).catch(() => null);
-  const photosOpened = await clickFirstVisible(page, PHOTO_VIDEO_MENU_SELECTORS);
-  const fileChooser = photosOpened ? await chooserPromise : null;
-  const fileInput = fileChooser ? null : await findAttachedFileInput(page);
+  let fileInput = await findPhotoVideoMenuFileInput(page);
+  let fileChooser = null;
+  if (!fileInput) {
+    const chooserPromise = page.waitForEvent('filechooser', { timeout: 4000 }).catch(() => null);
+    const photosOpened = await clickFirstVisible(page, PHOTO_VIDEO_MENU_SELECTORS);
+    fileChooser = photosOpened ? await chooserPromise : null;
+    fileInput = fileChooser ? null : await findAttachedFileInput(page);
+  }
   if (!fileChooser && !fileInput) throw new Error('Could not find the WhatsApp image upload control');
 
   const upload = {
@@ -3125,7 +3167,8 @@ async function typeAndSendImageReply(page, mediaUrl, caption) {
   }), MEDIA_CAPTION_SELECTORS, { timeout: 10000 }).then(() => true).catch(() => false);
   if (!captionReady || !await setMediaCaption(page, caption)) {
     const controls = await describeVisibleMediaControls(page);
-    log(`media caption controls unavailable: ${JSON.stringify(controls)}`);
+    const fileInputs = await describeFileInputs(page);
+    log(`media caption controls unavailable: ${JSON.stringify({ ...controls, fileInputs })}`);
     await page.keyboard.press('Escape').catch(() => null);
     throw new Error('Could not prepare the WhatsApp image caption');
   }
