@@ -107,7 +107,7 @@ assert(renderStartSource.includes('APP_PROXY_TIMEOUT'), 'Render proxy requests m
 assert(serverSource.includes("process.send({ type: 'runtime_ready' })"), 'ZA app must signal readiness to the Render parent');
 assert(serverSource.includes('function readCountryAppAsset()'), 'ZA public JavaScript must have a transformed asset cache');
 assert(serverSource.includes("renderPublicHtml('/');"), 'ZA public HTML must warm before readiness');
-assert(serverSource.includes('compressed: adapted.compressed'), 'ZA public JavaScript must reuse compressed output');
+assert(serverSource.includes('etag: adapted.etag'), 'ZA public JavaScript must reuse its transformed asset cache');
 assert(serverSource.includes('dynamicCompression: false'), 'Public HTML must not synchronously compress on the request path');
 assert(serverSource.includes("process.env.FEATURED_ROTATION_SCHEDULER_ENABLED === 'true'"), 'ZA featured rotation must require an explicit enable');
 assert(renderBlueprintSource.includes('FEATURED_ROTATION_SCHEDULER_ENABLED'), 'ZA Blueprint must disable empty-inventory rotation');

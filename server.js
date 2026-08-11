@@ -702,11 +702,7 @@ function readCountryAppAsset() {
     countryCode: ACTIVE_COUNTRY_CODE,
     body,
     etag: `W/"${ACTIVE_COUNTRY_CODE.toLowerCase()}-${runtimeBundleVersion()}"`,
-    lastModified: source.lastModified,
-    compressed: {
-      br: compressBody(body, 'br'),
-      gzip: compressBody(body, 'gzip')
-    }
+    lastModified: source.lastModified
   };
   return countryAppAssetCache;
 }
@@ -1231,7 +1227,7 @@ app.get('/assets/makaug-app.js', (req, res, next) => {
         cacheControl: LONG_LIVED_STATIC_CACHE_CONTROL,
         etag: adapted.etag,
         lastModified: adapted.lastModified,
-        compressed: adapted.compressed
+        dynamicCompression: false
       });
     }
     const asset = readCachedTextAsset(appJsPath);
