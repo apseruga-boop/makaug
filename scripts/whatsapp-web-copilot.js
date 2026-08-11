@@ -2931,6 +2931,33 @@ async function hasVisibleSelector(page, selectors) {
   return false;
 }
 
+async function hasPhotoVideoMenuItem(page) {
+  if (await hasVisibleSelector(page, PHOTO_VIDEO_MENU_SELECTORS)) return true;
+  const matches = page.getByText('Photos & videos', { exact: true });
+  const count = await matches.count().catch(() => 0);
+  for (let index = count - 1; index >= 0; index -= 1) {
+    if (await matches.nth(index).isVisible().catch(() => false)) return true;
+  }
+  return false;
+}
+
+async function clickPhotoVideoMenuItem(page) {
+  if (await clickFirstVisible(page, PHOTO_VIDEO_MENU_SELECTORS)) return true;
+  const matches = page.getByText('Photos & videos', { exact: true });
+  const count = await matches.count().catch(() => 0);
+  for (let index = count - 1; index >= 0; index -= 1) {
+    const candidate = matches.nth(index);
+    if (!await candidate.isVisible().catch(() => false)) continue;
+    try {
+      await candidate.click({ timeout: 2500 });
+      return true;
+    } catch (_error) {
+      // Try another exact visible label if WhatsApp mounted a duplicate.
+    }
+  }
+  return false;
+}
+
 async function findAttachedFileInput(page) {
   for (const selector of OUTBOUND_IMAGE_INPUT_SELECTORS) {
     const matches = page.locator(selector);
@@ -3150,15 +3177,19 @@ async function typeAndSendImageReply(page, mediaUrl, caption) {
   // WhatsApp keeps stale, hidden file inputs mounted in the chat shell. Always
   // open the current attachment menu first so the input we bind owns a live
   // React change handler and actually creates the media-preview composer.
-  if (!await hasVisibleSelector(page, PHOTO_VIDEO_MENU_SELECTORS)) {
+  if (!await hasPhotoVideoMenuItem(page)) {
     const opened = await clickFirstVisible(page, ATTACH_BUTTON_SELECTORS);
     if (!opened) throw new Error('Could not open the WhatsApp attachment picker');
-    await page.waitForTimeout(250);
+    await page.waitForTimeout(800);
   }
   const drawerInput = await findPhotoVideoMenuFileInput(page);
   const chooserPromise = page.waitForEvent('filechooser', { timeout: 4000 }).catch(() => null);
-  const photosOpened = await clickFirstVisible(page, PHOTO_VIDEO_MENU_SELECTORS);
-  if (!photosOpened) throw new Error('Could not select Photos & videos in WhatsApp');
+  const photosOpened = await clickPhotoVideoMenuItem(page);
+  if (!photosOpened) {
+    const controls = await describeVisibleMediaControls(page);
+    log(`Photos & videos menu item unavailable: ${JSON.stringify(controls)}`);
+    throw new Error('Could not select Photos & videos in WhatsApp');
+  }
   const fileChooser = await chooserPromise;
   const fileInput = fileChooser ? null : ((await findAttachedFileInput(page)) || drawerInput);
   if (!fileChooser && !fileInput) throw new Error('Could not find the WhatsApp image upload control');
