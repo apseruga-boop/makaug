@@ -15,6 +15,7 @@ const registry = require('../utils/southAfricaLocationRegistry');
 const mortgageRoute = require('../routes/mortgage');
 const propertiesRoute = require('../routes/properties');
 const { buildPublicSeoSnapshot } = require('../services/publicSeoService');
+const { priceLabel, propertySeoTitle } = require('../services/publicSeoRenderService');
 
 const root = path.resolve(__dirname, '..');
 const rawHtml = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
@@ -31,6 +32,20 @@ assert.equal(za.languages.length, 11);
 assert.deepEqual(za.locationHierarchy, ['province', 'city', 'suburb']);
 assert.equal(za.publicFeatures.marketplace, false);
 assert.equal(za.publicFeatures.valuation, false);
+assert.equal(priceLabel({ price: 1_450_000, price_period: 'once' }).replace(/\s/g, ' '), 'R 1 450 000');
+assert.equal(
+  propertySeoTitle({
+    listing_type: 'sale',
+    property_type: 'Apartment',
+    bedrooms: 2,
+    area: 'Lynnwood',
+    district: 'Gauteng',
+    price: 1_450_000,
+    price_period: 'once'
+  }).replace(/\s/g, ' '),
+  '2bdrm Apartment for Sale in Lynnwood, Gauteng — R 1 450 000 | seshaikhaya.com'
+);
+assert.doesNotMatch(priceLabel({ price: 1_450_000 }), /USh|UGX/);
 assert.equal(mortgageRoute.ACTIVE_COUNTRY_CODE, 'ZA');
 assert.deepEqual(
   mortgageRoute.FALLBACK_MORTGAGE_PROVIDERS.map((provider) => provider.name),

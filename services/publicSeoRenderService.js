@@ -341,10 +341,12 @@ async function loadPublicSeoListing(db, propertyId) {
 
 function priceLabel(listing = {}) {
   if (!(Number(listing.price) > 0)) return 'Price on application';
-  const amount = new Intl.NumberFormat('en-UG', { maximumFractionDigits: 0 }).format(Number(listing.price));
+  const numberLocale = ACTIVE_COUNTRY_CODE === 'ZA' ? 'en-ZA' : 'en-UG';
+  const currencyLabel = ACTIVE_CURRENCY === 'ZAR' ? 'R' : ACTIVE_CURRENCY === 'UGX' ? 'USh' : ACTIVE_CURRENCY;
+  const amount = new Intl.NumberFormat(numberLocale, { maximumFractionDigits: 0 }).format(Number(listing.price));
   const period = String(listing.price_period || '').trim().toLowerCase();
   const suffix = period && !['once', 'sale'].includes(period) ? `/${period}` : '';
-  return `USh ${amount}${suffix}`;
+  return `${currencyLabel} ${amount}${suffix}`;
 }
 
 function propertySeoTitle(listing = {}) {
