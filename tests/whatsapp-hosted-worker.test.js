@@ -13,6 +13,7 @@ const startScript = read('scripts/start-whatsapp-agent-render.sh');
 const adminApp = read('assets/makaug-app.js');
 const readiness = read('services/whatsappBridgeReadiness.js');
 const whatsappRoute = read('routes/whatsapp.js');
+const chatFilter = require('../services/whatsappWebChatFilter');
 
 assert(renderYaml.includes('type: worker'), 'Render blueprint must define a background worker for the WhatsApp agent');
 assert(renderYaml.includes('runtime: docker'), 'WhatsApp worker must run with Docker so Playwright/Chrome is available');
@@ -60,6 +61,13 @@ assert(agentScript.includes('login_screenshot_data_url: loginScreenshotDataUrl |
 assert(agentScript.includes('login_phone_pairing: phonePairing'), 'Non-ready heartbeats must expose phone pairing metadata for proof');
 assert(agentScript.includes('login_qr_refresh: qrRefresh'), 'Non-ready heartbeats must include QR refresh metadata for proof');
 assert(agentScript.includes('login_screenshot_data_url: null'), 'Online heartbeats must clear stale login screenshots');
+assert(agentScript.includes('ready_state: readyState') && agentScript.includes("phase: 'online'"), 'Online heartbeats must replace stale login readiness metadata');
+assert(agentScript.includes('isIgnoredWhatsappSystemChat(chatKey)') && agentScript.includes("skipped: 'whatsapp_system_chat'"), 'Worker must not ingest WhatsApp official system threads as customers');
+assert(agentScript.includes('.filter((row) => !isIgnoredWhatsappSystemChat(row.title))'), 'Unread counts and scans must exclude WhatsApp official system threads');
+assert.strictEqual(chatFilter.isIgnoredWhatsappSystemChat('WhatsApp'), true, 'WhatsApp official system chat must be ignored');
+assert.strictEqual(chatFilter.isIgnoredWhatsappSystemChat('  WHATSAPP  '), true, 'WhatsApp system chat matching must ignore case and spacing');
+assert.strictEqual(chatFilter.isIgnoredWhatsappSystemChat('+256 700 123456'), false, 'Real phone recipients must remain eligible');
+assert.strictEqual(chatFilter.isIgnoredWhatsappSystemChat('WhatsApp Customer'), false, 'Only the exact official system chat title should be suppressed');
 assert(agentScript.includes('WHATSAPP_WEB_COPILOT_USER_AGENT') && agentScript.includes('Chrome/120.0.0.0'), 'Hosted browser must present a normal Chrome user agent for WhatsApp Web');
 assert(agentScript.includes('--disable-blink-features=AutomationControlled') && agentScript.includes("navigator, 'webdriver'"), 'Hosted browser must avoid the automated/headless browser rejection path');
 assert(agentScript.includes('isChromiumProfileLockError') && agentScript.includes('launchPersistentContextWithProfileRetry'), 'Hosted worker must retry while Render rolling deploys still hold the persistent WhatsApp profile lock');
