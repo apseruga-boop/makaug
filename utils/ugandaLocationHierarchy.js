@@ -1,5 +1,6 @@
 const { DISTRICTS } = require('./constants');
 const {
+  canonicalLocationByKey,
   canonicalLocationOptions,
   canonicalUgandaDistrictsMentionedInText,
   canonicalizeUgandaLocation,
@@ -104,7 +105,9 @@ function districtForKnownLocationText(value = '') {
   return districtsForKnownLocationText(value)[0] || '';
 }
 
-function normalizeReviewLocationHierarchy(fields = {}) {
+function normalizeReviewLocationHierarchy(fields = {}, options = {}) {
+  const allowDistrictNode = options.allowDistrictNode === true;
+  const allowCanonicalHierarchy = options.allowCanonicalHierarchy === true;
   const errors = [];
   const area = clean(fields.area);
   const district = normalizeDistrict(fields.district) || clean(fields.district);
@@ -133,23 +136,25 @@ function normalizeReviewLocationHierarchy(fields = {}) {
   if (areaDistrict && areaDistrict !== district) {
     errors.push('area/neighbourhood must match the selected district');
   }
-  const canonical = area ? canonicalizeUgandaLocation(area, district) : null;
+  const explicitCanonical = canonicalLocationByKey(fields.canonical_location_id);
+  const canonical = explicitCanonical || (area ? canonicalizeUgandaLocation(area, district) : null);
   if (area && !canonical) {
     errors.push(isExcludedLocationOnly(area)
       ? 'area/neighbourhood must be a place, not a road, region, or water body'
       : 'area/neighbourhood must match a canonical Uganda location');
-  } else if (canonical && ['district', 'region'].includes(canonical.level)) {
+  } else if (canonical && (canonical.level === 'region' || (canonical.level === 'district' && !allowDistrictNode))) {
     errors.push('area/neighbourhood must be more specific than a district');
   }
 
-  if (canonical && !['district', 'region'].includes(canonical.level)) {
-    city = canonical.town || city;
+  if (canonical && canonical.level !== 'region' && (canonical.level !== 'district' || allowDistrictNode)) {
+    city = canonical.town || city || (canonical.level === 'district' ? `${canonical.name} Town` : '');
     neighborhood = canonical.name;
   }
 
   const tree = getDistrictLocationTree(district);
   let cityNode = city ? tree.find((item) => item.city === city) : null;
-  if (city && !cityNode) {
+  const explicitCanonicalHierarchy = allowCanonicalHierarchy && explicitCanonical && explicitCanonical.district === district;
+  if (city && !cityNode && !explicitCanonicalHierarchy) {
     errors.push('city/town must belong to the selected district');
   }
 
@@ -161,7 +166,7 @@ function normalizeReviewLocationHierarchy(fields = {}) {
     const neighborhoodMatchesCity = cityNode
       ? (cityNode.neighborhoods || []).some((n) => n.name === neighborhood)
       : false;
-    if (!neighborhoodMatchesCity) {
+    if (!neighborhoodMatchesCity && !(explicitCanonicalHierarchy && neighborhood === explicitCanonical.name)) {
       errors.push('neighbourhood must belong to the selected district and town/city');
     }
   }

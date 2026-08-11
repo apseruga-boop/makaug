@@ -176,7 +176,9 @@ test('public and King forms use the same resolver and clear stale hierarchy on u
   assert.match(app, /async function submitListProperty[\s\S]+finally[\s\S]+updateLpCanonicalLocationGuardState\(\)/);
   assert.match(page, /id="lp-location-unresolved-notice" role="alert" aria-live="polite" class="hidden/);
   assert.match(page, /id="lp-submit-btn"[^>]+disabled[^>]+aria-disabled="true"[^>]+aria-describedby="lp-location-unresolved-notice"/);
-  assert.match(app, /Resolve the area through the shared canonical location registry before approving/);
+  assert.match(app, /function canonicalTownForLocation/);
+  assert.match(app, /return \/\\b\(\?:town\|city\|municipality\|tc\)\\b\/i\.test\(name\) \? name : `\$\{name\} Town`/);
+  assert.match(app, /data-approval-blocker-host/);
   assert.match(route, /router\.get\('\/locations\/resolve'/);
   assert.match(route, /Canonical location confirmation is required before approval/);
   assert.match(route, /disambiguation_required/);

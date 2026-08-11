@@ -238,7 +238,8 @@ test('sourced candidate approval exemption follows stored provenance and is audi
   assert(propertiesRoute.includes('found_online_location_confirmed'), 'override should record location confirmation');
   assert(propertiesRoute.includes('sourcedCandidateRecordHasApprovalLocation'), 'override should verify location from the stored record, not only the request body');
   assert(propertiesRoute.includes('Location is required before found-online approval'), 'override error should explain that location is required');
-  assert(propertiesRoute.includes('cannot override missing location'), 'override details should make location non-negotiable');
+  assert(propertiesRoute.includes('Automated publication cannot override missing location'), 'automated publication should keep the missing-location gate hard');
+  assert(propertiesRoute.includes('authenticated human moderator may verify or override it'), 'human reviewers should receive the unified approval override');
   assert(propertiesRoute.includes('non-location review checks'), 'override should document that non-location checks are overridden');
   assert(propertiesRoute.includes('Found-online approval is only available'), 'override should reject ordinary listings');
   assert(propertiesRoute.includes('sourced_candidate_special_dispensation'), 'override should be stored on the property record');

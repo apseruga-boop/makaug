@@ -3138,15 +3138,22 @@ async function updatePropertyEditableFields({ propertyId, patch = {} }) {
   ));
   if (hasLocationHierarchyPatch) {
     const sourceAreaRaw = cleanText(normalizedPatch.area);
-    const hierarchy = normalizeReviewLocationHierarchy(normalizedPatch);
+    const hierarchy = normalizeReviewLocationHierarchy(normalizedPatch, {
+      allowDistrictNode: true,
+      allowCanonicalHierarchy: true
+    });
     errors.push(...hierarchy.errors);
     if (hierarchy.region) normalizedPatch.region = hierarchy.region;
     if (Object.prototype.hasOwnProperty.call(normalizedPatch, 'city')) normalizedPatch.city = hierarchy.city;
     if (Object.prototype.hasOwnProperty.call(normalizedPatch, 'neighborhood')) normalizedPatch.neighborhood = hierarchy.neighborhood;
-    const canonical = hierarchy.canonical || canonicalizeUgandaLocation(normalizedPatch.area, normalizedPatch.district);
-    if (canonical && !['district', 'region'].includes(canonical.level)) {
+    const canonical = canonicalLocationByKey(normalizedPatch.canonical_location_id)
+      || hierarchy.canonical
+      || canonicalizeUgandaLocation(normalizedPatch.area, normalizedPatch.district);
+    if (canonical && canonical.level !== 'region') {
       normalizedPatch.area = canonical.name;
       normalizedPatch.district = canonical.district;
+      normalizedPatch.city = canonical.town || normalizedPatch.city || (canonical.level === 'district' ? `${canonical.name} Town` : '');
+      normalizedPatch.neighborhood = canonical.name;
       fieldMap.area.value = canonical.name;
       extraPatch.moderator_area_input_raw = sourceAreaRaw || canonical.name;
       extraPatch.canonical_location_id = canonical.key;
