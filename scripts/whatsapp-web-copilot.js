@@ -2935,16 +2935,20 @@ async function findPhotoVideoMenuFileInput(page) {
       const menuItem = matches.nth(index);
       if (!await menuItem.isVisible().catch(() => false)) continue;
 
-      // WhatsApp mounts the active image input inside (or immediately around)
-      // the open Photos & videos menu item. Bind that input directly instead
-      // of an older hidden input that remains mounted in the chat shell.
-      let scope = menuItem;
-      for (let depth = 0; depth < 4; depth += 1) {
-        const inputs = scope.locator('input[type="file"][accept*="image"]');
-        const inputCount = await inputs.count().catch(() => 0);
-        if (inputCount) return inputs.nth(inputCount - 1);
-        scope = scope.locator('xpath=..');
+      // Current WhatsApp exposes a generic accept="*" input in the active
+      // attachment drawer. It is the live React-owned upload control even
+      // though an older accept="image/*" input remains mounted in the chat
+      // shell. Stay inside the drawer so we never bind the stale control.
+      const drawer = menuItem.locator('xpath=ancestor::*[@data-testid="drawer-middle"][1]');
+      if (await drawer.count().catch(() => 0)) {
+        const drawerInputs = drawer.locator('input[type="file"]');
+        const drawerInputCount = await drawerInputs.count().catch(() => 0);
+        if (drawerInputCount) return drawerInputs.nth(drawerInputCount - 1);
       }
+
+      const nestedInputs = menuItem.locator('input[type="file"]');
+      const nestedInputCount = await nestedInputs.count().catch(() => 0);
+      if (nestedInputCount) return nestedInputs.nth(nestedInputCount - 1);
     }
   }
   return null;
