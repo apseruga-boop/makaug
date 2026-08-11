@@ -103,6 +103,11 @@ const {
 } = require('../utils/humanIntegrityOverride');
 const { propertyPriceMetadata } = require('../utils/propertyPriceCurrency');
 const {
+  LISTING_EXTRA_TIMESTAMP_FIELDS,
+  normalizeListingTimestampFields,
+  normalizeListingTimestampValue
+} = require('../utils/listingTimestamp');
+const {
   canonicalLocationByKey,
   canonicalDisplayLocationForRow,
   canonicalLocationForRow,
@@ -417,7 +422,7 @@ function statusListingPatchFromBody(body = {}) {
 }
 
 async function applyStatusListingPatchBeforeModeration(req, propertyId, existing = {}, rawPatch = {}) {
-  const patch = statusListingPatchFromBody({ listing: rawPatch });
+  const patch = normalizeListingTimestampFields(statusListingPatchFromBody({ listing: rawPatch }));
   if (!Object.keys(patch).length) return { changed_fields: [], property: existing };
   const validateError = (message, details = []) => {
     const error = new Error(message);
@@ -461,7 +466,10 @@ async function applyStatusListingPatchBeforeModeration(req, propertyId, existing
       patch.price = Math.round(originalAmount * fxRate);
       patch.price_original = originalAmount;
       patch.price_fx_rate_ugx = fxRate;
-      patch.price_fx_as_of = cleanText(patch.price_fx_as_of || existing.price_fx_as_of || new Date().toISOString());
+      patch.price_fx_as_of = normalizeListingTimestampValue(
+        patch.price_fx_as_of ?? existing.price_fx_as_of ?? new Date(),
+        'price_fx_as_of'
+      );
     } else if (Object.prototype.hasOwnProperty.call(patch, 'price')) {
       patch.price_original = toNullableFloat(patch.price);
       patch.price_fx_rate_ugx = null;
@@ -568,6 +576,9 @@ async function applyStatusListingPatchBeforeModeration(req, propertyId, existing
     'student_room_label'
   ].forEach((key) => {
     if (Object.prototype.hasOwnProperty.call(patch, key)) extraPatch[key] = cleanText(patch[key]) || null;
+  });
+  LISTING_EXTRA_TIMESTAMP_FIELDS.forEach((key) => {
+    if (Object.prototype.hasOwnProperty.call(patch, key)) extraPatch[key] = patch[key];
   });
   [
     'canonical_location_id',
@@ -5375,10 +5386,12 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
       status: req.body?.status,
       message: error.message
     });
+    const invalidTimestamp = error.code === 'INVALID_LISTING_TIMESTAMP';
     return res.status(error.status || error.statusCode || 500).json({
       ok: false,
-      error: 'Status update failed',
-      details: [error.message || 'Unknown server error']
+      error: invalidTimestamp ? error.message : 'Status update failed',
+      details: error.details || [error.message || 'Unknown server error'],
+      ...(invalidTimestamp ? { invalid_field: error.field } : {})
     });
   }
 });

@@ -14032,7 +14032,7 @@ function staffListingPreviewPatch() {
     return collectAdminReviewListingPatch();
   }
   const get = (id) => document.getElementById(id)?.value ?? "";
-  return Object.fromEntries(Object.entries({
+  return adminNormalizeReviewListingTimestamps(Object.fromEntries(Object.entries({
     title: get("staff-preview-title"),
     description: get("staff-preview-description"),
     listing_type: get("staff-preview-listing-type"),
@@ -14051,7 +14051,7 @@ function staffListingPreviewPatch() {
     lister_email: get("staff-preview-lister-email"),
     bedrooms: get("staff-preview-bedrooms"),
     bathrooms: get("staff-preview-bathrooms")
-  }).filter(([, value]) => String(value ?? "").trim() !== ""));
+  }).filter(([, value]) => String(value ?? "").trim() !== "")), adminActiveReview || {});
 }
 
 function staffReviewPatch() {
@@ -25004,6 +25004,37 @@ async function initAdminReviewLocationMap(review = adminActiveReview) {
   }, 150);
 }
 
+function adminReviewTimestampField(field = "") {
+  const key = String(field || "").trim();
+  return Boolean(key) && (key.endsWith("_at") || ["available_from", "availability_date", "price_fx_as_of"].includes(key));
+}
+
+function adminReviewIsoTimestamp(value) {
+  if (value == null || value === "") return null;
+  const parsed = value instanceof Date ? new Date(value.getTime()) : new Date(value);
+  return Number.isFinite(parsed.getTime()) ? parsed.toISOString() : String(value).trim();
+}
+
+function adminNormalizeReviewListingTimestamps(patch = {}, original = {}) {
+  const normalized = { ...(patch || {}) };
+  const originalExtra = original?.extra_fields && typeof original.extra_fields === "object" ? original.extra_fields : {};
+  Object.keys(normalized).forEach((field) => {
+    if (!adminReviewTimestampField(field)) return;
+    const nextValue = adminReviewIsoTimestamp(normalized[field]);
+    const originalHasField = Object.prototype.hasOwnProperty.call(original || {}, field)
+      || Object.prototype.hasOwnProperty.call(originalExtra, field);
+    const originalValue = Object.prototype.hasOwnProperty.call(original || {}, field)
+      ? original[field]
+      : originalExtra[field];
+    if (originalHasField && nextValue === adminReviewIsoTimestamp(originalValue)) {
+      delete normalized[field];
+      return;
+    }
+    normalized[field] = nextValue;
+  });
+  return normalized;
+}
+
 function collectAdminReviewListingPatch() {
   const get = (id) => document.getElementById(id)?.value ?? "";
   const listingType = normalizeType(get("admin-review-listing-type-edit"));
@@ -25035,7 +25066,7 @@ function collectAdminReviewListingPatch() {
   const mergedAmenities = [...new Set([...amenities, ...studentAmenities])];
   const nearestUniversity = get("admin-review-nearest-uni-edit");
   const roomArrangement = get("admin-review-room-arrangement-edit");
-  return {
+  return adminNormalizeReviewListingTimestamps({
     title: get("admin-review-title-edit"),
     description: get("admin-review-description-edit"),
     listing_type: listingType,
@@ -25083,7 +25114,7 @@ function collectAdminReviewListingPatch() {
     student_universities: listingType === "student" && nearestUniversity ? [nearestUniversity] : [],
     student_room_label: listingType === "student" ? roomArrangement : "",
     students_welcome: listingType === "student"
-  };
+  }, adminActiveReview || {});
 }
 
 function adminReviewHumanLocationConfirmation() {
