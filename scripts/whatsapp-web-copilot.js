@@ -3246,7 +3246,6 @@ async function typeAndSendImageReply(page, mediaUrl, caption) {
     }
   }
   if (!captionReady) {
-    await page.keyboard.press('Escape').catch(() => null);
     const pasted = await pasteImageIntoComposer(page, media);
     if (pasted) captionReady = await waitForMediaCaptionReady(page);
   }
