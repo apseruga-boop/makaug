@@ -1549,7 +1549,11 @@ async function start() {
     startMarketplaceLifecycleScheduler(db);
     startMarketplaceDripScheduler(db);
   }
-  startFeaturedRotationScheduler(db);
+  if (!IS_SOUTH_AFRICA || process.env.FEATURED_ROTATION_SCHEDULER_ENABLED === 'true') {
+    startFeaturedRotationScheduler(db);
+  } else {
+    logger.info('Featured rotation scheduler disabled for South Africa staging');
+  }
   runtimeReady = true;
   logger.info(`${ACTIVE_TENANT.brandName} backend ready for traffic`);
   schedulePublicCacheWarmup(`http://127.0.0.1:${port}`);

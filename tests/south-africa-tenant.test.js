@@ -107,6 +107,8 @@ assert(serverSource.includes('function readCountryAppAsset()'), 'ZA public JavaS
 assert(serverSource.includes("renderPublicHtml('/');"), 'ZA public HTML must warm before readiness');
 assert(serverSource.includes('compressed: adapted.compressed'), 'ZA public JavaScript must reuse compressed output');
 assert(serverSource.includes('dynamicCompression: false'), 'Public HTML must not synchronously compress on the request path');
+assert(serverSource.includes("process.env.FEATURED_ROTATION_SCHEDULER_ENABLED === 'true'"), 'ZA featured rotation must require an explicit enable');
+assert(renderBlueprintSource.includes('FEATURED_ROTATION_SCHEDULER_ENABLED'), 'ZA Blueprint must disable empty-inventory rotation');
 assert(
   renderBlueprintSource.includes('startCommand: node scripts/render-start.js'),
   'Render Blueprint must use the early liveness bootstrap'

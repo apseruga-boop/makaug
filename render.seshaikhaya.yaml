@@ -49,6 +49,8 @@ projects:
                 value: "false"
               - key: HARVEST_PUBLIC_SUBMISSIONS_ENABLED
                 value: "false"
+              - key: FEATURED_ROTATION_SCHEDULER_ENABLED
+                value: "false"
               - key: FEATURED_ROTATION_TIMEZONE
                 value: Africa/Johannesburg
               - key: WHATSAPP_DELIVERY_MODE
