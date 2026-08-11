@@ -85,8 +85,8 @@ test('definitive coverage additions resolve to the correct district and region',
     assert.equal(canonical?.district, district, `${area} must resolve to ${district}`);
     assert.equal(regionForDistrict(canonical?.district), 'Central');
   });
-  assert.equal(canonicalizeUgandaLocation('Kanyanya'), null, 'duplicate place names require a district hint');
-  assert.equal(canonicalizeUgandaLocation('Njeru'), null, 'duplicate place names require a district hint');
+  assert.equal(canonicalizeUgandaLocation('Kanyanya')?.key, 'kampala:kanyanya', 'major area outranks rural namesakes');
+  assert.equal(canonicalizeUgandaLocation('Njeru')?.key, 'buikwe:njeru', 'city outranks a rural parish namesake');
 });
 
 test('roads, regions, water bodies and impossible district combinations stay unmatched', () => {

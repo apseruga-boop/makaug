@@ -24224,7 +24224,7 @@ async function adminReviewFindAddressOrPlace(options = {}) {
       : "Location not recognised — pin set but region/district/area could NOT be auto-filled.", "amber");
     return false;
   }
-  const canonicalResolution = await resolveUgandaLocationWithLabelFallback(query, point.label || "");
+  const canonicalResolution = await resolveUgandaLocationWithLabelFallback(query, point.canonicalQuery || "");
   const canonicalLocation = canonicalResolution.status === "matched" ? canonicalResolution.location : null;
   if (input && point.label) input.value = point.label;
   adminSetReviewEditValue("admin-review-address-edit", point.label || query);
@@ -28155,6 +28155,28 @@ function extractStreetNameFromGoogleResult(result = {}) {
   return normalizeStreetCandidate([streetNumber, route || premise].filter(Boolean).join(" ") || route || premise);
 }
 
+function extractCanonicalLocationQueryFromGoogleResult(result = {}) {
+  const components = Array.isArray(result?.address_components) ? result.address_components : [];
+  const localityTypes = [
+    "neighborhood",
+    "sublocality_level_4",
+    "sublocality_level_3",
+    "sublocality_level_2",
+    "sublocality_level_1",
+    "sublocality",
+    "locality",
+    "postal_town",
+    "administrative_area_level_3",
+    "administrative_area_level_2"
+  ];
+  for (const type of localityTypes) {
+    const match = components.find((item) => Array.isArray(item.types) && item.types.includes(type));
+    const value = String(match?.long_name || match?.short_name || "").trim();
+    if (value) return value;
+  }
+  return "";
+}
+
 	    function extractStreetNameFromNominatimAddress(address = {}) {
 	      return normalizeStreetCandidate(
 	        address?.road
@@ -28398,6 +28420,7 @@ async function geocodeWithGoogle(query, options = {}) {
         lat: loc.lat(),
         lng: loc.lng(),
         label: results[0].formatted_address || query,
+        canonicalQuery: extractCanonicalLocationQueryFromGoogleResult(results[0]),
         placeId: results[0].place_id || "",
         streetName
       });
@@ -28435,6 +28458,17 @@ async function geocodeWithNominatim(query) {
       lat,
       lng,
       label: row?.display_name || query,
+      canonicalQuery: String(
+        row?.address?.neighbourhood
+        || row?.address?.suburb
+        || row?.address?.quarter
+        || row?.address?.village
+        || row?.address?.town
+        || row?.address?.city
+        || row?.address?.municipality
+        || row?.address?.county
+        || ""
+      ).trim(),
       placeId: row?.place_id ? `osm:${row.place_id}` : "",
       streetName,
       provider: "nominatim",
@@ -28463,7 +28497,7 @@ async function applyLpAddressPlaceResult(point, query = "") {
   setLpHiddenValue("lp-location-confidence", point.confidence != null ? String(point.confidence) : "0.65");
   setLpResolvedLocationLabel(label);
   setListPinCoords(point.lat, point.lng, true, true);
-  const canonicalLocation = await resolveLpCanonicalLocation(query, label);
+  const canonicalLocation = await resolveLpCanonicalLocation(query, point.canonicalQuery || "");
   const confirmEl = document.getElementById("lp-location-confirm");
   if (confirmEl) confirmEl.checked = false;
   updateLpLocationConfirmButton();

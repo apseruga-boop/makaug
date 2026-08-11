@@ -2181,12 +2181,18 @@ router.get('/locations/resolve', (req, res) => {
   const match = resolution.match
     ? publicCanonicalLocationPayload({ ...resolution.match, match: resolution.match_type, confidence: resolution.confidence, auto_resolvable: true })
     : null;
-  const candidates = resolution.candidates.map((item) => publicCanonicalLocationPayload({
-    ...item,
-    match: resolution.match_type,
-    confidence: resolution.status === 'matched' ? 1 : 0,
-    auto_resolvable: resolution.status === 'matched'
-  }));
+  const candidates = resolution.candidates.map((item) => {
+    const selected = resolution.status === 'matched' && resolution.match?.key === item.key;
+    return publicCanonicalLocationPayload({
+      ...item,
+      match: selected
+        ? resolution.match_type
+        : resolution.status === 'matched' ? 'alternative_exact_alias' : resolution.match_type,
+      did_you_mean: resolution.status === 'matched' && !selected,
+      confidence: selected ? 1 : 0,
+      auto_resolvable: selected
+    });
+  });
   return res.json({
     ok: true,
     data: match,
@@ -2197,6 +2203,7 @@ router.get('/locations/resolve', (req, res) => {
       unmatched: resolution.status !== 'matched',
       approval_blocked: resolution.status !== 'matched',
       match: resolution.match_type,
+      matched_query: resolution.matched_query || query,
       confidence: resolution.confidence,
       candidates
     }
