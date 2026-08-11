@@ -130,6 +130,15 @@ test('country wrappers, punctuation and safe road noise normalize before exact m
   const numberedParish = resolveCanonicalUgandaLocation('405 Brigade, Kotido');
   assert.equal(numberedParish.status, 'matched');
   assert.equal(numberedParish.match?.key, 'kotido:405 brigade');
+
+  const numberedParishSuggestions = canonicalLocationSuggestions('405 Brigade, Kotido');
+  assert.equal(numberedParishSuggestions[0]?.canonical_key, 'kotido:405 brigade');
+  assert.equal(numberedParishSuggestions[0]?.auto_resolvable, true);
+
+  const kitendeCorridorSuggestions = canonicalLocationSuggestions('Kitende, Entebbe Road, Wakiso');
+  assert.equal(kitendeCorridorSuggestions[0]?.canonical_key, 'wakiso:kitende');
+  assert.equal(kitendeCorridorSuggestions[0]?.auto_resolvable, true);
+  assert.equal(kitendeCorridorSuggestions.some((entry) => entry.canonical_key === 'wakiso:entebbe'), false);
   assert.equal(resolveCanonicalUgandaLocation('Kampala Road').status, 'unmatched');
   assert.equal(resolveCanonicalUgandaLocation('Hoima Rd').status, 'unmatched');
   assert.equal(resolveCanonicalUgandaLocation('Zzxq, Uganda').status, 'unmatched');

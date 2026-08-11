@@ -791,7 +791,11 @@ function canonicalLocationSuggestions(query = '', counts = new Map(), limit = 8)
       aliasKeys.includes(attempt.normalized)
       && !(attempt.noise_stripped && normalizeDistrict(attempt.value))
     ));
-    const exact = exactAttemptIndex >= 0;
+    const selectedExact = exactResolution.status === 'matched'
+      && exactResolution.match?.key === entry.key;
+    const resolutionExact = exactResolution.status === 'matched'
+      && resolutionCandidateKeys.has(entry.key);
+    const exact = exactAttemptIndex >= 0 || resolutionExact;
     const comparableNeedles = searchableAttempts.map((attempt) => attempt.normalized);
     const prefix = !exact && comparableNeedles.some((needle) => aliasKeys.some((alias) => alias.startsWith(needle)));
     const contains = !exact && comparableNeedles.some((needle) => aliasKeys.some((alias) => alias.includes(needle)));
@@ -801,13 +805,7 @@ function canonicalLocationSuggestions(query = '', counts = new Map(), limit = 8)
     const fuzzyEligible = comparableNeedles.some((needle) => needle.length >= 5);
     const matchRank = exact ? 4 : prefix ? 3 : contains ? 2 : (fuzzyEligible && fuzzy >= 0.72) ? 1 : 0;
     if (!matchRank) return null;
-    const selectedExact = exact
-      && exactResolution.status === 'matched'
-      && exactResolution.match?.key === entry.key;
-    const alternativeExact = exact
-      && exactResolution.status === 'matched'
-      && resolutionCandidateKeys.has(entry.key)
-      && !selectedExact;
+    const alternativeExact = resolutionExact && !selectedExact;
     return {
       canonical_key: entry.key,
       location: entry.name,
@@ -826,11 +824,14 @@ function canonicalLocationSuggestions(query = '', counts = new Map(), limit = 8)
       auto_resolvable: selectedExact,
     };
   };
-  return registry
+  const ranked = registry
     .map(scoreEntry)
     .filter(Boolean)
-    .sort((a, b) => b.match_rank - a.match_rank || Number(b.auto_resolvable) - Number(a.auto_resolvable) || b.listing_count - a.listing_count || b.score - a.score || a.location.localeCompare(b.location))
-    .slice(0, Math.max(1, Math.min(8, Number(limit) || 8)));
+    .sort((a, b) => b.match_rank - a.match_rank || Number(b.auto_resolvable) - Number(a.auto_resolvable) || b.listing_count - a.listing_count || b.score - a.score || a.location.localeCompare(b.location));
+  const exactRanked = exactResolution.status === 'matched'
+    ? ranked.filter((entry) => resolutionCandidateKeys.has(entry.canonical_key))
+    : ranked;
+  return exactRanked.slice(0, Math.max(1, Math.min(8, Number(limit) || 8)));
 }
 
 function canonicalLocationSearchScope(keys = [], nearbyKm = 0) {
