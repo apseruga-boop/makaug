@@ -15,9 +15,11 @@ const {
   detectPropertyTypeEvidence,
 } = require('./propertyTypeVocabulary');
 
-const MAX_CANONICAL_PRICE_UGX = 100_000_000_000;
-const MIN_WHOLE_PROPERTY_PRICE_UGX = 1_000_000;
-const MIN_RECURRING_PRICE_UGX = 30_000;
+const ACTIVE_COUNTRY_CODE = String(process.env.COUNTRY_CODE || 'UG').trim().toUpperCase();
+const CANONICAL_CURRENCY = ACTIVE_COUNTRY_CODE === 'ZA' ? 'ZAR' : 'UGX';
+const MAX_CANONICAL_PRICE_UGX = ACTIVE_COUNTRY_CODE === 'ZA' ? 10_000_000_000 : 100_000_000_000;
+const MIN_WHOLE_PROPERTY_PRICE_UGX = ACTIVE_COUNTRY_CODE === 'ZA' ? 10_000 : 1_000_000;
+const MIN_RECURRING_PRICE_UGX = ACTIVE_COUNTRY_CODE === 'ZA' ? 500 : 30_000;
 
 const STRONG_LAND_PATTERN = /\b(?:(?:prime|vacant|bare|titled)\s+land|(?:land|plots?|ettaka|kibanja|bibanja)\s+(?:is\s+)?(?:for|on)\s+sale|\d+(?:\.\d+)?\s*(?:acres?|decimals?|square\s+(?:miles?|kilomet(?:er|re)s?))(?:\s+of\s+land)?\s+(?:for|on)\s+sale|square\s+(?:miles?|kilomet(?:er|re)s?)\s+of\s+land)\b/i;
 const LAND_ASSET_PATTERN = /\b(?:plots?|acres?|decimals?|farmland|bare[-\s]+land|vacant\s+land|prime\s+land|square\s+(?:miles?|kilomet(?:er|re)s?)(?:\s+of\s+land)?|ettaka|kibanja|bibanja)\b/i;
@@ -296,10 +298,10 @@ function priceMatchesContact(record = {}, price = null) {
     record.whatsapp,
     extra.public_contact_phone,
     extra.contact_phone,
-    ...(evidence.match(/(?:\+?256|0)?7\d{8}/g) || []),
+    ...(evidence.match(ACTIVE_COUNTRY_CODE === 'ZA' ? /(?:\+?27|0)?[6-8]\d{8}/g : /(?:\+?256|0)?7\d{8}/g) || []),
   ].map((value) => String(value || '').replace(/\D/g, '')).filter(Boolean);
   return contacts.some((digits) => {
-    const local = digits.replace(/^256/, '').replace(/^0/, '');
+    const local = digits.replace(ACTIVE_COUNTRY_CODE === 'ZA' ? /^27/ : /^256/, '').replace(/^0/, '');
     return priceDigits === digits || priceDigits === local || priceDigits === `0${local}`;
   });
 }
@@ -312,12 +314,12 @@ function listingDataIntegrityReport(record = {}, options = {}) {
   const poa = hasPriceOnApplication(record);
   const transactionType = normalizeCommercialTransactionType(record.transaction_type || record.transactionType);
   const commercialType = normalizeCommercialPropertyType(record.property_type || record.commercial_type);
-  const storedCurrency = compact(record.price_currency || object(record.extra_fields).price_currency || 'UGX').toUpperCase();
+  const storedCurrency = compact(record.price_currency || object(record.extra_fields).price_currency || CANONICAL_CURRENCY).toUpperCase();
   const originalCurrency = compact(
     record.price_original_currency
       || object(record.extra_fields).price_original_currency
-      || object(record.extra_fields).source_price_currency
-      || (storedCurrency === 'USD' ? 'USD' : 'UGX')
+    || object(record.extra_fields).source_price_currency
+    || (storedCurrency === 'USD' ? 'USD' : CANONICAL_CURRENCY)
   ).toUpperCase();
   const issues = [];
   const add = (code, message, details = {}) => issues.push({ code, message, ...details });
@@ -342,7 +344,7 @@ function listingDataIntegrityReport(record = {}, options = {}) {
     add('price_and_poa_conflict', 'A listing cannot carry both a numeric price and Price on application.');
   }
   if (Number.isFinite(price) && price > MAX_CANONICAL_PRICE_UGX) {
-    add('price_above_100bn_ugx', 'Canonical UGX price exceeds the 100 billion integrity clamp.');
+    add('price_above_canonical_sanity_limit', `Canonical ${CANONICAL_CURRENCY} price exceeds the configured integrity clamp.`);
   }
   if (priceMatchesContact(record, price)) {
     add('phone_number_stored_as_price', 'The stored price matches a captured contact number.');
@@ -350,25 +352,25 @@ function listingDataIntegrityReport(record = {}, options = {}) {
   if (Number.isFinite(price) && price > 0) {
     const commercialSale = category === 'commercial' && (transactionType === 'sale' || classification.transaction_type === 'sale');
     if ((['sale', 'land'].includes(category) || commercialSale) && price < MIN_WHOLE_PROPERTY_PRICE_UGX) {
-      add('whole_property_price_below_1m', 'Whole-property sale/land prices below UGX 1,000,000 require review.');
+      add('whole_property_price_below_sanity_floor', `Whole-property sale/land prices below the ${CANONICAL_CURRENCY} sanity floor require review.`);
     }
     if (['rent', 'student'].includes(category) && price < MIN_RECURRING_PRICE_UGX) {
-      add('recurring_price_below_30k', 'Recurring residential/student prices below UGX 30,000 require review.');
+      add('recurring_price_below_sanity_floor', `Recurring residential/student prices below the ${CANONICAL_CURRENCY} sanity floor require review.`);
     }
   }
 
-  if (storedCurrency !== 'UGX') {
-    add('canonical_price_currency_not_ugx', 'The stored canonical price is UGX, so price_currency must be UGX.');
+  if (storedCurrency !== CANONICAL_CURRENCY) {
+    add('canonical_price_currency_mismatch', `The stored canonical price is ${CANONICAL_CURRENCY}, so price_currency must match.`);
   }
-  if (originalCurrency === 'USD') {
+  if (originalCurrency !== CANONICAL_CURRENCY) {
     const original = Number(record.price_original ?? object(record.extra_fields).price_original);
     const rate = Number(record.price_fx_rate_ugx ?? object(record.extra_fields).price_fx_rate_ugx);
     if (!Number.isFinite(original) || original <= 0 || !Number.isFinite(rate) || rate <= 0) {
-      add('usd_source_provenance_incomplete', 'USD source amount and FX rate are required.');
+      add('fx_source_provenance_incomplete', `${originalCurrency} source amount and FX rate are required.`);
     } else if (Number.isFinite(price) && price > 0) {
       const expected = Math.round(original * rate);
       const drift = Math.abs(price - expected) / Math.max(price, expected);
-      if (drift > 0.01) add('usd_fx_magnitude_mismatch', 'Canonical UGX price does not match source USD amount multiplied by the stored FX rate.', { expected_price_ugx: expected });
+      if (drift > 0.01) add('fx_magnitude_mismatch', `Canonical ${CANONICAL_CURRENCY} price does not match source ${originalCurrency} amount multiplied by the stored FX rate.`, { expected_price: expected });
     }
   }
 

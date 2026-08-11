@@ -17,7 +17,7 @@ const {
 const {
   resolveCanonicalUgandaLocation,
   resolveCanonicalUgandaLocationFromText,
-} = require('../utils/ugandaLocationRegistry');
+} = require('../utils/locationRegistry');
 const {
   maskPhonesForPriceExtraction,
   normalizeUgandanSourcePhone,

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">seshaikhaya</title>
+  <desc id="desc">A South African green and gold home mark</desc>
+  <rect width="128" height="128" rx="28" fill="#007749"/>
+  <path d="M18 62 64 23l46 39v43H77V76H51v29H18Z" fill="#fff"/>
+  <path d="m18 62 46-39 46 39-9 11-37-31-37 31Z" fill="#ffb81c"/>
+  <path d="M51 105V76h26v29" fill="#111"/>
+  <path d="M18 88h33v17H18Z" fill="#de3831"/>
+  <path d="M77 88h33v17H77Z" fill="#002395"/>
+</svg>

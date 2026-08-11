@@ -95,19 +95,20 @@ const {
 } = require('../utils/commercialClassification');
 const { listingPriceQuality } = require('../utils/listingPriceQuality');
 const { listingDataIntegrityReport } = require('../utils/listingDataIntegrity');
+const { CANONICAL_PROPERTY_CURRENCY, propertyPriceMetadata } = require('../utils/propertyPriceCurrency');
 const {
   HUMAN_APPROVAL_OVERRIDE_MARKER,
   HUMAN_INTEGRITY_OVERRIDE_MARKER,
   HUMAN_INTEGRITY_OVERRIDE_NOTE,
   humanApprovalOverrideAccess
 } = require('../utils/humanIntegrityOverride');
-const { propertyPriceMetadata } = require('../utils/propertyPriceCurrency');
 const {
   LISTING_EXTRA_TIMESTAMP_FIELDS,
   normalizeListingTimestampFields,
   normalizeListingTimestampValue
 } = require('../utils/listingTimestamp');
 const {
+  PROVINCES,
   canonicalLocationByKey,
   canonicalDisplayLocationForRow,
   canonicalLocationForRow,
@@ -120,10 +121,19 @@ const {
   resolveCanonicalUgandaLocation,
   normalizeDistrict,
   normalizeLocationKey
-} = require('../utils/ugandaLocationRegistry');
+} = require('../utils/locationRegistry');
 const { regionForDistrict } = require('../utils/ugandaLocationHierarchy');
 
 const router = express.Router();
+const ACTIVE_COUNTRY_CODE = String(process.env.COUNTRY_CODE || 'UG').trim().toUpperCase();
+const IS_SOUTH_AFRICA = ACTIVE_COUNTRY_CODE === 'ZA';
+const ACTIVE_COUNTRY_NAME = IS_SOUTH_AFRICA ? 'South Africa' : 'Uganda';
+const ACTIVE_REGION_LABEL = IS_SOUTH_AFRICA ? 'province' : 'district';
+const ACTIVE_PRIMARY_REGIONS = IS_SOUTH_AFRICA ? (PROVINCES || []) : DISTRICTS;
+const ACTIVE_PRICE_CURRENCIES = IS_SOUTH_AFRICA ? ['ZAR', 'USD', 'EUR', 'GBP'] : ['UGX', 'USD'];
+const ACTIVE_BRAND_NAME = IS_SOUTH_AFRICA ? 'seshaikhaya' : 'makaug';
+const ACTIVE_PUBLIC_DOMAIN = IS_SOUTH_AFRICA ? 'seshaikhaya.com' : 'makaug.com';
+const activeRegionForDistrict = (district) => IS_SOUTH_AFRICA ? cleanText(district) : regionForDistrict(district);
 const LAUNCH_SEED_LISTING_MARKERS = ['SOFT LAUNCH TEST - DELETE', 'QA TEST - DELETE'];
 const LAUNCH_DUMMY_LISTING_TITLES = new Set(['sdgsdgd', 'sgsgsgsgs']);
 const PUBLIC_LOCATION_SUGGEST_CACHE_TTL_MS = 2 * 60 * 1000;
@@ -324,15 +334,41 @@ function normalizePublicSearchNeedle(value = '') {
 }
 
 function addCanonicalLocationSearchFilter(filters, values, scope = {}) {
-  const locations = [...(scope.exact || []), ...(scope.nearby || [])];
-  if (!locations.length) return false;
-  const canonicalKeys = locations.map((location) => location.key).filter(Boolean);
-  addFilter(
-    filters,
-    values,
-    `COALESCE(p.extra_fields->>'canonical_location_id', '') = ANY(?::text[])`,
-    canonicalKeys
-  );
+  if (!IS_SOUTH_AFRICA) {
+    const canonicalKeys = [...(scope.exact || []), ...(scope.nearby || [])]
+      .map((location) => location.key)
+      .filter(Boolean);
+    if (!canonicalKeys.length) return false;
+    addFilter(
+      filters,
+      values,
+      `COALESCE(p.extra_fields->>'canonical_location_id', '') = ANY(?::text[])`,
+      canonicalKeys
+    );
+    return true;
+  }
+  const selected = scope.selected || scope.exact || [];
+  const clauses = [];
+  const clauseValues = [];
+  for (const location of selected) {
+    if (IS_SOUTH_AFRICA && location.level === 'province') {
+      clauses.push(`COALESCE(p.extra_fields->>'province', p.district, '') = ?`);
+      clauseValues.push(location.province || location.name);
+    } else if (IS_SOUTH_AFRICA && location.level === 'city') {
+      clauses.push(`(COALESCE(p.extra_fields->>'province', p.district, '') = ? AND COALESCE(p.extra_fields->>'city', '') = ?)`);
+      clauseValues.push(location.province || location.district, location.city || location.name);
+    } else if (location.key) {
+      clauses.push(`COALESCE(p.extra_fields->>'canonical_location_id', '') = ?`);
+      clauseValues.push(location.key);
+    }
+  }
+  for (const location of scope.nearby || []) {
+    if (!location.key) continue;
+    clauses.push(`COALESCE(p.extra_fields->>'canonical_location_id', '') = ?`);
+    clauseValues.push(location.key);
+  }
+  if (!clauses.length) return false;
+  addFilter(filters, values, `(${clauses.join(' OR ')})`, ...clauseValues);
   return true;
 }
 
@@ -358,6 +394,17 @@ function publicLocationMatchForRow(row = {}, scope = {}) {
   const nearbyByKey = new Map((scope.nearby || []).map((location) => [location.key, location]));
   if (selectedKeys.has(canonical.key)) {
     return { type: 'exact', label: canonical.name, canonical_location_id: canonical.key };
+  }
+  const parent = (scope.selected || []).find((location) => {
+    if (!IS_SOUTH_AFRICA) return false;
+    if (location.level === 'province') return canonical.province === location.province;
+    if (location.level === 'city') {
+      return canonical.province === location.province && canonical.city === location.city;
+    }
+    return false;
+  });
+  if (parent) {
+    return { type: 'descendant', label: canonical.name, canonical_location_id: canonical.key };
   }
   if (nearbyByKey.has(canonical.key)) {
     return {
@@ -452,16 +499,16 @@ async function applyStatusListingPatchBeforeModeration(req, propertyId, existing
   const sourceCurrencyInput = patch.price_original_currency ?? patch.price_currency;
   if (sourceCurrencyInput != null) {
     const sourceCurrency = cleanText(sourceCurrencyInput).toUpperCase();
-    if (!['UGX', 'USD'].includes(sourceCurrency)) {
-      throw validateError('price_original_currency must be UGX or USD');
+    if (!ACTIVE_PRICE_CURRENCIES.includes(sourceCurrency)) {
+      throw validateError(`price_original_currency must be ${ACTIVE_PRICE_CURRENCIES.join(', ')}`);
     }
-    patch.price_currency = 'UGX';
+    patch.price_currency = CANONICAL_PROPERTY_CURRENCY;
     patch.price_original_currency = sourceCurrency;
-    if (sourceCurrency === 'USD') {
+    if (sourceCurrency !== CANONICAL_PROPERTY_CURRENCY) {
       const originalAmount = toNullableFloat(patch.price_original ?? existing.price_original);
       const fxRate = toNullableFloat(patch.price_fx_rate_ugx ?? existing.price_fx_rate_ugx);
       if (!(originalAmount > 0) || !(fxRate > 0)) {
-        throw validateError('A positive original USD amount and UGX FX rate are required');
+        throw validateError(`A positive original ${sourceCurrency} amount and ${CANONICAL_PROPERTY_CURRENCY} FX rate are required`);
       }
       patch.price = Math.round(originalAmount * fxRate);
       patch.price_original = originalAmount;
@@ -507,15 +554,15 @@ async function applyStatusListingPatchBeforeModeration(req, propertyId, existing
     area: (value) => cleanText(value),
     district: (value) => {
       const district = cleanText(value);
-      if (district && !DISTRICTS.includes(district)) {
-        throw validateError('district must be one of Uganda\'s valid districts');
+      if (district && !ACTIVE_PRIMARY_REGIONS.includes(district)) {
+        throw validateError(`${ACTIVE_REGION_LABEL} must be one of ${ACTIVE_COUNTRY_NAME}'s valid ${ACTIVE_REGION_LABEL}s`);
       }
       return district;
     },
     address: (value) => cleanText(value) || null,
     price: (value) => toNullableInt(value),
-    price_currency: () => 'UGX',
-    price_original_currency: (value) => cleanText(value).toUpperCase() || 'UGX',
+    price_currency: () => CANONICAL_PROPERTY_CURRENCY,
+    price_original_currency: (value) => cleanText(value).toUpperCase() || CANONICAL_PROPERTY_CURRENCY,
     price_original: (value) => toNullableFloat(value),
     price_fx_rate_ugx: (value) => toNullableFloat(value),
     price_fx_as_of: (value) => cleanText(value) || null,
@@ -892,8 +939,8 @@ function publicAreaLabelFor(property = {}, extra = {}) {
     || property.area
     || property.district
     || property.address
-    || 'Uganda'
-  ) || 'Uganda';
+    || ACTIVE_COUNTRY_NAME
+  ) || ACTIVE_COUNTRY_NAME;
 }
 
 function thirdPartyTypeLabel(property = {}) {
@@ -908,9 +955,11 @@ function thirdPartyTypeLabel(property = {}) {
 function publicPriceLabelFor(property = {}) {
   const raw = property.price == null ? '' : String(property.price).replace(/[^\d.]/g, '');
   const amount = Number(raw);
-  if (!Number.isFinite(amount) || amount <= 0) return 'Price upon application';
+  if (!Number.isFinite(amount) || amount <= 0) return 'Price on application';
   const period = cleanText(property.price_period || '').toLowerCase();
-  return `USh ${Math.round(amount).toLocaleString('en-US')}${period === 'month' ? '/month' : ''}`;
+  const currencyLabel = IS_SOUTH_AFRICA ? 'R' : 'USh';
+  const locale = IS_SOUTH_AFRICA ? 'en-ZA' : 'en-US';
+  return `${currencyLabel} ${Math.round(amount).toLocaleString(locale)}${period === 'month' ? '/month' : ''}`;
 }
 
 function stripTransactionFromPublicPropertyType(value = '') {
@@ -1046,6 +1095,11 @@ async function getOptionalAuthUser(req) {
 
 function normalizeUgPhone(phone) {
   const value = normalizePhone(phone);
+  if (IS_SOUTH_AFRICA) {
+    if (/^0[6-8]\d{8}$/.test(value)) return `+27${value.slice(1)}`;
+    if (/^27[6-8]\d{8}$/.test(value)) return `+${value}`;
+    return value;
+  }
   if (/^0\d{9}$/.test(value)) return `+256${value.slice(1)}`;
   if (/^256\d{9}$/.test(value)) return `+${value}`;
   return value;
@@ -1059,7 +1113,10 @@ function normalizePublicUgandaContactPhone(value = '') {
 
 function publicUgandaContactPhoneFromText(text = '') {
   const raw = String(text || '');
-  const matches = raw.match(/(?:\+?256|0)(?:[\s().-]*\d){9}/g) || [];
+  const pattern = IS_SOUTH_AFRICA
+    ? /(?:\+?27[\s().-]*|0)[6-8](?:[\s().-]*\d){8}/g
+    : /(?:\+?256|0)(?:[\s().-]*\d){9}/g;
+  const matches = raw.match(pattern) || [];
   for (const match of matches) {
     const phone = normalizePublicUgandaContactPhone(match);
     if (phone) return phone;
@@ -1113,7 +1170,7 @@ function publicContactPhoneForRow(row = {}, safeExtra = null) {
   return safeExtraPhone || extraPhone || rowPhone || '';
 }
 
-function compactPublicCardRow(row = {}, currency = 'UGX', locationScope = {}) {
+function compactPublicCardRow(row = {}, currency = CANONICAL_PROPERTY_CURRENCY, locationScope = {}) {
   const safeExtra = publicExtraFields(row.admin_extra_fields || row.extra_fields || {});
   const canonicalDisplay = canonicalDisplayLocationForRow({
     ...row,
@@ -1168,8 +1225,8 @@ function compactPublicCardRow(row = {}, currency = 'UGX', locationScope = {}) {
     area: canonicalDisplay.area,
     address: row.address,
     price: row.price,
-    price_currency: row.price_currency || 'UGX',
-    price_original_currency: row.price_original_currency || safeExtra.price_original_currency || 'UGX',
+    price_currency: row.price_currency || CANONICAL_PROPERTY_CURRENCY,
+    price_original_currency: row.price_original_currency || safeExtra.price_original_currency || CANONICAL_PROPERTY_CURRENCY,
     price_original: row.price_original,
     price_fx_rate_ugx: row.price_fx_rate_ugx,
     price_fx_as_of: row.price_fx_as_of,
@@ -1236,7 +1293,7 @@ async function findBrokerAgentForUser(user = {}) {
 }
 
 function isValidUgPhone(phone) {
-  return /^\+256\d{9}$/.test(phone);
+  return IS_SOUTH_AFRICA ? /^\+27[6-8]\d{8}$/.test(phone) : /^\+256\d{9}$/.test(phone);
 }
 
 function normalizeUgNin(value = '') {
@@ -1244,20 +1301,25 @@ function normalizeUgNin(value = '') {
 }
 
 function isValidUgNin(value = '') {
-  return /^(CM|CF|PM|PF)[A-Z0-9]{12}$/.test(normalizeUgNin(value));
+  return IS_SOUTH_AFRICA
+    ? /^\d{13}$/.test(normalizeUgNin(value))
+    : /^(CM|CF|PM|PF)[A-Z0-9]{12}$/.test(normalizeUgNin(value));
 }
 
 function normalizePreferredLanguage(value) {
   const lang = cleanText(value).toLowerCase();
-  return ['en', 'lg', 'sw', 'ac', 'ny', 'rn', 'sm'].includes(lang) ? lang : 'en';
+  const allowed = IS_SOUTH_AFRICA
+    ? ['en', 'af', 'zu', 'xh', 'nso', 'tn', 'st', 'ts', 'ss', 've', 'nr']
+    : ['en', 'lg', 'sw', 'ac', 'ny', 'rn', 'sm'];
+  return allowed.includes(lang) ? lang : 'en';
 }
 
 function getListingOtpCopy(language = 'en', { otp, expiresMinutes, audience = 'listing' } = {}) {
   const lang = normalizePreferredLanguage(language);
   const catalog = {
     en: {
-      listing: `makaug listing verification: your one-time code is ${otp}. It expires in ${expiresMinutes} minutes. Enter it on makaug.com to continue publishing your property.`,
-      agent: `makaug agent verification: your one-time code is ${otp}. It expires in ${expiresMinutes} minutes. Enter it on makaug.com to continue your agent application.`
+      listing: `${ACTIVE_BRAND_NAME} listing verification: your one-time code is ${otp}. It expires in ${expiresMinutes} minutes. Enter it on ${ACTIVE_PUBLIC_DOMAIN} to continue publishing your property.`,
+      agent: `${ACTIVE_BRAND_NAME} agent verification: your one-time code is ${otp}. It expires in ${expiresMinutes} minutes. Enter it on ${ACTIVE_PUBLIC_DOMAIN} to continue your agent application.`
     },
     lg: {
       listing: `makaug okukakasa listing: code yo ey’omulundi gumu ye ${otp}. Eggwaako mu ddakiika ${expiresMinutes}. Giyingize ku makaug.com okutwaliza mu maaso okutangaza property yo.`,
@@ -2134,7 +2196,9 @@ function canonicalApprovalLocationForRecord(row = {}, options = {}) {
   const stored = canonicalLocationByKey(extra.canonical_location_id);
   const exact = canonicalizeUgandaLocation(row.area, row.district);
   const candidate = stored || exact;
-  if (!candidate || candidate.level === 'region' || (candidate.level === 'district' && !allowDistrictNode)) return null;
+  if (!candidate || candidate.level === 'region') return null;
+  if (IS_SOUTH_AFRICA && candidate.level !== 'suburb') return null;
+  if (!IS_SOUTH_AFRICA && candidate.level === 'district' && !allowDistrictNode) return null;
   if (exact && stored && exact.key !== stored.key) return null;
   if (normalizeDistrict(row.district) !== candidate.district) return null;
   if (normalizeLocationKey(row.area) !== normalizeLocationKey(candidate.name)) return null;
@@ -2142,19 +2206,35 @@ function canonicalApprovalLocationForRecord(row = {}, options = {}) {
 }
 
 function publicCanonicalLocationPayload(item = {}) {
+  const province = item.province || (IS_SOUTH_AFRICA ? item.district : null);
+  const municipality = IS_SOUTH_AFRICA
+    ? (item.municipality || item.district_municipality || province)
+    : null;
+  const parentPathParts = IS_SOUTH_AFRICA
+    ? (item.level === 'province'
+      ? ['South Africa']
+      : [item.level === 'suburb' ? (item.city || item.town) : null, municipality, province])
+    : [];
   return {
     id: item.canonical_key || item.key,
     canonical_location_id: item.canonical_key || item.key,
     name: item.location || item.name,
     label: item.location || item.name,
-    district: item.district,
+    district: IS_SOUTH_AFRICA ? municipality : item.district,
+    province,
+    municipality,
+    district_municipality: IS_SOUTH_AFRICA ? (item.district_municipality || null) : null,
+    city: item.city || item.town || null,
+    suburb: item.suburb || (item.level === 'suburb' ? (item.location || item.name) : null),
     town: item.town || '',
-    region: regionForDistrict(item.district),
+    region: activeRegionForDistrict(IS_SOUTH_AFRICA ? province : item.district),
     level: item.level,
-    type_label: item.level === 'district'
-      ? 'District'
-      : ['city', 'town'].includes(item.level) ? 'Town / city' : 'Neighborhood',
-    parent_path: item.level === 'district' ? 'Uganda' : `${item.district} District`,
+    type_label: IS_SOUTH_AFRICA
+      ? (item.level === 'province' ? 'Province' : item.level === 'city' ? 'City / main place' : 'Suburb')
+      : (item.level === 'district' ? 'District' : ['city', 'town'].includes(item.level) ? 'Town / city' : 'Neighborhood'),
+    parent_path: IS_SOUTH_AFRICA
+      ? Array.from(new Set(parentPathParts.filter(Boolean))).join(', ')
+      : (item.level === 'district' ? 'Uganda' : `${item.district} District`),
     listing_count: Number(item.listing_count) || 0,
     match: item.match || 'exact_alias',
     did_you_mean: item.did_you_mean === true,
@@ -2170,8 +2250,8 @@ function publicCanonicalLocationPayload(item = {}) {
 router.get('/locations/catalog', (req, res) => {
   const district = normalizeDistrict(req.query.district);
   const locations = canonicalLocationOptions()
-    .filter((item) => !district || item.district === district)
-    .filter((item) => !['district', 'region'].includes(item.level))
+    .filter((item) => !district || (IS_SOUTH_AFRICA ? item.province === district : item.district === district))
+    .filter((item) => !['district', 'region', 'province'].includes(item.level))
     .map((item) => publicCanonicalLocationPayload({ ...item, match: 'exact_alias', confidence: 1, auto_resolvable: true }));
   return res.json({
     ok: true,
@@ -2209,7 +2289,7 @@ router.get('/locations/resolve', (req, res) => {
       unmatched: resolution.status !== 'matched',
       approval_blocked: resolution.status !== 'matched',
       match: resolution.match_type,
-      matched_query: resolution.matched_query || query,
+      matched_query: resolution.matched_query || null,
       confidence: resolution.confidence,
       candidates
     }
@@ -2333,7 +2413,7 @@ router.get('/suggestions', async (req, res, next) => {
       values
     );
 
-    const districts = DISTRICTS.filter((d) => d.toLowerCase().includes(query)).slice(0, 20);
+    const districts = ACTIVE_PRIMARY_REGIONS.filter((d) => d.toLowerCase().includes(query)).slice(0, 20);
 
     let universities = [];
     if (listingTypeFilter === 'student' || cleanText(req.query.for) === 'students') {
@@ -2392,7 +2472,7 @@ async function listPropertiesHandler(req, res, next) {
     if (canonicalLocationKeys.length !== canonicalLocationScope.selected.length) {
       return res.status(400).json({
         ok: false,
-        error: 'Choose a valid suggested Uganda location before searching.',
+        error: `Choose a valid suggested ${ACTIVE_COUNTRY_NAME} location before searching.`,
         data: {
           invalid_location_ids: canonicalLocationKeys.filter((key) => !canonicalLocationByKey(key))
         }
@@ -2416,7 +2496,7 @@ async function listPropertiesHandler(req, res, next) {
     const landTitleAvailable = normalizeLandTitleAvailability(req.query.landTitleAvailable ?? req.query.land_title_available ?? req.query.titleAvailable ?? req.query.title_available);
     const commercialType = cleanText(req.query.commercialType || req.query.commercial_type || categoryCommercialType);
     const transactionType = normalizeCommercialTransactionType(req.query.transactionType || req.query.transaction_type);
-    const currency = cleanText(req.query.currency || 'UGX').toUpperCase();
+    const currency = cleanText(req.query.currency || CANONICAL_PROPERTY_CURRENCY).toUpperCase();
     const source = cleanText(req.query.source || 'web_search');
     const language = cleanText(req.query.language || req.query.lang || 'en').toLowerCase();
     const sessionId = cleanText(req.query.session || req.query.session_id || req.query.guest_session_id);
@@ -2631,11 +2711,11 @@ async function listPropertiesHandler(req, res, next) {
             })]
           );
         } catch (logError) {
-          logger.warn('Failed to log outside-Uganda radius search', { error: logError.message });
+          logger.warn(`Failed to log outside-${ACTIVE_COUNTRY_CODE} radius search`, { error: logError.message });
         }
         return res.status(400).json({
           ok: false,
-          error: 'Location appears outside Uganda. Choose a Ugandan area or search all Uganda.',
+          error: `Location appears outside ${ACTIVE_COUNTRY_NAME}. Choose a local area or search all ${ACTIVE_COUNTRY_NAME}.`,
           data: {
             outside_uganda: true,
             fallback: 'manual_uganda_search'
@@ -3307,7 +3387,7 @@ router.patch('/:id/preview', async (req, res, next) => {
 
     if (Object.prototype.hasOwnProperty.call(patch, 'district')) {
       const district = cleanText(patch.district);
-      if (!DISTRICTS.includes(district)) errors.push('district must be one of Uganda\'s valid districts');
+      if (!ACTIVE_PRIMARY_REGIONS.includes(district)) errors.push(`${ACTIVE_REGION_LABEL} must be one of ${ACTIVE_COUNTRY_NAME}'s valid ${ACTIVE_REGION_LABEL}s`);
       setParts.push(`district = $${idx}`);
       values.push(district);
       idx += 1;
@@ -3380,7 +3460,7 @@ router.post('/request-submit-otp', async (req, res, next) => {
         return res.status(400).json({ ok: false, error: 'Valid email is required' });
       }
     } else if (!phone || !isValidPhone(phone) || !isValidUgPhone(phone)) {
-      return res.status(400).json({ ok: false, error: 'Valid Uganda phone is required' });
+      return res.status(400).json({ ok: false, error: `Valid ${ACTIVE_COUNTRY_NAME} phone is required` });
     }
 
     const { otp, expiresMinutes, identifier } = await issueListingSubmitOtp({ channel, phone, email, preferredLanguage, audience });
@@ -3415,7 +3495,7 @@ router.post('/verify-submit-otp', async (req, res, next) => {
       return res.status(400).json({ ok: false, error: `${channel} and code are required` });
     }
     if (channel === 'phone' && (!isValidPhone(phone) || !isValidUgPhone(phone))) {
-      return res.status(400).json({ ok: false, error: 'Valid Uganda phone is required' });
+      return res.status(400).json({ ok: false, error: `Valid ${ACTIVE_COUNTRY_NAME} phone is required` });
     }
     if (channel === 'email' && !isValidEmail(email)) {
       return res.status(400).json({ ok: false, error: 'Valid email is required' });
@@ -3633,11 +3713,12 @@ router.post('/', async (req, res, next) => {
 
     if (!LISTING_TYPES.includes(listingType)) errors.push('listing_type is required and must be valid');
     if (!title) errors.push('title is required');
-    if (!district) errors.push('district is required');
-    if (!area) errors.push('area is required');
+    if (!district) errors.push(`${ACTIVE_REGION_LABEL} is required`);
+    if (!area) errors.push(IS_SOUTH_AFRICA ? 'suburb is required' : 'area is required');
     if (!description) errors.push('description is required');
-    if (!priceOnApplication && (price == null || price < 10000)) {
-      errors.push('price must be provided in UGX or USD and convert to at least UGX 10,000');
+    const minimumCanonicalPrice = IS_SOUTH_AFRICA ? 500 : 10000;
+    if (!priceOnApplication && (price == null || price < minimumCanonicalPrice)) {
+      errors.push(`price must use ${ACTIVE_PRICE_CURRENCIES.join('/')} and convert to at least ${CANONICAL_PROPERTY_CURRENCY} ${minimumCanonicalPrice.toLocaleString()}`);
     }
     if (priceOnApplication && price != null && price > 0) errors.push('price and price_on_application cannot both be set');
     if (listingType === 'commercial' && !transactionType) {
@@ -3647,22 +3728,24 @@ router.post('/', async (req, res, next) => {
       errors.push('property_type is required for commercial listings');
     }
 
-    if (district && !DISTRICTS.includes(district)) {
-      errors.push('district must be one of Uganda\'s valid districts');
+    if (district && !ACTIVE_PRIMARY_REGIONS.includes(district)) {
+      errors.push(`${ACTIVE_REGION_LABEL} must be one of ${ACTIVE_COUNTRY_NAME}'s valid ${ACTIVE_REGION_LABEL}s`);
     }
-    if (district && area && DISTRICTS.includes(district)) {
+    if (district && area && ACTIVE_PRIMARY_REGIONS.includes(district)) {
       const canonicalAreaWithoutDistrict = canonicalizeUgandaLocation(area);
       const normalizedSubmittedDistrict = normalizeDistrict(district) || district;
       canonicalLocation = canonicalizeUgandaLocation(area, district);
       if (
         canonicalAreaWithoutDistrict
-        && canonicalAreaWithoutDistrict.level !== 'district'
+        && !['district', 'province'].includes(canonicalAreaWithoutDistrict.level)
         && canonicalAreaWithoutDistrict.district !== normalizedSubmittedDistrict
       ) {
         errors.push(`area belongs to ${canonicalAreaWithoutDistrict.district}, not ${normalizedSubmittedDistrict}`);
       } else if (!canonicalLocation) {
-        errors.push('area must match a canonical Uganda location and cannot be a road, region, or water body');
-      } else if (['district', 'region'].includes(canonicalLocation.level)) {
+        errors.push(`${IS_SOUTH_AFRICA ? 'suburb' : 'area'} must match a canonical ${ACTIVE_COUNTRY_NAME} location`);
+      } else if (IS_SOUTH_AFRICA && canonicalLocation.level !== 'suburb') {
+        errors.push('suburb must resolve below the province and city levels');
+      } else if (!IS_SOUTH_AFRICA && ['district', 'region'].includes(canonicalLocation.level)) {
         errors.push('area must be more specific than a district');
       } else {
         district = canonicalLocation.district;
@@ -3672,7 +3755,7 @@ router.post('/', async (req, res, next) => {
 
     const brokerFullName = cleanText([authUser?.first_name, authUser?.last_name].filter(Boolean).join(' '));
     const listerName = brokerCanSkipOwnerIdentity
-      ? (brokerAgent.full_name || brokerFullName || 'makaug broker')
+      ? (brokerAgent.full_name || brokerFullName || (IS_SOUTH_AFRICA ? 'seshaikhaya broker' : 'makaug broker'))
       : cleanText(body.lister_name);
     const listerEmail = brokerCanSkipOwnerIdentity
       ? cleanText(authUser?.email || brokerAgent?.email || body.lister_email)
@@ -3698,7 +3781,9 @@ router.post('/', async (req, res, next) => {
 
     if (listerEmail && !isValidEmail(listerEmail)) errors.push('lister_email is invalid');
     if (listerPhone && !isValidPhone(listerPhone)) errors.push('lister_phone is invalid');
-    if (listerPhone && !isValidUgPhone(listerPhone)) errors.push('lister_phone must be a valid Uganda phone (+256XXXXXXXXX)');
+    if (listerPhone && !isValidUgPhone(listerPhone)) {
+      errors.push(`lister_phone must be a valid ${ACTIVE_COUNTRY_NAME} phone (${IS_SOUTH_AFRICA ? '+27XXXXXXXXX' : '+256XXXXXXXXX'})`);
+    }
     if (latitude != null && (latitude < -90 || latitude > 90)) errors.push('latitude is out of range');
     if (longitude != null && (longitude < -180 || longitude > 180)) errors.push('longitude is out of range');
 
@@ -3742,7 +3827,9 @@ router.post('/', async (req, res, next) => {
       if (!idNumber) {
         errors.push('id_number is required for online listing review');
       } else if (!isValidUgNin(idNumber)) {
-        errors.push('id_number must be a valid Uganda NIN');
+        errors.push(IS_SOUTH_AFRICA
+          ? 'id_number must be a valid 13-digit South African ID number'
+          : 'id_number must be a valid Uganda NIN');
       }
       if (!idDocumentName && !idDocumentUrl) {
         errors.push('National ID photo is required. Upload a photo image; PDFs are not accepted');
@@ -3820,8 +3907,10 @@ router.post('/', async (req, res, next) => {
     extraFields.location_resolution_status = canonicalLocation ? 'canonical_match' : 'unresolved';
     extraFields.location_resolution_confidence = canonicalLocation ? 1 : 0;
     if (canonicalLocation) {
-      extraFields.region = regionForDistrict(canonicalLocation.district);
-      extraFields.city = canonicalLocation.town || extraFields.city || null;
+      extraFields.region = activeRegionForDistrict(canonicalLocation.district);
+      extraFields.province = canonicalLocation.province || (IS_SOUTH_AFRICA ? canonicalLocation.district : null);
+      extraFields.city = canonicalLocation.city || canonicalLocation.town || extraFields.city || null;
+      extraFields.suburb = canonicalLocation.suburb || (canonicalLocation.level === 'suburb' ? canonicalLocation.name : null);
       extraFields.neighborhood = canonicalLocation.name;
     }
     extraFields.price_currency = priceMetadata.price_currency;
@@ -3830,9 +3919,9 @@ router.post('/', async (req, res, next) => {
     extraFields.price_fx_rate_ugx = priceMetadata.price_fx_rate_ugx;
     extraFields.price_fx_as_of = priceMetadata.price_fx_as_of;
     extraFields.price_on_application = priceOnApplication;
-    extraFields.price_conversion_basis = priceMetadata.price_original_currency === 'USD'
-      ? 'Original submitted USD guide converted to canonical UGX for search and valuation.'
-      : 'Original submitted UGX guide stored without conversion.';
+    extraFields.price_conversion_basis = priceMetadata.price_original_currency !== CANONICAL_PROPERTY_CURRENCY
+      ? `Original submitted ${priceMetadata.price_original_currency} guide converted to canonical ${CANONICAL_PROPERTY_CURRENCY} for search and sorting.`
+      : `Original submitted ${CANONICAL_PROPERTY_CURRENCY} guide stored without conversion.`;
     const landTitleAvailable = normalizeLandTitleAvailability(
       body.land_title_available
         ?? body.landTitleAvailable
@@ -4155,7 +4244,7 @@ router.post('/', async (req, res, next) => {
       created_at: insertResult.rows[0].created_at,
       submitted_at: insertResult.rows[0].created_at,
       price,
-      currency: cleanText(body.currency || body.price_currency) || 'UGX',
+      currency: cleanText(body.currency || body.price_currency) || CANONICAL_PROPERTY_CURRENCY,
       price_period: cleanText(body.price_period) || null,
       area,
       district,
@@ -4679,8 +4768,8 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
           code: 'canonical_location_confirmation',
           error: 'Canonical location confirmation is required before approval',
           details: [
-            'Use Find to resolve an exact Uganda locality. A map pin or free-text address alone cannot approve a listing.',
-            'Unmatched or ambiguous locations remain unverified for automated publication. An authenticated human moderator may verify or override after checking the cascade and pin.'
+            `Use Find to resolve an exact ${ACTIVE_COUNTRY_NAME} locality. A map pin or free-text address alone cannot approve a listing.`,
+            `Unmatched or ambiguous locations must clear and leave the ${IS_SOUTH_AFRICA ? 'province, city and suburb' : 'region, district, town, neighbourhood and area'} unverified for automated publication. An authenticated human moderator may verify or override only after checking the cascade and pin.`
           ],
           missingFields,
           response: { location_resolution_status: 'unverified' }
@@ -4768,8 +4857,10 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
       }
       const confirmedCanonicalLocation = canonicalLocationForRow(current);
       const canonicalLocationIsSpecific = confirmedCanonicalLocation
-        && confirmedCanonicalLocation.level !== 'region'
-        && (confirmedCanonicalLocation.level !== 'district' || humanLocationConfirmed);
+        && (IS_SOUTH_AFRICA
+          ? confirmedCanonicalLocation.level === 'suburb'
+          : confirmedCanonicalLocation.level !== 'region'
+            && (confirmedCanonicalLocation.level !== 'district' || humanLocationConfirmed));
       const canonicalLocationMatchesStoredFields = canonicalLocationIsSpecific
         && normalizeLocationKey(current.area) === normalizeLocationKey(confirmedCanonicalLocation.name)
         && normalizeDistrict(current.district) === normalizeDistrict(confirmedCanonicalLocation.district);
@@ -4778,8 +4869,8 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
           code: 'canonical_location_specificity',
           error: 'Choose and save a specific canonical area before approval',
           details: [
-            'District-only, region-only, unmatched, or stale canonical assignments must remain in source review.',
-            'Save the corrected area and district in King, then confirm the location reclassification again.'
+            `${IS_SOUTH_AFRICA ? 'Province-only, city-only' : 'District-only, region-only'}, unmatched, or stale canonical assignments must remain in source review.`,
+            `Save the corrected ${IS_SOUTH_AFRICA ? 'suburb and province' : 'area and district'} in King, then confirm the location reclassification again.`
           ],
           missingFields: ['canonical_location', 'area', 'district']
         })) return;
@@ -5418,7 +5509,10 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
 
 module.exports = router;
 module.exports._test = {
+  addCanonicalLocationSearchFilter,
   compactPublicCardRow,
+  parseCanonicalLocationKeys,
+  publicLocationMatchForRow,
   publicPropertyRow,
   publicPropertiesCacheKey,
   isSourcedInventoryCandidateRecord,

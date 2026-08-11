@@ -13,7 +13,7 @@ function isWhatsappWebBridgeEnabled() {
 
 function getWhatsappDeliveryMode() {
   const raw = String(process.env.WHATSAPP_DELIVERY_MODE || 'auto').trim().toLowerCase();
-  return ['provider', 'web_bridge', 'auto'].includes(raw) ? raw : 'auto';
+  return ['provider', 'web_bridge', 'test', 'auto'].includes(raw) ? raw : 'auto';
 }
 
 function getWhatsappWebBridgeToken() {

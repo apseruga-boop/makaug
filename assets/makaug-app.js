@@ -4,6 +4,11 @@ const BrandConfig = Object.freeze({
   legalOrInternalName: "makaug",
   tagline: "Uganda Property"
 });
+const ACTIVE_LOCATION_COUNTRY = Object.freeze({
+  countryCode: String(window.__COUNTRY_CONFIG__?.countryCode || "UG").trim().toUpperCase(),
+  countryName: String(window.__COUNTRY_CONFIG__?.countryName || "Uganda").trim() || "Uganda"
+});
+const ACTIVE_LOCATION_COUNTRY_CODE_LOWER = ACTIVE_LOCATION_COUNTRY.countryCode.toLowerCase();
 const TIKTOK_MANUAL_REVIEW_READY_MARKER = "tiktok-manual-review-ready-20260802";
 const publicBrand = () => BrandConfig.productDisplayName;
 const normalizeType = (t) => {
@@ -24144,12 +24149,13 @@ function clearAdminReviewCanonicalLocation() {
 function applyAdminReviewCanonicalLocation(location = {}) {
   if (!location?.canonical_location_id || location.match !== "exact_alias" || Number(location.confidence) !== 1) return false;
   adminReviewCanonicalLocationResolution = location;
-  const canonicalTown = canonicalTownForLocation(location);
-  adminSetReviewEditValue("admin-review-region-edit", location.region || regionForDistrict(location.district));
-  adminReviewSetOptions("admin-review-district-edit", adminReviewDistrictOptionsHtml(location.region, location.district), location.district);
-  adminReviewSetOptions("admin-review-city-edit", adminReviewCityOptionsHtml(location.district, canonicalTown), canonicalTown);
+  const canonicalDistrict = location.province || location.district;
+  const canonicalTown = location.city || canonicalTownForLocation(location);
+  adminSetReviewEditValue("admin-review-region-edit", location.region || regionForDistrict(canonicalDistrict));
+  adminReviewSetOptions("admin-review-district-edit", adminReviewDistrictOptionsHtml(location.region, canonicalDistrict), canonicalDistrict);
+  adminReviewSetOptions("admin-review-city-edit", adminReviewCityOptionsHtml(canonicalDistrict, canonicalTown), canonicalTown);
   ensureSelectHasValue("admin-review-city-edit", canonicalTown, canonicalTown);
-  adminReviewSetOptions("admin-review-neighborhood-edit", adminReviewNeighborhoodOptionsHtml(location.district, canonicalTown, location.name), location.name);
+  adminReviewSetOptions("admin-review-neighborhood-edit", adminReviewNeighborhoodOptionsHtml(canonicalDistrict, canonicalTown, location.name), location.name);
   ensureSelectHasValue("admin-review-neighborhood-edit", location.name, location.name);
   const areaEl = document.getElementById("admin-review-area-edit");
   if (areaEl) {
@@ -24178,13 +24184,14 @@ function applyLpCanonicalLocation(location = {}) {
   if (!location?.canonical_location_id || location.match !== "exact_alias" || Number(location.confidence) !== 1) return false;
   lpCanonicalLocationResolution = location;
   lpCanonicalLocationAttempted = true;
-  const region = location.region || regionForDistrict(location.district);
-  const canonicalTown = canonicalTownForLocation(location);
+  const canonicalDistrict = location.province || location.district;
+  const region = location.region || regionForDistrict(canonicalDistrict);
+  const canonicalTown = location.city || canonicalTownForLocation(location);
   populateLpRegionOptions(region);
-  populateLpDistrictOptions(region, location.district);
-  populateLpCityOptions(location.district, canonicalTown);
+  populateLpDistrictOptions(region, canonicalDistrict);
+  populateLpCityOptions(canonicalDistrict, canonicalTown);
   ensureSelectHasValue("lp-city", canonicalTown, canonicalTown);
-  populateLpNeighborhoodOptions(location.district, canonicalTown, location.name);
+  populateLpNeighborhoodOptions(canonicalDistrict, canonicalTown, location.name);
   ensureSelectHasValue("lp-neighborhood", location.name, location.name);
   const areaEl = document.getElementById("lp-area");
   if (areaEl) {
@@ -24260,7 +24267,7 @@ async function adminReviewFindAddressOrPlace(options = {}) {
   adminReviewSetAddressSearchStatus(auto ? "Auto-filling the closest matching place in Uganda..." : "Finding the nearest matching place in Uganda...", "blue");
   let point = null;
   try {
-    point = await geocodeWithGoogle(uniqueTextParts([query, "Uganda"]).join(", "));
+    point = await geocodeWithGoogle(uniqueTextParts([query, ACTIVE_LOCATION_COUNTRY.countryName]).join(", "));
     if (point) {
       point.provider = "google";
       point.confidence = 0.75;
@@ -25138,7 +25145,7 @@ function collectAdminReviewListingPatch() {
     && Number(adminReviewCanonicalLocationResolution?.confidence) === 1
     ? adminReviewCanonicalLocationResolution
     : null;
-  const district = canonical?.district || get("admin-review-district-edit");
+  const district = canonical?.province || canonical?.district || get("admin-review-district-edit");
   const region = canonical?.region || (district ? regionForDistrict(district) : get("admin-review-region-edit"));
   const city = canonical?.town || get("admin-review-city-edit");
   const neighborhood = canonical?.name || get("admin-review-neighborhood-edit");
@@ -28420,7 +28427,7 @@ function resizeListMap(map, provider, center = null, zoom = null, delay = 120) {
 
 function buildHierarchyLocationQuery({ region = "", district = "", city = "", neighborhood = "", area = "" } = {}) {
   const areaPart = area && area !== neighborhood && area !== city ? area : "";
-  return uniqueTextParts([neighborhood, areaPart, city, district, region, "Uganda"]).join(", ");
+  return uniqueTextParts([neighborhood, areaPart, city, district, region, ACTIVE_LOCATION_COUNTRY.countryName]).join(", ");
 }
 
 function distanceBetweenPointsKm(a, b) {
@@ -28475,7 +28482,7 @@ async function getGooglePlacePredictions(query) {
   return new Promise((resolve) => {
     service.getPlacePredictions({
       input: query,
-      componentRestrictions: { country: "ug" },
+      componentRestrictions: { country: ACTIVE_LOCATION_COUNTRY_CODE_LOWER },
       types: ["geocode"]
     }, (predictions, status) => {
       if (status !== "OK" || !Array.isArray(predictions)) {
@@ -28497,7 +28504,7 @@ async function geocodeWithGoogle(query, options = {}) {
   return new Promise((resolve) => {
     const request = {
       address: query,
-      componentRestrictions: { country: "UG" }
+      componentRestrictions: { country: ACTIVE_LOCATION_COUNTRY.countryCode }
     };
     if (options.bounds) request.bounds = options.bounds;
     geocoder.geocode(request, (results, status) => {
@@ -28538,9 +28545,9 @@ function setLpHiddenValue(id, value = "") {
 }
 
 async function geocodeWithNominatim(query) {
-  const q = uniqueTextParts([query, "Uganda"]).join(", ");
+  const q = uniqueTextParts([query, ACTIVE_LOCATION_COUNTRY.countryName]).join(", ");
   try {
-    const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&addressdetails=1&countrycodes=ug&q=${encodeURIComponent(q)}`;
+    const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&addressdetails=1&countrycodes=${encodeURIComponent(ACTIVE_LOCATION_COUNTRY_CODE_LOWER)}&q=${encodeURIComponent(q)}`;
     const response = await fetch(url, { headers: { Accept: "application/json" } });
     if (!response.ok) return null;
     const rows = await response.json();
@@ -28651,7 +28658,7 @@ async function findLpAddressOrPlace() {
   ensureListPinMap();
   let point = null;
   try {
-    point = await geocodeWithGoogle(uniqueTextParts([query, "Uganda"]).join(", "));
+    point = await geocodeWithGoogle(uniqueTextParts([query, ACTIVE_LOCATION_COUNTRY.countryName]).join(", "));
     if (point) {
       point.provider = "google";
       point.confidence = 0.75;
@@ -28838,9 +28845,9 @@ async function resolveHierarchyMapAnchor({ region = "", district = "", city = ""
 
   const queries = Array.from(new Set([
     buildHierarchyLocationQuery({ region, district, city, neighborhood, area }),
-    uniqueTextParts([city, district, region, "Uganda"]).join(", "),
-    uniqueTextParts([district, region, "Uganda"]).join(", "),
-    uniqueTextParts([district, "Uganda"]).join(", ")
+    uniqueTextParts([city, district, region, ACTIVE_LOCATION_COUNTRY.countryName]).join(", "),
+    uniqueTextParts([district, region, ACTIVE_LOCATION_COUNTRY.countryName]).join(", "),
+    uniqueTextParts([district, ACTIVE_LOCATION_COUNTRY.countryName]).join(", ")
   ].filter(Boolean)));
 
   for (const query of queries) {
@@ -28854,7 +28861,7 @@ async function resolveHierarchyMapAnchor({ region = "", district = "", city = ""
 
   for (const query of queries) {
     try {
-      const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=ug&q=${encodeURIComponent(query)}`;
+      const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=${encodeURIComponent(ACTIVE_LOCATION_COUNTRY_CODE_LOWER)}&q=${encodeURIComponent(query)}`;
       const response = await fetch(url, { headers: { Accept: "application/json" } });
       if (!response.ok) continue;
       const rows = await response.json();
@@ -29292,7 +29299,7 @@ async function resolveListPinLocation(lat, lng) {
         hydrateStreetSuggestionsForSelection({ lat: Number(lat), lng: Number(lng) });
         return;
       }
-      const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}&zoom=18&addressdetails=1&countrycodes=ug`;
+      const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}&zoom=18&addressdetails=1&countrycodes=${encodeURIComponent(ACTIVE_LOCATION_COUNTRY_CODE_LOWER)}`;
       const response = await fetch(url, { headers: { Accept: "application/json" } });
       if (!response.ok) throw new Error(`Reverse geocode failed (${response.status})`);
       const data = await response.json();
@@ -29345,11 +29352,11 @@ async function geocodeListAddressToMap(anchorCenter = null) {
     const reqSeq = ++lpAddressGeoSeq;
     try {
       const hierarchyAnchor = anchorCenter || await resolveHierarchyMapAnchor({ region, district, city, neighborhood, area: lpVal("lp-area") });
-      const query = uniqueTextParts([streetName, address, neighborhood, city, district, region, "Uganda"]).join(", ");
+      const query = uniqueTextParts([streetName, address, neighborhood, city, district, region, ACTIVE_LOCATION_COUNTRY.countryName]).join(", ");
       const googlePoint = await geocodeWithGoogle(query, {
         bounds: hierarchyAnchor ? buildGoogleBoundsFromCenter(hierarchyAnchor, streetName ? 22 : 35) : null
       });
-      const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=ug&q=${encodeURIComponent(query)}`;
+      const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=${encodeURIComponent(ACTIVE_LOCATION_COUNTRY_CODE_LOWER)}&q=${encodeURIComponent(query)}`;
       if (googlePoint && pointMatchesHierarchyAnchor(googlePoint, hierarchyAnchor, streetName ? 45 : 75)) {
         if (reqSeq !== lpAddressGeoSeq) return;
         setListPinCoords(googlePoint.lat, googlePoint.lng, true, true);
@@ -29390,13 +29397,13 @@ async function geocodeListHierarchyToMap(anchorCenter = null) {
     const reqSeq = ++lpHierarchyGeoSeq;
     try {
       const areaPart = area && area !== neighborhood ? area : "";
-      const query = uniqueTextParts([streetName, neighborhood, areaPart, city, district, region, "Uganda"]).join(", ");
+      const query = uniqueTextParts([streetName, neighborhood, areaPart, city, district, region, ACTIVE_LOCATION_COUNTRY.countryName]).join(", ");
       if (!query) return;
       const hierarchyAnchor = anchorCenter || await resolveHierarchyMapAnchor({ region, district, city, neighborhood, area });
       const googlePoint = await geocodeWithGoogle(query, {
         bounds: hierarchyAnchor ? buildGoogleBoundsFromCenter(hierarchyAnchor, streetName ? 20 : 30) : null
       });
-      const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=ug&q=${encodeURIComponent(query)}`;
+      const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=${encodeURIComponent(ACTIVE_LOCATION_COUNTRY_CODE_LOWER)}&q=${encodeURIComponent(query)}`;
       if (googlePoint && pointMatchesHierarchyAnchor(googlePoint, hierarchyAnchor, streetName ? 40 : 70)) {
         if (reqSeq !== lpHierarchyGeoSeq) return;
         setListPinCoords(googlePoint.lat, googlePoint.lng, true, true);
@@ -36873,7 +36880,7 @@ async function loadSharedLocationCatalogForDistrict(district = "") {
     .then((response) => {
       const groups = new Map();
       (Array.isArray(response?.data) ? response.data : []).forEach((item) => {
-        if (!item?.name || item.district !== cleanDistrict) return;
+        if (!item?.name || (item.province || item.district) !== cleanDistrict) return;
         const town = item.town || `${cleanDistrict} Town`;
         if (!groups.has(town)) groups.set(town, new Map());
         groups.get(town).set(item.name, {
@@ -45547,7 +45554,7 @@ async function hydrateCanonicalLocationSeoRoute(config) {
     const response = await fetch(`/api/properties/locations/suggest?${params.toString()}`, { credentials: "same-origin" });
     const body = await response.json().catch(() => ({}));
     const suggestions = Array.isArray(body.data) ? body.data : [];
-    const selected = suggestions.find((item) => district && String(item.district || "").toLowerCase() === district.toLowerCase())
+    const selected = suggestions.find((item) => district && String(item.province || item.district || "").toLowerCase() === district.toLowerCase())
       || suggestions.find((item) => item.match === "exact_alias")
       || suggestions[0];
     if (response.ok && selected) selectCanonicalLocationSuggestion(config, selected);
@@ -45565,7 +45572,7 @@ function canonicalSeoRouteSlug(item = {}) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
-  return [slugPart(item.name || item.label), slugPart(item.district)].filter(Boolean).join("-");
+  return [slugPart(item.name || item.label), slugPart(item.province || item.district)].filter(Boolean).join("-");
 }
 
 function renderCanonicalSeoLandingIntro(config) {

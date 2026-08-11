@@ -114,12 +114,22 @@ test('country wrappers, punctuation and safe road noise normalize before exact m
     assert.equal(result.status, 'matched', query);
     assert.equal(result.match?.key, 'wakiso:sentema', query);
   });
-  assert.deepEqual(normalizeLocationQueryCandidates('Sentema Road, Wakiso, Uganda').slice(0, 4), [
+  const sentemaRoadCandidates = normalizeLocationQueryCandidates('Sentema Road, Wakiso, Uganda');
+  assert.deepEqual(sentemaRoadCandidates.slice(0, 4), [
     'Sentema Road, Wakiso, Uganda',
     'Sentema Road, Wakiso',
-    'Sentema Road',
+    'Sentema, Wakiso',
     'Sentema'
   ]);
+  assert(sentemaRoadCandidates.includes('Sentema Road'));
+
+  const kitendeCorridor = resolveCanonicalUgandaLocation('Kitende, Entebbe Road, Wakiso');
+  assert.equal(kitendeCorridor.status, 'matched');
+  assert.equal(kitendeCorridor.match?.key, 'wakiso:kitende');
+
+  const numberedParish = resolveCanonicalUgandaLocation('405 Brigade, Kotido');
+  assert.equal(numberedParish.status, 'matched');
+  assert.equal(numberedParish.match?.key, 'kotido:405 brigade');
   assert.equal(resolveCanonicalUgandaLocation('Kampala Road').status, 'unmatched');
   assert.equal(resolveCanonicalUgandaLocation('Hoima Rd').status, 'unmatched');
   assert.equal(resolveCanonicalUgandaLocation('Zzxq, Uganda').status, 'unmatched');

@@ -4,7 +4,7 @@ const {
   canonicalLocationOptions,
   canonicalLocationRollupCounts,
   canonicalLocationSearchScope
-} = require('../utils/ugandaLocationRegistry');
+} = require('../utils/locationRegistry');
 const { publicVisibleInventoryWhere } = require('./publicInventoryMetricsService');
 const {
   SEO_FACET_MIN_LISTINGS,
@@ -170,6 +170,20 @@ function buildPublicSeoSnapshot(rows = [], generatedAt = new Date().toISOString(
   const commercialTransactionCounts = new Map();
   const universityCounts = new Map();
   const properties = [];
+  if (!rows.length) {
+    return {
+      directCounts,
+      counts: emptyCounts(),
+      categoryTotals,
+      categoryPriceFloors,
+      locationPriceFloors: directPriceFloors,
+      facetCounts,
+      commercialTransactionCounts,
+      universityCounts,
+      properties,
+      generatedAt
+    };
+  }
   for (const row of rows) {
     const categories = publicCategoryKeysForRow(row);
     if (!categories.length) continue;

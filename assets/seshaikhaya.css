@@ -1,0 +1,67 @@
+:root {
+  --sa-green: #007749;
+  --sa-green-deep: #004b33;
+  --sa-gold: #ffb81c;
+  --sa-red: #de3831;
+  --sa-blue: #002395;
+  --sa-black: #111111;
+}
+
+body[data-country-code="ZA"] {
+  background: #f7f8f7;
+}
+
+body[data-country-code="ZA"]::before {
+  content: "";
+  display: block;
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: 4px;
+  z-index: 1000;
+  background: linear-gradient(90deg, var(--sa-red) 0 18%, #fff 18% 22%, var(--sa-blue) 22% 38%, var(--sa-green) 38% 68%, var(--sa-gold) 68% 84%, var(--sa-black) 84% 100%);
+}
+
+body[data-country-code="ZA"] .mk-top-strip,
+body[data-country-code="ZA"] footer {
+  background: var(--sa-green-deep) !important;
+}
+
+body[data-country-code="ZA"] .hero-bg {
+  background-image:
+    linear-gradient(115deg, rgba(0, 75, 51, .91) 0%, rgba(0, 119, 73, .76) 48%, rgba(0, 35, 149, .48) 100%),
+    url("https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1800&q=76");
+  background-position: center 55%;
+}
+
+body[data-country-code="ZA"] .hero-tab.tab-btn.active,
+body[data-country-code="ZA"] .hero-search-btn,
+body[data-country-code="ZA"] #nav-list-btn,
+body[data-country-code="ZA"] #mnav-advertise {
+  color: var(--sa-green-deep) !important;
+  background: var(--sa-gold) !important;
+  border-color: var(--sa-gold) !important;
+}
+
+body[data-country-code="ZA"] #page-marketplace,
+body[data-country-code="ZA"] #page-valuation,
+body[data-country-code="ZA"] [data-marketplace-i18n],
+body[data-country-code="ZA"] [data-valuation-i18n] {
+  display: none !important;
+}
+
+body[data-country-code="ZA"] a[href^="https://wa.me/"],
+body[data-country-code="ZA"] [data-public-whatsapp-link] {
+  display: none !important;
+}
+
+.seshaikhaya-logo-mark {
+  flex: 0 0 auto;
+  border-radius: 12px;
+  box-shadow: 0 7px 18px rgba(0, 75, 51, .24);
+}
+
+@media (max-width: 640px) {
+  body[data-country-code="ZA"] .hero-bg {
+    background-position: 60% center;
+  }
+}

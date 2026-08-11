@@ -1,6 +1,10 @@
 const { DISTRICTS } = require('./constants');
 const administrativeGazetteer = require('./ugandaLocationGazetteer.generated.json');
 const { CURATED_UGANDA_LOCATION_OVERRIDES } = require('./ugandaLocationOverrides');
+const {
+  locationQueryAttempts: sharedLocationQueryAttempts,
+  normalizeLocationQueryCandidates: sharedNormalizeLocationQueryCandidates
+} = require('./locationQueryNormalization');
 
 const DETAILED_LOCATIONS = [
   { name: 'Kampala', district: 'Kampala', level: 'district', lat: 0.3476, lng: 32.5825, aliases: ['Kampala', 'Kampala City', 'Central Kampala'] },
@@ -222,16 +226,6 @@ const EXCLUDED_LOCATION_ONLY_PATTERNS = [
   /\b(?:road|rd|street|st|avenue|ave|highway|bypass|expressway)\b/i
 ];
 
-const COUNTRY_QUERY_KEYS = new Set([
-  'uganda',
-  'ug',
-  'east africa',
-  'south africa',
-  'za'
-]);
-
-const TRAILING_ROAD_NOISE_PATTERN = /\s+(?:road|rd|street|st|avenue|ave)\.?$/i;
-
 function normalizeLocationKey(value = '') {
   return String(value || '')
     .normalize('NFKD')
@@ -243,58 +237,20 @@ function normalizeLocationKey(value = '') {
     .toLowerCase();
 }
 
-function cleanLocationQueryPart(value = '') {
-  return String(value || '')
-    .replace(/^[\s,;|/]+|[\s,;|/]+$/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function stripCountryQueryAffixes(value = '') {
-  const clean = cleanLocationQueryPart(value);
-  if (!clean) return '';
-  const withoutCountrySegments = clean
-    .split(',')
-    .map(cleanLocationQueryPart)
-    .filter((part) => part && !COUNTRY_QUERY_KEYS.has(normalizeLocationKey(part)))
-    .join(', ');
-  return cleanLocationQueryPart(withoutCountrySegments)
-    .replace(/^(?:uganda|ug|east africa|south africa|za)\b[\s,;:-]*/i, '')
-    .replace(/[\s,;:-]*\b(?:uganda|ug|east africa|south africa|za)$/i, '')
-    .trim();
-}
-
 function locationQueryAttempts(value = '') {
-  const raw = cleanLocationQueryPart(value);
-  if (!raw) return [];
-  const countryStripped = stripCountryQueryAffixes(raw);
-  const values = [raw];
-  if (countryStripped && countryStripped !== raw) values.push(countryStripped);
-  String(countryStripped || raw)
-    .split(',')
-    .map(cleanLocationQueryPart)
-    .filter(Boolean)
-    .forEach((part) => values.push(part));
-
-  const attempts = [];
-  const seen = new Set();
-  const add = (candidate, noiseStripped = false) => {
-    const clean = cleanLocationQueryPart(candidate);
-    const normalized = normalizeLocationKey(clean);
-    if (!clean || !normalized || COUNTRY_QUERY_KEYS.has(normalized) || seen.has(normalized)) return;
-    seen.add(normalized);
-    attempts.push({ value: clean, normalized, noise_stripped: noiseStripped });
-  };
-  values.forEach((candidate) => {
-    add(candidate, false);
-    const withoutRoadNoise = cleanLocationQueryPart(candidate).replace(TRAILING_ROAD_NOISE_PATTERN, '').trim();
-    if (withoutRoadNoise && withoutRoadNoise !== cleanLocationQueryPart(candidate)) add(withoutRoadNoise, true);
+  return sharedLocationQueryAttempts(value, {
+    countryCode: 'UG',
+    countryCodes: ['UG', 'ZA'],
+    normalizeKey: normalizeLocationKey
   });
-  return attempts;
 }
 
 function normalizeLocationQueryCandidates(value = '') {
-  return locationQueryAttempts(value).map((attempt) => attempt.value);
+  return sharedNormalizeLocationQueryCandidates(value, {
+    countryCode: 'UG',
+    countryCodes: ['UG', 'ZA'],
+    normalizeKey: normalizeLocationKey
+  });
 }
 
 const canonicalDistrictByKey = new Map();
@@ -505,6 +461,17 @@ function selectProminentCandidate(candidates = [], aliasKey = '', counts = new M
 function resolveCanonicalUgandaLocation(value = '', suppliedDistrict = '', options = {}) {
   const districtHint = districtHintFromQuery(value, suppliedDistrict);
   const attempts = locationQueryAttempts(value);
+  const firstSegment = String(value || '').split(',')[0].trim();
+  if (firstSegment && String(value || '').includes(',')) {
+    const firstSegmentKey = normalizeLocationKey(firstSegment);
+    if (firstSegmentKey && !attempts.some((attempt) => attempt.normalized === firstSegmentKey)) {
+      attempts.unshift({
+        value: firstSegment,
+        normalized: firstSegmentKey,
+        noise_stripped: false
+      });
+    }
+  }
   let candidates = [];
   let matchedAttempt = null;
   for (const attempt of attempts) {

@@ -141,6 +141,10 @@ function checkBackups() {
 
 function checkWhatsapp() {
   const mode = value('WHATSAPP_DELIVERY_MODE') || 'auto';
+  if (mode === 'test') {
+    add('whatsapp', 'ok', 'WhatsApp simulated test transport is enabled; no external message will be sent.');
+    return;
+  }
   const usesBridge = mode === 'web_bridge' || (mode === 'auto' && isTruthy('WHATSAPP_WEB_BRIDGE_ENABLED'));
   const usesProvider = mode === 'provider' || mode === 'auto';
   const providerEnvNames = ['WHATSAPP_ACCESS_TOKEN', 'WHATSAPP_PHONE_NUMBER_ID', 'WHATSAPP_VERIFY_TOKEN', 'WHATSAPP_APP_SECRET'];
