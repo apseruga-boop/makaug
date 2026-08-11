@@ -13847,15 +13847,15 @@ function moderationUpdateApprovalGate(prefix) {
     const priceOk = !priceRequired || document.getElementById(`${prefix}-price-basis-confirmed`)?.checked === true;
     const ok = identityOk && priceOk;
     const sourceOverrideButton = button.hasAttribute("data-price-approve-prefix");
-    button.disabled = !ok;
-    button.classList.toggle("bg-green-700", ok && prefix === "admin-review" && !sourceOverrideButton);
-    button.classList.toggle("hover:bg-green-600", ok && prefix === "admin-review" && !sourceOverrideButton);
-    button.classList.toggle("bg-blue-700", ok && sourceOverrideButton);
-    button.classList.toggle("hover:bg-blue-600", ok && sourceOverrideButton);
-    button.classList.toggle("bg-emerald-700", ok && prefix !== "admin-review");
-    button.classList.toggle("hover:bg-emerald-600", ok && prefix !== "admin-review");
-    button.classList.toggle("bg-gray-300", !ok);
-    button.classList.toggle("cursor-not-allowed", !ok);
+    button.disabled = false;
+    button.dataset.approvalAdvisoryPending = ok ? "false" : "true";
+    button.classList.toggle("bg-green-700", prefix === "admin-review" && !sourceOverrideButton);
+    button.classList.toggle("hover:bg-green-600", prefix === "admin-review" && !sourceOverrideButton);
+    button.classList.toggle("bg-blue-700", sourceOverrideButton);
+    button.classList.toggle("hover:bg-blue-600", sourceOverrideButton);
+    button.classList.toggle("bg-emerald-700", prefix !== "admin-review");
+    button.classList.toggle("hover:bg-emerald-600", prefix !== "admin-review");
+    button.classList.remove("bg-gray-300", "cursor-not-allowed");
   });
 }
 
@@ -13980,7 +13980,8 @@ function renderStaffListingPreviewModal(preview = {}) {
             <div class="mt-3" data-human-integrity-override-host></div>
             <div class="mt-3 grid gap-2">
               <button type="button" onclick="saveStaffListingPreview(${propertyIdArg(preview.id)})" class="border border-slate-300 text-slate-800 hover:bg-slate-50 rounded-xl px-4 py-2 text-sm font-black">Save preview changes</button>
-              <button type="button" data-staff-approve-id="${adminAttr(String(preview.id || ""))}" data-identity-approve-prefix="staff-preview" data-identity-required="${identityRequired ? "true" : "false"}" data-price-confirmation-required="${priceConfirmationRequired ? "true" : "false"}" ${(identityRequired && !identityGateOpen) || (priceConfirmationRequired && !priceConfirmationOpen) ? "disabled" : ""} class="${(identityRequired && !identityGateOpen) || (priceConfirmationRequired && !priceConfirmationOpen) ? "bg-gray-300 cursor-not-allowed" : "bg-emerald-700 hover:bg-emerald-600"} text-white rounded-xl px-4 py-2 text-sm font-black">Approve live after preview</button>
+              <button type="button" data-staff-approve-id="${adminAttr(String(preview.id || ""))}" data-identity-approve-prefix="staff-preview" data-identity-required="${identityRequired ? "true" : "false"}" data-price-confirmation-required="${priceConfirmationRequired ? "true" : "false"}" class="bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl px-4 py-2 text-sm font-black">Approve live after preview</button>
+              <div class="hidden" data-approval-blocker-host></div>
               <button type="button" onclick="staffRejectPreviewListing(${propertyIdArg(preview.id)})" class="bg-red-600 hover:bg-red-500 text-white rounded-xl px-4 py-2 text-sm font-black">Reject with reason</button>
               <button type="button" onclick="staffModerateListing(${propertyIdArg(preview.id)}, 'pending')" class="border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-xl px-4 py-2 text-sm font-black">Keep pending</button>
             </div>
@@ -14354,16 +14355,13 @@ function queueStaffDashboardRefreshAfterModeration({ refreshPublicSummary = fals
 
 async function staffApprovePreviewListing(propertyId, options = {}) {
   const propertyIdForRequest = String(propertyId || adminActiveReview?.id || "").trim();
-  const integrityOverride = options?.integrityOverride === true;
+  const humanApprovalOverride = options?.humanApprovalOverride === true || options?.integrityOverride === true;
   try {
     if (!propertyIdForRequest) throw new Error("Missing listing id for approval request");
     const foundOnlineApproval = staffSafeFoundOnlineApproval(adminActiveReview);
     const identityRequired = !foundOnlineApproval && moderationRequiresIdentity(adminActiveReview);
-    if (identityRequired && !moderationIdentityConfirmed("staff-preview", adminActiveReview)) {
-      toast("Confirm that the ID photo is clear and matches the ID number before approving.");
-      moderationIdentityCheckbox("staff-preview")?.focus();
-      return;
-    }
+    const identityConfirmed = moderationIdentityConfirmed("staff-preview", adminActiveReview);
+    const locationConfirmation = adminReviewHumanLocationConfirmation();
     staffApprovalDiagnostic("starting", { propertyId: propertyIdForRequest });
     setStaffPreviewDecisionBusy(true);
     toast("Sending approval request...");
@@ -14381,16 +14379,21 @@ async function staffApprovePreviewListing(propertyId, options = {}) {
       status: "approved",
       listing: staffListingPreviewPatch(),
       reason: review.reason || (identityRequired ? MODERATION_IDENTITY_APPROVAL_MESSAGE : "Staff approved after previewing listing facts"),
-      review_notes: integrityOverride ? HUMAN_INTEGRITY_OVERRIDE_REVIEW_NOTE : (review.notes || (identityRequired ? "Identity verified and listing facts checked before approval" : "Staff preview completed before approval")),
+      review_notes: humanApprovalOverride ? HUMAN_INTEGRITY_OVERRIDE_REVIEW_NOTE : (review.notes || (identityConfirmed ? "Identity verified and listing facts checked before approval" : "Staff preview completed before approval")),
       checklist: review.checklist || staffDefaultReviewChecklist(),
-      identity_verified: identityRequired ? true : review.identity_verified === true,
-      identity_document_verified: identityRequired ? true : review.identity_verified === true,
-      id_document_clear_and_matches: identityRequired ? true : review.identity_verified === true,
+      identity_verified: identityConfirmed,
+      identity_document_verified: identityConfirmed,
+      id_document_clear_and_matches: identityConfirmed,
       high_monthly_price_confirmed: document.getElementById("staff-preview-price-basis-confirmed")?.checked === true,
       warning_overrides: warningOverrides,
+      human_location_confirmed: locationConfirmation.confirmed,
+      canonical_location_confirmed: locationConfirmation.confirmed,
+      location_confirmed: locationConfirmation.confirmed,
+      location_confirmation_source: locationConfirmation.source,
+      location_confirmation_fields: locationConfirmation.fields,
       fast_admin_render: true,
       manual_notification_only: true,
-      ...(integrityOverride ? { integrity_override: true } : {})
+      ...(humanApprovalOverride ? { human_approval_override: true, integrity_override: true } : {})
     };
     staffApprovalDiagnostic("requesting", { propertyId: propertyIdForRequest, foundOnlineApproval, path: statusPath });
     const statusRes = await staffApiRequestWithTimeout(statusPath, {
@@ -14405,9 +14408,11 @@ async function staffApprovePreviewListing(propertyId, options = {}) {
     toast(messageOpened ? "Listing approved. WhatsApp message is ready." : "Listing approved. Public proof and dashboard refresh are running in the background.");
   } catch (error) {
     staffApprovalDiagnostic("failed", { propertyId: propertyIdForRequest, message: error.message || "backend checks failed" });
-    if (!integrityOverride && error.response?.data_integrity) {
-      revealHumanIntegrityOverride(error.response.data_integrity, propertyIdForRequest);
-      toast("Integrity flags need your decision. Review the warning, then choose Approve anyway (human verified).");
+    const response = error.response && typeof error.response === "object"
+      ? { ...error.response, human_approval_override_available: humanApprovalOverride ? false : error.response.human_approval_override_available }
+      : { error: error.message || "Approval failed", human_approval_override_available: !humanApprovalOverride };
+    if (showApprovalBlockerBanner(response, propertyIdForRequest)) {
+      toast("Approval reason is shown in the Decision panel.");
       return;
     }
     toast(`Approval blocked: ${error.message || "backend checks failed"}`);
@@ -23907,18 +23912,29 @@ function adminReviewDistrictOptionsHtml(region = "", selected = "") {
 
 function adminReviewCityOptionsHtml(district = "", selected = "") {
   const tree = getDistrictLocationTree(district);
+  const cities = tree.map((item) => item.city);
+  const selectedFallback = selected && !cities.includes(selected) ? [{ city: selected }] : [];
   return [`<option value="">Select town / city</option>`]
-    .concat(tree.map((item) => `<option value="${adminAttr(item.city)}" ${String(selected || "") === item.city ? "selected" : ""}>${adminEscape(item.city)}</option>`))
+    .concat(tree.concat(selectedFallback).map((item) => `<option value="${adminAttr(item.city)}" ${String(selected || "") === item.city ? "selected" : ""}>${adminEscape(item.city)}</option>`))
     .join("");
 }
 
 function adminReviewNeighborhoodOptionsHtml(district = "", city = "", selected = "") {
   const tree = getDistrictLocationTree(district);
   const cityNode = tree.find((item) => item.city === city);
-  const list = cityNode?.neighborhoods || [];
+  const list = [...(cityNode?.neighborhoods || [])];
+  if (selected && !list.some((item) => item.name === selected)) list.push({ name: selected });
   return [`<option value="">Select neighbourhood</option>`]
     .concat(list.map((item) => `<option value="${adminAttr(item.name)}" ${String(selected || "") === item.name ? "selected" : ""}>${adminEscape(item.name)}</option>`))
     .join("");
+}
+
+function canonicalTownForLocation(location = {}) {
+  const explicitTown = String(location?.town || "").trim();
+  if (explicitTown) return explicitTown;
+  const name = String(location?.name || location?.district || "").trim();
+  if (!name) return "";
+  return /\b(?:town|city|municipality|tc)\b/i.test(name) ? name : `${name} Town`;
 }
 
 function adminReviewCityBelongsToDistrict(district = "", city = "") {
@@ -24069,11 +24085,12 @@ function clearAdminReviewCanonicalLocation() {
 function applyAdminReviewCanonicalLocation(location = {}) {
   if (!location?.canonical_location_id || location.match !== "exact_alias" || Number(location.confidence) !== 1) return false;
   adminReviewCanonicalLocationResolution = location;
+  const canonicalTown = canonicalTownForLocation(location);
   adminSetReviewEditValue("admin-review-region-edit", location.region || regionForDistrict(location.district));
   adminReviewSetOptions("admin-review-district-edit", adminReviewDistrictOptionsHtml(location.region, location.district), location.district);
-  adminReviewSetOptions("admin-review-city-edit", adminReviewCityOptionsHtml(location.district, location.town), location.town);
-  ensureSelectHasValue("admin-review-city-edit", location.town, location.town);
-  adminReviewSetOptions("admin-review-neighborhood-edit", adminReviewNeighborhoodOptionsHtml(location.district, location.town, location.name), location.name);
+  adminReviewSetOptions("admin-review-city-edit", adminReviewCityOptionsHtml(location.district, canonicalTown), canonicalTown);
+  ensureSelectHasValue("admin-review-city-edit", canonicalTown, canonicalTown);
+  adminReviewSetOptions("admin-review-neighborhood-edit", adminReviewNeighborhoodOptionsHtml(location.district, canonicalTown, location.name), location.name);
   ensureSelectHasValue("admin-review-neighborhood-edit", location.name, location.name);
   const areaEl = document.getElementById("admin-review-area-edit");
   if (areaEl) {
@@ -24103,11 +24120,12 @@ function applyLpCanonicalLocation(location = {}) {
   lpCanonicalLocationResolution = location;
   lpCanonicalLocationAttempted = true;
   const region = location.region || regionForDistrict(location.district);
+  const canonicalTown = canonicalTownForLocation(location);
   populateLpRegionOptions(region);
   populateLpDistrictOptions(region, location.district);
-  populateLpCityOptions(location.district, location.town);
-  ensureSelectHasValue("lp-city", location.town, location.town);
-  populateLpNeighborhoodOptions(location.district, location.town, location.name);
+  populateLpCityOptions(location.district, canonicalTown);
+  ensureSelectHasValue("lp-city", canonicalTown, canonicalTown);
+  populateLpNeighborhoodOptions(location.district, canonicalTown, location.name);
   ensureSelectHasValue("lp-neighborhood", location.name, location.name);
   const areaEl = document.getElementById("lp-area");
   if (areaEl) {
@@ -24335,8 +24353,106 @@ function adminDataIntegrityReviewHtml(extra = {}) {
 }
 
 const HUMAN_INTEGRITY_OVERRIDE_REVIEW_NOTE = "human override — verified manually";
+const HUMAN_APPROVAL_OVERRIDE_MARKER = "human-approval-overlord-20260811";
+let activeHumanApprovalBlocker = null;
+
+function clearApprovalBlockerFieldHighlights() {
+  document.querySelectorAll("[data-approval-blocker-field='true']").forEach((field) => {
+    field.dataset.approvalBlockerField = "false";
+    field.classList.remove("border-red-600", "ring-2", "ring-red-300", "bg-red-50");
+  });
+}
+
+function approvalBlockerFieldIds(field = "") {
+  const key = String(field || "").trim().toLowerCase();
+  const map = {
+    region: ["admin-review-region-edit", "staff-preview-region"],
+    district: ["admin-review-district-edit", "staff-preview-district"],
+    town: ["admin-review-city-edit", "staff-preview-city"],
+    city: ["admin-review-city-edit", "staff-preview-city"],
+    neighborhood: ["admin-review-neighborhood-edit", "staff-preview-neighborhood"],
+    neighbourhood: ["admin-review-neighborhood-edit", "staff-preview-neighborhood"],
+    area: ["admin-review-area-edit", "staff-preview-area"],
+    price: ["admin-review-price-edit", "staff-preview-price"],
+    price_period: ["admin-review-price-period-edit", "staff-preview-price-period"],
+    transaction_type: ["admin-review-transaction-type-edit"],
+    property_type: ["admin-review-commercial-type-edit", "staff-preview-property-type"],
+    identity_verification: ["admin-review-id-verified", "staff-preview-id-verified"],
+    location_confirmation: ["admin-review-location-reclassification-confirm"],
+    canonical_location: ["admin-review-address-search-edit"]
+  };
+  return map[key] || [];
+}
+
+function showApprovalBlockerBanner(response = {}, propertyId = "") {
+  const staffModal = document.getElementById("staff-listing-preview-modal");
+  const host = staffModal?.querySelector("[data-approval-blocker-host]")
+    || document.querySelector("#admin-review-panel [data-approval-blocker-host]")
+    || document.querySelector("[data-human-integrity-override-host]");
+  if (!host) return false;
+  const errorText = String(response?.error || "Approval blocked").trim();
+  const details = Array.isArray(response?.details)
+    ? response.details.map((item) => String(item || "").trim()).filter(Boolean)
+    : (response?.details ? [String(response.details)] : []);
+  const dataIntegrity = response?.data_integrity && typeof response.data_integrity === "object"
+    ? response.data_integrity
+    : null;
+  const proposed = (Array.isArray(dataIntegrity?.issues) ? dataIntegrity.issues : [])
+    .flatMap((issue) => [
+      issue?.proposed_listing_type ? `Proposed category: ${issue.proposed_listing_type}` : "",
+      issue?.proposed_price_period ? `Proposed period: ${issue.proposed_price_period}` : ""
+    ])
+    .filter(Boolean);
+  const missingFields = Array.isArray(response?.missing_fields)
+    ? response.missing_fields.map((item) => String(item || "").trim()).filter(Boolean)
+    : [];
+  const overrideAvailable = response?.human_approval_override_available === true;
+  activeHumanApprovalBlocker = {
+    propertyId: String(propertyId || adminActiveReview?.id || "").trim(),
+    response
+  };
+  clearApprovalBlockerFieldHighlights();
+  missingFields.flatMap(approvalBlockerFieldIds).forEach((id) => {
+    const field = document.getElementById(id);
+    if (!field) return;
+    field.dataset.approvalBlockerField = "true";
+    field.classList.add("border-red-600", "ring-2", "ring-red-300", "bg-red-50");
+  });
+  host.classList.remove("hidden");
+  host.innerHTML = `
+    <div role="alert" aria-live="assertive" class="relative z-[12000] rounded-xl border-2 border-red-700 bg-red-50 p-4 text-red-950 shadow-xl" data-approval-blocker-banner="true">
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <div class="text-xs font-black uppercase tracking-wide">Approval blocked — full reason</div>
+          <div class="mt-1 text-sm font-black" data-approval-blocker-error>${adminEscape(errorText)}</div>
+        </div>
+        <button type="button" onclick="dismissApprovalBlockerBanner()" class="shrink-0 rounded-lg border border-red-300 bg-white px-2 py-1 text-xs font-black text-red-900">Dismiss</button>
+      </div>
+      ${details.length ? `<ul class="mt-3 list-disc space-y-1 pl-5 text-xs font-semibold" data-approval-blocker-details>${details.map((detail) => `<li>${adminEscape(detail)}</li>`).join("")}</ul>` : ""}
+      ${proposed.length ? `<div class="mt-3 rounded-lg border border-red-200 bg-white p-2 text-xs font-bold">${Array.from(new Set(proposed)).map(adminEscape).join(" · ")}</div>` : ""}
+      ${missingFields.length ? `<div class="mt-3 text-xs font-black">Fields needing attention: ${missingFields.map((field) => adminEscape(field.replace(/_/g, " "))).join(", ")}.</div>` : ""}
+      ${overrideAvailable ? `<button type="button" onclick="approveActiveHumanOverride()" class="mt-3 w-full rounded-lg bg-red-800 px-3 py-2 text-sm font-black text-white hover:bg-red-700">Approve anyway (human verified)</button>` : ""}
+    </div>`;
+  host.scrollIntoView({ behavior: "smooth", block: "center" });
+  return true;
+}
+
+function dismissApprovalBlockerBanner() {
+  const banner = document.querySelector("[data-approval-blocker-banner]");
+  banner?.parentElement?.classList.add("hidden");
+  banner?.remove();
+  activeHumanApprovalBlocker = null;
+  clearApprovalBlockerFieldHighlights();
+}
 
 function revealHumanIntegrityOverride(dataIntegrity = {}, propertyId = "") {
+  if (showApprovalBlockerBanner({
+    error: "Listing data integrity issues must be corrected before approval",
+    details: (Array.isArray(dataIntegrity?.issues) ? dataIntegrity.issues : []).map((issue) => issue?.message).filter(Boolean),
+    data_integrity: dataIntegrity,
+    human_approval_override_available: true,
+    approval_blocker: "data_integrity"
+  }, propertyId)) return;
   const issueCodes = Array.isArray(dataIntegrity?.issue_codes) ? dataIntegrity.issue_codes : [];
   const proposedFacts = (Array.isArray(dataIntegrity?.issues) ? dataIntegrity.issues : [])
     .flatMap((issue) => [
@@ -24371,17 +24487,23 @@ function revealHumanIntegrityOverride(dataIntegrity = {}, propertyId = "") {
 }
 
 async function approveActiveIntegrityOverride() {
-  const panel = document.querySelector("[data-data-integrity-review]");
-  const propertyId = String(panel?.dataset?.propertyId || adminActiveReview?.id || "").trim();
+  return approveActiveHumanOverride();
+}
+
+async function approveActiveHumanOverride() {
+  const propertyId = String(activeHumanApprovalBlocker?.propertyId || adminActiveReview?.id || "").trim();
   if (!propertyId) {
     toast("Open the listing review before approving.");
     return;
   }
   if (document.getElementById("staff-listing-preview-modal")) {
-    await staffApprovePreviewListing(propertyId, { integrityOverride: true });
+    await staffApprovePreviewListing(propertyId, { humanApprovalOverride: true });
     return;
   }
-  await adminSetListingStatus(propertyId, "approved", propertyId, { integrity_override: true });
+  await adminSetListingStatus(propertyId, "approved", propertyId, {
+    human_approval_override: true,
+    integrity_override: true
+  });
 }
 
 function adminReviewListingEditPanel(review = {}) {
@@ -24964,6 +25086,30 @@ function collectAdminReviewListingPatch() {
   };
 }
 
+function adminReviewHumanLocationConfirmation() {
+  const canonical = adminReviewCanonicalLocationResolution?.match === "exact_alias"
+    && Number(adminReviewCanonicalLocationResolution?.confidence) === 1
+    && Boolean(adminReviewCanonicalLocationResolution?.canonical_location_id);
+  const fields = adminReviewCurrentLocationFields();
+  const coordinates = adminReviewNormalizeCoordinateInputs(
+    document.getElementById("admin-review-latitude-edit")?.value,
+    document.getElementById("admin-review-longitude-edit")?.value
+  );
+  const fullManualLocation = Boolean(fields.region && fields.district && fields.area && coordinates.exact);
+  return {
+    confirmed: canonical || fullManualLocation,
+    source: canonical ? "shared_registry_find" : (fullManualLocation ? "manual_cascade_and_pin" : "unconfirmed"),
+    fields: [
+      fields.region ? "region" : "",
+      fields.district ? "district" : "",
+      fields.city ? "town" : "",
+      fields.neighborhood ? "neighborhood" : "",
+      fields.area ? "area" : "",
+      coordinates.exact ? "pin" : ""
+    ].filter(Boolean)
+  };
+}
+
 function adminBuildFallbackSocialTrustReview(review = {}) {
   const extra = adminReviewExtraFields(review);
   const platform = String(extra.source_platform || extra.source_contact_platform || "").trim();
@@ -25311,13 +25457,14 @@ function renderAdminReviewPanel(review) {
             <button onclick="adminCreateShareablePreviewLink(${reviewIdArg})" class="border border-amber-300 text-amber-800 hover:bg-amber-50 px-3 py-2 rounded-lg text-xs font-semibold">Copy Private Preview Link</button>
             <button onclick="saveAdminListingReview()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-semibold">Save Review</button>
             ${generatedDecisionReason ? `<button onclick="useAdminGeneratedDecisionReason()" class="border border-amber-300 text-amber-800 hover:bg-amber-50 px-3 py-2 rounded-lg text-xs font-semibold">Use Suggested Reason</button>` : ""}
-            <button onclick="adminSetListingStatus(${reviewIdArg}, 'approved', ${reviewIdArg})" data-identity-approve-prefix="admin-review" data-identity-required="${identityRequired ? "true" : "false"}" data-price-confirmation-required="${priceConfirmationRequired ? "true" : "false"}" ${approvalUnlocked ? "" : "disabled"} class="${approvalUnlocked ? "bg-green-700 hover:bg-green-600" : "bg-gray-300 cursor-not-allowed"} text-white px-3 py-2 rounded-lg text-xs font-semibold">Approve & Notify</button>
+            <button onclick="adminSetListingStatus(${reviewIdArg}, 'approved', ${reviewIdArg})" data-identity-approve-prefix="admin-review" data-identity-required="${identityRequired ? "true" : "false"}" data-price-confirmation-required="${priceConfirmationRequired ? "true" : "false"}" class="bg-green-700 hover:bg-green-600 text-white px-3 py-2 rounded-lg text-xs font-semibold">Approve & Notify</button>
             ${isSourcedCandidate ? `<button onclick="adminApproveSourcedCandidateOverride(${reviewIdArg})" data-price-approve-prefix="admin-review" data-price-confirmation-required="${priceConfirmationRequired ? "true" : "false"}" ${sourcedCandidateOverrideReady && (!priceConfirmationRequired || priceConfirmationOpen) ? "" : "disabled"} class="${sourcedCandidateOverrideReady && (!priceConfirmationRequired || priceConfirmationOpen) ? "bg-blue-700 hover:bg-blue-600" : "bg-gray-300 cursor-not-allowed"} text-white px-3 py-2 rounded-lg text-xs font-semibold">Approve Found Online</button>` : ""}
             <button onclick="adminSetListingStatus(${reviewIdArg}, 'rejected', ${reviewIdArg})" class="bg-red-600 hover:bg-red-500 text-white px-3 py-2 rounded-lg text-xs font-semibold">Reject & Notify</button>
           </div>
-          ${canApprove ? "" : `<div class="text-xs text-red-600 mt-2">${isSourcedCandidate ? (sourcedCandidateOverrideReady ? "Standard approval is blocked by owner-flow checks. Use Approve Found Online after source review; location is present." : "Found-online approval is blocked until a location or area is added.") : "Approval is blocked until non-overrideable red checks are resolved."}</div>`}
+          <div class="hidden mt-3" data-approval-blocker-host></div>
+          ${canApprove ? "" : `<div class="text-xs text-red-600 mt-2">${isSourcedCandidate ? (sourcedCandidateOverrideReady ? "Standard approval has unresolved owner-flow checks. Use Approve Found Online after source review, or use the human-verified override shown if the server blocks approval." : "Found-online approval needs a reviewed location. If the server blocks approval, the full reason and human-verified override will appear here.") : "Approval checks are advisory for authenticated human reviewers. If the server blocks approval, the full reason and human-verified override will appear here."}</div>`}
           ${canApprove && pendingWarningOverrides.length ? `<div class="text-xs text-amber-700 mt-2">Before approving, open and review these items, then record an override where appropriate: ${pendingWarningOverrides.map((label) => adminEscape(label)).join(", ")}.</div>` : ""}
-          ${isSourcedCandidate ? `<div class="text-xs ${sourcedCandidateOverrideReady ? "text-blue-700" : "text-amber-700"} mt-2">${sourcedCandidateOverrideReady ? "Found-online approval can override non-location checks. Location is present, so King can approve after reviewing the source evidence." : "Add a location or area before found-online approval. Location is the only non-negotiable check for this source-import approval path."}</div>` : ""}
+          ${isSourcedCandidate ? `<div class="text-xs ${sourcedCandidateOverrideReady ? "text-blue-700" : "text-amber-700"} mt-2">${sourcedCandidateOverrideReady ? "Found-online approval can override source-review checks. Location is present, so King can approve after reviewing the source evidence." : "Review the location and source evidence before approval. Automated publication remains blocked; an authenticated human can verify or override from the Decision panel."}</div>` : ""}
         </div>
 
         <div class="border border-gray-200 rounded-xl p-4">
@@ -25623,7 +25770,8 @@ async function adminSetListingStatus(localId, nextStatus, backendId = "", option
   const normalizedStatus = normalizeModerationStatus(nextStatus);
   const statusOptions = options && typeof options === "object" ? options : {};
   const isSourcedCandidateOverride = normalizedStatus === "approved" && statusOptions.sourced_candidate_override === true;
-  const integrityOverride = normalizedStatus === "approved" && statusOptions.integrity_override === true;
+  const humanApprovalOverride = normalizedStatus === "approved"
+    && (statusOptions.human_approval_override === true || statusOptions.integrity_override === true);
   const listing = PROPERTIES.find(
     (p) => String(p.id) === String(localId)
       || (backendId && String(p.backend_id || "") === String(backendId))
@@ -25640,6 +25788,7 @@ async function adminSetListingStatus(localId, nextStatus, backendId = "", option
   }
 
   const previousStatus = normalizeModerationStatus(listing.status);
+  const previousReviewedAt = listing.reviewed_at;
   const wasPendingBeforeStatusUpdate = previousStatus === "pending"
     || adminCurrentPendingListings.some((item) => adminListingMatchesId(item, backendId || localId));
   const isLiveApi = !!backendId && canUseLiveAdminApi();
@@ -25656,59 +25805,15 @@ async function adminSetListingStatus(localId, nextStatus, backendId = "", option
   const locationReclassificationReviewRequired = activeReviewExtraFields.location_review_required === true
     || String(activeReviewExtraFields.location_review_required || "").toLowerCase() === "true";
   const locationReclassificationConfirmed = document.getElementById("admin-review-location-reclassification-confirm")?.checked === true;
-  const canonicalLocationConfirmed = adminReviewCanonicalLocationResolution?.match === "exact_alias"
-    && Number(adminReviewCanonicalLocationResolution?.confidence) === 1
-    && Boolean(adminReviewCanonicalLocationResolution?.canonical_location_id);
-  if (normalizedStatus === "approved" && !canonicalLocationConfirmed) {
-    toast("Resolve the area through the shared canonical location registry before approving.");
-    document.getElementById("admin-review-address-search-edit")?.focus();
-    return;
-  }
-  if (normalizedStatus === "approved" && locationReclassificationReviewRequired && !locationReclassificationConfirmed) {
-    toast("Compare and confirm the reclassified canonical location before approving.");
-    document.getElementById("admin-review-location-reclassification-confirm")?.focus();
-    return;
-  }
-  if (
-    normalizedStatus === "approved"
-    && adminActiveReview?.id
-    && String(adminActiveReview.id) === String(backendId)
-    && moderationRequiresHighMonthlyPriceConfirmation(adminActiveReview)
-    && document.getElementById("admin-review-price-basis-confirmed")?.checked !== true
-  ) {
-    toast("Verify the high recurring price against the source evidence before approving.");
-    document.getElementById("admin-review-price-basis-confirmed")?.focus();
-    return;
-  }
-  if (normalizedStatus === "approved" && adminActiveReview?.id && String(adminActiveReview.id) === String(backendId) && !isSourcedCandidateOverride) {
-    const activeListingType = normalizeType(document.getElementById("admin-review-listing-type-edit")?.value || adminActiveReview.listing_type || "");
-    if (activeListingType === "commercial") {
-      const transactionType = document.getElementById("admin-review-transaction-type-edit")?.value || "";
-      const commercialType = document.getElementById("admin-review-commercial-type-edit")?.value || "";
-      if (!transactionType || !commercialType) {
-        toast("Choose the commercial transaction and property type before approving.");
-        (!transactionType ? document.getElementById("admin-review-transaction-type-edit") : document.getElementById("admin-review-commercial-type-edit"))?.focus();
-        return;
-      }
-    }
-    const pendingWarnings = getAdminPendingWarningOverrideLabels(adminActiveReview);
-    if (pendingWarnings.length) {
-      toast(`Review and override warning evidence first: ${pendingWarnings.slice(0, 3).join(", ")}${pendingWarnings.length > 3 ? "..." : ""}`);
-      return;
-    }
-    if (moderationRequiresIdentity(adminActiveReview) && !moderationIdentityConfirmed("admin-review", adminActiveReview)) {
-      toast("Confirm that the ID photo is clear and matches the ID number before approving.");
-      moderationIdentityCheckbox("admin-review")?.focus();
-      return;
-    }
-  }
+  const locationConfirmation = adminReviewHumanLocationConfirmation();
   if (normalizedStatus === "rejected") moderationApplyRejectionReasonPreset("admin-review");
   let moderationReason = (document.getElementById("admin-review-reason")?.value || listing?.extra_fields?.moderation_reason || "").trim();
   const reviewNotes = (document.getElementById("admin-review-notes")?.value || "").trim();
   const checklist = getAdminReviewChecklistFromDom();
   const structuredRejectionReasons = moderationSelectedRejectionReasons("admin-review");
   const identityRequired = normalizedStatus === "approved" && moderationRequiresIdentity(adminActiveReview || listing) && !isSourcedCandidateOverride;
-  if (identityRequired && !moderationReason) {
+  const identityConfirmed = moderationIdentityConfirmed("admin-review", adminActiveReview);
+  if (identityRequired && identityConfirmed && !moderationReason) {
     moderationReason = MODERATION_IDENTITY_APPROVAL_MESSAGE;
     const reasonEl = document.getElementById("admin-review-reason");
     if (reasonEl) reasonEl.value = moderationReason;
@@ -25760,7 +25865,8 @@ async function adminSetListingStatus(localId, nextStatus, backendId = "", option
   };
   if (backendId) {
     try {
-      if (isLiveApi && adminActiveReview?.id && String(adminActiveReview.id) === String(backendId)) {
+      const statusListingPatch = normalizedStatus === "approved" ? collectAdminReviewListingPatch() : null;
+      if (normalizedStatus !== "approved" && isLiveApi && adminActiveReview?.id && String(adminActiveReview.id) === String(backendId)) {
         const savedReview = await adminPersistActiveReviewEditsBeforeStatus(backendId, moderationReason, reviewNotes, checklist);
         if (savedReview) Object.assign(listing, savedReview);
       }
@@ -25772,16 +25878,22 @@ async function adminSetListingStatus(localId, nextStatus, backendId = "", option
 	          fast_admin_render: true,
 	          manual_notification_only: ["approved", "rejected"].includes(normalizedStatus),
 	          status: normalizedStatus,
+	          ...(statusListingPatch ? { listing: statusListingPatch } : {}),
 	          reason: moderationReason.trim() || undefined,
-	          review_notes: integrityOverride ? HUMAN_INTEGRITY_OVERRIDE_REVIEW_NOTE : (reviewNotes || undefined),
+	          review_notes: humanApprovalOverride ? HUMAN_INTEGRITY_OVERRIDE_REVIEW_NOTE : (reviewNotes || undefined),
 	          checklist,
-            identity_verified: identityRequired ? true : moderationIdentityConfirmed("admin-review", adminActiveReview),
-            identity_document_verified: identityRequired ? true : moderationIdentityConfirmed("admin-review", adminActiveReview),
-            id_document_clear_and_matches: identityRequired ? true : moderationIdentityConfirmed("admin-review", adminActiveReview),
+            identity_verified: identityConfirmed,
+            identity_document_verified: identityConfirmed,
+            id_document_clear_and_matches: identityConfirmed,
             high_monthly_price_confirmed: document.getElementById("admin-review-price-basis-confirmed")?.checked === true,
             structured_rejection_reasons: structuredRejectionReasons,
 	          warning_overrides: getAdminReviewWarningOverrides(adminActiveReview),
-            location_reclassification_confirmed: locationReclassificationConfirmed
+            location_reclassification_confirmed: locationReclassificationConfirmed || locationConfirmation.confirmed,
+            human_location_confirmed: locationConfirmation.confirmed,
+            canonical_location_confirmed: locationConfirmation.confirmed,
+            location_confirmed: locationConfirmation.confirmed,
+            location_confirmation_source: locationConfirmation.source,
+            location_confirmation_fields: locationConfirmation.fields
         }
       });
       statusResponse = response?.data || null;
@@ -25819,15 +25931,16 @@ async function adminSetListingStatus(localId, nextStatus, backendId = "", option
         if (existingPublic) existingPublic.status = normalizedStatus;
       }
 	    } catch (e) {
-	      if (!integrityOverride && e.response?.data_integrity) {
-	        revealHumanIntegrityOverride(e.response.data_integrity, backendId || localId);
-	        toast("Integrity flags need your decision. Review the warning, then choose Approve anyway (human verified).");
-	        return;
-	      }
-      const details = Array.isArray(e.response?.details)
-        ? e.response.details.join("; ")
-        : (e.response?.details ? JSON.stringify(e.response.details) : "");
-      toast(`Status update failed: ${details || e.message || "error"}`);
+      listing.status = previousStatus;
+      listing.reviewed_at = previousReviewedAt;
+      const response = e.response && typeof e.response === "object"
+        ? { ...e.response, human_approval_override_available: humanApprovalOverride ? false : e.response.human_approval_override_available }
+        : { error: e.message || "Status update failed", human_approval_override_available: false };
+      if (normalizedStatus === "approved" && showApprovalBlockerBanner(response, backendId || localId)) {
+        toast("Approval reason is shown in the Decision panel.");
+        return;
+      }
+      toast(`Status update failed: ${e.message || "error"}`);
       return;
     }
   }

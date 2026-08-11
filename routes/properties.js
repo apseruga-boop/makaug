@@ -96,9 +96,10 @@ const {
 const { listingPriceQuality } = require('../utils/listingPriceQuality');
 const { listingDataIntegrityReport } = require('../utils/listingDataIntegrity');
 const {
+  HUMAN_APPROVAL_OVERRIDE_MARKER,
   HUMAN_INTEGRITY_OVERRIDE_MARKER,
   HUMAN_INTEGRITY_OVERRIDE_NOTE,
-  humanIntegrityOverrideAccess
+  humanApprovalOverrideAccess
 } = require('../utils/humanIntegrityOverride');
 const { propertyPriceMetadata } = require('../utils/propertyPriceCurrency');
 const {
@@ -565,6 +566,14 @@ async function applyStatusListingPatchBeforeModeration(req, propertyId, existing
     'room_arrangement',
     'gender_pref',
     'student_room_label'
+  ].forEach((key) => {
+    if (Object.prototype.hasOwnProperty.call(patch, key)) extraPatch[key] = cleanText(patch[key]) || null;
+  });
+  [
+    'canonical_location_id',
+    'canonical_location_level',
+    'location_resolution_status',
+    'location_confirmation_source'
   ].forEach((key) => {
     if (Object.prototype.hasOwnProperty.call(patch, key)) extraPatch[key] = cleanText(patch[key]) || null;
   });
@@ -2102,12 +2111,13 @@ function sourcedCandidateRecordHasApprovalLocation(row = {}) {
   );
 }
 
-function canonicalApprovalLocationForRecord(row = {}) {
+function canonicalApprovalLocationForRecord(row = {}, options = {}) {
+  const allowDistrictNode = options.allowDistrictNode === true;
   const extra = propertyExtraFieldsObject(row);
   const stored = canonicalLocationByKey(extra.canonical_location_id);
   const exact = canonicalizeUgandaLocation(row.area, row.district);
   const candidate = stored || exact;
-  if (!candidate || ['district', 'region'].includes(candidate.level)) return null;
+  if (!candidate || candidate.level === 'region' || (candidate.level === 'district' && !allowDistrictNode)) return null;
   if (exact && stored && exact.key !== stored.key) return null;
   if (normalizeDistrict(row.district) !== candidate.district) return null;
   if (normalizeLocationKey(row.area) !== normalizeLocationKey(candidate.name)) return null;
@@ -4527,17 +4537,23 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
     }
 
     const actorRole = String(req.adminAuth?.role || '').toLowerCase();
-    const integrityOverrideRequested = nextStatus === 'approved'
-      && parseBooleanLike(req.body.integrity_override, false);
-    const integrityOverrideAccess = humanIntegrityOverrideAccess({
+    const humanApprovalOverrideRequested = nextStatus === 'approved'
+      && parseBooleanLike(
+        req.body.human_approval_override
+          || req.body.approval_override
+          || req.body.integrity_override,
+        false
+      );
+    const humanApprovalAccess = humanApprovalOverrideAccess({
       adminAuth: req.adminAuth,
-      requested: integrityOverrideRequested,
+      requested: humanApprovalOverrideRequested,
       nextStatus
     });
-    if (integrityOverrideRequested && !integrityOverrideAccess.allowed) {
+    if (humanApprovalOverrideRequested && !humanApprovalAccess.allowed) {
       return res.status(403).json({
         ok: false,
-        error: 'Human integrity override requires an authenticated super-admin or moderator session',
+        error: 'Human approval override requires an authenticated super-admin or moderator session',
+        human_approval_override_allowed: false,
         integrity_override_allowed: false
       });
     }
@@ -4580,19 +4596,71 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
       current = listingPatchResult.property || current;
       approvalWarnings.push(`Listing facts updated before moderation status change: ${listingPatchResult.changed_fields.join(', ')}`);
     }
+    const currentLocationExtra = propertyExtraFieldsObject(current);
+    const humanLocationConfirmed = nextStatus === 'approved'
+      && humanApprovalAccess.human_session
+      && parseBooleanLike(
+        req.body.human_location_confirmed
+          || req.body.canonical_location_confirmed
+          || req.body.location_confirmed
+          || req.body.found_online_location_confirmed,
+        false
+      );
+    const approvalOverrideBlockers = [];
+    const handleApprovalBlocker = ({
+      code,
+      error,
+      details = [],
+      missingFields = [],
+      response = {}
+    }) => {
+      const normalizedDetails = asArray(details).map((item) => cleanText(item)).filter(Boolean);
+      const normalizedFields = asArray(missingFields).map((item) => cleanText(item)).filter(Boolean);
+      if (humanApprovalAccess.allowed) {
+        approvalOverrideBlockers.push({
+          code: cleanText(code) || 'approval_blocked',
+          error: cleanText(error) || 'Approval blocked',
+          details: normalizedDetails,
+          missing_fields: normalizedFields
+        });
+        approvalWarnings.push(`Human approval override recorded for ${cleanText(code) || 'approval blocker'}.`);
+        return true;
+      }
+      res.status(400).json({
+        ok: false,
+        error,
+        details: normalizedDetails,
+        missing_fields: normalizedFields,
+        approval_blocker: cleanText(code) || 'approval_blocked',
+        approval_blocked: true,
+        human_approval_override_available: humanApprovalAccess.human_session,
+        ...response
+      });
+      return false;
+    };
     if (nextStatus === 'approved') {
-      const canonicalApprovalLocation = canonicalApprovalLocationForRecord(current);
+      const canonicalApprovalLocation = canonicalApprovalLocationForRecord(current, {
+        allowDistrictNode: humanLocationConfirmed
+      });
       if (!canonicalApprovalLocation) {
-        return res.status(400).json({
-          ok: false,
+        const missingFields = [
+          !cleanText(currentLocationExtra.region) ? 'region' : '',
+          !cleanText(current.district) ? 'district' : '',
+          !cleanText(currentLocationExtra.city) ? 'town' : '',
+          !cleanText(currentLocationExtra.neighborhood) ? 'neighborhood' : '',
+          !cleanText(current.area) ? 'area' : '',
+          !cleanText(currentLocationExtra.canonical_location_id) ? 'canonical_location' : ''
+        ].filter(Boolean);
+        if (!handleApprovalBlocker({
+          code: 'canonical_location_confirmation',
           error: 'Canonical location confirmation is required before approval',
           details: [
             'Use Find to resolve an exact Uganda locality. A map pin or free-text address alone cannot approve a listing.',
-            'Unmatched or ambiguous locations must keep region, district, town, neighbourhood, and area unverified.'
+            'Unmatched or ambiguous locations remain unverified for automated publication. An authenticated human moderator may verify or override after checking the cascade and pin.'
           ],
-          location_resolution_status: 'unverified',
-          approval_blocked: true
-        });
+          missingFields,
+          response: { location_resolution_status: 'unverified' }
+        })) return;
       }
     }
     const requestedSourcedCandidateOverride = nextStatus === 'approved'
@@ -4613,12 +4681,13 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
     if (nextStatus === 'approved' && !sourcedApprovalPolicy.usesExemption) {
       const priceQuality = listingPriceQuality(current, { highMonthlyPriceConfirmed });
       if (!priceQuality.ok) {
-        return res.status(400).json({
-          ok: false,
+        if (!handleApprovalBlocker({
+          code: 'price_quality',
           error: 'Listing price data must be corrected or confirmed before approval',
           details: priceQuality.reasons,
-          price_quality: priceQuality
-        });
+          missingFields: ['price', 'price_period'],
+          response: { price_quality: priceQuality }
+        })) return;
       }
       if (priceQuality.warnings.length) {
         approvalWarnings.push(`Price basis confirmed by staff: ${priceQuality.warnings.join(', ')}`);
@@ -4626,38 +4695,19 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
     }
     let dataIntegrity = null;
     let humanIntegrityOverride = null;
+    let humanApprovalOverride = null;
     if (nextStatus === 'approved') {
       dataIntegrity = listingDataIntegrityReport(current);
-      if (!dataIntegrity.ok && !integrityOverrideAccess.allowed) {
-        return res.status(400).json({
-          ok: false,
+      if (!dataIntegrity.ok) {
+        if (!handleApprovalBlocker({
+          code: 'data_integrity',
           error: 'Listing data integrity issues must be corrected before approval',
           details: dataIntegrity.issues.map((issue) => issue.message),
-          data_integrity: dataIntegrity,
-          integrity_override_available: integrityOverrideAccess.human_session
-        });
-      }
-      if (!dataIntegrity.ok && integrityOverrideAccess.allowed) {
-        const overriddenAt = new Date().toISOString();
-        reviewNotes = HUMAN_INTEGRITY_OVERRIDE_NOTE;
-        humanIntegrityOverride = {
-          marker: HUMAN_INTEGRITY_OVERRIDE_MARKER,
-          used: true,
-          at: overriddenAt,
-          actor_id: integrityOverrideAccess.user_id,
-          actor_role: integrityOverrideAccess.role,
-          actor_auth_type: integrityOverrideAccess.auth_type,
-          listing_id: req.params.id,
-          issue_codes: dataIntegrity.issue_codes,
-          issues: dataIntegrity.issues.map((issue) => ({
-            code: issue.code,
-            message: issue.message,
-            proposed_listing_type: issue.proposed_listing_type || null,
-            proposed_price_period: issue.proposed_price_period || null
-          })),
-          review_notes: HUMAN_INTEGRITY_OVERRIDE_NOTE
-        };
-        approvalWarnings.push(`Human integrity override recorded for: ${dataIntegrity.issue_codes.join(', ')}.`);
+          response: {
+            data_integrity: dataIntegrity,
+            integrity_override_available: humanApprovalAccess.human_session
+          }
+        })) return;
       }
     }
     const actorId = req.adminAuth?.userId || req.adminAuth?.type || 'admin_api_key';
@@ -4672,33 +4722,36 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
     let locationReclassificationExtraFields = null;
     if (nextStatus === 'approved' && locationReclassificationReviewRequired) {
       const locationReclassificationConfirmed = parseBooleanLike(
-        req.body.location_reclassification_confirmed,
+        req.body.location_reclassification_confirmed || humanLocationConfirmed,
         false
       );
       if (!locationReclassificationConfirmed) {
-        return res.status(400).json({
-          ok: false,
+        if (!handleApprovalBlocker({
+          code: 'location_reclassification_confirmation',
           error: 'Human confirmation of the reclassified location is required before approval',
           details: [
             'Compare the raw source location with the proposed canonical location, correct it if necessary, confirm the map pin, and tick the location reclassification confirmation.'
-          ]
-        });
+          ],
+          missingFields: ['location_confirmation']
+        })) return;
       }
       const confirmedCanonicalLocation = canonicalLocationForRow(current);
       const canonicalLocationIsSpecific = confirmedCanonicalLocation
-        && !['district', 'region'].includes(confirmedCanonicalLocation.level);
+        && confirmedCanonicalLocation.level !== 'region'
+        && (confirmedCanonicalLocation.level !== 'district' || humanLocationConfirmed);
       const canonicalLocationMatchesStoredFields = canonicalLocationIsSpecific
         && normalizeLocationKey(current.area) === normalizeLocationKey(confirmedCanonicalLocation.name)
         && normalizeDistrict(current.district) === normalizeDistrict(confirmedCanonicalLocation.district);
       if (!canonicalLocationMatchesStoredFields) {
-        return res.status(400).json({
-          ok: false,
+        if (!handleApprovalBlocker({
+          code: 'canonical_location_specificity',
           error: 'Choose and save a specific canonical area before approval',
           details: [
             'District-only, region-only, unmatched, or stale canonical assignments must remain in source review.',
             'Save the corrected area and district in King, then confirm the location reclassification again.'
-          ]
-        });
+          ],
+          missingFields: ['canonical_location', 'area', 'district']
+        })) return;
       }
       const confirmedAt = new Date().toISOString();
       locationReclassificationExtraFields = {
@@ -4706,13 +4759,13 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
         location_review_confirmed_at: confirmedAt,
         location_review_confirmed_by: actorId,
         location_review_confirmation: 'individual_king_moderation_approval',
-        location_review_confirmed_canonical_location_id: confirmedCanonicalLocation.key,
-        location_review_confirmed_canonical_location_level: confirmedCanonicalLocation.level,
-        location_review_confirmed_area: confirmedCanonicalLocation.name,
-        location_review_confirmed_district: confirmedCanonicalLocation.district,
-        location_resolution_status: 'canonical_human_confirmed'
+        location_review_confirmed_canonical_location_id: confirmedCanonicalLocation?.key || currentExtraFields.canonical_location_id || null,
+        location_review_confirmed_canonical_location_level: confirmedCanonicalLocation?.level || currentExtraFields.canonical_location_level || null,
+        location_review_confirmed_area: confirmedCanonicalLocation?.name || current.area || null,
+        location_review_confirmed_district: confirmedCanonicalLocation?.district || current.district || null,
+        location_resolution_status: canonicalLocationMatchesStoredFields ? 'canonical_human_confirmed' : 'human_override_verified'
       };
-      approvalWarnings.push(`Canonical location reclassification confirmed by King: ${confirmedCanonicalLocation.name}, ${confirmedCanonicalLocation.district}.`);
+      approvalWarnings.push(`Canonical location reclassification confirmed by King: ${confirmedCanonicalLocation?.name || current.area || 'manual area'}, ${confirmedCanonicalLocation?.district || current.district || 'manual district'}.`);
     }
     if (nextStatus === 'approved' && normalizeListingType(current.listing_type) === 'commercial') {
       const commercialTransactionType = normalizeCommercialTransactionType(current.transaction_type);
@@ -4724,11 +4777,15 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
       if (!commercialTransactionType) missingCommercialFields.push('Select For rent or For sale.');
       if (!commercialPropertyType) missingCommercialFields.push('Select a commercial property type.');
       if (missingCommercialFields.length) {
-        return res.status(400).json({
-          ok: false,
+        if (!handleApprovalBlocker({
+          code: 'commercial_classification',
           error: 'Commercial transaction and property type are required before approval',
-          details: missingCommercialFields
-        });
+          details: missingCommercialFields,
+          missingFields: [
+            !commercialTransactionType ? 'transaction_type' : '',
+            !commercialPropertyType ? 'property_type' : ''
+          ].filter(Boolean)
+        })) return;
       }
       const classificationWarning = commercialMisclassificationWarning(current);
       if (classificationWarning) approvalWarnings.push(classificationWarning);
@@ -4746,14 +4803,15 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
     }
 
     if (sourcedApprovalPolicy.usesExemption && !sourcedApprovalPolicy.hasLocation) {
-      return res.status(400).json({
-        ok: false,
+      if (!handleApprovalBlocker({
+        code: 'found_online_location',
         error: 'Location is required before found-online approval',
         details: [
           'Add at least an area, district, address, source location, or valid coordinates before approving.',
-          'Found-online approval can override missing contact, ID, image-count, pricing, and declaration checks, but it cannot override missing location.'
-        ]
-      });
+          'Automated publication cannot override missing location. An authenticated human moderator may verify or override it after reviewing the source evidence.'
+        ],
+        missingFields: ['region', 'district', 'town', 'neighborhood', 'area']
+      })) return;
     }
 
     const sourcedCandidateOverride = sourcedApprovalPolicy.usesExemption;
@@ -4798,19 +4856,21 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
       : [];
 
     if (missingChecks.length && !sourcedCandidateOverride) {
-      return res.status(400).json({
-        ok: false,
+      if (!handleApprovalBlocker({
+        code: 'approval_checklist',
         error: 'Approval checklist is incomplete',
-        details: missingChecks
-      });
+        details: missingChecks,
+        missingFields: ['approval_checklist']
+      })) return;
     }
 
     if (missingWarningOverrides.length && !sourcedCandidateOverride) {
-      return res.status(400).json({
-        ok: false,
+      if (!handleApprovalBlocker({
+        code: 'approval_warnings',
         error: 'Approval warnings require admin override',
-        details: missingWarningOverrides
-      });
+        details: missingWarningOverrides,
+        missingFields: ['warning_overrides']
+      })) return;
     }
 
     const identityVerificationRequired = nextStatus === 'approved'
@@ -4820,26 +4880,78 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
     let identityVerificationExtraFields = null;
     if (identityVerificationRequired) {
       if (!identityVerificationConfirmed) {
-        return res.status(400).json({
-          ok: false,
+        if (!handleApprovalBlocker({
+          code: 'identity_verification',
           error: 'ID verification confirmation is required before approval',
           details: [
             'Open the Identity panel, check that the National ID photo is clear, and confirm the ID number matches the document before approving.'
-          ]
-        });
+          ],
+          missingFields: ['identity_verification']
+        })) return;
       }
-      const verifiedAt = new Date().toISOString();
-      checklist.identity_document_verified = true;
-      checklist.identity_number_matches_document = true;
-      checklist.identity_verified = true;
-      moderationReason = moderationReason || 'Approved - identity verified: ID photo clear and ID number matches. Listing details confirmed.';
-      identityVerificationExtraFields = buildIdentityVerificationExtra({
-        actorId,
-        actorRole: actorRole || req.adminAuth?.type || 'staff',
-        verifiedAt
-      });
-      approvalWarnings.push('National ID photo and ID number match were confirmed before approval.');
+      if (identityVerificationConfirmed) {
+        const verifiedAt = new Date().toISOString();
+        checklist.identity_document_verified = true;
+        checklist.identity_number_matches_document = true;
+        checklist.identity_verified = true;
+        moderationReason = moderationReason || 'Approved - identity verified: ID photo clear and ID number matches. Listing details confirmed.';
+        identityVerificationExtraFields = buildIdentityVerificationExtra({
+          actorId,
+          actorRole: actorRole || req.adminAuth?.type || 'staff',
+          verifiedAt
+        });
+        approvalWarnings.push('National ID photo and ID number match were confirmed before approval.');
+      }
     }
+
+    if (approvalOverrideBlockers.length) {
+      const overriddenAt = new Date().toISOString();
+      reviewNotes = HUMAN_INTEGRITY_OVERRIDE_NOTE;
+      humanApprovalOverride = {
+        marker: HUMAN_APPROVAL_OVERRIDE_MARKER,
+        used: true,
+        at: overriddenAt,
+        actor_id: humanApprovalAccess.user_id,
+        actor_role: humanApprovalAccess.role,
+        actor_auth_type: humanApprovalAccess.auth_type,
+        listing_id: req.params.id,
+        issue_codes: Array.from(new Set(approvalOverrideBlockers.map((item) => item.code))),
+        blockers: approvalOverrideBlockers,
+        review_notes: HUMAN_INTEGRITY_OVERRIDE_NOTE
+      };
+      if (dataIntegrity && !dataIntegrity.ok) {
+        humanIntegrityOverride = {
+          ...humanApprovalOverride,
+          marker: HUMAN_INTEGRITY_OVERRIDE_MARKER,
+          issue_codes: dataIntegrity.issue_codes,
+          issues: dataIntegrity.issues.map((issue) => ({
+            code: issue.code,
+            message: issue.message,
+            proposed_listing_type: issue.proposed_listing_type || null,
+            proposed_price_period: issue.proposed_price_period || null
+          }))
+        };
+      }
+    }
+
+    const humanConfirmedCanonicalLocation = humanLocationConfirmed
+      ? canonicalLocationForRow(current)
+      : null;
+    const humanLocationConfirmationExtraFields = nextStatus === 'approved' && humanLocationConfirmed
+      ? {
+        human_location_confirmed: true,
+        human_location_confirmed_at: new Date().toISOString(),
+        human_location_confirmed_by: actorId,
+        human_location_confirmation_role: actorRole || req.adminAuth?.type || 'staff',
+        human_location_confirmation_source: cleanText(req.body.location_confirmation_source) || 'king_review',
+        location_resolution_status: 'canonical_human_confirmed',
+        location_review_required: false,
+        location_review_confirmed_canonical_location_id: humanConfirmedCanonicalLocation?.key || currentExtraFields.canonical_location_id || null,
+        location_review_confirmed_canonical_location_level: humanConfirmedCanonicalLocation?.level || currentExtraFields.canonical_location_level || null,
+        location_review_confirmed_area: humanConfirmedCanonicalLocation?.name || current.area || null,
+        location_review_confirmed_district: humanConfirmedCanonicalLocation?.district || current.district || null
+      }
+      : null;
 
     let sourcedCandidateDispensation = null;
     if (sourcedCandidateOverride) {
@@ -4896,6 +5008,7 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
       ...(identityVerificationExtraFields || {}),
       ...(structuredRejectionExtraFields || {}),
       ...(priceBasisExtraFields || {}),
+      ...(humanLocationConfirmationExtraFields || {}),
       ...(locationReclassificationExtraFields || {}),
       ...(nextStatus === 'approved' ? {
         data_integrity_review_required: false,
@@ -4911,7 +5024,8 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
           || (Array.isArray(currentExtraFields.data_integrity_issue_codes)
             ? currentExtraFields.data_integrity_issue_codes
             : []),
-        ...(humanIntegrityOverride ? { human_integrity_override: humanIntegrityOverride } : {})
+        ...(humanIntegrityOverride ? { human_integrity_override: humanIntegrityOverride } : {}),
+        ...(humanApprovalOverride ? { human_approval_override: humanApprovalOverride } : {})
       } : {})
     };
     const moderationExtraFieldsJson = Object.keys(moderationExtraFields).length
@@ -5062,8 +5176,10 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
           ...notification,
           ...(sourcedCandidateDispensation ? { sourced_candidate_special_dispensation: sourcedCandidateDispensation } : {}),
           ...(identityVerificationExtraFields ? { identity_verification: identityVerificationExtraFields.identity_verification } : {}),
+          ...(humanLocationConfirmationExtraFields ? { human_location_confirmation: humanLocationConfirmationExtraFields } : {}),
           ...(locationReclassificationExtraFields ? { location_reclassification_confirmation: locationReclassificationExtraFields } : {}),
           ...(humanIntegrityOverride ? { human_integrity_override: humanIntegrityOverride } : {}),
+          ...(humanApprovalOverride ? { human_approval_override: humanApprovalOverride } : {}),
           ...(structuredRejectionReasons.length ? { structured_rejection_reasons: structuredRejectionReasons } : {})
         };
         await db.query(
@@ -5142,6 +5258,32 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
             ]
           );
         }
+        if (humanApprovalOverride) {
+          await db.query(
+            `INSERT INTO property_moderation_events (
+              property_id,
+              actor_id,
+              action,
+              status_from,
+              status_to,
+              checklist,
+              reason,
+              notes,
+              delivery
+            ) VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9::jsonb)`,
+            [
+              listing.id,
+              actorId,
+              'human_approval_override_approved',
+              current.status,
+              nextStatus,
+              JSON.stringify(checklist),
+              moderationReason,
+              HUMAN_INTEGRITY_OVERRIDE_NOTE,
+              JSON.stringify(humanApprovalOverride)
+            ]
+          );
+        }
       } catch (error) {
         logger.error('Listing moderation event write failed after status update', {
           property_id: listing.id,
@@ -5167,6 +5309,8 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
               reason: moderationReason || null,
               structured_rejection_reasons: structuredRejectionReasons,
               human_integrity_override: humanIntegrityOverride || null,
+              human_approval_override: humanApprovalOverride || null,
+              human_location_confirmation: humanLocationConfirmationExtraFields || null,
               identity_verified: !!identityVerificationExtraFields,
               lister_notified: !!(notification.email?.sent || notification.whatsapp?.sent)
             })
@@ -5185,14 +5329,16 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
         alert_matching: alertMatching,
         warnings: approvalWarnings,
         automated_review: automatedReview || undefined,
-        integrity_override: humanIntegrityOverride || undefined
+        integrity_override: humanIntegrityOverride || undefined,
+        human_approval_override: humanApprovalOverride || undefined,
+        human_location_confirmation: humanLocationConfirmationExtraFields || undefined
       }
     });
 
     if (fastAdminRender && manualNotificationOnly && ['approved', 'rejected', 'pending'].includes(nextStatus)) {
       clearPublicPropertiesCache(`listing_status_${current.status || 'unknown'}_to_${nextStatus}`);
       invalidatePublicInventoryMetricsCache(`listing_status_${current.status || 'unknown'}_to_${nextStatus}`);
-      if (humanIntegrityOverride) {
+      if (humanApprovalOverride || humanIntegrityOverride) {
         await writeModerationAuditEvents();
       } else {
         runPublicInventoryFollowup(

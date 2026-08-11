@@ -63,6 +63,8 @@ assert(app.includes('ID photo not clear / unreadable'), 'reject flow must includ
 assert(app.includes('Location mismatch'), 'reject flow must include location mismatch reason');
 assert(app.includes('structured_rejection_reasons: review.structured_rejection_reasons'), 'staff reject must send structured reasons');
 assert(app.includes('structured_rejection_reasons: structuredRejectionReasons'), 'King reject must send structured reasons');
-assert(app.includes('identity_verified: identityRequired ? true'), 'approval payload must send identity verification confirmation');
+assert(app.includes('identity_verified: identityConfirmed'), 'approval payload must send the moderator checkbox result instead of claiming verification automatically');
+assert(app.includes('missing_fields: [\'identity_verification\']') || propertiesRoute.includes("missingFields: ['identity_verification']"), 'identity blocker must identify the field for the Decision-panel banner');
+assert(app.includes('Approve anyway (human verified)'), 'authenticated human reviewers must receive the unified approval override');
 
 console.log('moderator ID verification regression checks passed');

@@ -40,7 +40,8 @@ assert(frontend.includes('async function resolveUgandaLocationFromSharedRegistry
 assert(frontend.includes('/api/properties/locations/resolve?q='));
 assert(frontend.includes('function clearAdminReviewCanonicalLocation()'));
 assert(frontend.includes('Location not recognised — pin set but region/district/area could NOT be auto-filled.'));
-assert(frontend.includes('Resolve the area through the shared canonical location registry before approving.'));
+assert(frontend.includes('function canonicalTownForLocation'));
+assert(frontend.includes('data-approval-blocker-host'));
 assert(staffRoute.includes('Source/title/address evidence points to ${evidenceDistrict}, not ${district}'));
 assert(staffRoute.includes('warnings: staffLocationWarnings(property)'));
 

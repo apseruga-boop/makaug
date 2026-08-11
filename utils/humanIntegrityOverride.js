@@ -1,6 +1,7 @@
 'use strict';
 
 const HUMAN_INTEGRITY_OVERRIDE_MARKER = 'human-integrity-override-20260811';
+const HUMAN_APPROVAL_OVERRIDE_MARKER = 'human-approval-overlord-20260811';
 const HUMAN_INTEGRITY_OVERRIDE_NOTE = 'human override — verified manually';
 const HUMAN_INTEGRITY_OVERRIDE_ROLES = new Set(['super_admin', 'moderator']);
 
@@ -22,9 +23,15 @@ function humanIntegrityOverrideAccess({ adminAuth = {}, requested = false, nextS
   };
 }
 
+function humanApprovalOverrideAccess(input = {}) {
+  return humanIntegrityOverrideAccess(input);
+}
+
 module.exports = {
+  HUMAN_APPROVAL_OVERRIDE_MARKER,
   HUMAN_INTEGRITY_OVERRIDE_MARKER,
   HUMAN_INTEGRITY_OVERRIDE_NOTE,
   HUMAN_INTEGRITY_OVERRIDE_ROLES,
-  humanIntegrityOverrideAccess
+  humanIntegrityOverrideAccess,
+  humanApprovalOverrideAccess
 };
