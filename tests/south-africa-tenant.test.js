@@ -3,6 +3,7 @@
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
+const vm = require('vm');
 const { sanitizePublicHtml } = require('../services/publicHtmlSanitizer');
 const {
   SESHAIKHAYA_LAUNCH_MARKER,
@@ -79,6 +80,7 @@ assert.deepEqual(emptySeoSnapshot.properties, []);
 
 const rawJavaScript = fs.readFileSync(path.join(root, 'assets', 'makaug-app.js'), 'utf8');
 const zaJavaScript = applySouthAfricaJavaScript(rawJavaScript);
+assert.doesNotThrow(() => new vm.Script(zaJavaScript), 'ZA public JavaScript must remain syntactically valid');
 const serverSource = fs.readFileSync(path.join(root, 'server.js'), 'utf8');
 const renderStartSource = fs.readFileSync(path.join(root, 'scripts', 'render-start.js'), 'utf8');
 const renderBlueprintSource = fs.readFileSync(path.join(root, 'render.seshaikhaya.yaml'), 'utf8');
