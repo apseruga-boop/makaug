@@ -283,7 +283,10 @@ const OUTBOUND_IMAGE_INPUT_SELECTORS = [
 ];
 const MEDIA_CAPTION_SELECTORS = [
   '[data-testid="media-caption-input-container"] [contenteditable="true"]',
+  '[data-testid*="caption" i] [contenteditable="true"]',
   '[role="dialog"] div[role="textbox"][contenteditable="true"]',
+  '[role="dialog"] [data-lexical-editor="true"][contenteditable="true"]',
+  'div[aria-placeholder*="caption" i][contenteditable="true"]',
   'div[aria-label*="caption" i][contenteditable="true"]'
 ];
 const MEDIA_SEND_BUTTON_SELECTORS = [
@@ -2931,7 +2934,29 @@ async function setMediaCaption(page, caption) {
       return true;
     }
   }
-  return false;
+  return page.evaluate(({ selectors, text }) => {
+    const isVisible = (node) => {
+      if (!node) return false;
+      const style = window.getComputedStyle(node);
+      const rect = node.getBoundingClientRect();
+      return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 8 && rect.height > 8;
+    };
+    const candidates = selectors.flatMap((selector) => (
+      Array.from(document.querySelectorAll(selector)).filter(isVisible)
+    ));
+    const target = candidates[candidates.length - 1];
+    if (!target) return false;
+    target.focus();
+    document.execCommand?.('selectAll', false, null);
+    document.execCommand?.('insertText', false, String(text || ''));
+    target.dispatchEvent(new InputEvent('input', {
+      bubbles: true,
+      cancelable: true,
+      inputType: 'insertText',
+      data: String(text || '')
+    }));
+    return Boolean(String(target.innerText || target.textContent || '').trim());
+  }, { selectors: MEDIA_CAPTION_SELECTORS, text: caption }).catch(() => false);
 }
 
 async function getMediaComposerState(page) {
@@ -2964,28 +2989,39 @@ async function getMediaComposerState(page) {
 }
 
 async function dismissPendingMediaSelection(page) {
-  let state = await getMediaComposerState(page);
-  if (!state.captionVisible && !state.discardDialogVisible) return true;
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const state = await getMediaComposerState(page);
+    if (!state.captionVisible && !state.discardDialogVisible) return true;
 
-  if (state.captionVisible && !state.discardDialogVisible) {
-    await page.keyboard.press('Escape').catch(() => null);
-    await page.waitForTimeout(150);
-    state = await getMediaComposerState(page);
-  }
-
-  if (state.discardDialogVisible) {
-    const dialog = page.getByRole('dialog', { name: /Discard selection/i }).last();
-    const discardButton = dialog.getByRole('button', { name: /Discard|Yes/i }).last();
-    if (await discardButton.count().catch(() => 0)) {
-      await discardButton.click({ timeout: 2500 }).catch(() => null);
+    if (state.discardDialogVisible) {
+      const clicked = await page.evaluate(() => {
+        const isVisible = (node) => {
+          if (!node) return false;
+          const style = window.getComputedStyle(node);
+          const rect = node.getBoundingClientRect();
+          return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 8 && rect.height > 8;
+        };
+        const dialog = Array.from(document.querySelectorAll('[role="dialog"]')).find((node) => (
+          isVisible(node)
+          && /discard selection/i.test(`${node.getAttribute('aria-label') || ''} ${node.innerText || ''}`)
+        ));
+        if (!dialog) return false;
+        const action = Array.from(dialog.querySelectorAll('button,[role="button"]')).find((node) => (
+          isVisible(node) && /discard|yes|ok|continue/i.test(`${node.getAttribute('aria-label') || ''} ${node.innerText || ''}`)
+        ));
+        if (!action) return false;
+        action.click();
+        return true;
+      }).catch(() => false);
+      if (!clicked) await page.keyboard.press('Enter').catch(() => null);
     } else {
-      await page.keyboard.press('Enter').catch(() => null);
+      await page.keyboard.press('Escape').catch(() => null);
     }
-    await page.waitForTimeout(200);
+    await page.waitForTimeout(250);
   }
 
-  state = await getMediaComposerState(page);
-  return !state.captionVisible && !state.discardDialogVisible;
+  const finalState = await getMediaComposerState(page);
+  return !finalState.captionVisible && !finalState.discardDialogVisible;
 }
 
 async function waitForMediaSendConfirmation(page, caption, beforeState, timeoutMs = 10000) {
