@@ -515,6 +515,7 @@ const publicAppVersionSuffixes = [
   socialImportTilesVersion
 ];
 let cachedIndexHtml = null;
+let countryAppAssetCache = null;
 const publicHtmlCache = new Map();
 const textAssetCache = new Map();
 const PUBLIC_HTML_WARMUP_PATHS = [
@@ -659,10 +660,16 @@ function compressBody(body, encoding) {
   return body;
 }
 
-function readCachedTextAsset(filePath) {
+function readCachedTextAsset(filePath, { compress = true } = {}) {
   const stat = fs.statSync(filePath);
   const cached = textAssetCache.get(filePath);
   if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) {
+    if (compress && !cached.compressed) {
+      cached.compressed = {
+        br: compressBody(cached.body, 'br'),
+        gzip: compressBody(cached.body, 'gzip')
+      };
+    }
     return cached;
   }
   const body = fs.readFileSync(filePath);
@@ -672,13 +679,36 @@ function readCachedTextAsset(filePath) {
     body,
     etag: `W/"${stat.size.toString(16)}-${Math.floor(stat.mtimeMs).toString(16)}"`,
     lastModified: stat.mtime.toUTCString(),
+    compressed: compress ? {
+      br: compressBody(body, 'br'),
+      gzip: compressBody(body, 'gzip')
+    } : null
+  };
+  textAssetCache.set(filePath, entry);
+  return entry;
+}
+
+function readCountryAppAsset() {
+  const source = readCachedTextAsset(appJsPath, { compress: false });
+  if (
+    countryAppAssetCache
+    && countryAppAssetCache.sourceEtag === source.etag
+    && countryAppAssetCache.countryCode === ACTIVE_COUNTRY_CODE
+  ) return countryAppAssetCache;
+
+  const body = Buffer.from(applyCountryJavaScript(source.body.toString('utf8'), ACTIVE_COUNTRY_CODE), 'utf8');
+  countryAppAssetCache = {
+    sourceEtag: source.etag,
+    countryCode: ACTIVE_COUNTRY_CODE,
+    body,
+    etag: `W/"${ACTIVE_COUNTRY_CODE.toLowerCase()}-${runtimeBundleVersion()}"`,
+    lastModified: source.lastModified,
     compressed: {
       br: compressBody(body, 'br'),
       gzip: compressBody(body, 'gzip')
     }
   };
-  textAssetCache.set(filePath, entry);
-  return entry;
+  return countryAppAssetCache;
 }
 
 function sendBufferResponse(req, res, body, options = {}) {
@@ -1192,16 +1222,17 @@ app.get(Object.values(CATEGORY_SEO).flatMap((config) => [config.route, `${config
 
 app.get('/assets/makaug-app.js', (req, res, next) => {
   try {
-    const asset = readCachedTextAsset(appJsPath);
     if (ACTIVE_COUNTRY_CODE !== 'UG') {
-      const adapted = applyCountryJavaScript(asset.body.toString('utf8'), ACTIVE_COUNTRY_CODE);
-      return sendBufferResponse(req, res, adapted, {
+      const adapted = readCountryAppAsset();
+      return sendBufferResponse(req, res, adapted.body, {
         contentType: 'application/javascript; charset=utf-8',
         cacheControl: LONG_LIVED_STATIC_CACHE_CONTROL,
-        etag: `W/\"${ACTIVE_COUNTRY_CODE.toLowerCase()}-${runtimeBundleVersion()}\"`,
-        lastModified: asset.lastModified
+        etag: adapted.etag,
+        lastModified: adapted.lastModified,
+        compressed: adapted.compressed
       });
     }
+    const asset = readCachedTextAsset(appJsPath);
     return sendBufferResponse(req, res, asset.body, {
       contentType: 'application/javascript; charset=utf-8',
       cacheControl: LONG_LIVED_STATIC_CACHE_CONTROL,
@@ -1488,6 +1519,21 @@ async function start() {
       logger.warn('Public inventory summary warmup failed; list routes will use bounded fallback', {
         code: error?.code,
         message: error?.message
+      });
+    }
+  }
+  if (ACTIVE_COUNTRY_CODE !== 'UG') {
+    try {
+      const adaptedApp = readCountryAppAsset();
+      renderPublicHtml('/');
+      logger.info('Country public assets warmed before accepting traffic', {
+        country_code: ACTIVE_COUNTRY_CODE,
+        app_bytes: adaptedApp.body.length
+      });
+    } catch (error) {
+      logger.warn('Country public asset warmup failed; first request will retry', {
+        country_code: ACTIVE_COUNTRY_CODE,
+        message: error.message
       });
     }
   }

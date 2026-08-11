@@ -99,6 +99,11 @@ assert(renderStartSource.includes("hostname: '127.0.0.1'"), 'Render bootstrap mu
 assert(renderStartSource.includes('PORT: String(appPort)'), 'Render app process must use a separate internal port');
 assert(renderStartSource.includes("delete headers['content-length']"), 'Render proxy must not forward a stale GET body length');
 assert(renderStartSource.includes("proxyRequest.end();"), 'Render proxy must explicitly finish bodyless requests');
+assert(renderStartSource.includes('setTimeout(waitForAppReadiness, 1000)'), 'Render proxy must continuously monitor child readiness');
+assert(renderStartSource.includes('APP_PROXY_TIMEOUT'), 'Render proxy requests must have a bounded timeout');
+assert(serverSource.includes('function readCountryAppAsset()'), 'ZA public JavaScript must have a transformed asset cache');
+assert(serverSource.includes("renderPublicHtml('/');"), 'ZA public HTML must warm before readiness');
+assert(serverSource.includes('compressed: adapted.compressed'), 'ZA public JavaScript must reuse compressed output');
 assert(
   renderBlueprintSource.includes('startCommand: node scripts/render-start.js'),
   'Render Blueprint must use the early liveness bootstrap'

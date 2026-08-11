@@ -58,11 +58,21 @@ function proxyToApp(req, res) {
   });
   proxyRequest.on('error', (error) => {
     if (res.headersSent) return res.destroy(error);
+    console.error('Render application proxy request failed', {
+      code: error.code || null,
+      method,
+      path: String(req.url || '').split('?')[0]
+    });
     return jsonResponse(res, 502, {
       ok: false,
       error: 'application_unavailable',
       country_code: process.env.COUNTRY_CODE || 'ZA'
     });
+  });
+  proxyRequest.setTimeout(30000, () => {
+    const error = new Error('Render application proxy request timed out');
+    error.code = 'APP_PROXY_TIMEOUT';
+    proxyRequest.destroy(error);
   });
   if (method === 'GET' || method === 'HEAD') {
     proxyRequest.end();
@@ -91,6 +101,17 @@ const earlyHttpServer = http.createServer((req, res) => {
 });
 
 function waitForAppReadiness() {
+  let settled = false;
+  const finish = (ready) => {
+    if (settled) return;
+    settled = true;
+    const becameReady = ready && !appReady;
+    appReady = ready;
+    if (becameReady) {
+      console.log('Render application process ready behind liveness proxy', { port: appPort });
+    }
+    if (!shuttingDown) setTimeout(waitForAppReadiness, 1000).unref?.();
+  };
   const request = http.get({
     hostname: '127.0.0.1',
     port: appPort,
@@ -102,20 +123,18 @@ function waitForAppReadiness() {
     response.on('data', (chunk) => { body += chunk; });
     response.on('end', () => {
       try {
-        appReady = response.statusCode === 200 && JSON.parse(body).ready === true;
+        finish(response.statusCode === 200 && JSON.parse(body).ready === true);
       } catch {
-        appReady = false;
-      }
-      if (appReady) {
-        console.log('Render application process ready behind liveness proxy', { port: appPort });
-      } else if (!shuttingDown) {
-        setTimeout(waitForAppReadiness, 250).unref?.();
+        finish(false);
       }
     });
   });
-  request.on('timeout', () => request.destroy());
+  request.on('timeout', () => {
+    finish(false);
+    request.destroy();
+  });
   request.on('error', () => {
-    if (!shuttingDown) setTimeout(waitForAppReadiness, 250).unref?.();
+    finish(false);
   });
 }
 
