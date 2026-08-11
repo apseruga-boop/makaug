@@ -368,16 +368,25 @@ function canonicalLocationSuggestions(query = '', counts = new Map(), limit = 8)
   const needle = normalizeLocationKey(query);
   if (!needle) return [];
   const exact = resolveCanonicalSouthAfricaLocation(query);
-  return registry.map((entry) => {
-    const aliases = entry.aliases.map(normalizeLocationKey);
-    const isExact = aliases.includes(needle);
-    const isPrefix = aliases.some((alias) => alias.startsWith(needle));
-    const isContains = needle.length >= 3 && aliases.some((alias) => alias.includes(needle));
-    if (!isExact && !isPrefix && !isContains) return null;
+  const matchedEntries = new Map();
+  for (const row of aliasRows) {
+    const isExact = row.aliasKey === needle;
+    const isPrefix = !isExact && row.aliasKey.startsWith(needle);
+    const isContains = !isExact && !isPrefix && needle.length >= 3 && row.aliasKey.includes(needle);
+    if (!isExact && !isPrefix && !isContains) continue;
+    const rank = isExact ? 3 : isPrefix ? 2 : 1;
+    const existing = matchedEntries.get(row.entry.key);
+    if (!existing || rank > existing.rank) matchedEntries.set(row.entry.key, { entry: row.entry, isExact, rank });
+  }
+  return Array.from(matchedEntries.values()).map(({ entry, isExact, rank: searchRank }) => {
     const exactTarget = isExact && exact.status === 'matched' ? exact.match : null;
     if (exactTarget && entry.key !== exactTarget.key && sameAdministrativePlace(entry, exactTarget)) return null;
     const isSecondaryExact = Boolean(isExact && exactTarget && entry.key !== exactTarget.key);
-    const match = isExact && !isSecondaryExact ? 'exact_alias' : isSecondaryExact ? 'secondary_alias' : isPrefix ? 'prefix' : 'contains';
+    const match = isExact && !isSecondaryExact
+      ? 'exact_alias'
+      : isSecondaryExact
+        ? 'secondary_alias'
+        : searchRank === 2 ? 'prefix' : 'contains';
     return {
       canonical_key: entry.key,
       location: entry.name,
@@ -395,9 +404,9 @@ function canonicalLocationSuggestions(query = '', counts = new Map(), limit = 8)
       listing_count: Number(counts.get(entry.key) || 0),
       match,
       did_you_mean: isSecondaryExact,
-      confidence: isExact ? (isSecondaryExact ? 0.95 : 1) : isPrefix ? 0.9 : 0.8,
+      confidence: isExact ? (isSecondaryExact ? 0.95 : 1) : searchRank === 2 ? 0.9 : 0.8,
       auto_resolvable: isExact && exact.status === 'matched' && exact.match?.key === entry.key,
-      rank: isExact && !isSecondaryExact ? 4 : isSecondaryExact ? 3 : isPrefix ? 2 : 1
+      rank: isExact && !isSecondaryExact ? 4 : isSecondaryExact ? 3 : searchRank
     };
   }).filter(Boolean).sort((a, b) => b.rank - a.rank || b.listing_count - a.listing_count || a.location.localeCompare(b.location)).slice(0, Math.max(1, Math.min(8, Number(limit) || 8)));
 }

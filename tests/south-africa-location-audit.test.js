@@ -50,6 +50,14 @@ for (const { place, province, resolution } of auditResults) {
   );
 }
 
+const suggestionBatteryStartedAt = Date.now();
+for (const { place } of auditPlaces) registry.canonicalLocationSuggestions(place);
+const suggestionBatteryMs = Date.now() - suggestionBatteryStartedAt;
+assert(
+  suggestionBatteryMs < 2000,
+  `The 53-place suggestion battery took ${suggestionBatteryMs}ms; keep lookup indexed for free-tier responsiveness`
+);
+
 const aliasFamilies = [
   ['Gqeberha', 'Port Elizabeth', 'PE'],
   ['Mbombela', 'Nelspruit'],
