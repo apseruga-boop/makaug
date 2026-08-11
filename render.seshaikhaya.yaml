@@ -2,8 +2,9 @@ projects:
   - name: seshaikhaya
     environments:
       # Arthur approved a hard launch cap of about USD 13/month on 11 August
-      # 2026. Only the staging web service and its isolated ZA database belong
-      # in this Blueprint until a later production/worker budget is approved.
+      # 2026. Current Render checkout prices put Starter + Basic above that cap,
+      # so staging uses a free web service and an isolated paid ZA database.
+      # Production, workers and custom domains require later approval.
       - name: staging
         databases:
           - name: seshaikhaya-staging-db
@@ -17,24 +18,22 @@ projects:
             name: seshaikhaya-staging-web
             runtime: node
             region: frankfurt
-            plan: starter
+            plan: free
             branch: codex/seshaikhaya-launch-za-20260811
             buildCommand: npm ci && npm run build:css && npm run typecheck:bot
             preDeployCommand: npm run migrate
             startCommand: npm start
             healthCheckPath: /api/health
             autoDeployTrigger: commit
-            domains:
-              - staging.seshaikhaya.com
             envVars:
               - key: NODE_ENV
                 value: production
               - key: COUNTRY_CODE
                 value: ZA
               - key: PUBLIC_BASE_URL
-                value: https://staging.seshaikhaya.com
+                value: https://seshaikhaya-staging-web.onrender.com
               - key: CORS_ORIGINS
-                value: https://staging.seshaikhaya.com
+                value: https://seshaikhaya-staging-web.onrender.com
               - key: DATABASE_URL
                 fromDatabase:
                   name: seshaikhaya-staging-db

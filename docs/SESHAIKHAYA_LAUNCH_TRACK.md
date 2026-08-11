@@ -4,9 +4,11 @@ Status: active launch track, opened 11 August 2026.
 
 Current state: the application, staging infrastructure specification and local
 release proof are complete. Arthur authorised a hard infrastructure cap of
-approximately USD 13/month on 11 August 2026 for one Starter staging web
-service and one isolated South Africa PostgreSQL database. Production, workers,
-DNS changes, social accounts and production listings remain separate gates.
+approximately USD 13/month on 11 August 2026. Render's live checkout priced a
+Starter web service plus the database at USD 17.50/month, so the authorised
+configuration uses one free staging web service and one isolated paid South
+Africa PostgreSQL database. Production, workers, custom domains, DNS changes,
+social accounts and production listings remain separate gates.
 
 Seshaikhaya is a `ZA` tenant of the shared country platform. It is not a fork of
 the Uganda application. The same server, listing engine, moderation workflow,
@@ -63,9 +65,9 @@ deployment to its previous Render commit instead.
 
 ## Operator gates still open
 
-1. Provision only the authorised Starter staging web service and isolated paid
-   PostgreSQL database; do not add a worker or production service under this
-   approval.
+1. Provision only the authorised free staging web service and isolated paid
+   PostgreSQL database; do not add a worker, custom domain or production
+   service under this approval.
 2. Verify the resulting staging service and database migrations, then perform
    Dave's authenticated moderation audit.
 3. Change GoDaddy DNS only after staging proof, then verify the production
