@@ -3140,14 +3140,12 @@ async function typeAndSendImageReply(page, mediaUrl, caption) {
   const opened = await clickFirstVisible(page, ATTACH_BUTTON_SELECTORS);
   if (!opened) throw new Error('Could not open the WhatsApp attachment picker');
   await page.waitForTimeout(250);
-  let fileInput = await findPhotoVideoMenuFileInput(page);
-  let fileChooser = null;
-  if (!fileInput) {
-    const chooserPromise = page.waitForEvent('filechooser', { timeout: 4000 }).catch(() => null);
-    const photosOpened = await clickFirstVisible(page, PHOTO_VIDEO_MENU_SELECTORS);
-    fileChooser = photosOpened ? await chooserPromise : null;
-    fileInput = fileChooser ? null : await findAttachedFileInput(page);
-  }
+  const drawerInput = await findPhotoVideoMenuFileInput(page);
+  const chooserPromise = page.waitForEvent('filechooser', { timeout: 4000 }).catch(() => null);
+  const photosOpened = await clickFirstVisible(page, PHOTO_VIDEO_MENU_SELECTORS);
+  if (!photosOpened) throw new Error('Could not select Photos & videos in WhatsApp');
+  const fileChooser = await chooserPromise;
+  const fileInput = fileChooser ? null : (drawerInput || await findAttachedFileInput(page));
   if (!fileChooser && !fileInput) throw new Error('Could not find the WhatsApp image upload control');
 
   const upload = {
