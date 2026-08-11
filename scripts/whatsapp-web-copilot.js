@@ -3086,13 +3086,13 @@ async function typeAndSendImageReply(page, mediaUrl, caption) {
   const media = await fetchOutboundPropertyImage(mediaUrl);
   const beforeState = await getOutgoingMessageState(page).catch(() => ({ count: 0, recentTexts: [] }));
 
-  let fileInput = await findAttachedFileInput(page);
-  if (!fileInput) {
-    const opened = await clickFirstVisible(page, ATTACH_BUTTON_SELECTORS);
-    if (!opened) throw new Error('Could not open the WhatsApp attachment picker');
-    await page.waitForTimeout(200);
-    fileInput = await findAttachedFileInput(page);
-  }
+  // WhatsApp keeps stale, hidden file inputs mounted in the chat shell. Always
+  // open the current attachment menu first so the input we bind owns a live
+  // React change handler and actually creates the media-preview composer.
+  const opened = await clickFirstVisible(page, ATTACH_BUTTON_SELECTORS);
+  if (!opened) throw new Error('Could not open the WhatsApp attachment picker');
+  await page.waitForTimeout(250);
+  const fileInput = await findAttachedFileInput(page);
   if (!fileInput) throw new Error('Could not find the WhatsApp image upload control');
 
   await fileInput.setInputFiles({

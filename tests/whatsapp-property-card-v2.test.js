@@ -105,6 +105,7 @@ assert(bridgeWorker.includes('typeAndSendImageReply'), 'hosted bridge must send 
 assert(bridgeWorker.includes('sending the clean text card instead'), 'image failure must fall back to text-only');
 assert(bridgeWorker.includes('dismissPendingMediaSelection'), 'image failure must close WhatsApp media selection before text fallback');
 assert(bridgeWorker.includes('waitForMediaSendConfirmation'), 'media delivery must confirm the closed image composer without retrying a sent card');
+assert(bridgeWorker.indexOf('clickFirstVisible(page, ATTACH_BUTTON_SELECTORS)') < bridgeWorker.indexOf('findAttachedFileInput(page);'), 'worker must open the live attachment menu before selecting its image input');
 assert(adminRoute.includes('req.body.property_id || req.body.propertyId'), 'admin confirmation send must support a reviewed property card');
 assert(server.includes("'whatsapp-property-card-v2'"), 'production version marker must identify this release');
 
