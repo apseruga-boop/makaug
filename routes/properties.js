@@ -95,6 +95,11 @@ const {
 } = require('../utils/commercialClassification');
 const { listingPriceQuality } = require('../utils/listingPriceQuality');
 const { listingDataIntegrityReport } = require('../utils/listingDataIntegrity');
+const {
+  HUMAN_INTEGRITY_OVERRIDE_MARKER,
+  HUMAN_INTEGRITY_OVERRIDE_NOTE,
+  humanIntegrityOverrideAccess
+} = require('../utils/humanIntegrityOverride');
 const { propertyPriceMetadata } = require('../utils/propertyPriceCurrency');
 const {
   canonicalLocationByKey,
@@ -4505,7 +4510,7 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
   try {
     const nextStatus = cleanText(req.body.status).toLowerCase();
     let moderationReason = cleanText(req.body.reason) || null;
-    const reviewNotes = cleanText(req.body.review_notes || req.body.notes) || null;
+    let reviewNotes = cleanText(req.body.review_notes || req.body.notes) || null;
     const warningOverrides = req.body.warning_overrides && typeof req.body.warning_overrides === 'object'
       ? req.body.warning_overrides
       : {};
@@ -4522,6 +4527,20 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
     }
 
     const actorRole = String(req.adminAuth?.role || '').toLowerCase();
+    const integrityOverrideRequested = nextStatus === 'approved'
+      && parseBooleanLike(req.body.integrity_override, false);
+    const integrityOverrideAccess = humanIntegrityOverrideAccess({
+      adminAuth: req.adminAuth,
+      requested: integrityOverrideRequested,
+      nextStatus
+    });
+    if (integrityOverrideRequested && !integrityOverrideAccess.allowed) {
+      return res.status(403).json({
+        ok: false,
+        error: 'Human integrity override requires an authenticated super-admin or moderator session',
+        integrity_override_allowed: false
+      });
+    }
     if (actorRole === 'moderator') {
       const moderatorAllowedStatuses = new Set(['approved', 'rejected', 'pending']);
       if (!moderatorAllowedStatuses.has(nextStatus)) {
@@ -4605,15 +4624,40 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
         approvalWarnings.push(`Price basis confirmed by staff: ${priceQuality.warnings.join(', ')}`);
       }
     }
+    let dataIntegrity = null;
+    let humanIntegrityOverride = null;
     if (nextStatus === 'approved') {
-      const dataIntegrity = listingDataIntegrityReport(current);
-      if (!dataIntegrity.ok) {
+      dataIntegrity = listingDataIntegrityReport(current);
+      if (!dataIntegrity.ok && !integrityOverrideAccess.allowed) {
         return res.status(400).json({
           ok: false,
           error: 'Listing data integrity issues must be corrected before approval',
           details: dataIntegrity.issues.map((issue) => issue.message),
-          data_integrity: dataIntegrity
+          data_integrity: dataIntegrity,
+          integrity_override_available: integrityOverrideAccess.human_session
         });
+      }
+      if (!dataIntegrity.ok && integrityOverrideAccess.allowed) {
+        const overriddenAt = new Date().toISOString();
+        reviewNotes = HUMAN_INTEGRITY_OVERRIDE_NOTE;
+        humanIntegrityOverride = {
+          marker: HUMAN_INTEGRITY_OVERRIDE_MARKER,
+          used: true,
+          at: overriddenAt,
+          actor_id: integrityOverrideAccess.user_id,
+          actor_role: integrityOverrideAccess.role,
+          actor_auth_type: integrityOverrideAccess.auth_type,
+          listing_id: req.params.id,
+          issue_codes: dataIntegrity.issue_codes,
+          issues: dataIntegrity.issues.map((issue) => ({
+            code: issue.code,
+            message: issue.message,
+            proposed_listing_type: issue.proposed_listing_type || null,
+            proposed_price_period: issue.proposed_price_period || null
+          })),
+          review_notes: HUMAN_INTEGRITY_OVERRIDE_NOTE
+        };
+        approvalWarnings.push(`Human integrity override recorded for: ${dataIntegrity.issue_codes.join(', ')}.`);
       }
     }
     const actorId = req.adminAuth?.userId || req.adminAuth?.type || 'admin_api_key';
@@ -4855,8 +4899,19 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
       ...(locationReclassificationExtraFields || {}),
       ...(nextStatus === 'approved' ? {
         data_integrity_review_required: false,
+        data_integrity_issue_codes: [],
+        data_integrity_proposed_listing_type: null,
+        data_integrity_proposed_price_period: null,
         data_integrity_review_confirmed_at: new Date().toISOString(),
-        data_integrity_review_confirmed_by: actorId
+        data_integrity_review_confirmed_by: actorId,
+        data_integrity_review_resolution: humanIntegrityOverride
+          ? 'human_override_verified_manually'
+          : 'human_corrections_passed_integrity_gate',
+        data_integrity_resolved_issue_codes: humanIntegrityOverride?.issue_codes
+          || (Array.isArray(currentExtraFields.data_integrity_issue_codes)
+            ? currentExtraFields.data_integrity_issue_codes
+            : []),
+        ...(humanIntegrityOverride ? { human_integrity_override: humanIntegrityOverride } : {})
       } : {})
     };
     const moderationExtraFieldsJson = Object.keys(moderationExtraFields).length
@@ -5008,6 +5063,7 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
           ...(sourcedCandidateDispensation ? { sourced_candidate_special_dispensation: sourcedCandidateDispensation } : {}),
           ...(identityVerificationExtraFields ? { identity_verification: identityVerificationExtraFields.identity_verification } : {}),
           ...(locationReclassificationExtraFields ? { location_reclassification_confirmation: locationReclassificationExtraFields } : {}),
+          ...(humanIntegrityOverride ? { human_integrity_override: humanIntegrityOverride } : {}),
           ...(structuredRejectionReasons.length ? { structured_rejection_reasons: structuredRejectionReasons } : {})
         };
         await db.query(
@@ -5060,6 +5116,32 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
             ]
           );
         }
+        if (humanIntegrityOverride) {
+          await db.query(
+            `INSERT INTO property_moderation_events (
+              property_id,
+              actor_id,
+              action,
+              status_from,
+              status_to,
+              checklist,
+              reason,
+              notes,
+              delivery
+            ) VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9::jsonb)`,
+            [
+              listing.id,
+              actorId,
+              'human_integrity_override_approved',
+              current.status,
+              nextStatus,
+              JSON.stringify(checklist),
+              moderationReason,
+              HUMAN_INTEGRITY_OVERRIDE_NOTE,
+              JSON.stringify(humanIntegrityOverride)
+            ]
+          );
+        }
       } catch (error) {
         logger.error('Listing moderation event write failed after status update', {
           property_id: listing.id,
@@ -5084,6 +5166,7 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
               title: listing.title || null,
               reason: moderationReason || null,
               structured_rejection_reasons: structuredRejectionReasons,
+              human_integrity_override: humanIntegrityOverride || null,
               identity_verified: !!identityVerificationExtraFields,
               lister_notified: !!(notification.email?.sent || notification.whatsapp?.sent)
             })
@@ -5101,18 +5184,23 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
         notification,
         alert_matching: alertMatching,
         warnings: approvalWarnings,
-        automated_review: automatedReview || undefined
+        automated_review: automatedReview || undefined,
+        integrity_override: humanIntegrityOverride || undefined
       }
     });
 
     if (fastAdminRender && manualNotificationOnly && ['approved', 'rejected', 'pending'].includes(nextStatus)) {
       clearPublicPropertiesCache(`listing_status_${current.status || 'unknown'}_to_${nextStatus}`);
       invalidatePublicInventoryMetricsCache(`listing_status_${current.status || 'unknown'}_to_${nextStatus}`);
-      runPublicInventoryFollowup(
-        writeModerationAuditEvents,
-        'Deferred fast moderation audit failed',
-        { property_id: listing.id, status: nextStatus }
-      );
+      if (humanIntegrityOverride) {
+        await writeModerationAuditEvents();
+      } else {
+        runPublicInventoryFollowup(
+          writeModerationAuditEvents,
+          'Deferred fast moderation audit failed',
+          { property_id: listing.id, status: nextStatus }
+        );
+      }
       let fastAlertMatching = null;
       if (nextStatus === 'approved' && current.status !== 'approved') {
         fastAlertMatching = { deferred: true, reason: 'fast_manual_notification_response' };
