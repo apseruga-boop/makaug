@@ -3,6 +3,7 @@ require('dotenv').config();
 const path = require('path');
 const fs = require('fs');
 const zlib = require('zlib');
+const http = require('http');
 const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
@@ -1466,8 +1467,23 @@ async function start() {
   }
   startFeaturedRotationScheduler(db);
 
-  app.listen(port, '0.0.0.0', () => {
-    logger.info(`${ACTIVE_TENANT.brandName} backend running on http://localhost:${port}`);
+  const httpServer = http.createServer(app);
+  httpServer.keepAliveTimeout = 120_000;
+  httpServer.headersTimeout = 121_000;
+  httpServer.on('error', (error) => {
+    logger.error('HTTP server failed', {
+      code: error?.code,
+      message: error?.message,
+      port
+    });
+  });
+  httpServer.listen(port, '0.0.0.0', () => {
+    const address = httpServer.address();
+    logger.info(`${ACTIVE_TENANT.brandName} backend accepting traffic`, {
+      host: typeof address === 'object' && address ? address.address : '0.0.0.0',
+      port: typeof address === 'object' && address ? address.port : port,
+      family: typeof address === 'object' && address ? address.family : null
+    });
     schedulePublicCacheWarmup(`http://127.0.0.1:${port}`);
   });
 }
