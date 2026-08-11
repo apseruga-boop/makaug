@@ -43,7 +43,9 @@ test('wrong-region regression names resolve only as unique confidence-one aliase
     Nakwero: ['Wakiso', 'Central'],
     Mayangayanga: ['Mukono', 'Central'],
     Nsaggu: ['Wakiso', 'Central'],
-    MUBS: ['Kampala', 'Central']
+    MUBS: ['Kampala', 'Central'],
+    Ssenge: ['Wakiso', 'Central'],
+    Senge: ['Wakiso', 'Central']
   };
   Object.entries(expected).forEach(([query, [district, region]]) => {
     const result = resolveCanonicalUgandaLocation(query);
@@ -53,6 +55,16 @@ test('wrong-region regression names resolve only as unique confidence-one aliase
     assert.equal(result.match?.district, district, query);
     assert.equal(regionForDistrict(result.match?.district), region, query);
   });
+});
+
+test('Ssenge and Senge share one verified Wakiso canonical node', () => {
+  for (const query of ['Ssenge', 'Senge', 'Ssenge, Uganda']) {
+    const result = resolveCanonicalUgandaLocation(query);
+    assert.equal(result.status, 'matched', query);
+    assert.equal(result.confidence, 1, query);
+    assert.equal(result.match?.key, 'wakiso:ssenge', query);
+    assert.equal(result.match?.town, 'Nansana', query);
+  }
 });
 
 test('genuinely comparable duplicate place names require an exact parent hint', () => {

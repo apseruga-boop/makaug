@@ -15809,6 +15809,65 @@ async function adminLoadFoundOnlineReviewQueue(page = 1) {
   }
 }
 
+function adminBacklogRecoveryOutput(html = "") {
+  const output = document.getElementById("admin-backlog-recovery-output");
+  if (output) output.innerHTML = html;
+}
+
+async function adminLoadBacklogRecoveryRecount() {
+  if (!canUseLiveAdminApi()) {
+    toast("Sign in as admin or save ADMIN_API_KEY first.");
+    return;
+  }
+  adminBacklogRecoveryOutput('<div class="font-bold text-indigo-800">Recounting the real pending queue…</div>');
+  try {
+    const response = await apiRequest('/api/admin/backlog-recovery/recount', { headers: adminAuthHeaders(), cache: "no-store" });
+    const data = response?.data || {};
+    const counts = data.counts || {};
+    const agents = data.agent_listing_diagnostics || {};
+    adminBacklogRecoveryOutput(`
+      <div class="font-black">Queue recount — ${adminEscape(data.marker || response?.marker || "")}</div>
+      <div class="mt-2 grid grid-cols-2 md:grid-cols-4 gap-2">
+        ${[
+          ["Pending", counts.total_pending], ["No price", counts.missing_price], ["No location", counts.missing_location],
+          ["Junk title", counts.junk_title], ["Category ambiguous", counts.category_ambiguous],
+          ["District only", counts.district_only], ["Student manual", counts.student_manual_only],
+          ["Agent listings not live", agents.linked_not_live]
+        ].map(([label, value]) => `<div class="rounded-lg bg-indigo-50 p-2"><div class="text-[10px] uppercase tracking-wide">${adminEscape(label)}</div><div class="text-lg font-black">${adminEscape(Number(value || 0).toLocaleString())}</div></div>`).join("")}
+      </div>
+      <div class="mt-2 text-[11px]">Agent diagnosis: ${adminEscape(agents.healthy_live_agent_listings || 0)} healthy live links; ${adminEscape(agents.agent_lister_missing_profile_link || 0)} agent-labelled listings lack a profile link; ${adminEscape(agents.linked_to_unapproved_agent || 0)} link to a non-approved profile. Diagnosis only—nothing restored.</div>
+      <details class="mt-2"><summary class="cursor-pointer font-bold">Bucket overlaps</summary><pre class="mt-1 max-h-48 overflow-auto rounded bg-slate-950 p-2 text-[10px] text-green-100">${adminEscape(JSON.stringify(data.overlap || {}, null, 2))}</pre></details>
+    `);
+  } catch (error) {
+    adminBacklogRecoveryOutput(`<div class="font-bold text-red-700">Recount failed: ${adminEscape(error.message || "Unknown error")}</div>`);
+  }
+}
+
+async function adminLoadBacklogRecoverySample() {
+  if (!canUseLiveAdminApi()) {
+    toast("Sign in as admin or save ADMIN_API_KEY first.");
+    return;
+  }
+  const bucket = document.getElementById("admin-backlog-recovery-bucket")?.value || "missing_price";
+  const policy = document.getElementById("admin-backlog-recovery-district-policy")?.value || "hold";
+  adminBacklogRecoveryOutput(`<div class="font-bold text-indigo-800">Building up to 50 ${adminEscape(bucket)} proposals…</div>`);
+  try {
+    const response = await apiRequest(`/api/admin/backlog-recovery/sample?bucket=${encodeURIComponent(bucket)}&limit=50&district_only_policy=${encodeURIComponent(policy)}`, { headers: adminAuthHeaders(), cache: "no-store" });
+    const rows = Array.isArray(response?.data) ? response.data : [];
+    adminBacklogRecoveryOutput(`
+      <div class="font-black">${adminEscape(rows.length)} proposals — zero writes, zero publications</div>
+      <div class="mt-2 max-h-[34rem] space-y-2 overflow-auto">
+        ${rows.map((item) => `<details class="rounded-lg border border-indigo-100 bg-white p-2">
+          <summary class="cursor-pointer font-bold">${adminEscape(item.listing_id || "Listing")} · ${adminEscape(Object.entries(item.buckets || {}).filter(([, yes]) => yes).map(([name]) => name).join(", "))}</summary>
+          <pre class="mt-2 overflow-auto rounded bg-slate-950 p-2 text-[10px] text-green-100">${adminEscape(JSON.stringify(item, null, 2))}</pre>
+        </details>`).join("") || '<div>No rows found in this bucket.</div>'}
+      </div>
+    `);
+  } catch (error) {
+    adminBacklogRecoveryOutput(`<div class="font-bold text-red-700">Proposal sample failed: ${adminEscape(error.message || "Unknown error")}</div>`);
+  }
+}
+
 function adminShowMorePendingQueueRows() {
   adminPendingQueueVisibleLimit += ADMIN_PENDING_QUEUE_RENDER_STEP;
   renderAdminPendingRows(adminCurrentPendingListings);
@@ -24399,7 +24458,9 @@ function showApprovalBlockerBanner(response = {}, propertyId = "") {
     : null;
   const proposed = (Array.isArray(dataIntegrity?.issues) ? dataIntegrity.issues : [])
     .flatMap((issue) => [
-      issue?.proposed_listing_type ? `Proposed category: ${issue.proposed_listing_type}` : "",
+      issue?.issue_subject === "property_type" && issue?.form_property_type ? `Form property type: ${issue.form_property_type}` : "",
+      issue?.issue_subject === "property_type" && issue?.source_evidence ? `Source evidence: ${issue.source_evidence}` : "",
+      issue?.issue_subject !== "property_type" && issue?.proposed_listing_type ? `Proposed category: ${issue.proposed_listing_type}` : "",
       issue?.proposed_price_period ? `Proposed period: ${issue.proposed_price_period}` : ""
     ])
     .filter(Boolean);
@@ -24456,7 +24517,9 @@ function revealHumanIntegrityOverride(dataIntegrity = {}, propertyId = "") {
   const issueCodes = Array.isArray(dataIntegrity?.issue_codes) ? dataIntegrity.issue_codes : [];
   const proposedFacts = (Array.isArray(dataIntegrity?.issues) ? dataIntegrity.issues : [])
     .flatMap((issue) => [
-      issue?.proposed_listing_type ? `proposed category: ${issue.proposed_listing_type}` : "",
+      issue?.issue_subject === "property_type" && issue?.form_property_type ? `form property type: ${issue.form_property_type}` : "",
+      issue?.issue_subject === "property_type" && issue?.source_evidence ? `source evidence: ${issue.source_evidence}` : "",
+      issue?.issue_subject !== "property_type" && issue?.proposed_listing_type ? `proposed category: ${issue.proposed_listing_type}` : "",
       issue?.proposed_price_period ? `proposed period: ${issue.proposed_price_period}` : ""
     ])
     .filter(Boolean);
@@ -24721,17 +24784,50 @@ function adminSetReviewEditValue(id, value) {
 
 async function adminApplyExtractedReviewFacts() {
   if (!adminActiveReview) return;
-  const facts = adminExtractReviewFacts(adminActiveReview);
+  const localFacts = adminExtractReviewFacts(adminActiveReview);
+  let recovery = null;
+  try {
+    const response = await apiRequest(`/api/admin/backlog-recovery/proposal/${encodeURIComponent(adminActiveReview.id)}?district_only_policy=hold`, {
+      headers: adminAuthHeaders(), cache: "no-store"
+    });
+    recovery = response?.data || null;
+  } catch (error) {
+    console.warn("Shared recovery proposal unavailable; retaining current form facts", error?.message || error);
+  }
+  const priceProposal = recovery?.price?.status === "proposed" ? recovery.price.proposal : null;
+  const locationProposal = recovery?.location?.status === "proposed" ? recovery.location.proposal : null;
+  const classificationProposal = recovery?.classification?.status === "proposed" ? recovery.classification.proposal : null;
+  const titleProposal = recovery?.title?.status === "proposed" ? recovery.title.proposal : null;
+  const facts = {
+    ...localFacts,
+    ...(classificationProposal || {}),
+    ...(priceProposal?.price_ugx ? { price: priceProposal.price_ugx } : {}),
+    ...(locationProposal ? { area: locationProposal.area, district: locationProposal.district } : {}),
+    ...(titleProposal ? { title: titleProposal } : {})
+  };
   adminSetReviewEditValue("admin-review-title-edit", facts.title || adminActiveReview.title || "");
   adminSetReviewEditValue("admin-review-listing-type-edit", facts.listing_type || adminActiveReview.listing_type || "");
   adminReviewOnListingTypeChange();
   adminSetReviewEditValue("admin-review-lister-phone-edit", facts.contact_phone || adminActiveReview.lister_phone || "");
-  const locationResolution = await resolveUgandaLocationFromSharedRegistry(uniqueTextParts([
-    facts.area || adminActiveReview.area,
-    facts.district || adminActiveReview.district
-  ]).join(", "));
-  if (locationResolution.status === "matched") applyAdminReviewCanonicalLocation(locationResolution.location);
-  else clearAdminReviewCanonicalLocation();
+  if (locationProposal && !locationProposal.district_only) {
+    applyAdminReviewCanonicalLocation({
+      key: locationProposal.canonical_location_id,
+      level: locationProposal.canonical_location_level,
+      name: locationProposal.area,
+      town: locationProposal.city,
+      district: locationProposal.district,
+      region: locationProposal.region,
+      lat: locationProposal.latitude,
+      lng: locationProposal.longitude
+    });
+  } else {
+    const locationResolution = await resolveUgandaLocationFromSharedRegistry(uniqueTextParts([
+      facts.area || adminActiveReview.area,
+      facts.district || adminActiveReview.district
+    ]).join(", "));
+    if (locationResolution.status === "matched") applyAdminReviewCanonicalLocation(locationResolution.location);
+    else clearAdminReviewCanonicalLocation();
+  }
   adminSetReviewEditValue("admin-review-property-type-edit", facts.property_type || adminActiveReview.property_type || "");
   adminSetReviewEditValue("admin-review-transaction-type-edit", commercialTransactionForProperty({ ...adminActiveReview, ...facts }));
   adminSetReviewEditValue("admin-review-land-transaction-type-edit", adminActiveReview.transaction_type || adminActiveReview.extra_fields?.transaction_type || "sale");
@@ -24752,7 +24848,7 @@ async function adminApplyExtractedReviewFacts() {
     adminSetReviewEditValue("admin-review-longitude-edit", "");
   }
   adminReviewSyncLocationMapFromInputs();
-  toast("Extracted source details applied. Check location before approval.");
+  toast(recovery ? "Shared source-backed proposals applied. Check every field before approval." : "Extracted source details applied. Check location before approval.");
 }
 
 function adminUseConciseReviewDescription() {

@@ -1,0 +1,26 @@
+name: Uganda location coverage
+
+on:
+  pull_request:
+    paths:
+      - 'utils/ugandaLocation*.js'
+      - 'utils/ugandaLocationGazetteer.generated.json'
+      - 'tests/fixtures/uganda-high-traffic-locations.json'
+      - 'scripts/location-coverage-sweep.mjs'
+  push:
+    branches: [main]
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node scripts/location-coverage-sweep.mjs coverage-results.csv
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: uganda-location-coverage-results
+          path: coverage-results.csv

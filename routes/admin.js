@@ -73,6 +73,12 @@ const {
   queueWhatsappWebBridgeMessage
 } = require('../services/whatsappWebBridgeService');
 const { buildWhatsappPropertyCard } = require('../services/whatsappPropertyCardService');
+const {
+  RECOVERY_MARKER,
+  buildBacklogRecoveryProposal,
+  recountBacklog,
+  recordBuckets,
+} = require('../services/backlogRecoveryService');
 const { evaluateHostedWhatsappBridgeReadiness } = require('../services/whatsappBridgeReadiness');
 const {
   emailProviderConfigured: emailProviderConfiguredByService,
@@ -12185,6 +12191,98 @@ router.post('/setup-status/advertising-payment-test', async (req, res, next) => 
         providerConfigured: paymentProviderConfigured(),
         manualFallbackAudited: true
       }
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+async function loadUgandaBacklogRecoveryRows() {
+  const result = await db.query(
+    `SELECT p.*
+       FROM properties p
+      WHERE ${adminActionableReviewQueueWhere('p')}
+      ORDER BY p.created_at ASC`
+  );
+  return result.rows;
+}
+
+router.get('/backlog-recovery/recount', async (_req, res, next) => {
+  try {
+    const [rows, agentDiagnostics] = await Promise.all([
+      loadUgandaBacklogRecoveryRows(),
+      db.query(
+        `SELECT
+           COUNT(*) FILTER (WHERE p.agent_id IS NOT NULL)::int AS linked_total,
+           COUNT(*) FILTER (WHERE p.agent_id IS NOT NULL AND p.status = 'approved')::int AS linked_approved,
+           COUNT(*) FILTER (WHERE p.agent_id IS NOT NULL AND p.status <> 'approved')::int AS linked_not_live,
+           COUNT(*) FILTER (WHERE p.lister_type = 'agent' AND p.agent_id IS NULL)::int AS agent_lister_missing_profile_link,
+           COUNT(*) FILTER (WHERE p.agent_id IS NOT NULL AND a.id IS NULL)::int AS orphaned_agent_links,
+           COUNT(*) FILTER (WHERE p.agent_id IS NOT NULL AND COALESCE(a.status, '') <> 'approved')::int AS linked_to_unapproved_agent,
+           COUNT(*) FILTER (WHERE p.agent_id IS NOT NULL AND a.status = 'approved' AND p.status = 'approved')::int AS healthy_live_agent_listings
+         FROM properties p
+         LEFT JOIN agents a ON a.id = p.agent_id`
+      )
+    ]);
+    return res.json({
+      ok: true,
+      marker: RECOVERY_MARKER,
+      data: {
+        ...recountBacklog(rows),
+        agent_listing_diagnostics: agentDiagnostics.rows[0] || {},
+        agent_listing_diagnosis_only: true,
+        agent_listing_mutations_performed: 0,
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/backlog-recovery/sample', async (req, res, next) => {
+  try {
+    const allowedBuckets = new Set(['missing_price', 'missing_location', 'junk_title', 'category_ambiguous', 'district_only', 'student']);
+    const bucket = cleanText(req.query.bucket || 'missing_price').toLowerCase();
+    if (!allowedBuckets.has(bucket)) return res.status(400).json({ ok: false, error: 'Unknown recovery bucket.' });
+    const limit = Math.max(1, Math.min(50, Number(req.query.limit) || 50));
+    const districtOnlyPolicy = cleanText(req.query.district_only_policy || 'hold').toLowerCase();
+    if (!['hold', 'release'].includes(districtOnlyPolicy)) {
+      return res.status(400).json({ ok: false, error: 'district_only_policy must be hold or release.' });
+    }
+    const rows = await loadUgandaBacklogRecoveryRows();
+    const selected = rows.filter((row) => recordBuckets(row)[bucket]).slice(0, limit);
+    return res.json({
+      ok: true,
+      marker: RECOVERY_MARKER,
+      data: selected.map((row) => buildBacklogRecoveryProposal(row, { districtOnlyPolicy })),
+      meta: {
+        bucket,
+        sample_size: selected.length,
+        requested_limit: limit,
+        district_only_policy: districtOnlyPolicy,
+        proposals_only: true,
+        rows_updated: 0,
+        rows_published: 0,
+        students_excluded_from_automation: true,
+        rejected_deleted_untouched: true,
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/backlog-recovery/proposal/:id', async (req, res, next) => {
+  try {
+    const result = await db.query('SELECT * FROM properties WHERE id = $1 LIMIT 1', [req.params.id]);
+    if (!result.rows.length) return res.status(404).json({ ok: false, error: 'Listing not found.' });
+    const row = result.rows[0];
+    const districtOnlyPolicy = cleanText(req.query.district_only_policy || 'hold').toLowerCase();
+    return res.json({
+      ok: true,
+      marker: RECOVERY_MARKER,
+      data: buildBacklogRecoveryProposal(row, { districtOnlyPolicy }),
+      meta: { proposals_only: true, rows_updated: 0, rows_published: 0 },
     });
   } catch (error) {
     return next(error);

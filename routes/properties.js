@@ -594,6 +594,12 @@ async function applyStatusListingPatchBeforeModeration(req, propertyId, existing
   if (Object.prototype.hasOwnProperty.call(patch, 'student_universities')) {
     extraPatch.student_universities = asArray(patch.student_universities).map((item) => cleanText(item)).filter(Boolean);
   }
+  const humanStaffRole = ['super_admin', 'moderator'].includes(String(req.adminAuth?.role || '').toLowerCase());
+  if (humanStaffRole && Object.prototype.hasOwnProperty.call(patch, 'property_type')) {
+    extraPatch.human_verified_property_type = cleanText(patch.property_type) || null;
+    extraPatch.human_verified_property_type_at = new Date().toISOString();
+    extraPatch.human_verified_property_type_by = req.adminAuth?.userId || req.adminAuth?.type || 'human_staff_session';
+  }
   if (Object.prototype.hasOwnProperty.call(patch, 'amenities')) {
     const amenities = asArray(patch.amenities).map((item) => cleanText(item)).filter(Boolean);
     values.push(JSON.stringify(amenities));
@@ -4715,7 +4721,14 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
     let humanIntegrityOverride = null;
     let humanApprovalOverride = null;
     if (nextStatus === 'approved') {
-      dataIntegrity = listingDataIntegrityReport(current);
+      const humanVerifiedPropertyType = humanApprovalAccess.human_session
+        && (
+          listingPatchResult.changed_fields.includes('property_type')
+          || Boolean(propertyExtraFieldsObject(current).human_verified_property_type)
+        );
+      dataIntegrity = humanVerifiedPropertyType
+        ? listingDataIntegrityReport(current, { trustFormPropertyType: true })
+        : listingDataIntegrityReport(current);
       if (!dataIntegrity.ok) {
         if (!handleApprovalBlocker({
           code: 'data_integrity',

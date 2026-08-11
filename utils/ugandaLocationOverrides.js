@@ -91,6 +91,11 @@ const CURATED_UGANDA_LOCATION_OVERRIDES = [
     lat: 0.347, lng: 32.649,
     source: 'makaug_verified_location_override'
   },
+  {
+    name: 'Ssenge', district: 'Wakiso', town: 'Nansana', level: 'area',
+    aliases: ['Ssenge', 'Senge'], lat: 0.4167, lng: 32.5167,
+    source: 'makaug_verified_location_override'
+  },
 
   ...rows([
     'Najjanankumbi', 'Mutundwe', 'Bukasa', 'Kitintale', 'Mbuya', 'Luzira',

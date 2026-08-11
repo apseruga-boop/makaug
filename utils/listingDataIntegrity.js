@@ -5,20 +5,23 @@ const {
   normalizeCommercialTransactionType,
   normalizeListingPricePeriod,
 } = require('./commercialClassification');
+const {
+  COMMERCIAL_PATTERN,
+  HOSPITALITY_PATTERN,
+  LAND_PATTERN,
+  RESIDENTIAL_PATTERN: DWELLING_PATTERN,
+  SPECIFIC_PROPERTY_PATTERN,
+  STUDENT_PATTERN,
+  detectPropertyTypeEvidence,
+} = require('./propertyTypeVocabulary');
 
 const MAX_CANONICAL_PRICE_UGX = 100_000_000_000;
 const MIN_WHOLE_PROPERTY_PRICE_UGX = 1_000_000;
 const MIN_RECURRING_PRICE_UGX = 30_000;
 
-const HOSPITALITY_PATTERN = /\b(?:air\s*&?\s*b(?:n|and)?\s*b|airbnb|short[-\s]*stay|short[-\s]*term\s+stay|per\s+night|nightly|bed\s*(?:and|&)\s*breakfast|booking\.com|holiday\s+home|vacation\s+rental|guest\s*house|guesthouse|hotel\s+room|lodge\s+room|resort\s+stay)\b/i;
-const SPECIFIC_PROPERTY_PATTERN = /\b(?:bed(?:room)?s?|studio|bedsitter|house|home|app?artment|flat|villa|bungalow|mansion|duplex|condo|townhouse|plot|plots|land|acre|acres|decimal|decimals|hostel|room|rooms|shop|office|warehouse|factory|arcade|showroom|commercial\s+(?:space|land|plot)|building)\b/i;
-const DWELLING_PATTERN = /\b(?:bed(?:room)?s?|bath(?:room)?s?|house|home|app?artment(?:\s+block)?|flat|villa|bungalow|mansion|duplex|condo|townhouse|residence|residential|self[-\s]*contained|rentals?|rental\s+units?)\b/i;
 const STRONG_LAND_PATTERN = /\b(?:(?:prime|vacant|bare|titled)\s+land|(?:land|plots?|ettaka|kibanja|bibanja)\s+(?:is\s+)?(?:for|on)\s+sale|\d+(?:\.\d+)?\s*(?:acres?|decimals?|square\s+(?:miles?|kilomet(?:er|re)s?))(?:\s+of\s+land)?\s+(?:for|on)\s+sale|square\s+(?:miles?|kilomet(?:er|re)s?)\s+of\s+land)\b/i;
-const LAND_PATTERN = /\b(?:land|plots?|acres?|decimals?|square\s+(?:miles?|kilomet(?:er|re)s?)(?:\s+of\s+land)?|bare[-\s]+land|ettaka|kibanja|bibanja)\b/i;
 const LAND_ASSET_PATTERN = /\b(?:plots?|acres?|decimals?|farmland|bare[-\s]+land|vacant\s+land|prime\s+land|square\s+(?:miles?|kilomet(?:er|re)s?)(?:\s+of\s+land)?|ettaka|kibanja|bibanja)\b/i;
 const LAND_TITLE_PATTERN = /\b(?:(?:private|milo|mailo|freehold|leasehold|kabaka)\s+)?land\s+title\b/gi;
-const COMMERCIAL_PATTERN = /\b(?:office|shop|retail|warehouse|industrial|factory|arcade|showroom|business\s+premises|commercial\s+(?:building|property|premises|space|land|plot))\b/i;
-const STUDENT_PATTERN = /\b(?:student\s+(?:accommodation|hostel|room)|hostel\s+(?:room|bed|space)|campus|university|college|per\s+semester)\b/i;
 const SALE_PATTERN = /\b(?:for\s+(?:sale|sell)|on\s+sale|available\s+for\s+sale|selling|asking\s+price|guide\s+price|purchase\s+price)\b/i;
 const DIRECT_RENT_PATTERN = /\b(?:for\s*rent|to\s*rent|to\s*let|for\s+lease|available\s+to\s*rent|monthly\s+rent|forrent|housesforrent|propertiesforrent|apartmentsforrent|rooms?forrent)\b/i;
 const PERIODIC_RENT_PATTERN = /(?:\b(?:per|a)\s+month\b|\/month\b|\/mo\b|\bmonthly\b)/i;
@@ -85,10 +88,19 @@ function sourceClassificationEvidenceText(record = {}) {
   const raw = object(extra.raw_source_post);
   return [
     primaryListingEvidenceText(record),
+    record.caption,
+    record.source_title,
+    record.source_caption,
     record.source_text,
     record.source_visual_text,
+    extra.source_title,
+    extra.source_caption,
+    extra.source_description,
     extra.source_text,
     extra.source_visual_text,
+    raw.title,
+    raw.caption,
+    raw.description,
     raw.source_text,
   ].map(compact).filter(Boolean).join(' ');
 }
@@ -143,10 +155,12 @@ function hasSpecificLocation(record = {}) {
   return Boolean(area && district && area.toLowerCase() !== district.toLowerCase());
 }
 
-function deriveListingClassification(record = {}) {
+function deriveListingClassification(record = {}, options = {}) {
   const text = listingEvidenceText(record);
   const primaryText = primaryListingEvidenceText(record) || text;
   const classificationText = sourceClassificationEvidenceText(record) || primaryText;
+  const propertyEvidence = detectPropertyTypeEvidence(classificationText);
+  const trustedFormPropertyType = options.trustFormPropertyType === true && compact(record.property_type);
   const currentType = normalizedListingType(record.listing_type || record.listingType || record.category);
   const bedroomBathroomEvidence = Number(record.bedrooms || record.beds || 0) > 0
     || Number(record.bathrooms || record.baths || 0) > 0
@@ -155,7 +169,7 @@ function deriveListingClassification(record = {}) {
   const primaryCommercial = COMMERCIAL_PATTERN.test(primaryText);
   const primaryStrongLand = STRONG_LAND_PATTERN.test(primaryText);
   const primaryLand = hasLandAssetEvidence(primaryText);
-  const hasDwelling = DWELLING_PATTERN.test(classificationText) || bedroomBathroomEvidence;
+  const hasDwelling = DWELLING_PATTERN.test(classificationText) || bedroomBathroomEvidence || propertyEvidence.physical_type === 'residential';
   const hasCommercial = COMMERCIAL_PATTERN.test(classificationText);
   const hasStrongLand = STRONG_LAND_PATTERN.test(classificationText);
   const hasLand = hasLandAssetEvidence(classificationText);
@@ -208,6 +222,7 @@ function deriveListingClassification(record = {}) {
   else if (hasStrongLand || (hasLand && (currentType === 'land' || evidenceSale))) physicalType = 'land';
   else if (hasDwelling) physicalType = 'residential';
   else if (hasCommercial) physicalType = 'commercial';
+  else if (trustedFormPropertyType) physicalType = 'residential';
 
   if (!hasPrimaryPhysicalEvidence && fallbackPhysicalTypeCount > 1) {
     categoryAmbiguous = true;
@@ -254,6 +269,9 @@ function deriveListingClassification(record = {}) {
     explicit_rent: evidenceDirectRent || evidencePeriodicRent,
     transaction_intent: transactionIntent || null,
     physical_type: physicalType || null,
+    property_type: propertyEvidence.property_type || (trustedFormPropertyType ? compact(record.property_type).toLowerCase() : null),
+    form_property_type: compact(record.property_type) || null,
+    source_evidence: propertyEvidence.evidence_excerpt || compact(classificationText).slice(0, 240),
     category_ambiguous: categoryAmbiguous,
     ambiguity_reason: ambiguityReason || null,
     confidence: !categoryAmbiguous && listingType && physicalType && (transactionIntent || ['student', 'land', 'commercial'].includes(physicalType)) ? 'strong' : 'weak',
@@ -288,7 +306,7 @@ function priceMatchesContact(record = {}, price = null) {
 
 function listingDataIntegrityReport(record = {}, options = {}) {
   const category = normalizedListingType(record.listing_type || record.listingType || record.category);
-  const classification = deriveListingClassification(record);
+  const classification = deriveListingClassification(record, options);
   const period = normalizedPeriod(record);
   const price = Number(record.price);
   const poa = hasPriceOnApplication(record);
@@ -355,8 +373,14 @@ function listingDataIntegrityReport(record = {}, options = {}) {
   }
 
   if (classification.category_ambiguous) {
-    add('category_ambiguous', classification.ambiguity_reason || 'Category evidence is contradictory or incomplete.', {
-      proposed_listing_type: category || classification.listing_type,
+    const missingPhysicalType = /does not identify a specific physical property type/i.test(classification.ambiguity_reason || '');
+    add('category_ambiguous', missingPhysicalType
+      ? `Source evidence does not confirm a specific physical property type. Form value: ${classification.form_property_type || 'not set'}.`
+      : (classification.ambiguity_reason || 'Category evidence is contradictory or incomplete.'), {
+      issue_subject: missingPhysicalType ? 'property_type' : 'category',
+      form_property_type: classification.form_property_type,
+      source_evidence: classification.source_evidence,
+      ...(missingPhysicalType ? {} : { proposed_listing_type: category || classification.listing_type }),
     });
   } else if (classification.confidence === 'strong' && classification.listing_type && category && classification.listing_type !== category) {
     add('category_conflicts_with_source_evidence', `Source evidence indicates ${classification.listing_type}, not ${category}.`, {
