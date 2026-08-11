@@ -104,6 +104,7 @@ assert(renderStartSource.includes('APP_PROXY_TIMEOUT'), 'Render proxy requests m
 assert(serverSource.includes('function readCountryAppAsset()'), 'ZA public JavaScript must have a transformed asset cache');
 assert(serverSource.includes("renderPublicHtml('/');"), 'ZA public HTML must warm before readiness');
 assert(serverSource.includes('compressed: adapted.compressed'), 'ZA public JavaScript must reuse compressed output');
+assert(serverSource.includes('dynamicCompression: false'), 'Public HTML must not synchronously compress on the request path');
 assert(
   renderBlueprintSource.includes('startCommand: node scripts/render-start.js'),
   'Render Blueprint must use the early liveness bootstrap'

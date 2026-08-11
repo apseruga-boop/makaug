@@ -718,7 +718,8 @@ function sendBufferResponse(req, res, body, options = {}) {
     cacheControl = 'no-store',
     etag = '',
     lastModified = '',
-    compressed = null
+    compressed = null,
+    dynamicCompression = true
   } = options;
 
   res.setHeader('Content-Type', contentType);
@@ -734,8 +735,8 @@ function sendBufferResponse(req, res, body, options = {}) {
   const encoding = preferredContentEncoding(req);
   let output = source;
   if (encoding && source.length >= 1024) {
-    const candidate = compressed?.[encoding] || compressBody(source, encoding);
-    if (candidate.length < source.length) {
+    const candidate = compressed?.[encoding] || (dynamicCompression ? compressBody(source, encoding) : null);
+    if (candidate && candidate.length < source.length) {
       output = candidate;
       res.setHeader('Content-Encoding', encoding);
     }
@@ -755,6 +756,7 @@ function sendTextResponse(req, res, html, options = {}) {
   res.setHeader('Expires', '0');
   return sendBufferResponse(req, res, Buffer.from(String(html || ''), 'utf8'), {
     contentType: 'text/html; charset=utf-8',
+    dynamicCompression: false,
     ...options
   });
 }

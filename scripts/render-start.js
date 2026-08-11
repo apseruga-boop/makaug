@@ -116,7 +116,7 @@ function waitForAppReadiness() {
     hostname: '127.0.0.1',
     port: appPort,
     path: '/healthz',
-    timeout: 1000
+    timeout: 3000
   }, (response) => {
     let body = '';
     response.setEncoding('utf8');
