@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">makaug green M mark</title>
+  <desc id="desc">A white letter M on the makaug green rounded square.</desc>
+  <rect width="512" height="512" rx="112" fill="#15803d"/>
+  <path d="M126 365V147h59l71 115 71-115h59v218h-59V237l-54 87h-34l-54-87v128z" fill="#ffffff"/>
+</svg>

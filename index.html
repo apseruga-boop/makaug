@@ -20,6 +20,13 @@
   <meta name="twitter:description" content="Uganda's free property portal. Buy, rent, sell and find brokers across all districts.">
   <meta name="twitter:image" content="https://makaug.com/assets/og-cover.jpg">
   <link rel="canonical" href="https://makaug.com/">
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="icon" type="image/svg+xml" href="/assets/icons/makaug-mark.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/makaug-icon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/makaug-icon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/makaug-apple-touch-icon.png">
+  <link rel="manifest" href="/site.webmanifest">
+  <meta name="theme-color" content="#15803d">
   <script>
     (function () {
       window.__releaseMakaugBoot = function () {
@@ -451,7 +458,9 @@
     .hero-opportunity-counter {
       position: relative;
       display: inline-block;
-      min-width: 8ch;
+      min-width: 0;
+      margin: 0;
+      padding: 0;
       text-align: center;
       border-radius: 0.35rem;
       color: #bbf7d0;
@@ -2691,15 +2700,7 @@
             <i class="fas fa-check-circle text-green-300"></i> A property search engine for Uganda
           </div>
           <h1 id="hero-title" class="text-3xl md:text-5xl font-black leading-tight mb-1.5">Find your next home, land, rental, or student room</h1>
-          <p id="hero-subtitle" class="text-base md:text-xl text-white/90 font-semibold max-w-4xl mx-auto">
-            <span id="hero-subtitle-prefix">makaug uses AI-powered search algorithms to scan public online property sources across Uganda, organising</span>
-            <span id="hero-property-counter" class="hero-opportunity-counter" role="button" tabindex="0" aria-describedby="hero-property-counter-tooltip" title="Property opportunity breakdown">
-              <span id="hero-property-count">thousands of</span>
-              <span id="hero-property-counter-tooltip" class="hero-opportunity-tooltip" role="tooltip">Loading property breakdown...</span>
-            </span>
-            <span id="hero-property-count-label">property opportunities</span>
-            <span id="hero-subtitle-suffix">in one place.</span>
-          </p>
+          <p id="hero-subtitle" class="text-base md:text-xl text-white/90 font-semibold max-w-4xl mx-auto"><span id="hero-subtitle-prefix">makaug uses AI-powered search algorithms to scan public online property sources across Uganda, organising</span> <span id="hero-property-counter" class="hero-opportunity-counter" role="button" tabindex="0" aria-describedby="hero-property-counter-tooltip" title="Property opportunity breakdown"><span id="hero-property-count">thousands of</span><span id="hero-property-counter-tooltip" class="hero-opportunity-tooltip" role="tooltip">Loading property breakdown...</span></span> <span id="hero-property-count-label">property opportunities</span> <span id="hero-subtitle-suffix">in one place.</span></p>
         </div>
 
         <div class="hero-shell rounded-3xl p-2.5 md:p-3 max-w-5xl mx-auto">
@@ -8923,6 +8924,7 @@
       <p id="owned-edit-copy" class="text-sm text-gray-600 mt-2">Changes are saved to makaug.com and sent back to admin review before they appear publicly.</p>
       <form id="owned-listing-edit-form" onsubmit="submitOwnedListingEdit(event)" class="mt-5 space-y-3">
         <input type="hidden" id="owned-edit-id">
+        <input type="hidden" id="owned-edit-listing-type-input">
         <label class="block">
           <span class="block text-sm font-bold text-gray-700 mb-1">Title</span>
           <input id="owned-edit-title-input" name="title" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" required>
@@ -8935,13 +8937,17 @@
           <label class="block">
             <span class="block text-sm font-bold text-gray-700 mb-1">Price period</span>
             <select id="owned-edit-price-period-input" name="price_period" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white">
-              <option value="once">Once</option>
-              <option value="monthly">Monthly</option>
-              <option value="yearly">Yearly</option>
-              <option value="semester">Per semester</option>
+              <option value="once">Total / Once off</option>
             </select>
           </label>
         </div>
+        <label id="owned-edit-transaction-type-wrap" class="hidden block">
+          <span class="block text-sm font-bold text-gray-700 mb-1">Transaction</span>
+          <select id="owned-edit-transaction-type-input" onchange="syncOwnedListingPricePeriods()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white">
+            <option value="sale">For sale</option>
+            <option value="rent">For rent / lease</option>
+          </select>
+        </label>
         <div class="grid sm:grid-cols-2 gap-3">
           <label class="block">
             <span class="block text-sm font-bold text-gray-700 mb-1">Area</span>

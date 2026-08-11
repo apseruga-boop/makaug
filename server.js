@@ -154,7 +154,8 @@ app.get('/api/version', (_req, res) => {
       'canonical-location-source-review-115',
       'master-data-integrity-116',
       'shared-uganda-location-resolver-coverage',
-      'whatsapp-shared-location-resolver'
+      'whatsapp-shared-location-resolver',
+      'prelaunch-backlog-gates'
     ]
   });
 });

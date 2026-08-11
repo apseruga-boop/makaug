@@ -188,6 +188,10 @@ test('multi-select location scope supports exact and nearby results without sile
   );
   assert.equal(exact.nearby.length, 0);
 
+  const exactCity = canonicalLocationSearchScope(['wakiso:kira'], 0);
+  assert.deepEqual(exactCity.exact.map((item) => item.key), ['wakiso:kira']);
+  assert.equal(exactCity.nearby.length, 0);
+
   const widened = canonicalLocationSearchScope(['kampala:ntinda'], 3);
   assert.ok(widened.nearby.some((item) => item.key !== 'kampala:ntinda'));
   assert.ok(widened.nearby.every((item) => item.distance_km <= 3));

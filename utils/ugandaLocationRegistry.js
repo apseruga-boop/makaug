@@ -689,25 +689,11 @@ function canonicalLocationSearchScope(keys = [], nearbyKm = 0) {
     .slice(0, 5);
   const exact = new Map();
   const nearby = new Map();
+  const radius = Math.max(0, Math.min(7, Number(nearbyKm) || 0));
   selected.forEach((location) => {
     exact.set(location.key, location);
-    if (location.level === 'district') {
-      registry
-        .filter((entry) => entry.district === location.district)
-        .forEach((entry) => exact.set(entry.key, entry));
-      return;
-    }
-    if (location.level === 'city') {
-      registry
-        .filter((entry) => entry.district === location.district)
-        .filter((entry) => {
-          const distance = haversineKm(location, entry);
-          return distance != null && distance <= 7;
-        })
-        .forEach((entry) => exact.set(entry.key, entry));
-      return;
-    }
-    const radius = Math.max(0, Math.min(7, Number(nearbyKm) || 0));
+    // Exact means the requested canonical ID only. City and district nodes used
+    // to expand silently here, which made nearby=0 return other areas.
     if (!radius) return;
     registry
       .filter((entry) => entry.level !== 'district' && entry.key !== location.key)
@@ -730,8 +716,14 @@ function canonicalLocationRollupCounts(counts = new Map()) {
   const rolled = new Map(direct);
   registry.forEach((location) => {
     if (!['city', 'district'].includes(location.level)) return;
-    const scope = canonicalLocationSearchScope([location.key], 0);
-    const total = scope.exact.reduce((sum, child) => sum + Math.max(0, Number(direct.get(child.key)) || 0), 0);
+    const descendants = location.level === 'district'
+      ? registry.filter((entry) => entry.district === location.district)
+      : registry.filter((entry) => {
+        if (entry.district !== location.district) return false;
+        const distance = haversineKm(location, entry);
+        return distance != null && distance <= 7;
+      });
+    const total = descendants.reduce((sum, child) => sum + Math.max(0, Number(direct.get(child.key)) || 0), 0);
     rolled.set(location.key, total);
   });
   return rolled;

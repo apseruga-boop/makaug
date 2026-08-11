@@ -2347,7 +2347,8 @@ async function listPropertiesHandler(req, res, next) {
       const legacyCanonicalLocation = canonicalizeUgandaLocation(area, district);
       if (legacyCanonicalLocation) canonicalLocationKeys = [legacyCanonicalLocation.key];
     }
-    const nearbyKm = Math.max(0, Math.min(7, toNullableFloat(req.query.nearby_km || req.query.nearbyKm) ?? 3));
+    const requestedNearbyKm = toNullableFloat(req.query.nearby_km ?? req.query.nearbyKm ?? req.query.nearby);
+    const nearbyKm = Math.max(0, Math.min(7, requestedNearbyKm ?? 0));
     const canonicalLocationScope = canonicalLocationSearchScope(canonicalLocationKeys, nearbyKm);
     if (canonicalLocationKeys.length !== canonicalLocationScope.selected.length) {
       return res.status(400).json({
@@ -2392,10 +2393,10 @@ async function listPropertiesHandler(req, res, next) {
     const requestingModerationData = status && status !== 'approved';
     const searchLat = toNullableFloat(req.query.lat || req.query.latitude);
     const searchLng = toNullableFloat(req.query.lng || req.query.longitude);
-    const requestedRadiusKm = toNullableFloat(req.query.radiusKm || req.query.radius_km);
-    const requestedRadiusMiles = toNullableFloat(req.query.radiusMiles || req.query.radius_miles || req.query.radius);
+    const requestedRadiusKm = toNullableFloat(req.query.radiusKm ?? req.query.radius_km);
+    const requestedRadiusMiles = toNullableFloat(req.query.radiusMiles ?? req.query.radius_miles ?? req.query.radius);
     const hasRadiusSearch = searchLat != null && searchLng != null;
-    const radiusKm = requestedRadiusKm || normalizeRadiusKm(requestedRadiusMiles ? requestedRadiusMiles * 1.609344 : null, DEFAULT_SEARCH_RADIUS_MILES);
+    const radiusKm = requestedRadiusKm ?? normalizeRadiusKm(requestedRadiusMiles != null ? requestedRadiusMiles * 1.609344 : null, DEFAULT_SEARCH_RADIUS_MILES);
     let distanceSql = 'NULL::numeric';
 
     let adminAccess = false;
@@ -3584,7 +3585,7 @@ router.post('/', async (req, res, next) => {
         title,
         description
       }
-    );
+    ) || (listingType === 'land' ? 'sale' : null);
     const commercialPropertyType = listingType === 'commercial'
       ? normalizeCommercialPropertyType(body.property_type || body.commercial_type, { title, description })
       : cleanText(body.property_type);
