@@ -281,6 +281,12 @@ const OUTBOUND_IMAGE_INPUT_SELECTORS = [
   'input[type="file"][accept*="image"]',
   'input[type="file"][accept*="video"]'
 ];
+const PHOTO_VIDEO_MENU_SELECTORS = [
+  'button[role="menuitem"][aria-label*="Photos"]',
+  'button[role="menuitem"][aria-label*="videos"]',
+  '[role="menuitem"][aria-label*="Photos"]',
+  '[role="menuitem"][aria-label*="videos"]'
+];
 const MEDIA_CAPTION_SELECTORS = [
   '[data-testid="media-caption-input-container"] [contenteditable="true"]',
   '[data-testid*="caption" i] [contenteditable="true"]',
@@ -3092,14 +3098,22 @@ async function typeAndSendImageReply(page, mediaUrl, caption) {
   const opened = await clickFirstVisible(page, ATTACH_BUTTON_SELECTORS);
   if (!opened) throw new Error('Could not open the WhatsApp attachment picker');
   await page.waitForTimeout(250);
-  const fileInput = await findAttachedFileInput(page);
-  if (!fileInput) throw new Error('Could not find the WhatsApp image upload control');
+  const chooserPromise = page.waitForEvent('filechooser', { timeout: 4000 }).catch(() => null);
+  const photosOpened = await clickFirstVisible(page, PHOTO_VIDEO_MENU_SELECTORS);
+  const fileChooser = photosOpened ? await chooserPromise : null;
+  const fileInput = fileChooser ? null : await findAttachedFileInput(page);
+  if (!fileChooser && !fileInput) throw new Error('Could not find the WhatsApp image upload control');
 
-  await fileInput.setInputFiles({
+  const upload = {
     name: media.fileName,
     mimeType: media.mimeType,
     buffer: media.buffer
-  });
+  };
+  if (fileChooser) {
+    await fileChooser.setFiles(upload);
+  } else {
+    await fileInput.setInputFiles(upload);
+  }
 
   const captionReady = await page.waitForFunction((selectors) => selectors.some((selector) => {
     const nodes = Array.from(document.querySelectorAll(selector));
