@@ -107,6 +107,7 @@ assert(bridgeWorker.includes('dismissPendingMediaSelection'), 'image failure mus
 assert(bridgeWorker.includes('waitForMediaSendConfirmation'), 'media delivery must confirm the closed image composer without retrying a sent card');
 assert(bridgeWorker.indexOf('clickFirstVisible(page, ATTACH_BUTTON_SELECTORS)') < bridgeWorker.indexOf('findAttachedFileInput(page);'), 'worker must open the live attachment menu before selecting its image input');
 assert(bridgeWorker.includes("page.waitForEvent('filechooser'"), 'worker must bind the file chooser raised by Photos & videos');
+assert(bridgeWorker.includes('findPhotoVideoMenuFileInput'), 'worker must prefer the upload input owned by the open Photos & videos menu item');
 assert(adminRoute.includes('req.body.property_id || req.body.propertyId'), 'admin confirmation send must support a reviewed property card');
 assert(server.includes("'whatsapp-property-card-v2'"), 'production version marker must identify this release');
 
