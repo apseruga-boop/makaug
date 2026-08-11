@@ -100,6 +100,8 @@ function applySouthAfricaHtml(html) {
   output = output
     .replace(/<html lang="[^"]*"/, '<html lang="en-ZA"')
     .replace('<title>makaug.com | Uganda Property Portal</title>', '<title>seshaikhaya.com | South Africa Property</title>')
+    .replace(/<meta name="makaug-k24-marker"/i, '<meta name="seshaikhaya-intake-integrity-marker"')
+    .replace(/<meta name="makaug-release-marker"/i, '<meta name="seshaikhaya-shared-release-marker"')
     .replace(/<meta name="facebook-domain-verification"[^>]*>\s*/i, '')
     .replace(/<link rel="sitemap"[^>]*Marketplace directory sitemap[^>]*>\s*/i, '')
     .replace(/<link rel="icon" href="\/favicon\.ico" sizes="any">/i, '<link rel="icon" type="image/svg+xml" href="/assets/icons/seshaikhaya-mark.svg">')

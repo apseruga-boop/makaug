@@ -2160,23 +2160,34 @@ function canonicalApprovalLocationForRecord(row = {}) {
 }
 
 function publicCanonicalLocationPayload(item = {}) {
+  const province = item.province || (IS_SOUTH_AFRICA ? item.district : null);
+  const municipality = IS_SOUTH_AFRICA
+    ? (item.municipality || item.district_municipality || province)
+    : null;
+  const parentPathParts = IS_SOUTH_AFRICA
+    ? (item.level === 'province'
+      ? ['South Africa']
+      : [item.level === 'suburb' ? (item.city || item.town) : null, municipality, province])
+    : [];
   return {
     id: item.canonical_key || item.key,
     canonical_location_id: item.canonical_key || item.key,
     name: item.location || item.name,
     label: item.location || item.name,
-    district: item.district,
-    province: item.province || (IS_SOUTH_AFRICA ? item.district : null),
+    district: IS_SOUTH_AFRICA ? municipality : item.district,
+    province,
+    municipality,
+    district_municipality: IS_SOUTH_AFRICA ? (item.district_municipality || null) : null,
     city: item.city || item.town || null,
     suburb: item.suburb || (item.level === 'suburb' ? (item.location || item.name) : null),
     town: item.town || '',
-    region: activeRegionForDistrict(item.district),
+    region: activeRegionForDistrict(IS_SOUTH_AFRICA ? province : item.district),
     level: item.level,
     type_label: IS_SOUTH_AFRICA
       ? (item.level === 'province' ? 'Province' : item.level === 'city' ? 'City / main place' : 'Suburb')
       : (item.level === 'district' ? 'District' : ['city', 'town'].includes(item.level) ? 'Town / city' : 'Neighborhood'),
     parent_path: IS_SOUTH_AFRICA
-      ? (item.level === 'province' ? 'South Africa' : [item.city || item.town, item.province || item.district].filter(Boolean).join(', '))
+      ? Array.from(new Set(parentPathParts.filter(Boolean))).join(', ')
       : (item.level === 'district' ? 'Uganda' : `${item.district} District`),
     listing_count: Number(item.listing_count) || 0,
     match: item.match || 'exact_alias',
@@ -2193,7 +2204,7 @@ function publicCanonicalLocationPayload(item = {}) {
 router.get('/locations/catalog', (req, res) => {
   const district = normalizeDistrict(req.query.district);
   const locations = canonicalLocationOptions()
-    .filter((item) => !district || item.district === district)
+    .filter((item) => !district || (IS_SOUTH_AFRICA ? item.province === district : item.district === district))
     .filter((item) => !['district', 'region', 'province'].includes(item.level))
     .map((item) => publicCanonicalLocationPayload({ ...item, match: 'exact_alias', confidence: 1, auto_resolvable: true }));
   return res.json({
@@ -2214,7 +2225,7 @@ router.get('/locations/resolve', (req, res) => {
     ...item,
     match: resolution.match_type,
     confidence: resolution.status === 'matched' ? 1 : 0,
-    auto_resolvable: resolution.status === 'matched'
+    auto_resolvable: resolution.status === 'matched' && item.key === resolution.match?.key
   }));
   return res.json({
     ok: true,

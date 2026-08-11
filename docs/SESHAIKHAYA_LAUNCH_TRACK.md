@@ -104,3 +104,23 @@ deployment to its previous Render commit instead.
 6. Keep the total live staging footprint at USD 10.50/month. Do not add a
    worker, paid web service, custom domain or production service under the
    current approval.
+
+## Dave staging audit 1 correction
+
+- Dave's live audit of commit `568c82e47d99eb95b770d24a5620f1325fa5db61`
+  passed tenant isolation, scope, localisation and wrong-province safety, but
+  found Census main places duplicated as same-name city and suburb nodes.
+- The regression battery now resolves all 53 major-place cases automatically:
+  53 exact, zero forced disambiguations and zero wrong-province results.
+- Same-municipality city/suburb duplicates collapse to their primary city node.
+  Genuine cross-municipality names such as Fourways remain ambiguous.
+- Prominent aliases default safely while secondary places remain discoverable.
+  Current and legacy pairs include Gqeberha/Port Elizabeth, Mbombela/Nelspruit,
+  Mahikeng/Mafikeng, Pretoria/Tshwane, Durban/eThekwini,
+  Makhanda/Grahamstown and Polokwane/Pietersburg.
+- Location responses expose municipality and district-municipality context so
+  South Africa hierarchy is Province to Municipality/City to Suburb.
+- South Africa HTML renames the inherited Uganda meta-marker names while
+  retaining their shared-core release evidence.
+- Locations sign-off still requires the same battery and alias checks against
+  the replacement live staging commit; local acceptance is not live proof.

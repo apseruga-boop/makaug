@@ -67,6 +67,10 @@ for (const forbidden of [
   assert(!nav.includes(forbidden), `ZA navigation leaked ${forbidden}`);
   assert(!footer.includes(forbidden), `ZA footer leaked ${forbidden}`);
 }
+assert(!html.includes('name="makaug-k24-marker"'), 'ZA HTML leaked the Uganda intake marker name');
+assert(!html.includes('name="makaug-release-marker"'), 'ZA HTML leaked the Uganda release marker name');
+assert(html.includes('name="seshaikhaya-intake-integrity-marker"'));
+assert(html.includes('name="seshaikhaya-shared-release-marker"'));
 assert(!head.includes('marketplace-sitemap.xml'), 'ZA head leaked Marketplace sitemap');
 assert(!html.includes('256760112587'), 'ZA public HTML leaked Uganda WhatsApp number');
 for (const forbidden of ['makaug how-to video', 'Help makaug find', '>District<']) {

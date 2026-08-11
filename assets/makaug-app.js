@@ -24061,11 +24061,12 @@ function clearAdminReviewCanonicalLocation() {
 function applyAdminReviewCanonicalLocation(location = {}) {
   if (!location?.canonical_location_id || location.match !== "exact_alias" || Number(location.confidence) !== 1) return false;
   adminReviewCanonicalLocationResolution = location;
-  adminSetReviewEditValue("admin-review-region-edit", location.region || regionForDistrict(location.district));
-  adminReviewSetOptions("admin-review-district-edit", adminReviewDistrictOptionsHtml(location.region, location.district), location.district);
-  adminReviewSetOptions("admin-review-city-edit", adminReviewCityOptionsHtml(location.district, location.town), location.town);
+  const province = location.province || location.district;
+  adminSetReviewEditValue("admin-review-region-edit", location.region || regionForDistrict(province));
+  adminReviewSetOptions("admin-review-district-edit", adminReviewDistrictOptionsHtml(location.region, province), province);
+  adminReviewSetOptions("admin-review-city-edit", adminReviewCityOptionsHtml(province, location.town), location.town);
   ensureSelectHasValue("admin-review-city-edit", location.town, location.town);
-  adminReviewSetOptions("admin-review-neighborhood-edit", adminReviewNeighborhoodOptionsHtml(location.district, location.town, location.name), location.name);
+  adminReviewSetOptions("admin-review-neighborhood-edit", adminReviewNeighborhoodOptionsHtml(province, location.town, location.name), location.name);
   ensureSelectHasValue("admin-review-neighborhood-edit", location.name, location.name);
   const areaEl = document.getElementById("admin-review-area-edit");
   if (areaEl) {
@@ -24094,12 +24095,13 @@ function applyLpCanonicalLocation(location = {}) {
   if (!location?.canonical_location_id || location.match !== "exact_alias" || Number(location.confidence) !== 1) return false;
   lpCanonicalLocationResolution = location;
   lpCanonicalLocationAttempted = true;
-  const region = location.region || regionForDistrict(location.district);
+  const province = location.province || location.district;
+  const region = location.region || regionForDistrict(province);
   populateLpRegionOptions(region);
-  populateLpDistrictOptions(region, location.district);
-  populateLpCityOptions(location.district, location.town);
+  populateLpDistrictOptions(region, province);
+  populateLpCityOptions(province, location.town);
   ensureSelectHasValue("lp-city", location.town, location.town);
-  populateLpNeighborhoodOptions(location.district, location.town, location.name);
+  populateLpNeighborhoodOptions(province, location.town, location.name);
   ensureSelectHasValue("lp-neighborhood", location.name, location.name);
   const areaEl = document.getElementById("lp-area");
   if (areaEl) {
@@ -24827,7 +24829,7 @@ function collectAdminReviewListingPatch() {
     && Number(adminReviewCanonicalLocationResolution?.confidence) === 1
     ? adminReviewCanonicalLocationResolution
     : null;
-  const district = canonical?.district || get("admin-review-district-edit");
+  const district = canonical?.province || canonical?.district || get("admin-review-district-edit");
   const region = canonical?.region || (district ? regionForDistrict(district) : get("admin-review-region-edit"));
   const city = canonical?.town || get("admin-review-city-edit");
   const neighborhood = canonical?.name || get("admin-review-neighborhood-edit");
@@ -36530,7 +36532,7 @@ async function loadSharedLocationCatalogForDistrict(district = "") {
     .then((response) => {
       const groups = new Map();
       (Array.isArray(response?.data) ? response.data : []).forEach((item) => {
-        if (!item?.name || item.district !== cleanDistrict) return;
+        if (!item?.name || (item.province || item.district) !== cleanDistrict) return;
         const town = item.town || `${cleanDistrict} Town`;
         if (!groups.has(town)) groups.set(town, new Map());
         groups.get(town).set(item.name, {
@@ -45204,7 +45206,7 @@ async function hydrateCanonicalLocationSeoRoute(config) {
     const response = await fetch(`/api/properties/locations/suggest?${params.toString()}`, { credentials: "same-origin" });
     const body = await response.json().catch(() => ({}));
     const suggestions = Array.isArray(body.data) ? body.data : [];
-    const selected = suggestions.find((item) => district && String(item.district || "").toLowerCase() === district.toLowerCase())
+    const selected = suggestions.find((item) => district && String(item.province || item.district || "").toLowerCase() === district.toLowerCase())
       || suggestions.find((item) => item.match === "exact_alias")
       || suggestions[0];
     if (response.ok && selected) selectCanonicalLocationSuggestion(config, selected);
@@ -45222,7 +45224,7 @@ function canonicalSeoRouteSlug(item = {}) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
-  return [slugPart(item.name || item.label), slugPart(item.district)].filter(Boolean).join("-");
+  return [slugPart(item.name || item.label), slugPart(item.province || item.district)].filter(Boolean).join("-");
 }
 
 function renderCanonicalSeoLandingIntro(config) {
