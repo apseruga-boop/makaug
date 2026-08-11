@@ -82,10 +82,14 @@ const rawJavaScript = fs.readFileSync(path.join(root, 'assets', 'makaug-app.js')
 const zaJavaScript = applySouthAfricaJavaScript(rawJavaScript);
 assert.doesNotThrow(() => new vm.Script(zaJavaScript), 'ZA public JavaScript must remain syntactically valid');
 const serverSource = fs.readFileSync(path.join(root, 'server.js'), 'utf8');
+const healthRouteSource = fs.readFileSync(path.join(root, 'routes', 'health.js'), 'utf8');
 const renderStartSource = fs.readFileSync(path.join(root, 'scripts', 'render-start.js'), 'utf8');
 const renderBlueprintSource = fs.readFileSync(path.join(root, 'render.seshaikhaya.yaml'), 'utf8');
 assert(serverSource.includes("app.get('/healthz'"), 'Render process health endpoint is missing');
 assert(serverSource.includes("app.use('/api/health', healthRoutes)"), 'Database health endpoint must remain available');
+assert(!healthRouteSource.includes("service: 'makayug-backend'"), 'ZA health endpoint must not leak the legacy Uganda service name');
+assert(healthRouteSource.includes('country_code: ACTIVE_COUNTRY_CODE'), 'Database health endpoint must identify the active country');
+assert(healthRouteSource.includes('tenant: ACTIVE_TENANT.brandName'), 'Database health endpoint must identify the active tenant');
 assert(
   serverSource.indexOf("httpServer.listen(port, '0.0.0.0'") < serverSource.indexOf('await runMigrations()'),
   'Render liveness listener must bind before database migrations'
