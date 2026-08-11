@@ -286,8 +286,10 @@ const MEDIA_CAPTION_SELECTORS = [
   '[data-testid*="caption" i] [contenteditable="true"]',
   '[role="dialog"] div[role="textbox"][contenteditable="true"]',
   '[role="dialog"] [data-lexical-editor="true"][contenteditable="true"]',
+  'div[role="textbox"][data-lexical-editor="true"][contenteditable="true"]',
   'div[aria-placeholder*="caption" i][contenteditable="true"]',
-  'div[aria-label*="caption" i][contenteditable="true"]'
+  'div[aria-label*="caption" i][contenteditable="true"]',
+  'div[role="textbox"][contenteditable="true"][data-tab="10"]'
 ];
 const MEDIA_SEND_BUTTON_SELECTORS = [
   '[data-testid="media-send"]',
