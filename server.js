@@ -159,7 +159,8 @@ app.get('/api/version', (_req, res) => {
       'whatsapp-property-card-v2',
       'human-integrity-override-20260811',
       'human-approval-overlord-20260811',
-      'king-timestamp-iso-normalization-20260811'
+      'king-timestamp-iso-normalization-20260811',
+      'location-query-normalization-prominence-20260811'
     ]
   });
 });
