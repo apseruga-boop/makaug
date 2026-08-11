@@ -15861,7 +15861,7 @@ async function adminLoadBacklogRecoverySample() {
     const rows = Array.isArray(response?.data) ? response.data : [];
     adminBacklogRecoveryOutput(`
       <div class="font-black">${adminEscape(rows.length)} proposals — zero writes, zero publications</div>
-      <div class="mt-2 max-h-[34rem] space-y-2 overflow-auto">
+      <div class="mt-2 max-h-[520px] space-y-2 overflow-auto">
         ${rows.map((item) => `<details class="rounded-lg border border-indigo-100 bg-white p-2">
           <summary class="cursor-pointer font-bold">${adminEscape(item.listing_id || "Listing")} · ${adminEscape(Object.entries(item.buckets || {}).filter(([, yes]) => yes).map(([name]) => name).join(", "))}</summary>
           <pre class="mt-2 overflow-auto rounded bg-slate-950 p-2 text-[10px] text-green-100">${adminEscape(JSON.stringify(item, null, 2))}</pre>
