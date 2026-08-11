@@ -153,7 +153,8 @@ app.get('/api/version', (_req, res) => {
     markers: [
       'canonical-location-source-review-115',
       'master-data-integrity-116',
-      'shared-uganda-location-resolver-coverage'
+      'shared-uganda-location-resolver-coverage',
+      'whatsapp-shared-location-resolver'
     ]
   });
 });

@@ -24,6 +24,14 @@ const {
   normalizeRadiusMiles,
   roundLocationForAnalytics
 } = require('../services/locationSearchService');
+const { canonicalLocationSearchScope } = require('../utils/ugandaLocationRegistry');
+const { regionForDistrict } = require('../utils/ugandaLocationHierarchy');
+const {
+  canonicalizeWhatsappSearchFilters,
+  canonicalWhatsappLocationPatch,
+  resolveWhatsappLocation,
+  whatsappLocationPrompt
+} = require('../services/whatsappLocationResolverService');
 const {
   inferNearestUniversityFromListing,
   normalizeUniversityName
@@ -1781,54 +1789,11 @@ function stripMakaugBrandLocationNoise(value) {
     .trim();
 }
 
-const SELLER_LOCATION_HINTS = [
-  { area: 'Kololo', district: 'Kampala', pattern: /\bkololo\b/i },
-  { area: 'Mawanda Road', district: 'Kampala', pattern: /\bmawanda(?:\s+road)?\b/i },
-  { area: 'Entebbe', district: 'Wakiso', pattern: /\bentebbe\b/i },
-  { area: 'Ntinda', district: 'Kampala', pattern: /\bntinda\b/i },
-  { area: 'Bugolobi', district: 'Kampala', pattern: /\bbugolobi\b/i },
-  { area: 'Kyanja', district: 'Kampala', pattern: /\bkyanja\b/i },
-  { area: 'Naguru', district: 'Kampala', pattern: /\bnaguru\b/i },
-  { area: 'Nakasero', district: 'Kampala', pattern: /\bnakasero\b/i },
-  { area: 'Munyonyo', district: 'Kampala', pattern: /\bmunyonyo\b/i },
-  { area: 'Muyenga', district: 'Kampala', pattern: /\bmuyenga\b/i },
-  { area: 'Makindye', district: 'Kampala', pattern: /\bmakindye\b/i },
-  { area: 'Kansanga', district: 'Kampala', pattern: /\bkansanga\b/i },
-  { area: 'Kira', district: 'Wakiso', pattern: /\bkira\b/i },
-  { area: 'Najjera', district: 'Wakiso', pattern: /\bnajjera\b/i },
-  { area: 'Lubowa', district: 'Wakiso', pattern: /\blubowa\b/i },
-  { area: 'Seguku', district: 'Wakiso', pattern: /\bseguku\b/i },
-  { area: 'Kajjansi', district: 'Wakiso', pattern: /\bkajjansi\b/i },
-  { area: 'Mukono', district: 'Mukono', pattern: /\bmukono\b/i }
-];
-
-function uniqueNormalizedValues(values = []) {
-  const seen = new Set();
-  const output = [];
-  for (const value of values) {
-    const clean = normalizeInput(value);
-    const key = clean.toLowerCase();
-    if (!clean || seen.has(key)) continue;
-    seen.add(key);
-    output.push(clean);
-  }
-  return output;
-}
-
 function extractSellerKnownLocationHints(input = '') {
   const clean = stripMakaugBrandLocationNoise(input);
   if (!clean) return {};
-  const matchedLocations = SELLER_LOCATION_HINTS.filter((location) => location.pattern.test(clean));
-  const directDistricts = DISTRICTS.filter((district) => new RegExp(`\\b${district.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(clean));
-  const areas = uniqueNormalizedValues(matchedLocations.map((location) => location.area));
-  const districts = uniqueNormalizedValues([
-    ...matchedLocations.map((location) => location.district),
-    ...directDistricts
-  ]);
-  return {
-    ...(areas.length ? { area: areas.join(', ') } : {}),
-    ...(districts.length ? { district: districts.join(', ') } : {})
-  };
+  const resolution = resolveWhatsappLocation(clean, { allowText: true });
+  return canonicalWhatsappLocationPatch(resolution);
 }
 
 function isBadSellerAreaHint(candidate) {
@@ -2039,7 +2004,13 @@ function nextListingDraftStep(draft = {}) {
   if (isDraftMissingValue(draft, 'lister_type')) return 'ownership';
   if (isDraftMissingValue(draft, 'title')) return 'title';
   if (isDraftMissingValue(draft, 'district')) return 'district';
-  if (isDraftMissingValue(draft, 'area')) return 'area';
+  if (
+    isDraftMissingValue(draft, 'area')
+    || isDraftMissingValue(draft, 'canonical_location_id')
+    || ['district', 'region'].includes(normalizeInput(draft.canonical_location_level).toLowerCase())
+    || normalizeInput(draft.canonical_location_match) !== 'exact_alias'
+    || Number(draft.canonical_location_confidence) !== 1
+  ) return 'area';
   if (!['land', 'commercial'].includes(normalizeInput(draft.listing_type)) && isDraftMissingValue(draft, 'bedrooms')) return 'bedrooms';
   if (isDraftMissingValue(draft, 'price')) return 'price';
   if (draft.listing_type === 'rent' && isDraftMissingValue(draft, 'deposit_amount')) return 'ask_deposit';
@@ -2109,7 +2080,20 @@ function fastListingProgressReply(lang, patch = {}, updatedDraft = {}, intro = '
 
 async function submitWhatsappListingDraft({ phone, lang, draft }) {
   try {
-    const d = draft || {};
+    const rawDraft = draft || {};
+    const locationResolution = resolveWhatsappLocation(rawDraft.area, { district: rawDraft.district });
+    if (locationResolution.status !== 'matched' || ['district', 'region'].includes(locationResolution.match?.level)) {
+      await patchDraft(phone, {
+        canonical_location_id: null,
+        canonical_location_level: null,
+        canonical_location_match: null,
+        canonical_location_confidence: 0
+      });
+      return { message: whatsappLocationPrompt(locationResolution), nextStep: 'area' };
+    }
+    const locationPatch = canonicalWhatsappLocationPatch(locationResolution);
+    const d = { ...rawDraft, ...locationPatch };
+    await patchDraft(phone, locationPatch);
     const inquiryReference = buildListingReference();
     const ownerEditToken = createOwnerEditToken();
     const ownerEditTokenHash = hashOwnerEditToken(ownerEditToken);
@@ -2162,6 +2146,13 @@ async function submitWhatsappListingDraft({ phone, lang, draft }) {
           bedroom_options_text: d.bedroom_options_text || null,
           bedroom_options_min: d.bedroom_options_min || null,
           bedroom_options_max: d.bedroom_options_max || null,
+          canonical_location_id: d.canonical_location_id,
+          canonical_location_level: d.canonical_location_level,
+          canonical_location_match: d.canonical_location_match,
+          canonical_location_confidence: d.canonical_location_confidence,
+          canonical_location_source: d.canonical_location_source,
+          region: d.region,
+          resolved_location_label: [d.area, d.district, d.region].filter(Boolean).join(', '),
           removal_command: `REMOVE ${inquiryReference}`
         },
         inquiryReference,
@@ -3006,82 +2997,8 @@ const WORD_NUMBERS = {
   six: 6, seven: 7, eight: 8, nine: 9, ten: 10
 };
 
-const AREA_ALIASES = {
-  kampala: 'Kampala',
-  wakiso: 'Wakiso',
-  mukono: 'Mukono',
-  kisaasi: 'Kisaasi',
-  kololo: 'Kololo',
-  ntinda: 'Ntinda',
-  bugolobi: 'Bugolobi',
-  nakasero: 'Nakasero',
-  naalya: 'Naalya',
-  kira: 'Kira',
-  kyaliwajjala: 'Kyaliwajjala',
-  kyanja: 'Kyanja',
-  najjera: 'Najjera',
-  bukoto: 'Bukoto',
-  kyambogo: 'Kyambogo',
-  makerere: 'Makerere',
-  muyenga: 'Muyenga',
-  uyenga: 'Muyenga',
-  mbarara: 'Mbarara',
-  mbale: 'Mbale',
-  'mbale town': 'Mbale',
-  mbali: 'Mbale',
-  bali: 'Mbale',
-  gulu: 'Gulu',
-  lira: 'Lira',
-  arua: 'Arua',
-  jinja: 'Jinja',
-  entebbe: 'Entebbe',
-  'fort portal': 'Fort Portal',
-  'nansana': 'Nansana',
-  'bweyogerere': 'Bweyogerere',
-  'namugongo': 'Namugongo',
-  rubaga: 'Rubaga',
-  rubagaa: 'Rubaga',
-  lubaga: 'Rubaga'
-};
-
 const WHATSAPP_PUBLIC_SUPPRESSED_LISTING_MARKERS = ['SOFT LAUNCH TEST - DELETE', 'QA TEST - DELETE'];
 const WHATSAPP_PUBLIC_SUPPRESSED_LISTING_TITLES = new Set(['sdgsdgd', 'sgsgsgsgs']);
-
-const REGION_DISTRICTS = {
-  central: [
-    'Buikwe', 'Bukomansimbi', 'Buvuma', 'Gomba', 'Kalangala', 'Kalungu',
-    'Kampala', 'Kasanda', 'Kayunga', 'Kiboga', 'Kyankwanzi', 'Kyotera',
-    'Luwero', 'Lwengo', 'Lyantonde', 'Masaka', 'Mityana', 'Mpigi',
-    'Mubende', 'Mukono', 'Nakaseke', 'Nakasongola', 'Rakai',
-    'Sembabule', 'Wakiso', 'Butambala'
-  ],
-  eastern: [
-    'Budaka', 'Bududa', 'Bugiri', 'Bugweri', 'Bukedea', 'Bukwo',
-    'Bulambuli', 'Busia', 'Butaleja', 'Butebo', 'Buyende', 'Iganga',
-    'Jinja', 'Kaberamaido', 'Kalaki', 'Kaliro', 'Kamuli', 'Kapchorwa',
-    'Kapelebyong', 'Katakwi', 'Kibuku', 'Kumi', 'Luuka', 'Mayuge',
-    'Mbale', 'Namisindwa', 'Namutumba', 'Namayingo', 'Ngora',
-    'Pallisa', 'Serere', 'Sironko', 'Soroti', 'Tororo', 'Amuria'
-  ],
-  northern: [
-    'Abim', 'Adjumani', 'Agago', 'Alebtong', 'Amolatar', 'Amudat',
-    'Amuru', 'Apac', 'Arua', 'Dokolo', 'Gulu', 'Kaabong', 'Karenga',
-    'Kitgum', 'Koboko', 'Kole', 'Kotido', 'Kwania',
-    'Lamwo', 'Lira', 'Madi-Okollo', 'Maracha', 'Moroto', 'Moyo',
-    'Nabilatuk', 'Nakapiripirit', 'Napak', 'Nebbi', 'Nwoya',
-    'Obongi', 'Omoro', 'Otuke', 'Oyam', 'Pader', 'Pakwach',
-    'Yumbe', 'Zombo'
-  ],
-  western: [
-    'Buhweju', 'Buliisa', 'Bundibugyo', 'Bunyangabu', 'Bushenyi',
-    'Hoima', 'Ibanda', 'Isingiro', 'Kabale', 'Kabarole', 'Kagadi',
-    'Kakumiro', 'Kamwenge', 'Kanungu', 'Kasese', 'Kibaale', 'Kitagwenda',
-    'Kikuube', 'Kiruhura', 'Kiryandongo', 'Kisoro', 'Kyegegwa',
-    'Kyenjojo', 'Mbarara', 'Mitooma', 'Ntoroko', 'Ntungamo',
-    'Rubanda', 'Rubirizi', 'Rukiga', 'Rukungiri', 'Sheema'
-  ],
-  'greater kampala': ['Kampala', 'Wakiso', 'Mukono']
-};
 
 const WEBSITE_PUBLIC_LISTINGS = [
   {
@@ -3281,7 +3198,14 @@ function normalizeRegionKey(value) {
 
 function getRegionDistricts(value) {
   const key = normalizeRegionKey(value);
-  return key ? (REGION_DISTRICTS[key] || []) : [];
+  if (!key) return [];
+  if (key === 'greater kampala') return ['Kampala', 'Wakiso', 'Mukono'];
+  const expectedRegion = `${key.charAt(0).toUpperCase()}${key.slice(1)}`;
+  return Array.from(new Set(
+    DISTRICTS
+      .map((district) => String(district || '').replace(/\s+City$/i, ''))
+      .filter((district) => regionForDistrict(district) === expectedRegion)
+  ));
 }
 
 const NEAR_ME_PATTERNS = [
@@ -3432,44 +3356,14 @@ function parseSearchType(text) {
   return null;
 }
 
-function getDynamicAreaAliases(sessionData = {}) {
-  const aliases = {};
-  const source = sessionData && typeof sessionData === 'object'
-    ? sessionData.area_aliases
-    : null;
-
-  if (source && typeof source === 'object' && !Array.isArray(source)) {
-    Object.entries(source).forEach(([alias, canonical]) => {
-      const a = normalizeInput(alias).toLowerCase();
-      const c = normalizeInput(canonical);
-      if (a && c) aliases[a] = c;
-    });
-    return aliases;
-  }
-
-  if (Array.isArray(source)) {
-    source.forEach((row) => {
-      const alias = normalizeInput(row?.alias || row?.key).toLowerCase();
-      const canonical = normalizeInput(row?.canonical || row?.name || row?.value);
-      if (alias && canonical) aliases[alias] = canonical;
-    });
-  }
-
-  return aliases;
-}
-
 function parseAreaFromText(text, sessionData = {}) {
+  void sessionData;
   const clean = normalizeInput(text);
   if (!clean) return null;
   const lower = clean.toLowerCase();
   const cleanedLower = lower.replace(/[^\w\s'-]/g, ' ');
-  const aliasMap = {
-    ...AREA_ALIASES,
-    ...getDynamicAreaAliases(sessionData)
-  };
-
-  const directAlias = aliasMap[cleanedLower.trim()];
-  if (directAlias) return directAlias;
+  const exactTextResolution = resolveWhatsappLocation(clean, { allowText: true });
+  if (exactTextResolution.status === 'matched') return exactTextResolution.match.area;
 
   const districtHit = DISTRICTS.find((d) => cleanedLower.includes(d.toLowerCase()));
   if (districtHit) return districtHit;
@@ -3485,8 +3379,6 @@ function parseAreaFromText(text, sessionData = {}) {
       .trim();
     candidate = candidate.replace(/[^a-z\s'-]/gi, '').replace(/\s+/g, ' ').trim();
     if (candidate && candidate !== 'uganda') {
-      const alias = aliasMap[candidate];
-      if (alias) return alias;
       return candidate
         .split(/\s+/)
         .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
@@ -3503,10 +3395,8 @@ function sanitizeSearchAreaCandidate(area, originalText = '') {
 
   const lowerArea = cleanArea.toLowerCase();
   const lowerText = normalizeInput(originalText).toLowerCase();
-  const aliasMap = AREA_ALIASES;
-
-  const directAlias = aliasMap[lowerArea];
-  if (directAlias) return directAlias;
+  const exactResolution = resolveWhatsappLocation(cleanArea);
+  if (exactResolution.status === 'matched') return exactResolution.match.area;
 
   const districtHit = DISTRICTS.find((d) => lowerArea === String(d || '').toLowerCase());
   if (districtHit) return districtHit;
@@ -3659,7 +3549,7 @@ async function resolveNaturalSearchFilters({
   );
 
   if (!shouldUseAiNaturalSearchExtraction(deterministic, text)) {
-    return deterministic;
+    return resolveWhatsappSearchLocation(deterministic, text);
   }
 
   try {
@@ -3682,10 +3572,10 @@ async function resolveNaturalSearchFilters({
       || merged.useSharedLocation
       || (merged.searchType && merged.searchType !== 'any')
     );
-    return merged;
+    return resolveWhatsappSearchLocation(merged, text);
   } catch (error) {
     logger.warn('AI natural search extraction failed in route fallback:', error.message);
-    return deterministic;
+    return resolveWhatsappSearchLocation(deterministic, text);
   }
 }
 
@@ -3746,6 +3636,33 @@ function naturalSearchPrompt(lang, filters = {}, mode = 'area') {
     }
   };
   return copy[mode]?.[code] || copy[mode]?.en || copy.area.en;
+}
+
+function resolveWhatsappSearchLocation(filters = {}, originalText = '') {
+  return canonicalizeWhatsappSearchFilters(filters, originalText);
+}
+
+function whatsappSearchLocationBlockReply(filters = {}) {
+  return filters?.location_blocked && filters?.location_resolution
+    ? whatsappLocationPrompt(filters.location_resolution)
+    : null;
+}
+
+function addWhatsappCanonicalLocationFilter(where, values, filters = {}, alias = 'p') {
+  const canonicalId = normalizeInput(filters.canonical_location_id);
+  if (!canonicalId) return where;
+  const safeAlias = /^[a-z_][a-z0-9_]*$/i.test(String(alias || '')) ? alias : 'p';
+  const scope = canonicalLocationSearchScope([canonicalId], 0);
+  const selected = scope.selected?.[0];
+  if (!selected) return where;
+  if (selected.level === 'district') {
+    values.push(selected.district);
+    return `${where} AND ${safeAlias}.district = $${values.length}`;
+  }
+  const keys = Array.from(new Set((scope.exact || []).map((item) => item.key).filter(Boolean)));
+  if (!keys.length) return where;
+  values.push(keys);
+  return `${where} AND COALESCE(${safeAlias}.extra_fields->>'canonical_location_id', '') = ANY($${values.length})`;
 }
 
 const AFFORDABILITY_KEYWORDS = [
@@ -3856,7 +3773,8 @@ function formatAffordabilityAdviceMessage(lang, rows = [], areaStats = [], filte
 function canonicalAreaText(value) {
   const clean = normalizeInput(value);
   if (!clean) return '';
-  return AREA_ALIASES[clean.toLowerCase()] || clean;
+  const resolution = resolveWhatsappLocation(clean);
+  return resolution.status === 'matched' ? resolution.match.area : clean;
 }
 
 function listingMatchesSearchType(row, searchType) {
@@ -4014,7 +3932,11 @@ function buildWhatsappAffordableWhere(filters = {}, { includeBudget = true } = {
   }
 
   const area = normalizeInput(filters.area);
-  if (area && area.toLowerCase() !== 'any') {
+  if (filters.location_blocked) {
+    where += ' AND FALSE';
+  } else if (filters.canonical_location_id) {
+    where = addWhatsappCanonicalLocationFilter(where, values, filters, 'p');
+  } else if (area && area.toLowerCase() !== 'any') {
     const regionDistricts = getRegionDistricts(area);
     if (regionDistricts.length) {
       values.push(regionDistricts);
@@ -4179,7 +4101,11 @@ async function findPropertiesByNaturalFilters(filters = {}) {
   }
 
   const area = normalizeInput(filters.area);
-  if (area) {
+  if (filters.location_blocked) {
+    where += ' AND FALSE';
+  } else if (filters.canonical_location_id) {
+    where = addWhatsappCanonicalLocationFilter(where, values, filters, 'p');
+  } else if (area) {
     const regionDistricts = getRegionDistricts(area);
     if (regionDistricts.length) {
       values.push(regionDistricts);
@@ -5311,8 +5237,19 @@ async function findPropertiesForWhatsapp(searchType, location) {
     }
   }
 
-  const cleanLocation = normalizeInput(location);
-  if (cleanLocation) {
+  const cleanLocation = normalizeInput(
+    location && typeof location === 'object' ? (location.area || location.district) : location
+  );
+  const locationFilters = location && typeof location === 'object'
+    ? location
+    : cleanLocation
+      ? resolveWhatsappSearchLocation({ area: cleanLocation }, cleanLocation)
+      : {};
+  if (locationFilters.location_blocked) {
+    where += ' AND FALSE';
+  } else if (locationFilters.canonical_location_id) {
+    where = addWhatsappCanonicalLocationFilter(where, values, locationFilters, 'p');
+  } else if (cleanLocation) {
     const regionDistricts = getRegionDistricts(cleanLocation);
     if (regionDistricts.length) {
       values.push(regionDistricts);
@@ -6898,6 +6835,8 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       language: lang,
       sessionData
     });
+    const locationBlockReply = whatsappSearchLocationBlockReply(affordabilityFilters);
+    if (locationBlockReply) return respond(locationBlockReply, 'search_area');
     const reply = await buildAffordabilityAdviceReply({
       phone,
       text: cleanBody,
@@ -6932,6 +6871,9 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
         };
       }
     }
+    naturalFilters = resolveWhatsappSearchLocation(naturalFilters, cleanBody);
+    const locationBlockReply = whatsappSearchLocationBlockReply(naturalFilters);
+    if (locationBlockReply) return respond(locationBlockReply, 'search_area');
 
     if (!naturalFilters.hasSignal) {
       // Let non-search intents, greetings, and free-form support messages continue through the normal router.
@@ -7162,6 +7104,9 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
         };
       }
     }
+    naturalFilters = resolveWhatsappSearchLocation(naturalFilters, cleanBody);
+    const locationBlockReply = whatsappSearchLocationBlockReply(naturalFilters);
+    if (locationBlockReply) return respond(locationBlockReply, 'search_area');
     const likelyPropertySearchIntent = ['property_search', 'looking_for_property_lead'].includes(intentResult?.intent);
     if (likelyPropertySearchIntent || naturalFilters.hasSignal) {
       if (naturalFilters.useSharedLocation) {
@@ -7302,6 +7247,9 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
         };
       }
     }
+    naturalFilters = resolveWhatsappSearchLocation(naturalFilters, cleanBody);
+    const locationBlockReply = whatsappSearchLocationBlockReply(naturalFilters);
+    if (locationBlockReply) return respond(locationBlockReply, 'search_area');
 
     if (naturalFilters.hasSignal && naturalFilters.area) {
       const rows = await findPropertiesByNaturalFilters(naturalFilters);
@@ -7421,7 +7369,10 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     }
 
     if (looksLikeLocationOnlySearch(cleanBody)) {
-      const rows = await findPropertiesForWhatsapp('any', cleanBody);
+      const locationFilters = resolveWhatsappSearchLocation({ area: cleanBody }, cleanBody);
+      const locationBlockReply = whatsappSearchLocationBlockReply(locationFilters);
+      if (locationBlockReply) return respond(locationBlockReply, 'search_area');
+      const rows = await findPropertiesForWhatsapp('any', locationFilters);
       await patchSessionData(phone, { search_type: 'any', pending_search_filters: null });
       await logPropertySearchRequest({
         userPhone: phone,
@@ -7436,13 +7387,13 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
           lang,
           userPhone: phone,
           searchType: 'any',
-          area: cleanBody,
+          area: locationFilters.area,
           queryText: cleanBody,
           notes: `No approved listings found for location-only WhatsApp search: ${cleanBody}`
         });
         return respond(reply, 'main_menu');
       }
-      return respond(formatPropertySearchMessage(lang, rows, cleanBody, 'any'), 'main_menu');
+      return respond(formatPropertySearchMessage(lang, rows, locationFilters.area, 'any'), 'main_menu');
     }
 
     if (!naturalFilters.hasSignal) return respond(`${t(lang, 'invalidInput')}\n\n${t(lang, 'askSearchType')}`, 'search_type');
@@ -7610,7 +7561,14 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     let naturalFilters = null;
     if (pendingFilters) {
       naturalFilters = { ...pendingFilters };
-      if (!naturalFilters.area && cleanBody.length >= 2) naturalFilters.area = cleanBody;
+      if ((!naturalFilters.area || naturalFilters.location_blocked) && cleanBody.length >= 2) {
+        naturalFilters.area = cleanBody;
+        naturalFilters.district = null;
+        naturalFilters.location_resolution = null;
+        naturalFilters.location_status = null;
+        naturalFilters.location_blocked = false;
+        naturalFilters.canonical_location_id = null;
+      }
       naturalFilters.searchType = naturalFilters.searchType || searchType || 'any';
     } else {
       const parsed = await resolveNaturalSearchFilters({
@@ -7625,6 +7583,12 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     if (naturalFilters) naturalFilters = preserveExplicitSearchType(naturalFilters, searchType);
 
     if (naturalFilters && naturalFilters.area) {
+      naturalFilters = resolveWhatsappSearchLocation(naturalFilters, cleanBody);
+      const locationBlockReply = whatsappSearchLocationBlockReply(naturalFilters);
+      if (locationBlockReply) {
+        await patchSessionData(phone, { pending_search_filters: naturalFilters });
+        return respond(locationBlockReply, 'search_area');
+      }
       const rows = await findPropertiesByNaturalFilters(naturalFilters);
       await patchSessionData(phone, { pending_search_filters: null, search_type: naturalFilters.searchType || searchType || 'any' });
       await logPropertySearchRequest({
@@ -7654,7 +7618,13 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     }
 
     if (cleanBody.length < 2) return respond(t(lang, 'askSearchArea'), 'search_area');
-    const rows = await findPropertiesForWhatsapp(searchType, cleanBody);
+    const locationFilters = resolveWhatsappSearchLocation({ area: cleanBody, searchType }, cleanBody);
+    const locationBlockReply = whatsappSearchLocationBlockReply(locationFilters);
+    if (locationBlockReply) {
+      await patchSessionData(phone, { pending_search_filters: locationFilters });
+      return respond(locationBlockReply, 'search_area');
+    }
+    const rows = await findPropertiesForWhatsapp(searchType, locationFilters);
     await patchSessionData(phone, { pending_search_filters: null, search_type: searchType });
     await logPropertySearchRequest({
       userPhone: phone,
@@ -7670,14 +7640,14 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
         lang,
         userPhone: phone,
         searchType,
-        area: cleanBody,
+        area: locationFilters.area,
         queryText: cleanBody,
         notes: 'No approved listings found from typed area search.'
       });
       return respond(reply, 'main_menu');
     }
 
-    return respond(formatPropertySearchMessage(lang, rows, cleanBody, searchType), 'main_menu');
+    return respond(formatPropertySearchMessage(lang, rows, locationFilters.area, searchType), 'main_menu');
   }
 
   // AGENT AREA SEARCH
@@ -7794,10 +7764,24 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
   // DISTRICT
   if (step === 'district') {
     const naturalPatch = buildNaturalListingDetailDraft(cleanBody, draft) || {};
-    const districtCandidate = firstDistrictFromText(cleanBody) || DISTRICTS.find((d) => d.toLowerCase() === cleanBody.toLowerCase());
+    const locationResolution = resolveWhatsappLocation(cleanBody, { allowText: true });
+    if (locationResolution.status !== 'matched') {
+      return respond(whatsappLocationPrompt(locationResolution), 'district');
+    }
+    const locationPatch = canonicalWhatsappLocationPatch(locationResolution);
+    const resolvedAtDistrictLevel = ['district', 'region'].includes(locationResolution.match?.level);
     const patch = {
       ...naturalPatch,
-      district: naturalPatch.district || districtCandidate || cleanBody
+      ...locationPatch,
+      district: locationResolution.match.district,
+      ...(resolvedAtDistrictLevel ? {
+        area: null,
+        canonical_location_id: null,
+        canonical_location_level: null,
+        canonical_location_match: null,
+        canonical_location_confidence: 0,
+        canonical_location_source: null
+      } : {})
     };
     await patchDraft(phone, patch);
     const mergedDraft = { ...draft, ...patch };
@@ -7808,9 +7792,17 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
   // AREA
   if (step === 'area') {
     const naturalPatch = buildNaturalListingDetailDraft(cleanBody, draft) || {};
+    const locationResolution = resolveWhatsappLocation(cleanBody, {
+      district: naturalPatch.district || draft.district,
+      allowText: true
+    });
+    if (locationResolution.status !== 'matched' || ['district', 'region'].includes(locationResolution.match?.level)) {
+      return respond(whatsappLocationPrompt(locationResolution), 'area');
+    }
+    const locationPatch = canonicalWhatsappLocationPatch(locationResolution);
     const patch = {
       ...naturalPatch,
-      area: naturalPatch.area || stripMakaugBrandLocationNoise(cleanBody) || cleanBody
+      ...locationPatch
     };
     await patchDraft(phone, patch);
     const mergedDraft = { ...draft, ...patch };
@@ -8065,7 +8057,19 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
     // SUBMIT LISTING
     try {
-      const d = draft;
+      const locationResolution = resolveWhatsappLocation(draft.area, { district: draft.district });
+      if (locationResolution.status !== 'matched' || ['district', 'region'].includes(locationResolution.match?.level)) {
+        await patchDraft(phone, {
+          canonical_location_id: null,
+          canonical_location_level: null,
+          canonical_location_match: null,
+          canonical_location_confidence: 0
+        });
+        return respond(whatsappLocationPrompt(locationResolution), 'area');
+      }
+      const locationPatch = canonicalWhatsappLocationPatch(locationResolution);
+      const d = { ...draft, ...locationPatch };
+      await patchDraft(phone, locationPatch);
       const expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
 
       const result = await db.query(
@@ -8094,7 +8098,14 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
             field_agent_reference: normalizeFieldAgentCode(d.field_agent_reference) || null,
             bedroom_options_text: d.bedroom_options_text || null,
             bedroom_options_min: d.bedroom_options_min || null,
-            bedroom_options_max: d.bedroom_options_max || null
+            bedroom_options_max: d.bedroom_options_max || null,
+            canonical_location_id: d.canonical_location_id,
+            canonical_location_level: d.canonical_location_level,
+            canonical_location_match: d.canonical_location_match,
+            canonical_location_confidence: d.canonical_location_confidence,
+            canonical_location_source: d.canonical_location_source,
+            region: d.region,
+            resolved_location_label: [d.area, d.district, d.region].filter(Boolean).join(', ')
           },
           expiresAt
         ]
@@ -9286,6 +9297,11 @@ module.exports.__test = {
   formatAffordabilityAdviceMessage,
   formatPropertySearchMessage,
   whatsappSearchResultsUrl,
+  resolveWhatsappSearchLocation,
+  whatsappSearchLocationBlockReply,
+  resolveWhatsappLocation,
+  canonicalWhatsappLocationPatch,
+  whatsappLocationPrompt,
   WHATSAPP_PROPERTY_RESULT_LIMIT,
   hasValidMetaWebhookSignature
 };

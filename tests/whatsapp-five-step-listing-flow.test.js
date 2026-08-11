@@ -21,16 +21,16 @@ assert(
   'WhatsApp listing flow should acknowledge saved details and ask only for the next missing field'
 );
 assert(
-  source.includes('firstDistrictFromText(clean)'),
-  'Natural seller details should capture known districts from combined listing messages'
+  source.includes("require('../services/whatsappLocationResolverService')"),
+  'WhatsApp listing and search flows should use the shared Uganda location resolver service'
 );
 assert(
-  source.includes('const SELLER_LOCATION_HINTS') && source.includes("area: 'Kololo'") && source.includes("area: 'Mawanda Road'") && source.includes("area: 'Entebbe'"),
-  'Natural seller details should save known neighbourhoods from phrases like condos in Kololo, Mawanda Road and Entebbe'
+  !source.includes('const SELLER_LOCATION_HINTS') && source.includes('resolveWhatsappLocation(clean, { allowText: true })'),
+  'Natural seller details must resolve through the shared gazetteer instead of a private location hint list'
 );
 assert(
-  source.includes('function extractSellerKnownLocationHints') && source.includes('locationHints.district'),
-  'Natural seller details should infer districts from known locations without asking the same location question again'
+  source.includes('function extractSellerKnownLocationHints') && source.includes('canonicalWhatsappLocationPatch(resolution)'),
+  'Natural seller details should save the full canonical location cascade from the shared resolver'
 );
 assert(
   source.includes('parseListingPriceDraft(clean)'),

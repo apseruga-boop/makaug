@@ -3,6 +3,10 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 const { classifyWhatsappIntent } = require('../services/aiService');
+const {
+  canonicalWhatsappLocationPatch,
+  resolveWhatsappLocation,
+} = require('../services/whatsappLocationResolverService');
 
 const routeSource = fs.readFileSync(path.join(__dirname, '..', 'routes', 'whatsapp.js'), 'utf8');
 const aiSource = fs.readFileSync(path.join(__dirname, '..', 'services', 'aiService.js'), 'utf8');
@@ -41,7 +45,9 @@ const sandbox = {
   },
   t(_lang, key) {
     return key;
-  }
+  },
+  canonicalWhatsappLocationPatch,
+  resolveWhatsappLocation,
 };
 
 vm.createContext(sandbox);
