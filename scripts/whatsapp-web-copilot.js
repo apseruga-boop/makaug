@@ -3047,6 +3047,40 @@ async function setMediaCaption(page, caption) {
   }, { selectors: MEDIA_CAPTION_SELECTORS, text: caption }).catch(() => false);
 }
 
+async function pasteImageIntoComposer(page, media) {
+  return page.evaluate(({ base64, mimeType, fileName, composerSelectors }) => {
+    const isVisible = (node) => {
+      if (!node) return false;
+      const style = window.getComputedStyle(node);
+      const rect = node.getBoundingClientRect();
+      return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 8 && rect.height > 8;
+    };
+    const composer = composerSelectors.flatMap((selector) => (
+      Array.from(document.querySelectorAll(selector)).filter(isVisible)
+    )).at(-1);
+    if (!composer || typeof DataTransfer !== 'function' || typeof ClipboardEvent !== 'function') return false;
+
+    const binary = window.atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+    const file = new File([bytes], fileName, { type: mimeType });
+    const clipboardData = new DataTransfer();
+    clipboardData.items.add(file);
+    composer.focus();
+    composer.dispatchEvent(new ClipboardEvent('paste', {
+      bubbles: true,
+      cancelable: true,
+      clipboardData
+    }));
+    return true;
+  }, {
+    base64: media.buffer.toString('base64'),
+    mimeType: media.mimeType,
+    fileName: media.fileName,
+    composerSelectors: COMPOSER_SELECTORS
+  }).catch(() => false);
+}
+
 async function describeVisibleMediaControls(page) {
   return page.evaluate(() => {
     const isVisible = (node) => {
@@ -3205,7 +3239,7 @@ async function typeAndSendImageReply(page, mediaUrl, caption) {
     await fileInput.setInputFiles(upload);
   }
 
-  const captionReady = await page.waitForFunction((selectors) => selectors.some((selector) => {
+  let captionReady = await page.waitForFunction((selectors) => selectors.some((selector) => {
     const nodes = Array.from(document.querySelectorAll(selector));
     return nodes.some((node) => {
       const style = window.getComputedStyle(node);
@@ -3213,6 +3247,20 @@ async function typeAndSendImageReply(page, mediaUrl, caption) {
       return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 8 && rect.height > 8;
     });
   }), MEDIA_CAPTION_SELECTORS, { timeout: 10000 }).then(() => true).catch(() => false);
+  if (!captionReady) {
+    await page.keyboard.press('Escape').catch(() => null);
+    const pasted = await pasteImageIntoComposer(page, media);
+    if (pasted) {
+      captionReady = await page.waitForFunction((selectors) => selectors.some((selector) => {
+        const nodes = Array.from(document.querySelectorAll(selector));
+        return nodes.some((node) => {
+          const style = window.getComputedStyle(node);
+          const rect = node.getBoundingClientRect();
+          return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 8 && rect.height > 8;
+        });
+      }), MEDIA_CAPTION_SELECTORS, { timeout: 10000 }).then(() => true).catch(() => false);
+    }
+  }
   if (!captionReady || !await setMediaCaption(page, caption)) {
     const controls = await describeVisibleMediaControls(page);
     const fileInputs = await describeFileInputs(page);
