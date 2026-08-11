@@ -21,7 +21,7 @@ projects:
             plan: free
             branch: codex/seshaikhaya-launch-za-20260811
             buildCommand: npm ci --include=dev && npm run build:css && npm run typecheck:bot
-            startCommand: npm start
+            startCommand: node scripts/render-start.js
             healthCheckPath: /healthz
             autoDeployTrigger: commit
             envVars:

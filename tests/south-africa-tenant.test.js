@@ -71,6 +71,8 @@ assert(!html.includes('256760112587'), 'ZA public HTML leaked Uganda WhatsApp nu
 const rawJavaScript = fs.readFileSync(path.join(root, 'assets', 'makaug-app.js'), 'utf8');
 const zaJavaScript = applySouthAfricaJavaScript(rawJavaScript);
 const serverSource = fs.readFileSync(path.join(root, 'server.js'), 'utf8');
+const renderStartSource = fs.readFileSync(path.join(root, 'scripts', 'render-start.js'), 'utf8');
+const renderBlueprintSource = fs.readFileSync(path.join(root, 'render.seshaikhaya.yaml'), 'utf8');
 assert(serverSource.includes("app.get('/healthz'"), 'Render process health endpoint is missing');
 assert(serverSource.includes("app.use('/api/health', healthRoutes)"), 'Database health endpoint must remain available');
 assert(
@@ -79,6 +81,15 @@ assert(
 );
 assert(serverSource.includes('if (runtimeReady) return next();'), 'Non-health traffic must wait for startup readiness');
 assert(serverSource.includes('runtimeReady = true;'), 'Startup must release the readiness gate');
+assert(
+  renderStartSource.indexOf('earlyHttpServer.listen') < renderStartSource.indexOf("require('../server')"),
+  'Render bootstrap must bind before loading the full application'
+);
+assert(renderStartSource.includes("=== '/healthz'"), 'Render bootstrap health endpoint is missing');
+assert(
+  renderBlueprintSource.includes('startCommand: node scripts/render-start.js'),
+  'Render Blueprint must use the early liveness bootstrap'
+);
 assert(zaJavaScript.includes('productDisplayName: "seshaikhaya.com"'));
 assert(zaJavaScript.includes('let activeCur = "ZAR"'));
 assert(zaJavaScript.includes('const PROPERTIES = [];'));
