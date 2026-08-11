@@ -10109,9 +10109,16 @@ function openOwnedListingEditor(id) {
     if (field) field.value = value ?? "";
   };
   setValue("owned-edit-id", listing.id);
+  const listingType = normalizeType(listing.listing_type || "sale");
+  setValue("owned-edit-listing-type-input", listingType);
   setValue("owned-edit-title-input", listing.title || "");
   setValue("owned-edit-price-input", listing.price || "");
-  setValue("owned-edit-price-period-input", listing.period || listing.price_period || "once");
+  const transactionType = String(listing.transaction_type || "").toLowerCase()
+    || (listingType === "land" && ["mo", "yr", "wk", "acre_yr"].includes(normalizeListingPricePeriodValue(listing.price_period)) ? "rent" : "sale");
+  setValue("owned-edit-transaction-type-input", transactionType);
+  const transactionWrap = document.getElementById("owned-edit-transaction-type-wrap");
+  if (transactionWrap) transactionWrap.classList.toggle("hidden", !["land", "commercial"].includes(listingType));
+  syncOwnedListingPricePeriods(listing.period || listing.price_period || "");
   setValue("owned-edit-area-input", listing.area || "");
   setValue("owned-edit-district-input", listing.district || "");
   setValue("owned-edit-description-input", listing.description || "");
@@ -10123,6 +10130,12 @@ function openOwnedListingEditor(id) {
   openModal("owned-listing-edit-modal");
 }
 
+function syncOwnedListingPricePeriods(preferredValue = "") {
+  const listingType = normalizeType(document.getElementById("owned-edit-listing-type-input")?.value || "sale");
+  const transactionType = document.getElementById("owned-edit-transaction-type-input")?.value || "";
+  syncListingPricePeriodSelect("owned-edit-price-period-input", listingType, transactionType, preferredValue);
+}
+
 async function submitOwnedListingEdit(event) {
   event.preventDefault();
   if (!authState?.token) {
@@ -10131,10 +10144,16 @@ async function submitOwnedListingEdit(event) {
   }
   const status = document.getElementById("owned-edit-status");
   const id = document.getElementById("owned-edit-id")?.value;
+  const listingType = normalizeType(document.getElementById("owned-edit-listing-type-input")?.value || "sale");
+  const pricePeriod = normalizeListingPricePeriodValue(document.getElementById("owned-edit-price-period-input")?.value || "");
   const body = {
     title: document.getElementById("owned-edit-title-input")?.value || "",
     price: document.getElementById("owned-edit-price-input")?.value || "",
-    price_period: document.getElementById("owned-edit-price-period-input")?.value || "",
+    price_period: pricePeriod,
+    price_on_application: pricePeriod === "poa",
+    transaction_type: ["land", "commercial"].includes(listingType)
+      ? document.getElementById("owned-edit-transaction-type-input")?.value || "sale"
+      : "",
     area: document.getElementById("owned-edit-area-input")?.value || "",
     district: document.getElementById("owned-edit-district-input")?.value || "",
     description: document.getElementById("owned-edit-description-input")?.value || ""
@@ -23725,10 +23744,39 @@ function adminReviewCommercialFieldsHtml(review = {}, facts = {}) {
     <p class="mt-1 text-xs text-amber-900">Both fields are required before approval.</p>
     ${warning ? '<p class="mt-2 rounded-lg bg-red-50 border border-red-200 px-2 py-1.5 text-xs font-bold text-red-800">Possible residential listing classified as commercial. Confirm the category before approval.</p>' : ""}
     <div class="mt-3 grid md:grid-cols-2 gap-3">
-      <label class="block text-xs font-bold text-amber-950">Transaction *<select id="admin-review-transaction-type-edit" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm">${transactionOptions}</select></label>
+      <label class="block text-xs font-bold text-amber-950">Transaction *<select id="admin-review-transaction-type-edit" onchange="adminReviewSyncPricePeriods()" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm">${transactionOptions}</select></label>
       <label class="block text-xs font-bold text-amber-950">Commercial type *<select id="admin-review-commercial-type-edit" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm">${typeOptions}</select></label>
     </div>
   </div>`;
+}
+
+function adminReviewLandFieldsHtml(review = {}, facts = {}) {
+  const currentPeriod = normalizeListingPricePeriodValue(review.price_period || facts.price_period || "");
+  const transaction = String(review.transaction_type || review.extra_fields?.transaction_type || "").toLowerCase()
+    || (["mo", "yr", "wk", "acre_yr"].includes(currentPeriod) ? "rent" : "sale");
+  const transactionOptions = [["sale", "For sale"], ["rent", "For rent / lease"]]
+    .map(([value, label]) => `<option value="${value}" ${transaction === value ? "selected" : ""}>${label}</option>`).join("");
+  return `<div id="admin-review-land-fields" class="md:col-span-2 rounded-xl border border-teal-300 bg-teal-50 p-3 ${normalizeType(review.listing_type || facts.listing_type) === "land" ? "" : "hidden"}">
+    <div class="text-xs font-black uppercase tracking-wide text-teal-950">Land transaction</div>
+    <p class="mt-1 text-xs text-teal-900">Choose sale or rent/lease so the correct price basis is saved.</p>
+    <label class="mt-3 block text-xs font-bold text-teal-950">Transaction *<select id="admin-review-land-transaction-type-edit" onchange="adminReviewSyncPricePeriods()" class="mt-1 w-full rounded-lg border border-teal-200 bg-white px-3 py-2 text-sm">${transactionOptions}</select></label>
+  </div>`;
+}
+
+function adminReviewSyncPricePeriods(preferredValue = "") {
+  const type = normalizeType(document.getElementById("admin-review-listing-type-edit")?.value || "sale");
+  const transaction = type === "commercial"
+    ? document.getElementById("admin-review-transaction-type-edit")?.value
+    : type === "land"
+      ? document.getElementById("admin-review-land-transaction-type-edit")?.value
+      : "";
+  syncListingPricePeriodSelect("admin-review-price-period-edit", type, transaction, preferredValue);
+}
+
+function adminReviewOnPricePeriodChange() {
+  const period = normalizeListingPricePeriodValue(document.getElementById("admin-review-price-period-edit")?.value || "");
+  const poa = document.getElementById("admin-review-price-on-application-edit");
+  if (poa) poa.checked = period === "poa";
 }
 
 function adminReviewOnListingTypeChange() {
@@ -23737,10 +23785,9 @@ function adminReviewOnListingTypeChange() {
   if (studentPanel) studentPanel.classList.toggle("hidden", type !== "student");
   const commercialPanel = document.getElementById("admin-review-commercial-fields");
   if (commercialPanel) commercialPanel.classList.toggle("hidden", type !== "commercial");
-  const period = document.getElementById("admin-review-price-period-edit");
-  if (period && type === "student" && (!period.value || period.value === "once")) period.value = "sem";
-  if (period && type === "rent" && (!period.value || period.value === "once" || period.value === "sem")) period.value = "month";
-  if (period && (type === "sale" || type === "land" || type === "commercial") && !period.value) period.value = "once";
+  const landPanel = document.getElementById("admin-review-land-fields");
+  if (landPanel) landPanel.classList.toggle("hidden", type !== "land");
+  adminReviewSyncPricePeriods();
   adminReviewSyncStudentAmenitiesFromText();
 }
 
@@ -24329,13 +24376,14 @@ function adminReviewListingEditPanel(review = {}) {
     ["commercial", "Commercial"],
     ["student", "Student accommodation"]
   ].map(([value, label]) => `<option value="${value}" ${normalizeType(review.listing_type || review.type || "") === value ? "selected" : ""}>${label}</option>`).join("");
-  const periodOptions = [
-    ["once", "Once"],
-    ["month", "Per month"],
-    ["week", "Per week"],
-    ["night", "Per night"],
-    ["sem", "Per semester"]
-  ].map(([value, label]) => `<option value="${value}" ${String(review.price_period || "") === value ? "selected" : ""}>${label}</option>`).join("");
+  const initialListingType = normalizeType(review.listing_type || review.type || "sale");
+  const initialTransactionType = initialListingType === "commercial"
+    ? commercialTransactionForProperty({ ...review, ...facts })
+    : String(review.transaction_type || extra.transaction_type || "").toLowerCase()
+      || (initialListingType === "land" && ["mo", "yr", "wk", "acre_yr"].includes(normalizeListingPricePeriodValue(review.price_period)) ? "rent" : "sale");
+  const initialPeriod = normalizeListingPricePeriodValue(review.price_period || "");
+  const periodOptions = listingPricePeriodOptions(initialListingType, initialTransactionType)
+    .map(({ value, label }) => `<option value="${value}" ${initialPeriod === value ? "selected" : ""}>${label}</option>`).join("");
   const currentPriceCurrency = String(review.price_original_currency || extra.price_original_currency || "UGX").toUpperCase() === "USD" ? "USD" : "UGX";
   const priceCurrencyOptions = [
     ["UGX", "UGX — Uganda shillings"],
@@ -24418,6 +24466,7 @@ function adminReviewListingEditPanel(review = {}) {
           <input id="admin-review-property-type-edit" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.property_type || "")}" placeholder="Apartment, House, Land, Office">
         </label>
         ${adminReviewCommercialFieldsHtml(review, facts)}
+        ${adminReviewLandFieldsHtml(review, facts)}
         <label class="block text-xs font-bold text-gray-700">Title type
           <select id="admin-review-title-type-edit" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm">${titleTypeOptions}</select>
         </label>
@@ -24437,10 +24486,10 @@ function adminReviewListingEditPanel(review = {}) {
           <input id="admin-review-price-fx-rate-edit" type="number" min="0" step="0.01" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.price_fx_rate_ugx ?? extra.price_fx_rate_ugx ?? (currentPriceCurrency === "USD" ? 3800 : ""))}" placeholder="Only required for USD">
         </label>
         <label class="block text-xs font-bold text-gray-700">Price period
-          <select id="admin-review-price-period-edit" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm">${periodOptions}</select>
+          <select id="admin-review-price-period-edit" onchange="adminReviewOnPricePeriodChange()" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm">${periodOptions}</select>
         </label>
         <label class="flex items-center gap-2 rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs font-bold text-gray-700">
-          <input id="admin-review-price-on-application-edit" type="checkbox" ${review.price_on_application === true || extra.price_on_application === true || extra.price_upon_application === true ? "checked" : ""}>
+          <input id="admin-review-price-on-application-edit" type="checkbox" ${review.price_on_application === true || extra.price_on_application === true || extra.price_upon_application === true || initialPeriod === "poa" ? "checked" : ""}>
           Price on application (no numeric price)
         </label>
         <label class="block text-xs font-bold text-gray-700">Bedrooms
@@ -24501,10 +24550,11 @@ async function adminApplyExtractedReviewFacts() {
   else clearAdminReviewCanonicalLocation();
   adminSetReviewEditValue("admin-review-property-type-edit", facts.property_type || adminActiveReview.property_type || "");
   adminSetReviewEditValue("admin-review-transaction-type-edit", commercialTransactionForProperty({ ...adminActiveReview, ...facts }));
+  adminSetReviewEditValue("admin-review-land-transaction-type-edit", adminActiveReview.transaction_type || adminActiveReview.extra_fields?.transaction_type || "sale");
   adminSetReviewEditValue("admin-review-commercial-type-edit", canonicalCommercialTypeForProperty({ ...adminActiveReview, ...facts }));
   adminSetReviewEditValue("admin-review-land-title-available-edit", facts.land_title_available || getLandTitleAvailabilityValue(adminActiveReview) || "");
   adminSetReviewEditValue("admin-review-price-edit", facts.price || adminActiveReview.price || "");
-  adminSetReviewEditValue("admin-review-price-period-edit", facts.price_period || adminActiveReview.price_period || "");
+  adminReviewSyncPricePeriods(facts.price_period || adminActiveReview.price_period || "");
   adminSetReviewEditValue("admin-review-bedrooms-edit", facts.bedrooms ?? adminActiveReview.bedrooms ?? "");
   adminSetReviewEditValue("admin-review-bathrooms-edit", facts.bathrooms ?? adminActiveReview.bathrooms ?? "");
   const currentAmenities = (document.getElementById("admin-review-amenities-edit")?.value || "").split(",").map((item) => item.trim()).filter(Boolean);
@@ -24819,8 +24869,13 @@ function collectAdminReviewListingPatch() {
     price_original: get("admin-review-price-original-edit"),
     price_fx_rate_ugx: get("admin-review-price-fx-rate-edit"),
     price_period: get("admin-review-price-period-edit"),
-    price_on_application: document.getElementById("admin-review-price-on-application-edit")?.checked === true,
-    transaction_type: listingType === "commercial" ? get("admin-review-transaction-type-edit") : "",
+    price_on_application: normalizeListingPricePeriodValue(get("admin-review-price-period-edit")) === "poa"
+      || document.getElementById("admin-review-price-on-application-edit")?.checked === true,
+    transaction_type: listingType === "commercial"
+      ? get("admin-review-transaction-type-edit")
+      : listingType === "land"
+        ? get("admin-review-land-transaction-type-edit")
+        : "",
     property_type: listingType === "commercial" ? get("admin-review-commercial-type-edit") : get("admin-review-property-type-edit"),
     title_type: get("admin-review-title-type-edit"),
     land_title_available: get("admin-review-land-title-available-edit"),
@@ -29260,7 +29315,7 @@ function validateListStep1() {
     missing.push("Canonical area");
     markLpFieldError("lp-area", "Find or choose an exact area from the shared canonical location registry.");
   }
-  if (!parseIntSafe(lpVal("lp-price"))) {
+  if (normalizeListingPricePeriodValue(lpVal("lp-period")) !== "poa" && !parseIntSafe(lpVal("lp-price"))) {
     missing.push("Price");
     markLpFieldError("lp-price", "Enter a valid price.");
   }
@@ -29283,6 +29338,10 @@ function validateListStep1() {
       missing.push("Commercial type");
       markLpFieldError("lp-subtype", "Choose the commercial property type.");
     }
+  }
+  if (getListType() === "land" && !lpVal("lp-extra-land_mode")) {
+    missing.push("Land transaction");
+    markLpFieldError("lp-extra-land_mode", "Choose For Sale or For Rent / Lease.");
   }
   if (missing.length) {
     toast(`Please complete: ${missing.join(", ")}`);
@@ -29828,7 +29887,9 @@ function buildListPropertyPayload(photoUploadUrls = lpPhotoUploadUrls) {
     ? lpCanonicalLocationResolution
     : null;
   const description = lpVal("lp-description");
-  const price = parseIntSafe(lpVal("lp-price"));
+  const pricePeriod = normalizeListingPricePeriodValue(lpVal("lp-period"));
+  const priceOnApplication = pricePeriod === "poa";
+  const price = priceOnApplication ? null : parseIntSafe(lpVal("lp-price"));
   const landTitleAvailability = normalizeLandTitleAvailabilityValue(extra.land_title_available)
     || inferLandTitleAvailabilityFromText(title, description, extra.title_type);
   if (landTitleAvailability) {
@@ -29894,7 +29955,8 @@ function buildListPropertyPayload(photoUploadUrls = lpPhotoUploadUrls) {
     address: locationObject.fullAddress,
     description,
     price,
-    price_period: lpVal("lp-period") || null,
+    price_period: pricePeriod || null,
+    price_on_application: priceOnApplication,
     property_type: lpVal("lp-subtype") || null,
     bedrooms: cfg.showBedsBaths ? bedsNumeric : null,
     bathrooms: cfg.showBedsBaths ? bathsNumeric : null,
@@ -30031,6 +30093,8 @@ function buildListPropertyPayload(photoUploadUrls = lpPhotoUploadUrls) {
   }
 
   if (type === "land") {
+    payload.transaction_type = extra.land_mode || "sale";
+    payload.extra_fields.transaction_type = payload.transaction_type;
     payload.title_type = extra.title_type || null;
     payload.land_title_available = extra.land_title_available || null;
     payload.land_size_value = landParsed.value;
@@ -45764,8 +45828,9 @@ function persistSectionSearchRoute(config, values = {}, source = "section_shell"
   const canonicalSeoPath = selectedSeoLocation
     ? `${routeForPage(config.key)}/${canonicalSeoRouteSlug(selectedSeoLocation)}`
     : "";
-  const preserveCanonicalSeoPath = source === "canonical_location_selected"
-    && currentPath === canonicalSeoPath;
+  const preserveCanonicalSeoPath = Boolean(canonicalSeoPath)
+    && currentPath === canonicalSeoPath
+    && (source === "canonical_location_selected" || !window.location.search);
   const updated = preserveCanonicalSeoPath || updateHeroSearchRoute(config.key, {
     query: values.query || "",
     area: values.district || values.studentCampus || "",
@@ -49281,6 +49346,72 @@ function translatePropertyUi(text, vars = {}) {
   ), template);
 }
 
+const LISTING_PRICE_PERIOD_OPTIONS = Object.freeze({
+  sale: [
+    { value: "once", label: "Total / Once off" },
+    { value: "neg", label: "Negotiable" },
+    { value: "poa", label: "Price on application (POA)" }
+  ],
+  rent: [
+    { value: "mo", label: "Per Month" },
+    { value: "yr", label: "Per Year" },
+    { value: "wk", label: "Per Week" }
+  ],
+  land_sale: [
+    { value: "once", label: "Total / Once off" },
+    { value: "acre", label: "Per Acre" },
+    { value: "plot", label: "Per Plot" },
+    { value: "neg", label: "Negotiable" }
+  ],
+  land_rent: [
+    { value: "yr", label: "Per Year" },
+    { value: "mo", label: "Per Month" },
+    { value: "acre_yr", label: "Per Acre per Year" }
+  ],
+  commercial_sale: [
+    { value: "once", label: "Total / Sale Price" },
+    { value: "neg", label: "Negotiable" },
+    { value: "poa", label: "Price on application (POA)" }
+  ],
+  commercial_rent: [
+    { value: "mo", label: "Per Month" },
+    { value: "yr", label: "Per Year" },
+    { value: "wk", label: "Per Week" }
+  ],
+  student: [
+    { value: "sem", label: "Per Semester" },
+    { value: "yr", label: "Per Year" },
+    { value: "mo", label: "Per Month" }
+  ]
+});
+
+function normalizeListingPricePeriodValue(value = "") {
+  const clean = String(value || "").trim().toLowerCase();
+  const aliases = {
+    monthly: "mo", month: "mo", per_month: "mo",
+    yearly: "yr", year: "yr", per_year: "yr",
+    weekly: "wk", week: "wk", per_week: "wk",
+    semester: "sem", per_semester: "sem",
+    negotiable: "neg", sale: "once",
+    price_on_application: "poa"
+  };
+  return aliases[clean] || clean;
+}
+
+function listingPricePeriodOptions(listingType = "sale", transactionType = "") {
+  const type = normalizeType(listingType) || "sale";
+  const transaction = String(transactionType || "").trim().toLowerCase();
+  if (type === "land") return transaction === "rent" ? LISTING_PRICE_PERIOD_OPTIONS.land_rent : LISTING_PRICE_PERIOD_OPTIONS.land_sale;
+  if (type === "commercial") return transaction === "rent" ? LISTING_PRICE_PERIOD_OPTIONS.commercial_rent : LISTING_PRICE_PERIOD_OPTIONS.commercial_sale;
+  return LISTING_PRICE_PERIOD_OPTIONS[type] || LISTING_PRICE_PERIOD_OPTIONS.sale;
+}
+
+function syncListingPricePeriodSelect(id, listingType, transactionType = "", preferredValue = "") {
+  const options = listingPricePeriodOptions(listingType, transactionType);
+  const selected = normalizeListingPricePeriodValue(preferredValue || document.getElementById(id)?.value || "");
+  setSelectOptions(id, options, options.some((item) => item.value === selected) ? selected : options[0]?.value, true);
+}
+
 const LP_CONFIG = {
   sale: {
     badge: "For Sale",
@@ -49304,10 +49435,7 @@ const LP_CONFIG = {
     sizePlaceholder: "N/A",
     showSize: false,
     periodLabel: "Price Period",
-    periods: [
-      { value: "once", label: "Total / Once off" },
-      { value: "neg", label: "Negotiable" }
-    ],
+    periods: LISTING_PRICE_PERIOD_OPTIONS.sale,
     bedsLabel: "Bedrooms",
     bathsLabel: "Bathrooms",
     bedsSuffix: "beds",
@@ -49358,11 +49486,7 @@ const LP_CONFIG = {
     sizePlaceholder: "N/A",
     showSize: false,
     periodLabel: "Rent Period",
-    periods: [
-      { value: "mo", label: "Per Month" },
-      { value: "yr", label: "Per Year" },
-      { value: "wk", label: "Per Week" }
-    ],
+    periods: LISTING_PRICE_PERIOD_OPTIONS.rent,
     bedsLabel: "Bedrooms",
     bathsLabel: "Bathrooms",
     bedsSuffix: "beds",
@@ -49413,11 +49537,7 @@ const LP_CONFIG = {
     sizePlaceholder: "e.g. 1 acre, half acre, 100 by 50 ft, 30 decimals",
     showSize: true,
     periodLabel: "Price Basis",
-    periods: [
-      { value: "once", label: "Total / Once off" },
-      { value: "acre", label: "Per Acre" },
-      { value: "plot", label: "Per Plot" }
-    ],
+    periods: LISTING_PRICE_PERIOD_OPTIONS.land_sale,
     bedsLabel: "N/A",
     bathsLabel: "N/A",
     bedsSuffix: "beds",
@@ -49426,6 +49546,7 @@ const LP_CONFIG = {
     descPlaceholder: "Describe plot access, documents, utilities, and nearby landmarks...",
     continueLabel: "Continue to Photos →",
     extras: [
+      { key: "land_mode", label: "Transaction *", type: "select", required: true, options: [{ value: "sale", label: "For Sale" }, { value: "rent", label: "For Rent / Lease" }] },
       { key: "title_type", label: "Title Type", type: "select", options: ["Freehold", "Leasehold", "Mailo", "Customary"], info: "title_types" },
       { key: "land_title_available", label: "Land title available?", type: "select", options: [{ value: "unknown", label: "Not sure / to confirm" }, { value: "yes", label: "Yes - land title available" }, { value: "no", label: "No / not yet" }], info: "land_title_available" },
       { key: "road_access", label: "Road Access", type: "select", options: ["Tarmac", "Murram", "Earth Road"] },
@@ -49433,7 +49554,7 @@ const LP_CONFIG = {
       { key: "owner_confirmed", label: "Can you confirm you are the owner or authorised representative?", type: "select", options: [{ value: "yes", label: "Yes" }, { value: "agent", label: "Authorised broker/agent" }, { value: "no", label: "Not yet" }] },
       { key: "boundary_notes", label: "Boundary / coordinates notes", type: "text", placeholder: "e.g. road frontage, survey points, nearest landmark, plot shape" }
     ],
-    previewExtras: [{ key: "title_type", label: "Title" }, { key: "land_title_available", label: "Land title" }, { key: "road_access", label: "Access" }, { key: "owner_confirmed", label: "Owner" }, { key: "boundary_notes", label: "Boundary notes" }],
+    previewExtras: [{ key: "land_mode", label: "Mode" }, { key: "title_type", label: "Title" }, { key: "land_title_available", label: "Land title" }, { key: "road_access", label: "Access" }, { key: "owner_confirmed", label: "Owner" }, { key: "boundary_notes", label: "Boundary notes" }],
     amenities: [
       { value: "road", label: "🛣️ Road Access" },
       { value: "water", label: "🌊 Water Nearby" },
@@ -49467,10 +49588,7 @@ const LP_CONFIG = {
     sizePlaceholder: "N/A",
     showSize: false,
     periodLabel: "Commercial Price Period",
-    periods: [
-      { value: "once", label: "Total / Sale Price" },
-      { value: "neg", label: "Negotiable" }
-    ],
+    periods: LISTING_PRICE_PERIOD_OPTIONS.commercial_sale,
     bedsLabel: "N/A",
     bathsLabel: "N/A",
     bedsSuffix: "beds",
@@ -49534,11 +49652,7 @@ const LP_CONFIG = {
     sizePlaceholder: "N/A",
     showSize: false,
     periodLabel: "Payment Period",
-    periods: [
-      { value: "sem", label: "Per Semester" },
-      { value: "yr", label: "Per Year" },
-      { value: "mo", label: "Per Month" }
-    ],
+    periods: LISTING_PRICE_PERIOD_OPTIONS.student,
     bedsLabel: "Bed Spaces",
     bathsLabel: "Bathrooms",
     bedsSuffix: "spaces",
@@ -49614,7 +49728,9 @@ function renderLpExtraFields(type, preserveExisting = true) {
       const opts = normalized.map((opt) => `<option value="${opt.value}">${translateListingLabel(opt.label)}</option>`).join("");
       const onChange = field.key === "commercial_mode"
         ? `syncCommercialMode(this.value); updateLpDependentFields(); updateListPreview(); renderListReviewSummary();`
-        : `updateLpDependentFields(); updateListPreview(); renderListReviewSummary();`;
+        : field.key === "land_mode"
+          ? `syncLandMode(this.value); updateLpDependentFields(); updateListPreview(); renderListReviewSummary();`
+          : `updateLpDependentFields(); updateListPreview(); renderListReviewSummary();`;
       return `<div${dependsAttr}><label class="block text-sm font-semibold text-gray-700 mb-1.5">${translateListingLabel(field.label)}</label><select id="${id}" onchange="${onChange}" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white">${opts}</select>${infoHtml}</div>`;
     }
     const inputType = field.type === "number" ? "number" : "text";
@@ -49649,25 +49765,25 @@ function syncCommercialMode(mode) {
   if (modeSel) modeSel.value = currentMode;
 
   const periodLabelEl = document.getElementById("lp-period-label");
-	      if (currentMode === "rent") {
-	        if (periodLabelEl) periodLabelEl.textContent = translateListingLabel("Rent Period");
-    setSelectOptions("lp-period", [
-      { value: "mo", label: "Per Month" },
-      { value: "yr", label: "Per Year" },
-      { value: "wk", label: "Per Week" }
-    ], "mo");
-  } else {
-    if (periodLabelEl) periodLabelEl.textContent = translateListingLabel("Sale Price Model");
-    setSelectOptions("lp-period", [
-      { value: "once", label: "Total / Sale Price" },
-      { value: "neg", label: "Negotiable" }
-    ], "once");
-	      }
-	      const availableFromWrap = document.getElementById("lp-available-from-wrap");
-	      if (availableFromWrap) availableFromWrap.classList.toggle("hidden", currentMode !== "rent");
+  if (periodLabelEl) periodLabelEl.textContent = translateListingLabel(currentMode === "rent" ? "Rent Period" : "Sale Price Model");
+  syncListingPricePeriodSelect("lp-period", "commercial", currentMode);
+  const availableFromWrap = document.getElementById("lp-available-from-wrap");
+  if (availableFromWrap) availableFromWrap.classList.toggle("hidden", currentMode !== "rent");
+  updateLpDependentFields();
+}
 
-	      updateLpDependentFields();
-	    }
+function syncLandMode(mode) {
+  if (getListType() !== "land") return;
+  const modeSel = document.getElementById("lp-extra-land_mode");
+  const currentMode = mode !== undefined ? mode : (modeSel?.value || "sale");
+  if (modeSel) modeSel.value = currentMode;
+  const periodLabelEl = document.getElementById("lp-period-label");
+  if (periodLabelEl) periodLabelEl.textContent = translateListingLabel(currentMode === "rent" ? "Lease Price Basis" : "Sale Price Basis");
+  syncListingPricePeriodSelect("lp-period", "land", currentMode);
+  const availableFromWrap = document.getElementById("lp-available-from-wrap");
+  if (availableFromWrap) availableFromWrap.classList.toggle("hidden", currentMode !== "rent");
+  updateLpDependentFields();
+}
 
 function renderLpAmenities(type, preserveExisting = true) {
   const cfg = LP_CONFIG[type] || LP_CONFIG.sale;
@@ -49879,7 +49995,8 @@ function setListType(type) {
   setSelectOptions("lp-subtype", cfg.subtypes || [], (cfg.subtypes || [])[0]?.value, true);
   setSelectOptions("lp-period", cfg.periods || [], (cfg.periods || [])[0]?.value, true);
   renderLpExtraFields(selected, preserveTypeSpecificValues);
-	      if (selected === "commercial") syncCommercialMode();
+  if (selected === "commercial") syncCommercialMode();
+  if (selected === "land") syncLandMode();
   renderLpAmenities(selected, preserveTypeSpecificValues);
   updateLpPhotoRequirements();
   updateListPreview();
@@ -50019,9 +50136,9 @@ function updateListPreview() {
   if (locEl) locEl.textContent = locationParts.filter(Boolean).join(", ");
 
 	      const priceNum = lpNum("lp-price");
-	      const periodRaw = lpVal("lp-period");
-	      const periodVal = (periodRaw === "once" || periodRaw === "neg") ? "" : periodRaw;
-	      if (priceEl) priceEl.textContent = priceNum ? fmtP(priceNum, periodVal) : translateListingLabel("Price upon application");
+	      const periodRaw = normalizeListingPricePeriodValue(lpVal("lp-period"));
+	      const periodVal = ["once", "neg", "poa"].includes(periodRaw) ? "" : periodRaw;
+	      if (priceEl) priceEl.textContent = periodRaw === "poa" || !priceNum ? translateListingLabel("Price upon application") : fmtP(priceNum, periodVal);
 
   const metaParts = [];
   const subtype = document.getElementById("lp-subtype")?.selectedOptions?.[0]?.textContent || cfg.badge;

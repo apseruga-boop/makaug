@@ -215,6 +215,7 @@ function buildPublicSeoSnapshot(rows = [], generatedAt = new Date().toISOString(
   );
   const rolledCommercialTransactionCounts = rollupFacetCountMap(commercialTransactionCounts, ['for-rent', 'for-sale']);
   return {
+    directCounts,
     counts,
     categoryTotals,
     categoryPriceFloors,
@@ -279,7 +280,10 @@ function categoryPageSeoMeta(pathname = '/', snapshot = null, baseUrl = PUBLIC_S
   const cleanPath = String(pathname || '/').split('?')[0].replace(/\/+$/, '') || '/';
   const slug = cleanPath === config.route ? '' : cleanPath.slice(config.route.length + 1);
   const location = locationForRouteSlug(slug);
-  const count = location ? Number(snapshot?.counts?.[key]?.get(location.canonical_key) || 0) : null;
+  const locationCounts = location?.level === 'district'
+    ? snapshot?.counts?.[key]
+    : (snapshot?.directCounts?.[key] || snapshot?.counts?.[key]);
+  const count = location ? Number(locationCounts?.get(location.canonical_key) || 0) : null;
   const total = Number(snapshot?.categoryTotals?.[key]);
   const listingCount = location ? count : (Number.isFinite(total) ? total : null);
   const priceFloor = location

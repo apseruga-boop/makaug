@@ -465,7 +465,7 @@ function categoryH1(meta = {}) {
 }
 
 function areaLinksForCategory(snapshot, categoryKey, currentLocation = null, limit = 12) {
-  const counts = snapshot?.counts?.[categoryKey] || new Map();
+  const counts = snapshot?.directCounts?.[categoryKey] || snapshot?.counts?.[categoryKey] || new Map();
   const config = CATEGORY_SEO[categoryKey];
   if (!config) return [];
   const { canonicalLocationOptions } = require('../utils/ugandaLocationRegistry');
@@ -485,6 +485,9 @@ function areaLinksForCategory(snapshot, categoryKey, currentLocation = null, lim
     .map((location) => ({
       href: `${config.route}/${canonicalLocationRouteSlug(location)}`,
       label: location.level === 'district' ? location.district : `${location.location}, ${location.district}`,
+      area: location.location,
+      district: location.district,
+      canonicalKey: location.canonical_key,
       count: location.count,
       level: location.level
     }));
@@ -513,11 +516,20 @@ function facetLinksForArea(snapshot, meta) {
 }
 
 function popularAreaLinks(snapshot, limit = 15) {
-  return Object.keys(CATEGORY_SEO)
+  const candidates = Object.keys(CATEGORY_SEO)
     .flatMap((categoryKey) => areaLinksForCategory(snapshot, categoryKey, null, limit).map((link) => ({ ...link, categoryKey })))
     .filter((link) => !['district', 'region'].includes(String(link.level || '').toLowerCase()))
-    .sort((left, right) => right.count - left.count || left.label.localeCompare(right.label))
-    .slice(0, Math.max(0, limit));
+    .sort((left, right) => right.count - left.count || left.label.localeCompare(right.label));
+  const deduped = new Map();
+  for (const link of candidates) {
+    const key = link.canonicalKey || `${link.area}|${link.district}`.toLowerCase();
+    if (!deduped.has(key)) {
+      // Keep the strongest category destination so the displayed count is the
+      // exact count users receive after clicking its clean SEO URL.
+      deduped.set(key, { ...link, label: link.area || link.label });
+    }
+  }
+  return Array.from(deduped.values()).slice(0, Math.max(0, limit));
 }
 
 function neighborhoodAreaLinks(links = []) {
@@ -529,14 +541,14 @@ function renderAreaLinks(links = [], heading = 'Popular property areas') {
   if (!safeLinks.length) return '';
   return `<nav aria-label="${escapeHtml(heading)}" class="mb-6 rounded-2xl border border-green-100 bg-green-50 p-4" data-ssr-area-links="1">
     <h2 class="font-black text-green-950">${escapeHtml(heading)}</h2>
-    <div class="mt-3 flex flex-wrap gap-2">${safeLinks.map((link) => `<a href="${escapeHtml(link.href)}" class="rounded-full border border-green-200 bg-white px-3 py-1.5 text-sm font-semibold text-green-800 hover:bg-green-100">${escapeHtml(link.label)} <span aria-label="${link.count} listings">(${link.count})</span></a>`).join('')}</div>
+    <div class="mt-3 flex flex-wrap gap-2">${safeLinks.map((link) => `<a href="${escapeHtml(link.href)}" data-canonical-location-id="${escapeHtml(link.canonicalKey || '')}" title="${escapeHtml([link.area || link.label, link.district].filter(Boolean).join(', '))}" class="rounded-full border border-green-200 bg-white px-3 py-1.5 text-sm font-semibold text-green-800 hover:bg-green-100">${escapeHtml(link.label)} <span aria-label="${link.count} listings">(${link.count})</span></a>`).join('')}</div>
   </nav>`;
 }
 
 function renderFooterAreaLinks(links = []) {
   const safeLinks = neighborhoodAreaLinks(links);
   if (!safeLinks.length) return '';
-  return `<section class="max-w-7xl mx-auto px-4 pb-6" data-ssr-footer-area-links="1"><h2 class="font-black text-white">Popular property areas</h2><div class="mt-3 flex flex-wrap gap-3">${safeLinks.map((link) => `<a href="${escapeHtml(link.href)}" class="text-sm text-green-100 hover:text-white hover:underline">${escapeHtml(link.label)}</a>`).join('')}</div></section>`;
+  return `<section class="max-w-7xl mx-auto px-4 pb-6" data-ssr-footer-area-links="1"><h2 class="font-black text-white">Popular property areas</h2><div class="mt-3 flex flex-wrap gap-3">${safeLinks.map((link) => `<a href="${escapeHtml(link.href)}" data-canonical-location-id="${escapeHtml(link.canonicalKey || '')}" title="${escapeHtml([link.area || link.label, link.district].filter(Boolean).join(', '))}" class="text-sm text-green-100 hover:text-white hover:underline">${escapeHtml(link.label)}</a>`).join('')}</div></section>`;
 }
 
 function breadcrumbItems(meta, baseUrl) {

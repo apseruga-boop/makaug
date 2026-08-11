@@ -102,6 +102,8 @@ function propertyToCard(row, reason = 'Recommended for your saved preferences') 
     address: row.address,
     price: row.price,
     price_period: row.price_period,
+    price_on_application: row.price_on_application === true,
+    transaction_type: row.transaction_type || null,
     period: row.price_period,
     bedrooms: row.bedrooms,
     bathrooms: row.bathrooms,
@@ -509,7 +511,7 @@ function scoreListing(row, preferences = {}) {
 async function fetchRecommendations(userId, preferences = {}, limit = 12) {
   const result = await db.query(
     `SELECT p.id, p.listing_type, p.title, p.description, p.district, p.area, p.address,
-            p.price, p.price_period, p.bedrooms, p.bathrooms, p.property_type,
+            p.price, p.price_period, p.price_on_application, p.transaction_type, p.bedrooms, p.bathrooms, p.property_type,
             p.status, p.created_at, p.nearest_university, p.room_type, p.students_welcome,
             img.url AS primary_image_url
      FROM properties p
@@ -905,6 +907,8 @@ router.patch('/my-listings/:id', requireAuth, async (req, res, next) => {
     const address = asText(req.body.address);
     const propertyType = asText(req.body.property_type || req.body.propertyType);
     const pricePeriod = asText(req.body.price_period || req.body.pricePeriod);
+    const transactionType = asText(req.body.transaction_type || req.body.transactionType).toLowerCase();
+    const priceOnApplication = asBoolean(req.body.price_on_application ?? req.body.priceOnApplication, listing.price_on_application === true);
     const price = asBigIntNumber(req.body.price, null);
     const bedrooms = asInteger(req.body.bedrooms, null);
     const bathrooms = asInteger(req.body.bathrooms, null);
@@ -916,7 +920,10 @@ router.patch('/my-listings/:id', requireAuth, async (req, res, next) => {
     if (address) add('address', address);
     if (propertyType) add('property_type', propertyType);
     if (pricePeriod) add('price_period', pricePeriod);
-    if (price !== null) add('price', price);
+    if (['land', 'commercial'].includes(String(listing.listing_type || '').toLowerCase()) && ['sale', 'rent'].includes(transactionType)) add('transaction_type', transactionType);
+    if (req.body.price_on_application !== undefined || req.body.priceOnApplication !== undefined) add('price_on_application', priceOnApplication);
+    if (priceOnApplication) add('price', null);
+    else if (price !== null) add('price', price);
     if (bedrooms !== null) add('bedrooms', bedrooms);
     if (bathrooms !== null) add('bathrooms', bathrooms);
 

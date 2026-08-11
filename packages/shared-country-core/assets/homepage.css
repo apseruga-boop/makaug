@@ -32,7 +32,9 @@
     .hero-opportunity-counter {
       position: relative;
       display: inline-block;
-      min-width: 8ch;
+      min-width: 0;
+      margin: 0;
+      padding: 0;
       text-align: center;
       border-radius: 0.35rem;
       color: #bbf7d0;
