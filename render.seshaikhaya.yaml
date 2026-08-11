@@ -20,7 +20,7 @@ projects:
             region: frankfurt
             plan: free
             branch: codex/seshaikhaya-launch-za-20260811
-            buildCommand: npm ci && npm run build:css && npm run typecheck:bot
+            buildCommand: npm ci --include=dev && npm run build:css && npm run typecheck:bot
             startCommand: npm start
             healthCheckPath: /api/health
             autoDeployTrigger: commit
