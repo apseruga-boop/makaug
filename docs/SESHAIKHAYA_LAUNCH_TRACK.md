@@ -2,10 +2,11 @@
 
 Status: active launch track, opened 11 August 2026.
 
-Current state: the application, infrastructure specification and local release
-proof are complete. No paid Render resources, DNS changes, social accounts or
-production listings have been created from this branch. Those remain explicit
-operator approval and audit gates.
+Current state: the application, staging infrastructure specification and local
+release proof are complete. Arthur authorised a hard infrastructure cap of
+approximately USD 13/month on 11 August 2026 for one Starter staging web
+service and one isolated South Africa PostgreSQL database. Production, workers,
+DNS changes, social accounts and production listings remain separate gates.
 
 Seshaikhaya is a `ZA` tenant of the shared country platform. It is not a fork of
 the Uganda application. The same server, listing engine, moderation workflow,
@@ -62,15 +63,16 @@ deployment to its previous Render commit instead.
 
 ## Operator gates still open
 
-1. Authorise the paid Render Blueprint resources: two Starter web services,
-   two Starter workers and two paid PostgreSQL databases.
-2. Verify the resulting staging services and database migrations, then perform
+1. Provision only the authorised Starter staging web service and isolated paid
+   PostgreSQL database; do not add a worker or production service under this
+   approval.
+2. Verify the resulting staging service and database migrations, then perform
    Dave's authenticated moderation audit.
 3. Change GoDaddy DNS only after staging proof, then verify the production
    service, custom domain and TLS independently.
 4. Moderate at least five current, source-backed listings with exact map pins
    and availability checks; do not count candidates as live listings.
-5. Create social accounts only with an Arthur-controlled email and explicit
-   approval. Do not use a personal phone as the 2FA dependency.
+5. Social-account creation is explicitly on hold until the company email is
+   ready. Do not use a personal phone as the 2FA dependency.
 6. Connect a real WhatsApp number after test transport proof; until then the
    UI must continue to state that the number is pending.
