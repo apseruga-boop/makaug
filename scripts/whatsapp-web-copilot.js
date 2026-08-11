@@ -3160,7 +3160,7 @@ async function typeAndSendImageReply(page, mediaUrl, caption) {
   const photosOpened = await clickFirstVisible(page, PHOTO_VIDEO_MENU_SELECTORS);
   if (!photosOpened) throw new Error('Could not select Photos & videos in WhatsApp');
   const fileChooser = await chooserPromise;
-  const fileInput = fileChooser ? null : (drawerInput || await findAttachedFileInput(page));
+  const fileInput = fileChooser ? null : ((await findAttachedFileInput(page)) || drawerInput);
   if (!fileChooser && !fileInput) throw new Error('Could not find the WhatsApp image upload control');
 
   const upload = {
