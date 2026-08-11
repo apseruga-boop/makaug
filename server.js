@@ -1469,6 +1469,20 @@ async function start() {
   const httpServer = http.createServer(app);
   httpServer.keepAliveTimeout = 120_000;
   httpServer.headersTimeout = 121_000;
+  httpServer.on('connection', () => {
+    if (typeof process.send === 'function' && process.connected) {
+      process.send({ type: 'runtime_http_connection' });
+    }
+  });
+  httpServer.on('request', (req) => {
+    if (typeof process.send === 'function' && process.connected) {
+      process.send({
+        type: 'runtime_http_request',
+        method: String(req.method || 'GET').toUpperCase(),
+        path: String(req.url || '').split('?')[0]
+      });
+    }
+  });
   httpServer.on('error', (error) => {
     logger.error('HTTP server failed', {
       code: error?.code,
