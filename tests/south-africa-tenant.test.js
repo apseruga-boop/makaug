@@ -88,6 +88,8 @@ assert(
 assert(renderStartSource.includes("=== '/healthz'"), 'Render bootstrap health endpoint is missing');
 assert(renderStartSource.includes("hostname: '127.0.0.1'"), 'Render bootstrap must proxy to the isolated app process');
 assert(renderStartSource.includes('PORT: String(appPort)'), 'Render app process must use a separate internal port');
+assert(renderStartSource.includes("delete headers['content-length']"), 'Render proxy must not forward a stale GET body length');
+assert(renderStartSource.includes("proxyRequest.end();"), 'Render proxy must explicitly finish bodyless requests');
 assert(
   renderBlueprintSource.includes('startCommand: node scripts/render-start.js'),
   'Render Blueprint must use the early liveness bootstrap'

@@ -11,6 +11,30 @@ let appReady = false;
 let shuttingDown = false;
 let appProcess = null;
 
+const HOP_BY_HOP_HEADERS = new Set([
+  'connection',
+  'expect',
+  'keep-alive',
+  'proxy-authenticate',
+  'proxy-authorization',
+  'proxy-connection',
+  'te',
+  'trailer',
+  'transfer-encoding',
+  'upgrade'
+]);
+
+function proxyHeaders(headers = {}, { request = false } = {}) {
+  const forwarded = {};
+  for (const [name, value] of Object.entries(headers)) {
+    if (!HOP_BY_HOP_HEADERS.has(name.toLowerCase()) && value !== undefined) {
+      forwarded[name] = value;
+    }
+  }
+  if (request) forwarded.host = `127.0.0.1:${appPort}`;
+  return forwarded;
+}
+
 function jsonResponse(res, statusCode, payload) {
   res.statusCode = statusCode;
   res.setHeader('Cache-Control', 'no-store');
@@ -19,14 +43,17 @@ function jsonResponse(res, statusCode, payload) {
 }
 
 function proxyToApp(req, res) {
+  const method = String(req.method || 'GET').toUpperCase();
+  const headers = proxyHeaders(req.headers, { request: true });
+  if (method === 'GET' || method === 'HEAD') delete headers['content-length'];
   const proxyRequest = http.request({
     hostname: '127.0.0.1',
     port: appPort,
     path: req.url,
-    method: req.method,
-    headers: req.headers
+    method,
+    headers
   }, (proxyResponse) => {
-    res.writeHead(proxyResponse.statusCode || 502, proxyResponse.headers);
+    res.writeHead(proxyResponse.statusCode || 502, proxyHeaders(proxyResponse.headers));
     proxyResponse.pipe(res);
   });
   proxyRequest.on('error', (error) => {
@@ -37,7 +64,11 @@ function proxyToApp(req, res) {
       country_code: process.env.COUNTRY_CODE || 'ZA'
     });
   });
-  req.pipe(proxyRequest);
+  if (method === 'GET' || method === 'HEAD') {
+    proxyRequest.end();
+  } else {
+    req.pipe(proxyRequest);
+  }
 }
 
 const earlyHttpServer = http.createServer((req, res) => {
