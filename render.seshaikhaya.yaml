@@ -53,6 +53,8 @@ projects:
                 value: "false"
               - key: FEATURED_ROTATION_TIMEZONE
                 value: Africa/Johannesburg
+              - key: APP_HEARTBEAT_TIMEOUT_MS
+                value: "30000"
               - key: WHATSAPP_DELIVERY_MODE
                 value: test
               - key: WHATSAPP_WEB_BRIDGE_ENABLED

@@ -111,6 +111,7 @@ assert(renderStartSource.includes("delete headers['content-length']"), 'Render p
 assert(renderStartSource.includes("proxyRequest.end();"), 'Render proxy must explicitly finish bodyless requests');
 assert(renderStartSource.includes('runtime_heartbeat'), 'Render proxy must monitor child IPC heartbeats');
 assert(renderStartSource.includes('lastAppHeartbeatAt'), 'Render proxy must expire stale child readiness');
+assert(renderStartSource.includes('process.env.APP_HEARTBEAT_TIMEOUT_MS || 30000'), 'Render proxy must tolerate free-tier heartbeat jitter');
 assert(renderStartSource.includes('APP_PROXY_TIMEOUT'), 'Render proxy requests must have a bounded timeout');
 assert(serverSource.includes("process.send({ type: 'runtime_ready' })"), 'ZA app must signal readiness to the Render parent');
 assert(serverSource.includes('function readCountryAppAsset()'), 'ZA public JavaScript must have a transformed asset cache');
@@ -119,6 +120,7 @@ assert(serverSource.includes('etag: adapted.etag'), 'ZA public JavaScript must r
 assert(serverSource.includes('dynamicCompression: false'), 'Public HTML must not synchronously compress on the request path');
 assert(serverSource.includes("process.env.FEATURED_ROTATION_SCHEDULER_ENABLED === 'true'"), 'ZA featured rotation must require an explicit enable');
 assert(renderBlueprintSource.includes('FEATURED_ROTATION_SCHEDULER_ENABLED'), 'ZA Blueprint must disable empty-inventory rotation');
+assert(renderBlueprintSource.includes('APP_HEARTBEAT_TIMEOUT_MS'), 'ZA Blueprint must configure free-tier heartbeat grace');
 assert(
   renderBlueprintSource.includes('startCommand: node scripts/render-start.js'),
   'Render Blueprint must use the early liveness bootstrap'

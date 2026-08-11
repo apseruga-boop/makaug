@@ -11,7 +11,10 @@ let appReady = false;
 let shuttingDown = false;
 let appProcess = null;
 let lastAppHeartbeatAt = 0;
-const APP_HEARTBEAT_TIMEOUT_MS = 5000;
+const APP_HEARTBEAT_TIMEOUT_MS = Math.max(
+  5000,
+  Number(process.env.APP_HEARTBEAT_TIMEOUT_MS || 30000) || 30000
+);
 
 const HOP_BY_HOP_HEADERS = new Set([
   'connection',

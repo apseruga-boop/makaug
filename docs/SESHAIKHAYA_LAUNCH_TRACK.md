@@ -124,3 +124,7 @@ deployment to its previous Render commit instead.
   retaining their shared-core release evidence.
 - Locations sign-off still requires the same battery and alias checks against
   the replacement live staging commit; local acceptance is not live proof.
+- The free web scheduler can delay child heartbeats beyond five seconds. The
+  staging proxy therefore allows a 30-second heartbeat window while retaining
+  bounded upstream requests, preventing healthy instances from intermittently
+  presenting as `service_starting`.
