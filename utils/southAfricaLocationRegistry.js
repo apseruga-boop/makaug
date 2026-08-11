@@ -41,6 +41,7 @@ function normalizeDistrict(value = '') {
 function southAfricaLocationQueryAttempts(value = '') {
   return locationQueryAttempts(value, {
     countryCode: 'ZA',
+    countryCodes: ['ZA', 'UG'],
     normalizeKey: normalizeLocationKey
   });
 }
@@ -521,6 +522,7 @@ module.exports = {
   normalizeLocationKey,
   normalizeLocationQueryCandidates: (value = '') => normalizeLocationQueryCandidates(value, {
     countryCode: 'ZA',
+    countryCodes: ['ZA', 'UG'],
     normalizeKey: normalizeLocationKey
   }),
   resolveCanonicalSouthAfricaLocation,

@@ -73,9 +73,10 @@ const FOUND_ONLINE_SOURCE_POST_IMPORT_BATCH_ID = 'found_online_source_post_impor
 const SOCIAL_SEARCH_FIRST_SEEN_AT = '2026-05-20T00:00:00.000Z';
 const SOCIAL_SEARCH_ADDED_TO_MAKAUG_AT = '2026-05-20T00:00:00.000Z';
 const PRICE_UPON_APPLICATION_LABEL = 'Price on application';
+const USD_TO_UGX_GUIDE_RATE = configuredUsdToUgxRate();
 const USD_TO_CANONICAL_GUIDE_RATE = IS_SOUTH_AFRICA
   ? configuredRateToCanonicalCurrency('USD')
-  : configuredUsdToUgxRate();
+  : USD_TO_UGX_GUIDE_RATE;
 const ALLOWED_SOCIAL_SOURCE_PLATFORMS = ['youtube', 'tiktok', 'instagram', 'facebook', 'x', 'twitter'];
 const STUDENT_SOURCE_LISTING_PATTERN = /\b(?:students?|student\s+accommodation|hostel|campus|university|college|per\s+semester|residential\s+hostel|rooms?\s+near\s+(?:campus|university|college)|near\s+(?:makerere|kyambogo|mubs|ucu|must|nkumba))\b/i;
 const STUDENT_NEAR_CAMPUS_RADIUS_KM = 2;

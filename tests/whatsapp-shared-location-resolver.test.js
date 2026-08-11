@@ -53,7 +53,21 @@ assert.strictEqual(unknown.approval_blocked, true);
 assert.strictEqual(unknown.match, null);
 assert.match(whatsappLocationPrompt(unknown), /not match.*not guessed or saved/i);
 
-for (const query of ['Mateete', 'Migyera', 'Labongo', 'Bukuuku', 'Kyeeya']) {
+const prominentDuplicates = {
+  Mateete: 'sembabule:mateete',
+  Migyera: 'nakasongola:migyera',
+  Bukuuku: 'kabarole:bukuuku',
+  Kyeeya: 'kyenjojo:kyeeya'
+};
+for (const [query, canonicalId] of Object.entries(prominentDuplicates)) {
+  const resolution = resolveWhatsappLocation(query);
+  assert.strictEqual(resolution.status, 'matched', `${query} should use the prominent exact match in WhatsApp`);
+  assert.strictEqual(resolution.approval_blocked, false, `${query} should be safe to auto-resolve`);
+  assert.strictEqual(resolution.match.canonical_location_id, canonicalId);
+  assert(resolution.candidates.length >= 2, `${query} should retain alternative districts`);
+}
+
+for (const query of ['Labongo']) {
   const resolution = resolveWhatsappLocation(query);
   assert.strictEqual(resolution.status, 'ambiguous', `${query} should require WhatsApp disambiguation`);
   assert.strictEqual(resolution.approval_blocked, true, `${query} must never auto-resolve`);
@@ -95,7 +109,7 @@ assert.strictEqual(searchFilters.canonical_location_id, 'kampala:banda');
 assert.strictEqual(searchFilters.district, 'Kampala');
 assert.strictEqual(searchFilters.location_blocked, false);
 
-const ambiguousFilters = canonicalizeWhatsappSearchFilters({ area: 'Mateete' }, 'house in Mateete');
+const ambiguousFilters = canonicalizeWhatsappSearchFilters({ area: 'Labongo' }, 'house in Labongo');
 assert.strictEqual(ambiguousFilters.location_blocked, true);
 assert.strictEqual(ambiguousFilters.canonical_location_id, undefined);
 

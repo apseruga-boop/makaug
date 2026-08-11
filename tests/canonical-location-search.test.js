@@ -85,8 +85,8 @@ test('definitive coverage additions resolve to the correct district and region',
     assert.equal(canonical?.district, district, `${area} must resolve to ${district}`);
     assert.equal(regionForDistrict(canonical?.district), 'Central');
   });
-  assert.equal(canonicalizeUgandaLocation('Kanyanya'), null, 'duplicate place names require a district hint');
-  assert.equal(canonicalizeUgandaLocation('Njeru'), null, 'duplicate place names require a district hint');
+  assert.equal(canonicalizeUgandaLocation('Kanyanya')?.key, 'kampala:kanyanya', 'major area outranks rural namesakes');
+  assert.equal(canonicalizeUgandaLocation('Njeru')?.key, 'buikwe:njeru', 'city outranks a rural parish namesake');
 });
 
 test('roads, regions, water bodies and impossible district combinations stay unmatched', () => {
@@ -256,7 +256,8 @@ test('public category search is canonical-only and includes visible nearby and a
   assert.match(app, /data-location-reclassification-review="1"/);
   assert.match(app, /admin-review-location-reclassification-confirm/);
   assert.match(app, /location_reclassification_confirmed: locationReclassificationConfirmed/);
-  assert.match(app, /Compare and confirm the reclassified canonical location before approving/);
+  assert.match(app, /human_location_confirmed: locationConfirmation\.confirmed/);
+  assert.match(app, /location_reclassification_confirmed: locationReclassificationConfirmed \|\| locationConfirmation\.confirmed/);
   assert.match(route, /Human confirmation of the reclassified location is required before approval/);
   assert.match(route, /Choose and save a specific canonical area before approval/);
   assert.match(route, /location_review_confirmation: 'individual_king_moderation_approval'/);

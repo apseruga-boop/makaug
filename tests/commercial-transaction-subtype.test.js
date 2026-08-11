@@ -73,7 +73,9 @@ test('admin and staff editing persist the commercial transaction axis', () => {
   assert.match(staffRoute, /transaction_type: \(value\) => normalizeCommercialTransactionType/);
   assert.match(app, /id="admin-review-transaction-type-edit"/);
   assert.match(app, /id="admin-review-commercial-type-edit"/);
-  assert.match(app, /Choose the commercial transaction and property type before approving/);
+  assert.match(propertiesRoute, /Commercial transaction and property type are required before approval/);
+  assert.match(propertiesRoute, /code: 'commercial_classification'/);
+  assert.match(app, /transaction_type: \["admin-review-transaction-type-edit"\]/);
 });
 
 test('commercial public controls are segmented, canonical and carried through URLs', () => {

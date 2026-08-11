@@ -2,8 +2,8 @@ const { DISTRICTS } = require('./constants');
 const administrativeGazetteer = require('./ugandaLocationGazetteer.generated.json');
 const { CURATED_UGANDA_LOCATION_OVERRIDES } = require('./ugandaLocationOverrides');
 const {
-  locationQueryAttempts,
-  normalizeLocationQueryCandidates
+  locationQueryAttempts: sharedLocationQueryAttempts,
+  normalizeLocationQueryCandidates: sharedNormalizeLocationQueryCandidates
 } = require('./locationQueryNormalization');
 
 const DETAILED_LOCATIONS = [
@@ -237,9 +237,18 @@ function normalizeLocationKey(value = '') {
     .toLowerCase();
 }
 
-function ugandaLocationQueryAttempts(value = '') {
-  return locationQueryAttempts(value, {
+function locationQueryAttempts(value = '') {
+  return sharedLocationQueryAttempts(value, {
     countryCode: 'UG',
+    countryCodes: ['UG', 'ZA'],
+    normalizeKey: normalizeLocationKey
+  });
+}
+
+function normalizeLocationQueryCandidates(value = '') {
+  return sharedNormalizeLocationQueryCandidates(value, {
+    countryCode: 'UG',
+    countryCodes: ['UG', 'ZA'],
     normalizeKey: normalizeLocationKey
   });
 }
@@ -338,6 +347,21 @@ function aliasAppearsInValue(aliasKey, valueKey) {
 }
 
 const LOCATION_LEVEL_PRIORITY = Object.freeze({
+  city: 90,
+  town: 80,
+  area: 70,
+  neighborhood: 50,
+  parish: 40,
+  subcounty: 30,
+  county: 20,
+  district: 10,
+  region: 0
+});
+
+// Free-form source captions should prefer the most specific place mentioned
+// (for example Kigo over the broader Entebbe city wording). Exact duplicate
+// aliases are ranked separately by selectProminentCandidate below.
+const TEXT_LOCATION_LEVEL_PRIORITY = Object.freeze({
   neighborhood: 7,
   area: 7,
   parish: 7,
@@ -348,6 +372,35 @@ const LOCATION_LEVEL_PRIORITY = Object.freeze({
   district: 1,
   region: 0
 });
+
+const KNOWN_MAJOR_LOCALITY_BY_ALIAS = new Map(Object.entries({
+  nakasero: 'kampala:nakasero',
+  muyenga: 'kampala:muyenga',
+  ndeeba: 'kampala:ndeeba',
+  mengo: 'kampala:mengo',
+  mmengo: 'kampala:mengo',
+  katwe: 'kampala:katwe',
+  nsambya: 'kampala:nsambya',
+  wandegeya: 'kampala:wandegeya',
+  bunga: 'kampala:bunga',
+  kasubi: 'kampala:kasubi',
+  bukesa: 'kampala:bukesa',
+  kabowa: 'kampala:kabowa',
+  kyanja: 'kampala:kyanja',
+  bukoto: 'kampala:bukoto',
+  kikoni: 'kampala:kikoni',
+  kanyanya: 'kampala:kanyanya',
+  namirembe: 'kampala:namirembe',
+  kyebando: 'kampala:kyebando',
+  kitende: 'wakiso:kitende',
+  gayaza: 'wakiso:gayaza',
+  namugongo: 'wakiso:namugongo',
+  kisubi: 'wakiso:kisubi',
+  kasanje: 'wakiso:kasanje',
+  goma: 'mukono:goma',
+  lugazi: 'buikwe:lugazi',
+  njeru: 'buikwe:njeru'
+}));
 
 function districtHintFromQuery(value = '', suppliedDistrict = '') {
   const supplied = normalizeDistrict(suppliedDistrict);
@@ -378,9 +431,36 @@ function exactAliasCandidates(value = '', suppliedDistrict = '', options = {}) {
   ));
 }
 
-function resolveCanonicalUgandaLocation(value = '', suppliedDistrict = '') {
+function candidateListingCount(entry, counts = new Map()) {
+  if (counts instanceof Map) return Math.max(0, Number(counts.get(entry.key)) || 0);
+  return Math.max(0, Number(counts?.[entry.key]) || 0);
+}
+
+function selectProminentCandidate(candidates = [], aliasKey = '', counts = new Map()) {
+  if (candidates.length <= 1) return candidates[0] || null;
+  const ranked = candidates.map((entry) => ({
+    entry,
+    level: LOCATION_LEVEL_PRIORITY[entry.level] || 0,
+    listingCount: candidateListingCount(entry, counts),
+    knownMajor: KNOWN_MAJOR_LOCALITY_BY_ALIAS.get(aliasKey) === entry.key ? 1 : 0
+  })).sort((a, b) => (
+    b.level - a.level
+    || b.listingCount - a.listingCount
+    || b.knownMajor - a.knownMajor
+    || a.entry.name.localeCompare(b.entry.name)
+  ));
+  const [first, second] = ranked;
+  if (first.level > second.level) return first.entry;
+  const listingLeadIsClear = first.listingCount >= 3
+    && first.listingCount >= Math.max(second.listingCount + 3, second.listingCount * 2);
+  if (listingLeadIsClear) return first.entry;
+  if (first.knownMajor > second.knownMajor) return first.entry;
+  return null;
+}
+
+function resolveCanonicalUgandaLocation(value = '', suppliedDistrict = '', options = {}) {
   const districtHint = districtHintFromQuery(value, suppliedDistrict);
-  const attempts = ugandaLocationQueryAttempts(value);
+  const attempts = locationQueryAttempts(value);
   let candidates = [];
   let matchedAttempt = null;
   for (const attempt of attempts) {
@@ -391,9 +471,9 @@ function resolveCanonicalUgandaLocation(value = '', suppliedDistrict = '') {
     }
   }
   if (!candidates.length) {
-    return { status: 'unmatched', match: null, candidates: [], confidence: 0, match_type: 'unmatched', matched_query: null };
+    return { status: 'unmatched', match: null, candidates: [], confidence: 0, match_type: 'unmatched' };
   }
-  const firstSegmentKey = matchedAttempt?.normalized || '';
+  const firstSegmentKey = matchedAttempt?.normalized || normalizeLocationKey(String(value || '').split(',')[0]);
   const directDistrict = candidates.find((entry) => (
     entry.level === 'district'
     && normalizeLocationKey(entry.district) === firstSegmentKey
@@ -405,27 +485,30 @@ function resolveCanonicalUgandaLocation(value = '', suppliedDistrict = '') {
       candidates: [{ ...directDistrict }],
       confidence: 1,
       match_type: 'exact_alias',
-      matched_query: matchedAttempt.value
+      matched_query: matchedAttempt?.value || String(value || '').trim()
     };
   }
   const districts = new Set(candidates.map((entry) => entry.district));
-  if (districts.size > 1 && !districtHint) {
+  const prominent = districts.size > 1 && !districtHint
+    ? selectProminentCandidate(candidates, matchedAttempt?.normalized || '', options.counts)
+    : candidates[0];
+  if (districts.size > 1 && !districtHint && !prominent) {
     return {
       status: 'ambiguous',
       match: null,
       candidates: candidates.map((entry) => ({ ...entry })),
       confidence: 0,
       match_type: 'ambiguous_exact_alias',
-      matched_query: matchedAttempt.value
+      matched_query: matchedAttempt?.value || String(value || '').trim()
     };
   }
   return {
     status: 'matched',
-    match: { ...candidates[0] },
+    match: { ...(prominent || candidates[0]) },
     candidates: candidates.map((entry) => ({ ...entry })),
     confidence: 1,
     match_type: 'exact_alias',
-    matched_query: matchedAttempt.value
+    matched_query: matchedAttempt?.value || String(value || '').trim()
   };
 }
 
@@ -455,7 +538,7 @@ function resolveCanonicalUgandaLocationFromText(value = '', suppliedDistrict = '
     .map((row) => ({
       ...row,
       tokenCount: row.aliasKey.split(' ').length,
-      levelPriority: LOCATION_LEVEL_PRIORITY[row.entry.level] || 0
+      levelPriority: TEXT_LOCATION_LEVEL_PRIORITY[row.entry.level] || 0
     }));
 
   if (!found.length) {
@@ -481,6 +564,20 @@ function resolveCanonicalUgandaLocationFromText(value = '', suppliedDistrict = '
     if (mentionedDistricts.length === 1) {
       const districtMatches = candidates.filter((entry) => entry.district === mentionedDistricts[0]);
       if (districtMatches.length) candidates = districtMatches;
+    }
+  }
+
+  if (candidates.length > 1) {
+    const candidateKeys = new Set(candidates.map((entry) => entry.key));
+    const matchingAliasKeys = new Set(
+      bestMatches
+        .filter((row) => candidateKeys.has(row.entry.key))
+        .map((row) => row.aliasKey)
+    );
+    if (matchingAliasKeys.size === 1) {
+      const [aliasKey] = matchingAliasKeys;
+      const prominent = selectProminentCandidate(candidates, aliasKey);
+      if (prominent) candidates = [prominent];
     }
   }
 
@@ -535,6 +632,7 @@ function canonicalizeUgandaLocation(area = '', district = '') {
   const rawArea = String(area || '').split(',')[0].trim();
   const districtName = normalizeDistrict(district);
   if (!rawArea && !districtName) return null;
+
   if (rawArea) {
     const resolution = resolveCanonicalUgandaLocation(area, districtName);
     if (resolution.status === 'matched') return resolution.match;
@@ -668,24 +766,37 @@ function trigramSimilarity(left = '', right = '') {
 }
 
 function canonicalLocationSuggestions(query = '', counts = new Map(), limit = 8) {
-  const attempts = ugandaLocationQueryAttempts(query);
+  const attempts = locationQueryAttempts(query);
   if (!attempts.length) return [];
-  const exactResolution = resolveCanonicalUgandaLocation(query);
-  const exactQueryKey = normalizeLocationKey(exactResolution.matched_query || '');
-  const searchableNeedles = exactQueryKey
-    ? []
-    : attempts.filter((attempt) => !isExcludedLocationOnly(attempt.value)).map((attempt) => attempt.normalized);
+  const exactResolution = resolveCanonicalUgandaLocation(query, '', { counts });
+  const resolutionCandidateKeys = new Set(exactResolution.candidates.map((entry) => entry.key));
+  const searchableAttempts = attempts.filter((attempt) => (
+    !isExcludedLocationOnly(attempt.value)
+    && !(attempt.noise_stripped && normalizeDistrict(attempt.value))
+  ));
   const scoreEntry = (entry) => {
     const aliasKeys = entry.aliases.map(normalizeLocationKey).filter(Boolean);
-    const exact = Boolean(exactQueryKey && aliasKeys.includes(exactQueryKey));
-    const prefix = !exact && searchableNeedles.some((needle) => aliasKeys.some((alias) => alias.startsWith(needle)));
-    const contains = !exact && !prefix && searchableNeedles.some((needle) => aliasKeys.some((alias) => alias.includes(needle)));
-    const fuzzy = searchableNeedles.length
-      ? Math.max(...searchableNeedles.flatMap((needle) => aliasKeys.map((alias) => trigramSimilarity(needle, alias))), 0)
+    const exactAttemptIndex = attempts.findIndex((attempt) => (
+      aliasKeys.includes(attempt.normalized)
+      && !(attempt.noise_stripped && normalizeDistrict(attempt.value))
+    ));
+    const exact = exactAttemptIndex >= 0;
+    const comparableNeedles = searchableAttempts.map((attempt) => attempt.normalized);
+    const prefix = !exact && comparableNeedles.some((needle) => aliasKeys.some((alias) => alias.startsWith(needle)));
+    const contains = !exact && comparableNeedles.some((needle) => aliasKeys.some((alias) => alias.includes(needle)));
+    const fuzzy = comparableNeedles.length
+      ? Math.max(...comparableNeedles.flatMap((needle) => aliasKeys.map((alias) => trigramSimilarity(needle, alias))), 0)
       : 0;
-    const fuzzyEligible = searchableNeedles.some((needle) => needle.length >= 5);
+    const fuzzyEligible = comparableNeedles.some((needle) => needle.length >= 5);
     const matchRank = exact ? 4 : prefix ? 3 : contains ? 2 : (fuzzyEligible && fuzzy >= 0.72) ? 1 : 0;
     if (!matchRank) return null;
+    const selectedExact = exact
+      && exactResolution.status === 'matched'
+      && exactResolution.match?.key === entry.key;
+    const alternativeExact = exact
+      && exactResolution.status === 'matched'
+      && resolutionCandidateKeys.has(entry.key)
+      && !selectedExact;
     return {
       canonical_key: entry.key,
       location: entry.name,
@@ -696,20 +807,18 @@ function canonicalLocationSuggestions(query = '', counts = new Map(), limit = 8)
       longitude: Number.isFinite(entry.lng) ? entry.lng : null,
       aliases: [...entry.aliases],
       listing_count: Number(counts.get(entry.key) || 0),
-      match: exact ? 'exact_alias' : prefix ? 'prefix' : contains ? 'contains' : 'fuzzy',
-      did_you_mean: !exact && !prefix && !contains,
+      match: exact ? (alternativeExact ? 'alternative_exact_alias' : 'exact_alias') : prefix ? 'prefix' : contains ? 'contains' : 'fuzzy',
+      did_you_mean: alternativeExact || (!exact && !prefix && !contains),
       match_rank: matchRank,
-      score: matchRank * 10 + fuzzy,
+      score: matchRank * 10 + fuzzy + (exact ? Math.max(0, 1 - (exactAttemptIndex * 0.01)) : 0),
       confidence: exact ? 1 : prefix ? 0.94 : contains ? 0.88 : Number(fuzzy.toFixed(3)),
-      auto_resolvable: exact
-        && exactResolution.status === 'matched'
-        && exactResolution.match?.key === entry.key,
+      auto_resolvable: selectedExact,
     };
   };
   return registry
     .map(scoreEntry)
     .filter(Boolean)
-    .sort((a, b) => b.match_rank - a.match_rank || b.listing_count - a.listing_count || b.score - a.score || a.location.localeCompare(b.location))
+    .sort((a, b) => b.match_rank - a.match_rank || Number(b.auto_resolvable) - Number(a.auto_resolvable) || b.listing_count - a.listing_count || b.score - a.score || a.location.localeCompare(b.location))
     .slice(0, Math.max(1, Math.min(8, Number(limit) || 8)));
 }
 
@@ -788,10 +897,7 @@ module.exports = {
   aliasesForDistrict,
   normalizeDistrict,
   normalizeLocationKey,
-  normalizeLocationQueryCandidates: (value = '') => normalizeLocationQueryCandidates(value, {
-    countryCode: 'UG',
-    normalizeKey: normalizeLocationKey
-  }),
+  normalizeLocationQueryCandidates,
   haversineKm,
   isExcludedLocationOnly,
   trigramSimilarity

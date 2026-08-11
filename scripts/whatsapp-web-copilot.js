@@ -107,6 +107,7 @@ function resolvePlaywrightCoreModule() {
 
 const { chromium } = requireWithReadRetry(resolvePlaywrightCoreModule());
 const { isIgnoredWhatsappSystemChat } = requireWithReadRetry('../services/whatsappWebChatFilter');
+const { isOwnWhatsappMessage } = requireWithReadRetry('../services/whatsappWebDirectionService');
 
 if (typeof dns.setDefaultResultOrder === 'function') {
   dns.setDefaultResultOrder('ipv4first');
@@ -1354,6 +1355,13 @@ async function getActiveChatSnapshot(page) {
       if (/^false_/.test(text)) return 'in';
       return '';
     };
+    const hasOutgoingDeliveryReceipt = (root) => Boolean(root?.querySelector?.([
+      '[aria-label*="Delivered" i]',
+      '[aria-label*="Read" i]',
+      '[aria-label*="Sent" i]',
+      '[data-icon="msg-check"]',
+      '[data-icon="msg-dblcheck"]'
+    ].join(',')));
     const isLikelyOutgoingSender = (value) => /^(?:you|me|makaug(?:\.com)?)$/i.test(String(value || '').trim());
     const isTimestampOnlyText = (value) => /^\s*\d{1,2}:\d{2}\s*(?:AM|PM)?\s*$/i.test(String(value || '').trim());
     const cleanRenderedMessageText = (value, mediaType = 'text') => {
@@ -1441,6 +1449,7 @@ async function getActiveChatSnapshot(page) {
       if (root?.closest?.('.message-in')) return 'in';
       const dataDirection = directionFromDataId(messageIdForNode(root));
       if (dataDirection) return dataDirection;
+      if (hasOutgoingDeliveryReceipt(root)) return 'out';
       const container = root?.querySelector?.('[data-testid="msg-container"]')
         || (root?.matches?.('[data-testid="msg-container"]') ? root : null)
         || root;
@@ -1506,10 +1515,13 @@ async function getActiveChatSnapshot(page) {
     const timestampLabel = (pre.match(/^\[(.*?)\]/) || [])[1]
       || (renderedText.match(/(?:^|\n)(\d{1,2}:\d{2}\s*(?:AM|PM)?)(?:\n|$)/i) || [])[1]
       || '';
-    const senderLabel = pre
+    const senderLabelFromMetadata = pre
       .replace(/^\[[^\]]+\]\s*/, '')
       .replace(/:\s*$/, '')
       .trim();
+    const renderedSenderLabel = String(renderedText || '').split(/\r?\n/, 1)[0].trim();
+    const senderLabel = senderLabelFromMetadata
+      || (isLikelyOutgoingSender(renderedSenderLabel) ? renderedSenderLabel : '');
     const messageId = messageIdForNode(last);
     const dataIdDigits = phoneFromMessageDataId(messageId);
     const dataIdDirection = directionFromDataId(messageId);
@@ -1566,6 +1578,7 @@ async function getActiveChatSnapshot(page) {
       text: cleanText || (mediaType === 'call' ? '[missed call]' : mediaType === 'image' ? '[image]' : mediaType === 'voice' ? '[voice note]' : mediaType === 'media' ? '[media]' : ''),
       timestampLabel,
       messageId,
+      senderLabel,
       direction,
       mediaType,
       mediaUrl: mediaType === 'text' || mediaType === 'call' ? '' : `whatsapp-web://${messageId || crypto.randomUUID()}`,
@@ -1613,6 +1626,13 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
       if (/^false_/.test(text)) return 'in';
       return '';
     };
+    const hasOutgoingDeliveryReceipt = (root) => Boolean(root?.querySelector?.([
+      '[aria-label*="Delivered" i]',
+      '[aria-label*="Read" i]',
+      '[aria-label*="Sent" i]',
+      '[data-icon="msg-check"]',
+      '[data-icon="msg-dblcheck"]'
+    ].join(',')));
     const isLikelyOutgoingSender = (value) => /^(?:you|me|makaug(?:\.com)?)$/i.test(String(value || '').trim());
     const isTimestampOnlyText = (value) => /^\s*\d{1,2}:\d{2}\s*(?:AM|PM)?\s*$/i.test(String(value || '').trim());
     const cleanRenderedMessageText = (value, mediaType = 'text') => {
@@ -1700,6 +1720,7 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
       if (root?.closest?.('.message-in')) return 'in';
       const dataDirection = directionFromDataId(messageIdForNode(root));
       if (dataDirection) return dataDirection;
+      if (hasOutgoingDeliveryReceipt(root)) return 'out';
       const container = root?.querySelector?.('[data-testid="msg-container"]')
         || (root?.matches?.('[data-testid="msg-container"]') ? root : null)
         || root;
@@ -1741,10 +1762,13 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
         const timestampLabel = (pre.match(/^\[(.*?)\]/) || [])[1]
           || (renderedText.match(/(?:^|\n)(\d{1,2}:\d{2}\s*(?:AM|PM)?)(?:\n|$)/i) || [])[1]
           || '';
-        const senderLabel = pre
+        const senderLabelFromMetadata = pre
           .replace(/^\[[^\]]+\]\s*/, '')
           .replace(/:\s*$/, '')
           .trim();
+        const renderedSenderLabel = String(renderedText || '').split(/\r?\n/, 1)[0].trim();
+        const senderLabel = senderLabelFromMetadata
+          || (isLikelyOutgoingSender(renderedSenderLabel) ? renderedSenderLabel : '');
         const messageId = messageIdForNode(node);
         const dataIdDirection = directionFromDataId(messageId);
         const direction = directionForNode(node, senderLabel) || dataIdDirection;
@@ -1814,6 +1838,7 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
           text,
           timestampLabel,
           messageId,
+          senderLabel,
           direction: inferredDirection,
           mediaType,
           mediaUrl: mediaType === 'text' ? '' : `whatsapp-web://${messageId || crypto.randomUUID()}`,
@@ -2242,7 +2267,11 @@ async function ingestSnapshot({ snapshot, row = {}, source = 'unread_scan' }) {
   }
 
   if (!chatKey || (!text && !snapshot.mediaUrl)) return { processed: 0, skipped: 'missing_chat_or_content' };
-  if (snapshot.direction === 'out') return { processed: 0, skipped: 'outgoing_message' };
+  if (isOwnWhatsappMessage({
+    direction: snapshot.direction,
+    senderLabel: snapshot.senderLabel,
+    text: snapshot.text
+  })) return { processed: 0, skipped: 'outgoing_message' };
   if (chatKey.replace(/\D/g, '').length >= 9) {
     activeInboundRecipientHint = chatKey;
   }
@@ -2275,6 +2304,8 @@ async function ingestSnapshot({ snapshot, row = {}, source = 'unread_scan' }) {
         metadata: {
           chat_title: snapshot.chatKey || row.title,
           contact_name: snapshot.contactName || row.title || '',
+          message_direction: snapshot.direction || '',
+          sender_label: snapshot.senderLabel || '',
           media_count: snapshot.mediaCount || 0,
           voice_audio_data_url: snapshot.voiceAudioDataUrl || '',
           voice_audio_mime_type: snapshot.voiceAudioMimeType || '',

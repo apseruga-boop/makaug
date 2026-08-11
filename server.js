@@ -196,6 +196,9 @@ app.get('/api/version', (_req, res) => {
       'whatsapp-shared-location-resolver',
       'prelaunch-backlog-gates',
       'whatsapp-property-card-v2',
+      'human-integrity-override-20260811',
+      'human-approval-overlord-20260811',
+      'king-timestamp-iso-normalization-20260811',
       ...(IS_SOUTH_AFRICA ? [SESHAIKHAYA_LAUNCH_MARKER, 'seshaikhaya-national-gazetteer-20260811'] : [])
     ]
   });

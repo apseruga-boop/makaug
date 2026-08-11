@@ -6,6 +6,7 @@ const COUNTRY_QUERY_ALIASES = Object.freeze({
 });
 
 const ROAD_NOISE_PART_PATTERN = /\b(?:road|rd|street|st|avenue|ave|highway|bypass|expressway|drive|dr|lane|ln|boulevard|blvd)\.?\b/i;
+const TRAILING_ROAD_NOISE_PATTERN = /\s+(?:road|rd|street|st|avenue|ave|highway|bypass|expressway|drive|dr|lane|ln|boulevard|blvd)\.?$/i;
 const PREMISE_NOISE_PART_PATTERN = /^(?:plot|stand|erf|unit|house|flat|apartment)?\s*\d+[a-z]?(?:[-/]\d+[a-z]?)?(?:\s|$)/i;
 
 function defaultNormalizeLocationKey(value = '') {
@@ -31,14 +32,21 @@ function isRoadOrPremiseNoisePart(value = '') {
   return Boolean(clean && (ROAD_NOISE_PART_PATTERN.test(clean) || PREMISE_NOISE_PART_PATTERN.test(clean)));
 }
 
-function countryAliasKeys(countryCode = '', normalizeKey = defaultNormalizeLocationKey) {
-  const code = String(countryCode || process.env.COUNTRY_CODE || 'UG').trim().toUpperCase();
-  return new Set((COUNTRY_QUERY_ALIASES[code] || []).map(normalizeKey).filter(Boolean));
+function configuredCountryCodes(options = {}) {
+  const fallback = String(options.countryCode || process.env.COUNTRY_CODE || 'UG').trim().toUpperCase();
+  return Array.from(new Set((options.countryCodes || [fallback]).map((code) => String(code || '').trim().toUpperCase()).filter(Boolean)));
 }
 
-function countryAliasPattern(countryCode = '') {
-  const code = String(countryCode || process.env.COUNTRY_CODE || 'UG').trim().toUpperCase();
-  return (COUNTRY_QUERY_ALIASES[code] || [])
+function configuredCountryAliases(options = {}) {
+  return configuredCountryCodes(options).flatMap((code) => COUNTRY_QUERY_ALIASES[code] || []);
+}
+
+function countryAliasKeys(options = {}, normalizeKey = defaultNormalizeLocationKey) {
+  return new Set(configuredCountryAliases(options).map(normalizeKey).filter(Boolean));
+}
+
+function countryAliasPattern(options = {}) {
+  return configuredCountryAliases(options)
     .slice()
     .sort((left, right) => right.length - left.length)
     .map((alias) => alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
@@ -47,8 +55,8 @@ function countryAliasPattern(countryCode = '') {
 
 function stripCountryQueryAffixes(value = '', options = {}) {
   const normalizeKey = options.normalizeKey || defaultNormalizeLocationKey;
-  const countryKeys = countryAliasKeys(options.countryCode, normalizeKey);
-  const aliasPattern = countryAliasPattern(options.countryCode);
+  const countryKeys = countryAliasKeys(options, normalizeKey);
+  const aliasPattern = countryAliasPattern(options);
   const clean = cleanLocationQueryPart(value);
   if (!clean || !countryKeys.size) return clean;
   let stripped = cleanLocationQueryPart(
@@ -71,7 +79,7 @@ function stripCountryQueryAffixes(value = '', options = {}) {
 
 function locationQueryAttempts(value = '', options = {}) {
   const normalizeKey = options.normalizeKey || defaultNormalizeLocationKey;
-  const countryKeys = countryAliasKeys(options.countryCode, normalizeKey);
+  const countryKeys = countryAliasKeys(options, normalizeKey);
   const raw = cleanLocationQueryPart(value);
   if (!raw) return [];
   const countryStripped = stripCountryQueryAffixes(raw, options);
@@ -82,9 +90,18 @@ function locationQueryAttempts(value = '', options = {}) {
     .split(',')
     .map(cleanLocationQueryPart)
     .filter(Boolean);
-  const locationParts = parts.filter((part) => !isRoadOrPremiseNoisePart(part));
-  const removedNoise = locationParts.length !== parts.length;
-  for (let length = locationParts.length; length >= 1; length -= 1) {
+  if (parts.length > 1) {
+    parts.filter((part) => ROAD_NOISE_PART_PATTERN.test(part) && !PREMISE_NOISE_PART_PATTERN.test(part)).forEach((part) => {
+      values.push({ value: part, noiseStripped: false, allowRoadPart: true });
+      const withoutRoadNoise = cleanLocationQueryPart(part.replace(TRAILING_ROAD_NOISE_PATTERN, ''));
+      if (withoutRoadNoise && withoutRoadNoise !== part) values.push({ value: withoutRoadNoise, noiseStripped: true });
+    });
+  }
+  const locationParts = parts
+    .map((part) => (parts.length > 1 ? cleanLocationQueryPart(part.replace(TRAILING_ROAD_NOISE_PATTERN, '')) : part))
+    .filter((part) => part && !isRoadOrPremiseNoisePart(part));
+  const removedNoise = locationParts.join(', ') !== parts.join(', ');
+  for (let length = locationParts.length - (removedNoise ? 0 : 1); length >= 1; length -= 1) {
     values.push({ value: locationParts.slice(0, length).join(', '), noiseStripped: removedNoise });
   }
   locationParts.forEach((part) => values.push({ value: part, noiseStripped: removedNoise }));
@@ -98,8 +115,8 @@ function locationQueryAttempts(value = '', options = {}) {
     seen.add(normalized);
     attempts.push({ value: clean, normalized, noise_stripped: noiseStripped });
   };
-  values.forEach(({ value: candidate, noiseStripped }) => {
-    if (isRoadOrPremiseNoisePart(candidate) && !candidate.includes(',')) return;
+  values.forEach(({ value: candidate, noiseStripped, allowRoadPart = false }) => {
+    if (!allowRoadPart && isRoadOrPremiseNoisePart(candidate) && !candidate.includes(',')) return;
     add(candidate, noiseStripped);
   });
   return attempts;

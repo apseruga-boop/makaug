@@ -6,7 +6,10 @@ const path = require('node:path');
 const test = require('node:test');
 
 const {
+  canonicalLocationOptions,
   canonicalLocationSuggestions,
+  normalizeLocationKey,
+  normalizeLocationQueryCandidates,
   resolveCanonicalUgandaLocation,
   resolveCanonicalUgandaLocationFromText,
 } = require('../utils/ugandaLocationRegistry');
@@ -52,8 +55,8 @@ test('wrong-region regression names resolve only as unique confidence-one aliase
   });
 });
 
-test('duplicate place names require an exact parent hint before auto-resolution', () => {
-  ['Gobero', 'Nakasajja', 'Busika', 'Lugogo', 'Mateete', 'Migyera', 'Labongo', 'Bukuuku', 'Kyeeya'].forEach((query) => {
+test('genuinely comparable duplicate place names require an exact parent hint', () => {
+  ['Gobero', 'Nakasajja', 'Busika', 'Lugogo', 'Labongo'].forEach((query) => {
     const result = resolveCanonicalUgandaLocation(query);
     assert.equal(result.status, 'ambiguous', query);
     assert.equal(result.confidence, 0, query);
@@ -64,20 +67,100 @@ test('duplicate place names require an exact parent hint before auto-resolution'
   assert.equal(resolveCanonicalUgandaLocation('Lugogo', 'Kampala').match.district, 'Kampala');
 });
 
-test('Dave hand-back duplicates retain every verified parent and never auto-resolve bare names', () => {
-  const expectedParents = {
-    Mateete: ['Kyenjojo', 'Sembabule'],
-    Migyera: ['Isingiro', 'Nakasongola'],
-    Labongo: ['Kitgum', 'Masindi', 'Pader'],
-    Bukuuku: ['Kabarole', 'Nakaseke'],
-    Kyeeya: ['Kamuli', 'Kyenjojo']
+test('administratively prominent duplicate names auto-resolve while retaining every alternative', () => {
+  const expected = {
+    Mateete: ['sembabule:mateete', ['Kyenjojo', 'Sembabule']],
+    Migyera: ['nakasongola:migyera', ['Isingiro', 'Nakasongola']],
+    Bukuuku: ['kabarole:bukuuku', ['Kabarole', 'Nakaseke']],
+    Kyeeya: ['kyenjojo:kyeeya', ['Kamuli', 'Kyenjojo']]
   };
-  Object.entries(expectedParents).forEach(([query, districts]) => {
+  Object.entries(expected).forEach(([query, [canonicalKey, districts]]) => {
     const result = resolveCanonicalUgandaLocation(query);
-    assert.equal(result.status, 'ambiguous', query);
-    assert.equal(result.match, null, query);
-    assert.equal(result.confidence, 0, query);
+    assert.equal(result.status, 'matched', query);
+    assert.equal(result.match?.key, canonicalKey, query);
+    assert.equal(result.confidence, 1, query);
     assert.deepEqual([...new Set(result.candidates.map((item) => item.district))].sort(), districts, query);
+  });
+  const comparable = resolveCanonicalUgandaLocation('Labongo');
+  assert.equal(comparable.status, 'ambiguous');
+  assert.deepEqual([...new Set(comparable.candidates.map((item) => item.district))].sort(), ['Kitgum', 'Masindi', 'Pader']);
+});
+
+test('country wrappers, punctuation and safe road noise normalize before exact matching', () => {
+  const variants = [
+    'Sentema, Uganda',
+    'uganda, Sentema',
+    'Sentema, UG',
+    'Sentema, East Africa',
+    'Sentema, South Africa',
+    'Sentema, ZA',
+    '  Sentema,   Uganda.  ',
+    'Sentema Road, Wakiso, Central Region, Uganda'
+  ];
+  variants.forEach((query) => {
+    const result = resolveCanonicalUgandaLocation(query);
+    assert.equal(result.status, 'matched', query);
+    assert.equal(result.match?.key, 'wakiso:sentema', query);
+  });
+  assert.deepEqual(normalizeLocationQueryCandidates('Sentema Road, Wakiso, Uganda').slice(0, 4), [
+    'Sentema Road, Wakiso, Uganda',
+    'Sentema Road, Wakiso',
+    'Sentema Road',
+    'Sentema'
+  ]);
+  assert.equal(resolveCanonicalUgandaLocation('Kampala Road').status, 'unmatched');
+  assert.equal(resolveCanonicalUgandaLocation('Hoima Rd').status, 'unmatched');
+  assert.equal(resolveCanonicalUgandaLocation('Zzxq, Uganda').status, 'unmatched');
+});
+
+test('major Kampala and Wakiso localities beat obscure lower-level namesakes with alternatives retained', () => {
+  const expected = {
+    Nakasero: 'kampala:nakasero',
+    Muyenga: 'kampala:muyenga',
+    Kitende: 'wakiso:kitende',
+    Gayaza: 'wakiso:gayaza',
+    Ndeeba: 'kampala:ndeeba',
+    Mengo: 'kampala:mengo',
+    Nsambya: 'kampala:nsambya',
+    Wandegeya: 'kampala:wandegeya'
+  };
+  Object.entries(expected).forEach(([query, canonicalKey]) => {
+    for (const value of [query, `${query}, Uganda`]) {
+      const result = resolveCanonicalUgandaLocation(value);
+      assert.equal(result.status, 'matched', value);
+      assert.equal(result.match?.key, canonicalKey, value);
+      assert.ok(result.candidates.length > 1, `${value} must retain alternatives`);
+    }
+    const suggestions = canonicalLocationSuggestions(query, new Map(), 8);
+    assert.equal(suggestions[0]?.canonical_key, canonicalKey, query);
+    assert.equal(suggestions[0]?.auto_resolvable, true, query);
+    assert.ok(suggestions.some((item) => item.match === 'alternative_exact_alias' && item.did_you_mean), query);
+  });
+});
+
+test('1,000 unique Uganda localities resolve identically bare and country-suffixed with zero wrong districts', () => {
+  const allOptions = canonicalLocationOptions();
+  const options = allOptions.filter((item) => !['district', 'region'].includes(item.level));
+  const aliasCounts = new Map();
+  allOptions.forEach((item) => item.aliases.forEach((alias) => {
+    const key = normalizeLocationKey(alias);
+    aliasCounts.set(key, (aliasCounts.get(key) || 0) + 1);
+  }));
+  const seen = new Set();
+  const corpus = options.filter((item) => {
+    const key = normalizeLocationKey(item.location);
+    if (seen.has(key) || aliasCounts.get(key) !== 1) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, 1000);
+  assert.equal(corpus.length, 1000);
+  corpus.forEach((item) => {
+    const bare = resolveCanonicalUgandaLocation(item.location);
+    const suffixed = resolveCanonicalUgandaLocation(`${item.location}, Uganda`);
+    assert.equal(bare.status, 'matched', item.location);
+    assert.equal(suffixed.status, 'matched', `${item.location}, Uganda`);
+    assert.equal(bare.match?.key, item.canonical_key, item.location);
+    assert.equal(suffixed.match?.key, item.canonical_key, `${item.location}, Uganda`);
   });
 });
 
@@ -145,7 +228,10 @@ test('the full supplied missing-worklist has registry coverage without unsafe am
   const totals = { matched: 0, ambiguous: 0, unmatched: 0 };
   worklist.locations.forEach((query) => {
     const result = resolveCanonicalUgandaLocation(query);
+    const suffixed = resolveCanonicalUgandaLocation(`${query}, Uganda`);
     totals[result.status] += 1;
+    assert.equal(suffixed.status, result.status, query);
+    assert.equal(suffixed.match?.key, result.match?.key, query);
     if (result.status === 'matched') {
       assert.equal(result.confidence, 1, query);
       assert.equal(result.match_type, 'exact_alias', query);
@@ -168,6 +254,10 @@ test('public and King forms use the same resolver and clear stale hierarchy on u
   assert.match(app, /async function resolveUgandaLocationFromSharedRegistry/);
   assert.match(app, /async function adminReviewFindAddressOrPlace[\s\S]+resolveUgandaLocationWithLabelFallback/);
   assert.match(app, /async function applyLpAddressPlaceResult[\s\S]+resolveLpCanonicalLocation/);
+  assert.match(app, /function extractCanonicalLocationQueryFromGoogleResult[\s\S]+sublocality_level_1[\s\S]+administrative_area_level_2/);
+  assert.match(app, /canonicalQuery: extractCanonicalLocationQueryFromGoogleResult/);
+  assert.match(app, /resolveUgandaLocationWithLabelFallback\(query, point\.canonicalQuery \|\| ""\)/);
+  assert.doesNotMatch(app, /resolveUgandaLocationWithLabelFallback\(query, point\.label \|\| ""\)/);
   assert.match(app, /Location not recognised — pin set but region\/district\/area could NOT be auto-filled\./);
   assert.match(app, /function clearAdminReviewCanonicalLocation[\s\S]+admin-review-region-edit[\s\S]+admin-review-area-edit/);
   assert.match(app, /function clearLpCanonicalLocationCascade[\s\S]+populateLpRegionOptions\(""\)[\s\S]+lp-area/);
@@ -176,7 +266,9 @@ test('public and King forms use the same resolver and clear stale hierarchy on u
   assert.match(app, /async function submitListProperty[\s\S]+finally[\s\S]+updateLpCanonicalLocationGuardState\(\)/);
   assert.match(page, /id="lp-location-unresolved-notice" role="alert" aria-live="polite" class="hidden/);
   assert.match(page, /id="lp-submit-btn"[^>]+disabled[^>]+aria-disabled="true"[^>]+aria-describedby="lp-location-unresolved-notice"/);
-  assert.match(app, /Resolve the area through the shared canonical location registry before approving/);
+  assert.match(app, /function canonicalTownForLocation/);
+  assert.match(app, /return \/\\b\(\?:town\|city\|municipality\|tc\)\\b\/i\.test\(name\) \? name : `\$\{name\} Town`/);
+  assert.match(app, /data-approval-blocker-host/);
   assert.match(route, /router\.get\('\/locations\/resolve'/);
   assert.match(route, /Canonical location confirmation is required before approval/);
   assert.match(route, /disambiguation_required/);
@@ -214,4 +306,5 @@ test('Ask AI canonicalizes locations through the shared resolver and blocks unkn
 test('release exposes the shared resolver audit marker', () => {
   const server = read('server.js');
   assert.match(server, /'shared-uganda-location-resolver-coverage'/);
+  assert.match(server, /'location-query-normalization-prominence-20260811'/);
 });

@@ -53,6 +53,7 @@ const {
   queueWhatsappWebBridgeMessage,
   upsertWhatsappWebBridgeClient
 } = require('../services/whatsappWebBridgeService');
+const { isOwnWhatsappMessage } = require('../services/whatsappWebDirectionService');
 const {
   evaluateHostedWhatsappBridgeReadiness,
   summarizeWhatsappBridgeClient
@@ -9044,6 +9045,18 @@ router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
   const sharedLocation = parseInboundLocation(req.body.shared_location || req.body.location || req.body);
   const dryRun = ['1', 'true', 'yes'].includes(String(req.body.dry_run || req.body.dryRun || '').trim().toLowerCase());
   const inboundMetadata = req.body.metadata && typeof req.body.metadata === 'object' ? req.body.metadata : {};
+  if (isOwnWhatsappMessage({
+    direction: inboundMetadata.message_direction || inboundMetadata.direction,
+    senderLabel: inboundMetadata.sender_label || inboundMetadata.sender,
+    text: body
+  })) {
+    return res.json({
+      ok: true,
+      ignored: true,
+      duplicate: true,
+      duplicate_reason: 'outgoing_web_message'
+    });
+  }
   const contactName = cleanDisplayName(req.body.contact_name || req.body.contactName || inboundMetadata.contact_name || inboundMetadata.contactName || inboundMetadata.chat_title);
   const inboundMessageId = createBridgeMessageId({
     phone,

@@ -130,6 +130,11 @@ const { hideReportedProperty } = require('../services/reportListingModerationSer
 const { propertyPriceMetadata } = require('../utils/propertyPriceCurrency');
 const { listingDataIntegrityReport } = require('../utils/listingDataIntegrity');
 const { harvestAutomationEnabled } = require('../utils/harvestFeatureFlags');
+const {
+  LISTING_EXTRA_TIMESTAMP_FIELDS,
+  isListingTimestampField,
+  normalizeListingTimestampFields
+} = require('../utils/listingTimestamp');
 const SOURCED_INVENTORY_CANDIDATE_SOURCE = 'sourced_inventory_candidate_v1';
 const {
   BAKAIMA_BATCH_ID,
@@ -3113,7 +3118,7 @@ async function loadPropertyReview(propertyId) {
 }
 
 async function updatePropertyEditableFields({ propertyId, patch = {} }) {
-  const normalizedPatch = { ...patch };
+  const normalizedPatch = normalizeListingTimestampFields(patch);
   if (!Object.prototype.hasOwnProperty.call(normalizedPatch, 'listing_type')) {
     const typeAlias = normalizedPatch.listingType ?? normalizedPatch.type ?? normalizedPatch.category;
     if (typeAlias != null) normalizedPatch.listing_type = typeAlias;
@@ -3148,6 +3153,7 @@ async function updatePropertyEditableFields({ propertyId, patch = {} }) {
     area: { column: 'area', value: cleanText(normalizedPatch.area), required: true },
     address: { column: 'address', value: cleanText(normalizedPatch.address) || null },
     price: { column: 'price', value: toNullableInt(normalizedPatch.price) },
+    price_fx_as_of: { column: 'price_fx_as_of', value: normalizedPatch.price_fx_as_of || null },
     price_period: { column: 'price_period', value: cleanText(normalizedPatch.price_period) || null },
     transaction_type: { column: 'transaction_type', value: normalizeCommercialTransactionType(normalizedPatch.transaction_type) || null },
     property_type: { column: 'property_type', value: cleanText(normalizedPatch.property_type) || null },
@@ -3178,7 +3184,8 @@ async function updatePropertyEditableFields({ propertyId, patch = {} }) {
     if (IS_SOUTH_AFRICA) {
       const province = cleanText(normalizedPatch.province || normalizedPatch.district);
       const area = cleanText(normalizedPatch.suburb || normalizedPatch.area || normalizedPatch.city);
-      const canonical = canonicalizeUgandaLocation(area, province);
+      const canonical = canonicalLocationByKey(normalizedPatch.canonical_location_id)
+        || canonicalizeUgandaLocation(area, province);
       if (!canonical || canonical.level !== 'suburb') {
         errors.push('location must match an exact South African suburb and province from the shared registry');
       } else {
@@ -3198,15 +3205,22 @@ async function updatePropertyEditableFields({ propertyId, patch = {} }) {
         extraPatch.location_resolution_confidence = 1;
       }
     } else {
-      const hierarchy = normalizeReviewLocationHierarchy(normalizedPatch);
+      const hierarchy = normalizeReviewLocationHierarchy(normalizedPatch, {
+        allowDistrictNode: true,
+        allowCanonicalHierarchy: true
+      });
       errors.push(...hierarchy.errors);
       if (hierarchy.region) normalizedPatch.region = hierarchy.region;
       if (Object.prototype.hasOwnProperty.call(normalizedPatch, 'city')) normalizedPatch.city = hierarchy.city;
       if (Object.prototype.hasOwnProperty.call(normalizedPatch, 'neighborhood')) normalizedPatch.neighborhood = hierarchy.neighborhood;
-      const canonical = hierarchy.canonical || canonicalizeUgandaLocation(normalizedPatch.area, normalizedPatch.district);
-      if (canonical && !['district', 'region'].includes(canonical.level)) {
+      const canonical = canonicalLocationByKey(normalizedPatch.canonical_location_id)
+        || hierarchy.canonical
+        || canonicalizeUgandaLocation(normalizedPatch.area, normalizedPatch.district);
+      if (canonical && canonical.level !== 'region') {
         normalizedPatch.area = canonical.name;
         normalizedPatch.district = canonical.district;
+        normalizedPatch.city = canonical.town || normalizedPatch.city || (canonical.level === 'district' ? `${canonical.name} Town` : '');
+        normalizedPatch.neighborhood = canonical.name;
         fieldMap.area.value = canonical.name;
         extraPatch.moderator_area_input_raw = sourceAreaRaw || canonical.name;
         extraPatch.canonical_location_id = canonical.key;
@@ -3336,6 +3350,12 @@ async function updatePropertyEditableFields({ propertyId, patch = {} }) {
   addExtraPatch('gender_pref');
   addExtraPatch('student_room_label');
 
+  LISTING_EXTRA_TIMESTAMP_FIELDS.forEach((field) => {
+    if (!Object.prototype.hasOwnProperty.call(normalizedPatch, field)) return;
+    extraPatch[field] = normalizedPatch[field];
+    correctedFields.push(field);
+  });
+
   if (Object.prototype.hasOwnProperty.call(normalizedPatch, 'students_welcome')) {
     extraPatch.students_welcome = parseBooleanLike(normalizedPatch.students_welcome, false);
     correctedFields.push('students_welcome');
@@ -3463,7 +3483,8 @@ const ADMIN_REVIEW_EDITABLE_FIELDS = new Set([
   'nearest_university', 'distance_to_uni_km', 'room_type', 'room_arrangement',
   'gender_pref', 'students_welcome', 'student_universities',
   'student_room_label', 'land_title_available', 'landTitleAvailable',
-  'title_available', 'titleAvailable'
+  'title_available', 'titleAvailable', 'price_fx_as_of',
+  ...LISTING_EXTRA_TIMESTAMP_FIELDS
 ]);
 
 function adminReviewListingPatchFromBody(body = {}) {
@@ -3474,10 +3495,10 @@ function adminReviewListingPatchFromBody(body = {}) {
       : (body.listingPatch && typeof body.listingPatch === 'object' && !Array.isArray(body.listingPatch)
         ? body.listingPatch
         : null));
-  if (nested) return { ...nested };
-  return Object.fromEntries(
-    Object.entries(body || {}).filter(([key]) => ADMIN_REVIEW_EDITABLE_FIELDS.has(key))
-  );
+  if (nested) return normalizeListingTimestampFields(nested);
+  return normalizeListingTimestampFields(Object.fromEntries(
+    Object.entries(body || {}).filter(([key]) => ADMIN_REVIEW_EDITABLE_FIELDS.has(key) || isListingTimestampField(key))
+  ));
 }
 
 router.get('/summary', async (req, res, next) => {
