@@ -285,7 +285,9 @@ const PHOTO_VIDEO_MENU_SELECTORS = [
   'button[role="menuitem"][aria-label*="Photos"]',
   'button[role="menuitem"][aria-label*="videos"]',
   '[role="menuitem"][aria-label*="Photos"]',
-  '[role="menuitem"][aria-label*="videos"]'
+  '[role="menuitem"][aria-label*="videos"]',
+  '[role="menuitem"]:has-text("Photos & videos")',
+  'button:has-text("Photos & videos")'
 ];
 const MEDIA_CAPTION_SELECTORS = [
   '[data-testid="media-caption-input-container"] [contenteditable="true"]',
