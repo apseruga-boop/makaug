@@ -6,14 +6,15 @@ const db = require('../config/database');
 const { requireAdminApiKey } = require('../middleware/auth');
 const { asArray, cleanText, toNullableInt, toNullableFloat, isValidEmail, isValidPhone } = require('../middleware/validation');
 const { parsePagination, toPagination } = require('../utils/pagination');
-const { DISTRICTS, LISTING_TYPES } = require('../utils/constants');
+const { DISTRICTS: UGANDA_DISTRICTS, LISTING_TYPES } = require('../utils/constants');
 const {
   normalizeReviewLocationHierarchy,
   districtForKnownArea,
   districtForKnownLocationText
 } = require('../utils/ugandaLocationHierarchy');
-const { canonicalLocationByKey, canonicalizeUgandaLocation } = require('../utils/ugandaLocationRegistry');
+const { canonicalLocationByKey, canonicalizeUgandaLocation, PROVINCES: SOUTH_AFRICA_PROVINCES = [] } = require('../utils/locationRegistry');
 const { normalizeEmail, normalizeUgPhone } = require('../utils/adminOtpOverride');
+const { tenantFor } = require('../packages/shared-country-core');
 const {
   normalizeCommercialTransactionType,
   normalizeCommercialPropertyType,
@@ -287,7 +288,13 @@ router.post('/harvest/creators/:sourceKey/checked', async (req, res, next) => {
   }
 });
 
+const ACTIVE_COUNTRY_CODE = String(process.env.COUNTRY_CODE || 'UG').trim().toUpperCase();
+const IS_SOUTH_AFRICA = ACTIVE_COUNTRY_CODE === 'ZA';
+const ACTIVE_TENANT = tenantFor(ACTIVE_COUNTRY_CODE);
+const ACTIVE_BRAND = ACTIVE_TENANT.publicName || ACTIVE_TENANT.brandName;
+const DISTRICTS = IS_SOUTH_AFRICA ? SOUTH_AFRICA_PROVINCES : UGANDA_DISTRICTS;
 const FIELD_AGENT_DEFAULT_PAYOUT_UGX = 5000;
+const ACTIVE_FIELD_AGENT_DEFAULT_PAYOUT = IS_SOUTH_AFRICA ? 0 : FIELD_AGENT_DEFAULT_PAYOUT_UGX;
 const FIELD_AGENT_PAYOUT_DAY = 'Friday';
 const FIELD_AGENT_ID_START = 7300;
 const FIELD_AGENT_UPLOAD_MAX_BYTES = 2 * 1024 * 1024;
@@ -299,7 +306,7 @@ const ADMIN_LISTING_VIDEO_MAX_COUNT = 8;
 const DIRECT_AGENT_PROFILE_MARKER = '[DIRECT_AGENT_AUTHORISED]';
 const LAUNCH_TEST_LISTING_MARKERS = ['SOFT LAUNCH TEST - DELETE', 'QA TEST - DELETE'];
 const LAUNCH_TEST_DUMMY_TITLES = ['sdgsdgd', 'sgsgsgsgs'];
-const PUBLIC_SITE_URL = String(process.env.PUBLIC_BASE_URL || process.env.APP_BASE_URL || 'https://makaug.com').replace(/\/+$/, '');
+const PUBLIC_SITE_URL = String(process.env.PUBLIC_BASE_URL || process.env.APP_BASE_URL || ACTIVE_TENANT.domain).replace(/\/+$/, '');
 let propertySourceRegistrySeedJob = null;
 const LEAD_PROPERTY_MATCH_LIMIT = 10;
 const ADMIN_PENDING_REVIEW_STATUSES = [
@@ -665,17 +672,17 @@ function formatLeadMatchPrice(row = {}) {
   const price = numberOrNull(row.price);
   if (!price) return '';
   const period = cleanText(row.price_period);
-  return `USh ${Math.round(price).toLocaleString('en-UG')}${period ? ` ${period}` : ''}`;
+  return `${ACTIVE_TENANT.currencyLabel} ${Math.round(price).toLocaleString(ACTIVE_TENANT.dateLocale || 'en-UG')}${period ? ` ${period}` : ''}`;
 }
 
 function buildLeadMatchWhatsappMessage({ lead = {}, property = {}, criteria = {} } = {}) {
-  const title = cleanText(property.title) || 'a makaug property';
-  const location = [property.area, property.district].map(cleanText).filter(Boolean).join(', ') || cleanText(criteria.area) || 'Uganda';
+  const title = cleanText(property.title) || `a ${ACTIVE_BRAND} property`;
+  const location = [property.area, property.district].map(cleanText).filter(Boolean).join(', ') || cleanText(criteria.area) || ACTIVE_TENANT.countryName;
   const price = formatLeadMatchPrice(property);
   const original = cleanText(criteria.originalMessage || lead.message);
   const url = property.public_url || `${PUBLIC_SITE_URL}/property/${property.id}`;
   return [
-    'Hi, this is makaug.com.',
+    `Hi, this is ${ACTIVE_BRAND}.`,
     original ? `You previously asked us for: "${original.slice(0, 180)}"` : 'You previously asked us to help find a property.',
     'We found a live property that may match what you were looking for:',
     `${title}`,
@@ -683,7 +690,7 @@ function buildLeadMatchWhatsappMessage({ lead = {}, property = {}, criteria = {}
     price ? `Price: ${price}` : '',
     `View photos, map, and enquiry options: ${url}`,
     'Reply here if you would like help booking a viewing or requesting a callback.',
-    'Reply STOP if you no longer want makaug.com property follow-ups.'
+    `Reply STOP if you no longer want ${ACTIVE_BRAND} property follow-ups.`
   ].filter(Boolean).join('\n');
 }
 
@@ -703,8 +710,8 @@ function fieldAgentTerritory(row = {}) {
 
 function fieldAgentPayoutRate(row = {}) {
   const profile = fieldAgentProfile(row);
-  const rate = numberOrZero(profile.payout_rate_ugx || row.payout_rate_ugx || FIELD_AGENT_DEFAULT_PAYOUT_UGX);
-  return rate > 0 ? rate : FIELD_AGENT_DEFAULT_PAYOUT_UGX;
+  const rate = numberOrZero(profile.payout_rate_ugx || row.payout_rate_ugx || ACTIVE_FIELD_AGENT_DEFAULT_PAYOUT);
+  return rate > 0 ? rate : ACTIVE_FIELD_AGENT_DEFAULT_PAYOUT;
 }
 
 function fieldAgentReachScore(row = {}) {
@@ -986,11 +993,17 @@ function normalizeFieldAgentContactPhone(value = '') {
   const raw = cleanText(value).replace(/[^\d+]/g, '');
   if (!raw) return '';
   if (/^00\d{10,15}$/.test(raw)) return `+${raw.slice(2)}`;
-  if (/^0\d{9}$/.test(raw)) return `+256${raw.slice(1)}`;
-  if (/^256\d{9}$/.test(raw)) return `+${raw}`;
+  if (IS_SOUTH_AFRICA && /^0\d{9}$/.test(raw)) return `+27${raw.slice(1)}`;
+  if (IS_SOUTH_AFRICA && /^27\d{9}$/.test(raw)) return `+${raw}`;
+  if (!IS_SOUTH_AFRICA && /^0\d{9}$/.test(raw)) return `+256${raw.slice(1)}`;
+  if (!IS_SOUTH_AFRICA && /^256\d{9}$/.test(raw)) return `+${raw}`;
   if (/^\+\d{10,15}$/.test(raw)) return raw;
   if (/^\d{10,15}$/.test(raw)) return raw;
   return raw;
+}
+
+function normalizeCountryPhone(value = '') {
+  return IS_SOUTH_AFRICA ? normalizeFieldAgentContactPhone(value) : normalizeUgPhone(value);
 }
 
 function isLegacyZeroFieldAgentCode(value = '') {
@@ -1053,14 +1066,15 @@ function emailProviderConfigured() {
 
 function outboundEmailDisclosureOk(text = '') {
   const body = String(text || '').toLowerCase();
-  return body.includes('makaug.com')
+  const brand = ACTIVE_BRAND.toLowerCase();
+  return body.includes(brand)
     && body.includes('unsubscribe')
-    && (body.includes('https://makaug.com') || body.includes('makaug.com'));
+    && (body.includes(ACTIVE_TENANT.domain.toLowerCase()) || body.includes(brand));
 }
 
 function outboundWhatsappDisclosureOk(text = '') {
   const body = String(text || '').toLowerCase();
-  return body.includes('makaug.com') && /\bstop\b/.test(body);
+  return body.includes(ACTIVE_BRAND.toLowerCase()) && /\bstop\b/.test(body);
 }
 
 function emailDomain(value = '') {
@@ -1150,10 +1164,10 @@ function defaultStaffSeed(index = 1) {
   const suffix = String(number).padStart(2, '0');
   return {
     first_name: `Moderator ${number}`,
-    last_name: 'Makaug',
-    email: `moderator${number}@staff.makaug.internal`,
+    last_name: IS_SOUTH_AFRICA ? 'Seshaikhaya' : 'Makaug',
+    email: `moderator${number}@staff.${IS_SOUTH_AFRICA ? 'seshaikhaya' : 'makaug'}.internal`,
     personal_email: '',
-    phone: `+2567000010${suffix}`,
+    phone: IS_SOUTH_AFRICA ? `+278200001${suffix}` : `+2567000010${suffix}`,
     staff_code: normalizeStaffCode('', number),
     status: 'active'
   };
@@ -1208,7 +1222,7 @@ async function upsertModeratorStaffAccount(input = {}, req = null, fallbackIndex
   const firstName = cleanText(seed.first_name || seed.firstName || seed.name || `Moderator ${fallbackIndex}`).slice(0, 80);
   const lastName = cleanText(seed.last_name || seed.lastName || 'Makaug').slice(0, 80);
   const email = normalizeEmail(seed.email);
-  const phone = normalizeUgPhone(seed.phone) || cleanText(seed.phone);
+  const phone = normalizeCountryPhone(seed.phone) || cleanText(seed.phone);
   const status = cleanText(seed.status || 'active').toLowerCase();
   const staffCode = normalizeStaffCode(seed.staff_code || seed.staffCode || seed.employee_number, fallbackIndex);
   const suppliedPassword = cleanText(seed.password || seed.temporary_password || seed.tempPassword);
@@ -1333,7 +1347,7 @@ async function upsertModeratorStaffAccount(input = {}, req = null, fallbackIndex
 async function provisionApprovedBrokerAccount(agent = {}, req = null, options = {}) {
   const pendingVerification = options.pendingVerification === true;
   const email = normalizeEmail(agent.email);
-  const phone = normalizeUgPhone(agent.phone) || cleanText(agent.phone);
+  const phone = normalizeCountryPhone(agent.phone) || cleanText(agent.phone);
   if (!email) {
     return { status: 'skipped', reason: 'broker_email_missing' };
   }
@@ -1542,7 +1556,7 @@ function escapeHtml(value = '') {
 
 function buildFieldAgentProvisionEmail({ firstName, fieldAgentCode, pin, territory, payoutRateUgx, dashboardUrl, supportUrl }) {
   const safeFirstName = firstName || 'there';
-  const safePayoutRate = Number(payoutRateUgx || FIELD_AGENT_DEFAULT_PAYOUT_UGX);
+  const safePayoutRate = Number(payoutRateUgx || ACTIVE_FIELD_AGENT_DEFAULT_PAYOUT);
   const text = [
     `Hello ${safeFirstName},`,
     '',
@@ -1768,12 +1782,20 @@ function twilioWhatsappConfigured() {
   return envSet('TWILIO_ACCOUNT_SID') && envSet('TWILIO_AUTH_TOKEN') && hasSender;
 }
 
+function whatsappTestTransportConfigured() {
+  return String(process.env.WHATSAPP_DELIVERY_MODE || '').trim().toLowerCase() === 'test';
+}
+
 function whatsappProviderConfigured() {
-  return metaWhatsappConfigured() || whatsappWebBridgeConfigured() || twilioWhatsappConfigured();
+  return whatsappTestTransportConfigured()
+    || metaWhatsappConfigured()
+    || whatsappWebBridgeConfigured()
+    || twilioWhatsappConfigured();
 }
 
 function missingWhatsappEnv() {
   const deliveryMode = String(process.env.WHATSAPP_DELIVERY_MODE || '').trim().toLowerCase();
+  if (deliveryMode === 'test') return [];
   const hasMetaSignal = deliveryMode === 'provider'
     || META_WHATSAPP_REQUIRED_ENV.some((key) => envSet(key));
   const hasBridgeSignal = deliveryMode === 'web_bridge'
@@ -2395,11 +2417,11 @@ async function createLaunchAudit(req, action, details = {}) {
 }
 
 function adminTestEmail() {
-  return process.env.SUPER_ADMIN_EMAIL || process.env.SUPPORT_EMAIL || process.env.EMAIL_FROM || 'owner@makaug.com';
+  return process.env.SUPER_ADMIN_EMAIL || process.env.SUPPORT_EMAIL || process.env.EMAIL_FROM || `owner@${ACTIVE_BRAND}`;
 }
 
 function adminTestPhone() {
-  return process.env.SMS_TEST_PHONE || process.env.SUPER_ADMIN_PHONE || process.env.SUPPORT_WHATSAPP || process.env.WHATSAPP_TEST_PHONE || '+256760112587';
+  return process.env.SMS_TEST_PHONE || process.env.SUPER_ADMIN_PHONE || process.env.SUPPORT_WHATSAPP || process.env.WHATSAPP_TEST_PHONE || (IS_SOUTH_AFRICA ? '+27821234567' : '+256760112587');
 }
 
 function launchTimestamp() {
@@ -2441,6 +2463,17 @@ async function uploadMediaStorageCanary() {
 
 async function createSafeLaunchProperty(req, overrides = {}) {
   const reference = buildListingReference();
+  const defaultLocation = IS_SOUTH_AFRICA
+    ? {
+      district: 'Western Cape', area: 'Sea Point', city: 'Cape Town', country: 'South Africa',
+      address: 'Launch proof landmark, Sea Point', latitude: -33.9173, longitude: 18.3844,
+      canonical: canonicalizeUgandaLocation('Sea Point', 'Western Cape')
+    }
+    : {
+      district: 'Kampala', area: 'Ntinda', city: 'Kampala', country: 'Uganda',
+      address: 'Launch proof landmark, Ntinda', latitude: 0.353, longitude: 32.616,
+      canonical: canonicalizeUgandaLocation('Ntinda', 'Kampala')
+    };
   const result = await db.query(
     `INSERT INTO properties (
        listing_type, title, description, district, area, address, price,
@@ -2453,10 +2486,10 @@ async function createSafeLaunchProperty(req, overrides = {}) {
       overrides.listing_type || 'sale',
       overrides.title || `Launch proof hidden listing ${reference}`,
       overrides.description || 'Admin-only safe property submission test. This record is for launch proof and should not be approved publicly.',
-      overrides.district || 'Kampala',
-      overrides.area || 'Ntinda',
-      overrides.address || 'Launch proof landmark, Ntinda',
-      overrides.price || 150000000,
+      overrides.district || defaultLocation.district,
+      overrides.area || defaultLocation.area,
+      overrides.address || defaultLocation.address,
+      overrides.price || (IS_SOUTH_AFRICA ? 2500000 : 150000000),
       overrides.bedrooms || 2,
       overrides.bathrooms || 1,
       overrides.property_type || 'house',
@@ -2466,20 +2499,24 @@ async function createSafeLaunchProperty(req, overrides = {}) {
         launch_proof: true,
         non_public_test: true,
         reference,
+        canonical_location_id: defaultLocation.canonical?.key || null,
+        canonical_location_level: defaultLocation.canonical?.level || null,
+        province: IS_SOUTH_AFRICA ? defaultLocation.district : null,
+        suburb: IS_SOUTH_AFRICA ? defaultLocation.area : null,
         location_object: {
-          query: 'Ntinda launch proof',
-          fullAddress: 'Launch proof landmark, Ntinda, Kampala, Uganda',
-          area: 'Ntinda',
-          city: 'Kampala',
-          district: 'Kampala',
-          country: 'Uganda',
-          latitude: 0.353,
-          longitude: 32.616,
+          query: `${defaultLocation.area} launch proof`,
+          fullAddress: `${defaultLocation.address}, ${defaultLocation.city}, ${defaultLocation.country}`,
+          area: defaultLocation.area,
+          city: defaultLocation.city,
+          district: defaultLocation.district,
+          country: defaultLocation.country,
+          latitude: defaultLocation.latitude,
+          longitude: defaultLocation.longitude,
           locationConfidence: 'test',
           locationPrivacy: 'admin_only'
         }
       }),
-      overrides.lister_name || 'makaug Launch Proof',
+      overrides.lister_name || `${ACTIVE_BRAND} Launch Proof`,
       overrides.lister_phone || adminTestPhone(),
       overrides.lister_email || adminTestEmail(),
       'owner',
@@ -2510,7 +2547,7 @@ async function createSafeLaunchProperty(req, overrides = {}) {
     recipientEmail: listing.lister_email,
     recipientRole: 'property_owner',
     templateKey: 'listing_submitted_confirmation',
-    subject: 'Your makaug property listing has been submitted',
+    subject: `Your ${ACTIVE_BRAND} property listing has been submitted`,
     status: providerConfigured('email') ? 'queued' : 'provider_missing',
     provider: providerConfigured('email') ? 'configured' : null,
     relatedListingId: listing.id,
@@ -3122,7 +3159,7 @@ async function updatePropertyEditableFields({ propertyId, patch = {} }) {
     property_type: { column: 'property_type', value: cleanText(normalizedPatch.property_type) || null },
     title_type: { column: 'title_type', value: cleanText(normalizedPatch.title_type) || null },
     lister_name: { column: 'lister_name', value: cleanText(normalizedPatch.lister_name) || null },
-    lister_phone: { column: 'lister_phone', value: cleanText(normalizeUgPhone(normalizedPatch.lister_phone)) || null },
+    lister_phone: { column: 'lister_phone', value: cleanText(normalizeCountryPhone(normalizedPatch.lister_phone)) || null },
     lister_email: { column: 'lister_email', value: normalizeEmail(normalizedPatch.lister_email) || null },
     bedrooms: { column: 'bedrooms', value: toNullableInt(normalizedPatch.bedrooms) },
     bathrooms: { column: 'bathrooms', value: toNullableInt(normalizedPatch.bathrooms) },
@@ -3139,37 +3176,62 @@ async function updatePropertyEditableFields({ propertyId, patch = {} }) {
   const extraPatch = {};
   let idx = 2;
 
-  const hasLocationHierarchyPatch = ['region', 'district', 'city', 'neighborhood', 'area'].some((key) => (
+  const hasLocationHierarchyPatch = ['region', 'province', 'district', 'city', 'suburb', 'neighborhood', 'area'].some((key) => (
     Object.prototype.hasOwnProperty.call(normalizedPatch, key)
   ));
   if (hasLocationHierarchyPatch) {
     const sourceAreaRaw = cleanText(normalizedPatch.area);
-    const hierarchy = normalizeReviewLocationHierarchy(normalizedPatch, {
-      allowDistrictNode: true,
-      allowCanonicalHierarchy: true
-    });
-    errors.push(...hierarchy.errors);
-    if (hierarchy.region) normalizedPatch.region = hierarchy.region;
-    if (Object.prototype.hasOwnProperty.call(normalizedPatch, 'city')) normalizedPatch.city = hierarchy.city;
-    if (Object.prototype.hasOwnProperty.call(normalizedPatch, 'neighborhood')) normalizedPatch.neighborhood = hierarchy.neighborhood;
-    const canonical = canonicalLocationByKey(normalizedPatch.canonical_location_id)
-      || hierarchy.canonical
-      || canonicalizeUgandaLocation(normalizedPatch.area, normalizedPatch.district);
-    if (canonical && canonical.level !== 'region') {
-      normalizedPatch.area = canonical.name;
-      normalizedPatch.district = canonical.district;
-      normalizedPatch.city = canonical.town || normalizedPatch.city || (canonical.level === 'district' ? `${canonical.name} Town` : '');
-      normalizedPatch.neighborhood = canonical.name;
-      fieldMap.area.value = canonical.name;
-      extraPatch.moderator_area_input_raw = sourceAreaRaw || canonical.name;
-      extraPatch.canonical_location_id = canonical.key;
-      extraPatch.canonical_location_level = canonical.level;
-      extraPatch.location_resolution_status = 'canonical_moderator_edit';
-      extraPatch.location_resolution_confidence = 1;
+    if (IS_SOUTH_AFRICA) {
+      const province = cleanText(normalizedPatch.province || normalizedPatch.district);
+      const area = cleanText(normalizedPatch.suburb || normalizedPatch.area || normalizedPatch.city);
+      const canonical = canonicalLocationByKey(normalizedPatch.canonical_location_id)
+        || canonicalizeUgandaLocation(area, province);
+      if (!canonical || canonical.level !== 'suburb') {
+        errors.push('location must match an exact South African suburb and province from the shared registry');
+      } else {
+        normalizedPatch.area = canonical.suburb;
+        normalizedPatch.suburb = canonical.suburb;
+        normalizedPatch.city = canonical.city;
+        normalizedPatch.province = canonical.province;
+        normalizedPatch.district = canonical.province;
+        fieldMap.area.value = canonical.suburb;
+        extraPatch.moderator_area_input_raw = sourceAreaRaw || canonical.suburb;
+        extraPatch.canonical_location_id = canonical.key;
+        extraPatch.canonical_location_level = canonical.level;
+        extraPatch.province = canonical.province;
+        extraPatch.city = canonical.city;
+        extraPatch.suburb = canonical.suburb;
+        extraPatch.location_resolution_status = 'canonical_moderator_edit';
+        extraPatch.location_resolution_confidence = 1;
+      }
+    } else {
+      const hierarchy = normalizeReviewLocationHierarchy(normalizedPatch, {
+        allowDistrictNode: true,
+        allowCanonicalHierarchy: true
+      });
+      errors.push(...hierarchy.errors);
+      if (hierarchy.region) normalizedPatch.region = hierarchy.region;
+      if (Object.prototype.hasOwnProperty.call(normalizedPatch, 'city')) normalizedPatch.city = hierarchy.city;
+      if (Object.prototype.hasOwnProperty.call(normalizedPatch, 'neighborhood')) normalizedPatch.neighborhood = hierarchy.neighborhood;
+      const canonical = canonicalLocationByKey(normalizedPatch.canonical_location_id)
+        || hierarchy.canonical
+        || canonicalizeUgandaLocation(normalizedPatch.area, normalizedPatch.district);
+      if (canonical && canonical.level !== 'region') {
+        normalizedPatch.area = canonical.name;
+        normalizedPatch.district = canonical.district;
+        normalizedPatch.city = canonical.town || normalizedPatch.city || (canonical.level === 'district' ? `${canonical.name} Town` : '');
+        normalizedPatch.neighborhood = canonical.name;
+        fieldMap.area.value = canonical.name;
+        extraPatch.moderator_area_input_raw = sourceAreaRaw || canonical.name;
+        extraPatch.canonical_location_id = canonical.key;
+        extraPatch.canonical_location_level = canonical.level;
+        extraPatch.location_resolution_status = 'canonical_moderator_edit';
+        extraPatch.location_resolution_confidence = 1;
+      }
     }
   }
   const selectedDistrict = cleanText(normalizedPatch.district);
-  if (selectedDistrict && Object.prototype.hasOwnProperty.call(normalizedPatch, 'address')) {
+  if (!IS_SOUTH_AFRICA && selectedDistrict && Object.prototype.hasOwnProperty.call(normalizedPatch, 'address')) {
     const addressDistrict = districtForKnownLocationText(normalizedPatch.address);
     if (addressDistrict && addressDistrict !== selectedDistrict) {
       errors.push('address/location note must match the selected district');
@@ -3186,7 +3248,7 @@ async function updatePropertyEditableFields({ propertyId, patch = {} }) {
   });
 
   if (Object.prototype.hasOwnProperty.call(normalizedPatch, 'lister_phone')) {
-    const phone = cleanText(normalizeUgPhone(normalizedPatch.lister_phone));
+    const phone = cleanText(normalizeCountryPhone(normalizedPatch.lister_phone));
     if (phone && !isValidPhone(phone)) errors.push('lister_phone is invalid');
   }
 
@@ -3209,7 +3271,7 @@ async function updatePropertyEditableFields({ propertyId, patch = {} }) {
 
   if (Object.prototype.hasOwnProperty.call(normalizedPatch, 'district')) {
     const district = cleanText(normalizedPatch.district);
-    if (district && !DISTRICTS.includes(district)) errors.push('district must be one of Uganda\'s valid districts');
+    if (district && !DISTRICTS.includes(district)) errors.push(`${IS_SOUTH_AFRICA ? 'province' : 'district'} must be one of ${ACTIVE_TENANT.countryName}'s valid ${IS_SOUTH_AFRICA ? 'provinces' : 'districts'}`);
     setParts.push(`district = $${idx}`);
     values.push(district || null);
     correctedFields.push('district');
@@ -3229,7 +3291,7 @@ async function updatePropertyEditableFields({ propertyId, patch = {} }) {
   if (Object.prototype.hasOwnProperty.call(normalizedPatch, 'latitude')) {
     const latitude = toNullableCoordinate(normalizedPatch.latitude);
     const longitude = toNullableCoordinate(normalizedPatch.longitude);
-    if (latitude != null && longitude != null && !isPointInUganda(latitude, longitude) && !errors.includes('map pin must be inside Uganda')) errors.push('map pin must be inside Uganda');
+    if (latitude != null && longitude != null && !isPointInUganda(latitude, longitude) && !errors.includes(`map pin must be inside ${ACTIVE_TENANT.countryName}`)) errors.push(`map pin must be inside ${ACTIVE_TENANT.countryName}`);
     else if (latitude != null && (latitude < -90 || latitude > 90)) errors.push('latitude is out of range');
     setParts.push(`latitude = $${idx}`);
     values.push(latitude);
@@ -3240,7 +3302,7 @@ async function updatePropertyEditableFields({ propertyId, patch = {} }) {
   if (Object.prototype.hasOwnProperty.call(normalizedPatch, 'longitude')) {
     const longitude = toNullableCoordinate(normalizedPatch.longitude);
     const latitude = toNullableCoordinate(normalizedPatch.latitude);
-    if (latitude != null && longitude != null && !isPointInUganda(latitude, longitude) && !errors.includes('map pin must be inside Uganda')) errors.push('map pin must be inside Uganda');
+    if (latitude != null && longitude != null && !isPointInUganda(latitude, longitude) && !errors.includes(`map pin must be inside ${ACTIVE_TENANT.countryName}`)) errors.push(`map pin must be inside ${ACTIVE_TENANT.countryName}`);
     else if (longitude != null && (longitude < -180 || longitude > 180)) errors.push('longitude is out of range');
     setParts.push(`longitude = $${idx}`);
     values.push(longitude);
@@ -3271,7 +3333,9 @@ async function updatePropertyEditableFields({ propertyId, patch = {} }) {
     correctedFields.push(extraKey);
   };
   addExtraPatch('region');
+  addExtraPatch('province');
   addExtraPatch('city');
+  addExtraPatch('suburb');
   addExtraPatch('neighborhood');
   addExtraPatch('street_name');
   addExtraPatch('location_name');
@@ -3298,7 +3362,7 @@ async function updatePropertyEditableFields({ propertyId, patch = {} }) {
   }
 
   if (Object.prototype.hasOwnProperty.call(normalizedPatch, 'lister_phone')) {
-    const phone = cleanText(normalizeUgPhone(normalizedPatch.lister_phone));
+    const phone = cleanText(normalizeCountryPhone(normalizedPatch.lister_phone));
     extraPatch.contact_phone = phone || null;
     extraPatch.public_contact_phone = phone || null;
   }
@@ -3353,7 +3417,7 @@ async function updatePropertyEditableFields({ propertyId, patch = {} }) {
       title_type: cleanText(normalizedPatch.title_type),
       land_title_available: extraPatch.land_title_available || null,
       land_title_available_label: extraPatch.land_title_available_label || null,
-      lister_phone: cleanText(normalizeUgPhone(normalizedPatch.lister_phone)) || null,
+      lister_phone: cleanText(normalizeCountryPhone(normalizedPatch.lister_phone)) || null,
       nearest_university: cleanText(normalizedPatch.nearest_university),
       distance_to_uni_km: toNullableFloat(normalizedPatch.distance_to_uni_km),
       room_type: cleanText(normalizedPatch.room_type),
@@ -6110,7 +6174,7 @@ router.post('/properties/:id/review-token', async (req, res, next) => {
 router.post('/listing-submit-otp-override', async (req, res, next) => {
   try {
     const channel = cleanText(req.body.channel).toLowerCase() === 'email' ? 'email' : 'phone';
-    const phone = normalizeUgPhone(req.body.phone);
+    const phone = normalizeCountryPhone(req.body.phone);
     const email = normalizeEmail(req.body.email);
     const identifier = channel === 'email' ? email : phone;
 
@@ -6118,8 +6182,8 @@ router.post('/listing-submit-otp-override', async (req, res, next) => {
       if (!identifier || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier)) {
         return res.status(400).json({ ok: false, error: 'Valid email is required' });
       }
-    } else if (!identifier || !/^\+256\d{9}$/.test(identifier)) {
-      return res.status(400).json({ ok: false, error: 'Valid Uganda phone is required' });
+    } else if (!identifier || !(IS_SOUTH_AFRICA ? /^\+27\d{9}$/ : /^\+256\d{9}$/).test(identifier)) {
+      return res.status(400).json({ ok: false, error: `Valid ${ACTIVE_TENANT.countryName} phone is required` });
     }
 
     const token = createListingSubmitToken({ channel, phone, email });
@@ -6654,7 +6718,7 @@ router.get('/field-agents/listings', async (req, res, next) => {
          CASE
            WHEN COALESCE(u.profile_data->>'payout_rate_ugx', '') ~ '^[0-9]+$'
              THEN (u.profile_data->>'payout_rate_ugx')::int
-           ELSE ${FIELD_AGENT_DEFAULT_PAYOUT_UGX}
+           ELSE ${ACTIVE_FIELD_AGENT_DEFAULT_PAYOUT}
          END AS payout_rate_ugx
        FROM properties p
        JOIN users u
@@ -6677,7 +6741,7 @@ router.get('/field-agents/listings', async (req, res, next) => {
 
     const data = rows.rows.map((row) => {
       const normalizedStatus = normalizeAdminPropertyStatus(row.status || row.moderation_stage);
-      const payoutRate = Number(row.payout_rate_ugx || FIELD_AGENT_DEFAULT_PAYOUT_UGX) || FIELD_AGENT_DEFAULT_PAYOUT_UGX;
+      const payoutRate = Number(row.payout_rate_ugx || ACTIVE_FIELD_AGENT_DEFAULT_PAYOUT) || ACTIVE_FIELD_AGENT_DEFAULT_PAYOUT;
       return {
         id: row.id,
         title: row.title,
@@ -7635,7 +7699,7 @@ router.post('/field-agents/provision', async (req, res, next) => {
     const pin = cleanText(req.body.pin);
     const territory = cleanText(req.body.territory);
     const requestedFieldAgentCode = normalizeFieldAgentCode(req.body.field_agent_code || req.body.employee_number);
-    const payoutRateUgx = toNullableInt(req.body.payout_rate_ugx) || FIELD_AGENT_DEFAULT_PAYOUT_UGX;
+    const payoutRateUgx = toNullableInt(req.body.payout_rate_ugx) || ACTIVE_FIELD_AGENT_DEFAULT_PAYOUT;
     const status = cleanText(req.body.status || 'active').toLowerCase();
     const preferredLanguage = cleanText(req.body.preferred_language || 'en').toLowerCase();
     const notes = cleanText(req.body.notes);
@@ -7746,7 +7810,7 @@ router.post('/field-agents/provision', async (req, res, next) => {
       payout_rate_ugx: payoutRateUgx,
       payout_frequency: 'weekly',
       payout_day: FIELD_AGENT_PAYOUT_DAY,
-      payout_rule: `${FIELD_AGENT_DEFAULT_PAYOUT_UGX} UGX per approved listing, paid every ${FIELD_AGENT_PAYOUT_DAY} based on previous week approvals`,
+      payout_rule: `${ACTIVE_FIELD_AGENT_DEFAULT_PAYOUT} ${ACTIVE_TENANT.currencyCode} per approved listing, paid every ${FIELD_AGENT_PAYOUT_DAY} based on previous week approvals`,
       next_payout_source: 'admin_set',
       field_agent_support_phone: supportPhone || existingProfile.field_agent_support_phone || '',
 	      field_agent_notes: notes || existingProfile.field_agent_notes || '',
@@ -8456,8 +8520,8 @@ router.post('/agents/invite', async (req, res, next) => {
     const fullName = cleanText(body.full_name || body.agent_name || body.company_name).slice(0, 160);
     const companyName = cleanText(body.company_name || fullName).slice(0, 160);
     const email = normalizeEmail(body.email);
-    const phone = normalizeUgPhone(body.phone || body.whatsapp);
-    const whatsapp = normalizeUgPhone(body.whatsapp || body.phone);
+    const phone = normalizeCountryPhone(body.phone || body.whatsapp);
+    const whatsapp = normalizeCountryPhone(body.whatsapp || body.phone);
     const districtsCovered = asArray(body.districts_covered || body.districts)
       .flatMap((value) => String(value || '').split(','))
       .map((value) => cleanText(value))
@@ -8475,8 +8539,8 @@ router.post('/agents/invite', async (req, res, next) => {
     if (!fullName) errors.push('Agent or agency name is required');
     if (!companyName) errors.push('Company name is required');
     if (!email || !isValidEmail(email)) errors.push('A valid agent email is required');
-    if (!phone || !isValidPhone(phone)) errors.push('A valid Uganda phone is required');
-    if (!districtsCovered.length) errors.push('At least one valid Uganda district is required');
+    if (!phone || !isValidPhone(phone)) errors.push(`A valid ${ACTIVE_TENANT.countryName} phone is required`);
+    if (!districtsCovered.length) errors.push(`At least one valid ${IS_SOUTH_AFRICA ? 'South African province' : 'Uganda district'} is required`);
     if (!bio) errors.push('A public broker bio is required');
     if (profilePhotoUrl && !(/^data:image\//i.test(profilePhotoUrl) || /^https?:\/\//i.test(profilePhotoUrl))) {
       errors.push('Profile photo must be an image data URL or public HTTPS URL');
@@ -8598,8 +8662,8 @@ router.post('/agents/direct-onboarding', async (req, res, next) => {
     const body = req.body || {};
     const fullName = cleanText(body.full_name || body.agent_name).slice(0, 160);
     const companyName = cleanText(body.company_name || fullName).slice(0, 160);
-    const phone = normalizeUgPhone(body.phone || body.whatsapp);
-    const whatsapp = normalizeUgPhone(body.whatsapp || body.phone);
+    const phone = normalizeCountryPhone(body.phone || body.whatsapp);
+    const whatsapp = normalizeCountryPhone(body.whatsapp || body.phone);
     const email = normalizeEmail(body.email);
     const district = cleanText(body.district).slice(0, 120);
     const area = cleanText(body.area).slice(0, 160);
@@ -8620,9 +8684,9 @@ router.post('/agents/direct-onboarding', async (req, res, next) => {
     const errors = [];
 
     if (!fullName) errors.push('Agent name is required');
-    if (!phone || !isValidPhone(phone)) errors.push('A valid Uganda agent phone is required');
+    if (!phone || !isValidPhone(phone)) errors.push(`A valid ${ACTIVE_TENANT.countryName} agent phone is required`);
     if (email && !isValidEmail(email)) errors.push('Agent email is invalid');
-    if (!district || !DISTRICTS.includes(district)) errors.push('A valid Uganda district is required');
+    if (!district || !DISTRICTS.includes(district)) errors.push(`A valid ${IS_SOUTH_AFRICA ? 'South African province' : 'Uganda district'} is required`);
     if (!area) errors.push('Property area is required');
     if (!title) errors.push('Property title is required');
     if (!description) errors.push('Property description is required');
@@ -9671,7 +9735,7 @@ router.post('/whatsapp/conversations/:phone/reply', async (req, res, next) => {
     }
 
     const manualUrl = buildManualWhatsAppUrl(phone, text);
-    const effectiveDeliveryMode = ['provider', 'web_bridge', 'auto'].includes(requestedDeliveryMode)
+    const effectiveDeliveryMode = ['provider', 'web_bridge', 'test', 'auto'].includes(requestedDeliveryMode)
       ? requestedDeliveryMode
       : getWhatsappDeliveryMode();
 
@@ -10568,7 +10632,7 @@ router.post('/outreach/whatsapp/send', async (req, res, next) => {
     const source = cleanText(req.body?.source);
     const reviewed = req.body?.reviewed === true || String(req.body?.reviewed || '').toLowerCase() === 'true';
     const requestedDeliveryMode = String(req.body?.delivery_mode || '').trim().toLowerCase();
-    const effectiveDeliveryMode = ['provider', 'web_bridge', 'auto'].includes(requestedDeliveryMode)
+    const effectiveDeliveryMode = ['provider', 'web_bridge', 'test', 'auto'].includes(requestedDeliveryMode)
       ? requestedDeliveryMode
       : getWhatsappDeliveryMode();
     const manualUrl = buildManualWhatsAppUrl(phone, bodyText);

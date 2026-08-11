@@ -1,0 +1,69 @@
+projects:
+  - name: seshaikhaya
+    environments:
+      # Arthur approved a hard launch cap of about USD 13/month on 11 August
+      # 2026. Current Render checkout prices put Starter + Basic above that cap,
+      # so staging uses a free web service and an isolated paid ZA database.
+      # Production, workers and custom domains require later approval.
+      - name: staging
+        databases:
+          - name: seshaikhaya-staging-db
+            plan: basic-256mb
+            region: frankfurt
+            databaseName: seshaikhaya_staging
+            user: seshaikhaya_staging
+            ipAllowList: []
+        services:
+          - type: web
+            name: seshaikhaya-staging-web
+            runtime: node
+            region: frankfurt
+            plan: free
+            branch: codex/seshaikhaya-launch-za-20260811
+            buildCommand: npm ci --include=dev && npm run build:css && npm run typecheck:bot
+            startCommand: node scripts/render-start.js
+            healthCheckPath: /healthz
+            autoDeployTrigger: commit
+            envVars:
+              - key: PORT
+                value: "10000"
+              - key: NODE_ENV
+                value: production
+              - key: COUNTRY_CODE
+                value: ZA
+              - key: PUBLIC_BASE_URL
+                value: https://seshaikhaya-staging-web.onrender.com
+              - key: CORS_ORIGINS
+                value: https://seshaikhaya-staging-web.onrender.com
+              - key: DATABASE_URL
+                fromDatabase:
+                  name: seshaikhaya-staging-db
+                  property: connectionString
+              - key: DB_SSL
+                value: "true"
+              - key: RUN_MIGRATIONS_ON_START
+                value: "true"
+              - key: SOUTH_AFRICA_BOOTSTRAP_RESET_SEEDED_DATA
+                value: "true"
+              - key: HARVEST_AUTOMATION_ENABLED
+                value: "false"
+              - key: HARVEST_PUBLIC_SUBMISSIONS_ENABLED
+                value: "false"
+              - key: FEATURED_ROTATION_SCHEDULER_ENABLED
+                value: "false"
+              - key: FEATURED_ROTATION_TIMEZONE
+                value: Africa/Johannesburg
+              - key: APP_HEARTBEAT_TIMEOUT_MS
+                value: "30000"
+              - key: WHATSAPP_DELIVERY_MODE
+                value: test
+              - key: WHATSAPP_WEB_BRIDGE_ENABLED
+                value: "false"
+              - key: JWT_SECRET
+                generateValue: true
+              - key: ADMIN_API_KEY
+                generateValue: true
+              - key: SUPER_ADMIN_KEY
+                generateValue: true
+              - key: WHATSAPP_WEB_BRIDGE_TOKEN
+                generateValue: true

@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ "${WHATSAPP_DELIVERY_MODE:-}" == "test" ]]; then
+  echo "render-whatsapp-test-worker starting country=${COUNTRY_CODE:-UG}"
+  exec node scripts/whatsapp-test-worker.js
+fi
+
 export WHATSAPP_WEB_COPILOT_BASE_URL="${WHATSAPP_WEB_COPILOT_BASE_URL:-https://makaug.com}"
 export WHATSAPP_WEB_COPILOT_PROFILE_DIR="${WHATSAPP_WEB_COPILOT_PROFILE_DIR:-/var/data/whatsapp-profile-live}"
 export WHATSAPP_WEB_COPILOT_CLIENT_ID="${WHATSAPP_WEB_COPILOT_CLIENT_ID:-makaug-whatsapp-web-prod}"

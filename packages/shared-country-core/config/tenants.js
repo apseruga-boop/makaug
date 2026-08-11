@@ -53,6 +53,71 @@ const TENANTS = Object.freeze({
       Object.freeze({ code: "en", label: "English" }),
       Object.freeze({ code: "sw", label: "Kiswahili" })
     ])
+  }),
+  ZA: Object.freeze({
+    countryCode: "ZA",
+    countryName: "South Africa",
+    brandName: "seshaikhaya",
+    publicName: "seshaikhaya.com",
+    domain: "https://seshaikhaya.com",
+    email: "hello@seshaikhaya.com",
+    currencyCode: "ZAR",
+    currencyLabel: "R",
+    capital: "Pretoria",
+    geographySingular: "province",
+    geographyPlural: "provinces",
+    geographyCount: 9,
+    locationHierarchy: Object.freeze(["province", "city", "suburb"]),
+    phoneCountryCode: "+27",
+    phoneE164: "",
+    phoneDisplay: "Number coming soon",
+    logoLetter: "S",
+    logoSuffix: "",
+    localeStorageKey: "seshaikhaya_lang",
+    timezone: "Africa/Johannesburg",
+    dateLocale: "en-ZA",
+    currencies: Object.freeze([
+      Object.freeze({ code: "ZAR", label: "R (ZAR)" }),
+      Object.freeze({ code: "USD", label: "$ (USD)" }),
+      Object.freeze({ code: "EUR", label: "€ (EUR)" }),
+      Object.freeze({ code: "GBP", label: "£ (GBP)" })
+    ]),
+    publicFeatures: Object.freeze({
+      sale: true,
+      rent: true,
+      student: true,
+      commercial: true,
+      land: true,
+      bondFinder: true,
+      brokers: true,
+      askAi: true,
+      whatsapp: true,
+      marketplace: false,
+      valuation: false
+    }),
+    lenders: Object.freeze([
+      "Standard Bank",
+      "ABSA",
+      "FNB",
+      "Nedbank",
+      "Investec",
+      "SA Home Loans",
+      "ooba"
+    ]),
+    saslAccessibilityNote: "South African Sign Language support is provided through accessible video and captioned content where available.",
+    languages: Object.freeze([
+      Object.freeze({ code: "en", label: "English" }),
+      Object.freeze({ code: "af", label: "Afrikaans" }),
+      Object.freeze({ code: "zu", label: "isiZulu" }),
+      Object.freeze({ code: "xh", label: "isiXhosa" }),
+      Object.freeze({ code: "nso", label: "Sepedi" }),
+      Object.freeze({ code: "tn", label: "Setswana" }),
+      Object.freeze({ code: "st", label: "Sesotho" }),
+      Object.freeze({ code: "ts", label: "X\u0069tsonga" }),
+      Object.freeze({ code: "ss", label: "siSwati" }),
+      Object.freeze({ code: "ve", label: "Tshivenda" }),
+      Object.freeze({ code: "nr", label: "isiNdebele" })
+    ])
   })
 });
 

@@ -8,7 +8,14 @@ const {
 } = require('./publicSeoService');
 const { publicVisibleInventoryWhere } = require('./publicInventoryMetricsService');
 const { SEO_FACET_MIN_LISTINGS, FACET_DEFINITIONS, COMMERCIAL_TRANSACTION_FACETS } = require('../utils/publicSeoFacets');
-const { canonicalDisplayLocationForRow, canonicalLocationSearchScope } = require('../utils/ugandaLocationRegistry');
+const { canonicalDisplayLocationForRow, canonicalLocationSearchScope } = require('../utils/locationRegistry');
+const { tenantFor } = require('../packages/shared-country-core');
+
+const ACTIVE_COUNTRY_CODE = String(process.env.COUNTRY_CODE || 'UG').trim().toUpperCase();
+const ACTIVE_TENANT = tenantFor(ACTIVE_COUNTRY_CODE);
+const ACTIVE_BRAND = ACTIVE_TENANT.publicName || ACTIVE_TENANT.brandName;
+const ACTIVE_COUNTRY_NAME = ACTIVE_TENANT.countryName;
+const ACTIVE_CURRENCY = ACTIVE_TENANT.currencyCode;
 
 const SEO_LISTING_CACHE_TTL_MS = Math.max(
   30 * 1000,
@@ -70,11 +77,11 @@ function collapseDuplicatePublicTransaction(value = '') {
     .trim();
 }
 
-function absoluteUrl(value = '', baseUrl = 'https://makaug.com') {
+function absoluteUrl(value = '', baseUrl = ACTIVE_TENANT.domain) {
   const raw = String(value || '').trim();
   if (!raw) return '';
   if (/^https?:\/\//i.test(raw)) return raw;
-  const root = String(baseUrl || 'https://makaug.com').replace(/\/+$/, '');
+  const root = String(baseUrl || ACTIVE_TENANT.domain).replace(/\/+$/, '');
   return `${root}${raw.startsWith('/') ? '' : '/'}${raw}`;
 }
 
@@ -235,7 +242,7 @@ function normalizeSeoListingRow(row = {}) {
   return {
     id: String(row.id || ''),
     listing_type: String(row.listing_type || ''),
-    title: collapseDuplicatePublicTransaction(row.title) || 'Uganda property',
+    title: collapseDuplicatePublicTransaction(row.title) || `${ACTIVE_COUNTRY_NAME} property`,
     description: plainText(row.description),
     area: plainText(canonicalDisplay.area),
     district: plainText(canonicalDisplay.district),
@@ -354,14 +361,14 @@ function propertySeoTitle(listing = {}) {
   const intent = transaction === 'rent' ? ' for Rent' : transaction === 'sale' ? ' for Sale' : '';
   const location = [listing.area, listing.district].filter(Boolean).join(', ');
   const price = Number(listing.price || 0) > 0 ? ` — ${priceLabel(listing)}` : '';
-  return `${bedrooms}${type}${intent}${location ? ` in ${location}` : ''}${price} | makaug.com`;
+  return `${bedrooms}${type}${intent}${location ? ` in ${location}` : ''}${price} | ${ACTIVE_BRAND}`;
 }
 
 function propertySeoDescription(listing = {}) {
   const description = plainText(listing.description);
   const sentence = description.match(/^.*?[.!?](?:\s|$)/)?.[0]?.trim() || description.slice(0, 220).trim();
   if (sentence) return sentence.slice(0, 300);
-  return `${[listing.area, listing.district].filter(Boolean).join(', ')} - ${priceLabel(listing)}. View this Uganda property on makaug.com.`;
+  return `${[listing.area, listing.district].filter(Boolean).join(', ')} - ${priceLabel(listing)}. View this ${ACTIVE_COUNTRY_NAME} property on ${ACTIVE_BRAND}.`;
 }
 
 function listingAreaLocation(listing = {}) {
@@ -457,7 +464,7 @@ function insertBeforeClosingTag(html, tagName, content) {
 
 function categoryH1(meta = {}) {
   const subject = CATEGORY_H1_SUBJECTS[meta.key] || meta.config?.subject || 'Property';
-  if (!meta.location) return `${subject} in Uganda`;
+  if (!meta.location) return `${subject} in ${ACTIVE_COUNTRY_NAME}`;
   const place = meta.location.level === 'district'
     ? meta.location.district
     : `${meta.location.location}, ${meta.location.district}`;
@@ -468,7 +475,7 @@ function areaLinksForCategory(snapshot, categoryKey, currentLocation = null, lim
   const counts = snapshot?.directCounts?.[categoryKey] || snapshot?.counts?.[categoryKey] || new Map();
   const config = CATEGORY_SEO[categoryKey];
   if (!config) return [];
-  const { canonicalLocationOptions } = require('../utils/ugandaLocationRegistry');
+  const { canonicalLocationOptions } = require('../utils/locationRegistry');
   return canonicalLocationOptions()
     .map((location) => ({ ...location, count: Number(counts.get(location.canonical_key) || 0) }))
     .filter((location) => (
@@ -599,7 +606,7 @@ function renderCategorySeoHtml(html, options = {}) {
   const intro = `${renderRouteState(meta.routeState)}${renderBreadcrumbs(items)}<p class="mb-4 text-gray-700" data-ssr-category-summary="1">${escapeHtml(meta.description)}</p>${renderAreaLinks(facetLinks, 'Refine this area')}${renderAreaLinks(areaLinks, meta.location ? 'Nearby and popular areas' : 'Popular areas')}`;
   const cards = listings.length
     ? listings.map((listing, index) => renderSeoListingCard(listing, { categoryKey: meta.key, baseUrl: options.baseUrl, eager: index < 2 })).join('')
-    : `<div class="col-span-full rounded-2xl border border-gray-200 bg-gray-50 p-5"><h2 class="font-black">No live listings in this exact area yet</h2><p class="mt-2 text-sm text-gray-600">Browse nearby areas or return to ${escapeHtml(meta.config.label)} across Uganda.</p></div>`;
+    : `<div class="col-span-full rounded-2xl border border-gray-200 bg-gray-50 p-5"><h2 class="font-black">No live listings in this exact area yet</h2><p class="mt-2 text-sm text-gray-600">Browse nearby areas or return to ${escapeHtml(meta.config.label)} across ${escapeHtml(ACTIVE_COUNTRY_NAME)}.</p></div>`;
   let rendered = replacePageH1(html, pageId, h1);
   rendered = replaceElementInnerHtml(rendered, gridId, cards);
   rendered = insertBeforeElement(rendered, gridId, intro);
@@ -625,7 +632,7 @@ function renderCategorySeoHtml(html, options = {}) {
           name: h1,
           description: meta.description,
           url: meta.canonical,
-          isPartOf: { '@type': 'WebSite', name: 'makaug.com', url: absoluteUrl('/', options.baseUrl) }
+          isPartOf: { '@type': 'WebSite', name: ACTIVE_BRAND, url: absoluteUrl('/', options.baseUrl) }
         },
         breadcrumbStructuredData(items),
         itemList
@@ -662,7 +669,7 @@ function renderPropertySeoHtml(html, listing, options = {}) {
             listing.bathrooms ? `${listing.bathrooms} ${listing.bathrooms === 1 ? 'bathroom' : 'bathrooms'}` : '',
             listing.property_type
           ].filter(Boolean).map(escapeHtml).join(' · ')}</p>
-          <section class="mt-6"><h2 class="text-xl font-black text-gray-900">Property description</h2><p class="mt-2 whitespace-pre-line text-gray-700">${escapeHtml(listing.description || `View this property in ${locationLabel} on makaug.com.`)}</p></section>
+          <section class="mt-6"><h2 class="text-xl font-black text-gray-900">Property description</h2><p class="mt-2 whitespace-pre-line text-gray-700">${escapeHtml(listing.description || `View this property in ${locationLabel} on ${ACTIVE_BRAND}.`)}</p></section>
         </div>
       </div>
     </div>
@@ -679,13 +686,13 @@ function renderPropertySeoHtml(html, listing, options = {}) {
       '@type': 'PostalAddress',
       addressLocality: listing.area || '',
       addressRegion: listing.district || '',
-      addressCountry: 'UG'
+      addressCountry: ACTIVE_COUNTRY_CODE
     },
     ...(listing.price > 0 ? {
       offers: {
         '@type': 'Offer',
         price: listing.price,
-        priceCurrency: 'UGX',
+        priceCurrency: ACTIVE_CURRENCY,
         url: propertyUrl,
         availability: 'https://schema.org/InStock'
       }
@@ -718,7 +725,7 @@ function renderHomepageSeoHtml(html, options = {}) {
     eager: index < 2
   })).join('');
   let rendered = cards ? replaceElementInnerHtml(html, 'home-grid', cards) : html;
-  const popularAreas = renderAreaLinks(areaLinks, 'Popular property areas in Uganda');
+  const popularAreas = renderAreaLinks(areaLinks, `Popular property areas in ${ACTIVE_COUNTRY_NAME}`);
   rendered = insertBeforeElement(rendered, 'home-grid', popularAreas);
   rendered = insertBeforeClosingTag(rendered, 'footer', renderFooterAreaLinks(areaLinks));
   return {
@@ -728,13 +735,13 @@ function renderHomepageSeoHtml(html, options = {}) {
       '@graph': [
         {
           '@type': 'Organization',
-          name: 'makaug.com',
+          name: ACTIVE_BRAND,
           url: absoluteUrl('/', options.baseUrl),
-          areaServed: { '@type': 'Country', name: 'Uganda' }
+          areaServed: { '@type': 'Country', name: ACTIVE_COUNTRY_NAME }
         },
         {
           '@type': 'WebSite',
-          name: 'makaug.com',
+          name: ACTIVE_BRAND,
           url: absoluteUrl('/', options.baseUrl),
           potentialAction: {
             '@type': 'SearchAction',

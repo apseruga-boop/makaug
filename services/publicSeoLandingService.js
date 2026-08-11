@@ -7,7 +7,7 @@ const {
   locationForRouteSlug,
   slugifySeoPart
 } = require('./publicSeoService');
-const { canonicalLocationOptions } = require('../utils/ugandaLocationRegistry');
+const { canonicalLocationOptions } = require('../utils/locationRegistry');
 const {
   SEO_FACET_MIN_LISTINGS,
   FACET_DEFINITIONS,

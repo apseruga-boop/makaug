@@ -24,7 +24,7 @@ const {
   normalizeReviewLocationHierarchy,
   regionForDistrict
 } = require('../utils/ugandaLocationHierarchy');
-const { canonicalizeUgandaLocation } = require('../utils/ugandaLocationRegistry');
+const { canonicalizeUgandaLocation } = require('../utils/locationRegistry');
 const { addLeadActivity } = require('../services/leadService');
 const { buildAutomatedListingReview, normalizeReviewChecklist } = require('../services/listingModerationService');
 const { getCachedExternalDuplicateScan } = require('../services/externalDuplicateScanService');

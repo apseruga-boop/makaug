@@ -2,7 +2,10 @@
 
 const { sourcePriceAmount } = require('./propertyPriceCurrency');
 
-const FOREIGN_MARKET_SIGNALS = [
+const ACTIVE_COUNTRY_CODE = String(process.env.COUNTRY_CODE || 'UG').trim().toUpperCase();
+const IS_SOUTH_AFRICA = ACTIVE_COUNTRY_CODE === 'ZA';
+
+const UGANDA_FOREIGN_MARKET_SIGNALS = [
   { pattern: /\b(?:rwf|frw|rwandan francs?)\b/i, reason: 'foreign_currency_rwf' },
   { pattern: /\b(?:kes|kshs?|kenyan shillings?)\b/i, reason: 'foreign_currency_kes' },
   { pattern: /\b(?:tzs|tshs?|tanzanian shillings?)\b/i, reason: 'foreign_currency_tzs' },
@@ -14,14 +17,33 @@ const FOREIGN_MARKET_SIGNALS = [
   { pattern: /[\u0D80-\u0DFF\u0900-\u097F\u0B80-\u0BFF]/u, reason: 'foreign_market_script' },
 ];
 
+const SOUTH_AFRICA_FOREIGN_MARKET_SIGNALS = [
+  { pattern: /\b(?:ugx|ush|ugandan shillings?)\b/i, reason: 'foreign_currency_ugx' },
+  { pattern: /\b(?:rwf|frw|rwandan francs?)\b/i, reason: 'foreign_currency_rwf' },
+  { pattern: /\b(?:kes|kshs?|kenyan shillings?)\b/i, reason: 'foreign_currency_kes' },
+  { pattern: /\b(?:tzs|tshs?|tanzanian shillings?)\b/i, reason: 'foreign_currency_tzs' },
+  { pattern: /(?:₦|\bngn\b|\bnaira\b)/i, reason: 'foreign_currency_ngn' },
+  { pattern: /\b(?:uganda|kampala|wakiso|kenya|nairobi|mombasa|rwanda|kigali|tanzania|dar es salaam|nigeria|abuja|lagos|united states|usa)\b/i, reason: 'foreign_market_location' },
+  { pattern: /[\u0D80-\u0DFF\u0900-\u097F\u0B80-\u0BFF]/u, reason: 'foreign_market_script' },
+];
+
+const FOREIGN_MARKET_SIGNALS = IS_SOUTH_AFRICA
+  ? SOUTH_AFRICA_FOREIGN_MARKET_SIGNALS
+  : UGANDA_FOREIGN_MARKET_SIGNALS;
+
 const EXPLICIT_LISTING_INTENT_PATTERN = /\b(?:for sale|on sale|selling|for rent|to rent|to let|for lease|available for (?:sale|rent)|asking price|guide price|price\s*:)\b/i;
 const CONSTRUCTION_COST_PATTERN = /\b(?:build(?:ing)? costs?|cost to build|construction costs?|material costs?|cost breakdown|roofing materials?|bill of quantities|boq)\b/i;
-const FOREIGN_INTERNATIONAL_PHONE_PATTERN = /\+(?!256)\d{1,3}(?:[\s().-]*\d){7,14}/g;
-const UGANDA_PHONE_CANDIDATE_PATTERN = /(^|[^\d+])((?:\+?256[\s().-]*|0)7\d{2}[\s().-]*\d{3}[\s().-]*\d{3}|7\d{2}[\s().-]*\d{3}[\s().-]*\d{3})(?=$|[^\d])/g;
-const SOURCE_PRICE_EVIDENCE_PATTERN = /(?:\b(?:ugx|ush|shs?)\s*|(?:\$|us\$|usd)\s*)?\d[\d,.]*(?:\s*(?:bn|b|billion|billions|m|mn|million|millions|k|thousand|thousands)(?![a-z]))?(?:\s*(?:ugx|ush|shs?))?(?:\s*(?:\/\s*(?:month|mo)|per\s+month|monthly))?/gi;
-const SOURCE_PRICE_CONTEXT_PATTERN = /\b(?:price|asking|guide\s+price|at|only|going\s+for|selling\s+at|rent(?:ed)?\s+at)\s*(?:is|of|:|-)?\s*((?:ugx|ush|shs?)?\s*\d[\d,.]*(?:\s*(?:bn|b|billion|billions|m|mn|million|millions|k|thousand|thousands))?(?:\s*(?:ugx|ush|shs?))?)/gi;
+const FOREIGN_INTERNATIONAL_PHONE_PATTERN = IS_SOUTH_AFRICA
+  ? /\+(?!27)\d{1,3}(?:[\s().-]*\d){7,14}/g
+  : /\+(?!256)\d{1,3}(?:[\s().-]*\d){7,14}/g;
+const UGANDA_PHONE_CANDIDATE_PATTERN = IS_SOUTH_AFRICA
+  ? /(^|[^\d+])((?:\+?27[\s().-]*|0)[6-8](?:[\s().-]*\d){8}|[6-8]\d{8})(?=$|[^\d])/g
+  : /(^|[^\d+])((?:\+?256[\s().-]*|0)7\d{2}[\s().-]*\d{3}[\s().-]*\d{3}|7\d{2}[\s().-]*\d{3}[\s().-]*\d{3})(?=$|[^\d])/g;
+const PRICE_CURRENCY_SOURCE = IS_SOUTH_AFRICA ? '(?:zar|r|usd|us\\$|\\$|eur|€|gbp|£)' : '(?:ugx|ush|shs?|usd|us\\$|\\$)';
+const SOURCE_PRICE_EVIDENCE_PATTERN = new RegExp(`(?:\\b${PRICE_CURRENCY_SOURCE}\\s*)?\\d[\\d,.]*(?:\\s*(?:bn|b|billion|billions|m|mn|million|millions|k|thousand|thousands)(?![a-z]))?(?:\\s*${PRICE_CURRENCY_SOURCE})?(?:\\s*(?:\\/\\s*(?:month|mo|m²|sqm)|per\\s+(?:month|m²|square\\s+metre)|monthly))?`, 'gi');
+const SOURCE_PRICE_CONTEXT_PATTERN = new RegExp(`\\b(?:price|asking|guide\\s+price|at|only|going\\s+for|selling\\s+at|rent(?:ed)?\\s+at)\\s*(?:is|of|:|-)?\\s*(${PRICE_CURRENCY_SOURCE}?\\s*\\d[\\d,.]*(?:\\s*(?:bn|b|billion|billions|m|mn|million|millions|k|thousand|thousands))?(?:\\s*${PRICE_CURRENCY_SOURCE})?)`, 'gi');
 const SOURCE_PRICE_MAX_RELATIVE_DRIFT = 0.001;
-const CONSTRUCTION_MONEY_TOKEN_SOURCE = '(?:(?:ugx|ush|shs?|usd|us\\$|\\$)\\s*)?\\d[\\d,.]*(?:\\s*(?:bn|b|billion|billions|m|mn|million|millions|k|thousand|thousands))?';
+const CONSTRUCTION_MONEY_TOKEN_SOURCE = `(?:${PRICE_CURRENCY_SOURCE}\\s*)?\\d[\\d,.]*(?:\\s*(?:bn|b|billion|billions|m|mn|million|millions|k|thousand|thousands))?`;
 
 function compactText(value = '') {
   return String(value || '').replace(/\s+/g, ' ').trim();
@@ -57,6 +79,14 @@ function foreignSourceMarketStatus(text = '') {
 function normalizeUgandanSourcePhone(value = '') {
   const raw = compactText(value);
   if (!raw) return '';
+  if (IS_SOUTH_AFRICA) {
+    if (/^\+(?!27)/.test(raw) || /^00(?!27)/.test(raw)) return '';
+    const digits = raw.replace(/\D/g, '');
+    if (/^27[6-8]\d{8}$/.test(digits)) return `+${digits}`;
+    if (/^0[6-8]\d{8}$/.test(digits)) return `+27${digits.slice(1)}`;
+    if (/^[6-8]\d{8}$/.test(digits)) return `+27${digits}`;
+    return '';
+  }
   if (/^\+(?!256)/.test(raw) || /^00(?!256)/.test(raw)) return '';
   const digits = raw.replace(/\D/g, '');
   if (/^2567\d{8}$/.test(digits)) return `+${digits}`;
@@ -100,7 +130,7 @@ function sourcePriceMatchesPhone(value, text = '') {
   if (!candidateDigits) return false;
   const phone = ugandanPhoneFromSourceText(text).replace(/\D/g, '');
   if (!phone) return false;
-  const localPhone = phone.replace(/^256/, '');
+  const localPhone = phone.replace(IS_SOUTH_AFRICA ? /^27/ : /^256/, '');
   return candidateDigits === phone
     || candidateDigits === localPhone
     || candidateDigits === `0${localPhone}`;
@@ -111,7 +141,7 @@ function sourcePriceEvidenceAmounts(text = '') {
   const candidates = [];
   for (const match of masked.matchAll(SOURCE_PRICE_EVIDENCE_PATTERN)) {
     const token = compactText(match[0]);
-    if (!token || !/(?:ugx|ush|shs?|usd|us\$|\$|bn|b|billion|m(?:n|illion)?|k|thousand|\/\s*(?:month|mo)|per\s+month|monthly)/i.test(token)) continue;
+    if (!token || !/(?:zar|\br\s*\d|ugx|ush|shs?|usd|us\$|\$|eur|€|gbp|£|bn|b|billion|m(?:n|illion)?|k|thousand|\/\s*(?:month|mo|m²|sqm)|per\s+(?:month|m²|square\s+metre)|monthly)/i.test(token)) continue;
     const amount = sourcePriceAmount(token);
     if (Number.isFinite(amount) && amount > 0) candidates.push(amount);
   }
@@ -147,7 +177,8 @@ function safeSourcePriceCandidate(value, text = '') {
     return { value: null, reason: 'invalid_source_price' };
   }
   const explicitUsdValue = /(?:\$|\b(?:usd|us\$)\b)/i.test(String(value));
-  if (numericValue < 10000 && !explicitUsdValue) {
+  const minimumPlausibleListingPrice = IS_SOUTH_AFRICA ? 500 : 10000;
+  if (numericValue < minimumPlausibleListingPrice && !explicitUsdValue) {
     return { value: null, reason: 'implausible_unit_count_is_not_price' };
   }
   if (!sourcePriceHasEvidence(value, sourceText)) {

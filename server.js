@@ -3,6 +3,7 @@ require('dotenv').config();
 const path = require('path');
 const fs = require('fs');
 const zlib = require('zlib');
+const http = require('http');
 const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
@@ -54,7 +55,12 @@ const {
 } = require('./utils/harvestFeatureFlags');
 const { DISTRICTS: MARKETPLACE_DISTRICTS, MARKETPLACE_CATEGORIES } = require('./services/marketplaceService');
 const { loadPublicOpportunitySummary } = require('./services/publicInventoryMetricsService');
-const { applyUgandaHomepage } = require('./packages/shared-country-core');
+const {
+  SESHAIKHAYA_LAUNCH_MARKER,
+  applyCountryHtml,
+  applyCountryJavaScript,
+  tenantFor
+} = require('./packages/shared-country-core');
 const {
   CATEGORY_SEO,
   loadPublicSeoInventorySnapshot,
@@ -79,8 +85,13 @@ const app = express();
 // Required on Render so rate limiting uses the forwarded client IP correctly.
 app.set('trust proxy', 1);
 
+const ACTIVE_COUNTRY_CODE = String(process.env.COUNTRY_CODE || 'UG').trim().toUpperCase();
+const ACTIVE_TENANT = tenantFor(ACTIVE_COUNTRY_CODE);
+const IS_SOUTH_AFRICA = ACTIVE_COUNTRY_CODE === 'ZA';
+
 const RUNTIME_BUILD_ID = 'bundle-version-commit-key-20260719';
 const RUNTIME_STARTED_AT = new Date().toISOString();
+let runtimeReady = false;
 
 function escapeXml(value = '') {
   return String(value).replace(/[<>&'\"]/g, (character) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '\"': '&quot;' }[character]));
@@ -111,8 +122,9 @@ app.use(
   cors({
     origin(origin, callback) {
       const isLocalOrigin = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/i.test(String(origin || ''));
-      const isMakaugOrigin = /^https?:\/\/([^/]+\.)?makaug\.com$/i.test(String(origin || ''));
-      if (!origin || !corsOrigins.length || corsOrigins.includes(origin) || isLocalOrigin || isMakaugOrigin) {
+      const tenantHost = new URL(ACTIVE_TENANT.domain).hostname.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const isTenantOrigin = new RegExp(`^https?:\\/\\/(?:[^/]+\\.)?${tenantHost}$`, 'i').test(String(origin || ''));
+      if (!origin || !corsOrigins.length || corsOrigins.includes(origin) || isLocalOrigin || isTenantOrigin) {
         return callback(null, true);
       }
       return callback(new Error('CORS origin not allowed'));
@@ -131,6 +143,29 @@ app.use(express.json({
   }
 }));
 
+// Render's process-level health probe must not wait on database work. The
+// existing /api/health route remains the deeper database readiness check.
+app.get('/healthz', (_req, res) => {
+  res.set('Cache-Control', 'no-store');
+  return res.status(200).json({
+    ok: true,
+    service: process.env.RENDER_SERVICE_NAME || ACTIVE_TENANT.brandName,
+    country_code: ACTIVE_COUNTRY_CODE,
+    ready: runtimeReady,
+    started_at: RUNTIME_STARTED_AT
+  });
+});
+
+app.use((_req, res, next) => {
+  if (runtimeReady) return next();
+  res.set('Cache-Control', 'no-store');
+  return res.status(503).json({
+    ok: false,
+    error: 'service_starting',
+    country_code: ACTIVE_COUNTRY_CODE
+  });
+});
+
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 1000,
@@ -145,7 +180,9 @@ app.get('/api/version', (_req, res) => {
   res.set('Cache-Control', 'no-store');
   return res.status(200).json({
     ok: true,
-    service: process.env.RENDER_SERVICE_NAME || 'makaug',
+    service: process.env.RENDER_SERVICE_NAME || ACTIVE_TENANT.brandName,
+    country_code: ACTIVE_COUNTRY_CODE,
+    tenant: ACTIVE_TENANT.brandName,
     build_id: RUNTIME_BUILD_ID,
     git_commit: process.env.RENDER_GIT_COMMIT || process.env.SOURCE_VERSION || process.env.GIT_COMMIT || null,
     instance_id: process.env.RENDER_INSTANCE_ID || process.env.HOSTNAME || null,
@@ -154,13 +191,15 @@ app.get('/api/version', (_req, res) => {
       'canonical-location-source-review-115',
       'master-data-integrity-116',
       'shared-uganda-location-resolver-coverage',
+      'location-query-normalization-prominence-20260811',
+      'shared-country-location-query-normalization-20260811',
       'whatsapp-shared-location-resolver',
       'prelaunch-backlog-gates',
       'whatsapp-property-card-v2',
       'human-integrity-override-20260811',
       'human-approval-overlord-20260811',
       'king-timestamp-iso-normalization-20260811',
-      'location-query-normalization-prominence-20260811'
+      ...(IS_SOUTH_AFRICA ? [SESHAIKHAYA_LAUNCH_MARKER, 'seshaikhaya-national-gazetteer-20260811'] : [])
     ]
   });
 });
@@ -172,8 +211,8 @@ app.use('/api/agents', agentsRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/advertising', advertisingRoutes);
 app.use('/api/monetization', monetizationRoutes);
-app.use('/api/marketplace', marketplaceRoutes);
-app.use('/api/valuation', valuationRoutes);
+if (ACTIVE_TENANT.publicFeatures?.marketplace !== false) app.use('/api/marketplace', marketplaceRoutes);
+if (ACTIVE_TENANT.publicFeatures?.valuation !== false) app.use('/api/valuation', valuationRoutes);
 app.use('/api/tiktok-display', tiktokDisplayRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/saved-properties', savedPropertiesRoutes);
@@ -191,7 +230,8 @@ app.use('/api/staff', staffRoutes);
 app.use('/api/harvest', harvestRoutes);
 
 app.get('/marketplace-sitemap.xml', (_req, res) => {
-  const baseUrl = String(process.env.PUBLIC_BASE_URL || process.env.APP_BASE_URL || 'https://makaug.com').replace(/\/+$/, '');
+  if (ACTIVE_TENANT.publicFeatures?.marketplace === false) return res.status(404).type('text/plain').send('Not found');
+  const baseUrl = String(process.env.PUBLIC_BASE_URL || process.env.APP_BASE_URL || ACTIVE_TENANT.domain).replace(/\/+$/, '');
   const urls = [`${baseUrl}/marketplace`];
   for (const category of MARKETPLACE_CATEGORIES) {
     for (const district of MARKETPLACE_DISTRICTS) {
@@ -203,8 +243,8 @@ app.get('/marketplace-sitemap.xml', (_req, res) => {
 });
 
 app.get('/robots.txt', (_req, res) => {
-  const baseUrl = String(process.env.PUBLIC_BASE_URL || process.env.APP_BASE_URL || 'https://makaug.com').replace(/\/+$/, '');
-  res.type('text/plain').set('Cache-Control', 'public, max-age=3600').send([
+  const baseUrl = String(process.env.PUBLIC_BASE_URL || process.env.APP_BASE_URL || ACTIVE_TENANT.domain).replace(/\/+$/, '');
+  const lines = [
     'User-agent: *',
     'Allow: /',
     'Disallow: /admin',
@@ -212,15 +252,16 @@ app.get('/robots.txt', (_req, res) => {
     'Disallow: /staff',
     'Disallow: /dashboard',
     'Disallow: /api/',
-    `Sitemap: ${baseUrl}/sitemap.xml`,
-    `Sitemap: ${baseUrl}/marketplace-sitemap.xml`,
-    ''
-  ].join('\n'));
+    `Sitemap: ${baseUrl}/sitemap.xml`
+  ];
+  if (ACTIVE_TENANT.publicFeatures?.marketplace !== false) lines.push(`Sitemap: ${baseUrl}/marketplace-sitemap.xml`);
+  lines.push('');
+  res.type('text/plain').set('Cache-Control', 'public, max-age=3600').send(lines.join('\n'));
 });
 
 app.get('/sitemap.xml', async (_req, res, next) => {
   try {
-    const baseUrl = String(process.env.PUBLIC_BASE_URL || process.env.APP_BASE_URL || 'https://makaug.com').replace(/\/+$/, '');
+    const baseUrl = String(process.env.PUBLIC_BASE_URL || process.env.APP_BASE_URL || ACTIVE_TENANT.domain).replace(/\/+$/, '');
     let snapshot = { counts: {}, properties: [] };
     try {
       snapshot = await loadPublicSeoInventorySnapshot(db);
@@ -479,6 +520,7 @@ const publicAppVersionSuffixes = [
   socialImportTilesVersion
 ];
 let cachedIndexHtml = null;
+let countryAppAssetCache = null;
 const publicHtmlCache = new Map();
 const textAssetCache = new Map();
 const PUBLIC_HTML_WARMUP_PATHS = [
@@ -623,10 +665,16 @@ function compressBody(body, encoding) {
   return body;
 }
 
-function readCachedTextAsset(filePath) {
+function readCachedTextAsset(filePath, { compress = true } = {}) {
   const stat = fs.statSync(filePath);
   const cached = textAssetCache.get(filePath);
   if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) {
+    if (compress && !cached.compressed) {
+      cached.compressed = {
+        br: compressBody(cached.body, 'br'),
+        gzip: compressBody(cached.body, 'gzip')
+      };
+    }
     return cached;
   }
   const body = fs.readFileSync(filePath);
@@ -636,13 +684,32 @@ function readCachedTextAsset(filePath) {
     body,
     etag: `W/"${stat.size.toString(16)}-${Math.floor(stat.mtimeMs).toString(16)}"`,
     lastModified: stat.mtime.toUTCString(),
-    compressed: {
+    compressed: compress ? {
       br: compressBody(body, 'br'),
       gzip: compressBody(body, 'gzip')
-    }
+    } : null
   };
   textAssetCache.set(filePath, entry);
   return entry;
+}
+
+function readCountryAppAsset() {
+  const source = readCachedTextAsset(appJsPath, { compress: false });
+  if (
+    countryAppAssetCache
+    && countryAppAssetCache.sourceEtag === source.etag
+    && countryAppAssetCache.countryCode === ACTIVE_COUNTRY_CODE
+  ) return countryAppAssetCache;
+
+  const body = Buffer.from(applyCountryJavaScript(source.body.toString('utf8'), ACTIVE_COUNTRY_CODE), 'utf8');
+  countryAppAssetCache = {
+    sourceEtag: source.etag,
+    countryCode: ACTIVE_COUNTRY_CODE,
+    body,
+    etag: `W/"${ACTIVE_COUNTRY_CODE.toLowerCase()}-${runtimeBundleVersion()}"`,
+    lastModified: source.lastModified
+  };
+  return countryAppAssetCache;
 }
 
 function sendBufferResponse(req, res, body, options = {}) {
@@ -652,7 +719,8 @@ function sendBufferResponse(req, res, body, options = {}) {
     cacheControl = 'no-store',
     etag = '',
     lastModified = '',
-    compressed = null
+    compressed = null,
+    dynamicCompression = true
   } = options;
 
   res.setHeader('Content-Type', contentType);
@@ -668,8 +736,8 @@ function sendBufferResponse(req, res, body, options = {}) {
   const encoding = preferredContentEncoding(req);
   let output = source;
   if (encoding && source.length >= 1024) {
-    const candidate = compressed?.[encoding] || compressBody(source, encoding);
-    if (candidate.length < source.length) {
+    const candidate = compressed?.[encoding] || (dynamicCompression ? compressBody(source, encoding) : null);
+    if (candidate && candidate.length < source.length) {
       output = candidate;
       res.setHeader('Content-Encoding', encoding);
     }
@@ -689,6 +757,7 @@ function sendTextResponse(req, res, html, options = {}) {
   res.setHeader('Expires', '0');
   return sendBufferResponse(req, res, Buffer.from(String(html || ''), 'utf8'), {
     contentType: 'text/html; charset=utf-8',
+    dynamicCompression: false,
     ...options
   });
 }
@@ -899,8 +968,8 @@ function renderPublicHtml(pathname) {
   const key = normalizedBasePath === '/login' ? rawPath : normalizedBasePath;
   if (isProduction && publicHtmlCache.has(key)) return publicHtmlCache.get(key);
   let rendered = sanitizePublicHtml(readIndexHtml(), { pathname: rawPath });
-  if (normalizedBasePath === '/' && process.env.SHARED_CORE_PHASE1_ENABLED !== 'false') {
-    rendered = applyUgandaHomepage(rendered);
+  if (process.env.SHARED_CORE_PHASE1_ENABLED !== 'false') {
+    rendered = applyCountryHtml(rendered, ACTIVE_COUNTRY_CODE, { homepage: normalizedBasePath === '/' });
   }
   rendered = applyHarvestPublicSubmissionVisibility(rendered);
   if (isProduction) publicHtmlCache.set(key, rendered);
@@ -919,7 +988,7 @@ function absolutePublicUrl(value) {
   const raw = String(value || '').trim();
   if (!raw) return '';
   if (/^https?:\/\//i.test(raw)) return raw;
-  const base = String(process.env.PUBLIC_SITE_URL || process.env.PUBLIC_BASE_URL || process.env.APP_BASE_URL || 'https://makaug.com').replace(/\/+$/, '');
+  const base = String(process.env.PUBLIC_SITE_URL || process.env.PUBLIC_BASE_URL || process.env.APP_BASE_URL || ACTIVE_TENANT.domain).replace(/\/+$/, '');
   return `${base}${raw.startsWith('/') ? '' : '/'}${raw}`;
 }
 
@@ -1156,6 +1225,16 @@ app.get(Object.values(CATEGORY_SEO).flatMap((config) => [config.route, `${config
 
 app.get('/assets/makaug-app.js', (req, res, next) => {
   try {
+    if (ACTIVE_COUNTRY_CODE !== 'UG') {
+      const adapted = readCountryAppAsset();
+      return sendBufferResponse(req, res, adapted.body, {
+        contentType: 'application/javascript; charset=utf-8',
+        cacheControl: LONG_LIVED_STATIC_CACHE_CONTROL,
+        etag: adapted.etag,
+        lastModified: adapted.lastModified,
+        dynamicCompression: false
+      });
+    }
     const asset = readCachedTextAsset(appJsPath);
     return sendBufferResponse(req, res, asset.body, {
       contentType: 'application/javascript; charset=utf-8',
@@ -1218,8 +1297,12 @@ app.get(['/', '/index.html'], async (req, res, next) => {
       baseUrl: absolutePublicUrl('/')
     });
     const html = patchPublicPageSeoMeta(renderedSeo.html, {
-      title: 'makaug.com | Houses for Rent and Sale in Uganda',
-      description: "Find houses for rent, homes for sale, land, commercial property and student accommodation across Uganda on makaug.com.",
+      title: IS_SOUTH_AFRICA
+        ? 'seshaikhaya.com | Property for Sale and Rent in South Africa'
+        : 'makaug.com | Houses for Rent and Sale in Uganda',
+      description: IS_SOUTH_AFRICA
+        ? "Find reviewed homes for sale, rentals, land, commercial property and student accommodation across South Africa on seshaikhaya.com."
+        : "Find houses for rent, homes for sale, land, commercial property and student accommodation across Uganda on makaug.com.",
       canonical: absolutePublicUrl('/'),
       image: absolutePublicUrl('/assets/house-ads-v3/home-hero.webp'),
       structuredData: renderedSeo.structuredData
@@ -1290,6 +1373,12 @@ function shouldServeAdminShellForApiKeyFallback(auth, pathname = '') {
 
 function sendPublicIndex(req, res, next) {
   if (req.path.startsWith('/api/')) return next();
+  if (ACTIVE_TENANT.publicFeatures?.marketplace === false && /^\/marketplace(?:\/|$)/i.test(req.path)) {
+    return res.status(404).type('text/plain').send('Not found');
+  }
+  if (ACTIVE_TENANT.publicFeatures?.valuation === false && /^\/valuation(?:\/|$)/i.test(req.path)) {
+    return res.status(404).type('text/plain').send('Not found');
+  }
   if (isProtectedPath(req.path)) {
     const auth = authFromCookie(req);
     res.set('X-Robots-Tag', 'noindex, noarchive');
@@ -1380,8 +1469,33 @@ app.use(notFound);
 app.use(errorHandler);
 
 const port = parseInt(process.env.PORT || '8080', 10);
+const listenHost = process.env.RENDER_INTERNAL_APP === 'true' ? '127.0.0.1' : '0.0.0.0';
 
 async function start() {
+  const httpServer = http.createServer(app);
+  httpServer.keepAliveTimeout = 120_000;
+  httpServer.headersTimeout = 121_000;
+  httpServer.on('error', (error) => {
+    logger.error('HTTP server failed', {
+      code: error?.code,
+      message: error?.message,
+      port
+    });
+  });
+  await new Promise((resolve, reject) => {
+    httpServer.once('error', reject);
+    httpServer.listen(port, listenHost, () => {
+      httpServer.removeListener('error', reject);
+      resolve();
+    });
+  });
+  const address = httpServer.address();
+  logger.info(`${ACTIVE_TENANT.brandName} liveness endpoint accepting traffic`, {
+    host: typeof address === 'object' && address ? address.address : listenHost,
+    port: typeof address === 'object' && address ? address.port : port,
+    family: typeof address === 'object' && address ? address.family : null
+  });
+
   if (process.env.DATABASE_URL && process.env.RUN_MIGRATIONS_ON_START !== 'false') {
     await runMigrations();
   } else if (!process.env.DATABASE_URL) {
@@ -1412,20 +1526,47 @@ async function start() {
       });
     }
   }
+  if (ACTIVE_COUNTRY_CODE !== 'UG') {
+    try {
+      const adaptedApp = readCountryAppAsset();
+      renderPublicHtml('/');
+      logger.info('Country public assets warmed before accepting traffic', {
+        country_code: ACTIVE_COUNTRY_CODE,
+        app_bytes: adaptedApp.body.length
+      });
+    } catch (error) {
+      logger.warn('Country public asset warmup failed; first request will retry', {
+        country_code: ACTIVE_COUNTRY_CODE,
+        message: error.message
+      });
+    }
+  }
   if (harvestAutomationEnabled()) {
     startXSourceDripScheduler(db);
     startYouTubeSourceDripScheduler(db);
   } else {
     logger.info('Harvest automation schedulers disabled by rollout flag');
   }
-  startMarketplaceLifecycleScheduler(db);
-  startMarketplaceDripScheduler(db);
-  startFeaturedRotationScheduler(db);
-
-  app.listen(port, '0.0.0.0', () => {
-    logger.info(`makaug backend running on http://localhost:${port}`);
-    schedulePublicCacheWarmup(`http://127.0.0.1:${port}`);
-  });
+  if (ACTIVE_TENANT.publicFeatures?.marketplace !== false) {
+    startMarketplaceLifecycleScheduler(db);
+    startMarketplaceDripScheduler(db);
+  }
+  if (!IS_SOUTH_AFRICA || process.env.FEATURED_ROTATION_SCHEDULER_ENABLED === 'true') {
+    startFeaturedRotationScheduler(db);
+  } else {
+    logger.info('Featured rotation scheduler disabled for South Africa staging');
+  }
+  runtimeReady = true;
+  logger.info(`${ACTIVE_TENANT.brandName} backend ready for traffic`);
+  if (typeof process.send === 'function' && process.connected) {
+    const sendRenderHeartbeat = () => {
+      if (process.connected) process.send({ type: 'runtime_heartbeat' });
+    };
+    process.send({ type: 'runtime_ready' });
+    const renderHeartbeatTimer = setInterval(sendRenderHeartbeat, 1000);
+    renderHeartbeatTimer.unref?.();
+  }
+  schedulePublicCacheWarmup(`http://127.0.0.1:${port}`);
 }
 
 start().catch((error) => {

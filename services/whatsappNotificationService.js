@@ -1,4 +1,5 @@
 const logger = require('../config/logger');
+const crypto = require('crypto');
 
 let twilioPackage = null;
 let twilioClient = null;
@@ -6,6 +7,12 @@ let twilioClient = null;
 function normalizeUgPhoneForWhatsApp(phone) {
   const digits = String(phone || '').replace(/\D/g, '');
   if (!digits) return '';
+  const countryCode = String(process.env.COUNTRY_CODE || 'UG').trim().toUpperCase();
+  if (countryCode === 'ZA') {
+    if (digits.startsWith('27') && digits.length === 11) return digits;
+    if (digits.startsWith('0') && digits.length === 10) return `27${digits.slice(1)}`;
+    return digits;
+  }
   if (digits.startsWith('256') && digits.length === 12) return digits;
   if (digits.startsWith('0') && digits.length === 10) return `256${digits.slice(1)}`;
   return digits;
@@ -109,6 +116,22 @@ async function sendWhatsAppText({ to, body }) {
   const message = String(body || '').trim();
   if (!recipient) return { sent: false, reason: 'invalid_recipient' };
   if (!message) return { sent: false, reason: 'empty_body' };
+
+  if (String(process.env.WHATSAPP_DELIVERY_MODE || '').trim().toLowerCase() === 'test') {
+    const id = crypto
+      .createHash('sha256')
+      .update(`${recipient}\n${message}`)
+      .digest('hex')
+      .slice(0, 20);
+    logger.info('[WHATSAPP TEST TRANSPORT]', { to: recipient, messageLength: message.length, id });
+    return {
+      sent: true,
+      simulated: true,
+      provider: 'whatsapp_test_transport',
+      id: `wa-test-${id}`,
+      status: 'simulated'
+    };
+  }
 
   const metaResult = await sendViaMetaWhatsApp({ to: recipient, body: message });
   if (metaResult.sent) return metaResult;

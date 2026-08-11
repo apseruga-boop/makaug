@@ -10,7 +10,7 @@ const { createLead } = require('../services/leadService');
 
 const router = express.Router();
 
-const FALLBACK_MORTGAGE_PROVIDERS = [
+const UGANDA_FALLBACK_MORTGAGE_PROVIDERS = [
   {
     key: 'stanbic',
     name: 'Stanbic Bank Uganda',
@@ -124,6 +124,112 @@ const FALLBACK_MORTGAGE_PROVIDERS = [
     sourceVerifiedAt: '2026-06-07'
   }
 ];
+
+const SOUTH_AFRICA_FALLBACK_MORTGAGE_PROVIDERS = [
+  {
+    key: 'standard-bank',
+    name: 'Standard Bank',
+    residentialRate: null,
+    commercialRate: null,
+    landRate: null,
+    minDepositPct: { residential: 10, commercial: 20, land: 20, default: 10 },
+    maxYears: { residential: 20, commercial: 20, land: 20, default: 20 },
+    arrangementFeePct: null,
+    sourceLabel: 'Standard Bank South Africa home loans',
+    sourceUrl: 'https://www.standardbank.co.za/southafrica/personal/products-and-services/borrow-for-your-needs/home-loans/qualify-me',
+    sourceNote: 'Product and eligibility information is linked from the lender. Rates, deposit, term, fees and approval remain quote-specific.',
+    sourceVerifiedAt: '2026-08-11'
+  },
+  {
+    key: 'absa',
+    name: 'Absa',
+    residentialRate: null,
+    commercialRate: null,
+    landRate: null,
+    minDepositPct: { residential: 10, commercial: 20, land: 20, default: 10 },
+    maxYears: { residential: 20, commercial: 20, land: 20, default: 20 },
+    arrangementFeePct: null,
+    sourceLabel: 'Absa South Africa home loans',
+    sourceUrl: 'https://www.absa.co.za/personal/loans/for-a-home/understanding-home-loans/',
+    sourceNote: 'Product information is linked from the lender. Rates, deposit, term, fees and approval remain quote-specific.',
+    sourceVerifiedAt: '2026-08-11'
+  },
+  {
+    key: 'fnb',
+    name: 'FNB',
+    residentialRate: null,
+    commercialRate: null,
+    landRate: null,
+    minDepositPct: { residential: 10, commercial: 20, land: 20, default: 10 },
+    maxYears: { residential: 20, commercial: 20, land: 20, default: 20 },
+    arrangementFeePct: null,
+    sourceLabel: 'FNB South Africa home loans',
+    sourceUrl: 'https://www.fnb.co.za/home-loans/new-home-loan.html',
+    sourceNote: 'Product and application information is linked from the lender. Rates, deposit, term, fees and approval remain quote-specific.',
+    sourceVerifiedAt: '2026-08-11'
+  },
+  {
+    key: 'nedbank',
+    name: 'Nedbank',
+    residentialRate: null,
+    commercialRate: null,
+    landRate: null,
+    minDepositPct: { residential: 10, commercial: 20, land: 20, default: 10 },
+    maxYears: { residential: 20, commercial: 20, land: 20, default: 20 },
+    arrangementFeePct: null,
+    sourceLabel: 'Nedbank South Africa home loans',
+    sourceUrl: 'https://personal.nedbank.co.za/borrow/home-loans.html',
+    sourceNote: 'Product information is linked from the lender. Rates, deposit, term, fees and approval remain quote-specific.',
+    sourceVerifiedAt: '2026-08-11'
+  },
+  {
+    key: 'investec',
+    name: 'Investec',
+    residentialRate: null,
+    commercialRate: null,
+    landRate: null,
+    minDepositPct: { residential: 0, commercial: 20, land: 20, default: 10 },
+    maxYears: { residential: 20, commercial: 20, land: 20, default: 20 },
+    arrangementFeePct: null,
+    sourceLabel: 'Investec South Africa home loans',
+    sourceUrl: 'https://www.investec.com/en_za/individuals/finance/home-loan.html',
+    sourceNote: 'Product information is linked from the lender. Eligibility, rates, term, fees and approval remain quote-specific.',
+    sourceVerifiedAt: '2026-08-11'
+  },
+  {
+    key: 'sa-home-loans',
+    name: 'SA Home Loans',
+    residentialRate: null,
+    commercialRate: null,
+    landRate: null,
+    minDepositPct: { residential: 10, commercial: 20, land: 20, default: 10 },
+    maxYears: { residential: 20, commercial: 20, land: 20, default: 20 },
+    arrangementFeePct: null,
+    sourceLabel: 'SA Home Loans',
+    sourceUrl: 'https://www.sahomeloans.com/',
+    sourceNote: 'Product information is linked from the lender. Rates, deposit, term, fees and approval remain quote-specific.',
+    sourceVerifiedAt: '2026-08-11'
+  },
+  {
+    key: 'ooba',
+    name: 'ooba Home Loans',
+    residentialRate: null,
+    commercialRate: null,
+    landRate: null,
+    minDepositPct: { residential: 10, commercial: 20, land: 20, default: 10 },
+    maxYears: { residential: 20, commercial: 20, land: 20, default: 20 },
+    arrangementFeePct: null,
+    sourceLabel: 'ooba bond originator',
+    sourceUrl: 'https://www.ooba.co.za/home-loans/',
+    sourceNote: 'ooba is a bond originator rather than a bank. Any lender offer, rate, deposit, term, fees and approval remain quote-specific.',
+    sourceVerifiedAt: '2026-08-11'
+  }
+];
+
+const ACTIVE_COUNTRY_CODE = String(process.env.COUNTRY_CODE || 'UG').trim().toUpperCase();
+const FALLBACK_MORTGAGE_PROVIDERS = ACTIVE_COUNTRY_CODE === 'ZA'
+  ? SOUTH_AFRICA_FALLBACK_MORTGAGE_PROVIDERS
+  : UGANDA_FALLBACK_MORTGAGE_PROVIDERS;
 const AUDITED_MORTGAGE_PROVIDER_BY_KEY = new Map(FALLBACK_MORTGAGE_PROVIDERS.map((provider) => [provider.key, provider]));
 const MORTGAGE_PROVIDER_LOGO_URLS = {
   stanbic: '/assets/mortgage-logos/stanbic.svg',
@@ -678,3 +784,5 @@ router.put('/', requireAdminApiKey, async (req, res, next) => {
 });
 
 module.exports = router;
+module.exports.ACTIVE_COUNTRY_CODE = ACTIVE_COUNTRY_CODE;
+module.exports.FALLBACK_MORTGAGE_PROVIDERS = FALLBACK_MORTGAGE_PROVIDERS;

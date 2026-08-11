@@ -1,7 +1,11 @@
 const express = require('express');
 const db = require('../config/database');
+const { tenantFor } = require('../packages/shared-country-core');
 
 const router = express.Router();
+const ACTIVE_COUNTRY_CODE = String(process.env.COUNTRY_CODE || 'UG').trim().toUpperCase();
+const ACTIVE_TENANT = tenantFor(ACTIVE_COUNTRY_CODE);
+const ACTIVE_SERVICE = process.env.RENDER_SERVICE_NAME || `${ACTIVE_TENANT.brandName}-backend`;
 
 router.get('/', async (req, res) => {
   try {
@@ -9,7 +13,9 @@ router.get('/', async (req, res) => {
 
     return res.json({
       ok: true,
-      service: 'makayug-backend',
+      service: ACTIVE_SERVICE,
+      country_code: ACTIVE_COUNTRY_CODE,
+      tenant: ACTIVE_TENANT.brandName,
       env: process.env.NODE_ENV || 'development',
       uptimeSeconds: Math.round(process.uptime()),
       timestamp: new Date().toISOString(),
@@ -21,7 +27,9 @@ router.get('/', async (req, res) => {
   } catch (error) {
     return res.status(503).json({
       ok: false,
-      service: 'makayug-backend',
+      service: ACTIVE_SERVICE,
+      country_code: ACTIVE_COUNTRY_CODE,
+      tenant: ACTIVE_TENANT.brandName,
       database: {
         ok: false,
         error: 'Database unreachable'

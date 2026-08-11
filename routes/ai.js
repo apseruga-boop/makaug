@@ -14,7 +14,7 @@ const {
   canonicalLocationSuggestions,
   resolveCanonicalUgandaLocation,
   resolveCanonicalUgandaLocationFromText,
-} = require('../utils/ugandaLocationRegistry');
+} = require('../utils/locationRegistry');
 const {
   SUPPORTED_AI_LANGUAGES,
   extractNaturalPropertyQuery,
