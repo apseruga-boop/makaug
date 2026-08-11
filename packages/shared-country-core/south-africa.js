@@ -268,6 +268,7 @@ function applySouthAfricaJavaScript(source) {
     .replace(/"Select district"/g, '"Select province"')
     .replace(/"All districts"/g, '"All provinces"')
     .replace(/\+256 7XX XXX XXX/g, '+27 XX XXX XXXX')
+    .replace(/info@makaug\.com/g, 'hello@seshaikhaya.com')
     .replace(/makaug\.com/g, 'seshaikhaya.com')
     .replace(/\bmakaug(?=\s|,|\.|:|!|\?)/gi, 'seshaikhaya')
     .replace(/256760112587/g, '');
