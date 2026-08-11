@@ -49,6 +49,10 @@ async function applyMigration(filename, sql) {
   const client = await db.getClient();
   try {
     await client.query('BEGIN');
+    await client.query(
+      "SELECT set_config('app.country_code', $1, true)",
+      [String(process.env.COUNTRY_CODE || 'UG').trim().toUpperCase() || 'UG']
+    );
     await client.query(sql);
     await client.query('INSERT INTO schema_migrations (filename) VALUES ($1)', [filename]);
     await client.query('COMMIT');
