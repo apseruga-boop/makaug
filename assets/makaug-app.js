@@ -13977,6 +13977,7 @@ function renderStaffListingPreviewModal(preview = {}) {
           </section>
           <section class="rounded-xl border border-gray-200 p-4">
             <h4 class="font-black text-gray-900">Decision</h4>
+            <div class="mt-3" data-human-integrity-override-host></div>
             <div class="mt-3 grid gap-2">
               <button type="button" onclick="saveStaffListingPreview(${propertyIdArg(preview.id)})" class="border border-slate-300 text-slate-800 hover:bg-slate-50 rounded-xl px-4 py-2 text-sm font-black">Save preview changes</button>
               <button type="button" data-staff-approve-id="${adminAttr(String(preview.id || ""))}" data-identity-approve-prefix="staff-preview" data-identity-required="${identityRequired ? "true" : "false"}" data-price-confirmation-required="${priceConfirmationRequired ? "true" : "false"}" ${(identityRequired && !identityGateOpen) || (priceConfirmationRequired && !priceConfirmationOpen) ? "disabled" : ""} class="${(identityRequired && !identityGateOpen) || (priceConfirmationRequired && !priceConfirmationOpen) ? "bg-gray-300 cursor-not-allowed" : "bg-emerald-700 hover:bg-emerald-600"} text-white rounded-xl px-4 py-2 text-sm font-black">Approve live after preview</button>
@@ -14351,8 +14352,9 @@ function queueStaffDashboardRefreshAfterModeration({ refreshPublicSummary = fals
   }, 700);
 }
 
-async function staffApprovePreviewListing(propertyId) {
+async function staffApprovePreviewListing(propertyId, options = {}) {
   const propertyIdForRequest = String(propertyId || adminActiveReview?.id || "").trim();
+  const integrityOverride = options?.integrityOverride === true;
   try {
     if (!propertyIdForRequest) throw new Error("Missing listing id for approval request");
     const foundOnlineApproval = staffSafeFoundOnlineApproval(adminActiveReview);
@@ -14379,7 +14381,7 @@ async function staffApprovePreviewListing(propertyId) {
       status: "approved",
       listing: staffListingPreviewPatch(),
       reason: review.reason || (identityRequired ? MODERATION_IDENTITY_APPROVAL_MESSAGE : "Staff approved after previewing listing facts"),
-      review_notes: review.notes || (identityRequired ? "Identity verified and listing facts checked before approval" : "Staff preview completed before approval"),
+      review_notes: integrityOverride ? HUMAN_INTEGRITY_OVERRIDE_REVIEW_NOTE : (review.notes || (identityRequired ? "Identity verified and listing facts checked before approval" : "Staff preview completed before approval")),
       checklist: review.checklist || staffDefaultReviewChecklist(),
       identity_verified: identityRequired ? true : review.identity_verified === true,
       identity_document_verified: identityRequired ? true : review.identity_verified === true,
@@ -14387,7 +14389,8 @@ async function staffApprovePreviewListing(propertyId) {
       high_monthly_price_confirmed: document.getElementById("staff-preview-price-basis-confirmed")?.checked === true,
       warning_overrides: warningOverrides,
       fast_admin_render: true,
-      manual_notification_only: true
+      manual_notification_only: true,
+      ...(integrityOverride ? { integrity_override: true } : {})
     };
     staffApprovalDiagnostic("requesting", { propertyId: propertyIdForRequest, foundOnlineApproval, path: statusPath });
     const statusRes = await staffApiRequestWithTimeout(statusPath, {
@@ -14402,6 +14405,11 @@ async function staffApprovePreviewListing(propertyId) {
     toast(messageOpened ? "Listing approved. WhatsApp message is ready." : "Listing approved. Public proof and dashboard refresh are running in the background.");
   } catch (error) {
     staffApprovalDiagnostic("failed", { propertyId: propertyIdForRequest, message: error.message || "backend checks failed" });
+    if (!integrityOverride && error.response?.data_integrity) {
+      revealHumanIntegrityOverride(error.response.data_integrity, propertyIdForRequest);
+      toast("Integrity flags need your decision. Review the warning, then choose Approve anyway (human verified).");
+      return;
+    }
     toast(`Approval blocked: ${error.message || "backend checks failed"}`);
   } finally {
     setStaffPreviewDecisionBusy(false);
@@ -24315,11 +24323,65 @@ function adminDataIntegrityReviewHtml(extra = {}) {
   return `
     <div class="mt-3 rounded-xl border-2 border-orange-300 bg-orange-50 p-3" data-data-integrity-review="1">
       <div class="text-xs font-black uppercase tracking-wide text-orange-950">Data-integrity review required</div>
-      <p class="mt-1 text-xs font-semibold text-orange-900">Correct every flagged fact below. Approval will remain blocked until the saved record passes the shared integrity gate.</p>
+      <p class="mt-1 text-xs font-semibold text-orange-900">Integrity flags advise the human reviewer. Correct the facts where possible; after a normal approval is blocked, an authenticated King or moderator may approve the verified record anyway.</p>
       <div class="mt-2 flex flex-wrap gap-2">${issues.map((issue) => `<span class="rounded-full border border-orange-300 bg-white px-2 py-1 text-[11px] font-bold text-orange-950">${adminEscape(String(issue).replace(/_/g, " "))}</span>`).join("") || '<span class="text-xs text-orange-900">Open the moderation notes for the recorded issue.</span>'}</div>
       ${proposed.length ? `<div class="mt-2 text-xs font-bold text-orange-950">Suggested from source evidence: ${adminEscape(proposed.join(" · "))}. Confirm rather than accepting blindly.</div>` : ""}
       <div class="mt-1 text-[11px] text-orange-800">Previous public state: ${adminEscape(extra.data_integrity_previous_status || "unknown")} · Automatic publication: off</div>
+      <div class="mt-3" data-human-integrity-override-host>
+        <div class="hidden mb-2 rounded-lg border border-orange-300 bg-white p-2 text-xs font-bold text-orange-950" data-human-integrity-issues></div>
+        <button type="button" data-human-integrity-override-button onclick="approveActiveIntegrityOverride()" class="hidden w-full rounded-lg bg-orange-800 px-3 py-2 text-xs font-black text-white hover:bg-orange-700">Approve anyway (human verified)</button>
+      </div>
     </div>`;
+}
+
+const HUMAN_INTEGRITY_OVERRIDE_REVIEW_NOTE = "human override — verified manually";
+
+function revealHumanIntegrityOverride(dataIntegrity = {}, propertyId = "") {
+  const issueCodes = Array.isArray(dataIntegrity?.issue_codes) ? dataIntegrity.issue_codes : [];
+  const proposedFacts = (Array.isArray(dataIntegrity?.issues) ? dataIntegrity.issues : [])
+    .flatMap((issue) => [
+      issue?.proposed_listing_type ? `proposed category: ${issue.proposed_listing_type}` : "",
+      issue?.proposed_price_period ? `proposed period: ${issue.proposed_price_period}` : ""
+    ])
+    .filter(Boolean);
+  let panel = document.querySelector("[data-data-integrity-review]");
+  let host = panel?.querySelector("[data-human-integrity-override-host]")
+    || document.querySelector("[data-human-integrity-override-host]");
+  if (!host) return;
+  if (!panel) {
+    panel = document.createElement("div");
+    panel.className = "rounded-xl border-2 border-orange-400 bg-orange-50 p-3";
+    panel.dataset.dataIntegrityReview = "runtime";
+    panel.innerHTML = `
+      <div class="text-xs font-black uppercase tracking-wide text-orange-950">Integrity flags require a human decision</div>
+      <div class="mt-2 text-xs font-bold text-orange-900" data-human-integrity-issues></div>
+      <button type="button" data-human-integrity-override-button onclick="approveActiveIntegrityOverride()" class="mt-3 w-full rounded-lg bg-orange-800 px-3 py-2 text-xs font-black text-white hover:bg-orange-700">Approve anyway (human verified)</button>`;
+    host.replaceChildren(panel);
+  }
+  panel.dataset.propertyId = String(propertyId || adminActiveReview?.id || "");
+  const issueNode = panel.querySelector("[data-human-integrity-issues]");
+  if (issueNode) {
+    const flags = issueCodes.map((code) => String(code).replace(/_/g, " ")).join(", ") || "manual integrity review";
+    const proposed = Array.from(new Set(proposedFacts));
+    issueNode.textContent = `Integrity flags: ${flags}${proposed.length ? ` — ${proposed.join(" · ")}` : ""}`;
+    issueNode.classList.remove("hidden");
+  }
+  panel.querySelectorAll("[data-human-integrity-override-button]").forEach((button) => button.classList.remove("hidden"));
+  panel.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+async function approveActiveIntegrityOverride() {
+  const panel = document.querySelector("[data-data-integrity-review]");
+  const propertyId = String(panel?.dataset?.propertyId || adminActiveReview?.id || "").trim();
+  if (!propertyId) {
+    toast("Open the listing review before approving.");
+    return;
+  }
+  if (document.getElementById("staff-listing-preview-modal")) {
+    await staffApprovePreviewListing(propertyId, { integrityOverride: true });
+    return;
+  }
+  await adminSetListingStatus(propertyId, "approved", propertyId, { integrity_override: true });
 }
 
 function adminReviewListingEditPanel(review = {}) {
@@ -25243,6 +25305,7 @@ function renderAdminReviewPanel(review) {
               <div>${adminEscape(generatedDecisionReason)}</div>
             </div>
           ` : ""}
+          <div class="mt-3" data-human-integrity-override-host></div>
           <div class="flex flex-wrap gap-2 mt-3">
             <button onclick="openAdminListingLivePreview(${reviewIdArg})" class="border border-green-700 text-green-700 hover:bg-green-50 px-3 py-2 rounded-lg text-xs font-semibold">Open Live-style Preview</button>
             <button onclick="adminCreateShareablePreviewLink(${reviewIdArg})" class="border border-amber-300 text-amber-800 hover:bg-amber-50 px-3 py-2 rounded-lg text-xs font-semibold">Copy Private Preview Link</button>
@@ -25560,6 +25623,7 @@ async function adminSetListingStatus(localId, nextStatus, backendId = "", option
   const normalizedStatus = normalizeModerationStatus(nextStatus);
   const statusOptions = options && typeof options === "object" ? options : {};
   const isSourcedCandidateOverride = normalizedStatus === "approved" && statusOptions.sourced_candidate_override === true;
+  const integrityOverride = normalizedStatus === "approved" && statusOptions.integrity_override === true;
   const listing = PROPERTIES.find(
     (p) => String(p.id) === String(localId)
       || (backendId && String(p.backend_id || "") === String(backendId))
@@ -25709,7 +25773,7 @@ async function adminSetListingStatus(localId, nextStatus, backendId = "", option
 	          manual_notification_only: ["approved", "rejected"].includes(normalizedStatus),
 	          status: normalizedStatus,
 	          reason: moderationReason.trim() || undefined,
-	          review_notes: reviewNotes || undefined,
+	          review_notes: integrityOverride ? HUMAN_INTEGRITY_OVERRIDE_REVIEW_NOTE : (reviewNotes || undefined),
 	          checklist,
             identity_verified: identityRequired ? true : moderationIdentityConfirmed("admin-review", adminActiveReview),
             identity_document_verified: identityRequired ? true : moderationIdentityConfirmed("admin-review", adminActiveReview),
@@ -25754,7 +25818,12 @@ async function adminSetListingStatus(localId, nextStatus, backendId = "", option
         const existingPublic = PROPERTIES.find((p) => String(p.id) === String(backendId) || String(p.backend_id || "") === String(backendId));
         if (existingPublic) existingPublic.status = normalizedStatus;
       }
-    } catch (e) {
+	    } catch (e) {
+	      if (!integrityOverride && e.response?.data_integrity) {
+	        revealHumanIntegrityOverride(e.response.data_integrity, backendId || localId);
+	        toast("Integrity flags need your decision. Review the warning, then choose Approve anyway (human verified).");
+	        return;
+	      }
       const details = Array.isArray(e.response?.details)
         ? e.response.details.join("; ")
         : (e.response?.details ? JSON.stringify(e.response.details) : "");

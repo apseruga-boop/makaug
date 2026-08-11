@@ -156,7 +156,8 @@ app.get('/api/version', (_req, res) => {
       'shared-uganda-location-resolver-coverage',
       'whatsapp-shared-location-resolver',
       'prelaunch-backlog-gates',
-      'whatsapp-property-card-v2'
+      'whatsapp-property-card-v2',
+      'human-integrity-override-20260811'
     ]
   });
 });
