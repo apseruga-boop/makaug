@@ -25,6 +25,8 @@ projects:
             healthCheckPath: /healthz
             autoDeployTrigger: commit
             envVars:
+              - key: PORT
+                value: "10000"
               - key: NODE_ENV
                 value: production
               - key: COUNTRY_CODE
