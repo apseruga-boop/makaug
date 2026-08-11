@@ -286,10 +286,8 @@ const MEDIA_CAPTION_SELECTORS = [
   '[data-testid*="caption" i] [contenteditable="true"]',
   '[role="dialog"] div[role="textbox"][contenteditable="true"]',
   '[role="dialog"] [data-lexical-editor="true"][contenteditable="true"]',
-  'div[role="textbox"][data-lexical-editor="true"][contenteditable="true"]',
   'div[aria-placeholder*="caption" i][contenteditable="true"]',
-  'div[aria-label*="caption" i][contenteditable="true"]',
-  'div[role="textbox"][contenteditable="true"][data-tab="10"]'
+  'div[aria-label*="caption" i][contenteditable="true"]'
 ];
 const MEDIA_SEND_BUTTON_SELECTORS = [
   '[data-testid="media-send"]',
@@ -2961,6 +2959,44 @@ async function setMediaCaption(page, caption) {
   }, { selectors: MEDIA_CAPTION_SELECTORS, text: caption }).catch(() => false);
 }
 
+async function describeVisibleMediaControls(page) {
+  return page.evaluate(() => {
+    const isVisible = (node) => {
+      if (!node) return false;
+      const style = window.getComputedStyle(node);
+      const rect = node.getBoundingClientRect();
+      return style.display !== 'none'
+        && style.visibility !== 'hidden'
+        && Number(style.opacity || 1) !== 0
+        && rect.width > 8
+        && rect.height > 8;
+    };
+    const describe = (node) => ({
+      tag: String(node.tagName || '').toLowerCase(),
+      role: node.getAttribute?.('role') || '',
+      ariaLabel: node.getAttribute?.('aria-label') || '',
+      ariaPlaceholder: node.getAttribute?.('aria-placeholder') || '',
+      dataTestid: node.getAttribute?.('data-testid') || '',
+      dataIcon: node.getAttribute?.('data-icon') || '',
+      dataTab: node.getAttribute?.('data-tab') || '',
+      contenteditable: node.getAttribute?.('contenteditable') || '',
+      type: node.getAttribute?.('type') || ''
+    });
+    const activeElement = document.activeElement ? describe(document.activeElement) : null;
+    const controls = Array.from(document.querySelectorAll([
+      '[role="dialog"]',
+      '[contenteditable="true"]',
+      'button',
+      'input[type="file"]',
+      '[aria-label]',
+      '[aria-placeholder]',
+      '[data-testid]',
+      '[data-icon]'
+    ].join(','))).filter(isVisible).slice(-80).map(describe);
+    return { activeElement, controls };
+  }).catch(() => ({ activeElement: null, controls: [] }));
+}
+
 async function getMediaComposerState(page) {
   return page.evaluate(({ captionSelectors }) => {
     const isVisible = (node) => {
@@ -3074,6 +3110,8 @@ async function typeAndSendImageReply(page, mediaUrl, caption) {
     });
   }), MEDIA_CAPTION_SELECTORS, { timeout: 10000 }).then(() => true).catch(() => false);
   if (!captionReady || !await setMediaCaption(page, caption)) {
+    const controls = await describeVisibleMediaControls(page);
+    log(`media caption controls unavailable: ${JSON.stringify(controls)}`);
     await page.keyboard.press('Escape').catch(() => null);
     throw new Error('Could not prepare the WhatsApp image caption');
   }
