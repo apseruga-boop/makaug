@@ -18,7 +18,7 @@ services:
       - key: WHATSAPP_DELIVERY_MODE
         value: web_bridge
       - key: WHATSAPP_API_VERSION
-        value: v20.0
+        value: v25.0
       - key: WHATSAPP_ACCESS_TOKEN
         sync: false
       - key: WHATSAPP_PHONE_NUMBER_ID
@@ -40,7 +40,7 @@ services:
       - key: WHATSAPP_WEB_COPILOT_PROFILE_DIR
         value: /var/data/whatsapp-profile-live
       - key: WHATSAPP_WEB_COPILOT_HEADLESS
-        value: "false"
+        value: "true"
       - key: WHATSAPP_WEB_COPILOT_HOSTED
         value: "true"
       - key: WHATSAPP_WEB_COPILOT_LOGIN_METHOD
