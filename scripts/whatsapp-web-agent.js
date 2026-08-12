@@ -75,6 +75,7 @@ const PREFLIGHT_RETRY_MS = Math.max(500, Number(process.env.WHATSAPP_AGENT_PREFL
 const LOCAL_PLAYWRIGHT_CORE_PATH = '/private/tmp/makaug-playwright-runtime/node_modules/playwright-core';
 
 let child = null;
+let virtualDisplay = null;
 let stopping = false;
 let restartTimes = [];
 let starting = false;
@@ -91,6 +92,74 @@ function pruneRestartWindow() {
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isTruthy(value) {
+  return ['1', 'true', 'yes', 'on'].includes(String(value || '').trim().toLowerCase());
+}
+
+function displaySocketPath(display = process.env.DISPLAY || ':99') {
+  const match = String(display).match(/:(\d+)/);
+  return match ? `/tmp/.X11-unix/X${match[1]}` : '';
+}
+
+function hasLiveDisplay(display = process.env.DISPLAY || ':99') {
+  const socketPath = displaySocketPath(display);
+  return !!socketPath && fs.existsSync(socketPath);
+}
+
+function findXvfbExecutable() {
+  return ['/usr/bin/Xvfb', '/usr/local/bin/Xvfb'].find((candidate) => fs.existsSync(candidate)) || '';
+}
+
+async function ensureVirtualDisplay() {
+  if (isTruthy(process.env.WHATSAPP_WEB_COPILOT_HEADLESS)) return;
+  if (isTruthy(process.env.WHATSAPP_WEB_COPILOT_XVFB_MANAGED)) {
+    log(`virtual display is supervised by xvfb-run at ${process.env.DISPLAY || 'auto'}.`);
+    return;
+  }
+
+  const display = String(process.env.DISPLAY || ':99').trim() || ':99';
+  process.env.DISPLAY = display;
+  if (hasLiveDisplay(display)) {
+    log(`using existing virtual display ${display}.`);
+    return;
+  }
+
+  const executable = findXvfbExecutable();
+  if (!executable) {
+    process.env.WHATSAPP_WEB_COPILOT_HEADLESS = 'true';
+    log('Xvfb is unavailable; using the linked persistent profile in headless fallback mode.');
+    return;
+  }
+
+  log(`starting supervised virtual display ${display}.`);
+  virtualDisplay = spawn(executable, [display, '-screen', '0', '1440x980x24', '-nolisten', 'tcp'], {
+    stdio: ['ignore', 'ignore', 'inherit']
+  });
+  const startedDisplay = virtualDisplay;
+  virtualDisplay.once('error', (error) => {
+    log(`virtual display failed to start: ${error.message || error}`);
+  });
+  virtualDisplay.once('exit', (code, signal) => {
+    if (stopping || virtualDisplay !== startedDisplay) return;
+    log(`virtual display exited (${signal || code || 0}); exiting so Render can restart the full worker.`);
+    process.exit(1);
+  });
+
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    if (hasLiveDisplay(display)) {
+      log(`virtual display ${display} is ready.`);
+      return;
+    }
+    if (virtualDisplay.exitCode !== null) break;
+    await sleep(100);
+  }
+
+  if (virtualDisplay && !virtualDisplay.killed) virtualDisplay.kill('SIGTERM');
+  virtualDisplay = null;
+  process.env.WHATSAPP_WEB_COPILOT_HEADLESS = 'true';
+  log('virtual display did not become ready; using the linked persistent profile in headless fallback mode.');
 }
 
 function resolvePlaywrightCoreModule() {
@@ -170,6 +239,7 @@ async function startBridge() {
 function stop(signal) {
   stopping = true;
   log(`received ${signal}; stopping bridge.`);
+  if (virtualDisplay && !virtualDisplay.killed) virtualDisplay.kill(signal);
   if (child && !child.killed) {
     child.kill(signal);
     setTimeout(() => {
@@ -185,4 +255,9 @@ process.on('SIGTERM', () => stop('SIGTERM'));
 
 log('agent online. Keep this terminal open while WhatsApp Web is serving live replies.');
 log('Using WhatsApp Web is preferred over the desktop app because the bridge can read/send through a persistent Chrome profile and report heartbeats to admin.');
-startBridge();
+ensureVirtualDisplay()
+  .then(startBridge)
+  .catch((error) => {
+    log(`virtual display preflight failed: ${error.message || error}`);
+    process.exit(1);
+  });

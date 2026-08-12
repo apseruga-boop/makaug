@@ -30,12 +30,19 @@ assert(renderYaml.includes('WHATSAPP_WEB_COPILOT_PAIRING_PHONE') && renderYaml.i
 assert(renderYaml.includes('WHATSAPP_WEB_COPILOT_HOSTED') && renderYaml.includes('makaug-whatsapp-web-prod'), 'Render worker must use hosted production identity');
 
 assert(dockerfile.includes('mcr.microsoft.com/playwright') && dockerfile.includes('scripts/start-whatsapp-agent-render.sh'), 'Dockerfile must provide Playwright runtime and start the hosted agent script');
-assert(startScript.includes('command -v Xvfb') && startScript.includes('WHATSAPP_WEB_COPILOT_PROFILE_DIR="${WHATSAPP_WEB_COPILOT_PROFILE_DIR:-/var/data/whatsapp-profile-live}"'), 'Hosted start script must run Chrome under Xvfb and default to persistent disk profile');
+assert(startScript.includes('exec xvfb-run -a') && startScript.includes('WHATSAPP_WEB_COPILOT_PROFILE_DIR="${WHATSAPP_WEB_COPILOT_PROFILE_DIR:-/var/data/whatsapp-profile-live}"'), 'Hosted start script must supervise Chrome with xvfb-run and default to persistent disk profile');
 assert(startScript.includes('WHATSAPP_WEB_COPILOT_HEADLESS="${WHATSAPP_WEB_COPILOT_HEADLESS:-false}"'), 'Hosted start script must default to a visible browser for WhatsApp linking');
 assert(startScript.includes('exec node scripts/whatsapp-web-agent.js'), 'Hosted start script must hand off directly to the WhatsApp Node agent');
 assert(!renderYaml.includes('/ms-playwright/chromium-1217'), 'Render config must not pin Chrome to a Playwright revision-specific path');
 assert(!startScript.includes('/ms-playwright/chromium-1217'), 'Hosted start script must let Playwright resolve the Chromium executable path');
 assert(!agentScript.includes('if (!CDP_URL && !fs.existsSync(CHROME_PATH))'), 'WhatsApp agent must not exit before Playwright browser path fallback runs');
+assert(startScript.includes('WHATSAPP_WEB_COPILOT_XVFB_MANAGED="true"'), 'xvfb-run must tell the Node supervisor that the display is externally managed');
+
+const workerSupervisor = read('scripts/whatsapp-web-agent.js');
+assert(workerSupervisor.includes('async function ensureVirtualDisplay()'), 'Worker supervisor must verify a display even when Render bypasses the Docker start script');
+assert(workerSupervisor.includes("'/usr/bin/Xvfb'") && workerSupervisor.includes('hasLiveDisplay'), 'Worker supervisor must recover a missing Render X display');
+assert(workerSupervisor.includes("WHATSAPP_WEB_COPILOT_HEADLESS = 'true'"), 'Worker supervisor must have a bounded headless fallback instead of looping offline');
+assert(workerSupervisor.includes('exiting so Render can restart the full worker'), 'Worker supervisor must let Render recover if its managed display dies');
 
 assert(dockerignore.includes('.env') && dockerignore.includes('.env.*'), 'Docker build must exclude local env files');
 assert(dockerignore.includes('.whatsapp-web-copilot-profile*'), 'Docker build must exclude local WhatsApp browser profiles');
