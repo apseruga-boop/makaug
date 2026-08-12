@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const country = require('../config/countries/southAfrica');
 const { canonicalLocationOptions } = require('../utils/southAfricaLocationRegistry');
 
-const SOUTH_AFRICA_SCALE_BATCH_ID = 'seshaikhaya-scale-v2-20260812';
+const SOUTH_AFRICA_SCALE_BATCH_ID = 'seshaikhaya-scale-v3-compliant-pivot-20260812';
 const TARGET_CITY_COUNT = 60;
 const TARGET_SUBURB_COUNT = 500;
 
@@ -154,11 +154,8 @@ function compactKey(value = '') {
 function platformSearchUrl(platform, query) {
   const encoded = encodeURIComponent(query);
   const urls = {
-    facebook: `https://www.facebook.com/search/posts/?q=${encoded}`,
-    tiktok: `https://www.tiktok.com/search?q=${encoded}`,
     youtube: `https://www.youtube.com/results?search_query=${encoded}`,
     x: `https://x.com/search?q=${encoded}&src=typed_query&f=live`,
-    instagram: `https://www.instagram.com/explore/search/keyword/?q=${encoded}`,
   };
   return urls[platform] || '';
 }
@@ -201,7 +198,7 @@ function registryRow({ platform, query, track, sourceType, province = '', langua
   };
 }
 
-function *iterateSouthAfricaRegistryRows({ includeCorpus = false, platforms = country.sourceChannels } = {}) {
+function *iterateSouthAfricaRegistryRows({ includeCorpus = false, platforms = country.automatedSourceChannels } = {}) {
   const { selected, corpus } = buildSouthAfricaSearchCorpus();
   if (includeCorpus) {
     for (const item of corpus) {
@@ -232,40 +229,44 @@ function *iterateSouthAfricaRegistryRows({ includeCorpus = false, platforms = co
       }
     }
   }
-  for (const location of [...selected.provinces, ...selected.cities, ...selected.suburbs]) {
-    for (const pattern of FACEBOOK_GROUP_PATTERNS) {
-      const query = pattern.replace('{location}', location.name);
-      yield registryRow({
-        platform: 'facebook', query, track: 'fsbo', sourceType: 'facebook_group_discovery', province: location.province,
-        languages: /huis|eiendom|huur|plase/i.test(query) ? ['af'] : ['en'],
-        listingTypes: ['sale', 'rent', 'land'],
-        metadata: { canonical_location_id: location.key, location_level: location.level, subscription_target: 'group_back_catalogue' },
-      });
-    }
-  }
-  for (const location of selected.cities) {
-    const query = `Facebook Marketplace property ${location.name}`;
-    yield registryRow({
-      platform: 'facebook', query, track: 'fsbo', sourceType: 'facebook_marketplace_discovery', province: location.province,
-      languages: ['en', 'af', 'zu', 'xh'], listingTypes: ['sale', 'rent', 'land'],
-      metadata: { canonical_location_id: location.key, location_level: location.level, subscription_target: 'marketplace_back_catalogue' },
-    });
-  }
+}
+
+function buildSouthAfricaFacebookMarketingPlan() {
+  const { selected } = buildSouthAfricaSearchCorpus();
+  const locations = [...selected.provinces, ...selected.cities, ...selected.suburbs];
+  return locations.flatMap((location) => FACEBOOK_GROUP_PATTERNS.map((pattern) => ({
+    channel: 'facebook_groups',
+    action: 'manual_group_marketing_after_arthur_approval',
+    harvest: false,
+    query: pattern.replace('{location}', location.name),
+    province: location.province,
+    canonical_location_id: location.key,
+    location_level: location.level,
+    message_theme: 'List your home free on seshaikhaya — no agent, no commission',
+  })));
 }
 
 function summarizeSouthAfricaScaleCorpus() {
   const { selected, corpus } = buildSouthAfricaSearchCorpus();
   const registryFoundationCount = Array.from(iterateSouthAfricaRegistryRows({ includeCorpus: false })).length;
+  const facebookMarketingPlanCount = buildSouthAfricaFacebookMarketingPlan().length;
   return {
     batch_id: SOUTH_AFRICA_SCALE_BATCH_ID,
     lookback_days: country.lookbackDays,
-    platforms: [...country.sourceChannels],
+    platforms: [...country.automatedSourceChannels],
+    automated_platforms: [...country.automatedSourceChannels],
+    curated_platforms: [...country.curatedSourceChannels],
+    marketing_only_platforms: [...country.marketingSourceChannels],
+    excluded_automated_platforms: [...country.excludedAutomatedChannels],
     provinces: selected.provinces.length,
     cities: selected.cities.length,
     suburbs: selected.suburbs.length,
     corpus_queries: corpus.length,
-    platform_query_jobs: corpus.length * country.sourceChannels.length,
+    platform_query_jobs: corpus.length * country.automatedSourceChannels.length,
     registry_foundation_rows: registryFoundationCount,
+    facebook_group_marketing_queries: facebookMarketingPlanCount,
+    facebook_marketplace_harvest_jobs: 0,
+    tiktok_broad_search_jobs: 0,
     agency_brands: AGENCY_BRANDS.length,
     tracks: ['agent', 'fsbo'],
     languages: Object.keys(SEARCH_LANGUAGE_MATRIX),
@@ -283,6 +284,7 @@ module.exports = {
   TARGET_CITY_COUNT,
   TARGET_SUBURB_COUNT,
   buildSouthAfricaSearchCorpus,
+  buildSouthAfricaFacebookMarketingPlan,
   iterateSouthAfricaRegistryRows,
   selectScaleLocations,
   summarizeSouthAfricaScaleCorpus,

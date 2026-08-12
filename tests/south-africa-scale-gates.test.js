@@ -7,6 +7,7 @@ process.env.ZA_CONFIDENCE_AUTO_PUBLISH_ENABLED = 'false';
 
 const { evaluateSouthAfricaAutoPublish } = require('../services/southAfricaAutoPublishPolicyService');
 const { buildPilotPlan, selectPilotQueries, PILOT_SCOPE } = require('../services/southAfricaScalePilotService');
+const { requestedPlatformsForSweep } = require('../services/socialPlatformPostDiscoveryService');
 const { harvestAutomationEnabled } = require('../utils/harvestFeatureFlags');
 const propertiesRoute = require('../routes/properties');
 
@@ -58,8 +59,13 @@ for (const [name, patch, blocker] of [
 const queries = selectPilotQueries();
 assert.equal(queries.length, PILOT_SCOPE.query_job_cap);
 assert(queries.every((row) => row.province === 'Gauteng'));
-assert.deepEqual(new Set(queries.map((row) => row.platform)), new Set(['facebook', 'tiktok']));
+assert.deepEqual(new Set(queries.map((row) => row.platform)), new Set(['youtube', 'x']));
 assert.deepEqual(new Set(queries.map((row) => row.track)), new Set(['agent', 'fsbo']));
+assert.deepEqual(requestedPlatformsForSweep({ southAfricaSweep: true, normalizedPlatform: 'all' }), ['youtube', 'x']);
+assert.deepEqual(requestedPlatformsForSweep({ southAfricaSweep: true, normalizedPlatform: 'facebook' }), []);
+assert.deepEqual(requestedPlatformsForSweep({ southAfricaSweep: true, normalizedPlatform: 'instagram' }), []);
+assert.deepEqual(requestedPlatformsForSweep({ southAfricaSweep: true, normalizedPlatform: 'tiktok' }), ['tiktok']);
+assert.deepEqual(requestedPlatformsForSweep({ southAfricaSweep: false, normalizedPlatform: 'all' }), ['tiktok', 'youtube', 'x']);
 
 const blockedPlan = buildPilotPlan({
   COUNTRY_CODE: 'ZA',
@@ -69,9 +75,12 @@ const blockedPlan = buildPilotPlan({
   ZA_MONTHLY_SPEND_CAP_USD: '13',
 });
 assert.equal(blockedPlan.ok, false);
-assert(blockedPlan.blockers.some((reason) => /Facebook Groups/.test(reason)));
-assert(blockedPlan.blockers.some((reason) => /TikTok broad discovery/.test(reason)));
+assert(blockedPlan.blockers.some((reason) => /YouTube pilot/.test(reason)));
+assert(blockedPlan.blockers.some((reason) => /X pilot/.test(reason)));
 assert.equal(blockedPlan.cost.within_cap, true);
+assert.equal(blockedPlan.cost.youtube_search_request_upper_bound, 25);
+assert.equal(blockedPlan.cost.x_post_read_upper_bound, 250);
+assert.equal(blockedPlan.cost.x_estimated_incremental_cost_usd, 1.25);
 
 assert.equal(harvestAutomationEnabled({
   COUNTRY_CODE: 'ZA',

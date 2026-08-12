@@ -9,6 +9,7 @@ const {
   FACEBOOK_GROUP_PATTERNS,
   PRIVATE_SELLER_HASHTAGS,
   PRIVATE_SELLER_PHRASES,
+  buildSouthAfricaFacebookMarketingPlan,
   buildSouthAfricaSearchCorpus,
   iterateSouthAfricaRegistryRows,
   summarizeSouthAfricaScaleCorpus,
@@ -18,13 +19,18 @@ const { harvestAutomationEnabled } = require('../utils/harvestFeatureFlags');
 const { selected, corpus } = buildSouthAfricaSearchCorpus();
 const summary = summarizeSouthAfricaScaleCorpus();
 const registryFoundation = Array.from(iterateSouthAfricaRegistryRows({ includeCorpus: false }));
+const facebookMarketingPlan = buildSouthAfricaFacebookMarketingPlan();
 
 assert.equal(selected.provinces.length, 9);
 assert.equal(selected.cities.length, 60);
 assert.equal(selected.suburbs.length, 500);
 assert.equal(corpus.length, (9 + 60 + 500) * ((4 * 5 * 2 * 2) + PRIVATE_SELLER_HASHTAGS.length));
 assert.equal(summary.corpus_queries, corpus.length);
-assert.equal(summary.platform_query_jobs, corpus.length * 5);
+assert.equal(summary.platform_query_jobs, corpus.length * 2);
+assert.deepEqual(summary.automated_platforms, ['youtube', 'x']);
+assert.deepEqual(summary.curated_platforms, ['tiktok']);
+assert.deepEqual(summary.marketing_only_platforms, ['facebook']);
+assert.deepEqual(summary.excluded_automated_platforms, ['facebook', 'tiktok', 'instagram']);
 assert.deepEqual(summary.tracks, ['agent', 'fsbo']);
 assert.deepEqual(summary.languages, ['en', 'af', 'zu', 'xh']);
 assert.equal(summary.lookback_days, 183);
@@ -41,8 +47,13 @@ for (const hashtag of PRIVATE_SELLER_HASHTAGS) {
 assert(FACEBOOK_GROUP_PATTERNS.includes('Plot and plan {location}'));
 assert(FACEBOOK_GROUP_PATTERNS.includes('{location} township community property'));
 assert(registryFoundation.some((row) => row.source_type === 'agency_branch_discovery'));
-assert(registryFoundation.some((row) => row.source_type === 'facebook_group_discovery'));
-assert(registryFoundation.some((row) => row.source_type === 'facebook_marketplace_discovery'));
+assert(registryFoundation.every((row) => ['youtube', 'x'].includes(row.platform)));
+assert(!registryFoundation.some((row) => ['facebook', 'tiktok', 'instagram'].includes(row.platform)));
+assert(facebookMarketingPlan.length > 0);
+assert(facebookMarketingPlan.every((row) => row.harvest === false));
+assert(facebookMarketingPlan.every((row) => row.action === 'manual_group_marketing_after_arthur_approval'));
+assert.equal(summary.facebook_marketplace_harvest_jobs, 0);
+assert.equal(summary.tiktok_broad_search_jobs, 0);
 assert(registryFoundation.every((row) => row.metadata.country_code === 'ZA'));
 assert(registryFoundation.every((row) => row.metadata.auto_publish === false));
 assert.equal(new Set(registryFoundation.map((row) => row.source_key)).size, registryFoundation.length);

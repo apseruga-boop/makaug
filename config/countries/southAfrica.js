@@ -11,7 +11,12 @@ module.exports = Object.freeze({
   locationHierarchy: Object.freeze(['province', 'city', 'suburb']),
   lookbackDays: 183,
   autoPublishFoundOnline: false,
-  sourceChannels: Object.freeze(['facebook', 'tiktok', 'youtube', 'x', 'instagram']),
+  // Automated discovery is intentionally limited to official broad-search APIs.
+  automatedSourceChannels: Object.freeze(['youtube', 'x']),
+  curatedSourceChannels: Object.freeze(['tiktok']),
+  marketingSourceChannels: Object.freeze(['facebook']),
+  excludedAutomatedChannels: Object.freeze(['facebook', 'tiktok', 'instagram']),
+  sourceChannels: Object.freeze(['youtube', 'x']),
   sourceQueries: Object.freeze([
     '#propertysouthafrica',
     '#housesforsaleSA',

@@ -6,7 +6,7 @@ const { envFlagEnabled } = require('../utils/harvestFeatureFlags');
 const PILOT_SCOPE = Object.freeze({
   country_code: 'ZA',
   province: 'Gauteng',
-  platforms: Object.freeze(['facebook', 'tiktok']),
+  platforms: Object.freeze(['youtube', 'x']),
   tracks: Object.freeze(['agent', 'fsbo']),
   query_job_cap: 50,
   max_results_per_query: 10,
@@ -16,16 +16,16 @@ const PILOT_SCOPE = Object.freeze({
 });
 
 const PLATFORM_CONTROLS = Object.freeze({
-  facebook: Object.freeze({
-    allowed_methods: Object.freeze(['official_graph_api', 'operator_supplied_exact_public_post']),
-    prohibited_methods: Object.freeze(['browser_scraping', 'login_wall_bypass', 'rate_limit_evasion']),
-    minimum_interval_ms: 3000,
-    max_requests_per_hour: 120,
+  youtube: Object.freeze({
+    allowed_methods: Object.freeze(['youtube_data_api_v3_search']),
+    prohibited_methods: Object.freeze(['search_page_scraping', 'login_wall_bypass', 'rate_limit_evasion']),
+    minimum_interval_ms: 1500,
+    max_requests_per_day: 100,
     retry: Object.freeze({ max_attempts: 4, retry_statuses: [429, 500, 502, 503, 504], base_delay_ms: 5000, rate_limit_delay_ms: 60000, max_delay_ms: 900000 }),
   }),
-  tiktok: Object.freeze({
-    allowed_methods: Object.freeze(['official_display_api_with_creator_consent', 'official_oembed_exact_video', 'approved_platform_export']),
-    prohibited_methods: Object.freeze(['search_result_scraping', 'login_wall_bypass', 'rate_limit_evasion']),
+  x: Object.freeze({
+    allowed_methods: Object.freeze(['x_api_v2_recent_search']),
+    prohibited_methods: Object.freeze(['search_page_scraping', 'login_wall_bypass', 'rate_limit_evasion']),
     minimum_interval_ms: 2000,
     max_requests_per_hour: 120,
     retry: Object.freeze({ max_attempts: 4, retry_statuses: [429, 500, 502, 503, 504], base_delay_ms: 5000, rate_limit_delay_ms: 60000, max_delay_ms: 900000 }),
@@ -37,30 +37,28 @@ function envText(name, env = process.env) {
 }
 
 function platformAccessStatus(env = process.env) {
-  const facebookMethod = envText('ZA_FACEBOOK_GROUPS_ACCESS_METHOD', env).toLowerCase();
-  const facebookApproved = envFlagEnabled(env.ZA_FACEBOOK_GROUPS_ACCESS_APPROVED)
-    && PLATFORM_CONTROLS.facebook.allowed_methods.includes(facebookMethod)
-    && (facebookMethod === 'operator_supplied_exact_public_post'
-      || Boolean(envText('META_ACCESS_TOKEN', env) && envText('FACEBOOK_PAGE_IDS', env)));
-  const tiktokMethod = envText('ZA_TIKTOK_ACCESS_METHOD', env).toLowerCase();
-  const tiktokApproved = envFlagEnabled(env.ZA_TIKTOK_SOURCE_ACCESS_APPROVED)
-    && PLATFORM_CONTROLS.tiktok.allowed_methods.includes(tiktokMethod)
-    && (tiktokMethod === 'official_oembed_exact_video'
-      || Boolean(envText('TIKTOK_DATA_SOURCE_URL', env) || envText('TIKTOK_ACCESS_TOKEN', env)));
+  const youtubeMethod = envText('ZA_YOUTUBE_ACCESS_METHOD', env).toLowerCase();
+  const youtubeApproved = envFlagEnabled(env.ZA_YOUTUBE_SEARCH_ACCESS_APPROVED)
+    && PLATFORM_CONTROLS.youtube.allowed_methods.includes(youtubeMethod)
+    && Boolean(envText('YOUTUBE_API_KEY', env));
+  const xMethod = envText('ZA_X_ACCESS_METHOD', env).toLowerCase();
+  const xApproved = envFlagEnabled(env.ZA_X_API_ACCESS_APPROVED)
+    && PLATFORM_CONTROLS.x.allowed_methods.includes(xMethod)
+    && Boolean(envText('X_API_BEARER_TOKEN', env));
   return {
-    facebook: {
-      approved: facebookApproved,
-      method: facebookMethod || 'not_declared',
-      reason: facebookApproved
-        ? 'Approved access method and credentials are configured.'
-        : 'Facebook Groups pilot remains blocked until an approved official method or operator-supplied exact public posts are documented and configured.',
+    youtube: {
+      approved: youtubeApproved,
+      method: youtubeMethod || 'not_declared',
+      reason: youtubeApproved
+        ? 'YouTube Data API v3 Search access is configured.'
+        : 'YouTube pilot remains blocked until an API key and the approved YouTube Data API v3 Search method are configured.',
     },
-    tiktok: {
-      approved: tiktokApproved,
-      method: tiktokMethod || 'not_declared',
-      reason: tiktokApproved
-        ? 'Approved access method and source are configured.'
-        : 'TikTok broad discovery remains blocked; Display API is creator-consent scoped and oEmbed only accepts known exact videos. Configure an approved source/export or exact-URL pilot.',
+    x: {
+      approved: xApproved,
+      method: xMethod || 'not_declared',
+      reason: xApproved
+        ? 'X API v2 recent-search access is configured.'
+        : 'X pilot remains blocked until an X API bearer token, approved recent-search method, and cost approval are configured.',
     },
   };
 }
@@ -88,16 +86,20 @@ function selectPilotQueries() {
 }
 
 function estimatePilotCost({ requestCount = PILOT_SCOPE.harvested_row_cap, env = process.env } = {}) {
-  const configuredUsdPerThousand = Number(env.ZA_SCALE_PROVIDER_COST_USD_PER_1000_REQUESTS || 0);
-  const safeRate = Number.isFinite(configuredUsdPerThousand) && configuredUsdPerThousand >= 0
-    ? configuredUsdPerThousand
-    : 0;
-  const providerCost = Number(((Number(requestCount) || 0) * safeRate / 1000).toFixed(4));
+  const xPostReadCost = Number(env.ZA_X_POST_READ_COST_USD || 0.005);
+  const safeXPostReadCost = Number.isFinite(xPostReadCost) && xPostReadCost >= 0 ? xPostReadCost : 0.005;
+  const xPostReadUpperBound = Math.ceil((Number(requestCount) || 0) / PILOT_SCOPE.platforms.length);
+  const youtubeRequestUpperBound = PILOT_SCOPE.query_job_cap / PILOT_SCOPE.platforms.length;
+  const providerCost = Number((xPostReadUpperBound * safeXPostReadCost).toFixed(4));
   const currentMonthlySpend = Number(env.ZA_CURRENT_MONTHLY_SPEND_USD || 7.25);
   const monthlyCap = Number(env.ZA_MONTHLY_SPEND_CAP_USD || 13);
   return {
     request_count_upper_bound: Number(requestCount) || 0,
-    provider_cost_usd_per_1000_requests: safeRate,
+    youtube_search_request_upper_bound: youtubeRequestUpperBound,
+    youtube_estimated_incremental_cost_usd: 0,
+    x_post_read_upper_bound: xPostReadUpperBound,
+    x_cost_usd_per_post_read: safeXPostReadCost,
+    x_estimated_incremental_cost_usd: providerCost,
     estimated_incremental_provider_cost_usd: providerCost,
     current_monthly_spend_usd: currentMonthlySpend,
     monthly_cap_usd: monthlyCap,
@@ -114,8 +116,8 @@ function buildPilotPlan(env = process.env) {
   const blockers = [
     !envFlagEnabled(env.HARVEST_AUTOMATION_ENABLED) ? 'HARVEST_AUTOMATION_ENABLED is off' : '',
     !envFlagEnabled(env.ZA_SCALE_PILOT_ENABLED) ? 'ZA_SCALE_PILOT_ENABLED is off' : '',
-    !access.facebook.approved ? access.facebook.reason : '',
-    !access.tiktok.approved ? access.tiktok.reason : '',
+    !access.youtube.approved ? access.youtube.reason : '',
+    !access.x.approved ? access.x.reason : '',
     !cost.within_cap ? 'Estimated monthly spend would exceed the approved USD 13 cap' : '',
   ].filter(Boolean);
   return {
@@ -131,6 +133,7 @@ function buildPilotPlan(env = process.env) {
     stop_conditions: [
       'Stop at 500 harvested rows across all pilot buckets.',
       'Stop on any access-method mismatch, 401/403, repeated 429, or provider terms uncertainty.',
+      'Stop before the next X page or read if the observed X cost would breach the approved wave budget.',
       'Stop before public auto-publication; pilot rows remain held until Dave passes the sampled audit.',
       'Stop if estimated or observed monthly spend would exceed USD 13.',
     ],

@@ -159,9 +159,17 @@ function southAfricaPrivacyPageHtml(email) {
           <p class="mt-3">We do not sell personal information. We share only what is needed with hosting, email or messaging, security, analytics, and authorised platform providers, or where law requires it. Access controls, audit logs, encryption where supported, and data minimisation protect the service. Cross-border providers are assessed and contractually restricted where applicable.</p>
         </article>
       </div>
+      <article class="bg-white border border-red-100 rounded-2xl p-6" data-youtube-api-privacy>
+        <h2 class="text-xl font-black text-gray-900">YouTube API Services</h2>
+        <p class="mt-3">seshaikhaya uses YouTube API Services to find public South African property videos and retain source attribution. The API may provide a video's ID and link, title, description, channel name and ID, publication time, and thumbnail URL. We use API-key access to public data only; this feature does not ask users to sign in to YouTube, does not access private YouTube account data, and does not post, edit, or delete anything on YouTube.</p>
+        <p class="mt-3">YouTube remains the source of YouTube video metadata. Property categories, prices, locations, confidence decisions, and review outcomes shown by seshaikhaya are seshaikhaya product data and are not supplied or endorsed by YouTube. We do not download or rehost YouTube audiovisual content.</p>
+        <p class="mt-3">Public YouTube API data is refreshed or deleted within 30 calendar days. A user or rights holder may ask us to delete related stored data through the secure form below; we action a valid request as soon as possible and within 7 calendar days. Deleting data from seshaikhaya does not delete anything stored by YouTube.</p>
+        <p class="mt-3">Use of YouTube features is also governed by the <a class="font-bold text-green-700" href="https://www.youtube.com/t/terms" target="_blank" rel="noopener noreferrer">YouTube Terms of Service</a>. Google's handling of information is explained in the <a class="font-bold text-green-700" href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer">Google Privacy Policy</a>. An embedded YouTube player may share device, playback, and fraud-prevention information with YouTube when it loads or plays; autoplay remains off.</p>
+      </article>
       <article class="bg-white border border-green-100 rounded-2xl p-6">
         <h2 class="text-xl font-black text-gray-900">Retention</h2>
         <ul class="mt-3 list-disc pl-5 space-y-2">
+          <li>Public YouTube API data: refreshed or deleted within 30 calendar days.</li>
           <li>Unclaimed sourced-listing facts and private-seller relay contacts: up to 183 days without revalidation, or earlier on removal or expiry.</li>
           <li>Property enquiries: up to 365 days after the last activity.</li>
           <li>Claim, correction and takedown audit records: up to 1,095 days so objections are not accidentally undone and disputes can be investigated.</li>
@@ -184,6 +192,31 @@ function southAfricaPrivacyPageHtml(email) {
           <button id="popia-request-submit" class="rounded-xl bg-green-700 px-5 py-3 text-white font-bold" type="submit">Send secure request</button>
           <p id="popia-request-status" class="text-sm" role="status" aria-live="polite"></p>
         </form>
+      </article>
+    </section>
+  </main>`;
+}
+
+function southAfricaTermsPageHtml(email) {
+  return `
+  <main id="page-terms" class="page active" data-public-route="/terms" data-south-africa-terms="2026-08-12">
+    <section class="bg-green-800 py-10 text-white">
+      <div class="max-w-5xl mx-auto px-4">
+        <p class="text-green-200 text-sm font-bold uppercase tracking-wide">Platform terms</p>
+        <h1 class="text-4xl font-black serif mt-2">seshaikhaya Terms and Conditions</h1>
+        <p class="text-green-50 mt-3 max-w-3xl">seshaikhaya is a South African property discovery platform. Third-party results are source-attributed discovery records, not transaction guarantees.</p>
+        <p class="text-green-100 text-xs mt-3">Effective: 12 August 2026</p>
+      </div>
+    </section>
+    <section class="max-w-5xl mx-auto px-4 py-10 space-y-5 text-sm text-gray-700">
+      <article class="bg-white border border-green-100 rounded-2xl p-6 space-y-4">
+        <section><h2 class="text-xl font-black text-gray-900">Platform scope and accounts</h2><p class="mt-2">By using seshaikhaya.com, you agree to these Terms, applicable South African law, and the platform's safety and listing standards. Users must provide accurate information, protect account credentials, and market only property they own or are authorised to list. seshaikhaya is not an escrow service, law firm, estate agency, or party to a property transaction.</p></section>
+        <section><h2 class="text-xl font-black text-gray-900">Third-party property sources</h2><p class="mt-2">Some records link to public posts supplied by third parties. seshaikhaya does not claim ownership of their videos, images, captions, trademarks, or contact details, and does not guarantee availability, price, authority, title, or accuracy unless a separate verification label expressly says so. Check the original source and perform independent legal, identity, title, and payment verification.</p></section>
+        <section data-youtube-api-terms><h2 class="text-xl font-black text-gray-900">YouTube API Services</h2><p class="mt-2">seshaikhaya uses YouTube API Services for public-source discovery and attribution. By using pages or features that contain YouTube API data or an embedded YouTube player, you also agree to be bound by the <a class="font-bold text-green-700" href="https://www.youtube.com/t/terms" target="_blank" rel="noopener noreferrer">YouTube Terms of Service</a>. YouTube content remains on YouTube and is identified by its source link or branding. seshaikhaya is not affiliated with or endorsed by YouTube or Google. See our <a class="font-bold text-green-700" href="/privacy-policy">Privacy Policy</a> and the <a class="font-bold text-green-700" href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer">Google Privacy Policy</a>.</p></section>
+        <section><h2 class="text-xl font-black text-gray-900">Claim, correction, and removal</h2><p class="mt-2">Owners, sellers, estate agents, creators, rights holders, and authorised representatives may request a claim, correction, or removal. A private-seller removal request immediately hides the public result while staff verify the request. Removing a seshaikhaya record does not delete the original post or other data held by the source platform.</p></section>
+        <section><h2 class="text-xl font-black text-gray-900">Safety and prohibited conduct</h2><p class="mt-2">Fraud, impersonation, deceptive listings, forged documents, malicious links, attempts to bypass security, and unauthorised copying or rehosting of third-party media are prohibited. Users must independently verify the property, seller or agent, authority, title or tenure, and payment instructions before transacting.</p></section>
+        <section><h2 class="text-xl font-black text-gray-900">Fees, liability, and governing law</h2><p class="mt-2">Free listings, advertising, featured placement, and other paid services may have additional published terms. seshaikhaya does not guarantee a transaction, title validity, seller or tenant performance, financing, or freedom from third-party disputes. These Terms are governed by South African law and disputes are subject to courts with competent jurisdiction in South Africa.</p></section>
+        <section><h2 class="text-xl font-black text-gray-900">Contact</h2><p class="mt-2">Questions about these Terms can be sent to <a class="font-bold text-green-700" href="mailto:${email}">${email}</a>.</p></section>
       </article>
     </section>
   </main>`;
@@ -291,6 +324,12 @@ function applySouthAfricaHtml(html, { pathname = '/' } = {}) {
     output = output.replace(
       /<main id="page-privacy-policy"[\s\S]*?<\/main>/i,
       southAfricaPrivacyPageHtml(tenant.email)
+    );
+  }
+  if (normalizedPathname === '/terms') {
+    output = output.replace(
+      /<main id="page-terms"[\s\S]*?<\/main>/i,
+      southAfricaTermsPageHtml(tenant.email)
     );
   }
 

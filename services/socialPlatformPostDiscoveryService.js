@@ -4569,17 +4569,23 @@ async function runSocialPlatformPostSweep({
   let partialResults = false;
   const normalizedPlatform = normalizePlatform(platform || 'all');
   const normalizedFocus = cleanText(focus).toLowerCase();
+  const southAfricaSweep = String(env.COUNTRY_CODE || process.env.COUNTRY_CODE || '').trim().toUpperCase() === 'ZA';
+  const southAfricaTikTokCuratedOnly = /^(1|true|yes|on)$/i.test(String(env.ZA_TIKTOK_CURATED_INTAKE_ONLY || 'true'));
   const studentHousingFocus = normalizedFocus === 'students'
     || normalizedFocus === 'student'
     || normalizedFocus === 'student_housing'
     || normalizedPlatform === 'student'
     || normalizedPlatform === 'students'
     || normalizedPlatform === 'student_housing';
-  const requestedPlatforms = studentHousingFocus
-    ? ['tiktok', 'youtube', 'x', 'facebook', 'instagram']
-    : normalizedPlatform === 'all'
-      ? ['tiktok', 'youtube', 'x']
-      : [normalizedPlatform];
+  const requestedPlatforms = requestedPlatformsForSweep({
+    southAfricaSweep,
+    normalizedPlatform,
+    studentHousingFocus,
+    southAfricaTikTokCuratedOnly,
+  });
+  const platformPolicyBlockReason = southAfricaSweep && !requestedPlatforms.length
+    ? `${normalizedPlatform || 'unknown'} is not an automated South Africa source channel; use YouTube/X automation, exact-URL TikTok curation, or manual Facebook marketing.`
+    : '';
   const sourceLimit = cappedNumber(maxSources, SOCIAL_SWEEP_FAST_DEFAULT_SOURCES, 1, SOCIAL_SWEEP_FAST_MAX_SOURCES);
   const resultLimit = cappedNumber(maxResultsPerSource, DEFAULT_X_RESULTS_PER_SOURCE, 1, SOCIAL_SWEEP_FAST_MAX_RESULTS_PER_SOURCE);
   const pageLimit = cappedNumber(
@@ -5070,6 +5076,13 @@ async function runSocialPlatformPostSweep({
     import_batch_id: FOUND_ONLINE_SOURCE_POST_IMPORT_BATCH_ID,
     dry_run: dryRun,
     platforms: requestedPlatforms,
+    platform_policy: {
+      country_code: southAfricaSweep ? 'ZA' : String(env.COUNTRY_CODE || process.env.COUNTRY_CODE || 'UG').toUpperCase(),
+      automated_platforms: southAfricaSweep ? ['youtube', 'x'] : requestedPlatforms,
+      curated_platforms: southAfricaSweep ? ['tiktok'] : [],
+      marketing_only_platforms: southAfricaSweep ? ['facebook'] : [],
+      blocked_platform_reason: platformPolicyBlockReason,
+    },
     focus: studentHousingFocus ? 'students' : normalizedFocus,
     partial_results: partialResults,
     time_budget_exhausted: sweepRemaining <= 0,
@@ -5100,10 +5113,14 @@ async function runSocialPlatformPostSweep({
       instagram: sourceWindowSummary(instagramSourceWindow),
     },
     policy: {
-      tiktok: 'Hashtag/profile URLs are discovery tasks. Queue a property after the exact TikTok /@handle/video/id URL, location, source contact path, and source evidence are captured. Missing price becomes Price upon application. Location is non-negotiable before approval; other checks are King-review overrides.',
+      tiktok: southAfricaSweep
+        ? 'South Africa TikTok intake is curated-only. Queue a property only from an operator-supplied exact /@handle/video/id URL verified by official oEmbed or another approved consented source. Never run broad TikTok search scraping.'
+        : 'Hashtag/profile URLs are discovery tasks. Queue a property after the exact TikTok /@handle/video/id URL, location, source contact path, and source evidence are captured. Missing price becomes Price upon application. Location is non-negotiable before approval; other checks are King-review overrides.',
       youtube: 'YouTube source pages are scanned through channel upload playlists when a channel/handle is known; hashtags and search feeds use focused YouTube Data API search queries from 1 January 2026 onward for both Shorts and long-form videos. If YouTube Search quota is exhausted, the sweep falls back to stored YouTube source/contact channels and scans their upload playlists without broad hashtag search. Exact video URLs with snippet.publishedAt, title/description, channel contact path, location, and source evidence become Found Online review records. Missing price becomes Price upon application.',
       x: 'X/Twitter source lists become properties after X API/search returns exact post URLs with created_at, text, author/profile, media/source evidence, location, and contact path. Missing price becomes Price upon application. Location is non-negotiable before approval; other checks are King-review overrides.',
-      student_housing_focus: 'Student housing sweeps prioritize campus, hostel, student accommodation, university, and student-room source signals and prepare manual Facebook/Instagram capture tasks when direct APIs are unavailable.',
+      student_housing_focus: southAfricaSweep
+        ? 'South Africa student-housing automation is limited to YouTube Data API and X API results; Facebook is marketing-only and TikTok is exact-URL curated intake.'
+        : 'Student housing sweeps prioritize campus, hostel, student accommodation, university, and student-room source signals and prepare manual Facebook/Instagram capture tasks when direct APIs are unavailable.',
       profile_creation_rule: 'The sweep does not automatically create or link public Makaug broker profiles from social discovery. Source owners must register or claim a Makaug broker profile before Makaug shows a public agent profile.',
     },
     api_readiness: apiReadiness,
@@ -5180,7 +5197,9 @@ async function runSocialPlatformPostSweep({
       capture_task_count: facebookCaptureTasks.length,
       api_configured: apiReadiness.facebook.configured,
       api_mode: apiReadiness.facebook.mode,
-      skipped_reason: apiReadiness.facebook.configured
+      skipped_reason: southAfricaSweep
+        ? 'South Africa Facebook is marketing-only. No group or Marketplace harvesting is permitted.'
+        : apiReadiness.facebook.configured
         ? 'Facebook Graph credentials are present; keep exact public post URLs in King review until the Graph post adapter is enabled for the approved pages.'
         : 'Set META_GRAPH_ACCESS_TOKEN plus FACEBOOK_PAGE_IDS/FACEBOOK_PAGE_ID in Render for approved Facebook Graph page/post review.',
       capture_tasks: facebookCaptureTasks,
@@ -5193,7 +5212,9 @@ async function runSocialPlatformPostSweep({
       capture_task_count: instagramCaptureTasks.length,
       api_configured: apiReadiness.instagram.configured,
       api_mode: apiReadiness.instagram.mode,
-      skipped_reason: apiReadiness.instagram.configured
+      skipped_reason: southAfricaSweep
+        ? 'Instagram is excluded from South Africa automated harvesting.'
+        : apiReadiness.instagram.configured
         ? 'Instagram Graph credentials are present; keep exact post/reel URLs in King review until the hashtag/media adapter is enabled for the approved business account.'
         : 'Set META_GRAPH_ACCESS_TOKEN plus INSTAGRAM_BUSINESS_ACCOUNT_IDS/INSTAGRAM_BUSINESS_ACCOUNT_ID in Render for Instagram Graph hashtag/media review.',
       capture_tasks: instagramCaptureTasks,
@@ -5204,6 +5225,22 @@ async function runSocialPlatformPostSweep({
     harvest_event_log: harvestEventLog,
     pending_backlog_reprocess_result: pendingYouTubeBacklogReprocess,
   };
+}
+
+function requestedPlatformsForSweep({
+  southAfricaSweep = false,
+  normalizedPlatform = 'all',
+  studentHousingFocus = false,
+  southAfricaTikTokCuratedOnly = true,
+} = {}) {
+  if (southAfricaSweep) {
+    if (studentHousingFocus || normalizedPlatform === 'all') return ['youtube', 'x'];
+    if (['youtube', 'x'].includes(normalizedPlatform)) return [normalizedPlatform];
+    if (normalizedPlatform === 'tiktok' && southAfricaTikTokCuratedOnly) return ['tiktok'];
+    return [];
+  }
+  if (studentHousingFocus) return ['tiktok', 'youtube', 'x', 'facebook', 'instagram'];
+  return normalizedPlatform === 'all' ? ['tiktok', 'youtube', 'x'] : [normalizedPlatform];
 }
 
 module.exports = {
@@ -5269,4 +5306,5 @@ module.exports = {
   phoneFromText,
   youtubeSearchQuotaExceededFromReports,
   runSocialPlatformPostSweep,
+  requestedPlatformsForSweep,
 };

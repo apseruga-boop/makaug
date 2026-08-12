@@ -22,6 +22,14 @@ const rawHtml = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const publicHtml = sanitizePublicHtml(rawHtml, { pathname: '/' });
 const html = applySouthAfricaHtml(publicHtml, { pathname: '/' });
 const saslHtml = applySouthAfricaHtml(publicHtml, { pathname: '/sasl' });
+const privacyHtml = applySouthAfricaHtml(
+  sanitizePublicHtml(rawHtml, { pathname: '/privacy-policy' }),
+  { pathname: '/privacy-policy' }
+);
+const termsHtml = applySouthAfricaHtml(
+  sanitizePublicHtml(rawHtml, { pathname: '/terms' }),
+  { pathname: '/terms' }
+);
 const nav = html.match(/<nav\b[\s\S]*?<\/nav>/i)?.[0] || '';
 const footer = html.match(/<footer\b[\s\S]*?<\/footer>/i)?.[0] || '';
 const head = html.match(/<head>[\s\S]*?<\/head>/i)?.[0] || '';
@@ -95,6 +103,15 @@ assert(saslHtml.includes('data-sasl-help-page'));
 assert(saslHtml.includes('English text remains visible'));
 assert(saslHtml.includes('Signed video support'));
 assert(saslHtml.includes('captions'));
+assert(privacyHtml.includes('data-youtube-api-privacy'));
+assert(privacyHtml.includes('uses YouTube API Services'));
+assert(privacyHtml.includes('https://policies.google.com/privacy'));
+assert(privacyHtml.includes('refreshed or deleted within 30 calendar days'));
+assert(privacyHtml.includes('within 7 calendar days'));
+assert(termsHtml.includes('data-youtube-api-terms'));
+assert(termsHtml.includes('https://www.youtube.com/t/terms'));
+assert(termsHtml.includes('governed by South African law'));
+assert(!termsHtml.includes('Ugandan law'));
 
 for (const forbidden of [
   'id="nav-valuation"',
