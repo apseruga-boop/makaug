@@ -199,6 +199,8 @@ app.get('/api/version', (_req, res) => {
       'human-integrity-override-20260811',
       'human-approval-overlord-20260811',
       'king-timestamp-iso-normalization-20260811',
+      ...(!IS_SOUTH_AFRICA ? ['uganda-master-intake-recovery-20260811'] : []),
+      ...(!IS_SOUTH_AFRICA ? ['uganda-location-free-text-20260812'] : []),
       ...(IS_SOUTH_AFRICA ? [SESHAIKHAYA_LAUNCH_MARKER, 'seshaikhaya-national-gazetteer-20260811'] : [])
     ]
   });

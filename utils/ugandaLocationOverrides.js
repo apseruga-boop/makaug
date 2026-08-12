@@ -91,6 +91,21 @@ const CURATED_UGANDA_LOCATION_OVERRIDES = [
     lat: 0.347, lng: 32.649,
     source: 'makaug_verified_location_override'
   },
+  {
+    name: 'Ssenge', district: 'Wakiso', town: 'Nansana', level: 'area',
+    aliases: ['Ssenge', 'Senge'], lat: 0.4167, lng: 32.5167,
+    source: 'makaug_verified_location_override'
+  },
+  {
+    name: 'Nalumunye', district: 'Wakiso', town: 'Kyengera', level: 'area',
+    aliases: ['Nalumunye'],
+    source: 'wakiso_district_verified_marketplace_override'
+  },
+  {
+    name: 'Kitiko', district: 'Wakiso', town: 'Makindye-Ssabagabo', level: 'area',
+    aliases: ['Kitiko', 'Mutungo Kitiko'],
+    source: 'makindye_ssabagabo_verified_marketplace_override'
+  },
 
   ...rows([
     'Najjanankumbi', 'Mutundwe', 'Bukasa', 'Kitintale', 'Mbuya', 'Luzira',

@@ -18,6 +18,7 @@ const {
 } = require('../services/socialSearchSourcedListingsService');
 const { regionForDistrict } = require('../utils/ugandaLocationHierarchy');
 const worklist = require('./fixtures/uganda-location-coverage-worklist.json');
+const messyInputs = require('./fixtures/uganda-location-messy-inputs.json');
 
 const root = path.resolve(__dirname, '..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
@@ -43,7 +44,9 @@ test('wrong-region regression names resolve only as unique confidence-one aliase
     Nakwero: ['Wakiso', 'Central'],
     Mayangayanga: ['Mukono', 'Central'],
     Nsaggu: ['Wakiso', 'Central'],
-    MUBS: ['Kampala', 'Central']
+    MUBS: ['Kampala', 'Central'],
+    Ssenge: ['Wakiso', 'Central'],
+    Senge: ['Wakiso', 'Central']
   };
   Object.entries(expected).forEach(([query, [district, region]]) => {
     const result = resolveCanonicalUgandaLocation(query);
@@ -52,6 +55,47 @@ test('wrong-region regression names resolve only as unique confidence-one aliase
     assert.equal(result.confidence, 1, query);
     assert.equal(result.match?.district, district, query);
     assert.equal(regionForDistrict(result.match?.district), region, query);
+  });
+});
+
+test('Ssenge and Senge share one verified Wakiso canonical node', () => {
+  for (const query of ['Ssenge', 'Senge', 'Ssenge, Uganda']) {
+    const result = resolveCanonicalUgandaLocation(query);
+    assert.equal(result.status, 'matched', query);
+    assert.equal(result.confidence, 1, query);
+    assert.equal(result.match?.key, 'wakiso:ssenge', query);
+    assert.equal(result.match?.town, 'Nansana', query);
+  }
+});
+
+test('Nalumunye and Kitiko are verified confidence-one Wakiso registry nodes', () => {
+  const expected = {
+    Nalumunye: ['wakiso:nalumunye', 'Kyengera'],
+    Kitiko: ['wakiso:kitiko', 'Makindye-Ssabagabo']
+  };
+  Object.entries(expected).forEach(([query, [key, town]]) => {
+    const result = resolveCanonicalUgandaLocation(query);
+    assert.equal(result.status, 'matched', query);
+    assert.equal(result.match_type, 'exact_alias', query);
+    assert.equal(result.confidence, 1, query);
+    assert.equal(result.match?.key, key, query);
+    assert.equal(result.match?.district, 'Wakiso', query);
+    assert.equal(result.match?.town, town, query);
+  });
+});
+
+test('messy free text and misspellings are ranked suggestions, never silent matches', () => {
+  messyInputs.forEach(({ query, expected_key: expectedKey, expected }) => {
+    const resolution = resolveCanonicalUgandaLocation(query);
+    const suggestions = canonicalLocationSuggestions(query, new Map(), 8);
+    assert.equal(resolution.status, 'unmatched', query);
+    if (expected === 'unmatched') {
+      assert.equal(suggestions.length, 0, query);
+      return;
+    }
+    assert.equal(suggestions[0]?.canonical_key, expectedKey, query);
+    assert.equal(suggestions[0]?.did_you_mean, true, query);
+    assert.equal(suggestions[0]?.auto_resolvable, false, query);
   });
 });
 
@@ -102,12 +146,31 @@ test('country wrappers, punctuation and safe road noise normalize before exact m
     assert.equal(result.status, 'matched', query);
     assert.equal(result.match?.key, 'wakiso:sentema', query);
   });
-  assert.deepEqual(normalizeLocationQueryCandidates('Sentema Road, Wakiso, Uganda').slice(0, 4), [
+  const sentemaRoadCandidates = normalizeLocationQueryCandidates('Sentema Road, Wakiso, Uganda');
+  assert.deepEqual(sentemaRoadCandidates.slice(0, 4), [
     'Sentema Road, Wakiso, Uganda',
     'Sentema Road, Wakiso',
-    'Sentema Road',
+    'Sentema, Wakiso',
     'Sentema'
   ]);
+  assert(sentemaRoadCandidates.includes('Sentema Road'));
+
+  const kitendeCorridor = resolveCanonicalUgandaLocation('Kitende, Entebbe Road, Wakiso');
+  assert.equal(kitendeCorridor.status, 'matched');
+  assert.equal(kitendeCorridor.match?.key, 'wakiso:kitende');
+
+  const numberedParish = resolveCanonicalUgandaLocation('405 Brigade, Kotido');
+  assert.equal(numberedParish.status, 'matched');
+  assert.equal(numberedParish.match?.key, 'kotido:405 brigade');
+
+  const numberedParishSuggestions = canonicalLocationSuggestions('405 Brigade, Kotido');
+  assert.equal(numberedParishSuggestions[0]?.canonical_key, 'kotido:405 brigade');
+  assert.equal(numberedParishSuggestions[0]?.auto_resolvable, true);
+
+  const kitendeCorridorSuggestions = canonicalLocationSuggestions('Kitende, Entebbe Road, Wakiso');
+  assert.equal(kitendeCorridorSuggestions[0]?.canonical_key, 'wakiso:kitende');
+  assert.equal(kitendeCorridorSuggestions[0]?.auto_resolvable, true);
+  assert.equal(kitendeCorridorSuggestions.some((entry) => entry.canonical_key === 'wakiso:entebbe'), false);
   assert.equal(resolveCanonicalUgandaLocation('Kampala Road').status, 'unmatched');
   assert.equal(resolveCanonicalUgandaLocation('Hoima Rd').status, 'unmatched');
   assert.equal(resolveCanonicalUgandaLocation('Zzxq, Uganda').status, 'unmatched');
@@ -269,6 +332,9 @@ test('public and King forms use the same resolver and clear stale hierarchy on u
   assert.match(app, /function canonicalTownForLocation/);
   assert.match(app, /return \/\\b\(\?:town\|city\|municipality\|tc\)\\b\/i\.test\(name\) \? name : `\$\{name\} Town`/);
   assert.match(app, /data-approval-blocker-host/);
+  assert.match(app, /function adminReviewRenderCanonicalSuggestions/);
+  assert.match(app, /Choose the canonical place explicitly/);
+  assert.match(app, /match: "exact_alias",\s*confidence: 1/);
   assert.match(route, /router\.get\('\/locations\/resolve'/);
   assert.match(route, /Canonical location confirmation is required before approval/);
   assert.match(route, /disambiguation_required/);
@@ -307,4 +373,5 @@ test('release exposes the shared resolver audit marker', () => {
   const server = read('server.js');
   assert.match(server, /'shared-uganda-location-resolver-coverage'/);
   assert.match(server, /'location-query-normalization-prominence-20260811'/);
+  assert.match(server, /'uganda-location-free-text-20260812'/);
 });

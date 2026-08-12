@@ -52,6 +52,7 @@
     "cloud:verify-storage": "node scripts/verify-cloud-storage.js",
     "locations:build-uganda": "node scripts/build-uganda-location-gazetteer.js",
     "locations:probe-uganda": "node scripts/probe-uganda-location-coverage.js",
+    "locations:sweep-uganda": "node scripts/location-coverage-sweep.mjs coverage-results.csv",
     "locations:build-south-africa": "node scripts/build-south-africa-location-gazetteer.js",
     "inventory:seed-south-africa-sources": "node scripts/seed-south-africa-source-registry.js",
     "brand:icons-south-africa": "node scripts/generate-seshaikhaya-icons.js",

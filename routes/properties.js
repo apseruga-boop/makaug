@@ -642,6 +642,12 @@ async function applyStatusListingPatchBeforeModeration(req, propertyId, existing
   if (Object.prototype.hasOwnProperty.call(patch, 'student_universities')) {
     extraPatch.student_universities = asArray(patch.student_universities).map((item) => cleanText(item)).filter(Boolean);
   }
+  const humanStaffRole = ['super_admin', 'moderator'].includes(String(req.adminAuth?.role || '').toLowerCase());
+  if (humanStaffRole && Object.prototype.hasOwnProperty.call(patch, 'property_type')) {
+    extraPatch.human_verified_property_type = cleanText(patch.property_type) || null;
+    extraPatch.human_verified_property_type_at = new Date().toISOString();
+    extraPatch.human_verified_property_type_by = req.adminAuth?.userId || req.adminAuth?.type || 'human_staff_session';
+  }
   if (Object.prototype.hasOwnProperty.call(patch, 'amenities')) {
     const amenities = asArray(patch.amenities).map((item) => cleanText(item)).filter(Boolean);
     values.push(JSON.stringify(amenities));
@@ -2262,7 +2268,7 @@ router.get('/locations/resolve', (req, res) => {
   const match = resolution.match
     ? publicCanonicalLocationPayload({ ...resolution.match, match: resolution.match_type, confidence: resolution.confidence, auto_resolvable: true })
     : null;
-  const candidates = resolution.candidates.map((item) => {
+  let candidates = resolution.candidates.map((item) => {
     const selected = resolution.status === 'matched' && resolution.match?.key === item.key;
     return publicCanonicalLocationPayload({
       ...item,
@@ -2274,19 +2280,27 @@ router.get('/locations/resolve', (req, res) => {
       auto_resolvable: selected
     });
   });
+  if (resolution.status === 'unmatched') {
+    candidates = canonicalLocationSuggestions(query, new Map(), 8)
+      .filter((item) => item.auto_resolvable !== true)
+      .map(publicCanonicalLocationPayload);
+  }
+  const suggestionRequired = resolution.status === 'unmatched' && candidates.length > 0;
   return res.json({
     ok: true,
     data: match,
     meta: {
       canonical: true,
       query,
-      status: resolution.status,
+      status: suggestionRequired ? 'suggestion_required' : resolution.status,
       unmatched: resolution.status !== 'matched',
       approval_blocked: resolution.status !== 'matched',
       match: resolution.match_type,
       matched_query: resolution.matched_query || null,
       confidence: resolution.confidence,
-      candidates
+      candidates,
+      did_you_mean: suggestionRequired,
+      did_you_mean_suggestions: suggestionRequired ? candidates : []
     }
   });
 });
@@ -4805,7 +4819,14 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
     let humanIntegrityOverride = null;
     let humanApprovalOverride = null;
     if (nextStatus === 'approved') {
-      dataIntegrity = listingDataIntegrityReport(current);
+      const humanVerifiedPropertyType = humanApprovalAccess.human_session
+        && (
+          listingPatchResult.changed_fields.includes('property_type')
+          || Boolean(propertyExtraFieldsObject(current).human_verified_property_type)
+        );
+      dataIntegrity = humanVerifiedPropertyType
+        ? listingDataIntegrityReport(current, { trustFormPropertyType: true })
+        : listingDataIntegrityReport(current);
       if (!dataIntegrity.ok) {
         if (!handleApprovalBlocker({
           code: 'data_integrity',
