@@ -93,8 +93,41 @@ function injectBeforeHeadEnd(html, source) {
   return html.includes(source) ? html : html.replace('</head>', `${source}\n</head>`);
 }
 
-function applySouthAfricaHtml(html) {
+function saslAccessibilityPageHtml() {
+  return `
+  <main id="page-sasl" class="page active" data-public-route="/sasl" data-sasl-help-page>
+    <section class="bg-green-800 py-10 text-white">
+      <div class="max-w-5xl mx-auto px-4">
+        <p class="text-green-200 text-sm font-bold uppercase tracking-wide">Accessibility</p>
+        <h1 class="text-4xl font-black serif mt-2">South African Sign Language (SASL)</h1>
+        <p class="text-green-50 mt-3 max-w-3xl">SASL mode keeps English text available while prioritising signed video, captions and clear visual navigation.</p>
+      </div>
+    </section>
+    <section class="max-w-5xl mx-auto px-4 py-10">
+      <div class="grid gap-5 md:grid-cols-2">
+        <article class="bg-white border border-green-100 rounded-2xl p-6">
+          <h2 class="text-2xl font-bold text-gray-900 serif">What SASL mode changes</h2>
+          <ul class="mt-4 list-disc pl-5 space-y-2 text-gray-700">
+            <li>English text remains visible as the written companion language.</li>
+            <li>Available SASL versions of help videos are prioritised.</li>
+            <li>Video guidance must include captions or a written transcript.</li>
+            <li>The selected accessibility mode is saved on this device.</li>
+          </ul>
+        </article>
+        <article class="bg-white border border-green-100 rounded-2xl p-6" data-sasl-video-support>
+          <h2 class="text-2xl font-bold text-gray-900 serif">Signed video support</h2>
+          <p class="mt-4 text-gray-700">Signed walkthroughs will be labelled <strong>SASL video</strong>. Where a signed version is not yet available, English captions and written steps remain available.</p>
+          <p class="mt-4 text-sm text-gray-600">No silent or uncaptioned help video should be the only explanation of a property journey.</p>
+        </article>
+      </div>
+      <a href="/" class="inline-flex mt-6 rounded-xl bg-green-700 px-5 py-3 text-white font-semibold">Return to property search</a>
+    </section>
+  </main>`;
+}
+
+function applySouthAfricaHtml(html, { pathname = '/' } = {}) {
   const tenant = tenantFor('ZA');
+  const normalizedPathname = String(pathname || '/').split('?')[0].split('#')[0].replace(/\/+$/, '') || '/';
   let output = String(html || '');
 
   output = output
@@ -122,12 +155,12 @@ function applySouthAfricaHtml(html) {
     .replace(/<div class="text-2xl font-black text-green-800 serif">makaug<span class="text-amber-500">\.com<\/span><\/div>/,
       '<div class="text-2xl font-black text-green-800 serif">sesha<span class="text-amber-500">ikhaya</span></div>')
     .replace('UGANDA PROPERTY', 'SOUTH AFRICA PROPERTY')
-    .replace('Use makaug in 9 languages', 'Use seshaikhaya in 11 written languages')
+    .replace('Use makaug in 9 languages', 'Use seshaikhaya in 12 official languages')
     .replace('A property search engine for Uganda', 'South Africa’s home for property')
     .replace('makaug uses AI-powered search algorithms to scan public online property sources across Uganda, organising',
       'seshaikhaya uses AI-assisted search and human review to organise South African')
     .replace('<span id="hero-property-count">thousands of</span>', '<span id="hero-property-count">reviewed</span>')
-    .replace('Search in any language — makaug AI finds real listings.', 'Ask in any South African written language — seshaikhaya finds reviewed listings.')
+    .replace('Search in any language — makaug AI finds real listings.', 'Ask in any South African language — seshaikhaya finds reviewed listings.')
     .replace(/Ask makaug AI/g, 'Ask seshaikhaya AI')
     .replace(/makaug how-to video/gi, 'seshaikhaya how-to video')
     .replace(/Help makaug find/g, 'Help seshaikhaya find')
@@ -164,7 +197,11 @@ function applySouthAfricaHtml(html) {
     .replace(/\bdistricts\b/g, 'provinces')
     .replace(/\bdistrict\b/g, 'province')
     .replace(/📧 Email: info@seshaikhaya\.com/g, `📧 Email: ${tenant.email}`)
-    .replace(/makaug\.com/g, 'seshaikhaya.com');
+    .replace(/makaug\.com/g, 'seshaikhaya.com')
+    .replace(/(<a id="footer-link-help"[\s\S]*?<\/a>)/i,
+      '$1\n            <a id="footer-link-sasl" href="/sasl" class="block cursor-pointer hover:text-white">SASL accessibility</a>')
+    .replace(/(<option value="private">Privately listed<\/option>)/g,
+      '$1\n              <option value="private_seller">Private seller — no agent commission</option>');
 
   for (const id of ['nav-valuation', 'mnav-valuation', 'nav-marketplace', 'mnav-marketplace']) {
     output = removeAnchorById(output, id);
@@ -179,6 +216,13 @@ function applySouthAfricaHtml(html) {
   output = replaceSelectOptions(output, 'lang-sel-spotlight', tenant.languages);
   output = replaceSelectOptions(output, 'lp-review-lang-sel', tenant.languages);
   output = replaceSelectOptions(output, 'cur-sel', tenant.currencies);
+
+  if (normalizedPathname === '/sasl') {
+    output = output
+      .replace('<body class="bg-gray-50" data-country-code="ZA" data-tenant="seshaikhaya">',
+        '<body class="bg-gray-50" data-country-code="ZA" data-tenant="seshaikhaya" data-public-route-sasl="true">')
+      .replace(/<footer\b/i, `${saslAccessibilityPageHtml()}\n<footer`);
+  }
 
   output = replaceMeta(output, 'description', "South Africa's home for property. Find reviewed homes, rentals, student accommodation, commercial property and land.");
   output = replaceMeta(output, 'og:site_name', 'seshaikhaya.com');
@@ -215,7 +259,8 @@ function southAfricaLanguagePatch() {
     ts: { siteTitle: 'seshaikhaya.com | Tindlu ta Afrika Dzonga', brandSubtitle: 'TINDLU TA AFRIKA DZONGA', navSale: 'Swa xavisiwa', navRent: 'Swa hirisiwa', navStudents: 'Vadyondzi', navCommercial: 'Mabindzu', navLand: 'Misava', navBrokers: 'Kuma vayimeri', navMortgage: 'Kuma bond', navAI: 'Vutisa AI', pageAbout: 'Hi hina', heroRent: 'Hira', heroBuy: 'Xava', heroSearch: 'Lava', heroLocationLabel: 'Ndhawu', languageSet: 'Ririmi ri cincile' },
     ss: { siteTitle: 'seshaikhaya.com | Tindlu taseNingizimu Afrika', brandSubtitle: 'TINDLU TASE NINGIZIMU AFRIKA', navSale: 'Kuyatsengiswa', navRent: 'Kuyacashiswa', navStudents: 'Bafundzi', navCommercial: 'Temabhizinisi', navLand: 'Umhlaba', navBrokers: 'Tfola ema-ejenti', navMortgage: 'Tfola ibhondi', navAI: 'Buta i-AI', pageAbout: 'Ngatsi', heroRent: 'Cashisa', heroBuy: 'Tsenga', heroSearch: 'Sesha', heroLocationLabel: 'Indzawo', languageSet: 'Lulwimi lushintjiwe' },
     ve: { siteTitle: 'seshaikhaya.com | Ndaka dza Afrika Tshipembe', brandSubtitle: 'NDAKA DZA AFRIKA TSHIPEMBE', navSale: 'Dzi khou rengiswa', navRent: 'Dzi khou hiriswa', navStudents: 'Matshudeni', navCommercial: 'Mabindu', navLand: 'Mavu', navBrokers: 'Wanani vhaimeleli', navMortgage: 'Wanani bond', navAI: 'Vhudzisani AI', pageAbout: 'Nga ha riṋe', heroRent: 'Hira', heroBuy: 'Renga', heroSearch: 'Ṱoḓa', heroLocationLabel: 'Fhethu', languageSet: 'Luambo lwo shandulwa' },
-    nr: { siteTitle: 'seshaikhaya.com | Izindlu zeSewula Afrika', brandSubtitle: 'IZINDLU ZESEWULA AFRIKA', navSale: 'Ezithengiswako', navRent: 'Eziqashiswako', navStudents: 'Abafundi', navCommercial: 'Zokurhweba', navLand: 'Inarha', navBrokers: 'Fumana ama-ejenti', navMortgage: 'Fumana ibhondi', navAI: 'Buza i-AI', pageAbout: 'Ngathi', heroRent: 'Qasha', heroBuy: 'Thenga', heroSearch: 'Rhubhulula', heroLocationLabel: 'Indawo', languageSet: 'Ilimi litjhugululiwe' }
+    nr: { siteTitle: 'seshaikhaya.com | Izindlu zeSewula Afrika', brandSubtitle: 'IZINDLU ZESEWULA AFRIKA', navSale: 'Ezithengiswako', navRent: 'Eziqashiswako', navStudents: 'Abafundi', navCommercial: 'Zokurhweba', navLand: 'Inarha', navBrokers: 'Fumana ama-ejenti', navMortgage: 'Fumana ibhondi', navAI: 'Buza i-AI', pageAbout: 'Ngathi', heroRent: 'Qasha', heroBuy: 'Thenga', heroSearch: 'Rhubhulula', heroLocationLabel: 'Indawo', languageSet: 'Ilimi litjhugululiwe' },
+    sasl: { siteTitle: 'seshaikhaya.com | SASL accessibility', brandSubtitle: 'SOUTH AFRICA PROPERTY · SASL MODE', langBanner: 'SASL accessibility mode: English text retained; signed and captioned help prioritised.', languageSet: 'SASL accessibility mode enabled' }
   };
   return `\nObject.entries(${JSON.stringify(dictionaries)}).forEach(([code, values]) => { I18N_UI[code] = Object.assign({}, I18N_UI.en, values); });\n`;
 }
@@ -224,7 +269,7 @@ function applySouthAfricaJavaScript(source) {
   const tenant = tenantFor('ZA');
   const provinceArray = JSON.stringify(SOUTH_AFRICA_PROVINCES);
   const bondProviders = JSON.stringify(SOUTH_AFRICA_BOND_PROVIDERS);
-  const writtenLanguageCodes = JSON.stringify(tenant.languages.map((language) => language.code));
+  const officialLanguageCodes = JSON.stringify(tenant.languages.map((language) => language.code));
   let output = String(source || '')
     .replace(/const BrandConfig = Object\.freeze\(\{[\s\S]*?\n\}\);/, `const BrandConfig = Object.freeze({\n  productDisplayName: "seshaikhaya.com",\n  domain: "seshaikhaya.com",\n  legalOrInternalName: "seshaikhaya",\n  tagline: "South Africa Property"\n});`)
     .replace(/const DISTRICTS = \[[\s\S]*?\n\];\nconst PROPERTIES = \[[\s\S]*?\n\];\n\nconst SAMPLE_PROPERTY_GALLERIES = \{[\s\S]*?\n\};/, `const DISTRICTS = ${provinceArray};\nconst PROPERTIES = [];\n\nconst SAMPLE_PROPERTY_GALLERIES = {};`)
@@ -241,9 +286,10 @@ function applySouthAfricaJavaScript(source) {
     .replace(/const UGANDA_COORD_BOUNDS = \{[\s\S]*?\n\};/, `const UGANDA_COORD_BOUNDS = {\n  latMin: -35.0,\n  latMax: -22.0,\n  lngMin: 16.0,\n  lngMax: 33.0\n};`)
     .replace('return plausibleTotal || 1889;', 'return plausibleTotal || 0;')
     .replace('const LANG_FALLBACK = {', `${southAfricaLanguagePatch()}\nconst LANG_FALLBACK = {`)
-    .replace(/const LANG_FALLBACK = \{[\s\S]*?\n\};/, `const LANG_FALLBACK = {\n  en: "en", af: "en", zu: "en", xh: "en", nso: "en", tn: "en", st: "en", ts: "en", ss: "en", ve: "en", nr: "en"\n};`)
+    .replace(/const LANG_FALLBACK = \{[\s\S]*?\n\};/, `const LANG_FALLBACK = {\n  en: "en", af: "en", zu: "en", xh: "en", nso: "en", tn: "en", st: "en", ts: "en", ss: "en", ve: "en", nr: "en", sasl: "en"\n};`)
     .replace(/function getSupportedMakaugLanguageCode\(lang\) \{[\s\S]*?\n\}/,
-      `function getSupportedMakaugLanguageCode(lang) {\n  const code = String(lang || "").trim().toLowerCase();\n  const base = code.split("-")[0];\n  const supported = ${writtenLanguageCodes};\n  return supported.includes(base) && I18N_UI[base] ? base : "";\n}`)
+      `function getSupportedMakaugLanguageCode(lang) {\n  const code = String(lang || "").trim().toLowerCase();\n  const base = code.split("-")[0];\n  const supported = ${officialLanguageCodes};\n  return supported.includes(base) && I18N_UI[base] ? base : "";\n}`)
+    .replace('document.documentElement.lang = currentLang;', `document.documentElement.lang = currentLang === "sasl" ? "en-ZA" : currentLang;\n  document.documentElement.dataset.selectedLanguage = currentLang;\n  document.documentElement.classList.toggle("sasl-accessibility-mode", currentLang === "sasl");\n  if (document.body) {\n    const saslMode = currentLang === "sasl";\n    document.body.classList.toggle("sasl-accessibility-mode", saslMode);\n    let saslBanner = document.getElementById("sasl-accessibility-banner");\n    if (saslMode && !saslBanner) {\n      saslBanner = document.createElement("aside");\n      saslBanner.id = "sasl-accessibility-banner";\n      saslBanner.setAttribute("role", "status");\n      saslBanner.setAttribute("aria-live", "polite");\n      saslBanner.innerHTML = 'SASL accessibility mode is on. English text is retained. <a href="/sasl">Signed video and caption support</a>.';\n      document.body.prepend(saslBanner);\n    }\n    if (saslBanner) saslBanner.hidden = !saslMode;\n    document.querySelectorAll("[data-sasl-video]").forEach((node) => {\n      node.toggleAttribute("data-sasl-priority", saslMode);\n      node.style.order = saslMode ? "-1" : "";\n      const video = node.matches("video") ? node : node.querySelector("video");\n      if (video && saslMode) video.controls = true;\n      video?.querySelectorAll('track[kind="captions"], track[kind="subtitles"]').forEach((track) => {\n        track.default = saslMode;\n      });\n    });\n  }`)
     .replace(/makaug_lang/g, 'seshaikhaya_lang')
     .replace(/let activeCur = "UGX";/, 'let activeCur = "ZAR";')
     .replace(/UGX: \{ fmt: \(v, p\) => v \? `USh \$\{formatCompact\(v\)\}\$\{p \? "\/" \+ p : ""\}` : "Price upon application" \},/,
@@ -254,7 +300,7 @@ function applySouthAfricaJavaScript(source) {
     .replace(/\bOpen Mortgage Finder\b/g, 'Open Bond Finder')
     .replace(/makaug uses AI-powered search algorithms to scan public online property sources across Uganda, organising/g,
       'seshaikhaya uses AI-assisted search and human review to organise')
-    .replace(/Use makaug in 9 languages/g, 'Use seshaikhaya in 11 written languages')
+    .replace(/Use makaug in 9 languages/g, 'Use seshaikhaya in 12 official languages')
     .replace(/Uganda's #1 Free Property Platform/gi, "South Africa's home for property")
     .replace(/Uganda's first completely free property platform\./gi, 'A property platform built for South Africa.')
     .replace(/📧 Email: info@makaug\.com/g, '📧 Email: hello@seshaikhaya.com')

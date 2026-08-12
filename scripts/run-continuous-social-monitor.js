@@ -140,11 +140,20 @@ async function main() {
   const maxSources = numberValue('--max-sources', Number(process.env.CONTINUOUS_SOCIAL_MONITOR_MAX_SOURCES || 15), { min: 1, max: 60 });
   const maxResultsPerSource = numberValue('--max-results', Number(process.env.CONTINUOUS_SOCIAL_MONITOR_MAX_RESULTS || 25), { min: 1, max: 25 });
   const maxPagesPerSource = numberValue('--max-pages', Number(process.env.CONTINUOUS_SOCIAL_MONITOR_MAX_PAGES || 1), { min: 1, max: 1 });
-  const publishedAfter = argValue('--published-after', process.env.CONTINUOUS_SOCIAL_MONITOR_PUBLISHED_AFTER || '2026-01-01T00:00:00.000Z');
-  const lookbackDays = numberValue('--lookback-days', Number(process.env.CONTINUOUS_SOCIAL_MONITOR_LOOKBACK_DAYS || 7), { min: 0, max: 30 });
+  const southAfricaScaleMode = String(process.env.COUNTRY_CODE || '').trim().toUpperCase() === 'ZA';
+  const defaultPublishedAfter = southAfricaScaleMode
+    ? new Date(Date.now() - (183 * 24 * 60 * 60 * 1000)).toISOString()
+    : '2026-01-01T00:00:00.000Z';
+  const publishedAfter = argValue('--published-after', process.env.CONTINUOUS_SOCIAL_MONITOR_PUBLISHED_AFTER || defaultPublishedAfter);
+  const lookbackDays = numberValue(
+    '--lookback-days',
+    Number(process.env.CONTINUOUS_SOCIAL_MONITOR_LOOKBACK_DAYS || (southAfricaScaleMode ? 183 : 7)),
+    { min: 0, max: southAfricaScaleMode ? 183 : 30 }
+  );
   const searchMode = argValue('--x-search-mode', process.env.CONTINUOUS_SOCIAL_MONITOR_X_SEARCH_MODE || 'recent');
   const youtubeJobMode = argValue('--youtube-job-mode', process.env.CONTINUOUS_SOCIAL_MONITOR_YOUTUBE_JOB_MODE || 'channel_uploads');
-  const platforms = listValue('--platforms', process.env.CONTINUOUS_SOCIAL_MONITOR_PLATFORMS || 'youtube,x');
+  const defaultPlatforms = southAfricaScaleMode ? 'facebook,tiktok,youtube,x,instagram' : 'youtube,x';
+  const platforms = listValue('--platforms', process.env.CONTINUOUS_SOCIAL_MONITOR_PLATFORMS || defaultPlatforms);
   const explicitOffset = argValue('--source-offset', '');
   const auditCursor = explicitOffset === '' ? await readLastMonitorCursor() : null;
   const sourceOffset = explicitOffset !== ''

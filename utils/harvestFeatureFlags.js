@@ -5,6 +5,11 @@ function envFlagEnabled(value) {
 }
 
 function harvestAutomationEnabled(env = process.env) {
+  const countryCode = String(env.COUNTRY_CODE || 'UG').trim().toUpperCase();
+  if (countryCode === 'ZA') {
+    return envFlagEnabled(env.HARVEST_AUTOMATION_ENABLED)
+      && envFlagEnabled(env.ZA_SCALE_HARVEST_ENABLED);
+  }
   return envFlagEnabled(env.HARVEST_AUTOMATION_ENABLED);
 }
 

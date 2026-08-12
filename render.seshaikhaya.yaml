@@ -51,6 +51,10 @@ projects:
                 value: "false"
               - key: FEATURED_ROTATION_SCHEDULER_ENABLED
                 value: "false"
+              - key: ZA_SCALE_HARVEST_ENABLED
+                value: "false"
+              - key: ZA_SCALE_REGISTRY_WRITE_ENABLED
+                value: "false"
               - key: FEATURED_ROTATION_TIMEZONE
                 value: Africa/Johannesburg
               - key: APP_HEARTBEAT_TIMEOUT_MS

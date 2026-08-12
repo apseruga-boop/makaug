@@ -969,7 +969,10 @@ function renderPublicHtml(pathname) {
   if (isProduction && publicHtmlCache.has(key)) return publicHtmlCache.get(key);
   let rendered = sanitizePublicHtml(readIndexHtml(), { pathname: rawPath });
   if (process.env.SHARED_CORE_PHASE1_ENABLED !== 'false') {
-    rendered = applyCountryHtml(rendered, ACTIVE_COUNTRY_CODE, { homepage: normalizedBasePath === '/' });
+    rendered = applyCountryHtml(rendered, ACTIVE_COUNTRY_CODE, {
+      homepage: normalizedBasePath === '/',
+      pathname: rawPath,
+    });
   }
   rendered = applyHarvestPublicSubmissionVisibility(rendered);
   if (isProduction) publicHtmlCache.set(key, rendered);

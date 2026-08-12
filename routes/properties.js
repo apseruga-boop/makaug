@@ -305,7 +305,7 @@ function normalizeListingOrigin(value = '') {
     agent_listed: 'agent'
   };
   const normalized = aliases[origin] || origin;
-  return ['found_online', 'private', 'agent'].includes(normalized) ? normalized : '';
+  return ['found_online', 'private', 'agent', 'private_seller'].includes(normalized) ? normalized : '';
 }
 
 function foundOnlinePropertySql(alias = 'p') {
@@ -2603,7 +2603,9 @@ async function listPropertiesHandler(req, res, next) {
         filters.push("(COALESCE(p.extra_fields->>'featured', 'false') NOT IN ('true', '1', 'yes'))");
       }
     }
-    if (listingOrigin) {
+    if (listingOrigin === 'private_seller') {
+      filters.push("(LOWER(COALESCE(p.extra_fields->>'private_seller', 'false')) IN ('true', '1', 'yes'))");
+    } else if (listingOrigin) {
       addFilter(filters, values, `${listingOriginSql('p')} = ?`, listingOrigin);
     }
 

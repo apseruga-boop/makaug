@@ -9,9 +9,9 @@ module.exports = Object.freeze({
   phoneCountryCode: '+27',
   timezone: 'Africa/Johannesburg',
   locationHierarchy: Object.freeze(['province', 'city', 'suburb']),
-  lookbackDays: 90,
+  lookbackDays: 183,
   autoPublishFoundOnline: false,
-  sourceChannels: Object.freeze(['x', 'tiktok', 'youtube', 'facebook']),
+  sourceChannels: Object.freeze(['facebook', 'tiktok', 'youtube', 'x', 'instagram']),
   sourceQueries: Object.freeze([
     '#propertysouthafrica',
     '#housesforsaleSA',

@@ -38435,6 +38435,24 @@ function listingFoundOnlineBadgeHtml(p = {}, sizeClass = "text-[11px] px-2 py-1 
   }, sizeClass);
 }
 
+function isPrivateSellerListing(p = {}) {
+  const extra = p?.extra_fields && typeof p.extra_fields === "object" ? p.extra_fields : {};
+  return p?.private_seller === true
+    || p?.seller_track === "fsbo"
+    || extra.private_seller === true
+    || String(extra.private_seller || "").toLowerCase() === "true"
+    || String(extra.source_track || "").toLowerCase() === "fsbo";
+}
+
+function listingPrivateSellerBadgeHtml(p = {}, sizeClass = "text-[11px] px-2 py-1 rounded font-semibold") {
+  if (!isPrivateSellerListing(p)) return "";
+  return badgeHtml({
+    label: "Private seller — no agent commission",
+    cls: "bg-amber-300 text-amber-950",
+    icon: "fas fa-house-user"
+  }, sizeClass);
+}
+
 function foundOnlineSourcePlatformBadgeMeta(p = {}) {
   if (!isFoundOnlineListing(p)) return null;
   const meta = foundOnlineSourceMeta(p);
@@ -38481,6 +38499,7 @@ function listingBadgeRowHtml(p = {}, options = {}) {
   }
   badges.push(listingNewBadgeHtml(p, sizeClass));
   badges.push(listingFoundOnlineBadgeHtml(p, sizeClass));
+  badges.push(listingPrivateSellerBadgeHtml(p, sizeClass));
   if (!isFoundOnlineListing(p)) badges.push(badgeHtml(listingSourceMeta(p), sizeClass));
   badges.push(landTitleBadgeForListingHtml(p, { compact: options.compact !== false }));
   return badges.filter(Boolean).join("");
@@ -46501,6 +46520,7 @@ function publicListingFilterText(property) {
 }
 
 function publicListingOrigin(property = {}) {
+  if (isPrivateSellerListing(property)) return "private_seller";
   if (isFoundOnlineListing(property)) return "found_online";
   const explicit = String(property.listing_origin || "").trim().toLowerCase();
   if (["private", "agent"].includes(explicit)) return explicit;

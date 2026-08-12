@@ -50,14 +50,21 @@ function sourceCurrencyForValue(value, explicitCurrency = '') {
 function sourcePriceAmount(value) {
   if (value == null || value === '') return null;
   if (typeof value === 'number' && Number.isFinite(value)) return Math.round(value);
-  const raw = String(value || '').toLowerCase().replace(/,/g, '').trim();
+  let raw = String(value || '').toLowerCase().replace(/,/g, '').trim();
+  // South African captions commonly group digits with spaces: R 1 200 000.
+  // Collapse only whitespace that is part of a three-digit money grouping.
+  let previous = '';
+  while (previous !== raw) {
+    previous = raw;
+    raw = raw.replace(/(\d)[\s\u00a0]+(?=\d{3}(?:\D|$))/g, '$1');
+  }
   const match = raw.match(/(\d+(?:\.\d+)?)/);
   if (!match) return null;
   const amount = Number(match[1]);
   if (!Number.isFinite(amount)) return null;
   const multiplier = /\d(?:\.\d+)?\s*(b|bn|billions?)(?=\s*(?:ugx|ush|shs?)\b|\b|$)/.test(raw)
     ? 1000000000
-    : /\d(?:\.\d+)?\s*(m|mn|millions?)(?=\s*(?:ugx|ush|shs?)\b|\b|$)/.test(raw)
+    : /\d(?:\.\d+)?\s*(m|mn|mil|millions?)(?=\s*(?:zar|r|ugx|ush|shs?)\b|\b|$)/.test(raw)
       ? 1000000
       : /\d(?:\.\d+)?\s*(k|thousands?)(?=\s*(?:ugx|ush|shs?)\b|\b|$)/.test(raw)
         ? 1000
