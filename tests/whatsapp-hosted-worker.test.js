@@ -21,17 +21,17 @@ assert(renderYaml.includes('dockerfilePath: ./Dockerfile.whatsapp-agent'), 'Rend
 assert(renderYaml.includes('numInstances: 1'), 'WhatsApp Web profile must run as exactly one worker instance');
 assert(renderYaml.includes('mountPath: /var/data'), 'Render worker must attach persistent disk at /var/data');
 assert(renderYaml.includes('WHATSAPP_WEB_COPILOT_PROFILE_DIR') && renderYaml.includes('/var/data/whatsapp-profile-live'), 'Render worker must persist WhatsApp login profile on disk');
-assert(renderYaml.includes('WHATSAPP_WEB_COPILOT_HEADLESS') && renderYaml.includes('value: "false"'), 'Render worker must run a visible browser under xvfb for WhatsApp linking');
+assert(renderYaml.includes('WHATSAPP_WEB_COPILOT_HEADLESS') && renderYaml.includes('value: "true"'), 'Render worker must default to headless Chrome after its persisted WhatsApp session is linked');
 assert(renderYaml.includes('WHATSAPP_WEB_COPILOT_LOGIN_METHOD') && renderYaml.includes('WHATSAPP_WEB_COPILOT_PAIRING_PHONE'), 'Render worker must expose phone-number pairing as a QR fallback');
 assert(renderYaml.includes('WHATSAPP_WEB_BRIDGE_TOKEN') && renderYaml.includes('sync: false'), 'Bridge token must be prompted in Render, not committed');
 assert(renderYaml.includes('WHATSAPP_ACCESS_TOKEN') && renderYaml.includes('WHATSAPP_PHONE_NUMBER_ID') && renderYaml.includes('WHATSAPP_VERIFY_TOKEN'), 'Render worker must declare private Meta WhatsApp Cloud API env vars for provider mode');
-assert(renderYaml.includes('WHATSAPP_API_VERSION') && renderYaml.includes('v20.0'), 'Render worker must pin the tested Meta WhatsApp API version');
+assert(renderYaml.includes('WHATSAPP_API_VERSION') && renderYaml.includes('v25.0'), 'Render worker must pin the production Meta WhatsApp API version');
 assert(renderYaml.includes('WHATSAPP_WEB_COPILOT_PAIRING_PHONE') && renderYaml.includes('sync: false'), 'Phone pairing number must be configured as a private Render env var');
 assert(renderYaml.includes('WHATSAPP_WEB_COPILOT_HOSTED') && renderYaml.includes('makaug-whatsapp-web-prod'), 'Render worker must use hosted production identity');
 
 assert(dockerfile.includes('mcr.microsoft.com/playwright') && dockerfile.includes('scripts/start-whatsapp-agent-render.sh'), 'Dockerfile must provide Playwright runtime and start the hosted agent script');
 assert(startScript.includes('exec xvfb-run -a') && startScript.includes('WHATSAPP_WEB_COPILOT_PROFILE_DIR="${WHATSAPP_WEB_COPILOT_PROFILE_DIR:-/var/data/whatsapp-profile-live}"'), 'Hosted start script must supervise Chrome with xvfb-run and default to persistent disk profile');
-assert(startScript.includes('WHATSAPP_WEB_COPILOT_HEADLESS="${WHATSAPP_WEB_COPILOT_HEADLESS:-false}"'), 'Hosted start script must default to a visible browser for WhatsApp linking');
+assert(startScript.includes('WHATSAPP_WEB_COPILOT_HEADLESS="${WHATSAPP_WEB_COPILOT_HEADLESS:-true}"'), 'Hosted start script must default to headless Chrome so the linked session does not depend on an X server');
 assert(startScript.includes('exec node scripts/whatsapp-web-agent.js'), 'Hosted start script must hand off directly to the WhatsApp Node agent');
 assert(!renderYaml.includes('/ms-playwright/chromium-1217'), 'Render config must not pin Chrome to a Playwright revision-specific path');
 assert(!startScript.includes('/ms-playwright/chromium-1217'), 'Hosted start script must let Playwright resolve the Chromium executable path');

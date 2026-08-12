@@ -38,7 +38,7 @@ export const env = {
   waPhoneNumberId: readOptional('WHATSAPP_PHONE_NUMBER_ID'),
   waVerifyToken: process.env.WHATSAPP_VERIFY_TOKEN ?? 'makaug-verify-token',
   waAppSecret: readOptional('WHATSAPP_APP_SECRET'),
-  waApiVersion: process.env.WHATSAPP_API_VERSION ?? 'v20.0',
+  waApiVersion: process.env.WHATSAPP_API_VERSION ?? 'v25.0',
   publicBaseUrl: process.env.PUBLIC_BASE_URL ?? 'https://makaug.com',
   otpBypassCode: process.env.NODE_ENV === 'production' ? undefined : readOptional('OTP_BYPASS_CODE'),
   otpEnabled: toBool(process.env.OTP_ENABLED, true),

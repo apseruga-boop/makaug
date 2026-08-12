@@ -31,7 +31,7 @@ function getTwilioClient() {
 async function sendViaMetaWhatsApp({ to, body }) {
   const accessToken = String(process.env.WHATSAPP_ACCESS_TOKEN || '').trim();
   const phoneNumberId = String(process.env.WHATSAPP_PHONE_NUMBER_ID || '').trim();
-  const apiVersion = String(process.env.WHATSAPP_API_VERSION || 'v20.0').trim();
+  const apiVersion = String(process.env.WHATSAPP_API_VERSION || 'v25.0').trim();
 
   if (!accessToken || !phoneNumberId) {
     return { sent: false, reason: 'meta_whatsapp_not_configured' };

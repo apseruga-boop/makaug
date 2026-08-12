@@ -155,7 +155,7 @@ This backend now supports Meta Cloud API directly on the live `server.js` servic
    - `WHATSAPP_VERIFY_TOKEN` (any strong secret string)
    - `WHATSAPP_ACCESS_TOKEN` (Meta permanent/system-user token)
    - `WHATSAPP_PHONE_NUMBER_ID` (from WhatsApp Manager)
-   - `WHATSAPP_API_VERSION` (example: `v20.0`)
+   - `WHATSAPP_API_VERSION` (production: `v25.0`)
 2. Save + redeploy.
 3. In Meta App Dashboard > WhatsApp > Configuration:
    - Webhook URL: `https://makaug.com/api/whatsapp/webhook`
