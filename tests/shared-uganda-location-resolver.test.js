@@ -18,6 +18,7 @@ const {
 } = require('../services/socialSearchSourcedListingsService');
 const { regionForDistrict } = require('../utils/ugandaLocationHierarchy');
 const worklist = require('./fixtures/uganda-location-coverage-worklist.json');
+const messyInputs = require('./fixtures/uganda-location-messy-inputs.json');
 
 const root = path.resolve(__dirname, '..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
@@ -65,6 +66,37 @@ test('Ssenge and Senge share one verified Wakiso canonical node', () => {
     assert.equal(result.match?.key, 'wakiso:ssenge', query);
     assert.equal(result.match?.town, 'Nansana', query);
   }
+});
+
+test('Nalumunye and Kitiko are verified confidence-one Wakiso registry nodes', () => {
+  const expected = {
+    Nalumunye: ['wakiso:nalumunye', 'Kyengera'],
+    Kitiko: ['wakiso:kitiko', 'Makindye-Ssabagabo']
+  };
+  Object.entries(expected).forEach(([query, [key, town]]) => {
+    const result = resolveCanonicalUgandaLocation(query);
+    assert.equal(result.status, 'matched', query);
+    assert.equal(result.match_type, 'exact_alias', query);
+    assert.equal(result.confidence, 1, query);
+    assert.equal(result.match?.key, key, query);
+    assert.equal(result.match?.district, 'Wakiso', query);
+    assert.equal(result.match?.town, town, query);
+  });
+});
+
+test('messy free text and misspellings are ranked suggestions, never silent matches', () => {
+  messyInputs.forEach(({ query, expected_key: expectedKey, expected }) => {
+    const resolution = resolveCanonicalUgandaLocation(query);
+    const suggestions = canonicalLocationSuggestions(query, new Map(), 8);
+    assert.equal(resolution.status, 'unmatched', query);
+    if (expected === 'unmatched') {
+      assert.equal(suggestions.length, 0, query);
+      return;
+    }
+    assert.equal(suggestions[0]?.canonical_key, expectedKey, query);
+    assert.equal(suggestions[0]?.did_you_mean, true, query);
+    assert.equal(suggestions[0]?.auto_resolvable, false, query);
+  });
 });
 
 test('genuinely comparable duplicate place names require an exact parent hint', () => {
@@ -300,6 +332,9 @@ test('public and King forms use the same resolver and clear stale hierarchy on u
   assert.match(app, /function canonicalTownForLocation/);
   assert.match(app, /return \/\\b\(\?:town\|city\|municipality\|tc\)\\b\/i\.test\(name\) \? name : `\$\{name\} Town`/);
   assert.match(app, /data-approval-blocker-host/);
+  assert.match(app, /function adminReviewRenderCanonicalSuggestions/);
+  assert.match(app, /Choose the canonical place explicitly/);
+  assert.match(app, /match: "exact_alias",\s*confidence: 1/);
   assert.match(route, /router\.get\('\/locations\/resolve'/);
   assert.match(route, /Canonical location confirmation is required before approval/);
   assert.match(route, /disambiguation_required/);
@@ -338,4 +373,5 @@ test('release exposes the shared resolver audit marker', () => {
   const server = read('server.js');
   assert.match(server, /'shared-uganda-location-resolver-coverage'/);
   assert.match(server, /'location-query-normalization-prominence-20260811'/);
+  assert.match(server, /'uganda-location-free-text-20260812'/);
 });

@@ -8,6 +8,11 @@ const COUNTRY_QUERY_ALIASES = Object.freeze({
 const ROAD_NOISE_PART_PATTERN = /\b(?:road|rd|street|st|avenue|ave|highway|bypass|expressway|drive|dr|lane|ln|boulevard|blvd)\.?\b/i;
 const TRAILING_ROAD_NOISE_PATTERN = /\s+(?:road|rd|street|st|avenue|ave|highway|bypass|expressway|drive|dr|lane|ln|boulevard|blvd)\.?$/i;
 const PREMISE_NOISE_PART_PATTERN = /^(?:plot|stand|erf|unit|house|flat|apartment)?\s*\d+[a-z]?(?:[-/]\d+[a-z]?)?(?:\s|$)/i;
+const FREE_TEXT_NOISE_PHRASE_PATTERN = /\b(?:go\s+down)\b/gi;
+const FREE_TEXT_NOISE_TOKENS = new Set([
+  'district', 'drive', 'dr', 'go', 'down', 'highway', 'lane', 'ln', 'near',
+  'rd', 'region', 'road', 'stage', 'st', 'street', 'uganda', 'zone'
+]);
 
 function defaultNormalizeLocationKey(value = '') {
   return String(value || '')
@@ -130,9 +135,58 @@ function normalizeLocationQueryCandidates(value = '', options = {}) {
   return locationQueryAttempts(value, options).map((attempt) => attempt.value);
 }
 
+// Produce ordered locality phrases for suggestion-only matching. These values
+// must never be fed into exact auto-resolution: a space-separated phrase can
+// contain more than one real place and therefore requires an explicit choice.
+function freeTextLocationQueryAttempts(value = '', options = {}) {
+  const normalizeKey = options.normalizeKey || defaultNormalizeLocationKey;
+  const countryStripped = stripCountryQueryAffixes(value, options);
+  const originalTokens = countryStripped.split(/\s+/).filter(Boolean);
+  const clean = countryStripped
+    .replace(FREE_TEXT_NOISE_PHRASE_PATTERN, ' ')
+    .replace(/[,;|/]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const rawTokens = clean.split(/\s+/).filter(Boolean);
+  if (originalTokens.length < 2 || !rawTokens.length) return [];
+  const trailingKampala = rawTokens.length > 1 && normalizeKey(rawTokens.at(-1)) === 'kampala';
+  const tokens = rawTokens.filter((token, index) => {
+    const key = normalizeKey(token);
+    if (!key || FREE_TEXT_NOISE_TOKENS.has(key)) return false;
+    if (trailingKampala && index === rawTokens.length - 1) return false;
+    return true;
+  });
+  if (!tokens.length) return [];
+
+  const attempts = [];
+  const seen = new Set();
+  const add = (parts, position) => {
+    const candidate = cleanLocationQueryPart(parts.join(' '));
+    const normalized = normalizeKey(candidate);
+    if (!normalized || seen.has(normalized)) return;
+    seen.add(normalized);
+    attempts.push({
+      value: candidate,
+      normalized,
+      token_count: parts.length,
+      position
+    });
+  };
+  // Longer phrases win, then earlier/head-place phrases. Limiting the window
+  // prevents a long address from becoming a combinatorial search surface.
+  const maxWindow = Math.min(4, tokens.length);
+  for (let length = maxWindow; length >= 1; length -= 1) {
+    for (let start = 0; start <= tokens.length - length; start += 1) {
+      add(tokens.slice(start, start + length), start);
+    }
+  }
+  return attempts;
+}
+
 module.exports = {
   COUNTRY_QUERY_ALIASES,
   cleanLocationQueryPart,
+  freeTextLocationQueryAttempts,
   isRoadOrPremiseNoisePart,
   locationQueryAttempts,
   normalizeLocationQueryCandidates,

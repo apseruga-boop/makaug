@@ -1,6 +1,8 @@
 [
   { "query": "Ssenge", "canonical_key": "wakiso:ssenge" },
   { "query": "Senge", "canonical_key": "wakiso:ssenge" },
+  { "query": "Nalumunye", "canonical_key": "wakiso:nalumunye" },
+  { "query": "Kitiko", "canonical_key": "wakiso:kitiko" },
   { "query": "Sentema", "canonical_key": "wakiso:sentema" },
   { "query": "Nakasero", "canonical_key": "kampala:nakasero" },
   { "query": "Muyenga", "canonical_key": "kampala:muyenga" },

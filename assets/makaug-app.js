@@ -24112,7 +24112,9 @@ async function resolveUgandaLocationFromSharedRegistry(query = "") {
     return {
       status: response?.meta?.status || (response?.data ? "matched" : "unmatched"),
       location: response?.data || null,
-      candidates: Array.isArray(response?.meta?.candidates) ? response.meta.candidates : []
+      candidates: Array.isArray(response?.meta?.candidates) ? response.meta.candidates : [],
+      approvalBlocked: response?.meta?.approval_blocked === true,
+      didYouMean: response?.meta?.did_you_mean === true
     };
   } catch (_) {
     return { status: "unmatched", location: null, candidates: [] };
@@ -24222,6 +24224,51 @@ function adminReviewSetAddressSearchStatus(message = "", tone = "blue") {
   el.textContent = message || "Search a place, road, estate, town, or landmark, then confirm the pin.";
 }
 
+function adminReviewClearCanonicalSuggestions() {
+  const host = document.getElementById("admin-review-canonical-suggestions");
+  if (host) {
+    host.innerHTML = "";
+    host.classList.add("hidden");
+  }
+}
+
+function adminReviewChooseCanonicalSuggestion(index = 0) {
+  const candidate = window.__adminReviewCanonicalSuggestions?.[Number(index)];
+  if (!candidate?.canonical_location_id) return false;
+  const applied = applyAdminReviewCanonicalLocation({
+    ...candidate,
+    match: "exact_alias",
+    confidence: 1
+  });
+  if (!applied) return false;
+  adminReviewClearCanonicalSuggestions();
+  adminReviewSetAddressSearchStatus(`Canonical location selected: ${candidate.name}, ${candidate.district}. Check the full cascade and pin before approval.`, "green");
+  adminReviewScheduleLocationSync();
+  return true;
+}
+
+function adminReviewRenderCanonicalSuggestions(candidates = []) {
+  const host = document.getElementById("admin-review-canonical-suggestions");
+  if (!host) return;
+  const suggestions = (Array.isArray(candidates) ? candidates : [])
+    .filter((item) => item?.canonical_location_id)
+    .slice(0, 5);
+  window.__adminReviewCanonicalSuggestions = suggestions;
+  if (!suggestions.length) {
+    adminReviewClearCanonicalSuggestions();
+    return;
+  }
+  host.innerHTML = `
+    <div class="font-black text-amber-950">Did you mean? Choose the canonical place explicitly.</div>
+    <div class="mt-2 grid gap-2 sm:grid-cols-2">
+      ${suggestions.map((item, index) => `<button type="button" onclick="adminReviewChooseCanonicalSuggestion(${index})" class="rounded-lg border border-amber-300 bg-white px-3 py-2 text-left hover:bg-amber-50">
+        <strong class="block text-amber-950">${adminEscape(item.name || "Uganda location")}</strong>
+        <span class="block text-[11px] text-amber-800">${adminEscape([item.town, item.district, item.region].filter(Boolean).join(" · "))} · ${adminEscape(item.match === "fuzzy" ? "spelling suggestion" : "found in your phrase")}</span>
+      </button>`).join("")}
+    </div>`;
+  host.classList.remove("hidden");
+}
+
 function adminReviewOnAddressSearchInput() {
   const input = document.getElementById("admin-review-address-search-edit");
   const query = (input?.value || "").trim();
@@ -24264,6 +24311,7 @@ async function adminReviewFindAddressOrPlace(options = {}) {
     return false;
   }
   const auto = options?.auto === true;
+  adminReviewClearCanonicalSuggestions();
   adminReviewSetAddressSearchStatus(auto ? "Auto-filling the closest matching place in Uganda..." : "Finding the nearest matching place in Uganda...", "blue");
   let point = null;
   try {
@@ -24287,7 +24335,10 @@ async function adminReviewFindAddressOrPlace(options = {}) {
     adminSetReviewEditValue("admin-review-address-edit", query);
     adminReviewSetAddressSearchStatus(canonicalLocation
       ? "Location resolved, but the exact address pin was not found. Move and confirm the pin before approval."
-      : "Location not recognised — pin set but region/district/area could NOT be auto-filled.", "amber");
+      : canonicalResolution.candidates.length
+        ? "Canonical location needs your confirmation. Choose the correct suggestion below; nothing was auto-filled."
+        : "Location not recognised — pin set but region/district/area could NOT be auto-filled.", "amber");
+    if (!canonicalLocation) adminReviewRenderCanonicalSuggestions(canonicalResolution.candidates);
     return false;
   }
   const canonicalResolution = await resolveUgandaLocationWithLabelFallback(query, point.canonicalQuery || "");
@@ -24306,7 +24357,10 @@ async function adminReviewFindAddressOrPlace(options = {}) {
   adminReviewMoveLocationPin(point.lat, point.lng, { zoom: MAP_PROPERTY_ZOOM });
   adminReviewSetAddressSearchStatus(canonicalLocation
     ? "Address and canonical location found. Check the full cascade and pin before approval."
-    : "Location not recognised — pin set but region/district/area could NOT be auto-filled.", canonicalLocation ? "green" : "amber");
+    : canonicalResolution.candidates.length
+      ? "Address pin found, but the canonical place needs your confirmation. Choose below; nothing was auto-filled."
+      : "Location not recognised — pin set but region/district/area could NOT be auto-filled.", canonicalLocation ? "green" : "amber");
+  if (!canonicalLocation) adminReviewRenderCanonicalSuggestions(canonicalResolution.candidates);
   return Boolean(canonicalLocation);
 }
 
@@ -24712,6 +24766,7 @@ function adminReviewListingEditPanel(review = {}) {
             </div>
           </label>
           <div id="admin-review-address-search-status" class="mt-2 text-xs font-semibold text-blue-900">Search a place, road, estate, town, or landmark, then confirm the pin.</div>
+          <div id="admin-review-canonical-suggestions" class="hidden mt-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs" aria-live="polite"></div>
           <input id="admin-review-place-id-edit" type="hidden" value="${adminAttr(extra.place_id || "")}">
           <input id="admin-review-geocoding-provider-edit" type="hidden" value="${adminAttr(extra.geocoding_provider || "")}">
           <input id="admin-review-location-confidence-edit" type="hidden" value="${adminAttr(extra.location_confidence || "")}">

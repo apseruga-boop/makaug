@@ -1,0 +1,11 @@
+[
+  { "query": "Ssenge Nansana", "expected_key": "wakiso:ssenge", "expected": "suggestion" },
+  { "query": "Muyenga Kampala", "expected_key": "kampala:muyenga", "expected": "suggestion" },
+  { "query": "Bukasa Muyenga", "expected_key": "kampala:bukasa", "expected": "suggestion" },
+  { "query": "Kansanga Gaba Road", "expected_key": "kampala:kansanga", "expected": "suggestion" },
+  { "query": "kireka bweyogerere", "expected_key": "wakiso:kireka", "expected": "suggestion" },
+  { "query": "Naguru go down", "expected_key": "kampala:naguru", "expected": "suggestion" },
+  { "query": "Nakaseero", "expected_key": "kampala:nakasero", "expected": "suggestion" },
+  { "query": "Kyaliwajala", "expected_key": "wakiso:kyaliwajjala", "expected": "suggestion" },
+  { "query": "Zzxqfakeplace", "expected_key": null, "expected": "unmatched" }
+]

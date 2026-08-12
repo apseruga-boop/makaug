@@ -2,6 +2,7 @@ const { DISTRICTS } = require('./constants');
 const administrativeGazetteer = require('./ugandaLocationGazetteer.generated.json');
 const { CURATED_UGANDA_LOCATION_OVERRIDES } = require('./ugandaLocationOverrides');
 const {
+  freeTextLocationQueryAttempts: sharedFreeTextLocationQueryAttempts,
   locationQueryAttempts: sharedLocationQueryAttempts,
   normalizeLocationQueryCandidates: sharedNormalizeLocationQueryCandidates
 } = require('./locationQueryNormalization');
@@ -253,6 +254,14 @@ function normalizeLocationQueryCandidates(value = '') {
   });
 }
 
+function freeTextLocationQueryAttempts(value = '') {
+  return sharedFreeTextLocationQueryAttempts(value, {
+    countryCode: 'UG',
+    countryCodes: ['UG', 'ZA'],
+    normalizeKey: normalizeLocationKey
+  });
+}
+
 const canonicalDistrictByKey = new Map();
 DISTRICTS.forEach((district) => {
   const normalized = normalizeLocationKey(district).replace(/\s+city$/, '');
@@ -270,12 +279,16 @@ function normalizeDistrict(value = '') {
   return canonicalDistrictByKey.get(key) || '';
 }
 
-const overrideAliasKeys = new Set(
-  CURATED_UGANDA_LOCATION_OVERRIDES
-    .flatMap((entry) => [entry.name, ...(entry.aliases || [])])
+const overrideAliasKeysByDistrict = new Map();
+CURATED_UGANDA_LOCATION_OVERRIDES.forEach((entry) => {
+  const district = normalizeDistrict(entry.district) || String(entry.district || '').trim();
+  if (!district) return;
+  if (!overrideAliasKeysByDistrict.has(district)) overrideAliasKeysByDistrict.set(district, new Set());
+  [entry.name, ...(entry.aliases || [])]
     .map(normalizeLocationKey)
     .filter(Boolean)
-);
+    .forEach((aliasKey) => overrideAliasKeysByDistrict.get(district).add(aliasKey));
+});
 
 const sourceLocations = [
   ...CURATED_UGANDA_LOCATION_OVERRIDES,
@@ -290,7 +303,8 @@ sourceLocations.forEach((entry, index) => {
   if (!name || !DISTRICTS.includes(district)) return;
   const isOverride = index < CURATED_UGANDA_LOCATION_OVERRIDES.length;
   const sourceAliasKeys = [name, ...(entry.aliases || [])].map(normalizeLocationKey).filter(Boolean);
-  if (!isOverride && sourceAliasKeys.some((aliasKey) => overrideAliasKeys.has(aliasKey))) return;
+  const sameDistrictOverrideAliases = overrideAliasKeysByDistrict.get(district) || new Set();
+  if (!isOverride && sourceAliasKeys.some((aliasKey) => sameDistrictOverrideAliases.has(aliasKey))) return;
   const key = `${normalizeLocationKey(district)}:${normalizeLocationKey(name)}`;
   if (registryByKey.has(key)) return;
   registryByKey.set(key, {
@@ -776,9 +790,37 @@ function trigramSimilarity(left = '', right = '') {
   return (2 * overlap) / (a.size + b.size);
 }
 
+function levenshteinDistance(left = '', right = '') {
+  const a = normalizeLocationKey(left);
+  const b = normalizeLocationKey(right);
+  if (!a) return b.length;
+  if (!b) return a.length;
+  const previous = Array.from({ length: b.length + 1 }, (_, index) => index);
+  for (let row = 1; row <= a.length; row += 1) {
+    const current = [row];
+    for (let column = 1; column <= b.length; column += 1) {
+      current[column] = Math.min(
+        current[column - 1] + 1,
+        previous[column] + 1,
+        previous[column - 1] + (a[row - 1] === b[column - 1] ? 0 : 1)
+      );
+    }
+    previous.splice(0, previous.length, ...current);
+  }
+  return previous[b.length];
+}
+
+function editSimilarity(left = '', right = '') {
+  const a = normalizeLocationKey(left);
+  const b = normalizeLocationKey(right);
+  const longest = Math.max(a.length, b.length);
+  return longest ? 1 - (levenshteinDistance(a, b) / longest) : 0;
+}
+
 function canonicalLocationSuggestions(query = '', counts = new Map(), limit = 8) {
   const attempts = locationQueryAttempts(query);
-  if (!attempts.length) return [];
+  const freeTextAttempts = freeTextLocationQueryAttempts(query);
+  if (!attempts.length && !freeTextAttempts.length) return [];
   const exactResolution = resolveCanonicalUgandaLocation(query, '', { counts });
   const resolutionCandidateKeys = new Set(exactResolution.candidates.map((entry) => entry.key));
   const searchableAttempts = attempts.filter((attempt) => (
@@ -796,16 +838,31 @@ function canonicalLocationSuggestions(query = '', counts = new Map(), limit = 8)
     const resolutionExact = exactResolution.status === 'matched'
       && resolutionCandidateKeys.has(entry.key);
     const exact = exactAttemptIndex >= 0 || resolutionExact;
+    const freeTextMatches = freeTextAttempts
+      .map((attempt) => ({ attempt, aliasIndex: aliasKeys.indexOf(attempt.normalized) }))
+      .filter((match) => match.aliasIndex >= 0)
+      .sort((left, right) => (
+        right.attempt.token_count - left.attempt.token_count
+        || left.attempt.position - right.attempt.position
+      ));
+    const freeTextMatch = !exact ? freeTextMatches[0] : null;
     const comparableNeedles = searchableAttempts.map((attempt) => attempt.normalized);
-    const prefix = !exact && comparableNeedles.some((needle) => aliasKeys.some((alias) => alias.startsWith(needle)));
-    const contains = !exact && comparableNeedles.some((needle) => aliasKeys.some((alias) => alias.includes(needle)));
+    const prefix = !exact && !freeTextMatch && comparableNeedles.some((needle) => aliasKeys.some((alias) => alias.startsWith(needle)));
+    const contains = !exact && !freeTextMatch && comparableNeedles.some((needle) => aliasKeys.some((alias) => alias.includes(needle)));
+    const fuzzyPairs = comparableNeedles.flatMap((needle) => aliasKeys.map((alias) => ({
+      alias,
+      score: Math.max(trigramSimilarity(needle, alias), editSimilarity(needle, alias))
+    })));
+    const bestFuzzy = fuzzyPairs.sort((left, right) => right.score - left.score)[0];
     const fuzzy = comparableNeedles.length
-      ? Math.max(...comparableNeedles.flatMap((needle) => aliasKeys.map((alias) => trigramSimilarity(needle, alias))), 0)
+      ? bestFuzzy?.score || 0
       : 0;
     const fuzzyEligible = comparableNeedles.some((needle) => needle.length >= 5);
-    const matchRank = exact ? 4 : prefix ? 3 : contains ? 2 : (fuzzyEligible && fuzzy >= 0.72) ? 1 : 0;
+    const matchRank = exact ? 5 : freeTextMatch ? 4 : prefix ? 3 : contains ? 2 : (fuzzyEligible && fuzzy >= 0.72) ? 1 : 0;
     if (!matchRank) return null;
     const alternativeExact = resolutionExact && !selectedExact;
+    const prominentAlias = bestFuzzy?.alias || freeTextMatch?.attempt.normalized || '';
+    const knownMajor = KNOWN_MAJOR_LOCALITY_BY_ALIAS.get(prominentAlias) === entry.key;
     return {
       canonical_key: entry.key,
       location: entry.name,
@@ -816,18 +873,28 @@ function canonicalLocationSuggestions(query = '', counts = new Map(), limit = 8)
       longitude: Number.isFinite(entry.lng) ? entry.lng : null,
       aliases: [...entry.aliases],
       listing_count: Number(counts.get(entry.key) || 0),
-      match: exact ? (alternativeExact ? 'alternative_exact_alias' : 'exact_alias') : prefix ? 'prefix' : contains ? 'contains' : 'fuzzy',
-      did_you_mean: alternativeExact || (!exact && !prefix && !contains),
+      match: exact ? (alternativeExact ? 'alternative_exact_alias' : 'exact_alias') : freeTextMatch ? 'free_text_exact' : prefix ? 'prefix' : contains ? 'contains' : 'fuzzy',
+      did_you_mean: alternativeExact || Boolean(freeTextMatch) || (!exact && !prefix && !contains),
       match_rank: matchRank,
-      score: matchRank * 10 + fuzzy + (exact ? Math.max(0, 1 - (exactAttemptIndex * 0.01)) : 0),
-      confidence: exact ? 1 : prefix ? 0.94 : contains ? 0.88 : Number(fuzzy.toFixed(3)),
+      score: matchRank * 10 + (freeTextMatch ? 0 : fuzzy)
+        + (exact ? Math.max(0, 1 - (exactAttemptIndex * 0.01)) : 0)
+        + (freeTextMatch ? Math.max(0, 1 - (freeTextMatch.attempt.position * 0.1)) + (freeTextMatch.attempt.token_count * 0.01) : 0),
+      confidence: exact || freeTextMatch ? 1 : prefix ? 0.94 : contains ? 0.88 : Number(fuzzy.toFixed(3)),
       auto_resolvable: selectedExact,
+      known_major: knownMajor,
+      free_text_position: freeTextMatch?.attempt.position ?? null
     };
   };
   const ranked = registry
     .map(scoreEntry)
     .filter(Boolean)
-    .sort((a, b) => b.match_rank - a.match_rank || Number(b.auto_resolvable) - Number(a.auto_resolvable) || b.listing_count - a.listing_count || b.score - a.score || a.location.localeCompare(b.location));
+    .sort((a, b) => b.match_rank - a.match_rank
+      || Number(b.auto_resolvable) - Number(a.auto_resolvable)
+      || ((a.match === 'free_text_exact' && b.match === 'free_text_exact') ? (a.free_text_position - b.free_text_position) : 0)
+      || Number(b.known_major) - Number(a.known_major)
+      || b.listing_count - a.listing_count
+      || b.score - a.score
+      || a.location.localeCompare(b.location));
   const exactRanked = exactResolution.status === 'matched'
     ? ranked.filter((entry) => resolutionCandidateKeys.has(entry.canonical_key))
     : ranked;
@@ -910,7 +977,9 @@ module.exports = {
   normalizeDistrict,
   normalizeLocationKey,
   normalizeLocationQueryCandidates,
+  freeTextLocationQueryAttempts,
   haversineKm,
   isExcludedLocationOnly,
-  trigramSimilarity
+  trigramSimilarity,
+  editSimilarity
 };

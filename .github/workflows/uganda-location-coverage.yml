@@ -6,6 +6,7 @@ on:
       - 'utils/ugandaLocation*.js'
       - 'utils/ugandaLocationGazetteer.generated.json'
       - 'tests/fixtures/uganda-high-traffic-locations.json'
+      - 'tests/fixtures/uganda-location-messy-inputs.json'
       - 'scripts/location-coverage-sweep.mjs'
   push:
     branches: [main]
