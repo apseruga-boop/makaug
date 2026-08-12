@@ -1197,6 +1197,10 @@ function buildTikTokExactPostImportRows({
         source_key: seed.source_key || handle || sourceUrl,
         source_name: sourceName,
         platform: 'TikTok',
+        source_verified: oembedReportsByUrl[seed.post_url]?.ok === true,
+        source_verification_status: oembedReportsByUrl[seed.post_url]?.ok === true
+          ? 'official_oembed_verified'
+          : 'unverified_source',
         tiktok_url: sourceUrl,
         thumbnail_url: oembed.thumbnail_url,
         source_thumbnail_url: oembed.thumbnail_url,
@@ -3204,6 +3208,8 @@ function normalizeYouTubeApiPost(item = {}, job = {}) {
     source_registry_key: job.source_key || '',
     source_name: cleanText(snippet.channelTitle || job.source_name || 'YouTube property source'),
     platform: 'YouTube',
+    source_verified: true,
+    source_verification_status: 'official_api_verified',
     source_url: sourceUrl,
     post_url: sourceUrl,
     source_page_url: channelUrl,
@@ -3830,6 +3836,8 @@ function normalizeXApiPost(tweet = {}, includes = {}, job = {}) {
     source_key: job.source_key || username || tweet.author_id,
     source_name: cleanText(author.name || username || job.source_name || 'X property source'),
     platform: 'x',
+    source_verified: true,
+    source_verification_status: 'official_api_verified',
     source_url,
     post_url: source_url,
     source_page_url: username ? `https://x.com/${username}` : job.source_url,
@@ -4961,8 +4969,19 @@ async function runSocialPlatformPostSweep({
       queued_listings: [],
       source_review_records: [],
     };
+  const observedProviderRequestCount = (tiktokDataSourceFetch.reports || []).length
+    + (youtubeFetch.reports || []).length
+    + (xFetch.reports || []).length;
+  const xPostReadCostUsd = Number(process.env.ZA_X_POST_READ_COST_USD || 0.005);
+  const estimatedProviderCostUsd = String(process.env.COUNTRY_CODE || '').trim().toUpperCase() === 'ZA'
+    ? Number(((xFetch.posts || []).length * (Number.isFinite(xPostReadCostUsd) ? xPostReadCostUsd : 0.005)).toFixed(4))
+    : 0;
   const harvestEventLog = !dryRun
-    ? await recordHarvestImportResult(db, importResult, { eventType: 'scheduled_social_sweep' }).catch((error) => ({
+    ? await recordHarvestImportResult(db, importResult, {
+      eventType: 'scheduled_social_sweep',
+      requestCount: observedProviderRequestCount,
+      estimatedCostUsd: estimatedProviderCostUsd,
+    }).catch((error) => ({
       ok: false,
       recorded: 0,
       reason: error.message || 'harvest_event_log_failed',
@@ -5068,6 +5087,8 @@ async function runSocialPlatformPostSweep({
         backlog_reprocess_limit: SOCIAL_SWEEP_BACKLOG_REPROCESS_LIMIT,
         import_post_limit: importPostLimit,
       },
+      observed_provider_request_count: observedProviderRequestCount,
+      estimated_provider_cost_usd: estimatedProviderCostUsd,
     },
     registry_rotation: {
       requested_source_limit: sourceLimit,

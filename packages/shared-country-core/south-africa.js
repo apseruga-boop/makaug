@@ -125,6 +125,70 @@ function saslAccessibilityPageHtml() {
   </main>`;
 }
 
+function southAfricaPrivacyPageHtml(email) {
+  return `
+  <main id="page-privacy-policy" class="page active" data-public-route="/privacy-policy" data-popia-privacy-notice="2026-08-12">
+    <section class="bg-green-800 py-10 text-white">
+      <div class="max-w-5xl mx-auto px-4">
+        <p class="text-green-200 text-sm font-bold uppercase tracking-wide">POPIA privacy notice</p>
+        <h1 class="text-4xl font-black serif mt-2">How seshaikhaya handles personal information</h1>
+        <p class="text-green-50 mt-3 max-w-3xl">This notice explains sourced property listings, private-seller contact protection, enquiries, retention, and your rights under South Africa's Protection of Personal Information Act.</p>
+        <p class="text-green-100 text-xs mt-3">Effective: 12 August 2026</p>
+      </div>
+    </section>
+    <section class="max-w-5xl mx-auto px-4 py-10 space-y-5 text-sm text-gray-700">
+      <article class="bg-white border border-green-100 rounded-2xl p-6">
+        <h2 class="text-2xl font-black text-gray-900">Responsible party and Information Officer</h2>
+        <p class="mt-3">seshaikhaya is the responsible party for the processing described here. Privacy and data-subject requests go to the seshaikhaya Information Officer queue through the secure form below or <a class="font-bold text-green-700" href="mailto:${email}">${email}</a>. We may verify identity before disclosing or changing personal information.</p>
+      </article>
+      <div class="grid md:grid-cols-2 gap-5">
+        <article class="bg-white border border-green-100 rounded-2xl p-6">
+          <h2 class="text-xl font-black text-gray-900">Information and sources</h2>
+          <p class="mt-3">We process account and enquiry details, listing facts, canonical location and price data, security and audit records, and limited information from public property posts. A sourced result keeps the original post link and source attribution. Private-seller phone numbers and email addresses are retained server-side for enquiry relay and are not displayed publicly.</p>
+        </article>
+        <article class="bg-white border border-green-100 rounded-2xl p-6">
+          <h2 class="text-xl font-black text-gray-900">Purpose and lawful basis</h2>
+          <p class="mt-3">We process information to provide property discovery, relay requested enquiries, prevent fraud, maintain accurate source attribution, secure the service, and handle claims or removals. Depending on the activity, the basis is consent, performance of a requested service, legal obligation, or our and users' legitimate interests, balanced against the data subject's rights. Public-source collection is limited to information deliberately made public or otherwise lawfully available, where POPIA permits it.</p>
+        </article>
+        <article class="bg-white border border-green-100 rounded-2xl p-6">
+          <h2 class="text-xl font-black text-gray-900">Private sellers and enquiries</h2>
+          <p class="mt-3">A private seller's personal phone number or email is gated behind “Contact via seshaikhaya”. The seeker submits an enquiry to us; we relay it to the stored contact without exposing that contact in the public listing API or page. The seller decides whether to reply. The original public source remains visible for attribution.</p>
+        </article>
+        <article class="bg-white border border-green-100 rounded-2xl p-6">
+          <h2 class="text-xl font-black text-gray-900">Sharing and safeguards</h2>
+          <p class="mt-3">We do not sell personal information. We share only what is needed with hosting, email or messaging, security, analytics, and authorised platform providers, or where law requires it. Access controls, audit logs, encryption where supported, and data minimisation protect the service. Cross-border providers are assessed and contractually restricted where applicable.</p>
+        </article>
+      </div>
+      <article class="bg-white border border-green-100 rounded-2xl p-6">
+        <h2 class="text-xl font-black text-gray-900">Retention</h2>
+        <ul class="mt-3 list-disc pl-5 space-y-2">
+          <li>Unclaimed sourced-listing facts and private-seller relay contacts: up to 183 days without revalidation, or earlier on removal or expiry.</li>
+          <li>Property enquiries: up to 365 days after the last activity.</li>
+          <li>Claim, correction and takedown audit records: up to 1,095 days so objections are not accidentally undone and disputes can be investigated.</li>
+          <li>We delete or anonymise records when the period ends, unless a legal obligation, active dispute, fraud investigation, or lawful hold requires longer retention.</li>
+        </ul>
+      </article>
+      <article class="bg-white border border-red-100 rounded-2xl p-6">
+        <h2 class="text-xl font-black text-gray-900">Claim, correction and immediate removal</h2>
+        <p class="mt-3">Each sourced listing provides claim, correction and removal controls. A private seller's removal request immediately hides the public result and records an audit event; staff verification follows without automatically republishing it. You may also request access, correction, deletion, objection, or restriction, and may lodge a complaint with South Africa's Information Regulator.</p>
+      </article>
+      <article class="bg-white border border-green-100 rounded-2xl p-6" id="popia-request-form">
+        <h2 class="text-xl font-black text-gray-900">Send a POPIA request</h2>
+        <form class="mt-4 grid gap-3" onsubmit="return submitSouthAfricaPrivacyRequest(event)">
+          <input id="popia-request-name" required class="border border-gray-200 rounded-xl px-3 py-2" placeholder="Your name">
+          <input id="popia-request-contact" required class="border border-gray-200 rounded-xl px-3 py-2" placeholder="Email or South African phone">
+          <select id="popia-request-type" class="border border-gray-200 rounded-xl px-3 py-2 bg-white">
+            <option value="access">Access my information</option><option value="correction">Correct my information</option><option value="deletion">Delete my information</option><option value="objection">Object to processing</option><option value="complaint">Privacy complaint</option><option value="other">Other privacy request</option>
+          </select>
+          <textarea id="popia-request-details" required rows="4" class="border border-gray-200 rounded-xl px-3 py-2" placeholder="Tell the Information Officer what information or listing this concerns"></textarea>
+          <button id="popia-request-submit" class="rounded-xl bg-green-700 px-5 py-3 text-white font-bold" type="submit">Send secure request</button>
+          <p id="popia-request-status" class="text-sm" role="status" aria-live="polite"></p>
+        </form>
+      </article>
+    </section>
+  </main>`;
+}
+
 function applySouthAfricaHtml(html, { pathname = '/' } = {}) {
   const tenant = tenantFor('ZA');
   const normalizedPathname = String(pathname || '/').split('?')[0].split('#')[0].replace(/\/+$/, '') || '/';
@@ -222,6 +286,12 @@ function applySouthAfricaHtml(html, { pathname = '/' } = {}) {
       .replace('<body class="bg-gray-50" data-country-code="ZA" data-tenant="seshaikhaya">',
         '<body class="bg-gray-50" data-country-code="ZA" data-tenant="seshaikhaya" data-public-route-sasl="true">')
       .replace(/<footer\b/i, `${saslAccessibilityPageHtml()}\n<footer`);
+  }
+  if (normalizedPathname === '/privacy-policy') {
+    output = output.replace(
+      /<main id="page-privacy-policy"[\s\S]*?<\/main>/i,
+      southAfricaPrivacyPageHtml(tenant.email)
+    );
   }
 
   output = replaceMeta(output, 'description', "South Africa's home for property. Find reviewed homes, rentals, student accommodation, commercial property and land.");
@@ -338,7 +408,35 @@ function applySouthAfricaJavaScript(source) {
     .replace(/\bmakaug(?=\s|,|\.|:|!|\?)/gi, 'seshaikhaya')
     .replace(/256760112587/g, '');
 
-  output = `window.__COUNTRY_CONFIG__ = window.__COUNTRY_CONFIG__ || ${JSON.stringify(tenant)};\n${output}`;
+  output = `window.__COUNTRY_CONFIG__ = window.__COUNTRY_CONFIG__ || ${JSON.stringify(tenant)};\n${output}\n
+async function submitSouthAfricaPrivacyRequest(event) {
+  event?.preventDefault();
+  const status = document.getElementById("popia-request-status");
+  const button = document.getElementById("popia-request-submit");
+  if (status) { status.textContent = "Sending…"; status.className = "text-sm text-gray-600"; }
+  if (button) button.disabled = true;
+  try {
+    const response = await fetch("/api/contact/privacy-request", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Accept": "application/json" },
+      body: JSON.stringify({
+        name: document.getElementById("popia-request-name")?.value || "",
+        contact: document.getElementById("popia-request-contact")?.value || "",
+        request_type: document.getElementById("popia-request-type")?.value || "other",
+        details: document.getElementById("popia-request-details")?.value || ""
+      })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || (payload.details || []).join(", ") || "Could not send request");
+    if (status) { status.textContent = "Request received. Reference: " + (payload.data?.reference || payload.data?.id || "saved"); status.className = "text-sm font-bold text-green-800"; }
+    if (event?.target?.reset) event.target.reset();
+  } catch (error) {
+    if (status) { status.textContent = error.message || "Could not send request"; status.className = "text-sm font-bold text-red-700"; }
+  } finally {
+    if (button) button.disabled = false;
+  }
+  return false;
+}`;
   return output;
 }
 

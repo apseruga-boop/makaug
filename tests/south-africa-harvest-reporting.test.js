@@ -22,6 +22,8 @@ async function run() {
   assert.equal(report.window_days, 183);
   assert.equal(calls.length, 7);
   assert(calls.some(({ sql }) => sql.includes("metadata->>'source_track'") && sql.includes('parsed_complete_pct')));
+  assert(calls.some(({ sql }) => sql.includes('auto_publish_eligible') && sql.includes('human_review_required')));
+  assert(calls.some(({ sql }) => sql.includes('request_count') && sql.includes('estimated_cost_usd')));
   assert(calls.some(({ sql }) => sql.includes("metadata->>'classification'") && sql.includes("outcome IN ('skipped','failed')")));
   for (const { sql, params } of calls) {
     if (sql.includes('$1::int')) assert.equal(params[0], 183);
@@ -41,6 +43,10 @@ async function run() {
       complete_price: false,
       complete_location: true,
       complete_classification: true,
+      auto_publish_eligible: false,
+      auto_publish_blockers: ['invalid_or_missing_zar_price'],
+      request_count: 1,
+      estimated_cost_usd: 0,
     }],
   });
   assert.equal(result.recorded, 1);
@@ -51,6 +57,9 @@ async function run() {
   assert.equal(metadata.complete_price, false);
   assert.equal(metadata.complete_location, true);
   assert.equal(metadata.complete_classification, true);
+  assert.equal(metadata.auto_publish_eligible, false);
+  assert.deepEqual(metadata.auto_publish_blockers, ['invalid_or_missing_zar_price']);
+  assert.equal(metadata.request_count, 1);
 
   console.log('south-africa harvest reporting tests passed');
 }

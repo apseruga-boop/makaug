@@ -51,7 +51,8 @@ assert.equal(harvestAutomationEnabled({
   COUNTRY_CODE: 'ZA', HARVEST_AUTOMATION_ENABLED: 'true', ZA_SCALE_HARVEST_ENABLED: 'false'
 }), false);
 assert.equal(harvestAutomationEnabled({
-  COUNTRY_CODE: 'ZA', HARVEST_AUTOMATION_ENABLED: 'true', ZA_SCALE_HARVEST_ENABLED: 'true'
+  COUNTRY_CODE: 'ZA', HARVEST_AUTOMATION_ENABLED: 'true', ZA_SCALE_HARVEST_ENABLED: 'true',
+  ZA_SCALE_DAVE_PILOT_PASS: 'true', ZA_PLATFORM_ACCESS_APPROVED: 'true'
 }), true);
 assert.equal(harvestAutomationEnabled({ COUNTRY_CODE: 'UG', HARVEST_AUTOMATION_ENABLED: 'true' }), true);
 

@@ -54,6 +54,7 @@ const {
   deriveListingClassification,
   listingDataIntegrityReport,
 } = require('../utils/listingDataIntegrity');
+const { evaluateSouthAfricaAutoPublish } = require('./southAfricaAutoPublishPolicyService');
 
 const ACTIVE_COUNTRY_CODE = String(process.env.COUNTRY_CODE || 'UG').trim().toUpperCase();
 const IS_SOUTH_AFRICA = ACTIVE_COUNTRY_CODE === 'ZA';
@@ -97,12 +98,17 @@ const PREAPPROVED_PERMISSION_STATUSES = [
   'agent_preapproved',
   'owner_agent_preapproved',
 ];
-const PUBLIC_SOURCE_CONTACT_POLICY = 'No public phone number is not a blocker when a public social profile or platform message route exists; makaug shows Contact via social source until the agent adds a direct number. Website-only source/contact routes are not accepted for found-online launch inventory.';
+const LAUNCH_REVIEW_CAPTURE_DEFAULTS = Object.freeze({ capture_mode: 'launch_review_first' });
+const PUBLIC_SOURCE_CONTACT_POLICY = IS_SOUTH_AFRICA
+  ? 'Private-seller phone numbers and email addresses are never exposed publicly; enquiries must be relayed through seshaikhaya. Agent listings may use an approved public business route. Website-only source/contact routes are not accepted for found-online launch inventory.'
+  : 'No public phone number is not a blocker when a public social profile or platform message route exists; makaug shows Contact via social source until the agent adds a direct number. Website-only source/contact routes are not accepted for found-online launch inventory.';
 const FOUND_ONLINE_LAUNCH_INTAKE_POLICY = {
   source_window_start: LAUNCH_SOURCE_POST_WINDOW_START,
   target_source_year: 2026,
-  queue_rule: 'Always-on harvest mode: queue every supported public social property post from 1 January 2026 onward into review, regardless of poster type. Missing phone, media, price, exact pin, or a recognized location spelling are review notes, not capture blockers. Manually supplied exact social-post URLs may also enter King review when older, but must identify a specific property and carry an availability/date warning. Unknown locations stay pending for staff verification; explicit foreign listings are classified separately. Original-poster comments are optional. Website-only sources are ignored. Nothing harvested publishes automatically.',
-  image_rule: 'Found-online/social imports are public discovery results: do not rehost downloaded TikTok, Facebook, Instagram, YouTube, X, LinkedIn, WhatsApp, or website photos/videos as makaug gallery assets unless the rights holder has explicitly supplied or approved them. Public pages should show source links or official embeds first, then makaug rewritten facts and disclosures.',
+  queue_rule: IS_SOUTH_AFRICA
+    ? 'South Africa scale imports are captured behind disabled launch flags. When explicitly enabled after the audited pilot, complete and unambiguous rows may auto-publish under the confidence policy; every uncertain or risky row remains in human review. Unknown locations stay pending and explicit foreign listings are rejected.'
+    : 'Always-on harvest mode: queue every supported public social property post from 1 January 2026 onward into review, regardless of poster type. Missing phone, media, price, exact pin, or a recognized location spelling are review notes, not capture blockers. Manually supplied exact social-post URLs may also enter King review when older, but must identify a specific property and carry an availability/date warning. Unknown locations stay pending for staff verification; explicit foreign listings are classified separately. Original-poster comments are optional. Website-only sources are ignored. Nothing harvested publishes automatically.',
+  image_rule: `Found-online/social imports are public discovery results: do not rehost downloaded TikTok, Facebook, Instagram, YouTube, X, LinkedIn, WhatsApp, or website photos/videos as ${TARGET_BRAND_NAME} gallery assets unless the rights holder has explicitly supplied or approved them. Public pages should show source links or official embeds first, then ${TARGET_BRAND_NAME} rewritten facts and disclosures.`,
   facebook_image_rule: 'For Facebook, store the exact public post URL as source evidence. Do not scrape or rehost Meta media without permission or an approved Meta tool/feed; link back to the source and ask the source/agent for authorised images before using photos publicly. Location must still be present before approval.',
   platform_scope: ['YouTube', 'TikTok', 'Instagram', 'Facebook', 'X/Twitter'],
 };
@@ -1119,7 +1125,9 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
   return {
     eligible: captureToReview,
     blocking_reasons: blockingReasons,
-    capture_mode: strictSouthAfricaParserGate ? 'south_africa_parser_complete_only' : 'launch_review_first',
+    capture_mode: strictSouthAfricaParserGate
+      ? 'south_africa_parser_complete_only'
+      : LAUNCH_REVIEW_CAPTURE_DEFAULTS.capture_mode,
     capture_rule: strictSouthAfricaParserGate
       ? 'South Africa source posts reach the queue only with a numeric price or explicit POA, a canonical city/suburb, and a confident category.'
       : `supported social property posts go to review even when phone, media, or exact ${TARGET_COUNTRY_NAME} location needs human confirmation; only explicit foreign evidence is location-rejected`,
@@ -1208,6 +1216,18 @@ function sourceReviewReasonForIntake(intake = {}) {
   return 'missing_2026_launch_intake_evidence';
 }
 
+function sourceReviewRecordRequiresHumanReview(record = {}) {
+  const intake = record.intake || {};
+  if (!IS_SOUTH_AFRICA) return true;
+  if (intake.country_gate_passed === false || intake.website_source_blocked || intake.suppressed_source_url) return false;
+  if (intake.positive_listing_gate_hard_blocked || intake.data_integrity_hard_blocked) return false;
+  return Boolean(
+    (intake.strict_parser_gate && !intake.parsed_complete)
+      || intake.pure_hashtag_source_junk
+      || record.reason === 'low_signal_source_location'
+  );
+}
+
 function youtubeConfidenceReviewForItem(item = {}) {
   return item.raw_source_post?.youtube_confidence_review
     || item.raw_source_post?.raw_source_post?.youtube_confidence_review
@@ -1263,7 +1283,27 @@ function sourcePostIsYouTubeApiPost(item = {}, agent = sourceAgentForItem(item))
   );
 }
 
-function sourcePostAutoLiveStatusFor(item = {}, agent = sourceAgentForItem(item)) {
+function sourcePostAutoLiveStatusFor(item = {}, agent = sourceAgentForItem(item), options = {}) {
+  if (IS_SOUTH_AFRICA) {
+    const intake = options.intake || sourcePostMeetsLaunchIntakeRule(item, agent);
+    const policy = evaluateSouthAfricaAutoPublish(item, {
+      intake,
+      dedupePassed: options.dedupePassed === true,
+    });
+    return {
+      ...policy,
+      status: policy.approved ? 'approved' : 'pending',
+      moderation_stage: policy.approved ? 'auto_published' : (policy.eligible ? 'auto_publish_hold' : 'source_review'),
+      ready_for_human_review: !policy.eligible,
+      source_is_hashtag: sourceJobIsHashtag(sourceJobForItem(item), item),
+      source_is_youtube_api: sourcePostIsYouTubeApiPost(item, agent),
+      review_status: policy.eligible ? 'auto_publish_eligible' : 'human_review_required',
+      review_score: null,
+      phone_status: '',
+      location_status: policy.checks.location.exact ? 'exact_canonical_location' : 'location_review_required',
+      date_status: sourceDateStatusFor(item),
+    };
+  }
   const review = youtubeConfidenceReviewForItem(item) || {};
   const job = sourceJobForItem(item);
   const sourceIsHashtag = sourceJobIsHashtag(job, item);
@@ -1975,7 +2015,7 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
     older_exact_source_requires_availability_review: olderExactSourceRequiresAvailabilityReview,
     original_poster_comment_required: false,
     first_seen_online_at: SOCIAL_SEARCH_FIRST_SEEN_AT,
-    first_seen_online_label: 'First picked up by makaug source watch on 20 May 2026',
+    first_seen_online_label: `First picked up by ${TARGET_BRAND_NAME} source watch on 20 May 2026`,
     first_posted_online_at: sourcePublishedAt || null,
     source_published_at: sourcePublishedAt || null,
     video_published_at: sourcePublishedAt || null,
@@ -1993,6 +2033,11 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
     youtube_location_status: youtubeConfidenceReview?.location_status || '',
     youtube_category_status: youtubeConfidenceReview?.category_status || '',
     auto_live_source_import: autoLive.approved,
+    auto_publish_eligible: autoLive.eligible === true,
+    auto_publish_enabled: autoLive.enabled === true,
+    auto_publish_blockers: autoLive.blockers || [],
+    auto_publish_checks: autoLive.checks || null,
+    auto_publish_target_rate: autoLive.target_auto_publish_rate ?? null,
     auto_live_policy: autoLive.policy,
     auto_live_reason: autoLive.reason,
     auto_live_review_status: autoLive.review_status,
@@ -2000,7 +2045,7 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
     auto_live_source_is_hashtag: autoLive.source_is_hashtag,
     auto_live_source_is_youtube_api: autoLive.source_is_youtube_api,
     added_to_makaug_at: SOCIAL_SEARCH_ADDED_TO_MAKAUG_AT,
-    added_to_makaug_label: 'Added to makaug source review on 20 May 2026',
+    added_to_makaug_label: `Added to ${TARGET_BRAND_NAME} source review on 20 May 2026`,
     source_followers_label: agent.audienceLabel || 'Audience count to confirm from source',
     source_audience_label: agent.audienceLabel || 'Audience count to confirm from source',
     source_contact_url: sourceContactUrl,
@@ -2165,8 +2210,10 @@ function buildSocialSearchListing(item, agentId = null) {
     ...item,
     listing_type: listingType
   });
-  if (listingType === 'commercial' && (!transactionType || !propertyType)) {
+  if (IS_SOUTH_AFRICA && listingType === 'commercial' && (!transactionType || !propertyType)) {
     autoLive.approved = false;
+    autoLive.eligible = false;
+    autoLive.blockers = [...new Set([...(autoLive.blockers || []), 'commercial_classification_incomplete'])];
     autoLive.status = 'pending';
     autoLive.moderation_stage = 'source_review';
     autoLive.reason = 'Commercial transaction and subtype need staff confirmation before publication.';
@@ -2188,8 +2235,10 @@ function buildSocialSearchListing(item, agentId = null) {
   }, {
     requireSourcePriceEvidence: true
   });
-  if (!priceQuality.ok) {
+  if (IS_SOUTH_AFRICA && !priceQuality.ok) {
     autoLive.approved = false;
+    autoLive.eligible = false;
+    autoLive.blockers = [...new Set([...(autoLive.blockers || []), 'price_evidence_review_required'])];
     autoLive.status = 'pending';
     autoLive.moderation_stage = 'source_review';
     autoLive.reason = `Price evidence needs staff review: ${priceQuality.reasons.join(', ')}.`;
@@ -2209,8 +2258,10 @@ function buildSocialSearchListing(item, agentId = null) {
     source_url: sourceUrlForItem(item),
     extra_fields: item.raw_source_post || item.rawSourcePost || {},
   }, { requireCompleteEvidence: true });
-  if (!dataIntegrity.ok) {
+  if (IS_SOUTH_AFRICA && !dataIntegrity.ok) {
     autoLive.approved = false;
+    autoLive.eligible = false;
+    autoLive.blockers = [...new Set([...(autoLive.blockers || []), 'data_integrity_review_required'])];
     autoLive.status = 'pending';
     autoLive.moderation_stage = 'source_review';
     autoLive.reason = `Data integrity review required: ${dataIntegrity.issue_codes.join(', ')}.`;
@@ -2275,11 +2326,13 @@ function buildSocialSearchListing(item, agentId = null) {
     agent_id: privateSeller ? null : agentId,
     source: SOCIAL_SEARCH_SOURCE,
     listed_via: 'found_online',
-    status: 'pending',
-    moderation_stage: 'submitted',
-    reviewed_at: null,
-    moderation_notes: `${item.importedFromSourcePost ? 'FOUND-ONLINE SOURCE POST IMPORT' : 'SOCIAL SEARCH LISTING'}. Public source inventory from ${agent.name || 'source'}. Source post: ${sourceUrlForItem(item)}. ${manualOlderExactSource ? 'This manually supplied exact source post predates 2026; confirm current availability, location, and price or Price upon application before approval.' : 'Confirm source date, location, availability, category, contact route, and price or Price upon application before approval.'} Harvesting is review-only and cannot publish this listing. Original-poster comments are optional supporting evidence.${classificationWarning ? ` ${classificationWarning}` : ''} Batch: ${itemBatchId(item)}.`,
-    moderation_reason: `Pending King review of public found-online source, exact pin, latest availability, price, and image/source evidence. ${autoLive.reason}`,
+    status: autoLive.status,
+    moderation_stage: autoLive.moderation_stage,
+    reviewed_at: autoLive.approved ? new Date() : null,
+    moderation_notes: `${item.importedFromSourcePost ? 'FOUND-ONLINE SOURCE POST IMPORT' : 'SOCIAL SEARCH LISTING'}. Public source inventory from ${agent.name || 'source'}. Source post: ${sourceUrlForItem(item)}. ${manualOlderExactSource ? 'This manually supplied exact source post predates 2026; confirm current availability, location, and price before approval.' : autoLive.approved ? 'The ZA confidence policy passed every required publication check; the automated decision is audit-logged.' : autoLive.eligible ? 'Every confidence check passed, but automatic publication remains held behind the disabled rollout flag.' : 'Confirm each failed confidence check in King review before approval.'} Original-poster comments are optional supporting evidence.${classificationWarning ? ` ${classificationWarning}` : ''} Batch: ${itemBatchId(item)}.`,
+    moderation_reason: autoLive.approved
+      ? `Automatically published by ${autoLive.policy}. ${autoLive.reason}`
+      : `${autoLive.eligible ? 'Automatic publication held by rollout flag.' : 'Pending King review.'} ${autoLive.reason}`,
     images: listingImageRowsFor(item),
     source_item: item,
   };
@@ -2474,13 +2527,17 @@ async function insertListing(client, listing, agentId) {
     [
       propertyId,
       'always_on_harvest_engine',
-      'harvested_listing_created_for_review',
+      autoLive.approved ? 'harvested_listing_auto_published' : 'harvested_listing_created_for_review',
       listing.status || 'pending',
       JSON.stringify({
         found_online_candidate: true,
         social_search_candidate: true,
         found_online: true,
-        auto_live_source_import: false,
+        auto_live_source_import: autoLive.approved,
+        auto_publish_eligible: autoLive.eligible === true,
+        auto_publish_enabled: autoLive.enabled === true,
+        auto_publish_blockers: autoLive.blockers || [],
+        auto_publish_checks: autoLive.checks || null,
         auto_live_policy: autoLive.policy,
         auto_live_review_status: autoLive.review_status,
         preapproved_source_post: sourcePreApprovalStatusFor(listing.source_item).preapproved,
@@ -2512,6 +2569,9 @@ async function insertListing(client, listing, agentId) {
     owner_preview_expires_at: ownerPreviewExpiresAt,
     status: listing.status,
     moderation_stage: listing.moderation_stage,
+    auto_publish_eligible: autoLive.eligible === true,
+    auto_publish_enabled: autoLive.enabled === true,
+    auto_publish_blockers: autoLive.blockers || [],
     source_url: sourceUrlForItem(listing.source_item),
     youtube_url: listing.source_item.youtubeId ? youtubeUrl(listing.source_item.youtubeId) : '',
     agent_name: listing.lister_name,
@@ -3178,12 +3238,18 @@ function foundOnlinePerUrlResults(items = [], {
     if (createdRow) {
       return {
         ...reporting,
+        auto_publish_eligible: createdRow.auto_publish_eligible === true,
+        auto_published: createdRow.status === 'approved' && createdRow.moderation_stage === 'auto_published',
+        human_review_required: createdRow.auto_publish_eligible !== true,
+        auto_publish_blockers: createdRow.auto_publish_blockers || [],
         key: item.key,
         source_key: item.agentKey || '',
         source_url: sourceUrl,
         platform: item.sourcePlatform || '',
         outcome: 'created',
-        reason: 'created_in_review_queue',
+        reason: createdRow.status === 'approved'
+          ? 'auto_published'
+          : (createdRow.auto_publish_eligible ? 'auto_publish_held_by_flag' : 'created_in_review_queue'),
         property_id: createdRow.id || null,
         status: createdRow.status || '',
         moderation_stage: createdRow.moderation_stage || '',
@@ -3210,6 +3276,10 @@ function foundOnlinePerUrlResults(items = [], {
       const reason = skippedRow.reason || 'source_review_required';
       return {
         ...reporting,
+        auto_publish_eligible: false,
+        auto_published: false,
+        human_review_required: sourceReviewRecordRequiresHumanReview(skippedRow),
+        auto_publish_blockers: skippedRow.intake?.blocking_reasons || [reason],
         key: item.key,
         source_key: item.agentKey || '',
         source_url: sourceUrl,
@@ -3230,12 +3300,18 @@ function foundOnlinePerUrlResults(items = [], {
     if (dryRun && dryRunRow) {
       return {
         ...reporting,
+        auto_publish_eligible: dryRunRow.auto_publish_eligible === true,
+        auto_published: false,
+        human_review_required: dryRunRow.auto_publish_eligible !== true,
+        auto_publish_blockers: dryRunRow.auto_publish_blockers || [],
         key: item.key,
         source_key: item.agentKey || '',
         source_url: sourceUrl,
         platform: item.sourcePlatform || '',
         outcome: 'would_create',
-        reason: 'would_create_in_review_queue',
+        reason: dryRunRow.auto_publish_eligible
+          ? 'would_be_auto_publish_eligible'
+          : 'would_create_in_review_queue',
         property_id: null,
         status: dryRunRow.status || '',
         moderation_stage: dryRunRow.moderation_stage || '',
@@ -3417,7 +3493,8 @@ async function queueFoundOnlineSourcePostListings({
         alreadyPresent.push(alreadyPresentFoundOnlineRow(item, agent, existingRow));
         return [];
       }
-      const autoLive = sourcePostAutoLiveStatusFor(item, agent);
+      const uniqueItem = { ...item, autoPublishDedupePassed: true };
+      const autoLive = sourcePostAutoLiveStatusFor(uniqueItem, agent, { intake, dedupePassed: true });
       const row = {
         key: item.key,
         title: item.title,
@@ -3438,6 +3515,8 @@ async function queueFoundOnlineSourcePostListings({
         profile_key: shouldCreateSourceProfile(item, agent) ? sourceProfileKeyForItem(item, agent) : null,
         profile_policy: FOUND_ONLINE_PROFILE_CREATION_POLICY.rule,
         auto_live_ready: autoLive.approved,
+        auto_publish_eligible: autoLive.eligible === true,
+        auto_publish_blockers: autoLive.blockers || [],
         auto_live_policy: autoLive.policy,
         status: autoLive.status,
         moderation_stage: autoLive.moderation_stage,
@@ -3455,7 +3534,13 @@ async function queueFoundOnlineSourcePostListings({
       return [row];
     });
     const autoLiveRows = dryRunRows.filter((item) => item.auto_live_ready);
-    const reviewRows = dryRunRows.filter((item) => !item.auto_live_ready);
+    const autoPublishEligibleRows = dryRunRows.filter((item) => item.auto_publish_eligible);
+    const reviewRows = dryRunRows.filter((item) => !item.auto_publish_eligible);
+    const humanReviewSourceRecords = sourceReviewRecords.filter(sourceReviewRecordRequiresHumanReview);
+    const policyDecisionCount = dryRunRows.length + humanReviewSourceRecords.length;
+    const autoPublishRate = policyDecisionCount
+      ? Number((autoPublishEligibleRows.length / policyDecisionCount).toFixed(4))
+      : 0;
     const duplicateWarnings = duplicateWarningsForFoundOnlineRows(alreadyPresent);
     const perUrl = foundOnlinePerUrlResults(items, {
       alreadyPresent,
@@ -3480,8 +3565,16 @@ async function queueFoundOnlineSourcePostListings({
       created_auto_live_properties: 0,
       existing_auto_live_properties: 0,
       auto_live_properties: autoLiveRows.length,
+      auto_publish_eligible_properties: autoPublishEligibleRows.length,
+      auto_publish_eligibility_rate: autoPublishRate,
+      auto_publish_target_rate: 0.8,
+      auto_publish_target_met: autoPublishRate >= 0.8,
+      auto_publish_policy_decision_count: policyDecisionCount,
+      human_review_required_properties: reviewRows.length + humanReviewSourceRecords.length,
+      human_review_source_records: humanReviewSourceRecords,
       review_queue_properties: reviewRows.length,
       auto_live_listings: autoLiveRows,
+      auto_publish_eligible_listings: autoPublishEligibleRows,
       queued_listings: dryRunRows,
       review_queue_listings: reviewRows,
       already_present_properties: alreadyPresent,
@@ -3543,7 +3636,8 @@ async function queueFoundOnlineSourcePostListings({
         });
       }
       const agentId = createProfile ? agentIdsByKey[profileKey] : null;
-      const listing = buildSocialSearchListing(item, agentId);
+      const uniqueItem = { ...item, autoPublishDedupePassed: true };
+      const listing = buildSocialSearchListing(uniqueItem, agentId);
       const inserted = await insertListing(client, listing, agentId);
       inserted.profile_action = createProfile ? 'create_or_update_source_profile' : FOUND_ONLINE_PROFILE_CREATION_POLICY.profile_action;
       inserted.profile_key = createProfile ? profileKey : null;
@@ -3563,6 +3657,13 @@ async function queueFoundOnlineSourcePostListings({
     }
     await client.query('COMMIT');
     const autoLiveCreated = created.filter((item) => isLiveOrApprovedStatus(item));
+    const autoPublishEligibleCreated = created.filter((item) => item.auto_publish_eligible === true);
+    const humanReviewCreated = created.filter((item) => item.auto_publish_eligible !== true);
+    const humanReviewSourceRecords = skippedListings.filter(sourceReviewRecordRequiresHumanReview);
+    const policyDecisionCount = created.length + humanReviewSourceRecords.length;
+    const autoPublishRate = policyDecisionCount
+      ? Number((autoPublishEligibleCreated.length / policyDecisionCount).toFixed(4))
+      : 0;
     const reviewCreated = created.filter((item) => isReviewQueueStatus(item));
     const alreadyPresentReviewQueue = alreadyPresent.filter((item) => isReviewQueueStatus(item));
     const alreadyLiveOrApproved = alreadyPresent.filter((item) => isLiveOrApprovedStatus(item));
@@ -3615,8 +3716,16 @@ async function queueFoundOnlineSourcePostListings({
       created_review_queue_properties: reviewCreated.length,
       existing_auto_live_properties: alreadyLiveOrApproved.length,
       auto_live_properties: autoLiveListings.length,
+      auto_publish_eligible_properties: autoPublishEligibleCreated.length,
+      auto_publish_eligibility_rate: autoPublishRate,
+      auto_publish_target_rate: 0.8,
+      auto_publish_target_met: autoPublishRate >= 0.8,
+      auto_publish_policy_decision_count: policyDecisionCount,
+      human_review_required_properties: humanReviewCreated.length + humanReviewSourceRecords.length,
+      human_review_source_records: humanReviewSourceRecords,
       review_queue_properties: reviewQueueListings.length,
       auto_live_listings: autoLiveListings,
+      auto_publish_eligible_listings: autoPublishEligibleCreated,
       queued_listings: reviewQueueListings,
       already_present_properties: alreadyPresent,
       already_present_review_queue_properties: alreadyPresentReviewQueue,

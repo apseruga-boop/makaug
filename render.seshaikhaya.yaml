@@ -53,8 +53,20 @@ projects:
                 value: "false"
               - key: ZA_SCALE_HARVEST_ENABLED
                 value: "false"
+              - key: ZA_SCALE_PILOT_ENABLED
+                value: "false"
+              - key: ZA_SCALE_DAVE_PILOT_PASS
+                value: "false"
+              - key: ZA_PLATFORM_ACCESS_APPROVED
+                value: "false"
+              - key: ZA_CONFIDENCE_AUTO_PUBLISH_ENABLED
+                value: "false"
               - key: ZA_SCALE_REGISTRY_WRITE_ENABLED
                 value: "false"
+              - key: ZA_MONTHLY_SPEND_CAP_USD
+                value: "13"
+              - key: ZA_CURRENT_MONTHLY_SPEND_USD
+                value: "7.25"
               - key: FEATURED_ROTATION_TIMEZONE
                 value: Africa/Johannesburg
               - key: APP_HEARTBEAT_TIMEOUT_MS

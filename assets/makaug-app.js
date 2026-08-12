@@ -30952,6 +30952,12 @@ async function submitReportListing() {
     toast(message);
     return;
   }
+  if (["claim", "removal"].includes(requestType) && !reporterContact) {
+    const message = translateListingLabel("Please add your email or phone so the request can be verified.");
+    setStatus(message);
+    toast(message);
+    return;
+  }
 
   setStatus("");
   setButtonLoading("report-submit-btn", true);
@@ -30972,8 +30978,11 @@ async function submitReportListing() {
     });
     await trackEvent("report_listing_submit", { reason, request_type: requestType || "report" });
     const reference = response?.data?.reference || response?.data?.id || "";
+    const hiddenImmediately = response?.data?.listing_hidden_immediately === true;
     const message = [
-      translateListingLabel("Request submitted. makaug will review it."),
+      hiddenImmediately
+        ? translateListingLabel("Listing hidden immediately. Your removal request is recorded for verification.")
+        : translateListingLabel("Request submitted. makaug will review it."),
       reference ? `${translateListingLabel("Reference")}: ${reference}` : ""
     ].filter(Boolean).join(" ");
     setStatus(message, "success");
@@ -38985,6 +38994,9 @@ function foundOnlineSourceMeta(p = {}) {
     addedToMakaug,
     addedToMakaugLabel,
     hasDirectContact,
+    contactViaPlatform: extra.contact_via_platform === true
+      || String(extra.contact_via_platform || "").toLowerCase() === "true"
+      || String(extra.contact_gate || "").toLowerCase() === "seshaikhaya_enquiry",
     sourceUnavailable: Boolean(unavailableMeta),
     sourceUnavailableReason: unavailableMeta?.reason || "",
   };
@@ -39205,11 +39217,12 @@ function foundOnlineSourceActionLinksHtml(p = {}, meta = {}) {
   const contactRoute = foundOnlineSourceContactCtaUrl(meta);
   const sourceContactIsTikTokProfile = isTikTokProfileUrl(meta.sourceContactUrl);
   const showDistinctContactRoute = contactRoute && contactRoute !== meta.sourceUrl && !sourceContactIsTikTokProfile;
+  const platformContactGate = meta.contactViaPlatform === true || isPrivateSellerListing(p);
   return `
     <div class="mt-4 space-y-3">
       <div class="flex flex-wrap gap-2 text-xs">
         ${!sourceUnavailable && meta.sourceUrl ? `<a href="${adminAttr(meta.sourceUrl)}" target="_blank" rel="noopener noreferrer" class="rounded-xl bg-white border border-slate-200 px-3 py-2 font-black text-slate-800 hover:border-blue-200"><i class="fas fa-arrow-up-right-from-square mr-1 text-blue-700"></i>${translateListingLabel("Open original source")}</a>` : ""}
-        ${!sourceUnavailable && showDistinctContactRoute ? `<a href="${adminAttr(contactRoute)}" target="_blank" rel="noopener noreferrer" class="rounded-xl bg-white border border-slate-200 px-3 py-2 font-black text-slate-800 hover:border-blue-200"><i class="fas fa-user mr-1 text-blue-700"></i>${translateListingLabel("Contact original poster")}</a>` : ""}
+        ${platformContactGate ? `<button type="button" onclick="document.getElementById('detail-inquiry-name')?.focus(); document.getElementById('detail-inquiry-name')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); return false" class="rounded-xl bg-green-700 px-3 py-2 font-black text-white hover:bg-green-800"><i class="fas fa-envelope mr-1"></i>Contact via seshaikhaya</button>` : (!sourceUnavailable && showDistinctContactRoute ? `<a href="${adminAttr(contactRoute)}" target="_blank" rel="noopener noreferrer" class="rounded-xl bg-white border border-slate-200 px-3 py-2 font-black text-slate-800 hover:border-blue-200"><i class="fas fa-user mr-1 text-blue-700"></i>${translateListingLabel("Contact original poster")}</a>` : "")}
       </div>
       <div class="rounded-2xl border border-slate-200 bg-white p-3">
         <div class="text-xs font-black uppercase tracking-wide text-slate-600">${translateListingLabel("Something wrong? Report or claim this listing")}</div>
@@ -52468,12 +52481,13 @@ async function openDetail(id, options = {}) {
   const ownerPhoneHref = ownerPhone ? `tel:${String(ownerPhone).replace(/\s+/g, "")}` : "";
   const ownerEmail = p.lister_email || p.contact_email || "";
   const foundOnlineMeta = foundOnlineSourceMeta(p);
-  const sourceContactUrl = foundOnlineSourceContactCtaUrl(foundOnlineMeta);
+  const privateSellerContactGate = thirdPartyDetail && isPrivateSellerListing(p);
+  const sourceContactUrl = privateSellerContactGate ? "" : foundOnlineSourceContactCtaUrl(foundOnlineMeta);
   const sourceContactButtonLabel = foundOnlineMeta ? foundOnlineSourceContactButtonLabel(foundOnlineMeta) : translatePropertyUi("Contact via source");
   const sourceContactSubtitle = foundOnlineMeta ? foundOnlineSourceContactSubtitle(foundOnlineMeta) : "";
   const sourceContactCopy = foundOnlineMeta?.sourceContactLabel
     || (sourceContactUrl ? translatePropertyUi("Open the public source page for contact details.") : "");
-  const isFoundOnlineContact = shouldUseSourceOnlyContact(p, foundOnlineMeta);
+  const isFoundOnlineContact = shouldUseSourceOnlyContact(p, foundOnlineMeta) && !privateSellerContactGate;
   const brokerPhone = broker?.phone || "";
   const brokerPhoneHref = brokerPhone ? `tel:${String(brokerPhone).replace(/\s+/g, "")}` : "";
   const brokerWhatsapp = broker?.whatsapp || brokerPhone || "";

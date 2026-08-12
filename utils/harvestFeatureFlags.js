@@ -8,7 +8,9 @@ function harvestAutomationEnabled(env = process.env) {
   const countryCode = String(env.COUNTRY_CODE || 'UG').trim().toUpperCase();
   if (countryCode === 'ZA') {
     return envFlagEnabled(env.HARVEST_AUTOMATION_ENABLED)
-      && envFlagEnabled(env.ZA_SCALE_HARVEST_ENABLED);
+      && envFlagEnabled(env.ZA_SCALE_HARVEST_ENABLED)
+      && envFlagEnabled(env.ZA_SCALE_DAVE_PILOT_PASS)
+      && envFlagEnabled(env.ZA_PLATFORM_ACCESS_APPROVED);
   }
   return envFlagEnabled(env.HARVEST_AUTOMATION_ENABLED);
 }

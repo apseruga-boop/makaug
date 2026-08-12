@@ -1,4 +1,5 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 
 const db = require('../config/database');
 const logger = require('../config/logger');
@@ -10,6 +11,75 @@ const { logEmailEvent } = require('../services/emailLogService');
 const { logNotification, notificationStatusFromDelivery } = require('../services/notificationLogService');
 
 const router = express.Router();
+const ACTIVE_COUNTRY_CODE = String(process.env.COUNTRY_CODE || 'UG').trim().toUpperCase();
+const IS_SOUTH_AFRICA = ACTIVE_COUNTRY_CODE === 'ZA';
+const ACTIVE_BRAND_NAME = IS_SOUTH_AFRICA ? 'seshaikhaya' : 'makaug';
+const dataRightsLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, error: 'Too many claim, removal, report, or privacy requests. Please wait and try again.' },
+});
+
+async function immediatelyHideSouthAfricaPrivateSellerListing(propertyId, reportId) {
+  if (!IS_SOUTH_AFRICA || !propertyId) return { hidden: false, reason: 'not_applicable' };
+  const hidden = await db.query(
+    `WITH candidate AS (
+       SELECT id, status AS previous_status
+       FROM properties
+       WHERE id = $1
+         AND COALESCE(status, '') NOT IN ('deleted', 'hidden')
+         AND (
+           COALESCE(extra_fields->>'private_seller', 'false') IN ('true','1','yes')
+           OR LOWER(COALESCE(extra_fields->>'source_track', '')) = 'fsbo'
+         )
+         AND (
+           COALESCE(extra_fields->>'found_online', 'false') IN ('true','1','yes')
+           OR COALESCE(extra_fields->>'social_search_candidate', 'false') IN ('true','1','yes')
+           OR LOWER(COALESCE(listed_via, '')) = 'found_online'
+           OR LOWER(COALESCE(source, '')) LIKE '%found_online%'
+         )
+       FOR UPDATE
+     ), updated AS (
+       UPDATE properties p
+       SET status = 'hidden',
+           moderation_stage = 'data_subject_removal',
+           moderation_reason = 'Private seller requested removal through the public POPIA takedown path.',
+           moderation_notes = 'Hidden immediately; staff may verify the request but must not republish without resolving the data-subject objection.',
+           updated_at = NOW(),
+           extra_fields = COALESCE(p.extra_fields, '{}'::jsonb) || jsonb_build_object(
+             'privacy_takedown_status', 'hidden_immediately',
+             'privacy_takedown_report_id', $2::text,
+             'privacy_takedown_requested_at', NOW()::text
+           )
+       FROM candidate
+       WHERE p.id = candidate.id
+       RETURNING p.id, candidate.previous_status, p.status
+     )
+     SELECT * FROM updated`,
+    [propertyId, String(reportId || '')]
+  );
+  const row = hidden.rows[0];
+  if (!row) return { hidden: false, reason: 'not_private_seller_found_online_or_already_hidden' };
+  await db.query(
+    `INSERT INTO property_moderation_events (
+       property_id, actor_id, action, status_from, status_to, checklist, reason, notes, delivery
+     ) VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9::jsonb)`,
+    [
+      propertyId,
+      'privacy_self_service',
+      'data_subject_removal_immediate_hide',
+      row.previous_status,
+      'hidden',
+      JSON.stringify({ popia_request: true, private_seller: true, immediate_public_suppression: true }),
+      'Private seller requested removal of a sourced listing.',
+      `Report ${reportId} created through the public takedown flow.`,
+      JSON.stringify({ report_id: reportId, country_code: 'ZA' }),
+    ]
+  );
+  return { hidden: true, property_id: propertyId, previous_status: row.previous_status, status: 'hidden' };
+}
 
 function normalizeReportRequestType(value) {
   const normalized = cleanText(value).toLowerCase();
@@ -59,6 +129,19 @@ async function handleReportListing(req, res, next) {
       return res.status(400).json({
         ok: false,
         error: 'property_reference and reason are required'
+      });
+    }
+    if (IS_SOUTH_AFRICA && ['claim', 'removal'].includes(requestType) && !reporterContact) {
+      return res.status(400).json({
+        ok: false,
+        error: 'reporter_contact is required for a South Africa claim or removal request',
+      });
+    }
+    if (IS_SOUTH_AFRICA && ['claim', 'removal'].includes(requestType)
+      && !isValidEmail(reporterContact) && !isValidPhone(reporterContact)) {
+      return res.status(400).json({
+        ok: false,
+        error: 'reporter_contact must be a valid email or phone for a South Africa claim or removal request',
       });
     }
 
@@ -114,6 +197,9 @@ async function handleReportListing(req, res, next) {
     }
 
     const report = result.rows[0];
+    const immediateTakedown = requestType === 'removal'
+      ? await immediatelyHideSouthAfricaPrivateSellerListing(linkedPropertyId, report.id)
+      : { hidden: false, reason: 'not_requested' };
     const supportEmail = getSupportEmail();
     const whatsappUrl = getSupportWhatsappUrl();
     let lead = null;
@@ -157,9 +243,9 @@ async function handleReportListing(req, res, next) {
     try {
       adminDelivery = await sendSupportEmail({
         to: supportEmail,
-        subject: `[makaug] Listing report received • ${reason}`,
+        subject: `[${ACTIVE_BRAND_NAME}] Listing report received • ${reason}`,
         text: [
-          'A listing report was submitted on makaug.com.',
+          `A listing report was submitted on ${ACTIVE_BRAND_NAME}.`,
           '',
           `Report ID: ${report.id}`,
           `Property Reference: ${propertyReference}`,
@@ -178,9 +264,9 @@ async function handleReportListing(req, res, next) {
       if (reporterContact && isValidEmail(reporterContact)) {
         userDelivery = await sendSupportEmail({
           to: reporterContact,
-          subject: 'We received your makaug listing report',
+          subject: `We received your ${ACTIVE_BRAND_NAME} listing report`,
           text: [
-            'Thank you for reporting this issue to makaug.',
+            `Thank you for reporting this issue to ${ACTIVE_BRAND_NAME}.`,
             '',
             'Our team will investigate the listing and take the right action. We may contact you if we need more information.',
             '',
@@ -206,7 +292,7 @@ async function handleReportListing(req, res, next) {
         recipientEmail: reporterContact && isValidEmail(reporterContact) ? reporterContact : null,
         recipientRole: 'reporter',
         templateKey: 'fraud_report_received',
-        subject: 'We received your makaug listing report',
+        subject: `We received your ${ACTIVE_BRAND_NAME} listing report`,
         status: notificationStatusFromDelivery(userDelivery),
         relatedLeadId: lead?.id || null,
         failureReason: userDelivery?.error || userDelivery?.reason || null,
@@ -217,7 +303,7 @@ async function handleReportListing(req, res, next) {
         recipientEmail: supportEmail,
         recipientRole: 'admin',
         templateKey: 'admin_alert',
-        subject: `[makaug] Listing report received • ${reason}`,
+        subject: `[${ACTIVE_BRAND_NAME}] Listing report received • ${reason}`,
         status: notificationStatusFromDelivery(adminDelivery),
         relatedLeadId: lead?.id || null,
         failureReason: adminDelivery?.error || adminDelivery?.reason || null,
@@ -248,7 +334,9 @@ async function handleReportListing(req, res, next) {
         ...report,
         reference: report.id,
         lead_linked: Boolean(lead?.id),
-        follow_up_degraded: Boolean(leadLinkError)
+        follow_up_degraded: Boolean(leadLinkError),
+        listing_hidden_immediately: immediateTakedown.hidden === true,
+        takedown_status: immediateTakedown.hidden ? 'hidden' : immediateTakedown.reason,
       }
     });
   } catch (error) {
@@ -362,6 +450,129 @@ async function handleLookingForProperty(req, res, next) {
     });
 
     return res.status(201).json({ ok: true, data: request });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function handlePrivacyRequest(req, res, next) {
+  try {
+    if (!IS_SOUTH_AFRICA) {
+      return res.status(404).json({ ok: false, error: 'Privacy request route is not available for this tenant' });
+    }
+    const name = cleanText(req.body.name).slice(0, 160);
+    const contact = cleanText(req.body.contact || req.body.email || req.body.phone).slice(0, 320);
+    const requestType = cleanText(req.body.request_type || req.body.type).toLowerCase();
+    const details = cleanText(req.body.details || req.body.message).slice(0, 4000);
+    const validTypes = new Set(['access', 'correction', 'deletion', 'objection', 'complaint', 'other']);
+    const errors = [];
+    if (!name) errors.push('name is required');
+    if (!contact) errors.push('contact is required');
+    if (contact && !isValidEmail(contact) && !isValidPhone(contact)) errors.push('contact must be a valid email or phone');
+    if (!validTypes.has(requestType)) errors.push('request_type is invalid');
+    if (!details) errors.push('details are required');
+    if (errors.length) return res.status(400).json({ ok: false, error: 'Validation failed', details: errors });
+
+    const result = await db.query(
+      `INSERT INTO report_listings (
+         property_reference, reason, details, reporter_contact, status,
+         request_type, request_source, structured_fields
+       ) VALUES ($1,$2,$3,$4,'open','privacy','popia_privacy_request',$5::jsonb)
+       RETURNING id, status, request_type, created_at`,
+      [
+        'POPIA privacy request',
+        `Privacy ${requestType}`,
+        details,
+        contact,
+        JSON.stringify({ name, privacy_request_type: requestType, country_code: 'ZA' }),
+      ]
+    );
+    const request = result.rows[0];
+    let lead = null;
+    try {
+      lead = await createLead(db, {
+        source: 'popia_privacy_request',
+        leadType: 'support',
+        category: `privacy_${requestType}`,
+        message: details,
+        priority: ['deletion', 'objection', 'complaint'].includes(requestType) ? 'high' : 'medium',
+        contact: {
+          name,
+          email: isValidEmail(contact) ? contact : null,
+          phone: isValidPhone(contact) ? contact : null,
+          preferredContactChannel: isValidEmail(contact) ? 'email' : 'phone',
+          roleType: 'data_subject',
+        },
+        activityType: 'popia_privacy_request_received',
+        metadata: { report_id: request.id, privacy_request_type: requestType, country_code: 'ZA' },
+      });
+    } catch (leadError) {
+      logger.warn('POPIA request saved but CRM linking failed', { requestId: request.id, error: leadError.message });
+    }
+
+    const supportEmail = getSupportEmail();
+    let adminDelivery = { sent: false, reason: 'not_attempted' };
+    let userDelivery = { sent: false, reason: 'not_attempted' };
+    try {
+      adminDelivery = await sendSupportEmail({
+        to: supportEmail,
+        subject: `[seshaikhaya POPIA] ${requestType} request • ${request.id}`,
+        text: [
+          'A POPIA data-subject request was submitted.',
+          `Reference: ${request.id}`,
+          `Name: ${name}`,
+          `Contact: ${contact}`,
+          `Type: ${requestType}`,
+          `Details: ${details}`,
+        ].join('\n'),
+        replyTo: isValidEmail(contact) ? contact : undefined,
+      });
+      if (isValidEmail(contact)) {
+        userDelivery = await sendSupportEmail({
+          to: contact,
+          subject: `seshaikhaya POPIA request received • ${request.id}`,
+          text: `We received your POPIA ${requestType} request. Reference: ${request.id}. The Information Officer queue will process it and may contact you to verify identity.`,
+        });
+      }
+    } catch (deliveryError) {
+      logger.warn('POPIA request email delivery failed', { requestId: request.id, error: deliveryError.message });
+    }
+    await Promise.allSettled([
+      logNotification(db, {
+        recipientEmail: supportEmail,
+        channel: 'in_app',
+        type: 'popia_privacy_request_received',
+        status: 'logged',
+        payloadSummary: { report_id: request.id, privacy_request_type: requestType },
+        relatedLeadId: lead?.id || null,
+      }),
+      logEmailEvent(db, {
+        eventType: 'popia_privacy_request_received',
+        recipientEmail: supportEmail,
+        recipientRole: 'information_officer',
+        templateKey: 'admin_alert',
+        subject: `[seshaikhaya POPIA] ${requestType} request`,
+        status: notificationStatusFromDelivery(adminDelivery),
+        relatedLeadId: lead?.id || null,
+        failureReason: adminDelivery?.error || adminDelivery?.reason || null,
+        sentAt: adminDelivery?.sent ? new Date() : null,
+      }),
+      isValidEmail(contact) ? logEmailEvent(db, {
+        eventType: 'popia_privacy_request_confirmation',
+        recipientEmail: contact,
+        recipientRole: 'data_subject',
+        templateKey: 'privacy_request_confirmation',
+        subject: 'seshaikhaya POPIA request received',
+        status: notificationStatusFromDelivery(userDelivery),
+        relatedLeadId: lead?.id || null,
+        failureReason: userDelivery?.error || userDelivery?.reason || null,
+        sentAt: userDelivery?.sent ? new Date() : null,
+      }) : Promise.resolve(),
+    ]);
+    return res.status(201).json({
+      ok: true,
+      data: { id: request.id, reference: request.id, status: 'received' },
+    });
   } catch (error) {
     return next(error);
   }
@@ -638,8 +849,10 @@ async function handleCareerInterest(req, res, next) {
   }
 }
 
+router.use(['/report-listing', '/report', '/privacy-request'], dataRightsLimiter);
 router.post('/report-listing', handleReportListing);
 router.post('/report', handleReportListing);
+router.post('/privacy-request', handlePrivacyRequest);
 router.post('/looking-for-property', handleLookingForProperty);
 router.post('/looking', handleLookingForProperty);
 router.post('/help-request', handleHelpRequest);

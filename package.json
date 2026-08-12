@@ -54,6 +54,7 @@
     "locations:probe-uganda": "node scripts/probe-uganda-location-coverage.js",
     "locations:build-south-africa": "node scripts/build-south-africa-location-gazetteer.js",
     "inventory:seed-south-africa-sources": "node scripts/seed-south-africa-source-registry.js",
+    "inventory:pilot-south-africa": "node scripts/run-south-africa-scale-pilot.js",
     "brand:icons-south-africa": "node scripts/generate-seshaikhaya-icons.js",
     "probe:public-routes": "node scripts/probe-public-routes.js",
     "probe:public-routes:browser": "node scripts/probe-public-routes-browser.js",
@@ -67,7 +68,7 @@
     "test:seo-ssr": "node tests/seo-ssr-crawlability.test.js",
     "test:king-harvester-p0": "node tests/king-harvester-route-contract.test.js",
     "test:shared-core-phase1": "node tests/shared-core-phase1.test.js",
-    "test:south-africa": "COUNTRY_CODE=ZA node tests/south-africa-tenant.test.js && COUNTRY_CODE=ZA node tests/south-africa-location-audit.test.js && COUNTRY_CODE=ZA node tests/south-africa-intake-integrity.test.js && COUNTRY_CODE=ZA node tests/south-africa-scale-corpus.test.js && COUNTRY_CODE=ZA node tests/south-africa-harvest-reporting.test.js && COUNTRY_CODE=ZA node tests/south-africa-whatsapp-contract.test.js && COUNTRY_CODE=ZA WHATSAPP_DELIVERY_MODE=test node tests/south-africa-whatsapp-test-transport.test.js && node tests/south-africa-migration-isolation.test.js",
+    "test:south-africa": "COUNTRY_CODE=ZA node tests/south-africa-tenant.test.js && COUNTRY_CODE=ZA node tests/south-africa-location-audit.test.js && COUNTRY_CODE=ZA node tests/south-africa-intake-integrity.test.js && COUNTRY_CODE=ZA node tests/south-africa-scale-corpus.test.js && COUNTRY_CODE=ZA node tests/south-africa-scale-gates.test.js && COUNTRY_CODE=ZA node tests/south-africa-harvest-reporting.test.js && COUNTRY_CODE=ZA node tests/south-africa-whatsapp-contract.test.js && COUNTRY_CODE=ZA WHATSAPP_DELIVERY_MODE=test node tests/south-africa-whatsapp-test-transport.test.js && node tests/south-africa-migration-isolation.test.js",
     "smoke": "bash scripts/smoke-test.sh",
     "prelaunch": "bash scripts/prelaunch-check.sh"
   },

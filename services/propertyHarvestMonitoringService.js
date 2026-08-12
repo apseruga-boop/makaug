@@ -16,6 +16,8 @@ function normalizedPlatform(value = '') {
 async function recordHarvestImportResult(db, result = {}, {
   eventType = 'source_import',
   sourceKey = '',
+  requestCount = 0,
+  estimatedCostUsd = 0,
 } = {}) {
   if (!db?.query) return { ok: false, skipped: true, reason: 'missing_db_connection', recorded: 0 };
   const rows = Array.isArray(result.per_url_results)
@@ -24,7 +26,7 @@ async function recordHarvestImportResult(db, result = {}, {
       ? result.import_result.per_url_results
       : [];
   let recorded = 0;
-  for (const row of rows) {
+  for (const [rowIndex, row] of rows.entries()) {
     const identity = stablePlatformPostIdentity(row.source_url || '');
     await db.query(
       `INSERT INTO property_harvest_events (
@@ -48,6 +50,12 @@ async function recordHarvestImportResult(db, result = {}, {
           complete_price: row.complete_price === true || row.intake?.complete_price === true,
           complete_location: row.complete_location === true || row.intake?.complete_location === true,
           complete_classification: row.complete_classification === true || row.intake?.complete_classification === true,
+          auto_publish_eligible: row.auto_publish_eligible === true,
+          auto_published: row.auto_live_ready === true || row.auto_published === true,
+          human_review_required: row.human_review_required === true,
+          auto_publish_blockers: Array.isArray(row.auto_publish_blockers) ? row.auto_publish_blockers : [],
+          request_count: Number(row.request_count || (rowIndex === 0 ? requestCount : 0) || 0),
+          estimated_cost_usd: Number(row.estimated_cost_usd || (rowIndex === 0 ? estimatedCostUsd : 0) || 0),
           status: row.status || '',
           moderation_stage: row.moderation_stage || '',
           title: row.title || '',
@@ -100,6 +108,20 @@ async function loadHarvestSummary(db, { days = 14 } = {}) {
                 WHERE LOWER(COALESCE(e.metadata->>'parsed_complete', 'false')) IN ('true','1','yes')
               ) / NULLIF(COUNT(*), 0), 1) AS parsed_complete_pct,
               COUNT(*) FILTER (WHERE e.outcome = 'created' AND p.status = 'pending')::int AS queued,
+              COUNT(*) FILTER (
+                WHERE e.outcome = 'created'
+                  AND LOWER(COALESCE(e.metadata->>'auto_publish_eligible', 'false')) IN ('true','1','yes')
+              )::int AS auto_publish_eligible,
+              COUNT(*) FILTER (
+                WHERE e.outcome = 'created'
+                  AND LOWER(COALESCE(e.metadata->>'auto_published', 'false')) IN ('true','1','yes')
+                  AND p.status = 'approved'
+              )::int AS auto_published,
+              COUNT(*) FILTER (
+                WHERE LOWER(COALESCE(e.metadata->>'human_review_required', 'false')) IN ('true','1','yes')
+              )::int AS human_review_required,
+              COALESCE(SUM(NULLIF(e.metadata->>'request_count', '')::numeric), 0)::int AS request_count,
+              ROUND(COALESCE(SUM(NULLIF(e.metadata->>'estimated_cost_usd', '')::numeric), 0), 4) AS estimated_cost_usd,
               COUNT(*) FILTER (WHERE e.outcome = 'created' AND p.status = 'approved')::int AS live
        FROM property_harvest_events e
        LEFT JOIN properties p ON p.id = e.property_id
@@ -147,7 +169,9 @@ async function loadHarvestSummary(db, { days = 14 } = {}) {
     ),
   ]);
   return {
-    review_only: true,
+    review_only: ACTIVE_COUNTRY_CODE !== 'ZA' || !/^(1|true|yes|on)$/i.test(String(process.env.ZA_CONFIDENCE_AUTO_PUBLISH_ENABLED || '')),
+    confidence_auto_publish_policy: ACTIVE_COUNTRY_CODE === 'ZA',
+    target_auto_publish_rate: ACTIVE_COUNTRY_CODE === 'ZA' ? 0.8 : null,
     window_days: windowDays,
     daily_counts: daily.rows,
     source_daily_counts: sourceDaily.rows,
