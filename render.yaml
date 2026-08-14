@@ -1,10 +1,37 @@
 services:
+  - type: web
+    name: makaug-whatsapp-ai-runtime
+    runtime: node
+    plan: starter
+    region: oregon
+    numInstances: 1
+    buildCommand: npm ci --omit=dev
+    startCommand: node scripts/whatsapp-ai-runtime.js
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: COUNTRY_CODE
+        value: UG
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_PROJECT
+        sync: false
+      - key: OPENAI_ORGANIZATION
+        sync: false
+      - key: WHATSAPP_AI_RUNTIME_TOKEN
+        sync: false
+      - key: WHATSAPP_AI_WORKER_FRESH_SECONDS
+        value: "180"
+
   - type: worker
     name: makaug-whatsapp-agent
     runtime: docker
     dockerfilePath: ./Dockerfile.whatsapp-agent
     dockerContext: .
-    plan: starter
+    plan: standard
+    region: oregon
     numInstances: 1
     autoDeployTrigger: commit
     maxShutdownDelaySeconds: 60
@@ -48,8 +75,18 @@ services:
       - key: WHATSAPP_WEB_COPILOT_PAIRING_PHONE
         sync: false
       - key: WHATSAPP_WEB_COPILOT_POLL_MS
-        value: "50"
+        value: "750"
       - key: WHATSAPP_WEB_COPILOT_RECENT_SWEEP_MS
-        value: "60"
+        value: "3000"
+      - key: WHATSAPP_WEB_COPILOT_FAST_LANE_SWEEP_MS
+        value: "900"
+      - key: WHATSAPP_WEB_COPILOT_OUTBOX_POLL_MS
+        value: "1000"
+      - key: WHATSAPP_WEB_COPILOT_MAX_SESSION_MS
+        value: "14400000"
       - key: WHATSAPP_WEB_COPILOT_HEARTBEAT_MS
         value: "30000"
+      - key: WHATSAPP_AI_RUNTIME_URL
+        value: https://makaug-whatsapp-ai-runtime.onrender.com
+      - key: WHATSAPP_AI_RUNTIME_TOKEN
+        sync: false

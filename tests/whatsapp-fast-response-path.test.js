@@ -83,8 +83,9 @@ async function run() {
     'WhatsApp Web sender must keep send-confirmation timing configurable for fast replies'
   );
   assert(
-    whatsappWebCopilotSource.includes('POLL_MS = Math.min(150, Math.max(40'),
-    'WhatsApp Web sender must poll the active chat on a sub-100ms default path'
+    whatsappWebCopilotSource.includes('POLL_MS = Math.min(5000, Math.max(400')
+      && whatsappWebCopilotSource.includes('WHATSAPP_WEB_COPILOT_POLL_MS || 750'),
+    'WhatsApp Web sender must stay responsive without a memory-exhausting 50ms busy loop'
   );
 
   assert(
@@ -96,8 +97,9 @@ async function run() {
     'Admin WhatsApp health must expose hosted/live bridge readiness, not only raw bridge clients'
   );
   assert(
-    whatsappWebCopilotSource.includes('RECENT_CHAT_SWEEP_MS = Math.min(300, Math.max(60'),
-    'WhatsApp Web sender must sweep recent chats several times per second'
+    whatsappWebCopilotSource.includes('RECENT_CHAT_SWEEP_MS = Math.min(30000, Math.max(1500')
+      && whatsappWebCopilotSource.includes('FAST_LANE_SWEEP_MS = Math.min(5000, Math.max(600'),
+    'WhatsApp Web sender must rate-limit wide scans while retaining a bounded fast lane'
   );
   assert(
     whatsappWebCopilotSource.includes('WHATSAPP_WEB_COPILOT_FAST_LANE_LIMIT || 3')
@@ -116,9 +118,10 @@ async function run() {
     'WhatsApp Web sender must cache unchanged recent rows so old chats cannot block fresh replies'
   );
   assert(
-    whatsappWebCopilotSource.includes('const sentAtLoopStart = await processOutbox(page, { maxSends: 4 })')
+    whatsappWebCopilotSource.includes('if (now - lastOutboxPoll >= OUTBOX_POLL_MS)')
+      && whatsappWebCopilotSource.includes('sentAtLoopStart = await processOutbox(page, { maxSends: 4 })')
       && whatsappWebCopilotSource.includes('sentAtLoopStart + sentAfterCall'),
-    'WhatsApp Web sender must flush already queued replies before doing expensive chat sweeps'
+    'WhatsApp Web sender must flush queued replies on a bounded interval before expensive chat sweeps'
   );
   assert(
     whatsappWebCopilotSource.includes('return finish(true);'),

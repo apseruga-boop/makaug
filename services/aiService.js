@@ -41,8 +41,8 @@ const INTENTS = [
 const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL || 'https://makaug.com').replace(/\/+$/, '');
 const WHATSAPP_INTENT_AI_MODE = String(process.env.WHATSAPP_INTENT_AI_MODE || 'fast').trim().toLowerCase();
 
-function getClient() {
-  return getProviderClient();
+function getClient(scope = '') {
+  return getProviderClient(scope);
 }
 
 function normalizeIntent(value) {
@@ -783,7 +783,7 @@ function heuristicNaturalPropertyQuery({ text = '', fallbackType = 'any' } = {})
   );
 }
 
-async function detectWhatsappLanguage({ text = '', sessionLanguage = 'en', step = '' } = {}) {
+async function detectWhatsappLanguage({ text = '', sessionLanguage = 'en', step = '', providerScope = '' } = {}) {
   const clean = cleanText(text, 1200);
   const fallback = {
     language: normalizeLanguageCode(sessionLanguage),
@@ -795,10 +795,10 @@ async function detectWhatsappLanguage({ text = '', sessionLanguage = 'en', step 
 
   if (!clean) return fallback;
 
-  const client = getClient();
+  const client = getClient(providerScope);
   if (!client) return fallback;
 
-  const model = getTaskModel('language', process.env.OPENAI_LANGUAGE_MODEL || process.env.OPENAI_INTENT_MODEL || 'gpt-4.1-mini');
+  const model = getTaskModel('language', process.env.OPENAI_LANGUAGE_MODEL || process.env.OPENAI_INTENT_MODEL || 'gpt-4.1-mini', providerScope);
 
   try {
     const completion = await createChatCompletionResilient(client, {
@@ -875,9 +875,9 @@ Rules:
   }
 }
 
-async function extractNaturalPropertyQuery({ text = '', language = 'en', sessionData = {}, fallbackType = 'any' } = {}) {
+async function extractNaturalPropertyQuery({ text = '', language = 'en', sessionData = {}, fallbackType = 'any', providerScope = '' } = {}) {
   const fallback = heuristicNaturalPropertyQuery({ text, fallbackType });
-  const client = getClient();
+  const client = getClient(providerScope);
   const languageCode = normalizeLanguageCode(language);
   if (!client) {
     return {
@@ -888,7 +888,8 @@ async function extractNaturalPropertyQuery({ text = '', language = 'en', session
 
   const model = getTaskModel(
     'extract',
-    process.env.OPENAI_EXTRACT_MODEL || process.env.OPENAI_INTENT_MODEL || 'gpt-4.1-mini'
+    process.env.OPENAI_EXTRACT_MODEL || process.env.OPENAI_INTENT_MODEL || 'gpt-4.1-mini',
+    providerScope
   );
 
   try {
@@ -976,7 +977,7 @@ Rules:
   }
 }
 
-async function classifyWhatsappIntent({ text, language = 'en', step = '', sessionData = {} }) {
+async function classifyWhatsappIntent({ text, language = 'en', step = '', sessionData = {}, providerScope = '' }) {
   const fallback = heuristicIntent(text);
   if (shouldUseFastIntentPath({ text, step, fallback })) {
     return {
@@ -985,7 +986,7 @@ async function classifyWhatsappIntent({ text, language = 'en', step = '', sessio
     };
   }
 
-  const client = getClient();
+  const client = getClient(providerScope);
   if (!client) {
     return {
       ...fallback,
@@ -993,7 +994,7 @@ async function classifyWhatsappIntent({ text, language = 'en', step = '', sessio
     };
   }
 
-  let model = getTaskModel('intent', process.env.OPENAI_INTENT_MODEL || 'gpt-4.1-mini');
+  let model = getTaskModel('intent', process.env.OPENAI_INTENT_MODEL || 'gpt-4.1-mini', providerScope);
 
   try {
     const completion = await createChatCompletionResilient(client, {
@@ -1096,10 +1097,11 @@ function audioExtensionFromType(mediaType = '') {
 
 async function transcribeAudioBuffer(buffer, mediaType = 'audio/ogg', sourceMeta = {}) {
   if (!buffer?.length) return null;
-  const client = getClient();
+  const providerScope = String(sourceMeta.providerScope || '');
+  const client = getClient(providerScope);
   if (!client) return null;
 
-  let model = getTaskModel('transcribe', process.env.OPENAI_TRANSCRIBE_MODEL || 'gpt-4o-mini-transcribe');
+  let model = getTaskModel('transcribe', process.env.OPENAI_TRANSCRIBE_MODEL || 'gpt-4o-mini-transcribe', providerScope);
 
   try {
     const ext = audioExtensionFromType(mediaType);
@@ -1144,7 +1146,7 @@ async function transcribeAudioBuffer(buffer, mediaType = 'audio/ogg', sourceMeta
   }
 }
 
-async function transcribeAudioFromDataUrl(dataUrl, mediaType = 'audio/ogg') {
+async function transcribeAudioFromDataUrl(dataUrl, mediaType = 'audio/ogg', options = {}) {
   const raw = String(dataUrl || '');
   const match = raw.match(/^data:([^;,]+)?(?:;[^,]*)?;base64,([a-z0-9+/=\s]+)$/i);
   if (!match) return null;
@@ -1159,10 +1161,14 @@ async function transcribeAudioFromDataUrl(dataUrl, mediaType = 'audio/ogg') {
   }
 
   const buffer = Buffer.from(base64, 'base64');
-  return transcribeAudioBuffer(buffer, detectedType, { source: 'web_bridge_data_url', bytes: buffer.length });
+  return transcribeAudioBuffer(buffer, detectedType, {
+    source: 'web_bridge_data_url',
+    bytes: buffer.length,
+    providerScope: options.providerScope || ''
+  });
 }
 
-async function classifyWhatsappListingPhoto({ imageDataUrl = '', expectedSlot = '' } = {}) {
+async function classifyWhatsappListingPhoto({ imageDataUrl = '', expectedSlot = '', providerScope = '' } = {}) {
   const rawImage = String(imageDataUrl || '').trim();
   const safeSlot = cleanText(expectedSlot, 80) || 'property photo';
   if (!/^data:image\/(?:jpeg|jpg|png|webp);base64,/i.test(rawImage)) {
@@ -1188,7 +1194,7 @@ async function classifyWhatsappListingPhoto({ imageDataUrl = '', expectedSlot = 
     };
   }
 
-  const client = getClient();
+  const client = getClient(providerScope);
   if (!client) {
     return {
       accepted: false,
@@ -1200,7 +1206,7 @@ async function classifyWhatsappListingPhoto({ imageDataUrl = '', expectedSlot = 
     };
   }
 
-  const model = getTaskModel('whatsapp_photo', process.env.OPENAI_WHATSAPP_PHOTO_MODEL || 'gpt-4.1-mini');
+  const model = getTaskModel('whatsapp_photo', process.env.OPENAI_WHATSAPP_PHOTO_MODEL || 'gpt-4.1-mini', providerScope);
   try {
     const completion = await createChatCompletionResilient(client, {
       model,
@@ -1273,12 +1279,12 @@ async function classifyWhatsappListingPhoto({ imageDataUrl = '', expectedSlot = 
   }
 }
 
-async function transcribeAudioFromUrl(mediaUrl, mediaType = 'audio/ogg') {
+async function transcribeAudioFromUrl(mediaUrl, mediaType = 'audio/ogg', options = {}) {
   if (!mediaUrl) return null;
   if (String(mediaUrl).startsWith('data:')) {
-    return transcribeAudioFromDataUrl(mediaUrl, mediaType);
+    return transcribeAudioFromDataUrl(mediaUrl, mediaType, options);
   }
-  const client = getClient();
+  const client = getClient(options.providerScope || '');
   if (!client) return null;
 
   try {
@@ -1295,7 +1301,10 @@ async function transcribeAudioFromUrl(mediaUrl, mediaType = 'audio/ogg') {
 
     const arrayBuffer = await resp.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
-    return transcribeAudioBuffer(buffer, mediaType, { source: 'media_url' });
+    return transcribeAudioBuffer(buffer, mediaType, {
+      source: 'media_url',
+      providerScope: options.providerScope || ''
+    });
   } catch (error) {
     logger.warn('Audio transcription failed:', error.message);
     await logAiModelEvent({
@@ -1566,14 +1575,15 @@ async function suggestWhatsappAssistantReply({
   intent = 'unknown',
   language = 'en',
   context = {},
-  source = 'whatsapp'
+  source = 'whatsapp',
+  providerScope = ''
 }) {
   const link = buildIntentLink(intent);
   const languageCode = normalizeLanguageCode(language);
   const fallbackText = buildLocalizedAssistantFallbackText(languageCode, link);
   const guardrail = languageGuardrail(languageCode);
 
-  const client = getClient();
+  const client = getClient(providerScope);
   if (!client || shouldUseEnglishFallback(languageCode)) {
     await logAiModelEvent({
       eventType: 'assistant_reply',
@@ -1599,7 +1609,7 @@ async function suggestWhatsappAssistantReply({
     };
   }
 
-  const model = getTaskModel('reply', process.env.OPENAI_REPLY_MODEL || 'gpt-4.1-mini');
+  const model = getTaskModel('reply', process.env.OPENAI_REPLY_MODEL || 'gpt-4.1-mini', providerScope);
 
   try {
     const completion = await createChatCompletionResilient(client, {

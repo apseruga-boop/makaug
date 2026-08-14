@@ -103,6 +103,7 @@ const WHATSAPP_NATURAL_SEARCH_AI_TIMEOUT_MS = Math.min(
 const WHATSAPP_LANGUAGE_AI_MODE = String(process.env.WHATSAPP_LANGUAGE_AI_MODE || 'fast').trim().toLowerCase();
 const WHATSAPP_NATURAL_SEARCH_AI_MODE = String(process.env.WHATSAPP_NATURAL_SEARCH_AI_MODE || 'fast').trim().toLowerCase();
 const WHATSAPP_REPLY_AI_MODE = String(process.env.WHATSAPP_REPLY_AI_MODE || 'fast').trim().toLowerCase();
+const WHATSAPP_PROVIDER_SCOPE = 'whatsapp';
 const WHATSAPP_PROPERTY_RESULT_LIMIT = 10;
 const MIN_PUBLIC_WHATSAPP_PRICE_UGX = IS_SOUTH_AFRICA ? 500 : 10000;
 const WHATSAPP_LISTING_PHOTO_FLOW_MARKER = 'whatsapp-web-modern-media-20260804';
@@ -1506,7 +1507,7 @@ function whatsappSearchResultsUrl(searchType = 'any', area = '') {
 }
 
 async function conversationalAssistantFallback({ phone, body, lang, step, intentResult, sessionData }) {
-  if (!isLlmEnabled() || WHATSAPP_REPLY_AI_MODE === 'off' || WHATSAPP_REPLY_AI_MODE === 'fast') {
+  if (!isLlmEnabled(WHATSAPP_PROVIDER_SCOPE) || WHATSAPP_REPLY_AI_MODE === 'off' || WHATSAPP_REPLY_AI_MODE === 'fast') {
     return friendlyUnknownReply(lang);
   }
 
@@ -1528,6 +1529,7 @@ async function conversationalAssistantFallback({ phone, body, lang, step, intent
       intent: intentResult?.intent || 'unknown',
       language: lang,
       source: 'whatsapp_conversation_fallback',
+      providerScope: WHATSAPP_PROVIDER_SCOPE,
       context: {
         phone,
         step,
@@ -2544,7 +2546,8 @@ async function validateAndStoreListingPhotos({ phone, lang, draft = {}, runtime 
     const validation = await withTimeout(
       classifyWhatsappListingPhoto({
         imageDataUrl: candidate.dataUrl,
-        expectedSlot
+        expectedSlot,
+        providerScope: WHATSAPP_PROVIDER_SCOPE
       }),
       Math.max(2500, Number(process.env.WHATSAPP_PHOTO_VALIDATION_TIMEOUT_MS || 7000)),
       {
@@ -3662,7 +3665,8 @@ async function resolveNaturalSearchFilters({
       text,
       language,
       sessionData,
-      fallbackType
+      fallbackType,
+      providerScope: WHATSAPP_PROVIDER_SCOPE
     }), WHATSAPP_NATURAL_SEARCH_AI_TIMEOUT_MS, deterministic, 'WhatsApp natural search extraction');
     const merged = sanitizeNaturalSearchFilters(mergeNaturalSearchFilters(aiExtract, deterministic), text);
     if (deterministic.searchType && deterministic.searchType !== 'any') merged.searchType = deterministic.searchType;
@@ -8437,7 +8441,7 @@ async function processInboundRuntime({
         model: 'provided_voice_transcript'
       };
     } else {
-      voiceTranscriptionUnavailable = !isLlmEnabled();
+      voiceTranscriptionUnavailable = !isLlmEnabled(WHATSAPP_PROVIDER_SCOPE);
       const voiceDataUrl = normalizeInput(
         inboundMetadata.voice_audio_data_url
         || inboundMetadata.audio_data_url
@@ -8453,10 +8457,10 @@ async function processInboundRuntime({
       const transcriptionPromise = voiceTranscriptionUnavailable
         ? Promise.resolve(null)
         : voiceDataUrl
-          ? transcribeAudioFromDataUrl(voiceDataUrl, voiceMimeType)
+          ? transcribeAudioFromDataUrl(voiceDataUrl, voiceMimeType, { providerScope: WHATSAPP_PROVIDER_SCOPE })
           : (String(mediaUrl || '').startsWith('whatsapp-web://')
             ? Promise.resolve(null)
-            : transcribeAudioFromUrl(mediaUrl, normalizedMediaType || 'audio/ogg'));
+            : transcribeAudioFromUrl(mediaUrl, normalizedMediaType || 'audio/ogg', { providerScope: WHATSAPP_PROVIDER_SCOPE }));
       transcriptRecord = await withTimeout(
         transcriptionPromise.catch((error) => {
           logger.warn('WhatsApp voice transcription failed:', error.message || String(error));
@@ -8596,7 +8600,8 @@ async function processInboundRuntime({
     ? await withTimeout(detectWhatsappLanguage({
       text: effectiveBody,
       sessionLanguage: preliminaryLanguage.code || sessionLang,
-      step: sessionStep
+      step: sessionStep,
+      providerScope: WHATSAPP_PROVIDER_SCOPE
     }), WHATSAPP_FAST_ASSISTANT_TIMEOUT_MS, null, 'WhatsApp language detection')
     : null;
   const classifierLanguageResult = mergeAiLanguageDetection(preliminaryLanguage, aiLanguage);
@@ -8606,7 +8611,8 @@ async function processInboundRuntime({
     text: effectiveBody,
     language: classifierLanguage,
     step: sessionStep,
-    sessionData: sessionForMessage.session_data || {}
+    sessionData: sessionForMessage.session_data || {},
+    providerScope: WHATSAPP_PROVIDER_SCOPE
   });
   const baseDetectedLanguage = fastHints?.language || (transcriptRecord?.text
     ? resolveVoiceDetectedLanguage(transcriptRecord, effectiveBody, sessionLang)
@@ -9445,7 +9451,8 @@ router.post('/test', async (req, res) => {
     text: body,
     language: session.language || 'en',
     step: session.current_step || 'greeting',
-    sessionData: session.session_data || {}
+    sessionData: session.session_data || {},
+    providerScope: WHATSAPP_PROVIDER_SCOPE
   });
   const result = await processMessage(phone, body, mediaUrl, sharedLocation, { intent, mediaType });
   await updateSession(phone, { current_step: result.nextStep, current_intent: intent.intent || null });

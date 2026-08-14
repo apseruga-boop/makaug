@@ -9,11 +9,13 @@ const {
   transcribeAudioFromDataUrl
 } = require('../services/aiService');
 const { getProviderMeta, isLlmEnabled } = require('../services/llmProvider');
+const PROVIDER_SCOPE = 'whatsapp';
 
 async function main() {
-  const provider = getProviderMeta();
+  const provider = getProviderMeta(PROVIDER_SCOPE);
   console.log('LLM provider:', {
-    enabled: isLlmEnabled(),
+    scope: PROVIDER_SCOPE,
+    enabled: isLlmEnabled(PROVIDER_SCOPE),
     provider: provider.provider,
     baseURL: provider.baseURL,
     hasApiKey: provider.hasApiKey
@@ -30,18 +32,21 @@ async function main() {
     const language = await detectWhatsappLanguage({
       text: sample.text,
       sessionLanguage: sample.sessionLanguage,
-      step: 'main_menu'
+      step: 'main_menu',
+      providerScope: PROVIDER_SCOPE
     });
     const intent = await classifyWhatsappIntent({
       text: sample.text,
       language: language.language || sample.sessionLanguage,
       step: 'main_menu',
-      sessionData: {}
+      sessionData: {},
+      providerScope: PROVIDER_SCOPE
     });
     const filters = await extractNaturalPropertyQuery({
       text: sample.text,
       language: language.language || sample.sessionLanguage,
-      fallbackType: sample.fallbackType
+      fallbackType: sample.fallbackType,
+      providerScope: PROVIDER_SCOPE
     });
     console.log('\nSample:', sample.text);
     console.log({ language, intent, filters });
@@ -52,6 +57,7 @@ async function main() {
     intent: 'property_search',
     language: 'en',
     source: 'verify_whatsapp_ai_provider',
+    providerScope: PROVIDER_SCOPE,
     context: {
       assistantRole: 'friendly property assistant in the user pocket',
       preferredLink: 'https://makaug.com/#page-students',
@@ -63,7 +69,8 @@ async function main() {
   if (process.env.WHATSAPP_AI_VERIFY_AUDIO_DATA_URL) {
     const tx = await transcribeAudioFromDataUrl(
       process.env.WHATSAPP_AI_VERIFY_AUDIO_DATA_URL,
-      process.env.WHATSAPP_AI_VERIFY_AUDIO_MIME_TYPE || 'audio/ogg'
+      process.env.WHATSAPP_AI_VERIFY_AUDIO_MIME_TYPE || 'audio/ogg',
+      { providerScope: PROVIDER_SCOPE }
     );
     console.log('\nAudio transcription sample:', tx);
   }
