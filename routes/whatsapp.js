@@ -58,7 +58,10 @@ const {
   evaluateHostedWhatsappBridgeReadiness,
   summarizeWhatsappBridgeClient
 } = require('../services/whatsappBridgeReadiness');
-const { handleOwnerWhatsappCommand } = require('../services/aiCeoControlService');
+const {
+  handleOwnerWhatsappCommand,
+  isAiCeoOwnerPhone
+} = require('../services/aiCeoControlService');
 const { captureLearningEvent } = require('../services/aiLearningCaptureService');
 const { isLlmEnabled } = require('../services/llmProvider');
 const { storeDataUrl } = require('../services/cloudMediaStorageService');
@@ -86,6 +89,7 @@ const ACTIVE_LOCATION_LABEL = IS_SOUTH_AFRICA ? 'province, city or suburb' : 'ar
 const UGANDA_WHATSAPP_BRAND_HEADER = '🟩🟨 *makaug.com*';
 const HOME_URL = (process.env.PUBLIC_BASE_URL || ACTIVE_TENANT.domain).replace(/\/+$/, '');
 const WHATSAPP_NATURAL_SELLER_FLOW_MARKER = 'whatsapp-natural-seller-flow-20260804';
+const WHATSAPP_OWNER_FORWARD_REVIEW_MARKER = 'whatsapp-owner-forward-review-media-20260820';
 const WHATSAPP_API_VERSION = (process.env.WHATSAPP_API_VERSION || 'v25.0').trim();
 const WHATSAPP_ACCESS_TOKEN = (process.env.WHATSAPP_ACCESS_TOKEN || '').trim();
 const WHATSAPP_PHONE_NUMBER_ID = (process.env.WHATSAPP_PHONE_NUMBER_ID || '').trim();
@@ -2604,6 +2608,324 @@ async function validateAndStoreListingPhotos({ phone, lang, draft = {}, runtime 
   }
 
   return { photos, photoHashes, photoPerceptualHashes, photoValidation, outcomes };
+}
+
+function parseOwnerReviewForward(input = '') {
+  const match = String(input || '').match(/^\s*(FRANCIS|KAZI)\s*:\s*([\s\S]+)$/i);
+  if (!match?.[2]) return null;
+  const sourceKey = match[1].toLowerCase();
+  const caption = normalizeInput(match[2]);
+  if (!caption) return null;
+  return {
+    sourceKey,
+    sourceLabel: sourceKey === 'francis' ? 'Francis' : 'Kazi',
+    caption
+  };
+}
+
+function isReviewableOwnerForwardCaption(caption = '') {
+  const clean = normalizeInput(caption);
+  if (clean.length < 18) return false;
+  const hasProperty = /\b(?:property|house|home|mansion|bungalow|apartment|flat|rental|unit|land|plot|acre|decimal|commercial|shop|office|warehouse|bedroom|bathroom)\b/i.test(clean);
+  const hasTransactionOrPrice = /\b(?:for sale|selling|sale price|asking price|for rent|to rent|monthly rent|per month|ugx|ush|million|billion|\d+\s*(?:m|mn|bn))\b/i.test(clean);
+  return hasProperty && hasTransactionOrPrice;
+}
+
+function ownerForwardListingType(caption = '', parsed = {}) {
+  const inferred = normalizeListingType(parsed.listing_type || '');
+  if (inferred && inferred !== 'any') return inferred;
+  const clean = normalizeInput(caption).toLowerCase();
+  if (/\b(?:land|plot|plots|acre|acres|decimal|decimals|kibanja|bibanja)\b/i.test(clean)) return 'land';
+  if (/\b(?:commercial|office|shop|retail|warehouse|industrial|showroom)\b/i.test(clean)) return 'commercial';
+  if (/\b(?:hostel|student accommodation|campus room)\b/i.test(clean)) return 'student';
+  if (/\b(?:for rent|to rent|monthly rent|per month|rent per month)\b/i.test(clean)) return 'rent';
+  if (/\b(?:for sale|selling|sale price|asking price)\b/i.test(clean)) return 'sale';
+  return '';
+}
+
+function ownerForwardListingTitle({ listingType = '', area = '', bedrooms = null } = {}) {
+  const place = normalizeInput(area) || 'Uganda';
+  const bedPrefix = Number(bedrooms) > 0 ? `${Number(bedrooms)}-bed ` : '';
+  if (listingType === 'land') return `Land for sale in ${place}`;
+  if (listingType === 'rent') return `${bedPrefix}property for rent in ${place}`;
+  if (listingType === 'student') return `Student property in ${place}`;
+  if (listingType === 'commercial') return `Commercial property in ${place}`;
+  return `${bedPrefix}property for sale in ${place}`;
+}
+
+function ownerForwardPricePeriod(listingType = '', caption = '') {
+  const clean = normalizeInput(caption).toLowerCase();
+  if (listingType === 'student') return /\bsemester\b/i.test(clean) ? 'semester' : 'month';
+  if (listingType === 'rent' || (listingType === 'commercial' && /\b(?:for rent|to rent|per month|monthly rent)\b/i.test(clean))) return 'month';
+  return 'once';
+}
+
+async function storeOwnerReviewForwardPhotos({ sourceKey, inboundMessageId, runtime = {}, mediaUrl = '' } = {}) {
+  const candidates = listingPhotoCandidates(runtime, mediaUrl).filter((candidate) => candidate.dataUrl).slice(0, 10);
+  const stored = [];
+  for (let index = 0; index < candidates.length; index += 1) {
+    const candidate = candidates[index];
+    const url = await storeDataUrl(candidate.dataUrl, {
+      keyPrefix: 'whatsapp-forward-review/photos',
+      filename: `${sourceKey || 'source'}-${normalizeInput(inboundMessageId || crypto.randomUUID()).replace(/[^a-z0-9_-]+/gi, '-').slice(-80)}-${index + 1}.jpg`,
+      label: `WhatsApp forwarded property photo ${index + 1}`,
+      allowedMimeTypes: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'],
+      maxBytes: 5_000_000,
+      isPrivate: false
+    }).catch((error) => {
+      logger.warn('WhatsApp forwarded property photo upload failed:', error.message || String(error));
+      return '';
+    });
+    if (!/^https:\/\//i.test(String(url || ''))) continue;
+    stored.push({
+      url,
+      sha256: candidate.hash || '',
+      perceptualHash: candidate.perceptualHash || '',
+      mimeType: candidate.mimeType || 'image/jpeg'
+    });
+  }
+  return stored;
+}
+
+async function findApprovedOwnerForwardAgent(sourceLabel = '') {
+  const result = await db.query(
+    `SELECT id, full_name, phone, whatsapp, email
+       FROM agents
+      WHERE status = 'approved'
+        AND (
+          LOWER(full_name) = LOWER($1)
+          OR LOWER(SPLIT_PART(full_name, ' ', 1)) = LOWER($1)
+          OR LOWER(COALESCE(company_name, '')) = LOWER($1)
+        )
+      ORDER BY
+        CASE WHEN LOWER(full_name) = LOWER($1) THEN 0 ELSE 1 END,
+        updated_at DESC
+      LIMIT 2`,
+    [sourceLabel]
+  );
+  return result.rows.length === 1 ? result.rows[0] : null;
+}
+
+async function handleOwnerReviewForward({
+  phone,
+  body,
+  mediaUrl = '',
+  runtime = {},
+  inboundMessageId = '',
+  currentStep = 'main_menu'
+} = {}) {
+  if (!isAiCeoOwnerPhone(phone)) return { handled: false };
+  const parsedForward = parseOwnerReviewForward(body);
+  if (!parsedForward) return { handled: false };
+
+  const { sourceKey, sourceLabel, caption } = parsedForward;
+  if (!isReviewableOwnerForwardCaption(caption)) {
+    return {
+      handled: true,
+      nextStep: currentStep,
+      message: `I did not save this ${sourceLabel} item. Put the property facts, location and price after "${sourceLabel.toUpperCase()}:" and attach the property photo in the same message.`
+    };
+  }
+
+  const photoCandidates = Array.isArray(runtime.photoCandidates) ? runtime.photoCandidates : [];
+  if (!photoCandidates.some((candidate) => normalizeInput(candidate?.data_url || candidate?.dataUrl || ''))) {
+    return {
+      handled: true,
+      nextStep: currentStep,
+      message: `I did not save this ${sourceLabel} property because no usable image bytes reached makaug. Please resend the photo and caption together in one message.`
+    };
+  }
+
+  const existing = inboundMessageId
+    ? await db.query(
+      `SELECT id
+         FROM properties
+        WHERE source = 'whatsapp_forward_review'
+          AND extra_fields->>'whatsapp_forward_message_id' = $1
+        LIMIT 1`,
+      [inboundMessageId]
+    )
+    : { rows: [] };
+  if (existing.rows.length) {
+    return {
+      handled: true,
+      nextStep: currentStep,
+      propertyId: existing.rows[0].id,
+      duplicate: true,
+      message: `Already saved to review — ${String(existing.rows[0].id).slice(0, 8).toUpperCase()}. Nothing was published twice.`
+    };
+  }
+
+  const naturalDraft = buildNaturalListingDetailDraft(caption, {}) || {};
+  const hints = extractSellerListingDraftHints(caption, {});
+  const listingType = ownerForwardListingType(caption, { ...hints, ...naturalDraft });
+  const price = parseListingPriceDraft(caption);
+  const bedroomDraft = parseBedroomDraft(caption) || {};
+  const locationResolution = resolveWhatsappLocation(caption, { allowText: true });
+  const locationLevel = normalizeInput(locationResolution?.match?.level || '');
+  const exactLocation = locationResolution?.status === 'matched'
+    && !['district', 'region'].includes(locationLevel)
+    && Number(locationResolution?.confidence || 0) >= 1;
+  const locationPatch = exactLocation ? canonicalWhatsappLocationPatch(locationResolution) : {};
+
+  const missing = [];
+  if (!listingType) missing.push('sale/rent/land/commercial/student type');
+  if (!price) missing.push('price');
+  if (!locationPatch.area || !locationPatch.district || !locationPatch.canonical_location_id) missing.push('exact area and district');
+  if (missing.length) {
+    return {
+      handled: true,
+      nextStep: currentStep,
+      message: `I did not save this ${sourceLabel} property yet. Please resend it with: ${missing.join(', ')}. Keep the photo and caption in the same message.`
+    };
+  }
+
+  const storedPhotos = await storeOwnerReviewForwardPhotos({
+    sourceKey,
+    inboundMessageId,
+    runtime,
+    mediaUrl
+  });
+  if (!storedPhotos.length) {
+    return {
+      handled: true,
+      nextStep: currentStep,
+      message: `I received this ${sourceLabel} photo but could not store it permanently, so no review listing was created. Please wait before resending.`
+    };
+  }
+
+  const agent = await findApprovedOwnerForwardAgent(sourceLabel);
+  const contact = normalizeInput(agent?.whatsapp || agent?.phone || '');
+  const listerName = normalizeInput(agent?.full_name || sourceLabel);
+  const title = ownerForwardListingTitle({
+    listingType,
+    area: locationPatch.area,
+    bedrooms: bedroomDraft.bedrooms
+  });
+  const forwardedBySuffix = String(phone || '').replace(/\D/g, '').slice(-4);
+  const extraFields = {
+    review_only: true,
+    auto_publish: false,
+    whatsapp_owner_forward: true,
+    whatsapp_forward_marker: WHATSAPP_OWNER_FORWARD_REVIEW_MARKER,
+    whatsapp_forward_message_id: inboundMessageId || null,
+    whatsapp_forward_source_label: sourceLabel,
+    whatsapp_forwarded_by_phone_suffix: forwardedBySuffix || null,
+    whatsapp_forward_received_at: new Date().toISOString(),
+    source_caption: caption.slice(0, 2000),
+    source_contact_name: listerName,
+    source_contact_pending_verification: !agent,
+    source_attribution_requires_confirmation: !agent,
+    agent_profile_linked: Boolean(agent),
+    media_validation_status: 'pending_human_review',
+    media_count: storedPhotos.length,
+    media_sha256: storedPhotos.map((photo) => photo.sha256).filter(Boolean),
+    canonical_location_id: locationPatch.canonical_location_id,
+    canonical_location_level: locationPatch.canonical_location_level,
+    canonical_location_match: locationPatch.canonical_location_match,
+    canonical_location_confidence: locationPatch.canonical_location_confidence,
+    canonical_location_source: locationPatch.canonical_location_source,
+    region: locationPatch.region,
+    resolved_location_label: [locationPatch.area, locationPatch.district, locationPatch.region].filter(Boolean).join(', ')
+  };
+
+  const client = await db.getClient();
+  let propertyId = '';
+  try {
+    await client.query('BEGIN');
+    const inserted = await client.query(
+      `INSERT INTO properties (
+        listing_type, title, description, district, area, price, price_period,
+        bedrooms, lister_name, lister_phone, lister_email, lister_type, agent_id,
+        extra_fields, status, listed_via, source
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'pending','whatsapp','whatsapp_forward_review')
+      RETURNING id`,
+      [
+        listingType,
+        title,
+        caption.slice(0, 2000),
+        locationPatch.district,
+        locationPatch.area,
+        price,
+        ownerForwardPricePeriod(listingType, caption),
+        bedroomDraft.bedrooms || null,
+        listerName,
+        contact || null,
+        agent?.email || null,
+        'agent',
+        agent?.id || null,
+        JSON.stringify(extraFields)
+      ]
+    );
+    propertyId = inserted.rows[0].id;
+    for (let index = 0; index < storedPhotos.length; index += 1) {
+      await client.query(
+        `INSERT INTO property_images (property_id, url, is_primary, sort_order, slot_key, room_label)
+         VALUES ($1,$2,$3,$4,$5,$6)`,
+        [propertyId, storedPhotos[index].url, index === 0, index, index === 0 ? 'primary' : `extra_${index + 1}`, index === 0 ? 'Primary property photo' : `Property photo ${index + 1}`]
+      );
+    }
+    await client.query(
+      `INSERT INTO property_moderation_events
+        (property_id, actor_id, action, status_from, status_to, reason, notes, delivery)
+       VALUES ($1,$2,$3,$4,$4,$5,$6,$7::jsonb)`,
+      [
+        propertyId,
+        'whatsapp-owner-forward',
+        'whatsapp_owner_forward_queued',
+        'pending',
+        'Owner-labelled agent property forward stored for human review. No automatic publication.',
+        `${storedPhotos.length} permanent image(s) stored; source label ${sourceLabel}.`,
+        JSON.stringify({
+          marker: WHATSAPP_OWNER_FORWARD_REVIEW_MARKER,
+          source_label: sourceLabel,
+          agent_id: agent?.id || null,
+          media_count: storedPhotos.length,
+          auto_publish: false
+        })
+      ]
+    );
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    logger.error('WhatsApp owner property forward save failed:', error);
+    return {
+      handled: true,
+      nextStep: currentStep,
+      message: `I could not save this ${sourceLabel} property to review. Nothing went live. Please wait before resending.`
+    };
+  } finally {
+    client.release();
+  }
+
+  captureWhatsappLearningAsync({
+    eventName: 'whatsapp_owner_forward_queued',
+    phone,
+    language: 'en',
+    inputText: caption,
+    responseText: 'Saved to human review only.',
+    entities: {
+      property_id: propertyId,
+      source_label: sourceLabel,
+      listing_type: listingType,
+      area: locationPatch.area,
+      district: locationPatch.district,
+      media_count: storedPhotos.length
+    },
+    payload: {
+      marker: WHATSAPP_OWNER_FORWARD_REVIEW_MARKER,
+      agent_id: agent?.id || null,
+      auto_publish: false
+    },
+    dedupeKey: `whatsapp:owner-forward:${inboundMessageId || propertyId}`
+  });
+
+  return {
+    handled: true,
+    nextStep: currentStep,
+    propertyId,
+    message: `✅ Saved to review — ${String(propertyId).slice(0, 8).toUpperCase()}\nSource: ${listerName}${contact ? ` • phone ending ${contact.replace(/\D/g, '').slice(-4)}` : ' • contact needs confirmation'}\nMedia stored: ${storedPhotos.length}\nStatus: pending, not live.`
+  };
 }
 
 function isListingStartRequest(input, intentResult = {}) {
@@ -8493,6 +8815,48 @@ async function processInboundRuntime({
       metadata: loggedInboundMetadata
     }
   });
+
+  const ownerReviewForward = await handleOwnerReviewForward({
+    phone,
+    body: effectiveBody,
+    mediaUrl: effectiveMediaUrl,
+    runtime: {
+      mediaType: normalizedMediaType,
+      mediaCount: inboundMediaCount,
+      photoCandidates: inboundPhotoCandidates
+    },
+    inboundMessageId,
+    currentStep: sessionStep
+  }).catch((error) => {
+    logger.error('WhatsApp owner review-forward intake failed:', error);
+    return {
+      handled: true,
+      nextStep: sessionStep,
+      message: 'I could not save that forwarded property. Nothing went live. Please wait before resending.'
+    };
+  });
+  if (ownerReviewForward.handled) {
+    await logIntent({
+      userPhone: phone,
+      waMessageId: inboundMessageId,
+      detectedIntent: 'owner_property_forward_review',
+      confidence: 1,
+      language: sessionLang,
+      currentStep: sessionStep,
+      rawText: body,
+      transcript: null,
+      entities: {
+        property_id: ownerReviewForward.propertyId || null,
+        duplicate: Boolean(ownerReviewForward.duplicate),
+        review_only: true
+      },
+      modelUsed: WHATSAPP_OWNER_FORWARD_REVIEW_MARKER
+    });
+    return {
+      message: ownerReviewForward.message,
+      nextStep: ownerReviewForward.nextStep || sessionStep
+    };
+  }
 
   if (transcriptRecord?.text) {
     await saveTranscription({

@@ -200,6 +200,7 @@ app.get('/api/version', (_req, res) => {
       'human-approval-overlord-20260811',
       'king-timestamp-iso-normalization-20260811',
       ...(!IS_SOUTH_AFRICA ? ['makaug-always-on-whatsapp-runtime-20260814'] : []),
+      ...(!IS_SOUTH_AFRICA ? ['whatsapp-owner-forward-review-media-20260820'] : []),
       ...(!IS_SOUTH_AFRICA ? ['uganda-master-intake-recovery-20260811'] : []),
       ...(!IS_SOUTH_AFRICA ? ['uganda-location-free-text-20260812'] : []),
       ...(IS_SOUTH_AFRICA ? [SESHAIKHAYA_LAUNCH_MARKER, 'seshaikhaya-national-gazetteer-20260811'] : [])
