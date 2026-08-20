@@ -242,39 +242,58 @@ function buildPublicSeoSnapshot(rows = [], generatedAt = new Date().toISOString(
   };
 }
 
+async function refreshPublicSeoInventorySnapshot(db) {
+  const result = await db.query(
+    `SELECT id, listing_type, students_welcome, area, district,
+            title, description, price, price_period, bedrooms, property_type,
+            transaction_type, title_type, nearest_university,
+            jsonb_strip_nulls(jsonb_build_object(
+              'room_type', extra_fields->>'room_type',
+              'commercial_type', extra_fields->>'commercial_type',
+              'title_type', extra_fields->>'title_type',
+              'transaction_type', extra_fields->>'transaction_type',
+              'nearest_university', extra_fields->>'nearest_university',
+              'student_university', extra_fields->>'student_university',
+              'student_campus', extra_fields->>'student_campus'
+            )) AS extra_fields,
+            extra_fields->>'canonical_location_id' AS canonical_location_id,
+            extra_fields->>'city' AS city,
+            extra_fields->>'neighborhood' AS neighborhood,
+            updated_at, created_at
+     FROM properties
+     WHERE ${publicVisibleInventoryWhere('properties')}
+     ORDER BY updated_at DESC NULLS LAST, created_at DESC, id DESC`
+  );
+  const value = buildPublicSeoSnapshot(result.rows);
+  snapshotCache = { cachedAt: Date.now(), value };
+  return value;
+}
+
 async function loadPublicSeoInventorySnapshot(db, options = {}) {
   const now = Date.now();
   if (!options.force && snapshotCache && now - snapshotCache.cachedAt < PUBLIC_SEO_CACHE_TTL_MS) {
     return snapshotCache.value;
   }
+
+  // Once a valid snapshot exists, never make a visitor wait for the full
+  // inventory scan. Refresh it in the background and serve the last-known-good
+  // value immediately. Initial startup still awaits the first snapshot.
+  if (!options.force && snapshotCache?.value) {
+    if (!snapshotCacheInFlight) {
+      const staleRefresh = refreshPublicSeoInventorySnapshot(db);
+      snapshotCacheInFlight = staleRefresh;
+      staleRefresh
+        .catch(() => null)
+        .finally(() => {
+          if (snapshotCacheInFlight === staleRefresh) snapshotCacheInFlight = null;
+        });
+    }
+    return snapshotCache.value;
+  }
+
   if (!options.force && snapshotCacheInFlight) return snapshotCacheInFlight;
 
-  const pending = (async () => {
-    const result = await db.query(
-      `SELECT id, listing_type, students_welcome, area, district,
-              title, description, price, price_period, bedrooms, property_type,
-              transaction_type, title_type, nearest_university,
-              jsonb_strip_nulls(jsonb_build_object(
-                'room_type', extra_fields->>'room_type',
-                'commercial_type', extra_fields->>'commercial_type',
-                'title_type', extra_fields->>'title_type',
-                'transaction_type', extra_fields->>'transaction_type',
-                'nearest_university', extra_fields->>'nearest_university',
-                'student_university', extra_fields->>'student_university',
-                'student_campus', extra_fields->>'student_campus'
-              )) AS extra_fields,
-              extra_fields->>'canonical_location_id' AS canonical_location_id,
-              extra_fields->>'city' AS city,
-              extra_fields->>'neighborhood' AS neighborhood,
-              updated_at, created_at
-       FROM properties
-       WHERE ${publicVisibleInventoryWhere('properties')}
-       ORDER BY updated_at DESC NULLS LAST, created_at DESC, id DESC`
-    );
-    const value = buildPublicSeoSnapshot(result.rows);
-    snapshotCache = { cachedAt: Date.now(), value };
-    return value;
-  })();
+  const pending = refreshPublicSeoInventorySnapshot(db);
 
   if (!options.force) snapshotCacheInFlight = pending;
   try {

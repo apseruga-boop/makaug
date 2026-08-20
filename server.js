@@ -199,6 +199,7 @@ app.get('/api/version', (_req, res) => {
       'human-integrity-override-20260811',
       'human-approval-overlord-20260811',
       'king-timestamp-iso-normalization-20260811',
+      ...(!IS_SOUTH_AFRICA ? ['makaug-always-on-whatsapp-runtime-20260814'] : []),
       ...(!IS_SOUTH_AFRICA ? ['uganda-master-intake-recovery-20260811'] : []),
       ...(!IS_SOUTH_AFRICA ? ['uganda-location-free-text-20260812'] : []),
       ...(IS_SOUTH_AFRICA ? [SESHAIKHAYA_LAUNCH_MARKER, 'seshaikhaya-national-gazetteer-20260811'] : [])
@@ -525,6 +526,10 @@ let cachedIndexHtml = null;
 let countryAppAssetCache = null;
 const publicHtmlCache = new Map();
 const textAssetCache = new Map();
+const PUBLIC_HTML_CACHE_MAX_ENTRIES = Math.max(
+  4,
+  Math.min(64, Number(process.env.PUBLIC_HTML_CACHE_MAX_ENTRIES || 16) || 16)
+);
 const PUBLIC_HTML_WARMUP_PATHS = [
   '/',
   '/sitemap.xml',
@@ -968,13 +973,26 @@ function renderPublicHtml(pathname) {
   const basePath = String(rawPath).split('?')[0].split('#')[0] || '/';
   const normalizedBasePath = basePath.length > 1 ? basePath.replace(/\/+$/, '') : basePath;
   const key = normalizedBasePath === '/login' ? rawPath : normalizedBasePath;
-  if (isProduction && publicHtmlCache.has(key)) return publicHtmlCache.get(key);
+  if (isProduction && publicHtmlCache.has(key)) {
+    const cached = publicHtmlCache.get(key);
+    // Refresh insertion order so the first entry is always the least recently used.
+    publicHtmlCache.delete(key);
+    publicHtmlCache.set(key, cached);
+    return cached;
+  }
   let rendered = sanitizePublicHtml(readIndexHtml(), { pathname: rawPath });
   if (process.env.SHARED_CORE_PHASE1_ENABLED !== 'false') {
     rendered = applyCountryHtml(rendered, ACTIVE_COUNTRY_CODE, { homepage: normalizedBasePath === '/' });
   }
   rendered = applyHarvestPublicSubmissionVisibility(rendered);
-  if (isProduction) publicHtmlCache.set(key, rendered);
+  if (isProduction) {
+    publicHtmlCache.set(key, rendered);
+    while (publicHtmlCache.size > PUBLIC_HTML_CACHE_MAX_ENTRIES) {
+      const oldestKey = publicHtmlCache.keys().next().value;
+      if (oldestKey === undefined) break;
+      publicHtmlCache.delete(oldestKey);
+    }
+  }
   return rendered;
 }
 
@@ -1523,6 +1541,25 @@ async function start() {
       });
     } catch (error) {
       logger.warn('Public inventory summary warmup failed; list routes will use bounded fallback', {
+        code: error?.code,
+        message: error?.message
+      });
+    }
+  }
+  if (process.env.DATABASE_URL) {
+    try {
+      const [seoSnapshot, homepageListings] = await Promise.all([
+        loadPublicSeoInventorySnapshot(db),
+        loadPublicSeoListings(db, { limit: 6 })
+      ]);
+      logger.info('Public homepage SEO cache warmed before accepting traffic', {
+        listings: homepageListings.length,
+        generated_at: seoSnapshot?.generatedAt || null,
+        html_cache_max_entries: PUBLIC_HTML_CACHE_MAX_ENTRIES,
+        marker: 'makaug-always-on-whatsapp-runtime-20260814'
+      });
+    } catch (error) {
+      logger.warn('Public homepage SEO warmup failed; the first live request will use the bounded fallback', {
         code: error?.code,
         message: error?.message
       });

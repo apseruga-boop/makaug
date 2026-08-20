@@ -1,13 +1,15 @@
 # WhatsApp Web Copilot Setup
 
-This is the low-cost first version of the makaug WhatsApp assistant.
+This is the browser-transport version of the makaug WhatsApp assistant.
 
-Instead of paying for every reply through the official WhatsApp API from day one, this mode keeps **WhatsApp Web open on a dedicated machine** and lets the makaug admin inbox act as the control center.
+Production runs this transport in the dedicated always-on Render worker
+`makaug-whatsapp-agent-docker`. A local Chrome session is a development and
+recovery option only; Arthur's laptop is not part of the production runtime.
 
 ## How it works
 
-1. A team machine keeps **Google Chrome + WhatsApp Web** open all day.
-2. The local bridge script watches unread chats.
+1. The hosted worker keeps **Chromium + WhatsApp Web** open continuously using a persistent Render disk.
+2. The hosted bridge script watches unread chats.
 3. New messages are pushed into makaug:
    - saved in the database
    - categorized
@@ -22,9 +24,9 @@ This mode is practical and cheap, but it is still browser automation.
 
 That means:
 
-- Chrome must stay open
+- hosted Chromium must stay open
 - WhatsApp Web must stay logged in
-- the machine must stay awake and connected
+- the Render worker must stay online
 - DOM/layout changes in WhatsApp Web can break selectors
 
 So this should be treated as **Phase 1**, not the forever architecture.
@@ -43,8 +45,11 @@ Add these to the machine running the bridge:
 - `WHATSAPP_WEB_COPILOT_CHROME_PATH=/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`
 - `WHATSAPP_WEB_COPILOT_PROFILE_DIR=.whatsapp-web-copilot-profile`
 - `WHATSAPP_WEB_COPILOT_CDP_URL=http://127.0.0.1:9222` (optional, for attaching to an already-running Chrome)
-- `WHATSAPP_WEB_COPILOT_POLL_MS=500` (optional; the bridge caps this at 1000ms so live replies do not feel stuck)
-- `WHATSAPP_WEB_COPILOT_RECENT_SWEEP_MS=800` (optional; controls how often recent chats are checked when WhatsApp does not mark a chat unread)
+- `WHATSAPP_WEB_COPILOT_POLL_MS=750` (optional; values below 400ms are clamped to prevent Chromium memory exhaustion)
+- `WHATSAPP_WEB_COPILOT_RECENT_SWEEP_MS=3000` (optional; controls the wider recent-chat sweep)
+- `WHATSAPP_WEB_COPILOT_FAST_LANE_SWEEP_MS=900` (optional; checks the newest chat rows without running a full sweep)
+- `WHATSAPP_WEB_COPILOT_OUTBOX_POLL_MS=1000` (optional; bounds database/API outbox calls)
+- `WHATSAPP_WEB_COPILOT_MAX_SESSION_MS=14400000` (optional; planned Chromium recycle every four hours)
 
 The backend and the bridge must share the same:
 
@@ -59,9 +64,45 @@ machine running WhatsApp Web pointed at the same production URL:
 Do not point the always-on WhatsApp Web bridge at `localhost` unless you are
 intentionally testing a local backend.
 
-For production use, avoid slow polling values such as `5000`. The bridge is
-designed to keep replies close to real time and will cap slow values, but the
-environment should still be set to `500` or left unset.
+For production use, keep the values above. The earlier 50ms/60ms configuration
+busy-looped WhatsApp DOM scans and exhausted a 2 GB worker. The current fast
+lane remains sub-second while wide scans and outbox polling are bounded.
+
+## Isolated WhatsApp AI runtime
+
+The WhatsApp transport remains a single sender. Do **not** run a second browser
+worker against the same number.
+
+The production AI credential is isolated in `makaug-whatsapp-ai-runtime`:
+
+- Create a dedicated OpenAI project for MakaUG WhatsApp in Arthur's existing
+  OpenAI organization. A separate OpenAI account is unnecessary; the separate
+  project provides its own key, budget, usage view, and revocation boundary.
+- Store the project's `OPENAI_API_KEY` (and optional `OPENAI_PROJECT`) only on
+  `makaug-whatsapp-ai-runtime`.
+- Generate one random `WHATSAPP_AI_RUNTIME_TOKEN` and store the same value on
+  the AI runtime, the web service, and the existing transport worker.
+- On the web service set:
+  - `WHATSAPP_LLM_PROVIDER=openai_compat`
+  - `WHATSAPP_LLM_API_BASE_URL=https://makaug-whatsapp-ai-runtime.onrender.com/v1`
+  - `WHATSAPP_LLM_API_KEY=<WHATSAPP_AI_RUNTIME_TOKEN>`
+- On the transport worker set:
+  - `WHATSAPP_AI_RUNTIME_URL=https://makaug-whatsapp-ai-runtime.onrender.com`
+  - `WHATSAPP_AI_RUNTIME_TOKEN=<same token>`
+
+The main web service contains only the runtime token, not the dedicated OpenAI
+key. Once `WHATSAPP_LLM_PROVIDER` is configured, WhatsApp fails closed rather
+than borrowing the generic site/Seshaikhaya provider.
+
+Health endpoints:
+
+- `/health`: process liveness for Render.
+- `/ready`: OpenAI configuration plus a fresh `online` heartbeat from the
+  transport worker. Point the external uptime monitor here.
+
+If the AI runtime is unavailable, the existing deterministic replies and
+database outbox/human Inbox path remain available; messages are not silently
+dropped.
 
 ## Start sequence
 

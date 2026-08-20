@@ -131,14 +131,24 @@ const PROFILE_DIR = path.resolve(
   process.cwd(),
   String(process.env.WHATSAPP_WEB_COPILOT_PROFILE_DIR || '.whatsapp-web-copilot-profile')
 );
-const configuredPollMs = Number(process.env.WHATSAPP_WEB_COPILOT_POLL_MS || 50);
-const POLL_MS = Math.min(150, Math.max(40, Number.isFinite(configuredPollMs) ? configuredPollMs : 75));
+const configuredPollMs = Number(process.env.WHATSAPP_WEB_COPILOT_POLL_MS || 750);
+// WhatsApp DOM scans and API outbox claims are expensive. The previous 50ms
+// loop ran about 20 full scans per second and exhausted a 2 GB worker several
+// times per day. Sub-second polling is still responsive without busy-spinning.
+const POLL_MS = Math.min(5000, Math.max(400, Number.isFinite(configuredPollMs) ? configuredPollMs : 750));
 const configuredLoginPollMs = Number(process.env.WHATSAPP_WEB_COPILOT_LOGIN_POLL_MS || 2500);
 const LOGIN_POLL_MS = Math.min(
   10000,
   Math.max(1000, Number.isFinite(configuredLoginPollMs) ? configuredLoginPollMs : 2500)
 );
 const HEARTBEAT_MS = Math.max(10000, Number(process.env.WHATSAPP_WEB_COPILOT_HEARTBEAT_MS || 30000));
+const AI_RUNTIME_BASE_URL = String(process.env.WHATSAPP_AI_RUNTIME_URL || '').trim().replace(/\/+$/, '');
+const AI_RUNTIME_TOKEN = String(process.env.WHATSAPP_AI_RUNTIME_TOKEN || '').trim();
+const configuredMaxSessionMs = Number(process.env.WHATSAPP_WEB_COPILOT_MAX_SESSION_MS || (4 * 60 * 60 * 1000));
+const MAX_SESSION_MS = Math.min(
+  24 * 60 * 60 * 1000,
+  Math.max(30 * 60 * 1000, Number.isFinite(configuredMaxSessionMs) ? configuredMaxSessionMs : (4 * 60 * 60 * 1000))
+);
 const HEADLESS_BROWSER = ['1', 'true', 'yes', 'on'].includes(
   String(process.env.WHATSAPP_WEB_COPILOT_HEADLESS || '').trim().toLowerCase()
 );
@@ -156,8 +166,12 @@ const BROWSER_USER_AGENT = String(
     || 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
 ).trim();
 const MAX_CONSECUTIVE_LOOP_ERRORS = Math.max(2, Number(process.env.WHATSAPP_WEB_COPILOT_MAX_LOOP_ERRORS || 5));
-const configuredRecentSweepMs = Number(process.env.WHATSAPP_WEB_COPILOT_RECENT_SWEEP_MS || 60);
-const RECENT_CHAT_SWEEP_MS = Math.min(300, Math.max(60, Number.isFinite(configuredRecentSweepMs) ? configuredRecentSweepMs : 120));
+const configuredRecentSweepMs = Number(process.env.WHATSAPP_WEB_COPILOT_RECENT_SWEEP_MS || 3000);
+const RECENT_CHAT_SWEEP_MS = Math.min(30000, Math.max(1500, Number.isFinite(configuredRecentSweepMs) ? configuredRecentSweepMs : 3000));
+const configuredFastLaneSweepMs = Number(process.env.WHATSAPP_WEB_COPILOT_FAST_LANE_SWEEP_MS || 900);
+const FAST_LANE_SWEEP_MS = Math.min(5000, Math.max(600, Number.isFinite(configuredFastLaneSweepMs) ? configuredFastLaneSweepMs : 900));
+const configuredOutboxPollMs = Number(process.env.WHATSAPP_WEB_COPILOT_OUTBOX_POLL_MS || 1000);
+const OUTBOX_POLL_MS = Math.min(10000, Math.max(750, Number.isFinite(configuredOutboxPollMs) ? configuredOutboxPollMs : 1000));
 const RECENT_CHAT_SWEEP_LIMIT = Math.min(12, Math.max(1, Number(process.env.WHATSAPP_WEB_COPILOT_RECENT_SWEEP_LIMIT || 8)));
 const RECENT_CHAT_SWEEP_OPEN_LIMIT = Math.min(5, Math.max(1, Number(process.env.WHATSAPP_WEB_COPILOT_RECENT_SWEEP_OPEN_LIMIT || 5)));
 const RECENT_CHAT_FAST_LANE_LIMIT = Math.min(3, Math.max(1, Number(process.env.WHATSAPP_WEB_COPILOT_FAST_LANE_LIMIT || 3)));
@@ -583,8 +597,8 @@ async function apiRequest(endpoint, { method = 'GET', body } = {}) {
 }
 
 async function sendHeartbeat(extra = {}) {
+  const normalizedExtra = extra && typeof extra === 'object' ? extra : {};
   try {
-    const normalizedExtra = extra && typeof extra === 'object' ? extra : {};
     const { metadata, ...rest } = normalizedExtra;
     await apiRequest('/api/whatsapp/web-bridge/heartbeat', {
       method: 'POST',
@@ -602,6 +616,27 @@ async function sendHeartbeat(extra = {}) {
     });
   } catch (error) {
     log('heartbeat failed:', error.message || error);
+  }
+
+  if (AI_RUNTIME_BASE_URL && AI_RUNTIME_TOKEN) {
+    try {
+      const response = await fetch(`${AI_RUNTIME_BASE_URL}/heartbeat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${AI_RUNTIME_TOKEN}`
+        },
+        body: JSON.stringify({
+          client_id: CLIENT_ID,
+          status: normalizedExtra.status || 'unknown',
+          current_url: normalizedExtra.current_url || '',
+          reported_at: new Date().toISOString()
+        })
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    } catch (error) {
+      log('isolated AI runtime heartbeat failed:', error.message || error);
+    }
   }
 }
 
@@ -3554,6 +3589,7 @@ async function recoverWhatsappPage(context, previousPage) {
 }
 
 async function main() {
+  const sessionStartedAt = Date.now();
   let browser = null;
   let context = null;
   let connectedOverCdp = false;
@@ -3610,7 +3646,7 @@ async function main() {
   log('WhatsApp Web copilot started.');
   log(`Base URL: ${BASE_URL}`);
   log(`Client ID: ${CLIENT_ID}`);
-  log(`Poll interval: ${POLL_MS}ms; login poll: ${LOGIN_POLL_MS}ms; recent chat sweep: ${RECENT_CHAT_SWEEP_MS}ms; fast lane rows: ${RECENT_CHAT_FAST_LANE_LIMIT}; sweep open cap: ${RECENT_CHAT_SWEEP_OPEN_LIMIT}; row cache: ${RECENT_CHAT_ROW_CACHE_MS}ms; API retry attempts: ${API_RETRY_ATTEMPTS}`);
+  log(`Poll interval: ${POLL_MS}ms; outbox poll: ${OUTBOX_POLL_MS}ms; fast lane sweep: ${FAST_LANE_SWEEP_MS}ms; recent chat sweep: ${RECENT_CHAT_SWEEP_MS}ms; max browser session: ${Math.round(MAX_SESSION_MS / 60000)}m; fast lane rows: ${RECENT_CHAT_FAST_LANE_LIMIT}; sweep open cap: ${RECENT_CHAT_SWEEP_OPEN_LIMIT}; row cache: ${RECENT_CHAT_ROW_CACHE_MS}ms; API retry attempts: ${API_RETRY_ATTEMPTS}`);
   if (connectedOverCdp) {
     log(`Connected over CDP: ${CDP_URL}`);
   } else {
@@ -3621,6 +3657,8 @@ async function main() {
   let lastHeartbeat = 0;
   let lastBridgeState = '';
   let lastRecentSweep = 0;
+  let lastFastLaneSweep = 0;
+  let lastOutboxPoll = 0;
   let lastTabReselect = 0;
   let consecutiveLoopErrors = 0;
 
@@ -3632,6 +3670,16 @@ async function main() {
         lastBridgeState = '';
       }
       const now = Date.now();
+      if (now - sessionStartedAt >= MAX_SESSION_MS) {
+        log(`planned browser recycle after ${Math.round((now - sessionStartedAt) / 60000)} minutes to release Chromium memory safely.`);
+        await sendHeartbeat({
+          status: 'restarting',
+          current_url: page.url(),
+          metadata: { phase: 'planned_memory_recycle' }
+        });
+        if (!connectedOverCdp && context) await context.close().catch(() => null);
+        process.exit(0);
+      }
       const bridgeState = readyState.ready
         ? 'online'
         : readyState.waitingForLogin
@@ -3701,7 +3749,11 @@ async function main() {
         continue;
       }
 
-      const sentAtLoopStart = await processOutbox(page, { maxSends: 4 });
+      let sentAtLoopStart = 0;
+      if (now - lastOutboxPoll >= OUTBOX_POLL_MS) {
+        sentAtLoopStart = await processOutbox(page, { maxSends: 4 });
+        lastOutboxPoll = Date.now();
+      }
       let processedCallEvents = 0;
       let sentAfterCall = 0;
       const callEvent = await detectAndDeclineIncomingCall(page);
@@ -3744,8 +3796,9 @@ async function main() {
       let recentSweepResult = { scanned: 0, processed: 0 };
       let sentAfterSweep = 0;
       const hadLiveActivity = !!(processedCallEvents || sentAfterCall || activeProcessed || sentAfterActive || unreadResult.processed || sentAfterUnread);
-      if (!hadLiveActivity) {
+      if (!hadLiveActivity && now - lastFastLaneSweep >= FAST_LANE_SWEEP_MS) {
         recentSweepResult = await ingestRecentChatsSweep(page, RECENT_CHAT_FAST_LANE_LIMIT);
+        lastFastLaneSweep = Date.now();
         if (recentSweepResult.processed) {
           sentAfterSweep = await processOutbox(page, { maxSends: 2 });
         }
@@ -3763,8 +3816,7 @@ async function main() {
           sentAfterSweep = await processOutbox(page, { maxSends: 2 });
         }
       }
-      const sentAtLoopEnd = await processOutbox(page, { maxSends: 2 });
-      const sentCount = sentAtLoopStart + sentAfterCall + sentAfterActive + sentAfterUnread + sentAfterSweep + sentAtLoopEnd;
+      const sentCount = sentAtLoopStart + sentAfterCall + sentAfterActive + sentAfterUnread + sentAfterSweep;
       const activeSnapshot = await getActiveChatSnapshot(page);
 
       if (now - lastHeartbeat >= HEARTBEAT_MS) {

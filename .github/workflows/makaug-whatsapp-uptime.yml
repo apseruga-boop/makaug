@@ -1,0 +1,43 @@
+name: MakaUG WhatsApp uptime
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: makaug-whatsapp-uptime
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Hosted worker and AI runtime ready
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Verify isolated AI runtime and fresh worker heartbeat
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$(curl --fail --silent --show-error --max-time 20 \
+            https://makaug-whatsapp-ai-runtime.onrender.com/ready)"
+          node -e '
+            const payload = JSON.parse(process.argv[1]);
+            if (payload.ok !== true) throw new Error(`runtime not ready: ${process.argv[1]}`);
+            if (payload.worker?.fresh !== true || payload.worker?.status !== "online") {
+              throw new Error(`hosted WhatsApp worker is not fresh and online: ${process.argv[1]}`);
+            }
+            if (payload.openai_configured !== true) {
+              throw new Error(`isolated OpenAI project is not configured: ${process.argv[1]}`);
+            }
+          ' "$response"
+
+      - name: Verify production remains available
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 20 \
+            https://makaug.com/api/health >/dev/null

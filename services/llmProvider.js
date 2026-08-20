@@ -5,8 +5,7 @@ const PROVIDERS = {
   NONE: 'none'
 };
 
-let cachedSignature = '';
-let cachedClient = null;
+const cachedClients = new Map();
 let cachedOpenAI = null;
 
 function loadOpenAI() {
@@ -25,18 +24,35 @@ function normalizeProviderName(value) {
   return PROVIDERS.NONE;
 }
 
-function resolveProviderConfig() {
-  const provider = normalizeProviderName(process.env.LLM_PROVIDER);
-  const apiKey = (process.env.LLM_API_KEY || process.env.OPENAI_API_KEY || '').trim();
-  const ollamaBase = (process.env.OLLAMA_BASE_URL || '').trim();
+function scopePrefix(scope = '') {
+  return String(scope || '').trim().toUpperCase().replace(/[^A-Z0-9]+/g, '_');
+}
+
+function scopedEnv(scope, key) {
+  const prefix = scopePrefix(scope);
+  if (!prefix) return '';
+  return String(process.env[`${prefix}_${key}`] || '').trim();
+}
+
+function resolveProviderConfig(scope = '') {
+  const scopedProvider = scopedEnv(scope, 'LLM_PROVIDER');
+  const isolatedScope = Boolean(scopedProvider);
+  const provider = normalizeProviderName(scopedProvider || process.env.LLM_PROVIDER);
+  const apiKey = (
+    scopedEnv(scope, 'LLM_API_KEY')
+    || (!isolatedScope ? process.env.LLM_API_KEY : '')
+    || (!isolatedScope ? process.env.OPENAI_API_KEY : '')
+    || ''
+  ).trim();
+  const ollamaBase = (scopedEnv(scope, 'OLLAMA_BASE_URL') || (!isolatedScope ? process.env.OLLAMA_BASE_URL : '') || '').trim();
   const baseURL = provider === PROVIDERS.OLLAMA
     ? (ollamaBase || 'http://127.0.0.1:11434/v1')
-    : (process.env.LLM_API_BASE_URL || '').trim();
-  const organization = (process.env.LLM_ORGANIZATION || '').trim();
-  const project = (process.env.LLM_PROJECT || '').trim();
+    : (scopedEnv(scope, 'LLM_API_BASE_URL') || (!isolatedScope ? process.env.LLM_API_BASE_URL : '') || '').trim();
+  const organization = (scopedEnv(scope, 'LLM_ORGANIZATION') || (!isolatedScope ? process.env.LLM_ORGANIZATION : '') || '').trim();
+  const project = (scopedEnv(scope, 'LLM_PROJECT') || (!isolatedScope ? process.env.LLM_PROJECT : '') || '').trim();
   const hasKey = Boolean(apiKey);
   const forceNoAuth = (
-    String(process.env.LLM_NO_AUTH || '').trim().toLowerCase() === 'true'
+    String(scopedEnv(scope, 'LLM_NO_AUTH') || (!isolatedScope ? process.env.LLM_NO_AUTH : '') || '').trim().toLowerCase() === 'true'
     || provider === PROVIDERS.OLLAMA
   );
 
@@ -51,8 +67,8 @@ function resolveProviderConfig() {
   };
 }
 
-function getProviderName() {
-  return resolveProviderConfig().provider;
+function getProviderName(scope = '') {
+  return resolveProviderConfig(scope).provider;
 }
 
 function buildClientSignature(cfg) {
@@ -90,44 +106,50 @@ function buildOpenAiClientOptions(cfg) {
   return options;
 }
 
-function getProviderClient() {
-  const cfg = resolveProviderConfig();
+function getProviderClient(scope = '') {
+  const cfg = resolveProviderConfig(scope);
   if (cfg.provider === PROVIDERS.NONE) return null;
 
   const signature = buildClientSignature(cfg);
-  if (cachedClient && cachedSignature === signature) {
-    return cachedClient;
+  const cacheKey = scopePrefix(scope) || 'DEFAULT';
+  const cached = cachedClients.get(cacheKey);
+  if (cached?.client && cached.signature === signature) {
+    return cached.client;
   }
 
   const options = buildOpenAiClientOptions(cfg);
   if (!options) {
-    cachedClient = null;
-    cachedSignature = signature;
+    cachedClients.set(cacheKey, { signature, client: null });
     return null;
   }
 
   const OpenAI = loadOpenAI();
-  cachedClient = new OpenAI(options);
-  cachedSignature = signature;
-  return cachedClient;
+  const client = new OpenAI(options);
+  cachedClients.set(cacheKey, { signature, client });
+  return client;
 }
 
-function getTaskModel(taskName, fallbackModel) {
-  const key = `LLM_${String(taskName || '').trim().toUpperCase()}_MODEL`;
+function getTaskModel(taskName, fallbackModel, scope = '') {
+  const task = String(taskName || '').trim().toUpperCase();
+  const key = `LLM_${task}_MODEL`;
+  const scopedKey = scopePrefix(scope) ? `${scopePrefix(scope)}_${key}` : '';
+  const isolatedScope = Boolean(scopedEnv(scope, 'LLM_PROVIDER'));
   return (
-    (process.env[key] || '').trim() ||
-    (process.env.LLM_MODEL || '').trim() ||
-    (process.env.OLLAMA_MODEL || '').trim() ||
+    (scopedKey ? (process.env[scopedKey] || '').trim() : '') ||
+    scopedEnv(scope, 'LLM_MODEL') ||
+    (!isolatedScope ? (process.env[key] || '').trim() : '') ||
+    (!isolatedScope ? (process.env.LLM_MODEL || '').trim() : '') ||
+    (!isolatedScope ? (process.env.OLLAMA_MODEL || '').trim() : '') ||
     fallbackModel
   );
 }
 
-function isLlmEnabled() {
-  return Boolean(getProviderClient());
+function isLlmEnabled(scope = '') {
+  return Boolean(getProviderClient(scope));
 }
 
-function getProviderMeta() {
-  const cfg = resolveProviderConfig();
+function getProviderMeta(scope = '') {
+  const cfg = resolveProviderConfig(scope);
   return {
     provider: cfg.provider,
     baseURL: cfg.baseURL || null,
@@ -148,5 +170,6 @@ module.exports = {
   getTaskModel,
   isLlmEnabled,
   getProviderMeta,
+  resolveProviderConfig,
   toProviderFile
 };
