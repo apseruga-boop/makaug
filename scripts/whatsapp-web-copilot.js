@@ -2357,7 +2357,10 @@ async function ingestSnapshot({ snapshot, row = {}, source = 'unread_scan' }) {
             : [],
           image_preview_error: snapshot.imagePreviewError || '',
           unread_preview: row.preview || '',
-          source
+          source,
+          ...(snapshot.bridgeMetadata && typeof snapshot.bridgeMetadata === 'object'
+            ? snapshot.bridgeMetadata
+            : {})
         }
       }
     });
@@ -2368,10 +2371,171 @@ async function ingestSnapshot({ snapshot, row = {}, source = 'unread_scan' }) {
       processed: result.duplicate ? 0 : 1,
       duplicate: !!result.duplicate,
       queuedReply: !!result.data?.queued_reply,
+      backfillRequest: result.data?.backfill_request || null,
+      ownerForward: result.data?.owner_forward || null,
+      responseMessage: result.data?.message || '',
       chatKey
     };
   } catch (error) {
     log('failed to ingest chat:', chatKey, error.message || error);
+    return { processed: 0, error };
+  }
+}
+
+async function scrollWhatsappHistoryOlder(page) {
+  return page.evaluate(() => {
+    const root = document.querySelector('#main')
+      || document.querySelector('[data-testid="conversation-panel-wrapper"]');
+    if (!root) return false;
+    const candidates = [root, ...Array.from(root.querySelectorAll('div'))]
+      .filter((el) => el.scrollHeight > el.clientHeight + 120);
+    if (!candidates.length) return false;
+    const scroller = candidates.sort((a, b) => b.scrollHeight - a.scrollHeight)[0];
+    const previousTop = scroller.scrollTop;
+    scroller.scrollTop = 0;
+    scroller.dispatchEvent(new Event('scroll', { bubbles: true }));
+    return previousTop > 0;
+  }).catch(() => false);
+}
+
+async function scrollWhatsappHistoryToLatest(page) {
+  await page.evaluate(() => {
+    const root = document.querySelector('#main')
+      || document.querySelector('[data-testid="conversation-panel-wrapper"]');
+    if (!root) return;
+    const candidates = [root, ...Array.from(root.querySelectorAll('div'))]
+      .filter((el) => el.scrollHeight > el.clientHeight + 120);
+    if (!candidates.length) return;
+    const scroller = candidates.sort((a, b) => b.scrollHeight - a.scrollHeight)[0];
+    scroller.scrollTop = scroller.scrollHeight;
+    scroller.dispatchEvent(new Event('scroll', { bubbles: true }));
+  }).catch(() => {});
+  await page.waitForTimeout(350);
+}
+
+async function collectOwnerHistoryBackfillSnapshots(page, { chatKey = '', limit = 60 } = {}) {
+  const requestedLimit = Math.max(1, Math.min(100, Number(limit || 60)));
+  const normalizedCommandChat = normalizeChatKey(chatKey);
+  const collected = new Map();
+
+  for (let round = 0; round < 7 && collected.size < requestedLimit; round += 1) {
+    const snapshots = await getRecentIncomingSnapshots(page, requestedLimit);
+    for (const snapshot of snapshots) {
+      if (snapshot.mediaType !== 'image') continue;
+      const snapshotChat = normalizeChatKey(snapshot.chatKey);
+      if (normalizedCommandChat && snapshotChat && snapshotChat !== normalizedCommandChat) continue;
+      const key = String(
+        snapshot.messageId
+        || snapshot.mediaFingerprint
+        || `${snapshot.timestampLabel}:${snapshot.text}`
+      ).slice(0, 500);
+      if (!key || collected.has(key)) continue;
+      const hydrated = await hydrateMediaSnapshot(page, snapshot);
+      collected.set(key, hydrated);
+      if (collected.size >= requestedLimit) break;
+    }
+    if (collected.size >= requestedLimit) break;
+    const moved = await scrollWhatsappHistoryOlder(page);
+    if (!moved) break;
+    await page.waitForTimeout(650);
+  }
+
+  return Array.from(collected.values()).slice(-requestedLimit);
+}
+
+async function runOwnerHistoryBackfill(page, request = {}, chatKey = '') {
+  const sourceLabel = String(request.source_label || '').trim();
+  const sourceKey = String(request.source_key || sourceLabel).trim().toLowerCase();
+  const limit = Math.max(1, Math.min(100, Number(request.limit || 60)));
+  if (!['francis', 'kazi'].includes(sourceKey)) return { processed: 0, skipped: 'invalid_source' };
+
+  log(`starting owner-only ${sourceLabel} history backfill (limit ${limit})`);
+  const snapshots = await collectOwnerHistoryBackfillSnapshots(page, { chatKey, limit });
+  let mediaAttached = 0;
+  const updatedProperties = new Set();
+  let alreadyHandled = 0;
+  let skipped = 0;
+  let failed = 0;
+
+  for (let index = 0; index < snapshots.length; index += 1) {
+    const snapshot = snapshots[index];
+    const originalText = String(snapshot.text || '').trim();
+    if (!originalText || /^\[image\]$/i.test(originalText)) {
+      skipped += 1;
+      continue;
+    }
+    const labelledText = new RegExp(`^\\s*${sourceLabel}\\s*:`, 'i').test(originalText)
+      ? originalText
+      : `${sourceLabel.toUpperCase()}: ${originalText}`;
+    const historyKey = String(
+      snapshot.messageId
+      || snapshot.mediaFingerprint
+      || `${snapshot.timestampLabel}:${originalText}:${index}`
+    );
+    const backfillMessageId = `${historyKey}:backfill:${String(request.run_id || Date.now())}`.slice(0, 500);
+    const result = await ingestSnapshot({
+      snapshot: {
+        ...snapshot,
+        text: labelledText,
+        messageId: backfillMessageId,
+        browserMessageKey: `owner-history-backfill:${sourceKey}:${request.run_id || 'run'}:${historyKey}`.slice(0, 500),
+        bridgeMetadata: {
+          owner_history_backfill: true,
+          reconcile_only: true,
+          suppress_reply: true,
+          backfill_source_label: sourceLabel,
+          backfill_marker: request.marker || 'whatsapp-owner-history-backfill-20260820'
+        }
+      },
+      row: { title: chatKey || snapshot.chatKey, preview: '' },
+      source: 'owner_history_backfill'
+    });
+    if (result.error) {
+      failed += 1;
+      continue;
+    }
+    const action = result.ownerForward?.action || '';
+    if (action === 'media_reconciled') {
+      mediaAttached += Number(result.ownerForward?.media_attached || 0);
+      if (result.ownerForward?.property_id) updatedProperties.add(result.ownerForward.property_id);
+    } else if (action === 'media_already_attached' || result.duplicate) {
+      alreadyHandled += 1;
+    } else {
+      skipped += 1;
+    }
+  }
+
+  await scrollWhatsappHistoryToLatest(page);
+  const summary = [
+    `✅ ${sourceLabel} photo recovery finished.`,
+    `Photos checked: ${snapshots.length}`,
+    `Media attached: ${mediaAttached}`,
+    `Review rows updated: ${updatedProperties.size}`,
+    `Already handled: ${alreadyHandled}`,
+    `Skipped safely: ${skipped + failed}`,
+    'New listings created: 0',
+    'Listings published: 0'
+  ].join('\n');
+  await typeAndSendReply(page, summary);
+  log(`${sourceLabel} history backfill complete: ${JSON.stringify({ photos: snapshots.length, mediaAttached, rows: updatedProperties.size, alreadyHandled, skipped, failed })}`);
+  return {
+    processed: updatedProperties.size,
+    photos: snapshots.length,
+    mediaAttached,
+    alreadyHandled,
+    skipped,
+    failed
+  };
+}
+
+async function runBackfillRequestIfPresent(page, result = {}) {
+  if (!result.backfillRequest) return null;
+  try {
+    return await runOwnerHistoryBackfill(page, result.backfillRequest, result.chatKey);
+  } catch (error) {
+    log(`owner history backfill failed: ${error.message || error}`);
+    await scrollWhatsappHistoryToLatest(page);
+    await typeAndSendReply(page, 'I could not complete the photo recovery. Nothing was published or duplicated. Kunta will check the worker log.').catch(() => {});
     return { processed: 0, error };
   }
 }
@@ -2406,6 +2570,11 @@ async function ingestUnreadChats(page) {
       const result = await ingestSnapshot({ snapshot: hydrated, row, source: 'unread_scan' });
       processed += result.processed || 0;
       handledRow = handledRow || !!(result.processed || result.duplicate || result.queuedReply);
+      if (result.backfillRequest) {
+        const backfill = await runBackfillRequestIfPresent(page, result);
+        processed += backfill?.processed || 0;
+        handledRow = true;
+      }
       if (result.queuedReply) {
         await processOutbox(page, { recipient: result.chatKey, maxSends: 1 });
       }
@@ -2488,6 +2657,12 @@ async function ingestRecentChatsSweep(page, limit = RECENT_CHAT_SWEEP_LIMIT) {
       rowObserved = true;
       handledRow = handledRow || !!(result.processed || result.duplicate || result.queuedReply);
       processed += result.processed || 0;
+      if (result.backfillRequest) {
+        const backfill = await runBackfillRequestIfPresent(page, result);
+        processed += backfill?.processed || 0;
+        rememberRecentChatRow(rowKey);
+        return finish(true);
+      }
       if (result.queuedReply) {
         await processOutbox(page, { recipient: result.chatKey, maxSends: 1 });
       }
@@ -2536,6 +2711,10 @@ async function ingestActiveChat(page) {
       source: 'active_chat'
     });
     processed += result.processed || 0;
+    if (result.backfillRequest) {
+      const backfill = await runBackfillRequestIfPresent(page, result);
+      processed += backfill?.processed || 0;
+    }
     if (result.queuedReply) {
       await processOutbox(page, { recipient: result.chatKey, maxSends: 1 });
     }

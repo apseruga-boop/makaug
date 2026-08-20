@@ -29,9 +29,9 @@ assert(
   'forwarded images must be uploaded to permanent cloud storage before the review row is created'
 );
 assert(
-  route.includes("source = 'whatsapp_forward_review'")
+  route.includes("extra_fields->>'whatsapp_forward_message_id' = $1")
     && route.includes("'pending','whatsapp','whatsapp_forward_review'"),
-  'owner forwards must be deduplicated and inserted into the shared pending review queue'
+  'owner forwards must be deduplicated across recovery sources and inserted into the shared pending review queue'
 );
 assert(
   route.includes('review_only: true') && route.includes('auto_publish: false'),
@@ -54,6 +54,35 @@ assert(
   route.indexOf('const ownerReviewForward = await handleOwnerReviewForward')
     < route.indexOf('const ownerCommand = await handleOwnerWhatsappCommand'),
   'owner review forwards must be captured before generic owner-command or search routing can discard the image'
+);
+assert(
+  route.includes('whatsapp-owner-history-backfill-20260820')
+    && server.includes('whatsapp-owner-history-backfill-20260820'),
+  'owner history media recovery must expose a unique release marker'
+);
+assert(
+  route.includes('parseOwnerHistoryBackfillCommand')
+    && route.includes('isAiCeoOwnerPhone(phone)')
+    && bridge.includes('runOwnerHistoryBackfill'),
+  'history backfill must require an exact command from the authenticated owner phone'
+);
+assert(
+  bridge.includes('owner_history_backfill: true')
+    && bridge.includes('reconcile_only: true')
+    && bridge.includes('suppress_reply: true'),
+  'history replay must reconcile only, suppress per-photo replies and never create new rows'
+);
+assert(
+  route.includes("WHERE id = $1 AND status = 'pending'")
+    && route.includes("'pending','pending'")
+    && route.includes('whatsapp_owner_forward_media_reconciled'),
+  'media reconciliation must lock and preserve an existing pending row with an audit event'
+);
+assert(
+  route.includes('!suppressOwnerHistoryReply')
+    && bridge.includes('New listings created: 0')
+    && bridge.includes('Listings published: 0'),
+  'history recovery must emit one summary and no per-photo outbound spam or publication'
 );
 
 console.log('WhatsApp owner forward review checks passed');

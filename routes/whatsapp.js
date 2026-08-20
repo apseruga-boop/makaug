@@ -90,6 +90,7 @@ const UGANDA_WHATSAPP_BRAND_HEADER = '🟩🟨 *makaug.com*';
 const HOME_URL = (process.env.PUBLIC_BASE_URL || ACTIVE_TENANT.domain).replace(/\/+$/, '');
 const WHATSAPP_NATURAL_SELLER_FLOW_MARKER = 'whatsapp-natural-seller-flow-20260804';
 const WHATSAPP_OWNER_FORWARD_REVIEW_MARKER = 'whatsapp-owner-forward-review-media-20260820';
+const WHATSAPP_OWNER_HISTORY_BACKFILL_MARKER = 'whatsapp-owner-history-backfill-20260820';
 const WHATSAPP_API_VERSION = (process.env.WHATSAPP_API_VERSION || 'v25.0').trim();
 const WHATSAPP_ACCESS_TOKEN = (process.env.WHATSAPP_ACCESS_TOKEN || '').trim();
 const WHATSAPP_PHONE_NUMBER_ID = (process.env.WHATSAPP_PHONE_NUMBER_ID || '').trim();
@@ -2623,6 +2624,17 @@ function parseOwnerReviewForward(input = '') {
   };
 }
 
+function parseOwnerHistoryBackfillCommand(input = '') {
+  const match = String(input || '').match(/^\s*BACKFILL\s+(FRANCIS|KAZI)(?:\s+(\d{1,3}))?\s*$/i);
+  if (!match) return null;
+  const sourceKey = match[1].toLowerCase();
+  return {
+    sourceKey,
+    sourceLabel: sourceKey === 'francis' ? 'Francis' : 'Kazi',
+    limit: Math.max(1, Math.min(100, Number(match[2] || 60)))
+  };
+}
+
 function isReviewableOwnerForwardCaption(caption = '') {
   const clean = normalizeInput(caption);
   if (clean.length < 18) return false;
@@ -2706,6 +2718,194 @@ async function findApprovedOwnerForwardAgent(sourceLabel = '') {
   return result.rows.length === 1 ? result.rows[0] : null;
 }
 
+function ownerForwardMatchTokens(value = '') {
+  const ignored = new Set([
+    'and', 'the', 'for', 'from', 'with', 'this', 'that', 'property', 'properties',
+    'sale', 'rent', 'selling', 'asking', 'price', 'quick', 'urgent', 'uganda',
+    'ugx', 'ush', 'million', 'billion', 'bedroom', 'bedrooms', 'bathroom', 'bathrooms'
+  ]);
+  return new Set(
+    normalizeInput(value)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, ' ')
+      .split(/\s+/)
+      .filter((token) => token.length >= 3 && !ignored.has(token))
+  );
+}
+
+function ownerForwardTextOverlap(left = '', right = '') {
+  const leftTokens = ownerForwardMatchTokens(left);
+  const rightTokens = ownerForwardMatchTokens(right);
+  if (!leftTokens.size || !rightTokens.size) return 0;
+  let shared = 0;
+  for (const token of leftTokens) {
+    if (rightTokens.has(token)) shared += 1;
+  }
+  return shared / Math.max(1, Math.min(leftTokens.size, rightTokens.size));
+}
+
+async function findPendingOwnerForwardMediaTarget({
+  agent,
+  sourceLabel = '',
+  listingType = '',
+  area = '',
+  district = '',
+  price = null,
+  bedrooms = null,
+  caption = ''
+} = {}) {
+  const result = await db.query(
+    `SELECT p.id, p.title, p.description, p.bedrooms, p.extra_fields,
+            COUNT(pi.id)::int AS image_count
+       FROM properties p
+       LEFT JOIN property_images pi ON pi.property_id = p.id
+      WHERE p.status = 'pending'
+        AND p.listing_type = $1
+        AND LOWER(TRIM(COALESCE(p.area, ''))) = LOWER(TRIM($2))
+        AND LOWER(TRIM(COALESCE(p.district, ''))) = LOWER(TRIM($3))
+        AND p.price = $4
+        AND (
+          ($5::text <> '' AND p.agent_id::text = $5)
+          OR LOWER(TRIM(COALESCE(p.lister_name, ''))) = LOWER(TRIM($6))
+        )
+      GROUP BY p.id
+      ORDER BY p.created_at DESC
+      LIMIT 12`,
+    [listingType, area, district, price, agent?.id || '', agent?.full_name || sourceLabel]
+  );
+  if (!result.rows.length) return { target: null, ambiguous: false };
+  if (result.rows.length === 1) return { target: result.rows[0], ambiguous: false };
+
+  const requestedBedrooms = Number(bedrooms || 0);
+  const ranked = result.rows.map((row) => {
+    const rowText = [row.title, row.description, row.extra_fields?.source_caption].filter(Boolean).join(' ');
+    const overlap = ownerForwardTextOverlap(caption, rowText);
+    const rowBedrooms = Number(row.bedrooms || 0);
+    const bedroomScore = requestedBedrooms && rowBedrooms
+      ? (requestedBedrooms === rowBedrooms ? 0.25 : -0.25)
+      : 0;
+    return { row, score: overlap + bedroomScore };
+  }).sort((a, b) => b.score - a.score);
+  const best = ranked[0];
+  const second = ranked[1];
+  if (best.score >= 0.35 && best.score - second.score >= 0.12) {
+    return { target: best.row, ambiguous: false };
+  }
+  return { target: null, ambiguous: true };
+}
+
+async function attachOwnerForwardPhotosToPendingTarget({
+  target,
+  storedPhotos = [],
+  agent,
+  sourceLabel = '',
+  contact = '',
+  listerName = '',
+  inboundMessageId = ''
+} = {}) {
+  const existingHashes = new Set(
+    Array.isArray(target?.extra_fields?.media_sha256)
+      ? target.extra_fields.media_sha256.map((value) => normalizeInput(value)).filter(Boolean)
+      : []
+  );
+  const uniquePhotos = storedPhotos.filter((photo) => !photo.sha256 || !existingHashes.has(photo.sha256));
+  if (!uniquePhotos.length) {
+    return { attached: 0, duplicate: true };
+  }
+
+  const mergedHashes = [
+    ...existingHashes,
+    ...uniquePhotos.map((photo) => normalizeInput(photo.sha256)).filter(Boolean)
+  ];
+  const client = await db.getClient();
+  try {
+    await client.query('BEGIN');
+    const locked = await client.query(
+      `SELECT id
+         FROM properties
+        WHERE id = $1 AND status = 'pending'
+        FOR UPDATE`,
+      [target.id]
+    );
+    if (!locked.rows.length) throw new Error('pending media target changed status');
+    const countResult = await client.query(
+      'SELECT COUNT(*)::int AS count FROM property_images WHERE property_id = $1',
+      [target.id]
+    );
+    const existingCount = Number(countResult.rows[0]?.count || 0);
+    for (let index = 0; index < uniquePhotos.length; index += 1) {
+      const sortOrder = existingCount + index;
+      await client.query(
+        `INSERT INTO property_images (property_id, url, is_primary, sort_order, slot_key, room_label)
+         VALUES ($1,$2,$3,$4,$5,$6)`,
+        [
+          target.id,
+          uniquePhotos[index].url,
+          sortOrder === 0,
+          sortOrder,
+          sortOrder === 0 ? 'primary' : `extra_${sortOrder + 1}`,
+          sortOrder === 0 ? 'Primary property photo' : `Property photo ${sortOrder + 1}`
+        ]
+      );
+    }
+    await client.query(
+      `UPDATE properties
+          SET lister_name = $2,
+              lister_phone = COALESCE(NULLIF($3, ''), lister_phone),
+              agent_id = COALESCE($4::uuid, agent_id),
+              lister_type = 'agent',
+              extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $5::jsonb,
+              updated_at = NOW()
+        WHERE id = $1 AND status = 'pending'`,
+      [
+        target.id,
+        listerName || sourceLabel,
+        contact || '',
+        agent?.id || null,
+        JSON.stringify({
+          review_only: true,
+          auto_publish: false,
+          whatsapp_owner_forward: true,
+          whatsapp_forward_marker: WHATSAPP_OWNER_HISTORY_BACKFILL_MARKER,
+          whatsapp_forward_last_message_id: inboundMessageId || null,
+          whatsapp_forward_source_label: sourceLabel,
+          whatsapp_forward_media_reconciled_at: new Date().toISOString(),
+          agent_profile_linked: Boolean(agent),
+          media_validation_status: 'pending_human_review',
+          media_count: existingCount + uniquePhotos.length,
+          media_sha256: mergedHashes
+        })
+      ]
+    );
+    await client.query(
+      `INSERT INTO property_moderation_events
+        (property_id, actor_id, action, status_from, status_to, reason, notes, delivery)
+       VALUES ($1,$2,$3,'pending','pending',$4,$5,$6::jsonb)`,
+      [
+        target.id,
+        'whatsapp-owner-history-backfill',
+        'whatsapp_owner_forward_media_reconciled',
+        'Owner-authorised WhatsApp history backfill attached permanent media to an existing review row.',
+        `${uniquePhotos.length} permanent image(s) attached; source label ${sourceLabel}. Listing remained pending.`,
+        JSON.stringify({
+          marker: WHATSAPP_OWNER_HISTORY_BACKFILL_MARKER,
+          source_label: sourceLabel,
+          agent_id: agent?.id || null,
+          media_attached: uniquePhotos.length,
+          auto_publish: false
+        })
+      ]
+    );
+    await client.query('COMMIT');
+    return { attached: uniquePhotos.length, duplicate: false };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 async function handleOwnerReviewForward({
   phone,
   body,
@@ -2740,8 +2940,8 @@ async function handleOwnerReviewForward({
     ? await db.query(
       `SELECT id
          FROM properties
-        WHERE source = 'whatsapp_forward_review'
-          AND extra_fields->>'whatsapp_forward_message_id' = $1
+        WHERE extra_fields->>'whatsapp_forward_message_id' = $1
+           OR extra_fields->>'whatsapp_forward_last_message_id' = $1
         LIMIT 1`,
       [inboundMessageId]
     )
@@ -2780,6 +2980,30 @@ async function handleOwnerReviewForward({
     };
   }
 
+  const agent = await findApprovedOwnerForwardAgent(sourceLabel);
+  const contact = normalizeInput(agent?.whatsapp || agent?.phone || '');
+  const listerName = normalizeInput(agent?.full_name || sourceLabel);
+  const mediaTarget = await findPendingOwnerForwardMediaTarget({
+    agent,
+    sourceLabel,
+    listingType,
+    area: locationPatch.area,
+    district: locationPatch.district,
+    price,
+    bedrooms: bedroomDraft.bedrooms,
+    caption
+  });
+  if (runtime.reconcileOnly && !mediaTarget.target) {
+    return {
+      handled: true,
+      nextStep: currentStep,
+      action: mediaTarget.ambiguous ? 'ambiguous_existing_match' : 'no_existing_match',
+      message: mediaTarget.ambiguous
+        ? `Skipped this ${sourceLabel} photo: more than one pending row matched, so nothing was changed.`
+        : `Skipped this ${sourceLabel} photo: it did not uniquely match an existing pending row. Nothing was published.`
+    };
+  }
+
   const storedPhotos = await storeOwnerReviewForwardPhotos({
     sourceKey,
     inboundMessageId,
@@ -2790,13 +3014,34 @@ async function handleOwnerReviewForward({
     return {
       handled: true,
       nextStep: currentStep,
+      action: 'media_store_failed',
       message: `I received this ${sourceLabel} photo but could not store it permanently, so no review listing was created. Please wait before resending.`
     };
   }
 
-  const agent = await findApprovedOwnerForwardAgent(sourceLabel);
-  const contact = normalizeInput(agent?.whatsapp || agent?.phone || '');
-  const listerName = normalizeInput(agent?.full_name || sourceLabel);
+  if (mediaTarget.target) {
+    const reconciliation = await attachOwnerForwardPhotosToPendingTarget({
+      target: mediaTarget.target,
+      storedPhotos,
+      agent,
+      sourceLabel,
+      contact,
+      listerName,
+      inboundMessageId
+    });
+    return {
+      handled: true,
+      nextStep: currentStep,
+      propertyId: mediaTarget.target.id,
+      duplicate: reconciliation.duplicate,
+      action: reconciliation.duplicate ? 'media_already_attached' : 'media_reconciled',
+      mediaAttached: reconciliation.attached,
+      message: reconciliation.duplicate
+        ? `Media already attached to review — ${String(mediaTarget.target.id).slice(0, 8).toUpperCase()}. Nothing was published twice.`
+        : `✅ Media attached to existing review — ${String(mediaTarget.target.id).slice(0, 8).toUpperCase()}\nSource: ${listerName}${contact ? ` • phone ending ${contact.replace(/\D/g, '').slice(-4)}` : ''}\nMedia attached: ${reconciliation.attached}\nStatus: pending, not live.`
+    };
+  }
+
   const title = ownerForwardListingTitle({
     listingType,
     area: locationPatch.area,
@@ -2924,6 +3169,8 @@ async function handleOwnerReviewForward({
     handled: true,
     nextStep: currentStep,
     propertyId,
+    action: 'created',
+    mediaAttached: storedPhotos.length,
     message: `✅ Saved to review — ${String(propertyId).slice(0, 8).toUpperCase()}\nSource: ${listerName}${contact ? ` • phone ending ${contact.replace(/\D/g, '').slice(-4)}` : ' • contact needs confirmation'}\nMedia stored: ${storedPhotos.length}\nStatus: pending, not live.`
   };
 }
@@ -8823,7 +9070,9 @@ async function processInboundRuntime({
     runtime: {
       mediaType: normalizedMediaType,
       mediaCount: inboundMediaCount,
-      photoCandidates: inboundPhotoCandidates
+      photoCandidates: inboundPhotoCandidates,
+      ownerHistoryBackfill: inboundMetadata.owner_history_backfill === true && isAiCeoOwnerPhone(phone),
+      reconcileOnly: inboundMetadata.reconcile_only === true && isAiCeoOwnerPhone(phone)
     },
     inboundMessageId,
     currentStep: sessionStep
@@ -8854,7 +9103,13 @@ async function processInboundRuntime({
     });
     return {
       message: ownerReviewForward.message,
-      nextStep: ownerReviewForward.nextStep || sessionStep
+      nextStep: ownerReviewForward.nextStep || sessionStep,
+      ownerForward: {
+        action: ownerReviewForward.action || (ownerReviewForward.duplicate ? 'duplicate' : 'handled'),
+        property_id: ownerReviewForward.propertyId || null,
+        media_attached: Number(ownerReviewForward.mediaAttached || 0),
+        duplicate: Boolean(ownerReviewForward.duplicate)
+      }
     };
   }
 
@@ -9463,6 +9718,14 @@ router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
     media_count: mediaCount,
     ...(contactName && !dryRun ? { contact_name: contactName } : {})
   };
+  const ownerHistoryBackfillRequest = !dryRun && isAiCeoOwnerPhone(phone)
+    ? parseOwnerHistoryBackfillCommand(body)
+    : null;
+  const isAuthorizedOwnerHistoryBackfill = !dryRun
+    && isAiCeoOwnerPhone(phone)
+    && inboundMetadata.owner_history_backfill === true;
+  const suppressOwnerHistoryReply = isAuthorizedOwnerHistoryBackfill
+    && inboundMetadata.suppress_reply === true;
 
   const alreadySeen = await db.query(
     'SELECT 1 FROM whatsapp_messages WHERE wa_message_id = $1 LIMIT 1',
@@ -9472,7 +9735,7 @@ router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
     return res.json({ ok: true, duplicate: true, inbound_message_id: runtimeInboundMessageId });
   }
 
-  if (!dryRun) {
+  if (!dryRun && !ownerHistoryBackfillRequest && !isAuthorizedOwnerHistoryBackfill) {
     const recentDuplicateId = await findRecentBridgeInboundDuplicate({
       phone,
       body,
@@ -9516,6 +9779,42 @@ router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
         [runtimePhone, String(minutes)]
       );
     }
+  }
+
+  if (ownerHistoryBackfillRequest) {
+    await logWhatsappMessage({
+      userPhone: phone,
+      waMessageId: runtimeInboundMessageId,
+      direction: 'inbound',
+      messageType: 'text',
+      payload: {
+        provider: 'web_bridge',
+        body,
+        metadata: {
+          ...runtimeMetadata,
+          owner_history_backfill_command: true,
+          source_label: ownerHistoryBackfillRequest.sourceLabel,
+          requested_limit: ownerHistoryBackfillRequest.limit
+        }
+      }
+    });
+    return res.json({
+      ok: true,
+      data: {
+        inbound_message_id: runtimeInboundMessageId,
+        next_step: 'main_menu',
+        message: '',
+        queued_reply: false,
+        backfill_request: {
+          marker: WHATSAPP_OWNER_HISTORY_BACKFILL_MARKER,
+          run_id: runtimeInboundMessageId,
+          source_key: ownerHistoryBackfillRequest.sourceKey,
+          source_label: ownerHistoryBackfillRequest.sourceLabel,
+          limit: ownerHistoryBackfillRequest.limit,
+          reconcile_only: true
+        }
+      }
+    });
   }
 
   const isBridgeCallLog = (
@@ -9599,7 +9898,7 @@ router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
     });
   }
 
-  const { message, nextStep } = await processInboundRuntime({
+  const { message, nextStep, ownerForward = null } = await processInboundRuntime({
     phone: runtimePhone,
     inboundMessageId: runtimeInboundMessageId,
     body,
@@ -9611,7 +9910,7 @@ router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
   });
 
   let queuedReply = null;
-  if (message && !dryRun) {
+  if (message && !dryRun && !suppressOwnerHistoryReply) {
     queuedReply = await queueWhatsappWebBridgeAutoReply({
       phone,
       message,
@@ -9659,7 +9958,8 @@ router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
       dry_run: dryRun,
       ...(dryRun ? { dry_run_session: runtimePhone } : {}),
       queued_reply: !!queuedReply,
-      queue_id: queuedReply?.id || null
+      queue_id: queuedReply?.id || null,
+      owner_forward: ownerForward
     }
   });
 }));
