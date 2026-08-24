@@ -199,6 +199,7 @@ app.get('/api/version', (_req, res) => {
       'human-integrity-override-20260811',
       'human-approval-overlord-20260811',
       'king-timestamp-iso-normalization-20260811',
+      ...(!IS_SOUTH_AFRICA ? ['makaug-homepage-seo-stale-while-revalidate-20260824'] : []),
       ...(!IS_SOUTH_AFRICA ? ['makaug-always-on-whatsapp-runtime-20260814'] : []),
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-natural-ownership-replies-20260824'] : []),
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-public-agent-parity-fast-replies-20260824'] : []),
