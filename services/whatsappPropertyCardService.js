@@ -5,6 +5,7 @@ const { tenantFor } = require('../packages/shared-country-core');
 const ACTIVE_COUNTRY_CODE = String(process.env.COUNTRY_CODE || 'UG').trim().toUpperCase();
 const ACTIVE_TENANT = tenantFor(ACTIVE_COUNTRY_CODE);
 const DEFAULT_HOME_URL = ACTIVE_TENANT.domain;
+const WHATSAPP_PROPERTY_SEARCH_PREVIEW_LIMIT = 3;
 
 function cleanText(value = '') {
   return String(value || '')
@@ -175,8 +176,12 @@ function propertyUrlForWhatsapp(row = {}, homeUrl = DEFAULT_HOME_URL) {
   return `${base}/property/${encodeURIComponent(cleanText(row.id))}`;
 }
 
-function buildWhatsappPropertyCard(row = {}, { homeUrl = DEFAULT_HOME_URL } = {}) {
+function buildWhatsappPropertyCard(row = {}, {
+  homeUrl = DEFAULT_HOME_URL,
+  allPropertiesUrl = ''
+} = {}) {
   const base = safeHomeUrl(homeUrl).replace(/\/+$/, '');
+  const browseUrl = publicMediaUrl(allPropertiesUrl) || base;
   const location = [cleanText(row.area), cleanText(row.district)].filter(Boolean).join(', ') || ACTIVE_TENANT.countryName;
   const propertyUrl = propertyUrlForWhatsapp(row, base);
   const caption = [
@@ -185,30 +190,100 @@ function buildWhatsappPropertyCard(row = {}, { homeUrl = DEFAULT_HOME_URL } = {}
     `🏷️ ${whatsappListingTypeLabel(row)}`,
     `💰 ${formatWhatsappPropertyPrice(row)}`,
     `🔗 View photos, map & enquire: ${propertyUrl}`,
-    `🔎 View all properties: ${base}`
+    `🔎 View all properties: ${browseUrl}`
   ].join('\n');
   return {
     caption,
     imageUrl: whatsappPropertyImageUrl(row),
     propertyUrl,
-    allPropertiesUrl: base
+    allPropertiesUrl: browseUrl
   };
 }
 
-function propertyIdFromWhatsappReply(value = '', homeUrl = DEFAULT_HOME_URL) {
+function propertyIdsFromWhatsappReply(value = '', homeUrl = DEFAULT_HOME_URL) {
   const base = safeHomeUrl(homeUrl).replace(/\/+$/, '');
   const escaped = base.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const match = String(value || '').match(new RegExp(`${escaped}/property/([A-Za-z0-9-]{6,})`, 'i'));
-  return match ? match[1] : '';
+  const matches = String(value || '').matchAll(new RegExp(`${escaped}/property/([A-Za-z0-9-]{6,})`, 'ig'));
+  return [...new Set(Array.from(matches, (match) => match[1]).filter(Boolean))];
+}
+
+function propertyIdFromWhatsappReply(value = '', homeUrl = DEFAULT_HOME_URL) {
+  return propertyIdsFromWhatsappReply(value, homeUrl)[0] || '';
+}
+
+function whatsappSearchTypeLabel(searchType = '') {
+  const clean = cleanText(searchType).toLowerCase();
+  const labels = {
+    sale: 'properties for sale',
+    rent: 'rental properties',
+    student: 'student accommodation listings',
+    commercial: 'commercial property listings',
+    land: 'land listings',
+    any: 'properties'
+  };
+  return labels[clean] || labels.any;
+}
+
+function totalWhatsappSearchMatches(rows = []) {
+  const safeRows = Array.isArray(rows) ? rows : [];
+  return Math.max(
+    safeRows.length,
+    ...safeRows
+      .map((row) => Number(row?.total_count || 0))
+      .filter((value) => Number.isFinite(value) && value > 0)
+  );
+}
+
+function buildWhatsappPropertySearchReply(rows = [], {
+  homeUrl = DEFAULT_HOME_URL,
+  location = '',
+  searchType = 'any',
+  searchResultsUrl = ''
+} = {}) {
+  const safeRows = Array.isArray(rows) ? rows.filter(Boolean) : [];
+  const browseUrl = publicMediaUrl(searchResultsUrl) || safeHomeUrl(homeUrl).replace(/\/+$/, '');
+  if (!safeRows.length) {
+    return `No approved properties are available right now.\n🔎 View all properties: ${browseUrl}`;
+  }
+  if (safeRows.length === 1) {
+    return buildWhatsappPropertyCard(safeRows[0], {
+      homeUrl,
+      allPropertiesUrl: browseUrl
+    }).caption;
+  }
+
+  const visibleRows = safeRows.slice(0, WHATSAPP_PROPERTY_SEARCH_PREVIEW_LIMIT);
+  const totalMatches = totalWhatsappSearchMatches(safeRows);
+  const cleanLocation = cleanText(location);
+  const lines = [
+    `🔎 *${totalMatches} matching ${whatsappSearchTypeLabel(searchType)} found${cleanLocation ? ` in ${cleanLocation}` : ''}*`,
+    `Showing the newest ${visibleRows.length}:`,
+    ''
+  ];
+
+  visibleRows.forEach((row, index) => {
+    lines.push(`${index + 1}. 🏡 *${cleanWhatsappPropertyTitle(row)}*`);
+    lines.push(`📍 ${[cleanText(row.area), cleanText(row.district)].filter(Boolean).join(', ') || ACTIVE_TENANT.countryName}`);
+    lines.push(`💰 ${formatWhatsappPropertyPrice(row)}`);
+    lines.push(`🔗 ${propertyUrlForWhatsapp(row, homeUrl)}`);
+    lines.push('');
+  });
+
+  lines.push(`🔎 View all ${totalMatches} matches: ${browseUrl}`);
+  return lines.join('\n').trim();
 }
 
 module.exports = {
   buildWhatsappPropertyCard,
+  buildWhatsappPropertySearchReply,
   cleanWhatsappPropertyTitle,
   formatWhatsappPropertyPrice,
   meaningfulWhatsappPeriod,
   propertyIdFromWhatsappReply,
+  propertyIdsFromWhatsappReply,
   publicMediaUrl,
+  totalWhatsappSearchMatches,
+  WHATSAPP_PROPERTY_SEARCH_PREVIEW_LIMIT,
   whatsappListingTypeLabel,
   whatsappPropertyImageUrl
 };
