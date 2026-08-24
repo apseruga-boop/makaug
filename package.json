@@ -67,6 +67,7 @@
     "test:go-live-p0": "node tests/go-live-p0.test.js",
     "test:seo-ssr": "node tests/seo-ssr-crawlability.test.js",
     "test:king-harvester-p0": "node tests/king-harvester-route-contract.test.js",
+    "test:social-coverage-30k": "node --test tests/social-coverage-30k.test.js",
     "test:shared-core-phase1": "node tests/shared-core-phase1.test.js",
     "test:south-africa": "COUNTRY_CODE=ZA node tests/south-africa-tenant.test.js && COUNTRY_CODE=ZA node tests/south-africa-location-audit.test.js && COUNTRY_CODE=ZA node tests/south-africa-intake-integrity.test.js && COUNTRY_CODE=ZA node tests/south-africa-whatsapp-contract.test.js && COUNTRY_CODE=ZA WHATSAPP_DELIVERY_MODE=test node tests/south-africa-whatsapp-test-transport.test.js && node tests/south-africa-migration-isolation.test.js",
     "smoke": "bash scripts/smoke-test.sh",

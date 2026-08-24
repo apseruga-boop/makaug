@@ -12774,7 +12774,20 @@ function harvestSummaryHtml(data = {}) {
     return totals;
   }, {});
   const approvedTotal = sourceDaily.reduce((sum, row) => sum + Number(row.approved || 0), 0);
+  const checkedCoverage = data.post_check_coverage || {};
+  const checkedTarget = Number(checkedCoverage.target_unique_posts || 30000);
+  const checkedUnique = Number(checkedCoverage.unique_posts_checked || 0);
+  const checkedPercent = Math.min(100, Math.max(0, Number(checkedCoverage.percent_complete || 0)));
+  const checkedByPlatform = Array.isArray(checkedCoverage.by_platform) ? checkedCoverage.by_platform : [];
+  const recurringCoverage = data.recurring_social_coverage || {};
+  const recurringLast = recurringCoverage.last_result || {};
   return `
+    <div class="mb-3 rounded-xl border border-indigo-200 bg-indigo-50 p-3 text-indigo-950">
+      <div class="flex items-center justify-between gap-3 flex-wrap"><div><div class="font-black">30,000 unique-post coverage</div><div class="mt-1 text-[11px]">${adminEscape(checkedCoverage.counting_rule || "Distinct exact platform post IDs or canonical exact post URLs only.")}</div></div><div class="text-right"><div class="text-2xl font-black">${staffNumber(checkedUnique)} / ${staffNumber(checkedTarget)}</div><div class="text-[11px]">${adminEscape(checkedPercent)}% checked</div></div></div>
+      <div class="mt-2 h-2 overflow-hidden rounded-full bg-white"><div class="h-full bg-indigo-700" style="width:${adminAttr(checkedPercent)}%"></div></div>
+      <div class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px]">${checkedByPlatform.map((row) => `<span><strong>${adminEscape(row.platform || "unknown")}</strong>: ${staffNumber(row.unique_posts_checked || 0)} unique • ${staffNumber(row.duplicate_events || 0)} duplicate events</span>`).join("") || "No exact-post checks recorded yet."}</div>
+      <div class="mt-2 rounded-lg border border-indigo-100 bg-white p-2 text-[11px]"><strong>Recurring TikTok/Instagram coverage:</strong> ${recurringCoverage.armed ? "armed" : recurringCoverage.disabled_by_env ? "disabled by environment" : "not armed"} • every ${staffNumber(recurringCoverage.config?.cadence_minutes || 15)} minutes • batch ${staffNumber(recurringCoverage.config?.batch_size || 10)} sources${recurringLast.completed_at ? ` • last ${adminEscape(staffDate(recurringLast.completed_at))}` : ""}${recurringLast.error ? ` • ${adminEscape(recurringLast.error)}` : ""}. YouTube uses its separate live drip; X remains subject to provider credits.</div>
+    </div>
     <div class="grid sm:grid-cols-2 lg:grid-cols-6 gap-2">
       ${[
         ["Created in review", outcomeTotals.created || 0],
@@ -17216,14 +17229,26 @@ function adminSocialCaptureHelperScript() {
   };
   var seen={};
   var rows=[];
-  Array.prototype.slice.call(document.querySelectorAll("a[href]")).forEach(function(anchor){
-    var url=normalize(anchor.href);
-    if (!url || seen[url]) return;
-    seen[url]=true;
-    var card=anchor.closest("article,[data-e2e*=video],[data-testid*=tweet],li,div") || anchor;
-    var text=clean(card.innerText || anchor.innerText || anchor.getAttribute("aria-label") || document.title || "").slice(0,220);
-    rows.push(url+(text ? " | "+text : ""));
-  });
+  var collect=function(){
+    Array.prototype.slice.call(document.querySelectorAll("a[href]")).forEach(function(anchor){
+      if (rows.length>=2000) return;
+      var url=normalize(anchor.href);
+      if (!url || seen[url]) return;
+      seen[url]=true;
+      var card=anchor.closest("article,[data-e2e*=video],[data-testid*=tweet],li,div") || anchor;
+      var text=clean(card.innerText || anchor.innerText || anchor.getAttribute("aria-label") || document.title || "").slice(0,220);
+      rows.push(url+(text ? " | "+text : ""));
+    });
+  };
+  collect();
+  var stableRounds=0;
+  for(var round=0;round<24 && rows.length<2000 && stableRounds<4;round+=1){
+    var before=rows.length;
+    window.scrollTo(0,document.body.scrollHeight);
+    await new Promise(function(resolve){setTimeout(resolve,900);});
+    collect();
+    stableRounds=rows.length===before ? stableRounds+1 : 0;
+  }
   if (!rows.length) {
     alert("No exact social post links found on this visible page. Open a video/post/grid source page first, then run the helper again.");
     return;
@@ -17244,7 +17269,7 @@ function adminSocialCaptureHelperScript() {
     box.focus();
     box.select();
   }
-  alert("makaug copied "+rows.length+" exact social post link(s). Go back to King, click Paste Captured Links, and paste.");
+  alert("makaug deep capture copied "+rows.length+" unique exact social post link(s) from the posts this page loaded. Go back to King, click Paste Captured Links, and paste.");
 })();`;
 }
 
@@ -17268,7 +17293,7 @@ function adminSocialCaptureHelperPanelHtml({ copiedLabel = "" } = {}) {
     <div class="flex items-start justify-between gap-3 flex-wrap">
       <div>
         <div class="font-black">One-click capture helper ready</div>
-        <div class="mt-1">Use this once to create a browser bookmark. After that, open TikTok, YouTube, Facebook, Instagram, or X source pages and click the bookmark. It copies visible exact post/video links so you can paste them into makaug.</div>
+        <div class="mt-1">Use this once to create a browser bookmark. After that, open each saved TikTok, YouTube, Facebook, Instagram, or X hashtag/source page and click the bookmark. It scrolls through the latest posts the page will load, copies up to 2,000 unique exact post/video links, and leaves duplicate blocking to King.</div>
         ${copiedLabel ? `<div class="mt-2 inline-flex rounded-full bg-indigo-100 px-2 py-1 text-[11px] font-bold text-indigo-800">${adminEscape(copiedLabel)}</div>` : ""}
       </div>
       <button type="button" onclick="adminOpenSocialQuickPastePanel()" class="border border-violet-200 bg-white text-violet-700 hover:bg-violet-50 px-3 py-2 rounded-lg text-xs font-bold">Paste Captured Links</button>
@@ -17276,7 +17301,7 @@ function adminSocialCaptureHelperPanelHtml({ copiedLabel = "" } = {}) {
     <div class="mt-3 grid md:grid-cols-4 gap-2">
       <div class="rounded-lg border border-indigo-100 bg-white p-2"><div class="font-bold">1. Save bookmark</div><div class="text-[11px] mt-1">Click Copy Bookmarklet, then create a browser bookmark named makaug Capture Posts and paste it into the bookmark URL.</div></div>
       <div class="rounded-lg border border-indigo-100 bg-white p-2"><div class="font-bold">2. Open source</div><div class="text-[11px] mt-1">Open a TikTok hashtag/profile, YouTube search/channel, Facebook group/page, Instagram tag/profile, or X search.</div></div>
-      <div class="rounded-lg border border-indigo-100 bg-white p-2"><div class="font-bold">3. Click bookmark</div><div class="text-[11px] mt-1">Scroll until useful posts are visible, then click makaug Capture Posts in the bookmarks bar. The helper copies exact links.</div></div>
+      <div class="rounded-lg border border-indigo-100 bg-white p-2"><div class="font-bold">3. Deep-capture latest</div><div class="text-[11px] mt-1">Click makaug Capture Posts. It auto-scrolls the current hashtag/source page and copies unique exact links that the platform actually loads.</div></div>
       <div class="rounded-lg border border-indigo-100 bg-white p-2"><div class="font-bold">4. Paste here</div><div class="text-[11px] mt-1">Return to makaug, click Paste Captured Links, preview, then Queue Found Online for King review.</div></div>
     </div>
     <div class="mt-3 rounded-xl border border-indigo-100 bg-white p-3">
@@ -17286,7 +17311,7 @@ function adminSocialCaptureHelperPanelHtml({ copiedLabel = "" } = {}) {
         <button type="button" onclick="adminCopySocialCaptureConsoleCode()" class="border border-gray-200 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-bold">Copy Console Code</button>
         <button type="button" onclick="adminOpenSocialQuickPastePanel(adminSocialQuickPasteExample())" class="border border-gray-200 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-bold">Load Example</button>
       </div>
-      <div class="mt-2 text-[11px] text-indigo-900">Fastest setup: drag the dark makaug Capture Posts button to your browser bookmarks bar. If dragging is blocked, copy the bookmarklet and paste it into a new bookmark URL.</div>
+      <div class="mt-2 text-[11px] text-indigo-900">Fastest setup: drag the dark makaug Capture Posts button to your browser bookmarks bar. Run it once on every saved hashtag/source page. A page, task, or repeated URL never counts toward the 30,000 target—only a distinct exact post ID/URL recorded by King does.</div>
     </div>
     <details class="mt-3 rounded-xl border border-gray-200 bg-white p-3">
       <summary class="cursor-pointer text-xs font-black text-gray-800">Manual console fallback</summary>
@@ -17808,6 +17833,7 @@ function adminSocialPlatformSweepHtml(data = {}, platform = "all") {
   const youtubeReports = Array.isArray(youtube.fetch_reports) ? youtube.fetch_reports : [];
   const xJobs = Array.isArray(x.search_jobs) ? x.search_jobs : [];
   const xReports = Array.isArray(x.fetch_reports) ? x.fetch_reports : [];
+  const instagramReports = Array.isArray(instagram.fetch_reports) ? instagram.fetch_reports : [];
   const facebookTasks = Array.isArray(facebook.capture_tasks) ? facebook.capture_tasks : [];
   const instagramTasks = Array.isArray(instagram.capture_tasks) ? instagram.capture_tasks : [];
   const tiktokDataSourceFetch = tiktok.data_source_fetch || {};
@@ -17860,6 +17886,11 @@ function adminSocialPlatformSweepHtml(data = {}, platform = "all") {
       <div class="font-bold ${report.ok ? "text-emerald-950" : "text-amber-950"}">${adminEscape(report.source_name || report.source_key || "X job")}</div>
       <div class="text-[11px] ${report.ok ? "text-emerald-800" : "text-amber-800"} mt-0.5">${report.ok ? `${adminEscape(report.result_count || 0)} posts fetched` : adminEscape(report.reason || "X API did not return posts")}</div>
     </div>`).join("");
+  const instagramReportHtml = instagramReports.slice(0, 10).map((report) => `
+    <div class="rounded-lg border ${report.ok ? "border-emerald-100 bg-white" : "border-amber-100 bg-amber-50"} p-2">
+      <div class="font-bold ${report.ok ? "text-emerald-950" : "text-amber-950"}">${adminEscape(report.query || report.source_name || report.source_key || "Instagram hashtag")}</div>
+      <div class="text-[11px] ${report.ok ? "text-emerald-800" : "text-amber-800"} mt-0.5">${report.ok ? `${adminEscape(report.result_count || 0)} posts fetched • ${adminEscape(report.normalized_post_count || 0)} exact review candidates` : adminEscape(report.reason || "Instagram Graph did not return posts")}</div>
+    </div>`).join("");
   const manualCaptureTaskHtml = [...facebookTasks, ...instagramTasks].slice(0, 16).map((task) => `
     <div class="rounded-lg border border-purple-100 bg-white p-2">
       <div class="font-bold text-purple-950">${adminEscape(task.source_name || "Student source")}</div>
@@ -17908,11 +17939,12 @@ function adminSocialPlatformSweepHtml(data = {}, platform = "all") {
         ${xReportHtml ? `<div class="mt-2 grid md:grid-cols-2 gap-2">${xReportHtml}</div>` : ""}
         ${xJobHtml ? `<details class="mt-2"><summary class="cursor-pointer font-bold text-xs">Show X search jobs</summary><div class="mt-2 space-y-2">${xJobHtml}</div></details>` : ""}
       </div>` : ""}
-    ${(facebookTasks.length || instagramTasks.length) ? `
+    ${(instagram.hashtag_search_job_count || instagramReports.length || facebookTasks.length || instagramTasks.length) ? `
       <div class="mt-3 rounded-xl border border-purple-100 bg-purple-50 p-3 text-purple-950">
-        <div class="font-black">Facebook and Instagram student capture</div>
-        <div class="mt-1">${adminEscape(facebookTasks.length + instagramTasks.length)} source feeds are ready for exact-link capture. Open the source/feed, click the makaug Capture Posts bookmark, then paste exact public post or reel URLs into Paste Captured Links.</div>
-        <div class="mt-2 space-y-2">${manualCaptureTaskHtml}</div>
+        <div class="font-black">Instagram hashtag sweep and manual social capture</div>
+        <div class="mt-1">Instagram Graph configured: ${instagram.api_configured ? "Yes" : "No"} • ${adminEscape(instagram.hashtag_search_job_count || 0)} hashtag jobs • ${adminEscape(instagram.fetched_posts_count || 0)} exact posts fetched.${instagram.skipped_reason ? ` ${adminEscape(instagram.skipped_reason)}` : ""}</div>
+        ${instagramReportHtml ? `<div class="mt-2 grid md:grid-cols-2 gap-2">${instagramReportHtml}</div>` : ""}
+        ${(facebookTasks.length || instagramTasks.length) ? `<div class="mt-2 text-[11px]">${adminEscape(facebookTasks.length + instagramTasks.length)} source feeds also need exact-link capture. Open each source/feed, run the deep makaug capture bookmark, then paste the unique public post/reel URLs into King. Only exact post IDs count toward 30,000.</div><div class="mt-2 space-y-2">${manualCaptureTaskHtml}</div>` : ""}
       </div>` : ""}
     ${autoLive.length ? `<div class="mt-3 rounded-xl border border-red-100 bg-white p-3"><div class="font-black text-red-950">Policy warning: harvested rows reported as live</div><div class="mt-2 text-red-800">Do not continue until these rows are returned to review.</div></div>` : ""}
     ${queued.length ? `<div class="mt-3 rounded-xl border border-blue-100 bg-white p-3"><div class="font-black text-blue-950">Review queue properties</div><div class="mt-2 space-y-2">${queued.slice(0, 12).map((item) => adminSeededListingSummaryHtml(item, { pendingPanel: true })).join("")}</div></div>` : ""}
@@ -18140,14 +18172,14 @@ async function adminSweepSocialPlatformPosts(platform = "all") {
     : 0;
   const youtubeBatchSize = usesYouTubeSweep ? ADMIN_YOUTUBE_SWEEP_BATCH_SIZE : 40;
   const confirmCopy = studentFocus
-    ? "Run the dedicated student housing sweep across campus/hostel/student accommodation sources on TikTok, YouTube, X/Twitter, Facebook, and Instagram? YouTube/X imports require configured API keys; Facebook/Instagram stay exact-link capture tasks."
+    ? "Run the dedicated student housing sweep across campus/hostel/student accommodation sources on TikTok, YouTube, X/Twitter, Facebook, and Instagram? YouTube/X and Instagram Graph imports require configured API access; exact-link capture remains the fallback."
     : normalized === "tiktok"
     ? "Sweep tracked TikTok hashtags/profiles into exact-video capture tasks? This does not create properties until exact TikTok video URLs are imported."
     : normalized === "youtube"
       ? `Sweep the next broad YouTube batch from 1 January 2026 onward, including Shorts and long-form videos, then queue every eligible exact video as a found-online property candidate? This click starts at source offset ${youtubeSourceOffset} and uses ${youtubeBatchSize} jobs to avoid burning the whole daily YouTube quota on the same old channels. YOUTUBE_API_KEY, GOOGLE_YOUTUBE_API_KEY, or GOOGLE_API_KEY must be configured on the server.`
       : normalized === "x"
         ? "Sweep tracked X/Twitter sources through the X API and queue every eligible exact 2026+ post as found-online property candidates? X_BEARER_TOKEN must be configured on the server."
-        : "Sweep all tracked social sources across TikTok, YouTube, and X/Twitter? TikTok becomes exact-video capture tasks; YouTube/X queue eligible exact posts when API keys are configured.";
+        : "Sweep all tracked social sources across TikTok, Instagram, YouTube, and X/Twitter? TikTok remains exact-video capture/data-feed review; Instagram/YouTube/X queue eligible exact posts only when their approved API access is configured.";
   if (normalized !== "tiktok") {
     const ok = window.confirm(confirmCopy);
     if (!ok) return;
@@ -18169,7 +18201,7 @@ async function adminSweepSocialPlatformPosts(platform = "all") {
         ? `Sweeping YouTube videos from 1 January 2026, batch offset ${youtubeSourceOffset}, and importing eligible exact videos...`
         : normalized === "x"
           ? "Sweeping X/Twitter sources and importing eligible exact posts..."
-          : "Sweeping all tracked social sources across TikTok, YouTube, and X/Twitter...";
+          : "Sweeping all tracked social sources across TikTok, Instagram, YouTube, and X/Twitter...";
   }
   try {
     const response = await apiRequest("/api/admin/social-platform-posts/sweep", {
