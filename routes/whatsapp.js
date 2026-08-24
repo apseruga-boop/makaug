@@ -1781,6 +1781,64 @@ function mapListingTypeInput(input) {
   return map[key] || null;
 }
 
+function mapOwnershipInput(input) {
+  const key = normalizeInput(input)
+    .toLowerCase()
+    .replace(/[’‘`´]/g, "'")
+    .replace(/\s+/g, ' ')
+    .replace(/[.!?,;:]+$/g, '')
+    .trim();
+  if (!key) return null;
+
+  const exact = {
+    '1': 'owner',
+    owner: 'owner',
+    'the owner': 'owner',
+    'my property': 'owner',
+    mine: 'owner',
+    'nze nnyini': 'owner',
+    'nze nyini': 'owner',
+    'mimi ni mmiliki': 'owner',
+    'an won-ne': 'owner',
+    'ndi nyini': 'owner',
+    'ndi nyiri': 'owner',
+    'ባለቤት ነኝ': 'owner',
+    'أنا المالك': 'owner',
+    '2': 'agent',
+    agent: 'agent',
+    'an agent': 'agent',
+    broker: 'agent',
+    realtor: 'agent',
+    'nze agent': 'agent',
+    'mimi ni wakala': 'agent',
+    'an agent': 'agent',
+    'ndi agent': 'agent',
+    'ወኪል ነኝ': 'agent',
+    'أنا وكيل': 'agent'
+  };
+  if (exact[key]) return exact[key];
+
+  // Agent wording wins when both "agent" and "owner" appear, as in
+  // "I am an agent listing on behalf of the owner".
+  if (
+    /^(?:i\s*(?:am|'m)|im|we\s*(?:are|'re))\s+(?:an?\s+|the\s+)?(?:agent|broker|realtor)$/i.test(key)
+    || /\b(?:agent|broker|realtor)\b.{0,80}\b(?:for|on behalf of)\s+(?:the\s+|an?\s+)?owner\b/i.test(key)
+    || /\b(?:listing|acting)\s+on\s+behalf\s+of\s+(?:the\s+)?owner\b/i.test(key)
+  ) {
+    return 'agent';
+  }
+
+  if (
+    /^(?:i\s*(?:am|'m)|im|am|we\s*(?:are|'re))\s+(?:the\s+)?owner$/i.test(key)
+    || /^(?:i|we)\s+own\s+(?:it|this|this\s+property|the\s+property|the\s+house)$/i.test(key)
+    || /^(?:it\s+is|it's|this\s+is)\s+(?:mine|my\s+property|my\s+house)$/i.test(key)
+  ) {
+    return 'owner';
+  }
+
+  return null;
+}
+
 function inferListingTypeFromStartRequest(input, entities = {}) {
   const text = normalizeInput(input).toLowerCase();
   const entityType = normalizeListingType(entities?.listing_type || entities?.listingType || '');
@@ -7055,7 +7113,7 @@ function isActionableStepReply(step, value = '') {
   if (currentStep === 'main_menu') return ['1', '2', '3', '9'].includes(clean);
   if (currentStep === 'choose_language') return /^[1-9]$/.test(clean);
   if (currentStep === 'listing_type') return Boolean(mapListingTypeInput(clean));
-  if (currentStep === 'ownership') return Boolean(mapListingTypeInput(clean)) || ['1', '2', 'owner', 'agent'].includes(clean);
+  if (currentStep === 'ownership') return Boolean(mapOwnershipInput(clean)) || Boolean(mapListingTypeInput(clean));
   if (currentStep === 'ask_field_agent') return isAffirmativeReply(clean) || isNegativeReply(clean) || isNaturalListingDetailReply(clean);
   if (currentStep === 'confirm_whatsapp_contact') return isAffirmativeReply(clean) || isNegativeReply(clean);
   if (currentStep === 'ask_contact_method') return ['1', '2', 'phone', 'whatsapp', 'sms', 'call', 'email', 'mail', 'e-mail'].includes(clean);
@@ -7669,6 +7727,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
   const canSwitchFlow = globalRoute
     && step !== 'main_menu'
+    && !actionableStepReply
     && !activeFlowOwnsNumericReply
     && globalRoute !== step
     && !(globalRoute === 'search_type' && ['search_type', 'search_area', 'agent_area'].includes(step))
@@ -8460,9 +8519,8 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
   // OWNERSHIP
   if (step === 'ownership') {
-    const ownerMap = { '1': 'owner', '2': 'agent', owner: 'owner', agent: 'agent' };
     const listingTypeReply = mapListingTypeInput(cleanBody);
-    const ownershipReply = ownerMap[cleanBody.toLowerCase()];
+    const ownershipReply = mapOwnershipInput(cleanBody);
 
     // WhatsApp Web can occasionally deliver a small backlog after reconnecting.
     // If a user is answering the previous "What are you listing?" prompt, keep
@@ -10152,6 +10210,7 @@ module.exports.__test = {
   t,
   processInboundRuntime,
   contextualPageRouteFromMessage,
+  mapOwnershipInput,
   fastWhatsappRuntimeHints,
   menuRouteReply,
   parseInboundLocation,
