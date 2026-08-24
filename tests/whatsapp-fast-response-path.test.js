@@ -155,6 +155,12 @@ async function run() {
     'WhatsApp Web sender must not treat an older identical outgoing message as a fresh send confirmation'
   );
   assert(
+    whatsappWebCopilotSource.includes('hasOutgoingDeliveryState')
+      && whatsappWebCopilotSource.includes('/^(?:sent|delivered|read|pending)$/')
+      && whatsappWebCopilotSource.includes("root.querySelectorAll?.('[aria-label], [data-icon], [data-testid]')"),
+    'WhatsApp Web sender must recognize current Sent, Delivered, Read, and pending delivery ticks as outgoing-bubble proof'
+  );
+  assert(
     whatsappWebBridgeServiceSource.includes('WHATSAPP_WEB_BRIDGE_RETRY_SECONDS || 1'),
     'WhatsApp Web bridge retry delay should default to one second after a send failure'
   );

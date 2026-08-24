@@ -2762,6 +2762,16 @@ async function getOutgoingMessageState(page) {
       || document.body;
     const isModernOutgoing = (node) => {
       const root = node.closest?.('[data-testid^="conv-msg-"]') || node;
+      const hasOutgoingDeliveryState = Array.from(root.querySelectorAll?.('[aria-label], [data-icon], [data-testid]') || [])
+        .some((child) => {
+          const aria = normalize(child.getAttribute?.('aria-label') || '').toLowerCase();
+          const icon = normalize(child.getAttribute?.('data-icon') || '').toLowerCase();
+          const testId = normalize(child.getAttribute?.('data-testid') || '').toLowerCase();
+          return /^(?:sent|delivered|read|pending)$/.test(aria)
+            || /(?:msg-)?(?:check|clock)/.test(icon)
+            || /(?:msg-)?(?:check|clock)/.test(testId);
+        });
+      if (hasOutgoingDeliveryState) return true;
       const container = root.querySelector?.('[data-testid="msg-container"]')
         || (root.matches?.('[data-testid="msg-container"]') ? root : null)
         || root;
