@@ -5,6 +5,10 @@ const db = require('../config/database');
 const { asArray, cleanText, isValidEmail, isValidPhone } = require('../middleware/validation');
 const { logNotification } = require('../services/notificationLogService');
 const { ensurePostVerificationRecords } = require('../services/authFlowService');
+const {
+  DIRECT_AGENT_PROFILE_MARKER,
+  addPublicAgentEligibilityFilters
+} = require('../services/publicAgentEligibilityService');
 const { normalizeEmail, normalizeUgPhone } = require('../utils/adminOtpOverride');
 const { parsePagination, toPagination } = require('../utils/pagination');
 
@@ -51,11 +55,6 @@ const KNOWN_AGENT_SOCIAL_LINKS = [
   { licence: 'SOCIAL-KAMERUKA-PROPERTIES-20260524', facebook: 'https://www.facebook.com/327009134464566/', website: 'https://www.kameruka.com' },
   { licence: 'SOCIAL-KINGMAKER-PROPERTIES-UGANDA-20260524', facebook: 'https://www.facebook.com/KingMakerPropertiesUganda/', website: 'https://www.kingmakerproperties.co.ug/' },
 ];
-const PUBLIC_AGENT_SUPPRESSED_MARKERS = ['QA TEST - DELETE', 'SOFT LAUNCH TEST - DELETE', 'TRAINING', 'DEMO', 'SAMPLE', 'PLACEHOLDER'];
-const PUBLIC_AGENT_MIN_LIVE_LISTINGS = 2;
-const PUBLIC_DIRECT_AGENT_MIN_LIVE_LISTINGS = 1;
-const DIRECT_AGENT_PROFILE_MARKER = '[DIRECT_AGENT_AUTHORISED]';
-
 function sqlLiteral(value = '') {
   return String(value).replace(/'/g, "''");
 }
@@ -90,55 +89,6 @@ function knownAgentSocialSelect(alias = 'a') {
         ${knownAgentSocialCase(safeAlias, 'facebook', 'facebook_url')},
         ${knownAgentSocialCase(safeAlias, 'x', 'x_url')},
         ${knownAgentSocialCase(safeAlias, 'website', 'website_url')}`;
-}
-
-function addPublicAgentLaunchTestFilter(filters, values) {
-  PUBLIC_AGENT_SUPPRESSED_MARKERS.forEach((marker) => {
-    values.push(`%${marker}%`);
-    const idx = values.length;
-    filters.push(`(
-      COALESCE(a.full_name, '') NOT ILIKE $${idx}
-      AND COALESCE(a.company_name, '') NOT ILIKE $${idx}
-      AND COALESCE(a.bio, '') NOT ILIKE $${idx}
-      AND COALESCE(a.verification_reason, '') NOT ILIKE $${idx}
-    )`);
-  });
-  filters.push("COALESCE(a.email, '') !~* '(qa-test|makaug\\.invalid|dummy|sample)'");
-  filters.push("COALESCE(a.licence_number, '') !~* '^(QA|TEST|DUMMY|SAMPLE)-'");
-  filters.push("COALESCE(a.specializations::text, '') !~* '(qa test delete|soft launch test|dummy|sample|training|demo|placeholder)'");
-}
-
-function addPublicAgentInventoryFilter(filters) {
-  filters.push(`(
-    (
-      COALESCE(a.verification_reason, '') ILIKE '%${DIRECT_AGENT_PROFILE_MARKER}%'
-      AND (
-        SELECT COUNT(*)::int
-        FROM properties p
-        WHERE p.agent_id = a.id
-          AND p.status = 'approved'
-      ) >= ${PUBLIC_DIRECT_AGENT_MIN_LIVE_LISTINGS}
-    )
-    OR (
-      COALESCE(a.verification_reason, '') NOT ILIKE '%${DIRECT_AGENT_PROFILE_MARKER}%'
-      AND (
-        SELECT COUNT(*)::int
-        FROM properties p
-        WHERE p.agent_id = a.id
-          AND p.status = 'approved'
-      ) >= ${PUBLIC_AGENT_MIN_LIVE_LISTINGS}
-    )
-  )`);
-}
-
-function addPublicAgentSelfRegistrationFilter(filters) {
-  filters.push(`(
-    a.user_id IS NOT NULL
-    OR COALESCE(a.verification_reason, '') ILIKE '%${DIRECT_AGENT_PROFILE_MARKER}%'
-  )`);
-  filters.push("COALESCE(a.verification_reason, '') NOT ILIKE '%public social source onboarding%'");
-  filters.push("COALESCE(a.verification_reason, '') NOT ILIKE '%source profile%'");
-  filters.push("COALESCE(a.licence_number, '') !~* '^(SOCIAL|FOUND-ONLINE|TIKTOK|FACEBOOK|X)-'");
 }
 
 function verifyListingSubmitToken(token) {
@@ -617,9 +567,7 @@ router.get('/', async (req, res, next) => {
       values.push(status);
       filters.push(`a.status = $${values.length}`);
     }
-    addPublicAgentLaunchTestFilter(filters, values);
-    addPublicAgentSelfRegistrationFilter(filters);
-    addPublicAgentInventoryFilter(filters);
+    addPublicAgentEligibilityFilters(filters, values);
 
     const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
 
