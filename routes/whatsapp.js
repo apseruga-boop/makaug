@@ -66,6 +66,7 @@ const { captureLearningEvent } = require('../services/aiLearningCaptureService')
 const { isLlmEnabled } = require('../services/llmProvider');
 const { storeDataUrl } = require('../services/cloudMediaStorageService');
 const { buildUgNlisAssistantReply } = require('../services/ugnlisLandVerificationService');
+const { addPublicAgentEligibilityFilters } = require('../services/publicAgentEligibilityService');
 const { tenantFor } = require('../packages/shared-country-core');
 const { buildListingReference } = require('../services/listingReferenceService');
 const {
@@ -110,6 +111,9 @@ const WHATSAPP_NATURAL_SEARCH_AI_MODE = String(process.env.WHATSAPP_NATURAL_SEAR
 const WHATSAPP_REPLY_AI_MODE = String(process.env.WHATSAPP_REPLY_AI_MODE || 'fast').trim().toLowerCase();
 const WHATSAPP_PROVIDER_SCOPE = 'whatsapp';
 const WHATSAPP_PROPERTY_RESULT_LIMIT = 10;
+const WHATSAPP_AGENT_RESULT_LIMIT = 5;
+const WHATSAPP_AGENT_CACHE_MS = 30 * 1000;
+const whatsappAgentSearchCache = new Map();
 const MIN_PUBLIC_WHATSAPP_PRICE_UGX = IS_SOUTH_AFRICA ? 500 : 10000;
 const WHATSAPP_LISTING_PHOTO_FLOW_MARKER = 'whatsapp-web-modern-media-20260804';
 const WHATSAPP_MIN_LISTING_PHOTOS = 5;
@@ -6263,38 +6267,138 @@ async function findPropertiesNearWhatsappWithFilters(baseSearchType, sharedLocat
   };
 }
 
-async function findAgentsForWhatsapp(location) {
-  const q = `%${location}%`;
-  const result = await db.query(
-    `SELECT id, full_name, company_name, phone, whatsapp, rating, districts_covered
-     FROM agents
-     WHERE status = 'approved'
-       AND (
-         full_name ILIKE $1
-         OR COALESCE(company_name, '') ILIKE $1
-         OR EXISTS (
-           SELECT 1 FROM unnest(districts_covered) d WHERE d ILIKE $1
-         )
-       )
-     ORDER BY rating DESC NULLS LAST, created_at DESC
-     LIMIT 5`,
-    [q]
-  );
-
-  return result.rows;
+function whatsappAgentCacheKey({ keywords = [], preferredAgentIds = [], limit = WHATSAPP_AGENT_RESULT_LIMIT } = {}) {
+  const normalizedKeywords = (Array.isArray(keywords) ? keywords : [])
+    .map((value) => normalizeInput(value).toLowerCase())
+    .filter(Boolean)
+    .sort();
+  const normalizedIds = (Array.isArray(preferredAgentIds) ? preferredAgentIds : [])
+    .map((value) => normalizeInput(value).toLowerCase())
+    .filter(Boolean)
+    .sort();
+  return `${normalizedKeywords.join('|')}::${normalizedIds.join('|')}::${limit}`;
 }
 
-async function findAllAgentsForWhatsapp(limit = 5) {
+function cachedWhatsappAgents(key) {
+  const cached = whatsappAgentSearchCache.get(key);
+  if (!cached) return null;
+  if (Date.now() - cached.createdAt > WHATSAPP_AGENT_CACHE_MS) {
+    whatsappAgentSearchCache.delete(key);
+    return null;
+  }
+  return cached.rows.map((row) => ({ ...row }));
+}
+
+function rememberWhatsappAgents(key, rows) {
+  if (whatsappAgentSearchCache.size >= 100) {
+    const oldestKey = whatsappAgentSearchCache.keys().next().value;
+    if (oldestKey) whatsappAgentSearchCache.delete(oldestKey);
+  }
+  whatsappAgentSearchCache.set(key, {
+    createdAt: Date.now(),
+    rows: rows.map((row) => ({ ...row }))
+  });
+}
+
+function whatsappAgentKeywordScore(row, keywords = [], preferredAgentIds = []) {
+  const preferred = new Set(preferredAgentIds.map((value) => normalizeInput(value)));
+  let score = preferred.has(String(row.id)) ? 200 : 0;
+  const name = normalizeInput(row.full_name).toLowerCase();
+  const company = normalizeInput(row.company_name).toLowerCase();
+  const districts = Array.isArray(row.districts_covered)
+    ? row.districts_covered.map((value) => normalizeInput(value).toLowerCase())
+    : [];
+  keywords.forEach((value) => {
+    const keyword = normalizeInput(value).toLowerCase();
+    if (!keyword) return;
+    if (districts.includes(keyword)) score += 40;
+    else if (districts.some((district) => district.includes(keyword) || keyword.includes(district))) score += 25;
+    if (name.includes(keyword)) score += 20;
+    if (company.includes(keyword)) score += 20;
+  });
+  return score;
+}
+
+async function queryPublicAgentsForWhatsapp({
+  keywords = [],
+  preferredAgentIds = [],
+  limit = WHATSAPP_AGENT_RESULT_LIMIT
+} = {}) {
+  const keywordList = Array.isArray(keywords)
+    ? [...new Set(keywords.map((value) => normalizeInput(value)).filter(Boolean))].slice(0, 10)
+    : [];
+  const preferredIds = Array.isArray(preferredAgentIds)
+    ? [...new Set(preferredAgentIds.map((value) => normalizeInput(value)).filter(Boolean))].slice(0, 25)
+    : [];
+  const safeLimit = Math.max(1, Math.min(10, Number(limit) || WHATSAPP_AGENT_RESULT_LIMIT));
+  const cacheKey = whatsappAgentCacheKey({ keywords: keywordList, preferredAgentIds: preferredIds, limit: safeLimit });
+  const cached = cachedWhatsappAgents(cacheKey);
+  if (cached) return cached;
+
+  const filters = ["a.status = 'approved'"];
+  const values = [];
+  addPublicAgentEligibilityFilters(filters, values, 'a');
+
+  if (keywordList.length || preferredIds.length) {
+    let keywordMatch = 'FALSE';
+    let preferredMatch = 'FALSE';
+    if (keywordList.length) {
+      values.push(keywordList);
+      const keywordParam = values.length;
+      keywordMatch = `EXISTS (
+        SELECT 1
+        FROM unnest($${keywordParam}::text[]) AS keyword(value)
+        WHERE a.full_name ILIKE ('%' || keyword.value || '%')
+           OR COALESCE(a.company_name, '') ILIKE ('%' || keyword.value || '%')
+           OR EXISTS (
+             SELECT 1
+             FROM unnest(COALESCE(a.districts_covered, ARRAY[]::text[])) AS district(value)
+             WHERE district.value ILIKE ('%' || keyword.value || '%')
+           )
+      )`;
+    }
+    if (preferredIds.length) {
+      values.push(preferredIds);
+      preferredMatch = `a.id = ANY($${values.length}::uuid[])`;
+    }
+    filters.push(`(${preferredMatch} OR ${keywordMatch})`);
+  }
+
+  values.push(Math.max(safeLimit, 20));
   const result = await db.query(
-    `SELECT id, full_name, company_name, phone, whatsapp, rating, districts_covered
-     FROM agents
-     WHERE status = 'approved'
-     ORDER BY rating DESC NULLS LAST, created_at DESC
-     LIMIT $1`,
-    [Math.max(1, Math.min(10, Number(limit) || 5))]
+    `SELECT a.id, a.full_name, a.company_name, a.phone, a.whatsapp, a.districts_covered,
+            (
+              SELECT COUNT(*)::int
+              FROM properties p
+              WHERE p.agent_id = a.id
+                AND p.status = 'approved'
+            ) AS listings_count
+       FROM agents a
+      WHERE ${filters.join('\n        AND ')}
+      ORDER BY listings_count DESC, a.created_at DESC
+      LIMIT $${values.length}`,
+    values
   );
 
-  return result.rows;
+  const rows = result.rows
+    .map((row) => ({
+      ...row,
+      _score: whatsappAgentKeywordScore(row, keywordList, preferredIds)
+    }))
+    .sort((a, b) => {
+      const scoreDiff = Number(b._score || 0) - Number(a._score || 0);
+      if (scoreDiff !== 0) return scoreDiff;
+      return Number(b.listings_count || 0) - Number(a.listings_count || 0);
+    })
+    .slice(0, safeLimit)
+    .map(({ _score, ...row }) => row);
+
+  rememberWhatsappAgents(cacheKey, rows);
+  return rows;
+}
+
+async function findAllAgentsForWhatsapp(limit = WHATSAPP_AGENT_RESULT_LIMIT) {
+  return queryPublicAgentsForWhatsapp({ limit });
 }
 
 function extractAgentSearchKeywords(text, sessionData = {}) {
@@ -6389,49 +6493,17 @@ async function inferAgentSearchFromSharedLocation(sharedLocation, sessionData = 
 }
 
 async function findAgentsForWhatsappKeywords(keywords = [], preferredAgentIds = []) {
-  const ranked = new Map();
   const keywordList = Array.isArray(keywords)
     ? keywords.map((k) => normalizeInput(k)).filter(Boolean)
     : [];
   const preferredIds = Array.isArray(preferredAgentIds)
     ? preferredAgentIds.map((id) => normalizeInput(id)).filter(Boolean)
     : [];
-
-  if (preferredIds.length) {
-    const preferredRows = await db.query(
-      `SELECT id, full_name, company_name, phone, whatsapp, rating, districts_covered
-       FROM agents
-       WHERE status = 'approved'
-         AND id = ANY($1::uuid[])
-       ORDER BY rating DESC NULLS LAST, created_at DESC
-       LIMIT 5`,
-      [preferredIds]
-    );
-
-    preferredRows.rows.forEach((row) => {
-      ranked.set(String(row.id), { ...row, _score: 200 });
-    });
-  }
-
-  for (const keyword of keywordList) {
-    const rows = await findAgentsForWhatsapp(keyword);
-    rows.forEach((row, idx) => {
-      const id = String(row.id);
-      const existing = ranked.get(id);
-      const boost = Math.max(15 - idx * 2, 5);
-      if (!existing) ranked.set(id, { ...row, _score: boost });
-      else ranked.set(id, { ...existing, _score: Number(existing._score || 0) + boost });
-    });
-  }
-
-  return Array.from(ranked.values())
-    .sort((a, b) => {
-      const scoreDiff = Number(b._score || 0) - Number(a._score || 0);
-      if (scoreDiff !== 0) return scoreDiff;
-      return Number(b.rating || 0) - Number(a.rating || 0);
-    })
-    .slice(0, 5)
-    .map(({ _score, ...row }) => row);
+  return queryPublicAgentsForWhatsapp({
+    keywords: keywordList,
+    preferredAgentIds: preferredIds,
+    limit: WHATSAPP_AGENT_RESULT_LIMIT
+  });
 }
 
 async function logPropertySearchRequest({
@@ -7012,7 +7084,6 @@ function formatAgentSearchMessage(lang, rows, location) {
     const company = cleanAgentDisplayName(r.company_name);
     lines.push(`${idx + 1}. *${name}*${company ? ` - ${company}` : ''}`);
     if (areas) lines.push(`   ${t(lang, 'areasLabel')}: ${areas}`);
-    if (r.rating != null) lines.push(`   ${t(lang, 'ratingLabel')}: ⭐ ${Number(r.rating).toFixed(1)}`);
     lines.push(`   ${t(lang, 'profileLabel')}: ${HOME_URL}/agents/${r.id}`);
     lines.push('');
   });
@@ -8993,10 +9064,12 @@ async function processInboundRuntime({
     }${sharedLocation ? ' [location]' : ''} [${provider}]`
   );
 
-  const session = await getSession(phone);
+  const [session, conversationControl] = await Promise.all([
+    getSession(phone),
+    getWhatsappConversationControl(phone)
+  ]);
   const sessionLang = session.language || 'en';
   const sessionStep = session.current_step || 'greeting';
-  const conversationControl = await getWhatsappConversationControl(phone);
   const inboundMetadata = metadata && typeof metadata === 'object' ? metadata : {};
   const contactName = cleanDisplayName(
     inboundMetadata.contact_name
@@ -9378,6 +9451,9 @@ async function processInboundRuntime({
   }
 
   const runtimeLatencyMs = Math.max(0, Date.now() - runtimeStartedAt);
+  logger.info(
+    `WhatsApp reply ready in ${runtimeLatencyMs}ms [${provider}; ${sessionStep}->${nextStep}; ${intentResult.intent || 'unknown'}]`
+  );
 
   await updateSession(phone, { current_step: nextStep, current_intent: intentResult.intent || null });
   const finalPreferredLanguage = activeLang || runtimeLang || sessionLang;
