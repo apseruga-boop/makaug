@@ -187,10 +187,10 @@ const configuredSendConfirmMs = Number(process.env.WHATSAPP_WEB_COPILOT_SEND_CON
 const SEND_CONFIRM_MS = Math.min(2000, Math.max(250, Number.isFinite(configuredSendConfirmMs) ? configuredSendConfirmMs : 550));
 const configuredComposerClearMs = Number(process.env.WHATSAPP_WEB_COPILOT_SEND_COMPOSER_CLEAR_MS || 80);
 const SEND_COMPOSER_CLEAR_MS = Math.min(1200, Math.max(80, Number.isFinite(configuredComposerClearMs) ? configuredComposerClearMs : 220));
-const configuredSendConfirmAfterClearMs = Number(process.env.WHATSAPP_WEB_COPILOT_SEND_CONFIRM_AFTER_CLEAR_MS || 700);
+const configuredSendConfirmAfterClearMs = Number(process.env.WHATSAPP_WEB_COPILOT_SEND_CONFIRM_AFTER_CLEAR_MS || 3000);
 const SEND_CONFIRM_AFTER_CLEAR_MS = Math.min(
-  1200,
-  Math.max(50, Number.isFinite(configuredSendConfirmAfterClearMs) ? configuredSendConfirmAfterClearMs : 125)
+  5000,
+  Math.max(250, Number.isFinite(configuredSendConfirmAfterClearMs) ? configuredSendConfirmAfterClearMs : 3000)
 );
 const configuredSendRetryConfirmMs = Number(process.env.WHATSAPP_WEB_COPILOT_SEND_RETRY_CONFIRM_MS || 350);
 const SEND_RETRY_CONFIRM_MS = Math.min(

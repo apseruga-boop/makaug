@@ -9965,7 +9965,7 @@ router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
 }));
 
 // GET /api/whatsapp/web-bridge/status
-router.get('/web-bridge/status', async (req, res) => {
+router.get('/web-bridge/status', asyncRoute(async (req, res) => {
   if (!isWhatsappWebBridgeAuthorized(req)) return bridgeUnauthorized(res);
 
   const bridgeStatus = await getWhatsappWebBridgeStatus();
@@ -9984,10 +9984,10 @@ router.get('/web-bridge/status', async (req, res) => {
       clients: (bridgeStatus.clients || []).map(summarizeWhatsappBridgeClient)
     }
   });
-});
+}));
 
 // GET /api/whatsapp/web-bridge/outbox
-router.get('/web-bridge/outbox', async (req, res) => {
+router.get('/web-bridge/outbox', asyncRoute(async (req, res) => {
   if (!isWhatsappWebBridgeAuthorized(req)) return bridgeUnauthorized(res);
 
   const clientId = normalizeInput(req.query.client_id || req.headers['x-whatsapp-web-bridge-client'] || 'web_bridge');
@@ -10013,10 +10013,10 @@ router.get('/web-bridge/outbox', async (req, res) => {
       attempts: row.attempts || 0
     }))
   });
-});
+}));
 
 // POST /api/whatsapp/web-bridge/outbox/:id/sent
-router.post('/web-bridge/outbox/:id/sent', async (req, res) => {
+router.post('/web-bridge/outbox/:id/sent', asyncRoute(async (req, res) => {
   if (!isWhatsappWebBridgeAuthorized(req)) return bridgeUnauthorized(res);
 
   const duplicateSuppressed = ['1', 'true', 'yes'].includes(String(req.body.duplicate_suppressed || '').trim().toLowerCase());
@@ -10069,10 +10069,10 @@ router.post('/web-bridge/outbox/:id/sent', async (req, res) => {
   });
 
   return res.json({ ok: true, data: updated });
-});
+}));
 
 // POST /api/whatsapp/web-bridge/outbox/:id/failed
-router.post('/web-bridge/outbox/:id/failed', async (req, res) => {
+router.post('/web-bridge/outbox/:id/failed', asyncRoute(async (req, res) => {
   if (!isWhatsappWebBridgeAuthorized(req)) return bridgeUnauthorized(res);
 
   const updated = await markWhatsappWebBridgeMessageFailed(
@@ -10100,7 +10100,7 @@ router.post('/web-bridge/outbox/:id/failed', async (req, res) => {
   }
 
   return res.json({ ok: true, data: updated });
-});
+}));
 
 // POST /api/whatsapp/test
 // For testing in development

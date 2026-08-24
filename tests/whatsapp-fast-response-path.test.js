@@ -136,8 +136,9 @@ async function run() {
     'WhatsApp Web sender must use the fast composer-clear timeout after sending'
   );
   assert(
-    whatsappWebCopilotSource.includes('WHATSAPP_WEB_COPILOT_SEND_CONFIRM_AFTER_CLEAR_MS || 700'),
-    'WhatsApp Web sender must wait briefly for a real outgoing bubble after the composer clears'
+    whatsappWebCopilotSource.includes('WHATSAPP_WEB_COPILOT_SEND_CONFIRM_AFTER_CLEAR_MS || 3000')
+      && whatsappWebCopilotSource.includes('Math.min(\n  5000,'),
+    'WhatsApp Web sender must allow enough time to observe a real outgoing bubble after the composer clears'
   );
   assert(
     whatsappWebCopilotSource.includes("WHATSAPP_WEB_COPILOT_TRUST_SEND_ON_COMPOSER_CLEAR || 'false'"),
@@ -173,6 +174,15 @@ async function run() {
     whatsappWebBridgeServiceSource.includes("'browser_database_error'")
       && whatsappRouteSource.includes("router.post('/web-bridge/heartbeat', asyncRoute(async (req, res) => {"),
     'WhatsApp Web bridge heartbeat must accept browser database error status without crashing the process'
+  );
+  assert(
+    [
+      "router.get('/web-bridge/status', asyncRoute(async (req, res) => {",
+      "router.get('/web-bridge/outbox', asyncRoute(async (req, res) => {",
+      "router.post('/web-bridge/outbox/:id/sent', asyncRoute(async (req, res) => {",
+      "router.post('/web-bridge/outbox/:id/failed', asyncRoute(async (req, res) => {"
+    ].every((route) => whatsappRouteSource.includes(route)),
+    'Every async WhatsApp Web bridge delivery route must forward database failures instead of crashing production'
   );
   assert(
     whatsappWebBridgeServiceSource.includes('Math.min(\n    20,\n    Math.max(5, Number(process.env.WHATSAPP_WEB_BRIDGE_CLAIM_SECONDS || 8))'),
