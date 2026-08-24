@@ -5,9 +5,11 @@ const fs = require('fs');
 const path = require('path');
 const {
   buildWhatsappPropertyCard,
+  buildWhatsappPropertySearchReply,
   cleanWhatsappPropertyTitle,
   formatWhatsappPropertyPrice,
   propertyIdFromWhatsappReply,
+  propertyIdsFromWhatsappReply,
   whatsappPropertyImageUrl
 } = require('../services/whatsappPropertyCardService');
 
@@ -86,6 +88,25 @@ assert.strictEqual(
   'queued replies should recover the approved property ID for server-side image resolution'
 );
 
+const searchRows = [
+  { ...sale, id: '11111111-1111-4111-8111-111111111111', area: 'Najjera', title: 'Land for sale in Najjera', listing_type: 'land', price: 270_000_000, total_count: 66 },
+  { ...sale, id: '22222222-2222-4222-8222-222222222222', area: 'Kira', title: 'Land for sale in Kira', listing_type: 'land', price: 95_000_000, total_count: 66 },
+  { ...sale, id: '33333333-3333-4333-8333-333333333333', area: 'Gayaza', title: 'Land for sale in Gayaza', listing_type: 'land', price: 80_000_000, total_count: 66 },
+  { ...sale, id: '44444444-4444-4444-8444-444444444444', area: 'Kitende', title: 'Land for sale in Kitende', listing_type: 'land', price: 120_000_000, total_count: 66 }
+];
+const filteredLandUrl = 'https://makaug.com/land?listing_type=land&area=Wakiso';
+const searchReply = buildWhatsappPropertySearchReply(searchRows, {
+  location: 'Wakiso',
+  searchType: 'land',
+  searchResultsUrl: filteredLandUrl
+});
+assert(searchReply.includes('66 matching land listings found in Wakiso'), 'search reply must state the real total');
+assert(searchReply.includes('Showing the newest 3'), 'search reply must keep WhatsApp previews concise');
+assert(searchReply.includes(filteredLandUrl), 'search reply must link to the filtered live inventory');
+assert(searchReply.includes(searchRows[2].id), 'third preview must be visible');
+assert(!searchReply.includes(searchRows[3].id), 'fourth result must remain behind the filtered view-all link');
+assert.deepStrictEqual(propertyIdsFromWhatsappReply(searchReply), searchRows.slice(0, 3).map((row) => row.id));
+
 const repoRoot = path.join(__dirname, '..');
 const whatsappRoute = fs.readFileSync(path.join(repoRoot, 'routes', 'whatsapp.js'), 'utf8');
 const bridgeService = fs.readFileSync(path.join(repoRoot, 'services', 'whatsappWebBridgeService.js'), 'utf8');
@@ -96,8 +117,9 @@ const server = fs.readFileSync(path.join(repoRoot, 'server.js'), 'utf8');
 const formatterStart = whatsappRoute.indexOf('function formatPropertySearchMessage(lang');
 const formatterEnd = whatsappRoute.indexOf('function formatPropertySearchMessageLegacy', formatterStart);
 const activeFormatter = whatsappRoute.slice(formatterStart, formatterEnd);
-assert(activeFormatter.includes('buildWhatsappPropertyCard(row'), 'active search formatter must use the short card service');
+assert(activeFormatter.includes('buildWhatsappPropertySearchReply(rows'), 'active search formatter must use the concise multi-result service');
 assert(!activeFormatter.includes('formatFoundOnlineSourceLine'), 'active search formatter must not append provenance');
+assert(whatsappRoute.includes("const propertyId = propertyIds.length === 1 ? propertyIds[0] : ''"), 'multi-result searches must stay text-only instead of waiting on one failed image upload');
 assert(whatsappRoute.includes('mediaUrl = card.imageUrl'), 'auto replies must resolve the card image before queueing');
 assert(bridgeService.includes('media_url: normalizedMediaUrl'), 'bridge queue must carry the image URL');
 assert(whatsappRoute.includes("media_type: row.payload?.media_type || 'text'"), 'outbox API must expose media metadata');
@@ -111,5 +133,6 @@ assert(bridgeWorker.includes('findPhotoVideoMenuFileInput'), 'worker must prefer
 assert(bridgeWorker.includes('pasteImageIntoComposer'), 'worker must paste the property image if the hosted picker does not create a preview');
 assert(adminRoute.includes('req.body.property_id || req.body.propertyId'), 'admin confirmation send must support a reviewed property card');
 assert(server.includes("'whatsapp-property-card-v2'"), 'production version marker must identify this release');
+assert(server.includes("'whatsapp-multi-result-fast-search-20260824'"), 'production version marker must identify the multi-result speed fix');
 
 console.log('WhatsApp property card v2 checks passed');

@@ -7,7 +7,7 @@ const htmlSource = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'ut
 const serverSource = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
 
 assert(whatsappRouteSource.includes('const WHATSAPP_PROPERTY_RESULT_LIMIT = 10'), 'WhatsApp property search should cap customer replies at 10 listings');
-assert(whatsappRouteSource.includes('const MIN_PUBLIC_WHATSAPP_PRICE_UGX = 10000'), 'WhatsApp public search should define a minimum plausible price guard');
+assert(whatsappRouteSource.includes('const MIN_PUBLIC_WHATSAPP_PRICE_UGX = IS_SOUTH_AFRICA ? 500 : 10000'), 'WhatsApp public search should define the country-specific minimum plausible price guard');
 assert(whatsappRouteSource.includes('ORDER BY p.created_at DESC'), 'WhatsApp property searches should order listings by newest listed date first');
 assert(whatsappRouteSource.includes('COUNT(*) OVER() AS total_count'), 'WhatsApp property searches should know when more matches exist');
 assert(whatsappRouteSource.includes('LIMIT $'), 'WhatsApp property searches should bind the result limit instead of hard-coding five rows');

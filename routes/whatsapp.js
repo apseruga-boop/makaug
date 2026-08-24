@@ -71,7 +71,8 @@ const { tenantFor } = require('../packages/shared-country-core');
 const { buildListingReference } = require('../services/listingReferenceService');
 const {
   buildWhatsappPropertyCard,
-  propertyIdFromWhatsappReply
+  buildWhatsappPropertySearchReply,
+  propertyIdsFromWhatsappReply
 } = require('../services/whatsappPropertyCardService');
 const {
   createOwnerEditToken,
@@ -5095,7 +5096,8 @@ async function queueWhatsappWebBridgeAutoReply({
   if (!text) return null;
   let mediaUrl = '';
   let mediaType = 'text';
-  const propertyId = propertyIdFromWhatsappReply(text, HOME_URL);
+  const propertyIds = propertyIdsFromWhatsappReply(text, HOME_URL);
+  const propertyId = propertyIds.length === 1 ? propertyIds[0] : '';
   if (propertyId) {
     const result = await db.query(
       `SELECT p.id, p.title, p.listing_type, p.transaction_type, p.district, p.area,
@@ -6903,11 +6905,12 @@ async function formatNoMatchOrFallbackReply({
 
 function formatPropertySearchMessage(lang, rows, location, searchType) {
   void lang;
-  void location;
-  void searchType;
-  const row = Array.isArray(rows) ? rows[0] : null;
-  if (!row) return `No approved properties are available right now.\n🔎 View all properties: ${HOME_URL}`;
-  return buildWhatsappPropertyCard(row, { homeUrl: HOME_URL }).caption;
+  return buildWhatsappPropertySearchReply(rows, {
+    homeUrl: HOME_URL,
+    location,
+    searchType,
+    searchResultsUrl: whatsappSearchResultsUrl(searchType, location)
+  });
 }
 
 function formatPropertySearchMessageLegacy(lang, rows, location, searchType) {
