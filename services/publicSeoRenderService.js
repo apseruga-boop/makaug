@@ -112,13 +112,21 @@ function getSeoListingCacheEntry(key, now = Date.now()) {
   const cached = listingCache.get(key);
   if (!cached) return null;
   if (now - cached.cachedAt >= SEO_LISTING_CACHE_TTL_MS) {
-    listingCache.delete(key);
     return null;
   }
+  return touchSeoListingCacheEntry(key, cached);
+}
+
+function touchSeoListingCacheEntry(key, cached = listingCache.get(key)) {
+  if (!cached) return null;
   // Refresh insertion order so the first key remains the least recently used.
   listingCache.delete(key);
   listingCache.set(key, cached);
   return cached;
+}
+
+function getStaleSeoListingCacheEntry(key) {
+  return touchSeoListingCacheEntry(key);
 }
 
 function setSeoListingCacheEntry(key, value, now = Date.now()) {
@@ -141,6 +149,24 @@ async function loadSeoListingCacheEntry(key, loader, { force = false } = {}) {
     const cached = getSeoListingCacheEntry(key);
     if (cached) return cached;
     const pending = listingCacheInFlight.get(key);
+    const stale = getStaleSeoListingCacheEntry(key);
+    if (stale) {
+      if (!pending) {
+        const refresh = Promise.resolve()
+          .then(loader)
+          .then((value) => {
+            setSeoListingCacheEntry(key, value);
+            return getSeoListingCacheEntry(key);
+          });
+        listingCacheInFlight.set(key, refresh);
+        refresh
+          .catch(() => null)
+          .finally(() => {
+            if (listingCacheInFlight.get(key) === refresh) listingCacheInFlight.delete(key);
+          });
+      }
+      return stale;
+    }
     if (pending) return pending;
   }
 
@@ -788,6 +814,7 @@ module.exports = {
     clear: clearSeoListingCache,
     get: getSeoListingCacheEntry,
     set: setSeoListingCacheEntry,
-    size: () => listingCache.size
+    size: () => listingCache.size,
+    inFlight: (key) => listingCacheInFlight.get(key) || null
   })
 };

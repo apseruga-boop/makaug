@@ -24,6 +24,7 @@ const { UNIVERSITIES } = require('../utils/constants');
 const { facetDefinition, facetMatchesRow } = require('../utils/publicSeoFacets');
 const { normalizeUniversityName } = require('../utils/universityMatcher');
 const {
+  SEO_LISTING_CACHE_TTL_MS,
   SEO_LISTING_CACHE_MAX_ENTRIES,
   __seoListingCache,
   areaLinksForCategory,
@@ -262,6 +263,42 @@ async function run() {
   assert.equal(__seoListingCache.size(), SEO_LISTING_CACHE_MAX_ENTRIES, 'listing cache must never exceed its configured cap');
   assert.equal(__seoListingCache.get('entry:1', cacheNow), null, 'the least recently used cache entry must be evicted first');
   assert(__seoListingCache.get('oldest', cacheNow), 'the refreshed cache entry must survive eviction');
+  __seoListingCache.clear();
+
+  const homepageCacheKey = 'all:uganda:all:6';
+  const staleHomepageRows = [{ id: 'stale-homepage-listing', title: 'Cached homepage listing' }];
+  let releaseHomepageRefresh;
+  let homepageRefreshQueries = 0;
+  const homepageRefreshGate = new Promise((resolve) => {
+    releaseHomepageRefresh = resolve;
+  });
+  const delayedHomepageDb = {
+    async query() {
+      homepageRefreshQueries += 1;
+      await homepageRefreshGate;
+      return { rows: [listing] };
+    }
+  };
+  __seoListingCache.set(
+    homepageCacheKey,
+    { rows: staleHomepageRows },
+    Date.now() - SEO_LISTING_CACHE_TTL_MS - 1
+  );
+  const homepageLoad = loadPublicSeoListings(delayedHomepageDb, { limit: 6 });
+  const homepageRace = await Promise.race([
+    homepageLoad,
+    new Promise((resolve) => setTimeout(() => resolve('blocked_on_refresh'), 50))
+  ]);
+  assert.notEqual(homepageRace, 'blocked_on_refresh', 'an expired homepage cache must not block the visitor on its refresh query');
+  assert.deepEqual(homepageRace, staleHomepageRows, 'an expired homepage cache must serve the last-known-good cards');
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(homepageRefreshQueries, 1, 'the stale homepage cache must start one background refresh');
+  const homepageRefresh = __seoListingCache.inFlight(homepageCacheKey);
+  assert(homepageRefresh, 'the background homepage refresh must be observable while it is running');
+  releaseHomepageRefresh();
+  await homepageRefresh;
+  assert.equal(__seoListingCache.get(homepageCacheKey).rows[0].id, listing.id, 'the completed refresh must replace stale homepage cards');
+  assert(serverSource.includes('makaug-homepage-seo-stale-while-revalidate-20260824'), 'the homepage cold-cache fix must expose a live release marker');
   __seoListingCache.clear();
 
   __seoSnapshotCache.clear();
