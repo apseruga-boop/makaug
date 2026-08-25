@@ -2944,10 +2944,23 @@ function youtubeThumbnailUrls(thumbnails = {}) {
 
 function youtubeHasPropertySignal(text = '', job = {}) {
   const raw = cleanText(text).toLowerCase();
-  const sourceTypes = Array.isArray(job.source_listing_types) ? job.source_listing_types.join(' ') : '';
-  const sourceText = `${raw} ${sourceTypes}`.toLowerCase();
-  return /\b(property|properties|real estate|house|home|apartment|flat|villa|mansion|bungalow|duplex|bedroom|bedrooms|beds?|land|plot|plots|acre|acres|decimal|decimals|mailo|hostel|student accommodation|student room|rental|rent|to let|commercial|office|shop|warehouse|showroom|factory|arcade|ettaka|bibanja|ebibanja|akabanja|amayumba|nyumba|kupangisa|obupangisa|muzigo|emizigo|kiwanja|viwanja)\b/i.test(sourceText)
-    || /\b(?:for sale|for rent|on sale|selling|ugx|ush|shs?|million|billion|monthly|per month)\b/i.test(sourceText);
+  // The search job describes what we asked YouTube for, not what the returned
+  // video actually contains. Never let query/category hints turn a song, news
+  // clip, or event video into property evidence.
+  return /\b(property|properties|real estate|house|home|apartment|flat|villa|mansion|bungalow|duplex|bedroom|bedrooms|beds?|land|plot|plots|acre|acres|decimal|decimals|mailo|hostel|student accommodation|student room|rental|rent|to let|commercial|office|shop|warehouse|showroom|factory|arcade|ettaka|bibanja|ebibanja|akabanja|amayumba|nyumba|kupangisa|obupangisa|muzigo|emizigo|kiwanja|viwanja)\b/i.test(raw)
+    || /\b(?:for sale|for rent|on sale|selling|ugx|ush|shs?|million|billion|monthly|per month)\b/i.test(raw);
+}
+
+function youtubeHasConcreteListingEvidence(text = '', listingType = '') {
+  const raw = cleanText(text).toLowerCase();
+  if (!raw) return false;
+  if (youtubeHasExplicitListingIntent(raw, listingType)) return true;
+  const propertyNoun = /\b(?:house|home|apartment|flat|villa|mansion|bungalow|duplex|bedrooms?|beds?|land|plots?|acres?|decimals?|mailo|hostel|student accommodation|student room|rental|commercial|office|shop|warehouse|showroom|factory|arcade|ettaka|bibanja|ebibanja|akabanja|amayumba|nyumba|kiwanja|viwanja)\b/i.test(raw);
+  const structuredProperty = /\b\d+(?:\.\d+)?\s*(?:bed(?:room)?s?|bdrm|plots?|acres?|decimals?|rooms?)\b|\b(?:bed(?:room)?s?|bdrm|plots?|acres?|decimals?|rooms?)\s*\d+(?:\.\d+)?\b/i.test(raw);
+  const money = /\b(?:ugx|ush|shs?|usd)\s*[\d,.]+|\$\s*[\d,.]+|[\d,.]+\s*(?:m|mn|million|b|bn|billion)\b/i.test(raw);
+  const contact = /(?:\+?256[\s()-]*|(?:^|\D))0?7\d{2}[\s()-]*\d{3}[\s()-]*\d{3}(?:\D|$)|\b(?:call|whatsapp|contact|inbox|dm)\b/i.test(raw);
+  const availability = /\b(?:available|vacant|viewing|book a viewing|ready for occupancy)\b/i.test(raw);
+  return structuredProperty || (propertyNoun && money) || (propertyNoun && contact && availability);
 }
 
 function youtubeHasExplicitListingIntent(text = '', listingType = '') {
@@ -3139,7 +3152,6 @@ function youtubeEvidenceTextForItem(item = {}, job = {}, { includeComments = tru
     youtubeLocationDescriptionForItem(item),
     visualText,
     commentEvidence,
-    Array.isArray(job.source_listing_types) ? job.source_listing_types.join(' ') : '',
   ].filter(Boolean).join(' '));
 }
 
@@ -3148,7 +3160,7 @@ function youtubeShouldFetchCommentEvidence(item = {}, job = {}) {
   if (!youtubeHasPropertySignal(combinedText, job)) return false;
   const area = extractArea(combinedText);
   const district = districtForArea(area, combinedText);
-  const listingType = listingTypeFromText(`${combinedText} ${(job.source_listing_types || []).join(' ')}`);
+  const listingType = listingTypeFromText(combinedText);
   const missingSpecificLocation = youtubeLocationConfidence(area, district) !== 'area_or_neighbourhood_detected';
   const missingIntent = !youtubeHasExplicitListingIntent(combinedText, listingType);
   return missingSpecificLocation || missingIntent;
@@ -3419,7 +3431,10 @@ function normalizeYouTubeApiPost(item = {}, job = {}) {
   const commentEvidence = youtubeCommentEvidenceFromItem(item);
   const visualText = sourceVisualTextFromObject(item);
   const combinedText = youtubeEvidenceTextForItem(item, job);
-  if (!youtubeHasPropertySignal(combinedText, job)) return null;
+  if (!youtubeHasPropertySignal(combinedText)) return null;
+  const listingType = listingTypeFromText(combinedText);
+  const trustedChannelUpload = job.search_method === 'channel_uploads';
+  if (!trustedChannelUpload && !youtubeHasConcreteListingEvidence(combinedText, listingType)) return null;
   const area = extractArea(combinedText);
   const district = districtForArea(area, combinedText);
   const priceText = priceTextFromText(combinedText);
@@ -3429,7 +3444,6 @@ function normalizeYouTubeApiPost(item = {}, job = {}) {
   const channelUrl = youtubeChannelUrl(channelId) || job.source_url || '';
   const sourceUrl = youtubeWatchUrl(videoId);
   const publishedAt = item.contentDetails?.videoPublishedAt || snippet.publishedAt || '';
-  const listingType = listingTypeFromText(`${combinedText} ${(job.source_listing_types || []).join(' ')}`);
   const preapproval = youtubeSourcePreapprovalFields(job);
   const hashtagSource = youtubeSourceIsHashtag(job);
   const confidence = youtubeConfidenceReviewForPost({

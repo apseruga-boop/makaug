@@ -1620,6 +1620,60 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
   }, youtubeJobs[0]);
   assert.strictEqual(normalizedNonPropertyYoutube, null, 'YouTube API imports should drop search results that do not look like property posts');
 
+  const broadNoiseJob = {
+    ...broadYoutubeJobs[0],
+    search_method: 'search',
+    source_listing_types: ['rent', 'land', 'sale'],
+  };
+  const virtualOpenDayNoise = normalizeYouTubeApiPost({
+    id: { videoId: 'openDayNoise1' },
+    snippet: {
+      publishedAt: '2026-08-24T10:00:00.000Z',
+      title: 'Virtual Open Day Recap',
+      description: 'Highlights from our online event and guest speakers.',
+      channelId: 'UCeventNoise',
+      channelTitle: 'Campus Events Uganda',
+    },
+  }, broadNoiseJob);
+  assert.strictEqual(virtualOpenDayNoise, null, 'YouTube search hints must not turn an open-day event into a property listing');
+
+  const lugandaSongNoise = normalizeYouTubeApiPost({
+    id: { videoId: 'lugandaSong1' },
+    snippet: {
+      publishedAt: '2026-08-24T10:00:00.000Z',
+      title: 'Muzigo gwange - official audio',
+      description: 'New Ugandan song and music performance.',
+      channelId: 'UCmusicNoise',
+      channelTitle: 'Uganda Music',
+    },
+  }, broadNoiseJob);
+  assert.strictEqual(lugandaSongNoise, null, 'a single ambiguous Luganda property word must not admit a song from broad search');
+
+  const culturalNewsNoise = normalizeYouTubeApiPost({
+    id: { videoId: 'culturalNoise1' },
+    snippet: {
+      publishedAt: '2026-08-24T10:00:00.000Z',
+      title: "Uganda's Nilotika Cultural Ensemble performs live",
+      description: 'Arts and culture news from Kampala.',
+      channelId: 'UCcultureNoise',
+      channelTitle: 'Uganda Culture TV',
+    },
+  }, broadNoiseJob);
+  assert.strictEqual(culturalNewsNoise, null, 'broad property queries must not admit unrelated cultural news');
+
+  const legitimateBroadProperty = normalizeYouTubeApiPost({
+    id: { videoId: 'legitWakiso1' },
+    snippet: {
+      publishedAt: '2026-08-24T10:00:00.000Z',
+      title: 'HOUSE FOR SALE AT WAKISO ON SENTEMA ROAD AT 250 UGX MILLION',
+      description: 'Available for viewing. Call 0700000000.',
+      channelId: 'UCpropertyLegit',
+      channelTitle: 'Uganda Property Agent',
+    },
+  }, broadNoiseJob);
+  assert.ok(legitimateBroadProperty, 'a concrete broad-search property listing must still enter human review');
+  assert.strictEqual(legitimateBroadProperty.listing_type, 'sale');
+
   const xJobs = buildXSearchJobs({
     sources: [{
       key: 'x-uganda-property',
