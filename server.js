@@ -209,6 +209,7 @@ app.get('/api/version', (_req, res) => {
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-public-agent-parity-fast-replies-20260824'] : []),
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-multi-result-fast-search-20260824'] : []),
       ...(!IS_SOUTH_AFRICA ? [SOCIAL_COVERAGE_SCHEDULER_MARKER] : []),
+      ...(!IS_SOUTH_AFRICA ? ['social-review-source-evidence-only-20260825'] : []),
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-owner-forward-review-media-20260820'] : []),
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-owner-history-backfill-20260820'] : []),
       ...(!IS_SOUTH_AFRICA ? ['uganda-master-intake-recovery-20260811'] : []),
