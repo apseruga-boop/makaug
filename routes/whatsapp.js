@@ -3544,6 +3544,9 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
     listingType = 'rent';
   }
   const bedroomDraft = parseEmployeeBedroomDraft(cleanCaption);
+  if (!listingType && Number(bedroomDraft.bedrooms) >= 1 && /\bstaff quarters?\b/i.test(cleanCaption) && Number(price) >= 50000000) {
+    listingType = 'sale';
+  }
   let locationResolution = resolveWhatsappLocation(cleanCaption, { allowText: true });
   if (!locationResolution || locationResolution.status !== 'matched') {
     const beforeLandmark = cleanCaption.split(/\b(?:opposite|near)\b/i)[0].trim();
