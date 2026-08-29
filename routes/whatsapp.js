@@ -6710,6 +6710,38 @@ async function handleWhatsappCallEvent({
   }
 
   const session = await getSession(cleanPhone);
+  const activeEmployeeStep = isEmployeeIntakeStep(session.current_step)
+    ? String(session.current_step)
+    : '';
+  if (activeEmployeeStep) {
+    const callLog = await logWhatsappCallEvent({
+      phone: cleanPhone,
+      provider,
+      callId,
+      status,
+      callType,
+      contactName,
+      metadata: {
+        ...metadata,
+        active_employee_intake_preserved: true,
+        preserved_step: activeEmployeeStep,
+        call_reply_suppressed: true
+      }
+    });
+    const duplicate = Boolean(callLog?.inserted === false && callId);
+    logger.info('WhatsApp call event did not interrupt active employee intake', {
+      phone_suffix: employeeIntakePhoneSuffix(cleanPhone),
+      current_step: activeEmployeeStep,
+      duplicate
+    });
+    return {
+      duplicate,
+      message: '',
+      nextStep: activeEmployeeStep,
+      lead: null,
+      suppressedActiveEmployeeIntake: true
+    };
+  }
   const metadataLanguage = normalizeInput(
     metadata.language
     || metadata.detected_language
@@ -10586,12 +10618,12 @@ async function processInboundRuntimeUnlocked({
 
 const whatsappInboundRuntimeQueues = new Map();
 
-function processInboundRuntime(input = {}) {
-  const queueKey = normalizeBridgeInboundKey(input.phone || '') || String(input.phone || 'unknown').trim();
+function queueWhatsappRuntimeForPhone(phone, task) {
+  const queueKey = normalizeBridgeInboundKey(phone || '') || String(phone || 'unknown').trim();
   const previous = whatsappInboundRuntimeQueues.get(queueKey) || Promise.resolve();
   const current = previous
     .catch(() => {})
-    .then(() => processInboundRuntimeUnlocked(input));
+    .then(task);
   whatsappInboundRuntimeQueues.set(queueKey, current);
   current.finally(() => {
     if (whatsappInboundRuntimeQueues.get(queueKey) === current) {
@@ -10601,13 +10633,21 @@ function processInboundRuntime(input = {}) {
   return current;
 }
 
+function processInboundRuntime(input = {}) {
+  return queueWhatsappRuntimeForPhone(input.phone, () => processInboundRuntimeUnlocked(input));
+}
+
+function processWhatsappCallEvent(input = {}) {
+  return queueWhatsappRuntimeForPhone(input.phone, () => handleWhatsappCallEvent(input));
+}
+
 async function processMetaWebhookPayload(payload) {
   const inboundCalls = parseMetaCallEvents(payload);
   const inboundMessages = await parseMetaInboundMessages(payload);
 
   for (const call of inboundCalls) {
     try {
-      const { message, nextStep, duplicate } = await handleWhatsappCallEvent({
+      const { message, nextStep, duplicate } = await processWhatsappCallEvent({
         phone: call.phone,
         provider: 'meta',
         callId: call.callId,
@@ -10842,7 +10882,7 @@ router.post('/web-bridge/call', asyncRoute(async (req, res) => {
     callType: req.body.call_type || req.body.callType || 'voice'
   })).digest('hex')}`;
   const runtimePhone = dryRun ? createBridgeDryRunKey(phone, req.body.dry_run_session || req.body.dryRunSession || req.body.client_id || '') : phone;
-  const { message, nextStep, duplicate, lead } = await handleWhatsappCallEvent({
+  const { message, nextStep, duplicate, lead } = await processWhatsappCallEvent({
     phone: runtimePhone,
     provider: 'web_bridge',
     callId: dryRun ? `${callId}:dryrun:${runtimePhone.split(':').pop()}` : callId,
@@ -11071,7 +11111,7 @@ router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
   );
   if (isBridgeCallLog) {
     const callType = mediaType.includes('video') || /\bvideo\s+call\b/i.test(body) ? 'video' : 'voice';
-    const { message, nextStep, duplicate, lead } = await handleWhatsappCallEvent({
+    const { message, nextStep, duplicate, lead } = await processWhatsappCallEvent({
       phone: runtimePhone,
       provider: 'web_bridge',
       callId: runtimeInboundMessageId,
@@ -11419,5 +11459,6 @@ module.exports.__test = {
   employeeMediaCandidates,
   employeePropertyFacts,
   employeePropertyMissing,
+  handleWhatsappCallEvent,
   handleEmployeeWhatsappIntake
 };

@@ -74,6 +74,11 @@ assert(routeSource.includes('whatsapp_employee_batch_complete'), 'completed batc
 assert(routeSource.includes("const WHATSAPP_AGENT_007_ORDERED_BATCH_MARKER = 'whatsapp-agent-007-ordered-batch-finalization-20260829'"), 'ordered batch release must be traceable');
 assert(routeSource.includes('const whatsappInboundRuntimeQueues = new Map()'), 'same-phone messages must be serialized');
 assert(routeSource.includes('processInboundRuntimeUnlocked'), 'the serialized runtime must wrap the original inbound processor');
+assert(routeSource.includes('function processWhatsappCallEvent(input = {})'), 'call events must use the same per-phone runtime queue');
+assert.equal((routeSource.match(/await processWhatsappCallEvent\(\{/g) || []).length, 3, 'all three provider call-event paths must be serialized');
+assert(routeSource.includes('active_employee_intake_preserved: true'), 'call events must not take over an active employee intake');
+assert(routeSource.includes('call_reply_suppressed: true'), 'suppressed call events must remain auditable');
+assert(routeSource.includes('suppressedActiveEmployeeIntake: true'), 'call routing must report the employee-intake shield');
 assert(routeSource.includes('Properties shared: ${batchCounts.propertiesShared}'), 'completion must report the shared count');
 assert(routeSource.includes('Successfully set up in staff review: ${batchCounts.propertiesSetUp}'), 'completion must report the successful setup count');
 assert(routeSource.includes('Duplicates skipped: ${batchCounts.duplicatesSkipped}'), 'completion must report duplicates');
@@ -117,6 +122,7 @@ assert(
 assert(serverSource.includes('whatsapp-employee-agent-007-review-intake-20260829'), 'release marker should be externally verifiable');
 assert(serverSource.includes('whatsapp-agent-007-multiple-property-batches-20260829'), 'multiple-property mode should have an externally verifiable release marker');
 assert(serverSource.includes('whatsapp-agent-007-ordered-batch-finalization-20260829'), 'ordered batch finalization should have an externally verifiable release marker');
+assert(serverSource.includes('whatsapp-active-intake-call-shield-20260829'), 'employee call shield should have an externally verifiable release marker');
 
 const db = require('../config/database');
 const originalQuery = db.query;
@@ -124,6 +130,20 @@ const originalQuery = db.query;
 (async () => {
   const updates = [];
   db.query = async (sql, params = []) => {
+    if (/SELECT \* FROM whatsapp_sessions WHERE phone/i.test(sql)) {
+      return {
+        rows: [{
+          phone: params[0],
+          current_step: 'employee_intake_role',
+          language: 'en',
+          listing_draft: {},
+          session_data: { whatsapp_employee_intake: true }
+        }]
+      };
+    }
+    if (/INSERT INTO whatsapp_call_events/i.test(sql)) {
+      return { rows: [{ id: 'call-event-test', inserted: true }] };
+    }
     if (/UPDATE whatsapp_sessions/i.test(sql)) {
       updates.push({ sql, params });
       return { rows: [] };
@@ -143,6 +163,19 @@ const originalQuery = db.query;
     if (/INSERT INTO notifications/i.test(sql)) return { rows: [{ id: 'notification-test' }] };
     throw new Error(`Unexpected test query: ${String(sql).slice(0, 80)}`);
   };
+
+  const shieldedCall = await whatsappRoute.handleWhatsappCallEvent({
+    phone: '+447757773202',
+    provider: 'web_bridge',
+    callId: 'stale-call-card-during-agent-007',
+    status: 'missed',
+    callType: 'voice',
+    metadata: { detected_from: 'recent_chat_call_preview' }
+  });
+  assert.equal(shieldedCall.nextStep, 'employee_intake_role');
+  assert.equal(shieldedCall.message, '');
+  assert.equal(shieldedCall.lead, null);
+  assert.equal(shieldedCall.suppressedActiveEmployeeIntake, true);
 
   const triggered = await whatsappRoute.handleEmployeeWhatsappIntake({
     phone: '+447757773202',
