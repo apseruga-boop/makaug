@@ -1440,6 +1440,7 @@ async function getActiveChatSnapshot(page) {
     };
     const hasVoiceNote = (root, text = '') => {
       if (!root) return false;
+      if (root.querySelector('video, source[type^="video/"]')) return false;
       if (root.querySelector('audio, source[type^="audio/"]')) return true;
       const voiceControl = root.querySelector([
         '[aria-label*="voice" i]',
@@ -1599,21 +1600,22 @@ async function getActiveChatSnapshot(page) {
     const callLog = hasCallLog(last, text);
     const documentMedia = Boolean(last.querySelector('a[download], [data-icon*="document" i], [data-testid*="document" i]'))
       || /\.(?:pdf|docx?|xlsx?|pptx?|txt|csv)(?:\s|$)/i.test(text);
+    const videoMedia = Boolean(last.querySelector('video, source[type^="video/"]'));
     const mediaType = sharedLocation
       ? 'location'
       : hasNonEmojiImage && isTimestampOnlyText(text) && !!sharedLocation
         ? 'location_preview'
       : callLog
         ? 'call'
-      : voiceNote
-        ? 'voice'
       : documentMedia
         ? 'media'
+      : videoMedia
+        ? 'media'
+      : voiceNote
+        ? 'voice'
       : last.querySelector('img')
-      ? 'image'
-      : last.querySelector('video')
-          ? 'media'
-          : 'text';
+        ? 'image'
+        : 'text';
     const cleanText = cleanRenderedMessageText(text, mediaType);
 
     return {
@@ -1715,6 +1717,7 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
     };
     const hasVoiceNote = (root, text = '') => {
       if (!root) return false;
+      if (root.querySelector('video, source[type^="video/"]')) return false;
       if (root.querySelector('audio, source[type^="audio/"]')) return true;
       const voiceControl = root.querySelector([
         '[aria-label*="voice" i]',
@@ -1843,18 +1846,19 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
         const callLog = hasCallLog(node, rawText);
         const documentMedia = Boolean(node.querySelector('a[download], [data-icon*="document" i], [data-testid*="document" i]'))
           || /\.(?:pdf|docx?|xlsx?|pptx?|txt|csv)(?:\s|$)/i.test(rawText);
+        const videoMedia = Boolean(node.querySelector('video, source[type^="video/"]'));
         const mediaType = sharedLocation
           ? 'location'
           : hasNonEmojiImage && isTimestampOnlyText(rawText) && !!sharedLocation
             ? 'location_preview'
           : callLog
           ? 'call'
-          : voiceNote
-          ? 'voice'
           : documentMedia
             ? 'media'
-          : node.querySelector('video')
+          : videoMedia
             ? 'media'
+          : voiceNote
+            ? 'voice'
             : node.querySelector('img')
               ? 'image'
               : 'text';
