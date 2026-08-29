@@ -86,6 +86,7 @@ const { buildUgNlisAssistantReply } = require('../services/ugnlisLandVerificatio
 const { addPublicAgentEligibilityFilters } = require('../services/publicAgentEligibilityService');
 const { tenantFor } = require('../packages/shared-country-core');
 const { buildListingReference } = require('../services/listingReferenceService');
+const { propertyPriceMetadata } = require('../utils/propertyPriceCurrency');
 const {
   buildWhatsappPropertyCard,
   buildWhatsappPropertySearchReply,
@@ -1972,9 +1973,23 @@ function firstDistrictFromText(input = '') {
   return DISTRICTS.find((d) => new RegExp(`\\b${d.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(clean)) || '';
 }
 
+function listingPriceSourceFragment(input = '') {
+  const clean = normalizeInput(input).toLowerCase().replace(/,/g, '');
+  if (!clean) return '';
+  const explicitCurrency = clean.match(/\b(?:ugx|ush|usd|us\$)\s*\d+(?:\.\d+)?\s*(?:b|bn|bil|billion|m|mn|mil|million|k|thousand)?\b/i);
+  if (explicitCurrency?.[0]) return explicitCurrency[0];
+  const explicitSalePrice = clean.match(/\b(?:price|asking|selling|on sale(?: for)?|for sale(?: at)?|rent(?:ed)? at)\D{0,20}(\d+(?:\.\d+)?\s*(?:b|bn|bil|billion|m|mn|mil|million|k|thousand)?)\b/i);
+  return explicitSalePrice?.[1] || '';
+}
+
 function parseListingPriceDraft(input = '') {
   const clean = normalizeInput(input).toLowerCase().replace(/,/g, '');
   if (!clean) return null;
+  const sourceFragment = listingPriceSourceFragment(clean);
+  if (sourceFragment) {
+    const metadata = propertyPriceMetadata(sourceFragment);
+    if (metadata.supported && Number(metadata.price) >= 10000) return Number(metadata.price);
+  }
   const millionMatch = clean.match(/\b(\d+(?:\.\d+)?)\s*(m|mn|mil|million)\b/i);
   if (millionMatch) {
     const value = Math.round(Number(millionMatch[1]) * 1000000);
@@ -3519,10 +3534,24 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
   const cleanCaption = normalizeInput(caption);
   const naturalDraft = buildNaturalListingDetailDraft(cleanCaption, {}) || {};
   const hints = extractSellerListingDraftHints(cleanCaption, {});
-  const listingType = ownerForwardListingType(cleanCaption, { ...hints, ...naturalDraft });
-  const price = parseListingPriceDraft(cleanCaption);
+  let listingType = ownerForwardListingType(cleanCaption, { ...hints, ...naturalDraft });
+  const priceSource = listingPriceSourceFragment(cleanCaption);
+  const priceMetadata = priceSource
+    ? propertyPriceMetadata(priceSource)
+    : propertyPriceMetadata(parseListingPriceDraft(cleanCaption));
+  const price = Number(priceMetadata.price) || parseListingPriceDraft(cleanCaption);
+  if (!listingType && /\bapartments?\b/i.test(cleanCaption) && Number(price) >= 10000 && Number(price) <= 20000000 && !/\b(?:sale|selling|buy|purchase)\b/i.test(cleanCaption)) {
+    listingType = 'rent';
+  }
   const bedroomDraft = parseEmployeeBedroomDraft(cleanCaption);
   let locationResolution = resolveWhatsappLocation(cleanCaption, { allowText: true });
+  if (!locationResolution || locationResolution.status !== 'matched') {
+    const beforeLandmark = cleanCaption.split(/\b(?:opposite|near)\b/i)[0].trim();
+    if (beforeLandmark && beforeLandmark !== cleanCaption) {
+      const landmarkFallback = resolveWhatsappLocation(beforeLandmark, { allowText: true });
+      if (landmarkFallback?.status === 'matched') locationResolution = landmarkFallback;
+    }
+  }
   if ((!locationResolution || locationResolution.status !== 'matched') && sessionData.customer_details?.location) {
     locationResolution = resolveWhatsappLocation(`${cleanCaption} ${sessionData.customer_details.location}`, { allowText: true });
   }
@@ -3531,7 +3560,7 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
     && !['district', 'region'].includes(locationLevel)
     && Number(locationResolution?.confidence || 0) >= 1;
   const locationPatch = exactLocation ? canonicalWhatsappLocationPatch(locationResolution) : {};
-  return { cleanCaption, naturalDraft, hints, listingType, price, bedroomDraft, locationPatch };
+  return { cleanCaption, naturalDraft, hints, listingType, price, priceMetadata, bedroomDraft, locationPatch };
 }
 
 function employeePropertyMissing(facts = {}) {
@@ -3575,6 +3604,113 @@ function employeeBatchCounts(data = {}) {
     ? explicitSharedCount
     : propertiesSetUp + duplicatesSkipped + propertiesFailed;
   return { propertiesShared, propertiesSetUp, duplicatesSkipped, propertiesFailed };
+}
+
+async function reconcileEmployeeBatchReviewRecords(data = {}) {
+  const requestedIds = [...new Set((Array.isArray(data.property_ids) ? data.property_ids : []).map(String).filter(Boolean))];
+  if (!requestedIds.length) return { propertyIds: [], duplicatesRemoved: 0 };
+  const client = await db.getClient();
+  try {
+    await client.query('BEGIN');
+    const result = await client.query(
+      `SELECT id::text AS id, status, created_at, description, extra_fields
+         FROM properties
+        WHERE id = ANY($1::uuid[])
+          AND source = 'whatsapp_employee_intake'
+          AND status IN ('pending','approved')
+        ORDER BY created_at ASC, id ASC
+        FOR UPDATE`,
+      [requestedIds]
+    );
+    const groups = new Map();
+    for (const row of result.rows) {
+      const caption = normalizeInput(row.extra_fields?.source_caption || row.description || '');
+      const captionHash = normalizeInput(row.extra_fields?.source_caption_sha256) || employeeCaptionHash(caption) || row.id;
+      if (!groups.has(captionHash)) groups.set(captionHash, []);
+      groups.get(captionHash).push({ ...row, caption });
+    }
+
+    const keepers = [];
+    const redundantPending = [];
+    for (const rows of groups.values()) {
+      const keeper = rows.find((row) => row.status === 'approved') || rows[0];
+      keepers.push(keeper);
+      redundantPending.push(...rows.filter((row) => row.id !== keeper.id && row.status === 'pending'));
+    }
+
+    for (const row of keepers) {
+      const facts = employeePropertyFacts(row.caption, data);
+      if (employeePropertyMissing(facts).length) continue;
+      const priceMetadata = facts.priceMetadata || propertyPriceMetadata(facts.price);
+      await client.query(
+        `UPDATE properties
+            SET listing_type = $2,
+                title = $3,
+                district = $4,
+                area = $5,
+                price = $6,
+                price_currency = $7,
+                price_original_currency = $8,
+                price_original = $9,
+                price_fx_rate_ugx = $10,
+                price_fx_as_of = $11,
+                price_period = $12,
+                bedrooms = COALESCE($13, bedrooms),
+                extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $14::jsonb,
+                updated_at = NOW()
+          WHERE id = $1`,
+        [
+          row.id,
+          facts.listingType,
+          ownerForwardListingTitle({ listingType: facts.listingType, area: facts.locationPatch.area, bedrooms: facts.bedroomDraft.bedrooms }),
+          facts.locationPatch.district,
+          facts.locationPatch.area,
+          facts.price,
+          priceMetadata.price_currency || ACTIVE_CURRENCY,
+          priceMetadata.price_original_currency || ACTIVE_CURRENCY,
+          priceMetadata.price_original || facts.price,
+          priceMetadata.price_fx_rate_ugx || null,
+          priceMetadata.price_fx_as_of || null,
+          ownerForwardPricePeriod(facts.listingType, row.caption),
+          facts.bedroomDraft.bedrooms || null,
+          JSON.stringify({
+            employee_batch_completion_reconciled: true,
+            employee_batch_completion_reconciled_at: new Date().toISOString(),
+            price_currency: priceMetadata.price_currency || ACTIVE_CURRENCY,
+            price_original_currency: priceMetadata.price_original_currency || ACTIVE_CURRENCY,
+            price_original: priceMetadata.price_original || facts.price,
+            price_fx_rate_ugx: priceMetadata.price_fx_rate_ugx || null,
+            price_fx_as_of: priceMetadata.price_fx_as_of || null
+          })
+        ]
+      );
+    }
+
+    for (const row of redundantPending) {
+      const reason = 'Rejected duplicate created during interrupted Agent 007 recovery; the earlier review record was retained.';
+      await client.query(
+        `UPDATE properties
+            SET status = 'rejected', moderation_stage = 'rejected', moderation_reason = $2,
+                reviewed_at = NOW(), updated_at = NOW(),
+                extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $3::jsonb
+          WHERE id = $1 AND status = 'pending'`,
+        [row.id, reason, JSON.stringify({ employee_batch_recovery_duplicate: true, auto_publish: false })]
+      );
+      await client.query(
+        `INSERT INTO property_moderation_events
+          (property_id, actor_id, action, status_from, status_to, reason, notes, delivery)
+         VALUES ($1,'whatsapp-employee-agent-007','whatsapp_employee_recovery_duplicate_rejected','pending','rejected',$2,$2,$3::jsonb)`,
+        [row.id, reason, JSON.stringify({ marker: WHATSAPP_AGENT_007_ORDERED_BATCH_MARKER, auto_publish: false })]
+      );
+    }
+    await client.query('COMMIT');
+    return { propertyIds: keepers.map((row) => row.id), duplicatesRemoved: redundantPending.length };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 async function prepareEmployeeOrderedBatchReplay({
@@ -3708,9 +3844,12 @@ async function prepareEmployeeOrderedBatchReplay({
     property_ids: propertyIds,
     current_property_id: propertyIds[propertyIds.length - 1] || null,
     total_media_count: previousMedia,
-    properties_shared_count: previousShared,
-    properties_duplicate_count: previousDuplicates,
-    properties_failed_count: previousFailed,
+    properties_shared_count: 0,
+    properties_duplicate_count: 0,
+    properties_failed_count: 0,
+    employee_intake_recovery_previous_properties_shared: previousShared,
+    employee_intake_recovery_previous_duplicates: previousDuplicates,
+    employee_intake_recovery_previous_failed: previousFailed,
     property_attempt_message_ids: []
   };
   await replaceEmployeeSession(phone, 'employee_property_media', restoredData);
@@ -3832,6 +3971,11 @@ async function createEmployeeReviewProperty({
     whatsapp_employee_access_mode: process.env.WHATSAPP_EMPLOYEE_INTAKE_NUMBERS ? 'allowlist' : 'trigger_only',
     source_caption: caption.slice(0, 2000),
     source_caption_sha256: employeeCaptionHash(caption),
+    price_currency: facts.priceMetadata?.price_currency || ACTIVE_CURRENCY,
+    price_original_currency: facts.priceMetadata?.price_original_currency || ACTIVE_CURRENCY,
+    price_original: facts.priceMetadata?.price_original || facts.price,
+    price_fx_rate_ugx: facts.priceMetadata?.price_fx_rate_ugx || null,
+    price_fx_as_of: facts.priceMetadata?.price_fx_as_of || null,
     source_name: listerName,
     source_platform: 'WhatsApp employee intake',
     agent_profile_linked: Boolean(agent?.id),
@@ -3859,11 +4003,12 @@ async function createEmployeeReviewProperty({
     await client.query('BEGIN');
     const inserted = await client.query(
       `INSERT INTO properties (
-        listing_type, title, description, district, area, price, price_period,
+        listing_type, title, description, district, area, price,
+        price_currency, price_original_currency, price_original, price_fx_rate_ugx, price_fx_as_of, price_period,
         bedrooms, lister_name, lister_phone, lister_email, lister_type, agent_id,
         id_document_name, id_document_url, extra_fields,
         status, moderation_stage, listed_via, source
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'pending','submitted','whatsapp','whatsapp_employee_intake')
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,'pending','submitted','whatsapp','whatsapp_employee_intake')
       RETURNING id`,
       [
         facts.listingType,
@@ -3872,6 +4017,11 @@ async function createEmployeeReviewProperty({
         facts.locationPatch.district,
         facts.locationPatch.area,
         facts.price,
+        facts.priceMetadata?.price_currency || ACTIVE_CURRENCY,
+        facts.priceMetadata?.price_original_currency || ACTIVE_CURRENCY,
+        facts.priceMetadata?.price_original || facts.price,
+        facts.priceMetadata?.price_fx_rate_ugx || null,
+        facts.priceMetadata?.price_fx_as_of || null,
         ownerForwardPricePeriod(facts.listingType, caption),
         facts.bedroomDraft.bedrooms || null,
         listerName,
@@ -4220,11 +4370,22 @@ async function handleEmployeeWhatsappIntake({
 
   if (currentStep === 'employee_property_media') {
     if (isEmployeeIntakeComplete(cleanBody)) {
-      const propertyIds = Array.isArray(data.property_ids) ? data.property_ids : [];
-      const batchCounts = employeeBatchCounts(data);
-      if (!batchCounts.propertiesShared) {
+      let propertyIds = Array.isArray(data.property_ids) ? data.property_ids : [];
+      if (!Number(data.properties_shared_count || 0)) {
         return { handled: true, nextStep: currentStep, message: 'No properties have been saved yet. Send the first property media with its type, exact location and price in the caption.' };
       }
+      const reconciliation = data.employee_intake_recovery_skip_existing_matches === true
+        ? await reconcileEmployeeBatchReviewRecords(data)
+        : { propertyIds, duplicatesRemoved: 0 };
+      propertyIds = reconciliation.propertyIds;
+      data.property_ids = propertyIds;
+      const propertiesShared = Number(data.properties_shared_count || 0);
+      const propertiesFailed = Number(data.properties_failed_count || 0);
+      data.properties_duplicate_count = Math.max(
+        Number(data.properties_duplicate_count || 0),
+        propertiesShared - propertyIds.length - propertiesFailed
+      );
+      const batchCounts = employeeBatchCounts(data);
       const subjectName = normalizeInput(data.agent?.full_name || data.customer_details?.fullName || 'this batch');
       const agentPhone = normalizeInput(data.agent?.whatsapp || data.agent?.phone || '');
       const agentProfileUrl = data.agent?.id ? `${HOME_URL}/agents/${data.agent.id}` : '';
@@ -4369,6 +4530,7 @@ async function handleEmployeeWhatsappIntake({
     if (shouldStartProperty) {
       const existingProperty = await findEmployeeDuplicateProperty({ caption, facts, sessionData: data });
       if (existingProperty && data.employee_intake_recovery_skip_existing_matches === true) {
+        recordEmployeePropertyAttempt(data, { inboundMessageId, caption });
         const propertyIds = Array.isArray(data.property_ids) ? data.property_ids.map(String) : [];
         data.current_property_id = propertyIds.includes(String(existingProperty.id))
           ? existingProperty.id
@@ -4429,7 +4591,9 @@ async function handleEmployeeWhatsappIntake({
         const propertyId = await createEmployeeReviewProperty({ phone, inboundMessageId, caption, facts, storedMedia, sessionData: data });
         data.current_property_id = propertyId;
         data.property_ids = [...new Set([...(Array.isArray(data.property_ids) ? data.property_ids : []), propertyId])];
-        data.total_media_count = Number(data.total_media_count || 0) + storedMedia.length;
+        if (data.employee_intake_recovery_skip_existing_matches !== true) {
+          data.total_media_count = Number(data.total_media_count || 0) + storedMedia.length;
+        }
         delete data.pending_property_caption;
         await replaceEmployeeSession(phone, currentStep, data);
         return {
@@ -4458,7 +4622,9 @@ async function handleEmployeeWhatsappIntake({
         inboundMessageId
       });
       if (!attachment.duplicate) {
-        data.total_media_count = Number(data.total_media_count || 0) + attachment.attached;
+        if (data.employee_intake_recovery_skip_existing_matches !== true) {
+          data.total_media_count = Number(data.total_media_count || 0) + attachment.attached;
+        }
         await replaceEmployeeSession(phone, currentStep, data);
       }
       return {

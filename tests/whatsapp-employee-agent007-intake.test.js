@@ -65,8 +65,41 @@ assert.equal(parsedProperty.locationPatch.area, 'Ntinda');
 assert.equal(parsedProperty.locationPatch.district, 'Kampala');
 assert.deepEqual(whatsappRoute.employeePropertyMissing(parsedProperty), []);
 
+const compactCurrencyLand = whatsappRoute.employeePropertyFacts(
+  'Forwarded\n32 decimals plot Kira Nsasa behind Total fuel station UGX330 million',
+  {}
+);
+assert.equal(compactCurrencyLand.price, 330_000_000, 'currency labels joined to amounts must still parse');
+assert.equal(compactCurrencyLand.listingType, 'land');
+assert.equal(compactCurrencyLand.locationPatch.area, 'Kira-Nsasa');
+assert.deepEqual(whatsappRoute.employeePropertyMissing(compactCurrencyLand), []);
+
+const najeeraSale = whatsappRoute.employeePropertyFacts(
+  'Forwarded\nNajeera 8 double units apartments monthly income 8 million on sale UGX 1 billion',
+  {}
+);
+assert.equal(najeeraSale.price, 1_000_000_000, 'explicit sale price must win over monthly-income figures');
+assert.equal(najeeraSale.locationPatch.area, 'Najjera', 'common Najeera spelling must resolve canonically');
+assert.deepEqual(whatsappRoute.employeePropertyMissing(najeeraSale), []);
+
+const inferredApartmentRent = whatsappRoute.employeePropertyFacts(
+  'Forwarded\nNamugongo catholic shrine 3 bedroom apartments UGX 1.5 million',
+  {}
+);
+assert.equal(inferredApartmentRent.listingType, 'rent', 'low-price apartment captions without sale language should enter rent review');
+assert.deepEqual(whatsappRoute.employeePropertyMissing(inferredApartmentRent), []);
+
+const usdLand = whatsappRoute.employeePropertyFacts(
+  'Forwarded\nNajeera 2.2 acres opposite Najeera hospital private mailo on sale USD 3 million',
+  {}
+);
+assert.equal(usdLand.price, 11_400_000_000, 'USD source prices must be converted to canonical UGX');
+assert.equal(usdLand.priceMetadata.price_original_currency, 'USD');
+assert.equal(usdLand.priceMetadata.price_original, 3_000_000);
+assert.deepEqual(whatsappRoute.employeePropertyMissing(usdLand), []);
+
 assert(routeSource.includes("const WHATSAPP_EMPLOYEE_AGENT_007_MARKER = 'whatsapp-employee-agent-007-review-intake-20260829'"));
-assert(routeSource.includes("$16,'pending','submitted','whatsapp','whatsapp_employee_intake'"), 'employee properties must enter staff review as pending');
+assert(routeSource.includes("$21,'pending','submitted','whatsapp','whatsapp_employee_intake'"), 'employee properties must enter staff review as pending');
 assert(routeSource.includes('review_only: true') && routeSource.includes('auto_publish: false'), 'review-only and no-autopublish gates are required');
 assert(routeSource.includes("'whatsapp-employee-agent-007','whatsapp_employee_intake_queued','pending','pending'"), 'moderation history must retain pending status');
 assert(routeSource.includes('whatsapp_employee_property_review_queued'), 'each property should create a notification/audit record');
@@ -88,6 +121,9 @@ assert(!copilotSource.includes("snapshot.messageId || snapshot.mediaFingerprint 
 assert(routeSource.includes('Properties received: ${batchCounts.propertiesShared}'), 'completion must report the shared count');
 assert(routeSource.includes('Sent to staff review: ${batchCounts.propertiesSetUp}'), 'completion must report the successful setup count');
 assert(routeSource.includes('Duplicates skipped: ${batchCounts.duplicatesSkipped}'), 'completion must report duplicates');
+assert(routeSource.includes('reconcileEmployeeBatchReviewRecords'), 'completion must reconcile retry-created duplicate review records');
+assert(routeSource.includes('whatsapp_employee_recovery_duplicate_rejected'), 'recovery duplicates must be auditable and remain non-live');
+assert(routeSource.includes('properties_shared_count: 0'), 'ordered history recovery must recount the actual batch instead of reusing stale totals');
 assert(routeSource.includes('Could not be processed: ${batchCounts.propertiesFailed}'), 'completion must report failures');
 assert(routeSource.includes("type: 'whatsapp_agent_batch_card_awaiting_approval'"), 'agent notification must wait at the founder approval gate');
 assert(routeSource.includes("status: 'awaiting_founder_approval'"), 'pending agent-card state must be durable');
@@ -163,6 +199,7 @@ assert(serverSource.includes('whatsapp-agent-007-media-only-reconciliation-20260
 assert(serverSource.includes('whatsapp-agent-007-retry-history-recovery-20260829'), 'retrying history recovery should have an externally verifiable release marker');
 assert(serverSource.includes('whatsapp-agent-007-retry-api-errors-20260829'), 'API-error batch recovery should have an externally verifiable release marker');
 assert(serverSource.includes('whatsapp-agent-007-resume-replay-progress-20260829'), 'resumable replay progress should have an externally verifiable release marker');
+assert(serverSource.includes('whatsapp-agent-007-caption-reconciliation-20260829'), 'caption and duplicate reconciliation should have an externally verifiable release marker');
 assert(serverSource.includes("limit: '40mb'"), 'authorized WhatsApp video previews must fit through the JSON intake limit after base64 encoding');
 assert(serverSource.includes('whatsapp-active-intake-call-shield-20260829'), 'employee call shield should have an externally verifiable release marker');
 
