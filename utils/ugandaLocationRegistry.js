@@ -76,7 +76,7 @@ const DETAILED_LOCATIONS = [
   { name: 'Bweyogerere', district: 'Wakiso', lat: 0.351, lng: 32.676 },
   { name: 'Kyaliwajjala', district: 'Wakiso', lat: 0.377, lng: 32.639 },
   { name: 'Naalya', district: 'Wakiso', lat: 0.366, lng: 32.636, aliases: ['Naalya', 'Naalya Estate'] },
-  { name: 'Najjera', district: 'Wakiso', lat: 0.396, lng: 32.615, aliases: ['Najjera', 'Najjeera'] },
+  { name: 'Najjera', district: 'Wakiso', lat: 0.396, lng: 32.615, aliases: ['Najjera', 'Najjeera', 'Najeera'] },
   { name: 'Bulindo', district: 'Wakiso', lat: 0.418, lng: 32.633 },
   { name: 'Sonde', district: 'Wakiso', lat: 0.378, lng: 32.698 },
   { name: 'Kira-Mulawa', district: 'Wakiso', lat: 0.412, lng: 32.65, aliases: ['Kira-Mulawa', 'Kira Mulawa', 'Mulawa'] },
