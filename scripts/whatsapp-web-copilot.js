@@ -271,6 +271,8 @@ const WHATSAPP_EMPLOYEE_AGENT_007_WORKER_MARKER = 'whatsapp-agent-007-media-only
 const RECENT_INBOUND_BACKLOG_LIMIT = 60;
 const EMPLOYEE_BATCH_HISTORY_SCAN_LIMIT = 160;
 const EMPLOYEE_BATCH_HISTORY_MAX_ROUNDS = 30;
+const EMPLOYEE_BATCH_RECOVERY_RETRY_MS = 20_000;
+const EMPLOYEE_BATCH_RECOVERY_MAX_ATTEMPTS = 8;
 const EMPLOYEE_BATCH_RECOVERY_PHONES = String(
   process.env.WHATSAPP_WEB_COPILOT_EMPLOYEE_RECOVERY_PHONES || ''
 ).split(/[;,\s]+/).map((value) => normalizeChatKey(value)).filter(Boolean);
@@ -2703,10 +2705,14 @@ async function scrollWhatsappHistoryOlder(page) {
       .filter((el) => el.scrollHeight > el.clientHeight + 120);
     if (!candidates.length) return false;
     const scroller = candidates.sort((a, b) => b.scrollHeight - a.scrollHeight)[0];
-    const previousTop = scroller.scrollTop;
+    // WhatsApp can initially report scrollTop=0 while it is still hydrating the
+    // current history window. Re-applying the top boundary and continuing the
+    // bounded scan gives its virtualized list time to fetch the preceding rows.
+    // Returning false here used to abandon recovery after the first viewport.
     scroller.scrollTop = 0;
     scroller.dispatchEvent(new Event('scroll', { bubbles: true }));
-    return previousTop > 0;
+    scroller.dispatchEvent(new WheelEvent('wheel', { bubbles: true, deltaY: -1200 }));
+    return true;
   }).catch(() => false);
 }
 
@@ -2955,10 +2961,12 @@ async function maybeReplayEmployeeBatchThroughCompletion(page, snapshots = [], r
 
 async function runConfiguredEmployeeBatchRecovery(page) {
   let processed = 0;
+  let settled = EMPLOYEE_BATCH_RECOVERY_PHONES.length > 0;
   for (const phone of EMPLOYEE_BATCH_RECOVERY_PHONES) {
     const opened = await openChatForReply(page, phone);
     if (!opened) {
       log(`configured Agent 007 recovery chat could not be opened: ${phone}`);
+      settled = false;
       continue;
     }
     await page.waitForTimeout(700);
@@ -2977,9 +2985,11 @@ async function runConfiguredEmployeeBatchRecovery(page) {
       }
     }
     processed += result.processed || 0;
-    log(`configured Agent 007 recovery checked ${phone}; handled=${result.handled ? 'yes' : 'no'} processed=${result.processed || 0}`);
+    const phoneSettled = !!(result.completed || result.alreadyComplete);
+    settled = settled && phoneSettled;
+    log(`configured Agent 007 recovery checked ${phone}; handled=${result.handled ? 'yes' : 'no'} settled=${phoneSettled ? 'yes' : 'no'} processed=${result.processed || 0}`);
   }
-  return processed;
+  return { processed, settled };
 }
 
 async function collectOwnerHistoryBackfillSnapshots(page, { chatKey = '', limit = 60 } = {}) {
@@ -4447,7 +4457,9 @@ async function main() {
   let lastOutboxPoll = 0;
   let lastTabReselect = 0;
   let consecutiveLoopErrors = 0;
-  let configuredEmployeeRecoveryRan = false;
+  let configuredEmployeeRecoverySettled = EMPLOYEE_BATCH_RECOVERY_PHONES.length === 0;
+  let configuredEmployeeRecoveryAttempts = 0;
+  let lastConfiguredEmployeeRecoveryAttempt = 0;
 
   while (true) {
     try {
@@ -4536,9 +4548,18 @@ async function main() {
         continue;
       }
 
-      if (!configuredEmployeeRecoveryRan) {
-        configuredEmployeeRecoveryRan = true;
-        await runConfiguredEmployeeBatchRecovery(page);
+      if (
+        !configuredEmployeeRecoverySettled
+        && configuredEmployeeRecoveryAttempts < EMPLOYEE_BATCH_RECOVERY_MAX_ATTEMPTS
+        && now - lastConfiguredEmployeeRecoveryAttempt >= EMPLOYEE_BATCH_RECOVERY_RETRY_MS
+      ) {
+        configuredEmployeeRecoveryAttempts += 1;
+        lastConfiguredEmployeeRecoveryAttempt = now;
+        const recovery = await runConfiguredEmployeeBatchRecovery(page);
+        configuredEmployeeRecoverySettled = !!recovery.settled;
+        if (!configuredEmployeeRecoverySettled && configuredEmployeeRecoveryAttempts >= EMPLOYEE_BATCH_RECOVERY_MAX_ATTEMPTS) {
+          log(`configured Agent 007 recovery exhausted ${configuredEmployeeRecoveryAttempts} bounded attempts; the normal chat sweeps remain active`);
+        }
       }
 
       let sentAtLoopStart = 0;
