@@ -98,6 +98,15 @@ assert.equal(usdLand.priceMetadata.price_original_currency, 'USD');
 assert.equal(usdLand.priceMetadata.price_original, 3_000_000);
 assert.deepEqual(whatsappRoute.employeePropertyMissing(usdLand), []);
 
+const staffQuarterSale = whatsappRoute.employeePropertyFacts(
+  'Forwarded\nKira town 3 bedroom with staff quarters UGX 370 million',
+  {}
+);
+assert.equal(staffQuarterSale.listingType, 'sale', 'high-value bedroom captions with staff quarters should enter sale review');
+assert.equal(staffQuarterSale.price, 370_000_000);
+assert.equal(staffQuarterSale.locationPatch.area, 'Kira');
+assert.deepEqual(whatsappRoute.employeePropertyMissing(staffQuarterSale), []);
+
 assert(routeSource.includes("const WHATSAPP_EMPLOYEE_AGENT_007_MARKER = 'whatsapp-employee-agent-007-review-intake-20260829'"));
 assert(routeSource.includes("$21,'pending','submitted','whatsapp','whatsapp_employee_intake'"), 'employee properties must enter staff review as pending');
 assert(routeSource.includes('review_only: true') && routeSource.includes('auto_publish: false'), 'review-only and no-autopublish gates are required');
@@ -200,6 +209,7 @@ assert(serverSource.includes('whatsapp-agent-007-retry-history-recovery-20260829
 assert(serverSource.includes('whatsapp-agent-007-retry-api-errors-20260829'), 'API-error batch recovery should have an externally verifiable release marker');
 assert(serverSource.includes('whatsapp-agent-007-resume-replay-progress-20260829'), 'resumable replay progress should have an externally verifiable release marker');
 assert(serverSource.includes('whatsapp-agent-007-caption-reconciliation-20260829'), 'caption and duplicate reconciliation should have an externally verifiable release marker');
+assert(serverSource.includes('whatsapp-agent-007-residential-caption-20260829'), 'residential caption recovery should have an externally verifiable release marker');
 assert(serverSource.includes("limit: '40mb'"), 'authorized WhatsApp video previews must fit through the JSON intake limit after base64 encoding');
 assert(serverSource.includes('whatsapp-active-intake-call-shield-20260829'), 'employee call shield should have an externally verifiable release marker');
 
