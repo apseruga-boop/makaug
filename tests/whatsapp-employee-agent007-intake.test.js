@@ -77,6 +77,7 @@ assert(routeSource.includes('source_caption_sha256') && routeSource.includes("st
 assert(!routeSource.includes("source = 'whatsapp_employee_intake' AND status = 'approved'"), 'employee intake must never auto-approve');
 assert(copilotSource.includes('async function hydrateVideoSnapshot'), 'WhatsApp Web bridge should download video bytes');
 assert(copilotSource.includes('media_previews:'), 'WhatsApp Web bridge should transmit non-image media bytes');
+assert(copilotSource.includes('release_marker: WHATSAPP_EMPLOYEE_AGENT_007_WORKER_MARKER'), 'hosted worker heartbeat should prove the Agent 007 build');
 assert(serverSource.includes('whatsapp-employee-agent-007-review-intake-20260829'), 'release marker should be externally verifiable');
 
 const db = require('../config/database');

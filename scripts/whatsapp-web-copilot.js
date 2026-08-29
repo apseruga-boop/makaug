@@ -267,6 +267,7 @@ const LISTING_IMAGE_PREVIEW_QUALITY = 0.78;
 const LISTING_IMAGE_PREVIEW_MAX_BYTES = 1_500_000;
 const EMPLOYEE_VIDEO_PREVIEW_MAX_BYTES = 12_000_000;
 const OUTBOUND_PROPERTY_IMAGE_MAX_BYTES = 15_000_000;
+const WHATSAPP_EMPLOYEE_AGENT_007_WORKER_MARKER = 'whatsapp-employee-agent-007-review-intake-20260829';
 const seenBrowserMessageIds = new Set();
 const seenCallEventKeys = new Map();
 const recentlySentReplyKeys = new Map();
@@ -541,6 +542,8 @@ function hostedRuntimeMetadata() {
     runtime: hosted ? 'render_worker' : 'local_browser',
     deploy_target: hosted ? 'render' : 'local',
     node_version: process.version.replace(/^v/, ''),
+    release_marker: WHATSAPP_EMPLOYEE_AGENT_007_WORKER_MARKER,
+    git_commit: process.env.RENDER_GIT_COMMIT || process.env.SOURCE_VERSION || process.env.GIT_COMMIT || '',
     ...Object.fromEntries(Object.entries(renderSignals).filter(([, value]) => Boolean(value)))
   };
 }
