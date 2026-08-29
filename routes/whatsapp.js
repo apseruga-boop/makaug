@@ -3577,6 +3577,133 @@ function employeeBatchCounts(data = {}) {
   return { propertiesShared, propertiesSetUp, duplicatesSkipped, propertiesFailed };
 }
 
+async function prepareEmployeeOrderedBatchReplay({
+  phone,
+  observedPropertyMessages = 0,
+  triggerMessageId = '',
+  completionMessageId = ''
+} = {}) {
+  const sessionResult = await db.query(
+    'SELECT * FROM whatsapp_sessions WHERE phone = $1 LIMIT 1',
+    [phone]
+  );
+  const session = sessionResult.rows[0] || null;
+  if (!session) return { ready: false, reason: 'session_not_found' };
+
+  const currentStep = normalizeInput(session.current_step).toLowerCase();
+  const data = session.session_data && typeof session.session_data === 'object'
+    ? session.session_data
+    : {};
+  if (currentStep === 'employee_property_media' && data.whatsapp_employee_intake) {
+    return {
+      ready: true,
+      restored: false,
+      alreadyActive: true,
+      counts: employeeBatchCounts(data)
+    };
+  }
+
+  const previousShared = Number(data.employee_intake_last_properties_shared || 0);
+  const previousSetUp = Number(data.employee_intake_last_properties_set_up || 0);
+  const previousDuplicates = Number(data.employee_intake_last_duplicates_skipped || 0);
+  const previousFailed = Number(data.employee_intake_last_properties_failed || 0);
+  const previousMedia = Number(data.employee_intake_last_media_count || 0);
+  const completedAt = new Date(data.employee_intake_last_completed_at || 0);
+  const observed = Math.max(0, Number(observedPropertyMessages || 0));
+  if (!Number.isFinite(completedAt.getTime()) || completedAt.getTime() <= 0) {
+    return { ready: false, reason: 'completed_batch_not_found' };
+  }
+  if (Date.now() - completedAt.getTime() > 24 * 60 * 60 * 1000) {
+    return { ready: false, reason: 'completed_batch_too_old' };
+  }
+  if (observed > 0 && observed <= previousShared) {
+    return {
+      ready: false,
+      alreadyComplete: true,
+      reason: 'observed_batch_already_accounted_for',
+      counts: {
+        propertiesShared: previousShared,
+        propertiesSetUp: previousSetUp,
+        duplicatesSkipped: previousDuplicates,
+        propertiesFailed: previousFailed
+      }
+    };
+  }
+
+  const pendingAgent = data.employee_intake_pending_agent_notification;
+  const agentId = normalizeInput(pendingAgent?.agent_id);
+  if (!agentId || previousSetUp < 1) {
+    return { ready: false, reason: 'recoverable_agent_batch_not_found' };
+  }
+  const agentResult = await db.query(
+    `SELECT id, full_name, company_name, phone, whatsapp, email
+       FROM agents
+      WHERE id = $1
+      LIMIT 1`,
+    [agentId]
+  );
+  const agent = agentResult.rows[0];
+  if (!agent) return { ready: false, reason: 'agent_not_found' };
+
+  const propertyResult = await db.query(
+    `SELECT id::text AS id
+       FROM properties
+      WHERE source = 'whatsapp_employee_intake'
+        AND agent_id = $1
+        AND extra_fields->>'whatsapp_employee_sender_phone_suffix' = $2
+        AND created_at <= $3
+      ORDER BY created_at DESC, id DESC
+      LIMIT $4`,
+    [agentId, employeeIntakePhoneSuffix(phone), completedAt.toISOString(), previousSetUp]
+  );
+  if (propertyResult.rows.length !== previousSetUp) {
+    return { ready: false, reason: 'completed_batch_properties_not_found' };
+  }
+  const propertyIds = propertyResult.rows.map((row) => row.id).reverse();
+  const restoredData = {
+    whatsapp_employee_intake: true,
+    employee_intake_marker: WHATSAPP_EMPLOYEE_AGENT_007_MARKER,
+    ordered_batch_marker: WHATSAPP_AGENT_007_ORDERED_BATCH_MARKER,
+    employee_intake_recovery_marker: 'whatsapp-agent-007-history-reconciliation-20260829',
+    employee_intake_recovered_at: new Date().toISOString(),
+    employee_intake_original_completed_at: completedAt.toISOString(),
+    employee_intake_recovery_trigger_message_id: triggerMessageId || null,
+    employee_intake_recovery_completion_message_id: completionMessageId || null,
+    employee_sender_phone_suffix: employeeIntakePhoneSuffix(phone),
+    employee_role: 'agent',
+    agent,
+    property_batch_mode: data.employee_intake_last_batch_mode || 'multiple',
+    property_ids: propertyIds,
+    current_property_id: propertyIds[propertyIds.length - 1] || null,
+    total_media_count: previousMedia,
+    properties_shared_count: previousShared,
+    properties_duplicate_count: previousDuplicates,
+    properties_failed_count: previousFailed,
+    property_attempt_message_ids: []
+  };
+  await replaceEmployeeSession(phone, 'employee_property_media', restoredData);
+  await logNotification(db, {
+    recipientPhone: phone,
+    channel: 'whatsapp',
+    type: 'whatsapp_employee_batch_history_recovery_started',
+    status: 'processing',
+    relatedListingId: propertyIds[propertyIds.length - 1] || null,
+    payloadSummary: {
+      marker: 'whatsapp-agent-007-history-reconciliation-20260829',
+      observed_property_messages: observed,
+      previous_properties_shared: previousShared,
+      previous_properties_set_up: previousSetUp,
+      review_only: true
+    }
+  });
+  return {
+    ready: true,
+    restored: true,
+    alreadyActive: false,
+    counts: employeeBatchCounts(restoredData)
+  };
+}
+
 function recoverInterruptedEmployeeIntakeStep(session = {}) {
   const currentStep = normalizeInput(session.current_step).toLowerCase();
   const data = session.session_data && typeof session.session_data === 'object'
@@ -11003,6 +11130,35 @@ router.post('/web-bridge/call', asyncRoute(async (req, res) => {
   });
 }));
 
+// POST /api/whatsapp/web-bridge/employee-batch-recovery
+router.post('/web-bridge/employee-batch-recovery', asyncRoute(async (req, res) => {
+  if (!isWhatsappWebBridgeAuthorized(req)) return bridgeUnauthorized(res);
+
+  const phone = normalizeBridgeInboundKey(req.body.phone || req.body.chat_key || req.body.contact_key);
+  if (!phone) return res.status(400).json({ ok: false, error: 'phone or chat_key is required' });
+  if (!employeeIntakePhoneAllowed(phone, { ownerAuthorized: isAiCeoOwnerPhone(phone) })) {
+    return res.status(403).json({ ok: false, error: 'employee intake phone is not authorized' });
+  }
+  const observedPropertyMessages = Math.max(
+    0,
+    Math.min(100, Number(req.body.observed_property_messages || req.body.observedPropertyMessages || 0) || 0)
+  );
+  const result = await prepareEmployeeOrderedBatchReplay({
+    phone,
+    observedPropertyMessages,
+    triggerMessageId: normalizeInput(req.body.trigger_message_id || req.body.triggerMessageId),
+    completionMessageId: normalizeInput(req.body.completion_message_id || req.body.completionMessageId)
+  });
+  return res.json({
+    ok: true,
+    data: {
+      marker: 'whatsapp-agent-007-history-reconciliation-20260829',
+      observed_property_messages: observedPropertyMessages,
+      ...result
+    }
+  });
+}));
+
 // POST /api/whatsapp/web-bridge/inbound
 router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
   if (!isWhatsappWebBridgeAuthorized(req)) return bridgeUnauthorized(res);
@@ -11071,6 +11227,11 @@ router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
     && inboundMetadata.owner_history_backfill === true;
   const suppressOwnerHistoryReply = isAuthorizedOwnerHistoryBackfill
     && inboundMetadata.suppress_reply === true;
+  const isAuthorizedEmployeeBatchReplay = !dryRun
+    && employeeIntakePhoneAllowed(phone, { ownerAuthorized: isAiCeoOwnerPhone(phone) })
+    && inboundMetadata.employee_batch_ordered_replay === true;
+  const suppressEmployeeBatchReplayReply = isAuthorizedEmployeeBatchReplay
+    && inboundMetadata.employee_batch_completion !== true;
 
   const alreadySeen = await db.query(
     'SELECT 1 FROM whatsapp_messages WHERE wa_message_id = $1 LIMIT 1',
@@ -11080,7 +11241,7 @@ router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
     return res.json({ ok: true, duplicate: true, inbound_message_id: runtimeInboundMessageId });
   }
 
-  if (!dryRun && !ownerHistoryBackfillRequest && !isAuthorizedOwnerHistoryBackfill) {
+  if (!dryRun && !ownerHistoryBackfillRequest && !isAuthorizedOwnerHistoryBackfill && !isAuthorizedEmployeeBatchReplay) {
     const recentDuplicateId = await findRecentBridgeInboundDuplicate({
       phone,
       body,
@@ -11255,7 +11416,7 @@ router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
   });
 
   let queuedReply = null;
-  if (message && !dryRun && !suppressOwnerHistoryReply) {
+  if (message && !dryRun && !suppressOwnerHistoryReply && !suppressEmployeeBatchReplayReply) {
     queuedReply = await queueWhatsappWebBridgeAutoReply({
       phone,
       message,
@@ -11521,5 +11682,6 @@ module.exports.__test = {
   employeePropertyFacts,
   employeePropertyMissing,
   handleWhatsappCallEvent,
-  handleEmployeeWhatsappIntake
+  handleEmployeeWhatsappIntake,
+  prepareEmployeeOrderedBatchReplay
 };
