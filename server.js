@@ -206,6 +206,7 @@ app.get('/api/version', (_req, res) => {
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-employee-agent-007-review-intake-20260829'] : []),
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-agent-007-multiple-property-batches-20260829'] : []),
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-agent-007-ordered-batch-finalization-20260829'] : []),
+      ...(!IS_SOUTH_AFRICA ? ['francis-agent-premium-share-preview-v3-20260829'] : []),
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-multi-result-fast-search-20260824'] : []),
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-owner-forward-review-media-20260820'] : []),
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-owner-history-backfill-20260820'] : []),
@@ -1081,6 +1082,7 @@ function patchListingOpenGraphMeta(html, meta = {}) {
 
 const FRANCIS_ISABIRYE_AGENT_ID = '5674f6cb-37a0-4e1e-904f-06e03ec401ab';
 const AGENT_SHARE_PREVIEW_VERSION = 'preview-v2';
+const AGENT_SHARE_PREMIUM_PREVIEW_VERSION = 'preview-v3';
 
 async function loadPublicAgentOpenGraphMeta(agentId, options = {}) {
   const safeId = String(agentId || '').trim();
@@ -1115,14 +1117,25 @@ async function loadPublicAgentOpenGraphMeta(agentId, options = {}) {
   const description = specializations.length
     ? `${specializations.join(' - ')}. Review my property profile on makaug.com.`
     : 'Review my property profile on makaug.com.';
-  const isApprovedFrancisShare = String(row.id) === FRANCIS_ISABIRYE_AGENT_ID
+  const isFrancis = String(row.id) === FRANCIS_ISABIRYE_AGENT_ID;
+  const isPremiumFrancisPreview = isFrancis
+    && options.previewVersion === AGENT_SHARE_PREMIUM_PREVIEW_VERSION;
+  const isApprovedFrancisShare = isFrancis
     && (options.approvedShare === true || options.previewVersion === AGENT_SHARE_PREVIEW_VERSION);
-  const image = isApprovedFrancisShare
-    ? absolutePublicUrl('/assets/marketing/francis-isabirye-agent-share-v2.png')
-    : absolutePublicUrl(row.profile_photo_url || '/assets/house-ads-v3/agents.webp');
+  const image = isPremiumFrancisPreview
+    ? absolutePublicUrl('/assets/marketing/francis-isabirye-agent-share-v3.png')
+    : isApprovedFrancisShare
+      ? absolutePublicUrl('/assets/marketing/francis-isabirye-agent-share-v2.png')
+      : absolutePublicUrl(row.profile_photo_url || '/assets/house-ads-v3/agents.webp');
+  const title = isPremiumFrancisPreview
+    ? `${name} | Approved property agent on MakaUG`
+    : `${name} | Property agent on MakaUG`;
+  const shareDescription = isPremiumFrancisPreview
+    ? `View ${name}'s live property profile and current listings on makaug.com.`
+    : description;
   return {
-    title: `${name} | Property agent on MakaUG`,
-    description,
+    title,
+    description: shareDescription,
     image,
     canonical: absolutePublicUrl(profilePath),
     ogType: 'profile',
@@ -1130,7 +1143,7 @@ async function loadPublicAgentOpenGraphMeta(agentId, options = {}) {
       '@context': 'https://schema.org',
       '@type': 'RealEstateAgent',
       name,
-      description: String(row.bio || description).trim(),
+      description: String(row.bio || shareDescription).trim(),
       url: absolutePublicUrl(profilePath),
       image,
       areaServed: 'Uganda'
@@ -1349,16 +1362,18 @@ app.get('/agents/:id', async (req, res, next) => {
     let html = renderPublicHtml(req.originalUrl || req.url || req.path);
     const previewVersion = String(req.query.share || '').trim();
     const isApprovedFrancisProfile = String(req.params.id || '') === FRANCIS_ISABIRYE_AGENT_ID;
-    if (previewVersion === AGENT_SHARE_PREVIEW_VERSION || isApprovedFrancisProfile) {
+    const isSupportedPreview = previewVersion === AGENT_SHARE_PREVIEW_VERSION
+      || previewVersion === AGENT_SHARE_PREMIUM_PREVIEW_VERSION;
+    if (isSupportedPreview || isApprovedFrancisProfile) {
       const meta = await loadPublicAgentOpenGraphMeta(req.params.id, {
         previewVersion,
-        approvedShare: isApprovedFrancisProfile
+        approvedShare: isApprovedFrancisProfile && !isSupportedPreview
       });
       if (meta) {
         html = patchPublicPageSeoMeta(html, meta);
         res.set(
-          isApprovedFrancisProfile ? 'X-makaug-Agent-OG' : 'X-makaug-Agent-OG-Preview',
-          isApprovedFrancisProfile ? 'francis-v2' : AGENT_SHARE_PREVIEW_VERSION
+          isSupportedPreview ? 'X-makaug-Agent-OG-Preview' : 'X-makaug-Agent-OG',
+          isSupportedPreview ? previewVersion : 'francis-v2'
         );
       }
     }
