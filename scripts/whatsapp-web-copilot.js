@@ -1438,21 +1438,28 @@ async function getActiveChatSnapshot(page) {
       }
       return null;
     };
+    const hasVideoMedia = (root) => {
+      if (!root) return false;
+      if (root.querySelector('video, source[type^="video/"], [data-testid*="video" i], [data-icon*="video" i], [aria-label*="video" i]')) return true;
+      const highResolutionPoster = Array.from(root.querySelectorAll('img')).some((img) => (
+        img.naturalWidth >= 160 && img.naturalHeight >= 120
+      ));
+      const playControl = root.querySelector('[aria-label="Play" i], [aria-label^="Play " i], [data-icon="play"]');
+      return highResolutionPoster && Boolean(playControl);
+    };
     const hasVoiceNote = (root, text = '') => {
       if (!root) return false;
-      if (root.querySelector('video, source[type^="video/"]')) return false;
+      if (hasVideoMedia(root)) return false;
       if (root.querySelector('audio, source[type^="audio/"]')) return true;
       const voiceControl = root.querySelector([
         '[aria-label*="voice" i]',
         '[aria-label*="audio" i]',
-        '[aria-label*="Play voice" i]',
-        '[aria-label*="Play" i]',
         '[data-icon*="audio" i]',
         '[data-icon*="ptt" i]',
         '[data-testid*="audio" i]'
       ].join(','));
       if (voiceControl) return true;
-      return /\b0:\d{2}\b/.test(String(text || '')) && !!root.querySelector('canvas, svg, button');
+      return /\b\d{1,2}:\d{2}\b/.test(String(text || '')) && !!root.querySelector('canvas');
     };
     const hasCallLog = (root, text = '') => {
       if (!root) return false;
@@ -1600,7 +1607,7 @@ async function getActiveChatSnapshot(page) {
     const callLog = hasCallLog(last, text);
     const documentMedia = Boolean(last.querySelector('a[download], [data-icon*="document" i], [data-testid*="document" i]'))
       || /\.(?:pdf|docx?|xlsx?|pptx?|txt|csv)(?:\s|$)/i.test(text);
-    const videoMedia = Boolean(last.querySelector('video, source[type^="video/"]'));
+    const videoMedia = hasVideoMedia(last);
     const mediaType = sharedLocation
       ? 'location'
       : hasNonEmojiImage && isTimestampOnlyText(text) && !!sharedLocation
@@ -1715,21 +1722,28 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
       }
       return null;
     };
+    const hasVideoMedia = (root) => {
+      if (!root) return false;
+      if (root.querySelector('video, source[type^="video/"], [data-testid*="video" i], [data-icon*="video" i], [aria-label*="video" i]')) return true;
+      const highResolutionPoster = Array.from(root.querySelectorAll('img')).some((img) => (
+        img.naturalWidth >= 160 && img.naturalHeight >= 120
+      ));
+      const playControl = root.querySelector('[aria-label="Play" i], [aria-label^="Play " i], [data-icon="play"]');
+      return highResolutionPoster && Boolean(playControl);
+    };
     const hasVoiceNote = (root, text = '') => {
       if (!root) return false;
-      if (root.querySelector('video, source[type^="video/"]')) return false;
+      if (hasVideoMedia(root)) return false;
       if (root.querySelector('audio, source[type^="audio/"]')) return true;
       const voiceControl = root.querySelector([
         '[aria-label*="voice" i]',
         '[aria-label*="audio" i]',
-        '[aria-label*="Play voice" i]',
-        '[aria-label*="Play" i]',
         '[data-icon*="audio" i]',
         '[data-icon*="ptt" i]',
         '[data-testid*="audio" i]'
       ].join(','));
       if (voiceControl) return true;
-      return /\b0:\d{2}\b/.test(String(text || '')) && !!root.querySelector('canvas, svg, button');
+      return /\b\d{1,2}:\d{2}\b/.test(String(text || '')) && !!root.querySelector('canvas');
     };
     const hasCallLog = (root, text = '') => {
       if (!root) return false;
@@ -1846,7 +1860,7 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
         const callLog = hasCallLog(node, rawText);
         const documentMedia = Boolean(node.querySelector('a[download], [data-icon*="document" i], [data-testid*="document" i]'))
           || /\.(?:pdf|docx?|xlsx?|pptx?|txt|csv)(?:\s|$)/i.test(rawText);
-        const videoMedia = Boolean(node.querySelector('video, source[type^="video/"]'));
+        const videoMedia = hasVideoMedia(node);
         const mediaType = sharedLocation
           ? 'location'
           : hasNonEmojiImage && isTimestampOnlyText(rawText) && !!sharedLocation
@@ -2145,14 +2159,31 @@ async function hydrateVideoSnapshot(page, snapshot) {
         el.getAttribute('data-id') === targetMessageId
         || el.getAttribute('data-testid') === targetMessageId
       ));
-      const video = root?.querySelector('video');
-      const documentAnchor = root?.querySelector('a[download][href], a[href^="blob:"]');
-      const sourceUrl = video?.currentSrc || video?.src || video?.querySelector('source')?.src
+      let video = root?.querySelector('video');
+      let documentAnchor = root?.querySelector('a[download][href], a[href^="blob:"]');
+      let sourceUrl = video?.currentSrc || video?.src || video?.querySelector('source')?.src
         || documentAnchor?.href || '';
+      const highResolutionPoster = Array.from(root?.querySelectorAll('img') || []).some((img) => (
+        img.naturalWidth >= 160 && img.naturalHeight >= 120
+      ));
+      const explicitVideoMarker = root?.querySelector('[data-testid*="video" i], [data-icon*="video" i], [aria-label*="video" i]');
+      const playControl = root?.querySelector('[aria-label="Play" i], [aria-label^="Play " i], [data-icon="play"]');
+      if (!sourceUrl && (explicitVideoMarker || (highResolutionPoster && playControl))) {
+        const clickable = playControl?.closest?.('button, [role="button"]') || playControl || explicitVideoMarker;
+        clickable?.click?.();
+        for (let attempt = 0; attempt < 4 && !sourceUrl; attempt += 1) {
+          await new Promise((resolve) => setTimeout(resolve, 250));
+          video = root?.querySelector('video') || document.querySelector('[role="dialog"] video');
+          documentAnchor = root?.querySelector('a[download][href], a[href^="blob:"]');
+          sourceUrl = video?.currentSrc || video?.src || video?.querySelector('source')?.src
+            || documentAnchor?.href || '';
+        }
+      }
       if (!sourceUrl) return null;
       const response = await fetch(sourceUrl);
       if (!response.ok) return null;
       const blob = await response.blob();
+      if (video && !video.paused) video.pause();
       if (!blob.size || blob.size > maxBytes) return { error: 'video_too_large', bytes: blob.size };
       const dataUrl = await new Promise((resolve, reject) => {
         const reader = new FileReader();
