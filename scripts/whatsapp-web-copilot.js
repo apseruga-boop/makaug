@@ -265,9 +265,9 @@ const VOICE_AUDIO_MAX_BYTES = 8_000_000;
 const LISTING_IMAGE_PREVIEW_MAX_DIMENSION = 1280;
 const LISTING_IMAGE_PREVIEW_QUALITY = 0.78;
 const LISTING_IMAGE_PREVIEW_MAX_BYTES = 1_500_000;
-const EMPLOYEE_VIDEO_PREVIEW_MAX_BYTES = 12_000_000;
+const EMPLOYEE_VIDEO_PREVIEW_MAX_BYTES = 25_000_000;
 const OUTBOUND_PROPERTY_IMAGE_MAX_BYTES = 15_000_000;
-const WHATSAPP_EMPLOYEE_AGENT_007_WORKER_MARKER = 'whatsapp-agent-007-ordered-batch-finalization-20260829';
+const WHATSAPP_EMPLOYEE_AGENT_007_WORKER_MARKER = 'whatsapp-agent-007-complete-barrier-20260829';
 const RECENT_INBOUND_BACKLOG_LIMIT = 60;
 const seenBrowserMessageIds = new Set();
 const seenCallEventKeys = new Map();
@@ -2151,20 +2151,113 @@ async function hydrateImageSnapshot(page, snapshot) {
   }
 }
 
+function isLikelyWhatsappVideoResponse(response) {
+  const headers = response.headers();
+  const contentType = String(headers['content-type'] || '').toLowerCase();
+  const url = String(response.url() || '').toLowerCase();
+  if (contentType.startsWith('video/')) return true;
+  const binary = contentType.includes('application/octet-stream') || contentType.includes('binary/octet-stream');
+  const whatsappMedia = /(?:mmg\.whatsapp\.net|media|video|\.mp4|\.mov|\.webm)/i.test(url);
+  const resourceType = String(response.request()?.resourceType?.() || '').toLowerCase();
+  return binary && whatsappMedia && ['media', 'fetch', 'xhr'].includes(resourceType);
+}
+
+async function clickVideoMessageControl(page, messageId) {
+  return page.evaluate((targetMessageId) => {
+    const nodes = Array.from(document.querySelectorAll('[data-id], [data-testid^="conv-msg-"]'));
+    const root = nodes.find((el) => (
+      el.getAttribute('data-id') === targetMessageId
+      || el.getAttribute('data-testid') === targetMessageId
+    ));
+    if (!root) return false;
+    const poster = Array.from(root.querySelectorAll('img')).find((img) => (
+      img.naturalWidth >= 160 && img.naturalHeight >= 120
+    ));
+    const explicitVideo = root.querySelector('[data-testid*="video" i], [data-icon*="video" i], [aria-label*="video" i]');
+    const controls = [
+      root.querySelector('[aria-label*="Play video" i]'),
+      root.querySelector('[data-testid*="video-play" i]'),
+      root.querySelector('[data-icon="play"]'),
+      root.querySelector('[aria-label="Play" i], [aria-label^="Play " i]')
+    ].filter(Boolean);
+    const control = controls[0] || explicitVideo;
+    if (!control || (!explicitVideo && !poster)) return false;
+    const clickable = control.closest?.('button, [role="button"]') || control;
+    clickable.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+    clickable.click();
+    return true;
+  }, messageId).catch(() => false);
+}
+
+async function captureVideoSnapshotFromNetwork(page, messageId) {
+  const responsePromise = page.waitForResponse(
+    (response) => response.ok() && isLikelyWhatsappVideoResponse(response),
+    { timeout: 8000 }
+  ).catch(() => null);
+  const clicked = await clickVideoMessageControl(page, messageId);
+  if (!clicked) return null;
+  const response = await responsePromise;
+  if (!response) return null;
+  const buffer = await response.body().catch(() => null);
+  if (!buffer?.length || buffer.length > EMPLOYEE_VIDEO_PREVIEW_MAX_BYTES) return null;
+  const contentType = String(response.headers()['content-type'] || '').split(';')[0].trim().toLowerCase();
+  const mimeType = contentType.startsWith('video/') ? contentType : 'video/mp4';
+  return {
+    dataUrl: `data:${mimeType};base64,${buffer.toString('base64')}`,
+    mimeType,
+    bytes: buffer.length,
+    kind: 'video',
+    name: ''
+  };
+}
+
+async function captureVideoMessageScreenshot(page, messageId) {
+  const candidates = page.locator('[data-id], [data-testid^="conv-msg-"]');
+  const count = await candidates.count();
+  for (let index = 0; index < count; index += 1) {
+    const candidate = candidates.nth(index);
+    const dataId = await candidate.getAttribute('data-id').catch(() => '');
+    const testId = await candidate.getAttribute('data-testid').catch(() => '');
+    if (dataId !== messageId && testId !== messageId) continue;
+    await candidate.scrollIntoViewIfNeeded().catch(() => {});
+    const buffer = await candidate.screenshot({
+      type: 'jpeg',
+      quality: 82,
+      animations: 'disabled'
+    }).catch(() => null);
+    if (!buffer?.length || buffer.length > LISTING_IMAGE_PREVIEW_MAX_BYTES) return null;
+    return {
+      dataUrl: `data:image/jpeg;base64,${buffer.toString('base64')}`,
+      mimeType: 'image/jpeg',
+      bytes: buffer.length,
+      kind: 'image',
+      name: 'whatsapp-video-message-preview.jpg',
+      degradedFromVideo: true
+    };
+  }
+  return null;
+}
+
 async function hydrateVideoSnapshot(page, snapshot) {
   if (!snapshot || snapshot.mediaType !== 'media' || snapshot.mediaPreviews?.length) return snapshot;
   const messageId = String(snapshot.messageId || '').trim();
   if (!messageId) return snapshot;
 
   try {
-    const preview = await page.evaluate(async ({ targetMessageId, maxBytes }) => {
+    const networkPreview = await captureVideoSnapshotFromNetwork(page, messageId);
+    let preview = networkPreview || await page.evaluate(async ({ targetMessageId, maxBytes, posterMaxBytes }) => {
       const nodes = Array.from(document.querySelectorAll('[data-id], [data-testid^="conv-msg-"]'));
       const root = nodes.find((el) => (
         el.getAttribute('data-id') === targetMessageId
         || el.getAttribute('data-testid') === targetMessageId
       ));
-      let video = root?.querySelector('video');
-      let documentAnchor = root?.querySelector('a[download][href], a[href^="blob:"]');
+      const visibleVideo = () => Array.from(document.querySelectorAll('video')).find((item) => {
+        const rect = item.getBoundingClientRect();
+        return rect.width >= 120 && rect.height >= 90;
+      });
+      let video = root?.querySelector('video') || visibleVideo();
+      let documentAnchor = root?.querySelector('a[download][href], a[href^="blob:"]')
+        || document.querySelector('[role="dialog"] a[download][href], [role="dialog"] a[href^="blob:"]');
       let sourceUrl = video?.currentSrc || video?.src || video?.querySelector('source')?.src
         || documentAnchor?.href || '';
       const highResolutionPoster = Array.from(root?.querySelectorAll('img') || []).some((img) => (
@@ -2175,15 +2268,40 @@ async function hydrateVideoSnapshot(page, snapshot) {
       if (!sourceUrl && (explicitVideoMarker || (highResolutionPoster && playControl))) {
         const clickable = playControl?.closest?.('button, [role="button"]') || playControl || explicitVideoMarker;
         clickable?.click?.();
-        for (let attempt = 0; attempt < 4 && !sourceUrl; attempt += 1) {
+        for (let attempt = 0; attempt < 20 && !sourceUrl; attempt += 1) {
           await new Promise((resolve) => setTimeout(resolve, 250));
-          video = root?.querySelector('video') || document.querySelector('[role="dialog"] video');
-          documentAnchor = root?.querySelector('a[download][href], a[href^="blob:"]');
+          video = root?.querySelector('video') || visibleVideo();
+          documentAnchor = root?.querySelector('a[download][href], a[href^="blob:"]')
+            || document.querySelector('[role="dialog"] a[download][href], [role="dialog"] a[href^="blob:"]');
           sourceUrl = video?.currentSrc || video?.src || video?.querySelector('source')?.src
             || documentAnchor?.href || '';
         }
       }
-      if (!sourceUrl) return null;
+      if (!sourceUrl) {
+        const poster = Array.from(root?.querySelectorAll('img') || [])
+          .filter((img) => img.naturalWidth >= 160 && img.naturalHeight >= 120)
+          .sort((a, b) => (b.naturalWidth * b.naturalHeight) - (a.naturalWidth * a.naturalHeight))[0];
+        if (!poster) return null;
+        const maxDimension = 1280;
+        const scale = Math.min(1, maxDimension / Math.max(poster.naturalWidth, poster.naturalHeight));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(poster.naturalWidth * scale));
+        canvas.height = Math.max(1, Math.round(poster.naturalHeight * scale));
+        const context = canvas.getContext('2d', { alpha: false });
+        if (!context) return null;
+        context.drawImage(poster, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+        const bytes = Math.floor((dataUrl.length * 3) / 4);
+        if (!dataUrl || bytes > posterMaxBytes) return null;
+        return {
+          dataUrl,
+          mimeType: 'image/jpeg',
+          bytes,
+          kind: 'image',
+          name: 'whatsapp-video-preview.jpg',
+          degradedFromVideo: true
+        };
+      }
       const response = await fetch(sourceUrl);
       if (!response.ok) return null;
       const blob = await response.blob();
@@ -2219,7 +2337,14 @@ async function hydrateVideoSnapshot(page, snapshot) {
         bytes: blob.size,
         name
       };
-    }, { targetMessageId: messageId, maxBytes: EMPLOYEE_VIDEO_PREVIEW_MAX_BYTES });
+    }, {
+      targetMessageId: messageId,
+      maxBytes: EMPLOYEE_VIDEO_PREVIEW_MAX_BYTES,
+      posterMaxBytes: LISTING_IMAGE_PREVIEW_MAX_BYTES
+    });
+    if (!preview?.dataUrl) {
+      preview = await captureVideoMessageScreenshot(page, messageId);
+    }
 
     if (preview?.dataUrl) {
       const mediaPreview = {
@@ -2227,10 +2352,17 @@ async function hydrateVideoSnapshot(page, snapshot) {
         mimeType: preview.mimeType || 'video/mp4',
         bytes: Number(preview.bytes || 0),
         sha256: crypto.createHash('sha256').update(String(preview.dataUrl || '')).digest('hex'),
-        kind: String(preview.mimeType || '').startsWith('video/') ? 'video' : 'document',
+        kind: preview.kind || (String(preview.mimeType || '').startsWith('video/') ? 'video' : 'document'),
         name: preview.name || ''
       };
-      return { ...snapshot, mediaPreviews: [mediaPreview], mediaCount: 1 };
+      return {
+        ...snapshot,
+        mediaPreviews: [mediaPreview],
+        mediaCount: 1,
+        ...(preview.degradedFromVideo ? {
+          mediaPreviewError: 'video_bytes_unavailable_poster_stored'
+        } : {})
+      };
     }
     return { ...snapshot, mediaPreviewError: preview?.error || 'video_preview_unavailable' };
   } catch (error) {
@@ -2329,16 +2461,15 @@ async function ingestCallSnapshot({ snapshot, row = {}, source = 'call_card', ch
   const normalizedChatKey = normalizeChatKey(chatKey || snapshot.chatKey || row.title);
   const normalizedText = String(text || snapshot.text || row.preview || '[missed call]').trim() || '[missed call]';
   if (!normalizedChatKey) return { processed: 0, skipped: 'missing_chat_for_call' };
-  if (!isResolvableWhatsappCallChatKey(normalizedChatKey)) {
-    log(`skipped call card without a resolvable phone identity: ${normalizedChatKey}`);
-    return { processed: 0, skipped: 'unresolved_phone_for_call' };
-  }
-
   const browserMessageKey = snapshot.browserMessageKey || browserMessageKeyFor(snapshot, row);
   if (browserMessageKey && seenBrowserMessageIds.has(browserMessageKey)) {
     return { processed: 0, duplicate: true };
   }
   rememberBrowserMessageKey(browserMessageKey);
+  if (!isResolvableWhatsappCallChatKey(normalizedChatKey)) {
+    log(`skipped call card without a resolvable phone identity: ${normalizedChatKey}`);
+    return { processed: 0, skipped: 'unresolved_phone_for_call' };
+  }
 
   const callEventKey = [
     'call-card',

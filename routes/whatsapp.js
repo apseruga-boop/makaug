@@ -4135,7 +4135,7 @@ async function handleEmployeeWhatsappIntake({
         batchComplete: true,
         batchCounts,
         pendingAgentNotification,
-        message: `✅ *Batch processed for ${subjectName}*\nProperties shared: ${batchCounts.propertiesShared}\nSuccessfully set up in staff review: ${batchCounts.propertiesSetUp}\nDuplicates skipped: ${batchCounts.duplicatesSkipped}\nCould not be set up: ${batchCounts.propertiesFailed}\nMedia stored: ${Number(data.total_media_count || 0)}\nStatus: pending, not live.\n\nNothing is live until a staff moderator approves it.${notificationLine}`
+        message: `✅ *${batchCounts.propertiesSetUp} properties sent for staff review*\nBatch complete for ${subjectName}.\n\nProperties received: ${batchCounts.propertiesShared}\nSent to staff review: ${batchCounts.propertiesSetUp}\nDuplicates skipped: ${batchCounts.duplicatesSkipped}\nCould not be processed: ${batchCounts.propertiesFailed}\nMedia stored: ${Number(data.total_media_count || 0)}\n\nStatus: sent for review — pending moderator approval, not live.${notificationLine}`
       };
     }
 
@@ -4200,7 +4200,9 @@ async function handleEmployeeWhatsappIntake({
           nextStep: currentStep,
           propertyId: duplicate.rows[0].id,
           duplicate: true,
-          message: `Already saved to review — ${String(duplicate.rows[0].id).slice(0, 8).toUpperCase()}. Nothing was duplicated.`
+          message: (data.property_batch_mode || 'multiple') === 'multiple'
+            ? ''
+            : `Already saved to review — ${String(duplicate.rows[0].id).slice(0, 8).toUpperCase()}. Nothing was duplicated.`
         };
       }
     }
@@ -4216,7 +4218,9 @@ async function handleEmployeeWhatsappIntake({
           nextStep: currentStep,
           propertyId: existingProperty.id,
           duplicate: true,
-          message: `Duplicate property found — ${String(existingProperty.id).slice(0, 8).toUpperCase()} is already ${existingProperty.status}. Nothing was added twice.`
+          message: (data.property_batch_mode || 'multiple') === 'multiple'
+            ? ''
+            : `Duplicate property found — ${String(existingProperty.id).slice(0, 8).toUpperCase()} is already ${existingProperty.status}. Nothing was added twice.`
         };
       }
       const existingBatchProperties = Array.isArray(data.property_ids) ? data.property_ids.length : 0;
@@ -4260,7 +4264,7 @@ async function handleEmployeeWhatsappIntake({
           propertyId,
           message: (data.property_batch_mode || 'multiple') === 'single'
             ? `✅ Saved the property to staff review — ${String(propertyId).slice(0, 8).toUpperCase()}\nMedia stored: ${storedMedia.length}\nStatus: pending, not live.\n\nSend any additional media without a new full property caption. When this property is finished, type *COMPLETE*.`
-            : `✅ Saved property ${data.property_ids.length} to staff review — ${String(propertyId).slice(0, 8).toUpperCase()}\nMedia stored: ${storedMedia.length}\nStatus: pending, not live.\n\nTo start property ${data.property_ids.length + 1}, send its first media with a full property type, exact location and price caption. Keep going until the whole batch is loaded, then type *COMPLETE*.`
+            : ''
         };
       } catch (error) {
         logger.error('WhatsApp employee review property save failed:', error);
@@ -4288,8 +4292,10 @@ async function handleEmployeeWhatsappIntake({
         nextStep: currentStep,
         propertyId: data.current_property_id,
         duplicate: attachment.duplicate,
-        message: attachment.duplicate
-          ? 'That media is already attached. Nothing was duplicated.'
+        message: (data.property_batch_mode || 'multiple') === 'multiple'
+          ? ''
+          : attachment.duplicate
+            ? 'That media is already attached. Nothing was duplicated.'
           : (data.property_batch_mode || 'multiple') === 'single'
             ? `✅ ${attachment.attached} media item(s) attached to the pending property. Send more media for this property, or type *COMPLETE* when it is finished.`
             : `✅ ${attachment.attached} media item(s) attached to property ${Array.isArray(data.property_ids) ? data.property_ids.length : 1}. Send more media, start the next property with a full caption, or type *COMPLETE* only when the whole batch is finished.`

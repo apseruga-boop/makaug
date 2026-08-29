@@ -85,10 +85,10 @@ assert(copilotSource.includes('isResolvableWhatsappCallChatKey(normalizedChatKey
 assert(copilotSource.includes("'call-card',\n    normalizedChatKey"), 'repeated DOM scans must share a semantic call-card cooldown key');
 assert(copilotSource.includes("snapshot.timestampLabel || row.timestampLabel || ''"), 'call-card IDs must use stable timestamps');
 assert(!copilotSource.includes("snapshot.messageId || snapshot.mediaFingerprint || ''\n  );"), 'call-card IDs must not depend on unstable DOM row fingerprints');
-assert(routeSource.includes('Properties shared: ${batchCounts.propertiesShared}'), 'completion must report the shared count');
-assert(routeSource.includes('Successfully set up in staff review: ${batchCounts.propertiesSetUp}'), 'completion must report the successful setup count');
+assert(routeSource.includes('Properties received: ${batchCounts.propertiesShared}'), 'completion must report the shared count');
+assert(routeSource.includes('Sent to staff review: ${batchCounts.propertiesSetUp}'), 'completion must report the successful setup count');
 assert(routeSource.includes('Duplicates skipped: ${batchCounts.duplicatesSkipped}'), 'completion must report duplicates');
-assert(routeSource.includes('Could not be set up: ${batchCounts.propertiesFailed}'), 'completion must report failures');
+assert(routeSource.includes('Could not be processed: ${batchCounts.propertiesFailed}'), 'completion must report failures');
 assert(routeSource.includes("type: 'whatsapp_agent_batch_card_awaiting_approval'"), 'agent notification must wait at the founder approval gate');
 assert(routeSource.includes("status: 'awaiting_founder_approval'"), 'pending agent-card state must be durable');
 assert(routeSource.includes('whatsapp_employee_batch_mode') && routeSource.includes('whatsapp_employee_batch_property_number'), 'review records should retain multiple-property batch traceability');
@@ -107,6 +107,11 @@ assert(copilotSource.includes('media_previews:'), 'WhatsApp Web bridge should tr
 assert(copilotSource.includes('release_marker: WHATSAPP_EMPLOYEE_AGENT_007_WORKER_MARKER'), 'hosted worker heartbeat should prove the Agent 007 build');
 assert(copilotSource.includes('const RECENT_INBOUND_BACKLOG_LIMIT = 60'), 'worker must inspect the recent inbound backlog instead of only the last message');
 assert(copilotSource.includes("skipped: 'ordered_media_hydration_pending'"), 'worker must stop before COMPLETE when earlier media bytes are unavailable');
+assert(copilotSource.includes('captureVideoSnapshotFromNetwork'), 'worker must recover WhatsApp video bytes before reaching COMPLETE');
+assert(copilotSource.includes('captureVideoMessageScreenshot'), 'worker must preserve a reviewable property image when WhatsApp withholds video bytes and the poster canvas');
+assert(copilotSource.includes("mediaPreviewError: 'video_bytes_unavailable_poster_stored'"), 'an unrecoverable video must preserve a property poster instead of blocking the batch forever');
+assert(routeSource.includes("? ''\n            : `Already saved to review"), 'multiple batches must not send per-property duplicate acknowledgements');
+assert(/message: \(data\.property_batch_mode \|\| 'multiple'\) === 'single'[\s\S]{0,500}: ''/.test(routeSource), 'multiple batches must wait for one final completion summary');
 const voiceDetectorBlocks = copilotSource.match(/const hasVoiceNote = \(root, text = ''\) => \{[\s\S]*?\n    \};\n    const hasCallLog/g) || [];
 assert.equal(voiceDetectorBlocks.length, 2, 'both browser snapshot paths must define voice-specific detection');
 assert(voiceDetectorBlocks.every((block) => !block.includes('[aria-label*="Play" i]')), 'generic Play buttons must not classify property videos as voice notes');
@@ -118,7 +123,7 @@ assert.equal(
   2,
   'video detection must take priority over the generic play-button voice-note heuristic'
 );
-assert(copilotSource.includes("document.querySelector('[role=\"dialog\"] video')"), 'video hydration must recover media opened in the WhatsApp preview dialog');
+assert(copilotSource.includes("Array.from(document.querySelectorAll('video')).find"), 'video hydration must recover media opened in the WhatsApp preview dialog');
 assert(copilotSource.includes('clickable?.click?.()'), 'video hydration must activate thumbnail-only video cards before capturing permanent bytes');
 assert(!copilotSource.includes('getRecentIncomingSnapshots(page, 1)'), 'rapid batches must not be reduced to one visible message');
 assert(
@@ -128,6 +133,8 @@ assert(
 assert(serverSource.includes('whatsapp-employee-agent-007-review-intake-20260829'), 'release marker should be externally verifiable');
 assert(serverSource.includes('whatsapp-agent-007-multiple-property-batches-20260829'), 'multiple-property mode should have an externally verifiable release marker');
 assert(serverSource.includes('whatsapp-agent-007-ordered-batch-finalization-20260829'), 'ordered batch finalization should have an externally verifiable release marker');
+assert(serverSource.includes('whatsapp-agent-007-complete-barrier-20260829'), 'COMPLETE barrier should have an externally verifiable release marker');
+assert(serverSource.includes("limit: '40mb'"), 'authorized WhatsApp video previews must fit through the JSON intake limit after base64 encoding');
 assert(serverSource.includes('whatsapp-active-intake-call-shield-20260829'), 'employee call shield should have an externally verifiable release marker');
 
 const db = require('../config/database');
@@ -315,13 +322,14 @@ const originalQuery = db.query;
     propertiesFailed: 1
   });
   assert.equal(completed.pendingAgentNotification.status, 'awaiting_founder_approval');
-  assert.match(completed.message, /Batch processed for Francis Isabirye/);
-  assert.match(completed.message, /Properties shared: 3/);
-  assert.match(completed.message, /Successfully set up in staff review: 1/);
+  assert.match(completed.message, /1 properties sent for staff review/);
+  assert.match(completed.message, /Batch complete for Francis Isabirye/);
+  assert.match(completed.message, /Properties received: 3/);
+  assert.match(completed.message, /Sent to staff review: 1/);
   assert.match(completed.message, /Duplicates skipped: 1/);
-  assert.match(completed.message, /Could not be set up: 1/);
+  assert.match(completed.message, /Could not be processed: 1/);
   assert.match(completed.message, /has not been notified yet/);
-  assert.match(completed.message, /Nothing is live/);
+  assert.match(completed.message, /pending moderator approval, not live/);
   assert.equal(updates.length, 10, 'each state transition and interrupted-session recovery should persist immediately');
 
   console.log('WhatsApp Agent 007 employee intake contract tests passed.');
