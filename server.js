@@ -135,7 +135,7 @@ app.use(
 
 app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 app.use(express.json({
-  limit: '15mb',
+  limit: '40mb',
   verify: (req, _res, buffer) => {
     if (req.originalUrl === '/api/whatsapp/webhook') {
       req.rawBody = Buffer.from(buffer);
@@ -206,6 +206,7 @@ app.get('/api/version', (_req, res) => {
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-employee-agent-007-review-intake-20260829'] : []),
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-agent-007-multiple-property-batches-20260829'] : []),
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-agent-007-ordered-batch-finalization-20260829'] : []),
+      ...(!IS_SOUTH_AFRICA ? ['whatsapp-agent-007-complete-barrier-20260829'] : []),
       ...(!IS_SOUTH_AFRICA ? ['francis-agent-premium-share-preview-v3-20260829'] : []),
       ...(!IS_SOUTH_AFRICA ? ['francis-agent-authentic-brand-preview-v4-20260829'] : []),
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-active-intake-call-shield-20260829'] : []),
