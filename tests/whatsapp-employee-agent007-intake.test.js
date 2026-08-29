@@ -116,11 +116,13 @@ assert(copilotSource.includes('replayEmployeeBatchThroughCompletion'), 'the work
 assert(copilotSource.includes('scrollWhatsappHistoryNewer'), 'history reconciliation must walk forward from the trigger without keeping every video in memory');
 assert(copilotSource.includes('WHATSAPP_WEB_COPILOT_EMPLOYEE_RECOVERY_PHONES'), 'hosted workers must support an explicit startup recovery target');
 assert(copilotSource.includes('runConfiguredEmployeeBatchRecovery'), 'the configured Agent 007 chat must be checked before general chat sweeps can starve it');
+assert(copilotSource.includes('const history = await locateEmployeeBatchHistory(page, { chatKey: phone })'), 'configured recovery must scan directly to the durable COMPLETE boundary');
 assert(copilotSource.includes(':ordered-replay:${replayRunKey}'), 'history recovery must use a fresh server message id for media acknowledged before batch accounting');
 assert(copilotSource.includes("'/api/whatsapp/web-bridge/employee-batch-recovery'"), 'the worker must request a safe partial-batch recovery before replay');
 assert(routeSource.includes("router.post('/web-bridge/employee-batch-recovery'"), 'the bridge must expose an authenticated partial-batch recovery route');
 assert(routeSource.includes('observed_batch_already_accounted_for'), 'completed batches must not be resent after a worker restart');
 assert(routeSource.includes('employee_intake_recovery_skip_existing_matches'), 'recovery must preserve prior counts while replaying acknowledged property messages');
+assert(routeSource.includes("type = 'whatsapp_employee_batch_complete'"), 'recovery must fall back to the durable completion notification when chat session state is replaced');
 assert(routeSource.includes('employee_batch_ordered_replay'), 'authorized history replay must be marked and isolated from normal messages');
 assert(routeSource.includes("? ''\n            : `Already saved to review"), 'multiple batches must not send per-property duplicate acknowledgements');
 assert(/message: \(data\.property_batch_mode \|\| 'multiple'\) === 'single'[\s\S]{0,500}: ''/.test(routeSource), 'multiple batches must wait for one final completion summary');
@@ -149,6 +151,7 @@ assert(serverSource.includes('whatsapp-agent-007-complete-barrier-20260829'), 'C
 assert(serverSource.includes('whatsapp-agent-007-history-reconciliation-20260829'), 'history reconciliation should have an externally verifiable release marker');
 assert(serverSource.includes('whatsapp-agent-007-video-fetch-fallback-20260829'), 'video fetch fallback should have an externally verifiable release marker');
 assert(serverSource.includes('whatsapp-agent-007-acknowledged-media-reconciliation-20260829'), 'acknowledged media reconciliation should have an externally verifiable release marker');
+assert(serverSource.includes('whatsapp-agent-007-notification-ledger-recovery-20260829'), 'notification-ledger recovery should have an externally verifiable release marker');
 assert(serverSource.includes("limit: '40mb'"), 'authorized WhatsApp video previews must fit through the JSON intake limit after base64 encoding');
 assert(serverSource.includes('whatsapp-active-intake-call-shield-20260829'), 'employee call shield should have an externally verifiable release marker');
 
@@ -187,6 +190,21 @@ const originalQuery = db.query;
         }]
       };
     }
+    if (/SELECT payload_summary, created_at/i.test(sql) && /whatsapp_employee_batch_complete/i.test(sql)) {
+      return {
+        rows: [{
+          payload_summary: {
+            batch_mode: 'multiple',
+            properties_shared: 1,
+            properties_set_up: 1,
+            duplicates_skipped: 0,
+            properties_failed: 0,
+            media_count: 1
+          },
+          created_at: new Date().toISOString()
+        }]
+      };
+    }
     if (/FROM properties/i.test(sql) && /source_caption_sha256/i.test(sql)) {
       return { rows: [{ id: '22222222-2222-4222-8222-222222222222', status: 'pending' }] };
     }
@@ -194,7 +212,12 @@ const originalQuery = db.query;
       return { rows: [] };
     }
     if (/FROM properties/i.test(sql) && /whatsapp_employee_sender_phone_suffix/i.test(sql)) {
-      return { rows: [{ id: '22222222-2222-4222-8222-222222222222' }] };
+      return {
+        rows: [{
+          id: '22222222-2222-4222-8222-222222222222',
+          agent_id: '11111111-1111-4111-8111-111111111111'
+        }]
+      };
     }
     if (/INSERT INTO notifications/i.test(sql)) return { rows: [{ id: 'notification-test' }] };
     throw new Error(`Unexpected test query: ${String(sql).slice(0, 80)}`);
@@ -418,7 +441,29 @@ const originalQuery = db.query;
     duplicatesSkipped: 0,
     propertiesFailed: 0
   });
-  assert.equal(updates.length, 12, 'each state transition, interruption recovery, acknowledged-message reconciliation, and history recovery should persist immediately');
+
+  sessionRow = {
+    phone: '+447757773202',
+    current_step: 'missed_call_need',
+    language: 'en',
+    listing_draft: {},
+    session_data: { missed_call_flow: { status: 'asked_need' } }
+  };
+  const durableRestored = await whatsappRoute.prepareEmployeeOrderedBatchReplay({
+    phone: '+447757773202',
+    observedPropertyMessages: 23,
+    triggerMessageId: 'agent-007-trigger-after-missed-call',
+    completionMessageId: 'premature-complete-after-missed-call'
+  });
+  assert.equal(durableRestored.ready, true);
+  assert.equal(durableRestored.restored, true);
+  assert.deepEqual(durableRestored.counts, {
+    propertiesShared: 1,
+    propertiesSetUp: 1,
+    duplicatesSkipped: 0,
+    propertiesFailed: 0
+  });
+  assert.equal(updates.length, 13, 'each state transition, interruption recovery, acknowledged-message reconciliation, and both session and durable-ledger history recovery should persist immediately');
 
   console.log('WhatsApp Agent 007 employee intake contract tests passed.');
 })().catch((error) => {
