@@ -3669,6 +3669,7 @@ async function prepareEmployeeOrderedBatchReplay({
     employee_intake_original_completed_at: completedAt.toISOString(),
     employee_intake_recovery_trigger_message_id: triggerMessageId || null,
     employee_intake_recovery_completion_message_id: completionMessageId || null,
+    employee_intake_recovery_skip_existing_matches: true,
     employee_sender_phone_suffix: employeeIntakePhoneSuffix(phone),
     employee_role: 'agent',
     agent,
@@ -4335,8 +4336,23 @@ async function handleEmployeeWhatsappIntake({
     }
     let propertyAttemptRecorded = false;
     if (shouldStartProperty) {
-      propertyAttemptRecorded = recordEmployeePropertyAttempt(data, { inboundMessageId, caption });
       const existingProperty = await findEmployeeDuplicateProperty({ caption, facts, sessionData: data });
+      if (existingProperty && data.employee_intake_recovery_skip_existing_matches === true) {
+        const propertyIds = Array.isArray(data.property_ids) ? data.property_ids.map(String) : [];
+        data.current_property_id = propertyIds.includes(String(existingProperty.id))
+          ? existingProperty.id
+          : null;
+        await replaceEmployeeSession(phone, currentStep, data);
+        return {
+          handled: true,
+          nextStep: currentStep,
+          propertyId: existingProperty.id,
+          duplicate: true,
+          recoveryAlreadyAccountedFor: true,
+          message: ''
+        };
+      }
+      propertyAttemptRecorded = recordEmployeePropertyAttempt(data, { inboundMessageId, caption });
       if (existingProperty) {
         if (propertyAttemptRecorded) data.properties_duplicate_count = Number(data.properties_duplicate_count || 0) + 1;
         await replaceEmployeeSession(phone, currentStep, data);

@@ -116,9 +116,11 @@ assert(copilotSource.includes('replayEmployeeBatchThroughCompletion'), 'the work
 assert(copilotSource.includes('scrollWhatsappHistoryNewer'), 'history reconciliation must walk forward from the trigger without keeping every video in memory');
 assert(copilotSource.includes('WHATSAPP_WEB_COPILOT_EMPLOYEE_RECOVERY_PHONES'), 'hosted workers must support an explicit startup recovery target');
 assert(copilotSource.includes('runConfiguredEmployeeBatchRecovery'), 'the configured Agent 007 chat must be checked before general chat sweeps can starve it');
+assert(copilotSource.includes(':ordered-replay:${replayRunKey}'), 'history recovery must use a fresh server message id for media acknowledged before batch accounting');
 assert(copilotSource.includes("'/api/whatsapp/web-bridge/employee-batch-recovery'"), 'the worker must request a safe partial-batch recovery before replay');
 assert(routeSource.includes("router.post('/web-bridge/employee-batch-recovery'"), 'the bridge must expose an authenticated partial-batch recovery route');
 assert(routeSource.includes('observed_batch_already_accounted_for'), 'completed batches must not be resent after a worker restart');
+assert(routeSource.includes('employee_intake_recovery_skip_existing_matches'), 'recovery must preserve prior counts while replaying acknowledged property messages');
 assert(routeSource.includes('employee_batch_ordered_replay'), 'authorized history replay must be marked and isolated from normal messages');
 assert(routeSource.includes("? ''\n            : `Already saved to review"), 'multiple batches must not send per-property duplicate acknowledgements');
 assert(/message: \(data\.property_batch_mode \|\| 'multiple'\) === 'single'[\s\S]{0,500}: ''/.test(routeSource), 'multiple batches must wait for one final completion summary');
@@ -146,6 +148,7 @@ assert(serverSource.includes('whatsapp-agent-007-ordered-batch-finalization-2026
 assert(serverSource.includes('whatsapp-agent-007-complete-barrier-20260829'), 'COMPLETE barrier should have an externally verifiable release marker');
 assert(serverSource.includes('whatsapp-agent-007-history-reconciliation-20260829'), 'history reconciliation should have an externally verifiable release marker');
 assert(serverSource.includes('whatsapp-agent-007-video-fetch-fallback-20260829'), 'video fetch fallback should have an externally verifiable release marker');
+assert(serverSource.includes('whatsapp-agent-007-acknowledged-media-reconciliation-20260829'), 'acknowledged media reconciliation should have an externally verifiable release marker');
 assert(serverSource.includes("limit: '40mb'"), 'authorized WhatsApp video previews must fit through the JSON intake limit after base64 encoding');
 assert(serverSource.includes('whatsapp-active-intake-call-shield-20260829'), 'employee call shield should have an externally verifiable release marker');
 
@@ -183,6 +186,12 @@ const originalQuery = db.query;
           email: null
         }]
       };
+    }
+    if (/FROM properties/i.test(sql) && /source_caption_sha256/i.test(sql)) {
+      return { rows: [{ id: '22222222-2222-4222-8222-222222222222', status: 'pending' }] };
+    }
+    if (/FROM properties/i.test(sql) && /whatsapp_employee_message_id/i.test(sql)) {
+      return { rows: [] };
     }
     if (/FROM properties/i.test(sql) && /whatsapp_employee_sender_phone_suffix/i.test(sql)) {
       return { rows: [{ id: '22222222-2222-4222-8222-222222222222' }] };
@@ -306,6 +315,38 @@ const originalQuery = db.query;
   assert.match(singleMode.message, /one property/i);
   assert.match(singleMode.message, /COMPLETE/);
 
+  const recoveryExisting = await whatsappRoute.handleEmployeeWhatsappIntake({
+    phone: '+447757773202',
+    body: '2 bedroom apartment for rent in Ntinda, Kampala at UGX 1.5m per month',
+    mediaUrl: 'whatsapp-web://recovery-existing',
+    runtime: {
+      provider: 'web_bridge',
+      mediaType: 'image',
+      mediaCount: 1,
+      photoCandidates: [{ data_url: 'data:image/jpeg;base64,AA==', mime_type: 'image/jpeg' }]
+    },
+    inboundMessageId: 'acknowledged-media-replay-test',
+    session: {
+      current_step: 'employee_property_media',
+      session_data: {
+        employee_role: 'agent',
+        property_batch_mode: 'multiple',
+        employee_intake_recovery_skip_existing_matches: true,
+        agent: {
+          id: '11111111-1111-4111-8111-111111111111',
+          full_name: 'Francis Isabirye'
+        },
+        property_ids: ['22222222-2222-4222-8222-222222222222'],
+        total_media_count: 1,
+        properties_shared_count: 1,
+        properties_duplicate_count: 0,
+        properties_failed_count: 0
+      }
+    }
+  });
+  assert.equal(recoveryExisting.recoveryAlreadyAccountedFor, true);
+  assert.equal(recoveryExisting.message, '');
+
   const completed = await whatsappRoute.handleEmployeeWhatsappIntake({
     phone: '+447757773202',
     body: 'COMPLETE',
@@ -377,7 +418,7 @@ const originalQuery = db.query;
     duplicatesSkipped: 0,
     propertiesFailed: 0
   });
-  assert.equal(updates.length, 11, 'each state transition, interruption recovery, and history recovery should persist immediately');
+  assert.equal(updates.length, 12, 'each state transition, interruption recovery, acknowledged-message reconciliation, and history recovery should persist immediately');
 
   console.log('WhatsApp Agent 007 employee intake contract tests passed.');
 })().catch((error) => {
