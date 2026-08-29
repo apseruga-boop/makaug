@@ -267,9 +267,12 @@ const LISTING_IMAGE_PREVIEW_QUALITY = 0.78;
 const LISTING_IMAGE_PREVIEW_MAX_BYTES = 1_500_000;
 const EMPLOYEE_VIDEO_PREVIEW_MAX_BYTES = 25_000_000;
 const OUTBOUND_PROPERTY_IMAGE_MAX_BYTES = 15_000_000;
-const WHATSAPP_EMPLOYEE_AGENT_007_WORKER_MARKER = 'whatsapp-agent-007-complete-barrier-20260829';
+const WHATSAPP_EMPLOYEE_AGENT_007_WORKER_MARKER = 'whatsapp-agent-007-history-reconciliation-20260829';
 const RECENT_INBOUND_BACKLOG_LIMIT = 60;
+const EMPLOYEE_BATCH_HISTORY_SCAN_LIMIT = 160;
+const EMPLOYEE_BATCH_HISTORY_MAX_ROUNDS = 30;
 const seenBrowserMessageIds = new Set();
+const completedEmployeeBatchHistoryKeys = new Set();
 const seenCallEventKeys = new Map();
 const recentlySentReplyKeys = new Map();
 const recentChatRowKeys = new Map();
@@ -2708,6 +2711,225 @@ async function scrollWhatsappHistoryToLatest(page) {
   await page.waitForTimeout(350);
 }
 
+async function scrollWhatsappHistoryNewer(page) {
+  return page.evaluate(() => {
+    const root = document.querySelector('#main')
+      || document.querySelector('[data-testid="conversation-panel-wrapper"]');
+    if (!root) return false;
+    const candidates = [root, ...Array.from(root.querySelectorAll('div'))]
+      .filter((el) => el.scrollHeight > el.clientHeight + 120);
+    if (!candidates.length) return false;
+    const scroller = candidates.sort((a, b) => b.scrollHeight - a.scrollHeight)[0];
+    const previousTop = scroller.scrollTop;
+    const maximumTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+    const step = Math.max(500, Math.floor(scroller.clientHeight * 0.8));
+    const nextTop = Math.min(maximumTop, previousTop + step);
+    scroller.scrollTop = nextTop;
+    scroller.dispatchEvent(new Event('scroll', { bubbles: true }));
+    return nextTop > previousTop + 5;
+  }).catch(() => false);
+}
+
+function employeeBatchSnapshotKey(snapshot = {}) {
+  return String(
+    snapshot.messageId
+    || snapshot.mediaFingerprint
+    || `${snapshot.timestampLabel || ''}:${snapshot.mediaType || 'text'}:${snapshot.text || ''}`
+  ).slice(0, 500);
+}
+
+function isEmployeeBatchTriggerSnapshot(snapshot = {}) {
+  return /^\s*agent\s*0*07\s*[.!]?\s*$/i.test(String(snapshot.text || '').trim());
+}
+
+function isEmployeeBatchCompletionSnapshot(snapshot = {}) {
+  return /^\s*complete(?:\s+complete)*\s*[.!]?\s*$/i.test(String(snapshot.text || '').trim());
+}
+
+function isEmployeePropertyStartSnapshot(snapshot = {}) {
+  if (!['image', 'media'].includes(String(snapshot.mediaType || '').toLowerCase())) return false;
+  const text = String(snapshot.text || '').trim();
+  if (!text || /^\[(?:image|media|video|document)\]$/i.test(text)) return false;
+  return true;
+}
+
+async function locateEmployeeBatchHistory(page, { chatKey = '' } = {}) {
+  const normalizedChat = normalizeChatKey(chatKey);
+  const snapshotsByKey = new Map();
+  let orderedKeys = [];
+  let triggerKey = '';
+
+  for (let round = 0; round < EMPLOYEE_BATCH_HISTORY_MAX_ROUNDS; round += 1) {
+    const snapshots = (await getRecentIncomingSnapshots(page, EMPLOYEE_BATCH_HISTORY_SCAN_LIMIT))
+      .filter((snapshot) => {
+        const snapshotChat = normalizeChatKey(snapshot.chatKey);
+        return !normalizedChat || !snapshotChat || snapshotChat === normalizedChat;
+      });
+    const newKeys = [];
+    for (const snapshot of snapshots) {
+      const key = employeeBatchSnapshotKey(snapshot);
+      if (!key || snapshotsByKey.has(key)) continue;
+      snapshotsByKey.set(key, snapshot);
+      newKeys.push(key);
+    }
+    if (round === 0) orderedKeys.push(...newKeys);
+    else orderedKeys = [...newKeys, ...orderedKeys];
+
+    const ordered = orderedKeys.map((key) => snapshotsByKey.get(key)).filter(Boolean);
+    const lastCompletionIndex = ordered.map(isEmployeeBatchCompletionSnapshot).lastIndexOf(true);
+    const lastTriggerIndex = ordered
+      .slice(0, lastCompletionIndex >= 0 ? lastCompletionIndex + 1 : ordered.length)
+      .map(isEmployeeBatchTriggerSnapshot)
+      .lastIndexOf(true);
+    if (lastCompletionIndex >= 0 && lastTriggerIndex >= 0 && lastTriggerIndex < lastCompletionIndex) {
+      triggerKey = employeeBatchSnapshotKey(ordered[lastTriggerIndex]);
+      const completionKey = employeeBatchSnapshotKey(ordered[lastCompletionIndex]);
+      const batchSnapshots = ordered.slice(lastTriggerIndex, lastCompletionIndex + 1);
+      return {
+        found: true,
+        chatKey: normalizedChat || normalizeChatKey(ordered[lastCompletionIndex]?.chatKey),
+        triggerKey,
+        completionKey,
+        triggerSnapshot: ordered[lastTriggerIndex],
+        completionSnapshot: ordered[lastCompletionIndex],
+        observedPropertyMessages: batchSnapshots.filter(isEmployeePropertyStartSnapshot).length
+      };
+    }
+    const moved = await scrollWhatsappHistoryOlder(page);
+    if (!moved) break;
+    await page.waitForTimeout(650);
+  }
+
+  await scrollWhatsappHistoryToLatest(page);
+  return { found: false, reason: triggerKey ? 'completion_not_found' : 'agent_007_trigger_not_found' };
+}
+
+async function replayEmployeeBatchThroughCompletion(page, history = {}, row = {}) {
+  const completionKey = String(history.completionKey || '');
+  if (!history.found || !completionKey) return { handled: false, processed: 0 };
+  if (completedEmployeeBatchHistoryKeys.has(completionKey)) return { handled: true, processed: 0 };
+
+  const preparation = await apiRequest('/api/whatsapp/web-bridge/employee-batch-recovery', {
+    method: 'POST',
+    body: {
+      client_id: CLIENT_ID,
+      phone: history.chatKey,
+      observed_property_messages: history.observedPropertyMessages,
+      trigger_message_id: history.triggerSnapshot?.messageId || history.triggerKey,
+      completion_message_id: history.completionSnapshot?.messageId || history.completionKey
+    }
+  });
+  const preparationData = preparation.data || {};
+  if (preparationData.alreadyComplete) {
+    completedEmployeeBatchHistoryKeys.add(completionKey);
+    rememberBrowserMessageKey(browserMessageKeyFor(history.completionSnapshot, row));
+    await scrollWhatsappHistoryToLatest(page);
+    log(`Agent 007 batch already reconciled for ${history.chatKey}: ${history.observedPropertyMessages} property messages`);
+    return { handled: true, processed: 0, alreadyComplete: true };
+  }
+  if (!preparationData.ready) {
+    completedEmployeeBatchHistoryKeys.add(completionKey);
+    await scrollWhatsappHistoryToLatest(page);
+    log(`Agent 007 batch history replay skipped for ${history.chatKey}: ${preparationData.reason || 'recovery_not_ready'}`);
+    return { handled: true, processed: 0, skipped: preparationData.reason || 'recovery_not_ready' };
+  }
+
+  log(`starting Agent 007 ordered history replay for ${history.chatKey}: ${history.observedPropertyMessages} property messages observed`);
+  let started = false;
+  let completed = false;
+  let processed = 0;
+  const visited = new Set();
+  const replayRunKey = crypto.createHash('sha1').update(`${history.triggerKey}:${history.completionKey}`).digest('hex').slice(0, 16);
+
+  for (let round = 0; round < EMPLOYEE_BATCH_HISTORY_MAX_ROUNDS * 2 && !completed; round += 1) {
+    const snapshots = (await getRecentIncomingSnapshots(page, EMPLOYEE_BATCH_HISTORY_SCAN_LIMIT))
+      .filter((snapshot) => {
+        const snapshotChat = normalizeChatKey(snapshot.chatKey);
+        return !history.chatKey || !snapshotChat || snapshotChat === history.chatKey;
+      });
+    for (const snapshot of snapshots) {
+      const key = employeeBatchSnapshotKey(snapshot);
+      if (!started) {
+        if (key !== history.triggerKey) continue;
+        started = true;
+      }
+      if (!key || visited.has(key)) continue;
+      visited.add(key);
+
+      const isCompletion = key === history.completionKey || isEmployeeBatchCompletionSnapshot(snapshot);
+      const originalBrowserKey = browserMessageKeyFor(snapshot, row);
+      if (isCompletion) {
+        const result = await ingestSnapshot({
+          snapshot: {
+            ...snapshot,
+            messageId: `${snapshot.messageId || key}:ordered-complete:${replayRunKey}`.slice(0, 500),
+            browserMessageKey: `employee-batch-complete:${replayRunKey}`,
+            bridgeMetadata: {
+              employee_batch_ordered_replay: true,
+              employee_batch_completion: true,
+              employee_batch_history_marker: WHATSAPP_EMPLOYEE_AGENT_007_WORKER_MARKER,
+              observed_property_messages: history.observedPropertyMessages
+            }
+          },
+          row,
+          source: 'employee_batch_history_completion'
+        });
+        processed += result.processed || 0;
+        if (result.queuedReply) await processOutbox(page, { recipient: result.chatKey, maxSends: 1 });
+        rememberBrowserMessageKey(originalBrowserKey);
+        completed = !!(result.processed || result.duplicate || result.queuedReply);
+        break;
+      }
+
+      const hydrated = await hydrateMediaSnapshot(page, {
+        ...snapshot,
+        browserMessageKey: originalBrowserKey,
+        bridgeMetadata: {
+          employee_batch_ordered_replay: true,
+          employee_batch_completion: false,
+          employee_batch_history_marker: WHATSAPP_EMPLOYEE_AGENT_007_WORKER_MARKER,
+          observed_property_messages: history.observedPropertyMessages
+        }
+      });
+      const result = await ingestSnapshot({
+        snapshot: hydrated,
+        row,
+        source: 'employee_batch_history_replay'
+      });
+      if (result.retryable) {
+        await scrollWhatsappHistoryToLatest(page);
+        return { handled: true, processed, retryable: true };
+      }
+      processed += result.processed || 0;
+    }
+    if (completed) break;
+    const moved = await scrollWhatsappHistoryNewer(page);
+    if (!moved) break;
+    await page.waitForTimeout(650);
+  }
+
+  await scrollWhatsappHistoryToLatest(page);
+  if (completed) {
+    completedEmployeeBatchHistoryKeys.add(completionKey);
+    log(`Agent 007 ordered history replay completed for ${history.chatKey}; processed ${processed} missing message(s)`);
+    return { handled: true, processed, completed: true };
+  }
+  log(`Agent 007 ordered history replay did not reach COMPLETE for ${history.chatKey}`);
+  return { handled: true, processed, retryable: true, skipped: 'completion_not_reached' };
+}
+
+async function maybeReplayEmployeeBatchThroughCompletion(page, snapshots = [], row = {}) {
+  const visibleCompletion = snapshots.find(isEmployeeBatchCompletionSnapshot);
+  if (!visibleCompletion) return { handled: false, processed: 0 };
+  const visibleCompletionKey = employeeBatchSnapshotKey(visibleCompletion);
+  if (completedEmployeeBatchHistoryKeys.has(visibleCompletionKey)) return { handled: true, processed: 0 };
+  const history = await locateEmployeeBatchHistory(page, {
+    chatKey: normalizeChatKey(visibleCompletion.chatKey || row.title)
+  });
+  if (!history.found) return { handled: false, processed: 0 };
+  return replayEmployeeBatchThroughCompletion(page, history, row);
+}
+
 async function collectOwnerHistoryBackfillSnapshots(page, { chatKey = '', limit = 60 } = {}) {
   const requestedLimit = Math.max(1, Math.min(100, Number(limit || 60)));
   const normalizedCommandChat = normalizeChatKey(chatKey);
@@ -2854,6 +3076,11 @@ async function ingestUnreadChats(page) {
     if (!opened) continue;
 
     const snapshots = await getRecentIncomingSnapshots(page, RECENT_INBOUND_BACKLOG_LIMIT);
+    const employeeReplay = await maybeReplayEmployeeBatchThroughCompletion(page, snapshots, row);
+    if (employeeReplay.handled) {
+      processed += employeeReplay.processed || 0;
+      continue;
+    }
     let handledRow = false;
     let retryableBlocked = false;
     for (const snapshot of snapshots) {
@@ -2941,6 +3168,12 @@ async function ingestRecentChatsSweep(page, limit = RECENT_CHAT_SWEEP_LIMIT) {
     openedRows += 1;
 
     const snapshots = await getRecentIncomingSnapshots(page, RECENT_INBOUND_BACKLOG_LIMIT);
+    const employeeReplay = await maybeReplayEmployeeBatchThroughCompletion(page, snapshots, row);
+    if (employeeReplay.handled) {
+      processed += employeeReplay.processed || 0;
+      rememberRecentChatRow(rowKey);
+      return finish(true);
+    }
     let rowObserved = !snapshots.length;
     let handledRow = false;
     let retryableBlocked = false;
@@ -3002,6 +3235,11 @@ async function ingestRecentChatsSweep(page, limit = RECENT_CHAT_SWEEP_LIMIT) {
 
 async function ingestActiveChat(page) {
   const snapshots = await getRecentIncomingSnapshots(page, RECENT_INBOUND_BACKLOG_LIMIT);
+  const employeeReplay = await maybeReplayEmployeeBatchThroughCompletion(page, snapshots, {
+    title: snapshots[0]?.chatKey || '',
+    preview: ''
+  });
+  if (employeeReplay.handled) return employeeReplay.processed || 0;
   let processed = 0;
   for (const snapshot of snapshots) {
     const row = { title: snapshot.chatKey, preview: '' };

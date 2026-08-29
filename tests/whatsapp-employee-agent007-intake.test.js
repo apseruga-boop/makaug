@@ -110,6 +110,13 @@ assert(copilotSource.includes("skipped: 'ordered_media_hydration_pending'"), 'wo
 assert(copilotSource.includes('captureVideoSnapshotFromNetwork'), 'worker must recover WhatsApp video bytes before reaching COMPLETE');
 assert(copilotSource.includes('captureVideoMessageScreenshot'), 'worker must preserve a reviewable property image when WhatsApp withholds video bytes and the poster canvas');
 assert(copilotSource.includes("mediaPreviewError: 'video_bytes_unavailable_poster_stored'"), 'an unrecoverable video must preserve a property poster instead of blocking the batch forever');
+assert(copilotSource.includes('locateEmployeeBatchHistory'), 'COMPLETE must scan backward to the Agent 007 trigger before closing a batch');
+assert(copilotSource.includes('replayEmployeeBatchThroughCompletion'), 'the worker must replay every ordered batch message before COMPLETE');
+assert(copilotSource.includes('scrollWhatsappHistoryNewer'), 'history reconciliation must walk forward from the trigger without keeping every video in memory');
+assert(copilotSource.includes("'/api/whatsapp/web-bridge/employee-batch-recovery'"), 'the worker must request a safe partial-batch recovery before replay');
+assert(routeSource.includes("router.post('/web-bridge/employee-batch-recovery'"), 'the bridge must expose an authenticated partial-batch recovery route');
+assert(routeSource.includes('observed_batch_already_accounted_for'), 'completed batches must not be resent after a worker restart');
+assert(routeSource.includes('employee_batch_ordered_replay'), 'authorized history replay must be marked and isolated from normal messages');
 assert(routeSource.includes("? ''\n            : `Already saved to review"), 'multiple batches must not send per-property duplicate acknowledgements');
 assert(/message: \(data\.property_batch_mode \|\| 'multiple'\) === 'single'[\s\S]{0,500}: ''/.test(routeSource), 'multiple batches must wait for one final completion summary');
 const voiceDetectorBlocks = copilotSource.match(/const hasVoiceNote = \(root, text = ''\) => \{[\s\S]*?\n    \};\n    const hasCallLog/g) || [];
@@ -134,6 +141,7 @@ assert(serverSource.includes('whatsapp-employee-agent-007-review-intake-20260829
 assert(serverSource.includes('whatsapp-agent-007-multiple-property-batches-20260829'), 'multiple-property mode should have an externally verifiable release marker');
 assert(serverSource.includes('whatsapp-agent-007-ordered-batch-finalization-20260829'), 'ordered batch finalization should have an externally verifiable release marker');
 assert(serverSource.includes('whatsapp-agent-007-complete-barrier-20260829'), 'COMPLETE barrier should have an externally verifiable release marker');
+assert(serverSource.includes('whatsapp-agent-007-history-reconciliation-20260829'), 'history reconciliation should have an externally verifiable release marker');
 assert(serverSource.includes("limit: '40mb'"), 'authorized WhatsApp video previews must fit through the JSON intake limit after base64 encoding');
 assert(serverSource.includes('whatsapp-active-intake-call-shield-20260829'), 'employee call shield should have an externally verifiable release marker');
 
@@ -142,17 +150,16 @@ const originalQuery = db.query;
 
 (async () => {
   const updates = [];
+  let sessionRow = {
+    phone: '+447757773202',
+    current_step: 'employee_intake_role',
+    language: 'en',
+    listing_draft: {},
+    session_data: { whatsapp_employee_intake: true }
+  };
   db.query = async (sql, params = []) => {
     if (/SELECT \* FROM whatsapp_sessions WHERE phone/i.test(sql)) {
-      return {
-        rows: [{
-          phone: params[0],
-          current_step: 'employee_intake_role',
-          language: 'en',
-          listing_draft: {},
-          session_data: { whatsapp_employee_intake: true }
-        }]
-      };
+      return { rows: [{ ...sessionRow, phone: params[0] }] };
     }
     if (/INSERT INTO whatsapp_call_events/i.test(sql)) {
       return { rows: [{ id: 'call-event-test', inserted: true }] };
@@ -172,6 +179,9 @@ const originalQuery = db.query;
           email: null
         }]
       };
+    }
+    if (/FROM properties/i.test(sql) && /whatsapp_employee_sender_phone_suffix/i.test(sql)) {
+      return { rows: [{ id: '22222222-2222-4222-8222-222222222222' }] };
     }
     if (/INSERT INTO notifications/i.test(sql)) return { rows: [{ id: 'notification-test' }] };
     throw new Error(`Unexpected test query: ${String(sql).slice(0, 80)}`);
@@ -330,7 +340,40 @@ const originalQuery = db.query;
   assert.match(completed.message, /Could not be processed: 1/);
   assert.match(completed.message, /has not been notified yet/);
   assert.match(completed.message, /pending moderator approval, not live/);
-  assert.equal(updates.length, 10, 'each state transition and interrupted-session recovery should persist immediately');
+
+  sessionRow = {
+    phone: '+447757773202',
+    current_step: 'main_menu',
+    language: 'en',
+    listing_draft: {},
+    session_data: {
+      employee_intake_last_completed_at: new Date().toISOString(),
+      employee_intake_last_batch_mode: 'multiple',
+      employee_intake_last_properties_shared: 1,
+      employee_intake_last_properties_set_up: 1,
+      employee_intake_last_duplicates_skipped: 0,
+      employee_intake_last_properties_failed: 0,
+      employee_intake_last_media_count: 1,
+      employee_intake_pending_agent_notification: {
+        agent_id: '11111111-1111-4111-8111-111111111111'
+      }
+    }
+  };
+  const restored = await whatsappRoute.prepareEmployeeOrderedBatchReplay({
+    phone: '+447757773202',
+    observedPropertyMessages: 23,
+    triggerMessageId: 'agent-007-trigger',
+    completionMessageId: 'premature-complete'
+  });
+  assert.equal(restored.ready, true);
+  assert.equal(restored.restored, true);
+  assert.deepEqual(restored.counts, {
+    propertiesShared: 1,
+    propertiesSetUp: 1,
+    duplicatesSkipped: 0,
+    propertiesFailed: 0
+  });
+  assert.equal(updates.length, 11, 'each state transition, interruption recovery, and history recovery should persist immediately');
 
   console.log('WhatsApp Agent 007 employee intake contract tests passed.');
 })().catch((error) => {
