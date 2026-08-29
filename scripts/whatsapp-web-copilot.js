@@ -271,6 +271,9 @@ const WHATSAPP_EMPLOYEE_AGENT_007_WORKER_MARKER = 'whatsapp-agent-007-history-re
 const RECENT_INBOUND_BACKLOG_LIMIT = 60;
 const EMPLOYEE_BATCH_HISTORY_SCAN_LIMIT = 160;
 const EMPLOYEE_BATCH_HISTORY_MAX_ROUNDS = 30;
+const EMPLOYEE_BATCH_RECOVERY_PHONES = String(
+  process.env.WHATSAPP_WEB_COPILOT_EMPLOYEE_RECOVERY_PHONES || ''
+).split(/[;,\s]+/).map((value) => normalizeChatKey(value)).filter(Boolean);
 const seenBrowserMessageIds = new Set();
 const completedEmployeeBatchHistoryKeys = new Set();
 const seenCallEventKeys = new Map();
@@ -2930,6 +2933,26 @@ async function maybeReplayEmployeeBatchThroughCompletion(page, snapshots = [], r
   return replayEmployeeBatchThroughCompletion(page, history, row);
 }
 
+async function runConfiguredEmployeeBatchRecovery(page) {
+  let processed = 0;
+  for (const phone of EMPLOYEE_BATCH_RECOVERY_PHONES) {
+    const opened = await openChatForReply(page, phone);
+    if (!opened) {
+      log(`configured Agent 007 recovery chat could not be opened: ${phone}`);
+      continue;
+    }
+    await page.waitForTimeout(700);
+    const snapshots = await getRecentIncomingSnapshots(page, RECENT_INBOUND_BACKLOG_LIMIT);
+    const result = await maybeReplayEmployeeBatchThroughCompletion(page, snapshots, {
+      title: phone,
+      preview: ''
+    });
+    processed += result.processed || 0;
+    log(`configured Agent 007 recovery checked ${phone}; handled=${result.handled ? 'yes' : 'no'} processed=${result.processed || 0}`);
+  }
+  return processed;
+}
+
 async function collectOwnerHistoryBackfillSnapshots(page, { chatKey = '', limit = 60 } = {}) {
   const requestedLimit = Math.max(1, Math.min(100, Number(limit || 60)));
   const normalizedCommandChat = normalizeChatKey(chatKey);
@@ -4395,6 +4418,7 @@ async function main() {
   let lastOutboxPoll = 0;
   let lastTabReselect = 0;
   let consecutiveLoopErrors = 0;
+  let configuredEmployeeRecoveryRan = false;
 
   while (true) {
     try {
@@ -4481,6 +4505,11 @@ async function main() {
         }
         await sleep(readyState.waitingForLogin ? LOGIN_POLL_MS : Math.max(750, POLL_MS));
         continue;
+      }
+
+      if (!configuredEmployeeRecoveryRan) {
+        configuredEmployeeRecoveryRan = true;
+        await runConfiguredEmployeeBatchRecovery(page);
       }
 
       let sentAtLoopStart = 0;
