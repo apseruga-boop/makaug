@@ -80,6 +80,8 @@ assert(routeSource.includes('active_employee_intake_preserved: true'), 'call eve
 assert(routeSource.includes('call_reply_suppressed: true'), 'suppressed call events must remain auditable');
 assert(routeSource.includes('suppressedActiveEmployeeIntake: true'), 'call routing must report the employee-intake shield');
 assert(routeSource.includes('recoverInterruptedEmployeeIntakeStep'), 'sessions already interrupted by the old missed-call handler must recover');
+assert(copilotSource.includes("skipped: 'unresolved_phone_for_call'"), 'display names must never be accepted as call-event phone identities');
+assert(copilotSource.includes('isResolvableWhatsappCallChatKey(normalizedChatKey)'), 'call-card ingestion must require a resolvable WhatsApp phone identity');
 assert(copilotSource.includes("'call-card',\n    normalizedChatKey"), 'repeated DOM scans must share a semantic call-card cooldown key');
 assert(copilotSource.includes("snapshot.timestampLabel || row.timestampLabel || ''"), 'call-card IDs must use stable timestamps');
 assert(!copilotSource.includes("snapshot.messageId || snapshot.mediaFingerprint || ''\n  );"), 'call-card IDs must not depend on unstable DOM row fingerprints');

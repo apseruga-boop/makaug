@@ -419,6 +419,10 @@ function normalizeChatKey(value) {
   return raw.replace(/\s+/g, ' ').slice(0, 160);
 }
 
+function isResolvableWhatsappCallChatKey(value) {
+  return String(value || '').replace(/\D/g, '').length >= 9;
+}
+
 function createMessageId(chatKey, text, timestampLabel = '', mediaType = 'text', nonce = '') {
   return `webbridge:${crypto.createHash('sha1').update(JSON.stringify({
     chatKey: normalizeChatKey(chatKey),
@@ -2325,6 +2329,10 @@ async function ingestCallSnapshot({ snapshot, row = {}, source = 'call_card', ch
   const normalizedChatKey = normalizeChatKey(chatKey || snapshot.chatKey || row.title);
   const normalizedText = String(text || snapshot.text || row.preview || '[missed call]').trim() || '[missed call]';
   if (!normalizedChatKey) return { processed: 0, skipped: 'missing_chat_for_call' };
+  if (!isResolvableWhatsappCallChatKey(normalizedChatKey)) {
+    log(`skipped call card without a resolvable phone identity: ${normalizedChatKey}`);
+    return { processed: 0, skipped: 'unresolved_phone_for_call' };
+  }
 
   const browserMessageKey = snapshot.browserMessageKey || browserMessageKeyFor(snapshot, row);
   if (browserMessageKey && seenBrowserMessageIds.has(browserMessageKey)) {
