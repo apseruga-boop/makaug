@@ -118,6 +118,7 @@ assert(copilotSource.includes('WHATSAPP_WEB_COPILOT_EMPLOYEE_RECOVERY_PHONES'), 
 assert(copilotSource.includes('runConfiguredEmployeeBatchRecovery'), 'the configured Agent 007 chat must be checked before general chat sweeps can starve it');
 assert(copilotSource.includes('const history = await locateEmployeeBatchHistory(page, { chatKey: phone })'), 'configured recovery must scan directly to the durable COMPLETE boundary');
 assert(copilotSource.includes(':ordered-replay:${replayRunKey}'), 'history recovery must use a fresh server message id for media acknowledged before batch accounting');
+assert(copilotSource.includes("!['image', 'media'].includes(String(snapshot.mediaType || '').toLowerCase())"), 'history recovery must not replay Agent 007 setup text and reset the restored batch');
 assert(copilotSource.includes("'/api/whatsapp/web-bridge/employee-batch-recovery'"), 'the worker must request a safe partial-batch recovery before replay');
 assert(routeSource.includes("router.post('/web-bridge/employee-batch-recovery'"), 'the bridge must expose an authenticated partial-batch recovery route');
 assert(routeSource.includes('observed_batch_already_accounted_for'), 'completed batches must not be resent after a worker restart');
@@ -152,6 +153,7 @@ assert(serverSource.includes('whatsapp-agent-007-history-reconciliation-20260829
 assert(serverSource.includes('whatsapp-agent-007-video-fetch-fallback-20260829'), 'video fetch fallback should have an externally verifiable release marker');
 assert(serverSource.includes('whatsapp-agent-007-acknowledged-media-reconciliation-20260829'), 'acknowledged media reconciliation should have an externally verifiable release marker');
 assert(serverSource.includes('whatsapp-agent-007-notification-ledger-recovery-20260829'), 'notification-ledger recovery should have an externally verifiable release marker');
+assert(serverSource.includes('whatsapp-agent-007-media-only-reconciliation-20260829'), 'media-only reconciliation should have an externally verifiable release marker');
 assert(serverSource.includes("limit: '40mb'"), 'authorized WhatsApp video previews must fit through the JSON intake limit after base64 encoding');
 assert(serverSource.includes('whatsapp-active-intake-call-shield-20260829'), 'employee call shield should have an externally verifiable release marker');
 
