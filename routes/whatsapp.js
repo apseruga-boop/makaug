@@ -64,7 +64,22 @@ const {
 } = require('../services/aiCeoControlService');
 const { captureLearningEvent } = require('../services/aiLearningCaptureService');
 const { isLlmEnabled } = require('../services/llmProvider');
-const { storeDataUrl } = require('../services/cloudMediaStorageService');
+const { storeDataUrl, uploadBufferToS3 } = require('../services/cloudMediaStorageService');
+const {
+  EMPLOYEE_INTAKE_STEPS,
+  EMPLOYEE_INTAKE_TRIGGER,
+  employeeAgentExistingPrompt,
+  employeeIntakePhoneAllowed,
+  employeeMediaPrompt,
+  employeeRolePrompt,
+  isEmployeeIntakeComplete,
+  isEmployeeIntakeStep,
+  isEmployeeIntakeTrigger,
+  parseCustomerDetails,
+  parseEmployeeRole,
+  parseNewAgentDetails,
+  parseYesNo
+} = require('../services/whatsappEmployeeIntakeService');
 const { buildUgNlisAssistantReply } = require('../services/ugnlisLandVerificationService');
 const { addPublicAgentEligibilityFilters } = require('../services/publicAgentEligibilityService');
 const { tenantFor } = require('../packages/shared-country-core');
@@ -93,6 +108,7 @@ const HOME_URL = (process.env.PUBLIC_BASE_URL || ACTIVE_TENANT.domain).replace(/
 const WHATSAPP_NATURAL_SELLER_FLOW_MARKER = 'whatsapp-natural-seller-flow-20260804';
 const WHATSAPP_OWNER_FORWARD_REVIEW_MARKER = 'whatsapp-owner-forward-review-media-20260820';
 const WHATSAPP_OWNER_HISTORY_BACKFILL_MARKER = 'whatsapp-owner-history-backfill-20260820';
+const WHATSAPP_EMPLOYEE_AGENT_007_MARKER = 'whatsapp-employee-agent-007-review-intake-20260829';
 const WHATSAPP_API_VERSION = (process.env.WHATSAPP_API_VERSION || 'v25.0').trim();
 const WHATSAPP_ACCESS_TOKEN = (process.env.WHATSAPP_ACCESS_TOKEN || '').trim();
 const WHATSAPP_PHONE_NUMBER_ID = (process.env.WHATSAPP_PHONE_NUMBER_ID || '').trim();
@@ -3238,6 +3254,858 @@ async function handleOwnerReviewForward({
   };
 }
 
+function employeeIntakePhoneSuffix(phone = '') {
+  return String(phone || '').replace(/\D/g, '').slice(-4) || null;
+}
+
+function employeeMediaMimeType(candidate = {}, fallback = '') {
+  const direct = normalizeInput(candidate.mime_type || candidate.mimeType || fallback).toLowerCase();
+  if (direct.includes('/')) return direct.split(';')[0].trim();
+  const dataMatch = String(candidate.data_url || candidate.dataUrl || '').match(/^data:([^;,]+)[;,]/i);
+  return normalizeInput(dataMatch?.[1] || '').toLowerCase() || 'application/octet-stream';
+}
+
+function employeeMediaKind(mimeType = '') {
+  const mime = String(mimeType || '').toLowerCase();
+  if (mime.startsWith('image/')) return 'image';
+  if (mime.startsWith('video/')) return 'video';
+  return 'document';
+}
+
+function employeeMediaExtension(mimeType = '') {
+  const extensions = {
+    'image/jpeg': 'jpg',
+    'image/jpg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+    'image/gif': 'gif',
+    'video/mp4': 'mp4',
+    'video/quicktime': 'mov',
+    'video/webm': 'webm',
+    'application/pdf': 'pdf',
+    'application/msword': 'doc',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+    'application/vnd.ms-excel': 'xls',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+    'application/vnd.ms-powerpoint': 'ppt',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
+    'text/plain': 'txt',
+    'text/csv': 'csv'
+  };
+  return extensions[String(mimeType || '').toLowerCase()] || 'bin';
+}
+
+function employeeMediaCandidates(runtime = {}, mediaUrl = '') {
+  const collected = [];
+  const append = (candidate = {}, fallbackMime = '') => {
+    const dataUrl = normalizeInput(candidate.data_url || candidate.dataUrl || '');
+    const remoteUrl = normalizeInput(candidate.url || candidate.media_url || candidate.mediaUrl || '');
+    const mimeType = employeeMediaMimeType(candidate, fallbackMime);
+    if (!dataUrl && !/^https:\/\//i.test(remoteUrl)) return;
+    collected.push({
+      dataUrl,
+      remoteUrl,
+      mimeType,
+      kind: employeeMediaKind(mimeType),
+      sha256: normalizeInput(candidate.sha256 || candidate.hash || ''),
+      name: normalizeInput(candidate.name || candidate.filename || '')
+    });
+  };
+  for (const candidate of Array.isArray(runtime.photoCandidates) ? runtime.photoCandidates.slice(0, 20) : []) {
+    append(candidate, 'image/jpeg');
+  }
+  for (const candidate of Array.isArray(runtime.mediaCandidates) ? runtime.mediaCandidates.slice(0, 20) : []) {
+    append(candidate, runtime.mediaType || '');
+  }
+  if (/^https:\/\//i.test(String(mediaUrl || ''))) {
+    append({ mediaUrl }, runtime.mediaType || 'application/octet-stream');
+  }
+  const seen = new Set();
+  return collected.filter((candidate) => {
+    const key = candidate.sha256 || candidate.dataUrl || candidate.remoteUrl;
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, 20);
+}
+
+async function storeEmployeeMediaCandidate(candidate, {
+  privateMedia = false,
+  phone = '',
+  inboundMessageId = '',
+  index = 0,
+  provider = 'whatsapp'
+} = {}) {
+  const allowedMimeTypes = [
+    'image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif',
+    'video/mp4', 'video/quicktime', 'video/webm',
+    'application/pdf', 'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-powerpoint',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'text/plain', 'text/csv'
+  ];
+  const mimeType = employeeMediaMimeType(candidate);
+  if (!allowedMimeTypes.includes(mimeType)) {
+    throw new Error(`Unsupported employee intake media type: ${mimeType || 'unknown'}`);
+  }
+  const kind = employeeMediaKind(mimeType);
+  const maxBytes = kind === 'image' ? 6_000_000 : (kind === 'video' ? 25_000_000 : 15_000_000);
+  const safeMessage = normalizeInput(inboundMessageId || crypto.randomUUID()).replace(/[^a-z0-9_-]+/gi, '-').slice(-80);
+  const safePhone = String(phone || '').replace(/\D/g, '').slice(-8) || 'employee';
+  const filename = `${safePhone}-${safeMessage}-${index + 1}.${employeeMediaExtension(mimeType)}`;
+  let storedUrl = '';
+  let sha256 = normalizeInput(candidate.sha256 || '');
+
+  if (candidate.dataUrl) {
+    storedUrl = await storeDataUrl(candidate.dataUrl, {
+      keyPrefix: privateMedia ? 'whatsapp-employee-intake/private-id' : `whatsapp-employee-intake/${kind}`,
+      filename,
+      label: privateMedia ? 'employee intake identity document' : `employee intake ${kind}`,
+      allowedMimeTypes,
+      maxBytes,
+      isPrivate: privateMedia
+    });
+    if (!sha256) {
+      const encoded = String(candidate.dataUrl).split(',')[1] || '';
+      sha256 = crypto.createHash('sha256').update(Buffer.from(encoded, 'base64')).digest('hex');
+    }
+  } else if (/^https:\/\//i.test(candidate.remoteUrl)) {
+    const response = await fetch(candidate.remoteUrl, {
+      headers: {
+        Accept: mimeType,
+        ...(provider === 'meta' && WHATSAPP_ACCESS_TOKEN
+          ? { Authorization: `Bearer ${WHATSAPP_ACCESS_TOKEN}` }
+          : {})
+      }
+    });
+    if (!response.ok) throw new Error(`WhatsApp media download failed (${response.status})`);
+    const responseMime = normalizeInput(response.headers.get('content-type')).split(';')[0].toLowerCase() || mimeType;
+    if (!allowedMimeTypes.includes(responseMime)) throw new Error(`Unsupported downloaded media type: ${responseMime}`);
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (!bytes.length || bytes.length > maxBytes) throw new Error(`WhatsApp ${kind} exceeds the ${Math.floor(maxBytes / 1_000_000)}MB intake limit`);
+    const key = `${privateMedia ? 'whatsapp-employee-intake/private-id' : `whatsapp-employee-intake/${kind}`}/${Date.now()}-${crypto.randomUUID()}-${filename}`;
+    const stored = await uploadBufferToS3({ bytes, mimeType: responseMime, key });
+    storedUrl = privateMedia ? stored.internalRef : (stored.publicUrl || stored.internalRef);
+    sha256 = stored.sha256;
+  }
+
+  if (!storedUrl) throw new Error('Permanent media storage is unavailable');
+  return { url: storedUrl, sha256, mimeType, kind, name: candidate.name || filename };
+}
+
+async function storeEmployeeMedia(candidates = [], options = {}) {
+  const stored = [];
+  for (let index = 0; index < candidates.length; index += 1) {
+    stored.push(await storeEmployeeMediaCandidate(candidates[index], { ...options, index }));
+  }
+  return stored;
+}
+
+async function replaceEmployeeSession(phone, currentStep, sessionData = {}) {
+  await db.query(
+    `UPDATE whatsapp_sessions
+        SET current_step = $2,
+            listing_draft = '{}'::jsonb,
+            session_data = $3::jsonb,
+            last_message_at = NOW(),
+            updated_at = NOW()
+      WHERE phone = $1`,
+    [phone, currentStep, JSON.stringify(sessionData)]
+  );
+}
+
+async function findEmployeeApprovedAgents(query = '') {
+  const clean = normalizeInput(query);
+  if (!clean) return [];
+  const result = await db.query(
+    `SELECT id, full_name, company_name, phone, whatsapp, email
+       FROM agents
+      WHERE status = 'approved'
+        AND (
+          LOWER(full_name) = LOWER($1)
+          OR LOWER(COALESCE(company_name, '')) = LOWER($1)
+          OR LOWER(full_name) LIKE LOWER($2)
+          OR LOWER(COALESCE(company_name, '')) LIKE LOWER($2)
+          OR LOWER(COALESCE(makaug_agent_number, '')) = LOWER($1)
+        )
+      ORDER BY
+        CASE WHEN LOWER(full_name) = LOWER($1) THEN 0 ELSE 1 END,
+        updated_at DESC
+      LIMIT 5`,
+    [clean, `%${clean}%`]
+  );
+  return result.rows;
+}
+
+async function ensurePendingEmployeeAgent(details = {}, identityDocument = {}) {
+  const phoneDigits = String(details.phone || '').replace(/\D/g, '');
+  const existing = await db.query(
+    `SELECT id, full_name, company_name, phone, whatsapp, email, status, identity_document_url
+       FROM agents
+      WHERE regexp_replace(COALESCE(phone, ''), '\\D', '', 'g') = $1
+         OR regexp_replace(COALESCE(whatsapp, ''), '\\D', '', 'g') = $1
+      ORDER BY status = 'approved' DESC, updated_at DESC
+      LIMIT 1`,
+    [phoneDigits]
+  );
+  if (existing.rows[0]) {
+    const existingAgent = existing.rows[0];
+    if (existingAgent.status === 'pending' && !existingAgent.identity_document_url) {
+      const updated = await db.query(
+        `UPDATE agents
+            SET identity_document_name = $2,
+                identity_document_url = $3,
+                identity_document_type = $4,
+                identity_document_uploaded_at = NOW(),
+                verification_reason = CONCAT_WS(' ', NULLIF(verification_reason, ''), $5),
+                updated_at = NOW()
+          WHERE id = $1 AND status = 'pending' AND identity_document_url IS NULL
+          RETURNING id, full_name, company_name, phone, whatsapp, email, status`,
+        [
+          existingAgent.id,
+          identityDocument.name || 'whatsapp-agent-id',
+          identityDocument.url,
+          identityDocument.mimeType,
+          '[WHATSAPP_EMPLOYEE_AGENT_007] Employee-supplied identity media added to the existing pending agent. Manual staff verification is required; consent is not inferred.'
+        ]
+      );
+      if (updated.rows[0]) return { agent: updated.rows[0], created: false, identityAttached: true };
+    }
+    return { agent: existingAgent, created: false };
+  }
+
+  const licenceNumber = `EMPLOYEE-INTAKE-${crypto.randomUUID().replace(/-/g, '').slice(0, 16).toUpperCase()}`;
+  const inserted = await db.query(
+    `INSERT INTO agents (
+       full_name, company_name, licence_number, registration_status, listing_limit,
+       phone, whatsapp, districts_covered, specializations,
+       identity_document_name, identity_document_url, identity_document_type,
+       identity_document_uploaded_at, verification_reason,
+       privacy_consent_accepted, data_retention_notice_accepted, status
+     ) VALUES (
+       $1,$2,$3,'not_registered',2147483647,$4,$4,$5::text[],'{}'::text[],
+       $6,$7,$8,NOW(),$9,FALSE,FALSE,'pending'
+     ) RETURNING id, full_name, company_name, phone, whatsapp, email, status`,
+    [
+      details.fullName,
+      details.company || 'Independent agent',
+      licenceNumber,
+      details.phone,
+      [details.district],
+      identityDocument.name || 'whatsapp-agent-id',
+      identityDocument.url,
+      identityDocument.mimeType,
+      '[WHATSAPP_EMPLOYEE_AGENT_007] Employee supplied identity media. Agent, ID and phone require manual staff verification; privacy and retention consent are not inferred.'
+    ]
+  );
+  return { agent: inserted.rows[0], created: true };
+}
+
+function parseEmployeeBedroomDraft(caption = '') {
+  const clean = normalizeInput(caption);
+  const explicit = clean.match(/\b(\d{1,2})\s*(?:bedrooms?|beds?|br)\b/i)
+    || clean.match(/\b(?:bedrooms?|beds?|br)\s*[:=-]?\s*(\d{1,2})\b/i);
+  if (explicit?.[1]) return { bedrooms: Number(explicit[1]) };
+  return parseBedroomDraft(clean) || {};
+}
+
+function employeePropertyFacts(caption = '', sessionData = {}) {
+  const cleanCaption = normalizeInput(caption);
+  const naturalDraft = buildNaturalListingDetailDraft(cleanCaption, {}) || {};
+  const hints = extractSellerListingDraftHints(cleanCaption, {});
+  const listingType = ownerForwardListingType(cleanCaption, { ...hints, ...naturalDraft });
+  const price = parseListingPriceDraft(cleanCaption);
+  const bedroomDraft = parseEmployeeBedroomDraft(cleanCaption);
+  let locationResolution = resolveWhatsappLocation(cleanCaption, { allowText: true });
+  if ((!locationResolution || locationResolution.status !== 'matched') && sessionData.customer_details?.location) {
+    locationResolution = resolveWhatsappLocation(`${cleanCaption} ${sessionData.customer_details.location}`, { allowText: true });
+  }
+  const locationLevel = normalizeInput(locationResolution?.match?.level || '');
+  const exactLocation = locationResolution?.status === 'matched'
+    && !['district', 'region'].includes(locationLevel)
+    && Number(locationResolution?.confidence || 0) >= 1;
+  const locationPatch = exactLocation ? canonicalWhatsappLocationPatch(locationResolution) : {};
+  return { cleanCaption, naturalDraft, hints, listingType, price, bedroomDraft, locationPatch };
+}
+
+function employeePropertyMissing(facts = {}) {
+  const missing = [];
+  if (!facts.listingType) missing.push('sale/rent/land/commercial/student type');
+  if (!facts.price) missing.push('price');
+  if (!facts.locationPatch?.area || !facts.locationPatch?.district || !facts.locationPatch?.canonical_location_id) {
+    missing.push('exact area and district');
+  }
+  return missing;
+}
+
+function employeeCaptionHash(caption = '') {
+  const normalized = normalizeInput(caption).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  return normalized ? crypto.createHash('sha256').update(normalized).digest('hex') : '';
+}
+
+async function findEmployeeDuplicateProperty({ caption = '', facts = {}, sessionData = {} } = {}) {
+  const captionHash = employeeCaptionHash(caption);
+  if (!captionHash) return null;
+  const agentId = sessionData.agent?.id || '';
+  const contactDigits = String(
+    sessionData.agent?.whatsapp
+    || sessionData.agent?.phone
+    || sessionData.customer_details?.phone
+    || ''
+  ).replace(/\D/g, '');
+  const result = await db.query(
+    `SELECT id, status
+       FROM properties
+      WHERE source = 'whatsapp_employee_intake'
+        AND status IN ('pending','approved')
+        AND listing_type = $1
+        AND LOWER(TRIM(area)) = LOWER(TRIM($2))
+        AND LOWER(TRIM(district)) = LOWER(TRIM($3))
+        AND price = $4
+        AND extra_fields->>'source_caption_sha256' = $5
+        AND (
+          ($6::text <> '' AND agent_id::text = $6)
+          OR ($7::text <> '' AND regexp_replace(COALESCE(lister_phone, ''), '\\D', '', 'g') = $7)
+        )
+      ORDER BY created_at DESC
+      LIMIT 1`,
+    [facts.listingType, facts.locationPatch.area, facts.locationPatch.district, facts.price, captionHash, agentId, contactDigits]
+  );
+  return result.rows[0] || null;
+}
+
+async function createEmployeeReviewProperty({
+  phone,
+  inboundMessageId,
+  caption,
+  facts,
+  storedMedia,
+  sessionData
+} = {}) {
+  const agent = sessionData.agent || null;
+  const customer = sessionData.customer_details || null;
+  const listerName = normalizeInput(agent?.full_name || customer?.fullName || 'WhatsApp customer');
+  const listerPhone = normalizeInput(agent?.whatsapp || agent?.phone || customer?.phone || '');
+  const title = ownerForwardListingTitle({
+    listingType: facts.listingType,
+    area: facts.locationPatch.area,
+    bedrooms: facts.bedroomDraft.bedrooms
+  });
+  const imageMedia = storedMedia.filter((item) => item.kind === 'image');
+  const videoMedia = storedMedia.filter((item) => item.kind === 'video');
+  const documentMedia = storedMedia.filter((item) => item.kind === 'document');
+  const extraFields = {
+    review_only: true,
+    auto_publish: false,
+    whatsapp_employee_intake: true,
+    whatsapp_employee_intake_marker: WHATSAPP_EMPLOYEE_AGENT_007_MARKER,
+    whatsapp_employee_trigger: EMPLOYEE_INTAKE_TRIGGER,
+    whatsapp_employee_message_id: inboundMessageId || null,
+    whatsapp_employee_sender_phone_suffix: employeeIntakePhoneSuffix(phone),
+    whatsapp_employee_subject_role: sessionData.employee_role,
+    whatsapp_employee_access_mode: process.env.WHATSAPP_EMPLOYEE_INTAKE_NUMBERS ? 'allowlist' : 'trigger_only',
+    source_caption: caption.slice(0, 2000),
+    source_caption_sha256: employeeCaptionHash(caption),
+    source_name: listerName,
+    source_platform: 'WhatsApp employee intake',
+    agent_profile_linked: Boolean(agent?.id),
+    identity_document_available: Boolean(sessionData.identity_document_url),
+    media_validation_status: 'pending_human_review',
+    media_count: storedMedia.length,
+    media_sha256: storedMedia.map((item) => item.sha256).filter(Boolean),
+    video_urls: videoMedia.map((item) => item.url),
+    document_urls: documentMedia.map((item) => item.url),
+    canonical_location_id: facts.locationPatch.canonical_location_id,
+    canonical_location_level: facts.locationPatch.canonical_location_level,
+    canonical_location_match: facts.locationPatch.canonical_location_match,
+    canonical_location_confidence: facts.locationPatch.canonical_location_confidence,
+    canonical_location_source: facts.locationPatch.canonical_location_source,
+    region: facts.locationPatch.region,
+    resolved_location_label: [facts.locationPatch.area, facts.locationPatch.district, facts.locationPatch.region].filter(Boolean).join(', '),
+    ...(customer ? {
+      customer_location_confirmed: customer.location
+    } : {})
+  };
+
+  const client = await db.getClient();
+  let propertyId = '';
+  try {
+    await client.query('BEGIN');
+    const inserted = await client.query(
+      `INSERT INTO properties (
+        listing_type, title, description, district, area, price, price_period,
+        bedrooms, lister_name, lister_phone, lister_email, lister_type, agent_id,
+        id_document_name, id_document_url, extra_fields,
+        status, moderation_stage, listed_via, source
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'pending','submitted','whatsapp','whatsapp_employee_intake')
+      RETURNING id`,
+      [
+        facts.listingType,
+        title,
+        caption.slice(0, 2000),
+        facts.locationPatch.district,
+        facts.locationPatch.area,
+        facts.price,
+        ownerForwardPricePeriod(facts.listingType, caption),
+        facts.bedroomDraft.bedrooms || null,
+        listerName,
+        listerPhone || null,
+        agent?.email || null,
+        agent?.id ? 'agent' : 'owner',
+        agent?.id || null,
+        customer && sessionData.identity_document_url ? 'WhatsApp customer ID' : null,
+        customer ? sessionData.identity_document_url || null : null,
+        JSON.stringify(extraFields)
+      ]
+    );
+    propertyId = inserted.rows[0].id;
+    for (let index = 0; index < imageMedia.length; index += 1) {
+      await client.query(
+        `INSERT INTO property_images (property_id, url, is_primary, sort_order, slot_key, room_label)
+         VALUES ($1,$2,$3,$4,$5,$6)`,
+        [propertyId, imageMedia[index].url, index === 0, index, index === 0 ? 'primary' : `extra_${index + 1}`, index === 0 ? 'Primary property photo' : `Property photo ${index + 1}`]
+      );
+    }
+    await client.query(
+      `INSERT INTO property_moderation_events
+        (property_id, actor_id, action, status_from, status_to, reason, notes, delivery)
+       VALUES ($1,'whatsapp-employee-agent-007','whatsapp_employee_intake_queued','pending','pending',$2,$3,$4::jsonb)`,
+      [
+        propertyId,
+        'Employee-submitted WhatsApp property stored for human review. Automatic publication is disabled.',
+        `${storedMedia.length} permanent media item(s) stored; linked agent ${agent?.id || 'none'}.`,
+        JSON.stringify({ marker: WHATSAPP_EMPLOYEE_AGENT_007_MARKER, media_count: storedMedia.length, auto_publish: false })
+      ]
+    );
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+
+  await logNotification(db, {
+    recipientPhone: phone,
+    channel: 'whatsapp',
+    type: 'whatsapp_employee_property_review_queued',
+    status: 'queued',
+    relatedListingId: propertyId,
+    payloadSummary: { marker: WHATSAPP_EMPLOYEE_AGENT_007_MARKER, review_only: true, media_count: storedMedia.length }
+  });
+  captureWhatsappLearningAsync({
+    eventName: 'whatsapp_employee_property_review_queued',
+    phone,
+    language: 'en',
+    inputText: caption,
+    responseText: 'Saved to staff review only.',
+    entities: { property_id: propertyId, listing_type: facts.listingType, area: facts.locationPatch.area, district: facts.locationPatch.district },
+    payload: { marker: WHATSAPP_EMPLOYEE_AGENT_007_MARKER, agent_id: agent?.id || null, auto_publish: false },
+    dedupeKey: `whatsapp:employee-intake:${inboundMessageId || propertyId}`
+  });
+  return propertyId;
+}
+
+async function attachEmployeeReviewMedia({ propertyId, storedMedia, phone, inboundMessageId } = {}) {
+  const propertyResult = await db.query(
+    `SELECT id, extra_fields
+       FROM properties
+      WHERE id = $1 AND status = 'pending' AND source = 'whatsapp_employee_intake'
+      LIMIT 1`,
+    [propertyId]
+  );
+  const property = propertyResult.rows[0];
+  if (!property) throw new Error('The current employee intake property is no longer pending');
+  const existingHashes = new Set(Array.isArray(property.extra_fields?.media_sha256) ? property.extra_fields.media_sha256 : []);
+  const uniqueMedia = storedMedia.filter((item) => !item.sha256 || !existingHashes.has(item.sha256));
+  if (!uniqueMedia.length) return { attached: 0, duplicate: true };
+  const existingImages = await db.query('SELECT COUNT(*)::int AS count FROM property_images WHERE property_id = $1', [propertyId]);
+  const imageOffset = Number(existingImages.rows[0]?.count || 0);
+  const images = uniqueMedia.filter((item) => item.kind === 'image');
+  const previousVideos = Array.isArray(property.extra_fields?.video_urls) ? property.extra_fields.video_urls : [];
+  const previousDocuments = Array.isArray(property.extra_fields?.document_urls) ? property.extra_fields.document_urls : [];
+  const videos = uniqueMedia.filter((item) => item.kind === 'video').map((item) => item.url);
+  const documents = uniqueMedia.filter((item) => item.kind === 'document').map((item) => item.url);
+  const mergedHashes = [...existingHashes, ...uniqueMedia.map((item) => item.sha256).filter(Boolean)];
+  const client = await db.getClient();
+  try {
+    await client.query('BEGIN');
+    const locked = await client.query("SELECT id FROM properties WHERE id = $1 AND status = 'pending' FOR UPDATE", [propertyId]);
+    if (!locked.rows.length) throw new Error('The current property changed status while media was uploading');
+    for (let index = 0; index < images.length; index += 1) {
+      const sortOrder = imageOffset + index;
+      await client.query(
+        `INSERT INTO property_images (property_id, url, is_primary, sort_order, slot_key, room_label)
+         VALUES ($1,$2,$3,$4,$5,$6)`,
+        [propertyId, images[index].url, sortOrder === 0, sortOrder, sortOrder === 0 ? 'primary' : `extra_${sortOrder + 1}`, sortOrder === 0 ? 'Primary property photo' : `Property photo ${sortOrder + 1}`]
+      );
+    }
+    await client.query(
+      `UPDATE properties
+          SET extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $2::jsonb,
+              updated_at = NOW()
+        WHERE id = $1 AND status = 'pending'`,
+      [propertyId, JSON.stringify({
+        review_only: true,
+        auto_publish: false,
+        whatsapp_employee_intake: true,
+        whatsapp_employee_intake_marker: WHATSAPP_EMPLOYEE_AGENT_007_MARKER,
+        whatsapp_employee_last_message_id: inboundMessageId || null,
+        media_count: Number(property.extra_fields?.media_count || 0) + uniqueMedia.length,
+        media_sha256: mergedHashes,
+        video_urls: [...previousVideos, ...videos],
+        document_urls: [...previousDocuments, ...documents]
+      })]
+    );
+    await client.query(
+      `INSERT INTO property_moderation_events
+        (property_id, actor_id, action, status_from, status_to, reason, notes, delivery)
+       VALUES ($1,'whatsapp-employee-agent-007','whatsapp_employee_media_attached','pending','pending',$2,$3,$4::jsonb)`,
+      [
+        propertyId,
+        'Additional employee-submitted WhatsApp media attached; property remains pending.',
+        `${uniqueMedia.length} new media item(s) attached.`,
+        JSON.stringify({ marker: WHATSAPP_EMPLOYEE_AGENT_007_MARKER, media_attached: uniqueMedia.length, auto_publish: false })
+      ]
+    );
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+  return { attached: uniqueMedia.length, duplicate: false };
+}
+
+async function handleEmployeeWhatsappIntake({
+  phone,
+  body = '',
+  mediaUrl = '',
+  runtime = {},
+  inboundMessageId = '',
+  session = {}
+} = {}) {
+  const currentStep = session.current_step || 'greeting';
+  const cleanBody = normalizeInput(body);
+  const triggered = isEmployeeIntakeTrigger(cleanBody);
+  const active = isEmployeeIntakeStep(currentStep);
+  if (!triggered && !active) return { handled: false };
+
+  const allowed = employeeIntakePhoneAllowed(phone, { ownerAuthorized: isAiCeoOwnerPhone(phone) });
+  if (!allowed) {
+    logger.warn('Restricted WhatsApp employee intake trigger rejected', { phone_suffix: employeeIntakePhoneSuffix(phone) });
+    return {
+      handled: true,
+      nextStep: currentStep,
+      message: 'This staff intake code is restricted. Ask a MakaUG administrator to add your WhatsApp number.'
+    };
+  }
+
+  if (triggered) {
+    const freshData = {
+      whatsapp_employee_intake: true,
+      employee_intake_marker: WHATSAPP_EMPLOYEE_AGENT_007_MARKER,
+      employee_intake_started_at: new Date().toISOString(),
+      employee_sender_phone_suffix: employeeIntakePhoneSuffix(phone),
+      property_ids: [],
+      total_media_count: 0
+    };
+    await replaceEmployeeSession(phone, 'employee_intake_role', freshData);
+    return { handled: true, nextStep: 'employee_intake_role', message: employeeRolePrompt() };
+  }
+
+  const data = { ...(session.session_data || {}) };
+  if (currentStep === 'employee_intake_role') {
+    const role = parseEmployeeRole(cleanBody);
+    if (!role) return { handled: true, nextStep: currentStep, message: employeeRolePrompt() };
+    data.employee_role = role;
+    if (role === 'agent') {
+      await replaceEmployeeSession(phone, 'employee_agent_existing', data);
+      return { handled: true, nextStep: 'employee_agent_existing', message: employeeAgentExistingPrompt() };
+    }
+    await replaceEmployeeSession(phone, 'employee_customer_details', data);
+    return {
+      handled: true,
+      nextStep: 'employee_customer_details',
+      message: 'Send the customer details in this format:\n\nFull name | phone number | property location'
+    };
+  }
+
+  if (currentStep === 'employee_agent_existing') {
+    const answer = parseYesNo(cleanBody);
+    if (!answer) return { handled: true, nextStep: currentStep, message: employeeAgentExistingPrompt() };
+    if (answer === 'yes') {
+      data.agent_already_registered = true;
+      await replaceEmployeeSession(phone, 'employee_agent_lookup', data);
+      return { handled: true, nextStep: 'employee_agent_lookup', message: 'Send the agent’s exact name or MakaUG agent number.' };
+    }
+    data.agent_already_registered = false;
+    await replaceEmployeeSession(phone, 'employee_new_agent_details', data);
+    return {
+      handled: true,
+      nextStep: 'employee_new_agent_details',
+      message: 'Send the new agent details in this format:\n\nFull name | phone number | company | primary district'
+    };
+  }
+
+  if (currentStep === 'employee_agent_lookup') {
+    if (/^new$/i.test(cleanBody)) {
+      data.agent_already_registered = false;
+      await replaceEmployeeSession(phone, 'employee_new_agent_details', data);
+      return {
+        handled: true,
+        nextStep: 'employee_new_agent_details',
+        message: 'Send the new agent details in this format:\n\nFull name | phone number | company | primary district'
+      };
+    }
+    const matches = await findEmployeeApprovedAgents(cleanBody);
+    if (!matches.length) {
+      return { handled: true, nextStep: currentStep, message: 'I could not find an approved agent with that name. Check the exact name/agent number and try again, or type *NEW* to add a new agent.' };
+    }
+    data.agent_candidates = matches.map((agent) => ({
+      id: agent.id,
+      full_name: agent.full_name,
+      company_name: agent.company_name,
+      phone: agent.phone,
+      whatsapp: agent.whatsapp,
+      email: agent.email
+    }));
+    await replaceEmployeeSession(phone, 'employee_agent_confirm', data);
+    const options = data.agent_candidates.map((agent, index) => `${index + 1} — ${agent.full_name}${agent.company_name ? ` (${agent.company_name})` : ''}`).join('\n');
+    return {
+      handled: true,
+      nextStep: 'employee_agent_confirm',
+      message: `${options}\n\nReply with the number to confirm, or *NO* to search again.`
+    };
+  }
+
+  if (currentStep === 'employee_agent_confirm') {
+    if (/^(?:no|n|search)$/i.test(cleanBody)) {
+      delete data.agent_candidates;
+      await replaceEmployeeSession(phone, 'employee_agent_lookup', data);
+      return { handled: true, nextStep: 'employee_agent_lookup', message: 'Send the agent’s exact name or MakaUG agent number.' };
+    }
+    const selectedIndex = Number.parseInt(cleanBody, 10) - 1;
+    const selected = Array.isArray(data.agent_candidates) ? data.agent_candidates[selectedIndex] : null;
+    if (!selected) return { handled: true, nextStep: currentStep, message: 'Reply with one of the agent numbers shown, or *NO* to search again.' };
+    data.agent = selected;
+    delete data.agent_candidates;
+    await replaceEmployeeSession(phone, 'employee_property_media', data);
+    return { handled: true, nextStep: 'employee_property_media', message: employeeMediaPrompt(selected.full_name) };
+  }
+
+  if (currentStep === 'employee_new_agent_details') {
+    const details = parseNewAgentDetails(cleanBody);
+    if (!details) {
+      return { handled: true, nextStep: currentStep, message: 'Please use: Full name | phone number | company | primary district' };
+    }
+    data.new_agent_details = details;
+    await replaceEmployeeSession(phone, 'employee_identity_photo', data);
+    return { handled: true, nextStep: 'employee_identity_photo', message: 'Now send one clear photo of the new agent’s ID. It will be stored privately for staff verification and will never be published.' };
+  }
+
+  if (currentStep === 'employee_customer_details') {
+    const details = parseCustomerDetails(cleanBody);
+    if (!details) {
+      return { handled: true, nextStep: currentStep, message: 'Please use: Full name | phone number | property location' };
+    }
+    data.customer_details = details;
+    await replaceEmployeeSession(phone, 'employee_identity_photo', data);
+    return { handled: true, nextStep: 'employee_identity_photo', message: 'Now send one clear photo of the customer’s ID. It will be stored privately for staff verification and will never be published.' };
+  }
+
+  const candidates = employeeMediaCandidates(runtime, mediaUrl);
+  if (currentStep === 'employee_identity_photo') {
+    const imageCandidates = candidates.filter((candidate) => candidate.kind === 'image').slice(0, 1);
+    if (!imageCandidates.length) {
+      return { handled: true, nextStep: currentStep, message: 'I need one clear ID photo before property media can be accepted. Please send the ID as a photo.' };
+    }
+    let identityDocument;
+    try {
+      [identityDocument] = await storeEmployeeMedia(imageCandidates, {
+        privateMedia: true,
+        phone,
+        inboundMessageId,
+        provider: runtime.provider
+      });
+    } catch (error) {
+      logger.error('WhatsApp employee identity storage failed:', error);
+      return { handled: true, nextStep: currentStep, message: 'I could not store that ID privately, so intake has paused. Please resend a clear ID photo later; nothing was submitted.' };
+    }
+    data.identity_document_url = identityDocument.url;
+    data.identity_document_mime_type = identityDocument.mimeType;
+    if (data.employee_role === 'agent') {
+      try {
+        const ensured = await ensurePendingEmployeeAgent(data.new_agent_details, identityDocument);
+        data.agent = ensured.agent;
+        data.new_agent_created = ensured.created;
+      } catch (error) {
+        logger.error('WhatsApp employee pending-agent save failed:', error);
+        return { handled: true, nextStep: currentStep, message: 'The ID was stored privately, but I could not create the pending agent review record. Property intake has paused; nothing went live.' };
+      }
+    }
+    await replaceEmployeeSession(phone, 'employee_property_media', data);
+    return { handled: true, nextStep: 'employee_property_media', message: employeeMediaPrompt(data.agent?.full_name || data.customer_details?.fullName) };
+  }
+
+  if (currentStep === 'employee_property_media') {
+    if (isEmployeeIntakeComplete(cleanBody)) {
+      const propertyIds = Array.isArray(data.property_ids) ? data.property_ids : [];
+      if (!propertyIds.length) {
+        return { handled: true, nextStep: currentStep, message: 'No properties have been saved yet. Send the first property media with its type, exact location and price in the caption.' };
+      }
+      await logNotification(db, {
+        recipientPhone: phone,
+        channel: 'whatsapp',
+        type: 'whatsapp_employee_batch_complete',
+        status: 'sent',
+        payloadSummary: { marker: WHATSAPP_EMPLOYEE_AGENT_007_MARKER, review_only: true, property_count: propertyIds.length, media_count: Number(data.total_media_count || 0) },
+        relatedListingId: propertyIds[propertyIds.length - 1]
+      });
+      await replaceEmployeeSession(phone, 'main_menu', {
+        employee_intake_last_completed_at: new Date().toISOString(),
+        employee_intake_last_property_count: propertyIds.length,
+        employee_intake_last_media_count: Number(data.total_media_count || 0)
+      });
+      return {
+        handled: true,
+        nextStep: 'main_menu',
+        batchComplete: true,
+        message: `✅ *Batch complete*\n${propertyIds.length} ${propertyIds.length === 1 ? 'property is' : 'properties are'} now in staff review with ${Number(data.total_media_count || 0)} media item(s).\n\nNothing is live until a staff moderator approves it.`
+      };
+    }
+
+    const placeholderBody = /^\s*\[(?:image|video|document|media)\]\s*$/i.test(cleanBody);
+    if (!candidates.length) {
+      if (!cleanBody || placeholderBody) {
+        return { handled: true, nextStep: currentStep, message: 'No usable media bytes reached MakaUG. Please resend the photo, video or document.' };
+      }
+      data.pending_property_caption = cleanBody;
+      await replaceEmployeeSession(phone, currentStep, data);
+      return { handled: true, nextStep: currentStep, message: 'Caption saved. Now send the first property media; it will be stored with that property.' };
+    }
+
+    if (Number(data.total_media_count || 0) + candidates.length > 100) {
+      return { handled: true, nextStep: currentStep, message: 'This batch has reached the 100-media safety limit. Type *COMPLETE*, then start another batch with *Agent 007*.' };
+    }
+    const caption = (!placeholderBody && cleanBody) ? cleanBody : normalizeInput(data.pending_property_caption || '');
+    const facts = employeePropertyFacts(caption, data);
+    const missing = employeePropertyMissing(facts);
+    const shouldStartProperty = Boolean(caption) && !missing.length;
+
+    if (!shouldStartProperty && !data.current_property_id) {
+      return {
+        handled: true,
+        nextStep: currentStep,
+        message: `I have not saved this media yet. Send the first media again with: ${missing.length ? missing.join(', ') : 'property type, exact location and price'} in its caption.`
+      };
+    }
+    if (!shouldStartProperty && caption && isReviewableOwnerForwardCaption(caption)) {
+      return {
+        handled: true,
+        nextStep: currentStep,
+        message: `I have not attached this media because its new-property caption is incomplete. Add: ${missing.join(', ')} and resend it.`
+      };
+    }
+
+    if (inboundMessageId) {
+      const duplicate = await db.query(
+        `SELECT id
+           FROM properties
+          WHERE extra_fields->>'whatsapp_employee_message_id' = $1
+             OR extra_fields->>'whatsapp_employee_last_message_id' = $1
+          LIMIT 1`,
+        [inboundMessageId]
+      );
+      if (duplicate.rows[0]) {
+        return {
+          handled: true,
+          nextStep: currentStep,
+          propertyId: duplicate.rows[0].id,
+          duplicate: true,
+          message: `Already saved to review — ${String(duplicate.rows[0].id).slice(0, 8).toUpperCase()}. Nothing was duplicated.`
+        };
+      }
+    }
+    if (shouldStartProperty) {
+      const existingProperty = await findEmployeeDuplicateProperty({ caption, facts, sessionData: data });
+      if (existingProperty) {
+        return {
+          handled: true,
+          nextStep: currentStep,
+          propertyId: existingProperty.id,
+          duplicate: true,
+          message: `Duplicate property found — ${String(existingProperty.id).slice(0, 8).toUpperCase()} is already ${existingProperty.status}. Nothing was added twice.`
+        };
+      }
+    }
+
+    let storedMedia;
+    try {
+      storedMedia = await storeEmployeeMedia(candidates, {
+        privateMedia: false,
+        phone,
+        inboundMessageId,
+        provider: runtime.provider
+      });
+    } catch (error) {
+      logger.error('WhatsApp employee property-media storage failed:', error);
+      return { handled: true, nextStep: currentStep, message: 'I could not store that media permanently, so it was not added to review. Please wait before resending; nothing went live.' };
+    }
+
+    if (shouldStartProperty) {
+      try {
+        const propertyId = await createEmployeeReviewProperty({ phone, inboundMessageId, caption, facts, storedMedia, sessionData: data });
+        data.current_property_id = propertyId;
+        data.property_ids = [...new Set([...(Array.isArray(data.property_ids) ? data.property_ids : []), propertyId])];
+        data.total_media_count = Number(data.total_media_count || 0) + storedMedia.length;
+        delete data.pending_property_caption;
+        await replaceEmployeeSession(phone, currentStep, data);
+        return {
+          handled: true,
+          nextStep: currentStep,
+          propertyId,
+          message: `✅ Saved property ${data.property_ids.length} to staff review — ${String(propertyId).slice(0, 8).toUpperCase()}\nMedia stored: ${storedMedia.length}\nStatus: pending, not live.\n\nSend more media, start the next property with a full caption, or type *COMPLETE*.`
+        };
+      } catch (error) {
+        logger.error('WhatsApp employee review property save failed:', error);
+        return { handled: true, nextStep: currentStep, message: 'I stored the media but could not create the review record. Intake has paused and nothing went live. Please contact a staff moderator before resending.' };
+      }
+    }
+
+    try {
+      const attachment = await attachEmployeeReviewMedia({
+        propertyId: data.current_property_id,
+        storedMedia,
+        phone,
+        inboundMessageId
+      });
+      if (!attachment.duplicate) {
+        data.total_media_count = Number(data.total_media_count || 0) + attachment.attached;
+        await replaceEmployeeSession(phone, currentStep, data);
+      }
+      return {
+        handled: true,
+        nextStep: currentStep,
+        propertyId: data.current_property_id,
+        duplicate: attachment.duplicate,
+        message: attachment.duplicate
+          ? 'That media is already attached. Nothing was duplicated.'
+          : `✅ ${attachment.attached} media item(s) attached to the current pending property. Send more, start the next property with a full caption, or type *COMPLETE*.`
+      };
+    } catch (error) {
+      logger.error('WhatsApp employee media attachment failed:', error);
+      return { handled: true, nextStep: currentStep, message: 'I could not attach that media to the pending property. Nothing changed and nothing went live.' };
+    }
+  }
+
+  return { handled: false };
+}
+
 function isListingStartRequest(input, intentResult = {}) {
   const text = normalizeInput(input).toLowerCase();
   if (!text) return false;
@@ -3562,6 +4430,8 @@ async function parseMetaInboundMessages(payload = {}) {
 
         let mediaUrl = null;
         let mediaType = '';
+        let mediaId = '';
+        let mediaFilename = '';
         let sharedLocation = null;
 
         if (msgType === 'location' && message.location) {
@@ -3576,6 +4446,8 @@ async function parseMetaInboundMessages(payload = {}) {
         if (['image', 'audio', 'video', 'document', 'sticker'].includes(msgType)) {
           const mediaObj = message[msgType] || {};
           mediaType = String(mediaObj.mime_type || '');
+          mediaId = normalizeInput(mediaObj.id || '');
+          mediaFilename = normalizeInput(mediaObj.filename || '');
           if (mediaObj.id) {
             mediaUrl = await fetchMetaMediaUrl(mediaObj.id);
           }
@@ -3589,7 +4461,15 @@ async function parseMetaInboundMessages(payload = {}) {
           mediaUrl,
           mediaType,
           sharedLocation,
-          messageType: msgType || 'text'
+          messageType: msgType || 'text',
+          metadata: {
+            media_id: mediaId || null,
+            media_previews: mediaUrl ? [{
+              media_url: mediaUrl,
+              mime_type: mediaType || 'application/octet-stream',
+              name: mediaFilename || null
+            }] : []
+          }
         });
       }
     }
@@ -7265,7 +8145,7 @@ const STEPS = [
   'area', 'price', 'bedrooms', 'description', 'photos', 'ask_deposit', 'ask_contract',
   'ask_university', 'ask_distance', 'ask_public_name', 'confirm_whatsapp_contact', 'ask_contact_method', 'ask_contact_value',
   'ask_id_number', 'ask_selfie', 'ask_phone', 'search_type', 'search_area', 'agent_area',
-  'verify_otp', 'missed_call_need', 'missed_call_resolved', 'submitted'
+  'verify_otp', 'missed_call_need', 'missed_call_resolved', 'submitted', ...EMPLOYEE_INTAKE_STEPS
 ];
 
 async function processMessage(phone, body, mediaUrl, sharedLocation = null, runtime = {}) {
@@ -9104,6 +9984,9 @@ async function processInboundRuntime({
   const inboundPhotoCandidates = Array.isArray(inboundMetadata.image_previews)
     ? inboundMetadata.image_previews.slice(0, 10)
     : [];
+  const inboundMediaCandidates = Array.isArray(inboundMetadata.media_previews)
+    ? inboundMetadata.media_previews.slice(0, 20)
+    : [];
   const loggedInboundMetadata = {
     ...inboundMetadata,
     image_previews: inboundPhotoCandidates.map((item) => ({
@@ -9111,6 +9994,12 @@ async function processInboundRuntime({
       bytes: Number(item?.bytes || 0),
       sha256: normalizeInput(item?.sha256 || ''),
       perceptual_hash: normalizeInput(item?.perceptual_hash || item?.perceptualHash || '')
+    })),
+    media_previews: inboundMediaCandidates.map((item) => ({
+      mime_type: normalizeInput(item?.mime_type || item?.mimeType || '') || 'application/octet-stream',
+      bytes: Number(item?.bytes || 0),
+      sha256: normalizeInput(item?.sha256 || ''),
+      name: normalizeInput(item?.name || item?.filename || '')
     }))
   };
   const hasInlineImagePlaceholder = !mediaUrl
@@ -9196,6 +10085,57 @@ async function processInboundRuntime({
       metadata: loggedInboundMetadata
     }
   });
+
+  const employeeIntake = await handleEmployeeWhatsappIntake({
+    phone,
+    body: effectiveBody,
+    mediaUrl: effectiveMediaUrl,
+    runtime: {
+      provider,
+      mediaType: normalizedMediaType,
+      mediaCount: inboundMediaCount,
+      photoCandidates: inboundPhotoCandidates,
+      mediaCandidates: inboundMediaCandidates
+    },
+    inboundMessageId,
+    session: sessionForMessage
+  }).catch((error) => {
+    logger.error('WhatsApp Agent 007 employee intake failed:', error);
+    return {
+      handled: true,
+      nextStep: sessionStep,
+      message: 'Employee intake hit a temporary error. Nothing was published. Please wait before resending.'
+    };
+  });
+  if (employeeIntake.handled) {
+    await logIntent({
+      userPhone: phone,
+      waMessageId: inboundMessageId,
+      detectedIntent: 'employee_property_intake',
+      confidence: 1,
+      language: sessionLang,
+      currentStep: sessionStep,
+      rawText: body,
+      transcript: transcriptRecord?.text || null,
+      entities: {
+        property_id: employeeIntake.propertyId || null,
+        duplicate: Boolean(employeeIntake.duplicate),
+        batch_complete: Boolean(employeeIntake.batchComplete),
+        review_only: true
+      },
+      modelUsed: WHATSAPP_EMPLOYEE_AGENT_007_MARKER
+    });
+    return {
+      message: employeeIntake.message,
+      nextStep: employeeIntake.nextStep || sessionStep,
+      employeeIntake: {
+        property_id: employeeIntake.propertyId || null,
+        duplicate: Boolean(employeeIntake.duplicate),
+        batch_complete: Boolean(employeeIntake.batchComplete),
+        review_only: true
+      }
+    };
+  }
 
   const ownerReviewForward = await handleOwnerReviewForward({
     phone,
@@ -9553,7 +10493,8 @@ async function processMetaWebhookPayload(payload) {
         mediaUrl: inbound.mediaUrl,
         mediaType: inbound.mediaType,
         sharedLocation: inbound.sharedLocation,
-        provider: 'meta'
+        provider: 'meta',
+        metadata: inbound.metadata || {}
       });
 
       await sendMetaTextMessage(inbound.phone, message);
@@ -10307,5 +11248,10 @@ module.exports.__test = {
   canonicalWhatsappLocationPatch,
   whatsappLocationPrompt,
   WHATSAPP_PROPERTY_RESULT_LIMIT,
-  hasValidMetaWebhookSignature
+  hasValidMetaWebhookSignature,
+  employeeCaptionHash,
+  employeeMediaCandidates,
+  employeePropertyFacts,
+  employeePropertyMissing,
+  handleEmployeeWhatsappIntake
 };

@@ -265,6 +265,7 @@ const VOICE_AUDIO_MAX_BYTES = 8_000_000;
 const LISTING_IMAGE_PREVIEW_MAX_DIMENSION = 1280;
 const LISTING_IMAGE_PREVIEW_QUALITY = 0.78;
 const LISTING_IMAGE_PREVIEW_MAX_BYTES = 1_500_000;
+const EMPLOYEE_VIDEO_PREVIEW_MAX_BYTES = 12_000_000;
 const OUTBOUND_PROPERTY_IMAGE_MAX_BYTES = 15_000_000;
 const seenBrowserMessageIds = new Set();
 const seenCallEventKeys = new Map();
@@ -1592,6 +1593,8 @@ async function getActiveChatSnapshot(page) {
     const sharedLocation = extractSharedLocation(last);
     const voiceNote = hasVoiceNote(last, text);
     const callLog = hasCallLog(last, text);
+    const documentMedia = Boolean(last.querySelector('a[download], [data-icon*="document" i], [data-testid*="document" i]'))
+      || /\.(?:pdf|docx?|xlsx?|pptx?|txt|csv)(?:\s|$)/i.test(text);
     const mediaType = sharedLocation
       ? 'location'
       : hasNonEmojiImage && isTimestampOnlyText(text) && !!sharedLocation
@@ -1600,6 +1603,8 @@ async function getActiveChatSnapshot(page) {
         ? 'call'
       : voiceNote
         ? 'voice'
+      : documentMedia
+        ? 'media'
       : last.querySelector('img')
       ? 'image'
       : last.querySelector('video')
@@ -1832,6 +1837,8 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
         const sharedLocation = extractSharedLocation(node);
         const voiceNote = hasVoiceNote(node, rawText);
         const callLog = hasCallLog(node, rawText);
+        const documentMedia = Boolean(node.querySelector('a[download], [data-icon*="document" i], [data-testid*="document" i]'))
+          || /\.(?:pdf|docx?|xlsx?|pptx?|txt|csv)(?:\s|$)/i.test(rawText);
         const mediaType = sharedLocation
           ? 'location'
           : hasNonEmojiImage && isTimestampOnlyText(rawText) && !!sharedLocation
@@ -1840,6 +1847,8 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
           ? 'call'
           : voiceNote
           ? 'voice'
+          : documentMedia
+            ? 'media'
           : node.querySelector('video')
             ? 'media'
             : node.querySelector('img')
@@ -2116,9 +2125,80 @@ async function hydrateImageSnapshot(page, snapshot) {
   }
 }
 
+async function hydrateVideoSnapshot(page, snapshot) {
+  if (!snapshot || snapshot.mediaType !== 'media' || snapshot.mediaPreviews?.length) return snapshot;
+  const messageId = String(snapshot.messageId || '').trim();
+  if (!messageId) return snapshot;
+
+  try {
+    const preview = await page.evaluate(async ({ targetMessageId, maxBytes }) => {
+      const nodes = Array.from(document.querySelectorAll('[data-id], [data-testid^="conv-msg-"]'));
+      const root = nodes.find((el) => (
+        el.getAttribute('data-id') === targetMessageId
+        || el.getAttribute('data-testid') === targetMessageId
+      ));
+      const video = root?.querySelector('video');
+      const documentAnchor = root?.querySelector('a[download][href], a[href^="blob:"]');
+      const sourceUrl = video?.currentSrc || video?.src || video?.querySelector('source')?.src
+        || documentAnchor?.href || '';
+      if (!sourceUrl) return null;
+      const response = await fetch(sourceUrl);
+      if (!response.ok) return null;
+      const blob = await response.blob();
+      if (!blob.size || blob.size > maxBytes) return { error: 'video_too_large', bytes: blob.size };
+      const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = () => reject(reader.error || new Error('video read failed'));
+        reader.readAsDataURL(blob);
+      });
+      const name = documentAnchor?.download || '';
+      const extension = String(name).split('.').pop().toLowerCase();
+      const inferredMime = {
+        pdf: 'application/pdf',
+        doc: 'application/msword',
+        docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        xls: 'application/vnd.ms-excel',
+        xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ppt: 'application/vnd.ms-powerpoint',
+        pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        txt: 'text/plain',
+        csv: 'text/csv'
+      }[extension] || '';
+      const normalizedDataUrl = inferredMime
+        ? dataUrl.replace(/^data:[^;,]+/i, `data:${inferredMime}`)
+        : dataUrl;
+      return {
+        dataUrl: normalizedDataUrl,
+        mimeType: (blob.type && blob.type !== 'application/octet-stream')
+          ? blob.type
+          : (inferredMime || (video ? 'video/mp4' : 'application/octet-stream')),
+        bytes: blob.size,
+        name
+      };
+    }, { targetMessageId: messageId, maxBytes: EMPLOYEE_VIDEO_PREVIEW_MAX_BYTES });
+
+    if (preview?.dataUrl) {
+      const mediaPreview = {
+        dataUrl: preview.dataUrl,
+        mimeType: preview.mimeType || 'video/mp4',
+        bytes: Number(preview.bytes || 0),
+        sha256: crypto.createHash('sha256').update(String(preview.dataUrl || '')).digest('hex'),
+        kind: String(preview.mimeType || '').startsWith('video/') ? 'video' : 'document',
+        name: preview.name || ''
+      };
+      return { ...snapshot, mediaPreviews: [mediaPreview], mediaCount: 1 };
+    }
+    return { ...snapshot, mediaPreviewError: preview?.error || 'video_preview_unavailable' };
+  } catch (error) {
+    return { ...snapshot, mediaPreviewError: error.message || String(error) };
+  }
+}
+
 async function hydrateMediaSnapshot(page, snapshot) {
   const voiceHydrated = await hydrateVoiceSnapshot(page, snapshot);
-  return hydrateImageSnapshot(page, voiceHydrated);
+  const imageHydrated = await hydrateImageSnapshot(page, voiceHydrated);
+  return hydrateVideoSnapshot(page, imageHydrated);
 }
 
 function isLikelyVoiceAudioResponse(response) {
@@ -2356,6 +2436,16 @@ async function ingestSnapshot({ snapshot, row = {}, source = 'unread_scan' }) {
             }))
             : [],
           image_preview_error: snapshot.imagePreviewError || '',
+          media_previews: Array.isArray(snapshot.mediaPreviews)
+            ? snapshot.mediaPreviews.map((item) => ({
+              data_url: item.dataUrl || '',
+              mime_type: item.mimeType || 'application/octet-stream',
+              bytes: Number(item.bytes || 0),
+              sha256: item.sha256 || '',
+              kind: item.kind || ''
+            }))
+            : [],
+          media_preview_error: snapshot.mediaPreviewError || '',
           unread_preview: row.preview || '',
           source,
           ...(snapshot.bridgeMetadata && typeof snapshot.bridgeMetadata === 'object'
