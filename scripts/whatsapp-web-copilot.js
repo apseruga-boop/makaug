@@ -267,7 +267,7 @@ const LISTING_IMAGE_PREVIEW_QUALITY = 0.78;
 const LISTING_IMAGE_PREVIEW_MAX_BYTES = 1_500_000;
 const EMPLOYEE_VIDEO_PREVIEW_MAX_BYTES = 25_000_000;
 const OUTBOUND_PROPERTY_IMAGE_MAX_BYTES = 15_000_000;
-const WHATSAPP_EMPLOYEE_AGENT_007_WORKER_MARKER = 'whatsapp-agent-007-history-reconciliation-20260829';
+const WHATSAPP_EMPLOYEE_AGENT_007_WORKER_MARKER = 'whatsapp-agent-007-video-fetch-fallback-20260829';
 const RECENT_INBOUND_BACKLOG_LIMIT = 60;
 const EMPLOYEE_BATCH_HISTORY_SCAN_LIMIT = 160;
 const EMPLOYEE_BATCH_HISTORY_MAX_ROUNDS = 30;
@@ -2250,8 +2250,11 @@ async function hydrateVideoSnapshot(page, snapshot) {
   if (!messageId) return snapshot;
 
   try {
-    const networkPreview = await captureVideoSnapshotFromNetwork(page, messageId);
-    let preview = networkPreview || await page.evaluate(async ({ targetMessageId, maxBytes, posterMaxBytes }) => {
+    let preview = await captureVideoSnapshotFromNetwork(page, messageId);
+    let browserPreviewError = '';
+    if (!preview) {
+      try {
+        preview = await page.evaluate(async ({ targetMessageId, maxBytes, posterMaxBytes }) => {
       const nodes = Array.from(document.querySelectorAll('[data-id], [data-testid^="conv-msg-"]'));
       const root = nodes.find((el) => (
         el.getAttribute('data-id') === targetMessageId
@@ -2343,11 +2346,16 @@ async function hydrateVideoSnapshot(page, snapshot) {
         bytes: blob.size,
         name
       };
-    }, {
-      targetMessageId: messageId,
-      maxBytes: EMPLOYEE_VIDEO_PREVIEW_MAX_BYTES,
-      posterMaxBytes: LISTING_IMAGE_PREVIEW_MAX_BYTES
-    });
+        }, {
+          targetMessageId: messageId,
+          maxBytes: EMPLOYEE_VIDEO_PREVIEW_MAX_BYTES,
+          posterMaxBytes: LISTING_IMAGE_PREVIEW_MAX_BYTES
+        });
+      } catch (error) {
+        browserPreviewError = error.message || String(error);
+        log(`video DOM fetch failed for ${normalizeChatKey(snapshot.chatKey)}; trying message screenshot fallback: ${browserPreviewError}`);
+      }
+    }
     if (!preview?.dataUrl) {
       preview = await captureVideoMessageScreenshot(page, messageId);
     }
@@ -2370,7 +2378,10 @@ async function hydrateVideoSnapshot(page, snapshot) {
         } : {})
       };
     }
-    return { ...snapshot, mediaPreviewError: preview?.error || 'video_preview_unavailable' };
+    return {
+      ...snapshot,
+      mediaPreviewError: preview?.error || browserPreviewError || 'video_preview_unavailable'
+    };
   } catch (error) {
     return { ...snapshot, mediaPreviewError: error.message || String(error) };
   }
