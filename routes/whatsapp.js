@@ -3577,6 +3577,37 @@ function employeeBatchCounts(data = {}) {
   return { propertiesShared, propertiesSetUp, duplicatesSkipped, propertiesFailed };
 }
 
+function recoverInterruptedEmployeeIntakeStep(session = {}) {
+  const currentStep = normalizeInput(session.current_step).toLowerCase();
+  const data = session.session_data && typeof session.session_data === 'object'
+    ? session.session_data
+    : {};
+  if (!data.whatsapp_employee_intake) return '';
+  if (isEmployeeIntakeStep(currentStep)) return currentStep;
+  if (!['missed_call_need', 'missed_call_resolved'].includes(currentStep)) return '';
+
+  if (!data.employee_role) return 'employee_intake_role';
+  if (data.employee_role === 'agent') {
+    if (data.agent?.id) {
+      return data.property_batch_mode ? 'employee_property_media' : 'employee_property_count';
+    }
+    if (data.agent_already_registered === true) {
+      return Array.isArray(data.agent_candidates) && data.agent_candidates.length
+        ? 'employee_agent_confirm'
+        : 'employee_agent_lookup';
+    }
+    if (data.agent_already_registered === false) {
+      if (!data.new_agent_details) return 'employee_new_agent_details';
+      return data.identity_document_url ? 'employee_property_count' : 'employee_identity_photo';
+    }
+    return 'employee_agent_existing';
+  }
+
+  if (!data.customer_details) return 'employee_customer_details';
+  if (!data.identity_document_url) return 'employee_identity_photo';
+  return data.property_batch_mode ? 'employee_property_media' : 'employee_property_count';
+}
+
 async function findEmployeeDuplicateProperty({ caption = '', facts = {}, sessionData = {} } = {}) {
   const captionHash = employeeCaptionHash(caption);
   if (!captionHash) return null;
@@ -3828,10 +3859,21 @@ async function handleEmployeeWhatsappIntake({
   inboundMessageId = '',
   session = {}
 } = {}) {
-  const currentStep = session.current_step || 'greeting';
+  let currentStep = session.current_step || 'greeting';
   const cleanBody = normalizeInput(body);
   const triggered = isEmployeeIntakeTrigger(cleanBody);
-  const active = isEmployeeIntakeStep(currentStep);
+  let active = isEmployeeIntakeStep(currentStep);
+  const interruptedStep = active ? '' : recoverInterruptedEmployeeIntakeStep(session);
+  if (!triggered && !active && interruptedStep) {
+    const recoveredData = {
+      ...(session.session_data || {}),
+      employee_intake_recovered_from: currentStep,
+      employee_intake_recovered_at: new Date().toISOString()
+    };
+    await replaceEmployeeSession(phone, interruptedStep, recoveredData);
+    currentStep = interruptedStep;
+    active = true;
+  }
   if (!triggered && !active) return { handled: false };
 
   const allowed = employeeIntakePhoneAllowed(phone, { ownerAuthorized: isAiCeoOwnerPhone(phone) });
@@ -3862,7 +3904,13 @@ async function handleEmployeeWhatsappIntake({
     return { handled: true, nextStep: 'employee_intake_role', message: employeeRolePrompt() };
   }
 
-  const data = { ...(session.session_data || {}) };
+  const data = {
+    ...(session.session_data || {}),
+    ...(interruptedStep ? {
+      employee_intake_recovered_from: session.current_step || null,
+      employee_intake_recovered_at: new Date().toISOString()
+    } : {})
+  };
   if (currentStep === 'employee_intake_role') {
     const role = parseEmployeeRole(cleanBody);
     if (!role) return { handled: true, nextStep: currentStep, message: employeeRolePrompt() };
@@ -6712,8 +6760,15 @@ async function handleWhatsappCallEvent({
   const session = await getSession(cleanPhone);
   const activeEmployeeStep = isEmployeeIntakeStep(session.current_step)
     ? String(session.current_step)
-    : '';
+    : recoverInterruptedEmployeeIntakeStep(session);
   if (activeEmployeeStep) {
+    if (activeEmployeeStep !== session.current_step) {
+      await replaceEmployeeSession(cleanPhone, activeEmployeeStep, {
+        ...(session.session_data || {}),
+        employee_intake_recovered_from: session.current_step || null,
+        employee_intake_recovered_at: new Date().toISOString()
+      });
+    }
     const callLog = await logWhatsappCallEvent({
       phone: cleanPhone,
       provider,
