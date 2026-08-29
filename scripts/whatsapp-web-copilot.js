@@ -2925,9 +2925,15 @@ async function replayEmployeeBatchThroughCompletion(page, history = {}, row = {}
         row,
         source: 'employee_batch_history_replay'
       });
-      if (result.retryable) {
+      if (result.retryable || result.error) {
+        log(`Agent 007 ordered history replay paused for ${history.chatKey}: ${result.error?.message || result.error || 'retryable_media_error'}`);
         await scrollWhatsappHistoryToLatest(page);
-        return { handled: true, processed, retryable: true };
+        return {
+          handled: true,
+          processed,
+          retryable: true,
+          skipped: result.error ? 'bridge_ingest_error' : 'retryable_media_error'
+        };
       }
       processed += result.processed || 0;
     }
