@@ -79,6 +79,10 @@ assert.equal((routeSource.match(/await processWhatsappCallEvent\(\{/g) || []).le
 assert(routeSource.includes('active_employee_intake_preserved: true'), 'call events must not take over an active employee intake');
 assert(routeSource.includes('call_reply_suppressed: true'), 'suppressed call events must remain auditable');
 assert(routeSource.includes('suppressedActiveEmployeeIntake: true'), 'call routing must report the employee-intake shield');
+assert(routeSource.includes('recoverInterruptedEmployeeIntakeStep'), 'sessions already interrupted by the old missed-call handler must recover');
+assert(copilotSource.includes("'call-card',\n    normalizedChatKey"), 'repeated DOM scans must share a semantic call-card cooldown key');
+assert(copilotSource.includes("snapshot.timestampLabel || row.timestampLabel || ''"), 'call-card IDs must use stable timestamps');
+assert(!copilotSource.includes("snapshot.messageId || snapshot.mediaFingerprint || ''\n  );"), 'call-card IDs must not depend on unstable DOM row fingerprints');
 assert(routeSource.includes('Properties shared: ${batchCounts.propertiesShared}'), 'completion must report the shared count');
 assert(routeSource.includes('Successfully set up in staff review: ${batchCounts.propertiesSetUp}'), 'completion must report the successful setup count');
 assert(routeSource.includes('Duplicates skipped: ${batchCounts.duplicatesSkipped}'), 'completion must report duplicates');
@@ -176,6 +180,20 @@ const originalQuery = db.query;
   assert.equal(shieldedCall.message, '');
   assert.equal(shieldedCall.lead, null);
   assert.equal(shieldedCall.suppressedActiveEmployeeIntake, true);
+
+  const recoveredRole = await whatsappRoute.handleEmployeeWhatsappIntake({
+    phone: '+447757773202',
+    body: '1',
+    session: {
+      current_step: 'missed_call_resolved',
+      session_data: {
+        whatsapp_employee_intake: true,
+        missed_call_flow: { status: 'asked_resolution' }
+      }
+    }
+  });
+  assert.equal(recoveredRole.nextStep, 'employee_agent_existing');
+  assert.match(recoveredRole.message, /already registered on makaug\.com/i);
 
   const triggered = await whatsappRoute.handleEmployeeWhatsappIntake({
     phone: '+447757773202',
@@ -302,7 +320,7 @@ const originalQuery = db.query;
   assert.match(completed.message, /Could not be set up: 1/);
   assert.match(completed.message, /has not been notified yet/);
   assert.match(completed.message, /Nothing is live/);
-  assert.equal(updates.length, 8, 'each state transition should persist immediately');
+  assert.equal(updates.length, 10, 'each state transition and interrupted-session recovery should persist immediately');
 
   console.log('WhatsApp Agent 007 employee intake contract tests passed.');
 })().catch((error) => {

@@ -2332,12 +2332,22 @@ async function ingestCallSnapshot({ snapshot, row = {}, source = 'call_card', ch
   }
   rememberBrowserMessageKey(browserMessageKey);
 
+  const callEventKey = [
+    'call-card',
+    normalizedChatKey,
+    normalizeReplyText(normalizedText).toLowerCase(),
+    String(snapshot.timestampLabel || row.timestampLabel || '').trim()
+  ].join(':').slice(0, 500);
+  if (!rememberCallEventKey(callEventKey)) {
+    return { processed: 0, duplicate: true };
+  }
+
   const callId = createMessageId(
     normalizedChatKey,
     normalizedText,
-    snapshot.timestampLabel,
+    snapshot.timestampLabel || row.timestampLabel || '',
     'call',
-    snapshot.messageId || snapshot.mediaFingerprint || ''
+    snapshot.messageId || ''
   );
   const isVideoCall = /\bvideo\s+call\b/i.test(normalizedText);
   const status = /\b(?:no answer|missed|unanswered|declined|rejected|not answered)\b/i.test(normalizedText)
