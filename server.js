@@ -207,6 +207,7 @@ app.get('/api/version', (_req, res) => {
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-agent-007-multiple-property-batches-20260829'] : []),
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-agent-007-ordered-batch-finalization-20260829'] : []),
       ...(!IS_SOUTH_AFRICA ? ['francis-agent-premium-share-preview-v3-20260829'] : []),
+      ...(!IS_SOUTH_AFRICA ? ['francis-agent-authentic-brand-preview-v4-20260829'] : []),
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-multi-result-fast-search-20260824'] : []),
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-owner-forward-review-media-20260820'] : []),
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-owner-history-backfill-20260820'] : []),
@@ -1083,6 +1084,7 @@ function patchListingOpenGraphMeta(html, meta = {}) {
 const FRANCIS_ISABIRYE_AGENT_ID = '5674f6cb-37a0-4e1e-904f-06e03ec401ab';
 const AGENT_SHARE_PREVIEW_VERSION = 'preview-v2';
 const AGENT_SHARE_PREMIUM_PREVIEW_VERSION = 'preview-v3';
+const AGENT_SHARE_BRAND_PREVIEW_VERSION = 'preview-v4';
 
 async function loadPublicAgentOpenGraphMeta(agentId, options = {}) {
   const safeId = String(agentId || '').trim();
@@ -1118,21 +1120,29 @@ async function loadPublicAgentOpenGraphMeta(agentId, options = {}) {
     ? `${specializations.join(' - ')}. Review my property profile on makaug.com.`
     : 'Review my property profile on makaug.com.';
   const isFrancis = String(row.id) === FRANCIS_ISABIRYE_AGENT_ID;
+  const isBrandFrancisPreview = isFrancis
+    && options.previewVersion === AGENT_SHARE_BRAND_PREVIEW_VERSION;
   const isPremiumFrancisPreview = isFrancis
     && options.previewVersion === AGENT_SHARE_PREMIUM_PREVIEW_VERSION;
   const isApprovedFrancisShare = isFrancis
     && (options.approvedShare === true || options.previewVersion === AGENT_SHARE_PREVIEW_VERSION);
-  const image = isPremiumFrancisPreview
-    ? absolutePublicUrl('/assets/marketing/francis-isabirye-agent-share-v3.png')
-    : isApprovedFrancisShare
-      ? absolutePublicUrl('/assets/marketing/francis-isabirye-agent-share-v2.png')
-      : absolutePublicUrl(row.profile_photo_url || '/assets/house-ads-v3/agents.webp');
-  const title = isPremiumFrancisPreview
-    ? `${name} | Approved property agent on MakaUG`
-    : `${name} | Property agent on MakaUG`;
-  const shareDescription = isPremiumFrancisPreview
-    ? `View ${name}'s live property profile and current listings on makaug.com.`
-    : description;
+  const image = isBrandFrancisPreview
+    ? absolutePublicUrl('/assets/marketing/francis-isabirye-agent-share-v4.png')
+    : isPremiumFrancisPreview
+      ? absolutePublicUrl('/assets/marketing/francis-isabirye-agent-share-v3.png')
+      : isApprovedFrancisShare
+        ? absolutePublicUrl('/assets/marketing/francis-isabirye-agent-share-v2.png')
+        : absolutePublicUrl(row.profile_photo_url || '/assets/house-ads-v3/agents.webp');
+  const title = isBrandFrancisPreview
+    ? `${name} | Uganda property agent on MakaUG`
+    : isPremiumFrancisPreview
+      ? `${name} | Approved property agent on MakaUG`
+      : `${name} | Property agent on MakaUG`;
+  const shareDescription = isBrandFrancisPreview
+    ? `Explore ${name}'s property profile and listings on makaug.com.`
+    : isPremiumFrancisPreview
+      ? `View ${name}'s live property profile and current listings on makaug.com.`
+      : description;
   return {
     title,
     description: shareDescription,
@@ -1363,7 +1373,8 @@ app.get('/agents/:id', async (req, res, next) => {
     const previewVersion = String(req.query.share || '').trim();
     const isApprovedFrancisProfile = String(req.params.id || '') === FRANCIS_ISABIRYE_AGENT_ID;
     const isSupportedPreview = previewVersion === AGENT_SHARE_PREVIEW_VERSION
-      || previewVersion === AGENT_SHARE_PREMIUM_PREVIEW_VERSION;
+      || previewVersion === AGENT_SHARE_PREMIUM_PREVIEW_VERSION
+      || previewVersion === AGENT_SHARE_BRAND_PREVIEW_VERSION;
     if (isSupportedPreview || isApprovedFrancisProfile) {
       const meta = await loadPublicAgentOpenGraphMeta(req.params.id, {
         previewVersion,
