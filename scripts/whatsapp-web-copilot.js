@@ -267,7 +267,7 @@ const LISTING_IMAGE_PREVIEW_QUALITY = 0.78;
 const LISTING_IMAGE_PREVIEW_MAX_BYTES = 1_500_000;
 const EMPLOYEE_VIDEO_PREVIEW_MAX_BYTES = 25_000_000;
 const OUTBOUND_PROPERTY_IMAGE_MAX_BYTES = 15_000_000;
-const WHATSAPP_EMPLOYEE_AGENT_007_WORKER_MARKER = 'whatsapp-agent-007-video-fetch-fallback-20260829';
+const WHATSAPP_EMPLOYEE_AGENT_007_WORKER_MARKER = 'whatsapp-agent-007-acknowledged-media-reconciliation-20260829';
 const RECENT_INBOUND_BACKLOG_LIMIT = 60;
 const EMPLOYEE_BATCH_HISTORY_SCAN_LIMIT = 160;
 const EMPLOYEE_BATCH_HISTORY_MAX_ROUNDS = 30;
@@ -2853,7 +2853,10 @@ async function replayEmployeeBatchThroughCompletion(page, history = {}, row = {}
   let completed = false;
   let processed = 0;
   const visited = new Set();
-  const replayRunKey = crypto.createHash('sha1').update(`${history.triggerKey}:${history.completionKey}`).digest('hex').slice(0, 16);
+  const replayRunKey = crypto.createHash('sha1')
+    .update(`${history.triggerKey}:${history.completionKey}:${Date.now()}:${crypto.randomUUID()}`)
+    .digest('hex')
+    .slice(0, 16);
 
   for (let round = 0; round < EMPLOYEE_BATCH_HISTORY_MAX_ROUNDS * 2 && !completed; round += 1) {
     const snapshots = (await getRecentIncomingSnapshots(page, EMPLOYEE_BATCH_HISTORY_SCAN_LIMIT))
@@ -2897,7 +2900,6 @@ async function replayEmployeeBatchThroughCompletion(page, history = {}, row = {}
 
       const hydrated = await hydrateMediaSnapshot(page, {
         ...snapshot,
-        browserMessageKey: originalBrowserKey,
         bridgeMetadata: {
           employee_batch_ordered_replay: true,
           employee_batch_completion: false,
@@ -2906,7 +2908,11 @@ async function replayEmployeeBatchThroughCompletion(page, history = {}, row = {}
         }
       });
       const result = await ingestSnapshot({
-        snapshot: hydrated,
+        snapshot: {
+          ...hydrated,
+          messageId: `${snapshot.messageId || key}:ordered-replay:${replayRunKey}`.slice(0, 500),
+          browserMessageKey: `employee-batch-replay:${replayRunKey}:${crypto.createHash('sha1').update(key).digest('hex').slice(0, 16)}`
+        },
         row,
         source: 'employee_batch_history_replay'
       });
