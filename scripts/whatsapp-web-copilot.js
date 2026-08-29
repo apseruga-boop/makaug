@@ -278,6 +278,7 @@ const EMPLOYEE_BATCH_RECOVERY_PHONES = String(
 ).split(/[;,\s]+/).map((value) => normalizeChatKey(value)).filter(Boolean);
 const seenBrowserMessageIds = new Set();
 const completedEmployeeBatchHistoryKeys = new Set();
+const employeeBatchReplayProgress = new Map();
 const seenCallEventKeys = new Map();
 const recentlySentReplyKeys = new Map();
 const recentChatRowKeys = new Map();
@@ -2769,7 +2770,7 @@ function isEmployeeBatchCompletionSnapshot(snapshot = {}) {
 function isEmployeePropertyStartSnapshot(snapshot = {}) {
   if (!['image', 'media'].includes(String(snapshot.mediaType || '').toLowerCase())) return false;
   const text = String(snapshot.text || '').trim();
-  if (!text || /^\[(?:image|media|video|document)\]$/i.test(text)) return false;
+  if (!text || /^(?:forwarded|\[(?:image|media|video|document)\])$/i.test(text)) return false;
   return true;
 }
 
@@ -2858,7 +2859,12 @@ async function replayEmployeeBatchThroughCompletion(page, history = {}, row = {}
   let started = false;
   let completed = false;
   let processed = 0;
-  const visited = new Set();
+  const completedSnapshotKeys = employeeBatchReplayProgress.get(completionKey) || new Set();
+  employeeBatchReplayProgress.set(completionKey, completedSnapshotKeys);
+  while (employeeBatchReplayProgress.size > 25) {
+    employeeBatchReplayProgress.delete(employeeBatchReplayProgress.keys().next().value);
+  }
+  const visited = new Set(completedSnapshotKeys);
   const replayRunKey = crypto.createHash('sha1')
     .update(`${history.triggerKey}:${history.completionKey}:${Date.now()}:${crypto.randomUUID()}`)
     .digest('hex')
@@ -2877,10 +2883,10 @@ async function replayEmployeeBatchThroughCompletion(page, history = {}, row = {}
         started = true;
       }
       if (!key || visited.has(key)) continue;
-      visited.add(key);
 
       const isCompletion = key === history.completionKey || isEmployeeBatchCompletionSnapshot(snapshot);
       if (!isCompletion && !['image', 'media'].includes(String(snapshot.mediaType || '').toLowerCase())) {
+        visited.add(key);
         continue;
       }
       const originalBrowserKey = browserMessageKeyFor(snapshot, row);
@@ -2900,6 +2906,16 @@ async function replayEmployeeBatchThroughCompletion(page, history = {}, row = {}
           row,
           source: 'employee_batch_history_completion'
         });
+        if (result.retryable || result.error) {
+          log(`Agent 007 ordered history completion paused for ${history.chatKey}: ${result.error?.message || result.error || 'retryable_completion_error'}`);
+          await scrollWhatsappHistoryToLatest(page);
+          return {
+            handled: true,
+            processed,
+            retryable: true,
+            skipped: result.error ? 'bridge_completion_error' : 'retryable_completion_error'
+          };
+        }
         processed += result.processed || 0;
         if (result.queuedReply) await processOutbox(page, { recipient: result.chatKey, maxSends: 1 });
         rememberBrowserMessageKey(originalBrowserKey);
@@ -2936,6 +2952,8 @@ async function replayEmployeeBatchThroughCompletion(page, history = {}, row = {}
         };
       }
       processed += result.processed || 0;
+      visited.add(key);
+      completedSnapshotKeys.add(key);
     }
     if (completed) break;
     const moved = await scrollWhatsappHistoryNewer(page);
@@ -2946,6 +2964,7 @@ async function replayEmployeeBatchThroughCompletion(page, history = {}, row = {}
   await scrollWhatsappHistoryToLatest(page);
   if (completed) {
     completedEmployeeBatchHistoryKeys.add(completionKey);
+    employeeBatchReplayProgress.delete(completionKey);
     log(`Agent 007 ordered history replay completed for ${history.chatKey}; processed ${processed} missing message(s)`);
     return { handled: true, processed, completed: true };
   }
