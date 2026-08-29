@@ -8,6 +8,7 @@ const EMPLOYEE_INTAKE_STEPS = Object.freeze([
   'employee_new_agent_details',
   'employee_customer_details',
   'employee_identity_photo',
+  'employee_property_count',
   'employee_property_media'
 ]);
 
@@ -67,6 +68,17 @@ function parseYesNo(value = '') {
   });
 }
 
+function parsePropertyBatchMode(value = '') {
+  return choice(value, {
+    single: ['1', 'single', 'one', 'one property', 'single property'],
+    multiple: ['2', 'multiple', 'many', 'several', 'multiple properties', 'more than one']
+  });
+}
+
+function employeePropertyCountPrompt() {
+  return 'How many properties are you sending in this batch?\n\n1 — One property\n2 — Multiple properties';
+}
+
 function splitDetails(value = '') {
   const raw = String(value || '').trim();
   const parts = raw.includes('|')
@@ -100,9 +112,12 @@ function employeeAgentExistingPrompt() {
   return 'Is the agent already registered on makaug.com?\n\n1 — Yes\n2 — No';
 }
 
-function employeeMediaPrompt(subjectName = '') {
+function employeeMediaPrompt(subjectName = '', batchMode = 'multiple') {
   const subject = cleanText(subjectName) || 'this person';
-  return `✅ ${subject} is ready. Send each property photo, video or document through WhatsApp. Put the property type, exact location and price in the caption of the first media for each property. Additional media without a new property caption will be attached to the current property.\n\nWhen the whole batch is finished, type *COMPLETE*. Everything will stay in staff review until a moderator approves it.`;
+  if (batchMode === 'single') {
+    return `✅ ${subject} is ready for *one property*. Send its first photo, video or document with the property type, exact location and price in the caption. Send any additional media without a new property caption and it will stay attached to that property.\n\nWhen the property is finished, type *COMPLETE*. It will stay in staff review until a moderator approves it.`;
+  }
+  return `✅ ${subject} is ready for *multiple properties*. Start each property by sending its first photo, video or document with the property type, exact location and price in the caption. Additional media without a new full property caption stays attached to the current property. A new full property caption starts the next property.\n\nYou can send property 1, 2, 3 and continue through the whole batch. Only when every property is finished, type *COMPLETE*. Everything will stay in staff review until a moderator approves it.`;
 }
 
 module.exports = {
@@ -111,6 +126,7 @@ module.exports = {
   employeeAgentExistingPrompt,
   employeeIntakePhoneAllowed,
   employeeMediaPrompt,
+  employeePropertyCountPrompt,
   employeeRolePrompt,
   isEmployeeIntakeComplete,
   isEmployeeIntakeStep,
@@ -118,5 +134,6 @@ module.exports = {
   parseCustomerDetails,
   parseEmployeeRole,
   parseNewAgentDetails,
+  parsePropertyBatchMode,
   parseYesNo
 };

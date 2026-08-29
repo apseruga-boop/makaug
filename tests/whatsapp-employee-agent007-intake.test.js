@@ -11,6 +11,7 @@ const {
   parseCustomerDetails,
   parseEmployeeRole,
   parseNewAgentDetails,
+  parsePropertyBatchMode,
   parseYesNo
 } = require('../services/whatsappEmployeeIntakeService');
 
@@ -21,6 +22,9 @@ assert.equal(parseEmployeeRole('1'), 'agent');
 assert.equal(parseEmployeeRole('new customer'), 'customer');
 assert.equal(parseYesNo('yes'), 'yes');
 assert.equal(parseYesNo('2'), 'no');
+assert.equal(parsePropertyBatchMode('one property'), 'single');
+assert.equal(parsePropertyBatchMode('2'), 'multiple');
+assert.equal(parsePropertyBatchMode('twenty'), '');
 assert.deepEqual(parseNewAgentDetails('Francis Isabirye | +256 768 524008 | Francis Homes | Kampala'), {
   fullName: 'Francis Isabirye',
   phone: '+256 768 524008',
@@ -42,6 +46,7 @@ assert.equal(employeeIntakePhoneAllowed('+44 7757 773202', { allowlist: '+44 775
 assert.equal(employeeIntakePhoneAllowed('+44 7000 000000', { allowlist: '+447757773202', ownerAuthorized: false }), false);
 assert.equal(employeeIntakePhoneAllowed('+44 7000 000000', { allowlist: '+447757773202', ownerAuthorized: true }), true, 'owner control phone remains authorized');
 assert(EMPLOYEE_INTAKE_STEPS.includes('employee_identity_photo'));
+assert(EMPLOYEE_INTAKE_STEPS.includes('employee_property_count'));
 assert(EMPLOYEE_INTAKE_STEPS.includes('employee_property_media'));
 
 const routeSource = fs.readFileSync(path.join(__dirname, '..', 'routes', 'whatsapp.js'), 'utf8');
@@ -66,6 +71,8 @@ assert(routeSource.includes('review_only: true') && routeSource.includes('auto_p
 assert(routeSource.includes("'whatsapp-employee-agent-007','whatsapp_employee_intake_queued','pending','pending'"), 'moderation history must retain pending status');
 assert(routeSource.includes('whatsapp_employee_property_review_queued'), 'each property should create a notification/audit record');
 assert(routeSource.includes('whatsapp_employee_batch_complete'), 'completed batches should create a WhatsApp notification record');
+assert(routeSource.includes('whatsapp_employee_batch_mode') && routeSource.includes('whatsapp_employee_batch_property_number'), 'review records should retain multiple-property batch traceability');
+assert(routeSource.includes("=== 'single' && existingBatchProperties >= 1"), 'single mode must reject a second property without affecting multiple mode');
 assert(routeSource.includes("keyPrefix: privateMedia ? 'whatsapp-employee-intake/private-id'"), 'ID media must use private cloud storage');
 assert(routeSource.includes('id_document_name, id_document_url, extra_fields'), 'customer ID must use protected property identity columns');
 assert(!routeSource.includes('customer_identity_document_url'), 'private ID references must never be copied into public extra fields');
@@ -79,6 +86,7 @@ assert(copilotSource.includes('async function hydrateVideoSnapshot'), 'WhatsApp 
 assert(copilotSource.includes('media_previews:'), 'WhatsApp Web bridge should transmit non-image media bytes');
 assert(copilotSource.includes('release_marker: WHATSAPP_EMPLOYEE_AGENT_007_WORKER_MARKER'), 'hosted worker heartbeat should prove the Agent 007 build');
 assert(serverSource.includes('whatsapp-employee-agent-007-review-intake-20260829'), 'release marker should be externally verifiable');
+assert(serverSource.includes('whatsapp-agent-007-multiple-property-batches-20260829'), 'multiple-property mode should have an externally verifiable release marker');
 
 const db = require('../config/database');
 const originalQuery = db.query;
@@ -154,8 +162,45 @@ const originalQuery = db.query;
       }
     }
   });
-  assert.equal(confirmed.nextStep, 'employee_property_media');
-  assert.match(confirmed.message, /COMPLETE/);
+  assert.equal(confirmed.nextStep, 'employee_property_count');
+  assert.match(confirmed.message, /One property/);
+  assert.match(confirmed.message, /Multiple properties/);
+
+  const multipleMode = await whatsappRoute.handleEmployeeWhatsappIntake({
+    phone: '+447757773202',
+    body: 'multiple',
+    session: {
+      current_step: 'employee_property_count',
+      session_data: {
+        employee_role: 'agent',
+        agent: {
+          id: '11111111-1111-4111-8111-111111111111',
+          full_name: 'Francis Isabirye'
+        },
+        property_ids: []
+      }
+    }
+  });
+  assert.equal(multipleMode.nextStep, 'employee_property_media');
+  assert.match(multipleMode.message, /multiple properties/i);
+  assert.match(multipleMode.message, /property 1, 2, 3/);
+  assert.match(multipleMode.message, /COMPLETE/);
+
+  const singleMode = await whatsappRoute.handleEmployeeWhatsappIntake({
+    phone: '+447757773202',
+    body: '1',
+    session: {
+      current_step: 'employee_property_count',
+      session_data: {
+        employee_role: 'customer',
+        customer_details: { fullName: 'Test Customer' },
+        property_ids: []
+      }
+    }
+  });
+  assert.equal(singleMode.nextStep, 'employee_property_media');
+  assert.match(singleMode.message, /one property/i);
+  assert.match(singleMode.message, /COMPLETE/);
 
   const completed = await whatsappRoute.handleEmployeeWhatsappIntake({
     phone: '+447757773202',
@@ -164,6 +209,7 @@ const originalQuery = db.query;
       current_step: 'employee_property_media',
       session_data: {
         employee_role: 'agent',
+        property_batch_mode: 'multiple',
         property_ids: ['22222222-2222-4222-8222-222222222222'],
         total_media_count: 7
       }
@@ -173,7 +219,7 @@ const originalQuery = db.query;
   assert.equal(completed.batchComplete, true);
   assert.match(completed.message, /1 property is now in staff review/);
   assert.match(completed.message, /Nothing is live/);
-  assert.equal(updates.length, 6, 'each state transition should persist immediately');
+  assert.equal(updates.length, 8, 'each state transition should persist immediately');
 
   console.log('WhatsApp Agent 007 employee intake contract tests passed.');
 })().catch((error) => {

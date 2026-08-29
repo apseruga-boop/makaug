@@ -71,6 +71,7 @@ const {
   employeeAgentExistingPrompt,
   employeeIntakePhoneAllowed,
   employeeMediaPrompt,
+  employeePropertyCountPrompt,
   employeeRolePrompt,
   isEmployeeIntakeComplete,
   isEmployeeIntakeStep,
@@ -78,6 +79,7 @@ const {
   parseCustomerDetails,
   parseEmployeeRole,
   parseNewAgentDetails,
+  parsePropertyBatchMode,
   parseYesNo
 } = require('../services/whatsappEmployeeIntakeService');
 const { buildUgNlisAssistantReply } = require('../services/ugnlisLandVerificationService');
@@ -3606,6 +3608,8 @@ async function createEmployeeReviewProperty({
     whatsapp_employee_message_id: inboundMessageId || null,
     whatsapp_employee_sender_phone_suffix: employeeIntakePhoneSuffix(phone),
     whatsapp_employee_subject_role: sessionData.employee_role,
+    whatsapp_employee_batch_mode: sessionData.property_batch_mode || 'multiple',
+    whatsapp_employee_batch_property_number: (Array.isArray(sessionData.property_ids) ? sessionData.property_ids.length : 0) + 1,
     whatsapp_employee_access_mode: process.env.WHATSAPP_EMPLOYEE_INTAKE_NUMBERS ? 'allowlist' : 'trigger_only',
     source_caption: caption.slice(0, 2000),
     source_caption_sha256: employeeCaptionHash(caption),
@@ -3694,7 +3698,13 @@ async function createEmployeeReviewProperty({
     type: 'whatsapp_employee_property_review_queued',
     status: 'queued',
     relatedListingId: propertyId,
-    payloadSummary: { marker: WHATSAPP_EMPLOYEE_AGENT_007_MARKER, review_only: true, media_count: storedMedia.length }
+    payloadSummary: {
+      marker: WHATSAPP_EMPLOYEE_AGENT_007_MARKER,
+      review_only: true,
+      batch_mode: sessionData.property_batch_mode || 'multiple',
+      batch_property_number: (Array.isArray(sessionData.property_ids) ? sessionData.property_ids.length : 0) + 1,
+      media_count: storedMedia.length
+    }
   });
   captureWhatsappLearningAsync({
     eventName: 'whatsapp_employee_property_review_queued',
@@ -3894,8 +3904,8 @@ async function handleEmployeeWhatsappIntake({
     if (!selected) return { handled: true, nextStep: currentStep, message: 'Reply with one of the agent numbers shown, or *NO* to search again.' };
     data.agent = selected;
     delete data.agent_candidates;
-    await replaceEmployeeSession(phone, 'employee_property_media', data);
-    return { handled: true, nextStep: 'employee_property_media', message: employeeMediaPrompt(selected.full_name) };
+    await replaceEmployeeSession(phone, 'employee_property_count', data);
+    return { handled: true, nextStep: 'employee_property_count', message: employeePropertyCountPrompt() };
   }
 
   if (currentStep === 'employee_new_agent_details') {
@@ -3948,8 +3958,23 @@ async function handleEmployeeWhatsappIntake({
         return { handled: true, nextStep: currentStep, message: 'The ID was stored privately, but I could not create the pending agent review record. Property intake has paused; nothing went live.' };
       }
     }
+    await replaceEmployeeSession(phone, 'employee_property_count', data);
+    return { handled: true, nextStep: 'employee_property_count', message: employeePropertyCountPrompt() };
+  }
+
+  if (currentStep === 'employee_property_count') {
+    const batchMode = parsePropertyBatchMode(cleanBody);
+    if (!batchMode) {
+      return { handled: true, nextStep: currentStep, message: employeePropertyCountPrompt() };
+    }
+    data.property_batch_mode = batchMode;
+    data.property_batch_mode_selected_at = new Date().toISOString();
     await replaceEmployeeSession(phone, 'employee_property_media', data);
-    return { handled: true, nextStep: 'employee_property_media', message: employeeMediaPrompt(data.agent?.full_name || data.customer_details?.fullName) };
+    return {
+      handled: true,
+      nextStep: 'employee_property_media',
+      message: employeeMediaPrompt(data.agent?.full_name || data.customer_details?.fullName, batchMode)
+    };
   }
 
   if (currentStep === 'employee_property_media') {
@@ -3963,11 +3988,12 @@ async function handleEmployeeWhatsappIntake({
         channel: 'whatsapp',
         type: 'whatsapp_employee_batch_complete',
         status: 'sent',
-        payloadSummary: { marker: WHATSAPP_EMPLOYEE_AGENT_007_MARKER, review_only: true, property_count: propertyIds.length, media_count: Number(data.total_media_count || 0) },
+        payloadSummary: { marker: WHATSAPP_EMPLOYEE_AGENT_007_MARKER, review_only: true, batch_mode: data.property_batch_mode || 'multiple', property_count: propertyIds.length, media_count: Number(data.total_media_count || 0) },
         relatedListingId: propertyIds[propertyIds.length - 1]
       });
       await replaceEmployeeSession(phone, 'main_menu', {
         employee_intake_last_completed_at: new Date().toISOString(),
+        employee_intake_last_batch_mode: data.property_batch_mode || 'multiple',
         employee_intake_last_property_count: propertyIds.length,
         employee_intake_last_media_count: Number(data.total_media_count || 0)
       });
@@ -3983,6 +4009,19 @@ async function handleEmployeeWhatsappIntake({
     if (!candidates.length) {
       if (!cleanBody || placeholderBody) {
         return { handled: true, nextStep: currentStep, message: 'No usable media bytes reached MakaUG. Please resend the photo, video or document.' };
+      }
+      const existingBatchProperties = Array.isArray(data.property_ids) ? data.property_ids.length : 0;
+      const textOnlyFacts = employeePropertyFacts(cleanBody, data);
+      if (
+        (data.property_batch_mode || 'multiple') === 'single'
+        && existingBatchProperties >= 1
+        && employeePropertyMissing(textOnlyFacts).length === 0
+      ) {
+        return {
+          handled: true,
+          nextStep: currentStep,
+          message: 'This batch was set to *one property*. I did not start another property. Send any remaining media for the current property without a new full property caption, then type *COMPLETE*.'
+        };
       }
       data.pending_property_caption = cleanBody;
       await replaceEmployeeSession(phone, currentStep, data);
@@ -4042,6 +4081,14 @@ async function handleEmployeeWhatsappIntake({
           message: `Duplicate property found — ${String(existingProperty.id).slice(0, 8).toUpperCase()} is already ${existingProperty.status}. Nothing was added twice.`
         };
       }
+      const existingBatchProperties = Array.isArray(data.property_ids) ? data.property_ids.length : 0;
+      if ((data.property_batch_mode || 'multiple') === 'single' && existingBatchProperties >= 1) {
+        return {
+          handled: true,
+          nextStep: currentStep,
+          message: 'This batch was set to *one property*, so I did not create another one. Send any remaining media without a new full property caption, then type *COMPLETE*. To send another property, start a new *Agent 007* batch and choose *Multiple properties*.'
+        };
+      }
     }
 
     let storedMedia;
@@ -4069,7 +4116,9 @@ async function handleEmployeeWhatsappIntake({
           handled: true,
           nextStep: currentStep,
           propertyId,
-          message: `✅ Saved property ${data.property_ids.length} to staff review — ${String(propertyId).slice(0, 8).toUpperCase()}\nMedia stored: ${storedMedia.length}\nStatus: pending, not live.\n\nSend more media, start the next property with a full caption, or type *COMPLETE*.`
+          message: (data.property_batch_mode || 'multiple') === 'single'
+            ? `✅ Saved the property to staff review — ${String(propertyId).slice(0, 8).toUpperCase()}\nMedia stored: ${storedMedia.length}\nStatus: pending, not live.\n\nSend any additional media without a new full property caption. When this property is finished, type *COMPLETE*.`
+            : `✅ Saved property ${data.property_ids.length} to staff review — ${String(propertyId).slice(0, 8).toUpperCase()}\nMedia stored: ${storedMedia.length}\nStatus: pending, not live.\n\nTo start property ${data.property_ids.length + 1}, send its first media with a full property type, exact location and price caption. Keep going until the whole batch is loaded, then type *COMPLETE*.`
         };
       } catch (error) {
         logger.error('WhatsApp employee review property save failed:', error);
@@ -4095,7 +4144,9 @@ async function handleEmployeeWhatsappIntake({
         duplicate: attachment.duplicate,
         message: attachment.duplicate
           ? 'That media is already attached. Nothing was duplicated.'
-          : `✅ ${attachment.attached} media item(s) attached to the current pending property. Send more, start the next property with a full caption, or type *COMPLETE*.`
+          : (data.property_batch_mode || 'multiple') === 'single'
+            ? `✅ ${attachment.attached} media item(s) attached to the pending property. Send more media for this property, or type *COMPLETE* when it is finished.`
+            : `✅ ${attachment.attached} media item(s) attached to property ${Array.isArray(data.property_ids) ? data.property_ids.length : 1}. Send more media, start the next property with a full caption, or type *COMPLETE* only when the whole batch is finished.`
       };
     } catch (error) {
       logger.error('WhatsApp employee media attachment failed:', error);
