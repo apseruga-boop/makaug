@@ -267,7 +267,7 @@ const LISTING_IMAGE_PREVIEW_QUALITY = 0.78;
 const LISTING_IMAGE_PREVIEW_MAX_BYTES = 1_500_000;
 const EMPLOYEE_VIDEO_PREVIEW_MAX_BYTES = 25_000_000;
 const OUTBOUND_PROPERTY_IMAGE_MAX_BYTES = 15_000_000;
-const WHATSAPP_EMPLOYEE_AGENT_007_WORKER_MARKER = 'whatsapp-agent-007-notification-ledger-recovery-20260829';
+const WHATSAPP_EMPLOYEE_AGENT_007_WORKER_MARKER = 'whatsapp-agent-007-media-only-reconciliation-20260829';
 const RECENT_INBOUND_BACKLOG_LIMIT = 60;
 const EMPLOYEE_BATCH_HISTORY_SCAN_LIMIT = 160;
 const EMPLOYEE_BATCH_HISTORY_MAX_ROUNDS = 30;
@@ -2874,6 +2874,9 @@ async function replayEmployeeBatchThroughCompletion(page, history = {}, row = {}
       visited.add(key);
 
       const isCompletion = key === history.completionKey || isEmployeeBatchCompletionSnapshot(snapshot);
+      if (!isCompletion && !['image', 'media'].includes(String(snapshot.mediaType || '').toLowerCase())) {
+        continue;
+      }
       const originalBrowserKey = browserMessageKeyFor(snapshot, row);
       if (isCompletion) {
         const result = await ingestSnapshot({
