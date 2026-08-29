@@ -96,21 +96,19 @@ assert(copilotSource.includes('media_previews:'), 'WhatsApp Web bridge should tr
 assert(copilotSource.includes('release_marker: WHATSAPP_EMPLOYEE_AGENT_007_WORKER_MARKER'), 'hosted worker heartbeat should prove the Agent 007 build');
 assert(copilotSource.includes('const RECENT_INBOUND_BACKLOG_LIMIT = 60'), 'worker must inspect the recent inbound backlog instead of only the last message');
 assert(copilotSource.includes("skipped: 'ordered_media_hydration_pending'"), 'worker must stop before COMPLETE when earlier media bytes are unavailable');
-assert.equal(
-  (copilotSource.match(/if \(root\.querySelector\('video, source\[type\^="video\/"\]'\)\) return false;/g) || []).length,
-  2,
-  'video messages must be excluded from voice-note detection in both browser snapshot paths'
-);
-assert.equal(
-  (copilotSource.match(/const videoMedia = Boolean\([^\n]+video[^\n]+\);/g) || []).length,
-  2,
-  'both browser snapshot paths must explicitly detect video media'
-);
+const voiceDetectorBlocks = copilotSource.match(/const hasVoiceNote = \(root, text = ''\) => \{[\s\S]*?\n    \};\n    const hasCallLog/g) || [];
+assert.equal(voiceDetectorBlocks.length, 2, 'both browser snapshot paths must define voice-specific detection');
+assert(voiceDetectorBlocks.every((block) => !block.includes('[aria-label*="Play" i]')), 'generic Play buttons must not classify property videos as voice notes');
+assert(voiceDetectorBlocks.every((block) => !block.includes('canvas, svg, button')), 'generic duration controls must not classify property videos as voice notes');
+assert.equal((copilotSource.match(/const hasVideoMedia = \(root\)/g) || []).length, 2, 'both browser snapshot paths must explicitly detect video cards and thumbnails');
+assert.equal((copilotSource.match(/const videoMedia = hasVideoMedia\(/g) || []).length, 2, 'both browser snapshot paths must use the shared local video detector');
 assert.equal(
   (copilotSource.match(/: videoMedia\s*\n\s*\? 'media'\s*\n\s*: voiceNote\s*\n\s*\? 'voice'/g) || []).length,
   2,
   'video detection must take priority over the generic play-button voice-note heuristic'
 );
+assert(copilotSource.includes("document.querySelector('[role=\"dialog\"] video')"), 'video hydration must recover media opened in the WhatsApp preview dialog');
+assert(copilotSource.includes('clickable?.click?.()'), 'video hydration must activate thumbnail-only video cards before capturing permanent bytes');
 assert(!copilotSource.includes('getRecentIncomingSnapshots(page, 1)'), 'rapid batches must not be reduced to one visible message');
 assert(
   copilotSource.indexOf('.filter((item) => item.chatKey && item.text') < copilotSource.indexOf('.slice(-Math.max(1, maxItems))'),
