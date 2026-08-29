@@ -71,6 +71,15 @@ assert(routeSource.includes('review_only: true') && routeSource.includes('auto_p
 assert(routeSource.includes("'whatsapp-employee-agent-007','whatsapp_employee_intake_queued','pending','pending'"), 'moderation history must retain pending status');
 assert(routeSource.includes('whatsapp_employee_property_review_queued'), 'each property should create a notification/audit record');
 assert(routeSource.includes('whatsapp_employee_batch_complete'), 'completed batches should create a WhatsApp notification record');
+assert(routeSource.includes("const WHATSAPP_AGENT_007_ORDERED_BATCH_MARKER = 'whatsapp-agent-007-ordered-batch-finalization-20260829'"), 'ordered batch release must be traceable');
+assert(routeSource.includes('const whatsappInboundRuntimeQueues = new Map()'), 'same-phone messages must be serialized');
+assert(routeSource.includes('processInboundRuntimeUnlocked'), 'the serialized runtime must wrap the original inbound processor');
+assert(routeSource.includes('Properties shared: ${batchCounts.propertiesShared}'), 'completion must report the shared count');
+assert(routeSource.includes('Successfully set up in staff review: ${batchCounts.propertiesSetUp}'), 'completion must report the successful setup count');
+assert(routeSource.includes('Duplicates skipped: ${batchCounts.duplicatesSkipped}'), 'completion must report duplicates');
+assert(routeSource.includes('Could not be set up: ${batchCounts.propertiesFailed}'), 'completion must report failures');
+assert(routeSource.includes("type: 'whatsapp_agent_batch_card_awaiting_approval'"), 'agent notification must wait at the founder approval gate');
+assert(routeSource.includes("status: 'awaiting_founder_approval'"), 'pending agent-card state must be durable');
 assert(routeSource.includes('whatsapp_employee_batch_mode') && routeSource.includes('whatsapp_employee_batch_property_number'), 'review records should retain multiple-property batch traceability');
 assert(routeSource.includes("=== 'single' && existingBatchProperties >= 1"), 'single mode must reject a second property without affecting multiple mode');
 assert(routeSource.includes("keyPrefix: privateMedia ? 'whatsapp-employee-intake/private-id'"), 'ID media must use private cloud storage');
@@ -85,8 +94,16 @@ assert(!routeSource.includes("source = 'whatsapp_employee_intake' AND status = '
 assert(copilotSource.includes('async function hydrateVideoSnapshot'), 'WhatsApp Web bridge should download video bytes');
 assert(copilotSource.includes('media_previews:'), 'WhatsApp Web bridge should transmit non-image media bytes');
 assert(copilotSource.includes('release_marker: WHATSAPP_EMPLOYEE_AGENT_007_WORKER_MARKER'), 'hosted worker heartbeat should prove the Agent 007 build');
+assert(copilotSource.includes('const RECENT_INBOUND_BACKLOG_LIMIT = 60'), 'worker must inspect the recent inbound backlog instead of only the last message');
+assert(copilotSource.includes("skipped: 'ordered_media_hydration_pending'"), 'worker must stop before COMPLETE when earlier media bytes are unavailable');
+assert(!copilotSource.includes('getRecentIncomingSnapshots(page, 1)'), 'rapid batches must not be reduced to one visible message');
+assert(
+  copilotSource.indexOf('.filter((item) => item.chatKey && item.text') < copilotSource.indexOf('.slice(-Math.max(1, maxItems))'),
+  'worker must filter inbound messages before applying the backlog limit'
+);
 assert(serverSource.includes('whatsapp-employee-agent-007-review-intake-20260829'), 'release marker should be externally verifiable');
 assert(serverSource.includes('whatsapp-agent-007-multiple-property-batches-20260829'), 'multiple-property mode should have an externally verifiable release marker');
+assert(serverSource.includes('whatsapp-agent-007-ordered-batch-finalization-20260829'), 'ordered batch finalization should have an externally verifiable release marker');
 
 const db = require('../config/database');
 const originalQuery = db.query;
@@ -210,14 +227,34 @@ const originalQuery = db.query;
       session_data: {
         employee_role: 'agent',
         property_batch_mode: 'multiple',
+        agent: {
+          id: '11111111-1111-4111-8111-111111111111',
+          full_name: 'Francis Isabirye',
+          whatsapp: '+256768524008'
+        },
         property_ids: ['22222222-2222-4222-8222-222222222222'],
-        total_media_count: 7
+        total_media_count: 7,
+        properties_shared_count: 3,
+        properties_duplicate_count: 1,
+        properties_failed_count: 1
       }
     }
   });
   assert.equal(completed.nextStep, 'main_menu');
   assert.equal(completed.batchComplete, true);
-  assert.match(completed.message, /1 property is now in staff review/);
+  assert.deepEqual(completed.batchCounts, {
+    propertiesShared: 3,
+    propertiesSetUp: 1,
+    duplicatesSkipped: 1,
+    propertiesFailed: 1
+  });
+  assert.equal(completed.pendingAgentNotification.status, 'awaiting_founder_approval');
+  assert.match(completed.message, /Batch processed for Francis Isabirye/);
+  assert.match(completed.message, /Properties shared: 3/);
+  assert.match(completed.message, /Successfully set up in staff review: 1/);
+  assert.match(completed.message, /Duplicates skipped: 1/);
+  assert.match(completed.message, /Could not be set up: 1/);
+  assert.match(completed.message, /has not been notified yet/);
   assert.match(completed.message, /Nothing is live/);
   assert.equal(updates.length, 8, 'each state transition should persist immediately');
 
