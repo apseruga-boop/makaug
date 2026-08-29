@@ -3603,12 +3603,39 @@ async function prepareEmployeeOrderedBatchReplay({
     };
   }
 
-  const previousShared = Number(data.employee_intake_last_properties_shared || 0);
-  const previousSetUp = Number(data.employee_intake_last_properties_set_up || 0);
-  const previousDuplicates = Number(data.employee_intake_last_duplicates_skipped || 0);
-  const previousFailed = Number(data.employee_intake_last_properties_failed || 0);
-  const previousMedia = Number(data.employee_intake_last_media_count || 0);
-  const completedAt = new Date(data.employee_intake_last_completed_at || 0);
+  let previousShared = Number(data.employee_intake_last_properties_shared || 0);
+  let previousSetUp = Number(data.employee_intake_last_properties_set_up || 0);
+  let previousDuplicates = Number(data.employee_intake_last_duplicates_skipped || 0);
+  let previousFailed = Number(data.employee_intake_last_properties_failed || 0);
+  let previousMedia = Number(data.employee_intake_last_media_count || 0);
+  let previousBatchMode = normalizeInput(data.employee_intake_last_batch_mode) || 'multiple';
+  let completedAt = new Date(data.employee_intake_last_completed_at || 0);
+  if (!Number.isFinite(completedAt.getTime()) || completedAt.getTime() <= 0 || previousShared < 1 || previousSetUp < 1) {
+    const completionResult = await db.query(
+      `SELECT payload_summary, created_at
+         FROM notifications
+        WHERE recipient_phone = $1
+          AND type = 'whatsapp_employee_batch_complete'
+          AND status = 'sent'
+          AND created_at > NOW() - INTERVAL '24 hours'
+        ORDER BY created_at DESC
+        LIMIT 1`,
+      [phone]
+    );
+    const durableCompletion = completionResult.rows[0] || null;
+    const summary = durableCompletion?.payload_summary && typeof durableCompletion.payload_summary === 'object'
+      ? durableCompletion.payload_summary
+      : {};
+    if (durableCompletion) {
+      previousShared = Number(summary.properties_shared || 0);
+      previousSetUp = Number(summary.properties_set_up || 0);
+      previousDuplicates = Number(summary.duplicates_skipped || 0);
+      previousFailed = Number(summary.properties_failed || 0);
+      previousMedia = Number(summary.media_count || 0);
+      previousBatchMode = normalizeInput(summary.batch_mode) || 'multiple';
+      completedAt = new Date(durableCompletion.created_at || 0);
+    }
+  }
   const observed = Math.max(0, Number(observedPropertyMessages || 0));
   if (!Number.isFinite(completedAt.getTime()) || completedAt.getTime() <= 0) {
     return { ready: false, reason: 'completed_batch_not_found' };
@@ -3630,10 +3657,28 @@ async function prepareEmployeeOrderedBatchReplay({
     };
   }
 
-  const pendingAgent = data.employee_intake_pending_agent_notification;
-  const agentId = normalizeInput(pendingAgent?.agent_id);
-  if (!agentId || previousSetUp < 1) {
+  if (previousSetUp < 1) {
     return { ready: false, reason: 'recoverable_agent_batch_not_found' };
+  }
+  const propertyResult = await db.query(
+    `SELECT id::text AS id, agent_id::text AS agent_id
+       FROM properties
+      WHERE source = 'whatsapp_employee_intake'
+        AND agent_id IS NOT NULL
+        AND extra_fields->>'whatsapp_employee_sender_phone_suffix' = $1
+        AND created_at <= $2
+      ORDER BY created_at DESC, id DESC
+      LIMIT $3`,
+    [employeeIntakePhoneSuffix(phone), completedAt.toISOString(), previousSetUp]
+  );
+  if (propertyResult.rows.length !== previousSetUp) {
+    return { ready: false, reason: 'completed_batch_properties_not_found' };
+  }
+  const propertyAgentIds = [...new Set(propertyResult.rows.map((row) => normalizeInput(row.agent_id)).filter(Boolean))];
+  const pendingAgent = data.employee_intake_pending_agent_notification;
+  const agentId = normalizeInput(pendingAgent?.agent_id) || propertyAgentIds[0] || '';
+  if (!agentId || propertyAgentIds.length !== 1 || propertyAgentIds[0] !== agentId) {
+    return { ready: false, reason: 'completed_batch_agent_ambiguous' };
   }
   const agentResult = await db.query(
     `SELECT id, full_name, company_name, phone, whatsapp, email
@@ -3645,20 +3690,6 @@ async function prepareEmployeeOrderedBatchReplay({
   const agent = agentResult.rows[0];
   if (!agent) return { ready: false, reason: 'agent_not_found' };
 
-  const propertyResult = await db.query(
-    `SELECT id::text AS id
-       FROM properties
-      WHERE source = 'whatsapp_employee_intake'
-        AND agent_id = $1
-        AND extra_fields->>'whatsapp_employee_sender_phone_suffix' = $2
-        AND created_at <= $3
-      ORDER BY created_at DESC, id DESC
-      LIMIT $4`,
-    [agentId, employeeIntakePhoneSuffix(phone), completedAt.toISOString(), previousSetUp]
-  );
-  if (propertyResult.rows.length !== previousSetUp) {
-    return { ready: false, reason: 'completed_batch_properties_not_found' };
-  }
   const propertyIds = propertyResult.rows.map((row) => row.id).reverse();
   const restoredData = {
     whatsapp_employee_intake: true,
@@ -3673,7 +3704,7 @@ async function prepareEmployeeOrderedBatchReplay({
     employee_sender_phone_suffix: employeeIntakePhoneSuffix(phone),
     employee_role: 'agent',
     agent,
-    property_batch_mode: data.employee_intake_last_batch_mode || 'multiple',
+    property_batch_mode: previousBatchMode,
     property_ids: propertyIds,
     current_property_id: propertyIds[propertyIds.length - 1] || null,
     total_media_count: previousMedia,

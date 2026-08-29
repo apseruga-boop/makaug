@@ -267,7 +267,7 @@ const LISTING_IMAGE_PREVIEW_QUALITY = 0.78;
 const LISTING_IMAGE_PREVIEW_MAX_BYTES = 1_500_000;
 const EMPLOYEE_VIDEO_PREVIEW_MAX_BYTES = 25_000_000;
 const OUTBOUND_PROPERTY_IMAGE_MAX_BYTES = 15_000_000;
-const WHATSAPP_EMPLOYEE_AGENT_007_WORKER_MARKER = 'whatsapp-agent-007-acknowledged-media-reconciliation-20260829';
+const WHATSAPP_EMPLOYEE_AGENT_007_WORKER_MARKER = 'whatsapp-agent-007-notification-ledger-recovery-20260829';
 const RECENT_INBOUND_BACKLOG_LIMIT = 60;
 const EMPLOYEE_BATCH_HISTORY_SCAN_LIMIT = 160;
 const EMPLOYEE_BATCH_HISTORY_MAX_ROUNDS = 30;
@@ -2960,10 +2960,19 @@ async function runConfiguredEmployeeBatchRecovery(page) {
     }
     await page.waitForTimeout(700);
     const snapshots = await getRecentIncomingSnapshots(page, RECENT_INBOUND_BACKLOG_LIMIT);
-    const result = await maybeReplayEmployeeBatchThroughCompletion(page, snapshots, {
+    let result = await maybeReplayEmployeeBatchThroughCompletion(page, snapshots, {
       title: phone,
       preview: ''
     });
+    if (!result.handled) {
+      const history = await locateEmployeeBatchHistory(page, { chatKey: phone });
+      if (history.found) {
+        result = await replayEmployeeBatchThroughCompletion(page, history, {
+          title: phone,
+          preview: ''
+        });
+      }
+    }
     processed += result.processed || 0;
     log(`configured Agent 007 recovery checked ${phone}; handled=${result.handled ? 'yes' : 'no'} processed=${result.processed || 0}`);
   }
