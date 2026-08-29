@@ -267,7 +267,8 @@ const LISTING_IMAGE_PREVIEW_QUALITY = 0.78;
 const LISTING_IMAGE_PREVIEW_MAX_BYTES = 1_500_000;
 const EMPLOYEE_VIDEO_PREVIEW_MAX_BYTES = 12_000_000;
 const OUTBOUND_PROPERTY_IMAGE_MAX_BYTES = 15_000_000;
-const WHATSAPP_EMPLOYEE_AGENT_007_WORKER_MARKER = 'whatsapp-employee-agent-007-review-intake-20260829';
+const WHATSAPP_EMPLOYEE_AGENT_007_WORKER_MARKER = 'whatsapp-agent-007-ordered-batch-finalization-20260829';
+const RECENT_INBOUND_BACKLOG_LIMIT = 60;
 const seenBrowserMessageIds = new Set();
 const seenCallEventKeys = new Map();
 const recentlySentReplyKeys = new Map();
@@ -1895,13 +1896,13 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
         });
       });
     return snapshots
-      .slice(-Math.max(1, maxItems))
       .filter((item) => item.chatKey && item.text && (
         item.mediaType === 'call'
         || item.mediaType === 'call_log'
         || item.direction === 'in'
         || (item.direction === 'unknown' && item.mediaType && item.mediaType !== 'text')
-      ));
+      ))
+      .slice(-Math.max(1, maxItems));
   }, limit);
 }
 
@@ -2397,12 +2398,28 @@ async function ingestSnapshot({ snapshot, row = {}, source = 'unread_scan' }) {
     return { processed: 0, skipped: 'unstable_active_media_without_message_id' };
   }
 
+  const browserMediaPlaceholder = /^whatsapp-web:\/\//i.test(String(snapshot.mediaUrl || ''));
+  const missingImageBytes = mediaType === 'image'
+    && browserMediaPlaceholder
+    && !(Array.isArray(snapshot.imagePreviews) && snapshot.imagePreviews.length);
+  const missingFileBytes = mediaType === 'media'
+    && browserMediaPlaceholder
+    && !(Array.isArray(snapshot.mediaPreviews) && snapshot.mediaPreviews.length);
+  if (missingImageBytes || missingFileBytes) {
+    const hydrationError = snapshot.imagePreviewError || snapshot.mediaPreviewError || 'media_bytes_unavailable';
+    log(`paused ordered intake for ${chatKey}: ${hydrationError}`);
+    return {
+      processed: 0,
+      retryable: true,
+      skipped: 'ordered_media_hydration_pending',
+      error: new Error(hydrationError)
+    };
+  }
+
   const browserMessageKey = snapshot.browserMessageKey || browserMessageKeyFor(snapshot, row);
   if (browserMessageKey && seenBrowserMessageIds.has(browserMessageKey)) {
     return { processed: 0, duplicate: true };
   }
-  rememberBrowserMessageKey(browserMessageKey);
-
   const messageId = createMessageId(chatKey, text, snapshot.timestampLabel, mediaType, snapshot.messageId || snapshot.mediaFingerprint || '');
 
   try {
@@ -2457,6 +2474,7 @@ async function ingestSnapshot({ snapshot, row = {}, source = 'unread_scan' }) {
         }
       }
     });
+    rememberBrowserMessageKey(browserMessageKey);
     if (!result.duplicate) {
       log(`ingested ${source} ${mediaType} message from ${chatKey}; queued_reply=${result.data?.queued_reply ? 'yes' : 'no'}`);
     }
@@ -2651,8 +2669,9 @@ async function ingestUnreadChats(page) {
     const opened = await openChatRow(page, row);
     if (!opened) continue;
 
-    const snapshots = await getRecentIncomingSnapshots(page, 1);
+    const snapshots = await getRecentIncomingSnapshots(page, RECENT_INBOUND_BACKLOG_LIMIT);
     let handledRow = false;
+    let retryableBlocked = false;
     for (const snapshot of snapshots) {
       const browserMessageKey = browserMessageKeyFor(snapshot, row);
       if (browserMessageKey && seenBrowserMessageIds.has(browserMessageKey)) continue;
@@ -2661,6 +2680,10 @@ async function ingestUnreadChats(page) {
         browserMessageKey
       });
       const result = await ingestSnapshot({ snapshot: hydrated, row, source: 'unread_scan' });
+      if (result.retryable) {
+        retryableBlocked = true;
+        break;
+      }
       processed += result.processed || 0;
       handledRow = handledRow || !!(result.processed || result.duplicate || result.queuedReply);
       if (result.backfillRequest) {
@@ -2672,7 +2695,7 @@ async function ingestUnreadChats(page) {
         await processOutbox(page, { recipient: result.chatKey, maxSends: 1 });
       }
     }
-    if (!handledRow) {
+    if (!handledRow && !retryableBlocked) {
       const fallback = unreadPreviewSnapshot(row);
       if (fallback) {
         const result = await ingestSnapshot({ snapshot: fallback, row, source: 'unread_preview_fallback' });
@@ -2733,9 +2756,10 @@ async function ingestRecentChatsSweep(page, limit = RECENT_CHAT_SWEEP_LIMIT) {
     if (!opened) continue;
     openedRows += 1;
 
-    const snapshots = await getRecentIncomingSnapshots(page, 1);
+    const snapshots = await getRecentIncomingSnapshots(page, RECENT_INBOUND_BACKLOG_LIMIT);
     let rowObserved = !snapshots.length;
     let handledRow = false;
+    let retryableBlocked = false;
     for (const snapshot of snapshots) {
       const browserMessageKey = browserMessageKeyFor(snapshot, row);
       if (browserMessageKey && seenBrowserMessageIds.has(browserMessageKey)) {
@@ -2747,6 +2771,11 @@ async function ingestRecentChatsSweep(page, limit = RECENT_CHAT_SWEEP_LIMIT) {
         browserMessageKey
       });
       const result = await ingestSnapshot({ snapshot: hydrated, row, source: 'recent_chat_sweep' });
+      if (result.retryable) {
+        retryableBlocked = true;
+        rowObserved = false;
+        break;
+      }
       rowObserved = true;
       handledRow = handledRow || !!(result.processed || result.duplicate || result.queuedReply);
       processed += result.processed || 0;
@@ -2764,7 +2793,7 @@ async function ingestRecentChatsSweep(page, limit = RECENT_CHAT_SWEEP_LIMIT) {
         return finish(true);
       }
     }
-    if (!handledRow && row.unread) {
+    if (!handledRow && row.unread && !retryableBlocked) {
       const fallback = unreadPreviewSnapshot(row, 'recent_unread_preview_fallback');
       if (fallback) {
         const result = await ingestSnapshot({ snapshot: fallback, row, source: 'recent_unread_preview_fallback' });
@@ -2788,7 +2817,7 @@ async function ingestRecentChatsSweep(page, limit = RECENT_CHAT_SWEEP_LIMIT) {
 }
 
 async function ingestActiveChat(page) {
-  const snapshots = await getRecentIncomingSnapshots(page, 1);
+  const snapshots = await getRecentIncomingSnapshots(page, RECENT_INBOUND_BACKLOG_LIMIT);
   let processed = 0;
   for (const snapshot of snapshots) {
     const row = { title: snapshot.chatKey, preview: '' };
@@ -2803,6 +2832,7 @@ async function ingestActiveChat(page) {
       row,
       source: 'active_chat'
     });
+    if (result.retryable) break;
     processed += result.processed || 0;
     if (result.backfillRequest) {
       const backfill = await runBackfillRequestIfPresent(page, result);

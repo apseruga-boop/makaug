@@ -111,6 +111,7 @@ const WHATSAPP_NATURAL_SELLER_FLOW_MARKER = 'whatsapp-natural-seller-flow-202608
 const WHATSAPP_OWNER_FORWARD_REVIEW_MARKER = 'whatsapp-owner-forward-review-media-20260820';
 const WHATSAPP_OWNER_HISTORY_BACKFILL_MARKER = 'whatsapp-owner-history-backfill-20260820';
 const WHATSAPP_EMPLOYEE_AGENT_007_MARKER = 'whatsapp-employee-agent-007-review-intake-20260829';
+const WHATSAPP_AGENT_007_ORDERED_BATCH_MARKER = 'whatsapp-agent-007-ordered-batch-finalization-20260829';
 const WHATSAPP_API_VERSION = (process.env.WHATSAPP_API_VERSION || 'v25.0').trim();
 const WHATSAPP_ACCESS_TOKEN = (process.env.WHATSAPP_ACCESS_TOKEN || '').trim();
 const WHATSAPP_PHONE_NUMBER_ID = (process.env.WHATSAPP_PHONE_NUMBER_ID || '').trim();
@@ -3548,6 +3549,34 @@ function employeeCaptionHash(caption = '') {
   return normalized ? crypto.createHash('sha256').update(normalized).digest('hex') : '';
 }
 
+function employeePropertyAttemptKey({ inboundMessageId = '', caption = '' } = {}) {
+  return normalizeInput(inboundMessageId) || employeeCaptionHash(caption);
+}
+
+function recordEmployeePropertyAttempt(data = {}, { inboundMessageId = '', caption = '' } = {}) {
+  const attemptKey = employeePropertyAttemptKey({ inboundMessageId, caption });
+  const existingKeys = Array.isArray(data.property_attempt_message_ids)
+    ? data.property_attempt_message_ids.map((value) => String(value))
+    : [];
+  if (attemptKey && existingKeys.includes(attemptKey)) return false;
+  data.properties_shared_count = Number(data.properties_shared_count || 0) + 1;
+  if (attemptKey) {
+    data.property_attempt_message_ids = [...existingKeys, attemptKey].slice(-100);
+  }
+  return true;
+}
+
+function employeeBatchCounts(data = {}) {
+  const propertiesSetUp = Array.isArray(data.property_ids) ? data.property_ids.length : 0;
+  const duplicatesSkipped = Number(data.properties_duplicate_count || 0);
+  const propertiesFailed = Number(data.properties_failed_count || 0);
+  const explicitSharedCount = Number(data.properties_shared_count || 0);
+  const propertiesShared = explicitSharedCount > 0
+    ? explicitSharedCount
+    : propertiesSetUp + duplicatesSkipped + propertiesFailed;
+  return { propertiesShared, propertiesSetUp, duplicatesSkipped, propertiesFailed };
+}
+
 async function findEmployeeDuplicateProperty({ caption = '', facts = {}, sessionData = {} } = {}) {
   const captionHash = employeeCaptionHash(caption);
   if (!captionHash) return null;
@@ -3819,10 +3848,15 @@ async function handleEmployeeWhatsappIntake({
     const freshData = {
       whatsapp_employee_intake: true,
       employee_intake_marker: WHATSAPP_EMPLOYEE_AGENT_007_MARKER,
+      ordered_batch_marker: WHATSAPP_AGENT_007_ORDERED_BATCH_MARKER,
       employee_intake_started_at: new Date().toISOString(),
       employee_sender_phone_suffix: employeeIntakePhoneSuffix(phone),
       property_ids: [],
-      total_media_count: 0
+      total_media_count: 0,
+      properties_shared_count: 0,
+      properties_duplicate_count: 0,
+      properties_failed_count: 0,
+      property_attempt_message_ids: []
     };
     await replaceEmployeeSession(phone, 'employee_intake_role', freshData);
     return { handled: true, nextStep: 'employee_intake_role', message: employeeRolePrompt() };
@@ -3980,28 +4014,80 @@ async function handleEmployeeWhatsappIntake({
   if (currentStep === 'employee_property_media') {
     if (isEmployeeIntakeComplete(cleanBody)) {
       const propertyIds = Array.isArray(data.property_ids) ? data.property_ids : [];
-      if (!propertyIds.length) {
+      const batchCounts = employeeBatchCounts(data);
+      if (!batchCounts.propertiesShared) {
         return { handled: true, nextStep: currentStep, message: 'No properties have been saved yet. Send the first property media with its type, exact location and price in the caption.' };
       }
+      const subjectName = normalizeInput(data.agent?.full_name || data.customer_details?.fullName || 'this batch');
+      const agentPhone = normalizeInput(data.agent?.whatsapp || data.agent?.phone || '');
+      const agentProfileUrl = data.agent?.id ? `${HOME_URL}/agents/${data.agent.id}` : '';
+      const pendingAgentNotification = data.agent?.id && agentPhone && batchCounts.propertiesSetUp > 0
+        ? {
+          status: 'awaiting_founder_approval',
+          agent_id: data.agent.id,
+          agent_name: subjectName,
+          agent_phone: agentPhone,
+          profile_url: agentProfileUrl,
+          properties_shared: batchCounts.propertiesShared,
+          properties_set_up: batchCounts.propertiesSetUp,
+          duplicates_skipped: batchCounts.duplicatesSkipped,
+          properties_failed: batchCounts.propertiesFailed,
+          created_at: new Date().toISOString()
+        }
+        : null;
       await logNotification(db, {
         recipientPhone: phone,
         channel: 'whatsapp',
         type: 'whatsapp_employee_batch_complete',
         status: 'sent',
-        payloadSummary: { marker: WHATSAPP_EMPLOYEE_AGENT_007_MARKER, review_only: true, batch_mode: data.property_batch_mode || 'multiple', property_count: propertyIds.length, media_count: Number(data.total_media_count || 0) },
-        relatedListingId: propertyIds[propertyIds.length - 1]
+        payloadSummary: {
+          marker: WHATSAPP_AGENT_007_ORDERED_BATCH_MARKER,
+          review_only: true,
+          batch_mode: data.property_batch_mode || 'multiple',
+          properties_shared: batchCounts.propertiesShared,
+          properties_set_up: batchCounts.propertiesSetUp,
+          duplicates_skipped: batchCounts.duplicatesSkipped,
+          properties_failed: batchCounts.propertiesFailed,
+          media_count: Number(data.total_media_count || 0)
+        },
+        relatedListingId: propertyIds[propertyIds.length - 1] || null
       });
+      if (pendingAgentNotification) {
+        await logNotification(db, {
+          recipientPhone: phone,
+          channel: 'whatsapp',
+          type: 'whatsapp_agent_batch_card_awaiting_approval',
+          status: 'pending',
+          payloadSummary: {
+            marker: WHATSAPP_AGENT_007_ORDERED_BATCH_MARKER,
+            agent_id: pendingAgentNotification.agent_id,
+            properties_set_up: batchCounts.propertiesSetUp,
+            approval_required: true,
+            agent_notified: false
+          },
+          relatedListingId: propertyIds[propertyIds.length - 1] || null
+        });
+      }
       await replaceEmployeeSession(phone, 'main_menu', {
         employee_intake_last_completed_at: new Date().toISOString(),
         employee_intake_last_batch_mode: data.property_batch_mode || 'multiple',
-        employee_intake_last_property_count: propertyIds.length,
-        employee_intake_last_media_count: Number(data.total_media_count || 0)
+        employee_intake_last_properties_shared: batchCounts.propertiesShared,
+        employee_intake_last_properties_set_up: batchCounts.propertiesSetUp,
+        employee_intake_last_duplicates_skipped: batchCounts.duplicatesSkipped,
+        employee_intake_last_properties_failed: batchCounts.propertiesFailed,
+        employee_intake_last_media_count: Number(data.total_media_count || 0),
+        ...(pendingAgentNotification ? { employee_intake_pending_agent_notification: pendingAgentNotification } : {})
       });
+      const notificationLine = pendingAgentNotification
+        ? `\n\n${subjectName} has not been notified yet. The agent profile card is waiting for founder approval.`
+        : '';
       return {
         handled: true,
         nextStep: 'main_menu',
         batchComplete: true,
-        message: `✅ *Batch complete*\n${propertyIds.length} ${propertyIds.length === 1 ? 'property is' : 'properties are'} now in staff review with ${Number(data.total_media_count || 0)} media item(s).\n\nNothing is live until a staff moderator approves it.`
+        batchCounts,
+        pendingAgentNotification,
+        message: `✅ *Batch processed for ${subjectName}*\nProperties shared: ${batchCounts.propertiesShared}\nSuccessfully set up in staff review: ${batchCounts.propertiesSetUp}\nDuplicates skipped: ${batchCounts.duplicatesSkipped}\nCould not be set up: ${batchCounts.propertiesFailed}\nMedia stored: ${Number(data.total_media_count || 0)}\nStatus: pending, not live.\n\nNothing is live until a staff moderator approves it.${notificationLine}`
       };
     }
 
@@ -4070,9 +4156,13 @@ async function handleEmployeeWhatsappIntake({
         };
       }
     }
+    let propertyAttemptRecorded = false;
     if (shouldStartProperty) {
+      propertyAttemptRecorded = recordEmployeePropertyAttempt(data, { inboundMessageId, caption });
       const existingProperty = await findEmployeeDuplicateProperty({ caption, facts, sessionData: data });
       if (existingProperty) {
+        if (propertyAttemptRecorded) data.properties_duplicate_count = Number(data.properties_duplicate_count || 0) + 1;
+        await replaceEmployeeSession(phone, currentStep, data);
         return {
           handled: true,
           nextStep: currentStep,
@@ -4101,6 +4191,10 @@ async function handleEmployeeWhatsappIntake({
       });
     } catch (error) {
       logger.error('WhatsApp employee property-media storage failed:', error);
+      if (propertyAttemptRecorded) {
+        data.properties_failed_count = Number(data.properties_failed_count || 0) + 1;
+        await replaceEmployeeSession(phone, currentStep, data);
+      }
       return { handled: true, nextStep: currentStep, message: 'I could not store that media permanently, so it was not added to review. Please wait before resending; nothing went live.' };
     }
 
@@ -4122,6 +4216,10 @@ async function handleEmployeeWhatsappIntake({
         };
       } catch (error) {
         logger.error('WhatsApp employee review property save failed:', error);
+        if (propertyAttemptRecorded) {
+          data.properties_failed_count = Number(data.properties_failed_count || 0) + 1;
+          await replaceEmployeeSession(phone, currentStep, data);
+        }
         return { handled: true, nextStep: currentStep, message: 'I stored the media but could not create the review record. Intake has paused and nothing went live. Please contact a staff moderator before resending.' };
       }
     }
@@ -9981,7 +10079,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
   return respond(t(lang, 'invalidInput'), step);
 }
 
-async function processInboundRuntime({
+async function processInboundRuntimeUnlocked({
   phone,
   inboundMessageId = null,
   body = '',
@@ -10484,6 +10582,23 @@ async function processInboundRuntime({
   });
 
   return { message, nextStep };
+}
+
+const whatsappInboundRuntimeQueues = new Map();
+
+function processInboundRuntime(input = {}) {
+  const queueKey = normalizeBridgeInboundKey(input.phone || '') || String(input.phone || 'unknown').trim();
+  const previous = whatsappInboundRuntimeQueues.get(queueKey) || Promise.resolve();
+  const current = previous
+    .catch(() => {})
+    .then(() => processInboundRuntimeUnlocked(input));
+  whatsappInboundRuntimeQueues.set(queueKey, current);
+  current.finally(() => {
+    if (whatsappInboundRuntimeQueues.get(queueKey) === current) {
+      whatsappInboundRuntimeQueues.delete(queueKey);
+    }
+  }).catch(() => {});
+  return current;
 }
 
 async function processMetaWebhookPayload(payload) {
