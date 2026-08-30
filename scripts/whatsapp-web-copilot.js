@@ -2759,6 +2759,17 @@ function employeeBatchSnapshotKey(snapshot = {}) {
   ).slice(0, 500);
 }
 
+function snapshotsAfterCompletedEmployeeBatch(snapshots = [], replay = {}) {
+  if (!replay.alreadyComplete || !replay.completionKey) return snapshots;
+  let completionIndex = -1;
+  for (let index = 0; index < snapshots.length; index += 1) {
+    if (employeeBatchSnapshotKey(snapshots[index]) === replay.completionKey) {
+      completionIndex = index;
+    }
+  }
+  return completionIndex >= 0 ? snapshots.slice(completionIndex + 1) : snapshots;
+}
+
 function isEmployeeBatchTriggerSnapshot(snapshot = {}) {
   return /^\s*agent\s*0*07\s*[.!]?\s*$/i.test(String(snapshot.text || '').trim());
 }
@@ -2828,7 +2839,9 @@ async function locateEmployeeBatchHistory(page, { chatKey = '' } = {}) {
 async function replayEmployeeBatchThroughCompletion(page, history = {}, row = {}) {
   const completionKey = String(history.completionKey || '');
   if (!history.found || !completionKey) return { handled: false, processed: 0 };
-  if (completedEmployeeBatchHistoryKeys.has(completionKey)) return { handled: true, processed: 0 };
+  if (completedEmployeeBatchHistoryKeys.has(completionKey)) {
+    return { handled: false, processed: 0, alreadyComplete: true, completionKey };
+  }
 
   const preparation = await apiRequest('/api/whatsapp/web-bridge/employee-batch-recovery', {
     method: 'POST',
@@ -2846,7 +2859,7 @@ async function replayEmployeeBatchThroughCompletion(page, history = {}, row = {}
     rememberBrowserMessageKey(browserMessageKeyFor(history.completionSnapshot, row));
     await scrollWhatsappHistoryToLatest(page);
     log(`Agent 007 batch already reconciled for ${history.chatKey}: ${history.observedPropertyMessages} property messages`);
-    return { handled: true, processed: 0, alreadyComplete: true };
+    return { handled: false, processed: 0, alreadyComplete: true, completionKey };
   }
   if (!preparationData.ready) {
     completedEmployeeBatchHistoryKeys.add(completionKey);
@@ -2973,10 +2986,18 @@ async function replayEmployeeBatchThroughCompletion(page, history = {}, row = {}
 }
 
 async function maybeReplayEmployeeBatchThroughCompletion(page, snapshots = [], row = {}) {
-  const visibleCompletion = snapshots.find(isEmployeeBatchCompletionSnapshot);
+  const visibleCompletions = snapshots.filter(isEmployeeBatchCompletionSnapshot);
+  const visibleCompletion = visibleCompletions[visibleCompletions.length - 1];
   if (!visibleCompletion) return { handled: false, processed: 0 };
   const visibleCompletionKey = employeeBatchSnapshotKey(visibleCompletion);
-  if (completedEmployeeBatchHistoryKeys.has(visibleCompletionKey)) return { handled: true, processed: 0 };
+  if (completedEmployeeBatchHistoryKeys.has(visibleCompletionKey)) {
+    return {
+      handled: false,
+      processed: 0,
+      alreadyComplete: true,
+      completionKey: visibleCompletionKey
+    };
+  }
   const history = await locateEmployeeBatchHistory(page, {
     chatKey: normalizeChatKey(visibleCompletion.chatKey || row.title)
   });
@@ -3000,7 +3021,7 @@ async function runConfiguredEmployeeBatchRecovery(page) {
       title: phone,
       preview: ''
     });
-    if (!result.handled) {
+    if (!result.handled && !result.alreadyComplete) {
       const history = await locateEmployeeBatchHistory(page, { chatKey: phone });
       if (history.found) {
         result = await replayEmployeeBatchThroughCompletion(page, history, {
@@ -3168,9 +3189,10 @@ async function ingestUnreadChats(page) {
       processed += employeeReplay.processed || 0;
       continue;
     }
+    const liveSnapshots = snapshotsAfterCompletedEmployeeBatch(snapshots, employeeReplay);
     let handledRow = false;
     let retryableBlocked = false;
-    for (const snapshot of snapshots) {
+    for (const snapshot of liveSnapshots) {
       const browserMessageKey = browserMessageKeyFor(snapshot, row);
       if (browserMessageKey && seenBrowserMessageIds.has(browserMessageKey)) continue;
       const hydrated = await hydrateMediaSnapshot(page, {
@@ -3261,10 +3283,11 @@ async function ingestRecentChatsSweep(page, limit = RECENT_CHAT_SWEEP_LIMIT) {
       rememberRecentChatRow(rowKey);
       return finish(true);
     }
-    let rowObserved = !snapshots.length;
+    const liveSnapshots = snapshotsAfterCompletedEmployeeBatch(snapshots, employeeReplay);
+    let rowObserved = !liveSnapshots.length;
     let handledRow = false;
     let retryableBlocked = false;
-    for (const snapshot of snapshots) {
+    for (const snapshot of liveSnapshots) {
       const browserMessageKey = browserMessageKeyFor(snapshot, row);
       if (browserMessageKey && seenBrowserMessageIds.has(browserMessageKey)) {
         rowObserved = true;
@@ -3327,8 +3350,9 @@ async function ingestActiveChat(page) {
     preview: ''
   });
   if (employeeReplay.handled) return employeeReplay.processed || 0;
+  const liveSnapshots = snapshotsAfterCompletedEmployeeBatch(snapshots, employeeReplay);
   let processed = 0;
-  for (const snapshot of snapshots) {
+  for (const snapshot of liveSnapshots) {
     const row = { title: snapshot.chatKey, preview: '' };
     const browserMessageKey = browserMessageKeyFor(snapshot, row);
     if (browserMessageKey && seenBrowserMessageIds.has(browserMessageKey)) continue;

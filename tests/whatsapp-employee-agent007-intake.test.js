@@ -170,6 +170,10 @@ assert(copilotSource.includes("scroller.dispatchEvent(new WheelEvent('wheel'"), 
 assert(copilotSource.includes('result.retryable || result.error'), 'history recovery must restart the bounded batch after a transient bridge or database failure');
 assert(copilotSource.includes('employeeBatchReplayProgress'), 'history recovery must resume after the failed media instead of replaying successful media again');
 assert(copilotSource.includes("/^(?:forwarded|\\[(?:image|media|video|document)\\])$/i"), 'captionless forwarded attachments must not inflate the observed property count');
+assert(copilotSource.includes('snapshotsAfterCompletedEmployeeBatch'), 'a reconciled Agent 007 batch must not block later ordinary chat messages');
+assert(copilotSource.includes('snapshots.slice(completionIndex + 1)'), 'only messages after the completed batch boundary should resume normal chatbot handling');
+assert(copilotSource.includes('!result.handled && !result.alreadyComplete'), 'startup recovery must settle completed batches without replaying them or starving normal scans');
+assert(copilotSource.includes('const visibleCompletions = snapshots.filter(isEmployeeBatchCompletionSnapshot)'), 'the latest visible COMPLETE boundary must win when multiple batches are in chat history');
 assert(copilotSource.includes("'/api/whatsapp/web-bridge/employee-batch-recovery'"), 'the worker must request a safe partial-batch recovery before replay');
 assert(routeSource.includes("router.post('/web-bridge/employee-batch-recovery'"), 'the bridge must expose an authenticated partial-batch recovery route');
 assert(routeSource.includes('observed_batch_already_accounted_for'), 'completed batches must not be resent after a worker restart');
@@ -210,6 +214,7 @@ assert(serverSource.includes('whatsapp-agent-007-retry-api-errors-20260829'), 'A
 assert(serverSource.includes('whatsapp-agent-007-resume-replay-progress-20260829'), 'resumable replay progress should have an externally verifiable release marker');
 assert(serverSource.includes('whatsapp-agent-007-caption-reconciliation-20260829'), 'caption and duplicate reconciliation should have an externally verifiable release marker');
 assert(serverSource.includes('whatsapp-agent-007-residential-caption-20260829'), 'residential caption recovery should have an externally verifiable release marker');
+assert(serverSource.includes('whatsapp-agent-007-post-complete-chat-resume-20260830'), 'post-completion chatbot recovery should have an externally verifiable release marker');
 assert(serverSource.includes("limit: '40mb'"), 'authorized WhatsApp video previews must fit through the JSON intake limit after base64 encoding');
 assert(serverSource.includes('whatsapp-active-intake-call-shield-20260829'), 'employee call shield should have an externally verifiable release marker');
 
