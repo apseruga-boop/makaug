@@ -4,6 +4,8 @@ require('dotenv').config();
 
 const crypto = require('crypto');
 const fs = require('fs');
+const http = require('http');
+const https = require('https');
 const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
@@ -97,6 +99,37 @@ function canonicalHeaders(headers) {
   };
 }
 
+function streamFileUpload({ uploadUrl, headers, filePath }) {
+  const timeoutMs = Number(process.env.DATA_BACKUP_UPLOAD_TIMEOUT_MS || 30 * 60 * 1000);
+  const transport = uploadUrl.protocol === 'http:' ? http : https;
+
+  return new Promise((resolve, reject) => {
+    const request = transport.request(uploadUrl, { method: 'PUT', headers }, (response) => {
+      let responseBody = '';
+      response.setEncoding('utf8');
+      response.on('data', (chunk) => {
+        if (responseBody.length < 16_384) responseBody += chunk;
+      });
+      response.on('end', () => {
+        resolve({
+          ok: response.statusCode >= 200 && response.statusCode < 300,
+          status: response.statusCode,
+          body: responseBody
+        });
+      });
+    });
+
+    request.setTimeout(timeoutMs, () => {
+      request.destroy(new Error(`Backup upload timed out after ${timeoutMs}ms`));
+    });
+    request.on('error', reject);
+
+    const source = fs.createReadStream(filePath);
+    source.on('error', (error) => request.destroy(error));
+    source.pipe(request);
+  });
+}
+
 async function uploadFile({ filePath, key, contentType }) {
   const endpoint = requiredUrl('S3_ENDPOINT');
   const region = process.env.S3_REGION || 'auto';
@@ -121,21 +154,20 @@ async function uploadFile({ filePath, key, contentType }) {
   const stringToSign = ['AWS4-HMAC-SHA256', amzDate, credentialScope, sha256Hex(canonicalRequest)].join('\n');
   const signature = crypto.createHmac('sha256', signingKey(secret, dateStamp, region)).update(stringToSign).digest('hex');
 
-  const response = await fetch(uploadUrl, {
-    method: 'PUT',
+  const response = await streamFileUpload({
+    uploadUrl: new URL(uploadUrl),
+    filePath,
     headers: {
       'Content-Length': String(stat.size),
       'Content-Type': contentType,
       'X-Amz-Content-Sha256': payloadHash,
       'X-Amz-Date': amzDate,
       Authorization: `AWS4-HMAC-SHA256 Credential=${accessKey}/${credentialScope}, SignedHeaders=${canonical.names}, Signature=${signature}`
-    },
-    body: fs.createReadStream(filePath),
-    duplex: 'half'
+    }
   });
 
   if (!response.ok) {
-    throw new Error(`Upload failed for ${key}: ${response.status} ${await response.text()}`);
+    throw new Error(`Upload failed for ${key}: ${response.status} ${response.body}`);
   }
 
   return { key, bytes: stat.size, sha256: payloadHash };
@@ -229,7 +261,14 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  console.error(error.message || error);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((error) => {
+    console.error(error.message || error);
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  streamFileUpload,
+  uploadFile
+};
