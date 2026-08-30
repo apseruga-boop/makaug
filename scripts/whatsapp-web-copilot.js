@@ -131,11 +131,11 @@ const PROFILE_DIR = path.resolve(
   process.cwd(),
   String(process.env.WHATSAPP_WEB_COPILOT_PROFILE_DIR || '.whatsapp-web-copilot-profile')
 );
-const configuredPollMs = Number(process.env.WHATSAPP_WEB_COPILOT_POLL_MS || 750);
+const configuredPollMs = Number(process.env.WHATSAPP_WEB_COPILOT_POLL_MS || 500);
 // WhatsApp DOM scans and API outbox claims are expensive. The previous 50ms
 // loop ran about 20 full scans per second and exhausted a 2 GB worker several
 // times per day. Sub-second polling is still responsive without busy-spinning.
-const POLL_MS = Math.min(5000, Math.max(400, Number.isFinite(configuredPollMs) ? configuredPollMs : 750));
+const POLL_MS = Math.min(5000, Math.max(400, Number.isFinite(configuredPollMs) ? configuredPollMs : 500));
 const configuredLoginPollMs = Number(process.env.WHATSAPP_WEB_COPILOT_LOGIN_POLL_MS || 2500);
 const LOGIN_POLL_MS = Math.min(
   10000,
@@ -168,10 +168,10 @@ const BROWSER_USER_AGENT = String(
 const MAX_CONSECUTIVE_LOOP_ERRORS = Math.max(2, Number(process.env.WHATSAPP_WEB_COPILOT_MAX_LOOP_ERRORS || 5));
 const configuredRecentSweepMs = Number(process.env.WHATSAPP_WEB_COPILOT_RECENT_SWEEP_MS || 3000);
 const RECENT_CHAT_SWEEP_MS = Math.min(30000, Math.max(1500, Number.isFinite(configuredRecentSweepMs) ? configuredRecentSweepMs : 3000));
-const configuredFastLaneSweepMs = Number(process.env.WHATSAPP_WEB_COPILOT_FAST_LANE_SWEEP_MS || 900);
-const FAST_LANE_SWEEP_MS = Math.min(5000, Math.max(600, Number.isFinite(configuredFastLaneSweepMs) ? configuredFastLaneSweepMs : 900));
-const configuredOutboxPollMs = Number(process.env.WHATSAPP_WEB_COPILOT_OUTBOX_POLL_MS || 1000);
-const OUTBOX_POLL_MS = Math.min(10000, Math.max(750, Number.isFinite(configuredOutboxPollMs) ? configuredOutboxPollMs : 1000));
+const configuredFastLaneSweepMs = Number(process.env.WHATSAPP_WEB_COPILOT_FAST_LANE_SWEEP_MS || 650);
+const FAST_LANE_SWEEP_MS = Math.min(5000, Math.max(500, Number.isFinite(configuredFastLaneSweepMs) ? configuredFastLaneSweepMs : 650));
+const configuredOutboxPollMs = Number(process.env.WHATSAPP_WEB_COPILOT_OUTBOX_POLL_MS || 750);
+const OUTBOX_POLL_MS = Math.min(10000, Math.max(500, Number.isFinite(configuredOutboxPollMs) ? configuredOutboxPollMs : 750));
 const RECENT_CHAT_SWEEP_LIMIT = Math.min(12, Math.max(1, Number(process.env.WHATSAPP_WEB_COPILOT_RECENT_SWEEP_LIMIT || 8)));
 const RECENT_CHAT_SWEEP_OPEN_LIMIT = Math.min(5, Math.max(1, Number(process.env.WHATSAPP_WEB_COPILOT_RECENT_SWEEP_OPEN_LIMIT || 5)));
 const RECENT_CHAT_FAST_LANE_LIMIT = Math.min(3, Math.max(1, Number(process.env.WHATSAPP_WEB_COPILOT_FAST_LANE_LIMIT || 3)));
@@ -183,14 +183,21 @@ const RECENT_CHAT_ROW_CACHE_MS = Math.min(
 const OUTBOX_CLAIM_LIMIT = Math.min(25, Math.max(1, Number(process.env.WHATSAPP_WEB_COPILOT_OUTBOX_CLAIM_LIMIT || 25)));
 const OUTBOX_SENDS_PER_LOOP = Math.min(8, Math.max(1, Number(process.env.WHATSAPP_WEB_COPILOT_OUTBOX_SENDS_PER_LOOP || 5)));
 const API_RETRY_ATTEMPTS = Math.min(8, Math.max(3, Number(process.env.WHATSAPP_WEB_COPILOT_API_RETRY_ATTEMPTS || 5)));
-const configuredSendConfirmMs = Number(process.env.WHATSAPP_WEB_COPILOT_SEND_CONFIRM_MS || 300);
-const SEND_CONFIRM_MS = Math.min(2000, Math.max(250, Number.isFinite(configuredSendConfirmMs) ? configuredSendConfirmMs : 550));
+const configuredSendConfirmMs = Number(process.env.WHATSAPP_WEB_COPILOT_SEND_CONFIRM_MS || 250);
+const SEND_CONFIRM_MS = Math.min(2000, Math.max(250, Number.isFinite(configuredSendConfirmMs) ? configuredSendConfirmMs : 250));
 const configuredComposerClearMs = Number(process.env.WHATSAPP_WEB_COPILOT_SEND_COMPOSER_CLEAR_MS || 80);
 const SEND_COMPOSER_CLEAR_MS = Math.min(1200, Math.max(80, Number.isFinite(configuredComposerClearMs) ? configuredComposerClearMs : 220));
 const configuredSendConfirmAfterClearMs = Number(process.env.WHATSAPP_WEB_COPILOT_SEND_CONFIRM_AFTER_CLEAR_MS || 3000);
 const SEND_CONFIRM_AFTER_CLEAR_MS = Math.min(
   5000,
   Math.max(250, Number.isFinite(configuredSendConfirmAfterClearMs) ? configuredSendConfirmAfterClearMs : 3000)
+);
+const configuredTrustedComposerClearGraceMs = Number(
+  process.env.WHATSAPP_WEB_COPILOT_TRUSTED_CLEAR_GRACE_MS || 125
+);
+const TRUSTED_COMPOSER_CLEAR_GRACE_MS = Math.min(
+  500,
+  Math.max(75, Number.isFinite(configuredTrustedComposerClearGraceMs) ? configuredTrustedComposerClearGraceMs : 125)
 );
 const configuredSendRetryConfirmMs = Number(process.env.WHATSAPP_WEB_COPILOT_SEND_RETRY_CONFIRM_MS || 350);
 const SEND_RETRY_CONFIRM_MS = Math.min(
@@ -273,6 +280,13 @@ const EMPLOYEE_BATCH_HISTORY_SCAN_LIMIT = 160;
 const EMPLOYEE_BATCH_HISTORY_MAX_ROUNDS = 30;
 const EMPLOYEE_BATCH_RECOVERY_RETRY_MS = 20_000;
 const EMPLOYEE_BATCH_RECOVERY_MAX_ATTEMPTS = 8;
+const configuredEmployeeBatchRecoveryIdleMs = Number(
+  process.env.WHATSAPP_WEB_COPILOT_EMPLOYEE_RECOVERY_IDLE_MS || 60_000
+);
+const EMPLOYEE_BATCH_RECOVERY_IDLE_MS = Math.min(
+  10 * 60_000,
+  Math.max(30_000, Number.isFinite(configuredEmployeeBatchRecoveryIdleMs) ? configuredEmployeeBatchRecoveryIdleMs : 60_000)
+);
 const EMPLOYEE_BATCH_RECOVERY_PHONES = String(
   process.env.WHATSAPP_WEB_COPILOT_EMPLOYEE_RECOVERY_PHONES || ''
 ).split(/[;,\s]+/).map((value) => normalizeChatKey(value)).filter(Boolean);
@@ -3628,10 +3642,14 @@ async function waitForPostSendConfirmation(page, text, beforeState, timeoutMs = 
   const composerCleared = await waitForReplyComposerCleared(page, SEND_COMPOSER_CLEAR_MS);
   if (!composerCleared) return false;
 
-  // Composer-cleared alone is not enough: WhatsApp Web can clear the input
-  // before the outgoing bubble appears. Wait briefly for the real outgoing
-  // message, then optionally accept the cleared composer as a fast confirmation.
-  if (await waitForOutgoingReplyConfirmation(page, text, beforeState, SEND_CONFIRM_AFTER_CLEAR_MS)) {
+  // The hosted headless worker explicitly trusts a cleared composer. Give the
+  // real outgoing bubble a short grace period, then release the single-threaded
+  // scan loop instead of holding every other customer behind a three-second UI
+  // animation. Interactive/local workers retain the strict confirmation wait.
+  const afterClearTimeout = TRUST_SEND_ON_COMPOSER_CLEAR
+    ? TRUSTED_COMPOSER_CLEAR_GRACE_MS
+    : SEND_CONFIRM_AFTER_CLEAR_MS;
+  if (await waitForOutgoingReplyConfirmation(page, text, beforeState, afterClearTimeout)) {
     return true;
   }
 
@@ -4198,6 +4216,7 @@ async function processOutbox(page, { recipient = '', maxSends = OUTBOX_SENDS_PER
 
   let sent = 0;
   for (const item of orderedItems) {
+    const browserSendStartedAt = Date.now();
     try {
       if (hasRecentlySentReply(item)) {
         log(`suppressed duplicate queued reply to ${item.recipient}`);
@@ -4234,7 +4253,10 @@ async function processOutbox(page, { recipient = '', maxSends = OUTBOX_SENDS_PER
         await typeAndSendReply(page, item.text);
       }
       rememberRecentlySentReply(item);
-      log(`sent queued reply to ${item.recipient}`);
+      const browserSendMs = Date.now() - browserSendStartedAt;
+      const queuedAtMs = Date.parse(String(item.created_at || ''));
+      const queueAgeMs = Number.isFinite(queuedAtMs) ? Math.max(0, Date.now() - queuedAtMs) : null;
+      log(`sent queued reply to ${item.recipient}; browser_send_ms=${browserSendMs}; queue_age_ms=${queueAgeMs ?? 'unknown'}`);
 
       await apiRequest(`/api/whatsapp/web-bridge/outbox/${encodeURIComponent(item.id)}/sent`, {
         method: 'POST',
@@ -4491,7 +4513,7 @@ async function main() {
   log('WhatsApp Web copilot started.');
   log(`Base URL: ${BASE_URL}`);
   log(`Client ID: ${CLIENT_ID}`);
-  log(`Poll interval: ${POLL_MS}ms; outbox poll: ${OUTBOX_POLL_MS}ms; fast lane sweep: ${FAST_LANE_SWEEP_MS}ms; recent chat sweep: ${RECENT_CHAT_SWEEP_MS}ms; max browser session: ${Math.round(MAX_SESSION_MS / 60000)}m; fast lane rows: ${RECENT_CHAT_FAST_LANE_LIMIT}; sweep open cap: ${RECENT_CHAT_SWEEP_OPEN_LIMIT}; row cache: ${RECENT_CHAT_ROW_CACHE_MS}ms; API retry attempts: ${API_RETRY_ATTEMPTS}`);
+  log(`Poll interval: ${POLL_MS}ms; outbox poll: ${OUTBOX_POLL_MS}ms; fast lane sweep: ${FAST_LANE_SWEEP_MS}ms; recent chat sweep: ${RECENT_CHAT_SWEEP_MS}ms; send confirm: ${SEND_CONFIRM_MS}ms; trusted clear grace: ${TRUSTED_COMPOSER_CLEAR_GRACE_MS}ms; max browser session: ${Math.round(MAX_SESSION_MS / 60000)}m; fast lane rows: ${RECENT_CHAT_FAST_LANE_LIMIT}; sweep open cap: ${RECENT_CHAT_SWEEP_OPEN_LIMIT}; row cache: ${RECENT_CHAT_ROW_CACHE_MS}ms; API retry attempts: ${API_RETRY_ATTEMPTS}`);
   if (connectedOverCdp) {
     log(`Connected over CDP: ${CDP_URL}`);
   } else {
@@ -4597,20 +4619,6 @@ async function main() {
         continue;
       }
 
-      if (
-        !configuredEmployeeRecoverySettled
-        && configuredEmployeeRecoveryAttempts < EMPLOYEE_BATCH_RECOVERY_MAX_ATTEMPTS
-        && now - lastConfiguredEmployeeRecoveryAttempt >= EMPLOYEE_BATCH_RECOVERY_RETRY_MS
-      ) {
-        configuredEmployeeRecoveryAttempts += 1;
-        lastConfiguredEmployeeRecoveryAttempt = now;
-        const recovery = await runConfiguredEmployeeBatchRecovery(page);
-        configuredEmployeeRecoverySettled = !!recovery.settled;
-        if (!configuredEmployeeRecoverySettled && configuredEmployeeRecoveryAttempts >= EMPLOYEE_BATCH_RECOVERY_MAX_ATTEMPTS) {
-          log(`configured Agent 007 recovery exhausted ${configuredEmployeeRecoveryAttempts} bounded attempts; the normal chat sweeps remain active`);
-        }
-      }
-
       let sentAtLoopStart = 0;
       if (now - lastOutboxPoll >= OUTBOX_POLL_MS) {
         sentAtLoopStart = await processOutbox(page, { maxSends: 4 });
@@ -4676,6 +4684,27 @@ async function main() {
         };
         if (widerRecentSweepResult.processed) {
           sentAfterSweep = await processOutbox(page, { maxSends: 2 });
+        }
+      }
+      const hadPriorityActivity = !!(
+        hadLiveActivity
+        || hadFastLaneActivity
+        || recentSweepResult.processed
+        || sentAfterSweep
+      );
+      if (
+        !hadPriorityActivity
+        && !configuredEmployeeRecoverySettled
+        && configuredEmployeeRecoveryAttempts < EMPLOYEE_BATCH_RECOVERY_MAX_ATTEMPTS
+        && now - sessionStartedAt >= EMPLOYEE_BATCH_RECOVERY_IDLE_MS
+        && now - lastConfiguredEmployeeRecoveryAttempt >= EMPLOYEE_BATCH_RECOVERY_RETRY_MS
+      ) {
+        configuredEmployeeRecoveryAttempts += 1;
+        lastConfiguredEmployeeRecoveryAttempt = now;
+        const recovery = await runConfiguredEmployeeBatchRecovery(page);
+        configuredEmployeeRecoverySettled = !!recovery.settled;
+        if (!configuredEmployeeRecoverySettled && configuredEmployeeRecoveryAttempts >= EMPLOYEE_BATCH_RECOVERY_MAX_ATTEMPTS) {
+          log(`configured Agent 007 recovery exhausted ${configuredEmployeeRecoveryAttempts} bounded attempts; the normal chat sweeps remain active`);
         }
       }
       const sentCount = sentAtLoopStart + sentAfterCall + sentAfterActive + sentAfterUnread + sentAfterSweep;

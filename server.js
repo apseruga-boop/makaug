@@ -218,6 +218,7 @@ app.get('/api/version', (_req, res) => {
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-agent-007-caption-reconciliation-20260829'] : []),
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-agent-007-residential-caption-20260829'] : []),
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-agent-007-post-complete-chat-resume-20260830'] : []),
+      ...(!IS_SOUTH_AFRICA ? ['whatsapp-subsecond-response-pipeline-20260830'] : []),
       ...(!IS_SOUTH_AFRICA ? ['francis-agent-premium-share-preview-v3-20260829'] : []),
       ...(!IS_SOUTH_AFRICA ? ['francis-agent-authentic-brand-preview-v4-20260829'] : []),
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-active-intake-call-shield-20260829'] : []),

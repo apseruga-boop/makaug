@@ -7973,7 +7973,7 @@ async function findAgentsForWhatsappKeywords(keywords = [], preferredAgentIds = 
   });
 }
 
-async function logPropertySearchRequest({
+function logPropertySearchRequest({
   userPhone,
   searchType = 'any',
   queryText = '',
@@ -7984,6 +7984,7 @@ async function logPropertySearchRequest({
   outsideUganda = false,
   fallbackReason = null
 }) {
+  deferWhatsappWork('WhatsApp property search analytics', async () => {
   const safeLocation = location && typeof location === 'object'
     ? {
         ...location,
@@ -8030,15 +8031,16 @@ async function logPropertySearchRequest({
       [requestId, JSON.stringify(compactResults)]
     );
   }
+  });
 }
 
-async function createNoMatchLead({
+function createNoMatchLead({
   userPhone,
   searchType = 'any',
   preferredArea = '',
   notes = ''
 }) {
-  await db.query(
+  deferWhatsappWork('WhatsApp no-match lead capture', () => db.query(
     `INSERT INTO property_leads (phone, preferred_area, purpose, category, notes, payload)
      VALUES ($1, $2, 'search', $3, $4, $5::jsonb)`,
     [
@@ -8052,7 +8054,7 @@ async function createNoMatchLead({
         preferred_area: preferredArea || null
       })
     ]
-  );
+  ));
 }
 
 function safePublicPreviewUrl(value) {
@@ -11476,7 +11478,7 @@ router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
   }
 
   if (req.body.client_id && !dryRun) {
-    await upsertWhatsappWebBridgeClient({
+    deferWhatsappWork('WhatsApp inbound bridge heartbeat', () => upsertWhatsappWebBridgeClient({
       clientId: req.body.client_id,
       operatorName: req.body.operator_name || null,
       status: req.body.status || 'online',
@@ -11486,11 +11488,13 @@ router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
       currentUrl: req.body.current_url || null,
       stats: req.body.stats || {},
       metadata: {
-        ...inboundMetadata,
+        source: normalizeInput(inboundMetadata.source || 'web_bridge_inbound'),
+        media_type: mediaType || null,
+        media_count: mediaCount,
         ...(contactName ? { contact_name: contactName } : {}),
         last_inbound_message_id: inboundMessageId
       }
-    });
+    }));
   }
 
   if (dryRun && inboundMetadata.force_idle_minutes) {

@@ -160,7 +160,7 @@ assert(copilotSource.includes('locateEmployeeBatchHistory'), 'COMPLETE must scan
 assert(copilotSource.includes('replayEmployeeBatchThroughCompletion'), 'the worker must replay every ordered batch message before COMPLETE');
 assert(copilotSource.includes('scrollWhatsappHistoryNewer'), 'history reconciliation must walk forward from the trigger without keeping every video in memory');
 assert(copilotSource.includes('WHATSAPP_WEB_COPILOT_EMPLOYEE_RECOVERY_PHONES'), 'hosted workers must support an explicit startup recovery target');
-assert(copilotSource.includes('runConfiguredEmployeeBatchRecovery'), 'the configured Agent 007 chat must be checked before general chat sweeps can starve it');
+assert(copilotSource.includes('runConfiguredEmployeeBatchRecovery'), 'the configured Agent 007 chat must still receive bounded idle-time recovery');
 assert(copilotSource.includes('const history = await locateEmployeeBatchHistory(page, { chatKey: phone })'), 'configured recovery must scan directly to the durable COMPLETE boundary');
 assert(copilotSource.includes(':ordered-replay:${replayRunKey}'), 'history recovery must use a fresh server message id for media acknowledged before batch accounting');
 assert(copilotSource.includes("!['image', 'media'].includes(String(snapshot.mediaType || '').toLowerCase())"), 'history recovery must not replay Agent 007 setup text and reset the restored batch');
