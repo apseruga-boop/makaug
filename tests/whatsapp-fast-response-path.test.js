@@ -50,6 +50,21 @@ async function run() {
     whatsappRouteSource.includes('fastHints?.intent || await classifyWhatsappIntent'),
     'WhatsApp runtime must use fast hints before falling back to slower intent classification'
   );
+  assert(
+    whatsappRouteSource.includes("deferWhatsappWork('WhatsApp property search analytics'")
+      && whatsappRouteSource.includes('function logPropertySearchRequest({'),
+    'property-search analytics writes must not block the customer reply'
+  );
+  assert(
+    whatsappRouteSource.includes("deferWhatsappWork('WhatsApp no-match lead capture'")
+      && whatsappRouteSource.includes("deferWhatsappWork('WhatsApp inbound bridge heartbeat'"),
+    'lead capture and per-message bridge telemetry must not block the customer reply'
+  );
+  assert(
+    whatsappRouteSource.includes("source: normalizeInput(inboundMetadata.source || 'web_bridge_inbound')")
+      && !whatsappRouteSource.includes("metadata: {\n        ...inboundMetadata,\n        ...(contactName ? { contact_name: contactName } : {}),\n        last_inbound_message_id: inboundMessageId"),
+    'bridge heartbeat metadata must not persist heavyweight inline media payloads'
+  );
 
   const intent = await classifyWhatsappIntent({
     text: listingMessage,
@@ -84,7 +99,7 @@ async function run() {
   );
   assert(
     whatsappWebCopilotSource.includes('POLL_MS = Math.min(5000, Math.max(400')
-      && whatsappWebCopilotSource.includes('WHATSAPP_WEB_COPILOT_POLL_MS || 750'),
+      && whatsappWebCopilotSource.includes('WHATSAPP_WEB_COPILOT_POLL_MS || 500'),
     'WhatsApp Web sender must stay responsive without a memory-exhausting 50ms busy loop'
   );
 
@@ -98,8 +113,14 @@ async function run() {
   );
   assert(
     whatsappWebCopilotSource.includes('RECENT_CHAT_SWEEP_MS = Math.min(30000, Math.max(1500')
-      && whatsappWebCopilotSource.includes('FAST_LANE_SWEEP_MS = Math.min(5000, Math.max(600'),
+      && whatsappWebCopilotSource.includes('FAST_LANE_SWEEP_MS = Math.min(5000, Math.max(500')
+      && whatsappWebCopilotSource.includes('WHATSAPP_WEB_COPILOT_FAST_LANE_SWEEP_MS || 650'),
     'WhatsApp Web sender must rate-limit wide scans while retaining a bounded fast lane'
+  );
+  assert(
+    whatsappWebCopilotSource.includes('WHATSAPP_WEB_COPILOT_OUTBOX_POLL_MS || 750')
+      && whatsappWebCopilotSource.includes('OUTBOX_POLL_MS = Math.min(10000, Math.max(500'),
+    'queued replies must be claimed on a sub-second cadence without a busy loop'
   );
   assert(
     whatsappWebCopilotSource.includes('WHATSAPP_WEB_COPILOT_FAST_LANE_LIMIT || 3')
@@ -138,7 +159,29 @@ async function run() {
   assert(
     whatsappWebCopilotSource.includes('WHATSAPP_WEB_COPILOT_SEND_CONFIRM_AFTER_CLEAR_MS || 3000')
       && whatsappWebCopilotSource.includes('Math.min(\n  5000,'),
-    'WhatsApp Web sender must allow enough time to observe a real outgoing bubble after the composer clears'
+    'interactive workers must retain the strict outgoing-bubble confirmation window'
+  );
+  assert(
+    whatsappWebCopilotSource.includes('WHATSAPP_WEB_COPILOT_TRUSTED_CLEAR_GRACE_MS || 125')
+      && whatsappWebCopilotSource.includes('? TRUSTED_COMPOSER_CLEAR_GRACE_MS')
+      && whatsappWebCopilotSource.includes(': SEND_CONFIRM_AFTER_CLEAR_MS'),
+    'the trusted hosted worker must release the scan loop without waiting three seconds for a UI animation'
+  );
+  assert(
+    whatsappWebCopilotSource.includes('browser_send_ms=${browserSendMs}')
+      && whatsappWebCopilotSource.includes("queue_age_ms=${queueAgeMs ?? 'unknown'}"),
+    'production logs must expose browser-send and queue-age timing for response SLO verification'
+  );
+  const priorityScanIndex = whatsappWebCopilotSource.indexOf('const activeProcessed = await ingestActiveChat(page)');
+  const configuredRecoveryIndex = whatsappWebCopilotSource.indexOf(
+    'const recovery = await runConfiguredEmployeeBatchRecovery(page)',
+    priorityScanIndex
+  );
+  assert(
+    priorityScanIndex >= 0
+      && configuredRecoveryIndex > priorityScanIndex
+      && whatsappWebCopilotSource.includes('now - sessionStartedAt >= EMPLOYEE_BATCH_RECOVERY_IDLE_MS'),
+    'legacy Agent 007 recovery must run only after live customer scans and an idle startup grace period'
   );
   assert(
     whatsappWebCopilotSource.includes("WHATSAPP_WEB_COPILOT_TRUST_SEND_ON_COMPOSER_CLEAR || 'false'"),
