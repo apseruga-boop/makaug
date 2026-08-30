@@ -133,10 +133,19 @@ async function run() {
     'WhatsApp Web sender must cap old-chat openings so stale sweeps cannot hold the loop for a minute'
   );
   assert(
-    whatsappWebCopilotSource.includes('WHATSAPP_WEB_COPILOT_RECENT_ROW_CACHE_MS || 1200')
+    whatsappWebCopilotSource.includes('WHATSAPP_WEB_COPILOT_RECENT_ROW_CACHE_MS || 300000')
       && whatsappWebCopilotSource.includes('function shouldSkipRecentChatRow(')
-      && whatsappWebCopilotSource.includes('function rememberRecentChatRow('),
-    'WhatsApp Web sender must cache unchanged recent rows so old chats cannot block fresh replies'
+      && whatsappWebCopilotSource.includes('function rememberRecentChatRow(')
+      && whatsappWebCopilotSource.includes('RECENT_CHAT_ROW_CACHE_FILE')
+      && whatsappWebCopilotSource.includes('loadRecentChatRowCache()'),
+    'WhatsApp Web sender must persist unchanged row fingerprints so old media-heavy chats cannot block fresh replies after restart'
+  );
+  assert(
+    whatsappWebCopilotSource.includes('WHATSAPP_WEB_COPILOT_MEMORY_RECYCLE_MB || 1800')
+      && whatsappWebCopilotSource.includes('function readContainerMemoryBytes()')
+      && whatsappWebCopilotSource.includes("phase: 'memory_pressure_recycle'")
+      && whatsappWebCopilotSource.includes('planned browser recycle at'),
+    'WhatsApp Web sender must recycle Chromium gracefully before the 2 GB worker is killed'
   );
   assert(
     whatsappWebCopilotSource.includes('if (now - lastOutboxPoll >= OUTBOX_POLL_MS)')
