@@ -149,6 +149,16 @@ const MAX_SESSION_MS = Math.min(
   24 * 60 * 60 * 1000,
   Math.max(30 * 60 * 1000, Number.isFinite(configuredMaxSessionMs) ? configuredMaxSessionMs : (4 * 60 * 60 * 1000))
 );
+const configuredMemoryRecycleMb = Number(process.env.WHATSAPP_WEB_COPILOT_MEMORY_RECYCLE_MB || 1800);
+const MEMORY_RECYCLE_BYTES = Math.min(
+  8 * 1024 * 1024 * 1024,
+  Math.max(512 * 1024 * 1024, (Number.isFinite(configuredMemoryRecycleMb) ? configuredMemoryRecycleMb : 1800) * 1024 * 1024)
+);
+const configuredMemoryCheckMs = Number(process.env.WHATSAPP_WEB_COPILOT_MEMORY_CHECK_MS || 15000);
+const MEMORY_CHECK_MS = Math.min(
+  60000,
+  Math.max(5000, Number.isFinite(configuredMemoryCheckMs) ? configuredMemoryCheckMs : 15000)
+);
 const HEADLESS_BROWSER = ['1', 'true', 'yes', 'on'].includes(
   String(process.env.WHATSAPP_WEB_COPILOT_HEADLESS || '').trim().toLowerCase()
 );
@@ -175,11 +185,12 @@ const OUTBOX_POLL_MS = Math.min(10000, Math.max(500, Number.isFinite(configuredO
 const RECENT_CHAT_SWEEP_LIMIT = Math.min(12, Math.max(1, Number(process.env.WHATSAPP_WEB_COPILOT_RECENT_SWEEP_LIMIT || 8)));
 const RECENT_CHAT_SWEEP_OPEN_LIMIT = Math.min(5, Math.max(1, Number(process.env.WHATSAPP_WEB_COPILOT_RECENT_SWEEP_OPEN_LIMIT || 5)));
 const RECENT_CHAT_FAST_LANE_LIMIT = Math.min(3, Math.max(1, Number(process.env.WHATSAPP_WEB_COPILOT_FAST_LANE_LIMIT || 3)));
-const configuredRecentRowCacheMs = Number(process.env.WHATSAPP_WEB_COPILOT_RECENT_ROW_CACHE_MS || 1200);
+const configuredRecentRowCacheMs = Number(process.env.WHATSAPP_WEB_COPILOT_RECENT_ROW_CACHE_MS || 300000);
 const RECENT_CHAT_ROW_CACHE_MS = Math.min(
-  15000,
-  Math.max(1000, Number.isFinite(configuredRecentRowCacheMs) ? configuredRecentRowCacheMs : 4000)
+  60 * 60 * 1000,
+  Math.max(5000, Number.isFinite(configuredRecentRowCacheMs) ? configuredRecentRowCacheMs : 300000)
 );
+const RECENT_CHAT_ROW_CACHE_FILE = path.join(PROFILE_DIR, '.makaug-recent-chat-rows.json');
 const OUTBOX_CLAIM_LIMIT = Math.min(25, Math.max(1, Number(process.env.WHATSAPP_WEB_COPILOT_OUTBOX_CLAIM_LIMIT || 25)));
 const OUTBOX_SENDS_PER_LOOP = Math.min(8, Math.max(1, Number(process.env.WHATSAPP_WEB_COPILOT_OUTBOX_SENDS_PER_LOOP || 5)));
 const API_RETRY_ATTEMPTS = Math.min(8, Math.max(3, Number(process.env.WHATSAPP_WEB_COPILOT_API_RETRY_ATTEMPTS || 5)));
@@ -296,6 +307,7 @@ const employeeBatchReplayProgress = new Map();
 const seenCallEventKeys = new Map();
 const recentlySentReplyKeys = new Map();
 const recentChatRowKeys = new Map();
+let recentChatRowCacheWriteTimer = null;
 let activeInboundRecipientHint = '';
 const COMPOSER_SELECTORS = [
   'footer [data-testid="conversation-compose-box-input"][contenteditable="true"]',
@@ -486,6 +498,63 @@ function recentChatRowKey(row = {}) {
   return `${chatKey}:${timestampLabel}:${unreadState}:${rowType}:${preview}`.slice(0, 500);
 }
 
+function readContainerMemoryBytes() {
+  const candidates = [
+    '/sys/fs/cgroup/memory.current',
+    '/sys/fs/cgroup/memory/memory.usage_in_bytes'
+  ];
+  for (const filePath of candidates) {
+    try {
+      const value = Number(String(fs.readFileSync(filePath, 'utf8') || '').trim());
+      if (Number.isFinite(value) && value > 0) return value;
+    } catch (_error) {
+      // Local macOS workers do not expose Linux cgroup memory files.
+    }
+  }
+  return null;
+}
+
+function persistRecentChatRowCache() {
+  recentChatRowCacheWriteTimer = null;
+  try {
+    fs.mkdirSync(path.dirname(RECENT_CHAT_ROW_CACHE_FILE), { recursive: true });
+    const now = Date.now();
+    pruneRecentChatRowKeys(now);
+    const payload = JSON.stringify({
+      saved_at: new Date(now).toISOString(),
+      rows: Array.from(recentChatRowKeys.entries()).slice(-300)
+    });
+    const temporaryPath = `${RECENT_CHAT_ROW_CACHE_FILE}.tmp`;
+    fs.writeFileSync(temporaryPath, payload, { mode: 0o600 });
+    fs.renameSync(temporaryPath, RECENT_CHAT_ROW_CACHE_FILE);
+  } catch (error) {
+    log(`recent chat row cache write failed: ${error.message || error}`);
+  }
+}
+
+function scheduleRecentChatRowCacheWrite() {
+  if (recentChatRowCacheWriteTimer) return;
+  recentChatRowCacheWriteTimer = setTimeout(persistRecentChatRowCache, 250);
+  recentChatRowCacheWriteTimer.unref?.();
+}
+
+function loadRecentChatRowCache() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(RECENT_CHAT_ROW_CACHE_FILE, 'utf8'));
+    const now = Date.now();
+    for (const entry of Array.isArray(parsed?.rows) ? parsed.rows : []) {
+      const [rowKey, seenAt] = Array.isArray(entry) ? entry : [];
+      const timestamp = Number(seenAt);
+      if (!rowKey || !Number.isFinite(timestamp) || now - timestamp >= RECENT_CHAT_ROW_CACHE_MS) continue;
+      recentChatRowKeys.set(String(rowKey).slice(0, 500), timestamp);
+    }
+    pruneRecentChatRowKeys(now);
+    if (recentChatRowKeys.size) log(`restored ${recentChatRowKeys.size} recent chat row fingerprints from the persistent profile`);
+  } catch (error) {
+    if (error?.code !== 'ENOENT') log(`recent chat row cache read failed: ${error.message || error}`);
+  }
+}
+
 function pruneRecentChatRowKeys(now = Date.now(), ttlMs = RECENT_CHAT_ROW_CACHE_MS) {
   for (const [rowKey, seenAt] of recentChatRowKeys.entries()) {
     if (now - seenAt > ttlMs) recentChatRowKeys.delete(rowKey);
@@ -509,6 +578,7 @@ function rememberRecentChatRow(rowKey) {
   if (!rowKey) return;
   recentChatRowKeys.set(rowKey, Date.now());
   pruneRecentChatRowKeys();
+  scheduleRecentChatRowCacheWrite();
 }
 
 function rememberCallEventKey(callEventKey, ttlMs = 10 * 60 * 1000) {
@@ -4483,6 +4553,7 @@ async function main() {
       throw new Error(`Chrome executable not found. Checked configured path and common Linux Chromium paths; configured path was ${CHROME_PATH}`);
     }
     fs.mkdirSync(PROFILE_DIR, { recursive: true });
+    loadRecentChatRowCache();
     context = await launchPersistentContextWithProfileRetry(executablePath, {
       headless: HEADLESS_BROWSER,
       executablePath,
@@ -4513,7 +4584,7 @@ async function main() {
   log('WhatsApp Web copilot started.');
   log(`Base URL: ${BASE_URL}`);
   log(`Client ID: ${CLIENT_ID}`);
-  log(`Poll interval: ${POLL_MS}ms; outbox poll: ${OUTBOX_POLL_MS}ms; fast lane sweep: ${FAST_LANE_SWEEP_MS}ms; recent chat sweep: ${RECENT_CHAT_SWEEP_MS}ms; send confirm: ${SEND_CONFIRM_MS}ms; trusted clear grace: ${TRUSTED_COMPOSER_CLEAR_GRACE_MS}ms; max browser session: ${Math.round(MAX_SESSION_MS / 60000)}m; fast lane rows: ${RECENT_CHAT_FAST_LANE_LIMIT}; sweep open cap: ${RECENT_CHAT_SWEEP_OPEN_LIMIT}; row cache: ${RECENT_CHAT_ROW_CACHE_MS}ms; API retry attempts: ${API_RETRY_ATTEMPTS}`);
+  log(`Poll interval: ${POLL_MS}ms; outbox poll: ${OUTBOX_POLL_MS}ms; fast lane sweep: ${FAST_LANE_SWEEP_MS}ms; recent chat sweep: ${RECENT_CHAT_SWEEP_MS}ms; send confirm: ${SEND_CONFIRM_MS}ms; trusted clear grace: ${TRUSTED_COMPOSER_CLEAR_GRACE_MS}ms; max browser session: ${Math.round(MAX_SESSION_MS / 60000)}m; memory recycle: ${Math.round(MEMORY_RECYCLE_BYTES / (1024 * 1024))}MB; fast lane rows: ${RECENT_CHAT_FAST_LANE_LIMIT}; sweep open cap: ${RECENT_CHAT_SWEEP_OPEN_LIMIT}; row cache: ${RECENT_CHAT_ROW_CACHE_MS}ms; API retry attempts: ${API_RETRY_ATTEMPTS}`);
   if (connectedOverCdp) {
     log(`Connected over CDP: ${CDP_URL}`);
   } else {
@@ -4525,6 +4596,7 @@ async function main() {
   let lastBridgeState = '';
   let lastRecentSweep = 0;
   let lastFastLaneSweep = 0;
+  let lastMemoryCheck = 0;
   let lastOutboxPoll = 0;
   let lastTabReselect = 0;
   let consecutiveLoopErrors = 0;
@@ -4549,6 +4621,26 @@ async function main() {
         });
         if (!connectedOverCdp && context) await context.close().catch(() => null);
         process.exit(0);
+      }
+      if (now - lastMemoryCheck >= MEMORY_CHECK_MS) {
+        lastMemoryCheck = now;
+        const memoryBytes = readContainerMemoryBytes();
+        if (Number.isFinite(memoryBytes) && memoryBytes >= MEMORY_RECYCLE_BYTES) {
+          const memoryMb = Math.round(memoryBytes / (1024 * 1024));
+          log(`planned browser recycle at ${memoryMb}MB to prevent a Chromium out-of-memory stall.`);
+          persistRecentChatRowCache();
+          await sendHeartbeat({
+            status: 'restarting',
+            current_url: page.url(),
+            metadata: {
+              phase: 'memory_pressure_recycle',
+              memory_mb: memoryMb,
+              memory_recycle_mb: Math.round(MEMORY_RECYCLE_BYTES / (1024 * 1024))
+            }
+          });
+          if (!connectedOverCdp && context) await context.close().catch(() => null);
+          process.exit(0);
+        }
       }
       const bridgeState = readyState.ready
         ? 'online'
