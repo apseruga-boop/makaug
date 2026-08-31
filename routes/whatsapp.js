@@ -54,6 +54,7 @@ const {
   upsertWhatsappWebBridgeClient
 } = require('../services/whatsappWebBridgeService');
 const { isOwnWhatsappMessage } = require('../services/whatsappWebDirectionService');
+const { isWhatsappMissedCallCard } = require('../services/whatsappCallCardDetectionService');
 const {
   evaluateHostedWhatsappBridgeReadiness,
   summarizeWhatsappBridgeClient
@@ -113,6 +114,7 @@ const WHATSAPP_OWNER_FORWARD_REVIEW_MARKER = 'whatsapp-owner-forward-review-medi
 const WHATSAPP_OWNER_HISTORY_BACKFILL_MARKER = 'whatsapp-owner-history-backfill-20260820';
 const WHATSAPP_EMPLOYEE_AGENT_007_MARKER = 'whatsapp-employee-agent-007-review-intake-20260829';
 const WHATSAPP_AGENT_007_ORDERED_BATCH_MARKER = 'whatsapp-agent-007-ordered-batch-finalization-20260829';
+const WHATSAPP_CALL_EVENT_TRUST_MARKER = 'whatsapp-call-card-trust-gate-20260831';
 const WHATSAPP_API_VERSION = (process.env.WHATSAPP_API_VERSION || 'v25.0').trim();
 const WHATSAPP_ACCESS_TOKEN = (process.env.WHATSAPP_ACCESS_TOKEN || '').trim();
 const WHATSAPP_PHONE_NUMBER_ID = (process.env.WHATSAPP_PHONE_NUMBER_ID || '').trim();
@@ -6695,8 +6697,97 @@ async function clearSessionData(phone) {
   );
 }
 
-function getLeadNotificationEmail() {
-  return process.env.LEAD_NOTIFICATION_EMAIL || getSupportEmail() || 'info@makaug.com';
+function getWhatsappCallNotificationEmails() {
+  const configured = String(process.env.WHATSAPP_CALL_NOTIFICATION_EMAILS || '');
+  return Array.from(new Set([
+    'arthur@makaug.com',
+    'ronald@makaug.com',
+    ...configured.split(/[;,\s]+/)
+  ]
+    .map((value) => String(value || '').trim().toLowerCase())
+    .filter((value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value))));
+}
+
+function safeCallContextValue(value, maxLength = 260) {
+  if (value == null || typeof value === 'object') return '';
+  return String(value).replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, maxLength);
+}
+
+function inferWhatsappCallInquiry(session = {}, recentMessages = []) {
+  const step = normalizeInput(session.current_step).toLowerCase();
+  const intent = normalizeInput(session.current_intent).toLowerCase();
+  const draft = session.listing_draft && typeof session.listing_draft === 'object'
+    ? session.listing_draft
+    : {};
+  if (isEmployeeIntakeStep(step) || session.session_data?.whatsapp_employee_intake === true) {
+    return 'Employee property or agent intake in progress';
+  }
+  if (Object.keys(draft).length || /(?:listing|seller|owner|property_(?:details|photos|location|price))/.test(`${intent} ${step}`)) {
+    return 'Property listing or property-upload support';
+  }
+  if (/(?:student|hostel)/.test(`${intent} ${step}`)) return 'Student accommodation search';
+  if (/(?:search|buyer|rental|rent|buy|location|budget|results)/.test(`${intent} ${step}`)) return 'Property search or viewing enquiry';
+  if (/(?:agent|broker)/.test(`${intent} ${step}`)) return 'Property agent or broker enquiry';
+  if (/(?:advert|campaign)/.test(`${intent} ${step}`)) return 'Advertising enquiry';
+  if (/(?:report|fraud|support|human)/.test(`${intent} ${step}`)) return 'Customer support or listing report';
+  const latest = recentMessages[0]?.text || '';
+  return latest ? `Likely related to the recent WhatsApp message: ${latest.slice(0, 180)}` : 'No written enquiry is available yet';
+}
+
+async function getWhatsappCallInquiryContext(phone, session = {}) {
+  let recentMessages = [];
+  try {
+    const result = await db.query(
+      `SELECT direction, message_type, payload, created_at
+       FROM whatsapp_messages
+       WHERE user_phone = $1
+         AND direction = 'inbound'
+         AND message_type <> 'call'
+       ORDER BY created_at DESC
+       LIMIT 8`,
+      [phone]
+    );
+    recentMessages = (result.rows || []).map((row) => {
+      const payload = row.payload && typeof row.payload === 'object' ? row.payload : {};
+      const text = safeCallContextValue(
+        payload.body || payload.text || payload.transcript || payload.caption || '',
+        300
+      );
+      return {
+        direction: row.direction || 'inbound',
+        messageType: row.message_type || 'text',
+        text: text || `[${row.message_type || 'message'}]`,
+        createdAt: row.created_at || null
+      };
+    }).filter((item) => item.text);
+  } catch (error) {
+    if (!['42P01', '42703'].includes(error.code)) {
+      logger.warn('WhatsApp call context lookup failed', { phone, error: error.message });
+    }
+  }
+
+  const draft = session.listing_draft && typeof session.listing_draft === 'object'
+    ? session.listing_draft
+    : {};
+  const draftFields = [
+    ['title', draft.title],
+    ['listing type', draft.listing_type || draft.listingType || draft.type],
+    ['location', draft.location || draft.area],
+    ['district', draft.district],
+    ['price', draft.price || draft.budget],
+    ['bedrooms', draft.bedrooms]
+  ].map(([label, value]) => {
+    const clean = safeCallContextValue(value, 120);
+    return clean ? `${label}: ${clean}` : '';
+  }).filter(Boolean);
+
+  return {
+    likelyInquiry: inferWhatsappCallInquiry(session, recentMessages),
+    currentStep: safeCallContextValue(session.current_step, 100) || 'not available',
+    currentIntent: safeCallContextValue(session.current_intent, 100) || 'not available',
+    listingDraftSummary: draftFields.join('; ') || 'none',
+    recentMessages
+  };
 }
 
 function missedCallIntroMessage(lang = 'en') {
@@ -6954,12 +7045,21 @@ async function notifyMissedCallLead({
   stage = 'received',
   provider = 'whatsapp',
   callId = null,
-  language = 'en'
+  language = 'en',
+  callType = 'voice',
+  callStatus = 'received',
+  inquiryContext = {},
+  eventTime = new Date().toISOString()
 } = {}) {
-  const recipientEmail = getLeadNotificationEmail();
+  const recipientEmails = getWhatsappCallNotificationEmails();
   const subject = stage === 'escalated'
     ? '[makaug] WhatsApp caller needs a human callback'
-    : '[makaug] WhatsApp missed-call lead received';
+    : `[makaug] WhatsApp ${callType || 'voice'} call callback request`;
+  const recentConversation = Array.isArray(inquiryContext.recentMessages)
+    ? inquiryContext.recentMessages.slice(0, 5).map((item, index) => (
+      `${index + 1}. ${item.createdAt ? new Date(item.createdAt).toISOString() : 'time unavailable'} — ${item.text}`
+    ))
+    : [];
   const text = [
     stage === 'escalated'
       ? 'A WhatsApp missed-call conversation was not resolved by the assistant and needs a human callback.'
@@ -6971,39 +7071,56 @@ async function notifyMissedCallLead({
     `Language: ${languageDisplayName(language || 'en')}`,
     `Provider: ${provider || 'whatsapp'}`,
     `Call ID: ${callId || '-'}`,
+    `Call type: ${callType || 'voice'}`,
+    `Call status: ${callStatus || 'received'}`,
+    `Call received: ${eventTime}`,
     `Stage: ${stage}`,
     '',
-    `Need: ${needText || lead?.message || 'Awaiting written request'}`,
+    `Likely inquiry: ${needText || inquiryContext.likelyInquiry || lead?.message || 'No written enquiry is available yet'}`,
+    `Current chatbot intent: ${inquiryContext.currentIntent || 'not available'}`,
+    `Current chatbot step: ${inquiryContext.currentStep || 'not available'}`,
+    `Listing draft summary: ${inquiryContext.listingDraftSummary || 'none'}`,
+    '',
+    'Recent inbound WhatsApp context:',
+    ...(recentConversation.length ? recentConversation : ['No recent written messages were found.']),
     '',
     `Open Lead Centre: ${HOME_URL}/admin/leads`,
     `Open WhatsApp Inbox: ${HOME_URL}/admin/whatsapp-inbox`
   ].join('\n');
 
-  const delivery = await sendSupportEmail({
-    to: recipientEmail,
-    subject,
-    text
-  });
+  const deliveries = await Promise.all(recipientEmails.map(async (recipientEmail) => {
+    const delivery = await sendSupportEmail({
+      to: recipientEmail,
+      subject,
+      text
+    });
+    await logNotification(db, {
+      recipientEmail,
+      channel: 'email',
+      type: stage === 'escalated' ? 'whatsapp_missed_call_escalated' : 'whatsapp_call_callback_request',
+      status: notificationStatusFromDelivery(delivery),
+      relatedLeadId: lead?.id || null,
+      failureReason: delivery?.error || delivery?.reason || null,
+      sentAt: delivery?.sent ? new Date().toISOString() : null,
+      payloadSummary: {
+        phone,
+        stage,
+        language,
+        provider,
+        call_id: callId || null,
+        call_type: callType || 'voice',
+        call_status: callStatus || 'received',
+        lead_id: lead?.id || null,
+        likely_inquiry: inquiryContext.likelyInquiry || null
+      }
+    });
+    return { recipientEmail, ...delivery };
+  }));
 
-  await logNotification(db, {
-    recipientEmail,
-    channel: 'email',
-    type: stage === 'escalated' ? 'whatsapp_missed_call_escalated' : 'whatsapp_missed_call_lead',
-    status: notificationStatusFromDelivery(delivery),
-    relatedLeadId: lead?.id || null,
-    failureReason: delivery?.error || delivery?.reason || null,
-    sentAt: delivery?.sent ? new Date().toISOString() : null,
-    payloadSummary: {
-      phone,
-      stage,
-      language,
-      provider,
-      call_id: callId || null,
-      lead_id: lead?.id || null
-    }
-  });
-
-  return delivery;
+  return {
+    sent: deliveries.some((delivery) => delivery.sent === true),
+    deliveries
+  };
 }
 
 function notifyMissedCallLeadInBackground(input = {}) {
@@ -7107,6 +7224,17 @@ async function handleWhatsappCallEvent({
   }
 
   const session = await getSession(cleanPhone);
+  const metadataLanguage = normalizeInput(
+    metadata.language
+    || metadata.detected_language
+    || metadata.preferred_language
+    || metadata.preferredLanguage
+  ).toLowerCase();
+  const activeLang = resolveLangCode(
+    metadataLanguage && metadataLanguage !== 'auto'
+      ? metadataLanguage
+      : (session.language || 'en')
+  );
   const activeEmployeeStep = isEmployeeIntakeStep(session.current_step)
     ? String(session.current_step)
     : recoverInterruptedEmployeeIntakeStep(session);
@@ -7138,6 +7266,29 @@ async function handleWhatsappCallEvent({
       current_step: activeEmployeeStep,
       duplicate
     });
+    if (!duplicate) {
+      const inquiryContext = await getWhatsappCallInquiryContext(cleanPhone, {
+        ...session,
+        current_step: activeEmployeeStep
+      });
+      await notifyMissedCallLead({
+        lead: null,
+        phone: cleanPhone,
+        contactName,
+        stage: 'received',
+        provider,
+        callId,
+        language: activeLang,
+        callType,
+        callStatus: status,
+        inquiryContext
+      }).catch((error) => {
+        logger.warn('Employee WhatsApp call notification failed', {
+          phone: cleanPhone,
+          error: error.message || String(error)
+        });
+      });
+    }
     return {
       duplicate,
       message: '',
@@ -7146,17 +7297,8 @@ async function handleWhatsappCallEvent({
       suppressedActiveEmployeeIntake: true
     };
   }
-  const metadataLanguage = normalizeInput(
-    metadata.language
-    || metadata.detected_language
-    || metadata.preferred_language
-    || metadata.preferredLanguage
-  ).toLowerCase();
-  const activeLang = resolveLangCode(
-    metadataLanguage && metadataLanguage !== 'auto'
-      ? metadataLanguage
-      : (session.language || 'en')
-  );
+  const preservedStep = normalizeInput(session.current_step) || 'main_menu';
+  const preservedIntent = normalizeInput(session.current_intent) || null;
   const firstLog = await logWhatsappCallEvent({
     phone: cleanPhone,
     provider,
@@ -7171,11 +7313,12 @@ async function handleWhatsappCallEvent({
     return {
       duplicate: true,
       message: '',
-      nextStep: 'missed_call_need',
+      nextStep: preservedStep,
       lead: null
     };
   }
 
+  const inquiryContext = await getWhatsappCallInquiryContext(cleanPhone, session);
   const lead = await createMissedCallLead({
     phone: cleanPhone,
     contactName,
@@ -7184,22 +7327,15 @@ async function handleWhatsappCallEvent({
     callType,
     status,
     language: activeLang,
-    metadata
-  });
-  await patchSessionData(cleanPhone, {
-    missed_call_flow: {
-      status: 'awaiting_need',
-      lead_id: lead?.id || null,
-      phone: cleanPhone,
-      contact_name: contactName || null,
-      provider,
-      call_id: callId || null,
-      call_type: callType || 'voice',
-      language: activeLang,
-      started_at: new Date().toISOString()
+    metadata: {
+      ...metadata,
+      customer_reply_suppressed: true,
+      callback_notification_recipients: getWhatsappCallNotificationEmails(),
+      likely_inquiry: inquiryContext.likelyInquiry,
+      conversation_step_preserved: preservedStep,
+      conversation_intent_preserved: preservedIntent
     }
   });
-  await updateSession(cleanPhone, { language: activeLang, current_step: 'missed_call_need', current_intent: 'support' });
   await logWhatsappMessage({
     userPhone: cleanPhone,
     waMessageId: callId ? `call:${provider}:${callId}` : null,
@@ -7211,19 +7347,22 @@ async function handleWhatsappCallEvent({
       status,
       call_type: callType,
       contact_name: contactName || null,
+      likely_inquiry: inquiryContext.likelyInquiry,
+      customer_reply_suppressed: true,
       metadata
     }
   });
   await syncWhatsappConversationState({
     phone: cleanPhone,
     direction: 'inbound',
-    intent: 'support',
+    intent: preservedIntent || 'support',
     preferredLanguage: activeLang,
-    currentStep: 'missed_call_need',
+    currentStep: preservedStep,
     provider,
     messageType: 'call',
     metadata: {
-      missed_call_flow: true,
+      callback_required: true,
+      customer_reply_suppressed: true,
       call_id: callId || null,
       call_status: status || 'received',
       lead_id: lead?.id || null,
@@ -7231,31 +7370,45 @@ async function handleWhatsappCallEvent({
     }
   });
   await safeConversationControl(cleanPhone, {
-    status: 'awaiting_customer',
-    category: 'support',
-    priority: 'high',
+    status: 'needs_human',
+    category: preservedIntent || 'support',
+    priority: 'urgent',
+    ai_mode: 'copilot',
+    last_summary: inquiryContext.likelyInquiry,
     metadata: {
-      missed_call_flow: true,
+      callback_required: true,
+      customer_reply_suppressed: true,
       call_id: callId || null,
       lead_id: lead?.id || null,
-      language: activeLang
+      language: activeLang,
+      preserved_step: preservedStep,
+      preserved_intent: preservedIntent,
+      likely_inquiry: inquiryContext.likelyInquiry
     }
-  }, 'whatsapp_missed_call');
+  }, 'whatsapp_call_callback_request');
 
-  notifyMissedCallLeadInBackground({
+  await notifyMissedCallLead({
     lead,
     phone: cleanPhone,
     contactName,
     stage: 'received',
     provider,
     callId,
-    language: activeLang
+    language: activeLang,
+    callType,
+    callStatus: status,
+    inquiryContext
+  }).catch((error) => {
+    logger.warn('WhatsApp call callback notification failed', {
+      phone: cleanPhone,
+      error: error.message || String(error)
+    });
   });
 
   return {
     duplicate: false,
-    message: missedCallIntroMessage(activeLang),
-    nextStep: 'missed_call_need',
+    message: '',
+    nextStep: preservedStep,
     lead
   };
 }
@@ -11280,6 +11433,35 @@ router.post('/web-bridge/call', asyncRoute(async (req, res) => {
   }
 
   const inboundMetadata = req.body.metadata && typeof req.body.metadata === 'object' ? req.body.metadata : {};
+  const callDetectorRelease = normalizeInput(inboundMetadata.call_detector_release);
+  const detectionKind = normalizeInput(inboundMetadata.detection_kind);
+  const trustedLiveCallOverlay = detectionKind === 'live_call_overlay'
+    && inboundMetadata.source === 'whatsapp_web_call_detector';
+  const trustedCallLogCard = detectionKind === 'call_log_card'
+    && inboundMetadata.detected_from === 'whatsapp_call_log_card'
+    && isWhatsappMissedCallCard({
+      text: inboundMetadata.raw_text || '',
+      semanticMarkers: [inboundMetadata.call_marker || ''],
+      hasAuthoredMessage: false,
+      direction: 'in'
+    });
+  if (callDetectorRelease !== WHATSAPP_CALL_EVENT_TRUST_MARKER || (!trustedLiveCallOverlay && !trustedCallLogCard)) {
+    logger.warn('Ignored untrusted WhatsApp Web call detection', {
+      phone_suffix: employeeIntakePhoneSuffix(phone),
+      detection_kind: detectionKind || null,
+      detector_release: callDetectorRelease || null
+    });
+    return res.json({
+      ok: true,
+      duplicate: false,
+      data: {
+        ignored: true,
+        ignore_reason: 'untrusted_call_detection',
+        message: '',
+        queued_reply: false
+      }
+    });
+  }
   const contactName = cleanDisplayName(req.body.contact_name || req.body.contactName || inboundMetadata.contact_name || inboundMetadata.contactName || inboundMetadata.chat_title);
   const callId = normalizeInput(req.body.call_id || req.body.callId || req.body.event_id || req.body.eventId) || `web-call:${crypto.createHash('sha1').update(JSON.stringify({
     phone,
@@ -11543,14 +11725,13 @@ router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
     });
   }
 
-  const isBridgeCallLog = (
-    mediaType === 'call'
-    || mediaType === 'call_log'
-    || (
-      /\b(?:voice|video)\s+call\b/i.test(body)
-      && /\b(?:no answer|missed|unanswered|declined|rejected|not answered)\b/i.test(body)
-    )
-  );
+  const isBridgeCallLog = ['call', 'call_log'].includes(mediaType)
+    && isWhatsappMissedCallCard({
+      text: body,
+      semanticMarkers: [runtimeMetadata.call_marker || ''],
+      hasAuthoredMessage: false,
+      direction: 'in'
+    });
   if (isBridgeCallLog) {
     const callType = mediaType.includes('video') || /\bvideo\s+call\b/i.test(body) ? 'video' : 'voice';
     const { message, nextStep, duplicate, lead } = await processWhatsappCallEvent({
@@ -11901,6 +12082,8 @@ module.exports.__test = {
   employeeMediaCandidates,
   employeePropertyFacts,
   employeePropertyMissing,
+  getWhatsappCallNotificationEmails,
+  inferWhatsappCallInquiry,
   handleWhatsappCallEvent,
   handleEmployeeWhatsappIntake,
   prepareEmployeeOrderedBatchReplay

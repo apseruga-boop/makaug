@@ -108,6 +108,7 @@ function resolvePlaywrightCoreModule() {
 const { chromium } = requireWithReadRetry(resolvePlaywrightCoreModule());
 const { isIgnoredWhatsappSystemChat } = requireWithReadRetry('../services/whatsappWebChatFilter');
 const { isOwnWhatsappMessage } = requireWithReadRetry('../services/whatsappWebDirectionService');
+const { whatsappCallCardBrowserConfig } = requireWithReadRetry('../services/whatsappCallCardDetectionService');
 
 if (typeof dns.setDefaultResultOrder === 'function') {
   dns.setDefaultResultOrder('ipv4first');
@@ -285,7 +286,8 @@ const LISTING_IMAGE_PREVIEW_QUALITY = 0.78;
 const LISTING_IMAGE_PREVIEW_MAX_BYTES = 1_500_000;
 const EMPLOYEE_VIDEO_PREVIEW_MAX_BYTES = 25_000_000;
 const OUTBOUND_PROPERTY_IMAGE_MAX_BYTES = 15_000_000;
-const WHATSAPP_EMPLOYEE_AGENT_007_WORKER_MARKER = 'whatsapp-agent-007-media-only-reconciliation-20260829';
+const WHATSAPP_EMPLOYEE_AGENT_007_WORKER_MARKER = 'whatsapp-call-card-trust-gate-20260831';
+const WHATSAPP_CALL_CARD_BROWSER_CONFIG = Object.freeze(whatsappCallCardBrowserConfig());
 const RECENT_INBOUND_BACKLOG_LIMIT = 60;
 const EMPLOYEE_BATCH_HISTORY_SCAN_LIMIT = 160;
 const EMPLOYEE_BATCH_HISTORY_MAX_ROUNDS = 30;
@@ -1273,10 +1275,7 @@ async function scanChatRows(page, { unreadOnly = true, limit = 20 } = {}) {
     const normalize = (value) => String(value || '').replace(/\s+/g, ' ').trim();
     const hasCallLogText = (value = '') => {
       const combined = String(value || '').replace(/\s+/g, ' ').trim();
-      return (
-        /\b(?:voice|video)\s+call\b/i.test(combined)
-        && /\b(?:no answer|missed|unanswered|declined|rejected|not answered|call back)\b/i.test(combined)
-      ) || /\bmissed\s+(?:voice|video)\s+call\b/i.test(combined);
+      return new RegExp(options.callDetection.textPatternSource, 'i').test(combined);
     };
     const selectorGroups = [
       '#pane-side [data-testid="cell-frame-container"]',
@@ -1320,7 +1319,9 @@ async function scanChatRows(page, { unreadOnly = true, limit = 20 } = {}) {
         .slice(0, 4)
         .join(' ')
         .trim();
-      const callLog = hasCallLogText(`${preview} ${ariaLabel}`);
+      // The row aria-label can contain WhatsApp's fixed "Voice call" action.
+      // Only the actual preview is trusted as call-card text.
+      const callLog = hasCallLogText(preview);
       return {
         index,
         selector: rowSelector,
@@ -1331,7 +1332,7 @@ async function scanChatRows(page, { unreadOnly = true, limit = 20 } = {}) {
         callLog
       };
     }).filter((row) => row.title && (!unreadOnlyRows || row.unread)).slice(0, maxRows);
-  }, { unreadOnly, limit });
+  }, { unreadOnly, limit, callDetection: WHATSAPP_CALL_CARD_BROWSER_CONFIG });
 }
 
 async function scanUnreadChats(page) {
@@ -1455,7 +1456,7 @@ function unreadPreviewSnapshot(row = {}, source = 'unread_preview_fallback') {
 }
 
 async function getActiveChatSnapshot(page) {
-  return page.evaluate(() => {
+  return page.evaluate((callDetection) => {
     const header = document.querySelector('header');
     const headerTitle = header?.querySelector('span[title]')?.getAttribute('title')
       || Array.from(header?.querySelectorAll('[dir="auto"]') || []).map((el) => (el.textContent || '').trim()).find(Boolean)
@@ -1560,19 +1561,28 @@ async function getActiveChatSnapshot(page) {
     };
     const hasCallLog = (root, text = '') => {
       if (!root) return false;
-      const labels = Array.from(root.querySelectorAll('[aria-label], [data-icon], [data-testid], [title]'))
-        .map((el) => [
+      const authoredMessage = root.matches?.('div.copyable-text[data-pre-plain-text]')
+        || !!root.querySelector?.('div.copyable-text[data-pre-plain-text]');
+      if (authoredMessage || root.closest?.('.message-out')) return false;
+      const dataId = root.closest?.('[data-id]')?.getAttribute('data-id') || root.getAttribute?.('data-id') || '';
+      if (/^true_/.test(dataId)) return false;
+      const markers = [
+        root.getAttribute?.('aria-label'),
+        root.getAttribute?.('data-icon'),
+        root.getAttribute?.('data-testid'),
+        root.getAttribute?.('title'),
+        ...Array.from(root.querySelectorAll('[aria-label], [data-icon], [data-testid], [title]'))
+        .flatMap((el) => [
           el.getAttribute('aria-label'),
           el.getAttribute('data-icon'),
           el.getAttribute('data-testid'),
           el.getAttribute('title')
-        ].filter(Boolean).join(' '))
-        .join(' ');
-      const combined = `${text || ''} ${labels}`.replace(/\s+/g, ' ').trim();
-      return (
-        /\b(?:voice|video)\s+call\b/i.test(combined)
-        && /\b(?:no answer|missed|unanswered|declined|rejected|not answered|call back)\b/i.test(combined)
-      ) || /\bmissed\s+(?:voice|video)\s+call\b/i.test(combined);
+        ].filter(Boolean))
+      ].filter(Boolean);
+      const callText = String(text || '').replace(/\s+/g, ' ').trim();
+      const textMatch = new RegExp(callDetection.textPatternSource, 'i').test(callText);
+      const markerPattern = new RegExp(callDetection.markerPatternSource, 'i');
+      return textMatch || markers.some((marker) => markerPattern.test(String(marker || '').trim()));
     };
     const callLogContainerFor = (node) => {
       let current = node;
@@ -1736,11 +1746,13 @@ async function getActiveChatSnapshot(page) {
       mediaCount,
       mediaFingerprint
     };
-  });
+  }, WHATSAPP_CALL_CARD_BROWSER_CONFIG);
 }
 
 async function getRecentIncomingSnapshots(page, limit = 20) {
-  return page.evaluate((maxItems) => {
+  return page.evaluate((options) => {
+    const maxItems = options.maxItems;
+    const callDetection = options.callDetection;
     const header = document.querySelector('header');
     const headerTitle = header?.querySelector('span[title]')?.getAttribute('title')
       || Array.from(header?.querySelectorAll('[dir="auto"]') || []).map((el) => (el.textContent || '').trim()).find(Boolean)
@@ -1844,19 +1856,28 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
     };
     const hasCallLog = (root, text = '') => {
       if (!root) return false;
-      const labels = Array.from(root.querySelectorAll('[aria-label], [data-icon], [data-testid], [title]'))
-        .map((el) => [
+      const authoredMessage = root.matches?.('div.copyable-text[data-pre-plain-text]')
+        || !!root.querySelector?.('div.copyable-text[data-pre-plain-text]');
+      if (authoredMessage || root.closest?.('.message-out')) return false;
+      const dataId = root.closest?.('[data-id]')?.getAttribute('data-id') || root.getAttribute?.('data-id') || '';
+      if (/^true_/.test(dataId)) return false;
+      const markers = [
+        root.getAttribute?.('aria-label'),
+        root.getAttribute?.('data-icon'),
+        root.getAttribute?.('data-testid'),
+        root.getAttribute?.('title'),
+        ...Array.from(root.querySelectorAll('[aria-label], [data-icon], [data-testid], [title]'))
+        .flatMap((el) => [
           el.getAttribute('aria-label'),
           el.getAttribute('data-icon'),
           el.getAttribute('data-testid'),
           el.getAttribute('title')
-        ].filter(Boolean).join(' '))
-        .join(' ');
-      const combined = `${text || ''} ${labels}`.replace(/\s+/g, ' ').trim();
-      return (
-        /\b(?:voice|video)\s+call\b/i.test(combined)
-        && /\b(?:no answer|missed|unanswered|declined|rejected|not answered|call back)\b/i.test(combined)
-      ) || /\bmissed\s+(?:voice|video)\s+call\b/i.test(combined);
+        ].filter(Boolean))
+      ].filter(Boolean);
+      const callText = String(text || '').replace(/\s+/g, ' ').trim();
+      const textMatch = new RegExp(callDetection.textPatternSource, 'i').test(callText);
+      const markerPattern = new RegExp(callDetection.markerPatternSource, 'i');
+      return textMatch || markers.some((marker) => markerPattern.test(String(marker || '').trim()));
     };
     const callLogContainerFor = (node) => {
       let current = node;
@@ -2018,7 +2039,7 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
         || (item.direction === 'unknown' && item.mediaType && item.mediaType !== 'text')
       ))
       .slice(-Math.max(1, maxItems));
-  }, limit);
+  }, { maxItems: limit, callDetection: WHATSAPP_CALL_CARD_BROWSER_CONFIG });
 }
 
 async function hydrateVoiceSnapshot(page, snapshot) {
@@ -2614,6 +2635,8 @@ async function ingestCallSnapshot({ snapshot, row = {}, source = 'call_card', ch
           raw_text: normalizedText,
           source,
           detected_from: 'whatsapp_call_log_card',
+          detection_kind: 'call_log_card',
+          call_detector_release: WHATSAPP_EMPLOYEE_AGENT_007_WORKER_MARKER,
           media_fingerprint: snapshot.mediaFingerprint || '',
           message_id: snapshot.messageId || ''
         }
@@ -4738,7 +4761,9 @@ async function main() {
               metadata: {
                 raw_text: callEvent.rawText || '',
                 button_label: callEvent.label || '',
-                source: 'whatsapp_web_call_detector'
+                source: 'whatsapp_web_call_detector',
+                detection_kind: 'live_call_overlay',
+                call_detector_release: WHATSAPP_EMPLOYEE_AGENT_007_WORKER_MARKER
               }
             }
           });
