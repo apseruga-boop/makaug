@@ -2532,14 +2532,15 @@ async function hydrateVideoSnapshot(page, snapshot) {
         txt: 'text/plain',
         csv: 'text/csv'
       }[extension] || '';
-      const normalizedDataUrl = inferredMime
-        ? dataUrl.replace(/^data:[^;,]+/i, `data:${inferredMime}`)
+      const effectiveMime = (blob.type && blob.type !== 'application/octet-stream')
+        ? blob.type
+        : (inferredMime || (video ? 'video/mp4' : 'application/octet-stream'));
+      const normalizedDataUrl = effectiveMime !== 'application/octet-stream'
+        ? dataUrl.replace(/^data:[^;,]+/i, `data:${effectiveMime}`)
         : dataUrl;
       return {
         dataUrl: normalizedDataUrl,
-        mimeType: (blob.type && blob.type !== 'application/octet-stream')
-          ? blob.type
-          : (inferredMime || (video ? 'video/mp4' : 'application/octet-stream')),
+        mimeType: effectiveMime,
         bytes: blob.size,
         name
       };

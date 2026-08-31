@@ -29,6 +29,7 @@ assert(SELECTION_SQL.includes("p.status = 'pending'"), 'repair must leave approv
 assert(SELECTION_SQL.includes('NOT EXISTS'), 'repair must skip listings that already have a review image');
 assert(workerSource.includes('async function captureVideoPosterFrame'), 'new WhatsApp videos must get an extracted still');
 assert(workerSource.includes('isPlayableVideoBuffer'), 'worker must reject encrypted WhatsApp network payloads masquerading as MP4 files');
+assert(workerSource.includes("effectiveMime !== 'application/octet-stream'"), 'decrypted WhatsApp browser blobs must carry their playable video MIME in the data URL');
 assert(workerSource.includes('mediaPreviews.push({'), 'worker must submit the video and derived still together');
 assert(workerSource.includes('runPendingEmployeeVideoRecovery'), 'hosted worker must recover marked historic originals from WhatsApp history');
 assert(workerSource.includes('employeeVideoRecoveryCaptionKey'), 'historic lookup must ignore WhatsApp Forwarded and duration labels');
