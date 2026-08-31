@@ -69,6 +69,8 @@ const { storeDataUrl, uploadBufferToS3 } = require('../services/cloudMediaStorag
 const {
   EMPLOYEE_INTAKE_STEPS,
   EMPLOYEE_INTAKE_TRIGGER,
+  buildEmployeePublicDescription,
+  cleanEmployeePropertyCaption,
   employeeAgentExistingPrompt,
   employeeIntakePhoneAllowed,
   employeeMediaPrompt,
@@ -3511,8 +3513,8 @@ async function recoverEmployeeVideoReviewMedia(propertyId, runtime = {}) {
           images[index].url,
           existingImageCount + index === 0,
           existingImageCount + index,
-          `video_recovery_still_${index + 1}`,
-          `Recovered still image from property video ${index + 1}`
+          `video_key_frame_${existingImageCount + index + 1}`,
+          `Video key image ${existingImageCount + index + 1} of ${Math.max(5, existingImageCount + images.length)}`
         ]
       );
     }
@@ -3523,8 +3525,16 @@ async function recoverEmployeeVideoReviewMedia(propertyId, runtime = {}) {
       ? locked.extra_fields.media_sha256.filter(Boolean)
       : [];
     const recoveryPatch = {
+      video_url: videos[0]?.url || null,
       video_urls: videos.map((item) => item.url),
+      video_tours: videos.map((item, index) => ({
+        url: item.url,
+        label: `WhatsApp property video ${index + 1}`,
+        sort_order: index
+      })),
+      video_count: videos.length,
       video_still_urls: images.map((item) => item.url),
+      video_key_frame_count: existingImageCount + images.length,
       corrupt_video_urls: [...new Set([
         ...(Array.isArray(locked.extra_fields?.corrupt_video_urls) ? locked.extra_fields.corrupt_video_urls : []),
         ...oldVideoUrls
@@ -4114,6 +4124,15 @@ async function createEmployeeReviewProperty({
   const imageMedia = storedMedia.filter((item) => item.kind === 'image');
   const videoMedia = storedMedia.filter((item) => item.kind === 'video');
   const documentMedia = storedMedia.filter((item) => item.kind === 'document');
+  const videoKeyFrames = imageMedia.filter((item) => /video-(?:key-frame|still|message-preview|preview)/i.test(String(item.name || '')));
+  const cleanPublicCaption = cleanEmployeePropertyCaption(caption);
+  const publicDescription = buildEmployeePublicDescription({
+    caption,
+    facts,
+    listerName,
+    videoCount: videoMedia.length,
+    keyFrameCount: imageMedia.length
+  });
   const extraFields = {
     review_only: true,
     auto_publish: false,
@@ -4127,6 +4146,7 @@ async function createEmployeeReviewProperty({
     whatsapp_employee_batch_property_number: (Array.isArray(sessionData.property_ids) ? sessionData.property_ids.length : 0) + 1,
     whatsapp_employee_access_mode: process.env.WHATSAPP_EMPLOYEE_INTAKE_NUMBERS ? 'allowlist' : 'trigger_only',
     source_caption: caption.slice(0, 2000),
+    source_caption_display: cleanPublicCaption.slice(0, 2000),
     source_caption_sha256: employeeCaptionHash(caption),
     price_currency: facts.priceMetadata?.price_currency || ACTIVE_CURRENCY,
     price_original_currency: facts.priceMetadata?.price_original_currency || ACTIVE_CURRENCY,
@@ -4140,7 +4160,15 @@ async function createEmployeeReviewProperty({
     media_validation_status: 'pending_human_review',
     media_count: storedMedia.length,
     media_sha256: storedMedia.map((item) => item.sha256).filter(Boolean),
+    video_url: videoMedia[0]?.url || null,
     video_urls: videoMedia.map((item) => item.url),
+    video_tours: videoMedia.map((item, index) => ({
+      url: item.url,
+      label: `WhatsApp property video ${index + 1}`,
+      sort_order: index
+    })),
+    video_count: videoMedia.length,
+    video_key_frame_count: videoKeyFrames.length,
     document_urls: documentMedia.map((item) => item.url),
     canonical_location_id: facts.locationPatch.canonical_location_id,
     canonical_location_level: facts.locationPatch.canonical_location_level,
@@ -4170,7 +4198,7 @@ async function createEmployeeReviewProperty({
       [
         facts.listingType,
         title,
-        caption.slice(0, 2000),
+        publicDescription,
         facts.locationPatch.district,
         facts.locationPatch.area,
         facts.price,
@@ -4193,10 +4221,19 @@ async function createEmployeeReviewProperty({
     );
     propertyId = inserted.rows[0].id;
     for (let index = 0; index < imageMedia.length; index += 1) {
+      const isVideoKeyFrame = /video-(?:key-frame|still|message-preview|preview)/i.test(String(imageMedia[index].name || ''));
+      const keyFrameNumber = videoKeyFrames.indexOf(imageMedia[index]) + 1;
       await client.query(
         `INSERT INTO property_images (property_id, url, is_primary, sort_order, slot_key, room_label)
          VALUES ($1,$2,$3,$4,$5,$6)`,
-        [propertyId, imageMedia[index].url, index === 0, index, index === 0 ? 'primary' : `extra_${index + 1}`, index === 0 ? 'Primary property photo' : `Property photo ${index + 1}`]
+        [
+          propertyId,
+          imageMedia[index].url,
+          index === 0,
+          index,
+          isVideoKeyFrame ? `video_key_frame_${keyFrameNumber}` : (index === 0 ? 'primary' : `extra_${index + 1}`),
+          isVideoKeyFrame ? `Video key image ${keyFrameNumber} of ${Math.max(5, videoKeyFrames.length)}` : (index === 0 ? 'Primary property photo' : `Property photo ${index + 1}`)
+        ]
       );
     }
     await client.query(
@@ -4261,9 +4298,12 @@ async function attachEmployeeReviewMedia({ propertyId, storedMedia, phone, inbou
   const existingImages = await db.query('SELECT COUNT(*)::int AS count FROM property_images WHERE property_id = $1', [propertyId]);
   const imageOffset = Number(existingImages.rows[0]?.count || 0);
   const images = uniqueMedia.filter((item) => item.kind === 'image');
+  const videoKeyFrames = images.filter((item) => /video-(?:key-frame|still|message-preview|preview)/i.test(String(item.name || '')));
   const previousVideos = Array.isArray(property.extra_fields?.video_urls) ? property.extra_fields.video_urls : [];
+  const previousVideoTours = Array.isArray(property.extra_fields?.video_tours) ? property.extra_fields.video_tours : [];
   const previousDocuments = Array.isArray(property.extra_fields?.document_urls) ? property.extra_fields.document_urls : [];
   const videos = uniqueMedia.filter((item) => item.kind === 'video').map((item) => item.url);
+  const mergedVideos = [...new Set([...previousVideos, ...videos])];
   const documents = uniqueMedia.filter((item) => item.kind === 'document').map((item) => item.url);
   const mergedHashes = [...existingHashes, ...uniqueMedia.map((item) => item.sha256).filter(Boolean)];
   const client = await db.getClient();
@@ -4273,10 +4313,20 @@ async function attachEmployeeReviewMedia({ propertyId, storedMedia, phone, inbou
     if (!locked.rows.length) throw new Error('The current property changed status while media was uploading');
     for (let index = 0; index < images.length; index += 1) {
       const sortOrder = imageOffset + index;
+      const isVideoKeyFrame = /video-(?:key-frame|still|message-preview|preview)/i.test(String(images[index].name || ''));
+      const existingVideoKeyFrames = Number(property.extra_fields?.video_key_frame_count || 0);
+      const keyFrameNumber = existingVideoKeyFrames + videoKeyFrames.indexOf(images[index]) + 1;
       await client.query(
         `INSERT INTO property_images (property_id, url, is_primary, sort_order, slot_key, room_label)
          VALUES ($1,$2,$3,$4,$5,$6)`,
-        [propertyId, images[index].url, sortOrder === 0, sortOrder, sortOrder === 0 ? 'primary' : `extra_${sortOrder + 1}`, sortOrder === 0 ? 'Primary property photo' : `Property photo ${sortOrder + 1}`]
+        [
+          propertyId,
+          images[index].url,
+          sortOrder === 0,
+          sortOrder,
+          isVideoKeyFrame ? `video_key_frame_${keyFrameNumber}` : (sortOrder === 0 ? 'primary' : `extra_${sortOrder + 1}`),
+          isVideoKeyFrame ? `Video key image ${keyFrameNumber} of ${Math.max(5, existingVideoKeyFrames + videoKeyFrames.length)}` : (sortOrder === 0 ? 'Primary property photo' : `Property photo ${sortOrder + 1}`)
+        ]
       );
     }
     await client.query(
@@ -4292,7 +4342,15 @@ async function attachEmployeeReviewMedia({ propertyId, storedMedia, phone, inbou
         whatsapp_employee_last_message_id: inboundMessageId || null,
         media_count: Number(property.extra_fields?.media_count || 0) + uniqueMedia.length,
         media_sha256: mergedHashes,
-        video_urls: [...previousVideos, ...videos],
+        video_url: mergedVideos[0] || null,
+        video_urls: mergedVideos,
+        video_tours: mergedVideos.map((url, index) => ({
+          url,
+          label: previousVideoTours.find((item) => item?.url === url)?.label || `WhatsApp property video ${index + 1}`,
+          sort_order: index
+        })),
+        video_count: mergedVideos.length,
+        video_key_frame_count: Number(property.extra_fields?.video_key_frame_count || 0) + videoKeyFrames.length,
         document_urls: [...previousDocuments, ...documents]
       })]
     );

@@ -13,21 +13,35 @@ const { Readable, Transform } = require('stream');
 const { pipeline } = require('stream/promises');
 const db = require('../config/database');
 const { uploadBufferToS3 } = require('../services/cloudMediaStorageService');
+const {
+  buildEmployeePublicDescription,
+  cleanEmployeePropertyCaption
+} = require('../services/whatsappEmployeeIntakeService');
 
-const BACKFILL_MARKER = 'whatsapp-video-still-backfill-20260831';
+const BACKFILL_MARKER = 'whatsapp-video-five-key-frames-20260831';
 const MAX_DOWNLOAD_BYTES = 100 * 1024 * 1024;
 const MAX_VIDEOS_PER_PROPERTY = 10;
+const MIN_VIDEO_KEY_FRAMES = 5;
 
 const SELECTION_SQL = `
-  SELECT p.id, p.status, p.extra_fields, p.created_at
+  SELECT p.id, p.status, p.listing_type, p.description, p.district, p.area, p.price,
+         p.lister_name, p.extra_fields, p.created_at,
+         COUNT(pi.id) FILTER (
+           WHERE COALESCE(pi.slot_key, '') LIKE 'video_%'
+              OR COALESCE(pi.room_label, '') ILIKE '%video%'
+         )::int AS video_still_count
     FROM properties p
+    LEFT JOIN property_images pi ON pi.property_id = p.id
    WHERE p.source = 'whatsapp_employee_intake'
      AND p.status = 'pending'
      AND jsonb_typeof(p.extra_fields->'video_urls') = 'array'
      AND jsonb_array_length(p.extra_fields->'video_urls') > 0
-     AND NOT EXISTS (
-       SELECT 1 FROM property_images pi WHERE pi.property_id = p.id
-     )
+   GROUP BY p.id
+   HAVING COUNT(pi.id) FILTER (
+            WHERE COALESCE(pi.slot_key, '') LIKE 'video_%'
+               OR COALESCE(pi.room_label, '') ILIKE '%video%'
+          ) < ${MIN_VIDEO_KEY_FRAMES}
+       OR COALESCE(p.description, '') ~* '^\\s*forwarded'
    ORDER BY p.created_at ASC
 `;
 
@@ -112,31 +126,88 @@ async function extractStill(videoPath, stillPath) {
   return stat.size;
 }
 
+async function videoDurationSeconds(videoPath) {
+  const ffprobe = String(process.env.FFPROBE_PATH || 'ffprobe').trim() || 'ffprobe';
+  const { stdout } = await execFileAsync(ffprobe, [
+    '-v', 'error',
+    '-show_entries', 'format=duration',
+    '-of', 'default=noprint_wrappers=1:nokey=1',
+    videoPath
+  ]);
+  const duration = Number(String(stdout || '').trim());
+  return Number.isFinite(duration) && duration > 0 ? duration : 0;
+}
+
+function representativeFrameOffsets(durationSeconds, count) {
+  const duration = Number(durationSeconds || 0);
+  const targetCount = Math.max(0, Number(count || 0));
+  if (!targetCount) return [];
+  if (!Number.isFinite(duration) || duration <= 0.25) {
+    return Array.from({ length: targetCount }, (_, index) => index * 0.1);
+  }
+  return Array.from({ length: targetCount }, (_, index) => {
+    const fraction = targetCount === 1 ? 0.5 : (index + 1) / (targetCount + 1);
+    return Math.min(Math.max(0.05, duration * fraction), Math.max(0.05, duration - 0.05));
+  });
+}
+
+async function extractStillAt(videoPath, stillPath, seconds) {
+  const ffmpeg = String(process.env.FFMPEG_PATH || 'ffmpeg').trim() || 'ffmpeg';
+  await execFileAsync(ffmpeg, [
+    '-hide_banner', '-loglevel', 'error', '-y',
+    '-ss', Number(seconds || 0).toFixed(3),
+    '-i', videoPath,
+    '-frames:v', '1',
+    '-vf', "scale='min(1280,iw)':-2",
+    '-q:v', '3',
+    stillPath
+  ]);
+  const stat = await fsp.stat(stillPath);
+  if (!stat.size) throw new Error('ffmpeg produced an empty key frame');
+  return stat.size;
+}
+
+function keyFramesNeeded(property = {}) {
+  return Math.max(0, MIN_VIDEO_KEY_FRAMES - Number(property.video_still_count || 0));
+}
+
 async function makeAndUploadStills(property) {
   const urls = extractVideoUrls(property.extra_fields);
   if (!urls.length) throw new Error('no valid HTTPS video URL');
+  const required = keyFramesNeeded(property);
+  if (!required) return [];
   const tempDir = await fsp.mkdtemp(path.join(os.tmpdir(), `makaug-video-still-${property.id}-`));
   const uploaded = [];
   try {
     for (let index = 0; index < urls.length; index += 1) {
+      const remaining = required - uploaded.length;
+      if (remaining <= 0) break;
+      const remainingVideos = urls.length - index;
+      const frameCount = Math.max(1, Math.ceil(remaining / remainingVideos));
       const videoPath = path.join(tempDir, `video-${index + 1}.bin`);
-      const stillPath = path.join(tempDir, `still-${index + 1}.jpg`);
       try {
         await downloadVideo(urls[index], videoPath);
-        await extractStill(videoPath, stillPath);
-        const bytes = await fsp.readFile(stillPath);
-        const stored = await uploadBufferToS3({
-          bytes,
-          mimeType: 'image/jpeg',
-          key: `whatsapp-employee-intake/video-still/${property.id}/${Date.now()}-${crypto.randomUUID()}.jpg`
-        });
-        if (!stored.publicUrl) throw new Error('S3_PUBLIC_BASE_URL is required for review media');
-        uploaded.push({
-          url: stored.publicUrl,
-          sha256: stored.sha256,
-          sourceVideoUrl: urls[index],
-          bytes: stored.bytes
-        });
+        const duration = await videoDurationSeconds(videoPath);
+        const offsets = representativeFrameOffsets(duration, frameCount);
+        for (let frameIndex = 0; frameIndex < offsets.length && uploaded.length < required; frameIndex += 1) {
+          const stillPath = path.join(tempDir, `still-${index + 1}-${frameIndex + 1}.jpg`);
+          await extractStillAt(videoPath, stillPath, offsets[frameIndex]);
+          const bytes = await fsp.readFile(stillPath);
+          const stored = await uploadBufferToS3({
+            bytes,
+            mimeType: 'image/jpeg',
+            key: `whatsapp-employee-intake/video-key-frame/${property.id}/${Date.now()}-${crypto.randomUUID()}.jpg`
+          });
+          if (!stored.publicUrl) throw new Error('S3_PUBLIC_BASE_URL is required for review media');
+          uploaded.push({
+            url: stored.publicUrl,
+            sha256: stored.sha256,
+            sourceVideoUrl: urls[index],
+            sourceVideoIndex: index,
+            timestampSeconds: offsets[frameIndex],
+            bytes: stored.bytes
+          });
+        }
       } catch (error) {
         process.stderr.write(`WARN ${property.id} video ${index + 1}: ${error.message || error}\n`);
       }
@@ -144,7 +215,9 @@ async function makeAndUploadStills(property) {
   } finally {
     await fsp.rm(tempDir, { recursive: true, force: true });
   }
-  if (!uploaded.length) throw new Error('no video still could be generated');
+  if (uploaded.length < required) {
+    throw new Error(`generated ${uploaded.length} of ${required} required video key frames`);
+  }
   return uploaded;
 }
 
@@ -153,7 +226,7 @@ async function attachStills(propertyId, uploaded) {
   try {
     await client.query('BEGIN');
     const locked = await client.query(
-      `SELECT id, status, extra_fields
+      `SELECT id, status, listing_type, description, district, area, price, lister_name, extra_fields
          FROM properties
         WHERE id = $1
         FOR UPDATE`,
@@ -165,25 +238,52 @@ async function attachStills(propertyId, uploaded) {
       return { attached: 0, skipped: 'status_changed' };
     }
     const existing = await client.query(
-      'SELECT COUNT(*)::int AS count FROM property_images WHERE property_id = $1',
+      `SELECT COUNT(*) FILTER (
+                WHERE COALESCE(slot_key, '') LIKE 'video_%'
+                   OR COALESCE(room_label, '') ILIKE '%video%'
+              )::int AS video_count,
+              COALESCE(MAX(sort_order), -1)::int AS max_sort_order
+         FROM property_images
+        WHERE property_id = $1`,
       [propertyId]
     );
-    if (Number(existing.rows[0]?.count || 0) > 0) {
+    const existingVideoCount = Number(existing.rows[0]?.video_count || 0);
+    const required = Math.max(0, MIN_VIDEO_KEY_FRAMES - existingVideoCount);
+    const selectedUploads = uploaded.slice(0, required);
+    const cleanCaption = cleanEmployeePropertyCaption(property.extra_fields?.source_caption || property.description || '');
+    const publicDescription = buildEmployeePublicDescription({
+      caption: property.extra_fields?.source_caption || property.description || '',
+      facts: {
+        listingType: property.listing_type,
+        price: property.price,
+        priceMetadata: {
+          price_original_currency: property.extra_fields?.price_original_currency || property.extra_fields?.price_currency || 'UGX',
+          price_original: property.extra_fields?.price_original || property.price
+        },
+        locationPatch: { area: property.area, district: property.district }
+      },
+      listerName: property.lister_name,
+      videoCount: extractVideoUrls(property.extra_fields).length,
+      keyFrameCount: existingVideoCount + selectedUploads.length
+    });
+    if (!selectedUploads.length && publicDescription === property.description) {
       await client.query('ROLLBACK');
-      return { attached: 0, skipped: 'image_already_present' };
+      return { attached: 0, skipped: 'already_has_five_key_frames_and_clean_description' };
     }
 
-    for (let index = 0; index < uploaded.length; index += 1) {
+    const firstSortOrder = Number(existing.rows[0]?.max_sort_order ?? -1) + 1;
+    for (let index = 0; index < selectedUploads.length; index += 1) {
+      const keyFrameNumber = existingVideoCount + index + 1;
       await client.query(
         `INSERT INTO property_images (property_id, url, is_primary, sort_order, slot_key, room_label)
          VALUES ($1, $2, $3, $4, $5, $6)`,
         [
           propertyId,
-          uploaded[index].url,
-          index === 0,
-          index,
-          `video_still_${index + 1}`,
-          `Still image from property video ${index + 1}`
+          selectedUploads[index].url,
+          firstSortOrder + index === 0,
+          firstSortOrder + index,
+          `video_key_frame_${keyFrameNumber}`,
+          `Video key image ${keyFrameNumber} of ${MIN_VIDEO_KEY_FRAMES}`
         ]
       );
     }
@@ -193,20 +293,34 @@ async function attachStills(propertyId, uploaded) {
       : {};
     const hashes = Array.isArray(currentExtra.media_sha256) ? currentExtra.media_sha256 : [];
     const nextExtra = {
-      video_still_urls: uploaded.map((item) => item.url),
+      source_caption_display: cleanCaption.slice(0, 2000),
+      video_url: extractVideoUrls(property.extra_fields)[0] || null,
+      video_urls: extractVideoUrls(property.extra_fields),
+      video_tours: extractVideoUrls(property.extra_fields).map((url, index) => ({
+        url,
+        label: `WhatsApp property video ${index + 1}`,
+        sort_order: index
+      })),
+      video_count: extractVideoUrls(property.extra_fields).length,
+      video_still_urls: [...new Set([
+        ...(Array.isArray(currentExtra.video_still_urls) ? currentExtra.video_still_urls : []),
+        ...selectedUploads.map((item) => item.url)
+      ])],
       video_still_backfilled_at: new Date().toISOString(),
       video_still_backfill_marker: BACKFILL_MARKER,
-      media_count: Number(currentExtra.media_count || 0) + uploaded.length,
-      media_sha256: [...new Set([...hashes, ...uploaded.map((item) => item.sha256).filter(Boolean)])],
+      video_key_frame_count: existingVideoCount + selectedUploads.length,
+      media_count: Number(currentExtra.media_count || 0) + selectedUploads.length,
+      media_sha256: [...new Set([...hashes, ...selectedUploads.map((item) => item.sha256).filter(Boolean)])],
       review_only: true,
       auto_publish: false
     };
     await client.query(
       `UPDATE properties
-          SET extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $2::jsonb,
+          SET description = $3,
+              extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $2::jsonb,
               updated_at = NOW()
         WHERE id = $1 AND status = 'pending'`,
-      [propertyId, JSON.stringify(nextExtra)]
+      [propertyId, JSON.stringify(nextExtra), publicDescription]
     );
     await client.query(
       `INSERT INTO property_moderation_events
@@ -215,18 +329,25 @@ async function attachStills(propertyId, uploaded) {
                'pending', 'pending', $2, $3, $4::jsonb)`,
       [
         propertyId,
-        'Recovered still images from existing Cloudflare-hosted WhatsApp property videos.',
-        `${uploaded.length} video still image(s) attached. Listing remained in staff review.`,
+        'Prepared five representative key images and retained the playable WhatsApp property video.',
+        `${selectedUploads.length} key image(s) attached and the public description was cleaned. Listing remained in staff review.`,
         JSON.stringify({
           marker: BACKFILL_MARKER,
-          stills_attached: uploaded.length,
-          source_videos: uploaded.map((item) => item.sourceVideoUrl),
+          stills_attached: selectedUploads.length,
+          total_video_key_frames: existingVideoCount + selectedUploads.length,
+          source_videos: selectedUploads.map((item) => item.sourceVideoUrl),
+          frame_timestamps_seconds: selectedUploads.map((item) => Number(item.timestampSeconds || 0)),
+          description_cleaned: publicDescription !== property.description,
           auto_publish: false
         })
       ]
     );
     await client.query('COMMIT');
-    return { attached: uploaded.length };
+    return {
+      attached: selectedUploads.length,
+      totalVideoKeyFrames: existingVideoCount + selectedUploads.length,
+      descriptionCleaned: publicDescription !== property.description
+    };
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
@@ -245,7 +366,12 @@ async function main() {
     marker: BACKFILL_MARKER,
     mode: options.apply ? 'apply' : 'dry-run',
     selected: selected.length,
-    properties: selected.map((row) => ({ id: row.id, videos: extractVideoUrls(row.extra_fields).length }))
+    properties: selected.map((row) => ({
+      id: row.id,
+      videos: extractVideoUrls(row.extra_fields).length,
+      existingVideoKeyFrames: Number(row.video_still_count || 0),
+      keyFramesNeeded: keyFramesNeeded(row)
+    }))
   }, null, 2)}\n`);
   if (!options.apply) return;
 
@@ -254,7 +380,7 @@ async function main() {
     try {
       const uploaded = await makeAndUploadStills(property);
       const attached = await attachStills(property.id, uploaded);
-      if (attached.attached) {
+      if (attached.attached || attached.descriptionCleaned) {
         summary.repaired += 1;
         summary.stillsAttached += attached.attached;
       } else {
@@ -282,7 +408,10 @@ if (require.main === module) {
 
 module.exports = {
   BACKFILL_MARKER,
+  MIN_VIDEO_KEY_FRAMES,
   SELECTION_SQL,
   extractVideoUrls,
+  keyFramesNeeded,
+  representativeFrameOffsets,
   parseArgs
 };

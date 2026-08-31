@@ -16,6 +16,69 @@ function cleanText(value = '') {
   return String(value || '').replace(/\s+/g, ' ').trim();
 }
 
+function cleanEmployeePropertyCaption(value = '') {
+  const lines = String(value || '')
+    .replace(/\r/g, '\n')
+    .split(/\n+/)
+    .map((line) => cleanText(line))
+    .filter(Boolean)
+    .filter((line) => !/^(?:forwarded(?:\s+many\s+times)?|forwarded\s+message)$/i.test(line));
+  return cleanText(lines.join(' '))
+    .replace(/^(?:forwarded(?:\s+many\s+times)?|forwarded\s+message)\s*[:\-–—]?\s*/i, '')
+    .trim();
+}
+
+function employeePriceLabel(facts = {}) {
+  const metadata = facts.priceMetadata && typeof facts.priceMetadata === 'object'
+    ? facts.priceMetadata
+    : {};
+  const currency = cleanText(metadata.price_original_currency || metadata.price_currency || 'UGX').toUpperCase();
+  const amount = Number(metadata.price_original || metadata.price || facts.price || 0);
+  if (!Number.isFinite(amount) || amount <= 0) return '';
+  return `${currency} ${Math.round(amount).toLocaleString('en-GB')}`;
+}
+
+function employeeListingLabel(listingType = '') {
+  return ({
+    sale: 'Property for sale',
+    rent: 'Rental property',
+    land: 'Land for sale',
+    commercial: 'Commercial property',
+    student: 'Student accommodation'
+  })[cleanText(listingType).toLowerCase()] || 'Property listing';
+}
+
+function sentence(value = '') {
+  const text = cleanText(value);
+  if (!text) return '';
+  const capitalized = `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
+  return /[.!?]$/.test(capitalized) ? capitalized : `${capitalized}.`;
+}
+
+function buildEmployeePublicDescription({
+  caption = '',
+  facts = {},
+  listerName = '',
+  videoCount = 0,
+  keyFrameCount = 0
+} = {}) {
+  const cleanCaption = cleanEmployeePropertyCaption(caption);
+  const location = [facts.locationPatch?.area, facts.locationPatch?.district]
+    .map(cleanText)
+    .filter((value, index, values) => value && values.indexOf(value) === index)
+    .join(', ');
+  const price = employeePriceLabel(facts);
+  const lead = `${employeeListingLabel(facts.listingType)}${location ? ` in ${location}` : ''}${price ? `, listed at ${price}` : ''}.`;
+  const sourceDetail = cleanCaption ? sentence(cleanCaption) : '';
+  const videoDetail = Number(videoCount) > 0
+    ? `Watch ${Number(videoCount) === 1 ? 'the attached video tour' : `the ${Number(videoCount)} attached video tours`}${Number(keyFrameCount) > 0 ? ` and browse ${Number(keyFrameCount)} extracted key image${Number(keyFrameCount) === 1 ? '' : 's'}` : ''} before enquiring.`
+    : '';
+  const contact = cleanText(listerName)
+    ? `Contact ${cleanText(listerName)} to confirm current availability, full specifications and viewing arrangements.`
+    : 'Contact the listed agent to confirm current availability, full specifications and viewing arrangements.';
+  return [lead, sourceDetail, videoDetail, contact].filter(Boolean).join(' ').slice(0, 2000);
+}
+
 function digits(value = '') {
   return String(value || '').replace(/\D/g, '');
 }
@@ -123,6 +186,8 @@ function employeeMediaPrompt(subjectName = '', batchMode = 'multiple') {
 module.exports = {
   EMPLOYEE_INTAKE_STEPS,
   EMPLOYEE_INTAKE_TRIGGER,
+  buildEmployeePublicDescription,
+  cleanEmployeePropertyCaption,
   employeeAgentExistingPrompt,
   employeeIntakePhoneAllowed,
   employeeMediaPrompt,

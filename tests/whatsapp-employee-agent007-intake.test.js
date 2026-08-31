@@ -5,6 +5,8 @@ const fs = require('fs');
 const path = require('path');
 const {
   EMPLOYEE_INTAKE_STEPS,
+  buildEmployeePublicDescription,
+  cleanEmployeePropertyCaption,
   employeeIntakePhoneAllowed,
   isEmployeeIntakeComplete,
   isEmployeeIntakeTrigger,
@@ -14,6 +16,12 @@ const {
   parsePropertyBatchMode,
   parseYesNo
 } = require('../services/whatsappEmployeeIntakeService');
+
+assert.equal(
+  cleanEmployeePropertyCaption('Forwarded\nKyaliwajjala road 9 double units monthly income 7.5 million'),
+  'Kyaliwajjala road 9 double units monthly income 7.5 million',
+  'WhatsApp forwarding UI text must never become public copy'
+);
 
 assert.equal(isEmployeeIntakeTrigger('Agent 007'), true, 'exact Agent 007 trigger should start staff intake');
 assert.equal(isEmployeeIntakeTrigger('  agent   007  '), true, 'spacing and case should be normalized');
@@ -74,6 +82,17 @@ assert.equal(compactCurrencyLand.price, 330_000_000, 'currency labels joined to 
 assert.equal(compactCurrencyLand.listingType, 'land');
 assert.equal(compactCurrencyLand.locationPatch.area, 'Kira-Nsasa');
 assert.deepEqual(whatsappRoute.employeePropertyMissing(compactCurrencyLand), []);
+const enrichedPublicDescription = buildEmployeePublicDescription({
+  caption: 'Forwarded\n32 decimals plot Kira Nsasa behind Total fuel station UGX330 million',
+  facts: compactCurrencyLand,
+  listerName: 'Francis Isabirye',
+  videoCount: 1,
+  keyFrameCount: 5
+});
+assert(!/forwarded/i.test(enrichedPublicDescription), 'public descriptions must remove the WhatsApp Forwarded label');
+assert.match(enrichedPublicDescription, /Land for sale in Kira-Nsasa, Wakiso, listed at UGX 330,000,000\./);
+assert.match(enrichedPublicDescription, /5 extracted key images/);
+assert.match(enrichedPublicDescription, /Contact Francis Isabirye/);
 
 const najeeraSale = whatsappRoute.employeePropertyFacts(
   'Forwarded\nNajeera 8 double units apartments monthly income 8 million on sale UGX 1 billion',
@@ -155,6 +174,8 @@ assert(routeSource.includes('id_document_name, id_document_url, extra_fields'), 
 assert(!routeSource.includes('customer_identity_document_url'), 'private ID references must never be copied into public extra fields');
 assert(routeSource.includes('agent_profile_linked: Boolean(agent?.id)'), 'approved agent link state must be visible to moderation');
 assert(routeSource.includes('video_urls: videoMedia.map'), 'video references must be preserved for staff review');
+assert(routeSource.includes('video_tours: videoMedia.map'), 'video metadata must survive moderation and public approval');
+assert(routeSource.includes('buildEmployeePublicDescription'), 'employee intake must store enriched public copy rather than the raw WhatsApp caption');
 assert(routeSource.includes('document_urls: documentMedia.map'), 'document references must be preserved for staff review');
 assert(routeSource.includes('media_sha256'), 'media deduplication hashes must be persisted');
 assert(routeSource.includes('source_caption_sha256') && routeSource.includes("status IN ('pending','approved')"), 'property-level duplicate checks must cover pending and approved inventory');

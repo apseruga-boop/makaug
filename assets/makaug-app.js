@@ -13658,11 +13658,22 @@ async function renderStaffDashboard() {
   }
 }
 
+function staffPreviewVideosHtml(preview = {}) {
+  const urls = propertyVideoUrls(preview);
+  if (!urls.length) return staffEmpty("No property video is attached.");
+  return `<div class="mb-4 grid lg:grid-cols-2 gap-3" data-staff-review-video-gallery="true">
+    ${urls.map((url, index) => renderVideoEmbedCard(url, {
+      title: `Property video ${index + 1}`,
+      sub: "Play the complete walkthrough here before approving it for the public listing."
+    })).join("")}
+  </div>`;
+}
+
 function staffPreviewImagesHtml(images = []) {
   const list = Array.isArray(images) ? images : [];
   if (!list.length) return staffEmpty("No images are attached. Do not approve unless source evidence explains why.");
   return `<div class="grid grid-cols-2 md:grid-cols-4 gap-2">
-    ${list.slice(0, 8).map((image) => `
+    ${list.slice(0, 16).map((image) => `
       <a href="${adminAttr(image.url || "")}" target="_blank" rel="noopener noreferrer" class="block rounded-xl overflow-hidden border border-gray-200 bg-gray-50">
         <img src="${adminAttr(image.url || "")}" alt="${adminAttr(image.room_label || "Listing image")}" class="w-full aspect-square object-cover">
         <div class="px-2 py-1 text-[11px] text-gray-600">${adminEscape(image.room_label || image.slot_key || (image.is_primary ? "Primary" : "Image"))}</div>
@@ -13946,13 +13957,14 @@ function renderStaffListingPreviewModal(preview = {}) {
         <div class="space-y-4">
           ${adminReviewListingEditPanel(preview)}
           <section class="rounded-xl border border-gray-200 p-4">
-            <h4 class="font-black text-gray-900 mb-3">Photo and source evidence</h4>
+            <h4 class="font-black text-gray-900 mb-3">Photos, video and source evidence</h4>
+            ${staffPreviewVideosHtml(preview)}
             ${staffPreviewImagesHtml(preview.images || [])}
             <div class="mt-3 rounded-xl bg-gray-50 border border-gray-200 p-3 text-xs text-gray-700">
               <div><strong>Platform/source:</strong> ${adminEscape(source.platform || "not recorded")}</div>
               <div><strong>Source name:</strong> ${adminEscape(source.source_name || "not recorded")}</div>
               <div><strong>First posted:</strong> ${adminEscape(source.first_posted_online || "not recorded")}</div>
-              ${sourceUrl ? `<a href="${adminAttr(sourceUrl)}" target="_blank" rel="noopener noreferrer" class="inline-flex mt-2 font-black text-blue-700 underline underline-offset-2">Open original evidence</a>` : `<div class="mt-2 text-amber-700 font-bold">No source URL stored. Do not approve found-online listings without evidence.</div>`}
+              ${sourceUrl ? `<a href="${adminAttr(sourceUrl)}" target="_blank" rel="noopener noreferrer" class="inline-flex mt-2 font-black text-blue-700 underline underline-offset-2">Open original evidence</a>` : (propertyVideoUrls(preview).length ? `<div class="mt-2 text-emerald-700 font-bold">Playable WhatsApp video evidence is stored with this review record.</div>` : `<div class="mt-2 text-amber-700 font-bold">No source URL stored. Do not approve found-online listings without evidence.</div>`)}
             </div>
           </section>
           ${moderationIdentitySectionHtml(preview, "staff-preview", "staff")}
@@ -23584,6 +23596,7 @@ function adminReviewSourceText(review = {}) {
     review.description,
     review.moderation_notes,
     extra.source_title,
+    extra.source_caption_display,
     extra.source_caption,
     extra.caption,
     extra.source_description,
