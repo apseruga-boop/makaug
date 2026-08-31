@@ -286,7 +286,7 @@ const LISTING_IMAGE_PREVIEW_QUALITY = 0.78;
 const LISTING_IMAGE_PREVIEW_MAX_BYTES = 1_500_000;
 const EMPLOYEE_VIDEO_PREVIEW_MAX_BYTES = 25_000_000;
 const OUTBOUND_PROPERTY_IMAGE_MAX_BYTES = 15_000_000;
-const WHATSAPP_EMPLOYEE_AGENT_007_WORKER_MARKER = 'whatsapp-call-card-trust-gate-20260831';
+const WHATSAPP_EMPLOYEE_AGENT_007_WORKER_MARKER = 'whatsapp-video-still-dual-media-20260831';
 const WHATSAPP_CALL_CARD_BROWSER_CONFIG = Object.freeze(whatsappCallCardBrowserConfig());
 const RECENT_INBOUND_BACKLOG_LIMIT = 60;
 const EMPLOYEE_BATCH_HISTORY_SCAN_LIMIT = 160;
@@ -2352,6 +2352,81 @@ async function captureVideoMessageScreenshot(page, messageId) {
   return null;
 }
 
+async function captureVideoPosterFrame(page, messageId) {
+  return page.evaluate(async ({ targetMessageId, maxBytes }) => {
+    const nodes = Array.from(document.querySelectorAll('[data-id], [data-testid^="conv-msg-"]'));
+    const root = nodes.find((el) => (
+      el.getAttribute('data-id') === targetMessageId
+      || el.getAttribute('data-testid') === targetMessageId
+    ));
+    if (!root) return null;
+
+    const visibleVideo = Array.from(document.querySelectorAll('video')).find((item) => {
+      const rect = item.getBoundingClientRect();
+      return rect.width >= 120 && rect.height >= 90 && item.videoWidth > 0 && item.videoHeight > 0;
+    });
+    const video = root.querySelector('video') || visibleVideo || null;
+    if (video?.videoWidth && video?.videoHeight) {
+      video.pause?.();
+      const duration = Number(video.duration || 0);
+      if (duration > 0.25 && Number(video.currentTime || 0) < 0.1) {
+        const seekTarget = Math.min(1, Math.max(0.1, duration / 3));
+        await new Promise((resolve) => {
+          const timeout = setTimeout(resolve, 1200);
+          video.addEventListener('seeked', () => {
+            clearTimeout(timeout);
+            resolve();
+          }, { once: true });
+          try {
+            video.currentTime = seekTarget;
+          } catch {
+            clearTimeout(timeout);
+            resolve();
+          }
+        });
+      }
+    }
+
+    const poster = Array.from(root.querySelectorAll('img'))
+      .filter((img) => img.naturalWidth >= 160 && img.naturalHeight >= 120)
+      .sort((a, b) => (b.naturalWidth * b.naturalHeight) - (a.naturalWidth * a.naturalHeight))[0] || null;
+    const source = video?.videoWidth && video?.videoHeight ? video : poster;
+    const width = video?.videoWidth || poster?.naturalWidth || 0;
+    const height = video?.videoHeight || poster?.naturalHeight || 0;
+    if (!source || !width || !height) return null;
+
+    try {
+      const scale = Math.min(1, 1280 / Math.max(width, height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(width * scale));
+      canvas.height = Math.max(1, Math.round(height * scale));
+      const context = canvas.getContext('2d', { alpha: false });
+      if (!context) return null;
+      context.drawImage(source, 0, 0, canvas.width, canvas.height);
+      let dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+      let bytes = Math.floor((dataUrl.length * 3) / 4);
+      if (bytes > maxBytes) {
+        dataUrl = canvas.toDataURL('image/jpeg', 0.68);
+        bytes = Math.floor((dataUrl.length * 3) / 4);
+      }
+      if (!dataUrl || bytes > maxBytes) return null;
+      return {
+        dataUrl,
+        mimeType: 'image/jpeg',
+        bytes,
+        kind: 'image',
+        name: 'whatsapp-video-still.jpg',
+        derivedFromVideo: true
+      };
+    } catch {
+      return null;
+    }
+  }, {
+    targetMessageId: messageId,
+    maxBytes: LISTING_IMAGE_PREVIEW_MAX_BYTES
+  }).catch(() => null);
+}
+
 async function hydrateVideoSnapshot(page, snapshot) {
   if (!snapshot || snapshot.mediaType !== 'media' || snapshot.mediaPreviews?.length) return snapshot;
   const messageId = String(snapshot.messageId || '').trim();
@@ -2477,10 +2552,28 @@ async function hydrateVideoSnapshot(page, snapshot) {
         kind: preview.kind || (String(preview.mimeType || '').startsWith('video/') ? 'video' : 'document'),
         name: preview.name || ''
       };
+      const mediaPreviews = [mediaPreview];
+      if (mediaPreview.kind === 'video') {
+        const still = await captureVideoPosterFrame(page, messageId)
+          || await captureVideoMessageScreenshot(page, messageId);
+        if (still?.dataUrl) {
+          mediaPreviews.push({
+            dataUrl: still.dataUrl,
+            mimeType: still.mimeType || 'image/jpeg',
+            bytes: Number(still.bytes || 0),
+            sha256: crypto.createHash('sha256').update(String(still.dataUrl || '')).digest('hex'),
+            kind: 'image',
+            name: still.name || 'whatsapp-video-still.jpg'
+          });
+        }
+      }
       return {
         ...snapshot,
-        mediaPreviews: [mediaPreview],
-        mediaCount: 1,
+        mediaPreviews,
+        mediaCount: mediaPreviews.length,
+        ...(mediaPreview.kind === 'video' && mediaPreviews.length === 1 ? {
+          mediaPreviewWarning: 'video_still_unavailable'
+        } : {}),
         ...(preview.degradedFromVideo ? {
           mediaPreviewError: 'video_bytes_unavailable_poster_stored'
         } : {})

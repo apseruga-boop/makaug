@@ -224,6 +224,8 @@ app.get('/api/version', (_req, res) => {
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-active-intake-call-shield-20260829'] : []),
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-call-card-trust-gate-20260831'] : []),
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-distinct-rapid-replies-20260831'] : []),
+      ...(!IS_SOUTH_AFRICA ? ['whatsapp-video-still-dual-media-20260831'] : []),
+      ...(!IS_SOUTH_AFRICA ? ['whatsapp-video-still-backfill-20260831'] : []),
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-multi-result-fast-search-20260824'] : []),
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-owner-forward-review-media-20260820'] : []),
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-owner-history-backfill-20260820'] : []),

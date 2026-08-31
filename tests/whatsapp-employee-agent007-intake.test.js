@@ -166,6 +166,8 @@ assert(copilotSource.includes('const RECENT_INBOUND_BACKLOG_LIMIT = 60'), 'worke
 assert(copilotSource.includes("skipped: 'ordered_media_hydration_pending'"), 'worker must stop before COMPLETE when earlier media bytes are unavailable');
 assert(copilotSource.includes('captureVideoSnapshotFromNetwork'), 'worker must recover WhatsApp video bytes before reaching COMPLETE');
 assert(copilotSource.includes('captureVideoMessageScreenshot'), 'worker must preserve a reviewable property image when WhatsApp withholds video bytes and the poster canvas');
+assert(copilotSource.includes('captureVideoPosterFrame'), 'worker must derive a staff-review still when WhatsApp video bytes are available');
+assert(copilotSource.includes('mediaPreviews.push({'), 'successful video intake must carry both the video and its still image');
 assert(copilotSource.includes('trying message screenshot fallback'), 'a failed WhatsApp blob fetch must still try the reviewable message screenshot fallback');
 assert(copilotSource.includes("mediaPreviewError: 'video_bytes_unavailable_poster_stored'"), 'an unrecoverable video must preserve a property poster instead of blocking the batch forever');
 assert(copilotSource.includes('locateEmployeeBatchHistory'), 'COMPLETE must scan backward to the Agent 007 trigger before closing a batch');
@@ -229,6 +231,7 @@ assert(serverSource.includes('whatsapp-agent-007-residential-caption-20260829'),
 assert(serverSource.includes('whatsapp-agent-007-post-complete-chat-resume-20260830'), 'post-completion chatbot recovery should have an externally verifiable release marker');
 assert(serverSource.includes("limit: '40mb'"), 'authorized WhatsApp video previews must fit through the JSON intake limit after base64 encoding');
 assert(serverSource.includes('whatsapp-active-intake-call-shield-20260829'), 'employee call shield should have an externally verifiable release marker');
+assert(serverSource.includes('whatsapp-video-still-dual-media-20260831'), 'video and still repair should have an externally verifiable release marker');
 
 const db = require('../config/database');
 const originalQuery = db.query;

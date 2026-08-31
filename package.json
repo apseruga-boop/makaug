@@ -48,6 +48,7 @@
     "inventory:import-found-online-images": "node scripts/import-found-online-images.js",
     "ads:daily-report": "node scripts/send-advertising-daily-reports.js",
     "data:backup": "node scripts/run-production-data-backup.js",
+    "data:backfill-whatsapp-video-stills": "node scripts/backfill-whatsapp-video-stills.js",
     "cloud:readiness": "node scripts/check-cloud-readiness.js",
     "cloud:verify-storage": "node scripts/verify-cloud-storage.js",
     "locations:build-uganda": "node scripts/build-uganda-location-gazetteer.js",
