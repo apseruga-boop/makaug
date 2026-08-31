@@ -3323,7 +3323,11 @@ async function runPendingEmployeeVideoRecovery(page) {
       retryable = true;
       continue;
     }
-    const hydrated = await hydrateMediaSnapshot(page, snapshot);
+    const hydrated = await hydrateVideoSnapshot(page, {
+      ...snapshot,
+      mediaType: 'media',
+      mediaPreviews: []
+    });
     const previews = Array.isArray(hydrated.mediaPreviews) ? hydrated.mediaPreviews : [];
     const hasVideo = previews.some((item) => item.kind === 'video' || String(item.mimeType || '').startsWith('video/'));
     const hasImage = previews.some((item) => item.kind === 'image' || String(item.mimeType || '').startsWith('image/'));
