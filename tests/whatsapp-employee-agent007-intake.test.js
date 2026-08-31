@@ -21,6 +21,7 @@ assert.equal(isEmployeeIntakeTrigger('Agent 007 please'), false, 'trigger must n
 assert.equal(parseEmployeeRole('1'), 'agent');
 assert.equal(parseEmployeeRole('new customer'), 'customer');
 assert.equal(parseYesNo('yes'), 'yes');
+assert.equal(parseYesNo('1'), 'yes');
 assert.equal(parseYesNo('2'), 'no');
 assert.equal(parsePropertyBatchMode('one property'), 'single');
 assert.equal(parsePropertyBatchMode('2'), 'multiple');
@@ -108,6 +109,17 @@ assert.equal(staffQuarterSale.locationPatch.area, 'Kira');
 assert.deepEqual(whatsappRoute.employeePropertyMissing(staffQuarterSale), []);
 
 assert(routeSource.includes("const WHATSAPP_EMPLOYEE_AGENT_007_MARKER = 'whatsapp-employee-agent-007-review-intake-20260829'"));
+assert.equal(
+  whatsappRoute.shouldUseBridgeInboundFingerprintDedupe({ providerMessageId: 'webbridge:first-1' }),
+  false,
+  'a concrete bridge message ID must prevent a second valid identical reply from being fingerprint-deduplicated'
+);
+assert.equal(
+  whatsappRoute.shouldUseBridgeInboundFingerprintDedupe({ providerMessageId: '' }),
+  true,
+  'the recent body/time fingerprint remains available only when no message ID exists'
+);
+assert(routeSource.includes('whatsapp-distinct-rapid-replies-20260831') || serverSource.includes('whatsapp-distinct-rapid-replies-20260831'), 'the rapid identical-reply fix should be externally verifiable');
 assert(routeSource.includes("$21,'pending','submitted','whatsapp','whatsapp_employee_intake'"), 'employee properties must enter staff review as pending');
 assert(routeSource.includes('review_only: true') && routeSource.includes('auto_publish: false'), 'review-only and no-autopublish gates are required');
 assert(routeSource.includes("'whatsapp-employee-agent-007','whatsapp_employee_intake_queued','pending','pending'"), 'moderation history must retain pending status');
@@ -323,14 +335,14 @@ const originalQuery = db.query;
 
   const role = await whatsappRoute.handleEmployeeWhatsappIntake({
     phone: '+447757773202',
-    body: 'agent',
+    body: '1',
     session: { current_step: 'employee_intake_role', session_data: { property_ids: [] } }
   });
   assert.equal(role.nextStep, 'employee_agent_existing');
 
   const existing = await whatsappRoute.handleEmployeeWhatsappIntake({
     phone: '+447757773202',
-    body: 'yes',
+    body: '1',
     session: { current_step: 'employee_agent_existing', session_data: { employee_role: 'agent' } }
   });
   assert.equal(existing.nextStep, 'employee_agent_lookup');

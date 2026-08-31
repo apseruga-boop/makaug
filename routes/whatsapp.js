@@ -1728,6 +1728,14 @@ function createBridgeMessageId({ phone, body, createdAt, providerMessageId, medi
   return `webbridge:${hash}`;
 }
 
+function shouldUseBridgeInboundFingerprintDedupe({ providerMessageId = '' } = {}) {
+  // A WhatsApp/bridge message ID identifies one concrete message. Two valid
+  // replies can have the same body within seconds (for example Agent 007 asks
+  // two consecutive questions whose answer is "1"). Only use the coarse
+  // body/time fingerprint when the sender could not provide a message ID.
+  return !normalizeInput(providerMessageId);
+}
+
 function getBridgeInboundDedupeSeconds() {
   return Math.min(
     120,
@@ -11584,11 +11592,12 @@ router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
     });
   }
   const contactName = cleanDisplayName(req.body.contact_name || req.body.contactName || inboundMetadata.contact_name || inboundMetadata.contactName || inboundMetadata.chat_title);
+  const providerMessageId = normalizeInput(req.body.message_id || req.body.provider_message_id || '');
   const inboundMessageId = createBridgeMessageId({
     phone,
     body,
     createdAt: req.body.created_at || req.body.timestamp || '',
-    providerMessageId: req.body.message_id || req.body.provider_message_id || '',
+    providerMessageId,
     mediaType
   });
   const bridgeHasMedia = mediaType && mediaType !== 'text' && !mediaType.includes('location');
@@ -11641,7 +11650,13 @@ router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
     return res.json({ ok: true, duplicate: true, inbound_message_id: runtimeInboundMessageId });
   }
 
-  if (!dryRun && !ownerHistoryBackfillRequest && !isAuthorizedOwnerHistoryBackfill && !isAuthorizedEmployeeBatchReplay) {
+  if (
+    shouldUseBridgeInboundFingerprintDedupe({ providerMessageId })
+    && !dryRun
+    && !ownerHistoryBackfillRequest
+    && !isAuthorizedOwnerHistoryBackfill
+    && !isAuthorizedEmployeeBatchReplay
+  ) {
     const recentDuplicateId = await findRecentBridgeInboundDuplicate({
       phone,
       body,
@@ -12064,6 +12079,7 @@ module.exports.__test = {
   menuRouteReply,
   parseInboundLocation,
   normalizeBridgeInboundKey,
+  shouldUseBridgeInboundFingerprintDedupe,
   shouldRunWhatsappLanguageAi,
   shouldUseAiNaturalSearchExtraction,
   isAffordabilityAdviceQuestion,
