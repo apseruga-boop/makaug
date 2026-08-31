@@ -31,6 +31,7 @@ assert(workerSource.includes('async function captureVideoPosterFrame'), 'new Wha
 assert(workerSource.includes('isPlayableVideoBuffer'), 'worker must reject encrypted WhatsApp network payloads masquerading as MP4 files');
 assert(workerSource.includes('mediaPreviews.push({'), 'worker must submit the video and derived still together');
 assert(workerSource.includes('runPendingEmployeeVideoRecovery'), 'hosted worker must recover marked historic originals from WhatsApp history');
+assert(workerSource.includes('employeeVideoRecoveryCaptionKey'), 'historic lookup must ignore WhatsApp Forwarded and duration labels');
 assert(workerSource.includes("mediaPreviewWarning: 'video_still_unavailable'"), 'missing stills must remain visible as a warning');
 assert(backfillSource.includes("'whatsapp_video_still_backfilled'"), 'repairs must leave an audit event');
 assert(backfillSource.includes("'pending', 'pending'"), 'backfill must preserve staff-review status');

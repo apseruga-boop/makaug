@@ -3262,8 +3262,18 @@ function employeeVideoRecoveryPhone(target = {}) {
   )) || '';
 }
 
+function employeeVideoRecoveryCaptionKey(value = '') {
+  return normalizeReplyText(value)
+    .replace(/\b(?:forwarded|play video)\b/gi, ' ')
+    .replace(/\b\d{1,2}:\d{2}\b/g, ' ')
+    .replace(/[^a-z0-9]+/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
 async function findEmployeeVideoRecoverySnapshot(page, target = {}, chatKey = '') {
-  const expectedCaption = normalizeReplyText(target.source_caption || '').toLowerCase();
+  const expectedCaption = employeeVideoRecoveryCaptionKey(target.source_caption || '');
   if (!expectedCaption) return null;
   await scrollWhatsappHistoryToLatest(page);
   for (let round = 0; round < EMPLOYEE_BATCH_HISTORY_MAX_ROUNDS; round += 1) {
@@ -3274,10 +3284,10 @@ async function findEmployeeVideoRecoverySnapshot(page, target = {}, chatKey = ''
       });
     const match = snapshots.find((snapshot) => {
       if (!['image', 'media'].includes(String(snapshot.mediaType || '').toLowerCase())) return false;
-      const observedCaption = normalizeReplyText(snapshot.text || '').toLowerCase();
+      const observedCaption = employeeVideoRecoveryCaptionKey(snapshot.text || '');
       return observedCaption === expectedCaption
-        || observedCaption.endsWith(expectedCaption)
-        || expectedCaption.endsWith(observedCaption);
+        || observedCaption.includes(expectedCaption)
+        || expectedCaption.includes(observedCaption);
     });
     if (match) return match;
     const moved = await scrollWhatsappHistoryOlder(page);
