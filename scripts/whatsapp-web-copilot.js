@@ -107,7 +107,10 @@ function resolvePlaywrightCoreModule() {
 
 const { chromium } = requireWithReadRetry(resolvePlaywrightCoreModule());
 const { isIgnoredWhatsappSystemChat } = requireWithReadRetry('../services/whatsappWebChatFilter');
-const { isOwnWhatsappMessage } = requireWithReadRetry('../services/whatsappWebDirectionService');
+const {
+  isLikelyMakaugOutboundPreview,
+  isOwnWhatsappMessage
+} = requireWithReadRetry('../services/whatsappWebDirectionService');
 const { whatsappCallCardBrowserConfig } = requireWithReadRetry('../services/whatsappCallCardDetectionService');
 
 if (typeof dns.setDefaultResultOrder === 'function') {
@@ -287,6 +290,7 @@ const LISTING_IMAGE_PREVIEW_MAX_BYTES = 1_500_000;
 const EMPLOYEE_VIDEO_PREVIEW_MAX_BYTES = 25_000_000;
 const OUTBOUND_PROPERTY_IMAGE_MAX_BYTES = 15_000_000;
 const WHATSAPP_EMPLOYEE_AGENT_007_WORKER_MARKER = 'whatsapp-video-five-key-frames-20260831';
+const WHATSAPP_OUTGOING_PREVIEW_GUARD_MARKER = 'whatsapp-outgoing-preview-guard-20260831';
 const WHATSAPP_CALL_CARD_BROWSER_CONFIG = Object.freeze(whatsappCallCardBrowserConfig());
 const RECENT_INBOUND_BACKLOG_LIMIT = 60;
 const EMPLOYEE_BATCH_HISTORY_SCAN_LIMIT = 160;
@@ -644,6 +648,7 @@ function hostedRuntimeMetadata() {
     deploy_target: hosted ? 'render' : 'local',
     node_version: process.version.replace(/^v/, ''),
     release_marker: WHATSAPP_EMPLOYEE_AGENT_007_WORKER_MARKER,
+    outgoing_preview_guard: WHATSAPP_OUTGOING_PREVIEW_GUARD_MARKER,
     git_commit: process.env.RENDER_GIT_COMMIT || process.env.SOURCE_VERSION || process.env.GIT_COMMIT || '',
     ...Object.fromEntries(Object.entries(renderSignals).filter(([, value]) => Boolean(value)))
   };
@@ -1312,6 +1317,13 @@ async function scanChatRows(page, { unreadOnly = true, limit = 20 } = {}) {
       const ariaLabel = row.getAttribute('aria-label') || '';
       const unread = !!row.querySelector('[aria-label*="unread"], [data-testid*="unread"], [data-icon*="unread"]')
         || /unread/i.test(ariaLabel);
+      const outgoingReceipt = !!row.querySelector(
+        '[data-icon="msg-time"], [data-icon="msg-check"], [data-icon="msg-dblcheck"], '
+        + '[data-icon="status-time"], [data-icon="status-check"], [data-icon="status-dblcheck"]'
+      ) || Array.from(row.querySelectorAll('[aria-label]')).some((element) => {
+        const label = normalize(element.getAttribute('aria-label'));
+        return /^(?:sent|delivered|read|message sent|message delivered|message read)$/i.test(label);
+      });
       const timestampLabel = rowLines.find((line) => /^\d{1,2}:\d{2}\s*(?:AM|PM)?$/i.test(line)) || '';
       const preview = rowLines
         .filter((line) => line !== title && line !== timestampLabel)
@@ -1320,6 +1332,7 @@ async function scanChatRows(page, { unreadOnly = true, limit = 20 } = {}) {
         .slice(0, 4)
         .join(' ')
         .trim();
+      const previewDirection = outgoingReceipt || /^you\s*:/i.test(preview) ? 'out' : 'unknown';
       // The row aria-label can contain WhatsApp's fixed "Voice call" action.
       // Only the actual preview is trusted as call-card text.
       const callLog = hasCallLogText(preview);
@@ -1328,6 +1341,7 @@ async function scanChatRows(page, { unreadOnly = true, limit = 20 } = {}) {
         selector: rowSelector,
         title,
         preview: normalize(preview),
+        previewDirection,
         unread,
         timestampLabel,
         callLog
@@ -1436,6 +1450,7 @@ async function openChatByIndex(page, index) {
 function unreadPreviewSnapshot(row = {}, source = 'unread_preview_fallback') {
   const text = normalizeReplyText(row.preview || '');
   if (!row.unread || !row.title || !text) return null;
+  if (row.previewDirection === 'out' || isLikelyMakaugOutboundPreview(text)) return null;
   if (/^(?:photo|image|video|voice message|sticker|gif|\+\d+)$/i.test(text)) return null;
   return {
     chatKey: row.title,

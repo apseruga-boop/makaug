@@ -20,6 +20,19 @@ function isOwnWhatsappMessage({ direction = '', senderLabel = '', text = '' } = 
   return /^(?:you|me|makaug(?:\.com)?)$/i.test(firstRenderedLine);
 }
 
+function isLikelyMakaugOutboundPreview(value = '') {
+  const text = normalizeSenderLabel(value);
+  if (!text) return false;
+  return /^(?:🔐\s*)?MakaUG employee intake\b/i.test(text)
+    || /^Is the agent already registered on makaug\.com\?/i.test(text)
+    || /^Send the agent(?:'|’)?s exact name\b/i.test(text)
+    || /^How many properties are you sending\?/i.test(text)
+    || /\bis ready for (?:one|multiple) propert(?:y|ies)\b/i.test(text)
+    || /^Caption saved\. Now send (?:the )?first property media\b/i.test(text)
+    || /^✅\s*(?:Batch checked|\*?\d+ properties sent for staff review)/i.test(text);
+}
+
 module.exports = {
+  isLikelyMakaugOutboundPreview,
   isOwnWhatsappMessage
 };

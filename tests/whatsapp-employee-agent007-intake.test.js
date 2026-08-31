@@ -48,6 +48,8 @@ assert.deepEqual(parseCustomerDetails('Arthur Seruga | +44 7757 773202 | Kira, W
 assert.equal(parseCustomerDetails('Arthur only'), null, 'customer detail collection should fail closed');
 assert.equal(isEmployeeIntakeComplete('COMPLETE'), true);
 assert.equal(isEmployeeIntakeComplete('complete complete'), true);
+assert.equal(isEmployeeIntakeComplete('Clomplete'), true, 'the observed mobile typo must still finalize the batch');
+assert.equal(isEmployeeIntakeComplete('complte'), true, 'a missing-letter mobile typo must still finalize the batch');
 assert.equal(isEmployeeIntakeComplete('complete this'), false);
 assert.equal(employeeIntakePhoneAllowed('+44 7757 773202', { allowlist: '', ownerAuthorized: false }), true, 'empty allowlist preserves exact-trigger mode');
 assert.equal(employeeIntakePhoneAllowed('+44 7757 773202', { allowlist: '+447757773202,+256700000000', ownerAuthorized: false }), true);
@@ -159,8 +161,9 @@ assert(copilotSource.includes("'call-card',\n    normalizedChatKey"), 'repeated 
 assert(copilotSource.includes("snapshot.timestampLabel || row.timestampLabel || ''"), 'call-card IDs must use stable timestamps');
 assert(!copilotSource.includes("snapshot.messageId || snapshot.mediaFingerprint || ''\n  );"), 'call-card IDs must not depend on unstable DOM row fingerprints');
 assert(routeSource.includes('Properties received: ${batchCounts.propertiesShared}'), 'completion must report the shared count');
-assert(routeSource.includes('Sent to staff review: ${batchCounts.propertiesSetUp}'), 'completion must report the successful setup count');
-assert(routeSource.includes('Duplicates skipped: ${batchCounts.duplicatesSkipped}'), 'completion must report duplicates');
+assert(routeSource.includes('Newly sent to staff review: ${batchCounts.propertiesSetUp}'), 'completion must report the newly submitted count');
+assert(routeSource.includes('Already in staff review (duplicate copies skipped): ${batchCounts.duplicatesSkipped}'), 'completion must explain that duplicate matches are already in review');
+assert(routeSource.includes('Total confirmed in staff review: ${propertiesConfirmedInReview}'), 'completion must report the total confirmed review inventory');
 assert(routeSource.includes('reconcileEmployeeBatchReviewRecords'), 'completion must reconcile retry-created duplicate review records');
 assert(routeSource.includes('whatsapp_employee_recovery_duplicate_rejected'), 'recovery duplicates must be auditable and remain non-live');
 assert(routeSource.includes('properties_shared_count: 0'), 'ordered history recovery must recount the actual batch instead of reusing stale totals');
@@ -188,6 +191,10 @@ assert(copilotSource.includes("skipped: 'ordered_media_hydration_pending'"), 'wo
 assert(copilotSource.includes('captureVideoSnapshotFromNetwork'), 'worker must recover WhatsApp video bytes before reaching COMPLETE');
 assert(copilotSource.includes('isPlayableVideoBuffer'), 'worker must not persist encrypted WhatsApp network responses as playable videos');
 assert(copilotSource.includes('captureVideoMessageScreenshot'), 'worker must preserve a reviewable property image when WhatsApp withholds video bytes and the poster canvas');
+assert(copilotSource.includes("row.previewDirection === 'out'"), 'chat-row fallback must reject previews proved to be outgoing');
+assert(copilotSource.includes('isLikelyMakaugOutboundPreview(text)'), 'chat-row fallback must reject known MakaUG bot prompts when WhatsApp omits direction metadata');
+assert(copilotSource.includes("WHATSAPP_OUTGOING_PREVIEW_GUARD_MARKER = 'whatsapp-outgoing-preview-guard-20260831'"), 'hosted worker metadata must expose the outgoing-preview guard release');
+assert(serverSource.includes('whatsapp-outgoing-preview-guard-20260831'), 'live health metadata must expose the outgoing-preview guard release');
 assert(copilotSource.includes('captureVideoPosterFrame'), 'worker must derive a staff-review still when WhatsApp video bytes are available');
 assert(copilotSource.includes('mediaPreviews.push({'), 'successful video intake must carry both the video and its still image');
 assert(copilotSource.includes('trying message screenshot fallback'), 'a failed WhatsApp blob fetch must still try the reviewable message screenshot fallback');
@@ -503,11 +510,42 @@ const originalQuery = db.query;
   assert.match(completed.message, /1 properties sent for staff review/);
   assert.match(completed.message, /Batch complete for Francis Isabirye/);
   assert.match(completed.message, /Properties received: 3/);
-  assert.match(completed.message, /Sent to staff review: 1/);
-  assert.match(completed.message, /Duplicates skipped: 1/);
+  assert.match(completed.message, /Newly sent to staff review: 1/);
+  assert.match(completed.message, /Already in staff review \(duplicate copies skipped\): 1/);
+  assert.match(completed.message, /Total confirmed in staff review: 2/);
   assert.match(completed.message, /Could not be processed: 1/);
   assert.match(completed.message, /has not been notified yet/);
   assert.match(completed.message, /pending moderator approval, not live/);
+
+  const duplicateOnlyCompletion = await whatsappRoute.handleEmployeeWhatsappIntake({
+    phone: '+447757773202',
+    body: 'Clomplete',
+    session: {
+      current_step: 'employee_property_media',
+      session_data: {
+        employee_role: 'agent',
+        property_batch_mode: 'multiple',
+        agent: {
+          id: '11111111-1111-4111-8111-111111111111',
+          full_name: 'Kazi Honest',
+          whatsapp: '+256700000000'
+        },
+        property_ids: [],
+        total_media_count: 0,
+        properties_shared_count: 5,
+        properties_duplicate_count: 5,
+        properties_failed_count: 0
+      }
+    }
+  });
+  assert.equal(duplicateOnlyCompletion.nextStep, 'main_menu');
+  assert.equal(duplicateOnlyCompletion.batchComplete, true);
+  assert.equal(duplicateOnlyCompletion.pendingAgentNotification, null);
+  assert.match(duplicateOnlyCompletion.message, /Batch checked — 5 properties are already in staff review/);
+  assert.match(duplicateOnlyCompletion.message, /Newly sent to staff review: 0/);
+  assert.match(duplicateOnlyCompletion.message, /Already in staff review \(duplicate copies skipped\): 5/);
+  assert.match(duplicateOnlyCompletion.message, /Total confirmed in staff review: 5/);
+  assert.match(duplicateOnlyCompletion.message, /pending moderator approval, not live/);
 
   sessionRow = {
     phone: '+447757773202',
@@ -563,7 +601,7 @@ const originalQuery = db.query;
     duplicatesSkipped: 0,
     propertiesFailed: 0
   });
-  assert.equal(updates.length, 13, 'each state transition, interruption recovery, acknowledged-message reconciliation, and both session and durable-ledger history recovery should persist immediately');
+  assert.equal(updates.length, 14, 'each state transition, normal and duplicate-only completion, interruption recovery, acknowledged-message reconciliation, and both session and durable-ledger history recovery should persist immediately');
 
   console.log('WhatsApp Agent 007 employee intake contract tests passed.');
 })().catch((error) => {

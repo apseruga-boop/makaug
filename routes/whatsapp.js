@@ -4601,6 +4601,7 @@ async function handleEmployeeWhatsappIntake({
         propertiesShared - propertyIds.length - propertiesFailed
       );
       const batchCounts = employeeBatchCounts(data);
+      const propertiesConfirmedInReview = batchCounts.propertiesSetUp + batchCounts.duplicatesSkipped;
       const subjectName = normalizeInput(data.agent?.full_name || data.customer_details?.fullName || 'this batch');
       const agentPhone = normalizeInput(data.agent?.whatsapp || data.agent?.phone || '');
       const agentProfileUrl = data.agent?.id ? `${HOME_URL}/agents/${data.agent.id}` : '';
@@ -4613,6 +4614,7 @@ async function handleEmployeeWhatsappIntake({
           profile_url: agentProfileUrl,
           properties_shared: batchCounts.propertiesShared,
           properties_set_up: batchCounts.propertiesSetUp,
+          properties_already_in_review: batchCounts.duplicatesSkipped,
           duplicates_skipped: batchCounts.duplicatesSkipped,
           properties_failed: batchCounts.propertiesFailed,
           created_at: new Date().toISOString()
@@ -4629,6 +4631,7 @@ async function handleEmployeeWhatsappIntake({
           batch_mode: data.property_batch_mode || 'multiple',
           properties_shared: batchCounts.propertiesShared,
           properties_set_up: batchCounts.propertiesSetUp,
+          properties_already_in_review: batchCounts.duplicatesSkipped,
           duplicates_skipped: batchCounts.duplicatesSkipped,
           properties_failed: batchCounts.propertiesFailed,
           media_count: Number(data.total_media_count || 0)
@@ -4656,6 +4659,7 @@ async function handleEmployeeWhatsappIntake({
         employee_intake_last_batch_mode: data.property_batch_mode || 'multiple',
         employee_intake_last_properties_shared: batchCounts.propertiesShared,
         employee_intake_last_properties_set_up: batchCounts.propertiesSetUp,
+        employee_intake_last_properties_already_in_review: batchCounts.duplicatesSkipped,
         employee_intake_last_duplicates_skipped: batchCounts.duplicatesSkipped,
         employee_intake_last_properties_failed: batchCounts.propertiesFailed,
         employee_intake_last_media_count: Number(data.total_media_count || 0),
@@ -4664,13 +4668,16 @@ async function handleEmployeeWhatsappIntake({
       const notificationLine = pendingAgentNotification
         ? `\n\n${subjectName} has not been notified yet. The agent profile card is waiting for founder approval.`
         : '';
+      const completionHeadline = batchCounts.propertiesSetUp === 0 && batchCounts.duplicatesSkipped > 0
+        ? `✅ *Batch checked — ${batchCounts.duplicatesSkipped} ${batchCounts.duplicatesSkipped === 1 ? 'property is' : 'properties are'} already in staff review*`
+        : `✅ *${batchCounts.propertiesSetUp} properties sent for staff review*`;
       return {
         handled: true,
         nextStep: 'main_menu',
         batchComplete: true,
         batchCounts,
         pendingAgentNotification,
-        message: `✅ *${batchCounts.propertiesSetUp} properties sent for staff review*\nBatch complete for ${subjectName}.\n\nProperties received: ${batchCounts.propertiesShared}\nSent to staff review: ${batchCounts.propertiesSetUp}\nDuplicates skipped: ${batchCounts.duplicatesSkipped}\nCould not be processed: ${batchCounts.propertiesFailed}\nMedia stored: ${Number(data.total_media_count || 0)}\n\nStatus: sent for review — pending moderator approval, not live.${notificationLine}`
+        message: `${completionHeadline}\nBatch complete for ${subjectName}.\n\nProperties received: ${batchCounts.propertiesShared}\nNewly sent to staff review: ${batchCounts.propertiesSetUp}\nAlready in staff review (duplicate copies skipped): ${batchCounts.duplicatesSkipped}\nTotal confirmed in staff review: ${propertiesConfirmedInReview}\nCould not be processed: ${batchCounts.propertiesFailed}\nMedia stored: ${Number(data.total_media_count || 0)}\n\nStatus: sent for review — pending moderator approval, not live.${notificationLine}`
       };
     }
 

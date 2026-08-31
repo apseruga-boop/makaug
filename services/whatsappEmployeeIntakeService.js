@@ -92,7 +92,10 @@ function isEmployeeIntakeStep(value = '') {
 }
 
 function isEmployeeIntakeComplete(value = '') {
-  return /^(?:complete|completed|done)(?:\s+(?:complete|completed|done))?$/i.test(cleanText(value));
+  // Keep the command exact so captions containing the word "complete" are not
+  // closed accidentally, while accepting the small mobile-keyboard typos seen
+  // in real employee batches.
+  return /^(?:complete|completed|done|clomplete|complte|compelete)(?:\s+(?:complete|completed|done|clomplete|complte|compelete))?$/i.test(cleanText(value));
 }
 
 function employeeIntakePhoneAllowed(phone, {
