@@ -155,16 +155,45 @@ async function extractStillAt(videoPath, stillPath, seconds) {
   const ffmpeg = String(process.env.FFMPEG_PATH || 'ffmpeg').trim() || 'ffmpeg';
   await execFileAsync(ffmpeg, [
     '-hide_banner', '-loglevel', 'error', '-y',
-    '-ss', Number(seconds || 0).toFixed(3),
     '-i', videoPath,
+    '-ss', Number(seconds || 0).toFixed(3),
     '-frames:v', '1',
     '-vf', "scale='min(1280,iw)':-2",
     '-q:v', '3',
     stillPath
   ]);
-  const stat = await fsp.stat(stillPath);
+  const stat = await fsp.stat(stillPath).catch(() => null);
+  if (!stat) throw new Error(`ffmpeg produced no key frame at ${Number(seconds || 0).toFixed(3)}s`);
   if (!stat.size) throw new Error('ffmpeg produced an empty key frame');
   return stat.size;
+}
+
+async function extractStillWithFallback(videoPath, stillPath, requestedSeconds) {
+  const requested = Math.max(0, Number(requestedSeconds || 0));
+  const attempts = fallbackFrameOffsets(requested);
+  let lastError = null;
+  for (const seconds of attempts) {
+    await fsp.rm(stillPath, { force: true }).catch(() => {});
+    try {
+      await extractStillAt(videoPath, stillPath, seconds);
+      return seconds;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError || new Error('ffmpeg could not produce a key frame');
+}
+
+function fallbackFrameOffsets(requestedSeconds) {
+  const requested = Math.max(0, Number(requestedSeconds || 0));
+  return [...new Set([
+    requested,
+    requested * 0.75,
+    requested * 0.5,
+    requested * 0.25,
+    0.1,
+    0
+  ].map((value) => Number(value.toFixed(3))))];
 }
 
 function keyFramesNeeded(property = {}) {
@@ -191,7 +220,7 @@ async function makeAndUploadStills(property) {
         const offsets = representativeFrameOffsets(duration, frameCount);
         for (let frameIndex = 0; frameIndex < offsets.length && uploaded.length < required; frameIndex += 1) {
           const stillPath = path.join(tempDir, `still-${index + 1}-${frameIndex + 1}.jpg`);
-          await extractStillAt(videoPath, stillPath, offsets[frameIndex]);
+          const actualTimestampSeconds = await extractStillWithFallback(videoPath, stillPath, offsets[frameIndex]);
           const bytes = await fsp.readFile(stillPath);
           const stored = await uploadBufferToS3({
             bytes,
@@ -204,7 +233,7 @@ async function makeAndUploadStills(property) {
             sha256: stored.sha256,
             sourceVideoUrl: urls[index],
             sourceVideoIndex: index,
-            timestampSeconds: offsets[frameIndex],
+            timestampSeconds: actualTimestampSeconds,
             bytes: stored.bytes
           });
         }
@@ -411,6 +440,9 @@ module.exports = {
   MIN_VIDEO_KEY_FRAMES,
   SELECTION_SQL,
   extractVideoUrls,
+  extractStillAt,
+  extractStillWithFallback,
+  fallbackFrameOffsets,
   keyFramesNeeded,
   representativeFrameOffsets,
   parseArgs

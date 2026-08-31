@@ -8,6 +8,7 @@ const {
   MIN_VIDEO_KEY_FRAMES,
   SELECTION_SQL,
   extractVideoUrls,
+  fallbackFrameOffsets,
   keyFramesNeeded,
   representativeFrameOffsets,
   parseArgs
@@ -35,6 +36,11 @@ assert.equal(keyFramesNeeded({ video_still_count: 5 }), 0);
 const offsets = representativeFrameOffsets(12, 5);
 assert.equal(offsets.length, 5, 'five timestamps must be spread across each video');
 assert(offsets.every((value, index) => value > 0 && value < 12 && (!index || value > offsets[index - 1])));
+assert.deepEqual(
+  fallbackFrameOffsets(8),
+  [8, 6, 4, 2, 0.1, 0],
+  'frame extraction must progressively seek earlier when container duration metadata is inaccurate'
+);
 assert(SELECTION_SQL.includes("p.source = 'whatsapp_employee_intake'"), 'repair must stay scoped to employee intake');
 assert(SELECTION_SQL.includes("p.status = 'pending'"), 'repair must leave approved and rejected listings untouched');
 assert(SELECTION_SQL.includes('video_still_count') && SELECTION_SQL.includes('COUNT(pi.id) FILTER'), 'repair must count existing video-derived images');
@@ -51,6 +57,7 @@ assert(workerSource.includes('runPendingEmployeeVideoRecovery'), 'hosted worker 
 assert(workerSource.includes('employeeVideoRecoveryCaptionKey'), 'historic lookup must ignore WhatsApp Forwarded and duration labels');
 assert(workerSource.includes("mediaType: 'media',\n      mediaPreviews: []"), 'marked historic video cards must be reopened even if WhatsApp labels the old thumbnail as an image');
 assert(backfillSource.includes("'whatsapp_video_still_backfilled'"), 'repairs must leave an audit event');
+assert(backfillSource.includes('extractStillWithFallback(videoPath, stillPath'), 'backfill must recover when the requested frame timestamp is beyond decodable footage');
 assert(backfillSource.includes("'pending', 'pending'"), 'backfill must preserve staff-review status');
 assert(backfillSource.includes('auto_publish: false'), 'backfill must not publish repaired listings');
 assert(backfillSource.includes("slot_key, room_label"), 'derived stills must be attached to the existing property image gallery');
