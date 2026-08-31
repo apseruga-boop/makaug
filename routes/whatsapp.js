@@ -3323,6 +3323,14 @@ function employeeMediaExtension(mimeType = '') {
   return extensions[String(mimeType || '').toLowerCase()] || 'bin';
 }
 
+function employeeVideoBytesPlayable(bytes, mimeType = '') {
+  if (!Buffer.isBuffer(bytes) || bytes.length < 12) return false;
+  if (String(mimeType || '').toLowerCase().includes('webm')) {
+    return bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3;
+  }
+  return bytes.subarray(4, 8).toString('ascii') === 'ftyp';
+}
+
 function employeeMediaCandidates(runtime = {}, mediaUrl = '') {
   const collected = [];
   const append = (candidate = {}, fallbackMime = '') => {
@@ -3388,6 +3396,13 @@ async function storeEmployeeMediaCandidate(candidate, {
   let sha256 = normalizeInput(candidate.sha256 || '');
 
   if (candidate.dataUrl) {
+    if (kind === 'video') {
+      const encoded = String(candidate.dataUrl).split(',')[1] || '';
+      const bytes = Buffer.from(encoded, 'base64');
+      if (!employeeVideoBytesPlayable(bytes, mimeType)) {
+        throw new Error('Employee intake video bytes are encrypted or not a playable media container');
+      }
+    }
     storedUrl = await storeDataUrl(candidate.dataUrl, {
       keyPrefix: privateMedia ? 'whatsapp-employee-intake/private-id' : `whatsapp-employee-intake/${kind}`,
       filename,
@@ -3414,6 +3429,9 @@ async function storeEmployeeMediaCandidate(candidate, {
     if (!allowedMimeTypes.includes(responseMime)) throw new Error(`Unsupported downloaded media type: ${responseMime}`);
     const bytes = Buffer.from(await response.arrayBuffer());
     if (!bytes.length || bytes.length > maxBytes) throw new Error(`WhatsApp ${kind} exceeds the ${Math.floor(maxBytes / 1_000_000)}MB intake limit`);
+    if (kind === 'video' && !employeeVideoBytesPlayable(bytes, responseMime)) {
+      throw new Error('Downloaded employee intake video is encrypted or not a playable media container');
+    }
     const key = `${privateMedia ? 'whatsapp-employee-intake/private-id' : `whatsapp-employee-intake/${kind}`}/${Date.now()}-${crypto.randomUUID()}-${filename}`;
     const stored = await uploadBufferToS3({ bytes, mimeType: responseMime, key });
     storedUrl = privateMedia ? stored.internalRef : (stored.publicUrl || stored.internalRef);
@@ -3430,6 +3448,132 @@ async function storeEmployeeMedia(candidates = [], options = {}) {
     stored.push(await storeEmployeeMediaCandidate(candidates[index], { ...options, index }));
   }
   return stored;
+}
+
+async function recoverEmployeeVideoReviewMedia(propertyId, runtime = {}) {
+  const targetResult = await db.query(
+    `SELECT id, status, extra_fields
+       FROM properties
+      WHERE id = $1
+        AND source = 'whatsapp_employee_intake'
+        AND status = 'pending'
+        AND COALESCE(extra_fields->>'video_recovery_required', 'false') = 'true'
+      LIMIT 1`,
+    [propertyId]
+  );
+  const target = targetResult.rows[0];
+  if (!target) return { recovered: false, reason: 'target_not_pending_recovery' };
+
+  const candidates = employeeMediaCandidates(runtime)
+    .filter((candidate) => ['image', 'video'].includes(candidate.kind));
+  const stored = await storeEmployeeMedia(candidates, {
+    privateMedia: false,
+    phone: runtime.phone || '',
+    inboundMessageId: `video-recovery-${propertyId}`,
+    provider: 'web_bridge'
+  });
+  const videos = stored.filter((item) => item.kind === 'video');
+  const images = stored.filter((item) => item.kind === 'image');
+  if (!videos.length || !images.length) {
+    throw new Error('Video recovery requires a playable video and a derived still image');
+  }
+
+  const client = await db.getClient();
+  try {
+    await client.query('BEGIN');
+    const lockedResult = await client.query(
+      `SELECT id, status, extra_fields
+         FROM properties
+        WHERE id = $1
+        FOR UPDATE`,
+      [propertyId]
+    );
+    const locked = lockedResult.rows[0];
+    if (
+      !locked
+      || locked.status !== 'pending'
+      || String(locked.extra_fields?.video_recovery_required || '') !== 'true'
+    ) {
+      await client.query('ROLLBACK');
+      return { recovered: false, reason: 'target_changed' };
+    }
+    const imageCountResult = await client.query(
+      'SELECT COUNT(*)::int AS count FROM property_images WHERE property_id = $1',
+      [propertyId]
+    );
+    const existingImageCount = Number(imageCountResult.rows[0]?.count || 0);
+    for (let index = 0; index < images.length; index += 1) {
+      await client.query(
+        `INSERT INTO property_images (property_id, url, is_primary, sort_order, slot_key, room_label)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [
+          propertyId,
+          images[index].url,
+          existingImageCount + index === 0,
+          existingImageCount + index,
+          `video_recovery_still_${index + 1}`,
+          `Recovered still image from property video ${index + 1}`
+        ]
+      );
+    }
+    const oldVideoUrls = Array.isArray(locked.extra_fields?.video_urls)
+      ? locked.extra_fields.video_urls.filter(Boolean)
+      : [];
+    const oldHashes = Array.isArray(locked.extra_fields?.media_sha256)
+      ? locked.extra_fields.media_sha256.filter(Boolean)
+      : [];
+    const recoveryPatch = {
+      video_urls: videos.map((item) => item.url),
+      video_still_urls: images.map((item) => item.url),
+      corrupt_video_urls: [...new Set([
+        ...(Array.isArray(locked.extra_fields?.corrupt_video_urls) ? locked.extra_fields.corrupt_video_urls : []),
+        ...oldVideoUrls
+      ])],
+      video_recovery_required: false,
+      video_recovered_at: new Date().toISOString(),
+      video_recovery_marker: 'whatsapp-video-original-recovery-20260831',
+      media_count: videos.length + images.length,
+      media_sha256: [...new Set([
+        ...oldHashes,
+        ...videos.map((item) => item.sha256).filter(Boolean),
+        ...images.map((item) => item.sha256).filter(Boolean)
+      ])],
+      review_only: true,
+      auto_publish: false
+    };
+    await client.query(
+      `UPDATE properties
+          SET extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $2::jsonb,
+              updated_at = NOW()
+        WHERE id = $1 AND status = 'pending'`,
+      [propertyId, JSON.stringify(recoveryPatch)]
+    );
+    await client.query(
+      `INSERT INTO property_moderation_events
+        (property_id, actor_id, action, status_from, status_to, reason, notes, delivery)
+       VALUES ($1, 'whatsapp-video-original-recovery', 'whatsapp_video_original_recovered',
+               'pending', 'pending', $2, $3, $4::jsonb)`,
+      [
+        propertyId,
+        'Replaced an encrypted historic WhatsApp media object with the playable original and a derived still.',
+        `${videos.length} playable video(s) and ${images.length} still image(s) attached. Listing remained in staff review.`,
+        JSON.stringify({
+          marker: 'whatsapp-video-original-recovery-20260831',
+          videos_recovered: videos.length,
+          stills_attached: images.length,
+          corrupt_video_urls: oldVideoUrls,
+          auto_publish: false
+        })
+      ]
+    );
+    await client.query('COMMIT');
+    return { recovered: true, videos: videos.length, images: images.length };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 async function replaceEmployeeSession(phone, currentStep, sessionData = {}) {
@@ -11565,6 +11709,45 @@ router.post('/web-bridge/employee-batch-recovery', asyncRoute(async (req, res) =
       ...result
     }
   });
+}));
+
+// GET /api/whatsapp/web-bridge/employee-video-recovery-targets
+router.get('/web-bridge/employee-video-recovery-targets', asyncRoute(async (req, res) => {
+  if (!isWhatsappWebBridgeAuthorized(req)) return bridgeUnauthorized(res);
+  const result = await db.query(
+    `SELECT id,
+            extra_fields->>'source_caption' AS source_caption,
+            extra_fields->>'whatsapp_employee_sender_phone_suffix' AS sender_phone_suffix
+       FROM properties
+      WHERE source = 'whatsapp_employee_intake'
+        AND status = 'pending'
+        AND COALESCE(extra_fields->>'video_recovery_required', 'false') = 'true'
+      ORDER BY created_at ASC
+      LIMIT 10`
+  );
+  return res.json({
+    ok: true,
+    data: {
+      marker: 'whatsapp-video-original-recovery-20260831',
+      targets: result.rows
+    }
+  });
+}));
+
+// POST /api/whatsapp/web-bridge/employee-video-recovery/:id
+router.post('/web-bridge/employee-video-recovery/:id', asyncRoute(async (req, res) => {
+  if (!isWhatsappWebBridgeAuthorized(req)) return bridgeUnauthorized(res);
+  const propertyId = normalizeInput(req.params.id);
+  if (!/^[0-9a-f-]{36}$/i.test(propertyId)) {
+    return res.status(400).json({ ok: false, error: 'valid property id is required' });
+  }
+  const result = await recoverEmployeeVideoReviewMedia(propertyId, {
+    phone: normalizeBridgeInboundKey(req.body.phone || req.body.chat_key || ''),
+    mediaType: normalizeInput(req.body.media_type || req.body.mediaType || 'video/mp4'),
+    photoCandidates: Array.isArray(req.body.image_previews) ? req.body.image_previews : [],
+    mediaCandidates: Array.isArray(req.body.media_previews) ? req.body.media_previews : []
+  });
+  return res.json({ ok: true, data: { marker: 'whatsapp-video-original-recovery-20260831', ...result } });
 }));
 
 // POST /api/whatsapp/web-bridge/inbound

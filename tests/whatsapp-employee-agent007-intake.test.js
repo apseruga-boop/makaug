@@ -165,6 +165,7 @@ assert(copilotSource.includes('release_marker: WHATSAPP_EMPLOYEE_AGENT_007_WORKE
 assert(copilotSource.includes('const RECENT_INBOUND_BACKLOG_LIMIT = 60'), 'worker must inspect the recent inbound backlog instead of only the last message');
 assert(copilotSource.includes("skipped: 'ordered_media_hydration_pending'"), 'worker must stop before COMPLETE when earlier media bytes are unavailable');
 assert(copilotSource.includes('captureVideoSnapshotFromNetwork'), 'worker must recover WhatsApp video bytes before reaching COMPLETE');
+assert(copilotSource.includes('isPlayableVideoBuffer'), 'worker must not persist encrypted WhatsApp network responses as playable videos');
 assert(copilotSource.includes('captureVideoMessageScreenshot'), 'worker must preserve a reviewable property image when WhatsApp withholds video bytes and the poster canvas');
 assert(copilotSource.includes('captureVideoPosterFrame'), 'worker must derive a staff-review still when WhatsApp video bytes are available');
 assert(copilotSource.includes('mediaPreviews.push({'), 'successful video intake must carry both the video and its still image');

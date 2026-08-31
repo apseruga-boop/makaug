@@ -293,6 +293,7 @@ const EMPLOYEE_BATCH_HISTORY_SCAN_LIMIT = 160;
 const EMPLOYEE_BATCH_HISTORY_MAX_ROUNDS = 30;
 const EMPLOYEE_BATCH_RECOVERY_RETRY_MS = 20_000;
 const EMPLOYEE_BATCH_RECOVERY_MAX_ATTEMPTS = 8;
+const EMPLOYEE_VIDEO_RECOVERY_MAX_ATTEMPTS = 8;
 const configuredEmployeeBatchRecoveryIdleMs = Number(
   process.env.WHATSAPP_WEB_COPILOT_EMPLOYEE_RECOVERY_IDLE_MS || 60_000
 );
@@ -2276,6 +2277,15 @@ function isLikelyWhatsappVideoResponse(response) {
   return binary && whatsappMedia && ['media', 'fetch', 'xhr'].includes(resourceType);
 }
 
+function isPlayableVideoBuffer(buffer, mimeType = '') {
+  if (!Buffer.isBuffer(buffer) || buffer.length < 12) return false;
+  const mime = String(mimeType || '').toLowerCase();
+  if (mime.includes('webm')) {
+    return buffer[0] === 0x1a && buffer[1] === 0x45 && buffer[2] === 0xdf && buffer[3] === 0xa3;
+  }
+  return buffer.subarray(4, 8).toString('ascii') === 'ftyp';
+}
+
 async function clickVideoMessageControl(page, messageId) {
   return page.evaluate((targetMessageId) => {
     const nodes = Array.from(document.querySelectorAll('[data-id], [data-testid^="conv-msg-"]'));
@@ -2316,6 +2326,10 @@ async function captureVideoSnapshotFromNetwork(page, messageId) {
   if (!buffer?.length || buffer.length > EMPLOYEE_VIDEO_PREVIEW_MAX_BYTES) return null;
   const contentType = String(response.headers()['content-type'] || '').split(';')[0].trim().toLowerCase();
   const mimeType = contentType.startsWith('video/') ? contentType : 'video/mp4';
+  if (!isPlayableVideoBuffer(buffer, mimeType)) {
+    log(`ignored encrypted or unsupported WhatsApp video response for ${messageId}`);
+    return null;
+  }
   return {
     dataUrl: `data:${mimeType};base64,${buffer.toString('base64')}`,
     mimeType,
@@ -3236,6 +3250,94 @@ async function runConfiguredEmployeeBatchRecovery(page) {
     log(`configured Agent 007 recovery checked ${phone}; handled=${result.handled ? 'yes' : 'no'} settled=${phoneSettled ? 'yes' : 'no'} processed=${result.processed || 0}`);
   }
   return { processed, settled };
+}
+
+function employeeVideoRecoveryPhone(target = {}) {
+  const suffix = String(target.sender_phone_suffix || '').replace(/\D/g, '');
+  if (!suffix) return '';
+  return EMPLOYEE_BATCH_RECOVERY_PHONES.find((phone) => (
+    String(phone || '').replace(/\D/g, '').endsWith(suffix)
+  )) || '';
+}
+
+async function findEmployeeVideoRecoverySnapshot(page, target = {}, chatKey = '') {
+  const expectedCaption = normalizeReplyText(target.source_caption || '').toLowerCase();
+  if (!expectedCaption) return null;
+  await scrollWhatsappHistoryToLatest(page);
+  for (let round = 0; round < EMPLOYEE_BATCH_HISTORY_MAX_ROUNDS; round += 1) {
+    const snapshots = (await getRecentIncomingSnapshots(page, EMPLOYEE_BATCH_HISTORY_SCAN_LIMIT))
+      .filter((snapshot) => {
+        const snapshotChat = normalizeChatKey(snapshot.chatKey);
+        return !chatKey || !snapshotChat || snapshotChat === normalizeChatKey(chatKey);
+      });
+    const match = snapshots.find((snapshot) => {
+      if (!['image', 'media'].includes(String(snapshot.mediaType || '').toLowerCase())) return false;
+      const observedCaption = normalizeReplyText(snapshot.text || '').toLowerCase();
+      return observedCaption === expectedCaption
+        || observedCaption.endsWith(expectedCaption)
+        || expectedCaption.endsWith(observedCaption);
+    });
+    if (match) return match;
+    const moved = await scrollWhatsappHistoryOlder(page);
+    if (!moved) break;
+    await page.waitForTimeout(650);
+  }
+  await scrollWhatsappHistoryToLatest(page);
+  return null;
+}
+
+async function runPendingEmployeeVideoRecovery(page) {
+  const response = await apiRequest('/api/whatsapp/web-bridge/employee-video-recovery-targets');
+  const targets = Array.isArray(response.data?.targets) ? response.data.targets : [];
+  if (!targets.length) return { settled: true, recovered: 0 };
+  let recovered = 0;
+  let retryable = false;
+  for (const target of targets) {
+    const phone = employeeVideoRecoveryPhone(target);
+    if (!phone) {
+      log(`video recovery target ${target.id} has no configured employee phone matching suffix ${target.sender_phone_suffix || 'unknown'}`);
+      retryable = true;
+      continue;
+    }
+    const opened = await openChatForReply(page, phone);
+    if (!opened) {
+      retryable = true;
+      continue;
+    }
+    const snapshot = await findEmployeeVideoRecoverySnapshot(page, target, phone);
+    if (!snapshot) {
+      log(`video recovery could not find WhatsApp source message for ${target.id}`);
+      retryable = true;
+      continue;
+    }
+    const hydrated = await hydrateMediaSnapshot(page, snapshot);
+    const previews = Array.isArray(hydrated.mediaPreviews) ? hydrated.mediaPreviews : [];
+    const hasVideo = previews.some((item) => item.kind === 'video' || String(item.mimeType || '').startsWith('video/'));
+    const hasImage = previews.some((item) => item.kind === 'image' || String(item.mimeType || '').startsWith('image/'));
+    if (!hasVideo || !hasImage) {
+      log(`video recovery hydration incomplete for ${target.id}; video=${hasVideo} still=${hasImage}`);
+      retryable = true;
+      continue;
+    }
+    const result = await apiRequest(`/api/whatsapp/web-bridge/employee-video-recovery/${encodeURIComponent(target.id)}`, {
+      method: 'POST',
+      body: {
+        client_id: CLIENT_ID,
+        phone,
+        media_type: 'video/mp4',
+        media_previews: previews,
+        image_previews: Array.isArray(hydrated.imagePreviews) ? hydrated.imagePreviews : []
+      }
+    });
+    if (result.data?.recovered) {
+      recovered += 1;
+      log(`recovered original WhatsApp video and still for review property ${target.id}`);
+    } else {
+      retryable = true;
+    }
+  }
+  await scrollWhatsappHistoryToLatest(page);
+  return { settled: !retryable, recovered };
 }
 
 async function collectOwnerHistoryBackfillSnapshots(page, { chatKey = '', limit = 60 } = {}) {
@@ -4719,6 +4821,9 @@ async function main() {
   let configuredEmployeeRecoverySettled = EMPLOYEE_BATCH_RECOVERY_PHONES.length === 0;
   let configuredEmployeeRecoveryAttempts = 0;
   let lastConfiguredEmployeeRecoveryAttempt = 0;
+  let employeeVideoRecoverySettled = false;
+  let employeeVideoRecoveryAttempts = 0;
+  let lastEmployeeVideoRecoveryAttempt = 0;
 
   while (true) {
     try {
@@ -4915,6 +5020,21 @@ async function main() {
         configuredEmployeeRecoverySettled = !!recovery.settled;
         if (!configuredEmployeeRecoverySettled && configuredEmployeeRecoveryAttempts >= EMPLOYEE_BATCH_RECOVERY_MAX_ATTEMPTS) {
           log(`configured Agent 007 recovery exhausted ${configuredEmployeeRecoveryAttempts} bounded attempts; the normal chat sweeps remain active`);
+        }
+      }
+      if (
+        !hadPriorityActivity
+        && !employeeVideoRecoverySettled
+        && employeeVideoRecoveryAttempts < EMPLOYEE_VIDEO_RECOVERY_MAX_ATTEMPTS
+        && now - sessionStartedAt >= EMPLOYEE_BATCH_RECOVERY_IDLE_MS
+        && now - lastEmployeeVideoRecoveryAttempt >= EMPLOYEE_BATCH_RECOVERY_RETRY_MS
+      ) {
+        employeeVideoRecoveryAttempts += 1;
+        lastEmployeeVideoRecoveryAttempt = now;
+        const recovery = await runPendingEmployeeVideoRecovery(page);
+        employeeVideoRecoverySettled = !!recovery.settled;
+        if (!employeeVideoRecoverySettled && employeeVideoRecoveryAttempts >= EMPLOYEE_VIDEO_RECOVERY_MAX_ATTEMPTS) {
+          log(`employee video recovery exhausted ${employeeVideoRecoveryAttempts} bounded attempts; the listings remain pending for staff review`);
         }
       }
       const sentCount = sentAtLoopStart + sentAfterCall + sentAfterActive + sentAfterUnread + sentAfterSweep;
