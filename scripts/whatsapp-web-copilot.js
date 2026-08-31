@@ -3255,6 +3255,8 @@ async function runConfiguredEmployeeBatchRecovery(page) {
 function employeeVideoRecoveryPhone(target = {}) {
   const suffix = String(target.sender_phone_suffix || '').replace(/\D/g, '');
   if (!suffix) return '';
+  const sessionPhone = normalizeChatKey(target.sender_phone || '');
+  if (sessionPhone && sessionPhone.endsWith(suffix)) return sessionPhone;
   return EMPLOYEE_BATCH_RECOVERY_PHONES.find((phone) => (
     String(phone || '').replace(/\D/g, '').endsWith(suffix)
   )) || '';

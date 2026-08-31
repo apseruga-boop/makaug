@@ -11715,14 +11715,22 @@ router.post('/web-bridge/employee-batch-recovery', asyncRoute(async (req, res) =
 router.get('/web-bridge/employee-video-recovery-targets', asyncRoute(async (req, res) => {
   if (!isWhatsappWebBridgeAuthorized(req)) return bridgeUnauthorized(res);
   const result = await db.query(
-    `SELECT id,
-            extra_fields->>'source_caption' AS source_caption,
-            extra_fields->>'whatsapp_employee_sender_phone_suffix' AS sender_phone_suffix
-       FROM properties
-      WHERE source = 'whatsapp_employee_intake'
-        AND status = 'pending'
-        AND COALESCE(extra_fields->>'video_recovery_required', 'false') = 'true'
-      ORDER BY created_at ASC
+    `SELECT p.id,
+            p.extra_fields->>'source_caption' AS source_caption,
+            p.extra_fields->>'whatsapp_employee_sender_phone_suffix' AS sender_phone_suffix,
+            (
+              SELECT ws.phone
+                FROM whatsapp_sessions ws
+               WHERE regexp_replace(ws.phone, '[^0-9]', '', 'g')
+                     LIKE '%' || (p.extra_fields->>'whatsapp_employee_sender_phone_suffix')
+               ORDER BY ws.updated_at DESC
+               LIMIT 1
+            ) AS sender_phone
+       FROM properties p
+      WHERE p.source = 'whatsapp_employee_intake'
+        AND p.status = 'pending'
+        AND COALESCE(p.extra_fields->>'video_recovery_required', 'false') = 'true'
+      ORDER BY p.created_at ASC
       LIMIT 10`
   );
   return res.json({

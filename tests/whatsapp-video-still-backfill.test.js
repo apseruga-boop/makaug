@@ -38,6 +38,7 @@ assert(backfillSource.includes('auto_publish: false'), 'backfill must not publis
 assert(backfillSource.includes("slot_key, room_label"), 'derived stills must be attached to the existing property image gallery');
 assert(routeSource.includes('employeeVideoBytesPlayable'), 'the API must reject encrypted or corrupt video uploads before Cloudflare storage');
 assert(routeSource.includes("router.get('/web-bridge/employee-video-recovery-targets'"), 'worker must have an authenticated repair queue');
+assert(routeSource.includes('FROM whatsapp_sessions ws'), 'repair queue must resolve the authorized originating employee chat without a new worker secret');
 assert(routeSource.includes("router.post('/web-bridge/employee-video-recovery/:id'"), 'worker must have an authenticated original-media recovery route');
 assert(routeSource.includes("'pending', 'pending'"), 'original-video recovery must preserve staff-review status');
 assert(serverSource.includes('whatsapp-video-still-dual-media-20260831'), 'release marker must be externally visible');
