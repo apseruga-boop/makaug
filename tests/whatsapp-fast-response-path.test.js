@@ -225,8 +225,8 @@ async function run() {
     'WhatsApp Web bridge reply dedupe must be capped to seconds even if the environment is misconfigured'
   );
   assert(
-    whatsappWebBridgeServiceSource.includes('WHATSAPP_WEB_BRIDGE_CLAIM_SECONDS || 8'),
-    'WhatsApp Web bridge claim lease must recover quickly if the browser send path stalls'
+    whatsappWebBridgeServiceSource.includes('WHATSAPP_WEB_BRIDGE_CLAIM_SECONDS || 90'),
+    'WhatsApp Web bridge claim lease must remain longer than the browser send confirmation path'
   );
   assert(
     whatsappWebBridgeServiceSource.includes("'browser_database_error'")
@@ -243,8 +243,12 @@ async function run() {
     'Every async WhatsApp Web bridge delivery route must forward database failures instead of crashing production'
   );
   assert(
-    whatsappWebBridgeServiceSource.includes('Math.min(\n    20,\n    Math.max(5, Number(process.env.WHATSAPP_WEB_BRIDGE_CLAIM_SECONDS || 8))'),
-    'WhatsApp Web bridge claim lease must be capped below one minute'
+    whatsappWebBridgeServiceSource.includes('Math.min(\n    180,\n    Math.max(60, Number(process.env.WHATSAPP_WEB_BRIDGE_CLAIM_SECONDS || 90))'),
+    'WhatsApp Web bridge claim lease must prevent an in-flight browser send from being reclaimed and duplicated'
+  );
+  assert(
+    whatsappWebCopilotSource.includes('skipped overlapping outbox drain; the active browser send retains its queue lease'),
+    'one worker process must never type two queued replies into the composer concurrently'
   );
   assert(
     whatsappWebBridgeServiceSource.includes('duplicate_refreshed_at')

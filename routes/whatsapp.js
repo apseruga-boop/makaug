@@ -3708,6 +3708,14 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
     listingType = 'rent';
   }
   const bedroomDraft = parseEmployeeBedroomDraft(cleanCaption);
+  if (
+    listingType === 'land'
+    && Number(bedroomDraft.bedrooms) >= 1
+    && /\b(?:house|home|villa|bungalow|mansion|apartment|flat)\b/i.test(cleanCaption)
+    && /\b(?:sale|selling|buy|purchase)\b/i.test(cleanCaption)
+  ) {
+    listingType = 'sale';
+  }
   if (!listingType && Number(bedroomDraft.bedrooms) >= 1 && /\bstaff quarters?\b/i.test(cleanCaption) && Number(price) >= 50000000) {
     listingType = 'sale';
   }

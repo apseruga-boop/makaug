@@ -92,6 +92,12 @@ const CURATED_UGANDA_LOCATION_OVERRIDES = [
     source: 'makaug_verified_location_override'
   },
   {
+    name: 'Nabusugwe', district: 'Wakiso', town: 'Kira', level: 'area',
+    aliases: ['Nabusugwe', 'Namugongo Nabusugwe', 'Nabusugwe Namugongo'],
+    lat: 0.363, lng: 32.636,
+    source: 'makaug_verified_listing_location_override'
+  },
+  {
     name: 'Ssenge', district: 'Wakiso', town: 'Nansana', level: 'area',
     aliases: ['Ssenge', 'Senge'], lat: 0.4167, lng: 32.5167,
     source: 'makaug_verified_location_override'

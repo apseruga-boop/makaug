@@ -290,6 +290,7 @@ const LISTING_IMAGE_PREVIEW_MAX_BYTES = 1_500_000;
 const EMPLOYEE_VIDEO_PREVIEW_MAX_BYTES = 25_000_000;
 const OUTBOUND_PROPERTY_IMAGE_MAX_BYTES = 15_000_000;
 const WHATSAPP_EMPLOYEE_AGENT_007_WORKER_MARKER = 'whatsapp-video-five-key-frames-20260831';
+const WHATSAPP_AGENT_007_INTAKE_RELIABILITY_MARKER = 'whatsapp-agent007-replay-backoff-20260901';
 const WHATSAPP_OUTGOING_PREVIEW_GUARD_MARKER = 'whatsapp-outgoing-preview-guard-20260831';
 const WHATSAPP_CALL_CARD_BROWSER_CONFIG = Object.freeze(whatsappCallCardBrowserConfig());
 const RECENT_INBOUND_BACKLOG_LIMIT = 60;
@@ -298,6 +299,15 @@ const EMPLOYEE_BATCH_HISTORY_MAX_ROUNDS = 30;
 const EMPLOYEE_BATCH_RECOVERY_RETRY_MS = 20_000;
 const EMPLOYEE_BATCH_RECOVERY_MAX_ATTEMPTS = 8;
 const EMPLOYEE_VIDEO_RECOVERY_MAX_ATTEMPTS = 8;
+const configuredEmployeeBatchReplayBackoffMs = Number(
+  process.env.WHATSAPP_WEB_COPILOT_EMPLOYEE_REPLAY_BACKOFF_MS || 120_000
+);
+const EMPLOYEE_BATCH_REPLAY_BACKOFF_MS = Math.min(
+  15 * 60_000,
+  Math.max(60_000, Number.isFinite(configuredEmployeeBatchReplayBackoffMs)
+    ? configuredEmployeeBatchReplayBackoffMs
+    : 120_000)
+);
 const configuredEmployeeBatchRecoveryIdleMs = Number(
   process.env.WHATSAPP_WEB_COPILOT_EMPLOYEE_RECOVERY_IDLE_MS || 60_000
 );
@@ -311,11 +321,13 @@ const EMPLOYEE_BATCH_RECOVERY_PHONES = String(
 const seenBrowserMessageIds = new Set();
 const completedEmployeeBatchHistoryKeys = new Set();
 const employeeBatchReplayProgress = new Map();
+const employeeBatchReplayBackoffs = new Map();
 const seenCallEventKeys = new Map();
 const recentlySentReplyKeys = new Map();
 const recentChatRowKeys = new Map();
 let recentChatRowCacheWriteTimer = null;
 let activeInboundRecipientHint = '';
+let outboxProcessing = false;
 const COMPOSER_SELECTORS = [
   'footer [data-testid="conversation-compose-box-input"][contenteditable="true"]',
   'footer div[role="textbox"][contenteditable="true"]',
@@ -648,6 +660,7 @@ function hostedRuntimeMetadata() {
     deploy_target: hosted ? 'render' : 'local',
     node_version: process.version.replace(/^v/, ''),
     release_marker: WHATSAPP_EMPLOYEE_AGENT_007_WORKER_MARKER,
+    intake_reliability_marker: WHATSAPP_AGENT_007_INTAKE_RELIABILITY_MARKER,
     outgoing_preview_guard: WHATSAPP_OUTGOING_PREVIEW_GUARD_MARKER,
     git_commit: process.env.RENDER_GIT_COMMIT || process.env.SOURCE_VERSION || process.env.GIT_COMMIT || '',
     ...Object.fromEntries(Object.entries(renderSignals).filter(([, value]) => Boolean(value)))
@@ -2272,6 +2285,23 @@ async function hydrateImageSnapshot(page, snapshot) {
         mediaCount: imagePreviews.length
       };
     }
+    const screenshot = await captureImageMessageScreenshot(page, messageId);
+    if (screenshot?.dataUrl) {
+      const imagePreview = {
+        dataUrl: screenshot.dataUrl,
+        mimeType: screenshot.mimeType || 'image/jpeg',
+        bytes: Number(screenshot.bytes || 0),
+        sha256: crypto.createHash('sha256').update(String(screenshot.dataUrl || '')).digest('hex'),
+        perceptualHash: ''
+      };
+      log(`stored rendered WhatsApp image fallback for ${normalizeChatKey(snapshot.chatKey)} after canvas hydration was unavailable`);
+      return {
+        ...snapshot,
+        imagePreviews: [imagePreview],
+        mediaCount: 1,
+        imagePreviewWarning: 'image_canvas_unavailable_screenshot_stored'
+      };
+    }
     return { ...snapshot, imagePreviewError: 'image_preview_unavailable' };
   } catch (error) {
     return {
@@ -2279,6 +2309,48 @@ async function hydrateImageSnapshot(page, snapshot) {
       imagePreviewError: error.message || String(error)
     };
   }
+}
+
+async function captureImageMessageScreenshot(page, messageId) {
+  const candidates = page.locator('[data-id], [data-testid^="conv-msg-"]');
+  const count = await candidates.count();
+  for (let index = 0; index < count; index += 1) {
+    const candidate = candidates.nth(index);
+    const dataId = await candidate.getAttribute('data-id').catch(() => '');
+    const testId = await candidate.getAttribute('data-testid').catch(() => '');
+    if (dataId !== messageId && testId !== messageId) continue;
+    await candidate.scrollIntoViewIfNeeded().catch(() => {});
+    const images = candidate.locator('img');
+    const imageCount = await images.count();
+    for (let imageIndex = 0; imageIndex < imageCount; imageIndex += 1) {
+      const image = images.nth(imageIndex);
+      const suitable = await image.evaluate((item) => {
+        const rect = item.getBoundingClientRect();
+        const className = String(item.className || '').toLowerCase();
+        const alt = String(item.alt || '').toLowerCase();
+        return !className.includes('emoji')
+          && !alt.includes('emoji')
+          && !alt.includes('avatar')
+          && rect.width >= 120
+          && rect.height >= 90;
+      }).catch(() => false);
+      if (!suitable) continue;
+      const buffer = await image.screenshot({
+        type: 'jpeg',
+        quality: 82,
+        animations: 'disabled'
+      }).catch(() => null);
+      if (!buffer?.length || buffer.length > LISTING_IMAGE_PREVIEW_MAX_BYTES) continue;
+      return {
+        dataUrl: `data:image/jpeg;base64,${buffer.toString('base64')}`,
+        mimeType: 'image/jpeg',
+        bytes: buffer.length,
+        kind: 'image',
+        name: 'whatsapp-image-rendered-preview.jpg'
+      };
+    }
+  }
+  return null;
 }
 
 function isLikelyWhatsappVideoResponse(response) {
@@ -3036,8 +3108,41 @@ function employeeBatchSnapshotKey(snapshot = {}) {
   ).slice(0, 500);
 }
 
+function deferEmployeeBatchReplay(completionKey, reason = 'media_hydration_pending') {
+  const existing = employeeBatchReplayBackoffs.get(completionKey) || { attempts: 0 };
+  const attempts = Math.min(6, Number(existing.attempts || 0) + 1);
+  const delayMs = Math.min(15 * 60_000, EMPLOYEE_BATCH_REPLAY_BACKOFF_MS * (2 ** (attempts - 1)));
+  const deferred = {
+    attempts,
+    reason: String(reason || 'media_hydration_pending'),
+    retryAfter: Date.now() + delayMs
+  };
+  employeeBatchReplayBackoffs.set(completionKey, deferred);
+  while (employeeBatchReplayBackoffs.size > 50) {
+    employeeBatchReplayBackoffs.delete(employeeBatchReplayBackoffs.keys().next().value);
+  }
+  return deferred;
+}
+
+function deferredEmployeeBatchReplay(completionKey) {
+  const deferred = employeeBatchReplayBackoffs.get(completionKey);
+  if (!deferred) return null;
+  if (Date.now() >= Number(deferred.retryAfter || 0)) {
+    employeeBatchReplayBackoffs.delete(completionKey);
+    return null;
+  }
+  return {
+    handled: false,
+    processed: 0,
+    deferred: true,
+    completionKey,
+    retryAfter: deferred.retryAfter,
+    reason: deferred.reason
+  };
+}
+
 function snapshotsAfterCompletedEmployeeBatch(snapshots = [], replay = {}) {
-  if (!replay.alreadyComplete || !replay.completionKey) return snapshots;
+  if (!(replay.alreadyComplete || replay.deferred) || !replay.completionKey) return snapshots;
   let completionIndex = -1;
   for (let index = 0; index < snapshots.length; index += 1) {
     if (employeeBatchSnapshotKey(snapshots[index]) === replay.completionKey) {
@@ -3116,6 +3221,8 @@ async function locateEmployeeBatchHistory(page, { chatKey = '' } = {}) {
 async function replayEmployeeBatchThroughCompletion(page, history = {}, row = {}) {
   const completionKey = String(history.completionKey || '');
   if (!history.found || !completionKey) return { handled: false, processed: 0 };
+  const existingDeferral = deferredEmployeeBatchReplay(completionKey);
+  if (existingDeferral) return existingDeferral;
   if (completedEmployeeBatchHistoryKeys.has(completionKey)) {
     return { handled: false, processed: 0, alreadyComplete: true, completionKey };
   }
@@ -3197,12 +3304,19 @@ async function replayEmployeeBatchThroughCompletion(page, history = {}, row = {}
           source: 'employee_batch_history_completion'
         });
         if (result.retryable || result.error) {
+          const deferred = deferEmployeeBatchReplay(
+            completionKey,
+            result.error?.message || result.error || 'retryable_completion_error'
+          );
           log(`Agent 007 ordered history completion paused for ${history.chatKey}: ${result.error?.message || result.error || 'retryable_completion_error'}`);
           await scrollWhatsappHistoryToLatest(page);
           return {
-            handled: true,
+            handled: false,
             processed,
             retryable: true,
+            deferred: true,
+            completionKey,
+            retryAfter: deferred.retryAfter,
             skipped: result.error ? 'bridge_completion_error' : 'retryable_completion_error'
           };
         }
@@ -3232,12 +3346,19 @@ async function replayEmployeeBatchThroughCompletion(page, history = {}, row = {}
         source: 'employee_batch_history_replay'
       });
       if (result.retryable || result.error) {
+        const deferred = deferEmployeeBatchReplay(
+          completionKey,
+          result.error?.message || result.error || 'retryable_media_error'
+        );
         log(`Agent 007 ordered history replay paused for ${history.chatKey}: ${result.error?.message || result.error || 'retryable_media_error'}`);
         await scrollWhatsappHistoryToLatest(page);
         return {
-          handled: true,
+          handled: false,
           processed,
           retryable: true,
+          deferred: true,
+          completionKey,
+          retryAfter: deferred.retryAfter,
           skipped: result.error ? 'bridge_ingest_error' : 'retryable_media_error'
         };
       }
@@ -3255,11 +3376,21 @@ async function replayEmployeeBatchThroughCompletion(page, history = {}, row = {}
   if (completed) {
     completedEmployeeBatchHistoryKeys.add(completionKey);
     employeeBatchReplayProgress.delete(completionKey);
+    employeeBatchReplayBackoffs.delete(completionKey);
     log(`Agent 007 ordered history replay completed for ${history.chatKey}; processed ${processed} missing message(s)`);
     return { handled: true, processed, completed: true };
   }
+  const deferred = deferEmployeeBatchReplay(completionKey, 'completion_not_reached');
   log(`Agent 007 ordered history replay did not reach COMPLETE for ${history.chatKey}`);
-  return { handled: true, processed, retryable: true, skipped: 'completion_not_reached' };
+  return {
+    handled: false,
+    processed,
+    retryable: true,
+    deferred: true,
+    completionKey,
+    retryAfter: deferred.retryAfter,
+    skipped: 'completion_not_reached'
+  };
 }
 
 async function maybeReplayEmployeeBatchThroughCompletion(page, snapshots = [], row = {}) {
@@ -3267,6 +3398,8 @@ async function maybeReplayEmployeeBatchThroughCompletion(page, snapshots = [], r
   const visibleCompletion = visibleCompletions[visibleCompletions.length - 1];
   if (!visibleCompletion) return { handled: false, processed: 0 };
   const visibleCompletionKey = employeeBatchSnapshotKey(visibleCompletion);
+  const existingDeferral = deferredEmployeeBatchReplay(visibleCompletionKey);
+  if (existingDeferral) return existingDeferral;
   if (completedEmployeeBatchHistoryKeys.has(visibleCompletionKey)) {
     return {
       handled: false,
@@ -3298,7 +3431,7 @@ async function runConfiguredEmployeeBatchRecovery(page) {
       title: phone,
       preview: ''
     });
-    if (!result.handled && !result.alreadyComplete) {
+    if (!result.handled && !result.alreadyComplete && !result.deferred) {
       const history = await locateEmployeeBatchHistory(page, { chatKey: phone });
       if (history.found) {
         result = await replayEmployeeBatchThroughCompletion(page, history, {
@@ -3308,7 +3441,7 @@ async function runConfiguredEmployeeBatchRecovery(page) {
       }
     }
     processed += result.processed || 0;
-    const phoneSettled = !!(result.completed || result.alreadyComplete);
+    const phoneSettled = !!(result.completed || result.alreadyComplete) && !result.deferred;
     settled = settled && phoneSettled;
     log(`configured Agent 007 recovery checked ${phone}; handled=${result.handled ? 'yes' : 'no'} settled=${phoneSettled ? 'yes' : 'no'} processed=${result.processed || 0}`);
   }
@@ -4561,7 +4694,20 @@ async function typeAndSendImageReply(page, mediaUrl, caption) {
   return true;
 }
 
-async function processOutbox(page, { recipient = '', maxSends = OUTBOX_SENDS_PER_LOOP } = {}) {
+async function processOutbox(page, options = {}) {
+  if (outboxProcessing) {
+    log('skipped overlapping outbox drain; the active browser send retains its queue lease');
+    return 0;
+  }
+  outboxProcessing = true;
+  try {
+    return await processOutboxUnlocked(page, options);
+  } finally {
+    outboxProcessing = false;
+  }
+}
+
+async function processOutboxUnlocked(page, { recipient = '', maxSends = OUTBOX_SENDS_PER_LOOP } = {}) {
   const sendLimit = Math.min(
     OUTBOX_CLAIM_LIMIT,
     Math.max(1, Number(maxSends || OUTBOX_SENDS_PER_LOOP))
