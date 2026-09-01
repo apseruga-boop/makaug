@@ -28,8 +28,26 @@ assert(frontend.includes('function brokerIconActionsHtml'), 'broker cards should
 assert(directoryCard.includes('${brokerIconActionsHtml(b)}') && homepageCard.includes('${brokerIconActionsHtml(b)}'), 'both public card surfaces should use compact icon actions');
 assert(!directoryCard.includes('translateListingLabel("Call")') && !homepageCard.includes('translateListingLabel("WhatsApp")'), 'compact cards should not use large text contact buttons');
 assert(profile.includes('h-28 md:h-36 bg-gradient-to-r') && profile.includes('w-36 h-36 md:w-44 md:h-44 rounded-full'), 'broker profile should use a LinkedIn-style cover and a contained portrait');
+assert(profile.includes('flex flex-col items-center text-center'), 'broker profile identity should be centred symmetrically below the cover');
+assert(profile.includes('aspect-square') && profile.includes('rounded-full object-cover object-center'), 'every broker portrait should use a consistent square-to-circle crop');
+assert(profile.includes('items-center justify-center gap-x-4') && profile.includes('brokerIconActionsHtml(b, { large: true, profile: true })'), 'broker metadata and actions should remain centred below the portrait');
 assert(!profile.includes('w-64 h-64') && !profile.includes('lg:grid-cols-[300px,1fr]'), 'broker profile must not stretch the portrait into the old oversized photo block');
 assert(profile.includes('aria-labelledby="broker-about-heading"') && profile.includes('Profile overview'), 'broker profile should clearly explain who the agent is');
+assert(frontend.includes('function publicBrokerBio(broker = {})'), 'public broker biographies should use a shared cleanup policy');
+assert(profile.includes('${adminEscape(publicBrokerBio(b))}'), 'public profiles should render the cleaned biography');
+
+const publicBioStart = frontend.indexOf('function publicBrokerBio(broker = {})');
+const publicBioEnd = frontend.indexOf('function brokerIconActionsHtml', publicBioStart);
+const publicBrokerBio = new Function(`${frontend.slice(publicBioStart, publicBioEnd)}; return publicBrokerBio;`)();
+const directBio = "Kazi helps buyers across Wakiso. This profile was created from the agent’s direct submission; identity verification and account claim are pending.";
+assert.strictEqual(publicBrokerBio({ direct_agent_authorised: true, bio: directBio }), 'Kazi helps buyers across Wakiso.', 'MakaUG-created public profiles should remove direct-submission and claim boilerplate');
+assert.strictEqual(publicBrokerBio({ direct_agent_authorised: false, bio: directBio }), directBio, 'third-party biographies should not be rewritten by the MakaUG profile policy');
+
+const registrationStart = frontend.indexOf('function brokerRegistrationMeta(broker)');
+const registrationEnd = frontend.indexOf('function renderBrokerRegistrationBadge', registrationStart);
+const registrationMeta = frontend.slice(registrationStart, registrationEnd);
+assert(registrationMeta.includes('MakaUG agent profile'), 'MakaUG-created profiles should have a neutral public profile badge');
+assert(!registrationMeta.includes('Direct profile · claim pending'), 'MakaUG-created profiles must not expose claim-pending language');
 
 assert(!directoryCard.includes('${b.sales'), 'Find Brokers must not render an unverified sales count');
 assert(!directoryCard.includes('translateListingLabel("Sales")'), 'Find Brokers must not render a Sales label');

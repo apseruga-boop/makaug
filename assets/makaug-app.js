@@ -38657,11 +38657,11 @@ function listingBadgeRowHtml(p = {}, options = {}) {
 }
 
 function brokerRegistrationMeta(broker) {
-  if (broker?.direct_agent_authorised && broker?.profile_claim_pending) {
+  if (broker?.direct_agent_authorised) {
     return {
-      label: translateListingLabel("Direct profile · claim pending"),
-      cls: "bg-amber-50 text-amber-800",
-      icon: "fas fa-user-clock"
+      label: translateListingLabel("MakaUG agent profile"),
+      cls: "bg-green-50 text-green-700",
+      icon: "fas fa-user-check"
     };
   }
   const isRegistered = (broker?.registration_status || "not_registered") === "registered";
@@ -41375,6 +41375,20 @@ function brokerCompanyLineHtml(b, classes = "text-center text-gray-500 text-sm")
   const company = String(b?.company || "").trim();
   if (!company || company.toLowerCase() === name) return "";
   return `<p class="${classes}">${adminEscape(company)}</p>`;
+}
+
+function publicBrokerBio(broker = {}) {
+  const fallback = "Professional real estate broker helping clients buy, rent, and invest with confidence.";
+  let bio = String(broker?.bio || fallback).trim();
+  if (broker?.direct_agent_authorised) {
+    bio = bio
+      .replace(/\s*This profile was created from the agent[’']s direct submission[;,]?\s*identity verification and account claim are pending\.?\s*/gi, " ")
+      .replace(/\s*This profile was created from the agent[’']s direct submission[.;]?\s*/gi, " ")
+      .replace(/\s*Identity verification and account claim are pending\.?\s*/gi, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+  return bio || fallback;
 }
 
 function brokerIconActionsHtml(b, options = {}) {
@@ -52941,27 +52955,26 @@ async function openBrokerProfile(id) {
     <div class="bg-white border border-green-100 rounded-3xl mb-6 shadow-sm overflow-hidden">
       <div class="h-28 md:h-36 bg-gradient-to-r from-green-900 via-green-700 to-emerald-500" aria-hidden="true"></div>
       <div class="px-5 md:px-8 pb-7">
-        <div class="-mt-16 md:-mt-20 flex items-end justify-between gap-4 flex-wrap">
-          <div class="w-36 h-36 md:w-44 md:h-44 rounded-full border-[5px] border-white shadow-md overflow-hidden bg-green-50 flex items-center justify-center shrink-0">
-            <img src="${adminAttr(photoSrc)}" alt="${adminAttr(b.name)}" class="w-full h-full object-cover object-center" onerror="this.remove(); this.parentElement.innerHTML='<div class=\\'text-5xl\\'>${adminAttr(b.emoji || "👔")}</div>';">
+        <div class="-mt-16 md:-mt-20 flex flex-col items-center text-center">
+          <div class="aspect-square w-36 h-36 md:w-44 md:h-44 rounded-full border-[5px] border-white shadow-md overflow-hidden bg-green-50 flex items-center justify-center shrink-0">
+            <img src="${adminAttr(photoSrc)}" alt="${adminAttr(b.name)}" class="aspect-square w-full h-full rounded-full object-cover object-center" onerror="this.remove(); this.parentElement.innerHTML='<div class=\\'text-5xl\\'>${adminAttr(b.emoji || "👔")}</div>';">
           </div>
-          <div class="pb-1">${brokerIconActionsHtml(b, { large: true, profile: true })}</div>
-        </div>
-
-        <div class="grid lg:grid-cols-[minmax(0,1fr),280px] gap-7 mt-4">
-          <div>
-            <h1 class="text-3xl md:text-4xl font-black text-gray-900 leading-tight">${adminEscape(b.name)}</h1>
-            ${brokerCompanyLineHtml(b, "text-lg text-gray-600 mt-1 text-left")}
-            <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-gray-600">
+          <h1 class="mt-4 text-3xl md:text-4xl font-black text-gray-900 leading-tight">${adminEscape(b.name)}</h1>
+          ${brokerCompanyLineHtml(b, "text-lg text-gray-600 mt-1 text-center")}
+          <div class="mt-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-sm text-gray-600">
               <span class="inline-flex items-center gap-1.5"><i class="fas fa-location-dot text-green-600" aria-hidden="true"></i>${adminEscape(b.area)}</span>
               <span class="inline-flex items-center gap-1.5"><i class="fas fa-briefcase text-green-600" aria-hidden="true"></i>${adminEscape(b.experience || "Experienced Broker")}</span>
               ${publicLicence ? `<span class="inline-flex items-center gap-1.5"><i class="fas fa-id-card text-green-600" aria-hidden="true"></i>${adminEscape(publicLicence)}</span>` : ""}
-            </div>
-            ${renderBrokerRegistrationBadge(b) ? `<div class="mt-3">${renderBrokerRegistrationBadge(b)}</div>` : ""}
+          </div>
+          ${renderBrokerRegistrationBadge(b) ? `<div class="mt-3">${renderBrokerRegistrationBadge(b)}</div>` : ""}
+          <div class="mt-4">${brokerIconActionsHtml(b, { large: true, profile: true })}</div>
+        </div>
 
-            <section class="mt-6 border-t border-gray-100 pt-5" aria-labelledby="broker-about-heading">
+        <div class="grid lg:grid-cols-[minmax(0,1fr),280px] gap-7 mt-7 border-t border-gray-100 pt-6">
+          <div>
+            <section aria-labelledby="broker-about-heading">
               <h2 id="broker-about-heading" class="text-lg font-bold text-gray-900">About</h2>
-              <p class="text-gray-700 mt-2 leading-relaxed max-w-3xl">${adminEscape(b.bio || "Professional real estate broker helping clients buy, rent, and invest with confidence.")}</p>
+              <p class="text-gray-700 mt-2 leading-relaxed max-w-3xl">${adminEscape(publicBrokerBio(b))}</p>
             </section>
 
             ${(b.specialties || []).length ? `<div class="mt-5"><div class="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">Specialities</div><div class="flex flex-wrap gap-2">${(b.specialties || []).map((s) => `<span class="bg-gray-100 text-gray-700 text-xs font-medium px-3 py-1.5 rounded-full">${adminEscape(s)}</span>`).join("")}</div></div>` : ""}
