@@ -76,6 +76,25 @@ assert.equal(parsedProperty.locationPatch.area, 'Ntinda');
 assert.equal(parsedProperty.locationPatch.district, 'Kampala');
 assert.deepEqual(whatsappRoute.employeePropertyMissing(parsedProperty), []);
 
+assert.deepEqual(
+  whatsappRoute.employeePendingStoredMedia({
+    pending_property_media: [{
+      url: 'https://media.makaug.com/whatsapp/property-1.jpg',
+      sha256: 'stored-media-sha',
+      mimeType: 'image/jpeg',
+      name: 'property-1.jpg'
+    }]
+  }),
+  [{
+    url: 'https://media.makaug.com/whatsapp/property-1.jpg',
+    sha256: 'stored-media-sha',
+    mimeType: 'image/jpeg',
+    kind: 'image',
+    name: 'property-1.jpg'
+  }],
+  'a corrected caption must recover the exact permanently stored media reference'
+);
+
 const compactCurrencyLand = whatsappRoute.employeePropertyFacts(
   'Forwarded\n32 decimals plot Kira Nsasa behind Total fuel station UGX330 million',
   {}
@@ -230,11 +249,21 @@ assert(copilotSource.includes('employeeBatchReplayBackoffs'), 'history replay co
 assert(copilotSource.includes('snapshotsAfterCompletedEmployeeBatch(snapshots, employeeReplay)'), 'a deferred stale batch must not block later messages in the same chat');
 assert(copilotSource.includes('WHATSAPP_AGENT_007_INTAKE_RELIABILITY_MARKER'), 'the hosted worker heartbeat must identify the replay reliability release');
 assert(serverSource.includes('whatsapp-agent007-replay-backoff-20260901'), 'production health metadata must expose the Agent 007 reliability release');
+assert(serverSource.includes('whatsapp-agent007-pending-media-idempotency-20260901'), 'production health metadata must expose the pending-media and reply-idempotency release');
 assert(copilotSource.includes('configuredEmployeeRecoverySettled'), 'configured history recovery must stop only after the batch is complete or already reconciled');
 assert(copilotSource.includes("scroller.dispatchEvent(new WheelEvent('wheel'"), 'history recovery must explicitly request older virtualized WhatsApp rows');
 assert(copilotSource.includes('result.retryable || result.error'), 'history recovery must restart the bounded batch after a transient bridge or database failure');
 assert(copilotSource.includes('employeeBatchReplayProgress'), 'history recovery must resume after the failed media instead of replaying successful media again');
 assert(copilotSource.includes("/^(?:forwarded|\\[(?:image|media|video|document)\\])$/i"), 'captionless forwarded attachments must not inflate the observed property count');
+assert(routeSource.includes('pending_property_media'), 'incomplete-caption media must be retained durably instead of discarded');
+assert(routeSource.includes('You do not need to resend the media.'), 'caption correction must reuse already-stored media');
+assert(routeSource.includes('employeePendingStoredMedia(data)'), 'a corrected text caption must finalize stored media into staff review');
+assert(copilotSource.includes('isEmployeePropertyCaptionCorrectionSnapshot'), 'history replay must include a corrected property caption sent after media');
+assert(copilotSource.includes("source: 'employee_batch_history_caption'"), 'corrected history captions must be replayed before COMPLETE');
+assert(copilotSource.includes('employee_batch_completion_keys'), 'completed replay boundaries must survive hosted-worker restarts');
+assert(copilotSource.includes('normalizeReplyText(preparedComposer.text) !== normalizeReplyText(text)'), 'outbound replies must fail closed if the composer differs from the queued reply');
+assert(copilotSource.includes('same reply is never\n    // appended a second or third time'), 'the Lexical fallback must guard against repeated reply concatenation');
+assert(routeSource.includes('employeeIntake?.batch_complete !== true'), 'history recovery must not re-send a zero-property completion failure');
 assert(copilotSource.includes('snapshotsAfterCompletedEmployeeBatch'), 'a reconciled Agent 007 batch must not block later ordinary chat messages');
 assert(copilotSource.includes('snapshots.slice(completionIndex + 1)'), 'only messages after the completed batch boundary should resume normal chatbot handling');
 assert(copilotSource.includes('!result.handled && !result.alreadyComplete'), 'startup recovery must settle completed batches without replaying them or starving normal scans');
