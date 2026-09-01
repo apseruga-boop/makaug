@@ -104,6 +104,21 @@ assert.equal(najeeraSale.price, 1_000_000_000, 'explicit sale price must win ove
 assert.equal(najeeraSale.locationPatch.area, 'Najjera', 'common Najeera spelling must resolve canonically');
 assert.deepEqual(whatsappRoute.employeePropertyMissing(najeeraSale), []);
 
+const nabusugweSale = whatsappRoute.employeePropertyFacts(
+  'Nabusugwe 6 bedrooms house on 15 decimals plot swimming pool private mailo title on sale UGX 750 million',
+  {}
+);
+assert.equal(nabusugweSale.listingType, 'sale');
+assert.equal(nabusugweSale.price, 750_000_000);
+assert.equal(nabusugweSale.bedroomDraft.bedrooms, 6);
+assert.equal(nabusugweSale.locationPatch.area, 'Nabusugwe');
+assert.equal(nabusugweSale.locationPatch.district, 'Wakiso');
+assert.deepEqual(
+  whatsappRoute.employeePropertyMissing(nabusugweSale),
+  [],
+  'the real Nabusugwe Agent 007 caption must not be rejected as missing an exact location'
+);
+
 const inferredApartmentRent = whatsappRoute.employeePropertyFacts(
   'Forwarded\nNamugongo catholic shrine 3 bedroom apartments UGX 1.5 million',
   {}
@@ -208,6 +223,13 @@ assert(copilotSource.includes('const history = await locateEmployeeBatchHistory(
 assert(copilotSource.includes(':ordered-replay:${replayRunKey}'), 'history recovery must use a fresh server message id for media acknowledged before batch accounting');
 assert(copilotSource.includes("!['image', 'media'].includes(String(snapshot.mediaType || '').toLowerCase())"), 'history recovery must not replay Agent 007 setup text and reset the restored batch');
 assert(copilotSource.includes('EMPLOYEE_BATCH_RECOVERY_MAX_ATTEMPTS'), 'configured history recovery must retry a bounded number of times while WhatsApp hydrates older rows');
+assert(copilotSource.includes('captureImageMessageScreenshot'), 'tainted WhatsApp image canvases must fall back to a rendered property image');
+assert(copilotSource.includes("imagePreviewWarning: 'image_canvas_unavailable_screenshot_stored'"), 'rendered image recovery must remain auditable in staff review metadata');
+assert(copilotSource.includes('EMPLOYEE_BATCH_REPLAY_BACKOFF_MS'), 'an unavailable historical thumbnail must back off instead of monopolizing the worker loop');
+assert(copilotSource.includes('employeeBatchReplayBackoffs'), 'history replay cooldowns must be isolated by completed batch');
+assert(copilotSource.includes('snapshotsAfterCompletedEmployeeBatch(snapshots, employeeReplay)'), 'a deferred stale batch must not block later messages in the same chat');
+assert(copilotSource.includes('WHATSAPP_AGENT_007_INTAKE_RELIABILITY_MARKER'), 'the hosted worker heartbeat must identify the replay reliability release');
+assert(serverSource.includes('whatsapp-agent007-replay-backoff-20260901'), 'production health metadata must expose the Agent 007 reliability release');
 assert(copilotSource.includes('configuredEmployeeRecoverySettled'), 'configured history recovery must stop only after the batch is complete or already reconciled');
 assert(copilotSource.includes("scroller.dispatchEvent(new WheelEvent('wheel'"), 'history recovery must explicitly request older virtualized WhatsApp rows');
 assert(copilotSource.includes('result.retryable || result.error'), 'history recovery must restart the bounded batch after a transient bridge or database failure');

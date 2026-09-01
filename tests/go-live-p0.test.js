@@ -1318,7 +1318,7 @@ function run() {
   assert(!phoneOtpDeliveryServiceSource.includes('queueWhatsappWebBridgeMessage'), 'phone OTP must not queue WhatsApp bridge fallback');
   assert(whatsappRoutes.includes('recent_bridge_message_fingerprint'), 'WhatsApp web bridge must suppress repeated inbound browser fingerprints');
   assert(whatsappWebBridgeServiceSource.includes('reply_dedupe_key'), 'WhatsApp web bridge queue must dedupe repeated auto replies');
-  assert(whatsappWebBridgeServiceSource.includes('WHATSAPP_WEB_BRIDGE_CLAIM_SECONDS || 8'), 'WhatsApp web bridge claims need a short lease so stalled sends recover quickly');
+  assert(whatsappWebBridgeServiceSource.includes('WHATSAPP_WEB_BRIDGE_CLAIM_SECONDS || 90'), 'WhatsApp web bridge claims must outlive the browser send path so an in-flight reply is not duplicated');
   assert(whatsappWebCopilotScript.includes('suppressed duplicate queued reply'), 'WhatsApp Web copilot must suppress recently sent duplicate queue rows');
   assert(whatsappWebCopilotScript.includes('refusing to mark reply as sent'), 'WhatsApp Web copilot must not mark unconfirmed sends as sent');
   assert(whatsappWebCopilotScript.includes('[data-id^="true_"]'), 'WhatsApp Web copilot must detect outgoing bubbles with current WhatsApp Web selectors');

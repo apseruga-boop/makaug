@@ -55,8 +55,8 @@ function getReplyDedupeWindowSeconds() {
 
 function getBridgeClaimWindowSeconds() {
   return Math.min(
-    20,
-    Math.max(5, Number(process.env.WHATSAPP_WEB_BRIDGE_CLAIM_SECONDS || 8))
+    180,
+    Math.max(60, Number(process.env.WHATSAPP_WEB_BRIDGE_CLAIM_SECONDS || 90))
   );
 }
 
