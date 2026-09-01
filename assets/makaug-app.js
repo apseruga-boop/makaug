@@ -211,16 +211,22 @@ BROKERS.forEach((broker, index) => {
   if (!broker.featured_at && broker.featured_homepage) broker.featured_at = "2026-04-01T08:00:00.000Z";
 });
 
+const OFFICIAL_AGENT_PORTRAITS = new Map([
+  ["kazi honest", "/assets/agents/kazi-honest.jpg?v=20260901"]
+]);
+
 function mapRemoteAgentForUi(agent = {}) {
   const covered = Array.isArray(agent.districts_covered) ? agent.districts_covered.filter(Boolean) : [];
   const area = covered.length ? covered.slice(0, 3).join(" • ") : (agent.area || "Uganda");
   const specializations = Array.isArray(agent.specializations) ? agent.specializations.filter(Boolean) : [];
   const socials = normalizeBrokerSocialLinks(agent);
   const directAgentAuthorised = String(agent.verification_reason || "").includes("[DIRECT_AGENT_AUTHORISED]");
+  const fullName = agent.full_name || agent.name || "makaug agent";
+  const profilePhotoUrl = agent.profile_photo_url || OFFICIAL_AGENT_PORTRAITS.get(String(fullName).trim().toLowerCase()) || "";
   return {
     id: String(agent.id || ""),
     makaug_agent_number: agent.makaug_agent_number || agent.agent_number || "",
-    name: agent.full_name || agent.name || "makaug agent",
+    name: fullName,
     company: agent.company_name || agent.company || "makaug",
     phone: agent.phone || "",
     email: agent.email || "",
@@ -233,9 +239,9 @@ function mapRemoteAgentForUi(agent = {}) {
     rejected_listings: Number(agent.rejected_listings || 0) || 0,
     lead_enquiries: Number(agent.lead_enquiries || agent.inquiry_count || 0) || 0,
     sales: Number(agent.sales_count || agent.sales || 0) || 0,
-    emoji: agent.profile_photo_url ? "" : "👔",
-    photo: agent.profile_photo_url || "",
-    profile_photo_url: agent.profile_photo_url || "",
+    emoji: profilePhotoUrl ? "" : "👔",
+    photo: profilePhotoUrl,
+    profile_photo_url: profilePhotoUrl,
     registration_status: String(agent.registration_status || "not_registered").toLowerCase(),
     experience: agent.experience || (agent.experience_years || agent.experience_years === 0 ? `${agent.experience_years} year${Number(agent.experience_years) === 1 ? "" : "s"}` : ""),
     experience_years: Number(agent.experience_years || 0) || 0,
@@ -41364,25 +41370,28 @@ function brokerAvatarHtml(b, classes = "w-14 h-14") {
   return `<div class="${wrapperClass}">${b?.emoji || "👔"}</div>`;
 }
 
+function brokerCompanyLineHtml(b, classes = "text-center text-gray-500 text-sm") {
+  const name = String(b?.name || "").trim().toLowerCase();
+  const company = String(b?.company || "").trim();
+  if (!company || company.toLowerCase() === name) return "";
+  return `<p class="${classes}">${adminEscape(company)}</p>`;
+}
+
 function renderBrokers(id, list) {
   const el = document.getElementById(id);
   if (!el) return;
   if (id === "brokers-grid") {
     el.innerHTML = list.map((b) => `
-      <div class="broker-grid-card bg-white rounded-2xl border border-green-100 p-4 shadow-sm cursor-pointer hover:shadow-md transition-all" onclick="openBrokerProfile(${adminListingIdArg(b.id)})">
-        <div class="mb-2.5">${brokerAvatarHtml(b, "w-14 h-14 border-4")}</div>
-        <h3 class="text-lg font-bold text-gray-900 text-center leading-tight">${b.name}</h3>
-        <p class="text-center text-gray-500 text-sm">${b.company}</p>
+      <div class="broker-grid-card bg-white rounded-2xl border border-green-100 p-5 shadow-sm cursor-pointer hover:shadow-md transition-all" onclick="openBrokerProfile(${adminListingIdArg(b.id)})">
+        <div class="mb-3">${brokerAvatarHtml(b, "w-28 h-28 border-4 shadow-sm")}</div>
+        <h3 class="text-xl font-black text-gray-900 text-center leading-tight">${adminEscape(b.name)}</h3>
+        ${brokerCompanyLineHtml(b)}
         ${renderBrokerRegistrationBadge(b) ? `<div class="mt-3 text-center">${renderBrokerRegistrationBadge(b)}</div>` : ""}
 
-        <div class="grid grid-cols-2 gap-2 mt-4 text-center">
-          <div>
-            <div class="text-2xl font-bold text-gray-900 leading-none">${b.listings}</div>
-            <div class="text-xs text-gray-500">${translateListingLabel("Active Listings")}</div>
-          </div>
-          <div>
-            <div class="text-2xl font-bold text-gray-900 leading-none">${b.sales || 0}</div>
-            <div class="text-xs text-gray-500">${translateListingLabel("Sales")}</div>
+        <div class="mt-4 flex justify-center">
+          <div class="inline-flex items-baseline gap-1.5 rounded-full bg-green-50 px-4 py-2 text-green-900">
+            <strong class="text-xl leading-none">${b.listings}</strong>
+            <span class="text-xs font-semibold">${translateListingLabel("Active Listings")}</span>
           </div>
         </div>
 
@@ -41402,17 +41411,16 @@ function renderBrokers(id, list) {
   }
 
   el.innerHTML = list.map((b) => `
-    <div class="bg-white rounded-xl border border-gray-100 p-5 shadow-sm cursor-pointer hover:shadow-md" onclick="openBrokerProfile(${adminListingIdArg(b.id)})">
-      <div class="mb-3">${brokerAvatarHtml(b, "w-14 h-14")}</div>
-      <h3 class="font-bold text-gray-800 text-center">${b.name}</h3>
-      <p class="text-sm text-gray-500 text-center">${b.company}</p>
+    <div class="broker-grid-card bg-white rounded-2xl border border-gray-100 p-5 shadow-sm cursor-pointer hover:shadow-md transition-all" onclick="openBrokerProfile(${adminListingIdArg(b.id)})">
+      <div class="mb-3">${brokerAvatarHtml(b, "w-32 h-32 border-4 shadow-sm")}</div>
+      <h3 class="text-xl font-black text-gray-900 text-center">${adminEscape(b.name)}</h3>
+      ${brokerCompanyLineHtml(b)}
       ${renderBrokerRegistrationBadge(b, "text-[11px]") ? `<div class="mt-2 text-center">${renderBrokerRegistrationBadge(b, "text-[11px]")}</div>` : ""}
       <p class="text-xs text-gray-500 mt-2 text-center"><i class="fas fa-map-marker-alt text-green-600"></i> ${b.area}</p>
-	      <div class="mt-3 flex justify-center gap-5 text-sm">
-	        <span><strong>${b.listings}</strong> ${translateListingLabel("listings")}</span>
-	        <span>${adminEscape((b.specialties || [])[0] || "Broker")}</span>
-	      </div>
-      <div class="grid grid-cols-2 gap-2 mt-4">
+      <div class="mt-3 flex justify-center text-sm">
+        <span class="rounded-full bg-green-50 px-3 py-1.5 text-green-900"><strong>${b.listings}</strong> ${translateListingLabel("Active Listings")}</span>
+      </div>
+      <div class="mt-auto grid grid-cols-2 gap-2 pt-4">
         <a href="tel:${b.phone}" onclick="event.stopPropagation()" class="border border-green-700 text-green-700 text-center rounded-lg py-2 text-sm font-semibold">${translateListingLabel("Call")}</a>
         <a href="${adminAttr(buildWhatsAppUrl(b.whatsapp, buildBrokerContactWhatsappMessage(b)))}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" class="bg-green-500 text-white text-center rounded-lg py-2 text-sm font-semibold">${translateListingLabel("WhatsApp")}</a>
       </div>
@@ -52928,12 +52936,11 @@ async function openBrokerProfile(id) {
     <button onclick="showPage('brokers')" class="text-green-700 text-sm font-semibold mb-4 inline-flex items-center gap-2"><i class="fas fa-arrow-left"></i> Back to Brokers</button>
 
     <div class="bg-white border border-green-100 rounded-3xl p-6 md:p-8 mb-6 shadow-sm">
-      <div class="grid lg:grid-cols-[260px,1fr] gap-7 items-start">
+      <div class="grid lg:grid-cols-[300px,1fr] gap-7 items-start">
         <div>
-          <div class="w-48 h-48 mx-auto rounded-full border-4 border-green-100 shadow-sm overflow-hidden bg-green-50 flex items-center justify-center">
+          <div class="w-64 h-64 mx-auto rounded-3xl border-4 border-green-100 shadow-sm overflow-hidden bg-green-50 flex items-center justify-center">
             <img src="${adminAttr(photoSrc)}" alt="${adminAttr(b.name)}" class="w-full h-full object-cover" onerror="this.remove(); this.parentElement.innerHTML='<div class=\\'text-6xl\\'>${adminAttr(b.emoji || "👔")}</div>';">
           </div>
-          <p class="text-center text-xs text-gray-400 mt-2">Broker profile photo</p>
         </div>
 
         <div>
