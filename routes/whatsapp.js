@@ -3452,6 +3452,42 @@ async function storeEmployeeMedia(candidates = [], options = {}) {
   return stored;
 }
 
+function employeePendingStoredMedia(sessionData = {}) {
+  return (Array.isArray(sessionData.pending_property_media) ? sessionData.pending_property_media : [])
+    .map((item) => ({
+      url: normalizeInput(item?.url),
+      sha256: normalizeInput(item?.sha256),
+      mimeType: employeeMediaMimeType(item, item?.mimeType),
+      kind: employeeMediaKind(employeeMediaMimeType(item, item?.mimeType)),
+      name: normalizeInput(item?.name)
+    }))
+    .filter((item) => item.url && ['image', 'video', 'document'].includes(item.kind))
+    .slice(0, 20);
+}
+
+function rememberEmployeePendingMedia(sessionData = {}, storedMedia = [], inboundMessageId = '') {
+  const existing = employeePendingStoredMedia(sessionData);
+  const combined = [...existing, ...storedMedia];
+  const seen = new Set();
+  sessionData.pending_property_media = combined.filter((item) => {
+    const key = normalizeInput(item.sha256 || item.url);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, 20);
+  sessionData.pending_property_media_message_id = normalizeInput(inboundMessageId)
+    || normalizeInput(sessionData.pending_property_media_message_id)
+    || null;
+  sessionData.pending_property_media_stored_at = new Date().toISOString();
+  return sessionData.pending_property_media;
+}
+
+function clearEmployeePendingMedia(sessionData = {}) {
+  delete sessionData.pending_property_media;
+  delete sessionData.pending_property_media_message_id;
+  delete sessionData.pending_property_media_stored_at;
+}
+
 async function recoverEmployeeVideoReviewMedia(propertyId, runtime = {}) {
   const targetResult = await db.query(
     `SELECT id, status, extra_fields
@@ -4696,10 +4732,12 @@ async function handleEmployeeWhatsappIntake({
       }
       const existingBatchProperties = Array.isArray(data.property_ids) ? data.property_ids.length : 0;
       const textOnlyFacts = employeePropertyFacts(cleanBody, data);
+      const textOnlyMissing = employeePropertyMissing(textOnlyFacts);
+      const pendingStoredMedia = employeePendingStoredMedia(data);
       if (
         (data.property_batch_mode || 'multiple') === 'single'
         && existingBatchProperties >= 1
-        && employeePropertyMissing(textOnlyFacts).length === 0
+        && textOnlyMissing.length === 0
       ) {
         return {
           handled: true,
@@ -4707,9 +4745,79 @@ async function handleEmployeeWhatsappIntake({
           message: 'This batch was set to *one property*. I did not start another property. Send any remaining media for the current property without a new full property caption, then type *COMPLETE*.'
         };
       }
+
+      if (pendingStoredMedia.length && textOnlyMissing.length === 0) {
+        const propertyInboundMessageId = normalizeInput(data.pending_property_media_message_id) || inboundMessageId;
+        const existingProperty = await findEmployeeDuplicateProperty({
+          caption: cleanBody,
+          facts: textOnlyFacts,
+          sessionData: data
+        });
+        const propertyAttemptRecorded = recordEmployeePropertyAttempt(data, {
+          inboundMessageId: propertyInboundMessageId,
+          caption: cleanBody
+        });
+        if (existingProperty) {
+          if (propertyAttemptRecorded) {
+            data.properties_duplicate_count = Number(data.properties_duplicate_count || 0) + 1;
+          }
+          data.current_property_id = null;
+          delete data.pending_property_caption;
+          clearEmployeePendingMedia(data);
+          await replaceEmployeeSession(phone, currentStep, data);
+          return {
+            handled: true,
+            nextStep: currentStep,
+            propertyId: existingProperty.id,
+            duplicate: true,
+            message: (data.property_batch_mode || 'multiple') === 'multiple'
+              ? ''
+              : `Duplicate property found — ${String(existingProperty.id).slice(0, 8).toUpperCase()} is already ${existingProperty.status}. Nothing was added twice.`
+          };
+        }
+
+        try {
+          const propertyId = await createEmployeeReviewProperty({
+            phone,
+            inboundMessageId: propertyInboundMessageId,
+            caption: cleanBody,
+            facts: textOnlyFacts,
+            storedMedia: pendingStoredMedia,
+            sessionData: data
+          });
+          data.current_property_id = propertyId;
+          data.property_ids = [...new Set([...(Array.isArray(data.property_ids) ? data.property_ids : []), propertyId])];
+          data.total_media_count = Number(data.total_media_count || 0) + pendingStoredMedia.length;
+          delete data.pending_property_caption;
+          clearEmployeePendingMedia(data);
+          await replaceEmployeeSession(phone, currentStep, data);
+          return {
+            handled: true,
+            nextStep: currentStep,
+            propertyId,
+            message: (data.property_batch_mode || 'multiple') === 'single'
+              ? `✅ Saved the property to staff review — ${String(propertyId).slice(0, 8).toUpperCase()}\nMedia stored: ${pendingStoredMedia.length}\nStatus: pending, not live.\n\nSend any additional media without a new full property caption. When this property is finished, type *COMPLETE*.`
+              : ''
+          };
+        } catch (error) {
+          logger.error('WhatsApp employee pending-media review save failed:', error);
+          if (propertyAttemptRecorded) {
+            data.properties_failed_count = Number(data.properties_failed_count || 0) + 1;
+            await replaceEmployeeSession(phone, currentStep, data);
+          }
+          return { handled: true, nextStep: currentStep, message: 'The media is stored, but I could not create the staff-review record. Nothing went live. Please contact a staff moderator before resending.' };
+        }
+      }
+
       data.pending_property_caption = cleanBody;
       await replaceEmployeeSession(phone, currentStep, data);
-      return { handled: true, nextStep: currentStep, message: 'Caption saved. Now send the first property media; it will be stored with that property.' };
+      return {
+        handled: true,
+        nextStep: currentStep,
+        message: pendingStoredMedia.length
+          ? `The media is stored safely, but the property still needs: ${textOnlyMissing.join(', ')}. Send one corrected caption; you do not need to resend the media.`
+          : 'Caption saved. Now send the first property media; it will be stored with that property.'
+      };
     }
 
     if (Number(data.total_media_count || 0) + candidates.length > 100) {
@@ -4721,17 +4829,45 @@ async function handleEmployeeWhatsappIntake({
     const shouldStartProperty = Boolean(caption) && !missing.length;
 
     if (!shouldStartProperty && !data.current_property_id) {
+      try {
+        const pendingStoredMedia = await storeEmployeeMedia(candidates, {
+          privateMedia: false,
+          phone,
+          inboundMessageId,
+          provider: runtime.provider
+        });
+        rememberEmployeePendingMedia(data, pendingStoredMedia, inboundMessageId);
+        if (caption) data.pending_property_caption = caption;
+        await replaceEmployeeSession(phone, currentStep, data);
+      } catch (error) {
+        logger.error('WhatsApp employee pending property-media storage failed:', error);
+        return { handled: true, nextStep: currentStep, message: 'I could not store that media permanently, so it was not added to review. Please wait before resending; nothing went live.' };
+      }
       return {
         handled: true,
         nextStep: currentStep,
-        message: `I have not saved this media yet. Send the first media again with: ${missing.length ? missing.join(', ') : 'property type, exact location and price'} in its caption.`
+        message: `I stored this media safely, but it is not in staff review yet. Send one corrected caption with: ${missing.length ? missing.join(', ') : 'property type, exact location and price'}. You do not need to resend the media.`
       };
     }
     if (!shouldStartProperty && caption && isReviewableOwnerForwardCaption(caption)) {
+      try {
+        const pendingStoredMedia = await storeEmployeeMedia(candidates, {
+          privateMedia: false,
+          phone,
+          inboundMessageId,
+          provider: runtime.provider
+        });
+        rememberEmployeePendingMedia(data, pendingStoredMedia, inboundMessageId);
+        data.pending_property_caption = caption;
+        await replaceEmployeeSession(phone, currentStep, data);
+      } catch (error) {
+        logger.error('WhatsApp employee pending new-property media storage failed:', error);
+        return { handled: true, nextStep: currentStep, message: 'I could not store that media permanently, so it was not added to review. Please wait before resending; nothing went live.' };
+      }
       return {
         handled: true,
         nextStep: currentStep,
-        message: `I have not attached this media because its new-property caption is incomplete. Add: ${missing.join(', ')} and resend it.`
+        message: `I stored this media safely, but its new-property caption is incomplete. Send one corrected caption with: ${missing.join(', ')}. You do not need to resend the media.`
       };
     }
 
@@ -4807,6 +4943,18 @@ async function handleEmployeeWhatsappIntake({
         inboundMessageId,
         provider: runtime.provider
       });
+      if (shouldStartProperty) {
+        const pendingStoredMedia = employeePendingStoredMedia(data);
+        if (pendingStoredMedia.length) {
+          const seenStoredMedia = new Set();
+          storedMedia = [...pendingStoredMedia, ...storedMedia].filter((item) => {
+            const key = normalizeInput(item.sha256 || item.url);
+            if (!key || seenStoredMedia.has(key)) return false;
+            seenStoredMedia.add(key);
+            return true;
+          });
+        }
+      }
     } catch (error) {
       logger.error('WhatsApp employee property-media storage failed:', error);
       if (propertyAttemptRecorded) {
@@ -4825,6 +4973,7 @@ async function handleEmployeeWhatsappIntake({
           data.total_media_count = Number(data.total_media_count || 0) + storedMedia.length;
         }
         delete data.pending_property_caption;
+        clearEmployeePendingMedia(data);
         await replaceEmployeeSession(phone, currentStep, data);
         return {
           handled: true,
@@ -11903,7 +12052,7 @@ router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
   const isAuthorizedEmployeeBatchReplay = !dryRun
     && employeeIntakePhoneAllowed(phone, { ownerAuthorized: isAiCeoOwnerPhone(phone) })
     && inboundMetadata.employee_batch_ordered_replay === true;
-  const suppressEmployeeBatchReplayReply = isAuthorizedEmployeeBatchReplay
+  const suppressEmployeeBatchReplayNonCompletionReply = isAuthorizedEmployeeBatchReplay
     && inboundMetadata.employee_batch_completion !== true;
 
   const alreadySeen = await db.query(
@@ -12084,7 +12233,7 @@ router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
     });
   }
 
-  const { message, nextStep, ownerForward = null } = await processInboundRuntime({
+  const { message, nextStep, ownerForward = null, employeeIntake = null } = await processInboundRuntime({
     phone: runtimePhone,
     inboundMessageId: runtimeInboundMessageId,
     body,
@@ -12096,6 +12245,12 @@ router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
   });
 
   let queuedReply = null;
+  const suppressEmployeeBatchReplayReply = suppressEmployeeBatchReplayNonCompletionReply
+    || (
+      isAuthorizedEmployeeBatchReplay
+      && inboundMetadata.employee_batch_completion === true
+      && employeeIntake?.batch_complete !== true
+    );
   if (message && !dryRun && !suppressOwnerHistoryReply && !suppressEmployeeBatchReplayReply) {
     queuedReply = await queueWhatsappWebBridgeAutoReply({
       phone,
@@ -12360,6 +12515,7 @@ module.exports.__test = {
   hasValidMetaWebhookSignature,
   employeeCaptionHash,
   employeeMediaCandidates,
+  employeePendingStoredMedia,
   employeePropertyFacts,
   employeePropertyMissing,
   getWhatsappCallNotificationEmails,

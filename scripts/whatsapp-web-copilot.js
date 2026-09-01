@@ -291,6 +291,7 @@ const EMPLOYEE_VIDEO_PREVIEW_MAX_BYTES = 25_000_000;
 const OUTBOUND_PROPERTY_IMAGE_MAX_BYTES = 15_000_000;
 const WHATSAPP_EMPLOYEE_AGENT_007_WORKER_MARKER = 'whatsapp-video-five-key-frames-20260831';
 const WHATSAPP_AGENT_007_INTAKE_RELIABILITY_MARKER = 'whatsapp-agent007-replay-backoff-20260901';
+const WHATSAPP_AGENT_007_PENDING_MEDIA_FIX_MARKER = 'whatsapp-agent007-pending-media-idempotency-20260901';
 const WHATSAPP_OUTGOING_PREVIEW_GUARD_MARKER = 'whatsapp-outgoing-preview-guard-20260831';
 const WHATSAPP_CALL_CARD_BROWSER_CONFIG = Object.freeze(whatsappCallCardBrowserConfig());
 const RECENT_INBOUND_BACKLOG_LIMIT = 60;
@@ -541,7 +542,8 @@ function persistRecentChatRowCache() {
     pruneRecentChatRowKeys(now);
     const payload = JSON.stringify({
       saved_at: new Date(now).toISOString(),
-      rows: Array.from(recentChatRowKeys.entries()).slice(-300)
+      rows: Array.from(recentChatRowKeys.entries()).slice(-300),
+      employee_batch_completion_keys: Array.from(completedEmployeeBatchHistoryKeys).slice(-50)
     });
     const temporaryPath = `${RECENT_CHAT_ROW_CACHE_FILE}.tmp`;
     fs.writeFileSync(temporaryPath, payload, { mode: 0o600 });
@@ -567,11 +569,33 @@ function loadRecentChatRowCache() {
       if (!rowKey || !Number.isFinite(timestamp) || now - timestamp >= RECENT_CHAT_ROW_CACHE_MS) continue;
       recentChatRowKeys.set(String(rowKey).slice(0, 500), timestamp);
     }
+    const savedAt = Date.parse(String(parsed?.saved_at || ''));
+    if (Number.isFinite(savedAt) && now - savedAt < 24 * 60 * 60 * 1000) {
+      for (const completionKey of Array.isArray(parsed?.employee_batch_completion_keys)
+        ? parsed.employee_batch_completion_keys.slice(-50)
+        : []) {
+        const normalizedKey = String(completionKey || '').slice(0, 500);
+        if (normalizedKey) completedEmployeeBatchHistoryKeys.add(normalizedKey);
+      }
+    }
     pruneRecentChatRowKeys(now);
     if (recentChatRowKeys.size) log(`restored ${recentChatRowKeys.size} recent chat row fingerprints from the persistent profile`);
+    if (completedEmployeeBatchHistoryKeys.size) {
+      log(`restored ${completedEmployeeBatchHistoryKeys.size} completed Agent 007 batch boundary keys from the persistent profile`);
+    }
   } catch (error) {
     if (error?.code !== 'ENOENT') log(`recent chat row cache read failed: ${error.message || error}`);
   }
+}
+
+function rememberCompletedEmployeeBatchHistoryKey(completionKey = '') {
+  const normalizedKey = String(completionKey || '').slice(0, 500);
+  if (!normalizedKey) return;
+  completedEmployeeBatchHistoryKeys.add(normalizedKey);
+  while (completedEmployeeBatchHistoryKeys.size > 50) {
+    completedEmployeeBatchHistoryKeys.delete(completedEmployeeBatchHistoryKeys.values().next().value);
+  }
+  scheduleRecentChatRowCacheWrite();
 }
 
 function pruneRecentChatRowKeys(now = Date.now(), ttlMs = RECENT_CHAT_ROW_CACHE_MS) {
@@ -661,6 +685,7 @@ function hostedRuntimeMetadata() {
     node_version: process.version.replace(/^v/, ''),
     release_marker: WHATSAPP_EMPLOYEE_AGENT_007_WORKER_MARKER,
     intake_reliability_marker: WHATSAPP_AGENT_007_INTAKE_RELIABILITY_MARKER,
+    pending_media_fix_marker: WHATSAPP_AGENT_007_PENDING_MEDIA_FIX_MARKER,
     outgoing_preview_guard: WHATSAPP_OUTGOING_PREVIEW_GUARD_MARKER,
     git_commit: process.env.RENDER_GIT_COMMIT || process.env.SOURCE_VERSION || process.env.GIT_COMMIT || '',
     ...Object.fromEntries(Object.entries(renderSignals).filter(([, value]) => Boolean(value)))
@@ -3167,6 +3192,18 @@ function isEmployeePropertyStartSnapshot(snapshot = {}) {
   return true;
 }
 
+function isEmployeePropertyCaptionCorrectionSnapshot(snapshot = {}) {
+  if (String(snapshot.mediaType || 'text').toLowerCase() !== 'text') return false;
+  const text = String(snapshot.text || '').replace(/\s+/g, ' ').trim();
+  if (text.length < 20 || isEmployeeBatchTriggerSnapshot(snapshot) || isEmployeeBatchCompletionSnapshot(snapshot)) {
+    return false;
+  }
+  const hasPropertyType = /\b(?:house|home|villa|bungalow|mansion|apartments?|flats?|land|plots?|commercial|shop|office|warehouse|student|hostel|rental|rent|sale)\b/i.test(text);
+  const hasPrice = /\b(?:ugx|usd|shs?|million|billion|price|asking)\b/i.test(text)
+    || /\b\d[\d,.]*\s*(?:m|bn|b)\b/i.test(text);
+  return hasPropertyType && hasPrice;
+}
+
 async function locateEmployeeBatchHistory(page, { chatKey = '' } = {}) {
   const normalizedChat = normalizeChatKey(chatKey);
   const snapshotsByKey = new Map();
@@ -3239,14 +3276,14 @@ async function replayEmployeeBatchThroughCompletion(page, history = {}, row = {}
   });
   const preparationData = preparation.data || {};
   if (preparationData.alreadyComplete) {
-    completedEmployeeBatchHistoryKeys.add(completionKey);
+    rememberCompletedEmployeeBatchHistoryKey(completionKey);
     rememberBrowserMessageKey(browserMessageKeyFor(history.completionSnapshot, row));
     await scrollWhatsappHistoryToLatest(page);
     log(`Agent 007 batch already reconciled for ${history.chatKey}: ${history.observedPropertyMessages} property messages`);
     return { handled: false, processed: 0, alreadyComplete: true, completionKey };
   }
   if (!preparationData.ready) {
-    completedEmployeeBatchHistoryKeys.add(completionKey);
+    rememberCompletedEmployeeBatchHistoryKey(completionKey);
     await scrollWhatsappHistoryToLatest(page);
     log(`Agent 007 batch history replay skipped for ${history.chatKey}: ${preparationData.reason || 'recovery_not_ready'}`);
     return { handled: true, processed: 0, skipped: preparationData.reason || 'recovery_not_ready' };
@@ -3262,6 +3299,7 @@ async function replayEmployeeBatchThroughCompletion(page, history = {}, row = {}
     employeeBatchReplayProgress.delete(employeeBatchReplayProgress.keys().next().value);
   }
   const visited = new Set(completedSnapshotKeys);
+  let sawPropertyMedia = false;
   const replayRunKey = crypto.createHash('sha1')
     .update(`${history.triggerKey}:${history.completionKey}:${Date.now()}:${crypto.randomUUID()}`)
     .digest('hex')
@@ -3279,10 +3317,14 @@ async function replayEmployeeBatchThroughCompletion(page, history = {}, row = {}
         if (key !== history.triggerKey) continue;
         started = true;
       }
-      if (!key || visited.has(key)) continue;
+      if (!key) continue;
 
       const isCompletion = key === history.completionKey || isEmployeeBatchCompletionSnapshot(snapshot);
-      if (!isCompletion && !['image', 'media'].includes(String(snapshot.mediaType || '').toLowerCase())) {
+      const isPropertyMedia = ['image', 'media'].includes(String(snapshot.mediaType || '').toLowerCase());
+      if (isPropertyMedia) sawPropertyMedia = true;
+      if (visited.has(key)) continue;
+      const isCaptionCorrection = sawPropertyMedia && isEmployeePropertyCaptionCorrectionSnapshot(snapshot);
+      if (!isCompletion && !isPropertyMedia && !isCaptionCorrection) {
         visited.add(key);
         continue;
       }
@@ -3325,6 +3367,45 @@ async function replayEmployeeBatchThroughCompletion(page, history = {}, row = {}
         rememberBrowserMessageKey(originalBrowserKey);
         completed = !!(result.processed || result.duplicate || result.queuedReply);
         break;
+      }
+
+      if (isCaptionCorrection) {
+        const result = await ingestSnapshot({
+          snapshot: {
+            ...snapshot,
+            messageId: `${snapshot.messageId || key}:ordered-caption:${replayRunKey}`.slice(0, 500),
+            browserMessageKey: `employee-batch-caption:${replayRunKey}:${crypto.createHash('sha1').update(key).digest('hex').slice(0, 16)}`,
+            bridgeMetadata: {
+              employee_batch_ordered_replay: true,
+              employee_batch_completion: false,
+              employee_batch_history_marker: WHATSAPP_EMPLOYEE_AGENT_007_WORKER_MARKER,
+              observed_property_messages: history.observedPropertyMessages
+            }
+          },
+          row,
+          source: 'employee_batch_history_caption'
+        });
+        if (result.retryable || result.error) {
+          const deferred = deferEmployeeBatchReplay(
+            completionKey,
+            result.error?.message || result.error || 'retryable_caption_error'
+          );
+          log(`Agent 007 ordered history caption replay paused for ${history.chatKey}: ${result.error?.message || result.error || 'retryable_caption_error'}`);
+          await scrollWhatsappHistoryToLatest(page);
+          return {
+            handled: false,
+            processed,
+            retryable: true,
+            deferred: true,
+            completionKey,
+            retryAfter: deferred.retryAfter,
+            skipped: result.error ? 'bridge_caption_error' : 'retryable_caption_error'
+          };
+        }
+        processed += result.processed || 0;
+        visited.add(key);
+        completedSnapshotKeys.add(key);
+        continue;
       }
 
       const hydrated = await hydrateMediaSnapshot(page, {
@@ -3374,7 +3455,7 @@ async function replayEmployeeBatchThroughCompletion(page, history = {}, row = {}
 
   await scrollWhatsappHistoryToLatest(page);
   if (completed) {
-    completedEmployeeBatchHistoryKeys.add(completionKey);
+    rememberCompletedEmployeeBatchHistoryKey(completionKey);
     employeeBatchReplayProgress.delete(completionKey);
     employeeBatchReplayBackoffs.delete(completionKey);
     log(`Agent 007 ordered history replay completed for ${history.chatKey}; processed ${processed} missing message(s)`);
@@ -4035,21 +4116,11 @@ async function setComposerTextWithDom(page, text) {
     document.execCommand?.('delete', false, null);
     document.execCommand?.('insertText', false, message);
 
-    let current = normalize(target.innerText || target.textContent || '');
-    if (!current.includes(normalize(message).slice(0, 120))) {
-      target.textContent = message;
-      target.dispatchEvent(new InputEvent('input', {
-        bubbles: true,
-        cancelable: true,
-        inputType: 'insertText',
-        data: message
-      }));
-      target.dispatchEvent(new Event('change', { bubbles: true }));
-      current = normalize(target.innerText || target.textContent || '');
-    }
+    const current = normalize(target.innerText || target.textContent || '');
+    const expected = normalize(message);
 
     return {
-      ok: !!current && current.includes(normalize(message).slice(0, 120)),
+      ok: !!current && current === expected,
       reason: current ? null : 'text_not_inserted',
       text: current
     };
@@ -4162,6 +4233,7 @@ async function waitForPostSendConfirmation(page, text, beforeState, timeoutMs = 
 }
 
 async function replaceComposerText(page, text, timeoutMs = 1200) {
+  const expectedText = normalizeReplyText(text);
   const composer = await findReplyComposer(page, timeoutMs);
   if (!composer) return setComposerTextWithDom(page, text);
 
@@ -4175,12 +4247,24 @@ async function replaceComposerText(page, text, timeoutMs = 1200) {
       await page.waitForTimeout(10);
       return true;
     }
+    // Lexical can apply execCommand one animation frame after evaluate() has
+    // returned. Re-read before any fallback typing so the same reply is never
+    // appended a second or third time.
+    await page.waitForTimeout(100);
+    const delayedState = await getReplyComposerText(page).catch(() => ({ found: false, text: '' }));
+    if (delayedState.found && normalizeReplyText(delayedState.text) === expectedText) {
+      return true;
+    }
     await composer.click({ timeout: 700, force: true }).then(() => {
       focused = true;
     }).catch(() => {});
   }
 
   try {
+    if (focused) {
+      await composer.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A', { timeout: 700 }).catch(() => {});
+      await composer.press('Backspace', { timeout: 700 }).catch(() => {});
+    }
     await composer.fill(String(text || ''), { timeout: 1500 });
   } catch (_error) {
     if (!focused && await setComposerTextWithDom(page, text)) {
@@ -4191,8 +4275,19 @@ async function replaceComposerText(page, text, timeoutMs = 1200) {
     await page.keyboard.press('Backspace');
     await page.keyboard.type(String(text || ''), { delay: 1 });
   }
-  await page.waitForTimeout(10);
-  return true;
+  await page.waitForTimeout(50);
+  let finalState = await getReplyComposerText(page).catch(() => ({ found: false, text: '' }));
+  if (finalState.found && normalizeReplyText(finalState.text) === expectedText) return true;
+
+  // Fail closed on any duplicated or partial composer body. Clear once and
+  // type the exact reply; never send text that differs from the queue payload.
+  await composer.click({ timeout: 700, force: true }).catch(() => {});
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
+  await page.keyboard.press('Backspace');
+  await page.keyboard.type(String(text || ''), { delay: 1 });
+  await page.waitForTimeout(50);
+  finalState = await getReplyComposerText(page).catch(() => ({ found: false, text: '' }));
+  return finalState.found && normalizeReplyText(finalState.text) === expectedText;
 }
 
 async function openChatForReply(page, recipient) {
@@ -4261,7 +4356,12 @@ async function openChatForReply(page, recipient) {
 async function typeAndSendReply(page, text) {
   const beforeState = await getOutgoingMessageState(page).catch(() => ({ count: 0, recentTexts: [] }));
   if (!await replaceComposerText(page, text, 15000)) {
-    throw new Error('Could not find the WhatsApp reply box');
+    throw new Error('Could not prepare the exact WhatsApp reply text');
+  }
+
+  const preparedComposer = await getReplyComposerText(page).catch(() => ({ found: false, text: '' }));
+  if (!preparedComposer.found || normalizeReplyText(preparedComposer.text) !== normalizeReplyText(text)) {
+    throw new Error('WhatsApp reply text changed before send');
   }
 
   await clickWhatsAppSend(page);
