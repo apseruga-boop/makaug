@@ -212,7 +212,7 @@ BROKERS.forEach((broker, index) => {
 });
 
 const OFFICIAL_AGENT_PORTRAITS = new Map([
-  ["kazi honest", "/assets/agents/kazi-honest.jpg?v=20260901"]
+  ["kazi honest", "/assets/agents/kazi-honest-professional-v2.jpg?v=20260901b"]
 ]);
 
 function mapRemoteAgentForUi(agent = {}) {
@@ -41377,12 +41377,34 @@ function brokerCompanyLineHtml(b, classes = "text-center text-gray-500 text-sm")
   return `<p class="${classes}">${adminEscape(company)}</p>`;
 }
 
+function brokerIconActionsHtml(b, options = {}) {
+  const sizeClass = options.large === true ? "w-11 h-11 text-base" : "w-10 h-10 text-sm";
+  const name = adminEscape(b?.name || "broker");
+  const phone = String(b?.phone || "").replace(/\s+/g, "");
+  const whatsapp = String(b?.whatsapp || "").replace(/\D/g, "");
+  const profilePath = getBrokerProfilePath(b);
+  const baseClass = `${sizeClass} rounded-full inline-flex items-center justify-center border transition-colors`;
+  return `
+    <div class="flex items-center justify-center gap-2" aria-label="Contact and profile actions for ${name}">
+      ${phone
+        ? `<a href="tel:${adminAttr(phone)}" onclick="event.stopPropagation()" class="${baseClass} border-green-200 bg-white text-green-800 hover:bg-green-50" aria-label="Call ${name}" title="Call ${name}"><i class="fas fa-phone" aria-hidden="true"></i><span class="sr-only">Call ${name}</span></a>`
+        : `<span class="${baseClass} border-gray-200 bg-gray-50 text-gray-300 cursor-not-allowed" aria-label="Phone unavailable" title="Phone unavailable"><i class="fas fa-phone" aria-hidden="true"></i></span>`}
+      ${whatsapp
+        ? `<a href="${adminAttr(buildWhatsAppUrl(whatsapp, buildBrokerContactWhatsappMessage(b)))}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" class="${baseClass} border-green-500 bg-green-500 text-white hover:bg-green-600" aria-label="WhatsApp ${name}" title="WhatsApp ${name}"><i class="fab fa-whatsapp" aria-hidden="true"></i><span class="sr-only">WhatsApp ${name}</span></a>`
+        : `<span class="${baseClass} border-gray-200 bg-gray-50 text-gray-300 cursor-not-allowed" aria-label="WhatsApp unavailable" title="WhatsApp unavailable"><i class="fab fa-whatsapp" aria-hidden="true"></i></span>`}
+      <button type="button" onclick="event.stopPropagation(); shareBrokerBusinessCard(${adminListingIdArg(b.id)}, 'native')" class="${baseClass} border-green-200 bg-white text-green-800 hover:bg-green-50" aria-label="Share ${name}'s broker card" title="Share broker card"><i class="fas fa-share-nodes" aria-hidden="true"></i><span class="sr-only">Share broker card</span></button>
+      ${options.profile === true
+        ? `<button type="button" onclick="event.stopPropagation(); shareBrokerBusinessCard(${adminListingIdArg(b.id)}, 'link')" class="${baseClass} border-gray-900 bg-gray-900 text-white hover:bg-gray-800" aria-label="Copy ${name}'s profile link" title="Copy profile link"><i class="fas fa-link" aria-hidden="true"></i><span class="sr-only">Copy profile link</span></button>`
+        : `<a href="${adminAttr(profilePath)}" onclick="return openBrokerProfileLink(event, ${adminListingIdArg(b.id)})" class="${baseClass} border-gray-900 bg-gray-900 text-white hover:bg-gray-800" aria-label="View ${name}'s profile" title="View profile"><i class="fas fa-user" aria-hidden="true"></i><span class="sr-only">View profile</span></a>`}
+    </div>`;
+}
+
 function renderBrokers(id, list) {
   const el = document.getElementById(id);
   if (!el) return;
   if (id === "brokers-grid") {
     el.innerHTML = list.map((b) => `
-      <div class="broker-grid-card bg-white rounded-2xl border border-green-100 p-5 shadow-sm cursor-pointer hover:shadow-md transition-all" onclick="openBrokerProfile(${adminListingIdArg(b.id)})">
+      <div class="broker-grid-card bg-white rounded-2xl border border-green-100 p-4 shadow-sm cursor-pointer hover:shadow-md transition-all" onclick="openBrokerProfile(${adminListingIdArg(b.id)})">
         <div class="mb-3">${brokerAvatarHtml(b, "w-28 h-28 border-4 shadow-sm")}</div>
         <h3 class="text-xl font-black text-gray-900 text-center leading-tight">${adminEscape(b.name)}</h3>
         ${brokerCompanyLineHtml(b)}
@@ -41395,15 +41417,8 @@ function renderBrokers(id, list) {
           </div>
         </div>
 
-        <p class="text-center text-gray-500 text-sm mt-3">📍 ${b.area}</p>
-
-        <div class="mt-auto grid grid-cols-2 gap-2 mt-4">
-          <a href="tel:${b.phone}" onclick="event.stopPropagation()" class="broker-action-btn border border-green-700 text-green-700 rounded-xl hover:bg-green-50 inline-flex items-center justify-center gap-1.5 font-semibold px-2"><i class="fas fa-phone text-[11px]"></i><span>${translateListingLabel("Call")}</span></a>
-          <a href="${adminAttr(buildWhatsAppUrl(b.whatsapp, buildBrokerContactWhatsappMessage(b)))}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" class="broker-action-btn bg-green-500 text-white rounded-xl hover:bg-green-400 inline-flex items-center justify-center gap-1.5 font-semibold px-2"><i class="fab fa-whatsapp text-[12px]"></i><span>${translateListingLabel("WhatsApp")}</span></a>
-          <button type="button" onclick="event.stopPropagation(); shareBrokerBusinessCard(${adminListingIdArg(b.id)}, 'whatsapp')" class="broker-action-btn border border-green-200 text-green-700 rounded-xl hover:bg-green-50 inline-flex items-center justify-center gap-1.5 font-semibold px-2"><i class="fas fa-share-nodes text-[11px]"></i><span>${translateListingLabel("Share WA")}</span></button>
-          <button type="button" onclick="event.stopPropagation(); shareBrokerBusinessCard(${adminListingIdArg(b.id)}, 'twitter')" class="broker-action-btn border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 inline-flex items-center justify-center gap-1.5 font-semibold px-2"><i class="fab fa-x-twitter text-[11px]"></i><span>${translateListingLabel("Share X")}</span></button>
-        </div>
-        <a href="${adminAttr(getBrokerProfilePath(b))}" onclick="return openBrokerProfileLink(event, ${adminListingIdArg(b.id)})" class="w-full mt-2 rounded-xl border border-green-700 py-2 text-sm font-bold text-green-800 hover:bg-green-50 inline-flex items-center justify-center">View Profile</a>
+        <p class="text-center text-gray-500 text-sm mt-3"><i class="fas fa-location-dot text-green-600 mr-1" aria-hidden="true"></i>${b.area}</p>
+        <div class="mt-auto pt-4">${brokerIconActionsHtml(b)}</div>
       </div>
     `).join("");
     setBrokerMapMarkers(list);
@@ -41411,8 +41426,8 @@ function renderBrokers(id, list) {
   }
 
   el.innerHTML = list.map((b) => `
-    <div class="broker-grid-card bg-white rounded-2xl border border-gray-100 p-5 shadow-sm cursor-pointer hover:shadow-md transition-all" onclick="openBrokerProfile(${adminListingIdArg(b.id)})">
-      <div class="mb-3">${brokerAvatarHtml(b, "w-32 h-32 border-4 shadow-sm")}</div>
+    <div class="broker-grid-card bg-white rounded-2xl border border-gray-100 p-4 shadow-sm cursor-pointer hover:shadow-md transition-all" onclick="openBrokerProfile(${adminListingIdArg(b.id)})">
+      <div class="mb-3">${brokerAvatarHtml(b, "w-28 h-28 border-4 shadow-sm")}</div>
       <h3 class="text-xl font-black text-gray-900 text-center">${adminEscape(b.name)}</h3>
       ${brokerCompanyLineHtml(b)}
       ${renderBrokerRegistrationBadge(b, "text-[11px]") ? `<div class="mt-2 text-center">${renderBrokerRegistrationBadge(b, "text-[11px]")}</div>` : ""}
@@ -41420,12 +41435,7 @@ function renderBrokers(id, list) {
       <div class="mt-3 flex justify-center text-sm">
         <span class="rounded-full bg-green-50 px-3 py-1.5 text-green-900"><strong>${b.listings}</strong> ${translateListingLabel("Active Listings")}</span>
       </div>
-      <div class="mt-auto grid grid-cols-2 gap-2 pt-4">
-        <a href="tel:${b.phone}" onclick="event.stopPropagation()" class="border border-green-700 text-green-700 text-center rounded-lg py-2 text-sm font-semibold">${translateListingLabel("Call")}</a>
-        <a href="${adminAttr(buildWhatsAppUrl(b.whatsapp, buildBrokerContactWhatsappMessage(b)))}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" class="bg-green-500 text-white text-center rounded-lg py-2 text-sm font-semibold">${translateListingLabel("WhatsApp")}</a>
-      </div>
-      <button type="button" onclick="event.stopPropagation(); shareBrokerBusinessCard(${adminListingIdArg(b.id)}, 'whatsapp')" class="w-full mt-2 border border-green-200 text-green-700 text-center rounded-lg py-2 text-sm font-semibold hover:bg-green-50">${translateListingLabel("Share Broker Card")}</button>
-      <a href="${adminAttr(getBrokerProfilePath(b))}" onclick="return openBrokerProfileLink(event, ${adminListingIdArg(b.id)})" class="w-full mt-2 border border-green-700 text-green-800 text-center rounded-lg py-2 text-sm font-bold hover:bg-green-50 inline-flex items-center justify-center">View Profile</a>
+      <div class="mt-auto pt-4">${brokerIconActionsHtml(b)}</div>
     </div>`).join("");
 }
 
@@ -52923,76 +52933,57 @@ async function openBrokerProfile(id) {
   const remoteListings = Array.isArray(b.remote_listings) ? b.remote_listings.filter(isListingPublicVisible) : [];
   const list = remoteListings.length ? remoteListings : getPublicListings().filter((p) => String(p.agent || "") === String(id || ""));
   const photoSrc = publicImageSrc(b.photo || b.profile_photo_url, `https://ui-avatars.com/api/?name=${encodeURIComponent(b.name)}&background=dcfce7&color=166534&size=300`);
-  const status = String(b.status || "").toLowerCase();
-  const isApprovedBroker = status === "approved";
-  const isDirectClaimPending = b.direct_agent_authorised === true && b.profile_claim_pending === true;
-  const statusLabel = isDirectClaimPending
-    ? "Direct agent submission · identity verification pending"
-    : (isApprovedBroker ? "Approved makaug broker" : "Under makaug review");
+  const publicLicence = /^DIRECT-/i.test(String(b.licence || "").trim()) ? "" : String(b.licence || "").trim();
   const totalVideoTours = list.reduce((sum, property) => sum + propertyVideoUrls(property).length, 0);
-  const phoneDigits = String(b.phone || "").replace(/\s+/g, "");
-  const firstName = String(b.name || "broker").split(/\s+/)[0] || "broker";
   content.innerHTML = `
     <button onclick="showPage('brokers')" class="text-green-700 text-sm font-semibold mb-4 inline-flex items-center gap-2"><i class="fas fa-arrow-left"></i> Back to Brokers</button>
 
-    <div class="bg-white border border-green-100 rounded-3xl p-6 md:p-8 mb-6 shadow-sm">
-      <div class="grid lg:grid-cols-[300px,1fr] gap-7 items-start">
-        <div>
-          <div class="w-64 h-64 mx-auto rounded-3xl border-4 border-green-100 shadow-sm overflow-hidden bg-green-50 flex items-center justify-center">
-            <img src="${adminAttr(photoSrc)}" alt="${adminAttr(b.name)}" class="w-full h-full object-cover" onerror="this.remove(); this.parentElement.innerHTML='<div class=\\'text-6xl\\'>${adminAttr(b.emoji || "👔")}</div>';">
+    <div class="bg-white border border-green-100 rounded-3xl mb-6 shadow-sm overflow-hidden">
+      <div class="h-28 md:h-36 bg-gradient-to-r from-green-900 via-green-700 to-emerald-500" aria-hidden="true"></div>
+      <div class="px-5 md:px-8 pb-7">
+        <div class="-mt-16 md:-mt-20 flex items-end justify-between gap-4 flex-wrap">
+          <div class="w-36 h-36 md:w-44 md:h-44 rounded-full border-[5px] border-white shadow-md overflow-hidden bg-green-50 flex items-center justify-center shrink-0">
+            <img src="${adminAttr(photoSrc)}" alt="${adminAttr(b.name)}" class="w-full h-full object-cover object-center" onerror="this.remove(); this.parentElement.innerHTML='<div class=\\'text-5xl\\'>${adminAttr(b.emoji || "👔")}</div>';">
           </div>
+          <div class="pb-1">${brokerIconActionsHtml(b, { large: true, profile: true })}</div>
         </div>
 
-        <div>
-          <div class="flex items-start justify-between gap-3 flex-wrap">
-            <div>
-              <h1 class="text-3xl font-black text-gray-900">${b.name}</h1>
-              <p class="text-gray-500 mt-1">${b.company}</p>
-	              <div class="mt-2 flex flex-wrap gap-2">
-	                ${renderBrokerRegistrationBadge(b)}
-	                <span class="inline-flex items-center gap-1 ${isApprovedBroker && !isDirectClaimPending ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-800"} text-xs font-semibold px-2.5 py-1 rounded-full"><i class="fas fa-shield-halved"></i> ${statusLabel}</span>
-	              </div>
+        <div class="grid lg:grid-cols-[minmax(0,1fr),280px] gap-7 mt-4">
+          <div>
+            <h1 class="text-3xl md:text-4xl font-black text-gray-900 leading-tight">${adminEscape(b.name)}</h1>
+            ${brokerCompanyLineHtml(b, "text-lg text-gray-600 mt-1 text-left")}
+            <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-gray-600">
+              <span class="inline-flex items-center gap-1.5"><i class="fas fa-location-dot text-green-600" aria-hidden="true"></i>${adminEscape(b.area)}</span>
+              <span class="inline-flex items-center gap-1.5"><i class="fas fa-briefcase text-green-600" aria-hidden="true"></i>${adminEscape(b.experience || "Experienced Broker")}</span>
+              ${publicLicence ? `<span class="inline-flex items-center gap-1.5"><i class="fas fa-id-card text-green-600" aria-hidden="true"></i>${adminEscape(publicLicence)}</span>` : ""}
             </div>
-            <div class="text-sm text-gray-600">
-              <div class="flex items-center gap-2"><i class="fas fa-map-marker-alt text-green-600 w-4"></i>${b.area}</div>
-              <div class="flex items-center gap-2 mt-1"><i class="fas fa-id-card text-green-600 w-4"></i>${b.licence || "AREA Licensed"}</div>
-              <div class="flex items-center gap-2 mt-1"><i class="fas fa-briefcase text-green-600 w-4"></i>${b.experience || "Experienced Broker"}</div>
+            ${renderBrokerRegistrationBadge(b) ? `<div class="mt-3">${renderBrokerRegistrationBadge(b)}</div>` : ""}
+
+            <section class="mt-6 border-t border-gray-100 pt-5" aria-labelledby="broker-about-heading">
+              <h2 id="broker-about-heading" class="text-lg font-bold text-gray-900">About</h2>
+              <p class="text-gray-700 mt-2 leading-relaxed max-w-3xl">${adminEscape(b.bio || "Professional real estate broker helping clients buy, rent, and invest with confidence.")}</p>
+            </section>
+
+            ${(b.specialties || []).length ? `<div class="mt-5"><div class="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">Specialities</div><div class="flex flex-wrap gap-2">${(b.specialties || []).map((s) => `<span class="bg-gray-100 text-gray-700 text-xs font-medium px-3 py-1.5 rounded-full">${adminEscape(s)}</span>`).join("")}</div></div>` : ""}
+            ${(b.languages || []).length ? `<div class="mt-4"><div class="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">Languages</div><div class="flex flex-wrap gap-2">${(b.languages || []).map((l) => `<span class="bg-blue-50 text-blue-700 text-xs font-medium px-3 py-1.5 rounded-full">${adminEscape(l)}</span>`).join("")}</div></div>` : ""}
+            ${renderBrokerSocialLinks(b)}
+          </div>
+
+          <aside class="rounded-2xl border border-gray-100 bg-gray-50 p-4 h-fit" aria-label="Broker profile overview">
+            <h2 class="font-bold text-gray-900">Profile overview</h2>
+            <div class="mt-3 grid grid-cols-2 gap-3">
+              <div class="rounded-xl bg-white border border-gray-100 p-3 text-center">
+                <div class="text-2xl font-black text-gray-900">${list.length}</div>
+                <div class="text-xs text-gray-500">Active Listings</div>
+              </div>
+              <div class="rounded-xl bg-white border border-gray-100 p-3 text-center">
+                <div class="text-2xl font-black text-gray-900">${brokerMetric(getBrokerProfileViewCount(b.id))}</div>
+                <div class="text-xs text-gray-500">Profile Views</div>
+              </div>
             </div>
-          </div>
-
-          <p class="text-gray-700 mt-4 leading-relaxed">${b.bio || "Professional real estate broker helping clients buy, rent, and invest with confidence."}</p>
-          ${renderBrokerSocialLinks(b)}
-
-	          <div class="grid sm:grid-cols-2 gap-3 mt-5">
-            <div class="bg-green-50 rounded-xl p-3 text-center">
-              <div class="text-2xl font-bold text-gray-900">${list.length}</div>
-              <div class="text-xs text-gray-500">Active Listings</div>
-            </div>
-	            <div class="bg-green-50 rounded-xl p-3 text-center">
-	              <div class="text-2xl font-bold text-gray-900">${brokerMetric(getBrokerProfileViewCount(b.id))}</div>
-	              <div class="text-xs text-gray-500">Profile Views</div>
-	            </div>
-	          </div>
-          ${totalVideoTours ? `<div class="mt-3 rounded-xl border border-sky-100 bg-sky-50 px-3 py-2 text-center text-sm font-semibold text-sky-800"><i class="fas fa-video mr-1"></i>${totalVideoTours} property video tour${totalVideoTours === 1 ? "" : "s"}</div>` : ""}
-
-          <div class="mt-5 flex flex-wrap gap-2">
-            ${(b.specialties || []).map((s) => `<span class="bg-gray-100 text-gray-700 text-xs font-medium px-2.5 py-1 rounded-full">${s}</span>`).join("")}
-          </div>
-          <div class="mt-2 flex flex-wrap gap-2">
-            ${(b.languages || []).map((l) => `<span class="bg-blue-50 text-blue-700 text-xs font-medium px-2.5 py-1 rounded-full">${l}</span>`).join("")}
-          </div>
-
-          <div class="grid sm:grid-cols-2 gap-2 mt-6">
-            ${b.phone ? `<a href="tel:${adminAttr(phoneDigits)}" class="block bg-green-700 text-white text-center py-2.5 rounded-xl font-semibold">Call ${adminEscape(firstName)}</a>` : `<button type="button" class="block bg-gray-100 text-gray-400 text-center py-2.5 rounded-xl font-semibold cursor-not-allowed">Call unavailable</button>`}
-            ${b.whatsapp ? `<a href="${adminAttr(buildWhatsAppUrl(b.whatsapp, buildBrokerContactWhatsappMessage(b)))}" target="_blank" rel="noopener noreferrer" class="block bg-green-500 text-white text-center py-2.5 rounded-xl font-semibold">WhatsApp</a>` : `<button type="button" class="block bg-gray-100 text-gray-400 text-center py-2.5 rounded-xl font-semibold cursor-not-allowed">WhatsApp unavailable</button>`}
-          </div>
-          <div class="grid sm:grid-cols-5 gap-2 mt-2">
-            <button type="button" onclick="shareBrokerBusinessCard(${adminListingIdArg(b.id)}, 'whatsapp')" class="border border-green-200 text-green-700 text-center py-2.5 rounded-xl font-semibold hover:bg-green-50">Share</button>
-            <button type="button" onclick="shareBrokerBusinessCard(${adminListingIdArg(b.id)}, 'facebook')" class="border border-blue-200 text-blue-800 text-center py-2.5 rounded-xl font-semibold hover:bg-blue-50">Facebook</button>
-            <button type="button" onclick="shareBrokerBusinessCard(${adminListingIdArg(b.id)}, 'linkedin')" class="border border-blue-200 text-blue-800 text-center py-2.5 rounded-xl font-semibold hover:bg-blue-50">LinkedIn</button>
-            <button type="button" onclick="shareBrokerBusinessCard(${adminListingIdArg(b.id)}, 'x')" class="border border-gray-200 text-gray-800 text-center py-2.5 rounded-xl font-semibold hover:bg-gray-50">X</button>
-            <button type="button" onclick="shareBrokerBusinessCard(${adminListingIdArg(b.id)}, 'link')" class="border border-green-200 text-green-700 text-center py-2.5 rounded-xl font-semibold hover:bg-green-50">Copy link</button>
-          </div>
+            ${totalVideoTours ? `<div class="mt-3 rounded-xl border border-sky-100 bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-800"><i class="fas fa-video mr-1" aria-hidden="true"></i>${totalVideoTours} property video tour${totalVideoTours === 1 ? "" : "s"}</div>` : ""}
+            <p class="mt-4 text-xs leading-relaxed text-gray-500">Use the icons above to call, WhatsApp, share this broker card, or open the profile link.</p>
+          </aside>
         </div>
       </div>
     </div>
