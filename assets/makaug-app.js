@@ -40544,11 +40544,8 @@ function buildMapListingPopupHtml(property = {}) {
   const title = getLocalizedPropertyTitle(property) || translatePropertyUi("Property");
   const location = getPropertyLocationDisplay(property) || [property?.area, property?.district].filter(Boolean).join(", ");
   const detailPath = getPropertyDetailPath(property);
-  const popupDescription = propertyCardDescriptionText(property);
-  const descriptionPreview = popupDescription ? popupDescription.slice(0, 360) : "";
   return `
     <div data-map-marker-popup="listing" style="min-width:220px;max-width:240px">
-      ${descriptionPreview ? `<div style="max-height:118px;overflow:auto;border-radius:10px;margin-bottom:10px;background:#f8fafc;color:#334155;border:1px solid #d1fae5;font-size:12px;line-height:1.45;font-weight:600;text-align:left;padding:10px;">${adminEscape(descriptionPreview)}</div>` : ""}
       <a href="${adminAttr(detailPath)}" data-map-property-link="1" data-property-id="${adminAttr(property.id)}" onclick="return openMapPropertyDetail(event, ${idArg});" style="display:block;text-align:left;font-weight:700;color:#111827;margin-bottom:4px;text-decoration:none;">
         ${adminEscape(title)}
       </a>
@@ -53309,6 +53306,19 @@ function openFirstPublicMapMarkerForQa(mapId) {
 
 window.__makaugOpenFirstPublicMapMarker = openFirstPublicMapMarkerForQa;
 
+function openGoogleMarkerInfoWindow(map, marker, infoWindow, content, { centerMarker = false } = {}) {
+  const open = () => {
+    infoWindow.setContent(content);
+    infoWindow.open(map, marker);
+  };
+  if (!centerMarker || !marker?.getPosition || !map?.panTo) {
+    open();
+    return;
+  }
+  map.panTo(marker.getPosition());
+  window.setTimeout(open, 320);
+}
+
 function addGoogleMarkers(mapId, list) {
   const map = maps[mapId];
   if (!map || !window.google?.maps) return;
@@ -53323,12 +53333,10 @@ function addGoogleMarkers(mapId, list) {
     });
     const content = buildMapListingPopupHtml(p);
     marker.addListener("mouseover", () => {
-      infoWindow.setContent(content);
-      infoWindow.open(map, marker);
+      openGoogleMarkerInfoWindow(map, marker, infoWindow, content);
     });
     marker.addListener("click", () => {
-      infoWindow.setContent(content);
-      infoWindow.open(map, marker);
+      openGoogleMarkerInfoWindow(map, marker, infoWindow, content, { centerMarker: true });
     });
     markers[mapId].push(marker);
   });

@@ -208,22 +208,29 @@ async function clickPopupDetailOrBrokerAction(page, checks) {
     '.leaflet-popup button:has-text("View Property"):visible',
     '.gm-style-iw button:has-text("View Broker"):visible',
     '.leaflet-popup button:has-text("View Broker"):visible'
-  ].join(', ')).first();
+  ].join(', ')).last();
   if (!(await popupLink.count())) {
     checks.push('map popup opened but has no View Property/View Broker action');
     return;
   }
   const href = await popupLink.getAttribute('href').catch(() => '') || '';
   const label = await popupLink.innerText().catch(() => '') || '';
+  const expectedProperty = href.includes('/property/') || /View Property/i.test(label);
+  const expectedBroker = href.includes('/agents/') || /View Broker/i.test(label);
   await popupLink.click({ timeout: 8000 }).catch((error) => {
     checks.push(`map popup detail click failed: ${error.message}`);
   });
   await page.waitForLoadState('domcontentloaded', { timeout: 8000 }).catch(() => {});
-  await page.waitForTimeout(500);
+  await page.waitForFunction(({ expectedProperty, expectedBroker }) => {
+    const path = window.location.pathname || '/';
+    const text = document.body?.innerText || '';
+    if (expectedProperty) return path.startsWith('/property/') || /Back to results|Book Viewing|Request Callback|WhatsApp Contact|Send enquiry/i.test(text);
+    if (expectedBroker) return path.startsWith('/agents/') || /Back to Brokers|Broker profile|Verified broker|Share Broker Card/i.test(text);
+    return true;
+  }, { expectedProperty, expectedBroker }, { timeout: 8000 }).catch(() => {});
+  await page.waitForTimeout(180);
   const text = await visibleText(page);
   const path = new URL(page.url()).pathname;
-  const expectedProperty = href.includes('/property/') || /View Property/i.test(label);
-  const expectedBroker = href.includes('/agents/') || /View Broker/i.test(label);
   if (expectedProperty && !path.startsWith('/property/') && !/Back to results|Book Viewing|Request Callback|WhatsApp Contact|Send enquiry/i.test(text)) {
     checks.push(`map popup View Property did not open a listing detail route/view (path ${path})`);
   }
@@ -288,6 +295,10 @@ async function auditCardsAndMarkers(page, route) {
   const hasMap = await waitForMapIfPresent(page, route);
   const activeMapId = await visiblePublicMapId(page, route);
   const markerRoot = activeMapId ? `#${activeMapId}` : '';
+  if (hasMap && markerRoot) {
+    await page.locator(markerRoot).scrollIntoViewIfNeeded().catch(() => {});
+    await page.waitForTimeout(350);
+  }
   const markerCount = markerRoot ? await page.locator(`${markerRoot} .leaflet-marker-icon:visible, ${markerRoot} [data-map-marker]:visible`).count() : 0;
   if (markerCount) {
     const markerIndex = await page.evaluate((activeMapId) => {
