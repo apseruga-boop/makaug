@@ -94,6 +94,8 @@ test('website and WhatsApp AI recognize off-plan search and listing requests', (
   assert.match(ai, /'off_plan_search'/);
   assert.match(ai, /'off_plan_listing'/);
   assert.match(aiRoute, /assistantIsOffPlan/);
+  assert.match(aiRoute, /Your request is recorded only after you submit that contact form or send the WhatsApp message/);
+  assert.match(aiRoute, /action: 'open_off_plan_contact'/);
   assert.match(whatsapp, /Off-plan project received/);
   for (const field of ['Project name', 'Location', 'Completion date', 'Brochure and project images', 'Current construction progress', 'Current sales and availability']) assert.match(whatsapp, new RegExp(field));
   assert.match(whatsapp, /createOffPlanEnquiry/);
