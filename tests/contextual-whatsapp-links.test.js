@@ -40,7 +40,7 @@ for (const context of [
 assert(appSource.includes('Page: makaug.com'), 'support WhatsApp messages should include the originating page');
 assert(appSource.includes('buildDetailSupportWhatsappMessage()'), 'property detail floating support must include listing context');
 assert(appSource.includes('buildBrokerProfileSupportWhatsappMessage()'), 'broker profile floating support must include broker context');
-assert(appSource.includes('buildWhatsAppUrl(b.whatsapp, buildBrokerContactWhatsappMessage(b))'), 'broker WhatsApp buttons must open with a prefilled broker message');
+assert(appSource.includes('buildWhatsAppUrl(whatsapp, buildBrokerContactWhatsappMessage(b))'), 'broker WhatsApp buttons must use the normalized number and open with a prefilled broker message');
 assert(!appSource.includes('href="https://wa.me/${b.whatsapp}"'), 'broker WhatsApp links must not be bare wa.me links');
 assert(appSource.includes('const LISTING_WHATSAPP_CONTACT_I18N = Object.freeze'), 'listing contact WhatsApp copy must be language-aware');
 for (const lang of ['en', 'lg', 'sw', 'ac', 'ny', 'rn', 'sm']) {

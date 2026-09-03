@@ -29,7 +29,7 @@ country package are deployed with a South Africa tenant contract.
 - Credentials, sessions, staff identities, inventory, backups, domains and
   deployment evidence are never reused from Uganda, Kenya or Rwanda.
 - Uganda remains the default tenant so this branch cannot silently change an
-  existing MakaUG deployment.
+  existing makaug deployment.
 - Property Value and Marketplace are excluded from the ZA public product.
 
 ## Launch markers

@@ -23,7 +23,7 @@ function isOwnWhatsappMessage({ direction = '', senderLabel = '', text = '' } = 
 function isLikelyMakaugOutboundPreview(value = '') {
   const text = normalizeSenderLabel(value);
   if (!text) return false;
-  return /^(?:🔐\s*)?MakaUG employee intake\b/i.test(text)
+  return /^(?:🔐\s*)?makaug employee intake\b/i.test(text)
     || /^Is the agent already registered on makaug\.com\?/i.test(text)
     || /^Send the agent(?:'|’)?s exact name\b/i.test(text)
     || /^How many properties are you sending\?/i.test(text)

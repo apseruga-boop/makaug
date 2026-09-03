@@ -57,9 +57,9 @@ test('approval report blocks non-canonical currency and repeated FX multiplicati
     price_fx_rate_ugx: 3800,
   }));
   assert.equal(bad.ok, false);
-  assert(bad.issue_codes.includes('canonical_price_currency_not_ugx'));
-  assert(bad.issue_codes.includes('price_above_100bn_ugx'));
-  assert(bad.issue_codes.includes('usd_fx_magnitude_mismatch'));
+  assert(bad.issue_codes.includes('canonical_price_currency_mismatch'));
+  assert(bad.issue_codes.includes('price_above_canonical_sanity_limit'));
+  assert(bad.issue_codes.includes('fx_magnitude_mismatch'));
   assert.equal(MAX_CANONICAL_PRICE_UGX, 100000000000);
 });
 
@@ -385,7 +385,7 @@ test('King review edits source currency and POA without changing canonical curre
   assert.match(app, /price_original_currency: get\("admin-review-price-currency-edit"\)/);
   assert.match(app, /admin-review-price-on-application-edit/);
   assert.match(app, /data-data-integrity-review/);
-  assert.match(propertyRoute, /price_currency: \(\) => 'UGX'/);
+  assert.match(propertyRoute, /price_currency: \(\) => CANONICAL_PROPERTY_CURRENCY/);
   assert.match(propertyRoute, /price_original_currency/);
   assert.match(propertyRoute, /price_on_application/);
 });

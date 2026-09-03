@@ -8165,6 +8165,7 @@ function setLang(lang, silent = false, rerender = true) {
   applyLanguageUI();
   updateHomeAskAiLanguageCopy();
   applyMarketplaceLanguageUI();
+  if (typeof window.applyOffPlanLanguageUI === "function") window.applyOffPlanLanguageUI();
   if (!silent) toast(`${tr("languageSet")}: ${currentLang.toUpperCase()}`);
 }
 
@@ -38664,7 +38665,7 @@ function listingBadgeRowHtml(p = {}, options = {}) {
 function brokerRegistrationMeta(broker) {
   if (broker?.direct_agent_authorised) {
     return {
-      label: translateListingLabel("MakaUG agent profile"),
+      label: translateListingLabel("makaug agent profile"),
       cls: "bg-green-50 text-green-700",
       icon: "fas fa-user-check"
     };
@@ -39450,7 +39451,22 @@ function foundOnlineSourceVideoUrl(p = {}) {
 
 function foundOnlineSourceThumbnailUrl(p = {}, videoUrl = "") {
   const extra = p?.extra_fields && typeof p.extra_fields === "object" ? p.extra_fields : {};
+  const isStableThumbnail = (value) => {
+    const url = String(value || "").trim();
+    if (!/^https?:\/\//i.test(url)) return false;
+    return !/(?:tiktokcdn|byteimg|p16-|p19-|p77-|tos-)/i.test(url);
+  };
   const explicit = [
+    p.tiktok_thumbnail_cache_url,
+    p.thumbnail_cache_url,
+    p.source_thumbnail_cache_url,
+    p.cached_thumbnail_url,
+    p.cached_image_url,
+    extra.tiktok_thumbnail_cache_url,
+    extra.thumbnail_cache_url,
+    extra.source_thumbnail_cache_url,
+    extra.cached_thumbnail_url,
+    extra.cached_image_url,
     p.thumbnail_url,
     p.video_thumbnail_url,
     p.source_thumbnail_url,
@@ -39468,7 +39484,7 @@ function foundOnlineSourceThumbnailUrl(p = {}, videoUrl = "") {
     ...(Array.isArray(extra.photo_source_urls) ? extra.photo_source_urls : []),
     ...(Array.isArray(extra.authorised_photo_urls) ? extra.authorised_photo_urls : []),
     ...(Array.isArray(p.photo_source_urls) ? p.photo_source_urls : [])
-  ].find((value) => /^https?:\/\//i.test(String(value || "").trim()));
+  ].find(isStableThumbnail);
   if (explicit) return explicit;
   const youtubeId = getYouTubeVideoId(videoUrl || foundOnlineSourceVideoUrl(p));
   return youtubeId ? `https://img.youtube.com/vi/${encodeURIComponent(youtubeId)}/hqdefault.jpg` : "";

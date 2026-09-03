@@ -45,11 +45,15 @@ test('direct-agent publish gate requires evidence, photos, videos, and moderatio
 
 test('public direct profile is claim-pending, not presented as identity verified', () => {
   const agents = read('routes/agents.js');
+  const eligibility = read('services/publicAgentEligibilityService.js');
   const app = read('assets/makaug-app.js');
-  assert.match(agents, /PUBLIC_DIRECT_AGENT_MIN_LIVE_LISTINGS = 1/);
-  assert.match(agents, /\[DIRECT_AGENT_AUTHORISED\]/);
-  assert.match(app, /Direct profile · claim pending/);
-  assert.match(app, /Direct agent submission · identity verification pending/);
+  assert.match(eligibility, /PUBLIC_DIRECT_AGENT_MIN_LIVE_LISTINGS = 1/);
+  assert.match(eligibility, /DIRECT_AGENT_PROFILE_MARKER = '\[DIRECT_AGENT_AUTHORISED\]'/);
+  assert.match(agents, /addPublicAgentEligibilityFilters/);
+  assert.match(app, /profile_claim_pending: directAgentAuthorised && !agent\.user_id/);
+  assert.match(app, /if \(broker\?\.direct_agent_authorised\) \{[\s\S]*label: translateListingLabel\("makaug agent profile"\)/);
+  assert.match(app, /function publicBrokerBio[\s\S]*Identity verification and account claim are pending/);
+  assert.doesNotMatch(app, /label: translateListingLabel\("Identity verified"\)/);
 });
 
 test('authorised MP4 tours upload to cloud storage and render as a multi-video gallery', () => {

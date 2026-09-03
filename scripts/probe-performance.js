@@ -13,6 +13,7 @@ const ROUTES = [
   '/to-rent',
   '/for-sale',
   '/land',
+  '/off-plan',
   '/student-accommodation',
   '/students',
   '/commercial',
@@ -39,6 +40,7 @@ const EXPECTED_PAGE_IDS = {
   '/to-rent': 'page-rent',
   '/for-sale': 'page-sale',
   '/land': 'page-land',
+  '/off-plan': 'page-off-plan',
   '/student-accommodation': 'page-students',
   '/students': 'page-students',
   '/commercial': 'page-commercial',
@@ -91,6 +93,7 @@ function isLocalOptionalResponseFailure(failure) {
     '/api/properties',
     '/api/agents',
     '/api/mortgage-rates',
+    '/api/off-plan',
     '/api/analytics/event',
     '/api/analytics/web-vitals'
   ].some((prefix) => pathname.startsWith(prefix));

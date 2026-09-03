@@ -46,7 +46,7 @@ assert.strictEqual(publicBrokerBio({ direct_agent_authorised: false, bio: direct
 const registrationStart = frontend.indexOf('function brokerRegistrationMeta(broker)');
 const registrationEnd = frontend.indexOf('function renderBrokerRegistrationBadge', registrationStart);
 const registrationMeta = frontend.slice(registrationStart, registrationEnd);
-assert(registrationMeta.includes('MakaUG agent profile'), 'MakaUG-created profiles should have a neutral public profile badge');
+assert(registrationMeta.includes('makaug agent profile'), 'makaug-created profiles should have a neutral public profile badge');
 assert(!registrationMeta.includes('Direct profile · claim pending'), 'MakaUG-created profiles must not expose claim-pending language');
 
 assert(!directoryCard.includes('${b.sales'), 'Find Brokers must not render an unverified sales count');

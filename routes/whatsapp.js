@@ -4456,7 +4456,7 @@ async function handleEmployeeWhatsappIntake({
     return {
       handled: true,
       nextStep: currentStep,
-      message: 'This staff intake code is restricted. Ask a MakaUG administrator to add your WhatsApp number.'
+      message: 'This staff intake code is restricted. Ask a makaug administrator to add your WhatsApp number.'
     };
   }
 
@@ -4507,7 +4507,7 @@ async function handleEmployeeWhatsappIntake({
     if (answer === 'yes') {
       data.agent_already_registered = true;
       await replaceEmployeeSession(phone, 'employee_agent_lookup', data);
-      return { handled: true, nextStep: 'employee_agent_lookup', message: 'Send the agent’s exact name or MakaUG agent number.' };
+      return { handled: true, nextStep: 'employee_agent_lookup', message: 'Send the agent’s exact name or makaug agent number.' };
     }
     data.agent_already_registered = false;
     await replaceEmployeeSession(phone, 'employee_new_agent_details', data);
@@ -4553,7 +4553,7 @@ async function handleEmployeeWhatsappIntake({
     if (/^(?:no|n|search)$/i.test(cleanBody)) {
       delete data.agent_candidates;
       await replaceEmployeeSession(phone, 'employee_agent_lookup', data);
-      return { handled: true, nextStep: 'employee_agent_lookup', message: 'Send the agent’s exact name or MakaUG agent number.' };
+      return { handled: true, nextStep: 'employee_agent_lookup', message: 'Send the agent’s exact name or makaug agent number.' };
     }
     const selectedIndex = Number.parseInt(cleanBody, 10) - 1;
     const selected = Array.isArray(data.agent_candidates) ? data.agent_candidates[selectedIndex] : null;
@@ -4734,7 +4734,7 @@ async function handleEmployeeWhatsappIntake({
     const placeholderBody = /^\s*\[(?:image|video|document|media)\]\s*$/i.test(cleanBody);
     if (!candidates.length) {
       if (!cleanBody || placeholderBody) {
-        return { handled: true, nextStep: currentStep, message: 'No usable media bytes reached MakaUG. Please resend the photo, video or document.' };
+        return { handled: true, nextStep: currentStep, message: 'No usable media bytes reached makaug. Please resend the photo, video or document.' };
       }
       const existingBatchProperties = Array.isArray(data.property_ids) ? data.property_ids.length : 0;
       const textOnlyFacts = employeePropertyFacts(cleanBody, data);

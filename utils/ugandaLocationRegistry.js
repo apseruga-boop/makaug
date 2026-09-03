@@ -226,6 +226,7 @@ const EXCLUDED_LOCATION_ONLY_PATTERNS = [
   /\b(?:central|eastern|northern|western|greater kampala metropolitan)\s+region\b/i,
   /\b(?:road|rd|street|st|avenue|ave|highway|bypass|expressway)\b/i
 ];
+const ROAD_LOCATION_NOISE_PATTERN = /\b(?:road|rd|street|st|avenue|ave|highway|bypass|expressway)\b/i;
 
 function normalizeLocationKey(value = '') {
   return String(value || '')
@@ -822,6 +823,12 @@ function canonicalLocationSuggestions(query = '', counts = new Map(), limit = 8)
   const freeTextAttempts = freeTextLocationQueryAttempts(query);
   if (!attempts.length && !freeTextAttempts.length) return [];
   const exactResolution = resolveCanonicalUgandaLocation(query, '', { counts });
+  const meaningfulRoadTokens = normalizeLocationKey(query)
+    .split(' ')
+    .filter((token) => token && !/^(?:road|rd|street|st|avenue|ave|highway|bypass|expressway)$/.test(token));
+  const isBareRoadLabel = ROAD_LOCATION_NOISE_PATTERN.test(String(query || '')) && meaningfulRoadTokens.length <= 1;
+  const isExcludedNonRoadLabel = isExcludedLocationOnly(query) && !ROAD_LOCATION_NOISE_PATTERN.test(String(query || ''));
+  if (exactResolution.status !== 'matched' && (isBareRoadLabel || isExcludedNonRoadLabel)) return [];
   const resolutionCandidateKeys = new Set(exactResolution.candidates.map((entry) => entry.key));
   const searchableAttempts = attempts.filter((attempt) => (
     !isExcludedLocationOnly(attempt.value)

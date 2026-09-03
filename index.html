@@ -413,7 +413,7 @@
   </script>
   <link rel="preload" as="image" href="https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=1200&q=60" fetchpriority="high">
   <link rel="stylesheet" href="/assets/tailwind.css">
-  <link rel="stylesheet" href="/assets/off-plan.css?v=20260903-offplan-v1">
+  <link rel="stylesheet" href="/assets/off-plan.css?v=20260903-offplan-v2">
   <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
   <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"></noscript>
   <link rel="preload" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
@@ -3694,17 +3694,17 @@
       <div class="off-plan-hero py-12 md:py-16">
         <div class="max-w-7xl mx-auto px-4">
           <div class="max-w-3xl">
-            <span class="inline-flex items-center gap-2 rounded-full bg-white/15 border border-white/25 px-3 py-1.5 text-xs font-black uppercase tracking-wide"><i class="fas fa-building"></i> New developments in Uganda</span>
-            <h1 id="off-plan-title" class="mt-4 text-4xl md:text-6xl font-black leading-tight">Find your future home, before it is built</h1>
-            <p class="mt-4 text-base md:text-lg text-white/85 max-w-2xl">Explore verified off-plan projects, compare unit types, understand construction and sales progress, and model payment options in Uganda shillings.</p>
+            <span class="inline-flex items-center gap-2 rounded-full bg-white/15 border border-white/25 px-3 py-1.5 text-xs font-black uppercase tracking-wide"><i class="fas fa-building"></i><span data-off-plan-i18n="heroEyebrow">New developments in Uganda</span></span>
+            <h1 id="off-plan-title" class="mt-4 text-4xl md:text-6xl font-black leading-tight" data-off-plan-i18n="heroTitle">Find your future home, before it is built</h1>
+            <p class="mt-4 text-base md:text-lg text-white/85 max-w-2xl" data-off-plan-i18n="heroSubtitle">Explore verified off-plan projects, compare unit types, understand construction and sales progress, and model payment options in Uganda shillings.</p>
           </div>
           <form id="off-plan-search-form" onsubmit="searchOffPlan(event)" class="off-plan-search-shell mt-8 rounded-3xl p-3 md:p-4">
             <div class="off-plan-search-grid grid gap-2">
-              <label class="off-plan-field"><span class="sr-only">Project, area or developer</span><i class="fas fa-search"></i><input id="off-plan-q" autocomplete="off" placeholder="Project, area or developer"></label>
-              <label class="off-plan-field"><span class="sr-only">Location</span><select id="off-plan-location"><option value="">All locations</option></select></label>
-              <label class="off-plan-field"><span class="sr-only">Bedrooms</span><select id="off-plan-bedrooms"><option value="">Any bedrooms</option><option value="1">1 bedroom</option><option value="2">2 bedrooms</option><option value="3">3 bedrooms</option><option value="4">4+ bedrooms</option></select></label>
-              <label class="off-plan-field"><span class="sr-only">Maximum price</span><select id="off-plan-max-price"><option value="">Any price</option><option value="250000000">Up to USh 250M</option><option value="500000000">Up to USh 500M</option><option value="1000000000">Up to USh 1B</option><option value="2000000000">Up to USh 2B</option></select></label>
-              <button class="off-plan-search-button h-[50px] rounded-xl bg-amber-400 hover:bg-amber-300 text-green-950 font-black px-7"><i class="fas fa-search mr-2"></i>Search</button>
+              <label class="off-plan-field"><span class="sr-only" data-off-plan-i18n="projectSearch">Project, area or developer</span><i class="fas fa-search"></i><input id="off-plan-q" autocomplete="off" placeholder="Project, area or developer" data-off-plan-i18n-placeholder="projectSearch"></label>
+              <label class="off-plan-field"><span class="sr-only" data-off-plan-i18n="location">Location</span><select id="off-plan-location"><option value="" data-off-plan-i18n="allLocations">All locations</option></select></label>
+              <label class="off-plan-field"><span class="sr-only" data-off-plan-i18n="bedrooms">Bedrooms</span><select id="off-plan-bedrooms"><option value="" data-off-plan-i18n="anyBedrooms">Any bedrooms</option><option value="1" data-off-plan-i18n="oneBedroom">1 bedroom</option><option value="2" data-off-plan-i18n="twoBedrooms">2 bedrooms</option><option value="3" data-off-plan-i18n="threeBedrooms">3 bedrooms</option><option value="4" data-off-plan-i18n="fourBedrooms">4+ bedrooms</option></select></label>
+              <label class="off-plan-field"><span class="sr-only" data-off-plan-i18n="maximumPrice">Maximum price</span><select id="off-plan-max-price"><option value="" data-off-plan-i18n="anyPrice">Any price</option><option value="250000000" data-off-plan-i18n="upTo250">Up to USh 250M</option><option value="500000000" data-off-plan-i18n="upTo500">Up to USh 500M</option><option value="1000000000" data-off-plan-i18n="upTo1B">Up to USh 1B</option><option value="2000000000" data-off-plan-i18n="upTo2B">Up to USh 2B</option></select></label>
+              <button class="off-plan-search-button h-[50px] rounded-xl bg-amber-400 hover:bg-amber-300 text-green-950 font-black px-7"><i class="fas fa-search mr-2"></i><span data-off-plan-i18n="search">Search</span></button>
             </div>
           </form>
         </div>
@@ -3712,8 +3712,8 @@
 
       <div class="max-w-7xl mx-auto px-4 py-9">
         <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
-          <div><p class="text-xs font-black uppercase tracking-widest text-green-700">Off plan Uganda</p><h2 class="mt-1 text-2xl md:text-3xl font-black text-gray-950">New projects</h2><p id="off-plan-result-summary" class="mt-1 text-sm text-gray-500">Loading verified projects...</p></div>
-          <button type="button" onclick="openOffPlanContactModal()" class="inline-flex items-center justify-center gap-2 rounded-xl bg-green-700 hover:bg-green-600 text-white px-5 py-3 font-black"><i class="fas fa-plus"></i>List an off-plan project</button>
+          <div><p class="text-xs font-black uppercase tracking-widest text-green-700" data-off-plan-i18n="sectionEyebrow">Off plan Uganda</p><h2 class="mt-1 text-2xl md:text-3xl font-black text-gray-950" data-off-plan-i18n="newProjects">New projects</h2><p id="off-plan-result-summary" class="mt-1 text-sm text-gray-500" data-off-plan-i18n="loadingProjects">Loading verified projects...</p></div>
+          <button type="button" onclick="openOffPlanContactModal()" class="inline-flex items-center justify-center gap-2 rounded-xl bg-green-700 hover:bg-green-600 text-white px-5 py-3 font-black"><i class="fas fa-plus"></i><span data-off-plan-i18n="listProject">List an off-plan project</span></button>
         </div>
         <div class="off-plan-content-grid mt-7 grid gap-7">
           <div id="off-plan-results" class="off-plan-results-grid grid gap-5" aria-live="polite">
@@ -3722,13 +3722,13 @@
           <aside class="space-y-4">
             <div class="off-plan-panel">
               <div class="h-10 w-10 rounded-xl bg-green-50 text-green-700 grid place-items-center"><i class="fas fa-shield-halved"></i></div>
-              <h3 class="font-black text-gray-950 mt-3">Review before release</h3>
-              <p class="text-sm text-gray-600 mt-2 leading-relaxed">Projects appear here only after the makaug team checks the developer, location, pricing, progress and availability evidence.</p>
+              <h3 class="font-black text-gray-950 mt-3" data-off-plan-i18n="reviewTitle">Review before release</h3>
+              <p class="text-sm text-gray-600 mt-2 leading-relaxed" data-off-plan-i18n="reviewBody">Projects appear here only after the makaug team checks the developer, location, pricing, progress and availability evidence.</p>
             </div>
             <div class="off-plan-panel">
               <div class="h-10 w-10 rounded-xl bg-amber-50 text-amber-700 grid place-items-center"><i class="fas fa-calculator"></i></div>
-              <h3 class="font-black text-gray-950 mt-3">Plan the payments</h3>
-              <p class="text-sm text-gray-600 mt-2 leading-relaxed">Choose a unit and create a dated, illustrative UGX instalment schedule. Then compare mortgage options.</p>
+              <h3 class="font-black text-gray-950 mt-3" data-off-plan-i18n="paymentsTitle">Plan the payments</h3>
+              <p class="text-sm text-gray-600 mt-2 leading-relaxed" data-off-plan-i18n="paymentsBody">Choose a unit and create a dated, illustrative UGX instalment schedule. Then compare mortgage options.</p>
             </div>
           </aside>
         </div>
@@ -3737,29 +3737,29 @@
 
     <section id="off-plan-detail-view" class="hidden">
       <div class="max-w-7xl mx-auto px-4 py-6">
-        <button type="button" onclick="returnToOffPlanList()" class="text-sm font-bold text-green-800 hover:text-green-600"><i class="fas fa-arrow-left mr-2"></i>Back to off-plan projects</button>
+        <button type="button" onclick="returnToOffPlanList()" class="text-sm font-bold text-green-800 hover:text-green-600"><i class="fas fa-arrow-left mr-2"></i><span data-off-plan-i18n="backToProjects">Back to off-plan projects</span></button>
         <div id="off-plan-detail-content" class="mt-5"><div class="off-plan-skeleton"></div></div>
       </div>
     </section>
 
     <div id="off-plan-contact-modal" class="off-plan-modal" hidden role="dialog" aria-modal="true" aria-labelledby="off-plan-contact-title">
       <div class="off-plan-modal-card">
-        <div class="flex items-start justify-between gap-4"><div><p class="text-xs font-black uppercase tracking-widest text-green-700">Partner with makaug</p><h2 id="off-plan-contact-title" class="mt-1 text-2xl font-black text-gray-950">List an off-plan project</h2><p class="mt-2 text-sm text-gray-600">How would you like the team to contact you?</p></div><button type="button" onclick="closeOffPlanContactModal()" class="h-9 w-9 rounded-full bg-gray-100 hover:bg-gray-200" aria-label="Close"><i class="fas fa-xmark"></i></button></div>
+        <div class="flex items-start justify-between gap-4"><div><p class="text-xs font-black uppercase tracking-widest text-green-700" data-off-plan-i18n="partner">Partner with makaug</p><h2 id="off-plan-contact-title" class="mt-1 text-2xl font-black text-gray-950" data-off-plan-i18n="listProject">List an off-plan project</h2><p class="mt-2 text-sm text-gray-600" data-off-plan-i18n="contactQuestion">How would you like the team to contact you?</p></div><button type="button" onclick="closeOffPlanContactModal()" class="h-9 w-9 rounded-full bg-gray-100 hover:bg-gray-200" aria-label="Close" data-off-plan-i18n-aria="close"><i class="fas fa-xmark"></i></button></div>
         <div class="grid sm:grid-cols-3 gap-3 mt-6">
-          <button type="button" class="off-plan-contact-choice" data-off-plan-channel="whatsapp" aria-pressed="true" onclick="selectOffPlanContactChannel('whatsapp')"><i class="fab fa-whatsapp text-xl"></i><strong class="block mt-2">WhatsApp</strong><span class="text-xs text-gray-500">Continue in chat</span></button>
-          <button type="button" class="off-plan-contact-choice" data-off-plan-channel="email" aria-pressed="false" onclick="selectOffPlanContactChannel('email')"><i class="fas fa-envelope text-xl"></i><strong class="block mt-2">Email</strong><span class="text-xs text-gray-500">Reply by email</span></button>
-          <button type="button" class="off-plan-contact-choice" data-off-plan-channel="call" aria-pressed="false" onclick="selectOffPlanContactChannel('call')"><i class="fas fa-phone text-xl"></i><strong class="block mt-2">Call me</strong><span class="text-xs text-gray-500">Choose a time</span></button>
+          <button type="button" class="off-plan-contact-choice" data-off-plan-channel="whatsapp" aria-pressed="true" onclick="selectOffPlanContactChannel('whatsapp')"><i class="fab fa-whatsapp text-xl"></i><strong class="block mt-2">WhatsApp</strong><span class="text-xs text-gray-500" data-off-plan-i18n="continueChat">Continue in chat</span></button>
+          <button type="button" class="off-plan-contact-choice" data-off-plan-channel="email" aria-pressed="false" onclick="selectOffPlanContactChannel('email')"><i class="fas fa-envelope text-xl"></i><strong class="block mt-2" data-off-plan-i18n="email">Email</strong><span class="text-xs text-gray-500" data-off-plan-i18n="replyEmail">Reply by email</span></button>
+          <button type="button" class="off-plan-contact-choice" data-off-plan-channel="call" aria-pressed="false" onclick="selectOffPlanContactChannel('call')"><i class="fas fa-phone text-xl"></i><strong class="block mt-2" data-off-plan-i18n="callMe">Call me</strong><span class="text-xs text-gray-500" data-off-plan-i18n="chooseTime">Choose a time</span></button>
         </div>
         <form id="off-plan-contact-form" onsubmit="submitOffPlanContact(event)" class="mt-6 grid gap-3">
           <input id="off-plan-contact-channel" type="hidden" value="whatsapp">
-          <label class="text-sm font-bold text-gray-800">Your name<input id="off-plan-contact-name" required maxlength="180" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 font-normal" placeholder="Full name"></label>
+          <label class="text-sm font-bold text-gray-800"><span data-off-plan-i18n="yourName">Your name</span><input id="off-plan-contact-name" required maxlength="180" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 font-normal" placeholder="Full name" data-off-plan-i18n-placeholder="fullName"></label>
           <div class="grid sm:grid-cols-2 gap-3">
-            <label class="text-sm font-bold text-gray-800">WhatsApp / phone<input id="off-plan-contact-phone" type="tel" maxlength="80" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 font-normal" placeholder="+256..."></label>
-            <label class="text-sm font-bold text-gray-800">Email<input id="off-plan-contact-email" type="email" maxlength="260" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 font-normal" placeholder="name@example.com"></label>
+            <label class="text-sm font-bold text-gray-800"><span data-off-plan-i18n="phone">WhatsApp / phone</span><input id="off-plan-contact-phone" type="tel" maxlength="80" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 font-normal" placeholder="+256..."></label>
+            <label class="text-sm font-bold text-gray-800"><span data-off-plan-i18n="email">Email</span><input id="off-plan-contact-email" type="email" maxlength="260" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 font-normal" placeholder="name@example.com"></label>
           </div>
-          <label id="off-plan-callback-wrap" class="hidden text-sm font-bold text-gray-800">Preferred call time<input id="off-plan-contact-callback" type="datetime-local" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 font-normal"></label>
-          <div class="rounded-xl bg-green-50 border border-green-100 p-3 text-xs text-green-950">We will ask for the project name, location, completion date, brochure, images, construction progress and current sales. Every project stays in staff review until verified.</div>
-          <button id="off-plan-contact-submit" class="mt-1 rounded-xl bg-green-700 hover:bg-green-600 text-white px-5 py-3 font-black">Continue with WhatsApp</button>
+          <label id="off-plan-callback-wrap" class="hidden text-sm font-bold text-gray-800"><span data-off-plan-i18n="preferredCallTime">Preferred call time</span><input id="off-plan-contact-callback" type="datetime-local" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 font-normal"></label>
+          <div class="rounded-xl bg-green-50 border border-green-100 p-3 text-xs text-green-950" data-off-plan-i18n="contactNote">We will ask for the project name, location, completion date, brochure, images, construction progress and current sales. Every project stays in staff review until verified.</div>
+          <button id="off-plan-contact-submit" class="mt-1 rounded-xl bg-green-700 hover:bg-green-600 text-white px-5 py-3 font-black" data-off-plan-i18n="submitWhatsApp">Continue with WhatsApp</button>
           <p id="off-plan-contact-status" class="hidden text-sm rounded-xl p-3" role="status"></p>
         </form>
       </div>
@@ -9634,7 +9634,7 @@
         script.async = true;
         script.onload = function () {
           var offPlanScript = document.createElement("script");
-          offPlanScript.src = "/assets/off-plan.js?v=20260903-offplan-v1";
+          offPlanScript.src = "/assets/off-plan.js?v=20260903-offplan-v2";
           document.body.appendChild(offPlanScript);
         };
         document.body.appendChild(script);
