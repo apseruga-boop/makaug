@@ -102,6 +102,27 @@ test('website and WhatsApp AI recognize off-plan search and listing requests', (
   assert.match(whatsapp, /notifyOffPlanEnquiry/);
 });
 
+test('Off Plan follows all nine public language choices and refreshes on language change', () => {
+  const html = read('index.html');
+  const client = read('assets/off-plan.js');
+  const app = read('assets/makaug-app.js');
+  for (const language of ['en', 'lg', 'sw', 'ac', 'ny', 'rn', 'sm', 'am', 'ar']) {
+    assert.match(client, new RegExp(`\\n\\s{4}${language}: \\{`), `missing Off Plan language pack: ${language}`);
+  }
+  assert.match(html, /data-off-plan-i18n="heroTitle"/);
+  assert.match(html, /data-off-plan-i18n-placeholder="projectSearch"/);
+  assert.match(client, /function applyOffPlanLanguageUI\(\)/);
+  assert.match(client, /Object\.assign\(window, \{ applyOffPlanLanguageUI,/);
+  assert.match(app, /typeof window\.applyOffPlanLanguageUI === "function"/);
+});
+
+test('public social previews never request expiring TikTok CDN image URLs', () => {
+  const app = read('assets/makaug-app.js');
+  assert.match(app, /function foundOnlineSourceThumbnailUrl/);
+  assert.match(app, /tiktok_thumbnail_cache_url/);
+  assert.ok(app.includes('return !/(?:tiktokcdn|byteimg|p16-|p19-|p77-|tos-)/i.test(url);'));
+});
+
 test('walkthrough workflow is approval-gated and does not claim generated output', () => {
   const service = read('services/offPlanService.js');
   const migration = read('db/migrations/118_off_plan_developments.sql');

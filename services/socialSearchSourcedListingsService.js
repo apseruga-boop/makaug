@@ -72,7 +72,7 @@ const LAUNCH_SOURCE_POST_WINDOW_START = '2026-01-01T00:00:00.000Z';
 const FOUND_ONLINE_SOURCE_POST_IMPORT_BATCH_ID = 'found_online_source_post_import';
 const SOCIAL_SEARCH_FIRST_SEEN_AT = '2026-05-20T00:00:00.000Z';
 const SOCIAL_SEARCH_ADDED_TO_MAKAUG_AT = '2026-05-20T00:00:00.000Z';
-const PRICE_UPON_APPLICATION_LABEL = 'Price on application';
+const PRICE_UPON_APPLICATION_LABEL = 'Price upon application';
 const USD_TO_UGX_GUIDE_RATE = configuredUsdToUgxRate();
 const USD_TO_CANONICAL_GUIDE_RATE = IS_SOUTH_AFRICA
   ? configuredRateToCanonicalCurrency('USD')

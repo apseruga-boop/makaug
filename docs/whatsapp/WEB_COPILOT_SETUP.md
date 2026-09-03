@@ -75,7 +75,7 @@ worker against the same number.
 
 The production AI credential is isolated in `makaug-whatsapp-ai-runtime`:
 
-- Create a dedicated OpenAI project for MakaUG WhatsApp in Arthur's existing
+- Create a dedicated OpenAI project for makaug WhatsApp in Arthur's existing
   OpenAI organization. A separate OpenAI account is unnecessary; the separate
   project provides its own key, budget, usage view, and revocation boundary.
 - Store the project's `OPENAI_API_KEY` (and optional `OPENAI_PROJECT`) only on

@@ -31,6 +31,7 @@ const PRIMARY_ACTIONS = [
   { route: '/', selector: '#nav-land', label: 'Header Land', expectUrl: '/land', marker: 'Land' },
   { route: '/', selector: '#nav-students', label: 'Header Students', expectUrl: '/student-accommodation', marker: 'Student Accommodation' },
   { route: '/', selector: '#nav-commercial', label: 'Header Commercial', expectUrl: '/commercial', marker: 'Commercial' },
+  { route: '/', selector: '#nav-off-plan', label: 'Header Off Plan', expectUrl: '/off-plan', marker: 'Off Plan' },
   { route: '/', selector: '#nav-brokers', label: 'Header Brokers', expectUrl: '/brokers', marker: 'Brokers' },
   { route: '/', selector: '#nav-mortgage', label: 'Header Mortgage', expectUrl: '/mortgage', marker: 'Mortgage' },
   { route: '/', selector: '#nav-ai', label: 'Header AI Chatbot', expectUrl: '/discover-ai-chatbot', marker: 'AI' },
@@ -40,7 +41,8 @@ const PRIMARY_ACTIONS = [
   { route: '/student-accommodation', selector: '#student-login-cta', label: 'Student Login opens student drawer', expectDrawer: '#account-access-drawer', marker: 'Students can save campus searches' },
   { route: '/list-property', selector: '#list-choice-online-btn', label: 'List Property online choice opens form', expectSamePageAction: true, marker: 'Property Details' },
   { route: '/list-property', selector: '#lp-whatsapp-option-btn', label: 'List Property WhatsApp option', expectPopup: true, marker: 'List via WhatsApp' },
-  { route: '/discover-ai-chatbot', selector: '#ai-chatbot-submit-btn', label: 'AI chatbot prompt action', expectSamePageAction: true, marker: 'makaug AI', fill: { selector: '#ai-chatbot-message', value: 'Help me search for a rental in Kampala' } },
+  { route: '/discover-ai-chatbot', selector: '[data-ask-ai-inline-context="discover"] [data-ai-submit]', label: 'AI chatbot prompt action', expectSamePageAction: true, marker: 'makaug AI', fill: { selector: '[data-ask-ai-inline-context="discover"] [data-ai-message]', value: 'Help me search for a rental in Kampala' } },
+  { route: '/off-plan', selector: '#off-plan-list-view button[onclick="openOffPlanContactModal()"]', label: 'List Off Plan opens contact choices', expectDrawer: '#off-plan-contact-modal', marker: 'How would you like the team to contact you?' },
   { route: '/', selector: '#footer-link-list-free', label: 'Footer List Property', expectUrl: '/list-property', marker: 'List Property' },
   { route: '/', selector: '#footer-link-advertise', label: 'Footer Advertise', expectUrl: '/advertise', marker: 'Advertise' },
   { route: '/', selector: '#footer-link-help', label: 'Footer Help', expectUrl: '/help', marker: 'Help' },
@@ -52,6 +54,7 @@ const AUDIT_ROUTE_PAGE_IDS = {
   '/to-rent': 'page-rent',
   '/for-sale': 'page-sale',
   '/land': 'page-land',
+  '/off-plan': 'page-off-plan',
   '/student-accommodation': 'page-students',
   '/commercial': 'page-commercial',
   '/brokers': 'page-brokers',
@@ -248,7 +251,8 @@ async function auditVisibleActions(page) {
         onclick: el.getAttribute('onclick') || '',
         role: el.getAttribute('role') || '',
         type: el.getAttribute('type') || '',
-        disabled: el.disabled === true || el.getAttribute('aria-disabled') === 'true'
+        disabled: el.disabled === true || el.getAttribute('aria-disabled') === 'true',
+        describedBy: el.getAttribute('aria-describedby') || ''
       }))
       .filter((item) => item.label || item.id);
       });
@@ -355,6 +359,7 @@ async function auditCardsAndMarkers(page, route) {
 
 function actionHasDestination(item) {
   if (item.disabled) return true;
+  if (item.describedBy && item.role === 'button') return true;
   if (/leaflet-control|leaflet-bar/i.test(`${item.id} ${item.label} ${item.href} ${item.onclick}`)) return true;
   if (['+', '−', '-'].includes(item.label)) return true;
   if (item.href && item.href !== '#' && !/^javascript:void/i.test(item.href)) return true;
@@ -480,7 +485,7 @@ async function main() {
       results.push({ label: action.label, route: action.route, selector: action.selector, ok: failures.length === 0, failures });
     }
 
-    const auditRoutes = ['/', '/to-rent', '/for-sale', '/land', '/student-accommodation', '/commercial', '/brokers', '/list-property', '/advertise', '/mortgage', '/login', '/about', '/help', '/safety', '/anti-fraud'];
+    const auditRoutes = ['/', '/to-rent', '/for-sale', '/land', '/off-plan', '/student-accommodation', '/commercial', '/brokers', '/list-property', '/advertise', '/mortgage', '/login', '/about', '/help', '/safety', '/anti-fraud'];
     await page.close().catch(() => {});
     const auditContext = await browser.newContext({ viewport: { width: 1365, height: 900 } });
     for (const route of auditRoutes) {

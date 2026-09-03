@@ -171,7 +171,7 @@ function parseCustomerDetails(value = '') {
 }
 
 function employeeRolePrompt() {
-  return '🔐 *MakaUG employee intake*\nWhat are you loading?\n\n1 — Agent\n2 — New customer';
+  return '🔐 *makaug employee intake*\nWhat are you loading?\n\n1 — Agent\n2 — New customer';
 }
 
 function employeeAgentExistingPrompt() {

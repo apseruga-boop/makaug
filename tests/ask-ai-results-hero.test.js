@@ -105,7 +105,7 @@ assert(studentPageStart >= 0 && studentAiBar >= 0 && studentResultsGrid >= 0 && 
 includes(aiRoute, 'extractNaturalPropertyQuery', 'assistant route must parse natural property queries');
 includes(aiRoute, 'heuristicNaturalPropertyQuery', 'assistant route must expose the deterministic fast parser');
 includes(aiRoute, 'model: \'heuristic-fast\'', 'assistant search route must support non-LLM fast parsing');
-includes(aiRoute, 'if (!assistantIsSearch && !cleanBarSearchOnly)', 'assistant route must keep LLM chat off the search critical path');
+includes(aiRoute, 'if (assistantIsOffPlan || (!assistantIsSearch && !cleanBarSearchOnly))', 'assistant route must keep LLM chat off the search critical path while preserving deterministic Off Plan replies');
 includes(aiRoute, '/api/properties/search?', 'assistant route must call properties search');
 includes(aiRoute, "include_summary: '0'", 'assistant search must request a lightweight card payload');
 includes(aiRoute, "card_fields: '1'", 'assistant search must request card-only public fields');

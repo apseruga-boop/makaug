@@ -128,7 +128,7 @@ assert(genericAreaPromptIndex > -1, 'WhatsApp route still has generic area promp
 assert(affordabilityRouteIndex < genericAreaPromptIndex, 'Affordability questions must be handled before generic area prompt');
 assert(source.includes('buildAffordabilityAdviceReply'), 'WhatsApp route must build DB-backed affordability replies');
 assert(source.includes('ORDER BY p.price ASC NULLS LAST'), 'Affordability results must sort live listings by cheapest price first');
-assert(source.includes('const MIN_PUBLIC_WHATSAPP_PRICE_UGX = 10000'), 'WhatsApp affordability results must define a minimum plausible public price');
+assert(source.includes('const MIN_PUBLIC_WHATSAPP_PRICE_UGX = IS_SOUTH_AFRICA ? 500 : 10000'), 'WhatsApp affordability results must define the country-specific minimum plausible public price');
 assert(source.includes('price IS NULL OR ${safeAlias}.price >= $'), 'WhatsApp affordability results must filter implausibly tiny scraped prices');
 assert(aiSource.includes('what is the cheapest area to stay in?'), 'AI intent prompt must teach affordability questions');
 assert(aiSource.includes('can I get a house for $2 million?'), 'AI intent prompt must include budget affordability example');

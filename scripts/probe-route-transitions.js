@@ -14,6 +14,7 @@ const ROUTES = [
   ['/students', 'page-students', 'students'],
   ['/commercial', 'page-commercial', 'commercial'],
   ['/land', 'page-land', 'land'],
+  ['/off-plan', 'page-off-plan'],
   ['/brokers', 'page-brokers', 'brokers'],
   ['/mortgage', 'page-mortgage'],
   ['/discover-ai-chatbot', 'page-ai-chatbot'],
@@ -58,6 +59,7 @@ function isLocalOptionalResponseFailure(failure) {
     '/api/properties',
     '/api/agents',
     '/api/mortgage-rates',
+    '/api/off-plan',
     '/api/analytics/event',
     '/api/analytics/web-vitals'
   ].some((prefix) => pathname.startsWith(prefix));

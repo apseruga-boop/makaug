@@ -16,6 +16,7 @@ const staffRoute = read('routes/staff.js');
 const html = read('index.html');
 const propertiesRoute = read('routes/properties.js');
 const agentsRoute = read('routes/agents.js');
+const publicAgentEligibilityService = read('services/publicAgentEligibilityService.js');
 const socialSearchServiceSource = read('services/socialSearchSourcedListingsService.js');
 const socialPlatformSweepServiceSource = read('services/socialPlatformPostDiscoveryService.js');
 const propertySourceRegistrySource = read('services/propertySourceRegistryService.js');
@@ -514,11 +515,12 @@ test('Carnelian admin path and dashboard action are protected and auditable', ()
 
 test('source-only broker profiles are deferred until the agent self-registers', () => {
   assert.strictEqual(CARNELIAN_CONTACT.tiktok, 'https://www.tiktok.com/@carnelian.propert');
-  assert(agentsRoute.includes('function addPublicAgentSelfRegistrationFilter'), 'public agent API should centralize the self-registration filter');
-  assert(agentsRoute.includes('a.user_id IS NOT NULL'), 'public agent profiles should require a registered/claimed user account');
-  assert(agentsRoute.includes("COALESCE(a.verification_reason, '') NOT ILIKE '%public social source onboarding%'"), 'public agent profiles should hide source-discovery onboarding rows');
-  assert(agentsRoute.includes("COALESCE(a.verification_reason, '') NOT ILIKE '%source profile%'"), 'public agent profiles should hide legacy source profile rows');
-  assert(agentsRoute.includes("COALESCE(a.licence_number, '') !~* '^(SOCIAL|FOUND-ONLINE|TIKTOK|FACEBOOK|X)-'"), 'public agent profiles should hide auto-created social source licences');
+  assert(agentsRoute.includes('addPublicAgentEligibilityFilters'), 'public agent API should use the centralized eligibility filters');
+  assert(publicAgentEligibilityService.includes('function addPublicAgentSelfRegistrationFilter'), 'public agent eligibility should centralize the self-registration filter');
+  assert(publicAgentEligibilityService.includes('${a}.user_id IS NOT NULL'), 'public agent profiles should require a registered/claimed user account');
+  assert(publicAgentEligibilityService.includes("COALESCE(${a}.verification_reason, '') NOT ILIKE '%public social source onboarding%'"), 'public agent profiles should hide source-discovery onboarding rows');
+  assert(publicAgentEligibilityService.includes("COALESCE(${a}.verification_reason, '') NOT ILIKE '%source profile%'"), 'public agent profiles should hide legacy source profile rows');
+  assert(publicAgentEligibilityService.includes("COALESCE(${a}.licence_number, '') !~* '^(SOCIAL|FOUND-ONLINE|TIKTOK|FACEBOOK|X)-'"), 'public agent profiles should hide auto-created social source licences');
   assert(propertiesRoute.includes('agent_id: foundOnlinePublic ? null : publicRow.agent_id'), 'found-online listing cards should not attach source-created public agent profile ids');
   assert(propertiesRoute.includes('agent_id: foundOnlinePublic ? null : safeProperty.agent_id'), 'found-online listing detail should not attach source-created public agent profile ids');
   assert(socialSearchServiceSource.includes('FOUND_ONLINE_PROFILE_CREATION_POLICY'), 'source import policy should be explicit in the found-online service');

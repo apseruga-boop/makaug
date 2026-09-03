@@ -1,4 +1,4 @@
-# MakaUG Off Plan
+# makaug Off Plan
 
 ## Release boundary
 
@@ -19,7 +19,7 @@ Off Plan is a Uganda-only project catalogue. A development is public only when b
 
 ## Walkthrough boundary
 
-The first release prepares a render brief from an authorised floor plan and records the external render/approval lifecycle. It does not claim to turn a floor plan into a finished 3D video inside MakaUG. A hosted draft URL is required before `draft_ready`, and staff approval is required before `approved`.
+The first release prepares a render brief from an authorised floor plan and records the external render/approval lifecycle. It does not claim to turn a floor plan into a finished 3D video inside makaug. A hosted draft URL is required before `draft_ready`, and staff approval is required before `approved`.
 
 The implementation review identified `FloorplanToBlender3d` as a possible image-to-Blender prototype and Blender's supported headless animation renderer as a possible worker foundation. Neither is bundled into the website: the former is GPL-licensed and version-sensitive, while both still require a separately operated render worker and human visual review. This keeps the website fast and avoids presenting an experimental render as a faithful representation of the completed property.
 
