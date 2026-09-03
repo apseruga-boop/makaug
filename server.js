@@ -227,6 +227,7 @@ app.get('/api/version', (_req, res) => {
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-video-still-dual-media-20260831'] : []),
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-video-still-backfill-20260831'] : []),
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-video-five-key-frames-20260831'] : []),
+      ...(!IS_SOUTH_AFRICA ? ['whatsapp-video-distinct-clear-frames-20260903'] : []),
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-video-original-recovery-20260831'] : []),
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-outgoing-preview-guard-20260831'] : []),
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-agent007-replay-backoff-20260901'] : []),

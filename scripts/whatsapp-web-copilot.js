@@ -289,7 +289,7 @@ const LISTING_IMAGE_PREVIEW_QUALITY = 0.78;
 const LISTING_IMAGE_PREVIEW_MAX_BYTES = 1_500_000;
 const EMPLOYEE_VIDEO_PREVIEW_MAX_BYTES = 25_000_000;
 const OUTBOUND_PROPERTY_IMAGE_MAX_BYTES = 15_000_000;
-const WHATSAPP_EMPLOYEE_AGENT_007_WORKER_MARKER = 'whatsapp-video-five-key-frames-20260831';
+const WHATSAPP_EMPLOYEE_AGENT_007_WORKER_MARKER = 'whatsapp-video-distinct-clear-frames-20260903';
 const WHATSAPP_AGENT_007_INTAKE_RELIABILITY_MARKER = 'whatsapp-agent007-replay-backoff-20260901';
 const WHATSAPP_AGENT_007_PENDING_MEDIA_FIX_MARKER = 'whatsapp-agent007-pending-media-idempotency-20260901';
 const WHATSAPP_OUTGOING_PREVIEW_GUARD_MARKER = 'whatsapp-outgoing-preview-guard-20260831';
@@ -2508,6 +2508,31 @@ async function captureVideoKeyFrames(page, messageId, requestedFrameCount = 5) {
       const context = canvas.getContext('2d', { alpha: false });
       if (!context) return null;
       context.drawImage(source, 0, 0, canvas.width, canvas.height);
+      const fingerprintCanvas = document.createElement('canvas');
+      fingerprintCanvas.width = 16;
+      fingerprintCanvas.height = 16;
+      const fingerprintContext = fingerprintCanvas.getContext('2d', { alpha: false, willReadFrequently: true });
+      let fingerprint = '';
+      let frameQuality = 0;
+      if (fingerprintContext) {
+        fingerprintContext.drawImage(source, 0, 0, 16, 16);
+        const rgba = fingerprintContext.getImageData(0, 0, 16, 16).data;
+        const grey = [];
+        for (let index = 0; index < rgba.length; index += 4) {
+          grey.push(Math.round((rgba[index] * 0.299) + (rgba[index + 1] * 0.587) + (rgba[index + 2] * 0.114)));
+        }
+        const mean = grey.reduce((total, value) => total + value, 0) / Math.max(1, grey.length);
+        fingerprint = grey.map((value) => value >= mean ? '1' : '0').join('');
+        let gradientTotal = 0;
+        for (let y = 1; y < 15; y += 1) {
+          for (let x = 1; x < 15; x += 1) {
+            const center = grey[(y * 16) + x];
+            gradientTotal += Math.abs(center - grey[(y * 16) + x - 1]);
+            gradientTotal += Math.abs(center - grey[((y - 1) * 16) + x]);
+          }
+        }
+        frameQuality = gradientTotal / 392;
+      }
       let dataUrl = canvas.toDataURL('image/jpeg', 0.82);
       let bytes = Math.floor((dataUrl.length * 3) / 4);
       if (bytes > maxBytes) {
@@ -2522,16 +2547,19 @@ async function captureVideoKeyFrames(page, messageId, requestedFrameCount = 5) {
         kind: 'image',
         name,
         derivedFromVideo: true,
-        timestampSeconds
+        timestampSeconds,
+        frameFingerprint: fingerprint,
+        frameQuality
       };
     };
 
     if (video?.videoWidth && video?.videoHeight) {
       const targetCount = Math.max(1, Math.min(5, Number(frameCount || 5)));
       const duration = Number(video.duration || 0);
+      const candidateCount = Math.max(15, targetCount * 5);
       const targets = Number.isFinite(duration) && duration > 0.25
-        ? Array.from({ length: targetCount }, (_, index) => {
-          const fraction = targetCount === 1 ? 0.5 : 0.08 + ((0.84 * index) / (targetCount - 1));
+        ? Array.from({ length: candidateCount }, (_, index) => {
+          const fraction = candidateCount === 1 ? 0.5 : 0.04 + ((0.92 * index) / (candidateCount - 1));
           return Math.min(Math.max(0.05, duration * fraction), Math.max(0.05, duration - 0.05));
         })
         : [Number(video.currentTime || 0)];
@@ -2568,7 +2596,40 @@ async function captureVideoKeyFrames(page, messageId, requestedFrameCount = 5) {
           // Cross-origin canvases can fail; retain the WhatsApp poster fallback below.
         }
       }
-      if (frames.length) return frames;
+      if (frames.length) {
+        const distance = (left = '', right = '') => {
+          if (!left || !right || left.length !== right.length) return 1;
+          let changed = 0;
+          for (let index = 0; index < left.length; index += 1) {
+            if (left[index] !== right[index]) changed += 1;
+          }
+          return changed / left.length;
+        };
+        const pool = [...frames].sort((left, right) => Number(right.frameQuality || 0) - Number(left.frameQuality || 0));
+        const selected = [pool.shift()];
+        while (selected.length < targetCount && pool.length) {
+          let bestIndex = -1;
+          let bestDistance = -1;
+          let bestQuality = -1;
+          for (let index = 0; index < pool.length; index += 1) {
+            const nearestDistance = Math.min(...selected.map((item) => distance(
+              pool[index].frameFingerprint,
+              item.frameFingerprint
+            )));
+            const quality = Number(pool[index].frameQuality || 0);
+            if (nearestDistance > bestDistance || (nearestDistance === bestDistance && quality > bestQuality)) {
+              bestIndex = index;
+              bestDistance = nearestDistance;
+              bestQuality = quality;
+            }
+          }
+          if (bestIndex < 0 || bestDistance < 0.2) break;
+          selected.push(pool.splice(bestIndex, 1)[0]);
+        }
+        return selected
+          .sort((left, right) => Number(left.timestampSeconds || 0) - Number(right.timestampSeconds || 0))
+          .map(({ frameFingerprint, frameQuality, ...frame }) => frame);
+      }
     }
 
     try {

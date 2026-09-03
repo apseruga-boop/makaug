@@ -7,10 +7,15 @@ const {
   BACKFILL_MARKER,
   MIN_VIDEO_KEY_FRAMES,
   SELECTION_SQL,
+  candidateFrameOffsets,
   extractVideoUrls,
   fallbackFrameOffsets,
+  hammingDistance,
   keyFramesNeeded,
   representativeFrameOffsets,
+  selectDistinctFrameCandidates,
+  selectionQueryFor,
+  selectionSqlFor,
   parseArgs
 } = require('../scripts/backfill-whatsapp-video-stills');
 
@@ -22,14 +27,24 @@ const routeSource = fs.readFileSync(path.join(root, 'routes/whatsapp.js'), 'utf8
 const frontendSource = fs.readFileSync(path.join(root, 'assets/makaug-app.js'), 'utf8');
 const propertiesSource = fs.readFileSync(path.join(root, 'routes/properties.js'), 'utf8');
 
-assert.deepEqual(parseArgs([]), { apply: false, propertyIds: [] }, 'backfill must default to dry-run');
-assert.deepEqual(parseArgs(['--apply', '--property-id=abc']), { apply: true, propertyIds: ['abc'] });
+assert.deepEqual(parseArgs([]), {
+  apply: false,
+  replaceExisting: false,
+  reopenApproved: false,
+  propertyIds: []
+}, 'backfill must default to dry-run');
+assert.deepEqual(parseArgs(['--apply', '--replace-video-frames', '--reopen-approved', '--property-id=abc']), {
+  apply: true,
+  replaceExisting: true,
+  reopenApproved: true,
+  propertyIds: ['abc']
+});
 assert.deepEqual(
   extractVideoUrls({ video_urls: ['https://media.makaug.com/a.mp4', 'https://media.makaug.com/a.mp4', 'http://unsafe.test/a.mp4'] }),
   ['https://media.makaug.com/a.mp4'],
   'video repair should accept unique HTTPS media only'
 );
-assert.equal(BACKFILL_MARKER, 'whatsapp-video-five-key-frames-20260831');
+assert.equal(BACKFILL_MARKER, 'whatsapp-video-distinct-clear-frames-20260903');
 assert.equal(MIN_VIDEO_KEY_FRAMES, 5);
 assert.equal(keyFramesNeeded({ video_still_count: 1 }), 4);
 assert.equal(keyFramesNeeded({ video_still_count: 5 }), 0);
@@ -41,12 +56,32 @@ assert.deepEqual(
   [8, 6, 4, 2, 0.1, 0],
   'frame extraction must progressively seek earlier when container duration metadata is inaccurate'
 );
+const candidates = candidateFrameOffsets(20, 20);
+assert.equal(candidates.length, 20, 'repair must inspect substantially more candidates than the five final frames');
+assert(candidates[0] > 0 && candidates[candidates.length - 1] < 20);
+assert.equal(hammingDistance('0000', '1111'), 1);
+assert.equal(hammingDistance('0000', '0011'), 0.5);
+assert.deepEqual(
+  selectDistinctFrameCandidates([
+    { id: 'sharp-base', hash: '00000000', quality: 10, timestampSeconds: 1 },
+    { id: 'near-duplicate', hash: '00000001', quality: 9, timestampSeconds: 2 },
+    { id: 'different', hash: '11110000', quality: 8, timestampSeconds: 3 }
+  ], 2, 0.25).map((item) => item.id),
+  ['sharp-base', 'different'],
+  'near-identical frames must be rejected even when they are individually sharp'
+);
+assert(selectionSqlFor({ reopenApproved: true }).includes("p.status IN ('pending', 'approved')"));
+const targetedSelection = selectionQueryFor({ reopenApproved: true, propertyIds: ['abc'] });
+assert(targetedSelection.text.includes('p.id = ANY($1::uuid[])'));
+assert.deepEqual(targetedSelection.values, [['abc']]);
 assert(SELECTION_SQL.includes("p.source = 'whatsapp_employee_intake'"), 'repair must stay scoped to employee intake');
 assert(SELECTION_SQL.includes("p.status = 'pending'"), 'repair must leave approved and rejected listings untouched');
 assert(SELECTION_SQL.includes('video_still_count') && SELECTION_SQL.includes('COUNT(pi.id) FILTER'), 'repair must count existing video-derived images');
 assert(SELECTION_SQL.includes('forwarded'), 'repair must also clean raw WhatsApp descriptions');
 assert(workerSource.includes('async function captureVideoKeyFrames'), 'new WhatsApp videos must get five distributed key frames');
-assert(workerSource.includes("WHATSAPP_EMPLOYEE_AGENT_007_WORKER_MARKER = 'whatsapp-video-five-key-frames-20260831'"), 'hosted worker heartbeat must identify the five-frame release');
+assert(workerSource.includes("WHATSAPP_EMPLOYEE_AGENT_007_WORKER_MARKER = 'whatsapp-video-distinct-clear-frames-20260903'"), 'hosted worker heartbeat must identify the distinct-frame release');
+assert(workerSource.includes('candidateCount = Math.max(15, targetCount * 5)'), 'browser capture must sample more candidates than it retains');
+assert(workerSource.includes('bestDistance < 0.2'), 'browser capture must reject visually similar frames');
 assert(workerSource.includes('async function captureVideoPosterFrame'), 'new WhatsApp videos must get an extracted still');
 assert(workerSource.includes('isPlayableVideoBuffer'), 'worker must reject encrypted WhatsApp network payloads masquerading as MP4 files');
 assert(workerSource.includes("effectiveMime !== 'application/octet-stream'"), 'decrypted WhatsApp browser blobs must carry their playable video MIME in the data URL');
@@ -58,10 +93,13 @@ assert(workerSource.includes('employeeVideoRecoveryCaptionKey'), 'historic looku
 assert(workerSource.includes("mediaType: 'media',\n      mediaPreviews: []"), 'marked historic video cards must be reopened even if WhatsApp labels the old thumbnail as an image');
 assert(backfillSource.includes("'whatsapp_video_still_backfilled'"), 'repairs must leave an audit event');
 assert(backfillSource.includes('extractStillWithFallback(videoPath, stillPath'), 'backfill must recover when the requested frame timestamp is beyond decodable footage');
-assert(backfillSource.includes("'pending', 'pending'"), 'backfill must preserve staff-review status');
+assert(backfillSource.includes("$5, 'pending'"), 'backfill audit events must end in staff-review status');
+assert(backfillSource.includes("'media_repair_reopened'"), 'targeted repairs must record removal from public inventory');
+assert(backfillSource.includes("status = 'pending'"), 'approved repair targets must return to staff review');
+assert(backfillSource.includes('visually_distinct: true'), 'repair audit evidence must record the distinct-frame gate');
 assert(backfillSource.includes('auto_publish: false'), 'backfill must not publish repaired listings');
 assert(backfillSource.includes("slot_key, room_label"), 'derived stills must be attached to the existing property image gallery');
-assert(backfillSource.includes('Video key image ${keyFrameNumber} of ${MIN_VIDEO_KEY_FRAMES}'), 'review frames must be clearly labelled');
+assert(backfillSource.includes('Distinct video key image ${keyFrameNumber}'), 'review frames must be clearly labelled');
 assert(frontendSource.includes('function staffPreviewVideosHtml'), 'staff preview must render stored videos, not just poster images');
 assert(frontendSource.includes('data-staff-review-video-gallery="true"'), 'staff video gallery needs a stable visible proof hook');
 assert(frontendSource.includes('Photos, video and source evidence'), 'moderation copy must tell staff that both media types are present');
@@ -77,5 +115,6 @@ assert(serverSource.includes('whatsapp-video-still-dual-media-20260831'), 'relea
 assert(serverSource.includes('whatsapp-video-still-backfill-20260831'), 'repair marker must be externally visible');
 assert(serverSource.includes('whatsapp-video-original-recovery-20260831'), 'historic original recovery marker must be externally visible');
 assert(serverSource.includes('whatsapp-video-five-key-frames-20260831'), 'five-frame gallery marker must be externally visible');
+assert(serverSource.includes('whatsapp-video-distinct-clear-frames-20260903'), 'distinct clear-frame release marker must be externally visible');
 
 console.log('whatsapp video still backfill tests passed');
