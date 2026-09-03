@@ -117,6 +117,12 @@ async function waitForMapIfPresent(page, route) {
     if (map) map.scrollIntoView({ block: 'center', inline: 'center' });
   }, pageId).catch(() => {});
   await page.waitForTimeout(3400);
+  await page.waitForFunction(() => {
+    const loading = typeof publicListingsApiLoading !== 'undefined' && publicListingsApiLoading;
+    const deepTimers = typeof publicCategoryDeepHydrationTimers !== 'undefined' ? publicCategoryDeepHydrationTimers.size : 0;
+    const activeHydrations = typeof publicActiveCategoryHydrationPromises !== 'undefined' ? publicActiveCategoryHydrationPromises.size : 0;
+    return !loading && deepTimers === 0 && activeHydrations === 0;
+  }, { timeout: 15000 }).catch(() => {});
   return true;
 }
 
@@ -217,9 +223,25 @@ async function clickPopupDetailOrBrokerAction(page, checks) {
   const label = await popupLink.innerText().catch(() => '') || '';
   const expectedProperty = href.includes('/property/') || /View Property/i.test(label);
   const expectedBroker = href.includes('/agents/') || /View Broker/i.test(label);
-  await popupLink.click({ timeout: 8000 }).catch((error) => {
-    checks.push(`map popup detail click failed: ${error.message}`);
-  });
+  await popupLink.scrollIntoViewIfNeeded({ timeout: 8000 }).catch(() => {});
+  const clickTarget = await popupLink.evaluate((el) => {
+    const rect = el.getBoundingClientRect();
+    const x = rect.left + rect.width / 2;
+    const y = rect.top + rect.height / 2;
+    const top = document.elementFromPoint(x, y);
+    return {
+      x,
+      y,
+      clickable: top === el || el.contains(top)
+    };
+  }).catch(() => null);
+  if (!clickTarget?.clickable) {
+    checks.push('map popup detail action is obscured or detached');
+  } else {
+    await page.mouse.click(clickTarget.x, clickTarget.y).catch((error) => {
+      checks.push(`map popup detail click failed: ${error.message}`);
+    });
+  }
   await page.waitForLoadState('domcontentloaded', { timeout: 8000 }).catch(() => {});
   await page.waitForFunction(({ expectedProperty, expectedBroker }) => {
     const path = window.location.pathname || '/';
