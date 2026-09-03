@@ -1077,6 +1077,19 @@ router.post('/assistant-reply', async (req, res, next) => {
         ...response,
         text: sanitizeAssistantText(response?.text || '')
       };
+      if (normalizeAssistantIntent(effectiveIntent) === 'off_plan_listing') {
+        response = {
+          ...response,
+          text: sanitizeAssistantText([
+            '*makaug.com* | *List an off-plan project*',
+            'Open the Off Plan page and choose “List an off-plan project”, then select WhatsApp, email, or a callback. Your request is recorded only after you submit that contact form or send the WhatsApp message.',
+            'Please prepare: project name, location, completion date, brochure, images, construction progress and current sales.',
+            `🔗 ${appOriginFromRequest(req)}/off-plan`
+          ].join('\n')),
+          action_url: `${appOriginFromRequest(req)}/off-plan`,
+          action: 'open_off_plan_contact'
+        };
+      }
     }
 
     if (!assistantIsOffPlan && (assistantIsSearch || cleanBarSearchOnly)) {
