@@ -42802,17 +42802,32 @@ async function submitValuationEstimate(event, { auto = false } = {}) {
   return false;
 }
 
-function openValuationForProperty(propertyId) {
+async function ensureValuationPageForProperty() {
+  const valuationPage = document.getElementById("page-valuation");
+  if (valuationPage && !isPublicRouteSkeletonElement(valuationPage)) {
+    showPage("valuation", { source: "valuation_opened_from_listing" });
+    return true;
+  }
+  const loadToken = beginPublicRouteIntent("valuation");
+  mountPublicRouteSkeleton("valuation");
+  return loadPublicRouteFragment("/valuation", "valuation", {
+    source: "valuation_opened_from_listing",
+    loadToken
+  });
+}
+
+async function openValuationForProperty(propertyId) {
   const property = findPropertyForUi(propertyId);
   if (!property) {
-    showPage("valuation");
+    await ensureValuationPageForProperty();
     return false;
   }
   const type = normalizeType(property.type);
   const category = type === "students"
     ? "student"
     : (["sale", "rent", "land", "commercial", "student"].includes(type) ? type : "sale");
-  showPage("valuation");
+  const valuationReady = await ensureValuationPageForProperty();
+  if (!valuationReady) return false;
   initializeValuationPage();
   const setValue = (id, value) => {
     const element = document.getElementById(id);
@@ -52636,7 +52651,7 @@ async function openDetail(id, options = {}) {
   if (detailGalleryPhotoIndex < 0) detailGalleryPhotoIndex = 0;
   const selectedPhoto = thirdPartyDetail ? null : (detailGalleryPhotos[detailGalleryPhotoIndex] || primaryPhoto);
   const selectedPhotoSrc = thirdPartyDetail ? "" : publicImageSrc(selectedPhoto?.url || p.img, "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=900&q=80");
-  const detailIdArg = JSON.stringify(String(p.id));
+  const detailIdArg = propertyIdArg(p.id);
   const detailLocation = getPropertyLocationDisplay(p);
   const ownerPhone = p.lister_phone || p.contact_phone || p.phone || "";
   const publicCallPhone = publicCallPhoneForProperty(p, broker);
@@ -52861,7 +52876,7 @@ async function openDetail(id, options = {}) {
             ${sourceContactUrl && !publicWhatsappPhone ? `<p class="text-[11px] text-gray-500 mb-2">${adminEscape(sourceContactCopy || translatePropertyUi("No phone number is published. Use the source page to contact the lister."))}</p>` : ""}
           `}
           <button id="detail-save-btn" type="button" onclick="toggleSave(${detailIdArg})" class="${getDetailSaveButtonClasses(p.id)}">${getDetailSaveButtonContent(p.id)}</button>
-          <button type="button" onclick="openValuationForProperty(${detailIdArg})" class="mt-2 w-full border border-emerald-200 bg-emerald-50 text-emerald-800 py-2.5 rounded-xl font-semibold hover:bg-emerald-100">
+          <button id="detail-price-range-btn" type="button" class="mt-2 w-full border border-emerald-200 bg-emerald-50 text-emerald-800 py-2.5 rounded-xl font-semibold hover:bg-emerald-100">
             <i class="fas fa-chart-line mr-1" aria-hidden="true"></i> ${adminEscape(valuationTr("estimateButton"))}
           </button>
           ${!isFoundOnlineContact ? foundOnlineContactPanelHtml : ""}
@@ -52893,6 +52908,9 @@ async function openDetail(id, options = {}) {
     </div>
     ${mobileContactBarHtml}
     <div class="lg:hidden h-24" aria-hidden="true"></div>`;
+  document.getElementById("detail-price-range-btn")?.addEventListener("click", () => {
+    openValuationForProperty(p.id);
+  });
   showPage("detail");
   setLang(currentLang, true, false);
   updateDetailSaveButton(p.id);
