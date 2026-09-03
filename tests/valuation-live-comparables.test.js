@@ -406,6 +406,28 @@ assert.ok(
 assert.ok(html.includes('/marketplace?category=surveyors'), 'valuation must route to surveyors');
 assert.ok(app.includes('"/valuation": "valuation"'), 'public route must resolve to valuation page');
 assert.ok(app.includes('openValuationForProperty'), 'property detail must link into valuation');
+assert.ok(
+  app.includes('async function ensureValuationPageForProperty()')
+    && app.includes('return loadPublicRouteFragment("/valuation", "valuation"'),
+  'listing valuation must wait for a deep-link route fragment before applying its prefill'
+);
+assert.ok(
+  app.includes('const valuationReady = await ensureValuationPageForProperty();'),
+  'property detail must not prefill a temporary valuation skeleton'
+);
+const detailRendererStart = app.indexOf('async function openDetail(id, options = {})');
+const detailRendererEnd = app.indexOf('async function openBrokerProfile(id)', detailRendererStart);
+const detailRenderer = app.slice(detailRendererStart, detailRendererEnd);
+assert.ok(detailRenderer.includes('const detailIdArg = propertyIdArg(p.id);'), 'property detail actions must HTML-escape string IDs before placing them in inline handlers');
+assert.ok(detailRenderer.includes('id="detail-price-range-btn"'), 'property detail must expose one stable price-range button target');
+assert.ok(
+  detailRenderer.includes('document.getElementById("detail-price-range-btn")?.addEventListener("click"'),
+  'the price-range action must use a bound click handler instead of fragile inline string interpolation'
+);
+assert.ok(
+  !detailRenderer.includes('onclick="openValuationForProperty(${detailIdArg})"'),
+  'the price-range action must not regress to an inline handler that breaks UUID property IDs'
+);
 assert.ok(app.includes('applyValuationLanguageUI'), 'valuation UI must participate in language changes');
 assert.ok(routeSource.includes("router.get('/locations'"), 'valuation location counts endpoint must exist');
 assert.ok(routeSource.includes("router.post('/matches'"), 'valuation live match-count endpoint must exist');
