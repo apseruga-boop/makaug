@@ -51,6 +51,7 @@ const PUBLIC_ROUTES = [
   '/student-accommodation',
   '/students',
   '/land',
+  '/off-plan',
   '/commercial',
   '/brokers',
   '/mortgage',
@@ -77,6 +78,7 @@ const PUBLIC_ROUTE_MARKERS = {
   '/student-accommodation': ['Student accommodation', 'Campus', 'No student rooms'],
   '/students': ['Student accommodation', 'Campus', 'No student rooms'],
   '/land': ['Land', 'No land listings', 'title'],
+  '/off-plan': ['Find your future home, before it is built', 'New projects', 'List an off-plan project'],
   '/commercial': ['Commercial', 'No commercial spaces', 'business'],
   '/brokers': ['Brokers', 'Find your perfect broker', 'Broker directory'],
   '/mortgage': ['Mortgage Finder', 'Repayment calculator', 'Gross Monthly Income Required'],
@@ -103,6 +105,7 @@ const PUBLIC_ROUTE_ACTIVE_IDS = {
   '/student-accommodation': 'page-students',
   '/students': 'page-students',
   '/land': 'page-land',
+  '/off-plan': 'page-off-plan',
   '/commercial': 'page-commercial',
   '/brokers': 'page-brokers',
   '/mortgage': 'page-mortgage',
@@ -142,7 +145,8 @@ const FORBIDDEN_PUBLIC_IDS = [
   'looking-modal',
   'broker-reg-modal',
   'preview-photo-modal',
-  'detail-photo-modal'
+  'detail-photo-modal',
+  'off-plan-create-modal'
 ];
 
 function assertNoProtectedStrings(label, html) {

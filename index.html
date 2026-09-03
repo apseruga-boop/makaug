@@ -413,6 +413,7 @@
   </script>
   <link rel="preload" as="image" href="https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=1200&q=60" fetchpriority="high">
   <link rel="stylesheet" href="/assets/tailwind.css">
+  <link rel="stylesheet" href="/assets/off-plan.css?v=20260903-offplan-v1">
   <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
   <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"></noscript>
   <link rel="preload" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
@@ -2633,12 +2634,13 @@
           <div id="brand-subtitle" class="text-xs text-gray-400 -mt-1">UGANDA PROPERTY</div>
         </div>
       </a>
-      <div class="hidden lg:flex items-center gap-0.5">
+      <div id="desktop-primary-nav" class="hidden xl:flex items-center gap-0.5">
         <a id="nav-sale" href="/for-sale" onclick="showPage('sale')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">For Sale</a>
         <a id="nav-rent" href="/to-rent" onclick="showPage('rent')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">To Rent</a>
         <a id="nav-students" href="/student-accommodation" onclick="showPage('students')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Students</a>
         <a id="nav-commercial" href="/commercial" onclick="showPage('commercial')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Commercial</a>
         <a id="nav-land" href="/land" onclick="showPage('land')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Land</a>
+        <a id="nav-off-plan" href="/off-plan" onclick="showPage('off-plan')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Off Plan</a>
         <a id="nav-brokers" href="/brokers" onclick="showPage('brokers')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Find Brokers</a>
         <a id="nav-mortgage" href="/mortgage" onclick="showPage('mortgage')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Mortgage Finder</a>
         <a id="nav-valuation" href="/valuation" onclick="showPage('valuation')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Property Value</a>
@@ -2647,9 +2649,9 @@
         <a id="nav-about" href="/about" onclick="showPage('about')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">About Us</a>
       </div>
       <div class="flex items-center gap-2">
-        <button type="button" data-harvest-public-submission onclick="openHarvestSubmissionModal()" class="hidden lg:block border border-green-700 text-green-800 px-3 py-2 rounded-lg text-sm font-semibold hover:bg-green-50">Paste listing link</button>
+        <button type="button" data-harvest-public-submission onclick="openHarvestSubmissionModal()" class="hidden xl:block border border-green-700 text-green-800 px-3 py-2 rounded-lg text-sm font-semibold hover:bg-green-50">Paste listing link</button>
         <a id="nav-list-btn" data-testid="list-property-free-cta" href="/list-property" onclick="handleListPropertyFreeCta(event)" class="hidden md:block bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-green-600">List Property</a>
-        <button id="mob-toggle" class="lg:hidden text-gray-700 p-2" onclick="toggleMobile()"><i class="fas fa-bars text-xl"></i></button>
+        <button id="mob-toggle" class="xl:hidden text-gray-700 p-2" onclick="toggleMobile()"><i class="fas fa-bars text-xl"></i></button>
       </div>
     </div>
     <div id="mobile-menu" class="lg:hidden border-t border-gray-100 flex-col gap-1 px-4 py-3 bg-white">
@@ -2658,6 +2660,7 @@
       <a id="mnav-students" href="/student-accommodation" onclick="showPage('students');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Students</a>
       <a id="mnav-commercial" href="/commercial" onclick="showPage('commercial');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Commercial</a>
       <a id="mnav-land" href="/land" onclick="showPage('land');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Land</a>
+      <a id="mnav-off-plan" href="/off-plan" onclick="showPage('off-plan');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Off Plan</a>
       <a id="mnav-brokers" href="/brokers" onclick="showPage('brokers');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Find Brokers</a>
       <a id="mnav-mortgage" href="/mortgage" onclick="showPage('mortgage');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Mortgage Finder</a>
       <a id="mnav-valuation" href="/valuation" onclick="showPage('valuation');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Property Value</a>
@@ -2711,6 +2714,7 @@
               <button id="hero-tab-commercial" class="hero-tab tab-btn" onclick="setTab(this,'commercial')">Commercial</button>
               <button id="hero-tab-students" class="hero-tab tab-btn" onclick="setTab(this,'students')">Students</button>
               <button id="hero-tab-land" class="hero-tab tab-btn" onclick="setTab(this,'land')">Land</button>
+              <button id="hero-tab-off-plan" class="hero-tab tab-btn" onclick="openOffPlanFromHero()">Off Plan</button>
             </div>
             <div class="flex items-center gap-2">
               <button id="hero-list-free-btn" onclick="openListPropertyOptions()" class="inline-flex items-center gap-2 bg-green-500 hover:bg-green-400 text-green-950 text-sm font-bold px-4 py-2 rounded-full">
@@ -3681,6 +3685,98 @@
 		          </div>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="page-off-plan" class="page bg-[#f7faf8] min-h-screen" data-off-plan-marker="off-plan-projects-v1-20260903">
+    <section id="off-plan-list-view">
+      <div class="off-plan-hero py-12 md:py-16">
+        <div class="max-w-7xl mx-auto px-4">
+          <div class="max-w-3xl">
+            <span class="inline-flex items-center gap-2 rounded-full bg-white/15 border border-white/25 px-3 py-1.5 text-xs font-black uppercase tracking-wide"><i class="fas fa-building"></i> New developments in Uganda</span>
+            <h1 id="off-plan-title" class="mt-4 text-4xl md:text-6xl font-black leading-tight">Find your future home, before it is built</h1>
+            <p class="mt-4 text-base md:text-lg text-white/85 max-w-2xl">Explore verified off-plan projects, compare unit types, understand construction and sales progress, and model payment options in Uganda shillings.</p>
+          </div>
+          <form id="off-plan-search-form" onsubmit="searchOffPlan(event)" class="off-plan-search-shell mt-8 rounded-3xl p-3 md:p-4">
+            <div class="off-plan-search-grid grid gap-2">
+              <label class="off-plan-field"><span class="sr-only">Project, area or developer</span><i class="fas fa-search"></i><input id="off-plan-q" autocomplete="off" placeholder="Project, area or developer"></label>
+              <label class="off-plan-field"><span class="sr-only">Location</span><select id="off-plan-location"><option value="">All locations</option></select></label>
+              <label class="off-plan-field"><span class="sr-only">Bedrooms</span><select id="off-plan-bedrooms"><option value="">Any bedrooms</option><option value="1">1 bedroom</option><option value="2">2 bedrooms</option><option value="3">3 bedrooms</option><option value="4">4+ bedrooms</option></select></label>
+              <label class="off-plan-field"><span class="sr-only">Maximum price</span><select id="off-plan-max-price"><option value="">Any price</option><option value="250000000">Up to USh 250M</option><option value="500000000">Up to USh 500M</option><option value="1000000000">Up to USh 1B</option><option value="2000000000">Up to USh 2B</option></select></label>
+              <button class="off-plan-search-button h-[50px] rounded-xl bg-amber-400 hover:bg-amber-300 text-green-950 font-black px-7"><i class="fas fa-search mr-2"></i>Search</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div class="max-w-7xl mx-auto px-4 py-9">
+        <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+          <div><p class="text-xs font-black uppercase tracking-widest text-green-700">Off plan Uganda</p><h2 class="mt-1 text-2xl md:text-3xl font-black text-gray-950">New projects</h2><p id="off-plan-result-summary" class="mt-1 text-sm text-gray-500">Loading verified projects...</p></div>
+          <button type="button" onclick="openOffPlanContactModal()" class="inline-flex items-center justify-center gap-2 rounded-xl bg-green-700 hover:bg-green-600 text-white px-5 py-3 font-black"><i class="fas fa-plus"></i>List an off-plan project</button>
+        </div>
+        <div class="off-plan-content-grid mt-7 grid gap-7">
+          <div id="off-plan-results" class="off-plan-results-grid grid gap-5" aria-live="polite">
+            <div class="off-plan-skeleton"></div><div class="off-plan-skeleton"></div>
+          </div>
+          <aside class="space-y-4">
+            <div class="off-plan-panel">
+              <div class="h-10 w-10 rounded-xl bg-green-50 text-green-700 grid place-items-center"><i class="fas fa-shield-halved"></i></div>
+              <h3 class="font-black text-gray-950 mt-3">Review before release</h3>
+              <p class="text-sm text-gray-600 mt-2 leading-relaxed">Projects appear here only after the makaug team checks the developer, location, pricing, progress and availability evidence.</p>
+            </div>
+            <div class="off-plan-panel">
+              <div class="h-10 w-10 rounded-xl bg-amber-50 text-amber-700 grid place-items-center"><i class="fas fa-calculator"></i></div>
+              <h3 class="font-black text-gray-950 mt-3">Plan the payments</h3>
+              <p class="text-sm text-gray-600 mt-2 leading-relaxed">Choose a unit and create a dated, illustrative UGX instalment schedule. Then compare mortgage options.</p>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <section id="off-plan-detail-view" class="hidden">
+      <div class="max-w-7xl mx-auto px-4 py-6">
+        <button type="button" onclick="returnToOffPlanList()" class="text-sm font-bold text-green-800 hover:text-green-600"><i class="fas fa-arrow-left mr-2"></i>Back to off-plan projects</button>
+        <div id="off-plan-detail-content" class="mt-5"><div class="off-plan-skeleton"></div></div>
+      </div>
+    </section>
+
+    <div id="off-plan-contact-modal" class="off-plan-modal" hidden role="dialog" aria-modal="true" aria-labelledby="off-plan-contact-title">
+      <div class="off-plan-modal-card">
+        <div class="flex items-start justify-between gap-4"><div><p class="text-xs font-black uppercase tracking-widest text-green-700">Partner with makaug</p><h2 id="off-plan-contact-title" class="mt-1 text-2xl font-black text-gray-950">List an off-plan project</h2><p class="mt-2 text-sm text-gray-600">How would you like the team to contact you?</p></div><button type="button" onclick="closeOffPlanContactModal()" class="h-9 w-9 rounded-full bg-gray-100 hover:bg-gray-200" aria-label="Close"><i class="fas fa-xmark"></i></button></div>
+        <div class="grid sm:grid-cols-3 gap-3 mt-6">
+          <button type="button" class="off-plan-contact-choice" data-off-plan-channel="whatsapp" aria-pressed="true" onclick="selectOffPlanContactChannel('whatsapp')"><i class="fab fa-whatsapp text-xl"></i><strong class="block mt-2">WhatsApp</strong><span class="text-xs text-gray-500">Continue in chat</span></button>
+          <button type="button" class="off-plan-contact-choice" data-off-plan-channel="email" aria-pressed="false" onclick="selectOffPlanContactChannel('email')"><i class="fas fa-envelope text-xl"></i><strong class="block mt-2">Email</strong><span class="text-xs text-gray-500">Reply by email</span></button>
+          <button type="button" class="off-plan-contact-choice" data-off-plan-channel="call" aria-pressed="false" onclick="selectOffPlanContactChannel('call')"><i class="fas fa-phone text-xl"></i><strong class="block mt-2">Call me</strong><span class="text-xs text-gray-500">Choose a time</span></button>
+        </div>
+        <form id="off-plan-contact-form" onsubmit="submitOffPlanContact(event)" class="mt-6 grid gap-3">
+          <input id="off-plan-contact-channel" type="hidden" value="whatsapp">
+          <label class="text-sm font-bold text-gray-800">Your name<input id="off-plan-contact-name" required maxlength="180" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 font-normal" placeholder="Full name"></label>
+          <div class="grid sm:grid-cols-2 gap-3">
+            <label class="text-sm font-bold text-gray-800">WhatsApp / phone<input id="off-plan-contact-phone" type="tel" maxlength="80" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 font-normal" placeholder="+256..."></label>
+            <label class="text-sm font-bold text-gray-800">Email<input id="off-plan-contact-email" type="email" maxlength="260" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 font-normal" placeholder="name@example.com"></label>
+          </div>
+          <label id="off-plan-callback-wrap" class="hidden text-sm font-bold text-gray-800">Preferred call time<input id="off-plan-contact-callback" type="datetime-local" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 font-normal"></label>
+          <div class="rounded-xl bg-green-50 border border-green-100 p-3 text-xs text-green-950">We will ask for the project name, location, completion date, brochure, images, construction progress and current sales. Every project stays in staff review until verified.</div>
+          <button id="off-plan-contact-submit" class="mt-1 rounded-xl bg-green-700 hover:bg-green-600 text-white px-5 py-3 font-black">Continue with WhatsApp</button>
+          <p id="off-plan-contact-status" class="hidden text-sm rounded-xl p-3" role="status"></p>
+        </form>
+      </div>
+    </div>
+
+    <div id="off-plan-create-modal" class="off-plan-modal" hidden role="dialog" aria-modal="true" aria-labelledby="off-plan-create-title">
+      <div class="off-plan-modal-card">
+        <div class="flex items-start justify-between gap-4"><div><p class="text-xs font-black uppercase tracking-widest text-emerald-700">Staff review only</p><h2 id="off-plan-create-title" class="mt-1 text-2xl font-black text-gray-950">Add an off-plan project</h2><p class="mt-2 text-sm text-gray-600">This creates a private review record. It does not publish the project.</p></div><button type="button" onclick="closeOffPlanCreateModal()" class="h-9 w-9 rounded-full bg-gray-100" aria-label="Close"><i class="fas fa-xmark"></i></button></div>
+        <form onsubmit="submitOffPlanProject(event)" class="mt-6 grid gap-3">
+          <input id="off-plan-create-role" type="hidden" value="staff">
+          <label class="text-sm font-bold">Project name<input id="off-plan-create-name" required maxlength="220" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 font-normal"></label>
+          <div class="grid sm:grid-cols-2 gap-3"><label class="text-sm font-bold">Area<input id="off-plan-create-area" maxlength="140" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 font-normal" placeholder="e.g. Entebbe"></label><label class="text-sm font-bold">District<input id="off-plan-create-district" maxlength="140" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 font-normal" placeholder="e.g. Wakiso"></label></div>
+          <div class="grid sm:grid-cols-2 gap-3"><label class="text-sm font-bold">Source / agent<input id="off-plan-create-source" maxlength="220" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 font-normal"></label><label class="text-sm font-bold">Project type<input id="off-plan-create-type" maxlength="80" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 font-normal" placeholder="Apartments, townhouses..."></label></div>
+          <label class="text-sm font-bold">Source notes / draft description<textarea id="off-plan-create-description" rows="4" maxlength="20000" class="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 font-normal" placeholder="Record what was supplied and what still needs verification."></textarea></label>
+          <div class="rounded-xl bg-amber-50 border border-amber-200 p-3 text-xs text-amber-950">Developer identity, map pin, dates, progress, availability, UGX unit pricing and images must be completed and verified before publication.</div>
+          <button class="rounded-xl bg-slate-900 text-white px-5 py-3 font-black">Create private review record</button><p id="off-plan-create-status" class="hidden rounded-xl p-3 text-sm" role="status"></p>
+        </form>
       </div>
     </div>
   </div>
@@ -4747,6 +4843,7 @@
             <li id="ai-benefit-2" class="flex gap-2"><i class="fas fa-check-circle text-green-600 mt-0.5"></i><span>Search properties by district, area, budget, beds, and purpose.</span></li>
             <li id="ai-benefit-3" class="flex gap-2"><i class="fas fa-check-circle text-green-600 mt-0.5"></i><span>Get direct WhatsApp and call contacts for matching brokers.</span></li>
             <li id="ai-benefit-4" class="flex gap-2"><i class="fas fa-check-circle text-green-600 mt-0.5"></i><span>Use the chatbot in 9 languages with fast replies.</span></li>
+            <li id="ai-benefit-5" class="flex gap-2"><i class="fas fa-check-circle text-green-600 mt-0.5"></i><span>Explore off-plan projects or register a new development for staff review.</span></li>
           </ul>
           <a id="ai-cta-btn" href="https://wa.me/256760112587?text=Hello+makaug,+I+want+to+use+the+AI+chatbot" target="_blank" rel="noopener noreferrer" class="inline-flex mt-5 items-center gap-2 bg-green-600 hover:bg-green-500 text-white rounded-xl px-5 py-3 font-semibold" data-public-whatsapp-link data-whatsapp-context="ai-chatbot">
             <i class="fab fa-whatsapp text-lg"></i> Start Chatbot on WhatsApp
@@ -6496,6 +6593,15 @@
           </div>
         </div>
 
+        <section id="staff-off-plan-control" class="bg-white border border-emerald-100 rounded-2xl p-6" data-off-plan-dashboard="staff">
+          <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+            <div><p class="text-xs font-black uppercase tracking-widest text-emerald-700">New developments</p><h3 class="mt-1 text-xl font-black text-gray-950">Off Plan review desk</h3><p class="mt-1 text-sm text-gray-500">Check source evidence, update construction and sales figures, preview the brochure, and prepare floor-plan walkthrough briefs. Projects remain private until every publication check passes.</p></div>
+            <div class="flex gap-2"><button type="button" onclick="openOffPlanCreateModal('staff')" class="rounded-xl bg-emerald-700 text-white px-4 py-2 text-sm font-black"><i class="fas fa-plus mr-1"></i>Add project</button><button type="button" onclick="loadOffPlanManagement('staff')" class="rounded-xl border border-emerald-200 text-emerald-800 px-4 py-2 text-sm font-black"><i class="fas fa-rotate-right mr-1"></i>Refresh</button></div>
+          </div>
+          <div id="staff-off-plan-projects" class="mt-5 grid gap-4"><p class="text-sm text-gray-500">Open this desk to load the off-plan review queue.</p></div>
+          <details class="mt-5 rounded-xl border border-gray-200 p-4"><summary class="cursor-pointer font-black text-sm">Off-plan enquiries</summary><div id="staff-off-plan-enquiries" class="mt-3 grid gap-2 text-sm text-gray-600">Refresh to load enquiries.</div></details>
+        </section>
+
         <div id="staff-settings-panel" class="bg-white border border-blue-100 rounded-2xl p-6">
           <div class="flex items-start justify-between gap-4 flex-wrap">
             <div>
@@ -6941,6 +7047,15 @@
             </div>
           </div>
         </div>
+
+        <section id="admin-off-plan-control" class="bg-white border border-emerald-100 rounded-2xl p-6" data-off-plan-dashboard="admin">
+          <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+            <div><p class="text-xs font-black uppercase tracking-widest text-emerald-700">New developments</p><h3 class="mt-1 text-xl font-black text-gray-950">Off Plan control centre</h3><p class="mt-1 text-sm text-gray-500">Review projects and enquiries, update completion and sales, preview branded brochures, and create approval-gated walkthrough briefs. Publishing remains an explicit verified action.</p></div>
+            <div class="flex gap-2"><button type="button" onclick="openOffPlanCreateModal('admin')" class="rounded-xl bg-emerald-700 text-white px-4 py-2 text-sm font-black"><i class="fas fa-plus mr-1"></i>Add project</button><button type="button" onclick="loadOffPlanManagement('admin')" class="rounded-xl border border-emerald-200 text-emerald-800 px-4 py-2 text-sm font-black"><i class="fas fa-rotate-right mr-1"></i>Refresh</button></div>
+          </div>
+          <div id="admin-off-plan-projects" class="mt-5 grid gap-4"><p class="text-sm text-gray-500">Open this control to load the off-plan review queue.</p></div>
+          <details class="mt-5 rounded-xl border border-gray-200 p-4"><summary class="cursor-pointer font-black text-sm">Off-plan enquiries</summary><div id="admin-off-plan-enquiries" class="mt-3 grid gap-2 text-sm text-gray-600">Refresh to load enquiries.</div></details>
+        </section>
 
         <div id="admin-command-centre" class="bg-white border border-green-100 rounded-2xl overflow-hidden">
           <div class="grid xl:grid-cols-[1.05fr,0.95fr] gap-0">
@@ -9517,6 +9632,11 @@
         var script = document.createElement("script");
         script.src = "/assets/makaug-app.js?v=" + encodeURIComponent(window.__makaugAppVersion);
         script.async = true;
+        script.onload = function () {
+          var offPlanScript = document.createElement("script");
+          offPlanScript.src = "/assets/off-plan.js?v=20260903-offplan-v1";
+          document.body.appendChild(offPlanScript);
+        };
         document.body.appendChild(script);
       }
       loadMakaugApp();

@@ -6383,6 +6383,7 @@ const AI_CHATBOT_I18N = {
     benefit2: "Search properties by district, area, budget, beds, and purpose.",
     benefit3: "Get direct WhatsApp and call contacts for matching brokers.",
     benefit4: "Use the chatbot in 9 languages with fast replies.",
+    benefit5: "Explore off-plan projects or register a new development for staff review.",
     cta: "Start Chatbot on WhatsApp"
   },
   lg: {
@@ -7353,6 +7354,7 @@ function applyAiChatbotLanguageUI() {
   setTextById("ai-benefit-2", aiTr("benefit2"));
   setTextById("ai-benefit-3", aiTr("benefit3"));
   setTextById("ai-benefit-4", aiTr("benefit4"));
+  setTextById("ai-benefit-5", aiTr("benefit5"));
   const btn = document.getElementById("ai-cta-btn");
   if (btn) btn.innerHTML = `<i class="fab fa-whatsapp text-lg"></i> ${aiTr("cta")}`;
 }
@@ -7857,6 +7859,7 @@ function applyLanguageUI() {
   setTextById("nav-students", tr("navStudents"));
   setTextById("nav-commercial", tr("navCommercial"));
   setTextById("nav-land", tr("navLand"));
+  setTextById("nav-off-plan", translateListingLabel("Off Plan"));
   setTextById("nav-brokers", tr("navBrokers"));
   setTextById("nav-mortgage", tr("navMortgage"));
   setTextById("nav-valuation", valuationTr("navTitle"));
@@ -7868,6 +7871,7 @@ function applyLanguageUI() {
   setTextById("mnav-students", tr("navStudents"));
   setTextById("mnav-commercial", tr("navCommercial"));
   setTextById("mnav-land", tr("navLand"));
+  setTextById("mnav-off-plan", translateListingLabel("Off Plan"));
   setTextById("mnav-brokers", tr("navBrokers"));
   setTextById("mnav-mortgage", tr("navMortgage"));
   setTextById("mnav-valuation", valuationTr("navTitle"));
@@ -7889,6 +7893,7 @@ function applyLanguageUI() {
   setTextById("hero-tab-commercial", tr("heroCommercial"));
   setTextById("hero-tab-students", tr("heroStudents"));
   setTextById("hero-tab-land", tr("heroLand"));
+  setTextById("hero-tab-off-plan", translateListingLabel("Off Plan"));
   const heroListBtn = document.getElementById("hero-list-free-btn");
   if (heroListBtn) heroListBtn.innerHTML = `<i class="fas fa-plus"></i> ${tr("heroListFree")}`;
   setTextById("hero-search-btn", tr("heroSearch"));
@@ -43201,6 +43206,7 @@ const PAGE_ROUTE_MAP = Object.freeze({
   students: "/student-accommodation",
   commercial: "/commercial",
   land: "/land",
+  "off-plan": "/off-plan",
   brokers: "/brokers",
   mortgage: "/mortgage",
   valuation: "/valuation",
@@ -43243,6 +43249,7 @@ const PUBLIC_ROUTE_PAGE_MAP = Object.freeze({
   "/student-accommodation": "students",
   "/commercial": "commercial",
   "/land": "land",
+  "/off-plan": "off-plan",
   "/brokers": "brokers",
   "/find-brokers": "brokers",
   "/mortgage": "mortgage",
@@ -43299,6 +43306,7 @@ function pageForPublicRoute(path) {
   const exact = PUBLIC_ROUTE_PAGE_MAP[normalized];
   if (exact) return exact;
   if (/^\/hostels\/[a-z0-9-]+$/i.test(normalized)) return "students";
+  if (/^\/off-plan\/[a-z0-9-]+$/i.test(normalized)) return "off-plan";
   const landing = normalized.match(/^\/(for-sale|to-rent|land|commercial|student-accommodation)(?:\/[a-z0-9-]+)+$/i);
   return landing ? normalizePageKey(landing[1]) : "";
 }
@@ -43549,11 +43557,18 @@ function showPage(page, options = {}) {
   if (targetPage === "saved") renderSaved();
   if (targetPage === "agent-dashboard") renderAgentDashboard();
   if (targetPage === "field-dashboard") renderFieldDashboard();
-  if (targetPage === "staff-dashboard") renderStaffDashboard();
+  if (targetPage === "staff-dashboard") {
+    renderStaffDashboard();
+    if (typeof window.loadOffPlanManagement === "function") window.loadOffPlanManagement("staff");
+  }
   if (targetPage === "advertiser-dashboard") renderAdvertiserDashboard();
-  if (targetPage === "admin-dashboard") renderAdminDashboard();
+  if (targetPage === "admin-dashboard") {
+    renderAdminDashboard();
+    if (typeof window.loadOffPlanManagement === "function") window.loadOffPlanManagement("admin");
+  }
   if (targetPage === "admin-setup-status") renderAdminSetupStatus();
   if (targetPage === "marketplace") loadMarketplacePage();
+  if (targetPage === "off-plan" && typeof window.initializeOffPlanPage === "function") window.initializeOffPlanPage();
   if (targetPage === "advertise") initializeAdvertisingSelfServe();
   if (targetPage === "valuation") initializeValuationPage();
   if (targetPage === "tiktok-connect") initializeTikTokDisplayPage();
@@ -43623,6 +43638,7 @@ const PUBLIC_ROUTE_SKELETON_LABELS = Object.freeze({
   students: "Student Accommodation",
   commercial: "Commercial",
   land: "Land",
+  "off-plan": "Off Plan",
   brokers: "Brokers",
   mortgage: "Mortgage Finder",
   valuation: "Valuation",

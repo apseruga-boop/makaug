@@ -15,6 +15,7 @@ const WHATSAPP_CONVERSATION_CATEGORIES = [
   'uncategorized',
   'property_search',
   'property_listing',
+  'off_plan',
   'broker_help',
   'mortgage',
   'account',
@@ -58,6 +59,7 @@ function normalizeConversationAiMode(value, fallback = 'autopilot') {
 
 function mapIntentToConversationCategory(intent = '') {
   const raw = String(intent || '').trim().toLowerCase();
+  if (raw === 'off_plan_search' || raw === 'off_plan_listing') return 'off_plan';
   if (raw === 'property_search' || raw === 'looking_for_property_lead') return 'property_search';
   if (raw === 'property_listing') return 'property_listing';
   if (raw === 'agent_search' || raw === 'agent_registration') return 'broker_help';

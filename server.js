@@ -36,6 +36,11 @@ const studentRoutes = require('./routes/student');
 const fieldAgentRoutes = require('./routes/field-agent');
 const staffRoutes = require('./routes/staff');
 const harvestRoutes = require('./routes/harvest');
+const {
+  adminRouter: offPlanAdminRoutes,
+  publicRouter: offPlanRoutes,
+  staffRouter: offPlanStaffRoutes
+} = require('./routes/off-plan');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 const { runMigrations } = require('./scripts/migrate');
 const {
@@ -49,6 +54,7 @@ const { startYouTubeSourceDripScheduler } = require('./services/youtubeSourceDri
 const { startMarketplaceLifecycleScheduler } = require('./services/marketplaceLifecycleService');
 const { startMarketplaceDripScheduler } = require('./services/marketplaceNationalDripService');
 const { startFeaturedRotationScheduler } = require('./services/featuredRotationService');
+const { getPublicDevelopment, isPublicationReady, normalizeDevelopmentRow } = require('./services/offPlanService');
 const {
   applyHarvestPublicSubmissionVisibility,
   harvestAutomationEnabled
@@ -245,6 +251,7 @@ app.get('/api/version', (_req, res) => {
 app.use('/api/health', healthRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/properties', propertiesRoutes);
+app.use('/api/off-plan', offPlanRoutes);
 app.use('/api/agents', agentsRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/advertising', advertisingRoutes);
@@ -255,6 +262,7 @@ app.use('/api/tiktok-display', tiktokDisplayRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/saved-properties', savedPropertiesRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/admin/off-plan', offPlanAdminRoutes);
 app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api/mortgage-rates', mortgageRoutes);
 app.use('/api/ai', aiRoutes);
@@ -265,6 +273,7 @@ app.use('/api/property-seeker', propertySeekerRoutes);
 app.use('/api/student', studentRoutes);
 app.use('/api/field-agent', fieldAgentRoutes);
 app.use('/api/staff', staffRoutes);
+app.use('/api/staff/off-plan', offPlanStaffRoutes);
 app.use('/api/harvest', harvestRoutes);
 
 app.get('/marketplace-sitemap.xml', (_req, res) => {
@@ -307,6 +316,13 @@ app.get('/sitemap.xml', async (_req, res, next) => {
       logger.warn('Property sitemap is serving stable routes while inventory is unavailable', { message: error.message });
     }
     const urls = sitemapEntries(snapshot, baseUrl);
+    urls.push({ loc: `${baseUrl}/off-plan`, changefreq: 'daily', priority: '0.8' });
+    try {
+      const offPlan = await db.query("SELECT * FROM off_plan_developments WHERE country_code = 'UG' AND status = 'published' AND verification_status = 'verified' ORDER BY updated_at DESC LIMIT 500");
+      offPlan.rows.map(normalizeDevelopmentRow).filter(isPublicationReady).forEach((project) => urls.push({ loc: `${baseUrl}/off-plan/${encodeURIComponent(project.slug)}`, lastmod: project.updated_at ? new Date(project.updated_at).toISOString() : null, changefreq: 'weekly', priority: '0.7' }));
+    } catch (error) {
+      logger.warn('Off-plan sitemap entries are unavailable until the feature migration is applied', { message: error.message });
+    }
     const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map((entry) => [
       '  <url>',
       `    <loc>${escapeXml(entry.loc)}</loc>`,
@@ -1450,6 +1466,42 @@ function shouldServeAdminShellForApiKeyFallback(auth, pathname = '') {
   return Boolean(auth && (path === '/admin' || path.startsWith('/admin/') || path === '/king' || path.startsWith('/king/')));
 }
 
+app.get('/off-plan/:slug', async (req, res, next) => {
+  try {
+    const project = await getPublicDevelopment(db, req.params.slug);
+    if (!project) {
+      res.set('X-Robots-Tag', 'noindex, noarchive');
+      return res.status(404).type('text/plain').send('Off-plan project not found');
+    }
+    const description = String(project.description || `Explore ${project.name}, an off-plan development in ${[project.area, project.district, 'Uganda'].filter(Boolean).join(', ')}.`).replace(/\s+/g, ' ').trim().slice(0, 240);
+    const canonical = absolutePublicUrl(`/off-plan/${encodeURIComponent(project.slug)}`);
+    const image = absolutePublicUrl(project.images?.[0]?.url || '/assets/icons/makaug-icon-512.png');
+    const html = patchPublicPageSeoMeta(renderPublicHtml(req.originalUrl || req.url || req.path), {
+      title: `${project.name} | Off Plan Uganda | makaug.com`,
+      description,
+      canonical,
+      image,
+      ogType: 'website',
+      structuredData: {
+        '@context': 'https://schema.org',
+        '@type': 'Product',
+        name: project.name,
+        description,
+        image: (project.images || []).map((item) => absolutePublicUrl(item.url)).filter(Boolean),
+        url: canonical,
+        category: 'Off-plan property development',
+        areaServed: [project.area, project.district, 'Uganda'].filter(Boolean).join(', ')
+      }
+    });
+    res.set('X-makaug-Off-Plan-SSR', '1');
+    res.set('X-makaug-Public-Sanitized', '1');
+    return sendTextResponse(req, res, html, { cacheControl: PUBLIC_HTML_CACHE_CONTROL });
+  } catch (error) {
+    if (error.code === '42P01') return sendPublicIndex(req, res, next);
+    return next(error);
+  }
+});
+
 function sendPublicIndex(req, res, next) {
   if (req.path.startsWith('/api/')) return next();
   if (ACTIVE_TENANT.publicFeatures?.marketplace === false && /^\/marketplace(?:\/|$)/i.test(req.path)) {
@@ -1495,7 +1547,17 @@ function sendPublicIndex(req, res, next) {
   }
   try {
     res.set('X-makaug-Public-Sanitized', '1');
-    return sendTextResponse(req, res, renderPublicHtml(req.originalUrl || req.url || req.path), {
+    let html = renderPublicHtml(req.originalUrl || req.url || req.path);
+    if (/^\/off-plan\/?$/i.test(req.path)) {
+      html = patchPublicPageSeoMeta(html, {
+        title: 'Off Plan Property and New Developments in Uganda | makaug.com',
+        description: 'Explore verified off-plan projects and new developments in Uganda with unit prices, progress, payment plans, maps and downloadable brochures.',
+        canonical: absolutePublicUrl('/off-plan'),
+        image: absolutePublicUrl('/assets/off-plan/entebbe-victoria-palms/residents-lounge-render.jpg'),
+        structuredData: { '@context': 'https://schema.org', '@type': 'CollectionPage', name: 'Off Plan Property in Uganda', url: absolutePublicUrl('/off-plan') }
+      });
+    }
+    return sendTextResponse(req, res, html, {
       cacheControl: PUBLIC_HTML_CACHE_CONTROL
     });
   } catch (error) {

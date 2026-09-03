@@ -19,6 +19,8 @@ const {
 } = require('../config/languageRegistry');
 
 const INTENTS = [
+  'off_plan_search',
+  'off_plan_listing',
   'property_search',
   'search_near_me',
   'shared_location_search',
@@ -243,6 +245,7 @@ function formatUGX(value) {
 
 function buildIntentLink(intent) {
   const key = normalizeIntent(intent);
+  if (key === 'off_plan_search' || key === 'off_plan_listing') return `${PUBLIC_BASE_URL}/off-plan`;
   if ([
     'property_search',
     'search_near_me',
@@ -324,6 +327,22 @@ function buildLocalizedAssistantFallbackText(languageCode, link) {
   return (copy[code] || copy.en).join('\n');
 }
 
+function buildOffPlanAssistantText(intent) {
+  if (normalizeIntent(intent) === 'off_plan_listing') {
+    return [
+      '*makaug.com* | *Off-plan project received*',
+      'Thanks very much—your request has been received. A team member will contact you.',
+      'Please prepare: project name, location, completion date, brochure, images, construction progress and current sales.',
+      `🔗 ${PUBLIC_BASE_URL}/off-plan`
+    ].join('\n');
+  }
+  return [
+    '*makaug.com* | *Off-plan projects*',
+    'Explore verified new developments, unit prices, construction and sales progress, payment plans, maps and brochures.',
+    `🔗 ${PUBLIC_BASE_URL}/off-plan`
+  ].join('\n');
+}
+
 function looksLikeWrongNearbyLanguage(languageCode, text) {
   const canonical = toCanonicalLanguageCode(languageCode);
   if (!['rkg', 'rnynk'].includes(canonical)) return false;
@@ -384,6 +403,12 @@ function heuristicIntent(text) {
   }
   if (/(login process|log in process|sign in process|account access|cannot log in|can't log in|password|otp|account|sign in|login|saved|profile)/.test(t)) {
     return { intent: 'account_help', confidence: 0.72, entities: {} };
+  }
+  if (/\b(?:off[ -]?plan|new development|property development|housing development)\b/.test(t)) {
+    if (/\b(?:list|register|add|post|submit|upload|advertise|promote|developer|my project|our project)\b/.test(t)) {
+      return { intent: 'off_plan_listing', confidence: 0.91, entities: { listing_type: 'off_plan' } };
+    }
+    return { intent: 'off_plan_search', confidence: 0.88, entities: { listing_type: 'off_plan' } };
   }
   if (/(register agent|agent registration|sign up as (?:an )?agent|sign up as (?:a )?broker|broker signup|broker sign up|become (?:an )?agent|become (?:a )?broker|join as (?:an )?agent|join as (?:a )?broker|area licence|license|lisensi|licence)/.test(t)) {
     return { intent: 'agent_registration', confidence: 0.72, entities: {} };
@@ -1020,6 +1045,7 @@ Return strict JSON only:
     - language: en | lg | sw | ac | ny | rn | sm | am | ar
 }
 Rules:
+- Off-plan search covers users looking for off-plan homes, new developments, launch projects or projects under construction. Off-plan listing must win when a developer, investor or agent wants to list, register, add, advertise or promote an off-plan/new-development project.
 - Property search includes natural requests in any supported language, e.g. "2 bed in Kampala", "Natafuta shamba Mbale", "Noonya enju eya rent".
 - Property search also includes conversational affordability questions such as "what is the cheapest area to stay in?", "what is the cheapest area?", "can I get a house for $2 million?", "houses for 2 million", and equivalents in supported languages.
 - Property listing must win when the user says they want to list, post, upload, submit, add, create, advertise, or sell their own property/listing, including natural seller messages like "I want to sale my house in Rubaga", "am selling my land with a land title" or "hello am selling the land on Entebbe main road", even when the same message says "for sale" or "to rent". Treat common grammar and spelling variants such as "want to sale my house" as seller intent, not buyer search.
@@ -1580,8 +1606,22 @@ async function suggestWhatsappAssistantReply({
 }) {
   const link = buildIntentLink(intent);
   const languageCode = normalizeLanguageCode(language);
-  const fallbackText = buildLocalizedAssistantFallbackText(languageCode, link);
+  const isOffPlanIntent = ['off_plan_search', 'off_plan_listing'].includes(normalizeIntent(intent));
+  const fallbackText = isOffPlanIntent ? buildOffPlanAssistantText(intent) : buildLocalizedAssistantFallbackText(languageCode, link);
   const guardrail = languageGuardrail(languageCode);
+
+  if (isOffPlanIntent) {
+    await logAiModelEvent({
+      eventType: 'assistant_reply',
+      source,
+      inputPayload: { userMessage, intent: normalizeIntent(intent), language: languageCode, context },
+      outputPayload: { text: fallbackText, fallbackUsed: false, fallbackReason: 'verified_off_plan_workflow' },
+      modelName: 'template',
+      language: languageCode,
+      qualityScore: 0.9
+    });
+    return { text: fallbackText, model: 'template', language: languageCode, requestedLanguage: languageCode, responseLanguage: 'en', fallbackUsed: languageCode !== 'en', fallbackReason: languageCode === 'en' ? null : 'off_plan_translation_not_reviewed' };
+  }
 
   const client = getClient(providerScope);
   if (!client || shouldUseEnglishFallback(languageCode)) {

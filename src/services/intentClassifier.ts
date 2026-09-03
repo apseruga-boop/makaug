@@ -2,6 +2,8 @@ import { openai } from '../config/openai';
 import type { TopLevelIntent } from '../types/domain';
 
 const keywordMap: Array<{ intent: TopLevelIntent; keywords: string[] }> = [
+  { intent: 'off_plan_listing', keywords: ['list off plan', 'list off-plan', 'register off plan', 'register off-plan', 'add my development', 'advertise my development', 'promote my development'] },
+  { intent: 'off_plan_search', keywords: ['off plan', 'off-plan', 'new development', 'projects under construction'] },
   { intent: 'property_search', keywords: ['find property', 'search property', 'house', 'rent', 'buy', 'plot', 'looking for'] },
   { intent: 'property_listing', keywords: ['list property', 'post property', 'advertise', 'sell my house', 'i want to list'] },
   { intent: 'agent_search', keywords: ['find agent', 'broker', 'agent near', 'who can help'] },
@@ -33,7 +35,7 @@ export class IntentClassifierService {
           {
             role: 'system',
             content:
-              'Classify the user request into exactly one intent from: property_search, property_listing, agent_search, agent_registration, mortgage_help, account_help, saved_properties, support, report_listing, looking_for_property_lead, unknown. Return JSON {"intent":"..."}.'
+              'Classify the user request into exactly one intent from: off_plan_search, off_plan_listing, property_search, property_listing, agent_search, agent_registration, mortgage_help, account_help, saved_properties, support, report_listing, looking_for_property_lead, unknown. A developer, investor, or agent asking to list/register/add/promote a new development is off_plan_listing. Return JSON {"intent":"..."}.'
           },
           { role: 'user', content: normalized }
         ]

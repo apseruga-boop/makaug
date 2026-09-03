@@ -43,12 +43,13 @@
           <div id="brand-subtitle" class="text-xs text-gray-400 -mt-1">UGANDA PROPERTY</div>
         </div>
       </a>
-      <div class="hidden lg:flex items-center gap-0.5">
+      <div id="desktop-primary-nav" class="hidden xl:flex items-center gap-0.5">
         <a id="nav-sale" href="/for-sale" onclick="showPage('sale')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">For Sale</a>
         <a id="nav-rent" href="/to-rent" onclick="showPage('rent')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">To Rent</a>
         <a id="nav-students" href="/student-accommodation" onclick="showPage('students')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Students</a>
         <a id="nav-commercial" href="/commercial" onclick="showPage('commercial')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Commercial</a>
         <a id="nav-land" href="/land" onclick="showPage('land')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Land</a>
+        <a id="nav-off-plan" href="/off-plan" onclick="showPage('off-plan')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Off Plan</a>
         <a id="nav-brokers" href="/brokers" onclick="showPage('brokers')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Find Brokers</a>
         <a id="nav-mortgage" href="/mortgage" onclick="showPage('mortgage')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Mortgage Finder</a>
         <a id="nav-valuation" href="/valuation" onclick="showPage('valuation')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Property Value</a>
@@ -57,9 +58,9 @@
         <a id="nav-about" href="/about" onclick="showPage('about')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">About Us</a>
       </div>
       <div class="flex items-center gap-2">
-        <button type="button" data-harvest-public-submission onclick="openHarvestSubmissionModal()" class="hidden lg:block border border-green-700 text-green-800 px-3 py-2 rounded-lg text-sm font-semibold hover:bg-green-50">Paste listing link</button>
+        <button type="button" data-harvest-public-submission onclick="openHarvestSubmissionModal()" class="hidden xl:block border border-green-700 text-green-800 px-3 py-2 rounded-lg text-sm font-semibold hover:bg-green-50">Paste listing link</button>
         <a id="nav-list-btn" data-testid="list-property-free-cta" href="/list-property" onclick="handleListPropertyFreeCta(event)" class="hidden md:block bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-green-600">List Property</a>
-        <button id="mob-toggle" class="lg:hidden text-gray-700 p-2" onclick="toggleMobile()"><i class="fas fa-bars text-xl"></i></button>
+        <button id="mob-toggle" class="xl:hidden text-gray-700 p-2" onclick="toggleMobile()"><i class="fas fa-bars text-xl"></i></button>
       </div>
     </div>
     <div id="mobile-menu" class="lg:hidden border-t border-gray-100 flex-col gap-1 px-4 py-3 bg-white">
@@ -68,6 +69,7 @@
       <a id="mnav-students" href="/student-accommodation" onclick="showPage('students');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Students</a>
       <a id="mnav-commercial" href="/commercial" onclick="showPage('commercial');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Commercial</a>
       <a id="mnav-land" href="/land" onclick="showPage('land');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Land</a>
+      <a id="mnav-off-plan" href="/off-plan" onclick="showPage('off-plan');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Off Plan</a>
       <a id="mnav-brokers" href="/brokers" onclick="showPage('brokers');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Find Brokers</a>
       <a id="mnav-mortgage" href="/mortgage" onclick="showPage('mortgage');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Mortgage Finder</a>
       <a id="mnav-valuation" href="/valuation" onclick="showPage('valuation');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Property Value</a>

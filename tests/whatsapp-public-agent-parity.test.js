@@ -45,7 +45,7 @@ assert.doesNotMatch(agentQuerySource, /rating/);
 const keywordSearchSource = sourceBetween(
   whatsappRouteSource,
   'async function findAgentsForWhatsappKeywords(',
-  '\nasync function logPropertySearchRequest('
+  '\nfunction logPropertySearchRequest('
 );
 assert.match(keywordSearchSource, /return queryPublicAgentsForWhatsapp\(/);
 assert.doesNotMatch(keywordSearchSource, /for \(const keyword/);
