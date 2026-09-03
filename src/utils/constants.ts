@@ -19,7 +19,8 @@ export const TOP_LEVEL_MENU = [
   '4. Register as an agent',
   '5. Mortgage Finder',
   '6. My account / saved properties',
-  '7. Help / support'
+  '7. Help / support',
+  '8. Off-plan developments'
 ];
 
 export const GLOBAL_COMMANDS = ['back', 'edit', 'main menu', 'start again', 'change language', 'help'];

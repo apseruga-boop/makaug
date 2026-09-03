@@ -1,6 +1,8 @@
 export type SupportedLanguage = 'en' | 'lg' | 'sw' | 'ac' | 'ny' | 'rn' | 'sm' | 'am' | 'ar';
 
 export type TopLevelIntent =
+  | 'off_plan_search'
+  | 'off_plan_listing'
   | 'property_search'
   | 'property_listing'
   | 'agent_search'

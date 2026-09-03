@@ -60,6 +60,7 @@ const PUBLIC_FORBIDDEN_STRINGS = [
 ];
 
 const PUBLIC_MODAL_IDS = [
+  'off-plan-create-modal',
   'admin-evidence-modal',
   'admin-whatsapp-modal',
   'admin-photo-delete-modal',
@@ -83,6 +84,7 @@ const PUBLIC_PAGE_IDS = [
   'page-students',
   'page-commercial',
   'page-land',
+  'page-off-plan',
   'page-brokers',
   'page-mortgage',
   'page-valuation',
@@ -109,6 +111,7 @@ const PUBLIC_ROUTE_PAGE_MAP = {
   '/student-accommodation': ['page-students'],
   '/commercial': ['page-commercial'],
   '/land': ['page-land'],
+  '/off-plan': ['page-off-plan'],
   '/brokers': ['page-brokers'],
   '/find-brokers': ['page-brokers'],
   '/mortgage': ['page-mortgage'],
@@ -489,6 +492,7 @@ function getPublicPageIdsForRoute(pathname = '/') {
   if (isAuthRoute(pathName)) return [];
   if (SYNTHETIC_PUBLIC_ROUTE_CONTENT[pathName]) return [];
   if (pathName.startsWith('/property/')) return ['page-detail'];
+  if (pathName.startsWith('/off-plan/')) return ['page-off-plan'];
   if (pathName.startsWith('/agents/') || pathName.startsWith('/broker/')) return ['page-broker-profile'];
   const areaPage = Object.entries(PUBLIC_AREA_ROUTE_PAGE_MAP)
     .find(([prefix]) => pathName.startsWith(prefix))?.[1];

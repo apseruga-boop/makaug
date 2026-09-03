@@ -60,7 +60,8 @@ function parseMenuSelection(input: string): TopLevelIntent | null {
     '4': 'agent_registration',
     '5': 'mortgage_help',
     '6': 'account_help',
-    '7': 'support'
+    '7': 'support',
+    '8': 'off_plan_search'
   };
   return map[normalized] ?? null;
 }
@@ -172,6 +173,9 @@ export class ConversationStateMachine {
     }
 
     switch (session.currentIntent) {
+      case 'off_plan_search':
+      case 'off_plan_listing':
+        return this.handleOffPlan(session);
       case 'property_search':
         return this.handlePropertySearch(session, workingInput);
       case 'property_listing':
@@ -294,6 +298,9 @@ export class ConversationStateMachine {
     session.currentIntent = intent;
 
     switch (intent) {
+      case 'off_plan_search':
+      case 'off_plan_listing':
+        return this.handleOffPlan(session);
       case 'property_search':
         session.currentStep = 'search_purpose';
         session.data = {};
@@ -325,6 +332,16 @@ export class ConversationStateMachine {
       default:
         return this.handleSupport(session);
     }
+  }
+
+  private async handleOffPlan(session: SessionState) {
+    const intent = session.currentIntent;
+    session.currentIntent = null;
+    session.currentStep = 'main_menu';
+    const text = intent === 'off_plan_listing'
+      ? '*makaug.com* | *Off-plan project received*\nThanks very much—your request has been received. A team member will contact you.\nPlease prepare: project name, location, completion date, brochure, images, construction progress and current sales.\n' + this.urls.offPlan()
+      : '*makaug.com* | *Off-plan projects*\nExplore verified new developments, unit prices, construction and sales progress, payment plans, maps and brochures.\n' + this.urls.offPlan();
+    return { state: session, replies: [{ text }] };
   }
 
   private async handlePropertySearch(session: SessionState, input: MessageInput) {

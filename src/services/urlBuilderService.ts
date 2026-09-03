@@ -33,6 +33,10 @@ export class UrlBuilderService {
     return `${this.base}/#page-brokers`;
   }
 
+  offPlan(): string {
+    return `${this.base}/off-plan`;
+  }
+
   mortgage(): string {
     return `${this.base}/#page-mortgage`; // existing frontend hash route convention
   }

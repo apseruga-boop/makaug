@@ -666,7 +666,8 @@ test('broker profiles recover when public route fragments removed the profile pa
   assert.match(appSource, /function openBrokerProfileLink\(event, id\)/);
   assert.match(appSource, /function ensureBrokerProfilePageShell\(\)/);
   assert.match(appSource, /function setCanonicalBrokerProfileUrl\(brokerOrId, source = "broker_profile"\)/);
-  assert.match(appSource, /href="\$\{adminAttr\(getBrokerProfilePath\(b\)\)\}"/);
+  assert.match(appSource, /const profilePath = getBrokerProfilePath\(b\);/);
+  assert.match(appSource, /href="\$\{adminAttr\(profilePath\)\}"/);
   assert.match(appSource, /onclick="return openBrokerProfileLink\(event, \$\{adminListingIdArg\(b\.id\)\}\)"/);
   assert.match(appSource, /page\.id = "page-broker-profile"/);
   assert.match(appSource, /id="broker-profile-content"/);

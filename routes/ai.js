@@ -31,6 +31,9 @@ const router = express.Router();
 function normalizeAssistantIntent(value = '') {
   const intent = cleanText(value).toLowerCase();
   const aliases = {
+    search_off_plan: 'off_plan_search',
+    list_off_plan: 'off_plan_listing',
+    list_off_plan_project: 'off_plan_listing',
     property_search: 'search_property',
     apply_filters: 'search_property',
     search_near_me: 'search_property',
@@ -345,6 +348,15 @@ function assistantHasSearchSignal(parsed = {}, searchType = 'any', userMessage =
 
 function inferAssistantIntentFromMessage(userMessage = '', suppliedIntent = 'unknown') {
   const explicitIntent = cleanText(suppliedIntent).toLowerCase();
+  if (['off_plan_search', 'off_plan_listing', 'search_off_plan', 'list_off_plan', 'list_off_plan_project'].includes(explicitIntent)) {
+    return normalizeAssistantIntent(explicitIntent);
+  }
+  const offPlanText = cleanText(userMessage, 1200).toLowerCase();
+  if (/\b(?:off[ -]?plan|new development|property development|housing development)\b/.test(offPlanText)) {
+    return /\b(?:list|register|add|post|submit|upload|advertise|promote|developer|my project|our project)\b/.test(offPlanText)
+      ? 'off_plan_listing'
+      : 'off_plan_search';
+  }
   if (explicitIntent && explicitIntent !== 'unknown') return explicitIntent;
   const text = cleanText(userMessage, 1200);
   if (!text || ASSISTANT_GREETING_ONLY_PATTERN.test(text)) return 'unknown';
@@ -751,7 +763,8 @@ async function recordAssistantBackendTrace(req, { userMessage, intent, language,
     advertiser: 'advertiser',
     human_handoff: 'support',
     support: 'support',
-    property_listing: 'listing_owner'
+    property_listing: 'listing_owner',
+    off_plan_listing: 'listing_owner'
   };
   const leadType = leadTypeByIntent[normalizedIntent];
   if (leadType) {
@@ -1041,14 +1054,18 @@ router.post('/assistant-reply', async (req, res, next) => {
       || sourceKey === 'home_ask_ai_hero'
       || sourceKey === 'discover_ai_chatbot'
       || sourceKey.includes('ask_ai');
-    const effectiveIntent = cleanBarSearchOnly && !isAssistantSearchIntent(requestedIntent)
-      ? inferAssistantIntentFromMessage(userMessage, 'search_property')
-      : inferAssistantIntentFromMessage(userMessage, requestedIntent);
+    const inferredIntent = inferAssistantIntentFromMessage(userMessage, requestedIntent);
+    const effectiveIntent = ['off_plan_search', 'off_plan_listing'].includes(normalizeAssistantIntent(inferredIntent))
+      ? normalizeAssistantIntent(inferredIntent)
+      : cleanBarSearchOnly && !isAssistantSearchIntent(requestedIntent)
+        ? inferAssistantIntentFromMessage(userMessage, 'search_property')
+        : inferredIntent;
     const assistantIsSearch = isAssistantSearchIntent(effectiveIntent);
+    const assistantIsOffPlan = ['off_plan_search', 'off_plan_listing'].includes(normalizeAssistantIntent(effectiveIntent));
     let response = null;
     let searchPayload = null;
 
-    if (!assistantIsSearch && !cleanBarSearchOnly) {
+    if (assistantIsOffPlan || (!assistantIsSearch && !cleanBarSearchOnly)) {
       response = await suggestWhatsappAssistantReply({
         userMessage,
         intent: effectiveIntent,
@@ -1062,7 +1079,7 @@ router.post('/assistant-reply', async (req, res, next) => {
       };
     }
 
-    if (assistantIsSearch || cleanBarSearchOnly) {
+    if (!assistantIsOffPlan && (assistantIsSearch || cleanBarSearchOnly)) {
       const rawIntentType = assistantSearchType(effectiveIntent);
       const useLlmParser = parseBooleanLike(body.use_llm_parser ?? body.force_llm_parser, false);
       const extracted = useLlmParser

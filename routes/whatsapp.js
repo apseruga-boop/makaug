@@ -100,6 +100,12 @@ const {
   hashOwnerEditToken,
   ownerEditTokenExpiry
 } = require('../services/listingModerationService');
+const {
+  createEnquiry: createOffPlanEnquiry,
+  getManagedDevelopment: getManagedOffPlanDevelopment,
+  updateEnquiryDelivery: updateOffPlanEnquiryDelivery
+} = require('../services/offPlanService');
+const { notifyOffPlanEnquiry } = require('../services/offPlanNotificationService');
 
 const router = express.Router();
 const ACTIVE_COUNTRY_CODE = String(process.env.COUNTRY_CODE || 'UG').trim().toUpperCase();
@@ -146,7 +152,7 @@ const WHATSAPP_MIN_LISTING_PHOTOS = 5;
 // Language Translations
 const T = {
   en: {
-    welcome: "🏠 Welcome to *makaug* - Uganda's free property platform!\n\nWhat would you like to do?\n1️⃣ List my property\n2️⃣ Search for a property\n3️⃣ Find an agent\n\nReply with 1, 2, or 3",
+    welcome: "🏠 Welcome to *makaug* - Uganda's free property platform!\n\nWhat would you like to do?\n1️⃣ List my property\n2️⃣ Search for a property\n3️⃣ Find an agent\n4️⃣ Off-plan projects\n\nReply with 1, 2, 3, or 4",
     chooseLanguage: 'Choose your language / ቋንቋዎን ይምረጡ / اختر لغتك:\n1. English\n2. Luganda\n3. Kiswahili\n4. Acholi\n5. Runyankole\n6. Rukiga\n7. Lusoga\n8. Amharic / አማርኛ\n9. Arabic / العربية',
     askListingType: '🏠 What are you listing?\n1️⃣ House/Property for SALE\n2️⃣ House/Property for RENT\n3️⃣ Land/Plot\n4️⃣ Student accommodation\n5️⃣ Commercial property',
     askOwnership: '✅ Are you the owner of this property, or an agent listing on behalf of an owner?\n1️⃣ I am the owner\n2️⃣ I am an agent',
@@ -883,15 +889,15 @@ function welcomeMessage(lang, sessionData = {}) {
   const code = resolveLangCode(lang);
   const lead = timeGreetingWithName(code, sessionData);
   const menus = {
-    en: `Choose what you need:\n1️⃣ List my property\n2️⃣ Search for a property\n3️⃣ Find an agent\n\nYou can also type naturally, like "2 bedroom house in Kampala".`,
-    lg: `Londa ky'oyagala:\n1️⃣ Listing y'ennyumba yo\n2️⃣ Noonya ennyumba\n3️⃣ Funa agent\n\nOsobola n'okuwandika nga "ennyumba e Ntinda".`,
-    sw: `Chagua unachohitaji:\n1️⃣ Orodhesha mali yangu\n2️⃣ Tafuta nyumba/mali\n3️⃣ Tafuta agent\n\nUnaweza pia kuandika kawaida, kama "nyumba ya vyumba 2 Kampala".`,
-    ac: `Yer gin ma imito:\n1️⃣ Ket property mamegi\n2️⃣ Yeny property\n3️⃣ Nong agent\n\nI romo coc ki leb ma yot, calo "ot me rent i Gulu".`,
-    ny: `Toorana eki orikwenda:\n1️⃣ Handiika property yaawe\n2️⃣ Shaka property\n3️⃣ Shaka agent\n\nNoobaasa kuhandiika nk'omuntu arikugamba.`,
-    rn: `Hitamo ico ukeneye:\n1️⃣ Shyira property yaaweho\n2️⃣ Shaka property\n3️⃣ Shaka agent\n\nMushobora kwandika bisanzwe.`,
-    sm: `Londa ky'oyagala:\n1️⃣ Listing y'ennyumba yo\n2️⃣ Noonya ennyumba\n3️⃣ Funa agent\n\nOsobola n'okuwandika nga "ennyumba e Jinja".`,
-    am: `የሚፈልጉትን ይምረጡ:\n1️⃣ ንብረቴን ዘርዝር\n2️⃣ ንብረት ፈልግ\n3️⃣ ወኪል ፈልግ\n\nበተፈጥሮ መጻፍም ይችላሉ፣ ለምሳሌ "2 bedroom house in Kampala".`,
-    ar: `اختر ما تحتاجه:\n1️⃣ أدرج عقاري\n2️⃣ ابحث عن عقار\n3️⃣ ابحث عن وكيل\n\nيمكنك أيضاً الكتابة بشكل طبيعي، مثل "2 bedroom house in Kampala".`
+    en: `Choose what you need:\n1️⃣ List my property\n2️⃣ Search for a property\n3️⃣ Find an agent\n4️⃣ Off-plan projects\n\nYou can also type naturally, like "2 bedroom house in Kampala".`,
+    lg: `Londa ky'oyagala:\n1️⃣ Listing y'ennyumba yo\n2️⃣ Noonya ennyumba\n3️⃣ Funa agent\n4️⃣ Off-plan projects\n\nOsobola n'okuwandika nga "ennyumba e Ntinda".`,
+    sw: `Chagua unachohitaji:\n1️⃣ Orodhesha mali yangu\n2️⃣ Tafuta nyumba/mali\n3️⃣ Tafuta agent\n4️⃣ Off-plan projects\n\nUnaweza pia kuandika kawaida, kama "nyumba ya vyumba 2 Kampala".`,
+    ac: `Yer gin ma imito:\n1️⃣ Ket property mamegi\n2️⃣ Yeny property\n3️⃣ Nong agent\n4️⃣ Off-plan projects\n\nI romo coc ki leb ma yot, calo "ot me rent i Gulu".`,
+    ny: `Toorana eki orikwenda:\n1️⃣ Handiika property yaawe\n2️⃣ Shaka property\n3️⃣ Shaka agent\n4️⃣ Off-plan projects\n\nNoobaasa kuhandiika nk'omuntu arikugamba.`,
+    rn: `Hitamo ico ukeneye:\n1️⃣ Shyira property yaaweho\n2️⃣ Shaka property\n3️⃣ Shaka agent\n4️⃣ Off-plan projects\n\nMushobora kwandika bisanzwe.`,
+    sm: `Londa ky'oyagala:\n1️⃣ Listing y'ennyumba yo\n2️⃣ Noonya ennyumba\n3️⃣ Funa agent\n4️⃣ Off-plan projects\n\nOsobola n'okuwandika nga "ennyumba e Jinja".`,
+    am: `የሚፈልጉትን ይምረጡ:\n1️⃣ ንብረቴን ዘርዝር\n2️⃣ ንብረት ፈልግ\n3️⃣ ወኪል ፈልግ\n4️⃣ Off-plan projects\n\nበተፈጥሮ መጻፍም ይችላሉ፣ ለምሳሌ "2 bedroom house in Kampala".`,
+    ar: `اختر ما تحتاجه:\n1️⃣ أدرج عقاري\n2️⃣ ابحث عن عقار\n3️⃣ ابحث عن وكيل\n4️⃣ Off-plan projects\n\nيمكنك أيضاً الكتابة بشكل طبيعي، مثل "2 bedroom house in Kampala".`
   };
   return `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n\n${menus[code] || menus.en}\n\nBrowse makaug anytime: ${HOME_URL}`;
 }
@@ -9102,6 +9108,7 @@ function formatNoMatchReply(lang, preferredArea = '') {
 
 function intentRouteLabel(route) {
   const labels = {
+    off_plan: 'explore off-plan projects',
     listing_type: 'list a property',
     search_type: 'search for a property',
     agent_area: 'find a broker',
@@ -9115,6 +9122,7 @@ function intentRouteLabel(route) {
 }
 
 function menuRouteReply(lang, route) {
+  if (route === 'off_plan') return { message: offPlanWhatsappReply(false), nextStep: 'main_menu' };
   if (route === 'listing_type') return { message: t(lang, 'askListingType'), nextStep: 'listing_type' };
   if (route === 'search_type') return { message: t(lang, 'askSearchType'), nextStep: 'search_type' };
   if (route === 'agent_area') return { message: t(lang, 'askAgentArea'), nextStep: 'agent_area' };
@@ -9177,8 +9185,8 @@ function isActionableStepReply(step, value = '') {
   const clean = normalizeInput(value).toLowerCase();
   if (!currentStep || !clean || isResumeControlReply(clean)) return false;
 
-  if (currentStep === 'greeting') return ['1', '2', '3'].includes(clean);
-  if (currentStep === 'main_menu') return ['1', '2', '3', '9'].includes(clean);
+  if (currentStep === 'greeting') return ['1', '2', '3', '4'].includes(clean);
+  if (currentStep === 'main_menu') return ['1', '2', '3', '4', '9'].includes(clean);
   if (currentStep === 'choose_language') return /^[1-9]$/.test(clean);
   if (currentStep === 'listing_type') return Boolean(mapListingTypeInput(clean));
   if (currentStep === 'ownership') return Boolean(mapOwnershipInput(clean)) || Boolean(mapListingTypeInput(clean));
@@ -9194,6 +9202,7 @@ function isActionableStepReply(step, value = '') {
 
 function intentMenuRoute(intent) {
   const key = normalizeInput(intent).toLowerCase();
+  if (key === 'off_plan_search' || key === 'off_plan_listing') return 'off_plan';
   if (key === 'property_listing') return 'listing_type';
   if (key === 'property_search' || key === 'looking_for_property_lead') return 'search_type';
   if (key === 'agent_search') return 'agent_area';
@@ -9203,6 +9212,25 @@ function intentMenuRoute(intent) {
   if (key === 'report_listing') return 'report_listing';
   if (key === 'support') return 'support';
   return '';
+}
+
+function isOffPlanRequest(text = '', intent = '') {
+  return ['off_plan_search', 'off_plan_listing'].includes(normalizeInput(intent).toLowerCase())
+    || /\b(?:off[ -]?plan|new development|property development|housing development)\b/i.test(normalizeInput(text));
+}
+
+function isOffPlanListingRequest(text = '', intent = '') {
+  if (normalizeInput(intent).toLowerCase() === 'off_plan_listing') return true;
+  const clean = normalizeInput(text).toLowerCase();
+  return isOffPlanRequest(clean, intent)
+    && /\b(?:list|register|add|post|submit|upload|advertise|promote|developer|my project|our project)\b/i.test(clean);
+}
+
+function offPlanWhatsappReply(listingRequest = false) {
+  if (listingRequest) {
+    return `${whatsappBrandHeader('Off-plan project received')}\nThanks very much—your request has been received. A member of the team will get in touch with you.\n\nPlease prepare:\n• Project name\n• Location\n• Completion date\n• Brochure and project images\n• Current construction progress\n• Current sales and availability\n\nThe team will call you.\n${HOME_URL}/off-plan`;
+  }
+  return `${whatsappBrandHeader('Off-plan projects')}\nExplore verified new developments, homes, payment plans, progress, maps and brochures.\n\n${HOME_URL}/off-plan`;
 }
 
 function contextualPageRouteFromMessage(text = '') {
@@ -9226,6 +9254,7 @@ function contextualPageRouteFromMessage(text = '') {
   const path = normalizeInput(pageMatch?.[1] || '').replace(/^\/+/, '').toLowerCase();
   if (!path) return '';
 
+  if (path.startsWith('off-plan')) return 'off_plan';
   if (path.startsWith('broker-signup') || path.startsWith('agent-signup')) return 'agent_registration';
   if (path.startsWith('login') || path.startsWith('signup') || path.includes('account')) return 'account_help';
   if (path.startsWith('brokers') || path.startsWith('find-brokers') || path.startsWith('agents/')) return 'agent_area';
@@ -9274,6 +9303,27 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
   const compactUpper = normalizeOptKeyword(bodyUpper);
 
   const respond = (msg, nextStep) => ({ message: msg, nextStep });
+  if (isOffPlanRequest(cleanBody, intentResult?.intent)) {
+    const listingRequest = isOffPlanListingRequest(cleanBody, intentResult?.intent);
+    if (listingRequest) {
+      const enquiry = await createOffPlanEnquiry(db, {
+        enquiry_type: 'listing_request',
+        preferred_contact_channel: 'whatsapp',
+        name: normalizeInput(runtime.contactName || draft.public_name || sessionData.display_name || 'WhatsApp customer').slice(0, 180),
+        phone,
+        message: cleanBody || 'I would like to enquire about listing a new off-plan project.',
+        source_path: 'whatsapp_ai_chatbot',
+        external_key: runtime.waMessageId ? `whatsapp:off-plan:${runtime.waMessageId}` : null,
+        metadata: { detected_intent: intentResult?.intent || 'off_plan_listing', language: lang }
+      });
+      deferWhatsappWork('Off-plan enquiry notifications', async () => {
+        const development = enquiry.development_id ? await getManagedOffPlanDevelopment(db, enquiry.development_id) : null;
+        const delivery = await notifyOffPlanEnquiry(enquiry, development);
+        await updateOffPlanEnquiryDelivery(db, enquiry.id, delivery);
+      });
+    }
+    return respond(offPlanWhatsappReply(listingRequest), 'main_menu');
+  }
   const listingStartSteps = ['greeting', 'main_menu', 'search_type', 'search_area', 'agent_area', 'submitted'];
   const explicitListingStart = listingStartSteps.includes(step)
     && isListingStartRequest(cleanBody, intentResult);
@@ -9844,6 +9894,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     if (cleanBody === '1') return respond(t(lang, 'askListingType'), 'listing_type');
     if (cleanBody === '2') return respond(t(lang, 'askSearchType'), 'search_type');
     if (cleanBody === '3') return respond(t(lang, 'askAgentArea'), 'agent_area');
+    if (cleanBody === '4') return respond(offPlanWhatsappReply(false), 'main_menu');
     return respond(`${friendlyGreetingReply(lang, sessionData)}\n\n${t(lang, 'chooseLanguage')}`, 'choose_language');
   }
 
@@ -9910,6 +9961,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     if (cleanBody === '1') return respond(t(lang, 'askListingType'), 'listing_type');
     if (cleanBody === '2') return respond(t(lang, 'askSearchType'), 'search_type');
     if (cleanBody === '3') return respond(t(lang, 'askAgentArea'), 'agent_area');
+    if (cleanBody === '4') return respond(offPlanWhatsappReply(false), 'main_menu');
     if (cleanBody === '9') return respond(t(lang, 'chooseLanguage'), 'choose_language');
 
     if (compactUpper === 'WIDEN' && Number.isFinite(Number(sessionData.search_lat)) && Number.isFinite(Number(sessionData.search_lng))) {
@@ -11498,7 +11550,9 @@ async function processInboundRuntimeUnlocked({
       mediaType: normalizedMediaType,
       mediaCount: inboundMediaCount,
       photoCandidates: inboundPhotoCandidates,
-      transcript: transcriptRecord?.text || null
+      transcript: transcriptRecord?.text || null,
+      waMessageId: inboundMessageId,
+      contactName
     }
   );
 
