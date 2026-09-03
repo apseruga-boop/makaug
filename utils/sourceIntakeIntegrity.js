@@ -40,10 +40,10 @@ const UGANDA_PHONE_CANDIDATE_PATTERN = IS_SOUTH_AFRICA
   ? /(^|[^\d+])((?:\+?27[\s().-]*|0)[6-8](?:[\s().-]*\d){8}|[6-8]\d{8})(?=$|[^\d])/g
   : /(^|[^\d+])((?:\+?256[\s().-]*|0)7\d{2}[\s().-]*\d{3}[\s().-]*\d{3}|7\d{2}[\s().-]*\d{3}[\s().-]*\d{3})(?=$|[^\d])/g;
 const PRICE_CURRENCY_SOURCE = IS_SOUTH_AFRICA ? '(?:zar|r|usd|us\\$|\\$|eur|€|gbp|£)' : '(?:ugx|ush|shs?|usd|us\\$|\\$)';
-const SOURCE_PRICE_EVIDENCE_PATTERN = new RegExp(`(?:\\b${PRICE_CURRENCY_SOURCE}\\s*)?\\d[\\d,.]*(?:\\s*(?:bn|b|billion|billions|m|mn|million|millions|k|thousand|thousands)(?![a-z]))?(?:\\s*${PRICE_CURRENCY_SOURCE})?(?:\\s*(?:\\/\\s*(?:month|mo|m²|sqm)|per\\s+(?:month|m²|square\\s+metre)|monthly))?`, 'gi');
-const SOURCE_PRICE_CONTEXT_PATTERN = new RegExp(`\\b(?:price|asking|guide\\s+price|at|only|going\\s+for|selling\\s+at|rent(?:ed)?\\s+at)\\s*(?:is|of|:|-)?\\s*(${PRICE_CURRENCY_SOURCE}?\\s*\\d[\\d,.]*(?:\\s*(?:bn|b|billion|billions|m|mn|million|millions|k|thousand|thousands))?(?:\\s*${PRICE_CURRENCY_SOURCE})?)`, 'gi');
+const SOURCE_PRICE_EVIDENCE_PATTERN = new RegExp(`(?:\\b${PRICE_CURRENCY_SOURCE}\\s*)?\\d[\\d,.]*(?:\\s+\\d{3})*(?:\\s*(?:bn|b|billion|billions|m|mn|mil|million|millions|k|thousand|thousands)(?![a-z]))?(?:\\s*${PRICE_CURRENCY_SOURCE})?(?:\\s*(?:\\/\\s*(?:month|mo|m²|sqm)|per\\s+(?:month|m²|square\\s+metre)|monthly))?`, 'gi');
+const SOURCE_PRICE_CONTEXT_PATTERN = new RegExp(`\\b(?:price|asking|guide\\s+price|offers?\\s+from|from|at|only|going\\s+for|selling\\s+at|rent(?:ed)?\\s+at)\\s*(?:is|of|:|-)?\\s*(${PRICE_CURRENCY_SOURCE}?\\s*\\d[\\d,.]*(?:\\s+\\d{3})*(?:\\s*(?:bn|b|billion|billions|m|mn|mil|million|millions|k|thousand|thousands))?(?:\\s*${PRICE_CURRENCY_SOURCE})?)`, 'gi');
 const SOURCE_PRICE_MAX_RELATIVE_DRIFT = 0.001;
-const CONSTRUCTION_MONEY_TOKEN_SOURCE = `(?:${PRICE_CURRENCY_SOURCE}\\s*)?\\d[\\d,.]*(?:\\s*(?:bn|b|billion|billions|m|mn|million|millions|k|thousand|thousands))?`;
+const CONSTRUCTION_MONEY_TOKEN_SOURCE = `(?:${PRICE_CURRENCY_SOURCE}\\s*)?\\d[\\d,.]*(?:\\s+\\d{3})*(?:\\s*(?:bn|b|billion|billions|m|mn|mil|million|millions|k|thousand|thousands))?`;
 
 function compactText(value = '') {
   return String(value || '').replace(/\s+/g, ' ').trim();
@@ -141,7 +141,7 @@ function sourcePriceEvidenceAmounts(text = '') {
   const candidates = [];
   for (const match of masked.matchAll(SOURCE_PRICE_EVIDENCE_PATTERN)) {
     const token = compactText(match[0]);
-    if (!token || !/(?:zar|\br\s*\d|ugx|ush|shs?|usd|us\$|\$|eur|€|gbp|£|bn|b|billion|m(?:n|illion)?|k|thousand|\/\s*(?:month|mo|m²|sqm)|per\s+(?:month|m²|square\s+metre)|monthly)/i.test(token)) continue;
+    if (!token || !/(?:zar|\br\s*\d|ugx|ush|shs?|usd|us\$|\$|eur|€|gbp|£|bn|b|billion|m(?:n|il|illion)?|k|thousand|\/\s*(?:month|mo|m²|sqm)|per\s+(?:month|m²|square\s+metre)|monthly)/i.test(token)) continue;
     const amount = sourcePriceAmount(token);
     if (Number.isFinite(amount) && amount > 0) candidates.push(amount);
   }

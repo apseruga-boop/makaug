@@ -54,6 +54,7 @@ const {
   deriveListingClassification,
   listingDataIntegrityReport,
 } = require('../utils/listingDataIntegrity');
+const { evaluateSouthAfricaAutoPublish } = require('./southAfricaAutoPublishPolicyService');
 
 const ACTIVE_COUNTRY_CODE = String(process.env.COUNTRY_CODE || 'UG').trim().toUpperCase();
 const IS_SOUTH_AFRICA = ACTIVE_COUNTRY_CODE === 'ZA';
@@ -97,12 +98,17 @@ const PREAPPROVED_PERMISSION_STATUSES = [
   'agent_preapproved',
   'owner_agent_preapproved',
 ];
-const PUBLIC_SOURCE_CONTACT_POLICY = 'No public phone number is not a blocker when a public social profile or platform message route exists; makaug shows Contact via social source until the agent adds a direct number. Website-only source/contact routes are not accepted for found-online launch inventory.';
+const LAUNCH_REVIEW_CAPTURE_DEFAULTS = Object.freeze({ capture_mode: 'launch_review_first' });
+const PUBLIC_SOURCE_CONTACT_POLICY = IS_SOUTH_AFRICA
+  ? 'Private-seller phone numbers and email addresses are never exposed publicly; enquiries must be relayed through seshaikhaya. Agent listings may use an approved public business route. Website-only source/contact routes are not accepted for found-online launch inventory.'
+  : 'No public phone number is not a blocker when a public social profile or platform message route exists; makaug shows Contact via social source until the agent adds a direct number. Website-only source/contact routes are not accepted for found-online launch inventory.';
 const FOUND_ONLINE_LAUNCH_INTAKE_POLICY = {
   source_window_start: LAUNCH_SOURCE_POST_WINDOW_START,
   target_source_year: 2026,
-  queue_rule: 'Always-on harvest mode: queue every supported public social property post from 1 January 2026 onward into review, regardless of poster type. Missing phone, media, price, exact pin, or a recognized location spelling are review notes, not capture blockers. Manually supplied exact social-post URLs may also enter King review when older, but must identify a specific property and carry an availability/date warning. Unknown locations stay pending for staff verification; explicit foreign listings are classified separately. Original-poster comments are optional. Website-only sources are ignored. Nothing harvested publishes automatically.',
-  image_rule: 'Found-online/social imports are public discovery results: do not rehost downloaded TikTok, Facebook, Instagram, YouTube, X, LinkedIn, WhatsApp, or website photos/videos as makaug gallery assets unless the rights holder has explicitly supplied or approved them. Public pages should show source links or official embeds first, then makaug rewritten facts and disclosures.',
+  queue_rule: IS_SOUTH_AFRICA
+    ? 'South Africa scale imports are captured behind disabled launch flags. When explicitly enabled after the audited pilot, complete and unambiguous rows may auto-publish under the confidence policy; every uncertain or risky row remains in human review. Unknown locations stay pending and explicit foreign listings are rejected.'
+    : 'Always-on harvest mode: queue every supported public social property post from 1 January 2026 onward into review, regardless of poster type. Missing phone, media, price, exact pin, or a recognized location spelling are review notes, not capture blockers. Manually supplied exact social-post URLs may also enter King review when older, but must identify a specific property and carry an availability/date warning. Unknown locations stay pending for staff verification; explicit foreign listings are classified separately. Original-poster comments are optional. Website-only sources are ignored. Nothing harvested publishes automatically.',
+  image_rule: `Found-online/social imports are public discovery results: do not rehost downloaded TikTok, Facebook, Instagram, YouTube, X, LinkedIn, WhatsApp, or website photos/videos as ${TARGET_BRAND_NAME} gallery assets unless the rights holder has explicitly supplied or approved them. Public pages should show source links or official embeds first, then ${TARGET_BRAND_NAME} rewritten facts and disclosures.`,
   facebook_image_rule: 'For Facebook, store the exact public post URL as source evidence. Do not scrape or rehost Meta media without permission or an approved Meta tool/feed; link back to the source and ask the source/agent for authorised images before using photos publicly. Location must still be present before approval.',
   platform_scope: ['YouTube', 'TikTok', 'Instagram', 'Facebook', 'X/Twitter'],
 };
@@ -692,8 +698,8 @@ function explicitSourcePriceTextsFromEvidence(text = '') {
   const sourceText = maskConstructionCostsForPriceExtraction(compactText(text));
   const patterns = IS_SOUTH_AFRICA
     ? [
-      /(?:\b(?:ZAR|R|USD|US\$|EUR|GBP)\s*|[R$€£]\s*)\d[\d,.]*(?:\s*(?:bn|b|billion|billions|m|mn|million|millions|k|thousand|thousands))?(?:\s*(?:ZAR|USD|EUR|GBP))?/gi,
-      /\b\d+(?:\.\d+)?\s*(?:bn|b|billion|billions|m|mn|million|millions|k|thousand|thousands)\b(?:\s*(?:ZAR|R))?/gi
+      /(?:\b(?:ZAR|R|USD|US\$|EUR|GBP)\s*|[R$€£]\s*)\d[\d,.]*(?:\s+\d{3})*(?:\s*(?:bn|b|billion|billions|m|mn|mil|million|millions|k|thousand|thousands))?(?:\s*(?:ZAR|USD|EUR|GBP))?/gi,
+      /\b\d+(?:\.\d+)?\s*(?:bn|b|billion|billions|m|mn|mil|million|millions|k|thousand|thousands)\b(?:\s*(?:ZAR|R))?/gi
     ]
     : [
       /(?:\b(?:UGX|USh|Shs?|USD|US\$)\s*|\$\s*)\d[\d,.]*(?:\s*(?:bn|b|billion|billions|m|mn|million|millions|k|thousand|thousands))?(?:\s*(?:UGX|USh|Shs?))?/gi,
@@ -720,6 +726,30 @@ function strongestSourcePriceCandidate(raw = {}, sourceText = '') {
     if (safe.value != null && safe.value !== '') return safe;
   }
   return safeSourcePriceCandidate(candidates[0] ?? null, sourceText);
+}
+
+const SOUTH_AFRICA_EXPLICIT_POA_PATTERN = /\b(?:poa|price\s+(?:on|upon)\s+application|price\s+on\s+request)\b/i;
+const SOUTH_AFRICA_PRIVATE_SELLER_PATTERN = /\b(?:selling\s+my\s+house|no\s+(?:estate\s+)?agents?|private\s+sale|owner\s+selling|direct\s+from\s+owner|no\s+commission|cash\s+buyers?\s+only|urgent\s+sale|relocating\s*,?\s+must\s+sell|deceased\s+estate|divorce\s+sale|(?:bank\s+)?repossessed|privaat\s+verkoop|geen\s+agente|huis\s+te\s+koop\s+deur\s+eienaar|dringend\s+te\s+koop|geen\s+kommissie|indlu\s+iyathengiswa|ndithengisa\s+indlu\s+yam|#(?:nocommission|privatesale|sellingmyhouse|fsbo|huistekoop))\b/i;
+const SOUTH_AFRICA_AGENT_SELLER_PATTERN = /\b(?:estate\s+agent|property\s+practitioner|real\s+estate\s+agency|mandate|fidelity\s+fund\s+certificate|registered\s+agent|realtor)\b/i;
+
+function southAfricaPrivateSellerDetection(raw = {}, sourceText = '') {
+  if (!IS_SOUTH_AFRICA) return { private_seller: false, track: 'agent', confidence: 'not_applicable', signals: [] };
+  const explicitTrack = String(raw.source_track || raw.seller_track || raw.track || '').trim().toLowerCase();
+  const explicitListerType = String(raw.lister_type || raw.listerType || raw.seller_type || '').trim().toLowerCase();
+  const text = compactText(sourceText);
+  const privateMatch = text.match(SOUTH_AFRICA_PRIVATE_SELLER_PATTERN)?.[0] || '';
+  const agentMatch = text.match(SOUTH_AFRICA_AGENT_SELLER_PATTERN)?.[0] || '';
+  const explicitlyPrivate = ['fsbo', 'private', 'private_seller', 'owner'].includes(explicitTrack)
+    || ['owner', 'private', 'private_seller'].includes(explicitListerType);
+  const explicitlyAgent = ['agent', 'agency', 'branch'].includes(explicitTrack)
+    || ['agent', 'broker'].includes(explicitListerType);
+  const privateSeller = (explicitlyPrivate || Boolean(privateMatch)) && !explicitlyAgent && !agentMatch;
+  return {
+    private_seller: privateSeller,
+    track: privateSeller ? 'fsbo' : 'agent',
+    confidence: explicitlyPrivate || explicitlyAgent ? 'declared' : (privateMatch || agentMatch ? 'phrase_match' : 'default_agent_track'),
+    signals: [privateMatch, agentMatch].filter(Boolean),
+  };
 }
 
 function itemBatchId(item = {}) {
@@ -1003,7 +1033,10 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
   const allowedSocialSource = itemHasAllowedSocialSource(item, agent);
   const locationQuality = sourceLocationQualityForItem(item, agent);
   const hasPrice = hasPublishedPriceOrGuidePrice(item);
-  const priceUponApplication = !hasPrice;
+  const priceUponApplication = IS_SOUTH_AFRICA
+    ? item.priceOnApplication === true || item.price_on_application === true
+    : !hasPrice;
+  const completePrice = hasPrice || priceUponApplication;
   const imageRows = sourceImageRowsFor(item);
   const hasDirectContact = Boolean(String(agent.phone || agent.phoneAlt || agent.email || item.phone || item.phoneAlt || item.email || '').trim());
   const hasContact = hasAnyPublicContactPath(agent, item);
@@ -1019,7 +1052,9 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
     price_original_currency: item.priceOriginalCurrency || item.price_original_currency,
     price_original: item.priceOriginal ?? item.price_original,
     price_fx_rate_ugx: item.priceFxRateUgx ?? item.price_fx_rate_ugx,
-    price_on_application: !hasPublishedPriceOrGuidePrice(item),
+    price_on_application: IS_SOUTH_AFRICA
+      ? (item.priceOnApplication === true || item.price_on_application === true)
+      : !hasPublishedPriceOrGuidePrice(item),
     lister_phone: agent.phone || agent.phoneAlt || item.phone || '',
     source_contact_url: sourceContactUrlForAgent(agent, item),
     source_url: sourceUrlForItem(item),
@@ -1039,6 +1074,17 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
   const positiveGateHardBlocked = positiveListingGate.reason === 'not_a_listing'
     || positiveListingGate.reason === NON_TARGET_LOCATION_REASON;
   const integrityHardBlocked = dataIntegrity.issue_codes.includes('unsupported_hospitality_or_nightly');
+  const strictSouthAfricaParserGate = IS_SOUTH_AFRICA && item.importedFromSourcePost === true;
+  const canonicalLocationLevel = String(item.canonicalLocationLevel || item.canonical_location_level || '').toLowerCase();
+  const completeLocation = Boolean(
+    (item.canonicalLocationId || item.canonical_location_id)
+      && ['city', 'suburb'].includes(canonicalLocationLevel)
+      && locationQuality.ok
+  );
+  const completeClassification = dataIntegrity.classification?.confidence === 'strong'
+    && !dataIntegrity.issue_codes.includes('category_ambiguous')
+    && !dataIntegrity.issue_codes.includes('category_conflicts_with_source_evidence');
+  const strictParserComplete = completePrice && completeLocation && completeClassification;
   const manualExactSocialIntake = isManualExactSocialIntake(item);
   const specificPropertySignal = hasSpecificPropertySignal(item);
   const pureHashtagJunk = isPureHashtagSourceJunk(item);
@@ -1058,6 +1104,7 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
       && !integrityHardBlocked
       && !pureHashtagJunk
       && manualExactPasses
+      && (!strictSouthAfricaParserGate || strictParserComplete)
   );
   const blockingReasons = [
     !hasSource ? 'missing_exact_source_url' : '',
@@ -1071,12 +1118,19 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
     positiveGateHardBlocked ? (positiveListingGate.reason || 'not_a_listing') : '',
     integrityHardBlocked ? 'unsupported_hospitality_or_nightly' : '',
     pureHashtagJunk ? 'pure_hashtag_source_junk' : '',
+    strictSouthAfricaParserGate && !completePrice ? 'missing_price_or_explicit_poa' : '',
+    strictSouthAfricaParserGate && !completeLocation ? 'missing_city_or_suburb_canonical_location' : '',
+    strictSouthAfricaParserGate && !completeClassification ? 'category_not_confident' : '',
   ].filter(Boolean);
   return {
     eligible: captureToReview,
     blocking_reasons: blockingReasons,
-    capture_mode: 'launch_review_first',
-    capture_rule: `supported social property posts go to review even when phone, media, or exact ${TARGET_COUNTRY_NAME} location needs human confirmation; only explicit foreign evidence is location-rejected`,
+    capture_mode: strictSouthAfricaParserGate
+      ? 'south_africa_parser_complete_only'
+      : LAUNCH_REVIEW_CAPTURE_DEFAULTS.capture_mode,
+    capture_rule: strictSouthAfricaParserGate
+      ? 'South Africa source posts reach the queue only with a numeric price or explicit POA, a canonical city/suburb, and a confident category.'
+      : `supported social property posts go to review even when phone, media, or exact ${TARGET_COUNTRY_NAME} location needs human confirmation; only explicit foreign evidence is location-rejected`,
     has_source_url: hasSource,
     allowed_social_source: allowedSocialSource,
     country_gate_passed: countryGate.allowed !== false,
@@ -1092,7 +1146,7 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
     district_only_location: locationQuality.status === 'district_only_location',
     has_price_or_guide_price: hasPrice,
     price_upon_application: priceUponApplication,
-    price_status: hasPrice ? 'published_price_or_guide_price' : 'price_upon_application',
+    price_status: hasPrice ? 'published_price_or_guide_price' : (priceUponApplication ? 'explicit_price_on_application' : 'missing_price'),
     price_label: sourcePriceLabelFor(item),
     has_contact_path: hasContact,
     has_image_or_source_evidence: hasImageOrEvidence,
@@ -1131,11 +1185,23 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
     data_integrity: dataIntegrity,
     data_integrity_hard_blocked: integrityHardBlocked,
     pure_hashtag_source_junk: pureHashtagJunk,
+    strict_parser_gate: strictSouthAfricaParserGate,
+    parsed_complete: strictParserComplete,
+    complete_price: completePrice,
+    complete_location: completeLocation,
+    complete_classification: completeClassification,
   };
 }
 
 function sourceReviewReasonForIntake(intake = {}) {
   if (intake.suppressed_source_url) return 'skipped_suppressed';
+  if (intake.strict_parser_gate && !intake.parsed_complete) {
+    return (intake.blocking_reasons || []).find((reason) => [
+      'missing_price_or_explicit_poa',
+      'missing_city_or_suburb_canonical_location',
+      'category_not_confident',
+    ].includes(reason)) || 'south_africa_parser_incomplete';
+  }
   if (intake.country_gate_passed === false) return NON_TARGET_LOCATION_REASON;
   if (intake.source_quality_suppressed && /^low_signal_/i.test(String(intake.source_quality_reason || ''))) {
     return 'low_signal_source_location';
@@ -1148,6 +1214,18 @@ function sourceReviewReasonForIntake(intake = {}) {
     return 'low_signal_source_location';
   }
   return 'missing_2026_launch_intake_evidence';
+}
+
+function sourceReviewRecordRequiresHumanReview(record = {}) {
+  const intake = record.intake || {};
+  if (!IS_SOUTH_AFRICA) return true;
+  if (intake.country_gate_passed === false || intake.website_source_blocked || intake.suppressed_source_url) return false;
+  if (intake.positive_listing_gate_hard_blocked || intake.data_integrity_hard_blocked) return false;
+  return Boolean(
+    (intake.strict_parser_gate && !intake.parsed_complete)
+      || intake.pure_hashtag_source_junk
+      || record.reason === 'low_signal_source_location'
+  );
 }
 
 function youtubeConfidenceReviewForItem(item = {}) {
@@ -1205,7 +1283,27 @@ function sourcePostIsYouTubeApiPost(item = {}, agent = sourceAgentForItem(item))
   );
 }
 
-function sourcePostAutoLiveStatusFor(item = {}, agent = sourceAgentForItem(item)) {
+function sourcePostAutoLiveStatusFor(item = {}, agent = sourceAgentForItem(item), options = {}) {
+  if (IS_SOUTH_AFRICA) {
+    const intake = options.intake || sourcePostMeetsLaunchIntakeRule(item, agent);
+    const policy = evaluateSouthAfricaAutoPublish(item, {
+      intake,
+      dedupePassed: options.dedupePassed === true,
+    });
+    return {
+      ...policy,
+      status: policy.approved ? 'approved' : 'pending',
+      moderation_stage: policy.approved ? 'auto_published' : (policy.eligible ? 'auto_publish_hold' : 'source_review'),
+      ready_for_human_review: !policy.eligible,
+      source_is_hashtag: sourceJobIsHashtag(sourceJobForItem(item), item),
+      source_is_youtube_api: sourcePostIsYouTubeApiPost(item, agent),
+      review_status: policy.eligible ? 'auto_publish_eligible' : 'human_review_required',
+      review_score: null,
+      phone_status: '',
+      location_status: policy.checks.location.exact ? 'exact_canonical_location' : 'location_review_required',
+      date_status: sourceDateStatusFor(item),
+    };
+  }
   const review = youtubeConfidenceReviewForItem(item) || {};
   const job = sourceJobForItem(item);
   const sourceIsHashtag = sourceJobIsHashtag(job, item);
@@ -1854,7 +1952,9 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
     source_video_count: item.source_video_count || item.source_post_count || item.videoCount || item.postCount || '',
     source_video_count_label: item.source_video_count_label || item.source_post_count_label || item.postingVolumeLabel || '',
     price_label: sourcePriceLabelFor(item),
-    price_upon_application: !hasPublishedPriceOrGuidePrice(item),
+    price_upon_application: IS_SOUTH_AFRICA
+      ? (item.priceOnApplication === true || item.price_on_application === true)
+      : !hasPublishedPriceOrGuidePrice(item),
     contact_phone: agent.phone || agent.phoneAlt || item.contactPhone || item.phone || '',
     email: agent.email || item.email || '',
     raw_source_post: item.raw_source_post || item.rawSourcePost || {}
@@ -1878,6 +1978,13 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
     source_price_rejection_reason: item.sourcePriceRejectionReason || item.source_price_rejection_reason || null,
     source_platform: sourcePlatform,
     source_type: item.sourceType || item.source_type || 'found_online_source_post',
+    source_track: item.sellerTrack || item.seller_track || (item.privateSeller ? 'fsbo' : 'agent'),
+    private_seller: item.privateSeller === true || item.private_seller === true,
+    no_agent_commission_claim: item.privateSeller === true || item.private_seller === true,
+    private_seller_badge: item.privateSeller === true || item.private_seller === true
+      ? 'Private seller — no agent commission'
+      : null,
+    private_seller_detection: item.privateSellerDetection || item.private_seller_detection || null,
     transaction_type: item.transactionType || item.transaction_type || null,
     commercial_type: item.listingType === 'commercial' ? (item.subtype || null) : null,
     commercial_classification_warning: commercialMisclassificationWarning({
@@ -1908,7 +2015,7 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
     older_exact_source_requires_availability_review: olderExactSourceRequiresAvailabilityReview,
     original_poster_comment_required: false,
     first_seen_online_at: SOCIAL_SEARCH_FIRST_SEEN_AT,
-    first_seen_online_label: 'First picked up by makaug source watch on 20 May 2026',
+    first_seen_online_label: `First picked up by ${TARGET_BRAND_NAME} source watch on 20 May 2026`,
     first_posted_online_at: sourcePublishedAt || null,
     source_published_at: sourcePublishedAt || null,
     video_published_at: sourcePublishedAt || null,
@@ -1926,6 +2033,11 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
     youtube_location_status: youtubeConfidenceReview?.location_status || '',
     youtube_category_status: youtubeConfidenceReview?.category_status || '',
     auto_live_source_import: autoLive.approved,
+    auto_publish_eligible: autoLive.eligible === true,
+    auto_publish_enabled: autoLive.enabled === true,
+    auto_publish_blockers: autoLive.blockers || [],
+    auto_publish_checks: autoLive.checks || null,
+    auto_publish_target_rate: autoLive.target_auto_publish_rate ?? null,
     auto_live_policy: autoLive.policy,
     auto_live_reason: autoLive.reason,
     auto_live_review_status: autoLive.review_status,
@@ -1933,7 +2045,7 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
     auto_live_source_is_hashtag: autoLive.source_is_hashtag,
     auto_live_source_is_youtube_api: autoLive.source_is_youtube_api,
     added_to_makaug_at: SOCIAL_SEARCH_ADDED_TO_MAKAUG_AT,
-    added_to_makaug_label: 'Added to makaug source review on 20 May 2026',
+    added_to_makaug_label: `Added to ${TARGET_BRAND_NAME} source review on 20 May 2026`,
     source_followers_label: agent.audienceLabel || 'Audience count to confirm from source',
     source_audience_label: agent.audienceLabel || 'Audience count to confirm from source',
     source_contact_url: sourceContactUrl,
@@ -1961,9 +2073,13 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
     price_conversion_basis: (item.priceOriginalCurrency || item.price_original_currency) === 'USD'
       ? `Original public USD guide converted to canonical ${CANONICAL_PROPERTY_CURRENCY} for search and sorting.`
       : `Original public ${CANONICAL_PROPERTY_CURRENCY} guide stored without conversion.`,
-    price_upon_application: !hasPublishedPriceOrGuidePrice(item),
-    price_status: hasPublishedPriceOrGuidePrice(item) ? 'published_price_or_guide_price' : 'price_upon_application',
-    source_price_policy: `If the public social source does not publish a price, ${TARGET_BRAND_NAME} shows Price on application and King confirms the price during review/follow-up.`,
+    price_upon_application: item.priceOnApplication === true || (!IS_SOUTH_AFRICA && !hasPublishedPriceOrGuidePrice(item)),
+    price_status: hasPublishedPriceOrGuidePrice(item)
+      ? 'published_price_or_guide_price'
+      : (item.priceOnApplication === true ? 'explicit_price_on_application' : 'missing_price'),
+    source_price_policy: IS_SOUTH_AFRICA
+      ? 'South Africa imports require a numeric source price or explicit POA before queue insertion.'
+      : `If the public social source does not publish a price, ${TARGET_BRAND_NAME} shows Price on application and King confirms the price during review/follow-up.`,
     source_quality_review: sourceQualityReviewForItem(item, agent),
     source_positive_listing_gate: positiveListingGate,
     source_positive_listing_gate_passed: positiveListingGate.ok === true,
@@ -1990,9 +2106,9 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
     minimum_reliable_image_count: 1,
     owner_or_agent_name: agent.name,
     public_display_name: agent.name,
-    lister_registration_status: 'registered',
-    broker_agent_id: agentId,
-    broker_submission: true,
+    lister_registration_status: item.privateSeller === true ? 'private_seller_source_review' : 'registered',
+    broker_agent_id: item.privateSeller === true ? null : agentId,
+    broker_submission: item.privateSeller !== true,
     contact_source_status: 'public_source_contact_route_available',
     contact_phone_alt: agent.phoneAlt || '',
     website: agent.website || '',
@@ -2058,6 +2174,7 @@ function buildSocialSearchListing(item, agentId = null) {
     ? (campusByCoords?.name || nearestUniversityForSourceItem({ ...item, listingType: originalListingType }))
     : '';
   const studentListing = explicitlyStudent;
+  const privateSeller = IS_SOUTH_AFRICA && (item.privateSeller === true || item.private_seller === true);
   const listingType = studentListing ? 'students' : originalListingType;
   const pricePeriod = normalizeListingPricePeriod(item.price_period || item.pricePeriod, {
     listingType,
@@ -2093,8 +2210,10 @@ function buildSocialSearchListing(item, agentId = null) {
     ...item,
     listing_type: listingType
   });
-  if (listingType === 'commercial' && (!transactionType || !propertyType)) {
+  if (IS_SOUTH_AFRICA && listingType === 'commercial' && (!transactionType || !propertyType)) {
     autoLive.approved = false;
+    autoLive.eligible = false;
+    autoLive.blockers = [...new Set([...(autoLive.blockers || []), 'commercial_classification_incomplete'])];
     autoLive.status = 'pending';
     autoLive.moderation_stage = 'source_review';
     autoLive.reason = 'Commercial transaction and subtype need staff confirmation before publication.';
@@ -2116,8 +2235,10 @@ function buildSocialSearchListing(item, agentId = null) {
   }, {
     requireSourcePriceEvidence: true
   });
-  if (!priceQuality.ok) {
+  if (IS_SOUTH_AFRICA && !priceQuality.ok) {
     autoLive.approved = false;
+    autoLive.eligible = false;
+    autoLive.blockers = [...new Set([...(autoLive.blockers || []), 'price_evidence_review_required'])];
     autoLive.status = 'pending';
     autoLive.moderation_stage = 'source_review';
     autoLive.reason = `Price evidence needs staff review: ${priceQuality.reasons.join(', ')}.`;
@@ -2131,14 +2252,16 @@ function buildSocialSearchListing(item, agentId = null) {
     price_original_currency: item.priceOriginalCurrency || item.price_original_currency || CANONICAL_PROPERTY_CURRENCY,
     price_original: item.priceOriginal ?? item.price_original ?? item.price ?? null,
     price_fx_rate_ugx: item.priceFxRateUgx ?? item.price_fx_rate_ugx ?? null,
-    price_on_application: !hasPublishedPriceOrGuidePrice(item),
+    price_on_application: item.priceOnApplication === true || (!IS_SOUTH_AFRICA && !hasPublishedPriceOrGuidePrice(item)),
     lister_phone: agent.phone || agent.phoneAlt || '',
     source_contact_url: sourceContactUrlForAgent(agent, item),
     source_url: sourceUrlForItem(item),
     extra_fields: item.raw_source_post || item.rawSourcePost || {},
   }, { requireCompleteEvidence: true });
-  if (!dataIntegrity.ok) {
+  if (IS_SOUTH_AFRICA && !dataIntegrity.ok) {
     autoLive.approved = false;
+    autoLive.eligible = false;
+    autoLive.blockers = [...new Set([...(autoLive.blockers || []), 'data_integrity_review_required'])];
     autoLive.status = 'pending';
     autoLive.moderation_stage = 'source_review';
     autoLive.reason = `Data integrity review required: ${dataIntegrity.issue_codes.join(', ')}.`;
@@ -2153,14 +2276,14 @@ function buildSocialSearchListing(item, agentId = null) {
     district: item.district,
     area: item.area,
     address: item.address,
-    price: Number(item.price || 0) > 0 ? item.price : null,
+    price: Number(item.price || 0) > 0 ? item.price : (item.priceOnApplication === true ? 0 : null),
     price_currency: item.priceCurrency || item.price_currency || CANONICAL_PROPERTY_CURRENCY,
     price_original_currency: item.priceOriginalCurrency || item.price_original_currency || CANONICAL_PROPERTY_CURRENCY,
     price_original: item.priceOriginal ?? item.price_original ?? item.price ?? null,
     price_fx_rate_ugx: item.priceFxRateUgx ?? item.price_fx_rate_ugx ?? null,
     price_fx_as_of: item.priceFxAsOf || item.price_fx_as_of || null,
     price_period: pricePeriod || (transactionType === 'rent' ? 'month' : 'once'),
-    price_on_application: !hasPublishedPriceOrGuidePrice(item),
+    price_on_application: item.priceOnApplication === true || (!IS_SOUTH_AFRICA && !hasPublishedPriceOrGuidePrice(item)),
     bedrooms: item.beds,
     bathrooms: item.baths,
     property_type: propertyType || null,
@@ -2196,18 +2319,20 @@ function buildSocialSearchListing(item, agentId = null) {
       price_quality: priceQuality,
       data_integrity_review: dataIntegrity
     }),
-    lister_name: agent.name || 'Found-online Source Desk',
+    lister_name: agent.name || (privateSeller ? 'Private seller' : 'Found-online Source Desk'),
     lister_phone: agent.phone || null,
     lister_email: agent.email || null,
-    lister_type: 'agent',
-    agent_id: agentId,
+    lister_type: privateSeller ? 'owner' : 'agent',
+    agent_id: privateSeller ? null : agentId,
     source: SOCIAL_SEARCH_SOURCE,
     listed_via: 'found_online',
-    status: 'pending',
-    moderation_stage: 'submitted',
-    reviewed_at: null,
-    moderation_notes: `${item.importedFromSourcePost ? 'FOUND-ONLINE SOURCE POST IMPORT' : 'SOCIAL SEARCH LISTING'}. Public source inventory from ${agent.name || 'source'}. Source post: ${sourceUrlForItem(item)}. ${manualOlderExactSource ? 'This manually supplied exact source post predates 2026; confirm current availability, location, and price or Price upon application before approval.' : 'Confirm source date, location, availability, category, contact route, and price or Price upon application before approval.'} Harvesting is review-only and cannot publish this listing. Original-poster comments are optional supporting evidence.${classificationWarning ? ` ${classificationWarning}` : ''} Batch: ${itemBatchId(item)}.`,
-    moderation_reason: `Pending King review of public found-online source, exact pin, latest availability, price, and image/source evidence. ${autoLive.reason}`,
+    status: autoLive.status,
+    moderation_stage: autoLive.moderation_stage,
+    reviewed_at: autoLive.approved ? new Date() : null,
+    moderation_notes: `${item.importedFromSourcePost ? 'FOUND-ONLINE SOURCE POST IMPORT' : 'SOCIAL SEARCH LISTING'}. Public source inventory from ${agent.name || 'source'}. Source post: ${sourceUrlForItem(item)}. ${manualOlderExactSource ? 'This manually supplied exact source post predates 2026; confirm current availability, location, and price before approval.' : autoLive.approved ? 'The ZA confidence policy passed every required publication check; the automated decision is audit-logged.' : autoLive.eligible ? 'Every confidence check passed, but automatic publication remains held behind the disabled rollout flag.' : 'Confirm each failed confidence check in King review before approval.'} Original-poster comments are optional supporting evidence.${classificationWarning ? ` ${classificationWarning}` : ''} Batch: ${itemBatchId(item)}.`,
+    moderation_reason: autoLive.approved
+      ? `Automatically published by ${autoLive.policy}. ${autoLive.reason}`
+      : `${autoLive.eligible ? 'Automatic publication held by rollout flag.' : 'Pending King review.'} ${autoLive.reason}`,
     images: listingImageRowsFor(item),
     source_item: item,
   };
@@ -2326,6 +2451,7 @@ async function existingSocialSearchListingKeys(client) {
 }
 
 async function insertListing(client, listing, agentId) {
+  const effectiveAgentId = listing.lister_type === 'owner' ? null : agentId;
   const ownerPreviewToken = createOwnerEditToken();
   const ownerPreviewTokenHash = hashOwnerEditToken(ownerPreviewToken);
   const ownerPreviewExpiresAt = ownerEditTokenExpiry();
@@ -2368,7 +2494,7 @@ async function insertListing(client, listing, agentId) {
       listing.inquiry_reference, listing.id_number, listing.id_document_name,
       listing.id_document_url, listing.new_until, listing.amenities,
       listing.extra_fields, listing.lister_name, listing.lister_phone,
-      listing.lister_email, listing.lister_type, agentId, listing.source,
+      listing.lister_email, listing.lister_type, effectiveAgentId, listing.source,
       listing.listed_via, listing.status, listing.moderation_stage, listing.reviewed_at,
       listing.moderation_notes, listing.moderation_reason,
       ownerPreviewTokenHash, ownerPreviewExpiresAt,
@@ -2391,7 +2517,7 @@ async function insertListing(client, listing, agentId) {
      SET extra_fields = COALESCE(extra_fields, '{}'::jsonb)
        || $2::jsonb
      WHERE id = $1`,
-    [propertyId, JSON.stringify(extraFieldsFor(listing.source_item, agentId, propertyUrl, ownerPreviewUrl))]
+    [propertyId, JSON.stringify(extraFieldsFor(listing.source_item, effectiveAgentId, propertyUrl, ownerPreviewUrl))]
   );
 
   await client.query(
@@ -2401,13 +2527,17 @@ async function insertListing(client, listing, agentId) {
     [
       propertyId,
       'always_on_harvest_engine',
-      'harvested_listing_created_for_review',
+      autoLive.approved ? 'harvested_listing_auto_published' : 'harvested_listing_created_for_review',
       listing.status || 'pending',
       JSON.stringify({
         found_online_candidate: true,
         social_search_candidate: true,
         found_online: true,
-        auto_live_source_import: false,
+        auto_live_source_import: autoLive.approved,
+        auto_publish_eligible: autoLive.eligible === true,
+        auto_publish_enabled: autoLive.enabled === true,
+        auto_publish_blockers: autoLive.blockers || [],
+        auto_publish_checks: autoLive.checks || null,
         auto_live_policy: autoLive.policy,
         auto_live_review_status: autoLive.review_status,
         preapproved_source_post: sourcePreApprovalStatusFor(listing.source_item).preapproved,
@@ -2424,7 +2554,7 @@ async function insertListing(client, listing, agentId) {
         property_url: propertyUrl,
         owner_preview_url: ownerPreviewUrl,
         owner_preview_expires_at: ownerPreviewExpiresAt,
-        agent_id: agentId,
+        agent_id: effectiveAgentId,
         whatsapp_share_card: whatsappShareMessage(listing.source_item, propertyUrl, ownerPreviewUrl),
       }),
     ]
@@ -2439,6 +2569,9 @@ async function insertListing(client, listing, agentId) {
     owner_preview_expires_at: ownerPreviewExpiresAt,
     status: listing.status,
     moderation_stage: listing.moderation_stage,
+    auto_publish_eligible: autoLive.eligible === true,
+    auto_publish_enabled: autoLive.enabled === true,
+    auto_publish_blockers: autoLive.blockers || [],
     source_url: sourceUrlForItem(listing.source_item),
     youtube_url: listing.source_item.youtubeId ? youtubeUrl(listing.source_item.youtubeId) : '',
     agent_name: listing.lister_name,
@@ -2510,6 +2643,13 @@ function normalizeFoundOnlineListingType(value = '', options = {}) {
   return 'sale';
 }
 
+function normalizeFoundOnlineResidentialSubtype(value = '') {
+  const text = String(value || '').toLowerCase();
+  if (/\b(?:apartment|flat|condo|penthouse|studio)\b/.test(text)) return 'Apartment';
+  if (/\b(?:townhouse|town house|duplex|villa|bungalow|mansion|house|home|residence)\b/.test(text)) return 'House';
+  return null;
+}
+
 function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
   const sourceUrl = sourceUrlForItem(raw)
     || safeUrl(raw.source_url)
@@ -2519,6 +2659,7 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
     || safeUrl(raw.url);
   const sourceVisualText = sourceVisualTextForRawPost(raw);
   const sourceText = sourceTextForRawPost(raw);
+  const sellerDetection = southAfricaPrivateSellerDetection(raw, sourceText);
   const extractedPhone = publicPhoneFromText(sourceText);
   const extractedEmail = publicEmailFromText(sourceText);
   const sourceName = String(raw.source_name || raw.agent_name || raw.lister_name || raw.page_name || raw.account_name || raw.sourceKey || raw.source_key || 'Found-online source').trim();
@@ -2608,7 +2749,7 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
       title,
       description: `${description} ${sourceText}`
     }) || evidenceClassification.commercial_type
-    : (raw.subtype || raw.property_type || null);
+    : (raw.subtype || raw.property_type || normalizeFoundOnlineResidentialSubtype(`${title} ${description} ${sourceText}`));
   const normalizedStudentSource = isStudentSourceListing({
     ...raw,
     listingType,
@@ -2650,6 +2791,9 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
   const safePrice = countryGate.allowed
     ? priceCandidate
     : { value: null, reason: countryGate.reason };
+  const explicitPriceOnApplication = IS_SOUTH_AFRICA
+    && safePrice.value == null
+    && SOUTH_AFRICA_EXPLICIT_POA_PATTERN.test(sourceText);
   const ingestedAt = raw.ingested_at || raw.imported_at || raw.first_seen_at || new Date().toISOString();
   const sourcePriceMetadata = propertyPriceMetadata(safePrice.value, {
     currency: raw.price_currency || raw.currency || raw.source_currency,
@@ -2702,7 +2846,7 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
     price_original: sourcePriceMetadata.price_original,
     price_fx_rate_ugx: sourcePriceMetadata.price_fx_rate_ugx,
     price_period: pricePeriod,
-    price_on_application: !Number(sourcePriceMetadata.price || 0),
+    price_on_application: IS_SOUTH_AFRICA ? explicitPriceOnApplication : !Number(sourcePriceMetadata.price || 0),
     lister_phone: sourceAgent.phone,
     source_contact_url: sourceAgent.channelUrl,
     source_url: sourceUrl,
@@ -2764,12 +2908,15 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
     countryGate,
     sourcePriceRejectionReason: safePrice.reason || sourcePriceMetadata.rejection_reason || '',
     price: sourcePriceMetadata.price,
+    priceOnApplication: explicitPriceOnApplication,
     priceCurrency: sourcePriceMetadata.price_currency,
     priceOriginalCurrency: sourcePriceMetadata.price_original_currency,
     priceOriginal: sourcePriceMetadata.price_original,
     priceFxRateUgx: sourcePriceMetadata.price_fx_rate_ugx,
     priceFxAsOf: sourcePriceMetadata.price_fx_as_of,
-    priceText: safePrice.value == null ? '' : (raw.price_text || raw.price_label || ''),
+    priceText: explicitPriceOnApplication
+      ? (raw.price_text || raw.price_label || 'POA')
+      : (safePrice.value == null ? '' : (raw.price_text || raw.price_label || '')),
     price_period: pricePeriod,
     transactionType: transactionType || null,
     transaction_type: transactionType || null,
@@ -2791,6 +2938,9 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
     consent_confirmed: raw.consent_confirmed ?? raw.consentConfirmed ?? raw.agent_authorised ?? raw.agentAuthorised ?? raw.pre_approved ?? raw.preApproved ?? false,
     image_rights_confirmed: raw.image_rights_confirmed ?? raw.imageRightsConfirmed ?? raw.authorised_images ?? raw.authorisedImages ?? raw.pre_approved ?? raw.preApproved ?? false,
     pre_approved: raw.pre_approved ?? raw.preApproved ?? raw.agent_preapproved ?? raw.agentPreapproved ?? false,
+    privateSeller: sellerDetection.private_seller,
+    sellerTrack: sellerDetection.track,
+    privateSellerDetection: sellerDetection,
     raw_source_post: {
       ...raw,
       source_text: raw.source_text || sourceText,
@@ -3074,14 +3224,32 @@ function foundOnlinePerUrlResults(items = [], {
     const existingRow = matchFor(alreadyPresent, item);
     const skippedRow = matchFor(sourceReviewRecords, item);
     const dryRunRow = matchFor(dryRunRows, item);
+    const intake = skippedRow?.intake || sourcePostMeetsLaunchIntakeRule(item, sourceAgentForItem(item));
+    const sourceJob = sourceJobForItem(item);
+    const reporting = {
+      country_code: ACTIVE_COUNTRY_CODE,
+      source_track: item.sellerTrack || item.seller_track || (item.privateSeller ? 'fsbo' : 'agent'),
+      source_query: sourceJob.search_query || sourceJob.query || item.raw_source_post?.search_query || item.raw_source_post?.query || '',
+      parsed_complete: intake.parsed_complete === true,
+      complete_price: intake.complete_price === true,
+      complete_location: intake.complete_location === true,
+      complete_classification: intake.complete_classification === true,
+    };
     if (createdRow) {
       return {
+        ...reporting,
+        auto_publish_eligible: createdRow.auto_publish_eligible === true,
+        auto_published: createdRow.status === 'approved' && createdRow.moderation_stage === 'auto_published',
+        human_review_required: createdRow.auto_publish_eligible !== true,
+        auto_publish_blockers: createdRow.auto_publish_blockers || [],
         key: item.key,
         source_key: item.agentKey || '',
         source_url: sourceUrl,
         platform: item.sourcePlatform || '',
         outcome: 'created',
-        reason: 'created_in_review_queue',
+        reason: createdRow.status === 'approved'
+          ? 'auto_published'
+          : (createdRow.auto_publish_eligible ? 'auto_publish_held_by_flag' : 'created_in_review_queue'),
         property_id: createdRow.id || null,
         status: createdRow.status || '',
         moderation_stage: createdRow.moderation_stage || '',
@@ -3090,6 +3258,7 @@ function foundOnlinePerUrlResults(items = [], {
     }
     if (existingRow) {
       return {
+        ...reporting,
         key: item.key,
         source_key: item.agentKey || '',
         source_url: sourceUrl,
@@ -3106,6 +3275,11 @@ function foundOnlinePerUrlResults(items = [], {
     if (skippedRow) {
       const reason = skippedRow.reason || 'source_review_required';
       return {
+        ...reporting,
+        auto_publish_eligible: false,
+        auto_published: false,
+        human_review_required: sourceReviewRecordRequiresHumanReview(skippedRow),
+        auto_publish_blockers: skippedRow.intake?.blocking_reasons || [reason],
         key: item.key,
         source_key: item.agentKey || '',
         source_url: sourceUrl,
@@ -3125,12 +3299,19 @@ function foundOnlinePerUrlResults(items = [], {
     }
     if (dryRun && dryRunRow) {
       return {
+        ...reporting,
+        auto_publish_eligible: dryRunRow.auto_publish_eligible === true,
+        auto_published: false,
+        human_review_required: dryRunRow.auto_publish_eligible !== true,
+        auto_publish_blockers: dryRunRow.auto_publish_blockers || [],
         key: item.key,
         source_key: item.agentKey || '',
         source_url: sourceUrl,
         platform: item.sourcePlatform || '',
         outcome: 'would_create',
-        reason: 'would_create_in_review_queue',
+        reason: dryRunRow.auto_publish_eligible
+          ? 'would_be_auto_publish_eligible'
+          : 'would_create_in_review_queue',
         property_id: null,
         status: dryRunRow.status || '',
         moderation_stage: dryRunRow.moderation_stage || '',
@@ -3138,6 +3319,7 @@ function foundOnlinePerUrlResults(items = [], {
       };
     }
     return {
+      ...reporting,
       key: item.key,
       source_key: item.agentKey || '',
       source_url: sourceUrl,
@@ -3311,7 +3493,8 @@ async function queueFoundOnlineSourcePostListings({
         alreadyPresent.push(alreadyPresentFoundOnlineRow(item, agent, existingRow));
         return [];
       }
-      const autoLive = sourcePostAutoLiveStatusFor(item, agent);
+      const uniqueItem = { ...item, autoPublishDedupePassed: true };
+      const autoLive = sourcePostAutoLiveStatusFor(uniqueItem, agent, { intake, dedupePassed: true });
       const row = {
         key: item.key,
         title: item.title,
@@ -3332,6 +3515,8 @@ async function queueFoundOnlineSourcePostListings({
         profile_key: shouldCreateSourceProfile(item, agent) ? sourceProfileKeyForItem(item, agent) : null,
         profile_policy: FOUND_ONLINE_PROFILE_CREATION_POLICY.rule,
         auto_live_ready: autoLive.approved,
+        auto_publish_eligible: autoLive.eligible === true,
+        auto_publish_blockers: autoLive.blockers || [],
         auto_live_policy: autoLive.policy,
         status: autoLive.status,
         moderation_stage: autoLive.moderation_stage,
@@ -3349,7 +3534,13 @@ async function queueFoundOnlineSourcePostListings({
       return [row];
     });
     const autoLiveRows = dryRunRows.filter((item) => item.auto_live_ready);
-    const reviewRows = dryRunRows.filter((item) => !item.auto_live_ready);
+    const autoPublishEligibleRows = dryRunRows.filter((item) => item.auto_publish_eligible);
+    const reviewRows = dryRunRows.filter((item) => !item.auto_publish_eligible);
+    const humanReviewSourceRecords = sourceReviewRecords.filter(sourceReviewRecordRequiresHumanReview);
+    const policyDecisionCount = dryRunRows.length + humanReviewSourceRecords.length;
+    const autoPublishRate = policyDecisionCount
+      ? Number((autoPublishEligibleRows.length / policyDecisionCount).toFixed(4))
+      : 0;
     const duplicateWarnings = duplicateWarningsForFoundOnlineRows(alreadyPresent);
     const perUrl = foundOnlinePerUrlResults(items, {
       alreadyPresent,
@@ -3374,8 +3565,16 @@ async function queueFoundOnlineSourcePostListings({
       created_auto_live_properties: 0,
       existing_auto_live_properties: 0,
       auto_live_properties: autoLiveRows.length,
+      auto_publish_eligible_properties: autoPublishEligibleRows.length,
+      auto_publish_eligibility_rate: autoPublishRate,
+      auto_publish_target_rate: 0.8,
+      auto_publish_target_met: autoPublishRate >= 0.8,
+      auto_publish_policy_decision_count: policyDecisionCount,
+      human_review_required_properties: reviewRows.length + humanReviewSourceRecords.length,
+      human_review_source_records: humanReviewSourceRecords,
       review_queue_properties: reviewRows.length,
       auto_live_listings: autoLiveRows,
+      auto_publish_eligible_listings: autoPublishEligibleRows,
       queued_listings: dryRunRows,
       review_queue_listings: reviewRows,
       already_present_properties: alreadyPresent,
@@ -3437,7 +3636,8 @@ async function queueFoundOnlineSourcePostListings({
         });
       }
       const agentId = createProfile ? agentIdsByKey[profileKey] : null;
-      const listing = buildSocialSearchListing(item, agentId);
+      const uniqueItem = { ...item, autoPublishDedupePassed: true };
+      const listing = buildSocialSearchListing(uniqueItem, agentId);
       const inserted = await insertListing(client, listing, agentId);
       inserted.profile_action = createProfile ? 'create_or_update_source_profile' : FOUND_ONLINE_PROFILE_CREATION_POLICY.profile_action;
       inserted.profile_key = createProfile ? profileKey : null;
@@ -3457,6 +3657,13 @@ async function queueFoundOnlineSourcePostListings({
     }
     await client.query('COMMIT');
     const autoLiveCreated = created.filter((item) => isLiveOrApprovedStatus(item));
+    const autoPublishEligibleCreated = created.filter((item) => item.auto_publish_eligible === true);
+    const humanReviewCreated = created.filter((item) => item.auto_publish_eligible !== true);
+    const humanReviewSourceRecords = skippedListings.filter(sourceReviewRecordRequiresHumanReview);
+    const policyDecisionCount = created.length + humanReviewSourceRecords.length;
+    const autoPublishRate = policyDecisionCount
+      ? Number((autoPublishEligibleCreated.length / policyDecisionCount).toFixed(4))
+      : 0;
     const reviewCreated = created.filter((item) => isReviewQueueStatus(item));
     const alreadyPresentReviewQueue = alreadyPresent.filter((item) => isReviewQueueStatus(item));
     const alreadyLiveOrApproved = alreadyPresent.filter((item) => isLiveOrApprovedStatus(item));
@@ -3509,8 +3716,16 @@ async function queueFoundOnlineSourcePostListings({
       created_review_queue_properties: reviewCreated.length,
       existing_auto_live_properties: alreadyLiveOrApproved.length,
       auto_live_properties: autoLiveListings.length,
+      auto_publish_eligible_properties: autoPublishEligibleCreated.length,
+      auto_publish_eligibility_rate: autoPublishRate,
+      auto_publish_target_rate: 0.8,
+      auto_publish_target_met: autoPublishRate >= 0.8,
+      auto_publish_policy_decision_count: policyDecisionCount,
+      human_review_required_properties: humanReviewCreated.length + humanReviewSourceRecords.length,
+      human_review_source_records: humanReviewSourceRecords,
       review_queue_properties: reviewQueueListings.length,
       auto_live_listings: autoLiveListings,
+      auto_publish_eligible_listings: autoPublishEligibleCreated,
       queued_listings: reviewQueueListings,
       already_present_properties: alreadyPresent,
       already_present_review_queue_properties: alreadyPresentReviewQueue,

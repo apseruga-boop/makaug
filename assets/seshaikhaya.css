@@ -54,6 +54,31 @@ body[data-country-code="ZA"] [data-public-whatsapp-link] {
   display: none !important;
 }
 
+body[data-public-route-sasl="true"] #page-home {
+  display: none !important;
+}
+
+#sasl-accessibility-banner {
+  position: relative;
+  z-index: 999;
+  padding: .7rem 1rem;
+  color: #102a22;
+  background: #fff3c4;
+  border-bottom: 2px solid var(--sa-gold);
+  text-align: center;
+  font-weight: 700;
+}
+
+#sasl-accessibility-banner a {
+  color: var(--sa-green-deep);
+  text-decoration: underline;
+}
+
+html.sasl-accessibility-mode [data-sasl-video] {
+  outline: 3px solid var(--sa-gold);
+  outline-offset: 3px;
+}
+
 .seshaikhaya-logo-mark {
   flex: 0 0 auto;
   border-radius: 12px;

@@ -51,6 +51,36 @@ projects:
                 value: "false"
               - key: FEATURED_ROTATION_SCHEDULER_ENABLED
                 value: "false"
+              - key: ZA_SCALE_HARVEST_ENABLED
+                value: "false"
+              - key: ZA_SCALE_PILOT_ENABLED
+                value: "false"
+              - key: ZA_SCALE_DAVE_PILOT_PASS
+                value: "false"
+              - key: ZA_PLATFORM_ACCESS_APPROVED
+                value: "false"
+              - key: ZA_CONFIDENCE_AUTO_PUBLISH_ENABLED
+                value: "false"
+              - key: ZA_YOUTUBE_SEARCH_ACCESS_APPROVED
+                value: "false"
+              - key: ZA_YOUTUBE_ACCESS_METHOD
+                value: youtube_data_api_v3_search
+              - key: ZA_YOUTUBE_QUOTA_INCREASE_REQUESTED
+                value: "false"
+              - key: ZA_X_API_ACCESS_APPROVED
+                value: "false"
+              - key: ZA_X_ACCESS_METHOD
+                value: x_api_v2_recent_search
+              - key: ZA_TIKTOK_CURATED_INTAKE_ONLY
+                value: "true"
+              - key: ZA_FACEBOOK_MARKETING_ONLY
+                value: "true"
+              - key: ZA_SCALE_REGISTRY_WRITE_ENABLED
+                value: "false"
+              - key: ZA_MONTHLY_SPEND_CAP_USD
+                value: "13"
+              - key: ZA_CURRENT_MONTHLY_SPEND_USD
+                value: "7.25"
               - key: FEATURED_ROTATION_TIMEZONE
                 value: Africa/Johannesburg
               - key: APP_HEARTBEAT_TIMEOUT_MS

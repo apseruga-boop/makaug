@@ -305,7 +305,7 @@ function normalizeListingOrigin(value = '') {
     agent_listed: 'agent'
   };
   const normalized = aliases[origin] || origin;
-  return ['found_online', 'private', 'agent'].includes(normalized) ? normalized : '';
+  return ['found_online', 'private', 'agent', 'private_seller'].includes(normalized) ? normalized : '';
 }
 
 function foundOnlinePropertySql(alias = 'p') {
@@ -1165,10 +1165,21 @@ function publicContactPhoneFromExtra(extra = {}) {
 }
 
 function publicContactPhoneForRow(row = {}, safeExtra = null) {
+  const extra = safeExtra || publicExtraFields(row?.extra_fields || {});
+  if (isSouthAfricaPrivateSellerContactGated(row, extra)) return '';
   const extraPhone = publicContactPhoneFromExtra(row?.extra_fields || {});
-  const safeExtraPhone = normalizePublicUgandaContactPhone(safeExtra?.public_contact_phone || safeExtra?.contact_phone || '');
+  const safeExtraPhone = normalizePublicUgandaContactPhone(extra?.public_contact_phone || extra?.contact_phone || '');
   const rowPhone = normalizePublicUgandaContactPhone(row?.lister_phone || row?.contact_phone || row?.phone || row?.whatsapp || '');
   return safeExtraPhone || extraPhone || rowPhone || '';
+}
+
+function isSouthAfricaPrivateSellerContactGated(row = {}, extra = {}) {
+  if (!IS_SOUTH_AFRICA) return false;
+  const privateSeller = row.private_seller === true
+    || row.lister_type === 'owner'
+    || String(extra.private_seller || '').toLowerCase() === 'true'
+    || String(extra.source_track || '').toLowerCase() === 'fsbo';
+  return privateSeller && isFoundOnlinePublicRow(row, extra);
 }
 
 function compactPublicCardRow(row = {}, currency = CANONICAL_PROPERTY_CURRENCY, locationScope = {}) {
@@ -1465,6 +1476,11 @@ function publicSourceDateOutOfOrder(firstPostedRaw, firstSeenRaw, addedToMakaugR
 
 function publicExtraFields(extraFields = {}) {
   const extra = extraFields && typeof extraFields === 'object' ? extraFields : {};
+  const privateSellerContactGated = IS_SOUTH_AFRICA && (
+    extra.private_seller === true
+      || String(extra.private_seller || '').toLowerCase() === 'true'
+      || String(extra.source_track || '').toLowerCase() === 'fsbo'
+  );
   const rawSourcePost = extra.raw_source_post && typeof extra.raw_source_post === 'object' ? extra.raw_source_post : {};
   const landTitleAvailable = normalizeLandTitleAvailability(
     extra.land_title_available
@@ -1503,13 +1519,14 @@ function publicExtraFields(extraFields = {}) {
       || sourceUrl
       || safeSourceUrls[0]
   );
+  const publicSourceContactUrl = privateSellerContactGated ? null : sourceContactUrl;
   const sourcePlatform = cleanText(extra.source_platform)
     || inferPublicSourcePlatform(sourceUrl)
     || inferPublicSourcePlatform(sourceContactUrl);
   const sourceContactPlatform = cleanText(extra.source_contact_platform)
     || sourcePlatform
     || inferPublicSourcePlatform(sourceContactUrl);
-  const publicContactPhone = publicContactPhoneFromExtra(extra);
+  const publicContactPhone = privateSellerContactGated ? '' : publicContactPhoneFromExtra(extra);
   const rawSourceContactMethod = cleanText(extra.source_contact_method || '');
   const sourceContactHasPhoneClaim = /(?:phone|call|whatsapp)/i.test(`${rawSourceContactMethod} ${extra.source_contact_label || ''}`);
   const sourceContactLabel = publicContactPhone || !sourceContactHasPhoneClaim
@@ -1667,6 +1684,11 @@ function publicExtraFields(extraFields = {}) {
     image_count: imageCount,
     public_contact_phone: publicContactPhone || null,
     contact_phone: publicContactPhone || null,
+    private_seller: privateSellerContactGated,
+    source_track: extra.source_track || (privateSellerContactGated ? 'fsbo' : null),
+    private_seller_contact_public: privateSellerContactGated ? false : null,
+    contact_via_platform: privateSellerContactGated,
+    contact_gate: privateSellerContactGated ? 'seshaikhaya_enquiry' : null,
     source_unavailable: sourceUnavailable,
     source_url_status: extra.source_url_status || extra.source_status || null,
     source_unavailable_reason: sourceUnavailableReason,
@@ -1712,9 +1734,11 @@ function publicExtraFields(extraFields = {}) {
     added_to_makaug_label: extra.added_to_makaug_label || null,
     source_followers_label: extra.source_followers_label || null,
     source_audience_label: extra.source_audience_label || null,
-    source_contact_url: sourceUnavailable ? null : (sourceContactUrl || null),
-    source_contact_label: sourceUnavailable ? null : sourceContactLabel,
-    source_contact_method: sourceContactMethod,
+    source_contact_url: sourceUnavailable ? null : (publicSourceContactUrl || null),
+    source_contact_label: sourceUnavailable
+      ? null
+      : (privateSellerContactGated ? 'Contact via seshaikhaya' : sourceContactLabel),
+    source_contact_method: privateSellerContactGated ? 'enquiry' : sourceContactMethod,
     source_contact_platform: sourceContactPlatform || null,
     source_hover_description: sourceHoverDescription || null,
     source_card_description: sourceHoverDescription || null,
@@ -2617,7 +2641,9 @@ async function listPropertiesHandler(req, res, next) {
         filters.push("(COALESCE(p.extra_fields->>'featured', 'false') NOT IN ('true', '1', 'yes'))");
       }
     }
-    if (listingOrigin) {
+    if (listingOrigin === 'private_seller') {
+      filters.push("(LOWER(COALESCE(p.extra_fields->>'private_seller', 'false')) IN ('true', '1', 'yes'))");
+    } else if (listingOrigin) {
       addFilter(filters, values, `${listingOriginSql('p')} = ?`, listingOrigin);
     }
 
@@ -4547,6 +4573,10 @@ router.post('/:id/inquiries', async (req, res, next) => {
          p.agent_id,
          p.title,
          p.inquiry_reference,
+         p.source,
+         p.listed_via,
+         p.lister_type,
+         p.extra_fields,
          p.lister_name,
          p.lister_phone,
          p.lister_email,
@@ -4568,6 +4598,10 @@ router.post('/:id/inquiries', async (req, res, next) => {
     const targetPhone = listingContact.agent_whatsapp || listingContact.agent_phone || listingContact.lister_phone || null;
     const targetEmail = listingContact.agent_email || listingContact.lister_email || null;
     const targetName = listingContact.agent_name || listingContact.lister_name || null;
+    const privateSellerContactGated = isSouthAfricaPrivateSellerContactGated(
+      listingContact,
+      listingContact.extra_fields || {}
+    );
 
     const inserted = await db.query(
       `INSERT INTO property_inquiries (
@@ -4632,7 +4666,71 @@ router.post('/:id/inquiries', async (req, res, next) => {
       relatedLeadId: lead?.id || null
     });
 
-    return res.status(201).json({ ok: true, data: inserted.rows[0] });
+    let relay = { sent: false, channel: 'in_app', reason: 'staff_follow_up_logged' };
+    if (privateSellerContactGated) {
+      const relayText = [
+        `A property seeker sent an enquiry through ${ACTIVE_BRAND_NAME}.`,
+        `Listing: ${listingContact.title}`,
+        `Reference: ${listingContact.inquiry_reference || propertyId}`,
+        `From: ${contactName}`,
+        contactPhone ? `Phone: ${contactPhone}` : '',
+        contactEmail ? `Email: ${contactEmail}` : '',
+        message ? `Message: ${message}` : '',
+        '',
+        'Your contact details were not displayed publicly. Reply directly to the seeker if you wish.',
+      ].filter(Boolean).join('\n');
+      try {
+        if (targetEmail && isValidEmail(targetEmail)) {
+          const delivery = await sendSupportEmail({
+            to: targetEmail,
+            subject: `${ACTIVE_BRAND_NAME} property enquiry • ${listingContact.inquiry_reference || propertyId}`,
+            text: relayText,
+            replyTo: contactEmail && isValidEmail(contactEmail) ? contactEmail : undefined,
+          });
+          relay = {
+            sent: delivery?.sent === true,
+            channel: 'email',
+            reason: delivery?.reason || delivery?.error || '',
+          };
+        } else if (targetPhone && isValidPhone(targetPhone)) {
+          const delivery = await smsService.sendSMS(targetPhone, relayText.slice(0, 1200));
+          relay = { sent: true, channel: 'sms', provider: delivery?.provider || (delivery?.mocked ? 'mock' : '') };
+        }
+      } catch (relayError) {
+        relay = { sent: false, channel: targetEmail ? 'email' : 'sms', reason: relayError.message || 'relay_failed' };
+        logger.warn('Private-seller enquiry relay failed; inquiry remains in the staff queue', {
+          propertyId,
+          inquiryId: inserted.rows[0].id,
+          error: relay.reason,
+        });
+      }
+      await logNotification(db, {
+        recipientPhone: targetPhone || null,
+        recipientEmail: targetEmail || null,
+        channel: relay.channel,
+        type: 'private_seller_enquiry_relay',
+        status: relay.sent ? 'sent' : 'logged',
+        payloadSummary: {
+          inquiry_id: inserted.rows[0].id,
+          property_title: listingContact.title,
+          inquiry_reference: listingContact.inquiry_reference,
+          contact_gated: true,
+        },
+        relatedListingId: propertyId,
+        relatedLeadId: lead?.id || null,
+        failureReason: relay.sent ? null : relay.reason,
+        sentAt: relay.sent ? new Date() : null,
+      });
+    }
+
+    return res.status(201).json({
+      ok: true,
+      data: {
+        ...inserted.rows[0],
+        contact_gated: privateSellerContactGated,
+        relay_status: relay.sent ? 'sent' : 'queued_for_follow_up',
+      },
+    });
   } catch (error) {
     return next(error);
   }
@@ -5527,5 +5625,8 @@ module.exports._test = {
   isSourcedInventoryCandidateRecord,
   sourcedCandidateRecordHasApprovalLocation,
   sourcedInventoryApprovalPolicy,
-  buildThirdPartyPublicSummary
+  buildThirdPartyPublicSummary,
+  publicExtraFields,
+  publicContactPhoneForRow,
+  isSouthAfricaPrivateSellerContactGated
 };

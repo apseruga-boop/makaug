@@ -104,7 +104,7 @@ const TENANTS = Object.freeze({
       "SA Home Loans",
       "ooba"
     ]),
-    saslAccessibilityNote: "South African Sign Language support is provided through accessible video and captioned content where available.",
+    saslAccessibilityNote: "South African Sign Language accessibility mode retains English text and prioritises captioned, signed video where available.",
     languages: Object.freeze([
       Object.freeze({ code: "en", label: "English" }),
       Object.freeze({ code: "af", label: "Afrikaans" }),
@@ -116,7 +116,13 @@ const TENANTS = Object.freeze({
       Object.freeze({ code: "ts", label: "X\u0069tsonga" }),
       Object.freeze({ code: "ss", label: "siSwati" }),
       Object.freeze({ code: "ve", label: "Tshivenda" }),
-      Object.freeze({ code: "nr", label: "isiNdebele" })
+      Object.freeze({ code: "nr", label: "isiNdebele" }),
+      Object.freeze({
+        code: "sasl",
+        label: "SASL (South African Sign Language)",
+        accessibilityMode: true,
+        textFallback: "en"
+      })
     ])
   })
 });

@@ -83,9 +83,9 @@ function applyUgandaHomepage(html) {
   return injectMarker(html);
 }
 
-function applyCountryHtml(html, countryCode = "UG", { homepage = false } = {}) {
+function applyCountryHtml(html, countryCode = "UG", { homepage = false, pathname = "/" } = {}) {
   const tenant = tenantFor(countryCode);
-  if (tenant.countryCode === "ZA") return applySouthAfricaHtml(html);
+  if (tenant.countryCode === "ZA") return applySouthAfricaHtml(html, { pathname });
   if (tenant.countryCode === "UG" && homepage) return applyUgandaHomepage(html);
   return String(html || "");
 }

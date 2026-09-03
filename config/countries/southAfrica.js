@@ -9,9 +9,14 @@ module.exports = Object.freeze({
   phoneCountryCode: '+27',
   timezone: 'Africa/Johannesburg',
   locationHierarchy: Object.freeze(['province', 'city', 'suburb']),
-  lookbackDays: 90,
+  lookbackDays: 183,
   autoPublishFoundOnline: false,
-  sourceChannels: Object.freeze(['x', 'tiktok', 'youtube', 'facebook']),
+  // Automated discovery is intentionally limited to official broad-search APIs.
+  automatedSourceChannels: Object.freeze(['youtube', 'x']),
+  curatedSourceChannels: Object.freeze(['tiktok']),
+  marketingSourceChannels: Object.freeze(['facebook']),
+  excludedAutomatedChannels: Object.freeze(['facebook', 'tiktok', 'instagram']),
+  sourceChannels: Object.freeze(['youtube', 'x']),
   sourceQueries: Object.freeze([
     '#propertysouthafrica',
     '#housesforsaleSA',
