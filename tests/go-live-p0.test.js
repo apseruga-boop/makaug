@@ -1040,6 +1040,7 @@ function run() {
   assert(frontendSource.includes('data-map-property-link="1"'), 'map listing popups should expose real property detail links');
   assert(frontendSource.includes('href="${adminAttr(detailPath)}"'), 'map listing popup should have a real /property fallback URL');
   assert(frontendSource.includes('openMapPropertyDetail(event'), 'map listing popup should use a delegated detail click handler');
+  assert(frontendSource.includes('openGoogleMarkerInfoWindow(map, marker, infoWindow, content, { centerMarker: true })'), 'Google map clicks should center their marker before opening a compact popup below sticky search controls');
   assert(frontendSource.includes('data-map-broker-link="1"'), 'broker map popups should expose real broker profile links');
   assert(frontendSource.includes('openMapBrokerProfile(event'), 'broker map popup should use a delegated broker click handler');
   assert(frontendSource.includes('function clearStaleMapRegistry()'), 'public maps should clear stale registry entries after SPA route fragment swaps');
