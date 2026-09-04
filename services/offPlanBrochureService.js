@@ -122,6 +122,53 @@ function areaGroup(place = {}) {
   return 'Parks and family activities';
 }
 
+function distanceKmBetween(first = {}, second = {}) {
+  const lat1 = Number(first.latitude ?? first.lat);
+  const lng1 = Number(first.longitude ?? first.lng);
+  const lat2 = Number(second.latitude ?? second.lat);
+  const lng2 = Number(second.longitude ?? second.lng);
+  if (![lat1, lng1, lat2, lng2].every(Number.isFinite)) return null;
+  const radians = (degrees) => degrees * Math.PI / 180;
+  const deltaLat = radians(lat2 - lat1);
+  const deltaLng = radians(lng2 - lng1);
+  const a = Math.sin(deltaLat / 2) ** 2 + Math.cos(radians(lat1)) * Math.cos(radians(lat2)) * Math.sin(deltaLng / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function distanceFromProject(project = {}, place = {}) {
+  const supplied = Number(place.distance_km);
+  if (Number.isFinite(supplied)) return supplied;
+  return distanceKmBetween(project, place);
+}
+
+function formatApproximateDistance(project, place) {
+  const distance = distanceFromProject(project, place);
+  if (!Number.isFinite(distance)) return 'Distance to verify';
+  return `Approx. ${distance.toFixed(distance < 10 ? 1 : 0)} km from displayed area point`;
+}
+
+function computeMortgageEstimate({ principal, annualRate, years, arrangementFeePct = 0 } = {}) {
+  const safePrincipal = Number(principal);
+  const safeRate = Number(annualRate);
+  const safeYears = Number(years);
+  if (!(safePrincipal > 0) || !(safeRate > 0) || !(safeYears > 0)) return null;
+  const months = Math.max(1, Math.round(safeYears * 12));
+  const monthlyRate = safeRate / 100 / 12;
+  const factor = (1 + monthlyRate) ** months;
+  const monthly = safePrincipal * monthlyRate * factor / (factor - 1);
+  const arrangementFee = safePrincipal * Math.max(0, Number(arrangementFeePct) || 0) / 100;
+  const repaymentBeforeFee = monthly * months;
+  return {
+    principal: safePrincipal,
+    years: safeYears,
+    months,
+    monthly,
+    interest: repaymentBeforeFee - safePrincipal,
+    arrangementFee,
+    total: repaymentBeforeFee + arrangementFee
+  };
+}
+
 function addHeader(doc, title = '') {
   const previousY = doc.y;
   doc.save();
@@ -247,29 +294,34 @@ function buildOffPlanBrochure(projectInput, output, options = {}) {
 
   addPage(doc, project, 'Family life and local services');
   writeSectionTitle(doc, 'Family life and local services');
-  doc.fillColor(MUTED).font('Helvetica').fontSize(9.5).text('Explore education, healthcare, shopping, recreation and transport in the wider Entebbe area. These references do not claim a verified distance from the development; use the live project map and confirm current services directly.', 44, doc.y + 5, { width: 505, lineGap: 3 });
+  doc.fillColor(MUTED).font('Helvetica').fontSize(9.5).text('Explore education, healthcare, shopping, recreation and transport in the wider Entebbe area. Distances are approximate straight-line measurements from the displayed area point, not driving distances from a verified entrance. Confirm routes and current services directly.', 44, doc.y + 5, { width: 505, lineGap: 3 });
   const groupedPlaces = new Map();
   project.nearby_places.forEach((place) => {
     const key = areaGroup(place);
     if (!groupedPlaces.has(key)) groupedPlaces.set(key, []);
     groupedPlaces.get(key).push(place);
   });
-  let servicesY = doc.y + 26;
+  const servicesYByColumn = [doc.y + 32, doc.y + 32];
   const groupOrder = ['Schools and childcare', 'Healthcare', 'Universities', 'Markets and shopping', 'Parks and family activities', 'Transport'];
-  groupOrder.forEach((groupName) => {
-    const places = (groupedPlaces.get(groupName) || []).slice(0, 4);
-    if (!places.length || servicesY > 690) return;
-    doc.fillColor(BRAND_GREEN).font('Helvetica-Bold').fontSize(11).text(groupName, 44, servicesY, { width: 505 });
-    servicesY += 20;
+  groupOrder.filter((groupName) => (groupedPlaces.get(groupName) || []).length).forEach((groupName, groupIndex) => {
+    const places = (groupedPlaces.get(groupName) || []).slice(0, 3);
+    const column = groupIndex % 2;
+    const x = 44 + column * 258;
+    const width = 247;
+    let servicesY = servicesYByColumn[column];
+    if (servicesY > 690) return;
+    doc.roundedRect(x, servicesY, width, 28, 8).fill('#e5f2e9');
+    doc.fillColor(BRAND_GREEN).font('Helvetica-Bold').fontSize(10.5).text(groupName, x + 12, servicesY + 8, { width: width - 24, height: 14, ellipsis: true });
+    servicesY += 35;
     places.forEach((place) => {
-      if (servicesY > 710) return;
-      doc.roundedRect(44, servicesY, 505, 44, 8).fill(PALE);
-      doc.fillColor(INK).font('Helvetica-Bold').fontSize(9).text(cleanText(place.name || groupName, 150), 57, servicesY + 7, { width: 190, height: 13, ellipsis: true });
-      doc.fillColor(MUTED).font('Helvetica').fontSize(7.5).text(cleanText(place.note || 'Confirm current details and travel time.', 270), 255, servicesY + 6, { width: 280, height: 28, ellipsis: true, lineGap: 1, link: place.source_url || undefined });
-      if (place.source_url) doc.fillColor(BRAND_GREEN).font('Helvetica-Bold').fontSize(7).text('Official or primary source', 57, servicesY + 27, { width: 180, link: place.source_url, underline: true });
-      servicesY += 50;
+      if (servicesY > 718) return;
+      doc.roundedRect(x, servicesY, width, 58, 8).fill(PALE);
+      doc.fillColor(INK).font('Helvetica-Bold').fontSize(8.5).text(cleanText(place.name || groupName, 150), x + 11, servicesY + 7, { width: width - 22, height: 13, ellipsis: true });
+      doc.fillColor(BRAND_GREEN).font('Helvetica-Bold').fontSize(7.3).text(formatApproximateDistance(project, place), x + 11, servicesY + 23, { width: width - 22, height: 11, ellipsis: true });
+      doc.fillColor(MUTED).font('Helvetica').fontSize(7).text(cleanText(place.note || 'Confirm current details and travel time.', 220), x + 11, servicesY + 37, { width: width - 22, height: 15, ellipsis: true, lineGap: 1, link: place.source_url || undefined });
+      servicesY += 64;
     });
-    servicesY += 4;
+    servicesYByColumn[column] = servicesY + 12;
   });
 
   addPage(doc, project, 'Homes and payment plan');
@@ -305,21 +357,31 @@ function buildOffPlanBrochure(projectInput, output, options = {}) {
 
   addPage(doc, project, 'Mortgage comparison');
   writeSectionTitle(doc, 'Potential mortgage providers');
-  doc.fillColor(MUTED).font('Helvetica').fontSize(9.5).text('These are public lender terms for comparison, not approvals or guaranteed offers. Ask each lender for a current written quote and confirm whether it will finance this off-plan project.', 44, doc.y + 5, { width: 505, lineGap: 3 });
+  const mortgagePrice = Number(project.launch_price_ugx);
+  doc.fillColor(MUTED).font('Helvetica').fontSize(9.5).text(`These illustrations use ${Number.isFinite(mortgagePrice) ? formatMoney(mortgagePrice, 'UGX') : 'the project launch price'}, each lender's published minimum deposit and a term of up to 20 years. They are not approvals or guaranteed offers. Confirm whether the lender will finance this off-plan project.`, 44, doc.y + 5, { width: 505, lineGap: 3 });
   const mortgageProviders = (options.mortgageProviders || []).slice(0, 3);
-  let mortgageY = doc.y + 28;
+  let mortgageY = doc.y + 30;
   (mortgageProviders.length ? mortgageProviders : [{ name: 'Mortgage provider information', sourceNote: 'Open the live mortgage comparison on makaug.com for the latest available public lender information.' }]).forEach((provider) => {
     const rate = Number(provider.residentialRate);
     const deposit = Number(provider.minDepositPct?.residential);
-    const years = Number(provider.maxYears?.residential);
-    doc.roundedRect(44, mortgageY, 505, 132, 12).fill(PALE);
-    doc.fillColor(INK).font('Helvetica-Bold').fontSize(13).text(cleanText(provider.name || 'Mortgage provider', 120), 62, mortgageY + 15, { width: 460 });
-    doc.fillColor(BRAND_GREEN).font('Helvetica-Bold').fontSize(9).text(`PUBLIC RATE: ${Number.isFinite(rate) ? `${rate}%` : 'CURRENT QUOTE REQUIRED'}`, 62, mortgageY + 42, { width: 200 });
-    doc.fillColor(INK).font('Helvetica').fontSize(9).text(`Minimum deposit: ${Number.isFinite(deposit) ? `${deposit}%` : 'confirm with lender'}   |   Maximum term: ${Number.isFinite(years) ? `${years} years` : 'confirm with lender'}`, 62, mortgageY + 62, { width: 460 });
-    doc.fillColor(MUTED).font('Helvetica').fontSize(8).text(cleanText(provider.sourceNote || 'Confirm eligibility, valuation, fees, rate and approval with the lender.', 420), 62, mortgageY + 82, { width: 460, height: 34, ellipsis: true, lineGap: 2, link: provider.sourceUrl || undefined });
-    mortgageY += 145;
+    const maximumYears = Number(provider.maxYears?.residential);
+    const years = Number.isFinite(maximumYears) ? Math.min(20, maximumYears) : 20;
+    const principal = Number.isFinite(mortgagePrice) && Number.isFinite(deposit) ? mortgagePrice * (1 - deposit / 100) : mortgagePrice;
+    const estimate = computeMortgageEstimate({ principal, annualRate: rate, years, arrangementFeePct: provider.arrangementFeePct });
+    doc.roundedRect(44, mortgageY, 505, 166, 12).fill(PALE);
+    doc.fillColor(INK).font('Helvetica-Bold').fontSize(13).text(cleanText(provider.name || 'Mortgage provider', 120), 62, mortgageY + 13, { width: 460 });
+    doc.fillColor(BRAND_GREEN).font('Helvetica-Bold').fontSize(8.5).text(`RATE: ${Number.isFinite(rate) ? `${rate}%` : 'QUOTE REQUIRED'}   |   MINIMUM DEPOSIT: ${Number.isFinite(deposit) ? `${deposit}%` : 'CONFIRM'}   |   TERM USED: ${years} YEARS`, 62, mortgageY + 36, { width: 460 });
+    if (estimate) {
+      doc.fillColor(INK).font('Helvetica-Bold').fontSize(9).text(`Loan amount: ${formatMoney(estimate.principal, 'UGX')}`, 62, mortgageY + 57, { width: 225 });
+      doc.fillColor(INK).font('Helvetica-Bold').fontSize(9).text(`Estimated monthly: ${formatMoney(estimate.monthly, 'UGX')}`, 300, mortgageY + 57, { width: 235, align: 'right' });
+      doc.fillColor(MUTED).font('Helvetica').fontSize(8).text(`Estimated interest: ${formatMoney(estimate.interest, 'UGX')}`, 62, mortgageY + 79, { width: 225 });
+      doc.fillColor(MUTED).font('Helvetica').fontSize(8).text(`Arrangement fee: ${formatMoney(estimate.arrangementFee, 'UGX')}`, 300, mortgageY + 79, { width: 235, align: 'right' });
+      doc.fillColor(BRAND_GREEN).font('Helvetica-Bold').fontSize(9).text(`Estimated total repayment: ${formatMoney(estimate.total, 'UGX')}`, 62, mortgageY + 100, { width: 473 });
+    }
+    doc.fillColor(MUTED).font('Helvetica').fontSize(7.5).text(cleanText(provider.sourceNote || 'Confirm eligibility, valuation, fees, rate and approval with the lender.', 420), 62, mortgageY + 121, { width: 460, height: 28, ellipsis: true, lineGap: 2, link: provider.sourceUrl || undefined });
+    mortgageY += 178;
   });
-  doc.fillColor(MUTED).font('Helvetica-Oblique').fontSize(8.5).text('Mortgage rates, fees, loan-to-value limits, eligibility and terms can change. This comparison does not replace a lender offer letter or independent financial advice.', 44, 697, { width: 505, lineGap: 3 });
+  doc.fillColor(MUTED).font('Helvetica-Oblique').fontSize(8.5).text('Reducing-balance illustrations only. Mortgage rates, fees, loan-to-value limits, eligibility and terms can change. Confirm a current lender quote, all taxes and other charges. This comparison does not replace an offer letter or independent financial advice.', 44, 696, { width: 505, lineGap: 3 });
 
   if (imagePaths.length) {
     addPage(doc, project, 'Project gallery');
@@ -369,7 +431,7 @@ function buildOffPlanBrochure(projectInput, output, options = {}) {
 async function brochureBuffer(project, options = {}) {
   const agentProfile = options.agentProfile || null;
   const [mapImageBuffer, ...agentListingImageBuffers] = await Promise.all([
-    googleStaticMapBuffer(project),
+    options.mapImageBuffer || googleStaticMapBuffer(project),
     ...(agentProfile?.listings || []).slice(0, 5).map((listing) => safeRemoteImageBuffer(listing.primary_image_url))
   ]);
   return new Promise((resolve, reject) => {
@@ -384,6 +446,10 @@ async function brochureBuffer(project, options = {}) {
 module.exports = {
   brochureBuffer,
   buildOffPlanBrochure,
+  computeMortgageEstimate,
+  distanceFromProject,
+  distanceKmBetween,
+  formatApproximateDistance,
   formatDate,
   formatMoney,
   googleMapsUrl,

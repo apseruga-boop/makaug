@@ -139,18 +139,24 @@
 @media (min-width: 1100px) { .off-plan-detail-grid { grid-template-columns: minmax(0, 1fr) 330px; } }
 .off-plan-dashboard-card { border: 1px solid #dce6df; border-radius: 16px; background: #fff; padding: 16px; }
 .off-plan-map { width: 100%; min-height: 340px; border: 0; border-radius: 16px; background: #edf3ee; }
-.off-plan-map-popup { display: grid; min-width: 190px; gap: 5px; padding: 3px 2px; color: #17211c; }
-.off-plan-map-popup strong { display: block; font-size: 13px; line-height: 1.3; }
+.off-plan-map-popup { display: grid; min-width: 220px; max-width: 240px; gap: 5px; padding: 5px 2px; color: #17211c; }
+.off-plan-map-popup strong { display: block; color: #166534; font-size: 13px; line-height: 1.3; }
 .off-plan-map-popup span { display: block; color: #68736c; font-size: 11px; }
-.off-plan-map-popup a { display: inline-flex; width: fit-content; margin-top: 3px; color: #0d6b35; font-size: 11px; font-weight: 900; text-decoration: underline; }
-.off-plan-nearby-group h4 { display: flex; align-items: center; gap: 8px; color: #173d28; font-size: .83rem; font-weight: 900; }
-.off-plan-nearby-group h4 i { width: 20px; color: #dc2626; text-align: center; }
+.off-plan-map-popup .off-plan-map-popup-label { color: #dc2626; font-size: 9px; font-weight: 900; letter-spacing: .06em; text-transform: uppercase; }
+.off-plan-map-popup .off-plan-map-popup-title { display: block; margin-top: 1px; color: #111827; font-size: 13px; font-weight: 900; line-height: 1.3; text-decoration: none; }
+.off-plan-map-popup .off-plan-map-popup-contact { display: inline-flex; width: fit-content; color: #0d6b35; font-size: 11px; font-weight: 900; text-decoration: underline; }
+.off-plan-map-popup .off-plan-map-popup-button { display: block; box-sizing: border-box; width: 100%; margin-top: 4px; border-radius: 8px; background: #166534; color: #fff; padding: 8px 10px; font-size: 11px; font-weight: 900; text-align: center; text-decoration: none; }
+.off-plan-nearby-group h4 { display: flex; align-items: center; gap: 10px; margin: 0; color: #173d28; font-size: 1rem; font-weight: 900; letter-spacing: -.01em; }
+.off-plan-nearby-group h4::after { content: ""; height: 1px; flex: 1; background: linear-gradient(90deg,#dce9df,transparent); }
+.off-plan-nearby-group h4 i { display: grid; width: 30px; height: 30px; flex: 0 0 30px; place-items: center; border-radius: 9px; background: #fff1f2; color: #dc2626; font-size: .85rem; text-align: center; }
 .off-plan-nearby-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; margin-top: 9px; }
 .off-plan-nearby-card { display: block; min-width: 0; border: 1px solid #e0e6e2; border-radius: 13px; background: #f8faf9; padding: 12px; transition: border-color .18s ease, background .18s ease; }
 .off-plan-nearby-card:hover,
 .off-plan-nearby-card:focus-visible { border-color: #68b983; background: #f0f8f3; outline: 0; }
-.off-plan-nearby-card strong { display: block; color: #17211c; font-size: .8rem; line-height: 1.35; }
+.off-plan-nearby-card strong { display: block; color: #17211c; font-size: .86rem; line-height: 1.35; }
 .off-plan-nearby-card span { display: block; margin-top: 4px; color: #68736c; font-size: .7rem; line-height: 1.45; }
+.off-plan-nearby-card .off-plan-distance { display: inline-flex; align-items: center; gap: 6px; width: fit-content; margin-top: 7px; border-radius: 999px; background: #eaf6ee; color: #126437; padding: 4px 8px; font-size: .67rem; font-weight: 900; }
+.off-plan-nearby-card .off-plan-distance i { color: #dc2626; }
 .off-plan-nearby-card small { display: inline-flex; align-items: center; gap: 5px; margin-top: 8px; color: #0d6b35; font-size: .65rem; font-weight: 900; }
 .off-plan-mortgage-policy { border-left: 4px solid #e6a12a; border-radius: 0 10px 10px 0; background: #fffbeb; padding: 11px 13px; color: #59430a; }
 .off-plan-mortgage-policy strong { display: block; font-size: .75rem; }
@@ -158,6 +164,18 @@
 .off-plan-bank-heading { display: flex; min-height: 38px; align-items: center; gap: 10px; color: #111827; }
 .off-plan-bank-heading img { width: 78px; max-height: 34px; object-fit: contain; object-position: left center; }
 .off-plan-bank-heading strong { font-size: .86rem; line-height: 1.25; }
+.off-plan-mortgage-controls { display: grid; grid-template-columns: minmax(0,1fr) minmax(150px,.55fr) auto; align-items: end; gap: 10px; border: 1px solid #d8eadf; border-radius: 14px; background: #f6fbf7; padding: 13px; }
+.off-plan-mortgage-controls label { display: grid; gap: 5px; color: #46564c; font-size: .72rem; font-weight: 900; }
+.off-plan-mortgage-controls input,
+.off-plan-mortgage-controls select { width: 100%; height: 42px; border: 1px solid #cfd9d2; border-radius: 10px; background: #fff; padding: 0 11px; color: #17211c; font-size: .82rem; }
+.off-plan-mortgage-controls button { min-height: 42px; border-radius: 10px; background: #14753b; color: #fff; padding: 0 14px; font-size: .76rem; font-weight: 900; white-space: nowrap; }
+.off-plan-mortgage-estimate { margin-top: 13px; border-top: 1px solid #dce5df; padding-top: 12px; }
+.off-plan-mortgage-estimate h4 { color: #166534; font-size: .75rem; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; }
+.off-plan-mortgage-estimate dl { display: grid; gap: 7px; margin-top: 8px; }
+.off-plan-mortgage-estimate dl div { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.off-plan-mortgage-estimate dt { color: #647067; font-size: .68rem; }
+.off-plan-mortgage-estimate dd { color: #17211c; font-size: .73rem; font-weight: 900; text-align: right; }
+.off-plan-mortgage-estimate p { margin-top: 8px; color: #9a5b09; font-size: .66rem; font-weight: 800; line-height: 1.4; }
 .off-plan-modal { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; padding: 20px; background: rgba(8,20,13,.72); }
 .off-plan-modal[hidden] { display: none; }
 .off-plan-modal-card { width: min(680px,100%); max-height: 90vh; overflow: auto; border-radius: 24px; background: #fff; padding: 24px; box-shadow: 0 30px 90px rgba(0,0,0,.35); }
@@ -165,8 +183,10 @@
 @keyframes off-plan-pulse { to { background-position: -200% 0; } }
 
 @media (min-width: 1440px) {
-  nav > div:first-child { max-width: 1440px; }
+  nav > div:first-child { width: 100%; max-width: 1720px; }
   #desktop-primary-nav .nav-item { padding-left: .58rem; padding-right: .58rem; font-size: .82rem; }
+  html:not([lang="en"]) #desktop-primary-nav .nav-item { padding-left: .4rem; padding-right: .4rem; font-size: .75rem; }
+  html:not([lang="en"]) #nav-list-btn { padding-left: .78rem !important; padding-right: .78rem !important; font-size: .76rem !important; }
 }
 @media (min-width: 1024px) and (max-width: 1439px) {
   #desktop-primary-nav .nav-item { padding-left: .32rem; padding-right: .32rem; font-size: .72rem; }
@@ -213,4 +233,5 @@
   .off-plan-gallery-dialog-grid { grid-template-columns: 1fr; padding: 8px; }
   .off-plan-readiness ul { grid-template-columns: 1fr; }
   .off-plan-nearby-grid { grid-template-columns: 1fr; }
+  .off-plan-mortgage-controls { grid-template-columns: 1fr; }
 }

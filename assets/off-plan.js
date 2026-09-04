@@ -98,6 +98,16 @@
     guidePrices: 'دليل بالشلن · أسعار المصدر بالدولار', unitVerifying: 'يتم التحقق من تفاصيل الوحدات.', milestonesVerifying: 'يتم التحقق من مراحل الدفع.', paymentMilestone: 'مرحلة الدفع', monthlyInstalments: '{count} دفعات شهرية', termsVerify: 'الشروط قيد التحقق', mortgageIntro: 'قارن معلومات المقرضين العامة الحالية. تظل الأهلية والأسعار والموافقة من قرارات المقرض.', rate: 'السعر الإرشادي', quoteRequired: 'يلزم عرض سعر حالي', minDeposit: 'الحد الأدنى للمقدم', term: 'المدة القصوى', years: '{count} سنة', officialDetails: 'التفاصيل الرسمية', widerArea: 'توضح الخريطة المنطقة الأوسع، بينما يتم تأكيد الموقع الدقيق.', confirmTravel: 'أكد أوقات التنقل والموقع الدقيق قبل الالتزام.', nearbyLive: 'نتائج Google Maps الحالية حول نقطة المنطقة. أكد المسافات من الموقع الدقيق.', calcDisclaimer: 'للتوضيح فقط. أكد خطة الدفع الموقعة والرسوم والضرائب وآثار سعر الصرف مع المطور ومستشارك.', areaOverviewFallback: 'أكد المدارس والرعاية الصحية والمواصلات بعد التحقق من الموقع الدقيق.', projectDetails: 'تفاصيل المشروع المتوفرة لديك (اختياري)', projectDetailsPlaceholder: 'اسم المشروع والمطور والموقع وموعد الإنجاز والأسعار وخطة الدفع وروابط الأدلة'
   });
 
+  Object.assign(OFF_PLAN_DETAIL_I18N.en, { sourceAgentBio: 'Kazi Honest helps buyers explore residential homes, smart-home options and off-plan opportunities around Kigo Road and the wider Kampala-Wakiso market. This profile was created from the agent\'s direct submission; identity verification and account claim are pending.' });
+  Object.assign(OFF_PLAN_DETAIL_I18N.lg, { sourceAgentBio: 'Kazi Honest ayamba abagula okunoonya amaka ag\'okubeeramu, enkola za smart-home ne pulojekiti za off-plan okwetooloola Kigo Road n\'akatale ka Kampala-Wakiso. Profile eno yakolebwa okuva ku mawulire agent ge yaweereza; okukakasa obumuntu n\'okwezza account bikyagenda mu maaso.' });
+  Object.assign(OFF_PLAN_DETAIL_I18N.sw, { sourceAgentBio: 'Kazi Honest huwasaidia wanunuzi kuchunguza nyumba za makazi, chaguo za smart-home na miradi ya off-plan karibu na Kigo Road na soko pana la Kampala-Wakiso. Wasifu huu umetokana na taarifa za moja kwa moja za wakala; uthibitishaji wa utambulisho na madai ya akaunti bado unaendelea.' });
+  Object.assign(OFF_PLAN_DETAIL_I18N.ac, { sourceAgentBio: 'Kazi Honest konyo jo ma mito wilo ot me bedo iye, yoo me smart-home ki purujekti me off-plan cok ki Kigo Road ki Kampala-Wakiso. Profile man kiyubo ki ngec ma agent ocwalo; moko nga aye en ki kwanyo account pud tye ka time.' });
+  Object.assign(OFF_PLAN_DETAIL_I18N.ny, { sourceAgentBio: 'Kazi Honest naahwera abaguzi kureeba amaka g\'okutuura, enkora za smart-home na pulojekiti za off-plan omuri Kigo Road n\'akatale ka Kampala-Wakiso. Profile egi ekoreirwe aha makuru agu agent yaahaire; okuhamya omuntu n\'okutunga account nibikirindirwa.' });
+  Object.assign(OFF_PLAN_DETAIL_I18N.rn, { sourceAgentBio: 'Kazi Honest naahwera abaguzi kushaka amaka g\'okutuura, enkora za smart-home na pulojekiti za off-plan omuri Kigo Road n\'akatale ka Kampala-Wakiso. Profile egi ekoreirwe aha makuru agu agent yaahaire; okuhamya omuntu n\'okutunga account nibikirindirwa.' });
+  Object.assign(OFF_PLAN_DETAIL_I18N.sm, { sourceAgentBio: 'Kazi Honest ayamba abagula okulonda amaka ag\'okubeeramu, enkola dha smart-home ne pulojekiti dha off-plan okwetooloola Kigo Road n\'akatale ka Kampala-Wakiso. Profile eno yakolebwa okuva ku mawulire agent ge yawa; okukakasa obuntu n\'okwezza account bikyagenda mu maiso.' });
+  Object.assign(OFF_PLAN_DETAIL_I18N.am, { sourceAgentBio: 'Kazi Honest ገዢዎች በKigo Road እና በKampala-Wakiso አካባቢ የመኖሪያ ቤቶችን፣ smart-home አማራጮችንና off-plan ፕሮጀክቶችን እንዲያዩ ትረዳለች። ይህ መገለጫ ከደላላዋ ቀጥተኛ መረጃ የተዘጋጀ ሲሆን የማንነትና የአካውንት ማረጋገጫ በሂደት ላይ ነው።' });
+  Object.assign(OFF_PLAN_DETAIL_I18N.ar, { sourceAgentBio: 'تساعد Kazi Honest المشترين على استكشاف المنازل السكنية وخيارات المنازل الذكية ومشروعات البيع على المخطط حول Kigo Road وسوق Kampala-Wakiso الأوسع. أُنشئ هذا الملف من معلومات قدمتها الوكيلة مباشرة، وما زال التحقق من الهوية والمطالبة بالحساب قيد الإجراء.' });
+
   function offPlanLanguage() {
     const code = clean(document.documentElement.lang || 'en').toLowerCase().split('-')[0];
     return OFF_PLAN_I18N[code] ? code : 'en';
@@ -143,6 +153,16 @@
     am: { schools: 'ትምህርት ቤቶችና ህፃናት እንክብካቤ', healthcare: 'ጤና አገልግሎት', universities: 'ዩኒቨርሲቲዎች', shopping: 'ገበያና ግብይት', recreation: 'ፓርኮችና የቤተሰብ መዝናኛ', transport: 'ትራንስፖርት', mortgageTitle: 'የቤት ብድር አማራጮች', mortgagePolicy: 'የoff-plan ፋይናንስ በአበዳሪው ይወሰናል። የታተመ የቤት ወለድ ከመጠናቀቁ በፊት ቤቱ እንደሚደገፍ አያረጋግጥም። ብቁነት፣ ግምገማ፣ ሰነድ፣ መድን፣ ክፍያና ቅድመ ክፍያን ከአበዳሪው ያረጋግጡ።', chooseUnit: 'የቤት ዓይነት', customPayment: 'ቤት፣ ቅድመ ክፍያና የክፍያ ጊዜ ይምረጡ፣ ከዚያ ቀኖቹን ያስሉ።', phoneLabel: 'ስልክ / WhatsApp', familyServices: 'የቤተሰብ ኑሮና የአካባቢ አገልግሎቶች', areaServices: 'በአቅራቢያ ያሉ ትምህርት ቤቶች፣ ጤና፣ ዩኒቨርሲቲዎች፣ ገበያ፣ ትራንስፖርት፣ ፓርኮችና የቤተሰብ መዝናኛዎችን ይመልከቱ። ትክክለኛው ቦታና የጉዞ ጊዜ መረጋገጥ አለበት።' },
     ar: { schools: 'المدارس ورعاية الأطفال', healthcare: 'الرعاية الصحية', universities: 'الجامعات', shopping: 'الأسواق والتسوق', recreation: 'الحدائق والأنشطة العائلية', transport: 'النقل', mortgageTitle: 'خيارات الرهن العقاري', mortgagePolicy: 'تمويل العقار على المخطط خاص بكل مقرض. سعر الرهن المنشور لا يعني أن المقرض سيمول المنزل قبل اكتماله. أكد الأهلية والتقييم والملكية والدفعات المرحلية والتأمين والرسوم والمقدم مع المقرض.', chooseUnit: 'نوع المنزل', customPayment: 'اختر المنزل والمقدم ومدة الدفع ثم احسب كل مواعيد الدفعات التوضيحية.', phoneLabel: 'الهاتف / WhatsApp', familyServices: 'الحياة العائلية والخدمات المحلية', areaServices: 'استكشف المدارس والرعاية الصحية والجامعات والأسواق والنقل والحدائق والأنشطة العائلية القريبة. يجب تأكيد الموقع الدقيق وأوقات السفر.' }
   };
+
+  Object.assign(OFF_PLAN_EXPERIENCE_I18N.en, { approximateDistance: 'Approx. {distance} km from the displayed area point', distancePending: 'Distance pending', loanAmount: 'Amount to borrow (UGX)', loanTerm: 'Loan term', recalculateMortgage: 'Calculate repayments', monthlyRepayment: 'Estimated monthly payment', totalInterest: 'Estimated interest', arrangementFee: 'Arrangement fee estimate', totalRepayment: 'Estimated total repayment', mortgageEstimate: 'Repayment estimate', mortgageEstimateNote: 'Illustrative reducing-balance estimate using the selected amount and term. The lender must confirm the rate, fees, eligibility and whether it will finance this off-plan project.', termCapped: 'Calculated at this lender\'s {count}-year maximum term.', offPlanProjectLabel: 'Off-plan project', viewProject: 'View project details', lenderConfirm: 'Confirm eligibility, valuation, fees, rate and approval directly with the lender.' });
+  Object.assign(OFF_PLAN_EXPERIENCE_I18N.lg, { approximateDistance: 'Kilomita nga {distance} okuva ku kifo ekiragiddwa', distancePending: 'Ebanga likyakeberwa', loanAmount: 'Ssente z\'oyagala okwewola (UGX)', loanTerm: 'Emyaka gy\'okwewola', recalculateMortgage: 'Bala okusasula', monthlyRepayment: 'Okusasula kwa buli mwezi okuteeberezebwa', totalInterest: 'Amagoba agateeberezebwa', arrangementFee: 'Fee y\'okutegeka eteberezebwa', totalRepayment: 'Omugatte gw\'okusasula oguteeberezebwa', mortgageEstimate: 'Okuteebereza okusasula', mortgageEstimateNote: 'Kuno kuteebereza kwa reducing-balance nga kukozesa ssente n\'emyaka gy\'olonze. Lender alina okukakasa rate, fees, ebisanyizo n\'oba asobola okusasulira pulojekiti eno ya off-plan.', termCapped: 'Kibaliddwa ku myaka {count}, ekiseera kya lender ekisinga.', offPlanProjectLabel: 'Pulojekiti ya off-plan', viewProject: 'Laba ebikwata ku pulojekiti', lenderConfirm: 'Kakasa ebisanyizo, valuation, fees, rate n\'okukkirizibwa butereevu eri lender.' });
+  Object.assign(OFF_PLAN_EXPERIENCE_I18N.sw, { approximateDistance: 'Takriban km {distance} kutoka eneo linaloonyeshwa', distancePending: 'Umbali unathibitishwa', loanAmount: 'Kiasi cha kukopa (UGX)', loanTerm: 'Muda wa mkopo', recalculateMortgage: 'Kokotoa malipo', monthlyRepayment: 'Makadirio ya malipo ya mwezi', totalInterest: 'Makadirio ya riba', arrangementFee: 'Makadirio ya ada ya mpangilio', totalRepayment: 'Makadirio ya jumla ya malipo', mortgageEstimate: 'Makadirio ya malipo', mortgageEstimateNote: 'Makadirio ya mfano ya salio linalopungua kwa kiasi na muda uliochagua. Mkopeshaji lazima athibitishe riba, ada, ustahiki na ufadhili wa mradi huu.', termCapped: 'Imekokotolewa kwa kiwango cha juu cha miaka {count} cha mkopeshaji.', offPlanProjectLabel: 'Mradi wa off-plan', viewProject: 'Tazama taarifa za mradi', lenderConfirm: 'Thibitisha ustahiki, tathmini, ada, riba na idhini moja kwa moja na mkopeshaji.' });
+  Object.assign(OFF_PLAN_EXPERIENCE_I18N.ac, { approximateDistance: 'Kilomita ma rom ki {distance} ki kabedo ma kinyutu', distancePending: 'Bor pud tye ka kimoko', loanAmount: 'Cente ma imito deno (UGX)', loanTerm: 'Kare me den', recalculateMortgage: 'Kwan cul', monthlyRepayment: 'Cul me dwe ma gipimo', totalInterest: 'Interest ma gipimo', arrangementFee: 'Fee me yub ma gipimo', totalRepayment: 'Cul ducu ma gipimo', mortgageEstimate: 'Pimo me cul', mortgageEstimateNote: 'Man obedo lapor me cul ma jwayo balance kun tiyo ki cente ki kare ma iyero. Lender myero omok rate, fees, cik ki ka bitwero culo pi purujekti man.', termCapped: 'Kikwano i mwaka {count}, kare mamalo pa lender man.', offPlanProjectLabel: 'Purujekti me off-plan', viewProject: 'Nen lok pa purujekti', lenderConfirm: 'Mok cik, valuation, fees, rate ki ye bot lender kikome.' });
+  Object.assign(OFF_PLAN_EXPERIENCE_I18N.ny, { approximateDistance: 'Haihii km {distance} kuruga aha mwanya ogworekirwe', distancePending: 'Embaju nekyahamibwa', loanAmount: 'Efaranga agu orikwenda kweguza (UGX)', loanTerm: 'Obwire bwa mortgage', recalculateMortgage: 'Bara okusasura', monthlyRepayment: 'Okusasura kw\'buri kwezi okuteeberezebwa', totalInterest: 'Amagoba agateeberezebwa', arrangementFee: 'Fee y\'okuteekateeka eteberezebwa', totalRepayment: 'Okusasura kwona okuteeberezebwa', mortgageEstimate: 'Okuteebereza okusasura', mortgageEstimateNote: 'Eki n\'ekyokureebaho kya reducing-balance nikikoresa amafaranga n\'obwire obu otooraine. Lender aine kuhamya rate, fees, ebisanyizo n\'okusasurira pulojekiti egi.', termCapped: 'Kibarirwe aha myaka {count}, obwire bwa lender oburikukirayo.', offPlanProjectLabel: 'Pulojekiti ya off-plan', viewProject: 'Reeba amakuru ga pulojekiti', lenderConfirm: 'Hamya ebisanyizo, valuation, fees, rate n\'okwikiriza n\'lender.' });
+  Object.assign(OFF_PLAN_EXPERIENCE_I18N.rn, OFF_PLAN_EXPERIENCE_I18N.ny, { approximateDistance: 'Haihii km {distance} kuruga aha kicweka ekyorekirwe' });
+  Object.assign(OFF_PLAN_EXPERIENCE_I18N.sm, { approximateDistance: 'Kilomita nga {distance} okuva ku kifo ekiragiddwa', distancePending: 'Ebanga likyakeberwa', loanAmount: 'Ssente dh\'oyenda okwewola (UGX)', loanTerm: 'Emyaka gy\'okwewola', recalculateMortgage: 'Bala okusasula', monthlyRepayment: 'Okusasula kwa buli mwezi okuteeberezebwa', totalInterest: 'Amagoba agateeberezebwa', arrangementFee: 'Fee y\'okutegeka eteberezebwa', totalRepayment: 'Omugatte gw\'okusasula oguteeberezebwa', mortgageEstimate: 'Okuteebereza okusasula', mortgageEstimateNote: 'Kuno kuteebereza kwa reducing-balance nga kukozesa ssente n\'emyaka gy\'olonze. Lender alina okukakasa rate, fees n\'okusasulira pulojekiti eno.', termCapped: 'Kibaliddwa ku myaka {count}, ekiseera kya lender ekisinga.', offPlanProjectLabel: 'Pulojekiti ya off-plan', viewProject: 'Laba ebikwata ku pulojekiti', lenderConfirm: 'Kakasa valuation, fees, rate n\'okukkirizibwa eri lender.' });
+  Object.assign(OFF_PLAN_EXPERIENCE_I18N.am, { approximateDistance: 'ከሚታየው የአካባቢ ነጥብ በግምት {distance} ኪ.ሜ.', distancePending: 'ርቀት በማረጋገጥ ላይ', loanAmount: 'የሚበደሩት መጠን (UGX)', loanTerm: 'የብድር ጊዜ', recalculateMortgage: 'ክፍያውን አስሉ', monthlyRepayment: 'ግምታዊ ወርሃዊ ክፍያ', totalInterest: 'ግምታዊ ወለድ', arrangementFee: 'ግምታዊ የአዘጋጅት ክፍያ', totalRepayment: 'ግምታዊ ጠቅላላ ክፍያ', mortgageEstimate: 'የክፍያ ግምት', mortgageEstimateNote: 'የተመረጠውን መጠንና ጊዜ የሚጠቀም የቀነሰ ቀሪ ሒሳብ ምሳሌ ነው። አበዳሪው ወለድ፣ ክፍያ፣ ብቁነትና የፕሮጀክቱን ፋይናንስ ማረጋገጥ አለበት።', termCapped: 'በዚህ አበዳሪ ከፍተኛ {count} ዓመት ተሰልቷል።', offPlanProjectLabel: 'የoff-plan ፕሮጀክት', viewProject: 'የፕሮጀክቱን ዝርዝር ይመልከቱ', lenderConfirm: 'ብቁነት፣ ግምገማ፣ ክፍያ፣ ወለድና ፈቃድን ከአበዳሪው ያረጋግጡ።' });
+  Object.assign(OFF_PLAN_EXPERIENCE_I18N.ar, { approximateDistance: 'نحو {distance} كم من نقطة المنطقة المعروضة', distancePending: 'المسافة قيد التأكيد', loanAmount: 'المبلغ المطلوب اقتراضه (UGX)', loanTerm: 'مدة القرض', recalculateMortgage: 'احسب الأقساط', monthlyRepayment: 'القسط الشهري التقديري', totalInterest: 'الفائدة التقديرية', arrangementFee: 'رسوم الترتيب التقديرية', totalRepayment: 'إجمالي السداد التقديري', mortgageEstimate: 'تقدير السداد', mortgageEstimateNote: 'تقدير توضيحي برصيد متناقص باستخدام المبلغ والمدة المختارين. يجب أن يؤكد المقرض السعر والرسوم والأهلية وتمويل هذا المشروع.', termCapped: 'حُسب وفق الحد الأقصى لدى المقرض وهو {count} سنة.', offPlanProjectLabel: 'مشروع على المخطط', viewProject: 'عرض تفاصيل المشروع', lenderConfirm: 'أكد الأهلية والتقييم والرسوم والسعر والموافقة مباشرة مع المقرض.' });
 
   function offPlanExperienceText(key) {
     const pack = OFF_PLAN_EXPERIENCE_I18N[offPlanLanguage()] || OFF_PLAN_EXPERIENCE_I18N.en;
@@ -209,6 +229,44 @@
     if (value == null || (typeof value === 'string' && !value.trim())) return null;
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : null;
+  }
+  function coordinatesForPlace(place = {}) {
+    const location = place.geometry?.location;
+    const lat = number(typeof location?.lat === 'function' ? location.lat() : (location?.lat ?? place.latitude ?? place.lat));
+    const lng = number(typeof location?.lng === 'function' ? location.lng() : (location?.lng ?? place.longitude ?? place.lng));
+    return lat == null || lng == null ? null : { lat, lng };
+  }
+  function distanceKmBetween(first = {}, second = {}) {
+    const lat1 = number(first.lat ?? first.latitude); const lng1 = number(first.lng ?? first.longitude);
+    const lat2 = number(second.lat ?? second.latitude); const lng2 = number(second.lng ?? second.longitude);
+    if ([lat1, lng1, lat2, lng2].some((value) => value == null)) return null;
+    const radians = (degrees) => degrees * Math.PI / 180;
+    const deltaLat = radians(lat2 - lat1); const deltaLng = radians(lng2 - lng1);
+    const a = Math.sin(deltaLat / 2) ** 2 + Math.cos(radians(lat1)) * Math.cos(radians(lat2)) * Math.sin(deltaLng / 2) ** 2;
+    return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+  function distanceFromProject(place = {}, project = {}) {
+    const supplied = number(place.distance_km);
+    if (supplied != null) return supplied;
+    const coordinates = coordinatesForPlace(place);
+    return coordinates ? distanceKmBetween({ lat: project.latitude, lng: project.longitude }, coordinates) : null;
+  }
+  function formatDistanceLabel(distance) {
+    const value = number(distance);
+    if (value == null) return offPlanExperienceText('distancePending');
+    const digits = value < 10 ? 1 : 0;
+    return offPlanExperienceText('approximateDistance').replace('{distance}', value.toFixed(digits));
+  }
+  function mortgageEstimate(principalValue, annualRateValue, yearsValue, arrangementFeePctValue = 0) {
+    const principal = number(principalValue); const annualRate = number(annualRateValue); const years = number(yearsValue);
+    if (principal == null || principal <= 0 || annualRate == null || annualRate <= 0 || years == null || years <= 0) return null;
+    const months = Math.max(1, Math.round(years * 12));
+    const monthlyRate = annualRate / 100 / 12;
+    const factor = (1 + monthlyRate) ** months;
+    const monthly = principal * monthlyRate * factor / (factor - 1);
+    const arrangementFee = principal * Math.max(0, number(arrangementFeePctValue) || 0) / 100;
+    const repaymentBeforeFee = monthly * months;
+    return { principal, years, months, monthly, interest: repaymentBeforeFee - principal, arrangementFee, total: repaymentBeforeFee + arrangementFee };
   }
   function formatMoney(value, currency = 'UGX') {
     const amount = number(value);
@@ -624,7 +682,7 @@
     const sourceId = clean(project.source_agent_profile_id || project.source_agent_id);
     if (!sourceId) return '';
     const photo = projectAgentPhoto(project);
-    const bio = clean(project.source_agent_bio);
+    const bio = offPlanLanguage() === 'en' ? clean(project.source_agent_bio || offPlanText('sourceAgentBio')) : offPlanText('sourceAgentBio');
     const phone = clean(project.source_agent_whatsapp || project.source_agent_phone);
     const phoneHref = phone.replace(/[^+\d]/g, '');
     return `<section class="off-plan-panel"><p class="text-xs font-black uppercase tracking-wide text-green-700">${escapeHtml(offPlanText('projectContact'))}</p><div class="mt-3 flex flex-col sm:flex-row sm:items-center justify-between gap-4"><div class="flex items-center gap-4">${photo ? `<img src="${escapeHtml(photo)}" alt="${escapeHtml(sourceName)}" class="h-20 w-20 rounded-full object-cover border-4 border-green-50">` : `<span class="h-20 w-20 rounded-full bg-green-50 text-green-800 grid place-items-center text-2xl"><i class="fas fa-user"></i></span>`}<div><strong class="block text-lg text-gray-950">${escapeHtml(sourceName)}</strong>${project.source_agent_company ? `<span class="block text-sm text-gray-500">${escapeHtml(project.source_agent_company)}</span>` : ''}<span class="block text-sm text-gray-500">${escapeHtml(offPlanText('linkedProfile'))}</span>${phone ? `<a class="mt-2 inline-flex items-center gap-2 text-sm font-black text-green-800" href="tel:${escapeHtml(phoneHref)}"><i class="fas fa-phone" aria-hidden="true"></i>${escapeHtml(offPlanExperienceText('phoneLabel'))}: ${escapeHtml(phone)}</a>` : ''}</div></div><a href="/agents/${encodeURIComponent(sourceId)}" class="rounded-xl bg-green-50 text-green-800 px-4 py-2.5 text-sm font-black text-center">${escapeHtml(offPlanText('viewProfile'))}</a></div>${bio ? `<p class="mt-4 text-sm leading-6 text-gray-600">${escapeHtml(bio)}</p>` : ''}</section>`;
@@ -639,7 +697,7 @@
     const monthsValue = number(project.payment_plan_months) || 12;
     const monthOptions = Array.from(new Set([6, 12, 15, 18, 24, 36, 40, 48, 60, monthsValue])).sort((a, b) => a - b);
     const currencyOptions = Array.from(new Set(['UGX', originalCurrency, 'GBP', 'EUR'].filter(Boolean)));
-    return `<div id="off-plan-custom-payment-builder" class="mt-6 rounded-2xl border border-green-100 bg-[#f4faf5] p-5"><h3 class="font-black text-gray-950">${escapeHtml(offPlanText('buildSchedule'))}</h3><p class="mt-1 text-sm text-gray-600">${escapeHtml(offPlanExperienceText('customPayment'))}</p><div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-4">${units.length ? `<label class="text-xs font-bold text-gray-700">${escapeHtml(offPlanExperienceText('chooseUnit'))}<select id="off-plan-calc-unit" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 text-sm" onchange="selectOffPlanUnit(this.value)">${units.map((unit, index) => `<option value="${index}">${escapeHtml(localizedUnitLabel(unit))}</option>`).join('')}</select></label>` : ''}<label class="text-xs font-bold text-gray-700">${escapeHtml(offPlanText('currency'))}<select id="off-plan-calc-currency" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 text-sm" onchange="changeOffPlanCalculatorCurrency(this.value)">${currencyOptions.map((currency) => `<option value="${escapeHtml(currency)}">${escapeHtml(currency)}</option>`).join('')}</select></label><label class="text-xs font-bold text-gray-700">${escapeHtml(offPlanText('homePrice'))}<input id="off-plan-calc-price" type="number" min="0" value="${escapeHtml(firstPrice)}" data-ugx-value="${escapeHtml(firstPrice)}" data-original-value="${escapeHtml(sourceUnit?.price_original || '')}" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 text-sm"></label><label class="text-xs font-bold text-gray-700">${escapeHtml(offPlanText('upfrontDeposit'))}<select id="off-plan-calc-deposit" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 text-sm">${depositOptions.map((value) => `<option value="${value}" ${value === depositValue ? 'selected' : ''}>${value}%</option>`).join('')}</select></label><label class="text-xs font-bold text-gray-700">${escapeHtml(offPlanText('reservationFee'))}<input id="off-plan-calc-reservation" type="number" min="0" value="${escapeHtml(project.reservation_fee_ugx || 0)}" data-ugx-value="${escapeHtml(project.reservation_fee_ugx || 0)}" data-original-value="${escapeHtml(project.extra_fields?.reservation_fee_original || 1500)}" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 text-sm"></label><label class="text-xs font-bold text-gray-700">${escapeHtml(offPlanText('paymentMonths'))}<select id="off-plan-calc-months" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 text-sm">${monthOptions.map((value) => `<option value="${value}" ${value === monthsValue ? 'selected' : ''}>${escapeHtml(offPlanDynamicText('upToMonths', { count: value }))}</option>`).join('')}</select></label></div><button type="button" onclick="calculateOffPlanPayments()" class="mt-4 rounded-xl bg-green-700 text-white px-5 py-3 font-black">${escapeHtml(offPlanText('calculateDates'))}</button><div id="off-plan-calculator-result" class="mt-4"></div></div><div class="mt-5 rounded-2xl border border-emerald-100 bg-white overflow-hidden"><button type="button" onclick="toggleOffPlanMortgage()" class="w-full flex items-center justify-between gap-3 px-5 py-4 text-left text-sm font-black text-green-800" aria-controls="off-plan-mortgage-panel" aria-expanded="false" id="off-plan-mortgage-toggle"><span><i class="fas fa-house-circle-check mr-2"></i>${escapeHtml(offPlanExperienceText('mortgageTitle'))}</span><i class="fas fa-chevron-down"></i></button><div id="off-plan-mortgage-panel" class="hidden border-t border-emerald-100 p-5"><p class="text-sm text-gray-600">${escapeHtml(offPlanText('mortgageIntro'))}</p><div class="off-plan-mortgage-policy mt-3"><strong>${escapeHtml(offPlanExperienceText('mortgageTitle'))}</strong><p>${escapeHtml(offPlanExperienceText('mortgagePolicy'))}</p></div><div id="off-plan-mortgage-results" class="mt-4 grid md:grid-cols-3 gap-3"></div></div></div>`;
+    return `<div id="off-plan-custom-payment-builder" class="mt-6 rounded-2xl border border-green-100 bg-[#f4faf5] p-5"><h3 class="font-black text-gray-950">${escapeHtml(offPlanText('buildSchedule'))}</h3><p class="mt-1 text-sm text-gray-600">${escapeHtml(offPlanExperienceText('customPayment'))}</p><div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-4">${units.length ? `<label class="text-xs font-bold text-gray-700">${escapeHtml(offPlanExperienceText('chooseUnit'))}<select id="off-plan-calc-unit" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 text-sm" onchange="selectOffPlanUnit(this.value)">${units.map((unit, index) => `<option value="${index}">${escapeHtml(localizedUnitLabel(unit))}</option>`).join('')}</select></label>` : ''}<label class="text-xs font-bold text-gray-700">${escapeHtml(offPlanText('currency'))}<select id="off-plan-calc-currency" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 text-sm" onchange="changeOffPlanCalculatorCurrency(this.value)">${currencyOptions.map((currency) => `<option value="${escapeHtml(currency)}">${escapeHtml(currency)}</option>`).join('')}</select></label><label class="text-xs font-bold text-gray-700">${escapeHtml(offPlanText('homePrice'))}<input id="off-plan-calc-price" type="number" min="0" value="${escapeHtml(firstPrice)}" data-ugx-value="${escapeHtml(firstPrice)}" data-original-value="${escapeHtml(sourceUnit?.price_original || '')}" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 text-sm"></label><label class="text-xs font-bold text-gray-700">${escapeHtml(offPlanText('upfrontDeposit'))}<select id="off-plan-calc-deposit" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 text-sm">${depositOptions.map((value) => `<option value="${value}" ${value === depositValue ? 'selected' : ''}>${value}%</option>`).join('')}</select></label><label class="text-xs font-bold text-gray-700">${escapeHtml(offPlanText('reservationFee'))}<input id="off-plan-calc-reservation" type="number" min="0" value="${escapeHtml(project.reservation_fee_ugx || 0)}" data-ugx-value="${escapeHtml(project.reservation_fee_ugx || 0)}" data-original-value="${escapeHtml(project.extra_fields?.reservation_fee_original || 1500)}" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 text-sm"></label><label class="text-xs font-bold text-gray-700">${escapeHtml(offPlanText('paymentMonths'))}<select id="off-plan-calc-months" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 text-sm">${monthOptions.map((value) => `<option value="${value}" ${value === monthsValue ? 'selected' : ''}>${escapeHtml(offPlanDynamicText('upToMonths', { count: value }))}</option>`).join('')}</select></label></div><button type="button" onclick="calculateOffPlanPayments()" class="mt-4 rounded-xl bg-green-700 text-white px-5 py-3 font-black">${escapeHtml(offPlanText('calculateDates'))}</button><div id="off-plan-calculator-result" class="mt-4"></div></div><div class="mt-5 rounded-2xl border border-emerald-100 bg-white overflow-hidden"><button type="button" onclick="toggleOffPlanMortgage()" class="w-full flex items-center justify-between gap-3 px-5 py-4 text-left text-sm font-black text-green-800" aria-controls="off-plan-mortgage-panel" aria-expanded="false" id="off-plan-mortgage-toggle"><span><i class="fas fa-house-circle-check mr-2"></i>${escapeHtml(offPlanExperienceText('mortgageTitle'))}</span><i class="fas fa-chevron-down"></i></button><div id="off-plan-mortgage-panel" class="hidden border-t border-emerald-100 p-5"><p class="text-sm text-gray-600">${escapeHtml(offPlanText('mortgageIntro'))}</p><div class="off-plan-mortgage-policy mt-3"><strong>${escapeHtml(offPlanExperienceText('mortgageTitle'))}</strong><p>${escapeHtml(offPlanExperienceText('mortgagePolicy'))}</p></div><div class="off-plan-mortgage-controls mt-4"><label>${escapeHtml(offPlanExperienceText('loanAmount'))}<input id="off-plan-mortgage-amount" type="number" min="1" value="${escapeHtml(firstPrice)}"></label><label>${escapeHtml(offPlanExperienceText('loanTerm'))}<select id="off-plan-mortgage-years">${[5, 10, 15, 20, 25].map((years) => `<option value="${years}" ${years === 20 ? 'selected' : ''}>${escapeHtml(offPlanText('years', { count: years }))}</option>`).join('')}</select></label><button type="button" onclick="recalculateOffPlanMortgages()">${escapeHtml(offPlanExperienceText('recalculateMortgage'))}</button></div><p class="mt-3 text-xs leading-5 text-gray-500">${escapeHtml(offPlanExperienceText('mortgageEstimateNote'))}</p><div id="off-plan-mortgage-results" class="mt-4 grid md:grid-cols-3 gap-3"></div></div></div>`;
   }
 
   function detailMarkup(project) {
@@ -695,10 +753,11 @@
     if (!target) return;
     const populated = groups.filter((group) => Array.isArray(group.places) && group.places.length);
     if (!populated.length) { target.innerHTML = `<p class="text-sm text-gray-500">${escapeHtml(offPlanText('areaOverviewFallback'))}</p>`; return; }
-    target.innerHTML = populated.map((group) => `<section class="off-plan-nearby-group"><h4><i class="fas ${escapeHtml(group.icon)}" aria-hidden="true"></i>${escapeHtml(offPlanExperienceText(group.key))}</h4><div class="off-plan-nearby-grid">${group.places.map((place) => {
+    target.innerHTML = populated.map((group) => `<section class="off-plan-nearby-group"><h4><i class="fas ${escapeHtml(group.icon)}" aria-hidden="true"></i><span>${escapeHtml(offPlanExperienceText(group.key))}</span></h4><div class="off-plan-nearby-grid">${group.places.map((place) => {
       const mapsUrl = place.place_id ? `https://www.google.com/maps/search/?api=1&query_place_id=${encodeURIComponent(place.place_id)}&query=${encodeURIComponent(place.name || '')}` : (place.source_url || googleMapsLink(project));
       const note = place.vicinity || place.note || offPlanText('confirmTravel');
-      return `<a class="off-plan-nearby-card" href="${escapeHtml(mapsUrl)}" target="_blank" rel="noopener noreferrer"><strong>${escapeHtml(place.name || offPlanText('nearbyEssentials'))}</strong><span>${escapeHtml(offPlanLanguage() === 'en' ? note : offPlanText('confirmTravel'))}</span>${place.source_url ? `<small>${escapeHtml(offPlanText('officialDetails'))}<i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i></small>` : ''}</a>`;
+      const distance = formatDistanceLabel(distanceFromProject(place, project));
+      return `<a class="off-plan-nearby-card" href="${escapeHtml(mapsUrl)}" target="_blank" rel="noopener noreferrer"><strong>${escapeHtml(place.name || offPlanText('nearbyEssentials'))}</strong><span class="off-plan-distance"><i class="fas fa-route" aria-hidden="true"></i>${escapeHtml(distance)}</span><span>${escapeHtml(offPlanLanguage() === 'en' ? note : offPlanText('confirmTravel'))}</span>${place.source_url ? `<small>${escapeHtml(offPlanText('officialDetails'))}<i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i></small>` : ''}</a>`;
     }).join('')}</div></section>`).join('');
   }
 
@@ -713,7 +772,13 @@
     const merged = nearbyGroupDefinitions.map((definition) => {
       const live = groups.find((group) => group.key === definition.key)?.places || [];
       const official = stored.filter((place) => nearbyGroupKeyForPlace(place) === definition.key);
-      const places = [...official, ...live].filter((place, index, rows) => rows.findIndex((item) => (item.place_id && item.place_id === place.place_id) || clean(item.name).toLowerCase() === clean(place.name).toLowerCase()) === index).slice(0, 4);
+      const places = [...official, ...live].reduce((rows, place) => {
+        const key = clean(place.name).toLowerCase();
+        const match = rows.find((item) => (item.place_id && item.place_id === place.place_id) || clean(item.name).toLowerCase() === key);
+        if (!match) rows.push({ ...place });
+        else if (!coordinatesForPlace(match) && coordinatesForPlace(place)) Object.assign(match, { geometry: place.geometry, latitude: place.latitude, longitude: place.longitude, place_id: place.place_id || match.place_id, vicinity: place.vicinity || match.vicinity });
+        return rows;
+      }, []).slice(0, 4);
       return { ...definition, places };
     });
     renderNearbyGroups(merged, project);
@@ -729,8 +794,15 @@
       const position = { lat, lng };
       const map = new window.google.maps.Map(container, { center: position, zoom: project.extra_fields?.map_precision === 'area_centroid' ? 13 : 16, mapTypeControl: true, streetViewControl: true, fullscreenControl: true, clickableIcons: true, scrollwheel: false });
       const marker = new window.google.maps.Marker({ map, position, title: project.name, icon: 'https://maps.google.com/mapfiles/ms/icons/red-dot.png' });
-      const info = new window.google.maps.InfoWindow({ content: `<div class="off-plan-map-popup"><strong>${escapeHtml(project.name)}</strong><span>${escapeHtml(projectLocation(project))}</span></div>` });
-      marker.addListener('click', () => info.open({ map, anchor: marker }));
+      const sourceId = clean(project.source_agent_profile_id || project.source_agent_id);
+      const popupContent = `<div class="off-plan-map-popup" data-map-marker-popup="listing"><span class="off-plan-map-popup-label">${escapeHtml(offPlanExperienceText('offPlanProjectLabel'))}</span><a class="off-plan-map-popup-title" href="/off-plan/${encodeURIComponent(project.slug)}">${escapeHtml(project.name)}</a><span>${escapeHtml(projectLocation(project))}</span><strong>${escapeHtml(formatUgx(project.launch_price_ugx))}</strong>${sourceId ? `<a class="off-plan-map-popup-contact" href="/agents/${encodeURIComponent(sourceId)}">${escapeHtml(project.source_agent_name || project.source_display_name || offPlanText('projectContact'))}</a>` : ''}<a class="off-plan-map-popup-button" href="/off-plan/${encodeURIComponent(project.slug)}">${escapeHtml(offPlanExperienceText('viewProject'))}</a></div>`;
+      const info = new window.google.maps.InfoWindow({ content: popupContent });
+      const openInfo = (centerMarker = false) => {
+        if (centerMarker) map.panTo(marker.getPosition());
+        window.setTimeout(() => info.open({ map, anchor: marker }), centerMarker ? 250 : 0);
+      };
+      marker.addListener('mouseover', () => openInfo(false));
+      marker.addListener('click', () => openInfo(true));
       state.detailMap = map;
       if (window.google.maps.places?.PlacesService) {
         const service = new window.google.maps.places.PlacesService(map);
@@ -750,7 +822,7 @@
     }
   }
 
-  function mortgageProviderMarkup(provider) {
+  function mortgageProviderMarkup(provider, principal, requestedYears) {
     const rate = number(provider.residentialRate ?? provider.residential_rate);
     const deposits = provider.minDepositPct || {};
     const years = provider.maxYears || {};
@@ -758,7 +830,32 @@
     const term = number(years.residential ?? provider.max_years_residential);
     const name = provider.name || provider.provider_name || offPlanExperienceText('mortgageTitle');
     const logo = provider.logoUrl || provider.logo_url;
-    return `<article class="off-plan-mortgage-card rounded-2xl border border-gray-200 bg-gray-50 p-4"><div class="off-plan-bank-heading">${logo ? `<img src="${escapeHtml(logo)}" alt="${escapeHtml(name)} logo" loading="lazy">` : ''}<strong>${escapeHtml(name)}</strong></div><dl class="mt-3 grid grid-cols-2 gap-3 text-xs"><div><dt class="text-gray-500">${escapeHtml(offPlanText('rate'))}</dt><dd class="mt-1 font-black text-gray-950">${rate == null ? escapeHtml(offPlanText('quoteRequired')) : `${rate}%`}</dd></div><div><dt class="text-gray-500">${escapeHtml(offPlanText('minDeposit'))}</dt><dd class="mt-1 font-black text-gray-950">${deposit == null ? escapeHtml(offPlanText('quoteRequired')) : `${deposit}%`}</dd></div><div><dt class="text-gray-500">${escapeHtml(offPlanText('term'))}</dt><dd class="mt-1 font-black text-gray-950">${term == null ? escapeHtml(offPlanText('quoteRequired')) : escapeHtml(offPlanText('years', { count: term }))}</dd></div></dl><p class="mt-3 text-[11px] leading-5 text-gray-500">${escapeHtml(provider.sourceNote || provider.source_note || offPlanText('quoteRequired'))}</p>${provider.sourceUrl || provider.source_url ? `<a class="mt-3 inline-flex items-center gap-1 text-xs font-black text-green-800 underline" href="${escapeHtml(provider.sourceUrl || provider.source_url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(offPlanText('officialDetails'))}<i class="fas fa-arrow-up-right-from-square"></i></a>` : ''}</article>`;
+    const estimateYears = Math.min(number(requestedYears) || 20, term || number(requestedYears) || 20);
+    const estimate = mortgageEstimate(principal, rate, estimateYears, provider.arrangementFeePct ?? provider.arrangement_fee_pct);
+    const sourceNote = offPlanLanguage() === 'en' ? (provider.sourceNote || provider.source_note || offPlanExperienceText('lenderConfirm')) : offPlanExperienceText('lenderConfirm');
+    return `<article class="off-plan-mortgage-card rounded-2xl border border-gray-200 bg-gray-50 p-4"><div class="off-plan-bank-heading">${logo ? `<img src="${escapeHtml(logo)}" alt="${escapeHtml(name)} logo" loading="lazy">` : ''}<strong>${escapeHtml(name)}</strong></div><dl class="mt-3 grid grid-cols-2 gap-3 text-xs"><div><dt class="text-gray-500">${escapeHtml(offPlanText('rate'))}</dt><dd class="mt-1 font-black text-gray-950">${rate == null ? escapeHtml(offPlanText('quoteRequired')) : `${rate}%`}</dd></div><div><dt class="text-gray-500">${escapeHtml(offPlanText('minDeposit'))}</dt><dd class="mt-1 font-black text-gray-950">${deposit == null ? escapeHtml(offPlanText('quoteRequired')) : `${deposit}%`}</dd></div><div><dt class="text-gray-500">${escapeHtml(offPlanText('term'))}</dt><dd class="mt-1 font-black text-gray-950">${term == null ? escapeHtml(offPlanText('quoteRequired')) : escapeHtml(offPlanText('years', { count: term }))}</dd></div></dl>${estimate ? `<section class="off-plan-mortgage-estimate"><h4>${escapeHtml(offPlanExperienceText('mortgageEstimate'))}</h4><dl><div><dt>${escapeHtml(offPlanExperienceText('monthlyRepayment'))}</dt><dd>${escapeHtml(formatUgx(estimate.monthly))}</dd></div><div><dt>${escapeHtml(offPlanExperienceText('totalInterest'))}</dt><dd>${escapeHtml(formatUgx(estimate.interest))}</dd></div><div><dt>${escapeHtml(offPlanExperienceText('arrangementFee'))}</dt><dd>${escapeHtml(formatUgx(estimate.arrangementFee))}</dd></div><div><dt>${escapeHtml(offPlanExperienceText('totalRepayment'))}</dt><dd>${escapeHtml(formatUgx(estimate.total))}</dd></div></dl>${number(requestedYears) > estimateYears ? `<p>${escapeHtml(offPlanExperienceText('termCapped').replace('{count}', estimateYears))}</p>` : ''}</section>` : ''}<p class="mt-3 text-[11px] leading-5 text-gray-500">${escapeHtml(sourceNote)}</p>${provider.sourceUrl || provider.source_url ? `<a class="mt-3 inline-flex items-center gap-1 text-xs font-black text-green-800 underline" href="${escapeHtml(provider.sourceUrl || provider.source_url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(offPlanText('officialDetails'))}<i class="fas fa-arrow-up-right-from-square"></i></a>` : ''}</article>`;
+  }
+
+  function mortgageCalculationInputs() {
+    return {
+      principal: number(document.getElementById('off-plan-mortgage-amount')?.value),
+      years: number(document.getElementById('off-plan-mortgage-years')?.value) || 20
+    };
+  }
+
+  function renderOffPlanMortgageProviders() {
+    const target = document.getElementById('off-plan-mortgage-results');
+    if (!target) return;
+    const preferred = state.activeProject?.extra_fields?.mortgage_provider_keys || ['stanbic', 'dfcu', 'kcb'];
+    const providers = state.mortgageProviders.filter((provider) => preferred.includes(provider.key || provider.provider_key));
+    const selected = (providers.length ? providers : state.mortgageProviders).slice(0, 3);
+    const inputs = mortgageCalculationInputs();
+    target.innerHTML = selected.length ? selected.map((provider) => mortgageProviderMarkup(provider, inputs.principal, inputs.years)).join('') : `<p class="md:col-span-3 text-sm text-gray-500">${escapeHtml(offPlanText('quoteRequired'))}</p>`;
+  }
+
+  function recalculateOffPlanMortgages() {
+    if (!state.mortgageLoaded) { loadOffPlanMortgageProviders(); return; }
+    renderOffPlanMortgageProviders();
   }
 
   async function loadOffPlanMortgageProviders() {
@@ -771,10 +868,7 @@
         state.mortgageProviders = payload.data?.providers || payload.providers || [];
         state.mortgageLoaded = true;
       }
-      const preferred = state.activeProject?.extra_fields?.mortgage_provider_keys || ['stanbic', 'dfcu', 'kcb'];
-      const providers = state.mortgageProviders.filter((provider) => preferred.includes(provider.key || provider.provider_key));
-      const selected = (providers.length ? providers : state.mortgageProviders).slice(0, 3);
-      target.innerHTML = selected.length ? selected.map(mortgageProviderMarkup).join('') : `<p class="md:col-span-3 text-sm text-gray-500">${escapeHtml(offPlanText('quoteRequired'))}</p>`;
+      renderOffPlanMortgageProviders();
     } catch (error) { target.innerHTML = `<p class="md:col-span-3 rounded-xl bg-red-50 p-3 text-sm text-red-900">${escapeHtml(error.message)}</p>`; }
   }
 
@@ -846,6 +940,11 @@
       input.dataset.originalValue = unit.price_original || '';
       input.value = currency === 'UGX' ? (unit.price_ugx || '') : currency === clean(unit.price_original_currency).toUpperCase() ? (unit.price_original || '') : '';
     }
+    const mortgageAmount = document.getElementById('off-plan-mortgage-amount');
+    if (mortgageAmount && number(unit?.price_ugx) != null) {
+      mortgageAmount.value = unit.price_ugx;
+      if (state.mortgageLoaded) renderOffPlanMortgageProviders();
+    }
     document.getElementById('off-plan-calc-price')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 
@@ -865,6 +964,11 @@
       const schedule = data.schedule;
       track('off_plan_payment_calculated', { project_id: state.activeProject?.id || null, months: schedule.months, currency: schedule.currency, price: schedule.price });
       result.innerHTML = `<div class="grid sm:grid-cols-3 gap-3"><div class="rounded-xl bg-white border border-green-100 p-3"><span class="text-xs text-gray-500">${escapeHtml(offPlanText('upfront'))}</span><strong class="block">${escapeHtml(formatMoney(schedule.upfront_amount, schedule.currency))}</strong></div><div class="rounded-xl bg-white border border-green-100 p-3"><span class="text-xs text-gray-500">${escapeHtml(offPlanText('monthlyFrom'))}</span><strong class="block">${escapeHtml(formatMoney(schedule.monthly_amount, schedule.currency))}</strong></div><div class="rounded-xl bg-white border border-green-100 p-3"><span class="text-xs text-gray-500">${escapeHtml(offPlanText('finalDate'))}</span><strong class="block">${escapeHtml(schedule.instalments.at(-1)?.due_date || '—')}</strong></div></div><details class="mt-3 rounded-xl bg-white border border-green-100 p-3"><summary class="cursor-pointer font-black text-sm">${escapeHtml(offPlanText('viewPayments', { count: schedule.months }))}</summary><div class="mt-3 max-h-64 overflow-auto divide-y">${schedule.instalments.map((item) => `<div class="py-2 flex justify-between gap-4 text-xs"><span>${escapeHtml(item.due_date)}</span><strong>${escapeHtml(formatMoney(item.amount, schedule.currency))}</strong></div>`).join('')}</div></details><p class="mt-3 text-xs text-gray-500">${escapeHtml(offPlanText('calcDisclaimer'))}</p>`;
+      if (schedule.currency === 'UGX') {
+        const mortgageAmount = document.getElementById('off-plan-mortgage-amount');
+        if (mortgageAmount) mortgageAmount.value = Math.max(0, number(schedule.price) - number(schedule.upfront_amount));
+        if (state.mortgageLoaded) renderOffPlanMortgageProviders();
+      }
     } catch (error) { result.innerHTML = `<p class="rounded-xl bg-red-50 p-3 text-sm text-red-900">${escapeHtml(error.message)}</p>`; }
   }
 
@@ -1106,7 +1210,7 @@
     else returnToOffPlanList({ history: false });
   }
 
-  Object.assign(window, { applyOffPlanLanguageUI, calculateOffPlanPayments, changeOffPlanCalculatorCurrency, clearOffPlanFilters, closeOffPlanContactModal, closeOffPlanCreateModal, closeOffPlanGallery, createOffPlanWalkthroughBrief, downloadOffPlanBrochure, handleOffPlanListingAiPrompt, initializeOffPlanPage, loadOffPlanManagement, openOffPlanContactModal, openOffPlanCreateModal, openOffPlanCustomPaymentBuilder, openOffPlanDetail, openOffPlanFromHero, openOffPlanGallery, returnToOffPlanList, saveOffPlanProgress, searchOffPlan, selectOffPlanContactChannel, selectOffPlanUnit, setOffPlanProjectStatus, shareOffPlan, submitOffPlanContact, submitOffPlanProject, toggleOffPlanAi, toggleOffPlanFilters, toggleOffPlanMap, toggleOffPlanMortgage, uploadOffPlanMedia });
+  Object.assign(window, { applyOffPlanLanguageUI, calculateOffPlanPayments, changeOffPlanCalculatorCurrency, clearOffPlanFilters, closeOffPlanContactModal, closeOffPlanCreateModal, closeOffPlanGallery, createOffPlanWalkthroughBrief, downloadOffPlanBrochure, handleOffPlanListingAiPrompt, initializeOffPlanPage, loadOffPlanManagement, openOffPlanContactModal, openOffPlanCreateModal, openOffPlanCustomPaymentBuilder, openOffPlanDetail, openOffPlanFromHero, openOffPlanGallery, recalculateOffPlanMortgages, returnToOffPlanList, saveOffPlanProgress, searchOffPlan, selectOffPlanContactChannel, selectOffPlanUnit, setOffPlanProjectStatus, shareOffPlan, submitOffPlanContact, submitOffPlanProject, toggleOffPlanAi, toggleOffPlanFilters, toggleOffPlanMap, toggleOffPlanMortgage, uploadOffPlanMedia });
   if (/^\/off-plan(?:\/|$)/i.test(location.pathname)) initializeOffPlanPage();
   if (document.getElementById('page-staff-dashboard')?.classList.contains('active')) loadOffPlanManagement('staff');
   if (document.getElementById('page-admin-dashboard')?.classList.contains('active')) loadOffPlanManagement('admin');

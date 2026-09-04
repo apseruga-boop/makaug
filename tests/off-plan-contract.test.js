@@ -105,8 +105,8 @@ test('brochure, payment, gallery, map, sharing, video and mortgage handoff are v
   assert.match(client, /id="off-plan-gallery-dialog"/);
   assert.match(client, /closeOffPlanGallery/);
   assert.match(client, /value == null \|\| \(typeof value === 'string' && !value\.trim\(\)\)/);
-  assert.match(html, /off-plan\.js\?v=20260904-offplan-v10/);
-  assert.match(html, /off-plan\.css\?v=20260904-offplan-v10/);
+  assert.match(html, /off-plan\.js\?v=20260904-offplan-v11/);
+  assert.match(html, /off-plan\.css\?v=20260904-offplan-v11/);
   assert.match(client, /CLOSED_PERMANENTLY/);
   assert.match(client, /Archive this private project record/);
   assert.match(client, /status === 'archived' \? 'PATCH' : 'POST'/);
@@ -158,6 +158,7 @@ test('Off Plan family maps, contact and payment builder expose the requested int
   const css = read('assets/off-plan.css');
   const brochure = read('services/offPlanBrochureService.js');
   const enrichment = read('db/migrations/121_off_plan_family_area_enrichment.sql');
+  const distanceEnrichment = read('db/migrations/122_off_plan_nearby_reference_coordinates.sql');
   assert.match(html, /Partner with makaug\.com/);
   assert.doesNotMatch(html, /uppercase[^>]*data-off-plan-i18n="partner"/);
   for (const id of ['off-plan-calc-unit', 'off-plan-calc-deposit', 'off-plan-calc-months']) assert.match(client, new RegExp(`id="${id}"`));
@@ -167,10 +168,23 @@ test('Off Plan family maps, contact and payment builder expose the requested int
   assert.match(client, /source_agent_whatsapp \|\| project\.source_agent_phone/);
   for (const type of ['school', 'hospital', 'university', 'shopping_mall', 'supermarket', 'park', 'tourist_attraction', 'airport']) assert.match(client, new RegExp(`'${type}'`));
   assert.match(client, /mapTypeControl: true, streetViewControl: true, fullscreenControl: true/);
+  assert.match(client, /marker\.addListener\('mouseover'/);
+  assert.match(client, /data-map-marker-popup="listing"/);
+  assert.match(client, /distanceKmBetween/);
+  assert.match(client, /formatDistanceLabel\(distanceFromProject/);
+  assert.match(client, /id="off-plan-mortgage-amount"/);
+  assert.match(client, /id="off-plan-mortgage-years"/);
+  assert.match(client, /function mortgageEstimate/);
   assert.match(css, /\.off-plan-nearby-group h4/);
+  assert.match(css, /\.off-plan-nearby-card \.off-plan-distance/);
+  assert.match(css, /\.off-plan-mortgage-estimate/);
+  assert.match(css, /max-width: 1720px/);
   assert.match(brochure, /GOOGLE_MAPS_STATIC_API_KEY \|\| process\.env\.GOOGLE_MAPS_API_KEY/);
+  assert.match(brochure, /Approx\. .*km from displayed area point/);
+  assert.match(brochure, /computeMortgageEstimate/);
   assert.match(brochure, /Phone \/ WhatsApp/);
   for (const place of ['Nkumba University', 'University of Kisubi', 'Victoria Mall Entebbe', 'Entebbe Botanical Gardens', 'Uganda Wildlife Conservation Education Centre']) assert.match(enrichment, new RegExp(place));
+  for (const field of ['latitude', 'longitude', 'coordinate_precision', 'nearby_distance_basis']) assert.match(distanceEnrichment, new RegExp(field));
 });
 
 test('website and WhatsApp AI recognize off-plan search and listing requests', () => {
@@ -209,6 +223,10 @@ test('Off Plan follows all nine public language choices and refreshes on languag
   assert.match(client, /function applyOffPlanLanguageUI\(\)/);
   assert.match(client, /Object\.assign\(window, \{ applyOffPlanLanguageUI,/);
   assert.match(app, /typeof window\.applyOffPlanLanguageUI === "function"/);
+  for (const language of ['en', 'lg', 'sw', 'ac', 'ny', 'rn', 'sm', 'am', 'ar']) {
+    assert.match(client, new RegExp(`OFF_PLAN_DETAIL_I18N\\.${language}, \\{ sourceAgentBio:`), `missing localized source-agent biography: ${language}`);
+    assert.match(client, new RegExp(`OFF_PLAN_EXPERIENCE_I18N\\.${language}[^\\n]*approximateDistance`), `missing localized distance copy: ${language}`);
+  }
 });
 
 test('public social previews never request expiring TikTok CDN image URLs', () => {
