@@ -786,3 +786,4 @@ router.put('/', requireAdminApiKey, async (req, res, next) => {
 module.exports = router;
 module.exports.ACTIVE_COUNTRY_CODE = ACTIVE_COUNTRY_CODE;
 module.exports.FALLBACK_MORTGAGE_PROVIDERS = FALLBACK_MORTGAGE_PROVIDERS;
+module.exports.readMortgageProviders = readMortgageProviders;

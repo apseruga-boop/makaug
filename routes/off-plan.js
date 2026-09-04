@@ -23,6 +23,7 @@ const {
 const { brochureBuffer } = require('../services/offPlanBrochureService');
 const { notifyOffPlanEnquiry } = require('../services/offPlanNotificationService');
 const { prepareMediaUrlForStorage } = require('../services/cloudMediaStorageService');
+const { readMortgageProviders } = require('./mortgage');
 
 const publicRouter = express.Router();
 const staffRouter = express.Router();
@@ -78,8 +79,12 @@ async function storeManagedMedia(items, { developmentId, folder, allowedMimeType
 }
 
 function whatsappEnquiryUrl(enquiry = {}, development = null) {
-  const phone = String(process.env.SUPPORT_PHONE || '+256760112587').replace(/\D/g, '') || '256760112587';
-  const intro = cleanText(enquiry.name, 120) ? `Hi makaug, my name is ${cleanText(enquiry.name, 120)}. ` : 'Hi makaug, my name is... ';
+  const projectAgentPhone = enquiry.enquiry_type === 'project_interest'
+    ? cleanText(development?.source_agent_whatsapp || development?.source_agent_phone, 80)
+    : '';
+  const phone = String(projectAgentPhone || process.env.SUPPORT_PHONE || '+256760112587').replace(/\D/g, '') || '256760112587';
+  const recipient = projectAgentPhone ? cleanText(development?.source_agent_name || 'project contact', 120) : 'makaug';
+  const intro = cleanText(enquiry.name, 120) ? `Hi ${recipient}, my name is ${cleanText(enquiry.name, 120)}. ` : `Hi ${recipient}, my name is... `;
   const message = enquiry.enquiry_type === 'listing_request'
     ? `${intro}I would like to enquire about listing a new off-plan project.`
     : `${intro}I would like to enquire about ${cleanText(development?.name || 'this off-plan project', 220)}.`;
@@ -152,7 +157,10 @@ publicRouter.post('/enquiries', asyncRoute(async (req, res) => {
 publicRouter.get('/:slug/brochure.pdf', asyncRoute(async (req, res) => {
   const development = await getPublicDevelopment(db, req.params.slug);
   if (!development) return res.status(404).json({ ok: false, error: 'Off-plan project not found' });
-  const pdf = await brochureBuffer(development);
+  const [agentProfile, mortgagePayload] = await Promise.all([readBrochureAgentProfile(development), readMortgageProviders()]);
+  const preferredKeys = development.extra_fields?.mortgage_provider_keys || ['stanbic', 'dfcu', 'kcb'];
+  const mortgageProviders = (mortgagePayload.providers || []).filter((provider) => preferredKeys.includes(provider.key)).slice(0, 3);
+  const pdf = await brochureBuffer(development, { agentProfile, mortgageProviders });
   const fileName = `${development.slug}-makaug-brochure.pdf`;
   res.set({
     'Content-Type': 'application/pdf',
@@ -186,7 +194,10 @@ function mountManagementRoutes(router, authMiddleware) {
   router.get('/developments/:id/brochure.pdf', asyncRoute(async (req, res) => {
     const development = await getManagedDevelopment(db, req.params.id);
     if (!development) return res.status(404).json({ ok: false, error: 'Off-plan project not found' });
-    const pdf = await brochureBuffer(development);
+    const [agentProfile, mortgagePayload] = await Promise.all([readBrochureAgentProfile(development), readMortgageProviders()]);
+    const preferredKeys = development.extra_fields?.mortgage_provider_keys || ['stanbic', 'dfcu', 'kcb'];
+    const mortgageProviders = (mortgagePayload.providers || []).filter((provider) => preferredKeys.includes(provider.key)).slice(0, 3);
+    const pdf = await brochureBuffer(development, { agentProfile, mortgageProviders });
     res.set({
       'Content-Type': 'application/pdf',
       'Content-Disposition': `attachment; filename="${development.slug}-makaug-review-brochure.pdf"`,
@@ -260,6 +271,35 @@ function mountManagementRoutes(router, authMiddleware) {
     if (!walkthrough) return res.status(404).json({ ok: false, error: 'Walkthrough job not found' });
     return res.json({ ok: true, walkthrough });
   }));
+}
+
+async function readBrochureAgentProfile(development = {}) {
+  if (!development.source_agent_id && !development.source_agent_profile_id) return null;
+  const agentId = development.source_agent_profile_id || development.source_agent_id;
+  const agent = await db.query(
+    `SELECT id, full_name, company_name, bio, phone, whatsapp, email, profile_photo_url
+     FROM agents
+     WHERE id = $1 AND status = 'approved'
+     LIMIT 1`,
+    [agentId]
+  );
+  if (!agent.rows[0]) return null;
+  const listings = await db.query(
+    `SELECT p.id, p.title, p.area, p.district, p.price, p.price_currency,
+            img.url AS primary_image_url
+     FROM properties p
+     LEFT JOIN LATERAL (
+       SELECT i.url FROM property_images i
+       WHERE i.property_id = p.id
+       ORDER BY i.is_primary DESC, i.sort_order ASC, i.created_at ASC
+       LIMIT 1
+     ) img ON true
+     WHERE p.agent_id = $1 AND p.status = 'approved'
+     ORDER BY COALESCE(p.approved_at, p.updated_at, p.created_at) DESC
+     LIMIT 10`,
+    [agentId]
+  );
+  return { ...agent.rows[0], listings: listings.rows };
 }
 
 mountManagementRoutes(staffRouter, requireStaffAccess);
