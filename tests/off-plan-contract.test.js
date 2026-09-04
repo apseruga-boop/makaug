@@ -105,8 +105,8 @@ test('brochure, payment, gallery, map, sharing, video and mortgage handoff are v
   assert.match(client, /id="off-plan-gallery-dialog"/);
   assert.match(client, /closeOffPlanGallery/);
   assert.match(client, /value == null \|\| \(typeof value === 'string' && !value\.trim\(\)\)/);
-  assert.match(html, /off-plan\.js\?v=20260904-offplan-v12/);
-  assert.match(html, /off-plan\.css\?v=20260904-offplan-v12/);
+  assert.match(html, /off-plan\.js\?v=20260904-offplan-v13/);
+  assert.match(html, /off-plan\.css\?v=20260904-offplan-v13/);
   assert.match(client, /CLOSED_PERMANENTLY/);
   assert.match(client, /Archive this private project record/);
   assert.match(client, /status === 'archived' \? 'PATCH' : 'POST'/);
@@ -170,6 +170,7 @@ test('Off Plan family maps, contact and payment builder expose the requested int
   assert.match(client, /mapTypeControl: true, streetViewControl: true, fullscreenControl: true/);
   assert.match(client, /marker\.addListener\('mouseover'/);
   assert.match(client, /data-map-marker-popup="listing"/);
+  assert.match(client, /scrollFrame\.style\.overflow = 'hidden'/);
   assert.match(client, /distanceKmBetween/);
   assert.match(client, /formatDistanceLabel\(distanceFromProject/);
   assert.match(client, /id="off-plan-mortgage-amount"/);

@@ -800,7 +800,14 @@
       const info = new window.google.maps.InfoWindow({ content: popupContent });
       const openInfo = (centerMarker = false) => {
         if (centerMarker) map.panTo(marker.getPosition());
-        window.setTimeout(() => info.open({ map, anchor: marker }), centerMarker ? 250 : 0);
+        window.setTimeout(() => {
+          info.open({ map, anchor: marker });
+          window.setTimeout(() => {
+            const popup = container.querySelector('[data-map-marker-popup="listing"]');
+            const scrollFrame = popup?.closest('.gm-style-iw-d');
+            if (scrollFrame) scrollFrame.style.overflow = 'hidden';
+          }, 0);
+        }, centerMarker ? 250 : 0);
       };
       marker.addListener('mouseover', () => openInfo(false));
       marker.addListener('click', () => openInfo(true));
