@@ -2593,7 +2593,9 @@
       var route = window.location.pathname.replace(/\/+$/, '') || '/';
       var ugandaDetail = route.match(/^\/off-plan\/([a-z0-9-]+)$/i);
       var kenyaDetail = route.match(/^\/off-plan\/overseas\/kenya\/([a-z0-9-]+)$/i);
-      var path = route === '/off-plan'
+      var path = route === '/off-plan/overseas'
+        ? ''
+        : route === '/off-plan'
         ? '/api/off-plan?country=UG'
         : route === '/off-plan/overseas/kenya'
           ? '/api/off-plan?country=KE'
