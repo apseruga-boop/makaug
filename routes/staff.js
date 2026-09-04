@@ -65,6 +65,7 @@ const {
   loadHarvestSummary,
   recordHarvestImportResult,
 } = require('../services/propertyHarvestMonitoringService');
+const { schedulerStatus: socialCoverageSchedulerStatus } = require('../services/socialCoverageSchedulerService');
 const {
   listHarvestCreators,
   loadNextHarvestCreator,
@@ -3889,7 +3890,7 @@ router.get('/source-intake/jobs/:jobId', async (req, res) => {
 router.get('/harvest/summary', async (req, res, next) => {
   try {
     const data = await loadHarvestSummary(db, { days: req.query.days });
-    return res.json({ ok: true, data });
+    return res.json({ ok: true, data: { ...data, recurring_social_coverage: socialCoverageSchedulerStatus() } });
   } catch (error) {
     if (error?.code === '42P01') {
       return res.status(503).json({ ok: false, error: 'Apply migration 112_always_on_property_harvest.sql before opening Harvest monitoring.' });
@@ -4048,6 +4049,9 @@ router.post('/source-intake/social-sweep', async (req, res, next) => {
           time_budget_ms: sweepPayload.timeBudgetMs,
           source_offset: sweepPayload.sourceOffset,
           discovered_posts_count: result.discovered_posts_count || 0,
+          instagram_hashtag_search_job_count: result.instagram?.hashtag_search_job_count || 0,
+          instagram_api_configured: result.instagram?.api_configured === true,
+          instagram_fetched_posts_count: result.instagram?.fetched_posts_count || 0,
           created_properties: result.import_result?.created_properties || 0,
           auto_live_properties: result.import_result?.auto_live_properties || 0,
           existing_properties: result.import_result?.existing_properties || 0,

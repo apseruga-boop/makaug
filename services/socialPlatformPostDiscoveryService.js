@@ -74,6 +74,9 @@ const YOUTUBE_API_KEY_ENV_NAMES = ['YOUTUBE_API_KEY', 'GOOGLE_YOUTUBE_API_KEY', 
 const META_GRAPH_ACCESS_TOKEN_ENV_NAMES = ['META_GRAPH_ACCESS_TOKEN', 'FACEBOOK_GRAPH_ACCESS_TOKEN', 'FACEBOOK_PAGE_ACCESS_TOKEN', 'INSTAGRAM_GRAPH_ACCESS_TOKEN'];
 const FACEBOOK_PAGE_ID_ENV_NAMES = ['FACEBOOK_PAGE_IDS', 'FACEBOOK_PAGE_ID'];
 const INSTAGRAM_BUSINESS_ACCOUNT_ID_ENV_NAMES = ['INSTAGRAM_BUSINESS_ACCOUNT_IDS', 'INSTAGRAM_BUSINESS_ACCOUNT_ID'];
+const META_GRAPH_API_VERSION_ENV_NAMES = ['META_GRAPH_API_VERSION', 'FACEBOOK_GRAPH_API_VERSION'];
+const DEFAULT_META_GRAPH_API_VERSION = 'v23.0';
+const META_GRAPH_API_BASE_URL = 'https://graph.facebook.com';
 const TIKTOK_ACCESS_TOKEN_ENV_NAMES = ['TIKTOK_ACCESS_TOKEN', 'TIKTOK_RESEARCH_API_ACCESS_TOKEN'];
 const TIKTOK_CLIENT_KEY_ENV_NAMES = ['TIKTOK_CLIENT_KEY'];
 const TIKTOK_CLIENT_SECRET_ENV_NAMES = ['TIKTOK_CLIENT_SECRET'];
@@ -279,6 +282,18 @@ function socialDiscoveryApiReadiness(env = process.env) {
       required_data_source_env_any_of: TIKTOK_DATA_SOURCE_URL_ENV_NAMES,
       note: 'TikTok broad public discovery is approval-gated. Current production-safe path uses exact video URLs plus TikTok oEmbed thumbnails and King evidence review; configure a TikTok data-source/export URL when official search access is not available.',
     },
+  };
+}
+
+function metaGraphConfig(env = process.env) {
+  const accessToken = envValue(META_GRAPH_ACCESS_TOKEN_ENV_NAMES, env);
+  const businessAccountIds = envListValue(INSTAGRAM_BUSINESS_ACCOUNT_ID_ENV_NAMES, env);
+  const version = cleanText(envValue(META_GRAPH_API_VERSION_ENV_NAMES, env).value || DEFAULT_META_GRAPH_API_VERSION)
+    .replace(/^\/+|\/+$/g, '');
+  return {
+    accessToken,
+    businessAccountIds,
+    version: /^v\d+(?:\.\d+)?$/i.test(version) ? version : DEFAULT_META_GRAPH_API_VERSION,
   };
 }
 
@@ -2263,6 +2278,238 @@ function buildManualSocialCaptureTasks({ sources = [], platform = 'social', limi
     });
 }
 
+function buildInstagramHashtagJobs({
+  sources = sourcesForPlatform('instagram'),
+  limit = DEFAULT_MAX_SOURCES,
+} = {}) {
+  const seen = new Set();
+  return sources
+    .filter((source) => normalizePlatform(source.platform) === 'instagram')
+    .map((source) => ({ source, hashtag: sourceHashtag(source) }))
+    .filter(({ hashtag }) => {
+      const key = cleanText(hashtag).replace(/^#/, '').toLowerCase();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, cappedNumber(limit, DEFAULT_MAX_SOURCES, 1, MAX_PLATFORM_SWEEP_SOURCES))
+    .map(({ source, hashtag }) => ({
+      platform: 'instagram',
+      source_key: sourceKey(source),
+      source_name: sourceName(source),
+      source_type: source.source_type || source.sourceType || '',
+      source_record_kind: isDiscoveryFeed(source) ? 'discovery_feed' : 'source_page',
+      source_registry_offset: Number.isFinite(Number(source.source_registry_offset)) ? Number(source.source_registry_offset) : null,
+      source_window_index: Number.isFinite(Number(source.source_window_index)) ? Number(source.source_window_index) : null,
+      source_url: sourceUrl(source),
+      hashtag: cleanText(hashtag).replace(/^#/, ''),
+      query: `#${cleanText(hashtag).replace(/^#/, '')}`,
+    }));
+}
+
+function normalizeInstagramGraphPost(item = {}, job = {}) {
+  const permalink = normalizeInstagramPostUrl(item.permalink || '');
+  if (!permalink || !item.id) return null;
+  const caption = cleanText(item.caption || '');
+  const username = cleanText(item.username || '').replace(/^@/, '');
+  const text = cleanText(caption || `${job.query || 'Instagram property'} ${username}`);
+  const area = extractArea(text);
+  const district = districtForArea(area, text);
+  const mediaUrl = cleanText(item.thumbnail_url || item.media_url || '');
+  return {
+    post_id: cleanText(item.id),
+    source_key: job.source_key || username || `instagram:${item.id}`,
+    source_name: username || job.source_name || 'Instagram property source',
+    platform: 'instagram',
+    source_url: permalink,
+    post_url: permalink,
+    source_page_url: username ? `https://www.instagram.com/${username}/` : job.source_url,
+    source_contact_url: username ? `https://www.instagram.com/${username}/` : job.source_url,
+    instagram_url: permalink,
+    title: text.slice(0, 90) || `Instagram property post ${item.id}`,
+    caption: text,
+    description: text,
+    first_posted_at: item.timestamp || null,
+    created_at: item.timestamp || null,
+    area,
+    district,
+    location: area || district,
+    price_text: priceTextFromText(text),
+    listing_type: listingTypeFromText(text),
+    bedrooms: bedroomsFromText(text),
+    image_urls: mediaUrl ? [mediaUrl] : [],
+    thumbnail_url: mediaUrl,
+    source_batch: SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID,
+    source_registry_key: job.source_key,
+    source_urls: [job.source_url, permalink].filter(Boolean),
+    raw_source_post: {
+      instagram_media: item,
+      source_job: job,
+    },
+  };
+}
+
+async function fetchInstagramHashtagPostsForJobs(jobs = [], {
+  accessToken = '',
+  businessAccountIds = [],
+  graphVersion = DEFAULT_META_GRAPH_API_VERSION,
+  maxResults = DEFAULT_X_RESULTS_PER_SOURCE,
+  fetchImpl = fetch,
+  deadlineAt = 0,
+  minRemainingMs = SOCIAL_SWEEP_SOURCE_START_MIN_REMAINING_MS,
+} = {}) {
+  const token = cleanText(accessToken);
+  const accountId = (Array.isArray(businessAccountIds) ? businessAccountIds : [])
+    .map(cleanText)
+    .find(Boolean) || '';
+  if (!token || !accountId) {
+    return {
+      posts: [],
+      reports: [],
+      skipped: true,
+      reason: !token ? 'missing_meta_graph_access_token' : 'missing_instagram_business_account_id',
+      timed_out: false,
+      jobs_attempted_count: 0,
+      jobs_skipped_due_to_time_budget: 0,
+    };
+  }
+  const version = /^v\d+(?:\.\d+)?$/i.test(cleanText(graphVersion))
+    ? cleanText(graphVersion)
+    : DEFAULT_META_GRAPH_API_VERSION;
+  const posts = [];
+  const reports = [];
+  let timedOut = false;
+  let jobsAttemptedCount = 0;
+  let jobsSkippedDueToTimeBudget = 0;
+  const headers = {
+    Accept: 'application/json',
+    Authorization: `Bearer ${token}`,
+  };
+  for (let index = 0; index < jobs.length; index += 1) {
+    const job = jobs[index];
+    if (sweepDeadlineReached(deadlineAt, minRemainingMs)) {
+      timedOut = true;
+      jobsSkippedDueToTimeBudget = jobs.length - index;
+      reports.push({
+        ...job,
+        ok: false,
+        skipped: true,
+        reason: 'source_sweep_time_budget_exhausted',
+        result_count: 0,
+        normalized_post_count: 0,
+      });
+      break;
+    }
+    jobsAttemptedCount += 1;
+    const lookupUrl = new URL(`${META_GRAPH_API_BASE_URL}/${version}/${encodeURIComponent(accountId)}/ig_hashtag_search`);
+    lookupUrl.searchParams.set('user_id', accountId);
+    lookupUrl.searchParams.set('q', job.hashtag);
+    let lookupPayload = {};
+    let lookupStatus = 0;
+    try {
+      const lookupResponse = await fetchImpl(lookupUrl, { headers });
+      lookupStatus = lookupResponse.status;
+      lookupPayload = await lookupResponse.json().catch(() => ({}));
+      if (!lookupResponse.ok) {
+        reports.push({
+          ...job,
+          ok: false,
+          status: lookupResponse.status,
+          reason: lookupPayload?.error?.message || 'instagram_hashtag_lookup_failed',
+          error_code: lookupPayload?.error?.code || null,
+          result_count: 0,
+          normalized_post_count: 0,
+        });
+        continue;
+      }
+    } catch (error) {
+      const reason = sourceSweepErrorReason(error);
+      reports.push({
+        ...job,
+        ok: false,
+        status: lookupStatus,
+        skipped: true,
+        reason,
+        result_count: 0,
+        normalized_post_count: 0,
+      });
+      if (/source_sweep/.test(reason)) {
+        timedOut = true;
+        jobsSkippedDueToTimeBudget = jobs.length - index - 1;
+        break;
+      }
+      continue;
+    }
+    const hashtagId = cleanText(Array.isArray(lookupPayload.data) ? lookupPayload.data[0]?.id : '');
+    if (!hashtagId) {
+      reports.push({
+        ...job,
+        ok: true,
+        status: lookupStatus,
+        reason: 'instagram_hashtag_not_found',
+        result_count: 0,
+        normalized_post_count: 0,
+      });
+      continue;
+    }
+    const mediaUrl = new URL(`${META_GRAPH_API_BASE_URL}/${version}/${encodeURIComponent(hashtagId)}/recent_media`);
+    mediaUrl.searchParams.set('user_id', accountId);
+    mediaUrl.searchParams.set('fields', 'id,caption,media_type,media_url,permalink,timestamp,username,thumbnail_url');
+    mediaUrl.searchParams.set('limit', String(cappedNumber(maxResults, DEFAULT_X_RESULTS_PER_SOURCE, 1, 50)));
+    try {
+      const mediaResponse = await fetchImpl(mediaUrl, { headers });
+      const payload = await mediaResponse.json().catch(() => ({}));
+      if (!mediaResponse.ok) {
+        reports.push({
+          ...job,
+          hashtag_id: hashtagId,
+          ok: false,
+          status: mediaResponse.status,
+          reason: payload?.error?.message || 'instagram_recent_media_failed',
+          error_code: payload?.error?.code || null,
+          result_count: 0,
+          normalized_post_count: 0,
+        });
+        continue;
+      }
+      const rows = Array.isArray(payload.data) ? payload.data : [];
+      const normalized = rows.map((row) => normalizeInstagramGraphPost(row, job)).filter(Boolean);
+      posts.push(...normalized);
+      reports.push({
+        ...job,
+        hashtag_id: hashtagId,
+        ok: true,
+        status: mediaResponse.status,
+        result_count: rows.length,
+        normalized_post_count: normalized.length,
+      });
+    } catch (error) {
+      const reason = sourceSweepErrorReason(error);
+      reports.push({
+        ...job,
+        hashtag_id: hashtagId,
+        ok: false,
+        skipped: true,
+        reason,
+        result_count: 0,
+        normalized_post_count: 0,
+      });
+      if (/source_sweep/.test(reason)) {
+        timedOut = true;
+        jobsSkippedDueToTimeBudget = jobs.length - index - 1;
+        break;
+      }
+    }
+  }
+  return {
+    posts: uniquePosts(posts),
+    reports,
+    timed_out: timedOut,
+    jobs_attempted_count: jobsAttemptedCount,
+    jobs_skipped_due_to_time_budget: jobsSkippedDueToTimeBudget,
+  };
+}
+
 function youtubeCategoryTermsForSource(source = {}) {
   const listingTypes = sourceListValues(source, 'listingTypes', 'listing_types')
     .map((type) => type.toLowerCase());
@@ -2697,10 +2944,23 @@ function youtubeThumbnailUrls(thumbnails = {}) {
 
 function youtubeHasPropertySignal(text = '', job = {}) {
   const raw = cleanText(text).toLowerCase();
-  const sourceTypes = Array.isArray(job.source_listing_types) ? job.source_listing_types.join(' ') : '';
-  const sourceText = `${raw} ${sourceTypes}`.toLowerCase();
-  return /\b(property|properties|real estate|house|home|apartment|flat|villa|mansion|bungalow|duplex|bedroom|bedrooms|beds?|land|plot|plots|acre|acres|decimal|decimals|mailo|hostel|student accommodation|student room|rental|rent|to let|commercial|office|shop|warehouse|showroom|factory|arcade|ettaka|bibanja|ebibanja|akabanja|amayumba|nyumba|kupangisa|obupangisa|muzigo|emizigo|kiwanja|viwanja)\b/i.test(sourceText)
-    || /\b(?:for sale|for rent|on sale|selling|ugx|ush|shs?|million|billion|monthly|per month)\b/i.test(sourceText);
+  // The search job describes what we asked YouTube for, not what the returned
+  // video actually contains. Never let query/category hints turn a song, news
+  // clip, or event video into property evidence.
+  return /\b(property|properties|real estate|house|home|apartment|flat|villa|mansion|bungalow|duplex|bedroom|bedrooms|beds?|land|plot|plots|acre|acres|decimal|decimals|mailo|hostel|student accommodation|student room|rental|rent|to let|commercial|office|shop|warehouse|showroom|factory|arcade|ettaka|bibanja|ebibanja|akabanja|amayumba|nyumba|kupangisa|obupangisa|muzigo|emizigo|kiwanja|viwanja)\b/i.test(raw)
+    || /\b(?:for sale|for rent|on sale|selling|ugx|ush|shs?|million|billion|monthly|per month)\b/i.test(raw);
+}
+
+function youtubeHasConcreteListingEvidence(text = '', listingType = '') {
+  const raw = cleanText(text).toLowerCase();
+  if (!raw) return false;
+  if (youtubeHasExplicitListingIntent(raw, listingType)) return true;
+  const propertyNoun = /\b(?:house|home|apartment|flat|villa|mansion|bungalow|duplex|bedrooms?|beds?|land|plots?|acres?|decimals?|mailo|hostel|student accommodation|student room|rental|commercial|office|shop|warehouse|showroom|factory|arcade|ettaka|bibanja|ebibanja|akabanja|amayumba|nyumba|kiwanja|viwanja)\b/i.test(raw);
+  const structuredProperty = /\b\d+(?:\.\d+)?\s*(?:bed(?:room)?s?|bdrm|plots?|acres?|decimals?|rooms?)\b|\b(?:bed(?:room)?s?|bdrm|plots?|acres?|decimals?|rooms?)\s*\d+(?:\.\d+)?\b/i.test(raw);
+  const money = /\b(?:ugx|ush|shs?|usd)\s*[\d,.]+|\$\s*[\d,.]+|[\d,.]+\s*(?:m|mn|million|b|bn|billion)\b/i.test(raw);
+  const contact = /(?:\+?256[\s()-]*|(?:^|\D))0?7\d{2}[\s()-]*\d{3}[\s()-]*\d{3}(?:\D|$)|\b(?:call|whatsapp|contact|inbox|dm)\b/i.test(raw);
+  const availability = /\b(?:available|vacant|viewing|book a viewing|ready for occupancy)\b/i.test(raw);
+  return structuredProperty || (propertyNoun && money) || (propertyNoun && contact && availability);
 }
 
 function youtubeHasExplicitListingIntent(text = '', listingType = '') {
@@ -2892,7 +3152,6 @@ function youtubeEvidenceTextForItem(item = {}, job = {}, { includeComments = tru
     youtubeLocationDescriptionForItem(item),
     visualText,
     commentEvidence,
-    Array.isArray(job.source_listing_types) ? job.source_listing_types.join(' ') : '',
   ].filter(Boolean).join(' '));
 }
 
@@ -2901,7 +3160,7 @@ function youtubeShouldFetchCommentEvidence(item = {}, job = {}) {
   if (!youtubeHasPropertySignal(combinedText, job)) return false;
   const area = extractArea(combinedText);
   const district = districtForArea(area, combinedText);
-  const listingType = listingTypeFromText(`${combinedText} ${(job.source_listing_types || []).join(' ')}`);
+  const listingType = listingTypeFromText(combinedText);
   const missingSpecificLocation = youtubeLocationConfidence(area, district) !== 'area_or_neighbourhood_detected';
   const missingIntent = !youtubeHasExplicitListingIntent(combinedText, listingType);
   return missingSpecificLocation || missingIntent;
@@ -3172,7 +3431,10 @@ function normalizeYouTubeApiPost(item = {}, job = {}) {
   const commentEvidence = youtubeCommentEvidenceFromItem(item);
   const visualText = sourceVisualTextFromObject(item);
   const combinedText = youtubeEvidenceTextForItem(item, job);
-  if (!youtubeHasPropertySignal(combinedText, job)) return null;
+  if (!youtubeHasPropertySignal(combinedText)) return null;
+  const listingType = listingTypeFromText(combinedText);
+  const trustedChannelUpload = job.search_method === 'channel_uploads';
+  if (!trustedChannelUpload && !youtubeHasConcreteListingEvidence(combinedText, listingType)) return null;
   const area = extractArea(combinedText);
   const district = districtForArea(area, combinedText);
   const priceText = priceTextFromText(combinedText);
@@ -3182,7 +3444,6 @@ function normalizeYouTubeApiPost(item = {}, job = {}) {
   const channelUrl = youtubeChannelUrl(channelId) || job.source_url || '';
   const sourceUrl = youtubeWatchUrl(videoId);
   const publishedAt = item.contentDetails?.videoPublishedAt || snippet.publishedAt || '';
-  const listingType = listingTypeFromText(`${combinedText} ${(job.source_listing_types || []).join(' ')}`);
   const preapproval = youtubeSourcePreapprovalFields(job);
   const hashtagSource = youtubeSourceIsHashtag(job);
   const confidence = youtubeConfidenceReviewForPost({
@@ -4544,6 +4805,7 @@ async function runSocialPlatformPostSweep({
   lookbackDays = 0,
   fetchX = true,
   fetchYouTube = true,
+  fetchInstagram = true,
   useSavedCursors = true,
   backfillMode = false,
   youtubePublishedAfter = YOUTUBE_SOURCE_POST_WINDOW_START,
@@ -4570,7 +4832,7 @@ async function runSocialPlatformPostSweep({
   const requestedPlatforms = studentHousingFocus
     ? ['tiktok', 'youtube', 'x', 'facebook', 'instagram']
     : normalizedPlatform === 'all'
-      ? ['tiktok', 'youtube', 'x']
+      ? ['tiktok', 'instagram', 'youtube', 'x']
       : [normalizedPlatform];
   const sourceLimit = cappedNumber(maxSources, SOCIAL_SWEEP_FAST_DEFAULT_SOURCES, 1, SOCIAL_SWEEP_FAST_MAX_SOURCES);
   const resultLimit = cappedNumber(maxResultsPerSource, DEFAULT_X_RESULTS_PER_SOURCE, 1, SOCIAL_SWEEP_FAST_MAX_RESULTS_PER_SOURCE);
@@ -4662,6 +4924,9 @@ async function runSocialPlatformPostSweep({
   const instagramCaptureTasks = requestedPlatforms.includes('instagram')
     ? buildManualSocialCaptureTasks({ sources: instagramSourceWindow.sources, platform: 'instagram', limit: sourceLimit })
     : [];
+  const instagramHashtagJobs = requestedPlatforms.includes('instagram')
+    ? buildInstagramHashtagJobs({ sources: instagramSourceWindow.sources, limit: sourceLimit })
+    : [];
   const youtubeApi = envYouTubeApiKey(env);
   const apiReadiness = socialDiscoveryApiReadiness(env);
   const tiktokDataSourceLimit = Math.min(
@@ -4689,6 +4954,47 @@ async function runSocialPlatformPostSweep({
     || tiktokDataSourceFetch.timed_out === true
     || /source_sweep/.test(tiktokDataSourceFetch.skipped_reason || '')
   ) partialResults = true;
+  const instagramGraph = metaGraphConfig(env);
+  let instagramFetch = {
+    api_configured: Boolean(instagramGraph.accessToken.value && instagramGraph.businessAccountIds.values.length),
+    credential_env: instagramGraph.accessToken.value ? instagramGraph.accessToken.name : '',
+    business_account_ids_env: instagramGraph.businessAccountIds.value ? instagramGraph.businessAccountIds.name : '',
+    graph_version: instagramGraph.version,
+    skipped_reason: '',
+    posts: [],
+    reports: [],
+    timed_out: false,
+    jobs_attempted_count: 0,
+    jobs_skipped_due_to_time_budget: 0,
+  };
+  if (!requestedPlatforms.includes('instagram')) {
+    instagramFetch.skipped_reason = 'instagram_not_requested';
+  } else if (!fetchInstagram) {
+    instagramFetch.skipped_reason = 'instagram_fetch_disabled';
+  } else if (!instagramFetch.api_configured) {
+    instagramFetch.skipped_reason = 'Set META_GRAPH_ACCESS_TOKEN plus INSTAGRAM_BUSINESS_ACCOUNT_IDS/INSTAGRAM_BUSINESS_ACCOUNT_ID to scan approved Instagram hashtags; exact-link manual capture remains available.';
+  } else if (!instagramHashtagJobs.length) {
+    instagramFetch.skipped_reason = 'no_instagram_hashtag_sources_selected';
+  } else {
+    const fetched = await fetchInstagramHashtagPostsForJobs(instagramHashtagJobs, {
+      accessToken: instagramGraph.accessToken.value,
+      businessAccountIds: instagramGraph.businessAccountIds.values,
+      graphVersion: instagramGraph.version,
+      maxResults: resultLimit,
+      fetchImpl: sweepFetchImpl,
+      deadlineAt: sweepDeadlineAt,
+    });
+    instagramFetch = {
+      ...instagramFetch,
+      posts: fetched.posts || [],
+      reports: fetched.reports || [],
+      timed_out: fetched.timed_out === true,
+      jobs_attempted_count: fetched.jobs_attempted_count || 0,
+      jobs_skipped_due_to_time_budget: fetched.jobs_skipped_due_to_time_budget || 0,
+      skipped_reason: fetched.skipped ? fetched.reason : '',
+    };
+    if (instagramFetch.timed_out || instagramFetch.jobs_skipped_due_to_time_budget > 0) partialResults = true;
+  }
   const youtubeCommentLookupBudget = {
     remaining: cappedNumber(
       env.STAFF_YOUTUBE_COMMENT_LOOKUP_LIMIT,
@@ -4937,6 +5243,7 @@ async function runSocialPlatformPostSweep({
   }
   const allDiscoveredPosts = uniquePosts([
     ...tiktokDataSourceFetch.posts,
+    ...instagramFetch.posts,
     ...youtubeFetch.posts,
     ...xFetch.posts,
   ]);
@@ -5170,11 +5477,17 @@ async function runSocialPlatformPostSweep({
       source_offset: instagramSourceWindow.source_offset,
       next_source_offset: instagramSourceWindow.next_source_offset,
       capture_task_count: instagramCaptureTasks.length,
-      api_configured: apiReadiness.instagram.configured,
+      hashtag_search_job_count: instagramHashtagJobs.length,
+      api_configured: instagramFetch.api_configured,
       api_mode: apiReadiness.instagram.mode,
-      skipped_reason: apiReadiness.instagram.configured
-        ? 'Instagram Graph credentials are present; keep exact post/reel URLs in King review until the hashtag/media adapter is enabled for the approved business account.'
-        : 'Set META_GRAPH_ACCESS_TOKEN plus INSTAGRAM_BUSINESS_ACCOUNT_IDS/INSTAGRAM_BUSINESS_ACCOUNT_ID in Render for Instagram Graph hashtag/media review.',
+      graph_version: instagramFetch.graph_version,
+      credential_env: instagramFetch.credential_env,
+      business_account_ids_env: instagramFetch.business_account_ids_env,
+      skipped_reason: instagramFetch.skipped_reason,
+      fetch_reports: instagramFetch.reports,
+      fetched_posts_count: instagramFetch.posts.length,
+      jobs_attempted_count: instagramFetch.jobs_attempted_count,
+      jobs_skipped_due_to_time_budget: instagramFetch.jobs_skipped_due_to_time_budget,
       capture_tasks: instagramCaptureTasks,
     },
     discovered_posts_count: discoveredPosts.length,
@@ -5209,6 +5522,9 @@ module.exports = {
   META_GRAPH_ACCESS_TOKEN_ENV_NAMES,
   FACEBOOK_PAGE_ID_ENV_NAMES,
   INSTAGRAM_BUSINESS_ACCOUNT_ID_ENV_NAMES,
+  META_GRAPH_API_VERSION_ENV_NAMES,
+  DEFAULT_META_GRAPH_API_VERSION,
+  META_GRAPH_API_BASE_URL,
   TIKTOK_ACCESS_TOKEN_ENV_NAMES,
   TIKTOK_CLIENT_KEY_ENV_NAMES,
   TIKTOK_CLIENT_SECRET_ENV_NAMES,
@@ -5228,6 +5544,9 @@ module.exports = {
   enrichPendingTikTokSourceThumbnailRows,
   buildTikTokCaptureTasks,
   buildManualSocialCaptureTasks,
+  buildInstagramHashtagJobs,
+  normalizeInstagramGraphPost,
+  fetchInstagramHashtagPostsForJobs,
   buildTikTokExactPostImportRows,
   buildKnownYouTubeChannelSourcesFromRows,
   buildYouTubeSearchJobs,

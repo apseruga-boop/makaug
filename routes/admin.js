@@ -41,7 +41,8 @@ const {
   normalizeReviewChecklist,
   ownerEditTokenExpiry
 } = require('../services/listingModerationService');
-const { loadHarvestSummary } = require('../services/propertyHarvestMonitoringService');
+const { loadHarvestSummary, recordHarvestImportResult } = require('../services/propertyHarvestMonitoringService');
+const { schedulerStatus: socialCoverageSchedulerStatus } = require('../services/socialCoverageSchedulerService');
 const {
   KING_HARVEST_ROUTE_CONTRACT_MARKER,
   listHarvestCreators,
@@ -222,7 +223,7 @@ router.use(requireAdminApiKey);
 router.get('/harvest/summary', async (req, res, next) => {
   try {
     const data = await loadHarvestSummary(db, { days: req.query.days });
-    return res.json({ ok: true, data });
+    return res.json({ ok: true, data: { ...data, recurring_social_coverage: socialCoverageSchedulerStatus() } });
   } catch (error) {
     if (error?.code === '42P01') {
       return res.status(503).json({ ok: false, error: 'Apply migration 112_always_on_property_harvest.sql before opening Harvest monitoring.' });
@@ -240,6 +241,7 @@ router.get('/harvest/coverage', async (req, res, next) => {
         ...data,
         marker: KING_HARVEST_ROUTE_CONTRACT_MARKER,
         review_only: true,
+        recurring_social_coverage: socialCoverageSchedulerStatus(),
       },
     });
   } catch (error) {
@@ -4470,6 +4472,9 @@ router.post('/social-platform-posts/sweep', async (req, res, next) => {
       tiktok_capture_task_count: result.tiktok?.capture_task_count || 0,
       facebook_capture_task_count: result.facebook?.capture_task_count || 0,
       instagram_capture_task_count: result.instagram?.capture_task_count || 0,
+      instagram_hashtag_search_job_count: result.instagram?.hashtag_search_job_count || 0,
+      instagram_api_configured: result.instagram?.api_configured === true,
+      instagram_fetched_posts_count: result.instagram?.fetched_posts_count || 0,
       youtube_search_job_count: result.youtube?.search_job_count || 0,
       youtube_api_configured: result.youtube?.api_configured === true,
       youtube_live_ready_count: result.youtube?.confidence_summary?.live_ready_count || 0,
@@ -4823,6 +4828,11 @@ router.post('/tiktok-source-posts/import', async (req, res, next) => {
       dryRun,
       fetchOembed
     });
+    if (!dryRun) {
+      await recordHarvestImportResult(db, result, { eventType: 'admin_tiktok_exact_import' }).catch((error) => {
+        logger.warn('Admin TikTok harvest event logging failed', { message: error.message });
+      });
+    }
     await writeAudit('admin_tiktok_exact_posts_imported', {
       source: SOURCED_INVENTORY_CANDIDATE_SOURCE,
       batch_id: SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID,
@@ -4915,6 +4925,11 @@ router.post('/exact-social-source-posts/import', async (req, res, next) => {
       fetchPublicMetadata,
       skipImageHashLookup: dryRun || preparedFromPreview
     });
+    if (!dryRun) {
+      await recordHarvestImportResult(db, result, { eventType: 'admin_exact_social_import' }).catch((error) => {
+        logger.warn('Admin exact-social harvest event logging failed', { message: error.message });
+      });
+    }
     if (!dryRun && (
       Number(result.created_properties || 0) > 0
       || Number(result.existing_properties || 0) > 0

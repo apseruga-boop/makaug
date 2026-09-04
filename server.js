@@ -51,6 +51,10 @@ const {
 } = require('./services/publicHtmlSanitizer');
 const { startXSourceDripScheduler } = require('./services/xSourceDripService');
 const { startYouTubeSourceDripScheduler } = require('./services/youtubeSourceDripService');
+const {
+  SOCIAL_COVERAGE_SCHEDULER_MARKER,
+  startSocialCoverageScheduler
+} = require('./services/socialCoverageSchedulerService');
 const { startMarketplaceLifecycleScheduler } = require('./services/marketplaceLifecycleService');
 const { startMarketplaceDripScheduler } = require('./services/marketplaceNationalDripService');
 const { startFeaturedRotationScheduler } = require('./services/featuredRotationService');
@@ -240,6 +244,8 @@ app.get('/api/version', (_req, res) => {
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-agent007-replay-backoff-20260901'] : []),
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-agent007-pending-media-idempotency-20260901'] : []),
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-multi-result-fast-search-20260824'] : []),
+      ...(!IS_SOUTH_AFRICA ? [SOCIAL_COVERAGE_SCHEDULER_MARKER] : []),
+      ...(!IS_SOUTH_AFRICA ? ['social-review-source-evidence-only-20260825'] : []),
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-owner-forward-review-media-20260820'] : []),
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-owner-history-backfill-20260820'] : []),
       ...(!IS_SOUTH_AFRICA ? ['uganda-master-intake-recovery-20260811'] : []),
@@ -907,14 +913,26 @@ const captureHelperUsabilityScriptPatch = `
   };
   var seen={};
   var rows=[];
-  Array.prototype.slice.call(document.querySelectorAll("a[href]")).forEach(function(anchor){
-    var url=normalize(anchor.href);
-    if (!url || seen[url]) return;
-    seen[url]=true;
-    var card=anchor.closest("article,[data-e2e*=video],[data-testid*=tweet],li,div") || anchor;
-    var text=clean(card.innerText || anchor.innerText || anchor.getAttribute("aria-label") || document.title || "").slice(0,220);
-    rows.push(url+(text ? " | "+text : ""));
-  });
+  var collect=function(){
+    Array.prototype.slice.call(document.querySelectorAll("a[href]")).forEach(function(anchor){
+      if (rows.length>=2000) return;
+      var url=normalize(anchor.href);
+      if (!url || seen[url]) return;
+      seen[url]=true;
+      var card=anchor.closest("article,[data-e2e*=video],[data-testid*=tweet],li,div") || anchor;
+      var text=clean(card.innerText || anchor.innerText || anchor.getAttribute("aria-label") || document.title || "").slice(0,220);
+      rows.push(url+(text ? " | "+text : ""));
+    });
+  };
+  collect();
+  var stableRounds=0;
+  for(var round=0;round<24 && rows.length<2000 && stableRounds<4;round+=1){
+    var before=rows.length;
+    window.scrollTo(0,document.body.scrollHeight);
+    await new Promise(function(resolve){setTimeout(resolve,900);});
+    collect();
+    stableRounds=rows.length===before ? stableRounds+1 : 0;
+  }
   if (!rows.length) {
     alert("No exact social post links found on this visible page. Open a video/post/grid source page first, then run the helper again.");
     return;
@@ -935,7 +953,7 @@ const captureHelperUsabilityScriptPatch = `
     box.focus();
     box.select();
   }
-  alert("makaug copied "+rows.length+" exact social post link(s). Go back to King, click Paste Captured Links, and paste.");
+  alert("makaug deep capture copied "+rows.length+" unique exact social post link(s) from the posts this page loaded. Go back to King, click Paste Captured Links, and paste.");
 })();\`;
   };
 
@@ -966,7 +984,7 @@ const captureHelperUsabilityScriptPatch = `
     const bookmarklet = window.adminSocialCaptureBookmarkletUrl();
     return \`
     <div class="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 space-y-3 text-sm text-indigo-950">
-      <div><div class="font-black">Capture helper setup</div><div>Use this once to create a browser bookmark. After that, open TikTok, YouTube, Facebook, Instagram, or X source pages and click the bookmark. It copies visible exact post/video links so you can paste them into makaug.</div>
+      <div><div class="font-black">Capture helper setup</div><div>Use this once to create a browser bookmark. After that, open each saved TikTok, YouTube, Facebook, Instagram, or X hashtag/source page and click the bookmark. It scrolls through the latest posts the page will load and copies up to 2,000 unique exact post/video links for King deduplication.</div>
         \${copiedLabel ? \`<div class="mt-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-emerald-950"><div class="font-black">\${escapeHtml(copiedLabel)}</div><div class="mt-1 text-[11px]">Copied means the long bookmark code is in your computer clipboard. Nothing opens by itself. The next step is to paste it into a new browser bookmark URL field.</div></div>\` : ""}
       </div>
       <button type="button" onclick="adminPasteSocialCapturedLinks()" class="bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-50 px-3 py-2 rounded-lg text-xs font-bold">Open Paste Box</button>
@@ -977,7 +995,7 @@ const captureHelperUsabilityScriptPatch = `
       <div class="grid md:grid-cols-4 gap-2">
         <div class="bg-white border border-indigo-100 rounded-xl p-3"><b>1. Show bookmarks bar</b><br><span class="text-xs">Press Cmd+Shift+B in Chrome if you cannot see the bookmarks bar.</span></div>
         <div class="bg-white border border-indigo-100 rounded-xl p-3"><b>2. Save helper</b><br><span class="text-xs">Drag the purple makaug Capture Posts button to the bookmarks bar. If dragging is blocked, copy the Bookmark URL below into a new bookmark URL field.</span></div>
-        <div class="bg-white border border-indigo-100 rounded-xl p-3"><b>3. Capture links</b><br><span class="text-xs">Open a source page, scroll until useful posts are visible, then click the bookmark. The helper copies exact links.</span></div>
+        <div class="bg-white border border-indigo-100 rounded-xl p-3"><b>3. Deep-capture latest</b><br><span class="text-xs">Open a source page and click the bookmark. It auto-scrolls and copies unique exact links the platform loads.</span></div>
         <div class="bg-white border border-indigo-100 rounded-xl p-3"><b>4. Paste into King</b><br><span class="text-xs">Return to makaug, click Open Paste Box, preview, then Queue Found Online for King review.</span></div>
       </div>
       <div class="rounded-xl border border-indigo-100 bg-white p-3">
@@ -1705,6 +1723,7 @@ async function start() {
   if (harvestAutomationEnabled()) {
     startXSourceDripScheduler(db);
     startYouTubeSourceDripScheduler(db);
+    if (ACTIVE_COUNTRY_CODE === 'UG') startSocialCoverageScheduler(db);
   } else {
     logger.info('Harvest automation schedulers disabled by rollout flag');
   }

@@ -45,7 +45,7 @@ function usage() {
     'Usage:',
     '  node scripts/run-continuous-social-monitor.js --dry-run',
     '  node scripts/run-continuous-social-monitor.js --confirm',
-    '  node scripts/run-continuous-social-monitor.js --confirm --platforms=youtube,x --youtube-job-mode=channel_uploads --max-sources=15',
+    '  node scripts/run-continuous-social-monitor.js --confirm --platforms=youtube,x,instagram,tiktok --youtube-job-mode=channel_uploads --max-sources=15',
     '',
     'Defaults:',
     '  High-frequency YouTube runs use --youtube-job-mode=channel_uploads to avoid broad Search quota burn.',
@@ -121,6 +121,18 @@ function summarizeSweepResult(result = {}) {
       api_configured: result.x.api_configured === true,
       skipped_reason: result.x.skipped_reason || '',
     } : null,
+    instagram: result.instagram ? {
+      hashtag_search_job_count: result.instagram.hashtag_search_job_count || 0,
+      fetched_posts_count: result.instagram.fetched_posts_count || 0,
+      api_configured: result.instagram.api_configured === true,
+      skipped_reason: result.instagram.skipped_reason || '',
+    } : null,
+    tiktok: result.tiktok ? {
+      capture_task_count: result.tiktok.capture_task_count || 0,
+      fetched_posts_count: result.tiktok.data_source_fetch?.fetched_posts_count || 0,
+      api_configured: result.tiktok.api_configured === true,
+      skipped_reason: result.tiktok.data_source_fetch?.skipped_reason || '',
+    } : null,
   };
 }
 
@@ -144,7 +156,7 @@ async function main() {
   const lookbackDays = numberValue('--lookback-days', Number(process.env.CONTINUOUS_SOCIAL_MONITOR_LOOKBACK_DAYS || 7), { min: 0, max: 30 });
   const searchMode = argValue('--x-search-mode', process.env.CONTINUOUS_SOCIAL_MONITOR_X_SEARCH_MODE || 'recent');
   const youtubeJobMode = argValue('--youtube-job-mode', process.env.CONTINUOUS_SOCIAL_MONITOR_YOUTUBE_JOB_MODE || 'channel_uploads');
-  const platforms = listValue('--platforms', process.env.CONTINUOUS_SOCIAL_MONITOR_PLATFORMS || 'youtube,x');
+  const platforms = listValue('--platforms', process.env.CONTINUOUS_SOCIAL_MONITOR_PLATFORMS || 'youtube,x,instagram,tiktok');
   const explicitOffset = argValue('--source-offset', '');
   const auditCursor = explicitOffset === '' ? await readLastMonitorCursor() : null;
   const sourceOffset = explicitOffset !== ''
