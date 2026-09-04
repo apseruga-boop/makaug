@@ -6,6 +6,7 @@ const { asArray, cleanText, toNullableInt, toNullableFloat } = require('../middl
 const { captureLearningEvent } = require('../services/aiLearningCaptureService');
 const { createLead } = require('../services/leadService');
 const { logNotification } = require('../services/notificationLogService');
+const { listPublicDevelopments } = require('../services/offPlanService');
 const {
   normalizeCommercialTransactionType,
   normalizeCommercialPropertyType,
@@ -363,6 +364,73 @@ function inferAssistantIntentFromMessage(userMessage = '', suppliedIntent = 'unk
   if (ASSISTANT_LISTING_SIGNAL_PATTERN.test(text)) return 'property_search';
   if (ASSISTANT_TYPE_PATTERNS.some((item) => item.pattern.test(text))) return 'property_search';
   return 'unknown';
+}
+
+function offPlanAssistantSearchTerms(userMessage = '') {
+  const text = cleanText(userMessage, 1200);
+  const parsed = heuristicNaturalPropertyQuery({ text, fallbackType: 'any' });
+  const resolution = resolveCanonicalUgandaLocationFromText(text);
+  const location = resolution.status === 'matched' ? resolution.match : null;
+  const bedroomsMatch = text.match(/\b(\d+)\s*[- ]?(?:bed|beds|bedroom|bedrooms|br)\b/i);
+  const monthsMatch = text.match(/\b(\d{1,3})\s*[- ]?months?\b/i);
+  const projectTypeMatch = text.match(/\b(townhouse|apartment|house|mixed[ -]?use)\b/i);
+  const area = location && !['district', 'region'].includes(location.level) ? location.name : null;
+  const district = location?.district || null;
+  const bedrooms = Number(bedroomsMatch?.[1] || parsed?.bedsMin) || null;
+  const maxPaymentMonths = Number(monthsMatch?.[1]) || null;
+  const maxPriceUgx = Number(parsed?.maxBudgetUgx) || null;
+  const projectType = cleanText(projectTypeMatch?.[1]).replace(/\s+/g, '-') || null;
+  const query = { limit: 12 };
+  if (area) query.area = area;
+  if (district) query.district = district;
+  if (bedrooms) query.bedrooms = bedrooms;
+  if (maxPaymentMonths) query.max_payment_months = maxPaymentMonths;
+  if (maxPriceUgx) query.max_price_ugx = maxPriceUgx;
+  if (projectType) query.project_type = projectType;
+  return { query, area, district, bedrooms, maxPaymentMonths, maxPriceUgx, projectType };
+}
+
+async function buildOffPlanAssistantSearchPayload(userMessage = '', origin = '') {
+  const terms = offPlanAssistantSearchTerms(userMessage);
+  const projects = await listPublicDevelopments(db, terms.query);
+  const params = new URLSearchParams();
+  if (terms.area) params.set('area', terms.area);
+  if (terms.district) params.set('district', terms.district);
+  if (terms.bedrooms) params.set('bedrooms', String(terms.bedrooms));
+  if (terms.maxPaymentMonths) params.set('max_payment_months', String(terms.maxPaymentMonths));
+  if (terms.maxPriceUgx) params.set('max_price_ugx', String(terms.maxPriceUgx));
+  if (terms.projectType) params.set('project_type', terms.projectType);
+  const filters = {
+    search_type: 'off_plan',
+    area: terms.area,
+    district: terms.district,
+    bedrooms: terms.bedrooms,
+    max_price: terms.maxPriceUgx,
+    project_type: terms.projectType,
+    max_payment_months: terms.maxPaymentMonths
+  };
+  return {
+    filters,
+    filter_chips: [
+      terms.area || terms.district,
+      terms.bedrooms ? `${terms.bedrooms} bedrooms` : null,
+      terms.projectType,
+      terms.maxPaymentMonths ? `Up to ${terms.maxPaymentMonths} months` : null
+    ].filter(Boolean),
+    search_type: 'off_plan',
+    total_matches: projects.length,
+    result_count: projects.length,
+    off_plan_projects: projects,
+    listings: [],
+    results: [],
+    see_all_url: `${origin}/off-plan${params.toString() ? `?${params.toString()}` : ''}`,
+    search_path: '/off-plan',
+    zero_results: projects.length === 0,
+    capture_available: false,
+    match_quality: projects.length ? 'exact' : 'no_match',
+    exact_match: projects.length > 0,
+    search_error: null
+  };
 }
 
 function buildAssistantSeeAllUrl(parsed = {}, searchType = 'any') {
@@ -1077,7 +1145,32 @@ router.post('/assistant-reply', async (req, res, next) => {
         ...response,
         text: sanitizeAssistantText(response?.text || '')
       };
-      if (normalizeAssistantIntent(effectiveIntent) === 'off_plan_listing') {
+      if (normalizeAssistantIntent(effectiveIntent) === 'off_plan_search') {
+        try {
+          searchPayload = await buildOffPlanAssistantSearchPayload(userMessage, appOriginFromRequest(req));
+          response = {
+            ...response,
+            text: sanitizeAssistantText(searchPayload.total_matches
+              ? `I found ${searchPayload.total_matches} off-plan project${searchPayload.total_matches === 1 ? '' : 's'} matching your search.`
+              : 'No off-plan projects match every part of that search yet. Try changing a location, bedroom or payment-plan filter.')
+          };
+        } catch (searchError) {
+          searchPayload = {
+            search_type: 'off_plan',
+            total_matches: 0,
+            result_count: 0,
+            off_plan_projects: [],
+            listings: [],
+            results: [],
+            see_all_url: `${appOriginFromRequest(req)}/off-plan`,
+            zero_results: true,
+            capture_available: false,
+            match_quality: 'search_error',
+            exact_match: false,
+            search_error: searchError.message || 'off_plan_search_failed'
+          };
+        }
+      } else if (normalizeAssistantIntent(effectiveIntent) === 'off_plan_listing') {
         response = {
           ...response,
           text: sanitizeAssistantText([

@@ -9230,7 +9230,7 @@ function offPlanWhatsappReply(listingRequest = false) {
   if (listingRequest) {
     return `${whatsappBrandHeader('Off-plan project received')}\nThanks very much—your request has been received. A member of the team will get in touch with you.\n\nPlease prepare:\n• Project name\n• Location\n• Completion date\n• Brochure and project images\n• Current construction progress\n• Current sales and availability\n\nThe team will call you.\n${HOME_URL}/off-plan`;
   }
-  return `${whatsappBrandHeader('Off-plan projects')}\nExplore verified new developments, homes, payment plans, progress, maps and brochures.\n\n${HOME_URL}/off-plan`;
+  return `${whatsappBrandHeader('Off-plan projects')}\nExplore source-attributed new developments, homes, payment plans, maps and brochures. Unconfirmed facts are clearly labelled.\n\n${HOME_URL}/off-plan`;
 }
 
 function contextualPageRouteFromMessage(text = '') {

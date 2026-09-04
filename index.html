@@ -3732,9 +3732,9 @@
             <button type="button" class="off-plan-view-pill" onclick="toggleOffPlanAi()" aria-expanded="false" aria-controls="off-plan-ai-panel"><span aria-hidden="true">✨</span><span data-off-plan-i18n="askAi">Ask AI</span></button>
           </div>
           <div id="off-plan-ai-panel" class="off-plan-ai-panel" hidden>
-            <div class="ask-ai-search-shell" data-ai-search-shell data-ai-scope="all">
+            <div class="ask-ai-search-shell" data-ai-search-shell data-ai-scope="off_plan">
               <div class="flex items-center justify-between gap-3 flex-wrap"><div><h2 data-ai-title class="ask-ai-search-title" data-off-plan-i18n="aiTitle">Ask AI about off-plan</h2><p data-ai-subtitle class="ask-ai-search-subtitle" data-off-plan-i18n="aiSubtitle">Describe the project, location or payment plan you need.</p></div><p data-ai-scope-hint class="ask-ai-scope-chip">Off Plan</p></div>
-              <form data-ai-search-form data-ai-scope="all" onsubmit="submitAskAiSearchPrompt(event)" class="mt-3"><input data-ai-intent type="hidden" value="off_plan_search"><div class="ask-ai-search-row"><span class="ask-ai-search-icon" aria-hidden="true">✨</span><input data-ai-message autocomplete="off" class="ask-ai-search-input" aria-label="Ask makaug AI about off-plan projects" placeholder="Try: 3-bedroom off-plan home in Entebbe"><button data-ai-submit type="submit" class="ask-ai-search-submit"><span data-off-plan-i18n="askAi">Ask AI</span></button></div></form>
+              <form data-ai-search-form data-ai-scope="off_plan" onsubmit="submitAskAiSearchPrompt(event)" class="mt-3"><input data-ai-intent type="hidden" value="off_plan_search"><div class="ask-ai-search-row"><span class="ask-ai-search-icon" aria-hidden="true">✨</span><input data-ai-message autocomplete="off" class="ask-ai-search-input" aria-label="Ask makaug AI about off-plan projects" placeholder="Try: 3-bedroom off-plan home in Entebbe"><button data-ai-submit type="submit" class="ask-ai-search-submit"><span data-off-plan-i18n="askAi">Ask AI</span></button></div></form>
               <div data-ai-response class="mt-4 hidden rounded-2xl border border-blue-100 bg-white p-4 text-gray-900"></div>
             </div>
           </div>

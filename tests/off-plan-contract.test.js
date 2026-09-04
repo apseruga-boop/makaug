@@ -76,6 +76,7 @@ test('Off Plan directory uses the compact search, map, AI and image-led project 
   assert.match(html, /id="off-plan-map"/);
   assert.match(html, /id="off-plan-ai-panel"/);
   assert.match(html, /data-ai-intent type="hidden" value="off_plan_search"/);
+  assert.match(html, /data-ai-scope="off_plan"/);
   assert.doesNotMatch(html, /data-off-plan-i18n="sectionEyebrow">Off plan Uganda/);
   assert.match(client, /\/api\/properties\/locations\/suggest/);
   assert.match(client, /source_agent_profile_id/);
@@ -113,12 +114,18 @@ test('contact workflow has all channels and exact operations recipients', () => 
 test('website and WhatsApp AI recognize off-plan search and listing requests', () => {
   const ai = read('services/aiService.js');
   const aiRoute = read('routes/ai.js');
+  const app = read('assets/makaug-app.js');
   const whatsapp = read('routes/whatsapp.js');
   assert.match(ai, /'off_plan_search'/);
   assert.match(ai, /'off_plan_listing'/);
   assert.match(aiRoute, /assistantIsOffPlan/);
   assert.match(aiRoute, /Your request is recorded only after you submit that contact form or send the WhatsApp message/);
   assert.match(aiRoute, /action: 'open_off_plan_contact'/);
+  assert.match(aiRoute, /listPublicDevelopments/);
+  assert.match(aiRoute, /off_plan_projects: projects/);
+  assert.match(app, /off_plan: \{ intent: "off_plan_search"/);
+  assert.match(app, /function aiAssistantOffPlanCardsHtml/);
+  assert.match(app, /data\?\.off_plan_projects/);
   assert.match(whatsapp, /Off-plan project received/);
   for (const field of ['Project name', 'Location', 'Completion date', 'Brochure and project images', 'Current construction progress', 'Current sales and availability']) assert.match(whatsapp, new RegExp(field));
   assert.match(whatsapp, /createOffPlanEnquiry/);

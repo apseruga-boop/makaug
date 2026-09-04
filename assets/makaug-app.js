@@ -35238,6 +35238,7 @@ function aiAssistantStarLabel(text = "", fallback = "Ask AI") {
 
 const AI_ASSISTANT_SEARCH_SCOPES = Object.freeze({
   all: { intent: "search_property", labelKey: "all" },
+  off_plan: { intent: "off_plan_search", labelKey: "off_plan" },
   sale: { intent: "search_sale", labelKey: "sale" },
   rent: { intent: "search_rent", labelKey: "rent" },
   land: { intent: "search_land", labelKey: "land" },
@@ -35248,6 +35249,7 @@ const AI_ASSISTANT_SEARCH_SCOPES = Object.freeze({
 const AI_ASSISTANT_SCOPE_HINT_I18N = Object.freeze({
   en: {
     all: "Searching all properties",
+    off_plan: "Searching off-plan projects",
     sale: "Searching For Sale",
     rent: "Searching To Rent",
     land: "Searching Land",
@@ -35322,6 +35324,7 @@ const AI_ASSISTANT_SCOPE_HINT_I18N = Object.freeze({
 
 function normalizeAiAssistantScope(scope = "all") {
   const clean = String(scope || "all").trim().toLowerCase();
+  if (clean === "off-plan" || clean === "new-development" || clean === "new-developments") return "off_plan";
   if (clean === "students" || clean === "student-accommodation") return "student";
   if (clean === "to-rent" || clean === "rental" || clean === "rentals") return "rent";
   if (clean === "for-sale" || clean === "sales") return "sale";
@@ -35330,6 +35333,7 @@ function normalizeAiAssistantScope(scope = "all") {
 
 function aiAssistantScopeForPage(page = currentPage || "home") {
   const clean = String(page || "").trim().toLowerCase();
+  if (clean === "off-plan" || clean === "off_plan") return "off_plan";
   if (clean === "sale" || clean === "for-sale" || clean === "property-sale") return "sale";
   if (clean === "rent" || clean === "to-rent") return "rent";
   if (clean === "land") return "land";
@@ -35548,6 +35552,27 @@ function aiAssistantListingCardsHtml(listings = [], searchType = "") {
   return `<div class="grid md:grid-cols-2 xl:grid-cols-3 gap-4">${cards}</div>`;
 }
 
+function aiAssistantOffPlanCardsHtml(projects = []) {
+  const rows = Array.isArray(projects) ? projects : [];
+  if (!rows.length) return "";
+  return `<div class="grid md:grid-cols-2 gap-4">${rows.map((project) => {
+    const image = Array.isArray(project.images) ? project.images.find((item) => item?.url)?.url : "";
+    const location = [project.area, project.district].filter(Boolean).join(", ");
+    const price = Number(project.launch_price_ugx) > 0
+      ? `USh ${Math.round(Number(project.launch_price_ugx)).toLocaleString("en-UG")}`
+      : "Price on request";
+    const sourceName = String(project.source_agent_name || project.source_display_name || "Project source").trim();
+    const sourceId = String(project.source_agent_profile_id || project.source_agent_id || "").trim();
+    return `<article class="overflow-hidden rounded-2xl border border-emerald-100 bg-white shadow-sm">
+      <a href="/off-plan/${adminAttr(project.slug)}" class="block">
+        ${image ? `<img src="${adminAttr(image)}" alt="${adminAttr(project.name || "Off-plan project")}" class="h-44 w-full object-cover" loading="lazy">` : ""}
+        <div class="p-4"><span class="text-[11px] font-black uppercase tracking-wide text-emerald-700">Off Plan</span><h3 class="mt-1 text-lg font-black text-slate-950">${adminEscape(project.name || "Off-plan project")}</h3><p class="mt-1 text-xs text-slate-600">${adminEscape(location || "Location to be confirmed")}</p><strong class="mt-3 block text-base text-emerald-800">From ${adminEscape(price)}</strong>${project.payment_plan_months ? `<span class="mt-2 inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-black text-emerald-800">${adminEscape(String(project.payment_plan_months))}-month payment plan</span>` : ""}</div>
+      </a>
+      ${sourceId ? `<a href="/agents/${adminAttr(sourceId)}" class="flex items-center gap-2 border-t border-emerald-100 px-4 py-3 text-xs font-black text-emerald-800"><i class="fas fa-user-check" aria-hidden="true"></i>${adminEscape(sourceName)}</a>` : ""}
+    </article>`;
+  }).join("")}</div>`;
+}
+
 function aiAssistantNeedCaptureHtml(data = {}, copy = getAiAssistantPromptCopy()) {
   const capture = data?.capture_payload && typeof data.capture_payload === "object" ? data.capture_payload : {};
   const payload = {
@@ -35665,12 +35690,13 @@ function renderAiAssistantResponse(responseBox, data = {}, context = {}) {
   const copy = getAiAssistantPromptCopy();
   const text = data?.text || data?.reply || data?.message || "makaug AI is connected.";
   const listings = Array.isArray(data?.listings) ? data.listings : (Array.isArray(data?.results) ? data.results : []);
-  const total = Number(data?.total_matches ?? data?.pagination?.total ?? listings.length) || 0;
+  const offPlanProjects = Array.isArray(data?.off_plan_projects) ? data.off_plan_projects : [];
+  const total = Number(data?.total_matches ?? data?.pagination?.total ?? (listings.length + offPlanProjects.length)) || 0;
   const searchType = data?.search_type || data?.filters?.search_type || "";
   const chips = Array.isArray(data?.filter_chips)
     ? data.filter_chips
     : Object.values(data?.filters || {}).filter(Boolean).slice(0, 5);
-  const cardHtml = aiAssistantListingCardsHtml(listings, searchType);
+  const cardHtml = aiAssistantOffPlanCardsHtml(offPlanProjects) || aiAssistantListingCardsHtml(listings, searchType);
   const seeAllUrl = data?.see_all_url || data?.search_url || "";
   const seeAllHtml = seeAllUrl ? `
     <a href="${adminAttr(seeAllUrl)}" class="inline-flex items-center justify-center rounded-xl bg-blue-600 px-4 py-2 text-sm font-black text-white hover:bg-blue-700">
@@ -35685,7 +35711,7 @@ function renderAiAssistantResponse(responseBox, data = {}, context = {}) {
       ${adminEscape(copy.nearbyNote || "These are nearby or relaxed matches, not an exact match.")}
     </div>` : "";
   const captureHtml = data?.capture_available ? aiAssistantNeedCaptureHtml(data, copy) : "";
-  const zeroHtml = !listings.length && !data?.needs_search_input ? `
+  const zeroHtml = !listings.length && !offPlanProjects.length && !data?.needs_search_input ? `
     <div class="rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-950">
       <div class="font-black">${adminEscape(copy.zero)}</div>
       <div class="mt-3 flex flex-wrap gap-2">
@@ -35709,7 +35735,7 @@ function renderAiAssistantResponse(responseBox, data = {}, context = {}) {
   trackEvent("ai_assistant_results_rendered", {
     source_page: currentPage,
     source: context.source || "ai_assistant",
-    result_count: listings.length,
+    result_count: listings.length + offPlanProjects.length,
     total_matches: total,
     language: currentLang || "en"
   });
