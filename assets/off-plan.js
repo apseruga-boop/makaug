@@ -867,7 +867,7 @@
           ${overseas ? overseasHighlightsMarkup(project) : ''}
           ${agentCardMarkup(project)}
           ${concierge}
-          <section class="off-plan-panel"><div class="flex items-end justify-between gap-3"><div><p class="text-xs font-black uppercase tracking-wide text-green-700">${escapeHtml(offPlanText('chooseHome'))}</p><h2 class="mt-1 text-xl font-black text-gray-950">${escapeHtml(offPlanText('unitTypesPrices'))}</h2></div><span class="text-xs text-gray-500">${escapeHtml(offPlanText('guidePrices'))}</span></div><div class="mt-4">${unitTable(project)}</div></section>
+          <section class="off-plan-panel"><div class="flex items-end justify-between gap-3"><div><p class="text-xs font-black uppercase tracking-wide text-green-700">${escapeHtml(offPlanText('chooseHome'))}</p><h2 class="mt-1 text-xl font-black text-gray-950">${escapeHtml(offPlanText('unitTypesPrices'))}</h2></div><span class="text-xs text-gray-500">${escapeHtml(offPlanText('guidePrices').replace(/USD/g, clean(project.original_currency || 'USD').toUpperCase()))}</span></div><div class="mt-4">${unitTable(project)}</div></section>
           ${floorPlans}
           <section class="off-plan-panel"><h2 class="text-xl font-black text-gray-950">${escapeHtml(offPlanText('projectProgress'))}</h2><div class="grid sm:grid-cols-2 gap-6 mt-5">${progressMarkup(offPlanText('constructionCompleted'), project.construction_progress)}${progressMarkup(offPlanText('homesSold'), project.sales_progress)}</div></section>
           <section class="off-plan-panel"><h2 class="text-xl font-black text-gray-950">${escapeHtml(offPlanText('paymentPlan'))}</h2><div class="mt-4">${paymentPlanMarkup(project)}</div>${calculatorMarkup(project, firstPrice)}</section>

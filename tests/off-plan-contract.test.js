@@ -105,8 +105,8 @@ test('brochure, payment, gallery, map, sharing, video and mortgage handoff are v
   assert.match(client, /id="off-plan-gallery-dialog"/);
   assert.match(client, /closeOffPlanGallery/);
   assert.match(client, /value == null \|\| \(typeof value === 'string' && !value\.trim\(\)\)/);
-  assert.match(html, /off-plan\.js\?v=20260904-overseas-v1/);
-  assert.match(html, /off-plan\.css\?v=20260904-overseas-v1/);
+  assert.match(html, /off-plan\.js\?v=20260904-overseas-v2/);
+  assert.match(html, /off-plan\.css\?v=20260904-overseas-v2/);
   assert.match(client, /CLOSED_PERMANENTLY/);
   assert.match(client, /Archive this private project record/);
   assert.match(client, /status === 'archived' \? 'PATCH' : 'POST'/);
@@ -165,6 +165,7 @@ test('Spectre source facts, MakaUG coordination and Kenya safeguards are wired w
   assert.match(client, /officialBuyerGuidanceMarkup/);
   assert.match(client, /roi_projections/);
   assert.match(client, /OFF_PLAN_AMENITY_I18N/);
+  assert.match(client, /guidePrices'\)\.replace\(\/USD\/g, clean\(project\.original_currency/);
   assert.match(brochure, /copy\.overseasFinance/);
   assert.match(brochure, /copy\.makaugOverseasTeam/);
   assert.match(brochure, /project\.floor_plans/);
