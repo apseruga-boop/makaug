@@ -144,7 +144,8 @@ function distanceFromProject(project = {}, place = {}) {
 function formatApproximateDistance(project, place) {
   const distance = distanceFromProject(project, place);
   if (!Number.isFinite(distance)) return 'Distance to verify';
-  return `Approx. ${distance.toFixed(distance < 10 ? 1 : 0)} km from displayed area point`;
+  const display = distance < 0.1 ? '<0.1' : distance.toFixed(distance < 10 ? 1 : 0);
+  return `Approx. ${display} km from displayed area point`;
 }
 
 function computeMortgageEstimate({ principal, annualRate, years, arrangementFeePct = 0 } = {}) {
