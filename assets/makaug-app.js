@@ -372,13 +372,48 @@ async function refreshBrokersFromApi({ silent = true } = {}) {
 async function loadRemoteBrokerProfileForUi(id) {
   const brokerId = String(id || "").trim();
   if (!brokerId) return null;
-  const response = await apiRequest(`/api/agents/${encodeURIComponent(brokerId)}`, { skipAuth: true });
-  const agent = response?.data || {};
+  const offPlanController = typeof AbortController === 'function' ? new AbortController() : null;
+  const offPlanTimeout = offPlanController ? window.setTimeout(() => offPlanController.abort(), 4500) : null;
+  const offPlanProjectsPromise = apiRequest('/api/off-plan?limit=60', { skipAuth: true, signal: offPlanController?.signal })
+    .then((response) => (Array.isArray(response?.developments) ? response.developments : [])
+      .filter((project) => String(project?.source_agent_profile_id || project?.source_agent_id || '') === brokerId))
+    .catch(() => [])
+    .finally(() => { if (offPlanTimeout) window.clearTimeout(offPlanTimeout); });
+  const controller = typeof AbortController === 'function' ? new AbortController() : null;
+  const timeout = controller ? window.setTimeout(() => controller.abort(), 4000) : null;
+  let response = null;
+  let profileError = null;
+  try {
+    response = await apiRequest(`/api/agents/${encodeURIComponent(brokerId)}`, { skipAuth: true, signal: controller?.signal });
+  } catch (error) {
+    profileError = error;
+  } finally {
+    if (timeout) window.clearTimeout(timeout);
+  }
+  const offPlanProjects = await offPlanProjectsPromise;
+  let agent = response?.data || null;
+  if (!agent && offPlanProjects.length) {
+    const source = offPlanProjects[0];
+    const districts = [...new Set(offPlanProjects.map((project) => project.district).filter(Boolean))];
+    agent = {
+      id: brokerId,
+      full_name: source.source_agent_name || source.source_display_name || 'Project broker',
+      company_name: source.source_agent_company || source.source_agent_name || source.source_display_name || 'makaug',
+      profile_photo_url: source.source_agent_profile_photo_url || '',
+      status: source.source_agent_status || 'approved',
+      districts_covered: districts,
+      specializations: ['Off-plan projects'],
+      bio: `Project contact for ${offPlanProjects.map((project) => project.name).filter(Boolean).join(', ')} on makaug.com. Confirm current availability and project facts before making a commitment.`,
+      listings: []
+    };
+  }
+  if (!agent) throw profileError || new Error('Broker profile is not available yet.');
   const broker = mapRemoteAgentForUi(agent);
   broker.remote_profile_loaded = true;
   broker.remote_listings = Array.isArray(agent.listings)
     ? agent.listings.map((row) => mapRemotePropertyForUi(row)).filter((listing) => listing.id)
     : [];
+  broker.remote_off_plan_projects = offPlanProjects;
   const idx = REMOTE_BROKERS.findIndex((item) => String(item.id || "") === String(broker.id || brokerId));
   if (idx >= 0) {
     REMOTE_BROKERS[idx] = { ...REMOTE_BROKERS[idx], ...broker };
@@ -40695,6 +40730,32 @@ function setCanonicalBrokerProfileUrl(brokerOrId, source = "broker_profile") {
   } catch (error) {}
 }
 
+function brokerOffPlanProjectsHtml(projects = []) {
+  const rows = Array.isArray(projects) ? projects.filter((project) => project?.slug && project?.name) : [];
+  if (!rows.length) return "";
+  return `
+    <section class="bg-white border border-green-100 rounded-2xl p-5 mb-6" aria-labelledby="broker-off-plan-heading">
+      <div class="flex items-end justify-between gap-3 flex-wrap mb-4">
+        <div>
+          <div class="text-xs font-black uppercase tracking-wide text-green-700">Off-plan projects</div>
+          <h2 id="broker-off-plan-heading" class="text-xl font-bold text-gray-900 mt-1">Projects represented by this broker</h2>
+        </div>
+        <a href="/off-plan" class="text-sm font-bold text-green-700 hover:text-green-600">View all projects</a>
+      </div>
+      <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        ${rows.map((project) => {
+          const image = Array.isArray(project.images) ? project.images.find((item) => item?.url) : null;
+          const location = [project.area, project.district].filter(Boolean).join(", ") || "Location to be confirmed";
+          const price = Number(project.launch_price_ugx || 0);
+          return `<a href="/off-plan/${encodeURIComponent(project.slug)}" class="group overflow-hidden rounded-2xl border border-gray-200 bg-white hover:border-green-300 hover:shadow-md transition">
+            <div class="aspect-[4/3] bg-gray-100 overflow-hidden">${image ? `<img src="${adminAttr(image.url)}" alt="${adminAttr(image.caption || project.name)}" class="h-full w-full object-cover group-hover:scale-[1.02] transition" loading="lazy">` : ""}</div>
+            <div class="p-4"><span class="inline-flex rounded-full bg-blue-50 px-2 py-1 text-[11px] font-black text-blue-900">Source details supplied</span><h3 class="font-black text-gray-950 mt-2">${adminEscape(project.name)}</h3><p class="text-sm text-gray-500 mt-1">${adminEscape(location)}</p><strong class="block text-green-800 mt-3">${price > 0 ? adminEscape(fmtP(price)) : "Price on request"}</strong></div>
+          </a>`;
+        }).join("")}
+      </div>
+    </section>`;
+}
+
 function getAmenityDisplayLabel(value, listingType = "sale") {
   const raw = String(value || "").trim();
   if (!raw) return "";
@@ -53019,6 +53080,7 @@ async function openBrokerProfile(id) {
   setCanonicalBrokerProfileUrl(b, "broker_profile_open");
   const remoteListings = Array.isArray(b.remote_listings) ? b.remote_listings.filter(isListingPublicVisible) : [];
   const list = remoteListings.length ? remoteListings : getPublicListings().filter((p) => String(p.agent || "") === String(id || ""));
+  const offPlanProjects = Array.isArray(b.remote_off_plan_projects) ? b.remote_off_plan_projects : [];
   const photoSrc = publicImageSrc(b.photo || b.profile_photo_url, `https://ui-avatars.com/api/?name=${encodeURIComponent(b.name)}&background=dcfce7&color=166534&size=300`);
   const publicLicence = /^DIRECT-/i.test(String(b.licence || "").trim()) ? "" : String(b.licence || "").trim();
   const totalVideoTours = list.reduce((sum, property) => sum + propertyVideoUrls(property).length, 0);
@@ -53073,6 +53135,8 @@ async function openBrokerProfile(id) {
         </div>
       </div>
     </div>
+
+    ${brokerOffPlanProjectsHtml(offPlanProjects)}
 
     <div class="bg-white border border-gray-200 rounded-2xl p-5">
       <div class="flex justify-between items-center mb-4 flex-wrap gap-2">
