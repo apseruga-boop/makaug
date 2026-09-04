@@ -340,7 +340,7 @@ export class ConversationStateMachine {
     session.currentStep = 'main_menu';
     const text = intent === 'off_plan_listing'
       ? '*makaug.com* | *Off-plan project received*\nThanks very much—your request has been received. A team member will contact you.\nPlease prepare: project name, location, completion date, brochure, images, construction progress and current sales.\n' + this.urls.offPlan()
-      : '*makaug.com* | *Off-plan projects*\nExplore verified new developments, unit prices, construction and sales progress, payment plans, maps and brochures.\n' + this.urls.offPlan();
+      : '*makaug.com* | *Off-plan projects*\nExplore source-attributed new developments, unit prices, payment plans, maps and brochures. Unconfirmed facts are clearly labelled.\n' + this.urls.offPlan();
     return { state: session, replies: [{ text }] };
   }
 

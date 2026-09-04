@@ -338,7 +338,7 @@ function buildOffPlanAssistantText(intent) {
   }
   return [
     '*makaug.com* | *Off-plan projects*',
-    'Explore verified new developments, unit prices, construction and sales progress, payment plans, maps and brochures.',
+    'Explore source-attributed new developments, unit prices, payment plans, maps and brochures. Unconfirmed project facts are clearly labelled.',
     `🔗 ${PUBLIC_BASE_URL}/off-plan`
   ].join('\n');
 }
