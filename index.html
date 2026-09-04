@@ -414,6 +414,7 @@
   <link rel="preload" as="image" href="https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=1200&q=60" fetchpriority="high">
   <link rel="stylesheet" href="/assets/tailwind.css">
   <link rel="stylesheet" href="/assets/off-plan.css?v=20260904-overseas-v2">
+  <link rel="stylesheet" href="/assets/virtual-homes.css?v=20260905-v1">
   <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
   <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"></noscript>
   <link rel="preload" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
@@ -6670,6 +6671,16 @@
           <details class="mt-5 rounded-xl border border-gray-200 p-4"><summary class="cursor-pointer font-black text-sm">Off-plan enquiries</summary><div id="staff-off-plan-enquiries" class="mt-3 grid gap-2 text-sm text-gray-600">Refresh to load enquiries.</div></details>
         </section>
 
+        <section id="staff-virtual-homes-control" class="vh-workbench" data-virtual-home-dashboard="staff">
+          <div class="vh-workbench-head">
+            <div><p class="vh-kicker">AI virtual viewing</p><h3 class="mt-1 text-xl font-black text-gray-950">Maka Virtual Homes production</h3><p class="mt-1 text-sm text-gray-500">Upload source plans, review every uncertain element, approve geometry, build the 3D scene, run QA and prepare exports. Staff cannot publish.</p></div>
+            <div class="flex gap-2"><button type="button" class="vh-btn vh-btn-green" onclick="openVirtualHomeCreate('staff')"><i class="fas fa-plus"></i>Create</button><button type="button" class="vh-btn vh-btn-outline" onclick="loadVirtualHomeManagement('staff')"><i class="fas fa-rotate-right"></i>Refresh</button></div>
+          </div>
+          <div id="staff-virtual-home-storage" class="mt-3"></div>
+          <div id="staff-virtual-home-projects" class="vh-manager-list"><p class="text-sm text-gray-500">Open this workspace to load the production queue.</p></div>
+          <div id="staff-virtual-home-workspace"></div>
+        </section>
+
         <div id="staff-settings-panel" class="bg-white border border-blue-100 rounded-2xl p-6">
           <div class="flex items-start justify-between gap-4 flex-wrap">
             <div>
@@ -7123,6 +7134,17 @@
           </div>
           <div id="admin-off-plan-projects" class="mt-5 grid gap-4"><p class="text-sm text-gray-500">Open this control to load the off-plan review queue.</p></div>
           <details class="mt-5 rounded-xl border border-gray-200 p-4"><summary class="cursor-pointer font-black text-sm">Off-plan enquiries</summary><div id="admin-off-plan-enquiries" class="mt-3 grid gap-2 text-sm text-gray-600">Refresh to load enquiries.</div></details>
+        </section>
+
+        <section id="admin-virtual-homes-control" class="vh-workbench" data-virtual-home-dashboard="admin">
+          <div class="vh-workbench-head">
+            <div><p class="vh-kicker">AI virtual viewing</p><h3 class="mt-1 text-xl font-black text-gray-950">Maka Virtual Homes control centre</h3><p class="mt-1 text-sm text-gray-500">Final approval, public release, service pricing, assets, version history and storage health. Nothing publishes without an explicit King action.</p></div>
+            <div class="flex gap-2"><button type="button" class="vh-btn vh-btn-green" onclick="openVirtualHomeCreate('admin')"><i class="fas fa-plus"></i>Create</button><button type="button" class="vh-btn vh-btn-outline" onclick="loadVirtualHomeManagement('admin')"><i class="fas fa-rotate-right"></i>Refresh</button></div>
+          </div>
+          <div id="admin-virtual-home-storage" class="mt-3"></div>
+          <div id="admin-virtual-home-projects" class="vh-manager-list"><p class="text-sm text-gray-500">Open this control centre to load the production queue.</p></div>
+          <div id="admin-virtual-home-workspace"></div>
+          <details class="mt-5 rounded-xl border border-gray-200 p-4"><summary class="cursor-pointer font-black text-sm">Commercial requests and configurable products</summary><div id="admin-virtual-home-orders" class="mt-3 text-sm text-gray-600">Refresh to load requests.</div></details>
         </section>
 
         <div id="admin-command-centre" class="bg-white border border-green-100 rounded-2xl overflow-hidden">
@@ -8547,6 +8569,7 @@
           <a href="/brokers" class="about-card rounded-xl border border-[#e4ece8] bg-[#f6f9f7] p-4"><i class="fas fa-user-tie text-[#15603f]"></i><strong class="block mt-2" data-content-i18n="about.everyBrokersTitle">Find brokers</strong><span class="text-sm text-[#5b6b62]" data-content-i18n="about.everyBrokersText">trusted agents near you</span></a>
           <a href="/mortgage" class="about-card rounded-xl border border-[#e4ece8] bg-[#f6f9f7] p-4"><i class="fas fa-percent text-[#15603f]"></i><strong class="block mt-2" data-content-i18n="about.everyMortgageTitle">Mortgage finder</strong><span class="text-sm text-[#5b6b62]" data-content-i18n="about.everyMortgageText">compare bank rates and get help</span></a>
           <a href="/discover-ai-chatbot" class="about-card rounded-xl border border-[#e4ece8] bg-white p-4"><i class="fas fa-robot text-[#15603f]"></i><strong class="block mt-2" data-content-i18n="about.everyAiTitle">AI helper</strong><span class="text-sm text-[#5b6b62]" data-content-i18n="about.everyAiText">search and ask, hands-free</span></a>
+          <a href="/services/virtual-homes" onclick="showPage('virtual-homes')" class="about-card rounded-xl border border-[#e4ece8] bg-[#f6f9f7] p-4"><i class="fas fa-cube text-[#15603f]"></i><strong class="block mt-2">Maka Virtual Homes</strong><span class="text-sm text-[#5b6b62]">staff-reviewed interactive 3D viewing</span></a>
         </div>
       </section>
 
@@ -8773,6 +8796,131 @@
     </div>
   </div>
 
+  <div id="page-services" class="page vh-shell">
+    <section class="vh-hero">
+      <div class="vh-container vh-hero-inner">
+        <div>
+          <span class="vh-eyebrow"><i class="fas fa-sparkles"></i><span data-vh-i18n="servicesEyebrow">MakaUG property services</span></span>
+          <h1 class="vh-title" data-vh-i18n="servicesTitle">Property tools built for clearer decisions.</h1>
+          <p class="vh-lede" data-vh-i18n="servicesLede">Explore practical services for property owners, developers, agents and buyers—starting with staff-reviewed AI Virtual Viewing.</p>
+        </div>
+        <article class="vh-hero-card">
+          <div class="vh-card-icon"><i class="fas fa-cube"></i></div>
+          <h2 class="text-3xl font-black mt-4" data-vh-i18n="brand">Maka Virtual Homes</h2>
+          <p class="text-green-100 mt-3" data-vh-i18n="servicesCard">Turn an approved floor plan into a real interactive 3D home, then explore furnished, unfurnished, day and night views.</p>
+          <a href="/services/virtual-homes" onclick="showPage('virtual-homes')" class="vh-btn vh-btn-primary mt-5" data-vh-i18n="exploreService">Explore the service</a>
+        </article>
+      </div>
+    </section>
+  </div>
+
+  <div id="page-virtual-homes" class="page vh-shell" data-release-marker="maka-virtual-homes-v1-20260905">
+    <section class="vh-hero">
+      <div class="vh-container vh-hero-inner">
+        <div>
+          <span class="vh-eyebrow"><i class="fas fa-cube"></i><span data-vh-i18n="eyebrow">AI virtual viewing</span></span>
+          <h1 class="vh-title" data-vh-i18n="heroTitle">Walk through a home before it exists.</h1>
+          <p class="vh-lede" data-vh-i18n="heroLede">Maka Virtual Homes turns your floor plan into a staff-reviewed, interactive 3D experience for buyers, owners and developers.</p>
+          <div class="vh-actions">
+            <button class="vh-btn vh-btn-primary" type="button" onclick="virtualHomeScrollToOrder()"><i class="fas fa-wand-magic-sparkles"></i><span data-vh-i18n="startProject">Start a project</span></button>
+            <button class="vh-btn vh-btn-secondary" type="button" onclick="document.getElementById('vh-public-projects')?.scrollIntoView({behavior:'smooth'})"><i class="fas fa-play"></i><span data-vh-i18n="viewHomes">View published homes</span></button>
+          </div>
+        </div>
+        <div class="vh-hero-card" aria-label="Virtual Home capability preview">
+          <div class="vh-mini-plan">
+            <div class="vh-mini-room" style="left:7%;top:8%;width:55%;height:42%">Living</div>
+            <div class="vh-mini-room" style="left:62%;top:8%;width:31%;height:42%">Kitchen</div>
+            <div class="vh-mini-room" style="left:7%;top:50%;width:42%;height:43%">Bedroom</div>
+            <div class="vh-mini-room" style="left:49%;top:50%;width:44%;height:43%">Bedroom</div>
+          </div>
+          <div class="vh-mode-strip"><span data-vh-i18n="modeWalk">Walk</span><span data-vh-i18n="modeDollhouse">Dollhouse</span><span data-vh-i18n="furnished">Furnished</span><span data-vh-i18n="dayNight">Day / night</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="vh-section vh-section-white">
+      <div class="vh-container">
+        <div class="vh-section-head"><p class="vh-kicker" data-vh-i18n="howKicker">One controlled workflow</p><h2 class="vh-heading" data-vh-i18n="howTitle">A floor plan becomes a usable property experience.</h2><p class="vh-copy" data-vh-i18n="howCopy">Every source stays private while the team cleans, checks and corrects it. The public only sees a final project after King approval.</p></div>
+        <div class="vh-pipeline" aria-label="Virtual Home production process">
+          <div class="vh-pipeline-step"><strong>01</strong><span data-vh-i18n="stepUpload">Upload plan</span></div>
+          <div class="vh-pipeline-step"><strong>02</strong><span data-vh-i18n="stepClean">Clean image</span></div>
+          <div class="vh-pipeline-step"><strong>03</strong><span data-vh-i18n="stepReview">Staff review</span></div>
+          <div class="vh-pipeline-step"><strong>04</strong><span data-vh-i18n="stepBuild">Build real 3D</span></div>
+          <div class="vh-pipeline-step"><strong>05</strong><span data-vh-i18n="stepQa">Quality check</span></div>
+          <div class="vh-pipeline-step"><strong>06</strong><span data-vh-i18n="stepPublish">King publishes</span></div>
+        </div>
+        <div class="vh-grid-3">
+          <article class="vh-card"><div class="vh-card-icon"><i class="fas fa-person-walking"></i></div><h3 data-vh-i18n="real3dTitle">Real interactive 3D</h3><p data-vh-i18n="real3dCopy">Walk, rotate, zoom, open rooms and switch between dollhouse and floor-plan modes on mobile or desktop.</p></article>
+          <article class="vh-card"><div class="vh-card-icon"><i class="fas fa-couch"></i></div><h3 data-vh-i18n="layersTitle">Independent viewing layers</h3><p data-vh-i18n="layersCopy">Furniture and lighting are separate controls. Switch furnished or unfurnished, day or night, without losing your camera position.</p></article>
+          <article class="vh-card"><div class="vh-card-icon"><i class="fas fa-shield-halved"></i></div><h3 data-vh-i18n="truthTitle">Truthful accuracy labels</h3><p data-vh-i18n="truthCopy">Developer Verified, AI Reconstructed or Concept Visualisation labels show exactly how much you can rely on.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="vh-section">
+      <div class="vh-container">
+        <div class="vh-section-head"><p class="vh-kicker" data-vh-i18n="publishedKicker">Explore</p><h2 class="vh-heading" data-vh-i18n="publishedTitle">Published Virtual Homes</h2><p class="vh-copy" data-vh-i18n="publishedCopy">Only projects that have passed plan review, 3D quality checks and final publication approval appear here.</p></div>
+        <div id="vh-public-projects" class="vh-project-grid" aria-live="polite"><p class="vh-copy" data-vh-i18n="loading">Loading…</p></div>
+      </div>
+    </section>
+
+    <section class="vh-section vh-section-white" id="vh-order-section">
+      <div class="vh-container">
+        <div class="vh-section-head"><p class="vh-kicker" data-vh-i18n="orderKicker">For owners, agents and developers</p><h2 class="vh-heading" data-vh-i18n="orderTitle">Start a Virtual Home project.</h2><p class="vh-copy" data-vh-i18n="orderCopy">Tell us what you have. The team reviews the plan and confirms scope, accuracy and delivery before any payment is requested.</p></div>
+        <div id="vh-product-cards" class="vh-grid-3"></div>
+        <form id="vh-order-form" class="vh-form" onsubmit="return submitVirtualHomeOrder(event)">
+          <div class="vh-form-grid">
+            <label class="vh-field"><span data-vh-i18n="yourName">Your name</span><input id="vh-order-name" required autocomplete="name"></label>
+            <label class="vh-field"><span data-vh-i18n="company">Company or developer</span><input id="vh-order-company" autocomplete="organization"></label>
+            <label class="vh-field"><span data-vh-i18n="phone">Phone / WhatsApp</span><input id="vh-order-phone" inputmode="tel" autocomplete="tel"></label>
+            <label class="vh-field"><span data-vh-i18n="email">Email</span><input id="vh-order-email" type="email" autocomplete="email"></label>
+            <label class="vh-field"><span data-vh-i18n="product">Requested output</span><select id="vh-order-product"><option value="">Virtual Home only</option></select></label>
+            <label class="vh-field"><span data-vh-i18n="location">Property location</span><input id="vh-order-location"></label>
+            <label class="vh-field vh-field-wide"><span data-vh-i18n="notes">What source material do you have?</span><textarea id="vh-order-notes" rows="4" placeholder="Floor plan type, number of floors, measurements and requested outputs"></textarea></label>
+          </div>
+          <div class="vh-disclosure mt-4" data-vh-i18n="orderDisclosure">No paid service or extra storage is started automatically. MakaUG will review your request, confirm the quote and ask for approval first.</div>
+          <button class="vh-btn vh-btn-green mt-4" id="vh-order-submit" type="submit" data-vh-i18n="sendRequest">Send request</button>
+          <div id="vh-order-status" class="vh-status" role="status" aria-live="polite"></div>
+        </form>
+      </div>
+    </section>
+  </div>
+
+  <div id="page-virtual-home" class="page vh-viewer-page">
+    <div class="vh-container">
+      <div id="vh-viewer-root"><p class="text-green-100">Loading Virtual Home…</p></div>
+    </div>
+  </div>
+
+  <div id="virtual-home-create-modal" class="vh-modal" role="dialog" aria-modal="true" aria-labelledby="virtual-home-create-title">
+    <div class="vh-modal-dialog">
+      <div class="flex items-start justify-between gap-3"><div><p class="vh-kicker">New production job</p><h2 id="virtual-home-create-title" class="text-2xl font-black">Create a Virtual Home</h2></div><button type="button" class="vh-btn vh-btn-outline" onclick="closeVirtualHomeCreate()" aria-label="Close">×</button></div>
+      <form id="virtual-home-create-form" class="vh-form" onsubmit="return submitVirtualHomeCreate(event)">
+        <input id="vh-manager-kind" type="hidden" value="staff">
+        <div class="vh-form-grid">
+          <label class="vh-field"><span>Project name *</span><input id="vh-create-name" required></label>
+          <label class="vh-field"><span>Source</span><select id="vh-create-source"><option value="standalone_customer">Standalone customer</option><option value="off_plan_development">Existing development</option><option value="existing_property">Existing property</option></select></label>
+          <label class="vh-field"><span>Off Plan development UUID</span><input id="vh-create-development"></label>
+          <label class="vh-field"><span>Property UUID</span><input id="vh-create-property"></label>
+          <label class="vh-field"><span>Client</span><input id="vh-create-client"></label>
+          <label class="vh-field"><span>Company / developer</span><input id="vh-create-company"></label>
+          <label class="vh-field"><span>Country</span><input id="vh-create-country" maxlength="2" value="UG"></label>
+          <label class="vh-field"><span>Location</span><input id="vh-create-location"></label>
+          <label class="vh-field"><span>Category</span><input id="vh-create-category" placeholder="House, apartment, commercial…"></label>
+          <label class="vh-field"><span>Bedrooms</span><input id="vh-create-bedrooms" type="number" min="0"></label>
+          <label class="vh-field"><span>Bathrooms</span><input id="vh-create-bathrooms" type="number" min="0" step="0.5"></label>
+          <label class="vh-field"><span>Floors</span><input id="vh-create-floors" type="number" min="1"></label>
+          <label class="vh-field"><span>Floor area (m²)</span><input id="vh-create-area" type="number" min="0" step="0.1"></label>
+          <label class="vh-field"><span>Ceiling height (m)</span><input id="vh-create-ceiling" type="number" min="2" step="0.1"></label>
+          <label class="vh-field vh-field-wide"><span>Requested outputs</span><input id="vh-create-outputs" placeholder="interactive_3d, renders, video_16_9, video_9_16, glb, zip"></label>
+          <label class="vh-field vh-field-wide"><span>Source and finish notes</span><textarea id="vh-create-notes" rows="3"></textarea></label>
+        </div>
+        <button id="vh-create-submit" class="vh-btn vh-btn-green mt-4" type="submit">Create private project</button>
+        <div id="vh-create-status" class="vh-status" role="status"></div>
+      </form>
+    </div>
+  </div>
+
   <div id="page-saved" class="page">
     <div class="bg-green-800 py-8 text-white">
       <div class="max-w-7xl mx-auto px-4">
@@ -8824,6 +8972,8 @@
             <a id="footer-link-advertise" href="/advertise" onclick="handleAdvertisePropertyCta(event)" class="block cursor-pointer hover:text-white">Advertise with Us</a>
             <a id="footer-link-tiktok" href="/tiktok-connect" onclick="return navigatePublicRoute(this.href, event)" class="block cursor-pointer hover:text-white">Connect TikTok</a>
             <a id="footer-link-careers" href="/careers" onclick="showPage('careers')" class="block cursor-pointer hover:text-white">Careers</a>
+            <a href="/services" onclick="showPage('services')" class="block cursor-pointer hover:text-white">Property Services</a>
+            <a href="/services/virtual-homes" onclick="showPage('virtual-homes')" class="block cursor-pointer hover:text-white">Maka Virtual Homes</a>
           </div>
         </div>
 
@@ -9703,6 +9853,11 @@
         script.onload = function () {
           var offPlanScript = document.createElement("script");
           offPlanScript.src = "/assets/off-plan.js?v=20260904-overseas-v2";
+          offPlanScript.onload = function () {
+            var virtualHomesScript = document.createElement("script");
+            virtualHomesScript.src = "/assets/virtual-homes.js?v=20260905-v3";
+            document.body.appendChild(virtualHomesScript);
+          };
           document.body.appendChild(offPlanScript);
         };
         document.body.appendChild(script);

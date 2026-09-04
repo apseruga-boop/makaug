@@ -60,6 +60,7 @@ const PUBLIC_FORBIDDEN_STRINGS = [
 ];
 
 const PUBLIC_MODAL_IDS = [
+  'virtual-home-create-modal',
   'off-plan-create-modal',
   'admin-evidence-modal',
   'admin-whatsapp-modal',
@@ -85,6 +86,9 @@ const PUBLIC_PAGE_IDS = [
   'page-commercial',
   'page-land',
   'page-off-plan',
+  'page-services',
+  'page-virtual-homes',
+  'page-virtual-home',
   'page-brokers',
   'page-mortgage',
   'page-valuation',
@@ -112,6 +116,8 @@ const PUBLIC_ROUTE_PAGE_MAP = {
   '/commercial': ['page-commercial'],
   '/land': ['page-land'],
   '/off-plan': ['page-off-plan'],
+  '/services': ['page-services'],
+  '/services/virtual-homes': ['page-virtual-homes'],
   '/brokers': ['page-brokers'],
   '/find-brokers': ['page-brokers'],
   '/mortgage': ['page-mortgage'],
@@ -492,6 +498,7 @@ function getPublicPageIdsForRoute(pathname = '/') {
   if (isAuthRoute(pathName)) return [];
   if (SYNTHETIC_PUBLIC_ROUTE_CONTENT[pathName]) return [];
   if (pathName.startsWith('/property/')) return ['page-detail'];
+  if (pathName.startsWith('/virtual-homes/')) return ['page-virtual-home'];
   if (pathName.startsWith('/off-plan/')) return ['page-off-plan'];
   if (pathName.startsWith('/agents/') || pathName.startsWith('/broker/')) return ['page-broker-profile'];
   const areaPage = Object.entries(PUBLIC_AREA_ROUTE_PAGE_MAP)
@@ -615,7 +622,8 @@ function stripProtectedPageBlocks(html) {
   output = removeBetweenMarkers(output, '<div id="page-agent-dashboard"', '<div id="page-field-dashboard"');
   output = removeBetweenMarkers(output, '<div id="page-field-dashboard"', '<div id="page-admin-dashboard"');
   output = removeBetweenMarkers(output, '<div id="page-admin-dashboard"', '<div id="page-about"');
-  output = removeBetweenMarkers(output, '<div id="page-admin-docs"', '<div id="page-saved"');
+  output = removePageBlockById(output, 'page-admin-docs');
+  output = removePageBlockById(output, 'page-admin-setup-status');
   output = removeElementById(output, 'admin-evidence-modal');
   output = removeElementById(output, 'admin-whatsapp-modal');
   output = removeElementById(output, 'admin-photo-delete-modal');

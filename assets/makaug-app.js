@@ -8201,6 +8201,7 @@ function setLang(lang, silent = false, rerender = true) {
   updateHomeAskAiLanguageCopy();
   applyMarketplaceLanguageUI();
   if (typeof window.applyOffPlanLanguageUI === "function") window.applyOffPlanLanguageUI();
+  if (typeof window.applyVirtualHomeLanguageUI === "function") window.applyVirtualHomeLanguageUI();
   if (!silent) toast(`${tr("languageSet")}: ${currentLang.toUpperCase()}`);
 }
 
@@ -43315,6 +43316,9 @@ const PAGE_ROUTE_MAP = Object.freeze({
   commercial: "/commercial",
   land: "/land",
   "off-plan": "/off-plan",
+  services: "/services",
+  "virtual-homes": "/services/virtual-homes",
+  "virtual-home": "/virtual-homes",
   brokers: "/brokers",
   mortgage: "/mortgage",
   valuation: "/valuation",
@@ -43360,6 +43364,8 @@ const PUBLIC_ROUTE_PAGE_MAP = Object.freeze({
   "/off-plan": "off-plan",
   "/off-plan/overseas": "off-plan",
   "/off-plan/overseas/kenya": "off-plan",
+  "/services": "services",
+  "/services/virtual-homes": "virtual-homes",
   "/brokers": "brokers",
   "/find-brokers": "brokers",
   "/mortgage": "mortgage",
@@ -43417,6 +43423,7 @@ function pageForPublicRoute(path) {
   if (exact) return exact;
   if (/^\/hostels\/[a-z0-9-]+$/i.test(normalized)) return "students";
   if (/^\/off-plan(?:\/[a-z0-9-]+){1,3}$/i.test(normalized)) return "off-plan";
+  if (/^\/virtual-homes\/[a-z0-9-]+$/i.test(normalized)) return "virtual-home";
   const landing = normalized.match(/^\/(for-sale|to-rent|land|commercial|student-accommodation)(?:\/[a-z0-9-]+)+$/i);
   return landing ? normalizePageKey(landing[1]) : "";
 }
@@ -43670,15 +43677,19 @@ function showPage(page, options = {}) {
   if (targetPage === "staff-dashboard") {
     renderStaffDashboard();
     if (typeof window.loadOffPlanManagement === "function") window.loadOffPlanManagement("staff");
+    if (typeof window.loadVirtualHomeManagement === "function") window.loadVirtualHomeManagement("staff");
   }
   if (targetPage === "advertiser-dashboard") renderAdvertiserDashboard();
   if (targetPage === "admin-dashboard") {
     renderAdminDashboard();
     if (typeof window.loadOffPlanManagement === "function") window.loadOffPlanManagement("admin");
+    if (typeof window.loadVirtualHomeManagement === "function") window.loadVirtualHomeManagement("admin");
   }
   if (targetPage === "admin-setup-status") renderAdminSetupStatus();
   if (targetPage === "marketplace") loadMarketplacePage();
   if (targetPage === "off-plan" && typeof window.initializeOffPlanPage === "function") window.initializeOffPlanPage();
+  if (["services", "virtual-homes"].includes(targetPage) && typeof window.loadVirtualHomePublicPage === "function") window.loadVirtualHomePublicPage();
+  if (targetPage === "virtual-home" && typeof window.loadPublicVirtualHome === "function") window.loadPublicVirtualHome();
   if (targetPage === "advertise") initializeAdvertisingSelfServe();
   if (targetPage === "valuation") initializeValuationPage();
   if (targetPage === "tiktok-connect") initializeTikTokDisplayPage();
@@ -52730,6 +52741,35 @@ function setPropertyDetailDocumentTitle(property = {}, displayTitle = "") {
   document.title = `${title} | makaug.com`;
 }
 
+async function hydratePropertyVirtualHome(propertyId, renderedPropertyId) {
+  const slot = document.getElementById("detail-virtual-home-slot");
+  if (!slot || !propertyId) return;
+  try {
+    const payload = await apiRequest(`/api/virtual-homes?property_id=${encodeURIComponent(propertyId)}`, { skipAuth: true });
+    if (String(activeDetailPropertyId || "") !== String(renderedPropertyId || "")) return;
+    const project = Array.isArray(payload?.projects) ? payload.projects[0] : null;
+    if (!project?.public_slug) {
+      slot.innerHTML = "";
+      return;
+    }
+    slot.innerHTML = `
+      <section class="mt-4 overflow-hidden rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-950 to-emerald-800 p-5 text-white shadow-sm">
+        <div class="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+          <div>
+            <div class="text-xs font-black uppercase tracking-[0.16em] text-emerald-200">${translateListingLabel("Interactive 3D Virtual Home")}</div>
+            <h2 class="mt-1 text-xl font-black">${adminEscape(project.name || "Virtual Home")}</h2>
+            <p class="mt-1 text-sm text-emerald-100">${adminEscape(project.accuracy_disclosure || translateListingLabel("Walk through the reviewed floor plan in furnished, unfurnished, day and night views."))}</p>
+          </div>
+          <a href="/virtual-homes/${encodeURIComponent(project.public_slug)}" class="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-black text-emerald-900 hover:bg-emerald-50">
+            <i class="fas fa-cube" aria-hidden="true"></i> ${translateListingLabel("Explore Virtual Home")}
+          </a>
+        </div>
+      </section>`;
+  } catch (_) {
+    slot.innerHTML = "";
+  }
+}
+
 async function openDetail(id, options = {}) {
   let p = id && typeof id === "object" ? id : findPropertyForUi(id);
   if (p?.id) upsertPropertyForUi(p);
@@ -52932,6 +52972,7 @@ async function openDetail(id, options = {}) {
             </div>
             ` : ""}
             <div class="mt-4 text-sm text-gray-700">${localizedDescription}</div>
+            <div id="detail-virtual-home-slot"></div>
             ${detailVideoGalleryHtml}
             <div class="mt-4 bg-green-50 border border-green-100 rounded-xl p-3">
               <div class="text-xs uppercase tracking-wide text-green-700 font-semibold mb-1">${translateListingLabel("Area Highlights")}</div>
@@ -53042,6 +53083,7 @@ async function openDetail(id, options = {}) {
   updateDetailSaveButton(p.id);
   ensureRevenuePlacements();
   hydrateDetailSimilarProperties(p);
+  hydratePropertyVirtualHome(p.backend_id || p.id, p.id);
   setTimeout(() => {
     initDetailMap(p);
     if (showMortgageWidget) renderDetailMortgageWidget(p.id);
