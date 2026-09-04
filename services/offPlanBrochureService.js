@@ -200,6 +200,20 @@ function registerBrochureFonts(doc, language) {
   doc.registerFont('Brochure-Oblique', fonts.regular);
 }
 
+function preserveArabicWordSpacing(doc, language) {
+  if (normalizeBrochureLanguage(language) !== 'ar') return;
+  const writeText = doc.text.bind(doc);
+  doc.text = (text, ...args) => {
+    const last = args[args.length - 1];
+    if (last && typeof last === 'object' && !Array.isArray(last)) {
+      args[args.length - 1] = { wordSpacing: 1, ...last };
+    } else {
+      args.push({ wordSpacing: 1 });
+    }
+    return writeText(text, ...args);
+  };
+}
+
 function localizedProjectText(project, field, language, fallback) {
   const code = normalizeBrochureLanguage(language);
   if (code === 'en') return cleanText(project[field], 7000) || fallback;
@@ -280,6 +294,7 @@ function buildOffPlanBrochure(projectInput, output, options = {}) {
   const copy = brochureLanguagePack(language);
   const doc = new PDFDocument({ size: 'A4', margins: { top: 88, right: 44, bottom: 64, left: 44 }, info: { Title: `${project.name} - makaug.com ${copy.project}`, Author: 'makaug.com', Subject: copy.project } });
   registerBrochureFonts(doc, language);
+  preserveArabicWordSpacing(doc, language);
   if (output && typeof output.write === 'function') doc.pipe(output);
 
   const imagePaths = project.images.map((image) => ({ ...image, path: localAssetPath(image.url) })).filter((image) => image.path);
