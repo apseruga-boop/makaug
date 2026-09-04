@@ -104,14 +104,16 @@ test('brochure, payment, gallery, map, sharing, video and mortgage handoff are v
   assert.match(client, /id="off-plan-gallery-dialog"/);
   assert.match(client, /closeOffPlanGallery/);
   assert.match(client, /value == null \|\| \(typeof value === 'string' && !value\.trim\(\)\)/);
-  assert.match(html, /off-plan\.js\?v=20260904-offplan-v4/);
-  assert.match(html, /off-plan\.css\?v=20260904-offplan-v5/);
-  assert.match(client, /grid grid-cols-1 lg:grid-cols-\[minmax\(0,1fr\)_330px\]/);
+  assert.match(html, /off-plan\.js\?v=20260904-offplan-v6/);
+  assert.match(html, /off-plan\.css\?v=20260904-offplan-v6/);
+  assert.match(client, /off-plan-detail-grid/);
+  assert.match(css, /\.off-plan-detail-grid\s*\{/);
   assert.match(css, /width: min\(1120px,calc\(100vw - 28px\)\)/);
-  assert.match(client, /openstreetmap\.org/);
+  assert.match(client, /ensureOffPlanGoogleMaps/);
+  assert.match(client, /maps\.google\.com\/mapfiles\/ms\/icons\/red-dot\.png/);
   assert.match(client, /shareOffPlan\('whatsapp'\)/);
-  assert.match(client, /Project video/);
-  assert.match(client, /mortgage calculator/);
+  assert.match(client, /projectVideo/);
+  assert.match(client, /off-plan-mortgage-panel/);
   assert.match(route, /brochure\.pdf/);
 });
 
@@ -122,10 +124,25 @@ test('contact workflow has all channels and exact operations recipients', () => 
   assert.match(html, /data-off-plan-channel="whatsapp"/);
   assert.match(html, /data-off-plan-channel="email"/);
   assert.match(html, /data-off-plan-channel="call"/);
+  assert.match(html, /Partner with makaug\.com/);
+  assert.match(html, /id="off-plan-required-info-list"/);
+  assert.match(html, /id="off-plan-contact-truth"/);
+  assert.match(html, /id="off-plan-contact-details"/);
   for (const email of ['admin@makaug.com', 'arthur@makaug.com', 'ronald@makaug.com']) assert.match(notifications, new RegExp(email.replace('.', '\\.')));
   assert.match(route, /I would like to enquire about listing a new off-plan project/);
   assert.match(route, /requestedDevelopmentId/);
   assert.match(route, /status = 'published'[\s\S]*verification_status = 'verified'[\s\S]*public_preview_approved/);
+  assert.match(route, /source_agent_whatsapp \|\| development\?\.source_agent_phone/);
+});
+
+test('staff and King dashboards can edit enriched Off Plan facts', () => {
+  const client = read('assets/off-plan.js');
+  for (const field of ['source_agent_id', 'source_display_name', 'original_currency', 'discount_percentage', 'nearby_places', 'amenities', 'brochure_settings', 'extra_fields']) {
+    assert.match(client, new RegExp(`data-op-(?:edit|json)="${field}"`));
+  }
+  assert.match(client, /data-op-json-default="object"/);
+  assert.match(client, /off-plan-create-source-id/);
+  assert.match(client, /off-plan-create-latitude/);
 });
 
 test('website and WhatsApp AI recognize off-plan search and listing requests', () => {

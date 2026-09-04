@@ -289,6 +289,21 @@ function managedSelect() {
     LEFT JOIN agents a ON a.id = d.source_agent_id`;
 }
 
+function publicSelect() {
+  return `SELECT d.*,
+    a.id AS source_agent_profile_id,
+    CASE WHEN a.status = 'approved' THEN a.full_name ELSE NULL END AS source_agent_name,
+    CASE WHEN a.status = 'approved' THEN a.company_name ELSE NULL END AS source_agent_company,
+    CASE WHEN a.status = 'approved' THEN a.profile_photo_url ELSE NULL END AS source_agent_profile_photo_url,
+    CASE WHEN a.status = 'approved' THEN a.bio ELSE NULL END AS source_agent_bio,
+    CASE WHEN a.status = 'approved' THEN a.whatsapp ELSE NULL END AS source_agent_whatsapp,
+    CASE WHEN a.status = 'approved' THEN a.phone ELSE NULL END AS source_agent_phone,
+    CASE WHEN a.status = 'approved' THEN a.email ELSE NULL END AS source_agent_email,
+    a.status AS source_agent_status
+    FROM off_plan_developments d
+    LEFT JOIN agents a ON a.id = d.source_agent_id`;
+}
+
 async function listPublicDevelopments(db, query = {}) {
   const values = ['UG'];
   const filters = [`d.country_code = $1`, `d.status = 'published'`, `(d.verification_status = 'verified' OR (d.verification_status = 'partially_verified' AND d.extra_fields->>'public_preview_approved' = 'true'))`];
@@ -309,7 +324,7 @@ async function listPublicDevelopments(db, query = {}) {
   if (nullableInteger(query.completion_year) != null) add(`EXTRACT(YEAR FROM d.completion_date)::int = ?`, nullableInteger(query.completion_year));
   const limit = Math.max(1, Math.min(60, nullableInteger(query.limit) || 24));
   const result = await db.query(
-    `${managedSelect()} WHERE ${filters.join(' AND ')} ORDER BY d.published_at DESC NULLS LAST, d.created_at DESC LIMIT ${limit}`,
+    `${publicSelect()} WHERE ${filters.join(' AND ')} ORDER BY d.published_at DESC NULLS LAST, d.created_at DESC LIMIT ${limit}`,
     values
   );
   return result.rows.map(normalizeDevelopmentRow).filter(isPubliclyVisible);
@@ -317,7 +332,7 @@ async function listPublicDevelopments(db, query = {}) {
 
 async function getPublicDevelopment(db, slug) {
   const result = await db.query(
-    `${managedSelect()} WHERE d.country_code = 'UG' AND d.slug = $1 AND d.status = 'published' AND (d.verification_status = 'verified' OR (d.verification_status = 'partially_verified' AND d.extra_fields->>'public_preview_approved' = 'true')) LIMIT 1`,
+    `${publicSelect()} WHERE d.country_code = 'UG' AND d.slug = $1 AND d.status = 'published' AND (d.verification_status = 'verified' OR (d.verification_status = 'partially_verified' AND d.extra_fields->>'public_preview_approved' = 'true')) LIMIT 1`,
     [slugify(slug)]
   );
   const development = result.rows[0] ? normalizeDevelopmentRow(result.rows[0]) : null;

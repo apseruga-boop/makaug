@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const { brochureBuffer, formatDate } = require('../services/offPlanBrochureService');
 
-test('brochure renders a five-page A4 PDF without pagination overflow', async () => {
+test('brochure renders a seven-page A4 PDF with area, mortgage and broker sections without pagination overflow', async () => {
   const pdf = await brochureBuffer({
     name: 'Verified QA Project',
     slug: 'verified-qa-project',
@@ -30,7 +30,7 @@ test('brochure renders a five-page A4 PDF without pagination overflow', async ()
 
   assert.equal(pdf.subarray(0, 8).toString(), '%PDF-1.3');
   assert.ok(pdf.length > 20_000);
-  assert.equal((pdf.toString('latin1').match(/\/Type \/Page\b/g) || []).length, 5);
+  assert.equal((pdf.toString('latin1').match(/\/Type \/Page\b/g) || []).length, 7);
 });
 
 test('brochure dates are human-readable in Uganda time', () => {

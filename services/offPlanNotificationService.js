@@ -40,8 +40,11 @@ async function notifyOffPlanEnquiry(enquiry = {}, development = null) {
     `Email: ${cleanText(enquiry.email) || 'Not provided'}`,
     `Requested callback: ${formatCallback(enquiry.requested_callback_at)}`,
     `Source: ${cleanText(enquiry.source_path) || '/off-plan'}`,
+    `Project contact: ${cleanText(enquiry.metadata?.project_contact_name) || 'Not supplied'}`,
+    `Truth declaration: ${enquiry.metadata?.truth_confirmed === true ? 'Confirmed' : enquiry.enquiry_type === 'listing_request' ? 'Not confirmed' : 'Not applicable'}`,
     '',
     `Message: ${cleanText(enquiry.message) || 'No additional message.'}`,
+    enquiry.metadata?.supplied_project_details ? `\nProject details supplied:\n${cleanText(enquiry.metadata.supplied_project_details, 5000)}` : '',
     '',
     'Please contact the customer and verify all project information before publication.'
   ].join('\n');
