@@ -725,7 +725,10 @@
         const service = new window.google.maps.places.PlacesService(map);
         const queries = nearbyGroupDefinitions.map(async (definition) => {
           const rows = await Promise.all(definition.types.map((type) => new Promise((resolve) => service.nearbySearch({ location: position, radius: 8000, type }, (places, status) => resolve(status === window.google.maps.places.PlacesServiceStatus.OK ? places : [])))));
-          const places = rows.flat().filter((place, index, all) => all.findIndex((item) => item.place_id === place.place_id) === index).slice(0, 4);
+          const places = rows.flat()
+            .filter((place) => place.business_status !== 'CLOSED_PERMANENTLY' && !/\bpermanently closed\b/i.test(clean(place.name)))
+            .filter((place, index, all) => all.findIndex((item) => item.place_id === place.place_id) === index)
+            .slice(0, 4);
           return { ...definition, places };
         });
         renderLiveNearbyPlaces(await Promise.all(queries), project);
@@ -959,7 +962,7 @@
           <label class="text-xs font-bold">Extra fields and area notes (JSON)<textarea data-op-json="extra_fields" data-op-json-default="object" rows="7" class="mt-1 w-full rounded-lg border px-3 py-2 font-mono text-[11px]">${escapeHtml(JSON.stringify(project.extra_fields || {}, null, 2))}</textarea></label>
         </div>
       </details>
-      <div class="mt-4 flex flex-col md:flex-row md:items-center justify-between gap-3"><div class="text-xs ${blockers.length ? 'text-amber-900' : 'text-green-800'}"><strong>${blockers.length ? `${blockers.length} publication check${blockers.length === 1 ? '' : 's'} remaining` : 'Ready for explicit publication approval'}</strong>${blockers.length ? `<details class="mt-1"><summary class="cursor-pointer">View checks</summary><ul class="list-disc pl-5 mt-1">${blockers.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul></details>` : ''}</div><div class="flex flex-wrap gap-2"><button onclick="setOffPlanProjectStatus('${escapeHtml(project.id)}','${role}','changes_requested')" class="rounded-lg border border-amber-200 text-amber-800 px-4 py-2 text-xs font-black">Request changes</button>${!blockers.length && project.status !== 'published' ? `<button onclick="setOffPlanProjectStatus('${escapeHtml(project.id)}','${role}','published')" class="rounded-lg bg-green-700 text-white px-4 py-2 text-xs font-black">Publish verified project</button>` : ''}<button onclick="saveOffPlanProgress('${escapeHtml(project.id)}','${role}')" class="rounded-lg bg-slate-900 text-white px-4 py-2 text-xs font-black">Save project</button></div></div></article>`;
+      <div class="mt-4 flex flex-col md:flex-row md:items-center justify-between gap-3"><div class="text-xs ${blockers.length ? 'text-amber-900' : 'text-green-800'}"><strong>${blockers.length ? `${blockers.length} publication check${blockers.length === 1 ? '' : 's'} remaining` : 'Ready for explicit publication approval'}</strong>${blockers.length ? `<details class="mt-1"><summary class="cursor-pointer">View checks</summary><ul class="list-disc pl-5 mt-1">${blockers.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul></details>` : ''}</div><div class="flex flex-wrap gap-2"><button onclick="setOffPlanProjectStatus('${escapeHtml(project.id)}','${role}','changes_requested')" class="rounded-lg border border-amber-200 text-amber-800 px-4 py-2 text-xs font-black">Request changes</button>${!blockers.length && project.status !== 'published' ? `<button onclick="setOffPlanProjectStatus('${escapeHtml(project.id)}','${role}','published')" class="rounded-lg bg-green-700 text-white px-4 py-2 text-xs font-black">Publish verified project</button>` : ''}${project.status !== 'archived' ? `<button onclick="setOffPlanProjectStatus('${escapeHtml(project.id)}','${role}','archived')" class="rounded-lg border border-gray-300 text-gray-700 px-4 py-2 text-xs font-black">Archive</button>` : ''}<button onclick="saveOffPlanProgress('${escapeHtml(project.id)}','${role}')" class="rounded-lg bg-slate-900 text-white px-4 py-2 text-xs font-black">Save project</button></div></div></article>`;
   }
 
   async function loadOffPlanManagement(role = 'staff') {
@@ -988,6 +991,7 @@
 
   async function setOffPlanProjectStatus(id, role, status) {
     if (status === 'published' && !confirm('Publish this verified project to the public Off Plan page now?')) return;
+    if (status === 'archived' && !confirm('Archive this private project record? It will remain available to authorised staff but will never appear publicly.')) return;
     try { await request(`/api/${role === 'admin' ? 'admin' : 'staff'}/off-plan/developments/${encodeURIComponent(id)}/status`, { method: 'POST', headers: managementHeaders(role), body: { status } }); await loadOffPlanManagement(role); }
     catch (error) { alert(error.payload?.blockers?.join('\n') || error.message); }
   }
