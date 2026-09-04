@@ -32,7 +32,7 @@ test('public route, project detail route, API and protected dashboards are wired
   assert.match(server, /app\.use\('\/api\/staff\/off-plan', offPlanStaffRoutes\)/);
   assert.match(server, /app\.use\('\/api\/admin\/off-plan', offPlanAdminRoutes\)/);
   assert.match(route, /mountManagementRoutes\(staffRouter, requireStaffAccess\)/);
-  assert.match(route, /mountManagementRoutes\(adminRouter, requireAdminApiKey\)/);
+  assert.match(route, /mountManagementRoutes\(adminRouter, requireAdminApiKey, \{ allowPermanentDelete: true \}\)/);
   assert.match(html, /id="staff-off-plan-control"/);
   assert.match(html, /id="admin-off-plan-control"/);
 });
@@ -105,7 +105,7 @@ test('brochure, payment, gallery, map, sharing, video and mortgage handoff are v
   assert.match(client, /id="off-plan-gallery-dialog"/);
   assert.match(client, /closeOffPlanGallery/);
   assert.match(client, /value == null \|\| \(typeof value === 'string' && !value\.trim\(\)\)/);
-  assert.match(html, /off-plan\.js\?v=20260904-offplan-v13/);
+  assert.match(html, /off-plan\.js\?v=20260904-offplan-v14/);
   assert.match(html, /off-plan\.css\?v=20260904-offplan-v13/);
   assert.match(client, /CLOSED_PERMANENTLY/);
   assert.match(client, /Archive this private project record/);
@@ -119,6 +119,10 @@ test('brochure, payment, gallery, map, sharing, video and mortgage handoff are v
   assert.match(client, /projectVideo/);
   assert.match(client, /off-plan-mortgage-panel/);
   assert.match(route, /brochure\.pdf/);
+  assert.match(client, /brochure\.pdf\?lang=\$\{encodeURIComponent\(offPlanLanguage\(\)\)\}/);
+  assert.match(client, />View live<\/a>/);
+  assert.match(client, /deleteOffPlanProject/);
+  assert.match(route, /router\.delete\('\/developments\/:id'/);
 });
 
 test('contact workflow has all channels and exact operations recipients', () => {
@@ -157,6 +161,7 @@ test('Off Plan family maps, contact and payment builder expose the requested int
   const client = read('assets/off-plan.js');
   const css = read('assets/off-plan.css');
   const brochure = read('services/offPlanBrochureService.js');
+  const brochureI18n = read('services/offPlanBrochureI18n.js');
   const enrichment = read('db/migrations/121_off_plan_family_area_enrichment.sql');
   const distanceEnrichment = read('db/migrations/122_off_plan_nearby_reference_coordinates.sql');
   assert.match(html, /Partner with makaug\.com/);
@@ -181,9 +186,9 @@ test('Off Plan family maps, contact and payment builder expose the requested int
   assert.match(css, /\.off-plan-mortgage-estimate/);
   assert.match(css, /max-width: 1720px/);
   assert.match(brochure, /GOOGLE_MAPS_STATIC_API_KEY \|\| process\.env\.GOOGLE_MAPS_API_KEY/);
-  assert.match(brochure, /Approx\. .*km from displayed area point/);
+  assert.match(brochureI18n, /Approx\. \{distance\} km from displayed area point/);
   assert.match(brochure, /computeMortgageEstimate/);
-  assert.match(brochure, /Phone \/ WhatsApp/);
+  assert.match(brochureI18n, /Phone \/ WhatsApp/);
   for (const place of ['Nkumba University', 'University of Kisubi', 'Victoria Mall Entebbe', 'Entebbe Botanical Gardens', 'Uganda Wildlife Conservation Education Centre']) assert.match(enrichment, new RegExp(place));
   for (const field of ['latitude', 'longitude', 'coordinate_precision', 'nearby_distance_basis']) assert.match(distanceEnrichment, new RegExp(field));
 });
