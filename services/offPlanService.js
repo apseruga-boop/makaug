@@ -428,6 +428,35 @@ async function setDevelopmentStatus(db, id, status, { actorId = null, actorRole 
   return result.rows[0] ? { ...normalizeDevelopmentRow(result.rows[0]), publication_blockers: publicationBlockers(result.rows[0]) } : null;
 }
 
+async function deleteArchivedDevelopment(db, id, { actorId = null, actorRole = null } = {}) {
+  const existing = await getManagedDevelopment(db, id);
+  if (!existing) return null;
+  if (existing.status !== 'archived') {
+    const error = new Error('Archive the project before permanently deleting it');
+    error.status = 409;
+    throw error;
+  }
+  const result = await db.query(
+    `DELETE FROM off_plan_developments WHERE id = $1 AND status = 'archived' RETURNING *`,
+    [id]
+  );
+  const deleted = result.rows[0] || null;
+  if (deleted) {
+    await recordEvent(db, {
+      action: 'project_deleted',
+      actorId,
+      actorRole,
+      payload: {
+        deleted_development_id: deleted.id,
+        name: deleted.name,
+        slug: deleted.slug,
+        previous_status: deleted.status
+      }
+    });
+  }
+  return deleted ? normalizeDevelopmentRow(deleted) : null;
+}
+
 async function recordEvent(db, { developmentId = null, enquiryId = null, action, actorId = null, actorRole = null, payload = {} } = {}) {
   return db.query(
     `INSERT INTO off_plan_development_events (development_id, enquiry_id, action, actor_id, actor_role, payload) VALUES ($1,$2,$3,$4,$5,$6::jsonb) RETURNING *`,
@@ -583,6 +612,7 @@ module.exports = {
   buildOffPlanPaymentSchedule,
   createEnquiry,
   createWalkthroughJob,
+  deleteArchivedDevelopment,
   getManagedDevelopment,
   getPublicDevelopment,
   listEnquiries,

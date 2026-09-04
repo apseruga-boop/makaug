@@ -9,6 +9,12 @@ test('management routers start with their authentication middleware', () => {
   assert.equal(adminRouter.stack[0]?.name, 'requireAdminApiKey');
 });
 
+test('only the admin router exposes permanent deletion', () => {
+  const hasDeleteRoute = (router) => router.stack.some((layer) => layer.route?.path === '/developments/:id' && layer.route.methods.delete);
+  assert.equal(hasDeleteRoute(staffRouter), false);
+  assert.equal(hasDeleteRoute(adminRouter), true);
+});
+
 test('project enquiries route WhatsApp to the approved project contact', () => {
   const url = new URL(whatsappEnquiryUrl({
     enquiry_type: 'project_interest',

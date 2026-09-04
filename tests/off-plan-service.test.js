@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const {
   buildOffPlanPaymentSchedule,
+  deleteArchivedDevelopment,
   isPublicationReady,
   isPubliclyVisible,
   normalizeDevelopmentRow,
@@ -12,6 +13,31 @@ const {
   publicPreviewBlockers,
   slugify
 } = require('../services/offPlanService');
+
+test('permanent deletion is restricted to archived projects and writes a detached audit event', async () => {
+  const queries = [];
+  const archived = { id: '11111111-1111-4111-8111-111111111111', name: 'Archived QA Project', slug: 'archived-qa-project', country_code: 'UG', status: 'archived' };
+  const db = {
+    async query(sql, values) {
+      queries.push({ sql, values });
+      if (/SELECT[\s\S]+off_plan_developments/.test(sql)) return { rows: [archived] };
+      if (/DELETE FROM off_plan_developments/.test(sql)) return { rows: [archived] };
+      if (/INSERT INTO off_plan_development_events/.test(sql)) return { rows: [{ id: 'event-1' }] };
+      throw new Error(`Unexpected SQL: ${sql}`);
+    }
+  };
+  const deleted = await deleteArchivedDevelopment(db, archived.id, { actorId: 'admin-1', actorRole: 'admin' });
+  assert.equal(deleted.id, archived.id);
+  assert.equal(queries.filter(({ sql }) => /DELETE FROM off_plan_developments/.test(sql)).length, 1);
+  const audit = queries.find(({ sql }) => /INSERT INTO off_plan_development_events/.test(sql));
+  assert.equal(audit.values[0], null);
+  assert.equal(JSON.parse(audit.values[5]).deleted_development_id, archived.id);
+});
+
+test('permanent deletion rejects any project that has not first been archived', async () => {
+  const db = { query: async () => ({ rows: [{ id: '22222222-2222-4222-8222-222222222222', status: 'published' }] }) };
+  await assert.rejects(() => deleteArchivedDevelopment(db, '22222222-2222-4222-8222-222222222222'), (error) => error.status === 409 && /Archive the project/.test(error.message));
+});
 
 test('payment calculator creates an exact dated UGX schedule', () => {
   const result = buildOffPlanPaymentSchedule({

@@ -3,42 +3,65 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const { brochureBuffer, computeMortgageEstimate, distanceKmBetween, formatApproximateDistance, formatDate } = require('../services/offPlanBrochureService');
+const { brochureLanguagePack, normalizeBrochureLanguage, SUPPORTED_OFF_PLAN_LANGUAGES } = require('../services/offPlanBrochureI18n');
+
+const BROCHURE_PROJECT = {
+  name: 'Verified QA Project',
+  slug: 'verified-qa-project',
+  description: 'A verified local quality assurance description used to exercise the complete brochure layout without publishing a real project.',
+  area: 'Entebbe',
+  district: 'Wakiso',
+  latitude: 0.0512,
+  longitude: 32.4637,
+  launch_price_ugx: 410000000,
+  developer_name: 'QA Developer',
+  completion_date: '2028-12-01',
+  construction_progress: 35,
+  sales_progress: 30,
+  units_total: 60,
+  units_sold: 18,
+  units_available: 42,
+  payment_plan_months: 15,
+  verification_status: 'verified',
+  unit_types: [{ label: '2 Bedroom townhouse', bedrooms: 2, price_ugx: 410000000 }],
+  payment_plan: [{ label: 'Buyer contribution', kind: 'percentage', percent: 15 }],
+  nearby_places: [
+    { category: 'Healthcare', name: 'QA Hospital', note: 'Confirm current services.', source_url: 'https://example.com/hospital', latitude: 0.063874, longitude: 32.471655 },
+    { category: 'University', name: 'QA University', note: 'Confirm the current campus.', source_url: 'https://example.com/university', latitude: 0.095, longitude: 32.5075 },
+    { category: 'Shopping', name: 'QA Market', note: 'Confirm opening times.', source_url: 'https://example.com/market', latitude: 0.066486, longitude: 32.47634 }
+  ],
+  images: [{
+    url: '/assets/off-plan/entebbe-victoria-palms/construction-interior-1.jpg',
+    caption: 'Construction progress photo supplied to makaug'
+  }]
+};
+
+const BROCHURE_OPTIONS = {
+  agentProfile: { id: 'agent-qa', full_name: 'Kazi Honest', whatsapp: '+256791218405', bio: 'Project contact for quality assurance.' },
+  mortgageProviders: [{ name: 'QA Bank', residentialRate: 16.5, minDepositPct: { residential: 20 }, maxYears: { residential: 25 }, arrangementFeePct: 1.5 }]
+};
 
 test('brochure renders an eight-page A4 PDF with map, family services, mortgage and broker sections without pagination overflow', async () => {
-  const pdf = await brochureBuffer({
-    name: 'Verified QA Project',
-    slug: 'verified-qa-project',
-    description: 'A verified local quality assurance description used to exercise the complete brochure layout without publishing a real project.',
-    area: 'Entebbe',
-    district: 'Wakiso',
-    latitude: 0.0512,
-    longitude: 32.4637,
-    launch_price_ugx: 410000000,
-    developer_name: 'QA Developer',
-    completion_date: '2028-12-01',
-    construction_progress: 35,
-    sales_progress: 30,
-    units_total: 60,
-    units_sold: 18,
-    units_available: 42,
-    payment_plan_months: 15,
-    verification_status: 'verified',
-    unit_types: [{ label: '2 Bedroom townhouse', bedrooms: 2, price_ugx: 410000000 }],
-    payment_plan: [{ label: 'Buyer contribution', kind: 'percentage', percent: 15 }],
-    nearby_places: [
-      { category: 'Healthcare', name: 'QA Hospital', note: 'Confirm current services.', source_url: 'https://example.com/hospital', latitude: 0.063874, longitude: 32.471655 },
-      { category: 'University', name: 'QA University', note: 'Confirm the current campus.', source_url: 'https://example.com/university', latitude: 0.095, longitude: 32.5075 },
-      { category: 'Shopping', name: 'QA Market', note: 'Confirm opening times.', source_url: 'https://example.com/market', latitude: 0.066486, longitude: 32.47634 }
-    ],
-    images: [{
-      url: '/assets/off-plan/entebbe-victoria-palms/construction-interior-1.jpg',
-      caption: 'Construction progress photo supplied to makaug'
-    }]
-  }, { agentProfile: { id: 'agent-qa', full_name: 'Kazi Honest', whatsapp: '+256791218405', bio: 'Project contact for quality assurance.' }, mortgageProviders: [{ name: 'QA Bank', residentialRate: 16.5, minDepositPct: { residential: 20 }, maxYears: { residential: 25 }, arrangementFeePct: 1.5 }] });
+  const pdf = await brochureBuffer(BROCHURE_PROJECT, BROCHURE_OPTIONS);
 
   assert.equal(pdf.subarray(0, 8).toString(), '%PDF-1.3');
   assert.ok(pdf.length > 20_000);
   assert.equal((pdf.toString('latin1').match(/\/Type \/Page\b/g) || []).length, 8);
+});
+
+test('brochure generation supports every public site language, including Arabic and Amharic fonts', async () => {
+  assert.deepEqual(SUPPORTED_OFF_PLAN_LANGUAGES, ['en', 'lg', 'sw', 'ac', 'ny', 'rn', 'sm', 'am', 'ar']);
+  for (const language of SUPPORTED_OFF_PLAN_LANGUAGES) {
+    const copy = brochureLanguagePack(language);
+    assert.equal(copy.code, language);
+    assert.ok(copy.project && copy.locationArea && copy.disclaimer);
+    const pdf = await brochureBuffer(BROCHURE_PROJECT, { ...BROCHURE_OPTIONS, language });
+    assert.equal(pdf.subarray(0, 8).toString(), '%PDF-1.3', language);
+    assert.ok(pdf.length > 20_000, language);
+    assert.equal((pdf.toString('latin1').match(/\/Type \/Page\b/g) || []).length, 8, language);
+  }
+  assert.equal(normalizeBrochureLanguage('ar-AE'), 'ar');
+  assert.equal(normalizeBrochureLanguage('unsupported'), 'en');
 });
 
 test('nearby distance uses a straight-line project-to-place calculation and labels it as approximate', () => {

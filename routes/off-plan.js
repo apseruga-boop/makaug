@@ -7,6 +7,7 @@ const {
   buildOffPlanPaymentSchedule,
   createEnquiry,
   createWalkthroughJob,
+  deleteArchivedDevelopment,
   getManagedDevelopment,
   getPublicDevelopment,
   isPubliclyVisible,
@@ -21,6 +22,7 @@ const {
   writeDevelopment
 } = require('../services/offPlanService');
 const { brochureBuffer } = require('../services/offPlanBrochureService');
+const { normalizeBrochureLanguage } = require('../services/offPlanBrochureI18n');
 const { notifyOffPlanEnquiry } = require('../services/offPlanNotificationService');
 const { prepareMediaUrlForStorage } = require('../services/cloudMediaStorageService');
 const { readMortgageProviders } = require('./mortgage');
@@ -160,8 +162,9 @@ publicRouter.get('/:slug/brochure.pdf', asyncRoute(async (req, res) => {
   const [agentProfile, mortgagePayload] = await Promise.all([readBrochureAgentProfile(development), readMortgageProviders()]);
   const preferredKeys = development.extra_fields?.mortgage_provider_keys || ['stanbic', 'dfcu', 'kcb'];
   const mortgageProviders = (mortgagePayload.providers || []).filter((provider) => preferredKeys.includes(provider.key)).slice(0, 3);
-  const pdf = await brochureBuffer(development, { agentProfile, mortgageProviders });
-  const fileName = `${development.slug}-makaug-brochure.pdf`;
+  const language = normalizeBrochureLanguage(req.query.lang);
+  const pdf = await brochureBuffer(development, { agentProfile, mortgageProviders, language });
+  const fileName = `${development.slug}-${language}-makaug-brochure.pdf`;
   res.set({
     'Content-Type': 'application/pdf',
     'Content-Disposition': `attachment; filename="${fileName}"`,
@@ -177,7 +180,7 @@ publicRouter.get('/:slug', asyncRoute(async (req, res) => {
   return res.json({ ok: true, development });
 }));
 
-function mountManagementRoutes(router, authMiddleware) {
+function mountManagementRoutes(router, authMiddleware, { allowPermanentDelete = false } = {}) {
   router.use(authMiddleware);
 
   router.get('/developments', asyncRoute(async (req, res) => {
@@ -197,10 +200,11 @@ function mountManagementRoutes(router, authMiddleware) {
     const [agentProfile, mortgagePayload] = await Promise.all([readBrochureAgentProfile(development), readMortgageProviders()]);
     const preferredKeys = development.extra_fields?.mortgage_provider_keys || ['stanbic', 'dfcu', 'kcb'];
     const mortgageProviders = (mortgagePayload.providers || []).filter((provider) => preferredKeys.includes(provider.key)).slice(0, 3);
-    const pdf = await brochureBuffer(development, { agentProfile, mortgageProviders });
+    const language = normalizeBrochureLanguage(req.query.lang);
+    const pdf = await brochureBuffer(development, { agentProfile, mortgageProviders, language });
     res.set({
       'Content-Type': 'application/pdf',
-      'Content-Disposition': `attachment; filename="${development.slug}-makaug-review-brochure.pdf"`,
+      'Content-Disposition': `attachment; filename="${development.slug}-${language}-makaug-review-brochure.pdf"`,
       'Cache-Control': 'private, no-store'
     });
     return res.send(pdf);
@@ -216,6 +220,19 @@ function mountManagementRoutes(router, authMiddleware) {
     if (!development) return res.status(404).json({ ok: false, error: 'Off-plan project not found' });
     return res.json({ ok: true, development });
   }));
+
+  if (allowPermanentDelete) {
+    router.delete('/developments/:id', asyncRoute(async (req, res) => {
+      try {
+        const development = await deleteArchivedDevelopment(db, req.params.id, actor(req));
+        if (!development) return res.status(404).json({ ok: false, error: 'Off-plan project not found' });
+        return res.json({ ok: true, development });
+      } catch (error) {
+        if (error.status === 409) return res.status(409).json({ ok: false, error: error.message });
+        throw error;
+      }
+    }));
+  }
 
   router.post('/developments/:id/images', asyncRoute(async (req, res) => {
     if (!booleanValue(req.body?.confirm_rights)) return res.status(400).json({ ok: false, error: 'Image rights confirmation is required' });
@@ -303,7 +320,7 @@ async function readBrochureAgentProfile(development = {}) {
 }
 
 mountManagementRoutes(staffRouter, requireStaffAccess);
-mountManagementRoutes(adminRouter, requireAdminApiKey);
+mountManagementRoutes(adminRouter, requireAdminApiKey, { allowPermanentDelete: true });
 
 module.exports = {
   adminRouter,
