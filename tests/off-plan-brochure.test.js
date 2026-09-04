@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const { brochureBuffer, formatDate } = require('../services/offPlanBrochureService');
 
-test('brochure renders a seven-page A4 PDF with area, mortgage and broker sections without pagination overflow', async () => {
+test('brochure renders an eight-page A4 PDF with map, family services, mortgage and broker sections without pagination overflow', async () => {
   const pdf = await brochureBuffer({
     name: 'Verified QA Project',
     slug: 'verified-qa-project',
@@ -22,15 +22,20 @@ test('brochure renders a seven-page A4 PDF with area, mortgage and broker sectio
     verification_status: 'verified',
     unit_types: [{ label: '2 Bedroom townhouse', bedrooms: 2, price_ugx: 410000000 }],
     payment_plan: [{ label: 'Buyer contribution', kind: 'percentage', percent: 15 }],
+    nearby_places: [
+      { category: 'Healthcare', name: 'QA Hospital', note: 'Confirm current services.', source_url: 'https://example.com/hospital' },
+      { category: 'University', name: 'QA University', note: 'Confirm the current campus.', source_url: 'https://example.com/university' },
+      { category: 'Shopping', name: 'QA Market', note: 'Confirm opening times.', source_url: 'https://example.com/market' }
+    ],
     images: [{
       url: '/assets/off-plan/entebbe-victoria-palms/construction-interior-1.jpg',
       caption: 'Construction progress photo supplied to makaug'
     }]
-  });
+  }, { agentProfile: { id: 'agent-qa', full_name: 'Kazi Honest', whatsapp: '+256791218405', bio: 'Project contact for quality assurance.' } });
 
   assert.equal(pdf.subarray(0, 8).toString(), '%PDF-1.3');
   assert.ok(pdf.length > 20_000);
-  assert.equal((pdf.toString('latin1').match(/\/Type \/Page\b/g) || []).length, 7);
+  assert.equal((pdf.toString('latin1').match(/\/Type \/Page\b/g) || []).length, 8);
 });
 
 test('brochure dates are human-readable in Uganda time', () => {
