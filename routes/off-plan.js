@@ -54,6 +54,10 @@ function isUuid(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(cleanText(value, 80));
 }
 
+function publicCountryCode(value) {
+  return cleanText(value || 'UG', 2).toUpperCase() === 'KE' ? 'KE' : 'UG';
+}
+
 async function storeManagedMedia(items, { developmentId, folder, allowedMimeTypes, label }) {
   const source = Array.isArray(items) ? items : [];
   const stored = [];
@@ -81,7 +85,8 @@ async function storeManagedMedia(items, { developmentId, folder, allowedMimeType
 }
 
 function whatsappEnquiryUrl(enquiry = {}, development = null) {
-  const projectAgentPhone = enquiry.enquiry_type === 'project_interest'
+  const makaugManaged = development?.extra_fields?.contact_mode === 'makaug_managed';
+  const projectAgentPhone = enquiry.enquiry_type === 'project_interest' && !makaugManaged
     ? cleanText(development?.source_agent_whatsapp || development?.source_agent_phone, 80)
     : '';
   const phone = String(projectAgentPhone || process.env.SUPPORT_PHONE || '+256760112587').replace(/\D/g, '') || '256760112587';
@@ -99,12 +104,14 @@ publicRouter.get('/', asyncRoute(async (req, res) => {
   return res.json({ ok: true, developments, count: developments.length });
 }));
 
-publicRouter.get('/locations', asyncRoute(async (_req, res) => {
+publicRouter.get('/locations', asyncRoute(async (req, res) => {
+  const countryCode = publicCountryCode(req.query.country_code || req.query.country);
   const result = await db.query(
     `SELECT * FROM off_plan_developments
-     WHERE country_code = 'UG' AND status = 'published'
+     WHERE country_code = $1 AND status = 'published'
        AND (verification_status = 'verified' OR (verification_status = 'partially_verified' AND extra_fields->>'public_preview_approved' = 'true'))
-     ORDER BY district, area`
+     ORDER BY district, area`,
+    [countryCode]
   );
   const counts = new Map();
   result.rows.map(normalizeDevelopmentRow).filter(isPubliclyVisible).forEach((project) => {
@@ -127,14 +134,14 @@ publicRouter.post('/enquiries', asyncRoute(async (req, res) => {
   if (requestedDevelopmentId) {
     if (!isUuid(requestedDevelopmentId)) return res.status(404).json({ ok: false, error: 'Off-plan project not found' });
     const publicMatch = await db.query(
-      `SELECT slug FROM off_plan_developments
-       WHERE id = $1 AND country_code = 'UG' AND status = 'published'
+      `SELECT slug, country_code FROM off_plan_developments
+       WHERE id = $1 AND country_code = ANY(ARRAY['UG','KE']) AND status = 'published'
          AND (verification_status = 'verified' OR (verification_status = 'partially_verified' AND extra_fields->>'public_preview_approved' = 'true'))
        LIMIT 1`,
       [requestedDevelopmentId]
     );
     if (!publicMatch.rows[0]) return res.status(404).json({ ok: false, error: 'Off-plan project not found' });
-    development = await getPublicDevelopment(db, publicMatch.rows[0].slug);
+    development = await getPublicDevelopment(db, publicMatch.rows[0].slug, publicMatch.rows[0].country_code);
   }
   const enquiry = await createEnquiry(db, {
     ...(req.body || {}),
@@ -157,7 +164,7 @@ publicRouter.post('/enquiries', asyncRoute(async (req, res) => {
 }));
 
 publicRouter.get('/:slug/brochure.pdf', asyncRoute(async (req, res) => {
-  const development = await getPublicDevelopment(db, req.params.slug);
+  const development = await getPublicDevelopment(db, req.params.slug, publicCountryCode(req.query.country));
   if (!development) return res.status(404).json({ ok: false, error: 'Off-plan project not found' });
   const [agentProfile, mortgagePayload] = await Promise.all([readBrochureAgentProfile(development), readMortgageProviders()]);
   const preferredKeys = development.extra_fields?.mortgage_provider_keys || ['stanbic', 'dfcu', 'kcb'];
@@ -174,7 +181,7 @@ publicRouter.get('/:slug/brochure.pdf', asyncRoute(async (req, res) => {
 }));
 
 publicRouter.get('/:slug', asyncRoute(async (req, res) => {
-  const development = await getPublicDevelopment(db, req.params.slug);
+  const development = await getPublicDevelopment(db, req.params.slug, publicCountryCode(req.query.country));
   if (!development) return res.status(404).json({ ok: false, error: 'Off-plan project not found' });
   res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
   return res.json({ ok: true, development });

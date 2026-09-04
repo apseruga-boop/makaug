@@ -27,7 +27,7 @@ test('public route, project detail route, API and protected dashboards are wired
   const route = read('routes/off-plan.js');
   const html = read('index.html');
   assert.match(app, /"off-plan": "\/off-plan"/);
-  assert.ok(app.includes('if (/^\\/off-plan\\/[a-z0-9-]+$/i.test(normalized)) return "off-plan";'));
+  assert.ok(app.includes('if (/^\\/off-plan(?:\\/[a-z0-9-]+){1,3}$/i.test(normalized)) return "off-plan";'));
   assert.match(server, /app\.use\('\/api\/off-plan', offPlanRoutes\)/);
   assert.match(server, /app\.use\('\/api\/staff\/off-plan', offPlanStaffRoutes\)/);
   assert.match(server, /app\.use\('\/api\/admin\/off-plan', offPlanAdminRoutes\)/);
@@ -105,8 +105,8 @@ test('brochure, payment, gallery, map, sharing, video and mortgage handoff are v
   assert.match(client, /id="off-plan-gallery-dialog"/);
   assert.match(client, /closeOffPlanGallery/);
   assert.match(client, /value == null \|\| \(typeof value === 'string' && !value\.trim\(\)\)/);
-  assert.match(html, /off-plan\.js\?v=20260904-offplan-v14/);
-  assert.match(html, /off-plan\.css\?v=20260904-offplan-v13/);
+  assert.match(html, /off-plan\.js\?v=20260904-overseas-v1/);
+  assert.match(html, /off-plan\.css\?v=20260904-overseas-v1/);
   assert.match(client, /CLOSED_PERMANENTLY/);
   assert.match(client, /Archive this private project record/);
   assert.match(client, /status === 'archived' \? 'PATCH' : 'POST'/);
@@ -123,6 +123,53 @@ test('brochure, payment, gallery, map, sharing, video and mortgage handoff are v
   assert.match(client, />View live<\/a>/);
   assert.match(client, /deleteOffPlanProject/);
   assert.match(route, /router\.delete\('\/developments\/:id'/);
+});
+
+test('Off Plan offers Uganda by default and a localized overseas country hierarchy', () => {
+  const html = read('index.html');
+  const client = read('assets/off-plan.js');
+  const server = read('server.js');
+  const migration = read('db/migrations/123_off_plan_overseas_spectre.sql');
+  assert.match(html, /id="nav-off-plan" href="\/off-plan"/);
+  assert.match(html, /id="off-plan-nav-uganda"/);
+  assert.match(html, /id="off-plan-nav-overseas"/);
+  assert.match(html, /href="\/off-plan\/overseas"/);
+  assert.match(client, /\/off-plan\/overseas\/kenya/);
+  assert.match(client, /OFF_PLAN_NAV_I18N/);
+  for (const language of ['en', 'lg', 'sw', 'ac', 'ny', 'rn', 'sm', 'am', 'ar']) {
+    assert.match(client, new RegExp(`\\n\\s{4}${language}: \\{ uganda:`), `missing localized Off Plan menu: ${language}`);
+  }
+  for (const region of ['Africa', 'Europe', 'Americas', 'Middle East', 'Asia']) assert.match(client, new RegExp(region));
+  assert.match(server, /app\.get\('\/off-plan\/overseas\/kenya\/:slug'/);
+  assert.ok(
+    server.indexOf("app.get('/off-plan/overseas', sendPublicIndex)") < server.indexOf("app.get('/off-plan/:slug'"),
+    'the overseas landing must be registered before the Uganda slug route'
+  );
+  assert.match(server, /\/off-plan\/overseas\/kenya\/\$\{encodeURIComponent\(project\.slug\)\}/);
+  assert.match(migration, /'KE'[\s\S]*'spectre-westlands'[\s\S]*'Karim - supplied agent documents'/);
+});
+
+test('Spectre source facts, MakaUG coordination and Kenya safeguards are wired without invented completion facts', () => {
+  const migration = read('db/migrations/123_off_plan_overseas_spectre.sql');
+  const client = read('assets/off-plan.js');
+  const brochure = read('services/offPlanBrochureService.js');
+  for (const fact of ['8800000', '16700000', '100000', '36', '50', '65', '100']) assert.match(migration, new RegExp(fact));
+  for (const missing of ['developer legal identity', 'expected completion date', 'exact site pin', 'construction progress', 'current stock and prices']) assert.match(migration, new RegExp(missing));
+  assert.match(migration, /contact_mode":"makaug_managed"/);
+  assert.match(migration, /Kenya Ministry of Lands - official search certificate/);
+  assert.match(migration, /Kenya Land Registration Act/);
+  assert.match(client, /MakaUG overseas team/);
+  assert.match(client, /finance for an overseas purchase/i);
+  assert.match(client, /floor_plans/);
+  assert.match(client, /overseasHighlightsMarkup/);
+  assert.match(client, /officialBuyerGuidanceMarkup/);
+  assert.match(client, /roi_projections/);
+  assert.match(client, /OFF_PLAN_AMENITY_I18N/);
+  assert.match(brochure, /copy\.overseasFinance/);
+  assert.match(brochure, /copy\.makaugOverseasTeam/);
+  assert.match(brochure, /project\.floor_plans/);
+  assert.match(brochure, /copy\.projectHighlights/);
+  assert.match(brochure, /copy\.projectedReturns/);
 });
 
 test('contact workflow has all channels and exact operations recipients', () => {
@@ -171,7 +218,7 @@ test('Off Plan family maps, contact and payment builder expose the requested int
   assert.match(client, /offPlanExperienceText\('mortgageTitle'\)/);
   assert.match(client, /provider\.logoUrl \|\| provider\.logo_url/);
   assert.match(client, /source_agent_whatsapp \|\| project\.source_agent_phone/);
-  for (const type of ['school', 'hospital', 'university', 'shopping_mall', 'supermarket', 'park', 'tourist_attraction', 'airport']) assert.match(client, new RegExp(`'${type}'`));
+  for (const type of ['school', 'hospital', 'university', 'shopping_mall', 'supermarket', 'restaurant', 'park', 'tourist_attraction', 'airport']) assert.match(client, new RegExp(`'${type}'`));
   assert.match(client, /mapTypeControl: true, streetViewControl: true, fullscreenControl: true/);
   assert.match(client, /marker\.addListener\('mouseover'/);
   assert.match(client, /data-map-marker-popup="listing"/);

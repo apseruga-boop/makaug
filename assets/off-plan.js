@@ -19,6 +19,9 @@
     mortgageLoaded: false,
     agentProfile: null,
     mapVisible: true,
+    routeMode: 'uganda',
+    countryCode: 'UG',
+    countrySlug: '',
     managementLoaded: { staff: false, admin: false }
   };
 
@@ -108,6 +111,53 @@
   Object.assign(OFF_PLAN_DETAIL_I18N.am, { sourceAgentBio: 'Kazi Honest ገዢዎች በKigo Road እና በKampala-Wakiso አካባቢ የመኖሪያ ቤቶችን፣ smart-home አማራጮችንና off-plan ፕሮጀክቶችን እንዲያዩ ትረዳለች። ይህ መገለጫ ከደላላዋ ቀጥተኛ መረጃ የተዘጋጀ ሲሆን የማንነትና የአካውንት ማረጋገጫ በሂደት ላይ ነው።' });
   Object.assign(OFF_PLAN_DETAIL_I18N.ar, { sourceAgentBio: 'تساعد Kazi Honest المشترين على استكشاف المنازل السكنية وخيارات المنازل الذكية ومشروعات البيع على المخطط حول Kigo Road وسوق Kampala-Wakiso الأوسع. أُنشئ هذا الملف من معلومات قدمتها الوكيلة مباشرة، وما زال التحقق من الهوية والمطالبة بالحساب قيد الإجراء.' });
 
+  const OFF_PLAN_OVERSEAS_I18N = {
+    en: { overseas: 'Overseas', title: 'Off-plan homes beyond Uganda', subtitle: 'Explore carefully presented projects by region and country, with MakaUG beside you from enquiry to handover.', africa: 'Africa', africaBody: 'Start with selected East African destinations.', rest: 'Rest of the world', restBody: 'More markets will appear only after their project information and buying process are ready for review.', kenya: 'Kenya', kenyaBody: 'Nairobi off-plan apartments with local-currency payment plans and MakaUG buyer support.', openKenya: 'Explore Kenya', coming: 'Coming soon', kenyaTitle: 'New off-plan projects in Kenya', kenyaSubtitle: 'Compare homes, model KES payments and ask MakaUG to coordinate the cross-border buying journey.', backOverseas: 'Back to overseas destinations', managedBy: 'Managed with MakaUG', conciergeTitle: 'Your overseas buying journey with MakaUG', conciergeBody: 'We coordinate the information flow between you, the developer, your bank and your independent Kenyan lawyer. You remain the decision-maker and sign directly with the relevant parties.', financeTitle: 'Finance for an overseas purchase', financeBody: 'This may not be a standard Ugandan residential mortgage. Ask your bank whether it can finance a Kenyan off-plan purchase, what security it needs and how it handles foreign-currency and construction-stage payments.', sourceNote: 'Source documents supplied by Karim. Public enquiries are handled by MakaUG.', indicativeFx: 'Indicative conversion only. Refresh the exchange rate before relying on it.', contactMakaug: 'Enquire with MakaUG', floorPlans: 'Floor plans', steps: ['Requirements call','Document review','Independent legal checks','Developer coordination','Bank and currency coordination','Milestone follow-up'] },
+    lg: { overseas: 'Ebweru wa Uganda', title: 'Amaka ga off-plan ebweru wa Uganda', subtitle: 'Londa pulojekiti okusinziira ku kitundu n’eggwanga, nga MakaUG ekuyamba okuva ku kubuuza okutuuka ku kukwasa.', africa: 'Afrika', africaBody: 'Tandika n’amawanga ga East Africa agalondeddwa.', rest: 'Ensi endala', restBody: 'Amatale amalala gajja oluvannyuma lw’okukebera pulojekiti n’enkola y’okugula.', kenya: 'Kenya', kenyaBody: 'Apartimenti za off-plan mu Nairobi n’okusasula mu KES n’obuyambi bwa MakaUG.', openKenya: 'Kebera Kenya', coming: 'Kijja', kenyaTitle: 'Pulojekiti empya za off-plan mu Kenya', kenyaSubtitle: 'Gerageranya amaka, bala okusasula mu KES era saba MakaUG ekuyambe ku lugendo lw’okugula.', backOverseas: 'Ddayo ku mawanga ag’ebweru', managedBy: 'MakaUG y’ekukwasaganya', conciergeTitle: 'Olugendo lwo olw’okugula ebweru ne MakaUG', conciergeBody: 'Tukwasaganya amawulire wakati wo, omuzimbi, bbanka yo ne looya wo owetongodde mu Kenya. Ggwe osalawo era ossa omukono n’abantu abakwatibwako.', financeTitle: 'Okufuna ssente z’okugula ebweru', financeBody: 'Kino kiyinza obutaba mortgage ya bulijjo mu Uganda. Buuza bbanka oba esobola okusasulira off-plan mu Kenya, obukuumi bwe yeetaaga n’engeri gy’ekolamu foreign currency.', sourceNote: 'Ebiwandiiko byava eri Karim. MakaUG y’eddamu ababuuza.', indicativeFx: 'Exchange rate ya kulabirako yokka; gikakase nate.', contactMakaug: 'Buuza MakaUG', floorPlans: 'Pulaani z’amayumba', steps: ['Okunyumya ebyetaago','Okukebera ebiwandiiko','Okukebera amateeka','Okukwasaganya omuzimbi','Bbanka ne currency','Okugoberera emitendera'] },
+    sw: { overseas: 'Nje ya Uganda', title: 'Nyumba za off-plan nje ya Uganda', subtitle: 'Chunguza miradi kwa eneo na nchi huku MakaUG ikikusaidia kutoka uliziaji hadi makabidhiano.', africa: 'Afrika', africaBody: 'Anza na masoko yaliyoteuliwa ya Afrika Mashariki.', rest: 'Dunia nzima', restBody: 'Masoko zaidi yataongezwa baada ya taarifa na mchakato wa ununuzi kukaguliwa.', kenya: 'Kenya', kenyaBody: 'Fleti za off-plan Nairobi, malipo ya KES na usaidizi wa mnunuzi wa MakaUG.', openKenya: 'Chunguza Kenya', coming: 'Inakuja', kenyaTitle: 'Miradi mipya ya off-plan nchini Kenya', kenyaSubtitle: 'Linganisha nyumba, panga malipo ya KES na uombe MakaUG kuratibu ununuzi wa kuvuka mpaka.', backOverseas: 'Rudi kwa maeneo ya nje', managedBy: 'Inaratibiwa na MakaUG', conciergeTitle: 'Safari yako ya ununuzi wa nje na MakaUG', conciergeBody: 'Tunaratibu mawasiliano kati yako, msanidi, benki yako na wakili huru wa Kenya. Wewe ndiye hufanya uamuzi na kusaini na wahusika husika.', financeTitle: 'Ufadhili wa ununuzi wa nje', financeBody: 'Huu unaweza usiwe mkopo wa kawaida wa nyumba wa Uganda. Uliza benki ikiwa inaweza kufadhili mradi wa Kenya, dhamana inayohitaji na jinsi inavyoshughulikia fedha za kigeni.', sourceNote: 'Nyaraka zilitolewa na Karim. Maswali ya umma yanashughulikiwa na MakaUG.', indicativeFx: 'Ubadilishaji wa mfano tu; thibitisha kiwango cha sasa.', contactMakaug: 'Uliza MakaUG', floorPlans: 'Ramani za nyumba', steps: ['Simu ya mahitaji','Ukaguzi wa nyaraka','Ukaguzi huru wa kisheria','Uratibu wa msanidi','Benki na sarafu','Ufuatiliaji wa hatua'] },
+    ac: { overseas: 'Woko Uganda', title: 'Odi me off-plan woko Uganda', subtitle: 'Nen purujekti ki lobo kun MakaUG konyi nia i penyo naka miyo ot.', africa: 'Afrika', africaBody: 'Cak ki kabedo ma kiyero i East Africa.', rest: 'Lobo mukene', restBody: 'Kabedo mukene bino inge moko ngec ki yoo me wilo.', kenya: 'Kenya', kenyaBody: 'Apartment me Nairobi ki cul me KES ki kony pa MakaUG.', openKenya: 'Nen Kenya', coming: 'Pud bino', kenyaTitle: 'Purujekti manyen me off-plan i Kenya', kenyaSubtitle: 'Por odi, yub cul me KES ki kwa MakaUG oyub wilo woko Uganda.', backOverseas: 'Dok cen bot kabedo me woko', managedBy: 'MakaUG aye yubo', conciergeTitle: 'Yoo meri me wilo ki MakaUG', conciergeBody: 'Wayubo lok i kin in, lagwedo, bank ki lawyer me Kenya ma ni kene. In aye imoko lok ki keto cingi.', financeTitle: 'Cente me wilo woko', financeBody: 'Man romo pe bedo mortgage me Uganda. Peny bank ka twero culo pi off-plan i Kenya.', sourceNote: 'Karim omiyo dokumen; MakaUG aye gamo lapeny.', indicativeFx: 'Exchange rate me lapor keken.', contactMakaug: 'Peny MakaUG', floorPlans: 'Plan me ot', steps: ['Lok pi miti','Nen dokumen','Nen cik','Yub lagwedo','Bank ki currency','Lub yub me tic'] },
+    ny: { overseas: 'Aheeru ya Uganda', title: 'Amaka ga off-plan aheeru ya Uganda', subtitle: 'Reeba pulojekiti omu mahanga gatarikushushana, MakaUG ekukwasaganye okuhitsya aha kukwatsa.', africa: 'Africa', africaBody: 'Tandika n’amatare ga East Africa agatoorainwe.', rest: 'Ensi endiijo', restBody: 'Amatare agandi nigaija bwanyima y’okushwijuma amakuru n’enkora y’okugura.', kenya: 'Kenya', kenyaBody: 'Apartimenti za off-plan omuri Nairobi n’okusasura omu KES n’obuhwezi bwa MakaUG.', openKenya: 'Reeba Kenya', coming: 'Nikiija', kenyaTitle: 'Pulojekiti ensya za off-plan omuri Kenya', kenyaSubtitle: 'Geragyeranisa amaka, bara okusasura omu KES kandi oshabe MakaUG ekukwasaganye.', backOverseas: 'Garuka aha mahanga g’aheeru', managedBy: 'MakaUG neekukwasaganya', conciergeTitle: 'Orugyendo rwawe rw’okugura na MakaUG', conciergeBody: 'Nitukwasaganya amakuru ahagati yaawe, omwombeki, banka yaawe na looya wa Kenya oyetongoire. Iwe noohendera kandi osinya n’abakwatiibwaho.', financeTitle: 'Efaranga g’okugura aheeru', financeBody: 'Eki nikibaasa kutaba mortgage ya Uganda eya burijo. Buuza banka yaawe yaaba neebaasa kusasurira off-plan omuri Kenya.', sourceNote: 'Ebiwandiiko bikaruga ahari Karim; MakaUG neyo egarukamu.', indicativeFx: 'Exchange rate y’okureeberaho yonka.', contactMakaug: 'Buuza MakaUG', floorPlans: 'Pulaani z’amaka', steps: ['Okugamba ebyetaago','Okushwijuma ebiwandiiko','Okushwijuma amateeka','Okukwasaganya omwombeki','Banka na currency','Okuronda emitendera'] },
+    rn: {}, sm: {},
+    am: { overseas: 'ከኡጋንዳ ውጭ', title: 'ከኡጋንዳ ውጭ ያሉ የoff-plan ቤቶች', subtitle: 'በአገርና በክልል ፕሮጀክቶችን ይመልከቱ፤ MakaUG ከጥያቄ እስከ ርክክብ ያግዝዎታል።', africa: 'አፍሪካ', africaBody: 'በተመረጡ የምሥራቅ አፍሪካ ገበያዎች ይጀምሩ።', rest: 'የተቀረው ዓለም', restBody: 'ተጨማሪ ገበያዎች ከግምገማ በኋላ ይጨመራሉ።', kenya: 'ኬንያ', kenyaBody: 'በናይሮቢ የoff-plan አፓርታማዎች፣ የKES ክፍያ እና የMakaUG ድጋፍ።', openKenya: 'ኬንያን ይመልከቱ', coming: 'በቅርብ ቀን', kenyaTitle: 'በኬንያ አዳዲስ የoff-plan ፕሮጀክቶች', kenyaSubtitle: 'ቤቶችን ያወዳድሩ፣ የKES ክፍያ ያቅዱ እና MakaUG ግዢውን እንዲያስተባብር ይጠይቁ።', backOverseas: 'ወደ ውጭ አገር መዳረሻዎች ተመለስ', managedBy: 'በMakaUG የሚተባበር', conciergeTitle: 'ከMakaUG ጋር የውጭ ግዢ ጉዞ', conciergeBody: 'በእርስዎ፣ በአልሚው፣ በባንክዎ እና በገለልተኛ የኬንያ ጠበቃዎ መካከል መረጃን እናስተባብራለን።', financeTitle: 'የውጭ ግዢ ፋይናንስ', financeBody: 'ይህ መደበኛ የኡጋንዳ የቤት ብድር ላይሆን ይችላል። ባንክዎን ያረጋግጡ።', sourceNote: 'ሰነዶቹን Karim አቅርቧል፤ ጥያቄዎችን MakaUG ይቀበላል።', indicativeFx: 'ምሳሌያዊ ምንዛሬ ብቻ።', contactMakaug: 'MakaUGን ይጠይቁ', floorPlans: 'የቤት ፕላኖች', steps: ['የፍላጎት ጥሪ','የሰነድ ግምገማ','ገለልተኛ ሕጋዊ ምርመራ','የአልሚ ቅንጅት','ባንክና ምንዛሬ','የደረጃ ክትትል'] },
+    ar: { overseas: 'خارج أوغندا', title: 'منازل على المخطط خارج أوغندا', subtitle: 'استكشف المشروعات حسب المنطقة والدولة، مع دعم MakaUG من الاستفسار حتى التسليم.', africa: 'أفريقيا', africaBody: 'ابدأ بأسواق مختارة في شرق أفريقيا.', rest: 'بقية العالم', restBody: 'ستضاف أسواق أخرى بعد مراجعة بيانات المشروعات ومسار الشراء.', kenya: 'كينيا', kenyaBody: 'شقق على المخطط في نيروبي بخطط دفع بالشلن الكيني ودعم MakaUG.', openKenya: 'استكشف كينيا', coming: 'قريباً', kenyaTitle: 'مشروعات جديدة على المخطط في كينيا', kenyaSubtitle: 'قارن المنازل وخطط دفعات KES واطلب من MakaUG تنسيق رحلة الشراء عبر الحدود.', backOverseas: 'العودة إلى الوجهات الخارجية', managedBy: 'بإدارة MakaUG', conciergeTitle: 'رحلة شرائك الخارجية مع MakaUG', conciergeBody: 'ننسق المعلومات بينك وبين المطور وبنكك ومحاميك الكيني المستقل. أنت صاحب القرار وتوقع مباشرة مع الأطراف المعنية.', financeTitle: 'تمويل شراء خارجي', financeBody: 'قد لا يكون هذا رهناً عقارياً أوغندياً عادياً. اسأل بنكك إن كان سيمول شراء عقار كيني على المخطط ومتطلبات الضمان والعملات الأجنبية.', sourceNote: 'قدم Karim مستندات المصدر؛ وتتولى MakaUG الاستفسارات العامة.', indicativeFx: 'تحويل إرشادي فقط؛ أكد سعر الصرف الحالي.', contactMakaug: 'استفسر من MakaUG', floorPlans: 'مخططات الطوابق', steps: ['مكالمة المتطلبات','مراجعة المستندات','فحوص قانونية مستقلة','التنسيق مع المطور','البنك والعملات','متابعة المراحل'] }
+  };
+  OFF_PLAN_OVERSEAS_I18N.rn = { ...OFF_PLAN_OVERSEAS_I18N.ny };
+  OFF_PLAN_OVERSEAS_I18N.sm = { ...OFF_PLAN_OVERSEAS_I18N.lg };
+  const OFF_PLAN_OVERSEAS_DETAIL_I18N = {
+    en: { highlights: 'Project highlights', highlightsBody: 'Amenities shown in the supplied Spectre agent brochure. Confirm the final specification in the signed sale agreement.', roi: 'Source-projected returns', furnished: 'Furnished', unfurnished: 'Unfurnished', roiBody: 'Brochure projections only—not guaranteed returns. Independently verify rent, occupancy, running costs, tax and exchange-rate assumptions.', buyerChecks: 'Official Kenya buying checks', buyerChecksBody: 'Use an independent Kenyan lawyer and the official land-registry process before signing or transferring funds.', openOfficial: 'Open official guidance' },
+    lg: { highlights: 'Ebikulu ebiri mu pulojekiti', highlightsBody: 'Ebikozesebwa bino biri mu brochure ya Spectre eyaweereddwa. Kakasa ebisembayo mu ndagaano y’okutunda.', roi: 'Ensimbi ezisuubirwa mu biwandiiko', furnished: 'Erimu ebintu', unfurnished: 'Terimu bintu', roiBody: 'Bino byakulabirako okuva mu brochure, si magoba agasuubiziddwa. Kebera obupangisa, ebbanga ly’okubeeramu, ensaasaanya, omusolo n’ensimbi.', buyerChecks: 'Okukebera okugula mu Kenya okw’official', buyerChecksBody: 'Kozesa looya wa Kenya eyeetongodde n’enkola ya land registry nga tonnassa mukono oba okusasula.', openOfficial: 'Ggulawo obulagirizi bw’official' },
+    sw: { highlights: 'Vivutio vya mradi', highlightsBody: 'Vistawishi hivi vimetajwa katika brosha ya Spectre iliyotolewa. Thibitisha vipengele vya mwisho katika mkataba wa mauzo.', roi: 'Mapato yaliyokadiriwa na chanzo', furnished: 'Iliyowekewa samani', unfurnished: 'Bila samani', roiBody: 'Makadirio ya brosha pekee—si mapato yaliyohakikishwa. Thibitisha kodi, ukaaji, gharama, kodi ya serikali na sarafu kwa uhuru.', buyerChecks: 'Ukaguzi rasmi wa ununuzi Kenya', buyerChecksBody: 'Tumia wakili huru wa Kenya na mchakato rasmi wa usajili wa ardhi kabla ya kusaini au kutuma fedha.', openOfficial: 'Fungua mwongozo rasmi' },
+    ac: { highlights: 'Jami mabeco i purujekti', highlightsBody: 'Jami magi tye i brochure me Spectre ma kimiyo. Mok gin ma bibedo i contract me cato.', roi: 'Magoba ma ka lok ocake iye okwano', furnished: 'Ki jami i iye', unfurnished: 'Jami pe i iye', roiBody: 'Man obedo kwan me brochure keken, pe magoba ma kicike pire. Nen rent, bedo i ot, cost, tax ki currency ki keni.', buyerChecks: 'Yoo me Kenya me moko wil', buyerChecksBody: 'Tii ki lawyer me Kenya ma pe cuu ki yoo pa land registry mapwod pe iketo cingi onyo icwalo cente.', openOfficial: 'Yab cik ma oa ki ka ocake iye' },
+    ny: { highlights: 'Ebikuru bya pulojekiti', highlightsBody: 'Ebi nibyo ebiri omu brochure ya Spectre eyaheirwe. Hamya ebirikwija kuba omu ndagaano y’okutunda.', roi: 'Amagoba agu enshuro eteebereza', furnished: 'Erimu ebintu', unfurnished: 'Etarimu bintu', roiBody: 'N’okuteebereza kwa brochure kwonka, ti magoba agarahamiibwe. Shwijuma rent, occupancy, costs, tax na exchange rate.', buyerChecks: 'Okushwijuma okugura omuri Kenya', buyerChecksBody: 'Koresa lawyer wa Kenya oyeetongwire n’enkora ya land registry otakasinyire nari kusasura.', openOfficial: 'Yiguraho obuhabuzi bw’official' },
+    rn: {},
+    sm: {},
+    am: { highlights: 'የፕሮጀክቱ ዋና ገጽታዎች', highlightsBody: 'እነዚህ መገልገያዎች በቀረበው የSpectre ብሮሹር ውስጥ ተጠቅሰዋል። የመጨረሻውን ዝርዝር በሽያጭ ውሉ ያረጋግጡ።', roi: 'በምንጩ የተገመተ ተመላሽ', furnished: 'የቤት ዕቃ ያለው', unfurnished: 'የቤት ዕቃ የሌለው', roiBody: 'የብሮሹር ግምቶች ብቻ ናቸው፤ ዋስትና የላቸውም። ኪራይ፣ ነዋሪነት፣ ወጪ፣ ግብርና ምንዛሬን ለብቻዎ ያረጋግጡ።', buyerChecks: 'ይፋዊ የኬንያ ግዢ ምርመራ', buyerChecksBody: 'ከመፈረምዎ ወይም ገንዘብ ከማስተላለፍዎ በፊት ገለልተኛ የኬንያ ጠበቃና ይፋዊ የመሬት መዝገብ ሂደት ይጠቀሙ።', openOfficial: 'ይፋዊ መመሪያውን ይክፈቱ' },
+    ar: { highlights: 'أبرز مزايا المشروع', highlightsBody: 'هذه المرافق مذكورة في كتيب Spectre المقدم. أكد المواصفات النهائية في عقد البيع الموقع.', roi: 'العوائد المتوقعة حسب المصدر', furnished: 'مفروش', unfurnished: 'غير مفروش', roiBody: 'توقعات واردة في الكتيب فقط وليست عوائد مضمونة. تحقق مستقلاً من الإيجار والإشغال والتكاليف والضرائب والعملات.', buyerChecks: 'الفحوص الرسمية للشراء في كينيا', buyerChecksBody: 'استعن بمحام كيني مستقل وبإجراءات السجل العقاري الرسمية قبل التوقيع أو تحويل الأموال.', openOfficial: 'فتح الإرشادات الرسمية' }
+  };
+  OFF_PLAN_OVERSEAS_DETAIL_I18N.rn = { ...OFF_PLAN_OVERSEAS_DETAIL_I18N.ny };
+  OFF_PLAN_OVERSEAS_DETAIL_I18N.sm = { ...OFF_PLAN_OVERSEAS_DETAIL_I18N.lg };
+  const OFF_PLAN_AMENITY_I18N = {
+    lg: ['Emiryango egy’obwannannyini','Ennimiro ey’oku kasolya','Ekifo abaana we bazannyira','Business centre','Yoga studio','Paakingi y’emmotoka','Eddiiro','Spa ne sauna','Ekifo eky’okukola dduyiro','Ekidiba eky’okuwuga ekya infinity','Obuweereza bwa concierge','Sinema'],
+    sw: ['Matuta binafsi','Bustani ya angani','Eneo la kucheza watoto','Kituo cha biashara','Studio ya yoga','Maegesho ya magari','Mkahawa','Spa na sauna','Kituo cha mazoezi','Bwawa la infinity','Huduma ya concierge','Sinema'],
+    ac: ['Kabedo me woko pa ngat acel','Poto i wi ot','Kabedo pa lutino me tuku','Kabedo me biashara','Kabedo me yoga','Kabedo pa motoka','Ka cam','Spa ki sauna','Kabedo me exercise','Swimming pool me infinity','Kony pa concierge','Cinema'],
+    ny: ['Veranda z’obwananyini','Ebyatsi aha kasolya','Ahi abaana barikuzanira','Business centre','Yoga studio','Parking y’emotoka','Eriiro','Spa na sauna','Gym','Infinity pool','Obuheereza bwa concierge','Cinema'],
+    am: ['የግል ሰገነቶች','የሰማይ አትክልት','የልጆች መጫወቻ','የንግድ ማዕከል','የዮጋ ስቱዲዮ','የመኪና ማቆሚያ','ምግብ ቤት','ስፓና ሳውና','የአካል ብቃት ማዕከል','ኢንፊኒቲ ገንዳ','የኮንሲየርጅ አገልግሎት','ሲኒማ'],
+    ar: ['شرفات خاصة','حديقة علوية','منطقة لعب للأطفال','مركز أعمال','استوديو يوغا','مواقف سيارات','مطعم','سبا وساونا','مركز لياقة','مسبح لا متناهٍ','خدمة كونسيرج','سينما']
+  };
+  OFF_PLAN_AMENITY_I18N.rn = OFF_PLAN_AMENITY_I18N.ny;
+  OFF_PLAN_AMENITY_I18N.sm = OFF_PLAN_AMENITY_I18N.lg;
+  const OFF_PLAN_NAV_I18N = {
+    en: { uganda: 'Uganda', ugandaNote: 'Local developments', overseas: 'Overseas', overseasNote: 'Africa and the world' },
+    lg: { uganda: 'Uganda', ugandaNote: 'Pulojekiti ez’omu ggwanga', overseas: 'Ebweru wa Uganda', overseasNote: 'Afrika n’ensi endala' },
+    sw: { uganda: 'Uganda', ugandaNote: 'Miradi ya ndani', overseas: 'Nje ya Uganda', overseasNote: 'Afrika na dunia nzima' },
+    ac: { uganda: 'Uganda', ugandaNote: 'Purujekti me lobo', overseas: 'Woko Uganda', overseasNote: 'Afrika ki lobo mukene' },
+    ny: { uganda: 'Uganda', ugandaNote: 'Pulojekiti z’omunda', overseas: 'Aheeru ya Uganda', overseasNote: 'Africa n’ensi endiijo' },
+    rn: { uganda: 'Uganda', ugandaNote: 'Pulojekiti z’omunda', overseas: 'Aheeru ya Uganda', overseasNote: 'Africa n’ensi endiijo' },
+    sm: { uganda: 'Uganda', ugandaNote: 'Pulojekiti edh’omu ggwanga', overseas: 'Ebweru wa Uganda', overseasNote: 'Afrika n’ensi endala' },
+    am: { uganda: 'ኡጋንዳ', ugandaNote: 'የአገር ውስጥ ፕሮጀክቶች', overseas: 'ከኡጋንዳ ውጭ', overseasNote: 'አፍሪካና የተቀረው ዓለም' },
+    ar: { uganda: 'أوغندا', ugandaNote: 'مشروعات محلية', overseas: 'خارج أوغندا', overseasNote: 'أفريقيا وبقية العالم' }
+  };
+
   function offPlanLanguage() {
     const code = clean(document.documentElement.lang || 'en').toLowerCase().split('-')[0];
     return OFF_PLAN_I18N[code] ? code : 'en';
@@ -121,6 +171,16 @@
     let value = detailPack[key] || compactPack[key] || pack[key] || OFF_PLAN_DETAIL_I18N.en[key] || OFF_PLAN_COMPACT_I18N.en[key] || OFF_PLAN_I18N.en[key] || key;
     Object.entries(replacements).forEach(([name, replacement]) => { value = value.replaceAll(`{${name}}`, String(replacement)); });
     return value;
+  }
+
+  function overseasDetailText(key) {
+    const language = offPlanLanguage();
+    return OFF_PLAN_OVERSEAS_DETAIL_I18N[language]?.[key] || OFF_PLAN_OVERSEAS_DETAIL_I18N.en[key] || key;
+  }
+
+  function localizedAmenity(value, index) {
+    const translations = OFF_PLAN_AMENITY_I18N[offPlanLanguage()];
+    return translations?.[index] || value;
   }
 
   const OFF_PLAN_DYNAMIC_I18N = {
@@ -153,6 +213,16 @@
     am: { schools: 'ትምህርት ቤቶችና ህፃናት እንክብካቤ', healthcare: 'ጤና አገልግሎት', universities: 'ዩኒቨርሲቲዎች', shopping: 'ገበያና ግብይት', recreation: 'ፓርኮችና የቤተሰብ መዝናኛ', transport: 'ትራንስፖርት', mortgageTitle: 'የቤት ብድር አማራጮች', mortgagePolicy: 'የoff-plan ፋይናንስ በአበዳሪው ይወሰናል። የታተመ የቤት ወለድ ከመጠናቀቁ በፊት ቤቱ እንደሚደገፍ አያረጋግጥም። ብቁነት፣ ግምገማ፣ ሰነድ፣ መድን፣ ክፍያና ቅድመ ክፍያን ከአበዳሪው ያረጋግጡ።', chooseUnit: 'የቤት ዓይነት', customPayment: 'ቤት፣ ቅድመ ክፍያና የክፍያ ጊዜ ይምረጡ፣ ከዚያ ቀኖቹን ያስሉ።', phoneLabel: 'ስልክ / WhatsApp', familyServices: 'የቤተሰብ ኑሮና የአካባቢ አገልግሎቶች', areaServices: 'በአቅራቢያ ያሉ ትምህርት ቤቶች፣ ጤና፣ ዩኒቨርሲቲዎች፣ ገበያ፣ ትራንስፖርት፣ ፓርኮችና የቤተሰብ መዝናኛዎችን ይመልከቱ። ትክክለኛው ቦታና የጉዞ ጊዜ መረጋገጥ አለበት።' },
     ar: { schools: 'المدارس ورعاية الأطفال', healthcare: 'الرعاية الصحية', universities: 'الجامعات', shopping: 'الأسواق والتسوق', recreation: 'الحدائق والأنشطة العائلية', transport: 'النقل', mortgageTitle: 'خيارات الرهن العقاري', mortgagePolicy: 'تمويل العقار على المخطط خاص بكل مقرض. سعر الرهن المنشور لا يعني أن المقرض سيمول المنزل قبل اكتماله. أكد الأهلية والتقييم والملكية والدفعات المرحلية والتأمين والرسوم والمقدم مع المقرض.', chooseUnit: 'نوع المنزل', customPayment: 'اختر المنزل والمقدم ومدة الدفع ثم احسب كل مواعيد الدفعات التوضيحية.', phoneLabel: 'الهاتف / WhatsApp', familyServices: 'الحياة العائلية والخدمات المحلية', areaServices: 'استكشف المدارس والرعاية الصحية والجامعات والأسواق والنقل والحدائق والأنشطة العائلية القريبة. يجب تأكيد الموقع الدقيق وأوقات السفر.' }
   };
+
+  Object.assign(OFF_PLAN_EXPERIENCE_I18N.en, { dining: 'Restaurants and dining' });
+  Object.assign(OFF_PLAN_EXPERIENCE_I18N.lg, { dining: 'Eby’okulya n’amadduuka g’emmere' });
+  Object.assign(OFF_PLAN_EXPERIENCE_I18N.sw, { dining: 'Migahawa na chakula' });
+  Object.assign(OFF_PLAN_EXPERIENCE_I18N.ac, { dining: 'Kabedo me cam' });
+  Object.assign(OFF_PLAN_EXPERIENCE_I18N.ny, { dining: 'Eby’okurya n’amariiro' });
+  Object.assign(OFF_PLAN_EXPERIENCE_I18N.rn, { dining: 'Eby’okurya n’amariiro' });
+  Object.assign(OFF_PLAN_EXPERIENCE_I18N.sm, { dining: 'Eby’okulya n’amadduuka g’emmere' });
+  Object.assign(OFF_PLAN_EXPERIENCE_I18N.am, { dining: 'ምግብ ቤቶችና ምግብ' });
+  Object.assign(OFF_PLAN_EXPERIENCE_I18N.ar, { dining: 'المطاعم والطعام' });
 
   Object.assign(OFF_PLAN_EXPERIENCE_I18N.en, { approximateDistance: 'Approx. {distance} km from the displayed area point', distancePending: 'Distance pending', loanAmount: 'Amount to borrow (UGX)', loanTerm: 'Loan term', recalculateMortgage: 'Calculate repayments', monthlyRepayment: 'Estimated monthly payment', totalInterest: 'Estimated interest', arrangementFee: 'Arrangement fee estimate', totalRepayment: 'Estimated total repayment', mortgageEstimate: 'Repayment estimate', mortgageEstimateNote: 'Illustrative reducing-balance estimate using the selected amount and term. The lender must confirm the rate, fees, eligibility and whether it will finance this off-plan project.', termCapped: 'Calculated at this lender\'s {count}-year maximum term.', offPlanProjectLabel: 'Off-plan project', viewProject: 'View project details', lenderConfirm: 'Confirm eligibility, valuation, fees, rate and approval directly with the lender.' });
   Object.assign(OFF_PLAN_EXPERIENCE_I18N.lg, { approximateDistance: 'Kilomita nga {distance} okuva ku kifo ekiragiddwa', distancePending: 'Ebanga likyakeberwa', loanAmount: 'Ssente z\'oyagala okwewola (UGX)', loanTerm: 'Emyaka gy\'okwewola', recalculateMortgage: 'Bala okusasula', monthlyRepayment: 'Okusasula kwa buli mwezi okuteeberezebwa', totalInterest: 'Amagoba agateeberezebwa', arrangementFee: 'Fee y\'okutegeka eteberezebwa', totalRepayment: 'Omugatte gw\'okusasula oguteeberezebwa', mortgageEstimate: 'Okuteebereza okusasula', mortgageEstimateNote: 'Kuno kuteebereza kwa reducing-balance nga kukozesa ssente n\'emyaka gy\'olonze. Lender alina okukakasa rate, fees, ebisanyizo n\'oba asobola okusasulira pulojekiti eno ya off-plan.', termCapped: 'Kibaliddwa ku myaka {count}, ekiseera kya lender ekisinga.', offPlanProjectLabel: 'Pulojekiti ya off-plan', viewProject: 'Laba ebikwata ku pulojekiti', lenderConfirm: 'Kakasa ebisanyizo, valuation, fees, rate n\'okukkirizibwa butereevu eri lender.' });
@@ -203,11 +273,19 @@
   function applyOffPlanLanguageUI() {
     const root = document.getElementById('page-off-plan');
     if (!root) return;
+    const context = applyRouteContext();
+    const navCopy = OFF_PLAN_NAV_I18N[offPlanLanguage()] || OFF_PLAN_NAV_I18N.en;
+    [['off-plan-nav-uganda', navCopy.uganda], ['off-plan-nav-uganda-note', navCopy.ugandaNote], ['off-plan-nav-overseas', navCopy.overseas], ['off-plan-nav-overseas-note', navCopy.overseasNote]].forEach(([id, value]) => {
+      const element = document.getElementById(id);
+      if (element) element.textContent = value;
+    });
     root.querySelectorAll('[data-off-plan-i18n]').forEach((element) => { element.textContent = offPlanText(element.dataset.offPlanI18n); });
     root.querySelectorAll('[data-off-plan-i18n-placeholder]').forEach((element) => { element.setAttribute('placeholder', offPlanText(element.dataset.offPlanI18nPlaceholder)); });
     root.querySelectorAll('[data-off-plan-i18n-aria]').forEach((element) => { element.setAttribute('aria-label', offPlanText(element.dataset.offPlanI18nAria)); });
     root.querySelectorAll('[data-off-plan-type]').forEach((element) => { element.textContent = localizedProjectType(element.dataset.offPlanType); });
     root.querySelectorAll('[data-off-plan-months]').forEach((element) => { element.textContent = offPlanDynamicText('upToMonths', { count: element.dataset.offPlanMonths }); });
+    if (context.mode === 'overseas') { renderOverseasLanding(); refreshOffPlanContactCopy(); return; }
+    applyRegionalDirectoryCopy();
     if (state.activeProject) {
       const content = document.getElementById('off-plan-detail-content');
       if (content) {
@@ -229,6 +307,42 @@
     if (value == null || (typeof value === 'string' && !value.trim())) return null;
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : null;
+  }
+  function overseasText(key) {
+    const pack = OFF_PLAN_OVERSEAS_I18N[offPlanLanguage()] || OFF_PLAN_OVERSEAS_I18N.en;
+    return pack[key] || OFF_PLAN_OVERSEAS_I18N.en[key] || key;
+  }
+  function offPlanRouteContext(pathname = location.pathname) {
+    const path = String(pathname || '').replace(/\/+$/, '') || '/off-plan';
+    const detail = path.match(/^\/off-plan\/overseas\/kenya\/([a-z0-9-]+)$/i);
+    if (detail) return { mode: 'detail', countryCode: 'KE', countrySlug: 'kenya', slug: detail[1], basePath: '/off-plan/overseas/kenya' };
+    if (/^\/off-plan\/overseas\/kenya$/i.test(path)) return { mode: 'country', countryCode: 'KE', countrySlug: 'kenya', basePath: '/off-plan/overseas/kenya' };
+    if (/^\/off-plan\/overseas$/i.test(path)) return { mode: 'overseas', countryCode: null, countrySlug: '', basePath: '/off-plan/overseas' };
+    const ugDetail = path.match(/^\/off-plan\/([a-z0-9-]+)$/i);
+    return ugDetail ? { mode: 'detail', countryCode: 'UG', countrySlug: '', slug: ugDetail[1], basePath: '/off-plan' } : { mode: 'uganda', countryCode: 'UG', countrySlug: '', basePath: '/off-plan' };
+  }
+  function applyRouteContext(context = offPlanRouteContext()) {
+    state.routeMode = context.mode;
+    state.countryCode = context.countryCode || 'UG';
+    state.countrySlug = context.countrySlug || '';
+    return context;
+  }
+  function projectPublicPath(project = {}) {
+    if (project.extra_fields?.public_path) return project.extra_fields.public_path;
+    return project.country_code === 'KE' ? `/off-plan/overseas/kenya/${encodeURIComponent(project.slug)}` : `/off-plan/${encodeURIComponent(project.slug)}`;
+  }
+  function publicApiSuffix() { return state.countryCode === 'KE' ? '?country=KE' : ''; }
+  function localizedProjectField(project, field, fallback = '') {
+    return clean(project?.extra_fields?.translations?.[offPlanLanguage()]?.[field] || project?.[field] || project?.extra_fields?.[field] || fallback);
+  }
+  function primaryProjectPrice(project = {}) {
+    const units = project.unit_types || [];
+    if (project.country_code === 'KE') {
+      const prices = units.map((unit) => number(unit.price_original)).filter((value) => value > 0);
+      return { amount: prices.length ? Math.min(...prices) : null, currency: project.original_currency || 'KES' };
+    }
+    const prices = units.map((unit) => number(unit.price_ugx)).filter((value) => value > 0);
+    return { amount: number(project.launch_price_ugx) || (prices.length ? Math.min(...prices) : null), currency: 'UGX' };
   }
   function coordinatesForPlace(place = {}) {
     const location = place.geometry?.location;
@@ -273,8 +387,8 @@
     const amount = number(value);
     if (amount == null) return offPlanText('priceRequest');
     const code = clean(currency).toUpperCase() || 'UGX';
-    const prefix = { UGX: 'USh', USD: 'USD', GBP: 'GBP', EUR: 'EUR' }[code] || code;
-    const locale = code === 'UGX' ? 'en-UG' : 'en-US';
+    const prefix = { UGX: 'USh', KES: 'KSh', USD: 'USD', GBP: 'GBP', EUR: 'EUR' }[code] || code;
+    const locale = code === 'UGX' ? 'en-UG' : code === 'KES' ? 'en-KE' : 'en-US';
     return `${prefix} ${Math.round(amount).toLocaleString(locale)}`;
   }
   function formatUgx(value) { return formatMoney(value, 'UGX'); }
@@ -340,8 +454,7 @@
   }
 
   function projectCard(project, index = 0) {
-    const unitPrices = (project.unit_types || []).map((unit) => number(unit.price_ugx)).filter((value) => value != null && value > 0);
-    const launch = number(project.launch_price_ugx) || (unitPrices.length ? Math.min(...unitPrices) : null);
+    const primaryPrice = primaryProjectPrice(project);
     const bedrooms = (project.unit_types || []).map((unit) => number(unit.bedrooms)).filter((value) => value != null).sort((a, b) => a - b);
     const bedroomLabel = bedrooms.length ? `${bedrooms[0]}${bedrooms.at(-1) !== bedrooms[0] ? ` - ${bedrooms.at(-1)}` : ''} ${offPlanText('bedrooms')}` : offPlanText('homes');
     const sourceName = clean(project.source_agent_name || project.source_display_name);
@@ -352,11 +465,11 @@
     return `<article class="off-plan-card">
       <div class="off-plan-card-image">
         <img src="${escapeHtml(imageUrl(project))}" alt="${escapeHtml(imageCaption(project))}" loading="${index < 4 ? 'eager' : 'lazy'}" decoding="async"${index === 0 ? ' fetchpriority="high"' : ''}>
-        <a class="off-plan-card-cover" href="/off-plan/${encodeURIComponent(project.slug)}" data-off-plan-project="${escapeHtml(project.slug)}" aria-label="${escapeHtml(offPlanText('viewPhotos', { count: project.images?.length || 1 }))}: ${escapeHtml(project.name)}"></a>
+        <a class="off-plan-card-cover" href="${escapeHtml(projectPublicPath(project))}" data-off-plan-project="${escapeHtml(project.slug)}" aria-label="${escapeHtml(offPlanText('viewPhotos', { count: project.images?.length || 1 }))}: ${escapeHtml(project.name)}"></a>
         <div class="off-plan-card-badges"><span class="off-plan-pill bg-white/95 text-green-800">Off Plan</span><span class="off-plan-pill bg-black/65 text-white">${escapeHtml(delivery)}</span></div>
-        <div class="off-plan-card-content"><span class="off-plan-pill bg-white/95 text-green-800"><i class="fas fa-circle-check" aria-hidden="true"></i>${escapeHtml(statusLabel)}</span><h3>${escapeHtml(project.name)}</h3><p class="mt-1 text-sm"><i class="fas fa-location-dot mr-1" aria-hidden="true"></i>${escapeHtml(projectLocation(project))}</p><div class="off-plan-card-meta"><span><i class="fas fa-bed mr-1" aria-hidden="true"></i>${escapeHtml(bedroomLabel)}</span><span><i class="fas fa-house mr-1" aria-hidden="true"></i>${escapeHtml(typeLabel)}</span></div><p class="mt-3 text-xs">${escapeHtml(offPlanText('launchPrice'))}</p><strong class="off-plan-card-price">${escapeHtml(formatUgx(launch))}</strong>${project.payment_plan_months ? `<span class="off-plan-card-plan">${escapeHtml(offPlanText('monthPlan', { count: project.payment_plan_months }))}</span>` : ''}</div>
+        <div class="off-plan-card-content"><span class="off-plan-pill bg-white/95 text-green-800"><i class="fas fa-circle-check" aria-hidden="true"></i>${escapeHtml(statusLabel)}</span><h3>${escapeHtml(project.name)}</h3><p class="mt-1 text-sm"><i class="fas fa-location-dot mr-1" aria-hidden="true"></i>${escapeHtml(projectLocation(project))}</p><div class="off-plan-card-meta"><span><i class="fas fa-bed mr-1" aria-hidden="true"></i>${escapeHtml(bedroomLabel)}</span><span><i class="fas fa-house mr-1" aria-hidden="true"></i>${escapeHtml(typeLabel)}</span></div><p class="mt-3 text-xs">${escapeHtml(offPlanText('launchPrice'))}</p><strong class="off-plan-card-price">${escapeHtml(formatMoney(primaryPrice.amount, primaryPrice.currency))}</strong>${project.payment_plan_months ? `<span class="off-plan-card-plan">${escapeHtml(offPlanText('monthPlan', { count: project.payment_plan_months }))}</span>` : ''}</div>
       </div>
-      <div class="off-plan-card-actions">${sourceId ? `<a class="off-plan-card-agent" href="/agents/${encodeURIComponent(sourceId)}"><i class="fas fa-user-check" aria-hidden="true"></i>${escapeHtml(sourceName || offPlanText('viewBroker'))}</a>` : `<span class="off-plan-card-agent"><i class="fas fa-building" aria-hidden="true"></i>${escapeHtml(sourceName || offPlanText('projectTeam'))}</span>`}<button type="button" class="off-plan-card-whatsapp" data-off-plan-enquire="${escapeHtml(project.id)}" aria-label="${escapeHtml(offPlanText('enquireProject', { name: project.name }))}"><i class="fab fa-whatsapp" aria-hidden="true"></i></button></div>
+      <div class="off-plan-card-actions">${project.extra_fields?.contact_mode === 'makaug_managed' ? `<span class="off-plan-card-agent"><i class="fas fa-earth-africa" aria-hidden="true"></i>${escapeHtml(overseasText('managedBy'))}</span>` : sourceId ? `<a class="off-plan-card-agent" href="/agents/${encodeURIComponent(sourceId)}"><i class="fas fa-user-check" aria-hidden="true"></i>${escapeHtml(sourceName || offPlanText('viewBroker'))}</a>` : `<span class="off-plan-card-agent"><i class="fas fa-building" aria-hidden="true"></i>${escapeHtml(sourceName || offPlanText('projectTeam'))}</span>`}<button type="button" class="off-plan-card-whatsapp" data-off-plan-enquire="${escapeHtml(project.id)}" aria-label="${escapeHtml(offPlanText('enquireProject', { name: project.name }))}"><i class="fab fa-whatsapp" aria-hidden="true"></i></button></div>
     </article>`;
   }
 
@@ -379,7 +492,7 @@
     const chips = document.getElementById('off-plan-location-chips');
     if (!chips || chips.dataset.loaded === '1') return;
     try {
-      const data = await request('/api/off-plan/locations');
+      const data = await request(`/api/off-plan/locations?country=${encodeURIComponent(state.countryCode)}`);
       chips.innerHTML = (data.locations || []).slice(0, 10).map((item) => `<button type="button" class="off-plan-location-chip" data-off-plan-area="${escapeHtml(item.area || '')}" data-off-plan-district="${escapeHtml(item.district || '')}">${escapeHtml(item.area || item.district)} (${Number(item.project_count) || 0})</button>`).join('');
       chips.dataset.loaded = '1';
     } catch (_error) {}
@@ -439,9 +552,10 @@
   }
 
   function syncOffPlanSearchUrl(params) {
-    if (!/^\/off-plan\/?$/i.test(location.pathname)) return;
+    if (!/^\/off-plan(?:\/overseas\/kenya)?\/?$/i.test(location.pathname)) return;
     const query = params.toString();
-    history.replaceState({ page: 'off-plan' }, '', `/off-plan${query ? `?${query}` : ''}`);
+    const basePath = state.countryCode === 'KE' ? '/off-plan/overseas/kenya' : '/off-plan';
+    history.replaceState({ page: 'off-plan' }, '', `${basePath}${query ? `?${query}` : ''}`);
   }
 
   async function loadProjects() {
@@ -466,6 +580,7 @@
     if (projectType) params.set('project_type', projectType);
     if (paymentMonths) params.set('max_payment_months', paymentMonths);
     if (completionYear) params.set('completion_year', completionYear);
+    params.set('country', state.countryCode);
     syncOffPlanSearchUrl(params);
     try {
       const data = await request(`/api/off-plan?${params.toString()}`);
@@ -520,7 +635,7 @@
       if (!ready || !document.body.contains(container)) throw new Error('Google Maps unavailable');
       clearOffPlanMarkers();
       container.innerHTML = '';
-      const map = new window.google.maps.Map(container, { center: { lat: 1.3733, lng: 32.2903 }, zoom: 7, mapTypeControl: true, streetViewControl: true, fullscreenControl: true, clickableIcons: true, scrollwheel: false });
+      const map = new window.google.maps.Map(container, { center: state.countryCode === 'KE' ? { lat: -0.0236, lng: 37.9062 } : { lat: 1.3733, lng: 32.2903 }, zoom: state.countryCode === 'KE' ? 6 : 7, mapTypeControl: true, streetViewControl: true, fullscreenControl: true, clickableIcons: true, scrollwheel: false });
       state.map = map;
       if (projects.length) {
         const bounds = new window.google.maps.LatLngBounds();
@@ -530,7 +645,7 @@
           const position = { lat, lng };
           bounds.extend(position);
           const marker = new window.google.maps.Marker({ map, position, title: project.name, icon: 'https://maps.google.com/mapfiles/ms/icons/red-dot.png' });
-          const content = `<div class="off-plan-map-popup"><strong>${escapeHtml(project.name)}</strong><span>${escapeHtml(projectLocation(project))}</span><a href="/off-plan/${encodeURIComponent(project.slug)}">${escapeHtml(offPlanText('viewProfile'))}</a></div>`;
+          const content = `<div class="off-plan-map-popup"><strong>${escapeHtml(project.name)}</strong><span>${escapeHtml(projectLocation(project))}</span><a href="${escapeHtml(projectPublicPath(project))}">${escapeHtml(offPlanExperienceText('viewProject'))}</a></div>`;
           marker.addListener('click', () => { infoWindow.setContent(content); infoWindow.open({ map, anchor: marker }); });
           marker.addListener('mouseover', () => { infoWindow.setContent(content); infoWindow.open({ map, anchor: marker }); });
           state.mapMarkers.push(marker);
@@ -539,7 +654,7 @@
         else { map.fitBounds(bounds, 32); window.google.maps.event.addListenerOnce(map, 'idle', () => { if (map.getZoom() > 12) map.setZoom(12); }); }
       }
     } catch (_error) {
-      container.innerHTML = `<div class="h-full grid place-items-center px-6 text-center text-sm text-gray-600"><span><i class="fas fa-map-location-dot text-2xl text-red-600 block mb-2"></i>${escapeHtml(offPlanText('mapUnavailable'))}<a class="block mt-2 font-black text-green-800 underline" href="https://www.google.com/maps/search/?api=1&query=Uganda" target="_blank" rel="noopener noreferrer">${escapeHtml(offPlanText('openMaps'))}</a></span></div>`;
+      container.innerHTML = `<div class="h-full grid place-items-center px-6 text-center text-sm text-gray-600"><span><i class="fas fa-map-location-dot text-2xl text-red-600 block mb-2"></i>${escapeHtml(offPlanText('mapUnavailable'))}<a class="block mt-2 font-black text-green-800 underline" href="https://www.google.com/maps/search/?api=1&query=${state.countryCode === 'KE' ? 'Kenya' : 'Uganda'}" target="_blank" rel="noopener noreferrer">${escapeHtml(offPlanText('openMaps'))}</a></span></div>`;
     }
   }
 
@@ -591,7 +706,7 @@
   }
 
   function prepopulateOffPlanSearch() {
-    if (!/^\/off-plan\/?$/i.test(location.pathname)) return;
+    if (!/^\/off-plan(?:\/overseas\/kenya)?\/?$/i.test(location.pathname)) return;
     const params = new URLSearchParams(location.search);
     const q = clean(params.get('q') || params.get('query') || params.get('location') || params.get('area'));
     const area = clean(params.get('area'));
@@ -659,12 +774,17 @@
 
   function unitTable(project) {
     if (!(project.unit_types || []).length) return `<p class="text-sm text-gray-500">${escapeHtml(offPlanText('unitVerifying'))}</p>`;
-    return `<div class="overflow-x-auto"><table class="off-plan-unit-table"><thead><tr><th>${escapeHtml(offPlanText('homeType'))}</th><th>${escapeHtml(offPlanText('bedrooms'))}</th><th>${escapeHtml(offPlanText('size'))}</th><th>${escapeHtml(offPlanText('guidePrice'))}</th><th></th></tr></thead><tbody>${project.unit_types.map((unit, index) => `<tr><td class="font-black text-gray-950">${escapeHtml(localizedUnitLabel(unit))}</td><td>${escapeHtml(unit.bedrooms ?? '—')}</td><td>${unit.size_sqm ? `${escapeHtml(unit.size_sqm)} m²` : escapeHtml(offPlanText('toConfirm'))}</td><td><strong class="block">${escapeHtml(formatUgx(unit.price_ugx))}</strong>${unit.price_original ? `<span class="block mt-1 text-xs text-gray-500">${escapeHtml(formatMoney(unit.price_original, unit.price_original_currency || 'USD'))}</span>` : ''}</td><td><button type="button" onclick="selectOffPlanUnit(${index})" class="rounded-lg border border-green-200 text-green-800 px-3 py-2 text-xs font-black">${escapeHtml(offPlanText('calculate'))}</button></td></tr>`).join('')}</tbody></table></div>`;
+    return `<div class="overflow-x-auto"><table class="off-plan-unit-table"><thead><tr><th>${escapeHtml(offPlanText('homeType'))}</th><th>${escapeHtml(offPlanText('bedrooms'))}</th><th>${escapeHtml(offPlanText('size'))}</th><th>${escapeHtml(offPlanText('guidePrice'))}</th><th></th></tr></thead><tbody>${project.unit_types.map((unit, index) => {
+      const overseas = project.country_code === 'KE';
+      const primary = overseas ? formatMoney(unit.price_original, unit.price_original_currency || project.original_currency) : formatUgx(unit.price_ugx);
+      const secondary = overseas && unit.price_ugx ? `${formatUgx(unit.price_ugx)} · ${overseasText('indicativeFx')}` : (!overseas && unit.price_original ? formatMoney(unit.price_original, unit.price_original_currency || 'USD') : '');
+      return `<tr><td class="font-black text-gray-950">${escapeHtml(localizedUnitLabel(unit))}</td><td>${escapeHtml(unit.bedrooms ?? '—')}</td><td>${unit.size_sqm ? `${escapeHtml(unit.size_sqm)} m²` : escapeHtml(offPlanText('toConfirm'))}</td><td><strong class="block">${escapeHtml(primary)}</strong>${secondary ? `<span class="block mt-1 text-xs text-gray-500">${escapeHtml(secondary)}</span>` : ''}</td><td><button type="button" onclick="selectOffPlanUnit(${index})" class="rounded-lg border border-green-200 text-green-800 px-3 py-2 text-xs font-black">${escapeHtml(offPlanText('calculate'))}</button></td></tr>`;
+    }).join('')}</tbody></table></div>`;
   }
 
   function paymentPlanMarkup(project) {
     const steps = project.payment_plan || [];
-    const cards = steps.length ? steps.map((item, index) => `<div class="rounded-2xl ${index === 0 ? 'bg-green-800 text-white' : 'bg-green-50 text-green-950'} p-4"><span class="text-xs font-black uppercase tracking-wide opacity-70">${escapeHtml(offPlanText('step', { count: index + 1 }))}</span><strong class="block mt-1">${escapeHtml(localizedPaymentLabel(item))}</strong><span class="block text-sm mt-1">${item.percent != null ? `${escapeHtml(item.percent)}%` : item.amount_ugx ? formatUgx(item.amount_ugx) : item.months ? offPlanText('monthlyInstalments', { count: item.months }) : escapeHtml(item.due || offPlanText('termsVerify'))}</span></div>`).join('') : `<p class="text-sm text-gray-500">${escapeHtml(offPlanText('milestonesVerifying'))}</p>`;
+    const cards = steps.length ? steps.map((item, index) => `<div class="rounded-2xl ${index === 0 ? 'bg-green-800 text-white' : 'bg-green-50 text-green-950'} p-4"><span class="text-xs font-black uppercase tracking-wide opacity-70">${escapeHtml(offPlanText('step', { count: index + 1 }))}</span><strong class="block mt-1">${escapeHtml(localizedPaymentLabel(item))}</strong><span class="block text-sm mt-1">${item.percent != null ? `${escapeHtml(item.percent)}%` : item.amount_original ? formatMoney(item.amount_original, item.currency || project.original_currency) : item.amount_ugx ? formatUgx(item.amount_ugx) : item.months ? offPlanText('monthlyInstalments', { count: item.months }) : escapeHtml(item.due || offPlanText('termsVerify'))}</span></div>`).join('') : `<p class="text-sm text-gray-500">${escapeHtml(offPlanText('milestonesVerifying'))}</p>`;
     return `<div class="off-plan-payment-grid grid gap-3">${cards}<button type="button" onclick="openOffPlanCustomPaymentBuilder()" class="off-plan-build-step rounded-2xl border-2 border-dashed border-green-300 bg-white p-4 text-left"><span class="text-xs font-black uppercase tracking-wide text-green-700">${escapeHtml(offPlanText('step', { count: steps.length + 1 }))}</span><strong class="block mt-1 text-gray-950">${escapeHtml(offPlanText('buildYourOwn'))}</strong><span class="block text-sm mt-1 text-gray-500">${escapeHtml(offPlanText('buildSchedule'))}</span></button></div>`;
   }
 
@@ -679,6 +799,9 @@
   }
 
   function agentCardMarkup(project) {
+    if (project.extra_fields?.contact_mode === 'makaug_managed') {
+      return `<section class="off-plan-panel"><p class="text-xs font-black uppercase tracking-wide text-green-700">${escapeHtml(overseasText('managedBy'))}</p><div class="mt-3 flex flex-col sm:flex-row sm:items-center justify-between gap-4"><div class="flex items-center gap-4"><span class="h-20 w-20 rounded-2xl bg-green-700 text-white grid place-items-center text-3xl font-black">M</span><div><strong class="block text-lg text-gray-950">MakaUG overseas team</strong><span class="block text-sm text-gray-500">${escapeHtml(overseasText('sourceNote'))}</span></div></div><button type="button" onclick="openOffPlanContactModal('${escapeHtml(project.id)}','project_interest')" class="rounded-xl bg-green-700 text-white px-4 py-2.5 text-sm font-black">${escapeHtml(overseasText('contactMakaug'))}</button></div></section>`;
+    }
     const sourceName = clean(project.source_agent_name || project.source_display_name) || offPlanText('projectTeam');
     const sourceId = clean(project.source_agent_profile_id || project.source_agent_id);
     if (!sourceId) return '';
@@ -697,35 +820,62 @@
     const depositOptions = Array.from(new Set([0, 5, 10, 15, 20, 25, 30, 40, 50, depositValue])).sort((a, b) => a - b);
     const monthsValue = number(project.payment_plan_months) || 12;
     const monthOptions = Array.from(new Set([6, 12, 15, 18, 24, 36, 40, 48, 60, monthsValue])).sort((a, b) => a - b);
-    const currencyOptions = Array.from(new Set(['UGX', originalCurrency, 'GBP', 'EUR'].filter(Boolean)));
-    return `<div id="off-plan-custom-payment-builder" class="mt-6 rounded-2xl border border-green-100 bg-[#f4faf5] p-5"><h3 class="font-black text-gray-950">${escapeHtml(offPlanText('buildSchedule'))}</h3><p class="mt-1 text-sm text-gray-600">${escapeHtml(offPlanExperienceText('customPayment'))}</p><div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-4">${units.length ? `<label class="text-xs font-bold text-gray-700">${escapeHtml(offPlanExperienceText('chooseUnit'))}<select id="off-plan-calc-unit" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 text-sm" onchange="selectOffPlanUnit(this.value)">${units.map((unit, index) => `<option value="${index}">${escapeHtml(localizedUnitLabel(unit))}</option>`).join('')}</select></label>` : ''}<label class="text-xs font-bold text-gray-700">${escapeHtml(offPlanText('currency'))}<select id="off-plan-calc-currency" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 text-sm" onchange="changeOffPlanCalculatorCurrency(this.value)">${currencyOptions.map((currency) => `<option value="${escapeHtml(currency)}">${escapeHtml(currency)}</option>`).join('')}</select></label><label class="text-xs font-bold text-gray-700">${escapeHtml(offPlanText('homePrice'))}<input id="off-plan-calc-price" type="number" min="0" value="${escapeHtml(firstPrice)}" data-ugx-value="${escapeHtml(firstPrice)}" data-original-value="${escapeHtml(sourceUnit?.price_original || '')}" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 text-sm"></label><label class="text-xs font-bold text-gray-700">${escapeHtml(offPlanText('upfrontDeposit'))}<select id="off-plan-calc-deposit" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 text-sm">${depositOptions.map((value) => `<option value="${value}" ${value === depositValue ? 'selected' : ''}>${value}%</option>`).join('')}</select></label><label class="text-xs font-bold text-gray-700">${escapeHtml(offPlanText('reservationFee'))}<input id="off-plan-calc-reservation" type="number" min="0" value="${escapeHtml(project.reservation_fee_ugx || 0)}" data-ugx-value="${escapeHtml(project.reservation_fee_ugx || 0)}" data-original-value="${escapeHtml(project.extra_fields?.reservation_fee_original || 1500)}" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 text-sm"></label><label class="text-xs font-bold text-gray-700">${escapeHtml(offPlanText('paymentMonths'))}<select id="off-plan-calc-months" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 text-sm">${monthOptions.map((value) => `<option value="${value}" ${value === monthsValue ? 'selected' : ''}>${escapeHtml(offPlanDynamicText('upToMonths', { count: value }))}</option>`).join('')}</select></label></div><button type="button" onclick="calculateOffPlanPayments()" class="mt-4 rounded-xl bg-green-700 text-white px-5 py-3 font-black">${escapeHtml(offPlanText('calculateDates'))}</button><div id="off-plan-calculator-result" class="mt-4"></div></div><div class="mt-5 rounded-2xl border border-emerald-100 bg-white overflow-hidden"><button type="button" onclick="toggleOffPlanMortgage()" class="w-full flex items-center justify-between gap-3 px-5 py-4 text-left text-sm font-black text-green-800" aria-controls="off-plan-mortgage-panel" aria-expanded="false" id="off-plan-mortgage-toggle"><span><i class="fas fa-house-circle-check mr-2"></i>${escapeHtml(offPlanExperienceText('mortgageTitle'))}</span><i class="fas fa-chevron-down"></i></button><div id="off-plan-mortgage-panel" class="hidden border-t border-emerald-100 p-5"><p class="text-sm text-gray-600">${escapeHtml(offPlanText('mortgageIntro'))}</p><div class="off-plan-mortgage-policy mt-3"><strong>${escapeHtml(offPlanExperienceText('mortgageTitle'))}</strong><p>${escapeHtml(offPlanExperienceText('mortgagePolicy'))}</p></div><div class="off-plan-mortgage-controls mt-4"><label>${escapeHtml(offPlanExperienceText('loanAmount'))}<input id="off-plan-mortgage-amount" type="number" min="1" value="${escapeHtml(firstPrice)}"></label><label>${escapeHtml(offPlanExperienceText('loanTerm'))}<select id="off-plan-mortgage-years">${[5, 10, 15, 20, 25].map((years) => `<option value="${years}" ${years === 20 ? 'selected' : ''}>${escapeHtml(offPlanText('years', { count: years }))}</option>`).join('')}</select></label><button type="button" onclick="recalculateOffPlanMortgages()">${escapeHtml(offPlanExperienceText('recalculateMortgage'))}</button></div><p class="mt-3 text-xs leading-5 text-gray-500">${escapeHtml(offPlanExperienceText('mortgageEstimateNote'))}</p><div id="off-plan-mortgage-results" class="mt-4 grid md:grid-cols-3 gap-3"></div></div></div>`;
+    const overseas = project.country_code === 'KE';
+    const currencyOptions = Array.from(new Set((overseas ? [originalCurrency, 'UGX'] : ['UGX', originalCurrency, 'GBP', 'EUR']).filter(Boolean)));
+    const initialPrice = overseas ? (sourceUnit?.price_original || '') : firstPrice;
+    const initialReservation = overseas ? (project.extra_fields?.reservation_fee_original || 0) : (project.reservation_fee_ugx || 0);
+    const financePanel = overseas ? `<div class="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-5"><h3 class="font-black text-amber-950"><i class="fas fa-building-columns mr-2"></i>${escapeHtml(overseasText('financeTitle'))}</h3><p class="mt-2 text-sm leading-6 text-amber-950">${escapeHtml(overseasText('financeBody'))}</p><button type="button" onclick="openOffPlanContactModal('${escapeHtml(project.id)}','project_interest')" class="mt-4 rounded-xl bg-green-700 text-white px-4 py-2.5 text-sm font-black">${escapeHtml(overseasText('contactMakaug'))}</button></div>` : `<div class="mt-5 rounded-2xl border border-emerald-100 bg-white overflow-hidden"><button type="button" onclick="toggleOffPlanMortgage()" class="w-full flex items-center justify-between gap-3 px-5 py-4 text-left text-sm font-black text-green-800" aria-controls="off-plan-mortgage-panel" aria-expanded="false" id="off-plan-mortgage-toggle"><span><i class="fas fa-house-circle-check mr-2"></i>${escapeHtml(offPlanExperienceText('mortgageTitle'))}</span><i class="fas fa-chevron-down"></i></button><div id="off-plan-mortgage-panel" class="hidden border-t border-emerald-100 p-5"><p class="text-sm text-gray-600">${escapeHtml(offPlanText('mortgageIntro'))}</p><div class="off-plan-mortgage-policy mt-3"><strong>${escapeHtml(offPlanExperienceText('mortgageTitle'))}</strong><p>${escapeHtml(offPlanExperienceText('mortgagePolicy'))}</p></div><div class="off-plan-mortgage-controls mt-4"><label>${escapeHtml(offPlanExperienceText('loanAmount'))}<input id="off-plan-mortgage-amount" type="number" min="1" value="${escapeHtml(firstPrice)}"></label><label>${escapeHtml(offPlanExperienceText('loanTerm'))}<select id="off-plan-mortgage-years">${[5, 10, 15, 20, 25].map((years) => `<option value="${years}" ${years === 20 ? 'selected' : ''}>${escapeHtml(offPlanText('years', { count: years }))}</option>`).join('')}</select></label><button type="button" onclick="recalculateOffPlanMortgages()">${escapeHtml(offPlanExperienceText('recalculateMortgage'))}</button></div><p class="mt-3 text-xs leading-5 text-gray-500">${escapeHtml(offPlanExperienceText('mortgageEstimateNote'))}</p><div id="off-plan-mortgage-results" class="mt-4 grid md:grid-cols-3 gap-3"></div></div></div>`;
+    return `<div id="off-plan-custom-payment-builder" class="mt-6 rounded-2xl border border-green-100 bg-[#f4faf5] p-5"><h3 class="font-black text-gray-950">${escapeHtml(offPlanText('buildSchedule'))}</h3><p class="mt-1 text-sm text-gray-600">${escapeHtml(offPlanExperienceText('customPayment'))}</p><div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-4">${units.length ? `<label class="text-xs font-bold text-gray-700">${escapeHtml(offPlanExperienceText('chooseUnit'))}<select id="off-plan-calc-unit" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 text-sm" onchange="selectOffPlanUnit(this.value)">${units.map((unit, index) => `<option value="${index}">${escapeHtml(localizedUnitLabel(unit))}</option>`).join('')}</select></label>` : ''}<label class="text-xs font-bold text-gray-700">${escapeHtml(offPlanText('currency'))}<select id="off-plan-calc-currency" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 text-sm" onchange="changeOffPlanCalculatorCurrency(this.value)">${currencyOptions.map((currency) => `<option value="${escapeHtml(currency)}">${escapeHtml(currency)}</option>`).join('')}</select></label><label class="text-xs font-bold text-gray-700">${escapeHtml(offPlanText('homePrice'))}<input id="off-plan-calc-price" type="number" min="0" value="${escapeHtml(initialPrice)}" data-ugx-value="${escapeHtml(firstPrice)}" data-original-value="${escapeHtml(sourceUnit?.price_original || '')}" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 text-sm"></label><label class="text-xs font-bold text-gray-700">${escapeHtml(offPlanText('upfrontDeposit'))}<select id="off-plan-calc-deposit" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 text-sm">${depositOptions.map((value) => `<option value="${value}" ${value === depositValue ? 'selected' : ''}>${value}%</option>`).join('')}</select></label><label class="text-xs font-bold text-gray-700">${escapeHtml(offPlanText('reservationFee'))}<input id="off-plan-calc-reservation" type="number" min="0" value="${escapeHtml(initialReservation)}" data-ugx-value="${escapeHtml(project.reservation_fee_ugx || 0)}" data-original-value="${escapeHtml(project.extra_fields?.reservation_fee_original || 0)}" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 text-sm"></label><label class="text-xs font-bold text-gray-700">${escapeHtml(offPlanText('paymentMonths'))}<select id="off-plan-calc-months" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 text-sm">${monthOptions.map((value) => `<option value="${value}" ${value === monthsValue ? 'selected' : ''}>${escapeHtml(offPlanDynamicText('upToMonths', { count: value }))}</option>`).join('')}</select></label></div><button type="button" onclick="calculateOffPlanPayments()" class="mt-4 rounded-xl bg-green-700 text-white px-5 py-3 font-black">${escapeHtml(offPlanText('calculateDates'))}</button><div id="off-plan-calculator-result" class="mt-4"></div></div>${financePanel}`;
+  }
+
+  function overseasHighlightsMarkup(project) {
+    const amenities = Array.isArray(project.amenities) ? project.amenities : [];
+    const projections = Array.isArray(project.extra_fields?.roi_projections) ? project.extra_fields.roi_projections : [];
+    if (!amenities.length && !projections.length) return '';
+    const amenitySection = amenities.length ? `<div><h3 class="text-base font-black text-gray-950">${escapeHtml(overseasDetailText('highlights'))}</h3><p class="mt-1 text-sm leading-6 text-gray-600">${escapeHtml(overseasDetailText('highlightsBody'))}</p><ul class="off-plan-amenity-grid mt-4">${amenities.map((amenity, index) => `<li><i class="fas fa-circle-check" aria-hidden="true"></i><span>${escapeHtml(localizedAmenity(amenity, index))}</span></li>`).join('')}</ul></div>` : '';
+    const projectionSection = projections.length ? `<div class="mt-7"><h3 class="text-base font-black text-gray-950">${escapeHtml(overseasDetailText('roi'))}</h3><div class="off-plan-roi-grid mt-3">${projections.map((projection) => { const unit = (project.unit_types || []).find((item) => item.key === projection.unit_key) || {}; return `<div><strong>${escapeHtml(localizedUnitLabel(unit))}</strong><span>${escapeHtml(overseasDetailText('furnished'))}: ${escapeHtml(projection.furnished_percent)}%</span><span>${escapeHtml(overseasDetailText('unfurnished'))}: ${escapeHtml(projection.unfurnished_percent)}%</span></div>`; }).join('')}</div><p class="mt-3 text-xs leading-5 text-red-800">${escapeHtml(overseasDetailText('roiBody'))}</p></div>` : '';
+    return `<section class="off-plan-panel">${amenitySection}${projectionSection}</section>`;
+  }
+
+  function officialBuyerGuidanceMarkup(project) {
+    const guidance = Array.isArray(project.extra_fields?.official_buyer_guidance) ? project.extra_fields.official_buyer_guidance : [];
+    if (!guidance.length) return '';
+    const links = guidance.filter((item) => /^https:\/\//i.test(clean(item.url))).map((item) => `<a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer"><span>${escapeHtml(item.label || overseasDetailText('openOfficial'))}</span><i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i></a>`).join('');
+    return `<div class="mt-5 rounded-xl border border-blue-200 bg-blue-50 p-4"><strong class="text-blue-950">${escapeHtml(overseasDetailText('buyerChecks'))}</strong><p class="mt-1 text-sm leading-6 text-blue-900">${escapeHtml(overseasDetailText('buyerChecksBody'))}</p><div class="off-plan-guidance-links mt-3">${links}</div></div>`;
   }
 
   function detailMarkup(project) {
     const units = project.unit_types || [];
     const firstPrice = units.map((unit) => number(unit.price_ugx)).find((value) => value && value > 0) || project.launch_price_ugx || '';
+    const primaryPrice = primaryProjectPrice(project);
+    const overseas = project.country_code === 'KE';
     const fullyVerified = project.verification_status === 'verified';
-    const sourceName = clean(project.source_agent_name || project.source_display_name) || offPlanText('projectTeam');
+    const sourceName = overseas ? 'MakaUG' : (clean(project.source_agent_name || project.source_display_name) || offPlanText('projectTeam'));
     const soldLabel = project.units_sold == null || project.units_total == null ? offPlanText('toConfirm') : `${project.units_sold} / ${project.units_total}`;
-    const description = project.slug === 'entebbe-victoria-palms' ? offPlanText('previewDescription') : (project.description || offPlanText('toConfirm'));
-    const areaOverview = offPlanLanguage() === 'en' && clean(project.extra_fields?.area_overview)
+    const description = overseas ? localizedProjectField(project, 'description', project.description) : (project.slug === 'entebbe-victoria-palms' ? offPlanText('previewDescription') : (project.description || offPlanText('toConfirm')));
+    const areaOverview = overseas ? localizedProjectField(project, 'area_overview', project.extra_fields?.area_overview) : (offPlanLanguage() === 'en' && clean(project.extra_fields?.area_overview)
       ? clean(project.extra_fields.area_overview)
-      : `${project.slug === 'entebbe-victoria-palms' ? offPlanDynamicText('areaOverview') : offPlanText('areaOverviewFallback')} ${offPlanExperienceText('areaServices')}`;
+      : `${project.slug === 'entebbe-victoria-palms' ? offPlanDynamicText('areaOverview') : offPlanText('areaOverviewFallback')} ${offPlanExperienceText('areaServices')}`);
+    const concierge = overseas ? `<section class="off-plan-panel"><p class="text-xs font-black uppercase tracking-wide text-green-700">${escapeHtml(overseasText('managedBy'))}</p><h2 class="mt-1 text-xl font-black text-gray-950">${escapeHtml(overseasText('conciergeTitle'))}</h2><p class="mt-2 text-sm leading-6 text-gray-600">${escapeHtml(overseasText('conciergeBody'))}</p><div class="off-plan-concierge-steps mt-5">${(overseasText('steps') || []).map((step, index) => `<div class="off-plan-concierge-step"><span class="text-xs font-black text-red-600">${String(index + 1).padStart(2, '0')}</span><strong class="block mt-1 text-sm text-gray-950">${escapeHtml(step)}</strong></div>`).join('')}</div><div class="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4"><strong class="text-amber-950">${escapeHtml(overseasText('financeTitle'))}</strong><p class="mt-1 text-sm leading-6 text-amber-900">${escapeHtml(overseasText('financeBody'))}</p></div>${officialBuyerGuidanceMarkup(project)}</section>` : '';
+    const floorPlans = (project.floor_plans || []).length ? `<section class="off-plan-panel"><h2 class="text-xl font-black text-gray-950">${escapeHtml(overseasText('floorPlans'))}</h2><div class="off-plan-floor-plan-grid mt-4">${project.floor_plans.map((plan) => `<figure><img src="${escapeHtml(plan.url)}" alt="${escapeHtml(plan.caption || overseasText('floorPlans'))}" loading="lazy"><figcaption>${escapeHtml(plan.caption || overseasText('floorPlans'))}</figcaption></figure>`).join('')}</div></section>` : '';
     return `${galleryMarkup(project)}
       <div class="off-plan-detail-grid mt-7">
         <main class="min-w-0 space-y-6">
           <div><div class="flex flex-wrap gap-2"><span class="off-plan-pill ${fullyVerified ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-900'}"><i class="fas fa-circle-check"></i>${escapeHtml(fullyVerified ? offPlanText('verifiedProject') : offPlanText('sourceDetails'))}</span><span class="off-plan-pill bg-amber-100 text-amber-900">${escapeHtml(localizedProjectType(project.project_type || 'house'))}</span></div><h1 class="mt-3 text-3xl md:text-5xl font-black text-gray-950 leading-tight">${escapeHtml(project.name)}</h1><p class="mt-2 text-gray-500"><i class="fas fa-location-dot mr-1 text-red-600"></i>${escapeHtml(projectLocation(project))}${project.developer_name ? ` · ${escapeHtml(project.developer_name)}` : ''}</p></div>
           <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3"><div class="off-plan-stat"><span class="text-xs text-gray-500">${escapeHtml(offPlanText('expectedCompletion'))}</span><strong class="block mt-1">${escapeHtml(formatDate(project.completion_date))}</strong></div><div class="off-plan-stat"><span class="text-xs text-gray-500">${escapeHtml(offPlanText('construction'))}</span><strong class="block mt-1">${escapeHtml(number(project.construction_progress) == null ? offPlanText('toConfirm') : offPlanText('percentComplete', { count: project.construction_progress }))}</strong></div><div class="off-plan-stat"><span class="text-xs text-gray-500">${escapeHtml(offPlanText('homesSold'))}</span><strong class="block mt-1">${escapeHtml(soldLabel)}</strong></div><div class="off-plan-stat"><span class="text-xs text-gray-500">${escapeHtml(offPlanText('homesRemaining'))}</span><strong class="block mt-1">${escapeHtml(metricValue(project.units_available))}</strong></div></div>
           <section class="off-plan-panel"><h2 class="text-xl font-black text-gray-950">${escapeHtml(offPlanText('aboutDevelopment'))}</h2><p class="mt-3 text-sm md:text-base text-gray-700 leading-7 whitespace-pre-line">${escapeHtml(description)}</p></section>
+          ${overseas ? overseasHighlightsMarkup(project) : ''}
           ${agentCardMarkup(project)}
+          ${concierge}
           <section class="off-plan-panel"><div class="flex items-end justify-between gap-3"><div><p class="text-xs font-black uppercase tracking-wide text-green-700">${escapeHtml(offPlanText('chooseHome'))}</p><h2 class="mt-1 text-xl font-black text-gray-950">${escapeHtml(offPlanText('unitTypesPrices'))}</h2></div><span class="text-xs text-gray-500">${escapeHtml(offPlanText('guidePrices'))}</span></div><div class="mt-4">${unitTable(project)}</div></section>
+          ${floorPlans}
           <section class="off-plan-panel"><h2 class="text-xl font-black text-gray-950">${escapeHtml(offPlanText('projectProgress'))}</h2><div class="grid sm:grid-cols-2 gap-6 mt-5">${progressMarkup(offPlanText('constructionCompleted'), project.construction_progress)}${progressMarkup(offPlanText('homesSold'), project.sales_progress)}</div></section>
           <section class="off-plan-panel"><h2 class="text-xl font-black text-gray-950">${escapeHtml(offPlanText('paymentPlan'))}</h2><div class="mt-4">${paymentPlanMarkup(project)}</div>${calculatorMarkup(project, firstPrice)}</section>
           <section class="off-plan-panel"><h2 class="text-xl font-black text-gray-950">${escapeHtml(offPlanText('locationArea'))}</h2><p class="mt-2 text-sm text-gray-600">${escapeHtml(projectLocation(project))}. ${escapeHtml(project.extra_fields?.map_precision === 'area_centroid' ? offPlanText('widerArea') : offPlanText('confirmTravel'))}</p><p class="mt-3 text-sm leading-6 text-gray-700">${escapeHtml(areaOverview)}</p><div class="mt-4">${mapMarkup(project)}</div><div class="mt-6"><h3 class="font-black text-gray-950">${escapeHtml(offPlanExperienceText('familyServices'))}</h3><p class="mt-1 text-xs text-gray-500">${escapeHtml(offPlanText('nearbyLive'))}</p><div id="off-plan-nearby-places" class="mt-4 space-y-5"></div></div></section>
           ${(project.videos || []).length ? `<section class="off-plan-panel"><h2 class="text-xl font-black text-gray-950">${escapeHtml(offPlanText('projectVideo'))}</h2><div class="mt-4 aspect-video rounded-2xl overflow-hidden bg-gray-950"><video controls preload="metadata" class="w-full h-full" src="${escapeHtml(project.videos[0].url)}"></video></div></section>` : ''}
           <section class="off-plan-risk-warning"><strong><i class="fas fa-triangle-exclamation mr-1"></i>${escapeHtml(offPlanText('disclaimerTitle'))}</strong><p class="mt-2">${escapeHtml(offPlanText('disclaimerBody'))}</p></section>
         </main>
-        <aside class="off-plan-sticky-enquiry space-y-4"><div class="off-plan-panel shadow-[0_20px_60px_rgba(18,75,39,.12)]"><span class="text-xs text-gray-500">${escapeHtml(offPlanText('pricesFrom'))}</span><strong class="block text-2xl text-gray-950 mt-1">${escapeHtml(formatUgx(firstPrice))}</strong><p class="text-xs text-gray-500 mt-2">${escapeHtml(offPlanText('confirmPrice'))}</p><button type="button" onclick="openOffPlanContactModal('${escapeHtml(project.id)}','project_interest')" class="mt-5 w-full rounded-xl bg-green-700 hover:bg-green-600 text-white px-4 py-3 font-black"><i class="fab fa-whatsapp mr-2"></i>${escapeHtml(offPlanText('enquireThis', { name: sourceName }))}</button><a href="/api/off-plan/${encodeURIComponent(project.slug)}/brochure.pdf?lang=${encodeURIComponent(offPlanLanguage())}" class="mt-2 flex items-center justify-center gap-2 w-full rounded-xl border border-green-200 text-green-800 px-4 py-3 font-black" download><i class="fas fa-file-pdf"></i>${escapeHtml(offPlanText('downloadBrochure'))}</a></div><div class="off-plan-panel"><p class="text-xs font-black uppercase tracking-wide text-gray-500">${escapeHtml(offPlanText('shareProject'))}</p><div class="off-plan-share-row mt-3"><button onclick="shareOffPlan('native')" class="off-plan-share-button" aria-label="${escapeHtml(offPlanText('shareProject'))}"><i class="fas fa-share-nodes"></i><span>${escapeHtml(offPlanDynamicText('share'))}</span></button><button onclick="shareOffPlan('whatsapp')" class="off-plan-share-button is-whatsapp" aria-label="WhatsApp"><i class="fab fa-whatsapp"></i><span>WhatsApp</span></button><button onclick="shareOffPlan('x')" class="off-plan-share-button is-x" aria-label="Share on X"><span aria-hidden="true">𝕏</span></button></div></div></aside>
+        <aside class="off-plan-sticky-enquiry space-y-4"><div class="off-plan-panel shadow-[0_20px_60px_rgba(18,75,39,.12)]"><span class="text-xs text-gray-500">${escapeHtml(offPlanText('pricesFrom'))}</span><strong class="block text-2xl text-gray-950 mt-1">${escapeHtml(formatMoney(primaryPrice.amount, primaryPrice.currency))}</strong>${overseas && firstPrice ? `<span class="block mt-1 text-xs text-gray-500">${escapeHtml(formatUgx(firstPrice))} · ${escapeHtml(overseasText('indicativeFx'))}</span>` : ''}<p class="text-xs text-gray-500 mt-2">${escapeHtml(offPlanText('confirmPrice'))}</p><button type="button" onclick="openOffPlanContactModal('${escapeHtml(project.id)}','project_interest')" class="mt-5 w-full rounded-xl bg-green-700 hover:bg-green-600 text-white px-4 py-3 font-black"><i class="fab fa-whatsapp mr-2"></i>${escapeHtml(overseas ? overseasText('contactMakaug') : offPlanText('enquireThis', { name: sourceName }))}</button><a href="/api/off-plan/${encodeURIComponent(project.slug)}/brochure.pdf?lang=${encodeURIComponent(offPlanLanguage())}${overseas ? '&country=KE' : ''}" class="mt-2 flex items-center justify-center gap-2 w-full rounded-xl border border-green-200 text-green-800 px-4 py-3 font-black" download><i class="fas fa-file-pdf"></i>${escapeHtml(offPlanText('downloadBrochure'))}</a></div><div class="off-plan-panel"><p class="text-xs font-black uppercase tracking-wide text-gray-500">${escapeHtml(offPlanText('shareProject'))}</p><div class="off-plan-share-row mt-3"><button onclick="shareOffPlan('native')" class="off-plan-share-button" aria-label="${escapeHtml(offPlanText('shareProject'))}"><i class="fas fa-share-nodes"></i><span>${escapeHtml(offPlanDynamicText('share'))}</span></button><button onclick="shareOffPlan('whatsapp')" class="off-plan-share-button is-whatsapp" aria-label="WhatsApp"><i class="fab fa-whatsapp"></i><span>WhatsApp</span></button><button onclick="shareOffPlan('x')" class="off-plan-share-button is-x" aria-label="Share on X"><span aria-hidden="true">𝕏</span></button></div></div></aside>
       </div>`;
   }
 
@@ -734,6 +884,7 @@
     { key: 'healthcare', types: ['hospital'], icon: 'fa-hospital' },
     { key: 'universities', types: ['university'], icon: 'fa-graduation-cap' },
     { key: 'shopping', types: ['shopping_mall', 'supermarket'], icon: 'fa-basket-shopping' },
+    { key: 'dining', types: ['restaurant'], icon: 'fa-utensils' },
     { key: 'recreation', types: ['park', 'tourist_attraction'], icon: 'fa-tree' },
     { key: 'transport', types: ['airport'], icon: 'fa-plane' }
   ];
@@ -744,6 +895,7 @@
     if (/hospital|clinic|health|medical/.test(source)) return 'healthcare';
     if (/university|college|tertiary/.test(source)) return 'universities';
     if (/market|shop|mall|supermarket|retail/.test(source)) return 'shopping';
+    if (/dining|restaurant|food|cafe/.test(source)) return 'dining';
     if (/park|recreation|tourist|garden|wildlife|family/.test(source)) return 'recreation';
     if (/airport|transport|bus|ferry/.test(source)) return 'transport';
     return 'recreation';
@@ -796,7 +948,8 @@
       const map = new window.google.maps.Map(container, { center: position, zoom: project.extra_fields?.map_precision === 'area_centroid' ? 13 : 16, mapTypeControl: true, streetViewControl: true, fullscreenControl: true, clickableIcons: true, scrollwheel: false });
       const marker = new window.google.maps.Marker({ map, position, title: project.name, icon: 'https://maps.google.com/mapfiles/ms/icons/red-dot.png' });
       const sourceId = clean(project.source_agent_profile_id || project.source_agent_id);
-      const popupContent = `<div class="off-plan-map-popup" data-map-marker-popup="listing"><span class="off-plan-map-popup-label">${escapeHtml(offPlanExperienceText('offPlanProjectLabel'))}</span><a class="off-plan-map-popup-title" href="/off-plan/${encodeURIComponent(project.slug)}">${escapeHtml(project.name)}</a><span>${escapeHtml(projectLocation(project))}</span><strong>${escapeHtml(formatUgx(project.launch_price_ugx))}</strong>${sourceId ? `<a class="off-plan-map-popup-contact" href="/agents/${encodeURIComponent(sourceId)}">${escapeHtml(project.source_agent_name || project.source_display_name || offPlanText('projectContact'))}</a>` : ''}<a class="off-plan-map-popup-button" href="/off-plan/${encodeURIComponent(project.slug)}">${escapeHtml(offPlanExperienceText('viewProject'))}</a></div>`;
+      const mapPrice = primaryProjectPrice(project);
+      const popupContent = `<div class="off-plan-map-popup" data-map-marker-popup="listing"><span class="off-plan-map-popup-label">${escapeHtml(offPlanExperienceText('offPlanProjectLabel'))}</span><a class="off-plan-map-popup-title" href="${escapeHtml(projectPublicPath(project))}">${escapeHtml(project.name)}</a><span>${escapeHtml(projectLocation(project))}</span><strong>${escapeHtml(formatMoney(mapPrice.amount, mapPrice.currency))}</strong>${sourceId && project.extra_fields?.contact_mode !== 'makaug_managed' ? `<a class="off-plan-map-popup-contact" href="/agents/${encodeURIComponent(sourceId)}">${escapeHtml(project.source_agent_name || project.source_display_name || offPlanText('projectContact'))}</a>` : `<span class="off-plan-map-popup-contact">${escapeHtml(overseasText('managedBy'))}</span>`}<a class="off-plan-map-popup-button" href="${escapeHtml(projectPublicPath(project))}">${escapeHtml(offPlanExperienceText('viewProject'))}</a></div>`;
       const info = new window.google.maps.InfoWindow({ content: popupContent });
       const openInfo = (centerMarker = false) => {
         if (centerMarker) map.panTo(marker.getPosition());
@@ -911,9 +1064,10 @@
     if (!detail || !content) return;
     if (list) list.classList.add('hidden'); detail.classList.remove('hidden');
     content.innerHTML = '<div class="off-plan-skeleton"></div>';
-    if (options.history !== false) history.pushState({ page: 'off-plan', slug }, '', `/off-plan/${encodeURIComponent(slug)}`);
+    const detailPath = state.countryCode === 'KE' ? `/off-plan/overseas/kenya/${encodeURIComponent(slug)}` : `/off-plan/${encodeURIComponent(slug)}`;
+    if (options.history !== false) history.pushState({ page: 'off-plan', slug, country: state.countryCode }, '', detailPath);
     try {
-      const data = await request(`/api/off-plan/${encodeURIComponent(slug)}`);
+      const data = await request(`/api/off-plan/${encodeURIComponent(slug)}${publicApiSuffix()}`);
       state.activeProject = data.development;
       track('off_plan_project_view', { slug: state.activeProject.slug, project_id: state.activeProject.id });
       content.innerHTML = detailMarkup(state.activeProject);
@@ -929,8 +1083,9 @@
     document.getElementById('off-plan-list-view')?.classList.remove('hidden');
     document.getElementById('off-plan-detail-view')?.classList.add('hidden');
     state.activeProject = null;
-    document.title = 'Off Plan Property in Uganda | makaug.com';
-    if (options.history !== false) history.pushState({ page: 'off-plan' }, '', '/off-plan');
+    const listPath = state.countryCode === 'KE' ? '/off-plan/overseas/kenya' : '/off-plan';
+    document.title = state.countryCode === 'KE' ? `${overseasText('kenyaTitle')} | makaug.com` : 'Off Plan Property in Uganda | makaug.com';
+    if (options.history !== false) history.pushState({ page: 'off-plan', country: state.countryCode }, '', listPath);
     window.scrollTo({ top: 0, behavior: 'auto' });
     if (state.loaded) renderList();
     else if (!state.loading) loadProjects();
@@ -1021,7 +1176,7 @@
     if (status) status.className = 'hidden'; if (button) button.disabled = true;
     try {
       const suppliedDetails = clean(document.getElementById('off-plan-contact-details')?.value);
-      const data = await request('/api/off-plan/enquiries', { method: 'POST', body: { development_id: state.contactDevelopmentId, enquiry_type: state.contactMode, preferred_contact_channel: channel, name: clean(document.getElementById('off-plan-contact-name')?.value), phone: clean(document.getElementById('off-plan-contact-phone')?.value), email: clean(document.getElementById('off-plan-contact-email')?.value), requested_callback_at: channel === 'call' ? clean(document.getElementById('off-plan-contact-callback')?.value) : null, message: state.contactMode === 'project_interest' ? `I would like to enquire about ${state.activeProject?.name || 'this off-plan project'}.` : `I would like to enquire about listing a new off-plan project.${suppliedDetails ? ` Project details supplied: ${suppliedDetails}` : ''}`, source_path: location.pathname, metadata: { truth_confirmed: state.contactMode === 'listing_request' ? Boolean(document.getElementById('off-plan-contact-truth')?.checked) : null, supplied_project_details: suppliedDetails || null, project_contact_name: state.activeProject?.source_agent_name || null } } });
+      const data = await request('/api/off-plan/enquiries', { method: 'POST', body: { development_id: state.contactDevelopmentId, enquiry_type: state.contactMode, preferred_contact_channel: channel, name: clean(document.getElementById('off-plan-contact-name')?.value), phone: clean(document.getElementById('off-plan-contact-phone')?.value), email: clean(document.getElementById('off-plan-contact-email')?.value), requested_callback_at: channel === 'call' ? clean(document.getElementById('off-plan-contact-callback')?.value) : null, message: state.contactMode === 'project_interest' ? `I would like to enquire about ${state.activeProject?.name || 'this off-plan project'}.` : `I would like to enquire about listing a new off-plan project.${suppliedDetails ? ` Project details supplied: ${suppliedDetails}` : ''}`, source_path: location.pathname, metadata: { truth_confirmed: state.contactMode === 'listing_request' ? Boolean(document.getElementById('off-plan-contact-truth')?.checked) : null, supplied_project_details: suppliedDetails || null, project_contact_name: state.activeProject?.extra_fields?.contact_mode === 'makaug_managed' ? 'MakaUG overseas team' : (state.activeProject?.source_agent_name || null), country_code: state.activeProject?.country_code || state.countryCode } } });
       if (status) { status.className = 'text-sm rounded-xl p-3 bg-green-50 text-green-900'; status.textContent = data.message; }
       if (channel === 'whatsapp' && data.whatsapp_url) window.open(data.whatsapp_url, '_blank', 'noopener,noreferrer');
       track('off_plan_enquiry_submitted', { channel, mode: state.contactMode, development_id: state.contactDevelopmentId });
@@ -1032,7 +1187,7 @@
 
   function shareOffPlan(channel) {
     const project = state.activeProject; if (!project) return;
-    const url = `${location.origin}/off-plan/${project.slug}`; const text = `${project.name} — off-plan in ${projectLocation(project)} on makaug.com`;
+    const url = `${location.origin}${projectPublicPath(project)}`; const text = `${project.name} — off-plan in ${projectLocation(project)} on makaug.com`;
     track('off_plan_project_shared', { channel, project_id: project.id });
     if (channel === 'native' && navigator.share) { navigator.share({ title: project.name, text, url }).catch(() => {}); return; }
     const target = channel === 'whatsapp' ? `https://wa.me/?text=${encodeURIComponent(`${text} ${url}`)}` : `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`;
@@ -1055,12 +1210,13 @@
 
   function managementProjectCard(project, role) {
     const blockers = project.publication_blockers || [];
-    const liveControl = project.status === 'published' ? `<a href="/off-plan/${encodeURIComponent(project.slug)}" target="_blank" rel="noopener" class="rounded-lg border border-green-200 text-green-800 px-3 py-2 text-xs font-black"><i class="fas fa-up-right-from-square mr-1"></i>View live</a>` : '';
+    const liveControl = project.status === 'published' ? `<a href="${projectPublicPath(project)}" target="_blank" rel="noopener" class="rounded-lg border border-green-200 text-green-800 px-3 py-2 text-xs font-black"><i class="fas fa-up-right-from-square mr-1"></i>View live</a>` : '';
     const deleteControl = role === 'admin' && project.status === 'archived' ? `<button onclick="deleteOffPlanProject('${escapeHtml(project.id)}','${role}','${escapeHtml(project.name)}')" class="rounded-lg border border-red-300 text-red-700 px-4 py-2 text-xs font-black"><i class="fas fa-trash-can mr-1"></i>Delete</button>` : '';
-    return `<article class="off-plan-dashboard-card" data-off-plan-managed-id="${escapeHtml(project.id)}"><div class="flex flex-col lg:flex-row lg:items-start justify-between gap-4"><div class="min-w-0"><div class="flex flex-wrap gap-2"><span class="off-plan-pill ${project.status === 'published' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-900'}">${escapeHtml(project.status.replace(/_/g,' '))}</span><span class="off-plan-pill bg-gray-100 text-gray-700">${escapeHtml(project.verification_status.replace(/_/g,' '))}</span></div><h4 class="mt-2 text-lg font-black text-gray-950">${escapeHtml(project.name)}</h4><p class="text-xs text-gray-500 mt-1">${escapeHtml(projectLocation(project))} · source ${escapeHtml(project.source_display_name || 'not recorded')}</p></div><div class="flex flex-wrap gap-2">${liveControl}<button onclick="uploadOffPlanMedia('${escapeHtml(project.id)}','${role}','images')" class="rounded-lg border border-blue-200 text-blue-800 px-3 py-2 text-xs font-black"><i class="fas fa-images mr-1"></i>Images</button><button onclick="uploadOffPlanMedia('${escapeHtml(project.id)}','${role}','floor-plans')" class="rounded-lg border border-purple-200 text-purple-800 px-3 py-2 text-xs font-black"><i class="fas fa-ruler-combined mr-1"></i>Floor plan</button><button onclick="downloadOffPlanBrochure('${escapeHtml(project.id)}','${role}','${escapeHtml(project.slug)}')" class="rounded-lg border border-gray-200 px-3 py-2 text-xs font-black"><i class="fas fa-file-pdf mr-1"></i>Brochure</button><button onclick="createOffPlanWalkthroughBrief('${escapeHtml(project.id)}','${role}')" class="rounded-lg border border-purple-200 text-purple-800 px-3 py-2 text-xs font-black"><i class="fas fa-person-walking-arrow-right mr-1"></i>Walkthrough</button></div></div>
+    return `<article class="off-plan-dashboard-card" data-off-plan-managed-id="${escapeHtml(project.id)}"><div class="flex flex-col lg:flex-row lg:items-start justify-between gap-4"><div class="min-w-0"><div class="flex flex-wrap gap-2"><span class="off-plan-pill ${project.status === 'published' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-900'}">${escapeHtml(project.status.replace(/_/g,' '))}</span><span class="off-plan-pill bg-gray-100 text-gray-700">${escapeHtml(project.verification_status.replace(/_/g,' '))}</span><span class="off-plan-pill bg-blue-50 text-blue-800">${project.country_code === 'KE' ? 'Kenya · overseas' : 'Uganda'}</span></div><h4 class="mt-2 text-lg font-black text-gray-950">${escapeHtml(project.name)}</h4><p class="text-xs text-gray-500 mt-1">${escapeHtml(projectLocation(project))} · source ${escapeHtml(project.source_display_name || 'not recorded')}</p></div><div class="flex flex-wrap gap-2">${liveControl}<button onclick="uploadOffPlanMedia('${escapeHtml(project.id)}','${role}','images')" class="rounded-lg border border-blue-200 text-blue-800 px-3 py-2 text-xs font-black"><i class="fas fa-images mr-1"></i>Images</button><button onclick="uploadOffPlanMedia('${escapeHtml(project.id)}','${role}','floor-plans')" class="rounded-lg border border-purple-200 text-purple-800 px-3 py-2 text-xs font-black"><i class="fas fa-ruler-combined mr-1"></i>Floor plan</button><button onclick="downloadOffPlanBrochure('${escapeHtml(project.id)}','${role}','${escapeHtml(project.slug)}')" class="rounded-lg border border-gray-200 px-3 py-2 text-xs font-black"><i class="fas fa-file-pdf mr-1"></i>Brochure</button><button onclick="createOffPlanWalkthroughBrief('${escapeHtml(project.id)}','${role}')" class="rounded-lg border border-purple-200 text-purple-800 px-3 py-2 text-xs font-black"><i class="fas fa-person-walking-arrow-right mr-1"></i>Walkthrough</button></div></div>
       <div class="grid md:grid-cols-4 gap-3 mt-4"><label class="text-xs font-bold">Completion %<input data-op-edit="construction_progress" value="${escapeHtml(project.construction_progress ?? '')}" type="number" min="0" max="100" class="mt-1 w-full rounded-lg border px-3 py-2"></label><label class="text-xs font-bold">Units total<input data-op-edit="units_total" value="${escapeHtml(project.units_total ?? '')}" type="number" min="0" class="mt-1 w-full rounded-lg border px-3 py-2"></label><label class="text-xs font-bold">Units sold<input data-op-edit="units_sold" value="${escapeHtml(project.units_sold ?? '')}" type="number" min="0" class="mt-1 w-full rounded-lg border px-3 py-2"></label><label class="text-xs font-bold">Expected completion<input data-op-edit="completion_date" value="${escapeHtml((project.completion_date || '').slice(0,10))}" type="date" class="mt-1 w-full rounded-lg border px-3 py-2"></label></div>
       <details class="mt-4 rounded-xl border border-gray-200 p-4"><summary class="cursor-pointer text-sm font-black text-gray-900">Project facts and publication fields</summary>
         <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-3 mt-4">
+          <label class="text-xs font-bold">Market<select data-op-edit="country_code" class="mt-1 w-full rounded-lg border px-3 py-2 bg-white"><option value="UG" ${project.country_code === 'UG' ? 'selected' : ''}>Uganda</option><option value="KE" ${project.country_code === 'KE' ? 'selected' : ''}>Kenya · overseas</option></select></label>
           <label class="text-xs font-bold">Developer<input data-op-edit="developer_name" value="${escapeHtml(project.developer_name || '')}" class="mt-1 w-full rounded-lg border px-3 py-2"></label>
           <label class="text-xs font-bold">Source agent UUID<input data-op-edit="source_agent_id" value="${escapeHtml(project.source_agent_id || '')}" class="mt-1 w-full rounded-lg border px-3 py-2 font-mono text-xs"></label>
           <label class="text-xs font-bold">Source display name<input data-op-edit="source_display_name" value="${escapeHtml(project.source_display_name || '')}" class="mt-1 w-full rounded-lg border px-3 py-2"></label>
@@ -1190,6 +1346,34 @@
     document.body.style.overflow = '';
   }
 
+  function renderOverseasLanding() {
+    const target = document.getElementById('off-plan-overseas-view');
+    if (!target) return;
+    document.getElementById('off-plan-list-view')?.classList.add('hidden');
+    document.getElementById('off-plan-detail-view')?.classList.add('hidden');
+    target.classList.remove('hidden');
+    const regionLabels = { en: ['Europe','Americas','Middle East','Asia'], lg: ['Bulaaya','Amerika','Middle East','Asia'], sw: ['Ulaya','Amerika','Mashariki ya Kati','Asia'], ac: ['Europe','America','Middle East','Asia'], ny: ['Europe','America','Middle East','Asia'], rn: ['Europe','America','Middle East','Asia'], sm: ['Bulaaya','Amerika','Middle East','Asia'], am: ['አውሮፓ','አሜሪካ','መካከለኛው ምሥራቅ','እስያ'], ar: ['أوروبا','الأمريكتان','الشرق الأوسط','آسيا'] }[offPlanLanguage()] || ['Europe','Americas','Middle East','Asia'];
+    target.innerHTML = `<header class="off-plan-overseas-hero"><img src="/assets/off-plan/spectre-westlands/nairobi-skyline.jpg" alt="Nairobi skyline" fetchpriority="high"><div class="max-w-7xl mx-auto px-4 w-full"><span class="inline-flex rounded-full border border-white/30 bg-white/10 px-4 py-2 text-xs font-black uppercase tracking-widest">${escapeHtml(overseasText('overseas'))}</span><h1 class="mt-5 max-w-3xl text-4xl md:text-6xl font-black leading-tight">${escapeHtml(overseasText('title'))}</h1><p class="mt-4 max-w-2xl text-base md:text-lg leading-7 text-white/85">${escapeHtml(overseasText('subtitle'))}</p></div></header><main class="max-w-7xl mx-auto px-4 py-12 space-y-14"><section><p class="text-xs font-black uppercase tracking-widest text-red-600">${escapeHtml(overseasText('overseas'))}</p><h2 class="mt-2 text-3xl font-black text-gray-950">${escapeHtml(overseasText('africa'))}</h2><p class="mt-2 text-gray-600">${escapeHtml(overseasText('africaBody'))}</p><div class="off-plan-destination-grid mt-6"><a class="off-plan-destination-card" href="/off-plan/overseas/kenya"><img src="/assets/off-plan/spectre-westlands/nairobi-skyline.jpg" alt="Nairobi skyline"><div><span class="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/15"><i class="fas fa-map-location-dot"></i></span><h3 class="mt-3 text-3xl font-black">${escapeHtml(overseasText('kenya'))}</h3><p class="mt-1 text-sm text-white/80">${escapeHtml(overseasText('kenyaBody'))}</p><strong class="mt-4 inline-flex items-center gap-2 text-sm">${escapeHtml(overseasText('openKenya'))}<i class="fas fa-arrow-right"></i></strong></div></a><article class="off-plan-destination-card is-coming"><div><span class="text-xs font-black uppercase tracking-wide text-green-800">${escapeHtml(overseasText('coming'))}</span><h3 class="mt-2 text-2xl font-black">Tanzania</h3><p class="mt-1 text-sm">Dar es Salaam · Zanzibar</p></div></article></div></section><section><h2 class="text-3xl font-black text-gray-950">${escapeHtml(overseasText('rest'))}</h2><p class="mt-2 text-gray-600">${escapeHtml(overseasText('restBody'))}</p><div class="off-plan-destination-grid mt-6">${regionLabels.map((region) => `<article class="off-plan-destination-card is-coming"><div><span class="text-xs font-black uppercase tracking-wide text-green-800">${escapeHtml(overseasText('coming'))}</span><h3 class="mt-2 text-2xl font-black">${escapeHtml(region)}</h3></div></article>`).join('')}</div></section></main>`;
+    document.title = `${overseasText('title')} | makaug.com`;
+    track('off_plan_overseas_landing_view', { language: offPlanLanguage() });
+  }
+
+  function applyRegionalDirectoryCopy() {
+    const kenya = state.countryCode === 'KE';
+    const title = document.getElementById('off-plan-title');
+    const subtitle = title?.nextElementSibling;
+    const back = document.getElementById('off-plan-country-back');
+    if (kenya) {
+      if (title) title.textContent = overseasText('kenyaTitle');
+      if (subtitle) subtitle.textContent = overseasText('kenyaSubtitle');
+      if (back) { back.classList.remove('hidden'); const span = back.querySelector('span'); if (span) span.textContent = overseasText('backOverseas'); }
+    } else {
+      if (title) title.textContent = offPlanText('heroTitle');
+      if (subtitle) subtitle.textContent = offPlanText('heroSubtitle');
+      back?.classList.add('hidden');
+    }
+  }
+
   async function submitOffPlanProject(event) {
     event.preventDefault();
     const role = document.getElementById('off-plan-create-role')?.value === 'admin' ? 'admin' : 'staff';
@@ -1199,7 +1383,8 @@
       const imageFiles = Array.from(imageInput?.files || []).slice(0, 20);
       const imageRights = Boolean(document.getElementById('off-plan-create-image-rights')?.checked);
       if (imageFiles.length && !imageRights) throw new Error('Confirm that makaug has permission to use the selected project images.');
-      const data = await request(`/api/${role === 'admin' ? 'admin' : 'staff'}/off-plan/developments`, { method: 'POST', headers: managementHeaders(role), body: { name: clean(document.getElementById('off-plan-create-name')?.value), area: clean(document.getElementById('off-plan-create-area')?.value), district: clean(document.getElementById('off-plan-create-district')?.value), source_display_name: clean(document.getElementById('off-plan-create-source')?.value), source_agent_id: clean(document.getElementById('off-plan-create-source-id')?.value) || null, project_type: clean(document.getElementById('off-plan-create-type')?.value) || 'development', completion_date: clean(document.getElementById('off-plan-create-completion')?.value) || null, latitude: clean(document.getElementById('off-plan-create-latitude')?.value) || null, longitude: clean(document.getElementById('off-plan-create-longitude')?.value) || null, description: clean(document.getElementById('off-plan-create-description')?.value), status: 'pending_review', verification_status: 'needs_verification' } });
+      const countryCode = clean(document.getElementById('off-plan-create-country')?.value || 'UG').toUpperCase();
+      const data = await request(`/api/${role === 'admin' ? 'admin' : 'staff'}/off-plan/developments`, { method: 'POST', headers: managementHeaders(role), body: { country_code: countryCode, name: clean(document.getElementById('off-plan-create-name')?.value), area: clean(document.getElementById('off-plan-create-area')?.value), district: clean(document.getElementById('off-plan-create-district')?.value), source_display_name: clean(document.getElementById('off-plan-create-source')?.value), source_agent_id: clean(document.getElementById('off-plan-create-source-id')?.value) || null, project_type: clean(document.getElementById('off-plan-create-type')?.value) || 'development', completion_date: clean(document.getElementById('off-plan-create-completion')?.value) || null, latitude: clean(document.getElementById('off-plan-create-latitude')?.value) || null, longitude: clean(document.getElementById('off-plan-create-longitude')?.value) || null, description: clean(document.getElementById('off-plan-create-description')?.value), status: 'pending_review', verification_status: 'needs_verification', extra_fields: countryCode === 'KE' ? { contact_mode: 'makaug_managed', country_name: 'Kenya', country_slug: 'kenya', region: 'Africa' } : {} } });
       let uploadedCount = 0;
       let uploadWarning = '';
       if (imageFiles.length) {
@@ -1222,12 +1407,18 @@
 
   function initializeOffPlanPage() {
     track('off_plan_page_view', { path: location.pathname });
+    const context = applyRouteContext();
     applyOffPlanLanguageUI();
+    if (context.mode === 'overseas') { renderOverseasLanding(); return; }
+    document.getElementById('off-plan-overseas-view')?.classList.add('hidden');
+    document.getElementById('off-plan-list-view')?.classList.remove('hidden');
+    applyRegionalDirectoryCopy();
     wireOffPlanDirectoryControls();
     prepopulateOffPlanSearch();
+    const chips = document.getElementById('off-plan-location-chips'); if (chips) chips.dataset.loaded = '';
     loadLocations();
-    const match = location.pathname.match(/^\/off-plan\/([a-z0-9-]+)\/?$/i);
-    if (match) openOffPlanDetail(match[1], { history: false });
+    state.loaded = false;
+    if (context.mode === 'detail') openOffPlanDetail(context.slug, { history: false });
     else returnToOffPlanList({ history: false });
   }
 

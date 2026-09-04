@@ -9226,9 +9226,15 @@ function isOffPlanListingRequest(text = '', intent = '') {
     && /\b(?:list|register|add|post|submit|upload|advertise|promote|developer|my project|our project)\b/i.test(clean);
 }
 
-function offPlanWhatsappReply(listingRequest = false) {
+function offPlanWhatsappReply(listingRequest = false, message = '') {
   if (listingRequest) {
     return `${whatsappBrandHeader('Off-plan project received')}\nThanks very much—your request has been received. A member of the team will get in touch with you.\n\nPlease prepare:\n• Project name\n• Location\n• Completion date\n• Brochure and project images\n• Current construction progress\n• Current sales and availability\n\nThe team will call you.\n${HOME_URL}/off-plan`;
+  }
+  if (/\b(?:kenya|nairobi|westlands|spectre|overseas)\b/i.test(normalizeInput(message))) {
+    return `${whatsappBrandHeader('Overseas off-plan')}`
+      + `\nExplore the Kenya collection and Spectre Westlands with KES pricing, indicative UGX conversion, supplied floor plans and MakaUG-coordinated purchase steps.`
+      + `\n\nDeveloper, completion, stock, legal and bank terms must be independently confirmed before payment.`
+      + `\n\n${HOME_URL}/off-plan/overseas/kenya`;
   }
   return `${whatsappBrandHeader('Off-plan projects')}\nExplore source-attributed new developments, homes, payment plans, maps and brochures. Unconfirmed facts are clearly labelled.\n\n${HOME_URL}/off-plan`;
 }
@@ -9322,7 +9328,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
         await updateOffPlanEnquiryDelivery(db, enquiry.id, delivery);
       });
     }
-    return respond(offPlanWhatsappReply(listingRequest), 'main_menu');
+    return respond(offPlanWhatsappReply(listingRequest, cleanBody), 'main_menu');
   }
   const listingStartSteps = ['greeting', 'main_menu', 'search_type', 'search_area', 'agent_area', 'submitted'];
   const explicitListingStart = listingStartSteps.includes(step)

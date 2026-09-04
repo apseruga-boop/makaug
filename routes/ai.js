@@ -368,6 +368,7 @@ function inferAssistantIntentFromMessage(userMessage = '', suppliedIntent = 'unk
 
 function offPlanAssistantSearchTerms(userMessage = '') {
   const text = cleanText(userMessage, 1200);
+  const overseasKenya = /\b(?:kenya|nairobi|westlands|spectre|overseas)\b/i.test(text);
   const parsed = heuristicNaturalPropertyQuery({ text, fallbackType: 'any' });
   const resolution = resolveCanonicalUgandaLocationFromText(text);
   const location = resolution.status === 'matched' ? resolution.match : null;
@@ -380,14 +381,14 @@ function offPlanAssistantSearchTerms(userMessage = '') {
   const maxPaymentMonths = Number(monthsMatch?.[1]) || null;
   const maxPriceUgx = Number(parsed?.maxBudgetUgx) || null;
   const projectType = cleanText(projectTypeMatch?.[1]).replace(/\s+/g, '-') || null;
-  const query = { limit: 12 };
+  const query = { limit: 12, country_code: overseasKenya ? 'KE' : 'UG' };
   if (area) query.area = area;
   if (district) query.district = district;
   if (bedrooms) query.bedrooms = bedrooms;
   if (maxPaymentMonths) query.max_payment_months = maxPaymentMonths;
   if (maxPriceUgx) query.max_price_ugx = maxPriceUgx;
   if (projectType) query.project_type = projectType;
-  return { query, area, district, bedrooms, maxPaymentMonths, maxPriceUgx, projectType };
+  return { query, area, district, bedrooms, maxPaymentMonths, maxPriceUgx, projectType, overseasKenya };
 }
 
 async function buildOffPlanAssistantSearchPayload(userMessage = '', origin = '') {
@@ -400,6 +401,7 @@ async function buildOffPlanAssistantSearchPayload(userMessage = '', origin = '')
   if (terms.maxPaymentMonths) params.set('max_payment_months', String(terms.maxPaymentMonths));
   if (terms.maxPriceUgx) params.set('max_price_ugx', String(terms.maxPriceUgx));
   if (terms.projectType) params.set('project_type', terms.projectType);
+  const basePath = terms.overseasKenya ? '/off-plan/overseas/kenya' : '/off-plan';
   const filters = {
     search_type: 'off_plan',
     area: terms.area,
@@ -407,7 +409,8 @@ async function buildOffPlanAssistantSearchPayload(userMessage = '', origin = '')
     bedrooms: terms.bedrooms,
     max_price: terms.maxPriceUgx,
     project_type: terms.projectType,
-    max_payment_months: terms.maxPaymentMonths
+    max_payment_months: terms.maxPaymentMonths,
+    country_code: terms.overseasKenya ? 'KE' : 'UG'
   };
   return {
     filters,
@@ -423,8 +426,8 @@ async function buildOffPlanAssistantSearchPayload(userMessage = '', origin = '')
     off_plan_projects: projects,
     listings: [],
     results: [],
-    see_all_url: `${origin}/off-plan${params.toString() ? `?${params.toString()}` : ''}`,
-    search_path: '/off-plan',
+    see_all_url: `${origin}${basePath}${params.toString() ? `?${params.toString()}` : ''}`,
+    search_path: basePath,
     zero_results: projects.length === 0,
     capture_available: false,
     match_quality: projects.length ? 'exact' : 'no_match',

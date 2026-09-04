@@ -5,6 +5,7 @@ const { randomUUID, createHash } = require('crypto');
 const DEVELOPMENT_STATUSES = ['draft', 'pending_review', 'changes_requested', 'published', 'archived', 'rejected'];
 const VERIFICATION_STATUSES = ['needs_verification', 'partially_verified', 'verified'];
 const ENQUIRY_CHANNELS = ['whatsapp', 'email', 'call'];
+const PUBLIC_COUNTRY_CODES = ['UG', 'KE'];
 const JSON_ARRAY_FIELDS = ['unit_types', 'payment_plan', 'images', 'videos', 'floor_plans', 'amenities', 'nearby_places'];
 const JSON_OBJECT_FIELDS = ['brochure_settings', 'walkthrough_settings', 'extra_fields'];
 
@@ -207,7 +208,7 @@ function publicationBlockers(raw = {}) {
 
 function isPublicationReady(raw = {}) {
   const row = normalizeDevelopmentRow(raw);
-  return row.country_code === 'UG'
+  return PUBLIC_COUNTRY_CODES.includes(row.country_code)
     && row.status === 'published'
     && row.verification_status === 'verified'
     && publicationBlockers(row).length === 0;
@@ -219,13 +220,18 @@ function publicPreviewBlockers(raw = {}) {
   if (row.verification_status !== 'partially_verified') blockers.push('Preview projects must be marked partially verified.');
   if (row.extra_fields?.public_preview_approved !== true) blockers.push('Public preview approval is required.');
   if (!cleanText(row.name, 220)) blockers.push('Project name is required.');
-  if (!row.source_agent_id || !cleanText(row.source_display_name, 220)) blockers.push('An attributed source agent is required.');
+  const isMakaugManagedOverseas = row.country_code !== 'UG'
+    && row.extra_fields?.contact_mode === 'makaug_managed'
+    && row.extra_fields?.source_documents_verified === true;
+  if ((!row.source_agent_id && !isMakaugManagedOverseas) || !cleanText(row.source_display_name, 220)) blockers.push('An attributed source is required.');
   if (cleanText(row.description, 10000).length < 80) blockers.push('A source-labelled project description is required.');
   if (!cleanText(row.area, 140) || !cleanText(row.district, 140)) blockers.push('Area and district are required.');
   if (row.latitude == null || row.longitude == null) blockers.push('An area map point is required.');
   if (!row.unit_types.length) blockers.push('At least one unit type is required.');
-  if (row.unit_types.some((unit) => !(finiteNumber(unit.price_original, 0) > 0) || !cleanText(unit.price_original_currency, 3))) blockers.push('Every unit type needs its original source price.');
-  if (row.unit_types.some((unit) => !(finiteNumber(unit.price_ugx, 0) > 0))) blockers.push('Every unit type needs an indicative UGX price.');
+  const pricedUnits = row.unit_types.filter((unit) => finiteNumber(unit.price_original, 0) > 0);
+  if (!pricedUnits.length) blockers.push('At least one unit type needs its original source price.');
+  if (pricedUnits.some((unit) => !cleanText(unit.price_original_currency, 3))) blockers.push('Every supplied source price needs its original currency.');
+  if (pricedUnits.some((unit) => !(finiteNumber(unit.price_ugx, 0) > 0))) blockers.push('Every supplied source price needs an indicative UGX conversion.');
   if (!(finiteNumber(row.launch_price_ugx, 0) > 0)) blockers.push('An indicative starting price in UGX is required.');
   if (!row.payment_plan.length || !(row.payment_plan_months > 0)) blockers.push('The supplied payment period is required.');
   if (row.images.filter((image) => cleanText(image?.url, 2000) && cleanText(image?.caption, 300)).length < 3) blockers.push('At least three labelled project images are required.');
@@ -234,7 +240,7 @@ function publicPreviewBlockers(raw = {}) {
 
 function isPubliclyVisible(raw = {}) {
   const row = normalizeDevelopmentRow(raw);
-  if (row.country_code !== 'UG' || row.status !== 'published') return false;
+  if (!PUBLIC_COUNTRY_CODES.includes(row.country_code) || row.status !== 'published') return false;
   return isPublicationReady(row) || publicPreviewBlockers(row).length === 0;
 }
 
@@ -245,7 +251,11 @@ function normalizeWritePayload(input = {}, { partial = false } = {}) {
     if (partial && !Object.prototype.hasOwnProperty.call(value, key)) return;
     payload[key] = transform(value[key]);
   };
-  assign('country_code', (item) => cleanText(item || 'UG', 2).toUpperCase() || 'UG');
+  assign('country_code', (item) => {
+    const countryCode = cleanText(item || 'UG', 2).toUpperCase() || 'UG';
+    if (!PUBLIC_COUNTRY_CODES.includes(countryCode)) throw validationError('Country must be Uganda or Kenya');
+    return countryCode;
+  });
   assign('name', (item) => cleanText(item, 220));
   assign('slug', (item) => slugify(item || value.name));
   assign('developer_name', (item) => nullableText(item, 220));
@@ -305,7 +315,9 @@ function publicSelect() {
 }
 
 async function listPublicDevelopments(db, query = {}) {
-  const values = ['UG'];
+  const requestedCountry = cleanText(query.country_code || query.country || 'UG', 2).toUpperCase();
+  const countryCode = PUBLIC_COUNTRY_CODES.includes(requestedCountry) ? requestedCountry : 'UG';
+  const values = [countryCode];
   const filters = [`d.country_code = $1`, `d.status = 'published'`, `(d.verification_status = 'verified' OR (d.verification_status = 'partially_verified' AND d.extra_fields->>'public_preview_approved' = 'true'))`];
   const add = (sql, value) => {
     values.push(value);
@@ -330,18 +342,27 @@ async function listPublicDevelopments(db, query = {}) {
   return result.rows.map(normalizeDevelopmentRow).filter(isPubliclyVisible);
 }
 
-async function getPublicDevelopment(db, slug) {
+async function getPublicDevelopment(db, slug, countryCode = 'UG') {
+  const requestedCountry = cleanText(countryCode, 2).toUpperCase();
+  const normalizedCountry = PUBLIC_COUNTRY_CODES.includes(requestedCountry) ? requestedCountry : 'UG';
   const result = await db.query(
-    `${publicSelect()} WHERE d.country_code = 'UG' AND d.slug = $1 AND d.status = 'published' AND (d.verification_status = 'verified' OR (d.verification_status = 'partially_verified' AND d.extra_fields->>'public_preview_approved' = 'true')) LIMIT 1`,
-    [slugify(slug)]
+    `${publicSelect()} WHERE d.country_code = $1 AND d.slug = $2 AND d.status = 'published' AND (d.verification_status = 'verified' OR (d.verification_status = 'partially_verified' AND d.extra_fields->>'public_preview_approved' = 'true')) LIMIT 1`,
+    [normalizedCountry, slugify(slug)]
   );
   const development = result.rows[0] ? normalizeDevelopmentRow(result.rows[0]) : null;
   return development && isPubliclyVisible(development) ? development : null;
 }
 
 async function listManagedDevelopments(db, query = {}) {
-  const values = ['UG'];
-  const filters = ['d.country_code = $1'];
+  const values = [];
+  const filters = [];
+  const requestedCountry = cleanText(query.country_code || query.country, 2).toUpperCase();
+  if (PUBLIC_COUNTRY_CODES.includes(requestedCountry)) {
+    values.push(requestedCountry);
+    filters.push(`d.country_code = $${values.length}`);
+  } else {
+    filters.push(`d.country_code = ANY(ARRAY['UG','KE'])`);
+  }
   if (query.status && DEVELOPMENT_STATUSES.includes(cleanText(query.status).toLowerCase())) {
     values.push(cleanText(query.status).toLowerCase());
     filters.push(`d.status = $${values.length}`);
