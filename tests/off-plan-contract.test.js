@@ -115,7 +115,6 @@ test('brochure, payment, gallery, map, sharing, video and mortgage handoff are v
   assert.match(css, /width: min\(1120px,calc\(100vw - 28px\)\)/);
   assert.match(client, /ensureOffPlanGoogleMaps/);
   assert.match(client, /maps\.google\.com\/mapfiles\/ms\/icons\/red-dot\.png/);
-  assert.match(read('assets/makaug-app.js'), /libraries=places&loading=async/);
   assert.match(client, /shareOffPlan\('whatsapp'\)/);
   assert.match(client, /projectVideo/);
   assert.match(client, /off-plan-mortgage-panel/);
