@@ -134,6 +134,7 @@ test('Off Plan offers Uganda by default and a localized overseas country hierarc
   assert.match(html, /id="off-plan-nav-uganda"/);
   assert.match(html, /id="off-plan-nav-overseas"/);
   assert.match(html, /href="\/off-plan\/overseas"/);
+  assert.match(html, /route === '\/off-plan\/overseas'\s*\? ''/);
   assert.match(client, /\/off-plan\/overseas\/kenya/);
   assert.match(client, /OFF_PLAN_NAV_I18N/);
   for (const language of ['en', 'lg', 'sw', 'ac', 'ny', 'rn', 'sm', 'am', 'ar']) {
