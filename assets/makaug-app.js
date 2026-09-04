@@ -53245,7 +53245,7 @@ function ensureGoogleMapsApi() {
     script.id = scriptId;
     script.async = true;
     script.defer = true;
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(GOOGLE_MAPS_API_KEY)}&libraries=places`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(GOOGLE_MAPS_API_KEY)}&libraries=places&loading=async`;
     script.onload = () => resolve(!!window.google?.maps);
     script.onerror = () => resolve(false);
     document.head.appendChild(script);
