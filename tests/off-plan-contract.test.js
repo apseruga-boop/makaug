@@ -91,6 +91,7 @@ test('an Off Plan source broker profile remains usable when the general agent AP
   assert.match(app, /broker\.remote_off_plan_projects = offPlanProjects/);
   assert.match(app, /function brokerOffPlanProjectsHtml\(projects = \[\]\)/);
   assert.match(app, /Projects represented by this broker/);
+  assert.match(app, /brokerDisplayPhone\(b\) \? `<a href="tel:/);
 });
 
 test('brochure, payment, gallery, map, sharing, video and mortgage handoff are visible', () => {
@@ -104,8 +105,8 @@ test('brochure, payment, gallery, map, sharing, video and mortgage handoff are v
   assert.match(client, /id="off-plan-gallery-dialog"/);
   assert.match(client, /closeOffPlanGallery/);
   assert.match(client, /value == null \|\| \(typeof value === 'string' && !value\.trim\(\)\)/);
-  assert.match(html, /off-plan\.js\?v=20260904-offplan-v6/);
-  assert.match(html, /off-plan\.css\?v=20260904-offplan-v6/);
+  assert.match(html, /off-plan\.js\?v=20260904-offplan-v7/);
+  assert.match(html, /off-plan\.css\?v=20260904-offplan-v7/);
   assert.match(client, /off-plan-detail-grid/);
   assert.match(css, /\.off-plan-detail-grid\s*\{/);
   assert.match(css, /width: min\(1120px,calc\(100vw - 28px\)\)/);
@@ -143,6 +144,30 @@ test('staff and King dashboards can edit enriched Off Plan facts', () => {
   assert.match(client, /data-op-json-default="object"/);
   assert.match(client, /off-plan-create-source-id/);
   assert.match(client, /off-plan-create-latitude/);
+  assert.match(client, /off-plan-create-images/);
+  assert.match(client, /off-plan-create-image-rights/);
+  assert.match(client, /confirm_rights: true, images/);
+});
+
+test('Off Plan family maps, contact and payment builder expose the requested interactive controls', () => {
+  const html = read('index.html');
+  const client = read('assets/off-plan.js');
+  const css = read('assets/off-plan.css');
+  const brochure = read('services/offPlanBrochureService.js');
+  const enrichment = read('db/migrations/121_off_plan_family_area_enrichment.sql');
+  assert.match(html, /Partner with makaug\.com/);
+  assert.doesNotMatch(html, /uppercase[^>]*data-off-plan-i18n="partner"/);
+  for (const id of ['off-plan-calc-unit', 'off-plan-calc-deposit', 'off-plan-calc-months']) assert.match(client, new RegExp(`id="${id}"`));
+  assert.match(client, /openOffPlanCustomPaymentBuilder/);
+  assert.match(client, /offPlanExperienceText\('mortgageTitle'\)/);
+  assert.match(client, /provider\.logoUrl \|\| provider\.logo_url/);
+  assert.match(client, /source_agent_whatsapp \|\| project\.source_agent_phone/);
+  for (const type of ['school', 'hospital', 'university', 'shopping_mall', 'supermarket', 'park', 'tourist_attraction', 'airport']) assert.match(client, new RegExp(`'${type}'`));
+  assert.match(client, /mapTypeControl: true, streetViewControl: true, fullscreenControl: true/);
+  assert.match(css, /\.off-plan-nearby-group h4/);
+  assert.match(brochure, /GOOGLE_MAPS_STATIC_API_KEY \|\| process\.env\.GOOGLE_MAPS_API_KEY/);
+  assert.match(brochure, /Phone \/ WhatsApp/);
+  for (const place of ['Nkumba University', 'University of Kisubi', 'Victoria Mall Entebbe', 'Entebbe Botanical Gardens', 'Uganda Wildlife Conservation Education Centre']) assert.match(enrichment, new RegExp(place));
 });
 
 test('website and WhatsApp AI recognize off-plan search and listing requests', () => {

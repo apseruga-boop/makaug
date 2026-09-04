@@ -71,6 +71,9 @@
 .off-plan-map-note { display: flex; align-items: flex-start; gap: 8px; border-top: 1px solid #e5eae7; padding: 11px 13px; color: #617068; font-size: .7rem; line-height: 1.35; }
 .off-plan-map-note i { color: #e23d3d; margin-top: 2px; }
 .off-plan-payment-grid { grid-template-columns: 1fr; }
+.off-plan-build-step { cursor: pointer; transition: border-color .18s ease, background .18s ease, transform .18s ease; }
+.off-plan-build-step:hover,
+.off-plan-build-step:focus-visible { border-color: #168442; background: #f4faf5; outline: 0; transform: translateY(-1px); }
 .off-plan-card { width: 100%; max-width: 380px; background: #fff; border: 1px solid #e1e9e3; border-radius: 18px; overflow: hidden; transition: transform .2s ease, box-shadow .2s ease; }
 .off-plan-card:hover { transform: translateY(-3px); box-shadow: 0 22px 52px rgba(17,55,31,.13); }
 .off-plan-card-image { position: relative; min-height: 485px; overflow: hidden; background: #e8efe9; color: #fff; }
@@ -136,6 +139,25 @@
 @media (min-width: 1100px) { .off-plan-detail-grid { grid-template-columns: minmax(0, 1fr) 330px; } }
 .off-plan-dashboard-card { border: 1px solid #dce6df; border-radius: 16px; background: #fff; padding: 16px; }
 .off-plan-map { width: 100%; min-height: 340px; border: 0; border-radius: 16px; background: #edf3ee; }
+.off-plan-map-popup { display: grid; min-width: 190px; gap: 5px; padding: 3px 2px; color: #17211c; }
+.off-plan-map-popup strong { display: block; font-size: 13px; line-height: 1.3; }
+.off-plan-map-popup span { display: block; color: #68736c; font-size: 11px; }
+.off-plan-map-popup a { display: inline-flex; width: fit-content; margin-top: 3px; color: #0d6b35; font-size: 11px; font-weight: 900; text-decoration: underline; }
+.off-plan-nearby-group h4 { display: flex; align-items: center; gap: 8px; color: #173d28; font-size: .83rem; font-weight: 900; }
+.off-plan-nearby-group h4 i { width: 20px; color: #dc2626; text-align: center; }
+.off-plan-nearby-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; margin-top: 9px; }
+.off-plan-nearby-card { display: block; min-width: 0; border: 1px solid #e0e6e2; border-radius: 13px; background: #f8faf9; padding: 12px; transition: border-color .18s ease, background .18s ease; }
+.off-plan-nearby-card:hover,
+.off-plan-nearby-card:focus-visible { border-color: #68b983; background: #f0f8f3; outline: 0; }
+.off-plan-nearby-card strong { display: block; color: #17211c; font-size: .8rem; line-height: 1.35; }
+.off-plan-nearby-card span { display: block; margin-top: 4px; color: #68736c; font-size: .7rem; line-height: 1.45; }
+.off-plan-nearby-card small { display: inline-flex; align-items: center; gap: 5px; margin-top: 8px; color: #0d6b35; font-size: .65rem; font-weight: 900; }
+.off-plan-mortgage-policy { border-left: 4px solid #e6a12a; border-radius: 0 10px 10px 0; background: #fffbeb; padding: 11px 13px; color: #59430a; }
+.off-plan-mortgage-policy strong { display: block; font-size: .75rem; }
+.off-plan-mortgage-policy p { margin-top: 4px; font-size: .7rem; line-height: 1.55; }
+.off-plan-bank-heading { display: flex; min-height: 38px; align-items: center; gap: 10px; color: #111827; }
+.off-plan-bank-heading img { width: 78px; max-height: 34px; object-fit: contain; object-position: left center; }
+.off-plan-bank-heading strong { font-size: .86rem; line-height: 1.25; }
 .off-plan-modal { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; padding: 20px; background: rgba(8,20,13,.72); }
 .off-plan-modal[hidden] { display: none; }
 .off-plan-modal-card { width: min(680px,100%); max-height: 90vh; overflow: auto; border-radius: 24px; background: #fff; padding: 24px; box-shadow: 0 30px 90px rgba(0,0,0,.35); }
@@ -190,4 +212,5 @@
   .off-plan-gallery-dialog { width: calc(100vw - 16px); max-width: calc(100vw - 16px); max-height: 94vh; border-radius: 16px; }
   .off-plan-gallery-dialog-grid { grid-template-columns: 1fr; padding: 8px; }
   .off-plan-readiness ul { grid-template-columns: 1fr; }
+  .off-plan-nearby-grid { grid-template-columns: 1fr; }
 }

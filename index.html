@@ -413,7 +413,7 @@
   </script>
   <link rel="preload" as="image" href="https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=1200&q=60" fetchpriority="high">
   <link rel="stylesheet" href="/assets/tailwind.css">
-  <link rel="stylesheet" href="/assets/off-plan.css?v=20260904-offplan-v6">
+  <link rel="stylesheet" href="/assets/off-plan.css?v=20260904-offplan-v7">
   <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
   <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"></noscript>
   <link rel="preload" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
@@ -3783,7 +3783,7 @@
 
     <div id="off-plan-contact-modal" class="off-plan-modal" hidden role="dialog" aria-modal="true" aria-labelledby="off-plan-contact-title">
       <div class="off-plan-modal-card">
-        <div class="flex items-start justify-between gap-4"><div><p class="text-xs font-black uppercase tracking-widest text-green-700" data-off-plan-i18n="partner">Partner with makaug.com</p><h2 id="off-plan-contact-title" class="mt-1 text-2xl font-black text-gray-950" data-off-plan-i18n="listProject">List an off-plan project</h2><p class="mt-2 text-sm text-gray-600" data-off-plan-i18n="contactQuestion">How would you like the team to contact you?</p></div><button type="button" onclick="closeOffPlanContactModal()" class="h-9 w-9 rounded-full bg-gray-100 hover:bg-gray-200" aria-label="Close" data-off-plan-i18n-aria="close"><i class="fas fa-xmark"></i></button></div>
+        <div class="flex items-start justify-between gap-4"><div><p class="text-xs font-black tracking-widest text-green-700" data-off-plan-i18n="partner">Partner with makaug.com</p><h2 id="off-plan-contact-title" class="mt-1 text-2xl font-black text-gray-950" data-off-plan-i18n="listProject">List an off-plan project</h2><p class="mt-2 text-sm text-gray-600" data-off-plan-i18n="contactQuestion">How would you like the team to contact you?</p></div><button type="button" onclick="closeOffPlanContactModal()" class="h-9 w-9 rounded-full bg-gray-100 hover:bg-gray-200" aria-label="Close" data-off-plan-i18n-aria="close"><i class="fas fa-xmark"></i></button></div>
         <section id="off-plan-listing-readiness" class="off-plan-readiness mt-5"><h3 data-off-plan-i18n="requiredInfoTitle">Have this project information ready</h3><ul id="off-plan-required-info-list"></ul></section>
         <p id="off-plan-contact-project-note" class="hidden mt-5 rounded-xl border border-green-200 bg-green-50 p-4 text-sm font-bold leading-6 text-green-950"></p>
         <div class="grid sm:grid-cols-3 gap-3 mt-6">
@@ -3818,6 +3818,8 @@
           <div class="grid sm:grid-cols-2 gap-3"><label class="text-sm font-bold">Project type<input id="off-plan-create-type" maxlength="80" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 font-normal" placeholder="Apartments, townhouses..."></label><label class="text-sm font-bold">Expected completion<input id="off-plan-create-completion" type="date" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 font-normal"></label></div>
           <div class="grid sm:grid-cols-2 gap-3"><label class="text-sm font-bold">Latitude<input id="off-plan-create-latitude" type="number" step="0.0000001" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 font-normal" placeholder="Area point until exact pin is verified"></label><label class="text-sm font-bold">Longitude<input id="off-plan-create-longitude" type="number" step="0.0000001" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 font-normal"></label></div>
           <label class="text-sm font-bold">Source notes / draft description<textarea id="off-plan-create-description" rows="4" maxlength="20000" class="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 font-normal" placeholder="Record what was supplied and what still needs verification."></textarea></label>
+          <label class="text-sm font-bold">Project images (optional)<input id="off-plan-create-images" type="file" multiple accept="image/jpeg,image/png,image/webp" class="mt-1 block w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm font-normal file:mr-3 file:rounded-lg file:border-0 file:bg-green-50 file:px-3 file:py-2 file:font-bold file:text-green-800"><span class="mt-1 block text-xs font-normal text-gray-500">Add up to 20 reviewed project or construction images now, or add more from the project card after creation.</span></label>
+          <label class="flex items-start gap-2 rounded-xl border border-gray-200 bg-gray-50 p-3 text-xs text-gray-700"><input id="off-plan-create-image-rights" type="checkbox" class="mt-0.5 h-4 w-4 accent-green-700"><span>I confirm makaug has permission to use any images selected above.</span></label>
           <div class="rounded-xl bg-amber-50 border border-amber-200 p-3 text-xs text-amber-950">Developer identity, map pin, dates, progress, availability, UGX unit pricing and images must be completed and verified before publication.</div>
           <button class="rounded-xl bg-slate-900 text-white px-5 py-3 font-black">Create private review record</button><p id="off-plan-create-status" class="hidden rounded-xl p-3 text-sm" role="status"></p>
         </form>
@@ -9678,7 +9680,7 @@
         script.async = true;
         script.onload = function () {
           var offPlanScript = document.createElement("script");
-          offPlanScript.src = "/assets/off-plan.js?v=20260904-offplan-v6";
+          offPlanScript.src = "/assets/off-plan.js?v=20260904-offplan-v7";
           document.body.appendChild(offPlanScript);
         };
         document.body.appendChild(script);

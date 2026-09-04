@@ -132,6 +132,23 @@
     return value;
   }
 
+  const OFF_PLAN_EXPERIENCE_I18N = {
+    en: { schools: 'Schools and childcare', healthcare: 'Healthcare', universities: 'Universities', shopping: 'Markets and shopping', recreation: 'Parks and family activities', transport: 'Transport', mortgageTitle: 'Mortgage options', mortgagePolicy: 'Off-plan finance is lender-specific. A published residential rate does not mean the lender will fund a home before completion. Confirm construction-stage eligibility, valuation timing, title requirements, drawdowns, insurance, fees and the required deposit directly with the lender.', chooseUnit: 'Home type', customPayment: 'Choose a home, deposit and payment period, then calculate every illustrative payment date.', phoneLabel: 'Phone / WhatsApp', familyServices: 'Family life and local services', areaServices: 'Explore live schools and childcare, healthcare, universities, markets and shopping, transport, parks and family activities below. The exact project pin and travel times still need confirmation.' },
+    lg: { schools: 'Amasomero n’okulabirira abaana', healthcare: 'Ebyobulamu', universities: 'Amatendekero aga waggulu', shopping: 'Obutale n’amaduuka', recreation: 'Ppaaka n’eby’amasanyu g’amaka', transport: 'Entambula', mortgageTitle: 'Enkola za mortgage', mortgagePolicy: 'Okufuna ssente za off-plan kusalibwawo buli lender. Rate y’amaka teraga nti lender ajja kusasulira ennyumba nga tennaggwa. Kakasa ebisanyizo, valuation, title, insurance, fees ne deposit eri lender.', chooseUnit: 'Ekika ky’amaka', customPayment: 'Londa amaka, deposit n’emyezi gy’okusasula, oluvannyuma obale ennaku zonna.', phoneLabel: 'Essimu / WhatsApp', familyServices: 'Obulamu bw’amaka n’obuweereza bw’ekitundu', areaServices: 'Laba amasomero, ebyobulamu, amatendekero, obutale, entambula, ppaaka n’eby’amasanyu ebiri okumpi. Pin entuufu n’obudde bw’olugendo bikyetaaga okukakasibwa.' },
+    sw: { schools: 'Shule na malezi ya watoto', healthcare: 'Huduma za afya', universities: 'Vyuo vikuu', shopping: 'Masoko na ununuzi', recreation: 'Bustani na burudani ya familia', transport: 'Usafiri', mortgageTitle: 'Chaguo za mikopo', mortgagePolicy: 'Ufadhili wa off-plan hutegemea mkopeshaji. Riba ya nyumba iliyochapishwa haimaanishi kuwa mradi kabla ya kukamilika utafadhiliwa. Thibitisha ustahiki, tathmini, hati, malipo ya hatua, bima, ada na amana na mkopeshaji.', chooseUnit: 'Aina ya nyumba', customPayment: 'Chagua nyumba, amana na muda wa malipo, kisha kokotoa tarehe zote za mfano.', phoneLabel: 'Simu / WhatsApp', familyServices: 'Maisha ya familia na huduma za eneo', areaServices: 'Tazama shule, afya, vyuo vikuu, masoko, usafiri, bustani na burudani za familia zilizo karibu. Pini halisi na muda wa safari bado lazima uthibitishwe.' },
+    ac: { schools: 'Gang kwan ki gwoko lutino', healthcare: 'Ot yat', universities: 'Jami kwan mamalo', shopping: 'Cuk ki wil', recreation: 'Kabedo me yomcwiny pa jo gang', transport: 'Wot ki bino', mortgageTitle: 'Yoo me mortgage', mortgagePolicy: 'Lender acel acel aye moko ka twero culo pi off-plan mapwod pe otyeko. Peny lender pi cik, valuation, title, insurance, fees ki deposit.', chooseUnit: 'Kit ot', customPayment: 'Yer ot, deposit ki dwe me cul, ka ikwan nino me cul ducu.', phoneLabel: 'Cim / WhatsApp', familyServices: 'Kwo pa jo gang ki tic ma tye cok', areaServices: 'Nen gang kwan, ot yat, jami kwan mamalo, cuk, yo ki kabedo me yomcwiny ma tye cok. Pin kikome ki cawa me wot pud myero kimok.' },
+    ny: { schools: 'Amashomero n’okureeberera abaana', healthcare: 'Eby’obujanjabi', universities: 'Amatendekyero', shopping: 'Obutare n’amaduuka', recreation: 'Ppaaka n’eby’okweshemeza amaka', transport: 'Ebyentambura', mortgageTitle: 'Enkora za mortgage', mortgagePolicy: 'Okutunga mortgage ya off-plan nikuruga aha lender. Rate y’amaka terikumanyisa ngu lender naija kusasurira eka etakahendere. Hamya valuation, title, insurance, fees na deposit n’omuhwezi.', chooseUnit: 'Ekika ky’eka', customPayment: 'Toorana eka, deposit n’amezi g’okusasura, reero obare ebiro byona.', phoneLabel: 'Esimu / WhatsApp', familyServices: 'Amagara g’amaka n’obuheereza bw’ekicweka', areaServices: 'Reeba amashomero, eby’obujanjabi, amatendekyero, obutare, ebyentambura, ppaaka n’eby’okweshemeza amaka. Pin ehikire n’obwire bw’orugyendo nibyetenga kuhamibwa.' },
+    rn: { schools: 'Amashomero n’okureeberera abaana', healthcare: 'Eby’obujanjabi', universities: 'Amatendekyero', shopping: 'Obutare n’amaduuka', recreation: 'Ppaaka n’eby’okweshemeza amaka', transport: 'Ebyentambura', mortgageTitle: 'Enkora za mortgage', mortgagePolicy: 'Okutunga mortgage ya off-plan nikuruga aha lender. Hamya valuation, title, insurance, fees na deposit n’omuhwezi.', chooseUnit: 'Ekika ky’eka', customPayment: 'Toorana eka, deposit n’amezi g’okusasura, reero obare ebiro byona.', phoneLabel: 'Esimu / WhatsApp', familyServices: 'Amagara g’amaka n’obuheereza bw’ekicweka', areaServices: 'Reeba amashomero, eby’obujanjabi, amatendekyero, obutare, ebyentambura, ppaaka n’eby’okweshemeza amaka. Pin ehikire n’obwire bw’orugyendo nibyetenga kuhamibwa.' },
+    sm: { schools: 'Amasomero n’okulabirira abaana', healthcare: 'Ebyobulamu', universities: 'Amatendekero', shopping: 'Obutale n’amaduuka', recreation: 'Ppaaka n’eby’amasanyu g’amaka', transport: 'Entambula', mortgageTitle: 'Enkola dha mortgage', mortgagePolicy: 'Okufuna mortgage ya off-plan kusalibwawo lender. Kakasa valuation, title, insurance, fees ne deposit eri lender.', chooseUnit: 'Ekika ky’amaka', customPayment: 'Londa amaka, deposit n’emyezi gy’okusasula, oluvainhuma obale ennaku dhona.', phoneLabel: 'Esimu / WhatsApp', familyServices: 'Obulamu bw’amaka n’obuweereza bw’ekitundu', areaServices: 'Laba amasomero, ebyobulamu, amatendekero, obutale, entambula, ppaaka n’eby’amasanyu. Pin entuufu n’obwire bw’olugendo bikyetaaga okukakasibwa.' },
+    am: { schools: 'ትምህርት ቤቶችና ህፃናት እንክብካቤ', healthcare: 'ጤና አገልግሎት', universities: 'ዩኒቨርሲቲዎች', shopping: 'ገበያና ግብይት', recreation: 'ፓርኮችና የቤተሰብ መዝናኛ', transport: 'ትራንስፖርት', mortgageTitle: 'የቤት ብድር አማራጮች', mortgagePolicy: 'የoff-plan ፋይናንስ በአበዳሪው ይወሰናል። የታተመ የቤት ወለድ ከመጠናቀቁ በፊት ቤቱ እንደሚደገፍ አያረጋግጥም። ብቁነት፣ ግምገማ፣ ሰነድ፣ መድን፣ ክፍያና ቅድመ ክፍያን ከአበዳሪው ያረጋግጡ።', chooseUnit: 'የቤት ዓይነት', customPayment: 'ቤት፣ ቅድመ ክፍያና የክፍያ ጊዜ ይምረጡ፣ ከዚያ ቀኖቹን ያስሉ።', phoneLabel: 'ስልክ / WhatsApp', familyServices: 'የቤተሰብ ኑሮና የአካባቢ አገልግሎቶች', areaServices: 'በአቅራቢያ ያሉ ትምህርት ቤቶች፣ ጤና፣ ዩኒቨርሲቲዎች፣ ገበያ፣ ትራንስፖርት፣ ፓርኮችና የቤተሰብ መዝናኛዎችን ይመልከቱ። ትክክለኛው ቦታና የጉዞ ጊዜ መረጋገጥ አለበት።' },
+    ar: { schools: 'المدارس ورعاية الأطفال', healthcare: 'الرعاية الصحية', universities: 'الجامعات', shopping: 'الأسواق والتسوق', recreation: 'الحدائق والأنشطة العائلية', transport: 'النقل', mortgageTitle: 'خيارات الرهن العقاري', mortgagePolicy: 'تمويل العقار على المخطط خاص بكل مقرض. سعر الرهن المنشور لا يعني أن المقرض سيمول المنزل قبل اكتماله. أكد الأهلية والتقييم والملكية والدفعات المرحلية والتأمين والرسوم والمقدم مع المقرض.', chooseUnit: 'نوع المنزل', customPayment: 'اختر المنزل والمقدم ومدة الدفع ثم احسب كل مواعيد الدفعات التوضيحية.', phoneLabel: 'الهاتف / WhatsApp', familyServices: 'الحياة العائلية والخدمات المحلية', areaServices: 'استكشف المدارس والرعاية الصحية والجامعات والأسواق والنقل والحدائق والأنشطة العائلية القريبة. يجب تأكيد الموقع الدقيق وأوقات السفر.' }
+  };
+
+  function offPlanExperienceText(key) {
+    const pack = OFF_PLAN_EXPERIENCE_I18N[offPlanLanguage()] || OFF_PLAN_EXPERIENCE_I18N.en;
+    return pack[key] || OFF_PLAN_EXPERIENCE_I18N.en[key] || key;
+  }
+
   function localizedProjectType(value) {
     const key = clean(value).toLowerCase().replace(/[\s_-]+/g, '');
     return offPlanDynamicText({ townhouse: 'townhouse', apartment: 'apartment', flat: 'apartment', house: 'house', mixed: 'mixed', mixeduse: 'mixed' }[key] || 'house');
@@ -263,7 +280,7 @@
     return `<div><div class="flex items-center justify-between gap-3 text-xs"><span class="font-bold text-gray-700">${escapeHtml(label)}</span><span class="font-black text-green-800">${known ? offPlanText('percentComplete', { count: width }) : offPlanText('toConfirm')}</span></div><div class="off-plan-meter mt-2"><span style="width:${width}%"></span></div></div>`;
   }
 
-  function projectCard(project) {
+  function projectCard(project, index = 0) {
     const unitPrices = (project.unit_types || []).map((unit) => number(unit.price_ugx)).filter((value) => value != null && value > 0);
     const launch = number(project.launch_price_ugx) || (unitPrices.length ? Math.min(...unitPrices) : null);
     const bedrooms = (project.unit_types || []).map((unit) => number(unit.bedrooms)).filter((value) => value != null).sort((a, b) => a - b);
@@ -275,7 +292,7 @@
     const typeLabel = localizedProjectType(project.project_type || 'house');
     return `<article class="off-plan-card">
       <div class="off-plan-card-image">
-        <img src="${escapeHtml(imageUrl(project))}" alt="${escapeHtml(imageCaption(project))}" loading="lazy">
+        <img src="${escapeHtml(imageUrl(project))}" alt="${escapeHtml(imageCaption(project))}" loading="${index < 4 ? 'eager' : 'lazy'}" decoding="async"${index === 0 ? ' fetchpriority="high"' : ''}>
         <a class="off-plan-card-cover" href="/off-plan/${encodeURIComponent(project.slug)}" data-off-plan-project="${escapeHtml(project.slug)}" aria-label="${escapeHtml(offPlanText('viewPhotos', { count: project.images?.length || 1 }))}: ${escapeHtml(project.name)}"></a>
         <div class="off-plan-card-badges"><span class="off-plan-pill bg-white/95 text-green-800">Off Plan</span><span class="off-plan-pill bg-black/65 text-white">${escapeHtml(delivery)}</span></div>
         <div class="off-plan-card-content"><span class="off-plan-pill bg-white/95 text-green-800"><i class="fas fa-circle-check" aria-hidden="true"></i>${escapeHtml(statusLabel)}</span><h3>${escapeHtml(project.name)}</h3><p class="mt-1 text-sm"><i class="fas fa-location-dot mr-1" aria-hidden="true"></i>${escapeHtml(projectLocation(project))}</p><div class="off-plan-card-meta"><span><i class="fas fa-bed mr-1" aria-hidden="true"></i>${escapeHtml(bedroomLabel)}</span><span><i class="fas fa-house mr-1" aria-hidden="true"></i>${escapeHtml(typeLabel)}</span></div><p class="mt-3 text-xs">${escapeHtml(offPlanText('launchPrice'))}</p><strong class="off-plan-card-price">${escapeHtml(formatUgx(launch))}</strong>${project.payment_plan_months ? `<span class="off-plan-card-plan">${escapeHtml(offPlanText('monthPlan', { count: project.payment_plan_months }))}</span>` : ''}</div>
@@ -444,7 +461,7 @@
       if (!ready || !document.body.contains(container)) throw new Error('Google Maps unavailable');
       clearOffPlanMarkers();
       container.innerHTML = '';
-      const map = new window.google.maps.Map(container, { center: { lat: 1.3733, lng: 32.2903 }, zoom: 7, mapTypeControl: false, streetViewControl: false, fullscreenControl: true, scrollwheel: false });
+      const map = new window.google.maps.Map(container, { center: { lat: 1.3733, lng: 32.2903 }, zoom: 7, mapTypeControl: true, streetViewControl: true, fullscreenControl: true, clickableIcons: true, scrollwheel: false });
       state.map = map;
       if (projects.length) {
         const bounds = new window.google.maps.LatLngBounds();
@@ -578,7 +595,7 @@
   function paymentPlanMarkup(project) {
     const steps = project.payment_plan || [];
     const cards = steps.length ? steps.map((item, index) => `<div class="rounded-2xl ${index === 0 ? 'bg-green-800 text-white' : 'bg-green-50 text-green-950'} p-4"><span class="text-xs font-black uppercase tracking-wide opacity-70">${escapeHtml(offPlanText('step', { count: index + 1 }))}</span><strong class="block mt-1">${escapeHtml(localizedPaymentLabel(item))}</strong><span class="block text-sm mt-1">${item.percent != null ? `${escapeHtml(item.percent)}%` : item.amount_ugx ? formatUgx(item.amount_ugx) : item.months ? offPlanText('monthlyInstalments', { count: item.months }) : escapeHtml(item.due || offPlanText('termsVerify'))}</span></div>`).join('') : `<p class="text-sm text-gray-500">${escapeHtml(offPlanText('milestonesVerifying'))}</p>`;
-    return `<div class="off-plan-payment-grid grid gap-3">${cards}<div class="rounded-2xl border-2 border-dashed border-green-300 bg-white p-4"><span class="text-xs font-black uppercase tracking-wide text-green-700">${escapeHtml(offPlanText('step', { count: steps.length + 1 }))}</span><strong class="block mt-1 text-gray-950">${escapeHtml(offPlanText('buildYourOwn'))}</strong><span class="block text-sm mt-1 text-gray-500">${escapeHtml(offPlanText('buildSchedule'))}</span></div></div>`;
+    return `<div class="off-plan-payment-grid grid gap-3">${cards}<button type="button" onclick="openOffPlanCustomPaymentBuilder()" class="off-plan-build-step rounded-2xl border-2 border-dashed border-green-300 bg-white p-4 text-left"><span class="text-xs font-black uppercase tracking-wide text-green-700">${escapeHtml(offPlanText('step', { count: steps.length + 1 }))}</span><strong class="block mt-1 text-gray-950">${escapeHtml(offPlanText('buildYourOwn'))}</strong><span class="block text-sm mt-1 text-gray-500">${escapeHtml(offPlanText('buildSchedule'))}</span></button></div>`;
   }
 
   function mapMarkup(project) {
@@ -597,13 +614,21 @@
     if (!sourceId) return '';
     const photo = projectAgentPhoto(project);
     const bio = clean(project.source_agent_bio);
-    return `<section class="off-plan-panel"><p class="text-xs font-black uppercase tracking-wide text-green-700">${escapeHtml(offPlanText('projectContact'))}</p><div class="mt-3 flex flex-col sm:flex-row sm:items-center justify-between gap-4"><div class="flex items-center gap-4">${photo ? `<img src="${escapeHtml(photo)}" alt="${escapeHtml(sourceName)}" class="h-20 w-20 rounded-full object-cover border-4 border-green-50">` : `<span class="h-20 w-20 rounded-full bg-green-50 text-green-800 grid place-items-center text-2xl"><i class="fas fa-user"></i></span>`}<div><strong class="block text-lg text-gray-950">${escapeHtml(sourceName)}</strong>${project.source_agent_company ? `<span class="block text-sm text-gray-500">${escapeHtml(project.source_agent_company)}</span>` : ''}<span class="block text-sm text-gray-500">${escapeHtml(offPlanText('linkedProfile'))}</span></div></div><a href="/agents/${encodeURIComponent(sourceId)}" class="rounded-xl bg-green-50 text-green-800 px-4 py-2.5 text-sm font-black text-center">${escapeHtml(offPlanText('viewProfile'))}</a></div>${bio ? `<p class="mt-4 text-sm leading-6 text-gray-600">${escapeHtml(bio)}</p>` : ''}</section>`;
+    const phone = clean(project.source_agent_whatsapp || project.source_agent_phone);
+    const phoneHref = phone.replace(/[^+\d]/g, '');
+    return `<section class="off-plan-panel"><p class="text-xs font-black uppercase tracking-wide text-green-700">${escapeHtml(offPlanText('projectContact'))}</p><div class="mt-3 flex flex-col sm:flex-row sm:items-center justify-between gap-4"><div class="flex items-center gap-4">${photo ? `<img src="${escapeHtml(photo)}" alt="${escapeHtml(sourceName)}" class="h-20 w-20 rounded-full object-cover border-4 border-green-50">` : `<span class="h-20 w-20 rounded-full bg-green-50 text-green-800 grid place-items-center text-2xl"><i class="fas fa-user"></i></span>`}<div><strong class="block text-lg text-gray-950">${escapeHtml(sourceName)}</strong>${project.source_agent_company ? `<span class="block text-sm text-gray-500">${escapeHtml(project.source_agent_company)}</span>` : ''}<span class="block text-sm text-gray-500">${escapeHtml(offPlanText('linkedProfile'))}</span>${phone ? `<a class="mt-2 inline-flex items-center gap-2 text-sm font-black text-green-800" href="tel:${escapeHtml(phoneHref)}"><i class="fas fa-phone" aria-hidden="true"></i>${escapeHtml(offPlanExperienceText('phoneLabel'))}: ${escapeHtml(phone)}</a>` : ''}</div></div><a href="/agents/${encodeURIComponent(sourceId)}" class="rounded-xl bg-green-50 text-green-800 px-4 py-2.5 text-sm font-black text-center">${escapeHtml(offPlanText('viewProfile'))}</a></div>${bio ? `<p class="mt-4 text-sm leading-6 text-gray-600">${escapeHtml(bio)}</p>` : ''}</section>`;
   }
 
   function calculatorMarkup(project, firstPrice) {
-    const sourceUnit = (project.unit_types || []).find((unit) => number(unit.price_original) != null);
+    const units = project.unit_types || [];
+    const sourceUnit = units.find((unit) => number(unit.price_original) != null);
     const originalCurrency = sourceUnit?.price_original_currency || project.original_currency || 'USD';
-    return `<div class="mt-6 rounded-2xl border border-green-100 bg-[#f4faf5] p-5"><h3 class="font-black text-gray-950">${escapeHtml(offPlanText('buildSchedule'))}</h3><div class="grid sm:grid-cols-2 lg:grid-cols-5 gap-3 mt-4"><label class="text-xs font-bold text-gray-700">${escapeHtml(offPlanText('currency'))}<select id="off-plan-calc-currency" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 text-sm" onchange="changeOffPlanCalculatorCurrency(this.value)"><option value="UGX">UGX</option><option value="${escapeHtml(originalCurrency)}">${escapeHtml(originalCurrency)}</option><option value="GBP">GBP</option><option value="EUR">EUR</option></select></label><label class="text-xs font-bold text-gray-700">${escapeHtml(offPlanText('homePrice'))}<input id="off-plan-calc-price" type="number" min="0" value="${escapeHtml(firstPrice)}" data-ugx-value="${escapeHtml(firstPrice)}" data-original-value="${escapeHtml(sourceUnit?.price_original || '')}" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 text-sm"></label><label class="text-xs font-bold text-gray-700">${escapeHtml(offPlanText('upfrontDeposit'))}<input id="off-plan-calc-deposit" type="number" min="0" max="100" value="${escapeHtml(project.payment_plan?.find((item) => item.percent)?.percent || 0)}" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 text-sm"></label><label class="text-xs font-bold text-gray-700">${escapeHtml(offPlanText('reservationFee'))}<input id="off-plan-calc-reservation" type="number" min="0" value="${escapeHtml(project.reservation_fee_ugx || 0)}" data-ugx-value="${escapeHtml(project.reservation_fee_ugx || 0)}" data-original-value="${escapeHtml(project.extra_fields?.reservation_fee_original || 1500)}" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 text-sm"></label><label class="text-xs font-bold text-gray-700">${escapeHtml(offPlanText('paymentMonths'))}<input id="off-plan-calc-months" type="number" min="1" max="120" value="${escapeHtml(project.payment_plan_months || 12)}" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 text-sm"></label></div><button type="button" onclick="calculateOffPlanPayments()" class="mt-4 rounded-xl bg-green-700 text-white px-5 py-3 font-black">${escapeHtml(offPlanText('calculateDates'))}</button><div id="off-plan-calculator-result" class="mt-4"></div></div><div class="mt-5 rounded-2xl border border-emerald-100 bg-white overflow-hidden"><button type="button" onclick="toggleOffPlanMortgage()" class="w-full flex items-center justify-between gap-3 px-5 py-4 text-left text-sm font-black text-green-800" aria-controls="off-plan-mortgage-panel" aria-expanded="false" id="off-plan-mortgage-toggle"><span><i class="fas fa-house-circle-check mr-2"></i>${escapeHtml(offPlanText('mortgageOptions'))}</span><i class="fas fa-chevron-down"></i></button><div id="off-plan-mortgage-panel" class="hidden border-t border-emerald-100 p-5"><p class="text-sm text-gray-600">${escapeHtml(offPlanText('mortgageIntro'))}</p><div id="off-plan-mortgage-results" class="mt-4 grid md:grid-cols-3 gap-3"></div></div></div>`;
+    const depositValue = number(project.payment_plan?.find((item) => number(item.percent) != null)?.percent) || 0;
+    const depositOptions = Array.from(new Set([0, 5, 10, 15, 20, 25, 30, 40, 50, depositValue])).sort((a, b) => a - b);
+    const monthsValue = number(project.payment_plan_months) || 12;
+    const monthOptions = Array.from(new Set([6, 12, 15, 18, 24, 36, 40, 48, 60, monthsValue])).sort((a, b) => a - b);
+    const currencyOptions = Array.from(new Set(['UGX', originalCurrency, 'GBP', 'EUR'].filter(Boolean)));
+    return `<div id="off-plan-custom-payment-builder" class="mt-6 rounded-2xl border border-green-100 bg-[#f4faf5] p-5"><h3 class="font-black text-gray-950">${escapeHtml(offPlanText('buildSchedule'))}</h3><p class="mt-1 text-sm text-gray-600">${escapeHtml(offPlanExperienceText('customPayment'))}</p><div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-4">${units.length ? `<label class="text-xs font-bold text-gray-700">${escapeHtml(offPlanExperienceText('chooseUnit'))}<select id="off-plan-calc-unit" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 text-sm" onchange="selectOffPlanUnit(this.value)">${units.map((unit, index) => `<option value="${index}">${escapeHtml(localizedUnitLabel(unit))}</option>`).join('')}</select></label>` : ''}<label class="text-xs font-bold text-gray-700">${escapeHtml(offPlanText('currency'))}<select id="off-plan-calc-currency" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 text-sm" onchange="changeOffPlanCalculatorCurrency(this.value)">${currencyOptions.map((currency) => `<option value="${escapeHtml(currency)}">${escapeHtml(currency)}</option>`).join('')}</select></label><label class="text-xs font-bold text-gray-700">${escapeHtml(offPlanText('homePrice'))}<input id="off-plan-calc-price" type="number" min="0" value="${escapeHtml(firstPrice)}" data-ugx-value="${escapeHtml(firstPrice)}" data-original-value="${escapeHtml(sourceUnit?.price_original || '')}" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 text-sm"></label><label class="text-xs font-bold text-gray-700">${escapeHtml(offPlanText('upfrontDeposit'))}<select id="off-plan-calc-deposit" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 text-sm">${depositOptions.map((value) => `<option value="${value}" ${value === depositValue ? 'selected' : ''}>${value}%</option>`).join('')}</select></label><label class="text-xs font-bold text-gray-700">${escapeHtml(offPlanText('reservationFee'))}<input id="off-plan-calc-reservation" type="number" min="0" value="${escapeHtml(project.reservation_fee_ugx || 0)}" data-ugx-value="${escapeHtml(project.reservation_fee_ugx || 0)}" data-original-value="${escapeHtml(project.extra_fields?.reservation_fee_original || 1500)}" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 text-sm"></label><label class="text-xs font-bold text-gray-700">${escapeHtml(offPlanText('paymentMonths'))}<select id="off-plan-calc-months" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 text-sm">${monthOptions.map((value) => `<option value="${value}" ${value === monthsValue ? 'selected' : ''}>${escapeHtml(offPlanDynamicText('upToMonths', { count: value }))}</option>`).join('')}</select></label></div><button type="button" onclick="calculateOffPlanPayments()" class="mt-4 rounded-xl bg-green-700 text-white px-5 py-3 font-black">${escapeHtml(offPlanText('calculateDates'))}</button><div id="off-plan-calculator-result" class="mt-4"></div></div><div class="mt-5 rounded-2xl border border-emerald-100 bg-white overflow-hidden"><button type="button" onclick="toggleOffPlanMortgage()" class="w-full flex items-center justify-between gap-3 px-5 py-4 text-left text-sm font-black text-green-800" aria-controls="off-plan-mortgage-panel" aria-expanded="false" id="off-plan-mortgage-toggle"><span><i class="fas fa-house-circle-check mr-2"></i>${escapeHtml(offPlanExperienceText('mortgageTitle'))}</span><i class="fas fa-chevron-down"></i></button><div id="off-plan-mortgage-panel" class="hidden border-t border-emerald-100 p-5"><p class="text-sm text-gray-600">${escapeHtml(offPlanText('mortgageIntro'))}</p><div class="off-plan-mortgage-policy mt-3"><strong>${escapeHtml(offPlanExperienceText('mortgageTitle'))}</strong><p>${escapeHtml(offPlanExperienceText('mortgagePolicy'))}</p></div><div id="off-plan-mortgage-results" class="mt-4 grid md:grid-cols-3 gap-3"></div></div></div>`;
   }
 
   function detailMarkup(project) {
@@ -613,7 +638,9 @@
     const sourceName = clean(project.source_agent_name || project.source_display_name) || offPlanText('projectTeam');
     const soldLabel = project.units_sold == null || project.units_total == null ? offPlanText('toConfirm') : `${project.units_sold} / ${project.units_total}`;
     const description = project.slug === 'entebbe-victoria-palms' ? offPlanText('previewDescription') : (project.description || offPlanText('toConfirm'));
-    const areaOverview = project.slug === 'entebbe-victoria-palms' ? offPlanDynamicText('areaOverview') : (clean(project.extra_fields?.area_overview) || offPlanText('areaOverviewFallback'));
+    const areaOverview = offPlanLanguage() === 'en' && clean(project.extra_fields?.area_overview)
+      ? clean(project.extra_fields.area_overview)
+      : `${project.slug === 'entebbe-victoria-palms' ? offPlanDynamicText('areaOverview') : offPlanText('areaOverviewFallback')} ${offPlanExperienceText('areaServices')}`;
     return `${galleryMarkup(project)}
       <div class="off-plan-detail-grid mt-7">
         <main class="min-w-0 space-y-6">
@@ -624,7 +651,7 @@
           <section class="off-plan-panel"><div class="flex items-end justify-between gap-3"><div><p class="text-xs font-black uppercase tracking-wide text-green-700">${escapeHtml(offPlanText('chooseHome'))}</p><h2 class="mt-1 text-xl font-black text-gray-950">${escapeHtml(offPlanText('unitTypesPrices'))}</h2></div><span class="text-xs text-gray-500">${escapeHtml(offPlanText('guidePrices'))}</span></div><div class="mt-4">${unitTable(project)}</div></section>
           <section class="off-plan-panel"><h2 class="text-xl font-black text-gray-950">${escapeHtml(offPlanText('projectProgress'))}</h2><div class="grid sm:grid-cols-2 gap-6 mt-5">${progressMarkup(offPlanText('constructionCompleted'), project.construction_progress)}${progressMarkup(offPlanText('homesSold'), project.sales_progress)}</div></section>
           <section class="off-plan-panel"><h2 class="text-xl font-black text-gray-950">${escapeHtml(offPlanText('paymentPlan'))}</h2><div class="mt-4">${paymentPlanMarkup(project)}</div>${calculatorMarkup(project, firstPrice)}</section>
-          <section class="off-plan-panel"><h2 class="text-xl font-black text-gray-950">${escapeHtml(offPlanText('locationArea'))}</h2><p class="mt-2 text-sm text-gray-600">${escapeHtml(projectLocation(project))}. ${escapeHtml(project.extra_fields?.map_precision === 'area_centroid' ? offPlanText('widerArea') : offPlanText('confirmTravel'))}</p><p class="mt-3 text-sm leading-6 text-gray-700">${escapeHtml(areaOverview)}</p><div class="mt-4">${mapMarkup(project)}</div><div class="mt-5"><h3 class="font-black text-gray-950">${escapeHtml(offPlanText('nearbyEssentials'))}</h3><p class="mt-1 text-xs text-gray-500">${escapeHtml(offPlanText('nearbyLive'))}</p><div id="off-plan-nearby-places" class="mt-3 grid sm:grid-cols-2 gap-3"></div></div></section>
+          <section class="off-plan-panel"><h2 class="text-xl font-black text-gray-950">${escapeHtml(offPlanText('locationArea'))}</h2><p class="mt-2 text-sm text-gray-600">${escapeHtml(projectLocation(project))}. ${escapeHtml(project.extra_fields?.map_precision === 'area_centroid' ? offPlanText('widerArea') : offPlanText('confirmTravel'))}</p><p class="mt-3 text-sm leading-6 text-gray-700">${escapeHtml(areaOverview)}</p><div class="mt-4">${mapMarkup(project)}</div><div class="mt-6"><h3 class="font-black text-gray-950">${escapeHtml(offPlanExperienceText('familyServices'))}</h3><p class="mt-1 text-xs text-gray-500">${escapeHtml(offPlanText('nearbyLive'))}</p><div id="off-plan-nearby-places" class="mt-4 space-y-5"></div></div></section>
           ${(project.videos || []).length ? `<section class="off-plan-panel"><h2 class="text-xl font-black text-gray-950">${escapeHtml(offPlanText('projectVideo'))}</h2><div class="mt-4 aspect-video rounded-2xl overflow-hidden bg-gray-950"><video controls preload="metadata" class="w-full h-full" src="${escapeHtml(project.videos[0].url)}"></video></div></section>` : ''}
           <section class="off-plan-risk-warning"><strong><i class="fas fa-triangle-exclamation mr-1"></i>${escapeHtml(offPlanText('disclaimerTitle'))}</strong><p class="mt-2">${escapeHtml(offPlanText('disclaimerBody'))}</p></section>
         </main>
@@ -632,22 +659,53 @@
       </div>`;
   }
 
-  function renderStoredNearbyPlaces(project) {
-    const target = document.getElementById('off-plan-nearby-places');
-    if (!target) return;
-    const places = Array.isArray(project.nearby_places) ? project.nearby_places : [];
-    target.innerHTML = places.length ? places.map((place) => `<article class="rounded-xl border border-gray-200 bg-gray-50 p-3"><span class="text-[10px] font-black uppercase tracking-wide text-red-600">${escapeHtml(place.category || offPlanText('nearbyEssentials'))}</span><strong class="block mt-1 text-sm text-gray-950">${escapeHtml(place.name)}</strong>${place.note ? `<p class="mt-1 text-xs leading-5 text-gray-500">${escapeHtml(offPlanLanguage() === 'en' ? place.note : offPlanText('confirmTravel'))}</p>` : ''}${place.source_url ? `<a class="mt-2 inline-block text-xs font-black text-green-800 underline" href="${escapeHtml(place.source_url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(offPlanText('officialDetails'))}</a>` : ''}</article>`).join('') : `<p class="sm:col-span-2 text-sm text-gray-500">${escapeHtml(offPlanText('areaOverviewFallback'))}</p>`;
+  const nearbyGroupDefinitions = [
+    { key: 'schools', types: ['school'], icon: 'fa-school' },
+    { key: 'healthcare', types: ['hospital'], icon: 'fa-hospital' },
+    { key: 'universities', types: ['university'], icon: 'fa-graduation-cap' },
+    { key: 'shopping', types: ['shopping_mall', 'supermarket'], icon: 'fa-basket-shopping' },
+    { key: 'recreation', types: ['park', 'tourist_attraction'], icon: 'fa-tree' },
+    { key: 'transport', types: ['airport'], icon: 'fa-plane' }
+  ];
+
+  function nearbyGroupKeyForPlace(place = {}) {
+    const source = `${place.category || ''} ${(place.types || []).join(' ')}`.toLowerCase();
+    if (/school|child|nursery|kindergarten/.test(source)) return 'schools';
+    if (/hospital|clinic|health|medical/.test(source)) return 'healthcare';
+    if (/university|college|tertiary/.test(source)) return 'universities';
+    if (/market|shop|mall|supermarket|retail/.test(source)) return 'shopping';
+    if (/park|recreation|tourist|garden|wildlife|family/.test(source)) return 'recreation';
+    if (/airport|transport|bus|ferry/.test(source)) return 'transport';
+    return 'recreation';
   }
 
-  function renderLiveNearbyPlaces(results, project) {
+  function renderNearbyGroups(groups, project) {
     const target = document.getElementById('off-plan-nearby-places');
-    if (!target || !Array.isArray(results) || !results.length) { renderStoredNearbyPlaces(project); return; }
-    const unique = results.filter((place, index, rows) => rows.findIndex((item) => item.place_id === place.place_id) === index).slice(0, 8);
-    target.innerHTML = unique.map((place) => {
-      const category = place.types?.includes('school') ? 'School' : place.types?.includes('hospital') ? 'Healthcare' : offPlanText('nearbyEssentials');
-      const mapsUrl = place.place_id ? `https://www.google.com/maps/search/?api=1&query_place_id=${encodeURIComponent(place.place_id)}&query=${encodeURIComponent(place.name || '')}` : googleMapsLink(project);
-      return `<a class="rounded-xl border border-gray-200 bg-gray-50 p-3 hover:border-green-300" href="${escapeHtml(mapsUrl)}" target="_blank" rel="noopener noreferrer"><span class="text-[10px] font-black uppercase tracking-wide text-red-600">${escapeHtml(category)}</span><strong class="block mt-1 text-sm text-gray-950">${escapeHtml(place.name)}</strong><span class="block mt-1 text-xs text-gray-500">${escapeHtml(place.vicinity || offPlanText('confirmTravel'))}</span></a>`;
-    }).join('');
+    if (!target) return;
+    const populated = groups.filter((group) => Array.isArray(group.places) && group.places.length);
+    if (!populated.length) { target.innerHTML = `<p class="text-sm text-gray-500">${escapeHtml(offPlanText('areaOverviewFallback'))}</p>`; return; }
+    target.innerHTML = populated.map((group) => `<section class="off-plan-nearby-group"><h4><i class="fas ${escapeHtml(group.icon)}" aria-hidden="true"></i>${escapeHtml(offPlanExperienceText(group.key))}</h4><div class="off-plan-nearby-grid">${group.places.map((place) => {
+      const mapsUrl = place.place_id ? `https://www.google.com/maps/search/?api=1&query_place_id=${encodeURIComponent(place.place_id)}&query=${encodeURIComponent(place.name || '')}` : (place.source_url || googleMapsLink(project));
+      const note = place.vicinity || place.note || offPlanText('confirmTravel');
+      return `<a class="off-plan-nearby-card" href="${escapeHtml(mapsUrl)}" target="_blank" rel="noopener noreferrer"><strong>${escapeHtml(place.name || offPlanText('nearbyEssentials'))}</strong><span>${escapeHtml(offPlanLanguage() === 'en' ? note : offPlanText('confirmTravel'))}</span>${place.source_url ? `<small>${escapeHtml(offPlanText('officialDetails'))}<i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i></small>` : ''}</a>`;
+    }).join('')}</div></section>`).join('');
+  }
+
+  function renderStoredNearbyPlaces(project) {
+    const places = Array.isArray(project.nearby_places) ? project.nearby_places : [];
+    renderNearbyGroups(nearbyGroupDefinitions.map((definition) => ({ ...definition, places: places.filter((place) => nearbyGroupKeyForPlace(place) === definition.key).slice(0, 4) })), project);
+  }
+
+  function renderLiveNearbyPlaces(groups, project) {
+    if (!Array.isArray(groups) || !groups.some((group) => group.places?.length)) { renderStoredNearbyPlaces(project); return; }
+    const stored = Array.isArray(project.nearby_places) ? project.nearby_places : [];
+    const merged = nearbyGroupDefinitions.map((definition) => {
+      const live = groups.find((group) => group.key === definition.key)?.places || [];
+      const official = stored.filter((place) => nearbyGroupKeyForPlace(place) === definition.key);
+      const places = [...official, ...live].filter((place, index, rows) => rows.findIndex((item) => (item.place_id && item.place_id === place.place_id) || clean(item.name).toLowerCase() === clean(place.name).toLowerCase()) === index).slice(0, 4);
+      return { ...definition, places };
+    });
+    renderNearbyGroups(merged, project);
   }
 
   async function renderOffPlanDetailMap(project) {
@@ -658,16 +716,19 @@
       const ready = await ensureOffPlanGoogleMaps();
       if (!ready || !document.body.contains(container)) throw new Error('Google Maps unavailable');
       const position = { lat, lng };
-      const map = new window.google.maps.Map(container, { center: position, zoom: project.extra_fields?.map_precision === 'area_centroid' ? 13 : 16, mapTypeControl: false, streetViewControl: false, scrollwheel: false });
+      const map = new window.google.maps.Map(container, { center: position, zoom: project.extra_fields?.map_precision === 'area_centroid' ? 13 : 16, mapTypeControl: true, streetViewControl: true, fullscreenControl: true, clickableIcons: true, scrollwheel: false });
       const marker = new window.google.maps.Marker({ map, position, title: project.name, icon: 'https://maps.google.com/mapfiles/ms/icons/red-dot.png' });
       const info = new window.google.maps.InfoWindow({ content: `<div class="off-plan-map-popup"><strong>${escapeHtml(project.name)}</strong><span>${escapeHtml(projectLocation(project))}</span></div>` });
       marker.addListener('click', () => info.open({ map, anchor: marker }));
       state.detailMap = map;
       if (window.google.maps.places?.PlacesService) {
         const service = new window.google.maps.places.PlacesService(map);
-        const queries = ['school', 'hospital'].map((type) => new Promise((resolve) => service.nearbySearch({ location: position, radius: 8000, type }, (places, status) => resolve(status === window.google.maps.places.PlacesServiceStatus.OK ? places : []))));
-        const results = (await Promise.all(queries)).flat();
-        renderLiveNearbyPlaces(results, project);
+        const queries = nearbyGroupDefinitions.map(async (definition) => {
+          const rows = await Promise.all(definition.types.map((type) => new Promise((resolve) => service.nearbySearch({ location: position, radius: 8000, type }, (places, status) => resolve(status === window.google.maps.places.PlacesServiceStatus.OK ? places : [])))));
+          const places = rows.flat().filter((place, index, all) => all.findIndex((item) => item.place_id === place.place_id) === index).slice(0, 4);
+          return { ...definition, places };
+        });
+        renderLiveNearbyPlaces(await Promise.all(queries), project);
       } else renderStoredNearbyPlaces(project);
     } catch (_error) {
       container.innerHTML = `<div class="h-full grid place-items-center px-6 text-center text-sm text-gray-600"><span><i class="fas fa-map-location-dot text-3xl text-red-600 block mb-2"></i>${escapeHtml(offPlanText('mapUnavailable'))}</span></div>`;
@@ -681,7 +742,9 @@
     const years = provider.maxYears || {};
     const deposit = number(deposits.residential ?? provider.min_deposit_residential);
     const term = number(years.residential ?? provider.max_years_residential);
-    return `<article class="rounded-2xl border border-gray-200 bg-gray-50 p-4"><strong class="block text-gray-950">${escapeHtml(provider.name || provider.provider_name)}</strong><dl class="mt-3 grid grid-cols-2 gap-3 text-xs"><div><dt class="text-gray-500">${escapeHtml(offPlanText('rate'))}</dt><dd class="mt-1 font-black text-gray-950">${rate == null ? escapeHtml(offPlanText('quoteRequired')) : `${rate}%`}</dd></div><div><dt class="text-gray-500">${escapeHtml(offPlanText('minDeposit'))}</dt><dd class="mt-1 font-black text-gray-950">${deposit == null ? escapeHtml(offPlanText('quoteRequired')) : `${deposit}%`}</dd></div><div><dt class="text-gray-500">${escapeHtml(offPlanText('term'))}</dt><dd class="mt-1 font-black text-gray-950">${term == null ? escapeHtml(offPlanText('quoteRequired')) : escapeHtml(offPlanText('years', { count: term }))}</dd></div></dl><p class="mt-3 text-[11px] leading-5 text-gray-500">${escapeHtml(provider.sourceNote || provider.source_note || offPlanText('quoteRequired'))}</p>${provider.sourceUrl || provider.source_url ? `<a class="mt-3 inline-flex items-center gap-1 text-xs font-black text-green-800 underline" href="${escapeHtml(provider.sourceUrl || provider.source_url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(offPlanText('officialDetails'))}<i class="fas fa-arrow-up-right-from-square"></i></a>` : ''}</article>`;
+    const name = provider.name || provider.provider_name || offPlanExperienceText('mortgageTitle');
+    const logo = provider.logoUrl || provider.logo_url;
+    return `<article class="off-plan-mortgage-card rounded-2xl border border-gray-200 bg-gray-50 p-4"><div class="off-plan-bank-heading">${logo ? `<img src="${escapeHtml(logo)}" alt="${escapeHtml(name)} logo" loading="lazy">` : ''}<strong>${escapeHtml(name)}</strong></div><dl class="mt-3 grid grid-cols-2 gap-3 text-xs"><div><dt class="text-gray-500">${escapeHtml(offPlanText('rate'))}</dt><dd class="mt-1 font-black text-gray-950">${rate == null ? escapeHtml(offPlanText('quoteRequired')) : `${rate}%`}</dd></div><div><dt class="text-gray-500">${escapeHtml(offPlanText('minDeposit'))}</dt><dd class="mt-1 font-black text-gray-950">${deposit == null ? escapeHtml(offPlanText('quoteRequired')) : `${deposit}%`}</dd></div><div><dt class="text-gray-500">${escapeHtml(offPlanText('term'))}</dt><dd class="mt-1 font-black text-gray-950">${term == null ? escapeHtml(offPlanText('quoteRequired')) : escapeHtml(offPlanText('years', { count: term }))}</dd></div></dl><p class="mt-3 text-[11px] leading-5 text-gray-500">${escapeHtml(provider.sourceNote || provider.source_note || offPlanText('quoteRequired'))}</p>${provider.sourceUrl || provider.source_url ? `<a class="mt-3 inline-flex items-center gap-1 text-xs font-black text-green-800 underline" href="${escapeHtml(provider.sourceUrl || provider.source_url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(offPlanText('officialDetails'))}<i class="fas fa-arrow-up-right-from-square"></i></a>` : ''}</article>`;
   }
 
   async function loadOffPlanMortgageProviders() {
@@ -758,15 +821,24 @@
   }
 
   function selectOffPlanUnit(index) {
-    const unit = state.activeProject?.unit_types?.[index];
+    const unitIndex = Number(index);
+    const unit = state.activeProject?.unit_types?.[unitIndex];
     const input = document.getElementById('off-plan-calc-price');
+    const unitSelect = document.getElementById('off-plan-calc-unit');
     const currency = clean(document.getElementById('off-plan-calc-currency')?.value || 'UGX').toUpperCase();
+    if (unitSelect && Number.isInteger(unitIndex)) unitSelect.value = String(unitIndex);
     if (input && unit) {
       input.dataset.ugxValue = unit.price_ugx || '';
       input.dataset.originalValue = unit.price_original || '';
       input.value = currency === 'UGX' ? (unit.price_ugx || '') : currency === clean(unit.price_original_currency).toUpperCase() ? (unit.price_original || '') : '';
     }
     document.getElementById('off-plan-calc-price')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  function openOffPlanCustomPaymentBuilder() {
+    const builder = document.getElementById('off-plan-custom-payment-builder');
+    builder?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    window.setTimeout(() => document.getElementById('off-plan-calc-unit')?.focus() || document.getElementById('off-plan-calc-deposit')?.focus(), 350);
   }
 
   async function calculateOffPlanPayments() {
@@ -982,8 +1054,26 @@
     const role = document.getElementById('off-plan-create-role')?.value === 'admin' ? 'admin' : 'staff';
     const status = document.getElementById('off-plan-create-status');
     try {
+      const imageInput = document.getElementById('off-plan-create-images');
+      const imageFiles = Array.from(imageInput?.files || []).slice(0, 20);
+      const imageRights = Boolean(document.getElementById('off-plan-create-image-rights')?.checked);
+      if (imageFiles.length && !imageRights) throw new Error('Confirm that makaug has permission to use the selected project images.');
       const data = await request(`/api/${role === 'admin' ? 'admin' : 'staff'}/off-plan/developments`, { method: 'POST', headers: managementHeaders(role), body: { name: clean(document.getElementById('off-plan-create-name')?.value), area: clean(document.getElementById('off-plan-create-area')?.value), district: clean(document.getElementById('off-plan-create-district')?.value), source_display_name: clean(document.getElementById('off-plan-create-source')?.value), source_agent_id: clean(document.getElementById('off-plan-create-source-id')?.value) || null, project_type: clean(document.getElementById('off-plan-create-type')?.value) || 'development', completion_date: clean(document.getElementById('off-plan-create-completion')?.value) || null, latitude: clean(document.getElementById('off-plan-create-latitude')?.value) || null, longitude: clean(document.getElementById('off-plan-create-longitude')?.value) || null, description: clean(document.getElementById('off-plan-create-description')?.value), status: 'pending_review', verification_status: 'needs_verification' } });
-      if (status) { status.className = 'rounded-xl p-3 text-sm bg-green-50 text-green-900'; status.textContent = `${data.development.name} was created in private staff review.`; }
+      let uploadedCount = 0;
+      let uploadWarning = '';
+      if (imageFiles.length) {
+        try {
+          const images = await Promise.all(imageFiles.map(async (file) => ({ url: await dataUrlForFile(file), filename: file.name, caption: file.name, kind: 'project_photo' })));
+          const uploaded = await request(`/api/${role === 'admin' ? 'admin' : 'staff'}/off-plan/developments/${encodeURIComponent(data.development.id)}/images`, { method: 'POST', headers: managementHeaders(role), body: { confirm_rights: true, images } });
+          uploadedCount = uploaded.images?.length || imageFiles.length;
+        } catch (error) {
+          uploadWarning = ` The private project was saved, but its images need retrying: ${error.message}`;
+        }
+      }
+      if (status) {
+        status.className = `rounded-xl p-3 text-sm ${uploadWarning ? 'bg-amber-50 text-amber-950' : 'bg-green-50 text-green-900'}`;
+        status.textContent = `${data.development.name} was created in private staff review.${uploadedCount ? ` ${uploadedCount} image${uploadedCount === 1 ? '' : 's'} uploaded for review.` : ''}${uploadWarning}`;
+      }
       event.target.reset();
       await loadOffPlanManagement(role);
     } catch (error) { if (status) { status.className = 'rounded-xl p-3 text-sm bg-red-50 text-red-900'; status.textContent = error.message; } }
@@ -1000,7 +1090,7 @@
     else returnToOffPlanList({ history: false });
   }
 
-  Object.assign(window, { applyOffPlanLanguageUI, calculateOffPlanPayments, changeOffPlanCalculatorCurrency, clearOffPlanFilters, closeOffPlanContactModal, closeOffPlanCreateModal, closeOffPlanGallery, createOffPlanWalkthroughBrief, downloadOffPlanBrochure, initializeOffPlanPage, loadOffPlanManagement, openOffPlanContactModal, openOffPlanCreateModal, openOffPlanDetail, openOffPlanFromHero, openOffPlanGallery, returnToOffPlanList, saveOffPlanProgress, searchOffPlan, selectOffPlanContactChannel, selectOffPlanUnit, setOffPlanProjectStatus, shareOffPlan, submitOffPlanContact, submitOffPlanProject, toggleOffPlanAi, toggleOffPlanFilters, toggleOffPlanMap, toggleOffPlanMortgage, uploadOffPlanMedia });
+  Object.assign(window, { applyOffPlanLanguageUI, calculateOffPlanPayments, changeOffPlanCalculatorCurrency, clearOffPlanFilters, closeOffPlanContactModal, closeOffPlanCreateModal, closeOffPlanGallery, createOffPlanWalkthroughBrief, downloadOffPlanBrochure, initializeOffPlanPage, loadOffPlanManagement, openOffPlanContactModal, openOffPlanCreateModal, openOffPlanCustomPaymentBuilder, openOffPlanDetail, openOffPlanFromHero, openOffPlanGallery, returnToOffPlanList, saveOffPlanProgress, searchOffPlan, selectOffPlanContactChannel, selectOffPlanUnit, setOffPlanProjectStatus, shareOffPlan, submitOffPlanContact, submitOffPlanProject, toggleOffPlanAi, toggleOffPlanFilters, toggleOffPlanMap, toggleOffPlanMortgage, uploadOffPlanMedia });
   if (/^\/off-plan(?:\/|$)/i.test(location.pathname)) initializeOffPlanPage();
   if (document.getElementById('page-staff-dashboard')?.classList.contains('active')) loadOffPlanManagement('staff');
   if (document.getElementById('page-admin-dashboard')?.classList.contains('active')) loadOffPlanManagement('admin');

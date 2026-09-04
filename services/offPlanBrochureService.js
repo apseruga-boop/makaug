@@ -84,7 +84,7 @@ async function safeRemoteImageBuffer(url) {
 }
 
 async function googleStaticMapBuffer(project = {}) {
-  const key = cleanText(process.env.GOOGLE_MAPS_API_KEY, 500);
+  const key = cleanText(process.env.GOOGLE_MAPS_STATIC_API_KEY || process.env.GOOGLE_MAPS_API_KEY, 500);
   const lat = Number(project.latitude);
   const lng = Number(project.longitude);
   if (!key || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
@@ -99,12 +99,27 @@ async function googleStaticMapBuffer(project = {}) {
   });
   try {
     const response = await fetch(`https://maps.googleapis.com/maps/api/staticmap?${query}`, { signal: AbortSignal.timeout(4500) });
-    if (!response.ok || !(response.headers.get('content-type') || '').startsWith('image/')) return null;
+    if (!response.ok || !(response.headers.get('content-type') || '').startsWith('image/')) {
+      const responseText = await response.text().catch(() => '');
+      console.warn('[off-plan-brochure-map] Static map unavailable', { status: response.status, body: cleanText(responseText, 180) });
+      return null;
+    }
     const bytes = Buffer.from(await response.arrayBuffer());
     return bytes.length && bytes.length <= 8 * 1024 * 1024 ? bytes : null;
-  } catch (_error) {
+  } catch (error) {
+    console.warn('[off-plan-brochure-map] Static map request failed', { message: cleanText(error?.message, 180) });
     return null;
   }
+}
+
+function areaGroup(place = {}) {
+  const source = cleanText(place.category, 100).toLowerCase();
+  if (/school|child|nursery|kindergarten/.test(source)) return 'Schools and childcare';
+  if (/hospital|clinic|health|medical/.test(source)) return 'Healthcare';
+  if (/university|college|tertiary/.test(source)) return 'Universities';
+  if (/market|shop|mall|supermarket|retail/.test(source)) return 'Markets and shopping';
+  if (/airport|transport|bus|ferry/.test(source)) return 'Transport';
+  return 'Parks and family activities';
 }
 
 function addHeader(doc, title = '') {
@@ -227,14 +242,34 @@ function buildOffPlanBrochure(projectInput, output, options = {}) {
   doc.fillColor(MUTED).font('Helvetica').fontSize(8.5).text(project.extra_fields?.map_precision === 'area_centroid'
     ? 'The red marker represents the wider Entebbe area. The exact development pin is still being confirmed.'
     : 'Confirm the exact entrance and travel times before making a commitment.', 44, mapTop + 246, { width: 505, link: googleMapsUrl(project) });
-  let nearbyY = mapTop + 282;
-  doc.fillColor(BRAND_GREEN).font('Helvetica-Bold').fontSize(12).text('Area references', 44, nearbyY);
-  nearbyY += 22;
-  const nearby = project.nearby_places.slice(0, 4);
-  (nearby.length ? nearby : [{ name: 'Nearby services', note: 'Schools, hospitals and travel times require confirmation against the exact site pin.' }]).forEach((place) => {
-    doc.fillColor(INK).font('Helvetica-Bold').fontSize(9.5).text(cleanText(place.name || place.category || 'Area reference', 140), 55, nearbyY, { width: 200 });
-    doc.fillColor(MUTED).font('Helvetica').fontSize(8.5).text(cleanText(place.note || 'Confirm current details and travel time.', 260), 260, nearbyY, { width: 285, link: place.source_url || undefined });
-    nearbyY += 38;
+  doc.fillColor(BRAND_GREEN).font('Helvetica-Bold').fontSize(11).text('Open this area in Google Maps', 44, mapTop + 274, { width: 505, link: googleMapsUrl(project), underline: true });
+  doc.fillColor(MUTED).font('Helvetica').fontSize(8.5).text('Family services and source-attributed area references continue on the next page. Confirm every route and travel time from the exact development entrance.', 44, mapTop + 298, { width: 505, lineGap: 3 });
+
+  addPage(doc, project, 'Family life and local services');
+  writeSectionTitle(doc, 'Family life and local services');
+  doc.fillColor(MUTED).font('Helvetica').fontSize(9.5).text('Explore education, healthcare, shopping, recreation and transport in the wider Entebbe area. These references do not claim a verified distance from the development; use the live project map and confirm current services directly.', 44, doc.y + 5, { width: 505, lineGap: 3 });
+  const groupedPlaces = new Map();
+  project.nearby_places.forEach((place) => {
+    const key = areaGroup(place);
+    if (!groupedPlaces.has(key)) groupedPlaces.set(key, []);
+    groupedPlaces.get(key).push(place);
+  });
+  let servicesY = doc.y + 26;
+  const groupOrder = ['Schools and childcare', 'Healthcare', 'Universities', 'Markets and shopping', 'Parks and family activities', 'Transport'];
+  groupOrder.forEach((groupName) => {
+    const places = (groupedPlaces.get(groupName) || []).slice(0, 4);
+    if (!places.length || servicesY > 690) return;
+    doc.fillColor(BRAND_GREEN).font('Helvetica-Bold').fontSize(11).text(groupName, 44, servicesY, { width: 505 });
+    servicesY += 20;
+    places.forEach((place) => {
+      if (servicesY > 710) return;
+      doc.roundedRect(44, servicesY, 505, 44, 8).fill(PALE);
+      doc.fillColor(INK).font('Helvetica-Bold').fontSize(9).text(cleanText(place.name || groupName, 150), 57, servicesY + 7, { width: 190, height: 13, ellipsis: true });
+      doc.fillColor(MUTED).font('Helvetica').fontSize(7.5).text(cleanText(place.note || 'Confirm current details and travel time.', 270), 255, servicesY + 6, { width: 280, height: 28, ellipsis: true, lineGap: 1, link: place.source_url || undefined });
+      if (place.source_url) doc.fillColor(BRAND_GREEN).font('Helvetica-Bold').fontSize(7).text('Official or primary source', 57, servicesY + 27, { width: 180, link: place.source_url, underline: true });
+      servicesY += 50;
+    });
+    servicesY += 4;
   });
 
   addPage(doc, project, 'Homes and payment plan');
@@ -306,7 +341,9 @@ function buildOffPlanBrochure(projectInput, output, options = {}) {
   doc.fillColor(BRAND_GREEN).font('Helvetica-Bold').fontSize(10).text('PROJECT CONTACT', 184, 116);
   doc.fillColor(INK).font('Helvetica-Bold').fontSize(22).text(cleanText(agent?.full_name || project.source_display_name || 'Project team', 120), 184, 138, { width: 365 });
   doc.fillColor(MUTED).font('Helvetica').fontSize(10).text(cleanText(agent?.company_name || 'makaug broker profile', 140), 184, 172, { width: 365 });
-  if (agent?.bio) doc.fillColor(INK).font('Helvetica').fontSize(9.5).text(cleanText(agent.bio, 520), 184, 196, { width: 365, height: 62, ellipsis: true, lineGap: 3 });
+  const agentPhone = cleanText(agent?.whatsapp || agent?.phone, 60);
+  if (agentPhone) doc.fillColor(BRAND_GREEN).font('Helvetica-Bold').fontSize(10).text(`Phone / WhatsApp: ${agentPhone}`, 184, 190, { width: 365, link: `tel:${agentPhone.replace(/[^+\d]/g, '')}` });
+  if (agent?.bio) doc.fillColor(INK).font('Helvetica').fontSize(9).text(cleanText(agent.bio, 520), 184, agentPhone ? 211 : 196, { width: 365, height: agentPhone ? 38 : 53, ellipsis: true, lineGap: 3 });
   doc.roundedRect(44, 250, 505, 46, 11).fill(BRAND_GREEN);
   doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(12).text('View the broker profile and all current properties on makaug.com', 62, 267, { width: 470, align: 'center', link: agent ? agentUrl(agent) : projectUrl(project) });
   doc.fillColor(BRAND_GREEN).font('Helvetica-Bold').fontSize(14).text('More properties from this contact', 44, 326);

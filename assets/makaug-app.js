@@ -53103,6 +53103,7 @@ async function openBrokerProfile(id) {
           </div>
           ${renderBrokerRegistrationBadge(b) ? `<div class="mt-3">${renderBrokerRegistrationBadge(b)}</div>` : ""}
           <div class="mt-4">${brokerIconActionsHtml(b, { large: true, profile: true })}</div>
+          ${brokerDisplayPhone(b) ? `<a href="tel:${adminAttr(brokerDisplayPhone(b).replace(/\s+/g, ""))}" class="mt-3 inline-flex items-center gap-2 rounded-full bg-green-50 px-4 py-2 text-sm font-bold text-green-800 hover:bg-green-100"><i class="fas fa-phone" aria-hidden="true"></i><span>${adminEscape(brokerDisplayPhone(b))}</span></a>` : ""}
         </div>
 
         <div class="grid lg:grid-cols-[minmax(0,1fr),280px] gap-7 mt-7 border-t border-gray-100 pt-6">
