@@ -100,7 +100,11 @@
   }
 
   function clean(value) { return String(value == null ? '' : value).trim(); }
-  function number(value) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : null; }
+  function number(value) {
+    if (value == null || (typeof value === 'string' && !value.trim())) return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
   function formatUgx(value) {
     const amount = number(value);
     return amount == null ? 'Price on request' : `USh ${Math.round(amount).toLocaleString('en-UG')}`;

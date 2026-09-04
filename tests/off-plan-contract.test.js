@@ -93,6 +93,8 @@ test('brochure, payment, gallery, map, sharing, video and mortgage handoff are v
   assert.match(client, /calculateOffPlanPayments/);
   assert.match(client, /id="off-plan-gallery-dialog"/);
   assert.match(client, /closeOffPlanGallery/);
+  assert.match(client, /value == null \|\| \(typeof value === 'string' && !value\.trim\(\)\)/);
+  assert.match(html, /off-plan\.js\?v=20260904-offplan-v4/);
   assert.match(client, /openstreetmap\.org/);
   assert.match(client, /shareOffPlan\('whatsapp'\)/);
   assert.match(client, /Project video/);
