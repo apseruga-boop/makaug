@@ -35877,10 +35877,12 @@ async function submitAskAiSearchPrompt(event) {
   const scope = normalizeAiAssistantScope(form?.dataset?.aiScope || shell?.dataset?.aiScope || aiAssistantScopeForPage());
   const intent = form?.querySelector?.("[data-ai-intent]")?.value || aiAssistantIntentForScope(scope);
   const message = (form?.querySelector?.("[data-ai-message]")?.value || "").trim();
+  const responseBox = shell?.querySelector?.("[data-ai-response]") || document.getElementById("home-ai-response");
+  if (scope === "off_plan" && typeof window.handleOffPlanListingAiPrompt === "function" && window.handleOffPlanListingAiPrompt(message, responseBox)) return false;
   return requestAiAssistantResults({
     message,
     intent,
-    responseBox: shell?.querySelector?.("[data-ai-response]") || document.getElementById("home-ai-response"),
+    responseBox,
     button: form?.querySelector?.("[data-ai-submit]") || document.getElementById("home-ai-submit-btn"),
     source: scope === "all" && currentPage === "home" ? "home_ask_ai_hero" : "ask_ai_search_bar",
     scope

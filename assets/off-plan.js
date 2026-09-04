@@ -513,6 +513,17 @@
     if (open) panel.querySelector('[data-ai-message]')?.focus();
   }
 
+  function handleOffPlanListingAiPrompt(message, responseBox) {
+    const prompt = clean(message).toLowerCase();
+    const mentionsProject = /off[\s-]?plan|new project|development/.test(prompt);
+    const wantsToList = /\b(list|register|add|submit|post|publish|market)\b/.test(prompt);
+    if (!mentionsProject || !wantsToList || !responseBox) return false;
+    responseBox.classList.remove('hidden');
+    responseBox.innerHTML = `<div class="rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-green-950"><strong class="block text-base text-green-900">${escapeHtml(offPlanText('listProject'))}</strong><p class="mt-2 leading-6">${escapeHtml(offPlanText('contactNote'))}</p><button type="button" onclick="openOffPlanContactModal('', 'listing_request')" class="mt-3 rounded-xl bg-green-700 px-4 py-2.5 font-black text-white">${escapeHtml(offPlanText('listProject'))}</button></div>`;
+    track('off_plan_ai_listing_guidance', { language: offPlanLanguage() });
+    return true;
+  }
+
   function clearOffPlanFilters() {
     clearSelectedOffPlanLocation();
     ['off-plan-q', 'off-plan-property-type', 'off-plan-bedrooms', 'off-plan-max-price', 'off-plan-payment-months', 'off-plan-completion-year'].forEach((id) => { const input = document.getElementById(id); if (input) input.value = ''; });
@@ -1095,7 +1106,7 @@
     else returnToOffPlanList({ history: false });
   }
 
-  Object.assign(window, { applyOffPlanLanguageUI, calculateOffPlanPayments, changeOffPlanCalculatorCurrency, clearOffPlanFilters, closeOffPlanContactModal, closeOffPlanCreateModal, closeOffPlanGallery, createOffPlanWalkthroughBrief, downloadOffPlanBrochure, initializeOffPlanPage, loadOffPlanManagement, openOffPlanContactModal, openOffPlanCreateModal, openOffPlanCustomPaymentBuilder, openOffPlanDetail, openOffPlanFromHero, openOffPlanGallery, returnToOffPlanList, saveOffPlanProgress, searchOffPlan, selectOffPlanContactChannel, selectOffPlanUnit, setOffPlanProjectStatus, shareOffPlan, submitOffPlanContact, submitOffPlanProject, toggleOffPlanAi, toggleOffPlanFilters, toggleOffPlanMap, toggleOffPlanMortgage, uploadOffPlanMedia });
+  Object.assign(window, { applyOffPlanLanguageUI, calculateOffPlanPayments, changeOffPlanCalculatorCurrency, clearOffPlanFilters, closeOffPlanContactModal, closeOffPlanCreateModal, closeOffPlanGallery, createOffPlanWalkthroughBrief, downloadOffPlanBrochure, handleOffPlanListingAiPrompt, initializeOffPlanPage, loadOffPlanManagement, openOffPlanContactModal, openOffPlanCreateModal, openOffPlanCustomPaymentBuilder, openOffPlanDetail, openOffPlanFromHero, openOffPlanGallery, returnToOffPlanList, saveOffPlanProgress, searchOffPlan, selectOffPlanContactChannel, selectOffPlanUnit, setOffPlanProjectStatus, shareOffPlan, submitOffPlanContact, submitOffPlanProject, toggleOffPlanAi, toggleOffPlanFilters, toggleOffPlanMap, toggleOffPlanMortgage, uploadOffPlanMedia });
   if (/^\/off-plan(?:\/|$)/i.test(location.pathname)) initializeOffPlanPage();
   if (document.getElementById('page-staff-dashboard')?.classList.contains('active')) loadOffPlanManagement('staff');
   if (document.getElementById('page-admin-dashboard')?.classList.contains('active')) loadOffPlanManagement('admin');
