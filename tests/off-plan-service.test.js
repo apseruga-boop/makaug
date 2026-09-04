@@ -5,9 +5,11 @@ const test = require('node:test');
 const {
   buildOffPlanPaymentSchedule,
   isPublicationReady,
+  isPubliclyVisible,
   normalizeDevelopmentRow,
   normalizeWritePayload,
   publicationBlockers,
+  publicPreviewBlockers,
   slugify
 } = require('../services/offPlanService');
 
@@ -68,6 +70,24 @@ test('publication gate accepts a fully verified record', () => {
   assert.deepEqual(blockers, []);
   assert.equal(isPublicationReady(project), true);
   assert.equal(isPublicationReady({ ...project, launch_price_ugx: null }), false);
+});
+
+test('a source-attributed partial project is public only with explicit preview approval', () => {
+  const project = {
+    country_code: 'UG', status: 'published', verification_status: 'partially_verified',
+    name: 'Entebbe Victoria Palms', source_agent_id: 'c0bc49f9-aaaa-4093-b5c5-37ac73da7106', source_display_name: 'Kazi Honest',
+    description: 'A source-labelled townhouse project preview with supplied prices and images while delivery and progress facts remain clearly unconfirmed.',
+    area: 'Entebbe', district: 'Wakiso', latitude: 0.0512, longitude: 32.4637,
+    launch_price_ugx: 410400000, payment_plan_months: 15,
+    unit_types: [{ bedrooms: 2, price_original: 108000, price_original_currency: 'USD', price_ugx: 410400000 }],
+    payment_plan: [{ label: 'Across 15 months', months: 15 }],
+    images: [{ url: '/1.jpg', caption: 'One' }, { url: '/2.jpg', caption: 'Two' }, { url: '/3.jpg', caption: 'Three' }],
+    extra_fields: { public_preview_approved: true }
+  };
+  assert.deepEqual(publicPreviewBlockers(project), []);
+  assert.equal(isPubliclyVisible(project), true);
+  assert.equal(isPublicationReady(project), false);
+  assert.equal(isPubliclyVisible({ ...project, extra_fields: {} }), false);
 });
 
 test('publication gate rejects impossible sales totals and unlabelled media', () => {

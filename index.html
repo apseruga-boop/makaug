@@ -413,7 +413,7 @@
   </script>
   <link rel="preload" as="image" href="https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=1200&q=60" fetchpriority="high">
   <link rel="stylesheet" href="/assets/tailwind.css">
-  <link rel="stylesheet" href="/assets/off-plan.css?v=20260903-offplan-v2">
+  <link rel="stylesheet" href="/assets/off-plan.css?v=20260904-offplan-v3">
   <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
   <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"></noscript>
   <link rel="preload" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
@@ -3689,47 +3689,69 @@
     </div>
   </div>
 
-  <div id="page-off-plan" class="page bg-[#f7faf8] min-h-screen" data-off-plan-marker="off-plan-projects-v1-20260903">
+  <div id="page-off-plan" class="page bg-[#f7faf8] min-h-screen" data-off-plan-marker="off-plan-projectfinder-layout-v3-20260904">
     <section id="off-plan-list-view">
-      <div class="off-plan-hero py-12 md:py-16">
+      <div class="off-plan-directory-head">
         <div class="max-w-7xl mx-auto px-4">
-          <div class="max-w-3xl">
-            <span class="inline-flex items-center gap-2 rounded-full bg-white/15 border border-white/25 px-3 py-1.5 text-xs font-black uppercase tracking-wide"><i class="fas fa-building"></i><span data-off-plan-i18n="heroEyebrow">New developments in Uganda</span></span>
-            <h1 id="off-plan-title" class="mt-4 text-4xl md:text-6xl font-black leading-tight" data-off-plan-i18n="heroTitle">Find your future home, before it is built</h1>
-            <p class="mt-4 text-base md:text-lg text-white/85 max-w-2xl" data-off-plan-i18n="heroSubtitle">Explore verified off-plan projects, compare unit types, understand construction and sales progress, and model payment options in Uganda shillings.</p>
+          <div class="off-plan-heading-row">
+            <div>
+              <h1 id="off-plan-title" data-off-plan-i18n="heroTitle">New off-plan projects</h1>
+              <p data-off-plan-i18n="heroSubtitle">Explore developments, compare homes and plan your payments.</p>
+            </div>
+            <button type="button" onclick="openOffPlanContactModal()" class="off-plan-list-project-button"><i class="fas fa-plus" aria-hidden="true"></i><span data-off-plan-i18n="listProject">List an off-plan project</span></button>
           </div>
-          <form id="off-plan-search-form" onsubmit="searchOffPlan(event)" class="off-plan-search-shell mt-8 rounded-3xl p-3 md:p-4">
-            <div class="off-plan-search-grid grid gap-2">
-              <label class="off-plan-field"><span class="sr-only" data-off-plan-i18n="projectSearch">Project, area or developer</span><i class="fas fa-search"></i><input id="off-plan-q" autocomplete="off" placeholder="Project, area or developer" data-off-plan-i18n-placeholder="projectSearch"></label>
-              <label class="off-plan-field"><span class="sr-only" data-off-plan-i18n="location">Location</span><select id="off-plan-location"><option value="" data-off-plan-i18n="allLocations">All locations</option></select></label>
-              <label class="off-plan-field"><span class="sr-only" data-off-plan-i18n="bedrooms">Bedrooms</span><select id="off-plan-bedrooms"><option value="" data-off-plan-i18n="anyBedrooms">Any bedrooms</option><option value="1" data-off-plan-i18n="oneBedroom">1 bedroom</option><option value="2" data-off-plan-i18n="twoBedrooms">2 bedrooms</option><option value="3" data-off-plan-i18n="threeBedrooms">3 bedrooms</option><option value="4" data-off-plan-i18n="fourBedrooms">4+ bedrooms</option></select></label>
-              <label class="off-plan-field"><span class="sr-only" data-off-plan-i18n="maximumPrice">Maximum price</span><select id="off-plan-max-price"><option value="" data-off-plan-i18n="anyPrice">Any price</option><option value="250000000" data-off-plan-i18n="upTo250">Up to USh 250M</option><option value="500000000" data-off-plan-i18n="upTo500">Up to USh 500M</option><option value="1000000000" data-off-plan-i18n="upTo1B">Up to USh 1B</option><option value="2000000000" data-off-plan-i18n="upTo2B">Up to USh 2B</option></select></label>
-              <button class="off-plan-search-button h-[50px] rounded-xl bg-amber-400 hover:bg-amber-300 text-green-950 font-black px-7"><i class="fas fa-search mr-2"></i><span data-off-plan-i18n="search">Search</span></button>
+          <form id="off-plan-search-form" onsubmit="searchOffPlan(event)" class="off-plan-search-shell">
+            <div class="off-plan-query-row">
+              <label class="off-plan-query-field">
+                <span class="sr-only" data-off-plan-i18n="projectSearch">Location, project or developer</span>
+                <i class="fas fa-search" aria-hidden="true"></i>
+                <input id="off-plan-q" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="off-plan-location-suggestions" placeholder="Location, project or developer" data-off-plan-i18n-placeholder="projectSearch">
+                <input id="off-plan-location-key" type="hidden">
+                <input id="off-plan-location-area" type="hidden">
+                <input id="off-plan-location-district" type="hidden">
+                <div id="off-plan-location-suggestions" class="off-plan-location-suggestions" role="listbox"></div>
+              </label>
+              <button class="off-plan-search-button"><span data-off-plan-i18n="search">Search</span></button>
+            </div>
+            <div class="off-plan-filter-row">
+              <label class="off-plan-filter-field"><span class="sr-only" data-off-plan-i18n="propertyType">Property type</span><select id="off-plan-property-type"><option value="" data-off-plan-i18n="propertyType">Property type</option><option value="townhouse">Townhouse</option><option value="apartment">Apartment</option><option value="house">House</option><option value="mixed">Mixed use</option></select></label>
+              <label class="off-plan-filter-field"><span class="sr-only" data-off-plan-i18n="bedrooms">Bedrooms</span><select id="off-plan-bedrooms"><option value="" data-off-plan-i18n="anyBedrooms">Any bedrooms</option><option value="1" data-off-plan-i18n="oneBedroom">1 bedroom</option><option value="2" data-off-plan-i18n="twoBedrooms">2 bedrooms</option><option value="3" data-off-plan-i18n="threeBedrooms">3 bedrooms</option><option value="4" data-off-plan-i18n="fourBedrooms">4+ bedrooms</option></select></label>
+              <label class="off-plan-filter-field"><span class="sr-only" data-off-plan-i18n="maximumPrice">Price</span><select id="off-plan-max-price"><option value="" data-off-plan-i18n="anyPrice">Any price</option><option value="250000000" data-off-plan-i18n="upTo250">Up to USh 250M</option><option value="500000000" data-off-plan-i18n="upTo500">Up to USh 500M</option><option value="1000000000" data-off-plan-i18n="upTo1B">Up to USh 1B</option><option value="2000000000" data-off-plan-i18n="upTo2B">Up to USh 2B</option></select></label>
+              <label class="off-plan-filter-field"><span class="sr-only" data-off-plan-i18n="paymentPlan">Payment plan</span><select id="off-plan-payment-months"><option value="" data-off-plan-i18n="paymentPlan">Payment plan</option><option value="12">Up to 12 months</option><option value="15">Up to 15 months</option><option value="24">Up to 24 months</option><option value="36">Up to 36 months</option></select></label>
+              <button id="off-plan-filters-button" type="button" class="off-plan-filter-button" onclick="toggleOffPlanFilters()" aria-expanded="false" aria-controls="off-plan-advanced-filters"><i class="fas fa-sliders" aria-hidden="true"></i><span data-off-plan-i18n="filters">Filters</span></button>
+              <button id="off-plan-map-button" type="button" class="off-plan-filter-button off-plan-map-button" onclick="toggleOffPlanMap()" aria-pressed="true"><i class="fas fa-map" aria-hidden="true"></i><span data-off-plan-i18n="map">Map</span></button>
+            </div>
+            <div id="off-plan-advanced-filters" class="off-plan-advanced-filters" hidden>
+              <label><span>Delivery year</span><select id="off-plan-completion-year"><option value="">Any year</option><option value="2026">2026</option><option value="2027">2027</option><option value="2028">2028</option><option value="2029">2029</option><option value="2030">2030</option></select></label>
+              <button type="button" onclick="clearOffPlanFilters()">Clear filters</button>
             </div>
           </form>
+          <div id="off-plan-location-chips" class="off-plan-location-chips" aria-label="Popular project locations"></div>
+          <div class="off-plan-view-row">
+            <button type="button" class="off-plan-view-pill active"><i class="fas fa-city" aria-hidden="true"></i><span data-off-plan-i18n="projects">Projects</span></button>
+            <button type="button" class="off-plan-view-pill" onclick="toggleOffPlanAi()" aria-expanded="false" aria-controls="off-plan-ai-panel"><span aria-hidden="true">✨</span><span data-off-plan-i18n="askAi">Ask AI</span></button>
+          </div>
+          <div id="off-plan-ai-panel" class="off-plan-ai-panel" hidden>
+            <div class="ask-ai-search-shell" data-ai-search-shell data-ai-scope="all">
+              <div class="flex items-center justify-between gap-3 flex-wrap"><div><h2 data-ai-title class="ask-ai-search-title" data-off-plan-i18n="aiTitle">Ask AI about off-plan</h2><p data-ai-subtitle class="ask-ai-search-subtitle" data-off-plan-i18n="aiSubtitle">Describe the project, location or payment plan you need.</p></div><p data-ai-scope-hint class="ask-ai-scope-chip">Off Plan</p></div>
+              <form data-ai-search-form data-ai-scope="all" onsubmit="submitAskAiSearchPrompt(event)" class="mt-3"><input data-ai-intent type="hidden" value="off_plan_search"><div class="ask-ai-search-row"><span class="ask-ai-search-icon" aria-hidden="true">✨</span><input data-ai-message autocomplete="off" class="ask-ai-search-input" aria-label="Ask makaug AI about off-plan projects" placeholder="Try: 3-bedroom off-plan home in Entebbe"><button data-ai-submit type="submit" class="ask-ai-search-submit"><span data-off-plan-i18n="askAi">Ask AI</span></button></div></form>
+              <div data-ai-response class="mt-4 hidden rounded-2xl border border-blue-100 bg-white p-4 text-gray-900"></div>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div class="max-w-7xl mx-auto px-4 py-9">
-        <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
-          <div><p class="text-xs font-black uppercase tracking-widest text-green-700" data-off-plan-i18n="sectionEyebrow">Off plan Uganda</p><h2 class="mt-1 text-2xl md:text-3xl font-black text-gray-950" data-off-plan-i18n="newProjects">New projects</h2><p id="off-plan-result-summary" class="mt-1 text-sm text-gray-500" data-off-plan-i18n="loadingProjects">Loading verified projects...</p></div>
-          <button type="button" onclick="openOffPlanContactModal()" class="inline-flex items-center justify-center gap-2 rounded-xl bg-green-700 hover:bg-green-600 text-white px-5 py-3 font-black"><i class="fas fa-plus"></i><span data-off-plan-i18n="listProject">List an off-plan project</span></button>
+      <div class="max-w-[1440px] mx-auto px-4 py-7">
+        <div class="off-plan-results-heading">
+          <div><h2 data-off-plan-i18n="newProjects">New projects</h2><p id="off-plan-result-summary" data-off-plan-i18n="loadingProjects">Loading projects...</p></div>
         </div>
-        <div class="off-plan-content-grid mt-7 grid gap-7">
-          <div id="off-plan-results" class="off-plan-results-grid grid gap-5" aria-live="polite">
+        <div class="off-plan-content-grid">
+          <div id="off-plan-results" class="off-plan-results-grid" aria-live="polite">
             <div class="off-plan-skeleton"></div><div class="off-plan-skeleton"></div>
           </div>
-          <aside class="space-y-4">
-            <div class="off-plan-panel">
-              <div class="h-10 w-10 rounded-xl bg-green-50 text-green-700 grid place-items-center"><i class="fas fa-shield-halved"></i></div>
-              <h3 class="font-black text-gray-950 mt-3" data-off-plan-i18n="reviewTitle">Review before release</h3>
-              <p class="text-sm text-gray-600 mt-2 leading-relaxed" data-off-plan-i18n="reviewBody">Projects appear here only after the makaug team checks the developer, location, pricing, progress and availability evidence.</p>
-            </div>
-            <div class="off-plan-panel">
-              <div class="h-10 w-10 rounded-xl bg-amber-50 text-amber-700 grid place-items-center"><i class="fas fa-calculator"></i></div>
-              <h3 class="font-black text-gray-950 mt-3" data-off-plan-i18n="paymentsTitle">Plan the payments</h3>
-              <p class="text-sm text-gray-600 mt-2 leading-relaxed" data-off-plan-i18n="paymentsBody">Choose a unit and create a dated, illustrative UGX instalment schedule. Then compare mortgage options.</p>
-            </div>
+          <aside id="off-plan-map-shell" class="off-plan-map-shell" aria-label="Off-plan project map">
+            <div id="off-plan-map" class="off-plan-directory-map"></div>
+            <div class="off-plan-map-note"><i class="fas fa-location-dot" aria-hidden="true"></i><span data-off-plan-i18n="mapNote">Area markers are shown until an exact project pin is confirmed.</span></div>
           </aside>
         </div>
       </div>
@@ -9634,7 +9656,7 @@
         script.async = true;
         script.onload = function () {
           var offPlanScript = document.createElement("script");
-          offPlanScript.src = "/assets/off-plan.js?v=20260903-offplan-v2";
+          offPlanScript.src = "/assets/off-plan.js?v=20260904-offplan-v3";
           document.body.appendChild(offPlanScript);
         };
         document.body.appendChild(script);

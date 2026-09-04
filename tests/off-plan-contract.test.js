@@ -45,8 +45,9 @@ test('public Off Plan HTML keeps customer contact but strips staff creation cont
   assert.doesNotMatch(publicHtml, /Staff review only/);
 });
 
-test('supplied project is seeded for review and cannot leak into public queries', () => {
+test('supplied project starts guarded then receives one explicit source-attributed public preview', () => {
   const migration = read('db/migrations/118_off_plan_developments.sql');
+  const previewMigration = read('db/migrations/119_publish_kazi_victoria_palms_preview.sql');
   const service = read('services/offPlanService.js');
   assert.match(migration, /'entebbe-victoria-palms'/);
   assert.match(migration, /'Mackenzie'/);
@@ -58,6 +59,28 @@ test('supplied project is seeded for review and cannot leak into public queries'
   assert.match(service, /d\.status = 'published'/);
   assert.match(service, /d\.verification_status = 'verified'/);
   assert.match(service, /Use the review status action to publish a verified project/);
+  assert.match(previewMigration, /'Kazi Honest'/);
+  assert.match(previewMigration, /c0bc49f9-aaaa-4093-b5c5-37ac73da7106/);
+  assert.match(previewMigration, /'partially_verified'/);
+  assert.match(previewMigration, /"public_preview_approved":true/);
+  assert.match(previewMigration, /"facts_to_confirm"/);
+  assert.match(previewMigration, /"price_ugx":410400000/);
+});
+
+test('Off Plan directory uses the compact search, map, AI and image-led project layout', () => {
+  const html = read('index.html');
+  const client = read('assets/off-plan.js');
+  const css = read('assets/off-plan.css');
+  assert.match(html, /off-plan-projectfinder-layout-v3-20260904/);
+  assert.match(html, /id="off-plan-location-suggestions"/);
+  assert.match(html, /id="off-plan-map"/);
+  assert.match(html, /id="off-plan-ai-panel"/);
+  assert.match(html, /data-ai-intent type="hidden" value="off_plan_search"/);
+  assert.doesNotMatch(html, /data-off-plan-i18n="sectionEyebrow">Off plan Uganda/);
+  assert.match(client, /\/api\/properties\/locations\/suggest/);
+  assert.match(client, /source_agent_profile_id/);
+  assert.match(client, /renderOffPlanMap/);
+  assert.match(css, /off-plan-card-image[\s\S]*min-height: 485px/);
 });
 
 test('brochure, payment, gallery, map, sharing, video and mortgage handoff are visible', () => {
@@ -84,7 +107,7 @@ test('contact workflow has all channels and exact operations recipients', () => 
   for (const email of ['admin@makaug.com', 'arthur@makaug.com', 'ronald@makaug.com']) assert.match(notifications, new RegExp(email.replace('.', '\\.')));
   assert.match(route, /I would like to enquire about listing a new off-plan project/);
   assert.match(route, /requestedDevelopmentId/);
-  assert.match(route, /status = 'published' AND verification_status = 'verified'/);
+  assert.match(route, /status = 'published'[\s\S]*verification_status = 'verified'[\s\S]*public_preview_approved/);
 });
 
 test('website and WhatsApp AI recognize off-plan search and listing requests', () => {
@@ -108,6 +131,7 @@ test('Off Plan follows all nine public language choices and refreshes on languag
   const app = read('assets/makaug-app.js');
   for (const language of ['en', 'lg', 'sw', 'ac', 'ny', 'rn', 'sm', 'am', 'ar']) {
     assert.match(client, new RegExp(`\\n\\s{4}${language}: \\{`), `missing Off Plan language pack: ${language}`);
+    assert.match(client, new RegExp(`\\n\\s{4}${language}: \\{[^\\n]*heroTitle`), `missing compact Off Plan copy: ${language}`);
   }
   assert.match(html, /data-off-plan-i18n="heroTitle"/);
   assert.match(html, /data-off-plan-i18n-placeholder="projectSearch"/);

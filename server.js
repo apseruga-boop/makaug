@@ -54,7 +54,7 @@ const { startYouTubeSourceDripScheduler } = require('./services/youtubeSourceDri
 const { startMarketplaceLifecycleScheduler } = require('./services/marketplaceLifecycleService');
 const { startMarketplaceDripScheduler } = require('./services/marketplaceNationalDripService');
 const { startFeaturedRotationScheduler } = require('./services/featuredRotationService');
-const { getPublicDevelopment, isPublicationReady, normalizeDevelopmentRow } = require('./services/offPlanService');
+const { getPublicDevelopment, isPubliclyVisible, normalizeDevelopmentRow } = require('./services/offPlanService');
 const {
   applyHarvestPublicSubmissionVisibility,
   harvestAutomationEnabled
@@ -210,6 +210,7 @@ app.get('/api/version', (_req, res) => {
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-natural-ownership-replies-20260824'] : []),
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-public-agent-parity-fast-replies-20260824'] : []),
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-employee-agent-007-review-intake-20260829'] : []),
+      ...(!IS_SOUTH_AFRICA ? ['off-plan-projectfinder-layout-v3-20260904'] : []),
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-agent-007-multiple-property-batches-20260829'] : []),
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-agent-007-ordered-batch-finalization-20260829'] : []),
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-agent-007-complete-barrier-20260829'] : []),
@@ -318,8 +319,8 @@ app.get('/sitemap.xml', async (_req, res, next) => {
     const urls = sitemapEntries(snapshot, baseUrl);
     urls.push({ loc: `${baseUrl}/off-plan`, changefreq: 'daily', priority: '0.8' });
     try {
-      const offPlan = await db.query("SELECT * FROM off_plan_developments WHERE country_code = 'UG' AND status = 'published' AND verification_status = 'verified' ORDER BY updated_at DESC LIMIT 500");
-      offPlan.rows.map(normalizeDevelopmentRow).filter(isPublicationReady).forEach((project) => urls.push({ loc: `${baseUrl}/off-plan/${encodeURIComponent(project.slug)}`, lastmod: project.updated_at ? new Date(project.updated_at).toISOString() : null, changefreq: 'weekly', priority: '0.7' }));
+      const offPlan = await db.query("SELECT * FROM off_plan_developments WHERE country_code = 'UG' AND status = 'published' AND (verification_status = 'verified' OR (verification_status = 'partially_verified' AND extra_fields->>'public_preview_approved' = 'true')) ORDER BY updated_at DESC LIMIT 500");
+      offPlan.rows.map(normalizeDevelopmentRow).filter(isPubliclyVisible).forEach((project) => urls.push({ loc: `${baseUrl}/off-plan/${encodeURIComponent(project.slug)}`, lastmod: project.updated_at ? new Date(project.updated_at).toISOString() : null, changefreq: 'weekly', priority: '0.7' }));
     } catch (error) {
       logger.warn('Off-plan sitemap entries are unavailable until the feature migration is applied', { message: error.message });
     }
@@ -1551,7 +1552,7 @@ function sendPublicIndex(req, res, next) {
     if (/^\/off-plan\/?$/i.test(req.path)) {
       html = patchPublicPageSeoMeta(html, {
         title: 'Off Plan Property and New Developments in Uganda | makaug.com',
-        description: 'Explore verified off-plan projects and new developments in Uganda with unit prices, progress, payment plans, maps and downloadable brochures.',
+        description: 'Explore off-plan projects and new developments in Uganda with attributed pricing, progress, payment plans, maps and downloadable brochures.',
         canonical: absolutePublicUrl('/off-plan'),
         image: absolutePublicUrl('/assets/off-plan/entebbe-victoria-palms/residents-lounge-render.jpg'),
         structuredData: { '@context': 'https://schema.org', '@type': 'CollectionPage', name: 'Off Plan Property in Uganda', url: absolutePublicUrl('/off-plan') }

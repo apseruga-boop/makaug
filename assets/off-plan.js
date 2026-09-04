@@ -4,10 +4,17 @@
   const state = {
     loaded: false,
     loading: false,
+    pendingReload: false,
     projects: [],
     activeProject: null,
     contactMode: 'listing_request',
     contactDevelopmentId: null,
+    selectedLocation: null,
+    locationSuggestions: [],
+    locationTimer: null,
+    map: null,
+    mapLayer: null,
+    mapVisible: true,
     managementLoaded: { staff: false, admin: false }
   };
 
@@ -41,14 +48,28 @@
     }
   };
 
+  const OFF_PLAN_COMPACT_I18N = {
+    en: { heroTitle: 'New off-plan projects', heroSubtitle: 'Explore developments, compare homes and plan your payments.', projectSearch: 'Location, project or developer', propertyType: 'Property type', paymentPlan: 'Payment plan', filters: 'Filters', map: 'Map', projects: 'Projects', askAi: 'Ask AI', aiTitle: 'Ask AI about off-plan', aiSubtitle: 'Describe the project, location or payment plan you need.', mapNote: 'Area markers are shown until an exact project pin is confirmed.', loadingProjects: 'Loading projects...', projectsFound: '{count} project(s) found', noProjectsSummary: 'No projects found' },
+    lg: { heroTitle: 'Pulojekiti za off-plan empya', heroSubtitle: 'Kebera pulojekiti, gerageranya amaka era oteekateeke okusasula.', projectSearch: 'Ekifo, pulojekiti oba omuzimbi', propertyType: 'Ekika ky’ennyumba', paymentPlan: 'Enteekateeka y’okusasula', filters: 'Sengeka', map: 'Maapu', projects: 'Pulojekiti', askAi: 'Buuza AI', aiTitle: 'Buuza AI ku off-plan', aiSubtitle: 'Nyonyola pulojekiti, ekifo oba enteekateeka y’okusasula gy’onooya.', mapNote: 'Maapu eraga ekitundu okutuusa ekifo kya pulojekiti kikakasiddwa.', loadingProjects: 'Pulojekiti zitikkibwa...', projectsFound: 'Pulojekiti {count} ezuuliddwa', noProjectsSummary: 'Tewali pulojekiti ezuuliddwa' },
+    sw: { heroTitle: 'Miradi mipya ya off-plan', heroSubtitle: 'Chunguza miradi, linganisha nyumba na upange malipo.', projectSearch: 'Eneo, mradi au msanidi', propertyType: 'Aina ya nyumba', paymentPlan: 'Mpango wa malipo', filters: 'Vichujio', map: 'Ramani', projects: 'Miradi', askAi: 'Uliza AI', aiTitle: 'Uliza AI kuhusu off-plan', aiSubtitle: 'Eleza mradi, eneo au mpango wa malipo unaohitaji.', mapNote: 'Alama zinaonyesha eneo hadi mahali halisi pa mradi lithibitishwe.', loadingProjects: 'Inapakia miradi...', projectsFound: 'Miradi {count} imepatikana', noProjectsSummary: 'Hakuna miradi iliyopatikana' },
+    ac: { heroTitle: 'Purujekti manyen me off-plan', heroSubtitle: 'Nen purujekti, por odi ki yub cul.', projectSearch: 'Kabedo, purujekti onyo lagwedo', propertyType: 'Kit ot', paymentPlan: 'Yub me cul', filters: 'Yek', map: 'Map', projects: 'Purujekti', askAi: 'Peny AI', aiTitle: 'Peny AI pi off-plan', aiSubtitle: 'Tit purujekti, kabedo onyo yub cul ma imito.', mapNote: 'Map nyutu kabedo naka kimoko kabedo kikome me purujekti.', loadingProjects: 'Tye ka cano purujekti...', projectsFound: 'Purujekti {count} ononge', noProjectsSummary: 'Purujekti pe ononge' },
+    ny: { heroTitle: 'Pulojekiti ensya za off-plan', heroSubtitle: 'Reeba pulojekiti, geragyeranisa amaka kandi oteekateeke okusasura.', projectSearch: 'Omwanya, pulojekiti nari omwombeki', propertyType: 'Ekika ky’eka', paymentPlan: 'Enteekateeka y’okusasura', filters: 'Shwijuma', map: 'Maapu', projects: 'Pulojekiti', askAi: 'Buuza AI', aiTitle: 'Buuza AI aha off-plan', aiSubtitle: 'Shoboorora pulojekiti, omwanya nari enteekateeka y’okusasura.', mapNote: 'Maapu neeyoreka omwanya okuhitsya ahari pulojekiti hahamiibwe.', loadingProjects: 'Pulojekiti nizitwarwa...', projectsFound: 'Pulojekiti {count} ziboine', noProjectsSummary: 'Tihariho pulojekiti eboine' },
+    rn: { heroTitle: 'Pulojekiti nsya za off-plan', heroSubtitle: 'Reeba pulojekiti, geragyeranisa amaka kandi oteekateeke okusasura.', projectSearch: 'Ekicweka, pulojekiti nari omwombeki', propertyType: 'Ekika ky’eka', paymentPlan: 'Enteekateeka y’okusasura', filters: 'Shwijuma', map: 'Maapu', projects: 'Pulojekiti', askAi: 'Buuza AI', aiTitle: 'Buuza AI aha off-plan', aiSubtitle: 'Shoboorora pulojekiti, ekicweka nari enteekateeka y’okusasura.', mapNote: 'Maapu neeyoreka ekicweka okuhitsya ahari pulojekiti hahamiibwe.', loadingProjects: 'Pulojekiti nizitwarwa...', projectsFound: 'Pulojekiti {count} ziboine', noProjectsSummary: 'Tihariho pulojekiti eboine' },
+    sm: { heroTitle: 'Pulojekiti empyaka dha off-plan', heroSubtitle: 'Kebera pulojekiti, gerageranya amaka era otegeke okusasula.', projectSearch: 'Ekifo, pulojekiti oba omuzimbi', propertyType: 'Ekika ky’enhumba', paymentPlan: 'Enteekateeka y’okusasula', filters: 'Sengeka', map: 'Maapu', projects: 'Pulojekiti', askAi: 'Buuza AI', aiTitle: 'Buuza AI ku off-plan', aiSubtitle: 'Nyonyola pulojekiti, ekifo oba enteekateeka y’okusasula gy’onoina.', mapNote: 'Maapu eraga ekitundu okutuusa ekifo kya pulojekiti kikakasiddwa.', loadingProjects: 'Pulojekiti dhitikkibwa...', projectsFound: 'Pulojekiti {count} dhizuuliddwa', noProjectsSummary: 'Ezira pulojekiti ezuuliddwa' },
+    am: { heroTitle: 'አዳዲስ የ off-plan ፕሮጀክቶች', heroSubtitle: 'ፕሮጀክቶችን ይመልከቱ፣ ቤቶችን ያወዳድሩ እና ክፍያዎን ያቅዱ።', projectSearch: 'አካባቢ፣ ፕሮጀክት ወይም አልሚ', propertyType: 'የንብረት ዓይነት', paymentPlan: 'የክፍያ ዕቅድ', filters: 'ማጣሪያዎች', map: 'ካርታ', projects: 'ፕሮጀክቶች', askAi: 'AIን ይጠይቁ', aiTitle: 'ስለ off-plan AIን ይጠይቁ', aiSubtitle: 'የሚፈልጉትን ፕሮጀክት፣ አካባቢ ወይም የክፍያ ዕቅድ ይግለጹ።', mapNote: 'ትክክለኛው የፕሮጀክት ቦታ እስኪረጋገጥ ድረስ የአካባቢ ምልክቶች ይታያሉ።', loadingProjects: 'ፕሮጀክቶችን በመጫን ላይ...', projectsFound: '{count} ፕሮጀክቶች ተገኝተዋል', noProjectsSummary: 'ምንም ፕሮጀክት አልተገኘም' },
+    ar: { heroTitle: 'مشروعات جديدة على المخطط', heroSubtitle: 'استكشف المشروعات وقارن المنازل وخطط لدفعاتك.', projectSearch: 'الموقع أو المشروع أو المطور', propertyType: 'نوع العقار', paymentPlan: 'خطة الدفع', filters: 'التصفية', map: 'الخريطة', projects: 'المشروعات', askAi: 'اسأل الذكاء الاصطناعي', aiTitle: 'اسأل عن مشروعات البيع على المخطط', aiSubtitle: 'صف المشروع أو الموقع أو خطة الدفع التي تحتاجها.', mapNote: 'تظهر علامات المنطقة إلى أن يتم تأكيد الموقع الدقيق للمشروع.', loadingProjects: 'جارٍ تحميل المشروعات...', projectsFound: 'تم العثور على {count} مشروع', noProjectsSummary: 'لم يتم العثور على مشروعات' }
+  };
+
   function offPlanLanguage() {
     const code = clean(document.documentElement.lang || 'en').toLowerCase().split('-')[0];
     return OFF_PLAN_I18N[code] ? code : 'en';
   }
 
   function offPlanText(key, replacements = {}) {
-    const pack = OFF_PLAN_I18N[offPlanLanguage()] || OFF_PLAN_I18N.en;
-    let value = pack[key] || OFF_PLAN_I18N.en[key] || key;
+    const language = offPlanLanguage();
+    const pack = OFF_PLAN_I18N[language] || OFF_PLAN_I18N.en;
+    const compactPack = OFF_PLAN_COMPACT_I18N[language] || OFF_PLAN_COMPACT_I18N.en;
+    let value = compactPack[key] || pack[key] || OFF_PLAN_COMPACT_I18N.en[key] || OFF_PLAN_I18N.en[key] || key;
     Object.entries(replacements).forEach(([name, replacement]) => { value = value.replaceAll(`{${name}}`, String(replacement)); });
     return value;
   }
@@ -83,6 +104,14 @@
   function formatUgx(value) {
     const amount = number(value);
     return amount == null ? 'Price on request' : `USh ${Math.round(amount).toLocaleString('en-UG')}`;
+  }
+  function formatUsd(value) {
+    const amount = number(value);
+    return amount == null ? '' : `USD ${Math.round(amount).toLocaleString('en-US')}`;
+  }
+  function metricValue(value, suffix = '') {
+    const amount = number(value);
+    return amount == null ? 'To be confirmed' : `${amount}${suffix}`;
   }
   function formatDate(value) {
     if (!value) return 'To be confirmed';
@@ -134,13 +163,21 @@
   function projectCard(project) {
     const unitPrices = (project.unit_types || []).map((unit) => number(unit.price_ugx)).filter((value) => value != null && value > 0);
     const launch = number(project.launch_price_ugx) || (unitPrices.length ? Math.min(...unitPrices) : null);
-    const availability = project.units_available == null ? 'Availability confirmed on enquiry' : `${project.units_available} home${project.units_available === 1 ? '' : 's'} available`;
-    return `<article class="off-plan-card cursor-pointer" onclick="openOffPlanDetail('${escapeHtml(project.slug)}')" tabindex="0" onkeydown="if(event.key==='Enter')openOffPlanDetail('${escapeHtml(project.slug)}')">
-      <div class="off-plan-card-image"><img src="${escapeHtml(imageUrl(project))}" alt="${escapeHtml(imageCaption(project))}" loading="lazy"><span class="off-plan-pill absolute top-3 left-3 bg-white/95 text-green-800"><i class="fas fa-check-circle"></i>Staff verified</span><span class="off-plan-pill absolute bottom-3 left-3 bg-black/70 text-white"><i class="fas fa-calendar"></i>${escapeHtml(formatDate(project.completion_date))}</span></div>
-      <div class="p-5"><p class="text-xs font-black uppercase tracking-wide text-green-700">${escapeHtml(project.project_type || 'New development')}</p><h3 class="mt-1 text-xl font-black text-gray-950">${escapeHtml(project.name)}</h3><p class="mt-1 text-sm text-gray-500"><i class="fas fa-location-dot mr-1"></i>${escapeHtml(projectLocation(project))}</p>
-        <div class="grid grid-cols-2 gap-4 mt-5">${progressMarkup('Construction', project.construction_progress)}${progressMarkup('Homes sold', project.sales_progress)}</div>
-        <div class="mt-5 pt-4 border-t border-gray-100 flex items-end justify-between gap-3"><div><span class="text-xs text-gray-500">From</span><strong class="block text-lg text-gray-950">${escapeHtml(formatUgx(launch))}</strong></div><span class="text-xs font-bold text-green-800 text-right">${escapeHtml(availability)}</span></div>
+    const bedrooms = (project.unit_types || []).map((unit) => number(unit.bedrooms)).filter((value) => value != null).sort((a, b) => a - b);
+    const bedroomLabel = bedrooms.length ? `${bedrooms[0]}${bedrooms.at(-1) !== bedrooms[0] ? ` - ${bedrooms.at(-1)}` : ''} Beds` : 'Homes';
+    const sourceName = clean(project.source_agent_name || project.source_display_name);
+    const sourceId = clean(project.source_agent_profile_id || project.source_agent_id);
+    const statusLabel = project.verification_status === 'verified' ? 'Verified project' : 'Source details supplied';
+    const delivery = project.completion_date ? `Delivery: ${formatDate(project.completion_date)}` : 'Delivery: To be confirmed';
+    const typeLabel = clean(project.project_type || 'New development').replace(/\bdevelopment\b/i, '').trim() || 'Development';
+    return `<article class="off-plan-card">
+      <div class="off-plan-card-image">
+        <img src="${escapeHtml(imageUrl(project))}" alt="${escapeHtml(imageCaption(project))}" loading="lazy">
+        <a class="off-plan-card-cover" href="/off-plan/${encodeURIComponent(project.slug)}" data-off-plan-project="${escapeHtml(project.slug)}" aria-label="View ${escapeHtml(project.name)}"></a>
+        <div class="off-plan-card-badges"><span class="off-plan-pill bg-white/95 text-green-800">Off Plan</span><span class="off-plan-pill bg-black/65 text-white">${escapeHtml(delivery)}</span></div>
+        <div class="off-plan-card-content"><span class="off-plan-pill bg-white/95 text-green-800"><i class="fas fa-circle-check" aria-hidden="true"></i>${escapeHtml(statusLabel)}</span><h3>${escapeHtml(project.name)}</h3><p class="mt-1 text-sm"><i class="fas fa-location-dot mr-1" aria-hidden="true"></i>${escapeHtml(projectLocation(project))}</p><div class="off-plan-card-meta"><span><i class="fas fa-bed mr-1" aria-hidden="true"></i>${escapeHtml(bedroomLabel)}</span><span><i class="fas fa-house mr-1" aria-hidden="true"></i>${escapeHtml(typeLabel)}</span></div><p class="mt-3 text-xs">Launch price</p><strong class="off-plan-card-price">${escapeHtml(formatUgx(launch))}</strong>${project.payment_plan_months ? `<span class="off-plan-card-plan">${escapeHtml(project.payment_plan_months)}-month payment plan</span>` : ''}</div>
       </div>
+      <div class="off-plan-card-actions">${sourceId ? `<a class="off-plan-card-agent" href="/agents/${encodeURIComponent(sourceId)}"><i class="fas fa-user-check" aria-hidden="true"></i>${escapeHtml(sourceName || 'View broker')}</a>` : `<span class="off-plan-card-agent"><i class="fas fa-building" aria-hidden="true"></i>${escapeHtml(sourceName || 'Project team')}</span>`}<button type="button" class="off-plan-card-whatsapp" data-off-plan-enquire="${escapeHtml(project.id)}" aria-label="Enquire on WhatsApp about ${escapeHtml(project.name)}"><i class="fab fa-whatsapp" aria-hidden="true"></i></button></div>
     </article>`;
   }
 
@@ -151,45 +188,106 @@
     if (!state.projects.length) {
       grid.innerHTML = `<div class="md:col-span-2 rounded-3xl border border-green-100 bg-white p-8 md:p-12 text-center"><div class="mx-auto h-14 w-14 rounded-2xl bg-green-50 text-green-700 grid place-items-center text-xl"><i class="fas fa-building-circle-check"></i></div><h3 class="mt-4 text-xl font-black text-gray-950">${escapeHtml(offPlanText('noProjectsTitle'))}</h3><p class="mt-2 text-sm text-gray-600 max-w-xl mx-auto">${escapeHtml(offPlanText('noProjectsBody'))}</p><button onclick="openOffPlanContactModal()" class="mt-5 rounded-xl bg-green-700 text-white px-5 py-3 font-black">${escapeHtml(offPlanText('listProject'))}</button></div>`;
       if (summary) summary.textContent = offPlanText('noProjectsSummary');
+      renderOffPlanMap();
       return;
     }
     grid.innerHTML = state.projects.map(projectCard).join('');
     if (summary) summary.textContent = offPlanText('projectsFound', { count: state.projects.length });
+    renderOffPlanMap();
   }
 
   async function loadLocations() {
-    const select = document.getElementById('off-plan-location');
-    if (!select || select.dataset.loaded === '1') return;
+    const chips = document.getElementById('off-plan-location-chips');
+    if (!chips || chips.dataset.loaded === '1') return;
     try {
       const data = await request('/api/off-plan/locations');
-      const seen = new Set();
-      (data.locations || []).forEach((item) => {
-        const value = clean(item.area || item.district);
-        if (!value || seen.has(value.toLowerCase())) return;
-        seen.add(value.toLowerCase());
-        const option = document.createElement('option');
-        option.value = value;
-        option.textContent = `${value} (${item.project_count})`;
-        select.appendChild(option);
-      });
-      select.dataset.loaded = '1';
+      chips.innerHTML = (data.locations || []).slice(0, 10).map((item) => `<button type="button" class="off-plan-location-chip" data-off-plan-area="${escapeHtml(item.area || '')}" data-off-plan-district="${escapeHtml(item.district || '')}">${escapeHtml(item.area || item.district)} (${Number(item.project_count) || 0})</button>`).join('');
+      chips.dataset.loaded = '1';
     } catch (_error) {}
   }
 
+  function clearSelectedOffPlanLocation() {
+    state.selectedLocation = null;
+    ['off-plan-location-key', 'off-plan-location-area', 'off-plan-location-district'].forEach((id) => { const input = document.getElementById(id); if (input) input.value = ''; });
+  }
+
+  function closeOffPlanLocationSuggestions() {
+    const input = document.getElementById('off-plan-q');
+    const panel = document.getElementById('off-plan-location-suggestions');
+    panel?.classList.remove('open');
+    if (panel) panel.innerHTML = '';
+    input?.setAttribute('aria-expanded', 'false');
+  }
+
+  function selectOffPlanLocation(suggestion = {}) {
+    const id = clean(suggestion.canonical_location_id || suggestion.id);
+    const area = clean(suggestion.name || suggestion.label || suggestion.area);
+    const district = clean(suggestion.district || suggestion.province);
+    if (!area) return;
+    state.selectedLocation = { ...suggestion, id, area, district };
+    const query = document.getElementById('off-plan-q');
+    if (query) query.value = area;
+    const keyInput = document.getElementById('off-plan-location-key'); if (keyInput) keyInput.value = id;
+    const areaInput = document.getElementById('off-plan-location-area'); if (areaInput) areaInput.value = area;
+    const districtInput = document.getElementById('off-plan-location-district'); if (districtInput) districtInput.value = district;
+    closeOffPlanLocationSuggestions();
+    loadProjects();
+  }
+
+  function renderOffPlanLocationSuggestions(response = {}) {
+    const panel = document.getElementById('off-plan-location-suggestions');
+    const input = document.getElementById('off-plan-q');
+    if (!panel || !input) return;
+    const suggestions = [
+      ...(Array.isArray(response.data) ? response.data : []),
+      ...(Array.isArray(response.meta?.disambiguation_suggestions) ? response.meta.disambiguation_suggestions : []),
+      ...(Array.isArray(response.meta?.did_you_mean_suggestions) ? response.meta.did_you_mean_suggestions : [])
+    ].filter((item, index, rows) => rows.findIndex((other) => (other.canonical_location_id || other.id) === (item.canonical_location_id || item.id)) === index).slice(0, 8);
+    state.locationSuggestions = suggestions;
+    panel.innerHTML = suggestions.length ? suggestions.map((item, index) => `<button type="button" class="off-plan-location-suggestion" role="option" data-off-plan-location-index="${index}"><span><strong>${escapeHtml(item.name || item.label)}</strong><small>${escapeHtml(item.parent_path || item.district || '')}</small></span><span>${escapeHtml(item.type_label || 'Location')}</span></button>`).join('') : '<div class="off-plan-location-empty">No matching location. You can still search by project or developer.</div>';
+    panel.classList.add('open');
+    input.setAttribute('aria-expanded', 'true');
+  }
+
+  async function fetchOffPlanLocationSuggestions(query) {
+    const params = new URLSearchParams({ q: query, limit: '8' });
+    try {
+      const response = await fetch(`/api/properties/locations/suggest?${params.toString()}`, { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Location lookup failed');
+      renderOffPlanLocationSuggestions(data);
+    } catch (_error) { closeOffPlanLocationSuggestions(); }
+  }
+
+  function syncOffPlanSearchUrl(params) {
+    if (!/^\/off-plan\/?$/i.test(location.pathname)) return;
+    const query = params.toString();
+    history.replaceState({ page: 'off-plan' }, '', `/off-plan${query ? `?${query}` : ''}`);
+  }
+
   async function loadProjects() {
-    if (state.loading) return;
+    if (state.loading) { state.pendingReload = true; return; }
     state.loading = true;
     const grid = document.getElementById('off-plan-results');
     if (grid) grid.innerHTML = '<div class="off-plan-skeleton"></div><div class="off-plan-skeleton"></div>';
     const params = new URLSearchParams();
     const q = clean(document.getElementById('off-plan-q')?.value);
-    const location = clean(document.getElementById('off-plan-location')?.value);
+    const area = clean(document.getElementById('off-plan-location-area')?.value);
+    const district = clean(document.getElementById('off-plan-location-district')?.value);
     const bedrooms = clean(document.getElementById('off-plan-bedrooms')?.value);
     const maxPrice = clean(document.getElementById('off-plan-max-price')?.value);
-    if (q) params.set('q', q);
-    if (location) params.set('q', [q, location].filter(Boolean).join(' '));
+    const projectType = clean(document.getElementById('off-plan-property-type')?.value);
+    const paymentMonths = clean(document.getElementById('off-plan-payment-months')?.value);
+    const completionYear = clean(document.getElementById('off-plan-completion-year')?.value);
+    if (area) params.set('area', area);
+    if (district) params.set('district', district);
+    if (q && !area) params.set('q', q);
     if (bedrooms) params.set('bedrooms', bedrooms);
     if (maxPrice) params.set('max_price_ugx', maxPrice);
+    if (projectType) params.set('project_type', projectType);
+    if (paymentMonths) params.set('max_payment_months', paymentMonths);
+    if (completionYear) params.set('completion_year', completionYear);
+    syncOffPlanSearchUrl(params);
     try {
       const data = await request(`/api/off-plan?${params.toString()}`);
       state.projects = data.developments || [];
@@ -197,16 +295,175 @@
       renderList();
     } catch (error) {
       if (grid) grid.innerHTML = `<div class="md:col-span-2 rounded-2xl border border-red-100 bg-red-50 p-6 text-red-900"><strong>Projects could not be loaded.</strong><p class="text-sm mt-1">${escapeHtml(error.message)} Please try again.</p></div>`;
-    } finally { state.loading = false; }
+    } finally {
+      state.loading = false;
+      if (state.pendingReload) { state.pendingReload = false; loadProjects(); }
+    }
   }
 
   function searchOffPlan(event) {
     if (event) event.preventDefault();
-    track('off_plan_search', { query: clean(document.getElementById('off-plan-q')?.value), location: clean(document.getElementById('off-plan-location')?.value), bedrooms: clean(document.getElementById('off-plan-bedrooms')?.value) });
+    track('off_plan_search', { query: clean(document.getElementById('off-plan-q')?.value), location: clean(document.getElementById('off-plan-location-area')?.value), bedrooms: clean(document.getElementById('off-plan-bedrooms')?.value) });
+    closeOffPlanLocationSuggestions();
     loadProjects();
     return false;
   }
-  function openOffPlanFromHero() { if (typeof window.showPage === 'function') window.showPage('off-plan'); else window.location.href = '/off-plan'; }
+  function openOffPlanFromHero() {
+    const heroQuery = clean(document.getElementById('hero-q')?.value);
+    if (typeof window.showPage === 'function') window.showPage('off-plan'); else window.location.href = heroQuery ? `/off-plan?q=${encodeURIComponent(heroQuery)}` : '/off-plan';
+    window.setTimeout(() => { const input = document.getElementById('off-plan-q'); if (input && heroQuery) { clearSelectedOffPlanLocation(); input.value = heroQuery; fetchOffPlanLocationSuggestions(heroQuery); loadProjects(); } }, 0);
+  }
+
+  let offPlanLeafletPromise = null;
+  function ensureOffPlanLeaflet() {
+    if (window.L?.map) return Promise.resolve(window.L);
+    if (offPlanLeafletPromise) return offPlanLeafletPromise;
+    offPlanLeafletPromise = new Promise((resolve, reject) => {
+      if (!document.querySelector('link[data-off-plan-leaflet]')) {
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+        link.dataset.offPlanLeaflet = '1';
+        document.head.appendChild(link);
+      }
+      const existing = document.getElementById('off-plan-leaflet-script');
+      if (existing) {
+        existing.addEventListener('load', () => resolve(window.L), { once: true });
+        existing.addEventListener('error', reject, { once: true });
+        return;
+      }
+      const script = document.createElement('script');
+      script.id = 'off-plan-leaflet-script';
+      script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+      script.onload = () => resolve(window.L);
+      script.onerror = reject;
+      document.head.appendChild(script);
+    });
+    return offPlanLeafletPromise;
+  }
+
+  async function renderOffPlanMap() {
+    const shell = document.getElementById('off-plan-map-shell');
+    const container = document.getElementById('off-plan-map');
+    if (!shell || !container || shell.classList.contains('is-hidden')) return;
+    const projects = state.projects.filter((project) => number(project.latitude) != null && number(project.longitude) != null);
+    try {
+      const L = await ensureOffPlanLeaflet();
+      if (!L?.map || !document.body.contains(container)) return;
+      if (state.map?.remove) state.map.remove();
+      if (container._leaflet_id) { try { container._leaflet_id = null; } catch (_error) {} }
+      const map = L.map(container, { scrollWheelZoom: false, zoomControl: true }).setView([1.3733, 32.2903], 7);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
+      state.map = map;
+      if (projects.length) {
+        const bounds = [];
+        projects.forEach((project) => {
+          const lat = number(project.latitude); const lng = number(project.longitude);
+          bounds.push([lat, lng]);
+          const marker = L.marker([lat, lng]).addTo(map);
+          marker.bindPopup(`<div class="off-plan-map-popup"><strong>${escapeHtml(project.name)}</strong><span>${escapeHtml(projectLocation(project))}</span><a href="/off-plan/${encodeURIComponent(project.slug)}">View project</a></div>`);
+        });
+        if (bounds.length === 1) map.setView(bounds[0], 12);
+        else map.fitBounds(bounds, { padding: [32, 32], maxZoom: 12 });
+      }
+      window.setTimeout(() => map.invalidateSize(), 50);
+    } catch (_error) {
+      container.innerHTML = '<div class="h-full grid place-items-center px-6 text-center text-sm text-gray-600"><span><i class="fas fa-map-location-dot text-2xl text-green-700 block mb-2"></i>The map is temporarily unavailable.</span></div>';
+    }
+  }
+
+  function toggleOffPlanMap() {
+    const shell = document.getElementById('off-plan-map-shell');
+    const button = document.getElementById('off-plan-map-button');
+    if (!shell) return;
+    state.mapVisible = shell.classList.contains('is-hidden');
+    shell.classList.toggle('is-hidden', !state.mapVisible);
+    button?.setAttribute('aria-pressed', state.mapVisible ? 'true' : 'false');
+    if (state.mapVisible) renderOffPlanMap();
+  }
+
+  function toggleOffPlanFilters() {
+    const panel = document.getElementById('off-plan-advanced-filters');
+    const button = document.getElementById('off-plan-filters-button');
+    if (!panel) return;
+    const open = panel.hidden;
+    panel.hidden = !open;
+    button?.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+
+  function toggleOffPlanAi() {
+    const panel = document.getElementById('off-plan-ai-panel');
+    const button = document.querySelector('[aria-controls="off-plan-ai-panel"]');
+    if (!panel) return;
+    const open = panel.hidden;
+    panel.hidden = !open;
+    button?.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (open) panel.querySelector('[data-ai-message]')?.focus();
+  }
+
+  function clearOffPlanFilters() {
+    clearSelectedOffPlanLocation();
+    ['off-plan-q', 'off-plan-property-type', 'off-plan-bedrooms', 'off-plan-max-price', 'off-plan-payment-months', 'off-plan-completion-year'].forEach((id) => { const input = document.getElementById(id); if (input) input.value = ''; });
+    document.querySelectorAll('.off-plan-location-chip.active').forEach((chip) => chip.classList.remove('active'));
+    loadProjects();
+  }
+
+  function prepopulateOffPlanSearch() {
+    if (!/^\/off-plan\/?$/i.test(location.pathname)) return;
+    const params = new URLSearchParams(location.search);
+    const q = clean(params.get('q') || params.get('query') || params.get('location') || params.get('area'));
+    const area = clean(params.get('area'));
+    const district = clean(params.get('district'));
+    const query = document.getElementById('off-plan-q');
+    if (query && q) query.value = q;
+    if (area) {
+      state.selectedLocation = { id: clean(params.get('location_id')), area, district, name: area };
+      const keyInput = document.getElementById('off-plan-location-key'); if (keyInput) keyInput.value = state.selectedLocation.id;
+      const areaInput = document.getElementById('off-plan-location-area'); if (areaInput) areaInput.value = area;
+      const districtInput = document.getElementById('off-plan-location-district'); if (districtInput) districtInput.value = district;
+    }
+    const values = { 'off-plan-property-type': params.get('project_type'), 'off-plan-bedrooms': params.get('bedrooms'), 'off-plan-max-price': params.get('max_price_ugx'), 'off-plan-payment-months': params.get('max_payment_months'), 'off-plan-completion-year': params.get('completion_year') };
+    Object.entries(values).forEach(([id, value]) => { const input = document.getElementById(id); if (input && value) input.value = value; });
+  }
+
+  function wireOffPlanDirectoryControls() {
+    const root = document.getElementById('page-off-plan');
+    const input = document.getElementById('off-plan-q');
+    if (!root || root.dataset.directoryBound === '1') return;
+    root.dataset.directoryBound = '1';
+    input?.addEventListener('input', () => {
+      if (state.selectedLocation && input.value !== state.selectedLocation.area) clearSelectedOffPlanLocation();
+      window.clearTimeout(state.locationTimer);
+      const query = input.value.trim();
+      if (query.length < 2) { closeOffPlanLocationSuggestions(); return; }
+      state.locationTimer = window.setTimeout(() => fetchOffPlanLocationSuggestions(query), 180);
+    });
+    input?.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') closeOffPlanLocationSuggestions();
+      if (event.key === 'Enter' && state.locationSuggestions[0] && document.getElementById('off-plan-location-suggestions')?.classList.contains('open')) {
+        event.preventDefault();
+        selectOffPlanLocation(state.locationSuggestions[0]);
+      }
+    });
+    document.getElementById('off-plan-location-suggestions')?.addEventListener('click', (event) => {
+      const button = event.target.closest('[data-off-plan-location-index]');
+      if (button) selectOffPlanLocation(state.locationSuggestions[Number(button.dataset.offPlanLocationIndex)]);
+    });
+    document.getElementById('off-plan-location-chips')?.addEventListener('click', (event) => {
+      const chip = event.target.closest('[data-off-plan-area]');
+      if (!chip) return;
+      document.querySelectorAll('.off-plan-location-chip.active').forEach((item) => item.classList.toggle('active', item === chip));
+      selectOffPlanLocation({ name: chip.dataset.offPlanArea, district: chip.dataset.offPlanDistrict });
+    });
+    document.getElementById('off-plan-results')?.addEventListener('click', (event) => {
+      const projectLink = event.target.closest('[data-off-plan-project]');
+      if (projectLink) { event.preventDefault(); openOffPlanDetail(projectLink.dataset.offPlanProject); return; }
+      const enquiry = event.target.closest('[data-off-plan-enquire]');
+      if (enquiry) { state.activeProject = state.projects.find((project) => String(project.id) === String(enquiry.dataset.offPlanEnquire)) || null; openOffPlanContactModal(enquiry.dataset.offPlanEnquire, 'project_interest'); }
+    });
+    document.addEventListener('click', (event) => { if (!event.target.closest('.off-plan-query-field')) closeOffPlanLocationSuggestions(); });
+    root.querySelectorAll('#off-plan-property-type, #off-plan-bedrooms, #off-plan-max-price, #off-plan-payment-months, #off-plan-completion-year').forEach((control) => control.addEventListener('change', () => loadProjects()));
+  }
 
   function galleryMarkup(project) {
     const images = (project.images || []).slice(0, 3);
@@ -217,7 +474,7 @@
 
   function unitTable(project) {
     if (!(project.unit_types || []).length) return '<p class="text-sm text-gray-500">Unit details are being verified.</p>';
-    return `<div class="overflow-x-auto"><table class="off-plan-unit-table"><thead><tr><th>Home type</th><th>Bedrooms</th><th>Size</th><th>Price</th><th></th></tr></thead><tbody>${project.unit_types.map((unit, index) => `<tr><td class="font-black text-gray-950">${escapeHtml(unit.label || unit.property_type || 'Home')}</td><td>${escapeHtml(unit.bedrooms ?? '—')}</td><td>${unit.size_sqm ? `${escapeHtml(unit.size_sqm)} m²` : 'To verify'}</td><td class="font-black">${escapeHtml(formatUgx(unit.price_ugx))}</td><td><button type="button" onclick="selectOffPlanUnit(${index})" class="rounded-lg border border-green-200 text-green-800 px-3 py-2 text-xs font-black">Calculate</button></td></tr>`).join('')}</tbody></table></div>`;
+    return `<div class="overflow-x-auto"><table class="off-plan-unit-table"><thead><tr><th>Home type</th><th>Bedrooms</th><th>Size</th><th>Guide price</th><th></th></tr></thead><tbody>${project.unit_types.map((unit, index) => `<tr><td class="font-black text-gray-950">${escapeHtml(unit.label || unit.property_type || 'Home')}</td><td>${escapeHtml(unit.bedrooms ?? '—')}</td><td>${unit.size_sqm ? `${escapeHtml(unit.size_sqm)} m²` : 'To be confirmed'}</td><td><strong class="block">${escapeHtml(formatUgx(unit.price_ugx))}</strong>${unit.price_original ? `<span class="block mt-1 text-xs text-gray-500">Source: ${escapeHtml(formatUsd(unit.price_original))}</span>` : ''}</td><td><button type="button" onclick="selectOffPlanUnit(${index})" class="rounded-lg border border-green-200 text-green-800 px-3 py-2 text-xs font-black">Calculate</button></td></tr>`).join('')}</tbody></table></div>`;
   }
 
   function paymentPlanMarkup(project) {
@@ -237,16 +494,21 @@
   function detailMarkup(project) {
     const units = project.unit_types || [];
     const firstPrice = units.map((unit) => number(unit.price_ugx)).find((value) => value && value > 0) || project.launch_price_ugx || '';
+    const fullyVerified = project.verification_status === 'verified';
+    const sourceName = clean(project.source_agent_name || project.source_display_name);
+    const sourceId = clean(project.source_agent_profile_id || project.source_agent_id);
+    const soldLabel = project.units_sold == null || project.units_total == null ? 'To be confirmed' : `${project.units_sold} of ${project.units_total}`;
     return `${galleryMarkup(project)}
       <div class="mt-7 grid lg:grid-cols-[minmax(0,1fr)_330px] gap-8 items-start">
         <main class="space-y-6">
-          <div><div class="flex flex-wrap gap-2"><span class="off-plan-pill bg-green-100 text-green-800"><i class="fas fa-check-circle"></i>Staff verified</span><span class="off-plan-pill bg-amber-100 text-amber-900">${escapeHtml(project.project_type || 'Off plan')}</span></div><h1 class="mt-3 text-3xl md:text-5xl font-black text-gray-950 leading-tight">${escapeHtml(project.name)}</h1><p class="mt-2 text-gray-500"><i class="fas fa-location-dot mr-1"></i>${escapeHtml(projectLocation(project))}${project.developer_name ? ` · by ${escapeHtml(project.developer_name)}` : ''}</p></div>
-          <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3"><div class="off-plan-stat"><span class="text-xs text-gray-500">Expected completion</span><strong class="block mt-1">${escapeHtml(formatDate(project.completion_date))}</strong></div><div class="off-plan-stat"><span class="text-xs text-gray-500">Construction</span><strong class="block mt-1">${project.construction_progress}% complete</strong></div><div class="off-plan-stat"><span class="text-xs text-gray-500">Homes sold</span><strong class="block mt-1">${project.units_sold} of ${project.units_total}</strong></div><div class="off-plan-stat"><span class="text-xs text-gray-500">Homes remaining</span><strong class="block mt-1">${project.units_available}</strong></div></div>
+          <div><div class="flex flex-wrap gap-2"><span class="off-plan-pill ${fullyVerified ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-900'}"><i class="fas fa-circle-check"></i>${fullyVerified ? 'Verified project' : 'Source details supplied'}</span><span class="off-plan-pill bg-amber-100 text-amber-900">${escapeHtml(project.project_type || 'Off plan')}</span></div><h1 class="mt-3 text-3xl md:text-5xl font-black text-gray-950 leading-tight">${escapeHtml(project.name)}</h1><p class="mt-2 text-gray-500"><i class="fas fa-location-dot mr-1"></i>${escapeHtml(projectLocation(project))}${project.developer_name ? ` · by ${escapeHtml(project.developer_name)}` : ''}</p></div>
+          <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3"><div class="off-plan-stat"><span class="text-xs text-gray-500">Expected completion</span><strong class="block mt-1">${escapeHtml(formatDate(project.completion_date))}</strong></div><div class="off-plan-stat"><span class="text-xs text-gray-500">Construction</span><strong class="block mt-1">${escapeHtml(metricValue(project.construction_progress, '% complete'))}</strong></div><div class="off-plan-stat"><span class="text-xs text-gray-500">Homes sold</span><strong class="block mt-1">${escapeHtml(soldLabel)}</strong></div><div class="off-plan-stat"><span class="text-xs text-gray-500">Homes remaining</span><strong class="block mt-1">${escapeHtml(metricValue(project.units_available))}</strong></div></div>
           <section class="off-plan-panel"><h2 class="text-xl font-black text-gray-950">About the development</h2><p class="mt-3 text-sm md:text-base text-gray-700 leading-7 whitespace-pre-line">${escapeHtml(project.description)}</p></section>
-          <section class="off-plan-panel"><div class="flex items-end justify-between gap-3"><div><p class="text-xs font-black uppercase tracking-wide text-green-700">Choose a home</p><h2 class="mt-1 text-xl font-black text-gray-950">Unit types and prices</h2></div><span class="text-xs text-gray-500">Prices in UGX</span></div><div class="mt-4">${unitTable(project)}</div></section>
+          ${sourceId ? `<section class="off-plan-panel"><p class="text-xs font-black uppercase tracking-wide text-green-700">Project contact</p><div class="mt-3 flex items-center justify-between gap-4"><div><strong class="block text-lg text-gray-950">${escapeHtml(sourceName || 'Project broker')}</strong><span class="text-sm text-gray-500">Linked makaug broker profile</span></div><a href="/agents/${encodeURIComponent(sourceId)}" class="rounded-xl bg-green-50 text-green-800 px-4 py-2.5 text-sm font-black">View profile</a></div></section>` : ''}
+          <section class="off-plan-panel"><div class="flex items-end justify-between gap-3"><div><p class="text-xs font-black uppercase tracking-wide text-green-700">Choose a home</p><h2 class="mt-1 text-xl font-black text-gray-950">Unit types and prices</h2></div><span class="text-xs text-gray-500">UGX guide · source prices in USD</span></div><div class="mt-4">${unitTable(project)}</div></section>
           <section class="off-plan-panel"><h2 class="text-xl font-black text-gray-950">Project progress</h2><div class="grid sm:grid-cols-2 gap-6 mt-5">${progressMarkup('Construction completed', project.construction_progress)}${progressMarkup('Homes sold', project.sales_progress)}</div></section>
           <section class="off-plan-panel"><h2 class="text-xl font-black text-gray-950">Payment plan</h2><div class="mt-4">${paymentPlanMarkup(project)}</div><div class="mt-6 rounded-2xl border border-green-100 bg-[#f4faf5] p-5"><h3 class="font-black text-gray-950">Build your illustrative schedule</h3><div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-4"><label class="text-xs font-bold text-gray-700">Home price (UGX)<input id="off-plan-calc-price" type="number" min="0" value="${escapeHtml(firstPrice)}" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 text-sm"></label><label class="text-xs font-bold text-gray-700">Upfront deposit %<input id="off-plan-calc-deposit" type="number" min="0" max="100" value="${escapeHtml(project.payment_plan?.find((item) => item.percent)?.percent || 0)}" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 text-sm"></label><label class="text-xs font-bold text-gray-700">Reservation fee (UGX)<input id="off-plan-calc-reservation" type="number" min="0" value="${escapeHtml(project.reservation_fee_ugx || 0)}" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 text-sm"></label><label class="text-xs font-bold text-gray-700">Payment months<input id="off-plan-calc-months" type="number" min="1" max="120" value="${escapeHtml(project.payment_plan_months || 12)}" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 text-sm"></label></div><button type="button" onclick="calculateOffPlanPayments()" class="mt-4 rounded-xl bg-green-700 text-white px-5 py-3 font-black">Calculate payment dates</button><div id="off-plan-calculator-result" class="mt-4"></div></div><a href="/mortgage" onclick="showPage('mortgage')" class="inline-flex items-center gap-2 mt-5 text-sm font-black text-green-800 hover:text-green-600"><i class="fas fa-house-circle-check"></i>Compare with the mortgage calculator <i class="fas fa-arrow-right"></i></a></section>
-          <section class="off-plan-panel"><h2 class="text-xl font-black text-gray-950">Location and area</h2><p class="mt-2 text-sm text-gray-600">${escapeHtml(projectLocation(project))}. Confirm travel times and the exact site before making a commitment.</p><div class="mt-4">${mapMarkup(project)}</div></section>
+          <section class="off-plan-panel"><h2 class="text-xl font-black text-gray-950">Location and area</h2><p class="mt-2 text-sm text-gray-600">${escapeHtml(projectLocation(project))}. ${project.extra_fields?.map_precision === 'area_centroid' ? 'The map shows the wider area; the exact development pin is being confirmed.' : 'Confirm travel times and the exact site before making a commitment.'}</p><div class="mt-4">${mapMarkup(project)}</div></section>
           ${(project.videos || []).length ? `<section class="off-plan-panel"><h2 class="text-xl font-black text-gray-950">Project video</h2><div class="mt-4 aspect-video rounded-2xl overflow-hidden bg-gray-950"><video controls preload="metadata" class="w-full h-full" src="${escapeHtml(project.videos[0].url)}"></video></div></section>` : ''}
           <section class="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-950"><strong><i class="fas fa-triangle-exclamation mr-1"></i>Off-plan information can change.</strong><p class="mt-1">Verify approvals, title, developer identity, the sale agreement, payment destination, specifications, dates and current availability. Artist impressions may differ from the finished project. Consider independent legal and financial advice.</p></section>
         </main>
@@ -461,13 +723,15 @@
   function initializeOffPlanPage() {
     track('off_plan_page_view', { path: location.pathname });
     applyOffPlanLanguageUI();
+    wireOffPlanDirectoryControls();
+    prepopulateOffPlanSearch();
     loadLocations();
     const match = location.pathname.match(/^\/off-plan\/([a-z0-9-]+)\/?$/i);
     if (match) openOffPlanDetail(match[1], { history: false });
     else { returnToOffPlanList({ history: false }); if (!state.loaded) loadProjects(); }
   }
 
-  Object.assign(window, { applyOffPlanLanguageUI, calculateOffPlanPayments, closeOffPlanContactModal, closeOffPlanCreateModal, createOffPlanWalkthroughBrief, downloadOffPlanBrochure, initializeOffPlanPage, loadOffPlanManagement, openOffPlanContactModal, openOffPlanCreateModal, openOffPlanDetail, openOffPlanFromHero, openOffPlanGallery, returnToOffPlanList, saveOffPlanProgress, searchOffPlan, selectOffPlanContactChannel, selectOffPlanUnit, setOffPlanProjectStatus, shareOffPlan, submitOffPlanContact, submitOffPlanProject, uploadOffPlanMedia });
+  Object.assign(window, { applyOffPlanLanguageUI, calculateOffPlanPayments, clearOffPlanFilters, closeOffPlanContactModal, closeOffPlanCreateModal, createOffPlanWalkthroughBrief, downloadOffPlanBrochure, initializeOffPlanPage, loadOffPlanManagement, openOffPlanContactModal, openOffPlanCreateModal, openOffPlanDetail, openOffPlanFromHero, openOffPlanGallery, returnToOffPlanList, saveOffPlanProgress, searchOffPlan, selectOffPlanContactChannel, selectOffPlanUnit, setOffPlanProjectStatus, shareOffPlan, submitOffPlanContact, submitOffPlanProject, toggleOffPlanAi, toggleOffPlanFilters, toggleOffPlanMap, uploadOffPlanMedia });
   if (/^\/off-plan(?:\/|$)/i.test(location.pathname)) initializeOffPlanPage();
   if (document.getElementById('page-staff-dashboard')?.classList.contains('active')) loadOffPlanManagement('staff');
   if (document.getElementById('page-admin-dashboard')?.classList.contains('active')) loadOffPlanManagement('admin');

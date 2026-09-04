@@ -123,13 +123,13 @@ function buildOffPlanBrochure(projectInput, output) {
   if (output && typeof output.write === 'function') doc.pipe(output);
 
   const imagePaths = project.images.map((image) => ({ ...image, path: localAssetPath(image.url) })).filter((image) => image.path);
-  addHeader(doc, 'Off Plan Uganda');
+  addHeader(doc, 'Off Plan Project');
   addFooter(doc, project);
   if (imagePaths[0]) imageCover(doc, imagePaths[0].path, 42, 90, doc.page.width - 84, 310);
   else doc.roundedRect(42, 90, doc.page.width - 84, 310, 16).fill(PALE);
   doc.fillColor(BRAND_GOLD).font('Helvetica-Bold').fontSize(10).text('OFF PLAN PROJECT', 44, 426);
   doc.fillColor(INK).font('Helvetica-Bold').fontSize(29).text(cleanText(project.name, 220), 44, 448, { width: 510 });
-  doc.fillColor(MUTED).font('Helvetica').fontSize(13).text([project.area, project.district, 'Uganda'].filter(Boolean).join(', '), 44, doc.y + 8);
+  doc.fillColor(MUTED).font('Helvetica').fontSize(13).text([project.area, project.district].filter(Boolean).join(', '), 44, doc.y + 8);
   const price = project.launch_price_ugx != null
     ? `From ${formatMoney(project.launch_price_ugx, 'UGX')}`
     : 'UGX pricing to be verified';
@@ -173,7 +173,7 @@ function buildOffPlanBrochure(projectInput, output) {
       doc.roundedRect(44, yRow, 505, 46, 8).fill(index % 2 ? '#ffffff' : PALE);
       doc.fillColor(INK).font('Helvetica-Bold').fontSize(11).text(cleanText(unit.label || `${unit.bedrooms || ''} Bedroom ${unit.property_type || 'home'}`), 58, yRow + 9, { width: 280 });
       const priceText = unit.price_ugx
-        ? formatMoney(unit.price_ugx, 'UGX')
+        ? `${formatMoney(unit.price_ugx, 'UGX')}${unit.price_original ? ` guide | Source ${formatMoney(unit.price_original, unit.price_original_currency || project.original_currency)}` : ''}`
         : unit.price_original
           ? `${formatMoney(unit.price_original, unit.price_original_currency || project.original_currency)} supplied - UGX to verify`
           : 'Price on request';
