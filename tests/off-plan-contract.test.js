@@ -96,6 +96,7 @@ test('an Off Plan source broker profile remains usable when the general agent AP
 test('brochure, payment, gallery, map, sharing, video and mortgage handoff are visible', () => {
   const html = read('index.html');
   const client = read('assets/off-plan.js');
+  const css = read('assets/off-plan.css');
   const route = read('routes/off-plan.js');
   assert.match(html, /id="page-off-plan"/);
   assert.match(client, /Download brochure/);
@@ -104,6 +105,9 @@ test('brochure, payment, gallery, map, sharing, video and mortgage handoff are v
   assert.match(client, /closeOffPlanGallery/);
   assert.match(client, /value == null \|\| \(typeof value === 'string' && !value\.trim\(\)\)/);
   assert.match(html, /off-plan\.js\?v=20260904-offplan-v4/);
+  assert.match(html, /off-plan\.css\?v=20260904-offplan-v5/);
+  assert.match(client, /grid grid-cols-1 lg:grid-cols-\[minmax\(0,1fr\)_330px\]/);
+  assert.match(css, /width: min\(1120px,calc\(100vw - 28px\)\)/);
   assert.match(client, /openstreetmap\.org/);
   assert.match(client, /shareOffPlan\('whatsapp'\)/);
   assert.match(client, /Project video/);
