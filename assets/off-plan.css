@@ -100,6 +100,15 @@
 .off-plan-gallery figure:nth-child(3) { border-radius: 0 0 20px 0; }
 .off-plan-gallery img { width: 100%; height: 100%; object-fit: cover; }
 .off-plan-gallery figcaption { position: absolute; inset: auto 8px 8px 8px; padding: 7px 9px; border-radius: 9px; background: rgba(0,0,0,.64); color: #fff; font-size: 10px; }
+.off-plan-gallery-dialog { width: min(1120px,calc(100% - 28px)); max-width: none; max-height: 90vh; margin: auto; overflow: auto; border: 0; border-radius: 22px; background: #fff; padding: 0; box-shadow: 0 30px 100px rgba(0,0,0,.3); }
+.off-plan-gallery-dialog::backdrop { background: rgba(7,18,11,.78); backdrop-filter: blur(5px); }
+.off-plan-gallery-dialog-head { position: sticky; z-index: 2; top: 0; display: flex; align-items: center; justify-content: space-between; gap: 20px; border-bottom: 1px solid #e4e9e6; background: rgba(255,255,255,.96); padding: 15px 18px; backdrop-filter: blur(10px); }
+.off-plan-gallery-dialog-head h2 { margin-top: 2px; color: var(--op-ink); font-size: 1.15rem; font-weight: 900; }
+.off-plan-gallery-dialog-head button { display: grid; width: 40px; height: 40px; flex: 0 0 auto; place-items: center; border-radius: 999px; background: #eef4f0; color: #123c26; }
+.off-plan-gallery-dialog-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; padding: 12px; }
+.off-plan-gallery-dialog-grid figure { overflow: hidden; border-radius: 14px; background: #e8eeea; }
+.off-plan-gallery-dialog-grid img { width: 100%; aspect-ratio: 16/10; object-fit: cover; }
+.off-plan-gallery-dialog-grid figcaption { padding: 9px 11px 11px; color: #59665e; font-size: .72rem; line-height: 1.4; }
 .off-plan-stat { border: 1px solid #dfe9e1; border-radius: 17px; padding: 17px; background: linear-gradient(145deg,#fff,#f6faf7); }
 .off-plan-panel { border: 1px solid #e0e9e2; border-radius: 20px; background: #fff; padding: 24px; }
 .off-plan-unit-table { width: 100%; border-collapse: collapse; }
@@ -150,4 +159,6 @@
   .off-plan-gallery figure:first-child { grid-column: 1 / 3; grid-row: auto; border-radius: 16px 16px 0 0; }
   .off-plan-gallery figure:nth-child(2) { border-radius: 0 0 0 16px; }
   .off-plan-gallery figure:nth-child(3) { border-radius: 0 0 16px 0; }
+  .off-plan-gallery-dialog { width: calc(100% - 16px); max-height: 94vh; border-radius: 16px; }
+  .off-plan-gallery-dialog-grid { grid-template-columns: 1fr; padding: 8px; }
 }
