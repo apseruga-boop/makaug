@@ -213,6 +213,31 @@ function isPublicationReady(raw = {}) {
     && publicationBlockers(row).length === 0;
 }
 
+function publicPreviewBlockers(raw = {}) {
+  const row = normalizeDevelopmentRow(raw);
+  const blockers = [];
+  if (row.verification_status !== 'partially_verified') blockers.push('Preview projects must be marked partially verified.');
+  if (row.extra_fields?.public_preview_approved !== true) blockers.push('Public preview approval is required.');
+  if (!cleanText(row.name, 220)) blockers.push('Project name is required.');
+  if (!row.source_agent_id || !cleanText(row.source_display_name, 220)) blockers.push('An attributed source agent is required.');
+  if (cleanText(row.description, 10000).length < 80) blockers.push('A source-labelled project description is required.');
+  if (!cleanText(row.area, 140) || !cleanText(row.district, 140)) blockers.push('Area and district are required.');
+  if (row.latitude == null || row.longitude == null) blockers.push('An area map point is required.');
+  if (!row.unit_types.length) blockers.push('At least one unit type is required.');
+  if (row.unit_types.some((unit) => !(finiteNumber(unit.price_original, 0) > 0) || !cleanText(unit.price_original_currency, 3))) blockers.push('Every unit type needs its original source price.');
+  if (row.unit_types.some((unit) => !(finiteNumber(unit.price_ugx, 0) > 0))) blockers.push('Every unit type needs an indicative UGX price.');
+  if (!(finiteNumber(row.launch_price_ugx, 0) > 0)) blockers.push('An indicative starting price in UGX is required.');
+  if (!row.payment_plan.length || !(row.payment_plan_months > 0)) blockers.push('The supplied payment period is required.');
+  if (row.images.filter((image) => cleanText(image?.url, 2000) && cleanText(image?.caption, 300)).length < 3) blockers.push('At least three labelled project images are required.');
+  return Array.from(new Set(blockers));
+}
+
+function isPubliclyVisible(raw = {}) {
+  const row = normalizeDevelopmentRow(raw);
+  if (row.country_code !== 'UG' || row.status !== 'published') return false;
+  return isPublicationReady(row) || publicPreviewBlockers(row).length === 0;
+}
+
 function normalizeWritePayload(input = {}, { partial = false } = {}) {
   const value = input && typeof input === 'object' ? input : {};
   const payload = {};
@@ -253,14 +278,20 @@ function normalizeWritePayload(input = {}, { partial = false } = {}) {
 
 function managedSelect() {
   return `SELECT d.*,
+    a.id AS source_agent_profile_id,
+    CASE WHEN a.status = 'approved' THEN a.full_name ELSE NULL END AS source_agent_name,
+    CASE WHEN a.status = 'approved' THEN a.company_name ELSE NULL END AS source_agent_company,
+    CASE WHEN a.status = 'approved' THEN a.profile_photo_url ELSE NULL END AS source_agent_profile_photo_url,
+    a.status AS source_agent_status,
     (SELECT COUNT(*)::int FROM off_plan_enquiries e WHERE e.development_id = d.id) AS enquiry_count,
     (SELECT COUNT(*)::int FROM off_plan_walkthrough_jobs w WHERE w.development_id = d.id) AS walkthrough_job_count
-    FROM off_plan_developments d`;
+    FROM off_plan_developments d
+    LEFT JOIN agents a ON a.id = d.source_agent_id`;
 }
 
 async function listPublicDevelopments(db, query = {}) {
   const values = ['UG'];
-  const filters = [`d.country_code = $1`, `d.status = 'published'`, `d.verification_status = 'verified'`];
+  const filters = [`d.country_code = $1`, `d.status = 'published'`, `(d.verification_status = 'verified' OR (d.verification_status = 'partially_verified' AND d.extra_fields->>'public_preview_approved' = 'true'))`];
   const add = (sql, value) => {
     values.push(value);
     filters.push(sql.replace('?', `$${values.length}`));
@@ -271,24 +302,26 @@ async function listPublicDevelopments(db, query = {}) {
   if (query.area) add(`LOWER(d.area) = LOWER(?)`, cleanText(query.area, 140));
   if (finiteNumber(query.max_price_ugx, null) != null) add(`d.launch_price_ugx <= ?`, money(query.max_price_ugx));
   if (finiteNumber(query.min_price_ugx, null) != null) add(`d.launch_price_ugx >= ?`, money(query.min_price_ugx));
+  if (query.project_type) add(`LOWER(d.project_type) LIKE LOWER(?)`, `%${cleanText(query.project_type, 80)}%`);
   if (nullableInteger(query.bedrooms) != null) add(`EXISTS (SELECT 1 FROM jsonb_array_elements(d.unit_types) unit WHERE (unit->>'bedrooms') ~ '^\\d+$' AND (unit->>'bedrooms')::int = ?)`, nullableInteger(query.bedrooms));
   if (nullableInteger(query.payment_months) != null) add(`d.payment_plan_months >= ?`, nullableInteger(query.payment_months));
+  if (nullableInteger(query.max_payment_months) != null) add(`d.payment_plan_months <= ?`, nullableInteger(query.max_payment_months));
   if (nullableInteger(query.completion_year) != null) add(`EXTRACT(YEAR FROM d.completion_date)::int = ?`, nullableInteger(query.completion_year));
   const limit = Math.max(1, Math.min(60, nullableInteger(query.limit) || 24));
   const result = await db.query(
     `${managedSelect()} WHERE ${filters.join(' AND ')} ORDER BY d.published_at DESC NULLS LAST, d.created_at DESC LIMIT ${limit}`,
     values
   );
-  return result.rows.map(normalizeDevelopmentRow).filter(isPublicationReady);
+  return result.rows.map(normalizeDevelopmentRow).filter(isPubliclyVisible);
 }
 
 async function getPublicDevelopment(db, slug) {
   const result = await db.query(
-    `${managedSelect()} WHERE d.country_code = 'UG' AND d.slug = $1 AND d.status = 'published' AND d.verification_status = 'verified' LIMIT 1`,
+    `${managedSelect()} WHERE d.country_code = 'UG' AND d.slug = $1 AND d.status = 'published' AND (d.verification_status = 'verified' OR (d.verification_status = 'partially_verified' AND d.extra_fields->>'public_preview_approved' = 'true')) LIMIT 1`,
     [slugify(slug)]
   );
   const development = result.rows[0] ? normalizeDevelopmentRow(result.rows[0]) : null;
-  return development && isPublicationReady(development) ? development : null;
+  return development && isPubliclyVisible(development) ? development : null;
 }
 
 async function listManagedDevelopments(db, query = {}) {
@@ -541,9 +574,11 @@ module.exports = {
   listManagedDevelopments,
   listPublicDevelopments,
   isPublicationReady,
+  isPubliclyVisible,
   normalizeDevelopmentRow,
   normalizeWritePayload,
   publicationBlockers,
+  publicPreviewBlockers,
   recordEvent,
   setDevelopmentStatus,
   slugify,

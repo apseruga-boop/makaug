@@ -9,7 +9,7 @@ const {
   createWalkthroughJob,
   getManagedDevelopment,
   getPublicDevelopment,
-  isPublicationReady,
+  isPubliclyVisible,
   listEnquiries,
   listManagedDevelopments,
   listPublicDevelopments,
@@ -95,11 +95,12 @@ publicRouter.get('/', asyncRoute(async (req, res) => {
 publicRouter.get('/locations', asyncRoute(async (_req, res) => {
   const result = await db.query(
     `SELECT * FROM off_plan_developments
-     WHERE country_code = 'UG' AND status = 'published' AND verification_status = 'verified'
+     WHERE country_code = 'UG' AND status = 'published'
+       AND (verification_status = 'verified' OR (verification_status = 'partially_verified' AND extra_fields->>'public_preview_approved' = 'true'))
      ORDER BY district, area`
   );
   const counts = new Map();
-  result.rows.map(normalizeDevelopmentRow).filter(isPublicationReady).forEach((project) => {
+  result.rows.map(normalizeDevelopmentRow).filter(isPubliclyVisible).forEach((project) => {
     const key = `${project.district || ''}\u0000${project.area || ''}`;
     const current = counts.get(key) || { district: project.district, area: project.area, project_count: 0 };
     current.project_count += 1;
@@ -120,7 +121,8 @@ publicRouter.post('/enquiries', asyncRoute(async (req, res) => {
     if (!isUuid(requestedDevelopmentId)) return res.status(404).json({ ok: false, error: 'Off-plan project not found' });
     const publicMatch = await db.query(
       `SELECT slug FROM off_plan_developments
-       WHERE id = $1 AND country_code = 'UG' AND status = 'published' AND verification_status = 'verified'
+       WHERE id = $1 AND country_code = 'UG' AND status = 'published'
+         AND (verification_status = 'verified' OR (verification_status = 'partially_verified' AND extra_fields->>'public_preview_approved' = 'true'))
        LIMIT 1`,
       [requestedDevelopmentId]
     );
