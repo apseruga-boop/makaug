@@ -105,8 +105,8 @@ test('brochure, payment, gallery, map, sharing, video and mortgage handoff are v
   assert.match(client, /id="off-plan-gallery-dialog"/);
   assert.match(client, /closeOffPlanGallery/);
   assert.match(client, /value == null \|\| \(typeof value === 'string' && !value\.trim\(\)\)/);
-  assert.match(html, /off-plan\.js\?v=20260904-offplan-v9/);
-  assert.match(html, /off-plan\.css\?v=20260904-offplan-v9/);
+  assert.match(html, /off-plan\.js\?v=20260904-offplan-v10/);
+  assert.match(html, /off-plan\.css\?v=20260904-offplan-v10/);
   assert.match(client, /CLOSED_PERMANENTLY/);
   assert.match(client, /Archive this private project record/);
   assert.match(client, /status === 'archived' \? 'PATCH' : 'POST'/);
@@ -186,6 +186,8 @@ test('website and WhatsApp AI recognize off-plan search and listing requests', (
   assert.match(aiRoute, /listPublicDevelopments/);
   assert.match(aiRoute, /off_plan_projects: projects/);
   assert.match(app, /off_plan: \{ intent: "off_plan_search"/);
+  assert.match(app, /window\.handleOffPlanListingAiPrompt\(message, responseBox\)/);
+  assert.match(read('assets/off-plan.js'), /function handleOffPlanListingAiPrompt/);
   assert.match(app, /function aiAssistantOffPlanCardsHtml/);
   assert.match(app, /data\?\.off_plan_projects/);
   assert.match(whatsapp, /Off-plan project received/);
