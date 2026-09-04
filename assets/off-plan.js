@@ -992,7 +992,8 @@
   async function setOffPlanProjectStatus(id, role, status) {
     if (status === 'published' && !confirm('Publish this verified project to the public Off Plan page now?')) return;
     if (status === 'archived' && !confirm('Archive this private project record? It will remain available to authorised staff but will never appear publicly.')) return;
-    try { await request(`/api/${role === 'admin' ? 'admin' : 'staff'}/off-plan/developments/${encodeURIComponent(id)}/status`, { method: 'POST', headers: managementHeaders(role), body: { status } }); await loadOffPlanManagement(role); }
+    const base = `/api/${role === 'admin' ? 'admin' : 'staff'}/off-plan/developments/${encodeURIComponent(id)}`;
+    try { await request(status === 'archived' ? base : `${base}/status`, { method: status === 'archived' ? 'PATCH' : 'POST', headers: managementHeaders(role), body: { status } }); await loadOffPlanManagement(role); }
     catch (error) { alert(error.payload?.blockers?.join('\n') || error.message); }
   }
 
