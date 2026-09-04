@@ -47,6 +47,7 @@ test('nearby distance uses a straight-line project-to-place calculation and labe
   const distance = distanceKmBetween(project, hospital);
   assert.ok(distance > 1.5 && distance < 1.8);
   assert.match(formatApproximateDistance(project, hospital), /^Approx\. 1\.\d km from displayed area point$/);
+  assert.equal(formatApproximateDistance(project, project), 'Approx. <0.1 km from displayed area point');
 });
 
 test('mortgage estimate calculates reducing-balance monthly, interest, fee and total repayment', () => {

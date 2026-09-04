@@ -255,7 +255,8 @@
     const value = number(distance);
     if (value == null) return offPlanExperienceText('distancePending');
     const digits = value < 10 ? 1 : 0;
-    return offPlanExperienceText('approximateDistance').replace('{distance}', value.toFixed(digits));
+    const display = value < 0.1 ? '<0.1' : value.toFixed(digits);
+    return offPlanExperienceText('approximateDistance').replace('{distance}', display);
   }
   function mortgageEstimate(principalValue, annualRateValue, yearsValue, arrangementFeePctValue = 0) {
     const principal = number(principalValue); const annualRate = number(annualRateValue); const years = number(yearsValue);
