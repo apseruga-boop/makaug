@@ -1716,20 +1716,19 @@ async function start() {
       });
     }
   }
-  if (ACTIVE_COUNTRY_CODE !== 'UG') {
-    try {
-      const adaptedApp = readCountryAppAsset();
-      renderPublicHtml('/');
-      logger.info('Country public assets warmed before accepting traffic', {
-        country_code: ACTIVE_COUNTRY_CODE,
-        app_bytes: adaptedApp.body.length
-      });
-    } catch (error) {
-      logger.warn('Country public asset warmup failed; first request will retry', {
-        country_code: ACTIVE_COUNTRY_CODE,
-        message: error.message
-      });
-    }
+  try {
+    const adaptedApp = readCountryAppAsset();
+    renderPublicHtml('/');
+    logger.info('Country public assets verified before accepting traffic', {
+      country_code: ACTIVE_COUNTRY_CODE,
+      app_bytes: adaptedApp.body.length
+    });
+  } catch (error) {
+    logger.error('Country public asset verification failed; refusing unready deployment', {
+      country_code: ACTIVE_COUNTRY_CODE,
+      message: error.message
+    });
+    throw error;
   }
   if (harvestAutomationEnabled()) {
     startXSourceDripScheduler(db);

@@ -43,6 +43,7 @@ const {
   normalizeRadiusMiles,
   roundLocationForAnalytics
 } = require('../services/locationSearchService');
+const { applyUgandaHomepage } = require('../packages/shared-country-core');
 
 const PUBLIC_ROUTES = [
   '/',
@@ -235,6 +236,10 @@ function run() {
   }
 
   const homeHtml = sanitizePublicHtml(sourceHtml, { pathname: '/' });
+  assert.doesNotThrow(
+    () => applyUgandaHomepage(homeHtml),
+    'homepage shared components must be rebuilt whenever the canonical navigation or homepage changes'
+  );
   const homeText = normalizeText(homeHtml);
   assert(homeHtml.includes('id="page-home"'), 'homepage should render the homepage section');
   assert(!homeHtml.includes('id="page-list-property"'), 'homepage should not render the full list-property route');

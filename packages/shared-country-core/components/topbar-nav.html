@@ -49,7 +49,13 @@
         <a id="nav-students" href="/student-accommodation" onclick="showPage('students')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Students</a>
         <a id="nav-commercial" href="/commercial" onclick="showPage('commercial')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Commercial</a>
         <a id="nav-land" href="/land" onclick="showPage('land')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Land</a>
-        <a id="nav-off-plan" href="/off-plan" onclick="showPage('off-plan')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Off Plan</a>
+        <div class="off-plan-nav-menu">
+          <a id="nav-off-plan" href="/off-plan" onclick="showPage('off-plan')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer" aria-haspopup="true">Off Plan</a>
+          <div class="off-plan-nav-dropdown" aria-label="Off Plan destinations">
+            <a href="/off-plan"><span id="off-plan-nav-uganda">Uganda</span><small id="off-plan-nav-uganda-note">Local developments</small></a>
+            <a href="/off-plan/overseas"><span id="off-plan-nav-overseas">Overseas</span><small id="off-plan-nav-overseas-note">Africa and the world</small></a>
+          </div>
+        </div>
         <a id="nav-brokers" href="/brokers" onclick="showPage('brokers')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Find Brokers</a>
         <a id="nav-mortgage" href="/mortgage" onclick="showPage('mortgage')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Mortgage Finder</a>
         <a id="nav-valuation" href="/valuation" onclick="showPage('valuation')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Property Value</a>
@@ -70,6 +76,7 @@
       <a id="mnav-commercial" href="/commercial" onclick="showPage('commercial');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Commercial</a>
       <a id="mnav-land" href="/land" onclick="showPage('land');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Land</a>
       <a id="mnav-off-plan" href="/off-plan" onclick="showPage('off-plan');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Off Plan</a>
+      <div class="ml-4 border-l border-green-100 pl-2 flex flex-col text-sm"><a href="/off-plan" class="px-3 py-1.5 rounded-lg hover:bg-green-50">Uganda</a><a href="/off-plan/overseas" class="px-3 py-1.5 rounded-lg hover:bg-green-50">Overseas</a></div>
       <a id="mnav-brokers" href="/brokers" onclick="showPage('brokers');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Find Brokers</a>
       <a id="mnav-mortgage" href="/mortgage" onclick="showPage('mortgage');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Mortgage Finder</a>
       <a id="mnav-valuation" href="/valuation" onclick="showPage('valuation');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Property Value</a>
