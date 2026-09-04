@@ -2,7 +2,7 @@
 
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { brochureBuffer, computeMortgageEstimate, distanceKmBetween, formatApproximateDistance, formatDate } = require('../services/offPlanBrochureService');
+const { brochureBuffer, computeMortgageEstimate, distanceKmBetween, formatApproximateDistance, formatDate, projectUrl } = require('../services/offPlanBrochureService');
 const { brochureLanguagePack, normalizeBrochureLanguage, SUPPORTED_OFF_PLAN_LANGUAGES } = require('../services/offPlanBrochureI18n');
 
 const BROCHURE_PROJECT = {
@@ -85,4 +85,32 @@ test('brochure dates are human-readable in Uganda time', () => {
   assert.equal(formatDate('2028-12-01'), '1 December 2028');
   assert.equal(formatDate(new Date(2028, 11, 1)), '1 December 2028');
   assert.equal(formatDate(null), 'To verify');
+});
+
+test('overseas brochure uses the Kenya route, KES source pricing, floor plans and MakaUG contact journey', async () => {
+  const project = {
+    ...BROCHURE_PROJECT,
+    country_code: 'KE',
+    name: 'Spectre Westlands',
+    slug: 'spectre-westlands',
+    area: 'Westlands',
+    district: 'Nairobi',
+    original_currency: 'KES',
+    unit_types: [{ label: '1 Bedroom apartment - 50 m²', bedrooms: 1, size_sqm: 50, price_original: 8800000, price_original_currency: 'KES', price_ugx: 259600000 }],
+    payment_plan: [{ label: 'Reserve the selected apartment', kind: 'fixed', amount_original: 100000, currency: 'KES' }, { label: 'On signing', kind: 'percentage', percent: 20 }],
+    payment_plan_months: 36,
+    amenities: ['Private terraces', 'Sky garden', 'Kids play area'],
+    floor_plans: [{ url: '/assets/off-plan/spectre-westlands/floor-plan-1br-50.jpg', caption: '1 bedroom 50 m² floor plan' }],
+    images: [{ url: '/assets/off-plan/spectre-westlands/arrival.jpg', caption: 'Artist impression; final finishes may differ' }],
+    extra_fields: { contact_mode: 'makaug_managed', reservation_fee_original: 100000, area_overview: 'Westlands, Nairobi.', makaug_service_steps: ['Requirements call', 'Independent legal checks'], roi_projections: [{ unit_key: 'one-bedroom-50', furnished_percent: 23.68, unfurnished_percent: 14.21 }] }
+  };
+  assert.equal(projectUrl(project), 'https://makaug.com/off-plan/overseas/kenya/spectre-westlands');
+  for (const language of SUPPORTED_OFF_PLAN_LANGUAGES) {
+    const copy = brochureLanguagePack(language);
+    assert.ok(copy.projectHighlights && copy.projectedReturns && copy.roiDisclaimer, language);
+    const pdf = await brochureBuffer(project, { language });
+    assert.equal(pdf.subarray(0, 8).toString(), '%PDF-1.3', language);
+    assert.ok(pdf.length > 20_000, language);
+    assert.ok((pdf.toString('latin1').match(/\/Type \/Page\b/g) || []).length >= 9, language);
+  }
 });

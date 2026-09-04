@@ -413,7 +413,7 @@
   </script>
   <link rel="preload" as="image" href="https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=1200&q=60" fetchpriority="high">
   <link rel="stylesheet" href="/assets/tailwind.css">
-  <link rel="stylesheet" href="/assets/off-plan.css?v=20260904-offplan-v13">
+  <link rel="stylesheet" href="/assets/off-plan.css?v=20260904-overseas-v1">
   <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
   <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"></noscript>
   <link rel="preload" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
@@ -2590,9 +2590,19 @@
   <link rel="sitemap" type="application/xml" title="Marketplace directory sitemap" href="/marketplace-sitemap.xml">
   <script>
     (function prefetchOffPlanData() {
-      var match = window.location.pathname.match(/^\/off-plan(?:\/([a-z0-9-]+))?\/?$/i);
-      if (!match || (window.location.search && !match[1])) return;
-      var path = match[1] ? '/api/off-plan/' + encodeURIComponent(match[1]) : '/api/off-plan?';
+      var route = window.location.pathname.replace(/\/+$/, '') || '/';
+      var ugandaDetail = route.match(/^\/off-plan\/([a-z0-9-]+)$/i);
+      var kenyaDetail = route.match(/^\/off-plan\/overseas\/kenya\/([a-z0-9-]+)$/i);
+      var path = route === '/off-plan'
+        ? '/api/off-plan?country=UG'
+        : route === '/off-plan/overseas/kenya'
+          ? '/api/off-plan?country=KE'
+          : kenyaDetail
+            ? '/api/off-plan/' + encodeURIComponent(kenyaDetail[1]) + '?country=KE'
+            : ugandaDetail
+              ? '/api/off-plan/' + encodeURIComponent(ugandaDetail[1]) + '?country=UG'
+              : '';
+      if (!path || (window.location.search && !ugandaDetail && !kenyaDetail)) return;
       window.__makaugOffPlanBootstrap = {
         path: path,
         used: false,
@@ -2657,7 +2667,13 @@
         <a id="nav-students" href="/student-accommodation" onclick="showPage('students')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Students</a>
         <a id="nav-commercial" href="/commercial" onclick="showPage('commercial')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Commercial</a>
         <a id="nav-land" href="/land" onclick="showPage('land')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Land</a>
-        <a id="nav-off-plan" href="/off-plan" onclick="showPage('off-plan')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Off Plan</a>
+        <div class="off-plan-nav-menu">
+          <a id="nav-off-plan" href="/off-plan" onclick="showPage('off-plan')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer" aria-haspopup="true">Off Plan</a>
+          <div class="off-plan-nav-dropdown" aria-label="Off Plan destinations">
+            <a href="/off-plan"><span id="off-plan-nav-uganda">Uganda</span><small id="off-plan-nav-uganda-note">Local developments</small></a>
+            <a href="/off-plan/overseas"><span id="off-plan-nav-overseas">Overseas</span><small id="off-plan-nav-overseas-note">Africa and the world</small></a>
+          </div>
+        </div>
         <a id="nav-brokers" href="/brokers" onclick="showPage('brokers')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Find Brokers</a>
         <a id="nav-mortgage" href="/mortgage" onclick="showPage('mortgage')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Mortgage Finder</a>
         <a id="nav-valuation" href="/valuation" onclick="showPage('valuation')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Property Value</a>
@@ -2678,6 +2694,7 @@
       <a id="mnav-commercial" href="/commercial" onclick="showPage('commercial');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Commercial</a>
       <a id="mnav-land" href="/land" onclick="showPage('land');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Land</a>
       <a id="mnav-off-plan" href="/off-plan" onclick="showPage('off-plan');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Off Plan</a>
+      <div class="ml-4 border-l border-green-100 pl-2 flex flex-col text-sm"><a href="/off-plan" class="px-3 py-1.5 rounded-lg hover:bg-green-50">Uganda</a><a href="/off-plan/overseas" class="px-3 py-1.5 rounded-lg hover:bg-green-50">Overseas</a></div>
       <a id="mnav-brokers" href="/brokers" onclick="showPage('brokers');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Find Brokers</a>
       <a id="mnav-mortgage" href="/mortgage" onclick="showPage('mortgage');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Mortgage Finder</a>
       <a id="mnav-valuation" href="/valuation" onclick="showPage('valuation');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Property Value</a>
@@ -3707,11 +3724,13 @@
   </div>
 
   <div id="page-off-plan" class="page bg-[#f7faf8] min-h-screen" data-off-plan-marker="off-plan-projectfinder-layout-v3-20260904">
+    <section id="off-plan-overseas-view" class="hidden"></section>
     <section id="off-plan-list-view">
       <div class="off-plan-directory-head">
         <div class="max-w-7xl mx-auto px-4">
           <div class="off-plan-heading-row">
             <div>
+              <a id="off-plan-country-back" href="/off-plan/overseas" class="hidden mb-2 text-sm font-black text-green-800"><i class="fas fa-arrow-left mr-2" aria-hidden="true"></i><span></span></a>
               <h1 id="off-plan-title" data-off-plan-i18n="heroTitle">New off-plan projects</h1>
               <p data-off-plan-i18n="heroSubtitle">Explore developments, compare homes and plan your payments.</p>
             </div>
@@ -3812,6 +3831,7 @@
         <div class="flex items-start justify-between gap-4"><div><p class="text-xs font-black uppercase tracking-widest text-emerald-700">Staff review only</p><h2 id="off-plan-create-title" class="mt-1 text-2xl font-black text-gray-950">Add an off-plan project</h2><p class="mt-2 text-sm text-gray-600">This creates a private review record. It does not publish the project.</p></div><button type="button" onclick="closeOffPlanCreateModal()" class="h-9 w-9 rounded-full bg-gray-100" aria-label="Close"><i class="fas fa-xmark"></i></button></div>
         <form onsubmit="submitOffPlanProject(event)" class="mt-6 grid gap-3">
           <input id="off-plan-create-role" type="hidden" value="staff">
+          <label class="text-sm font-bold">Market<select id="off-plan-create-country" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 font-normal bg-white"><option value="UG">Uganda</option><option value="KE">Kenya (overseas)</option></select></label>
           <label class="text-sm font-bold">Project name<input id="off-plan-create-name" required maxlength="220" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 font-normal"></label>
           <div class="grid sm:grid-cols-2 gap-3"><label class="text-sm font-bold">Area<input id="off-plan-create-area" maxlength="140" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 font-normal" placeholder="e.g. Entebbe"></label><label class="text-sm font-bold">District<input id="off-plan-create-district" maxlength="140" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 font-normal" placeholder="e.g. Wakiso"></label></div>
           <div class="grid sm:grid-cols-2 gap-3"><label class="text-sm font-bold">Source / agent<input id="off-plan-create-source" maxlength="220" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 font-normal"></label><label class="text-sm font-bold">Source agent UUID<input id="off-plan-create-source-id" maxlength="36" class="mt-1 w-full h-11 rounded-xl border border-gray-300 px-3 font-normal font-mono text-xs" placeholder="Approved makaug agent UUID"></label></div>
@@ -9680,7 +9700,7 @@
         script.async = true;
         script.onload = function () {
           var offPlanScript = document.createElement("script");
-          offPlanScript.src = "/assets/off-plan.js?v=20260904-offplan-v14";
+          offPlanScript.src = "/assets/off-plan.js?v=20260904-overseas-v1";
           document.body.appendChild(offPlanScript);
         };
         document.body.appendChild(script);

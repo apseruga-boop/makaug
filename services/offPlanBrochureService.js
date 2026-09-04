@@ -26,9 +26,23 @@ const DEFAULT_FONT_SET = {
   regular: path.join(FONT_ROOT, 'NotoSans-Variable.ttf'),
   bold: path.join(FONT_ROOT, 'NotoSans-Variable.ttf')
 };
+const AMENITY_TRANSLATIONS = {
+  lg: ['Emiryango egy’obwannannyini','Ennimiro ey’oku kasolya','Ekifo abaana we bazannyira','Business centre','Yoga studio','Paakingi y’emmotoka','Eddiiro','Spa ne sauna','Ekifo eky’okukola dduyiro','Ekidiba eky’okuwuga ekya infinity','Obuweereza bwa concierge','Sinema'],
+  sw: ['Matuta binafsi','Bustani ya angani','Eneo la kucheza watoto','Kituo cha biashara','Studio ya yoga','Maegesho ya magari','Mkahawa','Spa na sauna','Kituo cha mazoezi','Bwawa la infinity','Huduma ya concierge','Sinema'],
+  ac: ['Kabedo me woko pa ngat acel','Poto i wi ot','Kabedo pa lutino me tuku','Kabedo me biashara','Kabedo me yoga','Kabedo pa motoka','Ka cam','Spa ki sauna','Kabedo me exercise','Swimming pool me infinity','Kony pa concierge','Cinema'],
+  ny: ['Veranda z’obwananyini','Ebyatsi aha kasolya','Ahi abaana barikuzanira','Business centre','Yoga studio','Parking y’emotoka','Eriiro','Spa na sauna','Gym','Infinity pool','Obuheereza bwa concierge','Cinema'],
+  am: ['የግል ሰገነቶች','የሰማይ አትክልት','የልጆች መጫወቻ','የንግድ ማዕከል','የዮጋ ስቱዲዮ','የመኪና ማቆሚያ','ምግብ ቤት','ስፓና ሳውና','የአካል ብቃት ማዕከል','ኢንፊኒቲ ገንዳ','የኮንሲየርጅ አገልግሎት','ሲኒማ'],
+  ar: ['شرفات خاصة','حديقة علوية','منطقة لعب للأطفال','مركز أعمال','استوديو يوغا','مواقف سيارات','مطعم','سبا وساونا','مركز لياقة','مسبح لا متناهٍ','خدمة كونسيرج','سينما']
+};
+AMENITY_TRANSLATIONS.rn = AMENITY_TRANSLATIONS.ny;
+AMENITY_TRANSLATIONS.sm = AMENITY_TRANSLATIONS.lg;
 
 function cleanText(value, max = 4000) {
   return String(value == null ? '' : value).trim().replace(/\s+/g, ' ').slice(0, max);
+}
+
+function localizedAmenity(value, index, language) {
+  return AMENITY_TRANSLATIONS[normalizeBrochureLanguage(language)]?.[index] || cleanText(value, 100);
 }
 
 function formatMoney(value, currency = 'UGX', copy = ENGLISH_FALLBACK) {
@@ -62,7 +76,10 @@ function publicBaseUrl() {
 }
 
 function projectUrl(project) {
-  return `${publicBaseUrl()}/off-plan/${encodeURIComponent(project.slug)}`;
+  const route = project.country_code === 'KE'
+    ? `/off-plan/overseas/kenya/${encodeURIComponent(project.slug)}`
+    : `/off-plan/${encodeURIComponent(project.slug)}`;
+  return `${publicBaseUrl()}${route}`;
 }
 
 function agentUrl(agent = {}) {
@@ -74,7 +91,7 @@ function googleMapsUrl(project = {}) {
   const lng = Number(project.longitude);
   const query = Number.isFinite(lat) && Number.isFinite(lng)
     ? `${lat},${lng}`
-    : [project.area, project.district, 'Uganda'].filter(Boolean).join(', ');
+    : [project.area, project.district, project.country_code === 'KE' ? 'Kenya' : 'Uganda'].filter(Boolean).join(', ');
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
 }
 
@@ -137,6 +154,7 @@ function areaGroup(place = {}) {
   if (/hospital|clinic|health|medical/.test(source)) return 'healthcare';
   if (/university|college|tertiary/.test(source)) return 'universities';
   if (/market|shop|mall|supermarket|retail/.test(source)) return 'shopping';
+  if (/dining|restaurant|food|cafe/.test(source)) return 'dining';
   if (/airport|transport|bus|ferry/.test(source)) return 'transport';
   return 'parks';
 }
@@ -216,7 +234,8 @@ function preserveArabicWordSpacing(doc, language) {
 
 function localizedProjectText(project, field, language, fallback) {
   const code = normalizeBrochureLanguage(language);
-  if (code === 'en') return cleanText(project[field], 7000) || fallback;
+  const directValue = project[field] ?? project.extra_fields?.[field];
+  if (code === 'en') return cleanText(directValue, 7000) || fallback;
   const translated = project.extra_fields?.translations?.[code]?.[field];
   if (cleanText(translated, 7000)) return cleanText(translated, 7000);
   if (project.slug === 'entebbe-victoria-palms') {
@@ -224,7 +243,7 @@ function localizedProjectText(project, field, language, fallback) {
     if (field === 'description') return copy.previewDescription;
     if (field === 'area_overview') return copy.areaOverview;
   }
-  return fallback;
+  return cleanText(directValue, 7000) || fallback;
 }
 
 function addHeader(doc, title = '', copy = ENGLISH_FALLBACK) {
@@ -290,6 +309,7 @@ function safeDescription(project, language, copy) {
 function buildOffPlanBrochure(projectInput, output, options = {}) {
   const project = normalizeDevelopmentRow(projectInput);
   const agent = options.agentProfile || null;
+  const overseas = project.country_code === 'KE' || project.extra_fields?.contact_mode === 'makaug_managed';
   const language = normalizeBrochureLanguage(options.language);
   const copy = brochureLanguagePack(language);
   const doc = new PDFDocument({ size: 'A4', margins: { top: 88, right: 44, bottom: 64, left: 44 }, info: { Title: `${project.name} - makaug.com ${copy.project}`, Author: 'makaug.com', Subject: copy.project } });
@@ -305,8 +325,11 @@ function buildOffPlanBrochure(projectInput, output, options = {}) {
   doc.fillColor(BRAND_GOLD).font('Brochure-Bold').fontSize(10).text(copy.project.toUpperCase(), 44, 426, { width: 505, align: copy.rtl ? 'right' : 'left' });
   doc.fillColor(INK).font('Brochure-Bold').fontSize(29).text(cleanText(project.name, 220), 44, 448, { width: 510, align: copy.rtl ? 'right' : 'left' });
   doc.fillColor(MUTED).font('Brochure-Regular').fontSize(13).text([project.area, project.district].filter(Boolean).join(', '), 44, doc.y + 8, { width: 505, align: copy.rtl ? 'right' : 'left' });
-  const price = project.launch_price_ugx != null
-    ? `${copy.from} ${formatMoney(project.launch_price_ugx, 'UGX', copy)}`
+  const originalLaunchPrice = Number(project.unit_types.find((unit) => Number(unit.price_original) > 0)?.price_original);
+  const price = overseas && Number.isFinite(originalLaunchPrice)
+    ? `${copy.from} ${formatMoney(originalLaunchPrice, project.original_currency || 'KES', copy)} · ${formatMoney(project.launch_price_ugx, 'UGX', copy)} ${copy.indicative}`
+    : project.launch_price_ugx != null
+      ? `${copy.from} ${formatMoney(project.launch_price_ugx, 'UGX', copy)}`
     : copy.pricingVerify;
   doc.roundedRect(44, doc.y + 24, 505, 72, 12).fill(PALE);
   doc.fillColor(BRAND_GREEN).font('Brochure-Bold').fontSize(19).text(price, 62, doc.y + 48, { width: 470 });
@@ -334,6 +357,19 @@ function buildOffPlanBrochure(projectInput, output, options = {}) {
     doc.fillColor(MUTED).font('Brochure-Bold').fontSize(8).text(label.toUpperCase(), x, top, { width: 235, align: copy.rtl ? 'right' : 'left' });
     doc.fillColor(INK).font('Brochure-Bold').fontSize(12).text(cleanText(value, 220), x, top + 17, { width: 235, align: copy.rtl ? 'right' : 'left' });
   });
+  if (overseas && project.amenities.length) {
+    const amenityY = y + 226;
+    doc.fillColor(BRAND_GREEN).font('Brochure-Bold').fontSize(14).text(copy.projectHighlights, 44, amenityY, { width: 505, align: copy.rtl ? 'right' : 'left' });
+    doc.fillColor(MUTED).font('Brochure-Regular').fontSize(8).text(copy.suppliedAmenities, 44, amenityY + 23, { width: 505, height: 26, ellipsis: true, align: copy.rtl ? 'right' : 'left' });
+    project.amenities.slice(0, 12).forEach((amenity, index) => {
+      const column = index % 3;
+      const row = Math.floor(index / 3);
+      const chipX = 44 + column * 171;
+      const chipY = amenityY + 57 + row * 29;
+      doc.roundedRect(chipX, chipY, 160, 22, 7).fill(PALE);
+      doc.fillColor(INK).font('Brochure-Bold').fontSize(7.2).text(localizedAmenity(amenity, index, language), chipX + 8, chipY + 7, { width: 144, height: 10, ellipsis: true, align: copy.rtl ? 'right' : 'left' });
+    });
+  }
 
   addPage(doc, project, copy.locationArea, copy);
   writeSectionTitle(doc, copy.locationArea, doc.y, copy.rtl);
@@ -362,7 +398,7 @@ function buildOffPlanBrochure(projectInput, output, options = {}) {
     groupedPlaces.get(key).push(place);
   });
   const servicesYByColumn = [doc.y + 32, doc.y + 32];
-  const groupOrder = ['schools', 'healthcare', 'universities', 'shopping', 'parks', 'transport'];
+  const groupOrder = ['schools', 'healthcare', 'universities', 'shopping', 'dining', 'parks', 'transport'];
   groupOrder.filter((groupName) => (groupedPlaces.get(groupName) || []).length).forEach((groupName, groupIndex) => {
     const places = (groupedPlaces.get(groupName) || []).slice(0, 3);
     const column = groupIndex % 2;
@@ -398,8 +434,10 @@ function buildOffPlanBrochure(projectInput, output, options = {}) {
       doc.roundedRect(44, yRow, 505, 46, 8).fill(index % 2 ? '#ffffff' : PALE);
       const unitLabel = language === 'en' && cleanText(unit.label, 220) ? cleanText(unit.label, 220) : interpolate(copy.homeLabel, { count: unit.bedrooms || '' });
       doc.fillColor(INK).font('Brochure-Bold').fontSize(11).text(unitLabel, 58, yRow + 9, { width: 280, align: copy.rtl ? 'right' : 'left' });
-      const priceText = unit.price_ugx
-        ? `${formatMoney(unit.price_ugx, 'UGX', copy)}${unit.price_original ? ` ${interpolate(copy.guideSource, { amount: formatMoney(unit.price_original, unit.price_original_currency || project.original_currency, copy) })}` : ''}`
+      const priceText = overseas && unit.price_original
+        ? `${formatMoney(unit.price_original, unit.price_original_currency || project.original_currency, copy)} · ${formatMoney(unit.price_ugx, 'UGX', copy)} ${copy.indicative}`
+        : unit.price_ugx
+          ? `${formatMoney(unit.price_ugx, 'UGX', copy)}${unit.price_original ? ` ${interpolate(copy.guideSource, { amount: formatMoney(unit.price_original, unit.price_original_currency || project.original_currency, copy) })}` : ''}`
         : unit.price_original
           ? interpolate(copy.sourceSupplied, { amount: formatMoney(unit.price_original, unit.price_original_currency || project.original_currency, copy) })
           : copy.priceRequest;
@@ -409,14 +447,45 @@ function buildOffPlanBrochure(projectInput, output, options = {}) {
   }
   writeSectionTitle(doc, copy.paymentPlan, Math.min(tableY, 545), copy.rtl);
   const paymentLines = project.payment_plan.length
-    ? project.payment_plan.map((item) => `${language === 'en' ? cleanText(item.label || copy.milestone) : copy.milestone}: ${item.amount_original ? formatMoney(item.amount_original, item.currency || project.original_currency, copy) : item.kind === 'equal_monthly' ? interpolate(copy.equalInstalments, { count: item.months || project.payment_plan_months || '?' }) : (language === 'en' ? cleanText(item.due || copy.toVerify) : copy.toVerify)}`)
+    ? project.payment_plan.map((item) => `${language === 'en' ? cleanText(item.label || copy.milestone) : copy.milestone}: ${item.amount_original ? formatMoney(item.amount_original, item.currency || project.original_currency, copy) : item.kind === 'percentage' && Number.isFinite(Number(item.percent)) ? `${item.percent}%` : item.kind === 'equal_monthly' ? interpolate(copy.equalInstalments, { count: item.months || project.payment_plan_months || '?' }) : (language === 'en' ? cleanText(item.due || copy.toVerify) : copy.toVerify)}`)
     : [copy.milestonesVerify];
   doc.fillColor(INK).font('Brochure-Regular').fontSize(10).list(paymentLines, 60, doc.y + 8, { width: 475, bulletRadius: 2, textIndent: 12, lineGap: 5, align: copy.rtl ? 'right' : 'left' });
   doc.moveDown(1.2);
   const paymentNote = language === 'en' ? (cleanText(project.extra_fields?.payment_terms_note, 900) || copy.paymentNote) : copy.paymentNote;
   doc.fillColor(MUTED).font('Brochure-Oblique').fontSize(9).text(paymentNote, 44, doc.y, { width: 505, lineGap: 3, align: copy.rtl ? 'right' : 'left' });
+  const roiProjections = Array.isArray(project.extra_fields?.roi_projections) ? project.extra_fields.roi_projections : [];
+  if (overseas && roiProjections.length) {
+    const roiY = Math.max(doc.y + 22, 535);
+    doc.fillColor(BRAND_GREEN).font('Brochure-Bold').fontSize(14).text(copy.projectedReturns, 44, roiY, { width: 505, align: copy.rtl ? 'right' : 'left' });
+    roiProjections.slice(0, 3).forEach((projection, index) => {
+      const unit = project.unit_types.find((item) => item.key === projection.unit_key) || {};
+      const cardX = 44 + index * 171;
+      doc.roundedRect(cardX, roiY + 28, 160, 82, 9).fill('#fff7f7');
+      const unitLabel = language === 'en' && cleanText(unit.label, 160) ? cleanText(unit.label, 160) : interpolate(copy.homeLabel, { count: unit.bedrooms || '' });
+      doc.fillColor(INK).font('Brochure-Bold').fontSize(8.5).text(unitLabel, cardX + 10, roiY + 39, { width: 140, height: 23, ellipsis: true, align: copy.rtl ? 'right' : 'left' });
+      doc.fillColor(MUTED).font('Brochure-Regular').fontSize(7.5).text(`${copy.furnished}: ${projection.furnished_percent}%`, cardX + 10, roiY + 68, { width: 140, align: copy.rtl ? 'right' : 'left' });
+      doc.text(`${copy.unfurnished}: ${projection.unfurnished_percent}%`, cardX + 10, roiY + 86, { width: 140, align: copy.rtl ? 'right' : 'left' });
+    });
+    doc.fillColor('#9b1c1c').font('Brochure-Oblique').fontSize(7.5).text(copy.roiDisclaimer, 44, roiY + 121, { width: 505, lineGap: 2, align: copy.rtl ? 'right' : 'left' });
+  }
 
-  addPage(doc, project, copy.mortgageComparison, copy);
+  addPage(doc, project, overseas ? copy.overseasFinance : copy.mortgageComparison, copy);
+  if (overseas) {
+    writeSectionTitle(doc, copy.overseasFinance, doc.y, copy.rtl);
+    doc.roundedRect(44, doc.y + 8, 505, 126, 12).fill('#fff8e7');
+    doc.fillColor(INK).font('Brochure-Bold').fontSize(12).text(copy.bankCheckTitle, 62, doc.y + 27, { width: 470, align: copy.rtl ? 'right' : 'left' });
+    doc.fillColor(MUTED).font('Brochure-Regular').fontSize(9.5).text(language === 'en' ? cleanText(project.extra_fields?.overseas_finance_policy, 1200) : copy.overseasFinancePolicy, 62, doc.y + 52, { width: 470, lineGap: 4, align: copy.rtl ? 'right' : 'left' });
+    doc.fillColor(BRAND_GREEN).font('Brochure-Bold').fontSize(15).text(copy.howMakaugHelps, 44, 270, { width: 505, align: copy.rtl ? 'right' : 'left' });
+    const steps = Array.isArray(project.extra_fields?.makaug_service_steps) ? project.extra_fields.makaug_service_steps : [];
+    (steps.length ? steps : copy.defaultOverseasSteps).slice(0, 6).forEach((step, index) => {
+      const yStep = 310 + index * 58;
+      doc.circle(61, yStep + 12, 12).fill(BRAND_GREEN);
+      doc.fillColor('#ffffff').font('Brochure-Bold').fontSize(9).text(String(index + 1), 53, yStep + 7, { width: 16, align: 'center' });
+      const stepText = language === 'en' ? cleanText(step, 220) : cleanText(copy.defaultOverseasSteps[index] || step, 220);
+      doc.fillColor(INK).font('Brochure-Bold').fontSize(10.5).text(stepText, 86, yStep + 4, { width: 450, align: copy.rtl ? 'right' : 'left' });
+    });
+    doc.fillColor(MUTED).font('Brochure-Oblique').fontSize(8.5).text(copy.overseasDisclaimer, 44, 686, { width: 505, lineGap: 3, align: copy.rtl ? 'right' : 'left' });
+  } else {
   writeSectionTitle(doc, copy.providers, doc.y, copy.rtl);
   const mortgagePrice = Number(project.launch_price_ugx);
   doc.fillColor(MUTED).font('Brochure-Regular').fontSize(9.5).text(interpolate(copy.mortgageIntro, { price: Number.isFinite(mortgagePrice) ? formatMoney(mortgagePrice, 'UGX', copy) : copy.launchPrice }), 44, doc.y + 5, { width: 505, lineGap: 3, align: copy.rtl ? 'right' : 'left' });
@@ -444,6 +513,7 @@ function buildOffPlanBrochure(projectInput, output, options = {}) {
     mortgageY += 178;
   });
   doc.fillColor(MUTED).font('Brochure-Oblique').fontSize(8.5).text(copy.mortgageDisclaimer, 44, 696, { width: 505, lineGap: 3, align: copy.rtl ? 'right' : 'left' });
+  }
 
   if (imagePaths.length) {
     addPage(doc, project, copy.gallery, copy);
@@ -459,21 +529,36 @@ function buildOffPlanBrochure(projectInput, output, options = {}) {
     });
   }
 
-  addPage(doc, project, agent ? `${copy.contact} - ${cleanText(agent.full_name, 60)}` : copy.contact, copy);
+  const floorPlanPaths = project.floor_plans.map((floorPlan) => ({ ...floorPlan, path: localAssetPath(floorPlan.url) })).filter((floorPlan) => floorPlan.path);
+  if (floorPlanPaths.length) {
+    addPage(doc, project, copy.floorPlans, copy);
+    writeSectionTitle(doc, copy.floorPlans, doc.y, copy.rtl);
+    floorPlanPaths.slice(0, 3).forEach((floorPlan, index) => {
+      const yPlan = 124 + index * 205;
+      imageCover(doc, floorPlan.path, 44, yPlan, 190, 170);
+      doc.fillColor(INK).font('Brochure-Bold').fontSize(11).text(language === 'en' ? cleanText(floorPlan.caption, 240) : copy.floorPlan, 252, yPlan + 44, { width: 297, height: 50, ellipsis: true, align: copy.rtl ? 'right' : 'left' });
+      doc.fillColor(MUTED).font('Brochure-Regular').fontSize(8.5).text(copy.floorPlanDisclaimer, 252, yPlan + 104, { width: 297, lineGap: 3, align: copy.rtl ? 'right' : 'left' });
+    });
+  }
+
+  addPage(doc, project, overseas ? copy.makaugOverseasTeam : agent ? `${copy.contact} - ${cleanText(agent.full_name, 60)}` : copy.contact, copy);
   const agentPhotoPath = localAssetPath(agent?.profile_photo_url || (cleanText(agent?.full_name).toLowerCase() === 'kazi honest' ? '/assets/agents/kazi-honest-professional-v2.jpg' : ''));
   if (agentPhotoPath) imageCover(doc, agentPhotoPath, 44, 108, 118, 118);
-  else doc.circle(103, 167, 59).fill(PALE);
+  else {
+    doc.circle(103, 167, 59).fill(PALE);
+    doc.fillColor(BRAND_GREEN).font('Brochure-Bold').fontSize(34).text('M', 44, 145, { width: 118, align: 'center' });
+  }
   doc.fillColor(BRAND_GREEN).font('Brochure-Bold').fontSize(10).text(copy.contactLabel, 184, 116, { width: 365, align: copy.rtl ? 'right' : 'left' });
-  doc.fillColor(INK).font('Brochure-Bold').fontSize(22).text(cleanText(agent?.full_name || project.source_display_name || copy.contact, 120), 184, 138, { width: 365, align: copy.rtl ? 'right' : 'left' });
-  doc.fillColor(MUTED).font('Brochure-Regular').fontSize(10).text(cleanText(agent?.company_name || copy.brokerProfile, 140), 184, 172, { width: 365, align: copy.rtl ? 'right' : 'left' });
-  const agentPhone = cleanText(agent?.whatsapp || agent?.phone, 60);
+  doc.fillColor(INK).font('Brochure-Bold').fontSize(22).text(cleanText(overseas ? copy.makaugOverseasTeam : agent?.full_name || project.source_display_name || copy.contact, 120), 184, 138, { width: 365, align: copy.rtl ? 'right' : 'left' });
+  doc.fillColor(MUTED).font('Brochure-Regular').fontSize(10).text(cleanText(overseas ? copy.purchaseCoordinator : agent?.company_name || copy.brokerProfile, 140), 184, 172, { width: 365, align: copy.rtl ? 'right' : 'left' });
+  const agentPhone = cleanText(overseas ? (process.env.SUPPORT_PHONE || '+256760112587') : agent?.whatsapp || agent?.phone, 60);
   if (agentPhone) doc.fillColor(BRAND_GREEN).font('Brochure-Bold').fontSize(10).text(`${copy.phone}: ${agentPhone}`, 184, 190, { width: 365, link: `tel:${agentPhone.replace(/[^+\d]/g, '')}`, align: copy.rtl ? 'right' : 'left' });
-  const agentBio = cleanText(agent?.full_name).toLowerCase() === 'kazi honest' && language !== 'en' ? copy.kaziBio : cleanText(agent?.bio, 520);
+  const agentBio = overseas ? copy.makaugOverseasBio : cleanText(agent?.full_name).toLowerCase() === 'kazi honest' && language !== 'en' ? copy.kaziBio : cleanText(agent?.bio, 520);
   if (agentBio) doc.fillColor(INK).font('Brochure-Regular').fontSize(9).text(agentBio, 184, agentPhone ? 211 : 196, { width: 365, height: agentPhone ? 38 : 53, ellipsis: true, lineGap: 3, align: copy.rtl ? 'right' : 'left' });
   doc.roundedRect(44, 250, 505, 46, 11).fill(BRAND_GREEN);
-  doc.fillColor('#ffffff').font('Brochure-Bold').fontSize(12).text(copy.viewProfile, 62, 267, { width: 470, align: 'center', link: agent ? agentUrl(agent) : projectUrl(project) });
-  doc.fillColor(BRAND_GREEN).font('Brochure-Bold').fontSize(14).text(copy.moreProperties, 44, 326, { width: 505, align: copy.rtl ? 'right' : 'left' });
-  const listingRows = (agent?.listings || []).slice(0, 5);
+  doc.fillColor('#ffffff').font('Brochure-Bold').fontSize(12).text(overseas ? copy.openProject : copy.viewProfile, 62, 267, { width: 470, align: 'center', link: agent && !overseas ? agentUrl(agent) : projectUrl(project) });
+  doc.fillColor(BRAND_GREEN).font('Brochure-Bold').fontSize(14).text(overseas ? copy.nextSteps : copy.moreProperties, 44, 326, { width: 505, align: copy.rtl ? 'right' : 'left' });
+  const listingRows = overseas ? [] : (agent?.listings || []).slice(0, 5);
   let listingY = 354;
   listingRows.forEach((listing, index) => {
     const thumb = options.agentListingImageBuffers?.[index];
@@ -485,7 +570,7 @@ function buildOffPlanBrochure(projectInput, output, options = {}) {
     doc.fillColor(BRAND_GREEN).font('Brochure-Bold').fontSize(8.5).text(formatMoney(listing.price, listing.price_currency || 'UGX', copy), 360, listingY + 20, { width: 185, align: 'right' });
     listingY += 66;
   });
-  if (!listingRows.length) doc.fillColor(MUTED).font('Brochure-Regular').fontSize(10).text(copy.openProfile, 44, 362, { width: 505, align: copy.rtl ? 'right' : 'left' });
+  if (!listingRows.length) doc.fillColor(MUTED).font('Brochure-Regular').fontSize(10).text(overseas ? copy.makaugNextSteps : copy.openProfile, 44, 362, { width: 505, lineGap: 4, align: copy.rtl ? 'right' : 'left' });
   doc.fillColor(INK).font('Brochure-Bold').fontSize(11).text(copy.important, 44, 700, { width: 505, align: copy.rtl ? 'right' : 'left' });
   doc.fillColor(MUTED).font('Brochure-Regular').fontSize(8).text(copy.disclaimer, 44, 718, { width: 505, lineGap: 3, align: copy.rtl ? 'right' : 'left' });
 

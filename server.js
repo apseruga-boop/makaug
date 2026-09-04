@@ -318,9 +318,11 @@ app.get('/sitemap.xml', async (_req, res, next) => {
     }
     const urls = sitemapEntries(snapshot, baseUrl);
     urls.push({ loc: `${baseUrl}/off-plan`, changefreq: 'daily', priority: '0.8' });
+    urls.push({ loc: `${baseUrl}/off-plan/overseas`, changefreq: 'weekly', priority: '0.7' });
+    urls.push({ loc: `${baseUrl}/off-plan/overseas/kenya`, changefreq: 'weekly', priority: '0.7' });
     try {
-      const offPlan = await db.query("SELECT * FROM off_plan_developments WHERE country_code = 'UG' AND status = 'published' AND (verification_status = 'verified' OR (verification_status = 'partially_verified' AND extra_fields->>'public_preview_approved' = 'true')) ORDER BY updated_at DESC LIMIT 500");
-      offPlan.rows.map(normalizeDevelopmentRow).filter(isPubliclyVisible).forEach((project) => urls.push({ loc: `${baseUrl}/off-plan/${encodeURIComponent(project.slug)}`, lastmod: project.updated_at ? new Date(project.updated_at).toISOString() : null, changefreq: 'weekly', priority: '0.7' }));
+      const offPlan = await db.query("SELECT * FROM off_plan_developments WHERE country_code = ANY(ARRAY['UG','KE']) AND status = 'published' AND (verification_status = 'verified' OR (verification_status = 'partially_verified' AND extra_fields->>'public_preview_approved' = 'true')) ORDER BY updated_at DESC LIMIT 500");
+      offPlan.rows.map(normalizeDevelopmentRow).filter(isPubliclyVisible).forEach((project) => urls.push({ loc: project.country_code === 'KE' ? `${baseUrl}/off-plan/overseas/kenya/${encodeURIComponent(project.slug)}` : `${baseUrl}/off-plan/${encodeURIComponent(project.slug)}`, lastmod: project.updated_at ? new Date(project.updated_at).toISOString() : null, changefreq: 'weekly', priority: '0.7' }));
     } catch (error) {
       logger.warn('Off-plan sitemap entries are unavailable until the feature migration is applied', { message: error.message });
     }
@@ -1467,18 +1469,23 @@ function shouldServeAdminShellForApiKeyFallback(auth, pathname = '') {
   return Boolean(auth && (path === '/admin' || path.startsWith('/admin/') || path === '/king' || path.startsWith('/king/')));
 }
 
-app.get('/off-plan/:slug', async (req, res, next) => {
-  try {
-    const project = await getPublicDevelopment(db, req.params.slug);
+function renderOffPlanProjectPage(req, res, next, countryCode = 'UG') {
+  return Promise.resolve().then(async () => {
+    const project = await getPublicDevelopment(db, req.params.slug, countryCode);
     if (!project) {
       res.set('X-Robots-Tag', 'noindex, noarchive');
       return res.status(404).type('text/plain').send('Off-plan project not found');
     }
-    const description = String(project.description || `Explore ${project.name}, an off-plan development in ${[project.area, project.district, 'Uganda'].filter(Boolean).join(', ')}.`).replace(/\s+/g, ' ').trim().slice(0, 240);
-    const canonical = absolutePublicUrl(`/off-plan/${encodeURIComponent(project.slug)}`);
+    const overseas = project.country_code === 'KE';
+    const countryName = overseas ? 'Kenya' : 'Uganda';
+    const description = String(project.description || `Explore ${project.name}, an off-plan development in ${[project.area, project.district, countryName].filter(Boolean).join(', ')}.`).replace(/\s+/g, ' ').trim().slice(0, 240);
+    const canonicalPath = overseas
+      ? `/off-plan/overseas/kenya/${encodeURIComponent(project.slug)}`
+      : `/off-plan/${encodeURIComponent(project.slug)}`;
+    const canonical = absolutePublicUrl(canonicalPath);
     const image = absolutePublicUrl(project.images?.[0]?.url || '/assets/icons/makaug-icon-512.png');
     const html = patchPublicPageSeoMeta(renderPublicHtml(req.originalUrl || req.url || req.path), {
-      title: `${project.name} | Off Plan Uganda | makaug.com`,
+      title: `${project.name} | Off Plan ${countryName} | makaug.com`,
       description,
       canonical,
       image,
@@ -1491,17 +1498,23 @@ app.get('/off-plan/:slug', async (req, res, next) => {
         image: (project.images || []).map((item) => absolutePublicUrl(item.url)).filter(Boolean),
         url: canonical,
         category: 'Off-plan property development',
-        areaServed: [project.area, project.district, 'Uganda'].filter(Boolean).join(', ')
+        areaServed: [project.area, project.district, countryName].filter(Boolean).join(', ')
       }
     });
-    res.set('X-makaug-Off-Plan-SSR', '1');
+    res.set('X-makaug-Off-Plan-SSR', overseas ? 'overseas-ke' : '1');
     res.set('X-makaug-Public-Sanitized', '1');
     return sendTextResponse(req, res, html, { cacheControl: PUBLIC_HTML_CACHE_CONTROL });
-  } catch (error) {
+  }).catch((error) => {
     if (error.code === '42P01') return sendPublicIndex(req, res, next);
     return next(error);
-  }
-});
+  });
+}
+
+app.get('/off-plan/overseas/kenya/:slug', (req, res, next) => renderOffPlanProjectPage(req, res, next, 'KE'));
+
+app.get('/off-plan/overseas', sendPublicIndex);
+
+app.get('/off-plan/:slug', (req, res, next) => renderOffPlanProjectPage(req, res, next, 'UG'));
 
 function sendPublicIndex(req, res, next) {
   if (req.path.startsWith('/api/')) return next();
@@ -1549,7 +1562,23 @@ function sendPublicIndex(req, res, next) {
   try {
     res.set('X-makaug-Public-Sanitized', '1');
     let html = renderPublicHtml(req.originalUrl || req.url || req.path);
-    if (/^\/off-plan\/?$/i.test(req.path)) {
+    if (/^\/off-plan\/overseas\/kenya\/?$/i.test(req.path)) {
+      html = patchPublicPageSeoMeta(html, {
+        title: 'Off Plan Property in Kenya | MakaUG Overseas',
+        description: 'Explore Kenya off-plan property with MakaUG-managed document review, legal coordination, payment guidance and currency information.',
+        canonical: absolutePublicUrl('/off-plan/overseas/kenya'),
+        image: absolutePublicUrl('/assets/off-plan/spectre-westlands/nairobi-skyline.jpg'),
+        structuredData: { '@context': 'https://schema.org', '@type': 'CollectionPage', name: 'Off Plan Property in Kenya', url: absolutePublicUrl('/off-plan/overseas/kenya') }
+      });
+    } else if (/^\/off-plan\/overseas\/?$/i.test(req.path)) {
+      html = patchPublicPageSeoMeta(html, {
+        title: 'Overseas Off Plan Property | MakaUG',
+        description: 'Browse overseas off-plan opportunities by region and country, beginning with verified-source projects in Africa.',
+        canonical: absolutePublicUrl('/off-plan/overseas'),
+        image: absolutePublicUrl('/assets/off-plan/spectre-westlands/nairobi-skyline.jpg'),
+        structuredData: { '@context': 'https://schema.org', '@type': 'CollectionPage', name: 'Overseas Off Plan Property', url: absolutePublicUrl('/off-plan/overseas') }
+      });
+    } else if (/^\/off-plan\/?$/i.test(req.path)) {
       html = patchPublicPageSeoMeta(html, {
         title: 'Off Plan Property and New Developments in Uganda | makaug.com',
         description: 'Explore off-plan projects and new developments in Uganda with attributed pricing, progress, payment plans, maps and downloadable brochures.',

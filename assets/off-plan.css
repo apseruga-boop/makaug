@@ -235,3 +235,36 @@
   .off-plan-nearby-grid { grid-template-columns: 1fr; }
   .off-plan-mortgage-controls { grid-template-columns: 1fr; }
 }
+.off-plan-nav-menu{position:relative}
+.off-plan-nav-dropdown{position:absolute;top:calc(100% + .25rem);left:50%;z-index:80;display:none;min-width:220px;transform:translateX(-50%);overflow:hidden;border:1px solid #dbe8df;border-radius:14px;background:#fff;box-shadow:0 18px 45px rgba(11,63,34,.16)}
+.off-plan-nav-menu:hover .off-plan-nav-dropdown,.off-plan-nav-menu:focus-within .off-plan-nav-dropdown{display:block}
+.off-plan-nav-dropdown a{display:flex;flex-direction:column;gap:2px;padding:12px 14px;color:#163523}
+.off-plan-nav-dropdown a:hover,.off-plan-nav-dropdown a:focus{background:#eef9f1;outline:0}
+.off-plan-nav-dropdown span{font-size:.875rem;font-weight:800}
+.off-plan-nav-dropdown small{font-size:.7rem;color:#64748b}
+.off-plan-overseas-hero{position:relative;min-height:390px;display:flex;align-items:end;overflow:hidden;background:#073b25;color:white}
+.off-plan-overseas-hero>img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.56}
+.off-plan-overseas-hero:after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(3,38,23,.94),rgba(3,38,23,.58) 55%,rgba(3,38,23,.18))}
+.off-plan-overseas-hero>div{position:relative;z-index:1;padding-top:5rem;padding-bottom:4rem}
+.off-plan-destination-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:18px}
+.off-plan-destination-card{position:relative;display:block;min-height:260px;overflow:hidden;border-radius:22px;background:#0b4f31;color:#fff;box-shadow:0 14px 40px rgba(15,71,41,.12)}
+.off-plan-destination-card img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transition:transform .35s ease}
+.off-plan-destination-card:hover img{transform:scale(1.035)}
+.off-plan-destination-card:after{content:"";position:absolute;inset:0;background:linear-gradient(0deg,rgba(3,26,15,.92),rgba(3,26,15,.05) 68%)}
+.off-plan-destination-card>div{position:absolute;z-index:1;left:0;right:0;bottom:0;padding:20px}
+.off-plan-destination-card.is-coming{background:#eaf2ed;color:#365043;box-shadow:none;border:1px dashed #b6cbbd}
+.off-plan-destination-card.is-coming:after{display:none}
+.off-plan-destination-card.is-coming>div{position:relative;padding-top:7rem}
+.off-plan-concierge-steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+.off-plan-concierge-step{border:1px solid #d9eadf;border-radius:16px;background:#f7fbf8;padding:16px}
+.off-plan-amenity-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:10px;list-style:none;padding:0;margin-bottom:0}
+.off-plan-amenity-grid li{display:flex;align-items:center;gap:9px;border:1px solid #d9eadf;border-radius:12px;background:#f7fbf8;padding:11px 12px;font-size:.84rem;font-weight:700;color:#1f3327}
+.off-plan-amenity-grid i{color:#14833b}
+.off-plan-roi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
+.off-plan-roi-grid>div{display:grid;gap:5px;border:1px solid #f1c4c4;border-radius:12px;background:#fffafa;padding:12px}
+.off-plan-roi-grid strong{font-size:.84rem;color:#17221c}.off-plan-roi-grid span{font-size:.78rem;color:#5f6b64}
+.off-plan-guidance-links{display:grid;gap:8px}.off-plan-guidance-links a{display:flex;align-items:center;justify-content:space-between;gap:12px;border-radius:10px;background:#fff;padding:10px 12px;color:#14532d;font-size:.8rem;font-weight:800;text-decoration:underline;text-underline-offset:2px}
+.off-plan-floor-plan-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+.off-plan-floor-plan-grid figure{overflow:hidden;border:1px solid #dce7df;border-radius:16px;background:#fff}
+.off-plan-floor-plan-grid img{width:100%;aspect-ratio:4/3;object-fit:cover}
+.off-plan-floor-plan-grid figcaption{padding:10px 12px;font-size:.75rem;color:#475569}

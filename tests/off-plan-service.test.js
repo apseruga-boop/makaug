@@ -116,6 +116,27 @@ test('a source-attributed partial project is public only with explicit preview a
   assert.equal(isPubliclyVisible({ ...project, extra_fields: {} }), false);
 });
 
+test('a MakaUG-managed Kenya preview accepts verified source documents and partial unit pricing', () => {
+  const project = {
+    country_code: 'KE', status: 'published', verification_status: 'partially_verified',
+    name: 'Spectre Westlands', source_display_name: 'Karim - supplied agent documents',
+    description: 'A source-labelled overseas project preview with supplied layouts, prices, payment terms and clear buyer verification safeguards.',
+    area: 'Westlands', district: 'Nairobi', latitude: -1.2676, longitude: 36.8108,
+    launch_price_ugx: 259600000, payment_plan_months: 36,
+    unit_types: [
+      { bedrooms: 1, price_original: 8800000, price_original_currency: 'KES', price_ugx: 259600000 },
+      { bedrooms: 1, price_original: null, price_original_currency: 'KES', price_ugx: null },
+      { bedrooms: 2, price_original: 16700000, price_original_currency: 'KES', price_ugx: 492650000 }
+    ],
+    payment_plan: [{ label: 'Balance across 36 months', months: 36 }],
+    images: [{ url: '/1.jpg', caption: 'One' }, { url: '/2.jpg', caption: 'Two' }, { url: '/3.jpg', caption: 'Three' }],
+    extra_fields: { public_preview_approved: true, source_documents_verified: true, contact_mode: 'makaug_managed' }
+  };
+  assert.deepEqual(publicPreviewBlockers(project), []);
+  assert.equal(isPubliclyVisible(project), true);
+  assert.equal(isPubliclyVisible({ ...project, country_code: 'TZ' }), false);
+});
+
 test('publication gate rejects impossible sales totals and unlabelled media', () => {
   const blockers = publicationBlockers({
     name: 'Verified Project', developer_name: 'Verified Developer Ltd',
