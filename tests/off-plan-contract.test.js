@@ -84,6 +84,15 @@ test('Off Plan directory uses the compact search, map, AI and image-led project 
   assert.match(css, /off-plan-card-image[\s\S]*min-height: 485px/);
 });
 
+test('an Off Plan source broker profile remains usable when the general agent API is slow', () => {
+  const app = read('assets/makaug-app.js');
+  assert.match(app, /offPlanProjectsPromise = apiRequest\('\/api\/off-plan\?limit=60'/);
+  assert.match(app, /window\.setTimeout\(\(\) => controller\.abort\(\), 4000\)/);
+  assert.match(app, /broker\.remote_off_plan_projects = offPlanProjects/);
+  assert.match(app, /function brokerOffPlanProjectsHtml\(projects = \[\]\)/);
+  assert.match(app, /Projects represented by this broker/);
+});
+
 test('brochure, payment, gallery, map, sharing, video and mortgage handoff are visible', () => {
   const html = read('index.html');
   const client = read('assets/off-plan.js');
