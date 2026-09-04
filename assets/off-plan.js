@@ -466,10 +466,13 @@
   }
 
   function galleryMarkup(project) {
-    const images = (project.images || []).slice(0, 3);
+    const allImages = project.images || [];
+    const images = allImages.slice(0, 3);
     if (!images.length) return '<div class="rounded-3xl bg-gray-100 h-[360px]"></div>';
     while (images.length < 3) images.push(images[0]);
-    return `<div class="off-plan-gallery">${images.map((image, index) => `<figure><img src="${escapeHtml(image.url)}" alt="${escapeHtml(image.caption || project.name)}"><figcaption>${escapeHtml(image.caption || 'Project image')}</figcaption>${index === 2 && project.images.length > 3 ? `<button type="button" onclick="openOffPlanGallery()" class="absolute right-3 top-3 rounded-lg bg-white/95 text-gray-950 px-3 py-2 text-xs font-black"><i class="fas fa-images mr-1"></i>All ${project.images.length} photos</button>` : ''}</figure>`).join('')}</div>`;
+    const preview = `<div class="off-plan-gallery">${images.map((image, index) => `<figure><img src="${escapeHtml(image.url)}" alt="${escapeHtml(image.caption || project.name)}"><figcaption>${escapeHtml(image.caption || 'Project image')}</figcaption>${index === 2 && allImages.length > 3 ? `<button type="button" onclick="openOffPlanGallery()" class="absolute right-3 top-3 rounded-lg bg-white/95 text-gray-950 px-3 py-2 text-xs font-black"><i class="fas fa-images mr-1"></i>View all ${allImages.length} photos</button>` : ''}</figure>`).join('')}</div>`;
+    if (allImages.length <= 3) return preview;
+    return `${preview}<dialog id="off-plan-gallery-dialog" class="off-plan-gallery-dialog" aria-labelledby="off-plan-gallery-title"><div class="off-plan-gallery-dialog-head"><div><p class="text-xs font-black uppercase tracking-wide text-green-700">Project gallery</p><h2 id="off-plan-gallery-title">${escapeHtml(project.name)}</h2></div><button type="button" onclick="closeOffPlanGallery()" aria-label="Close project gallery"><i class="fas fa-xmark" aria-hidden="true"></i></button></div><div class="off-plan-gallery-dialog-grid">${allImages.map((image) => `<figure><img src="${escapeHtml(image.url)}" alt="${escapeHtml(image.caption || project.name)}" loading="lazy"><figcaption>${escapeHtml(image.caption || 'Project image')}</figcaption></figure>`).join('')}</div></dialog>`;
   }
 
   function unitTable(project) {
@@ -611,7 +614,20 @@
     const target = channel === 'whatsapp' ? `https://wa.me/?text=${encodeURIComponent(`${text} ${url}`)}` : `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`;
     window.open(target, '_blank', 'noopener,noreferrer');
   }
-  function openOffPlanGallery() { document.querySelector('#off-plan-detail-content .off-plan-gallery')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+  function openOffPlanGallery() {
+    const dialog = document.getElementById('off-plan-gallery-dialog');
+    if (!dialog) return;
+    if (typeof dialog.showModal === 'function') dialog.showModal();
+    else dialog.setAttribute('open', '');
+    document.body.style.overflow = 'hidden';
+  }
+  function closeOffPlanGallery() {
+    const dialog = document.getElementById('off-plan-gallery-dialog');
+    if (!dialog) return;
+    if (typeof dialog.close === 'function') dialog.close();
+    else dialog.removeAttribute('open');
+    document.body.style.overflow = '';
+  }
 
   function managementProjectCard(project, role) {
     const blockers = project.publication_blockers || [];
@@ -731,7 +747,7 @@
     else { returnToOffPlanList({ history: false }); if (!state.loaded) loadProjects(); }
   }
 
-  Object.assign(window, { applyOffPlanLanguageUI, calculateOffPlanPayments, clearOffPlanFilters, closeOffPlanContactModal, closeOffPlanCreateModal, createOffPlanWalkthroughBrief, downloadOffPlanBrochure, initializeOffPlanPage, loadOffPlanManagement, openOffPlanContactModal, openOffPlanCreateModal, openOffPlanDetail, openOffPlanFromHero, openOffPlanGallery, returnToOffPlanList, saveOffPlanProgress, searchOffPlan, selectOffPlanContactChannel, selectOffPlanUnit, setOffPlanProjectStatus, shareOffPlan, submitOffPlanContact, submitOffPlanProject, toggleOffPlanAi, toggleOffPlanFilters, toggleOffPlanMap, uploadOffPlanMedia });
+  Object.assign(window, { applyOffPlanLanguageUI, calculateOffPlanPayments, clearOffPlanFilters, closeOffPlanContactModal, closeOffPlanCreateModal, closeOffPlanGallery, createOffPlanWalkthroughBrief, downloadOffPlanBrochure, initializeOffPlanPage, loadOffPlanManagement, openOffPlanContactModal, openOffPlanCreateModal, openOffPlanDetail, openOffPlanFromHero, openOffPlanGallery, returnToOffPlanList, saveOffPlanProgress, searchOffPlan, selectOffPlanContactChannel, selectOffPlanUnit, setOffPlanProjectStatus, shareOffPlan, submitOffPlanContact, submitOffPlanProject, toggleOffPlanAi, toggleOffPlanFilters, toggleOffPlanMap, uploadOffPlanMedia });
   if (/^\/off-plan(?:\/|$)/i.test(location.pathname)) initializeOffPlanPage();
   if (document.getElementById('page-staff-dashboard')?.classList.contains('active')) loadOffPlanManagement('staff');
   if (document.getElementById('page-admin-dashboard')?.classList.contains('active')) loadOffPlanManagement('admin');

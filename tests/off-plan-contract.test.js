@@ -91,6 +91,8 @@ test('brochure, payment, gallery, map, sharing, video and mortgage handoff are v
   assert.match(html, /id="page-off-plan"/);
   assert.match(client, /Download brochure/);
   assert.match(client, /calculateOffPlanPayments/);
+  assert.match(client, /id="off-plan-gallery-dialog"/);
+  assert.match(client, /closeOffPlanGallery/);
   assert.match(client, /openstreetmap\.org/);
   assert.match(client, /shareOffPlan\('whatsapp'\)/);
   assert.match(client, /Project video/);
