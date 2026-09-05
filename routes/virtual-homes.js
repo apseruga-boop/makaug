@@ -19,9 +19,11 @@ const {
   listOrders,
   listProducts,
   listPublicProjects,
+  normalizePropertyModel,
   recordEvent,
   reviewConfidenceItem,
   savePropertyModel,
+  sceneFromPropertyModel,
   setProjectStatus,
   storageSummary,
   updateProject,
@@ -51,6 +53,108 @@ const PUBLIC_EVENTS = new Set([
   'room_opened', 'furniture_opened', 'video_exported', 'lite_fallback_used',
   'service_enquiry_opened'
 ]);
+
+const DEMO_PUBLIC_SLUG = 'demo';
+const DEMO_PROPERTY_MODEL = normalizePropertyModel({
+  scale: {
+    state: 'KNOWN',
+    metres_per_source_unit: 1,
+    known_measurement: 'Demo dimensions in metres',
+    source: 'Maka Virtual Homes preview'
+  },
+  floors: [{
+    key: 'ground',
+    label: 'Ground floor',
+    elevation_m: 0,
+    ceiling_height_m: 2.8,
+    rooms: [
+      {
+        key: 'living-room', label: 'Living room', type: 'living', x: 0, z: 0, width: 5.6, depth: 4.2,
+        furniture: [
+          { key: 'living-sofa', label: 'Three-seat sofa', type: 'sofa', x: 1.25, z: 2.25, width: 2.2, depth: 0.9, height: 0.78, product_key: 'DEMO-SOFA' },
+          { key: 'living-table', label: 'Coffee table', type: 'table', x: 3.1, z: 2.25, width: 1.15, depth: 0.7, height: 0.42, product_key: 'DEMO-TABLE' },
+          { key: 'living-console', label: 'Media console', type: 'console', x: 5.05, z: 2.15, width: 0.45, depth: 1.6, height: 0.55 }
+        ]
+      },
+      {
+        key: 'kitchen-dining', label: 'Kitchen and dining', type: 'kitchen', x: 5.6, z: 0, width: 4.4, depth: 4.2,
+        furniture: [
+          { key: 'dining-table', label: 'Dining table', type: 'table', x: 7.05, z: 2.2, width: 1.65, depth: 0.95, height: 0.76, product_key: 'DEMO-DINING' },
+          { key: 'kitchen-island', label: 'Kitchen island', type: 'counter', x: 9.15, z: 2.15, width: 0.75, depth: 2.25, height: 0.92 }
+        ]
+      },
+      {
+        key: 'primary-bedroom', label: 'Primary bedroom', type: 'bedroom', x: 0, z: 4.2, width: 5.2, depth: 4.3,
+        furniture: [
+          { key: 'primary-bed', label: 'King bed', type: 'bed', x: 2.55, z: 6.35, width: 2, depth: 2.15, height: 0.62, product_key: 'DEMO-BED' },
+          { key: 'primary-wardrobe', label: 'Wardrobe', type: 'wardrobe', x: 4.85, z: 7.15, width: 0.55, depth: 2.1, height: 2.25 }
+        ]
+      },
+      {
+        key: 'second-bedroom', label: 'Second bedroom', type: 'bedroom', x: 5.2, z: 4.2, width: 4.8, depth: 4.3,
+        furniture: [
+          { key: 'second-bed', label: 'Double bed', type: 'bed', x: 7.2, z: 6.3, width: 1.55, depth: 2, height: 0.58, product_key: 'DEMO-BED' },
+          { key: 'second-desk', label: 'Study desk', type: 'desk', x: 9.25, z: 5.2, width: 1.2, depth: 0.55, height: 0.74, product_key: 'DEMO-DESK' }
+        ]
+      },
+      {
+        key: 'bathroom', label: 'Bathroom', type: 'bathroom', x: 10, z: 0, width: 2.4, depth: 3.1,
+        furniture: [
+          { key: 'bath', label: 'Bath', type: 'bath', x: 11.2, z: 1.6, width: 1.65, depth: 0.75, height: 0.55 }
+        ]
+      },
+      {
+        key: 'entry', label: 'Entrance hall', type: 'hall', x: 10, z: 3.1, width: 2.4, depth: 5.4,
+        furniture: [
+          { key: 'entry-bench', label: 'Entry bench', type: 'bench', x: 11.7, z: 5.1, width: 1.1, depth: 0.45, height: 0.48 }
+        ]
+      }
+    ]
+  }]
+});
+
+const DEMO_PROJECT = Object.freeze({
+  id: '00000000-0000-4000-8000-000000000001',
+  name: 'Maka Virtual Homes — Interactive Preview',
+  public_slug: DEMO_PUBLIC_SLUG,
+  country_code: 'UG',
+  location: 'Fictional two-bedroom sample home',
+  property_category: 'House',
+  bedrooms: 2,
+  bathrooms: 1,
+  floors: 1,
+  floor_area_sqm: 105.4,
+  ceiling_height_m: 2.8,
+  accuracy_level: 'CONCEPT_VISUALISATION',
+  accuracy_disclosure: 'Interactive demonstration only. This fictional layout is not a property listing and must not be used for construction, valuation or purchase decisions.',
+  property_model: DEMO_PROPERTY_MODEL,
+  property_model_version: 1,
+  scene_manifest: sceneFromPropertyModel(DEMO_PROPERTY_MODEL, { modelVersion: 1, accuracyLevel: 'CONCEPT_VISUALISATION' }),
+  viewer_settings: { default_mode: 'dollhouse', default_furniture: 'furnished', default_environment: 'day', lite_fallback: true },
+  assets: [],
+  listing_links: [],
+  published_at: null,
+  delivered_at: null,
+  is_demo: true
+});
+
+const DEMO_PRODUCTS = Object.freeze([
+  { product_key: 'INTERACTIVE_3D', name: 'Interactive Virtual Home', description: 'Walk, dollhouse and floor-plan viewing modes.', price_ugx: null, settings: { quote_required: true } },
+  { product_key: 'MAKA_BRANDED_VIDEO', name: 'Maka-branded walkthrough video', description: 'An eight-second browser preview is available from the managed workspace.', price_ugx: 50000, settings: {} }
+]);
+
+const DEMO_FURNITURE = Object.freeze([
+  { product_key: 'DEMO-SOFA', name: 'Three-seat sofa', category: 'Living room', image_url: null, target_url: '/marketplace', price_ugx: null },
+  { product_key: 'DEMO-TABLE', name: 'Coffee table', category: 'Living room', image_url: null, target_url: '/marketplace', price_ugx: null },
+  { product_key: 'DEMO-DINING', name: 'Dining table', category: 'Dining', image_url: null, target_url: '/marketplace', price_ugx: null },
+  { product_key: 'DEMO-BED', name: 'Bedroom collection', category: 'Bedroom', image_url: null, target_url: '/marketplace', price_ugx: null },
+  { product_key: 'DEMO-DESK', name: 'Study desk', category: 'Home office', image_url: null, target_url: '/marketplace', price_ugx: null }
+]);
+
+function virtualHomeDemoEnabled(env = process.env) {
+  if (String(env.NODE_ENV || '').toLowerCase() === 'production') return false;
+  return ['1', 'true', 'yes', 'on'].includes(String(env.VIRTUAL_HOME_DEMO_ENABLED || '').trim().toLowerCase());
+}
 
 function cleanText(value, max = 2000) {
   return String(value == null ? '' : value).trim().replace(/\s+/g, ' ').slice(0, max);
@@ -83,12 +187,20 @@ function assetDownload(asset) {
 }
 
 publicRouter.get('/', asyncRoute(async (req, res) => {
+  if (virtualHomeDemoEnabled()) {
+    res.set('Cache-Control', 'no-store');
+    return res.json({ ok: true, projects: [DEMO_PROJECT], count: 1, demo: true });
+  }
   const projects = await listPublicProjects(db, req.query);
   res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
   return res.json({ ok: true, projects, count: projects.length });
 }));
 
 publicRouter.get('/products', asyncRoute(async (_req, res) => {
+  if (virtualHomeDemoEnabled()) {
+    res.set('Cache-Control', 'no-store');
+    return res.json({ ok: true, products: DEMO_PRODUCTS, furniture: DEMO_FURNITURE, demo: true });
+  }
   const [products, furniture] = await Promise.all([listProducts(db), listFurnitureProducts(db, { publicOnly: true })]);
   res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=900');
   return res.json({
@@ -99,6 +211,14 @@ publicRouter.get('/products', asyncRoute(async (_req, res) => {
 }));
 
 publicRouter.post('/orders', asyncRoute(async (req, res) => {
+  if (virtualHomeDemoEnabled()) {
+    return res.status(202).json({
+      ok: true,
+      demo: true,
+      order_id: null,
+      message: 'Preview received. Nothing was saved, emailed or charged in this local demo.'
+    });
+  }
   const order = await createOrder(db, {
     ...(req.body || {}),
     metadata: {
@@ -131,6 +251,10 @@ publicRouter.post('/orders', asyncRoute(async (req, res) => {
 }));
 
 publicRouter.get('/:slug', asyncRoute(async (req, res) => {
+  if (virtualHomeDemoEnabled() && req.params.slug === DEMO_PUBLIC_SLUG) {
+    res.set('Cache-Control', 'no-store');
+    return res.json({ ok: true, project: DEMO_PROJECT, demo: true });
+  }
   const project = await getPublicProject(db, req.params.slug);
   if (!project) return res.status(404).json({ ok: false, error: 'Virtual Home not found' });
   res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
@@ -138,6 +262,11 @@ publicRouter.get('/:slug', asyncRoute(async (req, res) => {
 }));
 
 publicRouter.post('/:slug/events', asyncRoute(async (req, res) => {
+  if (virtualHomeDemoEnabled() && req.params.slug === DEMO_PUBLIC_SLUG) {
+    const action = cleanText(req.body?.action, 120).toLowerCase();
+    if (!PUBLIC_EVENTS.has(action)) return res.status(400).json({ ok: false, error: 'Unsupported viewer event' });
+    return res.status(202).json({ ok: true, demo: true, persisted: false });
+  }
   const project = await getPublicProject(db, req.params.slug);
   if (!project) return res.status(404).json({ ok: false, error: 'Virtual Home not found' });
   const action = cleanText(req.body?.action, 120).toLowerCase();
@@ -295,4 +424,11 @@ async function handleFurnitureRedirect(req, res, next) {
   }
 }
 
-module.exports = { adminRouter, handleFurnitureRedirect, publicRouter, staffRouter };
+module.exports = {
+  DEMO_PROJECT,
+  adminRouter,
+  handleFurnitureRedirect,
+  publicRouter,
+  staffRouter,
+  virtualHomeDemoEnabled
+};

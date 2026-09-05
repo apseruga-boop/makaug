@@ -42,10 +42,12 @@ const {
   staffRouter: offPlanStaffRoutes
 } = require('./routes/off-plan');
 const {
+  DEMO_PROJECT: virtualHomeDemoProject,
   adminRouter: virtualHomesAdminRoutes,
   handleFurnitureRedirect,
   publicRouter: virtualHomesRoutes,
-  staffRouter: virtualHomesStaffRoutes
+  staffRouter: virtualHomesStaffRoutes,
+  virtualHomeDemoEnabled
 } = require('./routes/virtual-homes');
 const { getPublicProject: getPublicVirtualHome } = require('./services/virtualHomeService');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
@@ -1533,7 +1535,9 @@ function renderOffPlanProjectPage(req, res, next, countryCode = 'UG') {
 
 function renderVirtualHomeProjectPage(req, res, next) {
   return Promise.resolve().then(async () => {
-    const project = await getPublicVirtualHome(db, req.params.slug);
+    const project = virtualHomeDemoEnabled() && req.params.slug === virtualHomeDemoProject.public_slug
+      ? virtualHomeDemoProject
+      : await getPublicVirtualHome(db, req.params.slug);
     if (!project) {
       res.set('X-Robots-Tag', 'noindex, noarchive');
       return res.status(404).type('text/plain').send('Virtual Home not found');

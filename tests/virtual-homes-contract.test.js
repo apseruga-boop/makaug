@@ -19,6 +19,7 @@ test('Virtual Homes routes, services, viewer pages and both manager dashboards a
   assert.match(server, /app\.use\('\/api\/staff\/virtual-homes', virtualHomesStaffRoutes\)/);
   assert.match(server, /app\.use\('\/api\/admin\/virtual-homes', virtualHomesAdminRoutes\)/);
   assert.match(server, /app\.get\('\/virtual-homes\/:slug'/);
+  assert.match(server, /virtualHomeDemoEnabled\(\)/);
   for (const id of ['page-services', 'page-virtual-homes', 'page-virtual-home', 'staff-virtual-homes-control', 'admin-virtual-homes-control']) assert.match(html, new RegExp(`id="${id}"`));
   assert.match(app, /hydratePropertyVirtualHome/);
   assert.match(app, /detail-virtual-home-slot/);
@@ -51,8 +52,12 @@ test('viewer has actual 3D modes, independent layers, managed video, exports and
   assert.match(client, /captureStream\(30\)/);
   assert.match(client, /video_exported/);
   assert.match(client, /litePlan/);
+  assert.match(client, /Interactive compatibility view/);
+  assert.match(client, /data-vh-lite-mode/);
   assert.match(client, /\['json','svg','glb','zip'\]/);
   assert.match(route, /exportProject/);
+  assert.match(route, /VIRTUAL_HOME_DEMO_ENABLED/);
+  assert.match(route, /Nothing was saved, emailed or charged/);
 });
 
 test('all nine languages are wired and a language change refreshes the active Virtual Homes surface', () => {

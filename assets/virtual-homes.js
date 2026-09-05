@@ -287,7 +287,50 @@
 
   function sceneModel(project){return project.scene_manifest?.floors?.length?project.scene_manifest:{floors:project.property_model?.floors||[],bounds:{min_x:0,min_z:0,max_x:12,max_z:10},camera:{target:[6,1,5],position:[17,12,15]}};}
   function viewerEvent(project,action,value=''){if(!project.public_slug)return;fetch(`/api/virtual-homes/${encodeURIComponent(project.public_slug)}/events`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,value}),keepalive:true}).catch(()=>{});}
-  function litePlan(project,root,message){const rooms=(project.property_model?.floors||[]).flatMap((f)=>f.rooms||[]);if(!rooms.length){root.innerHTML=`<div class="vh-lite-plan"><div><i class="fas fa-draw-polygon text-4xl text-green-700"></i><h3 class="font-black text-xl mt-3">Floor-plan view</h3><p class="mt-2">${esc(message||'3D is not available on this device.')}</p></div></div>`;return;}const maxX=Math.max(...rooms.map(r=>Number(r.x)+Number(r.width)),1),maxZ=Math.max(...rooms.map(r=>Number(r.z)+Number(r.depth)),1);root.innerHTML=`<div class="vh-lite-plan"><svg viewBox="0 0 ${maxX} ${maxZ}" style="width:100%;height:100%">${rooms.map(r=>`<g><rect x="${Number(r.x)}" y="${Number(r.z)}" width="${Number(r.width)}" height="${Number(r.depth)}" fill="#e8f5ec" stroke="#126d3b" stroke-width=".08"/><text x="${Number(r.x)+.2}" y="${Number(r.z)+.5}" font-size=".35" fill="#10231a">${esc(r.label||'Room')}</text></g>`).join('')}</svg></div>`;}
+  function litePlan(project,root,message){
+    const rooms=(project.property_model?.floors||[]).flatMap((f)=>f.rooms||[]);
+    if(!rooms.length){root.innerHTML=`<div class="vh-lite-plan"><div><i class="fas fa-draw-polygon text-4xl text-green-700"></i><h3 class="font-black text-xl mt-3">Floor-plan view</h3><p class="mt-2">${esc(message||'3D is not available on this device.')}</p></div></div>`;return;}
+    const maxX=Math.max(...rooms.map(r=>Number(r.x)+Number(r.width)),1),maxZ=Math.max(...rooms.map(r=>Number(r.z)+Number(r.depth)),1);
+    const furniture=rooms.flatMap((room)=>(room.furniture||[]).map((item)=>({
+      ...item,
+      roomKey:room.key||room.label||'',
+      x:Number(item.x)-(Number(item.width||.8)/2),
+      z:Number(item.z)-(Number(item.depth||.8)/2),
+      width:Number(item.width||.8),
+      depth:Number(item.depth||.8)
+    })));
+    root.innerHTML=`<div class="vh-lite-experience" data-vh-lite-mode-value="dollhouse" data-vh-lite-environment-value="day" data-vh-lite-furniture-value="on">
+      <div class="vh-viewer-toolbar">
+        <div class="vh-viewer-toolbar-group"><button class="vh-control" data-vh-lite-mode="walk">${esc(t('modeWalk'))}</button><button class="vh-control" data-vh-lite-mode="dollhouse">${esc(t('modeDollhouse'))}</button><button class="vh-control" data-vh-lite-mode="floor_plan">${esc(t('modeFloor'))}</button></div>
+        <div class="vh-viewer-toolbar-group"><button class="vh-control" data-vh-lite-furniture="on">${esc(t('furnished'))}</button><button class="vh-control" data-vh-lite-furniture="off">${esc(t('unfurnished'))}</button><button class="vh-control" data-vh-lite-environment="day">${esc(t('day'))}</button><button class="vh-control" data-vh-lite-environment="night">${esc(t('night'))}</button><button class="vh-control" data-vh-lite-reset>${esc(t('reset'))}</button></div>
+      </div>
+      <div class="vh-lite-stage">
+        <div class="vh-lite-compat"><i class="fas fa-mobile-screen-button"></i> Interactive compatibility view</div>
+        <svg class="vh-lite-model" viewBox="-.35 -.35 ${maxX+.7} ${maxZ+.7}" aria-label="Interactive floor plan">
+          <g class="vh-lite-rooms">${rooms.map((r,index)=>`<g class="vh-lite-room" data-vh-lite-room="${esc(r.key||r.label||String(index))}" tabindex="0" role="button" aria-label="Open ${esc(r.label||'room')}"><rect x="${Number(r.x)}" y="${Number(r.z)}" width="${Number(r.width)}" height="${Number(r.depth)}"/><text x="${Number(r.x)+.22}" y="${Number(r.z)+.52}">${esc(r.label||'Room')}</text></g>`).join('')}</g>
+          <g class="vh-lite-furniture">${furniture.map((item)=>`<rect x="${item.x}" y="${item.z}" width="${item.width}" height="${item.depth}" rx=".08"><title>${esc(item.label||item.type||'Furniture')}</title></rect>`).join('')}</g>
+        </svg>
+        <div class="vh-lite-mode-copy" aria-live="polite">Dollhouse mode · drag-free preview</div>
+      </div>
+      <div class="vh-lite-room-info" hidden><button type="button" aria-label="${esc(t('close'))}">×</button><strong></strong><span></span></div>
+    </div>`;
+    const experience=root.querySelector('.vh-lite-experience'),info=experience.querySelector('.vh-lite-room-info'),modeCopy=experience.querySelector('.vh-lite-mode-copy');
+    function sync(){
+      const mode=experience.dataset.vhLiteModeValue,environment=experience.dataset.vhLiteEnvironmentValue,furnishing=experience.dataset.vhLiteFurnitureValue;
+      experience.querySelectorAll('[data-vh-lite-mode]').forEach((button)=>button.setAttribute('aria-pressed',String(button.dataset.vhLiteMode===mode)));
+      experience.querySelectorAll('[data-vh-lite-environment]').forEach((button)=>button.setAttribute('aria-pressed',String(button.dataset.vhLiteEnvironment===environment)));
+      experience.querySelectorAll('[data-vh-lite-furniture]').forEach((button)=>button.setAttribute('aria-pressed',String(button.dataset.vhLiteFurniture===furnishing)));
+      const label=mode==='walk'?t('modeWalk'):mode==='floor_plan'?t('modeFloor'):t('modeDollhouse');
+      modeCopy.textContent=`${label} · interactive compatibility preview`;
+    }
+    experience.querySelectorAll('[data-vh-lite-mode]').forEach((button)=>button.onclick=()=>{experience.dataset.vhLiteModeValue=button.dataset.vhLiteMode;sync();viewerEvent(project,'mode_changed',button.dataset.vhLiteMode);});
+    experience.querySelectorAll('[data-vh-lite-environment]').forEach((button)=>button.onclick=()=>{experience.dataset.vhLiteEnvironmentValue=button.dataset.vhLiteEnvironment;sync();viewerEvent(project,'environment_changed',button.dataset.vhLiteEnvironment);});
+    experience.querySelectorAll('[data-vh-lite-furniture]').forEach((button)=>button.onclick=()=>{experience.dataset.vhLiteFurnitureValue=button.dataset.vhLiteFurniture;sync();viewerEvent(project,'furniture_changed',button.dataset.vhLiteFurniture==='on'?'furnished':'unfurnished');});
+    experience.querySelector('[data-vh-lite-reset]').onclick=()=>{experience.dataset.vhLiteModeValue='dollhouse';experience.dataset.vhLiteEnvironmentValue='day';experience.dataset.vhLiteFurnitureValue='on';info.hidden=true;sync();};
+    experience.querySelectorAll('[data-vh-lite-room]').forEach((roomNode)=>{const open=()=>{const room=rooms.find((item)=>(item.key||item.label)===roomNode.dataset.vhLiteRoom);if(!room)return;info.querySelector('strong').textContent=room.label||'Room';info.querySelector('span').textContent=`${Number(room.width).toFixed(1)}m × ${Number(room.depth).toFixed(1)}m · ${(room.furniture||[]).length} furnishing item(s)`;info.hidden=false;viewerEvent(project,'room_opened',room.key||room.label||'room');};roomNode.onclick=open;roomNode.onkeydown=(event)=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();open();}};});
+    info.querySelector('button').onclick=()=>{info.hidden=true;};
+    sync();
+  }
 
   async function createViewer(project,root,options={}){
     if(!root)return;for(const [key,viewer] of VH.viewers){if(!document.contains(key)){viewer.destroy();VH.viewers.delete(key);}}

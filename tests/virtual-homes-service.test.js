@@ -17,6 +17,7 @@ const {
   transitionAllowed
 } = require('../services/virtualHomeService');
 const virtualHomeNotifications = require('../services/virtualHomeNotificationService');
+const { DEMO_PROJECT, virtualHomeDemoEnabled } = require('../routes/virtual-homes');
 
 const propertyModel = {
   scale: { state: 'KNOWN', metres_per_source_unit: 1, known_measurement: 'Bedroom width 4m', source: 'staff measurement' },
@@ -48,6 +49,19 @@ test('normalizes a measurable property model and creates real viewer modes', () 
   assert.deepEqual(scene.modes, ['walk', 'dollhouse', 'floor_plan']);
   assert.deepEqual(scene.environments, ['day', 'night']);
   assert.deepEqual(scene.furnishing, ['furnished', 'unfurnished']);
+});
+
+test('local preview has valid interactive geometry and is impossible to enable in production', () => {
+  assert.equal(virtualHomeDemoEnabled({ NODE_ENV: 'development', VIRTUAL_HOME_DEMO_ENABLED: 'true' }), true);
+  assert.equal(virtualHomeDemoEnabled({ NODE_ENV: 'test', VIRTUAL_HOME_DEMO_ENABLED: '1' }), true);
+  assert.equal(virtualHomeDemoEnabled({ NODE_ENV: 'production', VIRTUAL_HOME_DEMO_ENABLED: 'true' }), false);
+  assert.equal(virtualHomeDemoEnabled({ NODE_ENV: 'development', VIRTUAL_HOME_DEMO_ENABLED: 'false' }), false);
+  assert.equal(DEMO_PROJECT.public_slug, 'demo');
+  assert.equal(DEMO_PROJECT.is_demo, true);
+  assert.equal(DEMO_PROJECT.accuracy_level, 'CONCEPT_VISUALISATION');
+  assert.deepEqual(propertyModelErrors(DEMO_PROJECT.property_model), []);
+  assert.deepEqual(DEMO_PROJECT.scene_manifest.modes, ['walk', 'dollhouse', 'floor_plan']);
+  assert.ok(DEMO_PROJECT.property_model.floors[0].rooms.length >= 6);
 });
 
 test('rejects incomplete geometry and labels confidence bands at the requested thresholds', () => {
