@@ -12517,6 +12517,13 @@ function staffReviewQueueCardHtml(item = {}, options = {}) {
   const queueNote = options.brokerQueue
     ? `<div class="mt-2 rounded-xl bg-emerald-50 border border-emerald-100 p-2 text-xs text-emerald-900">Broker-submitted listing. Check location, price, photos, and broker authority, then approve to publish.</div>`
     : "";
+  const mediaValidationStatus = String(item.extra_fields?.media_validation_status || "").trim();
+  const mediaQualityBlockers = Array.isArray(item.extra_fields?.media_quality_blockers)
+    ? item.extra_fields.media_quality_blockers
+    : [];
+  const mediaQualityWarning = mediaValidationStatus.startsWith("blocked_") || mediaQualityBlockers.length
+    ? `<div class="mt-2 rounded-xl bg-red-50 border border-red-200 p-2 text-xs text-red-900"><strong>Media blocked:</strong> this listing has no approved property photo. Review the quarantined source evidence and attach a clear property image before approval.</div>`
+    : "";
   return `
     <article class="border border-gray-200 rounded-2xl p-4">
       <div class="flex items-start justify-between gap-3">
@@ -12526,6 +12533,7 @@ function staffReviewQueueCardHtml(item = {}, options = {}) {
           <div class="text-xs text-gray-500 mt-1">Owner/contact: ${adminEscape(item.lister_name || item.lister_phone || item.lister_email || "not recorded")}</div>
           <div class="text-xs text-gray-500 mt-1">Source: ${adminEscape(item.source_platform || item.source || item.listed_via || "website")}${sourceUrl ? ` • <a href="${adminAttr(sourceUrl)}" target="_blank" rel="noopener noreferrer" class="font-black text-blue-700 underline underline-offset-2">open evidence</a>` : ""}</div>
           ${queueNote}
+          ${mediaQualityWarning}
           ${duplicateCount ? `<div class="mt-2 rounded-xl bg-red-50 border border-red-100 p-2 text-xs text-red-800"><strong>${staffNumber(duplicateCount)} possible duplicate${duplicateCount === 1 ? "" : "s"}.</strong> Compare before publishing.</div>` : ""}
           ${item.moderation_reason ? `<div class="mt-2 rounded-xl bg-amber-50 border border-amber-100 p-2 text-xs text-amber-900">${adminEscape(item.moderation_reason)}</div>` : ""}
         </div>

@@ -4760,6 +4760,33 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
       });
       return false;
     };
+    if (nextStatus === 'approved' && cleanText(current.source).toLowerCase() === 'whatsapp_employee_intake') {
+      const mediaQuality = propertyExtraFieldsObject(current);
+      const usableImageResult = await db.query(
+        `SELECT COUNT(*)::int AS total
+           FROM property_images
+          WHERE property_id = $1
+            AND COALESCE(slot_key, '') NOT IN ('source_evidence_original', 'quarantined_source_evidence')`,
+        [req.params.id]
+      );
+      const usableImageCount = Number(usableImageResult.rows[0]?.total || 0);
+      if (mediaQuality.media_validation_status === 'blocked_no_usable_property_image' || usableImageCount < 1) {
+        return res.status(400).json({
+          ok: false,
+          error: 'A clear property image is required before approval',
+          details: [
+            'WhatsApp chat screenshots and rendered message fallbacks are retained as source evidence only.',
+            'Attach at least one validated property photo or a clear video-derived key image before approving.'
+          ],
+          missing_fields: ['validated_property_image'],
+          approval_blocker: 'employee_media_quality',
+          approval_blocked: true,
+          human_approval_override_available: false,
+          media_validation_status: mediaQuality.media_validation_status || 'blocked_no_usable_property_image',
+          usable_property_image_count: usableImageCount
+        });
+      }
+    }
     if (nextStatus === 'approved') {
       const canonicalApprovalLocation = canonicalApprovalLocationForRecord(current, {
         allowDistrictNode: humanLocationConfirmed

@@ -290,6 +290,7 @@ const LISTING_IMAGE_PREVIEW_MAX_BYTES = 1_500_000;
 const EMPLOYEE_VIDEO_PREVIEW_MAX_BYTES = 25_000_000;
 const OUTBOUND_PROPERTY_IMAGE_MAX_BYTES = 15_000_000;
 const WHATSAPP_EMPLOYEE_AGENT_007_WORKER_MARKER = 'whatsapp-video-distinct-clear-frames-20260903';
+const WHATSAPP_EMPLOYEE_MEDIA_QUALITY_MARKER = 'whatsapp-employee-media-quality-guard-20260906';
 const WHATSAPP_AGENT_007_INTAKE_RELIABILITY_MARKER = 'whatsapp-agent007-replay-backoff-20260901';
 const WHATSAPP_AGENT_007_PENDING_MEDIA_FIX_MARKER = 'whatsapp-agent007-pending-media-idempotency-20260901';
 const WHATSAPP_OUTGOING_PREVIEW_GUARD_MARKER = 'whatsapp-outgoing-preview-guard-20260831';
@@ -684,6 +685,7 @@ function hostedRuntimeMetadata() {
     deploy_target: hosted ? 'render' : 'local',
     node_version: process.version.replace(/^v/, ''),
     release_marker: WHATSAPP_EMPLOYEE_AGENT_007_WORKER_MARKER,
+    media_quality_marker: WHATSAPP_EMPLOYEE_MEDIA_QUALITY_MARKER,
     intake_reliability_marker: WHATSAPP_AGENT_007_INTAKE_RELIABILITY_MARKER,
     pending_media_fix_marker: WHATSAPP_AGENT_007_PENDING_MEDIA_FIX_MARKER,
     outgoing_preview_guard: WHATSAPP_OUTGOING_PREVIEW_GUARD_MARKER,
@@ -2302,7 +2304,8 @@ async function hydrateImageSnapshot(page, snapshot) {
         mimeType: item.mimeType || 'image/jpeg',
         bytes: Number(item.bytes || 0),
         sha256: crypto.createHash('sha256').update(String(item.dataUrl || '')).digest('hex'),
-        perceptualHash: String(item.perceptualHash || '').toLowerCase()
+        perceptualHash: String(item.perceptualHash || '').toLowerCase(),
+        captureSource: 'whatsapp_image_pixels'
       }));
       return {
         ...snapshot,
@@ -2317,7 +2320,9 @@ async function hydrateImageSnapshot(page, snapshot) {
         mimeType: screenshot.mimeType || 'image/jpeg',
         bytes: Number(screenshot.bytes || 0),
         sha256: crypto.createHash('sha256').update(String(screenshot.dataUrl || '')).digest('hex'),
-        perceptualHash: ''
+        perceptualHash: '',
+        captureSource: 'rendered_whatsapp_image_fallback',
+        previewWarning: 'image_canvas_unavailable_screenshot_stored'
       };
       log(`stored rendered WhatsApp image fallback for ${normalizeChatKey(snapshot.chatKey)} after canvas hydration was unavailable`);
       return {
@@ -3091,7 +3096,9 @@ async function ingestSnapshot({ snapshot, row = {}, source = 'unread_scan' }) {
               mime_type: item.mimeType || 'image/jpeg',
               bytes: Number(item.bytes || 0),
               sha256: item.sha256 || '',
-              perceptual_hash: item.perceptualHash || ''
+              perceptual_hash: item.perceptualHash || '',
+              capture_source: item.captureSource || '',
+              preview_warning: item.previewWarning || ''
             }))
             : [],
           image_preview_error: snapshot.imagePreviewError || '',

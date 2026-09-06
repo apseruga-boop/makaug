@@ -50,6 +50,7 @@
     "ads:daily-report": "node scripts/send-advertising-daily-reports.js",
     "data:backup": "node scripts/run-production-data-backup.js",
     "data:backfill-whatsapp-video-stills": "node scripts/backfill-whatsapp-video-stills.js",
+    "data:audit-whatsapp-employee-media": "node scripts/audit-whatsapp-employee-media.js",
     "cloud:readiness": "node scripts/check-cloud-readiness.js",
     "cloud:verify-storage": "node scripts/verify-cloud-storage.js",
     "locations:build-uganda": "node scripts/build-uganda-location-gazetteer.js",

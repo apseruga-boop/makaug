@@ -90,7 +90,12 @@ assert.deepEqual(
     sha256: 'stored-media-sha',
     mimeType: 'image/jpeg',
     kind: 'image',
-    name: 'property-1.jpg'
+    name: 'property-1.jpg',
+    captureSource: '',
+    previewWarning: '',
+    publicEligible: true,
+    evidenceOnly: false,
+    mediaValidation: null
   }],
   'a corrected caption must recover the exact permanently stored media reference'
 );
@@ -206,7 +211,7 @@ assert(routeSource.includes("type: 'whatsapp_agent_batch_card_awaiting_approval'
 assert(routeSource.includes("status: 'awaiting_founder_approval'"), 'pending agent-card state must be durable');
 assert(routeSource.includes('whatsapp_employee_batch_mode') && routeSource.includes('whatsapp_employee_batch_property_number'), 'review records should retain multiple-property batch traceability');
 assert(routeSource.includes("=== 'single' && existingBatchProperties >= 1"), 'single mode must reject a second property without affecting multiple mode');
-assert(routeSource.includes("keyPrefix: privateMedia ? 'whatsapp-employee-intake/private-id'"), 'ID media must use private cloud storage');
+assert(routeSource.includes("const keyPrefix = privateMedia ? 'whatsapp-employee-intake/private-id'"), 'ID media must use private cloud storage');
 assert(routeSource.includes('id_document_name, id_document_url, extra_fields'), 'customer ID must use protected property identity columns');
 assert(!routeSource.includes('customer_identity_document_url'), 'private ID references must never be copied into public extra fields');
 assert(routeSource.includes('agent_profile_linked: Boolean(agent?.id)'), 'approved agent link state must be visible to moderation');
@@ -244,6 +249,14 @@ assert(copilotSource.includes("!['image', 'media'].includes(String(snapshot.medi
 assert(copilotSource.includes('EMPLOYEE_BATCH_RECOVERY_MAX_ATTEMPTS'), 'configured history recovery must retry a bounded number of times while WhatsApp hydrates older rows');
 assert(copilotSource.includes('captureImageMessageScreenshot'), 'tainted WhatsApp image canvases must fall back to a rendered property image');
 assert(copilotSource.includes("imagePreviewWarning: 'image_canvas_unavailable_screenshot_stored'"), 'rendered image recovery must remain auditable in staff review metadata');
+assert(copilotSource.includes("captureSource: 'rendered_whatsapp_image_fallback'"), 'rendered WhatsApp fallbacks must carry explicit provenance to the API');
+assert(copilotSource.includes('capture_source: item.captureSource'), 'fallback provenance must survive the web-bridge payload');
+assert(routeSource.includes('validateEmployeeImageCandidate'), 'employee intake images must pass the property-photo classifier before becoming gallery media');
+assert(routeSource.includes("verdict: 'rendered_whatsapp_message_evidence'"), 'rendered message fallbacks must be quarantined deterministically');
+assert(routeSource.includes("media_validation_status: imageMedia.length ? 'passed_automated_image_gate' : 'blocked_no_usable_property_image'"), 'review records must expose whether they contain a usable public image');
+assert(routeSource.includes('source_evidence_urls'), 'rejected screenshots must remain available to staff as source evidence');
+assert(copilotSource.includes("WHATSAPP_EMPLOYEE_MEDIA_QUALITY_MARKER = 'whatsapp-employee-media-quality-guard-20260906'"), 'worker health must identify the media-quality guard release');
+assert(serverSource.includes('whatsapp-employee-media-quality-guard-20260906'), 'production health must expose the employee media-quality release');
 assert(copilotSource.includes('EMPLOYEE_BATCH_REPLAY_BACKOFF_MS'), 'an unavailable historical thumbnail must back off instead of monopolizing the worker loop');
 assert(copilotSource.includes('employeeBatchReplayBackoffs'), 'history replay cooldowns must be isolated by completed batch');
 assert(copilotSource.includes('snapshotsAfterCompletedEmployeeBatch(snapshots, employeeReplay)'), 'a deferred stale batch must not block later messages in the same chat');

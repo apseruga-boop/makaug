@@ -3352,7 +3352,9 @@ function employeeMediaCandidates(runtime = {}, mediaUrl = '') {
       mimeType,
       kind: employeeMediaKind(mimeType),
       sha256: normalizeInput(candidate.sha256 || candidate.hash || ''),
-      name: normalizeInput(candidate.name || candidate.filename || '')
+      name: normalizeInput(candidate.name || candidate.filename || ''),
+      captureSource: normalizeInput(candidate.capture_source || candidate.captureSource || ''),
+      previewWarning: normalizeInput(candidate.preview_warning || candidate.previewWarning || '')
     });
   };
   for (const candidate of Array.isArray(runtime.photoCandidates) ? runtime.photoCandidates.slice(0, 20) : []) {
@@ -3371,6 +3373,37 @@ function employeeMediaCandidates(runtime = {}, mediaUrl = '') {
     seen.add(key);
     return true;
   }).slice(0, 20);
+}
+
+async function validateEmployeeImageCandidate(candidate = {}, imageDataUrl = '') {
+  const captureSource = normalizeInput(candidate.captureSource).toLowerCase();
+  if (captureSource === 'rendered_whatsapp_image_fallback') {
+    return {
+      accepted: false,
+      verdict: 'rendered_whatsapp_message_evidence',
+      scene_type: 'unknown',
+      matches_expected_slot: false,
+      confidence: 1,
+      reason: candidate.previewWarning || 'rendered_whatsapp_message_fallback_must_not_be_public'
+    };
+  }
+  return withTimeout(
+    classifyWhatsappListingPhoto({
+      imageDataUrl,
+      expectedSlot: 'property photo',
+      providerScope: WHATSAPP_PROVIDER_SCOPE
+    }),
+    Math.max(2500, Number(process.env.WHATSAPP_PHOTO_VALIDATION_TIMEOUT_MS || 7000)),
+    {
+      accepted: false,
+      verdict: 'unavailable',
+      scene_type: 'unknown',
+      matches_expected_slot: false,
+      confidence: 0,
+      reason: 'employee_media_vision_validation_timeout'
+    },
+    'WhatsApp employee media validation'
+  );
 }
 
 async function storeEmployeeMediaCandidate(candidate, {
@@ -3402,6 +3435,8 @@ async function storeEmployeeMediaCandidate(candidate, {
   const filename = `${safePhone}-${safeMessage}-${index + 1}.${employeeMediaExtension(mimeType)}`;
   let storedUrl = '';
   let sha256 = normalizeInput(candidate.sha256 || '');
+  let mediaValidation = null;
+  let publicEligible = kind !== 'image' || privateMedia;
 
   if (candidate.dataUrl) {
     if (kind === 'video') {
@@ -3411,10 +3446,18 @@ async function storeEmployeeMediaCandidate(candidate, {
         throw new Error('Employee intake video bytes are encrypted or not a playable media container');
       }
     }
+    if (kind === 'image' && !privateMedia) {
+      mediaValidation = await validateEmployeeImageCandidate(candidate, candidate.dataUrl);
+      publicEligible = mediaValidation?.accepted === true;
+    }
+    const keyPrefix = privateMedia ? 'whatsapp-employee-intake/private-id'
+      : (kind === 'image' && !publicEligible ? 'whatsapp-employee-intake/source-evidence' : `whatsapp-employee-intake/${kind}`);
     storedUrl = await storeDataUrl(candidate.dataUrl, {
-      keyPrefix: privateMedia ? 'whatsapp-employee-intake/private-id' : `whatsapp-employee-intake/${kind}`,
+      keyPrefix,
       filename,
-      label: privateMedia ? 'employee intake identity document' : `employee intake ${kind}`,
+      label: privateMedia
+        ? 'employee intake identity document'
+        : (kind === 'image' && !publicEligible ? 'employee intake source evidence' : `employee intake ${kind}`),
       allowedMimeTypes,
       maxBytes,
       isPrivate: privateMedia
@@ -3440,14 +3483,33 @@ async function storeEmployeeMediaCandidate(candidate, {
     if (kind === 'video' && !employeeVideoBytesPlayable(bytes, responseMime)) {
       throw new Error('Downloaded employee intake video is encrypted or not a playable media container');
     }
-    const key = `${privateMedia ? 'whatsapp-employee-intake/private-id' : `whatsapp-employee-intake/${kind}`}/${Date.now()}-${crypto.randomUUID()}-${filename}`;
+    if (kind === 'image' && !privateMedia) {
+      const validationDataUrl = `data:${responseMime};base64,${bytes.toString('base64')}`;
+      mediaValidation = await validateEmployeeImageCandidate(candidate, validationDataUrl);
+      publicEligible = mediaValidation?.accepted === true;
+    }
+    const keyPrefix = privateMedia
+      ? 'whatsapp-employee-intake/private-id'
+      : (kind === 'image' && !publicEligible ? 'whatsapp-employee-intake/source-evidence' : `whatsapp-employee-intake/${kind}`);
+    const key = `${keyPrefix}/${Date.now()}-${crypto.randomUUID()}-${filename}`;
     const stored = await uploadBufferToS3({ bytes, mimeType: responseMime, key });
     storedUrl = privateMedia ? stored.internalRef : (stored.publicUrl || stored.internalRef);
     sha256 = stored.sha256;
   }
 
   if (!storedUrl) throw new Error('Permanent media storage is unavailable');
-  return { url: storedUrl, sha256, mimeType, kind, name: candidate.name || filename };
+  return {
+    url: storedUrl,
+    sha256,
+    mimeType,
+    kind,
+    name: candidate.name || filename,
+    captureSource: candidate.captureSource || '',
+    previewWarning: candidate.previewWarning || '',
+    publicEligible,
+    evidenceOnly: kind === 'image' && !publicEligible,
+    mediaValidation
+  };
 }
 
 async function storeEmployeeMedia(candidates = [], options = {}) {
@@ -3465,7 +3527,12 @@ function employeePendingStoredMedia(sessionData = {}) {
       sha256: normalizeInput(item?.sha256),
       mimeType: employeeMediaMimeType(item, item?.mimeType),
       kind: employeeMediaKind(employeeMediaMimeType(item, item?.mimeType)),
-      name: normalizeInput(item?.name)
+      name: normalizeInput(item?.name),
+      captureSource: normalizeInput(item?.captureSource || item?.capture_source),
+      previewWarning: normalizeInput(item?.previewWarning || item?.preview_warning),
+      publicEligible: item?.evidenceOnly === true ? false : item?.publicEligible !== false,
+      evidenceOnly: item?.evidenceOnly === true,
+      mediaValidation: item?.mediaValidation && typeof item.mediaValidation === 'object' ? item.mediaValidation : null
     }))
     .filter((item) => item.url && ['image', 'video', 'document'].includes(item.kind))
     .slice(0, 20);
@@ -4171,7 +4238,8 @@ async function createEmployeeReviewProperty({
     area: facts.locationPatch.area,
     bedrooms: facts.bedroomDraft.bedrooms
   });
-  const imageMedia = storedMedia.filter((item) => item.kind === 'image');
+  const imageMedia = storedMedia.filter((item) => item.kind === 'image' && item.publicEligible !== false);
+  const evidenceMedia = storedMedia.filter((item) => item.kind === 'image' && item.publicEligible === false);
   const videoMedia = storedMedia.filter((item) => item.kind === 'video');
   const documentMedia = storedMedia.filter((item) => item.kind === 'document');
   const videoKeyFrames = imageMedia.filter((item) => /video-(?:key-frame|still|message-preview|preview)/i.test(String(item.name || '')));
@@ -4207,7 +4275,14 @@ async function createEmployeeReviewProperty({
     source_platform: 'WhatsApp employee intake',
     agent_profile_linked: Boolean(agent?.id),
     identity_document_available: Boolean(sessionData.identity_document_url),
-    media_validation_status: 'pending_human_review',
+    media_validation_status: imageMedia.length ? 'passed_automated_image_gate' : 'blocked_no_usable_property_image',
+    media_quality_blockers: evidenceMedia.map((item) => ({
+      url: item.url,
+      capture_source: item.captureSource || null,
+      verdict: item.mediaValidation?.verdict || 'not_public_eligible',
+      reason: item.mediaValidation?.reason || item.previewWarning || 'image_not_public_eligible'
+    })),
+    source_evidence_urls: evidenceMedia.map((item) => item.url),
     media_count: storedMedia.length,
     media_sha256: storedMedia.map((item) => item.sha256).filter(Boolean),
     video_url: videoMedia[0]?.url || null,
@@ -4294,7 +4369,13 @@ async function createEmployeeReviewProperty({
         propertyId,
         'Employee-submitted WhatsApp property stored for human review. Automatic publication is disabled.',
         `${storedMedia.length} permanent media item(s) stored; linked agent ${agent?.id || 'none'}.`,
-        JSON.stringify({ marker: WHATSAPP_EMPLOYEE_AGENT_007_MARKER, media_count: storedMedia.length, auto_publish: false })
+        JSON.stringify({
+          marker: WHATSAPP_EMPLOYEE_AGENT_007_MARKER,
+          media_count: storedMedia.length,
+          public_image_count: imageMedia.length,
+          quarantined_evidence_count: evidenceMedia.length,
+          auto_publish: false
+        })
       ]
     );
     await client.query('COMMIT');
@@ -4347,7 +4428,8 @@ async function attachEmployeeReviewMedia({ propertyId, storedMedia, phone, inbou
   if (!uniqueMedia.length) return { attached: 0, duplicate: true };
   const existingImages = await db.query('SELECT COUNT(*)::int AS count FROM property_images WHERE property_id = $1', [propertyId]);
   const imageOffset = Number(existingImages.rows[0]?.count || 0);
-  const images = uniqueMedia.filter((item) => item.kind === 'image');
+  const images = uniqueMedia.filter((item) => item.kind === 'image' && item.publicEligible !== false);
+  const evidenceImages = uniqueMedia.filter((item) => item.kind === 'image' && item.publicEligible === false);
   const videoKeyFrames = images.filter((item) => /video-(?:key-frame|still|message-preview|preview)/i.test(String(item.name || '')));
   const previousVideos = Array.isArray(property.extra_fields?.video_urls) ? property.extra_fields.video_urls : [];
   const previousVideoTours = Array.isArray(property.extra_fields?.video_tours) ? property.extra_fields.video_tours : [];
@@ -4356,6 +4438,8 @@ async function attachEmployeeReviewMedia({ propertyId, storedMedia, phone, inbou
   const mergedVideos = [...new Set([...previousVideos, ...videos])];
   const documents = uniqueMedia.filter((item) => item.kind === 'document').map((item) => item.url);
   const mergedHashes = [...existingHashes, ...uniqueMedia.map((item) => item.sha256).filter(Boolean)];
+  const previousEvidenceUrls = Array.isArray(property.extra_fields?.source_evidence_urls) ? property.extra_fields.source_evidence_urls : [];
+  const previousQualityBlockers = Array.isArray(property.extra_fields?.media_quality_blockers) ? property.extra_fields.media_quality_blockers : [];
   const client = await db.getClient();
   try {
     await client.query('BEGIN');
@@ -4401,7 +4485,20 @@ async function attachEmployeeReviewMedia({ propertyId, storedMedia, phone, inbou
         })),
         video_count: mergedVideos.length,
         video_key_frame_count: Number(property.extra_fields?.video_key_frame_count || 0) + videoKeyFrames.length,
-        document_urls: [...previousDocuments, ...documents]
+        document_urls: [...previousDocuments, ...documents],
+        source_evidence_urls: [...new Set([...previousEvidenceUrls, ...evidenceImages.map((item) => item.url)])],
+        media_quality_blockers: [
+          ...previousQualityBlockers,
+          ...evidenceImages.map((item) => ({
+            url: item.url,
+            capture_source: item.captureSource || null,
+            verdict: item.mediaValidation?.verdict || 'not_public_eligible',
+            reason: item.mediaValidation?.reason || item.previewWarning || 'image_not_public_eligible'
+          }))
+        ],
+        media_validation_status: imageOffset + images.length > 0
+          ? 'passed_automated_image_gate'
+          : 'blocked_no_usable_property_image'
       })]
     );
     await client.query(
@@ -4411,8 +4508,14 @@ async function attachEmployeeReviewMedia({ propertyId, storedMedia, phone, inbou
       [
         propertyId,
         'Additional employee-submitted WhatsApp media attached; property remains pending.',
-        `${uniqueMedia.length} new media item(s) attached.`,
-        JSON.stringify({ marker: WHATSAPP_EMPLOYEE_AGENT_007_MARKER, media_attached: uniqueMedia.length, auto_publish: false })
+        `${images.length} public-eligible image(s), ${evidenceImages.length} quarantined evidence image(s), and ${uniqueMedia.length - images.length - evidenceImages.length} other media item(s) stored.`,
+        JSON.stringify({
+          marker: WHATSAPP_EMPLOYEE_AGENT_007_MARKER,
+          media_attached: uniqueMedia.length,
+          public_images_attached: images.length,
+          evidence_images_quarantined: evidenceImages.length,
+          auto_publish: false
+        })
       ]
     );
     await client.query('COMMIT');
@@ -11165,7 +11268,9 @@ async function processInboundRuntimeUnlocked({
       mime_type: normalizeInput(item?.mime_type || item?.mimeType || '') || 'image/jpeg',
       bytes: Number(item?.bytes || 0),
       sha256: normalizeInput(item?.sha256 || ''),
-      perceptual_hash: normalizeInput(item?.perceptual_hash || item?.perceptualHash || '')
+      perceptual_hash: normalizeInput(item?.perceptual_hash || item?.perceptualHash || ''),
+      capture_source: normalizeInput(item?.capture_source || item?.captureSource || ''),
+      preview_warning: normalizeInput(item?.preview_warning || item?.previewWarning || '')
     })),
     media_previews: inboundMediaCandidates.map((item) => ({
       mime_type: normalizeInput(item?.mime_type || item?.mimeType || '') || 'application/octet-stream',
