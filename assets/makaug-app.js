@@ -18591,11 +18591,11 @@ function hydrateAdminListingsForExactIdInBackground(propertyId, headers) {
   const key = String(propertyId || "").trim().toLowerCase();
   if (!key || adminExactIdHydrationInFlight || adminExactIdHydrationKey === key || !canUseLiveAdminApi()) return;
   adminExactIdHydrationKey = key;
-  adminExactIdHydrationInFlight = fetchAdminPaginatedRows("/api/properties?status=all", headers, { limit: 100, maxPages: 40 })
-    .then((rows) => {
-      const allListings = (rows || []).map(normalizeRemoteAdminListing);
-      if (!allListings.length) return;
-      adminRemoteListings = adminUniqueSeedItems([...allListings, ...adminRemoteListings]);
+  adminExactIdHydrationInFlight = apiRequest(`/api/properties/${encodeURIComponent(key)}`, { headers })
+    .then((response) => {
+      const listing = response?.data ? normalizeRemoteAdminListing(response.data) : null;
+      if (!listing?.id) return;
+      adminRemoteListings = adminUniqueSeedItems([listing, ...adminRemoteListings]);
       renderAdminAllListingsRows(adminRemoteListings);
     })
     .catch((error) => {
