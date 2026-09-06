@@ -2488,6 +2488,7 @@ async function listPropertiesHandler(req, res, next) {
       });
     }
     const status = cleanText(req.query.status || 'approved').toLowerCase();
+    const propertyId = cleanText(req.query.property_id || req.query.propertyId);
     const minPrice = toNullableInt(req.query.min_price || req.query.minPrice);
     const maxPrice = toNullableInt(req.query.max_price || req.query.maxPrice);
     const minBeds = toNullableInt(req.query.min_beds || req.query.bedrooms);
@@ -2609,6 +2610,13 @@ async function listPropertiesHandler(req, res, next) {
       }
     } else if (publicOnly || !adminAccess) {
       filters.push(publicLivePropertyStatusSql('p'));
+    }
+
+    if (propertyId) {
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(propertyId)) {
+        return res.status(400).json({ ok: false, error: 'Invalid property ID' });
+      }
+      addFilter(filters, values, 'p.id::text = ?', propertyId);
     }
     if (featuredFilterRequested) {
       if (featuredOnly) {
