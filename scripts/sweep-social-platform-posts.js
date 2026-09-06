@@ -8,6 +8,7 @@ const {
   SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID,
   runSocialPlatformPostSweep,
 } = require('../services/socialPlatformPostDiscoveryService');
+const { socialSweepPublishedAfter } = require('../utils/socialSweepWindow');
 
 const args = process.argv.slice(2);
 
@@ -23,7 +24,7 @@ function usage() {
   console.error([
     'Usage:',
     '  node scripts/sweep-social-platform-posts.js --platform=tiktok --dry-run',
-    '  node scripts/sweep-social-platform-posts.js --platform=youtube --confirm --published-after=2026-01-01T00:00:00.000Z --source-offset=0 --max-sources=50 --max-results=25 --max-pages=1',
+    '  node scripts/sweep-social-platform-posts.js --platform=youtube --confirm --lookback-days=30 --source-offset=0 --max-sources=50 --max-results=25 --max-pages=1',
     '  node scripts/sweep-social-platform-posts.js --platform=youtube --dry-run --source-offset=100 --max-sources=50 --max-results=25 --max-pages=1',
     '  node scripts/sweep-social-platform-posts.js --platform=youtube --confirm --youtube-job-mode=channel_uploads --source-offset=0 --max-sources=25 --max-results=25',
     '  node scripts/sweep-social-platform-posts.js --platform=x --dry-run',
@@ -32,7 +33,7 @@ function usage() {
     '',
     'Platforms:',
     '  tiktok  Builds exact-video capture tasks from tracked TikTok hashtag/profile feeds.',
-    '  youtube Uses YOUTUBE_API_KEY/GOOGLE_YOUTUBE_API_KEY to fetch Shorts and long-form videos from 1 January 2026 onward and queue eligible exact video posts.',
+    '  youtube Uses YOUTUBE_API_KEY/GOOGLE_YOUTUBE_API_KEY to fetch Shorts and long-form videos from the rolling 30-day window and queue eligible exact video posts.',
     '  x       Uses X_BEARER_TOKEN/TWITTER_BEARER_TOKEN when available to fetch exact X post URLs and queue eligible found-online properties.',
     '  students Builds a student-housing sweep across TikTok, YouTube, X, Facebook, and Instagram sources.',
     '  all     Runs TikTok capture tasks plus YouTube and X API discovery.',
@@ -56,8 +57,8 @@ async function main() {
   const maxPagesPerSource = argValue('--max-pages', '1');
   const youtubeJobMode = argValue('--youtube-job-mode', argValue('--youtube-mode', 'all'));
   const searchMode = argValue('--x-search-mode', 'all');
-  const lookbackDays = argValue('--lookback-days', '0');
-  const publishedAfter = argValue('--published-after', '2026-01-01T00:00:00.000Z');
+  const lookbackDays = argValue('--lookback-days', '30');
+  const publishedAfter = argValue('--published-after', socialSweepPublishedAfter());
   if (!dryRun && !confirm) {
     usage();
     process.exit(2);

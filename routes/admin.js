@@ -21,6 +21,7 @@ const {
 } = require('../utils/commercialClassification');
 const { createListingSubmitToken } = require('../utils/listingSubmitOtp');
 const { publicLivePropertyStatusSql } = require('../utils/publicInventoryStatus');
+const { socialSweepPublishedAfter } = require('../utils/socialSweepWindow');
 const {
   landTitleAvailabilityLabel,
   normalizeLandTitleAvailability
@@ -4440,7 +4441,7 @@ router.post('/social-platform-posts/sweep', async (req, res, next) => {
     const youtubeJobMode = req.body?.youtube_job_mode || req.body?.youtubeJobMode || 'all';
     const searchMode = req.body?.x_search_mode || req.body?.xSearchMode || 'all';
     const lookbackDays = req.body?.lookback_days || req.body?.lookbackDays || 0;
-    const publishedAfter = req.body?.published_after || req.body?.publishedAfter || '2026-01-01T00:00:00.000Z';
+    const publishedAfter = req.body?.published_after || req.body?.publishedAfter || socialSweepPublishedAfter();
     const xPublishedAfter = req.body?.x_published_after || req.body?.xPublishedAfter || publishedAfter;
     const focus = req.body?.focus || req.body?.sweep_focus || req.body?.sweepFocus || '';
     const result = await runSocialPlatformPostSweep({

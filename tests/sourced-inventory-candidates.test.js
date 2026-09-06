@@ -976,7 +976,7 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
   assert.strictEqual(pkg.scripts['inventory:sweep-social-platforms'], 'node scripts/sweep-social-platform-posts.js');
   assert(socialPlatformSweepScript.includes('--platform=tiktok --dry-run'), 'social sweep script should expose TikTok hashtag capture mode');
   assert(socialPlatformSweepScript.includes('--platform=youtube --confirm'), 'social sweep script should expose YouTube API import mode');
-  assert(socialPlatformSweepScript.includes('--published-after=2026-01-01T00:00:00.000Z'), 'social sweep script should expose the January YouTube start date');
+  assert(socialPlatformSweepScript.includes('--lookback-days=30'), 'social sweep script should expose the rolling 30-day source window');
   assert(socialPlatformSweepScript.includes('--platform=x --confirm'), 'social sweep script should expose X import mode');
   assert(socialPlatformSweepScript.includes('--lookback-days'), 'social sweep script should support two-week X/Twitter lookback sweeps');
   assert(adminRoute.includes("router.post('/social-platform-posts/sweep'"), 'admin should expose a protected social platform sweep endpoint');
@@ -1003,7 +1003,9 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
   assert(frontend.includes('Import TikTok Videos'), 'King dashboard should expose exact TikTok video import action');
   assert(frontend.includes('Import YouTube Videos'), 'King dashboard should expose exact YouTube video import action');
   assert(frontend.includes('Sweep YouTube Videos'), 'King dashboard should expose YouTube video sweep action');
-  assert(frontend.includes('ADMIN_YOUTUBE_SWEEP_WINDOW_START = "2026-01-01T00:00:00.000Z"'), 'King dashboard should sweep YouTube from January 2026 onward');
+  assert(frontend.includes('ADMIN_SOCIAL_SWEEP_LOOKBACK_DAYS = 30'), 'King dashboard should sweep every social platform over a rolling 30-day window');
+  assert(frontend.includes('adminSocialSweepWindowStart'), 'King dashboard should calculate the social sweep window at run time');
+  assert(!frontend.includes('published_after: "2026-01-01T00:00:00.000Z"'), 'dashboard sweep requests must not silently fall back to the January launch archive window');
   assert(frontend.includes('getTikTokEmbedUrl'), 'public property detail should support TikTok video embeds');
   assert(frontend.includes('https://www.tiktok.com/embed/v2/'), 'TikTok source videos should render with TikTok embed URLs');
   assert(frontend.includes('getSourceVideoEmbedMeta'), 'property source videos should use the platform-aware embed metadata path');
@@ -1758,6 +1760,8 @@ test('found-online social search admin path and share cards are protected and au
   assert(continuousMonitorScript.includes("'channel_uploads'"), 'continuous monitor should default frequent YouTube pulls to channel uploads');
   assert(continuousMonitorScript.includes('next_source_offset'), 'continuous monitor should advance source offsets between runs');
   assert(continuousMonitorScript.includes('runSocialPlatformPostSweep'), 'continuous monitor should use the existing sweep/import gate');
+  assert(continuousMonitorScript.includes('CONTINUOUS_SOCIAL_MONITOR_LOOKBACK_DAYS || 30'), 'continuous monitor should default to the requested rolling 30-day window');
+  assert(continuousMonitorScript.includes('socialSweepPublishedAfter()'), 'continuous monitor should calculate a fresh rolling date floor on every run');
   assert(adminRoute.includes('const maxPagesPerSource = 1'), 'admin YouTube sweep endpoint should pin pagination to one fast page');
   assert(adminRoute.includes('youtube_job_mode') && adminRoute.includes('youtubeJobMode'), 'admin YouTube sweep endpoint should accept explicit job mode');
   assert(frontend.includes('ADMIN_YOUTUBE_SWEEP_MAX_PAGES'), 'King dashboard should send the YouTube pagination depth');
