@@ -18543,9 +18543,6 @@ function renderAdminAllListingsRows(listings) {
       ].filter(Boolean).join(" ").toLowerCase();
       return hay.includes(q);
     });
-    if (!view.length && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(q)) {
-      hydrateAdminExactListingInBackground(q, adminAuthHeaders());
-    }
   }
   if (!view.length) {
     wrap.innerHTML = `<div class="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-4">No listings match this filter.</div>`;
@@ -18582,29 +18579,6 @@ function renderAdminAllListingsRows(listings) {
       </div>
     `;
   }).join("");
-}
-
-let adminExactListingHydrationKey = "";
-let adminExactListingHydrationInFlight = null;
-
-function hydrateAdminExactListingInBackground(propertyId, headers) {
-  const key = String(propertyId || "").trim().toLowerCase();
-  if (!key || adminExactListingHydrationKey === key || adminExactListingHydrationInFlight || !canUseLiveAdminApi()) return;
-  adminExactListingHydrationKey = key;
-  adminExactListingHydrationInFlight = apiRequest(`/api/properties?status=all&property_id=${encodeURIComponent(key)}&limit=10&page=1`, { headers })
-    .then((response) => {
-      const rows = Array.isArray(response?.data) ? response.data.map(normalizeRemoteAdminListing) : [];
-      if (!rows.length) return;
-      adminRemoteListings = adminUniqueSeedItems([...rows, ...adminRemoteListings]);
-      renderAdminAllListingsRows(adminRemoteListings);
-    })
-    .catch((error) => {
-      const wrap = document.getElementById("admin-all-listings-table");
-      if (wrap) wrap.innerHTML = `<div class="text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl p-4">Exact listing lookup failed: ${adminEscape(error?.message || "error")}</div>`;
-    })
-    .finally(() => {
-      adminExactListingHydrationInFlight = null;
-    });
 }
 
 function ensureAdminApril29CleanupControls() {
