@@ -31,12 +31,16 @@ assert.deepEqual(parseArgs([]), {
   apply: false,
   replaceExisting: false,
   reopenApproved: false,
+  quarantinePrimary: false,
+  agentIds: [],
   propertyIds: []
 }, 'backfill must default to dry-run');
-assert.deepEqual(parseArgs(['--apply', '--replace-video-frames', '--reopen-approved', '--property-id=abc']), {
+assert.deepEqual(parseArgs(['--apply', '--replace-video-frames', '--reopen-approved', '--quarantine-primary', '--agent-id=agent-1', '--property-id=abc']), {
   apply: true,
   replaceExisting: true,
   reopenApproved: true,
+  quarantinePrimary: true,
+  agentIds: ['agent-1'],
   propertyIds: ['abc']
 });
 assert.deepEqual(
@@ -74,6 +78,10 @@ assert(selectionSqlFor({ reopenApproved: true }).includes("p.status IN ('pending
 const targetedSelection = selectionQueryFor({ reopenApproved: true, propertyIds: ['abc'] });
 assert(targetedSelection.text.includes('p.id = ANY($1::uuid[])'));
 assert.deepEqual(targetedSelection.values, [['abc']]);
+const agentSelection = selectionQueryFor({ reopenApproved: true, agentIds: ['agent-1'] });
+assert(agentSelection.text.includes('p.agent_id = ANY($1::uuid[])'));
+assert.deepEqual(agentSelection.values, [['agent-1']]);
+assert(!agentSelection.text.includes("p.source = 'whatsapp_employee_intake'"), 'agent-scoped audits must include legacy/manual imports');
 assert(SELECTION_SQL.includes("p.source = 'whatsapp_employee_intake'"), 'repair must stay scoped to employee intake');
 assert(SELECTION_SQL.includes("p.status = 'pending'"), 'repair must leave approved and rejected listings untouched');
 assert(SELECTION_SQL.includes('video_still_count') && SELECTION_SQL.includes('COUNT(pi.id) FILTER'), 'repair must count existing video-derived images');
@@ -98,6 +106,9 @@ assert(backfillSource.includes("'media_repair_reopened'"), 'targeted repairs mus
 assert(backfillSource.includes("status = 'pending'"), 'approved repair targets must return to staff review');
 assert(backfillSource.includes('visually_distinct: true'), 'repair audit evidence must record the distinct-frame gate');
 assert(backfillSource.includes('auto_publish: false'), 'backfill must not publish repaired listings');
+assert(backfillSource.includes("--apply requires one or more explicit --property-id"), 'production repair must require an exact reviewed property manifest');
+assert(backfillSource.includes('source_evidence_urls'), 'quarantined screenshots must move out of the public gallery and remain auditable');
+assert(backfillSource.includes("await client.query('DELETE FROM property_images WHERE property_id = $1'"), 'cropped screenshot repair must remove the original WhatsApp screenshot from the gallery');
 assert(backfillSource.includes("slot_key, room_label"), 'derived stills must be attached to the existing property image gallery');
 assert(backfillSource.includes('Distinct video key image ${keyFrameNumber}'), 'review frames must be clearly labelled');
 assert(frontendSource.includes('function staffPreviewVideosHtml'), 'staff preview must render stored videos, not just poster images');

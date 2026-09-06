@@ -54,6 +54,11 @@ function parseArgs(argv = process.argv.slice(2)) {
     apply: argv.includes('--apply'),
     replaceExisting: argv.includes('--replace-video-frames'),
     reopenApproved: argv.includes('--reopen-approved'),
+    quarantinePrimary: argv.includes('--quarantine-primary'),
+    agentIds: argv
+      .filter((arg) => arg.startsWith('--agent-id='))
+      .map((arg) => arg.slice('--agent-id='.length).trim())
+      .filter(Boolean),
     propertyIds: argv
       .filter((arg) => arg.startsWith('--property-id='))
       .map((arg) => arg.slice('--property-id='.length).trim())
@@ -69,12 +74,16 @@ function selectionSqlFor({ reopenApproved = false } = {}) {
 }
 
 function selectionQueryFor(options = {}) {
-  if (!options.propertyIds?.length) {
+  if (!options.propertyIds?.length && !options.agentIds?.length) {
     return { text: selectionSqlFor(options), values: [] };
   }
   const statusSql = options.reopenApproved
     ? "p.status IN ('pending', 'approved')"
     : "p.status = 'pending'";
+  const targetClause = options.propertyIds?.length
+    ? 'p.id = ANY($1::uuid[])'
+    : 'p.agent_id = ANY($1::uuid[])';
+  const targetValues = options.propertyIds?.length ? options.propertyIds : options.agentIds;
   return {
     text: `
       SELECT p.id, p.status, p.listing_type, p.description, p.district, p.area, p.price,
@@ -85,13 +94,12 @@ function selectionQueryFor(options = {}) {
              )::int AS video_still_count
         FROM properties p
         LEFT JOIN property_images pi ON pi.property_id = p.id
-       WHERE p.source = 'whatsapp_employee_intake'
-         AND ${statusSql}
-         AND p.id = ANY($1::uuid[])
+       WHERE ${statusSql}
+         AND ${targetClause}
        GROUP BY p.id
        ORDER BY p.created_at ASC
     `,
-    values: [options.propertyIds]
+    values: [targetValues]
   };
 }
 
@@ -458,7 +466,11 @@ async function makeAndUploadStills(property, { replaceExisting = false } = {}) {
   return uploaded;
 }
 
-async function attachStills(propertyId, uploaded, { replaceExisting = false, reopenApproved = false } = {}) {
+async function attachStills(propertyId, uploaded, {
+  replaceExisting = false,
+  reopenApproved = false,
+  quarantinePrimary = false
+} = {}) {
   const client = await db.getClient();
   try {
     await client.query('BEGIN');
@@ -480,12 +492,22 @@ async function attachStills(propertyId, uploaded, { replaceExisting = false, reo
                 WHERE COALESCE(slot_key, '') LIKE 'video_%'
                    OR COALESCE(room_label, '') ILIKE '%video%'
               )::int AS video_count,
-              COALESCE(MAX(sort_order), -1)::int AS max_sort_order
+              COALESCE(MAX(sort_order), -1)::int AS max_sort_order,
+              (ARRAY_AGG(url ORDER BY is_primary DESC, sort_order ASC, created_at ASC))[1] AS primary_url
          FROM property_images
         WHERE property_id = $1`,
       [propertyId]
     );
     const existingVideoCountBeforeRepair = Number(existing.rows[0]?.video_count || 0);
+    const quarantinedPrimaryUrl = quarantinePrimary ? String(existing.rows[0]?.primary_url || '').trim() : '';
+    if (quarantinePrimary && quarantinedPrimaryUrl) {
+      await client.query(
+        `DELETE FROM property_images
+          WHERE property_id = $1
+            AND url = $2`,
+        [propertyId, quarantinedPrimaryUrl]
+      );
+    }
     if (replaceExisting) {
       await client.query(
         `DELETE FROM property_images
@@ -574,6 +596,12 @@ async function attachStills(propertyId, uploaded, { replaceExisting = false, reo
       video_key_frame_count: existingVideoCount + selectedUploads.length,
       media_count: Number(currentExtra.media_count || 0) + selectedUploads.length,
       media_sha256: [...new Set([...hashes, ...selectedUploads.map((item) => item.sha256).filter(Boolean)])],
+      source_evidence_urls: [...new Set([
+        ...(Array.isArray(currentExtra.source_evidence_urls) ? currentExtra.source_evidence_urls : []),
+        ...(quarantinedPrimaryUrl ? [quarantinedPrimaryUrl] : [])
+      ])],
+      media_quality_blockers: [],
+      media_validation_status: selectedUploads.length ? 'passed_repair_image_gate' : 'blocked_no_usable_property_image',
       review_only: true,
       auto_publish: false
     };
@@ -608,6 +636,7 @@ async function attachStills(propertyId, uploaded, { replaceExisting = false, reo
           frame_sharpness: selectedUploads.map((item) => Number(Number(item.sharpness || 0).toFixed(4))),
           visually_distinct: true,
           replaced_existing_video_frames: replaceExisting,
+          quarantined_primary_screenshot: Boolean(quarantinedPrimaryUrl),
           description_cleaned: publicDescription !== property.description,
           auto_publish: false
         }),
@@ -660,15 +689,18 @@ async function attachCroppedPreview(property, preview) {
       videoCount: 0,
       keyFrameCount: 0
     });
-    await client.query(
-      `UPDATE property_images
-          SET is_primary = FALSE,
-              sort_order = sort_order + 1,
-              slot_key = CASE WHEN is_primary THEN 'source_evidence_original' ELSE slot_key END,
-              room_label = CASE WHEN is_primary THEN 'Original WhatsApp source evidence' ELSE room_label END
-        WHERE property_id = $1`,
+    const previousImages = await client.query(
+      `SELECT url
+         FROM property_images
+        WHERE property_id = $1
+        ORDER BY is_primary DESC, sort_order ASC, created_at ASC`,
       [property.id]
     );
+    const sourceEvidenceUrls = [...new Set([
+      ...(Array.isArray(current.extra_fields?.source_evidence_urls) ? current.extra_fields.source_evidence_urls : []),
+      ...previousImages.rows.map((item) => String(item.url || '').trim()).filter(Boolean)
+    ])];
+    await client.query('DELETE FROM property_images WHERE property_id = $1', [property.id]);
     await client.query(
       `INSERT INTO property_images (property_id, url, is_primary, sort_order, slot_key, room_label)
        VALUES ($1, $2, TRUE, 0, 'repaired_primary', 'Clear property preview from source video')`,
@@ -692,6 +724,9 @@ async function attachCroppedPreview(property, preview) {
         media_repair_crop_bounds: preview.bounds,
         media_repair_sharpness: Number(Number(preview.sharpness || 0).toFixed(4)),
         media_repair_entropy: Number(Number(preview.entropy || 0).toFixed(4)),
+        source_evidence_urls: sourceEvidenceUrls,
+        media_quality_blockers: [],
+        media_validation_status: 'passed_repair_image_gate',
         media_repaired_at: new Date().toISOString()
       })]
     );
@@ -777,6 +812,9 @@ async function reopenPropertyForMediaReview(property) {
 
 async function main() {
   const options = parseArgs();
+  if (options.apply && !options.propertyIds.length) {
+    throw new Error('--apply requires one or more explicit --property-id values from a reviewed dry-run manifest');
+  }
   const selection = selectionQueryFor(options);
   const result = await db.query(selection.text, selection.values);
   const selected = result.rows;
@@ -790,7 +828,8 @@ async function main() {
       existingVideoKeyFrames: Number(row.video_still_count || 0),
       keyFramesNeeded: keyFramesNeeded(row, options),
       willReopenForReview: options.reopenApproved && row.status === 'approved',
-      replaceExisting: options.replaceExisting
+      replaceExisting: options.replaceExisting,
+      quarantinePrimary: options.quarantinePrimary
     }))
   }, null, 2)}\n`);
   if (!options.apply) return;
