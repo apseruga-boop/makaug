@@ -18,6 +18,7 @@
     "typecheck:bot": "tsc -p tsconfig.json --noEmit",
     "test:bot": "vitest run",
     "test:off-plan": "node --test tests/off-plan-service.test.js tests/off-plan-contract.test.js tests/off-plan-route-auth.test.js tests/off-plan-brochure.test.js",
+    "test:virtual-homes": "node --test tests/virtual-homes-service.test.js tests/virtual-homes-contract.test.js",
     "migrate": "node scripts/migrate.js",
     "seed": "node scripts/seed.js",
     "admin:create-super": "node scripts/create-super-admin.js",
@@ -92,12 +93,14 @@
     "express-rate-limit": "^7.4.1",
     "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
+    "jszip": "^3.10.1",
     "nodemailer": "^9.0.5",
     "openai": "^4.104.0",
     "pdfkit": "^0.20.2",
     "pg": "^8.12.0",
     "playwright-core": "^1.59.1",
     "sharp": "^0.35.3",
+    "three": "^0.184.0",
     "twilio": "^5.3.3"
   },
   "devDependencies": {

@@ -112,6 +112,8 @@ function normalizeDevelopmentRow(row = {}) {
   const normalized = { ...row };
   for (const field of JSON_ARRAY_FIELDS) normalized[field] = jsonArray(row[field]);
   for (const field of JSON_OBJECT_FIELDS) normalized[field] = jsonObject(row[field]);
+  normalized.virtual_home = jsonObject(row.virtual_home);
+  if (!normalized.virtual_home.public_slug) normalized.virtual_home = null;
   normalized.construction_progress = finiteNumber(row.construction_progress, null);
   normalized.discount_percentage = finiteNumber(row.discount_percentage, null);
   normalized.latitude = finiteNumber(row.latitude, null);
@@ -309,9 +311,26 @@ function publicSelect() {
     CASE WHEN a.status = 'approved' THEN a.whatsapp ELSE NULL END AS source_agent_whatsapp,
     CASE WHEN a.status = 'approved' THEN a.phone ELSE NULL END AS source_agent_phone,
     CASE WHEN a.status = 'approved' THEN a.email ELSE NULL END AS source_agent_email,
-    a.status AS source_agent_status
+    a.status AS source_agent_status,
+    CASE WHEN vh.public_slug IS NOT NULL THEN jsonb_build_object(
+      'public_slug', vh.public_slug,
+      'name', vh.name,
+      'accuracy_level', vh.accuracy_level,
+      'accuracy_disclosure', vh.accuracy_disclosure
+    ) ELSE NULL END AS virtual_home
     FROM off_plan_developments d
-    LEFT JOIN agents a ON a.id = d.source_agent_id`;
+    LEFT JOIN agents a ON a.id = d.source_agent_id
+    LEFT JOIN LATERAL (
+      SELECT p.public_slug, p.name, p.accuracy_level, p.accuracy_disclosure
+      FROM virtual_home_listing_links l
+      JOIN virtual_home_projects p ON p.id = l.project_id
+      WHERE l.off_plan_development_id = d.id
+        AND p.status = 'PUBLISHED'
+        AND p.is_public = true
+        AND p.public_slug IS NOT NULL
+      ORDER BY p.published_at DESC NULLS LAST, p.updated_at DESC
+      LIMIT 1
+    ) vh ON true`;
 }
 
 async function listPublicDevelopments(db, query = {}) {

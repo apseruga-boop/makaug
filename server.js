@@ -41,6 +41,15 @@ const {
   publicRouter: offPlanRoutes,
   staffRouter: offPlanStaffRoutes
 } = require('./routes/off-plan');
+const {
+  DEMO_PROJECT: virtualHomeDemoProject,
+  adminRouter: virtualHomesAdminRoutes,
+  handleFurnitureRedirect,
+  publicRouter: virtualHomesRoutes,
+  staffRouter: virtualHomesStaffRoutes,
+  virtualHomeDemoEnabled
+} = require('./routes/virtual-homes');
+const { getPublicProject: getPublicVirtualHome } = require('./services/virtualHomeService');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 const { runMigrations } = require('./scripts/migrate');
 const {
@@ -211,6 +220,7 @@ app.get('/api/version', (_req, res) => {
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-public-agent-parity-fast-replies-20260824'] : []),
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-employee-agent-007-review-intake-20260829'] : []),
       ...(!IS_SOUTH_AFRICA ? ['off-plan-projectfinder-layout-v3-20260904'] : []),
+      ...(!IS_SOUTH_AFRICA ? ['maka-virtual-homes-v1-20260905'] : []),
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-agent-007-multiple-property-batches-20260829'] : []),
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-agent-007-ordered-batch-finalization-20260829'] : []),
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-agent-007-complete-barrier-20260829'] : []),
@@ -254,6 +264,7 @@ app.use('/api/health', healthRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/properties', propertiesRoutes);
 app.use('/api/off-plan', offPlanRoutes);
+app.use('/api/virtual-homes', virtualHomesRoutes);
 app.use('/api/agents', agentsRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/advertising', advertisingRoutes);
@@ -265,6 +276,7 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/saved-properties', savedPropertiesRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/admin/off-plan', offPlanAdminRoutes);
+app.use('/api/admin/virtual-homes', virtualHomesAdminRoutes);
 app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api/mortgage-rates', mortgageRoutes);
 app.use('/api/ai', aiRoutes);
@@ -276,7 +288,10 @@ app.use('/api/student', studentRoutes);
 app.use('/api/field-agent', fieldAgentRoutes);
 app.use('/api/staff', staffRoutes);
 app.use('/api/staff/off-plan', offPlanStaffRoutes);
+app.use('/api/staff/virtual-homes', virtualHomesStaffRoutes);
 app.use('/api/harvest', harvestRoutes);
+
+app.get('/go/furniture/:productKey', handleFurnitureRedirect);
 
 app.get('/marketplace-sitemap.xml', (_req, res) => {
   if (ACTIVE_TENANT.publicFeatures?.marketplace === false) return res.status(404).type('text/plain').send('Not found');
@@ -321,11 +336,19 @@ app.get('/sitemap.xml', async (_req, res, next) => {
     urls.push({ loc: `${baseUrl}/off-plan`, changefreq: 'daily', priority: '0.8' });
     urls.push({ loc: `${baseUrl}/off-plan/overseas`, changefreq: 'weekly', priority: '0.7' });
     urls.push({ loc: `${baseUrl}/off-plan/overseas/kenya`, changefreq: 'weekly', priority: '0.7' });
+    urls.push({ loc: `${baseUrl}/services`, changefreq: 'monthly', priority: '0.7' });
+    urls.push({ loc: `${baseUrl}/services/virtual-homes`, changefreq: 'weekly', priority: '0.8' });
     try {
       const offPlan = await db.query("SELECT * FROM off_plan_developments WHERE country_code = ANY(ARRAY['UG','KE']) AND status = 'published' AND (verification_status = 'verified' OR (verification_status = 'partially_verified' AND extra_fields->>'public_preview_approved' = 'true')) ORDER BY updated_at DESC LIMIT 500");
       offPlan.rows.map(normalizeDevelopmentRow).filter(isPubliclyVisible).forEach((project) => urls.push({ loc: project.country_code === 'KE' ? `${baseUrl}/off-plan/overseas/kenya/${encodeURIComponent(project.slug)}` : `${baseUrl}/off-plan/${encodeURIComponent(project.slug)}`, lastmod: project.updated_at ? new Date(project.updated_at).toISOString() : null, changefreq: 'weekly', priority: '0.7' }));
     } catch (error) {
       logger.warn('Off-plan sitemap entries are unavailable until the feature migration is applied', { message: error.message });
+    }
+    try {
+      const virtualHomes = await db.query("SELECT public_slug, updated_at FROM virtual_home_projects WHERE status IN ('PUBLISHED','DELIVERED') AND is_public = true AND public_slug IS NOT NULL ORDER BY updated_at DESC LIMIT 500");
+      virtualHomes.rows.forEach((project) => urls.push({ loc: `${baseUrl}/virtual-homes/${encodeURIComponent(project.public_slug)}`, lastmod: project.updated_at ? new Date(project.updated_at).toISOString() : null, changefreq: 'weekly', priority: '0.7' }));
+    } catch (error) {
+      logger.warn('Virtual Home sitemap entries are unavailable until the feature migration is applied', { message: error.message });
     }
     const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map((entry) => [
       '  <url>',
@@ -1511,11 +1534,46 @@ function renderOffPlanProjectPage(req, res, next, countryCode = 'UG') {
   });
 }
 
+function renderVirtualHomeProjectPage(req, res, next) {
+  return Promise.resolve().then(async () => {
+    const project = virtualHomeDemoEnabled() && req.params.slug === virtualHomeDemoProject.public_slug
+      ? virtualHomeDemoProject
+      : await getPublicVirtualHome(db, req.params.slug);
+    if (!project) {
+      res.set('X-Robots-Tag', 'noindex, noarchive');
+      return res.status(404).type('text/plain').send('Virtual Home not found');
+    }
+    const description = String(project.accuracy_disclosure || `Explore the interactive 3D Virtual Home for ${project.name}.`).replace(/\s+/g, ' ').trim().slice(0, 240);
+    const canonical = absolutePublicUrl(`/virtual-homes/${encodeURIComponent(project.public_slug)}`);
+    const html = patchPublicPageSeoMeta(renderPublicHtml(req.originalUrl || req.url || req.path), {
+      title: `${project.name} Virtual Home | makaug.com`,
+      description,
+      canonical,
+      image: absolutePublicUrl('/assets/icons/makaug-icon-512.png'),
+      structuredData: {
+        '@context': 'https://schema.org',
+        '@type': '3DModel',
+        name: project.name,
+        description,
+        encodingFormat: 'model/gltf-binary',
+        url: canonical
+      }
+    });
+    res.set('X-makaug-Virtual-Home-SSR', '1');
+    res.set('X-makaug-Public-Sanitized', '1');
+    return sendTextResponse(req, res, html, { cacheControl: PUBLIC_HTML_CACHE_CONTROL });
+  }).catch((error) => {
+    if (error.code === '42P01') return sendPublicIndex(req, res, next);
+    return next(error);
+  });
+}
+
 app.get('/off-plan/overseas/kenya/:slug', (req, res, next) => renderOffPlanProjectPage(req, res, next, 'KE'));
 
 app.get('/off-plan/overseas', sendPublicIndex);
 
 app.get('/off-plan/:slug', (req, res, next) => renderOffPlanProjectPage(req, res, next, 'UG'));
+app.get('/virtual-homes/:slug', renderVirtualHomeProjectPage);
 
 function sendPublicIndex(req, res, next) {
   if (req.path.startsWith('/api/')) return next();
@@ -1587,6 +1645,22 @@ function sendPublicIndex(req, res, next) {
         image: absolutePublicUrl('/assets/off-plan/entebbe-victoria-palms/residents-lounge-render.jpg'),
         structuredData: { '@context': 'https://schema.org', '@type': 'CollectionPage', name: 'Off Plan Property in Uganda', url: absolutePublicUrl('/off-plan') }
       });
+    } else if (/^\/services\/virtual-homes\/?$/i.test(req.path)) {
+      html = patchPublicPageSeoMeta(html, {
+        title: 'AI Virtual Viewing and 3D Walkthroughs | Maka Virtual Homes',
+        description: 'Turn a floor plan into a staff-reviewed, interactive 3D Virtual Home with furnished, unfurnished, day and night viewing modes.',
+        canonical: absolutePublicUrl('/services/virtual-homes'),
+        image: absolutePublicUrl('/assets/icons/makaug-icon-512.png'),
+        structuredData: { '@context': 'https://schema.org', '@type': 'Service', name: 'Maka Virtual Homes', provider: { '@type': 'Organization', name: 'makaug.com' }, areaServed: 'Uganda' }
+      });
+    } else if (/^\/services\/?$/i.test(req.path)) {
+      html = patchPublicPageSeoMeta(html, {
+        title: 'Property Services | makaug.com',
+        description: 'Explore MakaUG property services, including AI Virtual Viewing and 3D property walkthrough production.',
+        canonical: absolutePublicUrl('/services'),
+        image: absolutePublicUrl('/assets/icons/makaug-icon-512.png'),
+        structuredData: { '@context': 'https://schema.org', '@type': 'CollectionPage', name: 'MakaUG Property Services', url: absolutePublicUrl('/services') }
+      });
     }
     return sendTextResponse(req, res, html, {
       cacheControl: PUBLIC_HTML_CACHE_CONTROL
@@ -1618,6 +1692,15 @@ app.get('/assets/makaug-app.js', (req, res, next) => {
     res.set('Cache-Control', 'no-store');
     return res.send(alreadyPatched ? source : `${source}\n${captureHelperUsabilityScriptPatch}`);
   });
+});
+
+// Three.js is MIT licensed. Serve only the required browser build rather than
+// exposing node_modules as a public directory.
+app.get('/assets/vendor/three.module.min.js', (_req, res) => {
+  res.type('application/javascript');
+  res.set('Cache-Control', 'public, max-age=604800, immutable');
+  res.set('X-Vendor-License', 'MIT');
+  return res.sendFile(path.join(staticRoot, 'node_modules', 'three', 'build', 'three.module.min.js'));
 });
 
 app.use(express.static(staticRoot, {
