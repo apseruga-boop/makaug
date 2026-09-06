@@ -13520,7 +13520,7 @@ async function staffRunSourceSweep(dryRun = true, profile = "agency") {
           source_offset: sourceOffset,
           max_results: dryRun ? Math.min(10, sweepProfile.maxResults) : sweepProfile.maxResults,
           max_pages: dryRun ? 1 : sweepProfile.maxPages,
-          published_after: "2026-01-01T00:00:00.000Z",
+          published_after: adminSocialSweepWindowStart(),
           youtube_job_mode: youtubeJobMode
         }
       },
@@ -17792,7 +17792,7 @@ function adminImportYouTubeExactPosts(seedText = "") {
   return adminOpenSocialQuickPastePanel(seedText || adminYouTubeQuickPasteExample());
 }
 
-const ADMIN_YOUTUBE_SWEEP_WINDOW_START = "2026-01-01T00:00:00.000Z";
+const ADMIN_SOCIAL_SWEEP_LOOKBACK_DAYS = 30;
 const ADMIN_YOUTUBE_SWEEP_BATCH_SIZE = 50;
 const ADMIN_YOUTUBE_SWEEP_MAX_PAGES = 1;
 const ADMIN_YOUTUBE_SWEEP_OFFSET_KEYS = {
@@ -17800,6 +17800,12 @@ const ADMIN_YOUTUBE_SWEEP_OFFSET_KEYS = {
   student: "makaug.admin.studentYoutubeSweepSourceOffset",
   all: "makaug.admin.allSocialYoutubeSweepSourceOffset",
 };
+
+function adminSocialSweepWindowStart(now = Date.now()) {
+  const nowMs = Number(now);
+  const safeNowMs = Number.isFinite(nowMs) ? nowMs : Date.now();
+  return new Date(safeNowMs - ADMIN_SOCIAL_SWEEP_LOOKBACK_DAYS * 24 * 60 * 60 * 1000).toISOString();
+}
 
 function adminSocialSweepOffsetKey(normalized = "youtube", studentFocus = false) {
   if (studentFocus) return ADMIN_YOUTUBE_SWEEP_OFFSET_KEYS.student;
@@ -17859,7 +17865,7 @@ function adminYouTubeSweepMethodLabel(source = {}) {
 
 function adminYouTubeReportSummary(report = {}) {
   if (!report.ok) return adminEscape(report.reason || "YouTube API did not return videos");
-  const inWindow = report.in_window_result_count != null ? ` • ${adminEscape(report.in_window_result_count || 0)} since Jan 2026` : "";
+  const inWindow = report.in_window_result_count != null ? ` • ${adminEscape(report.in_window_result_count || 0)} in the rolling 30-day window` : "";
   return `${adminEscape(report.result_count || 0)} videos fetched${inWindow} • ${adminEscape(report.normalized_post_count || 0)} property-like • ${adminEscape(report.pages_fetched || 0)}/${adminEscape(report.max_pages || 1)} pages • ${adminEscape(adminYouTubeSweepMethodLabel(report))}`;
 }
 
@@ -17905,7 +17911,7 @@ function adminSocialPlatformSweepHtml(data = {}, platform = "all") {
     <div class="rounded-lg border border-red-100 bg-white p-2">
       <div class="font-bold text-red-950">${adminEscape(job.source_name || "YouTube source")}</div>
       <div class="text-[11px] text-red-700 mt-0.5 break-words">${adminEscape(job.query || "")}</div>
-      <div class="text-[11px] text-red-600 mt-0.5">${adminEscape(adminYouTubeSweepMethodLabel(job))} • From ${adminEscape(job.published_after || ADMIN_YOUTUBE_SWEEP_WINDOW_START)} • Shorts and long-form videos</div>
+      <div class="text-[11px] text-red-600 mt-0.5">${adminEscape(adminYouTubeSweepMethodLabel(job))} • From ${adminEscape(job.published_after || adminSocialSweepWindowStart())} • Shorts and long-form videos</div>
       <div class="mt-1 flex gap-2 flex-wrap">
         ${job.source_url ? `<a href="${adminAttr(job.source_url)}" target="_blank" rel="noopener" class="border border-red-200 text-red-700 hover:bg-red-50 px-2 py-1 rounded text-[11px] font-bold">Open YouTube source</a>` : ""}
         <button type="button" onclick="adminImportYouTubeExactPosts()" class="border border-red-300 text-red-700 hover:bg-red-50 px-2 py-1 rounded text-[11px] font-bold">Import YouTube Videos</button>
@@ -17960,7 +17966,7 @@ function adminSocialPlatformSweepHtml(data = {}, platform = "all") {
     ${youtube.search_job_count ? `
       <div class="mt-3 rounded-xl border border-red-100 bg-red-50 p-3 text-red-950">
         <div class="font-black">YouTube video sweep</div>
-        <div class="mt-1">${adminEscape(youtube.search_job_count)} YouTube search jobs prepared from ${adminEscape(youtube.published_after || ADMIN_YOUTUBE_SWEEP_WINDOW_START)}. API configured: ${youtube.api_configured ? "Yes" : "No"}${youtube.skipped_reason ? ` • ${adminEscape(youtube.skipped_reason)}` : ""}</div>
+        <div class="mt-1">${adminEscape(youtube.search_job_count)} YouTube search jobs prepared from ${adminEscape(youtube.published_after || adminSocialSweepWindowStart())}. API configured: ${youtube.api_configured ? "Yes" : "No"}${youtube.skipped_reason ? ` • ${adminEscape(youtube.skipped_reason)}` : ""}</div>
         <div class="mt-1 text-[11px]">Quality: ${adminEscape(youtubeConfidence.auto_live_ready_count || 0)} high-confidence rows ready for human review • ${adminEscape(youtubeConfidence.source_contact_only_count || 0)} source-contact-only • ${adminEscape(youtubeConfidence.location_review_count || 0)} need location review • Types ${adminEscape(JSON.stringify(youtubeConfidence.by_listing_type || {}))}</div>
         <div class="mt-1 text-[11px]">Batch source offset ${adminEscape(youtubeSourceOffset)} with ${adminEscape(youtubeBatchSize)} jobs per click. Next broad YouTube batch starts at offset ${adminEscape(youtubeNextSourceOffset)}. YouTube search returns Shorts and long-form videos, and makaug stores the exact video URL plus YouTube snippet published date as First posted online.</div>
         ${youtubeQuotaExceeded ? `<div class="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-2 text-amber-900 font-bold">YouTube daily search quota is exhausted. This is a Google quota limit, not a makaug parsing failure. Wait for the quota reset or request a higher YouTube Data API quota, then click Sweep YouTube Videos again to continue from this batch offset.</div>` : ""}
@@ -18130,6 +18136,7 @@ async function adminRunStaffSocialSweepFallback(normalized = "all", studentFocus
   const profile = adminStaffSocialSweepProfile(normalized, studentFocus);
   const statusEl = adminSocialStatusElement();
   const sourceOffset = staffStoredSweepOffset(profile.offsetKey);
+  const publishedAfter = adminSocialSweepWindowStart();
   if (statusEl) {
     statusEl.classList.remove("hidden");
     statusEl.innerHTML = `Submitting ${adminEscape(profile.label.toLowerCase())} through the staff async queue from source offset ${adminEscape(sourceOffset)}...`;
@@ -18153,7 +18160,7 @@ async function adminRunStaffSocialSweepFallback(normalized = "all", studentFocus
           source_offset: sourceOffset,
           max_results: profile.maxResults,
           max_pages: profile.maxPages,
-          published_after: ADMIN_YOUTUBE_SWEEP_WINDOW_START,
+          published_after: publishedAfter,
           youtube_job_mode: profile.youtubeJobMode
         }
       },
@@ -18184,6 +18191,7 @@ async function adminRunStaffSocialSweepFallback(normalized = "all", studentFocus
 async function adminSweepSocialPlatformPosts(platform = "all") {
   const normalized = String(platform || "all").toLowerCase();
   const studentFocus = normalized === "student" || normalized === "students" || normalized === "student_housing";
+  const publishedAfter = adminSocialSweepWindowStart();
   if (!canUseLiveAdminApi()) {
     if (canUseStaffSourceIntakeApi()) {
       return adminRunStaffSocialSweepFallback(normalized, studentFocus);
@@ -18211,7 +18219,7 @@ async function adminSweepSocialPlatformPosts(platform = "all") {
     : normalized === "tiktok"
     ? "Sweep tracked TikTok hashtags/profiles into exact-video capture tasks? This does not create properties until exact TikTok video URLs are imported."
     : normalized === "youtube"
-      ? `Sweep the next broad YouTube batch from 1 January 2026 onward, including Shorts and long-form videos, then queue every eligible exact video as a found-online property candidate? This click starts at source offset ${youtubeSourceOffset} and uses ${youtubeBatchSize} jobs to avoid burning the whole daily YouTube quota on the same old channels. YOUTUBE_API_KEY, GOOGLE_YOUTUBE_API_KEY, or GOOGLE_API_KEY must be configured on the server.`
+      ? `Sweep the next broad YouTube batch from the last ${ADMIN_SOCIAL_SWEEP_LOOKBACK_DAYS} days, including Shorts and long-form videos, then queue every eligible exact video as a found-online property candidate? This click starts at source offset ${youtubeSourceOffset} and uses ${youtubeBatchSize} jobs to avoid burning the whole daily YouTube quota on the same old channels. YOUTUBE_API_KEY, GOOGLE_YOUTUBE_API_KEY, or GOOGLE_API_KEY must be configured on the server.`
       : normalized === "x"
         ? "Sweep tracked X/Twitter sources through the X API and queue every eligible exact 2026+ post as found-online property candidates? X_BEARER_TOKEN must be configured on the server."
         : "Sweep all tracked social sources across TikTok, YouTube, and X/Twitter? TikTok becomes exact-video capture tasks; YouTube/X queue eligible exact posts when API keys are configured.";
@@ -18233,7 +18241,7 @@ async function adminSweepSocialPlatformPosts(platform = "all") {
       : normalized === "tiktok"
       ? "Sweeping TikTok hashtags/profiles and preparing exact-video capture tasks..."
       : normalized === "youtube"
-        ? `Sweeping YouTube videos from 1 January 2026, batch offset ${youtubeSourceOffset}, and importing eligible exact videos...`
+        ? `Sweeping YouTube videos from the last ${ADMIN_SOCIAL_SWEEP_LOOKBACK_DAYS} days, batch offset ${youtubeSourceOffset}, and importing eligible exact videos...`
         : normalized === "x"
           ? "Sweeping X/Twitter sources and importing eligible exact posts..."
           : "Sweeping all tracked social sources across TikTok, YouTube, and X/Twitter...";
@@ -18251,7 +18259,7 @@ async function adminSweepSocialPlatformPosts(platform = "all") {
         max_results: STAFF_SOURCE_SWEEP_MAX_RESULTS,
         max_pages: usesYouTubeSweep ? ADMIN_YOUTUBE_SWEEP_MAX_PAGES : 1,
         x_search_mode: "all",
-        published_after: ADMIN_YOUTUBE_SWEEP_WINDOW_START
+        published_after: publishedAfter
       }
     });
     const data = response?.data || {};

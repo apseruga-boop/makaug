@@ -7,6 +7,7 @@ const { cleanText, isValidEmail, isValidPhone } = require('../middleware/validat
 const { parsePagination, toPagination } = require('../utils/pagination');
 const { DISTRICTS, LISTING_TYPES } = require('../utils/constants');
 const { publicLivePropertyStatusSql } = require('../utils/publicInventoryStatus');
+const { socialSweepPublishedAfter } = require('../utils/socialSweepWindow');
 const {
   invalidatePublicInventoryMetricsCache,
   loadPublicOpportunitySummary,
@@ -159,15 +160,15 @@ const STAFF_SOURCE_MONITOR_GUIDE = {
   status: 'Ready for Render Cron Job and Render Shell trigger',
   dry_run_command: 'npm run inventory:continuous-monitor -- --dry-run',
   confirm_command: 'npm run inventory:continuous-monitor -- --confirm --platforms=youtube,x --youtube-job-mode=channel_uploads --max-sources=15 --max-results=25 --max-pages=1',
-  deep_channel_command: 'npm run inventory:sweep-social-platforms -- --platform=youtube --confirm --youtube-job-mode=channel_uploads --published-after=2026-01-01T00:00:00.000Z --max-sources=50 --max-results=25 --max-pages=1',
-  broad_search_command: 'npm run inventory:sweep-social-platforms -- --platform=youtube --confirm --youtube-job-mode=search --published-after=2026-01-01T00:00:00.000Z --max-sources=20 --max-results=10 --max-pages=1',
+  deep_channel_command: 'npm run inventory:sweep-social-platforms -- --platform=youtube --confirm --youtube-job-mode=channel_uploads --lookback-days=30 --max-sources=50 --max-results=25 --max-pages=1',
+  broad_search_command: 'npm run inventory:sweep-social-platforms -- --platform=youtube --confirm --youtube-job-mode=search --lookback-days=30 --max-sources=20 --max-results=10 --max-pages=1',
   daily_registry_command: 'npm run inventory:daily-source-sweep -- --confirm',
   high_frequency_cadence: 'Every 10-15 minutes: safe known-channel uploads plus X recent search.',
   deep_channel_cadence: 'Every 1-2 hours: deeper known-channel upload scans for agency sources that post heavily.',
   broad_search_cadence: 'Every 2-4 hours: broader hashtag/search discovery in small batches so YouTube Search quota is protected.',
   daily_registry_cadence: 'Once daily: refresh the source registry and review baseline.',
   render_trigger_path: 'Render Dashboard > project > New > Cron Job, or web service Shell for a one-off run.',
-  published_after: '2026-01-01T00:00:00.000Z',
+  lookback_days: 30,
   source_registry_batch_id: PROPERTY_SOURCE_REGISTRY_BATCH_ID,
   source_registry_target_count: PROPERTY_SOURCE_REGISTRY_TARGET_COUNT,
   social_platform_batch_id: SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID,
@@ -584,8 +585,14 @@ function staffSourcedCandidateHasApprovalLocation(row = {}) {
 }
 
 function staffSourceMonitorGuide() {
+  const publishedAfter = socialSweepPublishedAfter();
+  const deepChannelCommand = `${STAFF_SOURCE_MONITOR_GUIDE.deep_channel_command} --published-after=${publishedAfter}`;
+  const broadSearchCommand = `${STAFF_SOURCE_MONITOR_GUIDE.broad_search_command} --published-after=${publishedAfter}`;
   return {
     ...STAFF_SOURCE_MONITOR_GUIDE,
+    published_after: publishedAfter,
+    deep_channel_command: deepChannelCommand,
+    broad_search_command: broadSearchCommand,
     cadences: [
       { label: 'Fast monitor', value: STAFF_SOURCE_MONITOR_GUIDE.high_frequency_cadence },
       { label: 'Broad search', value: STAFF_SOURCE_MONITOR_GUIDE.broad_search_cadence },
@@ -594,7 +601,7 @@ function staffSourceMonitorGuide() {
     commands: [
       { label: 'Dry proof', value: STAFF_SOURCE_MONITOR_GUIDE.dry_run_command },
       { label: 'Trigger now', value: STAFF_SOURCE_MONITOR_GUIDE.confirm_command },
-      { label: 'Broad YouTube search', value: STAFF_SOURCE_MONITOR_GUIDE.broad_search_command },
+      { label: 'Broad YouTube search', value: broadSearchCommand },
       { label: 'Daily registry', value: STAFF_SOURCE_MONITOR_GUIDE.daily_registry_command }
     ]
   };
@@ -4025,7 +4032,7 @@ router.post('/source-intake/social-sweep', async (req, res, next) => {
       ),
       searchMode: cleanText(req.body?.x_search_mode || req.body?.xSearchMode || 'all'),
       lookbackDays: Math.max(0, parseInt(req.body?.lookback_days || req.body?.lookbackDays || 0, 10) || 0),
-      publishedAfter: cleanText(req.body?.published_after || req.body?.publishedAfter || '2026-01-01T00:00:00.000Z'),
+      publishedAfter: cleanText(req.body?.published_after || req.body?.publishedAfter || socialSweepPublishedAfter()),
       youtubeJobMode,
       timeBudgetMs: STAFF_SOCIAL_SWEEP_TIME_BUDGET_MS
     };
