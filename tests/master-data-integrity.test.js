@@ -319,6 +319,41 @@ test('nightly and hospitality posts are rejected by intake, never converted to m
   assert(intake.data_integrity.issue_codes.includes('unsupported_hospitality_or_nightly'));
 });
 
+test('automated social sweeps keep generic channel messages out of the property queue', () => {
+  const listing = normalizeFoundOnlineSourcePost({
+    source_url: 'https://www.youtube.com/watch?v=generic12345',
+    source_platform: 'youtube',
+    source_name: 'Example Uganda agent',
+    title: 'We are here to listen to you',
+    caption: 'Talk to our team about opportunities in Uganda. Contact this channel.',
+    listing_type: 'rent',
+    price_on_application: true,
+  });
+  const intake = sourcePostMeetsLaunchIntakeRule(listing, listing.sourceAgent);
+  assert.equal(intake.eligible, false);
+  assert(intake.blocking_reasons.includes('not_a_listing') || intake.blocking_reasons.includes('not_a_specific_property_listing'));
+
+  const otherwiseValid = normalizeFoundOnlineSourcePost({
+    source_url: 'https://www.youtube.com/watch?v=validhome123',
+    source_platform: 'youtube',
+    source_name: 'Example Uganda agent',
+    title: 'Three bedroom house for sale in Kira',
+    caption: 'Three bedroom house for sale in Kira, Wakiso for UGX 450 million.',
+    area: 'Kira',
+    district: 'Wakiso',
+    price: 450000000,
+    listing_type: 'sale',
+  });
+  otherwiseValid.dataIntegrity = {
+    ok: false,
+    issues: [],
+    issue_codes: ['not_a_specific_property_listing'],
+  };
+  const integrityBlocked = sourcePostMeetsLaunchIntakeRule(otherwiseValid, otherwiseValid.sourceAgent);
+  assert.equal(integrityBlocked.eligible, false);
+  assert(integrityBlocked.blocking_reasons.includes('not_a_specific_property_listing'));
+});
+
 test('commercial category shorthand becomes a real subtype filter', () => {
   const route = read('routes/properties.js');
   const handlerStart = route.indexOf('async function listPropertiesHandler');
