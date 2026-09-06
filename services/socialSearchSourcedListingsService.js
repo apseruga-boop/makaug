@@ -1024,7 +1024,7 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
     source_contact_url: sourceContactUrlForAgent(agent, item),
     source_url: sourceUrlForItem(item),
     extra_fields: item.raw_source_post || item.rawSourcePost || {},
-  });
+  }, { requireCompleteEvidence: true });
   const countryGate = item.countryGate || item.country_gate || { allowed: true, reason: '', matched: '' };
   const hasLocation = item.locationEvidenceConfirmed !== false && (
     Boolean(String(item.address || item.area || item.district || '').trim())
@@ -1038,7 +1038,11 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
   const sourceQualityHardBlocked = sourceQuality.suppressed && !lowSignalOnlySuppressed;
   const positiveGateHardBlocked = positiveListingGate.reason === 'not_a_listing'
     || positiveListingGate.reason === NON_TARGET_LOCATION_REASON;
-  const integrityHardBlocked = dataIntegrity.issue_codes.includes('unsupported_hospitality_or_nightly');
+  const integrityHardBlockReason = dataIntegrity.issue_codes.find((code) => [
+    'unsupported_hospitality_or_nightly',
+    'not_a_specific_property_listing',
+  ].includes(code)) || '';
+  const integrityHardBlocked = Boolean(integrityHardBlockReason);
   const manualExactSocialIntake = isManualExactSocialIntake(item);
   const specificPropertySignal = hasSpecificPropertySignal(item);
   const pureHashtagJunk = isPureHashtagSourceJunk(item);
@@ -1069,7 +1073,7 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
     !dateWindowAllowsQueue ? 'before_2026_automated_source_window' : '',
     sourceQualityHardBlocked ? (sourceQuality.reason || 'non_listing_source_content') : '',
     positiveGateHardBlocked ? (positiveListingGate.reason || 'not_a_listing') : '',
-    integrityHardBlocked ? 'unsupported_hospitality_or_nightly' : '',
+    integrityHardBlocked ? integrityHardBlockReason : '',
     pureHashtagJunk ? 'pure_hashtag_source_junk' : '',
   ].filter(Boolean);
   return {
