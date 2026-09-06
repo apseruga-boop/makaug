@@ -194,11 +194,17 @@ function normalizePlatform(value = '') {
 }
 
 function envBearerToken(env = process.env) {
-  for (const name of X_BEARER_ENV_NAMES) {
+  return envBearerTokens(env)[0] || { name: '', token: '' };
+}
+
+function envBearerTokens(env = process.env) {
+  const seen = new Set();
+  return X_BEARER_ENV_NAMES.flatMap((name) => {
     const token = String(env[name] || '').trim();
-    if (token) return { name, token };
-  }
-  return { name: '', token: '' };
+    if (!token || seen.has(token)) return [];
+    seen.add(token);
+    return [{ name, token }];
+  });
 }
 
 function envYouTubeApiKey(env = process.env) {
@@ -3917,11 +3923,15 @@ async function fetchXPostMetadata(url = '', {
 
 async function fetchXSearchJob(job = {}, {
   bearerToken = '',
+  bearerTokens = [],
   maxResults = DEFAULT_X_RESULTS_PER_SOURCE,
   searchMode = 'all',
   fetchImpl = fetch,
 } = {}) {
-  if (!bearerToken) {
+  const tokenCandidates = [...new Set([bearerToken, ...(Array.isArray(bearerTokens) ? bearerTokens : [])]
+    .map((value) => cleanText(value))
+    .filter(Boolean))];
+  if (!tokenCandidates.length) {
     return {
       ok: false,
       skipped: true,
@@ -3939,22 +3949,31 @@ async function fetchXSearchJob(job = {}, {
   url.searchParams.set('media.fields', 'media_key,type,url,preview_image_url,width,height');
   if (searchMode === 'recent' && job.since_id) url.searchParams.set('since_id', String(job.since_id));
   if (searchMode !== 'recent') url.searchParams.set('start_time', job.start_time || LAUNCH_SOURCE_POST_WINDOW_START);
-  const response = await fetchImpl(url, {
-    headers: { Authorization: `Bearer ${bearerToken}` },
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
+  let response;
+  let payload = {};
+  let credentialAttempts = 0;
+  for (const token of tokenCandidates) {
+    credentialAttempts += 1;
+    response = await fetchImpl(url, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    payload = await response.json().catch(() => ({}));
+    if (response.ok || ![401, 403].includes(response.status)) break;
+  }
+  if (!response?.ok) {
     return {
       ok: false,
-      status: response.status,
+      status: response?.status || 0,
       reason: payload?.title || payload?.detail || payload?.error || 'x_api_search_failed',
       errors: payload?.errors || [],
+      credential_attempts: credentialAttempts,
       posts: [],
     };
   }
   const rows = Array.isArray(payload.data) ? payload.data : [];
   return {
     ok: true,
+    credential_attempts: credentialAttempts,
     result_count: rows.length,
     posts: rows.map((tweet) => normalizeXApiPost(tweet, payload.includes || {}, job)).filter((post) => post.source_url),
     meta: payload.meta || {},
@@ -4038,6 +4057,7 @@ async function fetchXPostsForJobs(jobs = [], options = {}) {
       since_id: job.since_id || '',
       newest_id: report.meta?.newest_id || '',
       error_count: Array.isArray(report.errors) ? report.errors.length : 0,
+      credential_attempts: Number(report.credential_attempts || 0),
     });
     posts.push(...(report.posts || []));
     if (timedOut) break;
@@ -4847,7 +4867,8 @@ async function runSocialPlatformPostSweep({
       });
     }
   }
-  const bearer = envBearerToken(env);
+  const bearerCandidates = envBearerTokens(env);
+  const bearer = bearerCandidates[0] || { name: '', token: '' };
   let xFetch = {
     api_configured: Boolean(bearer.token),
     token_env: bearer.name || '',
@@ -4862,6 +4883,7 @@ async function runSocialPlatformPostSweep({
   if (requestedPlatforms.includes('x') && fetchX && bearer.token && xSearchJobs.length) {
     const fetched = await fetchXPostsForJobs(xSearchJobs, {
       bearerToken: bearer.token,
+      bearerTokens: bearerCandidates.map((candidate) => candidate.token),
       maxResults: resultLimit,
       searchMode,
       fetchImpl: sweepFetchImpl,
@@ -5205,6 +5227,7 @@ module.exports = {
   YOUTUBE_SOURCE_TEXT_ENRICHMENT_VERSION,
   YOUTUBE_API_KEY_ENV_NAMES,
   X_BEARER_ENV_NAMES,
+  envBearerTokens,
   X_TWEET_LOOKUP_URL,
   META_GRAPH_ACCESS_TOKEN_ENV_NAMES,
   FACEBOOK_PAGE_ID_ENV_NAMES,

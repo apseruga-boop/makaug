@@ -10,6 +10,7 @@ const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 const {
   buildXSearchJobs,
   fetchXPostsForJobs,
+  envBearerTokens,
   runSocialPlatformPostSweep,
   X_FULL_ARCHIVE_SEARCH_PACING_MS,
 } = require('../services/socialPlatformPostDiscoveryService');
@@ -91,6 +92,15 @@ async function main() {
   assert(socialDiscoveryService.includes('const xSourceWindow = rotatingSourceWindow(xSources'), 'X sweep should walk source offsets through the rotating source window');
   assert(socialDiscoveryService.includes('buildXSearchJobs({ sources: xSourceWindow.sources'), 'X sweep should build X jobs from the offset-selected source window');
 
+  assert.deepStrictEqual(
+    envBearerTokens({ X_BEARER_TOKEN: 'stale', TWITTER_BEARER_TOKEN: 'working', X_API_BEARER_TOKEN: 'working' }),
+    [
+      { name: 'X_BEARER_TOKEN', token: 'stale' },
+      { name: 'TWITTER_BEARER_TOKEN', token: 'working' },
+    ],
+    'X credential discovery should retain distinct fallback tokens without retrying duplicates'
+  );
+
   const xSources = getPropertySourceRegistry().filter((source) => String(source.platform || '').toLowerCase() === 'x');
   assert(xSources.length > 100, 'registry should have enough X sources for offset walking');
   const firstBatch = buildXSearchJobs({ sources: xSources.slice(0, 5), limit: 5 });
@@ -166,6 +176,26 @@ async function main() {
   });
   assert.strictEqual(callTimes.length, 2, 'full-archive pacing test should make two calls');
   assert(callTimes[1] - callTimes[0] >= 8, 'full-archive calls should be spaced apart instead of fired back-to-back');
+
+  const authHeaders = [];
+  const fallbackResult = await fetchXPostsForJobs([
+    { query: 'Uganda property has:media -is:retweet', source_key: 'x-token-fallback', source_registry_offset: 3 },
+  ], {
+    bearerToken: 'stale-token',
+    bearerTokens: ['stale-token', 'working-token'],
+    maxResults: 10,
+    searchMode: 'recent',
+    fetchImpl: async (_url, options = {}) => {
+      authHeaders.push(options.headers.Authorization);
+      if (options.headers.Authorization === 'Bearer stale-token') {
+        return { ok: false, status: 401, json: async () => ({ title: 'Unauthorized' }) };
+      }
+      return { ok: true, status: 200, json: async () => ({ data: [], meta: {} }) };
+    },
+  });
+  assert.deepStrictEqual(authHeaders, ['Bearer stale-token', 'Bearer working-token'], 'X search should retry an alternate configured bearer only after an auth failure');
+  assert.strictEqual(fallbackResult.reports[0].ok, true, 'a working fallback bearer should recover the X job');
+  assert.strictEqual(fallbackResult.reports[0].credential_attempts, 2, 'X report should expose the number of credential attempts without exposing secrets');
 
   console.log('ok - X source drip scheduler, cursor, controls, and backoff guards are wired');
 }
