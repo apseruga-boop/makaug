@@ -14,7 +14,6 @@ const {
 
 const LEGACY_SOURCED_INVENTORY_CANDIDATE_SOURCE = 'sourced_inventory_candidate_v1';
 const DEFAULT_HASHTAG = 'ugandarealestate';
-const DEFAULT_HASHTAG_SEQUENCE_LIMIT = 100;
 const SCOUT_PRIORITY_HASHTAGS = [
   'ugandarealestate',
   'realestateuganda',
@@ -127,7 +126,8 @@ const SCOUT_PRIORITY_HASHTAGS = [
 const DEFAULT_HASHTAG_SEQUENCE = uniqueNormalizedHashtags([
   ...SCOUT_PRIORITY_HASHTAGS,
   ...PROPERTY_HASHTAG_WATCHLIST,
-]).slice(0, DEFAULT_HASHTAG_SEQUENCE_LIMIT);
+]);
+const DEFAULT_HASHTAG_SEQUENCE_LIMIT = DEFAULT_HASHTAG_SEQUENCE.length;
 const DEFAULT_LIVE_LIMIT = 5;
 const DEFAULT_REVIEW_LIMIT = 100;
 const MAX_SCAN_LIMIT = 250;
@@ -144,7 +144,7 @@ const AGENT_VISUAL_PROFILE = {
   role: 'TikTok property scout and review-queue assistant',
   avatar_prompt: 'A warm, sharp Uganda property scout AI wearing a clean green Makaug jacket, holding a phone and map pin, friendly but professional.',
   chat_route: AGENT_CHAT_ROUTE,
-  status_label: 'Scans one TikTok hashtag at a time, sends every candidate to human review, and stops at 100 review items.',
+  status_label: `Scans one TikTok hashtag at a time across all ${DEFAULT_HASHTAG_SEQUENCE_LIMIT} tracked tags, sends every candidate to human review, and stops when the review queue reaches its safety cap.`,
 };
 
 const REVIEW_STATUSES = [
