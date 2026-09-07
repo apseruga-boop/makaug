@@ -11,10 +11,19 @@ function createWhatsappPairingRecovery(options = {}) {
   let lastAttemptAt = 0;
 
   return {
-    plan({ now = Date.now(), waitingForLogin = false, pairingCodeVisible = false } = {}) {
+    plan({
+      now = Date.now(),
+      waitingForLogin = false,
+      pairingCodeVisible = false,
+      pairingRateLimited = false
+    } = {}) {
       if (!waitingForLogin) {
         lastAttemptAt = 0;
         return { shouldAttempt: false, state: 'not_waiting_for_login', retryAfterMs: 0 };
+      }
+
+      if (pairingRateLimited) {
+        return { shouldAttempt: false, state: 'pairing_rate_limited', retryAfterMs: 0 };
       }
 
       if (pairingCodeVisible) {

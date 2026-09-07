@@ -57,4 +57,20 @@ assert.strictEqual(blocked.ok, false);
 assert.strictEqual(blocked.status, 'blocked');
 assert.strictEqual(blocked.reason, 'status_waiting_for_login');
 
+const rateLimited = evaluateHostedWhatsappBridgeReadiness([{
+  ...hostedWaitingForLogin,
+  status: 'pairing_rate_limited',
+  metadata: {
+    ...hostedWaitingForLogin.metadata,
+    ready_state: {
+      ...hostedWaitingForLogin.metadata.ready_state,
+      pairingRateLimited: true
+    }
+  }
+}], { now });
+
+assert.strictEqual(rateLimited.ok, false);
+assert.strictEqual(rateLimited.status, 'blocked');
+assert.strictEqual(rateLimited.reason, 'status_pairing_rate_limited');
+
 console.log('WhatsApp bridge readiness fallback ok');
