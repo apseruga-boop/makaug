@@ -255,7 +255,7 @@ function buildIntentLink(intent) {
     'property_need_request',
     'looking_for_property_lead'
   ].includes(key)) return `${PUBLIC_BASE_URL}/#page-sale`;
-  if (key === 'property_listing') return `${PUBLIC_BASE_URL}/#page-list-property`;
+  if (key === 'property_listing') return `${PUBLIC_BASE_URL}/list-property?mode=online`;
   if (key === 'agent_search') return `${PUBLIC_BASE_URL}/#page-brokers`;
   if (key === 'agent_registration') return `${PUBLIC_BASE_URL}/broker-signup`;
   if (key === 'mortgage_help') return `${PUBLIC_BASE_URL}/#page-mortgage`;
