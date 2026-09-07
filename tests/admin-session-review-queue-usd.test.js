@@ -108,6 +108,8 @@ test('command-centre isolates optional metric failures instead of returning 500'
 
   assert.match(admin, /const logger = require\('\.\.\/config\/logger'\);/);
   assert.match(admin, /async function adminCommandCentreMetric\(/);
+  assert.match(admin, /ADMIN_COMMAND_CENTRE_METRIC_CONCURRENCY = 4/);
+  assert.match(admin, /withAdminCommandCentreMetricSlot\(producer\)/);
   assert.match(admin, /admin-command-centre-v5-partial-safe/);
   assert.match(admin, /partial: metricFallbacks\.length > 0/);
   assert.match(admin, /metric_fallbacks: metricFallbacks/);

@@ -2092,11 +2092,29 @@ async function safeCount(sql, values = [], options = {}) {
   return Number(row.total || 0);
 }
 
+const ADMIN_COMMAND_CENTRE_METRIC_CONCURRENCY = 4;
+let adminCommandCentreMetricActive = 0;
+const adminCommandCentreMetricWaiters = [];
+
+async function withAdminCommandCentreMetricSlot(producer) {
+  if (adminCommandCentreMetricActive >= ADMIN_COMMAND_CENTRE_METRIC_CONCURRENCY) {
+    await new Promise((resolve) => adminCommandCentreMetricWaiters.push(resolve));
+  }
+  adminCommandCentreMetricActive += 1;
+  try {
+    return await producer();
+  } finally {
+    adminCommandCentreMetricActive = Math.max(0, adminCommandCentreMetricActive - 1);
+    const next = adminCommandCentreMetricWaiters.shift();
+    if (next) next();
+  }
+}
+
 async function adminCommandCentreMetric(key, producer, fallback = 0) {
   try {
     return {
       key,
-      value: Number(await producer()) || 0,
+      value: Number(await withAdminCommandCentreMetricSlot(producer)) || 0,
       fallback_reason: null
     };
   } catch (error) {
