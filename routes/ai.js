@@ -1126,8 +1126,10 @@ router.post('/assistant-reply', async (req, res, next) => {
       || sourceKey === 'discover_ai_chatbot'
       || sourceKey.includes('ask_ai');
     const inferredIntent = inferAssistantIntentFromMessage(userMessage, requestedIntent);
-    const effectiveIntent = ['off_plan_search', 'off_plan_listing'].includes(normalizeAssistantIntent(inferredIntent))
-      ? normalizeAssistantIntent(inferredIntent)
+    const normalizedInferredIntent = normalizeAssistantIntent(inferredIntent);
+    const cleanBarExplicitActionIntents = ['off_plan_search', 'off_plan_listing', 'property_listing'];
+    const effectiveIntent = cleanBarExplicitActionIntents.includes(normalizedInferredIntent)
+      ? normalizedInferredIntent
       : cleanBarSearchOnly && !isAssistantSearchIntent(requestedIntent)
         ? inferAssistantIntentFromMessage(userMessage, 'search_property')
         : inferredIntent;
