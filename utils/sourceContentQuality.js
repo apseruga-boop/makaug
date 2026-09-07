@@ -100,6 +100,32 @@ function jsonText(value) {
   }
 }
 
+function rawSourceEvidenceText(raw = {}) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return '';
+  const searchSnippet = raw.youtube_search_item?.snippet || {};
+  const detailSnippet = raw.youtube_video_details?.snippet || raw.video_details?.snippet || {};
+  const nested = raw.raw_source_post && raw.raw_source_post !== raw
+    ? rawSourceEvidenceText(raw.raw_source_post)
+    : '';
+  return [
+    raw.title,
+    raw.source_title,
+    raw.caption,
+    raw.description,
+    raw.source_text,
+    raw.source_visual_text,
+    raw.comments,
+    raw.youtube_top_comments,
+    searchSnippet.title,
+    searchSnippet.description,
+    Array.isArray(searchSnippet.tags) ? searchSnippet.tags.join(' ') : '',
+    detailSnippet.title,
+    detailSnippet.description,
+    Array.isArray(detailSnippet.tags) ? detailSnippet.tags.join(' ') : '',
+    nested,
+  ].map(compactText).filter(Boolean).join(' ');
+}
+
 function sourceQualityText(record = {}) {
   const extra = record.extra_fields && typeof record.extra_fields === 'object' && !Array.isArray(record.extra_fields)
     ? record.extra_fields
@@ -131,7 +157,10 @@ function sourceQualityText(record = {}) {
     extra.source_text,
     extra.source_visual_text,
     extra.youtube_source_title,
-    jsonText(extra.raw_source_post),
+    // Discovery job/query terms are not source evidence. Include only the
+    // returned post's own text so a hashtag/search term cannot manufacture a
+    // property signal for unrelated YouTube content.
+    rawSourceEvidenceText(extra.raw_source_post),
   ].map(compactText).filter(Boolean).join(' ');
 }
 
