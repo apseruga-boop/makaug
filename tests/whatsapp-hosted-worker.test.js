@@ -56,14 +56,16 @@ assert(agentScript.includes('...hostedRuntimeMetadata()'), 'Every heartbeat must
 assert(agentScript.includes('captureLoginScreenshotDataUrl(page)'), 'Hosted worker must capture a protected login screenshot while WhatsApp is not ready');
 assert(agentScript.includes('refreshWhatsappLoginQrIfNeeded(page)'), 'Hosted worker must refresh stale WhatsApp login QR codes before screenshot heartbeats');
 assert(agentScript.includes('select to reload qr code') && agentScript.includes('clicked_reload_qr'), 'Hosted worker must detect and click WhatsApp reload-QR prompts');
-assert(agentScript.includes('startWhatsappPhonePairingIfConfigured(page)'), 'Hosted worker must support WhatsApp phone-number pairing when QR linking fails');
+assert(agentScript.includes('startWhatsappPhonePairingIfConfigured(page'), 'Hosted worker must support WhatsApp phone-number pairing when QR linking fails');
 assert(agentScript.includes('WHATSAPP_WEB_COPILOT_PAIRING_PHONE') && agentScript.includes('log in with phone number'), 'Phone pairing must use the configured private phone number and click the WhatsApp phone login path');
 assert(agentScript.includes('clickWhatsappPhoneLoginLink(page)') && agentScript.includes('getByRole'), 'Phone pairing must use Playwright locator clicks for the login link');
-assert(agentScript.includes('submitWhatsappPhonePairingWithPlaywright(page)') && agentScript.includes('phone_fill_did_not_stick'), 'Phone pairing must fill and submit the phone form with Playwright and report fill failures');
+assert(agentScript.includes('submitWhatsappPhonePairingWithPlaywright(page') && agentScript.includes('phone_fill_did_not_stick'), 'Phone pairing must fill and submit the phone form with Playwright and report fill failures');
 assert(agentScript.includes('pairing_code_loading') && agentScript.includes("getByText(/^edit$/i)"), 'Phone pairing must recover from a stuck loading code screen by editing and resubmitting');
 assert(agentScript.includes('phonePairingRecovery.plan') && pairingRecovery.includes('pairing_retry_backoff'), 'Phone pairing recovery must be rate limited between login heartbeats');
 assert(agentScript.includes('pairingCodeVisible') && agentScript.includes("stable: pairingPlan.state === 'pairing_code_visible'"), 'A visible phone pairing code must remain stable while waiting for an operator');
 assert(!agentScript.includes('submitted WhatsApp phone pairing with Playwright'), 'Logs must not claim a phone pairing submission when only a code is visible');
+assert(agentScript.includes('WHATSAPP_WEB_COPILOT_PAIRING_REFRESH_NONCE') && agentScript.includes('.makaug-pairing-refresh-nonce'), 'Operators must be able to request exactly one fresh pairing code across worker restarts');
+assert(agentScript.includes('forceRefresh: forcePairingRefreshNow') && agentScript.includes('markPairingRefreshNonceConsumed()'), 'A pairing refresh nonce must force one resubmission and then persist its consumed state');
 assert(agentScript.includes('phonePairingPrompt') && agentScript.includes('enter code on phone'), 'Readiness detection must treat phone-code screens as login states');
 assert(agentScript.includes('phone_form_not_visible_after_click'), 'Phone pairing must not claim submission if the phone form never appears');
 assert(agentScript.includes("text.includes('code on your phone')"), 'Phone pairing detection must require real pairing-code copy, not QR-screen text');
