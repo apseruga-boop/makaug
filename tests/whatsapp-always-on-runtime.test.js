@@ -100,6 +100,8 @@ async function run() {
   assert(serverSource.includes("...(!IS_SOUTH_AFRICA ? ['makaug-always-on-whatsapp-runtime-20260814'] : [])"), 'release marker must remain Uganda-only');
   assert(routeSource.includes("const WHATSAPP_PROVIDER_SCOPE = 'whatsapp'") && routeSource.includes('providerScope: WHATSAPP_PROVIDER_SCOPE'), 'all WhatsApp AI calls must opt into the isolated provider scope');
   assert(uptimeWorkflow.includes('cron: "*/5 * * * *"') && uptimeWorkflow.includes('makaug-whatsapp-ai-runtime.onrender.com/ready'), 'an external five-minute monitor must verify both AI runtime and transport-worker readiness');
+  assert(uptimeWorkflow.includes('issues: write') && uptimeWorkflow.includes('[Incident] MakaUG WhatsApp bot is offline'), 'a failed uptime check must create a visible, deduplicated incident');
+  assert(uptimeWorkflow.includes('if: success()') && uptimeWorkflow.includes("state: 'closed'"), 'a recovered uptime check must close the WhatsApp incident');
 
   const seo = require('../services/publicSeoService');
   seo.__seoSnapshotCache.clear();
