@@ -54,6 +54,10 @@ const {
   deriveListingClassification,
   listingDataIntegrityReport,
 } = require('../utils/listingDataIntegrity');
+const {
+  postgresSafeJsonStringify,
+  truncateUnicode,
+} = require('../utils/postgresJson');
 
 const ACTIVE_COUNTRY_CODE = String(process.env.COUNTRY_CODE || 'UG').trim().toUpperCase();
 const IS_SOUTH_AFRICA = ACTIVE_COUNTRY_CODE === 'ZA';
@@ -634,7 +638,7 @@ function cleanSourceListingTitle(value = '', fallback = 'Property listing') {
     .replace(/\s+/g, ' ')
     .replace(/^[\s,.;:–—-]+|[\s,.;:–—-]+$/g, '')
     .trim();
-  return (cleaned || compactText(fallback) || 'Property listing').slice(0, 180);
+  return truncateUnicode(cleaned || compactText(fallback) || 'Property listing', 180);
 }
 
 function asTextArray(value = []) {
@@ -2192,10 +2196,10 @@ function buildSocialSearchListing(item, agentId = null) {
     id_document_name: null,
     id_document_url: null,
     new_until: new Date(Date.now() + (30 * 24 * 60 * 60 * 1000)),
-    amenities: JSON.stringify(item.listingType === 'land'
+    amenities: postgresSafeJsonStringify(item.listingType === 'land'
       ? ['Found online', 'Road access to verify', 'Title to verify', 'Agent follow-up required']
       : ['Found online', `${sourcePlatformFor(agent, item)} source evidence`, 'Agent follow-up required', 'HD photos to verify']),
-    extra_fields: JSON.stringify({
+    extra_fields: postgresSafeJsonStringify({
       ...extraFieldsFor(item, agentId),
       price_quality: priceQuality,
       data_integrity_review: dataIntegrity
@@ -2395,7 +2399,7 @@ async function insertListing(client, listing, agentId) {
      SET extra_fields = COALESCE(extra_fields, '{}'::jsonb)
        || $2::jsonb
      WHERE id = $1`,
-    [propertyId, JSON.stringify(extraFieldsFor(listing.source_item, agentId, propertyUrl, ownerPreviewUrl))]
+    [propertyId, postgresSafeJsonStringify(extraFieldsFor(listing.source_item, agentId, propertyUrl, ownerPreviewUrl))]
   );
 
   await client.query(
@@ -2407,7 +2411,7 @@ async function insertListing(client, listing, agentId) {
       'always_on_harvest_engine',
       'harvested_listing_created_for_review',
       listing.status || 'pending',
-      JSON.stringify({
+      postgresSafeJsonStringify({
         found_online_candidate: true,
         social_search_candidate: true,
         found_online: true,
@@ -2423,7 +2427,7 @@ async function insertListing(client, listing, agentId) {
       }),
       listing.moderation_reason,
       listing.moderation_notes,
-      JSON.stringify({
+      postgresSafeJsonStringify({
         batch_id: itemBatchId(listing.source_item),
         property_url: propertyUrl,
         owner_preview_url: ownerPreviewUrl,
@@ -3741,7 +3745,7 @@ async function updateExistingFoundOnlineSourcePostListing(client, existingRow = 
       autoLive.approved,
       listing.moderation_notes,
       listing.moderation_reason,
-      JSON.stringify(finalExtraFields),
+      postgresSafeJsonStringify(finalExtraFields),
     ]
   );
   await client.query(
@@ -3754,7 +3758,7 @@ async function updateExistingFoundOnlineSourcePostListing(client, existingRow = 
       autoLive.approved ? 'youtube_hashtag_backlog_enriched_auto_live' : 'youtube_hashtag_backlog_enriched_pending',
       existingRow.status || 'pending',
       listing.status || 'pending',
-      JSON.stringify({
+      postgresSafeJsonStringify({
         found_online_candidate: true,
         social_search_candidate: true,
         reprocessed_existing_source_post: true,
@@ -3769,7 +3773,7 @@ async function updateExistingFoundOnlineSourcePostListing(client, existingRow = 
       }),
       listing.moderation_reason,
       listing.moderation_notes,
-      JSON.stringify({
+      postgresSafeJsonStringify({
         property_url: propertyUrl,
         owner_preview_url: ownerPreviewUrl,
         agent_id: agentId,
@@ -3812,7 +3816,7 @@ async function markExistingFoundOnlineSourcePostEnrichedPending(client, existing
      RETURNING id::text AS id, title, status, moderation_stage`,
     [
       existingRow.id,
-      JSON.stringify(finalExtraFields),
+      postgresSafeJsonStringify(finalExtraFields),
       reason || 'Still pending after YouTube source text enrichment; source evidence is not specific enough for auto-live.',
     ]
   );
@@ -3826,7 +3830,7 @@ async function markExistingFoundOnlineSourcePostEnrichedPending(client, existing
       'youtube_hashtag_backlog_enriched_pending',
       existingRow.status || 'pending',
       existingRow.status || 'pending',
-      JSON.stringify({
+      postgresSafeJsonStringify({
         found_online_candidate: true,
         social_search_candidate: true,
         reprocessed_existing_source_post: true,
@@ -3841,7 +3845,7 @@ async function markExistingFoundOnlineSourcePostEnrichedPending(client, existing
       }),
       reason || 'Still pending after YouTube source text enrichment.',
       `YouTube source text/comments were enriched, but this row remains pending because it does not meet the auto-live gate. Source: ${sourceUrlForItem(item)}.`,
-      JSON.stringify({
+      postgresSafeJsonStringify({
         property_url: propertyUrl,
         owner_preview_url: ownerPreviewUrl,
         agent_id: agentId,
