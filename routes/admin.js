@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 
 const db = require('../config/database');
+const logger = require('../config/logger');
 const { requireAdminApiKey } = require('../middleware/auth');
 const { asArray, cleanText, toNullableInt, toNullableFloat, isValidEmail, isValidPhone } = require('../middleware/validation');
 const { parsePagination, toPagination } = require('../utils/pagination');
@@ -42,7 +43,10 @@ const {
   normalizeReviewChecklist,
   ownerEditTokenExpiry
 } = require('../services/listingModerationService');
-const { loadHarvestSummary } = require('../services/propertyHarvestMonitoringService');
+const {
+  loadHarvestSummary,
+  recordHarvestImportResult,
+} = require('../services/propertyHarvestMonitoringService');
 const {
   KING_HARVEST_ROUTE_CONTRACT_MARKER,
   listHarvestCreators,
@@ -4916,6 +4920,11 @@ router.post('/exact-social-source-posts/import', async (req, res, next) => {
       fetchPublicMetadata,
       skipImageHashLookup: dryRun || preparedFromPreview
     });
+    if (!dryRun) {
+      await recordHarvestImportResult(db, result, { eventType: 'exact_social_import' }).catch((error) => {
+        logger.warn('Admin harvest import event logging failed', { message: error.message });
+      });
+    }
     if (!dryRun && (
       Number(result.created_properties || 0) > 0
       || Number(result.existing_properties || 0) > 0

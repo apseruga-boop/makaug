@@ -106,6 +106,7 @@ test('command-centre isolates optional metric failures instead of returning 500'
   const admin = read('routes/admin.js');
   const html = read('index.html');
 
+  assert.match(admin, /const logger = require\('\.\.\/config\/logger'\);/);
   assert.match(admin, /async function adminCommandCentreMetric\(/);
   assert.match(admin, /admin-command-centre-v5-partial-safe/);
   assert.match(admin, /partial: metricFallbacks\.length > 0/);
@@ -116,6 +117,18 @@ test('command-centre isolates optional metric failures instead of returning 500'
     'the command-centre route must roll off the all-or-nothing v4 producer'
   );
   assert.match(html, /admin-command-centre-partial-safe-20260726/);
+});
+
+test('admin exact social imports update the persisted harvest ledger', () => {
+  const admin = read('routes/admin.js');
+  const exactImportRoute = admin.slice(
+    admin.indexOf("router.post('/exact-social-source-posts/import'"),
+    admin.indexOf("router.post('/property-source-registry/seed'")
+  );
+
+  assert.match(admin, /recordHarvestImportResult/);
+  assert.match(exactImportRoute, /recordHarvestImportResult\(db, result, \{ eventType: 'exact_social_import' \}\)/);
+  assert.match(exactImportRoute, /if \(!dryRun\)/);
 });
 
 test('USD currency metadata is carried through import, API, moderation, and public UI', () => {
