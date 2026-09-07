@@ -985,6 +985,21 @@ async function startWhatsappPhonePairingIfConfigured(page, { forceRefresh = fals
       log(`acted on WhatsApp phone pairing with Playwright (${playwrightPairing.state || playwrightPairing.reason || 'unknown'}).`);
     }
 
+    // After Playwright submits the phone form, WhatsApp may be navigating or
+    // rendering the pairing-code screen. Re-entering page.evaluate during that
+    // transition can hang the bridge before it sends the next heartbeat. The
+    // DOM fallback below is only needed when the real Playwright interaction
+    // could not act on the login form.
+    if (playwrightPairing.attempted || playwrightPairing.state === 'pairing_code_visible') {
+      return {
+        attempted: !!playwrightPairing.attempted,
+        state: playwrightPairing.state || null,
+        reason: playwrightPairing.reason || null,
+        playwright_pairing: playwrightPairing,
+        phone_masked: maskPhoneNumber(PAIRING_PHONE_NUMBER)
+      };
+    }
+
     const result = await page.evaluate(async ({ phone, clickedPhoneLogin, playwrightPairing, forceRefresh }) => {
       const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
       const normalize = (value) => String(value || '').replace(/\s+/g, ' ').trim();
