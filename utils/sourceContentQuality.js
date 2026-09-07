@@ -26,11 +26,12 @@ const UGANDA_DISTRICT_SET = new Set(
   (IS_SOUTH_AFRICA ? activeLocationRegistry.PROVINCES || [] : DISTRICTS)
     .map((district) => district.toLowerCase())
 );
-const POSITIVE_PROPERTY_NOUN_PATTERN = /\b(?:bedroom|bdrm|beds?|plots?|land|acres?|house|home|apartment|studio|rental|hostel|shop|office|warehouse|duplex|bungalow|mansion|condo|villa|villas|townhouse|townhouses|self[-\s]*contained|single\s+room|double\s+room|bedsitter|bed\s*sitter|roommate|non[-\s]*residential|residential\s+hostel)\b/i;
-const POSITIVE_LISTING_INTENT_WITH_NOUN_PATTERN = /\b(?:for\s+sale|on\s+sale|for\s+rent|to\s+let|to\s+rent|selling|available\s+(?:for\s+)?(?:sale|rent|lease))\b[\s\S]{0,80}\b(?:bedroom|bdrm|beds?|plots?|land|acres?|house|home|apartment|studio|rental|hostel|shop|office|warehouse|duplex|bungalow|mansion|condo|villa|villas|townhouse|townhouses|self[-\s]*contained|single\s+room|double\s+room|bedsitter|bed\s*sitter|roommate|non[-\s]*residential|residential\s+hostel)\b|\b(?:bedroom|bdrm|beds?|plots?|land|acres?|house|home|apartment|studio|rental|hostel|shop|office|warehouse|duplex|bungalow|mansion|condo|villa|villas|townhouse|townhouses|self[-\s]*contained|single\s+room|double\s+room|bedsitter|bed\s*sitter|roommate|non[-\s]*residential|residential\s+hostel)\b[\s\S]{0,80}\b(?:for\s+sale|on\s+sale|for\s+rent|to\s+let|to\s+rent|selling|available\s+(?:for\s+)?(?:sale|rent|lease))\b/i;
+const POSITIVE_PROPERTY_NOUN_PATTERN = /\b(?:bedrooms?|bdrm|beds?|plots?|land|acres?|houses?|homes?|apartments?|studios?|rentals?|hostels?|shops?|offices?|warehouses?|duplex(?:es)?|bungalows?|mansions?|condos?|villas?|townhouses?|self[-\s]*contained|single\s+room|double\s+room|bedsitter|bed\s*sitter|roommate|non[-\s]*residential|residential\s+hostel)\b/i;
+const POSITIVE_LISTING_INTENT_WITH_NOUN_PATTERN = /\b(?:for\s+sale|on\s+sale|for\s+rent|to\s+let|to\s+rent|selling|available\s+(?:for\s+)?(?:sale|rent|lease))\b[\s\S]{0,80}\b(?:bedrooms?|bdrm|beds?|plots?|land|acres?|houses?|homes?|apartments?|studios?|rentals?|hostels?|shops?|offices?|warehouses?|duplex(?:es)?|bungalows?|mansions?|condos?|villas?|townhouses?|self[-\s]*contained|single\s+room|double\s+room|bedsitter|bed\s*sitter|roommate|non[-\s]*residential|residential\s+hostel)\b|\b(?:bedrooms?|bdrm|beds?|plots?|land|acres?|houses?|homes?|apartments?|studios?|rentals?|hostels?|shops?|offices?|warehouses?|duplex(?:es)?|bungalows?|mansions?|condos?|villas?|townhouses?|self[-\s]*contained|single\s+room|double\s+room|bedsitter|bed\s*sitter|roommate|non[-\s]*residential|residential\s+hostel)\b[\s\S]{0,80}\b(?:for\s+sale|on\s+sale|for\s+rent|to\s+let|to\s+rent|selling|available\s+(?:for\s+)?(?:sale|rent|lease))\b/i;
 const POSITIVE_PROPERTY_COUNT_PATTERN = /\b\d+(?:\.\d+)?\s*(?:bed(?:room)?s?|bdrm|plots?|acres?|rooms?)\b|\b(?:bed(?:room)?s?|bdrm|plots?|acres?|rooms?)\s*\d+(?:\.\d+)?\b|\b(?:single\s+room|double\s+room|self[-\s]*contained|bedsitter|bed\s*sitter|per\s+semester)\b/i;
 const POSITIVE_FOREIGN_LOCATION_PATTERN = /(^|\b)(ajah|lekki|ibeju|lagos|abuja|ikeja|ikoyi|nigeria|naira|nairobi|mombasa|kenya|accra|ghana|east\s+legon|dar\s+es\s+salaam|tanzania|kigali|rwanda|johannesburg|cape\s+town|south\s+africa|dubai|uae|texas|florida|london|uk|canada|portugal|golden\s+visa|passport|citizenship|residency|owerri|asaba|enugu|awka|onitsha|nnewi|imo|anambra|delta\s+state|edo|certificate\s+of\s+occupancy|ibusa|apogazi|avu|sangotedo|ibeju|eneka|port\s+harcourt|gra\s+phase|ph\s+city|shell\s+cooperative\s+estate|cooperative\s+estate\s+ph|kolkata|west\s+bengal|bengal|warangal|hanumakonda|telugu|hyderabad|telangana|andhra\s+pradesh|mumbai|delhi|new\s+delhi|delhi\s+ncr|chennai|tamil\s+nadu|pune|india|indian\s+real\s+estate|lahore|karachi|islamabad|rawalpindi|pakistan|marla|ranchi|jharkhand|usha\s+martin\s+university|munnar|lakshmi|viripara|kerala|decimal|decimals|cent|cents|gunta|bigha|katha|lakh|lakhs|crore|crores|sobha|emaar|damac|rwf|kanombe|ada\s+george|aluu|omoko|rivers\s+state|ksh|tzs|ota|sango|ogun|ogborhill|aba|abia|cantonment|trasacco|murakaza\s+neza|tubafitiye|turabafitiye)(\b|$)|\bc\s*(?:of|\/|-)\s*o\b|\b(?:apogazi\s+nike|nike\s+enugu)\b|\b[1-9]\s*bhk\b|\b\d+\s*(?:marla|decimals?)\b|\+233\b|\+234\b|\+91\b|\u20a6|\u20b9|[\u0900-\u097f\u0b80-\u0bff]/i;
 const EXPLICIT_FOREIGN_PROPERTY_SIGNAL_PATTERN = /\b(?:ajah|lekki|ibeju|lagos|abuja|ikeja|ikoyi|nigeria|nairobi|mombasa|kenya|accra|ghana|east\s+legon|dar\s+es\s+salaam|tanzania|kigali|rwanda|johannesburg|cape\s+town|south\s+africa|dubai|uae|texas|florida|london|united\s+kingdom|canada|portugal|owerri|asaba|enugu|awka|onitsha|nnewi|port\s+harcourt|kolkata|west\s+bengal|warangal|hyderabad|telangana|mumbai|delhi|chennai|tamil\s+nadu|pune|india|lahore|karachi|islamabad|rawalpindi|pakistan|ranchi|jharkhand|kerala|rwf|frw|ksh|kes|tzs|ngn|inr|gbp)\b|\+233\b|\+234\b|\+91\b|₦|₹|[\u0900-\u097f\u0b80-\u0bff]/i;
+const US_STATE_ADDRESS_PATTERN = /,\s*(?:AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY)\b/;
 const SOUTH_AFRICA_FOREIGN_PROPERTY_PATTERN = /\b(?:uganda|kampala|wakiso|kenya|nairobi|mombasa|rwanda|kigali|tanzania|dar\s+es\s+salaam|nigeria|lagos|abuja|ghana|accra|india|mumbai|delhi|pakistan|lahore|dubai|uae|united\s+states|usa|united\s+kingdom|canada|rwf|frw|ksh|kes|ugx|ush|tzs|ngn|inr)\b|\+233\b|\+234\b|\+256\b|\+254\b|\+250\b|\+91\b|₦|₹|[\u0900-\u097f\u0b80-\u0bff]/i;
 const UGANDA_PHONE_PATTERN = /(?:\+?256[\s()-]*|(?:^|\D))0?7\d{2}[\s()-]*\d{3}[\s()-]*\d{3}(?:\D|$)/;
 const UGANDA_DOMAIN_PATTERN = /(?:https?:\/\/)?(?:[\w-]+\.)+ug(?:[/:?#]|$)/i;
@@ -135,6 +136,37 @@ function sourceQualityText(record = {}) {
   ].map(compactText).filter(Boolean).join(' ');
 }
 
+function sourceListingEvidenceText(record = {}) {
+  const extra = record.extra_fields && typeof record.extra_fields === 'object' && !Array.isArray(record.extra_fields)
+    ? record.extra_fields
+    : {};
+  const raw = extra.raw_source_post && typeof extra.raw_source_post === 'object' && !Array.isArray(extra.raw_source_post)
+    ? extra.raw_source_post
+    : {};
+  return [
+    record.title,
+    record.sourceTitle,
+    record.source_title,
+    record.caption,
+    record.description,
+    record.sourceText,
+    record.source_text,
+    record.sourceVisualText,
+    record.source_visual_text,
+    extra.source_title,
+    extra.source_caption,
+    extra.source_description,
+    extra.source_text,
+    extra.source_visual_text,
+    extra.youtube_source_title,
+    raw.title,
+    raw.caption,
+    raw.description,
+    raw.source_text,
+    raw.source_visual_text,
+  ].map(compactText).filter(Boolean).join(' ');
+}
+
 function sourceNameText(record = {}) {
   const extra = record.extra_fields && typeof record.extra_fields === 'object' && !Array.isArray(record.extra_fields)
     ? record.extra_fields
@@ -186,7 +218,7 @@ function sourceLocationText(record = {}) {
 }
 
 function sourcePositiveListingText(record = {}) {
-  return [sourceQualityText(record), sourceLocationText(record)].map(compactText).filter(Boolean).join(' ');
+  return [sourceListingEvidenceText(record), sourceLocationText(record)].map(compactText).filter(Boolean).join(' ');
 }
 
 function sourcePositiveListingTitleValues(record = {}) {
@@ -304,6 +336,11 @@ function sourceHasConcreteListingSignal(record = {}) {
   const hasPropertyNoun = POSITIVE_PROPERTY_NOUN_PATTERN.test(text);
   const hasMoneySignal = (price != null && price > 0) || MONEY_SIGNAL_PATTERN.test(text);
   const hasMetadataListingIntent = /^(sale|for_sale|rent|rental|for_rent|lease|student|commercial|land)$/.test(listingIntent);
+  const hasSpecificStructuredLocation = [record.area, record.address, record.location, record.location_label]
+    .map(compactText)
+    .some((value) => value && !locationLabelIsBroad(value));
+  const hasPropertyBusinessSource = /\b(?:propert(?:y|ies)|real\s+estate|realt(?:or|y)|homes?|land)\b/i.test(sourceNameText(record));
+  const hasLocalListingPromo = LOW_SIGNAL_PROMO_PATTERN.test(text);
   const hasSpecificPropertyType = propertyType
     && !BROAD_PROPERTY_TYPE_LABELS.has(propertyType)
     && LISTING_INTENT_PROPERTY_TYPES.has(propertyType);
@@ -312,7 +349,8 @@ function sourceHasConcreteListingSignal(record = {}) {
       || (bedrooms != null && bedrooms > 0)
       || POSITIVE_PROPERTY_COUNT_PATTERN.test(text)
       || POSITIVE_LISTING_INTENT_WITH_NOUN_PATTERN.test(text)
-      || (hasMetadataListingIntent && hasPropertyNoun)
+      || (hasMetadataListingIntent && hasPropertyNoun && hasSpecificStructuredLocation && hasPropertyBusinessSource)
+      || (hasMetadataListingIntent && hasPropertyNoun && hasLocalListingPromo)
       || (hasSpecificPropertyType && (hasMoneySignal || POSITIVE_LISTING_INTENT_WITH_NOUN_PATTERN.test(text)))
   );
 }
@@ -344,8 +382,9 @@ function sourcePositiveListingGateForRecord(record = {}) {
   }
   const foreignPropertyPattern = IS_SOUTH_AFRICA ? SOUTH_AFRICA_FOREIGN_PROPERTY_PATTERN : POSITIVE_FOREIGN_LOCATION_PATTERN;
   const explicitForeignPattern = IS_SOUTH_AFRICA ? SOUTH_AFRICA_FOREIGN_PROPERTY_PATTERN : EXPLICIT_FOREIGN_PROPERTY_SIGNAL_PATTERN;
-  const hasExplicitForeignSignal = explicitForeignPattern.test(text);
-  if (foreignPropertyPattern.test(text) && (hasExplicitForeignSignal || !hasStrongPositiveUgandaSignal)) {
+  const hasUsStateAddress = !IS_SOUTH_AFRICA && US_STATE_ADDRESS_PATTERN.test(text);
+  const hasExplicitForeignSignal = explicitForeignPattern.test(text) || hasUsStateAddress;
+  if ((foreignPropertyPattern.test(text) || hasUsStateAddress) && (hasExplicitForeignSignal || !hasStrongPositiveUgandaSignal)) {
     return {
       ok: false,
       reason: NON_TARGET_LOCATION_REASON,

@@ -395,6 +395,48 @@ async function run() {
   assert.strictEqual(publicHealthClip.ok, false, 'public-health/news-framed clips must not pass as listings');
   assert.strictEqual(publicHealthClip.reason, 'not_a_listing');
 
+  const discoveryQueryContaminationCases = [
+    {
+      title: 'TCHIKA TCHIKA — TCHIKI TCHIKI — BOOM BOOM — TAKA TAKA — DUTY FRUTY!',
+      listing_type: 'land',
+    },
+    {
+      title: 'Chimpanzees in Uganda kill rivals on border patrols to seize land and food, Dr. Jill Pruetz says',
+      listing_type: 'land',
+    },
+    {
+      title: "WE DID IT !How we Rescued Teresa Children's Center Land",
+      listing_type: 'land',
+    },
+  ];
+  for (const candidate of discoveryQueryContaminationCases) {
+    const gate = sourcePositiveListingGateForRecord({
+      ...candidate,
+      extra_fields: {
+        raw_source_post: {
+          source_job: { search_query: 'Uganda land for sale' },
+        },
+      },
+    });
+    assert.strictEqual(gate.ok, false, `${candidate.title} must not inherit listing intent from the crawler query`);
+    assert.strictEqual(gate.reason, 'not_a_listing');
+  }
+
+  const usStateAddressListing = sourcePositiveListingGateForRecord({
+    title: '8498 Lake Road Berrien Center, MI Homes for Sale',
+    listing_type: 'sale',
+  });
+  assert.strictEqual(usStateAddressListing.ok, false, 'US state-address listings must stay out of Uganda review');
+  assert.strictEqual(usStateAddressListing.reason, 'non_uganda_location');
+
+  const lowercaseUgandaSentence = sourcePositiveListingGateForRecord({
+    title: 'House for sale in Kampala, in Wakiso district',
+    listing_type: 'sale',
+    area: 'Kampala',
+    district: 'Wakiso',
+  });
+  assert.strictEqual(lowercaseUgandaSentence.ok, true, 'ordinary lowercase prose must not be mistaken for a US state code');
+
   const dryBlocked = await queueFoundOnlineSourcePostListings({
     dryRun: true,
     posts: [{

@@ -268,6 +268,7 @@ test('found-online intake uses the shared precedence classifier for future harve
     ['42-decimal plot in Mbalwa', 'land'],
     ['New appartment for rent in Wakiso town', 'rent'],
     ['34 rental units apartment block fully occupied for sale', 'sale'],
+    ['Rental units for sale in Nansana making UGX 1.75M per month, asking price UGX 150M', 'sale'],
   ];
 
   cases.forEach(([title, expected], index) => {
