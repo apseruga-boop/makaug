@@ -137,6 +137,7 @@ const PROFILE_DIR = path.resolve(
 );
 const PAIRING_REFRESH_NONCE = String(process.env.WHATSAPP_WEB_COPILOT_PAIRING_REFRESH_NONCE || '').trim();
 const PAIRING_REFRESH_STATE_FILE = path.join(PROFILE_DIR, '.makaug-pairing-refresh-nonce');
+const PAIRING_RATE_LIMIT_STATE_FILE = path.join(PROFILE_DIR, '.makaug-pairing-rate-limit.json');
 const configuredPollMs = Number(process.env.WHATSAPP_WEB_COPILOT_POLL_MS || 500);
 // WhatsApp DOM scans and API outbox claims are expensive. The previous 50ms
 // loop ran about 20 full scans per second and exhausted a 2 GB worker several
@@ -1273,6 +1274,39 @@ function markPairingRefreshNonceConsumed() {
   if (!PAIRING_REFRESH_NONCE) return;
   fs.mkdirSync(PROFILE_DIR, { recursive: true });
   fs.writeFileSync(PAIRING_REFRESH_STATE_FILE, `${PAIRING_REFRESH_NONCE}\n`, { mode: 0o600 });
+}
+
+function readPairingRateLimitState() {
+  try {
+    const parsed = JSON.parse(String(fs.readFileSync(PAIRING_RATE_LIMIT_STATE_FILE, 'utf8') || '{}'));
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch (_error) {
+    return null;
+  }
+}
+
+function markPairingRateLimited() {
+  const existing = readPairingRateLimitState();
+  if (existing && String(existing.refresh_nonce || '') === PAIRING_REFRESH_NONCE) return;
+  fs.mkdirSync(PROFILE_DIR, { recursive: true });
+  fs.writeFileSync(PAIRING_RATE_LIMIT_STATE_FILE, JSON.stringify({
+    blocked_at: new Date().toISOString(),
+    refresh_nonce: PAIRING_REFRESH_NONCE || null
+  }), { mode: 0o600 });
+}
+
+function isPairingRateLimitPersisted() {
+  const state = readPairingRateLimitState();
+  if (!state) return false;
+  return !PAIRING_REFRESH_NONCE || String(state.refresh_nonce || '') === PAIRING_REFRESH_NONCE;
+}
+
+function clearPairingRateLimitState() {
+  try {
+    fs.unlinkSync(PAIRING_RATE_LIMIT_STATE_FILE);
+  } catch (error) {
+    if (error?.code !== 'ENOENT') log(`failed to clear WhatsApp pairing rate-limit state: ${error?.message || error}`);
+  }
 }
 
 function summarizeWhatsappReadyState(readyState = {}) {
@@ -5264,6 +5298,15 @@ async function main() {
   while (true) {
     try {
       let readyState = await detectWhatsappReady(page);
+      if (readyState.pairingRateLimited) markPairingRateLimited();
+      if (!readyState.ready && !readyState.pairingRateLimited && isPairingRateLimitPersisted()) {
+        readyState = {
+          ...readyState,
+          waitingForLogin: true,
+          pairingRateLimited: true,
+          pairingRateLimitPersisted: true
+        };
+      }
       if (readyState.openElsewhere && await claimWhatsappUseHere(page)) {
         readyState = await detectWhatsappReady(page);
         lastBridgeState = '';
@@ -5400,6 +5443,7 @@ async function main() {
       }
 
       phonePairingRecovery.reset();
+      clearPairingRateLimitState();
 
       let sentAtLoopStart = 0;
       if (now - lastOutboxPoll >= OUTBOX_POLL_MS) {
