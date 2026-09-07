@@ -60,6 +60,9 @@ assert(agentScript.includes('startWhatsappPhonePairingIfConfigured(page'), 'Host
 assert(agentScript.includes('WHATSAPP_WEB_COPILOT_PAIRING_PHONE') && agentScript.includes('log in with phone number'), 'Phone pairing must use the configured private phone number and click the WhatsApp phone login path');
 assert(agentScript.includes('clickWhatsappPhoneLoginLink(page)') && agentScript.includes('getByRole'), 'Phone pairing must use Playwright locator clicks for the login link');
 assert(agentScript.includes('submitWhatsappPhonePairingWithPlaywright(page') && agentScript.includes('phone_fill_did_not_stick'), 'Phone pairing must fill and submit the phone form with Playwright and report fill failures');
+const pairingShortCircuitIndex = agentScript.indexOf("if (playwrightPairing.attempted || playwrightPairing.state === 'pairing_code_visible')");
+const pairingDomFallbackIndex = agentScript.indexOf('const result = await page.evaluate', pairingShortCircuitIndex);
+assert(pairingShortCircuitIndex >= 0 && pairingDomFallbackIndex > pairingShortCircuitIndex, 'A completed Playwright pairing step must return before the synthetic DOM fallback can hang the heartbeat loop');
 assert(agentScript.includes('pairing_code_loading') && agentScript.includes("getByText(/^edit$/i)"), 'Phone pairing must recover from a stuck loading code screen by editing and resubmitting');
 assert(agentScript.includes('phonePairingRecovery.plan') && pairingRecovery.includes('pairing_retry_backoff'), 'Phone pairing recovery must be rate limited between login heartbeats');
 assert(agentScript.includes('pairingCodeVisible') && agentScript.includes("stable: pairingPlan.state === 'pairing_code_visible'"), 'A visible phone pairing code must remain stable while waiting for an operator');
