@@ -11,9 +11,14 @@ const {
   buildXSearchJobs,
   fetchXPostsForJobs,
   envBearerTokens,
+  normalizeXApiPost,
   runSocialPlatformPostSweep,
   X_FULL_ARCHIVE_SEARCH_PACING_MS,
 } = require('../services/socialPlatformPostDiscoveryService');
+const {
+  postgresSafeJsonStringify,
+  replaceLoneSurrogates,
+} = require('../utils/postgresJson');
 const {
   getPropertySourceRegistry,
 } = require('../services/propertySourceRegistryService');
@@ -196,6 +201,22 @@ async function main() {
   assert.deepStrictEqual(authHeaders, ['Bearer stale-token', 'Bearer working-token'], 'X search should retry an alternate configured bearer only after an auth failure');
   assert.strictEqual(fallbackResult.reports[0].ok, true, 'a working fallback bearer should recover the X job');
   assert.strictEqual(fallbackResult.reports[0].credential_attempts, 2, 'X report should expose the number of credential attempts without exposing secrets');
+
+  const boundaryText = `${'a'.repeat(89)}\u{1D5D5}b`;
+  const normalizedBoundaryPost = normalizeXApiPost({
+    id: 'unicode-boundary',
+    author_id: 'author-1',
+    text: boundaryText,
+  }, {
+    users: [{ id: 'author-1', username: 'unicode_property_source' }],
+  }, {});
+  assert.strictEqual(Array.from(normalizedBoundaryPost.title).length, 90, 'X titles should be truncated by Unicode code point');
+  assert.strictEqual(normalizedBoundaryPost.title.endsWith('\u{1D5D5}'), true, 'X title truncation should preserve the complete final Unicode character');
+  assert.strictEqual(replaceLoneSurrogates(`before\uD835after`), 'before\uFFFDafter', 'lone high surrogates should be repaired');
+  assert.strictEqual(replaceLoneSurrogates(`before\uDC00after`), 'before\uFFFDafter', 'lone low surrogates should be repaired');
+  const safeJson = postgresSafeJsonStringify({ caption: `before\uD835after`, title: normalizedBoundaryPost.title });
+  assert.strictEqual(JSON.parse(safeJson).caption, 'before\uFFFDafter', 'PostgreSQL-bound JSON should replace invalid surrogate input');
+  assert.strictEqual(JSON.parse(safeJson).title, normalizedBoundaryPost.title, 'PostgreSQL-bound JSON should preserve valid astral Unicode');
 
   console.log('ok - X source drip scheduler, cursor, controls, and backoff guards are wired');
 }

@@ -24,6 +24,7 @@ const {
   ugandanPhoneFromSourceText,
 } = require('../utils/sourceIntakeIntegrity');
 const { resolveSourceShortUrl } = require('../utils/sourceUrlNormalization');
+const { truncateUnicode } = require('../utils/postgresJson');
 const {
   buildHarvestFingerprints,
   primaryImagePerceptualHashes,
@@ -3841,7 +3842,7 @@ function normalizeXApiPost(tweet = {}, includes = {}, job = {}) {
     source_page_url: username ? `https://x.com/${username}` : job.source_url,
     source_contact_url: username ? `https://x.com/${username}` : job.source_url,
     x_url: source_url,
-    title: text.slice(0, 90) || `X property post ${tweet.id}`,
+    title: truncateUnicode(text, 90) || `X property post ${tweet.id}`,
     caption: text,
     description: text,
     first_posted_at: tweet.created_at || null,
