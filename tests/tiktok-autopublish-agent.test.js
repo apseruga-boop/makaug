@@ -97,9 +97,9 @@ test('Maka Scout identity is exposed for staff chat and visual surfaces', () => 
   assert(profile.status_label.includes('one TikTok hashtag at a time'), 'profile should explain the hashtag workflow');
 });
 
-test('Maka Scout defaults to a 100-hashtag multilingual TikTok sweep sequence', () => {
-  assert.strictEqual(DEFAULT_HASHTAG_SEQUENCE_LIMIT, 100);
-  assert.strictEqual(DEFAULT_HASHTAG_SEQUENCE.length, 100);
+test('Maka Scout defaults to every curated multilingual TikTok hashtag', () => {
+  assert.strictEqual(DEFAULT_HASHTAG_SEQUENCE_LIMIT, 233);
+  assert.strictEqual(DEFAULT_HASHTAG_SEQUENCE.length, 233);
   [
     'ugandarealestate',
     'kampalarentals',
