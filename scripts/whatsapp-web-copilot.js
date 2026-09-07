@@ -1231,6 +1231,8 @@ async function detectWhatsappReady(page) {
     const phonePairingPrompt = bodyText.includes('enter code on phone')
       || bodyText.includes('linking whatsapp account')
       || bodyText.includes('link with phone number instead');
+    const pairingRateLimited = bodyText.includes('too many attempts')
+      && (bodyText.includes('link a device') || bodyText.includes('try again later'));
     const databaseError = bodyText.includes('a database error occurred')
       || bodyText.includes('database error occurred')
       || bodyText.includes('your browser storage is full')
@@ -1251,6 +1253,7 @@ async function detectWhatsappReady(page) {
       loginPrompt,
       phonePairingPrompt,
       pairingCodeVisible,
+      pairingRateLimited,
       databaseError,
       openElsewhere
     };
@@ -1279,6 +1282,7 @@ function summarizeWhatsappReadyState(readyState = {}) {
     readyState.hasSearchBox ? 'search_box' : '',
     readyState.hasLoggedInShell ? 'logged_in_shell' : '',
     readyState.loginPrompt ? 'login_prompt' : '',
+    readyState.pairingRateLimited ? 'pairing_rate_limited' : '',
     readyState.databaseError ? 'database_error' : '',
     readyState.openElsewhere ? 'open_elsewhere' : ''
   ].filter(Boolean).join(',');
@@ -5297,6 +5301,8 @@ async function main() {
       }
       const bridgeState = readyState.ready
         ? 'online'
+        : readyState.pairingRateLimited
+          ? 'pairing_rate_limited'
         : readyState.waitingForLogin
           ? 'waiting_for_login'
           : 'starting';
@@ -5320,13 +5326,18 @@ async function main() {
         }
 
         if (now - lastHeartbeat >= HEARTBEAT_MS) {
-          const forcePairingRefreshNow = forcePairingRefresh && readyState.waitingForLogin;
-          const pairingPlan = forcePairingRefreshNow
+          const forcePairingRefreshNow = forcePairingRefresh
+            && readyState.waitingForLogin
+            && !readyState.pairingRateLimited;
+          const pairingPlan = readyState.pairingRateLimited
+            ? { shouldAttempt: false, state: 'pairing_rate_limited', retryAfterMs: 0 }
+            : forcePairingRefreshNow
             ? { shouldAttempt: true, state: 'operator_refresh_requested', retryAfterMs: 0 }
             : phonePairingRecovery.plan({
                 now,
                 waitingForLogin: readyState.waitingForLogin,
-                pairingCodeVisible: readyState.pairingCodeVisible
+                pairingCodeVisible: readyState.pairingCodeVisible,
+                pairingRateLimited: readyState.pairingRateLimited
               });
           const phonePairing = pairingPlan.shouldAttempt
             ? await startWhatsappPhonePairingIfConfigured(page, { forceRefresh: forcePairingRefreshNow })
@@ -5344,7 +5355,9 @@ async function main() {
             forcePairingRefresh = false;
             log('consumed the operator-requested WhatsApp pairing-code refresh.');
           }
-          const qrRefresh = readyState.waitingForLogin && !phonePairing.attempted
+          const qrRefresh = readyState.waitingForLogin
+            && !readyState.pairingRateLimited
+            && !phonePairing.attempted
             ? await refreshWhatsappLoginQrIfNeeded(page)
             : { refreshed: false };
           if (qrRefresh.refreshed) {
@@ -5356,6 +5369,8 @@ async function main() {
               ? 'browser_database_error'
               : readyState.openElsewhere
                 ? 'open_elsewhere'
+                : readyState.pairingRateLimited
+                  ? 'pairing_rate_limited'
                 : readyState.waitingForLogin
                   ? 'waiting_for_login'
                   : 'starting',
@@ -5371,6 +5386,8 @@ async function main() {
                 ? 'WhatsApp Web is showing a browser database/storage error. Refresh WhatsApp Web or relink the bridge profile if it persists.'
                 : readyState.openElsewhere
                   ? 'WhatsApp Web is open in another window; the bridge is trying to claim this session with Use here.'
+                  : readyState.pairingRateLimited
+                    ? 'WhatsApp has temporarily blocked device-link attempts after too many retries. Automatic pairing attempts are paused until WhatsApp clears the cooldown.'
                   : readyState.waitingForLogin
                     ? 'Waiting for WhatsApp Web login'
                     : 'Browser starting'

@@ -21,6 +21,10 @@ const stableCode = recovery.plan({ now: 700_000, waitingForLogin: true, pairingC
 assert.strictEqual(stableCode.shouldAttempt, false, 'a visible code must remain stable for the operator');
 assert.strictEqual(stableCode.state, 'pairing_code_visible');
 
+const rateLimited = recovery.plan({ now: 700_000, waitingForLogin: true, pairingRateLimited: true });
+assert.strictEqual(rateLimited.shouldAttempt, false, 'the worker must not retry while WhatsApp has rate limited device linking');
+assert.strictEqual(rateLimited.state, 'pairing_rate_limited');
+
 assert.strictEqual(recovery.plan({ now: 700_000, waitingForLogin: false }).state, 'not_waiting_for_login');
 assert.strictEqual(recovery.plan({ now: 701_000, waitingForLogin: true }).shouldAttempt, true, 'a later logout must start a fresh recovery immediately');
 
