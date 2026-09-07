@@ -14,6 +14,7 @@ const adminApp = read('assets/makaug-app.js');
 const readiness = read('services/whatsappBridgeReadiness.js');
 const whatsappRoute = read('routes/whatsapp.js');
 const chatFilter = require('../services/whatsappWebChatFilter');
+const pairingRecovery = read('services/whatsappPairingRecovery.js');
 
 assert(renderYaml.includes('type: worker'), 'Render blueprint must define a background worker for the WhatsApp agent');
 assert(renderYaml.includes('runtime: docker'), 'WhatsApp worker must run with Docker so Playwright/Chrome is available');
@@ -60,6 +61,9 @@ assert(agentScript.includes('WHATSAPP_WEB_COPILOT_PAIRING_PHONE') && agentScript
 assert(agentScript.includes('clickWhatsappPhoneLoginLink(page)') && agentScript.includes('getByRole'), 'Phone pairing must use Playwright locator clicks for the login link');
 assert(agentScript.includes('submitWhatsappPhonePairingWithPlaywright(page)') && agentScript.includes('phone_fill_did_not_stick'), 'Phone pairing must fill and submit the phone form with Playwright and report fill failures');
 assert(agentScript.includes('pairing_code_loading') && agentScript.includes("getByText(/^edit$/i)"), 'Phone pairing must recover from a stuck loading code screen by editing and resubmitting');
+assert(agentScript.includes('phonePairingRecovery.plan') && pairingRecovery.includes('pairing_retry_backoff'), 'Phone pairing recovery must be rate limited between login heartbeats');
+assert(agentScript.includes('pairingCodeVisible') && agentScript.includes("stable: pairingPlan.state === 'pairing_code_visible'"), 'A visible phone pairing code must remain stable while waiting for an operator');
+assert(!agentScript.includes('submitted WhatsApp phone pairing with Playwright'), 'Logs must not claim a phone pairing submission when only a code is visible');
 assert(agentScript.includes('phonePairingPrompt') && agentScript.includes('enter code on phone'), 'Readiness detection must treat phone-code screens as login states');
 assert(agentScript.includes('phone_form_not_visible_after_click'), 'Phone pairing must not claim submission if the phone form never appears');
 assert(agentScript.includes("text.includes('code on your phone')"), 'Phone pairing detection must require real pairing-code copy, not QR-screen text');

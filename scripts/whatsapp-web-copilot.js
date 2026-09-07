@@ -170,6 +170,9 @@ const LOGIN_SCREENSHOT_ENABLED = !['0', 'false', 'no', 'off'].includes(
   String(process.env.WHATSAPP_WEB_COPILOT_LOGIN_SCREENSHOT || 'true').trim().toLowerCase()
 );
 const LOGIN_METHOD = String(process.env.WHATSAPP_WEB_COPILOT_LOGIN_METHOD || 'auto').trim().toLowerCase();
+const { createWhatsappPairingRecovery } = require('../services/whatsappPairingRecovery');
+const configuredPairingRetryMs = Number(process.env.WHATSAPP_WEB_COPILOT_PAIRING_RETRY_MS || (10 * 60 * 1000));
+const phonePairingRecovery = createWhatsappPairingRecovery({ retryMs: configuredPairingRetryMs });
 const PAIRING_PHONE_NUMBER = String(
   process.env.WHATSAPP_WEB_COPILOT_PAIRING_PHONE
     || process.env.WHATSAPP_WEB_COPILOT_PHONE_NUMBER
@@ -902,7 +905,7 @@ async function submitWhatsappPhonePairingWithPlaywright(page) {
 
   if (codeScreenState.codeScreen) {
     if (codeScreenState.codeVisible) {
-      return { attempted: true, state: 'pairing_code_visible', reason: null };
+      return { attempted: false, state: 'pairing_code_visible', reason: null, stable: true };
     }
     const editClicked = await clickVisibleLocator(page.getByText(/^edit$/i).first(), 1200)
       || await clickVisibleLocator(page.locator('a, button, [role="button"], [tabindex]').filter({ hasText: /^edit$/i }).first(), 1200);
@@ -977,7 +980,7 @@ async function startWhatsappPhonePairingIfConfigured(page) {
     }
     const playwrightPairing = await submitWhatsappPhonePairingWithPlaywright(page);
     if (playwrightPairing.attempted) {
-      log(`submitted WhatsApp phone pairing with Playwright (${playwrightPairing.state || playwrightPairing.reason || 'unknown'}).`);
+      log(`acted on WhatsApp phone pairing with Playwright (${playwrightPairing.state || playwrightPairing.reason || 'unknown'}).`);
     }
 
     const result = await page.evaluate(async ({ phone, clickedPhoneLogin, playwrightPairing }) => {
@@ -1049,7 +1052,7 @@ async function startWhatsappPhonePairingIfConfigured(page) {
       };
 
       let state = inspectPairingState();
-      if (state.codeVisible) return { attempted: true, state: 'pairing_code_visible' };
+      if (state.codeVisible) return { attempted: false, state: 'pairing_code_visible', stable: true };
       if (playwrightPairing?.attempted) {
         return {
           attempted: true,
@@ -1077,7 +1080,7 @@ async function startWhatsappPhonePairingIfConfigured(page) {
         state = inspectPairingState();
       }
 
-      if (state.codeVisible) return { attempted: true, state: 'pairing_code_visible' };
+      if (state.codeVisible) return { attempted: false, state: 'pairing_code_visible', stable: true };
       if (!state.phoneFormVisible) return { attempted: true, state: 'phone_login_clicked', reason: 'phone_form_not_visible' };
 
       const inputs = visibleInputs();
@@ -1115,7 +1118,7 @@ async function startWhatsappPhonePairingIfConfigured(page) {
     }, { phone: PAIRING_PHONE_NUMBER, clickedPhoneLogin, playwrightPairing });
 
     if (result?.attempted) {
-      log(`attempted WhatsApp phone-number pairing (${result.state || result.reason || 'unknown'}).`);
+      log(`acted on WhatsApp phone-number pairing (${result.state || result.reason || 'unknown'}).`);
     }
     return {
       attempted: !!result?.attempted,
@@ -1206,6 +1209,8 @@ async function detectWhatsappReady(page) {
       || bodyText.includes('use whatsapp on your phone to link a device')
       || (bodyText.includes('link to your account') && (bodyText.includes('scan') || bodyText.includes('qr code')))
       || bodyText.includes('log in with phone number');
+    const pairingCodeVisible = /\b[A-Z0-9]\s+[A-Z0-9]\s+[A-Z0-9]\s+[A-Z0-9]\s*-\s*[A-Z0-9]\s+[A-Z0-9]\s+[A-Z0-9]\s+[A-Z0-9]\b/i.test(document.body?.innerText || '')
+      || /\b[A-Z0-9]{4}\s*-\s*[A-Z0-9]{4}\b/i.test(document.body?.innerText || '');
     const phonePairingPrompt = bodyText.includes('enter code on phone')
       || bodyText.includes('linking whatsapp account')
       || bodyText.includes('link with phone number instead');
@@ -1228,6 +1233,7 @@ async function detectWhatsappReady(page) {
       hasLoggedInShell,
       loginPrompt,
       phonePairingPrompt,
+      pairingCodeVisible,
       databaseError,
       openElsewhere
     };
@@ -5281,9 +5287,19 @@ async function main() {
         }
 
         if (now - lastHeartbeat >= HEARTBEAT_MS) {
-          const phonePairing = readyState.waitingForLogin
+          const pairingPlan = phonePairingRecovery.plan({
+            now,
+            waitingForLogin: readyState.waitingForLogin,
+            pairingCodeVisible: readyState.pairingCodeVisible
+          });
+          const phonePairing = pairingPlan.shouldAttempt
             ? await startWhatsappPhonePairingIfConfigured(page)
-            : { attempted: false };
+            : {
+                attempted: false,
+                state: pairingPlan.state,
+                stable: pairingPlan.state === 'pairing_code_visible',
+                retry_after_ms: pairingPlan.retryAfterMs
+              };
           if (phonePairing.attempted) {
             readyState = await detectWhatsappReady(page);
           }
@@ -5324,6 +5340,8 @@ async function main() {
         await sleep(readyState.waitingForLogin ? LOGIN_POLL_MS : Math.max(750, POLL_MS));
         continue;
       }
+
+      phonePairingRecovery.reset();
 
       let sentAtLoopStart = 0;
       if (now - lastOutboxPoll >= OUTBOX_POLL_MS) {
