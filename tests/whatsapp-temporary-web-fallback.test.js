@@ -24,6 +24,7 @@ assert(app.includes('function syncTemporaryOnlineAiPageCopy()'), 'the AI page mu
 assert(html.includes('id="web-ai-chatbot"'), 'the website AI fallback must have a stable public anchor');
 assert(aiService.includes("`${PUBLIC_BASE_URL}/list-property?mode=online`"), 'AI property-listing replies must link to the live online form');
 assert(aiRoute.includes("normalizedEffectiveIntent === 'property_listing'"), 'the website AI must recognize listing requests instead of forcing them through property search');
+assert(aiRoute.includes("'off_plan_search', 'off_plan_listing', 'property_listing'"), 'clean AI search bars must preserve an explicit property-listing action intent');
 assert(aiRoute.includes('Your submission goes to staff review and is not published automatically.'), 'the website AI must describe the review-only listing boundary');
 
 console.log('WhatsApp temporary website fallback ok');
