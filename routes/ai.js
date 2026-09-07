@@ -1132,11 +1132,26 @@ router.post('/assistant-reply', async (req, res, next) => {
         ? inferAssistantIntentFromMessage(userMessage, 'search_property')
         : inferredIntent;
     const assistantIsSearch = isAssistantSearchIntent(effectiveIntent);
-    const assistantIsOffPlan = ['off_plan_search', 'off_plan_listing'].includes(normalizeAssistantIntent(effectiveIntent));
+    const normalizedEffectiveIntent = normalizeAssistantIntent(effectiveIntent);
+    const assistantIsOffPlan = ['off_plan_search', 'off_plan_listing'].includes(normalizedEffectiveIntent);
     let response = null;
     let searchPayload = null;
 
-    if (assistantIsOffPlan || (!assistantIsSearch && !cleanBarSearchOnly)) {
+    if (normalizedEffectiveIntent === 'property_listing') {
+      const onlineListingUrl = `${appOriginFromRequest(req)}/list-property?mode=online`;
+      response = {
+        text: sanitizeAssistantText([
+          '*makaug.com* | *List property online*',
+          'Use the secure online form to add the property details, location, photos and contact information.',
+          'Your submission goes to staff review and is not published automatically.',
+          `🔗 ${onlineListingUrl}`
+        ].join('\n')),
+        model: 'template',
+        language: 'en',
+        action_url: onlineListingUrl,
+        action: 'open_online_listing_form'
+      };
+    } else if (assistantIsOffPlan || (!assistantIsSearch && !cleanBarSearchOnly)) {
       response = await suggestWhatsappAssistantReply({
         userMessage,
         intent: effectiveIntent,
@@ -1188,7 +1203,7 @@ router.post('/assistant-reply', async (req, res, next) => {
       }
     }
 
-    if (!assistantIsOffPlan && (assistantIsSearch || cleanBarSearchOnly)) {
+    if (!assistantIsOffPlan && assistantIsSearch) {
       const rawIntentType = assistantSearchType(effectiveIntent);
       const useLlmParser = parseBooleanLike(body.use_llm_parser ?? body.force_llm_parser, false);
       const extracted = useLlmParser

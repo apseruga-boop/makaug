@@ -20121,6 +20121,11 @@ function buildWhatsAppUrl(phone, message) {
 }
 
 const MAKAUG_SUPPORT_WHATSAPP = "256760112587";
+// Temporary continuity switch while WhatsApp is blocking new device links.
+// Keep public help and listing journeys usable through the website, then set
+// this to false after the hosted WhatsApp bridge is paired and reply-tested.
+const MAKAUG_WHATSAPP_AI_WEB_FALLBACK = true;
+const MAKAUG_WEB_AI_FALLBACK_URL = "/discover-ai-chatbot#web-ai-chatbot";
 const PUBLIC_WHATSAPP_CONTEXTS = Object.freeze({
   home: "Hi makaug, I'm on makaug.com and need property help. Please guide me with the best next step.",
   sale: "Hi makaug, I'm on the For Sale page and I'm looking for a home or investment property. Please help me find suitable options, confirm availability, and connect me with a trusted owner or broker.",
@@ -20223,7 +20228,34 @@ function buildPublicWhatsappMessage(context = {}) {
 }
 
 function supportWhatsappUrl(context = {}) {
+  if (MAKAUG_WHATSAPP_AI_WEB_FALLBACK) return MAKAUG_WEB_AI_FALLBACK_URL;
   return buildWhatsAppUrl(MAKAUG_SUPPORT_WHATSAPP, buildPublicWhatsappMessage(context));
+}
+
+function syncTemporaryWebSupportCopy(link, context = "") {
+  if (!MAKAUG_WHATSAPP_AI_WEB_FALLBACK || !link) return;
+  link.target = "_self";
+  link.removeAttribute("rel");
+  link.dataset.whatsappFallback = "web";
+  const labels = {
+    "topbar-whatsapp-link": '<i class="fas fa-robot text-green-300"></i> AI help online',
+    "footer-whatsapp-label": "🤖 AI help online",
+    "footer-chat-whatsapp": "💬 Open online assistant",
+    "floating-whatsapp-link": '<i class="fas fa-robot"></i>',
+    "ai-cta-btn": '<i class="fas fa-robot text-lg"></i> Use AI Chatbot Online',
+    "listing-submit-whatsapp-link": "Use makaug online help"
+  };
+  if (labels[link.id]) link.innerHTML = labels[link.id];
+  if (link.id === "floating-whatsapp-link") link.setAttribute("aria-label", "Ask makaug AI online");
+  if (!link.id && String(link.textContent || "").toLowerCase().includes("whatsapp")) {
+    link.textContent = context === "list-property" ? "List online instead" : "Open online support";
+  }
+}
+
+function syncTemporaryOnlineAiPageCopy() {
+  if (!MAKAUG_WHATSAPP_AI_WEB_FALLBACK) return;
+  setTextById("ai-page-sub", "Use makaug's online AI to search by area, request broker contacts, and open the secure property listing form in your preferred Ugandan language.");
+  setTextById("ai-card-1-sub", "Open the secure online form to add property details and photos, then complete verification for staff review.");
 }
 
 function resolveWhatsappContextForLink(link) {
@@ -20262,8 +20294,33 @@ function syncPublicWhatsappLinks(root = document) {
     const context = resolveWhatsappContextForLink(link);
     link.href = supportWhatsappUrl({ context });
     link.dataset.whatsappResolvedContext = context;
+    syncTemporaryWebSupportCopy(link, context);
     bindSupportWhatsappAnalytics(link);
   });
+  syncTemporaryOnlineAiPageCopy();
+}
+
+function installTemporaryWebSupportFallback() {
+  if (!MAKAUG_WHATSAPP_AI_WEB_FALLBACK || document.documentElement.dataset.webSupportFallbackBound === "1") return;
+  document.documentElement.dataset.webSupportFallbackBound = "1";
+  document.addEventListener("click", (event) => {
+    const link = event.target?.closest?.('a[href^="https://wa.me/256760112587"], a[href^="https://wa.me/+256760112587"]');
+    if (!link || link.dataset.whatsappStatic === "true") return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    const context = resolveWhatsappContextForLink(link);
+    const isListingChoice = ["lp-wa-link", "lp-whatsapp-option-btn", "lp-whatsapp-option-inline-btn"].includes(link.id || "");
+    const href = isListingChoice
+      ? `/list-property?mode=online&type=${encodeURIComponent(getListChoiceType())}`
+      : supportWhatsappUrl({ context });
+    trackEvent("whatsapp_support_web_fallback", {
+      page: currentPage || "",
+      context,
+      href_path: window.location.pathname || "/",
+      link_id: link.id || ""
+    });
+    window.location.href = href;
+  }, true);
 }
 
 function openSupportWhatsApp(context = "", options = {}) {
@@ -32068,6 +32125,9 @@ function buildListPropertyWhatsAppMessage() {
 }
 
 function listPropertyWhatsAppUrl() {
+  if (MAKAUG_WHATSAPP_AI_WEB_FALLBACK) {
+    return `/list-property?mode=online&type=${encodeURIComponent(getListChoiceType())}`;
+  }
   return buildWhatsAppUrl(MAKAUG_SUPPORT_WHATSAPP, buildListPropertyWhatsAppMessage());
 }
 
@@ -32075,8 +32135,25 @@ function updateListPropertyWhatsAppLinks() {
   const href = listPropertyWhatsAppUrl();
   ["lp-wa-link", "lp-whatsapp-option-btn", "lp-whatsapp-option-inline-btn"].forEach((id) => {
     const link = document.getElementById(id);
-    if (link) link.href = href;
+    if (link) {
+      link.href = href;
+      if (MAKAUG_WHATSAPP_AI_WEB_FALLBACK) {
+        link.target = "_self";
+        link.removeAttribute("rel");
+        link.dataset.whatsappFallback = "web";
+      }
+    }
   });
+  if (MAKAUG_WHATSAPP_AI_WEB_FALLBACK) {
+    setTextById("list-choice-sub", "WhatsApp AI is temporarily unavailable. Use the secure online form while device linking cools down.");
+    setTextById("list-choice-wa-title", "Use Online Form Now");
+    setTextById("list-choice-wa-copy", "Continue on makaug.com. Your submission will remain in staff review until approved.");
+    setTextById("lp-choice-whatsapp-title", "Continue Online");
+    setTextById("lp-choice-whatsapp-context", "Continue with the secure makaug online form. Nothing is published before staff approval.");
+    setTextById("lp-wa-title", "WhatsApp AI is temporarily unavailable");
+    setTextById("lp-wa-copy", "Use the secure online listing form while WhatsApp device linking cools down.");
+    setTextById("lp-wa-btn-label", "💻 List Online Instead");
+  }
 }
 
 function chooseListPropertyOnline(options = {}) {
@@ -32099,6 +32176,17 @@ function chooseListPropertyOnline(options = {}) {
 
 function chooseListPropertyWhatsApp(options = {}) {
   const event = options.event;
+  if (MAKAUG_WHATSAPP_AI_WEB_FALLBACK) {
+    if (event) event.preventDefault();
+    logListPropertyIntent("online_fallback", { source: options.source || "list_property_choice" });
+    closeModal("list-choice-modal");
+    if (currentPage === "list-property") {
+      chooseListPropertyOnline({ source: options.source || "whatsapp_cooldown_fallback" });
+    } else {
+      window.location.href = `/list-property?mode=online&type=${encodeURIComponent(getListChoiceType())}`;
+    }
+    return false;
+  }
   const href = listPropertyWhatsAppUrl();
   const sameWindow = options.sameWindow === true || isMobileListPropertyExperience();
   logListPropertyIntent("whatsapp_ai", { source: options.source || "list_property_choice" });
@@ -32118,6 +32206,9 @@ function chooseListPropertyWhatsApp(options = {}) {
 }
 
 function handleListPropertyWhatsAppClick(event) {
+  if (MAKAUG_WHATSAPP_AI_WEB_FALLBACK) {
+    return chooseListPropertyWhatsApp({ event, source: "form_whatsapp_cooldown_fallback", sameWindow: true });
+  }
   const href = listPropertyWhatsAppUrl();
   logListPropertyIntent("whatsapp_ai", { source: "form_whatsapp_cta" });
   try {
@@ -54017,6 +54108,7 @@ function initializeMakaugApp() {
   if (window.__makaugAppInitialized) return;
   window.__makaugAppInitialized = true;
   installPublicRouteInterceptor();
+  installTemporaryWebSupportFallback();
   const savedLang = getStoredMakaugLanguagePreference();
   addAdUnits();
   initGoogleAds();
