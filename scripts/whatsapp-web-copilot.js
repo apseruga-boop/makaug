@@ -3757,7 +3757,11 @@ async function runConfiguredEmployeeBatchRecovery(page) {
 
 function employeeVideoRecoveryPhone(target = {}) {
   const suffix = String(target.sender_phone_suffix || '').replace(/\D/g, '');
-  if (!suffix) return '';
+  if (!suffix) {
+    return EMPLOYEE_BATCH_RECOVERY_PHONES.length === 1
+      ? EMPLOYEE_BATCH_RECOVERY_PHONES[0]
+      : '';
+  }
   const sessionPhone = normalizeChatKey(target.sender_phone || '');
   if (sessionPhone && sessionPhone.endsWith(suffix)) return sessionPhone;
   return EMPLOYEE_BATCH_RECOVERY_PHONES.find((phone) => (

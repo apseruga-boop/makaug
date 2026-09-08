@@ -137,6 +137,10 @@ assert(routeSource.includes("router.get('/web-bridge/employee-video-recovery-tar
 assert(routeSource.includes('FROM whatsapp_sessions ws'), 'repair queue must resolve the authorized originating employee chat without a new worker secret');
 assert(routeSource.includes("router.post('/web-bridge/employee-video-recovery/:id'"), 'worker must have an authenticated original-media recovery route');
 assert(routeSource.includes("source IN ('whatsapp_employee_intake', 'whatsapp_forward_review')"), 'flagged legacy Francis forwards must be eligible for the same pending-only original-media recovery');
+assert(workerSource.includes('EMPLOYEE_BATCH_RECOVERY_PHONES.length === 1'), 'a single configured recovery chat must safely handle legacy targets that predate sender suffix storage');
+assert(routeSource.includes("router.post('/web-bridge/employee-video-recovery-reconcile'"), 'already recovered originals need an exact-id state reconciliation route');
+assert(routeSource.includes("media_validation_status: 'passed_automated_image_gate'"), 'successful original recovery must clear the screenshot-only media block');
+assert(routeSource.includes('video_recovery_reason: null'), 'successful original recovery must clear its stale recovery reason');
 assert(routeSource.includes("'pending', 'pending'"), 'original-video recovery must preserve staff-review status');
 assert(routeSource.includes("captureSource === 'rendered_whatsapp_video_fallback'"), 'rendered video-message screenshots must be rejected before gallery insertion');
 assert(routeSource.includes("captureSource === 'whatsapp_video_poster_evidence'"), 'a poster without the original video must remain evidence only');

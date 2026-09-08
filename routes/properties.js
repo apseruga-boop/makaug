@@ -4760,7 +4760,10 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
       });
       return false;
     };
-    if (nextStatus === 'approved' && cleanText(current.source).toLowerCase() === 'whatsapp_employee_intake') {
+    if (
+      nextStatus === 'approved'
+      && ['whatsapp_employee_intake', 'whatsapp_forward_review'].includes(cleanText(current.source).toLowerCase())
+    ) {
       const mediaQuality = propertyExtraFieldsObject(current);
       const usableImageResult = await db.query(
         `SELECT COUNT(*)::int AS total
