@@ -29,7 +29,7 @@ const FRAME_HASH_SIZE = 16;
 const MIN_FRAME_HASH_DISTANCE = 0.2;
 
 const SELECTION_SQL = `
-  SELECT p.id, p.status, p.listing_type, p.description, p.district, p.area, p.price,
+  SELECT p.id, p.status, p.source, p.listing_type, p.description, p.district, p.area, p.price,
          p.lister_name, p.extra_fields, p.created_at,
          COUNT(pi.id) FILTER (
            WHERE COALESCE(pi.slot_key, '') LIKE 'video_%'
@@ -57,6 +57,7 @@ function parseArgs(argv = process.argv.slice(2)) {
     reopenApproved: argv.includes('--reopen-approved'),
     quarantinePrimary: argv.includes('--quarantine-primary'),
     quarantineVideoScreenshots: argv.includes('--quarantine-video-screenshots'),
+    allowLegacySource: argv.includes('--allow-legacy-source'),
     agentIds: argv
       .filter((arg) => arg.startsWith('--agent-id='))
       .map((arg) => arg.slice('--agent-id='.length).trim())
@@ -88,7 +89,7 @@ function selectionQueryFor(options = {}) {
   const targetValues = options.propertyIds?.length ? options.propertyIds : options.agentIds;
   return {
     text: `
-      SELECT p.id, p.status, p.listing_type, p.description, p.district, p.area, p.price,
+      SELECT p.id, p.status, p.source, p.listing_type, p.description, p.district, p.area, p.price,
              p.lister_name, p.extra_fields, p.created_at,
              COUNT(pi.id) FILTER (
                WHERE COALESCE(pi.slot_key, '') LIKE 'video_%'
@@ -583,7 +584,7 @@ async function attachStills(propertyId, uploaded, {
   }
 }
 
-async function quarantineWhatsappVideoScreenshots(property) {
+async function quarantineWhatsappVideoScreenshots(property, { allowLegacySource = false } = {}) {
   const client = await db.getClient();
   try {
     await client.query('BEGIN');
@@ -595,9 +596,13 @@ async function quarantineWhatsappVideoScreenshots(property) {
       [property.id]
     );
     const current = locked.rows[0];
-    if (!current || current.status !== 'pending' || current.source !== 'whatsapp_employee_intake') {
+    if (!current || current.status !== 'pending') {
       await client.query('ROLLBACK');
-      return { attached: 0, skipped: 'not_pending_whatsapp_employee_intake' };
+      return { attached: 0, skipped: 'not_pending' };
+    }
+    if (current.source !== 'whatsapp_employee_intake' && !allowLegacySource) {
+      await client.query('ROLLBACK');
+      return { attached: 0, skipped: 'legacy_source_requires_explicit_flag' };
     }
     const cleanCaption = cleanEmployeePropertyCaption(current.extra_fields?.source_caption || current.description || '');
     const publicDescription = buildEmployeePublicDescription({
@@ -679,6 +684,8 @@ async function quarantineWhatsappVideoScreenshots(property) {
           marker: ORIGINAL_MEDIA_ONLY_MARKER,
           quarantined_gallery_urls: previousImages.rows.map((item) => item.url).filter(Boolean),
           video_recovery_required: true,
+          original_source: current.source || null,
+          legacy_source_allowed: current.source !== 'whatsapp_employee_intake',
           auto_publish: false
         })
       ]
@@ -765,6 +772,7 @@ async function main() {
     selected: selected.length,
     properties: selected.map((row) => ({
       id: row.id,
+      source: row.source,
       videos: extractVideoUrls(row.extra_fields).length,
       existingVideoKeyFrames: Number(row.video_still_count || 0),
       keyFramesNeeded: keyFramesNeeded(row, options),
@@ -774,7 +782,8 @@ async function main() {
       action: extractVideoUrls(row.extra_fields).length
         ? 'extract_distinct_key_frames_from_playable_video'
         : 'quarantine_screenshots_and_request_original_video',
-      quarantineVideoScreenshots: options.quarantineVideoScreenshots
+      quarantineVideoScreenshots: options.quarantineVideoScreenshots,
+      allowLegacySource: options.allowLegacySource
     }))
   }, null, 2)}\n`);
   if (!options.apply) return;
@@ -804,7 +813,9 @@ async function main() {
         if (!options.quarantineVideoScreenshots) {
           throw new Error('property has no playable video; pass --quarantine-video-screenshots after reviewing the exact dry-run manifest');
         }
-        attached = await quarantineWhatsappVideoScreenshots(property);
+        attached = await quarantineWhatsappVideoScreenshots(property, {
+          allowLegacySource: options.allowLegacySource
+        });
       }
       summary.screenshotsQuarantined += Number(attached.quarantined || 0);
       if (attached.queuedForVideoRecovery) summary.queuedForVideoRecovery += 1;
