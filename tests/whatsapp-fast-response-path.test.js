@@ -251,6 +251,12 @@ async function run() {
     'one worker process must never type two queued replies into the composer concurrently'
   );
   assert(
+    whatsappWebCopilotSource.includes('async function dismissReplyBlockingDialog(page)')
+      && whatsappWebCopilotSource.includes("await page.keyboard.press('Escape').catch(() => null)")
+      && whatsappWebCopilotSource.includes('await dismissReplyBlockingDialog(page);'),
+    'WhatsApp Web sender must dismiss a modal that intercepts the live reply composer before typing'
+  );
+  assert(
     whatsappWebBridgeServiceSource.includes('duplicate_refreshed_at')
       && whatsappWebBridgeServiceSource.includes('same_reply_new_inbound'),
     'WhatsApp Web bridge must wake an existing pending duplicate reply instead of leaving it delayed'

@@ -4267,6 +4267,77 @@ async function setComposerTextWithDom(page, text) {
   return !!result.ok;
 }
 
+async function inspectReplyBlockingDialog(page) {
+  return page.evaluate((composerSelectors) => {
+    const normalize = (value) => String(value || '').replace(/\s+/g, ' ').trim();
+    const isVisible = (node) => {
+      if (!node) return false;
+      const style = window.getComputedStyle(node);
+      const rect = node.getBoundingClientRect();
+      return style.display !== 'none'
+        && style.visibility !== 'hidden'
+        && Number(style.opacity || 1) !== 0
+        && rect.width > 8
+        && rect.height > 8;
+    };
+    const composer = composerSelectors
+      .flatMap((selector) => Array.from(document.querySelectorAll(selector)))
+      .filter(isVisible)
+      .at(-1);
+    if (!composer) return { blocking: false, label: '' };
+
+    const dialog = Array.from(document.querySelectorAll('[role="dialog"][aria-modal="true"], [role="dialog"]'))
+      .filter(isVisible)
+      .find((node) => !node.contains(composer));
+    if (!dialog) return { blocking: false, label: '' };
+
+    return {
+      blocking: true,
+      label: normalize(dialog.getAttribute('aria-label') || dialog.innerText || dialog.textContent || '').slice(0, 180)
+    };
+  }, COMPOSER_SELECTORS).catch(() => ({ blocking: false, label: '' }));
+}
+
+async function dismissReplyBlockingDialog(page) {
+  const before = await inspectReplyBlockingDialog(page);
+  if (!before.blocking) return false;
+
+  log(`dismissing reply-blocking WhatsApp dialog before composing${before.label ? `: ${before.label}` : ''}`);
+  await page.keyboard.press('Escape').catch(() => null);
+  await page.waitForTimeout(250);
+  if (!(await inspectReplyBlockingDialog(page)).blocking) return true;
+
+  const clicked = await page.evaluate(() => {
+    const normalize = (value) => String(value || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    const isVisible = (node) => {
+      if (!node) return false;
+      const style = window.getComputedStyle(node);
+      const rect = node.getBoundingClientRect();
+      return style.display !== 'none'
+        && style.visibility !== 'hidden'
+        && Number(style.opacity || 1) !== 0
+        && rect.width > 8
+        && rect.height > 8;
+    };
+    const dialog = Array.from(document.querySelectorAll('[role="dialog"][aria-modal="true"], [role="dialog"]'))
+      .filter(isVisible)
+      .at(-1);
+    if (!dialog) return false;
+    const action = Array.from(dialog.querySelectorAll('button,[role="button"]'))
+      .filter(isVisible)
+      .find((node) => /^(?:close|dismiss|cancel|not now)$/.test(normalize([
+        node.getAttribute('aria-label'),
+        node.getAttribute('title'),
+        node.textContent
+      ].filter(Boolean).join(' '))));
+    if (!action) return false;
+    action.click();
+    return true;
+  }).catch(() => false);
+  if (clicked) await page.waitForTimeout(250);
+  return !(await inspectReplyBlockingDialog(page)).blocking;
+}
+
 async function clickWhatsAppSend(page) {
   const clicked = await page.evaluate((selectors) => {
     for (const selector of selectors) {
@@ -4365,6 +4436,7 @@ async function waitForPostSendConfirmation(page, text, beforeState, timeoutMs = 
 
 async function replaceComposerText(page, text, timeoutMs = 1200) {
   const expectedText = normalizeReplyText(text);
+  await dismissReplyBlockingDialog(page);
   const composer = await findReplyComposer(page, timeoutMs);
   if (!composer) return setComposerTextWithDom(page, text);
 
