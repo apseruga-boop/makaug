@@ -93,6 +93,7 @@ assert.deepEqual(
     name: 'property-1.jpg',
     captureSource: '',
     previewWarning: '',
+    degradedFromVideo: false,
     publicEligible: true,
     evidenceOnly: false,
     mediaValidation: null
@@ -237,7 +238,7 @@ assert(serverSource.includes('whatsapp-outgoing-preview-guard-20260831'), 'live 
 assert(copilotSource.includes('captureVideoPosterFrame'), 'worker must derive a staff-review still when WhatsApp video bytes are available');
 assert(copilotSource.includes('mediaPreviews.push({'), 'successful video intake must carry both the video and its still image');
 assert(copilotSource.includes('trying message screenshot fallback'), 'a failed WhatsApp blob fetch must still try the reviewable message screenshot fallback');
-assert(copilotSource.includes("mediaPreviewError: 'video_bytes_unavailable_poster_stored'"), 'an unrecoverable video must preserve a property poster instead of blocking the batch forever');
+assert(copilotSource.includes("mediaPreviewError: 'video_bytes_unavailable_poster_stored'"), 'an unrecoverable video must preserve a poster as evidence instead of blocking the batch forever');
 assert(copilotSource.includes('locateEmployeeBatchHistory'), 'COMPLETE must scan backward to the Agent 007 trigger before closing a batch');
 assert(copilotSource.includes('replayEmployeeBatchThroughCompletion'), 'the worker must replay every ordered batch message before COMPLETE');
 assert(copilotSource.includes('scrollWhatsappHistoryNewer'), 'history reconciliation must walk forward from the trigger without keeping every video in memory');
@@ -251,9 +252,24 @@ assert(copilotSource.includes('captureImageMessageScreenshot'), 'tainted WhatsAp
 assert(copilotSource.includes("imagePreviewWarning: 'image_canvas_unavailable_screenshot_stored'"), 'rendered image recovery must remain auditable in staff review metadata');
 assert(copilotSource.includes("captureSource: 'rendered_whatsapp_image_fallback'"), 'rendered WhatsApp fallbacks must carry explicit provenance to the API');
 assert(copilotSource.includes('capture_source: item.captureSource'), 'fallback provenance must survive the web-bridge payload');
+assert(copilotSource.includes("captureSource: 'rendered_whatsapp_video_fallback'"), 'video-message screenshots must carry evidence-only provenance');
+assert(copilotSource.includes("previewWarning: 'video_bytes_unavailable_screenshot_evidence_only'"), 'missing original video bytes must be explicit in intake metadata');
+assert(copilotSource.includes('degraded_from_video: item.degradedFromVideo === true'), 'video degradation provenance must reach the API');
 assert(routeSource.includes('validateEmployeeImageCandidate'), 'employee intake images must pass the property-photo classifier before becoming gallery media');
 assert(routeSource.includes("verdict: 'rendered_whatsapp_message_evidence'"), 'rendered message fallbacks must be quarantined deterministically');
-assert(routeSource.includes("media_validation_status: imageMedia.length ? 'passed_automated_image_gate' : 'blocked_no_usable_property_image'"), 'review records must expose whether they contain a usable public image');
+assert(routeSource.includes("'blocked_original_video_recovery_required'"), 'review records must expose when the original WhatsApp video is missing');
+assert.equal(whatsappRoute.employeeVideoEvidenceOnly({
+  kind: 'image',
+  captureSource: 'rendered_whatsapp_video_fallback',
+  previewWarning: 'video_bytes_unavailable_screenshot_evidence_only',
+  degradedFromVideo: true
+}), true, 'rendered video-message captures must force original-video recovery');
+assert.equal(whatsappRoute.employeeVideoEvidenceOnly({
+  kind: 'image',
+  captureSource: '',
+  previewWarning: '',
+  degradedFromVideo: false
+}), false, 'ordinary property photos must not be routed into video recovery');
 assert(routeSource.includes('source_evidence_urls'), 'rejected screenshots must remain available to staff as source evidence');
 assert(copilotSource.includes("WHATSAPP_EMPLOYEE_MEDIA_QUALITY_MARKER = 'whatsapp-employee-media-quality-guard-20260906'"), 'worker health must identify the media-quality guard release');
 assert(serverSource.includes('whatsapp-employee-media-quality-guard-20260906'), 'production health must expose the employee media-quality release');

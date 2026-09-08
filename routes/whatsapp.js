@@ -3354,7 +3354,8 @@ function employeeMediaCandidates(runtime = {}, mediaUrl = '') {
       sha256: normalizeInput(candidate.sha256 || candidate.hash || ''),
       name: normalizeInput(candidate.name || candidate.filename || ''),
       captureSource: normalizeInput(candidate.capture_source || candidate.captureSource || ''),
-      previewWarning: normalizeInput(candidate.preview_warning || candidate.previewWarning || '')
+      previewWarning: normalizeInput(candidate.preview_warning || candidate.previewWarning || ''),
+      degradedFromVideo: candidate.degraded_from_video === true || candidate.degradedFromVideo === true
     });
   };
   for (const candidate of Array.isArray(runtime.photoCandidates) ? runtime.photoCandidates.slice(0, 20) : []) {
@@ -3377,7 +3378,12 @@ function employeeMediaCandidates(runtime = {}, mediaUrl = '') {
 
 async function validateEmployeeImageCandidate(candidate = {}, imageDataUrl = '') {
   const captureSource = normalizeInput(candidate.captureSource).toLowerCase();
-  if (captureSource === 'rendered_whatsapp_image_fallback') {
+  const previewWarning = normalizeInput(candidate.previewWarning).toLowerCase();
+  const whatsappEvidenceOnly = captureSource === 'rendered_whatsapp_image_fallback'
+    || captureSource === 'rendered_whatsapp_video_fallback'
+    || captureSource === 'whatsapp_video_poster_evidence'
+    || previewWarning.includes('evidence_only');
+  if (whatsappEvidenceOnly) {
     return {
       accepted: false,
       verdict: 'rendered_whatsapp_message_evidence',
@@ -3506,6 +3512,7 @@ async function storeEmployeeMediaCandidate(candidate, {
     name: candidate.name || filename,
     captureSource: candidate.captureSource || '',
     previewWarning: candidate.previewWarning || '',
+    degradedFromVideo: candidate.degradedFromVideo === true,
     publicEligible,
     evidenceOnly: kind === 'image' && !publicEligible,
     mediaValidation
@@ -3530,6 +3537,7 @@ function employeePendingStoredMedia(sessionData = {}) {
       name: normalizeInput(item?.name),
       captureSource: normalizeInput(item?.captureSource || item?.capture_source),
       previewWarning: normalizeInput(item?.previewWarning || item?.preview_warning),
+      degradedFromVideo: item?.degradedFromVideo === true || item?.degraded_from_video === true,
       publicEligible: item?.evidenceOnly === true ? false : item?.publicEligible !== false,
       evidenceOnly: item?.evidenceOnly === true,
       mediaValidation: item?.mediaValidation && typeof item.mediaValidation === 'object' ? item.mediaValidation : null
@@ -3559,6 +3567,16 @@ function clearEmployeePendingMedia(sessionData = {}) {
   delete sessionData.pending_property_media;
   delete sessionData.pending_property_media_message_id;
   delete sessionData.pending_property_media_stored_at;
+}
+
+function employeeVideoEvidenceOnly(item = {}) {
+  if (item.kind !== 'image') return false;
+  const captureSource = normalizeInput(item.captureSource || item.capture_source).toLowerCase();
+  const previewWarning = normalizeInput(item.previewWarning || item.preview_warning).toLowerCase();
+  return item.degradedFromVideo === true
+    || captureSource === 'rendered_whatsapp_video_fallback'
+    || captureSource === 'whatsapp_video_poster_evidence'
+    || previewWarning.startsWith('video_bytes_unavailable_');
 }
 
 async function recoverEmployeeVideoReviewMedia(propertyId, runtime = {}) {
@@ -4242,6 +4260,7 @@ async function createEmployeeReviewProperty({
   const evidenceMedia = storedMedia.filter((item) => item.kind === 'image' && item.publicEligible === false);
   const videoMedia = storedMedia.filter((item) => item.kind === 'video');
   const documentMedia = storedMedia.filter((item) => item.kind === 'document');
+  const videoRecoveryRequired = videoMedia.length === 0 && evidenceMedia.some(employeeVideoEvidenceOnly);
   const videoKeyFrames = imageMedia.filter((item) => /video-(?:key-frame|still|message-preview|preview)/i.test(String(item.name || '')));
   const cleanPublicCaption = cleanEmployeePropertyCaption(caption);
   const publicDescription = buildEmployeePublicDescription({
@@ -4275,7 +4294,9 @@ async function createEmployeeReviewProperty({
     source_platform: 'WhatsApp employee intake',
     agent_profile_linked: Boolean(agent?.id),
     identity_document_available: Boolean(sessionData.identity_document_url),
-    media_validation_status: imageMedia.length ? 'passed_automated_image_gate' : 'blocked_no_usable_property_image',
+    media_validation_status: videoRecoveryRequired
+      ? 'blocked_original_video_recovery_required'
+      : (imageMedia.length ? 'passed_automated_image_gate' : 'blocked_no_usable_property_image'),
     media_quality_blockers: evidenceMedia.map((item) => ({
       url: item.url,
       capture_source: item.captureSource || null,
@@ -4294,6 +4315,9 @@ async function createEmployeeReviewProperty({
     })),
     video_count: videoMedia.length,
     video_key_frame_count: videoKeyFrames.length,
+    video_recovery_required: videoRecoveryRequired,
+    video_recovery_reason: videoRecoveryRequired ? 'original_whatsapp_video_bytes_unavailable' : null,
+    video_recovery_requested_at: videoRecoveryRequired ? new Date().toISOString() : null,
     document_urls: documentMedia.map((item) => item.url),
     canonical_location_id: facts.locationPatch.canonical_location_id,
     canonical_location_level: facts.locationPatch.canonical_location_level,
@@ -4374,6 +4398,7 @@ async function createEmployeeReviewProperty({
           media_count: storedMedia.length,
           public_image_count: imageMedia.length,
           quarantined_evidence_count: evidenceMedia.length,
+          video_recovery_required: videoRecoveryRequired,
           auto_publish: false
         })
       ]
@@ -4436,6 +4461,10 @@ async function attachEmployeeReviewMedia({ propertyId, storedMedia, phone, inbou
   const previousDocuments = Array.isArray(property.extra_fields?.document_urls) ? property.extra_fields.document_urls : [];
   const videos = uniqueMedia.filter((item) => item.kind === 'video').map((item) => item.url);
   const mergedVideos = [...new Set([...previousVideos, ...videos])];
+  const videoRecoveryRequired = mergedVideos.length === 0 && (
+    property.extra_fields?.video_recovery_required === true
+    || evidenceImages.some(employeeVideoEvidenceOnly)
+  );
   const documents = uniqueMedia.filter((item) => item.kind === 'document').map((item) => item.url);
   const mergedHashes = [...existingHashes, ...uniqueMedia.map((item) => item.sha256).filter(Boolean)];
   const previousEvidenceUrls = Array.isArray(property.extra_fields?.source_evidence_urls) ? property.extra_fields.source_evidence_urls : [];
@@ -4485,6 +4514,11 @@ async function attachEmployeeReviewMedia({ propertyId, storedMedia, phone, inbou
         })),
         video_count: mergedVideos.length,
         video_key_frame_count: Number(property.extra_fields?.video_key_frame_count || 0) + videoKeyFrames.length,
+        video_recovery_required: videoRecoveryRequired,
+        video_recovery_reason: videoRecoveryRequired ? 'original_whatsapp_video_bytes_unavailable' : null,
+        video_recovery_requested_at: videoRecoveryRequired
+          ? (property.extra_fields?.video_recovery_requested_at || new Date().toISOString())
+          : null,
         document_urls: [...previousDocuments, ...documents],
         source_evidence_urls: [...new Set([...previousEvidenceUrls, ...evidenceImages.map((item) => item.url)])],
         media_quality_blockers: [
@@ -4496,9 +4530,11 @@ async function attachEmployeeReviewMedia({ propertyId, storedMedia, phone, inbou
             reason: item.mediaValidation?.reason || item.previewWarning || 'image_not_public_eligible'
           }))
         ],
-        media_validation_status: imageOffset + images.length > 0
-          ? 'passed_automated_image_gate'
-          : 'blocked_no_usable_property_image'
+        media_validation_status: videoRecoveryRequired
+          ? 'blocked_original_video_recovery_required'
+          : (imageOffset + images.length > 0
+            ? 'passed_automated_image_gate'
+            : 'blocked_no_usable_property_image')
       })]
     );
     await client.query(
@@ -4514,6 +4550,7 @@ async function attachEmployeeReviewMedia({ propertyId, storedMedia, phone, inbou
           media_attached: uniqueMedia.length,
           public_images_attached: images.length,
           evidence_images_quarantined: evidenceImages.length,
+          video_recovery_required: videoRecoveryRequired,
           auto_publish: false
         })
       ]
@@ -12681,6 +12718,7 @@ module.exports.__test = {
   employeeCaptionHash,
   employeeMediaCandidates,
   employeePendingStoredMedia,
+  employeeVideoEvidenceOnly,
   employeePropertyFacts,
   employeePropertyMissing,
   getWhatsappCallNotificationEmails,

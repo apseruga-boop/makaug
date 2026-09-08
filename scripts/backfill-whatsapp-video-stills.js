@@ -20,6 +20,7 @@ const {
 } = require('../services/whatsappEmployeeIntakeService');
 
 const BACKFILL_MARKER = 'whatsapp-video-distinct-clear-frames-20260903';
+const ORIGINAL_MEDIA_ONLY_MARKER = 'whatsapp-original-media-only-20260908';
 const MAX_DOWNLOAD_BYTES = 100 * 1024 * 1024;
 const MAX_VIDEOS_PER_PROPERTY = 10;
 const MIN_VIDEO_KEY_FRAMES = 5;
@@ -55,6 +56,7 @@ function parseArgs(argv = process.argv.slice(2)) {
     replaceExisting: argv.includes('--replace-video-frames'),
     reopenApproved: argv.includes('--reopen-approved'),
     quarantinePrimary: argv.includes('--quarantine-primary'),
+    quarantineVideoScreenshots: argv.includes('--quarantine-video-screenshots'),
     agentIds: argv
       .filter((arg) => arg.startsWith('--agent-id='))
       .map((arg) => arg.slice('--agent-id='.length).trim())
@@ -275,82 +277,6 @@ async function normalizeSelectedFrame(inputPath, outputPath) {
   const stat = await fsp.stat(outputPath);
   if (!stat.size) throw new Error('image normalization produced an empty key frame');
   return stat.size;
-}
-
-function colourDistance(left = [], right = []) {
-  return [0, 1, 2].reduce((total, index) => total + Math.abs(Number(left[index] || 0) - Number(right[index] || 0)), 0);
-}
-
-async function whatsappMessagePreviewBounds(imagePath) {
-  const image = sharp(imagePath).rotate().removeAlpha();
-  const { data, info } = await image.clone().raw().toBuffer({ resolveWithObject: true });
-  if (info.width < 900 || info.height < 260) return null;
-  const pixel = (x, y) => {
-    const safeX = Math.max(0, Math.min(info.width - 1, Math.round(x)));
-    const safeY = Math.max(0, Math.min(info.height - 1, Math.round(y)));
-    const offset = ((safeY * info.width) + safeX) * info.channels;
-    return [data[offset], data[offset + 1], data[offset + 2]];
-  };
-  const contentAtLandscapeEdge = pixel(info.width * 0.35, Math.min(100, info.height * 0.25));
-  const backgroundReference = pixel(info.width * 0.74, Math.min(100, info.height * 0.25));
-  const landscape = colourDistance(contentAtLandscapeEdge, backgroundReference) > 60;
-  const left = Math.round(info.width * 0.069);
-  const top = Math.min(30, Math.max(0, info.height - 1));
-  const width = landscape ? Math.round(info.width * 0.35) : Math.round(info.width * 0.255);
-  const requestedHeight = landscape ? Math.round(width * (9 / 16)) : Math.round(width * (4 / 2.84));
-  const height = Math.min(requestedHeight, info.height - top - Math.max(28, Math.round(info.height * 0.08)));
-  if (width < 180 || height < 160) return null;
-  return { left, top, width, height, landscape };
-}
-
-async function makeAndUploadCroppedPreview(property, fetchImpl = fetch) {
-  const imageResult = await db.query(
-    `SELECT url
-       FROM property_images
-      WHERE property_id = $1
-      ORDER BY is_primary DESC, sort_order ASC, created_at ASC
-      LIMIT 1`,
-    [property.id]
-  );
-  const sourceUrl = String(imageResult.rows[0]?.url || '').trim();
-  if (!sourceUrl) throw new Error('no source image is available for media repair');
-  const tempDir = await fsp.mkdtemp(path.join(os.tmpdir(), `makaug-preview-repair-${property.id}-`));
-  try {
-    const inputPath = path.join(tempDir, 'source-image');
-    const outputPath = path.join(tempDir, 'repaired-preview.jpg');
-    await downloadVideo(sourceUrl, inputPath, fetchImpl);
-    const bounds = await whatsappMessagePreviewBounds(inputPath);
-    if (!bounds) throw new Error('source screenshot does not contain a recoverable full property preview');
-    await sharp(inputPath)
-      .rotate()
-      .extract({ left: bounds.left, top: bounds.top, width: bounds.width, height: bounds.height })
-      .resize({ width: bounds.landscape ? 1280 : 960, withoutEnlargement: false, kernel: sharp.kernel.lanczos3 })
-      .sharpen({ sigma: 0.7, m1: 0.8, m2: 1.6 })
-      .jpeg({ quality: 90, chromaSubsampling: '4:4:4', mozjpeg: true })
-      .toFile(outputPath);
-    const metrics = await frameCandidateMetrics(outputPath);
-    if (metrics.sharpness < 0.25 || metrics.entropy < 5) {
-      throw new Error('source screenshot preview is incomplete or too unclear to reuse');
-    }
-    const bytes = await fsp.readFile(outputPath);
-    const stored = await uploadBufferToS3({
-      bytes,
-      mimeType: 'image/jpeg',
-      key: `whatsapp-employee-intake/repaired-preview/${property.id}/${Date.now()}-${crypto.randomUUID()}.jpg`
-    });
-    if (!stored.publicUrl) throw new Error('S3_PUBLIC_BASE_URL is required for review media');
-    return {
-      url: stored.publicUrl,
-      sha256: stored.sha256,
-      bytes: stored.bytes,
-      sourceUrl,
-      bounds,
-      sharpness: metrics.sharpness,
-      entropy: metrics.entropy
-    };
-  } finally {
-    await fsp.rm(tempDir, { recursive: true, force: true });
-  }
 }
 
 async function extractStillAt(videoPath, stillPath, seconds) {
@@ -657,21 +583,21 @@ async function attachStills(propertyId, uploaded, {
   }
 }
 
-async function attachCroppedPreview(property, preview) {
+async function quarantineWhatsappVideoScreenshots(property) {
   const client = await db.getClient();
   try {
     await client.query('BEGIN');
     const locked = await client.query(
-      `SELECT id, status, listing_type, description, district, area, price, lister_name, extra_fields
+      `SELECT id, status, source, listing_type, description, district, area, price, lister_name, extra_fields
          FROM properties
         WHERE id = $1
         FOR UPDATE`,
       [property.id]
     );
     const current = locked.rows[0];
-    if (!current || current.status !== 'pending') {
+    if (!current || current.status !== 'pending' || current.source !== 'whatsapp_employee_intake') {
       await client.query('ROLLBACK');
-      return { attached: 0, skipped: 'status_changed' };
+      return { attached: 0, skipped: 'not_pending_whatsapp_employee_intake' };
     }
     const cleanCaption = cleanEmployeePropertyCaption(current.extra_fields?.source_caption || current.description || '');
     const publicDescription = buildEmployeePublicDescription({
@@ -690,7 +616,7 @@ async function attachCroppedPreview(property, preview) {
       keyFrameCount: 0
     });
     const previousImages = await client.query(
-      `SELECT url
+      `SELECT url, slot_key, room_label
          FROM property_images
         WHERE property_id = $1
         ORDER BY is_primary DESC, sort_order ASC, created_at ASC`,
@@ -700,17 +626,23 @@ async function attachCroppedPreview(property, preview) {
       ...(Array.isArray(current.extra_fields?.source_evidence_urls) ? current.extra_fields.source_evidence_urls : []),
       ...previousImages.rows.map((item) => String(item.url || '').trim()).filter(Boolean)
     ])];
+    const previousQualityBlockers = Array.isArray(current.extra_fields?.media_quality_blockers)
+      ? current.extra_fields.media_quality_blockers
+      : [];
+    const quarantineBlockers = previousImages.rows.map((item) => ({
+      url: String(item.url || '').trim(),
+      capture_source: 'legacy_whatsapp_video_screenshot',
+      previous_slot_key: item.slot_key || null,
+      previous_room_label: item.room_label || null,
+      verdict: 'source_evidence_only',
+      reason: 'whatsapp_video_screenshot_not_public_media'
+    }));
     await client.query('DELETE FROM property_images WHERE property_id = $1', [property.id]);
-    await client.query(
-      `INSERT INTO property_images (property_id, url, is_primary, sort_order, slot_key, room_label)
-       VALUES ($1, $2, TRUE, 0, 'repaired_primary', 'Clear property preview from source video')`,
-      [property.id, preview.url]
-    );
     await client.query(
       `UPDATE properties
           SET description = $2,
               moderation_stage = 'submitted',
-              moderation_reason = 'Media repaired; manual re-review required',
+              moderation_reason = 'Original WhatsApp video recovery required; do not approve',
               extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $3::jsonb,
               updated_at = NOW()
         WHERE id = $1 AND status = 'pending'`,
@@ -718,39 +650,47 @@ async function attachCroppedPreview(property, preview) {
         source_caption_display: cleanCaption.slice(0, 2000),
         review_only: true,
         auto_publish: false,
-        media_repair_marker: BACKFILL_MARKER,
-        media_repair_mode: 'whatsapp_source_preview_crop',
-        media_repair_source_url: preview.sourceUrl,
-        media_repair_crop_bounds: preview.bounds,
-        media_repair_sharpness: Number(Number(preview.sharpness || 0).toFixed(4)),
-        media_repair_entropy: Number(Number(preview.entropy || 0).toFixed(4)),
+        media_repair_marker: ORIGINAL_MEDIA_ONLY_MARKER,
+        media_repair_mode: 'original_whatsapp_video_recovery',
         source_evidence_urls: sourceEvidenceUrls,
-        media_quality_blockers: [],
-        media_validation_status: 'passed_repair_image_gate',
-        media_repaired_at: new Date().toISOString()
+        media_quality_blockers: [...previousQualityBlockers, ...quarantineBlockers],
+        media_validation_status: 'blocked_original_video_recovery_required',
+        video_url: null,
+        video_urls: [],
+        video_tours: [],
+        video_count: 0,
+        video_key_frame_count: 0,
+        video_recovery_required: true,
+        video_recovery_reason: 'legacy_whatsapp_video_screenshot_quarantined',
+        video_recovery_requested_at: new Date().toISOString(),
+        media_quarantined_at: new Date().toISOString()
       })]
     );
     await client.query(
       `INSERT INTO property_moderation_events
         (property_id, actor_id, action, status_from, status_to, reason, notes, delivery)
-       VALUES ($1, 'whatsapp-video-still-backfill', 'whatsapp_source_preview_repaired',
+       VALUES ($1, 'whatsapp-video-still-backfill', 'whatsapp_video_screenshot_quarantined',
                'pending', 'pending', $2, $3, $4::jsonb)`,
       [
         property.id,
-        'Cropped the actual property preview out of the WhatsApp message screenshot.',
-        'A clearer primary preview was attached. The original screenshot remains as source evidence and the listing remains in staff review.',
+        'Removed WhatsApp video screenshots from the review gallery and queued original-video recovery.',
+        `${previousImages.rows.length} screenshot-derived gallery image(s) were retained as source evidence only. The listing remains pending and must not be approved until the original video and clean key frames are attached.`,
         JSON.stringify({
-          marker: BACKFILL_MARKER,
-          source_url: preview.sourceUrl,
-          crop_bounds: preview.bounds,
-          sharpness: Number(Number(preview.sharpness || 0).toFixed(4)),
-          entropy: Number(Number(preview.entropy || 0).toFixed(4)),
+          marker: ORIGINAL_MEDIA_ONLY_MARKER,
+          quarantined_gallery_urls: previousImages.rows.map((item) => item.url).filter(Boolean),
+          video_recovery_required: true,
           auto_publish: false
         })
       ]
     );
     await client.query('COMMIT');
-    return { attached: 1, mode: 'cropped_source_preview', descriptionCleaned: publicDescription !== current.description };
+    return {
+      attached: 0,
+      quarantined: previousImages.rows.length,
+      queuedForVideoRecovery: true,
+      mode: 'original_video_recovery_required',
+      descriptionCleaned: publicDescription !== current.description
+    };
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
@@ -820,6 +760,7 @@ async function main() {
   const selected = result.rows;
   process.stdout.write(`${JSON.stringify({
     marker: BACKFILL_MARKER,
+    originalMediaOnlyMarker: ORIGINAL_MEDIA_ONLY_MARKER,
     mode: options.apply ? 'apply' : 'dry-run',
     selected: selected.length,
     properties: selected.map((row) => ({
@@ -829,7 +770,11 @@ async function main() {
       keyFramesNeeded: keyFramesNeeded(row, options),
       willReopenForReview: options.reopenApproved && row.status === 'approved',
       replaceExisting: options.replaceExisting,
-      quarantinePrimary: options.quarantinePrimary
+      quarantinePrimary: options.quarantinePrimary,
+      action: extractVideoUrls(row.extra_fields).length
+        ? 'extract_distinct_key_frames_from_playable_video'
+        : 'quarantine_screenshots_and_request_original_video',
+      quarantineVideoScreenshots: options.quarantineVideoScreenshots
     }))
   }, null, 2)}\n`);
   if (!options.apply) return;
@@ -839,6 +784,8 @@ async function main() {
     reopenedForReview: 0,
     repaired: 0,
     stillsAttached: 0,
+    screenshotsQuarantined: 0,
+    queuedForVideoRecovery: 0,
     skipped: 0,
     failed: 0,
     errors: []
@@ -854,10 +801,14 @@ async function main() {
         const uploaded = await makeAndUploadStills(property, options);
         attached = await attachStills(property.id, uploaded, options);
       } else {
-        const preview = await makeAndUploadCroppedPreview(property);
-        attached = await attachCroppedPreview(property, preview);
+        if (!options.quarantineVideoScreenshots) {
+          throw new Error('property has no playable video; pass --quarantine-video-screenshots after reviewing the exact dry-run manifest');
+        }
+        attached = await quarantineWhatsappVideoScreenshots(property);
       }
-      if (attached.attached || attached.descriptionCleaned) {
+      summary.screenshotsQuarantined += Number(attached.quarantined || 0);
+      if (attached.queuedForVideoRecovery) summary.queuedForVideoRecovery += 1;
+      if (attached.attached || attached.descriptionCleaned || attached.queuedForVideoRecovery) {
         summary.repaired += 1;
         summary.stillsAttached += attached.attached;
       } else {
@@ -885,6 +836,7 @@ if (require.main === module) {
 
 module.exports = {
   BACKFILL_MARKER,
+  ORIGINAL_MEDIA_ONLY_MARKER,
   MIN_VIDEO_KEY_FRAMES,
   SELECTION_SQL,
   extractVideoUrls,
@@ -896,7 +848,6 @@ module.exports = {
   candidateFrameOffsets,
   hammingDistance,
   selectDistinctFrameCandidates,
-  whatsappMessagePreviewBounds,
   representativeFrameOffsets,
   selectionSqlFor,
   selectionQueryFor,
