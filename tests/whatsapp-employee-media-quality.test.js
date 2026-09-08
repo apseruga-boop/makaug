@@ -87,6 +87,7 @@ assert.equal(metadataIssue({ primary_slot_key: 'primary', extra_fields: {} }), '
   assert(propertiesSource.includes("'original_whatsapp_video', 'validated_property_image'"), 'missing original videos must be named explicitly at the approval boundary');
   assert(propertiesSource.includes("NOT IN ('source_evidence_original', 'quarantined_source_evidence')"), 'source evidence must not count as usable public media');
   assert(staffRouteSource.includes("'media_validation_status', p.extra_fields->>'media_validation_status'"), 'moderators must receive the media validation state');
+  assert(staffRouteSource.includes("'video_recovery_required', COALESCE(p.extra_fields->'video_recovery_required', 'false'::jsonb)"), 'moderators must receive a boolean original-video recovery flag');
   assert(appSource.includes('<strong>Media blocked:</strong>'), 'the review queue must explain why a quarantined listing cannot be approved');
   assert(appSource.includes('the playable original WhatsApp video is still being recovered'), 'staff must see the original-video recovery state in the queue');
   console.log('WhatsApp employee media quality checks passed');
