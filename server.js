@@ -444,6 +444,7 @@ const mortgageI18nPolishVersion = 'mortgage-i18n-polish-20260710';
 const mortgageRealBankLogosVersion = 'mortgage-real-bank-logos-20260710';
 const mortgageRealBankLogosEagerVersion = 'mortgage-real-bank-logos-eager-20260710';
 const mortgageLogoCellPolishVersion = 'mortgage-logo-cell-polish-20260710';
+const mortgageSourceRefreshVersion = 'mortgage-source-refresh-20260908';
 const publicStickyMapRailVersion = 'public-sticky-map-rail-20260710';
 const publicStickyMapAssistRailVersion = 'public-sticky-map-assist-rail-20260710';
 const tailwindStaticCssVersion = 'tailwind-static-css-20260710';
@@ -549,6 +550,7 @@ const publicAppVersionSuffixes = [
   mortgageRealBankLogosVersion,
   mortgageRealBankLogosEagerVersion,
   mortgageLogoCellPolishVersion,
+  mortgageSourceRefreshVersion,
   publicStickyMapRailVersion,
   publicStickyMapAssistRailVersion,
   tailwindStaticCssVersion,

@@ -20,10 +20,10 @@ const UGANDA_FALLBACK_MORTGAGE_PROVIDERS = [
     minDepositPct: { residential: 20, commercial: 20, land: 20, default: 20 },
     maxYears: { residential: 25, commercial: 25, land: 25, default: 25 },
     arrangementFeePct: 1.5,
-    sourceLabel: 'Stanbic home loan public pages',
-    sourceUrl: 'https://www.stanbicbank.co.ug/uganda/personal/products-and-services/borrow-for-your-needs/see-all-mortgages-and-home-loans/house-purchase-loan',
-    sourceNote: 'Stanbic publishes 80% financing/LTV, 1.5% arrangement fee, 1.5% transfer stamp duty, 0.5% mortgage stamp duty, and 0.25% valuation guidance.',
-    sourceVerifiedAt: '2026-06-21'
+    sourceLabel: 'Stanbic advertised pre-approved mortgage rate',
+    sourceUrl: 'https://www.stanbicbank.co.ug/uganda/personal/about-us/news/Stanbic-Bank-Uganda%E2%80%99s-new-mortgage-solution-breaks-financing-barrier-to-home-ownership',
+    sourceNote: 'Stanbic advertised 16.5% UGX pricing for eligible existing customers in its pre-approved mortgage launch. Its main home-loan page contains conflicting financing and fee wording, so eligibility, deposit, fees, and the final rate require direct confirmation.',
+    sourceVerifiedAt: '2026-09-08'
   },
   {
     key: 'hfb',
@@ -36,8 +36,8 @@ const UGANDA_FALLBACK_MORTGAGE_PROVIDERS = [
     arrangementFeePct: 1.25,
     sourceLabel: 'Housing Finance mortgage terms and conditions',
     sourceUrl: 'https://www.housingfinance.co.ug/mortgage-development-finance/housing-finance-bank-mortgage-terms-and-conditions/',
-    sourceNote: 'Housing Finance publishes LTV, term, facility-fee, stamp-duty, and gross-income guidance; its public page says interest is variable and requires lender confirmation.',
-    sourceVerifiedAt: '2026-06-21'
+    sourceNote: 'Housing Finance publishes up to 80% purchase finance in Kampala, up to 20-year residential/commercial terms, a 1.25% facility fee, and a 35% income guide. Its public page says interest is variable, so the rate requires lender confirmation.',
+    sourceVerifiedAt: '2026-09-08'
   },
   {
     key: 'dfcu',
@@ -50,8 +50,8 @@ const UGANDA_FALLBACK_MORTGAGE_PROVIDERS = [
     arrangementFeePct: 2.0,
     sourceLabel: 'dfcu home loans',
     sourceUrl: 'https://www.dfcugroup.com/personal-banking/home-loans/',
-    sourceNote: 'dfcu publishes UGX home-loan rate guidance and 20-year UGX term rules; commercial and land rates need bank confirmation.',
-    sourceVerifiedAt: '2026-06-21'
+    sourceNote: 'dfcu publishes 16% UGX home-loan guidance, up to 85% open-market-value financing, and UGX tenure guidance. Its 2026 tariff guide lists a 2%-3% arrangement-fee range; this calculator uses the 2% lower bound as an estimate.',
+    sourceVerifiedAt: '2026-09-08'
   },
   {
     key: 'kcb',
@@ -64,8 +64,8 @@ const UGANDA_FALLBACK_MORTGAGE_PROVIDERS = [
     arrangementFeePct: 1.5,
     sourceLabel: 'KCB mortgage overview',
     sourceUrl: 'https://ug.kcbgroup.com/products/mortgage',
-    sourceNote: 'KCB publishes UGX pricing from 17.5%, 20-year purchase/construction/refinance terms, and 80% LTV guidance for Kampala, Entebbe, and Wakiso.',
-    sourceVerifiedAt: '2026-06-21'
+    sourceNote: 'KCB publishes UGX pricing from 17.5%, up to 20-year purchase/construction/refinance terms, and up to 80% financing for Kampala, Entebbe, and Wakiso. Final pricing and approval remain bank-specific.',
+    sourceVerifiedAt: '2026-09-08'
   },
   {
     key: 'ncba',
@@ -79,7 +79,7 @@ const UGANDA_FALLBACK_MORTGAGE_PROVIDERS = [
     sourceLabel: 'NCBA Uganda property loans',
     sourceUrl: 'https://ncbagroup.com/ug/property-loans/',
     sourceNote: 'NCBA publishes property-loan, construction-finance, land-purchase, and equity-release terms: up to 25-year UGX mortgage tenure, up to 90% financing for eligible Kampala/city properties, 70% office-space financing, and up to 60-month land-purchase terms; public rate requires bank confirmation.',
-    sourceVerifiedAt: '2026-06-21'
+    sourceVerifiedAt: '2026-09-08'
   },
   {
     key: 'centenary',
@@ -87,18 +87,18 @@ const UGANDA_FALLBACK_MORTGAGE_PROVIDERS = [
     residentialRate: null,
     commercialRate: null,
     landRate: null,
-    minDepositPct: { residential: 20, commercial: 20, land: 10, default: 20 },
+    minDepositPct: { residential: 30, commercial: 30, land: 10, default: 30 },
     maxYears: { residential: 10, commercial: 10, land: 10, default: 10 },
     arrangementFeePct: 1.5,
     sourceLabel: 'Centenary Bank housing loan pages',
     sourceUrl: 'https://www.centenarybank.co.ug/product/cente-mortgage/4/8',
-    sourceNote: 'Centenary publishes Cente Mortgage and CenteLand product pages: mortgage loan amounts from UGX 20m to UGX 300m, up to 10-year tenure, declining-balance interest, up to 80% LTV, and CenteLand 10% mandatory contribution; public rate requires bank confirmation.',
-    sourceVerifiedAt: '2026-06-21'
+    sourceNote: 'Centenary publishes Cente Mortgage amounts from UGX 20m to UGX 300m, up to 10-year tenure, and a minimum 30% borrower contribution. The same page also states maximum LTV of 80%, so the calculator uses the more conservative 30% deposit and requires bank confirmation.',
+    sourceVerifiedAt: '2026-09-08'
   },
   {
     key: 'baroda',
     name: 'Bank of Baroda Uganda',
-    residentialRate: 18.0,
+    residentialRate: null,
     commercialRate: null,
     landRate: null,
     minDepositPct: { residential: 20, commercial: 20, land: 20, default: 20 },
@@ -106,8 +106,8 @@ const UGANDA_FALLBACK_MORTGAGE_PROVIDERS = [
     arrangementFeePct: 1.0,
     sourceLabel: 'Baroda housing loan and interest rates',
     sourceUrl: 'https://www.bankofbaroda.ug/rates-and-charges/interest-rates',
-    sourceNote: 'Baroda publishes housing-loan pricing as 2% below UGX PLR; with public PLR at 20%, this is an indicative 18% UGX rate.',
-    sourceVerifiedAt: '2026-06-07'
+    sourceNote: 'Baroda publishes housing-loan pricing as 2% below UGX PLR and a maximum 15-year term. Its displayed 20% PLR is explicitly effective from 2022 and the page directs customers to confirm current rates, so no numeric rate is presented here.',
+    sourceVerifiedAt: '2026-09-08'
   },
   {
     key: 'absa',
@@ -117,11 +117,11 @@ const UGANDA_FALLBACK_MORTGAGE_PROVIDERS = [
     landRate: null,
     minDepositPct: { residential: 15, commercial: 20, land: 20, default: 20 },
     maxYears: { residential: 25, commercial: 25, land: 25, default: 25 },
-    arrangementFeePct: 1.5,
+    arrangementFeePct: 2.0,
     sourceLabel: 'Absa Uganda home loans',
     sourceUrl: 'https://www.absa.co.ug/personal/home-loans/',
-    sourceNote: 'Absa publishes home-loan availability but does not publish a fixed public rate on the reviewed page, so quotes are required.',
-    sourceVerifiedAt: '2026-06-07'
+    sourceNote: 'Absa publishes up to 85% property finance, up to 25-year terms, and a 2% arrangement fee. It does not publish a fixed public rate on the reviewed page, so a current quote is required.',
+    sourceVerifiedAt: '2026-09-08'
   }
 ];
 
@@ -334,6 +334,13 @@ function mergeAuditedMortgageProviders(providers = []) {
   return mergedProviders;
 }
 
+function latestMortgageSourceVerifiedAt(providers = []) {
+  return providers
+    .map((provider) => provider.sourceVerifiedAt || provider.source_verified_at || null)
+    .filter((value) => value && !Number.isNaN(new Date(value).getTime()))
+    .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0] || null;
+}
+
 async function hasMortgageTable() {
   const exists = await db.query(`SELECT to_regclass('public.mortgage_providers') AS table_name`);
   return Boolean(exists.rows[0]?.table_name);
@@ -364,9 +371,10 @@ function buildMortgageLeadRef() {
 async function readMortgageProviders() {
   try {
     if (!(await hasMortgageTable())) {
+      const providers = mergeAuditedMortgageProviders(FALLBACK_MORTGAGE_PROVIDERS);
       return {
-        providers: mergeAuditedMortgageProviders(FALLBACK_MORTGAGE_PROVIDERS),
-        updatedAt: null,
+        providers,
+        updatedAt: latestMortgageSourceVerifiedAt(providers),
         source: 'fallback'
       };
     }
@@ -394,28 +402,26 @@ async function readMortgageProviders() {
     );
 
     if (!result.rows.length) {
+      const providers = mergeAuditedMortgageProviders(FALLBACK_MORTGAGE_PROVIDERS);
       return {
-        providers: mergeAuditedMortgageProviders(FALLBACK_MORTGAGE_PROVIDERS),
-        updatedAt: null,
+        providers,
+        updatedAt: latestMortgageSourceVerifiedAt(providers),
         source: 'fallback'
       };
     }
 
     const providers = mergeAuditedMortgageProviders(result.rows.map(normalizeProvider));
-    const latest = result.rows
-      .map((row) => row.updated_at)
-      .filter(Boolean)
-      .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0] || null;
 
     return {
       providers,
-      updatedAt: latest,
+      updatedAt: latestMortgageSourceVerifiedAt(providers),
       source: 'database'
     };
   } catch (error) {
+    const providers = mergeAuditedMortgageProviders(FALLBACK_MORTGAGE_PROVIDERS);
     return {
-      providers: mergeAuditedMortgageProviders(FALLBACK_MORTGAGE_PROVIDERS),
-      updatedAt: null,
+      providers,
+      updatedAt: latestMortgageSourceVerifiedAt(providers),
       source: 'fallback'
     };
   }

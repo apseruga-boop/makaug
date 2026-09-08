@@ -474,7 +474,7 @@ const CURRENCIES = {
 };
 const REVIEW_USD_TO_UGX_GUIDE_RATE = 3800;
 
-const DEFAULT_MORTGAGE_RATE_UPDATED_AT = "2026-06-21";
+const DEFAULT_MORTGAGE_RATE_UPDATED_AT = "2026-09-08";
 const MAP_DEFAULT_CENTER = { lat: 1.3733, lng: 32.2903 };
 const MAP_UGANDA_OVERVIEW_CENTER = { lat: 1.3733, lng: 32.2903 };
 const MAP_DEFAULT_ZOOM = 7;
@@ -517,10 +517,10 @@ const DEFAULT_MORTGAGE_PROVIDERS = [
     minDepositPct: { residential: 20, commercial: 20, land: 20, default: 20 },
     maxYears: { residential: 25, commercial: 25, land: 25, default: 25 },
     arrangementFeePct: 1.5,
-    sourceLabel: "Stanbic home loan public pages",
-    sourceUrl: "https://www.stanbicbank.co.ug/uganda/personal/products-and-services/borrow-for-your-needs/see-all-mortgages-and-home-loans/house-purchase-loan",
-    sourceNote: "Stanbic publishes home loan fees, transfer stamp duty, mortgage stamp duty, and valuation guidance; final pricing is confirmed by the bank.",
-    sourceVerifiedAt: "2026-06-21"
+    sourceLabel: "Stanbic advertised pre-approved mortgage rate",
+    sourceUrl: "https://www.stanbicbank.co.ug/uganda/personal/about-us/news/Stanbic-Bank-Uganda%E2%80%99s-new-mortgage-solution-breaks-financing-barrier-to-home-ownership",
+    sourceNote: "Stanbic advertised 16.5% UGX pricing for eligible existing customers in its pre-approved mortgage launch. Its main home-loan page contains conflicting financing and fee wording, so eligibility, deposit, fees, and the final rate require direct confirmation.",
+    sourceVerifiedAt: "2026-09-08"
   },
   {
     id: "hfb",
@@ -533,8 +533,8 @@ const DEFAULT_MORTGAGE_PROVIDERS = [
     arrangementFeePct: 1.25,
     sourceLabel: "Housing Finance mortgage terms and conditions",
     sourceUrl: "https://www.housingfinance.co.ug/mortgage-development-finance/housing-finance-bank-mortgage-terms-and-conditions/",
-    sourceNote: "Housing Finance publishes LTV, term, facility fee, and gross-income guidance; rate is variable and requires bank confirmation.",
-    sourceVerifiedAt: "2026-06-21"
+    sourceNote: "Housing Finance publishes up to 80% purchase finance in Kampala, up to 20-year residential/commercial terms, a 1.25% facility fee, and a 35% income guide. Its public page says interest is variable, so the rate requires lender confirmation.",
+    sourceVerifiedAt: "2026-09-08"
   },
   {
     id: "dfcu",
@@ -547,8 +547,8 @@ const DEFAULT_MORTGAGE_PROVIDERS = [
     arrangementFeePct: 2.0,
     sourceLabel: "dfcu home loans",
     sourceUrl: "https://www.dfcugroup.com/personal-banking/home-loans/",
-    sourceNote: "dfcu publishes UGX home-loan rate guidance, 20-year UGX term rules, and up-to-85% open-market-value guidance for residential home loans.",
-    sourceVerifiedAt: "2026-06-21"
+    sourceNote: "dfcu publishes 16% UGX home-loan guidance, up to 85% open-market-value financing, and UGX tenure guidance. Its 2026 tariff guide lists a 2%-3% arrangement-fee range; this calculator uses the 2% lower bound as an estimate.",
+    sourceVerifiedAt: "2026-09-08"
   },
   {
     id: "kcb",
@@ -561,8 +561,8 @@ const DEFAULT_MORTGAGE_PROVIDERS = [
     arrangementFeePct: 1.5,
     sourceLabel: "KCB mortgage overview",
     sourceUrl: "https://ug.kcbgroup.com/products/mortgage",
-    sourceNote: "KCB publishes UGX pricing from 17.5%, 20-year purchase/construction/refinance term guidance, and LTV rules.",
-    sourceVerifiedAt: "2026-06-21"
+    sourceNote: "KCB publishes UGX pricing from 17.5%, up to 20-year purchase/construction/refinance terms, and up to 80% financing for Kampala, Entebbe, and Wakiso. Final pricing and approval remain bank-specific.",
+    sourceVerifiedAt: "2026-09-08"
   },
   {
     id: "ncba",
@@ -576,7 +576,7 @@ const DEFAULT_MORTGAGE_PROVIDERS = [
     sourceLabel: "NCBA Uganda property loans",
     sourceUrl: "https://ncbagroup.com/ug/property-loans/",
     sourceNote: "NCBA publishes property-loan, construction-finance, land-purchase, and equity-release terms including up to 25-year UGX mortgage tenure, up to 90% financing for eligible Kampala/city properties, and up to 60-month land-purchase terms; public rate requires bank confirmation.",
-    sourceVerifiedAt: "2026-06-21"
+    sourceVerifiedAt: "2026-09-08"
   },
   {
     id: "centenary",
@@ -584,18 +584,18 @@ const DEFAULT_MORTGAGE_PROVIDERS = [
     residentialRate: null,
     commercialRate: null,
     landRate: null,
-    minDepositPct: { residential: 20, commercial: 20, land: 10, default: 20 },
+    minDepositPct: { residential: 30, commercial: 30, land: 10, default: 30 },
     maxYears: { residential: 10, commercial: 10, land: 10, default: 10 },
     arrangementFeePct: 1.5,
     sourceLabel: "Centenary Bank housing loan pages",
     sourceUrl: "https://www.centenarybank.co.ug/product/cente-mortgage/4/8",
-    sourceNote: "Centenary publishes Cente Mortgage and CenteLand terms including UGX 20m-300m mortgage loan amounts, up to 10-year tenure, up to 80% LTV, and CenteLand 10% mandatory contribution; public rate requires bank confirmation.",
-    sourceVerifiedAt: "2026-06-21"
+    sourceNote: "Centenary publishes Cente Mortgage amounts from UGX 20m to UGX 300m, up to 10-year tenure, and a minimum 30% borrower contribution. The same page also states maximum LTV of 80%, so the calculator uses the more conservative 30% deposit and requires bank confirmation.",
+    sourceVerifiedAt: "2026-09-08"
   },
   {
     id: "baroda",
     name: "Bank of Baroda Uganda",
-    residentialRate: 18.0,
+    residentialRate: null,
     commercialRate: null,
     landRate: null,
     minDepositPct: { residential: 20, commercial: 20, land: 20, default: 20 },
@@ -603,8 +603,8 @@ const DEFAULT_MORTGAGE_PROVIDERS = [
     arrangementFeePct: 1.0,
     sourceLabel: "Baroda housing loan and interest rates",
     sourceUrl: "https://www.bankofbaroda.ug/rates-and-charges/interest-rates",
-    sourceNote: "Baroda publishes housing loan pricing as 2% below UGX PLR; with PLR 20%, this gives an indicative 18% UGX rate.",
-    sourceVerifiedAt: "2026-06-07"
+    sourceNote: "Baroda publishes housing-loan pricing as 2% below UGX PLR and a maximum 15-year term. Its displayed 20% PLR is explicitly effective from 2022 and the page directs customers to confirm current rates, so no numeric rate is presented here.",
+    sourceVerifiedAt: "2026-09-08"
   },
   {
     id: "absa",
@@ -614,11 +614,11 @@ const DEFAULT_MORTGAGE_PROVIDERS = [
     landRate: null,
     minDepositPct: { residential: 15, commercial: 20, land: 20, default: 20 },
     maxYears: { residential: 25, commercial: 25, land: 25, default: 25 },
-    arrangementFeePct: 1.5,
+    arrangementFeePct: 2.0,
     sourceLabel: "Absa Uganda home loans",
     sourceUrl: "https://www.absa.co.ug/personal/home-loans/",
-    sourceNote: "Absa publishes home-loan availability in UGX/USD with competitive rates, but does not publish a fixed public rate on the page.",
-    sourceVerifiedAt: "2026-06-07"
+    sourceNote: "Absa publishes up to 85% property finance, up to 25-year terms, and a 2% arrangement fee. It does not publish a fixed public rate on the reviewed page, so a current quote is required.",
+    sourceVerifiedAt: "2026-09-08"
   }
 ];
 const AUDITED_MORTGAGE_PROVIDER_BY_ID = Object.fromEntries(DEFAULT_MORTGAGE_PROVIDERS.map((provider) => [provider.id, provider]));
@@ -4807,8 +4807,8 @@ const MORTGAGE_I18N = {
     pill1Sub: "See side-by-side repayment estimates instantly.",
     pill2Title: "Professional Calculator",
     pill2Sub: "Enter price, deposit, rate, and term to estimate repayments.",
-    pill3Title: "Daily Rate Review",
-    pill3Sub: "Rates are checked daily to keep this page up to date.",
+    pill3Title: "Dated Source Review",
+    pill3Sub: "Bank information is checked against public lender pages and dated below.",
     calcTitle: "Repayment calculator",
     calcTip: "Estimate before you apply",
     labelPrice: "Property Price (UGX)",
@@ -4872,8 +4872,8 @@ const MORTGAGE_I18N = {
     leadSubmitBank: "Request {bank} Call",
     resultsTitle: "Best Match & Bank Comparison",
     ratesFootnote: "Indicative public rates from bank sources. Confirm current rates with the lender before applying.",
-    ratesAsOfLine: "Rates as of {date} · indicative, confirm with the bank.",
-    comparisonSubtitle: "Sort live public bank assumptions by repayment, rate, term, or deposit strength.",
+    ratesAsOfLine: "Sources verified {date} · indicative, confirm with the bank.",
+    comparisonSubtitle: "Sort dated public-bank assumptions by repayment, rate, term, or deposit strength.",
     sortBy: "Sort by",
     sortMonthly: "Monthly repayment",
     sortRate: "Interest rate",
@@ -4902,11 +4902,11 @@ const MORTGAGE_I18N = {
     termFeeBody: "A one-time setup fee charged by the bank, often a percentage of the approved loan amount.",
     termEarlyTitle: "Early Repayment",
     termEarlyBody: "Some lenders charge a fee if you clear the loan early. Always check this before signing your offer letter.",
-    dailyTitle: "Daily Update Flow",
-    dailyNote: "Rates are pulled from our API and public bank sources, then reviewed regularly. Use Refresh for the latest available makaug data, and confirm final terms with the bank.",
+    dailyTitle: "How rates are reviewed",
+    dailyNote: "The date above records the latest public-source verification. Refresh reloads makaug's published dataset; the bank must confirm the final rate, fees, eligibility, and approval.",
     summaryPrice: "Property Price",
     summaryDepositLoan: "Deposit / Loan",
-    summaryUpdated: "Rates Updated",
+    summaryUpdated: "Sources Verified",
     healthAffordability: "Affordability Check",
     healthSuggestedIncome: "Suggested Income (35% rule)",
     healthLoanShare: "Loan Share",
@@ -4986,8 +4986,8 @@ const MORTGAGE_I18N = {
     pill1Sub: "Laba okubala kw'okusasula kwa buli bbanka mangu.",
     pill2Title: "Kozaamu slider",
     pill2Sub: "Kyusa deposit n'emyaka olabe enkyukakyuka mu kusasula buli mwezi.",
-    pill3Title: "Rate zikeberwa buli lunaku",
-    pill3Sub: "Rate zikeberwa buli lunaku okukuuma data nga mpya.",
+    pill3Title: "Okukebera ensonda za bbanka",
+    pill3Sub: "Rate zikakasibwa ku mpapula za bbanka ez'olukale, era olunaku lw'okukebera lulagibwa wansi.",
     calcTitle: "Repayment calculator",
     calcTip: "Kyusa sliders olabe enjawulo",
     labelPrice: "Omuwendo gwa Property (UGX)",
@@ -5016,8 +5016,8 @@ const MORTGAGE_I18N = {
     termFeeBody: "Kino ssente ya mulundi gumu ku kutandika loan.",
     termEarlyTitle: "Early Repayment",
     termEarlyBody: "Bbanka ezimu zisasula omutango bw'osasula loan ng'ekiseera tekinnaggwa.",
-    dailyTitle: "Okutereeza data buli lunaku",
-    dailyNote: "Rate ziggibwa mu API era zikeberwa buli lunaku. Nyiga Refresh okulaba ezisinga obupya.",
+    dailyTitle: "Engeri rate gye zikeberwamu",
+    dailyNote: "Olunaku oluli waggulu lulaga okukebera okw'enkomerero ku nsonda ez'olukale. Refresh eddamu okutikka data ya makaug; bbanka y'ekakasa rate n'ebisale eby'enkomerero.",
     summaryPrice: "Omuwendo gwa Property",
     summaryDepositLoan: "Deposit / Loan",
     summaryUpdated: "Rate Zaasembyeyo Okukyusibwa",
@@ -5100,8 +5100,8 @@ const MORTGAGE_I18N = {
     pill1Sub: "Ona makadirio ya malipo kwa benki tofauti papo hapo.",
     pill2Title: "Cheza na Sliders",
     pill2Sub: "Badilisha amana na miaka kuona malipo ya mwezi kwa muda halisi.",
-    pill3Title: "Ukaguzi wa Kila Siku",
-    pill3Sub: "Viwango hukaguliwa kila siku ili data ibaki mpya.",
+    pill3Title: "Ukaguzi wa Vyanzo vya Benki",
+    pill3Sub: "Viwango huthibitishwa dhidi ya kurasa za umma za benki, na tarehe ya ukaguzi inaonyeshwa hapa chini.",
     calcTitle: "Kikokotoo cha Rehani",
     calcTip: "Sogeza sliders kuona chaguo tofauti",
     labelPrice: "Bei ya Mali (UGX)",
@@ -5130,8 +5130,8 @@ const MORTGAGE_I18N = {
     termFeeBody: "Ada ya mara moja wakati wa kuanzisha mkopo.",
     termEarlyTitle: "Kulipa Mapema",
     termEarlyBody: "Baadhi ya benki hutoza adhabu ukimaliza mkopo mapema.",
-    dailyTitle: "Mtiririko wa Usasishaji wa Kila Siku",
-    dailyNote: "Viwango hupakiwa kutoka API na kukaguliwa kila siku. Tumia kitufe cha refresh kuona data mpya.",
+    dailyTitle: "Jinsi viwango vinavyokaguliwa",
+    dailyNote: "Tarehe iliyo juu inaonyesha uthibitishaji wa mwisho wa vyanzo vya umma. Refresh hupakia upya data ya makaug; benki lazima ithibitishe kiwango na ada za mwisho.",
     summaryPrice: "Bei ya Mali",
     summaryDepositLoan: "Amana / Mkopo",
     summaryUpdated: "Viwango Vimesasishwa",
@@ -5214,8 +5214,8 @@ const MORTGAGE_I18N = {
     pill1Sub: "Nen cato cente pa bank mapat ki mapiyo.",
     pill2Title: "Yub ki Sliders",
     pill2Sub: "Lok deposit ki mwaka me neno cente me dwe i kare-ki-kare.",
-    pill3Title: "Neno Rate Buri Nino",
-    pill3Sub: "Rate pego buri nino me gwoko ngec ma manyen.",
+    pill3Title: "Neno kama pa bank",
+    pill3Sub: "Rate pego ki potbuk pa bank ma tye bot lwak, ki nino me neno nyute piny.",
     calcTitle: "Repayment calculator",
     calcTip: "Lok sliders me pimo yoo mapat",
     labelPrice: "Wel pa gang (UGX)",
@@ -5244,8 +5244,8 @@ const MORTGAGE_I18N = {
     termFeeBody: "En cente acel me cako loan.",
     termEarlyTitle: "Cato mapwod",
     termEarlyBody: "Bank mukene twero cako fee ka i cato loan mapwod.",
-    dailyTitle: "Nwo ngec buri nino",
-    dailyNote: "Rate bongo ki API ka kange ki nino. Tii ki Refresh me neno ngec manyen.",
+    dailyTitle: "Yoo ma ginongo rate",
+    dailyNote: "Nino ma tye malo nyuto neno me agiki ki kama ma tye bot lwak. Refresh nwoyo keto ngec pa makaug; bank myero omok rate ki cul me agiki.",
     summaryPrice: "Wel pa gang",
     summaryDepositLoan: "Deposit / Loan",
     summaryUpdated: "Rate ma onwo",
@@ -5328,8 +5328,8 @@ const MORTGAGE_I18N = {
     pill1Sub: "Reeba enshashura z'okurabira omu bank ezindi mangu.",
     pill2Title: "Shaba na Sliders",
     pill2Sub: "Hindura deposit n'emyaka oreebe ensasura ya buri kwezi.",
-    pill3Title: "Okwegyesa Rate buri izooba",
-    pill3Sub: "Rate zireebwa buri izooba kugira data egume nempya.",
+    pill3Title: "Okukebera ensonda za banki",
+    pill3Sub: "Rate nizikakasibwa n'empapura za banki ez'ahari boona, kandi eizooba ry'okukebera niryorekwa ahansi.",
     calcTitle: "Repayment calculator",
     calcTip: "Hindura sliders ogerageranye options",
     labelPrice: "Omuhendo gwa Property (UGX)",
@@ -5358,8 +5358,8 @@ const MORTGAGE_I18N = {
     termFeeBody: "Amafaranga g'omurundi gumu aga kubanzaa loan.",
     termEarlyTitle: "Okusasura kare",
     termEarlyBody: "Bank ezimwe zicaja omutango ku kusinga loan kare.",
-    dailyTitle: "Okutereeza kwa buri izooba",
-    dailyNote: "Rate zituruka omu API kandi zireebwa buri izooba. Nyiga Refresh oreebe ezimpya.",
+    dailyTitle: "Oku rate zirikuheebwa amakuru",
+    dailyNote: "Eizooba eriri ahaiguru niryo ry'okukakasibwa kw'enkomerero omu nsonda z'ahari boona. Refresh neegarura data ya makaug; banki niyo ekakasa rate n'ebisale by'enkomerero.",
     summaryPrice: "Omuhendo gwa Property",
     summaryDepositLoan: "Deposit / Loan",
     summaryUpdated: "Rate ezaharirwe",
@@ -5442,8 +5442,8 @@ const MORTGAGE_I18N = {
     pill1Sub: "Reba ibaruramari ryo kwishyura ku mabanki atandukanye ako kanya.",
     pill2Title: "Koresha sliders",
     pill2Sub: "Hindura deposit n'imyaka urebe uko kwishyura kwa buri kwezi guhinduka.",
-    pill3Title: "Isuzuma rya buri munsi",
-    pill3Sub: "Rates zisuzumwa buri munsi kugira amakuru agume ari mashya.",
+    pill3Title: "Isuzuma ry'amasoko ya banki",
+    pill3Sub: "Rates zemezwa ku mbuga za banki, kandi itariki y'isuzuma igaragazwa hasi.",
     calcTitle: "Repayment calculator",
     calcTip: "Hindura sliders ugeregeranye options",
     labelPrice: "Igiciro cya Property (UGX)",
@@ -5472,8 +5472,8 @@ const MORTGAGE_I18N = {
     termFeeBody: "Amafaranga yishyurwa rimwe igihe ideni ritangiye.",
     termEarlyTitle: "Kwishyura kare",
     termEarlyBody: "Amabanki amwe yishyuza penalty uramutse wishyuye ideni mbere y'igihe.",
-    dailyTitle: "Guhindura amakuru buri munsi",
-    dailyNote: "Rates zituruka kuri API kandi zisuzumwa buri munsi. Kanda Refresh ubone izishya.",
+    dailyTitle: "Uko rates zisuzumwa",
+    dailyNote: "Itariki iri hejuru yerekana igihe amasoko rusange yaherukaga kwemezwa. Refresh isubiramo data ya makaug; banki ni yo yemeza rate n'amafaranga bya nyuma.",
     summaryPrice: "Igiciro cya Property",
     summaryDepositLoan: "Deposit / Loan",
     summaryUpdated: "Rates zasubiwemo",
@@ -5556,8 +5556,8 @@ const MORTGAGE_I18N = {
     pill1Sub: "Laba ensasula ezigerageranyiziddwa mangu.",
     pill2Title: "Kozesa sliders",
     pill2Sub: "Kyusa deposit n'emyaka olabe ensasula za buli mwezi.",
-    pill3Title: "Rate zikeberwa buli lunaku",
-    pill3Sub: "Rate zikeberwa buli lunaku okusigaza data nga mpya.",
+    pill3Title: "Okukebera ensonda za bbanka",
+    pill3Sub: "Rate zikakasibwa ku mpapula za bbanka ez'olukale, era olunaku lw'okukebera lulagibwa wansi.",
     calcTitle: "Repayment calculator",
     calcTip: "Kyusa sliders ogerageranye eby'okulondako",
     labelPrice: "Omuwendo gwa Property (UGX)",
@@ -5586,8 +5586,8 @@ const MORTGAGE_I18N = {
     termFeeBody: "Ssente ya mulundi gumu ku kutandika loan.",
     termEarlyTitle: "Okusasula nga bukyali",
     termEarlyBody: "Bbanka ezimu zisasuliza penalty bw'osasula loan nga ekiseera tekinnaggwa.",
-    dailyTitle: "Okukyusa data buli lunaku",
-    dailyNote: "Rate ziggibwa mu API era zikeberwa buli lunaku. Nyiga Refresh okulaba ezisinga obupya.",
+    dailyTitle: "Engeri rate gye zikeberwamu",
+    dailyNote: "Olunaku oluli waggulu lulaga okukebera okw'enkomerero ku nsonda ez'olukale. Refresh eddamu okutikka data ya makaug; bbanka y'ekakasa rate n'ebisale eby'enkomerero.",
     summaryPrice: "Omuwendo gwa Property",
     summaryDepositLoan: "Deposit / Loan",
     summaryUpdated: "Rate zikyusiddwa",
@@ -5672,8 +5672,8 @@ MORTGAGE_I18N.rn = Object.assign({}, MORTGAGE_I18N.en, {
   pill1Sub: "Reeba ensasura ya buri kwezi kuruga omu banki nyingi.",
   pill2Title: "Calculator y'omutindo",
   pill2Sub: "Yingiza omuhendo, deposit, rate, n'emyaka kureeba ensasura.",
-  pill3Title: "Rate nizikeberwa buri izooba",
-  pill3Sub: "Tukeba eby'amabanki buri izooba kugira ngu page egume eri nshya.",
+  pill3Title: "Okukebera ensonda za banki",
+  pill3Sub: "Rate nizikakasibwa n'empapura za banki ez'ahari boona, kandi eizooba ry'okukebera niryorekwa ahansi.",
   calcTitle: "Calculator y'ensasura",
   calcTip: "Gerageranya otakasabye",
   labelPrice: "Omuhendo gw'eky'obutaka/nju (UGX)",
@@ -5747,8 +5747,8 @@ MORTGAGE_I18N.rn = Object.assign({}, MORTGAGE_I18N.en, {
   termFeeBody: "Fee erikusasurwa rimwe loan neetandikwa, emirundi mingi eri percentage ya loan eikirizibwe.",
   termEarlyTitle: "Okusasura kare",
   termEarlyBody: "Banki zimwe nizibaasa kusaba fee waheza loan kare. Banza okikakase otakateire omukono.",
-  dailyTitle: "Okugarura data buri izooba",
-  dailyNote: "Rate niziruga ku API kandi nizikeberwa buri izooba. Kanda refresh kureeba data ensya.",
+  dailyTitle: "Oku rate zirikuheebwa amakuru",
+  dailyNote: "Eizooba eriri ahaiguru niryo ry'okukakasibwa kw'enkomerero omu nsonda z'ahari boona. Refresh neegarura data ya makaug; banki niyo ekakasa rate n'ebisale by'enkomerero.",
   summaryPrice: "Omuhendo gwa property",
   summaryDepositLoan: "Deposit / loan",
   summaryUpdated: "Rate zigaruriirwe",
@@ -5824,8 +5824,8 @@ MORTGAGE_I18N.am = Object.assign({}, MORTGAGE_I18N.en, {
   pill1Sub: "የወር ክፍያ ግምቶችን ከጎን ለጎን ይመልከቱ።",
   pill2Title: "የባለሙያ ማስሊያ",
   pill2Sub: "ዋጋ፣ ቅድመ ክፍያ፣ ወለድ እና ጊዜ ያስገቡ።",
-  pill3Title: "የዕለት ዋጋ ግምገማ",
-  pill3Sub: "ይህ ገጽ እንዲዘምን የባንክ መረጃ በየቀኑ ይፈተሻል።",
+  pill3Title: "የሕዝብ ምንጭ የወለድ ምጣኔ ግምገማ",
+  pill3Sub: "የባንክ ወለድ ምጣኔዎች ከሕዝብ የባንክ ገጾች ጋር ይረጋገጣሉ፣ የምርመራውም ቀን ከታች ይታያል።",
   calcTitle: "የክፍያ ማስሊያ",
   calcTip: "ከመጠየቅዎ በፊት ይገምቱ",
   labelPrice: "የንብረት ዋጋ (UGX)",
@@ -5899,8 +5899,8 @@ MORTGAGE_I18N.am = Object.assign({}, MORTGAGE_I18N.en, {
   termFeeBody: "ብድሩ ሲጀምር ብዙ ጊዜ ከተፈቀደው ብድር መጠን በመቶኛ የሚከፈል አንድ ጊዜ ክፍያ።",
   termEarlyTitle: "ቀደም ብሎ መክፈል",
   termEarlyBody: "አንዳንድ ባንኮች ብድሩን ቀደም ብለው ካጠናቀቁ ክፍያ ሊያስከፍሉ ይችላሉ።",
-  dailyTitle: "የዕለት ዝመና ሂደት",
-  dailyNote: "ዋጋዎች ከAPI ይመጣሉ እና በየቀኑ ይገመገማሉ። አዲሱን መረጃ ለማየት አድስ ይጫኑ።",
+  dailyTitle: "የወለድ ምጣኔዎች እንዴት እንደሚገመገሙ",
+  dailyNote: "ከላይ ያለው ቀን የመጨረሻውን የሕዝብ ምንጭ ማረጋገጫ ያሳያል። Refresh የmakaugን የታተመ መረጃ ዳግም ይጭናል፤ ባንኩ የመጨረሻውን ምጣኔና ክፍያዎች ማረጋገጥ አለበት።",
   summaryPrice: "የንብረት ዋጋ",
   summaryDepositLoan: "ቅድመ ክፍያ / ብድር",
   summaryUpdated: "ዋጋዎች ተዘምነዋል",
@@ -5984,8 +5984,8 @@ MORTGAGE_I18N.ar = Object.assign({}, MORTGAGE_I18N.en, {
   pill1Sub: "شاهد تقديرات السداد جنباً إلى جنب فوراً.",
   pill2Title: "حاسبة احترافية",
   pill2Sub: "أدخل السعر والدفعة الأولى والفائدة والمدة لتقدير السداد.",
-  pill3Title: "مراجعة يومية للأسعار",
-  pill3Sub: "تتم مراجعة البيانات يومياً للحفاظ على تحديث الصفحة.",
+  pill3Title: "مراجعة الأسعار من المصادر العامة",
+  pill3Sub: "يتم التحقق من الأسعار مقابل صفحات البنوك العامة، ويظهر تاريخ المراجعة أدناه.",
   calcTitle: "حاسبة السداد",
   calcTip: "قدّر التكلفة قبل التقديم",
   labelPrice: "سعر العقار (UGX)",
@@ -6059,8 +6059,8 @@ MORTGAGE_I18N.ar = Object.assign({}, MORTGAGE_I18N.en, {
   termFeeBody: "رسوم تدفع مرة واحدة عند إعداد القرض، غالباً كنسبة من مبلغ القرض الموافق عليه.",
   termEarlyTitle: "السداد المبكر",
   termEarlyBody: "بعض المقرضين يفرضون رسوماً إذا سددت القرض مبكراً. تحقق من ذلك قبل توقيع العرض.",
-  dailyTitle: "تدفق التحديث اليومي",
-  dailyNote: "تسحب الأسعار من API وتراجع يومياً. استخدم زر التحديث لأحدث بيانات متاحة.",
+  dailyTitle: "كيفية مراجعة الأسعار",
+  dailyNote: "يوضح التاريخ أعلاه آخر تحقق من المصادر العامة. يعيد زر التحديث تحميل بيانات makaug المنشورة؛ ويجب على البنك تأكيد السعر والرسوم النهائية.",
   summaryPrice: "سعر العقار",
   summaryDepositLoan: "الدفعة الأولى / القرض",
   summaryUpdated: "تحديث الأسعار",
@@ -51383,6 +51383,13 @@ function formatMortgageUpdatedAtLabel(value) {
   });
 }
 
+function latestMortgageSourceVerifiedAt(providers = []) {
+  return providers
+    .map((provider) => provider.sourceVerifiedAt || provider.source_verified_at || null)
+    .filter((value) => value && !Number.isNaN(new Date(value).getTime()))
+    .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0] || null;
+}
+
 function hydrateMortgageProvidersFromApi(data, options = {}) {
   const checkedAt = data?.refreshedAt || options.checkedAt || new Date().toISOString();
   MORTGAGE_RATE_LAST_CHECKED_RAW = checkedAt;
@@ -51425,7 +51432,9 @@ function hydrateMortgageProvidersFromApi(data, options = {}) {
   }));
 
   MORTGAGE_PROVIDERS = mergeAuditedMortgageProviderList(normalized);
-  MORTGAGE_RATE_UPDATED_RAW = data.updatedAt || DEFAULT_MORTGAGE_RATE_UPDATED_AT;
+  MORTGAGE_RATE_UPDATED_RAW = latestMortgageSourceVerifiedAt(MORTGAGE_PROVIDERS)
+    || data.updatedAt
+    || DEFAULT_MORTGAGE_RATE_UPDATED_AT;
   MORTGAGE_RATE_UPDATED_AT = formatMortgageUpdatedAtLabel(MORTGAGE_RATE_UPDATED_RAW);
   return true;
 }
