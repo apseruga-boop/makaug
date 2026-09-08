@@ -122,6 +122,7 @@ const WHATSAPP_OWNER_FORWARD_REVIEW_MARKER = 'whatsapp-owner-forward-review-medi
 const WHATSAPP_OWNER_HISTORY_BACKFILL_MARKER = 'whatsapp-owner-history-backfill-20260820';
 const WHATSAPP_EMPLOYEE_AGENT_007_MARKER = 'whatsapp-employee-agent-007-review-intake-20260829';
 const WHATSAPP_AGENT_007_ORDERED_BATCH_MARKER = 'whatsapp-agent-007-ordered-batch-finalization-20260829';
+const WHATSAPP_VIDEO_ORIGINAL_RECOVERY_MARKER = 'whatsapp-video-original-recovery-20260831';
 const WHATSAPP_CALL_EVENT_TRUST_MARKER = 'whatsapp-call-card-trust-gate-20260831';
 const WHATSAPP_API_VERSION = (process.env.WHATSAPP_API_VERSION || 'v25.0').trim();
 const WHATSAPP_ACCESS_TOKEN = (process.env.WHATSAPP_ACCESS_TOKEN || '').trim();
@@ -3579,6 +3580,18 @@ function employeeVideoEvidenceOnly(item = {}) {
     || previewWarning.startsWith('video_bytes_unavailable_');
 }
 
+function recoveredEmployeeVideoMediaQualityPatch() {
+  return {
+    media_quality_blockers: [],
+    media_validation_status: 'passed_automated_image_gate',
+    video_recovery_required: false,
+    video_recovery_reason: null,
+    video_recovery_requested_at: null,
+    review_only: true,
+    auto_publish: false
+  };
+}
+
 async function recoverEmployeeVideoReviewMedia(propertyId, runtime = {}) {
   const targetResult = await db.query(
     `SELECT id, status, extra_fields
@@ -3666,21 +3679,23 @@ async function recoverEmployeeVideoReviewMedia(propertyId, runtime = {}) {
         ...(Array.isArray(locked.extra_fields?.corrupt_video_urls) ? locked.extra_fields.corrupt_video_urls : []),
         ...oldVideoUrls
       ])],
-      video_recovery_required: false,
+      ...recoveredEmployeeVideoMediaQualityPatch(),
       video_recovered_at: new Date().toISOString(),
-      video_recovery_marker: 'whatsapp-video-original-recovery-20260831',
+      video_recovery_marker: WHATSAPP_VIDEO_ORIGINAL_RECOVERY_MARKER,
       media_count: videos.length + images.length,
       media_sha256: [...new Set([
         ...oldHashes,
         ...videos.map((item) => item.sha256).filter(Boolean),
         ...images.map((item) => item.sha256).filter(Boolean)
       ])],
-      review_only: true,
-      auto_publish: false
     };
     await client.query(
       `UPDATE properties
           SET extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $2::jsonb,
+              moderation_reason = CASE
+                WHEN moderation_reason = 'Original WhatsApp video recovery required; do not approve' THEN NULL
+                ELSE moderation_reason
+              END,
               updated_at = NOW()
         WHERE id = $1 AND status = 'pending'`,
       [propertyId, JSON.stringify(recoveryPatch)]
@@ -3695,7 +3710,7 @@ async function recoverEmployeeVideoReviewMedia(propertyId, runtime = {}) {
         'Replaced an encrypted historic WhatsApp media object with the playable original and a derived still.',
         `${videos.length} playable video(s) and ${images.length} still image(s) attached. Listing remained in staff review.`,
         JSON.stringify({
-          marker: 'whatsapp-video-original-recovery-20260831',
+          marker: WHATSAPP_VIDEO_ORIGINAL_RECOVERY_MARKER,
           videos_recovered: videos.length,
           stills_attached: images.length,
           corrupt_video_urls: oldVideoUrls,
@@ -3705,6 +3720,91 @@ async function recoverEmployeeVideoReviewMedia(propertyId, runtime = {}) {
     );
     await client.query('COMMIT');
     return { recovered: true, videos: videos.length, images: images.length };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function reconcileRecoveredEmployeeVideoReviewMedia(propertyIds = []) {
+  const requestedIds = [...new Set(propertyIds
+    .map((value) => normalizeInput(value))
+    .filter((value) => /^[0-9a-f-]{36}$/i.test(value)))]
+    .slice(0, 20);
+  if (!requestedIds.length) return { repaired: [], skipped: [] };
+
+  const client = await db.getClient();
+  const repaired = [];
+  const skipped = [];
+  try {
+    await client.query('BEGIN');
+    for (const propertyId of requestedIds) {
+      const targetResult = await client.query(
+        `SELECT p.id, p.status, p.source, p.extra_fields,
+                (
+                  SELECT COUNT(*)::int
+                    FROM property_images pi
+                   WHERE pi.property_id = p.id
+                     AND COALESCE(pi.slot_key, '') NOT IN ('source_evidence_original', 'quarantined_source_evidence')
+                ) AS usable_image_count
+           FROM properties p
+          WHERE p.id = $1
+          FOR UPDATE`,
+        [propertyId]
+      );
+      const target = targetResult.rows[0];
+      const extraFields = target?.extra_fields && typeof target.extra_fields === 'object'
+        ? target.extra_fields
+        : {};
+      const videoUrls = [
+        normalizeInput(extraFields.video_url),
+        ...(Array.isArray(extraFields.video_urls) ? extraFields.video_urls.map((url) => normalizeInput(url)) : [])
+      ].filter(Boolean);
+      const isSafeRecoveredTarget = target
+        && target.status === 'pending'
+        && ['whatsapp_employee_intake', 'whatsapp_forward_review'].includes(normalizeInput(target.source).toLowerCase())
+        && extraFields.video_recovery_marker === WHATSAPP_VIDEO_ORIGINAL_RECOVERY_MARKER
+        && extraFields.video_recovery_required === false
+        && videoUrls.length > 0
+        && Number(target.usable_image_count || 0) > 0;
+      if (!isSafeRecoveredTarget) {
+        skipped.push({ id: propertyId, reason: 'not_a_pending_recovered_video_target' });
+        continue;
+      }
+      await client.query(
+        `UPDATE properties
+            SET extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $2::jsonb,
+                moderation_reason = CASE
+                  WHEN moderation_reason = 'Original WhatsApp video recovery required; do not approve' THEN NULL
+                  ELSE moderation_reason
+                END,
+                updated_at = NOW()
+          WHERE id = $1 AND status = 'pending'`,
+        [propertyId, JSON.stringify(recoveredEmployeeVideoMediaQualityPatch())]
+      );
+      await client.query(
+        `INSERT INTO property_moderation_events
+          (property_id, actor_id, action, status_from, status_to, reason, notes, delivery)
+         VALUES ($1, 'whatsapp-video-original-recovery', 'whatsapp_video_recovery_state_reconciled',
+                 'pending', 'pending', $2, $3, $4::jsonb)`,
+        [
+          propertyId,
+          'Cleared the screenshot-only media block after validating the recovered original WhatsApp video and key image.',
+          'Listing remains pending for staff review and cannot auto-publish.',
+          JSON.stringify({
+            marker: WHATSAPP_VIDEO_ORIGINAL_RECOVERY_MARKER,
+            usable_image_count: Number(target.usable_image_count || 0),
+            video_count: videoUrls.length,
+            auto_publish: false
+          })
+        ]
+      );
+      repaired.push(propertyId);
+    }
+    await client.query('COMMIT');
+    return { repaired, skipped };
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
@@ -12167,6 +12267,20 @@ router.get('/web-bridge/employee-video-recovery-targets', asyncRoute(async (req,
 }));
 
 // POST /api/whatsapp/web-bridge/employee-video-recovery/:id
+router.post('/web-bridge/employee-video-recovery-reconcile', asyncRoute(async (req, res) => {
+  if (!isWhatsappWebBridgeAuthorized(req)) return bridgeUnauthorized(res);
+  const propertyIds = Array.isArray(req.body.property_ids) ? req.body.property_ids : [];
+  if (!propertyIds.length || propertyIds.length > 20) {
+    return res.status(400).json({ ok: false, error: 'property_ids must contain between 1 and 20 exact ids' });
+  }
+  if (propertyIds.some((propertyId) => !/^[0-9a-f-]{36}$/i.test(normalizeInput(propertyId)))) {
+    return res.status(400).json({ ok: false, error: 'every property_id must be an exact valid id' });
+  }
+  const result = await reconcileRecoveredEmployeeVideoReviewMedia(propertyIds);
+  return res.json({ ok: true, data: { marker: WHATSAPP_VIDEO_ORIGINAL_RECOVERY_MARKER, ...result } });
+}));
+
+// POST /api/whatsapp/web-bridge/employee-video-recovery/:id
 router.post('/web-bridge/employee-video-recovery/:id', asyncRoute(async (req, res) => {
   if (!isWhatsappWebBridgeAuthorized(req)) return bridgeUnauthorized(res);
   const propertyId = normalizeInput(req.params.id);
@@ -12179,7 +12293,7 @@ router.post('/web-bridge/employee-video-recovery/:id', asyncRoute(async (req, re
     photoCandidates: Array.isArray(req.body.image_previews) ? req.body.image_previews : [],
     mediaCandidates: Array.isArray(req.body.media_previews) ? req.body.media_previews : []
   });
-  return res.json({ ok: true, data: { marker: 'whatsapp-video-original-recovery-20260831', ...result } });
+  return res.json({ ok: true, data: { marker: WHATSAPP_VIDEO_ORIGINAL_RECOVERY_MARKER, ...result } });
 }));
 
 // POST /api/whatsapp/web-bridge/inbound
