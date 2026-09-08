@@ -2051,6 +2051,7 @@ async function buildDashboardPanelsPayload(req) {
                 'source_name', p.extra_fields->>'source_name',
                 'source_platform', p.extra_fields->>'source_platform',
                 'media_validation_status', p.extra_fields->>'media_validation_status',
+                'video_recovery_required', COALESCE(p.extra_fields->'video_recovery_required', 'false'::jsonb),
                 'media_quality_blockers', COALESCE(p.extra_fields->'media_quality_blockers', '[]'::jsonb),
                 'source_evidence_urls', COALESCE(p.extra_fields->'source_evidence_urls', '[]'::jsonb)
               ) AS extra_fields,
