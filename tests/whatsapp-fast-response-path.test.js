@@ -259,6 +259,11 @@ async function run() {
     'WhatsApp Web sender must dismiss stale modal blockers while allowing a new-chat overlay to finish normally'
   );
   assert(
+    whatsappWebCopilotSource.includes("await page.keyboard.insertText(String(text || ''))")
+      && whatsappWebCopilotSource.includes('reply composer exact-text verification failed; expected_len='),
+    'WhatsApp Web sender must insert generated Unicode text exactly and log privacy-safe mismatch evidence'
+  );
+  assert(
     whatsappWebBridgeServiceSource.includes('duplicate_refreshed_at')
       && whatsappWebBridgeServiceSource.includes('same_reply_new_inbound'),
     'WhatsApp Web bridge must wake an existing pending duplicate reply instead of leaving it delayed'

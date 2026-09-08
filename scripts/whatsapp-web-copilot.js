@@ -4486,7 +4486,7 @@ async function replaceComposerText(page, text, timeoutMs = 1200) {
     }
     await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
     await page.keyboard.press('Backspace');
-    await page.keyboard.type(String(text || ''), { delay: 1 });
+    await page.keyboard.insertText(String(text || ''));
   }
   await page.waitForTimeout(50);
   let finalState = await getReplyComposerText(page).catch(() => ({ found: false, text: '' }));
@@ -4497,10 +4497,15 @@ async function replaceComposerText(page, text, timeoutMs = 1200) {
   await composer.click({ timeout: 700, force: true }).catch(() => {});
   await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
   await page.keyboard.press('Backspace');
-  await page.keyboard.type(String(text || ''), { delay: 1 });
+  await page.keyboard.insertText(String(text || ''));
   await page.waitForTimeout(50);
   finalState = await getReplyComposerText(page).catch(() => ({ found: false, text: '' }));
-  return finalState.found && normalizeReplyText(finalState.text) === expectedText;
+  const exact = finalState.found && normalizeReplyText(finalState.text) === expectedText;
+  if (!exact) {
+    const actualText = normalizeReplyText(finalState.text || '');
+    log(`reply composer exact-text verification failed; expected_len=${expectedText.length}; actual_len=${actualText.length}; expected_hash=${crypto.createHash('sha256').update(expectedText).digest('hex').slice(0, 12)}; actual_hash=${crypto.createHash('sha256').update(actualText).digest('hex').slice(0, 12)}`);
+  }
+  return exact;
 }
 
 async function openChatForReply(page, recipient) {
