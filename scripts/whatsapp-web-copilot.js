@@ -192,7 +192,10 @@ const LOGIN_SCREENSHOT_ENABLED = !['0', 'false', 'no', 'off'].includes(
 const LOGIN_METHOD = String(process.env.WHATSAPP_WEB_COPILOT_LOGIN_METHOD || 'auto').trim().toLowerCase();
 const { createWhatsappPairingRecovery } = require('../services/whatsappPairingRecovery');
 const configuredPairingRetryMs = Number(process.env.WHATSAPP_WEB_COPILOT_PAIRING_RETRY_MS || (10 * 60 * 1000));
-const phonePairingRecovery = createWhatsappPairingRecovery({ retryMs: configuredPairingRetryMs });
+const phonePairingRecovery = createWhatsappPairingRecovery({
+  retryMs: configuredPairingRetryMs,
+  requireOperatorRefresh: !!PAIRING_REFRESH_NONCE
+});
 const PAIRING_PHONE_NUMBER = String(
   process.env.WHATSAPP_WEB_COPILOT_PAIRING_PHONE
     || process.env.WHATSAPP_WEB_COPILOT_PHONE_NUMBER

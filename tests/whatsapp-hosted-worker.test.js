@@ -75,6 +75,7 @@ assert(agentScript.includes('pairingCodeVisible') && agentScript.includes("stabl
 assert(!agentScript.includes('submitted WhatsApp phone pairing with Playwright'), 'Logs must not claim a phone pairing submission when only a code is visible');
 assert(agentScript.includes('WHATSAPP_WEB_COPILOT_PAIRING_REFRESH_NONCE') && agentScript.includes('.makaug-pairing-refresh-nonce'), 'Operators must be able to request exactly one fresh pairing code across worker restarts');
 assert(agentScript.includes('forceRefresh: forcePairingRefreshNow') && agentScript.includes('markPairingRefreshNonceConsumed()'), 'A pairing refresh nonce must force one resubmission and then persist its consumed state');
+assert(agentScript.includes('requireOperatorRefresh: !!PAIRING_REFRESH_NONCE') && pairingRecovery.includes("state: 'operator_refresh_required'"), 'A consumed operator nonce must disable automatic phone-number resubmission');
 assert(agentScript.includes('phonePairingPrompt') && agentScript.includes('enter code on phone'), 'Readiness detection must treat phone-code screens as login states');
 assert(agentScript.includes('phone_form_not_visible_after_click'), 'Phone pairing must not claim submission if the phone form never appears');
 assert(agentScript.includes("text.includes('code on your phone')"), 'Phone pairing detection must require real pairing-code copy, not QR-screen text');

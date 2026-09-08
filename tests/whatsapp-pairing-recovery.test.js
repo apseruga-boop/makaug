@@ -28,4 +28,13 @@ assert.strictEqual(rateLimited.state, 'pairing_rate_limited');
 assert.strictEqual(recovery.plan({ now: 700_000, waitingForLogin: false }).state, 'not_waiting_for_login');
 assert.strictEqual(recovery.plan({ now: 701_000, waitingForLogin: true }).shouldAttempt, true, 'a later logout must start a fresh recovery immediately');
 
+const operatorOnlyRecovery = createWhatsappPairingRecovery({
+  retryMs: 60_000,
+  requireOperatorRefresh: true
+});
+const operatorOnlyPlan = operatorOnlyRecovery.plan({ now: 1_000, waitingForLogin: true });
+assert.strictEqual(operatorOnlyPlan.shouldAttempt, false, 'a configured operator nonce must disable timed phone-number resubmission');
+assert.strictEqual(operatorOnlyPlan.state, 'operator_refresh_required');
+assert.strictEqual(operatorOnlyRecovery.requireOperatorRefresh, true);
+
 console.log('WhatsApp phone-pairing recovery backoff ok');
