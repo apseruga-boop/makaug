@@ -34,15 +34,17 @@ assert.deepEqual(parseArgs([]), {
   reopenApproved: false,
   quarantinePrimary: false,
   quarantineVideoScreenshots: false,
+  allowLegacySource: false,
   agentIds: [],
   propertyIds: []
 }, 'backfill must default to dry-run');
-assert.deepEqual(parseArgs(['--apply', '--replace-video-frames', '--reopen-approved', '--quarantine-primary', '--quarantine-video-screenshots', '--agent-id=agent-1', '--property-id=abc']), {
+assert.deepEqual(parseArgs(['--apply', '--replace-video-frames', '--reopen-approved', '--quarantine-primary', '--quarantine-video-screenshots', '--allow-legacy-source', '--agent-id=agent-1', '--property-id=abc']), {
   apply: true,
   replaceExisting: true,
   reopenApproved: true,
   quarantinePrimary: true,
   quarantineVideoScreenshots: true,
+  allowLegacySource: true,
   agentIds: ['agent-1'],
   propertyIds: ['abc']
 });
@@ -88,6 +90,7 @@ assert.deepEqual(agentSelection.values, [['agent-1']]);
 assert(!agentSelection.text.includes("p.source = 'whatsapp_employee_intake'"), 'agent-scoped audits must include legacy/manual imports');
 assert(SELECTION_SQL.includes("p.source = 'whatsapp_employee_intake'"), 'repair must stay scoped to employee intake');
 assert(SELECTION_SQL.includes("p.status = 'pending'"), 'repair must leave approved and rejected listings untouched');
+assert(SELECTION_SQL.includes('p.source'), 'the reviewed manifest must expose the stored source before any repair');
 assert(SELECTION_SQL.includes('video_still_count') && SELECTION_SQL.includes('COUNT(pi.id) FILTER'), 'repair must count existing video-derived images');
 assert(SELECTION_SQL.includes('forwarded'), 'repair must also clean raw WhatsApp descriptions');
 assert(workerSource.includes('async function captureVideoKeyFrames'), 'new WhatsApp videos must get five distributed key frames');
@@ -116,6 +119,7 @@ assert(backfillSource.includes("await client.query('DELETE FROM property_images 
 assert(backfillSource.includes("media_validation_status: 'blocked_original_video_recovery_required'"), 'a screenshot-only video listing must stay blocked until original media is recovered');
 assert(backfillSource.includes('video_recovery_required: true'), 'screenshot quarantine must enqueue original-video recovery');
 assert(backfillSource.includes("'whatsapp_video_screenshot_quarantined'"), 'screenshot quarantine must record a durable audit event');
+assert(backfillSource.includes("skipped: 'legacy_source_requires_explicit_flag'"), 'legacy imports must require a second explicit safety flag');
 assert(!backfillSource.includes("'repaired_primary', 'Clear property preview from source video'"), 'a cropped WhatsApp screenshot must never be reinserted as a property photo');
 assert(!backfillSource.includes('makeAndUploadCroppedPreview'), 'the backfill must never upscale WhatsApp screen captures into gallery media');
 assert(backfillSource.includes("slot_key, room_label"), 'derived stills must be attached to the existing property image gallery');
