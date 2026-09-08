@@ -12521,8 +12521,12 @@ function staffReviewQueueCardHtml(item = {}, options = {}) {
   const mediaQualityBlockers = Array.isArray(item.extra_fields?.media_quality_blockers)
     ? item.extra_fields.media_quality_blockers
     : [];
-  const mediaQualityWarning = mediaValidationStatus.startsWith("blocked_") || mediaQualityBlockers.length
-    ? `<div class="mt-2 rounded-xl bg-red-50 border border-red-200 p-2 text-xs text-red-900"><strong>Media blocked:</strong> this listing has no approved property photo. Review the quarantined source evidence and attach a clear property image before approval.</div>`
+  const videoRecoveryRequired = item.extra_fields?.video_recovery_required === true;
+  const mediaQualityWarningText = videoRecoveryRequired
+    ? "the playable original WhatsApp video is still being recovered. Screenshots and poster captures are evidence only; do not approve this listing until the MP4 and clean key images are attached."
+    : "this listing has no approved property photo. Review the quarantined source evidence and attach a clear property image before approval.";
+  const mediaQualityWarning = mediaValidationStatus.startsWith("blocked_") || videoRecoveryRequired || mediaQualityBlockers.length
+    ? `<div class="mt-2 rounded-xl bg-red-50 border border-red-200 p-2 text-xs text-red-900"><strong>Media blocked:</strong> ${mediaQualityWarningText}</div>`
     : "";
   return `
     <article class="border border-gray-200 rounded-2xl p-4">

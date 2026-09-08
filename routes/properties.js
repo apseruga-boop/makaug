@@ -4770,19 +4770,31 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
         [req.params.id]
       );
       const usableImageCount = Number(usableImageResult.rows[0]?.total || 0);
-      if (mediaQuality.media_validation_status === 'blocked_no_usable_property_image' || usableImageCount < 1) {
+      const mediaValidationStatus = cleanText(mediaQuality.media_validation_status);
+      const videoRecoveryRequired = mediaQuality.video_recovery_required === true;
+      if (mediaValidationStatus.startsWith('blocked_') || videoRecoveryRequired || usableImageCount < 1) {
         return res.status(400).json({
           ok: false,
-          error: 'A clear property image is required before approval',
-          details: [
-            'WhatsApp chat screenshots and rendered message fallbacks are retained as source evidence only.',
-            'Attach at least one validated property photo or a clear video-derived key image before approving.'
-          ],
-          missing_fields: ['validated_property_image'],
+          error: videoRecoveryRequired
+            ? 'The original WhatsApp property video is required before approval'
+            : 'A clear property image is required before approval',
+          details: videoRecoveryRequired
+            ? [
+              'WhatsApp video screenshots and poster fallbacks are retained as source evidence only.',
+              'Recover the playable original video and attach clear video-derived key images before approving.'
+            ]
+            : [
+              'WhatsApp chat screenshots and rendered message fallbacks are retained as source evidence only.',
+              'Attach at least one validated property photo or a clear video-derived key image before approving.'
+            ],
+          missing_fields: videoRecoveryRequired
+            ? ['original_whatsapp_video', 'validated_property_image']
+            : ['validated_property_image'],
           approval_blocker: 'employee_media_quality',
           approval_blocked: true,
           human_approval_override_available: false,
-          media_validation_status: mediaQuality.media_validation_status || 'blocked_no_usable_property_image',
+          media_validation_status: mediaValidationStatus || 'blocked_no_usable_property_image',
+          video_recovery_required: videoRecoveryRequired,
           usable_property_image_count: usableImageCount
         });
       }

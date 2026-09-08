@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const {
   BACKFILL_MARKER,
+  ORIGINAL_MEDIA_ONLY_MARKER,
   MIN_VIDEO_KEY_FRAMES,
   SELECTION_SQL,
   candidateFrameOffsets,
@@ -32,14 +33,16 @@ assert.deepEqual(parseArgs([]), {
   replaceExisting: false,
   reopenApproved: false,
   quarantinePrimary: false,
+  quarantineVideoScreenshots: false,
   agentIds: [],
   propertyIds: []
 }, 'backfill must default to dry-run');
-assert.deepEqual(parseArgs(['--apply', '--replace-video-frames', '--reopen-approved', '--quarantine-primary', '--agent-id=agent-1', '--property-id=abc']), {
+assert.deepEqual(parseArgs(['--apply', '--replace-video-frames', '--reopen-approved', '--quarantine-primary', '--quarantine-video-screenshots', '--agent-id=agent-1', '--property-id=abc']), {
   apply: true,
   replaceExisting: true,
   reopenApproved: true,
   quarantinePrimary: true,
+  quarantineVideoScreenshots: true,
   agentIds: ['agent-1'],
   propertyIds: ['abc']
 });
@@ -49,6 +52,7 @@ assert.deepEqual(
   'video repair should accept unique HTTPS media only'
 );
 assert.equal(BACKFILL_MARKER, 'whatsapp-video-distinct-clear-frames-20260903');
+assert.equal(ORIGINAL_MEDIA_ONLY_MARKER, 'whatsapp-original-media-only-20260908');
 assert.equal(MIN_VIDEO_KEY_FRAMES, 5);
 assert.equal(keyFramesNeeded({ video_still_count: 1 }), 4);
 assert.equal(keyFramesNeeded({ video_still_count: 5 }), 0);
@@ -108,7 +112,12 @@ assert(backfillSource.includes('visually_distinct: true'), 'repair audit evidenc
 assert(backfillSource.includes('auto_publish: false'), 'backfill must not publish repaired listings');
 assert(backfillSource.includes("--apply requires one or more explicit --property-id"), 'production repair must require an exact reviewed property manifest');
 assert(backfillSource.includes('source_evidence_urls'), 'quarantined screenshots must move out of the public gallery and remain auditable');
-assert(backfillSource.includes("await client.query('DELETE FROM property_images WHERE property_id = $1'"), 'cropped screenshot repair must remove the original WhatsApp screenshot from the gallery');
+assert(backfillSource.includes("await client.query('DELETE FROM property_images WHERE property_id = $1'"), 'screenshot quarantine must remove WhatsApp UI captures from the gallery');
+assert(backfillSource.includes("media_validation_status: 'blocked_original_video_recovery_required'"), 'a screenshot-only video listing must stay blocked until original media is recovered');
+assert(backfillSource.includes('video_recovery_required: true'), 'screenshot quarantine must enqueue original-video recovery');
+assert(backfillSource.includes("'whatsapp_video_screenshot_quarantined'"), 'screenshot quarantine must record a durable audit event');
+assert(!backfillSource.includes("'repaired_primary', 'Clear property preview from source video'"), 'a cropped WhatsApp screenshot must never be reinserted as a property photo');
+assert(!backfillSource.includes('makeAndUploadCroppedPreview'), 'the backfill must never upscale WhatsApp screen captures into gallery media');
 assert(backfillSource.includes("slot_key, room_label"), 'derived stills must be attached to the existing property image gallery');
 assert(backfillSource.includes('Distinct video key image ${keyFrameNumber}'), 'review frames must be clearly labelled');
 assert(frontendSource.includes('function staffPreviewVideosHtml'), 'staff preview must render stored videos, not just poster images');
@@ -122,6 +131,10 @@ assert(routeSource.includes("router.get('/web-bridge/employee-video-recovery-tar
 assert(routeSource.includes('FROM whatsapp_sessions ws'), 'repair queue must resolve the authorized originating employee chat without a new worker secret');
 assert(routeSource.includes("router.post('/web-bridge/employee-video-recovery/:id'"), 'worker must have an authenticated original-media recovery route');
 assert(routeSource.includes("'pending', 'pending'"), 'original-video recovery must preserve staff-review status');
+assert(routeSource.includes("captureSource === 'rendered_whatsapp_video_fallback'"), 'rendered video-message screenshots must be rejected before gallery insertion');
+assert(routeSource.includes("captureSource === 'whatsapp_video_poster_evidence'"), 'a poster without the original video must remain evidence only');
+assert(workerSource.includes("original_media_only_marker: WHATSAPP_ORIGINAL_MEDIA_ONLY_MARKER"), 'worker heartbeat must expose the original-media-only guard');
+assert(serverSource.includes('whatsapp-original-media-only-20260908'), 'production health must expose the original-media-only release');
 assert(serverSource.includes('whatsapp-video-still-dual-media-20260831'), 'release marker must be externally visible');
 assert(serverSource.includes('whatsapp-video-still-backfill-20260831'), 'repair marker must be externally visible');
 assert(serverSource.includes('whatsapp-video-original-recovery-20260831'), 'historic original recovery marker must be externally visible');

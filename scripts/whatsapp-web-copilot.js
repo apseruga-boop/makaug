@@ -317,6 +317,7 @@ const EMPLOYEE_VIDEO_PREVIEW_MAX_BYTES = 25_000_000;
 const OUTBOUND_PROPERTY_IMAGE_MAX_BYTES = 15_000_000;
 const WHATSAPP_EMPLOYEE_AGENT_007_WORKER_MARKER = 'whatsapp-video-distinct-clear-frames-20260903';
 const WHATSAPP_EMPLOYEE_MEDIA_QUALITY_MARKER = 'whatsapp-employee-media-quality-guard-20260906';
+const WHATSAPP_ORIGINAL_MEDIA_ONLY_MARKER = 'whatsapp-original-media-only-20260908';
 const WHATSAPP_AGENT_007_INTAKE_RELIABILITY_MARKER = 'whatsapp-agent007-replay-backoff-20260901';
 const WHATSAPP_AGENT_007_PENDING_MEDIA_FIX_MARKER = 'whatsapp-agent007-pending-media-idempotency-20260901';
 const WHATSAPP_OUTGOING_PREVIEW_GUARD_MARKER = 'whatsapp-outgoing-preview-guard-20260831';
@@ -712,6 +713,7 @@ function hostedRuntimeMetadata() {
     node_version: process.version.replace(/^v/, ''),
     release_marker: WHATSAPP_EMPLOYEE_AGENT_007_WORKER_MARKER,
     media_quality_marker: WHATSAPP_EMPLOYEE_MEDIA_QUALITY_MARKER,
+    original_media_only_marker: WHATSAPP_ORIGINAL_MEDIA_ONLY_MARKER,
     intake_reliability_marker: WHATSAPP_AGENT_007_INTAKE_RELIABILITY_MARKER,
     pending_media_fix_marker: WHATSAPP_AGENT_007_PENDING_MEDIA_FIX_MARKER,
     outgoing_preview_guard: WHATSAPP_OUTGOING_PREVIEW_GUARD_MARKER,
@@ -2540,7 +2542,9 @@ async function captureVideoMessageScreenshot(page, messageId) {
       bytes: buffer.length,
       kind: 'image',
       name: 'whatsapp-video-message-preview.jpg',
-      degradedFromVideo: true
+      degradedFromVideo: true,
+      captureSource: 'rendered_whatsapp_video_fallback',
+      previewWarning: 'video_bytes_unavailable_screenshot_evidence_only'
     };
   }
   return null;
@@ -2788,7 +2792,9 @@ async function hydrateVideoSnapshot(page, snapshot) {
           bytes,
           kind: 'image',
           name: 'whatsapp-video-preview.jpg',
-          degradedFromVideo: true
+          degradedFromVideo: true,
+          captureSource: 'whatsapp_video_poster_evidence',
+          previewWarning: 'video_bytes_unavailable_poster_evidence_only'
         };
       }
       const response = await fetch(sourceUrl);
@@ -2848,7 +2854,10 @@ async function hydrateVideoSnapshot(page, snapshot) {
         bytes: Number(preview.bytes || 0),
         sha256: crypto.createHash('sha256').update(String(preview.dataUrl || '')).digest('hex'),
         kind: preview.kind || (String(preview.mimeType || '').startsWith('video/') ? 'video' : 'document'),
-        name: preview.name || ''
+        name: preview.name || '',
+        captureSource: preview.captureSource || '',
+        previewWarning: preview.previewWarning || '',
+        degradedFromVideo: preview.degradedFromVideo === true
       };
       const mediaPreviews = [mediaPreview];
       if (mediaPreview.kind === 'video') {
@@ -2866,6 +2875,9 @@ async function hydrateVideoSnapshot(page, snapshot) {
             sha256: crypto.createHash('sha256').update(String(still.dataUrl || '')).digest('hex'),
             kind: 'image',
             name: still.name || `whatsapp-video-key-frame-${index + 1}.jpg`,
+            captureSource: still.captureSource || '',
+            previewWarning: still.previewWarning || '',
+            degradedFromVideo: still.degradedFromVideo === true,
             videoTimestampSeconds: Number.isFinite(Number(still.timestampSeconds)) ? Number(still.timestampSeconds) : null
           });
         }
@@ -3171,7 +3183,10 @@ async function ingestSnapshot({ snapshot, row = {}, source = 'unread_scan' }) {
               mime_type: item.mimeType || 'application/octet-stream',
               bytes: Number(item.bytes || 0),
               sha256: item.sha256 || '',
-              kind: item.kind || ''
+              kind: item.kind || '',
+              capture_source: item.captureSource || '',
+              preview_warning: item.previewWarning || '',
+              degraded_from_video: item.degradedFromVideo === true
             }))
             : [],
           media_preview_error: snapshot.mediaPreviewError || '',
