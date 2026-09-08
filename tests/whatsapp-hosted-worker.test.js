@@ -70,6 +70,7 @@ assert(agentScript.includes('pairingRateLimited') && pairingRecovery.includes("s
 assert(agentScript.includes("? 'pairing_rate_limited'") && agentScript.includes('Automatic pairing attempts are paused'), 'Rate-limited login heartbeats must expose the provider cooldown instead of retrying');
 assert(pairingRateLimitStore.includes('.makaug-pairing-rate-limit.json') && agentScript.includes('pairingRateLimitStore.isBlocked()'), 'The provider cooldown must survive worker restarts on the persistent WhatsApp profile');
 assert(agentScript.includes('pairingRateLimitStore.clear()'), 'A successful WhatsApp login must clear the persisted pairing cooldown');
+assert(pairingRateLimitStore.includes('isExpired(state)') && agentScript.includes('WHATSAPP_WEB_COPILOT_PAIRING_COOLDOWN_MS'), 'A persisted provider cooldown must expire automatically instead of blocking WhatsApp forever');
 assert(agentScript.includes('pairingCodeVisible') && agentScript.includes("stable: pairingPlan.state === 'pairing_code_visible'"), 'A visible phone pairing code must remain stable while waiting for an operator');
 assert(!agentScript.includes('submitted WhatsApp phone pairing with Playwright'), 'Logs must not claim a phone pairing submission when only a code is visible');
 assert(agentScript.includes('WHATSAPP_WEB_COPILOT_PAIRING_REFRESH_NONCE') && agentScript.includes('.makaug-pairing-refresh-nonce'), 'Operators must be able to request exactly one fresh pairing code across worker restarts');

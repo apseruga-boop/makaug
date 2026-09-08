@@ -137,10 +137,23 @@ const PROFILE_DIR = path.resolve(
 );
 const PAIRING_REFRESH_NONCE = String(process.env.WHATSAPP_WEB_COPILOT_PAIRING_REFRESH_NONCE || '').trim();
 const PAIRING_REFRESH_STATE_FILE = path.join(PROFILE_DIR, '.makaug-pairing-refresh-nonce');
+const configuredPairingCooldownMs = Number(
+  process.env.WHATSAPP_WEB_COPILOT_PAIRING_COOLDOWN_MS || 24 * 60 * 60 * 1000
+);
+const PAIRING_COOLDOWN_MS = Math.min(
+  7 * 24 * 60 * 60 * 1000,
+  Math.max(
+    15 * 60 * 1000,
+    Number.isFinite(configuredPairingCooldownMs)
+      ? configuredPairingCooldownMs
+      : 24 * 60 * 60 * 1000
+  )
+);
 const { createWhatsappPairingRateLimitStore } = require('../services/whatsappPairingRateLimitStore');
 const pairingRateLimitStore = createWhatsappPairingRateLimitStore({
   profileDir: PROFILE_DIR,
-  refreshNonce: PAIRING_REFRESH_NONCE
+  refreshNonce: PAIRING_REFRESH_NONCE,
+  cooldownMs: PAIRING_COOLDOWN_MS
 });
 const configuredPollMs = Number(process.env.WHATSAPP_WEB_COPILOT_POLL_MS || 500);
 // WhatsApp DOM scans and API outbox claims are expensive. The previous 50ms
