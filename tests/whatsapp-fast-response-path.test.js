@@ -253,8 +253,10 @@ async function run() {
   assert(
     whatsappWebCopilotSource.includes('async function dismissReplyBlockingDialog(page)')
       && whatsappWebCopilotSource.includes("await page.keyboard.press('Escape').catch(() => null)")
-      && whatsappWebCopilotSource.includes('await dismissReplyBlockingDialog(page);'),
-    'WhatsApp Web sender must dismiss a modal that intercepts the live reply composer before typing'
+      && whatsappWebCopilotSource.includes('await dismissReplyBlockingDialog(page);')
+      && whatsappWebCopilotSource.includes("/^starting chat\\b/i.test(blockingDialog.label || '')")
+      && whatsappWebCopilotSource.includes("/^starting chat\\b/i.test(before.label || '')"),
+    'WhatsApp Web sender must dismiss stale modal blockers while allowing a new-chat overlay to finish normally'
   );
   assert(
     whatsappWebBridgeServiceSource.includes('duplicate_refreshed_at')

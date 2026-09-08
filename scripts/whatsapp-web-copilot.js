@@ -4131,7 +4131,13 @@ async function waitForReplyComposer(page, timeoutMs = 15000) {
       throw new Error('WhatsApp says this recipient phone number is invalid');
     }
     const composer = await findReplyComposer(page, 300);
-    if (composer) return composer;
+    if (composer) {
+      const blockingDialog = await inspectReplyBlockingDialog(page);
+      if (!blockingDialog.blocking || !/^starting chat\b/i.test(blockingDialog.label || '')) {
+        return composer;
+      }
+    }
+    await page.waitForTimeout(75);
   }
   return null;
 }
@@ -4301,6 +4307,10 @@ async function inspectReplyBlockingDialog(page) {
 async function dismissReplyBlockingDialog(page) {
   const before = await inspectReplyBlockingDialog(page);
   if (!before.blocking) return false;
+  if (/^starting chat\b/i.test(before.label || '')) {
+    log('waiting for WhatsApp to finish opening the requested chat before composing');
+    return false;
+  }
 
   log(`dismissing reply-blocking WhatsApp dialog before composing${before.label ? `: ${before.label}` : ''}`);
   await page.keyboard.press('Escape').catch(() => null);
