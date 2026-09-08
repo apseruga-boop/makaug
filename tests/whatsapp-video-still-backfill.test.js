@@ -99,6 +99,8 @@ assert(workerSource.includes('candidateCount = Math.max(15, targetCount * 5)'), 
 assert(workerSource.includes('bestDistance < 0.2'), 'browser capture must reject visually similar frames');
 assert(workerSource.includes('async function captureVideoPosterFrame'), 'new WhatsApp videos must get an extracted still');
 assert(workerSource.includes('isPlayableVideoBuffer'), 'worker must reject encrypted WhatsApp network payloads masquerading as MP4 files');
+assert(workerSource.includes('captureVideoSnapshotFromDownload'), 'worker must recover the decrypted original through WhatsApp Web download controls when network responses are encrypted');
+assert(workerSource.includes("page.waitForEvent('download'"), 'worker must wait for the browser download before accepting historic video recovery');
 assert(workerSource.includes("effectiveMime !== 'application/octet-stream'"), 'decrypted WhatsApp browser blobs must carry their playable video MIME in the data URL');
 assert(workerSource.includes('mediaPreviews.push({'), 'worker must submit the video and derived still together');
 assert(workerSource.includes('captureVideoKeyFrames(page, messageId, 5)'), 'worker must request five key frames from a playable video');
@@ -134,6 +136,7 @@ assert(routeSource.includes('employeeVideoBytesPlayable'), 'the API must reject 
 assert(routeSource.includes("router.get('/web-bridge/employee-video-recovery-targets'"), 'worker must have an authenticated repair queue');
 assert(routeSource.includes('FROM whatsapp_sessions ws'), 'repair queue must resolve the authorized originating employee chat without a new worker secret');
 assert(routeSource.includes("router.post('/web-bridge/employee-video-recovery/:id'"), 'worker must have an authenticated original-media recovery route');
+assert(routeSource.includes("source IN ('whatsapp_employee_intake', 'whatsapp_forward_review')"), 'flagged legacy Francis forwards must be eligible for the same pending-only original-media recovery');
 assert(routeSource.includes("'pending', 'pending'"), 'original-video recovery must preserve staff-review status');
 assert(routeSource.includes("captureSource === 'rendered_whatsapp_video_fallback'"), 'rendered video-message screenshots must be rejected before gallery insertion');
 assert(routeSource.includes("captureSource === 'whatsapp_video_poster_evidence'"), 'a poster without the original video must remain evidence only');
