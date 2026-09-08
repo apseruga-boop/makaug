@@ -2521,6 +2521,83 @@ async function captureVideoSnapshotFromNetwork(page, messageId) {
   };
 }
 
+async function readWhatsappDownloadBuffer(download, maxBytes) {
+  if (!download) return null;
+  const stream = await download.createReadStream().catch(() => null);
+  if (!stream) return null;
+  const chunks = [];
+  let totalBytes = 0;
+  try {
+    for await (const chunk of stream) {
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      totalBytes += buffer.length;
+      if (totalBytes > maxBytes) {
+        stream.destroy();
+        return null;
+      }
+      chunks.push(buffer);
+    }
+  } catch (_error) {
+    return null;
+  }
+  return chunks.length ? Buffer.concat(chunks, totalBytes) : null;
+}
+
+async function captureVideoSnapshotFromDownload(page, messageId) {
+  const candidates = page.locator('[data-id], [data-testid^="conv-msg-"]');
+  const count = await candidates.count().catch(() => 0);
+  let root = null;
+  for (let index = 0; index < count; index += 1) {
+    const candidate = candidates.nth(index);
+    const dataId = await candidate.getAttribute('data-id').catch(() => '');
+    const testId = await candidate.getAttribute('data-testid').catch(() => '');
+    if (dataId === messageId || testId === messageId) {
+      root = candidate;
+      break;
+    }
+  }
+  if (!root) return null;
+
+  await root.scrollIntoViewIfNeeded().catch(() => {});
+  await root.hover().catch(() => {});
+  const controls = [
+    root.getByRole('button', { name: /download/i }).first(),
+    root.locator('[aria-label*="download" i]').first(),
+    root.locator('[data-icon="download"], [data-testid*="download" i]').first(),
+    page.locator('[role="dialog"]').getByRole('button', { name: /download/i }).first(),
+    page.locator('[role="dialog"] [aria-label*="download" i], [role="dialog"] [data-icon="download"]').first()
+  ];
+
+  for (const control of controls) {
+    if (!await control.isVisible({ timeout: 600 }).catch(() => false)) continue;
+    const downloadPromise = page.waitForEvent('download', { timeout: 12_000 }).catch(() => null);
+    const clicked = await control.click({ timeout: 1500 }).then(() => true).catch(() => false);
+    if (!clicked) continue;
+    const download = await downloadPromise;
+    if (!download) {
+      // Some WhatsApp download buttons hydrate the decrypted browser blob
+      // without emitting a browser download. The DOM-blob path runs next.
+      await page.waitForTimeout(1200);
+      continue;
+    }
+    const buffer = await readWhatsappDownloadBuffer(download, EMPLOYEE_VIDEO_PREVIEW_MAX_BYTES);
+    const suggestedName = String(download.suggestedFilename?.() || '').trim();
+    if (!buffer?.length || !isPlayableVideoBuffer(buffer, 'video/mp4')) {
+      log(`ignored non-playable WhatsApp download for ${messageId}`);
+      continue;
+    }
+    log(`captured decrypted WhatsApp video download for ${messageId}; bytes=${buffer.length}`);
+    return {
+      dataUrl: `data:video/mp4;base64,${buffer.toString('base64')}`,
+      mimeType: 'video/mp4',
+      bytes: buffer.length,
+      kind: 'video',
+      name: suggestedName || 'whatsapp-property-video.mp4'
+    };
+  }
+  return null;
+}
+
 async function captureVideoMessageScreenshot(page, messageId) {
   const candidates = page.locator('[data-id], [data-testid^="conv-msg-"]');
   const count = await candidates.count();
@@ -2736,6 +2813,9 @@ async function hydrateVideoSnapshot(page, snapshot) {
   try {
     let preview = await captureVideoSnapshotFromNetwork(page, messageId);
     let browserPreviewError = '';
+    if (!preview) {
+      preview = await captureVideoSnapshotFromDownload(page, messageId);
+    }
     if (!preview) {
       try {
         preview = await page.evaluate(async ({ targetMessageId, maxBytes, posterMaxBytes }) => {

@@ -3584,7 +3584,7 @@ async function recoverEmployeeVideoReviewMedia(propertyId, runtime = {}) {
     `SELECT id, status, extra_fields
        FROM properties
       WHERE id = $1
-        AND source = 'whatsapp_employee_intake'
+        AND source IN ('whatsapp_employee_intake', 'whatsapp_forward_review')
         AND status = 'pending'
         AND COALESCE(extra_fields->>'video_recovery_required', 'false') = 'true'
       LIMIT 1`,
@@ -12151,7 +12151,7 @@ router.get('/web-bridge/employee-video-recovery-targets', asyncRoute(async (req,
                LIMIT 1
             ) AS sender_phone
        FROM properties p
-      WHERE p.source = 'whatsapp_employee_intake'
+      WHERE p.source IN ('whatsapp_employee_intake', 'whatsapp_forward_review')
         AND p.status = 'pending'
         AND COALESCE(p.extra_fields->>'video_recovery_required', 'false') = 'true'
       ORDER BY p.created_at ASC
