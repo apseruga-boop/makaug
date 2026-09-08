@@ -3826,6 +3826,7 @@ async function findEmployeeVideoRecoverySnapshots(page, target = {}, chatKey = '
 async function runPendingEmployeeVideoRecovery(page) {
   const response = await apiRequest('/api/whatsapp/web-bridge/employee-video-recovery-targets');
   const targets = Array.isArray(response.data?.targets) ? response.data.targets : [];
+  log(`video recovery queue returned ${targets.length} pending target(s)`);
   if (!targets.length) return { settled: true, recovered: 0 };
   let recovered = 0;
   let retryable = false;
@@ -5738,8 +5739,7 @@ async function main() {
         }
       }
       if (
-        !hadPriorityActivity
-        && !employeeVideoRecoverySettled
+        !employeeVideoRecoverySettled
         && employeeVideoRecoveryAttempts < EMPLOYEE_VIDEO_RECOVERY_MAX_ATTEMPTS
         && now - sessionStartedAt >= EMPLOYEE_BATCH_RECOVERY_IDLE_MS
         && now - lastEmployeeVideoRecoveryAttempt >= EMPLOYEE_BATCH_RECOVERY_RETRY_MS

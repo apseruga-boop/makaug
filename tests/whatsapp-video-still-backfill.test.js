@@ -141,6 +141,8 @@ assert(workerSource.includes('EMPLOYEE_BATCH_RECOVERY_PHONES.length === 1'), 'a 
 assert(workerSource.includes('employeeVideoRecoverySnapshotsForCaption'), 'recovery must inspect media adjacent to a captioned property photo');
 assert(workerSource.includes('if (isEmployeePropertyStartSnapshot(candidate)) break'), 'adjacent recovery must stop before the next property caption');
 assert(workerSource.includes('for (const snapshot of snapshots)'), 'recovery must try each bounded adjacent media message until it finds the original video');
+assert(workerSource.includes('video recovery queue returned ${targets.length} pending target(s)'), 'startup recovery must expose its exact pending target count');
+assert(!workerSource.includes("!hadPriorityActivity\n        && !employeeVideoRecoverySettled"), 'background chat sweeps must not starve bounded original-video recovery');
 assert(routeSource.includes("router.post('/web-bridge/employee-video-recovery-reconcile'"), 'already recovered originals need an exact-id state reconciliation route');
 assert(routeSource.includes("media_validation_status: 'passed_automated_image_gate'"), 'successful original recovery must clear the screenshot-only media block');
 assert(routeSource.includes('video_recovery_reason: null'), 'successful original recovery must clear its stale recovery reason');
