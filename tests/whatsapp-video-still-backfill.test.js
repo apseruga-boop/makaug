@@ -107,7 +107,7 @@ assert(workerSource.includes('captureVideoKeyFrames(page, messageId, 5)'), 'work
 assert(workerSource.includes("mediaPreviewWarning: 'video_key_frames_incomplete'"), 'incomplete key-frame extraction must remain visible to the intake runtime');
 assert(workerSource.includes('runPendingEmployeeVideoRecovery'), 'hosted worker must recover marked historic originals from WhatsApp history');
 assert(workerSource.includes('employeeVideoRecoveryCaptionKey'), 'historic lookup must ignore WhatsApp Forwarded and duration labels');
-assert(workerSource.includes("mediaType: 'media',\n      mediaPreviews: []"), 'marked historic video cards must be reopened even if WhatsApp labels the old thumbnail as an image');
+assert(/mediaType: 'media',\s+mediaPreviews: \[\]/.test(workerSource), 'marked historic video cards must be reopened even if WhatsApp labels the old thumbnail as an image');
 assert(backfillSource.includes("'whatsapp_video_still_backfilled'"), 'repairs must leave an audit event');
 assert(backfillSource.includes('extractStillWithFallback(videoPath, stillPath'), 'backfill must recover when the requested frame timestamp is beyond decodable footage');
 assert(backfillSource.includes("$5, 'pending'"), 'backfill audit events must end in staff-review status');
@@ -138,6 +138,9 @@ assert(routeSource.includes('FROM whatsapp_sessions ws'), 'repair queue must res
 assert(routeSource.includes("router.post('/web-bridge/employee-video-recovery/:id'"), 'worker must have an authenticated original-media recovery route');
 assert(routeSource.includes("source IN ('whatsapp_employee_intake', 'whatsapp_forward_review')"), 'flagged legacy Francis forwards must be eligible for the same pending-only original-media recovery');
 assert(workerSource.includes('EMPLOYEE_BATCH_RECOVERY_PHONES.length === 1'), 'a single configured recovery chat must safely handle legacy targets that predate sender suffix storage');
+assert(workerSource.includes('employeeVideoRecoverySnapshotsForCaption'), 'recovery must inspect media adjacent to a captioned property photo');
+assert(workerSource.includes('if (isEmployeePropertyStartSnapshot(candidate)) break'), 'adjacent recovery must stop before the next property caption');
+assert(workerSource.includes('for (const snapshot of snapshots)'), 'recovery must try each bounded adjacent media message until it finds the original video');
 assert(routeSource.includes("router.post('/web-bridge/employee-video-recovery-reconcile'"), 'already recovered originals need an exact-id state reconciliation route');
 assert(routeSource.includes("media_validation_status: 'passed_automated_image_gate'"), 'successful original recovery must clear the screenshot-only media block');
 assert(routeSource.includes('video_recovery_reason: null'), 'successful original recovery must clear its stale recovery reason');
