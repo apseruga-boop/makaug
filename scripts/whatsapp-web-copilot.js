@@ -3779,9 +3779,33 @@ function employeeVideoRecoveryCaptionKey(value = '') {
     .toLowerCase();
 }
 
-async function findEmployeeVideoRecoverySnapshot(page, target = {}, chatKey = '') {
+function employeeVideoRecoverySnapshotsForCaption(snapshots = [], expectedCaption = '') {
+  const matchIndex = snapshots.findIndex((snapshot) => {
+    if (!['image', 'media'].includes(String(snapshot.mediaType || '').toLowerCase())) return false;
+    const observedCaption = employeeVideoRecoveryCaptionKey(snapshot.text || '');
+    return observedCaption === expectedCaption
+      || observedCaption.includes(expectedCaption)
+      || expectedCaption.includes(observedCaption);
+  });
+  if (matchIndex < 0) return [];
+
+  const captionedSnapshot = snapshots[matchIndex];
+  const adjacentMedia = [];
+  for (let index = matchIndex + 1; index < snapshots.length && adjacentMedia.length < 12; index += 1) {
+    const candidate = snapshots[index];
+    if (isEmployeePropertyStartSnapshot(candidate)) break;
+    if (['image', 'media'].includes(String(candidate.mediaType || '').toLowerCase())) {
+      adjacentMedia.push(candidate);
+    }
+  }
+  return captionedSnapshot.mediaType === 'media'
+    ? [captionedSnapshot, ...adjacentMedia]
+    : [...adjacentMedia, captionedSnapshot];
+}
+
+async function findEmployeeVideoRecoverySnapshots(page, target = {}, chatKey = '') {
   const expectedCaption = employeeVideoRecoveryCaptionKey(target.source_caption || '');
-  if (!expectedCaption) return null;
+  if (!expectedCaption) return [];
   await scrollWhatsappHistoryToLatest(page);
   for (let round = 0; round < EMPLOYEE_BATCH_HISTORY_MAX_ROUNDS; round += 1) {
     const snapshots = (await getRecentIncomingSnapshots(page, EMPLOYEE_BATCH_HISTORY_SCAN_LIMIT))
@@ -3789,20 +3813,14 @@ async function findEmployeeVideoRecoverySnapshot(page, target = {}, chatKey = ''
         const snapshotChat = normalizeChatKey(snapshot.chatKey);
         return !chatKey || !snapshotChat || snapshotChat === normalizeChatKey(chatKey);
       });
-    const match = snapshots.find((snapshot) => {
-      if (!['image', 'media'].includes(String(snapshot.mediaType || '').toLowerCase())) return false;
-      const observedCaption = employeeVideoRecoveryCaptionKey(snapshot.text || '');
-      return observedCaption === expectedCaption
-        || observedCaption.includes(expectedCaption)
-        || expectedCaption.includes(observedCaption);
-    });
-    if (match) return match;
+    const matches = employeeVideoRecoverySnapshotsForCaption(snapshots, expectedCaption);
+    if (matches.length) return matches;
     const moved = await scrollWhatsappHistoryOlder(page);
     if (!moved) break;
     await page.waitForTimeout(650);
   }
   await scrollWhatsappHistoryToLatest(page);
-  return null;
+  return [];
 }
 
 async function runPendingEmployeeVideoRecovery(page) {
@@ -3823,20 +3841,27 @@ async function runPendingEmployeeVideoRecovery(page) {
       retryable = true;
       continue;
     }
-    const snapshot = await findEmployeeVideoRecoverySnapshot(page, target, phone);
-    if (!snapshot) {
+    const snapshots = await findEmployeeVideoRecoverySnapshots(page, target, phone);
+    if (!snapshots.length) {
       log(`video recovery could not find WhatsApp source message for ${target.id}`);
       retryable = true;
       continue;
     }
-    const hydrated = await hydrateVideoSnapshot(page, {
-      ...snapshot,
-      mediaType: 'media',
-      mediaPreviews: []
-    });
-    const previews = Array.isArray(hydrated.mediaPreviews) ? hydrated.mediaPreviews : [];
-    const hasVideo = previews.some((item) => item.kind === 'video' || String(item.mimeType || '').startsWith('video/'));
-    const hasImage = previews.some((item) => item.kind === 'image' || String(item.mimeType || '').startsWith('image/'));
+    let hydrated = null;
+    let previews = [];
+    let hasVideo = false;
+    let hasImage = false;
+    for (const snapshot of snapshots) {
+      hydrated = await hydrateVideoSnapshot(page, {
+        ...snapshot,
+        mediaType: 'media',
+        mediaPreviews: []
+      });
+      previews = Array.isArray(hydrated.mediaPreviews) ? hydrated.mediaPreviews : [];
+      hasVideo = previews.some((item) => item.kind === 'video' || String(item.mimeType || '').startsWith('video/'));
+      hasImage = previews.some((item) => item.kind === 'image' || String(item.mimeType || '').startsWith('image/'));
+      if (hasVideo && hasImage) break;
+    }
     if (!hasVideo || !hasImage) {
       log(`video recovery hydration incomplete for ${target.id}; video=${hasVideo} still=${hasImage}`);
       retryable = true;
