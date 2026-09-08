@@ -8,6 +8,7 @@ function normalizeRetryMs(value, fallback = 10 * 60 * 1000) {
 
 function createWhatsappPairingRecovery(options = {}) {
   const retryMs = normalizeRetryMs(options.retryMs);
+  const requireOperatorRefresh = options.requireOperatorRefresh === true;
   let lastAttemptAt = 0;
 
   return {
@@ -30,6 +31,15 @@ function createWhatsappPairingRecovery(options = {}) {
         return { shouldAttempt: false, state: 'pairing_code_visible', retryAfterMs: 0 };
       }
 
+      // Production workers that have an operator refresh nonce must never
+      // resubmit a phone number on a timer. A failed/stale pairing code can
+      // otherwise turn into repeated device-link attempts and trigger
+      // WhatsApp's provider cooldown. The caller handles a new nonce as the
+      // single explicit attempt before consulting this recovery plan.
+      if (requireOperatorRefresh) {
+        return { shouldAttempt: false, state: 'operator_refresh_required', retryAfterMs: 0 };
+      }
+
       const elapsedMs = lastAttemptAt ? Math.max(0, now - lastAttemptAt) : retryMs;
       if (!lastAttemptAt || elapsedMs >= retryMs) {
         lastAttemptAt = now;
@@ -45,7 +55,8 @@ function createWhatsappPairingRecovery(options = {}) {
     reset() {
       lastAttemptAt = 0;
     },
-    retryMs
+    retryMs,
+    requireOperatorRefresh
   };
 }
 
