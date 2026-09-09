@@ -3992,12 +3992,16 @@ async function ensurePendingEmployeeAgent(details = {}, identityDocument = {}) {
   return { agent: inserted.rows[0], created: true };
 }
 
-async function repairEmployeePendingAgentPropertyLink({ propertyId = '', agentId = '' } = {}) {
+async function repairEmployeePendingAgentPropertyLink({
+  propertyId = '',
+  agentId = '',
+  founderVerifiedIdentityMatch = false
+} = {}) {
   const client = await db.getClient();
   try {
     await client.query('BEGIN');
     const propertyResult = await client.query(
-      `SELECT id::text AS id, status, source, moderation_stage,
+      `SELECT id::text AS id, status, source, moderation_stage, created_at,
               agent_id::text AS agent_id, lister_type, lister_name, lister_phone,
               id_document_url, extra_fields
          FROM properties
@@ -4006,7 +4010,7 @@ async function repairEmployeePendingAgentPropertyLink({ propertyId = '', agentId
       [propertyId]
     );
     const agentResult = await client.query(
-      `SELECT id::text AS id, status, full_name, phone, whatsapp, email,
+      `SELECT id::text AS id, status, full_name, phone, whatsapp, email, created_at,
               identity_document_url
          FROM agents
         WHERE id = $1
@@ -4063,15 +4067,27 @@ async function repairEmployeePendingAgentPropertyLink({ propertyId = '', agentId
       await client.query('ROLLBACK');
       return { repaired: false, reason: 'agent_identity_document_missing' };
     }
-    if (propertyIdentityUrl && propertyIdentityUrl !== agentIdentityUrl) {
-      await client.query('ROLLBACK');
-      return { repaired: false, reason: 'identity_document_mismatch' };
+    const identityUrlsDiffer = Boolean(propertyIdentityUrl && propertyIdentityUrl !== agentIdentityUrl);
+    if (identityUrlsDiffer) {
+      if (founderVerifiedIdentityMatch !== true) {
+        await client.query('ROLLBACK');
+        return { repaired: false, reason: 'identity_document_mismatch' };
+      }
+      const propertyCreatedAt = new Date(property.created_at || 0).getTime();
+      const agentCreatedAt = new Date(agent.created_at || 0).getTime();
+      const creationGapMs = Math.abs(propertyCreatedAt - agentCreatedAt);
+      if (!Number.isFinite(creationGapMs) || creationGapMs > 24 * 60 * 60 * 1000) {
+        await client.query('ROLLBACK');
+        return { repaired: false, reason: 'founder_verified_identity_creation_window_mismatch' };
+      }
     }
 
     const repairedAt = new Date().toISOString();
-    const identityMatchMode = propertyIdentityUrl
-      ? 'same_private_document'
-      : 'agent_profile_private_document_only';
+    const identityMatchMode = identityUrlsDiffer
+      ? 'founder_verified_rendered_private_copy'
+      : propertyIdentityUrl
+        ? 'same_private_document'
+        : 'agent_profile_private_document_only';
     const extraFieldsPatch = {
       whatsapp_employee_subject_role: 'agent',
       agent_profile_linked: true,
@@ -4108,9 +4124,11 @@ async function repairEmployeePendingAgentPropertyLink({ propertyId = '', agentId
        VALUES ($1,'whatsapp-employee-agent-007','whatsapp_employee_pending_agent_link_repaired','pending','pending',$2,$3,$4::jsonb)`,
       [
         property.id,
-        propertyIdentityUrl
-          ? 'Recovered employee WhatsApp property linked to its exact pending agent profile after strict name, phone and private identity-document matching.'
-          : 'Recovered employee WhatsApp property linked to its exact pending agent profile after strict name and phone matching; the pending agent profile already holds private identity media and the property had no conflicting ID reference.',
+        identityUrlsDiffer
+          ? 'Recovered employee WhatsApp property linked to its exact pending agent profile after strict name, phone and creation-window matching plus founder verification that the protected ID records are copies of the same submitted document.'
+          : propertyIdentityUrl
+            ? 'Recovered employee WhatsApp property linked to its exact pending agent profile after strict name, phone and private identity-document matching.'
+            : 'Recovered employee WhatsApp property linked to its exact pending agent profile after strict name and phone matching; the pending agent profile already holds private identity media and the property had no conflicting ID reference.',
         'Property and agent remain pending. No approval, publication, consent inference, or outbound notification was performed.',
         JSON.stringify({
           marker: WHATSAPP_AGENT_007_PENDING_AGENT_LINK_REPAIR_MARKER,
@@ -4118,6 +4136,7 @@ async function repairEmployeePendingAgentPropertyLink({ propertyId = '', agentId
           property_status: 'pending',
           agent_status: 'pending',
           identity_match_mode: identityMatchMode,
+          founder_verified_identity_match: identityUrlsDiffer,
           auto_publish: false,
           notification_sent: false
         })
@@ -4134,6 +4153,7 @@ async function repairEmployeePendingAgentPropertyLink({ propertyId = '', agentId
       lister_type: updated.rows[0].lister_type,
       agent_status: agent.status,
       identity_match_mode: identityMatchMode,
+      founder_verified_identity_match: identityUrlsDiffer,
       auto_publish: false,
       notification_sent: false
     };
@@ -13085,7 +13105,11 @@ router.post('/web-bridge/employee-pending-agent-link-repair', asyncRoute(async (
   if (!/^[0-9a-f-]{36}$/i.test(propertyId) || !/^[0-9a-f-]{36}$/i.test(agentId)) {
     return res.status(400).json({ ok: false, error: 'exact valid property_id and agent_id are required' });
   }
-  const result = await repairEmployeePendingAgentPropertyLink({ propertyId, agentId });
+  const result = await repairEmployeePendingAgentPropertyLink({
+    propertyId,
+    agentId,
+    founderVerifiedIdentityMatch: req.body.founder_verified_identity_match === true
+  });
   if (!result.repaired && !result.alreadyLinked) {
     return res.status(409).json({ ok: false, error: result.reason, data: result });
   }

@@ -731,11 +731,12 @@ const originalGetClient = db.getClient;
             status: 'pending',
             source: 'whatsapp_employee_intake',
             moderation_stage: 'submitted',
+            created_at: '2026-09-09T15:00:00.000Z',
             agent_id: null,
             lister_type: 'owner',
             lister_name: 'Pending Agent',
             lister_phone: '+256700000001',
-            id_document_url: null,
+            id_document_url: 'https://private.test.invalid/rendered-property-id-copy',
             extra_fields: { whatsapp_employee_subject_role: 'customer' }
           }]
         };
@@ -746,6 +747,7 @@ const originalGetClient = db.getClient;
             id: '11111111-1111-4111-8111-111111111111',
             status: 'pending',
             full_name: 'Pending Agent',
+            created_at: '2026-09-09T14:58:00.000Z',
             phone: '+256700000001',
             whatsapp: '+256700000001',
             email: null,
@@ -769,14 +771,22 @@ const originalGetClient = db.getClient;
     },
     release() {}
   });
-  const pendingAgentLinkRepair = await whatsappRoute.repairEmployeePendingAgentPropertyLink({
+  const refusedUnverifiedIdentityLink = await whatsappRoute.repairEmployeePendingAgentPropertyLink({
     propertyId: '22222222-2222-4222-8222-222222222222',
     agentId: '11111111-1111-4111-8111-111111111111'
+  });
+  assert.equal(refusedUnverifiedIdentityLink.repaired, false);
+  assert.equal(refusedUnverifiedIdentityLink.reason, 'identity_document_mismatch');
+  const pendingAgentLinkRepair = await whatsappRoute.repairEmployeePendingAgentPropertyLink({
+    propertyId: '22222222-2222-4222-8222-222222222222',
+    agentId: '11111111-1111-4111-8111-111111111111',
+    founderVerifiedIdentityMatch: true
   });
   assert.equal(pendingAgentLinkRepair.repaired, true);
   assert.equal(pendingAgentLinkRepair.property_status, 'pending');
   assert.equal(pendingAgentLinkRepair.agent_status, 'pending');
-  assert.equal(pendingAgentLinkRepair.identity_match_mode, 'agent_profile_private_document_only');
+  assert.equal(pendingAgentLinkRepair.identity_match_mode, 'founder_verified_rendered_private_copy');
+  assert.equal(pendingAgentLinkRepair.founder_verified_identity_match, true);
   assert.equal(pendingAgentLinkRepair.auto_publish, false);
   assert.equal(pendingAgentLinkRepair.notification_sent, false);
   assert(repairQueries.some((sql) => /id_document_url = NULL/i.test(sql)), 'the duplicate property ID reference must be cleared after the private agent-profile match');
