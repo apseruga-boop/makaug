@@ -189,7 +189,7 @@ test('explicit sourced-preview publication records approval and preserves the st
       queries.push({ sql, values });
       if (/SELECT[\s\S]+off_plan_developments/.test(sql)) return { rows: [project] };
       if (/UPDATE off_plan_developments SET status/.test(sql)) {
-        return { rows: [{ ...project, status: 'published', extra_fields: JSON.parse(values[4]) }] };
+        return { rows: [{ ...project, status: 'published', extra_fields: JSON.parse(values[3]) }] };
       }
       if (/INSERT INTO off_plan_development_events/.test(sql)) return { rows: [{ id: 'event-2' }] };
       throw new Error(`Unexpected SQL: ${sql}`);
@@ -207,7 +207,8 @@ test('explicit sourced-preview publication records approval and preserves the st
   assert.equal(published.extra_fields.public_preview_approved, true);
   assert.equal(published.extra_fields.public_preview_approved_by, 'admin-1');
   const update = queries.find(({ sql }) => /UPDATE off_plan_developments SET status/.test(sql));
-  assert.equal(update.values[3], true);
+  assert.equal(update.values.length, 4);
+  assert.match(update.sql, /extra_fields = \$4::jsonb/);
 });
 
 test('publication gate rejects impossible sales totals and unlabelled media', () => {

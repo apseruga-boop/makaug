@@ -521,10 +521,15 @@ async function setDevelopmentStatus(db, id, status, { actorId = null, actorRole 
     public_preview_approved_at: new Date().toISOString(),
     public_preview_approved_by: actorId
   } : existing.extra_fields;
-  const result = await db.query(
-    `UPDATE off_plan_developments SET status = $2, published_at = CASE WHEN $2 = 'published' THEN COALESCE(published_at, NOW()) ELSE published_at END, extra_fields = CASE WHEN $4 THEN $5::jsonb ELSE extra_fields END, updated_by = $3, updated_at = NOW() WHERE id = $1 RETURNING *`,
-    [id, requested, actorId, isSourcedPreview, JSON.stringify(nextExtraFields)]
-  );
+  const result = isSourcedPreview
+    ? await db.query(
+      `UPDATE off_plan_developments SET status = $2, published_at = COALESCE(published_at, NOW()), extra_fields = $4::jsonb, updated_by = $3, updated_at = NOW() WHERE id = $1 RETURNING *`,
+      [id, requested, actorId, JSON.stringify(nextExtraFields)]
+    )
+    : await db.query(
+      `UPDATE off_plan_developments SET status = $2, published_at = CASE WHEN $2 = 'published' THEN COALESCE(published_at, NOW()) ELSE published_at END, updated_by = $3, updated_at = NOW() WHERE id = $1 RETURNING *`,
+      [id, requested, actorId]
+    );
   await recordEvent(db, {
     developmentId: id,
     action: `status_${requested}`,
