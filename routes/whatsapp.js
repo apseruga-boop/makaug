@@ -4059,17 +4059,25 @@ async function repairEmployeePendingAgentPropertyLink({ propertyId = '', agentId
     }
     const propertyIdentityUrl = normalizeInput(property.id_document_url);
     const agentIdentityUrl = normalizeInput(agent.identity_document_url);
-    if (!propertyIdentityUrl || propertyIdentityUrl !== agentIdentityUrl) {
+    if (!agentIdentityUrl) {
+      await client.query('ROLLBACK');
+      return { repaired: false, reason: 'agent_identity_document_missing' };
+    }
+    if (propertyIdentityUrl && propertyIdentityUrl !== agentIdentityUrl) {
       await client.query('ROLLBACK');
       return { repaired: false, reason: 'identity_document_mismatch' };
     }
 
     const repairedAt = new Date().toISOString();
+    const identityMatchMode = propertyIdentityUrl
+      ? 'same_private_document'
+      : 'agent_profile_private_document_only';
     const extraFieldsPatch = {
       whatsapp_employee_subject_role: 'agent',
       agent_profile_linked: true,
       identity_document_available: true,
       identity_document_storage: 'agent_profile_private',
+      pending_agent_identity_match_mode: identityMatchMode,
       pending_agent_link_repair_marker: WHATSAPP_AGENT_007_PENDING_AGENT_LINK_REPAIR_MARKER,
       pending_agent_link_repaired_at: repairedAt
     };
@@ -4100,13 +4108,16 @@ async function repairEmployeePendingAgentPropertyLink({ propertyId = '', agentId
        VALUES ($1,'whatsapp-employee-agent-007','whatsapp_employee_pending_agent_link_repaired','pending','pending',$2,$3,$4::jsonb)`,
       [
         property.id,
-        'Recovered employee WhatsApp property linked to its exact pending agent profile after strict name, phone and private identity-document matching.',
+        propertyIdentityUrl
+          ? 'Recovered employee WhatsApp property linked to its exact pending agent profile after strict name, phone and private identity-document matching.'
+          : 'Recovered employee WhatsApp property linked to its exact pending agent profile after strict name and phone matching; the pending agent profile already holds private identity media and the property had no conflicting ID reference.',
         'Property and agent remain pending. No approval, publication, consent inference, or outbound notification was performed.',
         JSON.stringify({
           marker: WHATSAPP_AGENT_007_PENDING_AGENT_LINK_REPAIR_MARKER,
           agent_id: agent.id,
           property_status: 'pending',
           agent_status: 'pending',
+          identity_match_mode: identityMatchMode,
           auto_publish: false,
           notification_sent: false
         })
@@ -4122,6 +4133,7 @@ async function repairEmployeePendingAgentPropertyLink({ propertyId = '', agentId
       moderation_stage: updated.rows[0].moderation_stage,
       lister_type: updated.rows[0].lister_type,
       agent_status: agent.status,
+      identity_match_mode: identityMatchMode,
       auto_publish: false,
       notification_sent: false
     };

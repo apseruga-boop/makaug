@@ -735,7 +735,7 @@ const originalGetClient = db.getClient;
             lister_type: 'owner',
             lister_name: 'Pending Agent',
             lister_phone: '+256700000001',
-            id_document_url: 'https://private.test.invalid/exact-agent-id',
+            id_document_url: null,
             extra_fields: { whatsapp_employee_subject_role: 'customer' }
           }]
         };
@@ -776,6 +776,7 @@ const originalGetClient = db.getClient;
   assert.equal(pendingAgentLinkRepair.repaired, true);
   assert.equal(pendingAgentLinkRepair.property_status, 'pending');
   assert.equal(pendingAgentLinkRepair.agent_status, 'pending');
+  assert.equal(pendingAgentLinkRepair.identity_match_mode, 'agent_profile_private_document_only');
   assert.equal(pendingAgentLinkRepair.auto_publish, false);
   assert.equal(pendingAgentLinkRepair.notification_sent, false);
   assert(repairQueries.some((sql) => /id_document_url = NULL/i.test(sql)), 'the duplicate property ID reference must be cleared after the private agent-profile match');
