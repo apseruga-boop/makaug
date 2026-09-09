@@ -129,6 +129,7 @@ test('migration, staff APIs, dashboard and CLI expose restart-safe review-only c
   const app = read('assets/makaug-app.js');
   const html = read('index.html');
   const script = read('scripts/run-source-coverage.js');
+  const coverageService = read('services/sourceCoverageService.js');
   const packageJson = read('package.json');
 
   assert.match(migration, /CREATE TABLE IF NOT EXISTS source_coverage_runs/);
@@ -137,13 +138,17 @@ test('migration, staff APIs, dashboard and CLI expose restart-safe review-only c
   assert.match(migration, /FOR UPDATE SKIP LOCKED|idx_source_coverage_items_claim/);
   assert.match(staffRoute, /source-intake\/coverage\/runs/);
   assert.match(staffRoute, /source-intake\/coverage\/items\/:itemId\/complete/);
-  assert.match(staffRoute, /auto_live_properties \|\| 0\) !== 0/);
+  assert.match(staffRoute, /created_auto_live_properties \|\| 0\) !== 0/);
+  assert.doesNotMatch(staffRoute, /if \(Number\(importResult\.auto_live_properties/, 'pre-existing public duplicates must not be mistaken for new automatic publication');
+  assert.match(coverageService, /created_auto_live_properties \|\| 0\) !== 0/);
+  assert.doesNotMatch(coverageService, /if \(Number\(importResult\.auto_live_properties/, 'YouTube coverage must distinguish new publication from an existing public duplicate');
   assert.match(staffRoute, /\.slice\(0, 10\)/, 'manual TikTok commits must remain in small batches');
   assert.match(html, /Exhaustive 30-day source coverage/);
   assert.match(html, /Load next 10 TikTok sources/);
   assert.match(app, /Review-only confirmed/);
   assert.match(script, /processYouTubeCoverageBatch/);
   assert.match(script, /hasFlag\('--latest'\)/, 'scheduled workers must resolve the active durable run without a hard-coded UUID');
+  assert.match(script, /--repair-safety-blocks/, 'the one known false-positive safety stop must have a narrow repair path');
   assert.match(packageJson, /inventory:source-coverage/);
   assert.equal(staffRouter.stack[0]?.name, 'requireStaffAccess', 'coverage endpoints must inherit the staff access gate');
 });

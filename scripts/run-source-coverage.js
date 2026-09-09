@@ -9,6 +9,7 @@ const {
   getSourceCoverageRun,
   listSourceCoverageRuns,
   processYouTubeCoverageBatch,
+  requeueFalsePositiveSafetyBlocks,
 } = require('../services/sourceCoverageService');
 
 function argValue(name, fallback = '') {
@@ -34,6 +35,9 @@ function usage() {
     '',
     'Inspect the newest runs:',
     '  node scripts/run-source-coverage.js --status',
+    '',
+    'Repair safety blocks caused only by pre-existing live duplicates:',
+    '  node scripts/run-source-coverage.js --run-id=<uuid> --repair-safety-blocks --confirm',
     '',
     'TikTok public pages remain an assisted workflow in the staff dashboard unless an approved data-source adapter is configured.',
     'Every imported candidate remains pending for human review; this command never approves or publishes.',
@@ -69,6 +73,11 @@ async function main() {
   if (!runId) {
     usage();
     throw new Error('--run-id or an active --latest run is required unless --create or --status is used.');
+  }
+  if (hasFlag('--repair-safety-blocks')) {
+    if (!hasFlag('--confirm')) throw new Error('Add --confirm to requeue verified false-positive safety blocks.');
+    console.log(JSON.stringify({ ok: true, ...(await requeueFalsePositiveSafetyBlocks(db, runId)) }, null, 2));
+    return;
   }
   if (!hasFlag('--confirm')) {
     console.log(JSON.stringify({ ok: true, dry_run: true, run: await getSourceCoverageRun(db, runId) }, null, 2));
