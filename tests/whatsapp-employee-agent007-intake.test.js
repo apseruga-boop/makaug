@@ -275,6 +275,7 @@ assert(copilotSource.includes("WHATSAPP_EMPLOYEE_MEDIA_QUALITY_MARKER = 'whatsap
 assert(serverSource.includes('whatsapp-employee-media-quality-guard-20260906'), 'production health must expose the employee media-quality release');
 assert(copilotSource.includes('EMPLOYEE_BATCH_REPLAY_BACKOFF_MS'), 'an unavailable historical thumbnail must back off instead of monopolizing the worker loop');
 assert(copilotSource.includes('employeeBatchReplayBackoffs'), 'history replay cooldowns must be isolated by completed batch');
+assert(copilotSource.includes('If hydration fails again,\n  // deferEmployeeBatchReplay can extend the delay'), 'expired replay cooldowns must preserve their attempt count for exponential backoff');
 assert(copilotSource.includes('snapshotsAfterCompletedEmployeeBatch(snapshots, employeeReplay)'), 'a deferred stale batch must not block later messages in the same chat');
 assert(copilotSource.includes('WHATSAPP_AGENT_007_INTAKE_RELIABILITY_MARKER'), 'the hosted worker heartbeat must identify the replay reliability release');
 assert(serverSource.includes('whatsapp-agent007-replay-backoff-20260901'), 'production health metadata must expose the Agent 007 reliability release');

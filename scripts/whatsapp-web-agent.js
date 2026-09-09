@@ -76,6 +76,8 @@ const LOCAL_PLAYWRIGHT_CORE_PATH = '/private/tmp/makaug-playwright-runtime/node_
 
 let child = null;
 let virtualDisplay = null;
+let powerAssertion = null;
+let powerAssertionRestartTimer = null;
 let stopping = false;
 let restartTimes = [];
 let starting = false;
@@ -96,6 +98,42 @@ function sleep(ms) {
 
 function isTruthy(value) {
   return ['1', 'true', 'yes', 'on'].includes(String(value || '').trim().toLowerCase());
+}
+
+function shouldPreventLocalIdleSleep() {
+  if (process.platform !== 'darwin') return false;
+  return !['0', 'false', 'no', 'off'].includes(
+    String(process.env.WHATSAPP_AGENT_PREVENT_IDLE_SLEEP || 'true').trim().toLowerCase()
+  );
+}
+
+function startLocalPowerAssertion() {
+  if (!shouldPreventLocalIdleSleep() || stopping || powerAssertion) return;
+  const caffeinatePath = '/usr/bin/caffeinate';
+  if (!fs.existsSync(caffeinatePath)) {
+    log('macOS idle-sleep prevention is unavailable because /usr/bin/caffeinate was not found.');
+    return;
+  }
+
+  powerAssertion = spawn(caffeinatePath, ['-i', '-w', String(process.pid)], {
+    stdio: ['ignore', 'ignore', 'inherit']
+  });
+  const assertion = powerAssertion;
+  assertion.unref();
+  log('holding a macOS idle-sleep assertion while the local WhatsApp bridge is online.');
+  assertion.once('error', (error) => {
+    if (powerAssertion === assertion) powerAssertion = null;
+    log(`macOS idle-sleep assertion failed: ${error.message || error}`);
+  });
+  assertion.once('exit', (code, signal) => {
+    if (powerAssertion === assertion) powerAssertion = null;
+    if (stopping) return;
+    log(`macOS idle-sleep assertion exited (${signal || code || 0}); restoring it in 1s.`);
+    powerAssertionRestartTimer = setTimeout(() => {
+      powerAssertionRestartTimer = null;
+      startLocalPowerAssertion();
+    }, 1000);
+  });
 }
 
 function displaySocketPath(display = process.env.DISPLAY || ':99') {
@@ -239,6 +277,10 @@ async function startBridge() {
 function stop(signal) {
   stopping = true;
   log(`received ${signal}; stopping bridge.`);
+  if (powerAssertionRestartTimer) clearTimeout(powerAssertionRestartTimer);
+  powerAssertionRestartTimer = null;
+  if (powerAssertion && !powerAssertion.killed) powerAssertion.kill('SIGTERM');
+  powerAssertion = null;
   if (virtualDisplay && !virtualDisplay.killed) virtualDisplay.kill(signal);
   if (child && !child.killed) {
     child.kill(signal);
@@ -255,6 +297,7 @@ process.on('SIGTERM', () => stop('SIGTERM'));
 
 log('agent online. Keep this terminal open while WhatsApp Web is serving live replies.');
 log('Using WhatsApp Web is preferred over the desktop app because the bridge can read/send through a persistent Chrome profile and report heartbeats to admin.');
+startLocalPowerAssertion();
 ensureVirtualDisplay()
   .then(startBridge)
   .catch((error) => {
