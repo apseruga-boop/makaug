@@ -76,6 +76,16 @@ assert.equal(parsedProperty.locationPatch.area, 'Ntinda');
 assert.equal(parsedProperty.locationPatch.district, 'Kampala');
 assert.deepEqual(whatsappRoute.employeePropertyMissing(parsedProperty), []);
 
+const masindiKafuLand = whatsappRoute.employeePropertyFacts(
+  'Land for sale in Kafu, Masindi District. Asking price UGX 12 million per acre.',
+  {}
+);
+assert.equal(masindiKafuLand.listingType, 'land');
+assert.equal(masindiKafuLand.price, 12_000_000);
+assert.equal(masindiKafuLand.locationPatch.area, 'Kafu');
+assert.equal(masindiKafuLand.locationPatch.district, 'Masindi');
+assert.deepEqual(whatsappRoute.employeePropertyMissing(masindiKafuLand), []);
+
 assert.equal(
   whatsappRoute.employeeCaptionLikelySameProperty(
     'Royal Palms Butabika - Luzira 4 bedroom villa for sale. Well planned gated community',

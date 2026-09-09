@@ -179,6 +179,11 @@ const CURATED_UGANDA_LOCATION_OVERRIDES = [
     aliases: ['Labongo'], source: 'ubos_and_openstreetmap_verified_override'
   },
   {
+    name: 'Kafu', district: 'Masindi', town: 'Kafu', level: 'area',
+    aliases: ['Kafu', 'Kaffu', 'Masindi Kafu', 'Masindi Kaffu'],
+    source: 'masindi_district_verified_override'
+  },
+  {
     name: 'Labongo', district: 'Kitgum', town: 'Kitgum', level: 'area',
     aliases: ['Labongo'], source: 'ubos_and_openstreetmap_verified_override'
   },
