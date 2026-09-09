@@ -1819,7 +1819,13 @@ async function getActiveChatSnapshot(page) {
     const mediaOnlyNodes = Array.from(chatRoot.querySelectorAll('[data-id], [data-testid^="conv-msg-"]')).filter((el) => {
       if (el.querySelector('div.copyable-text[data-pre-plain-text]')) return false;
       const text = el.innerText || el.textContent || '';
-      return !!el.querySelector('img, video, audio') || hasVoiceNote(el, text) || hasCallLog(el, text);
+      return !!el.querySelector([
+        'img', 'video', 'audio',
+        '[data-testid*="image" i]',
+        '[data-testid*="album" i]',
+        '[aria-label*="image" i]',
+        '[style*="background-image"]'
+      ].join(',')) || hasVoiceNote(el, text) || hasCallLog(el, text);
     });
     const callLogNodes = Array.from(chatRoot.querySelectorAll('div, span, [role="button"], [aria-label], [title], [data-icon], [data-testid]'))
       .map(callLogContainerFor)
@@ -1902,7 +1908,7 @@ async function getActiveChatSnapshot(page) {
     const highResolutionImages = nonEmojiImages.filter((img) => img.naturalWidth >= 160 && img.naturalHeight >= 120);
     const hasNonEmojiImage = highResolutionImages.length > 0 || nonEmojiImages.length > 0;
     const extraImageMatch = text.match(/\+(\d+)/);
-    const visibleMediaCount = Math.max(1, highResolutionImages.length);
+    const visibleMediaCount = Math.max(1, highResolutionImages.length, nonEmojiImages.length);
     const mediaCount = hasNonEmojiImage
       ? Math.max(visibleMediaCount, extraImageMatch ? visibleMediaCount + Number(extraImageMatch[1]) : visibleMediaCount)
       : 0;
@@ -2115,7 +2121,13 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
     const mediaOnlyNodes = Array.from(chatRoot.querySelectorAll('[data-id], [data-testid^="conv-msg-"]')).filter((el) => {
       if (el.querySelector('div.copyable-text[data-pre-plain-text]')) return false;
       const text = el.innerText || el.textContent || '';
-      return !!el.querySelector('img, video, audio') || hasVoiceNote(el, text) || hasCallLog(el, text);
+      return !!el.querySelector([
+        'img', 'video', 'audio',
+        '[data-testid*="image" i]',
+        '[data-testid*="album" i]',
+        '[aria-label*="image" i]',
+        '[style*="background-image"]'
+      ].join(',')) || hasVoiceNote(el, text) || hasCallLog(el, text);
     });
     const callLogNodes = Array.from(chatRoot.querySelectorAll('div, span, [role="button"], [aria-label], [title], [data-icon], [data-testid]'))
       .map(callLogContainerFor)
@@ -2167,7 +2179,7 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
         const highResolutionImages = nonEmojiImages.filter((img) => img.naturalWidth >= 160 && img.naturalHeight >= 120);
         const hasNonEmojiImage = highResolutionImages.length > 0 || nonEmojiImages.length > 0;
         const extraImageMatch = rawText.match(/\+(\d+)/);
-        const visibleMediaCount = Math.max(1, highResolutionImages.length);
+        const visibleMediaCount = Math.max(1, highResolutionImages.length, nonEmojiImages.length);
         const mediaCount = hasNonEmojiImage
           ? Math.max(visibleMediaCount, extraImageMatch ? visibleMediaCount + Number(extraImageMatch[1]) : visibleMediaCount)
           : 0;
@@ -2365,7 +2377,8 @@ async function hydrateImageSnapshot(page, snapshot) {
         const className = String(img.className || '').toLowerCase();
         const alt = String(img.alt || '').toLowerCase();
         if (className.includes('emoji') || alt.includes('emoji') || alt.includes('avatar')) return false;
-        return img.naturalWidth >= 160 && img.naturalHeight >= 120
+        const minimumSourceDimension = Number(requestedMediaCount || 1) > 1 ? 64 : 120;
+        return img.naturalWidth >= minimumSourceDimension && img.naturalHeight >= minimumSourceDimension
           && rect.width >= 24 && rect.height >= 24;
       });
       const uniqueImageCandidates = Array.from(new Map(imageCandidates.map((img) => {
@@ -2438,15 +2451,23 @@ async function hydrateImageSnapshot(page, snapshot) {
 
       const expectedCount = Math.max(1, Math.min(20, Number(requestedMediaCount || 1) || 1));
       const viewerResults = [];
-      if (expectedCount > 1 && visibleImages.length) {
-        const opener = visibleImages[0].closest('button, [role="button"]') || visibleImages[0];
-        opener.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
-        opener.click();
-        await new Promise((resolve) => setTimeout(resolve, 650));
+      if (expectedCount > 1) {
+        const openerCandidate = visibleImages[0]
+          || root.querySelector([
+            '[data-testid*="image" i]',
+            '[data-testid*="album" i]',
+            '[aria-label*="image" i]',
+            '[style*="background-image"]'
+          ].join(','));
+        const opener = openerCandidate?.closest('button, [role="button"]') || openerCandidate;
+        if (opener) {
+          opener.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+          opener.click();
+          await new Promise((resolve) => setTimeout(resolve, 650));
 
-        let previousViewerSource = '';
-        const seenViewerHashes = new Set();
-        for (let index = 0; index < expectedCount; index += 1) {
+          let previousViewerSource = '';
+          const seenViewerHashes = new Set();
+          for (let index = 0; index < expectedCount; index += 1) {
           const viewerRoots = Array.from(document.querySelectorAll([
             '[role="dialog"]',
             '[data-testid*="media-viewer" i]',
@@ -2508,18 +2529,19 @@ async function hydrateImageSnapshot(page, snapshot) {
           if (!nextControl || index >= expectedCount - 1) break;
           (nextControl.closest('button, [role="button"]') || nextControl).click();
           await new Promise((resolve) => setTimeout(resolve, 450));
-        }
+          }
 
-        const closeControl = Array.from(document.querySelectorAll([
-          'button[aria-label*="Close" i]',
-          '[role="button"][aria-label*="Close" i]',
-          '[data-icon="x-viewer"]',
-          '[data-testid*="media-viewer-close" i]'
-        ].join(','))).find((element) => {
-          const rect = element.getBoundingClientRect();
-          return rect.width > 0 && rect.height > 0;
-        });
-        (closeControl?.closest('button, [role="button"]') || closeControl)?.click?.();
+          const closeControl = Array.from(document.querySelectorAll([
+            'button[aria-label*="Close" i]',
+            '[role="button"][aria-label*="Close" i]',
+            '[data-icon="x-viewer"]',
+            '[data-testid*="media-viewer-close" i]'
+          ].join(','))).find((element) => {
+            const rect = element.getBoundingClientRect();
+            return rect.width > 0 && rect.height > 0;
+          });
+          (closeControl?.closest('button, [role="button"]') || closeControl)?.click?.();
+        }
       }
 
       const preferred = viewerResults.length ? [...viewerResults, ...visibleResults] : visibleResults;
@@ -3468,6 +3490,7 @@ async function ingestSnapshot({ snapshot, row = {}, source = 'unread_scan' }) {
       backfillRequest: result.data?.backfill_request || null,
       ownerForward: result.data?.owner_forward || null,
       responseMessage: result.data?.message || '',
+      batchComplete: result.data?.employee_batch_complete === true,
       chatKey
     };
   } catch (error) {
@@ -3812,7 +3835,21 @@ async function replayEmployeeBatchThroughCompletion(page, history = {}, row = {}
         processed += result.processed || 0;
         if (result.queuedReply) await processOutbox(page, { recipient: result.chatKey, maxSends: 1 });
         rememberBrowserMessageKey(originalBrowserKey);
-        completed = !!(result.processed || result.duplicate || result.queuedReply);
+        if (result.batchComplete !== true) {
+          const deferred = deferEmployeeBatchReplay(completionKey, 'batch_incomplete_missing_media');
+          log(`Agent 007 ordered history completion remains open for ${history.chatKey}: usable property media is still missing`);
+          await scrollWhatsappHistoryToLatest(page);
+          return {
+            handled: false,
+            processed,
+            retryable: true,
+            deferred: true,
+            completionKey,
+            retryAfter: deferred.retryAfter,
+            skipped: 'batch_incomplete_missing_media'
+          };
+        }
+        completed = true;
         break;
       }
 
