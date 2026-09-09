@@ -4057,7 +4057,7 @@ router.post('/source-intake/coverage/items/:itemId/complete', async (req, res, n
         fetchPublicMetadata: false,
         skipImageHashLookup: true,
       });
-      if (Number(importResult.auto_live_properties || 0) !== 0) {
+      if (Number(importResult.created_auto_live_properties || 0) !== 0) {
         const unsafe = new Error('Review-only safety check failed: an exhaustive coverage import reported automatic publication.');
         unsafe.status = 503;
         throw unsafe;
@@ -4085,6 +4085,8 @@ router.post('/source-intake/coverage/items/:itemId/complete', async (req, res, n
           existing_properties: Number(importResult.existing_properties || 0),
           review_queue_properties: Number(importResult.review_queue_properties || 0),
           source_review_count: Number(importResult.source_review_count || 0),
+          created_auto_live_properties: Number(importResult.created_auto_live_properties || 0),
+          existing_auto_live_properties: Number(importResult.existing_auto_live_properties || 0),
           auto_live_properties: Number(importResult.auto_live_properties || 0),
         } : { auto_live_properties: 0 },
       },

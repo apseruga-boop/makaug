@@ -504,6 +504,25 @@ async function completeSourceCoverageItem(db, itemId, {
   return { item: updated.rows[0], run };
 }
 
+async function requeueFalsePositiveSafetyBlocks(db, runId) {
+  const repaired = await db.query(
+    `UPDATE source_coverage_items
+     SET status = 'retry', failure_reason = NULL, last_error = NULL,
+         next_attempt_at = NOW(), checked_at = NULL, updated_at = NOW()
+     WHERE run_id = $1::uuid
+       AND status = 'blocked'
+       AND failure_reason = 'review_only_safety_check_failed'
+       AND COALESCE((result->'import_summary'->>'created_auto_live_properties')::int, 0) = 0
+     RETURNING id::text AS id, source_key`,
+    [runId]
+  );
+  return {
+    repaired_count: repaired.rowCount,
+    repaired_items: repaired.rows,
+    run: await refreshSourceCoverageRun(db, runId),
+  };
+}
+
 function youtubeApiKey(env = process.env) {
   for (const name of YOUTUBE_API_KEY_ENV_NAMES) {
     const value = clean(env[name]);
@@ -616,12 +635,19 @@ async function processYouTubeCoverageBatch({
     if (!dryRun && posts.length) {
       await recordHarvestImportResult(db, importResult, { eventType: 'source_coverage_youtube' }).catch(() => {});
     }
-    if (Number(importResult.auto_live_properties || 0) !== 0) {
+    if (Number(importResult.created_auto_live_properties || 0) !== 0) {
       await completeSourceCoverageItem(db, item.id, {
         outcome: 'blocked',
         failureReason: 'review_only_safety_check_failed',
         result: { import_summary: importResult },
       });
+      for (const deferred of items.slice(itemIndex + 1)) {
+        await completeSourceCoverageItem(db, deferred.id, {
+          outcome: 'retry',
+          failureReason: 'youtube_batch_deferred_after_safety_stop',
+          retryAfterMinutes: 15,
+        });
+      }
       throw new Error('Review-only safety check failed: YouTube coverage reported automatic publication.');
     }
     const outcome = posts.length ? 'completed' : 'checked_empty';
@@ -639,11 +665,13 @@ async function processYouTubeCoverageBatch({
           existing_properties: Number(importResult.existing_properties || 0),
           review_queue_properties: Number(importResult.review_queue_properties || 0),
           source_review_count: Number(importResult.source_review_count || 0),
+          created_auto_live_properties: Number(importResult.created_auto_live_properties || 0),
+          existing_auto_live_properties: Number(importResult.existing_auto_live_properties || 0),
           auto_live_properties: Number(importResult.auto_live_properties || 0),
         },
       },
     });
-    reports.push({ item_id: item.id, source_key: item.source_key, status: completed.item.status, discovered: posts.length, review_queued: Number(importResult.review_queue_properties || 0), auto_live: Number(importResult.auto_live_properties || 0) });
+    reports.push({ item_id: item.id, source_key: item.source_key, status: completed.item.status, discovered: posts.length, review_queued: Number(importResult.review_queue_properties || 0), created_auto_live: Number(importResult.created_auto_live_properties || 0), existing_auto_live: Number(importResult.existing_auto_live_properties || 0) });
   }
   return { ok: true, marker: SOURCE_COVERAGE_MARKER, run_id: runId, processed: reports.length, reports, run: await refreshSourceCoverageRun(db, runId) };
 }
@@ -665,6 +693,7 @@ module.exports = {
   claimSourceCoverageBatch,
   completeSourceCoverageItem,
   refreshSourceCoverageRun,
+  requeueFalsePositiveSafetyBlocks,
   youtubeProviderFailureDisposition,
   processYouTubeCoverageBatch,
 };
