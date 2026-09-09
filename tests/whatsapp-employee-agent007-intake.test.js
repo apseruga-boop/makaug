@@ -427,6 +427,7 @@ assert(routeSource.includes("WHERE status IN ('pending','approved')"), 'rejected
 assert(routeSource.includes('You do not need to resend the media.'), 'caption correction must reuse already-stored media');
 assert(routeSource.includes('employeePendingStoredMedia(data)'), 'a corrected text caption must finalize stored media into staff review');
 assert(copilotSource.includes('isEmployeePropertyCaptionCorrectionSnapshot'), 'history replay must include a corrected property caption sent after media');
+assert(copilotSource.includes('bedrooms?|bathrooms?|washrooms?|quarters?'), 'history replay must treat priced room-count captions such as the Kazi Kira forward as property boundaries');
 assert(copilotSource.includes("source: 'employee_batch_history_caption'"), 'corrected history captions must be replayed before COMPLETE');
 assert(copilotSource.includes('employee_batch_completion_keys'), 'completed replay boundaries must survive hosted-worker restarts');
 assert(copilotSource.includes('normalizeReplyText(preparedComposer.text) !== normalizeReplyText(text)'), 'outbound replies must fail closed if the composer differs from the queued reply');

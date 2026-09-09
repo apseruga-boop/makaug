@@ -3493,7 +3493,7 @@ function isEmployeePropertyCaptionCorrectionSnapshot(snapshot = {}) {
   if (text.length < 20 || isEmployeeBatchTriggerSnapshot(snapshot) || isEmployeeBatchCompletionSnapshot(snapshot)) {
     return false;
   }
-  const hasPropertyType = /\b(?:house|home|villa|bungalow|mansion|apartments?|flats?|land|plots?|commercial|shop|office|warehouse|student|hostel|rental|rent|sale)\b/i.test(text);
+  const hasPropertyType = /\b(?:house|home|villa|bungalow|mansion|apartments?|flats?|land|plots?|commercial|shop|office|warehouse|student|hostel|rental|rent|sale|bedrooms?|bathrooms?|washrooms?|quarters?)\b/i.test(text);
   const hasPrice = /\b(?:ugx|usd|shs?|million|billion|price|asking)\b/i.test(text)
     || /\b\d[\d,.]*\s*(?:m|bn|b)\b/i.test(text);
   return hasPropertyType && hasPrice;
