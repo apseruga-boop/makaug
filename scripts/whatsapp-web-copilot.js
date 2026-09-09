@@ -443,6 +443,11 @@ function isClosedBrowserError(error) {
     .test(String(error?.message || error || ''));
 }
 
+function isAmbiguousWhatsappSendError(error) {
+  return /WhatsApp send was not confirmed after (?:composer cleared|Enter)/i
+    .test(String(error?.message || error || ''));
+}
+
 function hasChromiumProfileLockFiles() {
   return chromiumProfileLockFiles().some((filePath) => {
     try {
@@ -5312,14 +5317,22 @@ async function processOutboxUnlocked(page, { recipient = '', maxSends = OUTBOX_S
       });
       sent += 1;
     } catch (error) {
+      const ambiguousBrowserSend = isAmbiguousWhatsappSendError(error);
+      if (ambiguousBrowserSend) rememberRecentlySentReply(item);
       await apiRequest(`/api/whatsapp/web-bridge/outbox/${encodeURIComponent(item.id)}/failed`, {
         method: 'POST',
         body: {
           client_id: CLIENT_ID,
-          error: error.message || 'send_failed'
+          error: error.message || 'send_failed',
+          do_not_retry: ambiguousBrowserSend,
+          ambiguous_browser_send: ambiguousBrowserSend
         }
       }).catch(() => {});
-      log('failed to send queued reply:', item.recipient, error.message || error);
+      if (ambiguousBrowserSend) {
+        log(`outgoing bubble was not observable after the composer cleared; suppressed automatic retry to prevent a duplicate reply to ${item.recipient}`);
+      } else {
+        log('failed to send queued reply:', item.recipient, error.message || error);
+      }
     }
   }
 
