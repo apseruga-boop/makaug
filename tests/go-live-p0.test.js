@@ -1331,6 +1331,9 @@ function run() {
   assert(whatsappWebBridgeServiceSource.includes('WHATSAPP_WEB_BRIDGE_CLAIM_SECONDS || 90'), 'WhatsApp web bridge claims must outlive the browser send path so an in-flight reply is not duplicated');
   assert(whatsappWebCopilotScript.includes('suppressed duplicate queued reply'), 'WhatsApp Web copilot must suppress recently sent duplicate queue rows');
   assert(whatsappWebCopilotScript.includes('refusing to mark reply as sent'), 'WhatsApp Web copilot must not mark unconfirmed sends as sent');
+  assert(whatsappWebCopilotScript.includes('do_not_retry: ambiguousBrowserSend'), 'WhatsApp Web copilot must not automatically resend an ambiguous browser send');
+  assert(whatsappRoutes.includes('retry_suppressed: suppressRetry'), 'WhatsApp bridge failures must retain ambiguous-send retry suppression evidence');
+  assert(whatsappWebBridgeServiceSource.includes("status = CASE WHEN $5::boolean OR attempts + 1 >= 8 THEN 'failed' ELSE 'retry' END"), 'ambiguous WhatsApp browser sends must become terminal failures instead of duplicate retries');
   assert(whatsappWebCopilotScript.includes('[data-id^="true_"]'), 'WhatsApp Web copilot must detect outgoing bubbles with current WhatsApp Web selectors');
   assert(whatsappWebCopilotScript.includes('detectAndDeclineIncomingCall'), 'WhatsApp Web copilot must detect and decline incoming calls');
   assert(whatsappWebCopilotScript.includes('/api/whatsapp/web-bridge/call'), 'WhatsApp Web copilot must send call events to the backend');

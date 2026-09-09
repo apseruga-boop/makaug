@@ -338,21 +338,22 @@ async function markWhatsappWebBridgeMessageSent(id, patch = {}) {
   return result.rows[0] || null;
 }
 
-async function markWhatsappWebBridgeMessageFailed(id, errorMessage = 'bridge_send_failed', patch = {}) {
+async function markWhatsappWebBridgeMessageFailed(id, errorMessage = 'bridge_send_failed', patch = {}, options = {}) {
   const retryDelay = Math.min(120, Math.max(1, Number(process.env.WHATSAPP_WEB_BRIDGE_RETRY_SECONDS || 1)));
   const metadata = patch && typeof patch === 'object' ? patch : {};
+  const suppressRetry = options?.suppressRetry === true;
   const result = await db.query(
     `UPDATE outbound_message_queue
      SET
-       status = CASE WHEN attempts + 1 >= 8 THEN 'failed' ELSE 'retry' END,
+       status = CASE WHEN $5::boolean OR attempts + 1 >= 8 THEN 'failed' ELSE 'retry' END,
        attempts = attempts + 1,
        last_error = $2,
-       next_attempt_at = NOW() + ($3 || ' seconds')::interval,
+       next_attempt_at = CASE WHEN $5::boolean THEN NOW() ELSE NOW() + ($3 || ' seconds')::interval END,
        metadata = COALESCE(metadata, '{}'::jsonb) || $4::jsonb,
        updated_at = NOW()
      WHERE id = $1
      RETURNING *`,
-    [id, String(errorMessage || 'bridge_send_failed'), String(retryDelay), JSON.stringify(metadata)]
+    [id, String(errorMessage || 'bridge_send_failed'), String(retryDelay), JSON.stringify(metadata), suppressRetry]
   );
   return result.rows[0] || null;
 }

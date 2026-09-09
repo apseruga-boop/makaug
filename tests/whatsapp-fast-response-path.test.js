@@ -3,6 +3,8 @@ const fs = require('fs');
 const path = require('path');
 
 const { classifyWhatsappIntent } = require('../services/aiService');
+const db = require('../config/database');
+const { markWhatsappWebBridgeMessageFailed } = require('../services/whatsappWebBridgeService');
 
 const whatsappRouteSource = fs.readFileSync(
   path.join(__dirname, '..', 'routes', 'whatsapp.js'),
@@ -234,6 +236,39 @@ async function run() {
       && whatsappWebCopilotSource.includes("root.querySelectorAll?.('[aria-label], [data-icon], [data-testid]')"),
     'WhatsApp Web sender must recognize current Sent, Delivered, Read, and pending delivery ticks as outgoing-bubble proof'
   );
+  assert(
+    whatsappWebCopilotSource.includes('function isAmbiguousWhatsappSendError(error)')
+      && whatsappWebCopilotSource.includes('do_not_retry: ambiguousBrowserSend')
+      && whatsappWebCopilotSource.includes('suppressed automatic retry to prevent a duplicate reply'),
+    'a cleared composer without observable bubble proof must be treated as ambiguous and never automatically resent'
+  );
+  assert(
+    whatsappRouteSource.includes('const suppressRetry = ambiguousBrowserSend &&')
+      && whatsappRouteSource.includes('{ suppressRetry }')
+      && whatsappWebBridgeServiceSource.includes("status = CASE WHEN $5::boolean OR attempts + 1 >= 8 THEN 'failed' ELSE 'retry' END")
+      && whatsappRouteSource.includes('retry_suppressed: suppressRetry'),
+    'the bridge API must terminally fail ambiguous browser sends while retaining audit metadata'
+  );
+  const originalQuery = db.query;
+  let capturedFailureUpdate = null;
+  try {
+    db.query = async (sql, params) => {
+      capturedFailureUpdate = { sql, params };
+      return { rows: [{ id: 'queue-1', status: 'failed' }] };
+    };
+    const terminalFailure = await markWhatsappWebBridgeMessageFailed(
+      'queue-1',
+      'WhatsApp send was not confirmed after composer cleared',
+      { ambiguous_browser_send: true, retry_suppressed: true },
+      { suppressRetry: true }
+    );
+    assert.strictEqual(terminalFailure.status, 'failed');
+    assert(capturedFailureUpdate.sql.includes("status = CASE WHEN $5::boolean OR attempts + 1 >= 8 THEN 'failed' ELSE 'retry' END"));
+    assert.strictEqual(capturedFailureUpdate.params[4], true, 'ambiguous sends must bind the terminal-failure flag');
+    assert.strictEqual(JSON.parse(capturedFailureUpdate.params[3]).retry_suppressed, true);
+  } finally {
+    db.query = originalQuery;
+  }
   assert(
     whatsappWebBridgeServiceSource.includes('WHATSAPP_WEB_BRIDGE_RETRY_SECONDS || 1'),
     'WhatsApp Web bridge retry delay should default to one second after a send failure'

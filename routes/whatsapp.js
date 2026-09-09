@@ -12944,13 +12944,23 @@ router.post('/web-bridge/outbox/:id/sent', asyncRoute(async (req, res) => {
 router.post('/web-bridge/outbox/:id/failed', asyncRoute(async (req, res) => {
   if (!isWhatsappWebBridgeAuthorized(req)) return bridgeUnauthorized(res);
 
+  const ambiguousBrowserSend = req.body.ambiguous_browser_send === true
+    || String(req.body.ambiguous_browser_send || '').trim().toLowerCase() === 'true';
+  const suppressRetry = ambiguousBrowserSend && (
+    req.body.do_not_retry === true
+    || String(req.body.do_not_retry || '').trim().toLowerCase() === 'true'
+  );
+
   const updated = await markWhatsappWebBridgeMessageFailed(
     req.params.id,
     req.body.error || 'bridge_send_failed',
     {
       bridge_client_id: req.body.client_id || null,
-      bridge_failed_at: new Date().toISOString()
-    }
+      bridge_failed_at: new Date().toISOString(),
+      ambiguous_browser_send: ambiguousBrowserSend,
+      retry_suppressed: suppressRetry
+    },
+    { suppressRetry }
   );
 
   if (!updated) {
