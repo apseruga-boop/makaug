@@ -2754,7 +2754,7 @@ function parseOwnerHistoryBackfillCommand(input = '') {
 function isReviewableOwnerForwardCaption(caption = '') {
   const clean = normalizeInput(caption);
   if (clean.length < 18) return false;
-  const hasProperty = /\b(?:property|house|home|mansion|bungalow|apartment|flat|rental|unit|land|plot|acre|decimal|commercial|shop|office|warehouse|bedroom|bathroom)\b/i.test(clean);
+  const hasProperty = /\b(?:property|house|home|mansion|bungalow|villa|townhouse|apartment|flat|rental|unit|land|plots?|acres?|decimals?|commercial|shop|office|warehouse|bedrooms?|bathrooms?)\b/i.test(clean);
   const hasTransactionOrPrice = /\b(?:for sale|selling|sale price|asking price|for rent|to rent|monthly rent|per month|ugx|ush|million|billion|\d+\s*(?:m|mn|bn))\b/i.test(clean);
   return hasProperty && hasTransactionOrPrice;
 }
@@ -3926,11 +3926,15 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
   const naturalDraft = buildNaturalListingDetailDraft(cleanCaption, {}) || {};
   const hints = extractSellerListingDraftHints(cleanCaption, {});
   let listingType = ownerForwardListingType(cleanCaption, { ...hints, ...naturalDraft });
-  const priceSource = listingPriceSourceFragment(cleanCaption);
+  const priceScanCaption = cleanCaption.replace(
+    /\b(\d[\d,.]*(?:\.\d+)?)\s*(?:us\s+)?dollars?\b/gi,
+    'USD $1'
+  );
+  const priceSource = listingPriceSourceFragment(priceScanCaption);
   const priceMetadata = priceSource
     ? propertyPriceMetadata(priceSource)
-    : propertyPriceMetadata(parseListingPriceDraft(cleanCaption));
-  const price = Number(priceMetadata.price) || parseListingPriceDraft(cleanCaption);
+    : propertyPriceMetadata(parseListingPriceDraft(priceScanCaption));
+  const price = Number(priceMetadata.price) || parseListingPriceDraft(priceScanCaption);
   if (!listingType && /\bapartments?\b/i.test(cleanCaption) && Number(price) >= 10000 && Number(price) <= 20000000 && !/\b(?:sale|selling|buy|purchase)\b/i.test(cleanCaption)) {
     listingType = 'rent';
   }
@@ -3938,18 +3942,36 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
   if (
     listingType === 'land'
     && Number(bedroomDraft.bedrooms) >= 1
-    && /\b(?:house|home|villa|bungalow|mansion|apartment|flat)\b/i.test(cleanCaption)
-    && /\b(?:sale|selling|buy|purchase)\b/i.test(cleanCaption)
+    && (
+      /\b(?:house|home|villa|bungalow|mansion|apartment|flat|townhouse)\b/i.test(cleanCaption)
+      || /\b(?:boys?|staff)\s+quarters?\b/i.test(cleanCaption)
+    )
+    && (Number(price) >= 50000000 || /\b(?:sale|selling|buy|purchase)\b/i.test(cleanCaption))
+  ) {
+    listingType = 'sale';
+  }
+  if (!listingType && /\brent(?:ed)?\s+(?:at|for)\b/i.test(cleanCaption)) {
+    listingType = 'rent';
+  }
+  if (
+    !listingType
+    && Number(bedroomDraft.bedrooms) >= 1
+    && /\b(?:house|home|villa|bungalow|mansion|apartment|flat|townhouse)\b/i.test(cleanCaption)
+    && Number(price) >= 50000000
   ) {
     listingType = 'sale';
   }
   if (!listingType && Number(bedroomDraft.bedrooms) >= 1 && /\bstaff quarters?\b/i.test(cleanCaption) && Number(price) >= 50000000) {
     listingType = 'sale';
   }
-  let locationResolution = resolveWhatsappLocation(cleanCaption, { allowText: true });
+  const locationCaption = cleanCaption.replace(
+    /\b(?:private|ready|freehold)?\s*m(?:ailo|olo|ilo)\s+(?:land\s+)?title\b/gi,
+    ' '
+  );
+  let locationResolution = resolveWhatsappLocation(locationCaption, { allowText: true });
   if (!locationResolution || locationResolution.status !== 'matched') {
-    const beforeLandmark = cleanCaption.split(/\b(?:opposite|near)\b/i)[0].trim();
-    if (beforeLandmark && beforeLandmark !== cleanCaption) {
+    const beforeLandmark = locationCaption.split(/\b(?:opposite|near)\b/i)[0].trim();
+    if (beforeLandmark && beforeLandmark !== locationCaption) {
       const landmarkFallback = resolveWhatsappLocation(beforeLandmark, { allowText: true });
       if (landmarkFallback?.status === 'matched') locationResolution = landmarkFallback;
     }
@@ -3973,6 +3995,20 @@ function employeePropertyMissing(facts = {}) {
     missing.push('exact area and district');
   }
   return missing;
+}
+
+function isEmployeeNewPropertyCaptionBoundary(caption = '', facts = {}) {
+  const clean = normalizeInput(caption);
+  if (clean.length < 18) return false;
+  const hasPropertySignal = /\b(?:property|house|home|mansion|bungalow|villa|townhouse|apartments?|flats?|rentals?|units?|land|plots?|acres?|decimals?|commercial|shops?|offices?|warehouses?|bedrooms?|bathrooms?)\b/i.test(clean);
+  if (!hasPropertySignal) return false;
+  const parsedSignal = Boolean(
+    facts.listingType
+    || Number(facts.price) > 0
+    || facts.locationPatch?.area
+    || Number(facts.bedroomDraft?.bedrooms) > 0
+  );
+  return parsedSignal || isReviewableOwnerForwardCaption(clean);
 }
 
 function employeeCaptionHash(caption = '') {
@@ -4875,6 +4911,21 @@ async function handleEmployeeWhatsappIntake({
 
   if (currentStep === 'employee_property_media') {
     if (isEmployeeIntakeComplete(cleanBody)) {
+      const pendingStoredMedia = employeePendingStoredMedia(data);
+      const pendingCaption = normalizeInput(data.pending_property_caption || '');
+      if (pendingStoredMedia.length || pendingCaption) {
+        const pendingFacts = employeePropertyFacts(pendingCaption, data);
+        const pendingMissing = employeePropertyMissing(pendingFacts);
+        const missingLine = pendingMissing.length
+          ? ` Still needed: ${pendingMissing.join(', ')}.`
+          : '';
+        return {
+          handled: true,
+          nextStep: currentStep,
+          batchComplete: false,
+          message: `I have not completed this batch because one property is still waiting to be matched with its caption and media.${missingLine} Send the corrected caption or the missing media; nothing has been merged and nothing is live.`
+        };
+      }
       let propertyIds = Array.isArray(data.property_ids) ? data.property_ids : [];
       if (!Number(data.properties_shared_count || 0)) {
         return { handled: true, nextStep: currentStep, message: 'No properties have been saved yet. Send the first property media with its type, exact location and price in the caption.' };
@@ -5073,6 +5124,8 @@ async function handleEmployeeWhatsappIntake({
     const facts = employeePropertyFacts(caption, data);
     const missing = employeePropertyMissing(facts);
     const shouldStartProperty = Boolean(caption) && !missing.length;
+    const startsIncompleteNewProperty = Boolean(caption)
+      && isEmployeeNewPropertyCaptionBoundary(caption, facts);
 
     if (!shouldStartProperty && !data.current_property_id) {
       try {
@@ -5095,7 +5148,7 @@ async function handleEmployeeWhatsappIntake({
         message: `I stored this media safely, but it is not in staff review yet. Send one corrected caption with: ${missing.length ? missing.join(', ') : 'property type, exact location and price'}. You do not need to resend the media.`
       };
     }
-    if (!shouldStartProperty && caption && isReviewableOwnerForwardCaption(caption)) {
+    if (!shouldStartProperty && startsIncompleteNewProperty) {
       try {
         const pendingStoredMedia = await storeEmployeeMedia(candidates, {
           privateMedia: false,
@@ -5147,6 +5200,8 @@ async function handleEmployeeWhatsappIntake({
         data.current_property_id = propertyIds.includes(String(existingProperty.id))
           ? existingProperty.id
           : null;
+        delete data.pending_property_caption;
+        clearEmployeePendingMedia(data);
         await replaceEmployeeSession(phone, currentStep, data);
         return {
           handled: true,
@@ -5160,6 +5215,8 @@ async function handleEmployeeWhatsappIntake({
       propertyAttemptRecorded = recordEmployeePropertyAttempt(data, { inboundMessageId, caption });
       if (existingProperty) {
         if (propertyAttemptRecorded) data.properties_duplicate_count = Number(data.properties_duplicate_count || 0) + 1;
+        delete data.pending_property_caption;
+        clearEmployeePendingMedia(data);
         await replaceEmployeeSession(phone, currentStep, data);
         return {
           handled: true,
@@ -5250,6 +5307,7 @@ async function handleEmployeeWhatsappIntake({
         if (data.employee_intake_recovery_skip_existing_matches !== true) {
           data.total_media_count = Number(data.total_media_count || 0) + attachment.attached;
         }
+        delete data.pending_property_caption;
         await replaceEmployeeSession(phone, currentStep, data);
       }
       return {
@@ -12835,6 +12893,7 @@ module.exports.__test = {
   employeeVideoEvidenceOnly,
   employeePropertyFacts,
   employeePropertyMissing,
+  isEmployeeNewPropertyCaptionBoundary,
   getWhatsappCallNotificationEmails,
   inferWhatsappCallInquiry,
   handleWhatsappCallEvent,
