@@ -415,6 +415,9 @@ assert(copilotSource.includes('media_previews:'), 'WhatsApp Web bridge should tr
 assert(copilotSource.includes('release_marker: WHATSAPP_EMPLOYEE_AGENT_007_WORKER_MARKER'), 'hosted worker heartbeat should prove the Agent 007 build');
 assert(copilotSource.includes('const RECENT_INBOUND_BACKLOG_LIMIT = 60'), 'worker must inspect the recent inbound backlog instead of only the last message');
 assert(copilotSource.includes("skipped: 'ordered_media_hydration_pending'"), 'worker must stop before COMPLETE when earlier media bytes are unavailable');
+assert(copilotSource.includes('snapshots.slice(0, propertyPhaseIndex + 1)'), 'history replay must wait for the exact property-phase boundary before considering media');
+assert(copilotSource.includes('replaySnapshots.filter((snapshot) => !isEmployeeBatchCompletionSnapshot(snapshot))'), 'detached WhatsApp album nodes must be hydrated before a visible COMPLETE row is replayed');
+assert(copilotSource.includes('normalized the active WhatsApp conversation to its latest row before starting inbound sweeps.'), 'worker startup must move stale persisted history views to the latest row before normal ingestion');
 assert(copilotSource.includes('captureVideoSnapshotFromNetwork'), 'worker must recover WhatsApp video bytes before reaching COMPLETE');
 assert(copilotSource.includes('isPlayableVideoBuffer'), 'worker must not persist encrypted WhatsApp network responses as playable videos');
 assert(copilotSource.includes('captureVideoMessageScreenshot'), 'worker must preserve a reviewable property image when WhatsApp withholds video bytes and the poster canvas');
@@ -432,12 +435,23 @@ assert(copilotSource.includes('index > lastSetupMediaIndex && isEmployeeProperty
 assert(copilotSource.includes('return isEmployeePropertyCaptionText(text);'), 'an ID or other setup image must not become a property boundary merely because WhatsApp renders extra text on it');
 assert(copilotSource.includes('Images before the final one/multiple selection are identity evidence'), 'history replay must never reinterpret setup identity evidence as property media');
 assert(copilotSource.includes('whatsapp_media_viewer_original_pixels'), 'multi-photo albums must be captured from the opened WhatsApp media viewer');
-assert(copilotSource.includes('visibleMediaCount + Number(extraImageMatch[1])'), 'album counts must include every visible tile plus the hidden +N items');
+assert(copilotSource.includes('renderedMediaLayout'), 'mixed photo/video albums must be detected from rendered tiles even when WhatsApp omits image tags');
+assert(copilotSource.includes('getComputedStyle(element).backgroundImage'), 'mixed albums must recover original CSS-backed photo tile sources');
+assert(copilotSource.includes('loadImageSource'), 'CSS-backed WhatsApp tiles must be hydrated into image pixels before replay');
+assert(copilotSource.includes('captureImageTileScreenshots'), 'CSS-backed album photos must fall back to clean tile-level pixel capture');
+assert(copilotSource.includes("captureSource: 'whatsapp_rendered_media_tile_pixels'"), 'clean tile captures must carry distinct provenance from full-message evidence screenshots');
+assert(copilotSource.match(/node\?\.querySelector\?\.\('\[data-id\]'\)\?\.getAttribute\('data-id'\)/g)?.length >= 2, 'message snapshots must prefer the unique nested WhatsApp data-id over repeated conv-msg wrappers');
+assert(copilotSource.split('rect.width < rootRect.width * 0.88').length >= 3, 'full-width WhatsApp wrappers must not be misclassified as outgoing by their centered geometry');
+assert(copilotSource.includes('minimumVisibleCount + extraCount'), 'album counts must include every visible tile plus the hidden +N items');
 assert(copilotSource.includes("'[data-testid*=\"album\" i]'"), 'virtualized WhatsApp albums must remain discoverable after their image tags unload');
-assert(copilotSource.includes("text.match(/^\\s*\\+(\\d+)\\s*$/m)"), 'only a standalone WhatsApp +N overlay may imply a virtualized album');
+assert(copilotSource.split('value.match(/^\\+(\\d{1,2})$/)').length >= 3, 'only a standalone WhatsApp +N overlay may increase the virtualized album count');
 assert(copilotSource.includes("&& !(Array.isArray(snapshot.imagePreviews) && snapshot.imagePreviews.length);"), 'an image album misclassified as generic media must proceed when original image pixels were captured');
 assert(routeSource.includes('inboundMetadata.image_previews.slice(0, 20)'), 'all images in a normal WhatsApp album must reach intake instead of being truncated at ten');
 assert(routeSource.includes('employee_batch_complete: employeeIntake?.batch_complete === true'), 'the bridge must return a minimal durable completion acknowledgement');
+assert(routeSource.includes("router.post('/web-bridge/employee-pending-agent-link-repair'"), 'the bridge must expose a narrow authenticated repair for an exact orphaned pending-agent property');
+assert(routeSource.includes('identity_document_mismatch'), 'pending-agent link repair must fail closed unless the private identity document matches');
+assert(routeSource.includes("'whatsapp_employee_pending_agent_link_repaired'"), 'pending-agent link repair must leave a moderation audit event');
+assert(routeSource.includes('No approval, publication, consent inference, or outbound notification was performed.'), 'pending-agent link repair must preserve the review and consent boundary');
 assert(copilotSource.includes("skipped: 'batch_incomplete_missing_media'"), 'history repair must stay retryable until the API confirms every property has usable media');
 assert(routeSource.includes('employee_media_result: employeeIntake?.media_attachment || null'), 'the bridge must expose normalized media attachment diagnostics to the worker');
 assert(routeSource.includes('employee_property_id: employeeIntake?.property_id || null'), 'the bridge must expose the exact review row used for an Agent 007 media attachment');
@@ -459,6 +473,8 @@ assert(copilotSource.includes("captureSource: 'rendered_whatsapp_image_fallback'
 assert(copilotSource.includes('capture_source: item.captureSource'), 'fallback provenance must survive the web-bridge payload');
 assert(copilotSource.includes("captureSource: 'rendered_whatsapp_video_fallback'"), 'video-message screenshots must carry evidence-only provenance');
 assert(copilotSource.includes("previewWarning: 'video_bytes_unavailable_screenshot_evidence_only'"), 'missing original video bytes must be explicit in intake metadata');
+assert(copilotSource.includes('closeWhatsappMediaViewer'), 'mixed album hydration must restore the chat after opening a video viewer');
+assert(copilotSource.includes("/^(?:forwarded|\\+\\d+)$/i"), 'forward labels and +N overlays must remain captionless media rather than replacing the saved property caption');
 assert(copilotSource.includes('degraded_from_video: item.degradedFromVideo === true'), 'video degradation provenance must reach the API');
 assert(routeSource.includes('validateEmployeeImageCandidate'), 'employee intake images must pass the property-photo classifier before becoming gallery media');
 assert(routeSource.includes("verdict: 'rendered_whatsapp_message_evidence'"), 'rendered message fallbacks must be quarantined deterministically');
@@ -495,6 +511,8 @@ assert(serverSource.includes('whatsapp-agent007-viewer-group-recovery-20260909')
 assert(copilotSource.includes('viewer_group_recovery_marker'), 'worker heartbeats must expose the viewer-group recovery release');
 assert(serverSource.includes('whatsapp-agent007-staff-media-proof-20260909'), 'production health metadata must expose the staff-media proof release');
 assert(copilotSource.includes('staff_media_proof_marker'), 'worker heartbeats must expose the staff-media proof release');
+assert(serverSource.includes('whatsapp-agent007-mixed-media-album-recovery-20260909'), 'production health metadata must expose mixed media album recovery');
+assert(copilotSource.includes('mixed_album_recovery_marker'), 'worker heartbeats must expose mixed media album recovery');
 assert(serverSource.includes('whatsapp-agent007-completion-ack-contract-20260909'), 'production health metadata must expose the corrected worker completion acknowledgement contract');
 assert(copilotSource.includes('configuredEmployeeRecoverySettled'), 'configured history recovery must stop only after the batch is complete or already reconciled');
 assert(copilotSource.includes("scroller.dispatchEvent(new WheelEvent('wheel'"), 'history recovery must explicitly request older virtualized WhatsApp rows');
@@ -585,6 +603,8 @@ assert(serverSource.includes("limit: '40mb'"), 'authorized WhatsApp video previe
 assert(serverSource.includes('whatsapp-active-intake-call-shield-20260829'), 'employee call shield should have an externally verifiable release marker');
 assert(serverSource.includes('whatsapp-video-still-dual-media-20260831'), 'video and still repair should have an externally verifiable release marker');
 assert(serverSource.includes('whatsapp-agent007-pending-property-queue-20260909'), 'separate pending-property queue guard should have an externally verifiable release marker');
+assert(serverSource.includes('whatsapp-agent007-pending-agent-link-repair-20260909'), 'pending-agent link repair should have an externally verifiable release marker');
+assert(serverSource.includes('whatsapp-agent007-history-latest-normalization-20260909'), 'worker startup history normalization should have an externally verifiable release marker');
 assert(serverSource.includes('whatsapp-agent007-identity-evidence-purge-20260909'), 'identity-evidence purge should have an externally verifiable release marker');
 assert(serverSource.includes('whatsapp-agent007-forced-media-reconciliation-20260909'), 'forced historical media reconciliation should have an externally verifiable release marker');
 
@@ -697,6 +717,71 @@ const originalGetClient = db.getClient;
     },
     release() {}
   });
+
+  const intakeGetClient = db.getClient;
+  const repairQueries = [];
+  db.getClient = async () => ({
+    query: async (sql) => {
+      repairQueries.push(String(sql));
+      if (/^(?:BEGIN|COMMIT|ROLLBACK)$/i.test(String(sql).trim())) return { rows: [] };
+      if (/FROM properties/i.test(sql) && /FOR UPDATE/i.test(sql)) {
+        return {
+          rows: [{
+            id: '22222222-2222-4222-8222-222222222222',
+            status: 'pending',
+            source: 'whatsapp_employee_intake',
+            moderation_stage: 'submitted',
+            agent_id: null,
+            lister_type: 'owner',
+            lister_name: 'Pending Agent',
+            lister_phone: '+256700000001',
+            id_document_url: 'https://private.test.invalid/exact-agent-id',
+            extra_fields: { whatsapp_employee_subject_role: 'customer' }
+          }]
+        };
+      }
+      if (/FROM agents/i.test(sql) && /FOR UPDATE/i.test(sql)) {
+        return {
+          rows: [{
+            id: '11111111-1111-4111-8111-111111111111',
+            status: 'pending',
+            full_name: 'Pending Agent',
+            phone: '+256700000001',
+            whatsapp: '+256700000001',
+            email: null,
+            identity_document_url: 'https://private.test.invalid/exact-agent-id'
+          }]
+        };
+      }
+      if (/UPDATE properties/i.test(sql)) {
+        return {
+          rows: [{
+            id: '22222222-2222-4222-8222-222222222222',
+            status: 'pending',
+            moderation_stage: 'submitted',
+            agent_id: '11111111-1111-4111-8111-111111111111',
+            lister_type: 'agent'
+          }]
+        };
+      }
+      if (/INSERT INTO property_moderation_events/i.test(sql)) return { rows: [] };
+      throw new Error(`Unexpected pending-agent repair query: ${String(sql).slice(0, 80)}`);
+    },
+    release() {}
+  });
+  const pendingAgentLinkRepair = await whatsappRoute.repairEmployeePendingAgentPropertyLink({
+    propertyId: '22222222-2222-4222-8222-222222222222',
+    agentId: '11111111-1111-4111-8111-111111111111'
+  });
+  assert.equal(pendingAgentLinkRepair.repaired, true);
+  assert.equal(pendingAgentLinkRepair.property_status, 'pending');
+  assert.equal(pendingAgentLinkRepair.agent_status, 'pending');
+  assert.equal(pendingAgentLinkRepair.auto_publish, false);
+  assert.equal(pendingAgentLinkRepair.notification_sent, false);
+  assert(repairQueries.some((sql) => /id_document_url = NULL/i.test(sql)), 'the duplicate property ID reference must be cleared after the private agent-profile match');
+  assert(!repairQueries.some((sql) => /status\s*=\s*['"]approved['"]/i.test(sql)), 'the repair must not approve the property or agent');
+  assert(!repairQueries.some((sql) => /INSERT INTO notifications/i.test(sql)), 'the repair must not contact the pending agent');
+  db.getClient = intakeGetClient;
 
   testPhotoValidation = {
     accepted: false,
