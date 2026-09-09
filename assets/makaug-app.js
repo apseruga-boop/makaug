@@ -26141,6 +26141,9 @@ async function adminSetListingStatus(localId, nextStatus, backendId = "", option
   ) || adminRemoteListings.find(
     (p) => String(p.id) === String(localId)
       || (backendId && String(p.backend_id || "") === String(backendId))
+  ) || adminCurrentPendingListings.find(
+    (p) => String(p.id) === String(localId)
+      || (backendId && String(p.backend_id || "") === String(backendId))
   ) || adminLiveListings.find(
     (p) => String(p.id) === String(localId)
       || (backendId && String(p.backend_id || "") === String(backendId))

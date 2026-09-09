@@ -152,6 +152,7 @@ function run() {
   assert(app.includes('adminPendingQueueFilterButton("broker", "Broker", counts.broker)'), 'King review queue should expose a broker filter');
   assert(app.includes('async function adminLoadPendingReviewQueuePage(page = 1, queue = "all")'), 'King review queue should paginate the complete pending queue instead of hiding rows after the first page');
   assert(app.includes('["all", "found_online"].includes(adminPendingQueueRemotePagination?.queue)'), 'all and found-online review queues should expose previous and next page controls');
+  assert(app.includes(') || adminCurrentPendingListings.find('), 'review records opened from later pending-queue pages must remain actionable by exact ID');
   assert(app.includes('renderAdminStaffControl'), 'King dashboard should render staff account control');
   assert(app.includes('/api/admin/staff/bootstrap-five'), 'King dashboard should call staff bootstrap API');
   assert(app.includes('saveAdminGateApiKeyAndRefresh'), 'King dashboard should let a stale admin shell reconnect with ADMIN_API_KEY fallback');
