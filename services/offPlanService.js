@@ -391,7 +391,8 @@ async function listManagedDevelopments(db, query = {}) {
     values.push(`%${search}%`);
     filters.push(`CONCAT_WS(' ', d.name, d.developer_name, d.area, d.district, d.source_display_name) ILIKE $${values.length}`);
   }
-  const result = await db.query(`${managedSelect()} WHERE ${filters.join(' AND ')} ORDER BY d.updated_at DESC LIMIT 200`, values);
+  const whereClause = filters.length ? filters.join(' AND ') : 'TRUE';
+  const result = await db.query(`${managedSelect()} WHERE ${whereClause} ORDER BY d.updated_at DESC LIMIT 200`, values);
   return result.rows.map((row) => ({ ...normalizeDevelopmentRow(row), publication_blockers: publicationBlockers(row) }));
 }
 
