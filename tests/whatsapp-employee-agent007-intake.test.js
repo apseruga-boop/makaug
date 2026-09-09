@@ -169,6 +169,67 @@ assert.equal(staffQuarterSale.price, 370_000_000);
 assert.equal(staffQuarterSale.locationPatch.area, 'Kira');
 assert.deepEqual(whatsappRoute.employeePropertyMissing(staffQuarterSale), []);
 
+const kaziMunyonyoSale = whatsappRoute.employeePropertyFacts(
+  'A 7 bedrooms mansion in Munyonyo with three sitting rooms, two kitchens, 8 bathrooms and rooftop kitchen, a bar and a bathroom going for 580,000 dollars last price.',
+  {}
+);
+assert.equal(kaziMunyonyoSale.listingType, 'sale', 'high-value residential dollar captions must be treated as sale listings');
+assert.equal(kaziMunyonyoSale.price, 2_204_000_000, 'trailing dollars must convert to canonical UGX');
+assert.equal(kaziMunyonyoSale.priceMetadata.price_original_currency, 'USD');
+assert.equal(kaziMunyonyoSale.locationPatch.area, 'Munyonyo');
+assert.deepEqual(whatsappRoute.employeePropertyMissing(kaziMunyonyoSale), []);
+
+const kaziKiraSale = whatsappRoute.employeePropertyFacts(
+  '4 bedrooms and boys quarters. Sited on 15 decimals on shimoni road kira 650M. Ready title',
+  {}
+);
+assert.equal(kaziKiraSale.listingType, 'sale', 'a residential home on a decimal-sized plot must not become a land listing');
+assert.deepEqual(whatsappRoute.employeePropertyMissing(kaziKiraSale), []);
+
+const kaziLubowaRent = whatsappRoute.employeePropertyFacts(
+  'Three bedrooms self contained location lubowa Entebbe rd rent at 3m',
+  {}
+);
+assert.equal(kaziLubowaRent.listingType, 'rent', 'rent-at captions must be classified as rentals');
+assert.deepEqual(whatsappRoute.employeePropertyMissing(kaziLubowaRent), []);
+
+const kaziButabikaIncomplete = whatsappRoute.employeePropertyFacts(
+  'Royal Palms Butabika - Luzira 4 bedroom villa for sale. Well planned gated community',
+  {}
+);
+assert.deepEqual(whatsappRoute.employeePropertyMissing(kaziButabikaIncomplete), ['price']);
+assert.equal(
+  whatsappRoute.isEmployeeNewPropertyCaptionBoundary(
+    kaziButabikaIncomplete.cleanCaption,
+    kaziButabikaIncomplete
+  ),
+  true,
+  'an incomplete new villa caption must be quarantined instead of attaching to the previous property'
+);
+assert.equal(
+  whatsappRoute.isEmployeeNewPropertyCaptionBoundary('Kitchen video', whatsappRoute.employeePropertyFacts('Kitchen video', {})),
+  false,
+  'a short media label must remain attachable to the current property'
+);
+
+const kaziUnlocatedLand = whatsappRoute.employeePropertyFacts(
+  'This land is virgin and fertile, suitable for farming. Freehold land title. Asking price 12m UGX per acre, slightly negotiable.',
+  {}
+);
+assert.deepEqual(whatsappRoute.employeePropertyMissing(kaziUnlocatedLand), ['exact area and district']);
+assert.equal(
+  whatsappRoute.isEmployeeNewPropertyCaptionBoundary(kaziUnlocatedLand.cleanCaption, kaziUnlocatedLand),
+  true,
+  'unlocated land media must wait for an exact location rather than merging into the active property'
+);
+
+const kaziMailoTitle = whatsappRoute.employeePropertyFacts(
+  'A house for sale in Nakayla. 4 bedrooms, 3 bathrooms, sited on 30 decimals with a private molo land title. Price is UGX 950m negotiable',
+  {}
+);
+assert.notEqual(kaziMailoTitle.locationPatch.area, 'Molo', 'a misspelled mailo-title phrase must not be mistaken for Molo town');
+assert.deepEqual(whatsappRoute.employeePropertyMissing(kaziMailoTitle), ['exact area and district']);
+
 assert(routeSource.includes("const WHATSAPP_EMPLOYEE_AGENT_007_MARKER = 'whatsapp-employee-agent-007-review-intake-20260829'"));
 assert.equal(
   whatsappRoute.shouldUseBridgeInboundFingerprintDedupe({ providerMessageId: 'webbridge:first-1' }),
@@ -597,6 +658,41 @@ const originalQuery = db.query;
   assert.match(completed.message, /Could not be processed: 1/);
   assert.match(completed.message, /has not been notified yet/);
   assert.match(completed.message, /pending moderator approval, not live/);
+
+  const blockedIncompleteCompletion = await whatsappRoute.handleEmployeeWhatsappIntake({
+    phone: '+447757773202',
+    body: 'COMPLETE',
+    session: {
+      current_step: 'employee_property_media',
+      session_data: {
+        employee_role: 'agent',
+        property_batch_mode: 'multiple',
+        agent: {
+          id: '11111111-1111-4111-8111-111111111111',
+          full_name: 'Kazi Honest'
+        },
+        current_property_id: '22222222-2222-4222-8222-222222222222',
+        property_ids: ['22222222-2222-4222-8222-222222222222'],
+        total_media_count: 1,
+        properties_shared_count: 1,
+        properties_duplicate_count: 0,
+        properties_failed_count: 0,
+        pending_property_caption: 'Royal Palms Butabika - Luzira 4 bedroom villa for sale. Well planned gated community',
+        pending_property_media: [{
+          url: 'https://media.makaug.com/whatsapp/kazi-butabika.mp4',
+          sha256: 'kazi-butabika-video',
+          mimeType: 'video/mp4',
+          kind: 'video',
+          name: 'kazi-butabika.mp4'
+        }]
+      }
+    }
+  });
+  assert.equal(blockedIncompleteCompletion.nextStep, 'employee_property_media');
+  assert.equal(blockedIncompleteCompletion.batchComplete, false);
+  assert.match(blockedIncompleteCompletion.message, /not completed this batch/i);
+  assert.match(blockedIncompleteCompletion.message, /Still needed: price/i);
+  assert.match(blockedIncompleteCompletion.message, /nothing has been merged and nothing is live/i);
 
   const duplicateOnlyCompletion = await whatsappRoute.handleEmployeeWhatsappIntake({
     phone: '+447757773202',
