@@ -4245,11 +4245,26 @@ async function prepareEmployeeOrderedBatchReplay({
     ? session.session_data
     : {};
   if (currentStep === 'employee_property_media' && data.whatsapp_employee_intake) {
+    const pendingCaption = normalizeInput(data.pending_property_caption || '');
+    const pendingMedia = employeePendingStoredMedia(data);
+    const queuedSubmissions = employeePendingSubmissionQueue(data);
     return {
       ready: true,
       restored: false,
       alreadyActive: true,
-      counts: employeeBatchCounts(data)
+      counts: employeeBatchCounts(data),
+      pending: {
+        current: Boolean(pendingCaption || pendingMedia.length),
+        current_missing: pendingCaption
+          ? employeePropertyMissing(employeePropertyFacts(pendingCaption, data))
+          : (pendingMedia.length ? ['property type, exact location and price'] : []),
+        queued_count: queuedSubmissions.length,
+        queued_missing: queuedSubmissions.map((entry) => (
+          entry.caption
+            ? employeePropertyMissing(employeePropertyFacts(entry.caption, data))
+            : ['property type, exact location and price']
+        ))
+      }
     };
   }
 
