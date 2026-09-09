@@ -45,6 +45,8 @@ assert(workerSupervisor.includes('async function ensureVirtualDisplay()'), 'Work
 assert(workerSupervisor.includes("'/usr/bin/Xvfb'") && workerSupervisor.includes('hasLiveDisplay'), 'Worker supervisor must recover a missing Render X display');
 assert(workerSupervisor.includes("WHATSAPP_WEB_COPILOT_HEADLESS = 'true'"), 'Worker supervisor must have a bounded headless fallback instead of looping offline');
 assert(workerSupervisor.includes('exiting so Render can restart the full worker'), 'Worker supervisor must let Render recover if its managed display dies');
+assert(workerSupervisor.includes("spawn(caffeinatePath, ['-i', '-w', String(process.pid)]"), 'A Mac-local fallback must prevent idle system sleep while it is responsible for live WhatsApp replies');
+assert(workerSupervisor.includes('WHATSAPP_AGENT_PREVENT_IDLE_SLEEP'), 'Mac idle-sleep prevention must retain an explicit operator override');
 
 assert(dockerignore.includes('.env') && dockerignore.includes('.env.*'), 'Docker build must exclude local env files');
 assert(dockerignore.includes('.whatsapp-web-copilot-profile*'), 'Docker build must exclude local WhatsApp browser profiles');

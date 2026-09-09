@@ -321,6 +321,7 @@ const WHATSAPP_ORIGINAL_MEDIA_ONLY_MARKER = 'whatsapp-original-media-only-202609
 const WHATSAPP_AGENT_007_INTAKE_RELIABILITY_MARKER = 'whatsapp-agent007-replay-backoff-20260901';
 const WHATSAPP_AGENT_007_PENDING_MEDIA_FIX_MARKER = 'whatsapp-agent007-pending-media-idempotency-20260901';
 const WHATSAPP_OUTGOING_PREVIEW_GUARD_MARKER = 'whatsapp-outgoing-preview-guard-20260831';
+const WHATSAPP_RESPONSE_RELIABILITY_MARKER = 'whatsapp-local-keepawake-media-backoff-20260909';
 const WHATSAPP_CALL_CARD_BROWSER_CONFIG = Object.freeze(whatsappCallCardBrowserConfig());
 const RECENT_INBOUND_BACKLOG_LIMIT = 60;
 const EMPLOYEE_BATCH_HISTORY_SCAN_LIMIT = 160;
@@ -337,6 +338,15 @@ const EMPLOYEE_BATCH_REPLAY_BACKOFF_MS = Math.min(
     ? configuredEmployeeBatchReplayBackoffMs
     : 120_000)
 );
+const configuredMediaHydrationBackoffMs = Number(
+  process.env.WHATSAPP_WEB_COPILOT_MEDIA_HYDRATION_BACKOFF_MS || 60_000
+);
+const MEDIA_HYDRATION_BACKOFF_MS = Math.min(
+  15 * 60_000,
+  Math.max(15_000, Number.isFinite(configuredMediaHydrationBackoffMs)
+    ? configuredMediaHydrationBackoffMs
+    : 60_000)
+);
 const configuredEmployeeBatchRecoveryIdleMs = Number(
   process.env.WHATSAPP_WEB_COPILOT_EMPLOYEE_RECOVERY_IDLE_MS || 60_000
 );
@@ -351,6 +361,7 @@ const seenBrowserMessageIds = new Set();
 const completedEmployeeBatchHistoryKeys = new Set();
 const employeeBatchReplayProgress = new Map();
 const employeeBatchReplayBackoffs = new Map();
+const mediaHydrationBackoffs = new Map();
 const seenCallEventKeys = new Map();
 const recentlySentReplyKeys = new Map();
 const recentChatRowKeys = new Map();
@@ -652,6 +663,42 @@ function rememberRecentChatRow(rowKey) {
   scheduleRecentChatRowCacheWrite();
 }
 
+function mediaHydrationBackoffKey(snapshot = {}, row = {}) {
+  return browserMessageKeyFor(snapshot, row);
+}
+
+function deferredMediaHydration(snapshot = {}, row = {}) {
+  const key = mediaHydrationBackoffKey(snapshot, row);
+  if (!key) return null;
+  const deferred = mediaHydrationBackoffs.get(key);
+  if (!deferred || Date.now() >= Number(deferred.retryAfter || 0)) return null;
+  return deferred;
+}
+
+function deferMediaHydration(snapshot = {}, row = {}, reason = 'media_hydration_pending') {
+  const key = mediaHydrationBackoffKey(snapshot, row);
+  if (!key) return null;
+  const existing = mediaHydrationBackoffs.get(key) || { attempts: 0 };
+  const attempts = Math.min(6, Number(existing.attempts || 0) + 1);
+  const delayMs = Math.min(15 * 60_000, MEDIA_HYDRATION_BACKOFF_MS * (2 ** (attempts - 1)));
+  const deferred = {
+    attempts,
+    reason: String(reason || 'media_hydration_pending'),
+    retryAfter: Date.now() + delayMs
+  };
+  mediaHydrationBackoffs.set(key, deferred);
+  while (mediaHydrationBackoffs.size > 1000) {
+    mediaHydrationBackoffs.delete(mediaHydrationBackoffs.keys().next().value);
+  }
+  log(`paused ordered intake for ${normalizeChatKey(snapshot.chatKey || row.title)}: ${deferred.reason}; retry_in_ms=${delayMs}`);
+  return deferred;
+}
+
+function clearMediaHydrationBackoff(snapshot = {}, row = {}) {
+  const key = mediaHydrationBackoffKey(snapshot, row);
+  if (key) mediaHydrationBackoffs.delete(key);
+}
+
 function rememberCallEventKey(callEventKey, ttlMs = 10 * 60 * 1000) {
   if (!callEventKey) return false;
   const now = Date.now();
@@ -717,6 +764,7 @@ function hostedRuntimeMetadata() {
     intake_reliability_marker: WHATSAPP_AGENT_007_INTAKE_RELIABILITY_MARKER,
     pending_media_fix_marker: WHATSAPP_AGENT_007_PENDING_MEDIA_FIX_MARKER,
     outgoing_preview_guard: WHATSAPP_OUTGOING_PREVIEW_GUARD_MARKER,
+    response_reliability_marker: WHATSAPP_RESPONSE_RELIABILITY_MARKER,
     git_commit: process.env.RENDER_GIT_COMMIT || process.env.SOURCE_VERSION || process.env.GIT_COMMIT || '',
     ...Object.fromEntries(Object.entries(renderSignals).filter(([, value]) => Boolean(value)))
   };
@@ -3206,17 +3254,19 @@ async function ingestSnapshot({ snapshot, row = {}, source = 'unread_scan' }) {
     && !(Array.isArray(snapshot.mediaPreviews) && snapshot.mediaPreviews.length);
   if (missingImageBytes || missingFileBytes) {
     const hydrationError = snapshot.imagePreviewError || snapshot.mediaPreviewError || 'media_bytes_unavailable';
-    log(`paused ordered intake for ${chatKey}: ${hydrationError}`);
+    const deferred = deferMediaHydration(snapshot, row, hydrationError);
     return {
       processed: 0,
       retryable: true,
       skipped: 'ordered_media_hydration_pending',
+      retryAfter: deferred?.retryAfter || null,
       error: new Error(hydrationError)
     };
   }
 
   const browserMessageKey = snapshot.browserMessageKey || browserMessageKeyFor(snapshot, row);
   if (browserMessageKey && seenBrowserMessageIds.has(browserMessageKey)) {
+    clearMediaHydrationBackoff(snapshot, row);
     return { processed: 0, duplicate: true };
   }
   const messageId = createMessageId(chatKey, text, snapshot.timestampLabel, mediaType, snapshot.messageId || snapshot.mediaFingerprint || '');
@@ -3279,6 +3329,7 @@ async function ingestSnapshot({ snapshot, row = {}, source = 'unread_scan' }) {
       }
     });
     rememberBrowserMessageKey(browserMessageKey);
+    clearMediaHydrationBackoff(snapshot, row);
     if (!result.duplicate) {
       log(`ingested ${source} ${mediaType} message from ${chatKey}; queued_reply=${result.data?.queued_reply ? 'yes' : 'no'}`);
     }
@@ -3378,10 +3429,10 @@ function deferEmployeeBatchReplay(completionKey, reason = 'media_hydration_pendi
 function deferredEmployeeBatchReplay(completionKey) {
   const deferred = employeeBatchReplayBackoffs.get(completionKey);
   if (!deferred) return null;
-  if (Date.now() >= Number(deferred.retryAfter || 0)) {
-    employeeBatchReplayBackoffs.delete(completionKey);
-    return null;
-  }
+  // Keep the attempt count after a cooldown expires. If hydration fails again,
+  // deferEmployeeBatchReplay can extend the delay instead of restarting the
+  // same historical batch at the minimum interval forever.
+  if (Date.now() >= Number(deferred.retryAfter || 0)) return null;
   return {
     handled: false,
     processed: 0,
@@ -4046,10 +4097,15 @@ async function ingestUnreadChats(page) {
     for (const snapshot of liveSnapshots) {
       const browserMessageKey = browserMessageKeyFor(snapshot, row);
       if (browserMessageKey && seenBrowserMessageIds.has(browserMessageKey)) continue;
-      const hydrated = await hydrateMediaSnapshot(page, {
+      const pendingSnapshot = {
         ...snapshot,
         browserMessageKey
-      });
+      };
+      if (deferredMediaHydration(pendingSnapshot, row)) {
+        retryableBlocked = true;
+        break;
+      }
+      const hydrated = await hydrateMediaSnapshot(page, pendingSnapshot);
       const result = await ingestSnapshot({ snapshot: hydrated, row, source: 'unread_scan' });
       if (result.retryable) {
         retryableBlocked = true;
@@ -4144,10 +4200,16 @@ async function ingestRecentChatsSweep(page, limit = RECENT_CHAT_SWEEP_LIMIT) {
         rowObserved = true;
         continue;
       }
-      const hydrated = await hydrateMediaSnapshot(page, {
+      const pendingSnapshot = {
         ...snapshot,
         browserMessageKey
-      });
+      };
+      if (deferredMediaHydration(pendingSnapshot, row)) {
+        retryableBlocked = true;
+        rowObserved = false;
+        break;
+      }
+      const hydrated = await hydrateMediaSnapshot(page, pendingSnapshot);
       const result = await ingestSnapshot({ snapshot: hydrated, row, source: 'recent_chat_sweep' });
       if (result.retryable) {
         retryableBlocked = true;
@@ -4207,10 +4269,12 @@ async function ingestActiveChat(page) {
     const row = { title: snapshot.chatKey, preview: '' };
     const browserMessageKey = browserMessageKeyFor(snapshot, row);
     if (browserMessageKey && seenBrowserMessageIds.has(browserMessageKey)) continue;
-    const hydrated = await hydrateMediaSnapshot(page, {
+    const pendingSnapshot = {
       ...snapshot,
       browserMessageKey
-    });
+    };
+    if (deferredMediaHydration(pendingSnapshot, row)) break;
+    const hydrated = await hydrateMediaSnapshot(page, pendingSnapshot);
     const result = await ingestSnapshot({
       snapshot: hydrated,
       row,
@@ -4633,14 +4697,22 @@ async function replaceComposerText(page, text, timeoutMs = 1200) {
   return exact;
 }
 
+async function prepareExactReplyText(page, text, attempts = 3) {
+  const boundedAttempts = Math.max(1, Math.min(3, Number(attempts || 3)));
+  for (let attempt = 1; attempt <= boundedAttempts; attempt += 1) {
+    if (await replaceComposerText(page, text, attempt === 1 ? 15000 : 2500)) return true;
+    if (attempt >= boundedAttempts) break;
+    log(`reply composer was not ready; reacquiring it (${attempt}/${boundedAttempts})`);
+    await page.waitForTimeout(250);
+    await waitForReplyComposer(page, 2000).catch(() => null);
+  }
+  return false;
+}
+
 async function openChatForReply(page, recipient) {
   const chatKey = String(recipient || '').trim();
   const phoneDigits = chatKey.replace(/\D/g, '');
   const normalizedRecipient = normalizeChatKey(phoneDigits || chatKey);
-  if (activeInboundRecipientHint && activeInboundRecipientHint === normalizedRecipient) {
-    const composer = await waitForReplyComposer(page, 450);
-    if (composer) return true;
-  }
   const activeSnapshot = await getActiveChatSnapshot(page).catch(() => null);
   const activeKey = normalizeChatKey(activeSnapshot?.chatKey || '');
   if (activeKey && activeKey === normalizedRecipient) {
@@ -4698,7 +4770,7 @@ async function openChatForReply(page, recipient) {
 
 async function typeAndSendReply(page, text) {
   const beforeState = await getOutgoingMessageState(page).catch(() => ({ count: 0, recentTexts: [] }));
-  if (!await replaceComposerText(page, text, 15000)) {
+  if (!await prepareExactReplyText(page, text)) {
     throw new Error('Could not prepare the exact WhatsApp reply text');
   }
 

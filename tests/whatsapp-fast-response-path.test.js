@@ -158,6 +158,17 @@ async function run() {
     'WhatsApp Web sender must stop the recent-chat sweep as soon as it handles a new inbound message'
   );
   assert(
+    whatsappWebCopilotSource.includes('MEDIA_HYDRATION_BACKOFF_MS')
+      && whatsappWebCopilotSource.includes('mediaHydrationBackoffs')
+      && whatsappWebCopilotSource.includes('deferredMediaHydration(pendingSnapshot, row)'),
+    'an unavailable historical media preview must back off before hydration so it cannot hot-loop ahead of new chats'
+  );
+  assert(
+    whatsappWebCopilotSource.includes("WHATSAPP_RESPONSE_RELIABILITY_MARKER = 'whatsapp-local-keepawake-media-backoff-20260909'")
+      && whatsappWebCopilotSource.includes('response_reliability_marker: WHATSAPP_RESPONSE_RELIABILITY_MARKER'),
+    'bridge heartbeats must identify the response-latency reliability release'
+  );
+  assert(
     whatsappWebCopilotSource.includes('WHATSAPP_WEB_COPILOT_SEND_COMPOSER_CLEAR_MS'),
     'WhatsApp Web sender must expose a fast composer-clear confirmation timeout'
   );
@@ -262,6 +273,18 @@ async function run() {
     whatsappWebCopilotSource.includes("await page.keyboard.insertText(String(text || ''))")
       && whatsappWebCopilotSource.includes('reply composer exact-text verification failed; expected_len='),
     'WhatsApp Web sender must insert generated Unicode text exactly and log privacy-safe mismatch evidence'
+  );
+  assert(
+    whatsappWebCopilotSource.includes('async function prepareExactReplyText(page, text, attempts = 3)')
+      && whatsappWebCopilotSource.includes('reply composer was not ready; reacquiring it')
+      && whatsappWebCopilotSource.includes('if (!await prepareExactReplyText(page, text))'),
+    'a transient WhatsApp composer remount must be recovered in the same send attempt'
+  );
+  const openChatIndex = whatsappWebCopilotSource.indexOf('async function openChatForReply(page, recipient)');
+  const openChatBody = whatsappWebCopilotSource.slice(openChatIndex, whatsappWebCopilotSource.indexOf('async function typeAndSendReply', openChatIndex));
+  assert(
+    !openChatBody.includes('activeInboundRecipientHint && activeInboundRecipientHint === normalizedRecipient'),
+    'outbox delivery must verify the active chat instead of trusting a stale inbound-recipient hint'
   );
   assert(
     whatsappWebBridgeServiceSource.includes('duplicate_refreshed_at')
