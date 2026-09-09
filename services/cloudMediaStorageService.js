@@ -91,6 +91,36 @@ function parseS3InternalRef(value = '') {
   };
 }
 
+function parseStoredS3ObjectRef(value = '') {
+  const internal = parseS3InternalRef(value);
+  if (internal) return internal;
+  const publicBase = String(process.env.S3_PUBLIC_BASE_URL || '').trim();
+  if (!publicBase) return null;
+  let candidate;
+  let base;
+  try {
+    candidate = new URL(String(value || '').trim());
+    base = new URL(publicBase);
+  } catch (_) {
+    return null;
+  }
+  if (candidate.origin !== base.origin) return null;
+  const basePath = base.pathname.replace(/\/+$/, '');
+  if (basePath && !candidate.pathname.startsWith(`${basePath}/`)) return null;
+  const encodedKey = candidate.pathname.slice(basePath.length).replace(/^\/+/, '');
+  if (!encodedKey) return null;
+  let key;
+  try {
+    key = encodedKey.split('/').map((segment) => decodeURIComponent(segment)).join('/');
+  } catch (_) {
+    return null;
+  }
+  return {
+    bucket: String(process.env.S3_BUCKET || '').trim(),
+    key: normalizeObjectKey(key)
+  };
+}
+
 function mediaStorageProvider() {
   return String(process.env.MEDIA_STORAGE_PROVIDER || 'local').trim().toLowerCase();
 }
@@ -230,6 +260,43 @@ async function uploadBufferToS3({ bytes, mimeType, key, bucket: bucketOverride, 
     sha256: payloadHash,
     mimeType
   };
+}
+
+async function deleteStoredS3Object(value, { fetchImpl = fetch } = {}) {
+  assertCloudMediaStorageConfigured();
+  const parsed = parseStoredS3ObjectRef(value);
+  if (!parsed?.bucket || !parsed?.key) {
+    throw storageError('Cloud media reference is not an object in the configured bucket.', 400);
+  }
+  const endpoint = new URL(process.env.S3_ENDPOINT);
+  const region = String(process.env.S3_REGION || 'auto').trim() || 'auto';
+  const accessKey = String(process.env.S3_ACCESS_KEY_ID || '').trim();
+  const secret = String(process.env.S3_SECRET_ACCESS_KEY || '').trim();
+  const payloadHash = sha256Hex('');
+  const { dateStamp, amzDate } = dateParts();
+  const canonicalUri = canonicalUriFor(endpoint, parsed.bucket, parsed.key);
+  const headers = {
+    host: endpoint.host,
+    'x-amz-content-sha256': payloadHash,
+    'x-amz-date': amzDate
+  };
+  const { canonicalHeaders, signedHeaderNames } = signedHeaders(headers);
+  const canonicalRequest = ['DELETE', canonicalUri, '', canonicalHeaders, signedHeaderNames, payloadHash].join('\n');
+  const credentialScope = `${dateStamp}/${region}/${SERVICE}/aws4_request`;
+  const stringToSign = ['AWS4-HMAC-SHA256', amzDate, credentialScope, sha256Hex(canonicalRequest)].join('\n');
+  const signature = crypto.createHmac('sha256', signingKey(secret, dateStamp, region)).update(stringToSign).digest('hex');
+  const response = await fetchImpl(`${endpoint.origin}${canonicalUri}`, {
+    method: 'DELETE',
+    headers: {
+      'X-Amz-Content-Sha256': payloadHash,
+      'X-Amz-Date': amzDate,
+      Authorization: `AWS4-HMAC-SHA256 Credential=${accessKey}/${credentialScope}, SignedHeaders=${signedHeaderNames}, Signature=${signature}`
+    }
+  });
+  if (!response.ok) {
+    throw storageError(`Cloud media delete failed: ${response.status} ${await response.text()}`, 502);
+  }
+  return { deleted: true, bucket: parsed.bucket, key: parsed.key };
 }
 
 function createSignedS3GetUrl(internalRef, { expiresSeconds = 300, now = new Date() } = {}) {
@@ -375,7 +442,9 @@ module.exports = {
   prepareMediaUrlForStorage,
   prepareUploadObjectForStorage,
   parseS3InternalRef,
+  parseStoredS3ObjectRef,
   createSignedS3GetUrl,
+  deleteStoredS3Object,
   uploadBufferToS3,
   storeDataUrl,
   storeRemoteImageUrl

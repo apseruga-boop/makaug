@@ -72,9 +72,11 @@ let testPhotoValidation = {
   reason: 'test_property_photo'
 };
 require('../services/aiService').classifyWhatsappListingPhoto = async () => testPhotoValidation;
-require('../services/cloudMediaStorageService').storeDataUrl = async (_dataUrl, options = {}) => (
-  `https://media.test.invalid/${options.filename || 'whatsapp-property.jpg'}`
-);
+let storedMediaUrlCount = 0;
+require('../services/cloudMediaStorageService').storeDataUrl = async (_dataUrl, options = {}) => {
+  storedMediaUrlCount += 1;
+  return `https://media.test.invalid/${options.filename || 'whatsapp-property.jpg'}`;
+};
 const whatsappRoute = require('../routes/whatsapp').__test;
 const parsedProperty = whatsappRoute.employeePropertyFacts(
   '2 bedroom apartment for rent in Ntinda, Kampala at UGX 1.5m per month',
@@ -521,6 +523,8 @@ assert(copilotSource.includes('viewer_group_explicit=${viewerGroupExplicit'), 'l
 assert(routeSource.includes('accepted_pending_review_original_whatsapp_pixels'), 'original viewer pixels must remain reviewable when the optional vision provider is unavailable');
 assert(routeSource.includes('Array.isArray(storedMedia) ? storedMedia : []'), 'duplicate evidence replays must report their original validation reason for safe diagnosis');
 assert(routeSource.includes('const retainedVideoBlockers'), 'an existing valid gallery must clear stale still-image blockers while preserving video-recovery blockers');
+assert(routeSource.includes('Private identity media rejected from property storage'), 'identity-classified property frames must fail before public evidence upload');
+assert(routeSource.includes("router.post('/web-bridge/employee-review-media-reconcile'"), 'the authenticated bridge must expose exact-property privacy reconciliation');
 assert(routeSource.includes('public_image_count: imageOffset + images.length'), 'each attachment must persist the exact public gallery count for the fast staff queue');
 assert(routeSource.includes('primary_image_url: existingPrimaryImageUrl || images[0]?.url'), 'each attachment must persist the exact public primary image for the fast staff queue');
 assert(routeSource.includes("type = 'whatsapp_employee_batch_complete'"), 'recovery must fall back to the durable completion notification when chat session state is replaced');
@@ -564,6 +568,7 @@ assert(serverSource.includes("limit: '40mb'"), 'authorized WhatsApp video previe
 assert(serverSource.includes('whatsapp-active-intake-call-shield-20260829'), 'employee call shield should have an externally verifiable release marker');
 assert(serverSource.includes('whatsapp-video-still-dual-media-20260831'), 'video and still repair should have an externally verifiable release marker');
 assert(serverSource.includes('whatsapp-agent007-pending-property-queue-20260909'), 'separate pending-property queue guard should have an externally verifiable release marker');
+assert(serverSource.includes('whatsapp-agent007-identity-evidence-purge-20260909'), 'identity-evidence purge should have an externally verifiable release marker');
 
 const db = require('../config/database');
 const originalQuery = db.query;
@@ -700,6 +705,26 @@ const originalGetClient = db.getClient;
     height: 720
   }, { phone: '+447757773202', inboundMessageId: 'visible-card-test' });
   assert.equal(untrustedVisiblePixels.publicEligible, false, 'a rendered chat-card image must stay quarantined when vision is unavailable');
+  testPhotoValidation = {
+    accepted: false,
+    verdict: 'screenshot_or_document',
+    scene_type: 'identification_document',
+    matches_expected_slot: false,
+    confidence: 0.99,
+    reason: 'photo of identification document'
+  };
+  const storedBeforeIdentityAttempt = storedMediaUrlCount;
+  await assert.rejects(
+    whatsappRoute.storeEmployeeMediaCandidate({
+      dataUrl: 'data:image/jpeg;base64,Ag==',
+      mimeType: 'image/jpeg',
+      captureSource: 'whatsapp_media_viewer_original_pixels',
+      width: 1280,
+      height: 720
+    }, { phone: '+447757773202', inboundMessageId: 'identity-firewall-test' }),
+    /Private identity media rejected from property storage/
+  );
+  assert.equal(storedMediaUrlCount, storedBeforeIdentityAttempt, 'identity-classified property media must never be uploaded to public evidence storage');
   testPhotoValidation = {
     accepted: true,
     verdict: 'accepted',
