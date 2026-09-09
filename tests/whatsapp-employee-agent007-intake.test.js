@@ -173,6 +173,28 @@ assert.deepEqual(
   'a corrected caption must recover the exact permanently stored media reference'
 );
 
+assert.deepEqual(
+  whatsappRoute.employeePropertyMediaCandidates([
+    { dataUrl: 'data:image/jpeg;base64,identity', sha256: 'private-id-sha', kind: 'image' },
+    { dataUrl: 'data:image/jpeg;base64,property', sha256: 'property-sha', kind: 'image' }
+  ], {
+    identity_document_sha256: 'private-id-sha',
+    identity_document_message_id: 'false_256700000000@c.us_PRIVATE-ID'
+  }, 'false_256700000000@c.us_PROPERTY-PHOTO'),
+  [{ dataUrl: 'data:image/jpeg;base64,property', sha256: 'property-sha', kind: 'image' }],
+  'the private identity fingerprint must be removed before any property-media storage path'
+);
+assert.deepEqual(
+  whatsappRoute.employeePropertyMediaCandidates([
+    { dataUrl: 'data:image/jpeg;base64,replayed-id', sha256: 'changed-render-hash', kind: 'image' }
+  ], {
+    identity_document_sha256: 'private-id-sha',
+    identity_document_message_id: 'false_256700000000@c.us_PRIVATE-ID'
+  }, 'false_256700000000@c.us_PRIVATE-ID:ordered-replay:abc123'),
+  [],
+  'the identity source-message boundary must block replay even if rendered bytes change'
+);
+
 const compactCurrencyLand = whatsappRoute.employeePropertyFacts(
   'Forwarded\n32 decimals plot Kira Nsasa behind Total fuel station UGX330 million',
   {}
@@ -346,6 +368,10 @@ assert(routeSource.includes("status: 'awaiting_founder_approval'"), 'pending age
 assert(routeSource.includes('whatsapp_employee_batch_mode') && routeSource.includes('whatsapp_employee_batch_property_number'), 'review records should retain multiple-property batch traceability');
 assert(routeSource.includes("=== 'single' && existingBatchProperties >= 1"), 'single mode must reject a second property without affecting multiple mode');
 assert(routeSource.includes("const keyPrefix = privateMedia ? 'whatsapp-employee-intake/private-id'"), 'ID media must use private cloud storage');
+assert(routeSource.includes('employeePropertyMediaCandidates'), 'property intake must have a data-layer identity-media firewall');
+assert(routeSource.includes('identity_document_sha256'), 'the private ID fingerprint must survive the active intake session');
+assert(routeSource.includes('employeePropertiesMissingUsableMedia'), 'COMPLETE must verify each review property has usable media');
+assert(routeSource.includes("recoveredRole === 'customer'"), 'ordered repair must support customer/owner batches as well as registered agents');
 assert(routeSource.includes('id_document_name, id_document_url, extra_fields'), 'customer ID must use protected property identity columns');
 assert(!routeSource.includes('customer_identity_document_url'), 'private ID references must never be copied into public extra fields');
 assert(routeSource.includes('agent_profile_linked: Boolean(agent?.id)'), 'approved agent link state must be visible to moderation');
@@ -373,6 +399,12 @@ assert(copilotSource.includes('mediaPreviews.push({'), 'successful video intake 
 assert(copilotSource.includes('trying message screenshot fallback'), 'a failed WhatsApp blob fetch must still try the reviewable message screenshot fallback');
 assert(copilotSource.includes("mediaPreviewError: 'video_bytes_unavailable_poster_stored'"), 'an unrecoverable video must preserve a poster as evidence instead of blocking the batch forever');
 assert(copilotSource.includes('locateEmployeeBatchHistory'), 'COMPLETE must scan backward to the Agent 007 trigger before closing a batch');
+assert(copilotSource.includes('employeePropertyPhaseBoundarySnapshot'), 'history replay must locate the one/multiple selection boundary before property media');
+assert(copilotSource.includes('Images before the final one/multiple selection are identity evidence'), 'history replay must never reinterpret setup identity evidence as property media');
+assert(copilotSource.includes('whatsapp_media_viewer_original_pixels'), 'multi-photo albums must be captured from the opened WhatsApp media viewer');
+assert(copilotSource.includes('visibleMediaCount + Number(extraImageMatch[1])'), 'album counts must include every visible tile plus the hidden +N items');
+assert(copilotSource.includes("&& !(Array.isArray(snapshot.imagePreviews) && snapshot.imagePreviews.length);"), 'an image album misclassified as generic media must proceed when original image pixels were captured');
+assert(routeSource.includes('inboundMetadata.image_previews.slice(0, 20)'), 'all images in a normal WhatsApp album must reach intake instead of being truncated at ten');
 assert(copilotSource.includes('replayEmployeeBatchThroughCompletion'), 'the worker must replay every ordered batch message before COMPLETE');
 assert(copilotSource.includes('scrollWhatsappHistoryNewer'), 'history reconciliation must walk forward from the trigger without keeping every video in memory');
 assert(copilotSource.includes('WHATSAPP_WEB_COPILOT_EMPLOYEE_RECOVERY_PHONES'), 'hosted workers must support an explicit startup recovery target');
@@ -413,6 +445,8 @@ assert(copilotSource.includes('snapshotsAfterCompletedEmployeeBatch(snapshots, e
 assert(copilotSource.includes('WHATSAPP_AGENT_007_INTAKE_RELIABILITY_MARKER'), 'the hosted worker heartbeat must identify the replay reliability release');
 assert(serverSource.includes('whatsapp-agent007-replay-backoff-20260901'), 'production health metadata must expose the Agent 007 reliability release');
 assert(serverSource.includes('whatsapp-agent007-pending-media-idempotency-20260901'), 'production health metadata must expose the pending-media and reply-idempotency release');
+assert(serverSource.includes('whatsapp-agent007-identity-media-firewall-20260909'), 'production health metadata must expose the identity-media firewall');
+assert(serverSource.includes('whatsapp-agent007-album-original-capture-20260909'), 'production health metadata must expose the original album capture release');
 assert(copilotSource.includes('configuredEmployeeRecoverySettled'), 'configured history recovery must stop only after the batch is complete or already reconciled');
 assert(copilotSource.includes("scroller.dispatchEvent(new WheelEvent('wheel'"), 'history recovery must explicitly request older virtualized WhatsApp rows');
 assert(copilotSource.includes('result.retryable || result.error'), 'history recovery must restart the bounded batch after a transient bridge or database failure');
@@ -489,6 +523,7 @@ const originalQuery = db.query;
 
 (async () => {
   const updates = [];
+  let missingMediaPropertyIds = [];
   let sessionRow = {
     phone: '+447757773202',
     current_step: 'employee_intake_role',
@@ -505,6 +540,22 @@ const originalQuery = db.query;
     }
     if (/UPDATE whatsapp_sessions/i.test(sql)) {
       updates.push({ sql, params });
+      return { rows: [] };
+    }
+    if (/INSERT INTO agents/i.test(sql)) {
+      return {
+        rows: [{
+          id: '33333333-3333-4333-8333-333333333333',
+          full_name: params[0],
+          company_name: params[1],
+          phone: params[3],
+          whatsapp: params[3],
+          email: null,
+          status: 'pending'
+        }]
+      };
+    }
+    if (/FROM agents/i.test(sql) && params[0] === '256700123456') {
       return { rows: [] };
     }
     if (/FROM agents/i.test(sql)) {
@@ -536,6 +587,9 @@ const originalQuery = db.query;
     }
     if (/FROM properties/i.test(sql) && /source_caption_sha256/i.test(sql)) {
       return { rows: [{ id: '22222222-2222-4222-8222-222222222222', status: 'pending' }] };
+    }
+    if (/FROM properties p/i.test(sql) && /FROM property_images pi/i.test(sql)) {
+      return { rows: missingMediaPropertyIds.map((id) => ({ id })) };
     }
     if (/FROM properties/i.test(sql) && /whatsapp_employee_message_id/i.test(sql)) {
       return { rows: [] };
@@ -630,6 +684,20 @@ const originalQuery = db.query;
   assert.equal(confirmed.nextStep, 'employee_property_count');
   assert.match(confirmed.message, /One property/);
   assert.match(confirmed.message, /Multiple properties/);
+
+  const pendingNewAgent = await whatsappRoute.ensurePendingEmployeeAgent({
+    fullName: 'New Agent Test',
+    phone: '+256 700 123456',
+    company: 'New Agent Company',
+    district: 'Wakiso'
+  }, {
+    name: 'private-agent-id.jpg',
+    url: 'private-media:whatsapp-employee-intake/private-id/test-agent-id.jpg',
+    mimeType: 'image/jpeg'
+  });
+  assert.equal(pendingNewAgent.created, true);
+  assert.equal(pendingNewAgent.agent.status, 'pending');
+  assert.equal(pendingNewAgent.agent.id, '33333333-3333-4333-8333-333333333333');
 
   const multipleMode = await whatsappRoute.handleEmployeeWhatsappIntake({
     phone: '+447757773202',
@@ -738,6 +806,30 @@ const originalQuery = db.query;
   assert.match(completed.message, /Could not be processed: 1/);
   assert.match(completed.message, /has not been notified yet/);
   assert.match(completed.message, /pending moderator approval, not live/);
+
+  missingMediaPropertyIds = ['22222222-2222-4222-8222-222222222222'];
+  const blockedMissingPropertyMedia = await whatsappRoute.handleEmployeeWhatsappIntake({
+    phone: '+447757773202',
+    body: 'COMPLETE',
+    session: {
+      current_step: 'employee_property_media',
+      session_data: {
+        employee_role: 'customer',
+        property_batch_mode: 'single',
+        customer_details: { fullName: 'Promise Test', phone: '+256700000000' },
+        property_ids: ['22222222-2222-4222-8222-222222222222'],
+        total_media_count: 0,
+        properties_shared_count: 1,
+        properties_duplicate_count: 0,
+        properties_failed_count: 0
+      }
+    }
+  });
+  assert.equal(blockedMissingPropertyMedia.batchComplete, false);
+  assert.equal(blockedMissingPropertyMedia.nextStep, 'employee_property_media');
+  assert.match(blockedMissingPropertyMedia.message, /no usable property photo or original video/i);
+  assert.match(blockedMissingPropertyMedia.message, /private ID is not property media/i);
+  missingMediaPropertyIds = [];
 
   const blockedIncompleteCompletion = await whatsappRoute.handleEmployeeWhatsappIntake({
     phone: '+447757773202',
