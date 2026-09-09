@@ -1906,10 +1906,11 @@ async function getActiveChatSnapshot(page) {
       return !src.startsWith('data:image/gif') && !img.className.includes('emoji') && !alt.match(/^\p{Emoji}+$/u);
     });
     const highResolutionImages = nonEmojiImages.filter((img) => img.naturalWidth >= 160 && img.naturalHeight >= 120);
+    const extraImageMatch = text.match(/^\s*\+(\d+)\s*$/m);
     const hasNonEmojiImage = highResolutionImages.length > 0 || nonEmojiImages.length > 0;
-    const extraImageMatch = text.match(/\+(\d+)/);
-    const visibleMediaCount = Math.max(1, highResolutionImages.length, nonEmojiImages.length);
-    const mediaCount = hasNonEmojiImage
+    const hasRenderedAlbum = Boolean(extraImageMatch);
+    const visibleMediaCount = Math.max(1, highResolutionImages.length, nonEmojiImages.length, hasRenderedAlbum ? 4 : 0);
+    const mediaCount = hasNonEmojiImage || hasRenderedAlbum
       ? Math.max(visibleMediaCount, extraImageMatch ? visibleMediaCount + Number(extraImageMatch[1]) : visibleMediaCount)
       : 0;
     const sharedLocation = extractSharedLocation(last);
@@ -1930,7 +1931,7 @@ async function getActiveChatSnapshot(page) {
         ? 'media'
       : voiceNote
         ? 'voice'
-      : last.querySelector('img')
+      : (last.querySelector('img') || hasRenderedAlbum)
         ? 'image'
         : 'text';
     const cleanText = cleanRenderedMessageText(text, mediaType);
@@ -2177,10 +2178,11 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
           return !src.startsWith('data:image/gif') && !img.className.includes('emoji') && !alt.match(/^\p{Emoji}+$/u);
         });
         const highResolutionImages = nonEmojiImages.filter((img) => img.naturalWidth >= 160 && img.naturalHeight >= 120);
+        const extraImageMatch = rawText.match(/^\s*\+(\d+)\s*$/m);
         const hasNonEmojiImage = highResolutionImages.length > 0 || nonEmojiImages.length > 0;
-        const extraImageMatch = rawText.match(/\+(\d+)/);
-        const visibleMediaCount = Math.max(1, highResolutionImages.length, nonEmojiImages.length);
-        const mediaCount = hasNonEmojiImage
+        const hasRenderedAlbum = Boolean(extraImageMatch);
+        const visibleMediaCount = Math.max(1, highResolutionImages.length, nonEmojiImages.length, hasRenderedAlbum ? 4 : 0);
+        const mediaCount = hasNonEmojiImage || hasRenderedAlbum
           ? Math.max(visibleMediaCount, extraImageMatch ? visibleMediaCount + Number(extraImageMatch[1]) : visibleMediaCount)
           : 0;
         const sharedLocation = extractSharedLocation(node);
@@ -2201,7 +2203,7 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
             ? 'media'
           : voiceNote
             ? 'voice'
-            : node.querySelector('img')
+            : (node.querySelector('img') || hasRenderedAlbum)
               ? 'image'
               : 'text';
         const cleanText = cleanRenderedMessageText(rawText, mediaType);
@@ -2458,7 +2460,8 @@ async function hydrateImageSnapshot(page, snapshot) {
             '[data-testid*="album" i]',
             '[aria-label*="image" i]',
             '[style*="background-image"]'
-          ].join(','));
+          ].join(','))
+          || Array.from(root.querySelectorAll('span, div')).find((element) => /^\+\d+$/.test(String(element.textContent || '').trim()));
         const opener = openerCandidate?.closest('button, [role="button"]') || openerCandidate;
         if (opener) {
           opener.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
@@ -3613,23 +3616,26 @@ function isEmployeeBatchCompletionSnapshot(snapshot = {}) {
   return /^\s*complete(?:\s+complete)*\s*[.!]?\s*$/i.test(String(snapshot.text || '').trim());
 }
 
-function isEmployeePropertyStartSnapshot(snapshot = {}) {
-  if (!['image', 'media'].includes(String(snapshot.mediaType || '').toLowerCase())) return false;
-  const text = String(snapshot.text || '').trim();
-  if (!text || /^(?:forwarded|\[(?:image|media|video|document)\])$/i.test(text)) return false;
-  return true;
-}
-
-function isEmployeePropertyCaptionCorrectionSnapshot(snapshot = {}) {
-  if (String(snapshot.mediaType || 'text').toLowerCase() !== 'text') return false;
-  const text = String(snapshot.text || '').replace(/\s+/g, ' ').trim();
-  if (text.length < 20 || isEmployeeBatchTriggerSnapshot(snapshot) || isEmployeeBatchCompletionSnapshot(snapshot)) {
-    return false;
-  }
+function isEmployeePropertyCaptionText(value = '') {
+  const text = String(value || '').replace(/\s+/g, ' ').trim();
+  if (text.length < 20) return false;
   const hasPropertyType = /\b(?:house|home|villa|bungalow|mansion|apartments?|flats?|land|plots?|commercial|shop|office|warehouse|student|hostel|rental|rent|sale|bedrooms?|bathrooms?|washrooms?|quarters?)\b/i.test(text);
   const hasPrice = /\b(?:ugx|usd|shs?|million|billion|price|asking)\b/i.test(text)
     || /\b\d[\d,.]*\s*(?:m|bn|b)\b/i.test(text);
   return hasPropertyType && hasPrice;
+}
+
+function isEmployeePropertyStartSnapshot(snapshot = {}) {
+  if (!['image', 'media'].includes(String(snapshot.mediaType || '').toLowerCase())) return false;
+  const text = String(snapshot.text || '').trim();
+  if (!text || /^(?:forwarded|\[(?:image|media|video|document)\])$/i.test(text)) return false;
+  return isEmployeePropertyCaptionText(text);
+}
+
+function isEmployeePropertyCaptionCorrectionSnapshot(snapshot = {}) {
+  if (String(snapshot.mediaType || 'text').toLowerCase() !== 'text') return false;
+  if (isEmployeeBatchTriggerSnapshot(snapshot) || isEmployeeBatchCompletionSnapshot(snapshot)) return false;
+  return isEmployeePropertyCaptionText(snapshot.text);
 }
 
 function isEmployeePropertyBatchModeSnapshot(snapshot = {}) {
