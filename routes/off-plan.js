@@ -8,11 +8,13 @@ const {
   createEnquiry,
   createWalkthroughJob,
   deleteArchivedDevelopment,
+  getPublicMarket,
   getManagedDevelopment,
   getPublicDevelopment,
   isPubliclyVisible,
   listEnquiries,
   listManagedDevelopments,
+  listPublicMarkets,
   listPublicDevelopments,
   normalizeDevelopmentRow,
   setDevelopmentStatus,
@@ -24,7 +26,8 @@ const {
 const { brochureBuffer } = require('../services/offPlanBrochureService');
 const { normalizeBrochureLanguage } = require('../services/offPlanBrochureI18n');
 const { notifyOffPlanEnquiry } = require('../services/offPlanNotificationService');
-const { prepareMediaUrlForStorage } = require('../services/cloudMediaStorageService');
+const { prepareMediaUrlForStorage, storeBuffer } = require('../services/cloudMediaStorageService');
+const { brochureFingerprint, extractBrochureDraft, MAX_BROCHURE_BYTES } = require('../services/offPlanBrochureIntakeService');
 const { readMortgageProviders } = require('./mortgage');
 
 const publicRouter = express.Router();
@@ -50,12 +53,19 @@ function booleanValue(value) {
   return value === true || ['1', 'true', 'yes', 'on'].includes(cleanText(value, 12).toLowerCase());
 }
 
+function decodedHeader(req, name, fallback = '') {
+  const value = req.get(name);
+  if (!value) return fallback;
+  try { return decodeURIComponent(value); } catch (_error) { return value; }
+}
+
 function isUuid(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(cleanText(value, 80));
 }
 
 function publicCountryCode(value) {
-  return cleanText(value || 'UG', 2).toUpperCase() === 'KE' ? 'KE' : 'UG';
+  const code = cleanText(value || 'UG', 2).toUpperCase();
+  return /^[A-Z]{2}$/.test(code) ? code : 'UG';
 }
 
 async function storeManagedMedia(items, { developmentId, folder, allowedMimeTypes, label }) {
@@ -124,6 +134,19 @@ publicRouter.get('/locations', asyncRoute(async (req, res) => {
   return res.json({ ok: true, locations: Array.from(counts.values()) });
 }));
 
+publicRouter.get('/markets', asyncRoute(async (_req, res) => {
+  const markets = await listPublicMarkets(db);
+  res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
+  return res.json({ ok: true, markets, count: markets.length });
+}));
+
+publicRouter.get('/markets/:countrySlug', asyncRoute(async (req, res) => {
+  const market = await getPublicMarket(db, req.params.countrySlug);
+  if (!market) return res.status(404).json({ ok: false, error: 'Off-plan market not found' });
+  res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
+  return res.json({ ok: true, market });
+}));
+
 publicRouter.post('/calculate', (req, res) => {
   return res.json({ ok: true, schedule: buildOffPlanPaymentSchedule(req.body || {}) });
 });
@@ -135,7 +158,7 @@ publicRouter.post('/enquiries', asyncRoute(async (req, res) => {
     if (!isUuid(requestedDevelopmentId)) return res.status(404).json({ ok: false, error: 'Off-plan project not found' });
     const publicMatch = await db.query(
       `SELECT slug, country_code FROM off_plan_developments
-       WHERE id = $1 AND country_code = ANY(ARRAY['UG','KE']) AND status = 'published'
+       WHERE id = $1 AND country_code ~ '^[A-Z]{2}$' AND status = 'published'
          AND (verification_status = 'verified' OR (verification_status = 'partially_verified' AND extra_fields->>'public_preview_approved' = 'true'))
        LIMIT 1`,
       [requestedDevelopmentId]
@@ -222,6 +245,47 @@ function mountManagementRoutes(router, authMiddleware, { allowPermanentDelete = 
     return res.status(201).json({ ok: true, development });
   }));
 
+  router.post('/developments/import-brochure', express.raw({ type: 'application/pdf', limit: `${Math.ceil(MAX_BROCHURE_BYTES / (1024 * 1024))}mb` }), asyncRoute(async (req, res) => {
+    const brochure = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+    if (!booleanValue(req.get('x-confirm-rights'))) return res.status(400).json({ ok: false, error: 'Brochure-use permission confirmation is required' });
+    const countryCode = publicCountryCode(req.get('x-off-plan-country-code'));
+    const countryName = cleanText(decodedHeader(req, 'x-off-plan-country-name', countryCode), 120);
+    const filename = cleanText(decodedHeader(req, 'x-file-name', 'brochure.pdf'), 180);
+    const extracted = await extractBrochureDraft(brochure, {
+      countryCode,
+      countryName,
+      countrySlug: req.get('x-off-plan-country-slug'),
+      region: decodedHeader(req, 'x-off-plan-region'),
+      filename,
+      fallbackName: decodedHeader(req, 'x-off-plan-project-name'),
+      sourceDisplayName: decodedHeader(req, 'x-off-plan-source-name')
+    });
+    const storedRef = await storeBuffer(brochure, {
+      keyPrefix: 'off-plan/source-brochures',
+      filename,
+      mimeType: 'application/pdf',
+      allowedMimeTypes: ['application/pdf'],
+      maxBytes: MAX_BROCHURE_BYTES,
+      isPrivate: true,
+      label: 'Off-plan brochure'
+    });
+    const payload = {
+      ...extracted.payload,
+      extra_fields: {
+        ...extracted.payload.extra_fields,
+        source_brochure: {
+          filename,
+          storage_ref: storedRef,
+          sha256: brochureFingerprint(brochure),
+          bytes: brochure.length,
+          uploaded_at: new Date().toISOString()
+        }
+      }
+    };
+    const development = await writeDevelopment(db, payload, actor(req));
+    return res.status(201).json({ ok: true, development, extraction_status: extracted.extraction_status, extraction_warning: extracted.extraction_warning });
+  }));
+
   router.patch('/developments/:id', asyncRoute(async (req, res) => {
     const development = await writeDevelopment(db, req.body || {}, { id: req.params.id, ...actor(req) });
     if (!development) return res.status(404).json({ ok: false, error: 'Off-plan project not found' });
@@ -230,6 +294,9 @@ function mountManagementRoutes(router, authMiddleware, { allowPermanentDelete = 
 
   if (allowPermanentDelete) {
     router.delete('/developments/:id', asyncRoute(async (req, res) => {
+      if (allowPermanentDelete === 'super_admin' && actor(req).actorRole !== 'super_admin') {
+        return res.status(403).json({ ok: false, error: 'Only a super admin can permanently delete an archived off-plan project' });
+      }
       try {
         const development = await deleteArchivedDevelopment(db, req.params.id, actor(req));
         if (!development) return res.status(404).json({ ok: false, error: 'Off-plan project not found' });
@@ -326,7 +393,7 @@ async function readBrochureAgentProfile(development = {}) {
   return { ...agent.rows[0], listings: listings.rows };
 }
 
-mountManagementRoutes(staffRouter, requireStaffAccess);
+mountManagementRoutes(staffRouter, requireStaffAccess, { allowPermanentDelete: 'super_admin' });
 mountManagementRoutes(adminRouter, requireAdminApiKey, { allowPermanentDelete: true });
 
 module.exports = {

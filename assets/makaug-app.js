@@ -35864,23 +35864,24 @@ function aiAssistantOffPlanCardsHtml(projects = []) {
   return `<div class="grid md:grid-cols-2 gap-4">${rows.map((project) => {
     const image = Array.isArray(project.images) ? project.images.find((item) => item?.url)?.url : "";
     const location = [project.area, project.district].filter(Boolean).join(", ");
-    const overseas = String(project.country_code || "").toUpperCase() === "KE";
+    const overseas = String(project.country_code || "").toUpperCase() !== "UG";
+    const countrySlug = String(project.extra_fields?.country_slug || project.extra_fields?.country_name || project.country_code || "overseas").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
     const sourcePrice = overseas && Array.isArray(project.unit_types)
       ? project.unit_types.find((unit) => Number(unit?.price_original) > 0)
       : null;
     const price = sourcePrice
-      ? `KES ${Math.round(Number(sourcePrice.price_original)).toLocaleString("en-KE")}`
+      ? `${String(sourcePrice.price_original_currency || project.original_currency || "USD").toUpperCase()} ${Math.round(Number(sourcePrice.price_original)).toLocaleString("en")}`
       : Number(project.launch_price_ugx) > 0
       ? `USh ${Math.round(Number(project.launch_price_ugx)).toLocaleString("en-UG")}`
       : "Price on request";
     const sourceName = String(project.source_agent_name || project.source_display_name || "Project source").trim();
     const sourceId = String(project.source_agent_profile_id || project.source_agent_id || "").trim();
     return `<article class="overflow-hidden rounded-2xl border border-emerald-100 bg-white shadow-sm">
-      <a href="${overseas ? `/off-plan/overseas/kenya/${adminAttr(project.slug)}` : `/off-plan/${adminAttr(project.slug)}`}" class="block">
+      <a href="${overseas ? `/off-plan/overseas/${adminAttr(countrySlug)}/${adminAttr(project.slug)}` : `/off-plan/${adminAttr(project.slug)}`}" class="block">
         ${image ? `<img src="${adminAttr(image)}" alt="${adminAttr(project.name || "Off-plan project")}" class="h-44 w-full object-cover" loading="lazy">` : ""}
         <div class="p-4"><span class="text-[11px] font-black uppercase tracking-wide text-emerald-700">Off Plan</span><h3 class="mt-1 text-lg font-black text-slate-950">${adminEscape(project.name || "Off-plan project")}</h3><p class="mt-1 text-xs text-slate-600">${adminEscape(location || "Location to be confirmed")}</p><strong class="mt-3 block text-base text-emerald-800">From ${adminEscape(price)}</strong>${project.payment_plan_months ? `<span class="mt-2 inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-black text-emerald-800">${adminEscape(String(project.payment_plan_months))}-month payment plan</span>` : ""}</div>
       </a>
-      ${overseas ? `<div class="flex items-center gap-2 border-t border-emerald-100 px-4 py-3 text-xs font-black text-emerald-800"><i class="fas fa-people-arrows" aria-hidden="true"></i>MakaUG overseas team</div>` : sourceId ? `<a href="/agents/${adminAttr(sourceId)}" class="flex items-center gap-2 border-t border-emerald-100 px-4 py-3 text-xs font-black text-emerald-800"><i class="fas fa-user-check" aria-hidden="true"></i>${adminEscape(sourceName)}</a>` : ""}
+      ${overseas ? `<div class="flex items-center gap-2 border-t border-emerald-100 px-4 py-3 text-xs font-black text-emerald-800"><i class="fas fa-people-arrows" aria-hidden="true"></i>makaug.com overseas team</div>` : sourceId ? `<a href="/agents/${adminAttr(sourceId)}" class="flex items-center gap-2 border-t border-emerald-100 px-4 py-3 text-xs font-black text-emerald-800"><i class="fas fa-user-check" aria-hidden="true"></i>${adminEscape(sourceName)}</a>` : ""}
     </article>`;
   }).join("")}</div>`;
 }

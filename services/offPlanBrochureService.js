@@ -76,8 +76,10 @@ function publicBaseUrl() {
 }
 
 function projectUrl(project) {
-  const route = project.country_code === 'KE'
-    ? `/off-plan/overseas/kenya/${encodeURIComponent(project.slug)}`
+  const countryName = project.extra_fields?.country_slug || project.extra_fields?.country_name || (project.country_code === 'KE' ? 'Kenya' : project.country_code);
+  const countrySlug = String(countryName || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const route = project.country_code && project.country_code !== 'UG'
+    ? `/off-plan/overseas/${encodeURIComponent(countrySlug)}/${encodeURIComponent(project.slug)}`
     : `/off-plan/${encodeURIComponent(project.slug)}`;
   return `${publicBaseUrl()}${route}`;
 }
@@ -91,7 +93,7 @@ function googleMapsUrl(project = {}) {
   const lng = Number(project.longitude);
   const query = Number.isFinite(lat) && Number.isFinite(lng)
     ? `${lat},${lng}`
-    : [project.area, project.district, project.country_code === 'KE' ? 'Kenya' : 'Uganda'].filter(Boolean).join(', ');
+    : [project.area, project.district, project.extra_fields?.country_name || (project.country_code === 'UG' ? 'Uganda' : project.country_code)].filter(Boolean).join(', ');
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
 }
 
@@ -309,9 +311,19 @@ function safeDescription(project, language, copy) {
 function buildOffPlanBrochure(projectInput, output, options = {}) {
   const project = normalizeDevelopmentRow(projectInput);
   const agent = options.agentProfile || null;
-  const overseas = project.country_code === 'KE' || project.extra_fields?.contact_mode === 'makaug_managed';
+  const overseas = project.country_code !== 'UG' || project.extra_fields?.contact_mode === 'makaug_managed';
   const language = normalizeBrochureLanguage(options.language);
-  const copy = brochureLanguagePack(language);
+  let copy = brochureLanguagePack(language);
+  if (overseas && project.country_code !== 'KE') {
+    copy = {
+      ...copy,
+      overseasFinancePolicy: 'Ask your bank whether it can finance this overseas off-plan purchase, what security it needs, and how it handles foreign-currency and construction-stage payments.',
+      defaultOverseasSteps: ['Requirements and affordability call', 'Source and project document review', 'Independent local lawyer and title checks', 'Developer and offer coordination', 'Bank and currency coordination', 'Milestone follow-up through handover'],
+      overseasDisclaimer: 'makaug.com coordinates communication and practical steps but is not the developer, lender or legal adviser. Use an independent local lawyer and obtain written bank and developer terms before paying.',
+      makaugOverseasBio: 'makaug.com is the public contact for this overseas opportunity and coordinates the buyer, source, developer, bank and independent local lawyer. Project facts and payment instructions remain subject to written verification.',
+      makaugNextSteps: 'Contact makaug.com for a requirements call. We will identify missing documents, coordinate independent local legal checks, confirm the developer offer and payment destination, and help you plan verified cross-border payments.'
+    };
+  }
   const doc = new PDFDocument({ size: 'A4', margins: { top: 88, right: 44, bottom: 64, left: 44 }, info: { Title: `${project.name} - makaug.com ${copy.project}`, Author: 'makaug.com', Subject: copy.project } });
   registerBrochureFonts(doc, language);
   preserveArabicWordSpacing(doc, language);
@@ -327,7 +339,7 @@ function buildOffPlanBrochure(projectInput, output, options = {}) {
   doc.fillColor(MUTED).font('Brochure-Regular').fontSize(13).text([project.area, project.district].filter(Boolean).join(', '), 44, doc.y + 8, { width: 505, align: copy.rtl ? 'right' : 'left' });
   const originalLaunchPrice = Number(project.unit_types.find((unit) => Number(unit.price_original) > 0)?.price_original);
   const price = overseas && Number.isFinite(originalLaunchPrice)
-    ? `${copy.from} ${formatMoney(originalLaunchPrice, project.original_currency || 'KES', copy)} · ${formatMoney(project.launch_price_ugx, 'UGX', copy)} ${copy.indicative}`
+    ? `${copy.from} ${formatMoney(originalLaunchPrice, project.original_currency || 'USD', copy)} · ${formatMoney(project.launch_price_ugx, 'UGX', copy)} ${copy.indicative}`
     : project.launch_price_ugx != null
       ? `${copy.from} ${formatMoney(project.launch_price_ugx, 'UGX', copy)}`
     : copy.pricingVerify;

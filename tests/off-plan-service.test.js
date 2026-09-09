@@ -134,7 +134,8 @@ test('a MakaUG-managed Kenya preview accepts verified source documents and parti
   };
   assert.deepEqual(publicPreviewBlockers(project), []);
   assert.equal(isPubliclyVisible(project), true);
-  assert.equal(isPubliclyVisible({ ...project, country_code: 'TZ' }), false);
+  assert.equal(isPubliclyVisible({ ...project, country_code: 'TZ', extra_fields: { ...project.extra_fields, country_name: 'Tanzania', country_slug: 'tanzania' } }), true);
+  assert.equal(isPubliclyVisible({ ...project, verification_status: 'verified' }), true, 'approved previews must not disappear when staff marks them verified');
 });
 
 test('publication gate rejects impossible sales totals and unlabelled media', () => {
@@ -159,6 +160,7 @@ test('write normalization defaults a new project to review state', () => {
   assert.equal(payload.status, 'pending_review');
   assert.equal(payload.verification_status, 'needs_verification');
   assert.equal(slugify('Kampala Heights & Homes'), 'kampala-heights-homes');
+  assert.equal(normalizeWritePayload({ country_code: 'AE', name: 'Dubai project' }).country_code, 'AE');
 });
 
 test('write normalization rejects malformed database identifiers and dates', () => {
