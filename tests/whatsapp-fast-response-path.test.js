@@ -340,6 +340,15 @@ async function run() {
     'outbox delivery must verify the active chat instead of trusting a stale inbound-recipient hint'
   );
   assert(
+    openChatBody.indexOf('await page.keyboard.type(phoneDigits || chatKey')
+      < openChatBody.indexOf('page.goto(`https://web.whatsapp.com/send?phone='),
+    'chat opening must use the already-loaded WhatsApp search before disruptive direct-phone navigation'
+  );
+  assert(
+    openChatBody.includes('returning to the loaded chat list'),
+    'a direct-phone timeout must recover to the chat list instead of crashing the live bridge loop'
+  );
+  assert(
     whatsappWebBridgeServiceSource.includes('duplicate_refreshed_at')
       && whatsappWebBridgeServiceSource.includes('same_reply_new_inbound'),
     'WhatsApp Web bridge must wake an existing pending duplicate reply instead of leaving it delayed'

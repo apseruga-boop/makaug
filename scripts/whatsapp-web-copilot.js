@@ -4935,14 +4935,9 @@ async function openChatForReply(page, recipient) {
     return !!await waitForReplyComposer(page, 900);
   }
 
-  if (phoneDigits.length >= 9) {
-    await page.goto(`https://web.whatsapp.com/send?phone=${encodeURIComponent(phoneDigits)}`, {
-      waitUntil: 'domcontentloaded'
-    });
-    return !!await waitForReplyComposer(page, 8000);
-  }
-
   const searchSelectors = [
+    'div[role="textbox"][contenteditable="true"][aria-label*="Search" i]',
+    'div[role="textbox"][contenteditable="true"][aria-placeholder*="Search" i]',
     'div[role="textbox"][contenteditable="true"][data-tab="3"]',
     'div[contenteditable="true"][data-tab="3"]',
     'div[contenteditable="true"][title*="Search"]',
@@ -4956,8 +4951,8 @@ async function openChatForReply(page, recipient) {
         await locator.click();
         await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
         await page.keyboard.press('Backspace');
-        await page.keyboard.type(chatKey, { delay: 20 });
-        await page.waitForTimeout(350);
+        await page.keyboard.type(phoneDigits || chatKey, { delay: 15 });
+        await page.waitForTimeout(600);
 
         const exactTitle = page.locator(`span[title="${chatKey.replace(/"/g, '\\"')}"]`).first();
         if (await exactTitle.count()) {
@@ -4966,15 +4961,42 @@ async function openChatForReply(page, recipient) {
           return !!await waitForReplyComposer(page, 7000);
         }
 
-        const row = page.locator('[data-testid="cell-frame-container"], div[role="listitem"]').first();
-        if (await row.count()) {
+        const rows = page.locator('[data-testid="cell-frame-container"], div[role="listitem"]');
+        const rowCount = Math.min(8, await rows.count());
+        for (let index = 0; index < rowCount; index += 1) {
+          const row = rows.nth(index);
+          if (phoneDigits.length >= 9) {
+            const rowDigits = String(await row.innerText().catch(() => '')).replace(/\D/g, '');
+            if (!rowDigits.endsWith(phoneDigits.slice(-9))) continue;
+          }
           const clicked = await clickVisibleLocator(row, 1200);
-          if (!clicked) continue;
-          return !!await waitForReplyComposer(page, 7000);
+          if (!clicked || !await waitForReplyComposer(page, 7000)) continue;
+          const openedSnapshot = await getActiveChatSnapshot(page).catch(() => null);
+          const openedKey = normalizeChatKey(openedSnapshot?.chatKey || '');
+          if (!phoneDigits.length || openedKey === normalizedRecipient || openedKey.endsWith(phoneDigits.slice(-9))) {
+            return true;
+          }
         }
       } catch (_error) {
         // continue to next selector
       }
+    }
+  }
+
+  if (phoneDigits.length >= 9) {
+    try {
+      await page.goto(`https://web.whatsapp.com/send?phone=${encodeURIComponent(phoneDigits)}`, {
+        waitUntil: 'domcontentloaded',
+        timeout: 15_000
+      });
+      return !!await waitForReplyComposer(page, 8000);
+    } catch (error) {
+      log(`direct WhatsApp phone navigation failed for ${phoneDigits.slice(-4)}; returning to the loaded chat list: ${error.message || error}`);
+      await page.goto('https://web.whatsapp.com/', {
+        waitUntil: 'domcontentloaded',
+        timeout: 15_000
+      }).catch(() => null);
+      return false;
     }
   }
 
