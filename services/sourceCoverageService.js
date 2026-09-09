@@ -8,6 +8,7 @@ const {
 } = require('./socialPlatformPostDiscoveryService');
 const { queueFoundOnlineSourcePostListings } = require('./socialSearchSourcedListingsService');
 const { recordHarvestImportResult } = require('./propertyHarvestMonitoringService');
+const { isPermanentlyBlockedSocialSource } = require('./socialSourceBlocklistService');
 
 const SOURCE_COVERAGE_MARKER = 'source-coverage-manifest-20260909';
 const DEFAULT_SECTION_SIZE = 500;
@@ -91,7 +92,8 @@ function buildCoverageManifestRows(sources = [], {
   const selected = sources
     .map(sourceSnapshot)
     .filter((source) => allowedPlatforms.has(source.platform))
-    .filter((source) => ['active', 'candidate'].includes(source.status));
+    .filter((source) => ['active', 'candidate'].includes(source.status))
+    .filter((source) => !isPermanentlyBlockedSocialSource(source));
   const firstSequenceByCanonicalKey = new Map();
   const platformOffsets = new Map();
   return selected.map((source, index) => {

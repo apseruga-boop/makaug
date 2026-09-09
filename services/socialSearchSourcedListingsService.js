@@ -28,6 +28,7 @@ const {
   commercialMisclassificationWarning,
 } = require('../utils/commercialClassification');
 const { listingPriceQuality } = require('../utils/listingPriceQuality');
+const { blockedSocialSourceMatch } = require('./socialSourceBlocklistService');
 const {
   CANONICAL_PROPERTY_CURRENCY,
   configuredRateToCanonicalCurrency,
@@ -1143,6 +1144,7 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
 }
 
 function sourceReviewReasonForIntake(intake = {}) {
+  if (intake.blocked_social_source) return 'permanently_blocked_social_source';
   if (intake.suppressed_source_url) return 'skipped_suppressed';
   if (intake.country_gate_passed === false) return NON_TARGET_LOCATION_REASON;
   if (intake.source_quality_suppressed && /^low_signal_/i.test(String(intake.source_quality_reason || ''))) {
@@ -3240,11 +3242,21 @@ async function queueFoundOnlineSourcePostListings({
     suppressed_source: suppressedSources.get(normalizedSourceUrlForItem(item)),
   })).map(({ item, agent, suppressed_source: suppressedSource }) => {
     const intake = sourcePostMeetsLaunchIntakeRule(item, agent);
+    const blockedSource = blockedSocialSourceMatch({ ...item, ...agent });
     return {
       item,
       agent,
+      blocked_source: blockedSource,
       suppressed_source: suppressedSource || null,
-      intake: suppressedSource
+      intake: blockedSource
+        ? {
+          ...intake,
+          eligible: false,
+          blocked_social_source: true,
+          blocked_social_source_key: blockedSource.key,
+          blocked_social_source_reason: blockedSource.reason,
+        }
+        : suppressedSource
         ? {
           ...intake,
           eligible: false,
@@ -3288,6 +3300,10 @@ async function queueFoundOnlineSourcePostListings({
         source_url: intake.suppressed_source_url,
         reason: intake.suppressed_source_reason,
       } : undefined,
+      blocked_social_source: intake.blocked_social_source ? {
+        source_key: intake.blocked_social_source_key,
+        reason: intake.blocked_social_source_reason,
+      } : undefined,
       source_quality: intake.source_quality_suppressed ? {
         suppressed: true,
         reason: intake.source_quality_reason,
@@ -3296,6 +3312,7 @@ async function queueFoundOnlineSourcePostListings({
     }));
   const sourceQualitySuppressedRecords = sourceReviewRecords.filter((item) => item.intake?.source_quality_suppressed);
   const suppressedSourceRecords = sourceReviewRecords.filter((item) => item.intake?.suppressed_source_url);
+  const blockedSocialSourceRecords = sourceReviewRecords.filter((item) => item.intake?.blocked_social_source);
   const lowSignalSourceLocationRecords = sourceReviewRecords.filter((item) => item.reason === 'low_signal_source_location');
   const foreignRejectedRecords = sourceReviewRecords.filter((item) => item.reason === NON_TARGET_LOCATION_REASON);
 
@@ -3373,6 +3390,7 @@ async function queueFoundOnlineSourcePostListings({
       eligible_to_queue_count: eligible.length,
       source_review_count: sourceReviewRecords.length,
       suppressed_source_count: suppressedSourceRecords.length,
+      blocked_social_source_count: blockedSocialSourceRecords.length,
       source_quality_suppressed_count: sourceQualitySuppressedRecords.length,
       low_signal_source_location_count: lowSignalSourceLocationRecords.length,
       foreign_rejected_count: foreignRejectedRecords.length,
@@ -3394,6 +3412,7 @@ async function queueFoundOnlineSourcePostListings({
       per_url_summary: perUrl.summary,
       source_review_records: sourceReviewRecords,
       suppressed_source_records: suppressedSourceRecords,
+      blocked_social_source_records: blockedSocialSourceRecords,
       source_quality_suppressed_records: sourceQualitySuppressedRecords,
       low_signal_source_location_records: lowSignalSourceLocationRecords,
       foreign_rejected_records: foreignRejectedRecords,
@@ -3530,6 +3549,7 @@ async function queueFoundOnlineSourcePostListings({
       per_url_summary: perUrl.summary,
       source_review_count: skippedListings.length,
       suppressed_source_count: suppressedSourceRecords.length,
+      blocked_social_source_count: blockedSocialSourceRecords.length,
       source_quality_suppressed_count: sourceQualitySuppressedRecords.length,
       low_signal_source_location_count: lowSignalSourceLocationRecords.length,
       foreign_rejected_count: foreignRejectedRecords.length,
@@ -3538,6 +3558,7 @@ async function queueFoundOnlineSourcePostListings({
       persisted_property_count: persistence.count,
       persisted_property_ids: persistence.ids,
       suppressed_source_records: suppressedSourceRecords,
+      blocked_social_source_records: blockedSocialSourceRecords,
       source_quality_suppressed_records: sourceQualitySuppressedRecords,
       low_signal_source_location_records: lowSignalSourceLocationRecords,
       foreign_rejected_records: foreignRejectedRecords,

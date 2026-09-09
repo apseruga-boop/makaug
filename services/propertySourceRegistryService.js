@@ -518,13 +518,17 @@ const BASE_PROPERTY_SOURCE_REGISTRY = [
     key: 'dream-home-real-estate',
     name: 'Dream Home Real Estate',
     platform: 'youtube',
+    status: 'blocked',
     url: 'https://www.youtube.com/results?search_query=Dream+Home+Real+Estate+Uganda+Agaba+Lewis+William',
     handle: 'Dream Home Real Estate',
     phone: '+256750719382',
     phoneAlt: '+256777647991',
     listingTypes: ['sale', 'rent'],
     districts: ['Kampala', 'Wakiso'],
-    metadata: { contact_source: 'Founder screenshot of channel description' },
+    metadata: {
+      contact_source: 'Founder screenshot of channel description',
+      blocked_reason: 'owner_requested_permanent_social_source_block_20260909',
+    },
   }),
   source({
     key: 'realtor-mahad',
