@@ -245,6 +245,7 @@ app.get('/api/version', (_req, res) => {
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-agent007-album-original-capture-20260909'] : []),
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-agent007-existing-row-media-repair-20260909'] : []),
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-agent007-full-album-gallery-recovery-20260909'] : []),
+      ...(!IS_SOUTH_AFRICA ? ['whatsapp-agent007-completion-ack-contract-20260909'] : []),
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-agent007-property-boundary-guard-20260909'] : []),
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-agent007-pending-property-queue-20260909'] : []),
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-multi-result-fast-search-20260824'] : []),

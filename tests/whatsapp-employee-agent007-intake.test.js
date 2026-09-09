@@ -420,8 +420,9 @@ assert(copilotSource.includes("'[data-testid*=\"album\" i]'"), 'virtualized What
 assert(copilotSource.includes("text.match(/^\\s*\\+(\\d+)\\s*$/m)"), 'only a standalone WhatsApp +N overlay may imply a virtualized album');
 assert(copilotSource.includes("&& !(Array.isArray(snapshot.imagePreviews) && snapshot.imagePreviews.length);"), 'an image album misclassified as generic media must proceed when original image pixels were captured');
 assert(routeSource.includes('inboundMetadata.image_previews.slice(0, 20)'), 'all images in a normal WhatsApp album must reach intake instead of being truncated at ten');
-assert(routeSource.includes('employee_batch_complete: employeeIntake?.batchComplete === true'), 'the bridge must return a minimal durable completion acknowledgement');
+assert(routeSource.includes('employee_batch_complete: employeeIntake?.batch_complete === true'), 'the bridge must return a minimal durable completion acknowledgement');
 assert(copilotSource.includes("skipped: 'batch_incomplete_missing_media'"), 'history repair must stay retryable until the API confirms every property has usable media');
+assert(routeSource.includes('employee_media_result: employeeIntake?.media_attachment || null'), 'the bridge must expose normalized media attachment diagnostics to the worker');
 assert(copilotSource.includes('replayEmployeeBatchThroughCompletion'), 'the worker must replay every ordered batch message before COMPLETE');
 assert(copilotSource.includes('scrollWhatsappHistoryNewer'), 'history reconciliation must walk forward from the trigger without keeping every video in memory');
 assert(copilotSource.includes('WHATSAPP_WEB_COPILOT_EMPLOYEE_RECOVERY_PHONES'), 'hosted workers must support an explicit startup recovery target');
@@ -468,6 +469,7 @@ assert(serverSource.includes('whatsapp-agent007-existing-row-media-repair-202609
 assert(copilotSource.includes('existing_row_media_repair_marker'), 'worker heartbeats must expose the existing-review media repair release');
 assert(serverSource.includes('whatsapp-agent007-full-album-gallery-recovery-20260909'), 'production health metadata must expose the full album gallery recovery release');
 assert(copilotSource.includes('full_album_gallery_marker'), 'worker heartbeats must expose the full album gallery recovery release');
+assert(serverSource.includes('whatsapp-agent007-completion-ack-contract-20260909'), 'production health metadata must expose the corrected worker completion acknowledgement contract');
 assert(copilotSource.includes('configuredEmployeeRecoverySettled'), 'configured history recovery must stop only after the batch is complete or already reconciled');
 assert(copilotSource.includes("scroller.dispatchEvent(new WheelEvent('wheel'"), 'history recovery must explicitly request older virtualized WhatsApp rows');
 assert(copilotSource.includes('result.retryable || result.error'), 'history recovery must restart the bounded batch after a transient bridge or database failure');
