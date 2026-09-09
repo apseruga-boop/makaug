@@ -412,6 +412,7 @@ assert(routeSource.includes('pending_property_media'), 'incomplete-caption media
 assert(routeSource.includes('pending_property_queue'), 'multiple incomplete property forwards must remain in a separate durable queue instead of merging');
 assert(routeSource.includes('queued_missing: queuedSubmissions.map'), 'authenticated recovery diagnostics should report missing-field groups without exposing private captions');
 assert(routeSource.includes('current_media_count: pendingMedia.length'), 'authenticated recovery diagnostics should expose held media counts without private media URLs');
+assert(routeSource.includes("current_preview_url: pendingMedia.find((item) => item.kind === 'image')?.url || null"), 'authenticated bridge diagnostics should expose one held-media preview for exact repair matching');
 assert(routeSource.includes("WHERE status IN ('pending','approved')"), 'rejected broken review rows must not block a corrected Agent 007 replay forever');
 assert(routeSource.includes('You do not need to resend the media.'), 'caption correction must reuse already-stored media');
 assert(routeSource.includes('employeePendingStoredMedia(data)'), 'a corrected text caption must finalize stored media into staff review');
