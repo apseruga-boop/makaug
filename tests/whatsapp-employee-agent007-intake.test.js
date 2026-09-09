@@ -40,6 +40,19 @@ assert.deepEqual(parseNewAgentDetails('Francis Isabirye | +256 768 524008 | Fran
   company: 'Francis Homes',
   district: 'Kampala'
 });
+assert.deepEqual(parseNewAgentDetails('Promise Ahimbisibwe | 0751182011 | Makerere Kikoni'), {
+  fullName: 'Promise Ahimbisibwe',
+  phone: '0751182011',
+  company: 'Independent agent',
+  district: 'Makerere Kikoni'
+}, 'company must be optional for independent agents using the observed three-field WhatsApp format');
+assert.deepEqual(parseNewAgentDetails('Promise Ahimbisibwe | 0751182011 | | Makerere Kikoni'), {
+  fullName: 'Promise Ahimbisibwe',
+  phone: '0751182011',
+  company: 'Independent agent',
+  district: 'Makerere Kikoni'
+}, 'an explicitly blank company field must use the independent-agent fallback');
+assert.equal(parseNewAgentDetails('Promise Ahimbisibwe | 0751182011'), null, 'district must remain required');
 assert.deepEqual(parseCustomerDetails('Arthur Seruga | +44 7757 773202 | Kira, Wakiso'), {
   fullName: 'Arthur Seruga',
   phone: '+44 7757 773202',
@@ -339,6 +352,7 @@ assert.notEqual(kaziMailoTitle.locationPatch.area, 'Molo', 'a misspelled mailo-t
 assert.deepEqual(whatsappRoute.employeePropertyMissing(kaziMailoTitle), ['exact area and district']);
 
 assert(routeSource.includes("const WHATSAPP_EMPLOYEE_AGENT_007_MARKER = 'whatsapp-employee-agent-007-review-intake-20260829'"));
+assert(routeSource.includes('Company is optional. If included'), 'new-agent instructions must explain the supported three-field format');
 assert.equal(
   whatsappRoute.shouldUseBridgeInboundFingerprintDedupe({ providerMessageId: 'webbridge:first-1' }),
   false,
