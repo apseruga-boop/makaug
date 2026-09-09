@@ -331,6 +331,7 @@ const WHATSAPP_AGENT_007_PENDING_MEDIA_FIX_MARKER = 'whatsapp-agent007-pending-m
 const WHATSAPP_AGENT_007_IDENTITY_MEDIA_FIREWALL_MARKER = 'whatsapp-agent007-identity-media-firewall-20260909';
 const WHATSAPP_AGENT_007_ALBUM_CAPTURE_MARKER = 'whatsapp-agent007-album-original-capture-20260909';
 const WHATSAPP_AGENT_007_EXISTING_ROW_MEDIA_REPAIR_MARKER = 'whatsapp-agent007-existing-row-media-repair-20260909';
+const WHATSAPP_AGENT_007_FULL_ALBUM_GALLERY_MARKER = 'whatsapp-agent007-full-album-gallery-recovery-20260909';
 const WHATSAPP_OUTGOING_PREVIEW_GUARD_MARKER = 'whatsapp-outgoing-preview-guard-20260831';
 const WHATSAPP_RESPONSE_RELIABILITY_MARKER = 'whatsapp-rendered-text-confirmation-20260909';
 const WHATSAPP_CALL_CARD_BROWSER_CONFIG = Object.freeze(whatsappCallCardBrowserConfig());
@@ -792,6 +793,7 @@ function hostedRuntimeMetadata() {
     identity_media_firewall_marker: WHATSAPP_AGENT_007_IDENTITY_MEDIA_FIREWALL_MARKER,
     album_capture_marker: WHATSAPP_AGENT_007_ALBUM_CAPTURE_MARKER,
     existing_row_media_repair_marker: WHATSAPP_AGENT_007_EXISTING_ROW_MEDIA_REPAIR_MARKER,
+    full_album_gallery_marker: WHATSAPP_AGENT_007_FULL_ALBUM_GALLERY_MARKER,
     outgoing_preview_guard: WHATSAPP_OUTGOING_PREVIEW_GUARD_MARKER,
     response_reliability_marker: WHATSAPP_RESPONSE_RELIABILITY_MARKER,
     git_commit: process.env.RENDER_GIT_COMMIT || process.env.SOURCE_VERSION || process.env.GIT_COMMIT || '',
@@ -2362,6 +2364,17 @@ async function hydrateImageSnapshot(page, snapshot) {
   if (!messageId) return snapshot;
 
   try {
+    const messageRoots = page.locator('[data-id], [data-testid^="conv-msg-"]');
+    const rootCount = await messageRoots.count();
+    for (let index = 0; index < rootCount; index += 1) {
+      const candidate = messageRoots.nth(index);
+      const dataId = await candidate.getAttribute('data-id').catch(() => '');
+      const testId = await candidate.getAttribute('data-testid').catch(() => '');
+      if (dataId !== messageId && testId !== messageId) continue;
+      await candidate.scrollIntoViewIfNeeded().catch(() => {});
+      await page.waitForTimeout(500);
+      break;
+    }
     const previews = await page.evaluate(async ({
       targetMessageId,
       maxDimension,
@@ -2390,6 +2403,12 @@ async function hydrateImageSnapshot(page, snapshot) {
         return [key, img];
       })).values());
       const visibleImages = uniqueImageCandidates.slice(0, 20);
+      const hydratedExtraImageMatch = String(root.innerText || root.textContent || '').match(/^\s*\+(\d+)\s*$/m);
+      const hydratedVisibleCount = Math.max(1, visibleImages.length, hydratedExtraImageMatch ? 4 : 0);
+      const expectedCount = Math.max(1, Math.min(20, Math.max(
+        Number(requestedMediaCount || 1) || 1,
+        hydratedExtraImageMatch ? hydratedVisibleCount + Number(hydratedExtraImageMatch[1]) : hydratedVisibleCount
+      )));
 
       const encodeImage = async (sourceImage, captureSource = 'whatsapp_image_pixels') => {
         if (!sourceImage.complete) {
@@ -2423,7 +2442,7 @@ async function hydrateImageSnapshot(page, snapshot) {
         hashCanvas.width = 9;
         hashCanvas.height = 8;
         const hashContext = hashCanvas.getContext('2d', { willReadFrequently: true });
-        if (!hashContext) return { dataUrl, mimeType: 'image/jpeg', bytes, perceptualHash: '', captureSource };
+        if (!hashContext) return { dataUrl, mimeType: 'image/jpeg', bytes, width, height, perceptualHash: '', captureSource };
         hashContext.drawImage(sourceImage, 0, 0, 9, 8);
         const pixels = hashContext.getImageData(0, 0, 9, 8).data;
         let bits = '';
@@ -2440,7 +2459,7 @@ async function hydrateImageSnapshot(page, snapshot) {
         for (let index = 0; index < bits.length; index += 4) {
           perceptualHash += Number.parseInt(bits.slice(index, index + 4), 2).toString(16);
         }
-        return { dataUrl, mimeType: 'image/jpeg', bytes, perceptualHash, captureSource };
+        return { dataUrl, mimeType: 'image/jpeg', bytes, width, height, perceptualHash, captureSource };
       };
 
       const visibleResults = [];
@@ -2453,7 +2472,6 @@ async function hydrateImageSnapshot(page, snapshot) {
         }
       }
 
-      const expectedCount = Math.max(1, Math.min(20, Number(requestedMediaCount || 1) || 1));
       const viewerResults = [];
       if (expectedCount > 1) {
         const openerCandidate = visibleImages[0]
@@ -2472,7 +2490,8 @@ async function hydrateImageSnapshot(page, snapshot) {
 
           let previousViewerSource = '';
           const seenViewerHashes = new Set();
-          for (let index = 0; index < expectedCount; index += 1) {
+          const viewerTraversalLimit = expectedCount;
+          for (let index = 0; index < viewerTraversalLimit; index += 1) {
           const viewerRoots = Array.from(document.querySelectorAll([
             '[role="dialog"]',
             '[data-testid*="media-viewer" i]',
@@ -2531,7 +2550,7 @@ async function hydrateImageSnapshot(page, snapshot) {
             const rect = element.getBoundingClientRect();
             return rect.width > 0 && rect.height > 0;
           });
-          if (!nextControl || index >= expectedCount - 1) break;
+          if (!nextControl || index >= viewerTraversalLimit - 1) break;
           (nextControl.closest('button, [role="button"]') || nextControl).click();
           await new Promise((resolve) => setTimeout(resolve, 450));
           }
@@ -2570,12 +2589,14 @@ async function hydrateImageSnapshot(page, snapshot) {
         dataUrl: item.dataUrl,
         mimeType: item.mimeType || 'image/jpeg',
         bytes: Number(item.bytes || 0),
+        width: Number(item.width || 0),
+        height: Number(item.height || 0),
         sha256: crypto.createHash('sha256').update(String(item.dataUrl || '')).digest('hex'),
         perceptualHash: String(item.perceptualHash || '').toLowerCase(),
         captureSource: item.captureSource || 'whatsapp_image_pixels'
       }));
       const viewerOriginals = imagePreviews.filter((item) => item.captureSource === 'whatsapp_media_viewer_original_pixels').length;
-      log(`hydrated WhatsApp image message for ${normalizeChatKey(snapshot.chatKey)}; expected=${Number(snapshot.mediaCount || 1)} captured=${imagePreviews.length} viewer_originals=${viewerOriginals}`);
+      log(`hydrated WhatsApp image message for ${normalizeChatKey(snapshot.chatKey)}; snapshot_expected=${Number(snapshot.mediaCount || 1)} captured=${imagePreviews.length} viewer_originals=${viewerOriginals}`);
       return {
         ...snapshot,
         imagePreviews,
@@ -3457,6 +3478,8 @@ async function ingestSnapshot({ snapshot, row = {}, source = 'unread_scan' }) {
               data_url: item.dataUrl || '',
               mime_type: item.mimeType || 'image/jpeg',
               bytes: Number(item.bytes || 0),
+              width: Number(item.width || 0),
+              height: Number(item.height || 0),
               sha256: item.sha256 || '',
               perceptual_hash: item.perceptualHash || '',
               capture_source: item.captureSource || '',
@@ -3489,6 +3512,10 @@ async function ingestSnapshot({ snapshot, row = {}, source = 'unread_scan' }) {
     clearMediaHydrationBackoff(snapshot, row);
     if (!result.duplicate) {
       log(`ingested ${source} ${mediaType} message from ${chatKey}; queued_reply=${result.data?.queued_reply ? 'yes' : 'no'}`);
+      if (result.data?.employee_media_result) {
+        const mediaResult = result.data.employee_media_result;
+        log(`employee media result for ${chatKey}; attached=${Number(mediaResult.attached || 0)} public_images=${Number(mediaResult.publicImages || 0)} evidence_images=${Number(mediaResult.evidenceImages || 0)} reasons=${(Array.isArray(mediaResult.validationReasons) ? mediaResult.validationReasons : []).join(',') || 'none'}`);
+      }
     }
     return {
       processed: result.duplicate ? 0 : 1,

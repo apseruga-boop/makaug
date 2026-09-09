@@ -3360,7 +3360,9 @@ function employeeMediaCandidates(runtime = {}, mediaUrl = '') {
       name: normalizeInput(candidate.name || candidate.filename || ''),
       captureSource: normalizeInput(candidate.capture_source || candidate.captureSource || ''),
       previewWarning: normalizeInput(candidate.preview_warning || candidate.previewWarning || ''),
-      degradedFromVideo: candidate.degraded_from_video === true || candidate.degradedFromVideo === true
+      degradedFromVideo: candidate.degraded_from_video === true || candidate.degradedFromVideo === true,
+      width: Math.max(0, Number(candidate.width || 0) || 0),
+      height: Math.max(0, Number(candidate.height || 0) || 0)
     });
   };
   for (const candidate of Array.isArray(runtime.photoCandidates) ? runtime.photoCandidates.slice(0, 20) : []) {
@@ -3487,6 +3489,19 @@ async function storeEmployeeMediaCandidate(candidate, {
     if (kind === 'image' && !privateMedia) {
       mediaValidation = await validateEmployeeImageCandidate(candidate, candidate.dataUrl);
       publicEligible = mediaValidation?.accepted === true;
+      const captureSource = normalizeInput(candidate.captureSource).toLowerCase();
+      const originalViewerPixels = captureSource === 'whatsapp_media_viewer_original_pixels';
+      const usefulDimensions = Number(candidate.width || 0) >= 240 && Number(candidate.height || 0) >= 180;
+      if (!publicEligible && mediaValidation?.verdict === 'unavailable' && originalViewerPixels && usefulDimensions) {
+        publicEligible = true;
+        mediaValidation = {
+          ...mediaValidation,
+          accepted: true,
+          verdict: 'accepted_pending_review_original_whatsapp_pixels',
+          matches_expected_slot: true,
+          reason: 'vision_unavailable_original_whatsapp_pixels_pending_review'
+        };
+      }
     }
     const keyPrefix = privateMedia ? 'whatsapp-employee-intake/private-id'
       : (kind === 'image' && !publicEligible ? 'whatsapp-employee-intake/source-evidence' : `whatsapp-employee-intake/${kind}`);
@@ -4738,11 +4753,17 @@ async function attachEmployeeReviewMedia({ propertyId, storedMedia, phone, inbou
   );
   const property = propertyResult.rows[0];
   if (!property) throw new Error('The current employee intake property is no longer pending');
-  const existingHashes = new Set(Array.isArray(property.extra_fields?.media_sha256) ? property.extra_fields.media_sha256 : []);
-  const uniqueMedia = storedMedia.filter((item) => !item.sha256 || !existingHashes.has(item.sha256));
-  if (!uniqueMedia.length) return { attached: 0, duplicate: true };
   const existingImages = await db.query('SELECT COUNT(*)::int AS count FROM property_images WHERE property_id = $1', [propertyId]);
   const imageOffset = Number(existingImages.rows[0]?.count || 0);
+  const existingHashes = new Set(Array.isArray(property.extra_fields?.media_sha256) ? property.extra_fields.media_sha256 : []);
+  const uniqueMedia = storedMedia.filter((item) => (
+    !item.sha256
+    || !existingHashes.has(item.sha256)
+    || (imageOffset === 0 && item.kind === 'image' && item.publicEligible !== false)
+  ));
+  if (!uniqueMedia.length) {
+    return { attached: 0, duplicate: true, publicImages: 0, evidenceImages: 0, validationReasons: [] };
+  }
   const images = uniqueMedia.filter((item) => item.kind === 'image' && item.publicEligible !== false);
   const evidenceImages = uniqueMedia.filter((item) => item.kind === 'image' && item.publicEligible === false);
   const videoKeyFrames = images.filter((item) => /video-(?:key-frame|still|message-preview|preview)/i.test(String(item.name || '')));
@@ -4759,6 +4780,13 @@ async function attachEmployeeReviewMedia({ propertyId, storedMedia, phone, inbou
   const mergedHashes = [...existingHashes, ...uniqueMedia.map((item) => item.sha256).filter(Boolean)];
   const previousEvidenceUrls = Array.isArray(property.extra_fields?.source_evidence_urls) ? property.extra_fields.source_evidence_urls : [];
   const previousQualityBlockers = Array.isArray(property.extra_fields?.media_quality_blockers) ? property.extra_fields.media_quality_blockers : [];
+  const retainedQualityBlockers = images.length
+    ? previousQualityBlockers.filter((item) => ![
+      'vision_provider_unavailable',
+      'employee_media_vision_validation_timeout',
+      'vision_unavailable_original_whatsapp_pixels_pending_review'
+    ].includes(normalizeInput(item?.reason).toLowerCase()))
+    : previousQualityBlockers;
   const client = await db.getClient();
   try {
     await client.query('BEGIN');
@@ -4812,7 +4840,7 @@ async function attachEmployeeReviewMedia({ propertyId, storedMedia, phone, inbou
         document_urls: [...previousDocuments, ...documents],
         source_evidence_urls: [...new Set([...previousEvidenceUrls, ...evidenceImages.map((item) => item.url)])],
         media_quality_blockers: [
-          ...previousQualityBlockers,
+          ...retainedQualityBlockers,
           ...evidenceImages.map((item) => ({
             url: item.url,
             capture_source: item.captureSource || null,
@@ -4852,7 +4880,16 @@ async function attachEmployeeReviewMedia({ propertyId, storedMedia, phone, inbou
   } finally {
     client.release();
   }
-  return { attached: uniqueMedia.length, duplicate: false };
+  return {
+    attached: uniqueMedia.length,
+    duplicate: false,
+    publicImages: images.length,
+    evidenceImages: evidenceImages.length,
+    validationReasons: uniqueMedia
+      .map((item) => normalizeInput(item.mediaValidation?.reason || item.previewWarning || ''))
+      .filter(Boolean)
+      .slice(0, 20)
+  };
 }
 
 async function employeePropertiesMissingUsableMedia(propertyIds = []) {
@@ -5285,6 +5322,7 @@ async function handleEmployeeWhatsappIntake({
                 propertyId: existingProperty.id,
                 duplicate: attachment.duplicate,
                 recoveryAlreadyAccountedFor: true,
+                mediaAttachment: attachment,
                 message: ''
               };
             } catch (error) {
@@ -5601,6 +5639,7 @@ async function handleEmployeeWhatsappIntake({
         propertyId: data.current_property_id,
         duplicate: attachment.duplicate,
         recoveryAlreadyAccountedFor: Boolean(recoveredExistingProperty),
+        mediaAttachment: attachment,
         message: (data.property_batch_mode || 'multiple') === 'multiple'
           ? ''
           : attachment.duplicate
@@ -12962,7 +13001,8 @@ router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
       queued_reply: !!queuedReply,
       queue_id: queuedReply?.id || null,
       owner_forward: ownerForward,
-      employee_batch_complete: employeeIntake?.batchComplete === true
+      employee_batch_complete: employeeIntake?.batchComplete === true,
+      employee_media_result: employeeIntake?.mediaAttachment || null
     }
   });
 }));
@@ -13188,6 +13228,7 @@ module.exports.__test = {
   employeeCaptionHash,
   employeeMediaCandidates,
   employeePropertyMediaCandidates,
+  storeEmployeeMediaCandidate,
   employeePendingStoredMedia,
   employeeVideoEvidenceOnly,
   employeePropertyFacts,
