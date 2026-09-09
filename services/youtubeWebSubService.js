@@ -2,6 +2,7 @@
 
 const crypto = require('crypto');
 const logger = require('../config/logger');
+const { blockedSocialSourceMatch } = require('./socialSourceBlocklistService');
 
 const YOUTUBE_WEBSUB_HUB_URL = 'https://pubsubhubbub.appspot.com/subscribe';
 const YOUTUBE_FEED_BASE_URL = 'https://www.youtube.com/xml/feeds/videos.xml';
@@ -114,6 +115,16 @@ async function requestYouTubeWebSubSubscription(db, channelId, {
   env = process.env,
 } = {}) {
   const id = clean(channelId);
+  const blockedSource = blockedSocialSourceMatch({ channel_id: id });
+  if (blockedSource) {
+    return {
+      ok: true,
+      skipped: true,
+      reason: 'permanently_blocked_social_source',
+      channel_id: id,
+      blocked_source_key: blockedSource.key,
+    };
+  }
   const callback = callbackUrl(env);
   if (!id) return { ok: false, reason: 'missing_youtube_channel_id' };
   if (!callback) return { ok: false, reason: 'missing_youtube_websub_callback_url' };
@@ -189,6 +200,19 @@ async function processYouTubeWebSubNotification(db, rawBody, {
   if (!event.video_id || !event.channel_id || event.deleted) {
     return { ok: true, skipped: true, reason: event.deleted ? 'youtube_video_deleted' : 'youtube_websub_entry_missing_ids', event };
   }
+  const blockedSource = blockedSocialSourceMatch({
+    channel_id: event.channel_id,
+    author_name: event.author_name,
+  });
+  if (blockedSource) {
+    return {
+      ok: true,
+      skipped: true,
+      reason: 'permanently_blocked_social_source',
+      blocked_source_key: blockedSource.key,
+      event,
+    };
+  }
   await upsertYouTubeChannel(db, {
     channel_id: event.channel_id,
     display_name: event.author_name,
@@ -239,6 +263,20 @@ async function registerDiscoveredYouTubeChannels(db, posts = [], { autoSubscribe
     .map((channel) => [channel.channel_id, channel])).values()].slice(0, 10);
   const reports = [];
   for (const channel of channels) {
+    const blockedSource = blockedSocialSourceMatch(channel);
+    if (blockedSource) {
+      reports.push({
+        channel_id: channel.channel_id,
+        stored: false,
+        subscription: {
+          ok: true,
+          skipped: true,
+          reason: 'permanently_blocked_social_source',
+          blocked_source_key: blockedSource.key,
+        },
+      });
+      continue;
+    }
     const stored = await upsertYouTubeChannel(db, channel);
     const shouldSubscribe = autoSubscribe && stored?.subscription_status !== 'subscribed';
     const subscription = shouldSubscribe

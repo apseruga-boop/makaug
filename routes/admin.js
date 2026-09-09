@@ -224,6 +224,53 @@ const router = express.Router();
 
 router.use(requireAdminApiKey);
 
+router.get('/social-source-blocks/dream-home-real-estate', async (_req, res, next) => {
+  try {
+    const [auditResult, blockResult, remainingResult] = await Promise.all([
+      db.query(
+        `SELECT purge_key, source_key, reason, deleted_property_count, deleted_agent_count,
+                status_counts, deleted_property_ids, verified_remaining_property_count, created_at
+         FROM social_source_purge_audits
+         WHERE purge_key = 'dream-home-v8-20260909'
+         LIMIT 1`
+      ),
+      db.query(
+        `SELECT platform, match_type, match_value, source_key, reason, created_at, updated_at
+         FROM blocked_social_sources
+         WHERE source_key = 'dream-home-real-estate'
+         ORDER BY platform, match_type, match_value`
+      ),
+      db.query(
+        `SELECT COUNT(*)::int AS count
+         FROM properties p
+         WHERE (
+             LOWER(COALESCE(p.source, '')) IN ('found_online_property_source_v1','sourced_inventory_candidate')
+             OR LOWER(COALESCE(p.listed_via, '')) = 'found_online'
+           )
+           AND (
+             LOWER(COALESCE(p.extra_fields->>'source_registry_key', '')) IN ('dream-home-real-estate','ucfvusmhrd9iinxi3jgl6qga','williolevis')
+             OR LOWER(COALESCE(p.extra_fields::text, '')) LIKE '%ucfvusmhrd9iinxi3jgl6qga%'
+             OR LOWER(COALESCE(p.extra_fields::text, '')) LIKE '%@williolevis%'
+             OR REGEXP_REPLACE(COALESCE(p.lister_phone, ''), '[^0-9]', '', 'g') IN ('256732639346','256750719382','256750819382','256777647991')
+           )`
+      ),
+    ]);
+    return res.json({
+      ok: true,
+      source_key: 'dream-home-real-estate',
+      audit: auditResult.rows[0] || null,
+      permanent_blocks: blockResult.rows,
+      permanent_block_count: blockResult.rows.length,
+      remaining_property_count: Number(remainingResult.rows[0]?.count || 0),
+    });
+  } catch (error) {
+    if (error?.code === '42P01') {
+      return res.status(503).json({ ok: false, error: 'Apply migration 125_block_and_purge_dream_home_v8.sql first.' });
+    }
+    return next(error);
+  }
+});
+
 router.get('/harvest/summary', async (req, res, next) => {
   try {
     const data = await loadHarvestSummary(db, { days: req.query.days });

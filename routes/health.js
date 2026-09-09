@@ -56,7 +56,8 @@ router.get('/migrations', async (_req, res) => {
     '055_republish_curated_youtube_social_inventory.sql',
     '056_fix_social_source_location_pins.sql',
     '057_suspend_auto_source_agent_profiles.sql',
-    '058_correct_lady_property_agent_kira_mansion.sql'
+    '058_correct_lady_property_agent_kira_mansion.sql',
+    '125_block_and_purge_dream_home_v8.sql'
   ];
   try {
     const result = await db.query(

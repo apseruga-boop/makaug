@@ -30,6 +30,10 @@ const {
   primaryImagePerceptualHashes,
 } = require('./propertyHarvestDedupService');
 const { recordHarvestImportResult } = require('./propertyHarvestMonitoringService');
+const {
+  blockedSocialSourceMatch,
+  isPermanentlyBlockedSocialSource,
+} = require('./socialSourceBlocklistService');
 
 const SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID = 'social_platform_post_discovery_20260525';
 const DEFAULT_MAX_SOURCES = 40;
@@ -1922,6 +1926,28 @@ async function importExactSocialSourcePosts({
   xBearerToken = '',
   fetchImpl = fetch,
 } = {}) {
+  const blockedInputs = [
+    ...(Array.isArray(posts) ? posts : []),
+    ...(Array.isArray(urls) ? urls : []),
+  ].map((input) => typeof input === 'string' ? { url: input } : input)
+    .map((input) => ({ input, match: blockedSocialSourceMatch(input) }))
+    .filter(({ match }) => match);
+  if (blockedInputs.length) {
+    return {
+      ok: true,
+      dry_run: dryRun,
+      received_posts: Array.isArray(posts) ? posts.length : 0,
+      normalized_posts: 0,
+      created_properties: 0,
+      blocked_social_source_count: blockedInputs.length,
+      blocked_social_source_records: blockedInputs.map(({ input, match }) => ({
+        source_url: cleanText(input?.post_url || input?.source_url || input?.url || ''),
+        source_key: match.key,
+        reason: match.reason,
+      })),
+      reason: 'permanently_blocked_social_source',
+    };
+  }
   const resolutionReports = [];
   const resolveInputUrl = async (value = '') => {
     const rawUrl = cleanText(value);
@@ -2158,6 +2184,8 @@ function sourcesForPlatform(platform = 'all') {
   const normalized = normalizePlatform(platform);
   return getPropertySourceRegistry()
     .filter((source) => normalized === 'all' || normalizePlatform(source.platform) === normalized)
+    .filter((source) => cleanText(source.status).toLowerCase() !== 'blocked')
+    .filter((source) => !isPermanentlyBlockedSocialSource(source))
     .map((source) => ({
       ...source,
       source_key: source.key || source.source_key,
@@ -2518,6 +2546,7 @@ function buildKnownYouTubeChannelSourcesFromRows(rows = [], {
   const seen = new Set();
   const sources = [];
   for (const row of Array.isArray(rows) ? rows : []) {
+    if (isPermanentlyBlockedSocialSource(row)) continue;
     const candidates = [
       row.youtube_channel_url,
       row.source_channel_url,
@@ -5242,6 +5271,7 @@ module.exports = {
   DEFAULT_TIKTOK_PENDING_REPROCESS_LIMIT,
   X_FULL_ARCHIVE_SEARCH_PACING_MS,
   socialDiscoveryApiReadiness,
+  sourcesForPlatform,
   TIKTOK_OEMBED_URL,
   TIKTOK_EXACT_VIDEO_URL_PATTERN,
   extractExactSocialPostUrls,
