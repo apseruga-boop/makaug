@@ -76,6 +76,68 @@ assert.equal(parsedProperty.locationPatch.area, 'Ntinda');
 assert.equal(parsedProperty.locationPatch.district, 'Kampala');
 assert.deepEqual(whatsappRoute.employeePropertyMissing(parsedProperty), []);
 
+assert.equal(
+  whatsappRoute.employeeCaptionLikelySameProperty(
+    'Royal Palms Butabika - Luzira 4 bedroom villa for sale. Well planned gated community',
+    'Royal Palms Butabika - Luzira 4 bedroom villa for sale at UGX 850 million. Well planned gated community',
+    {}
+  ),
+  true,
+  'a corrected caption should recover the stored media for the same property'
+);
+assert.equal(
+  whatsappRoute.employeeCaptionLikelySameProperty(
+    'Royal Palms Butabika - Luzira 4 bedroom villa for sale. Well planned gated community',
+    'Good deal. House for sale in Naalya with 4 bedrooms at UGX 950 million',
+    {}
+  ),
+  false,
+  'a later complete property must never inherit media from an earlier incomplete property'
+);
+assert.equal(
+  whatsappRoute.employeeCaptionLikelySameProperty(
+    'Virgin fertile land suitable for farming. Asking 12m per acre slightly negotiable',
+    '4 bedrooms and boys quarters on 15 decimals in Shimon Road Kira at UGX 650 million',
+    {}
+  ),
+  false,
+  'Kazi land media and the following Kira home must remain separate'
+);
+assert.deepEqual(
+  whatsappRoute.employeePendingSubmissionQueue({
+    pending_property_queue: [{
+      caption: 'Royal Palms Butabika villa for sale',
+      inbound_message_id: 'kazi-butabika-message',
+      media: [{
+        url: 'https://media.makaug.com/whatsapp/kazi-butabika.mp4',
+        sha256: 'kazi-butabika-video',
+        mimeType: 'video/mp4',
+        kind: 'video',
+        name: 'kazi-butabika.mp4'
+      }]
+    }]
+  }),
+  [{
+    caption: 'Royal Palms Butabika villa for sale',
+    inboundMessageId: 'kazi-butabika-message',
+    storedAt: '',
+    media: [{
+      url: 'https://media.makaug.com/whatsapp/kazi-butabika.mp4',
+      sha256: 'kazi-butabika-video',
+      mimeType: 'video/mp4',
+      kind: 'video',
+      name: 'kazi-butabika.mp4',
+      captureSource: '',
+      previewWarning: '',
+      degradedFromVideo: false,
+      publicEligible: true,
+      evidenceOnly: false,
+      mediaValidation: null
+    }]
+  }],
+  'a second incomplete Kazi property must keep its own caption and permanent media references'
+);
+
 assert.deepEqual(
   whatsappRoute.employeePendingStoredMedia({
     pending_property_media: [{
@@ -347,6 +409,8 @@ assert(copilotSource.includes('result.retryable || result.error'), 'history reco
 assert(copilotSource.includes('employeeBatchReplayProgress'), 'history recovery must resume after the failed media instead of replaying successful media again');
 assert(copilotSource.includes("/^(?:forwarded|\\[(?:image|media|video|document)\\])$/i"), 'captionless forwarded attachments must not inflate the observed property count');
 assert(routeSource.includes('pending_property_media'), 'incomplete-caption media must be retained durably instead of discarded');
+assert(routeSource.includes('pending_property_queue'), 'multiple incomplete property forwards must remain in a separate durable queue instead of merging');
+assert(routeSource.includes("WHERE status IN ('pending','approved')"), 'rejected broken review rows must not block a corrected Agent 007 replay forever');
 assert(routeSource.includes('You do not need to resend the media.'), 'caption correction must reuse already-stored media');
 assert(routeSource.includes('employeePendingStoredMedia(data)'), 'a corrected text caption must finalize stored media into staff review');
 assert(copilotSource.includes('isEmployeePropertyCaptionCorrectionSnapshot'), 'history replay must include a corrected property caption sent after media');
@@ -403,6 +467,7 @@ assert(serverSource.includes('whatsapp-agent-007-post-complete-chat-resume-20260
 assert(serverSource.includes("limit: '40mb'"), 'authorized WhatsApp video previews must fit through the JSON intake limit after base64 encoding');
 assert(serverSource.includes('whatsapp-active-intake-call-shield-20260829'), 'employee call shield should have an externally verifiable release marker');
 assert(serverSource.includes('whatsapp-video-still-dual-media-20260831'), 'video and still repair should have an externally verifiable release marker');
+assert(serverSource.includes('whatsapp-agent007-pending-property-queue-20260909'), 'separate pending-property queue guard should have an externally verifiable release marker');
 
 const db = require('../config/database');
 const originalQuery = db.query;
