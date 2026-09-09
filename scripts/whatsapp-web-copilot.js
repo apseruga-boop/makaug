@@ -329,7 +329,7 @@ const WHATSAPP_ORIGINAL_MEDIA_ONLY_MARKER = 'whatsapp-original-media-only-202609
 const WHATSAPP_AGENT_007_INTAKE_RELIABILITY_MARKER = 'whatsapp-agent007-replay-backoff-20260901';
 const WHATSAPP_AGENT_007_PENDING_MEDIA_FIX_MARKER = 'whatsapp-agent007-pending-media-idempotency-20260901';
 const WHATSAPP_OUTGOING_PREVIEW_GUARD_MARKER = 'whatsapp-outgoing-preview-guard-20260831';
-const WHATSAPP_RESPONSE_RELIABILITY_MARKER = 'whatsapp-confirmed-bubble-local-20260909';
+const WHATSAPP_RESPONSE_RELIABILITY_MARKER = 'whatsapp-rendered-text-confirmation-20260909';
 const WHATSAPP_CALL_CARD_BROWSER_CONFIG = Object.freeze(whatsappCallCardBrowserConfig());
 const RECENT_INBOUND_BACKLOG_LIMIT = 60;
 const EMPLOYEE_BATCH_HISTORY_SCAN_LIMIT = 160;
@@ -747,6 +747,18 @@ function isTimestampOnly(value) {
 
 function normalizeReplyText(value) {
   return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function normalizeOutgoingConfirmationText(value) {
+  // WhatsApp removes its lightweight formatting markers from the rendered
+  // bubble text, and renders emoji as separate image nodes that are absent
+  // from innerText. Compare that rendered form while retaining message-id/count
+  // checks so an older identical reply cannot confirm a new send.
+  return normalizeReplyText(
+    normalizeReplyText(value)
+      .replace(/[*_~`]/g, '')
+      .replace(/\p{Extended_Pictographic}|\uFE0F|\u200D/gu, '')
+  );
 }
 
 function hostedRuntimeMetadata() {
@@ -4565,17 +4577,17 @@ async function clickWhatsAppSend(page) {
 }
 
 async function waitForOutgoingReplyConfirmation(page, expectedText, beforeState = {}, timeoutMs = 1200) {
-  const expected = normalizeReplyText(expectedText);
+  const expected = normalizeOutgoingConfirmationText(expectedText);
   const expectedPrefix = expected.slice(0, 120);
   const beforeCount = Number(beforeState.count || 0);
-  const beforeLastText = normalizeReplyText(beforeState.lastText || '');
+  const beforeLastText = normalizeOutgoingConfirmationText(beforeState.lastText || '');
   const beforeMessageIds = new Set(Array.isArray(beforeState.recentMessageIds) ? beforeState.recentMessageIds : []);
   const deadline = Date.now() + timeoutMs;
 
   while (Date.now() < deadline) {
     const state = await getOutgoingMessageState(page).catch(() => ({ count: 0, recentTexts: [] }));
     const recentTexts = Array.isArray(state.recentTexts)
-      ? state.recentTexts.map((text) => normalizeReplyText(text)).filter(Boolean)
+      ? state.recentTexts.map((text) => normalizeOutgoingConfirmationText(text)).filter(Boolean)
       : [];
     const hasNewMessageId = Array.isArray(state.recentMessageIds)
       && state.recentMessageIds.some((id) => id && !beforeMessageIds.has(id));
@@ -4588,7 +4600,7 @@ async function waitForOutgoingReplyConfirmation(page, expectedText, beforeState 
       return true;
     }
 
-    const lastText = normalizeReplyText(state.lastText || '');
+    const lastText = normalizeOutgoingConfirmationText(state.lastText || '');
     if (hasNewMessageId && (!expectedPrefix || (lastText && lastText.includes(expectedPrefix)))) {
       return true;
     }
