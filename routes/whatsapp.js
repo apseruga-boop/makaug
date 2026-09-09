@@ -4011,6 +4011,82 @@ function isEmployeeNewPropertyCaptionBoundary(caption = '', facts = {}) {
   return parsedSignal || isReviewableOwnerForwardCaption(clean);
 }
 
+function employeeCaptionLikelySameProperty(previousCaption = '', nextCaption = '', sessionData = {}) {
+  const previous = normalizeInput(previousCaption);
+  const next = normalizeInput(nextCaption);
+  if (!previous || !next) return false;
+  if (employeeCaptionHash(previous) === employeeCaptionHash(next)) return true;
+
+  const previousFacts = employeePropertyFacts(previous, sessionData);
+  const nextFacts = employeePropertyFacts(next, sessionData);
+  const previousArea = normalizeInput(previousFacts.locationPatch?.area).toLowerCase();
+  const nextArea = normalizeInput(nextFacts.locationPatch?.area).toLowerCase();
+  if (previousArea && nextArea && previousArea !== nextArea) return false;
+
+  const previousPrice = Number(previousFacts.price || 0);
+  const nextPrice = Number(nextFacts.price || 0);
+  if (previousPrice > 0 && nextPrice > 0 && previousPrice !== nextPrice) return false;
+  if (previousArea && previousArea === nextArea) return true;
+  if (previousPrice > 0 && previousPrice === nextPrice) return true;
+
+  const ignored = new Set([
+    'a', 'an', 'and', 'at', 'available', 'bedroom', 'bedrooms', 'for', 'forwarded',
+    'house', 'in', 'is', 'land', 'of', 'on', 'or', 'plot', 'property', 'sale', 'the',
+    'to', 'ugx', 'with'
+  ]);
+  const tokens = (value) => new Set(
+    value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').split(/\s+/)
+      .filter((token) => token.length >= 3 && !ignored.has(token) && !/^\d+$/.test(token))
+  );
+  const previousTokens = tokens(previous);
+  const nextTokens = tokens(next);
+  const overlap = [...previousTokens].filter((token) => nextTokens.has(token)).length;
+  return overlap >= 2 && overlap / Math.max(1, Math.min(previousTokens.size, nextTokens.size)) >= 0.25;
+}
+
+function employeePendingSubmissionQueue(data = {}) {
+  return (Array.isArray(data.pending_property_queue) ? data.pending_property_queue : [])
+    .map((entry) => ({
+      caption: normalizeInput(entry?.caption),
+      inboundMessageId: normalizeInput(entry?.inboundMessageId || entry?.inbound_message_id),
+      storedAt: normalizeInput(entry?.storedAt || entry?.stored_at),
+      media: employeePendingStoredMedia({ pending_property_media: entry?.media })
+    }))
+    .filter((entry) => entry.caption || entry.media.length);
+}
+
+function rememberEmployeeQueuedSubmission(data = {}, { caption = '', storedMedia = [], inboundMessageId = '' } = {}) {
+  const queue = employeePendingSubmissionQueue(data);
+  const candidateKey = employeePropertyAttemptKey({ inboundMessageId, caption });
+  const exists = queue.some((entry) => employeePropertyAttemptKey({
+    inboundMessageId: entry.inboundMessageId,
+    caption: entry.caption
+  }) === candidateKey);
+  if (!exists) {
+    queue.push({
+      caption: normalizeInput(caption),
+      inboundMessageId: normalizeInput(inboundMessageId),
+      storedAt: new Date().toISOString(),
+      media: employeePendingStoredMedia({ pending_property_media: storedMedia })
+    });
+  }
+  data.pending_property_queue = queue.slice(-20);
+  return data.pending_property_queue;
+}
+
+function promoteEmployeeQueuedSubmission(data = {}) {
+  const queue = employeePendingSubmissionQueue(data);
+  const next = queue.shift() || null;
+  if (queue.length) data.pending_property_queue = queue;
+  else delete data.pending_property_queue;
+  if (!next) return null;
+  data.pending_property_caption = next.caption;
+  data.pending_property_media = next.media;
+  data.pending_property_media_message_id = next.inboundMessageId || null;
+  data.pending_property_media_stored_at = next.storedAt || new Date().toISOString();
+  return next;
+}
+
 function employeeCaptionHash(caption = '') {
   const normalized = normalizeInput(caption).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
   return normalized ? crypto.createHash('sha256').update(normalized).digest('hex') : '';
@@ -4913,17 +4989,21 @@ async function handleEmployeeWhatsappIntake({
     if (isEmployeeIntakeComplete(cleanBody)) {
       const pendingStoredMedia = employeePendingStoredMedia(data);
       const pendingCaption = normalizeInput(data.pending_property_caption || '');
-      if (pendingStoredMedia.length || pendingCaption) {
+      const queuedSubmissions = employeePendingSubmissionQueue(data);
+      if (pendingStoredMedia.length || pendingCaption || queuedSubmissions.length) {
         const pendingFacts = employeePropertyFacts(pendingCaption, data);
         const pendingMissing = employeePropertyMissing(pendingFacts);
         const missingLine = pendingMissing.length
           ? ` Still needed: ${pendingMissing.join(', ')}.`
           : '';
+        const queuedLine = queuedSubmissions.length
+          ? ` ${queuedSubmissions.length} more separate ${queuedSubmissions.length === 1 ? 'property is' : 'properties are'} stored behind it.`
+          : '';
         return {
           handled: true,
           nextStep: currentStep,
           batchComplete: false,
-          message: `I have not completed this batch because one property is still waiting to be matched with its caption and media.${missingLine} Send the corrected caption or the missing media; nothing has been merged and nothing is live.`
+          message: `I have not completed this batch because one property is still waiting to be matched with its caption and media.${missingLine}${queuedLine} Send the corrected caption or the missing media; nothing has been merged and nothing is live.`
         };
       }
       let propertyIds = Array.isArray(data.property_ids) ? data.property_ids : [];
@@ -5031,6 +5111,7 @@ async function handleEmployeeWhatsappIntake({
       const textOnlyFacts = employeePropertyFacts(cleanBody, data);
       const textOnlyMissing = employeePropertyMissing(textOnlyFacts);
       const pendingStoredMedia = employeePendingStoredMedia(data);
+      const pendingCaption = normalizeInput(data.pending_property_caption || '');
       if (
         (data.property_batch_mode || 'multiple') === 'single'
         && existingBatchProperties >= 1
@@ -5044,6 +5125,14 @@ async function handleEmployeeWhatsappIntake({
       }
 
       if (pendingStoredMedia.length && textOnlyMissing.length === 0) {
+        if (pendingCaption && !employeeCaptionLikelySameProperty(pendingCaption, cleanBody, data)) {
+          const pendingMissing = employeePropertyMissing(employeePropertyFacts(pendingCaption, data));
+          return {
+            handled: true,
+            nextStep: currentStep,
+            message: `A different property is already stored and still needs: ${pendingMissing.join(', ') || 'a corrected caption'}. Finish that property first, then resend this caption. Nothing was merged and nothing is live.`
+          };
+        }
         const propertyInboundMessageId = normalizeInput(data.pending_property_media_message_id) || inboundMessageId;
         const existingProperty = await findEmployeeDuplicateProperty({
           caption: cleanBody,
@@ -5061,14 +5150,18 @@ async function handleEmployeeWhatsappIntake({
           data.current_property_id = null;
           delete data.pending_property_caption;
           clearEmployeePendingMedia(data);
+          const promotedSubmission = promoteEmployeeQueuedSubmission(data);
           await replaceEmployeeSession(phone, currentStep, data);
+          const promotedPrompt = promotedSubmission
+            ? `The next separately stored property still needs: ${employeePropertyMissing(employeePropertyFacts(promotedSubmission.caption, data)).join(', ') || 'a corrected caption'}. Send its corrected caption; its media is already safe.`
+            : '';
           return {
             handled: true,
             nextStep: currentStep,
             propertyId: existingProperty.id,
             duplicate: true,
             message: (data.property_batch_mode || 'multiple') === 'multiple'
-              ? ''
+              ? promotedPrompt
               : `Duplicate property found — ${String(existingProperty.id).slice(0, 8).toUpperCase()} is already ${existingProperty.status}. Nothing was added twice.`
           };
         }
@@ -5087,14 +5180,18 @@ async function handleEmployeeWhatsappIntake({
           data.total_media_count = Number(data.total_media_count || 0) + pendingStoredMedia.length;
           delete data.pending_property_caption;
           clearEmployeePendingMedia(data);
+          const promotedSubmission = promoteEmployeeQueuedSubmission(data);
           await replaceEmployeeSession(phone, currentStep, data);
+          const promotedPrompt = promotedSubmission
+            ? `\n\nThe next separately stored property still needs: ${employeePropertyMissing(employeePropertyFacts(promotedSubmission.caption, data)).join(', ') || 'a corrected caption'}. Send its corrected caption; its media is already safe.`
+            : '';
           return {
             handled: true,
             nextStep: currentStep,
             propertyId,
             message: (data.property_batch_mode || 'multiple') === 'single'
               ? `✅ Saved the property to staff review — ${String(propertyId).slice(0, 8).toUpperCase()}\nMedia stored: ${pendingStoredMedia.length}\nStatus: pending, not live.\n\nSend any additional media without a new full property caption. When this property is finished, type *COMPLETE*.`
-              : ''
+              : promotedPrompt
           };
         } catch (error) {
           logger.error('WhatsApp employee pending-media review save failed:', error);
@@ -5120,14 +5217,30 @@ async function handleEmployeeWhatsappIntake({
     if (Number(data.total_media_count || 0) + candidates.length > 100) {
       return { handled: true, nextStep: currentStep, message: 'This batch has reached the 100-media safety limit. Type *COMPLETE*, then start another batch with *Agent 007*.' };
     }
-    const caption = (!placeholderBody && cleanBody) ? cleanBody : normalizeInput(data.pending_property_caption || '');
+    const pendingCaptionBeforeMessage = normalizeInput(data.pending_property_caption || '');
+    const pendingStoredMediaBeforeMessage = employeePendingStoredMedia(data);
+    const caption = (!placeholderBody && cleanBody)
+      ? cleanBody
+      : (!data.current_property_id ? pendingCaptionBeforeMessage : '');
     const facts = employeePropertyFacts(caption, data);
     const missing = employeePropertyMissing(facts);
     const shouldStartProperty = Boolean(caption) && !missing.length;
     const startsIncompleteNewProperty = Boolean(caption)
       && isEmployeeNewPropertyCaptionBoundary(caption, facts);
+    const continuesPendingProperty = shouldStartProperty
+      && pendingStoredMediaBeforeMessage.length > 0
+      && employeeCaptionLikelySameProperty(pendingCaptionBeforeMessage, caption, data);
 
-    if (!shouldStartProperty && !data.current_property_id) {
+    if (
+      !shouldStartProperty
+      && !data.current_property_id
+      && !(
+        startsIncompleteNewProperty
+        && pendingStoredMediaBeforeMessage.length
+        && pendingCaptionBeforeMessage
+        && !employeeCaptionLikelySameProperty(pendingCaptionBeforeMessage, caption, data)
+      )
+    ) {
       try {
         const pendingStoredMedia = await storeEmployeeMedia(candidates, {
           privateMedia: false,
@@ -5156,8 +5269,16 @@ async function handleEmployeeWhatsappIntake({
           inboundMessageId,
           provider: runtime.provider
         });
-        rememberEmployeePendingMedia(data, pendingStoredMedia, inboundMessageId);
-        data.pending_property_caption = caption;
+        if (
+          pendingStoredMediaBeforeMessage.length
+          && pendingCaptionBeforeMessage
+          && !employeeCaptionLikelySameProperty(pendingCaptionBeforeMessage, caption, data)
+        ) {
+          rememberEmployeeQueuedSubmission(data, { caption, storedMedia: pendingStoredMedia, inboundMessageId });
+        } else {
+          rememberEmployeePendingMedia(data, pendingStoredMedia, inboundMessageId);
+          data.pending_property_caption = caption;
+        }
         await replaceEmployeeSession(phone, currentStep, data);
       } catch (error) {
         logger.error('WhatsApp employee pending new-property media storage failed:', error);
@@ -5166,7 +5287,9 @@ async function handleEmployeeWhatsappIntake({
       return {
         handled: true,
         nextStep: currentStep,
-        message: `I stored this media safely, but its new-property caption is incomplete. Send one corrected caption with: ${missing.join(', ')}. You do not need to resend the media.`
+        message: pendingStoredMediaBeforeMessage.length && pendingCaptionBeforeMessage
+          ? 'I stored this as a separate queued property because the previous property is still incomplete. Finish the previous caption first; nothing was merged and nothing is live.'
+          : `I stored this media safely, but its new-property caption is incomplete. Send one corrected caption with: ${missing.join(', ')}. You do not need to resend the media.`
       };
     }
 
@@ -5174,8 +5297,11 @@ async function handleEmployeeWhatsappIntake({
       const duplicate = await db.query(
         `SELECT id
            FROM properties
-          WHERE extra_fields->>'whatsapp_employee_message_id' = $1
-             OR extra_fields->>'whatsapp_employee_last_message_id' = $1
+          WHERE status IN ('pending','approved')
+            AND (
+              extra_fields->>'whatsapp_employee_message_id' = $1
+              OR extra_fields->>'whatsapp_employee_last_message_id' = $1
+            )
           LIMIT 1`,
         [inboundMessageId]
       );
@@ -5200,8 +5326,11 @@ async function handleEmployeeWhatsappIntake({
         data.current_property_id = propertyIds.includes(String(existingProperty.id))
           ? existingProperty.id
           : null;
-        delete data.pending_property_caption;
-        clearEmployeePendingMedia(data);
+        if (!pendingStoredMediaBeforeMessage.length || continuesPendingProperty) {
+          delete data.pending_property_caption;
+          clearEmployeePendingMedia(data);
+          promoteEmployeeQueuedSubmission(data);
+        }
         await replaceEmployeeSession(phone, currentStep, data);
         return {
           handled: true,
@@ -5215,8 +5344,11 @@ async function handleEmployeeWhatsappIntake({
       propertyAttemptRecorded = recordEmployeePropertyAttempt(data, { inboundMessageId, caption });
       if (existingProperty) {
         if (propertyAttemptRecorded) data.properties_duplicate_count = Number(data.properties_duplicate_count || 0) + 1;
-        delete data.pending_property_caption;
-        clearEmployeePendingMedia(data);
+        if (!pendingStoredMediaBeforeMessage.length || continuesPendingProperty) {
+          delete data.pending_property_caption;
+          clearEmployeePendingMedia(data);
+          promoteEmployeeQueuedSubmission(data);
+        }
         await replaceEmployeeSession(phone, currentStep, data);
         return {
           handled: true,
@@ -5248,7 +5380,7 @@ async function handleEmployeeWhatsappIntake({
       });
       if (shouldStartProperty) {
         const pendingStoredMedia = employeePendingStoredMedia(data);
-        if (pendingStoredMedia.length) {
+        if (continuesPendingProperty && pendingStoredMedia.length) {
           const seenStoredMedia = new Set();
           storedMedia = [...pendingStoredMedia, ...storedMedia].filter((item) => {
             const key = normalizeInput(item.sha256 || item.url);
@@ -5275,8 +5407,11 @@ async function handleEmployeeWhatsappIntake({
         if (data.employee_intake_recovery_skip_existing_matches !== true) {
           data.total_media_count = Number(data.total_media_count || 0) + storedMedia.length;
         }
-        delete data.pending_property_caption;
-        clearEmployeePendingMedia(data);
+        if (!pendingStoredMediaBeforeMessage.length || continuesPendingProperty) {
+          delete data.pending_property_caption;
+          clearEmployeePendingMedia(data);
+          promoteEmployeeQueuedSubmission(data);
+        }
         await replaceEmployeeSession(phone, currentStep, data);
         return {
           handled: true,
@@ -12894,6 +13029,8 @@ module.exports.__test = {
   employeePropertyFacts,
   employeePropertyMissing,
   isEmployeeNewPropertyCaptionBoundary,
+  employeeCaptionLikelySameProperty,
+  employeePendingSubmissionQueue,
   getWhatsappCallNotificationEmails,
   inferWhatsappCallInquiry,
   handleWhatsappCallEvent,
