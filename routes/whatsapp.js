@@ -1745,11 +1745,15 @@ function shouldUseBridgeInboundFingerprintDedupe({ providerMessageId = '' } = {}
   return !normalizeInput(providerMessageId);
 }
 
-function getBridgeInboundDedupeSeconds() {
-  return Math.min(
-    120,
-    Math.max(10, Number(process.env.WHATSAPP_WEB_BRIDGE_INBOUND_DEDUPE_SECONDS || 25))
-  );
+function getBridgeInboundDedupeSeconds({ messageType = '', mediaType = '' } = {}) {
+  const textOnly = String(messageType || '').trim().toLowerCase() === 'text'
+    && ['', 'text'].includes(String(mediaType || '').trim().toLowerCase());
+  const configured = Number(textOnly
+    ? process.env.WHATSAPP_WEB_BRIDGE_TEXT_INBOUND_DEDUPE_SECONDS || 180
+    : process.env.WHATSAPP_WEB_BRIDGE_INBOUND_DEDUPE_SECONDS || 25);
+  return textOnly
+    ? Math.min(600, Math.max(60, Number.isFinite(configured) ? configured : 180))
+    : Math.min(120, Math.max(10, Number.isFinite(configured) ? configured : 25));
 }
 
 async function findRecentBridgeInboundDuplicate({
@@ -1758,7 +1762,7 @@ async function findRecentBridgeInboundDuplicate({
   messageType,
   mediaType
 }) {
-  const dedupeSeconds = getBridgeInboundDedupeSeconds();
+  const dedupeSeconds = getBridgeInboundDedupeSeconds({ messageType, mediaType });
   const result = await db.query(
     `SELECT wa_message_id
        FROM whatsapp_messages

@@ -249,6 +249,13 @@ async function run() {
       && whatsappRouteSource.includes('retry_suppressed: suppressRetry'),
     'the bridge API must terminally fail ambiguous browser sends while retaining audit metadata'
   );
+  assert(
+    whatsappRouteSource.includes('WHATSAPP_WEB_BRIDGE_TEXT_INBOUND_DEDUPE_SECONDS || 180')
+      && whatsappRouteSource.includes('? Math.min(600, Math.max(60,')
+      && whatsappRouteSource.includes(': process.env.WHATSAPP_WEB_BRIDGE_INBOUND_DEDUPE_SECONDS || 25')
+      && whatsappRouteSource.includes('getBridgeInboundDedupeSeconds({ messageType, mediaType })'),
+    'text-only browser re-observation must be deduped for minutes without suppressing consecutive Agent 007 media'
+  );
   const originalQuery = db.query;
   let capturedFailureUpdate = null;
   try {
