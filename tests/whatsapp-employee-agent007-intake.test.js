@@ -63,14 +63,15 @@ assert(EMPLOYEE_INTAKE_STEPS.includes('employee_property_media'));
 const routeSource = fs.readFileSync(path.join(__dirname, '..', 'routes', 'whatsapp.js'), 'utf8');
 const copilotSource = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'whatsapp-web-copilot.js'), 'utf8');
 const serverSource = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
-require('../services/aiService').classifyWhatsappListingPhoto = async () => ({
+let testPhotoValidation = {
   accepted: true,
   verdict: 'accepted',
   scene_type: 'other_property',
   matches_expected_slot: true,
   confidence: 0.99,
   reason: 'test_property_photo'
-});
+};
+require('../services/aiService').classifyWhatsappListingPhoto = async () => testPhotoValidation;
 require('../services/cloudMediaStorageService').storeDataUrl = async (_dataUrl, options = {}) => (
   `https://media.test.invalid/${options.filename || 'whatsapp-property.jpg'}`
 );
@@ -465,6 +466,8 @@ assert(serverSource.includes('whatsapp-agent007-identity-media-firewall-20260909
 assert(serverSource.includes('whatsapp-agent007-album-original-capture-20260909'), 'production health metadata must expose the original album capture release');
 assert(serverSource.includes('whatsapp-agent007-existing-row-media-repair-20260909'), 'production health metadata must expose the existing-review media repair release');
 assert(copilotSource.includes('existing_row_media_repair_marker'), 'worker heartbeats must expose the existing-review media repair release');
+assert(serverSource.includes('whatsapp-agent007-full-album-gallery-recovery-20260909'), 'production health metadata must expose the full album gallery recovery release');
+assert(copilotSource.includes('full_album_gallery_marker'), 'worker heartbeats must expose the full album gallery recovery release');
 assert(copilotSource.includes('configuredEmployeeRecoverySettled'), 'configured history recovery must stop only after the batch is complete or already reconciled');
 assert(copilotSource.includes("scroller.dispatchEvent(new WheelEvent('wheel'"), 'history recovery must explicitly request older virtualized WhatsApp rows');
 assert(copilotSource.includes('result.retryable || result.error'), 'history recovery must restart the bounded batch after a transient bridge or database failure');
@@ -498,6 +501,9 @@ assert(routeSource.includes('recoveredExistingProperty = existingProperty'), 'or
 assert(routeSource.includes('persist the original bytes and attach only new hashes'), 'the existing-row media repair path must remain explicit and auditable');
 assert(copilotSource.includes('rowDigits.includes(phoneSuffix)'), 'WhatsApp search results must tolerate timestamps and preview digits after the matching phone number');
 assert(copilotSource.includes('viewer_originals=${viewerOriginals}'), 'album recovery must log privacy-safe original-image counts for live verification');
+assert(copilotSource.includes('const hydratedExtraImageMatch'), 'album recovery must re-read the hidden +N count after scrolling the historical message into view');
+assert(copilotSource.includes('const viewerTraversalLimit = expectedCount'), 'an opened WhatsApp album must stop at its refreshed message count and never traverse into unrelated chat media');
+assert(routeSource.includes('accepted_pending_review_original_whatsapp_pixels'), 'original viewer pixels must remain reviewable when the optional vision provider is unavailable');
 assert(routeSource.includes("type = 'whatsapp_employee_batch_complete'"), 'recovery must fall back to the durable completion notification when chat session state is replaced');
 assert(routeSource.includes('employee_batch_ordered_replay'), 'authorized history replay must be marked and isolated from normal messages');
 assert(routeSource.includes("? ''\n            : `Already saved to review"), 'multiple batches must not send per-property duplicate acknowledgements');
@@ -649,6 +655,40 @@ const originalGetClient = db.getClient;
     },
     release() {}
   });
+
+  testPhotoValidation = {
+    accepted: false,
+    verdict: 'unavailable',
+    scene_type: 'unknown',
+    matches_expected_slot: false,
+    confidence: 0,
+    reason: 'vision_provider_unavailable'
+  };
+  const reviewableOriginalPixels = await whatsappRoute.storeEmployeeMediaCandidate({
+    dataUrl: 'data:image/jpeg;base64,AA==',
+    mimeType: 'image/jpeg',
+    captureSource: 'whatsapp_media_viewer_original_pixels',
+    width: 1280,
+    height: 720
+  }, { phone: '+447757773202', inboundMessageId: 'viewer-original-test' });
+  assert.equal(reviewableOriginalPixels.publicEligible, true, 'large original WhatsApp viewer pixels must remain visible for staff review when vision is unavailable');
+  assert.equal(reviewableOriginalPixels.mediaValidation.verdict, 'accepted_pending_review_original_whatsapp_pixels');
+  const untrustedVisiblePixels = await whatsappRoute.storeEmployeeMediaCandidate({
+    dataUrl: 'data:image/jpeg;base64,AQ==',
+    mimeType: 'image/jpeg',
+    captureSource: 'whatsapp_image_pixels',
+    width: 1280,
+    height: 720
+  }, { phone: '+447757773202', inboundMessageId: 'visible-card-test' });
+  assert.equal(untrustedVisiblePixels.publicEligible, false, 'a rendered chat-card image must stay quarantined when vision is unavailable');
+  testPhotoValidation = {
+    accepted: true,
+    verdict: 'accepted',
+    scene_type: 'other_property',
+    matches_expected_slot: true,
+    confidence: 0.99,
+    reason: 'test_property_photo'
+  };
 
   const shieldedCall = await whatsappRoute.handleWhatsappCallEvent({
     phone: '+447757773202',
