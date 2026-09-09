@@ -183,7 +183,8 @@
 
   function localizedAmenity(value, index) {
     const translations = OFF_PLAN_AMENITY_I18N[offPlanLanguage()];
-    return translations?.[index] || value;
+    const label = value && typeof value === 'object' ? (value.name || value.label || value.title || '') : value;
+    return translations?.[index] || clean(label);
   }
 
   const OFF_PLAN_DYNAMIC_I18N = {
@@ -245,6 +246,11 @@
   function localizedProjectType(value) {
     const key = clean(value).toLowerCase().replace(/[\s_-]+/g, '');
     return offPlanDynamicText({ townhouse: 'townhouse', apartment: 'apartment', flat: 'apartment', house: 'house', mixed: 'mixed', mixeduse: 'mixed' }[key] || 'house');
+  }
+
+  function projectDisplayType(project = {}) {
+    const unitTypes = Array.from(new Set((project.unit_types || []).map((unit) => clean(unit?.property_type)).filter(Boolean)));
+    return unitTypes.length === 1 ? unitTypes[0] : (project.project_type || unitTypes[0] || 'house');
   }
 
   function localizedUnitLabel(unit = {}) {
@@ -434,7 +440,15 @@
   }
   function projectLocation(project) { return [project.area, project.district].filter(Boolean).join(', ') || offPlanText('toConfirm'); }
   function imageUrl(project, index = 0) { return project.images?.[index]?.url || '/assets/icons/makaug-icon-512.png'; }
-  function imageCaption(project, index = 0) { return project.images?.[index]?.caption || `${project.name} project image`; }
+  function imageCaption(project, index = 0) {
+    const supplied = clean(project.images?.[index]?.caption);
+    if (!supplied) return `${project.name} project image`;
+    if (/\.(?:jpe?g|png|webp)$/i.test(supplied)) {
+      const label = supplied.replace(/\.(?:jpe?g|png|webp)$/i, '').replace(/^\d+[\s_-]*/, '').replace(/[\s_-]+/g, ' ').trim();
+      return `${project.name} ${label || 'project image'}`;
+    }
+    return supplied;
+  }
   function track(name, payload = {}) { if (typeof window.trackEvent === 'function') window.trackEvent(name, payload); }
 
   function managementHeaders(role) {
@@ -487,7 +501,7 @@
     const sourceId = clean(project.source_agent_profile_id || project.source_agent_id);
     const statusLabel = project.verification_status === 'verified' ? offPlanText('verifiedProject') : offPlanText('sourceDetails');
     const delivery = `${offPlanText('delivery')}: ${formatDate(project.completion_date)}`;
-    const typeLabel = localizedProjectType(project.project_type || 'house');
+    const typeLabel = localizedProjectType(projectDisplayType(project));
     return `<article class="off-plan-card">
       <div class="off-plan-card-image">
         <img src="${escapeHtml(imageUrl(project))}" alt="${escapeHtml(imageCaption(project))}" loading="${index < 4 ? 'eager' : 'lazy'}" decoding="async"${index === 0 ? ' fetchpriority="high"' : ''}>
@@ -859,7 +873,10 @@
     const amenities = Array.isArray(project.amenities) ? project.amenities : [];
     const projections = Array.isArray(project.extra_fields?.roi_projections) ? project.extra_fields.roi_projections : [];
     if (!amenities.length && !projections.length) return '';
-    const amenitySection = amenities.length ? `<div><h3 class="text-base font-black text-gray-950">${escapeHtml(overseasDetailText('highlights'))}</h3><p class="mt-1 text-sm leading-6 text-gray-600">${escapeHtml(overseasDetailText('highlightsBody'))}</p><ul class="off-plan-amenity-grid mt-4">${amenities.map((amenity, index) => `<li><i class="fas fa-circle-check" aria-hidden="true"></i><span>${escapeHtml(localizedAmenity(amenity, index))}</span></li>`).join('')}</ul></div>` : '';
+    const highlightsBody = project.country_code === 'KE'
+      ? overseasDetailText('highlightsBody')
+      : 'Amenities shown in the supplied developer materials. Confirm the final specification in the signed sale agreement.';
+    const amenitySection = amenities.length ? `<div><h3 class="text-base font-black text-gray-950">${escapeHtml(overseasDetailText('highlights'))}</h3><p class="mt-1 text-sm leading-6 text-gray-600">${escapeHtml(highlightsBody)}</p><ul class="off-plan-amenity-grid mt-4">${amenities.map((amenity, index) => `<li><i class="fas fa-circle-check" aria-hidden="true"></i><span>${escapeHtml(localizedAmenity(amenity, index))}</span></li>`).join('')}</ul></div>` : '';
     const projectionSection = projections.length ? `<div class="mt-7"><h3 class="text-base font-black text-gray-950">${escapeHtml(overseasDetailText('roi'))}</h3><div class="off-plan-roi-grid mt-3">${projections.map((projection) => { const unit = (project.unit_types || []).find((item) => item.key === projection.unit_key) || {}; return `<div><strong>${escapeHtml(localizedUnitLabel(unit))}</strong><span>${escapeHtml(overseasDetailText('furnished'))}: ${escapeHtml(projection.furnished_percent)}%</span><span>${escapeHtml(overseasDetailText('unfurnished'))}: ${escapeHtml(projection.unfurnished_percent)}%</span></div>`; }).join('')}</div><p class="mt-3 text-xs leading-5 text-red-800">${escapeHtml(overseasDetailText('roiBody'))}</p></div>` : '';
     return `<section class="off-plan-panel">${amenitySection}${projectionSection}</section>`;
   }
@@ -889,7 +906,7 @@
     return `${galleryMarkup(project)}
       <div class="off-plan-detail-grid mt-7">
         <main class="min-w-0 space-y-6">
-          <div><div class="flex flex-wrap gap-2"><span class="off-plan-pill ${fullyVerified ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-900'}"><i class="fas fa-circle-check"></i>${escapeHtml(fullyVerified ? offPlanText('verifiedProject') : offPlanText('sourceDetails'))}</span><span class="off-plan-pill bg-amber-100 text-amber-900">${escapeHtml(localizedProjectType(project.project_type || 'house'))}</span></div><h1 class="mt-3 text-3xl md:text-5xl font-black text-gray-950 leading-tight">${escapeHtml(project.name)}</h1><p class="mt-2 text-gray-500"><i class="fas fa-location-dot mr-1 text-red-600"></i>${escapeHtml(projectLocation(project))}${project.developer_name ? ` · ${escapeHtml(project.developer_name)}` : ''}</p></div>
+          <div><div class="flex flex-wrap gap-2"><span class="off-plan-pill ${fullyVerified ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-900'}"><i class="fas fa-circle-check"></i>${escapeHtml(fullyVerified ? offPlanText('verifiedProject') : offPlanText('sourceDetails'))}</span><span class="off-plan-pill bg-amber-100 text-amber-900">${escapeHtml(localizedProjectType(projectDisplayType(project)))}</span></div><h1 class="mt-3 text-3xl md:text-5xl font-black text-gray-950 leading-tight">${escapeHtml(project.name)}</h1><p class="mt-2 text-gray-500"><i class="fas fa-location-dot mr-1 text-red-600"></i>${escapeHtml(projectLocation(project))}${project.developer_name ? ` · ${escapeHtml(project.developer_name)}` : ''}</p></div>
           <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3"><div class="off-plan-stat"><span class="text-xs text-gray-500">${escapeHtml(offPlanText('expectedCompletion'))}</span><strong class="block mt-1">${escapeHtml(formatDate(project.completion_date))}</strong></div><div class="off-plan-stat"><span class="text-xs text-gray-500">${escapeHtml(offPlanText('construction'))}</span><strong class="block mt-1">${escapeHtml(number(project.construction_progress) == null ? offPlanText('toConfirm') : offPlanText('percentComplete', { count: project.construction_progress }))}</strong></div><div class="off-plan-stat"><span class="text-xs text-gray-500">${escapeHtml(offPlanText('homesSold'))}</span><strong class="block mt-1">${escapeHtml(soldLabel)}</strong></div><div class="off-plan-stat"><span class="text-xs text-gray-500">${escapeHtml(offPlanText('homesRemaining'))}</span><strong class="block mt-1">${escapeHtml(metricValue(project.units_available))}</strong></div></div>
           <section class="off-plan-panel"><h2 class="text-xl font-black text-gray-950">${escapeHtml(offPlanText('aboutDevelopment'))}</h2><p class="mt-3 text-sm md:text-base text-gray-700 leading-7 whitespace-pre-line">${escapeHtml(description)}</p></section>
           ${overseas ? overseasHighlightsMarkup(project) : ''}
