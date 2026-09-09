@@ -4255,10 +4255,12 @@ async function prepareEmployeeOrderedBatchReplay({
       counts: employeeBatchCounts(data),
       pending: {
         current: Boolean(pendingCaption || pendingMedia.length),
+        current_media_count: pendingMedia.length,
         current_missing: pendingCaption
           ? employeePropertyMissing(employeePropertyFacts(pendingCaption, data))
           : (pendingMedia.length ? ['property type, exact location and price'] : []),
         queued_count: queuedSubmissions.length,
+        queued_media_counts: queuedSubmissions.map((entry) => entry.media.length),
         queued_missing: queuedSubmissions.map((entry) => (
           entry.caption
             ? employeePropertyMissing(employeePropertyFacts(entry.caption, data))
