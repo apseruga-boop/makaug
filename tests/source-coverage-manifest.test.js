@@ -145,6 +145,7 @@ test('migration, staff APIs, dashboard and CLI expose restart-safe review-only c
   assert.match(staffRoute, /\.slice\(0, 10\)/, 'manual TikTok commits must remain in small batches');
   assert.match(html, /Exhaustive 30-day source coverage/);
   assert.match(html, /Load next 10 TikTok sources/);
+  assert.match(html, /href="\/staff-dashboard#staff-source-coverage-status"[^>]*>Exhaustive 30-day Coverage<\/a>/, 'King must link directly to the durable coverage tracker');
   assert.match(app, /Review-only confirmed/);
   assert.match(script, /processYouTubeCoverageBatch/);
   assert.match(script, /hasFlag\('--latest'\)/, 'scheduled workers must resolve the active durable run without a hard-coded UUID');
