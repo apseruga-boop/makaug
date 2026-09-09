@@ -333,6 +333,7 @@ const WHATSAPP_AGENT_007_ALBUM_CAPTURE_MARKER = 'whatsapp-agent007-album-origina
 const WHATSAPP_AGENT_007_EXISTING_ROW_MEDIA_REPAIR_MARKER = 'whatsapp-agent007-existing-row-media-repair-20260909';
 const WHATSAPP_AGENT_007_FULL_ALBUM_GALLERY_MARKER = 'whatsapp-agent007-full-album-gallery-recovery-20260909';
 const WHATSAPP_AGENT_007_VIEWER_GROUP_RECOVERY_MARKER = 'whatsapp-agent007-viewer-group-recovery-20260909';
+const WHATSAPP_AGENT_007_STAFF_MEDIA_PROOF_MARKER = 'whatsapp-agent007-staff-media-proof-20260909';
 const WHATSAPP_OUTGOING_PREVIEW_GUARD_MARKER = 'whatsapp-outgoing-preview-guard-20260831';
 const WHATSAPP_RESPONSE_RELIABILITY_MARKER = 'whatsapp-rendered-text-confirmation-20260909';
 const WHATSAPP_CALL_CARD_BROWSER_CONFIG = Object.freeze(whatsappCallCardBrowserConfig());
@@ -796,6 +797,7 @@ function hostedRuntimeMetadata() {
     existing_row_media_repair_marker: WHATSAPP_AGENT_007_EXISTING_ROW_MEDIA_REPAIR_MARKER,
     full_album_gallery_marker: WHATSAPP_AGENT_007_FULL_ALBUM_GALLERY_MARKER,
     viewer_group_recovery_marker: WHATSAPP_AGENT_007_VIEWER_GROUP_RECOVERY_MARKER,
+    staff_media_proof_marker: WHATSAPP_AGENT_007_STAFF_MEDIA_PROOF_MARKER,
     outgoing_preview_guard: WHATSAPP_OUTGOING_PREVIEW_GUARD_MARKER,
     response_reliability_marker: WHATSAPP_RESPONSE_RELIABILITY_MARKER,
     git_commit: process.env.RENDER_GIT_COMMIT || process.env.SOURCE_VERSION || process.env.GIT_COMMIT || '',
@@ -3576,7 +3578,8 @@ async function ingestSnapshot({ snapshot, row = {}, source = 'unread_scan' }) {
       log(`ingested ${source} ${mediaType} message from ${chatKey}; queued_reply=${result.data?.queued_reply ? 'yes' : 'no'}`);
       if (result.data?.employee_media_result) {
         const mediaResult = result.data.employee_media_result;
-        log(`employee media result for ${chatKey}; attached=${Number(mediaResult.attached || 0)} public_images=${Number(mediaResult.publicImages || 0)} evidence_images=${Number(mediaResult.evidenceImages || 0)} reasons=${(Array.isArray(mediaResult.validationReasons) ? mediaResult.validationReasons : []).join(',') || 'none'}`);
+        const propertyRef = String(result.data?.employee_property_id || '').slice(0, 8).toUpperCase() || 'none';
+        log(`employee media result for ${chatKey}; property=${propertyRef} attached=${Number(mediaResult.attached || 0)} public_images=${Number(mediaResult.publicImages || 0)} evidence_images=${Number(mediaResult.evidenceImages || 0)} reasons=${(Array.isArray(mediaResult.validationReasons) ? mediaResult.validationReasons : []).join(',') || 'none'}`);
       }
     }
     return {
@@ -3587,6 +3590,7 @@ async function ingestSnapshot({ snapshot, row = {}, source = 'unread_scan' }) {
       ownerForward: result.data?.owner_forward || null,
       responseMessage: result.data?.message || '',
       batchComplete: result.data?.employee_batch_complete === true,
+      employeePropertyId: result.data?.employee_property_id || null,
       chatKey
     };
   } catch (error) {
@@ -3744,9 +3748,14 @@ function employeePropertyPhaseBoundarySnapshot(batchSnapshots = []) {
     || isEmployeeBatchCompletionSnapshot(snapshot)
   ));
   const searchEnd = firstPropertySignalIndex >= 0 ? firstPropertySignalIndex : batchSnapshots.length;
-  const candidates = batchSnapshots
-    .slice(0, searchEnd)
-    .filter(isEmployeePropertyBatchModeSnapshot);
+  const setupSnapshots = batchSnapshots.slice(0, searchEnd);
+  const lastSetupMediaIndex = setupSnapshots
+    .map((snapshot) => ['image', 'media'].includes(String(snapshot.mediaType || '').toLowerCase()))
+    .lastIndexOf(true);
+  const candidates = setupSnapshots
+    .map((snapshot, index) => ({ snapshot, index }))
+    .filter(({ snapshot, index }) => index > lastSetupMediaIndex && isEmployeePropertyBatchModeSnapshot(snapshot))
+    .map(({ snapshot }) => snapshot);
   return candidates[candidates.length - 1] || null;
 }
 

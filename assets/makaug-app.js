@@ -12521,11 +12521,13 @@ function staffReviewQueueCardHtml(item = {}, options = {}) {
   const mediaQualityBlockers = Array.isArray(item.extra_fields?.media_quality_blockers)
     ? item.extra_fields.media_quality_blockers
     : [];
+  const imageCount = Number(item.image_count || item.extra_fields?.public_image_count || 0) || 0;
+  const primaryImageUrl = String(item.primary_image_url || item.extra_fields?.primary_image_url || "").trim();
   const videoRecoveryRequired = item.extra_fields?.video_recovery_required === true;
   const mediaQualityWarningText = videoRecoveryRequired
     ? "the playable original WhatsApp video is still being recovered. Screenshots and poster captures are evidence only; do not approve this listing until the MP4 and clean key images are attached."
     : "this listing has no approved property photo. Review the quarantined source evidence and attach a clear property image before approval.";
-  const mediaQualityWarning = mediaValidationStatus.startsWith("blocked_") || videoRecoveryRequired || mediaQualityBlockers.length
+  const mediaQualityWarning = mediaValidationStatus.startsWith("blocked_") || videoRecoveryRequired || (!imageCount && mediaQualityBlockers.length)
     ? `<div class="mt-2 rounded-xl bg-red-50 border border-red-200 p-2 text-xs text-red-900"><strong>Media blocked:</strong> ${mediaQualityWarningText}</div>`
     : "";
   return `
@@ -12536,6 +12538,7 @@ function staffReviewQueueCardHtml(item = {}, options = {}) {
           <div class="text-xs text-gray-500 mt-1">${adminEscape(location)} • ${adminEscape(item.listing_type || item.property_type || "property")} • ${adminEscape(price)}</div>
           <div class="text-xs text-gray-500 mt-1">Owner/contact: ${adminEscape(item.lister_name || item.lister_phone || item.lister_email || "not recorded")}</div>
           <div class="text-xs text-gray-500 mt-1">Source: ${adminEscape(item.source_platform || item.source || item.listed_via || "website")}${sourceUrl ? ` • <a href="${adminAttr(sourceUrl)}" target="_blank" rel="noopener noreferrer" class="font-black text-blue-700 underline underline-offset-2">open evidence</a>` : ""}</div>
+          ${primaryImageUrl ? `<div class="mt-2 flex items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50 p-2"><img src="${adminAttr(primaryImageUrl)}" alt="Primary property photo" class="h-16 w-20 rounded-lg border border-emerald-100 object-cover"><div class="text-xs font-black text-emerald-900">${staffNumber(imageCount)} clear property photo${imageCount === 1 ? "" : "s"} attached</div></div>` : ""}
           ${queueNote}
           ${mediaQualityWarning}
           ${duplicateCount ? `<div class="mt-2 rounded-xl bg-red-50 border border-red-100 p-2 text-xs text-red-800"><strong>${staffNumber(duplicateCount)} possible duplicate${duplicateCount === 1 ? "" : "s"}.</strong> Compare before publishing.</div>` : ""}

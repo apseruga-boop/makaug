@@ -412,6 +412,7 @@ assert(copilotSource.includes('trying message screenshot fallback'), 'a failed W
 assert(copilotSource.includes("mediaPreviewError: 'video_bytes_unavailable_poster_stored'"), 'an unrecoverable video must preserve a poster as evidence instead of blocking the batch forever');
 assert(copilotSource.includes('locateEmployeeBatchHistory'), 'COMPLETE must scan backward to the Agent 007 trigger before closing a batch');
 assert(copilotSource.includes('employeePropertyPhaseBoundarySnapshot'), 'history replay must locate the one/multiple selection boundary before property media');
+assert(copilotSource.includes('index > lastSetupMediaIndex && isEmployeePropertyBatchModeSnapshot'), 'numeric setup replies before the private identity image must never become the property-media boundary');
 assert(copilotSource.includes('return isEmployeePropertyCaptionText(text);'), 'an ID or other setup image must not become a property boundary merely because WhatsApp renders extra text on it');
 assert(copilotSource.includes('Images before the final one/multiple selection are identity evidence'), 'history replay must never reinterpret setup identity evidence as property media');
 assert(copilotSource.includes('whatsapp_media_viewer_original_pixels'), 'multi-photo albums must be captured from the opened WhatsApp media viewer');
@@ -423,6 +424,8 @@ assert(routeSource.includes('inboundMetadata.image_previews.slice(0, 20)'), 'all
 assert(routeSource.includes('employee_batch_complete: employeeIntake?.batch_complete === true'), 'the bridge must return a minimal durable completion acknowledgement');
 assert(copilotSource.includes("skipped: 'batch_incomplete_missing_media'"), 'history repair must stay retryable until the API confirms every property has usable media');
 assert(routeSource.includes('employee_media_result: employeeIntake?.media_attachment || null'), 'the bridge must expose normalized media attachment diagnostics to the worker');
+assert(routeSource.includes('employee_property_id: employeeIntake?.property_id || null'), 'the bridge must expose the exact review row used for an Agent 007 media attachment');
+assert(copilotSource.includes('property=${propertyRef} attached='), 'the worker must log a privacy-safe review reference for every media attachment');
 assert(copilotSource.includes('replayEmployeeBatchThroughCompletion'), 'the worker must replay every ordered batch message before COMPLETE');
 assert(copilotSource.includes('scrollWhatsappHistoryNewer'), 'history reconciliation must walk forward from the trigger without keeping every video in memory');
 assert(copilotSource.includes('WHATSAPP_WEB_COPILOT_EMPLOYEE_RECOVERY_PHONES'), 'hosted workers must support an explicit startup recovery target');
@@ -471,6 +474,8 @@ assert(serverSource.includes('whatsapp-agent007-full-album-gallery-recovery-2026
 assert(copilotSource.includes('full_album_gallery_marker'), 'worker heartbeats must expose the full album gallery recovery release');
 assert(serverSource.includes('whatsapp-agent007-viewer-group-recovery-20260909'), 'production health metadata must expose the viewer-group recovery release');
 assert(copilotSource.includes('viewer_group_recovery_marker'), 'worker heartbeats must expose the viewer-group recovery release');
+assert(serverSource.includes('whatsapp-agent007-staff-media-proof-20260909'), 'production health metadata must expose the staff-media proof release');
+assert(copilotSource.includes('staff_media_proof_marker'), 'worker heartbeats must expose the staff-media proof release');
 assert(serverSource.includes('whatsapp-agent007-completion-ack-contract-20260909'), 'production health metadata must expose the corrected worker completion acknowledgement contract');
 assert(copilotSource.includes('configuredEmployeeRecoverySettled'), 'configured history recovery must stop only after the batch is complete or already reconciled');
 assert(copilotSource.includes("scroller.dispatchEvent(new WheelEvent('wheel'"), 'history recovery must explicitly request older virtualized WhatsApp rows');
@@ -512,6 +517,9 @@ assert(copilotSource.includes('refreshedSource && refreshedSource !== previousVi
 assert(copilotSource.includes('viewer_group_explicit=${viewerGroupExplicit'), 'live recovery logs must say whether a larger album count came from the opened viewer');
 assert(routeSource.includes('accepted_pending_review_original_whatsapp_pixels'), 'original viewer pixels must remain reviewable when the optional vision provider is unavailable');
 assert(routeSource.includes('Array.isArray(storedMedia) ? storedMedia : []'), 'duplicate evidence replays must report their original validation reason for safe diagnosis');
+assert(routeSource.includes('const retainedVideoBlockers'), 'an existing valid gallery must clear stale still-image blockers while preserving video-recovery blockers');
+assert(routeSource.includes('public_image_count: imageOffset + images.length'), 'each attachment must persist the exact public gallery count for the fast staff queue');
+assert(routeSource.includes('primary_image_url: existingPrimaryImageUrl || images[0]?.url'), 'each attachment must persist the exact public primary image for the fast staff queue');
 assert(routeSource.includes("type = 'whatsapp_employee_batch_complete'"), 'recovery must fall back to the durable completion notification when chat session state is replaced');
 assert(routeSource.includes('employee_batch_ordered_replay'), 'authorized history replay must be marked and isolated from normal messages');
 assert(routeSource.includes("? ''\n            : `Already saved to review"), 'multiple batches must not send per-property duplicate acknowledgements');
@@ -629,7 +637,7 @@ const originalGetClient = db.getClient;
     if (/SELECT id, extra_fields/i.test(sql) && /source = 'whatsapp_employee_intake'/i.test(sql)) {
       return { rows: [{ id: params[0], extra_fields: { media_count: 0, media_sha256: [], video_urls: [] } }] };
     }
-    if (/SELECT COUNT\(\*\)::int AS count FROM property_images/i.test(sql)) {
+    if (/SELECT COUNT\(\*\)::int AS count/i.test(sql) && /FROM property_images/i.test(sql)) {
       return { rows: [{ count: attachedReviewImages.length }] };
     }
     if (/FROM properties p/i.test(sql) && /FROM property_images pi/i.test(sql)) {

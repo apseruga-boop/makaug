@@ -89,8 +89,11 @@ assert.equal(metadataIssue({ primary_slot_key: 'primary', extra_fields: {} }), '
   assert(propertiesSource.includes("NOT IN ('source_evidence_original', 'quarantined_source_evidence')"), 'source evidence must not count as usable public media');
   assert(staffRouteSource.includes("'media_validation_status', p.extra_fields->>'media_validation_status'"), 'moderators must receive the media validation state');
   assert(staffRouteSource.includes("'video_recovery_required', COALESCE(p.extra_fields->'video_recovery_required', 'false'::jsonb)"), 'moderators must receive a boolean original-video recovery flag');
+  assert(staffRouteSource.includes("'public_image_count', COALESCE(p.extra_fields->'public_image_count'"), 'staff review cards must receive the stored count of attached property gallery images without a slow image join');
+  assert(staffRouteSource.includes("'primary_image_url', p.extra_fields->>'primary_image_url'"), 'staff review cards must receive the stored primary property image without a slow image join');
   assert(appSource.includes('<strong>Media blocked:</strong>'), 'the review queue must explain why a quarantined listing cannot be approved');
   assert(appSource.includes('the playable original WhatsApp video is still being recovered'), 'staff must see the original-video recovery state in the queue');
+  assert(appSource.includes('clear property photo${imageCount === 1 ? "" : "s"} attached'), 'staff must see a clear photo count and thumbnail once gallery media exists');
   console.log('WhatsApp employee media quality checks passed');
 })().catch((error) => {
   console.error(error);

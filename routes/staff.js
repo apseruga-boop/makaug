@@ -2062,7 +2062,9 @@ async function buildDashboardPanelsPayload(req) {
                 'media_validation_status', p.extra_fields->>'media_validation_status',
                 'video_recovery_required', COALESCE(p.extra_fields->'video_recovery_required', 'false'::jsonb),
                 'media_quality_blockers', COALESCE(p.extra_fields->'media_quality_blockers', '[]'::jsonb),
-                'source_evidence_urls', COALESCE(p.extra_fields->'source_evidence_urls', '[]'::jsonb)
+                'source_evidence_urls', COALESCE(p.extra_fields->'source_evidence_urls', '[]'::jsonb),
+                'public_image_count', COALESCE(p.extra_fields->'public_image_count', '0'::jsonb),
+                'primary_image_url', p.extra_fields->>'primary_image_url'
               ) AS extra_fields,
               COALESCE(p.extra_fields->>'source_url', p.extra_fields->>'source_post_url', p.extra_fields->>'tiktok_url', p.extra_fields->>'youtube_url', p.extra_fields->>'video_url') AS source_url,
               COALESCE(p.extra_fields->>'source_platform', p.extra_fields->>'source_badge', p.source, p.listed_via) AS source_platform,

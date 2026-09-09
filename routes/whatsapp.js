@@ -4609,6 +4609,8 @@ async function createEmployeeReviewProperty({
       reason: item.mediaValidation?.reason || item.previewWarning || 'image_not_public_eligible'
     })),
     source_evidence_urls: evidenceMedia.map((item) => item.url),
+    public_image_count: imageMedia.length,
+    primary_image_url: imageMedia[0]?.url || null,
     media_count: storedMedia.length,
     media_sha256: storedMedia.map((item) => item.sha256).filter(Boolean),
     video_url: videoMedia[0]?.url || null,
@@ -4753,8 +4755,15 @@ async function attachEmployeeReviewMedia({ propertyId, storedMedia, phone, inbou
   );
   const property = propertyResult.rows[0];
   if (!property) throw new Error('The current employee intake property is no longer pending');
-  const existingImages = await db.query('SELECT COUNT(*)::int AS count FROM property_images WHERE property_id = $1', [propertyId]);
+  const existingImages = await db.query(
+    `SELECT COUNT(*)::int AS count,
+            (ARRAY_AGG(url ORDER BY is_primary DESC, sort_order ASC, created_at ASC))[1] AS primary_image_url
+       FROM property_images
+      WHERE property_id = $1`,
+    [propertyId]
+  );
   const imageOffset = Number(existingImages.rows[0]?.count || 0);
+  const existingPrimaryImageUrl = normalizeInput(existingImages.rows[0]?.primary_image_url || '');
   const existingHashes = new Set(Array.isArray(property.extra_fields?.media_sha256) ? property.extra_fields.media_sha256 : []);
   const uniqueMedia = storedMedia.filter((item) => (
     !item.sha256
@@ -4762,6 +4771,27 @@ async function attachEmployeeReviewMedia({ propertyId, storedMedia, phone, inbou
     || (imageOffset === 0 && item.kind === 'image' && item.publicEligible !== false)
   ));
   if (!uniqueMedia.length) {
+    if (imageOffset > 0) {
+      const retainedVideoBlockers = (Array.isArray(property.extra_fields?.media_quality_blockers)
+        ? property.extra_fields.media_quality_blockers
+        : []).filter((item) => {
+        const captureSource = normalizeInput(item?.capture_source).toLowerCase();
+        const reason = normalizeInput(item?.reason).toLowerCase();
+        return captureSource.includes('video') || reason.includes('video');
+      });
+      await db.query(
+        `UPDATE properties
+            SET extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $2::jsonb,
+                updated_at = NOW()
+          WHERE id = $1 AND status = 'pending'`,
+        [propertyId, JSON.stringify({
+          public_image_count: imageOffset,
+          primary_image_url: existingPrimaryImageUrl || property.extra_fields?.primary_image_url || null,
+          media_validation_status: 'passed_automated_image_gate',
+          media_quality_blockers: retainedVideoBlockers
+        })]
+      );
+    }
     return {
       attached: 0,
       duplicate: true,
@@ -4789,13 +4819,17 @@ async function attachEmployeeReviewMedia({ propertyId, storedMedia, phone, inbou
   const mergedHashes = [...existingHashes, ...uniqueMedia.map((item) => item.sha256).filter(Boolean)];
   const previousEvidenceUrls = Array.isArray(property.extra_fields?.source_evidence_urls) ? property.extra_fields.source_evidence_urls : [];
   const previousQualityBlockers = Array.isArray(property.extra_fields?.media_quality_blockers) ? property.extra_fields.media_quality_blockers : [];
-  const retainedQualityBlockers = images.length
-    ? previousQualityBlockers.filter((item) => ![
-      'vision_provider_unavailable',
-      'employee_media_vision_validation_timeout',
-      'vision_unavailable_original_whatsapp_pixels_pending_review'
-    ].includes(normalizeInput(item?.reason).toLowerCase()))
+  const hasUsablePropertyImage = imageOffset + images.length > 0;
+  const retainedQualityBlockers = hasUsablePropertyImage
+    ? previousQualityBlockers.filter((item) => {
+      const captureSource = normalizeInput(item?.capture_source).toLowerCase();
+      const reason = normalizeInput(item?.reason).toLowerCase();
+      return captureSource.includes('video') || reason.includes('video');
+    })
     : previousQualityBlockers;
+  const blockingEvidenceImages = hasUsablePropertyImage
+    ? evidenceImages.filter(employeeVideoEvidenceOnly)
+    : evidenceImages;
   const client = await db.getClient();
   try {
     await client.query('BEGIN');
@@ -4831,6 +4865,8 @@ async function attachEmployeeReviewMedia({ propertyId, storedMedia, phone, inbou
         whatsapp_employee_intake_marker: WHATSAPP_EMPLOYEE_AGENT_007_MARKER,
         whatsapp_employee_last_message_id: inboundMessageId || null,
         media_count: Number(property.extra_fields?.media_count || 0) + uniqueMedia.length,
+        public_image_count: imageOffset + images.length,
+        primary_image_url: existingPrimaryImageUrl || images[0]?.url || property.extra_fields?.primary_image_url || null,
         media_sha256: mergedHashes,
         video_url: mergedVideos[0] || null,
         video_urls: mergedVideos,
@@ -4850,7 +4886,7 @@ async function attachEmployeeReviewMedia({ propertyId, storedMedia, phone, inbou
         source_evidence_urls: [...new Set([...previousEvidenceUrls, ...evidenceImages.map((item) => item.url)])],
         media_quality_blockers: [
           ...retainedQualityBlockers,
-          ...evidenceImages.map((item) => ({
+          ...blockingEvidenceImages.map((item) => ({
             url: item.url,
             capture_source: item.captureSource || null,
             verdict: item.mediaValidation?.verdict || 'not_public_eligible',
@@ -13012,6 +13048,7 @@ router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
       queue_id: queuedReply?.id || null,
       owner_forward: ownerForward,
       employee_batch_complete: employeeIntake?.batch_complete === true,
+      employee_property_id: employeeIntake?.property_id || null,
       employee_media_result: employeeIntake?.media_attachment || null
     }
   });
