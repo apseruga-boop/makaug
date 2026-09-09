@@ -164,7 +164,7 @@ async function run() {
     'an unavailable historical media preview must back off before hydration so it cannot hot-loop ahead of new chats'
   );
   assert(
-    whatsappWebCopilotSource.includes("WHATSAPP_RESPONSE_RELIABILITY_MARKER = 'whatsapp-local-keepawake-media-backoff-20260909'")
+    whatsappWebCopilotSource.includes("WHATSAPP_RESPONSE_RELIABILITY_MARKER = 'whatsapp-confirmed-bubble-local-20260909'")
       && whatsappWebCopilotSource.includes('response_reliability_marker: WHATSAPP_RESPONSE_RELIABILITY_MARKER'),
     'bridge heartbeats must identify the response-latency reliability release'
   );
@@ -206,6 +206,10 @@ async function run() {
   assert(
     whatsappWebCopilotSource.includes("WHATSAPP_WEB_COPILOT_TRUST_SEND_ON_COMPOSER_CLEAR || 'false'"),
     'WhatsApp Web sender must not mark a reply sent from composer-clear alone by default'
+  );
+  assert(
+    whatsappWebCopilotSource.includes('const TRUST_SEND_ON_COMPOSER_CLEAR = HOSTED_RUNTIME &&'),
+    'local WhatsApp workers must require a visible outgoing bubble even when headless mode is enabled'
   );
   assert(
     whatsappWebCopilotSource.includes('send bubble was not observed after composer cleared; trusting composer-clear send confirmation by override')

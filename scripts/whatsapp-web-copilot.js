@@ -186,6 +186,14 @@ const MEMORY_CHECK_MS = Math.min(
 const HEADLESS_BROWSER = ['1', 'true', 'yes', 'on'].includes(
   String(process.env.WHATSAPP_WEB_COPILOT_HEADLESS || '').trim().toLowerCase()
 );
+const HOSTED_RUNTIME = String(process.env.WHATSAPP_WEB_COPILOT_HOSTED || '').trim().toLowerCase() === 'true'
+  || PROFILE_DIR.startsWith('/var/data')
+  || [
+    process.env.RENDER_SERVICE_ID,
+    process.env.RENDER_SERVICE_NAME,
+    process.env.RENDER_INSTANCE_ID,
+    process.env.RENDER_EXTERNAL_HOSTNAME
+  ].some(Boolean);
 const LOGIN_SCREENSHOT_ENABLED = !['0', 'false', 'no', 'off'].includes(
   String(process.env.WHATSAPP_WEB_COPILOT_LOGIN_SCREENSHOT || 'true').trim().toLowerCase()
 );
@@ -245,7 +253,7 @@ const SEND_RETRY_CONFIRM_MS = Math.min(
   2000,
   Math.max(300, Number.isFinite(configuredSendRetryConfirmMs) ? configuredSendRetryConfirmMs : 750)
 );
-const TRUST_SEND_ON_COMPOSER_CLEAR = !['0', 'false', 'no', 'off'].includes(
+const TRUST_SEND_ON_COMPOSER_CLEAR = HOSTED_RUNTIME && !['0', 'false', 'no', 'off'].includes(
   HEADLESS_BROWSER
     ? String(process.env.WHATSAPP_WEB_COPILOT_TRUST_SEND_ON_COMPOSER_CLEAR || 'true').trim().toLowerCase()
     : String(process.env.WHATSAPP_WEB_COPILOT_TRUST_SEND_ON_COMPOSER_CLEAR || 'false').trim().toLowerCase()
@@ -321,7 +329,7 @@ const WHATSAPP_ORIGINAL_MEDIA_ONLY_MARKER = 'whatsapp-original-media-only-202609
 const WHATSAPP_AGENT_007_INTAKE_RELIABILITY_MARKER = 'whatsapp-agent007-replay-backoff-20260901';
 const WHATSAPP_AGENT_007_PENDING_MEDIA_FIX_MARKER = 'whatsapp-agent007-pending-media-idempotency-20260901';
 const WHATSAPP_OUTGOING_PREVIEW_GUARD_MARKER = 'whatsapp-outgoing-preview-guard-20260831';
-const WHATSAPP_RESPONSE_RELIABILITY_MARKER = 'whatsapp-local-keepawake-media-backoff-20260909';
+const WHATSAPP_RESPONSE_RELIABILITY_MARKER = 'whatsapp-confirmed-bubble-local-20260909';
 const WHATSAPP_CALL_CARD_BROWSER_CONFIG = Object.freeze(whatsappCallCardBrowserConfig());
 const RECENT_INBOUND_BACKLOG_LIMIT = 60;
 const EMPLOYEE_BATCH_HISTORY_SCAN_LIMIT = 160;
@@ -748,9 +756,7 @@ function hostedRuntimeMetadata() {
     render_instance_id: process.env.RENDER_INSTANCE_ID || '',
     render_external_hostname: process.env.RENDER_EXTERNAL_HOSTNAME || ''
   };
-  const hosted = String(process.env.WHATSAPP_WEB_COPILOT_HOSTED || '').trim().toLowerCase() === 'true'
-    || PROFILE_DIR.startsWith('/var/data')
-    || Object.values(renderSignals).some(Boolean);
+  const hosted = HOSTED_RUNTIME;
 
   return {
     hosted,
