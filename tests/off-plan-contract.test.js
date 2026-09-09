@@ -105,10 +105,10 @@ test('brochure, payment, gallery, map, sharing, video and mortgage handoff are v
   assert.match(client, /id="off-plan-gallery-dialog"/);
   assert.match(client, /closeOffPlanGallery/);
   assert.match(client, /value == null \|\| \(typeof value === 'string' && !value\.trim\(\)\)/);
-  assert.match(html, /off-plan\.js\?v=20260909-off-plan-v6/);
+  assert.match(html, /off-plan\.js\?v=20260909-off-plan-v7/);
   assert.match(html, /off-plan\.css\?v=20260909-off-plan-v3/);
   assert.match(client, /CLOSED_PERMANENTLY/);
-  assert.match(client, /Archive this private project record/);
+  assert.match(client, /Archive this private project\?/);
   assert.match(client, /setOffPlanProjectStatus/);
   assert.match(client, /Publish sourced preview/);
   assert.match(client, /publication_mode: publicationMode/);
@@ -209,6 +209,9 @@ test('staff and King dashboards can edit enriched Off Plan facts', () => {
   assert.match(client, /confirm_rights: true, images/);
   assert.match(client, /Confirm and choose files/);
   assert.match(client, /confirmOffPlanMediaRights/);
+  assert.match(client, /confirmOffPlanAction/);
+  assert.match(client, /Publish sourced preview/);
+  assert.doesNotMatch(client, /confirm\('Publish this sourced project preview now/);
 });
 
 test('Off Plan family maps, contact and payment builder expose the requested interactive controls', () => {

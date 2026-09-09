@@ -1311,10 +1311,30 @@
     catch (error) { alert(error.message); }
   }
 
+  function confirmOffPlanAction({ eyebrow = 'Confirm action', title, message, confirmLabel = 'Confirm', tone = 'green' }) {
+    return new Promise((resolve) => {
+      const dialog = document.createElement('dialog');
+      const confirmClass = tone === 'red' ? 'bg-red-700' : 'bg-green-700';
+      dialog.className = 'w-[min(560px,calc(100vw-28px))] rounded-2xl border-0 p-0 shadow-2xl backdrop:bg-slate-950/60';
+      dialog.innerHTML = `<div class="p-6"><p class="text-xs font-black uppercase tracking-wide text-green-700">${escapeHtml(eyebrow)}</p><h3 class="mt-2 text-xl font-black text-gray-950">${escapeHtml(title)}</h3><p class="mt-3 text-sm leading-6 text-gray-600">${escapeHtml(message)}</p><div class="mt-6 flex justify-end gap-3"><button type="button" data-op-action-cancel class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-black text-gray-700">Cancel</button><button type="button" data-op-action-confirm class="rounded-lg ${confirmClass} px-4 py-2 text-sm font-black text-white">${escapeHtml(confirmLabel)}</button></div></div>`;
+      const finish = (confirmed) => {
+        dialog.close?.();
+        dialog.remove();
+        resolve(confirmed);
+      };
+      dialog.querySelector('[data-op-action-cancel]').addEventListener('click', () => finish(false));
+      dialog.querySelector('[data-op-action-confirm]').addEventListener('click', () => finish(true));
+      dialog.addEventListener('cancel', (event) => { event.preventDefault(); finish(false); });
+      document.body.appendChild(dialog);
+      if (typeof dialog.showModal === 'function') dialog.showModal();
+      else dialog.setAttribute('open', '');
+    });
+  }
+
   async function setOffPlanProjectStatus(id, role, status, publicationMode = '') {
-    if (status === 'published' && publicationMode === 'sourced_preview' && !confirm('Publish this sourced project preview now? Developer materials, indicative prices, payment terms, location and images will be public. Current availability, sales and construction progress will remain unverified.')) return;
-    if (status === 'published' && publicationMode !== 'sourced_preview' && !confirm('Publish this verified project to the public Off Plan page now?')) return;
-    if (status === 'archived' && !confirm('Archive this private project record? It will remain available to authorised staff but will never appear publicly.')) return;
+    if (status === 'published' && publicationMode === 'sourced_preview' && !(await confirmOffPlanAction({ eyebrow: 'Public sourced preview', title: 'Publish this project now?', message: 'Developer materials, indicative prices, payment terms, location and images will become public. Current availability, sales and construction progress will remain clearly labelled for buyer verification.', confirmLabel: 'Publish sourced preview' }))) return;
+    if (status === 'published' && publicationMode !== 'sourced_preview' && !(await confirmOffPlanAction({ eyebrow: 'Verified publication', title: 'Publish this verified project now?', message: 'This project will appear on the public Off Plan page.', confirmLabel: 'Publish verified project' }))) return;
+    if (status === 'archived' && !(await confirmOffPlanAction({ eyebrow: 'Archive project', title: 'Archive this private project?', message: 'It will remain available to authorised staff but will never appear publicly.', confirmLabel: 'Archive project', tone: 'red' }))) return;
     const base = `/api/${role === 'admin' ? 'admin' : 'staff'}/off-plan/developments/${encodeURIComponent(id)}`;
     try { await request(`${base}/status`, { method: 'POST', headers: managementHeaders(role), body: { status, publication_mode: publicationMode || null } }); await loadOffPlanManagement(role); }
     catch (error) { alert(error.payload?.blockers?.join('\n') || error.message); }
