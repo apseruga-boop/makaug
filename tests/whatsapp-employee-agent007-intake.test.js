@@ -426,6 +426,9 @@ assert(copilotSource.includes("skipped: 'batch_incomplete_missing_media'"), 'his
 assert(routeSource.includes('employee_media_result: employeeIntake?.media_attachment || null'), 'the bridge must expose normalized media attachment diagnostics to the worker');
 assert(routeSource.includes('employee_property_id: employeeIntake?.property_id || null'), 'the bridge must expose the exact review row used for an Agent 007 media attachment');
 assert(copilotSource.includes('property=${propertyRef} attached='), 'the worker must log a privacy-safe review reference for every media attachment');
+assert(routeSource.includes('async function employeeReviewMediaStatus'), 'the protected recovery endpoint must report exact image/video counts for its review rows');
+assert(routeSource.includes('property_media_status: await employeeReviewMediaStatus'), 'every active, restored, or completed recovery response must include exact review-row media status');
+assert(serverSource.includes('whatsapp-agent007-media-status-proof-20260909'), 'production health metadata must expose the media-status proof release');
 assert(copilotSource.includes('replayEmployeeBatchThroughCompletion'), 'the worker must replay every ordered batch message before COMPLETE');
 assert(copilotSource.includes('scrollWhatsappHistoryNewer'), 'history reconciliation must walk forward from the trigger without keeping every video in memory');
 assert(copilotSource.includes('WHATSAPP_WEB_COPILOT_EMPLOYEE_RECOVERY_PHONES'), 'hosted workers must support an explicit startup recovery target');
