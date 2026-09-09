@@ -249,6 +249,7 @@ app.get('/api/version', (_req, res) => {
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-agent007-staff-media-proof-20260909'] : []),
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-agent007-media-status-proof-20260909'] : []),
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-agent007-identity-evidence-purge-20260909'] : []),
+      ...(!IS_SOUTH_AFRICA ? ['whatsapp-agent007-forced-media-reconciliation-20260909'] : []),
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-agent007-completion-ack-contract-20260909'] : []),
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-agent007-property-boundary-guard-20260909'] : []),
       ...(!IS_SOUTH_AFRICA ? ['whatsapp-agent007-pending-property-queue-20260909'] : []),

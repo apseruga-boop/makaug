@@ -520,6 +520,9 @@ assert(copilotSource.includes('const explicitViewerCount'), 'historical albums m
 assert(copilotSource.includes('const viewerTraversalLimit = Math.max(expectedCount, explicitViewerCount)'), 'viewer traversal may expand only to an explicit same-album count');
 assert(copilotSource.includes('refreshedSource && refreshedSource !== previousViewerSource'), 'album recovery must wait for each next original image before capturing it');
 assert(copilotSource.includes('viewer_group_explicit=${viewerGroupExplicit'), 'live recovery logs must say whether a larger album count came from the opened viewer');
+assert(copilotSource.includes('WHATSAPP_WEB_COPILOT_FORCE_EMPLOYEE_MEDIA_RECONCILIATION'), 'a bounded operator recovery must be able to re-open an already-completed historical album');
+assert(copilotSource.includes('suppressCompletionReply: true'), 'forced historical media recovery must not send a duplicate completion message');
+assert(routeSource.includes('inboundMetadata.suppress_reply === true'), 'the authenticated replay endpoint must suppress completion replies for forced media-only recovery');
 assert(routeSource.includes('accepted_pending_review_original_whatsapp_pixels'), 'original viewer pixels must remain reviewable when the optional vision provider is unavailable');
 assert(routeSource.includes('Array.isArray(storedMedia) ? storedMedia : []'), 'duplicate evidence replays must report their original validation reason for safe diagnosis');
 assert(routeSource.includes('const retainedVideoBlockers'), 'an existing valid gallery must clear stale still-image blockers while preserving video-recovery blockers');
@@ -569,6 +572,7 @@ assert(serverSource.includes('whatsapp-active-intake-call-shield-20260829'), 'em
 assert(serverSource.includes('whatsapp-video-still-dual-media-20260831'), 'video and still repair should have an externally verifiable release marker');
 assert(serverSource.includes('whatsapp-agent007-pending-property-queue-20260909'), 'separate pending-property queue guard should have an externally verifiable release marker');
 assert(serverSource.includes('whatsapp-agent007-identity-evidence-purge-20260909'), 'identity-evidence purge should have an externally verifiable release marker');
+assert(serverSource.includes('whatsapp-agent007-forced-media-reconciliation-20260909'), 'forced historical media reconciliation should have an externally verifiable release marker');
 
 const db = require('../config/database');
 const originalQuery = db.query;

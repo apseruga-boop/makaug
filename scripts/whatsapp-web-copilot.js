@@ -371,6 +371,9 @@ const EMPLOYEE_BATCH_RECOVERY_IDLE_MS = Math.min(
 const EMPLOYEE_BATCH_RECOVERY_PHONES = String(
   process.env.WHATSAPP_WEB_COPILOT_EMPLOYEE_RECOVERY_PHONES || ''
 ).split(/[;,\s]+/).map((value) => normalizeChatKey(value)).filter(Boolean);
+const FORCE_EMPLOYEE_MEDIA_RECONCILIATION = ['1', 'true', 'yes'].includes(String(
+  process.env.WHATSAPP_WEB_COPILOT_FORCE_EMPLOYEE_MEDIA_RECONCILIATION || ''
+).trim().toLowerCase());
 const seenBrowserMessageIds = new Set();
 const completedEmployeeBatchHistoryKeys = new Set();
 const employeeBatchReplayProgress = new Map();
@@ -382,6 +385,7 @@ const recentChatRowKeys = new Map();
 let recentChatRowCacheWriteTimer = null;
 let activeInboundRecipientHint = '';
 let outboxProcessing = false;
+let forcedEmployeeMediaReconciliationAttempted = false;
 const COMPOSER_SELECTORS = [
   'footer [data-testid="conversation-compose-box-input"][contenteditable="true"]',
   'footer div[role="textbox"][contenteditable="true"]',
@@ -798,6 +802,7 @@ function hostedRuntimeMetadata() {
     full_album_gallery_marker: WHATSAPP_AGENT_007_FULL_ALBUM_GALLERY_MARKER,
     viewer_group_recovery_marker: WHATSAPP_AGENT_007_VIEWER_GROUP_RECOVERY_MARKER,
     staff_media_proof_marker: WHATSAPP_AGENT_007_STAFF_MEDIA_PROOF_MARKER,
+    forced_media_reconciliation_enabled: FORCE_EMPLOYEE_MEDIA_RECONCILIATION,
     outgoing_preview_guard: WHATSAPP_OUTGOING_PREVIEW_GUARD_MARKER,
     response_reliability_marker: WHATSAPP_RESPONSE_RELIABILITY_MARKER,
     git_commit: process.env.RENDER_GIT_COMMIT || process.env.SOURCE_VERSION || process.env.GIT_COMMIT || '',
@@ -3813,7 +3818,9 @@ async function locateEmployeeBatchHistory(page, { chatKey = '' } = {}) {
   return { found: false, reason: triggerKey ? 'completion_not_found' : 'agent_007_trigger_not_found' };
 }
 
-async function replayEmployeeBatchThroughCompletion(page, history = {}, row = {}) {
+async function replayEmployeeBatchThroughCompletion(page, history = {}, row = {}, {
+  suppressCompletionReply = false
+} = {}) {
   const completionKey = String(history.completionKey || '');
   if (!history.found || !completionKey) return { handled: false, processed: 0 };
   const existingDeferral = deferredEmployeeBatchReplay(completionKey);
@@ -3916,6 +3923,7 @@ async function replayEmployeeBatchThroughCompletion(page, history = {}, row = {}
             bridgeMetadata: {
               employee_batch_ordered_replay: true,
               employee_batch_completion: true,
+              suppress_reply: suppressCompletionReply,
               employee_batch_history_marker: WHATSAPP_EMPLOYEE_AGENT_007_WORKER_MARKER,
               observed_property_messages: history.observedPropertyMessages
             }
@@ -4100,10 +4108,30 @@ async function runConfiguredEmployeeBatchRecovery(page) {
     }
     await page.waitForTimeout(700);
     const snapshots = await getRecentIncomingSnapshots(page, RECENT_INBOUND_BACKLOG_LIMIT);
-    let result = await maybeReplayEmployeeBatchThroughCompletion(page, snapshots, {
-      title: phone,
-      preview: ''
-    });
+    let result = null;
+    if (FORCE_EMPLOYEE_MEDIA_RECONCILIATION && !forcedEmployeeMediaReconciliationAttempted) {
+      forcedEmployeeMediaReconciliationAttempted = true;
+      const forcedHistory = await locateEmployeeBatchHistory(page, { chatKey: phone });
+      if (forcedHistory.found) {
+        completedEmployeeBatchHistoryKeys.delete(String(forcedHistory.completionKey || ''));
+        result = await replayEmployeeBatchThroughCompletion(page, {
+          ...forcedHistory,
+          observedPropertyMessages: 0
+        }, {
+          title: phone,
+          preview: ''
+        }, {
+          suppressCompletionReply: true
+        });
+        log(`forced Agent 007 media reconciliation checked ${phone}; handled=${result.handled ? 'yes' : 'no'} processed=${result.processed || 0}`);
+      }
+    }
+    if (!result) {
+      result = await maybeReplayEmployeeBatchThroughCompletion(page, snapshots, {
+        title: phone,
+        preview: ''
+      });
+    }
     if (!result.handled && !result.alreadyComplete && !result.deferred) {
       const history = await locateEmployeeBatchHistory(page, { chatKey: phone });
       if (history.found) {

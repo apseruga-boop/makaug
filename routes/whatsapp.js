@@ -13057,7 +13057,10 @@ router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
     && employeeIntakePhoneAllowed(phone, { ownerAuthorized: isAiCeoOwnerPhone(phone) })
     && inboundMetadata.employee_batch_ordered_replay === true;
   const suppressEmployeeBatchReplayNonCompletionReply = isAuthorizedEmployeeBatchReplay
-    && inboundMetadata.employee_batch_completion !== true;
+    && (
+      inboundMetadata.employee_batch_completion !== true
+      || inboundMetadata.suppress_reply === true
+    );
 
   const alreadySeen = await db.query(
     'SELECT 1 FROM whatsapp_messages WHERE wa_message_id = $1 LIMIT 1',
