@@ -250,7 +250,7 @@
 
   function projectDisplayType(project = {}) {
     const unitTypes = Array.from(new Set((project.unit_types || []).map((unit) => clean(unit?.property_type)).filter(Boolean)));
-    if (unitTypes.length && unitTypes.every((type) => /^(?:apartment|flat|duplex|studio)$/i.test(type))) return 'apartment';
+    if (unitTypes.length && unitTypes.every((type) => /apartment|flat|duplex|studio/i.test(type))) return 'apartment';
     return unitTypes.length === 1 ? unitTypes[0] : (project.project_type || unitTypes[0] || 'house');
   }
 
