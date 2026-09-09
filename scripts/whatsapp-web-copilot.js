@@ -3594,7 +3594,6 @@ async function replayEmployeeBatchThroughCompletion(page, history = {}, row = {}
     employeeBatchReplayProgress.delete(employeeBatchReplayProgress.keys().next().value);
   }
   const visited = new Set(completedSnapshotKeys);
-  let sawPropertyMedia = false;
   const replayRunKey = crypto.createHash('sha1')
     .update(`${history.triggerKey}:${history.completionKey}:${Date.now()}:${crypto.randomUUID()}`)
     .digest('hex')
@@ -3616,9 +3615,8 @@ async function replayEmployeeBatchThroughCompletion(page, history = {}, row = {}
 
       const isCompletion = key === history.completionKey || isEmployeeBatchCompletionSnapshot(snapshot);
       const isPropertyMedia = ['image', 'media'].includes(String(snapshot.mediaType || '').toLowerCase());
-      if (isPropertyMedia) sawPropertyMedia = true;
       if (visited.has(key)) continue;
-      const isCaptionCorrection = sawPropertyMedia && isEmployeePropertyCaptionCorrectionSnapshot(snapshot);
+      const isCaptionCorrection = isEmployeePropertyCaptionCorrectionSnapshot(snapshot);
       if (!isCompletion && !isPropertyMedia && !isCaptionCorrection) {
         visited.add(key);
         continue;
