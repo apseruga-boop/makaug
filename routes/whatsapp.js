@@ -128,6 +128,7 @@ const WHATSAPP_OWNER_HISTORY_BACKFILL_MARKER = 'whatsapp-owner-history-backfill-
 const WHATSAPP_EMPLOYEE_AGENT_007_MARKER = 'whatsapp-employee-agent-007-review-intake-20260829';
 const WHATSAPP_AGENT_007_ORDERED_BATCH_MARKER = 'whatsapp-agent-007-ordered-batch-finalization-20260829';
 const WHATSAPP_AGENT_007_IDENTITY_EVIDENCE_PURGE_MARKER = 'whatsapp-agent007-identity-evidence-purge-20260909';
+const WHATSAPP_AGENT_007_PENDING_AGENT_LINK_REPAIR_MARKER = 'whatsapp-agent007-pending-agent-link-repair-20260909';
 const WHATSAPP_VIDEO_ORIGINAL_RECOVERY_MARKER = 'whatsapp-video-original-recovery-20260831';
 const WHATSAPP_CALL_EVENT_TRUST_MARKER = 'whatsapp-call-card-trust-gate-20260831';
 const WHATSAPP_API_VERSION = (process.env.WHATSAPP_API_VERSION || 'v25.0').trim();
@@ -3989,6 +3990,147 @@ async function ensurePendingEmployeeAgent(details = {}, identityDocument = {}) {
     ]
   );
   return { agent: inserted.rows[0], created: true };
+}
+
+async function repairEmployeePendingAgentPropertyLink({ propertyId = '', agentId = '' } = {}) {
+  const client = await db.getClient();
+  try {
+    await client.query('BEGIN');
+    const propertyResult = await client.query(
+      `SELECT id::text AS id, status, source, moderation_stage,
+              agent_id::text AS agent_id, lister_type, lister_name, lister_phone,
+              id_document_url, extra_fields
+         FROM properties
+        WHERE id = $1
+        FOR UPDATE`,
+      [propertyId]
+    );
+    const agentResult = await client.query(
+      `SELECT id::text AS id, status, full_name, phone, whatsapp, email,
+              identity_document_url
+         FROM agents
+        WHERE id = $1
+        FOR UPDATE`,
+      [agentId]
+    );
+    const property = propertyResult.rows[0];
+    const agent = agentResult.rows[0];
+    if (!property || !agent) {
+      await client.query('ROLLBACK');
+      return { repaired: false, reason: !property ? 'property_not_found' : 'agent_not_found' };
+    }
+    if (property.status !== 'pending' || property.source !== 'whatsapp_employee_intake') {
+      await client.query('ROLLBACK');
+      return { repaired: false, reason: 'property_not_pending_employee_intake' };
+    }
+    if (agent.status !== 'pending') {
+      await client.query('ROLLBACK');
+      return { repaired: false, reason: 'agent_not_pending' };
+    }
+    if (property.agent_id === agent.id && property.lister_type === 'agent') {
+      await client.query('COMMIT');
+      return {
+        repaired: false,
+        alreadyLinked: true,
+        property_id: property.id,
+        agent_id: agent.id,
+        property_status: property.status,
+        agent_status: agent.status
+      };
+    }
+    if (property.agent_id && property.agent_id !== agent.id) {
+      await client.query('ROLLBACK');
+      return { repaired: false, reason: 'property_linked_to_different_agent' };
+    }
+
+    const normalizedPropertyName = normalizeInput(property.lister_name).toLowerCase();
+    const normalizedAgentName = normalizeInput(agent.full_name).toLowerCase();
+    if (!normalizedPropertyName || normalizedPropertyName !== normalizedAgentName) {
+      await client.query('ROLLBACK');
+      return { repaired: false, reason: 'lister_name_mismatch' };
+    }
+    const propertyPhoneDigits = String(property.lister_phone || '').replace(/\D/g, '');
+    const agentPhoneDigits = [agent.phone, agent.whatsapp]
+      .map((value) => String(value || '').replace(/\D/g, ''))
+      .filter(Boolean);
+    if (!propertyPhoneDigits || !agentPhoneDigits.includes(propertyPhoneDigits)) {
+      await client.query('ROLLBACK');
+      return { repaired: false, reason: 'lister_phone_mismatch' };
+    }
+    const propertyIdentityUrl = normalizeInput(property.id_document_url);
+    const agentIdentityUrl = normalizeInput(agent.identity_document_url);
+    if (!propertyIdentityUrl || propertyIdentityUrl !== agentIdentityUrl) {
+      await client.query('ROLLBACK');
+      return { repaired: false, reason: 'identity_document_mismatch' };
+    }
+
+    const repairedAt = new Date().toISOString();
+    const extraFieldsPatch = {
+      whatsapp_employee_subject_role: 'agent',
+      agent_profile_linked: true,
+      identity_document_available: true,
+      identity_document_storage: 'agent_profile_private',
+      pending_agent_link_repair_marker: WHATSAPP_AGENT_007_PENDING_AGENT_LINK_REPAIR_MARKER,
+      pending_agent_link_repaired_at: repairedAt
+    };
+    const updated = await client.query(
+      `UPDATE properties
+          SET agent_id = $2,
+              lister_type = 'agent',
+              lister_name = $3,
+              lister_email = COALESCE(NULLIF(lister_email, ''), $4),
+              id_document_name = NULL,
+              id_document_url = NULL,
+              extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $5::jsonb,
+              updated_at = NOW()
+        WHERE id = $1
+          AND status = 'pending'
+          AND source = 'whatsapp_employee_intake'
+          AND agent_id IS NULL
+        RETURNING id::text AS id, status, moderation_stage, agent_id::text AS agent_id, lister_type`,
+      [property.id, agent.id, agent.full_name, agent.email || null, JSON.stringify(extraFieldsPatch)]
+    );
+    if (!updated.rows[0]) {
+      await client.query('ROLLBACK');
+      return { repaired: false, reason: 'property_link_changed_during_repair' };
+    }
+    await client.query(
+      `INSERT INTO property_moderation_events
+        (property_id, actor_id, action, status_from, status_to, reason, notes, delivery)
+       VALUES ($1,'whatsapp-employee-agent-007','whatsapp_employee_pending_agent_link_repaired','pending','pending',$2,$3,$4::jsonb)`,
+      [
+        property.id,
+        'Recovered employee WhatsApp property linked to its exact pending agent profile after strict name, phone and private identity-document matching.',
+        'Property and agent remain pending. No approval, publication, consent inference, or outbound notification was performed.',
+        JSON.stringify({
+          marker: WHATSAPP_AGENT_007_PENDING_AGENT_LINK_REPAIR_MARKER,
+          agent_id: agent.id,
+          property_status: 'pending',
+          agent_status: 'pending',
+          auto_publish: false,
+          notification_sent: false
+        })
+      ]
+    );
+    await client.query('COMMIT');
+    return {
+      repaired: true,
+      alreadyLinked: false,
+      property_id: updated.rows[0].id,
+      agent_id: updated.rows[0].agent_id,
+      property_status: updated.rows[0].status,
+      moderation_stage: updated.rows[0].moderation_stage,
+      lister_type: updated.rows[0].lister_type,
+      agent_status: agent.status,
+      auto_publish: false,
+      notification_sent: false
+    };
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => null);
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 function parseEmployeeBedroomDraft(caption = '') {
@@ -12923,6 +13065,27 @@ router.post('/web-bridge/employee-review-media-reconcile', asyncRoute(async (req
   });
 }));
 
+// POST /api/whatsapp/web-bridge/employee-pending-agent-link-repair
+router.post('/web-bridge/employee-pending-agent-link-repair', asyncRoute(async (req, res) => {
+  if (!isWhatsappWebBridgeAuthorized(req)) return bridgeUnauthorized(res);
+  const propertyId = normalizeInput(req.body.property_id || req.body.propertyId);
+  const agentId = normalizeInput(req.body.agent_id || req.body.agentId);
+  if (!/^[0-9a-f-]{36}$/i.test(propertyId) || !/^[0-9a-f-]{36}$/i.test(agentId)) {
+    return res.status(400).json({ ok: false, error: 'exact valid property_id and agent_id are required' });
+  }
+  const result = await repairEmployeePendingAgentPropertyLink({ propertyId, agentId });
+  if (!result.repaired && !result.alreadyLinked) {
+    return res.status(409).json({ ok: false, error: result.reason, data: result });
+  }
+  return res.json({
+    ok: true,
+    data: {
+      marker: WHATSAPP_AGENT_007_PENDING_AGENT_LINK_REPAIR_MARKER,
+      ...result
+    }
+  });
+}));
+
 // GET /api/whatsapp/web-bridge/employee-video-recovery-targets
 router.get('/web-bridge/employee-video-recovery-targets', asyncRoute(async (req, res) => {
   if (!isWhatsappWebBridgeAuthorized(req)) return bridgeUnauthorized(res);
@@ -13546,6 +13709,7 @@ module.exports.__test = {
   employeeCaptionLikelySameProperty,
   employeePendingSubmissionQueue,
   ensurePendingEmployeeAgent,
+  repairEmployeePendingAgentPropertyLink,
   reconcileEmployeeIdentityEvidence,
   getWhatsappCallNotificationEmails,
   inferWhatsappCallInquiry,

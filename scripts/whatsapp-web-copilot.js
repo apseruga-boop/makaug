@@ -334,6 +334,7 @@ const WHATSAPP_AGENT_007_EXISTING_ROW_MEDIA_REPAIR_MARKER = 'whatsapp-agent007-e
 const WHATSAPP_AGENT_007_FULL_ALBUM_GALLERY_MARKER = 'whatsapp-agent007-full-album-gallery-recovery-20260909';
 const WHATSAPP_AGENT_007_VIEWER_GROUP_RECOVERY_MARKER = 'whatsapp-agent007-viewer-group-recovery-20260909';
 const WHATSAPP_AGENT_007_STAFF_MEDIA_PROOF_MARKER = 'whatsapp-agent007-staff-media-proof-20260909';
+const WHATSAPP_AGENT_007_MIXED_ALBUM_RECOVERY_MARKER = 'whatsapp-agent007-mixed-media-album-recovery-20260909';
 const WHATSAPP_OUTGOING_PREVIEW_GUARD_MARKER = 'whatsapp-outgoing-preview-guard-20260831';
 const WHATSAPP_RESPONSE_RELIABILITY_MARKER = 'whatsapp-rendered-text-confirmation-20260909';
 const WHATSAPP_CALL_CARD_BROWSER_CONFIG = Object.freeze(whatsappCallCardBrowserConfig());
@@ -551,6 +552,8 @@ function createMessageId(chatKey, text, timestampLabel = '', mediaType = 'text',
 }
 
 function browserMessageKeyFor(snapshot = {}, row = {}) {
+  snapshot = snapshot || {};
+  row = row || {};
   const chatKey = normalizeChatKey(snapshot.chatKey || row.title);
   const mediaType = snapshot.mediaType || 'text';
   const text = isTimestampOnly(snapshot.text) && String(mediaType).includes('location')
@@ -802,6 +805,7 @@ function hostedRuntimeMetadata() {
     full_album_gallery_marker: WHATSAPP_AGENT_007_FULL_ALBUM_GALLERY_MARKER,
     viewer_group_recovery_marker: WHATSAPP_AGENT_007_VIEWER_GROUP_RECOVERY_MARKER,
     staff_media_proof_marker: WHATSAPP_AGENT_007_STAFF_MEDIA_PROOF_MARKER,
+    mixed_album_recovery_marker: WHATSAPP_AGENT_007_MIXED_ALBUM_RECOVERY_MARKER,
     forced_media_reconciliation_enabled: FORCE_EMPLOYEE_MEDIA_RECONCILIATION,
     outgoing_preview_guard: WHATSAPP_OUTGOING_PREVIEW_GUARD_MARKER,
     response_reliability_marker: WHATSAPP_RESPONSE_RELIABILITY_MARKER,
@@ -1680,8 +1684,9 @@ async function getActiveChatSnapshot(page) {
         || text.match(/\b(\d{9,16})@(?:c\.us|s\.whatsapp\.net)\b/i);
       return match?.[1] || '';
     };
-    const dataIdForNode = (node) => node?.closest?.('[data-id]')?.getAttribute('data-id')
-      || node?.getAttribute?.('data-id')
+    const dataIdForNode = (node) => node?.getAttribute?.('data-id')
+      || node?.closest?.('[data-id]')?.getAttribute('data-id')
+      || node?.querySelector?.('[data-id]')?.getAttribute('data-id')
       || '';
     const modernMessageRootForNode = (node) => node?.closest?.('[data-testid^="conv-msg-"]')
       || (node?.matches?.('[data-testid^="conv-msg-"]') ? node : null);
@@ -1690,9 +1695,9 @@ async function getActiveChatSnapshot(page) {
       || node;
     const messageIdForNode = (node) => {
       const root = canonicalMessageRootForNode(node);
-      return root?.getAttribute?.('data-id')
+      return dataIdForNode(node)
+        || dataIdForNode(root)
         || root?.getAttribute?.('data-testid')
-        || dataIdForNode(node)
         || '';
     };
     const phoneFromNode = (node) => phoneFromMessageDataId(dataIdForNode(node));
@@ -1714,7 +1719,10 @@ async function getActiveChatSnapshot(page) {
     const cleanRenderedMessageText = (value, mediaType = 'text') => {
       const lines = String(value || '').split('\n').map((line) => line.trim()).filter(Boolean);
       const withoutTime = lines.filter((line) => !isTimestampOnlyText(line));
-      if (mediaType === 'image' && withoutTime.every((line) => /^\+\d+$/.test(line))) return '';
+      if (
+        ['image', 'media'].includes(String(mediaType || '').toLowerCase())
+        && withoutTime.every((line) => /^(?:forwarded|\+\d+)$/i.test(line))
+      ) return '';
       return withoutTime.join('\n').trim();
     };
     const parseCoords = (value) => {
@@ -1753,6 +1761,52 @@ async function getActiveChatSnapshot(page) {
       ));
       const playControl = root.querySelector('[aria-label="Play" i], [aria-label^="Play " i], [data-icon="play"]');
       return highResolutionPoster && Boolean(playControl);
+    };
+    const renderedMediaLayout = (root, rawText = '', imageCount = 0) => {
+      if (!root) return { hasAlbum: false, visibleCount: imageCount, expectedCount: imageCount };
+      const selector = [
+        'img', 'video',
+        '[data-testid*="image" i]',
+        '[aria-label*="image" i]',
+        '[style*="background-image"]'
+      ].join(',');
+      const candidates = Array.from(root.querySelectorAll(selector)).filter((element) => {
+        const rect = element.getBoundingClientRect();
+        const className = String(element.className || '').toLowerCase();
+        const alt = String(element.getAttribute?.('alt') || '').toLowerCase();
+        return rect.width >= 48 && rect.height >= 48
+          && !className.includes('emoji')
+          && !alt.includes('emoji')
+          && !alt.includes('avatar');
+      });
+      const leafCandidates = candidates.filter((element) => !candidates.some((other) => (
+        other !== element && element.contains(other)
+      )));
+      const visibleBoxes = new Set(leafCandidates.map((element) => {
+        const rect = element.getBoundingClientRect();
+        return [Math.round(rect.left / 4), Math.round(rect.top / 4), Math.round(rect.width / 4), Math.round(rect.height / 4)].join(':');
+      }));
+      const visibleCount = Math.min(20, Math.max(imageCount, visibleBoxes.size));
+      const albumCountLabels = [
+        ...String(rawText || '').split(/\r?\n/),
+        ...Array.from(root.querySelectorAll('span, [aria-label], [title]')).flatMap((element) => [
+          element.textContent || '',
+          element.getAttribute('aria-label') || '',
+          element.getAttribute('title') || ''
+        ])
+      ].map((value) => String(value || '').trim()).filter(Boolean);
+      const extraMatch = albumCountLabels
+        .map((value) => value.match(/^\+(\d{1,2})$/) || value.match(/^(\d{1,2})\s+more$/i))
+        .find(Boolean);
+      const extraCount = Math.max(0, Math.min(19, Number.parseInt(extraMatch?.[1] || '0', 10) || 0));
+      const albumMarker = Boolean(root.querySelector('[data-testid*="album" i], [aria-label*="album" i]'));
+      const hasAlbum = albumMarker || visibleCount > 1 || extraCount > 0;
+      const minimumVisibleCount = hasAlbum ? Math.max(2, visibleCount) : visibleCount;
+      return {
+        hasAlbum,
+        visibleCount: minimumVisibleCount,
+        expectedCount: Math.min(20, Math.max(minimumVisibleCount, minimumVisibleCount + extraCount))
+      };
     };
     const hasVoiceNote = (root, text = '') => {
       if (!root) return false;
@@ -1819,7 +1873,7 @@ async function getActiveChatSnapshot(page) {
         || root;
       const rootRect = chatRoot.getBoundingClientRect();
       const rect = container?.getBoundingClientRect?.();
-      if (rect && rect.width > 0 && rootRect.width > 0) {
+      if (rect && rect.width > 0 && rootRect.width > 0 && rect.width < rootRect.width * 0.88) {
         const messageCenter = rect.left + rect.width / 2;
         const panelCenter = rootRect.left + rootRect.width / 2;
         return messageCenter < panelCenter ? 'in' : 'out';
@@ -1919,12 +1973,12 @@ async function getActiveChatSnapshot(page) {
       return !src.startsWith('data:image/gif') && !img.className.includes('emoji') && !alt.match(/^\p{Emoji}+$/u);
     });
     const highResolutionImages = nonEmojiImages.filter((img) => img.naturalWidth >= 160 && img.naturalHeight >= 120);
-    const extraImageMatch = text.match(/^\s*\+(\d+)\s*$/m);
+    const mediaLayout = renderedMediaLayout(last, text, Math.max(highResolutionImages.length, nonEmojiImages.length));
     const hasNonEmojiImage = highResolutionImages.length > 0 || nonEmojiImages.length > 0;
-    const hasRenderedAlbum = Boolean(extraImageMatch);
-    const visibleMediaCount = Math.max(1, highResolutionImages.length, nonEmojiImages.length, hasRenderedAlbum ? 4 : 0);
+    const hasRenderedAlbum = mediaLayout.hasAlbum;
+    const visibleMediaCount = Math.max(1, highResolutionImages.length, nonEmojiImages.length, mediaLayout.visibleCount);
     const mediaCount = hasNonEmojiImage || hasRenderedAlbum
-      ? Math.max(visibleMediaCount, extraImageMatch ? visibleMediaCount + Number(extraImageMatch[1]) : visibleMediaCount)
+      ? Math.max(visibleMediaCount, mediaLayout.expectedCount)
       : 0;
     const sharedLocation = extractSharedLocation(last);
     const voiceNote = hasVoiceNote(last, text);
@@ -1984,8 +2038,9 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
         || text.match(/\b(\d{9,16})@(?:c\.us|s\.whatsapp\.net)\b/i);
       return match?.[1] || '';
     };
-    const dataIdForNode = (node) => node?.closest?.('[data-id]')?.getAttribute('data-id')
-      || node?.getAttribute?.('data-id')
+    const dataIdForNode = (node) => node?.getAttribute?.('data-id')
+      || node?.closest?.('[data-id]')?.getAttribute('data-id')
+      || node?.querySelector?.('[data-id]')?.getAttribute('data-id')
       || '';
     const modernMessageRootForNode = (node) => node?.closest?.('[data-testid^="conv-msg-"]')
       || (node?.matches?.('[data-testid^="conv-msg-"]') ? node : null);
@@ -1994,9 +2049,9 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
       || node;
     const messageIdForNode = (node) => {
       const root = canonicalMessageRootForNode(node);
-      return root?.getAttribute?.('data-id')
+      return dataIdForNode(node)
+        || dataIdForNode(root)
         || root?.getAttribute?.('data-testid')
-        || dataIdForNode(node)
         || '';
     };
     const directionFromDataId = (value) => {
@@ -2017,7 +2072,10 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
     const cleanRenderedMessageText = (value, mediaType = 'text') => {
       const lines = String(value || '').split('\n').map((line) => line.trim()).filter(Boolean);
       const withoutTime = lines.filter((line) => !isTimestampOnlyText(line));
-      if (mediaType === 'image' && withoutTime.every((line) => /^\+\d+$/.test(line))) return '';
+      if (
+        ['image', 'media'].includes(String(mediaType || '').toLowerCase())
+        && withoutTime.every((line) => /^(?:forwarded|\+\d+)$/i.test(line))
+      ) return '';
       return withoutTime.join('\n').trim();
     };
     const parseCoords = (value) => {
@@ -2056,6 +2114,52 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
       ));
       const playControl = root.querySelector('[aria-label="Play" i], [aria-label^="Play " i], [data-icon="play"]');
       return highResolutionPoster && Boolean(playControl);
+    };
+    const renderedMediaLayout = (root, rawText = '', imageCount = 0) => {
+      if (!root) return { hasAlbum: false, visibleCount: imageCount, expectedCount: imageCount };
+      const selector = [
+        'img', 'video',
+        '[data-testid*="image" i]',
+        '[aria-label*="image" i]',
+        '[style*="background-image"]'
+      ].join(',');
+      const candidates = Array.from(root.querySelectorAll(selector)).filter((element) => {
+        const rect = element.getBoundingClientRect();
+        const className = String(element.className || '').toLowerCase();
+        const alt = String(element.getAttribute?.('alt') || '').toLowerCase();
+        return rect.width >= 48 && rect.height >= 48
+          && !className.includes('emoji')
+          && !alt.includes('emoji')
+          && !alt.includes('avatar');
+      });
+      const leafCandidates = candidates.filter((element) => !candidates.some((other) => (
+        other !== element && element.contains(other)
+      )));
+      const visibleBoxes = new Set(leafCandidates.map((element) => {
+        const rect = element.getBoundingClientRect();
+        return [Math.round(rect.left / 4), Math.round(rect.top / 4), Math.round(rect.width / 4), Math.round(rect.height / 4)].join(':');
+      }));
+      const visibleCount = Math.min(20, Math.max(imageCount, visibleBoxes.size));
+      const albumCountLabels = [
+        ...String(rawText || '').split(/\r?\n/),
+        ...Array.from(root.querySelectorAll('span, [aria-label], [title]')).flatMap((element) => [
+          element.textContent || '',
+          element.getAttribute('aria-label') || '',
+          element.getAttribute('title') || ''
+        ])
+      ].map((value) => String(value || '').trim()).filter(Boolean);
+      const extraMatch = albumCountLabels
+        .map((value) => value.match(/^\+(\d{1,2})$/) || value.match(/^(\d{1,2})\s+more$/i))
+        .find(Boolean);
+      const extraCount = Math.max(0, Math.min(19, Number.parseInt(extraMatch?.[1] || '0', 10) || 0));
+      const albumMarker = Boolean(root.querySelector('[data-testid*="album" i], [aria-label*="album" i]'));
+      const hasAlbum = albumMarker || visibleCount > 1 || extraCount > 0;
+      const minimumVisibleCount = hasAlbum ? Math.max(2, visibleCount) : visibleCount;
+      return {
+        hasAlbum,
+        visibleCount: minimumVisibleCount,
+        expectedCount: Math.min(20, Math.max(minimumVisibleCount, minimumVisibleCount + extraCount))
+      };
     };
     const hasVoiceNote = (root, text = '') => {
       if (!root) return false;
@@ -2122,7 +2226,7 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
         || root;
       const rootRect = chatRoot.getBoundingClientRect();
       const rect = container?.getBoundingClientRect?.();
-      if (rect && rect.width > 0 && rootRect.width > 0) {
+      if (rect && rect.width > 0 && rootRect.width > 0 && rect.width < rootRect.width * 0.88) {
         const messageCenter = rect.left + rect.width / 2;
         const panelCenter = rootRect.left + rootRect.width / 2;
         return messageCenter < panelCenter ? 'in' : 'out';
@@ -2191,12 +2295,12 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
           return !src.startsWith('data:image/gif') && !img.className.includes('emoji') && !alt.match(/^\p{Emoji}+$/u);
         });
         const highResolutionImages = nonEmojiImages.filter((img) => img.naturalWidth >= 160 && img.naturalHeight >= 120);
-        const extraImageMatch = rawText.match(/^\s*\+(\d+)\s*$/m);
+        const mediaLayout = renderedMediaLayout(node, rawText, Math.max(highResolutionImages.length, nonEmojiImages.length));
         const hasNonEmojiImage = highResolutionImages.length > 0 || nonEmojiImages.length > 0;
-        const hasRenderedAlbum = Boolean(extraImageMatch);
-        const visibleMediaCount = Math.max(1, highResolutionImages.length, nonEmojiImages.length, hasRenderedAlbum ? 4 : 0);
+        const hasRenderedAlbum = mediaLayout.hasAlbum;
+        const visibleMediaCount = Math.max(1, highResolutionImages.length, nonEmojiImages.length, mediaLayout.visibleCount);
         const mediaCount = hasNonEmojiImage || hasRenderedAlbum
-          ? Math.max(visibleMediaCount, extraImageMatch ? visibleMediaCount + Number(extraImageMatch[1]) : visibleMediaCount)
+          ? Math.max(visibleMediaCount, mediaLayout.expectedCount)
           : 0;
         const sharedLocation = extractSharedLocation(node);
         const voiceNote = hasVoiceNote(node, rawText);
@@ -2411,7 +2515,45 @@ async function hydrateImageSnapshot(page, snapshot) {
         const key = img.currentSrc || img.src || `${img.naturalWidth}x${img.naturalHeight}:${img.alt || ''}`;
         return [key, img];
       })).values());
-      const visibleImages = uniqueImageCandidates.slice(0, 20);
+      const backgroundUrls = Array.from(root.querySelectorAll([
+        '[style*="background-image"]',
+        '[data-testid*="image" i]',
+        '[aria-label*="image" i]'
+      ].join(','))).flatMap((element) => {
+        const rect = element.getBoundingClientRect();
+        if (rect.width < 48 || rect.height < 48) return [];
+        const backgroundImage = getComputedStyle(element).backgroundImage || '';
+        return Array.from(backgroundImage.matchAll(/url\(["']?([^"')]+)["']?\)/g)).map((match) => match[1]);
+      }).filter((url, index, all) => (
+        url
+        && !/^data:image\/(?:gif|svg\+xml)/i.test(url)
+        && all.indexOf(url) === index
+      ));
+      const loadImageSource = async (sourceUrl) => {
+        if (!sourceUrl) return null;
+        const image = new Image();
+        image.decoding = 'sync';
+        image.src = sourceUrl;
+        if (!image.complete) {
+          await new Promise((resolve) => {
+            const finish = () => resolve();
+            image.addEventListener('load', finish, { once: true });
+            image.addEventListener('error', finish, { once: true });
+            setTimeout(finish, 1800);
+          });
+        }
+        return image.naturalWidth >= 64 && image.naturalHeight >= 64 ? image : null;
+      };
+      const backgroundImages = [];
+      for (const backgroundUrl of backgroundUrls.slice(0, 20)) {
+        const image = await loadImageSource(backgroundUrl);
+        if (image) backgroundImages.push(image);
+      }
+      const visibleDomImages = uniqueImageCandidates.slice(0, 20);
+      const visibleImages = Array.from(new Map([
+        ...visibleDomImages,
+        ...backgroundImages
+      ].map((img) => [img.currentSrc || img.src, img])).values()).slice(0, 20);
       const hydratedExtraImageMatch = String(root.innerText || root.textContent || '').match(/^\s*\+(\d+)\s*$/m);
       const hydratedVisibleCount = Math.max(1, visibleImages.length, hydratedExtraImageMatch ? 4 : 0);
       const expectedCount = Math.max(1, Math.min(20, Math.max(
@@ -2483,7 +2625,7 @@ async function hydrateImageSnapshot(page, snapshot) {
 
       const viewerResults = [];
       if (expectedCount > 1) {
-        const openerCandidate = visibleImages[0]
+        const openerCandidate = visibleDomImages[0]
           || root.querySelector([
             '[data-testid*="image" i]',
             '[data-testid*="album" i]',
@@ -2563,8 +2705,19 @@ async function hydrateImageSnapshot(page, snapshot) {
             const rightScore = (rightRect.width * rightRect.height) + (right.naturalWidth * right.naturalHeight);
             return rightScore - leftScore;
           });
-          const currentImage = viewerImages[0] || null;
-          const currentSource = currentImage?.currentSrc || currentImage?.src || '';
+          const viewerBackgroundUrl = Array.from(viewerRoot.querySelectorAll([
+            '[style*="background-image"]',
+            '[data-testid*="image" i]',
+            '[aria-label*="image" i]'
+          ].join(','))).map((element) => {
+            const rect = element.getBoundingClientRect();
+            if (rect.width < 120 || rect.height < 90) return '';
+            const backgroundImage = getComputedStyle(element).backgroundImage || '';
+            return (backgroundImage.match(/url\(["']?([^"')]+)["']?\)/) || [])[1] || '';
+          }).find(Boolean) || '';
+          let currentImage = viewerImages[0] || null;
+          if (!currentImage && viewerBackgroundUrl) currentImage = await loadImageSource(viewerBackgroundUrl);
+          const currentSource = currentImage?.currentSrc || currentImage?.src || viewerBackgroundUrl || '';
           if (currentImage && currentSource !== previousViewerSource) {
             try {
               const encoded = await encodeImage(currentImage, 'whatsapp_media_viewer_original_pixels');
@@ -2615,7 +2768,15 @@ async function hydrateImageSnapshot(page, snapshot) {
               return ((rightRect.width * rightRect.height) + (right.naturalWidth * right.naturalHeight))
                 - ((leftRect.width * leftRect.height) + (left.naturalWidth * left.naturalHeight));
             });
-            const refreshedSource = refreshedImages[0]?.currentSrc || refreshedImages[0]?.src || '';
+            const refreshedBackgroundSource = refreshedViewerRoot
+              ? Array.from(refreshedViewerRoot.querySelectorAll('[style*="background-image"], [data-testid*="image" i], [aria-label*="image" i]')).map((element) => {
+                const rect = element.getBoundingClientRect();
+                if (rect.width < 120 || rect.height < 90) return '';
+                const backgroundImage = getComputedStyle(element).backgroundImage || '';
+                return (backgroundImage.match(/url\(["']?([^"')]+)["']?\)/) || [])[1] || '';
+              }).find(Boolean) || ''
+              : '';
+            const refreshedSource = refreshedImages[0]?.currentSrc || refreshedImages[0]?.src || refreshedBackgroundSource;
             if (refreshedSource && refreshedSource !== previousViewerSource) break;
           }
           }
@@ -2672,6 +2833,26 @@ async function hydrateImageSnapshot(page, snapshot) {
         mediaCount: imagePreviews.length
       };
     }
+    const tileScreenshots = await captureImageTileScreenshots(page, messageId, snapshot.mediaCount || 1);
+    if (tileScreenshots.length) {
+      const imagePreviews = tileScreenshots.map((item) => ({
+        dataUrl: item.dataUrl,
+        mimeType: item.mimeType || 'image/jpeg',
+        bytes: Number(item.bytes || 0),
+        width: Number(item.width || 0),
+        height: Number(item.height || 0),
+        sha256: crypto.createHash('sha256').update(String(item.dataUrl || '')).digest('hex'),
+        perceptualHash: '',
+        captureSource: item.captureSource || 'whatsapp_rendered_media_tile_pixels',
+        previewWarning: ''
+      }));
+      log(`hydrated ${imagePreviews.length} WhatsApp rendered photo tile(s) for ${normalizeChatKey(snapshot.chatKey)} after source-image hydration was unavailable`);
+      return {
+        ...snapshot,
+        imagePreviews,
+        mediaCount: imagePreviews.length
+      };
+    }
     const screenshot = await captureImageMessageScreenshot(page, messageId);
     if (screenshot?.dataUrl) {
       const imagePreview = {
@@ -2691,6 +2872,60 @@ async function hydrateImageSnapshot(page, snapshot) {
         imagePreviewWarning: 'image_canvas_unavailable_screenshot_stored'
       };
     }
+    const diagnostics = await page.evaluate((targetMessageId) => {
+      const nodes = Array.from(document.querySelectorAll('[data-id], [data-testid^="conv-msg-"]'));
+      const matchingNodes = nodes.filter((element) => (
+        element.getAttribute('data-id') === targetMessageId
+        || element.getAttribute('data-testid') === targetMessageId
+      ));
+      const root = matchingNodes[0];
+      const viewerRoots = Array.from(document.querySelectorAll('[data-testid*="media-viewer" i], [data-animate-modal-popup="true"], [role="dialog"]'))
+        .filter((element) => {
+          const rect = element.getBoundingClientRect();
+          return rect.width >= 320 && rect.height >= 240;
+        });
+      if (!root) return {
+        root_found: false,
+        message_root_count: nodes.length,
+        target_kind: /^(?:true|false)_/.test(String(targetMessageId || '')) ? 'data_id' : 'test_id_or_other',
+        target_hash: String(targetMessageId || '').split('').reduce((hash, character) => ((hash * 31) + character.charCodeAt(0)) >>> 0, 0).toString(16),
+        viewer_count: viewerRoots.length
+      };
+      const rect = root.getBoundingClientRect();
+      const images = Array.from(root.querySelectorAll('img'));
+      const backgroundElements = Array.from(root.querySelectorAll('[style*="background-image"], [data-testid*="image" i], [aria-label*="image" i]'));
+      const computedBackgroundKinds = backgroundElements.map((element) => {
+        const value = getComputedStyle(element).backgroundImage || '';
+        if (/url\(["']?blob:/i.test(value)) return 'blob';
+        if (/url\(["']?data:/i.test(value)) return 'data';
+        if (/url\(["']?https?:/i.test(value)) return 'http';
+        return value && value !== 'none' ? 'other' : 'none';
+      });
+      return {
+        root_found: true,
+        target_kind: /^(?:true|false)_/.test(String(targetMessageId || '')) ? 'data_id' : 'test_id_or_other',
+        target_hash: String(targetMessageId || '').split('').reduce((hash, character) => ((hash * 31) + character.charCodeAt(0)) >>> 0, 0).toString(16),
+        exact_match_count: matchingNodes.length,
+        root_width: Math.round(rect.width),
+        root_height: Math.round(rect.height),
+        root_text_kind: /^\s*complete(?:\s+complete)*\s*[.!]?\s*$/i.test(String(root.innerText || root.textContent || '').replace(/^\s*\d{1,2}:\d{2}\s*(?:AM|PM)?\s*$/gmi, '').trim())
+          ? 'completion'
+          : /\b(?:ugx|usd|price|asking)\b/i.test(String(root.innerText || root.textContent || ''))
+            ? 'property_caption'
+            : 'other',
+        image_count: images.length,
+        visible_image_count: images.filter((image) => {
+          const imageRect = image.getBoundingClientRect();
+          return imageRect.width >= 48 && imageRect.height >= 48;
+        }).length,
+        video_count: root.querySelectorAll('video, [data-testid*="video" i], [aria-label*="video" i]').length,
+        background_element_count: backgroundElements.length,
+        background_kinds: [...new Set(computedBackgroundKinds)],
+        album_marker_count: root.querySelectorAll('[data-testid*="album" i], [aria-label*="album" i]').length,
+        viewer_count: viewerRoots.length
+      };
+    }, messageId).catch((error) => ({ diagnostic_error: error.message || String(error) }));
+    log(`WhatsApp image hydration diagnostic for ${normalizeChatKey(snapshot.chatKey)}: ${JSON.stringify(diagnostics)}`);
     return { ...snapshot, imagePreviewError: 'image_preview_unavailable' };
   } catch (error) {
     return {
@@ -2698,6 +2933,91 @@ async function hydrateImageSnapshot(page, snapshot) {
       imagePreviewError: error.message || String(error)
     };
   }
+}
+
+async function captureImageTileScreenshots(page, messageId, requestedCount = 1) {
+  const roots = page.locator('[data-id], [data-testid^="conv-msg-"]');
+  const rootCount = await roots.count().catch(() => 0);
+  let root = null;
+  for (let index = 0; index < rootCount; index += 1) {
+    const candidate = roots.nth(index);
+    const dataId = await candidate.getAttribute('data-id').catch(() => '');
+    const testId = await candidate.getAttribute('data-testid').catch(() => '');
+    if (dataId === messageId || testId === messageId) {
+      root = candidate;
+      break;
+    }
+  }
+  if (!root) return [];
+  await root.scrollIntoViewIfNeeded().catch(() => {});
+  await page.waitForTimeout(350);
+
+  const selectors = [
+    'img',
+    '[style*="background-image"]',
+    '[data-testid*="image" i]',
+    '[aria-label*="image" i]'
+  ].join(',');
+  const candidates = root.locator(selectors);
+  const candidateCount = await candidates.count().catch(() => 0);
+  const limit = Math.max(1, Math.min(20, Number(requestedCount || 1) || 1));
+  const results = [];
+  const seenBoxes = new Set();
+  const seenHashes = new Set();
+  for (let index = 0; index < candidateCount && results.length < limit; index += 1) {
+    const candidate = candidates.nth(index);
+    const metadata = await candidate.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      const className = String(element.className || '').toLowerCase();
+      const alt = String(element.getAttribute?.('alt') || '').toLowerCase();
+      const videoContainer = Boolean(
+        element.closest?.('[data-testid*="video" i], [aria-label*="video" i]')
+        || element.parentElement?.querySelector?.(':scope > video, :scope > [data-testid*="video" i], :scope > [data-icon="play"], :scope > [aria-label*="Play video" i]')
+      );
+      const containsNestedCandidate = Array.from(element.querySelectorAll([
+        'img',
+        '[style*="background-image"]',
+        '[data-testid*="image" i]',
+        '[aria-label*="image" i]'
+      ].join(','))).some((nested) => {
+        const nestedRect = nested.getBoundingClientRect();
+        return nested !== element && nestedRect.width >= 80 && nestedRect.height >= 60;
+      });
+      return {
+        suitable: rect.width >= 80 && rect.height >= 60
+          && !containsNestedCandidate
+          && !videoContainer
+          && !className.includes('emoji')
+          && !alt.includes('emoji')
+          && !alt.includes('avatar'),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+        boxKey: [Math.round(rect.left / 4), Math.round(rect.top / 4), Math.round(rect.width / 4), Math.round(rect.height / 4)].join(':')
+      };
+    }).catch(() => null);
+    if (!metadata?.suitable || seenBoxes.has(metadata.boxKey)) continue;
+    seenBoxes.add(metadata.boxKey);
+    const buffer = await candidate.screenshot({
+      type: 'jpeg',
+      quality: 90,
+      animations: 'disabled'
+    }).catch(() => null);
+    if (!buffer?.length || buffer.length > LISTING_IMAGE_PREVIEW_MAX_BYTES) continue;
+    const hash = crypto.createHash('sha256').update(buffer).digest('hex');
+    if (seenHashes.has(hash)) continue;
+    seenHashes.add(hash);
+    results.push({
+      dataUrl: `data:image/jpeg;base64,${buffer.toString('base64')}`,
+      mimeType: 'image/jpeg',
+      bytes: buffer.length,
+      width: metadata.width,
+      height: metadata.height,
+      kind: 'image',
+      name: `whatsapp-property-tile-${results.length + 1}.jpg`,
+      captureSource: 'whatsapp_rendered_media_tile_pixels'
+    });
+  }
+  return results;
 }
 
 async function captureImageMessageScreenshot(page, messageId) {
@@ -2918,7 +3238,82 @@ async function captureVideoMessageScreenshot(page, messageId) {
       previewWarning: 'video_bytes_unavailable_screenshot_evidence_only'
     };
   }
+  const viewerCandidates = page.locator([
+    '[data-testid*="media-viewer" i]',
+    '[data-animate-modal-popup="true"]',
+    '[role="dialog"]'
+  ].join(','));
+  const viewerCount = await viewerCandidates.count().catch(() => 0);
+  for (let index = 0; index < viewerCount; index += 1) {
+    const viewer = viewerCandidates.nth(index);
+    const suitable = await viewer.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      const hasVisibleMedia = Array.from(element.querySelectorAll('img, video')).some((media) => {
+        const mediaRect = media.getBoundingClientRect();
+        return mediaRect.width >= 120 && mediaRect.height >= 90;
+      });
+      return rect.width >= 320 && rect.height >= 240 && hasVisibleMedia;
+    }).catch(() => false);
+    if (!suitable) continue;
+    const buffer = await viewer.screenshot({
+      type: 'jpeg',
+      quality: 82,
+      animations: 'disabled'
+    }).catch(() => null);
+    if (!buffer?.length || buffer.length > LISTING_IMAGE_PREVIEW_MAX_BYTES) continue;
+    return {
+      dataUrl: `data:image/jpeg;base64,${buffer.toString('base64')}`,
+      mimeType: 'image/jpeg',
+      bytes: buffer.length,
+      kind: 'image',
+      name: 'whatsapp-video-viewer-preview.jpg',
+      degradedFromVideo: true,
+      captureSource: 'rendered_whatsapp_video_fallback',
+      previewWarning: 'video_bytes_unavailable_screenshot_evidence_only'
+    };
+  }
   return null;
+}
+
+async function closeWhatsappMediaViewer(page) {
+  const closed = await page.evaluate(() => {
+    const roots = Array.from(document.querySelectorAll([
+      '[data-testid*="media-viewer" i]',
+      '[data-animate-modal-popup="true"]',
+      '[role="dialog"]'
+    ].join(','))).filter((element) => {
+      const rect = element.getBoundingClientRect();
+      const explicitViewer = /media.*viewer|viewer.*media/i.test([
+        element.getAttribute('data-testid') || '',
+        element.getAttribute('aria-label') || ''
+      ].join(' '));
+      const visibleMedia = Array.from(element.querySelectorAll('img, video')).some((media) => {
+        const mediaRect = media.getBoundingClientRect();
+        return mediaRect.width >= 120 && mediaRect.height >= 90;
+      });
+      return rect.width >= 320 && rect.height >= 240 && (explicitViewer || visibleMedia);
+    });
+    const root = roots.sort((left, right) => {
+      const leftRect = left.getBoundingClientRect();
+      const rightRect = right.getBoundingClientRect();
+      return (rightRect.width * rightRect.height) - (leftRect.width * leftRect.height);
+    })[0];
+    if (!root) return false;
+    const closeControl = Array.from(root.querySelectorAll([
+      'button[aria-label*="Close" i]',
+      '[role="button"][aria-label*="Close" i]',
+      '[data-icon="x-viewer"]',
+      '[data-testid*="media-viewer-close" i]'
+    ].join(','))).find((element) => {
+      const rect = element.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
+    });
+    if (!closeControl) return false;
+    (closeControl.closest('button, [role="button"]') || closeControl).click();
+    return true;
+  }).catch(() => false);
+  if (closed) await page.waitForTimeout(250).catch(() => {});
+  return closed;
 }
 
 async function captureVideoKeyFrames(page, messageId, requestedFrameCount = 5) {
@@ -3274,6 +3669,8 @@ async function hydrateVideoSnapshot(page, snapshot) {
     };
   } catch (error) {
     return { ...snapshot, mediaPreviewError: error.message || String(error) };
+  } finally {
+    await closeWhatsappMediaViewer(page);
   }
 }
 
@@ -3659,6 +4056,7 @@ async function scrollWhatsappHistoryNewer(page) {
 }
 
 function employeeBatchSnapshotKey(snapshot = {}) {
+  snapshot = snapshot || {};
   return String(
     snapshot.messageId
     || snapshot.mediaFingerprint
@@ -3877,7 +4275,34 @@ async function replayEmployeeBatchThroughCompletion(page, history = {}, row = {}
         const snapshotChat = normalizeChatKey(snapshot.chatKey);
         return !history.chatKey || !snapshotChat || snapshotChat === history.chatKey;
       });
-    for (const snapshot of snapshots) {
+    let replaySnapshots = snapshots;
+    if (history.propertyPhaseKey && !propertyPhaseStarted) {
+      const propertyPhaseIndex = snapshots.findIndex((snapshot) => (
+        employeeBatchSnapshotKey(snapshot) === history.propertyPhaseKey
+      ));
+      if (propertyPhaseIndex < 0) {
+        const moved = await scrollWhatsappHistoryNewer(page);
+        if (!moved) break;
+        await page.waitForTimeout(650);
+        continue;
+      }
+      for (const setupSnapshot of snapshots.slice(0, propertyPhaseIndex + 1)) {
+        const setupKey = employeeBatchSnapshotKey(setupSnapshot);
+        if (!setupKey) continue;
+        visited.add(setupKey);
+        completedSnapshotKeys.add(setupKey);
+      }
+      started = true;
+      propertyPhaseStarted = true;
+      replaySnapshots = snapshots.slice(propertyPhaseIndex + 1);
+    }
+    // WhatsApp can surface a mixed album's detached data-id node after the
+    // visible COMPLETE row. Hydrate all post-boundary media before completing.
+    replaySnapshots = [
+      ...replaySnapshots.filter((snapshot) => !isEmployeeBatchCompletionSnapshot(snapshot)),
+      ...replaySnapshots.filter(isEmployeeBatchCompletionSnapshot)
+    ];
+    for (const snapshot of replaySnapshots) {
       const key = employeeBatchSnapshotKey(snapshot);
       if (!started) {
         if (key !== history.triggerKey) continue;
@@ -4008,6 +4433,9 @@ async function replayEmployeeBatchThroughCompletion(page, history = {}, row = {}
         continue;
       }
 
+      const replayMessageId = String(snapshot.messageId || '');
+      const replayMessageIdHash = crypto.createHash('sha1').update(replayMessageId).digest('hex').slice(0, 12);
+      log(`Agent 007 replay hydrating property media for ${history.chatKey}: type=${snapshot.mediaType || 'unknown'} count=${Number(snapshot.mediaCount || 0)} timestamp=${snapshot.timestampLabel || 'unknown'} id_kind=${/^(?:true|false)_/.test(replayMessageId) ? 'data_id' : 'test_id_or_other'} id_hash=${replayMessageIdHash}`);
       const hydrated = await hydrateMediaSnapshot(page, {
         ...snapshot,
         bridgeMetadata: {
@@ -5939,6 +6367,7 @@ async function main() {
   let employeeVideoRecoverySettled = false;
   let employeeVideoRecoveryAttempts = 0;
   let lastEmployeeVideoRecoveryAttempt = 0;
+  let readyHistoryNormalized = false;
 
   while (true) {
     try {
@@ -6006,6 +6435,7 @@ async function main() {
           const selectedPage = await getUsableWhatsappPage(context);
           if (selectedPage !== page) {
             page = selectedPage;
+            readyHistoryNormalized = false;
             readyState = await detectWhatsappReady(page);
             log(`reselected WhatsApp tab (${page.url() || 'no_url'}) ${summarizeWhatsappReadyState(readyState)}`);
             lastBridgeState = '';
@@ -6092,6 +6522,14 @@ async function main() {
         pairingRateLimitStore.clear();
       } catch (error) {
         log(`failed to clear WhatsApp pairing rate-limit state: ${error?.message || error}`);
+      }
+
+      if (!readyHistoryNormalized) {
+        await scrollWhatsappHistoryToLatest(page);
+        readyHistoryNormalized = true;
+        lastFastLaneSweep = Date.now();
+        lastRecentSweep = Date.now();
+        log('normalized the active WhatsApp conversation to its latest row before starting inbound sweeps.');
       }
 
       let sentAtLoopStart = 0;
@@ -6205,7 +6643,7 @@ async function main() {
         await sendHeartbeat({
           status: 'online',
           current_url: page.url(),
-          active_chat_key: normalizeChatKey(activeSnapshot.chatKey || ''),
+          active_chat_key: normalizeChatKey(activeSnapshot?.chatKey || ''),
           unread_count: unreadResult.unreadCount || 0,
           stats: {
             processed_call_events: processedCallEvents || 0,
@@ -6230,7 +6668,7 @@ async function main() {
       consecutiveLoopErrors = 0;
     } catch (error) {
       consecutiveLoopErrors += 1;
-      log('bridge loop error:', error.message || error);
+      log('bridge loop error:', error.stack || error.message || error);
       await sendHeartbeat({
         status: 'degraded',
         current_url: '',
