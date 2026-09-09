@@ -100,17 +100,17 @@ async function extractBrochureDraft(buffer, context = {}, dependencies = {}) {
   let uploaded;
   try {
     const maxAiBrochureBytes = dependencies.maxAiBrochureBytes || MAX_AI_BROCHURE_BYTES;
-    if (buffer.length > maxAiBrochureBytes) {
-      const brochureText = await (dependencies.localBrochureText || localBrochureText)(buffer);
-      if (!brochureText) throw new Error('No readable text was found in the large brochure');
+    const brochureText = await (dependencies.localBrochureText || localBrochureText)(buffer).catch(() => '');
+    if (brochureText) {
       const response = await client.responses.create({
         model: dependencies.model || getTaskModel('brochure', process.env.OPENAI_OFF_PLAN_BROCHURE_MODEL || 'gpt-4.1-mini', 'off_plan'),
         input: [{ role: 'user', content: [{ type: 'input_text', text: `${extractionInstruction()}\n\nBROCHURE TEXT:\n${brochureText}` }] }],
         temperature: 0
       });
       const extracted = jsonFromText(response.output_text || '');
-      return { payload: normalizeExtractedBrochure(extracted, { ...context, fallbackName }), extraction_status: 'completed_from_text', extraction_warning: 'The PDF exceeded the direct document-input limit, so its embedded text was extracted locally. Staff must verify facts against the original brochure.' };
+      return { payload: normalizeExtractedBrochure(extracted, { ...context, fallbackName }), extraction_status: 'completed_from_text', extraction_warning: 'Embedded PDF text was extracted locally for faster intake. Staff must verify facts against the original brochure.' };
     }
+    if (buffer.length > maxAiBrochureBytes) throw new Error('No readable text was found in the large brochure');
     const file = await (dependencies.toProviderFile || toProviderFile)(buffer, cleanText(context.filename || 'brochure.pdf', 180), { type: 'application/pdf' });
     uploaded = await client.files.create({ file, purpose: 'user_data' });
     const response = await client.responses.create({

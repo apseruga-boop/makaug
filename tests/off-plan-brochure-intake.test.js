@@ -59,6 +59,24 @@ test('a provider failure still returns a review-safe shell and cleans up its upl
   assert.equal(deletedId, 'file-123');
 });
 
+test('a readable brochure uses local text before attempting a provider file upload', async () => {
+  const client = {
+    files: { create: async () => { throw new Error('readable brochure must not be uploaded directly'); } },
+    responses: { create: async ({ input }) => {
+      assert.match(input[0].content[0].text, /BROCHURE TEXT:[\s\S]*Beverly Grande/);
+      return { output_text: '{"name":"Beverly Grande","developer_name":"HMB Homes","area":"Motor City"}' };
+    } }
+  };
+  const result = await extractBrochureDraft(
+    Buffer.from('%PDF-1.4\nmock'),
+    { countryCode: 'AE', countryName: 'United Arab Emirates', filename: 'Beverly Grande.pdf' },
+    { client, localBrochureText: async () => 'Beverly Grande by HMB Homes in Motor City.' }
+  );
+  assert.equal(result.extraction_status, 'completed_from_text');
+  assert.equal(result.payload.status, 'pending_review');
+  assert.equal(result.payload.area, 'Motor City');
+});
+
 test('a brochure above the direct provider limit uses local text and stays review-only', async () => {
   const client = {
     files: { create: async () => { throw new Error('large brochure must not be uploaded directly'); } },
