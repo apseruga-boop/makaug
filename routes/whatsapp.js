@@ -5261,6 +5261,38 @@ async function handleEmployeeWhatsappIntake({
           inboundMessageId: propertyInboundMessageId,
           caption: cleanBody
         });
+        if (existingProperty && data.employee_intake_recovery_skip_existing_matches === true) {
+          const propertyIds = Array.isArray(data.property_ids) ? data.property_ids.map(String) : [];
+          if (propertyIds.includes(String(existingProperty.id))) {
+            try {
+              const attachment = await attachEmployeeReviewMedia({
+                propertyId: existingProperty.id,
+                storedMedia: pendingStoredMedia,
+                phone,
+                inboundMessageId: propertyInboundMessageId
+              });
+              data.current_property_id = existingProperty.id;
+              if (!attachment.duplicate) {
+                data.total_media_count = Number(data.total_media_count || 0) + attachment.attached;
+              }
+              delete data.pending_property_caption;
+              clearEmployeePendingMedia(data);
+              promoteEmployeeQueuedSubmission(data);
+              await replaceEmployeeSession(phone, currentStep, data);
+              return {
+                handled: true,
+                nextStep: currentStep,
+                propertyId: existingProperty.id,
+                duplicate: attachment.duplicate,
+                recoveryAlreadyAccountedFor: true,
+                message: ''
+              };
+            } catch (error) {
+              logger.error('WhatsApp employee recovery media attachment failed:', error);
+              return { handled: true, nextStep: currentStep, message: 'The property remains in staff review, but I could not attach its recovered media. Nothing went live.' };
+            }
+          }
+        }
         if (existingProperty) {
           if (propertyAttemptRecorded) {
             data.properties_duplicate_count = Number(data.properties_duplicate_count || 0) + 1;
@@ -5436,31 +5468,31 @@ async function handleEmployeeWhatsappIntake({
       }
     }
     let propertyAttemptRecorded = false;
+    let recoveredExistingProperty = null;
     if (shouldStartProperty) {
       const existingProperty = await findEmployeeDuplicateProperty({ caption, facts, sessionData: data });
       if (existingProperty && data.employee_intake_recovery_skip_existing_matches === true) {
-        recordEmployeePropertyAttempt(data, { inboundMessageId, caption });
         const propertyIds = Array.isArray(data.property_ids) ? data.property_ids.map(String) : [];
         data.current_property_id = propertyIds.includes(String(existingProperty.id))
           ? existingProperty.id
           : null;
-        if (!pendingStoredMediaBeforeMessage.length || continuesPendingProperty) {
-          delete data.pending_property_caption;
-          clearEmployeePendingMedia(data);
-          promoteEmployeeQueuedSubmission(data);
+        if (!data.current_property_id) {
+          return {
+            handled: true,
+            nextStep: currentStep,
+            propertyId: existingProperty.id,
+            duplicate: true,
+            recoveryAlreadyAccountedFor: true,
+            message: ''
+          };
         }
-        await replaceEmployeeSession(phone, currentStep, data);
-        return {
-          handled: true,
-          nextStep: currentStep,
-          propertyId: existingProperty.id,
-          duplicate: true,
-          recoveryAlreadyAccountedFor: true,
-          message: ''
-        };
+        // Ordered recovery is deliberately replaying the media for an already
+        // counted review row. Do not return at the duplicate-caption check:
+        // persist the original bytes and attach only new hashes to that row.
+        recoveredExistingProperty = existingProperty;
       }
       propertyAttemptRecorded = recordEmployeePropertyAttempt(data, { inboundMessageId, caption });
-      if (existingProperty) {
+      if (existingProperty && !recoveredExistingProperty) {
         if (propertyAttemptRecorded) data.properties_duplicate_count = Number(data.properties_duplicate_count || 0) + 1;
         if (!pendingStoredMediaBeforeMessage.length || continuesPendingProperty) {
           delete data.pending_property_caption;
@@ -5517,7 +5549,7 @@ async function handleEmployeeWhatsappIntake({
       return { handled: true, nextStep: currentStep, message: 'I could not store that media permanently, so it was not added to review. Please wait before resending; nothing went live.' };
     }
 
-    if (shouldStartProperty) {
+    if (shouldStartProperty && !recoveredExistingProperty) {
       try {
         const propertyId = await createEmployeeReviewProperty({ phone, inboundMessageId, caption, facts, storedMedia, sessionData: data });
         data.current_property_id = propertyId;
@@ -5557,10 +5589,10 @@ async function handleEmployeeWhatsappIntake({
         inboundMessageId
       });
       if (!attachment.duplicate) {
-        if (data.employee_intake_recovery_skip_existing_matches !== true) {
-          data.total_media_count = Number(data.total_media_count || 0) + attachment.attached;
-        }
+        data.total_media_count = Number(data.total_media_count || 0) + attachment.attached;
         delete data.pending_property_caption;
+        clearEmployeePendingMedia(data);
+        promoteEmployeeQueuedSubmission(data);
         await replaceEmployeeSession(phone, currentStep, data);
       }
       return {
@@ -5568,6 +5600,7 @@ async function handleEmployeeWhatsappIntake({
         nextStep: currentStep,
         propertyId: data.current_property_id,
         duplicate: attachment.duplicate,
+        recoveryAlreadyAccountedFor: Boolean(recoveredExistingProperty),
         message: (data.property_batch_mode || 'multiple') === 'multiple'
           ? ''
           : attachment.duplicate
