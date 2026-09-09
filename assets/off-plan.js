@@ -1251,6 +1251,7 @@
       <details class="mt-4 rounded-xl border border-gray-200 p-4"><summary class="cursor-pointer text-sm font-black text-gray-900">Project facts and publication fields</summary>
         <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-3 mt-4">
           <label class="text-xs font-bold">Country code<input data-op-edit="country_code" value="${escapeHtml(project.country_code)}" maxlength="2" pattern="[A-Za-z]{2}" class="mt-1 w-full rounded-lg border px-3 py-2 uppercase"></label>
+          <label class="text-xs font-bold">Project name<input data-op-edit="name" value="${escapeHtml(project.name)}" class="mt-1 w-full rounded-lg border px-3 py-2"></label>
           <label class="text-xs font-bold">Developer<input data-op-edit="developer_name" value="${escapeHtml(project.developer_name || '')}" class="mt-1 w-full rounded-lg border px-3 py-2"></label>
           <label class="text-xs font-bold">Source agent UUID<input data-op-edit="source_agent_id" value="${escapeHtml(project.source_agent_id || '')}" class="mt-1 w-full rounded-lg border px-3 py-2 font-mono text-xs"></label>
           <label class="text-xs font-bold">Source display name<input data-op-edit="source_display_name" value="${escapeHtml(project.source_display_name || '')}" class="mt-1 w-full rounded-lg border px-3 py-2"></label>

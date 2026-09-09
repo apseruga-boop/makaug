@@ -33,6 +33,15 @@ test('brochure extraction accepts fenced provider JSON but does not invent missi
   assert.deepEqual(payload.unit_types, []);
 });
 
+test('an explicitly supplied project name wins over a noisy extracted brochure title', () => {
+  const payload = normalizeExtractedBrochure(
+    { name: 'Beverly Grande Motor city', area: 'Motor City' },
+    { countryCode: 'AE', countryName: 'United Arab Emirates', fallbackName: 'Beverly Grande' }
+  );
+  assert.equal(payload.name, 'Beverly Grande');
+  assert.equal(payload.area, 'Motor City');
+});
+
 test('an unavailable extraction provider still returns a review-safe brochure shell', async () => {
   const result = await extractBrochureDraft(Buffer.from('%PDF-1.4\nmock'), { countryCode: 'AE', countryName: 'United Arab Emirates', filename: 'Beverly Park.pdf' }, { client: null });
   assert.equal(result.extraction_status, 'provider_unavailable');
