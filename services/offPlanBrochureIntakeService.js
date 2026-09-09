@@ -27,7 +27,7 @@ function jsonFromText(value) {
 function normalizeExtractedBrochure(raw = {}, context = {}) {
   const countryCode = cleanText(context.countryCode || 'UG', 2).toUpperCase();
   const countryName = cleanText(context.countryName || countryCode, 120);
-  const name = cleanText(raw.name || context.fallbackName || 'Brochure project', 220);
+  const name = cleanText(context.fallbackName || raw.name || 'Brochure project', 220);
   return {
     country_code: countryCode,
     name,
