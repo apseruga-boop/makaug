@@ -12860,6 +12860,122 @@ function renderStaffHarvestSummary(data = {}) {
   wrap.innerHTML = harvestSummaryHtml(data);
 }
 
+let staffSourceCoverageRun = null;
+
+function renderStaffSourceCoverage(run = null) {
+  const status = document.getElementById("staff-source-coverage-status");
+  if (!status) return;
+  staffSourceCoverageRun = run;
+  if (!run) {
+    status.textContent = "No exhaustive source coverage manifest exists yet.";
+    return;
+  }
+  const counters = run.counters || {};
+  const total = Number(run.source_record_count || 0);
+  const checked = Number(run.checked_count || 0);
+  const resolved = Number(run.resolved_count ?? checked);
+  const blocked = Number(run.blocked_count ?? counters.blocked ?? 0);
+  const remaining = Number(run.remaining_count ?? counters.remaining ?? Math.max(0, total - resolved));
+  const percent = total ? Math.min(100, Math.round((resolved / total) * 1000) / 10) : 0;
+  status.innerHTML = `
+    <div class="grid sm:grid-cols-2 lg:grid-cols-6 gap-2">
+      <div><strong>${staffNumber(total)}</strong> source records</div>
+      <div><strong>${staffNumber(run.canonical_source_count || 0)}</strong> canonical sources</div>
+      <div><strong>${staffNumber(resolved)}</strong> resolved (${adminEscape(percent)}%)</div>
+      <div><strong>${staffNumber(remaining)}</strong> remaining</div>
+      <div><strong>${staffNumber(blocked)}</strong> blocked</div>
+      <div><strong>${staffNumber(counters.review_queued_count || 0)}</strong> review rows</div>
+    </div>
+    <div class="mt-2">Run <strong>${adminEscape(run.id || "-")}</strong> • ${adminEscape((run.platform_scope || []).join(", "))} • ${adminEscape(run.status || "queued")} • ${staffNumber(run.section_count || 0)} sections</div>
+    <div class="mt-1 font-bold text-emerald-800">Review-only confirmed • automatically published: 0</div>`;
+}
+
+function renderStaffSourceCoverageItems(items = []) {
+  const wrap = document.getElementById("staff-source-coverage-items");
+  if (!wrap) return;
+  if (!items.length) {
+    wrap.innerHTML = `<div class="text-xs text-gray-500">No claimable TikTok sources remain in this run.</div>`;
+    return;
+  }
+  wrap.innerHTML = items.map((item) => `
+    <article id="staff-source-coverage-item-${adminAttr(item.id)}" class="rounded-xl border border-pink-100 bg-pink-50 p-3">
+      <div class="font-black text-gray-900">#${staffNumber(item.sequence_number || 0)} • ${adminEscape(item.source_name || item.source_key || "TikTok source")}</div>
+      <div class="mt-1 text-[11px] text-gray-500">Section ${staffNumber(item.section_number || 0)} • attempt ${staffNumber(item.attempts || 0)}</div>
+      <a href="${adminAttr(item.source_url || "#")}" target="_blank" rel="noopener noreferrer" class="mt-2 inline-block break-all text-xs font-bold text-pink-800 underline">Open public source</a>
+      <textarea id="staff-source-coverage-links-${adminAttr(item.id)}" class="mt-2 w-full rounded-lg border border-pink-200 bg-white p-2 text-[11px] font-mono" rows="3" placeholder="Paste up to 10 exact /@handle/video/id links found on this source"></textarea>
+      <div class="mt-2 flex flex-wrap gap-2">
+        <button type="button" onclick="staffCompleteSourceCoverageItem(${adminListingIdArg(item.id)}, false)" class="rounded-lg bg-emerald-700 px-3 py-1.5 text-[11px] font-black text-white">Queue links + checked</button>
+        <button type="button" onclick="staffCompleteSourceCoverageItem(${adminListingIdArg(item.id)}, true)" class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-[11px] font-black text-gray-700">Checked — no results</button>
+      </div>
+    </article>`).join("");
+}
+
+async function staffLoadSourceCoverage() {
+  const status = document.getElementById("staff-source-coverage-status");
+  if (status) status.textContent = "Loading exhaustive coverage…";
+  try {
+    const response = await apiRequest("/api/staff/source-intake/coverage/runs?limit=1");
+    renderStaffSourceCoverage(response?.data?.runs?.[0] || null);
+  } catch (error) {
+    if (status) status.textContent = `Coverage unavailable: ${error.message || "request failed"}`;
+  }
+}
+
+async function staffStartSourceCoverage() {
+  const status = document.getElementById("staff-source-coverage-status");
+  if (status) status.textContent = "Creating or resuming the durable TikTok + YouTube manifest…";
+  try {
+    const response = await apiRequest("/api/staff/source-intake/coverage/runs", {
+      method: "POST",
+      body: { platforms: ["tiktok", "youtube"], lookback_days: 30, section_size: 500, reuse_active: true }
+    });
+    renderStaffSourceCoverage(response?.data || null);
+    toast(response?.data?.reused_existing_run ? "Existing coverage run resumed." : "Exhaustive source manifest created.");
+  } catch (error) {
+    if (status) status.textContent = `Coverage start failed: ${error.message || "request failed"}`;
+    toast(`Coverage start failed: ${error.message || "request failed"}`);
+  }
+}
+
+async function staffClaimTikTokCoverageBatch() {
+  if (!staffSourceCoverageRun?.id) await staffLoadSourceCoverage();
+  if (!staffSourceCoverageRun?.id) return toast("Start the exhaustive coverage manifest first.");
+  const wrap = document.getElementById("staff-source-coverage-items");
+  if (wrap) wrap.textContent = "Claiming the next restart-safe TikTok batch…";
+  try {
+    const response = await apiRequest(`/api/staff/source-intake/coverage/runs/${encodeURIComponent(staffSourceCoverageRun.id)}/claim`, {
+      method: "POST",
+      body: { platform: "tiktok", batch_size: 10, lease_minutes: 30 }
+    });
+    renderStaffSourceCoverageItems(response?.data?.items || []);
+  } catch (error) {
+    if (wrap) wrap.textContent = `Could not claim the next TikTok batch: ${error.message || "request failed"}`;
+  }
+}
+
+async function staffCompleteSourceCoverageItem(itemId = "", checkedEmpty = false) {
+  const id = String(itemId || "").trim();
+  if (!id) return;
+  const rawText = checkedEmpty ? "" : (document.getElementById(`staff-source-coverage-links-${id}`)?.value || "");
+  if (!checkedEmpty && !staffSourceImportTikTokUrls(rawText).length) {
+    return toast("Paste at least one exact TikTok /@handle/video/id link, or use Checked — no results.");
+  }
+  const card = document.getElementById(`staff-source-coverage-item-${id}`);
+  if (card) card.style.opacity = "0.55";
+  try {
+    const response = await apiRequest(`/api/staff/source-intake/coverage/items/${encodeURIComponent(id)}/complete`, {
+      method: "POST",
+      body: { raw_text: rawText, outcome: checkedEmpty ? "checked_empty" : "completed" }
+    });
+    renderStaffSourceCoverage(response?.data?.run || staffSourceCoverageRun);
+    if (card) card.remove();
+    toast(checkedEmpty ? "Source recorded as checked with no recent results." : "Exact links checked and queued review-only.");
+  } catch (error) {
+    if (card) card.style.opacity = "1";
+    toast(`Could not complete this source: ${error.message || "request failed"}`);
+  }
+}
+
 async function loadStaffHarvestSummary() {
   const wrap = document.getElementById("staff-harvest-summary");
   if (wrap) wrap.textContent = "Loading Harvest coverage…";
@@ -13074,6 +13190,7 @@ function applyStaffDashboardData(data = {}, user = {}) {
   renderStaffProfileSettings(data.staff || user, data.payments || {});
   renderStaffSourceIntake(data.source_intake || {});
   loadStaffHarvestSummary();
+  staffLoadSourceCoverage();
   renderStaffTraining(data.training || {});
   if (data.partial) {
     renderStaffDeferredPanelLoading();

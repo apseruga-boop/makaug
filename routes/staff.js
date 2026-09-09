@@ -67,6 +67,15 @@ const {
   recordHarvestImportResult,
 } = require('../services/propertyHarvestMonitoringService');
 const {
+  SOURCE_COVERAGE_MARKER,
+  createSourceCoverageRun,
+  getSourceCoverageRun,
+  listSourceCoverageRuns,
+  getSourceCoverageItem,
+  claimSourceCoverageBatch,
+  completeSourceCoverageItem,
+} = require('../services/sourceCoverageService');
+const {
   listHarvestCreators,
   loadNextHarvestCreator,
   markHarvestCreatorChecked,
@@ -3926,6 +3935,178 @@ router.get('/source-intake/discover-helper', (req, res) => {
       instructions: 'Open the public Discover page, copy exact /@handle/video/id links from visible listing cards, then paste those links into the exact social import panel. The server does not scrape the page.',
     },
   });
+});
+
+router.get('/source-intake/coverage/runs', async (req, res, next) => {
+  try {
+    res.set('Cache-Control', 'no-store');
+    const runs = await listSourceCoverageRuns(db, {
+      limit: req.query.limit,
+      platform: req.query.platform,
+    });
+    return res.json({ ok: true, data: { marker: SOURCE_COVERAGE_MARKER, runs } });
+  } catch (error) {
+    if (error?.code === '42P01') {
+      return res.status(503).json({ ok: false, error: 'Apply migration 124_source_coverage_manifest.sql before starting exhaustive coverage.' });
+    }
+    return next(error);
+  }
+});
+
+router.post('/source-intake/coverage/runs', async (req, res, next) => {
+  try {
+    res.set('Cache-Control', 'no-store');
+    const platforms = req.body?.platforms || req.body?.platform || ['tiktok', 'youtube'];
+    const run = await createSourceCoverageRun({
+      db,
+      platforms,
+      lookbackDays: req.body?.lookback_days || req.body?.lookbackDays || 30,
+      sectionSize: req.body?.section_size || req.body?.sectionSize || 500,
+      createdBy: actorId(req),
+      reuseActive: req.body?.reuse_active !== false && req.body?.reuseActive !== false,
+    });
+    await logStaffActivity(req, run.reused_existing_run ? 'source_coverage_run_reused' : 'source_coverage_run_created', {
+      targetType: 'source_coverage',
+      targetId: run.id,
+      metadata: {
+        marker: SOURCE_COVERAGE_MARKER,
+        platform_scope: run.platform_scope,
+        source_record_count: run.source_record_count,
+        canonical_source_count: run.canonical_source_count,
+        review_only: true,
+        auto_publish: false,
+      },
+    });
+    return res.status(run.reused_existing_run ? 200 : 201).json({ ok: true, data: run });
+  } catch (error) {
+    if (error?.code === '42P01') {
+      return res.status(503).json({ ok: false, error: 'Apply migration 124_source_coverage_manifest.sql before starting exhaustive coverage.' });
+    }
+    return next(error);
+  }
+});
+
+router.get('/source-intake/coverage/runs/:runId', async (req, res, next) => {
+  try {
+    res.set('Cache-Control', 'no-store');
+    return res.json({ ok: true, data: await getSourceCoverageRun(db, req.params.runId) });
+  } catch (error) {
+    if (error.status) return res.status(error.status).json({ ok: false, error: error.message });
+    if (error?.code === '42P01') return res.status(503).json({ ok: false, error: 'Source coverage storage is not migrated.' });
+    return next(error);
+  }
+});
+
+router.post('/source-intake/coverage/runs/:runId/claim', async (req, res, next) => {
+  try {
+    res.set('Cache-Control', 'no-store');
+    const platform = cleanText(req.body?.platform || 'tiktok').toLowerCase();
+    const items = await claimSourceCoverageBatch(db, req.params.runId, {
+      platform,
+      batchSize: req.body?.batch_size || req.body?.batchSize || 10,
+      leaseMinutes: req.body?.lease_minutes || req.body?.leaseMinutes || 30,
+    });
+    const publicItems = items.map((item) => ({
+      id: item.id,
+      run_id: item.run_id,
+      source_key: item.source_key,
+      source_name: item.source_name,
+      platform: item.platform,
+      source_type: item.source_type,
+      source_url: item.source_url,
+      source_offset: item.source_offset,
+      sequence_number: item.sequence_number,
+      section_number: item.section_number,
+      status: item.status,
+      attempts: item.attempts,
+      lease_expires_at: item.lease_expires_at,
+    }));
+    await logStaffActivity(req, 'source_coverage_batch_claimed', {
+      targetType: 'source_coverage',
+      targetId: req.params.runId,
+      metadata: { marker: SOURCE_COVERAGE_MARKER, platform, claimed_count: publicItems.length },
+    });
+    return res.json({ ok: true, data: { marker: SOURCE_COVERAGE_MARKER, items: publicItems } });
+  } catch (error) {
+    if (error?.code === '42P01') return res.status(503).json({ ok: false, error: 'Source coverage storage is not migrated.' });
+    return next(error);
+  }
+});
+
+router.post('/source-intake/coverage/items/:itemId/complete', async (req, res, next) => {
+  try {
+    res.set('Cache-Control', 'no-store');
+    const item = await getSourceCoverageItem(db, req.params.itemId);
+    if (item.platform !== 'tiktok') {
+      return res.status(400).json({ ok: false, error: 'The assisted completion endpoint accepts TikTok coverage items only.' });
+    }
+    if (item.status !== 'processing') {
+      return res.status(409).json({ ok: false, error: `This coverage item is ${item.status}; claim it before completing it.` });
+    }
+    const rawText = cleanText(req.body?.raw_text || req.body?.rawText || '');
+    const inputUrls = Array.isArray(req.body?.urls) ? req.body.urls : [];
+    const exactUrls = extractTikTokVideoUrls([...inputUrls, rawText].join('\n')).slice(0, 10);
+    let importResult = null;
+    if (exactUrls.length) {
+      importResult = await importExactSocialSourcePosts({
+        db,
+        urls: exactUrls,
+        rawText,
+        dryRun: false,
+        fetchOembed: true,
+        fetchPublicMetadata: false,
+        skipImageHashLookup: true,
+      });
+      if (Number(importResult.auto_live_properties || 0) !== 0) {
+        const unsafe = new Error('Review-only safety check failed: an exhaustive coverage import reported automatic publication.');
+        unsafe.status = 503;
+        throw unsafe;
+      }
+      await recordHarvestImportResult(db, importResult, { eventType: 'source_coverage_tiktok' }).catch((error) => {
+        logger.warn('Source coverage harvest event logging failed', { message: error.message });
+      });
+    }
+    const outcome = exactUrls.length ? 'completed' : cleanText(req.body?.outcome || 'checked_empty');
+    const completed = await completeSourceCoverageItem(db, req.params.itemId, {
+      outcome,
+      exactUrlCount: exactUrls.length,
+      discoveredCount: exactUrls.length,
+      reviewQueuedCount: Number(importResult?.review_queue_properties || 0),
+      duplicateCount: Number(importResult?.existing_properties || 0),
+      excludedCount: Number(importResult?.source_review_count || 0),
+      failureReason: cleanText(req.body?.failure_reason || req.body?.failureReason || ''),
+      error: cleanText(req.body?.error || ''),
+      retryAfterMinutes: req.body?.retry_after_minutes || req.body?.retryAfterMinutes || 60,
+      result: {
+        marker: SOURCE_COVERAGE_MARKER,
+        exact_urls: exactUrls,
+        import_summary: importResult ? {
+          created_properties: Number(importResult.created_properties || 0),
+          existing_properties: Number(importResult.existing_properties || 0),
+          review_queue_properties: Number(importResult.review_queue_properties || 0),
+          source_review_count: Number(importResult.source_review_count || 0),
+          auto_live_properties: Number(importResult.auto_live_properties || 0),
+        } : { auto_live_properties: 0 },
+      },
+    });
+    await logStaffActivity(req, 'source_coverage_item_completed', {
+      targetType: 'source_coverage_item',
+      targetId: req.params.itemId,
+      metadata: {
+        marker: SOURCE_COVERAGE_MARKER,
+        outcome: completed.item.status,
+        exact_url_count: exactUrls.length,
+        review_queue_properties: Number(importResult?.review_queue_properties || 0),
+        auto_live_properties: 0,
+      },
+    });
+    clearStaffFastDashboardCache();
+    return res.json({ ok: true, data: completed });
+  } catch (error) {
+    if (error.status) return res.status(error.status).json({ ok: false, error: error.message });
+    if (error?.code === '42P01') return res.status(503).json({ ok: false, error: 'Source coverage storage is not migrated.' });
+    return next(error);
+  }
 });
 
 router.post('/harvest/youtube/subscriptions', async (req, res, next) => {
