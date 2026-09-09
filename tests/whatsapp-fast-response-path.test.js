@@ -164,7 +164,7 @@ async function run() {
     'an unavailable historical media preview must back off before hydration so it cannot hot-loop ahead of new chats'
   );
   assert(
-    whatsappWebCopilotSource.includes("WHATSAPP_RESPONSE_RELIABILITY_MARKER = 'whatsapp-confirmed-bubble-local-20260909'")
+    whatsappWebCopilotSource.includes("WHATSAPP_RESPONSE_RELIABILITY_MARKER = 'whatsapp-rendered-text-confirmation-20260909'")
       && whatsappWebCopilotSource.includes('response_reliability_marker: WHATSAPP_RESPONSE_RELIABILITY_MARKER'),
     'bridge heartbeats must identify the response-latency reliability release'
   );
@@ -220,6 +220,13 @@ async function run() {
     whatsappWebCopilotSource.includes('matchedNewText')
       && !whatsappWebCopilotSource.includes('if (matchedText) return true;'),
     'WhatsApp Web sender must not treat an older identical outgoing message as a fresh send confirmation'
+  );
+  assert(
+    whatsappWebCopilotSource.includes('function normalizeOutgoingConfirmationText')
+      && whatsappWebCopilotSource.includes("replace(/[*_~`]/g, '')")
+      && whatsappWebCopilotSource.includes('Extended_Pictographic')
+      && whatsappWebCopilotSource.includes('normalizeOutgoingConfirmationText(expectedText)'),
+    'outgoing confirmation must compare the text WhatsApp actually renders after removing formatting and emoji image markers'
   );
   assert(
     whatsappWebCopilotSource.includes('hasOutgoingDeliveryState')
