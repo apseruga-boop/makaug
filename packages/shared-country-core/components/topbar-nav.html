@@ -49,11 +49,11 @@
         <a id="nav-students" href="/student-accommodation" onclick="showPage('students')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Students</a>
         <a id="nav-commercial" href="/commercial" onclick="showPage('commercial')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Commercial</a>
         <a id="nav-land" href="/land" onclick="showPage('land')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Land</a>
-        <div class="off-plan-nav-menu">
-          <a id="nav-off-plan" href="/off-plan" onclick="showPage('off-plan')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer" aria-haspopup="true">Off Plan</a>
+        <div class="off-plan-nav-menu" onmouseleave="this.classList.remove('is-dismissed')">
+          <a id="nav-off-plan" href="/off-plan" onclick="this.parentElement.classList.add('is-dismissed');this.blur();showPage('off-plan')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer" aria-haspopup="true">Off Plan</a>
           <div class="off-plan-nav-dropdown" aria-label="Off Plan destinations">
-            <a href="/off-plan"><span id="off-plan-nav-uganda">Uganda</span><small id="off-plan-nav-uganda-note">Local developments</small></a>
-            <a href="/off-plan/overseas"><span id="off-plan-nav-overseas">Overseas</span><small id="off-plan-nav-overseas-note">Africa and the world</small></a>
+            <a href="/off-plan" onclick="this.closest('.off-plan-nav-menu').classList.add('is-dismissed')"><span id="off-plan-nav-uganda">Uganda</span><small id="off-plan-nav-uganda-note">Local developments</small></a>
+            <a href="/off-plan/overseas" onclick="this.closest('.off-plan-nav-menu').classList.add('is-dismissed')"><span id="off-plan-nav-overseas">Overseas</span><small id="off-plan-nav-overseas-note">Africa and the world</small></a>
           </div>
         </div>
         <a id="nav-brokers" href="/brokers" onclick="showPage('brokers')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Find Brokers</a>

@@ -9,9 +9,9 @@ test('management routers start with their authentication middleware', () => {
   assert.equal(adminRouter.stack[0]?.name, 'requireAdminApiKey');
 });
 
-test('only the admin router exposes permanent deletion', () => {
+test('admin and staff routers expose deletion while the staff route enforces super-admin authorization', () => {
   const hasDeleteRoute = (router) => router.stack.some((layer) => layer.route?.path === '/developments/:id' && layer.route.methods.delete);
-  assert.equal(hasDeleteRoute(staffRouter), false);
+  assert.equal(hasDeleteRoute(staffRouter), true);
   assert.equal(hasDeleteRoute(adminRouter), true);
 });
 
@@ -34,6 +34,7 @@ test('public router exposes read, calculator and enquiry routes without manageme
   assert.ok(paths.includes('/'));
   assert.ok(paths.includes('/calculate'));
   assert.ok(paths.includes('/enquiries'));
+  assert.ok(paths.includes('/markets'));
   assert.ok(paths.includes('/:slug'));
   assert.ok(!paths.includes('/developments'));
 });

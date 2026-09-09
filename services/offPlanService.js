@@ -5,7 +5,7 @@ const { randomUUID, createHash } = require('crypto');
 const DEVELOPMENT_STATUSES = ['draft', 'pending_review', 'changes_requested', 'published', 'archived', 'rejected'];
 const VERIFICATION_STATUSES = ['needs_verification', 'partially_verified', 'verified'];
 const ENQUIRY_CHANNELS = ['whatsapp', 'email', 'call'];
-const PUBLIC_COUNTRY_CODES = ['UG', 'KE'];
+const COUNTRY_CODE_RE = /^[A-Z]{2}$/;
 const JSON_ARRAY_FIELDS = ['unit_types', 'payment_plan', 'images', 'videos', 'floor_plans', 'amenities', 'nearby_places'];
 const JSON_OBJECT_FIELDS = ['brochure_settings', 'walkthrough_settings', 'extra_fields'];
 
@@ -208,7 +208,7 @@ function publicationBlockers(raw = {}) {
 
 function isPublicationReady(raw = {}) {
   const row = normalizeDevelopmentRow(raw);
-  return PUBLIC_COUNTRY_CODES.includes(row.country_code)
+  return COUNTRY_CODE_RE.test(row.country_code)
     && row.status === 'published'
     && row.verification_status === 'verified'
     && publicationBlockers(row).length === 0;
@@ -217,7 +217,7 @@ function isPublicationReady(raw = {}) {
 function publicPreviewBlockers(raw = {}) {
   const row = normalizeDevelopmentRow(raw);
   const blockers = [];
-  if (row.verification_status !== 'partially_verified') blockers.push('Preview projects must be marked partially verified.');
+  if (!['partially_verified', 'verified'].includes(row.verification_status)) blockers.push('Preview projects must be marked partially verified or verified.');
   if (row.extra_fields?.public_preview_approved !== true) blockers.push('Public preview approval is required.');
   if (!cleanText(row.name, 220)) blockers.push('Project name is required.');
   const isMakaugManagedOverseas = row.country_code !== 'UG'
@@ -240,7 +240,7 @@ function publicPreviewBlockers(raw = {}) {
 
 function isPubliclyVisible(raw = {}) {
   const row = normalizeDevelopmentRow(raw);
-  if (!PUBLIC_COUNTRY_CODES.includes(row.country_code) || row.status !== 'published') return false;
+  if (!COUNTRY_CODE_RE.test(row.country_code) || row.status !== 'published') return false;
   return isPublicationReady(row) || publicPreviewBlockers(row).length === 0;
 }
 
@@ -253,7 +253,7 @@ function normalizeWritePayload(input = {}, { partial = false } = {}) {
   };
   assign('country_code', (item) => {
     const countryCode = cleanText(item || 'UG', 2).toUpperCase() || 'UG';
-    if (!PUBLIC_COUNTRY_CODES.includes(countryCode)) throw validationError('Country must be Uganda or Kenya');
+    if (!COUNTRY_CODE_RE.test(countryCode)) throw validationError('Country must use a two-letter code, for example UG, KE, or AE');
     return countryCode;
   });
   assign('name', (item) => cleanText(item, 220));
@@ -294,9 +294,22 @@ function managedSelect() {
     CASE WHEN a.status = 'approved' THEN a.profile_photo_url ELSE NULL END AS source_agent_profile_photo_url,
     a.status AS source_agent_status,
     (SELECT COUNT(*)::int FROM off_plan_enquiries e WHERE e.development_id = d.id) AS enquiry_count,
-    (SELECT COUNT(*)::int FROM off_plan_walkthrough_jobs w WHERE w.development_id = d.id) AS walkthrough_job_count
+    (SELECT COUNT(*)::int FROM off_plan_walkthrough_jobs w WHERE w.development_id = d.id) AS walkthrough_job_count,
+    walkthrough.id AS walkthrough_job_id,
+    walkthrough.status AS walkthrough_status,
+    walkthrough.output_video_url AS walkthrough_output_video_url,
+    walkthrough.error_message AS walkthrough_error_message,
+    walkthrough.created_at AS walkthrough_requested_at,
+    walkthrough.updated_at AS walkthrough_updated_at
     FROM off_plan_developments d
-    LEFT JOIN agents a ON a.id = d.source_agent_id`;
+    LEFT JOIN agents a ON a.id = d.source_agent_id
+    LEFT JOIN LATERAL (
+      SELECT w.id, w.status, w.output_video_url, w.error_message, w.created_at, w.updated_at
+      FROM off_plan_walkthrough_jobs w
+      WHERE w.development_id = d.id
+      ORDER BY w.created_at DESC
+      LIMIT 1
+    ) walkthrough ON true`;
 }
 
 function publicSelect() {
@@ -309,14 +322,22 @@ function publicSelect() {
     CASE WHEN a.status = 'approved' THEN a.whatsapp ELSE NULL END AS source_agent_whatsapp,
     CASE WHEN a.status = 'approved' THEN a.phone ELSE NULL END AS source_agent_phone,
     CASE WHEN a.status = 'approved' THEN a.email ELSE NULL END AS source_agent_email,
-    a.status AS source_agent_status
+    a.status AS source_agent_status,
+    walkthrough.output_video_url AS walkthrough_output_video_url
     FROM off_plan_developments d
-    LEFT JOIN agents a ON a.id = d.source_agent_id`;
+    LEFT JOIN agents a ON a.id = d.source_agent_id
+    LEFT JOIN LATERAL (
+      SELECT w.output_video_url
+      FROM off_plan_walkthrough_jobs w
+      WHERE w.development_id = d.id AND w.status = 'approved' AND w.output_video_url IS NOT NULL
+      ORDER BY w.updated_at DESC
+      LIMIT 1
+    ) walkthrough ON true`;
 }
 
 async function listPublicDevelopments(db, query = {}) {
   const requestedCountry = cleanText(query.country_code || query.country || 'UG', 2).toUpperCase();
-  const countryCode = PUBLIC_COUNTRY_CODES.includes(requestedCountry) ? requestedCountry : 'UG';
+  const countryCode = COUNTRY_CODE_RE.test(requestedCountry) ? requestedCountry : 'UG';
   const values = [countryCode];
   const filters = [`d.country_code = $1`, `d.status = 'published'`, `(d.verification_status = 'verified' OR (d.verification_status = 'partially_verified' AND d.extra_fields->>'public_preview_approved' = 'true'))`];
   const add = (sql, value) => {
@@ -344,7 +365,7 @@ async function listPublicDevelopments(db, query = {}) {
 
 async function getPublicDevelopment(db, slug, countryCode = 'UG') {
   const requestedCountry = cleanText(countryCode, 2).toUpperCase();
-  const normalizedCountry = PUBLIC_COUNTRY_CODES.includes(requestedCountry) ? requestedCountry : 'UG';
+  const normalizedCountry = COUNTRY_CODE_RE.test(requestedCountry) ? requestedCountry : 'UG';
   const result = await db.query(
     `${publicSelect()} WHERE d.country_code = $1 AND d.slug = $2 AND d.status = 'published' AND (d.verification_status = 'verified' OR (d.verification_status = 'partially_verified' AND d.extra_fields->>'public_preview_approved' = 'true')) LIMIT 1`,
     [normalizedCountry, slugify(slug)]
@@ -357,11 +378,9 @@ async function listManagedDevelopments(db, query = {}) {
   const values = [];
   const filters = [];
   const requestedCountry = cleanText(query.country_code || query.country, 2).toUpperCase();
-  if (PUBLIC_COUNTRY_CODES.includes(requestedCountry)) {
+  if (COUNTRY_CODE_RE.test(requestedCountry)) {
     values.push(requestedCountry);
     filters.push(`d.country_code = $${values.length}`);
-  } else {
-    filters.push(`d.country_code = ANY(ARRAY['UG','KE'])`);
   }
   if (query.status && DEVELOPMENT_STATUSES.includes(cleanText(query.status).toLowerCase())) {
     values.push(cleanText(query.status).toLowerCase());
@@ -374,6 +393,38 @@ async function listManagedDevelopments(db, query = {}) {
   }
   const result = await db.query(`${managedSelect()} WHERE ${filters.join(' AND ')} ORDER BY d.updated_at DESC LIMIT 200`, values);
   return result.rows.map((row) => ({ ...normalizeDevelopmentRow(row), publication_blockers: publicationBlockers(row) }));
+}
+
+async function listPublicMarkets(db) {
+  const result = await db.query(
+    `${publicSelect()} WHERE d.country_code <> 'UG' AND d.status = 'published'
+      AND (d.verification_status = 'verified' OR (d.verification_status = 'partially_verified' AND d.extra_fields->>'public_preview_approved' = 'true'))
+      ORDER BY d.published_at DESC NULLS LAST, d.created_at DESC`
+  );
+  const markets = new Map();
+  result.rows.map(normalizeDevelopmentRow).filter(isPubliclyVisible).forEach((project) => {
+    const countryCode = project.country_code;
+    const countryName = cleanText(project.extra_fields?.country_name, 120) || countryCode;
+    const countrySlug = slugify(project.extra_fields?.country_slug || countryName || countryCode);
+    const current = markets.get(countryCode) || {
+      country_code: countryCode,
+      country_name: countryName,
+      country_slug: countrySlug,
+      region: cleanText(project.extra_fields?.region, 120) || 'Overseas',
+      project_count: 0,
+      hero_image_url: project.images?.[0]?.url || null,
+      summary: cleanText(project.extra_fields?.market_summary, 300) || `${countryName} off-plan projects supported by makaug.com.`
+    };
+    current.project_count += 1;
+    if (!current.hero_image_url && project.images?.[0]?.url) current.hero_image_url = project.images[0].url;
+    markets.set(countryCode, current);
+  });
+  return Array.from(markets.values()).sort((a, b) => a.country_name.localeCompare(b.country_name));
+}
+
+async function getPublicMarket(db, countrySlug) {
+  const slug = slugify(countrySlug);
+  return (await listPublicMarkets(db)).find((market) => market.country_slug === slug) || null;
 }
 
 async function getManagedDevelopment(db, id) {
@@ -635,9 +686,11 @@ module.exports = {
   createWalkthroughJob,
   deleteArchivedDevelopment,
   getManagedDevelopment,
+  getPublicMarket,
   getPublicDevelopment,
   listEnquiries,
   listManagedDevelopments,
+  listPublicMarkets,
   listPublicDevelopments,
   isPublicationReady,
   isPubliclyVisible,

@@ -409,6 +409,29 @@ async function storeDataUrl(dataUrl, options = {}) {
   return options.isPrivate ? stored.internalRef : (stored.publicUrl || stored.internalRef);
 }
 
+async function storeBuffer(bytes, options = {}) {
+  const buffer = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes || []);
+  const mimeType = String(options.mimeType || 'application/octet-stream').toLowerCase();
+  if (!buffer.length) throw storageError(`${options.label || 'uploaded file'} is empty.`, 400);
+  if (options.allowedMimeTypes?.length && !options.allowedMimeTypes.includes(mimeType)) {
+    throw storageError(`${options.label || 'uploaded file'} must be one of: ${options.allowedMimeTypes.join(', ')}`, 400);
+  }
+  if (options.maxBytes && buffer.length > options.maxBytes) {
+    throw storageError(`${options.label || 'uploaded file'} is too large. Upload must be ${Math.floor(options.maxBytes / (1024 * 1024))}MB or smaller.`, 400);
+  }
+  if (!cloudMediaStorageConfigured()) {
+    if (cloudMediaStorageRequired()) assertCloudMediaStorageConfigured();
+    return null;
+  }
+  const key = objectKeyFor({
+    keyPrefix: options.keyPrefix || 'uploads',
+    filename: options.filename || options.label || 'upload',
+    mimeType
+  });
+  const stored = await uploadBufferToS3({ bytes: buffer, mimeType, key });
+  return options.isPrivate ? stored.internalRef : (stored.publicUrl || stored.internalRef);
+}
+
 async function prepareMediaUrlForStorage(value, options = {}) {
   const raw = String(value || '').trim();
   if (!isDataUrl(raw)) return raw;
@@ -447,5 +470,6 @@ module.exports = {
   deleteStoredS3Object,
   uploadBufferToS3,
   storeDataUrl,
+  storeBuffer,
   storeRemoteImageUrl
 };

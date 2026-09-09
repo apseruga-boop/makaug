@@ -10138,7 +10138,7 @@ function offPlanWhatsappReply(listingRequest = false, message = '') {
   }
   if (/\b(?:kenya|nairobi|westlands|spectre|overseas)\b/i.test(normalizeInput(message))) {
     return `${whatsappBrandHeader('Overseas off-plan')}`
-      + `\nExplore the Kenya collection and Spectre Westlands with KES pricing, indicative UGX conversion, supplied floor plans and MakaUG-coordinated purchase steps.`
+      + `\nExplore the Kenya collection and Spectre Westlands with KES pricing, indicative UGX conversion, supplied floor plans and makaug.com-coordinated purchase steps.`
       + `\n\nDeveloper, completion, stock, legal and bank terms must be independently confirmed before payment.`
       + `\n\n${HOME_URL}/off-plan/overseas/kenya`;
   }

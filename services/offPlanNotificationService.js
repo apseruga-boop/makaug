@@ -3,9 +3,9 @@
 const { sendSupportEmail } = require('./emailService');
 
 const DEFAULT_OFF_PLAN_NOTIFICATION_EMAILS = [
-  'admin@makaug.com',
   'arthur@makaug.com',
-  'ronald@makaug.com'
+  'ronald@makaug.com',
+  'info@makaug.com'
 ];
 
 function cleanText(value, max = 2000) {
