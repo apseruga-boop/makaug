@@ -238,6 +238,23 @@ function publicPreviewBlockers(raw = {}) {
   return Array.from(new Set(blockers));
 }
 
+function sourcedPreviewBlockers(raw = {}) {
+  const row = normalizeDevelopmentRow(raw);
+  return publicPreviewBlockers({
+    ...row,
+    extra_fields: { ...row.extra_fields, public_preview_approved: true }
+  });
+}
+
+function withManagementReadiness(raw = {}) {
+  const row = normalizeDevelopmentRow(raw);
+  return {
+    ...row,
+    publication_blockers: publicationBlockers(row),
+    sourced_preview_blockers: sourcedPreviewBlockers(row)
+  };
+}
+
 function isPubliclyVisible(raw = {}) {
   const row = normalizeDevelopmentRow(raw);
   if (!COUNTRY_CODE_RE.test(row.country_code) || row.status !== 'published') return false;
@@ -393,7 +410,7 @@ async function listManagedDevelopments(db, query = {}) {
   }
   const whereClause = filters.length ? filters.join(' AND ') : 'TRUE';
   const result = await db.query(`${managedSelect()} WHERE ${whereClause} ORDER BY d.updated_at DESC LIMIT 200`, values);
-  return result.rows.map((row) => ({ ...normalizeDevelopmentRow(row), publication_blockers: publicationBlockers(row) }));
+  return result.rows.map(withManagementReadiness);
 }
 
 async function listPublicMarkets(db) {
@@ -430,7 +447,7 @@ async function getPublicMarket(db, countrySlug) {
 
 async function getManagedDevelopment(db, id) {
   const result = await db.query(`${managedSelect()} WHERE d.id = $1 LIMIT 1`, [id]);
-  return result.rows[0] ? { ...normalizeDevelopmentRow(result.rows[0]), publication_blockers: publicationBlockers(result.rows[0]) } : null;
+  return result.rows[0] ? withManagementReadiness(result.rows[0]) : null;
 }
 
 async function writeDevelopment(db, input, { id = null, actorId = null, actorRole = null } = {}) {
@@ -465,7 +482,7 @@ async function writeDevelopment(db, input, { id = null, actorId = null, actorRol
     }
     const result = await db.query(`UPDATE off_plan_developments SET ${fields.join(', ')} WHERE id = $1 RETURNING *`, values);
     if (result.rows[0]) await recordEvent(db, { developmentId: id, action: payload.verification_status === 'verified' ? 'verification_completed' : 'project_updated', actorId, actorRole, payload: { fields: Object.keys(payload) } });
-    return result.rows[0] ? { ...normalizeDevelopmentRow(result.rows[0]), publication_blockers: publicationBlockers(result.rows[0]) } : null;
+    return result.rows[0] ? withManagementReadiness(result.rows[0]) : null;
   }
   const columns = Object.keys(payload);
   const values = Object.values(payload).map((value, index) => JSON_ARRAY_FIELDS.includes(columns[index]) || JSON_OBJECT_FIELDS.includes(columns[index]) ? JSON.stringify(value) : value);
@@ -474,10 +491,10 @@ async function writeDevelopment(db, input, { id = null, actorId = null, actorRol
   const placeholders = columns.map((key, index) => `$${index + 1}${JSON_ARRAY_FIELDS.includes(key) || JSON_OBJECT_FIELDS.includes(key) ? '::jsonb' : ''}`);
   const result = await db.query(`INSERT INTO off_plan_developments (${columns.join(', ')}) VALUES (${placeholders.join(', ')}) RETURNING *`, values);
   await recordEvent(db, { developmentId: result.rows[0].id, action: 'project_created_for_review', actorId, actorRole, payload: { source_display_name: result.rows[0].source_display_name || null } });
-  return { ...normalizeDevelopmentRow(result.rows[0]), publication_blockers: publicationBlockers(result.rows[0]) };
+  return withManagementReadiness(result.rows[0]);
 }
 
-async function setDevelopmentStatus(db, id, status, { actorId = null, actorRole = null } = {}) {
+async function setDevelopmentStatus(db, id, status, { actorId = null, actorRole = null, publicationMode = null } = {}) {
   const requested = cleanText(status).toLowerCase();
   if (!DEVELOPMENT_STATUSES.includes(requested)) {
     const error = new Error('Invalid development status');
@@ -486,19 +503,36 @@ async function setDevelopmentStatus(db, id, status, { actorId = null, actorRole 
   }
   const existing = await getManagedDevelopment(db, id);
   if (!existing) return null;
-  const blockers = requested === 'published' ? publicationBlockers(existing) : [];
+  const isSourcedPreview = requested === 'published' && publicationMode === 'sourced_preview';
+  const blockers = requested === 'published'
+    ? (isSourcedPreview ? sourcedPreviewBlockers(existing) : publicationBlockers(existing))
+    : [];
   if (blockers.length) {
-    const error = new Error('Project cannot be published until verification is complete');
+    const error = new Error(isSourcedPreview
+      ? 'Project cannot be published as a sourced preview until its source checks are complete'
+      : 'Project cannot be published until verification is complete');
     error.status = 409;
     error.details = blockers;
     throw error;
   }
+  const nextExtraFields = isSourcedPreview ? {
+    ...existing.extra_fields,
+    public_preview_approved: true,
+    public_preview_approved_at: new Date().toISOString(),
+    public_preview_approved_by: actorId
+  } : existing.extra_fields;
   const result = await db.query(
-    `UPDATE off_plan_developments SET status = $2, published_at = CASE WHEN $2 = 'published' THEN COALESCE(published_at, NOW()) ELSE published_at END, updated_by = $3, updated_at = NOW() WHERE id = $1 RETURNING *`,
-    [id, requested, actorId]
+    `UPDATE off_plan_developments SET status = $2, published_at = CASE WHEN $2 = 'published' THEN COALESCE(published_at, NOW()) ELSE published_at END, extra_fields = CASE WHEN $4 THEN $5::jsonb ELSE extra_fields END, updated_by = $3, updated_at = NOW() WHERE id = $1 RETURNING *`,
+    [id, requested, actorId, isSourcedPreview, JSON.stringify(nextExtraFields)]
   );
-  await recordEvent(db, { developmentId: id, action: `status_${requested}`, actorId, actorRole, payload: { previous_status: existing.status } });
-  return result.rows[0] ? { ...normalizeDevelopmentRow(result.rows[0]), publication_blockers: publicationBlockers(result.rows[0]) } : null;
+  await recordEvent(db, {
+    developmentId: id,
+    action: `status_${requested}`,
+    actorId,
+    actorRole,
+    payload: { previous_status: existing.status, publication_mode: isSourcedPreview ? 'sourced_preview' : 'verified' }
+  });
+  return result.rows[0] ? withManagementReadiness(result.rows[0]) : null;
 }
 
 async function deleteArchivedDevelopment(db, id, { actorId = null, actorRole = null } = {}) {
@@ -699,6 +733,7 @@ module.exports = {
   normalizeWritePayload,
   publicationBlockers,
   publicPreviewBlockers,
+  sourcedPreviewBlockers,
   recordEvent,
   setDevelopmentStatus,
   slugify,

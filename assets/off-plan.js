@@ -1238,6 +1238,11 @@
 
   function managementProjectCard(project, role) {
     const blockers = project.publication_blockers || [];
+    const sourcedPreviewBlockers = project.sourced_preview_blockers || [];
+    const canPublishSourcedPreview = project.status !== 'published'
+      && project.country_code !== 'UG'
+      && blockers.length > 0
+      && sourcedPreviewBlockers.length === 0;
     const countryName = clean(project.extra_fields?.country_name) || (project.country_code === 'UG' ? 'Uganda' : project.country_code);
     const walkthroughLabels = { brief_ready: 'Brief ready · awaiting render', render_requested: 'Render requested', draft_ready: 'Draft video ready · approval needed', approved: 'Approved video ready', failed: 'Render failed', cancelled: 'Cancelled' };
     const walkthroughStatus = project.walkthrough_status ? (walkthroughLabels[project.walkthrough_status] || project.walkthrough_status.replace(/_/g, ' ')) : 'No walkthrough brief';
@@ -1279,7 +1284,7 @@
         </div>
       </details>
       <div class="mt-3 rounded-xl border border-purple-100 bg-purple-50 px-4 py-3 text-xs text-purple-950"><strong>Walkthrough:</strong> ${escapeHtml(walkthroughStatus)}${project.walkthrough_error_message ? ` · ${escapeHtml(project.walkthrough_error_message)}` : ''}</div>
-      <div class="mt-4 flex flex-col md:flex-row md:items-center justify-between gap-3"><div class="text-xs ${blockers.length ? 'text-amber-900' : 'text-green-800'}"><strong>${blockers.length ? `${blockers.length} publication check${blockers.length === 1 ? '' : 's'} remaining` : 'Ready for explicit publication approval'}</strong>${blockers.length ? `<details class="mt-1"><summary class="cursor-pointer">View checks</summary><ul class="list-disc pl-5 mt-1">${blockers.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul></details>` : ''}</div><div class="flex flex-wrap gap-2"><button onclick="setOffPlanProjectStatus('${escapeHtml(project.id)}','${role}','changes_requested')" class="rounded-lg border border-amber-200 text-amber-800 px-4 py-2 text-xs font-black">Request changes</button>${!blockers.length && project.status !== 'published' ? `<button onclick="setOffPlanProjectStatus('${escapeHtml(project.id)}','${role}','published')" class="rounded-lg bg-green-700 text-white px-4 py-2 text-xs font-black">Publish verified project</button>` : ''}${project.status !== 'archived' ? `<button onclick="setOffPlanProjectStatus('${escapeHtml(project.id)}','${role}','archived')" class="rounded-lg border border-gray-300 text-gray-700 px-4 py-2 text-xs font-black">Archive</button>` : ''}${deleteControl}<button onclick="saveOffPlanProgress('${escapeHtml(project.id)}','${role}')" class="rounded-lg bg-slate-900 text-white px-4 py-2 text-xs font-black">Save project</button></div></div></div></details>`;
+      <div class="mt-4 flex flex-col md:flex-row md:items-center justify-between gap-3"><div class="text-xs ${canPublishSourcedPreview || !blockers.length ? 'text-green-800' : 'text-amber-900'}"><strong>${canPublishSourcedPreview ? 'Ready for sourced public preview' : (blockers.length ? `${blockers.length} publication check${blockers.length === 1 ? '' : 's'} remaining` : 'Ready for explicit publication approval')}</strong>${canPublishSourcedPreview ? '<p class="mt-1">Current availability, sales and construction progress remain labelled for buyer verification.</p>' : (blockers.length ? `<details class="mt-1"><summary class="cursor-pointer">View checks</summary><ul class="list-disc pl-5 mt-1">${blockers.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul></details>` : '')}</div><div class="flex flex-wrap gap-2"><button onclick="setOffPlanProjectStatus('${escapeHtml(project.id)}','${role}','changes_requested')" class="rounded-lg border border-amber-200 text-amber-800 px-4 py-2 text-xs font-black">Request changes</button>${!blockers.length && project.status !== 'published' ? `<button onclick="setOffPlanProjectStatus('${escapeHtml(project.id)}','${role}','published')" class="rounded-lg bg-green-700 text-white px-4 py-2 text-xs font-black">Publish verified project</button>` : ''}${canPublishSourcedPreview ? `<button onclick="setOffPlanProjectStatus('${escapeHtml(project.id)}','${role}','published','sourced_preview')" class="rounded-lg bg-green-700 text-white px-4 py-2 text-xs font-black">Publish sourced preview</button>` : ''}${project.status !== 'archived' ? `<button onclick="setOffPlanProjectStatus('${escapeHtml(project.id)}','${role}','archived')" class="rounded-lg border border-gray-300 text-gray-700 px-4 py-2 text-xs font-black">Archive</button>` : ''}${deleteControl}<button onclick="saveOffPlanProgress('${escapeHtml(project.id)}','${role}')" class="rounded-lg bg-slate-900 text-white px-4 py-2 text-xs font-black">Save project</button></div></div></div></details>`;
   }
 
   async function loadOffPlanManagement(role = 'staff') {
@@ -1306,11 +1311,12 @@
     catch (error) { alert(error.message); }
   }
 
-  async function setOffPlanProjectStatus(id, role, status) {
-    if (status === 'published' && !confirm('Publish this verified project to the public Off Plan page now?')) return;
+  async function setOffPlanProjectStatus(id, role, status, publicationMode = '') {
+    if (status === 'published' && publicationMode === 'sourced_preview' && !confirm('Publish this sourced project preview now? Developer materials, indicative prices, payment terms, location and images will be public. Current availability, sales and construction progress will remain unverified.')) return;
+    if (status === 'published' && publicationMode !== 'sourced_preview' && !confirm('Publish this verified project to the public Off Plan page now?')) return;
     if (status === 'archived' && !confirm('Archive this private project record? It will remain available to authorised staff but will never appear publicly.')) return;
     const base = `/api/${role === 'admin' ? 'admin' : 'staff'}/off-plan/developments/${encodeURIComponent(id)}`;
-    try { await request(`${base}/status`, { method: 'POST', headers: managementHeaders(role), body: { status } }); await loadOffPlanManagement(role); }
+    try { await request(`${base}/status`, { method: 'POST', headers: managementHeaders(role), body: { status, publication_mode: publicationMode || null } }); await loadOffPlanManagement(role); }
     catch (error) { alert(error.payload?.blockers?.join('\n') || error.message); }
   }
 

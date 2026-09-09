@@ -12,7 +12,9 @@ const {
   normalizeWritePayload,
   publicationBlockers,
   publicPreviewBlockers,
-  slugify
+  setDevelopmentStatus,
+  slugify,
+  sourcedPreviewBlockers
 } = require('../services/offPlanService');
 
 test('managed project listing uses a valid predicate when no filters are supplied', async () => {
@@ -149,6 +151,63 @@ test('a MakaUG-managed Kenya preview accepts verified source documents and parti
   assert.equal(isPubliclyVisible(project), true);
   assert.equal(isPubliclyVisible({ ...project, country_code: 'TZ', extra_fields: { ...project.extra_fields, country_name: 'Tanzania', country_slug: 'tanzania' } }), true);
   assert.equal(isPubliclyVisible({ ...project, verification_status: 'verified' }), true, 'approved previews must not disappear when staff marks them verified');
+});
+
+test('sourced preview readiness models the explicit publish approval without weakening its source checks', () => {
+  const project = {
+    country_code: 'AE', status: 'pending_review', verification_status: 'partially_verified',
+    name: 'Beverly Grande', source_display_name: 'HMB developer materials',
+    description: 'A source-labelled Dubai project preview with supplied layouts, indicative prices, payment milestones and buyer verification safeguards.',
+    area: 'Motor City', district: 'Dubai', latitude: 25.045349, longitude: 55.230814,
+    launch_price_ugx: 814730000, payment_plan_months: 16,
+    unit_types: [{ bedrooms: 0, price_original: 791000, price_original_currency: 'AED', price_ugx: 814730000 }],
+    payment_plan: [{ label: 'Booking', percent: 20 }],
+    images: [{ url: '/1.jpg', caption: 'Exterior' }, { url: '/2.jpg', caption: 'Pool' }, { url: '/3.jpg', caption: 'Roof terrace' }],
+    extra_fields: { source_documents_verified: true, contact_mode: 'makaug_managed' }
+  };
+  assert.deepEqual(sourcedPreviewBlockers(project), []);
+  assert.ok(publicPreviewBlockers(project).includes('Public preview approval is required.'));
+  assert.ok(sourcedPreviewBlockers({ ...project, extra_fields: { contact_mode: 'makaug_managed' } }).includes('An attributed source is required.'));
+});
+
+test('explicit sourced-preview publication records approval and preserves the strict verified gate', async () => {
+  const project = {
+    id: '33333333-3333-4333-8333-333333333333',
+    country_code: 'AE', status: 'pending_review', verification_status: 'partially_verified',
+    name: 'Beverly Grande', source_display_name: 'HMB developer materials',
+    description: 'A source-labelled Dubai project preview with supplied layouts, indicative prices, payment milestones and buyer verification safeguards.',
+    area: 'Motor City', district: 'Dubai', latitude: 25.045349, longitude: 55.230814,
+    launch_price_ugx: 814730000, payment_plan_months: 16,
+    unit_types: [{ bedrooms: 0, price_original: 791000, price_original_currency: 'AED', price_ugx: 814730000 }],
+    payment_plan: [{ label: 'Booking', percent: 20 }],
+    images: [{ url: '/1.jpg', caption: 'Exterior' }, { url: '/2.jpg', caption: 'Pool' }, { url: '/3.jpg', caption: 'Roof terrace' }],
+    extra_fields: { source_documents_verified: true, contact_mode: 'makaug_managed' }
+  };
+  const queries = [];
+  const db = {
+    async query(sql, values) {
+      queries.push({ sql, values });
+      if (/SELECT[\s\S]+off_plan_developments/.test(sql)) return { rows: [project] };
+      if (/UPDATE off_plan_developments SET status/.test(sql)) {
+        return { rows: [{ ...project, status: 'published', extra_fields: JSON.parse(values[4]) }] };
+      }
+      if (/INSERT INTO off_plan_development_events/.test(sql)) return { rows: [{ id: 'event-2' }] };
+      throw new Error(`Unexpected SQL: ${sql}`);
+    }
+  };
+
+  await assert.rejects(
+    () => setDevelopmentStatus(db, project.id, 'published', { actorId: 'admin-1', actorRole: 'admin' }),
+    (error) => error.status === 409 && error.details.includes('Construction progress percentage is required.')
+  );
+  const published = await setDevelopmentStatus(db, project.id, 'published', {
+    actorId: 'admin-1', actorRole: 'admin', publicationMode: 'sourced_preview'
+  });
+  assert.equal(published.status, 'published');
+  assert.equal(published.extra_fields.public_preview_approved, true);
+  assert.equal(published.extra_fields.public_preview_approved_by, 'admin-1');
+  const update = queries.find(({ sql }) => /UPDATE off_plan_developments SET status/.test(sql));
+  assert.equal(update.values[3], true);
 });
 
 test('publication gate rejects impossible sales totals and unlabelled media', () => {

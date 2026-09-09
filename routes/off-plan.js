@@ -330,7 +330,10 @@ function mountManagementRoutes(router, authMiddleware, { allowPermanentDelete = 
 
   router.post('/developments/:id/status', asyncRoute(async (req, res) => {
     try {
-      const development = await setDevelopmentStatus(db, req.params.id, req.body?.status, actor(req));
+      const development = await setDevelopmentStatus(db, req.params.id, req.body?.status, {
+        ...actor(req),
+        publicationMode: req.body?.publication_mode
+      });
       if (!development) return res.status(404).json({ ok: false, error: 'Off-plan project not found' });
       return res.json({ ok: true, development });
     } catch (error) {
