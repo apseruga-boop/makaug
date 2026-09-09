@@ -250,6 +250,7 @@
 
   function projectDisplayType(project = {}) {
     const unitTypes = Array.from(new Set((project.unit_types || []).map((unit) => clean(unit?.property_type)).filter(Boolean)));
+    if (unitTypes.length && unitTypes.every((type) => /^(?:apartment|flat|duplex|studio)$/i.test(type))) return 'apartment';
     return unitTypes.length === 1 ? unitTypes[0] : (project.project_type || unitTypes[0] || 'house');
   }
 
@@ -808,7 +809,7 @@
     const images = allImages.slice(0, 3);
     if (!images.length) return '<div class="rounded-3xl bg-gray-100 h-[360px]"></div>';
     while (images.length < 3) images.push(images[0]);
-    const preview = `<div class="off-plan-gallery">${images.map((image, index) => `<figure><img src="${escapeHtml(image.url)}" alt="${escapeHtml(image.caption || project.name)}"><figcaption>${escapeHtml(image.caption || offPlanText('projectImage'))}</figcaption>${index === 2 && allImages.length > 3 ? `<button type="button" onclick="openOffPlanGallery()" class="absolute right-3 top-3 rounded-lg bg-white/95 text-gray-950 px-3 py-2 text-xs font-black"><i class="fas fa-images mr-1"></i>${escapeHtml(offPlanText('viewPhotos', { count: allImages.length }))}</button>` : ''}</figure>`).join('')}</div>`;
+    const preview = `<div class="off-plan-gallery">${images.map((image, index) => `<figure><img src="${escapeHtml(image.url)}" alt="${escapeHtml(imageCaption(project, index))}"><figcaption>${escapeHtml(imageCaption(project, index))}</figcaption>${index === 2 && allImages.length > 3 ? `<button type="button" onclick="openOffPlanGallery()" class="absolute right-3 top-3 rounded-lg bg-white/95 text-gray-950 px-3 py-2 text-xs font-black"><i class="fas fa-images mr-1"></i>${escapeHtml(offPlanText('viewPhotos', { count: allImages.length }))}</button>` : ''}</figure>`).join('')}</div>`;
     if (allImages.length <= 3) return preview;
     return `${preview}<dialog id="off-plan-gallery-dialog" class="off-plan-gallery-dialog" aria-labelledby="off-plan-gallery-title"><div class="off-plan-gallery-dialog-head"><div><p class="text-xs font-black uppercase tracking-wide text-green-700">${escapeHtml(offPlanText('projectGallery'))}</p><h2 id="off-plan-gallery-title">${escapeHtml(project.name)}</h2></div><button type="button" onclick="closeOffPlanGallery()" aria-label="${escapeHtml(offPlanText('close'))}"><i class="fas fa-xmark" aria-hidden="true"></i></button></div><div class="off-plan-gallery-dialog-grid">${allImages.map((image) => `<figure><img src="${escapeHtml(image.url)}" alt="${escapeHtml(image.caption || project.name)}" loading="lazy"><figcaption>${escapeHtml(image.caption || offPlanText('projectImage'))}</figcaption></figure>`).join('')}</div></dialog>`;
   }
