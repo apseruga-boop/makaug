@@ -4762,7 +4762,16 @@ async function attachEmployeeReviewMedia({ propertyId, storedMedia, phone, inbou
     || (imageOffset === 0 && item.kind === 'image' && item.publicEligible !== false)
   ));
   if (!uniqueMedia.length) {
-    return { attached: 0, duplicate: true, publicImages: 0, evidenceImages: 0, validationReasons: [] };
+    return {
+      attached: 0,
+      duplicate: true,
+      publicImages: 0,
+      evidenceImages: 0,
+      validationReasons: (Array.isArray(storedMedia) ? storedMedia : [])
+        .map((item) => normalizeInput(item.mediaValidation?.reason || item.previewWarning || ''))
+        .filter(Boolean)
+        .slice(0, 20)
+    };
   }
   const images = uniqueMedia.filter((item) => item.kind === 'image' && item.publicEligible !== false);
   const evidenceImages = uniqueMedia.filter((item) => item.kind === 'image' && item.publicEligible === false);

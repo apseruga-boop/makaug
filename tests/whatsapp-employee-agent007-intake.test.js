@@ -469,6 +469,8 @@ assert(serverSource.includes('whatsapp-agent007-existing-row-media-repair-202609
 assert(copilotSource.includes('existing_row_media_repair_marker'), 'worker heartbeats must expose the existing-review media repair release');
 assert(serverSource.includes('whatsapp-agent007-full-album-gallery-recovery-20260909'), 'production health metadata must expose the full album gallery recovery release');
 assert(copilotSource.includes('full_album_gallery_marker'), 'worker heartbeats must expose the full album gallery recovery release');
+assert(serverSource.includes('whatsapp-agent007-viewer-group-recovery-20260909'), 'production health metadata must expose the viewer-group recovery release');
+assert(copilotSource.includes('viewer_group_recovery_marker'), 'worker heartbeats must expose the viewer-group recovery release');
 assert(serverSource.includes('whatsapp-agent007-completion-ack-contract-20260909'), 'production health metadata must expose the corrected worker completion acknowledgement contract');
 assert(copilotSource.includes('configuredEmployeeRecoverySettled'), 'configured history recovery must stop only after the batch is complete or already reconciled');
 assert(copilotSource.includes("scroller.dispatchEvent(new WheelEvent('wheel'"), 'history recovery must explicitly request older virtualized WhatsApp rows');
@@ -504,8 +506,12 @@ assert(routeSource.includes('persist the original bytes and attach only new hash
 assert(copilotSource.includes('rowDigits.includes(phoneSuffix)'), 'WhatsApp search results must tolerate timestamps and preview digits after the matching phone number');
 assert(copilotSource.includes('viewer_originals=${viewerOriginals}'), 'album recovery must log privacy-safe original-image counts for live verification');
 assert(copilotSource.includes('const hydratedExtraImageMatch'), 'album recovery must re-read the hidden +N count after scrolling the historical message into view');
-assert(copilotSource.includes('const viewerTraversalLimit = expectedCount'), 'an opened WhatsApp album must stop at its refreshed message count and never traverse into unrelated chat media');
+assert(copilotSource.includes('const explicitViewerCount'), 'historical albums must recover the media-group count from the opened WhatsApp viewer');
+assert(copilotSource.includes('const viewerTraversalLimit = Math.max(expectedCount, explicitViewerCount)'), 'viewer traversal may expand only to an explicit same-album count');
+assert(copilotSource.includes('refreshedSource && refreshedSource !== previousViewerSource'), 'album recovery must wait for each next original image before capturing it');
+assert(copilotSource.includes('viewer_group_explicit=${viewerGroupExplicit'), 'live recovery logs must say whether a larger album count came from the opened viewer');
 assert(routeSource.includes('accepted_pending_review_original_whatsapp_pixels'), 'original viewer pixels must remain reviewable when the optional vision provider is unavailable');
+assert(routeSource.includes('Array.isArray(storedMedia) ? storedMedia : []'), 'duplicate evidence replays must report their original validation reason for safe diagnosis');
 assert(routeSource.includes("type = 'whatsapp_employee_batch_complete'"), 'recovery must fall back to the durable completion notification when chat session state is replaced');
 assert(routeSource.includes('employee_batch_ordered_replay'), 'authorized history replay must be marked and isolated from normal messages');
 assert(routeSource.includes("? ''\n            : `Already saved to review"), 'multiple batches must not send per-property duplicate acknowledgements');
