@@ -11929,6 +11929,7 @@ async function processInboundRuntimeUnlocked({
         property_id: employeeIntake.propertyId || null,
         duplicate: Boolean(employeeIntake.duplicate),
         batch_complete: Boolean(employeeIntake.batchComplete),
+        media_attachment: employeeIntake.mediaAttachment || null,
         review_only: true
       }
     };
@@ -13001,8 +13002,8 @@ router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
       queued_reply: !!queuedReply,
       queue_id: queuedReply?.id || null,
       owner_forward: ownerForward,
-      employee_batch_complete: employeeIntake?.batchComplete === true,
-      employee_media_result: employeeIntake?.mediaAttachment || null
+      employee_batch_complete: employeeIntake?.batch_complete === true,
+      employee_media_result: employeeIntake?.media_attachment || null
     }
   });
 }));
