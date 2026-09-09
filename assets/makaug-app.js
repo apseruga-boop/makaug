@@ -15825,9 +15825,9 @@ function adminPendingQueueToolbarHtml(rows = [], filteredRows = [], visibleRows 
           ${adminPendingQueueFilterButton("found_online", "Found online", counts.found_online)}
           ${adminPendingQueueFilterButton("broker", "Broker", counts.broker)}
           ${adminPendingQueueFilterButton("student", "Student", counts.student)}
-          ${adminPendingQueueRemotePagination?.queue === "found_online" ? `
-            <button type="button" onclick="adminLoadFoundOnlineReviewQueue(${Math.max(1, Number(adminPendingQueueRemotePagination.page || 1) - 1)})" class="bg-white text-blue-700 hover:bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-lg text-xs font-black ${Number(adminPendingQueueRemotePagination.page || 1) <= 1 ? "opacity-40 cursor-not-allowed" : ""}" ${Number(adminPendingQueueRemotePagination.page || 1) <= 1 ? "disabled" : ""}>Previous</button>
-            <button type="button" onclick="adminLoadFoundOnlineReviewQueue(${Number(adminPendingQueueRemotePagination.page || 1) + 1})" class="bg-white text-blue-700 hover:bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-lg text-xs font-black ${adminPendingQueueRemotePagination.hasMore ? "" : "opacity-40 cursor-not-allowed"}" ${adminPendingQueueRemotePagination.hasMore ? "" : "disabled"}>Next</button>
+          ${["all", "found_online"].includes(adminPendingQueueRemotePagination?.queue) ? `
+            <button type="button" onclick="adminLoadPendingReviewQueuePage(${Math.max(1, Number(adminPendingQueueRemotePagination.page || 1) - 1)}, '${adminAttr(adminPendingQueueRemotePagination.queue)}')" class="bg-white text-blue-700 hover:bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-lg text-xs font-black ${Number(adminPendingQueueRemotePagination.page || 1) <= 1 ? "opacity-40 cursor-not-allowed" : ""}" ${Number(adminPendingQueueRemotePagination.page || 1) <= 1 ? "disabled" : ""}>Previous</button>
+            <button type="button" onclick="adminLoadPendingReviewQueuePage(${Number(adminPendingQueueRemotePagination.page || 1) + 1}, '${adminAttr(adminPendingQueueRemotePagination.queue)}')" class="bg-white text-blue-700 hover:bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-lg text-xs font-black ${adminPendingQueueRemotePagination.hasMore ? "" : "opacity-40 cursor-not-allowed"}" ${adminPendingQueueRemotePagination.hasMore ? "" : "disabled"}>Next</button>
           ` : ""}
           ${hasMore ? `<button type="button" onclick="adminShowMorePendingQueueRows()" class="bg-white text-blue-700 hover:bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-lg text-xs font-black">Show more</button>` : ""}
         </div>
@@ -15843,35 +15843,42 @@ function adminSetPendingQueueFilter(filter = "all") {
     adminLoadFoundOnlineReviewQueue(1);
     return;
   }
+  if (adminPendingQueueFilter === "all" && canUseLiveAdminApi()) {
+    adminLoadPendingReviewQueuePage(1, "all");
+    return;
+  }
   adminPendingQueueRemotePagination = null;
   renderAdminPendingRows(adminCurrentPendingListings);
 }
 
-async function adminLoadFoundOnlineReviewQueue(page = 1) {
+async function adminLoadPendingReviewQueuePage(page = 1, queue = "all") {
   if (!canUseLiveAdminApi()) {
     toast("Sign in as admin or save ADMIN_API_KEY first.");
     return;
   }
   const safePage = Math.max(1, Number(page || 1));
+  const safeQueue = queue === "found_online" ? "found_online" : "all";
+  const queueLabel = safeQueue === "found_online" ? "Found Online" : "pending";
+  const queueParam = safeQueue === "found_online" ? "&queue=found_online" : "";
   const wrap = document.getElementById("admin-pending-table");
-  adminPendingQueueFilter = "found_online";
+  adminPendingQueueFilter = safeQueue;
   if (wrap) {
-    wrap.innerHTML = `<div class="rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-900">Loading Found Online review page ${adminEscape(safePage)}...</div>`;
+    wrap.innerHTML = `<div class="rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-900">Loading ${adminEscape(queueLabel)} review page ${adminEscape(safePage)}...</div>`;
   }
   try {
-    const response = await apiRequest(`/api/admin/properties/review-queue?include_total=1&include_images=0&queue=found_online&limit=${ADMIN_REVIEW_QUEUE_PAGE_SIZE}&page=${safePage}`, {
+    const response = await apiRequest(`/api/admin/properties/review-queue?include_total=1&include_images=0${queueParam}&limit=${ADMIN_REVIEW_QUEUE_PAGE_SIZE}&page=${safePage}`, {
       headers: adminAuthHeaders(),
       cache: "no-store"
     });
     const rows = (Array.isArray(response?.data) ? response.data : []).map(normalizeRemoteAdminListing).filter(adminIsPendingReviewSeedItem);
     adminPendingQueueRemotePagination = {
-      queue: "found_online",
+      queue: safeQueue,
       page: safePage,
       hasMore: response?.meta?.has_more === true,
       total: Number(response?.pagination?.total || rows.length)
     };
     if (response?.meta?.total_exact === true) {
-      adminPendingQueueTotals.found_online = Number(response?.pagination?.total || 0);
+      adminPendingQueueTotals[safeQueue] = Number(response?.pagination?.total || 0);
     }
     adminPendingQueueVisibleLimit = ADMIN_REVIEW_QUEUE_PAGE_SIZE;
     renderAdminPendingRows(rows);
@@ -15879,10 +15886,14 @@ async function adminLoadFoundOnlineReviewQueue(page = 1) {
   } catch (error) {
     adminPendingQueueRemotePagination = null;
     if (wrap) {
-      wrap.innerHTML = `<div class="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">Found Online review could not load: ${adminEscape(error.message || "Unknown error")}</div>`;
+      wrap.innerHTML = `<div class="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">${adminEscape(queueLabel)} review could not load: ${adminEscape(error.message || "Unknown error")}</div>`;
     }
-    toast(`Found Online review failed: ${error.message || "error"}`);
+    toast(`${queueLabel} review failed: ${error.message || "error"}`);
   }
+}
+
+async function adminLoadFoundOnlineReviewQueue(page = 1) {
+  return adminLoadPendingReviewQueuePage(page, "found_online");
 }
 
 function adminBacklogRecoveryOutput(html = "") {
@@ -16212,9 +16223,9 @@ async function fetchRemoteAdminSnapshot(options = {}) {
   if (pendingQueueKey === "all" && Number.isFinite(commandPendingTotal) && commandPendingTotal >= 0) {
     adminPendingQueueTotals.all = commandPendingTotal;
   }
-  if (Array.isArray(pendingRows) && adminPendingQueueFilter === "found_online") {
+  if (Array.isArray(pendingRows) && ["all", "found_online"].includes(adminPendingQueueFilter)) {
     adminPendingQueueRemotePagination = {
-      queue: "found_online",
+      queue: adminPendingQueueFilter,
       page: Number(pendingRows?.adminPagination?.page || 1),
       hasMore: pendingRows?.adminMeta?.has_more === true,
       total: Number(pendingRows?.adminPagination?.total || pendingListings.length)
