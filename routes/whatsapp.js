@@ -4300,6 +4300,7 @@ async function prepareEmployeeOrderedBatchReplay({
       restored: false,
       alreadyActive: true,
       counts: employeeBatchCounts(data),
+      property_media_status: await employeeReviewMediaStatus(data.property_ids),
       pending: {
         current: Boolean(pendingCaption || pendingMedia.length),
         current_media_count: pendingMedia.length,
@@ -4388,7 +4389,8 @@ async function prepareEmployeeOrderedBatchReplay({
         propertiesSetUp: previousSetUp,
         duplicatesSkipped: previousDuplicates,
         propertiesFailed: previousFailed
-      }
+      },
+      property_media_status: await employeeReviewMediaStatus(propertyIds)
     };
   }
   const propertyAgentIds = [...new Set(propertyResult.rows.map((row) => normalizeInput(row.agent_id)).filter(Boolean))];
@@ -4478,7 +4480,8 @@ async function prepareEmployeeOrderedBatchReplay({
     ready: true,
     restored: true,
     alreadyActive: false,
-    counts: employeeBatchCounts(restoredData)
+    counts: employeeBatchCounts(restoredData),
+    property_media_status: await employeeReviewMediaStatus(propertyIds)
   };
 }
 
@@ -4956,6 +4959,38 @@ async function employeePropertiesMissingUsableMedia(propertyIds = []) {
     [ids]
   );
   return result.rows.map((row) => String(row.id));
+}
+
+async function employeeReviewMediaStatus(propertyIds = []) {
+  const ids = [...new Set((Array.isArray(propertyIds) ? propertyIds : []).map(String).filter(Boolean))];
+  if (!ids.length) return [];
+  const result = await db.query(
+    `SELECT p.id::text AS property_id,
+            p.status,
+            COALESCE(p.extra_fields->>'media_validation_status', '') AS media_validation_status,
+            COALESCE((
+              SELECT COUNT(*)::int FROM property_images pi WHERE pi.property_id = p.id
+            ), 0)::int AS image_count,
+            CASE
+              WHEN jsonb_typeof(p.extra_fields->'video_urls') = 'array'
+                THEN jsonb_array_length(p.extra_fields->'video_urls')
+              WHEN COALESCE(NULLIF(p.extra_fields->>'video_url', ''), '') <> '' THEN 1
+              ELSE 0
+            END::int AS video_count,
+            COALESCE(p.extra_fields->>'video_recovery_required', 'false') = 'true' AS video_recovery_required
+       FROM properties p
+      WHERE p.id = ANY($1::uuid[])
+      ORDER BY array_position($1::uuid[], p.id)`,
+    [ids]
+  );
+  return result.rows.map((row) => ({
+    property_id: String(row.property_id),
+    status: normalizeInput(row.status),
+    media_validation_status: normalizeInput(row.media_validation_status),
+    image_count: Number(row.image_count || 0),
+    video_count: Number(row.video_count || 0),
+    video_recovery_required: row.video_recovery_required === true
+  }));
 }
 
 async function handleEmployeeWhatsappIntake({
