@@ -1351,9 +1351,28 @@
     });
   }
 
+  function confirmOffPlanMediaRights(kindLabel) {
+    return new Promise((resolve) => {
+      const dialog = document.createElement('dialog');
+      dialog.className = 'w-[min(520px,calc(100vw-28px))] rounded-2xl border-0 p-0 shadow-2xl backdrop:bg-slate-950/60';
+      dialog.innerHTML = `<div class="p-6"><p class="text-xs font-black uppercase tracking-wide text-green-700">Media permission</p><h3 class="mt-2 text-xl font-black text-gray-950">Confirm before choosing ${escapeHtml(kindLabel)}</h3><p class="mt-3 text-sm leading-6 text-gray-600">I confirm makaug.com has permission to use the selected ${escapeHtml(kindLabel)} for this project.</p><div class="mt-6 flex justify-end gap-3"><button type="button" data-op-media-cancel class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-black text-gray-700">Cancel</button><button type="button" data-op-media-confirm class="rounded-lg bg-green-700 px-4 py-2 text-sm font-black text-white">Confirm and choose files</button></div></div>`;
+      const finish = (confirmed) => {
+        dialog.close?.();
+        dialog.remove();
+        resolve(confirmed);
+      };
+      dialog.querySelector('[data-op-media-cancel]').addEventListener('click', () => finish(false));
+      dialog.querySelector('[data-op-media-confirm]').addEventListener('click', () => finish(true));
+      dialog.addEventListener('cancel', (event) => { event.preventDefault(); finish(false); });
+      document.body.appendChild(dialog);
+      if (typeof dialog.showModal === 'function') dialog.showModal();
+      else dialog.setAttribute('open', '');
+    });
+  }
+
   async function uploadOffPlanMedia(id, role, kind) {
     const isFloorPlan = kind === 'floor-plans';
-    if (!confirm(`I confirm makaug has permission to use the selected ${isFloorPlan ? 'floor plan' : 'project images'} for this project.`)) return;
+    if (!(await confirmOffPlanMediaRights(isFloorPlan ? 'floor plan' : 'project images'))) return;
     const input = document.createElement('input'); input.type = 'file'; input.multiple = !isFloorPlan; input.accept = isFloorPlan ? 'image/jpeg,image/png,image/webp,application/pdf' : 'image/jpeg,image/png,image/webp';
     input.onchange = async () => {
       const files = Array.from(input.files || []).slice(0, 20); if (!files.length) return;

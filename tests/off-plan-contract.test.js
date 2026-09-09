@@ -105,7 +105,7 @@ test('brochure, payment, gallery, map, sharing, video and mortgage handoff are v
   assert.match(client, /id="off-plan-gallery-dialog"/);
   assert.match(client, /closeOffPlanGallery/);
   assert.match(client, /value == null \|\| \(typeof value === 'string' && !value\.trim\(\)\)/);
-  assert.match(html, /off-plan\.js\?v=20260909-off-plan-v5/);
+  assert.match(html, /off-plan\.js\?v=20260909-off-plan-v6/);
   assert.match(html, /off-plan\.css\?v=20260909-off-plan-v3/);
   assert.match(client, /CLOSED_PERMANENTLY/);
   assert.match(client, /Archive this private project record/);
@@ -207,6 +207,8 @@ test('staff and King dashboards can edit enriched Off Plan facts', () => {
   assert.match(client, /off-plan-create-brochure/);
   assert.match(client, /import-brochure/);
   assert.match(client, /confirm_rights: true, images/);
+  assert.match(client, /Confirm and choose files/);
+  assert.match(client, /confirmOffPlanMediaRights/);
 });
 
 test('Off Plan family maps, contact and payment builder expose the requested interactive controls', () => {
