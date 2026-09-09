@@ -328,6 +328,8 @@ const WHATSAPP_EMPLOYEE_MEDIA_QUALITY_MARKER = 'whatsapp-employee-media-quality-
 const WHATSAPP_ORIGINAL_MEDIA_ONLY_MARKER = 'whatsapp-original-media-only-20260908';
 const WHATSAPP_AGENT_007_INTAKE_RELIABILITY_MARKER = 'whatsapp-agent007-replay-backoff-20260901';
 const WHATSAPP_AGENT_007_PENDING_MEDIA_FIX_MARKER = 'whatsapp-agent007-pending-media-idempotency-20260901';
+const WHATSAPP_AGENT_007_IDENTITY_MEDIA_FIREWALL_MARKER = 'whatsapp-agent007-identity-media-firewall-20260909';
+const WHATSAPP_AGENT_007_ALBUM_CAPTURE_MARKER = 'whatsapp-agent007-album-original-capture-20260909';
 const WHATSAPP_OUTGOING_PREVIEW_GUARD_MARKER = 'whatsapp-outgoing-preview-guard-20260831';
 const WHATSAPP_RESPONSE_RELIABILITY_MARKER = 'whatsapp-rendered-text-confirmation-20260909';
 const WHATSAPP_CALL_CARD_BROWSER_CONFIG = Object.freeze(whatsappCallCardBrowserConfig());
@@ -786,6 +788,8 @@ function hostedRuntimeMetadata() {
     original_media_only_marker: WHATSAPP_ORIGINAL_MEDIA_ONLY_MARKER,
     intake_reliability_marker: WHATSAPP_AGENT_007_INTAKE_RELIABILITY_MARKER,
     pending_media_fix_marker: WHATSAPP_AGENT_007_PENDING_MEDIA_FIX_MARKER,
+    identity_media_firewall_marker: WHATSAPP_AGENT_007_IDENTITY_MEDIA_FIREWALL_MARKER,
+    album_capture_marker: WHATSAPP_AGENT_007_ALBUM_CAPTURE_MARKER,
     outgoing_preview_guard: WHATSAPP_OUTGOING_PREVIEW_GUARD_MARKER,
     response_reliability_marker: WHATSAPP_RESPONSE_RELIABILITY_MARKER,
     git_commit: process.env.RENDER_GIT_COMMIT || process.env.SOURCE_VERSION || process.env.GIT_COMMIT || '',
@@ -1898,8 +1902,9 @@ async function getActiveChatSnapshot(page) {
     const highResolutionImages = nonEmojiImages.filter((img) => img.naturalWidth >= 160 && img.naturalHeight >= 120);
     const hasNonEmojiImage = highResolutionImages.length > 0 || nonEmojiImages.length > 0;
     const extraImageMatch = text.match(/\+(\d+)/);
+    const visibleMediaCount = Math.max(1, highResolutionImages.length);
     const mediaCount = hasNonEmojiImage
-      ? Math.max(1, highResolutionImages.length, extraImageMatch ? Number(extraImageMatch[1]) + 2 : 1)
+      ? Math.max(visibleMediaCount, extraImageMatch ? visibleMediaCount + Number(extraImageMatch[1]) : visibleMediaCount)
       : 0;
     const sharedLocation = extractSharedLocation(last);
     const voiceNote = hasVoiceNote(last, text);
@@ -2162,8 +2167,9 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
         const highResolutionImages = nonEmojiImages.filter((img) => img.naturalWidth >= 160 && img.naturalHeight >= 120);
         const hasNonEmojiImage = highResolutionImages.length > 0 || nonEmojiImages.length > 0;
         const extraImageMatch = rawText.match(/\+(\d+)/);
+        const visibleMediaCount = Math.max(1, highResolutionImages.length);
         const mediaCount = hasNonEmojiImage
-          ? Math.max(1, highResolutionImages.length, extraImageMatch ? Number(extraImageMatch[1]) + 2 : 1)
+          ? Math.max(visibleMediaCount, extraImageMatch ? visibleMediaCount + Number(extraImageMatch[1]) : visibleMediaCount)
           : 0;
         const sharedLocation = extractSharedLocation(node);
         const voiceNote = hasVoiceNote(node, rawText);
@@ -2333,7 +2339,9 @@ async function hydrateVoiceSnapshot(page, snapshot) {
 }
 
 async function hydrateImageSnapshot(page, snapshot) {
-  if (!snapshot || snapshot.mediaType !== 'image' || snapshot.imagePreviews?.length) return snapshot;
+  const snapshotMediaType = String(snapshot?.mediaType || '').toLowerCase();
+  const multiItemAlbum = snapshotMediaType === 'media' && Number(snapshot?.mediaCount || 0) > 1;
+  if (!snapshot || (!multiItemAlbum && snapshotMediaType !== 'image') || snapshot.imagePreviews?.length) return snapshot;
   const messageId = String(snapshot.messageId || '').trim();
   if (!messageId) return snapshot;
 
@@ -2342,7 +2350,8 @@ async function hydrateImageSnapshot(page, snapshot) {
       targetMessageId,
       maxDimension,
       quality,
-      maxBytes
+      maxBytes,
+      requestedMediaCount
     }) => {
       const nodes = Array.from(document.querySelectorAll('[data-id], [data-testid^="conv-msg-"]'));
       const root = nodes.find((el) => (
@@ -2363,9 +2372,9 @@ async function hydrateImageSnapshot(page, snapshot) {
         const key = img.currentSrc || img.src || `${img.naturalWidth}x${img.naturalHeight}:${img.alt || ''}`;
         return [key, img];
       })).values());
-      const visibleImages = uniqueImageCandidates.slice(0, 5);
+      const visibleImages = uniqueImageCandidates.slice(0, 20);
 
-      const encodeImage = async (sourceImage) => {
+      const encodeImage = async (sourceImage, captureSource = 'whatsapp_image_pixels') => {
         if (!sourceImage.complete) {
           await new Promise((resolve) => {
             const finish = () => resolve();
@@ -2397,7 +2406,7 @@ async function hydrateImageSnapshot(page, snapshot) {
         hashCanvas.width = 9;
         hashCanvas.height = 8;
         const hashContext = hashCanvas.getContext('2d', { willReadFrequently: true });
-        if (!hashContext) return { dataUrl, mimeType: 'image/jpeg', bytes, perceptualHash: '' };
+        if (!hashContext) return { dataUrl, mimeType: 'image/jpeg', bytes, perceptualHash: '', captureSource };
         hashContext.drawImage(sourceImage, 0, 0, 9, 8);
         const pixels = hashContext.getImageData(0, 0, 9, 8).data;
         let bits = '';
@@ -2414,24 +2423,119 @@ async function hydrateImageSnapshot(page, snapshot) {
         for (let index = 0; index < bits.length; index += 4) {
           perceptualHash += Number.parseInt(bits.slice(index, index + 4), 2).toString(16);
         }
-        return { dataUrl, mimeType: 'image/jpeg', bytes, perceptualHash };
+        return { dataUrl, mimeType: 'image/jpeg', bytes, perceptualHash, captureSource };
       };
 
-      const results = [];
+      const visibleResults = [];
       for (const img of visibleImages) {
         try {
           const encoded = await encodeImage(img);
-          if (encoded?.dataUrl) results.push(encoded);
+          if (encoded?.dataUrl) visibleResults.push(encoded);
         } catch (_error) {
           // A tainted or unavailable thumbnail is skipped and fails closed server-side.
         }
       }
-      return results;
+
+      const expectedCount = Math.max(1, Math.min(20, Number(requestedMediaCount || 1) || 1));
+      const viewerResults = [];
+      if (expectedCount > 1 && visibleImages.length) {
+        const opener = visibleImages[0].closest('button, [role="button"]') || visibleImages[0];
+        opener.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+        opener.click();
+        await new Promise((resolve) => setTimeout(resolve, 650));
+
+        let previousViewerSource = '';
+        const seenViewerHashes = new Set();
+        for (let index = 0; index < expectedCount; index += 1) {
+          const viewerRoots = Array.from(document.querySelectorAll([
+            '[role="dialog"]',
+            '[data-testid*="media-viewer" i]',
+            '[data-animate-modal-popup="true"]'
+          ].join(','))).filter((element) => {
+            const rect = element.getBoundingClientRect();
+            return rect.width >= 320 && rect.height >= 240;
+          });
+          const viewerRoot = viewerRoots.sort((left, right) => {
+            const leftRect = left.getBoundingClientRect();
+            const rightRect = right.getBoundingClientRect();
+            return (rightRect.width * rightRect.height) - (leftRect.width * leftRect.height);
+          })[0] || null;
+          if (!viewerRoot) break;
+
+          const viewerImages = Array.from(viewerRoot.querySelectorAll('img')).filter((img) => {
+            const rect = img.getBoundingClientRect();
+            const className = String(img.className || '').toLowerCase();
+            const alt = String(img.alt || '').toLowerCase();
+            return !className.includes('emoji')
+              && !alt.includes('emoji')
+              && !alt.includes('avatar')
+              && img.naturalWidth >= 160
+              && img.naturalHeight >= 120
+              && rect.width >= 120
+              && rect.height >= 90;
+          }).sort((left, right) => {
+            const leftRect = left.getBoundingClientRect();
+            const rightRect = right.getBoundingClientRect();
+            const leftScore = (leftRect.width * leftRect.height) + (left.naturalWidth * left.naturalHeight);
+            const rightScore = (rightRect.width * rightRect.height) + (right.naturalWidth * right.naturalHeight);
+            return rightScore - leftScore;
+          });
+          const currentImage = viewerImages[0] || null;
+          const currentSource = currentImage?.currentSrc || currentImage?.src || '';
+          if (currentImage && currentSource !== previousViewerSource) {
+            try {
+              const encoded = await encodeImage(currentImage, 'whatsapp_media_viewer_original_pixels');
+              const uniquenessKey = encoded?.perceptualHash || encoded?.dataUrl || '';
+              if (encoded?.dataUrl && uniquenessKey && !seenViewerHashes.has(uniquenessKey)) {
+                seenViewerHashes.add(uniquenessKey);
+                viewerResults.push(encoded);
+              }
+            } catch (_error) {
+              // The visible-card pixels remain as a fail-closed fallback below.
+            }
+          }
+          previousViewerSource = currentSource;
+
+          const nextControl = Array.from(viewerRoot.querySelectorAll([
+            'button[aria-label*="Next" i]',
+            '[role="button"][aria-label*="Next" i]',
+            '[data-icon="chevron-right"]',
+            '[data-testid*="next" i]'
+          ].join(','))).find((element) => {
+            const rect = element.getBoundingClientRect();
+            return rect.width > 0 && rect.height > 0;
+          });
+          if (!nextControl || index >= expectedCount - 1) break;
+          (nextControl.closest('button, [role="button"]') || nextControl).click();
+          await new Promise((resolve) => setTimeout(resolve, 450));
+        }
+
+        const closeControl = Array.from(document.querySelectorAll([
+          'button[aria-label*="Close" i]',
+          '[role="button"][aria-label*="Close" i]',
+          '[data-icon="x-viewer"]',
+          '[data-testid*="media-viewer-close" i]'
+        ].join(','))).find((element) => {
+          const rect = element.getBoundingClientRect();
+          return rect.width > 0 && rect.height > 0;
+        });
+        (closeControl?.closest('button, [role="button"]') || closeControl)?.click?.();
+      }
+
+      const preferred = viewerResults.length ? [...viewerResults, ...visibleResults] : visibleResults;
+      const seen = new Set();
+      return preferred.filter((item) => {
+        const key = item.perceptualHash || item.dataUrl;
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      }).slice(0, expectedCount);
     }, {
       targetMessageId: messageId,
       maxDimension: LISTING_IMAGE_PREVIEW_MAX_DIMENSION,
       quality: LISTING_IMAGE_PREVIEW_QUALITY,
-      maxBytes: LISTING_IMAGE_PREVIEW_MAX_BYTES
+      maxBytes: LISTING_IMAGE_PREVIEW_MAX_BYTES,
+      requestedMediaCount: snapshot.mediaCount || 1
     });
 
     if (Array.isArray(previews) && previews.length) {
@@ -2441,7 +2545,7 @@ async function hydrateImageSnapshot(page, snapshot) {
         bytes: Number(item.bytes || 0),
         sha256: crypto.createHash('sha256').update(String(item.dataUrl || '')).digest('hex'),
         perceptualHash: String(item.perceptualHash || '').toLowerCase(),
-        captureSource: 'whatsapp_image_pixels'
+        captureSource: item.captureSource || 'whatsapp_image_pixels'
       }));
       return {
         ...snapshot,
@@ -3274,7 +3378,8 @@ async function ingestSnapshot({ snapshot, row = {}, source = 'unread_scan' }) {
     && !(Array.isArray(snapshot.imagePreviews) && snapshot.imagePreviews.length);
   const missingFileBytes = mediaType === 'media'
     && browserMediaPlaceholder
-    && !(Array.isArray(snapshot.mediaPreviews) && snapshot.mediaPreviews.length);
+    && !(Array.isArray(snapshot.mediaPreviews) && snapshot.mediaPreviews.length)
+    && !(Array.isArray(snapshot.imagePreviews) && snapshot.imagePreviews.length);
   if (missingImageBytes || missingFileBytes) {
     const hydrationError = snapshot.imagePreviewError || snapshot.mediaPreviewError || 'media_bytes_unavailable';
     const deferred = deferMediaHydration(snapshot, row, hydrationError);
@@ -3504,6 +3609,25 @@ function isEmployeePropertyCaptionCorrectionSnapshot(snapshot = {}) {
   return hasPropertyType && hasPrice;
 }
 
+function isEmployeePropertyBatchModeSnapshot(snapshot = {}) {
+  if (String(snapshot.mediaType || 'text').toLowerCase() !== 'text') return false;
+  const text = String(snapshot.text || '').replace(/\s+/g, ' ').trim();
+  return /^(?:1|2|one(?: property)?|single(?: property)?|multiple(?: properties)?|many)$/i.test(text);
+}
+
+function employeePropertyPhaseBoundarySnapshot(batchSnapshots = []) {
+  const firstPropertySignalIndex = batchSnapshots.findIndex((snapshot) => (
+    isEmployeePropertyStartSnapshot(snapshot)
+    || isEmployeePropertyCaptionCorrectionSnapshot(snapshot)
+    || isEmployeeBatchCompletionSnapshot(snapshot)
+  ));
+  const searchEnd = firstPropertySignalIndex >= 0 ? firstPropertySignalIndex : batchSnapshots.length;
+  const candidates = batchSnapshots
+    .slice(0, searchEnd)
+    .filter(isEmployeePropertyBatchModeSnapshot);
+  return candidates[candidates.length - 1] || null;
+}
+
 async function locateEmployeeBatchHistory(page, { chatKey = '' } = {}) {
   const normalizedChat = normalizeChatKey(chatKey);
   const snapshotsByKey = new Map();
@@ -3536,6 +3660,7 @@ async function locateEmployeeBatchHistory(page, { chatKey = '' } = {}) {
       triggerKey = employeeBatchSnapshotKey(ordered[lastTriggerIndex]);
       const completionKey = employeeBatchSnapshotKey(ordered[lastCompletionIndex]);
       const batchSnapshots = ordered.slice(lastTriggerIndex, lastCompletionIndex + 1);
+      const propertyPhaseBoundary = employeePropertyPhaseBoundarySnapshot(batchSnapshots);
       return {
         found: true,
         chatKey: normalizedChat || normalizeChatKey(ordered[lastCompletionIndex]?.chatKey),
@@ -3543,6 +3668,8 @@ async function locateEmployeeBatchHistory(page, { chatKey = '' } = {}) {
         completionKey,
         triggerSnapshot: ordered[lastTriggerIndex],
         completionSnapshot: ordered[lastCompletionIndex],
+        propertyPhaseKey: employeeBatchSnapshotKey(propertyPhaseBoundary),
+        propertyPhaseSnapshot: propertyPhaseBoundary,
         observedPropertyMessages: batchSnapshots.filter(isEmployeePropertyStartSnapshot).length
       };
     }
@@ -3571,7 +3698,8 @@ async function replayEmployeeBatchThroughCompletion(page, history = {}, row = {}
       phone: history.chatKey,
       observed_property_messages: history.observedPropertyMessages,
       trigger_message_id: history.triggerSnapshot?.messageId || history.triggerKey,
-      completion_message_id: history.completionSnapshot?.messageId || history.completionKey
+      completion_message_id: history.completionSnapshot?.messageId || history.completionKey,
+      property_phase_message_id: history.propertyPhaseSnapshot?.messageId || history.propertyPhaseKey || ''
     }
   });
   const preparationData = preparation.data || {};
@@ -3591,6 +3719,7 @@ async function replayEmployeeBatchThroughCompletion(page, history = {}, row = {}
 
   log(`starting Agent 007 ordered history replay for ${history.chatKey}: ${history.observedPropertyMessages} property messages observed`);
   let started = false;
+  let propertyPhaseStarted = false;
   let completed = false;
   let processed = 0;
   const completedSnapshotKeys = employeeBatchReplayProgress.get(completionKey) || new Set();
@@ -3618,10 +3747,30 @@ async function replayEmployeeBatchThroughCompletion(page, history = {}, row = {}
       }
       if (!key) continue;
 
+      if (!propertyPhaseStarted && history.propertyPhaseKey && key === history.propertyPhaseKey) {
+        propertyPhaseStarted = true;
+        visited.add(key);
+        completedSnapshotKeys.add(key);
+        continue;
+      }
+
       const isCompletion = key === history.completionKey || isEmployeeBatchCompletionSnapshot(snapshot);
       const isPropertyMedia = ['image', 'media'].includes(String(snapshot.mediaType || '').toLowerCase());
       if (visited.has(key)) continue;
       const isCaptionCorrection = isEmployeePropertyCaptionCorrectionSnapshot(snapshot);
+      if (!propertyPhaseStarted && (isCaptionCorrection || isEmployeePropertyStartSnapshot(snapshot))) {
+        // A valid property caption is a safe fallback boundary when older
+        // WhatsApp setup rows have already been virtualized out of the DOM.
+        propertyPhaseStarted = true;
+      }
+      if (isPropertyMedia && !propertyPhaseStarted) {
+        // Images before the final one/multiple selection are identity evidence,
+        // never property media. This is the structural privacy boundary for
+        // ordered Agent 007 recovery.
+        visited.add(key);
+        completedSnapshotKeys.add(key);
+        continue;
+      }
       if (!isCompletion && !isPropertyMedia && !isCaptionCorrection) {
         visited.add(key);
         continue;

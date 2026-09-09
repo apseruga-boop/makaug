@@ -3381,6 +3381,33 @@ function employeeMediaCandidates(runtime = {}, mediaUrl = '') {
   }).slice(0, 20);
 }
 
+function normalizeEmployeeSourceMessageId(value = '') {
+  return normalizeInput(value)
+    .replace(/:(?:ordered-replay|ordered-caption|ordered-complete):[a-f0-9]+$/i, '')
+    .slice(0, 500);
+}
+
+function employeePropertyMediaCandidates(candidates = [], sessionData = {}, inboundMessageId = '') {
+  const identitySha256 = normalizeInput(
+    sessionData.identity_document_sha256
+    || sessionData.employee_intake_last_identity_sha256
+    || ''
+  ).toLowerCase();
+  const identityMessageId = normalizeEmployeeSourceMessageId(
+    sessionData.identity_document_message_id
+    || sessionData.employee_intake_last_identity_message_id
+    || ''
+  );
+  const propertyMessageId = normalizeEmployeeSourceMessageId(inboundMessageId);
+
+  return (Array.isArray(candidates) ? candidates : []).filter((candidate) => {
+    const candidateSha256 = normalizeInput(candidate?.sha256 || '').toLowerCase();
+    if (identitySha256 && candidateSha256 && candidateSha256 === identitySha256) return false;
+    if (identityMessageId && propertyMessageId && propertyMessageId === identityMessageId) return false;
+    return true;
+  });
+}
+
 async function validateEmployeeImageCandidate(candidate = {}, imageDataUrl = '') {
   const captureSource = normalizeInput(candidate.captureSource).toLowerCase();
   const previewWarning = normalizeInput(candidate.previewWarning).toLowerCase();
@@ -4235,7 +4262,8 @@ async function prepareEmployeeOrderedBatchReplay({
   phone,
   observedPropertyMessages = 0,
   triggerMessageId = '',
-  completionMessageId = ''
+  completionMessageId = '',
+  propertyPhaseMessageId = ''
 } = {}) {
   const sessionResult = await db.query(
     'SELECT * FROM whatsapp_sessions WHERE phone = $1 LIMIT 1',
@@ -4316,7 +4344,26 @@ async function prepareEmployeeOrderedBatchReplay({
   if (Date.now() - completedAt.getTime() > 24 * 60 * 60 * 1000) {
     return { ready: false, reason: 'completed_batch_too_old' };
   }
-  if (observed > 0 && observed <= previousShared) {
+  if (previousSetUp < 1) {
+    return { ready: false, reason: 'recoverable_agent_batch_not_found' };
+  }
+  const propertyResult = await db.query(
+    `SELECT id::text AS id, agent_id::text AS agent_id,
+            lister_name, lister_phone, id_document_url, area, district, extra_fields
+       FROM properties
+      WHERE source = 'whatsapp_employee_intake'
+        AND extra_fields->>'whatsapp_employee_sender_phone_suffix' = $1
+        AND created_at <= $2
+      ORDER BY created_at DESC, id DESC
+      LIMIT $3`,
+    [employeeIntakePhoneSuffix(phone), completedAt.toISOString(), previousSetUp]
+  );
+  if (propertyResult.rows.length !== previousSetUp) {
+    return { ready: false, reason: 'completed_batch_properties_not_found' };
+  }
+  const propertyIds = propertyResult.rows.map((row) => row.id).reverse();
+  const propertiesMissingUsableMedia = await employeePropertiesMissingUsableMedia(propertyIds);
+  if (observed > 0 && observed <= previousShared && !propertiesMissingUsableMedia.length) {
     return {
       ready: false,
       alreadyComplete: true,
@@ -4329,41 +4376,40 @@ async function prepareEmployeeOrderedBatchReplay({
       }
     };
   }
-
-  if (previousSetUp < 1) {
-    return { ready: false, reason: 'recoverable_agent_batch_not_found' };
-  }
-  const propertyResult = await db.query(
-    `SELECT id::text AS id, agent_id::text AS agent_id
-       FROM properties
-      WHERE source = 'whatsapp_employee_intake'
-        AND agent_id IS NOT NULL
-        AND extra_fields->>'whatsapp_employee_sender_phone_suffix' = $1
-        AND created_at <= $2
-      ORDER BY created_at DESC, id DESC
-      LIMIT $3`,
-    [employeeIntakePhoneSuffix(phone), completedAt.toISOString(), previousSetUp]
-  );
-  if (propertyResult.rows.length !== previousSetUp) {
-    return { ready: false, reason: 'completed_batch_properties_not_found' };
-  }
   const propertyAgentIds = [...new Set(propertyResult.rows.map((row) => normalizeInput(row.agent_id)).filter(Boolean))];
   const pendingAgent = data.employee_intake_pending_agent_notification;
   const agentId = normalizeInput(pendingAgent?.agent_id) || propertyAgentIds[0] || '';
-  if (!agentId || propertyAgentIds.length !== 1 || propertyAgentIds[0] !== agentId) {
+  const recoveredRole = normalizeInput(
+    propertyResult.rows[0]?.extra_fields?.whatsapp_employee_subject_role
+    || data.employee_intake_last_subject_role
+  ).toLowerCase();
+  const customerBatch = recoveredRole === 'customer' && propertyAgentIds.length === 0;
+  if (!customerBatch && (!agentId || propertyAgentIds.length !== 1 || propertyAgentIds[0] !== agentId)) {
     return { ready: false, reason: 'completed_batch_agent_ambiguous' };
   }
-  const agentResult = await db.query(
-    `SELECT id, full_name, company_name, phone, whatsapp, email
-       FROM agents
-      WHERE id = $1
-      LIMIT 1`,
-    [agentId]
-  );
-  const agent = agentResult.rows[0];
-  if (!agent) return { ready: false, reason: 'agent_not_found' };
+  let agent = null;
+  if (!customerBatch) {
+    const agentResult = await db.query(
+      `SELECT id, full_name, company_name, phone, whatsapp, email, identity_document_url
+         FROM agents
+        WHERE id = $1
+        LIMIT 1`,
+      [agentId]
+    );
+    agent = agentResult.rows[0];
+    if (!agent) return { ready: false, reason: 'agent_not_found' };
+  }
 
-  const propertyIds = propertyResult.rows.map((row) => row.id).reverse();
+  const latestProperty = propertyResult.rows[0];
+  const customerDetails = customerBatch ? {
+    fullName: normalizeInput(latestProperty.lister_name || 'WhatsApp customer'),
+    phone: normalizeInput(latestProperty.lister_phone || ''),
+    location: normalizeInput(
+      latestProperty.extra_fields?.customer_location_confirmed
+      || [latestProperty.area, latestProperty.district].filter(Boolean).join(', ')
+    )
+  } : null;
+
   const restoredData = {
     whatsapp_employee_intake: true,
     employee_intake_marker: WHATSAPP_EMPLOYEE_AGENT_007_MARKER,
@@ -4373,10 +4419,19 @@ async function prepareEmployeeOrderedBatchReplay({
     employee_intake_original_completed_at: completedAt.toISOString(),
     employee_intake_recovery_trigger_message_id: triggerMessageId || null,
     employee_intake_recovery_completion_message_id: completionMessageId || null,
+    employee_intake_recovery_property_phase_message_id: propertyPhaseMessageId || null,
     employee_intake_recovery_skip_existing_matches: true,
     employee_sender_phone_suffix: employeeIntakePhoneSuffix(phone),
-    employee_role: 'agent',
-    agent,
+    employee_role: customerBatch ? 'customer' : 'agent',
+    ...(agent ? { agent } : {}),
+    ...(customerDetails ? { customer_details: customerDetails } : {}),
+    identity_document_url: normalizeInput(
+      latestProperty.id_document_url
+      || agent?.identity_document_url
+      || ''
+    ) || null,
+    identity_document_sha256: normalizeInput(data.employee_intake_last_identity_sha256 || '') || null,
+    identity_document_message_id: normalizeInput(data.employee_intake_last_identity_message_id || '') || null,
     property_batch_mode: previousBatchMode,
     property_ids: propertyIds,
     current_property_id: propertyIds[propertyIds.length - 1] || null,
@@ -4800,6 +4855,27 @@ async function attachEmployeeReviewMedia({ propertyId, storedMedia, phone, inbou
   return { attached: uniqueMedia.length, duplicate: false };
 }
 
+async function employeePropertiesMissingUsableMedia(propertyIds = []) {
+  const ids = [...new Set((Array.isArray(propertyIds) ? propertyIds : []).map(String).filter(Boolean))];
+  if (!ids.length) return [];
+  const result = await db.query(
+    `SELECT p.id::text AS id
+       FROM properties p
+      WHERE p.id = ANY($1::uuid[])
+        AND p.status IN ('pending','approved')
+        AND NOT EXISTS (
+          SELECT 1 FROM property_images pi WHERE pi.property_id = p.id
+        )
+        AND CASE
+          WHEN jsonb_typeof(p.extra_fields->'video_urls') = 'array'
+            THEN jsonb_array_length(p.extra_fields->'video_urls') = 0
+          ELSE COALESCE(NULLIF(p.extra_fields->>'video_url', ''), '') = ''
+        END`,
+    [ids]
+  );
+  return result.rows.map((row) => String(row.id));
+}
+
 async function handleEmployeeWhatsappIntake({
   phone,
   body = '',
@@ -4979,6 +5055,8 @@ async function handleEmployeeWhatsappIntake({
     }
     data.identity_document_url = identityDocument.url;
     data.identity_document_mime_type = identityDocument.mimeType;
+    data.identity_document_sha256 = identityDocument.sha256 || null;
+    data.identity_document_message_id = normalizeEmployeeSourceMessageId(inboundMessageId) || null;
     if (data.employee_role === 'agent') {
       try {
         const ensured = await ensurePendingEmployeeAgent(data.new_agent_details, identityDocument);
@@ -5032,6 +5110,15 @@ async function handleEmployeeWhatsappIntake({
       let propertyIds = Array.isArray(data.property_ids) ? data.property_ids : [];
       if (!Number(data.properties_shared_count || 0)) {
         return { handled: true, nextStep: currentStep, message: 'No properties have been saved yet. Send the first property media with its type, exact location and price in the caption.' };
+      }
+      const propertiesMissingUsableMedia = await employeePropertiesMissingUsableMedia(propertyIds);
+      if (propertiesMissingUsableMedia.length) {
+        return {
+          handled: true,
+          nextStep: currentStep,
+          batchComplete: false,
+          message: `I have not completed this batch because ${propertiesMissingUsableMedia.length} ${propertiesMissingUsableMedia.length === 1 ? 'property has' : 'properties have'} no usable property photo or original video attached. Send the missing property media; the private ID is not property media, nothing is live, and the batch remains open.`
+        };
       }
       const reconciliation = data.employee_intake_recovery_skip_existing_matches === true
         ? await reconcileEmployeeBatchReviewRecords(data)
@@ -5107,6 +5194,9 @@ async function handleEmployeeWhatsappIntake({
         employee_intake_last_duplicates_skipped: batchCounts.duplicatesSkipped,
         employee_intake_last_properties_failed: batchCounts.propertiesFailed,
         employee_intake_last_media_count: Number(data.total_media_count || 0),
+        employee_intake_last_subject_role: data.employee_role || null,
+        employee_intake_last_identity_sha256: data.identity_document_sha256 || null,
+        employee_intake_last_identity_message_id: data.identity_document_message_id || null,
         ...(pendingAgentNotification ? { employee_intake_pending_agent_notification: pendingAgentNotification } : {})
       });
       const notificationLine = pendingAgentNotification
@@ -5125,6 +5215,11 @@ async function handleEmployeeWhatsappIntake({
       };
     }
 
+    const candidates = employeePropertyMediaCandidates(
+      employeeMediaCandidates(runtime, mediaUrl),
+      data,
+      inboundMessageId
+    );
     const placeholderBody = /^\s*\[(?:image|video|document|media)\]\s*$/i.test(cleanBody);
     if (!candidates.length) {
       if (!cleanBody || placeholderBody) {
@@ -11608,9 +11703,9 @@ async function processInboundRuntimeUnlocked({
   let transcriptRecord = null;
   let voiceTranscriptionUnavailable = false;
   const normalizedMediaType = String(mediaType || '').toLowerCase();
-  const inboundMediaCount = Math.max(0, Math.min(10, Number(inboundMetadata.media_count || inboundMetadata.mediaCount || 0) || 0));
+  const inboundMediaCount = Math.max(0, Math.min(20, Number(inboundMetadata.media_count || inboundMetadata.mediaCount || 0) || 0));
   const inboundPhotoCandidates = Array.isArray(inboundMetadata.image_previews)
-    ? inboundMetadata.image_previews.slice(0, 10)
+    ? inboundMetadata.image_previews.slice(0, 20)
     : [];
   const inboundMediaCandidates = Array.isArray(inboundMetadata.media_previews)
     ? inboundMetadata.media_previews.slice(0, 20)
@@ -12439,7 +12534,8 @@ router.post('/web-bridge/employee-batch-recovery', asyncRoute(async (req, res) =
     phone,
     observedPropertyMessages,
     triggerMessageId: normalizeInput(req.body.trigger_message_id || req.body.triggerMessageId),
-    completionMessageId: normalizeInput(req.body.completion_message_id || req.body.completionMessageId)
+    completionMessageId: normalizeInput(req.body.completion_message_id || req.body.completionMessageId),
+    propertyPhaseMessageId: normalizeInput(req.body.property_phase_message_id || req.body.propertyPhaseMessageId)
   });
   return res.json({
     ok: true,
@@ -12520,7 +12616,7 @@ router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
   const body = normalizeInput(req.body.body || req.body.text || '');
   let mediaUrl = normalizeInput(req.body.media_url || req.body.mediaUrl);
   const mediaType = normalizeInput(req.body.media_type || req.body.mediaType).toLowerCase();
-  const mediaCount = Math.max(0, Math.min(10, Number(req.body.media_count || req.body.mediaCount || 0) || 0));
+  const mediaCount = Math.max(0, Math.min(20, Number(req.body.media_count || req.body.mediaCount || 0) || 0));
   const sharedLocation = parseInboundLocation(req.body.shared_location || req.body.location || req.body);
   const dryRun = ['1', 'true', 'yes'].includes(String(req.body.dry_run || req.body.dryRun || '').trim().toLowerCase());
   const inboundMetadata = req.body.metadata && typeof req.body.metadata === 'object' ? req.body.metadata : {};
@@ -13057,6 +13153,7 @@ module.exports.__test = {
   hasValidMetaWebhookSignature,
   employeeCaptionHash,
   employeeMediaCandidates,
+  employeePropertyMediaCandidates,
   employeePendingStoredMedia,
   employeeVideoEvidenceOnly,
   employeePropertyFacts,
@@ -13064,6 +13161,7 @@ module.exports.__test = {
   isEmployeeNewPropertyCaptionBoundary,
   employeeCaptionLikelySameProperty,
   employeePendingSubmissionQueue,
+  ensurePendingEmployeeAgent,
   getWhatsappCallNotificationEmails,
   inferWhatsappCallInquiry,
   handleWhatsappCallEvent,
