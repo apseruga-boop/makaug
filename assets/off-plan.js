@@ -885,8 +885,13 @@
   function officialBuyerGuidanceMarkup(project) {
     const guidance = Array.isArray(project.extra_fields?.official_buyer_guidance) ? project.extra_fields.official_buyer_guidance : [];
     if (!guidance.length) return '';
+    const dubaiProject = clean(project.country_code).toUpperCase() === 'AE';
+    const buyerChecks = dubaiProject ? 'Official Dubai buying checks' : overseasDetailText('buyerChecks');
+    const buyerChecksBody = dubaiProject
+      ? 'Use an independent UAE property lawyer and verify the project status through the Dubai Land Department before signing or transferring funds.'
+      : overseasDetailText('buyerChecksBody');
     const links = guidance.filter((item) => /^https:\/\//i.test(clean(item.url))).map((item) => `<a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer"><span>${escapeHtml(item.label || overseasDetailText('openOfficial'))}</span><i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i></a>`).join('');
-    return `<div class="mt-5 rounded-xl border border-blue-200 bg-blue-50 p-4"><strong class="text-blue-950">${escapeHtml(overseasDetailText('buyerChecks'))}</strong><p class="mt-1 text-sm leading-6 text-blue-900">${escapeHtml(overseasDetailText('buyerChecksBody'))}</p><div class="off-plan-guidance-links mt-3">${links}</div></div>`;
+    return `<div class="mt-5 rounded-xl border border-blue-200 bg-blue-50 p-4"><strong class="text-blue-950">${escapeHtml(buyerChecks)}</strong><p class="mt-1 text-sm leading-6 text-blue-900">${escapeHtml(buyerChecksBody)}</p><div class="off-plan-guidance-links mt-3">${links}</div></div>`;
   }
 
   function detailMarkup(project) {

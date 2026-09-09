@@ -176,6 +176,16 @@ test('Spectre source facts, makaug.com coordination and Kenya safeguards are wir
   assert.match(brochure, /copy\.projectedReturns/);
 });
 
+test('UAE project guidance and overseas brochure contact details are Dubai-specific', () => {
+  const client = read('assets/off-plan.js');
+  const brochure = read('services/offPlanBrochureService.js');
+  assert.match(client, /Official Dubai buying checks/);
+  assert.match(client, /verify the project status through the Dubai Land Department/);
+  assert.match(client, /dubaiProject \? 'Official Dubai buying checks' : overseasDetailText\('buyerChecks'\)/);
+  assert.match(brochure, /safeRemoteImageBuffer\(image\.url\)/);
+  assert.match(brochure, /mailto:info@makaug\.com/);
+});
+
 test('contact workflow has all channels and exact operations recipients', () => {
   const html = read('index.html');
   const notifications = read('services/offPlanNotificationService.js');

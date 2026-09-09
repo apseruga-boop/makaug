@@ -329,7 +329,11 @@ function buildOffPlanBrochure(projectInput, output, options = {}) {
   preserveArabicWordSpacing(doc, language);
   if (output && typeof output.write === 'function') doc.pipe(output);
 
-  const imagePaths = project.images.map((image) => ({ ...image, path: localAssetPath(image.url) })).filter((image) => image.path);
+  const projectImageBuffers = Array.isArray(options.projectImageBuffers) ? options.projectImageBuffers : [];
+  const imagePaths = project.images.map((image, index) => ({
+    ...image,
+    path: localAssetPath(image.url) || projectImageBuffers[index] || null
+  })).filter((image) => image.path);
   addHeader(doc, copy.project, copy);
   addFooter(doc, project, copy);
   if (imagePaths[0]) imageCover(doc, imagePaths[0].path, 42, 90, doc.page.width - 84, 310);
@@ -565,6 +569,7 @@ function buildOffPlanBrochure(projectInput, output, options = {}) {
   doc.fillColor(MUTED).font('Brochure-Regular').fontSize(10).text(cleanText(overseas ? copy.purchaseCoordinator : agent?.company_name || copy.brokerProfile, 140), 184, 172, { width: 365, align: copy.rtl ? 'right' : 'left' });
   const agentPhone = cleanText(overseas ? (process.env.SUPPORT_PHONE || '+256760112587') : agent?.whatsapp || agent?.phone, 60);
   if (agentPhone) doc.fillColor(BRAND_GREEN).font('Brochure-Bold').fontSize(10).text(`${copy.phone}: ${agentPhone}`, 184, 190, { width: 365, link: `tel:${agentPhone.replace(/[^+\d]/g, '')}`, align: copy.rtl ? 'right' : 'left' });
+  if (overseas) doc.fillColor(BRAND_GREEN).font('Brochure-Bold').fontSize(9).text('info@makaug.com', 390, 190, { width: 159, link: 'mailto:info@makaug.com', align: 'right' });
   const agentBio = overseas ? copy.makaugOverseasBio : cleanText(agent?.full_name).toLowerCase() === 'kazi honest' && language !== 'en' ? copy.kaziBio : cleanText(agent?.bio, 520);
   if (agentBio) doc.fillColor(INK).font('Brochure-Regular').fontSize(9).text(agentBio, 184, agentPhone ? 211 : 196, { width: 365, height: agentPhone ? 38 : 53, ellipsis: true, lineGap: 3, align: copy.rtl ? 'right' : 'left' });
   doc.roundedRect(44, 250, 505, 46, 11).fill(BRAND_GREEN);
@@ -592,13 +597,14 @@ function buildOffPlanBrochure(projectInput, output, options = {}) {
 
 async function brochureBuffer(project, options = {}) {
   const agentProfile = options.agentProfile || null;
-  const [mapImageBuffer, ...agentListingImageBuffers] = await Promise.all([
+  const [mapImageBuffer, projectImageBuffers, agentListingImageBuffers] = await Promise.all([
     options.mapImageBuffer || googleStaticMapBuffer(project),
-    ...(agentProfile?.listings || []).slice(0, 5).map((listing) => safeRemoteImageBuffer(listing.primary_image_url))
+    Promise.all((project.images || []).map((image) => safeRemoteImageBuffer(image.url))),
+    Promise.all((agentProfile?.listings || []).slice(0, 5).map((listing) => safeRemoteImageBuffer(listing.primary_image_url)))
   ]);
   return new Promise((resolve, reject) => {
     const chunks = [];
-    const doc = buildOffPlanBrochure(project, null, { ...options, agentProfile, mapImageBuffer, agentListingImageBuffers });
+    const doc = buildOffPlanBrochure(project, null, { ...options, agentProfile, mapImageBuffer, projectImageBuffers, agentListingImageBuffers });
     doc.on('data', (chunk) => chunks.push(chunk));
     doc.on('end', () => resolve(Buffer.concat(chunks)));
     doc.on('error', reject);

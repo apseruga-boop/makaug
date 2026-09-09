@@ -1,6 +1,8 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const test = require('node:test');
 const { brochureBuffer, computeMortgageEstimate, distanceKmBetween, formatApproximateDistance, formatDate, projectUrl } = require('../services/offPlanBrochureService');
 const { brochureLanguagePack, normalizeBrochureLanguage, SUPPORTED_OFF_PLAN_LANGUAGES } = require('../services/offPlanBrochureI18n');
@@ -112,5 +114,31 @@ test('overseas brochure uses the Kenya route, KES source pricing, floor plans an
     assert.equal(pdf.subarray(0, 8).toString(), '%PDF-1.3', language);
     assert.ok(pdf.length > 20_000, language);
     assert.ok((pdf.toString('latin1').match(/\/Type \/Page\b/g) || []).length >= 9, language);
+  }
+});
+
+test('overseas brochure embeds approved media.makaug.com project images and the makaug.com contact email', { concurrency: false }, async () => {
+  const remoteImageUrl = 'https://media.makaug.com/off-plan/qa-cover.jpg';
+  const imageBytes = fs.readFileSync(path.resolve(__dirname, '../assets/off-plan/entebbe-victoria-palms/construction-interior-1.jpg'));
+  const originalFetch = global.fetch;
+  const requestedUrls = [];
+  global.fetch = async (url) => {
+    requestedUrls.push(String(url));
+    if (String(url) === remoteImageUrl) return new Response(imageBytes, { status: 200, headers: { 'content-type': 'image/jpeg' } });
+    return new Response('', { status: 404 });
+  };
+  try {
+    const pdf = await brochureBuffer({
+      ...BROCHURE_PROJECT,
+      country_code: 'AE',
+      slug: 'beverly-qa',
+      images: [{ url: remoteImageUrl, caption: 'Approved project cover' }],
+      extra_fields: { contact_mode: 'makaug_managed' }
+    });
+    assert.ok(requestedUrls.includes(remoteImageUrl));
+    assert.match(pdf.toString('latin1'), /\/Subtype \/Image/);
+    assert.ok(pdf.length > 20_000);
+  } finally {
+    global.fetch = originalFetch;
   }
 });
