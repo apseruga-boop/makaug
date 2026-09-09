@@ -12928,7 +12928,8 @@ router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
       ...(dryRun ? { dry_run_session: runtimePhone } : {}),
       queued_reply: !!queuedReply,
       queue_id: queuedReply?.id || null,
-      owner_forward: ownerForward
+      owner_forward: ownerForward,
+      employee_batch_complete: employeeIntake?.batchComplete === true
     }
   });
 }));

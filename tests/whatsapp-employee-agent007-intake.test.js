@@ -403,8 +403,11 @@ assert(copilotSource.includes('employeePropertyPhaseBoundarySnapshot'), 'history
 assert(copilotSource.includes('Images before the final one/multiple selection are identity evidence'), 'history replay must never reinterpret setup identity evidence as property media');
 assert(copilotSource.includes('whatsapp_media_viewer_original_pixels'), 'multi-photo albums must be captured from the opened WhatsApp media viewer');
 assert(copilotSource.includes('visibleMediaCount + Number(extraImageMatch[1])'), 'album counts must include every visible tile plus the hidden +N items');
+assert(copilotSource.includes("'[data-testid*=\"album\" i]'"), 'virtualized WhatsApp albums must remain discoverable after their image tags unload');
 assert(copilotSource.includes("&& !(Array.isArray(snapshot.imagePreviews) && snapshot.imagePreviews.length);"), 'an image album misclassified as generic media must proceed when original image pixels were captured');
 assert(routeSource.includes('inboundMetadata.image_previews.slice(0, 20)'), 'all images in a normal WhatsApp album must reach intake instead of being truncated at ten');
+assert(routeSource.includes('employee_batch_complete: employeeIntake?.batchComplete === true'), 'the bridge must return a minimal durable completion acknowledgement');
+assert(copilotSource.includes("skipped: 'batch_incomplete_missing_media'"), 'history repair must stay retryable until the API confirms every property has usable media');
 assert(copilotSource.includes('replayEmployeeBatchThroughCompletion'), 'the worker must replay every ordered batch message before COMPLETE');
 assert(copilotSource.includes('scrollWhatsappHistoryNewer'), 'history reconciliation must walk forward from the trigger without keeping every video in memory');
 assert(copilotSource.includes('WHATSAPP_WEB_COPILOT_EMPLOYEE_RECOVERY_PHONES'), 'hosted workers must support an explicit startup recovery target');
