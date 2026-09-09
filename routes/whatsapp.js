@@ -65,7 +65,12 @@ const {
 } = require('../services/aiCeoControlService');
 const { captureLearningEvent } = require('../services/aiLearningCaptureService');
 const { isLlmEnabled } = require('../services/llmProvider');
-const { storeDataUrl, uploadBufferToS3 } = require('../services/cloudMediaStorageService');
+const {
+  deleteStoredS3Object,
+  parseStoredS3ObjectRef,
+  storeDataUrl,
+  uploadBufferToS3
+} = require('../services/cloudMediaStorageService');
 const {
   EMPLOYEE_INTAKE_STEPS,
   EMPLOYEE_INTAKE_TRIGGER,
@@ -122,6 +127,7 @@ const WHATSAPP_OWNER_FORWARD_REVIEW_MARKER = 'whatsapp-owner-forward-review-medi
 const WHATSAPP_OWNER_HISTORY_BACKFILL_MARKER = 'whatsapp-owner-history-backfill-20260820';
 const WHATSAPP_EMPLOYEE_AGENT_007_MARKER = 'whatsapp-employee-agent-007-review-intake-20260829';
 const WHATSAPP_AGENT_007_ORDERED_BATCH_MARKER = 'whatsapp-agent-007-ordered-batch-finalization-20260829';
+const WHATSAPP_AGENT_007_IDENTITY_EVIDENCE_PURGE_MARKER = 'whatsapp-agent007-identity-evidence-purge-20260909';
 const WHATSAPP_VIDEO_ORIGINAL_RECOVERY_MARKER = 'whatsapp-video-original-recovery-20260831';
 const WHATSAPP_CALL_EVENT_TRUST_MARKER = 'whatsapp-call-card-trust-gate-20260831';
 const WHATSAPP_API_VERSION = (process.env.WHATSAPP_API_VERSION || 'v25.0').trim();
@@ -3446,6 +3452,15 @@ async function validateEmployeeImageCandidate(candidate = {}, imageDataUrl = '')
   );
 }
 
+function employeeMediaValidationIsIdentityDocument(validation = {}) {
+  const classifierText = [
+    validation?.verdict,
+    validation?.scene_type,
+    validation?.reason
+  ].map((value) => normalizeInput(value).toLowerCase()).join(' ');
+  return /\b(?:identity|identification|passport|national[\s_-]+id|id[\s_-]+document)\b/.test(classifierText);
+}
+
 async function storeEmployeeMediaCandidate(candidate, {
   privateMedia = false,
   phone = '',
@@ -3502,6 +3517,9 @@ async function storeEmployeeMediaCandidate(candidate, {
           reason: 'vision_unavailable_original_whatsapp_pixels_pending_review'
         };
       }
+      if (employeeMediaValidationIsIdentityDocument(mediaValidation)) {
+        throw new Error('Private identity media rejected from property storage');
+      }
     }
     const keyPrefix = privateMedia ? 'whatsapp-employee-intake/private-id'
       : (kind === 'image' && !publicEligible ? 'whatsapp-employee-intake/source-evidence' : `whatsapp-employee-intake/${kind}`);
@@ -3540,6 +3558,9 @@ async function storeEmployeeMediaCandidate(candidate, {
       const validationDataUrl = `data:${responseMime};base64,${bytes.toString('base64')}`;
       mediaValidation = await validateEmployeeImageCandidate(candidate, validationDataUrl);
       publicEligible = mediaValidation?.accepted === true;
+      if (employeeMediaValidationIsIdentityDocument(mediaValidation)) {
+        throw new Error('Private identity media rejected from property storage');
+      }
     }
     const keyPrefix = privateMedia
       ? 'whatsapp-employee-intake/private-id'
@@ -3569,7 +3590,18 @@ async function storeEmployeeMediaCandidate(candidate, {
 async function storeEmployeeMedia(candidates = [], options = {}) {
   const stored = [];
   for (let index = 0; index < candidates.length; index += 1) {
-    stored.push(await storeEmployeeMediaCandidate(candidates[index], { ...options, index }));
+    try {
+      stored.push(await storeEmployeeMediaCandidate(candidates[index], { ...options, index }));
+    } catch (error) {
+      if (error?.message === 'Private identity media rejected from property storage') {
+        logger.warn('Identity-classified employee property candidate discarded before storage', {
+          candidate_index: index,
+          inbound_message_id: normalizeInput(options.inboundMessageId).slice(0, 120)
+        });
+        continue;
+      }
+      throw error;
+    }
   }
   return stored;
 }
@@ -4991,6 +5023,177 @@ async function employeeReviewMediaStatus(propertyIds = []) {
     video_count: Number(row.video_count || 0),
     video_recovery_required: row.video_recovery_required === true
   }));
+}
+
+async function storedEmployeeEvidenceIsIdentityDocument(url = '') {
+  const cleanUrl = normalizeInput(url);
+  if (!/^https:\/\//i.test(cleanUrl) || !parseStoredS3ObjectRef(cleanUrl)) return false;
+  try {
+    const response = await fetch(cleanUrl, { headers: { Accept: 'image/jpeg, image/png, image/webp, image/gif' } });
+    if (!response.ok) return false;
+    const mimeType = normalizeInput(response.headers?.get?.('content-type')).split(';')[0].toLowerCase();
+    if (!['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'].includes(mimeType)) return false;
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (!bytes.length || bytes.length > 6_000_000) return false;
+    const validation = await validateEmployeeImageCandidate(
+      { captureSource: 'stored_employee_source_evidence_reconciliation' },
+      `data:${mimeType};base64,${bytes.toString('base64')}`
+    );
+    return employeeMediaValidationIsIdentityDocument(validation);
+  } catch (error) {
+    logger.warn('Stored employee evidence identity check failed', {
+      error: error.message
+    });
+    return false;
+  }
+}
+
+async function reconcileEmployeeIdentityEvidence(propertyIds = []) {
+  const ids = [...new Set((Array.isArray(propertyIds) ? propertyIds : []).map((value) => normalizeInput(value)).filter(Boolean))];
+  const result = await db.query(
+    `SELECT p.id::text AS property_id,
+            p.status,
+            p.source,
+            p.id_document_url,
+            COALESCE(p.extra_fields, '{}'::jsonb) AS extra_fields,
+            COALESCE((
+              SELECT COUNT(*)::int FROM property_images pi WHERE pi.property_id = p.id
+            ), 0)::int AS image_count,
+            (
+              SELECT pi.url
+                FROM property_images pi
+               WHERE pi.property_id = p.id
+               ORDER BY pi.is_primary DESC, pi.sort_order ASC, pi.created_at ASC
+               LIMIT 1
+            ) AS primary_image_url
+       FROM properties p
+      WHERE p.id = ANY($1::uuid[])
+        AND p.status = 'pending'
+        AND p.source IN ('whatsapp_employee_intake', 'whatsapp_forward_review')
+      ORDER BY array_position($1::uuid[], p.id)`,
+    [ids]
+  );
+  const byId = new Map(result.rows.map((row) => [String(row.property_id), row]));
+  const reconciled = [];
+
+  for (const propertyId of ids) {
+    const property = byId.get(propertyId);
+    if (!property) {
+      reconciled.push({ property_id: propertyId, status: 'not_found_or_not_pending' });
+      continue;
+    }
+    const extraFields = property.extra_fields && typeof property.extra_fields === 'object' ? property.extra_fields : {};
+    const blockers = Array.isArray(extraFields.media_quality_blockers) ? extraFields.media_quality_blockers : [];
+    const identityBlockers = blockers.filter(employeeMediaValidationIsIdentityDocument);
+    const privateIdentityUrl = normalizeInput(property.id_document_url);
+    const sourceEvidenceUrls = (Array.isArray(extraFields.source_evidence_urls) ? extraFields.source_evidence_urls : [])
+      .map((url) => normalizeInput(url))
+      .filter(Boolean);
+    const identityEvidenceUrlSet = new Set(identityBlockers
+      .map((item) => normalizeInput(item?.url))
+      .filter((url) => /^https:\/\//i.test(url) && url !== privateIdentityUrl));
+    for (const url of sourceEvidenceUrls) {
+      if (url !== privateIdentityUrl && await storedEmployeeEvidenceIsIdentityDocument(url)) {
+        identityEvidenceUrlSet.add(url);
+      }
+    }
+    const identityEvidenceUrls = [...identityEvidenceUrlSet];
+
+    let deletedObjectCount = 0;
+    for (const url of identityEvidenceUrls) {
+      if (parseStoredS3ObjectRef(url)) {
+        await deleteStoredS3Object(url);
+        deletedObjectCount += 1;
+      }
+    }
+
+    const remainingBlockers = blockers.filter((item) => !employeeMediaValidationIsIdentityDocument(item));
+    const removedUrls = new Set(identityEvidenceUrls);
+    const remainingEvidenceUrls = sourceEvidenceUrls.filter((url) => !removedUrls.has(url));
+    const imageCount = Number(property.image_count || 0);
+    const videoUrls = Array.isArray(extraFields.video_urls) ? extraFields.video_urls.filter(Boolean) : [];
+    const videoCount = videoUrls.length || (normalizeInput(extraFields.video_url) ? 1 : 0);
+    const videoRecoveryRequired = videoCount === 0 && (
+      extraFields.video_recovery_required === true
+      || remainingBlockers.some((item) => {
+        const blockerText = `${normalizeInput(item?.capture_source)} ${normalizeInput(item?.reason)}`.toLowerCase();
+        return blockerText.includes('video');
+      })
+    );
+    const mediaValidationStatus = videoRecoveryRequired
+      ? 'blocked_original_video_recovery_required'
+      : (imageCount > 0 ? 'passed_automated_image_gate' : 'blocked_no_usable_property_image');
+    const patch = {
+      review_only: true,
+      auto_publish: false,
+      public_image_count: imageCount,
+      primary_image_url: normalizeInput(property.primary_image_url) || null,
+      source_evidence_urls: remainingEvidenceUrls,
+      media_quality_blockers: remainingBlockers,
+      media_validation_status: mediaValidationStatus,
+      video_recovery_required: videoRecoveryRequired,
+      identity_evidence_purge_marker: WHATSAPP_AGENT_007_IDENTITY_EVIDENCE_PURGE_MARKER,
+      identity_evidence_purged_at: new Date().toISOString()
+    };
+    const client = await db.getClient();
+    try {
+      await client.query('BEGIN');
+      const locked = await client.query(
+        `SELECT id FROM properties
+          WHERE id = $1 AND status = 'pending'
+            AND source IN ('whatsapp_employee_intake', 'whatsapp_forward_review')
+          FOR UPDATE`,
+        [propertyId]
+      );
+      if (!locked.rows.length) throw new Error('The property changed state during identity-evidence reconciliation');
+      await client.query(
+        `UPDATE properties
+            SET extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $2::jsonb,
+                updated_at = NOW()
+          WHERE id = $1`,
+        [propertyId, JSON.stringify(patch)]
+      );
+      await client.query(
+        `INSERT INTO property_moderation_events
+          (property_id, actor_id, action, status_from, status_to, reason, notes, delivery)
+         VALUES ($1,'whatsapp-employee-agent-007','whatsapp_identity_evidence_purged','pending','pending',$2,$3,$4::jsonb)`,
+        [
+          propertyId,
+          'Identity-classified public source evidence removed; protected verification media retained.',
+          `${identityEvidenceUrls.length} public identity evidence reference(s) removed and ${deletedObjectCount} stored object(s) deleted.`,
+          JSON.stringify({
+            marker: WHATSAPP_AGENT_007_IDENTITY_EVIDENCE_PURGE_MARKER,
+            removed_reference_count: identityEvidenceUrls.length,
+            deleted_object_count: deletedObjectCount,
+            private_identity_retained: Boolean(privateIdentityUrl),
+            public_image_count: imageCount,
+            video_count: videoCount,
+            review_only: true,
+            auto_publish: false
+          })
+        ]
+      );
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+    reconciled.push({
+      property_id: propertyId,
+      status: 'reconciled',
+      removed_reference_count: identityEvidenceUrls.length,
+      deleted_object_count: deletedObjectCount,
+      evidence_objects_scanned: sourceEvidenceUrls.length,
+      private_identity_retained: Boolean(privateIdentityUrl),
+      image_count: imageCount,
+      video_count: videoCount,
+      media_validation_status: mediaValidationStatus,
+      review_only: true
+    });
+  }
+  return reconciled;
 }
 
 async function handleEmployeeWhatsappIntake({
@@ -12700,6 +12903,26 @@ router.post('/web-bridge/employee-batch-recovery', asyncRoute(async (req, res) =
   });
 }));
 
+// POST /api/whatsapp/web-bridge/employee-review-media-reconcile
+router.post('/web-bridge/employee-review-media-reconcile', asyncRoute(async (req, res) => {
+  if (!isWhatsappWebBridgeAuthorized(req)) return bridgeUnauthorized(res);
+  const propertyIds = Array.isArray(req.body.property_ids) ? req.body.property_ids : [];
+  if (!propertyIds.length || propertyIds.length > 20) {
+    return res.status(400).json({ ok: false, error: 'property_ids must contain between 1 and 20 exact ids' });
+  }
+  if (propertyIds.some((propertyId) => !/^[0-9a-f-]{36}$/i.test(normalizeInput(propertyId)))) {
+    return res.status(400).json({ ok: false, error: 'every property_id must be an exact valid id' });
+  }
+  const reconciled = await reconcileEmployeeIdentityEvidence(propertyIds);
+  return res.json({
+    ok: true,
+    data: {
+      marker: WHATSAPP_AGENT_007_IDENTITY_EVIDENCE_PURGE_MARKER,
+      properties: reconciled
+    }
+  });
+}));
+
 // GET /api/whatsapp/web-bridge/employee-video-recovery-targets
 router.get('/web-bridge/employee-video-recovery-targets', asyncRoute(async (req, res) => {
   if (!isWhatsappWebBridgeAuthorized(req)) return bridgeUnauthorized(res);
@@ -13310,6 +13533,7 @@ module.exports.__test = {
   employeeCaptionHash,
   employeeMediaCandidates,
   employeePropertyMediaCandidates,
+  employeeMediaValidationIsIdentityDocument,
   storeEmployeeMediaCandidate,
   employeePendingStoredMedia,
   employeeVideoEvidenceOnly,
@@ -13319,6 +13543,7 @@ module.exports.__test = {
   employeeCaptionLikelySameProperty,
   employeePendingSubmissionQueue,
   ensurePendingEmployeeAgent,
+  reconcileEmployeeIdentityEvidence,
   getWhatsappCallNotificationEmails,
   inferWhatsappCallInquiry,
   handleWhatsappCallEvent,
