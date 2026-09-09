@@ -4256,6 +4256,8 @@ async function prepareEmployeeOrderedBatchReplay({
       pending: {
         current: Boolean(pendingCaption || pendingMedia.length),
         current_media_count: pendingMedia.length,
+        current_preview_url: pendingMedia.find((item) => item.kind === 'image')?.url || null,
+        current_media_kinds: pendingMedia.map((item) => item.kind),
         current_missing: pendingCaption
           ? employeePropertyMissing(employeePropertyFacts(pendingCaption, data))
           : (pendingMedia.length ? ['property type, exact location and price'] : []),
