@@ -5285,7 +5285,7 @@ async function handleEmployeeWhatsappIntake({
     return {
       handled: true,
       nextStep: 'employee_new_agent_details',
-      message: 'Send the new agent details in this format:\n\nFull name | phone number | company | primary district'
+      message: 'Send the new agent details in this format:\n\nFull name | phone number | primary district\n\nCompany is optional. If included, use:\nFull name | phone number | company | primary district'
     };
   }
 
@@ -5296,7 +5296,7 @@ async function handleEmployeeWhatsappIntake({
       return {
         handled: true,
         nextStep: 'employee_new_agent_details',
-        message: 'Send the new agent details in this format:\n\nFull name | phone number | company | primary district'
+        message: 'Send the new agent details in this format:\n\nFull name | phone number | primary district\n\nCompany is optional. If included, use:\nFull name | phone number | company | primary district'
       };
     }
     const matches = await findEmployeeApprovedAgents(cleanBody);
@@ -5338,7 +5338,7 @@ async function handleEmployeeWhatsappIntake({
   if (currentStep === 'employee_new_agent_details') {
     const details = parseNewAgentDetails(cleanBody);
     if (!details) {
-      return { handled: true, nextStep: currentStep, message: 'Please use: Full name | phone number | company | primary district' };
+      return { handled: true, nextStep: currentStep, message: 'Please use: Full name | phone number | primary district. Company is optional; add it between the phone number and district if available.' };
     }
     data.new_agent_details = details;
     await replaceEmployeeSession(phone, 'employee_identity_photo', data);

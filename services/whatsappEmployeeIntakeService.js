@@ -154,7 +154,11 @@ function splitDetails(value = '') {
 }
 
 function parseNewAgentDetails(value = '') {
-  const [fullName = '', phone = '', company = '', district = ''] = splitDetails(value);
+  const parts = splitDetails(value);
+  if (parts.length < 3 || parts.length > 4) return null;
+  const [fullName = '', phone = ''] = parts;
+  const company = parts.length === 4 ? parts[2] : 'Independent agent';
+  const district = parts.length === 4 ? parts[3] : parts[2];
   if (!fullName || digits(phone).length < 8 || !district) return null;
   return {
     fullName,
