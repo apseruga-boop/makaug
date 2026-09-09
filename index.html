@@ -6831,6 +6831,21 @@
               </div>
               <div id="staff-harvest-summary" class="mt-3 text-xs text-gray-600">Harvest coverage loading…</div>
             </div>
+            <div class="mt-3 rounded-xl border border-violet-200 bg-white p-3">
+              <div class="flex items-start justify-between gap-3 flex-wrap">
+                <div>
+                  <div class="font-black text-gray-900">Exhaustive 30-day source coverage</div>
+                  <div class="text-xs text-gray-500 mt-1">Durable, restart-safe sections. Every eligible property remains in staff review; automatic publication is disabled.</div>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                  <button type="button" onclick="staffLoadSourceCoverage()" class="rounded-lg border border-violet-200 px-3 py-1.5 text-xs font-black text-violet-800 hover:bg-violet-50">Refresh coverage</button>
+                  <button type="button" onclick="staffStartSourceCoverage()" class="rounded-lg bg-violet-700 px-3 py-1.5 text-xs font-black text-white hover:bg-violet-600">Start / resume manifest</button>
+                  <button type="button" onclick="staffClaimTikTokCoverageBatch()" class="rounded-lg border border-pink-300 px-3 py-1.5 text-xs font-black text-pink-800 hover:bg-pink-50">Load next 10 TikTok sources</button>
+                </div>
+              </div>
+              <div id="staff-source-coverage-status" class="mt-3 text-xs text-gray-600">Coverage manifest has not been loaded.</div>
+              <div id="staff-source-coverage-items" class="mt-3 grid md:grid-cols-2 gap-2"></div>
+            </div>
             <details class="mt-3 rounded-xl bg-white border border-sky-100 p-3">
               <summary class="cursor-pointer font-black text-gray-900 text-sm">Trigger commands</summary>
               <div id="staff-source-monitor-commands" class="mt-3 space-y-2 text-xs"></div>

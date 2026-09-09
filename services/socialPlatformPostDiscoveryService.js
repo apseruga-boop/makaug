@@ -5255,6 +5255,7 @@ module.exports = {
   buildTikTokExactPostImportRows,
   buildKnownYouTubeChannelSourcesFromRows,
   buildYouTubeSearchJobs,
+  fetchYouTubePostsForJobs,
   filterYouTubeJobsByMode,
   normalizeYouTubeJobMode,
   buildXSearchJobs,
