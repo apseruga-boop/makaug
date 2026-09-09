@@ -63,6 +63,17 @@ assert(EMPLOYEE_INTAKE_STEPS.includes('employee_property_media'));
 const routeSource = fs.readFileSync(path.join(__dirname, '..', 'routes', 'whatsapp.js'), 'utf8');
 const copilotSource = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'whatsapp-web-copilot.js'), 'utf8');
 const serverSource = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+require('../services/aiService').classifyWhatsappListingPhoto = async () => ({
+  accepted: true,
+  verdict: 'accepted',
+  scene_type: 'other_property',
+  matches_expected_slot: true,
+  confidence: 0.99,
+  reason: 'test_property_photo'
+});
+require('../services/cloudMediaStorageService').storeDataUrl = async (_dataUrl, options = {}) => (
+  `https://media.test.invalid/${options.filename || 'whatsapp-property.jpg'}`
+);
 const whatsappRoute = require('../routes/whatsapp').__test;
 const parsedProperty = whatsappRoute.employeePropertyFacts(
   '2 bedroom apartment for rent in Ntinda, Kampala at UGX 1.5m per month',
@@ -452,6 +463,8 @@ assert(serverSource.includes('whatsapp-agent007-replay-backoff-20260901'), 'prod
 assert(serverSource.includes('whatsapp-agent007-pending-media-idempotency-20260901'), 'production health metadata must expose the pending-media and reply-idempotency release');
 assert(serverSource.includes('whatsapp-agent007-identity-media-firewall-20260909'), 'production health metadata must expose the identity-media firewall');
 assert(serverSource.includes('whatsapp-agent007-album-original-capture-20260909'), 'production health metadata must expose the original album capture release');
+assert(serverSource.includes('whatsapp-agent007-existing-row-media-repair-20260909'), 'production health metadata must expose the existing-review media repair release');
+assert(copilotSource.includes('existing_row_media_repair_marker'), 'worker heartbeats must expose the existing-review media repair release');
 assert(copilotSource.includes('configuredEmployeeRecoverySettled'), 'configured history recovery must stop only after the batch is complete or already reconciled');
 assert(copilotSource.includes("scroller.dispatchEvent(new WheelEvent('wheel'"), 'history recovery must explicitly request older virtualized WhatsApp rows');
 assert(copilotSource.includes('result.retryable || result.error'), 'history recovery must restart the bounded batch after a transient bridge or database failure');
@@ -481,6 +494,10 @@ assert(copilotSource.includes("'/api/whatsapp/web-bridge/employee-batch-recovery
 assert(routeSource.includes("router.post('/web-bridge/employee-batch-recovery'"), 'the bridge must expose an authenticated partial-batch recovery route');
 assert(routeSource.includes('observed_batch_already_accounted_for'), 'completed batches must not be resent after a worker restart');
 assert(routeSource.includes('employee_intake_recovery_skip_existing_matches'), 'recovery must preserve prior counts while replaying acknowledged property messages');
+assert(routeSource.includes('recoveredExistingProperty = existingProperty'), 'ordered recovery must attach replayed media to the existing pending review row instead of discarding it as a duplicate caption');
+assert(routeSource.includes('persist the original bytes and attach only new hashes'), 'the existing-row media repair path must remain explicit and auditable');
+assert(copilotSource.includes('rowDigits.includes(phoneSuffix)'), 'WhatsApp search results must tolerate timestamps and preview digits after the matching phone number');
+assert(copilotSource.includes('viewer_originals=${viewerOriginals}'), 'album recovery must log privacy-safe original-image counts for live verification');
 assert(routeSource.includes("type = 'whatsapp_employee_batch_complete'"), 'recovery must fall back to the durable completion notification when chat session state is replaced');
 assert(routeSource.includes('employee_batch_ordered_replay'), 'authorized history replay must be marked and isolated from normal messages');
 assert(routeSource.includes("? ''\n            : `Already saved to review"), 'multiple batches must not send per-property duplicate acknowledgements');
@@ -525,9 +542,11 @@ assert(serverSource.includes('whatsapp-agent007-pending-property-queue-20260909'
 
 const db = require('../config/database');
 const originalQuery = db.query;
+const originalGetClient = db.getClient;
 
 (async () => {
   const updates = [];
+  const attachedReviewImages = [];
   let missingMediaPropertyIds = [];
   let sessionRow = {
     phone: '+447757773202',
@@ -593,6 +612,12 @@ const originalQuery = db.query;
     if (/FROM properties/i.test(sql) && /source_caption_sha256/i.test(sql)) {
       return { rows: [{ id: '22222222-2222-4222-8222-222222222222', status: 'pending' }] };
     }
+    if (/SELECT id, extra_fields/i.test(sql) && /source = 'whatsapp_employee_intake'/i.test(sql)) {
+      return { rows: [{ id: params[0], extra_fields: { media_count: 0, media_sha256: [], video_urls: [] } }] };
+    }
+    if (/SELECT COUNT\(\*\)::int AS count FROM property_images/i.test(sql)) {
+      return { rows: [{ count: attachedReviewImages.length }] };
+    }
     if (/FROM properties p/i.test(sql) && /FROM property_images pi/i.test(sql)) {
       return { rows: missingMediaPropertyIds.map((id) => ({ id })) };
     }
@@ -610,6 +635,20 @@ const originalQuery = db.query;
     if (/INSERT INTO notifications/i.test(sql)) return { rows: [{ id: 'notification-test' }] };
     throw new Error(`Unexpected test query: ${String(sql).slice(0, 80)}`);
   };
+  db.getClient = async () => ({
+    query: async (sql, params = []) => {
+      if (/^(?:BEGIN|COMMIT|ROLLBACK)$/i.test(String(sql).trim())) return { rows: [] };
+      if (/SELECT id FROM properties/i.test(sql) && /FOR UPDATE/i.test(sql)) return { rows: [{ id: params[0] }] };
+      if (/INSERT INTO property_images/i.test(sql)) {
+        attachedReviewImages.push({ propertyId: params[0], url: params[1] });
+        return { rows: [] };
+      }
+      if (/UPDATE properties/i.test(sql)) return { rows: [] };
+      if (/INSERT INTO property_moderation_events/i.test(sql)) return { rows: [] };
+      throw new Error(`Unexpected test client query: ${String(sql).slice(0, 80)}`);
+    },
+    release() {}
+  });
 
   const shieldedCall = await whatsappRoute.handleWhatsappCallEvent({
     phone: '+447757773202',
@@ -771,6 +810,42 @@ const originalQuery = db.query;
   });
   assert.equal(recoveryExisting.recoveryAlreadyAccountedFor, true);
   assert.equal(recoveryExisting.message, '');
+  assert.equal(recoveryExisting.duplicate, false);
+  assert.equal(attachedReviewImages.length, 1, 'ordered recovery must attach the original property image to the existing pending review row');
+
+  const recoveryMediaBeforeCaption = await whatsappRoute.handleEmployeeWhatsappIntake({
+    phone: '+447757773202',
+    body: '2 bedroom apartment for rent in Ntinda, Kampala at UGX 1.5m per month',
+    inboundMessageId: 'recovery-caption-after-media',
+    session: {
+      current_step: 'employee_property_media',
+      session_data: {
+        employee_role: 'agent',
+        property_batch_mode: 'multiple',
+        employee_intake_recovery_skip_existing_matches: true,
+        agent: {
+          id: '11111111-1111-4111-8111-111111111111',
+          full_name: 'Francis Isabirye'
+        },
+        property_ids: ['22222222-2222-4222-8222-222222222222'],
+        total_media_count: 0,
+        properties_shared_count: 1,
+        pending_property_media_message_id: 'recovery-album-before-caption',
+        pending_property_media: [{
+          url: 'https://media.test.invalid/recovered-album-2.jpg',
+          sha256: 'recovered-album-2',
+          mimeType: 'image/jpeg',
+          kind: 'image',
+          name: 'recovered-album-2.jpg',
+          publicEligible: true
+        }]
+      }
+    }
+  });
+  assert.equal(recoveryMediaBeforeCaption.recoveryAlreadyAccountedFor, true);
+  assert.equal(recoveryMediaBeforeCaption.message, '');
+  assert.equal(recoveryMediaBeforeCaption.duplicate, false);
+  assert.equal(attachedReviewImages.length, 2, 'media replayed before its caption must attach to the same existing pending review row');
 
   const completed = await whatsappRoute.handleEmployeeWhatsappIntake({
     phone: '+447757773202',
@@ -955,7 +1030,7 @@ const originalQuery = db.query;
     duplicatesSkipped: 0,
     propertiesFailed: 0
   });
-  assert.equal(updates.length, 14, 'each state transition, normal and duplicate-only completion, interruption recovery, acknowledged-message reconciliation, and both session and durable-ledger history recovery should persist immediately');
+  assert.equal(updates.length, 15, 'each state transition, normal and duplicate-only completion, interruption recovery, both media replay orders, acknowledged-message reconciliation, and both session and durable-ledger history recovery should persist immediately');
 
   console.log('WhatsApp Agent 007 employee intake contract tests passed.');
 })().catch((error) => {
@@ -963,4 +1038,5 @@ const originalQuery = db.query;
   process.exitCode = 1;
 }).finally(() => {
   db.query = originalQuery;
+  db.getClient = originalGetClient;
 });

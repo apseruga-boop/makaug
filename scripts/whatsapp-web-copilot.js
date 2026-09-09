@@ -330,6 +330,7 @@ const WHATSAPP_AGENT_007_INTAKE_RELIABILITY_MARKER = 'whatsapp-agent007-replay-b
 const WHATSAPP_AGENT_007_PENDING_MEDIA_FIX_MARKER = 'whatsapp-agent007-pending-media-idempotency-20260901';
 const WHATSAPP_AGENT_007_IDENTITY_MEDIA_FIREWALL_MARKER = 'whatsapp-agent007-identity-media-firewall-20260909';
 const WHATSAPP_AGENT_007_ALBUM_CAPTURE_MARKER = 'whatsapp-agent007-album-original-capture-20260909';
+const WHATSAPP_AGENT_007_EXISTING_ROW_MEDIA_REPAIR_MARKER = 'whatsapp-agent007-existing-row-media-repair-20260909';
 const WHATSAPP_OUTGOING_PREVIEW_GUARD_MARKER = 'whatsapp-outgoing-preview-guard-20260831';
 const WHATSAPP_RESPONSE_RELIABILITY_MARKER = 'whatsapp-rendered-text-confirmation-20260909';
 const WHATSAPP_CALL_CARD_BROWSER_CONFIG = Object.freeze(whatsappCallCardBrowserConfig());
@@ -790,6 +791,7 @@ function hostedRuntimeMetadata() {
     pending_media_fix_marker: WHATSAPP_AGENT_007_PENDING_MEDIA_FIX_MARKER,
     identity_media_firewall_marker: WHATSAPP_AGENT_007_IDENTITY_MEDIA_FIREWALL_MARKER,
     album_capture_marker: WHATSAPP_AGENT_007_ALBUM_CAPTURE_MARKER,
+    existing_row_media_repair_marker: WHATSAPP_AGENT_007_EXISTING_ROW_MEDIA_REPAIR_MARKER,
     outgoing_preview_guard: WHATSAPP_OUTGOING_PREVIEW_GUARD_MARKER,
     response_reliability_marker: WHATSAPP_RESPONSE_RELIABILITY_MARKER,
     git_commit: process.env.RENDER_GIT_COMMIT || process.env.SOURCE_VERSION || process.env.GIT_COMMIT || '',
@@ -2572,6 +2574,8 @@ async function hydrateImageSnapshot(page, snapshot) {
         perceptualHash: String(item.perceptualHash || '').toLowerCase(),
         captureSource: item.captureSource || 'whatsapp_image_pixels'
       }));
+      const viewerOriginals = imagePreviews.filter((item) => item.captureSource === 'whatsapp_media_viewer_original_pixels').length;
+      log(`hydrated WhatsApp image message for ${normalizeChatKey(snapshot.chatKey)}; expected=${Number(snapshot.mediaCount || 1)} captured=${imagePreviews.length} viewer_originals=${viewerOriginals}`);
       return {
         ...snapshot,
         imagePreviews,
@@ -4967,7 +4971,8 @@ async function openChatForReply(page, recipient) {
           const row = rows.nth(index);
           if (phoneDigits.length >= 9) {
             const rowDigits = String(await row.innerText().catch(() => '')).replace(/\D/g, '');
-            if (!rowDigits.endsWith(phoneDigits.slice(-9))) continue;
+            const phoneSuffix = phoneDigits.slice(-9);
+            if (!rowDigits.includes(phoneSuffix) && rowCount !== 1) continue;
           }
           const clicked = await clickVisibleLocator(row, 1200);
           if (!clicked || !await waitForReplyComposer(page, 7000)) continue;
