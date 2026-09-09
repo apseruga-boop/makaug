@@ -7,12 +7,25 @@ const {
   deleteArchivedDevelopment,
   isPublicationReady,
   isPubliclyVisible,
+  listManagedDevelopments,
   normalizeDevelopmentRow,
   normalizeWritePayload,
   publicationBlockers,
   publicPreviewBlockers,
   slugify
 } = require('../services/offPlanService');
+
+test('managed project listing uses a valid predicate when no filters are supplied', async () => {
+  const db = {
+    async query(sql, values) {
+      assert.match(sql, /WHERE TRUE ORDER BY d\.updated_at DESC/);
+      assert.deepEqual(values, []);
+      return { rows: [] };
+    }
+  };
+
+  assert.deepEqual(await listManagedDevelopments(db), []);
+});
 
 test('permanent deletion is restricted to archived projects and writes a detached audit event', async () => {
   const queries = [];
