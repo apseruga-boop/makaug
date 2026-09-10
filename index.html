@@ -1939,10 +1939,10 @@
       padding: 7px 12px;
     }
     .advertising-preview-browser {
-      background: #f6f9f7;
-      border: 1px solid #cdddd3;
-      border-radius: 18px;
-      box-shadow: 0 20px 44px rgba(15, 61, 46, .13);
+      background: #edf3ef;
+      border: 1px solid #d6e3da;
+      border-radius: 20px;
+      box-shadow: 0 22px 52px rgba(15, 61, 46, .14);
       overflow: hidden;
     }
     .advertising-preview-browser-bar {
@@ -1956,88 +1956,147 @@
     }
     .advertising-preview-browser-dot { background: #dbe7df; border-radius: 999px; height: 8px; width: 8px; }
     .advertising-preview-logo { color: #15603f; font-size: 12px; font-weight: 900; margin-left: 5px; }
-    .advertising-preview-canvas { min-height: 315px; overflow: hidden; padding: 16px; position: relative; }
-    .advertising-preview-hero {
+    .advertising-preview-canvas { min-height: 350px; overflow: hidden; padding: 0; position: relative; }
+    .ad-format-page { background: #f8faf9; min-height: 350px; padding: 18px; }
+    .ad-format-page-head {
+      align-items: center;
+      display: flex;
+      gap: 12px;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .ad-format-page-head strong { color: #16241d; display: block; font-size: 16px; font-weight: 900; }
+    .ad-format-page-head small { color: #68776f; display: block; font-size: 11px; font-weight: 700; margin-top: 2px; }
+    .ad-format-page-controls { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+    .ad-format-page-controls span,
+    .advertising-preview-tag {
+      background: #edf6f0;
+      border: 1px solid #cfe3d5;
+      border-radius: 999px;
+      color: #15603f;
+      display: inline-flex;
+      font-size: 10px;
+      font-weight: 800;
+      padding: 5px 9px;
+    }
+    .ad-format-slot-label {
+      align-items: center;
+      color: #996000;
+      display: flex;
+      font-size: 10px;
+      font-weight: 900;
+      gap: 7px;
+      letter-spacing: .08em;
+      margin: 13px 0 8px;
+      text-transform: uppercase;
+    }
+    .ad-format-slot-label::before { background: #d99118; border-radius: 999px; content: ""; height: 7px; width: 7px; }
+    .ad-format-mini-results { display: grid; gap: 9px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .ad-format-mini-result { background: #fff; border-radius: 10px; box-shadow: 0 3px 12px rgba(22,36,29,.05); height: 56px; overflow: hidden; padding: 9px; }
+    .ad-format-mini-result::before,
+    .ad-format-mini-result::after { background: #dfe8e2; border-radius: 999px; content: ""; display: block; height: 6px; }
+    .ad-format-mini-result::after { margin-top: 9px; width: 62%; }
+    .ad-format-banner {
       background-position: center;
       background-size: cover;
-      border-radius: 13px;
-      height: 106px;
+      border-radius: 14px;
+      box-shadow: 0 16px 34px rgba(15,61,46,.15);
+      min-height: 196px;
       overflow: hidden;
       position: relative;
     }
-    .advertising-preview-hero::after { background: linear-gradient(90deg, rgba(15,61,46,.82), rgba(15,61,46,.15)); content: ""; inset: 0; position: absolute; }
-    .advertising-preview-hero-copy { bottom: 14px; color: #ffffff; font-size: 17px; font-weight: 900; left: 16px; max-width: 64%; position: absolute; z-index: 1; }
-    .advertising-preview-grid { display: grid; gap: 10px; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 12px; }
-    .advertising-preview-card { background: #ffffff; border: 1px solid #dfe9e3; border-radius: 10px; min-height: 102px; overflow: hidden; position: relative; }
-    .advertising-preview-card img { display: block; height: 58px; object-fit: cover; width: 100%; }
-    .advertising-preview-line { background: #dfe9e3; border-radius: 999px; height: 6px; margin: 8px 8px 0; }
-    .advertising-preview-line.short { width: 52%; }
-    .advertising-preview-highlight {
-      background: #fff8e7;
-      border: 2px solid #d99118;
-      box-shadow: 0 0 0 4px rgba(217,145,24,.14);
-      color: #7c4700;
-      font-size: 11px;
-      font-weight: 900;
-      padding: 8px;
+    .ad-format-banner::after { background: linear-gradient(90deg, rgba(7,31,23,.94), rgba(15,61,46,.72) 48%, rgba(15,61,46,.08)); content: ""; inset: 0; position: absolute; }
+    .ad-format-banner-copy { color: #fff; display: flex; flex-direction: column; inset: 0 auto 0 0; justify-content: center; max-width: 58%; padding: 25px 28px; position: absolute; z-index: 2; }
+    .ad-format-banner-copy small { color: #c6f6d7; font-size: 10px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+    .ad-format-banner-copy strong { font-size: clamp(21px, 3vw, 31px); font-weight: 900; letter-spacing: -.035em; line-height: 1.05; margin-top: 8px; }
+    .ad-format-banner-cta { align-self: flex-start; background: #fff; border-radius: 999px; color: #14532d; font-size: 11px; font-weight: 900; margin-top: 16px; padding: 8px 13px; }
+    .ad-format-sponsored-chip { align-items: center; background: rgba(255,255,255,.94); border-radius: 999px; color: #14532d; display: inline-flex; font-size: 9px; font-weight: 900; gap: 5px; padding: 6px 9px; position: absolute; right: 12px; top: 12px; z-index: 3; }
+    .ad-format-native-grid { display: grid; gap: 12px; grid-template-columns: 1.18fr 1fr 1fr; }
+    .ad-format-property-card { background: #fff; border-radius: 14px; box-shadow: 0 5px 18px rgba(17,49,35,.08); min-height: 245px; overflow: hidden; position: relative; }
+    .ad-format-property-card > img { display: block; height: 116px; object-fit: cover; width: 100%; }
+    .ad-format-property-card.is-sponsored { box-shadow: 0 18px 36px rgba(15,61,46,.2); transform: translateY(-3px); }
+    .ad-format-property-card.is-sponsored::after { background: linear-gradient(90deg, #d99118, #f4bf53); content: ""; height: 4px; inset: 0 0 auto; position: absolute; }
+    .ad-format-card-sponsor { background: #123f2f; border-radius: 999px; color: #fff; font-size: 9px; font-weight: 900; left: 10px; padding: 6px 9px; position: absolute; top: 10px; z-index: 2; }
+    .ad-format-property-copy { padding: 12px; }
+    .ad-format-property-copy strong { color: #16241d; display: block; font-size: 13px; font-weight: 900; line-height: 1.25; }
+    .ad-format-property-copy small { color: #68776f; display: block; font-size: 10px; font-weight: 700; margin-top: 5px; }
+    .ad-format-property-meta { align-items: center; color: #15603f; display: flex; font-size: 11px; font-weight: 900; justify-content: space-between; margin-top: 12px; }
+    .ad-format-card-cta { background: #15603f; border-radius: 999px; color: #fff; font-size: 9px; padding: 6px 9px; }
+    .ad-format-standard-card { opacity: .68; }
+    .ad-format-standard-card .ad-format-property-copy span { background: #dfe8e2; border-radius: 999px; display: block; height: 7px; margin-top: 8px; }
+    .ad-format-standard-card .ad-format-property-copy span:last-child { width: 58%; }
+    .ad-format-agent-card {
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 18px 38px rgba(15,61,46,.18);
+      display: grid;
+      grid-template-columns: 42% 1fr;
+      min-height: 245px;
+      overflow: hidden;
       position: relative;
     }
-    .advertising-preview-highlight::before {
-      background: #d99118;
-      border-radius: 999px;
-      color: #ffffff;
-      content: "Your placement";
-      font-size: 9px;
-      left: 8px;
-      letter-spacing: .05em;
-      padding: 4px 7px;
-      position: absolute;
-      text-transform: uppercase;
-      top: 7px;
-      z-index: 2;
-    }
-    .advertising-preview-highlight img { height: 66px; margin-top: 20px; }
-    .advertising-preview-band {
-      align-items: center;
-      background: linear-gradient(105deg, #0f3d2e, #1e7b53);
-      border: 2px solid #d99118;
-      border-radius: 12px;
-      box-shadow: 0 0 0 4px rgba(217,145,24,.14);
-      color: #ffffff;
-      display: flex;
-      font-size: 13px;
-      font-weight: 900;
-      justify-content: space-between;
-      margin-top: 12px;
-      min-height: 70px;
-      padding: 14px;
-    }
-    .advertising-preview-map { background: linear-gradient(145deg, #e6f2e9, #f9f6ea); border-radius: 13px; height: 112px; overflow: hidden; position: relative; }
-    .advertising-preview-map::before { background: repeating-linear-gradient(26deg, transparent 0 19px, rgba(80,118,91,.18) 20px 22px); content: ""; inset: 0; position: absolute; }
-    .advertising-preview-map-pin { align-items: center; background: #d99118; border: 3px solid #ffffff; border-radius: 999px; box-shadow: 0 6px 15px rgba(124,71,0,.28); color: #ffffff; display: flex; font-size: 11px; font-weight: 900; height: 58px; justify-content: center; left: 42%; position: absolute; top: 28px; width: 58px; }
-    .advertising-preview-phone { background: #ffffff; border: 7px solid #16241d; border-radius: 24px; margin: 0 auto; max-width: 255px; min-height: 275px; padding: 18px 12px 12px; }
-    .advertising-preview-chat { background: #e8f5ec; border-radius: 12px 12px 4px 12px; color: #234c36; font-size: 11px; line-height: 1.45; margin: 12px 0 0 28px; padding: 10px; }
-    .advertising-preview-email { background: #ffffff; border: 1px solid #dfe9e3; border-radius: 13px; margin: 18px auto; max-width: 430px; padding: 16px; }
-    .advertising-preview-email-header { border-bottom: 1px solid #e4ece8; color: #5b6b62; font-size: 11px; padding-bottom: 10px; }
-    .advertising-preview-tag { background: #edf6f0; border: 1px solid #cfe3d5; border-radius: 999px; color: #15603f; display: inline-flex; font-size: 11px; font-weight: 800; padding: 5px 9px; }
-    .advertising-preview-live-frame { background: #e9f1ec; border: 1px solid #cfe0d6; border-radius: 14px; min-height: 300px; overflow: hidden; position: relative; }
-    .advertising-preview-live-image { display: block; height: 100%; min-height: 300px; object-fit: cover; object-position: top center; width: 100%; }
-    .advertising-preview-live-badge { align-items: center; background: rgba(15,61,46,.94); border-radius: 999px; color: #fff; display: inline-flex; font-size: 11px; font-weight: 900; gap: 6px; left: 12px; padding: 7px 10px; position: absolute; top: 12px; z-index: 3; }
-    .advertising-preview-live-highlight { border: 4px solid #f59e0b; border-radius: 13px; box-shadow: 0 0 0 999px rgba(15,29,23,.18), 0 10px 28px rgba(110,62,0,.22); pointer-events: none; position: absolute; z-index: 2; }
-    .advertising-preview-live-highlight::before { background: #d98608; border-radius: 999px; color: #fff; content: attr(data-label); font-size: 11px; font-weight: 900; left: 7px; padding: 6px 9px; position: absolute; top: 7px; }
-    .advertising-preview-live-highlight.is-card-left { bottom: 3%; left: 1.2%; top: 2%; width: 48%; }
-    .advertising-preview-live-highlight.is-card-right { bottom: 3%; right: 1.2%; top: 2%; width: 48%; }
-    .advertising-preview-live-highlight.is-banner { bottom: 8%; left: 7%; right: 7%; height: 20%; }
-    .advertising-preview-live-highlight.is-hero { left: 4%; right: 4%; top: 23%; height: 44%; }
-    .advertising-preview-live-source { background: rgba(255,255,255,.96); border-radius: 8px 0 0 0; bottom: 0; color: #315443; font-size: 10px; font-weight: 800; padding: 5px 8px; position: absolute; right: 0; z-index: 3; }
+    .ad-format-agent-media { background-position: center; background-size: cover; min-height: 245px; }
+    .ad-format-agent-copy { display: flex; flex-direction: column; justify-content: center; padding: 25px; }
+    .ad-format-agent-copy small { color: #b06d00; font-size: 10px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+    .ad-format-agent-copy strong { color: #16241d; font-size: 24px; font-weight: 900; letter-spacing: -.03em; line-height: 1.08; margin-top: 8px; }
+    .ad-format-agent-copy p { color: #5c6d63; font-size: 11px; font-weight: 700; margin: 9px 0 0; }
+    .ad-format-agent-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 16px; }
+    .ad-format-agent-actions span { background: #15603f; border-radius: 999px; color: #fff; font-size: 10px; font-weight: 900; padding: 8px 11px; }
+    .ad-format-agent-actions span:last-child { background: #edf6f0; color: #15603f; }
+    .advertising-preview-phone { background: #fff; border: 8px solid #10271e; border-radius: 29px; box-shadow: 0 18px 38px rgba(15,61,46,.2); margin: 0 auto; max-width: 280px; min-height: 316px; overflow: hidden; }
+    .ad-format-phone-head { align-items: center; background: #0f3d2e; color: #fff; display: flex; font-size: 11px; font-weight: 900; gap: 8px; padding: 13px; }
+    .ad-format-phone-head span { align-items: center; background: #fff; border-radius: 999px; color: #15603f; display: flex; height: 26px; justify-content: center; width: 26px; }
+    .ad-format-phone-body { background: #efeae2; min-height: 260px; padding: 12px; }
+    .ad-format-chat-request { background: #fff; border-radius: 4px 12px 12px 12px; color: #4d5f55; font-size: 10px; line-height: 1.4; max-width: 80%; padding: 8px; }
+    .ad-format-chat-card { background: #d9fdd3; border-radius: 12px 4px 12px 12px; box-shadow: 0 5px 14px rgba(31,76,50,.12); margin: 10px 0 0 auto; overflow: hidden; width: 88%; }
+    .ad-format-chat-card img { display: block; height: 88px; object-fit: cover; width: 100%; }
+    .ad-format-chat-card div { color: #234c36; font-size: 10px; line-height: 1.35; padding: 9px; }
+    .ad-format-chat-card strong { display: block; font-size: 11px; margin-top: 3px; }
+    .advertising-preview-email { background: #fff; border-radius: 16px; box-shadow: 0 18px 38px rgba(15,61,46,.16); margin: 0 auto; max-width: 520px; overflow: hidden; }
+    .advertising-preview-email-header { align-items: center; background: #f5f8f6; border-bottom: 1px solid #e4ece8; color: #52665b; display: flex; font-size: 10px; font-weight: 800; justify-content: space-between; padding: 11px 15px; }
+    .ad-format-email-hero { background-position: center; background-size: cover; min-height: 140px; position: relative; }
+    .ad-format-email-hero::after { background: linear-gradient(90deg, rgba(9,43,31,.92), rgba(9,43,31,.15)); content: ""; inset: 0; position: absolute; }
+    .ad-format-email-hero strong { color: #fff; font-size: 22px; font-weight: 900; left: 20px; line-height: 1.08; max-width: 62%; position: absolute; top: 42px; z-index: 2; }
+    .ad-format-email-body { align-items: center; display: flex; gap: 18px; justify-content: space-between; padding: 16px 20px 19px; }
+    .ad-format-email-body span { color: #5b6b62; font-size: 10px; font-weight: 700; max-width: 62%; }
+    .ad-format-email-body b { background: #15603f; border-radius: 999px; color: #fff; font-size: 10px; padding: 8px 12px; white-space: nowrap; }
+    .ad-format-bundle { display: grid; gap: 11px; grid-template-columns: 1.35fr .8fr; }
+    .ad-format-bundle-main { grid-row: span 2; }
+    .ad-format-bundle-main .ad-format-banner { min-height: 290px; }
+    .ad-format-bundle-main .ad-format-banner-copy { max-width: 76%; }
+    .ad-format-bundle-tile { background: #fff; border-radius: 14px; box-shadow: 0 8px 22px rgba(15,61,46,.1); min-height: 138px; overflow: hidden; padding: 14px; }
+    .ad-format-bundle-tile small { color: #15603f; display: block; font-size: 9px; font-weight: 900; letter-spacing: .06em; text-transform: uppercase; }
+    .ad-format-bundle-tile img { border-radius: 9px; display: block; height: 70px; margin-top: 9px; object-fit: cover; width: 100%; }
+    .ad-format-creative-board { display: grid; gap: 11px; grid-template-columns: 1.6fr .65fr .65fr; }
+    .ad-format-creative-piece { background-position: center; background-size: cover; border-radius: 14px; box-shadow: 0 12px 28px rgba(15,61,46,.14); min-height: 255px; overflow: hidden; position: relative; }
+    .ad-format-creative-piece::after { background: linear-gradient(0deg, rgba(7,31,23,.9), rgba(7,31,23,.04) 68%); content: ""; inset: 0; position: absolute; }
+    .ad-format-creative-piece strong { bottom: 18px; color: #fff; font-size: 18px; font-weight: 900; left: 16px; line-height: 1.08; max-width: 80%; position: absolute; z-index: 2; }
+    .ad-format-creative-piece.is-story strong,
+    .ad-format-creative-piece.is-square strong { font-size: 12px; }
     .advertise-sidebar-actions { background: #0f3d2e; border-radius: 16px; color: #fff; overflow: hidden; }
     .advertise-sidebar-dashboard { background: rgba(255,255,255,.08); border-top: 1px solid rgba(255,255,255,.18); margin-top: 18px; padding: 16px 20px 20px; }
     .advertise-sidebar-dashboard a { background: #fff; border-radius: 10px; color: #15603f; display: flex; font-size: 14px; font-weight: 900; justify-content: center; margin-top: 10px; padding: 11px 14px; text-align: center; }
     @media (max-width: 639px) {
-      .advertising-preview-canvas { min-height: 265px; padding: 12px; }
-      .advertising-preview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .advertising-preview-grid .advertising-preview-card:last-child { display: none; }
-      .advertising-preview-live-frame, .advertising-preview-live-image { min-height: 235px; }
+      .ad-format-page { padding: 12px; }
+      .ad-format-page-head { align-items: flex-start; }
+      .ad-format-page-controls span:nth-child(n+3) { display: none; }
+      .ad-format-native-grid { grid-template-columns: 1fr 1fr; }
+      .ad-format-property-card.is-sponsored { grid-column: 1 / -1; }
+      .ad-format-native-grid .ad-format-property-card:last-child { display: none; }
+      .ad-format-banner { min-height: 185px; }
+      .ad-format-banner-copy { max-width: 78%; padding: 20px; }
+      .ad-format-banner-copy strong { font-size: 22px; }
+      .ad-format-agent-card { grid-template-columns: 38% 1fr; }
+      .ad-format-agent-copy { padding: 16px; }
+      .ad-format-agent-copy strong { font-size: 18px; }
+      .ad-format-agent-actions span:last-child { display: none; }
+      .ad-format-bundle { grid-template-columns: 1fr; }
+      .ad-format-bundle-main { grid-row: auto; }
+      .ad-format-bundle-main .ad-format-banner { min-height: 220px; }
+      .ad-format-bundle-tile { display: none; }
+      .ad-format-creative-board { grid-template-columns: 1fr .65fr; }
+      .ad-format-creative-piece { min-height: 215px; }
+      .ad-format-creative-piece.is-story { display: none; }
     }
     @media (prefers-reduced-motion: reduce) {
       .advertise-package-card { transition: none; transform: none !important; }
@@ -4871,7 +4930,7 @@
     </main>
   </div>
 
-  <div id="advertising-placement-preview-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="advertising-placement-preview-title" data-advertising-placement-preview="20260910">
+  <div id="advertising-placement-preview-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="advertising-placement-preview-title" data-advertising-placement-preview="20260910-professional-formats">
     <div class="modal-box" style="max-width:940px">
       <button id="advertising-placement-preview-close" type="button" onclick="closeModal('advertising-placement-preview-modal')" aria-label="Close placement preview" data-content-i18n-aria="advertise.previewClose" class="absolute top-4 right-4 z-10 w-10 h-10 rounded-full border border-green-200 bg-white text-green-700 hover:bg-green-50">✕</button>
       <div class="pr-12">
@@ -4880,7 +4939,7 @@
         <p id="advertising-placement-preview-price" class="mt-2 text-sm font-black text-[#15603f]"></p>
       </div>
       <div class="mt-5 grid lg:grid-cols-[minmax(0,1.3fr)_minmax(250px,.7fr)] gap-5 items-start">
-        <div id="advertising-placement-preview-visual" aria-label="Live makaug page capture showing the selected advertising position" data-content-i18n-aria="advertise.previewVisualAria"></div>
+        <div id="advertising-placement-preview-visual" aria-label="Professional advertising format shown in its real makaug page position" data-content-i18n-aria="advertise.formatPreviewVisualAria"></div>
         <div class="rounded-2xl border border-[#dfe9e3] bg-[#f6f9f7] p-5">
           <h3 class="text-lg font-black text-[#16241d]" data-content-i18n="advertise.previewWhat">What this placement does</h3>
           <p id="advertising-placement-preview-copy" class="mt-2 text-sm leading-relaxed text-[#52665b]"></p>
@@ -4888,7 +4947,7 @@
           <div id="advertising-placement-preview-locations" class="mt-2 flex flex-wrap gap-2"></div>
           <h4 class="mt-5 text-xs font-black uppercase tracking-wide text-[#15603f]" data-content-i18n="advertise.previewBest">Best for</h4>
           <p id="advertising-placement-preview-best-for" class="mt-2 text-sm leading-relaxed text-[#52665b]"></p>
-          <p class="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900" data-content-i18n="advertise.previewDisclaimer">Representative example: the highlighted area uses a current live makaug page capture. Final position and creative are confirmed during review before payment and launch.</p>
+          <p class="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900" data-content-i18n="advertise.formatPreviewDisclaimer">Format preview: each example uses the same placement type and page position as makaug's current advertising surfaces. Final artwork, targeting and live position are confirmed during review before payment and launch.</p>
         </div>
       </div>
       <div class="mt-5 flex flex-wrap gap-2">

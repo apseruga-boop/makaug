@@ -3228,10 +3228,12 @@ const ADVERTISING_UI_I18N_EN = Object.freeze({
   "advertise.previewLabel": "Placement preview",
   "advertise.previewTitle": "See where your advert appears",
   "advertise.previewVisualAria": "Live makaug page capture showing the selected advertising position",
+  "advertise.formatPreviewVisualAria": "Professional advertising format shown in its real makaug page position",
   "advertise.previewWhat": "What this placement does",
   "advertise.previewWhere": "Where it can appear",
   "advertise.previewBest": "Best for",
   "advertise.previewDisclaimer": "Representative example: the highlighted area uses a current live makaug page capture. Final position and creative are confirmed during review before payment and launch.",
+  "advertise.formatPreviewDisclaimer": "Format preview: each example uses the same placement type and page position as makaug's current advertising surfaces. Final artwork, targeting and live position are confirmed during review before payment and launch.",
   "advertise.previewChoose": "Choose this placement",
   "advertise.previewWhatsapp": "Ask on WhatsApp",
   "advertise.previewEmail": "Email makaug",
@@ -43730,67 +43732,55 @@ const ADVERTISING_PACKAGE_PREVIEW_CONTENT = Object.freeze({
     copy: "One approved property is given a clearly labelled priority position when its location and property type match a visitor's search. The listing keeps its real photos, price, contact route and makaug review status.",
     locations: ["Property search", "Category results", "Similar properties"],
     bestFor: "Owners, agents or developers who want more attention on one specific approved listing during a focused sales week.",
-    view: "featured",
+    format: "native-property",
     image: "/assets/house-ads-v3/sale.webp",
-    headline: "Your property is placed ahead of standard results",
-    screenshot: "/assets/advertising-previews/live-search.jpg",
-    highlight: "card-left"
+    headline: "Your property is placed ahead of standard results"
   },
   regional_search_boost: {
     copy: "Your approved property, agent profile or business is promoted only when people search the districts and areas selected for the campaign. The placement can follow relevant list and map journeys without appearing nationally.",
     locations: ["District search", "Area search", "Map results"],
     bestFor: "Campaigns focused on places such as Kampala, Wakiso, Mukono, Jinja or a smaller group of named areas.",
-    view: "regional",
+    format: "regional-native",
     image: "/assets/house-ads-v3/land.webp",
-    headline: "Visible to people searching your chosen area",
-    screenshot: "/assets/advertising-previews/live-land.jpg",
-    highlight: "card-left"
+    headline: "Visible to people searching your chosen area"
   },
   homepage_banner: {
     copy: "A wide, clearly labelled campaign banner appears inside the makaug homepage journey. It uses approved brand artwork, a short message and one destination action.",
     locations: ["Homepage top", "Homepage mid-page"],
     bestFor: "Major launches, developers, lenders and property brands that need broad homepage visibility.",
-    view: "band",
+    format: "homepage-band",
     image: "/assets/house-ads-v3/home-hero.webp",
-    headline: "A wide visual campaign across the homepage",
-    screenshot: "/assets/advertising-previews/live-homepage.jpg",
-    highlight: "banner"
+    headline: "A wide visual campaign across the homepage"
   },
   agent_spotlight: {
     copy: "A verified broker profile receives a priority card in agent discovery and can be surfaced beside relevant property journeys. Visitors still see the broker's genuine profile, verification status and contact options.",
     locations: ["Find Brokers", "Agent cards", "Property details"],
     bestFor: "Verified agents and agencies looking to grow recognition and enquiries in the areas they serve.",
-    view: "featured",
+    format: "agent-spotlight",
     image: "/assets/house-ads-v3/agents.webp",
-    headline: "Your verified profile stands out in broker discovery",
-    screenshot: "/assets/advertising-previews/live-brokers.jpg",
-    highlight: "card-left"
+    headline: "Your verified profile stands out in broker discovery"
   },
   student_accommodation_push: {
     copy: "Approved hostels, studios and student rooms can receive a sponsored position in student accommodation searches that match the selected campus or area.",
     locations: ["Students page", "University search", "WhatsApp student results"],
     bestFor: "Accommodation providers filling rooms around a particular university or student area.",
-    view: "band",
+    format: "student-native",
     image: "/assets/house-ads-v3/students.webp",
-    headline: "Reach students searching near their campus",
-    screenshot: "/assets/advertising-previews/live-students.jpg",
-    highlight: "card-left"
+    headline: "Reach students searching near their campus"
   },
   commercial_land_sponsor: {
     copy: "Commercial property or land inventory is promoted within the relevant investor and business-search journey, including matching list and map results.",
     locations: ["Commercial results", "Land results", "Map results"],
     bestFor: "Landowners, developers and commercial agents targeting investors or business buyers.",
-    view: "regional",
+    format: "commercial-band",
     image: "/assets/house-ads-v3/commercial.webp",
-    headline: "Sponsor inventory in commercial and land searches",
-    screenshot: "/assets/advertising-previews/live-commercial.jpg",
-    highlight: "card-left"
+    headline: "Sponsor inventory in commercial and land searches"
   },
   whatsapp_chatbot_sponsor: {
     copy: "An approved sponsored recommendation can appear in a relevant WhatsApp property conversation when the campaign matches what the person is asking for. It remains labelled as sponsored.",
     locations: ["WhatsApp property results", "WhatsApp agent results"],
     bestFor: "Relevant property or service offers that benefit from a direct conversational enquiry route.",
-    view: "whatsapp",
+    format: "whatsapp-card",
     image: "/assets/house-ads-v3/detail.webp",
     headline: "A sponsored recommendation inside a matching chat"
   },
@@ -43798,7 +43788,7 @@ const ADVERTISING_PACKAGE_PREVIEW_CONTENT = Object.freeze({
     copy: "makaug prepares an approved one-off message for a relevant opted-in audience segment. The campaign is reviewed before any email or WhatsApp distribution is scheduled.",
     locations: ["Email campaign", "WhatsApp campaign"],
     bestFor: "Time-sensitive launches, open days and clearly defined offers with a specific audience and call to action.",
-    view: "email",
+    format: "email-creative",
     image: "/assets/house-ads-v3/home-hero.webp",
     headline: "Your approved offer delivered to an opted-in audience"
   },
@@ -43806,21 +43796,17 @@ const ADVERTISING_PACKAGE_PREVIEW_CONTENT = Object.freeze({
     copy: "A coordinated month-long campaign combines approved website, search, map, WhatsApp, email and agent-card placements. makaug confirms the exact mix and schedule during review.",
     locations: ["Homepage", "Search", "Map", "WhatsApp", "Email", "Agent cards"],
     bestFor: "Large property launches or brands that need sustained reach across several makaug journeys.",
-    view: "bundle",
+    format: "campaign-bundle",
     image: "/assets/house-ads-v3/home-hero.webp",
-    headline: "One coordinated campaign across makaug",
-    screenshot: "/assets/advertising-previews/live-homepage.jpg",
-    highlight: "hero"
+    headline: "One coordinated campaign across makaug"
   },
   creative_design_addon: {
     copy: "makaug turns your approved logo, offer and message into size-ready campaign artwork. This is a creative service add-on and does not include media placement by itself.",
     locations: ["Banner creative", "Listing creative", "Campaign resize set"],
     bestFor: "Advertisers who have an offer and brand assets but need polished, correctly sized artwork before launch.",
-    view: "creative",
+    format: "creative-kit",
     image: "/assets/house-ads-v3/marketplace.webp",
-    headline: "Size-ready creative prepared for your placement",
-    screenshot: "/assets/advertising-previews/live-homepage.jpg",
-    highlight: "banner"
+    headline: "Size-ready creative prepared for your placement"
   }
 });
 
@@ -43902,65 +43888,96 @@ function buildAdvertisingPlacementPreviewVisual(meta = {}, item = {}) {
   const image = adminAttr(meta.image || "/assets/house-ads-v3/home-hero.webp");
   const headline = adminEscape(meta.headline || advertisingPackageText(item, "label") || contentTr("advertise.packageLabelFallback"));
   const browserBar = `<div class="advertising-preview-browser-bar"><span class="advertising-preview-browser-dot"></span><span class="advertising-preview-browser-dot"></span><span class="advertising-preview-browser-dot"></span><span class="advertising-preview-logo">M ${adminEscape(contentTr("advertise.browserBrand"))}</span></div>`;
-  const propertyCard = (src, highlighted = false, label = "Approved property") => `
-    <div class="advertising-preview-card${highlighted ? " advertising-preview-highlight" : ""}">
-      <img src="${adminAttr(src)}" alt="" loading="lazy" decoding="async">
-      <div class="advertising-preview-line"></div><div class="advertising-preview-line short"></div>
-      ${highlighted ? `<span class="sr-only">${adminEscape(label)}</span>` : ""}
+  const format = String(meta.format || "homepage-band");
+  const sponsored = adminEscape(contentTr("advertise.sponsored"));
+  const viewLabel = adminEscape(contentTr("advertise.view"));
+  const learnMore = adminEscape(contentTr("advertise.learnMore"));
+  const placementLabel = adminEscape(contentTr("advertise.yourPlacement"));
+  const contextLabel = adminEscape(meta.capture || "makaug.com");
+  const locationLabels = Array.isArray(meta.locations) ? meta.locations : [];
+  const pageHead = `
+    <div class="ad-format-page-head">
+      <div><strong>${contextLabel}</strong><small>${adminEscape(locationLabels[0] || "makaug.com")}</small></div>
+      <div class="ad-format-page-controls">${locationLabels.slice(0, 3).map((label) => `<span>${adminEscape(label)}</span>`).join("")}</div>
     </div>`;
-
-  if (meta.view === "whatsapp") {
-    return `<div class="advertising-preview-browser" aria-label="${adminAttr(contentTr("advertise.whatsappPreviewAria"))}">${browserBar}<div class="advertising-preview-canvas">
-      <div class="advertising-preview-phone">
-        <div class="text-xs font-black text-[#15603f]">${adminEscape(contentTr("advertise.whatsappPreviewTitle"))}</div>
-        <div class="mt-3 rounded-xl bg-gray-100 p-2 text-[11px] text-gray-600">${adminEscape(contentTr("advertise.whatsappPreviewRequest"))}</div>
-        <div class="advertising-preview-chat"><strong>${adminEscape(contentTr("advertise.sponsoredRecommendation"))}</strong><br>${headline}<img src="${image}" alt="" loading="lazy" decoding="async" class="mt-2 h-20 w-full rounded-lg object-cover"></div>
+  const miniResults = `<div class="ad-format-mini-results"><div class="ad-format-mini-result"></div><div class="ad-format-mini-result"></div><div class="ad-format-mini-result"></div></div>`;
+  const slotLabel = `<div class="ad-format-slot-label"><span>${placementLabel}</span></div>`;
+  const sponsorChip = `<span class="ad-format-sponsored-chip"><i class="fas fa-bullhorn" aria-hidden="true"></i>${sponsored}</span>`;
+  const browser = (content, aria = contentTr("advertise.formatPreviewVisualAria")) => `<div class="advertising-preview-browser" data-advertising-format-preview="${adminAttr(format)}" aria-label="${adminAttr(aria)}">${browserBar}<div class="advertising-preview-canvas">${content}</div></div>`;
+  const banner = (bannerImage = image) => `
+    <section class="ad-format-banner" style="background-image:url('${adminAttr(bannerImage)}')">
+      ${sponsorChip}
+      <div class="ad-format-banner-copy">
+        <small>makaug.com</small>
+        <strong>${headline}</strong>
+        <span class="ad-format-banner-cta">${learnMore} →</span>
       </div>
-    </div></div>`;
-  }
-
-  if (meta.view === "email") {
-    return `<div class="advertising-preview-browser" aria-label="${adminAttr(contentTr("advertise.emailPreviewAria"))}">${browserBar}<div class="advertising-preview-canvas">
-      <div class="advertising-preview-email">
-        <div class="advertising-preview-email-header">${adminEscape(contentTr("advertise.emailPreviewFrom"))}</div>
-        <img src="${image}" alt="" loading="lazy" decoding="async" class="mt-3 h-28 w-full rounded-xl object-cover">
-        <div class="mt-3 text-base font-black text-[#16241d]">${headline}</div>
-        <div class="advertising-preview-line"></div><div class="advertising-preview-line short"></div>
-        <div class="mt-4 inline-flex rounded-lg bg-[#15603f] px-3 py-2 text-xs font-black text-white">${adminEscape(contentTr("advertise.viewApprovedOffer"))}</div>
+    </section>`;
+  const standardCard = (src) => `
+    <article class="ad-format-property-card ad-format-standard-card">
+      <img src="${adminAttr(src)}" alt="" loading="eager" decoding="async">
+      <div class="ad-format-property-copy"><span></span><span></span></div>
+    </article>`;
+  const sponsoredPropertyCard = () => `
+    <article class="ad-format-property-card is-sponsored">
+      <span class="ad-format-card-sponsor">${sponsored}${format === "regional-native" ? " · Kampala" : ""}</span>
+      <img src="${image}" alt="" loading="eager" decoding="async">
+      <div class="ad-format-property-copy">
+        <strong>${headline}</strong>
+        <small>${format === "student-native" ? "Makerere · Kampala" : format === "regional-native" ? "Kampala · Wakiso" : "Najjera · Wakiso"}</small>
+        <div class="ad-format-property-meta"><span>USh 650M</span><span class="ad-format-card-cta">${viewLabel} →</span></div>
       </div>
-    </div></div>`;
+    </article>`;
+
+  if (["native-property", "regional-native", "student-native"].includes(format)) {
+    const secondaryImage = format === "student-native" ? "/assets/house-ads-v3/rent.webp" : "/assets/house-ads-v3/commercial.webp";
+    return browser(`<div class="ad-format-page">${pageHead}${slotLabel}<div class="ad-format-native-grid">${sponsoredPropertyCard()}${standardCard(secondaryImage)}${standardCard("/assets/house-ads-v3/land.webp")}</div></div>`);
   }
 
-  if (meta.screenshot) {
-    const screenshot = adminAttr(meta.screenshot);
-    const highlight = ["card-left", "card-right", "banner", "hero"].includes(meta.highlight) ? meta.highlight : "card-left";
-    const placementLabel = adminAttr(contentTr("advertise.yourPlacement"));
-    return `<div class="advertising-preview-browser">${browserBar}<div class="advertising-preview-canvas">
-      <div class="advertising-preview-live-frame">
-        <img class="advertising-preview-live-image" src="${screenshot}" alt="${adminAttr(meta.capture || "makaug.com")}" loading="eager" decoding="async">
-        <span class="advertising-preview-live-badge"><i class="fas fa-camera" aria-hidden="true"></i>${adminEscape(meta.capture || "makaug.com")}</span>
-        <span class="advertising-preview-live-highlight is-${highlight}" data-label="${placementLabel}"></span>
-        <span class="advertising-preview-live-source">${adminEscape(contentTr("advertise.liveCapture"))}</span>
-      </div>
-    </div></div>`;
+  if (["homepage-band", "commercial-band"].includes(format)) {
+    return browser(`<div class="ad-format-page">${pageHead}${miniResults}${slotLabel}${banner()}</div>`);
   }
 
-  if (meta.view === "regional") {
-    return `<div class="advertising-preview-browser" aria-label="${adminAttr(contentTr("advertise.regionalPreviewAria"))}">${browserBar}<div class="advertising-preview-canvas">
-      <div class="advertising-preview-map"><div class="advertising-preview-map-pin">${adminEscape(contentTr("advertise.yourArea"))}</div></div>
-      <div class="advertising-preview-band"><span><small class="block text-amber-200">${adminEscape(contentTr("advertise.regionalSponsor"))}</small>${headline}</span><span>${adminEscape(contentTr("advertise.view"))} →</span></div>
-      <div class="advertising-preview-grid">${propertyCard(meta.image, true, item.label)}${propertyCard("/assets/house-ads-v3/land.webp")}${propertyCard("/assets/house-ads-v3/commercial.webp")}</div>
-    </div></div>`;
+  if (format === "agent-spotlight") {
+    return browser(`<div class="ad-format-page">${pageHead}${slotLabel}<article class="ad-format-agent-card">
+      ${sponsorChip}
+      <div class="ad-format-agent-media" style="background-image:url('${image}')"></div>
+      <div class="ad-format-agent-copy"><small>${sponsored}</small><strong>${headline}</strong><p>Kampala · Wakiso · Mukono</p><div class="ad-format-agent-actions"><span>WhatsApp</span><span>${viewLabel} →</span></div></div>
+    </article></div>`);
   }
 
-  const featuredCard = meta.view === "featured";
-  const showBand = ["band", "bundle", "creative"].includes(meta.view);
-  return `<div class="advertising-preview-browser" aria-label="${adminAttr(contentTr("advertise.websitePreviewAria"))}">${browserBar}<div class="advertising-preview-canvas">
-    <div class="advertising-preview-hero" style="background-image:url('${image}')"><div class="advertising-preview-hero-copy">${adminEscape(contentTr("advertise.searchUganda"))}</div></div>
-    ${showBand ? `<div class="advertising-preview-band"><span><small class="block text-amber-200">${adminEscape(contentTr(meta.view === "creative" ? "advertise.creativePreview" : "advertise.sponsored"))}</small>${headline}</span><span>${adminEscape(contentTr("advertise.learnMore"))} →</span></div>` : ""}
-    <div class="advertising-preview-grid">${propertyCard(meta.image, featuredCard, item.label)}${propertyCard("/assets/house-ads-v3/rent.webp")}${propertyCard("/assets/house-ads-v3/agents.webp")}</div>
-    ${meta.view === "bundle" ? `<div class="mt-3 flex flex-wrap gap-2"><span class="advertising-preview-tag">${adminEscape(contentTr("advertise.search"))}</span><span class="advertising-preview-tag">${adminEscape(contentTr("advertise.map"))}</span><span class="advertising-preview-tag">WhatsApp</span><span class="advertising-preview-tag">${adminEscape(contentTr("advertise.emailOption"))}</span></div>` : ""}
-  </div></div>`;
+  if (format === "whatsapp-card") {
+    return browser(`<div class="ad-format-page"><div class="advertising-preview-phone">
+      <div class="ad-format-phone-head"><span>M</span>${adminEscape(contentTr("advertise.whatsappPreviewTitle"))}</div>
+      <div class="ad-format-phone-body"><div class="ad-format-chat-request">${adminEscape(contentTr("advertise.whatsappPreviewRequest"))}</div><div class="ad-format-chat-card"><img src="${image}" alt="" loading="eager" decoding="async"><div><small>${adminEscape(contentTr("advertise.sponsoredRecommendation"))}</small><strong>${headline}</strong><span>${viewLabel} →</span></div></div></div>
+    </div></div>`, contentTr("advertise.whatsappPreviewAria"));
+  }
+
+  if (format === "email-creative") {
+    return browser(`<div class="ad-format-page"><div class="advertising-preview-email">
+      <div class="advertising-preview-email-header"><span>${adminEscape(contentTr("advertise.emailPreviewFrom"))}</span><b>makaug.com</b></div>
+      <div class="ad-format-email-hero" style="background-image:url('${image}')"><strong>${headline}</strong></div>
+      <div class="ad-format-email-body"><span>${adminEscape(meta.copy || advertisingPackageText(item, "description"))}</span><b>${adminEscape(contentTr("advertise.viewApprovedOffer"))}</b></div>
+    </div></div>`, contentTr("advertise.emailPreviewAria"));
+  }
+
+  if (format === "campaign-bundle") {
+    return browser(`<div class="ad-format-page">${pageHead}<div class="ad-format-bundle">
+      <div class="ad-format-bundle-main">${banner()}</div>
+      <div class="ad-format-bundle-tile"><small>${adminEscape(contentTr("advertise.search"))}</small><img src="/assets/house-ads-v3/sale.webp" alt="" loading="eager" decoding="async"></div>
+      <div class="ad-format-bundle-tile"><small>WhatsApp · ${adminEscape(contentTr("advertise.emailOption"))}</small><img src="/assets/house-ads-v3/agents.webp" alt="" loading="eager" decoding="async"></div>
+    </div></div>`);
+  }
+
+  if (format === "creative-kit") {
+    return browser(`<div class="ad-format-page">${pageHead}${slotLabel}<div class="ad-format-creative-board">
+      <div class="ad-format-creative-piece" style="background-image:url('${image}')"><strong>${headline}</strong></div>
+      <div class="ad-format-creative-piece is-square" style="background-image:url('/assets/house-ads-v3/sale.webp')"><strong>${adminEscape(advertisingPackageText(item, "label"))}</strong></div>
+      <div class="ad-format-creative-piece is-story" style="background-image:url('/assets/house-ads-v3/students.webp')"><strong>${adminEscape(contentTr("advertise.learnMore"))}</strong></div>
+    </div></div>`);
+  }
+
+  return browser(`<div class="ad-format-page">${pageHead}${miniResults}${slotLabel}${banner()}</div>`);
 }
 
 function advertisingContactUrls(item = advertisingSelectedPackage()) {

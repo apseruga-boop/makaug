@@ -119,11 +119,10 @@ for (const packageKey of packageKeys) {
   }
 }
 
-const previewImages = Array.from(app.matchAll(/screenshot: "(\/assets\/advertising-previews\/[^"]+)"/g), (match) => match[1]);
-assert(previewImages.length >= 8, 'website placement types should use live-site screenshot previews');
-for (const imagePath of new Set(previewImages)) {
-  assert(fs.existsSync(path.join(root, imagePath.replace(/^\//, ''))), `preview asset should exist: ${imagePath}`);
-}
+assert(app.includes('data-advertising-format-preview'), 'placement previews should render a professional format specimen');
+assert(app.includes('format: "homepage-band"'), 'homepage package should use the real below-results house-band position');
+assert(app.includes('format: "native-property"'), 'featured-property package should render a complete sponsored listing card');
+assert(!app.includes('advertising-preview-live-highlight'), 'placement previews should not use border-only screenshot highlighting');
 assert(html.includes('The dashboard is for returning advertisers to manage submitted campaigns'), 'support and dashboard roles should be explained separately');
 assert(html.includes('class="advertise-sidebar-dashboard"'), 'dashboard action should be positioned inside the support sidebar');
 
