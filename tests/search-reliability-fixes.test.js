@@ -13,6 +13,7 @@ const aiSource = read('routes/ai.js');
 const whatsappSource = read('routes/whatsapp.js');
 const serverSource = read('server.js');
 const migrationSource = read('db/migrations/126_quarantine_unlocated_public_properties.sql');
+const zeroCoordinateMigrationSource = read('db/migrations/127_quarantine_zero_coordinate_public_property.sql');
 
 test('public pages no longer crawl the complete inventory in the background', () => {
   assert.doesNotMatch(appSource, /PUBLIC_LISTINGS_BACKGROUND_MAX_PAGES/);
@@ -108,4 +109,8 @@ test('resolve shares the suggester count cache and locationless rows return to r
   assert.equal((migrationSource.match(/[0-9a-f]{8}-[0-9a-f-]{27,}/g) || []).length, 4);
   assert.match(migrationSource, /AND status = 'approved'/);
   assert.match(migrationSource, /AND latitude IS NULL[\s\S]*AND longitude IS NULL/);
+  assert.match(zeroCoordinateMigrationSource, /eb3515cc-3ab9-46d1-9e6e-632ae8714c05/);
+  assert.match(zeroCoordinateMigrationSource, /AND latitude = 0[\s\S]*AND longitude = 0/);
+  assert.match(zeroCoordinateMigrationSource, /status = 'pending'/);
+  assert.match(zeroCoordinateMigrationSource, /'publication_eligible', false/);
 });
