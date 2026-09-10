@@ -223,16 +223,21 @@ function publicPreviewBlockers(raw = {}) {
   const isMakaugManagedOverseas = row.country_code !== 'UG'
     && row.extra_fields?.contact_mode === 'makaug_managed'
     && row.extra_fields?.source_documents_verified === true;
+  const approvedPriceOnRequest = isMakaugManagedOverseas
+    && row.extra_fields?.price_on_request_approved === true;
+  const approvedPendingMapPoint = isMakaugManagedOverseas
+    && row.extra_fields?.map_point_pending_approved === true;
   if ((!row.source_agent_id && !isMakaugManagedOverseas) || !cleanText(row.source_display_name, 220)) blockers.push('An attributed source is required.');
   if (cleanText(row.description, 10000).length < 80) blockers.push('A source-labelled project description is required.');
   if (!cleanText(row.area, 140) || !cleanText(row.district, 140)) blockers.push('Area and district are required.');
-  if (row.latitude == null || row.longitude == null) blockers.push('An area map point is required.');
+  if ((row.latitude == null || row.longitude == null) && !approvedPendingMapPoint) blockers.push('An area map point is required.');
   if (!row.unit_types.length) blockers.push('At least one unit type is required.');
   const pricedUnits = row.unit_types.filter((unit) => finiteNumber(unit.price_original, 0) > 0);
-  if (!pricedUnits.length) blockers.push('At least one unit type needs its original source price.');
+  if (!pricedUnits.length && !approvedPriceOnRequest) blockers.push('At least one unit type needs its original source price.');
+  if (!pricedUnits.length && approvedPriceOnRequest && row.unit_types.some((unit) => !cleanText(unit.price_status, 200))) blockers.push('Every price-on-request unit needs a clear status label.');
   if (pricedUnits.some((unit) => !cleanText(unit.price_original_currency, 3))) blockers.push('Every supplied source price needs its original currency.');
   if (pricedUnits.some((unit) => !(finiteNumber(unit.price_ugx, 0) > 0))) blockers.push('Every supplied source price needs an indicative UGX conversion.');
-  if (!(finiteNumber(row.launch_price_ugx, 0) > 0)) blockers.push('An indicative starting price in UGX is required.');
+  if (!(finiteNumber(row.launch_price_ugx, 0) > 0) && !approvedPriceOnRequest) blockers.push('An indicative starting price in UGX is required.');
   if (!row.payment_plan.length || !(row.payment_plan_months > 0)) blockers.push('The supplied payment period is required.');
   if (row.images.filter((image) => cleanText(image?.url, 2000) && cleanText(image?.caption, 300)).length < 3) blockers.push('At least three labelled project images are required.');
   return Array.from(new Set(blockers));

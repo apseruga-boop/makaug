@@ -153,6 +153,34 @@ test('a MakaUG-managed Kenya preview accepts verified source documents and parti
   assert.equal(isPubliclyVisible({ ...project, verification_status: 'verified' }), true, 'approved previews must not disappear when staff marks them verified');
 });
 
+test('a site-owner-approved overseas preview may show price and map point as pending without inventing either', () => {
+  const project = {
+    country_code: 'AE', status: 'published', verification_status: 'partially_verified',
+    name: 'AMRA', source_display_name: 'Citi Developers - supplied AMRA factsheet and payment plan',
+    description: 'A source-labelled waterfront project preview with supplied unit sizes, payment terms, completion timing and clearly pending live prices and exact project pin.',
+    area: 'Umm Al Quwain Blue Carbon Zone', district: 'Umm Al Quwain', latitude: null, longitude: null,
+    launch_price_ugx: null, payment_plan_months: 36,
+    unit_types: [
+      { bedrooms: 0, size_sqm: 46.45, price_original: null, price_original_currency: 'AED', price_ugx: null, price_status: 'Current price to be confirmed with makaug.com' },
+      { bedrooms: 1, size_sqm: 78.6, price_original: null, price_original_currency: 'AED', price_ugx: null, price_status: 'Current price to be confirmed with makaug.com' }
+    ],
+    payment_plan: [{ label: 'Three years post handover', percent: 30, months: 36 }],
+    images: [{ url: '/1.jpg', caption: 'Exterior' }, { url: '/2.jpg', caption: 'Marina' }, { url: '/3.jpg', caption: 'Residence' }],
+    extra_fields: {
+      public_preview_approved: true,
+      source_documents_verified: true,
+      contact_mode: 'makaug_managed',
+      price_on_request_approved: true,
+      map_point_pending_approved: true
+    }
+  };
+  assert.deepEqual(publicPreviewBlockers(project), []);
+  assert.equal(isPubliclyVisible(project), true);
+  assert.ok(publicPreviewBlockers({ ...project, extra_fields: { ...project.extra_fields, price_on_request_approved: false } }).includes('At least one unit type needs its original source price.'));
+  assert.ok(publicPreviewBlockers({ ...project, extra_fields: { ...project.extra_fields, map_point_pending_approved: false } }).includes('An area map point is required.'));
+  assert.ok(publicPreviewBlockers({ ...project, unit_types: [{ bedrooms: 0 }] }).includes('Every price-on-request unit needs a clear status label.'));
+});
+
 test('sourced preview readiness models the explicit publish approval without weakening its source checks', () => {
   const project = {
     country_code: 'AE', status: 'pending_review', verification_status: 'partially_verified',
