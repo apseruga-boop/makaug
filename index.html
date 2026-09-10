@@ -27,6 +27,7 @@
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/makaug-apple-touch-icon.png">
   <link rel="manifest" href="/site.webmanifest">
   <script src="/config/aboutCommercialProducts.js?v=about-commercial-products-20260910-v1"></script>
+  <script src="/assets/about-advertise-i18n.js?v=about-advertise-i18n-20260910-v1"></script>
   <meta name="theme-color" content="#15803d">
   <script>
     (function () {
@@ -2019,10 +2020,24 @@
     .advertising-preview-email { background: #ffffff; border: 1px solid #dfe9e3; border-radius: 13px; margin: 18px auto; max-width: 430px; padding: 16px; }
     .advertising-preview-email-header { border-bottom: 1px solid #e4ece8; color: #5b6b62; font-size: 11px; padding-bottom: 10px; }
     .advertising-preview-tag { background: #edf6f0; border: 1px solid #cfe3d5; border-radius: 999px; color: #15603f; display: inline-flex; font-size: 11px; font-weight: 800; padding: 5px 9px; }
+    .advertising-preview-live-frame { background: #e9f1ec; border: 1px solid #cfe0d6; border-radius: 14px; min-height: 300px; overflow: hidden; position: relative; }
+    .advertising-preview-live-image { display: block; height: 100%; min-height: 300px; object-fit: cover; object-position: top center; width: 100%; }
+    .advertising-preview-live-badge { align-items: center; background: rgba(15,61,46,.94); border-radius: 999px; color: #fff; display: inline-flex; font-size: 11px; font-weight: 900; gap: 6px; left: 12px; padding: 7px 10px; position: absolute; top: 12px; z-index: 3; }
+    .advertising-preview-live-highlight { border: 4px solid #f59e0b; border-radius: 13px; box-shadow: 0 0 0 999px rgba(15,29,23,.18), 0 10px 28px rgba(110,62,0,.22); pointer-events: none; position: absolute; z-index: 2; }
+    .advertising-preview-live-highlight::before { background: #d98608; border-radius: 999px; color: #fff; content: attr(data-label); font-size: 11px; font-weight: 900; left: 7px; padding: 6px 9px; position: absolute; top: 7px; }
+    .advertising-preview-live-highlight.is-card-left { bottom: 3%; left: 1.2%; top: 2%; width: 48%; }
+    .advertising-preview-live-highlight.is-card-right { bottom: 3%; right: 1.2%; top: 2%; width: 48%; }
+    .advertising-preview-live-highlight.is-banner { bottom: 8%; left: 7%; right: 7%; height: 20%; }
+    .advertising-preview-live-highlight.is-hero { left: 4%; right: 4%; top: 23%; height: 44%; }
+    .advertising-preview-live-source { background: rgba(255,255,255,.96); border-radius: 8px 0 0 0; bottom: 0; color: #315443; font-size: 10px; font-weight: 800; padding: 5px 8px; position: absolute; right: 0; z-index: 3; }
+    .advertise-sidebar-actions { background: #0f3d2e; border-radius: 16px; color: #fff; overflow: hidden; }
+    .advertise-sidebar-dashboard { background: rgba(255,255,255,.08); border-top: 1px solid rgba(255,255,255,.18); margin-top: 18px; padding: 16px 20px 20px; }
+    .advertise-sidebar-dashboard a { background: #fff; border-radius: 10px; color: #15603f; display: flex; font-size: 14px; font-weight: 900; justify-content: center; margin-top: 10px; padding: 11px 14px; text-align: center; }
     @media (max-width: 639px) {
       .advertising-preview-canvas { min-height: 265px; padding: 12px; }
       .advertising-preview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .advertising-preview-grid .advertising-preview-card:last-child { display: none; }
+      .advertising-preview-live-frame, .advertising-preview-live-image { min-height: 235px; }
     }
     @media (prefers-reduced-motion: reduce) {
       .advertise-package-card { transition: none; transform: none !important; }
@@ -4709,77 +4724,77 @@
   <div id="page-advertise" class="page bg-[#f6f9f7]" data-advertising-marker="advertising-selfserve-checkout-20260724">
     <section class="bg-[#0f3d2e] py-10 text-white">
       <div class="max-w-6xl mx-auto px-4">
-        <p class="text-xs font-black uppercase tracking-wide text-emerald-200">Self-serve advertising</p>
-        <h1 class="mt-2 text-3xl md:text-4xl font-black serif">Create a makaug campaign</h1>
-        <p class="mt-2 max-w-3xl text-sm md:text-base text-emerald-50">Choose placement, see the price, and prepare the advert. After review and approval, pay through secure hosted checkout before the campaign goes live.</p>
+        <p class="text-xs font-black uppercase tracking-wide text-emerald-200" data-content-i18n="advertise.heroLabel">Self-serve advertising</p>
+        <h1 class="mt-2 text-3xl md:text-4xl font-black serif" data-content-i18n="advertise.title">Create a makaug campaign</h1>
+        <p class="mt-2 max-w-3xl text-sm md:text-base text-emerald-50" data-content-i18n="advertise.subtitle">Choose placement, see the price, and prepare the advert. After review and approval, pay through secure hosted checkout before the campaign goes live.</p>
       </div>
     </section>
 
     <main class="max-w-6xl mx-auto px-4 py-8">
       <div class="grid lg:grid-cols-[minmax(0,1fr)_340px] gap-6 items-start">
         <section class="bg-white border border-[#e4ece8] rounded-xl p-5 md:p-6">
-          <div class="grid grid-cols-4 gap-2" aria-label="Campaign steps">
-            <div class="advertise-step-tab rounded-lg bg-emerald-50 px-2 py-2 text-center text-xs font-black text-[#15603f]" data-advertise-step-tab="1">1. Placement</div>
-            <div class="advertise-step-tab rounded-lg bg-gray-50 px-2 py-2 text-center text-xs font-black text-gray-500" data-advertise-step-tab="2">2. Creative</div>
-            <div class="advertise-step-tab rounded-lg bg-gray-50 px-2 py-2 text-center text-xs font-black text-gray-500" data-advertise-step-tab="3">3. Contact</div>
-            <div class="advertise-step-tab rounded-lg bg-gray-50 px-2 py-2 text-center text-xs font-black text-gray-500" data-advertise-step-tab="4">4. Review</div>
+          <div class="grid grid-cols-4 gap-2" aria-label="Campaign steps" data-content-i18n-aria="advertise.stepsAria">
+            <div class="advertise-step-tab rounded-lg bg-emerald-50 px-2 py-2 text-center text-xs font-black text-[#15603f]" data-advertise-step-tab="1" data-content-i18n="advertise.stepPlacement">1. Placement</div>
+            <div class="advertise-step-tab rounded-lg bg-gray-50 px-2 py-2 text-center text-xs font-black text-gray-500" data-advertise-step-tab="2" data-content-i18n="advertise.stepCreative">2. Creative</div>
+            <div class="advertise-step-tab rounded-lg bg-gray-50 px-2 py-2 text-center text-xs font-black text-gray-500" data-advertise-step-tab="3" data-content-i18n="advertise.stepContact">3. Contact</div>
+            <div class="advertise-step-tab rounded-lg bg-gray-50 px-2 py-2 text-center text-xs font-black text-gray-500" data-advertise-step-tab="4" data-content-i18n="advertise.stepReview">4. Review</div>
           </div>
 
           <form id="advertise-selfserve-form" class="mt-6" onsubmit="submitAdvertisingSelfServe(event)">
             <div data-advertise-step="1">
-              <h2 class="text-xl font-black text-[#16241d]">Choose where you want to appear</h2>
-              <p class="mt-1 text-sm text-[#5b6b62]">Select a package, then preview exactly where it can appear before you continue. Prices and duration come from the live makaug rate card.</p>
+              <h2 class="text-xl font-black text-[#16241d]" data-content-i18n="advertise.chooseTitle">Choose where you want to appear</h2>
+              <p class="mt-1 text-sm text-[#5b6b62]" data-content-i18n="advertise.chooseSub">Select a package, then preview exactly where it can appear before you continue. Prices and duration come from the live makaug rate card.</p>
               <div id="advertise-package-options" class="mt-4 grid md:grid-cols-2 gap-3">
                 <div class="h-28 rounded-xl bg-gray-50 animate-pulse"></div>
                 <div class="h-28 rounded-xl bg-gray-50 animate-pulse"></div>
               </div>
               <div class="mt-4 grid sm:grid-cols-2 gap-3">
                 <label class="block">
-                  <span class="block text-xs font-bold text-gray-600 mb-1">Target areas</span>
-                  <input name="target_locations" class="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm" placeholder="Kampala, Wakiso, Mukono">
+                  <span class="block text-xs font-bold text-gray-600 mb-1" data-content-i18n="advertise.targetAreas">Target areas</span>
+                  <input name="target_locations" class="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm" placeholder="Kampala, Wakiso, Mukono" data-content-i18n-placeholder="advertise.targetAreasPlaceholder">
                 </label>
                 <label class="block">
-                  <span class="block text-xs font-bold text-gray-600 mb-1">Property audience</span>
+                  <span class="block text-xs font-bold text-gray-600 mb-1" data-content-i18n="advertise.audience">Property audience</span>
                   <select name="target_listing_types" class="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm bg-white">
-                    <option value="all">All property seekers</option>
-                    <option value="sale">For sale</option>
-                    <option value="rent">To rent</option>
-                    <option value="land">Land</option>
-                    <option value="commercial">Commercial</option>
-                    <option value="student">Student accommodation</option>
+                    <option value="all" data-content-i18n="advertise.audienceAll">All property seekers</option>
+                    <option value="sale" data-content-i18n="advertise.audienceSale">For sale</option>
+                    <option value="rent" data-content-i18n="advertise.audienceRent">To rent</option>
+                    <option value="land" data-content-i18n="advertise.audienceLand">Land</option>
+                    <option value="commercial" data-content-i18n="advertise.audienceCommercial">Commercial</option>
+                    <option value="student" data-content-i18n="advertise.audienceStudent">Student accommodation</option>
                   </select>
                 </label>
               </div>
             </div>
 
             <div data-advertise-step="2" class="hidden">
-              <h2 class="text-xl font-black text-[#16241d]">Prepare the advert</h2>
-              <p class="mt-1 text-sm text-[#5b6b62]">Add the message customers should see. Card and payment details are never collected by makaug.</p>
+              <h2 class="text-xl font-black text-[#16241d]" data-content-i18n="advertise.creativeTitle">Prepare the advert</h2>
+              <p class="mt-1 text-sm text-[#5b6b62]" data-content-i18n="advertise.creativeSub">Add the message customers should see. Card and payment details are never collected by makaug.</p>
               <div class="mt-4 grid gap-3">
                 <label class="block">
-                  <span class="block text-xs font-bold text-gray-600 mb-1">Campaign name</span>
-                  <input name="campaign_name" required class="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm" placeholder="July Kampala property campaign">
+                  <span class="block text-xs font-bold text-gray-600 mb-1" data-content-i18n="advertise.campaignName">Campaign name</span>
+                  <input name="campaign_name" required class="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm" placeholder="July Kampala property campaign" data-content-i18n-placeholder="advertise.campaignNamePlaceholder">
                 </label>
                 <label class="block">
-                  <span class="block text-xs font-bold text-gray-600 mb-1">Headline</span>
-                  <input name="creative_headline" required maxlength="80" class="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm" placeholder="Find your next home in Kampala">
+                  <span class="block text-xs font-bold text-gray-600 mb-1" data-content-i18n="advertise.headline">Headline</span>
+                  <input name="creative_headline" required maxlength="80" class="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm" placeholder="Find your next home in Kampala" data-content-i18n-placeholder="advertise.headlinePlaceholder">
                 </label>
                 <label class="block">
-                  <span class="block text-xs font-bold text-gray-600 mb-1">Advert copy</span>
-                  <textarea name="creative_body" required rows="4" maxlength="280" class="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm" placeholder="Describe the property, service, or offer clearly."></textarea>
+                  <span class="block text-xs font-bold text-gray-600 mb-1" data-content-i18n="advertise.advertCopy">Advert copy</span>
+                  <textarea name="creative_body" required rows="4" maxlength="280" class="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm" placeholder="Describe the property, service, or offer clearly." data-content-i18n-placeholder="advertise.advertCopyPlaceholder"></textarea>
                 </label>
                 <div class="grid sm:grid-cols-2 gap-3">
                   <label class="block">
-                    <span class="block text-xs font-bold text-gray-600 mb-1">Call to action</span>
+                    <span class="block text-xs font-bold text-gray-600 mb-1" data-content-i18n="advertise.callToAction">Call to action</span>
                     <select name="creative_cta" class="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm bg-white">
-                      <option>View property</option>
-                      <option>Learn more</option>
-                      <option>Contact advertiser</option>
-                      <option>Book a viewing</option>
+                      <option data-content-i18n="advertise.ctaView">View property</option>
+                      <option data-content-i18n="advertise.ctaLearn">Learn more</option>
+                      <option data-content-i18n="advertise.ctaContact">Contact advertiser</option>
+                      <option data-content-i18n="advertise.ctaBook">Book a viewing</option>
                     </select>
                   </label>
                   <label class="block">
-                    <span class="block text-xs font-bold text-gray-600 mb-1">Destination link</span>
+                    <span class="block text-xs font-bold text-gray-600 mb-1" data-content-i18n="advertise.destination">Destination link</span>
                     <input name="destination_url" type="url" class="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm" placeholder="https://makaug.com/property/...">
                   </label>
                 </div>
@@ -4787,38 +4802,38 @@
             </div>
 
             <div data-advertise-step="3" class="hidden">
-              <h2 class="text-xl font-black text-[#16241d]">Your contact details</h2>
-              <p class="mt-1 text-sm text-[#5b6b62]">Campaign owners need an advertiser account so approved campaigns can receive a hosted checkout link.</p>
+              <h2 class="text-xl font-black text-[#16241d]" data-content-i18n="advertise.contactTitle">Your contact details</h2>
+              <p class="mt-1 text-sm text-[#5b6b62]" data-content-i18n="advertise.contactSub">Campaign owners need an advertiser account so approved campaigns can receive a hosted checkout link.</p>
               <div class="mt-4 grid sm:grid-cols-2 gap-3">
-                <input name="full_name" required class="border border-gray-200 rounded-xl px-3 py-3 text-sm" placeholder="Full name">
-                <input name="business_name" required class="border border-gray-200 rounded-xl px-3 py-3 text-sm" placeholder="Business or brand">
-                <input name="email" type="email" class="border border-gray-200 rounded-xl px-3 py-3 text-sm" placeholder="Email">
-                <input name="phone" class="border border-gray-200 rounded-xl px-3 py-3 text-sm" placeholder="+256 phone / WhatsApp">
+                <input name="full_name" required class="border border-gray-200 rounded-xl px-3 py-3 text-sm" placeholder="Full name" data-content-i18n-placeholder="advertise.fullName">
+                <input name="business_name" required class="border border-gray-200 rounded-xl px-3 py-3 text-sm" placeholder="Business or brand" data-content-i18n-placeholder="advertise.businessName">
+                <input name="email" type="email" class="border border-gray-200 rounded-xl px-3 py-3 text-sm" placeholder="Email" data-content-i18n-placeholder="advertise.email">
+                <input name="phone" class="border border-gray-200 rounded-xl px-3 py-3 text-sm" placeholder="+256 phone / WhatsApp" data-content-i18n-placeholder="advertise.phone">
               </div>
               <label class="mt-3 block">
-                <span class="block text-xs font-bold text-gray-600 mb-1">Preferred contact</span>
+                <span class="block text-xs font-bold text-gray-600 mb-1" data-content-i18n="advertise.preferredContact">Preferred contact</span>
                 <select name="preferred_contact_channel" class="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm bg-white">
-                  <option value="whatsapp">WhatsApp</option>
-                  <option value="email">Email</option>
-                  <option value="phone">Phone call</option>
+                  <option value="whatsapp" data-content-i18n="advertise.whatsappOption">WhatsApp</option>
+                  <option value="email" data-content-i18n="advertise.emailOption">Email</option>
+                  <option value="phone" data-content-i18n="advertise.phoneCall">Phone call</option>
                 </select>
               </label>
             </div>
 
             <div data-advertise-step="4" class="hidden">
-              <h2 class="text-xl font-black text-[#16241d]">Review and continue</h2>
-              <p class="mt-1 text-sm text-[#5b6b62]">Your campaign enters makaug review. Approved campaigns receive secure hosted checkout; only paid campaigns can go live.</p>
+              <h2 class="text-xl font-black text-[#16241d]" data-content-i18n="advertise.reviewTitle">Review and continue</h2>
+              <p class="mt-1 text-sm text-[#5b6b62]" data-content-i18n="advertise.reviewSub">Your campaign enters makaug review. Approved campaigns receive secure hosted checkout; only paid campaigns can go live.</p>
               <div id="advertise-review-summary" class="mt-4 rounded-xl border border-[#e4ece8] bg-[#f6f9f7] p-4 text-sm text-gray-700"></div>
               <label class="mt-4 flex items-start gap-3 rounded-xl border border-gray-200 p-3 text-sm">
                 <input name="review_confirmed" type="checkbox" required class="mt-1 accent-[#15603f]">
-                <span>I confirm the advert is accurate and that makaug may review it before publication.</span>
+                <span data-content-i18n="advertise.reviewConfirm">I confirm the advert is accurate and that makaug may review it before publication.</span>
               </label>
-              <button type="submit" class="mt-4 w-full bg-[#15603f] hover:bg-[#0f3d2e] text-white rounded-xl px-4 py-3 font-black">Submit campaign for review</button>
+              <button type="submit" class="mt-4 w-full bg-[#15603f] hover:bg-[#0f3d2e] text-white rounded-xl px-4 py-3 font-black" data-content-i18n="advertise.submit">Submit campaign for review</button>
             </div>
 
             <div class="mt-6 flex items-center justify-between gap-3">
-              <button id="advertise-prev" type="button" onclick="setAdvertisingSelfServeStep(advertisingSelfServeStep - 1)" class="hidden border border-gray-300 text-gray-700 rounded-xl px-4 py-2.5 text-sm font-bold">Back</button>
-              <button id="advertise-next" type="button" onclick="advanceAdvertisingSelfServe()" class="ml-auto bg-[#15603f] text-white rounded-xl px-5 py-2.5 text-sm font-black">Continue</button>
+              <button id="advertise-prev" type="button" onclick="setAdvertisingSelfServeStep(advertisingSelfServeStep - 1)" class="hidden border border-gray-300 text-gray-700 rounded-xl px-4 py-2.5 text-sm font-bold" data-content-i18n="advertise.back">Back</button>
+              <button id="advertise-next" type="button" onclick="advanceAdvertisingSelfServe()" class="ml-auto bg-[#15603f] text-white rounded-xl px-5 py-2.5 text-sm font-black" data-content-i18n="advertise.continue">Continue</button>
             </div>
             <div id="advertise-selfserve-status" class="hidden mt-4 rounded-xl border p-3 text-sm" aria-live="polite"></div>
           </form>
@@ -4826,25 +4841,31 @@
 
         <aside class="space-y-4 lg:sticky lg:top-24">
           <div class="bg-white border border-[#e4ece8] rounded-xl p-5">
-            <p class="text-xs font-black uppercase tracking-wide text-[#15603f]">Live quote</p>
-            <div id="advertise-quote-label" class="mt-2 text-sm font-bold text-[#16241d]">Choose a package</div>
+            <p class="text-xs font-black uppercase tracking-wide text-[#15603f]" data-content-i18n="advertise.liveQuote">Live quote</p>
+            <div id="advertise-quote-label" class="mt-2 text-sm font-bold text-[#16241d]" data-content-i18n="advertise.choosePackage">Choose a package</div>
             <div id="advertise-quote-amount" class="mt-1 text-3xl font-black text-[#15603f]">UGX 0</div>
-            <div id="advertise-quote-duration" class="mt-1 text-xs text-[#5b6b62]">No package selected</div>
+            <div id="advertise-quote-duration" class="mt-1 text-xs text-[#5b6b62]" data-content-i18n="advertise.noPackage">No package selected</div>
           </div>
           <div class="bg-white border border-[#e4ece8] rounded-xl p-5">
-            <p class="text-xs font-black uppercase tracking-wide text-[#15603f]">Payment</p>
-            <div id="advertise-payment-readiness" class="mt-2 text-sm text-[#5b6b62]">Checking secure checkout…</div>
-            <p class="mt-2 text-xs text-gray-500">Mobile money and card details stay inside the payment provider’s hosted flow. makaug never stores them.</p>
+            <p class="text-xs font-black uppercase tracking-wide text-[#15603f]" data-content-i18n="advertise.payment">Payment</p>
+            <div id="advertise-payment-readiness" class="mt-2 text-sm text-[#5b6b62]" data-content-i18n="advertise.checkingPayment">Checking secure checkout…</div>
+            <p class="mt-2 text-xs text-gray-500" data-content-i18n="advertise.paymentNote">Mobile money and card details stay inside the payment provider’s hosted flow. makaug never stores them.</p>
           </div>
-          <div class="bg-[#0f3d2e] text-white rounded-xl p-5">
-            <p class="text-xs font-black uppercase tracking-wide text-emerald-200">Need help choosing?</p>
-            <p class="mt-2 text-sm text-emerald-50">Tell makaug what you want to promote and where. We will reply with the right placement and next step.</p>
+          <div class="advertise-sidebar-actions">
+            <div class="p-5 pb-0">
+            <p class="text-xs font-black uppercase tracking-wide text-emerald-200" data-content-i18n="advertise.supportTitle">Need help choosing?</p>
+            <p class="mt-2 text-sm text-emerald-50" data-content-i18n="advertise.supportText">Tell makaug what you want to promote and where. We will reply with the right placement and next step.</p>
             <div class="mt-4 grid gap-2">
-              <a id="advertise-contact-whatsapp" href="https://wa.me/256760112587?text=Hello%20makaug%2C%20I%20want%20help%20choosing%20an%20advertising%20placement" target="_blank" rel="noopener noreferrer" class="rounded-lg bg-white px-3 py-2.5 text-center text-sm font-black text-[#15603f]"><i class="fab fa-whatsapp mr-1"></i> WhatsApp 0760 112 587</a>
-              <a id="advertise-contact-email" href="mailto:info@makaug.com?subject=Advertising%20with%20makaug" class="rounded-lg border border-emerald-300 px-3 py-2.5 text-center text-sm font-black text-white"><i class="fas fa-envelope mr-1"></i> Email info@makaug.com</a>
+              <a id="advertise-contact-whatsapp" href="https://wa.me/256760112587?text=Hello%20makaug%2C%20I%20want%20help%20choosing%20an%20advertising%20placement" target="_blank" rel="noopener noreferrer" class="rounded-lg bg-white px-3 py-2.5 text-center text-sm font-black text-[#15603f]"><i class="fab fa-whatsapp mr-1"></i> <span data-content-i18n="advertise.contactWhatsapp">WhatsApp 0760 112 587</span></a>
+              <a id="advertise-contact-email" href="mailto:info@makaug.com?subject=Advertising%20with%20makaug" class="rounded-lg border border-emerald-300 px-3 py-2.5 text-center text-sm font-black text-white"><i class="fas fa-envelope mr-1"></i> <span data-content-i18n="advertise.contactEmail">Email info@makaug.com</span></a>
+            </div>
+            </div>
+            <div class="advertise-sidebar-dashboard">
+              <p class="text-xs font-black uppercase tracking-wide text-emerald-200" data-content-i18n="advertise.dashboardTitle">Already advertising?</p>
+              <p class="mt-2 text-xs leading-relaxed text-emerald-50" data-content-i18n="advertise.dashboardText">The dashboard is for returning advertisers to manage submitted campaigns, review status, payment links and live dates. Start a new request on this page.</p>
+              <a href="/advertiser-dashboard" onclick="return openAdvertiserDashboard(event)"><i class="fas fa-chart-line mr-1"></i><span data-content-i18n="advertise.dashboardAction">Open advertiser dashboard</span></a>
             </div>
           </div>
-          <a href="/advertiser-dashboard" onclick="return openAdvertiserDashboard(event)" class="block rounded-xl border border-[#cdddd3] bg-white px-4 py-3 text-center text-sm font-black text-[#15603f]"><i class="fas fa-chart-line mr-1"></i> Open advertiser dashboard</a>
         </aside>
       </div>
     </main>
@@ -4852,28 +4873,28 @@
 
   <div id="advertising-placement-preview-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="advertising-placement-preview-title" data-advertising-placement-preview="20260910">
     <div class="modal-box" style="max-width:940px">
-      <button id="advertising-placement-preview-close" type="button" onclick="closeModal('advertising-placement-preview-modal')" aria-label="Close placement preview" class="absolute top-4 right-4 z-10 w-10 h-10 rounded-full border border-green-200 bg-white text-green-700 hover:bg-green-50">✕</button>
+      <button id="advertising-placement-preview-close" type="button" onclick="closeModal('advertising-placement-preview-modal')" aria-label="Close placement preview" data-content-i18n-aria="advertise.previewClose" class="absolute top-4 right-4 z-10 w-10 h-10 rounded-full border border-green-200 bg-white text-green-700 hover:bg-green-50">✕</button>
       <div class="pr-12">
-        <p class="text-xs font-black uppercase tracking-[.14em] text-[#15603f]">Placement preview</p>
+        <p class="text-xs font-black uppercase tracking-[.14em] text-[#15603f]" data-content-i18n="advertise.previewLabel">Placement preview</p>
         <h2 id="advertising-placement-preview-title" class="mt-1 text-2xl md:text-3xl font-black text-[#16241d] serif">See where your advert appears</h2>
         <p id="advertising-placement-preview-price" class="mt-2 text-sm font-black text-[#15603f]"></p>
       </div>
       <div class="mt-5 grid lg:grid-cols-[minmax(0,1.3fr)_minmax(250px,.7fr)] gap-5 items-start">
-        <div id="advertising-placement-preview-visual" aria-label="Example makaug page showing the selected advertising position"></div>
+        <div id="advertising-placement-preview-visual" aria-label="Live makaug page capture showing the selected advertising position" data-content-i18n-aria="advertise.previewVisualAria"></div>
         <div class="rounded-2xl border border-[#dfe9e3] bg-[#f6f9f7] p-5">
-          <h3 class="text-lg font-black text-[#16241d]">What this placement does</h3>
+          <h3 class="text-lg font-black text-[#16241d]" data-content-i18n="advertise.previewWhat">What this placement does</h3>
           <p id="advertising-placement-preview-copy" class="mt-2 text-sm leading-relaxed text-[#52665b]"></p>
-          <h4 class="mt-5 text-xs font-black uppercase tracking-wide text-[#15603f]">Where it can appear</h4>
+          <h4 class="mt-5 text-xs font-black uppercase tracking-wide text-[#15603f]" data-content-i18n="advertise.previewWhere">Where it can appear</h4>
           <div id="advertising-placement-preview-locations" class="mt-2 flex flex-wrap gap-2"></div>
-          <h4 class="mt-5 text-xs font-black uppercase tracking-wide text-[#15603f]">Best for</h4>
+          <h4 class="mt-5 text-xs font-black uppercase tracking-wide text-[#15603f]" data-content-i18n="advertise.previewBest">Best for</h4>
           <p id="advertising-placement-preview-best-for" class="mt-2 text-sm leading-relaxed text-[#52665b]"></p>
-          <p class="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900"><strong>Example only:</strong> final position and creative are confirmed during makaug review before payment and launch.</p>
+          <p class="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900" data-content-i18n="advertise.previewDisclaimer">Representative example: the highlighted area uses a current live makaug page capture. Final position and creative are confirmed during review before payment and launch.</p>
         </div>
       </div>
       <div class="mt-5 flex flex-wrap gap-2">
-        <button id="advertising-placement-preview-use" type="button" onclick="confirmAdvertisingPlacementPreview()" class="bg-[#15603f] hover:bg-[#0f3d2e] text-white rounded-xl px-5 py-3 text-sm font-black">Choose this placement</button>
-        <a id="advertising-placement-preview-whatsapp" target="_blank" rel="noopener noreferrer" class="border border-[#cdddd3] text-[#15603f] rounded-xl px-5 py-3 text-sm font-black"><i class="fab fa-whatsapp mr-1"></i> Ask on WhatsApp</a>
-        <a id="advertising-placement-preview-email" class="border border-[#cdddd3] text-[#15603f] rounded-xl px-5 py-3 text-sm font-black"><i class="fas fa-envelope mr-1"></i> Email makaug</a>
+        <button id="advertising-placement-preview-use" type="button" onclick="confirmAdvertisingPlacementPreview()" class="bg-[#15603f] hover:bg-[#0f3d2e] text-white rounded-xl px-5 py-3 text-sm font-black" data-content-i18n="advertise.previewChoose">Choose this placement</button>
+        <a id="advertising-placement-preview-whatsapp" target="_blank" rel="noopener noreferrer" class="border border-[#cdddd3] text-[#15603f] rounded-xl px-5 py-3 text-sm font-black"><i class="fab fa-whatsapp mr-1"></i> <span data-content-i18n="advertise.previewWhatsapp">Ask on WhatsApp</span></a>
+        <a id="advertising-placement-preview-email" class="border border-[#cdddd3] text-[#15603f] rounded-xl px-5 py-3 text-sm font-black"><i class="fas fa-envelope mr-1"></i> <span data-content-i18n="advertise.previewEmail">Email makaug</span></a>
       </div>
     </div>
   </div>
@@ -8801,7 +8822,7 @@
     </div>
 
     <div class="max-w-6xl mx-auto px-4 py-10">
-      <section class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-12" aria-label="makaug platform statistics">
+      <section class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-12" aria-label="makaug platform statistics" data-content-i18n-aria="about.statsAria">
         <div class="about-stat-card"><div class="about-stat-value" data-about-stat-count="146">146</div><p data-content-i18n="about.statDistricts">districts</p></div>
         <div class="about-stat-card"><div class="about-stat-value" data-about-stat-count="9">9</div><p data-content-i18n="about.statLanguages">languages</p></div>
         <div id="about-live-listings-stat" class="about-stat-card hidden"><div id="about-live-listing-count" class="about-stat-value"></div><p data-content-i18n="about.statLiveListings">live listings</p></div>
@@ -8820,12 +8841,12 @@
             <h3 class="text-xl font-black text-[#16241d]" data-content-i18n="about.everythingTitle">Everything you can do</h3>
             <p class="text-sm text-[#5b6b62] mt-1" data-content-i18n="about.everythingSub">One platform for every kind of property journey.</p>
             <div class="grid sm:grid-cols-2 gap-3 mt-4" data-about-journey-images="20260910">
-              <a href="/for-sale" class="about-journey-card"><span class="about-journey-image"><img src="/assets/house-ads-v3/sale.webp" alt="Home available for sale in Uganda" loading="lazy" decoding="async"></span><span class="about-journey-body"><i class="fas fa-house"></i><strong class="block mt-2" data-content-i18n="about.everySaleTitle">Property for sale</strong><span data-content-i18n="about.everySaleText">homes, apartments and property to buy</span></span></a>
-              <a href="/to-rent" class="about-journey-card"><span class="about-journey-image"><img src="/assets/house-ads-v3/rent.webp" alt="Renter looking across a Ugandan city" loading="lazy" decoding="async"></span><span class="about-journey-body"><i class="fas fa-key"></i><strong class="block mt-2" data-content-i18n="about.everyRentTitle">Property to rent</strong><span data-content-i18n="about.everyRentText">houses, apartments and rooms</span></span></a>
-              <a href="/student-accommodation" class="about-journey-card"><span class="about-journey-image"><img src="/assets/house-ads-v3/students.webp" alt="Students near campus accommodation" loading="lazy" decoding="async"></span><span class="about-journey-body"><i class="fas fa-graduation-cap"></i><strong class="block mt-2" data-content-i18n="about.everyStudentsTitle">Student housing</strong><span data-content-i18n="about.everyStudentsText">hostels and rooms near campus</span></span></a>
-              <a href="/land" class="about-journey-card"><span class="about-journey-image"><img src="/assets/house-ads-v3/land.webp" alt="Land and countryside in Uganda" loading="lazy" decoding="async"></span><span class="about-journey-body"><i class="fas fa-map"></i><strong class="block mt-2" data-content-i18n="about.everyLandTitle">Land</strong><span data-content-i18n="about.everyLandText">plots, acreage and development land</span></span></a>
-              <a href="/commercial" class="about-journey-card"><span class="about-journey-image"><img src="/assets/house-ads-v3/commercial.webp" alt="Ugandan commercial shopfront" loading="lazy" decoding="async"></span><span class="about-journey-body"><i class="fas fa-building"></i><strong class="block mt-2" data-content-i18n="about.everyCommercialTitle">Commercial property</strong><span data-content-i18n="about.everyCommercialText">offices, shops and warehouses</span></span></a>
-              <a href="/off-plan" class="about-journey-card"><span class="about-journey-image"><img src="/assets/off-plan/entebbe-victoria-palms/residents-lounge-render.jpg" alt="New Off Plan development amenity" loading="lazy" decoding="async"></span><span class="about-journey-body"><i class="fas fa-city"></i><strong class="block mt-2" data-content-i18n="about.everyOffPlanTitle">Off Plan</strong><span data-content-i18n="about.everyOffPlanText">new developments in Uganda and overseas</span></span></a>
+              <a href="/for-sale" class="about-journey-card"><span class="about-journey-image"><img src="/assets/house-ads-v3/sale.webp" alt="Home available for sale in Uganda" data-content-i18n-alt="about.imageSaleJourney" loading="lazy" decoding="async"></span><span class="about-journey-body"><i class="fas fa-house"></i><strong class="block mt-2" data-content-i18n="about.everySaleTitle">Property for sale</strong><span data-content-i18n="about.everySaleText">homes, apartments and property to buy</span></span></a>
+              <a href="/to-rent" class="about-journey-card"><span class="about-journey-image"><img src="/assets/house-ads-v3/rent.webp" alt="Renter looking across a Ugandan city" data-content-i18n-alt="about.imageRentJourney" loading="lazy" decoding="async"></span><span class="about-journey-body"><i class="fas fa-key"></i><strong class="block mt-2" data-content-i18n="about.everyRentTitle">Property to rent</strong><span data-content-i18n="about.everyRentText">houses, apartments and rooms</span></span></a>
+              <a href="/student-accommodation" class="about-journey-card"><span class="about-journey-image"><img src="/assets/house-ads-v3/students.webp" alt="Students near campus accommodation" data-content-i18n-alt="about.imageStudentJourney" loading="lazy" decoding="async"></span><span class="about-journey-body"><i class="fas fa-graduation-cap"></i><strong class="block mt-2" data-content-i18n="about.everyStudentsTitle">Student housing</strong><span data-content-i18n="about.everyStudentsText">hostels and rooms near campus</span></span></a>
+              <a href="/land" class="about-journey-card"><span class="about-journey-image"><img src="/assets/house-ads-v3/land.webp" alt="Land and countryside in Uganda" data-content-i18n-alt="about.imageLandJourney" loading="lazy" decoding="async"></span><span class="about-journey-body"><i class="fas fa-map"></i><strong class="block mt-2" data-content-i18n="about.everyLandTitle">Land</strong><span data-content-i18n="about.everyLandText">plots, acreage and development land</span></span></a>
+              <a href="/commercial" class="about-journey-card"><span class="about-journey-image"><img src="/assets/house-ads-v3/commercial.webp" alt="Ugandan commercial shopfront" data-content-i18n-alt="about.imageCommercialJourney" loading="lazy" decoding="async"></span><span class="about-journey-body"><i class="fas fa-building"></i><strong class="block mt-2" data-content-i18n="about.everyCommercialTitle">Commercial property</strong><span data-content-i18n="about.everyCommercialText">offices, shops and warehouses</span></span></a>
+              <a href="/off-plan" class="about-journey-card"><span class="about-journey-image"><img src="/assets/off-plan/entebbe-victoria-palms/residents-lounge-render.jpg" alt="New Off Plan development amenity" data-content-i18n-alt="about.imageOffPlanJourney" loading="lazy" decoding="async"></span><span class="about-journey-body"><i class="fas fa-city"></i><strong class="block mt-2" data-content-i18n="about.everyOffPlanTitle">Off Plan</strong><span data-content-i18n="about.everyOffPlanText">new developments in Uganda and overseas</span></span></a>
             </div>
           </div>
         </div>
@@ -8835,10 +8856,10 @@
         <h2 id="about-standard-products" class="about-section-title" data-content-i18n="about.standardTitle">Standard products</h2>
         <p class="about-section-sub" data-content-i18n="about.standardSub">Get your property in front of Uganda's buyers and renters</p>
         <div class="about-product-grid about-product-grid-four mt-6" data-about-product-images="20260910">
-          <article id="listings" class="about-product-card"><span class="about-product-image"><img src="/assets/house-ads-v3/sale.webp" alt="Home promoted for sale on makaug" loading="lazy" decoding="async"></span><span class="about-product-icon"><i class="fas fa-house"></i></span><h3 data-content-i18n="about.saleTitle">Private listing — For Sale</h3><p data-content-i18n="about.saleText">List your home, land or commercial property yourself.</p><strong class="about-price" data-about-price="privateListing" data-about-price-template="First week free · then {price}">First week free · then {{ABOUT_PRICE:privateListing}}</strong><ul><li>AI-written description in 9 languages</li><li>Checked by our team</li><li>WhatsApp and phone leads</li><li>Edit or remove any time</li></ul><a class="about-product-action" href="/list-property?type=sale">List for sale</a></article>
-          <article class="about-product-card"><span class="about-product-image"><img src="/assets/house-ads-v3/rent.webp" alt="Rental property journey on makaug" loading="lazy" decoding="async"></span><span class="about-product-icon"><i class="fas fa-key"></i></span><h3 data-content-i18n="about.rentTitle">Private listing — To Rent</h3><p data-content-i18n="about.rentText">List a rental or student room yourself.</p><strong class="about-price" data-about-price="privateListing" data-about-price-template="First week free · then {price}">First week free · then {{ABOUT_PRICE:privateListing}}</strong><ul><li>AI-written description in 9 languages</li><li>Checked by our team</li><li>WhatsApp and phone leads</li><li>Edit or remove any time</li></ul><a class="about-product-action" href="/list-property?type=rent">List for rent</a></article>
-          <article id="agents" class="about-product-card"><span class="about-product-image"><img src="/assets/house-ads-v3/agents.webp" alt="Property agent helping a customer" loading="lazy" decoding="async"></span><span class="about-product-icon"><i class="fas fa-user-tie"></i></span><h3 data-content-i18n="about.agentTitle">Agent subscription</h3><p data-content-i18n="about.agentText">For brokers and agencies with multiple properties.</p><strong class="about-price" data-about-price="agentSubscription" data-about-price-template="{price} · all your listings">{{ABOUT_PRICE:agentSubscription}} · all your listings</strong><ul><li>All listings on one account</li><li>Verified badge and broker profile</li><li>Lead inbox and CSV export</li><li>Priority review</li></ul><a class="about-product-action" href="/broker-signup">Register as an agent</a></article>
-          <article id="developers" class="about-product-card"><span class="about-product-image"><img src="/assets/off-plan/spectre-westlands/arrival.jpg" alt="Off Plan development arrival view" loading="lazy" decoding="async"></span><span class="about-product-icon"><i class="fas fa-city"></i></span><h3 data-content-i18n="about.developerTitle">Off-plan developments</h3><p data-content-i18n="about.developerText">Dedicated project pages for developers and marketing agents.</p><strong class="about-price" data-about-price="offPlanDevelopment">{{ABOUT_PRICE:offPlanDevelopment}}</strong><ul><li>Units, plans, video and payment plans</li><li>Off Plan and search visibility</li><li>Enquiries to your sales team</li><li>Overseas projects welcome</li></ul><a class="about-product-action" href="/broker-signup">Register as an agent</a></article>
+          <article id="listings" class="about-product-card"><span class="about-product-image"><img src="/assets/house-ads-v3/sale.webp" alt="Home promoted for sale on makaug" loading="lazy" decoding="async"></span><span class="about-product-icon"><i class="fas fa-house"></i></span><h3 data-content-i18n="about.saleTitle">Private listing — For Sale</h3><p data-content-i18n="about.saleText">List your home, land or commercial property yourself.</p><strong class="about-price" data-about-price="privateListing" data-about-price-template-key="about.privateTrialTemplate">First week free · then {{ABOUT_PRICE:privateListing}}</strong><ul><li data-content-i18n="about.productAiDescription">AI-written description in 9 languages</li><li data-content-i18n="about.productChecked">Checked by our team</li><li data-content-i18n="about.productWhatsappLeads">WhatsApp and phone leads</li><li data-content-i18n="about.productEdit">Edit or remove any time</li></ul><a class="about-product-action" href="/list-property?type=sale" data-content-i18n="about.saleAction">List for sale</a></article>
+          <article class="about-product-card"><span class="about-product-image"><img src="/assets/house-ads-v3/rent.webp" alt="Rental property journey on makaug" loading="lazy" decoding="async"></span><span class="about-product-icon"><i class="fas fa-key"></i></span><h3 data-content-i18n="about.rentTitle">Private listing — To Rent</h3><p data-content-i18n="about.rentText">List a rental or student room yourself.</p><strong class="about-price" data-about-price="privateListing" data-about-price-template-key="about.privateTrialTemplate">First week free · then {{ABOUT_PRICE:privateListing}}</strong><ul><li data-content-i18n="about.productAiDescription">AI-written description in 9 languages</li><li data-content-i18n="about.productChecked">Checked by our team</li><li data-content-i18n="about.productWhatsappLeads">WhatsApp and phone leads</li><li data-content-i18n="about.productEdit">Edit or remove any time</li></ul><a class="about-product-action" href="/list-property?type=rent" data-content-i18n="about.rentAction">List for rent</a></article>
+          <article id="agents" class="about-product-card"><span class="about-product-image"><img src="/assets/house-ads-v3/agents.webp" alt="Property agent helping a customer" loading="lazy" decoding="async"></span><span class="about-product-icon"><i class="fas fa-user-tie"></i></span><h3 data-content-i18n="about.agentTitle">Agent subscription</h3><p data-content-i18n="about.agentText">For brokers and agencies with multiple properties.</p><strong class="about-price" data-about-price="agentSubscription" data-about-price-template-key="about.agentPriceTemplate">{{ABOUT_PRICE:agentSubscription}} · all your listings</strong><ul><li data-content-i18n="about.agentAllListings">All listings on one account</li><li data-content-i18n="about.agentVerified">Verified badge and broker profile</li><li data-content-i18n="about.agentLeadInbox">Lead inbox and CSV export</li><li data-content-i18n="about.agentPriority">Priority review</li></ul><a class="about-product-action" href="/broker-signup" data-content-i18n="about.agentAction">Register as an agent</a></article>
+          <article id="developers" class="about-product-card"><span class="about-product-image"><img src="/assets/off-plan/spectre-westlands/arrival.jpg" alt="Off Plan development arrival view" loading="lazy" decoding="async"></span><span class="about-product-icon"><i class="fas fa-city"></i></span><h3 data-content-i18n="about.developerTitle">Off-plan developments</h3><p data-content-i18n="about.developerText">Dedicated project pages for developers and marketing agents.</p><strong class="about-price" data-about-price="offPlanDevelopment">{{ABOUT_PRICE:offPlanDevelopment}}</strong><ul><li data-content-i18n="about.developerUnits">Units, plans, video and payment plans</li><li data-content-i18n="about.developerVisibility">Off Plan and search visibility</li><li data-content-i18n="about.developerEnquiries">Enquiries to your sales team</li><li data-content-i18n="about.developerOverseas">Overseas projects welcome</li></ul><a class="about-product-action" href="/broker-signup" data-content-i18n="about.agentAction">Register as an agent</a></article>
         </div>
       </section>
 
@@ -8846,18 +8867,18 @@
         <h2 id="about-value-products" class="about-section-title" data-content-i18n="about.valueTitle">Get seen first</h2>
         <p class="about-section-sub" data-content-i18n="about.valueSub">Add to any live listing to move it up and stand out. These options promote one property; broader brand and multi-channel campaigns sit under Advertise with makaug.</p>
         <div class="about-product-grid mt-6">
-          <article id="featured" class="about-product-card"><span class="about-product-image"><img src="/assets/house-ads-v3/home-hero.webp" alt="Featured property placement on the makaug homepage" loading="lazy" decoding="async"></span><span class="about-product-icon"><i class="fas fa-star"></i></span><h3>Featured listing</h3><p>Your property on the homepage Featured strip and at the top of its category.</p><strong class="about-price" data-about-price="featuredListing">{{ABOUT_PRICE:featuredListing}}</strong><ul><li>Featured badge</li><li>Homepage visibility</li><li>Top of category page</li><li>Best for a focused sales week</li></ul><a class="about-product-action" target="_blank" rel="noopener" href="https://wa.me/256760112587?text=Hello%20makaug%2C%20I%20want%20to%20feature%20my%20listing">Contact us to feature</a></article>
-          <article id="premium" class="about-product-card"><span class="about-product-image"><img src="/assets/house-ads-v3/detail.webp" alt="Premium property detail experience" loading="lazy" decoding="async"></span><span class="about-product-icon"><i class="fas fa-gem"></i></span><h3>Premium listing</h3><p>Prime position at the top of search results for your area, with a larger card.</p><strong class="about-price" data-about-price="premiumListing">{{ABOUT_PRICE:premiumListing}}</strong><ul><li>Premium badge</li><li>Top search position</li><li>Larger result card</li><li>Built for a faster result</li></ul><a class="about-product-action" target="_blank" rel="noopener" href="https://wa.me/256760112587?text=Hello%20makaug%2C%20I%20want%20to%20make%20my%20listing%20Premium">Contact us for Premium</a></article>
-          <article id="boosted" class="about-product-card"><span class="about-product-image"><img src="/assets/sourced/carnelian/kira-shimon-5bed-01-main.jpg" alt="Approved property ready for a visibility boost" loading="lazy" decoding="async"></span><span class="about-product-icon"><i class="fas fa-arrow-trend-up"></i></span><h3>Boosted listing</h3><p>Ranks above standard listings in results and alerts for a full month.</p><strong class="about-price" data-about-price="boostedListing">{{ABOUT_PRICE:boostedListing}}</strong><ul><li>Boosted badge</li><li>Higher search ranking</li><li>Property-alert visibility</li><li>A full month of reach</li></ul><a class="about-product-action" target="_blank" rel="noopener" href="https://wa.me/256760112587?text=Hello%20makaug%2C%20I%20want%20to%20boost%20my%20listing">Contact us to boost</a></article>
+          <article id="featured" class="about-product-card"><span class="about-product-image"><img src="/assets/house-ads-v3/home-hero.webp" alt="Featured property placement on the makaug homepage" loading="lazy" decoding="async"></span><span class="about-product-icon"><i class="fas fa-star"></i></span><h3 data-content-i18n="about.featuredTitle">Featured listing</h3><p data-content-i18n="about.featuredText">Your property on the homepage Featured strip and at the top of its category.</p><strong class="about-price" data-about-price="featuredListing">{{ABOUT_PRICE:featuredListing}}</strong><ul><li data-content-i18n="about.featuredBadge">Featured badge</li><li data-content-i18n="about.featuredHomepage">Homepage visibility</li><li data-content-i18n="about.featuredCategory">Top of category page</li><li data-content-i18n="about.featuredBest">Best for a focused sales week</li></ul><a class="about-product-action" target="_blank" rel="noopener" href="https://wa.me/256760112587?text=Hello%20makaug%2C%20I%20want%20to%20feature%20my%20listing" data-content-i18n="about.featuredAction">Contact us to feature</a></article>
+          <article id="premium" class="about-product-card"><span class="about-product-image"><img src="/assets/house-ads-v3/detail.webp" alt="Premium property detail experience" loading="lazy" decoding="async"></span><span class="about-product-icon"><i class="fas fa-gem"></i></span><h3 data-content-i18n="about.premiumTitle">Premium listing</h3><p data-content-i18n="about.premiumText">Prime position at the top of search results for your area, with a larger card.</p><strong class="about-price" data-about-price="premiumListing">{{ABOUT_PRICE:premiumListing}}</strong><ul><li data-content-i18n="about.premiumBadge">Premium badge</li><li data-content-i18n="about.premiumPosition">Top search position</li><li data-content-i18n="about.premiumCard">Larger result card</li><li data-content-i18n="about.premiumBest">Built for a faster result</li></ul><a class="about-product-action" target="_blank" rel="noopener" href="https://wa.me/256760112587?text=Hello%20makaug%2C%20I%20want%20to%20make%20my%20listing%20Premium" data-content-i18n="about.premiumAction">Contact us for Premium</a></article>
+          <article id="boosted" class="about-product-card"><span class="about-product-image"><img src="/assets/sourced/carnelian/kira-shimon-5bed-01-main.jpg" alt="Approved property ready for a visibility boost" loading="lazy" decoding="async"></span><span class="about-product-icon"><i class="fas fa-arrow-trend-up"></i></span><h3 data-content-i18n="about.boostedTitle">Boosted listing</h3><p data-content-i18n="about.boostedText">Ranks above standard listings in results and alerts for a full month.</p><strong class="about-price" data-about-price="boostedListing">{{ABOUT_PRICE:boostedListing}}</strong><ul><li data-content-i18n="about.boostedBadge">Boosted badge</li><li data-content-i18n="about.boostedRanking">Higher search ranking</li><li data-content-i18n="about.boostedAlerts">Property-alert visibility</li><li data-content-i18n="about.boostedBest">A full month of reach</li></ul><a class="about-product-action" target="_blank" rel="noopener" href="https://wa.me/256760112587?text=Hello%20makaug%2C%20I%20want%20to%20boost%20my%20listing" data-content-i18n="about.boostedAction">Contact us to boost</a></article>
         </div>
       </section>
 
       <section class="about-products-section" aria-labelledby="about-growth-products">
         <h2 id="about-growth-products" class="about-section-title" data-content-i18n="about.growthTitle">Grow your property business</h2>
         <div class="about-product-grid mt-6">
-          <article id="reports" class="about-product-card"><span class="about-product-image"><img src="/assets/house-ads-v3/land.webp" alt="Uganda property market viewed by district" loading="lazy" decoding="async"></span><span class="about-product-icon"><i class="fas fa-chart-line"></i></span><h3>Market Intelligence Report</h3><p>Asking prices, rental yields, demand and supply by district and property type.</p><strong class="about-price" data-about-price="marketReport">{{ABOUT_PRICE:marketReport}}</strong><ul><li>Built from live and historical data</li><li>Delivered as a PDF</li><li>Within 5 working days</li><li>Prepared for your decision</li></ul><a class="about-product-action" target="_blank" rel="noopener" href="https://wa.me/256760112587?text=Hello%20makaug%2C%20I%20want%20a%20Market%20Intelligence%20Report">Talk to us</a></article>
-          <article id="websites" class="about-product-card"><span class="about-product-image"><img src="/assets/house-ads-v3/brokers.webp" alt="Connected digital experience for a property agency" loading="lazy" decoding="async"></span><span class="about-product-icon"><i class="fas fa-laptop-code"></i></span><h3>Agency websites</h3><p>A branded agency website connected to your makaug listings.</p><strong class="about-price"><span data-about-price="agencyWebsiteSetup">{{ABOUT_PRICE:agencyWebsiteSetup}}</span> + <span data-about-price="agencyWebsiteMonthly">{{ABOUT_PRICE:agencyWebsiteMonthly}}</span></strong><ul><li>Domain setup and branded design</li><li>Connected listings feed</li><li>WhatsApp lead button</li><li>Monthly performance summary</li></ul><a class="about-product-action" target="_blank" rel="noopener" href="https://wa.me/256760112587?text=Hello%20makaug%2C%20I%20want%20an%20agency%20website">Talk to us</a></article>
-          <article id="professional" class="about-product-card"><span class="about-product-image"><img src="/assets/sourced/carnelian/kira-modern-4bed-01-main.jpg" alt="Professionally photographed property listing" loading="lazy" decoding="async"></span><span class="about-product-icon"><i class="fas fa-camera"></i></span><h3>Professional listing service</h3><p>Professional photos, a short walkthrough and a polished multilingual listing.</p><strong class="about-price" data-about-price="professionalListing">{{ABOUT_PRICE:professionalListing}}</strong><ul><li>Kampala and Wakiso</li><li>Other districts on request</li><li>Photos and short video</li><li>We upload it for you</li></ul><a class="about-product-action" target="_blank" rel="noopener" href="https://wa.me/256760112587?text=Hello%20makaug%2C%20I%20want%20to%20book%20a%20professional%20property%20shoot">Talk to us</a></article>
+          <article id="reports" class="about-product-card"><span class="about-product-image"><img src="/assets/house-ads-v3/land.webp" alt="Uganda property market viewed by district" loading="lazy" decoding="async"></span><span class="about-product-icon"><i class="fas fa-chart-line"></i></span><h3 data-content-i18n="about.reportTitle">Market Intelligence Report</h3><p data-content-i18n="about.reportText">Asking prices, rental yields, demand and supply by district and property type.</p><strong class="about-price" data-about-price="marketReport">{{ABOUT_PRICE:marketReport}}</strong><ul><li data-content-i18n="about.reportData">Built from live and historical data</li><li data-content-i18n="about.reportPdf">Delivered as a PDF</li><li data-content-i18n="about.reportTiming">Within 5 working days</li><li data-content-i18n="about.reportDecision">Prepared for your decision</li></ul><a class="about-product-action" target="_blank" rel="noopener" href="https://wa.me/256760112587?text=Hello%20makaug%2C%20I%20want%20a%20Market%20Intelligence%20Report" data-content-i18n="about.talkAction">Talk to us</a></article>
+          <article id="websites" class="about-product-card"><span class="about-product-image"><img src="/assets/house-ads-v3/brokers.webp" alt="Connected digital experience for a property agency" loading="lazy" decoding="async"></span><span class="about-product-icon"><i class="fas fa-laptop-code"></i></span><h3 data-content-i18n="about.websiteTitle">Agency websites</h3><p data-content-i18n="about.websiteText">A branded agency website connected to your makaug listings.</p><strong class="about-price"><span data-about-price="agencyWebsiteSetup">{{ABOUT_PRICE:agencyWebsiteSetup}}</span> + <span data-about-price="agencyWebsiteMonthly">{{ABOUT_PRICE:agencyWebsiteMonthly}}</span></strong><ul><li data-content-i18n="about.websiteDesign">Domain setup and branded design</li><li data-content-i18n="about.websiteFeed">Connected listings feed</li><li data-content-i18n="about.websiteWhatsapp">WhatsApp lead button</li><li data-content-i18n="about.websiteSummary">Monthly performance summary</li></ul><a class="about-product-action" target="_blank" rel="noopener" href="https://wa.me/256760112587?text=Hello%20makaug%2C%20I%20want%20an%20agency%20website" data-content-i18n="about.talkAction">Talk to us</a></article>
+          <article id="professional" class="about-product-card"><span class="about-product-image"><img src="/assets/sourced/carnelian/kira-modern-4bed-01-main.jpg" alt="Professionally photographed property listing" loading="lazy" decoding="async"></span><span class="about-product-icon"><i class="fas fa-camera"></i></span><h3 data-content-i18n="about.professionalTitle">Professional listing service</h3><p data-content-i18n="about.professionalText">Professional photos, a short walkthrough and a polished multilingual listing.</p><strong class="about-price" data-about-price="professionalListing">{{ABOUT_PRICE:professionalListing}}</strong><ul><li data-content-i18n="about.professionalAreas">Kampala and Wakiso</li><li data-content-i18n="about.professionalOther">Other districts on request</li><li data-content-i18n="about.professionalMedia">Photos and short video</li><li data-content-i18n="about.professionalUpload">We upload it for you</li></ul><a class="about-product-action" target="_blank" rel="noopener" href="https://wa.me/256760112587?text=Hello%20makaug%2C%20I%20want%20to%20book%20a%20professional%20property%20shoot" data-content-i18n="about.talkAction">Talk to us</a></article>
         </div>
       </section>
 
@@ -8870,7 +8891,7 @@
             <p class="mt-3 text-sm text-[#5b6b62]" data-content-i18n="about.advertisingText">Weekly placements are available for banks, insurers, furniture and building suppliers, developers and agencies. Choose homepage, search, property-detail, mortgage, valuation, broker, marketplace or alert placements, with run-of-site and monthly options available.</p>
           </div>
           <div class="about-advertising-action">
-            <strong class="about-price"><span data-about-price="advertisingMinimum" data-about-price-only="true">{{ABOUT_PRICE_ONLY:advertisingMinimum}}</span>–<span data-about-price="advertisingMaximum" data-about-price-only="true">{{ABOUT_PRICE_ONLY:advertisingMaximum}}</span> / week</strong>
+            <strong class="about-price"><span data-about-price="advertisingMinimum" data-about-price-only="true">{{ABOUT_PRICE_ONLY:advertisingMinimum}}</span>–<span data-about-price="advertisingMaximum" data-about-price-only="true">{{ABOUT_PRICE_ONLY:advertisingMaximum}}</span> <span data-content-i18n="about.perWeek">/ week</span></strong>
             <a class="about-product-action" href="/advertise" data-content-i18n="about.advertisingLearnMore">Learn more</a>
           </div>
         </div>
@@ -8947,7 +8968,7 @@
           <a href="/for-sale" class="about-cta about-final-cta-primary rounded-xl px-4 py-2 text-sm font-bold" data-content-i18n="about.ctaSearch">Search property</a>
           <a href="/list-property" class="about-cta about-final-cta-primary rounded-xl px-4 py-2 text-sm font-bold" data-content-i18n="about.ctaList">List a property</a>
           <a href="https://wa.me/256760112587?text=Hello%20makaug%2C%20I%20want%20to%20know%20about%20your%20products" target="_blank" rel="noopener" class="about-cta about-final-cta-secondary rounded-xl px-4 py-2 text-sm font-bold" data-content-i18n="about.finalWhatsapp" data-public-whatsapp-link data-whatsapp-context="about">WhatsApp sales: 0760 112 587</a>
-          <a href="mailto:info@makaug.com?subject=makaug%20products" class="about-cta about-final-cta-secondary rounded-xl px-4 py-2 text-sm font-bold">Email: info@makaug.com</a>
+          <a href="mailto:info@makaug.com?subject=makaug%20products" class="about-cta about-final-cta-secondary rounded-xl px-4 py-2 text-sm font-bold" data-content-i18n="about.finalEmail">Email: info@makaug.com</a>
         </div>
       </section>
 

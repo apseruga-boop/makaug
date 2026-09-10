@@ -15,7 +15,7 @@ assert(html.includes('id="advertising-placement-preview-visual"'), 'preview moda
 assert(html.includes('What this placement does'), 'preview modal should explain the selected placement');
 assert(html.includes('Where it can appear'), 'preview modal should list selected placement locations');
 assert(html.includes('Best for'), 'preview modal should explain the intended advertiser');
-assert(html.includes('Example only:'), 'preview modal should distinguish the preview from an approved live position');
+assert(html.includes('Representative example:'), 'preview modal should distinguish the preview from an approved live position');
 assert(html.includes('id="advertise-contact-whatsapp"'), 'advertise page should expose WhatsApp help');
 assert(html.includes('WhatsApp 0760 112 587'), 'advertise page should show the WhatsApp number');
 assert(html.includes('id="advertise-contact-email"'), 'advertise page should expose email help');
@@ -28,12 +28,23 @@ assert(app.includes('function openAdvertiserDashboard'), 'advertiser dashboard b
 assert(app.includes('openAuthSignIn("advertiser")'), 'signed-out dashboard users should enter advertiser sign-in');
 assert(app.includes('advertising_placement_preview_opened'), 'preview opens should be tracked');
 assert(app.includes('Preview where it appears'), 'every rendered package should include a preview action');
+assert(app.includes('/assets/advertising-previews/live-search.jpg'), 'featured-property preview should use a live search capture');
+assert(app.includes('/assets/advertising-previews/live-homepage.jpg'), 'homepage preview should use a live homepage capture');
+assert(app.includes('/assets/advertising-previews/live-brokers.jpg'), 'agent preview should use a live broker-directory capture');
+assert(app.includes('advertising-preview-live-highlight'), 'live captures should include a labelled placement highlight');
+assert(app.includes('contentTr("advertise.liveCapture")'), 'live capture disclosure should follow the selected language');
 
 const packageCatalog = catalog.slice(0, catalog.indexOf('const ADVERTISING_PLACEMENTS'));
 const packageKeys = Array.from(packageCatalog.matchAll(/\n\s{4}key: '([^']+)'/g), (match) => match[1]);
 assert(packageKeys.length >= 10, 'advertising catalogue should expose the expected package range');
 for (const key of packageKeys) {
   assert(app.includes(`${key}: {`), `preview content should cover advertising package ${key}`);
+}
+
+const previewImagePaths = Array.from(app.matchAll(/screenshot: "(\/assets\/advertising-previews\/[^"?]+)"/g), (match) => match[1]);
+assert(previewImagePaths.length >= 8, 'website advertising packages should use real live-site capture assets');
+for (const imagePath of new Set(previewImagePaths)) {
+  assert(fs.existsSync(path.join(root, imagePath.replace(/^\//, ''))), `live-site preview capture should exist: ${imagePath}`);
 }
 
 const aboutStart = html.indexOf('id="page-about"');
