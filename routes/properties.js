@@ -387,7 +387,10 @@ function addCanonicalLocationSearchFilter(filters, values, scope = {}) {
       clauseValues.push(Array.from(new Set(districtCanonicalPrefixes)));
     }
     if (selectedDistricts.length) {
-      clauses.push(`LOWER(TRIM(COALESCE(p.district, ''))) = ANY(?::text[])`);
+      clauses.push(`(
+        COALESCE(p.extra_fields->>'canonical_location_id', '') = ''
+        AND LOWER(TRIM(COALESCE(p.district, ''))) = ANY(?::text[])
+      )`);
       clauseValues.push(selectedDistricts.map((district) => district.toLowerCase()));
     }
     addFilter(filters, values, `(${clauses.join(' OR ')})`, ...clauseValues);

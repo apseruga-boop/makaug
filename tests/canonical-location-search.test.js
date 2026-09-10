@@ -166,7 +166,7 @@ test('location suggestions rank exact aliases first and never exceed eight', () 
   assert.ok(suggestions.length <= 8);
 });
 
-test('city and district suggestion counts use the same descendant scope as search', () => {
+test('city suggestions stay exact while district suggestions use descendant scope', () => {
   const direct = new Map([
     ['wakiso:kira', 10],
     ['wakiso:najjera', 4],
@@ -174,7 +174,7 @@ test('city and district suggestion counts use the same descendant scope as searc
     ['kampala:ntinda', 7],
   ]);
   const rolled = canonicalLocationRollupCounts(direct);
-  assert.ok(rolled.get('wakiso:kira') > direct.get('wakiso:kira'));
+  assert.equal(rolled.get('wakiso:kira'), direct.get('wakiso:kira'));
   assert.ok(rolled.get('wakiso:wakiso') >= 17);
   assert.equal(rolled.get('kampala:ntinda'), 7);
 });
