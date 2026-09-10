@@ -33134,17 +33134,21 @@ function accountAccessText(key) {
       otpEmail: "Email",
       otpPhone: "SMS / Text",
       detailsTitle: "Confirm contact details",
+      brokerDetailsTitle: "Your details",
       preferencesTitle: "Quick preferences",
       brokerIdTitle: "Broker trust check",
       passwordTitle: "Create password",
+      next: "Next",
       sendCode: "Send verification code",
       verifyCode: "Verify code",
       createFinal: "Create account",
       contactStepNote: "Add your first name, second name, email, and mobile number. We will send a code before you choose preferences.",
+      brokerContactStepNote: "Add your first name, second name, email, and mobile number, then select Next.",
       preferencesStepNote: "Tell us what you are looking for so your dashboard starts useful.",
-      brokerIdStepNote: "Optional now: add your National ID details if you have them ready, or skip and complete them later from your broker dashboard.",
+      brokerIdStepNote: "Add your National ID number and a clear photo of the ID to continue.",
       passwordStepNote: "Create a password, confirm it, and accept the terms before opening your dashboard.",
-      brokerIdRequirement: "Broker ID can be added later from the dashboard. Verified contact and password are enough to open your broker account.",
+      brokerIdRequirement: "A valid National ID number and clear ID photo are required to create a broker profile.",
+      createBrokerProfile: "Create broker profile",
       forgotTitle: "Reset password",
       resetIdentifier: "Email address or phone number",
       resetCode: "Reset code",
@@ -33191,12 +33195,16 @@ function accountAccessText(key) {
       otpEmail: "Email",
       otpPhone: "SMS / Text",
       detailsTitle: "Kakasa email n'essimu",
+      brokerDetailsTitle: "Ebikukwatako",
       preferencesTitle: "By'oyagala mu bwangu",
       passwordTitle: "Kola password",
+      next: "Ekiddako",
       sendCode: "Sindika code",
       verifyCode: "Kakasa code",
       createFinal: "Kola account",
+      createBrokerProfile: "Kola profile ya broker",
       contactStepNote: "Teekamu erinnya erisooka, ery'okubiri, email, n'essimu. Tujja kusindika code nga tonnalonda by'oyagala.",
+      brokerContactStepNote: "Teekamu erinnya erisooka, ery'okubiri, email, n'essimu, olwo onyige Genda mu maaso.",
       preferencesStepNote: "Tubuulire ky'onoonya dashboard yo etandike nga ekuyamba.",
       passwordStepNote: "Kola password, gikakase, era okkirize amateeka nga tonnayigira dashboard.",
       forgotTitle: "Kyuusa password",
@@ -33245,12 +33253,16 @@ function accountAccessText(key) {
       otpEmail: "Barua pepe",
       otpPhone: "SMS / Text",
       detailsTitle: "Thibitisha mawasiliano",
+      brokerDetailsTitle: "Maelezo yako",
       preferencesTitle: "Mapendeleo ya haraka",
       passwordTitle: "Unda nenosiri",
+      next: "Inayofuata",
       sendCode: "Tuma msimbo",
       verifyCode: "Thibitisha msimbo",
       createFinal: "Fungua akaunti",
+      createBrokerProfile: "Fungua wasifu wa dalali",
       contactStepNote: "Weka jina la kwanza, jina la pili, barua pepe, na nambari ya simu. Tutatuma msimbo kabla ya mapendeleo.",
+      brokerContactStepNote: "Weka jina la kwanza, jina la pili, barua pepe, na nambari ya simu, kisha uchague Endelea.",
       preferencesStepNote: "Tuambie unachotafuta ili dashibodi yako ianze vizuri.",
       passwordStepNote: "Unda nenosiri, lithibitishe, na ukubali masharti kabla ya dashibodi.",
       forgotTitle: "Weka upya nenosiri",
@@ -33644,11 +33656,10 @@ function updateAccountAccessProgress(step = "account") {
   const progress = document.getElementById("account-access-progress-summary");
   if (!progress) return;
   const labels = isAccountAccessBrokerCreateFlow() ? {
-    details: "1 of 5: Details",
-    verify: "2 of 5: Verify",
-    preferences: "3 of 5: Broker details",
-    broker_id: "4 of 5: Trust check",
-    password: "5 of 5: Password"
+    details: "1 of 4: Details",
+    preferences: "2 of 4: Broker details",
+    broker_id: "3 of 4: ID",
+    password: "4 of 4: Password"
   } : {
     details: "1 of 4: Details",
     verify: "2 of 4: Verify",
@@ -33741,6 +33752,7 @@ function applyAccountAccessTheme() {
   if (progress) progress.style.background = "rgba(255,255,255,0.18)";
   const otpWrap = document.getElementById("account-access-otp-method-wrap");
   if (otpWrap) {
+    otpWrap.classList.toggle("hidden", isAccountAccessBrokerCreateFlow());
     otpWrap.style.background = theme.soft;
     otpWrap.style.borderColor = theme.border;
   }
@@ -33779,8 +33791,8 @@ function updateAccountAccessBrokerIdentityState() {
   preview.classList.toggle("hidden", !details.fileName && !details.nin);
   preview.innerHTML = `
     <div class="font-black text-green-950">Broker trust check</div>
-    <div class="mt-1">${details.nin ? `ID number: ${adminEscape(details.nin)}` : "ID number can be added later."}</div>
-    <div>${details.fileName ? `Photo ready: ${adminEscape(details.fileName)}` : "ID photo can be added later from the dashboard."}</div>
+    <div class="mt-1">${details.nin ? `ID number: ${adminEscape(details.nin)}` : "ID number is required."}</div>
+    <div>${details.fileName ? `Photo ready: ${adminEscape(details.fileName)}` : "A clear ID photo is required."}</div>
   `;
 }
 
@@ -33821,10 +33833,14 @@ async function handleAccountAccessBrokerIdentitySelection(event) {
 function validateAccountAccessBrokerIdentityStep() {
   if (!isAccountAccessBrokerCreateFlow()) return true;
   const details = getAccountAccessBrokerIdentityDetails();
-  if (!details.nin && !details.dataUrl) return true;
-  if (details.nin && !isValidBrokerNationalId(details.nin)) {
-    toast("Enter a valid National ID number, or clear it and add it later from your dashboard.");
+  if (!details.nin || !isValidBrokerNationalId(details.nin)) {
+    toast("Enter a valid National ID number to continue.");
     document.getElementById("account-access-broker-id-number")?.focus();
+    return false;
+  }
+  if (!details.dataUrl) {
+    toast("Upload a clear photo of the National ID to continue.");
+    document.getElementById("account-access-broker-id-file")?.focus();
     return false;
   }
   return true;
@@ -33836,12 +33852,11 @@ function getAccountAccessCreatePasswordReadiness() {
   const termsAccepted = document.getElementById("account-access-terms")?.checked === true;
   const privacyAccepted = document.getElementById("account-access-privacy")?.checked === true;
   const missing = [];
-  if (!accountAccessContactVerificationToken) missing.push(accountAccessText("verifiedRequirement"));
+  if (!isAccountAccessBrokerCreateFlow() && !accountAccessContactVerificationToken) missing.push(accountAccessText("verifiedRequirement"));
   if (isAccountAccessBrokerCreateFlow()) {
     const brokerIdentity = getAccountAccessBrokerIdentityDetails();
-    if (brokerIdentity.nin && !isValidBrokerNationalId(brokerIdentity.nin)) {
-      missing.push("Broker ID number looks invalid. Clear it or add a valid ID number before continuing.");
-    }
+    if (!brokerIdentity.nin || !isValidBrokerNationalId(brokerIdentity.nin)) missing.push("A valid broker ID number is required.");
+    if (!brokerIdentity.dataUrl) missing.push("A clear broker ID photo is required.");
   }
   if (password.length < 8) missing.push(accountAccessText("passwordRequirement"));
   if (!confirmPassword || password !== confirmPassword) missing.push(accountAccessText("confirmRequirement"));
@@ -33907,6 +33922,7 @@ function updateAccountAccessCreateFinalState() {
 
 function setAccountAccessCreateStep(step = "details") {
   accountAccessCreateStep = ["details", "verify", "preferences", "broker_id", "password"].includes(step) ? step : "details";
+  if (accountAccessCreateStep === "verify" && isAccountAccessBrokerCreateFlow()) accountAccessCreateStep = "preferences";
   if (accountAccessCreateStep === "broker_id" && !isAccountAccessBrokerCreateFlow()) accountAccessCreateStep = "password";
   const isVerify = accountAccessCreateStep === "verify";
   const stepIds = {
@@ -33927,11 +33943,13 @@ function setAccountAccessCreateStep(step = "details") {
 	  if (note) {
 	    const noteKey = accountAccessCreateStep === "preferences"
 	      ? "preferencesStepNote"
-	      : (accountAccessCreateStep === "broker_id" ? "brokerIdStepNote" : (accountAccessCreateStep === "password" ? "passwordStepNote" : "contactStepNote"));
+	      : (accountAccessCreateStep === "broker_id"
+	        ? "brokerIdStepNote"
+	        : (accountAccessCreateStep === "password" ? "passwordStepNote" : (isAccountAccessBrokerCreateFlow() ? "brokerContactStepNote" : "contactStepNote")));
 	    setAccountAccessFlowNote(accountAccessText(noteKey), "info");
 	  }
-	  const titles = {
-	    details: accountAccessText("detailsTitle"),
+  const titles = {
+    details: isAccountAccessBrokerCreateFlow() ? accountAccessText("brokerDetailsTitle") : accountAccessText("detailsTitle"),
 	    verify: accountAccessText("verifyTitle"),
 	    preferences: accountAccessText("preferencesTitle"),
 	    broker_id: accountAccessText("brokerIdTitle"),
@@ -33940,12 +33958,12 @@ function setAccountAccessCreateStep(step = "details") {
   setTextById("account-access-mode-label", titles[accountAccessCreateStep] || accountAccessText("createAccount"));
   const btn = document.getElementById("account-access-continue-btn");
   if (btn) {
-    const labels = {
-	      details: accountAccessText("sendCode"),
+	    const labels = {
+	      details: isAccountAccessBrokerCreateFlow() ? accountAccessText("next") : accountAccessText("sendCode"),
 	      verify: accountAccessText("verifyCode"),
-	      preferences: accountAccessText("continue"),
-	      broker_id: accountAccessText("continue"),
-	      password: accountAccessText("createFinal")
+	      preferences: isAccountAccessBrokerCreateFlow() ? accountAccessText("next") : accountAccessText("continue"),
+	      broker_id: isAccountAccessBrokerCreateFlow() ? accountAccessText("next") : accountAccessText("continue"),
+	      password: isAccountAccessBrokerCreateFlow() ? accountAccessText("createBrokerProfile") : accountAccessText("createFinal")
 	    };
     btn.textContent = labels[accountAccessCreateStep] || accountAccessText("continue");
   }
@@ -34112,22 +34130,22 @@ function ensureAccountAccessDrawer() {
             </div>
             <div id="account-access-create-broker-id-step" data-auth-create-step="broker_id" class="hidden space-y-3">
               <div class="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950">
-                <div class="font-black text-sm text-amber-950">Optional broker trust check</div>
-                <p class="mt-1">Add your National ID details now if they are ready, or skip this step and complete them later from your broker dashboard. Your account and dashboard access are not blocked here.</p>
+                <div class="font-black text-sm text-amber-950">Broker ID details</div>
+                <p class="mt-1">Add your National ID number and a clear photo. Makaug staff review these details privately; they are never shown publicly.</p>
               </div>
               <div class="grid sm:grid-cols-2 gap-3">
                 <label class="block">
-                  <span class="block text-xs font-bold text-gray-600 mb-1">National ID number / NIN <span class="font-semibold text-gray-400">(optional)</span></span>
+                  <span class="block text-xs font-bold text-gray-600 mb-1">National ID number / NIN</span>
                   <input id="account-access-broker-id-number" autocomplete="off" maxlength="32" oninput="updateAccountAccessBrokerIdentityState()" class="w-full min-h-[52px] border border-green-100 rounded-xl px-4 py-3 text-base uppercase" placeholder="CMxxxxxxxxxxxx">
                 </label>
                 <label class="block">
-                  <span class="block text-xs font-bold text-gray-600 mb-1">National ID photo <span class="font-semibold text-gray-400">(optional)</span></span>
+                  <span class="block text-xs font-bold text-gray-600 mb-1">National ID photo</span>
                   <input id="account-access-broker-id-file" type="file" accept="image/*" onchange="handleAccountAccessBrokerIdentitySelection(event)" class="w-full min-h-[52px] border border-green-100 rounded-xl px-4 py-3 text-sm bg-white">
                 </label>
               </div>
               <div id="account-access-broker-id-preview" class="hidden rounded-2xl border border-green-100 bg-green-50 p-3 text-xs text-green-900"></div>
               <div class="rounded-2xl border border-green-100 bg-green-50 p-3 text-xs text-green-950 space-y-1">
-                <p><strong>Your data is protected:</strong> if you add ID details, we use them only for broker review, safety, fraud prevention, and legal compliance.</p>
+                <p><strong>Your data is protected:</strong> we use your ID details only for broker review, safety, fraud prevention, and legal compliance.</p>
                 <p>You can request access, correction, export, or deletion. If your account is deleted, makaug deletes or anonymises broker ID data unless a legal retention duty applies.</p>
                 <p>Your broker listings still require makaug admin approval before they appear publicly.</p>
               </div>
@@ -34455,6 +34473,13 @@ async function continueAccountAccess() {
   }
   if (accountAccessDrawerMode === "create") {
     if (accountAccessCreateStep === "details") {
+	      if (isAccountAccessBrokerCreateFlow()) {
+	        const details = getAccountAccessContactDetails();
+	        if (!validateAccountAccessContactDetails(details)) return;
+	        setAccountAccessCreateStep("preferences");
+	        setTimeout(() => document.querySelector("#account-access-screening select")?.focus(), 30);
+	        return;
+	      }
       await submitAccountAccessContactOtp();
       return;
 	    }
@@ -34544,8 +34569,8 @@ function validateAccountAccessContactDetails({ firstName, lastName, email, phone
     toast("Enter a valid email address.");
     return false;
   }
-  if (otpChannel === "phone" && !/^\+256\d{9}$/.test(phone || "")) {
-    toast("Enter a valid Uganda mobile number for SMS verification.");
+  if ((otpChannel === "phone" || isAccountAccessBrokerCreateFlow()) && !/^\+256\d{9}$/.test(phone || "")) {
+    toast(isAccountAccessBrokerCreateFlow() ? "Enter a valid Uganda mobile number." : "Enter a valid Uganda mobile number for SMS verification.");
     return false;
   }
   return true;
@@ -34774,7 +34799,7 @@ async function submitAccountAccessCreate() {
     toast("Please accept the Terms and Privacy Policy to continue.");
     return;
   }
-	  if (!accountAccessContactVerificationToken) {
+	  if (!isAccountAccessBrokerCreateFlow() && !accountAccessContactVerificationToken) {
 	    toast("Please verify your email or SMS code before creating the account.");
 	    setAccountAccessCreateStep("details");
 	    return;
@@ -34786,17 +34811,16 @@ async function submitAccountAccessCreate() {
 	  const profileData = collectAccountAccessScreeningData();
 	  if (isAccountAccessBrokerCreateFlow()) {
 	    const brokerIdentity = getAccountAccessBrokerIdentityDetails();
-	    const hasBrokerIdentity = Boolean(brokerIdentity.nin || brokerIdentity.dataUrl);
+	    const hasBrokerIdentity = Boolean(brokerIdentity.nin && brokerIdentity.dataUrl);
 	    profileData.broker_national_id_number = brokerIdentity.nin;
 	    profileData.broker_identity_document_name = brokerIdentity.fileName;
 	    profileData.broker_identity_document_type = brokerIdentity.fileType;
 	    profileData.broker_identity_document_url = brokerIdentity.dataUrl;
 	    profileData.broker_identity_document_uploaded = brokerIdentity.dataUrl ? "true" : "false";
 	    if (brokerIdentity.dataUrl) profileData.broker_identity_document_uploaded_at = new Date().toISOString();
-	    profileData.broker_identity_deferred = hasBrokerIdentity ? "false" : "true";
-	    profileData.broker_verification_reason = hasBrokerIdentity
-	      ? "Broker trust details supplied during account creation for admin review."
-	      : "Broker account created with ID verification deferred to the broker dashboard/admin review.";
+	    profileData.broker_identity_deferred = "false";
+	    profileData.broker_signup_without_contact_otp = "true";
+	    profileData.broker_verification_reason = "Broker ID details supplied during account creation for manual staff review; no contact OTP required.";
 	    profileData.broker_privacy_consent_accepted = hasBrokerIdentity ? "true" : "false";
 	    profileData.broker_data_retention_notice_accepted = hasBrokerIdentity ? "true" : "false";
 	  }
@@ -34825,8 +34849,10 @@ async function submitAccountAccessCreate() {
         role: roleLabel,
         password,
         confirm_password: confirmPassword,
-        otp_channel: otpChannel,
-        contact_verification_token: accountAccessContactVerificationToken,
+	        ...(isAccountAccessBrokerCreateFlow() ? {} : {
+	          otp_channel: otpChannel,
+	          contact_verification_token: accountAccessContactVerificationToken
+	        }),
         audience: accountAccessDrawerAudience,
         terms_accepted: termsAccepted,
         privacy_accepted: privacyAccepted,
@@ -34840,7 +34866,7 @@ async function submitAccountAccessCreate() {
     accountAccessContactVerificationToken = "";
     setAccountAccessCreateStatus(accountAccessText("openingDashboard"), "success");
     toast(register?.data?.message || "Your makaug.com account has been set up. Opening your dashboard.");
-    await finalizeAuth(register?.data, "drawer_verified_signup", accountAccessDrawerAudience);
+    await finalizeAuth(register?.data, isAccountAccessBrokerCreateFlow() ? "drawer_broker_signup" : "drawer_verified_signup", accountAccessDrawerAudience);
   } catch (error) {
     if (isExistingAccountCreateError(error)) {
       setAccountAccessCreateStatus(accountAccessText("existingAccountTryingSignIn"), "pending");
