@@ -37,7 +37,10 @@ test('public search endpoints use a 60-second cache contract without response co
 
 test('district searches roll up canonical children and stored district labels', () => {
   assert.match(propertiesSource, /canonical_location_id', ''\) LIKE ANY\(\?::text\[\]\)/);
-  assert.match(propertiesSource, /LOWER\(TRIM\(COALESCE\(p\.district, ''\)\)\) = ANY\(\?::text\[\]\)/);
+  assert.match(
+    propertiesSource,
+    /canonical_location_id', ''\) = ''[\s\S]*LOWER\(TRIM\(COALESCE\(p\.district, ''\)\)\) = ANY\(\?::text\[\]\)/
+  );
 
   const { canonicalLocationRollupCounts } = require('../utils/ugandaLocationRegistry');
   const counts = canonicalLocationRollupCounts(new Map([
