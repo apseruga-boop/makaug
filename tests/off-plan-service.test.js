@@ -181,6 +181,33 @@ test('a site-owner-approved overseas preview may show price and map point as pen
   assert.ok(publicPreviewBlockers({ ...project, unit_types: [{ bedrooms: 0 }] }).includes('Every price-on-request unit needs a clear status label.'));
 });
 
+test('a site-owner-approved overseas render pack may show payment terms as pending without inventing them', () => {
+  const project = {
+    country_code: 'KE', status: 'published', verification_status: 'partially_verified',
+    name: 'Velar', source_display_name: 'Karim - supplied Velar project renders',
+    description: 'A source-labelled Kenya project preview created from the supplied architectural renders, with its location, unit mix, prices and payment terms clearly awaiting documentary confirmation.',
+    area: 'Location to be confirmed', district: 'Kenya', latitude: null, longitude: null,
+    launch_price_ugx: null, payment_plan_months: null,
+    unit_types: [{ bedrooms: null, price_original: null, price_ugx: null, price_status: 'Current unit mix and prices to be confirmed with makaug.com' }],
+    payment_plan: [],
+    images: [{ url: '/1.jpg', caption: 'Exterior' }, { url: '/2.jpg', caption: 'Rooftop' }, { url: '/3.jpg', caption: 'Pool' }],
+    extra_fields: {
+      public_preview_approved: true,
+      source_materials_verified: true,
+      contact_mode: 'makaug_managed',
+      price_on_request_approved: true,
+      map_point_pending_approved: true,
+      payment_plan_pending_approved: true,
+      payment_plan_status: 'Payment plan has not been supplied; confirm current terms with makaug.com.'
+    }
+  };
+  assert.deepEqual(publicPreviewBlockers(project), []);
+  assert.equal(isPubliclyVisible(project), true);
+  assert.ok(publicPreviewBlockers({ ...project, extra_fields: { ...project.extra_fields, payment_plan_pending_approved: false } }).includes('The supplied payment period is required.'));
+  assert.ok(publicPreviewBlockers({ ...project, extra_fields: { ...project.extra_fields, payment_plan_status: '' } }).includes('A pending payment plan needs a clear status label.'));
+  assert.ok(publicPreviewBlockers({ ...project, extra_fields: { ...project.extra_fields, source_materials_verified: false } }).includes('An attributed source is required.'));
+});
+
 test('sourced preview readiness models the explicit publish approval without weakening its source checks', () => {
   const project = {
     country_code: 'AE', status: 'pending_review', verification_status: 'partially_verified',

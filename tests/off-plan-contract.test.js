@@ -207,6 +207,34 @@ test('AMRA is source-attributed in the UAE review queue and Spectre only keeps d
   assert.match(mapMigration, /Approximate AMRA area marker/);
 });
 
+test('the four Karim Kenya source packs are published without inventing missing facts', () => {
+  const migration = read('db/migrations/131_add_karim_kenya_off_plan_projects.sql');
+  const service = read('services/offPlanService.js');
+  const client = read('assets/off-plan.js');
+  const brochure = read('services/offPlanBrochureService.js');
+  for (const slug of ['velar', 'ivy-myst-kileleshwa', 'high-street-lane-migaa', 'gaia-brookside']) {
+    assert.match(migration, new RegExp(`'${slug}'`));
+  }
+  assert.equal((migration.match(/'published'/g) || []).length, 4, 'all four records should publish explicitly');
+  assert.equal((migration.match(/"public_preview_approved":true/g) || []).length, 4);
+  assert.match(migration, /"source_materials_verified":true/);
+  assert.match(migration, /"payment_plan_pending_approved":true/);
+  assert.match(migration, /A payment plan was not included in the supplied pack/);
+  assert.match(migration, /A payment schedule was not included in the supplied brochure/);
+  for (const fact of ['7900000', '29600000', '3250000', '20500000', '25000000']) assert.match(migration, new RegExp(fact));
+  for (const missing of ['developer legal identity', 'exact project address', 'current unit sizes, prices and availability']) assert.match(migration, new RegExp(missing));
+  assert.match(migration, /floor-plan-block-a-page-3\.jpg/);
+  assert.match(migration, /floor-plan-block-b-page-8\.jpg/);
+  assert.match(service, /source_materials_verified/);
+  assert.match(service, /payment_plan_pending_approved/);
+  assert.match(client, /price_original_max/);
+  assert.match(client, /size_sqm_max/);
+  assert.match(client, /firstPrice && project\.payment_plan_months \? calculatorMarkup/);
+  assert.match(brochure, /originalPriceMax/);
+  assert.match(brochure, /ugxPriceMax/);
+  assert.match(brochure, /project\.unit_types\.length > 6 \? 2 : 1/);
+});
+
 test('Off Plan project details use readable mobile cards and an uncluttered mobile gallery', () => {
   const client = read('assets/off-plan.js');
   const css = read('assets/off-plan.css');

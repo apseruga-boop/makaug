@@ -444,26 +444,42 @@ function buildOffPlanBrochure(projectInput, output, options = {}) {
     doc.fillColor(MUTED).font('Brochure-Regular').fontSize(11).text(copy.unitVerify, 44, tableY, { width: 505, align: copy.rtl ? 'right' : 'left' });
     tableY += 40;
   } else {
+    const unitColumns = project.unit_types.length > 6 ? 2 : 1;
+    const unitRows = Math.ceil(project.unit_types.length / unitColumns);
+    const unitColumnWidth = unitColumns === 2 ? 247 : 505;
     project.unit_types.forEach((unit, index) => {
-      const yRow = tableY + index * 58;
+      const unitColumn = unitColumns === 2 ? index % 2 : 0;
+      const unitRow = unitColumns === 2 ? Math.floor(index / 2) : index;
+      const xRow = 44 + unitColumn * 258;
+      const yRow = tableY + unitRow * 58;
       if (yRow > 530) return;
-      doc.roundedRect(44, yRow, 505, 46, 8).fill(index % 2 ? '#ffffff' : PALE);
+      doc.roundedRect(xRow, yRow, unitColumnWidth, 46, 8).fill(unitRow % 2 ? '#ffffff' : PALE);
       const unitLabel = language === 'en' && cleanText(unit.label, 220) ? cleanText(unit.label, 220) : interpolate(copy.homeLabel, { count: unit.bedrooms || '' });
-      doc.fillColor(INK).font('Brochure-Bold').fontSize(11).text(unitLabel, 58, yRow + 9, { width: 280, align: copy.rtl ? 'right' : 'left' });
+      doc.fillColor(INK).font('Brochure-Bold').fontSize(unitColumns === 2 ? 8.5 : 11).text(unitLabel, xRow + 14, yRow + 8, { width: unitColumnWidth - 28, height: 13, ellipsis: true, align: copy.rtl ? 'right' : 'left' });
+      const originalPrice = Number(unit.price_original);
+      const originalPriceMax = Number(unit.price_original_max);
+      const ugxPrice = Number(unit.price_ugx);
+      const ugxPriceMax = Number(unit.price_ugx_max);
+      const originalPriceText = Number.isFinite(originalPrice) && originalPrice > 0
+        ? `${formatMoney(originalPrice, unit.price_original_currency || project.original_currency, copy)}${Number.isFinite(originalPriceMax) && originalPriceMax > originalPrice ? ` – ${formatMoney(originalPriceMax, unit.price_original_currency || project.original_currency, copy)}` : ''}`
+        : '';
+      const ugxPriceText = Number.isFinite(ugxPrice) && ugxPrice > 0
+        ? `${formatMoney(ugxPrice, 'UGX', copy)}${Number.isFinite(ugxPriceMax) && ugxPriceMax > ugxPrice ? ` – ${formatMoney(ugxPriceMax, 'UGX', copy)}` : ''}`
+        : '';
       const priceText = overseas && unit.price_original
-        ? `${formatMoney(unit.price_original, unit.price_original_currency || project.original_currency, copy)} · ${formatMoney(unit.price_ugx, 'UGX', copy)} ${copy.indicative}`
+        ? `${originalPriceText} · ${ugxPriceText} ${copy.indicative}`
         : unit.price_ugx
           ? `${formatMoney(unit.price_ugx, 'UGX', copy)}${unit.price_original ? ` ${interpolate(copy.guideSource, { amount: formatMoney(unit.price_original, unit.price_original_currency || project.original_currency, copy) })}` : ''}`
         : unit.price_original
           ? interpolate(copy.sourceSupplied, { amount: formatMoney(unit.price_original, unit.price_original_currency || project.original_currency, copy) })
           : copy.priceRequest;
-      doc.fillColor(MUTED).font('Brochure-Regular').fontSize(9).text(priceText, 58, yRow + 25, { width: 450, align: copy.rtl ? 'right' : 'left' });
+      doc.fillColor(MUTED).font('Brochure-Regular').fontSize(unitColumns === 2 ? 7 : 9).text(priceText, xRow + 14, yRow + 25, { width: unitColumnWidth - 28, height: 13, ellipsis: true, align: copy.rtl ? 'right' : 'left' });
     });
-    tableY += Math.min(project.unit_types.length, 6) * 58 + 18;
+    tableY += Math.min(unitRows, 6) * 58 + 18;
   }
   writeSectionTitle(doc, copy.paymentPlan, Math.min(tableY, 545), copy.rtl);
   const paymentLines = project.payment_plan.length
-    ? project.payment_plan.map((item) => `${language === 'en' ? cleanText(item.label || copy.milestone) : copy.milestone}: ${item.amount_original ? formatMoney(item.amount_original, item.currency || project.original_currency, copy) : item.kind === 'percentage' && Number.isFinite(Number(item.percent)) ? `${item.percent}%` : item.kind === 'equal_monthly' ? interpolate(copy.equalInstalments, { count: item.months || project.payment_plan_months || '?' }) : (language === 'en' ? cleanText(item.due || copy.toVerify) : copy.toVerify)}`)
+    ? project.payment_plan.map((item) => `${language === 'en' ? cleanText(item.label || copy.milestone) : copy.milestone}: ${item.amount_original ? formatMoney(item.amount_original, item.currency || project.original_currency, copy) : Number.isFinite(Number(item.percent)) ? `${item.percent}%` : item.kind === 'equal_monthly' ? interpolate(copy.equalInstalments, { count: item.months || project.payment_plan_months || '?' }) : (language === 'en' ? cleanText(item.due || copy.toVerify) : copy.toVerify)}`)
     : [copy.milestonesVerify];
   doc.fillColor(INK).font('Brochure-Regular').fontSize(10).list(paymentLines, 60, doc.y + 8, { width: 475, bulletRadius: 2, textIndent: 12, lineGap: 5, align: copy.rtl ? 'right' : 'left' });
   doc.moveDown(1.2);

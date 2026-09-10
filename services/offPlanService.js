@@ -222,11 +222,14 @@ function publicPreviewBlockers(raw = {}) {
   if (!cleanText(row.name, 220)) blockers.push('Project name is required.');
   const isMakaugManagedOverseas = row.country_code !== 'UG'
     && row.extra_fields?.contact_mode === 'makaug_managed'
-    && row.extra_fields?.source_documents_verified === true;
+    && (row.extra_fields?.source_documents_verified === true
+      || row.extra_fields?.source_materials_verified === true);
   const approvedPriceOnRequest = isMakaugManagedOverseas
     && row.extra_fields?.price_on_request_approved === true;
   const approvedPendingMapPoint = isMakaugManagedOverseas
     && row.extra_fields?.map_point_pending_approved === true;
+  const approvedPendingPaymentPlan = isMakaugManagedOverseas
+    && row.extra_fields?.payment_plan_pending_approved === true;
   if ((!row.source_agent_id && !isMakaugManagedOverseas) || !cleanText(row.source_display_name, 220)) blockers.push('An attributed source is required.');
   if (cleanText(row.description, 10000).length < 80) blockers.push('A source-labelled project description is required.');
   if (!cleanText(row.area, 140) || !cleanText(row.district, 140)) blockers.push('Area and district are required.');
@@ -238,7 +241,10 @@ function publicPreviewBlockers(raw = {}) {
   if (pricedUnits.some((unit) => !cleanText(unit.price_original_currency, 3))) blockers.push('Every supplied source price needs its original currency.');
   if (pricedUnits.some((unit) => !(finiteNumber(unit.price_ugx, 0) > 0))) blockers.push('Every supplied source price needs an indicative UGX conversion.');
   if (!(finiteNumber(row.launch_price_ugx, 0) > 0) && !approvedPriceOnRequest) blockers.push('An indicative starting price in UGX is required.');
-  if (!row.payment_plan.length || !(row.payment_plan_months > 0)) blockers.push('The supplied payment period is required.');
+  if ((!row.payment_plan.length || !(row.payment_plan_months > 0)) && !approvedPendingPaymentPlan) blockers.push('The supplied payment period is required.');
+  if ((!row.payment_plan.length || !(row.payment_plan_months > 0))
+    && approvedPendingPaymentPlan
+    && !cleanText(row.extra_fields?.payment_plan_status, 300)) blockers.push('A pending payment plan needs a clear status label.');
   if (row.images.filter((image) => cleanText(image?.url, 2000) && cleanText(image?.caption, 300)).length < 3) blockers.push('At least three labelled project images are required.');
   return Array.from(new Set(blockers));
 }

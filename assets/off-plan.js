@@ -819,16 +819,31 @@
     if (!(project.unit_types || []).length) return `<p class="text-sm text-gray-500">${escapeHtml(offPlanText('unitVerifying'))}</p>`;
     return `<div class="overflow-x-auto"><table class="off-plan-unit-table"><thead><tr><th>${escapeHtml(offPlanText('homeType'))}</th><th>${escapeHtml(offPlanText('bedrooms'))}</th><th>${escapeHtml(offPlanText('size'))}</th><th>${escapeHtml(offPlanText('guidePrice'))}</th><th></th></tr></thead><tbody>${project.unit_types.map((unit, index) => {
       const overseas = project.country_code !== 'UG';
-      const primary = overseas ? formatMoney(unit.price_original, unit.price_original_currency || project.original_currency) : formatUgx(unit.price_ugx);
-      const secondary = overseas && unit.price_ugx ? `${formatUgx(unit.price_ugx)} · ${overseasText('indicativeFx')}` : (!overseas && unit.price_original ? formatMoney(unit.price_original, unit.price_original_currency || 'USD') : '');
-      return `<tr><td data-label="${escapeHtml(offPlanText('homeType'))}" class="font-black text-gray-950">${escapeHtml(localizedUnitLabel(unit))}</td><td data-label="${escapeHtml(offPlanText('bedrooms'))}">${escapeHtml(unit.bedrooms ?? '—')}</td><td data-label="${escapeHtml(offPlanText('size'))}">${unit.size_sqm ? `${escapeHtml(unit.size_sqm)} m²` : escapeHtml(offPlanText('toConfirm'))}</td><td data-label="${escapeHtml(offPlanText('guidePrice'))}"><strong class="block">${escapeHtml(primary)}</strong>${secondary ? `<span class="block mt-1 text-xs text-gray-500">${escapeHtml(secondary)}</span>` : ''}</td><td><button type="button" onclick="selectOffPlanUnit(${index})" class="rounded-lg border border-green-200 text-green-800 px-3 py-2 text-xs font-black">${escapeHtml(offPlanText('calculate'))}</button></td></tr>`;
+      const originalCurrency = unit.price_original_currency || project.original_currency;
+      const primaryStart = overseas ? formatMoney(unit.price_original, originalCurrency) : formatUgx(unit.price_ugx);
+      const primaryEnd = overseas && number(unit.price_original_max) > number(unit.price_original) ? formatMoney(unit.price_original_max, originalCurrency) : '';
+      const primary = primaryEnd ? `${primaryStart} – ${primaryEnd}` : primaryStart;
+      const ugxStart = unit.price_ugx ? formatUgx(unit.price_ugx) : '';
+      const ugxEnd = number(unit.price_ugx_max) > number(unit.price_ugx) ? formatUgx(unit.price_ugx_max) : '';
+      const secondary = overseas && ugxStart ? `${ugxStart}${ugxEnd ? ` – ${ugxEnd}` : ''} · ${overseasText('indicativeFx')}` : (!overseas && unit.price_original ? formatMoney(unit.price_original, unit.price_original_currency || 'USD') : '');
+      const sizeStart = number(unit.size_sqm_min) ?? number(unit.size_sqm);
+      const sizeEnd = number(unit.size_sqm_max);
+      const size = sizeStart == null ? offPlanText('toConfirm') : `${sizeStart}${sizeEnd > sizeStart ? `–${sizeEnd}` : ''} m²`;
+      const calculatorButton = number(unit.price_original) != null || number(unit.price_ugx) != null
+        ? `<button type="button" onclick="selectOffPlanUnit(${index})" class="rounded-lg border border-green-200 text-green-800 px-3 py-2 text-xs font-black">${escapeHtml(offPlanText('calculate'))}</button>`
+        : '';
+      return `<tr><td data-label="${escapeHtml(offPlanText('homeType'))}" class="font-black text-gray-950">${escapeHtml(localizedUnitLabel(unit))}</td><td data-label="${escapeHtml(offPlanText('bedrooms'))}">${escapeHtml(unit.bedrooms ?? '—')}</td><td data-label="${escapeHtml(offPlanText('size'))}">${escapeHtml(size)}</td><td data-label="${escapeHtml(offPlanText('guidePrice'))}"><strong class="block">${escapeHtml(primary)}</strong>${secondary ? `<span class="block mt-1 text-xs text-gray-500">${escapeHtml(secondary)}</span>` : ''}</td><td>${calculatorButton}</td></tr>`;
     }).join('')}</tbody></table></div>`;
   }
 
   function paymentPlanMarkup(project) {
     const steps = project.payment_plan || [];
     const cards = steps.length ? steps.map((item, index) => `<div class="rounded-2xl ${index === 0 ? 'bg-green-800 text-white' : 'bg-green-50 text-green-950'} p-4"><span class="text-xs font-black uppercase tracking-wide opacity-70">${escapeHtml(offPlanText('step', { count: index + 1 }))}</span><strong class="block mt-1">${escapeHtml(localizedPaymentLabel(item))}</strong><span class="block text-sm mt-1">${item.percent != null ? `${escapeHtml(item.percent)}%` : item.amount_original ? formatMoney(item.amount_original, item.currency || project.original_currency) : item.amount_ugx ? formatUgx(item.amount_ugx) : item.months ? offPlanText('monthlyInstalments', { count: item.months }) : escapeHtml(item.due || offPlanText('termsVerify'))}</span></div>`).join('') : `<p class="text-sm text-gray-500">${escapeHtml(offPlanText('milestonesVerifying'))}</p>`;
-    return `<div class="off-plan-payment-grid grid gap-3">${cards}<button type="button" onclick="openOffPlanCustomPaymentBuilder()" class="off-plan-build-step rounded-2xl border-2 border-dashed border-green-300 bg-white p-4 text-left"><span class="text-xs font-black uppercase tracking-wide text-green-700">${escapeHtml(offPlanText('step', { count: steps.length + 1 }))}</span><strong class="block mt-1 text-gray-950">${escapeHtml(offPlanText('buildYourOwn'))}</strong><span class="block text-sm mt-1 text-gray-500">${escapeHtml(offPlanText('buildSchedule'))}</span></button></div>`;
+    const hasPricedUnit = (project.unit_types || []).some((unit) => number(unit.price_original) != null || number(unit.price_ugx) != null);
+    const builder = project.payment_plan_months && hasPricedUnit
+      ? `<button type="button" onclick="openOffPlanCustomPaymentBuilder()" class="off-plan-build-step rounded-2xl border-2 border-dashed border-green-300 bg-white p-4 text-left"><span class="text-xs font-black uppercase tracking-wide text-green-700">${escapeHtml(offPlanText('step', { count: steps.length + 1 }))}</span><strong class="block mt-1 text-gray-950">${escapeHtml(offPlanText('buildYourOwn'))}</strong><span class="block text-sm mt-1 text-gray-500">${escapeHtml(offPlanText('buildSchedule'))}</span></button>`
+      : '';
+    return `<div class="off-plan-payment-grid grid gap-3">${cards}${builder}</div>`;
   }
 
   function mapMarkup(project) {
@@ -856,7 +871,7 @@
   }
 
   function calculatorMarkup(project, firstPrice) {
-    const units = project.unit_types || [];
+    const units = (project.unit_types || []).filter((unit) => number(unit.price_original) != null || number(unit.price_ugx) != null);
     const sourceUnit = units.find((unit) => number(unit.price_original) != null);
     const originalCurrency = sourceUnit?.price_original_currency || project.original_currency || 'USD';
     const depositValue = number(project.payment_plan?.find((item) => number(item.percent) != null)?.percent) || 0;
@@ -926,7 +941,7 @@
           <section class="off-plan-panel"><div class="flex items-end justify-between gap-3"><div><p class="text-xs font-black uppercase tracking-wide text-green-700">${escapeHtml(offPlanText('chooseHome'))}</p><h2 class="mt-1 text-xl font-black text-gray-950">${escapeHtml(offPlanText('unitTypesPrices'))}</h2></div><span class="text-xs text-gray-500">${escapeHtml(offPlanText('guidePrices').replace(/USD/g, clean(project.original_currency || 'USD').toUpperCase()))}</span></div><div class="mt-4">${unitTable(project)}</div></section>
           ${floorPlans}
           <section class="off-plan-panel"><h2 class="text-xl font-black text-gray-950">${escapeHtml(offPlanText('projectProgress'))}</h2><div class="grid sm:grid-cols-2 gap-6 mt-5">${progressMarkup(offPlanText('constructionCompleted'), project.construction_progress)}${progressMarkup(offPlanText('homesSold'), project.sales_progress)}</div></section>
-          <section class="off-plan-panel"><h2 class="text-xl font-black text-gray-950">${escapeHtml(offPlanText('paymentPlan'))}</h2><div class="mt-4">${paymentPlanMarkup(project)}</div>${calculatorMarkup(project, firstPrice)}</section>
+          <section class="off-plan-panel"><h2 class="text-xl font-black text-gray-950">${escapeHtml(offPlanText('paymentPlan'))}</h2><div class="mt-4">${paymentPlanMarkup(project)}</div>${firstPrice && project.payment_plan_months ? calculatorMarkup(project, firstPrice) : ''}</section>
           <section class="off-plan-panel"><h2 class="text-xl font-black text-gray-950">${escapeHtml(offPlanText('locationArea'))}</h2><p class="mt-2 text-sm text-gray-600">${escapeHtml(projectLocation(project))}. ${escapeHtml(project.extra_fields?.map_precision === 'area_centroid' ? offPlanText('widerArea') : offPlanText('confirmTravel'))}</p><p class="mt-3 text-sm leading-6 text-gray-700">${escapeHtml(areaOverview)}</p><div class="mt-4">${mapMarkup(project)}</div><div class="mt-6"><h3 class="font-black text-gray-950">${escapeHtml(offPlanExperienceText('familyServices'))}</h3><p class="mt-1 text-xs text-gray-500">${escapeHtml(offPlanText('nearbyLive'))}</p><div id="off-plan-nearby-places" class="mt-4 space-y-5"></div></div></section>
           ${publicVideoUrl ? `<section class="off-plan-panel"><h2 class="text-xl font-black text-gray-950">${escapeHtml(offPlanText('projectVideo'))}</h2><div class="mt-4 aspect-video rounded-2xl overflow-hidden bg-gray-950"><video controls preload="metadata" class="w-full h-full" src="${escapeHtml(publicVideoUrl)}"></video></div></section>` : ''}
           <section class="off-plan-risk-warning"><strong><i class="fas fa-triangle-exclamation mr-1"></i>${escapeHtml(offPlanText('disclaimerTitle'))}</strong><p class="mt-2">${escapeHtml(offPlanText('disclaimerBody'))}</p></section>
