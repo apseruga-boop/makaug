@@ -322,7 +322,7 @@ function mountManagementRoutes(router, authMiddleware, { allowPermanentDelete = 
     if (!booleanValue(req.body?.confirm_rights)) return res.status(400).json({ ok: false, error: 'Floor-plan rights confirmation is required' });
     const development = await getManagedDevelopment(db, req.params.id);
     if (!development) return res.status(404).json({ ok: false, error: 'Off-plan project not found' });
-    const floorPlans = await storeManagedMedia(req.body?.floor_plans, { developmentId: req.params.id, folder: 'floor-plans', allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'], label: 'Off-plan floor plan' });
+    const floorPlans = await storeManagedMedia(req.body?.floor_plans, { developmentId: req.params.id, folder: 'floor-plans', allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp'], label: 'Off-plan floor-plan image' });
     if (!floorPlans.length) return res.status(400).json({ ok: false, error: 'At least one floor plan is required' });
     const updated = await writeDevelopment(db, { floor_plans: [...development.floor_plans, ...floorPlans] }, { id: req.params.id, ...actor(req) });
     return res.status(201).json({ ok: true, development: updated, floor_plans: floorPlans });

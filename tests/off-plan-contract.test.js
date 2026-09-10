@@ -105,7 +105,7 @@ test('brochure, payment, gallery, map, sharing, video and mortgage handoff are v
   assert.match(client, /id="off-plan-gallery-dialog"/);
   assert.match(client, /closeOffPlanGallery/);
   assert.match(client, /value == null \|\| \(typeof value === 'string' && !value\.trim\(\)\)/);
-  assert.match(html, /off-plan\.js\?v=20260909-off-plan-v11/);
+  assert.match(html, /off-plan\.js\?v=20260910-off-plan-v13/);
   assert.match(html, /off-plan\.css\?v=20260909-off-plan-v3/);
   assert.match(client, /CLOSED_PERMANENTLY/);
   assert.match(client, /Archive this private project\?/);
@@ -174,6 +174,26 @@ test('Spectre source facts, makaug.com coordination and Kenya safeguards are wir
   assert.match(brochure, /project\.floor_plans/);
   assert.match(brochure, /copy\.projectHighlights/);
   assert.match(brochure, /copy\.projectedReturns/);
+});
+
+test('AMRA is source-attributed in the UAE review queue and Spectre only keeps display-ready floor plans', () => {
+  const migration = read('db/migrations/128_add_amra_and_repair_spectre_floor_plans.sql');
+  const client = read('assets/off-plan.js');
+  const route = read('routes/off-plan.js');
+  for (const fact of ['AMRA', 'Citi Developers', 'Umm Al Quwain Blue Carbon Zone', '2029-12-31', '70/30', '5000', '2937']) {
+    assert.match(migration, new RegExp(fact));
+  }
+  for (const missing of ['current unit prices and availability', 'exact project map pin', 'construction progress']) {
+    assert.match(migration, new RegExp(missing));
+  }
+  assert.match(migration, /'pending_review'[\s\S]*'partially_verified'/);
+  assert.match(migration, /"public_preview_approved":false/);
+  assert.match(migration, /WHERE country_code = 'KE' AND slug = 'spectre-westlands'/);
+  assert.equal((migration.match(/floor-plan-(?:1br-50|1br-65|2br-100)\.jpg/g) || []).length, 3);
+  assert.doesNotMatch(migration, /spectre-floor-plans---agents-version\.pdf/);
+  assert.match(client, /floorPlanImages[\s\S]*data:image[\s\S]*jpe\?g\|png\|webp/);
+  assert.match(client, /input\.accept = 'image\/jpeg,image\/png,image\/webp'/);
+  assert.match(route, /folder: 'floor-plans', allowedMimeTypes: \['image\/jpeg', 'image\/png', 'image\/webp'\]/);
 });
 
 test('UAE project guidance and overseas brochure contact details are Dubai-specific', () => {

@@ -908,7 +908,11 @@
       ? clean(project.extra_fields.area_overview)
       : `${project.slug === 'entebbe-victoria-palms' ? offPlanDynamicText('areaOverview') : offPlanText('areaOverviewFallback')} ${offPlanExperienceText('areaServices')}`);
     const concierge = overseas ? `<section class="off-plan-panel"><p class="text-xs font-black uppercase tracking-wide text-green-700">${escapeHtml(overseasProjectText(project, 'managedBy'))}</p><h2 class="mt-1 text-xl font-black text-gray-950">${escapeHtml(overseasProjectText(project, 'conciergeTitle'))}</h2><p class="mt-2 text-sm leading-6 text-gray-600">${escapeHtml(overseasProjectText(project, 'conciergeBody'))}</p><div class="off-plan-concierge-steps mt-5">${(overseasProjectText(project, 'steps') || []).map((step, index) => `<div class="off-plan-concierge-step"><span class="text-xs font-black uppercase tracking-wide text-red-600">${String(index + 1).padStart(2, '0')}</span><strong class="block mt-1 text-sm text-gray-950">${escapeHtml(step)}</strong></div>`).join('')}</div><div class="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4"><strong class="text-amber-950">${escapeHtml(overseasProjectText(project, 'financeTitle'))}</strong><p class="mt-1 text-sm leading-6 text-amber-900">${escapeHtml(overseasProjectText(project, 'financeBody'))}</p></div>${officialBuyerGuidanceMarkup(project)}</section>` : '';
-    const floorPlans = (project.floor_plans || []).length ? `<section class="off-plan-panel"><h2 class="text-xl font-black text-gray-950">${escapeHtml(overseasText('floorPlans'))}</h2><div class="off-plan-floor-plan-grid mt-4">${project.floor_plans.map((plan) => `<figure><img src="${escapeHtml(plan.url)}" alt="${escapeHtml(plan.caption || overseasText('floorPlans'))}" loading="lazy"><figcaption>${escapeHtml(plan.caption || overseasText('floorPlans'))}</figcaption></figure>`).join('')}</div></section>` : '';
+    const floorPlanImages = (project.floor_plans || []).filter((plan) => {
+      const url = clean(plan?.url);
+      return /^data:image\/(?:jpeg|png|webp);/i.test(url) || /\.(?:jpe?g|png|webp)(?:[?#].*)?$/i.test(url);
+    });
+    const floorPlans = floorPlanImages.length ? `<section class="off-plan-panel"><h2 class="text-xl font-black text-gray-950">${escapeHtml(overseasText('floorPlans'))}</h2><div class="off-plan-floor-plan-grid mt-4">${floorPlanImages.map((plan) => `<figure><img src="${escapeHtml(plan.url)}" alt="${escapeHtml(plan.caption || overseasText('floorPlans'))}" loading="lazy"><figcaption>${escapeHtml(plan.caption || overseasText('floorPlans'))}</figcaption></figure>`).join('')}</div></section>` : '';
     return `${galleryMarkup(project)}
       <div class="off-plan-detail-grid mt-7">
         <main class="min-w-0 space-y-6">
@@ -1422,7 +1426,7 @@
   async function uploadOffPlanMedia(id, role, kind) {
     const isFloorPlan = kind === 'floor-plans';
     if (!(await confirmOffPlanMediaRights(isFloorPlan ? 'floor plan' : 'project images'))) return;
-    const input = document.createElement('input'); input.type = 'file'; input.multiple = !isFloorPlan; input.accept = isFloorPlan ? 'image/jpeg,image/png,image/webp,application/pdf' : 'image/jpeg,image/png,image/webp';
+    const input = document.createElement('input'); input.type = 'file'; input.multiple = !isFloorPlan; input.accept = 'image/jpeg,image/png,image/webp';
     input.onchange = async () => {
       const files = Array.from(input.files || []).slice(0, 20); if (!files.length) return;
       try {
