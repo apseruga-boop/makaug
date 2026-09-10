@@ -83,6 +83,23 @@ assert(!aboutBlock.includes('fa-facebook'), 'Facebook must not be presented as a
   'Off Plan'
 ].forEach((copy) => assert(normalized.includes(copy), `/about should restore the original journey overview: ${copy}`));
 
+assert(aboutBlock.includes('data-about-journey-images="20260910"'), 'the journey overview should include the image-led release marker');
+assert.strictEqual((aboutBlock.match(/class="about-journey-card"/g) || []).length, 6, 'all six property journeys should use image-led cards');
+[
+  '/assets/house-ads-v3/sale.webp',
+  '/assets/house-ads-v3/rent.webp',
+  '/assets/house-ads-v3/students.webp',
+  '/assets/house-ads-v3/land.webp',
+  '/assets/house-ads-v3/commercial.webp',
+  '/assets/off-plan/entebbe-victoria-palms/residents-lounge-render.jpg'
+].forEach((asset) => {
+  assert(aboutBlock.includes(`src="${asset}"`), `/about journey image missing: ${asset}`);
+  assert(fs.existsSync(path.join(root, asset.replace(/^\//, ''))), `/about journey image file missing: ${asset}`);
+});
+assert.strictEqual((aboutBlock.match(/loading="lazy" decoding="async"/g) || []).length, 6, 'journey images should be lazy-loaded and asynchronously decoded');
+assert(html.includes('#page-about .about-journey-image img'), 'journey image styles should be scoped to the About page');
+assert(html.includes('object-fit: cover;'), 'journey photos should fill their cards without distortion');
+
 [
   'Identity and contact checks',
   'Reviewed before it is public',

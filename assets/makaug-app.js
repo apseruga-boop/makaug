@@ -3059,8 +3059,8 @@ const ABOUT_PAGE_I18N_EN = Object.freeze({
   "about.trustRecordTitle": "Review trail",
   "about.trustRecordText": "Changes, approvals, and removals are handled through staff review, not hidden shortcuts.",
   "about.whyChooseTitle": "Why people choose makaug",
-  "about.chooseFreeTitle": "Free to list",
-  "about.chooseFreeText": "no listing fees, ever; paid advertising stays separate",
+  "about.chooseFreeTitle": "Free to start",
+  "about.chooseFreeText": "the first 7 days are free; the current listing price applies after the trial",
   "about.chooseWhatsappTitle": "WhatsApp-first",
   "about.chooseWhatsappText": "built for how Uganda actually communicates",
   "about.chooseLanguagesTitle": "9 languages",
@@ -7022,17 +7022,17 @@ function applyListingWizardLanguageUI() {
     ["lp-resolved-map-label", "Resolved Map Location"],
     ["lp-lat-label", "Latitude"],
     ["lp-lng-label", "Longitude"],
-    ["lp-wa-title", "Prefer WhatsApp?"],
-    ["lp-wa-copy", "No laptop? No problem. List via our WhatsApp chatbot in any Ugandan language."],
-    ["lp-wa-btn-label", "📲 List on WhatsApp Instead"],
+    ["lp-wa-title", "List through WhatsApp"],
+    ["lp-wa-copy", "Message 0760 112 587 in any Ugandan language and let the makaug assistant guide you through the listing."],
+    ["lp-wa-btn-label", "📲 List through WhatsApp"],
     ["list-choice-title", "List Property"],
-    ["list-choice-sub", "Choose the listing type, then pick online form or WhatsApp AI chatbot."],
+    ["list-choice-sub", "Choose the listing type, then pick List Online or List through WhatsApp."],
     ["list-choice-online-title", "List Online"],
     ["list-choice-online-copy", "Open the guided website form."],
-    ["list-choice-wa-title", "Via WhatsApp AI"],
-    ["list-choice-wa-copy", "Chat with the makaug AI listing assistant."],
-    ["list-choice-free-title", "Always 100% Free."],
-    ["list-choice-free-copy", "Submit with email, phone, and ID details; makaug reviews the listing before it goes live."]
+    ["list-choice-wa-title", "List through WhatsApp"],
+    ["list-choice-wa-copy", "Message 0760 112 587 and let the makaug assistant guide you."],
+    ["list-choice-free-title", "Start with 7 days free."],
+    ["list-choice-free-copy", "After that, one private listing costs UGX 25,000 per month. Every submission stays in staff review until approved."]
   ];
   labelPairs.forEach(([id, text]) => {
     const el = document.getElementById(id);
@@ -20328,11 +20328,6 @@ function buildWhatsAppUrl(phone, message) {
 }
 
 const MAKAUG_SUPPORT_WHATSAPP = "256760112587";
-// Temporary continuity switch while WhatsApp is blocking new device links.
-// Keep public help and listing journeys usable through the website, then set
-// this to false after the hosted WhatsApp bridge is paired and reply-tested.
-const MAKAUG_WHATSAPP_AI_WEB_FALLBACK = true;
-const MAKAUG_WEB_AI_FALLBACK_URL = "/discover-ai-chatbot#web-ai-chatbot";
 const PUBLIC_WHATSAPP_CONTEXTS = Object.freeze({
   home: "Hi makaug, I'm on makaug.com and need property help. Please guide me with the best next step.",
   sale: "Hi makaug, I'm on the For Sale page and I'm looking for a home or investment property. Please help me find suitable options, confirm availability, and connect me with a trusted owner or broker.",
@@ -20435,34 +20430,7 @@ function buildPublicWhatsappMessage(context = {}) {
 }
 
 function supportWhatsappUrl(context = {}) {
-  if (MAKAUG_WHATSAPP_AI_WEB_FALLBACK) return MAKAUG_WEB_AI_FALLBACK_URL;
   return buildWhatsAppUrl(MAKAUG_SUPPORT_WHATSAPP, buildPublicWhatsappMessage(context));
-}
-
-function syncTemporaryWebSupportCopy(link, context = "") {
-  if (!MAKAUG_WHATSAPP_AI_WEB_FALLBACK || !link) return;
-  link.target = "_self";
-  link.removeAttribute("rel");
-  link.dataset.whatsappFallback = "web";
-  const labels = {
-    "topbar-whatsapp-link": '<i class="fas fa-robot text-green-300"></i> AI help online',
-    "footer-whatsapp-label": "🤖 AI help online",
-    "footer-chat-whatsapp": "💬 Open online assistant",
-    "floating-whatsapp-link": '<i class="fas fa-robot"></i>',
-    "ai-cta-btn": '<i class="fas fa-robot text-lg"></i> Use AI Chatbot Online',
-    "listing-submit-whatsapp-link": "Use makaug online help"
-  };
-  if (labels[link.id]) link.innerHTML = labels[link.id];
-  if (link.id === "floating-whatsapp-link") link.setAttribute("aria-label", "Ask makaug AI online");
-  if (!link.id && String(link.textContent || "").toLowerCase().includes("whatsapp")) {
-    link.textContent = context === "list-property" ? "List online instead" : "Open online support";
-  }
-}
-
-function syncTemporaryOnlineAiPageCopy() {
-  if (!MAKAUG_WHATSAPP_AI_WEB_FALLBACK) return;
-  setTextById("ai-page-sub", "Use makaug's online AI to search by area, request broker contacts, and open the secure property listing form in your preferred Ugandan language.");
-  setTextById("ai-card-1-sub", "Open the secure online form to add property details and photos, then complete verification for staff review.");
 }
 
 function resolveWhatsappContextForLink(link) {
@@ -20501,33 +20469,8 @@ function syncPublicWhatsappLinks(root = document) {
     const context = resolveWhatsappContextForLink(link);
     link.href = supportWhatsappUrl({ context });
     link.dataset.whatsappResolvedContext = context;
-    syncTemporaryWebSupportCopy(link, context);
     bindSupportWhatsappAnalytics(link);
   });
-  syncTemporaryOnlineAiPageCopy();
-}
-
-function installTemporaryWebSupportFallback() {
-  if (!MAKAUG_WHATSAPP_AI_WEB_FALLBACK || document.documentElement.dataset.webSupportFallbackBound === "1") return;
-  document.documentElement.dataset.webSupportFallbackBound = "1";
-  document.addEventListener("click", (event) => {
-    const link = event.target?.closest?.('a[href^="https://wa.me/256760112587"], a[href^="https://wa.me/+256760112587"]');
-    if (!link || link.dataset.whatsappStatic === "true") return;
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    const context = resolveWhatsappContextForLink(link);
-    const isListingChoice = ["lp-wa-link", "lp-whatsapp-option-btn", "lp-whatsapp-option-inline-btn"].includes(link.id || "");
-    const href = isListingChoice
-      ? `/list-property?mode=online&type=${encodeURIComponent(getListChoiceType())}`
-      : supportWhatsappUrl({ context });
-    trackEvent("whatsapp_support_web_fallback", {
-      page: currentPage || "",
-      context,
-      href_path: window.location.pathname || "/",
-      link_id: link.id || ""
-    });
-    window.location.href = href;
-  }, true);
 }
 
 function openSupportWhatsApp(context = "", options = {}) {
@@ -32059,36 +32002,36 @@ function listChoiceMeta(type = getListChoiceType()) {
       gateTitle: "List a property for sale",
       gateCopy: "For sale listings use ownership, price, photos, Find address or place, and review checks.",
       onlineCopy: "Open the sale listing form for address, price, photos, ownership, and review.",
-      whatsappCopy: "Open WhatsApp AI with sale-listing context for guided capture.",
-      modalSub: "Sale listings use the green makaug owner flow."
+      whatsappCopy: "Message WhatsApp 0760 112 587 with your sale property and let the makaug assistant guide you.",
+      modalSub: "Choose List Online or List through WhatsApp for this sale property."
     },
     rent: {
       gateTitle: "List a rental property",
       gateCopy: "Rental listings use availability, rent period, amenities, Find address or place, and viewing setup.",
       onlineCopy: "Open the rental form for rent period, availability, amenities, address, and verification.",
-      whatsappCopy: "Open WhatsApp AI with rental context so makaug can help capture the right details.",
-      modalSub: "Rental listings use the warm amber rent flow."
+      whatsappCopy: "Message WhatsApp 0760 112 587 with your rental and let the makaug assistant guide you.",
+      modalSub: "Choose List Online or List through WhatsApp for this rental property."
     },
     student: {
       gateTitle: "List student accommodation",
       gateCopy: "Student accommodation uses a purple campus flow for campus, room setup, safety, services, and availability.",
       onlineCopy: "Open the student accommodation form for campus, room setup, services, photos, and map pin.",
-      whatsappCopy: "Open WhatsApp AI with campus and student-housing context.",
-      modalSub: "Student accommodation uses the purple campus theme."
+      whatsappCopy: "Message WhatsApp 0760 112 587 with the student accommodation details and let the makaug assistant guide you.",
+      modalSub: "Choose List Online or List through WhatsApp for student accommodation."
     },
     land: {
       gateTitle: "List land",
       gateCopy: "Land listings use title/tenure, plot size, road access, map pin, and ownership review.",
       onlineCopy: "Open the land form for title/tenure, plot size, location, photos, and review.",
-      whatsappCopy: "Open WhatsApp AI with land and title-status context.",
-      modalSub: "Land listings use a natural green title-safety flow."
+      whatsappCopy: "Message WhatsApp 0760 112 587 with the land details and let the makaug assistant guide you.",
+      modalSub: "Choose List Online or List through WhatsApp for this land listing."
     },
     commercial: {
       gateTitle: "List commercial property",
       gateCopy: "Commercial listings use business use, size, parking/loading, price terms, and location.",
       onlineCopy: "Open the commercial form for business use, size, terms, address, and verification.",
-      whatsappCopy: "Open WhatsApp AI with commercial-space context.",
-      modalSub: "Commercial listings use a warm business-orange flow."
+      whatsappCopy: "Message WhatsApp 0760 112 587 with the commercial property details and let the makaug assistant guide you.",
+      modalSub: "Choose List Online or List through WhatsApp for this commercial property."
     }
   };
   return {
@@ -32192,12 +32135,12 @@ function maybeOpenListPropertyChoiceModal() {
     chooseListPropertyOnline({ source: "route_query", skipModalClose: true });
     return;
   }
-  if (mode === "whatsapp" || isMobileListPropertyExperience()) {
+  if (mode === "whatsapp") {
     setListPropertyFormVisible(false);
     window.setTimeout(() => {
       if (currentPage === "list-property" && !lpListingPathChoice) {
         chooseListPropertyWhatsApp({
-          source: mode === "whatsapp" ? "route_query" : "mobile_route_auto",
+          source: "route_query",
           sameWindow: true
         });
       }
@@ -32211,10 +32154,6 @@ function maybeOpenListPropertyChoiceModal() {
 }
 
 function openListPropertyOptions(options = {}) {
-  if (isMobileListPropertyExperience() && options.forceChoice !== true) {
-    chooseListPropertyWhatsApp({ source: options.source || "mobile_options_auto", sameWindow: true });
-    return;
-  }
   if (!document.getElementById("list-choice-modal")) {
     trackEvent("list_property_cta_clicked", { source: "public_route_fallback" });
     window.location.href = "/list-property";
@@ -32265,10 +32204,6 @@ function handleListPropertyFreeCta(event) {
   });
   const inferredType = inferListTypeFromCurrentRoute();
   setListChoiceType(inferredType);
-  if (isMobileListPropertyExperience()) {
-    chooseListPropertyWhatsApp({ source: "mobile_list_property_cta", sameWindow: true });
-    return;
-  }
   navigatePublicRoute(`/list-property?type=${encodeURIComponent(inferredType)}`, null, { source: "list_property_cta" });
 }
 
@@ -32335,9 +32270,6 @@ function buildListPropertyWhatsAppMessage() {
 }
 
 function listPropertyWhatsAppUrl() {
-  if (MAKAUG_WHATSAPP_AI_WEB_FALLBACK) {
-    return `/list-property?mode=online&type=${encodeURIComponent(getListChoiceType())}`;
-  }
   return buildWhatsAppUrl(MAKAUG_SUPPORT_WHATSAPP, buildListPropertyWhatsAppMessage());
 }
 
@@ -32347,23 +32279,8 @@ function updateListPropertyWhatsAppLinks() {
     const link = document.getElementById(id);
     if (link) {
       link.href = href;
-      if (MAKAUG_WHATSAPP_AI_WEB_FALLBACK) {
-        link.target = "_self";
-        link.removeAttribute("rel");
-        link.dataset.whatsappFallback = "web";
-      }
     }
   });
-  if (MAKAUG_WHATSAPP_AI_WEB_FALLBACK) {
-    setTextById("list-choice-sub", "WhatsApp AI is temporarily unavailable. Use the secure online form while device linking cools down.");
-    setTextById("list-choice-wa-title", "Use Online Form Now");
-    setTextById("list-choice-wa-copy", "Continue on makaug.com. Your submission will remain in staff review until approved.");
-    setTextById("lp-choice-whatsapp-title", "Continue Online");
-    setTextById("lp-choice-whatsapp-context", "Continue with the secure makaug online form. Nothing is published before staff approval.");
-    setTextById("lp-wa-title", "WhatsApp AI is temporarily unavailable");
-    setTextById("lp-wa-copy", "Use the secure online listing form while WhatsApp device linking cools down.");
-    setTextById("lp-wa-btn-label", "💻 List Online Instead");
-  }
 }
 
 function chooseListPropertyOnline(options = {}) {
@@ -32386,17 +32303,6 @@ function chooseListPropertyOnline(options = {}) {
 
 function chooseListPropertyWhatsApp(options = {}) {
   const event = options.event;
-  if (MAKAUG_WHATSAPP_AI_WEB_FALLBACK) {
-    if (event) event.preventDefault();
-    logListPropertyIntent("online_fallback", { source: options.source || "list_property_choice" });
-    closeModal("list-choice-modal");
-    if (currentPage === "list-property") {
-      chooseListPropertyOnline({ source: options.source || "whatsapp_cooldown_fallback" });
-    } else {
-      window.location.href = `/list-property?mode=online&type=${encodeURIComponent(getListChoiceType())}`;
-    }
-    return false;
-  }
   const href = listPropertyWhatsAppUrl();
   const sameWindow = options.sameWindow === true || isMobileListPropertyExperience();
   logListPropertyIntent("whatsapp_ai", { source: options.source || "list_property_choice" });
@@ -32416,9 +32322,6 @@ function chooseListPropertyWhatsApp(options = {}) {
 }
 
 function handleListPropertyWhatsAppClick(event) {
-  if (MAKAUG_WHATSAPP_AI_WEB_FALLBACK) {
-    return chooseListPropertyWhatsApp({ event, source: "form_whatsapp_cooldown_fallback", sameWindow: true });
-  }
   const href = listPropertyWhatsAppUrl();
   logListPropertyIntent("whatsapp_ai", { source: "form_whatsapp_cta" });
   try {
@@ -48059,7 +47962,6 @@ const LISTING_LABEL_I18N = {
     "Full form on website": "Ffoomu enzijuvu ku website",
     "Via WhatsApp": "Okuyita ku WhatsApp",
     "Chat with our AI bot": "Yogera ne AI bot waffe",
-    "Always 100% Free.": "Buli kiseera Bwereere 100%.",
     "Your listing goes live within 24 hours after identity verification.": "Listing yo egenda ku mukutu mu ssaawa 24 oluvannyuma lw'okukakasa endagamuntu.",
     "Prefer WhatsApp?": "Wasinga kwagala WhatsApp?",
     "No laptop? No problem. List via our WhatsApp chatbot in any Ugandan language.": "Tolina laptop? Tewali buzibu. Teka listing okuyita mu WhatsApp chatbot yaffe mu lulimi lwonna olw'e Uganda.",
@@ -48211,7 +48113,6 @@ const LISTING_LABEL_I18N = {
     "No": "Nedda",
     "Describe the property — key features, condition, neighbourhood highlights...": "Nnyonnyola ekintu — ebyayo ebikulu, embeera, n'ebikulu ku kitundu...",
     "📍 Kampala, Uganda": "📍 Kampala, Uganda",
-    "Uganda's first completely free property platform. List, search, and connect via website or WhatsApp. Covering all 146 districts.": "Pulatifoomu y'ebintu eby'obugagga ey'olubereberye mu Uganda ey'obwereere ddala. Teka listing, noonyereza, era okwatanagane okuyita ku website oba WhatsApp. Ebikka ku disitulikiti zonna 146.",
     "© 2026 makaug. All rights reserved.": "© 2026 makaug. Eddembe lyonna likuumiddwa.",
     "quality flag(s)": "obubaka bw'omutindo",
     "No quality flags": "Tewali buzibu bwa mutindo",
@@ -48457,7 +48358,6 @@ const LISTING_LABEL_I18N = {
     "Full form on website": "Fomu kamili kwenye tovuti",
     "Via WhatsApp": "Kupitia WhatsApp",
     "Chat with our AI bot": "Ongea na AI bot wetu",
-    "Always 100% Free.": "Daima Bure 100%.",
     "Your listing goes live within 24 hours after identity verification.": "Tangazo lako linaenda hewani ndani ya saa 24 baada ya uthibitisho wa utambulisho.",
     "Prefer WhatsApp?": "Unapendelea WhatsApp?",
     "No laptop? No problem. List via our WhatsApp chatbot in any Ugandan language.": "Huna laptop? Hakuna shida. Tangaza kupitia chatbot yetu ya WhatsApp kwa lugha yoyote ya Uganda.",
@@ -48609,7 +48509,6 @@ const LISTING_LABEL_I18N = {
     "No": "Hapana",
     "Describe the property — key features, condition, neighbourhood highlights...": "Elezea mali — vipengele muhimu, hali yake, na vivutio vya eneo...",
     "📍 Kampala, Uganda": "📍 Kampala, Uganda",
-    "Uganda's first completely free property platform. List, search, and connect via website or WhatsApp. Covering all 146 districts.": "Jukwaa la kwanza kabisa la mali nchini Uganda lisilo na malipo. Tangaza, tafuta, na ungana kupitia tovuti au WhatsApp. Linafikia wilaya zote 146.",
     "© 2026 makaug. All rights reserved.": "© 2026 makaug. Haki zote zimehifadhiwa.",
     "quality flag(s)": "alama za ubora",
     "No quality flags": "Hakuna alama za ubora",
@@ -54499,7 +54398,6 @@ function initializeMakaugApp() {
   if (window.__makaugAppInitialized) return;
   window.__makaugAppInitialized = true;
   installPublicRouteInterceptor();
-  installTemporaryWebSupportFallback();
   const savedLang = getStoredMakaugLanguagePreference();
   addAdUnits();
   initGoogleAds();
