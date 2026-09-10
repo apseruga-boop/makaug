@@ -105,7 +105,7 @@ test('brochure, payment, gallery, map, sharing, video and mortgage handoff are v
   assert.match(client, /id="off-plan-gallery-dialog"/);
   assert.match(client, /closeOffPlanGallery/);
   assert.match(client, /value == null \|\| \(typeof value === 'string' && !value\.trim\(\)\)/);
-  assert.match(html, /off-plan\.js\?v=20260910-off-plan-v14/);
+  assert.match(html, /off-plan\.js\?v=20260910-off-plan-v15/);
   assert.match(html, /off-plan\.css\?v=20260910-off-plan-v4/);
   assert.match(client, /CLOSED_PERMANENTLY/);
   assert.match(client, /Archive this private project\?/);
