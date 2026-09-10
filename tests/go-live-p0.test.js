@@ -339,7 +339,7 @@ function run() {
   const listPropertyText = normalizeText(listPropertyHtml);
   assert(listPropertyHtml.includes('id="page-list-property"'), '/list-property should render the listing form route');
   assert(listPropertyHtml.includes('id="list-choice-modal"'), '/list-property should include the listing path choice modal');
-  assert(listPropertyHtml.includes('Choose the listing type, then pick online form or WhatsApp AI chatbot.'), '/list-property choice modal should explain online vs WhatsApp AI paths');
+  assert(listPropertyHtml.includes('Choose the listing type, then pick List Online or List through WhatsApp.'), '/list-property choice modal should explain both listing paths');
   assert(listPropertyHtml.includes('id="list-choice-online-btn"'), '/list-property choice modal should include List Online action');
   assert(listPropertyHtml.includes('id="lp-whatsapp-option-btn"'), '/list-property choice modal should include WhatsApp AI action');
   assert(listPropertyHtml.includes('chooseListPropertyOnline'), '/list-property should open the form only after choosing online listing');
@@ -351,7 +351,9 @@ function run() {
   assert(/id="listing-submit-modal"[^>]*class="modal-overlay"/.test(listPropertyHtml), 'listing submit modal should be hidden by default');
   assert(!/id="listing-submit-modal"[^>]*class="[^"]*\bopen\b/i.test(listPropertyHtml), 'listing submit modal should not be open before submission');
   assert(listPropertyText.includes('List Property'), '/list-property should use short page title');
-  assert(listPropertyText.includes('List your property on makaug for free.'), '/list-property should explain free listing in supporting copy');
+  assert(!listPropertyText.includes('Always 100% Free.'), '/list-property must not claim listings are always free');
+  assert(listPropertyText.includes('Start with 7 days free.'), '/list-property should explain the introductory listing period');
+  assert(listPropertyText.includes('one private listing costs UGX 25,000 per month'), '/list-property should state the current post-trial price');
   assert(!listPropertyText.includes('List Your Property - Free'), '/list-property should not use old long free title');
   assert(listPropertyText.includes('Find address or place'), '/list-property should show address-first location flow');
   assert(listPropertyHtml.includes('id="lp-current-location-btn"'), '/list-property should include share current location button');
