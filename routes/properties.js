@@ -137,7 +137,7 @@ const ACTIVE_PUBLIC_BRAND_LABEL = IS_SOUTH_AFRICA ? ACTIVE_PUBLIC_DOMAIN : 'Maka
 const activeRegionForDistrict = (district) => IS_SOUTH_AFRICA ? cleanText(district) : regionForDistrict(district);
 const LAUNCH_SEED_LISTING_MARKERS = ['SOFT LAUNCH TEST - DELETE', 'QA TEST - DELETE'];
 const LAUNCH_DUMMY_LISTING_TITLES = new Set(['sdgsdgd', 'sgsgsgsgs']);
-const PUBLIC_LOCATION_SUGGEST_CACHE_TTL_MS = 2 * 60 * 1000;
+const PUBLIC_LOCATION_SUGGEST_CACHE_TTL_MS = 60 * 1000;
 const publicLocationSuggestCache = new Map();
 
 function readPositiveIntegerEnv(names, fallback) {
@@ -169,7 +169,7 @@ function isPublicTikTokVideoUrl(value = '') {
 }
 
 const PUBLIC_PROPERTIES_CACHE_TTL_MS = readPositiveIntegerEnv(
-  ['PUBLIC_PROPERTIES_CACHE_TTL_MS', 'PUBLIC_OPPORTUNITY_SUMMARY_CACHE_TTL_MS'],
+  ['PUBLIC_PROPERTIES_CACHE_TTL_MS'],
   60 * 1000
 );
 const PUBLIC_PROPERTIES_CACHE_MAX_AGE_SECONDS = Math.max(1, Math.floor(PUBLIC_PROPERTIES_CACHE_TTL_MS / 1000));
@@ -198,6 +198,19 @@ function runPublicInventoryFollowup(task, label, context = {}) {
 
 function publicPropertiesCacheControl() {
   return `public, max-age=${PUBLIC_PROPERTIES_CACHE_MAX_AGE_SECONDS}, stale-while-revalidate=${PUBLIC_PROPERTIES_CACHE_STALE_SECONDS}`;
+}
+
+function setPublicPropertiesCacheHeaders(res, cacheable = true) {
+  const value = cacheable ? publicPropertiesCacheControl() : 'no-store';
+  res.removeHeader('Set-Cookie');
+  res.set('Cache-Control', value);
+  if (!cacheable) {
+    res.removeHeader('CDN-Cache-Control');
+    res.removeHeader('Cloudflare-CDN-Cache-Control');
+    return;
+  }
+  res.set('CDN-Cache-Control', value);
+  res.set('Cloudflare-CDN-Cache-Control', value);
 }
 
 function publicPropertiesCacheKey(req) {
@@ -282,6 +295,19 @@ function isTransientPublicPropertyDatabaseError(error = {}) {
   );
 }
 
+function sendPublicPropertySearchUnavailable(res, error = {}) {
+  if (!isTransientPublicPropertyDatabaseError(error)) return false;
+  setPublicPropertiesCacheHeaders(res, false);
+  res.set('Retry-After', '2');
+  res.status(503).json({
+    ok: false,
+    error: 'Property search is temporarily unavailable. Please try again.',
+    code: 'property_search_temporarily_unavailable',
+    retryable: true
+  });
+  return true;
+}
+
 async function withPublicPropertyDatabaseRetry(operation) {
   try {
     return await operation();
@@ -336,16 +362,35 @@ function normalizePublicSearchNeedle(value = '') {
 
 function addCanonicalLocationSearchFilter(filters, values, scope = {}) {
   if (!IS_SOUTH_AFRICA) {
+    const selectedDistrictLocations = (scope.selected || [])
+      .filter((location) => location.level === 'district');
+    const selectedDistricts = selectedDistrictLocations
+      .map((location) => normalizeDistrict(location.district || location.name))
+      .filter(Boolean);
+    const districtCanonicalPrefixes = selectedDistrictLocations
+      .map((location) => `${normalizeLocationKey(location.district || location.name)}:%`)
+      .filter((prefix) => prefix !== ':%');
     const canonicalKeys = [...(scope.exact || []), ...(scope.nearby || [])]
+      .filter((location) => location.level !== 'district')
       .map((location) => location.key)
       .filter(Boolean);
-    if (!canonicalKeys.length) return false;
-    addFilter(
-      filters,
-      values,
-      `COALESCE(p.extra_fields->>'canonical_location_id', '') = ANY(?::text[])`,
-      canonicalKeys
-    );
+    const uniqueCanonicalKeys = Array.from(new Set(canonicalKeys));
+    if (!uniqueCanonicalKeys.length && !selectedDistricts.length) return false;
+    const clauses = [];
+    const clauseValues = [];
+    if (uniqueCanonicalKeys.length) {
+      clauses.push(`COALESCE(p.extra_fields->>'canonical_location_id', '') = ANY(?::text[])`);
+      clauseValues.push(uniqueCanonicalKeys);
+    }
+    if (districtCanonicalPrefixes.length) {
+      clauses.push(`COALESCE(p.extra_fields->>'canonical_location_id', '') LIKE ANY(?::text[])`);
+      clauseValues.push(Array.from(new Set(districtCanonicalPrefixes)));
+    }
+    if (selectedDistricts.length) {
+      clauses.push(`LOWER(TRIM(COALESCE(p.district, ''))) = ANY(?::text[])`);
+      clauseValues.push(selectedDistricts.map((district) => district.toLowerCase()));
+    }
+    addFilter(filters, values, `(${clauses.join(' OR ')})`, ...clauseValues);
     return true;
   }
   const selected = scope.selected || scope.exact || [];
@@ -771,11 +816,14 @@ function approximatePublicPagination({ page, limit, offset, rowCount, hasMore })
   const safeOffset = Math.max(0, Number(offset) || 0);
   const safeRowCount = Math.max(0, Number(rowCount) || 0);
   return {
-    total: safeOffset + safeRowCount + (hasMore ? 1 : 0),
+    total: null,
     page: safePage,
     limit: safeLimit,
-    totalPages: hasMore ? safePage + 1 : Math.max(1, safePage),
-    approximate: true
+    totalPages: null,
+    hasMore: hasMore === true,
+    has_more: hasMore === true,
+    loadedThrough: safeOffset + safeRowCount,
+    approximate: false
   };
 }
 
@@ -2249,6 +2297,7 @@ function publicCanonicalLocationPayload(item = {}) {
 }
 
 router.get('/locations/catalog', (req, res) => {
+  setPublicPropertiesCacheHeaders(res, true);
   const district = normalizeDistrict(req.query.district);
   const locations = canonicalLocationOptions()
     .filter((item) => !district || (IS_SOUTH_AFRICA ? item.province === district : item.district === district))
@@ -2261,52 +2310,108 @@ router.get('/locations/catalog', (req, res) => {
   });
 });
 
-router.get('/locations/resolve', (req, res) => {
-  const query = cleanText(req.query.q || req.query.query).slice(0, 180);
-  const district = cleanText(req.query.district).slice(0, 80);
-  const resolution = resolveCanonicalUgandaLocation(query, district);
-  const match = resolution.match
-    ? publicCanonicalLocationPayload({ ...resolution.match, match: resolution.match_type, confidence: resolution.confidence, auto_resolvable: true })
-    : null;
-  let candidates = resolution.candidates.map((item) => {
-    const selected = resolution.status === 'matched' && resolution.match?.key === item.key;
-    return publicCanonicalLocationPayload({
-      ...item,
-      match: selected
-        ? resolution.match_type
-        : resolution.status === 'matched' ? 'alternative_exact_alias' : resolution.match_type,
-      did_you_mean: resolution.status === 'matched' && !selected,
-      confidence: selected ? 1 : 0,
-      auto_resolvable: selected
-    });
-  });
-  if (resolution.status === 'unmatched') {
-    candidates = canonicalLocationSuggestions(query, new Map(), 8)
-      .filter((item) => item.auto_resolvable !== true)
-      .map(publicCanonicalLocationPayload);
+async function loadPublicLocationSuggestionCounts({ listingType = '', studentPortal = false } = {}) {
+  const cacheKey = studentPortal ? 'student' : (LISTING_TYPES.includes(listingType) ? listingType : 'all');
+  let cached = publicLocationSuggestCache.get(cacheKey);
+  if (cached && (Date.now() - cached.createdAt) <= PUBLIC_LOCATION_SUGGEST_CACHE_TTL_MS) return cached.counts;
+
+  const values = [];
+  const filters = [
+    publicLivePropertyStatusSql('p'),
+    `NOT ${publicLaunchTestListingFastCondition('p')}`
+  ];
+  if (studentPortal || listingType === 'student') {
+    addFilter(filters, values, '(p.listing_type IN (?, ?) OR (p.listing_type = ? AND p.students_welcome = ?))', 'student', 'students', 'rent', true);
+  } else if (LISTING_TYPES.includes(listingType)) {
+    addFilter(filters, values, 'p.listing_type = ?', listingType);
   }
-  const suggestionRequired = resolution.status === 'unmatched' && candidates.length > 0;
-  return res.json({
-    ok: true,
-    data: match,
-    meta: {
-      canonical: true,
-      query,
-      status: suggestionRequired ? 'suggestion_required' : resolution.status,
-      unmatched: resolution.status !== 'matched',
-      approval_blocked: resolution.status !== 'matched',
-      match: resolution.match_type,
-      matched_query: resolution.matched_query || null,
-      confidence: resolution.confidence,
-      candidates,
-      did_you_mean: suggestionRequired,
-      did_you_mean_suggestions: suggestionRequired ? candidates : []
+  const result = await withPublicPropertyDatabaseRetry(() => db.query(
+    `SELECT
+       p.extra_fields->>'canonical_location_id' AS canonical_location_id,
+       p.extra_fields->>'canonical_location_level' AS canonical_location_level,
+       p.area,
+       p.district,
+       COUNT(*)::int AS listing_count
+     FROM properties p
+     WHERE ${filters.join(' AND ')}
+     GROUP BY
+       p.extra_fields->>'canonical_location_id',
+       p.extra_fields->>'canonical_location_level',
+       p.area,
+       p.district`,
+    values
+  ));
+  const canonicalRows = canonicalizeLocationRows(result.rows);
+  const directCounts = new Map(canonicalRows.map((row) => [row.canonical_key, Number(row.listing_count) || 0]));
+  cached = {
+    createdAt: Date.now(),
+    counts: canonicalLocationRollupCounts(directCounts)
+  };
+  publicLocationSuggestCache.set(cacheKey, cached);
+  return cached.counts;
+}
+
+router.get('/locations/resolve', async (req, res, next) => {
+  try {
+    setPublicPropertiesCacheHeaders(res, true);
+    const query = cleanText(req.query.q || req.query.query).slice(0, 180);
+    const district = cleanText(req.query.district).slice(0, 80);
+    const counts = await loadPublicLocationSuggestionCounts();
+    const resolution = resolveCanonicalUgandaLocation(query, district, { counts });
+    const match = resolution.match
+      ? publicCanonicalLocationPayload({
+        ...resolution.match,
+        listing_count: Number(counts.get(resolution.match.key)) || 0,
+        match: resolution.match_type,
+        confidence: resolution.confidence,
+        auto_resolvable: true
+      })
+      : null;
+    let candidates = resolution.candidates.map((item) => {
+      const selected = resolution.status === 'matched' && resolution.match?.key === item.key;
+      return publicCanonicalLocationPayload({
+        ...item,
+        listing_count: Number(counts.get(item.key)) || 0,
+        match: selected
+          ? resolution.match_type
+          : resolution.status === 'matched' ? 'alternative_exact_alias' : resolution.match_type,
+        did_you_mean: resolution.status === 'matched' && !selected,
+        confidence: selected ? 1 : 0,
+        auto_resolvable: selected
+      });
+    });
+    if (resolution.status === 'unmatched') {
+      candidates = canonicalLocationSuggestions(query, counts, 8)
+        .filter((item) => item.auto_resolvable !== true)
+        .map(publicCanonicalLocationPayload);
     }
-  });
+    const suggestionRequired = resolution.status === 'unmatched' && candidates.length > 0;
+    return res.json({
+      ok: true,
+      data: match,
+      meta: {
+        canonical: true,
+        query,
+        status: suggestionRequired ? 'suggestion_required' : resolution.status,
+        unmatched: resolution.status !== 'matched',
+        approval_blocked: resolution.status !== 'matched',
+        match: resolution.match_type,
+        matched_query: resolution.matched_query || null,
+        confidence: resolution.confidence,
+        candidates,
+        did_you_mean: suggestionRequired,
+        did_you_mean_suggestions: suggestionRequired ? candidates : []
+      }
+    });
+  } catch (error) {
+    if (sendPublicPropertySearchUnavailable(res, error)) return undefined;
+    return next(error);
+  }
 });
 
 router.get('/locations/suggest', async (req, res, next) => {
   try {
+    setPublicPropertiesCacheHeaders(res, true);
     const query = cleanText(req.query.q || req.query.query).slice(0, 120);
     const rawListingCategory = cleanText(req.query.listing_type || req.query.type || req.query.category);
     const categoryToken = rawListingCategory.toLowerCase().replace(/[\s/.-]+/g, '_');
@@ -2318,45 +2423,8 @@ router.get('/locations/suggest', async (req, res, next) => {
       return res.json({ ok: true, data: [], meta: { canonical: true, max_results: limit } });
     }
 
-    const cacheKey = studentPortal ? 'student' : (LISTING_TYPES.includes(listingType) ? listingType : 'all');
-    let cached = publicLocationSuggestCache.get(cacheKey);
-    if (!cached || (Date.now() - cached.createdAt) > PUBLIC_LOCATION_SUGGEST_CACHE_TTL_MS) {
-      const values = [];
-      const filters = [
-        publicLivePropertyStatusSql('p'),
-        `NOT ${publicLaunchTestListingFastCondition('p')}`
-      ];
-      if (studentPortal || listingType === 'student') {
-        addFilter(filters, values, '(p.listing_type IN (?, ?) OR (p.listing_type = ? AND p.students_welcome = ?))', 'student', 'students', 'rent', true);
-      } else if (LISTING_TYPES.includes(listingType)) {
-        addFilter(filters, values, 'p.listing_type = ?', listingType);
-      }
-      const result = await withPublicPropertyDatabaseRetry(() => db.query(
-        `SELECT
-           p.extra_fields->>'canonical_location_id' AS canonical_location_id,
-           p.extra_fields->>'canonical_location_level' AS canonical_location_level,
-           p.area,
-           p.district,
-           COUNT(*)::int AS listing_count
-         FROM properties p
-         WHERE ${filters.join(' AND ')}
-         GROUP BY
-           p.extra_fields->>'canonical_location_id',
-           p.extra_fields->>'canonical_location_level',
-           p.area,
-           p.district`,
-        values
-      ));
-      const canonicalRows = canonicalizeLocationRows(result.rows);
-      const directCounts = new Map(canonicalRows.map((row) => [row.canonical_key, Number(row.listing_count) || 0]));
-      cached = {
-        createdAt: Date.now(),
-        counts: canonicalLocationRollupCounts(directCounts)
-      };
-      publicLocationSuggestCache.set(cacheKey, cached);
-    }
-
-    const suggestions = canonicalLocationSuggestions(query, cached.counts, limit);
+    const counts = await loadPublicLocationSuggestionCounts({ listingType, studentPortal });
+    const suggestions = canonicalLocationSuggestions(query, counts, limit);
     const exactSuggestions = suggestions.filter((item) => item.match === 'exact_alias' && item.auto_resolvable === true);
     const disambiguationSuggestions = suggestions.filter((item) => item.match === 'exact_alias' && item.auto_resolvable !== true);
     const didYouMeanSuggestions = suggestions.filter((item) => item.match !== 'exact_alias');
@@ -2376,6 +2444,7 @@ router.get('/locations/suggest', async (req, res, next) => {
       }
     });
   } catch (error) {
+    if (sendPublicPropertySearchUnavailable(res, error)) return undefined;
     return next(error);
   }
 });
@@ -2548,7 +2617,7 @@ async function listPropertiesHandler(req, res, next) {
     const forcePublicCacheRefresh = canUsePublicResponseCache && isPublicCacheRefreshRequest(req);
     const publicCache = canUsePublicResponseCache ? getPublicPropertiesCache(req) : { key: '', payload: null };
     if (publicCache.payload && !forcePublicCacheRefresh) {
-      res.set('Cache-Control', publicPropertiesCacheControl());
+      setPublicPropertiesCacheHeaders(res, true);
       res.set('X-Makaug-Properties-Cache', 'HIT');
       return res.json(publicCache.payload);
     }
@@ -2776,6 +2845,7 @@ async function listPropertiesHandler(req, res, next) {
     const total = hasOpportunitySummary ? Number(opportunitySummary.total || 0) : null;
     if (summaryOnly) {
       if (opportunitySummaryMeta?.marker) res.set('X-Makaug-Properties-Count-Marker', opportunitySummaryMeta.marker);
+      setPublicPropertiesCacheHeaders(res, canUsePublicResponseCache);
       return res.json({
         ok: true,
         data: [],
@@ -3253,10 +3323,11 @@ async function listPropertiesHandler(req, res, next) {
       }
     };
     if (canUsePublicResponseCache) setPublicPropertiesCache(publicCache.key, payload);
-    res.set('Cache-Control', canUsePublicResponseCache ? publicPropertiesCacheControl() : 'no-store');
+    setPublicPropertiesCacheHeaders(res, canUsePublicResponseCache);
     res.set('X-Makaug-Properties-Cache', canUsePublicResponseCache ? (forcePublicCacheRefresh ? 'REFRESH' : 'MISS') : 'BYPASS');
     return res.json(payload);
   } catch (error) {
+    if (sendPublicPropertySearchUnavailable(res, error)) return undefined;
     return next(error);
   }
 }
@@ -5561,11 +5632,14 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
 module.exports = router;
 module.exports._test = {
   addCanonicalLocationSearchFilter,
+  approximatePublicPagination,
   compactPublicCardRow,
+  loadPublicLocationSuggestionCounts,
   parseCanonicalLocationKeys,
   publicLocationMatchForRow,
   publicPropertyRow,
   publicPropertiesCacheKey,
+  sendPublicPropertySearchUnavailable,
   isSourcedInventoryCandidateRecord,
   sourcedCandidateRecordHasApprovalLocation,
   sourcedInventoryApprovalPolicy,

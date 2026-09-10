@@ -153,17 +153,17 @@ test('anonymous public property APIs suppress launch seed QA listings', () => {
   assert.match(routeSource, /const publicOnly = parseBooleanLike\(req\.query\.public_only \|\| req\.query\.publicOnly, false\)/);
   assert.match(routeSource, /if \(publicOnly \|\| !adminAccess\) \{\s*addPublicLaunchSeedFilter\(filters, values\);/);
   assert.match(appSource, /PUBLIC_LISTINGS_FAST_PAGE_LIMIT = 8/);
-  assert.match(appSource, /PUBLIC_LISTINGS_BACKGROUND_PAGE_LIMIT = 24/);
-  assert.match(appSource, /PUBLIC_LISTINGS_BACKGROUND_MAX_PAGES = 80/);
-  assert.match(appSource, /PUBLIC_LISTINGS_ROUTE_SEARCH_MAX_PAGES = 80/);
+  assert.doesNotMatch(appSource, /PUBLIC_LISTINGS_BACKGROUND_PAGE_LIMIT/);
+  assert.doesNotMatch(appSource, /PUBLIC_LISTINGS_BACKGROUND_MAX_PAGES/);
+  assert.doesNotMatch(appSource, /PUBLIC_LISTINGS_ROUTE_SEARCH_MAX_PAGES/);
   assert.match(appSource, /PUBLIC_RESULTS_PAGE_SIZE = 24/);
   assert.match(appSource, /PUBLIC_PAGINATION_CATEGORIES = Object\.freeze\(\["sale", "rent", "students", "commercial", "land"\]\)/);
   assert.match(appSource, /PUBLIC_OPPORTUNITY_SUMMARY_PATH = "\/api\/properties\?status=approved&public_only=1&limit=1&page=1&summary_only=1&include_summary=1"/);
   assert.match(routeSource, /const summaryOnly = parseBooleanLike\(req\.query\.summary_only \|\| req\.query\.summaryOnly, false\)/);
   assert.match(routeSource, /const includeSummary = summaryOnly \|\| parseBooleanLike/);
   assert.match(routeSource, /if \(summaryOnly\) \{/);
-  assert.match(appSource, /PUBLIC_CATEGORY_DEEP_HYDRATION_DELAY_MS = 8000/);
-  assert.match(appSource, /const publicCategoryDeepHydrationTimers = new Map\(\)/);
+  assert.doesNotMatch(appSource, /PUBLIC_CATEGORY_DEEP_HYDRATION_DELAY_MS/);
+  assert.doesNotMatch(appSource, /publicCategoryDeepHydrationTimers/);
   assert.match(appSource, /const publicActiveCategoryHydrationPromises = new Map\(\)/);
   assert.match(appSource, /function applyPublicRowsForUi\(publicRowsSnapshot, responseSnapshot, options = \{\}\)/);
   assert.match(appSource, /function exactPublicPaginationTotal\(response\)/);
@@ -178,14 +178,11 @@ test('anonymous public property APIs suppress launch seed QA listings', () => {
   assert(appSource.indexOf('const { rows: firstPageRows, firstResponse: firstPageResponse } = await firstPageRowsPromise') < appSource.indexOf('const summaryStats = await summaryStatsPromise'));
   assert.match(appSource, /applyPublicRowsForUi\(firstPageRows, firstPageResponse\);[\s\S]*cachePublicCategoryPageRows\(activeCategory, 1, firstPageRows\);[\s\S]*renderAll\(\);/);
   assert.match(appSource, /cachePublicCategoryPageRows\(activeCategory, 1, firstPageRows\)/);
-  assert.match(appSource, /function schedulePublicCategoryDeepHydration\(category, totalCount = 0\)/);
-  assert.match(appSource, /window\.setTimeout\(\(\) => \{[\s\S]*refreshActivePublicInventoryCategoryFromApi\(\{ silent: true \}\)/);
-  assert.match(appSource, /schedulePublicCategoryDeepHydration\(activeCategory, categoryTotal\);\s*return true;/);
-  assert.match(appSource, /const backgroundRowsPromise = fetchPublicPaginatedRows\("\/api\/properties\?status=approved&public_only=1", \{/);
-  assert.match(appSource, /limit: PUBLIC_LISTINGS_BACKGROUND_PAGE_LIMIT,[\s\S]*maxPages: PUBLIC_LISTINGS_BACKGROUND_MAX_PAGES,[\s\S]*includeSummary: false/);
+  assert.doesNotMatch(appSource, /function schedulePublicCategoryDeepHydration\(/);
+  assert.doesNotMatch(appSource, /const backgroundRowsPromise = fetchPublicPaginatedRows/);
   assert.match(appSource, /const firstPageCategoryExactTotal = activeCategory \? exactPublicPaginationTotalValue\(firstPageResponse\) : null;/);
   assert.match(appSource, /const categoryTotal = activeCategory \? firstPageCategoryExactTotal \?\? \(publicOpportunityStatForCategory\(activeCategory\) \?\? summaryStats\?\.\[activeCategory\] \?\? 0\) : 0;/);
-  assert.match(appSource, /const \{ rows: publicRows, firstResponse \} = await backgroundRowsPromise;\s*const featuredRows = await featuredRowsPromise;\s*applyPublicRowsForUi\(publicRows, firstResponse, \{ featuredRows, prune: true \}\);\s*renderAll\(\);/);
+  assert.match(appSource, /await featuredRowsPromise;\s*return true;/);
   assert.match(appSource, /function publicOpportunityStatForCategory\(category\)/);
   assert.match(appSource, /function getPublicCategoryDisplayCount\(category, localCount = 0, \{ filtered = false \} = \{\}\)/);
   assert.match(appSource, /function setPublicCategoryCount\(category, localCount = 0, options = \{\}\)/);
@@ -199,15 +196,15 @@ test('anonymous public property APIs suppress launch seed QA listings', () => {
   assert.match(appSource, /data-public-pagination-bar/);
   assert.match(appSource, /onclick="goToPublicCategoryPage\('\$\{adminAttr\(key\)\}', \$\{visiblePage\}\)"/);
   assert.match(appSource, /limit=\$\{PUBLIC_RESULTS_PAGE_SIZE\}&page=\$\{safePage\}/);
-  assert.match(appSource, /async function fetchPublicCategoryRows\(category, totalCount = 0, options = \{\}\)/);
+  assert.doesNotMatch(appSource, /async function fetchPublicCategoryRows\(/);
   assert.match(appSource, /async function refreshActivePublicInventoryCategoryFromApi\(\{ silent = true \} = \{\}\)/);
   assert.match(appSource, /if \(publicListingsApiLoading\) return refreshActivePublicInventoryCategoryFromApi\(\{ silent \}\)/);
   assert.match(appSource, /return "\/api\/properties\?status=approved&public_only=1&student_portal=1"/);
   assert.match(appSource, /category=\$\{encodeURIComponent\(normalized\)\}/);
   assert.match(appSource, /const activeCategory = activePublicInventoryCategoryFromRoute\(\)/);
-  assert.match(appSource, /onPageRows: \(pageRows, pageResponse\) => \{/);
-  assert.match(appSource, /applyPublicRowsForUi\(pageRows, pageResponse\);\s*renderAll\(\);/);
-  assert.match(appSource, /await fetchPublicCategoryRows\(activeCategory, categoryTotal, \{/);
+  assert.match(appSource, /maxPages: 1,/);
+  assert.match(appSource, /applyPublicRowsForUi\(firstPageRows, firstPageResponse\);/);
+  assert.doesNotMatch(appSource, /await fetchPublicCategoryRows\(/);
   assert.match(appSource, /renderPublicCategoryPageWithAuthoritativeCache\("sale", saleListings, \{/);
   assert.match(appSource, /renderPublicCategoryPageWithAuthoritativeCache\("rent", rentListings, \{/);
   assert.match(appSource, /setPublicCategoryCount\(key, total, \{ filtered: true \}\)/);
@@ -215,7 +212,8 @@ test('anonymous public property APIs suppress launch seed QA listings', () => {
   assert.match(appSource, /renderPublicCategoryPage\("rent", list, \{/);
   assert(appSource.includes('const summaryParam = hasSummaryParam ? "" : `&include_summary=${includeSummary ? "1" : "0"}`;'));
   assert.match(appSource, /publicListingsApiTotal = Number\.isFinite\(apiTotal\) \? apiTotal : rows\.length/);
-  assert.match(appSource, /apiRequest\(`\$\{path\}\$\{separator\}limit=\$\{limit\}&page=\$\{page\}\$\{summaryParam\}`, \{ skipAuth: true \}\)/);
+  assert.match(appSource, /const requestPath = `\$\{path\}\$\{separator\}limit=\$\{limit\}&page=\$\{page\}\$\{summaryParam\}`/);
+  assert.match(appSource, /response = await apiRequest\(requestPath, \{ skipAuth: true \}\)/);
   assert.match(routeSource, /} else \{\s*opportunitySummary = null;\s*\}/);
   assert.match(routeSource, /const rowLimit = hasOpportunitySummary \? limit : limit \+ 1/);
   assert.match(routeSource, /const pagination = hasOpportunitySummary[\s\S]*approximatePublicPagination/);
@@ -529,14 +527,13 @@ test('public shell uses precompiled Tailwind CSS instead of the runtime Play CDN
   assert.match(tailwindCssSource, /\.hover\\:bg-green-50:hover/);
 });
 
-test('public result pages expose the full inventory and avoid black iframe media cards', () => {
-  assert.match(appSource, /const PUBLIC_LISTINGS_BACKGROUND_MAX_PAGES = 80;/);
-  assert.match(appSource, /const PUBLIC_LISTINGS_ROUTE_SEARCH_MAX_PAGES = 80;/);
+test('public result pages use explicit server pagination and avoid black iframe media cards', () => {
+  assert.doesNotMatch(appSource, /PUBLIC_LISTINGS_BACKGROUND_MAX_PAGES/);
+  assert.doesNotMatch(appSource, /PUBLIC_LISTINGS_ROUTE_SEARCH_MAX_PAGES/);
   assert.match(appSource, /const PUBLIC_RESULTS_PAGE_SIZE = 24;/);
-  assert.doesNotMatch(appSource, /const PUBLIC_LISTINGS_BACKGROUND_MAX_PAGES = 2;/);
-  assert.match(asyncFunctionSource('fetchPublicCategoryRows'), /fetchPublicPaginatedRows/);
-  assert.doesNotMatch(asyncFunctionSource('fetchPublicCategoryRows'), /Promise\.all\(Array\.from/);
-  assert.match(functionSource('renderPublicCategoryPagination'), /Page \$\{page\} of \$\{totalPages\}/);
+  assert.doesNotMatch(appSource, /async function fetchPublicCategoryRows\(/);
+  assert.match(functionSource('renderPublicCategoryPagination'), /unknownTotal/);
+  assert.match(functionSource('renderPublicCategoryPagination'), /\$\{hasMore \? "\+" : ""\} properties/);
   assert.match(functionSource('renderPublicCategoryPagination'), /‹ Prev/);
   assert.match(functionSource('renderPublicCategoryPagination'), /Next ›/);
   assert.match(functionSource('renderPublicCategoryPage'), /PUBLIC_RESULTS_PAGE_SIZE/);
@@ -588,9 +585,11 @@ test('public result pages expose the full inventory and avoid black iframe media
 test('public properties API is cacheable and uses the fast public summary path', () => {
   assert.match(propertiesRouteSource, /function readPositiveIntegerEnv\(names, fallback\)/);
   assert.match(propertiesRouteSource, /PUBLIC_PROPERTIES_CACHE_TTL_MS = readPositiveIntegerEnv\(/);
-  assert.match(propertiesRouteSource, /PUBLIC_OPPORTUNITY_SUMMARY_CACHE_TTL_MS/);
+  assert.match(propertiesRouteSource, /\['PUBLIC_PROPERTIES_CACHE_TTL_MS'\]/);
   assert.match(propertiesRouteSource, /60 \* 1000/);
   assert.match(propertiesRouteSource, /function publicPropertiesCacheControl\(\)/);
+  assert.match(propertiesRouteSource, /res\.removeHeader\('Set-Cookie'\)/);
+  assert.match(propertiesRouteSource, /Cloudflare-CDN-Cache-Control/);
   assert.match(propertiesRouteSource, /function clearPublicPropertiesCache\(reason = 'public_inventory_changed'\)/);
   assert.match(propertiesRouteSource, /PUBLIC_PROPERTIES_CACHE_IGNORED_QUERY_KEYS = new Set\(\[/);
   assert.match(propertiesRouteSource, /'_cb'/);
@@ -634,7 +633,7 @@ test('public properties API is cacheable and uses the fast public summary path',
   assert.match(propertiesRouteSource, /fast_manual_notification_response/);
   assert.match(propertiesRouteSource, /runPublicInventoryFollowup\(\s*\(\) => matchListingToSavedSearches/);
   assert.doesNotMatch(propertiesRouteSource, /const opportunityBucketSql = publicOpportunityBucketSql\('p'\)/);
-  assert.match(propertiesRouteSource, /Cache-Control', canUsePublicResponseCache \? publicPropertiesCacheControl\(\) : 'no-store'/);
+  assert.match(propertiesRouteSource, /setPublicPropertiesCacheHeaders\(res, canUsePublicResponseCache\)/);
 });
 
 test('property detail enquiries are routed to the listing contact, not the signed-in admin viewer', () => {

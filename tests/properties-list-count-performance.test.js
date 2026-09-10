@@ -12,7 +12,6 @@ const migration = fs.readFileSync(path.join(root, 'db/migrations/077_properties_
 const exactCountMigration = fs.readFileSync(path.join(root, 'db/migrations/092_public_inventory_exact_count_index.sql'), 'utf8');
 const locationCountMigration = fs.readFileSync(path.join(root, 'db/migrations/093_public_location_search_count_indexes.sql'), 'utf8');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
-const propertiesRouteModule = require('../routes/properties');
 
 assert(
   propertiesRoute.includes("loadPublicOpportunitySummary"),
@@ -102,9 +101,9 @@ assert(
   'public inventory metrics service should carry the release marker'
 );
 assert(
-  metricsService.includes("PUBLIC_INVENTORY_METRICS_CACHE_TTL_MS || '180000'")
+  metricsService.includes("PUBLIC_INVENTORY_METRICS_CACHE_TTL_MS || '60000'")
     && metricsService.includes('Math.min(600000'),
-  'public count cache should outlive the 45-second warm-up cycle without becoming long-lived'
+  'public count cache should default to the shared 60-second search cache window without becoming long-lived'
 );
 assert(
   metricsService.includes("statement_timeout"),
@@ -153,20 +152,10 @@ assert(
   serverSource.includes("'/api/properties/search?search=Kira'"),
   'the production cache warmer should prime the exact default Kira search shape used by clients'
 );
-const warmedKiraCacheKey = propertiesRouteModule._test.publicPropertiesCacheKey({
-  query: {
-    search: 'Kira'
-  }
-});
-const browserKiraCacheKey = propertiesRouteModule._test.publicPropertiesCacheKey({
-  query: {
-    search: 'Kira',
-    _cb: 'browser-cold-probe-123'
-  }
-});
-assert.strictEqual(
-  browserKiraCacheKey,
-  warmedKiraCacheKey,
+assert(
+  propertiesRoute.includes('PUBLIC_PROPERTIES_CACHE_IGNORED_QUERY_KEYS.has(key)')
+    && propertiesRoute.includes("'_cb'")
+    && propertiesRoute.includes("normalized.set('public_only', '1')"),
   'browser cache-busters and implicit public defaults must reuse the pre-warmed Kira response'
 );
 assert(

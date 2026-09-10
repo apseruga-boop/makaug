@@ -876,12 +876,9 @@ let aboutPublicListingsTotal = null;
 let aboutPublicListingsTotalPromise = null;
 const publicActiveCategoryHydrationPromises = new Map();
 const PUBLIC_LISTINGS_FAST_PAGE_LIMIT = 8;
-const PUBLIC_LISTINGS_BACKGROUND_PAGE_LIMIT = 24;
-const PUBLIC_LISTINGS_BACKGROUND_MAX_PAGES = 80;
-const PUBLIC_LISTINGS_ROUTE_SEARCH_MAX_PAGES = 80;
 const PUBLIC_RESULTS_PAGE_SIZE = 24;
+const PUBLIC_SEARCH_RETRY_DELAY_MS = 1500;
 const PUBLIC_OPPORTUNITY_SUMMARY_PATH = "/api/properties?status=approved&public_only=1&limit=1&page=1&summary_only=1&include_summary=1";
-const PUBLIC_CATEGORY_DEEP_HYDRATION_DELAY_MS = 8000;
 const STUDENT_PAGE_PAGINATION_FIX_MARKER = "student-page-pagination-fix-20260715";
 const STUDENT_PAGINATION_NAV_FIX_MARKER = "student-pagination-nav-fix-20260715";
 const CATEGORY_PAGINATION_TOTAL_FIX_MARKER = "category-pagination-total-fix-20260715";
@@ -889,7 +886,6 @@ const CATEGORY_PAGINATION_API_TOTAL_FIX_MARKER = "category-pagination-api-total-
 const CATEGORY_PAGINATION_STARTUP_LOADING_FIX_MARKER = "category-pagination-startup-loading-fix-20260715";
 const CATEGORY_PAGINATION_LOADING_RENDER_FIX_MARKER = "category-pagination-loading-render-fix-20260715";
 const CATEGORY_PAGINATION_NO_LOCAL_TOTAL_FIX_MARKER = "category-pagination-no-local-total-fix-20260715";
-const publicCategoryDeepHydrationTimers = new Map();
 const PUBLIC_PAGINATION_CATEGORIES = Object.freeze(["sale", "rent", "students", "commercial", "land"]);
 const publicCategoryPaginationState = {};
 const publicCategoryPageRowsCache = {};
@@ -965,6 +961,7 @@ let adminUnlockTapBuffer = [];
 const lpHierarchyAnchorCache = new Map();
 const LISTING_NEW_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
 const typeaheadState = { panel: null, input: null, items: [], index: -1, onPick: null };
+const heroCanonicalLocationState = { selected: null, requestSeq: 0, timer: null };
 const DEFAULT_NEAR_ME_RADIUS_MI = 10;
 const SEARCH_RADIUS_MI_OPTIONS = [0, 0.25, 0.5, 1, 3, 5, 10, 15, 20, 30, 40, 50];
 const DEFAULT_NEAR_ME_RADIUS_KM = 10;
@@ -38037,6 +38034,7 @@ function routeSearchHandoffPayload(page) {
   const qs = new URLSearchParams(window.location.search || "");
   const query = normalizeInput(qs.get("q") || qs.get("query") || qs.get("search") || "");
   const area = normalizeInput(qs.get("area") || qs.get("district") || qs.get("location") || qs.get("campus") || qs.get("university") || "");
+  const locations = normalizeInput(qs.get("locations") || qs.get("location_ids") || "");
   const filters = {
     propertyType: normalizeInput(qs.get("property_type") || qs.get("propertyType") || qs.get("room_type") || qs.get("commercial_type") || qs.get("land_title_type") || ""),
     transactionType: normalizeInput(qs.get("transaction_type") || qs.get("transactionType") || ""),
@@ -38049,7 +38047,7 @@ function routeSearchHandoffPayload(page) {
     sort: normalizeInput(qs.get("sort") || "")
   };
   const hasFilters = Object.values(filters).some(Boolean);
-  if (!query && !area && !hasFilters) return seoRouteStateHandoffPayload(targetPage);
+  if (!query && !area && !locations && !hasFilters) return seoRouteStateHandoffPayload(targetPage);
   const radiusKmParam = normalizeInput(qs.get("radiusKm") || qs.get("radius_km") || "");
   const radiusMilesParam = normalizeInput(qs.get("radiusMiles") || qs.get("radius_miles") || qs.get("radius") || "");
   const radiusKmFromLegacyMiles = radiusKmParam ? "" : (radiusMilesParam ? radiusKmSelectValue(milesToKm(radiusMilesParam)) : "");
@@ -38057,6 +38055,8 @@ function routeSearchHandoffPayload(page) {
     page: targetPage,
     query: query || area,
     area,
+    locations,
+    nearby: normalizeInput(qs.get("nearby") || qs.get("nearby_km") || ""),
     filters,
     radiusKm: radiusKmParam || radiusKmFromLegacyMiles || null,
     radiusMiles: radiusMilesParam || null,
@@ -38070,10 +38070,15 @@ function heroSearchRouteUrl(page, payload = {}) {
   if (!route) return "";
   const query = normalizeInput(payload.query || "");
   const area = normalizeInput(payload.area || "");
+  const locations = normalizeInput(payload.locations || "");
   const filters = payload.filters || {};
   const params = new URLSearchParams();
   if (query) params.set("q", query);
   if (area) params.set(targetPage === "students" ? "campus" : "area", area);
+  if (locations) {
+    params.set("locations", locations);
+    params.set("nearby", String(payload.nearby ?? 3));
+  }
   if (payload.radiusKm) params.set("radiusKm", String(payload.radiusKm));
   else if (payload.radiusMiles) params.set("radiusKm", String(Number(milesToKm(payload.radiusMiles).toFixed(3))));
   if (filters.propertyType) params.set("property_type", filters.propertyType);
@@ -38750,16 +38755,16 @@ function activateTypeaheadIndex(nextIndex) {
   nodes[nextIndex].scrollIntoView({ block: "nearest" });
 }
 
-function chooseTypeahead(value) {
+function chooseTypeahead(value, item = null) {
   if (!typeaheadState.input) return;
   typeaheadState.input.value = value;
-  if (typeof typeaheadState.onPick === "function") typeaheadState.onPick(value);
+  if (typeof typeaheadState.onPick === "function") typeaheadState.onPick(value, item);
   closeTypeahead();
 }
 
-function renderTypeahead(inputEl, pool, onPick) {
+function renderTypeahead(inputEl, pool, onPick, options = {}) {
   const query = inputEl.value || "";
-  const matches = rankSuggestions(pool, query).slice(0, 8);
+  const matches = (options.preRanked ? pool : rankSuggestions(pool, query)).slice(0, 8);
   if (!matches.length) {
     closeTypeahead();
     return;
@@ -38769,10 +38774,10 @@ function renderTypeahead(inputEl, pool, onPick) {
   typeaheadState.items = matches;
   typeaheadState.index = -1;
   typeaheadState.onPick = onPick;
-  panel.innerHTML = matches.map((m) => `
-    <button type="button" class="rm-sugg-item" data-value="${encodeURIComponent(m.value)}">
-      <span class="rm-sugg-main">${m.value}</span>
-      <span class="rm-sugg-meta">${m.kind}</span>
+  panel.innerHTML = matches.map((m, index) => `
+    <button type="button" class="rm-sugg-item" data-value="${encodeURIComponent(m.value)}" data-index="${index}">
+      <span class="rm-sugg-main">${adminEscape(m.value)}</span>
+      <span class="rm-sugg-meta">${adminEscape(`${m.kind}${Number.isFinite(Number(m.listing_count)) ? ` · ${Number(m.listing_count)} live` : ""}`)}</span>
     </button>
   `).join("");
   positionTypeaheadPanel(inputEl);
@@ -38780,7 +38785,8 @@ function renderTypeahead(inputEl, pool, onPick) {
   panel.querySelectorAll(".rm-sugg-item").forEach((btn) => {
     btn.addEventListener("mousedown", (e) => {
       e.preventDefault();
-      chooseTypeahead(decodeURIComponent(btn.dataset.value || ""));
+      const item = matches[Number(btn.dataset.index || 0)] || null;
+      chooseTypeahead(decodeURIComponent(btn.dataset.value || ""), item);
     });
   });
 }
@@ -38803,7 +38809,7 @@ function handleTypeaheadKeydown(e, poolFactory, onPick) {
     if (!isOpen || typeaheadState.index < 0) return;
     e.preventDefault();
     const chosen = typeaheadState.items[typeaheadState.index];
-    if (chosen) chooseTypeahead(chosen.value);
+    if (chosen) chooseTypeahead(chosen.value, chosen);
   } else if (e.key === "Escape") {
     closeTypeahead();
   }
@@ -38818,8 +38824,69 @@ function wireInputTypeahead(inputId, poolFactory, onPick) {
   input.addEventListener("keydown", (e) => handleTypeaheadKeydown(e, poolFactory, onPick));
 }
 
+function heroCanonicalSuggestionItems(response = {}) {
+  return canonicalLocationSuggestionsFromResponse(response).map((item) => ({
+    ...item,
+    value: item.name || item.label || "",
+    kind: item.explicit_selection_required
+      ? `${item.match === "exact_alias" ? "Choose district" : "Did you mean"} · ${item.type_label || "Location"}`
+      : item.type_label || "Location"
+  })).filter((item) => item.value);
+}
+
+async function fetchHeroCanonicalLocationSuggestions(input, query) {
+  const requestSeq = heroCanonicalLocationState.requestSeq + 1;
+  heroCanonicalLocationState.requestSeq = requestSeq;
+  const params = new URLSearchParams({ q: query, limit: "8" });
+  if (currentTab === "students") params.set("student_portal", "1");
+  else params.set("listing_type", currentTab);
+  setHeroLocationStatus("Searching live locations...", "loading");
+  try {
+    const body = await fetchPublicJsonWithRetry(`/api/properties/locations/suggest?${params.toString()}`);
+    if (requestSeq !== heroCanonicalLocationState.requestSeq) return;
+    const items = heroCanonicalSuggestionItems(body);
+    renderTypeahead(input, items, (_value, item) => {
+      heroCanonicalLocationState.selected = item?.canonical_location_id || item?.id ? item : null;
+      if (heroCanonicalLocationState.selected) {
+        setHeroLocationStatus(`${item.value} selected · includes listings within 3 km`, "active");
+      }
+    }, { preRanked: true });
+    setHeroLocationStatus(items.length ? "Choose a suggested location." : "No matching location. Try a nearby town or district.", items.length ? "idle" : "error");
+  } catch (error) {
+    if (requestSeq !== heroCanonicalLocationState.requestSeq) return;
+    const fallback = getLocationSuggestionPool(false).filter((item) => ["District", "Region"].includes(item.kind));
+    renderTypeahead(input, fallback, () => {
+      heroCanonicalLocationState.selected = null;
+    });
+    setHeroLocationStatus("Live suggestions are taking longer than usual. District and region fallback is available; please retry for a precise area.", "error");
+  }
+}
+
+function wireHeroCanonicalLocationTypeahead() {
+  const input = document.getElementById("hero-q");
+  if (!input || input.dataset.canonicalHeroWired === "1") return;
+  input.dataset.canonicalHeroWired = "1";
+  const requestSuggestions = () => {
+    const query = input.value.trim();
+    if (heroCanonicalLocationState.selected && query !== (heroCanonicalLocationState.selected.name || heroCanonicalLocationState.selected.label || heroCanonicalLocationState.selected.value)) {
+      heroCanonicalLocationState.selected = null;
+    }
+    window.clearTimeout(heroCanonicalLocationState.timer);
+    if (query.length < 2) {
+      closeTypeahead();
+      return;
+    }
+    heroCanonicalLocationState.timer = window.setTimeout(() => fetchHeroCanonicalLocationSuggestions(input, query), 180);
+  };
+  input.addEventListener("input", requestSuggestions);
+  input.addEventListener("focus", requestSuggestions);
+  input.addEventListener("keydown", (event) => handleTypeaheadKeydown(event, () => typeaheadState.items, (_value, item) => {
+    heroCanonicalLocationState.selected = item?.canonical_location_id || item?.id ? item : null;
+  }));
+}
+
 function wireSearchTypeahead() {
-  wireInputTypeahead("hero-q", () => getLocationSuggestionPool(currentTab === "students"), () => {});
+  wireHeroCanonicalLocationTypeahead();
   wireInputTypeahead("sale-location-f", () => getLocationSuggestionPool(false), () => filterListings("sale"));
   wireInputTypeahead("rent-location-f", () => getLocationSuggestionPool(false), () => filterListings("rent"));
   wireInputTypeahead("commercial-q-f", () => getLocationSuggestionPool(false), () => filterCommercial());
@@ -44521,25 +44588,39 @@ async function fetchPublicPaginatedRows(path, options = {}) {
   const rows = [];
   let firstResponse = null;
   let page = 1;
-  let totalPages = 1;
+  let hasMore = true;
   const hasSummaryParam = /[?&](include_summary|includeSummary|summary)=/i.test(path);
-  do {
+  while (page <= maxPages && hasMore) {
     const separator = path.includes("?") ? "&" : "?";
     const includeSummary = options.includeSummary !== false && page === 1;
     const summaryParam = hasSummaryParam ? "" : `&include_summary=${includeSummary ? "1" : "0"}`;
-    const response = await apiRequest(`${path}${separator}limit=${limit}&page=${page}${summaryParam}`, { skipAuth: true });
+    const requestPath = `${path}${separator}limit=${limit}&page=${page}${summaryParam}`;
+    let response;
+    try {
+      response = await apiRequest(requestPath, { skipAuth: true });
+    } catch (firstError) {
+      await new Promise((resolve) => window.setTimeout(resolve, PUBLIC_SEARCH_RETRY_DELAY_MS));
+      response = await apiRequest(requestPath, { skipAuth: true });
+    }
     if (!firstResponse) firstResponse = response;
-    rows.push(...(Array.isArray(response?.data) ? response.data : []));
-    totalPages = Math.max(1, Number(response?.pagination?.totalPages || 1));
+    const pageRows = Array.isArray(response?.data) ? response.data : [];
+    rows.push(...pageRows);
+    const exactTotalPages = Number(response?.pagination?.totalPages);
+    const explicitHasMore = response?.pagination?.hasMore ?? response?.pagination?.has_more;
+    hasMore = typeof explicitHasMore === "boolean"
+      ? explicitHasMore
+      : Number.isFinite(exactTotalPages) && exactTotalPages > 0
+        ? page < exactTotalPages
+        : pageRows.length >= limit;
     if (typeof options.onPage === "function") {
       try {
-        options.onPage({ rows: rows.slice(), firstResponse, response, page, totalPages });
+        options.onPage({ rows: rows.slice(), firstResponse, response, page, totalPages: Number.isFinite(exactTotalPages) ? exactTotalPages : null, hasMore });
       } catch (pageCallbackError) {
         console.warn("Public listings page callback failed", pageCallbackError);
       }
     }
     page += 1;
-  } while (page <= totalPages && page <= maxPages);
+  }
   return { rows, firstResponse };
 }
 
@@ -44631,7 +44712,8 @@ function publicPaginationStateFor(category) {
       mode: "api",
       requestSeq: 0,
       sourcePath: "",
-      totalAuthoritative: false
+      totalAuthoritative: false,
+      hasMore: false
     };
   }
   return publicCategoryPaginationState[key];
@@ -44698,6 +44780,7 @@ function syncPublicCategoryPaginationSource(category, path = "") {
     clearPublicCategoryPageCache(category);
     state.total = 0;
     state.totalAuthoritative = false;
+    state.hasMore = false;
     state.page = 1;
   }
   if (nextPath) state.sourcePath = nextPath;
@@ -44738,6 +44821,21 @@ function exactPublicPaginationTotalValue(response) {
   return Number.isFinite(total) && total >= 0 ? total : null;
 }
 
+function publicPaginationHasMore(response, rowCount = 0, limit = PUBLIC_RESULTS_PAGE_SIZE) {
+  const explicit = response?.pagination?.hasMore ?? response?.pagination?.has_more;
+  if (typeof explicit === "boolean") return explicit;
+  const page = Math.max(1, Number(response?.pagination?.page) || 1);
+  const totalPages = Number(response?.pagination?.totalPages);
+  if (Number.isFinite(totalPages) && totalPages > 0) return page < totalPages;
+  return Math.max(0, Number(rowCount) || 0) >= Math.max(1, Number(limit) || PUBLIC_RESULTS_PAGE_SIZE);
+}
+
+function publicPaginationLoadedThrough(response, rowCount = 0, limit = PUBLIC_RESULTS_PAGE_SIZE) {
+  const page = Math.max(1, Number(response?.pagination?.page) || 1);
+  const responseLimit = Math.max(1, Number(response?.pagination?.limit) || Number(limit) || PUBLIC_RESULTS_PAGE_SIZE);
+  return ((page - 1) * responseLimit) + Math.max(0, Number(rowCount) || 0);
+}
+
 function publicCategoryStateHasAuthoritativeTotal(category, state = null) {
   const key = publicPaginationKey(category);
   const currentState = state || publicPaginationStateFor(key);
@@ -44749,6 +44847,7 @@ function publicCategoryStateHasAuthoritativeTotal(category, state = null) {
 function publicCategoryTotalForPagination(category, localCount = 0, response = null, options = {}) {
   const exactResponseTotal = exactPublicPaginationTotalValue(response);
   if (exactResponseTotal != null) return exactResponseTotal;
+  if (response?.pagination && response.pagination.total == null) return publicPaginationLoadedThrough(response, localCount);
   if (options.filtered) return Math.max(0, Number(localCount) || 0);
   const state = publicPaginationStateFor(category);
   const stateTotal = Math.max(0, Number(state?.total) || 0);
@@ -44777,10 +44876,19 @@ function authoritativePublicCategoryPageRows(category) {
   if (key !== "students" && !publicCategoryActiveSearchPath(key)) return null;
   const state = publicPaginationStateFor(key);
   const activePath = publicCategoryApiPathForPagination(key);
-  if (!state?.totalAuthoritative || !activePath || state.sourcePath !== activePath || state.mode !== "api") return null;
-  const page = Math.min(Math.max(1, Number(state.page) || 1), publicPaginationPageCount(state.total));
+  if (!state || !activePath || state.sourcePath !== activePath || state.mode !== "api") return null;
+  const page = state.totalAuthoritative
+    ? Math.min(Math.max(1, Number(state.page) || 1), publicPaginationPageCount(state.total))
+    : Math.max(1, Number(state.page) || 1);
   const rows = publicPaginationCacheFor(key)?.[page];
-  return Array.isArray(rows) ? { rows, page, total: Math.max(0, Number(state.total) || 0), sourcePath: activePath } : null;
+  return Array.isArray(rows) ? {
+    rows,
+    page,
+    total: Math.max(0, Number(state.total) || 0),
+    totalAuthoritative: state.totalAuthoritative === true,
+    hasMore: state.hasMore === true,
+    sourcePath: activePath
+  } : null;
 }
 
 function renderPublicCategoryPageWithAuthoritativeCache(category, fallbackList = [], options = {}) {
@@ -44841,7 +44949,9 @@ function renderPublicCategoryPagination(category, options = {}) {
   const totalPages = publicPaginationPageCount(total);
   const page = authoritative
     ? authoritative.page
-    : Math.min(Math.max(1, Number(options.page ?? state.page) || 1), totalPages);
+    : state.totalAuthoritative
+      ? Math.min(Math.max(1, Number(options.page ?? state.page) || 1), totalPages)
+      : Math.max(1, Number(options.page ?? state.page) || 1);
   const loading = options.loading ?? state.loading;
   if (!total && !loading) {
     el.innerHTML = "";
@@ -44849,14 +44959,10 @@ function renderPublicCategoryPagination(category, options = {}) {
   }
   const pageStart = total ? ((page - 1) * PUBLIC_RESULTS_PAGE_SIZE) + 1 : 0;
   const pageEnd = Math.min(total, page * PUBLIC_RESULTS_PAGE_SIZE);
-  const awaitingExactRouteTotal = Boolean(
-    key === publicPaginationKey(activePublicInventoryCategoryFromRoute())
-    && state.mode === "api"
-    && !state.totalAuthoritative
-    && total <= PUBLIC_RESULTS_PAGE_SIZE
-  );
-  const rangeText = awaitingExactRouteTotal
-    ? "Fetching the full result count..."
+  const unknownTotal = state.mode === "api" && !state.totalAuthoritative;
+  const hasMore = options.hasMore ?? authoritative?.hasMore ?? state.hasMore;
+  const rangeText = unknownTotal
+    ? (pageEnd ? `Showing ${pageStart}-${pageEnd}${hasMore ? "+" : ""} properties` : "No properties found")
     : (total ? `Showing ${pageStart}-${pageEnd} of ${total} properties` : "No properties found");
   const disabledClass = "opacity-45 cursor-not-allowed";
   const enabledClass = "hover:bg-green-50 hover:border-green-400";
@@ -44878,7 +44984,11 @@ function renderPublicCategoryPagination(category, options = {}) {
         aria-current="${active ? "page" : "false"}">${visiblePage}</button>`);
     previous = visiblePage;
   });
-  const navHtml = !awaitingExactRouteTotal && totalPages > 1 ? `
+  const navHtml = unknownTotal ? `
+        <nav class="flex flex-wrap items-center gap-2" aria-label="${adminAttr(key)} results pages">
+          ${navButton("‹ Prev", Math.max(1, page - 1), loading || page <= 1)}
+          ${navButton("Next ›", page + 1, loading || !hasMore)}
+        </nav>` : totalPages > 1 ? `
         <nav class="flex flex-wrap items-center gap-2" aria-label="${adminAttr(key)} results pages">
           ${navButton("‹ Prev", Math.max(1, page - 1), loading || page <= 1)}
           ${pageButtons.join("")}
@@ -44888,7 +44998,7 @@ function renderPublicCategoryPagination(category, options = {}) {
     <div class="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm" data-public-pagination-bar="${adminAttr(key)}">
       <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div class="text-sm font-semibold text-gray-700">
-          ${loading || awaitingExactRouteTotal ? "Loading listings..." : `Page ${page} of ${totalPages}`}
+          ${loading ? "Loading listings..." : unknownTotal ? `Page ${page}` : `Page ${page} of ${totalPages}`}
           <span class="block text-xs font-medium text-gray-500">${rangeText}</span>
         </div>
         ${navHtml}
@@ -44914,6 +45024,10 @@ function renderPublicCategoryPage(category, list = [], options = {}) {
   const exactResponseTotal = exactPublicPaginationTotalValue(options.response || null);
   const total = resolvedTotal;
   state.total = total;
+  if (options.response?.pagination) {
+    const responseRowCount = Array.isArray(options.rowsOverride) ? options.rowsOverride.length : list.length;
+    state.hasMore = publicPaginationHasMore(options.response, responseRowCount);
+  }
   if (exactResponseTotal != null) {
     state.totalAuthoritative = true;
   } else if (state.mode === "local" || options.mode === "local" || filtered) {
@@ -44960,9 +45074,12 @@ async function fetchPublicCategoryPage(category, page = 1, options = {}) {
   const rawRows = Array.isArray(response?.data) ? response.data : [];
   applyPublicRowsForUi(rawRows, response);
   const rows = cachePublicCategoryPageRows(key, safePage, rawRows);
-  const total = publicCategoryTotalForPagination(key, rows.length, response, { filtered: false });
+  const hasMore = publicPaginationHasMore(response, rows.length);
+  const exactTotal = exactPublicPaginationTotalValue(response);
+  const total = exactTotal ?? publicPaginationLoadedThrough(response, rows.length);
   state.total = total;
-  state.totalAuthoritative = exactPublicPaginationTotalValue(response) != null;
+  state.totalAuthoritative = exactTotal != null || !hasMore;
+  state.hasMore = hasMore;
   state.mode = "api";
   state.sourcePath = path;
   return { rows, response, total: state.total };
@@ -44983,11 +45100,12 @@ async function goToPublicCategoryPage(category, page = 1) {
   if (!key || !state) return false;
   const requestedPage = Math.max(1, Number(page) || 1);
   const authoritative = authoritativePublicCategoryPageRows(key);
-  const authoritativeTotal = authoritative ? authoritative.total : null;
-  const totalForClamp = authoritative ? authoritative.total : Math.max(0, Number(state.total) || 0);
+  const exactAuthoritative = authoritative?.totalAuthoritative === true;
+  const authoritativeTotal = exactAuthoritative ? authoritative.total : null;
+  const totalForClamp = exactAuthoritative ? authoritative.total : Math.max(0, Number(state.total) || 0);
   const totalPages = publicPaginationPageCount(totalForClamp || PUBLIC_RESULTS_PAGE_SIZE);
-  const targetPage = Math.min(requestedPage, totalPages);
-  if (authoritative && requestedPage !== targetPage) {
+  const targetPage = exactAuthoritative ? Math.min(requestedPage, totalPages) : requestedPage;
+  if (exactAuthoritative && requestedPage !== targetPage) {
     state.page = authoritative.page;
     renderPublicCategoryPage(key, authoritative.rows, {
       page: authoritative.page,
@@ -45049,12 +45167,12 @@ function publicInventoryRouteSearchPath(category) {
   if (controlPath) return controlPath;
   const payload = routeSearchHandoffPayload(page);
   const config = sectionSearchConfigFor(page);
-  if (config && isCanonicalPropertySearchPage(config.key)) return "";
   if (!payload || !config) return "";
   const query = normalizeInput(payload.query || payload.area || "");
   const area = normalizeInput(payload.area || "");
+  const locations = normalizeInput(payload.locations || "");
   const filters = payload.filters || {};
-  const hasSearch = Boolean(query || area || Object.values(filters).some(Boolean));
+  const hasSearch = Boolean(query || area || locations || Object.values(filters).some(Boolean));
   if (!hasSearch) return "";
   const params = new URLSearchParams();
   params.set("status", "approved");
@@ -45066,6 +45184,10 @@ function publicInventoryRouteSearchPath(category) {
   }
   if (query) params.set("query", query);
   if (area && area !== query) params.set(page === "students" ? "studentCampus" : "area", area);
+  if (locations) {
+    params.set("locations", locations);
+    params.set("nearby", String(payload.nearby ?? 3));
+  }
   if (filters.propertyType) params.set("property_type", filters.propertyType);
   if (filters.minPrice) params.set("min_price", String(filters.minPrice));
   if (filters.maxPrice) params.set("max_price", String(filters.maxPrice));
@@ -45192,6 +45314,37 @@ function publicCategoryControlSearchPath(category) {
   return active ? `${PUBLIC_FILTER_SEARCH_ENDPOINT}?${params.toString()}` : "";
 }
 
+function clearPublicSearchDelayNotice(category) {
+  const key = publicPaginationKey(category);
+  if (key) document.getElementById(`public-search-delay-${key}`)?.remove();
+}
+
+function renderPublicSearchDelayNotice(category, options = {}) {
+  const key = publicPaginationKey(category);
+  const grid = key ? document.getElementById(publicPaginationGridId(key)) : null;
+  if (!key || !grid?.parentElement) return false;
+  const existing = document.getElementById(`public-search-delay-${key}`);
+  const notice = existing || document.createElement("aside");
+  notice.id = `public-search-delay-${key}`;
+  notice.className = "mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-950";
+  const allowRetry = options.allowRetry !== false;
+  notice.innerHTML = `
+    <strong class="block text-sm">Still searching live properties...</strong>
+    <span class="mt-1 block text-xs text-amber-800">${allowRetry ? "This is taking longer than usual. Your filters are still here." : "This search is taking a little longer than usual."}</span>
+    ${allowRetry ? `<button type="button" class="mt-3 min-h-[40px] rounded-lg bg-amber-700 px-4 text-sm font-bold text-white" onclick="retryActivePublicSearch()">Try again</button>` : ""}`;
+  if (!existing) grid.parentElement.insertBefore(notice, grid);
+  return true;
+}
+
+function retryActivePublicSearch() {
+  const category = activePublicInventoryCategoryFromRoute();
+  if (!category) return false;
+  clearPublicSearchDelayNotice(category);
+  toast("Searching live properties...");
+  refreshActivePublicInventoryCategoryFromApi({ silent: false });
+  return false;
+}
+
 function hydrateVisibleRouteSearchResults(source = "route_search_backend_results") {
   const activeCategory = activePublicInventoryCategoryFromRoute();
   if (!activeCategory || !publicInventoryRouteSearchPath(activeCategory)) return false;
@@ -45217,31 +45370,6 @@ function exactPublicPaginationTotal(response) {
   return total != null && total > 0 ? total : 0;
 }
 
-async function fetchPublicCategoryRows(category, totalCount = 0, options = {}) {
-  const path = publicInventoryCategoryPath(category);
-  if (!path) return { rows: [], firstResponse: null };
-  const limit = PUBLIC_LISTINGS_BACKGROUND_PAGE_LIMIT;
-  const expectedPages = Math.ceil(Math.max(0, Number(totalCount) || 0) / limit) || 1;
-  try {
-    return await fetchPublicPaginatedRows(path, {
-      limit,
-      maxPages: Math.min(Math.max(expectedPages, 1), PUBLIC_LISTINGS_BACKGROUND_MAX_PAGES),
-      includeSummary: false,
-      onPage: ({ rows, response, page }) => {
-        if (!rows.length || typeof options.onPageRows !== "function") return;
-        try {
-          options.onPageRows(rows, response, page);
-        } catch (pageCallbackError) {
-          console.warn("Public category inventory page callback failed", pageCallbackError);
-        }
-      }
-    });
-  } catch (error) {
-    console.warn("Public category inventory failed", { category, error: error?.message || error });
-    return { rows: [], firstResponse: null };
-  }
-}
-
 async function refreshActivePublicInventoryCategoryFromApi({ silent = true } = {}) {
   const activeCategory = activePublicInventoryCategoryFromRoute();
   if (!activeCategory) return false;
@@ -45253,6 +45381,12 @@ async function refreshActivePublicInventoryCategoryFromApi({ silent = true } = {
     return publicActiveCategoryHydrationPromises.get(hydrationKey);
   }
   const hydrationPromise = (async () => {
+    const slowNoticeTimer = activeRouteSearchPath
+      ? window.setTimeout(() => renderPublicSearchDelayNotice(activeCategory, { allowRetry: false }), 3000)
+      : null;
+    const retryNoticeTimer = activeRouteSearchPath
+      ? window.setTimeout(() => renderPublicSearchDelayNotice(activeCategory, { allowRetry: true }), 10000)
+      : null;
     try {
       let { rows: firstCategoryRows, firstResponse: firstCategoryResponse } = await fetchPublicPaginatedRows(activeCategoryPath, {
         limit: PUBLIC_RESULTS_PAGE_SIZE,
@@ -45290,6 +45424,7 @@ async function refreshActivePublicInventoryCategoryFromApi({ silent = true } = {
           firstCategoryState.page = 1;
           firstCategoryState.total = firstCategoryTotal;
           firstCategoryState.totalAuthoritative = firstCategoryExactTotal != null;
+          firstCategoryState.hasMore = publicPaginationHasMore(firstCategoryResponse, firstCategoryRows.length);
           firstCategoryState.mode = "api";
           firstCategoryState.sourcePath = resolvedCategoryPath;
         }
@@ -45314,6 +45449,7 @@ async function refreshActivePublicInventoryCategoryFromApi({ silent = true } = {
           firstCategoryState.page = 1;
           firstCategoryState.total = publicCategoryTotalForPagination(activeCategory, firstCategoryRows.length, firstCategoryResponse, { filtered: false });
           firstCategoryState.totalAuthoritative = exactPublicPaginationTotalValue(firstCategoryResponse) != null;
+          firstCategoryState.hasMore = publicPaginationHasMore(firstCategoryResponse, firstCategoryRows.length);
           firstCategoryState.mode = "api";
           firstCategoryState.sourcePath = activeCategoryPath;
         }
@@ -45337,23 +45473,15 @@ async function refreshActivePublicInventoryCategoryFromApi({ silent = true } = {
         if (firstCategoryExactTotal != null) categoryState.totalAuthoritative = true;
         categoryState.sourcePath = activeCategoryPath;
       }
-      const { rows: categoryRows, firstResponse: categoryFirstResponse } = await fetchPublicCategoryRows(activeCategory, categoryTotal, {
-        onPageRows: (pageRows, pageResponse) => {
-          if (activeCategory !== activePublicInventoryCategoryFromRoute()) return;
-          if (shouldIgnoreCatalogueHydration(activeCategory, activeCategoryPath)) return;
-          applyPublicRowsForUi(pageRows, pageResponse);
-          renderAll();
-        }
-      });
-      if (categoryRows.length && activeCategory === activePublicInventoryCategoryFromRoute()) {
-        if (shouldIgnoreCatalogueHydration(activeCategory, activeCategoryPath)) return true;
-        applyPublicRowsForUi(categoryRows, categoryFirstResponse);
-        renderAll();
-      }
-      return categoryRows.length > 0;
+      clearPublicSearchDelayNotice(activeCategory);
+      return firstCategoryRows.length > 0;
     } catch (error) {
+      if (activeRouteSearchPath) renderPublicSearchDelayNotice(activeCategory);
       if (!silent) toast(`Live ${activeCategory} listings refresh failed: ${error.message || "error"}`);
       return false;
+    } finally {
+      if (slowNoticeTimer) window.clearTimeout(slowNoticeTimer);
+      if (retryNoticeTimer) window.clearTimeout(retryNoticeTimer);
     }
   })();
   publicActiveCategoryHydrationPromises.set(hydrationKey, hydrationPromise);
@@ -45364,29 +45492,18 @@ async function refreshActivePublicInventoryCategoryFromApi({ silent = true } = {
   }
 }
 
-function schedulePublicCategoryDeepHydration(category, totalCount = 0) {
-  const normalizedCategory = category === "students" ? "student" : normalizeType(category);
-  if (!normalizedCategory || totalCount <= PUBLIC_RESULTS_PAGE_SIZE) return false;
-  if (publicCategoryDeepHydrationTimers.has(normalizedCategory)) return false;
-  const timer = window.setTimeout(() => {
-    publicCategoryDeepHydrationTimers.delete(normalizedCategory);
-    if (normalizedCategory !== activePublicInventoryCategoryFromRoute()) return;
-    refreshActivePublicInventoryCategoryFromApi({ silent: true }).then((loaded) => {
-      if (loaded && normalizedCategory === activePublicInventoryCategoryFromRoute()) {
-        renderAll();
-        resetMaps();
-      }
-    });
-  }, PUBLIC_CATEGORY_DEEP_HYDRATION_DELAY_MS);
-  publicCategoryDeepHydrationTimers.set(normalizedCategory, timer);
-  return true;
-}
-
 async function refreshPublicListingsFromApi({ silent = true } = {}) {
   if (publicListingsApiLoading) return refreshActivePublicInventoryCategoryFromApi({ silent });
   publicListingsApiLoading = true;
   const startupCategory = activePublicInventoryCategoryFromRoute();
   const startupState = startupCategory ? publicPaginationStateFor(startupCategory) : null;
+  const startupRouteSearchPath = startupCategory ? publicInventoryRouteSearchPath(startupCategory) : "";
+  const slowNoticeTimer = startupRouteSearchPath
+    ? window.setTimeout(() => renderPublicSearchDelayNotice(startupCategory, { allowRetry: false }), 3000)
+    : null;
+  const retryNoticeTimer = startupRouteSearchPath
+    ? window.setTimeout(() => renderPublicSearchDelayNotice(startupCategory, { allowRetry: true }), 10000)
+    : null;
   if (startupState) {
     const startupPath = publicInventoryCategoryPath(startupCategory);
     startupState.loading = true;
@@ -45440,6 +45557,7 @@ async function refreshPublicListingsFromApi({ silent = true } = {}) {
         firstPageState.page = 1;
         firstPageState.total = publicCategoryTotalForPagination(activeCategory, firstPageRows.length, firstPageResponse, { filtered: false });
         firstPageState.totalAuthoritative = exactPublicPaginationTotalValue(firstPageResponse) != null;
+        firstPageState.hasMore = publicPaginationHasMore(firstPageResponse, firstPageRows.length);
         firstPageState.loading = false;
         firstPageState.mode = "api";
         firstPageState.sourcePath = firstPagePath;
@@ -45459,38 +45577,10 @@ async function refreshPublicListingsFromApi({ silent = true } = {}) {
       }
     }
     if (activeCategory) {
-      if (activeRouteSearchPath) {
-        const expectedPages = Math.ceil(Math.max(0, Number(categoryTotal) || 0) / PUBLIC_LISTINGS_BACKGROUND_PAGE_LIMIT) || 1;
-        const { rows: searchRows, firstResponse: searchFirstResponse } = await fetchPublicPaginatedRows(activeRouteSearchPath, {
-          limit: PUBLIC_LISTINGS_BACKGROUND_PAGE_LIMIT,
-          maxPages: Math.min(Math.max(expectedPages, 1), PUBLIC_LISTINGS_ROUTE_SEARCH_MAX_PAGES),
-          includeSummary: false,
-          onPage: ({ rows, response }) => {
-            if (activeCategory !== activePublicInventoryCategoryFromRoute()) return;
-            applyPublicRowsForUi(rows, response);
-            renderAll();
-            syncActiveRouteSearchHandoff("initial_route_search_page");
-          }
-        });
-        if (searchRows.length && activeCategory === activePublicInventoryCategoryFromRoute()) {
-          applyPublicRowsForUi(searchRows, searchFirstResponse || firstPageResponse);
-          renderAll();
-          syncActiveRouteSearchHandoff("initial_route_search_complete");
-        }
-        return true;
-      }
-      schedulePublicCategoryDeepHydration(activeCategory, categoryTotal);
+      clearPublicSearchDelayNotice(activeCategory);
       return true;
     }
-    const backgroundRowsPromise = fetchPublicPaginatedRows("/api/properties?status=approved&public_only=1", {
-      limit: PUBLIC_LISTINGS_BACKGROUND_PAGE_LIMIT,
-      maxPages: PUBLIC_LISTINGS_BACKGROUND_MAX_PAGES,
-      includeSummary: false
-    });
-    const { rows: publicRows, firstResponse } = await backgroundRowsPromise;
-    const featuredRows = await featuredRowsPromise;
-    applyPublicRowsForUi(publicRows, firstResponse, { featuredRows, prune: true });
-    renderAll();
+    await featuredRowsPromise;
     return true;
   } catch (e) {
     const activeCategory = activePublicInventoryCategoryFromRoute();
@@ -45499,9 +45589,12 @@ async function refreshPublicListingsFromApi({ silent = true } = {}) {
       activeState.loading = false;
       renderPublicCategoryPagination(activeCategory, { loading: false });
     }
+    if (activeCategory && publicInventoryRouteSearchPath(activeCategory)) renderPublicSearchDelayNotice(activeCategory);
     if (!silent) toast(`Live listings refresh failed: ${e.message || "error"}`);
     return false;
   } finally {
+    if (slowNoticeTimer) window.clearTimeout(slowNoticeTimer);
+    if (retryNoticeTimer) window.clearTimeout(retryNoticeTimer);
     publicListingsApiLoading = false;
   }
 }
@@ -45726,6 +45819,7 @@ function setTab(el, type) {
   group.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
   el.classList.add("active");
   currentTab = type;
+  heroCanonicalLocationState.selected = null;
   const transactionWrap = document.getElementById("hero-transaction-wrap");
   if (transactionWrap) transactionWrap.classList.toggle("hidden", !["commercial", "land"].includes(type));
   setHeroTransactionType(["commercial", "land"].includes(type) ? (document.getElementById("hero-transaction-f")?.value || "") : "");
@@ -45737,7 +45831,7 @@ function setTab(el, type) {
   closeHeroSuggestions();
   const heroInput = document.getElementById("hero-q");
   if (heroInput && document.activeElement === heroInput && heroInput.value.trim()) {
-    renderTypeahead(heroInput, getLocationSuggestionPool(currentTab === "students"), () => {});
+    fetchHeroCanonicalLocationSuggestions(heroInput, heroInput.value.trim());
   }
 }
 
@@ -45750,7 +45844,7 @@ function setHeroTransactionType(value = "") {
   });
 }
 
-function buildHeroSearchBackendPayload({ query = "", area = "", filters = {}, nearState = null, resultsCount = 0, category = currentTab } = {}) {
+function buildHeroSearchBackendPayload({ query = "", area = "", filters = {}, nearState = null, canonicalLocation = null, resultsCount = 0, category = currentTab } = {}) {
   const searchCategory = category || currentTab;
   const payload = {
     query,
@@ -45771,6 +45865,11 @@ function buildHeroSearchBackendPayload({ query = "", area = "", filters = {}, ne
     payload[snakeKey] = value;
   };
   if (area) payload.area = area;
+  const canonicalLocationId = canonicalLocation?.canonical_location_id || canonicalLocation?.id || "";
+  if (canonicalLocationId) {
+    payload.locations = canonicalLocationId;
+    payload.nearby = 3;
+  }
   if (filters.propertyType) payload.propertyType = filters.propertyType;
   if (filters.propertyType) payload.property_type = filters.propertyType;
   if (filters.minPrice) payload.minPrice = filters.minPrice;
@@ -46064,15 +46163,44 @@ async function hydrateCanonicalLocationSeoRoute(config) {
   if (config.backendCategory === "students") params.set("student_portal", "1");
   else params.set("listing_type", config.backendCategory);
   try {
-    const response = await fetch(`/api/properties/locations/suggest?${params.toString()}`, { credentials: "same-origin" });
-    const body = await response.json().catch(() => ({}));
-    const suggestions = Array.isArray(body.data) ? body.data : [];
-    const selected = suggestions.find((item) => district && String(item.province || item.district || "").toLowerCase() === district.toLowerCase())
-      || suggestions.find((item) => item.match === "exact_alias")
-      || suggestions[0];
-    if (response.ok && selected) selectCanonicalLocationSuggestion(config, selected);
+    const body = await fetchPublicJsonWithRetry(`/api/properties/locations/suggest?${params.toString()}`);
+    const suggestions = canonicalLocationSuggestionsFromResponse(body);
+    const exactSuggestions = Array.isArray(body.data) ? body.data : [];
+    const didYouMeanSuggestions = Array.isArray(body.meta?.did_you_mean_suggestions) ? body.meta.did_you_mean_suggestions : [];
+    const disambiguationSuggestions = Array.isArray(body.meta?.disambiguation_suggestions) ? body.meta.disambiguation_suggestions : [];
+    const districtMatched = suggestions.filter((item) => district && String(item.province || item.district || "").toLowerCase() === district.toLowerCase());
+    const selected = districtMatched.length === 1
+      ? districtMatched[0]
+      : exactSuggestions.length === 1 && body.meta?.disambiguation_required !== true
+        ? exactSuggestions[0]
+        : exactSuggestions.length === 0 && disambiguationSuggestions.length === 0 && didYouMeanSuggestions.length === 1
+          ? didYouMeanSuggestions[0]
+        : null;
+    if (selected) {
+      selectCanonicalLocationSuggestion(config, selected);
+      if (exactSuggestions.length === 0) {
+        const status = document.querySelector(`#${sectionSearchShellId(config.key)} [data-canonical-location-status]`);
+        if (status) {
+          status.textContent = `Showing results for ${selected.name || selected.label} (you typed '${query}').`;
+          status.classList.remove("error");
+        }
+      }
+    } else {
+      renderCanonicalLocationSuggestions(config, body);
+      const shell = document.getElementById(sectionSearchShellId(config.key));
+      const input = shell?.querySelector(".section-search-text-input");
+      const status = shell?.querySelector("[data-canonical-location-status]");
+      if (input && !input.value) input.value = query;
+      if (status) {
+        status.textContent = suggestions.length
+          ? "Choose the intended location from the suggestions before searching."
+          : "No exact location match. Try a nearby town or district.";
+        status.classList.add("error");
+      }
+    }
   } catch (error) {
     console.warn("Canonical SEO location hydration failed", error);
+    renderPublicSearchDelayNotice(config.key);
   } finally {
     state.seoHydrating = false;
   }
@@ -46213,10 +46341,7 @@ function selectCanonicalLocationSuggestion(config, suggestion) {
   runSectionSearch(config.key, { source: "canonical_location_selected" });
 }
 
-function renderCanonicalLocationSuggestions(config, response = {}) {
-  const shell = document.getElementById(sectionSearchShellId(config.key));
-  const panel = shell?.querySelector("[data-canonical-location-suggestions]");
-  if (!panel) return;
+function canonicalLocationSuggestionsFromResponse(response = {}) {
   const exactSuggestions = Array.isArray(response.data) ? response.data : [];
   const disambiguationSuggestions = Array.isArray(response.meta?.disambiguation_suggestions)
     ? response.meta.disambiguation_suggestions.map((item) => ({ ...item, explicit_selection_required: true }))
@@ -46224,7 +46349,44 @@ function renderCanonicalLocationSuggestions(config, response = {}) {
   const didYouMeanSuggestions = Array.isArray(response.meta?.did_you_mean_suggestions)
     ? response.meta.did_you_mean_suggestions.map((item) => ({ ...item, explicit_selection_required: true }))
     : [];
-  const suggestions = [...exactSuggestions, ...disambiguationSuggestions, ...didYouMeanSuggestions].slice(0, 8);
+  return [...exactSuggestions, ...disambiguationSuggestions, ...didYouMeanSuggestions].slice(0, 8);
+}
+
+async function fetchPublicJsonWithRetry(path, options = {}) {
+  const attempts = Math.max(1, Math.min(3, Number(options.attempts) || 2));
+  const timeoutMs = Math.max(1000, Math.min(10000, Number(options.timeoutMs) || 5000));
+  let lastError = null;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(path, {
+        credentials: "same-origin",
+        headers: { Accept: "application/json" },
+        signal: controller.signal
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const error = new Error(body?.error || `Request failed (${response.status})`);
+        error.status = response.status;
+        throw error;
+      }
+      return body;
+    } catch (error) {
+      lastError = error;
+      if (attempt < attempts) await new Promise((resolve) => window.setTimeout(resolve, PUBLIC_SEARCH_RETRY_DELAY_MS));
+    } finally {
+      window.clearTimeout(timeout);
+    }
+  }
+  throw lastError || new Error("Request failed");
+}
+
+function renderCanonicalLocationSuggestions(config, response = {}) {
+  const shell = document.getElementById(sectionSearchShellId(config.key));
+  const panel = shell?.querySelector("[data-canonical-location-suggestions]");
+  if (!panel) return;
+  const suggestions = canonicalLocationSuggestionsFromResponse(response);
   canonicalLocationStateFor(config.key).suggestions = suggestions;
   if (!suggestions.length) {
     panel.innerHTML = `<div class="canonical-location-empty">No matching Uganda location. Try a nearby town or district.</div>`;
@@ -46259,13 +46421,8 @@ async function fetchCanonicalLocationSuggestions(config, query) {
   if (config.backendCategory === "students") params.set("student_portal", "1");
   else params.set("listing_type", config.backendCategory);
   try {
-    const response = await fetch(`/api/properties/locations/suggest?${params.toString()}`, {
-      credentials: "same-origin",
-      headers: { Accept: "application/json" }
-    });
-    const body = await response.json().catch(() => ({}));
+    const body = await fetchPublicJsonWithRetry(`/api/properties/locations/suggest?${params.toString()}`);
     if (state.requestSeq !== requestSeq) return;
-    if (!response.ok) throw new Error(body?.error || "Location lookup failed");
     renderCanonicalLocationSuggestions(config, body);
   } catch (error) {
     if (state.requestSeq !== requestSeq) return;
@@ -46884,6 +47041,11 @@ function mountSectionSearchShell(page) {
 
 function doSearch() {
   const qRaw = document.getElementById("hero-q").value || "";
+  const selectedHeroLocation = heroCanonicalLocationState.selected
+    && qRaw.trim() === (heroCanonicalLocationState.selected.name || heroCanonicalLocationState.selected.label || heroCanonicalLocationState.selected.value)
+    ? heroCanonicalLocationState.selected
+    : null;
+  const routedQuery = selectedHeroLocation ? "" : qRaw.trim();
   const q = qRaw.toLowerCase().trim();
   const areaOrUniRaw = document.getElementById("hero-district").value || "";
   const areaOrUni = currentTab === "students"
@@ -46916,16 +47078,19 @@ function doSearch() {
   incrementUserSearchCount();
   const destinationPage = pageMap[currentTab] || "sale";
   const backendPayload = buildHeroSearchBackendPayload({
-    query: qRaw.trim(),
+    query: routedQuery,
     area: areaOrUni || "",
     filters: heroFilters,
     nearState: heroNearState,
+    canonicalLocation: selectedHeroLocation,
     resultsCount: results.length
   });
   recordHeroSearchBackendPayload(backendPayload);
   saveHeroSearchHandoff(destinationPage, {
-    query: qRaw || "",
+    query: routedQuery,
     area: areaOrUni || "",
+    locations: selectedHeroLocation?.canonical_location_id || selectedHeroLocation?.id || "",
+    nearby: selectedHeroLocation ? 3 : "",
     radius: routedRadiusValue,
     radiusKm: heroNearState?.radiusKm || (parseFloat(heroRadiusValue || "0") || null),
     radiusMiles: heroNearState?.radiusMiles || (parseFloat(heroRadiusValue || "0") ? kmToMiles(parseFloat(heroRadiusValue || "0")) : null),
@@ -46941,8 +47106,10 @@ function doSearch() {
   });
   showPage(destinationPage);
   updateHeroSearchRoute(destinationPage, {
-    query: qRaw || "",
+    query: routedQuery,
     area: areaOrUni || "",
+    locations: selectedHeroLocation?.canonical_location_id || selectedHeroLocation?.id || "",
+    nearby: selectedHeroLocation ? 3 : "",
     radius: routedRadiusValue,
     radiusKm: heroNearState?.radiusKm || (parseFloat(heroRadiusValue || "0") || null),
     radiusMiles: heroNearState?.radiusMiles || (parseFloat(heroRadiusValue || "0") ? kmToMiles(parseFloat(heroRadiusValue || "0")) : null),
@@ -47045,7 +47212,7 @@ function doSearch() {
     if (saleSort) saleSort.value = heroFilters.sort || "newest";
     filterListings("sale");
   }
-  toast(`Found ${results.length} properties`);
+  toast("Searching live properties...");
   trackEvent("property_search", {
     listing_type: currentTab,
     query: q || "",
@@ -47062,6 +47229,7 @@ function doSearch() {
 }
 
 function quickSearch(area) {
+  heroCanonicalLocationState.selected = null;
   document.getElementById("hero-q").value = area;
   doSearch();
 }

@@ -10186,6 +10186,27 @@ function formatNoMatchReply(lang, preferredArea = '') {
   return messages[code] || messages.en;
 }
 
+function whatsappSearchBusyReply(lang = 'en') {
+  const code = resolveLangCode(lang);
+  const messages = {
+    en: `${whatsappBrandHeader('Search busy')}\nProperty search is temporarily busy. Please reply *RETRY* in a moment. I have not treated this as no matching properties.`,
+    lg: `${whatsappBrandHeader('Okunoonya kulimu emirimu')}\nOkunoonya amayumba kulimu emirimu mingi kati. Ddamu *RETRY* mu kaseera katono. Sikibalidde nga tewali properties.`,
+    sw: `${whatsappBrandHeader('Utafutaji una shughuli')}\nUtafutaji wa mali una shughuli nyingi sasa. Jibu *RETRY* baada ya muda mfupi. Sijahesabu hili kama hakuna mali zinazolingana.`
+  };
+  return messages[code] || messages.en;
+}
+
+function isWhatsappPropertySearchRuntime(intent = '', step = '') {
+  return ['search_type', 'search_area'].includes(normalizeInput(step).toLowerCase())
+    || [
+      'property_search',
+      'looking_for_property_lead',
+      'search_near_me',
+      'shared_location_search',
+      'apply_filters'
+    ].includes(normalizeInput(intent).toLowerCase());
+}
+
 function intentRouteLabel(route) {
   const labels = {
     off_plan: 'explore off-plan projects',
@@ -12627,23 +12648,39 @@ async function processInboundRuntimeUnlocked({
     };
   }
 
-  let { message, nextStep } = await processMessage(
-    phone,
-    effectiveBody,
-    effectiveMediaUrl,
-    sharedLocation,
-    {
-      intent: intentResult,
-      language: activeLang,
-      session: sessionForMessage,
-      mediaType: normalizedMediaType,
-      mediaCount: inboundMediaCount,
-      photoCandidates: inboundPhotoCandidates,
-      transcript: transcriptRecord?.text || null,
-      waMessageId: inboundMessageId,
-      contactName
-    }
-  );
+  let processed;
+  try {
+    processed = await processMessage(
+      phone,
+      effectiveBody,
+      effectiveMediaUrl,
+      sharedLocation,
+      {
+        intent: intentResult,
+        language: activeLang,
+        session: sessionForMessage,
+        mediaType: normalizedMediaType,
+        mediaCount: inboundMediaCount,
+        photoCandidates: inboundPhotoCandidates,
+        transcript: transcriptRecord?.text || null,
+        waMessageId: inboundMessageId,
+        contactName
+      }
+    );
+  } catch (error) {
+    if (!isWhatsappPropertySearchRuntime(intentResult?.intent, sessionStep)) throw error;
+    logger.warn('WhatsApp property search is temporarily unavailable', {
+      phone,
+      intent: intentResult?.intent || 'unknown',
+      step: sessionStep,
+      error: error.message || String(error)
+    });
+    processed = {
+      message: whatsappSearchBusyReply(activeLang),
+      nextStep: sessionStep
+    };
+  }
+  let { message, nextStep } = processed;
 
   if (transcriptRecord?.text) {
     const transcriptEcho = formatVoiceTranscriptEcho(activeLang, transcriptRecord.text);
@@ -13724,6 +13761,8 @@ module.exports.__test = {
   inferAffordabilitySearchType,
   formatAffordabilityAdviceMessage,
   formatPropertySearchMessage,
+  whatsappSearchBusyReply,
+  isWhatsappPropertySearchRuntime,
   whatsappSearchResultsUrl,
   resolveWhatsappSearchLocation,
   whatsappSearchLocationBlockReply,
