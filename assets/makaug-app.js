@@ -3074,14 +3074,305 @@ const ABOUT_PAGE_I18N_EN = Object.freeze({
   "about.finalTitle": "Ready to start?",
   "about.finalSub": "List your first property free for 7 days, or talk to our sales team about agent plans, developments and advertising.",
   "about.finalWhatsapp": "WhatsApp sales: 0760 112 587",
+  "about.finalEmail": "Email: info@makaug.com",
   "about.finalHow": "How it works",
   "about.finalHelp": "Help centre",
-  "about.finalSafety": "Safety tips"
+  "about.finalSafety": "Safety tips",
+  "about.privateTrialTemplate": "First week free · then {price}",
+  "about.agentPriceTemplate": "{price} · all your listings",
+  "about.productAiDescription": "AI-written description in 9 languages",
+  "about.productChecked": "Checked by our team",
+  "about.productWhatsappLeads": "WhatsApp and phone leads",
+  "about.productEdit": "Edit or remove any time",
+  "about.saleAction": "List for sale",
+  "about.rentAction": "List for rent",
+  "about.agentAllListings": "All listings on one account",
+  "about.agentVerified": "Verified badge and broker profile",
+  "about.agentLeadInbox": "Lead inbox and CSV export",
+  "about.agentPriority": "Priority review",
+  "about.agentAction": "Register as an agent",
+  "about.developerUnits": "Units, plans, video and payment plans",
+  "about.developerVisibility": "Off Plan and search visibility",
+  "about.developerEnquiries": "Enquiries to your sales team",
+  "about.developerOverseas": "Overseas projects welcome",
+  "about.featuredTitle": "Featured listing",
+  "about.featuredText": "Your property on the homepage Featured strip and at the top of its category.",
+  "about.featuredBadge": "Featured badge",
+  "about.featuredHomepage": "Homepage visibility",
+  "about.featuredCategory": "Top of category page",
+  "about.featuredBest": "Best for a focused sales week",
+  "about.featuredAction": "Contact us to feature",
+  "about.premiumTitle": "Premium listing",
+  "about.premiumText": "Prime position at the top of search results for your area, with a larger card.",
+  "about.premiumBadge": "Premium badge",
+  "about.premiumPosition": "Top search position",
+  "about.premiumCard": "Larger result card",
+  "about.premiumBest": "Built for a faster result",
+  "about.premiumAction": "Contact us for Premium",
+  "about.boostedTitle": "Boosted listing",
+  "about.boostedText": "Ranks above standard listings in results and alerts for a full month.",
+  "about.boostedBadge": "Boosted badge",
+  "about.boostedRanking": "Higher search ranking",
+  "about.boostedAlerts": "Property-alert visibility",
+  "about.boostedBest": "A full month of reach",
+  "about.boostedAction": "Contact us to boost",
+  "about.reportTitle": "Market Intelligence Report",
+  "about.reportText": "Asking prices, rental yields, demand and supply by district and property type.",
+  "about.reportData": "Built from live and historical data",
+  "about.reportPdf": "Delivered as a PDF",
+  "about.reportTiming": "Within 5 working days",
+  "about.reportDecision": "Prepared for your decision",
+  "about.websiteTitle": "Agency websites",
+  "about.websiteText": "A branded agency website connected to your makaug listings.",
+  "about.websiteDesign": "Domain setup and branded design",
+  "about.websiteFeed": "Connected listings feed",
+  "about.websiteWhatsapp": "WhatsApp lead button",
+  "about.websiteSummary": "Monthly performance summary",
+  "about.professionalTitle": "Professional listing service",
+  "about.professionalText": "Professional photos, a short walkthrough and a polished multilingual listing.",
+  "about.professionalAreas": "Kampala and Wakiso",
+  "about.professionalOther": "Other districts on request",
+  "about.professionalMedia": "Photos and short video",
+  "about.professionalUpload": "We upload it for you",
+  "about.talkAction": "Talk to us",
+  "about.perWeek": "/ week",
+  "about.periodPropertyMonth": "property / month",
+  "about.periodMonth": "month",
+  "about.periodPost": "post",
+  "about.periodSevenDays": "7 days",
+  "about.periodListingMonth": "listing / month",
+  "about.periodReport": "report",
+  "about.periodSetup": "setup",
+  "about.periodProperty": "property",
+  "about.periodPlacementWeek": "placement / week",
+  "about.statsAria": "makaug platform statistics",
+  "about.imageSaleJourney": "Home available for sale in Uganda",
+  "about.imageRentJourney": "Renter looking across a Ugandan city",
+  "about.imageStudentJourney": "Students near campus accommodation",
+  "about.imageLandJourney": "Land and countryside in Uganda",
+  "about.imageCommercialJourney": "Ugandan commercial shopfront",
+  "about.imageOffPlanJourney": "New Off Plan development amenity",
+  "about.imageSaleProduct": "Home promoted for sale on makaug",
+  "about.imageRentProduct": "Rental property journey on makaug",
+  "about.imageAgentProduct": "Property agent helping a customer",
+  "about.imageOffPlanProduct": "Off Plan development arrival view",
+  "about.imageFeaturedProduct": "Featured property placement on the makaug homepage",
+  "about.imagePremiumProduct": "Premium property detail experience",
+  "about.imageBoostedProduct": "Approved property ready for a visibility boost",
+  "about.imageReportProduct": "Uganda property market viewed by district",
+  "about.imageWebsiteProduct": "Branded property agency website",
+  "about.imageProfessionalProduct": "Professionally photographed property listing",
+  "about.imageAdvertisingProduct": "Business reaching active property customers"
 });
 
-Object.assign(CONTENT_I18N.en, ABOUT_PAGE_I18N_EN);
+const ADVERTISING_UI_I18N_EN = Object.freeze({
+  "advertise.heroLabel": "Self-serve advertising",
+  "advertise.title": "Create a makaug campaign",
+  "advertise.subtitle": "Choose placement, see the price, and prepare the advert. After review and approval, pay through secure hosted checkout before the campaign goes live.",
+  "advertise.stepsAria": "Campaign steps",
+  "advertise.stepPlacement": "1. Placement",
+  "advertise.stepCreative": "2. Creative",
+  "advertise.stepContact": "3. Contact",
+  "advertise.stepReview": "4. Review",
+  "advertise.chooseTitle": "Choose where you want to appear",
+  "advertise.chooseSub": "Select a package, then preview exactly where it can appear before you continue. Prices and duration come from the live makaug rate card.",
+  "advertise.targetAreas": "Target areas",
+  "advertise.targetAreasPlaceholder": "Kampala, Wakiso, Mukono",
+  "advertise.audience": "Property audience",
+  "advertise.audienceAll": "All property seekers",
+  "advertise.audienceSale": "For sale",
+  "advertise.audienceRent": "To rent",
+  "advertise.audienceLand": "Land",
+  "advertise.audienceCommercial": "Commercial",
+  "advertise.audienceStudent": "Student accommodation",
+  "advertise.creativeTitle": "Prepare the advert",
+  "advertise.creativeSub": "Add the message customers should see. Card and payment details are never collected by makaug.",
+  "advertise.campaignName": "Campaign name",
+  "advertise.campaignNamePlaceholder": "July Kampala property campaign",
+  "advertise.headline": "Headline",
+  "advertise.headlinePlaceholder": "Find your next home in Kampala",
+  "advertise.advertCopy": "Advert copy",
+  "advertise.advertCopyPlaceholder": "Describe the property, service, or offer clearly.",
+  "advertise.callToAction": "Call to action",
+  "advertise.ctaView": "View property",
+  "advertise.ctaLearn": "Learn more",
+  "advertise.ctaContact": "Contact advertiser",
+  "advertise.ctaBook": "Book a viewing",
+  "advertise.destination": "Destination link",
+  "advertise.contactTitle": "Your contact details",
+  "advertise.contactSub": "Campaign owners need an advertiser account so approved campaigns can receive a hosted checkout link.",
+  "advertise.fullName": "Full name",
+  "advertise.businessName": "Business or brand",
+  "advertise.email": "Email",
+  "advertise.phone": "+256 phone / WhatsApp",
+  "advertise.preferredContact": "Preferred contact",
+  "advertise.phoneCall": "Phone call",
+  "advertise.reviewTitle": "Review and continue",
+  "advertise.reviewSub": "Your campaign enters makaug review. Approved campaigns receive secure hosted checkout; only paid campaigns can go live.",
+  "advertise.reviewConfirm": "I confirm the advert is accurate and that makaug may review it before publication.",
+  "advertise.submit": "Submit campaign for review",
+  "advertise.back": "Back",
+  "advertise.continue": "Continue",
+  "advertise.liveQuote": "Live quote",
+  "advertise.choosePackage": "Choose a package",
+  "advertise.noPackage": "No package selected",
+  "advertise.payment": "Payment",
+  "advertise.checkingPayment": "Checking secure checkout…",
+  "advertise.paymentNote": "Mobile money and card details stay inside the payment provider’s hosted flow. makaug never stores them.",
+  "advertise.supportTitle": "Need help choosing?",
+  "advertise.supportText": "Tell makaug what you want to promote and where. We will reply with the right placement and next step.",
+  "advertise.dashboardTitle": "Already advertising?",
+  "advertise.dashboardText": "The dashboard is for returning advertisers to manage submitted campaigns, review status, payment links and live dates. Start a new request on this page.",
+  "advertise.dashboardAction": "Open advertiser dashboard",
+  "advertise.previewClose": "Close placement preview",
+  "advertise.previewLabel": "Placement preview",
+  "advertise.previewTitle": "See where your advert appears",
+  "advertise.previewVisualAria": "Live makaug page capture showing the selected advertising position",
+  "advertise.previewWhat": "What this placement does",
+  "advertise.previewWhere": "Where it can appear",
+  "advertise.previewBest": "Best for",
+  "advertise.previewDisclaimer": "Representative example: the highlighted area uses a current live makaug page capture. Final position and creative are confirmed during review before payment and launch.",
+  "advertise.previewChoose": "Choose this placement",
+  "advertise.previewWhatsapp": "Ask on WhatsApp",
+  "advertise.previewEmail": "Email makaug",
+  "advertise.previewButton": "Preview where it appears",
+  "advertise.liveCapture": "Live makaug page capture",
+  "advertise.yourPlacement": "Your placement",
+  "advertise.oneOff": "One-off service",
+  "advertise.day": "day",
+  "advertise.days": "days",
+  "advertise.fixed": "fixed",
+  "advertise.packageLabelFallback": "Approved makaug campaign placement",
+  "advertise.previewUnavailable": "This placement preview is temporarily unavailable. Contact makaug for help choosing.",
+  "advertise.chooseBeforeContinue": "Choose an advertising package before continuing.",
+  "advertise.completeRequired": "Complete the required fields before continuing.",
+  "advertise.rateCardError": "The live rate card could not be loaded. Please try again.",
+  "advertise.paymentError": "Payment readiness could not be checked.",
+  "advertise.paymentWaiting": "Campaign submission is available; hosted checkout is waiting for provider configuration.",
+  "advertise.paymentReady": "{provider} hosted checkout is ready.",
+  "advertise.contactRequired": "Add an email or phone number so makaug can contact you.",
+  "advertise.choosePackageError": "Choose an advertising package.",
+  "advertise.submitting": "Submitting campaign…",
+  "advertise.saving": "Saving the campaign request…",
+  "advertise.campaignReferenceMissing": "Campaign reference was not returned.",
+  "advertise.savedForReview": "Campaign {reference} is saved for review. After approval, your advertiser dashboard will show the secure hosted payment link. The campaign can go live only after payment.",
+  "advertise.briefSaved": "Campaign brief saved with reference {reference}. {createAccount} or {signIn} to create the order and continue to secure payment.",
+  "advertise.pendingReference": "pending",
+  "advertise.createAccount": "Create an advertiser account",
+  "advertise.signIn": "sign in",
+  "advertise.submissionFailed": "Campaign submission failed. Please try again.",
+  "advertise.contactWhatsapp": "WhatsApp 0760 112 587",
+  "advertise.contactEmail": "Email info@makaug.com",
+  "advertise.whatsappOption": "WhatsApp",
+  "advertise.emailOption": "Email",
+  "advertise.browserBrand": "makaug.com · Uganda property",
+  "advertise.whatsappPreviewAria": "WhatsApp sponsored recommendation example",
+  "advertise.whatsappPreviewTitle": "makaug on WhatsApp",
+  "advertise.whatsappPreviewRequest": "Show me properties that match my search.",
+  "advertise.sponsoredRecommendation": "Sponsored recommendation",
+  "advertise.emailPreviewAria": "Email campaign example",
+  "advertise.emailPreviewFrom": "From: makaug.com · Sponsored property update",
+  "advertise.viewApprovedOffer": "View approved offer",
+  "advertise.regionalPreviewAria": "Regional search placement example",
+  "advertise.yourArea": "YOUR AREA",
+  "advertise.regionalSponsor": "Regional sponsor",
+  "advertise.view": "View",
+  "advertise.websitePreviewAria": "Website advertising placement example",
+  "advertise.searchUganda": "Search property across Uganda",
+  "advertise.creativePreview": "Creative preview",
+  "advertise.sponsored": "Sponsored",
+  "advertise.learnMore": "Learn more",
+  "advertise.search": "Search",
+  "advertise.map": "Map",
+  "advertise.reviewPackage": "Package",
+  "advertise.reviewPrice": "Price",
+  "advertise.reviewCampaign": "Campaign",
+  "advertise.reviewBusiness": "Business",
+  "advertise.reviewAdvert": "Advert",
+  "advertise.contactMessage": "Hello makaug, I'm interested in {detail}. Please help me confirm the best placement and next step.",
+  "advertise.contactSubject": "Advertising enquiry: {label}",
+  "advertise.contactBody": "Hello makaug,\n\nI'm interested in {detail}. Please help me confirm the best placement and next step.\n\nThank you.",
+  "advertise.package.featured_property_boost.label": "Featured Property Boost",
+  "advertise.package.featured_property_boost.description": "Push one approved listing higher in matching search journeys and similar-property recommendations.",
+  "advertise.package.featured_property_boost.copy": "One approved property is given a clearly labelled priority position when its location and property type match a visitor's search. The listing keeps its real photos, price, contact route and makaug review status.",
+  "advertise.package.featured_property_boost.locations": "Property search|Category results|Similar properties",
+  "advertise.package.featured_property_boost.bestFor": "Owners, agents or developers who want more attention on one specific approved listing during a focused sales week.",
+  "advertise.package.featured_property_boost.headline": "Your property is placed ahead of standard results",
+  "advertise.package.featured_property_boost.capture": "For Sale results",
+  "advertise.package.regional_search_boost.label": "Regional Search Boost",
+  "advertise.package.regional_search_boost.description": "Promote a property, agent, or business to people searching specific districts and areas.",
+  "advertise.package.regional_search_boost.copy": "Your approved property, agent profile or business is promoted only when people search the districts and areas selected for the campaign. The placement can follow relevant list and map journeys without appearing nationally.",
+  "advertise.package.regional_search_boost.locations": "District search|Area search|Map results",
+  "advertise.package.regional_search_boost.bestFor": "Campaigns focused on places such as Kampala, Wakiso, Mukono, Jinja or a smaller group of named areas.",
+  "advertise.package.regional_search_boost.headline": "Visible to people searching your chosen area",
+  "advertise.package.regional_search_boost.capture": "Land results",
+  "advertise.package.homepage_banner.label": "Homepage Banner",
+  "advertise.package.homepage_banner.description": "Premium brand visibility on the makaug homepage.",
+  "advertise.package.homepage_banner.copy": "A wide, clearly labelled campaign banner appears inside the makaug homepage journey. It uses approved brand artwork, a short message and one destination action.",
+  "advertise.package.homepage_banner.locations": "Homepage top|Homepage mid-page",
+  "advertise.package.homepage_banner.bestFor": "Major launches, developers, lenders and property brands that need broad homepage visibility.",
+  "advertise.package.homepage_banner.headline": "A wide visual campaign across the homepage",
+  "advertise.package.homepage_banner.capture": "Homepage",
+  "advertise.package.agent_spotlight.label": "Agent Spotlight",
+  "advertise.package.agent_spotlight.description": "Feature a verified broker profile in broker discovery and relevant property journeys.",
+  "advertise.package.agent_spotlight.copy": "A verified broker profile receives a priority card in agent discovery and can be surfaced beside relevant property journeys. Visitors still see the broker's genuine profile, verification status and contact options.",
+  "advertise.package.agent_spotlight.locations": "Find Brokers|Agent cards|Property details",
+  "advertise.package.agent_spotlight.bestFor": "Verified agents and agencies looking to grow recognition and enquiries in the areas they serve.",
+  "advertise.package.agent_spotlight.headline": "Your verified profile stands out in broker discovery",
+  "advertise.package.agent_spotlight.capture": "Find Brokers",
+  "advertise.package.student_accommodation_push.label": "Student Accommodation Push",
+  "advertise.package.student_accommodation_push.description": "Promote hostels, studios, and student rooms near universities and student search flows.",
+  "advertise.package.student_accommodation_push.copy": "Approved hostels, studios and student rooms can receive a sponsored position in student accommodation searches that match the selected campus or area.",
+  "advertise.package.student_accommodation_push.locations": "Students page|University search|WhatsApp student results",
+  "advertise.package.student_accommodation_push.bestFor": "Accommodation providers filling rooms around a particular university or student area.",
+  "advertise.package.student_accommodation_push.headline": "Reach students searching near their campus",
+  "advertise.package.student_accommodation_push.capture": "Student accommodation results",
+  "advertise.package.commercial_land_sponsor.label": "Commercial and Land Sponsor",
+  "advertise.package.commercial_land_sponsor.description": "Sponsor commercial property or land inventory for investors and business buyers.",
+  "advertise.package.commercial_land_sponsor.copy": "Commercial property or land inventory is promoted within the relevant investor and business-search journey, including matching list and map results.",
+  "advertise.package.commercial_land_sponsor.locations": "Commercial results|Land results|Map results",
+  "advertise.package.commercial_land_sponsor.bestFor": "Landowners, developers and commercial agents targeting investors or business buyers.",
+  "advertise.package.commercial_land_sponsor.headline": "Sponsor inventory in commercial and land searches",
+  "advertise.package.commercial_land_sponsor.capture": "Commercial results",
+  "advertise.package.whatsapp_chatbot_sponsor.label": "WhatsApp Chatbot Sponsor",
+  "advertise.package.whatsapp_chatbot_sponsor.description": "Appear inside relevant WhatsApp assistant recommendations where the ad matches the user's request.",
+  "advertise.package.whatsapp_chatbot_sponsor.copy": "An approved sponsored recommendation can appear in a relevant WhatsApp property conversation when the campaign matches what the person is asking for. It remains labelled as sponsored.",
+  "advertise.package.whatsapp_chatbot_sponsor.locations": "WhatsApp property results|WhatsApp agent results",
+  "advertise.package.whatsapp_chatbot_sponsor.bestFor": "Relevant property or service offers that benefit from a direct conversational enquiry route.",
+  "advertise.package.whatsapp_chatbot_sponsor.headline": "A sponsored recommendation inside a matching chat",
+  "advertise.package.whatsapp_chatbot_sponsor.capture": "WhatsApp conversation",
+  "advertise.package.email_whatsapp_blast.label": "Email and WhatsApp Campaign",
+  "advertise.package.email_whatsapp_blast.description": "Send an approved offer to an opted-in makaug audience segment.",
+  "advertise.package.email_whatsapp_blast.copy": "makaug prepares an approved one-off message for a relevant opted-in audience segment. The campaign is reviewed before any email or WhatsApp distribution is scheduled.",
+  "advertise.package.email_whatsapp_blast.locations": "Email campaign|WhatsApp campaign",
+  "advertise.package.email_whatsapp_blast.bestFor": "Time-sensitive launches, open days and clearly defined offers with a specific audience and call to action.",
+  "advertise.package.email_whatsapp_blast.headline": "Your approved offer delivered to an opted-in audience",
+  "advertise.package.email_whatsapp_blast.capture": "Email campaign",
+  "advertise.package.haymaker_all_platform.label": "All-platform Campaign",
+  "advertise.package.haymaker_all_platform.description": "Coordinate approved website, search, map, WhatsApp, email and agent-card placements.",
+  "advertise.package.haymaker_all_platform.copy": "A coordinated month-long campaign combines approved website, search, map, WhatsApp, email and agent-card placements. makaug confirms the exact mix and schedule during review.",
+  "advertise.package.haymaker_all_platform.locations": "Homepage|Search|Map|WhatsApp|Email|Agent cards",
+  "advertise.package.haymaker_all_platform.bestFor": "Large property launches or brands that need sustained reach across several makaug journeys.",
+  "advertise.package.haymaker_all_platform.headline": "One coordinated campaign across makaug",
+  "advertise.package.haymaker_all_platform.capture": "Homepage and property journeys",
+  "advertise.package.creative_design_addon.label": "Creative Design Add-on",
+  "advertise.package.creative_design_addon.description": "Prepare campaign artwork for an approved makaug placement.",
+  "advertise.package.creative_design_addon.copy": "makaug turns your approved logo, offer and message into size-ready campaign artwork. This is a creative service add-on and does not include media placement by itself.",
+  "advertise.package.creative_design_addon.locations": "Banner creative|Listing creative|Campaign resize set",
+  "advertise.package.creative_design_addon.bestFor": "Advertisers who have an offer and brand assets but need polished, correctly sized artwork before launch.",
+  "advertise.package.creative_design_addon.headline": "Size-ready creative prepared for your placement",
+  "advertise.package.creative_design_addon.capture": "Homepage placement context"
+});
+
+Object.assign(CONTENT_I18N.en, ABOUT_PAGE_I18N_EN, ADVERTISING_UI_I18N_EN);
 ["lg", "sw", "ac", "ny", "rn", "sm", "am", "ar"].forEach((code) => {
-  CONTENT_I18N[code] = Object.assign({}, CONTENT_I18N[code] || {}, ABOUT_PAGE_I18N_EN);
+  CONTENT_I18N[code] = Object.assign(
+    {},
+    ABOUT_PAGE_I18N_EN,
+    ADVERTISING_UI_I18N_EN,
+    CONTENT_I18N[code] || {},
+    window.__MAKAUG_ABOUT_ADVERTISE_I18N__?.[code] || {}
+  );
 });
 Object.assign(CONTENT_I18N.lg, {
   "about.heroLabel": "Ebitukwatako",
@@ -3213,11 +3504,30 @@ function contentTr(key) {
   return value || key;
 }
 
+function contentTemplate(key, values = {}) {
+  return Object.entries(values).reduce(
+    (text, [name, value]) => text.replaceAll(`{${name}}`, String(value ?? "")),
+    contentTr(key)
+  );
+}
+
 function applyContentLanguageUI(root = document) {
   if (!root) return;
   root.querySelectorAll("[data-content-i18n]").forEach((el) => {
     const key = el.getAttribute("data-content-i18n");
     if (key) el.textContent = contentTr(key);
+  });
+  root.querySelectorAll("[data-content-i18n-placeholder]").forEach((el) => {
+    const key = el.getAttribute("data-content-i18n-placeholder");
+    if (key) el.setAttribute("placeholder", contentTr(key));
+  });
+  root.querySelectorAll("[data-content-i18n-aria]").forEach((el) => {
+    const key = el.getAttribute("data-content-i18n-aria");
+    if (key) el.setAttribute("aria-label", contentTr(key));
+  });
+  root.querySelectorAll("[data-content-i18n-alt]").forEach((el) => {
+    const key = el.getAttribute("data-content-i18n-alt");
+    if (key) el.setAttribute("alt", contentTr(key));
   });
 }
 
@@ -7856,7 +8166,19 @@ function aboutCommercialPriceLabel(key, priceOnly = false) {
   const entry = aboutCommercialCatalog()?.products?.[key];
   if (!entry) return '';
   const value = fmtP(entry.amount, '');
-  return priceOnly ? value : `${value} / ${entry.period}`;
+  const periodKeys = {
+    'property / month': 'about.periodPropertyMonth',
+    month: 'about.periodMonth',
+    post: 'about.periodPost',
+    '7 days': 'about.periodSevenDays',
+    'listing / month': 'about.periodListingMonth',
+    report: 'about.periodReport',
+    setup: 'about.periodSetup',
+    property: 'about.periodProperty',
+    'placement / week': 'about.periodPlacementWeek'
+  };
+  const period = contentTr(periodKeys[entry.period] || '') || entry.period;
+  return priceOnly ? value : `${value} / ${period}`;
 }
 
 function updateAboutCommercialPrices() {
@@ -7866,7 +8188,8 @@ function updateAboutCommercialPrices() {
     const key = el.getAttribute('data-about-price');
     const price = aboutCommercialPriceLabel(key, el.getAttribute('data-about-price-only') === 'true');
     if (!price) return;
-    const template = el.getAttribute('data-about-price-template') || '{price}';
+    const templateKey = el.getAttribute('data-about-price-template-key');
+    const template = templateKey ? contentTr(templateKey) : (el.getAttribute('data-about-price-template') || '{price}');
     el.textContent = template.replace('{price}', price);
   });
 }
@@ -8036,6 +8359,7 @@ function applyLanguageUI() {
   setPageHeading("page-account", tr("pageAccount"));
   applyContentLanguageUI(document);
   updateAboutPageUi();
+  applyAdvertisingLanguageUI();
   applyAuthUi();
   applyAccountAccessLanguageUi();
   applyListingWizardLanguageUI();
@@ -43408,7 +43732,9 @@ const ADVERTISING_PACKAGE_PREVIEW_CONTENT = Object.freeze({
     bestFor: "Owners, agents or developers who want more attention on one specific approved listing during a focused sales week.",
     view: "featured",
     image: "/assets/house-ads-v3/sale.webp",
-    headline: "Your property is placed ahead of standard results"
+    headline: "Your property is placed ahead of standard results",
+    screenshot: "/assets/advertising-previews/live-search.jpg",
+    highlight: "card-left"
   },
   regional_search_boost: {
     copy: "Your approved property, agent profile or business is promoted only when people search the districts and areas selected for the campaign. The placement can follow relevant list and map journeys without appearing nationally.",
@@ -43416,7 +43742,9 @@ const ADVERTISING_PACKAGE_PREVIEW_CONTENT = Object.freeze({
     bestFor: "Campaigns focused on places such as Kampala, Wakiso, Mukono, Jinja or a smaller group of named areas.",
     view: "regional",
     image: "/assets/house-ads-v3/land.webp",
-    headline: "Visible to people searching your chosen area"
+    headline: "Visible to people searching your chosen area",
+    screenshot: "/assets/advertising-previews/live-land.jpg",
+    highlight: "card-left"
   },
   homepage_banner: {
     copy: "A wide, clearly labelled campaign banner appears inside the makaug homepage journey. It uses approved brand artwork, a short message and one destination action.",
@@ -43424,7 +43752,9 @@ const ADVERTISING_PACKAGE_PREVIEW_CONTENT = Object.freeze({
     bestFor: "Major launches, developers, lenders and property brands that need broad homepage visibility.",
     view: "band",
     image: "/assets/house-ads-v3/home-hero.webp",
-    headline: "A wide visual campaign across the homepage"
+    headline: "A wide visual campaign across the homepage",
+    screenshot: "/assets/advertising-previews/live-homepage.jpg",
+    highlight: "banner"
   },
   agent_spotlight: {
     copy: "A verified broker profile receives a priority card in agent discovery and can be surfaced beside relevant property journeys. Visitors still see the broker's genuine profile, verification status and contact options.",
@@ -43432,7 +43762,9 @@ const ADVERTISING_PACKAGE_PREVIEW_CONTENT = Object.freeze({
     bestFor: "Verified agents and agencies looking to grow recognition and enquiries in the areas they serve.",
     view: "featured",
     image: "/assets/house-ads-v3/agents.webp",
-    headline: "Your verified profile stands out in broker discovery"
+    headline: "Your verified profile stands out in broker discovery",
+    screenshot: "/assets/advertising-previews/live-brokers.jpg",
+    highlight: "card-left"
   },
   student_accommodation_push: {
     copy: "Approved hostels, studios and student rooms can receive a sponsored position in student accommodation searches that match the selected campus or area.",
@@ -43440,7 +43772,9 @@ const ADVERTISING_PACKAGE_PREVIEW_CONTENT = Object.freeze({
     bestFor: "Accommodation providers filling rooms around a particular university or student area.",
     view: "band",
     image: "/assets/house-ads-v3/students.webp",
-    headline: "Reach students searching near their campus"
+    headline: "Reach students searching near their campus",
+    screenshot: "/assets/advertising-previews/live-students.jpg",
+    highlight: "card-left"
   },
   commercial_land_sponsor: {
     copy: "Commercial property or land inventory is promoted within the relevant investor and business-search journey, including matching list and map results.",
@@ -43448,7 +43782,9 @@ const ADVERTISING_PACKAGE_PREVIEW_CONTENT = Object.freeze({
     bestFor: "Landowners, developers and commercial agents targeting investors or business buyers.",
     view: "regional",
     image: "/assets/house-ads-v3/commercial.webp",
-    headline: "Sponsor inventory in commercial and land searches"
+    headline: "Sponsor inventory in commercial and land searches",
+    screenshot: "/assets/advertising-previews/live-commercial.jpg",
+    highlight: "card-left"
   },
   whatsapp_chatbot_sponsor: {
     copy: "An approved sponsored recommendation can appear in a relevant WhatsApp property conversation when the campaign matches what the person is asking for. It remains labelled as sponsored.",
@@ -43472,7 +43808,9 @@ const ADVERTISING_PACKAGE_PREVIEW_CONTENT = Object.freeze({
     bestFor: "Large property launches or brands that need sustained reach across several makaug journeys.",
     view: "bundle",
     image: "/assets/house-ads-v3/home-hero.webp",
-    headline: "One coordinated campaign across makaug"
+    headline: "One coordinated campaign across makaug",
+    screenshot: "/assets/advertising-previews/live-homepage.jpg",
+    highlight: "hero"
   },
   creative_design_addon: {
     copy: "makaug turns your approved logo, offer and message into size-ready campaign artwork. This is a creative service add-on and does not include media placement by itself.",
@@ -43480,7 +43818,9 @@ const ADVERTISING_PACKAGE_PREVIEW_CONTENT = Object.freeze({
     bestFor: "Advertisers who have an offer and brand assets but need polished, correctly sized artwork before launch.",
     view: "creative",
     image: "/assets/house-ads-v3/marketplace.webp",
-    headline: "Size-ready creative prepared for your placement"
+    headline: "Size-ready creative prepared for your placement",
+    screenshot: "/assets/advertising-previews/live-homepage.jpg",
+    highlight: "banner"
   }
 });
 
@@ -43491,8 +43831,14 @@ function advertisingSelectedPackage() {
 
 function advertisingPackageDurationLabel(item = {}) {
   const duration = Number(item?.duration_days || 0);
-  if (duration < 1) return "One-off service";
-  return `${duration} day${duration === 1 ? "" : "s"}`;
+  if (duration < 1) return contentTr("advertise.oneOff");
+  return `${duration} ${contentTr(duration === 1 ? "advertise.day" : "advertise.days")}`;
+}
+
+function advertisingPackageText(item = {}, field = "label") {
+  const key = String(item?.key || "");
+  if (!key) return String(item?.[field] || "");
+  return contentTr(`advertise.package.${key}.${field}`) || String(item?.[field] || "");
 }
 
 function setAdvertisingStatus(message = "", tone = "info") {
@@ -43514,13 +43860,13 @@ function setAdvertisingStatus(message = "", tone = "info") {
 
 function updateAdvertisingQuote() {
   const selected = advertisingSelectedPackage();
-  setTextById("advertise-quote-label", selected?.label || "Choose a package");
+  setTextById("advertise-quote-label", selected ? advertisingPackageText(selected, "label") : contentTr("advertise.choosePackage"));
   setTextById("advertise-quote-amount", `UGX ${Number(selected?.price_ugx || 0).toLocaleString("en-UG")}`);
   setTextById(
     "advertise-quote-duration",
     selected
-      ? `${advertisingPackageDurationLabel(selected)} · ${String(selected.pricing_model || "fixed").replace(/_/g, " ")}`
-      : "No package selected"
+      ? `${advertisingPackageDurationLabel(selected)} · ${selected.pricing_model === "fixed" ? contentTr("advertise.fixed") : String(selected.pricing_model || "fixed").replace(/_/g, " ")}`
+      : contentTr("advertise.noPackage")
   );
   document.querySelectorAll("[data-advertise-package-card]").forEach((card) => {
     card.classList.toggle("is-selected", card.dataset.advertisePackageCard === selected?.key);
@@ -43531,7 +43877,7 @@ function updateAdvertisingQuote() {
 
 function advertisingPackagePreviewMeta(item = {}) {
   const key = String(item?.key || "");
-  return ADVERTISING_PACKAGE_PREVIEW_CONTENT[key] || {
+  const base = ADVERTISING_PACKAGE_PREVIEW_CONTENT[key] || {
     copy: item?.description || "makaug will confirm the exact placement and creative during campaign review.",
     locations: Array.isArray(item?.placements) && item.placements.length ? item.placements.map((value) => String(value).replace(/_/g, " ")) : ["makaug property journeys"],
     bestFor: "Advertisers who want to reach people actively searching for property.",
@@ -43539,12 +43885,23 @@ function advertisingPackagePreviewMeta(item = {}) {
     image: "/assets/house-ads-v3/home-hero.webp",
     headline: item?.label || "Approved makaug campaign placement"
   };
+  const translatedLocations = advertisingPackageText(item, "locations");
+  return {
+    ...base,
+    copy: advertisingPackageText(item, "copy") || base.copy,
+    locations: translatedLocations && !translatedLocations.startsWith("advertise.package.")
+      ? translatedLocations.split("|").map((value) => value.trim()).filter(Boolean)
+      : base.locations,
+    bestFor: advertisingPackageText(item, "bestFor") || base.bestFor,
+    headline: advertisingPackageText(item, "headline") || base.headline,
+    capture: advertisingPackageText(item, "capture") || "makaug.com"
+  };
 }
 
 function buildAdvertisingPlacementPreviewVisual(meta = {}, item = {}) {
   const image = adminAttr(meta.image || "/assets/house-ads-v3/home-hero.webp");
-  const headline = adminEscape(meta.headline || item.label || "Your campaign placement");
-  const browserBar = `<div class="advertising-preview-browser-bar"><span class="advertising-preview-browser-dot"></span><span class="advertising-preview-browser-dot"></span><span class="advertising-preview-browser-dot"></span><span class="advertising-preview-logo">M makaug.com · Uganda property</span></div>`;
+  const headline = adminEscape(meta.headline || advertisingPackageText(item, "label") || contentTr("advertise.packageLabelFallback"));
+  const browserBar = `<div class="advertising-preview-browser-bar"><span class="advertising-preview-browser-dot"></span><span class="advertising-preview-browser-dot"></span><span class="advertising-preview-browser-dot"></span><span class="advertising-preview-logo">M ${adminEscape(contentTr("advertise.browserBrand"))}</span></div>`;
   const propertyCard = (src, highlighted = false, label = "Approved property") => `
     <div class="advertising-preview-card${highlighted ? " advertising-preview-highlight" : ""}">
       <img src="${adminAttr(src)}" alt="" loading="lazy" decoding="async">
@@ -43553,55 +43910,69 @@ function buildAdvertisingPlacementPreviewVisual(meta = {}, item = {}) {
     </div>`;
 
   if (meta.view === "whatsapp") {
-    return `<div class="advertising-preview-browser" aria-label="WhatsApp sponsored recommendation example">${browserBar}<div class="advertising-preview-canvas">
+    return `<div class="advertising-preview-browser" aria-label="${adminAttr(contentTr("advertise.whatsappPreviewAria"))}">${browserBar}<div class="advertising-preview-canvas">
       <div class="advertising-preview-phone">
-        <div class="text-xs font-black text-[#15603f]">makaug on WhatsApp</div>
-        <div class="mt-3 rounded-xl bg-gray-100 p-2 text-[11px] text-gray-600">Show me properties that match my search.</div>
-        <div class="advertising-preview-chat"><strong>Sponsored recommendation</strong><br>${headline}<img src="${image}" alt="" loading="lazy" decoding="async" class="mt-2 h-20 w-full rounded-lg object-cover"></div>
+        <div class="text-xs font-black text-[#15603f]">${adminEscape(contentTr("advertise.whatsappPreviewTitle"))}</div>
+        <div class="mt-3 rounded-xl bg-gray-100 p-2 text-[11px] text-gray-600">${adminEscape(contentTr("advertise.whatsappPreviewRequest"))}</div>
+        <div class="advertising-preview-chat"><strong>${adminEscape(contentTr("advertise.sponsoredRecommendation"))}</strong><br>${headline}<img src="${image}" alt="" loading="lazy" decoding="async" class="mt-2 h-20 w-full rounded-lg object-cover"></div>
       </div>
     </div></div>`;
   }
 
   if (meta.view === "email") {
-    return `<div class="advertising-preview-browser" aria-label="Email campaign example">${browserBar}<div class="advertising-preview-canvas">
+    return `<div class="advertising-preview-browser" aria-label="${adminAttr(contentTr("advertise.emailPreviewAria"))}">${browserBar}<div class="advertising-preview-canvas">
       <div class="advertising-preview-email">
-        <div class="advertising-preview-email-header">From: makaug.com · Sponsored property update</div>
+        <div class="advertising-preview-email-header">${adminEscape(contentTr("advertise.emailPreviewFrom"))}</div>
         <img src="${image}" alt="" loading="lazy" decoding="async" class="mt-3 h-28 w-full rounded-xl object-cover">
         <div class="mt-3 text-base font-black text-[#16241d]">${headline}</div>
         <div class="advertising-preview-line"></div><div class="advertising-preview-line short"></div>
-        <div class="mt-4 inline-flex rounded-lg bg-[#15603f] px-3 py-2 text-xs font-black text-white">View approved offer</div>
+        <div class="mt-4 inline-flex rounded-lg bg-[#15603f] px-3 py-2 text-xs font-black text-white">${adminEscape(contentTr("advertise.viewApprovedOffer"))}</div>
+      </div>
+    </div></div>`;
+  }
+
+  if (meta.screenshot) {
+    const screenshot = adminAttr(meta.screenshot);
+    const highlight = ["card-left", "card-right", "banner", "hero"].includes(meta.highlight) ? meta.highlight : "card-left";
+    const placementLabel = adminAttr(contentTr("advertise.yourPlacement"));
+    return `<div class="advertising-preview-browser">${browserBar}<div class="advertising-preview-canvas">
+      <div class="advertising-preview-live-frame">
+        <img class="advertising-preview-live-image" src="${screenshot}" alt="${adminAttr(meta.capture || "makaug.com")}" loading="eager" decoding="async">
+        <span class="advertising-preview-live-badge"><i class="fas fa-camera" aria-hidden="true"></i>${adminEscape(meta.capture || "makaug.com")}</span>
+        <span class="advertising-preview-live-highlight is-${highlight}" data-label="${placementLabel}"></span>
+        <span class="advertising-preview-live-source">${adminEscape(contentTr("advertise.liveCapture"))}</span>
       </div>
     </div></div>`;
   }
 
   if (meta.view === "regional") {
-    return `<div class="advertising-preview-browser" aria-label="Regional search placement example">${browserBar}<div class="advertising-preview-canvas">
-      <div class="advertising-preview-map"><div class="advertising-preview-map-pin">YOUR<br>AREA</div></div>
-      <div class="advertising-preview-band"><span><small class="block text-amber-200">Regional sponsor</small>${headline}</span><span>View →</span></div>
+    return `<div class="advertising-preview-browser" aria-label="${adminAttr(contentTr("advertise.regionalPreviewAria"))}">${browserBar}<div class="advertising-preview-canvas">
+      <div class="advertising-preview-map"><div class="advertising-preview-map-pin">${adminEscape(contentTr("advertise.yourArea"))}</div></div>
+      <div class="advertising-preview-band"><span><small class="block text-amber-200">${adminEscape(contentTr("advertise.regionalSponsor"))}</small>${headline}</span><span>${adminEscape(contentTr("advertise.view"))} →</span></div>
       <div class="advertising-preview-grid">${propertyCard(meta.image, true, item.label)}${propertyCard("/assets/house-ads-v3/land.webp")}${propertyCard("/assets/house-ads-v3/commercial.webp")}</div>
     </div></div>`;
   }
 
   const featuredCard = meta.view === "featured";
   const showBand = ["band", "bundle", "creative"].includes(meta.view);
-  return `<div class="advertising-preview-browser" aria-label="Website advertising placement example">${browserBar}<div class="advertising-preview-canvas">
-    <div class="advertising-preview-hero" style="background-image:url('${image}')"><div class="advertising-preview-hero-copy">Search property across Uganda</div></div>
-    ${showBand ? `<div class="advertising-preview-band"><span><small class="block text-amber-200">${meta.view === "creative" ? "Creative preview" : "Sponsored"}</small>${headline}</span><span>Learn more →</span></div>` : ""}
+  return `<div class="advertising-preview-browser" aria-label="${adminAttr(contentTr("advertise.websitePreviewAria"))}">${browserBar}<div class="advertising-preview-canvas">
+    <div class="advertising-preview-hero" style="background-image:url('${image}')"><div class="advertising-preview-hero-copy">${adminEscape(contentTr("advertise.searchUganda"))}</div></div>
+    ${showBand ? `<div class="advertising-preview-band"><span><small class="block text-amber-200">${adminEscape(contentTr(meta.view === "creative" ? "advertise.creativePreview" : "advertise.sponsored"))}</small>${headline}</span><span>${adminEscape(contentTr("advertise.learnMore"))} →</span></div>` : ""}
     <div class="advertising-preview-grid">${propertyCard(meta.image, featuredCard, item.label)}${propertyCard("/assets/house-ads-v3/rent.webp")}${propertyCard("/assets/house-ads-v3/agents.webp")}</div>
-    ${meta.view === "bundle" ? `<div class="mt-3 flex flex-wrap gap-2"><span class="advertising-preview-tag">Search</span><span class="advertising-preview-tag">Map</span><span class="advertising-preview-tag">WhatsApp</span><span class="advertising-preview-tag">Email</span></div>` : ""}
+    ${meta.view === "bundle" ? `<div class="mt-3 flex flex-wrap gap-2"><span class="advertising-preview-tag">${adminEscape(contentTr("advertise.search"))}</span><span class="advertising-preview-tag">${adminEscape(contentTr("advertise.map"))}</span><span class="advertising-preview-tag">WhatsApp</span><span class="advertising-preview-tag">${adminEscape(contentTr("advertise.emailOption"))}</span></div>` : ""}
   </div></div>`;
 }
 
 function advertisingContactUrls(item = advertisingSelectedPackage()) {
-  const label = String(item?.label || "a makaug advertising placement");
+  const label = String(item ? advertisingPackageText(item, "label") : contentTr("advertise.packageLabelFallback"));
   const price = Number(item?.price_ugx || 0);
   const duration = Number(item?.duration_days || 0);
   const detail = price > 0
-    ? `${label} (UGX ${price.toLocaleString("en-UG")}${duration ? ` for ${duration} day${duration === 1 ? "" : "s"}` : ""})`
+    ? `${label} (UGX ${price.toLocaleString("en-UG")}${duration ? ` · ${advertisingPackageDurationLabel(item)}` : ""})`
     : label;
-  const message = `Hello makaug, I'm interested in ${detail}. Please help me confirm the best placement and next step.`;
-  const subject = `Advertising enquiry: ${label}`;
-  const body = `Hello makaug,\n\nI'm interested in ${detail}. Please help me confirm the best placement and next step.\n\nThank you.`;
+  const message = contentTemplate("advertise.contactMessage", { detail, label });
+  const subject = contentTemplate("advertise.contactSubject", { label });
+  const body = contentTemplate("advertise.contactBody", { detail, label });
   return {
     whatsapp: `https://wa.me/256760112587?text=${encodeURIComponent(message)}`,
     email: `mailto:info@makaug.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
@@ -43620,7 +43991,7 @@ function updateAdvertisingContactLinks(item = advertisingSelectedPackage()) {
   });
 }
 
-function openAdvertisingPlacementPreview(packageKey, event) {
+function openAdvertisingPlacementPreview(packageKey, event, shouldTrack = true) {
   if (event) {
     event.preventDefault();
     event.stopPropagation();
@@ -43628,7 +43999,7 @@ function openAdvertisingPlacementPreview(packageKey, event) {
   const key = String(packageKey || "");
   const item = advertisingSelfServePackages.find((entry) => String(entry.key) === key);
   if (!item) {
-    setAdvertisingStatus("This placement preview is temporarily unavailable. Contact makaug for help choosing.", "error");
+    setAdvertisingStatus(contentTr("advertise.previewUnavailable"), "error");
     return false;
   }
   const radio = Array.from(document.querySelectorAll("#advertise-selfserve-form input[name='package_key']"))
@@ -43637,7 +44008,7 @@ function openAdvertisingPlacementPreview(packageKey, event) {
   advertisingPlacementPreviewKey = key;
   updateAdvertisingQuote();
   const meta = advertisingPackagePreviewMeta(item);
-  setTextById("advertising-placement-preview-title", item.label || "Placement preview");
+  setTextById("advertising-placement-preview-title", advertisingPackageText(item, "label") || contentTr("advertise.previewTitle"));
   setTextById(
     "advertising-placement-preview-price",
     `UGX ${Number(item.price_ugx || 0).toLocaleString("en-UG")} · ${advertisingPackageDurationLabel(item)}`
@@ -43653,7 +44024,7 @@ function openAdvertisingPlacementPreview(packageKey, event) {
   const modalBox = document.querySelector("#advertising-placement-preview-modal .modal-box");
   if (modalBox) modalBox.scrollTop = 0;
   document.getElementById("advertising-placement-preview-close")?.focus({ preventScroll: true });
-  trackEvent("advertising_placement_preview_opened", { package_key: key });
+  if (shouldTrack) trackEvent("advertising_placement_preview_opened", { package_key: key });
   return false;
 }
 
@@ -43701,7 +44072,7 @@ function validateAdvertisingStep(step = advertisingSelfServeStep) {
   const form = document.getElementById("advertise-selfserve-form");
   if (!form) return false;
   if (step === 1 && !advertisingSelectedPackage()) {
-    setAdvertisingStatus("Choose an advertising package before continuing.", "error");
+    setAdvertisingStatus(contentTr("advertise.chooseBeforeContinue"), "error");
     return false;
   }
   const requiredByStep = {
@@ -43712,14 +44083,14 @@ function validateAdvertisingStep(step = advertisingSelfServeStep) {
     const field = form.elements.namedItem(name);
     if (!field?.value?.trim()) {
       field?.focus();
-      setAdvertisingStatus("Complete the required fields before continuing.", "error");
+      setAdvertisingStatus(contentTr("advertise.completeRequired"), "error");
       return false;
     }
   }
   if (step === 3) {
     const data = new FormData(form);
     if (!String(data.get("email") || "").trim() && !String(data.get("phone") || "").trim()) {
-      setAdvertisingStatus("Add an email or phone number so makaug can contact you.", "error");
+      setAdvertisingStatus(contentTr("advertise.contactRequired"), "error");
       return false;
     }
   }
@@ -43740,12 +44111,42 @@ function renderAdvertisingReviewSummary() {
   const data = new FormData(form);
   wrap.innerHTML = `
     <dl class="grid sm:grid-cols-2 gap-3">
-      <div><dt class="text-xs font-bold text-gray-500">Package</dt><dd class="mt-1 font-black text-gray-900">${adminEscape(selected?.label || "-")}</dd></div>
-      <div><dt class="text-xs font-bold text-gray-500">Price</dt><dd class="mt-1 font-black text-[#15603f]">UGX ${Number(selected?.price_ugx || 0).toLocaleString("en-UG")}</dd></div>
-      <div><dt class="text-xs font-bold text-gray-500">Campaign</dt><dd class="mt-1 font-bold text-gray-900">${adminEscape(data.get("campaign_name") || "-")}</dd></div>
-      <div><dt class="text-xs font-bold text-gray-500">Business</dt><dd class="mt-1 font-bold text-gray-900">${adminEscape(data.get("business_name") || "-")}</dd></div>
-      <div class="sm:col-span-2"><dt class="text-xs font-bold text-gray-500">Advert</dt><dd class="mt-1 text-gray-700">${adminEscape(data.get("creative_headline") || "-")} · ${adminEscape(data.get("creative_body") || "-")}</dd></div>
+      <div><dt class="text-xs font-bold text-gray-500">${adminEscape(contentTr("advertise.reviewPackage"))}</dt><dd class="mt-1 font-black text-gray-900">${adminEscape(selected ? advertisingPackageText(selected, "label") : "-")}</dd></div>
+      <div><dt class="text-xs font-bold text-gray-500">${adminEscape(contentTr("advertise.reviewPrice"))}</dt><dd class="mt-1 font-black text-[#15603f]">UGX ${Number(selected?.price_ugx || 0).toLocaleString("en-UG")}</dd></div>
+      <div><dt class="text-xs font-bold text-gray-500">${adminEscape(contentTr("advertise.reviewCampaign"))}</dt><dd class="mt-1 font-bold text-gray-900">${adminEscape(data.get("campaign_name") || "-")}</dd></div>
+      <div><dt class="text-xs font-bold text-gray-500">${adminEscape(contentTr("advertise.reviewBusiness"))}</dt><dd class="mt-1 font-bold text-gray-900">${adminEscape(data.get("business_name") || "-")}</dd></div>
+      <div class="sm:col-span-2"><dt class="text-xs font-bold text-gray-500">${adminEscape(contentTr("advertise.reviewAdvert"))}</dt><dd class="mt-1 text-gray-700">${adminEscape(data.get("creative_headline") || "-")} · ${adminEscape(data.get("creative_body") || "-")}</dd></div>
     </dl>`;
+}
+
+function renderAdvertisingPackageOptions() {
+  const packageWrap = document.getElementById("advertise-package-options");
+  if (!packageWrap || !advertisingSelfServePackages.length) return;
+  const selectedKey = advertisingSelectedPackage()?.key || advertisingSelfServePackages[0]?.key || "";
+  packageWrap.innerHTML = advertisingSelfServePackages.map((item, index) => `
+    <label class="advertise-package-card" data-advertise-package-card="${adminAttr(item.key)}">
+      <div class="flex items-start gap-3">
+        <input type="radio" name="package_key" value="${adminAttr(item.key)}" ${String(item.key) === String(selectedKey) || (!selectedKey && index === 0) ? "checked" : ""} onchange="updateAdvertisingQuote()" class="mt-1 accent-[#15603f]">
+        <span class="min-w-0 flex-1">
+          <strong class="block text-sm text-[#16241d]">${adminEscape(advertisingPackageText(item, "label"))}</strong>
+          <span class="mt-1 block text-xs leading-relaxed text-[#5b6b62]">${adminEscape(advertisingPackageText(item, "description") || item.description || "")}</span>
+          <span class="mt-2 block text-sm font-black text-[#15603f]">UGX ${Number(item.price_ugx || 0).toLocaleString("en-UG")} · ${advertisingPackageDurationLabel(item)}</span>
+          <button type="button" onclick="return openAdvertisingPlacementPreview('${adminAttr(item.key)}', event)" class="advertise-package-preview-button"><i class="fas fa-eye" aria-hidden="true"></i> ${adminEscape(contentTr("advertise.previewButton"))}</button>
+        </span>
+      </div>
+    </label>`).join("");
+}
+
+function applyAdvertisingLanguageUI() {
+  const page = document.getElementById("page-advertise");
+  if (!page) return;
+  applyContentLanguageUI(page);
+  renderAdvertisingPackageOptions();
+  updateAdvertisingQuote();
+  const previewModal = document.getElementById("advertising-placement-preview-modal");
+  if (advertisingPlacementPreviewKey && (previewModal?.classList.contains("open") || previewModal?.classList.contains("active"))) {
+    openAdvertisingPlacementPreview(advertisingPlacementPreviewKey, null, false);
+  }
 }
 
 async function initializeAdvertisingSelfServe() {
@@ -43770,28 +44171,17 @@ async function initializeAdvertisingSelfServe() {
       apiRequest("/api/advertising/readiness", { skipAuth: true })
     ]);
     advertisingSelfServePackages = Array.isArray(packageResponse?.data) ? packageResponse.data : [];
-    packageWrap.innerHTML = advertisingSelfServePackages.map((item, index) => `
-      <label class="advertise-package-card" data-advertise-package-card="${adminAttr(item.key)}">
-        <div class="flex items-start gap-3">
-          <input type="radio" name="package_key" value="${adminAttr(item.key)}" ${index === 0 ? "checked" : ""} onchange="updateAdvertisingQuote()" class="mt-1 accent-[#15603f]">
-          <span class="min-w-0 flex-1">
-            <strong class="block text-sm text-[#16241d]">${adminEscape(item.label)}</strong>
-            <span class="mt-1 block text-xs leading-relaxed text-[#5b6b62]">${adminEscape(item.description || "")}</span>
-            <span class="mt-2 block text-sm font-black text-[#15603f]">UGX ${Number(item.price_ugx || 0).toLocaleString("en-UG")} · ${advertisingPackageDurationLabel(item)}</span>
-            <button type="button" onclick="return openAdvertisingPlacementPreview('${adminAttr(item.key)}', event)" class="advertise-package-preview-button"><i class="fas fa-eye" aria-hidden="true"></i> Preview where it appears</button>
-          </span>
-        </div>
-      </label>`).join("");
+    renderAdvertisingPackageOptions();
     const readiness = readinessResponse?.data || {};
     setTextById(
       "advertise-payment-readiness",
       readiness.provider_configured
-        ? `${String(readiness.provider || "Payment provider")} hosted checkout is ready.`
-        : "Campaign submission is available; hosted checkout is waiting for provider configuration."
+        ? contentTemplate("advertise.paymentReady", { provider: String(readiness.provider || contentTr("advertise.payment")) })
+        : contentTr("advertise.paymentWaiting")
     );
   } catch (error) {
-    packageWrap.innerHTML = `<div class="rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-800">The live rate card could not be loaded. Please try again.</div>`;
-    setTextById("advertise-payment-readiness", "Payment readiness could not be checked.");
+    packageWrap.innerHTML = `<div class="rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-800">${adminEscape(contentTr("advertise.rateCardError"))}</div>`;
+    setTextById("advertise-payment-readiness", contentTr("advertise.paymentError"));
   }
   updateAdvertisingQuote();
   setAdvertisingSelfServeStep(1);
@@ -43828,41 +44218,36 @@ async function submitAdvertisingSelfServe(event) {
     source: "advertising_selfserve"
   };
   if (!selected) {
-    setAdvertisingStatus("Choose an advertising package.", "error");
+    setAdvertisingStatus(contentTr("advertise.choosePackageError"), "error");
     return false;
   }
   if (submit) {
     submit.disabled = true;
-    submit.textContent = "Submitting campaign…";
+    submit.textContent = contentTr("advertise.submitting");
   }
-  setAdvertisingStatus("Saving the campaign request…");
+  setAdvertisingStatus(contentTr("advertise.saving"));
   try {
     const mode = derivePortalMode(authState?.user, authState?.user?.portal_mode);
     if (authState?.user && ["advertiser", "admin"].includes(mode)) {
       const created = await apiRequest("/api/advertising/campaigns", { method: "POST", body: payload });
       const campaignId = created?.data?.campaign?.id;
-      if (!campaignId) throw new Error("Campaign reference was not returned.");
-      setAdvertisingStatus(
-        `Campaign <strong>${adminEscape(campaignId)}</strong> is saved for review. `
-        + "After approval, your advertiser dashboard will show the secure hosted payment link. The campaign can go live only after payment.",
-        "success"
-      );
+      if (!campaignId) throw new Error(contentTr("advertise.campaignReferenceMissing"));
+      setAdvertisingStatus(contentTemplate("advertise.savedForReview", { reference: `<strong>${adminEscape(campaignId)}</strong>` }), "success");
     } else {
       const inquiry = await apiRequest("/api/advertising/inquiries", { method: "POST", skipAuth: true, body: payload });
-      setAdvertisingStatus(
-        `Campaign brief saved with reference <strong>${adminEscape(inquiry?.data?.id || "pending")}</strong>. `
-        + `<button type="button" onclick="openAuthSignUp('advertiser')" class="underline font-black">Create an advertiser account</button> or `
-        + `<button type="button" onclick="openAuthSignIn('advertiser')" class="underline font-black">sign in</button> to create the order and continue to secure payment.`,
-        "success"
-      );
+      setAdvertisingStatus(contentTemplate("advertise.briefSaved", {
+        reference: `<strong>${adminEscape(inquiry?.data?.id || contentTr("advertise.pendingReference"))}</strong>`,
+        createAccount: `<button type="button" onclick="openAuthSignUp('advertiser')" class="underline font-black">${adminEscape(contentTr("advertise.createAccount"))}</button>`,
+        signIn: `<button type="button" onclick="openAuthSignIn('advertiser')" class="underline font-black">${adminEscape(contentTr("advertise.signIn"))}</button>`
+      }), "success");
     }
     trackEvent("advertising_selfserve_submitted", { package_key: selected.key, authenticated: Boolean(authState?.user) });
   } catch (error) {
-    setAdvertisingStatus(adminEscape(error?.message || "Campaign submission failed. Please try again."), "error");
+    setAdvertisingStatus(adminEscape(error?.message || contentTr("advertise.submissionFailed")), "error");
   } finally {
     if (submit) {
       submit.disabled = false;
-      submit.textContent = "Submit campaign for review";
+      submit.textContent = contentTr("advertise.submit");
     }
   }
   return false;
