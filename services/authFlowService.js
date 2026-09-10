@@ -65,7 +65,7 @@ function dashboardForUser(user = {}, preferredAudience = '') {
   return ROLE_DASHBOARD_MAP[user.role] || '/dashboard';
 }
 
-function buildOtpSuccessPayload({ user, token, preferredAudience = '', pendingIntentCompleted = false, message = '' } = {}) {
+function buildOtpSuccessPayload({ user, token, preferredAudience = '', pendingIntentCompleted = false, contactVerified = true, message = '' } = {}) {
   const redirectUrl = dashboardForUser(user, preferredAudience);
   return {
     token,
@@ -74,7 +74,7 @@ function buildOtpSuccessPayload({ user, token, preferredAudience = '', pendingIn
     userId: user?.id || null,
     role: user?.role || '',
     sessionCreated: Boolean(token),
-    contactVerified: true,
+    contactVerified: contactVerified === true,
     nextAction: 'open_dashboard',
     redirectUrl,
     pendingIntentCompleted: Boolean(pendingIntentCompleted),
@@ -179,6 +179,12 @@ async function ensurePostVerificationRecords(db, user = {}) {
     const brokerDocType = cleanText(profile.broker_identity_document_type);
     const nationalIdNumber = cleanText(profile.broker_national_id_number || profile.national_id_number).toUpperCase();
     const brokerIdentityDeferred = parseBooleanLike(profile.broker_identity_deferred, !brokerDocUrl && !nationalIdNumber);
+    const brokerTrustSubmitted = Boolean(
+      nationalIdNumber
+      && brokerDocUrl
+      && privacyConsentAccepted
+      && dataRetentionNoticeAccepted
+    );
     const verificationReason = cleanText(profile.broker_verification_reason)
       || (brokerIdentityDeferred
         ? 'Broker account created with ID verification deferred to dashboard/admin review.'
@@ -320,7 +326,7 @@ async function ensurePostVerificationRecords(db, user = {}) {
            updated_at = NOW()
        WHERE id = $1`,
       [user.id, JSON.stringify({
-        broker_review_status: 'pending_review',
+        broker_review_status: brokerTrustSubmitted ? 'pending_admin_review' : 'pending_review',
         broker_agent_id: brokerAgentId,
         makaug_agent_number: makaugAgentNumber
       })]

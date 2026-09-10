@@ -73,6 +73,16 @@ function isValidUgPhone(phone) {
   return /^\+256\d{9}$/.test(phone);
 }
 
+function isValidBrokerNationalId(value = '') {
+  const idNumber = cleanText(value).replace(/\s+/g, '').toUpperCase();
+  const compact = idNumber.replace(/-/g, '');
+  if (/^(CM|CF|PM|PF)[A-Z0-9]{12}$/.test(compact)) return true;
+  return /^[A-Z0-9-]{6,32}$/.test(idNumber)
+    && compact.length >= 8
+    && /[A-Z]/.test(compact)
+    && /\d{4,}/.test(compact);
+}
+
 function isOtpDeliveryFailure(error) {
   const message = String(error?.message || '').toLowerCase();
   return message.includes('failed to send otp')
@@ -171,6 +181,12 @@ function sanitizeProfileData(input = {}) {
     'broker_identity_document_type',
     'broker_identity_document_uploaded',
     'broker_identity_document_uploaded_at',
+    'broker_identity_deferred',
+    'broker_signup_without_contact_otp',
+    'broker_phone_verification_required',
+    'broker_manual_phone_review_required',
+    'broker_identity_verification_required',
+    'broker_identity_submitted_at',
     'broker_verification_reason',
     'broker_privacy_consent_accepted',
     'broker_data_retention_notice_accepted',
@@ -1066,6 +1082,19 @@ router.post('/register', async (req, res, next) => {
     });
 
     const role = roleForSignup({ roleInput, audience });
+    const isBrokerSignup = audience === 'agent';
+
+    if (isBrokerSignup) {
+      Object.assign(profileData, {
+        broker_identity_deferred: 'false',
+        broker_signup_without_contact_otp: 'true',
+        broker_phone_verification_required: 'false',
+        broker_manual_phone_review_required: 'true',
+        broker_identity_verification_required: 'false',
+        broker_identity_submitted_at: profileData.broker_identity_document_uploaded_at || new Date().toISOString(),
+        broker_review_status: 'pending_admin_review'
+      });
+    }
 
     const errors = [];
     if (!firstName) errors.push('first_name is required');
@@ -1084,6 +1113,21 @@ router.post('/register', async (req, res, next) => {
     if (otpChannel === 'email' && !email) errors.push('email is required when otp_channel is email');
     if (req.body.contact_verification_token && !contactVerification.ok) errors.push(contactVerification.error);
     if (audience === 'agent' && !email) errors.push('email is required for broker signup');
+    if (isBrokerSignup && !isValidBrokerNationalId(profileData.broker_national_id_number)) {
+      errors.push('a valid broker National ID number is required');
+    }
+    if (isBrokerSignup && !(/^data:image\/[a-z0-9.+-]+;base64,/i.test(profileData.broker_identity_document_url || '') || /^https:\/\//i.test(profileData.broker_identity_document_url || ''))) {
+      errors.push('a clear broker National ID photo is required');
+    }
+    if (isBrokerSignup && !String(profileData.broker_identity_document_type || '').toLowerCase().startsWith('image/')) {
+      errors.push('broker National ID upload must be an image');
+    }
+    if (isBrokerSignup && !parseBooleanLike(profileData.broker_privacy_consent_accepted, false)) {
+      errors.push('broker privacy consent is required');
+    }
+    if (isBrokerSignup && !parseBooleanLike(profileData.broker_data_retention_notice_accepted, false)) {
+      errors.push('broker data-retention notice acceptance is required');
+    }
     if (audience === 'field_agent' && !profileData.field_agent_territory && !profileData.field_agent_areas) {
       errors.push('field agent territory or areas are required');
     }
@@ -1106,7 +1150,7 @@ router.post('/register', async (req, res, next) => {
       [phone, email]
     );
 
-    const verifiedConflict = existingResult.rows.find((row) => row.phone_verified || row.status !== 'active');
+    const verifiedConflict = existingResult.rows.find((row) => row.phone_verified || row.status !== 'active' || row.role === 'agent_broker');
     if (verifiedConflict) {
       await client.query('ROLLBACK');
       return res.status(409).json({ ok: false, error: 'Account with this phone or email already exists' });
@@ -1177,21 +1221,30 @@ router.post('/register', async (req, res, next) => {
     let otpIssue = null;
     let resolvedOtpChannel = otpChannel === 'email' && email ? 'email' : 'phone';
     let emailFallbackToSms = false;
-    if (contactVerification.ok) {
-      const verifiedPatch = {
-        contact_verified_before_account_creation: true,
-        contact_verified_channel: contactVerification.channel,
-        contact_verified_at: new Date().toISOString()
-      };
+    if (contactVerification.ok || isBrokerSignup) {
+      const verifiedPatch = contactVerification.ok
+        ? {
+          contact_verified_before_account_creation: true,
+          contact_verified_channel: contactVerification.channel,
+          contact_verified_at: new Date().toISOString()
+        }
+        : {
+          broker_signup_without_contact_otp: true,
+          broker_phone_verification_required: false,
+          broker_manual_phone_review_required: true,
+          broker_identity_verification_required: false,
+          broker_identity_submitted_at: new Date().toISOString(),
+          broker_review_status: 'pending_admin_review'
+        };
       const verifiedUpdate = await client.query(
         `UPDATE users
-         SET phone_verified = TRUE,
+         SET phone_verified = CASE WHEN $3::boolean THEN TRUE ELSE phone_verified END,
              profile_data = COALESCE(profile_data, '{}'::jsonb) || $2::jsonb,
              last_login_at = NOW(),
              updated_at = NOW()
          WHERE id = $1
          RETURNING *`,
-        [user.id, JSON.stringify(verifiedPatch)]
+        [user.id, JSON.stringify(verifiedPatch), contactVerification.ok]
       );
       user = verifiedUpdate.rows[0];
     } else {
@@ -1276,7 +1329,7 @@ router.post('/register', async (req, res, next) => {
       await notifyAdminSignup({ user, eventType: 'new_advertiser_signup' });
     }
 
-    if (contactVerification.ok) {
+    if (contactVerification.ok || isBrokerSignup) {
       try {
         await ensurePostVerificationRecords(db, user);
         const refreshed = await db.query('SELECT * FROM users WHERE id = $1 LIMIT 1', [user.id]);
@@ -1322,6 +1375,7 @@ router.post('/register', async (req, res, next) => {
         token,
         user: publicUser(user),
         preferredAudience: audience,
+        contactVerified: contactVerification.ok,
         message: 'Your makaug.com account has been set up. Opening your dashboard now.'
       });
       return res.status(201).json({ ok: true, data: successPayload });
@@ -1405,7 +1459,8 @@ router.post('/login', async (req, res, next) => {
       return res.status(401).json({ ok: false, error: preferredAudience === 'field_agent' ? 'Invalid Field Agent ID or PIN' : 'Invalid credentials' });
     }
 
-    if (!user.phone_verified) {
+    const brokerPhoneOtpNotRequired = user.role === 'agent_broker';
+    if (!user.phone_verified && !brokerPhoneOtpNotRequired) {
       return res.status(403).json({ ok: false, error: 'Phone not verified. Use OTP sign in to verify this account.' });
     }
 
@@ -1419,6 +1474,7 @@ router.post('/login', async (req, res, next) => {
       token,
       user: publicUser(user),
       preferredAudience,
+      contactVerified: user.phone_verified === true,
       message: 'Signed in. Opening your makaug.com dashboard.'
     });
     if (adminSecurity) {

@@ -501,7 +501,9 @@ const aboutLandStepsVersion = 'about-land-steps-20260713';
 const socialImportTilesVersion = 'social-import-tiles-20260713';
 const kingHarvesterRouteContractVersion = 'king-harvester-route-contract-20260809';
 const kingTikTokHarvesterE2eVersion = 'king-tiktok-harvester-e2e-20260809';
+const brokerSignupNoContactOtpVersion = 'broker-signup-no-contact-otp-20260910';
 const publicAppVersionSuffixes = [
+  brokerSignupNoContactOtpVersion,
   kingTikTokHarvesterE2eVersion,
   kingHarvesterRouteContractVersion,
   captureHelperUsabilityVersion,
