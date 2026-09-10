@@ -438,13 +438,16 @@ function run() {
   assert(aboutText.includes('About makaug'), '/about should show About makaug');
   for (const expected of [
     'Every property in Uganda, in one place',
+    'All Uganda properties in one place',
+    'Everything you can do',
     'Standard products',
     'Get seen first',
     'Grow your property business',
     'Advertise with makaug',
     'How we find properties online',
     'Property made simple',
-    'Trust comes first',
+    'From search to sorted, in three steps',
+    'How we work to prevent fraud',
     'Renters',
     'Buyers',
     'Students and parents',
