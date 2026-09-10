@@ -61,6 +61,8 @@ const {
 } = require('./utils/harvestFeatureFlags');
 const { DISTRICTS: MARKETPLACE_DISTRICTS, MARKETPLACE_CATEGORIES } = require('./services/marketplaceService');
 const { loadPublicOpportunitySummary } = require('./services/publicInventoryMetricsService');
+const { injectAboutCommercialProducts } = require('./services/aboutCommercialProductsService');
+const { buildAboutCommercialRateCardPdf } = require('./services/aboutCommercialRateCardPdfService');
 const {
   SESHAIKHAYA_LAUNCH_MARKER,
   applyCountryHtml,
@@ -1045,7 +1047,7 @@ const captureHelperUsabilityScriptPatch = `
 function readIndexHtml() {
   if (isProduction && cachedIndexHtml) return cachedIndexHtml;
   const patchedHtml = applyCaptureHelperUsabilityIndexPatch(fs.readFileSync(indexPath, 'utf8'));
-  const html = injectRuntimeMetaPixelId(injectRuntimeBundleVersion(patchedHtml));
+  const html = injectAboutCommercialProducts(injectRuntimeMetaPixelId(injectRuntimeBundleVersion(patchedHtml)));
   if (isProduction) cachedIndexHtml = html;
   return html;
 }
@@ -1600,7 +1602,15 @@ function sendPublicIndex(req, res, next) {
   try {
     res.set('X-makaug-Public-Sanitized', '1');
     let html = renderPublicHtml(req.originalUrl || req.url || req.path);
-    if (/^\/off-plan\/overseas\/kenya\/?$/i.test(req.path)) {
+    if (/^\/about\/?$/i.test(req.path)) {
+      html = patchPublicPageSeoMeta(html, {
+        title: 'About makaug — Products, pricing & how it works | makaug.com',
+        description: 'Everything makaug offers: listings from UGX 25,000/month (first week free), agent plans, off-plan developments, featured and premium listings, market reports, agency websites and advertising.',
+        canonical: absolutePublicUrl('/about'),
+        image: absolutePublicUrl('/assets/og-cover.jpg'),
+        structuredData: { '@context': 'https://schema.org', '@type': 'AboutPage', name: 'About makaug', url: absolutePublicUrl('/about') }
+      });
+    } else if (/^\/off-plan\/overseas\/kenya\/?$/i.test(req.path)) {
       html = patchPublicPageSeoMeta(html, {
         title: 'Off Plan Property in Kenya | makaug.com Overseas',
         description: 'Explore Kenya off-plan property with makaug.com-managed document review, legal coordination, payment guidance and currency information.',
@@ -1632,6 +1642,19 @@ function sendPublicIndex(req, res, next) {
     return next(error);
   }
 }
+
+app.get('/about/rate-card.pdf', async (req, res, next) => {
+  try {
+    const pdf = await buildAboutCommercialRateCardPdf();
+    res.type('application/pdf');
+    res.set('Cache-Control', 'public, max-age=3600');
+    res.set('Content-Disposition', 'attachment; filename="makaug-commercial-rate-card.pdf"');
+    res.set('X-makaug-Rate-Card-Version', 'about-commercial-products-20260910-v1');
+    return res.send(pdf);
+  } catch (error) {
+    return next(error);
+  }
+});
 
 function shouldServeIndex(req) {
   if (!['GET', 'HEAD'].includes(req.method)) return false;

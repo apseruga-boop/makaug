@@ -26,6 +26,7 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/makaug-icon-16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/makaug-apple-touch-icon.png">
   <link rel="manifest" href="/site.webmanifest">
+  <script src="/config/aboutCommercialProducts.js?v=about-commercial-products-20260910-v1"></script>
   <meta name="theme-color" content="#15803d">
   <script>
     (function () {
@@ -1116,6 +1117,89 @@
       background: #ffffff;
       border: .5px solid #cdddd3;
       color: #15603f;
+    }
+    #page-about .about-hero-panel {
+      background: linear-gradient(135deg, #f4faf6 0%, #ffffff 72%);
+      border-bottom: 1px solid #e0ebe4;
+      color: #16241d;
+    }
+    #page-about .about-hero-panel h1,
+    #page-about .about-hero-panel p { color: #16241d; }
+    #page-about .about-eyebrow {
+      color: #15603f;
+      font-size: 13px;
+      font-weight: 900;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+    #page-about .about-outline-cta {
+      align-items: center;
+      background: #ffffff;
+      border: 1px solid #bdd2c5;
+      color: #15603f;
+      display: inline-flex;
+      justify-content: center;
+    }
+    #page-about .about-stat-card {
+      background: #ffffff;
+      border: 1px solid #e0ebe4;
+      border-radius: 14px;
+      padding: 18px;
+    }
+    #page-about .about-stat-card p { color: #5b6b62; font-size: 13px; font-weight: 800; margin-top: 3px; }
+    #page-about .about-stat-value { color: #15603f; font-size: 30px; font-weight: 900; }
+    #page-about .about-products-section { border-top: 1px solid #e0ebe4; padding: 52px 0; scroll-margin-top: 96px; }
+    #page-about .about-section-title { color: #16241d; font-family: Georgia, serif; font-size: clamp(28px, 4vw, 38px); font-weight: 900; line-height: 1.15; }
+    #page-about .about-section-sub { color: #5b6b62; font-size: 16px; margin-top: 8px; }
+    #page-about .about-product-grid { display: grid; gap: 18px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    #page-about .about-product-card {
+      background: #ffffff;
+      border: 1px solid #dfe9e3;
+      border-radius: 16px;
+      box-shadow: 0 12px 30px rgba(20, 83, 45, .07);
+      display: flex;
+      flex-direction: column;
+      min-height: 100%;
+      padding: 22px;
+      scroll-margin-top: 96px;
+    }
+    #page-about .about-product-card h3 { color: #16241d; font-size: 19px; font-weight: 900; line-height: 1.3; margin-top: 14px; }
+    #page-about .about-product-card > p { color: #5b6b62; font-size: 14px; line-height: 1.55; margin-top: 7px; }
+    #page-about .about-product-card ul { color: #4b5f54; font-size: 13px; line-height: 1.55; list-style: none; margin: 16px 0 20px; }
+    #page-about .about-product-card li { margin-top: 6px; padding-left: 18px; position: relative; }
+    #page-about .about-product-card li::before { color: #15803d; content: "✓"; font-weight: 900; left: 0; position: absolute; }
+    #page-about .about-product-icon { align-items: center; background: #e9f6ed; border-radius: 12px; color: #15603f; display: inline-flex; height: 42px; justify-content: center; width: 42px; }
+    #page-about .about-price { color: #15803d; display: block; font-size: 15px; font-weight: 900; line-height: 1.45; margin-top: 14px; }
+    #page-about .about-product-action { align-items: center; background: #15603f; border-radius: 11px; color: #ffffff; display: inline-flex; font-size: 14px; font-weight: 900; justify-content: center; margin-top: auto; min-height: 44px; padding: 10px 14px; text-align: center; }
+    #page-about .about-advertising-summary { align-items: center; background: #f6f9f7; border: 1px solid #dfe9e3; border-radius: 16px; display: grid; gap: 20px; grid-template-columns: auto minmax(0, 1fr) auto; padding: 24px; }
+    #page-about .about-advertising-copy .about-section-sub { margin-top: 5px; }
+    #page-about .about-advertising-action { align-items: flex-end; display: flex; flex-direction: column; gap: 12px; min-width: 210px; }
+    #page-about .about-advertising-action .about-price { margin: 0; text-align: right; }
+    #page-about .about-source-grid { display: grid; gap: 16px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    #page-about .about-source-card { background: #ffffff; border: 1px solid #dfe9e3; border-radius: 16px; padding: 22px; }
+    #page-about .about-source-card h3 { color: #16241d; font-size: 18px; font-weight: 900; line-height: 1.35; margin-top: 14px; }
+    #page-about .about-source-card p { color: #52665b; font-size: 14px; line-height: 1.65; margin-top: 8px; }
+    #page-about .about-source-icon { align-items: center; background: #edf6f0; border-radius: 12px; color: #15603f; display: inline-flex; font-size: 21px; height: 42px; justify-content: center; width: 42px; }
+    #page-about .about-source-youtube { color: #c62828; }
+    #page-about .about-source-x { color: #111827; }
+    #page-about .about-source-tiktok { color: #111827; }
+    #page-about .about-source-google { color: #2563eb; }
+    #page-about .about-discovery-process { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    #page-about .about-discovery-process article { align-items: flex-start; background: #f6f9f7; border: 1px solid #e0ebe4; border-radius: 14px; display: flex; gap: 13px; padding: 18px; }
+    #page-about .about-discovery-process article > span { align-items: center; background: #15603f; border-radius: 999px; color: #ffffff; display: inline-flex; flex: 0 0 28px; font-size: 12px; font-weight: 900; height: 28px; justify-content: center; }
+    #page-about .about-discovery-process h3 { color: #16241d; font-size: 15px; font-weight: 900; }
+    #page-about .about-discovery-process p { color: #5b6b62; font-size: 13px; line-height: 1.6; margin-top: 5px; }
+    #page-about .about-source-note { align-items: flex-start; background: #edf6f0; border: 1px solid #cfe3d5; border-radius: 14px; color: #3e594a; display: flex; font-size: 13px; gap: 12px; line-height: 1.6; padding: 17px; }
+    #page-about .about-source-note i { color: #15603f; margin-top: 3px; }
+    @media (max-width: 1023px) { #page-about .about-product-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 639px) {
+      #page-about .about-products-section { padding: 38px 0; }
+      #page-about .about-product-grid, #page-about .about-source-grid, #page-about .about-discovery-process { grid-template-columns: 1fr; }
+      #page-about .about-product-action, #page-about .about-outline-cta, #page-about .about-hero-panel .about-cta { width: 100%; }
+      #page-about .about-product-card { padding: 19px; }
+      #page-about .about-advertising-summary { align-items: flex-start; grid-template-columns: 1fr; padding: 20px; }
+      #page-about .about-advertising-action { align-items: stretch; min-width: 0; width: 100%; }
+      #page-about .about-advertising-action .about-price { text-align: left; }
     }
     .about-ai-pipeline {
       position: relative;
@@ -8474,101 +8558,113 @@
     </div>
   </div>
 
-  <div id="page-about" class="page bg-white text-[#16241d]">
-    <div class="about-hero-panel bg-[#0f3d2e] py-14 text-white">
+  <div id="page-about" class="page bg-white text-[#16241d]" data-about-commercial-version="about-commercial-products-20260910-v2">
+    <div class="about-hero-panel py-14">
       <div class="max-w-6xl mx-auto px-4 about-reveal">
-        <p class="text-white/78 text-sm font-bold uppercase tracking-wide" data-content-i18n="about.heroLabel">About makaug</p>
-        <h1 class="text-4xl md:text-6xl font-black serif mt-2 leading-tight max-w-5xl" data-content-i18n="about.title">Every property in Uganda, finally in one place</h1>
-        <p class="text-white/86 mt-5 max-w-3xl text-base md:text-lg" data-content-i18n="about.subtitle">Buy, rent, sell, or find student housing and land — free to list, in 9 languages, on the web or straight from WhatsApp, across all 146 districts.</p>
+        <p class="about-eyebrow" data-content-i18n="about.heroLabel">About makaug</p>
+        <h1 class="text-4xl md:text-6xl font-black serif mt-2 leading-tight max-w-5xl" data-content-i18n="about.title">Every property in Uganda, in one place</h1>
+        <p class="mt-5 max-w-4xl text-base md:text-lg" data-content-i18n="about.subtitle">makaug is Uganda's property search engine. We find every real listing online, check it, and put it in front of buyers, renters and students in 9 languages, on the web or on WhatsApp, across all 146 districts. Below is everything we offer and what it costs.</p>
         <div class="flex flex-wrap gap-2 mt-6">
-          <a href="/for-sale" class="about-cta about-hero-cta-primary bg-white text-[#15603f] rounded-xl px-4 py-2 text-sm font-bold" data-content-i18n="about.ctaSearch">Search property</a>
-          <a href="/list-property" class="about-cta about-hero-cta-secondary bg-white border border-[#dbe8e0] text-[#15603f] rounded-xl px-4 py-2 text-sm font-bold" data-content-i18n="about.ctaList">List free</a>
-          <a href="https://wa.me/256760112587?text=Hello%20makaug,%20I%20need%20property%20help" target="_blank" rel="noopener" class="about-cta about-hero-cta-social border border-white/35 text-white rounded-xl px-4 py-2 text-sm font-bold" data-content-i18n="about.ctaWhatsapp" data-public-whatsapp-link data-whatsapp-context="about">Ask makaug on WhatsApp</a>
+          <a href="/for-sale" class="about-cta about-solid-green-cta rounded-xl px-5 py-3 text-sm font-bold" data-content-i18n="about.ctaSearch">Search property</a>
+          <a href="/list-property" class="about-cta about-solid-green-cta rounded-xl px-5 py-3 text-sm font-bold" data-content-i18n="about.ctaList">List a property</a>
+          <a href="https://wa.me/256760112587?text=Hello%20makaug%2C%20I%20want%20to%20know%20about%20your%20products" target="_blank" rel="noopener" class="about-cta about-outline-cta rounded-xl px-5 py-3 text-sm font-bold" data-content-i18n="about.ctaWhatsapp" data-public-whatsapp-link data-whatsapp-context="about-sales">Talk to sales on WhatsApp</a>
         </div>
       </div>
     </div>
 
-    <div class="max-w-6xl mx-auto px-4 py-12">
-      <section class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8" aria-label="makaug platform statistics">
-        <div class="about-card about-stat-card rounded-xl border border-[#e4ece8] bg-white p-5 shadow-sm">
-          <div class="text-3xl font-black text-[#15603f]" data-about-stat-count="146">146</div>
-          <p class="text-sm font-bold text-[#5b6b62] mt-1" data-content-i18n="about.statDistricts">districts covered</p>
-        </div>
-        <div class="about-card about-stat-card rounded-xl border border-[#e4ece8] bg-white p-5 shadow-sm">
-          <div class="text-3xl font-black text-[#15603f]" data-about-stat-count="9">9</div>
-          <p class="text-sm font-bold text-[#5b6b62] mt-1" data-content-i18n="about.statLanguages">languages</p>
-        </div>
-        <div class="about-card about-stat-card rounded-xl border border-[#e4ece8] bg-white p-5 shadow-sm">
-          <div id="about-live-listing-count" class="text-3xl font-black text-[#15603f]" data-about-stat-count="1889">1,889</div>
-          <p class="text-sm font-bold text-[#5b6b62] mt-1" data-content-i18n="about.statLiveListings">live listings</p>
-        </div>
-        <div class="about-card about-stat-card rounded-xl border border-[#e4ece8] bg-white p-5 shadow-sm">
-          <div class="text-3xl font-black text-[#15603f]" data-content-i18n="about.statFreeValue">Free</div>
-          <p class="text-sm font-bold text-[#5b6b62] mt-1" data-content-i18n="about.statFreeLabel">to list</p>
-        </div>
+    <div class="max-w-6xl mx-auto px-4 py-10">
+      <section class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-12" aria-label="makaug platform statistics">
+        <div class="about-stat-card"><div class="about-stat-value" data-about-stat-count="146">146</div><p data-content-i18n="about.statDistricts">districts</p></div>
+        <div class="about-stat-card"><div class="about-stat-value" data-about-stat-count="9">9</div><p data-content-i18n="about.statLanguages">languages</p></div>
+        <div id="about-live-listings-stat" class="about-stat-card hidden"><div id="about-live-listing-count" class="about-stat-value"></div><p data-content-i18n="about.statLiveListings">live listings</p></div>
+        <div class="about-stat-card"><div class="about-stat-value" data-about-stat-count="7">7</div><p data-content-i18n="about.statTrial">days free to list</p></div>
       </section>
 
-      <section class="about-card about-vision-panel rounded-xl border border-[#0f3d2e] bg-[#0f3d2e] text-white p-6 md:p-8 shadow-sm mb-8">
-        <div class="grid lg:grid-cols-[0.9fr,1.1fr] gap-6 lg:items-center">
+      <section class="about-card rounded-xl border border-[#dfe9e3] bg-[#f6f9f7] p-6 md:p-8 mb-8 shadow-sm" aria-labelledby="about-mission-title">
+        <div class="grid lg:grid-cols-[0.9fr,1.1fr] gap-7 lg:items-start">
           <div>
-            <p class="text-xs font-black uppercase tracking-wide text-white/70" data-content-i18n="about.visionLabel">Our vision</p>
-            <h2 class="text-3xl md:text-4xl font-black text-white serif mt-2" data-content-i18n="about.visionTitle">We find every property, so you don't have to</h2>
-            <p class="text-white/78 mt-4 leading-relaxed" data-content-i18n="about.visionText">Property in Uganda is scattered — across WhatsApp, social media, brokers, and word of mouth. makaug is changing that. Our AI searches TikTok, YouTube, Facebook, and X, reads what it finds, and brings every real property into one place you can actually search. Think of it as a search engine for Uganda property.</p>
+            <p class="about-eyebrow" data-content-i18n="about.missionLabel">Our mission</p>
+            <h2 id="about-mission-title" class="text-3xl md:text-4xl font-black text-[#16241d] serif mt-2" data-content-i18n="about.missionTitle">All Uganda properties in one place</h2>
+            <p class="text-[#52665b] mt-4 leading-relaxed" data-content-i18n="about.missionText">Our mission is to make genuine property opportunities across Uganda easier to find, understand and act on. We bring information scattered across websites, social platforms, WhatsApp, developers, owners and brokers into one searchable place; organise it clearly in 9 languages; and give buyers, renters and students safer next steps from first search to viewing and decision.</p>
+            <p class="text-[#52665b] mt-3 leading-relaxed" data-content-i18n="about.missionPromise">For owners, agents and developers, that means a clear route to present property properly and reach serious people. For property seekers, it means broader choice, visible sources, useful details and a team that reviews what appears on makaug.</p>
           </div>
-          <div class="about-ai-pipeline rounded-xl bg-white/10 text-white p-5">
-            <div class="grid md:grid-cols-3 gap-3">
-              <div class="about-pipeline-step rounded-xl bg-white/10 border border-white/10 p-4">
-                <i class="fas fa-satellite-dish text-white/82"></i>
-                <div class="font-black mt-3" data-content-i18n="about.pipelineSources">Sources</div>
-                <p class="text-xs text-white/78 mt-1">TikTok · YouTube · Facebook · X</p>
-              </div>
-              <div class="about-pipeline-step rounded-xl bg-white/10 border border-white/10 p-4">
-                <i class="fas fa-wand-magic-sparkles text-white/82"></i>
-                <div class="font-black mt-3" data-content-i18n="about.pipelineAi">AI organises</div>
-                <p class="text-xs text-white/78 mt-1" data-content-i18n="about.pipelineAiText">location, price, category, duplicates</p>
-              </div>
-              <div class="about-pipeline-step rounded-xl bg-white/10 border border-white/10 p-4">
-                <i class="fas fa-circle-check text-white/82"></i>
-                <div class="font-black mt-3" data-content-i18n="about.pipelineReview">Team review</div>
-                <p class="text-xs text-white/78 mt-1" data-content-i18n="about.pipelineReviewText">checked before buyers see it</p>
-              </div>
+          <div>
+            <h3 class="text-xl font-black text-[#16241d]" data-content-i18n="about.everythingTitle">Everything you can do</h3>
+            <p class="text-sm text-[#5b6b62] mt-1" data-content-i18n="about.everythingSub">One platform for every kind of property journey.</p>
+            <div class="grid sm:grid-cols-2 gap-3 mt-4">
+              <a href="/for-sale" class="rounded-xl border border-[#dfe9e3] bg-white p-4"><i class="fas fa-house text-[#15603f]"></i><strong class="block mt-2" data-content-i18n="about.everySaleTitle">Property for sale</strong><span class="text-sm text-[#5b6b62]" data-content-i18n="about.everySaleText">homes, apartments and property to buy</span></a>
+              <a href="/to-rent" class="rounded-xl border border-[#dfe9e3] bg-white p-4"><i class="fas fa-key text-[#15603f]"></i><strong class="block mt-2" data-content-i18n="about.everyRentTitle">Property to rent</strong><span class="text-sm text-[#5b6b62]" data-content-i18n="about.everyRentText">houses, apartments and rooms</span></a>
+              <a href="/student-accommodation" class="rounded-xl border border-[#dfe9e3] bg-white p-4"><i class="fas fa-graduation-cap text-[#15603f]"></i><strong class="block mt-2" data-content-i18n="about.everyStudentsTitle">Student housing</strong><span class="text-sm text-[#5b6b62]" data-content-i18n="about.everyStudentsText">hostels and rooms near campus</span></a>
+              <a href="/land" class="rounded-xl border border-[#dfe9e3] bg-white p-4"><i class="fas fa-map text-[#15603f]"></i><strong class="block mt-2" data-content-i18n="about.everyLandTitle">Land</strong><span class="text-sm text-[#5b6b62]" data-content-i18n="about.everyLandText">plots, acreage and development land</span></a>
+              <a href="/commercial" class="rounded-xl border border-[#dfe9e3] bg-white p-4"><i class="fas fa-building text-[#15603f]"></i><strong class="block mt-2" data-content-i18n="about.everyCommercialTitle">Commercial property</strong><span class="text-sm text-[#5b6b62]" data-content-i18n="about.everyCommercialText">offices, shops and warehouses</span></a>
+              <a href="/off-plan" class="rounded-xl border border-[#dfe9e3] bg-white p-4"><i class="fas fa-city text-[#15603f]"></i><strong class="block mt-2" data-content-i18n="about.everyOffPlanTitle">Off Plan</strong><span class="text-sm text-[#5b6b62]" data-content-i18n="about.everyOffPlanText">new developments in Uganda and overseas</span></a>
             </div>
-            <p class="text-sm font-bold text-white/78 mt-4" data-content-i18n="about.pipelineCaption">Discovered by AI · checked by our team · live for buyers</p>
           </div>
         </div>
       </section>
 
-      <section class="grid md:grid-cols-3 gap-4 mb-8">
-        <article class="about-card rounded-xl border border-[#e4ece8] bg-white p-5 shadow-sm">
-          <i class="fas fa-magnifying-glass-location text-[#15603f] text-2xl"></i>
-          <h3 class="font-black text-[#16241d] mt-3" data-content-i18n="about.aiDiscoveryTitle">AI discovery</h3>
-          <p class="text-sm text-[#5b6b62] mt-2" data-content-i18n="about.aiDiscoveryText">We find property posted anywhere online, not just what's listed with us — and organise it so it's searchable.</p>
-        </article>
-        <article class="about-card rounded-xl border border-[#e4ece8] bg-[#f6f9f7] p-5 shadow-sm">
-          <i class="fas fa-comments text-[#15603f] text-2xl"></i>
-          <h3 class="font-black text-[#16241d] mt-3" data-content-i18n="about.aiAssistantTitle">AI assistant</h3>
-          <p class="text-sm text-[#5b6b62] mt-2" data-content-i18n="about.aiAssistantText">Ask makaug anything about property, in any of 9 languages, and get a straight answer.</p>
-        </article>
-        <article class="about-card rounded-xl border border-[#e4ece8] bg-white p-5 shadow-sm">
-          <i class="fas fa-language text-[#15603f] text-2xl"></i>
-          <h3 class="font-black text-[#16241d] mt-3" data-content-i18n="about.aiToolsTitle">AI listing tools</h3>
-          <p class="text-sm text-[#5b6b62] mt-2" data-content-i18n="about.aiToolsText">Owners get a description written for them and translated live, so listings look great with no effort.</p>
-        </article>
+      <section class="about-products-section" aria-labelledby="about-standard-products">
+        <h2 id="about-standard-products" class="about-section-title" data-content-i18n="about.standardTitle">Standard products</h2>
+        <p class="about-section-sub" data-content-i18n="about.standardSub">Get your property in front of Uganda's buyers and renters</p>
+        <div class="about-product-grid mt-6">
+          <article id="listings" class="about-product-card"><span class="about-product-icon"><i class="fas fa-house"></i></span><h3 data-content-i18n="about.saleTitle">Private listing — For Sale</h3><p data-content-i18n="about.saleText">List your home, land or commercial property yourself.</p><strong class="about-price" data-about-price="privateListing" data-about-price-template="First week free · then {price}">First week free · then {{ABOUT_PRICE:privateListing}}</strong><ul><li>AI-written description in 9 languages</li><li>Checked by our team</li><li>WhatsApp and phone leads</li><li>Edit or remove any time</li></ul><a class="about-product-action" href="/list-property?type=sale">List for sale</a></article>
+          <article class="about-product-card"><span class="about-product-icon"><i class="fas fa-key"></i></span><h3 data-content-i18n="about.rentTitle">Private listing — To Rent</h3><p data-content-i18n="about.rentText">List a rental or student room yourself.</p><strong class="about-price" data-about-price="privateListing" data-about-price-template="First week free · then {price}">First week free · then {{ABOUT_PRICE:privateListing}}</strong><ul><li>AI-written description in 9 languages</li><li>Checked by our team</li><li>WhatsApp and phone leads</li><li>Edit or remove any time</li></ul><a class="about-product-action" href="/list-property?type=rent">List for rent</a></article>
+          <article id="agents" class="about-product-card"><span class="about-product-icon"><i class="fas fa-user-tie"></i></span><h3 data-content-i18n="about.agentTitle">Agent subscription</h3><p data-content-i18n="about.agentText">For brokers and agencies with multiple properties.</p><strong class="about-price" data-about-price="agentSubscription" data-about-price-template="{price} · all your listings">{{ABOUT_PRICE:agentSubscription}} · all your listings</strong><ul><li>All listings on one account</li><li>Verified badge and broker profile</li><li>Lead inbox and CSV export</li><li>Priority review</li></ul><a class="about-product-action" href="/broker-signup">Register as an agent</a></article>
+          <article id="developers" class="about-product-card"><span class="about-product-icon"><i class="fas fa-city"></i></span><h3 data-content-i18n="about.developerTitle">Off-plan developments</h3><p data-content-i18n="about.developerText">Dedicated project pages for developers and marketing agents.</p><strong class="about-price" data-about-price="offPlanDevelopment">{{ABOUT_PRICE:offPlanDevelopment}}</strong><ul><li>Units, plans, video and payment plans</li><li>Off Plan and search visibility</li><li>Enquiries to your sales team</li><li>Overseas projects welcome</li></ul><a class="about-product-action" href="/broker-signup">Register as an agent</a></article>
+        </div>
       </section>
 
-      <section class="about-card rounded-xl border border-[#e4ece8] bg-white p-6 mb-8 shadow-sm">
-        <h2 class="text-3xl font-black text-[#16241d] serif" data-content-i18n="about.everythingTitle">Everything you can do</h2>
-        <p class="text-[#5b6b62] mt-2" data-content-i18n="about.everythingSub">One platform for every kind of property journey.</p>
-        <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-5">
-          <a href="/for-sale" class="about-card rounded-xl border border-[#e4ece8] bg-[#f6f9f7] p-4"><i class="fas fa-house text-[#15603f]"></i><strong class="block mt-2" data-content-i18n="about.everySaleTitle">For sale</strong><span class="text-sm text-[#5b6b62]" data-content-i18n="about.everySaleText">homes and property to buy</span></a>
-          <a href="/to-rent" class="about-card rounded-xl border border-[#e4ece8] bg-[#f6f9f7] p-4"><i class="fas fa-key text-[#15603f]"></i><strong class="block mt-2" data-content-i18n="about.everyRentTitle">To rent</strong><span class="text-sm text-[#5b6b62]" data-content-i18n="about.everyRentText">houses and apartments</span></a>
-          <a href="/student-accommodation" class="about-card rounded-xl border border-[#e4ece8] bg-[#f6f9f7] p-4"><i class="fas fa-graduation-cap text-[#15603f]"></i><strong class="block mt-2" data-content-i18n="about.everyStudentsTitle">Students</strong><span class="text-sm text-[#5b6b62]" data-content-i18n="about.everyStudentsText">hostels and rooms near campus</span></a>
-          <a href="/land" class="about-card rounded-xl border border-[#e4ece8] bg-[#f6f9f7] p-4"><i class="fas fa-map text-[#15603f]"></i><strong class="block mt-2" data-content-i18n="about.everyLandTitle">Land</strong><span class="text-sm text-[#5b6b62]" data-content-i18n="about.everyLandText">plots and acreage</span></a>
-          <a href="/commercial" class="about-card rounded-xl border border-[#e4ece8] bg-[#f6f9f7] p-4"><i class="fas fa-building text-[#15603f]"></i><strong class="block mt-2" data-content-i18n="about.everyCommercialTitle">Commercial</strong><span class="text-sm text-[#5b6b62]" data-content-i18n="about.everyCommercialText">offices, shops, warehouses</span></a>
-          <a href="/brokers" class="about-card rounded-xl border border-[#e4ece8] bg-[#f6f9f7] p-4"><i class="fas fa-user-tie text-[#15603f]"></i><strong class="block mt-2" data-content-i18n="about.everyBrokersTitle">Find brokers</strong><span class="text-sm text-[#5b6b62]" data-content-i18n="about.everyBrokersText">trusted agents near you</span></a>
-          <a href="/mortgage" class="about-card rounded-xl border border-[#e4ece8] bg-[#f6f9f7] p-4"><i class="fas fa-percent text-[#15603f]"></i><strong class="block mt-2" data-content-i18n="about.everyMortgageTitle">Mortgage finder</strong><span class="text-sm text-[#5b6b62]" data-content-i18n="about.everyMortgageText">compare bank rates and get help</span></a>
-          <a href="/discover-ai-chatbot" class="about-card rounded-xl border border-[#e4ece8] bg-white p-4"><i class="fas fa-robot text-[#15603f]"></i><strong class="block mt-2" data-content-i18n="about.everyAiTitle">AI helper</strong><span class="text-sm text-[#5b6b62]" data-content-i18n="about.everyAiText">search and ask, hands-free</span></a>
+      <section class="about-products-section" aria-labelledby="about-value-products">
+        <h2 id="about-value-products" class="about-section-title" data-content-i18n="about.valueTitle">Get seen first</h2>
+        <p class="about-section-sub" data-content-i18n="about.valueSub">Add to any live listing to move it up and stand out</p>
+        <div class="about-product-grid mt-6">
+          <article id="featured" class="about-product-card"><span class="about-product-icon"><i class="fas fa-star"></i></span><h3>Featured listing</h3><p>Your property on the homepage Featured strip and at the top of its category.</p><strong class="about-price" data-about-price="featuredListing">{{ABOUT_PRICE:featuredListing}}</strong><ul><li>Featured badge</li><li>Homepage visibility</li><li>Top of category page</li><li>Best for a focused sales week</li></ul><a class="about-product-action" target="_blank" rel="noopener" href="https://wa.me/256760112587?text=Hello%20makaug%2C%20I%20want%20to%20feature%20my%20listing">Contact us to feature</a></article>
+          <article id="premium" class="about-product-card"><span class="about-product-icon"><i class="fas fa-gem"></i></span><h3>Premium listing</h3><p>Prime position at the top of search results for your area, with a larger card.</p><strong class="about-price" data-about-price="premiumListing">{{ABOUT_PRICE:premiumListing}}</strong><ul><li>Premium badge</li><li>Top search position</li><li>Larger result card</li><li>Built for a faster result</li></ul><a class="about-product-action" target="_blank" rel="noopener" href="https://wa.me/256760112587?text=Hello%20makaug%2C%20I%20want%20to%20make%20my%20listing%20Premium">Contact us for Premium</a></article>
+          <article id="boosted" class="about-product-card"><span class="about-product-icon"><i class="fas fa-arrow-trend-up"></i></span><h3>Boosted listing</h3><p>Ranks above standard listings in results and alerts for a full month.</p><strong class="about-price" data-about-price="boostedListing">{{ABOUT_PRICE:boostedListing}}</strong><ul><li>Boosted badge</li><li>Higher search ranking</li><li>Property-alert visibility</li><li>A full month of reach</li></ul><a class="about-product-action" target="_blank" rel="noopener" href="https://wa.me/256760112587?text=Hello%20makaug%2C%20I%20want%20to%20boost%20my%20listing">Contact us to boost</a></article>
         </div>
+      </section>
+
+      <section class="about-products-section" aria-labelledby="about-growth-products">
+        <h2 id="about-growth-products" class="about-section-title" data-content-i18n="about.growthTitle">Grow your property business</h2>
+        <div class="about-product-grid mt-6">
+          <article id="reports" class="about-product-card"><span class="about-product-icon"><i class="fas fa-chart-line"></i></span><h3>Market Intelligence Report</h3><p>Asking prices, rental yields, demand and supply by district and property type.</p><strong class="about-price" data-about-price="marketReport">{{ABOUT_PRICE:marketReport}}</strong><ul><li>Built from live and historical data</li><li>Delivered as a PDF</li><li>Within 5 working days</li><li>Prepared for your decision</li></ul><a class="about-product-action" target="_blank" rel="noopener" href="https://wa.me/256760112587?text=Hello%20makaug%2C%20I%20want%20a%20Market%20Intelligence%20Report">Talk to us</a></article>
+          <article id="websites" class="about-product-card"><span class="about-product-icon"><i class="fas fa-laptop-code"></i></span><h3>Agency websites</h3><p>A branded agency website connected to your makaug listings.</p><strong class="about-price"><span data-about-price="agencyWebsiteSetup">{{ABOUT_PRICE:agencyWebsiteSetup}}</span> + <span data-about-price="agencyWebsiteMonthly">{{ABOUT_PRICE:agencyWebsiteMonthly}}</span></strong><ul><li>Domain setup and branded design</li><li>Connected listings feed</li><li>WhatsApp lead button</li><li>Monthly performance summary</li></ul><a class="about-product-action" target="_blank" rel="noopener" href="https://wa.me/256760112587?text=Hello%20makaug%2C%20I%20want%20an%20agency%20website">Talk to us</a></article>
+          <article id="professional" class="about-product-card"><span class="about-product-icon"><i class="fas fa-camera"></i></span><h3>Professional listing service</h3><p>Professional photos, a short walkthrough and a polished multilingual listing.</p><strong class="about-price" data-about-price="professionalListing">{{ABOUT_PRICE:professionalListing}}</strong><ul><li>Kampala and Wakiso</li><li>Other districts on request</li><li>Photos and short video</li><li>We upload it for you</li></ul><a class="about-product-action" target="_blank" rel="noopener" href="https://wa.me/256760112587?text=Hello%20makaug%2C%20I%20want%20to%20book%20a%20professional%20property%20shoot">Talk to us</a></article>
+        </div>
+      </section>
+
+      <section id="advertising" class="about-products-section" aria-labelledby="about-advertising-title">
+        <div class="about-advertising-summary">
+          <span class="about-product-icon"><i class="fas fa-bullhorn"></i></span>
+          <div class="about-advertising-copy">
+            <h2 id="about-advertising-title" class="about-section-title" data-content-i18n="about.advertisingTitle">Advertise with makaug</h2>
+            <p class="about-section-sub" data-content-i18n="about.advertisingSub">Put your brand in front of people actively looking for property.</p>
+            <p class="mt-3 text-sm text-[#5b6b62]" data-content-i18n="about.advertisingText">Weekly placements are available for banks, insurers, furniture and building suppliers, developers and agencies. Choose homepage, search, property-detail, mortgage, valuation, broker, marketplace or alert placements, with run-of-site and monthly options available.</p>
+          </div>
+          <div class="about-advertising-action">
+            <strong class="about-price"><span data-about-price="advertisingMinimum" data-about-price-only="true">{{ABOUT_PRICE_ONLY:advertisingMinimum}}</span>–<span data-about-price="advertisingMaximum" data-about-price-only="true">{{ABOUT_PRICE_ONLY:advertisingMaximum}}</span> / week</strong>
+            <a class="about-product-action" href="/advertise" data-content-i18n="about.advertisingLearnMore">Learn more</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="about-products-section" aria-labelledby="about-discovery-title">
+        <p class="about-eyebrow" data-content-i18n="about.discoveryEyebrow">Found online</p>
+        <h2 id="about-discovery-title" class="about-section-title" data-content-i18n="about.discoveryTitle">How we find properties online</h2>
+        <p class="about-section-sub max-w-4xl" data-content-i18n="about.discoveryIntro">Uganda's property market is spread across videos, posts, websites and local business pages. makaug uses approved APIs for YouTube, X, TikTok and Google to find public property information and bring it into one searchable place. We do not use Facebook for this process.</p>
+        <div class="about-source-grid mt-6">
+          <article class="about-source-card"><span class="about-source-icon about-source-youtube"><i class="fab fa-youtube"></i></span><h3 data-content-i18n="about.discoveryYoutubeTitle">YouTube API</h3><p data-content-i18n="about.discoveryYoutubeText">Helps makaug find public property videos and updates from relevant Uganda property channels while keeping the original video connected to the listing.</p></article>
+          <article class="about-source-card"><span class="about-source-icon about-source-x"><i class="fab fa-x-twitter"></i></span><h3 data-content-i18n="about.discoveryXTitle">X API — formerly Twitter</h3><p data-content-i18n="about.discoveryXText">Helps us find public property posts and retain the original post link, account and date so people can see where the information came from.</p></article>
+          <article class="about-source-card"><span class="about-source-icon about-source-tiktok"><i class="fab fa-tiktok"></i></span><h3 data-content-i18n="about.discoveryTikTokTitle">TikTok API</h3><p data-content-i18n="about.discoveryTikTokText">Helps us identify public property videos from relevant sources and connect each suitable listing back to the original TikTok post.</p></article>
+          <article class="about-source-card"><span class="about-source-icon about-source-google"><i class="fab fa-google"></i></span><h3 data-content-i18n="about.discoveryGoogleTitle">Google APIs</h3><p data-content-i18n="about.discoveryGoogleText">Help us find public property pages and understand places, map positions, addresses and districts. The original source remains visible wherever a property was found online.</p></article>
+        </div>
+        <div class="about-discovery-process mt-6">
+          <article><span>1</span><div><h3 data-content-i18n="about.discoveryStepOneTitle">Find the original public post</h3><p data-content-i18n="about.discoveryStepOneText">A property found online must link back to the specific public post, video or page it came from—not simply a search page or social profile.</p></div></article>
+          <article><span>2</span><div><h3 data-content-i18n="about.discoveryStepTwoTitle">Read and structure the evidence</h3><p data-content-i18n="about.discoveryStepTwoText">We extract only what the source supports: title, caption, price, property type, area, contact details, media, author and first-posted date. Missing facts stay missing or are marked for confirmation.</p></div></article>
+          <article><span>3</span><div><h3 data-content-i18n="about.discoveryStepThreeTitle">Check the details and duplicates</h3><p data-content-i18n="about.discoveryStepThreeText">We compare the source, location, price, contact details, description and images to flag repeated or inconsistent listings before publication.</p></div></article>
+          <article><span>4</span><div><h3 data-content-i18n="about.discoveryStepFourTitle">Human review before publication</h3><p data-content-i18n="about.discoveryStepFourText">Nothing found online is published automatically. Our team reviews the source, property details, contact route, location, images, duplicates and safety concerns first.</p></div></article>
+        </div>
+        <div class="about-source-note mt-6"><i class="fas fa-shield-halved"></i><p data-content-i18n="about.discoveryNote"><strong>Clear sources:</strong> makaug organises public property information; we do not claim ownership of the original post, fill in facts that were not provided or treat an online post as proof of ownership. Owners and agents can claim, correct or request removal of a listing.</p></div>
       </section>
 
       <section class="about-card rounded-xl border border-[#e4ece8] bg-[#f6f9f7] p-6 mb-8">
@@ -8585,92 +8681,45 @@
           <div class="rounded-xl bg-white border border-[#e4ece8] p-5 shadow-sm">
             <p class="text-xs font-black uppercase tracking-wide text-[#15603f]" data-content-i18n="about.personaLabel">What brings you here?</p>
             <h3 id="about-persona-title" class="text-2xl font-black text-[#16241d] mt-2">Renters</h3>
-            <p id="about-persona-copy" class="text-[#5b6b62] mt-3 leading-relaxed">Search by area and budget, save homes, set alerts, book viewings, and contact owners safely.</p>
+            <p id="about-persona-copy" class="text-[#5b6b62] mt-3 leading-relaxed">Search rentals by district, area, map, budget, bedrooms and property type. Compare photos, video, price periods, amenities, contact routes and source information before shortlisting. Save properties and searches, receive alerts when suitable homes appear, then contact the owner or broker, request a viewing or callback, and use makaug's safety guidance before paying.</p>
             <a id="about-persona-cta" href="/to-rent" class="about-cta about-solid-green-cta inline-flex mt-5 rounded-xl bg-[#15603f] text-white px-4 py-2 text-sm font-black">Search rentals</a>
           </div>
         </div>
       </section>
 
-      <section class="about-card rounded-xl border border-[#e4ece8] bg-white p-6 mb-8 shadow-sm">
-        <h2 class="text-3xl font-black text-[#16241d] serif" data-content-i18n="about.stepsTitle">From search to sorted, in three steps</h2>
+      <section class="about-card rounded-xl border border-[#e4ece8] bg-[#f6f9f7] p-6 mb-8" aria-labelledby="about-steps-title">
+        <h2 id="about-steps-title" class="text-3xl font-black text-[#16241d] serif" data-content-i18n="about.stepsTitle">From search to sorted, in three steps</h2>
         <div class="grid md:grid-cols-3 gap-4 mt-5">
-          <div class="rounded-xl bg-[#f6f9f7] border border-[#e4ece8] p-4"><div class="text-3xl font-black text-[#15603f]">1</div><h3 class="font-black mt-2" data-content-i18n="about.stepSearchTitle">Search or list</h3><p class="text-sm text-[#5b6b62] mt-1" data-content-i18n="about.stepSearchText">On the web or straight from WhatsApp. Owners list free in minutes.</p></div>
-          <div class="rounded-xl bg-[#f6f9f7] border border-[#e4ece8] p-4"><div class="text-3xl font-black text-[#15603f]">2</div><h3 class="font-black mt-2" data-content-i18n="about.stepVerifyTitle">Verified and safe</h3><p class="text-sm text-[#5b6b62] mt-1" data-content-i18n="about.stepVerifyText">Every listing is checked for location, photos, contact, and fraud signals before it goes live. Verified, not blindly posted.</p></div>
-          <div class="rounded-xl bg-[#f6f9f7] border border-[#e4ece8] p-4"><div class="text-3xl font-black text-[#15603f]">3</div><h3 class="font-black mt-2" data-content-i18n="about.stepConnectTitle">Connect</h3><p class="text-sm text-[#5b6b62] mt-1" data-content-i18n="about.stepConnectText">Message the owner or broker, book a viewing, and decide — with safety guidance the whole way.</p></div>
+          <div class="rounded-xl bg-white border border-[#e4ece8] p-4"><div class="text-3xl font-black text-[#15603f]">1</div><h3 class="font-black mt-2" data-content-i18n="about.stepSearchTitle">Search or list</h3><p class="text-sm text-[#5b6b62] mt-1" data-content-i18n="about.stepSearchText">Search Uganda property on the web or WhatsApp, or submit your own property with the details and media people need.</p></div>
+          <div class="rounded-xl bg-white border border-[#e4ece8] p-4"><div class="text-3xl font-black text-[#15603f]">2</div><h3 class="font-black mt-2" data-content-i18n="about.stepVerifyTitle">Review and compare</h3><p class="text-sm text-[#5b6b62] mt-1" data-content-i18n="about.stepVerifyText">Use source, contact, location, price and media information to compare options. makaug reviews listings and flags concerns before publication.</p></div>
+          <div class="rounded-xl bg-white border border-[#e4ece8] p-4"><div class="text-3xl font-black text-[#15603f]">3</div><h3 class="font-black mt-2" data-content-i18n="about.stepConnectTitle">Connect carefully</h3><p class="text-sm text-[#5b6b62] mt-1" data-content-i18n="about.stepConnectText">Contact the responsible owner, agent or developer, arrange a viewing, and complete independent checks before signing or paying.</p></div>
         </div>
       </section>
 
-      <section class="about-card about-land-steps-section mb-8 shadow-sm" data-release-marker="about-land-steps-20260713">
-        <h2 class="about-land-heading serif" data-content-i18n="about.landHubTitle">Find and list land — without pretending to clear titles</h2>
-        <p class="about-land-intro" data-content-i18n="about.landHubText">Browse land, compare details, and see seller contact routes. makaug is a marketplace, not a title-checking or legal service — so take three steps to protect yourself before you pay.</p>
-        <div class="about-land-steps-grid">
-          <article class="about-land-step-card">
-            <div class="about-land-step-head">
-              <span class="about-land-step-badge">1</span>
-              <i class="about-land-step-icon ti-map-pin fas fa-map-pin" aria-hidden="true"></i>
-            </div>
-            <h3 class="about-land-step-title" data-content-i18n="about.landHubOfficialTitle">Map the location</h3>
-            <p class="about-land-step-tip" data-content-i18n="about.landHubOfficialText">Pin the exact plot before you travel to see it.</p>
-          </article>
-          <article class="about-land-step-card">
-            <div class="about-land-step-head">
-              <span class="about-land-step-badge">2</span>
-              <i class="about-land-step-icon ti-file-check fas fa-file-circle-check" aria-hidden="true"></i>
-            </div>
-            <h3 class="about-land-step-title" data-content-i18n="about.landHubEvidenceTitle">Check the documents</h3>
-            <p class="about-land-step-tip" data-content-i18n="about.landHubEvidenceText">Review the title with your own lawyer, not the seller's.</p>
-          </article>
-          <article class="about-land-step-card">
-            <div class="about-land-step-head">
-              <span class="about-land-step-badge">3</span>
-              <i class="about-land-step-icon ti-shield-check fas fa-shield-halved" aria-hidden="true"></i>
-            </div>
-            <h3 class="about-land-step-title" data-content-i18n="about.landHubProcessTitle">Avoid pressure</h3>
-            <p class="about-land-step-tip" data-content-i18n="about.landHubProcessText">Never rush, and never make untraceable payments.</p>
-          </article>
+      <section class="about-card rounded-xl bg-white border border-[#e4ece8] p-6 md:p-8 mb-8 shadow-sm" aria-labelledby="about-trust-title">
+        <p class="about-eyebrow" data-content-i18n="about.safetyLabel">Trust and accountability</p>
+        <h2 id="about-trust-title" class="text-3xl md:text-4xl font-black text-[#16241d] serif mt-2" data-content-i18n="about.trustTitle">How we work to prevent fraud</h2>
+        <p class="text-[#52665b] mt-3 max-w-4xl leading-relaxed" data-content-i18n="about.trustIntro">Property fraud cannot be solved by a badge or one automated check. makaug combines identity and contact checks, structured evidence, duplicate detection, human review, visible sources and a report-and-removal process. We keep a review trail so concerns and decisions can be followed up instead of disappearing.</p>
+        <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
+          <article class="rounded-xl bg-[#f6f9f7] border border-[#e4ece8] p-5"><i class="fas fa-id-card text-[#15603f] text-xl"></i><h3 class="font-black mt-3" data-content-i18n="about.trustIdentityTitle">Identity and contact checks</h3><p class="text-sm text-[#5b6b62] mt-2 leading-relaxed" data-content-i18n="about.trustIdentityText">People submitting property provide contact and identity information for review. We check that the contact route works and that the person can respond to questions about the listing. These checks support accountability, but they are not a guarantee of ownership.</p></article>
+          <article class="rounded-xl bg-[#f6f9f7] border border-[#e4ece8] p-5"><i class="fas fa-clipboard-check text-[#15603f] text-xl"></i><h3 class="font-black mt-3" data-content-i18n="about.trustReviewTitle">Reviewed before it is public</h3><p class="text-sm text-[#5b6b62] mt-2 leading-relaxed" data-content-i18n="about.trustReviewText">Submitted and found-online properties go into review rather than straight onto the public site. The team checks the description, price, location, contact route, images, source evidence and obvious inconsistencies before deciding whether the listing is ready.</p></article>
+          <article class="rounded-xl bg-[#f6f9f7] border border-[#e4ece8] p-5"><i class="fas fa-images text-[#15603f] text-xl"></i><h3 class="font-black mt-3" data-content-i18n="about.trustDuplicateTitle">Duplicate listing and image checks</h3><p class="text-sm text-[#5b6b62] mt-2 leading-relaxed" data-content-i18n="about.trustDuplicateText">We compare source links, property details, contacts, locations, descriptions and, where available, image fingerprints. Likely repeats or recycled media are flagged for a closer look so one property is not presented as several different opportunities.</p></article>
+          <article class="rounded-xl bg-[#f6f9f7] border border-[#e4ece8] p-5"><i class="fas fa-link text-[#15603f] text-xl"></i><h3 class="font-black mt-3" data-content-i18n="about.trustSourceTitle">Sources and changes stay traceable</h3><p class="text-sm text-[#5b6b62] mt-2 leading-relaxed" data-content-i18n="about.trustSourceText">Found-online listings keep a route to the original public source. Review decisions, status changes, corrections, claims and removal requests are handled through recorded workflows so the team can investigate what happened and act consistently.</p></article>
+          <article class="rounded-xl bg-[#f6f9f7] border border-[#e4ece8] p-5"><i class="fas fa-triangle-exclamation text-[#15603f] text-xl"></i><h3 class="font-black mt-3" data-content-i18n="about.trustSignalsTitle">Fraud and pressure signals</h3><p class="text-sm text-[#5b6b62] mt-2 leading-relaxed" data-content-i18n="about.trustSignalsText">Unclear ownership claims, conflicting locations or prices, copied media, suspicious contacts and pressure to make an urgent or untraceable payment are reasons to pause or escalate a listing. Users can report a concern directly for staff review.</p></article>
+          <article class="rounded-xl bg-[#f6f9f7] border border-[#e4ece8] p-5"><i class="fas fa-flag text-[#15603f] text-xl"></i><h3 class="font-black mt-3" data-content-i18n="about.trustFraudTitle">Claim, correct, report or remove</h3><p class="text-sm text-[#5b6b62] mt-2 leading-relaxed" data-content-i18n="about.trustFraudText">Owners and agents can claim a found-online listing, correct inaccurate information or request removal. Anyone can report suspicious behaviour. The team reviews the evidence and can hold, hide, correct or remove content while the concern is investigated.</p></article>
         </div>
-        <div class="about-land-actions flex flex-wrap gap-2 mt-5">
-          <a href="/land" class="about-cta about-solid-green-cta bg-[#15603f] text-white rounded-xl px-4 py-2 text-sm font-bold" data-content-i18n="about.landHubPortal">Browse land</a>
-          <a href="https://ugnlis.mlhud.go.ug/" target="_blank" rel="noopener noreferrer" data-release-marker="ugnlis-official-portal-20260525" class="about-cta about-land-secondary-cta rounded-xl px-4 py-2 text-sm font-bold" data-content-i18n="about.landHubUgNlis">Official UgNLIS portal</a>
-        </div>
-      </section>
-
-      <section class="about-card rounded-xl bg-white border border-[#e4ece8] p-6 mb-8 shadow-sm">
-        <h2 class="text-3xl font-black text-[#16241d] serif" data-content-i18n="about.trustTitle">Trust comes first</h2>
-        <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4 mt-5">
-          <div class="rounded-xl bg-[#f6f9f7] border border-[#e4ece8] p-4"><strong data-content-i18n="about.trustIdentityTitle">Identity and contact checks</strong><p class="text-sm text-[#5b6b62] mt-1" data-content-i18n="about.trustIdentityText">Owners verify with a National ID and contact details, so you know who you're dealing with.</p></div>
-          <div class="rounded-xl bg-[#f6f9f7] border border-[#e4ece8] p-4"><strong data-content-i18n="about.trustReviewTitle">Reviewed before it's public</strong><p class="text-sm text-[#5b6b62] mt-1" data-content-i18n="about.trustReviewText">Our team checks details, photos, location, duplicates, and fraud signals before any listing goes live.</p></div>
-          <div class="rounded-xl bg-[#f6f9f7] border border-[#e4ece8] p-4"><strong data-content-i18n="about.trustSourceTitle">Source transparency</strong><p class="text-sm text-[#5b6b62] mt-1" data-content-i18n="about.trustSourceText">Found-online listings show where and when we found them, and how to check the original post.</p></div>
-          <div class="rounded-xl bg-[#f6f9f7] border border-[#e4ece8] p-4"><strong data-content-i18n="about.trustClaimTitle">Claim or remove</strong><p class="text-sm text-[#5b6b62] mt-1" data-content-i18n="about.trustClaimText">Owners and agents can claim, update, correct, or remove a listing anytime — with a full review trail.</p></div>
-          <div class="rounded-xl bg-[#f6f9f7] border border-[#e4ece8] p-4"><strong data-content-i18n="about.trustFraudTitle">Report fraud</strong><p class="text-sm text-[#5b6b62] mt-1" data-content-i18n="about.trustFraudText">Flag suspicious listings, title concerns, or payment pressure in one tap.</p><a href="/safety" class="inline-flex mt-2 text-sm font-black text-[#15603f]" data-content-i18n="about.ctaSafety">Safety tips</a></div>
-          <div class="rounded-xl bg-[#f6f9f7] border border-[#e4ece8] p-4"><strong data-content-i18n="about.trustRecordTitle">Review trail</strong><p class="text-sm text-[#5b6b62] mt-1" data-content-i18n="about.trustRecordText">Changes, approvals, and removals are handled through staff review, not hidden shortcuts.</p></div>
-        </div>
-      </section>
-
-      <section class="about-card rounded-xl bg-[#f6f9f7] text-[#16241d] border border-[#e4ece8] p-6 mb-8 shadow-sm">
-        <h2 class="text-3xl font-black serif" data-content-i18n="about.whyChooseTitle">Why people choose makaug</h2>
-        <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-5">
-          <div class="rounded-xl bg-white border border-[#e4ece8] p-4"><strong data-content-i18n="about.chooseFreeTitle">Free to list</strong><p class="text-sm text-[#5b6b62] mt-1" data-content-i18n="about.chooseFreeText">no listing fees, ever; paid advertising stays separate</p></div>
-          <div class="rounded-xl bg-white border border-[#e4ece8] p-4"><strong data-content-i18n="about.chooseWhatsappTitle">WhatsApp-first</strong><p class="text-sm text-[#5b6b62] mt-1" data-content-i18n="about.chooseWhatsappText">built for how Uganda actually communicates</p></div>
-          <div class="rounded-xl bg-white border border-[#e4ece8] p-4"><strong data-content-i18n="about.chooseLanguagesTitle">9 languages</strong><p class="text-sm text-[#5b6b62] mt-1" data-content-i18n="about.chooseLanguagesText">including Luganda, Kiswahili, and more, right across the site</p></div>
-          <div class="rounded-xl bg-white border border-[#e4ece8] p-4"><strong data-content-i18n="about.chooseDistrictsTitle">All 146 districts</strong><p class="text-sm text-[#5b6b62] mt-1" data-content-i18n="about.chooseDistrictsText">Kampala to the furthest town</p></div>
-          <div class="rounded-xl bg-white border border-[#e4ece8] p-4"><strong data-content-i18n="about.chooseAiTitle">AI-powered</strong><p class="text-sm text-[#5b6b62] mt-1" data-content-i18n="about.chooseAiText">discovery, assistant, and listing tools</p></div>
-          <div class="rounded-xl bg-white border border-[#e4ece8] p-4"><strong data-content-i18n="about.chooseVerifiedTitle">Verified listings</strong><p class="text-sm text-[#5b6b62] mt-1" data-content-i18n="about.chooseVerifiedText">human-reviewed for trust</p></div>
-        </div>
+        <div class="about-source-note mt-6"><i class="fas fa-shield-halved"></i><p data-content-i18n="about.trustBoundary"><strong>Your independent checks still matter:</strong> makaug review reduces avoidable risk but does not replace a physical viewing, an independent lawyer, an official title search, a written agreement or a traceable payment method. Never pay because somebody is pressuring you to act immediately.</p></div>
+        <div class="flex flex-wrap gap-2 mt-5"><a href="/safety" class="about-cta about-solid-green-cta bg-[#15603f] text-white rounded-xl px-4 py-2 text-sm font-bold" data-content-i18n="about.ctaSafety">Read the safety guide</a><a href="/help" class="about-cta about-outline-cta rounded-xl px-4 py-2 text-sm font-bold" data-content-i18n="about.finalHelp">Get help</a></div>
       </section>
 
       <section class="about-card rounded-[14px] bg-[#f0f6f2] text-[#16241d] border border-[#dbe8e0] p-6 mb-8">
-        <h2 class="text-3xl font-black serif" data-content-i18n="about.finalTitle">Ready to find your place?</h2>
-        <p class="mt-2 text-[#5b6b62] font-semibold" data-content-i18n="about.finalSub">Search thousands of listings, or list your own free in minutes.</p>
+        <h2 class="text-3xl font-black serif" data-content-i18n="about.finalTitle">Ready to start?</h2>
+        <p class="mt-2 text-[#5b6b62] font-semibold" data-content-i18n="about.finalSub">List your first property free for 7 days, or talk to our sales team about agent plans, developments and advertising.</p>
         <div class="about-final-cta-actions flex flex-wrap gap-2 mt-5">
           <a href="/for-sale" class="about-cta about-final-cta-primary rounded-xl px-4 py-2 text-sm font-bold" data-content-i18n="about.ctaSearch">Search property</a>
-          <a href="/list-property" class="about-cta about-final-cta-secondary rounded-xl px-4 py-2 text-sm font-bold" data-content-i18n="about.ctaList">List free</a>
-          <a href="https://wa.me/256760112587?text=Hello%20makaug,%20I%20need%20property%20help" target="_blank" rel="noopener" class="about-cta about-final-cta-secondary rounded-xl px-4 py-2 text-sm font-bold" data-content-i18n="about.finalWhatsapp" data-public-whatsapp-link data-whatsapp-context="about">Chat on WhatsApp</a>
-        </div>
-        <div class="flex flex-wrap gap-4 mt-5 text-sm font-black">
-          <a href="/how-it-works" data-content-i18n="about.finalHow">How it works</a>
-          <a href="/help" data-content-i18n="about.finalHelp">Help centre</a>
-          <a href="/safety" data-content-i18n="about.finalSafety">Safety tips</a>
+          <a href="/list-property" class="about-cta about-final-cta-primary rounded-xl px-4 py-2 text-sm font-bold" data-content-i18n="about.ctaList">List a property</a>
+          <a href="https://wa.me/256760112587?text=Hello%20makaug%2C%20I%20want%20to%20know%20about%20your%20products" target="_blank" rel="noopener" class="about-cta about-final-cta-secondary rounded-xl px-4 py-2 text-sm font-bold" data-content-i18n="about.finalWhatsapp" data-public-whatsapp-link data-whatsapp-context="about-sales">WhatsApp sales: 0760 112 587</a>
+          <a href="mailto:info@makaug.com?subject=makaug%20products" class="about-cta about-final-cta-secondary rounded-xl px-4 py-2 text-sm font-bold">Email: info@makaug.com</a>
         </div>
       </section>
 
@@ -8811,7 +8860,7 @@
         <div>
           <div class="text-2xl font-black serif" id="footer-brand-title">makaug.com</div>
           <p id="footer-brand-copy" class="text-green-200 text-sm mt-3 leading-relaxed">
-            Uganda's first completely free property platform. List, search, and connect via website or WhatsApp. Covering all 146 districts.
+            Uganda's property search engine. List your first week free, then keep it live from UGX 25,000 a month. Web or WhatsApp, all 146 districts.
           </p>
           <div class="mt-4 space-y-2 text-sm text-green-200">
             <a id="footer-whatsapp-label" href="https://wa.me/256760112587" target="_blank" rel="noopener noreferrer" class="block hover:text-white" data-public-whatsapp-link data-whatsapp-context="auto">📲 WhatsApp: 0760112587</a>

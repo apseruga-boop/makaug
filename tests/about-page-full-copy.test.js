@@ -1,179 +1,135 @@
+'use strict';
+
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
+const catalog = require('../config/aboutCommercialProducts');
+const { injectAboutCommercialProducts } = require('../services/aboutCommercialProductsService');
 
 const root = path.resolve(__dirname, '..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
-
 const html = read('index.html');
 const frontend = read('assets/makaug-app.js');
 const server = read('server.js');
+const pdfService = read('services/aboutCommercialRateCardPdfService.js');
 
 const aboutStart = html.indexOf('<div id="page-about"');
 const aboutEnd = html.indexOf('<div id="page-admin-docs"', aboutStart);
 assert(aboutStart >= 0 && aboutEnd > aboutStart, 'About page block should exist before admin docs');
 const aboutBlock = html.slice(aboutStart, aboutEnd);
-const normalizedAbout = aboutBlock.replace(/\s+/g, ' ');
-
-assert(html.includes('about-page-full-copy-20260713'), 'HTML app version should include about-page-full-copy marker');
-assert(html.includes('about-page-visual-refine-20260713'), 'HTML app version should include about-page-visual-refine marker');
-assert(html.includes('about-cta-primary-20260713'), 'HTML app version should include about CTA primary marker');
-assert(html.includes('about-hero-contrast-fix-20260713'), 'HTML app version should include about hero contrast fix marker');
-assert(html.includes('about-land-steps-20260713'), 'HTML app version should include about land steps marker');
-assert(server.includes("aboutPageFullCopyVersion = 'about-page-full-copy-20260713'"), 'server should include about page release marker');
-assert(server.includes("aboutPageVisualRefineVersion = 'about-page-visual-refine-20260713'"), 'server should include about visual refine release marker');
-assert(server.includes("aboutCtaPrimaryVersion = 'about-cta-primary-20260713'"), 'server should include about CTA primary release marker');
-assert(server.includes("aboutHeroContrastFixVersion = 'about-hero-contrast-fix-20260713'"), 'server should include about hero contrast fix release marker');
-assert(server.includes("aboutLandStepsVersion = 'about-land-steps-20260713'"), 'server should include about land steps release marker');
-assert(server.includes('aboutPageFullCopyVersion'), 'server public app suffix list should include the about page marker');
-assert(server.includes('aboutPageVisualRefineVersion'), 'server public app suffix list should include the about visual refine marker');
-assert(server.includes('aboutCtaPrimaryVersion'), 'server public app suffix list should include the about CTA primary marker');
-assert(server.includes('aboutHeroContrastFixVersion'), 'server public app suffix list should include the about hero contrast fix marker');
-assert(server.includes('aboutLandStepsVersion'), 'server public app suffix list should include the about land steps marker');
+const normalized = aboutBlock.replace(/\s+/g, ' ');
 
 [
-  'Every property in Uganda, finally in one place',
-  'We find every property, so you don\'t have to',
-  'Discovered by AI · checked by our team · live for buyers',
+  'Every property in Uganda, in one place',
+  "makaug is Uganda's property search engine.",
+  'Our mission',
+  'All Uganda properties in one place',
   'Everything you can do',
+  'Standard products',
+  'Get seen first',
+  'Grow your property business',
+  'Advertise with makaug',
+  'How we find properties online',
   'Property made simple — whoever you are',
   'From search to sorted, in three steps',
-  'Find and list land — without pretending to clear titles',
-  'Pin the exact plot before you travel to see it.',
-  "Review the title with your own lawyer, not the seller's.",
-  'Never rush, and never make untraceable payments.',
-  'Trust comes first',
-  'Why people choose makaug',
-  'Ready to find your place?'
-].forEach((copy) => {
-  assert(normalizedAbout.includes(copy), `/about is missing approved copy: ${copy}`);
+  'How we work to prevent fraud',
+  'Ready to start?'
+].forEach((copy) => assert(normalized.includes(copy), `/about is missing approved copy: ${copy}`));
+
+assert(!normalized.includes('Why people choose makaug'), 'obsolete Why people choose block should be removed');
+assert(!normalized.includes('Find and list land'), 'the confusing standalone land proposition should be removed');
+assert(!normalized.includes('no listing fees, ever'), 'obsolete free-listing claim should be removed');
+assert(!html.includes("Uganda's first completely free property platform"), 'the shared footer must not contradict the paid-listing model');
+assert(html.includes("Uganda's property search engine. List your first week free, then keep it live from UGX 25,000 a month."), 'the shared footer should state the current listing model');
+assert(!normalized.includes('1,889'), 'About must not contain a hardcoded live-listing total');
+assert(aboutBlock.includes('id="about-live-listings-stat" class="about-stat-card hidden"'), 'live count should fail closed and stay hidden until the API succeeds');
+assert(frontend.includes('return plausibleTotal || 0'), 'live-count helper should not use a hardcoded fallback');
+assert(frontend.includes("liveStat?.classList.add('hidden')"), 'client should hide the live statistic on failure');
+
+['listings', 'agents', 'developers', 'featured', 'premium', 'boosted', 'advertising', 'reports', 'websites', 'professional'].forEach((anchor) => {
+  assert(aboutBlock.includes(`id="${anchor}"`), `missing deep-link anchor #${anchor}`);
+});
+assert.strictEqual((aboutBlock.match(/class="about-product-card"/g) || []).length, 10, 'About should render ten commercial product cards');
+assert.strictEqual(catalog.advertisingPlacements.length, 22, 'single-source catalog should contain all 22 advertising placements');
+assert.strictEqual(catalog.products.privateListing.amount, 25000);
+assert.strictEqual(catalog.products.featuredListing.amount, 50000);
+assert.strictEqual(catalog.products.offPlanDevelopment.amount, 150000);
+assert.strictEqual(catalog.products.offPlanDevelopment.period, 'post', 'Off Plan should be charged per post, not per month');
+assert(aboutBlock.includes('class="about-advertising-summary"'), 'advertising should use the compact summary treatment');
+assert(!aboutBlock.includes('about-rate-table'), 'the 22-row advertising table should not take up space on About');
+assert(aboutBlock.includes('href="/advertise" data-content-i18n="about.advertisingLearnMore">Learn more</a>'), 'compact advertising summary should link to the detailed advertiser page');
+assert.strictEqual((aboutBlock.match(/class="about-source-card"/g) || []).length, 4, 'found-online explanation should cover four provider groups');
+assert.strictEqual((aboutBlock.match(/about-discovery-process mt-6/g) || []).length, 1, 'found-online explanation should include the review process');
+assert.strictEqual((aboutBlock.match(/about.discoveryStep(?:One|Two|Three|Four)Title/g) || []).length, 4, 'found-online explanation should include all four steps');
+[
+  'YouTube API',
+  'X API — formerly Twitter',
+  'TikTok API',
+  'Google APIs',
+  'We do not use Facebook for this process.',
+  'Nothing found online is published automatically.',
+  'must link back to the specific public post, video or page'
+].forEach((copy) => assert(normalized.includes(copy), `/about found-online detail is missing: ${copy}`));
+assert(!aboutBlock.includes('fa-facebook'), 'Facebook must not be presented as a connected discovery source');
+['oEmbed', 'WebSub', 'provider or export feeds', '/@handle/video/id'].forEach((detail) => {
+  assert(!normalized.includes(detail), `/about should not expose implementation detail: ${detail}`);
 });
 
 [
-  'Property in Uganda should be easier to find, easier to list, and safer to trust.',
-  'Who we are',
-  'Our mission',
-  'Why makaug exists',
-  'How we support trust and safety'
-].forEach((oldCopy) => {
-  assert(!normalizedAbout.includes(oldCopy), `/about still renders old copy: ${oldCopy}`);
-});
-
-assert(aboutBlock.includes('id="about-live-listing-count"'), 'About page should include a live listings count node');
-assert(aboutBlock.includes('data-about-stat-count="146"'), 'About stats should include count-up district metric');
-assert(aboutBlock.includes('data-about-stat-count="9"'), 'About stats should include count-up language metric');
-assert(aboutBlock.includes('about-hero-panel bg-[#0f3d2e]'), 'About hero should carry an explicit dark panel class');
-assert(aboutBlock.includes('about-vision-panel rounded-xl'), 'About vision block should carry an explicit dark panel class');
-assert(html.includes('#page-about .about-hero-panel') && html.includes('#page-about .about-vision-panel'), 'About contrast fix should use scoped hero and vision CSS');
-assert(html.includes('background: #0f3d2e'), 'About contrast fix should force the approved deep green background in inline CSS');
-assert(aboutBlock.includes('about-hero-cta-primary'), 'About hero primary CTA should have explicit contrast-safe styling');
-assert(aboutBlock.includes('about-hero-cta-secondary'), 'About hero secondary CTA should have explicit contrast-safe styling');
-assert(aboutBlock.includes('about-hero-cta-social'), 'About hero WhatsApp CTA should have explicit contrast-safe styling');
-assert(html.includes('#page-about .about-solid-green-cta'), 'About solid green CTAs should have scoped fallback styling');
-assert.strictEqual((aboutBlock.match(/bg-\[#15603f\][^"]*text-white/g) || []).length, (aboutBlock.match(/about-solid-green-cta/g) || []).length, 'Every About solid-green CTA should use the contrast-safe fallback class');
-assert(aboutBlock.includes('about-land-steps-section'), 'About land section should use the numbered safety steps layout');
-assert(aboutBlock.includes('data-release-marker="about-land-steps-20260713"'), 'About land section should expose the land steps marker');
-assert.strictEqual((aboutBlock.match(/about-land-step-card/g) || []).length, 3, 'About land section should render three step cards');
-assert.deepStrictEqual(
-  [...aboutBlock.matchAll(/<span class="about-land-step-badge">(\d)<\/span>/g)].map((match) => match[1]),
-  ['1', '2', '3'],
-  'About land step badges should read 1, 2, 3'
-);
-['ti-map-pin', 'ti-file-check', 'ti-shield-check'].forEach((iconClass) => {
-  assert(aboutBlock.includes(iconClass), `About land step should include icon marker: ${iconClass}`);
-});
-[
-  'about.landHubOfficialText',
-  'about.landHubEvidenceText',
-  'about.landHubProcessText'
-].forEach((key) => {
-  assert(aboutBlock.includes(`data-content-i18n="${key}"`), `About land step tip should be i18n-wired: ${key}`);
-});
-assert(aboutBlock.includes('href="/land"'), 'About land Browse land CTA should link to /land');
-assert(aboutBlock.includes('href="https://ugnlis.mlhud.go.ug/"'), 'About land UgNLIS CTA should link to the official portal');
-assert(aboutBlock.includes('about-stat-card rounded-xl border border-[#e4ece8] bg-white'), 'About stat cards should use one uniform white card treatment');
-assert(aboutBlock.includes('bg-[#f0f6f2]'), 'final CTA should use the approved green-tint panel');
-assert(aboutBlock.includes('about-final-cta-actions'), 'final CTA should have a dedicated three-button action row');
-const finalCtaStart = aboutBlock.indexOf('<section class="about-card rounded-[14px] bg-[#f0f6f2]');
-const finalCtaEnd = aboutBlock.indexOf('</section>', finalCtaStart);
-assert(finalCtaStart >= 0 && finalCtaEnd > finalCtaStart, 'final CTA section should exist');
-const finalCtaBlock = aboutBlock.slice(finalCtaStart, finalCtaEnd);
-const finalCtaLinks = [...finalCtaBlock.matchAll(/<a\s+([^>]*?)>(.*?)<\/a>/g)].map((match) => ({
-  attrs: match[1],
-  text: match[2].replace(/<[^>]+>/g, '').trim()
-}));
-assert.deepStrictEqual(
-  finalCtaLinks.slice(0, 3).map((link) => link.text),
-  ['Search property', 'List free', 'Chat on WhatsApp'],
-  'final CTA buttons should render Search property, List free, Chat on WhatsApp in order'
-);
-assert(finalCtaLinks[0].attrs.includes('href="/for-sale"'), 'Search property CTA should link to /for-sale');
-assert(finalCtaLinks[0].attrs.includes('about-final-cta-primary'), 'Search property CTA should use the solid primary class');
-assert(finalCtaLinks[1].attrs.includes('href="/list-property"'), 'List free CTA should link to /list-property');
-assert(finalCtaLinks[1].attrs.includes('about-final-cta-secondary'), 'List free CTA should use the outline secondary class');
-assert(finalCtaLinks[2].attrs.includes('wa.me/256760112587'), 'WhatsApp CTA should link to makaug WhatsApp');
-assert(finalCtaLinks[2].attrs.includes('about-final-cta-secondary'), 'WhatsApp CTA should use the outline secondary class');
-assert(!/(?:bg|text|border)-(?:amber|yellow|orange|purple|blue|red)-/.test(aboutBlock), 'About page should not use yellow/multicolour Tailwind palette classes');
-assert(!aboutBlock.includes('#d9a441'), 'About page should not use the old gold/yellow accent');
-assert.strictEqual((aboutBlock.match(/<section[^>]*bg-\[#0f3d2e\]/g) || []).length, 1, 'Only the vision section should be a dark feature block');
-assert(aboutBlock.includes('about-ai-pipeline'), 'About page should include the animated AI pipeline');
-assert(aboutBlock.includes('data-about-persona="renters"'), 'About page should include persona selector buttons');
-assert(aboutBlock.includes('onclick="setAboutPersona(\'businesses\')"'), 'About persona selector should be interactive');
-
-const aboutKeys = [...new Set([...aboutBlock.matchAll(/data-content-i18n="([^"]+)"/g)].map((match) => match[1]))];
-assert(aboutKeys.length >= 90, 'About page should wire all visible copy through content i18n');
-aboutKeys.forEach((key) => {
-  assert(frontend.includes(`"${key}"`), `content i18n dictionary missing About key: ${key}`);
-});
+  'Property for sale',
+  'Property to rent',
+  'Student housing',
+  'Commercial property',
+  'Off Plan'
+].forEach((copy) => assert(normalized.includes(copy), `/about should restore the original journey overview: ${copy}`));
 
 [
-  'about.landHubTitle',
-  'about.landHubText',
-  'about.landHubOfficialTitle',
-  'about.landHubOfficialText',
-  'about.landHubEvidenceTitle',
-  'about.landHubEvidenceText',
-  'about.landHubProcessTitle',
-  'about.landHubProcessText'
-].forEach((key) => {
-  ['en', 'lg', 'sw', 'ac', 'ny', 'rn', 'sm', 'am', 'ar'].forEach((code) => {
-    const packPattern = code === 'en'
-      ? new RegExp(`const ABOUT_PAGE_I18N_EN[\\s\\S]*"${key}"`)
-      : new RegExp(`Object\\.assign\\(CONTENT_I18N\\.${code},[\\s\\S]*"${key}"`);
-    assert(packPattern.test(frontend), `About land key should be translated in ${code}: ${key}`);
-  });
-});
+  'Identity and contact checks',
+  'Reviewed before it is public',
+  'Duplicate listing and image checks',
+  'Sources and changes stay traceable',
+  'Fraud and pressure signals',
+  'Claim, correct, report or remove',
+  'Your independent checks still matter'
+].forEach((copy) => assert(normalized.includes(copy), `/about trust explanation is missing: ${copy}`));
 
 [
-  'ABOUT_PAGE_I18N_EN',
-  'function setAboutPersona',
-  'ABOUT_PERSONA_ROUTES',
-  'function updateAboutPageUi',
-  'function fetchAboutPublicListingsTotal',
-  'function aboutLiveListingTotal',
-  'pagination?.total',
-  'PUBLIC_OPPORTUNITY_SUMMARY_PATH',
-  'function animateAboutStatNumber',
-  'updateAboutPageUi(stats)',
-  'CONTENT_I18N[code] = Object.assign({}, CONTENT_I18N[code] || {}, ABOUT_PAGE_I18N_EN)'
-].forEach((needle) => {
-  assert(frontend.includes(needle), `frontend missing About page wiring: ${needle}`);
-});
+  'Search rentals by district, area, map, budget, bedrooms and property type.',
+  'Explore homes, land, commercial property and off-plan developments across Uganda',
+  'Find student rooms and hostels near a university or campus',
+  'Create a sale or rental listing on the website or begin through WhatsApp.',
+  'Register your agency or broker account',
+  'Search for offices, shops, warehouses, industrial space, land and development opportunities'
+].forEach((copy) => assert(frontend.includes(copy), `expanded persona guidance is missing: ${copy}`));
 
+const rendered = injectAboutCommercialProducts(aboutBlock);
+assert(!rendered.includes('{{ABOUT_PRICE:'), 'server rendering should replace every price placeholder');
+assert(!rendered.includes('{{ABOUT_PRICE_ONLY:'), 'server rendering should replace every price-only placeholder');
+assert(rendered.includes('UGX 25,000 / property / month'), 'private listing price should come from the catalog');
+assert(rendered.includes('UGX 150,000 / post'), 'Off Plan price should be presented per post');
+assert(frontend.includes('window.__MAKAUG_ABOUT_COMMERCIAL_PRODUCTS__'), 'client pricing should read from the shared catalog');
+assert(frontend.includes("fmtP(entry.amount, '')"), 'About prices should use the existing currency conversion helper');
+
+const hrefs = [...aboutBlock.matchAll(/<a\b[^>]*href="([^"]+)"/g)].map((match) => match[1]);
+assert(hrefs.length > 0, 'About should include actions');
+assert(hrefs.every((href) => href && href !== '#'), 'About must not contain dead hash actions');
+assert(hrefs.some((href) => href === '/advertise'), 'advertiser Learn more action should exist');
+assert(!hrefs.some((href) => href.startsWith('/dashboard?product=')), 'commercial upgrades should not send visitors into an unactionable dashboard route');
+assert(aboutBlock.includes('id="developers"') && /id="developers"[\s\S]*?href="\/broker-signup"[\s\S]*?>Register as an agent<\/a>/.test(aboutBlock), 'Off Plan should send developers to agent registration');
 [
-  'lg',
-  'sw',
-  'ac',
-  'ny',
-  'rn',
-  'sm',
-  'am',
-  'ar'
-].forEach((code) => {
-  assert(frontend.includes(`"${code}"`), `About i18n fallback should cover ${code}`);
-});
+  'I%20want%20to%20feature%20my%20listing',
+  'I%20want%20to%20make%20my%20listing%20Premium',
+  'I%20want%20to%20boost%20my%20listing',
+  'I%20want%20a%20Market%20Intelligence%20Report',
+  'I%20want%20an%20agency%20website',
+  'I%20want%20to%20book%20a%20professional%20property%20shoot'
+].forEach((message) => assert(hrefs.some((href) => href.includes(message)), `missing working sales contact for: ${message}`));
+assert(hrefs.filter((href) => href.startsWith('https://wa.me/256760112587?text=')).length >= 8, 'commercial sales actions should use tailored WhatsApp links');
 
-assert(frontend.includes('window.setAboutPersona = setAboutPersona'), 'persona selector should expose the handler for inline buttons');
-assert(frontend.includes('document.documentElement.dir = currentLang === "ar" ? "rtl" : "ltr"'), 'Arabic RTL support should remain wired');
+assert(server.includes("app.get('/about/rate-card.pdf'"), 'existing PDF route should remain available for compatibility');
+assert(server.includes("canonical: absolutePublicUrl('/about')"), 'About should have a self-referencing canonical');
+assert(server.includes('About makaug — Products, pricing & how it works | makaug.com'), 'About should have the approved unique title');
+assert(server.includes('Everything makaug offers: listings from UGX 25,000/month'), 'About should have the approved meta description');
+assert(pdfService.includes("require('../config/aboutCommercialProducts')"), 'PDF must use the same price catalog as the page');
 
-console.log('About page full-copy regression checks passed.');
+console.log('about page commercial rebuild checks passed');

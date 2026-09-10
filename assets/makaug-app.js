@@ -874,6 +874,7 @@ let publicListingsApiTotal = null;
 let publicListingsApiStats = null;
 let aboutPublicListingsTotal = null;
 let aboutPublicListingsTotalPromise = null;
+let aboutPublicListingsTotalAttempted = false;
 const publicActiveCategoryHydrationPromises = new Map();
 const PUBLIC_LISTINGS_FAST_PAGE_LIMIT = 8;
 const PUBLIC_RESULTS_PAGE_SIZE = 24;
@@ -2560,7 +2561,7 @@ const CONTENT_I18N = {
     "about.adSeparationTitle": "Ads stay separate",
     "about.adSeparationText": "Free listing is open to owners and brokers. Paid advertising is labelled and managed separately from listing moderation.",
     "about.landHubLabel": "Land marketplace support",
-    "about.landHubTitle": "Find and list land without pretending to clear titles",
+    "about.landHubTitle": "Land safety",
     "about.landHubText": "Browse land listings, compare details, and use safety guidance. Makaug is a marketplace, not an official title-checking or legal-clearance service.",
     "about.landHubPortal": "Browse land listings",
     "about.landHubOfficialTitle": "Listing discovery",
@@ -2913,20 +2914,60 @@ CONTENT_I18N.ar = Object.assign({}, CONTENT_I18N.en, {
 
 const ABOUT_PAGE_I18N_EN = Object.freeze({
   "about.heroLabel": "About makaug",
-  "about.title": "Every property in Uganda, finally in one place",
-  "about.heroStatement": "Every property in Uganda, finally in one place",
-  "about.subtitle": "Buy, rent, sell, or find student housing and land — free to list, in 9 languages, on the web or straight from WhatsApp, across all 146 districts.",
+  "about.title": "Every property in Uganda, in one place",
+  "about.heroStatement": "Every property in Uganda, in one place",
+  "about.subtitle": "makaug is Uganda's property search engine. We find every real listing online, check it, and put it in front of buyers, renters and students in 9 languages, on the web or on WhatsApp, across all 146 districts. Below is everything we offer and what it costs.",
   "about.ctaSearch": "Search property",
-  "about.ctaList": "List free",
-  "about.ctaWhatsapp": "Ask makaug on WhatsApp",
-  "about.statDistricts": "districts covered",
+  "about.ctaList": "List a property",
+  "about.ctaWhatsapp": "Talk to sales on WhatsApp",
+  "about.statDistricts": "districts",
   "about.statLanguages": "languages",
   "about.statLiveListings": "live listings",
-  "about.statFreeValue": "Free",
-  "about.statFreeLabel": "to list",
+  "about.statTrial": "days free to list",
+  "about.missionLabel": "Our mission",
+  "about.missionTitle": "All Uganda properties in one place",
+  "about.missionText": "Our mission is to make genuine property opportunities across Uganda easier to find, understand and act on. We bring information scattered across websites, social platforms, WhatsApp, developers, owners and brokers into one searchable place; organise it clearly in 9 languages; and give buyers, renters and students safer next steps from first search to viewing and decision.",
+  "about.missionPromise": "For owners, agents and developers, that means a clear route to present property properly and reach serious people. For property seekers, it means broader choice, visible sources, useful details and a team that reviews what appears on makaug.",
+  "about.standardTitle": "Standard products",
+  "about.standardSub": "Get your property in front of Uganda's buyers and renters",
+  "about.saleTitle": "Private listing — For Sale",
+  "about.saleText": "List your home, land or commercial property yourself.",
+  "about.rentTitle": "Private listing — To Rent",
+  "about.rentText": "List a rental or student room yourself.",
+  "about.agentTitle": "Agent subscription",
+  "about.agentText": "For brokers and agencies with multiple properties.",
+  "about.developerTitle": "Off-plan developments",
+  "about.developerText": "Dedicated project pages for developers and marketing agents.",
+  "about.valueTitle": "Get seen first",
+  "about.valueSub": "Add to any live listing to move it up and stand out",
+  "about.growthTitle": "Grow your property business",
+  "about.advertisingTitle": "Advertise with makaug",
+  "about.advertisingSub": "Put your brand in front of people actively looking for property.",
+  "about.advertisingText": "Weekly placements are available for banks, insurers, furniture and building suppliers, developers and agencies. Choose homepage, search, property-detail, mortgage, valuation, broker, marketplace or alert placements, with run-of-site and monthly options available.",
+  "about.advertisingLearnMore": "Learn more",
+  "about.discoveryEyebrow": "Found online",
+  "about.discoveryTitle": "How we find properties online",
+  "about.discoveryIntro": "Uganda's property market is spread across videos, posts, websites and local business pages. makaug uses approved APIs for YouTube, X, TikTok and Google to find public property information and bring it into one searchable place. We do not use Facebook for this process.",
+  "about.discoveryYoutubeTitle": "YouTube API",
+  "about.discoveryYoutubeText": "Helps makaug find public property videos and updates from relevant Uganda property channels while keeping the original video connected to the listing.",
+  "about.discoveryXTitle": "X API — formerly Twitter",
+  "about.discoveryXText": "Helps us find public property posts and retain the original post link, account and date so people can see where the information came from.",
+  "about.discoveryTikTokTitle": "TikTok API",
+  "about.discoveryTikTokText": "Helps us identify public property videos from relevant sources and connect each suitable listing back to the original TikTok post.",
+  "about.discoveryGoogleTitle": "Google APIs",
+  "about.discoveryGoogleText": "Help us find public property pages and understand places, map positions, addresses and districts. The original source remains visible wherever a property was found online.",
+  "about.discoveryStepOneTitle": "Find the original public post",
+  "about.discoveryStepOneText": "A property found online must link back to the specific public post, video or page it came from—not simply a search page or social profile.",
+  "about.discoveryStepTwoTitle": "Read and structure the evidence",
+  "about.discoveryStepTwoText": "We extract only what the source supports: title, caption, price, property type, area, contact details, media, author and first-posted date. Missing facts stay missing or are marked for confirmation.",
+  "about.discoveryStepThreeTitle": "Check the details and duplicates",
+  "about.discoveryStepThreeText": "We compare the source, location, price, contact details, description and images to flag repeated or inconsistent listings before publication.",
+  "about.discoveryStepFourTitle": "Human review before publication",
+  "about.discoveryStepFourText": "Nothing found online is published automatically. Our team reviews the source, property details, contact route, location, images, duplicates and safety concerns first.",
+  "about.discoveryNote": "Clear sources: makaug organises public property information; we do not claim ownership of the original post, fill in facts that were not provided or treat an online post as proof of ownership. Owners and agents can claim, correct or request removal of a listing.",
   "about.visionLabel": "Our vision",
   "about.visionTitle": "We find every property, so you don't have to",
-  "about.visionText": "Property in Uganda is scattered — across WhatsApp, social media, brokers, and word of mouth. makaug is changing that. Our AI searches TikTok, YouTube, Facebook, and X, reads what it finds, and brings every real property into one place you can actually search. Think of it as a search engine for Uganda property.",
+  "about.visionText": "Property in Uganda is scattered across WhatsApp, public online posts, brokers and word of mouth. makaug brings that information into one searchable place and reviews listings before publication.",
   "about.pipelineSources": "Sources",
   "about.pipelineAi": "AI organises",
   "about.pipelineAiText": "location, price, category, duplicates",
@@ -2941,16 +2982,18 @@ const ABOUT_PAGE_I18N_EN = Object.freeze({
   "about.aiToolsText": "Owners get a description written for them and translated live, so listings look great with no effort.",
   "about.everythingTitle": "Everything you can do",
   "about.everythingSub": "One platform for every kind of property journey.",
-  "about.everySaleTitle": "For sale",
-  "about.everySaleText": "homes and property to buy",
-  "about.everyRentTitle": "To rent",
-  "about.everyRentText": "houses and apartments",
-  "about.everyStudentsTitle": "Students",
+  "about.everySaleTitle": "Property for sale",
+  "about.everySaleText": "homes, apartments and property to buy",
+  "about.everyRentTitle": "Property to rent",
+  "about.everyRentText": "houses, apartments and rooms",
+  "about.everyStudentsTitle": "Student housing",
   "about.everyStudentsText": "hostels and rooms near campus",
   "about.everyLandTitle": "Land",
-  "about.everyLandText": "plots and acreage",
-  "about.everyCommercialTitle": "Commercial",
-  "about.everyCommercialText": "offices, shops, warehouses",
+  "about.everyLandText": "plots, acreage and development land",
+  "about.everyCommercialTitle": "Commercial property",
+  "about.everyCommercialText": "offices, shops and warehouses",
+  "about.everyOffPlanTitle": "Off Plan",
+  "about.everyOffPlanText": "new developments in Uganda and overseas",
   "about.everyBrokersTitle": "Find brokers",
   "about.everyBrokersText": "trusted agents near you",
   "about.everyMortgageTitle": "Mortgage finder",
@@ -2960,31 +3003,31 @@ const ABOUT_PAGE_I18N_EN = Object.freeze({
   "about.personaTitle": "Property made simple — whoever you are",
   "about.personaLabel": "What brings you here?",
   "about.rentersTitle": "Renters",
-  "about.personaRentersText": "Search by area and budget, save homes, set alerts, book viewings, and contact owners safely.",
+  "about.personaRentersText": "Search rentals by district, area, map, budget, bedrooms and property type. Compare photos, video, price periods, amenities, contact routes and source information before shortlisting. Save properties and searches, receive alerts when suitable homes appear, then contact the owner or broker, request a viewing or callback, and use makaug's safety guidance before paying.",
   "about.personaRentersCta": "Search rentals",
   "about.buyersTitle": "Buyers",
-  "about.personaBuyersText": "Compare homes and land, read location, title, and verification signals, and use safety guidance before you pay.",
+  "about.personaBuyersText": "Explore homes, land, commercial property and off-plan developments across Uganda, then narrow the results by district, area, property type, price, bedrooms and map location. Compare photos, videos, source and verification information, floor plans, development progress and payment details where supplied. Save promising properties, set alerts, contact the owner, agent or developer, use the Mortgage Finder for an affordability guide, and complete independent legal and title checks before paying.",
   "about.personaBuyersCta": "Browse for sale",
   "about.studentsTitle": "Students and parents",
-  "about.personaStudentsText": "Find hostels by campus, budget, room type, security, water, and Wi-Fi, with viewings and student alerts.",
+  "about.personaStudentsText": "Find student rooms and hostels near a university or campus using area, budget, room type and accommodation filters. Review photos, video, distance information and practical details such as security, water, electricity, Wi-Fi, furnishing, sharing arrangements and payment periods when the provider has supplied them. Students and parents can save options, receive alerts, contact the hostel or owner, arrange a viewing and check the room, route and payment terms before committing.",
   "about.personaStudentsCta": "Find student housing",
   "about.ownersTitle": "Owners and sellers",
-  "about.personaOwnersText": "List free with guided fields, map your location, verify with your ID, and get enquiries — reviewed before it goes public.",
+  "about.personaOwnersText": "Create a sale or rental listing on the website or begin through WhatsApp. Add the exact location, price and payment period, property details, photos and video, then provide the identity and contact information needed for review. makaug can help organise the description and present it through the site's language system. Your listing remains under staff review until its evidence is ready, and once approved you can receive enquiries, edit details, remove the property and manage visibility from your account. The first 7 days are free; the published product price applies if you keep a private listing live after that period.",
   "about.personaOwnersCta": "List your property",
   "about.brokersTitle": "Brokers",
-  "about.personaBrokersText": "Build a broker profile, manage listings and leads, and handle WhatsApp enquiries and viewings in one place.",
+  "about.personaBrokersText": "Register your agency or broker account, submit identity and business details for review, and build a profile that buyers and owners can find in the broker directory. Manage multiple listings from one account, organise leads and viewing requests, respond through phone or WhatsApp, and export lead information where available. The agent plan brings listings together under one subscription, while Featured, Premium and Boosted options can be used for stock that needs extra visibility. Published badges and profiles remain subject to makaug's verification and moderation rules.",
   "about.personaBrokersCta": "Register as broker",
   "about.businessesTitle": "Businesses",
-  "about.personaBusinessesText": "Find offices, shops, and warehouses, enquire directly, and save your commercial searches.",
+  "about.personaBusinessesText": "Search for offices, shops, warehouses, industrial space, land and development opportunities using location, size, price and property-type filters. Save commercial searches, receive new-listing alerts and contact the responsible owner, broker or developer. Property-service companies can register for Marketplace review; agencies and developers can request market-intelligence reports or connected websites; and banks, insurers, suppliers and other brands can reach active property seekers through makaug advertising placements. Every public listing or business source should still be checked directly before a contract or payment.",
   "about.personaBusinessesCta": "Find commercial space",
   "about.stepsTitle": "From search to sorted, in three steps",
   "about.stepSearchTitle": "Search or list",
-  "about.stepSearchText": "On the web or straight from WhatsApp. Owners list free in minutes.",
-  "about.stepVerifyTitle": "Verified and safe",
-  "about.stepVerifyText": "Every listing is checked for location, photos, contact, and fraud signals before it goes live. Verified, not blindly posted.",
-  "about.stepConnectTitle": "Connect",
-  "about.stepConnectText": "Message the owner or broker, book a viewing, and decide — with safety guidance the whole way.",
-  "about.landHubTitle": "Find and list land — without pretending to clear titles",
+  "about.stepSearchText": "Search Uganda property on the web or WhatsApp, or submit your own property with the details and media people need.",
+  "about.stepVerifyTitle": "Review and compare",
+  "about.stepVerifyText": "Use source, contact, location, price and media information to compare options. makaug reviews listings and flags concerns before publication.",
+  "about.stepConnectTitle": "Connect carefully",
+  "about.stepConnectText": "Contact the responsible owner, agent or developer, arrange a viewing, and complete independent checks before signing or paying.",
+  "about.landHubTitle": "Land safety",
   "about.landHubText": "Browse land, compare details, and see seller contact routes. makaug is a marketplace, not a title-checking or legal service — so take three steps to protect yourself before you pay.",
   "about.landHubPortal": "Browse land",
   "about.landHubUgNlis": "Official UgNLIS portal",
@@ -2994,18 +3037,25 @@ const ABOUT_PAGE_I18N_EN = Object.freeze({
   "about.landHubEvidenceText": "Review the title with your own lawyer, not the seller's.",
   "about.landHubProcessTitle": "Avoid pressure",
   "about.landHubProcessText": "Never rush, and never make untraceable payments.",
-  "about.trustTitle": "Trust comes first",
+  "about.safetyLabel": "Trust and accountability",
+  "about.trustTitle": "How we work to prevent fraud",
+  "about.trustIntro": "Property fraud cannot be solved by a badge or one automated check. makaug combines identity and contact checks, structured evidence, duplicate detection, human review, visible sources and a report-and-removal process. We keep a review trail so concerns and decisions can be followed up instead of disappearing.",
   "about.trustIdentityTitle": "Identity and contact checks",
-  "about.trustIdentityText": "Owners verify with a National ID and contact details, so you know who you're dealing with.",
-  "about.trustReviewTitle": "Reviewed before it's public",
-  "about.trustReviewText": "Our team checks details, photos, location, duplicates, and fraud signals before any listing goes live.",
-  "about.trustSourceTitle": "Source transparency",
-  "about.trustSourceText": "Found-online listings show where and when we found them, and how to check the original post.",
+  "about.trustIdentityText": "People submitting property provide contact and identity information for review. We check that the contact route works and that the person can respond to questions about the listing. These checks support accountability, but they are not a guarantee of ownership.",
+  "about.trustReviewTitle": "Reviewed before it is public",
+  "about.trustReviewText": "Submitted and found-online properties go into review rather than straight onto the public site. The team checks the description, price, location, contact route, images, source evidence and obvious inconsistencies before deciding whether the listing is ready.",
+  "about.trustDuplicateTitle": "Duplicate listing and image checks",
+  "about.trustDuplicateText": "We compare source links, property details, contacts, locations, descriptions and, where available, image fingerprints. Likely repeats or recycled media are flagged for a closer look so one property is not presented as several different opportunities.",
+  "about.trustSourceTitle": "Sources and changes stay traceable",
+  "about.trustSourceText": "Found-online listings keep a route to the original public source. Review decisions, status changes, corrections, claims and removal requests are handled through recorded workflows so the team can investigate what happened and act consistently.",
+  "about.trustSignalsTitle": "Fraud and pressure signals",
+  "about.trustSignalsText": "Unclear ownership claims, conflicting locations or prices, copied media, suspicious contacts and pressure to make an urgent or untraceable payment are reasons to pause or escalate a listing. Users can report a concern directly for staff review.",
   "about.trustClaimTitle": "Claim or remove",
   "about.trustClaimText": "Owners and agents can claim, update, correct, or remove a listing anytime — with a full review trail.",
-  "about.trustFraudTitle": "Report fraud",
-  "about.trustFraudText": "Flag suspicious listings, title concerns, or payment pressure in one tap.",
-  "about.ctaSafety": "Safety tips",
+  "about.trustFraudTitle": "Claim, correct, report or remove",
+  "about.trustFraudText": "Owners and agents can claim a found-online listing, correct inaccurate information or request removal. Anyone can report suspicious behaviour. The team reviews the evidence and can hold, hide, correct or remove content while the concern is investigated.",
+  "about.trustBoundary": "Your independent checks still matter: makaug review reduces avoidable risk but does not replace a physical viewing, an independent lawyer, an official title search, a written agreement or a traceable payment method. Never pay because somebody is pressuring you to act immediately.",
+  "about.ctaSafety": "Read the safety guide",
   "about.trustRecordTitle": "Review trail",
   "about.trustRecordText": "Changes, approvals, and removals are handled through staff review, not hidden shortcuts.",
   "about.whyChooseTitle": "Why people choose makaug",
@@ -3021,9 +3071,9 @@ const ABOUT_PAGE_I18N_EN = Object.freeze({
   "about.chooseAiText": "discovery, assistant, and listing tools",
   "about.chooseVerifiedTitle": "Verified listings",
   "about.chooseVerifiedText": "human-reviewed for trust",
-  "about.finalTitle": "Ready to find your place?",
-  "about.finalSub": "Search thousands of listings, or list your own free in minutes.",
-  "about.finalWhatsapp": "Chat on WhatsApp",
+  "about.finalTitle": "Ready to start?",
+  "about.finalSub": "List your first property free for 7 days, or talk to our sales team about agent plans, developments and advertising.",
+  "about.finalWhatsapp": "WhatsApp sales: 0760 112 587",
   "about.finalHow": "How it works",
   "about.finalHelp": "Help centre",
   "about.finalSafety": "Safety tips"
@@ -4468,7 +4518,7 @@ const HOME_ASSISTANT_I18N = {
 
 const FOOTER_I18N = {
   en: {
-    brandCopy: `Uganda's first completely free property platform. List, search, and connect via website or WhatsApp. Covering all 146 districts.`,
+    brandCopy: `Uganda's property search engine. List your first week free, then keep it live from UGX 25,000 a month. Web or WhatsApp, all 146 districts.`,
     whatsapp: "WhatsApp",
     email: "Email",
     chatWhatsapp: "Chat on WhatsApp",
@@ -4501,7 +4551,6 @@ const FOOTER_I18N = {
     copyright: `© 2026 ${publicBrand()}. All rights reserved.`
   },
   lg: {
-    brandCopy: `Pulatifoomu y'ebintu ey'obwereere ddala mu Uganda. Teka listing, noonyereza, era okwatanagane okuyita ku website oba WhatsApp. Ebikka ku disitulikiti zonna 146.`,
     whatsapp: "WhatsApp",
     email: "Email",
     chatWhatsapp: "Nyumya ku WhatsApp",
@@ -4534,7 +4583,6 @@ const FOOTER_I18N = {
     copyright: `© 2026 ${publicBrand()}. Eddembe lyonna likuumiddwa.`
   },
   sw: {
-    brandCopy: `Jukwaa la kwanza la mali lisilo na malipo kabisa nchini Uganda. Tangaza, tafuta, na ungana kupitia tovuti au WhatsApp. Linafikia wilaya zote 146.`,
     whatsapp: "WhatsApp",
     email: "Barua pepe",
     chatWhatsapp: "Piga gumzo WhatsApp",
@@ -4567,7 +4615,6 @@ const FOOTER_I18N = {
     copyright: `© 2026 ${publicBrand()}. Haki zote zimehifadhiwa.`
   },
   ac: {
-    brandCopy: `Kabedo me property ma nono i Uganda. Ket listing, yeny, ki kube ki website onyo WhatsApp. Otyeko district 146 ducu.`,
     whatsapp: "WhatsApp",
     email: "Email",
     chatWhatsapp: "Lok i WhatsApp",
@@ -4600,7 +4647,6 @@ const FOOTER_I18N = {
     copyright: `© 2026 ${publicBrand()}. Twero ducu kigwoko.`
   },
   ny: {
-    brandCopy: `Platform ya property ey'obusa obutashashurwa omuri Uganda. Ta listing, sherura, kandi oganire kurabira aha website ninga WhatsApp. Ekwata district 146 zoona.`,
     whatsapp: "WhatsApp",
     email: "Email",
     chatWhatsapp: "Gamba kuri WhatsApp",
@@ -4633,7 +4679,6 @@ const FOOTER_I18N = {
     copyright: `© 2026 ${publicBrand()}. Obugabe bwona burindirwe.`
   },
   rn: {
-    brandCopy: `Platform ya property ey'obusa etashashurwa omuri Uganda. Ta listing, sherura, kandi oganire kurabira aha website ninga WhatsApp. Ekwata district 146 zoona.`,
     whatsapp: "WhatsApp",
     email: "Email",
     chatWhatsapp: "Ganira kuri WhatsApp",
@@ -4666,7 +4711,6 @@ const FOOTER_I18N = {
     copyright: `© 2026 ${publicBrand()}. Obugabe bwona burindirwe.`
   },
   sm: {
-    brandCopy: `Platform ya property ey'obwereere mu Uganda. Teeka listing, noonya, era kwatagana okuyita ku website oba WhatsApp. Ekwata ku disitulikiti zonna 146.`,
     whatsapp: "WhatsApp",
     email: "Email",
     chatWhatsapp: "Yogera ku WhatsApp",
@@ -4699,7 +4743,6 @@ const FOOTER_I18N = {
     copyright: `© 2026 ${publicBrand()}. Eddembe lyonna likuumiddwa.`
   },
   ar: {
-    brandCopy: `أول منصة عقارات مجانية بالكامل في أوغندا. أدرج، ابحث، وتواصل عبر الموقع أو WhatsApp. تغطي كل districts الـ146.`,
     whatsapp: "WhatsApp",
     email: "البريد الإلكتروني",
     chatWhatsapp: "الدردشة على WhatsApp",
@@ -7767,15 +7810,15 @@ function setAboutPublicListingsTotal(value) {
 function aboutLiveListingTotal(stats = {}) {
   const candidates = [
     aboutPublicListingsTotal,
-    publicListingsApiTotal,
-    stats?.total
+    publicListingsApiTotal
   ].map((value) => Number(value || 0)).filter((value) => Number.isFinite(value) && value > 0);
   const plausibleTotal = candidates.find((value) => value >= 100);
-  return plausibleTotal || 1889;
+  return plausibleTotal || 0;
 }
 
 async function fetchAboutPublicListingsTotal() {
   if (aboutPublicListingsTotalPromise) return aboutPublicListingsTotalPromise;
+  aboutPublicListingsTotalAttempted = true;
   aboutPublicListingsTotalPromise = (async () => {
     let response = null;
     try {
@@ -7805,15 +7848,47 @@ async function fetchAboutPublicListingsTotal() {
   return aboutPublicListingsTotalPromise;
 }
 
+function aboutCommercialCatalog() {
+  return window.__MAKAUG_ABOUT_COMMERCIAL_PRODUCTS__ || null;
+}
+
+function aboutCommercialPriceLabel(key, priceOnly = false) {
+  const entry = aboutCommercialCatalog()?.products?.[key];
+  if (!entry) return '';
+  const value = fmtP(entry.amount, '');
+  return priceOnly ? value : `${value} / ${entry.period}`;
+}
+
+function updateAboutCommercialPrices() {
+  const page = document.getElementById('page-about');
+  if (!page || !aboutCommercialCatalog()) return;
+  page.querySelectorAll('[data-about-price]').forEach((el) => {
+    const key = el.getAttribute('data-about-price');
+    const price = aboutCommercialPriceLabel(key, el.getAttribute('data-about-price-only') === 'true');
+    if (!price) return;
+    const template = el.getAttribute('data-about-price-template') || '{price}';
+    el.textContent = template.replace('{price}', price);
+  });
+}
+
 function updateAboutPageUi(stats = getHeroPropertyOpportunityStats()) {
   const aboutPage = document.getElementById("page-about");
   if (!aboutPage) return;
+  updateAboutCommercialPrices();
   const liveCount = aboutPage.querySelector("#about-live-listing-count");
+  const liveStat = aboutPage.querySelector("#about-live-listings-stat");
   if (liveCount) {
     const total = aboutLiveListingTotal(stats);
-    liveCount.dataset.aboutStatCount = String(total);
-    animateAboutStatNumber(liveCount, total);
-    if (!aboutPublicListingsTotal || total < 100) {
+    if (total > 0) {
+      liveStat?.classList.remove('hidden');
+      liveCount.dataset.aboutStatCount = String(total);
+      animateAboutStatNumber(liveCount, total);
+    } else {
+      liveStat?.classList.add('hidden');
+      liveCount.removeAttribute('data-about-stat-count');
+      liveCount.textContent = '';
+    }
+    if (!aboutPublicListingsTotalAttempted && total < 100) {
       fetchAboutPublicListingsTotal().catch(() => {});
     }
   }
