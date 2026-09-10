@@ -105,8 +105,8 @@ test('brochure, payment, gallery, map, sharing, video and mortgage handoff are v
   assert.match(client, /id="off-plan-gallery-dialog"/);
   assert.match(client, /closeOffPlanGallery/);
   assert.match(client, /value == null \|\| \(typeof value === 'string' && !value\.trim\(\)\)/);
-  assert.match(html, /off-plan\.js\?v=20260910-off-plan-v13/);
-  assert.match(html, /off-plan\.css\?v=20260909-off-plan-v3/);
+  assert.match(html, /off-plan\.js\?v=20260910-off-plan-v14/);
+  assert.match(html, /off-plan\.css\?v=20260910-off-plan-v4/);
   assert.match(client, /CLOSED_PERMANENTLY/);
   assert.match(client, /Archive this private project\?/);
   assert.match(client, /setOffPlanProjectStatus/);
@@ -179,6 +179,7 @@ test('Spectre source facts, makaug.com coordination and Kenya safeguards are wir
 test('AMRA is source-attributed in the UAE review queue and Spectre only keeps display-ready floor plans', () => {
   const migration = read('db/migrations/128_add_amra_and_repair_spectre_floor_plans.sql');
   const publicationMigration = read('db/migrations/129_publish_amra_sourced_preview.sql');
+  const mapMigration = read('db/migrations/130_add_amra_area_map_marker.sql');
   const client = read('assets/off-plan.js');
   const route = read('routes/off-plan.js');
   for (const fact of ['AMRA', 'Citi Developers', 'Umm Al Quwain Blue Carbon Zone', '2029-12-31', '70/30', '5000', '2937']) {
@@ -200,6 +201,21 @@ test('AMRA is source-attributed in the UAE review queue and Spectre only keeps d
   assert.match(publicationMigration, /'price_on_request_approved', true/);
   assert.match(publicationMigration, /'map_point_pending_approved', true/);
   assert.match(publicationMigration, /WHERE country_code = 'AE' AND slug = 'amra-umm-al-quwain'/);
+  assert.match(mapMigration, /latitude = 25\.5777300/);
+  assert.match(mapMigration, /longitude = 55\.5651400/);
+  assert.match(mapMigration, /'map_precision', 'area_centroid'/);
+  assert.match(mapMigration, /Approximate AMRA area marker/);
+});
+
+test('Off Plan project details use readable mobile cards and an uncluttered mobile gallery', () => {
+  const client = read('assets/off-plan.js');
+  const css = read('assets/off-plan.css');
+  assert.match(client, /off-plan-gallery-view-all-mobile/);
+  assert.match(client, /data-label="\$\{escapeHtml\(offPlanText\('homeType'\)\)\}"/);
+  assert.match(client, /data-label="\$\{escapeHtml\(offPlanText\('guidePrice'\)\)\}"/);
+  assert.match(css, /@media \(max-width: 767px\)[\s\S]*\.off-plan-gallery figure:nth-child\(2\)[\s\S]*display: none/);
+  assert.match(css, /\.off-plan-unit-table tr \{ display: grid; grid-template-columns: repeat\(2,minmax\(0,1fr\)\)/);
+  assert.match(css, /\.off-plan-unit-table td:nth-child\(4\)[\s\S]*grid-column: 1 \/ -1/);
 });
 
 test('UAE project guidance and overseas brochure contact details are Dubai-specific', () => {
