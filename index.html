@@ -1185,9 +1185,10 @@
     #page-about .about-journey-body strong { color: #16241d; font-size: 16px; line-height: 1.35; }
     #page-about .about-journey-body > span { color: #5b6b62; display: block; font-size: 14px; line-height: 1.55; margin-top: 5px; }
     #page-about .about-products-section { border-top: 1px solid #e0ebe4; padding: 52px 0; scroll-margin-top: 96px; }
-    #page-about .about-section-title { color: #16241d; font-family: Georgia, serif; font-size: clamp(28px, 4vw, 38px); font-weight: 900; line-height: 1.15; }
+    #page-about .about-section-title { color: #16241d; font-family: Georgia, serif; font-size: clamp(28px, 4vw, 38px); font-weight: 900; line-height: 1.15; scroll-margin-top: 110px; }
     #page-about .about-section-sub { color: #5b6b62; font-size: 16px; margin-top: 8px; }
     #page-about .about-product-grid { display: grid; gap: 18px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    #page-about .about-product-grid.about-product-grid-four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
     #page-about .about-product-card {
       background: #ffffff;
       border: 1px solid #dfe9e3;
@@ -1196,18 +1197,43 @@
       display: flex;
       flex-direction: column;
       min-height: 100%;
+      overflow: hidden;
       padding: 22px;
       scroll-margin-top: 96px;
+      transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
     }
-    #page-about .about-product-card h3 { color: #16241d; font-size: 19px; font-weight: 900; line-height: 1.3; margin-top: 14px; }
+    #page-about .about-product-card:hover {
+      border-color: #9fc7ad;
+      box-shadow: 0 18px 36px rgba(20, 83, 45, .12);
+      transform: translateY(-2px);
+    }
+    #page-about .about-product-image {
+      aspect-ratio: 16 / 7.4;
+      background: #e7f0ea;
+      display: block;
+      margin: -22px -22px 0;
+      overflow: hidden;
+    }
+    #page-about .about-product-image img {
+      display: block;
+      height: 100%;
+      object-fit: cover;
+      transition: transform .28s ease;
+      width: 100%;
+    }
+    #page-about .about-product-card:hover .about-product-image img { transform: scale(1.03); }
+    #page-about .about-product-card h3 { color: #16241d; font-size: 19px; font-weight: 900; line-height: 1.3; margin-top: 10px; }
     #page-about .about-product-card > p { color: #5b6b62; font-size: 14px; line-height: 1.55; margin-top: 7px; }
     #page-about .about-product-card ul { color: #4b5f54; font-size: 13px; line-height: 1.55; list-style: none; margin: 16px 0 20px; }
     #page-about .about-product-card li { margin-top: 6px; padding-left: 18px; position: relative; }
     #page-about .about-product-card li::before { color: #15803d; content: "✓"; font-weight: 900; left: 0; position: absolute; }
-    #page-about .about-product-icon { align-items: center; background: #e9f6ed; border-radius: 12px; color: #15603f; display: inline-flex; height: 42px; justify-content: center; width: 42px; }
+    #page-about .about-product-icon { align-items: center; background: #e9f6ed; border: 3px solid #ffffff; border-radius: 13px; color: #15603f; display: inline-flex; height: 46px; justify-content: center; margin-top: -21px; position: relative; width: 46px; z-index: 1; }
+    #page-about .about-product-card > .about-product-icon:first-child { margin-top: 0; }
     #page-about .about-price { color: #15803d; display: block; font-size: 15px; font-weight: 900; line-height: 1.45; margin-top: 14px; }
     #page-about .about-product-action { align-items: center; background: #15603f; border-radius: 11px; color: #ffffff; display: inline-flex; font-size: 14px; font-weight: 900; justify-content: center; margin-top: auto; min-height: 44px; padding: 10px 14px; text-align: center; }
-    #page-about .about-advertising-summary { align-items: center; background: #f6f9f7; border: 1px solid #dfe9e3; border-radius: 16px; display: grid; gap: 20px; grid-template-columns: auto minmax(0, 1fr) auto; padding: 24px; }
+    #page-about .about-advertising-summary { align-items: center; background: #f6f9f7; border: 1px solid #dfe9e3; border-radius: 16px; display: grid; gap: 20px; grid-template-columns: minmax(150px, .42fr) minmax(0, 1fr) auto; overflow: hidden; padding: 18px; }
+    #page-about .about-advertising-image { align-self: stretch; border-radius: 12px; display: block; min-height: 180px; overflow: hidden; }
+    #page-about .about-advertising-image img { display: block; height: 100%; object-fit: cover; width: 100%; }
     #page-about .about-advertising-copy .about-section-sub { margin-top: 5px; }
     #page-about .about-advertising-action { align-items: flex-end; display: flex; flex-direction: column; gap: 12px; min-width: 210px; }
     #page-about .about-advertising-action .about-price { margin: 0; text-align: right; }
@@ -1227,13 +1253,15 @@
     #page-about .about-discovery-process p { color: #5b6b62; font-size: 13px; line-height: 1.6; margin-top: 5px; }
     #page-about .about-source-note { align-items: flex-start; background: #edf6f0; border: 1px solid #cfe3d5; border-radius: 14px; color: #3e594a; display: flex; font-size: 13px; gap: 12px; line-height: 1.6; padding: 17px; }
     #page-about .about-source-note i { color: #15603f; margin-top: 3px; }
-    @media (max-width: 1023px) { #page-about .about-product-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 1023px) { #page-about .about-product-grid, #page-about .about-product-grid.about-product-grid-four { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     @media (max-width: 639px) {
       #page-about .about-products-section { padding: 38px 0; }
-      #page-about .about-product-grid, #page-about .about-source-grid, #page-about .about-discovery-process { grid-template-columns: 1fr; }
+      #page-about .about-product-grid, #page-about .about-product-grid.about-product-grid-four, #page-about .about-source-grid, #page-about .about-discovery-process { grid-template-columns: 1fr; }
       #page-about .about-product-action, #page-about .about-outline-cta, #page-about .about-hero-panel .about-cta { width: 100%; }
       #page-about .about-product-card { padding: 19px; }
+      #page-about .about-product-image { margin-left: -19px; margin-right: -19px; margin-top: -19px; }
       #page-about .about-advertising-summary { align-items: flex-start; grid-template-columns: 1fr; padding: 20px; }
+      #page-about .about-advertising-image { min-height: 170px; }
       #page-about .about-advertising-action { align-items: stretch; min-width: 0; width: 100%; }
       #page-about .about-advertising-action .about-price { text-align: left; }
     }
@@ -1295,6 +1323,8 @@
       .about-cta,
       .about-journey-card,
       .about-journey-image img,
+      .about-product-card,
+      .about-product-image img,
       .about-persona-btn,
       .about-pipeline-step,
       .about-ai-pipeline::before {
@@ -1872,6 +1902,130 @@
       padding: 24px;
       position: relative;
       z-index: 7001;
+    }
+    .advertise-package-card {
+      background: #ffffff;
+      border: 1px solid #e4ece8;
+      border-radius: 14px;
+      cursor: pointer;
+      display: block;
+      padding: 16px;
+      transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+    }
+    .advertise-package-card:hover,
+    .advertise-package-card:focus-within {
+      border-color: #77aa8a;
+      box-shadow: 0 12px 24px rgba(15, 61, 46, .09);
+      transform: translateY(-1px);
+    }
+    .advertise-package-card.is-selected {
+      background: #f4fbf6;
+      border-color: #15603f;
+      box-shadow: 0 0 0 2px rgba(21, 96, 63, .1);
+    }
+    .advertise-package-preview-button {
+      align-items: center;
+      background: #f0f8f3;
+      border: 1px solid #cfe3d5;
+      border-radius: 999px;
+      color: #15603f;
+      display: inline-flex;
+      font-size: 12px;
+      font-weight: 900;
+      gap: 6px;
+      margin-top: 12px;
+      min-height: 34px;
+      padding: 7px 12px;
+    }
+    .advertising-preview-browser {
+      background: #f6f9f7;
+      border: 1px solid #cdddd3;
+      border-radius: 18px;
+      box-shadow: 0 20px 44px rgba(15, 61, 46, .13);
+      overflow: hidden;
+    }
+    .advertising-preview-browser-bar {
+      align-items: center;
+      background: #ffffff;
+      border-bottom: 1px solid #e4ece8;
+      display: flex;
+      gap: 7px;
+      min-height: 42px;
+      padding: 9px 13px;
+    }
+    .advertising-preview-browser-dot { background: #dbe7df; border-radius: 999px; height: 8px; width: 8px; }
+    .advertising-preview-logo { color: #15603f; font-size: 12px; font-weight: 900; margin-left: 5px; }
+    .advertising-preview-canvas { min-height: 315px; overflow: hidden; padding: 16px; position: relative; }
+    .advertising-preview-hero {
+      background-position: center;
+      background-size: cover;
+      border-radius: 13px;
+      height: 106px;
+      overflow: hidden;
+      position: relative;
+    }
+    .advertising-preview-hero::after { background: linear-gradient(90deg, rgba(15,61,46,.82), rgba(15,61,46,.15)); content: ""; inset: 0; position: absolute; }
+    .advertising-preview-hero-copy { bottom: 14px; color: #ffffff; font-size: 17px; font-weight: 900; left: 16px; max-width: 64%; position: absolute; z-index: 1; }
+    .advertising-preview-grid { display: grid; gap: 10px; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 12px; }
+    .advertising-preview-card { background: #ffffff; border: 1px solid #dfe9e3; border-radius: 10px; min-height: 102px; overflow: hidden; position: relative; }
+    .advertising-preview-card img { display: block; height: 58px; object-fit: cover; width: 100%; }
+    .advertising-preview-line { background: #dfe9e3; border-radius: 999px; height: 6px; margin: 8px 8px 0; }
+    .advertising-preview-line.short { width: 52%; }
+    .advertising-preview-highlight {
+      background: #fff8e7;
+      border: 2px solid #d99118;
+      box-shadow: 0 0 0 4px rgba(217,145,24,.14);
+      color: #7c4700;
+      font-size: 11px;
+      font-weight: 900;
+      padding: 8px;
+      position: relative;
+    }
+    .advertising-preview-highlight::before {
+      background: #d99118;
+      border-radius: 999px;
+      color: #ffffff;
+      content: "Your placement";
+      font-size: 9px;
+      left: 8px;
+      letter-spacing: .05em;
+      padding: 4px 7px;
+      position: absolute;
+      text-transform: uppercase;
+      top: 7px;
+      z-index: 2;
+    }
+    .advertising-preview-highlight img { height: 66px; margin-top: 20px; }
+    .advertising-preview-band {
+      align-items: center;
+      background: linear-gradient(105deg, #0f3d2e, #1e7b53);
+      border: 2px solid #d99118;
+      border-radius: 12px;
+      box-shadow: 0 0 0 4px rgba(217,145,24,.14);
+      color: #ffffff;
+      display: flex;
+      font-size: 13px;
+      font-weight: 900;
+      justify-content: space-between;
+      margin-top: 12px;
+      min-height: 70px;
+      padding: 14px;
+    }
+    .advertising-preview-map { background: linear-gradient(145deg, #e6f2e9, #f9f6ea); border-radius: 13px; height: 112px; overflow: hidden; position: relative; }
+    .advertising-preview-map::before { background: repeating-linear-gradient(26deg, transparent 0 19px, rgba(80,118,91,.18) 20px 22px); content: ""; inset: 0; position: absolute; }
+    .advertising-preview-map-pin { align-items: center; background: #d99118; border: 3px solid #ffffff; border-radius: 999px; box-shadow: 0 6px 15px rgba(124,71,0,.28); color: #ffffff; display: flex; font-size: 11px; font-weight: 900; height: 58px; justify-content: center; left: 42%; position: absolute; top: 28px; width: 58px; }
+    .advertising-preview-phone { background: #ffffff; border: 7px solid #16241d; border-radius: 24px; margin: 0 auto; max-width: 255px; min-height: 275px; padding: 18px 12px 12px; }
+    .advertising-preview-chat { background: #e8f5ec; border-radius: 12px 12px 4px 12px; color: #234c36; font-size: 11px; line-height: 1.45; margin: 12px 0 0 28px; padding: 10px; }
+    .advertising-preview-email { background: #ffffff; border: 1px solid #dfe9e3; border-radius: 13px; margin: 18px auto; max-width: 430px; padding: 16px; }
+    .advertising-preview-email-header { border-bottom: 1px solid #e4ece8; color: #5b6b62; font-size: 11px; padding-bottom: 10px; }
+    .advertising-preview-tag { background: #edf6f0; border: 1px solid #cfe3d5; border-radius: 999px; color: #15603f; display: inline-flex; font-size: 11px; font-weight: 800; padding: 5px 9px; }
+    @media (max-width: 639px) {
+      .advertising-preview-canvas { min-height: 265px; padding: 12px; }
+      .advertising-preview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .advertising-preview-grid .advertising-preview-card:last-child { display: none; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .advertise-package-card { transition: none; transform: none !important; }
     }
     .admin-evidence-box {
       max-width: min(920px, calc(100vw - 32px));
@@ -4574,7 +4728,7 @@
           <form id="advertise-selfserve-form" class="mt-6" onsubmit="submitAdvertisingSelfServe(event)">
             <div data-advertise-step="1">
               <h2 class="text-xl font-black text-[#16241d]">Choose where you want to appear</h2>
-              <p class="mt-1 text-sm text-[#5b6b62]">Prices and campaign duration come from the live makaug rate card.</p>
+              <p class="mt-1 text-sm text-[#5b6b62]">Select a package, then preview exactly where it can appear before you continue. Prices and duration come from the live makaug rate card.</p>
               <div id="advertise-package-options" class="mt-4 grid md:grid-cols-2 gap-3">
                 <div class="h-28 rounded-xl bg-gray-50 animate-pulse"></div>
                 <div class="h-28 rounded-xl bg-gray-50 animate-pulse"></div>
@@ -4682,10 +4836,46 @@
             <div id="advertise-payment-readiness" class="mt-2 text-sm text-[#5b6b62]">Checking secure checkout…</div>
             <p class="mt-2 text-xs text-gray-500">Mobile money and card details stay inside the payment provider’s hosted flow. makaug never stores them.</p>
           </div>
-          <a href="/advertiser-dashboard" class="block rounded-xl border border-[#cdddd3] bg-white px-4 py-3 text-center text-sm font-black text-[#15603f]">Open advertiser dashboard</a>
+          <div class="bg-[#0f3d2e] text-white rounded-xl p-5">
+            <p class="text-xs font-black uppercase tracking-wide text-emerald-200">Need help choosing?</p>
+            <p class="mt-2 text-sm text-emerald-50">Tell makaug what you want to promote and where. We will reply with the right placement and next step.</p>
+            <div class="mt-4 grid gap-2">
+              <a id="advertise-contact-whatsapp" href="https://wa.me/256760112587?text=Hello%20makaug%2C%20I%20want%20help%20choosing%20an%20advertising%20placement" target="_blank" rel="noopener noreferrer" class="rounded-lg bg-white px-3 py-2.5 text-center text-sm font-black text-[#15603f]"><i class="fab fa-whatsapp mr-1"></i> WhatsApp 0760 112 587</a>
+              <a id="advertise-contact-email" href="mailto:info@makaug.com?subject=Advertising%20with%20makaug" class="rounded-lg border border-emerald-300 px-3 py-2.5 text-center text-sm font-black text-white"><i class="fas fa-envelope mr-1"></i> Email info@makaug.com</a>
+            </div>
+          </div>
+          <a href="/advertiser-dashboard" onclick="return openAdvertiserDashboard(event)" class="block rounded-xl border border-[#cdddd3] bg-white px-4 py-3 text-center text-sm font-black text-[#15603f]"><i class="fas fa-chart-line mr-1"></i> Open advertiser dashboard</a>
         </aside>
       </div>
     </main>
+  </div>
+
+  <div id="advertising-placement-preview-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="advertising-placement-preview-title" data-advertising-placement-preview="20260910">
+    <div class="modal-box" style="max-width:940px">
+      <button id="advertising-placement-preview-close" type="button" onclick="closeModal('advertising-placement-preview-modal')" aria-label="Close placement preview" class="absolute top-4 right-4 z-10 w-10 h-10 rounded-full border border-green-200 bg-white text-green-700 hover:bg-green-50">✕</button>
+      <div class="pr-12">
+        <p class="text-xs font-black uppercase tracking-[.14em] text-[#15603f]">Placement preview</p>
+        <h2 id="advertising-placement-preview-title" class="mt-1 text-2xl md:text-3xl font-black text-[#16241d] serif">See where your advert appears</h2>
+        <p id="advertising-placement-preview-price" class="mt-2 text-sm font-black text-[#15603f]"></p>
+      </div>
+      <div class="mt-5 grid lg:grid-cols-[minmax(0,1.3fr)_minmax(250px,.7fr)] gap-5 items-start">
+        <div id="advertising-placement-preview-visual" aria-label="Example makaug page showing the selected advertising position"></div>
+        <div class="rounded-2xl border border-[#dfe9e3] bg-[#f6f9f7] p-5">
+          <h3 class="text-lg font-black text-[#16241d]">What this placement does</h3>
+          <p id="advertising-placement-preview-copy" class="mt-2 text-sm leading-relaxed text-[#52665b]"></p>
+          <h4 class="mt-5 text-xs font-black uppercase tracking-wide text-[#15603f]">Where it can appear</h4>
+          <div id="advertising-placement-preview-locations" class="mt-2 flex flex-wrap gap-2"></div>
+          <h4 class="mt-5 text-xs font-black uppercase tracking-wide text-[#15603f]">Best for</h4>
+          <p id="advertising-placement-preview-best-for" class="mt-2 text-sm leading-relaxed text-[#52665b]"></p>
+          <p class="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900"><strong>Example only:</strong> final position and creative are confirmed during makaug review before payment and launch.</p>
+        </div>
+      </div>
+      <div class="mt-5 flex flex-wrap gap-2">
+        <button id="advertising-placement-preview-use" type="button" onclick="confirmAdvertisingPlacementPreview()" class="bg-[#15603f] hover:bg-[#0f3d2e] text-white rounded-xl px-5 py-3 text-sm font-black">Choose this placement</button>
+        <a id="advertising-placement-preview-whatsapp" target="_blank" rel="noopener noreferrer" class="border border-[#cdddd3] text-[#15603f] rounded-xl px-5 py-3 text-sm font-black"><i class="fab fa-whatsapp mr-1"></i> Ask on WhatsApp</a>
+        <a id="advertising-placement-preview-email" class="border border-[#cdddd3] text-[#15603f] rounded-xl px-5 py-3 text-sm font-black"><i class="fas fa-envelope mr-1"></i> Email makaug</a>
+      </div>
+    </div>
   </div>
 
   <div id="page-valuation" class="page bg-[#f6f9f7]" data-valuation-marker="valuation-canonical-confidence-cards-20260725" data-valuation-punchlist-marker="valuation-final-punchlist-20260725" data-valuation-ux-marker="valuation-k17-simple-range-20260725" data-properties-search-count-marker="properties-location-search-cache-key-20260725" data-valuation-closeout-marker="valuation-k17-closeout-20260725">
@@ -8644,36 +8834,36 @@
       <section class="about-products-section" aria-labelledby="about-standard-products">
         <h2 id="about-standard-products" class="about-section-title" data-content-i18n="about.standardTitle">Standard products</h2>
         <p class="about-section-sub" data-content-i18n="about.standardSub">Get your property in front of Uganda's buyers and renters</p>
-        <div class="about-product-grid mt-6">
-          <article id="listings" class="about-product-card"><span class="about-product-icon"><i class="fas fa-house"></i></span><h3 data-content-i18n="about.saleTitle">Private listing — For Sale</h3><p data-content-i18n="about.saleText">List your home, land or commercial property yourself.</p><strong class="about-price" data-about-price="privateListing" data-about-price-template="First week free · then {price}">First week free · then {{ABOUT_PRICE:privateListing}}</strong><ul><li>AI-written description in 9 languages</li><li>Checked by our team</li><li>WhatsApp and phone leads</li><li>Edit or remove any time</li></ul><a class="about-product-action" href="/list-property?type=sale">List for sale</a></article>
-          <article class="about-product-card"><span class="about-product-icon"><i class="fas fa-key"></i></span><h3 data-content-i18n="about.rentTitle">Private listing — To Rent</h3><p data-content-i18n="about.rentText">List a rental or student room yourself.</p><strong class="about-price" data-about-price="privateListing" data-about-price-template="First week free · then {price}">First week free · then {{ABOUT_PRICE:privateListing}}</strong><ul><li>AI-written description in 9 languages</li><li>Checked by our team</li><li>WhatsApp and phone leads</li><li>Edit or remove any time</li></ul><a class="about-product-action" href="/list-property?type=rent">List for rent</a></article>
-          <article id="agents" class="about-product-card"><span class="about-product-icon"><i class="fas fa-user-tie"></i></span><h3 data-content-i18n="about.agentTitle">Agent subscription</h3><p data-content-i18n="about.agentText">For brokers and agencies with multiple properties.</p><strong class="about-price" data-about-price="agentSubscription" data-about-price-template="{price} · all your listings">{{ABOUT_PRICE:agentSubscription}} · all your listings</strong><ul><li>All listings on one account</li><li>Verified badge and broker profile</li><li>Lead inbox and CSV export</li><li>Priority review</li></ul><a class="about-product-action" href="/broker-signup">Register as an agent</a></article>
-          <article id="developers" class="about-product-card"><span class="about-product-icon"><i class="fas fa-city"></i></span><h3 data-content-i18n="about.developerTitle">Off-plan developments</h3><p data-content-i18n="about.developerText">Dedicated project pages for developers and marketing agents.</p><strong class="about-price" data-about-price="offPlanDevelopment">{{ABOUT_PRICE:offPlanDevelopment}}</strong><ul><li>Units, plans, video and payment plans</li><li>Off Plan and search visibility</li><li>Enquiries to your sales team</li><li>Overseas projects welcome</li></ul><a class="about-product-action" href="/broker-signup">Register as an agent</a></article>
+        <div class="about-product-grid about-product-grid-four mt-6" data-about-product-images="20260910">
+          <article id="listings" class="about-product-card"><span class="about-product-image"><img src="/assets/house-ads-v3/sale.webp" alt="Home promoted for sale on makaug" loading="lazy" decoding="async"></span><span class="about-product-icon"><i class="fas fa-house"></i></span><h3 data-content-i18n="about.saleTitle">Private listing — For Sale</h3><p data-content-i18n="about.saleText">List your home, land or commercial property yourself.</p><strong class="about-price" data-about-price="privateListing" data-about-price-template="First week free · then {price}">First week free · then {{ABOUT_PRICE:privateListing}}</strong><ul><li>AI-written description in 9 languages</li><li>Checked by our team</li><li>WhatsApp and phone leads</li><li>Edit or remove any time</li></ul><a class="about-product-action" href="/list-property?type=sale">List for sale</a></article>
+          <article class="about-product-card"><span class="about-product-image"><img src="/assets/house-ads-v3/rent.webp" alt="Rental property journey on makaug" loading="lazy" decoding="async"></span><span class="about-product-icon"><i class="fas fa-key"></i></span><h3 data-content-i18n="about.rentTitle">Private listing — To Rent</h3><p data-content-i18n="about.rentText">List a rental or student room yourself.</p><strong class="about-price" data-about-price="privateListing" data-about-price-template="First week free · then {price}">First week free · then {{ABOUT_PRICE:privateListing}}</strong><ul><li>AI-written description in 9 languages</li><li>Checked by our team</li><li>WhatsApp and phone leads</li><li>Edit or remove any time</li></ul><a class="about-product-action" href="/list-property?type=rent">List for rent</a></article>
+          <article id="agents" class="about-product-card"><span class="about-product-image"><img src="/assets/house-ads-v3/agents.webp" alt="Property agent helping a customer" loading="lazy" decoding="async"></span><span class="about-product-icon"><i class="fas fa-user-tie"></i></span><h3 data-content-i18n="about.agentTitle">Agent subscription</h3><p data-content-i18n="about.agentText">For brokers and agencies with multiple properties.</p><strong class="about-price" data-about-price="agentSubscription" data-about-price-template="{price} · all your listings">{{ABOUT_PRICE:agentSubscription}} · all your listings</strong><ul><li>All listings on one account</li><li>Verified badge and broker profile</li><li>Lead inbox and CSV export</li><li>Priority review</li></ul><a class="about-product-action" href="/broker-signup">Register as an agent</a></article>
+          <article id="developers" class="about-product-card"><span class="about-product-image"><img src="/assets/off-plan/spectre-westlands/arrival.jpg" alt="Off Plan development arrival view" loading="lazy" decoding="async"></span><span class="about-product-icon"><i class="fas fa-city"></i></span><h3 data-content-i18n="about.developerTitle">Off-plan developments</h3><p data-content-i18n="about.developerText">Dedicated project pages for developers and marketing agents.</p><strong class="about-price" data-about-price="offPlanDevelopment">{{ABOUT_PRICE:offPlanDevelopment}}</strong><ul><li>Units, plans, video and payment plans</li><li>Off Plan and search visibility</li><li>Enquiries to your sales team</li><li>Overseas projects welcome</li></ul><a class="about-product-action" href="/broker-signup">Register as an agent</a></article>
         </div>
       </section>
 
       <section class="about-products-section" aria-labelledby="about-value-products">
         <h2 id="about-value-products" class="about-section-title" data-content-i18n="about.valueTitle">Get seen first</h2>
-        <p class="about-section-sub" data-content-i18n="about.valueSub">Add to any live listing to move it up and stand out</p>
+        <p class="about-section-sub" data-content-i18n="about.valueSub">Add to any live listing to move it up and stand out. These options promote one property; broader brand and multi-channel campaigns sit under Advertise with makaug.</p>
         <div class="about-product-grid mt-6">
-          <article id="featured" class="about-product-card"><span class="about-product-icon"><i class="fas fa-star"></i></span><h3>Featured listing</h3><p>Your property on the homepage Featured strip and at the top of its category.</p><strong class="about-price" data-about-price="featuredListing">{{ABOUT_PRICE:featuredListing}}</strong><ul><li>Featured badge</li><li>Homepage visibility</li><li>Top of category page</li><li>Best for a focused sales week</li></ul><a class="about-product-action" target="_blank" rel="noopener" href="https://wa.me/256760112587?text=Hello%20makaug%2C%20I%20want%20to%20feature%20my%20listing">Contact us to feature</a></article>
-          <article id="premium" class="about-product-card"><span class="about-product-icon"><i class="fas fa-gem"></i></span><h3>Premium listing</h3><p>Prime position at the top of search results for your area, with a larger card.</p><strong class="about-price" data-about-price="premiumListing">{{ABOUT_PRICE:premiumListing}}</strong><ul><li>Premium badge</li><li>Top search position</li><li>Larger result card</li><li>Built for a faster result</li></ul><a class="about-product-action" target="_blank" rel="noopener" href="https://wa.me/256760112587?text=Hello%20makaug%2C%20I%20want%20to%20make%20my%20listing%20Premium">Contact us for Premium</a></article>
-          <article id="boosted" class="about-product-card"><span class="about-product-icon"><i class="fas fa-arrow-trend-up"></i></span><h3>Boosted listing</h3><p>Ranks above standard listings in results and alerts for a full month.</p><strong class="about-price" data-about-price="boostedListing">{{ABOUT_PRICE:boostedListing}}</strong><ul><li>Boosted badge</li><li>Higher search ranking</li><li>Property-alert visibility</li><li>A full month of reach</li></ul><a class="about-product-action" target="_blank" rel="noopener" href="https://wa.me/256760112587?text=Hello%20makaug%2C%20I%20want%20to%20boost%20my%20listing">Contact us to boost</a></article>
+          <article id="featured" class="about-product-card"><span class="about-product-image"><img src="/assets/house-ads-v3/home-hero.webp" alt="Featured property placement on the makaug homepage" loading="lazy" decoding="async"></span><span class="about-product-icon"><i class="fas fa-star"></i></span><h3>Featured listing</h3><p>Your property on the homepage Featured strip and at the top of its category.</p><strong class="about-price" data-about-price="featuredListing">{{ABOUT_PRICE:featuredListing}}</strong><ul><li>Featured badge</li><li>Homepage visibility</li><li>Top of category page</li><li>Best for a focused sales week</li></ul><a class="about-product-action" target="_blank" rel="noopener" href="https://wa.me/256760112587?text=Hello%20makaug%2C%20I%20want%20to%20feature%20my%20listing">Contact us to feature</a></article>
+          <article id="premium" class="about-product-card"><span class="about-product-image"><img src="/assets/house-ads-v3/detail.webp" alt="Premium property detail experience" loading="lazy" decoding="async"></span><span class="about-product-icon"><i class="fas fa-gem"></i></span><h3>Premium listing</h3><p>Prime position at the top of search results for your area, with a larger card.</p><strong class="about-price" data-about-price="premiumListing">{{ABOUT_PRICE:premiumListing}}</strong><ul><li>Premium badge</li><li>Top search position</li><li>Larger result card</li><li>Built for a faster result</li></ul><a class="about-product-action" target="_blank" rel="noopener" href="https://wa.me/256760112587?text=Hello%20makaug%2C%20I%20want%20to%20make%20my%20listing%20Premium">Contact us for Premium</a></article>
+          <article id="boosted" class="about-product-card"><span class="about-product-image"><img src="/assets/sourced/carnelian/kira-shimon-5bed-01-main.jpg" alt="Approved property ready for a visibility boost" loading="lazy" decoding="async"></span><span class="about-product-icon"><i class="fas fa-arrow-trend-up"></i></span><h3>Boosted listing</h3><p>Ranks above standard listings in results and alerts for a full month.</p><strong class="about-price" data-about-price="boostedListing">{{ABOUT_PRICE:boostedListing}}</strong><ul><li>Boosted badge</li><li>Higher search ranking</li><li>Property-alert visibility</li><li>A full month of reach</li></ul><a class="about-product-action" target="_blank" rel="noopener" href="https://wa.me/256760112587?text=Hello%20makaug%2C%20I%20want%20to%20boost%20my%20listing">Contact us to boost</a></article>
         </div>
       </section>
 
       <section class="about-products-section" aria-labelledby="about-growth-products">
         <h2 id="about-growth-products" class="about-section-title" data-content-i18n="about.growthTitle">Grow your property business</h2>
         <div class="about-product-grid mt-6">
-          <article id="reports" class="about-product-card"><span class="about-product-icon"><i class="fas fa-chart-line"></i></span><h3>Market Intelligence Report</h3><p>Asking prices, rental yields, demand and supply by district and property type.</p><strong class="about-price" data-about-price="marketReport">{{ABOUT_PRICE:marketReport}}</strong><ul><li>Built from live and historical data</li><li>Delivered as a PDF</li><li>Within 5 working days</li><li>Prepared for your decision</li></ul><a class="about-product-action" target="_blank" rel="noopener" href="https://wa.me/256760112587?text=Hello%20makaug%2C%20I%20want%20a%20Market%20Intelligence%20Report">Talk to us</a></article>
-          <article id="websites" class="about-product-card"><span class="about-product-icon"><i class="fas fa-laptop-code"></i></span><h3>Agency websites</h3><p>A branded agency website connected to your makaug listings.</p><strong class="about-price"><span data-about-price="agencyWebsiteSetup">{{ABOUT_PRICE:agencyWebsiteSetup}}</span> + <span data-about-price="agencyWebsiteMonthly">{{ABOUT_PRICE:agencyWebsiteMonthly}}</span></strong><ul><li>Domain setup and branded design</li><li>Connected listings feed</li><li>WhatsApp lead button</li><li>Monthly performance summary</li></ul><a class="about-product-action" target="_blank" rel="noopener" href="https://wa.me/256760112587?text=Hello%20makaug%2C%20I%20want%20an%20agency%20website">Talk to us</a></article>
-          <article id="professional" class="about-product-card"><span class="about-product-icon"><i class="fas fa-camera"></i></span><h3>Professional listing service</h3><p>Professional photos, a short walkthrough and a polished multilingual listing.</p><strong class="about-price" data-about-price="professionalListing">{{ABOUT_PRICE:professionalListing}}</strong><ul><li>Kampala and Wakiso</li><li>Other districts on request</li><li>Photos and short video</li><li>We upload it for you</li></ul><a class="about-product-action" target="_blank" rel="noopener" href="https://wa.me/256760112587?text=Hello%20makaug%2C%20I%20want%20to%20book%20a%20professional%20property%20shoot">Talk to us</a></article>
+          <article id="reports" class="about-product-card"><span class="about-product-image"><img src="/assets/house-ads-v3/land.webp" alt="Uganda property market viewed by district" loading="lazy" decoding="async"></span><span class="about-product-icon"><i class="fas fa-chart-line"></i></span><h3>Market Intelligence Report</h3><p>Asking prices, rental yields, demand and supply by district and property type.</p><strong class="about-price" data-about-price="marketReport">{{ABOUT_PRICE:marketReport}}</strong><ul><li>Built from live and historical data</li><li>Delivered as a PDF</li><li>Within 5 working days</li><li>Prepared for your decision</li></ul><a class="about-product-action" target="_blank" rel="noopener" href="https://wa.me/256760112587?text=Hello%20makaug%2C%20I%20want%20a%20Market%20Intelligence%20Report">Talk to us</a></article>
+          <article id="websites" class="about-product-card"><span class="about-product-image"><img src="/assets/house-ads-v3/brokers.webp" alt="Connected digital experience for a property agency" loading="lazy" decoding="async"></span><span class="about-product-icon"><i class="fas fa-laptop-code"></i></span><h3>Agency websites</h3><p>A branded agency website connected to your makaug listings.</p><strong class="about-price"><span data-about-price="agencyWebsiteSetup">{{ABOUT_PRICE:agencyWebsiteSetup}}</span> + <span data-about-price="agencyWebsiteMonthly">{{ABOUT_PRICE:agencyWebsiteMonthly}}</span></strong><ul><li>Domain setup and branded design</li><li>Connected listings feed</li><li>WhatsApp lead button</li><li>Monthly performance summary</li></ul><a class="about-product-action" target="_blank" rel="noopener" href="https://wa.me/256760112587?text=Hello%20makaug%2C%20I%20want%20an%20agency%20website">Talk to us</a></article>
+          <article id="professional" class="about-product-card"><span class="about-product-image"><img src="/assets/sourced/carnelian/kira-modern-4bed-01-main.jpg" alt="Professionally photographed property listing" loading="lazy" decoding="async"></span><span class="about-product-icon"><i class="fas fa-camera"></i></span><h3>Professional listing service</h3><p>Professional photos, a short walkthrough and a polished multilingual listing.</p><strong class="about-price" data-about-price="professionalListing">{{ABOUT_PRICE:professionalListing}}</strong><ul><li>Kampala and Wakiso</li><li>Other districts on request</li><li>Photos and short video</li><li>We upload it for you</li></ul><a class="about-product-action" target="_blank" rel="noopener" href="https://wa.me/256760112587?text=Hello%20makaug%2C%20I%20want%20to%20book%20a%20professional%20property%20shoot">Talk to us</a></article>
         </div>
       </section>
 
       <section id="advertising" class="about-products-section" aria-labelledby="about-advertising-title">
         <div class="about-advertising-summary">
-          <span class="about-product-icon"><i class="fas fa-bullhorn"></i></span>
+          <span class="about-advertising-image"><img src="/assets/house-ads-v3/marketplace.webp" alt="Business reaching active property customers" loading="lazy" decoding="async"></span>
           <div class="about-advertising-copy">
             <h2 id="about-advertising-title" class="about-section-title" data-content-i18n="about.advertisingTitle">Advertise with makaug</h2>
             <p class="about-section-sub" data-content-i18n="about.advertisingSub">Put your brand in front of people actively looking for property.</p>
