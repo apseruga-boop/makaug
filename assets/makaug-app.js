@@ -2938,8 +2938,29 @@ const ABOUT_PAGE_I18N_EN = Object.freeze({
   "about.valueSub": "Add to any live listing to move it up and stand out",
   "about.growthTitle": "Grow your property business",
   "about.advertisingTitle": "Advertise with makaug",
-  "about.advertisingSub": "Put your brand in front of people actively looking for property",
-  "about.discoveryTitle": "How we find property",
+  "about.advertisingSub": "Put your brand in front of people actively looking for property.",
+  "about.advertisingText": "Weekly placements are available for banks, insurers, furniture and building suppliers, developers and agencies. Choose homepage, search, property-detail, mortgage, valuation, broker, marketplace or alert placements, with run-of-site and monthly options available.",
+  "about.advertisingLearnMore": "Learn more",
+  "about.discoveryEyebrow": "Found online",
+  "about.discoveryTitle": "How we find properties online",
+  "about.discoveryIntro": "Uganda's property market is spread across videos, posts, websites and local business pages. makaug combines approved source lists with official and authorised data services to find exact public property posts, preserve where they came from and move suitable candidates into a human review queue. Facebook is not part of this discovery pipeline.",
+  "about.discoveryYoutubeTitle": "YouTube Data API, oEmbed and WebSub",
+  "about.discoveryYoutubeText": "We monitor approved Uganda property channels, channel uploads, search terms and recent videos through the YouTube Data API. oEmbed helps confirm the video title, author and preview, while WebSub can notify makaug when a subscribed channel publishes. We retain the exact video or Shorts URL and publication date.",
+  "about.discoveryXTitle": "X API — formerly Twitter",
+  "about.discoveryXText": "The X API can search recent posts, approved source timelines and, where the access level permits, the wider archive. Results must resolve to an exact public status URL. We retain the post text, author, timestamp and source link so the original can be checked.",
+  "about.discoveryTikTokTitle": "TikTok data sources and oEmbed",
+  "about.discoveryTikTokText": "TikTok discovery uses approved provider or export feeds when configured, plus exact public video links collected through the staff-assisted source workflow. TikTok oEmbed confirms the public caption, creator and preview image. Profile or hashtag pages are discovery leads only; a specific /@handle/video/id link is required before intake.",
+  "about.discoveryGoogleTitle": "Google Search, Maps and Places",
+  "about.discoveryGoogleText": "Google Custom Search or an authorised Google search provider can support source-evidence and duplicate checks. Google Maps and Places help resolve names, pins, addresses and districts, and identify property-service businesses for Marketplace. Google does not replace the original property post: the exact source and contact route remain the evidence.",
+  "about.discoveryStepOneTitle": "Discover exact public sources",
+  "about.discoveryStepOneText": "Source registries, approved channels, API searches and staff-assisted capture produce an exact post or video URL—not a generic profile, hashtag or results page.",
+  "about.discoveryStepTwoTitle": "Read and structure the evidence",
+  "about.discoveryStepTwoText": "We extract only what the source supports: title, caption, price, property type, area, contact details, media, author and first-posted date. Missing facts stay missing or are marked for confirmation.",
+  "about.discoveryStepThreeTitle": "Check location and duplicates",
+  "about.discoveryStepThreeText": "Normalised source URLs, post identities, contact clusters, caption similarity, image fingerprints, location and price signals help us avoid importing the same property repeatedly or assigning it to the wrong place.",
+  "about.discoveryStepFourTitle": "Human review before publication",
+  "about.discoveryStepFourText": "Harvested candidates do not publish automatically. Staff review the source, property evidence, contact route, location, media, duplicates and safety signals. Approved listings keep a visible Found online label and route back to the original source.",
+  "about.discoveryNote": "Source transparency: makaug organises public or authorised property information; it does not claim ownership of the original post, invent missing facts or treat discovery as verification. Owners and agents can claim, correct or request removal through the review process.",
   "about.visionLabel": "Our vision",
   "about.visionTitle": "We find every property, so you don't have to",
   "about.visionText": "Property in Uganda is scattered — across WhatsApp, social media, brokers, and word of mouth. makaug is changing that. Our AI searches TikTok, YouTube, Facebook, and X, reads what it finds, and brings every real property into one place you can actually search. Think of it as a search engine for Uganda property.",
@@ -2976,22 +2997,22 @@ const ABOUT_PAGE_I18N_EN = Object.freeze({
   "about.personaTitle": "Property made simple — whoever you are",
   "about.personaLabel": "What brings you here?",
   "about.rentersTitle": "Renters",
-  "about.personaRentersText": "Search by area and budget, save homes, set alerts, book viewings, and contact owners safely.",
+  "about.personaRentersText": "Search rentals by district, area, map, budget, bedrooms and property type. Compare photos, video, price periods, amenities, contact routes and source information before shortlisting. Save properties and searches, receive alerts when suitable homes appear, then contact the owner or broker, request a viewing or callback, and use makaug's safety guidance before paying.",
   "about.personaRentersCta": "Search rentals",
   "about.buyersTitle": "Buyers",
-  "about.personaBuyersText": "Compare homes and land, read location, title, and verification signals, and use safety guidance before you pay.",
+  "about.personaBuyersText": "Explore homes, land, commercial property and off-plan developments across Uganda, then narrow the results by district, area, property type, price, bedrooms and map location. Compare photos, videos, source and verification information, floor plans, development progress and payment details where supplied. Save promising properties, set alerts, contact the owner, agent or developer, use the Mortgage Finder for an affordability guide, and complete independent legal and title checks before paying.",
   "about.personaBuyersCta": "Browse for sale",
   "about.studentsTitle": "Students and parents",
-  "about.personaStudentsText": "Find hostels by campus, budget, room type, security, water, and Wi-Fi, with viewings and student alerts.",
+  "about.personaStudentsText": "Find student rooms and hostels near a university or campus using area, budget, room type and accommodation filters. Review photos, video, distance information and practical details such as security, water, electricity, Wi-Fi, furnishing, sharing arrangements and payment periods when the provider has supplied them. Students and parents can save options, receive alerts, contact the hostel or owner, arrange a viewing and check the room, route and payment terms before committing.",
   "about.personaStudentsCta": "Find student housing",
   "about.ownersTitle": "Owners and sellers",
-  "about.personaOwnersText": "List free with guided fields, map your location, verify with your ID, and get enquiries — reviewed before it goes public.",
+  "about.personaOwnersText": "Create a sale or rental listing on the website or begin through WhatsApp. Add the exact location, price and payment period, property details, photos and video, then provide the identity and contact information needed for review. makaug can help organise the description and present it through the site's language system. Your listing remains under staff review until its evidence is ready, and once approved you can receive enquiries, edit details, remove the property and manage visibility from your account. The first 7 days are free; the published product price applies if you keep a private listing live after that period.",
   "about.personaOwnersCta": "List your property",
   "about.brokersTitle": "Brokers",
-  "about.personaBrokersText": "Build a broker profile, manage listings and leads, and handle WhatsApp enquiries and viewings in one place.",
+  "about.personaBrokersText": "Register your agency or broker account, submit identity and business details for review, and build a profile that buyers and owners can find in the broker directory. Manage multiple listings from one account, organise leads and viewing requests, respond through phone or WhatsApp, and export lead information where available. The agent plan brings listings together under one subscription, while Featured, Premium and Boosted options can be used for stock that needs extra visibility. Published badges and profiles remain subject to makaug's verification and moderation rules.",
   "about.personaBrokersCta": "Register as broker",
   "about.businessesTitle": "Businesses",
-  "about.personaBusinessesText": "Find offices, shops, and warehouses, enquire directly, and save your commercial searches.",
+  "about.personaBusinessesText": "Search for offices, shops, warehouses, industrial space, land and development opportunities using location, size, price and property-type filters. Save commercial searches, receive new-listing alerts and contact the responsible owner, broker or developer. Property-service companies can register for Marketplace review; agencies and developers can request market-intelligence reports or connected websites; and banks, insurers, suppliers and other brands can reach active property seekers through makaug advertising placements. Every public listing or business source should still be checked directly before a contract or payment.",
   "about.personaBusinessesCta": "Find commercial space",
   "about.stepsTitle": "From search to sorted, in three steps",
   "about.stepSearchTitle": "Search or list",
@@ -7832,18 +7853,6 @@ function aboutCommercialPriceLabel(key, priceOnly = false) {
   return priceOnly ? value : `${value} / ${entry.period}`;
 }
 
-function renderAboutAdvertisingRateRows() {
-  const body = document.getElementById('about-advertising-rate-rows');
-  const placements = aboutCommercialCatalog()?.advertisingPlacements;
-  if (!body || !Array.isArray(placements)) return;
-  body.innerHTML = placements.map((item) => `
-    <tr data-about-ad-row>
-      <td>${adminEscape(item.page)}</td>
-      <td><strong>${adminEscape(item.placement)}</strong><span>${adminEscape(item.format)}</span></td>
-      <td>${adminEscape(fmtP(item.amount, ''))}</td>
-    </tr>`).join('');
-}
-
 function updateAboutCommercialPrices() {
   const page = document.getElementById('page-about');
   if (!page || !aboutCommercialCatalog()) return;
@@ -7854,7 +7863,6 @@ function updateAboutCommercialPrices() {
     const template = el.getAttribute('data-about-price-template') || '{price}';
     el.textContent = template.replace('{price}', price);
   });
-  renderAboutAdvertisingRateRows();
 }
 
 function updateAboutPageUi(stats = getHeroPropertyOpportunityStats()) {

@@ -442,7 +442,7 @@ function run() {
     'Get seen first',
     'Grow your property business',
     'Advertise with makaug',
-    'How we find property',
+    'How we find properties online',
     'Property made simple',
     'Trust comes first',
     'Renters',

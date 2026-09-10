@@ -1171,23 +1171,35 @@
     #page-about .about-product-icon { align-items: center; background: #e9f6ed; border-radius: 12px; color: #15603f; display: inline-flex; height: 42px; justify-content: center; width: 42px; }
     #page-about .about-price { color: #15803d; display: block; font-size: 15px; font-weight: 900; line-height: 1.45; margin-top: 14px; }
     #page-about .about-product-action { align-items: center; background: #15603f; border-radius: 11px; color: #ffffff; display: inline-flex; font-size: 14px; font-weight: 900; justify-content: center; margin-top: auto; min-height: 44px; padding: 10px 14px; text-align: center; }
-    #page-about .about-rate-table-wrap { border: 1px solid #dfe9e3; border-radius: 14px; overflow-x: auto; }
-    #page-about .about-rate-table { border-collapse: collapse; min-width: 720px; width: 100%; }
-    #page-about .about-rate-table th { background: #f1f7f3; color: #223a2e; font-size: 12px; letter-spacing: .03em; padding: 13px 15px; text-align: left; text-transform: uppercase; }
-    #page-about .about-rate-table td { border-top: 1px solid #e5eee8; color: #415349; font-size: 13px; padding: 13px 15px; vertical-align: top; }
-    #page-about .about-rate-table td:last-child { color: #15803d; font-weight: 900; white-space: nowrap; }
-    #page-about .about-rate-table td span { color: #6a7a71; display: block; font-size: 12px; margin-top: 4px; }
-    #page-about .about-process-grid { display: grid; gap: 14px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
-    #page-about .about-process-grid article { background: #f6f9f7; border: 1px solid #e0ebe4; border-radius: 14px; padding: 20px; }
-    #page-about .about-process-grid i { color: #15603f; font-size: 22px; }
-    #page-about .about-process-grid h3 { font-weight: 900; margin-top: 12px; }
-    #page-about .about-process-grid p { color: #5b6b62; font-size: 13px; margin-top: 4px; }
+    #page-about .about-advertising-summary { align-items: center; background: #f6f9f7; border: 1px solid #dfe9e3; border-radius: 16px; display: grid; gap: 20px; grid-template-columns: auto minmax(0, 1fr) auto; padding: 24px; }
+    #page-about .about-advertising-copy .about-section-sub { margin-top: 5px; }
+    #page-about .about-advertising-action { align-items: flex-end; display: flex; flex-direction: column; gap: 12px; min-width: 210px; }
+    #page-about .about-advertising-action .about-price { margin: 0; text-align: right; }
+    #page-about .about-source-grid { display: grid; gap: 16px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    #page-about .about-source-card { background: #ffffff; border: 1px solid #dfe9e3; border-radius: 16px; padding: 22px; }
+    #page-about .about-source-card h3 { color: #16241d; font-size: 18px; font-weight: 900; line-height: 1.35; margin-top: 14px; }
+    #page-about .about-source-card p { color: #52665b; font-size: 14px; line-height: 1.65; margin-top: 8px; }
+    #page-about .about-source-icon { align-items: center; background: #edf6f0; border-radius: 12px; color: #15603f; display: inline-flex; font-size: 21px; height: 42px; justify-content: center; width: 42px; }
+    #page-about .about-source-youtube { color: #c62828; }
+    #page-about .about-source-x { color: #111827; }
+    #page-about .about-source-tiktok { color: #111827; }
+    #page-about .about-source-google { color: #2563eb; }
+    #page-about .about-discovery-process { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    #page-about .about-discovery-process article { align-items: flex-start; background: #f6f9f7; border: 1px solid #e0ebe4; border-radius: 14px; display: flex; gap: 13px; padding: 18px; }
+    #page-about .about-discovery-process article > span { align-items: center; background: #15603f; border-radius: 999px; color: #ffffff; display: inline-flex; flex: 0 0 28px; font-size: 12px; font-weight: 900; height: 28px; justify-content: center; }
+    #page-about .about-discovery-process h3 { color: #16241d; font-size: 15px; font-weight: 900; }
+    #page-about .about-discovery-process p { color: #5b6b62; font-size: 13px; line-height: 1.6; margin-top: 5px; }
+    #page-about .about-source-note { align-items: flex-start; background: #edf6f0; border: 1px solid #cfe3d5; border-radius: 14px; color: #3e594a; display: flex; font-size: 13px; gap: 12px; line-height: 1.6; padding: 17px; }
+    #page-about .about-source-note i { color: #15603f; margin-top: 3px; }
     @media (max-width: 1023px) { #page-about .about-product-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     @media (max-width: 639px) {
       #page-about .about-products-section { padding: 38px 0; }
-      #page-about .about-product-grid, #page-about .about-process-grid { grid-template-columns: 1fr; }
+      #page-about .about-product-grid, #page-about .about-source-grid, #page-about .about-discovery-process { grid-template-columns: 1fr; }
       #page-about .about-product-action, #page-about .about-outline-cta, #page-about .about-hero-panel .about-cta { width: 100%; }
       #page-about .about-product-card { padding: 19px; }
+      #page-about .about-advertising-summary { align-items: flex-start; grid-template-columns: 1fr; padding: 20px; }
+      #page-about .about-advertising-action { align-items: stretch; min-width: 0; width: 100%; }
+      #page-about .about-advertising-action .about-price { text-align: left; }
     }
     .about-ai-pipeline {
       position: relative;
@@ -8598,16 +8610,37 @@
       </section>
 
       <section id="advertising" class="about-products-section" aria-labelledby="about-advertising-title">
-        <h2 id="about-advertising-title" class="about-section-title" data-content-i18n="about.advertisingTitle">Advertise with makaug</h2>
-        <p class="about-section-sub" data-content-i18n="about.advertisingSub">Put your brand in front of people actively looking for property</p>
-        <p class="mt-4 max-w-4xl text-[#5b6b62]">Banks, insurers, furniture and building suppliers, developers and agencies can advertise on makaug. Placements are sold by the week, from <span data-about-price="advertisingMinimum" data-about-price-only="true">{{ABOUT_PRICE_ONLY:advertisingMinimum}}</span> to <span data-about-price="advertisingMaximum" data-about-price-only="true">{{ABOUT_PRICE_ONLY:advertisingMaximum}}</span> depending on the page and position. Run-of-site and monthly packages are available.</p>
-        <div class="about-rate-table-wrap mt-6"><table class="about-rate-table"><thead><tr><th>Page</th><th>Placement and format</th><th>UGX / week</th></tr></thead><tbody id="about-advertising-rate-rows">{{ABOUT_ADVERTISING_ROWS}}</tbody></table></div>
-        <div class="flex flex-wrap gap-2 mt-5"><a class="about-product-action" href="/advertise">Book advertising</a><a class="about-outline-cta rounded-xl px-4 py-3 text-sm font-black" href="/about/rate-card.pdf" download>Download the rate card (PDF)</a></div>
+        <div class="about-advertising-summary">
+          <span class="about-product-icon"><i class="fas fa-bullhorn"></i></span>
+          <div class="about-advertising-copy">
+            <h2 id="about-advertising-title" class="about-section-title" data-content-i18n="about.advertisingTitle">Advertise with makaug</h2>
+            <p class="about-section-sub" data-content-i18n="about.advertisingSub">Put your brand in front of people actively looking for property.</p>
+            <p class="mt-3 text-sm text-[#5b6b62]" data-content-i18n="about.advertisingText">Weekly placements are available for banks, insurers, furniture and building suppliers, developers and agencies. Choose homepage, search, property-detail, mortgage, valuation, broker, marketplace or alert placements, with run-of-site and monthly options available.</p>
+          </div>
+          <div class="about-advertising-action">
+            <strong class="about-price"><span data-about-price="advertisingMinimum" data-about-price-only="true">{{ABOUT_PRICE_ONLY:advertisingMinimum}}</span>–<span data-about-price="advertisingMaximum" data-about-price-only="true">{{ABOUT_PRICE_ONLY:advertisingMaximum}}</span> / week</strong>
+            <a class="about-product-action" href="/advertise" data-content-i18n="about.advertisingLearnMore">Learn more</a>
+          </div>
+        </div>
       </section>
 
-      <section class="about-products-section">
-        <h2 class="about-section-title" data-content-i18n="about.discoveryTitle">How we find property</h2>
-        <div class="about-process-grid mt-6"><article><i class="fas fa-satellite-dish"></i><h3>Sources</h3><p>TikTok · YouTube · Facebook · X</p></article><article><i class="fas fa-wand-magic-sparkles"></i><h3>AI organises</h3><p>Location, price, category and duplicates</p></article><article><i class="fas fa-circle-check"></i><h3>Team review</h3><p>Checked before buyers see it</p></article></div>
+      <section class="about-products-section" aria-labelledby="about-discovery-title">
+        <p class="about-eyebrow" data-content-i18n="about.discoveryEyebrow">Found online</p>
+        <h2 id="about-discovery-title" class="about-section-title" data-content-i18n="about.discoveryTitle">How we find properties online</h2>
+        <p class="about-section-sub max-w-4xl" data-content-i18n="about.discoveryIntro">Uganda's property market is spread across videos, posts, websites and local business pages. makaug combines approved source lists with official and authorised data services to find exact public property posts, preserve where they came from and move suitable candidates into a human review queue. Facebook is not part of this discovery pipeline.</p>
+        <div class="about-source-grid mt-6">
+          <article class="about-source-card"><span class="about-source-icon about-source-youtube"><i class="fab fa-youtube"></i></span><h3 data-content-i18n="about.discoveryYoutubeTitle">YouTube Data API, oEmbed and WebSub</h3><p data-content-i18n="about.discoveryYoutubeText">We monitor approved Uganda property channels, channel uploads, search terms and recent videos through the YouTube Data API. oEmbed helps confirm the video title, author and preview, while WebSub can notify makaug when a subscribed channel publishes. We retain the exact video or Shorts URL and publication date.</p></article>
+          <article class="about-source-card"><span class="about-source-icon about-source-x"><i class="fab fa-x-twitter"></i></span><h3 data-content-i18n="about.discoveryXTitle">X API — formerly Twitter</h3><p data-content-i18n="about.discoveryXText">The X API can search recent posts, approved source timelines and, where the access level permits, the wider archive. Results must resolve to an exact public status URL. We retain the post text, author, timestamp and source link so the original can be checked.</p></article>
+          <article class="about-source-card"><span class="about-source-icon about-source-tiktok"><i class="fab fa-tiktok"></i></span><h3 data-content-i18n="about.discoveryTikTokTitle">TikTok data sources and oEmbed</h3><p data-content-i18n="about.discoveryTikTokText">TikTok discovery uses approved provider or export feeds when configured, plus exact public video links collected through the staff-assisted source workflow. TikTok oEmbed confirms the public caption, creator and preview image. Profile or hashtag pages are discovery leads only; a specific /@handle/video/id link is required before intake.</p></article>
+          <article class="about-source-card"><span class="about-source-icon about-source-google"><i class="fab fa-google"></i></span><h3 data-content-i18n="about.discoveryGoogleTitle">Google Search, Maps and Places</h3><p data-content-i18n="about.discoveryGoogleText">Google Custom Search or an authorised Google search provider can support source-evidence and duplicate checks. Google Maps and Places help resolve names, pins, addresses and districts, and identify property-service businesses for Marketplace. Google does not replace the original property post: the exact source and contact route remain the evidence.</p></article>
+        </div>
+        <div class="about-discovery-process mt-6">
+          <article><span>1</span><div><h3 data-content-i18n="about.discoveryStepOneTitle">Discover exact public sources</h3><p data-content-i18n="about.discoveryStepOneText">Source registries, approved channels, API searches and staff-assisted capture produce an exact post or video URL—not a generic profile, hashtag or results page.</p></div></article>
+          <article><span>2</span><div><h3 data-content-i18n="about.discoveryStepTwoTitle">Read and structure the evidence</h3><p data-content-i18n="about.discoveryStepTwoText">We extract only what the source supports: title, caption, price, property type, area, contact details, media, author and first-posted date. Missing facts stay missing or are marked for confirmation.</p></div></article>
+          <article><span>3</span><div><h3 data-content-i18n="about.discoveryStepThreeTitle">Check location and duplicates</h3><p data-content-i18n="about.discoveryStepThreeText">Normalised source URLs, post identities, contact clusters, caption similarity, image fingerprints, location and price signals help us avoid importing the same property repeatedly or assigning it to the wrong place.</p></div></article>
+          <article><span>4</span><div><h3 data-content-i18n="about.discoveryStepFourTitle">Human review before publication</h3><p data-content-i18n="about.discoveryStepFourText">Harvested candidates do not publish automatically. Staff review the source, property evidence, contact route, location, media, duplicates and safety signals. Approved listings keep a visible Found online label and route back to the original source.</p></div></article>
+        </div>
+        <div class="about-source-note mt-6"><i class="fas fa-shield-halved"></i><p data-content-i18n="about.discoveryNote"><strong>Source transparency:</strong> makaug organises public or authorised property information; it does not claim ownership of the original post, invent missing facts or treat discovery as verification. Owners and agents can claim, correct or request removal through the review process.</p></div>
       </section>
 
       <section class="about-card rounded-xl border border-[#e4ece8] bg-[#f6f9f7] p-6 mb-8">
@@ -8624,7 +8657,7 @@
           <div class="rounded-xl bg-white border border-[#e4ece8] p-5 shadow-sm">
             <p class="text-xs font-black uppercase tracking-wide text-[#15603f]" data-content-i18n="about.personaLabel">What brings you here?</p>
             <h3 id="about-persona-title" class="text-2xl font-black text-[#16241d] mt-2">Renters</h3>
-            <p id="about-persona-copy" class="text-[#5b6b62] mt-3 leading-relaxed">Search by area and budget, save homes, set alerts, book viewings, and contact owners safely.</p>
+            <p id="about-persona-copy" class="text-[#5b6b62] mt-3 leading-relaxed">Search rentals by district, area, map, budget, bedrooms and property type. Compare photos, video, price periods, amenities, contact routes and source information before shortlisting. Save properties and searches, receive alerts when suitable homes appear, then contact the owner or broker, request a viewing or callback, and use makaug's safety guidance before paying.</p>
             <a id="about-persona-cta" href="/to-rent" class="about-cta about-solid-green-cta inline-flex mt-5 rounded-xl bg-[#15603f] text-white px-4 py-2 text-sm font-black">Search rentals</a>
           </div>
         </div>
