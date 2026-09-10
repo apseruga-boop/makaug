@@ -941,14 +941,8 @@ function canonicalLocationRollupCounts(counts = new Map()) {
   const direct = counts instanceof Map ? counts : new Map(Object.entries(counts || {}));
   const rolled = new Map(direct);
   registry.forEach((location) => {
-    if (!['city', 'district'].includes(location.level)) return;
-    const descendants = location.level === 'district'
-      ? registry.filter((entry) => entry.district === location.district)
-      : registry.filter((entry) => {
-        if (entry.district !== location.district) return false;
-        const distance = haversineKm(location, entry);
-        return distance != null && distance <= 7;
-      });
+    if (location.level !== 'district') return;
+    const descendants = registry.filter((entry) => entry.district === location.district);
     const total = descendants.reduce((sum, child) => sum + Math.max(0, Number(direct.get(child.key)) || 0), 0);
     rolled.set(location.key, total);
   });

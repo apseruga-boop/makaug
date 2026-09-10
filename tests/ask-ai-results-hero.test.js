@@ -107,7 +107,7 @@ includes(aiRoute, 'heuristicNaturalPropertyQuery', 'assistant route must expose 
 includes(aiRoute, 'model: \'heuristic-fast\'', 'assistant search route must support non-LLM fast parsing');
 includes(aiRoute, 'if (assistantIsOffPlan || (!assistantIsSearch && !cleanBarSearchOnly))', 'assistant route must keep LLM chat off the search critical path while preserving deterministic Off Plan replies');
 includes(aiRoute, '/api/properties/search?', 'assistant route must call properties search');
-includes(aiRoute, "include_summary: '0'", 'assistant search must request a lightweight card payload');
+includes(aiRoute, "include_summary: '1'", 'assistant search must request the authoritative total alongside lightweight cards');
 includes(aiRoute, "card_fields: '1'", 'assistant search must request card-only public fields');
 includes(aiRoute, 'ASSISTANT_SEARCH_RESULT_CACHE_TTL_MS', 'assistant route must cache repeated common search results briefly');
 includes(aiRoute, "ASSISTANT_SEARCH_PREWARM_MARKER = 'ask-ai-search-prewarm-20260718'", 'assistant route must carry the search prewarm marker');
@@ -133,13 +133,16 @@ includes(aiRoute, 'ASSISTANT_SEARCH_PREWARM_ENABLED', 'assistant search prewarm 
 includes(aiRoute, 'ASSISTANT_SEARCH_CACHE_TTL_MS', 'assistant cache TTL must be configurable for short freshness windows');
 includes(aiRoute, 'search_prewarm_marker: ASSISTANT_SEARCH_PREWARM_MARKER', 'assistant responses must expose the prewarm marker for live verification');
 includes(aiRoute, 'ASSISTANT_SEARCH_TIMEOUT_MS', 'assistant search timeout must be configurable');
-includes(aiRoute, 'if (result.total === 0 && parsed?.propertyType)', 'assistant route should preserve the exact commercial subtype on the first search');
+includes(aiRoute, 'if (resultCount === 0 && parsed?.propertyType)', 'assistant route should preserve the exact commercial subtype on the first search');
 includes(aiRoute, "relaxedFilters = ['property_type']", 'assistant route should only relax a scarce subtype after the exact search returns zero');
 includes(aiRoute, 'assistantSearchOriginFromRequest', 'assistant search should use an internal origin where available');
 includes(aiRoute, 'ASSISTANT_SEARCH_BASE_URL', 'assistant search should allow an internal search base URL override');
 includes(aiRoute, 'listings: result.listings', 'assistant route must return listings array');
 includes(aiRoute, 'results: result.listings', 'assistant route must return results alias');
 includes(aiRoute, 'total_matches: result.total', 'assistant route must return total_matches');
+includes(aiRoute, 'minimum_matches: result.minimumTotal', 'assistant route must distinguish an exact total from the loaded lower bound');
+includes(aiRoute, 'fetchAssistantSearchUrl(url, { timeoutMs, forceRefresh: true })', 'assistant search must retry a transient search failure once');
+includes(aiRoute, 'Property search is temporarily busy', 'assistant search errors must not be described as zero results');
 includes(aiRoute, 'see_all_url: seeAllUrl', 'assistant route must return see_all_url');
 includes(aiRoute, 'sanitizeAssistantText', 'assistant route must sanitize old brand emoji from replies');
 includes(aiRoute, "router.post('/property-need'", 'assistant route must expose zero-result property-need capture');

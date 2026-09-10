@@ -456,7 +456,7 @@ function buildAssistantSearchParams(parsed = {}, searchType = 'any', language = 
     public_only: '1',
     limit: '6',
     page: '1',
-    include_summary: '0',
+    include_summary: '1',
     card_fields: '1',
     sort: 'newest',
     source: 'ai_assistant',
@@ -540,6 +540,13 @@ function assistantLeadText({ total = 0, parsed = {}, searchType = 'any', languag
     : `I could not find exact matches around ${place}. Tell us what you need and we can help watch for it.`;
 }
 
+function assistantSearchBusyText(language = 'en') {
+  if (language === 'sw') return 'Utafutaji wa mali una shughuli nyingi sasa. Tafadhali jaribu tena baada ya muda mfupi—sijahesabu hili kama hakuna matokeo.';
+  if (language === 'lg') return 'Okunoonya amayumba kulimu emirimu mingi kati. Gezaako nate mu kaseera katono—sikibalidde nga tewali bivuddemu.';
+  if (language === 'ar') return 'البحث العقاري مشغول مؤقتاً. يُرجى إعادة المحاولة بعد لحظات—لم أتعامل مع هذا كأنه لا توجد نتائج.';
+  return 'Property search is temporarily busy. Please retry in a moment—I have not treated this as a zero-result search.';
+}
+
 function assistantLocationLooksRelaxed(listings = [], parsed = {}) {
   const wanted = cleanText(parsed?.area || parsed?.district).toLowerCase();
   if (!wanted || !Array.isArray(listings) || !listings.length) return false;
@@ -576,7 +583,7 @@ const ASSISTANT_SEARCH_PREWARM_MARKER = 'ask-ai-search-prewarm-20260718';
 const ASSISTANT_SEARCH_PREWARM_BROAD_MARKER = 'ask-ai-prewarm-broad-20260718';
 const ASSISTANT_SEARCH_RESULT_CACHE_TTL_MS = Math.max(
   60 * 1000,
-  Math.min(10 * 60 * 1000, parseInt(process.env.ASSISTANT_SEARCH_CACHE_TTL_MS || `${5 * 60 * 1000}`, 10) || (5 * 60 * 1000))
+  Math.min(10 * 60 * 1000, parseInt(process.env.ASSISTANT_SEARCH_CACHE_TTL_MS || `${60 * 1000}`, 10) || (60 * 1000))
 );
 const ASSISTANT_SEARCH_TIMEOUT_MS = Math.max(1200, Math.min(8000, parseInt(process.env.ASSISTANT_SEARCH_TIMEOUT_MS || '5000', 10) || 5000));
 const ASSISTANT_SEARCH_RESULT_CACHE_MAX_ENTRIES = Math.max(80, Math.min(300, parseInt(process.env.ASSISTANT_SEARCH_CACHE_MAX_ENTRIES || '200', 10) || 200));
@@ -717,12 +724,17 @@ async function fetchAssistantSearchUrl(url, { timeoutMs = ASSISTANT_SEARCH_TIMEO
       throw err;
     }
     const listings = Array.isArray(json?.data) ? json.data : [];
-    const total = Number(json?.pagination?.total ?? json?.summary?.public_opportunities?.total ?? listings.length) || 0;
+    const rawTotal = json?.pagination?.total ?? json?.summary?.public_opportunities?.total;
+    const parsedTotal = rawTotal == null ? null : Number(rawTotal);
+    const total = Number.isFinite(parsedTotal) && parsedTotal >= 0 ? parsedTotal : null;
+    const hasMore = json?.pagination?.hasMore === true || json?.pagination?.has_more === true;
     const payload = {
       ok: true,
       url,
       listings,
       total,
+      minimumTotal: listings.length,
+      hasMore,
       pagination: json?.pagination || null,
       meta: json?.meta || null,
       prewarm_marker: ASSISTANT_SEARCH_PREWARM_MARKER,
@@ -739,7 +751,16 @@ async function fetchAssistantSearchResults(req, { parsed, searchType, language, 
   const params = buildAssistantSearchParams(parsed, searchType, language);
   const origin = assistantSearchOriginFromRequest(req);
   const url = `${origin}/api/properties/search?${params.toString()}`;
-  return fetchAssistantSearchUrl(url, { timeoutMs });
+  let firstError = null;
+  try {
+    return await fetchAssistantSearchUrl(url, { timeoutMs });
+  } catch (error) {
+    firstError = error;
+  }
+  const status = Number(firstError?.status || 0);
+  if (status > 0 && status < 500 && status !== 429) throw firstError;
+  await new Promise((resolve) => setTimeout(resolve, 350));
+  return fetchAssistantSearchUrl(url, { timeoutMs, forceRefresh: true });
 }
 
 function assistantSearchPrewarmOrigin() {
@@ -1283,10 +1304,11 @@ router.post('/assistant-reply', async (req, res, next) => {
             exactTotal = result.total;
           } catch (error) {
             exactSearchError = error;
-            exactTotal = 0;
+            exactTotal = null;
           }
           if (!result) throw exactSearchError || new Error('property_search_failed');
-          if (result.total === 0 && parsed?.propertyType) {
+          let resultCount = result.total ?? result.minimumTotal ?? result.listings.length;
+          if (resultCount === 0 && parsed?.propertyType) {
             effectiveParsed = { ...parsed, propertyType: null };
             relaxedFilters = ['property_type'];
             matchQuality = 'nearby_not_exact';
@@ -1295,19 +1317,20 @@ router.post('/assistant-reply', async (req, res, next) => {
               searchType,
               language
             });
+            resultCount = result.total ?? result.minimumTotal ?? result.listings.length;
           }
-          if (result.total > 0 && assistantLocationLooksRelaxed(result.listings, effectiveParsed)) {
+          if (resultCount > 0 && assistantLocationLooksRelaxed(result.listings, effectiveParsed)) {
             matchQuality = 'nearby_not_exact';
             relaxedFilters = Array.from(new Set([...relaxedFilters, 'location']));
           }
           const seeAllUrl = buildAssistantSeeAllUrl(effectiveParsed, searchType);
-          const leadText = assistantLeadText({ total: result.total, parsed: effectiveParsed, searchType, language, matchQuality });
+          const leadText = assistantLeadText({ total: resultCount, parsed: effectiveParsed, searchType, language, matchQuality });
           response = assistantFastResponse(leadText, language, extracted?.model || 'heuristic-fast');
           const capturePayload = buildAssistantCapturePayload({
             userMessage,
             parsed: effectiveParsed,
             searchType,
-            reason: result.total === 0 ? 'zero_results' : matchQuality
+            reason: resultCount === 0 ? 'zero_results' : matchQuality
           });
           searchPayload = {
             parsed_query: extracted,
@@ -1327,28 +1350,24 @@ router.post('/assistant-reply', async (req, res, next) => {
             filter_chips: assistantFilterChips(effectiveParsed, searchType),
             search_type: searchType,
             total_matches: result.total,
+            minimum_matches: result.minimumTotal,
+            has_more: result.hasMore,
             exact_total_matches: exactTotal,
             result_count: result.listings.length,
             listings: result.listings,
             results: result.listings,
             see_all_url: seeAllUrl,
             search_path: publicPath,
-            zero_results: result.total === 0,
-            capture_available: result.total === 0 || matchQuality === 'nearby_not_exact',
+            zero_results: resultCount === 0,
+            capture_available: resultCount === 0 || matchQuality === 'nearby_not_exact',
             capture_payload: capturePayload,
             match_quality: matchQuality,
-            exact_match: matchQuality === 'exact' && result.total > 0,
+            exact_match: matchQuality === 'exact' && resultCount > 0,
             search_error: null,
             search_prewarm_marker: ASSISTANT_SEARCH_PREWARM_MARKER,
             search_prewarm_broad_marker: ASSISTANT_SEARCH_PREWARM_BROAD_MARKER
           };
         } catch (searchError) {
-          const capturePayload = buildAssistantCapturePayload({
-            userMessage,
-            parsed,
-            searchType,
-            reason: 'search_error'
-          });
           searchPayload = {
             parsed_query: extracted,
             effective_query: parsed,
@@ -1366,24 +1385,26 @@ router.post('/assistant-reply', async (req, res, next) => {
             },
             filter_chips: assistantFilterChips(parsed, searchType),
             search_type: searchType,
-            total_matches: 0,
-            exact_total_matches: 0,
+            total_matches: null,
+            exact_total_matches: null,
             result_count: 0,
             listings: [],
             results: [],
             see_all_url: buildAssistantSeeAllUrl(parsed, searchType),
             search_path: publicPath,
-            zero_results: true,
-            capture_available: true,
-            capture_payload: capturePayload,
+            zero_results: false,
+            capture_available: false,
+            capture_payload: null,
             match_quality: 'search_error',
             exact_match: false,
+            retryable: true,
+            retry_after_seconds: 2,
             search_error: searchError.message || 'property_search_failed',
             search_prewarm_marker: ASSISTANT_SEARCH_PREWARM_MARKER,
             search_prewarm_broad_marker: ASSISTANT_SEARCH_PREWARM_BROAD_MARKER
           };
           response = assistantFastResponse(
-            assistantLeadText({ total: 0, parsed, searchType, language }),
+            assistantSearchBusyText(language),
             language,
             extracted?.model || 'heuristic-fast'
           );

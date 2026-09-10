@@ -165,6 +165,7 @@ app.get('/healthz', (_req, res) => {
 app.use((_req, res, next) => {
   if (runtimeReady) return next();
   res.set('Cache-Control', 'no-store');
+  res.set('Retry-After', '2');
   return res.status(503).json({
     ok: false,
     error: 'service_starting',

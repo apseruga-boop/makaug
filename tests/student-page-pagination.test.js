@@ -42,11 +42,11 @@ assert(app.includes('if (key !== "students" && !publicCategoryActiveSearchPath(k
 assert(app.includes('state.sourcePath !== activePath || state.mode !== "api"'), 'authoritative route rows must only apply to the matching active API source');
 assert(app.includes('renderPublicCategoryPageWithAuthoritativeCache("students"'), 'student render path must use the authoritative active-route cache');
 assert(app.includes('const authoritative = authoritativePublicCategoryPageRows(key);\n  const total = authoritative'), 'pagination controls must prefer authoritative route totals over stale passed totals');
-assert(app.includes('const navHtml = !awaitingExactRouteTotal && totalPages > 1'), 'single-page and pending-count result sets should not render clickable pagination navigation');
-assert(app.includes('if (authoritative && requestedPage !== targetPage)'), 'pagination click handler must no-op when a stale click targets a non-existent authoritative page');
+assert(app.includes('const navHtml = unknownTotal ?'), 'unknown totals should render honest previous/next pagination without inventing a page count');
+assert(app.includes('if (exactAuthoritative && requestedPage !== targetPage)'), 'pagination click handler must no-op when a stale click targets a non-existent exact page');
 
 assert(app.includes('if (publicCategoryStateHasAuthoritativeTotal(category, state)) return stateTotal'), 'global summary counts must not overwrite exact category API totals');
-assert(app.includes('state.total = total;\n  state.totalAuthoritative = exactPublicPaginationTotalValue(response) != null'), 'exact zero totals should replace stale page totals instead of falling through');
+assert(app.includes('const total = exactTotal ?? publicPaginationLoadedThrough(response, rows.length);\n  state.total = total;\n  state.totalAuthoritative = exactTotal != null || !hasMore'), 'exact zero totals should replace stale page totals while unknown totals retain an explicit lower bound');
 assert(app.includes('const totalPages = Math.max(1, Math.ceil(total / pageSize))'), 'student range rendering should clamp to real page count');
 assert(app.includes('const page = Math.min(Math.max(1, Number(options.page) || 1), totalPages)'), 'student header page number should be clamped');
 assert(app.includes('const end = total ? Math.max(start, Math.min(total, rowEnd)) : 0'), 'student header range must never reverse start/end');
@@ -56,10 +56,10 @@ assert(app.includes('if (normalized === "student") return "/api/properties?statu
 assert(app.includes('category=${encodeURIComponent(normalized)}'), 'public category pages must use the category API contract that returns authoritative pagination totals');
 assert(!app.includes('public_only=1&listing_type=${encodeURIComponent(normalized)}'), 'public category page loader must not use listing_type totals that collapse to the current page');
 assert(app.includes('params.set("student_portal", "1")'), 'student searches should keep sending the student portal flag');
-assert(app.includes('Fetching the full result count...'), 'startup pagination must not present a page-sized local count as the full result total');
+assert(app.includes('`${hasMore ? "+" : ""} properties`') || app.includes('${hasMore ? "+" : ""} properties'), 'unknown totals should be labelled as a lower bound with a plus sign');
 assert(app.includes('renderPublicCategoryPagination(startupCategory, { loading: true })'), 'category routes must immediately replace stale local pagination with a loading count while API totals hydrate');
-assert(app.includes('loading || awaitingExactRouteTotal ? "Loading listings..."'), 'active category routes must keep showing loading until an authoritative API total arrives');
-assert(app.includes('!awaitingExactRouteTotal && totalPages > 1'), 'active category routes must not render local one-page navigation while exact totals are pending');
+assert(app.includes('loading ? "Loading listings..." : unknownTotal ? `Page ${page}`'), 'active category routes should distinguish loading from an unknown total');
+assert(app.includes('navButton("Next ›", page + 1, loading || !hasMore)'), 'unknown-total routes should keep paging until the API reports no more rows');
 assert(app.includes('const { rows: firstPageRows, firstResponse: firstPageResponse } = await firstPageRowsPromise'), 'first category page should render before waiting on the slower summary promise');
 assert(app.indexOf('const { rows: firstPageRows, firstResponse: firstPageResponse } = await firstPageRowsPromise') < app.indexOf('const summaryStats = await summaryStatsPromise'), 'first page response must be applied before awaiting summary stats');
 
