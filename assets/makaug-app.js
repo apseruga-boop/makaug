@@ -874,6 +874,7 @@ let publicListingsApiTotal = null;
 let publicListingsApiStats = null;
 let aboutPublicListingsTotal = null;
 let aboutPublicListingsTotalPromise = null;
+let aboutPublicListingsTotalAttempted = false;
 const publicActiveCategoryHydrationPromises = new Map();
 const PUBLIC_LISTINGS_FAST_PAGE_LIMIT = 8;
 const PUBLIC_RESULTS_PAGE_SIZE = 24;
@@ -2913,17 +2914,32 @@ CONTENT_I18N.ar = Object.assign({}, CONTENT_I18N.en, {
 
 const ABOUT_PAGE_I18N_EN = Object.freeze({
   "about.heroLabel": "About makaug",
-  "about.title": "Every property in Uganda, finally in one place",
-  "about.heroStatement": "Every property in Uganda, finally in one place",
-  "about.subtitle": "Buy, rent, sell, or find student housing and land — free to list, in 9 languages, on the web or straight from WhatsApp, across all 146 districts.",
+  "about.title": "Every property in Uganda, in one place",
+  "about.heroStatement": "Every property in Uganda, in one place",
+  "about.subtitle": "makaug is Uganda's property search engine. We find every real listing online, check it, and put it in front of buyers, renters and students in 9 languages, on the web or on WhatsApp, across all 146 districts. Below is everything we offer and what it costs.",
   "about.ctaSearch": "Search property",
-  "about.ctaList": "List free",
-  "about.ctaWhatsapp": "Ask makaug on WhatsApp",
-  "about.statDistricts": "districts covered",
+  "about.ctaList": "List a property",
+  "about.ctaWhatsapp": "Talk to sales on WhatsApp",
+  "about.statDistricts": "districts",
   "about.statLanguages": "languages",
   "about.statLiveListings": "live listings",
-  "about.statFreeValue": "Free",
-  "about.statFreeLabel": "to list",
+  "about.statTrial": "days free to list",
+  "about.standardTitle": "Standard products",
+  "about.standardSub": "Get your property in front of Uganda's buyers and renters",
+  "about.saleTitle": "Private listing — For Sale",
+  "about.saleText": "List your home, land or commercial property yourself.",
+  "about.rentTitle": "Private listing — To Rent",
+  "about.rentText": "List a rental or student room yourself.",
+  "about.agentTitle": "Agent subscription",
+  "about.agentText": "For brokers and agencies with multiple properties.",
+  "about.developerTitle": "Off-plan developments",
+  "about.developerText": "Dedicated project pages for developers and marketing agents.",
+  "about.valueTitle": "Get seen first",
+  "about.valueSub": "Add to any live listing to move it up and stand out",
+  "about.growthTitle": "Grow your property business",
+  "about.advertisingTitle": "Advertise with makaug",
+  "about.advertisingSub": "Put your brand in front of people actively looking for property",
+  "about.discoveryTitle": "How we find property",
   "about.visionLabel": "Our vision",
   "about.visionTitle": "We find every property, so you don't have to",
   "about.visionText": "Property in Uganda is scattered — across WhatsApp, social media, brokers, and word of mouth. makaug is changing that. Our AI searches TikTok, YouTube, Facebook, and X, reads what it finds, and brings every real property into one place you can actually search. Think of it as a search engine for Uganda property.",
@@ -3021,9 +3037,9 @@ const ABOUT_PAGE_I18N_EN = Object.freeze({
   "about.chooseAiText": "discovery, assistant, and listing tools",
   "about.chooseVerifiedTitle": "Verified listings",
   "about.chooseVerifiedText": "human-reviewed for trust",
-  "about.finalTitle": "Ready to find your place?",
-  "about.finalSub": "Search thousands of listings, or list your own free in minutes.",
-  "about.finalWhatsapp": "Chat on WhatsApp",
+  "about.finalTitle": "Ready to start?",
+  "about.finalSub": "List your first property free for 7 days, or talk to our sales team about agent plans, developments and advertising.",
+  "about.finalWhatsapp": "WhatsApp sales: 0760 112 587",
   "about.finalHow": "How it works",
   "about.finalHelp": "Help centre",
   "about.finalSafety": "Safety tips"
@@ -7767,15 +7783,15 @@ function setAboutPublicListingsTotal(value) {
 function aboutLiveListingTotal(stats = {}) {
   const candidates = [
     aboutPublicListingsTotal,
-    publicListingsApiTotal,
-    stats?.total
+    publicListingsApiTotal
   ].map((value) => Number(value || 0)).filter((value) => Number.isFinite(value) && value > 0);
   const plausibleTotal = candidates.find((value) => value >= 100);
-  return plausibleTotal || 1889;
+  return plausibleTotal || 0;
 }
 
 async function fetchAboutPublicListingsTotal() {
   if (aboutPublicListingsTotalPromise) return aboutPublicListingsTotalPromise;
+  aboutPublicListingsTotalAttempted = true;
   aboutPublicListingsTotalPromise = (async () => {
     let response = null;
     try {
@@ -7805,15 +7821,60 @@ async function fetchAboutPublicListingsTotal() {
   return aboutPublicListingsTotalPromise;
 }
 
+function aboutCommercialCatalog() {
+  return window.__MAKAUG_ABOUT_COMMERCIAL_PRODUCTS__ || null;
+}
+
+function aboutCommercialPriceLabel(key, priceOnly = false) {
+  const entry = aboutCommercialCatalog()?.products?.[key];
+  if (!entry) return '';
+  const value = fmtP(entry.amount, '');
+  return priceOnly ? value : `${value} / ${entry.period}`;
+}
+
+function renderAboutAdvertisingRateRows() {
+  const body = document.getElementById('about-advertising-rate-rows');
+  const placements = aboutCommercialCatalog()?.advertisingPlacements;
+  if (!body || !Array.isArray(placements)) return;
+  body.innerHTML = placements.map((item) => `
+    <tr data-about-ad-row>
+      <td>${adminEscape(item.page)}</td>
+      <td><strong>${adminEscape(item.placement)}</strong><span>${adminEscape(item.format)}</span></td>
+      <td>${adminEscape(fmtP(item.amount, ''))}</td>
+    </tr>`).join('');
+}
+
+function updateAboutCommercialPrices() {
+  const page = document.getElementById('page-about');
+  if (!page || !aboutCommercialCatalog()) return;
+  page.querySelectorAll('[data-about-price]').forEach((el) => {
+    const key = el.getAttribute('data-about-price');
+    const price = aboutCommercialPriceLabel(key, el.getAttribute('data-about-price-only') === 'true');
+    if (!price) return;
+    const template = el.getAttribute('data-about-price-template') || '{price}';
+    el.textContent = template.replace('{price}', price);
+  });
+  renderAboutAdvertisingRateRows();
+}
+
 function updateAboutPageUi(stats = getHeroPropertyOpportunityStats()) {
   const aboutPage = document.getElementById("page-about");
   if (!aboutPage) return;
+  updateAboutCommercialPrices();
   const liveCount = aboutPage.querySelector("#about-live-listing-count");
+  const liveStat = aboutPage.querySelector("#about-live-listings-stat");
   if (liveCount) {
     const total = aboutLiveListingTotal(stats);
-    liveCount.dataset.aboutStatCount = String(total);
-    animateAboutStatNumber(liveCount, total);
-    if (!aboutPublicListingsTotal || total < 100) {
+    if (total > 0) {
+      liveStat?.classList.remove('hidden');
+      liveCount.dataset.aboutStatCount = String(total);
+      animateAboutStatNumber(liveCount, total);
+    } else {
+      liveStat?.classList.add('hidden');
+      liveCount.removeAttribute('data-about-stat-count');
+      liveCount.textContent = '';
+    }
+    if (!aboutPublicListingsTotalAttempted && total < 100) {
       fetchAboutPublicListingsTotal().catch(() => {});
     }
   }

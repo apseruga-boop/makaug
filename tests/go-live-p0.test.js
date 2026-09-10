@@ -85,7 +85,7 @@ const PUBLIC_ROUTE_MARKERS = {
   '/mortgage': ['Mortgage Finder', 'Repayment calculator', 'Gross Monthly Income Required'],
   '/advertise': ['Advertise', 'Campaign', 'Sponsored'],
   '/marketplace': ['Find trusted property professionals', 'Register your property service', 'Uganda property services'],
-  '/about': ['About', 'makaug', 'Our Mission'],
+  '/about': ['About makaug', 'Standard products', 'Advertise with makaug'],
   '/how-it-works': ['How makaug Works', 'List property'],
   '/careers': ['Careers at makaug', 'Field agent signup'],
   '/help': ['Help Centre', 'WhatsApp support'],
@@ -437,11 +437,13 @@ function run() {
   assert(aboutHtml.includes('id="page-about"'), '/about should render the about route');
   assert(aboutText.includes('About makaug'), '/about should show About makaug');
   for (const expected of [
-    'Every property in Uganda, finally in one place',
-    'We find every property, so you don\'t have to',
-    'Everything you can do',
+    'Every property in Uganda, in one place',
+    'Standard products',
+    'Get seen first',
+    'Grow your property business',
+    'Advertise with makaug',
+    'How we find property',
     'Property made simple',
-    'From search to sorted, in three steps',
     'Trust comes first',
     'Renters',
     'Buyers',
@@ -449,7 +451,7 @@ function run() {
     'Owners and sellers',
     'Brokers',
     'Businesses',
-    'Why people choose makaug'
+    'Ready to start?'
   ]) {
     assert(aboutText.includes(expected), `/about missing redesigned section: ${expected}`);
   }
