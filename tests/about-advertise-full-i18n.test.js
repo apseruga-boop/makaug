@@ -38,7 +38,7 @@ const packs = context.window.__MAKAUG_ABOUT_ADVERTISE_I18N__;
 const languages = ['lg', 'sw', 'ac', 'ny', 'rn', 'sm', 'am', 'ar'];
 
 assert(packs && typeof packs === 'object', 'generated About/Advertise language pack should load');
-assert(html.includes('/assets/about-advertise-i18n.js?v=about-advertise-i18n-20260910-v1'), 'page should load the generated language pack');
+assert(html.includes('/assets/about-advertise-i18n.js?v=whatsapp-number-20260911'), 'page should load the generated language pack');
 assert(html.indexOf('/assets/about-advertise-i18n.js') < html.indexOf('/assets/makaug-app.js'), 'language pack should load before the main app');
 
 const placeholderTokens = (value) => Array.from(String(value).matchAll(/\{([a-zA-Z][a-zA-Z0-9_]*)\}/g), (match) => match[1]).sort();

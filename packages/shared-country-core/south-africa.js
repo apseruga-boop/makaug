@@ -172,7 +172,7 @@ function applySouthAfricaHtml(html) {
   output = output
     .replace(/\s*<a\b[^>]*href="\/marketplace[^>]*>[\s\S]*?<\/a>/gi, '')
     .replace(/\s*<a\b[^>]*href="\/valuation[^>]*>[\s\S]*?<\/a>/gi, '')
-    .replace(/\s*<a\b[^>]*href="https:\/\/wa\.me\/256760112587[^>]*>[\s\S]*?<\/a>/gi, '')
+    .replace(/\s*<a\b[^>]*href="https:\/\/wa\.me\/256(?:760112587|780863394)[^>]*>[\s\S]*?<\/a>/gi, '')
     .replace(/\s*<a\b[^>]*href="https:\/\/(?:www\.)?(?:instagram|linkedin|facebook|youtube|tiktok|x|twitter)\.com\/[^>]*>[\s\S]*?<\/a>/gi, '');
 
   output = replaceSelectOptions(output, 'lang-sel', tenant.languages);
@@ -290,7 +290,7 @@ function applySouthAfricaJavaScript(source) {
     .replace(/info@makaug\.com/g, 'hello@seshaikhaya.com')
     .replace(/makaug\.com/g, 'seshaikhaya.com')
     .replace(/\bmakaug(?=\s|,|\.|:|!|\?)/gi, 'seshaikhaya')
-    .replace(/256760112587/g, '');
+    .replace(/256(?:760112587|780863394)/g, '');
 
   output = `window.__COUNTRY_CONFIG__ = window.__COUNTRY_CONFIG__ || ${JSON.stringify(tenant)};\n${output}`;
   return output;

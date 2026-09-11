@@ -17,7 +17,7 @@ assert(html.includes('Where it can appear'), 'preview modal should list selected
 assert(html.includes('Best for'), 'preview modal should explain the intended advertiser');
 assert(html.includes('Format preview:'), 'preview modal should distinguish the format specimen from an approved live campaign');
 assert(html.includes('id="advertise-contact-whatsapp"'), 'advertise page should expose WhatsApp help');
-assert(html.includes('WhatsApp 0760 112 587'), 'advertise page should show the WhatsApp number');
+assert(html.includes('WhatsApp 0780 863 394'), 'advertise page should show the WhatsApp number');
 assert(html.includes('id="advertise-contact-email"'), 'advertise page should expose email help');
 assert(html.includes('Email info@makaug.com'), 'advertise page should show the support email');
 assert(html.includes('href="/advertiser-dashboard" onclick="return openAdvertiserDashboard(event)"'), 'advertiser dashboard action should use the auth-aware route handler');

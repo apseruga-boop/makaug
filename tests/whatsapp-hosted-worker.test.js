@@ -22,7 +22,7 @@ assert(renderYaml.includes('runtime: docker'), 'WhatsApp worker must run with Do
 assert(renderYaml.includes('dockerfilePath: ./Dockerfile.whatsapp-agent'), 'Render worker must use the WhatsApp agent Dockerfile');
 assert(renderYaml.includes('numInstances: 1'), 'WhatsApp Web profile must run as exactly one worker instance');
 assert(renderYaml.includes('mountPath: /var/data'), 'Render worker must attach persistent disk at /var/data');
-assert(renderYaml.includes('WHATSAPP_WEB_COPILOT_PROFILE_DIR') && renderYaml.includes('/var/data/whatsapp-profile-live'), 'Render worker must persist WhatsApp login profile on disk');
+assert(renderYaml.includes('WHATSAPP_WEB_COPILOT_PROFILE_DIR') && renderYaml.includes('/var/data/whatsapp-profile-256780863394'), 'Render worker must persist WhatsApp login profile on disk');
 assert(renderYaml.includes('WHATSAPP_WEB_COPILOT_HEADLESS') && renderYaml.includes('value: "true"'), 'Render worker must default to headless Chrome after its persisted WhatsApp session is linked');
 assert(renderYaml.includes('WHATSAPP_WEB_COPILOT_LOGIN_METHOD') && renderYaml.includes('WHATSAPP_WEB_COPILOT_PAIRING_PHONE'), 'Render worker must expose phone-number pairing as a QR fallback');
 assert(renderYaml.includes('WHATSAPP_WEB_BRIDGE_TOKEN') && renderYaml.includes('sync: false'), 'Bridge token must be prompted in Render, not committed');

@@ -99,7 +99,7 @@ function whatsappEnquiryUrl(enquiry = {}, development = null) {
   const projectAgentPhone = enquiry.enquiry_type === 'project_interest' && !makaugManaged
     ? cleanText(development?.source_agent_whatsapp || development?.source_agent_phone, 80)
     : '';
-  const phone = String(projectAgentPhone || process.env.SUPPORT_PHONE || '+256760112587').replace(/\D/g, '') || '256760112587';
+  const phone = String(projectAgentPhone || process.env.SUPPORT_PHONE || '+256780863394').replace(/\D/g, '') || '256780863394';
   const recipient = projectAgentPhone ? cleanText(development?.source_agent_name || 'project contact', 120) : 'makaug';
   const intro = cleanText(enquiry.name, 120) ? `Hi ${recipient}, my name is ${cleanText(enquiry.name, 120)}. ` : `Hi ${recipient}, my name is... `;
   const message = enquiry.enquiry_type === 'listing_request'

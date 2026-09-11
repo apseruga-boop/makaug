@@ -165,7 +165,7 @@ function applyKenyaTenant(html) {
     .replace(/\bUSh\b/g, "KSh")
     .replace(/\bUGX\b/g, "KES")
     .replace(/info@nyumbake\.com/g, tenant.email)
-    .replace(/https:\/\/wa\.me\/256760112587/g, `mailto:${tenant.email}`)
+    .replace(/https:\/\/wa\.me\/256(?:760112587|780863394)/g, `mailto:${tenant.email}`)
     .replace(
       /<p id="footer-brand-copy"([\s\S]*?)<\/p>/,
       '<p id="footer-brand-copy"$1</p>'

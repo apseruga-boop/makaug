@@ -146,7 +146,7 @@ function emailWordmarkHtml() {
 function emailFooterHtml() {
   const supportEmail = getSupportEmail();
   const supportPhone = getSupportPhone();
-  const whatsappUrl = `https://wa.me/${String(supportPhone).replace(/\D/g, '') || '256760112587'}`;
+  const whatsappUrl = `https://wa.me/${String(supportPhone).replace(/\D/g, '') || '256780863394'}`;
   return `
     <tr>
       <td style="background:#f8faf7;border-top:1px solid #e5efe2;padding:18px 28px;color:#6b7280;font-size:12px;line-height:1.6;">

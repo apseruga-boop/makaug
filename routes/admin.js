@@ -2497,7 +2497,7 @@ function adminTestEmail() {
 }
 
 function adminTestPhone() {
-  return process.env.SMS_TEST_PHONE || process.env.SUPER_ADMIN_PHONE || process.env.SUPPORT_WHATSAPP || process.env.WHATSAPP_TEST_PHONE || (IS_SOUTH_AFRICA ? '+27821234567' : '+256760112587');
+  return process.env.SMS_TEST_PHONE || process.env.SUPER_ADMIN_PHONE || process.env.SUPPORT_WHATSAPP || process.env.WHATSAPP_TEST_PHONE || (IS_SOUTH_AFRICA ? '+27821234567' : '+256780863394');
 }
 
 function launchTimestamp() {
@@ -7784,7 +7784,7 @@ router.post('/field-agents/provision', async (req, res, next) => {
     const status = cleanText(req.body.status || 'active').toLowerCase();
     const preferredLanguage = cleanText(req.body.preferred_language || 'en').toLowerCase();
     const notes = cleanText(req.body.notes);
-	    const supportPhone = normalizeFieldAgentContactPhone(req.body.support_phone || process.env.SUPPORT_WHATSAPP || process.env.SUPPORT_PHONE || '0760112587');
+	    const supportPhone = normalizeFieldAgentContactPhone(req.body.support_phone || process.env.SUPPORT_WHATSAPP || process.env.SUPPORT_PHONE || '0780863394');
 	    const actorId = adminActorId(req);
 	    let idDocument = cleanFieldAgentUpload(req.body.id_document || req.body.id_document_file, 'Field Agent ID document');
 	    let signedContract = cleanFieldAgentUpload(req.body.signed_contract || req.body.contract || req.body.signed_contract_file, 'Field Agent signed contract');

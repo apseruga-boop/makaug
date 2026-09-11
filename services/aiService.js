@@ -272,56 +272,56 @@ function buildLocalizedAssistantFallbackText(languageCode, link) {
       '*makaug.com* | *Property help*',
       'I can help with search, listing, agents, mortgage guidance, and account help.',
       `🔗 ${link}`,
-      'Human support: 0760112587 or info@makaug.com.'
+      'Human support: 0780863394 or info@makaug.com.'
     ],
     lg: [
       '*makaug.com* | *Property help*',
       'Nsobola okukuyamba okunoonya property, okulistinga, okunoonya agent, mortgage, ne account.',
       `🔗 ${link}`,
-      'Support: 0760112587 oba info@makaug.com.'
+      'Support: 0780863394 oba info@makaug.com.'
     ],
     sw: [
       '*makaug.com* | *Property help*',
       'Naweza kusaidia kutafuta mali, kuorodhesha mali, kupata agent, mortgage, na akaunti.',
       `🔗 ${link}`,
-      'Support: 0760112587 au info@makaug.com.'
+      'Support: 0780863394 au info@makaug.com.'
     ],
     ac: [
       '*makaug.com* | *Property help*',
       'Aromo konyi me yeny property, keto property, nongo agent, mortgage, ki account.',
       `🔗 ${link}`,
-      'Support: 0760112587 onyo info@makaug.com.'
+      'Support: 0780863394 onyo info@makaug.com.'
     ],
     ny: [
       '*makaug.com* | *Property help*',
       'Nimbaasa kukuyamba kushaka property, kuhandiika property, kushaka agent, mortgage, na account.',
       `🔗 ${link}`,
-      'Support: 0760112587 nari info@makaug.com.'
+      'Support: 0780863394 nari info@makaug.com.'
     ],
     rn: [
       '*makaug.com* | *Property help*',
       `${displayName} translation is not fully available yet, so I will use English rather than guessing another language.`,
       'I can help with property search, listing, agent support, mortgage guidance, and account help.',
       `🔗 ${link}`,
-      'Human support: 0760112587 or info@makaug.com.'
+      'Human support: 0780863394 or info@makaug.com.'
     ],
     sm: [
       '*makaug.com* | *Property help*',
       'Nsobola okukuyamba okunoonya property, okulistinga, okunoonya agent, mortgage, ne account.',
       `🔗 ${link}`,
-      'Support: 0760112587 oba info@makaug.com.'
+      'Support: 0780863394 oba info@makaug.com.'
     ],
     am: [
       '*makaug.com* | *Property help*',
       'ንብረት መፈለግ፣ መዘርዘር፣ ወኪል ማግኘት፣ mortgage እና account እርዳታ ልረዳዎ እችላለሁ።',
       `🔗 ${link}`,
-      'Support: 0760112587 ወይም info@makaug.com.'
+      'Support: 0780863394 ወይም info@makaug.com.'
     ],
     ar: [
       '*makaug.com* | *مساعدة العقارات*',
       'أستطيع مساعدتك في البحث عن عقار، إدراج عقار، العثور على وكيل، إرشاد mortgage، ومساعدة الحساب.',
       `🔗 ${link}`,
-      'الدعم: 0760112587 أو info@makaug.com.'
+      'الدعم: 0780863394 أو info@makaug.com.'
     ]
   };
   return (copy[code] || copy.en).join('\n');

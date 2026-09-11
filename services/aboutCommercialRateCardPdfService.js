@@ -84,7 +84,7 @@ function buildAboutCommercialRateCardPdf() {
     ensure(72);
     doc.moveDown(.8).fillColor(PALE).roundedRect(doc.page.margins.left, doc.y, pageWidth, 58, 8).fill();
     doc.fillColor(INK).font('Helvetica-Bold').fontSize(10).text('Book or ask a question', doc.page.margins.left + 12, doc.y + 12);
-    doc.fillColor(MUTED).font('Helvetica').fontSize(9).text('WhatsApp 0760 112 587 · info@makaug.com · makaug.com/advertise', { lineGap: 2 });
+    doc.fillColor(MUTED).font('Helvetica').fontSize(9).text('WhatsApp 0780 863 394 · info@makaug.com · makaug.com/advertise', { lineGap: 2 });
     doc.moveDown(2.4).fontSize(8).text('Rate guide dated 10 September 2026. Items marked for commercial confirmation in the source brief remain subject to written quotation. VAT treatment should be confirmed before invoicing.');
     doc.end();
   });

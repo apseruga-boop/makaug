@@ -5,12 +5,12 @@ function getSupportEmail() {
 }
 
 function getSupportPhone() {
-  return process.env.SUPPORT_PHONE || '+256760112587';
+  return process.env.SUPPORT_PHONE || '+256780863394';
 }
 
 function getSupportWhatsappUrl() {
   const digits = String(getSupportPhone()).replace(/\D/g, '');
-  return digits ? `https://wa.me/${digits}` : 'https://wa.me/256760112587';
+  return digits ? `https://wa.me/${digits}` : 'https://wa.me/256780863394';
 }
 
 function getDefaultEmailFrom() {

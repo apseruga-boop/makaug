@@ -103,7 +103,7 @@ assert(!html.includes('name="makaug-release-marker"'), 'ZA HTML leaked the Ugand
 assert(html.includes('name="seshaikhaya-intake-integrity-marker"'));
 assert(html.includes('name="seshaikhaya-shared-release-marker"'));
 assert(!head.includes('marketplace-sitemap.xml'), 'ZA head leaked Marketplace sitemap');
-assert(!html.includes('256760112587'), 'ZA public HTML leaked Uganda WhatsApp number');
+assert(!/256(?:760112587|780863394)/.test(html), 'ZA public HTML leaked Uganda WhatsApp number');
 for (const forbidden of ['makaug how-to video', 'Help makaug find', '>District<']) {
   assert(!html.includes(forbidden), `ZA public HTML leaked ${forbidden}`);
 }

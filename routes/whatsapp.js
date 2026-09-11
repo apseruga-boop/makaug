@@ -214,7 +214,7 @@ const T = {
     photoReceived: '✅ Photo {count} received.',
     invalidNin: '❌ Please enter a valid National ID Number (NIN).',
     sendSelfiePhotoOnly: '❌ Please upload a photo of your National ID. No PDFs or document files. Take a picture and send the photo.',
-    invalidPhone: '❌ Invalid phone format. Try: 0760112587',
+    invalidPhone: '❌ Invalid phone format. Try: 0780863394',
     visitMoreListings: 'Visit {url} for more listings.',
     seeAllAgents: 'See all agents: {url}',
     nextPropertySearchActions: 'Next: tap a listing link to view photos, map, book a viewing, or request a callback. Reply *2* to search again, *MENU* for the main menu, or *WIDEN* if this was a nearby search.',
@@ -286,7 +286,7 @@ const T = {
     photoReceived: '✅ Ekifaananyi {count}/5 kifuniddwa! Weereza ekiddako.',
     invalidNin: '❌ NIN gyotadde si ntuufu. Gezaako nate.',
     sendSelfiePhotoOnly: '❌ Weereza ekifaananyi kya National ID/selfie. Tosindika PDF oba document file.',
-    invalidPhone: '❌ Namba ya ssimu si ntuufu. Geza: 0760112587',
+    invalidPhone: '❌ Namba ya ssimu si ntuufu. Geza: 0780863394',
     visitMoreListings: 'Laba ebisingawo ku {url}.',
     seeAllAgents: 'Laba ba agent bonna: {url}',
     replySearchAgain: 'Ddamu 2 okunoonya nate.',
@@ -344,7 +344,7 @@ const T = {
     photoReceived: '✅ Picha {count}/5 imepokelewa! Tuma picha inayofuata.',
     invalidNin: '❌ Tafadhali andika NIN sahihi.',
     sendSelfiePhotoOnly: '❌ Tafadhali tuma picha ya National ID/selfie. Usitume PDF au faili la document.',
-    invalidPhone: '❌ Namba ya simu si sahihi. Jaribu: 0760112587',
+    invalidPhone: '❌ Namba ya simu si sahihi. Jaribu: 0780863394',
     visitMoreListings: 'Tembelea {url} kuona mali zaidi.',
     seeAllAgents: 'Tazama mawakala wote: {url}',
     replySearchAgain: 'Jibu 2 kutafuta tena.',
@@ -635,7 +635,7 @@ T.am = Object.assign({}, T.en, {
   photoReceived: '✅ ፎቶ {count} ደርሷል።',
   invalidNin: '❌ እባክዎ ትክክለኛ National ID Number (NIN) ያስገቡ።',
   sendSelfiePhotoOnly: '❌ እባክዎ የ National ID/selfie ፎቶ ይላኩ። PDF ወይም document አይላኩ።',
-  invalidPhone: '❌ የስልክ ቅርጸት ትክክል አይደለም። ይሞክሩ: 0760112587',
+  invalidPhone: '❌ የስልክ ቅርጸት ትክክል አይደለም። ይሞክሩ: 0780863394',
   visitMoreListings: 'ተጨማሪ ዝርዝሮችን በ {url} ይመልከቱ።',
   seeAllAgents: 'ሁሉንም ወኪሎች ይመልከቱ: {url}',
   nextPropertySearchActions: 'ቀጣይ: ፎቶ፣ ካርታ፣ ወይም የመጠየቂያ አማራጭ ለማየት የዝርዝሩን ሊንክ ይንኩ። እንደገና ለመፈለግ *2*፣ ወደ ዋና ምናሌ *MENU*፣ ወይም በአቅራቢያ ፍለጋ ከሆነ *WIDEN* ይመልሱ።',
@@ -715,7 +715,7 @@ T.ar = Object.assign({}, T.en, {
   photoReceived: '✅ تم استلام صورة {count}.',
   invalidNin: '❌ أدخل National ID Number (NIN) صحيحاً.',
   sendSelfiePhotoOnly: '❌ أرسل صورة National ID/selfie فقط. لا ترسل PDF أو document file.',
-  invalidPhone: '❌ صيغة الهاتف غير صحيحة. جرّب: 0760112587',
+  invalidPhone: '❌ صيغة الهاتف غير صحيحة. جرّب: 0780863394',
   visitMoreListings: 'شاهد المزيد من listings على {url}.',
   seeAllAgents: 'شاهد كل الوكلاء: {url}',
   nextPropertySearchActions: 'التالي: اضغط رابط listing لعرض الصور والخريطة أو طلب viewing/callback. أرسل *2* للبحث من جديد، *MENU* للقائمة، أو *WIDEN* إذا كان بحثاً قريباً.',
@@ -13704,7 +13704,7 @@ router.post('/web-bridge/outbox/:id/failed', asyncRoute(async (req, res) => {
 router.post('/test', async (req, res) => {
   if (process.env.NODE_ENV === 'production') return res.status(404).json({ error: 'Not found' });
 
-  const { phone = IS_SOUTH_AFRICA ? '+27821234567' : '+256760112587', body = '1', mediaUrl, mediaType = '' } = req.body;
+  const { phone = IS_SOUTH_AFRICA ? '+27821234567' : '+256780863394', body = '1', mediaUrl, mediaType = '' } = req.body;
   const sharedLocation = parseInboundLocation(req.body.location || req.body);
 
   const session = await getSession(phone);
