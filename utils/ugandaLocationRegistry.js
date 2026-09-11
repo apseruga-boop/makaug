@@ -102,6 +102,8 @@ const DETAILED_LOCATIONS = [
   { name: 'Nabbingo', district: 'Wakiso', lat: 0.295, lng: 32.477 },
   { name: 'Kyengera', district: 'Wakiso', level: 'city', lat: 0.294, lng: 32.501, aliases: ['Kyengera', 'Kyengera Town'] },
 
+  { name: 'Semuto', district: 'Nakaseke', level: 'town', lat: 0.6201, lng: 32.3298, aliases: ['Semuto', 'Semuto Town', 'Semuto Town Council'] },
+
   { name: 'Kalagi', district: 'Mukono', lat: 0.531, lng: 32.743, aliases: ['Kalagi', 'Kalagi Town', 'Kalagi Trading Centre', 'Kalagi Trading Center'] },
 
   { name: 'Mukono', district: 'Mukono', level: 'district', lat: 0.353, lng: 32.753, aliases: ['Mukono', 'Mukono Town'] },

@@ -286,6 +286,20 @@ test('harvest captions use the same exact-alias resolver without district guessi
   assert.equal(normalized.locationResolutionConfidence, 1);
 });
 
+test('Semuto town resolves to Nakaseke for guarded staff-review intake', () => {
+  const exact = resolveCanonicalUgandaLocation('Semuto, Nakaseke District');
+  assert.equal(exact.status, 'matched');
+  assert.equal(exact.match?.name, 'Semuto');
+  assert.equal(exact.match?.district, 'Nakaseke');
+  assert.equal(exact.match?.key, 'nakaseke:semuto');
+
+  const caption = resolveCanonicalUgandaLocationFromText(
+    'Land for sale: 1 acre in Semuto, Nakaseke District, 2 to 3 km from Semuto town.'
+  );
+  assert.equal(caption.status, 'matched');
+  assert.equal(caption.match?.key, 'nakaseke:semuto');
+});
+
 test('the full supplied missing-worklist has registry coverage without unsafe ambiguity acceptance', () => {
   assert.equal(worklist.locations.length, worklist.meta.parsed_names);
   const totals = { matched: 0, ambiguous: 0, unmatched: 0 };

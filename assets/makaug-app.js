@@ -269,6 +269,7 @@ function mapRemoteAgentForUi(agent = {}) {
     identity_document_uploaded_at: agent.identity_document_uploaded_at || "",
     verification_reason: agent.verification_reason || "",
     direct_agent_authorised: directAgentAuthorised,
+    private_id_profile_reviewed: String(agent.verification_reason || "").includes("[STAFF_REVIEWED_PRIVATE_ID_PROFILE]"),
     profile_claim_pending: directAgentAuthorised && !agent.user_id,
     privacy_consent_accepted: agent.privacy_consent_accepted === true,
     privacy_consent_at: agent.privacy_consent_at || "",
@@ -22288,6 +22289,7 @@ function renderAdminBrokerRows(agents) {
           ${idDocumentUploaded ? `<a href="${adminAttr(agent.identity_document_url)}" target="_blank" rel="noopener noreferrer" class="border border-amber-300 text-amber-800 hover:bg-amber-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Review ID</a>` : ""}
           ${whatsappUrl ? `<a href="${adminAttr(whatsappUrl)}" target="_blank" rel="noopener noreferrer" class="bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Contact Broker</a>` : ""}
           ${agent.email ? `<a href="mailto:${adminAttr(agent.email)}?subject=${encodeURIComponent("makaug broker follow-up")}" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Email</a>` : ""}
+          ${canUseLiveAdminApi() && idDocumentUploaded && !agent.private_id_profile_reviewed ? `<button onclick="adminApproveAgentPublicProfile(${idArg})" class="bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Approve public profile</button>` : ""}
           ${canUseLiveAdminApi() ? `<button onclick="adminSetAgentStatus(${idArg}, '${status === "approved" ? "pending" : "approved"}')" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">${approveLabel}</button>` : ""}
         </div>
       </div>`;
@@ -26950,6 +26952,31 @@ async function adminSetAgentStatus(agentId, status) {
     toast(`Broker updated: ${status}.${accessNote}${emailStatus}`);
   } catch (e) {
     toast(`Broker update failed: ${e.message || "error"}`);
+  }
+}
+
+async function adminApproveAgentPublicProfile(agentId) {
+  if (!canUseLiveAdminApi()) {
+    toast("Sign in as admin or set ADMIN_API_KEY first to approve the public profile.");
+    return;
+  }
+  const confirmed = window.confirm("Confirm that staff reviewed the private ID, the public profile facts, and permission to publish this agent contact route. Linked properties will remain in staff review.");
+  if (!confirmed) return;
+  try {
+    await apiRequest(`/api/admin/agents/${encodeURIComponent(agentId)}/public-profile-approval`, {
+      method: "POST",
+      headers: adminAuthHeaders(),
+      body: {
+        identity_document_reviewed: true,
+        contact_permission_confirmed: true,
+        profile_facts_confirmed: true
+      }
+    });
+    await refreshBrokersFromApi({ silent: true });
+    await renderAdminDashboard();
+    toast("Public agent profile approved. Linked properties remain in staff review.");
+  } catch (e) {
+    toast(`Public profile approval failed: ${e.message || "error"}`);
   }
 }
 

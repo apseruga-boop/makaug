@@ -9,6 +9,7 @@ const PUBLIC_AGENT_SUPPRESSED_MARKERS = [
 const PUBLIC_AGENT_MIN_LIVE_LISTINGS = 2;
 const PUBLIC_DIRECT_AGENT_MIN_LIVE_LISTINGS = 1;
 const DIRECT_AGENT_PROFILE_MARKER = '[DIRECT_AGENT_AUTHORISED]';
+const REVIEWED_PRIVATE_ID_PROFILE_MARKER = '[STAFF_REVIEWED_PRIVATE_ID_PROFILE]';
 
 function sqlAlias(value = 'a') {
   const alias = String(value || 'a').trim();
@@ -41,11 +42,17 @@ function addPublicAgentInventoryFilter(filters, alias = 'a') {
     (
       COALESCE(${a}.verification_reason, '') ILIKE '%${DIRECT_AGENT_PROFILE_MARKER}%'
       AND (
-        SELECT COUNT(*)::int
-        FROM properties p
-        WHERE p.agent_id = ${a}.id
-          AND p.status = 'approved'
-      ) >= ${PUBLIC_DIRECT_AGENT_MIN_LIVE_LISTINGS}
+        (
+          COALESCE(${a}.verification_reason, '') ILIKE '%${REVIEWED_PRIVATE_ID_PROFILE_MARKER}%'
+          AND NULLIF(BTRIM(COALESCE(${a}.identity_document_url, '')), '') IS NOT NULL
+        )
+        OR (
+          SELECT COUNT(*)::int
+          FROM properties p
+          WHERE p.agent_id = ${a}.id
+            AND p.status = 'approved'
+        ) >= ${PUBLIC_DIRECT_AGENT_MIN_LIVE_LISTINGS}
+      )
     )
     OR (
       COALESCE(${a}.verification_reason, '') NOT ILIKE '%${DIRECT_AGENT_PROFILE_MARKER}%'
@@ -78,6 +85,8 @@ function addPublicAgentEligibilityFilters(filters, values, alias = 'a') {
 
 module.exports = {
   DIRECT_AGENT_PROFILE_MARKER,
+  PUBLIC_DIRECT_AGENT_MIN_LIVE_LISTINGS,
+  REVIEWED_PRIVATE_ID_PROFILE_MARKER,
   PUBLIC_AGENT_MIN_LIVE_LISTINGS,
   PUBLIC_AGENT_SUPPRESSED_MARKERS,
   addPublicAgentEligibilityFilters,
