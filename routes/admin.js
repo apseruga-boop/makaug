@@ -362,6 +362,7 @@ const ADMIN_LISTING_IMAGE_MAX_COUNT = 20;
 const ADMIN_LISTING_VIDEO_MAX_BYTES = 8 * 1024 * 1024;
 const ADMIN_LISTING_VIDEO_MAX_COUNT = 8;
 const DIRECT_AGENT_PROFILE_MARKER = '[DIRECT_AGENT_AUTHORISED]';
+const REVIEWED_PRIVATE_ID_PROFILE_MARKER = '[STAFF_REVIEWED_PRIVATE_ID_PROFILE]';
 const LAUNCH_TEST_LISTING_MARKERS = ['SOFT LAUNCH TEST - DELETE', 'QA TEST - DELETE'];
 const LAUNCH_TEST_DUMMY_TITLES = ['sdgsdgd', 'sgsgsgsgs'];
 const PUBLIC_SITE_URL = String(process.env.PUBLIC_BASE_URL || process.env.APP_BASE_URL || ACTIVE_TENANT.domain).replace(/\/+$/, '');
@@ -9072,6 +9073,93 @@ router.post('/agents/direct-onboarding', async (req, res, next) => {
     return next(error);
   } finally {
     client.release();
+  }
+});
+
+router.post('/agents/:id/public-profile-approval', async (req, res, next) => {
+  try {
+    const body = req.body || {};
+    const identityDocumentReviewed = parseBooleanLike(body.identity_document_reviewed, false);
+    const contactPermissionConfirmed = parseBooleanLike(body.contact_permission_confirmed, false);
+    const profileFactsConfirmed = parseBooleanLike(body.profile_facts_confirmed, false);
+
+    if (!identityDocumentReviewed || !contactPermissionConfirmed || !profileFactsConfirmed) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Private ID review, contact permission, and public profile facts must all be confirmed'
+      });
+    }
+
+    const existing = await db.query(
+      `SELECT id, full_name, company_name, phone, whatsapp, identity_document_url, verification_reason, status
+       FROM agents
+       WHERE id = $1
+       LIMIT 1`,
+      [req.params.id]
+    );
+    const agent = existing.rows[0] || null;
+    if (!agent) {
+      return res.status(404).json({ ok: false, error: 'Agent not found' });
+    }
+    if (!String(agent.identity_document_url || '').trim()) {
+      return res.status(409).json({ ok: false, error: 'A private identity document must be stored before the public profile can be approved' });
+    }
+    if (!normalizeCountryPhone(agent.phone || agent.whatsapp)) {
+      return res.status(409).json({ ok: false, error: 'A valid contact number must be stored before the public profile can be approved' });
+    }
+
+    const existingReason = String(agent.verification_reason || '').trim();
+    const alreadyReviewed = existingReason.includes(REVIEWED_PRIVATE_ID_PROFILE_MARKER);
+    const markers = [DIRECT_AGENT_PROFILE_MARKER, REVIEWED_PRIVATE_ID_PROFILE_MARKER]
+      .filter((marker) => !existingReason.includes(marker));
+    const reviewedReason = [
+      existingReason,
+      ...markers,
+      alreadyReviewed ? '' : 'Staff reviewed the private identity evidence, public profile facts, and permission to publish the agent contact route. Listings remain separately moderated.'
+    ].filter(Boolean).join(' ');
+
+    const updated = await db.query(
+      `UPDATE agents
+       SET status = 'approved',
+           approved_at = COALESCE(approved_at, NOW()),
+           contact_phone_verified_at = COALESCE(contact_phone_verified_at, NOW()),
+           verification_reason = $2,
+           updated_at = NOW()
+       WHERE id = $1
+       RETURNING
+         id,
+         makaug_agent_number,
+         full_name,
+         company_name,
+         phone,
+         whatsapp,
+         registration_status,
+         approved_at,
+         contact_phone_verified_at,
+         featured_homepage,
+         status,
+         updated_at`,
+      [req.params.id, reviewedReason]
+    );
+
+    await writeAudit('admin_agent_public_profile_approved', {
+      agent_id: req.params.id,
+      identity_document_reviewed: true,
+      contact_permission_confirmed: true,
+      profile_facts_confirmed: true,
+      listing_status_unchanged: true
+    }, adminActorId(req));
+
+    return res.json({
+      ok: true,
+      data: {
+        ...updated.rows[0],
+        private_identity_document_stored: true,
+        listings_remain_separately_moderated: true
+      }
+    });
+  } catch (error) {
+    return next(error);
   }
 });
 
