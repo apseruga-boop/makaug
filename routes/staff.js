@@ -539,7 +539,14 @@ function staffLocationWarnings(row = {}) {
     extra.source_text,
     extra.source_location
   ].map((value) => cleanText(value)).filter(Boolean).join(' | ');
-  districtsForKnownLocationText(evidenceText)
+  const identityTerms = [
+    row.lister_name,
+    extra.source_name,
+    extra.public_display_name,
+    extra.agent_name,
+    extra.broker_name
+  ].map((value) => cleanText(value)).filter(Boolean);
+  districtsForKnownLocationText(evidenceText, { excludedTerms: identityTerms })
     .filter((evidenceDistrict) => district && evidenceDistrict !== district)
     .forEach((evidenceDistrict) => {
       warnings.push(`Source/title/address evidence points to ${evidenceDistrict}, not ${district}`);

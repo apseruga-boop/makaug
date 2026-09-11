@@ -627,13 +627,22 @@ function resolveCanonicalUgandaLocationFromText(value = '', suppliedDistrict = '
   };
 }
 
-function canonicalUgandaDistrictsMentionedInText(value = '') {
+function canonicalUgandaDistrictsMentionedInText(value = '', options = {}) {
   const valueKey = normalizeLocationKey(value);
   if (!valueKey) return [];
+  const excludedAliasKeys = new Set(
+    (Array.isArray(options.excludedTerms) ? options.excludedTerms : [])
+      .flatMap((term) => {
+        const termKey = normalizeLocationKey(term);
+        return termKey ? [termKey, ...termKey.split(/\s+/)] : [];
+      })
+      .filter((termKey) => termKey.length >= 4)
+  );
   const aliases = new Map();
   aliasRows
     .filter((row) => row.aliasKey.length >= 4)
     .filter((row) => !TEXT_LOCATION_ALIAS_STOP_KEYS.has(row.aliasKey))
+    .filter((row) => !excludedAliasKeys.has(row.aliasKey))
     .filter((row) => aliasAppearsInValue(row.aliasKey, valueKey))
     .forEach((row) => {
       if (!aliases.has(row.aliasKey)) aliases.set(row.aliasKey, new Set());

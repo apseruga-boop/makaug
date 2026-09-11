@@ -21,6 +21,14 @@ assert.strictEqual(districtForKnownArea('Ndibulungi'), 'Luwero');
 assert.strictEqual(districtForKnownLocationText('25 acres in Luweero Ndibulungi'), 'Luwero');
 assert.deepStrictEqual(districtsForKnownLocationText('Luweero, not Arua'), ['Luwero', 'Arua']);
 assert.deepStrictEqual(
+  districtsForKnownLocationText(
+    '3-bedroom rental in Sseguku. New customer Katamba is the agent.',
+    { excludedTerms: ['Katamba Bonny'] }
+  ),
+  ['Wakiso'],
+  'agent names that are also place names must not create false district warnings'
+);
+assert.deepStrictEqual(
   normalizeReviewLocationHierarchy({
     area: 'Ndibulungi',
     district: 'Luwero',

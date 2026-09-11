@@ -97,8 +97,8 @@ function districtForKnownArea(area) {
   return '';
 }
 
-function districtsForKnownLocationText(value = '') {
-  return canonicalUgandaDistrictsMentionedInText(value);
+function districtsForKnownLocationText(value = '', options = {}) {
+  return canonicalUgandaDistrictsMentionedInText(value, options);
 }
 
 function districtForKnownLocationText(value = '') {
