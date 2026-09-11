@@ -12471,7 +12471,9 @@ async function renderFieldDashboard() {
     const message = `Hi makaug.com Operations, this is ${user.first_name || "a Field Agent"} (${fieldCode}). I need support with field listings, payouts, or approvals.`;
     supportLink.href = `https://wa.me/256780863394?text=${encodeURIComponent(message)}`;
   }
-  setText("field-agent-support-phone", `WhatsApp Operations: ${liveAgent.support_phone || profile.field_agent_support_phone || "0780863394"}`);
+  const storedSupportPhone = liveAgent.support_phone || profile.field_agent_support_phone || "0780863394";
+  const supportPhone = /^(?:256760112587|0760112587)$/.test(String(storedSupportPhone).replace(/\D/g, "")) ? "0780863394" : storedSupportPhone;
+  setText("field-agent-support-phone", `WhatsApp Operations: ${supportPhone}`);
 
   const regionProgressEl = document.getElementById("field-region-progress");
   if (regionProgressEl) {
