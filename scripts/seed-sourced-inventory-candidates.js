@@ -8,7 +8,7 @@ const { buildListingReference } = require('../services/listingReferenceService')
 const SOURCE = 'sourced_inventory_candidate_v1';
 const DEFAULT_COUNT = 200;
 const MAX_COUNT = 1000;
-const SUPPORT_PHONE = process.env.SUPPORT_PHONE || process.env.SUPER_ADMIN_PHONE || '+256760112587';
+const SUPPORT_PHONE = process.env.SUPPORT_PHONE || process.env.SUPER_ADMIN_PHONE || '+256780863394';
 const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || 'info@makaug.com';
 
 const args = new Set(process.argv.slice(2));

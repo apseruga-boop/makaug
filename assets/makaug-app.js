@@ -766,7 +766,7 @@ const HOW_TO_VIDEO_SLOTS = [
   { key: "location-and-photos", title: "How to add property location and photos", description: "Use Find address or place, confirm the map pin, and upload useful photos.", category: "listing", youtubeVideoId: "", ctaLabel: "Open listing form", ctaUrl: "/list-property" },
   { key: "broker-dashboard", title: "How brokers use the dashboard", description: "Update your broker card, submit listings for review, track leads, and manage account settings.", category: "broker", youtubeVideoId: "", ctaLabel: "Open broker dashboard", ctaUrl: "/broker-dashboard" },
   { key: "broker-boost-property", title: "How to boost a broker listing", description: "Preview sponsored placement, choose reach or days live, and prepare payment before a campaign goes live.", category: "broker", youtubeVideoId: "", ctaLabel: "Advertise with makaug", ctaUrl: "/advertise" },
-  { key: "whatsapp-contact", title: "How to contact an owner or broker on WhatsApp", description: "Send property context, reference, location, and your viewing question safely.", category: "whatsapp", youtubeVideoId: "", ctaLabel: "Ask makaug", ctaUrl: "https://wa.me/256760112587?text=Hello%20makaug,%20I%20need%20property%20help" },
+  { key: "whatsapp-contact", title: "How to contact an owner or broker on WhatsApp", description: "Send property context, reference, location, and your viewing question safely.", category: "whatsapp", youtubeVideoId: "", ctaLabel: "Ask makaug", ctaUrl: "https://wa.me/256780863394?text=Hello%20makaug,%20I%20need%20property%20help" },
   { key: "save-searches-alerts", title: "How to save searches and create alerts", description: "Keep track of demand and get notified when matching listings appear.", category: "alerts", youtubeVideoId: "", ctaLabel: "Save a search", ctaUrl: "/to-rent" },
   { key: "book-viewing-callback", title: "How to book a viewing or request callback", description: "Understand viewing buttons, callback requests, and follow-up tracking.", category: "viewings", youtubeVideoId: "", ctaLabel: "Find properties", ctaUrl: "/for-sale" },
   { key: "stay-safe-report", title: "How to stay safe and report suspicious listings", description: "Learn red flags, title checks, payment safety, and fraud-report steps.", category: "safety", youtubeVideoId: "", ctaLabel: "Read safety tips", ctaUrl: "/safety" },
@@ -3073,7 +3073,7 @@ const ABOUT_PAGE_I18N_EN = Object.freeze({
   "about.chooseVerifiedText": "human-reviewed for trust",
   "about.finalTitle": "Ready to start?",
   "about.finalSub": "List your first property free for 7 days, or talk to our sales team about agent plans, developments and advertising.",
-  "about.finalWhatsapp": "WhatsApp sales: 0760 112 587",
+  "about.finalWhatsapp": "WhatsApp sales: 0780 863 394",
   "about.finalEmail": "Email: info@makaug.com",
   "about.finalHow": "How it works",
   "about.finalHelp": "Help centre",
@@ -3263,7 +3263,7 @@ const ADVERTISING_UI_I18N_EN = Object.freeze({
   "advertise.createAccount": "Create an advertiser account",
   "advertise.signIn": "sign in",
   "advertise.submissionFailed": "Campaign submission failed. Please try again.",
-  "advertise.contactWhatsapp": "WhatsApp 0760 112 587",
+  "advertise.contactWhatsapp": "WhatsApp 0780 863 394",
   "advertise.contactEmail": "Email info@makaug.com",
   "advertise.whatsappOption": "WhatsApp",
   "advertise.emailOption": "Email",
@@ -5120,7 +5120,7 @@ function footerTr(key) {
 function applyFooterLanguageUI() {
   setTextById("footer-brand-title", publicBrand());
   setTextById("footer-brand-copy", footerTr("brandCopy"));
-  setTextById("footer-whatsapp-label", `📲 ${footerTr("whatsapp")}: 0760112587`);
+  setTextById("footer-whatsapp-label", `📲 ${footerTr("whatsapp")}: 0780863394`);
   setTextById("footer-email-label", `📧 ${footerTr("email")}: info@makaug.com`);
   setTextById("footer-chat-whatsapp", `💬 ${footerTr("chatWhatsapp")}`);
   setTextById("footer-location-label", `📍 ${footerTr("location")}`);
@@ -7335,14 +7335,14 @@ function applyListingWizardLanguageUI() {
     ["lp-lat-label", "Latitude"],
     ["lp-lng-label", "Longitude"],
     ["lp-wa-title", "List through WhatsApp"],
-    ["lp-wa-copy", "Message 0760 112 587 in any Ugandan language and let the makaug assistant guide you through the listing."],
+    ["lp-wa-copy", "Message 0780 863 394 in any Ugandan language and let the makaug assistant guide you through the listing."],
     ["lp-wa-btn-label", "📲 List through WhatsApp"],
     ["list-choice-title", "List Property"],
     ["list-choice-sub", "Choose the listing type, then pick List Online or List through WhatsApp."],
     ["list-choice-online-title", "List Online"],
     ["list-choice-online-copy", "Open the guided website form."],
     ["list-choice-wa-title", "List through WhatsApp"],
-    ["list-choice-wa-copy", "Message 0760 112 587 and let the makaug assistant guide you."],
+    ["list-choice-wa-copy", "Message 0780 863 394 and let the makaug assistant guide you."],
     ["list-choice-free-title", "Start with 7 days free."],
     ["list-choice-free-copy", "After that, one private listing costs UGX 25,000 per month. Every submission stays in staff review until approved."]
   ];
@@ -12469,9 +12469,9 @@ async function renderFieldDashboard() {
   const supportLink = document.getElementById("field-agent-whatsapp-broadcast");
   if (supportLink) {
     const message = `Hi makaug.com Operations, this is ${user.first_name || "a Field Agent"} (${fieldCode}). I need support with field listings, payouts, or approvals.`;
-    supportLink.href = `https://wa.me/256760112587?text=${encodeURIComponent(message)}`;
+    supportLink.href = `https://wa.me/256780863394?text=${encodeURIComponent(message)}`;
   }
-  setText("field-agent-support-phone", `WhatsApp Operations: ${liveAgent.support_phone || profile.field_agent_support_phone || "0760112587"}`);
+  setText("field-agent-support-phone", `WhatsApp Operations: ${liveAgent.support_phone || profile.field_agent_support_phone || "0780863394"}`);
 
   const regionProgressEl = document.getElementById("field-region-progress");
   if (regionProgressEl) {
@@ -20653,7 +20653,7 @@ function buildWhatsAppUrl(phone, message) {
   return `https://wa.me/${recipient}?text=${encodeURIComponent(String(message || "").trim())}`;
 }
 
-const MAKAUG_SUPPORT_WHATSAPP = "256760112587";
+const MAKAUG_SUPPORT_WHATSAPP = "256780863394";
 const PUBLIC_WHATSAPP_CONTEXTS = Object.freeze({
   home: "Hi makaug, I'm on makaug.com and need property help. Please guide me with the best next step.",
   sale: "Hi makaug, I'm on the For Sale page and I'm looking for a home or investment property. Please help me find suitable options, confirm availability, and connect me with a trusted owner or broker.",
@@ -20788,7 +20788,7 @@ function bindSupportWhatsappAnalytics(link) {
 
 function syncPublicWhatsappLinks(root = document) {
   const scope = root && root.querySelectorAll ? root : document;
-  const links = scope.querySelectorAll('a[href^="https://wa.me/256760112587"], a[href^="https://wa.me/+256760112587"], a[data-public-whatsapp-link]');
+  const links = scope.querySelectorAll('a[href^="https://wa.me/256780863394"], a[href^="https://wa.me/+256780863394"], a[data-public-whatsapp-link]');
   links.forEach((link) => {
     if (!link || link.dataset.whatsappStatic === "true") return;
     if (["lp-wa-link", "lp-whatsapp-option-btn", "lp-whatsapp-option-inline-btn"].includes(link.id || "")) return;
@@ -32328,35 +32328,35 @@ function listChoiceMeta(type = getListChoiceType()) {
       gateTitle: "List a property for sale",
       gateCopy: "For sale listings use ownership, price, photos, Find address or place, and review checks.",
       onlineCopy: "Open the sale listing form for address, price, photos, ownership, and review.",
-      whatsappCopy: "Message WhatsApp 0760 112 587 with your sale property and let the makaug assistant guide you.",
+      whatsappCopy: "Message WhatsApp 0780 863 394 with your sale property and let the makaug assistant guide you.",
       modalSub: "Choose List Online or List through WhatsApp for this sale property."
     },
     rent: {
       gateTitle: "List a rental property",
       gateCopy: "Rental listings use availability, rent period, amenities, Find address or place, and viewing setup.",
       onlineCopy: "Open the rental form for rent period, availability, amenities, address, and verification.",
-      whatsappCopy: "Message WhatsApp 0760 112 587 with your rental and let the makaug assistant guide you.",
+      whatsappCopy: "Message WhatsApp 0780 863 394 with your rental and let the makaug assistant guide you.",
       modalSub: "Choose List Online or List through WhatsApp for this rental property."
     },
     student: {
       gateTitle: "List student accommodation",
       gateCopy: "Student accommodation uses a purple campus flow for campus, room setup, safety, services, and availability.",
       onlineCopy: "Open the student accommodation form for campus, room setup, services, photos, and map pin.",
-      whatsappCopy: "Message WhatsApp 0760 112 587 with the student accommodation details and let the makaug assistant guide you.",
+      whatsappCopy: "Message WhatsApp 0780 863 394 with the student accommodation details and let the makaug assistant guide you.",
       modalSub: "Choose List Online or List through WhatsApp for student accommodation."
     },
     land: {
       gateTitle: "List land",
       gateCopy: "Land listings use title/tenure, plot size, road access, map pin, and ownership review.",
       onlineCopy: "Open the land form for title/tenure, plot size, location, photos, and review.",
-      whatsappCopy: "Message WhatsApp 0760 112 587 with the land details and let the makaug assistant guide you.",
+      whatsappCopy: "Message WhatsApp 0780 863 394 with the land details and let the makaug assistant guide you.",
       modalSub: "Choose List Online or List through WhatsApp for this land listing."
     },
     commercial: {
       gateTitle: "List commercial property",
       gateCopy: "Commercial listings use business use, size, parking/loading, price terms, and location.",
       onlineCopy: "Open the commercial form for business use, size, terms, address, and verification.",
-      whatsappCopy: "Message WhatsApp 0760 112 587 with the commercial property details and let the makaug assistant guide you.",
+      whatsappCopy: "Message WhatsApp 0780 863 394 with the commercial property details and let the makaug assistant guide you.",
       modalSub: "Choose List Online or List through WhatsApp for this commercial property."
     }
   };
@@ -34622,7 +34622,7 @@ async function submitAccountAccessContactOtp() {
     toast(message);
     setTimeout(() => document.getElementById("account-access-otp-code")?.focus(), 30);
   } catch (error) {
-    const supportPhone = error.response?.support?.whatsapp || "0760112587";
+    const supportPhone = error.response?.support?.whatsapp || "0780863394";
     const recovery = error.status === 503 || Array.isArray(error.response?.retry_channels)
       ? `${error.message || "Could not send verification code."} You can retry Email, choose SMS/Text if your Uganda number is correct, or WhatsApp makaug support on ${supportPhone}.`
       : `${error.message || "Could not send verification code."} Check your details and try the other verification method.`;
@@ -35054,7 +35054,7 @@ async function sendAccountAccessPasswordResetCode() {
     toast(request?.data?.message || `We sent a password reset code by ${channelLabel}.`);
     setTimeout(() => document.getElementById("account-access-reset-code")?.focus(), 30);
   } catch (error) {
-    const supportPhone = error.response?.support?.whatsapp || "0760112587";
+    const supportPhone = error.response?.support?.whatsapp || "0780863394";
     const retry = Array.isArray(error.response?.retry_channels)
       ? ` Try the other method, or WhatsApp makaug support on ${supportPhone}.`
       : "";
@@ -36356,7 +36356,7 @@ function renderAiAssistantResponse(responseBox, data = {}, context = {}) {
       <div class="font-black">${adminEscape(copy.zero)}</div>
       <div class="mt-3 flex flex-wrap gap-2">
         <a href="/list-property" class="rounded-xl bg-blue-600 px-3 py-2 text-xs font-black text-white">${adminEscape(copy.listFree || "List free")}</a>
-        <a href="https://wa.me/256760112587?text=Hello%20makaug%2C%20I%20need%20help%20finding%20a%20property" target="_blank" rel="noopener" class="rounded-xl border border-blue-100 bg-white px-3 py-2 text-xs font-black text-blue-700">${adminEscape(copy.whatsappMakaug || "WhatsApp makaug")}</a>
+        <a href="https://wa.me/256780863394?text=Hello%20makaug%2C%20I%20need%20help%20finding%20a%20property" target="_blank" rel="noopener" class="rounded-xl border border-blue-100 bg-white px-3 py-2 text-xs font-black text-blue-700">${adminEscape(copy.whatsappMakaug || "WhatsApp makaug")}</a>
       </div>
     </div>` : "";
   responseBox.innerHTML = `
@@ -36814,10 +36814,10 @@ const PAGE_CONTENT = {
       <p class="text-green-50 mt-2 max-w-2xl">Find quick help for searching, listing, saving, viewing, safety, accounts, and WhatsApp support.</p>
     </div>
     <div class="grid md:grid-cols-2 gap-3 mb-6">
-      ${["Finding property","Listing property","Student accommodation","Saved searches and alerts","Book viewings and callbacks","Brokers and agents","Land and title safety","Fraud and suspicious listings","Account and login","Advertising with makaug"].map((topic) => `<div class="rounded-2xl border border-green-100 bg-white p-4"><h3 class="font-black text-gray-900">${topic}</h3><p class="text-sm text-gray-600 mt-1">Get practical steps, related video guidance, and WhatsApp support.</p><a class="inline-flex mt-3 text-sm font-bold text-green-700" href="https://wa.me/256760112587?text=Hello%20makaug,%20I%20need%20help%20with%20${encodeURIComponent(topic)}" target="_blank" rel="noopener">WhatsApp support</a></div>`).join("")}
+      ${["Finding property","Listing property","Student accommodation","Saved searches and alerts","Book viewings and callbacks","Brokers and agents","Land and title safety","Fraud and suspicious listings","Account and login","Advertising with makaug"].map((topic) => `<div class="rounded-2xl border border-green-100 bg-white p-4"><h3 class="font-black text-gray-900">${topic}</h3><p class="text-sm text-gray-600 mt-1">Get practical steps, related video guidance, and WhatsApp support.</p><a class="inline-flex mt-3 text-sm font-bold text-green-700" href="https://wa.me/256780863394?text=Hello%20makaug,%20I%20need%20help%20with%20${encodeURIComponent(topic)}" target="_blank" rel="noopener">WhatsApp support</a></div>`).join("")}
     </div>
     <div class="grid md:grid-cols-3 gap-3 mb-6">
-      <a class="rounded-2xl bg-green-700 text-white p-4 font-black" href="https://wa.me/256760112587?text=Hello%20makaug,%20I%20need%20help" target="_blank" rel="noopener">Ask makaug on WhatsApp</a>
+      <a class="rounded-2xl bg-green-700 text-white p-4 font-black" href="https://wa.me/256780863394?text=Hello%20makaug,%20I%20need%20help" target="_blank" rel="noopener">Ask makaug on WhatsApp</a>
       <a class="rounded-2xl bg-red-50 text-red-700 p-4 font-black" href="/report-fraud">Report a listing</a>
       <a class="rounded-2xl bg-amber-50 text-amber-900 p-4 font-black" href="/list-property">List Property</a>
     </div>
@@ -36845,7 +36845,7 @@ const PAGE_CONTENT = {
       <p class="text-green-50 mt-2 max-w-3xl" data-content-i18n="safety.subtitle">Simple, practical checks for every property journey: view safely, verify identity, confirm authority, use traceable payments, and report suspicious pressure quickly.</p>
       <div class="flex flex-wrap gap-2 mt-5">
         <a href="/report-fraud" class="inline-flex rounded-xl bg-white/90 px-4 py-2 text-sm font-black text-green-900" data-content-i18n="safety.reportCta">Report suspicious listing</a>
-        <a href="https://wa.me/256760112587?text=Hello%20makaug.com,%20I%20need%20safety%20help" target="_blank" rel="noopener" class="inline-flex rounded-xl bg-white/90 px-4 py-2 text-sm font-black text-green-900" data-content-i18n="safety.whatsappCta">Ask makaug.com on WhatsApp</a>
+        <a href="https://wa.me/256780863394?text=Hello%20makaug.com,%20I%20need%20safety%20help" target="_blank" rel="noopener" class="inline-flex rounded-xl bg-white/90 px-4 py-2 text-sm font-black text-green-900" data-content-i18n="safety.whatsappCta">Ask makaug.com on WhatsApp</a>
         <a href="/anti-fraud" class="inline-flex rounded-xl bg-white/90 px-4 py-2 text-sm font-black text-green-900" data-content-i18n="safety.fraudCta">Read anti-fraud guidance</a>
       </div>
     </div>
@@ -36911,7 +36911,7 @@ const PAGE_CONTENT = {
         <p class="text-sm text-gray-600 mt-2" data-content-i18n="safety.reportBody">Stop the conversation, keep screenshots and payment details, then report it so makaug.com can review the listing.</p>
         <div class="flex flex-wrap gap-2 mt-4">
           <a href="/report-fraud" class="rounded-xl bg-red-600 px-4 py-2 text-sm font-black text-white" data-content-i18n="safety.reportCta">Report suspicious listing</a>
-          <a href="https://wa.me/256760112587?text=Hello%20makaug.com,%20I%20need%20safety%20help" target="_blank" rel="noopener" class="rounded-xl border border-green-700 px-4 py-2 text-sm font-black text-green-700" data-content-i18n="safety.whatsappCta">Ask makaug.com on WhatsApp</a>
+          <a href="https://wa.me/256780863394?text=Hello%20makaug.com,%20I%20need%20safety%20help" target="_blank" rel="noopener" class="rounded-xl border border-green-700 px-4 py-2 text-sm font-black text-green-700" data-content-i18n="safety.whatsappCta">Ask makaug.com on WhatsApp</a>
         </div>
       </section>
     </div>
@@ -37077,7 +37077,7 @@ const PAGE_CONTENT = {
         <div id="career-interest-status" class="hidden rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-800"></div>
         <button type="submit" class="w-full bg-green-700 hover:bg-green-600 text-white rounded-xl px-4 py-3 text-center font-bold">Send career interest</button>
       </form>
-      <a class="mt-3 block border border-green-200 text-green-800 hover:bg-green-50 rounded-xl px-4 py-3 text-center font-bold" href="https://wa.me/256760112587?text=Hello%20makaug,%20I%20would%20like%20to%20share%20my%20CV%20and%20career%20interest." target="_blank" rel="noopener">Message on WhatsApp</a>
+      <a class="mt-3 block border border-green-200 text-green-800 hover:bg-green-50 rounded-xl px-4 py-3 text-center font-bold" href="https://wa.me/256780863394?text=Hello%20makaug,%20I%20would%20like%20to%20share%20my%20CV%20and%20career%20interest." target="_blank" rel="noopener">Message on WhatsApp</a>
     </div>
     <p class="text-sm mt-4 text-gray-600">
       makaug.com is committed to fair hiring and equal opportunity based on merit, role requirements, and practical impact.
@@ -44017,7 +44017,7 @@ function advertisingContactUrls(item = advertisingSelectedPackage()) {
   const subject = contentTemplate("advertise.contactSubject", { label });
   const body = contentTemplate("advertise.contactBody", { detail, label });
   return {
-    whatsapp: `https://wa.me/256760112587?text=${encodeURIComponent(message)}`,
+    whatsapp: `https://wa.me/256780863394?text=${encodeURIComponent(message)}`,
     email: `mailto:info@makaug.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
   };
 }

@@ -209,7 +209,7 @@ const SYNTHETIC_PUBLIC_ROUTE_CONTENT = {
       </form>
     `,
     ctas: ['Send career interest', 'Contact makaug', 'Field agent signup'],
-    links: ['/careers#career-interest-form', 'https://wa.me/256760112587?text=Hello%20makaug,%20I%20am%20interested%20in%20careers', '/field-agent-signup']
+    links: ['/careers#career-interest-form', 'https://wa.me/256780863394?text=Hello%20makaug,%20I%20am%20interested%20in%20careers', '/field-agent-signup']
   },
   '/help': {
     title: 'makaug Help Centre',
@@ -243,7 +243,7 @@ const SYNTHETIC_PUBLIC_ROUTE_CONTENT = {
       </form>
     `,
     ctas: ['WhatsApp support', 'Report an issue', 'Tell makaug what you need'],
-    links: ['https://wa.me/256760112587?text=Hello%20makaug,%20I%20need%20help', '/report-fraud', '/dashboard?intent=property-need']
+    links: ['https://wa.me/256780863394?text=Hello%20makaug,%20I%20need%20help', '/report-fraud', '/dashboard?intent=property-need']
   },
   '/safety': {
     i18nPrefix: 'safety',
@@ -285,7 +285,7 @@ const SYNTHETIC_PUBLIC_ROUTE_CONTENT = {
       </div>
     `,
     ctas: ['Report suspicious listing', 'Ask makaug.com on WhatsApp', 'Read anti-fraud guidance'],
-    links: ['/report-fraud', 'https://wa.me/256760112587?text=Hello%20makaug.com,%20I%20need%20safety%20help', '/anti-fraud']
+    links: ['/report-fraud', 'https://wa.me/256780863394?text=Hello%20makaug.com,%20I%20need%20safety%20help', '/anti-fraud']
   },
   '/terms': {
     title: 'makaug Terms and Conditions',
@@ -543,7 +543,7 @@ function renderSyntheticRouteContent(pathname = '/') {
   const ctaHtml = content.ctas.map((item, index) => {
     const href = (content.links || [])[index] || '/help';
     const external = /^https?:|^mailto:/i.test(href);
-    const supportWhatsAppAttrs = /^https:\/\/wa\.me\/256760112587/i.test(href)
+    const supportWhatsAppAttrs = /^https:\/\/wa\.me\/256780863394/i.test(href)
       ? ` data-public-whatsapp-link data-whatsapp-context="${whatsappContext}"`
       : '';
     const ctaKey = content.i18nPrefix && content.ctaKeys?.[index]
@@ -579,7 +579,7 @@ function renderSyntheticRouteContent(pathname = '/') {
         <h2 class="text-2xl font-bold text-gray-900 serif"${content.i18nPrefix ? ` data-content-i18n="${content.i18nPrefix}.title"` : ''}>${content.title}</h2>
         <p class="text-gray-600 mt-3"${content.i18nPrefix ? ` data-content-i18n="${content.i18nPrefix}.subtitle"` : ''}>${content.body}</p>
         ${content.extraHtml || ''}
-        <a href="https://wa.me/256760112587" class="inline-flex mt-5 rounded-xl bg-green-700 px-5 py-3 text-white font-semibold" data-public-whatsapp-link data-whatsapp-context="${whatsappContext}">Ask makaug.com on WhatsApp</a>
+        <a href="https://wa.me/256780863394" class="inline-flex mt-5 rounded-xl bg-green-700 px-5 py-3 text-white font-semibold" data-public-whatsapp-link data-whatsapp-context="${whatsappContext}">Ask makaug.com on WhatsApp</a>
       </div>
     </section>
     ${videoSection}

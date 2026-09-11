@@ -52,8 +52,8 @@ for (const expected of [
   assert(kenya.includes(expected), `Kenya homepage missing ${expected}`);
 }
 for (const forbidden of [
-  "0760112587",
-  "256760112587",
+  "0780863394",
+  "256780863394",
   "info@makaug.com",
   "wa.me",
   "WhatsApp",

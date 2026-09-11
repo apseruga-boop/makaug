@@ -144,7 +144,7 @@ assert(aboutBlock.includes('id="developers"') && /id="developers"[\s\S]*?href="\
   'I%20want%20an%20agency%20website',
   'I%20want%20to%20book%20a%20professional%20property%20shoot'
 ].forEach((message) => assert(hrefs.some((href) => href.includes(message)), `missing working sales contact for: ${message}`));
-assert(hrefs.filter((href) => href.startsWith('https://wa.me/256760112587?text=')).length >= 8, 'commercial sales actions should use tailored WhatsApp links');
+assert(hrefs.filter((href) => href.startsWith('https://wa.me/256780863394?text=')).length >= 8, 'commercial sales actions should use tailored WhatsApp links');
 
 assert(server.includes("app.get('/about/rate-card.pdf'"), 'existing PDF route should remain available for compatibility');
 assert(server.includes("canonical: absolutePublicUrl('/about')"), 'About should have a self-referencing canonical');

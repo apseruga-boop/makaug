@@ -109,7 +109,7 @@ const HOW_TO_VIDEO_SLOTS = [
     thumbnailUrl: '',
     durationSeconds: 60,
     ctaLabel: 'Ask makaug',
-    ctaUrl: 'https://wa.me/256760112587?text=Hello%20makaug,%20I%20need%20property%20help',
+    ctaUrl: 'https://wa.me/256780863394?text=Hello%20makaug,%20I%20need%20property%20help',
     status: 'slot_ready',
     sortOrder: 7
   },

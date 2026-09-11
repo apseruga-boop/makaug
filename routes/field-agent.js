@@ -262,7 +262,7 @@ router.get('/dashboard', requireFieldAgent, async (req, res, next) => {
           payout_frequency: profile.payout_frequency || 'weekly',
 	          payout_day: profile.payout_day || FIELD_AGENT_PAYOUT_DAY,
 	          notice: profile.field_agent_banner_message || profile.field_agent_notes || '',
-	          support_phone: profile.field_agent_support_phone || process.env.SUPPORT_WHATSAPP || process.env.SUPPORT_PHONE || '0760112587',
+	          support_phone: profile.field_agent_support_phone || process.env.SUPPORT_WHATSAPP || process.env.SUPPORT_PHONE || '0780863394',
 	          signed_contract_name: signedContract?.name || '',
 	          signed_contract_url: signedContractHref
 	        },

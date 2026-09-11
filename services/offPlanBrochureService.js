@@ -583,7 +583,7 @@ function buildOffPlanBrochure(projectInput, output, options = {}) {
   doc.fillColor(BRAND_GREEN).font('Brochure-Bold').fontSize(10).text(copy.contactLabel, 184, 116, { width: 365, align: copy.rtl ? 'right' : 'left' });
   doc.fillColor(INK).font('Brochure-Bold').fontSize(22).text(cleanText(overseas ? copy.makaugOverseasTeam : agent?.full_name || project.source_display_name || copy.contact, 120), 184, 138, { width: 365, align: copy.rtl ? 'right' : 'left' });
   doc.fillColor(MUTED).font('Brochure-Regular').fontSize(10).text(cleanText(overseas ? copy.purchaseCoordinator : agent?.company_name || copy.brokerProfile, 140), 184, 172, { width: 365, align: copy.rtl ? 'right' : 'left' });
-  const agentPhone = cleanText(overseas ? (process.env.SUPPORT_PHONE || '+256760112587') : agent?.whatsapp || agent?.phone, 60);
+  const agentPhone = cleanText(overseas ? (process.env.SUPPORT_PHONE || '+256780863394') : agent?.whatsapp || agent?.phone, 60);
   if (agentPhone) doc.fillColor(BRAND_GREEN).font('Brochure-Bold').fontSize(10).text(`${copy.phone}: ${agentPhone}`, 184, 190, { width: 365, link: `tel:${agentPhone.replace(/[^+\d]/g, '')}`, align: copy.rtl ? 'right' : 'left' });
   if (overseas) doc.fillColor(BRAND_GREEN).font('Brochure-Bold').fontSize(9).text('info@makaug.com', 390, 190, { width: 159, link: 'mailto:info@makaug.com', align: 'right' });
   const agentBio = overseas ? copy.makaugOverseasBio : cleanText(agent?.full_name).toLowerCase() === 'kazi honest' && language !== 'en' ? copy.kaziBio : cleanText(agent?.bio, 520);

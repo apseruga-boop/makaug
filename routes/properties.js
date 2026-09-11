@@ -3690,7 +3690,7 @@ router.post('/listing-intent', async (req, res, next) => {
 
     if (mode === 'whatsapp_ai') {
       await logWhatsAppMessage(db, {
-        recipientPhone: process.env.MAKAUG_WHATSAPP_NUMBER || '+256760112587',
+        recipientPhone: process.env.MAKAUG_WHATSAPP_NUMBER || '+256780863394',
         templateKey: 'list_property_whatsapp_ai',
         messageType: 'handoff',
         language,
