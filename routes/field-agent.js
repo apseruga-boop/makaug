@@ -5,6 +5,7 @@ const db = require('../config/database');
 const logger = require('../config/logger');
 const { cleanText } = require('../middleware/validation');
 const { logNotification } = require('../services/notificationLogService');
+const { resolveMakaugSupportPhone } = require('../services/whatsappLinkService');
 
 const router = express.Router();
 const FIELD_AGENT_DEFAULT_PAYOUT_UGX = 5000;
@@ -262,7 +263,7 @@ router.get('/dashboard', requireFieldAgent, async (req, res, next) => {
           payout_frequency: profile.payout_frequency || 'weekly',
 	          payout_day: profile.payout_day || FIELD_AGENT_PAYOUT_DAY,
 	          notice: profile.field_agent_banner_message || profile.field_agent_notes || '',
-	          support_phone: profile.field_agent_support_phone || process.env.SUPPORT_WHATSAPP || process.env.SUPPORT_PHONE || '0780863394',
+	          support_phone: resolveMakaugSupportPhone(profile.field_agent_support_phone),
 	          signed_contract_name: signedContract?.name || '',
 	          signed_contract_url: signedContractHref
 	        },

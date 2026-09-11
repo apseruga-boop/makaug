@@ -31,4 +31,14 @@ assert(app.includes('return buildWhatsAppUrl(MAKAUG_SUPPORT_WHATSAPP, buildListP
 assert(app.includes('logListPropertyIntent("whatsapp_ai"'), 'WhatsApp listing selection must remain measurable');
 assert(app.includes('logListPropertyIntent("online"'), 'online listing selection must remain measurable');
 
+const { resolveMakaugSupportPhone } = require('../services/whatsappLinkService');
+const previousSupport = process.env.SUPPORT_WHATSAPP;
+process.env.SUPPORT_WHATSAPP = '+256780863394';
+for (const oldPhone of ['', '0760112587', '+256760112587', '+256 760 112 587']) {
+  assert.equal(resolveMakaugSupportPhone(oldPhone), '+256780863394', 'saved operations defaults must follow the new company number');
+}
+assert.equal(resolveMakaugSupportPhone('+256701234567'), '+256701234567', 'custom staff support numbers must be preserved');
+if (previousSupport === undefined) delete process.env.SUPPORT_WHATSAPP;
+else process.env.SUPPORT_WHATSAPP = previousSupport;
+
 console.log('WhatsApp public listing paths restored');

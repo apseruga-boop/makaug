@@ -14,6 +14,12 @@ function normalizeWhatsAppRecipient(phone = '') {
   return digits;
 }
 
+function resolveMakaugSupportPhone(storedPhone = '') {
+  const recipient = normalizeWhatsAppRecipient(storedPhone);
+  if (recipient && recipient !== '256760112587') return storedPhone;
+  return process.env.SUPPORT_WHATSAPP || process.env.SUPPORT_PHONE || '+256780863394';
+}
+
 function listingCategory(listing = {}) {
   const raw = cleanValue(listing.listing_type || listing.type || listing.category).toLowerCase();
   if (raw.includes('rent')) return 'rent';
@@ -101,5 +107,6 @@ module.exports = {
   listingLocation,
   listingReference,
   listingUrl,
-  normalizeWhatsAppRecipient
+  normalizeWhatsAppRecipient,
+  resolveMakaugSupportPhone
 };
