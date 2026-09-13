@@ -14249,17 +14249,48 @@ function staffPreviewVideosHtml(preview = {}) {
   </div>`;
 }
 
-function staffPreviewImagesHtml(images = []) {
+function staffPreviewImagesHtml(images = [], propertyId = "", removedImages = []) {
   const list = Array.isArray(images) ? images : [];
-  if (!list.length) return staffEmpty("No images are attached. Do not approve unless source evidence explains why.");
-  return `<div class="grid grid-cols-2 md:grid-cols-4 gap-2">
-    ${list.slice(0, 16).map((image) => `
-      <a href="${adminAttr(image.url || "")}" target="_blank" rel="noopener noreferrer" class="block rounded-xl overflow-hidden border border-gray-200 bg-gray-50">
-        <img src="${adminAttr(image.url || "")}" alt="${adminAttr(image.room_label || "Listing image")}" class="w-full aspect-square object-cover">
-        <div class="px-2 py-1 text-[11px] text-gray-600">${adminEscape(image.room_label || image.slot_key || (image.is_primary ? "Primary" : "Image"))}</div>
+  const removed = Array.isArray(removedImages) ? removedImages : [];
+  const card = (image, restoring = false) => `
+    <div class="rounded-xl overflow-hidden border border-gray-200 bg-gray-50">
+      <a href="${adminAttr(image.url || "")}" target="_blank" rel="noopener noreferrer" class="block">
+        <img src="${adminAttr(image.url || "")}" alt="${adminAttr(image.room_label || "Listing photo")}" class="w-full aspect-square object-cover" loading="lazy">
+        <div class="px-2 py-1 text-[11px] text-gray-600">${adminEscape(restoring ? "Removed photo" : (image.is_primary ? "Primary property photo" : (image.room_label || image.slot_key || "Property photo")))}</div>
       </a>
-    `).join("")}
-  </div>`;
+      ${propertyId && image.id ? `<button type="button" data-staff-photo-action onclick="staffChangePreviewPhoto(${propertyIdArg(propertyId)}, ${propertyIdArg(image.id)}, ${restoring})" class="w-full border-t border-gray-200 bg-white px-2 py-2 text-xs font-black ${restoring ? "text-emerald-800 hover:bg-emerald-50" : "text-red-700 hover:bg-red-50"}">${restoring ? "Restore photo" : "Remove photo"}</button>` : ""}
+    </div>`;
+  return `<p class="mb-3 text-xs text-gray-600">Remove any photo that belongs to another property. Changes save immediately; removed photos can be restored below.</p>
+    ${list.length ? `<div class="grid grid-cols-2 md:grid-cols-4 gap-2">${list.map((image) => card(image)).join("")}</div>` : staffEmpty("No property photos are attached. A signed-in reviewer can use the human approval override after checking this listing.")}
+    ${removed.length ? `<details class="mt-3 rounded-xl border border-gray-200 p-3"><summary class="cursor-pointer text-sm font-bold">Removed photos (${removed.length})</summary><div class="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2">${removed.map((image) => card(image, true)).join("")}</div></details>` : ""}`;
+}
+
+let staffPhotoChangePending = false;
+async function staffChangePreviewPhoto(propertyId, imageId, restore = false) {
+  if (staffPhotoChangePending || String(adminActiveReview?.id || "") !== String(propertyId)) return;
+  staffPhotoChangePending = true;
+  document.querySelectorAll("[data-staff-photo-action]").forEach((button) => { button.disabled = true; });
+  setStaffPreviewDecisionBusy(true);
+  try {
+    const response = await staffApiRequestWithTimeout(`/api/staff/properties/${encodeURIComponent(propertyId)}/images/${encodeURIComponent(imageId)}${restore ? "/restore" : ""}`, {
+      method: restore ? "POST" : "DELETE"
+    }, STAFF_MODERATION_WRITE_TIMEOUT_MS, "Photo update");
+    if (String(adminActiveReview?.id || "") === String(propertyId)) {
+      adminActiveReview.images = response.data.images;
+      adminActiveReview.extra_fields = response.data.extra_fields;
+      const gallery = document.getElementById("staff-preview-photo-gallery");
+      if (gallery) gallery.innerHTML = staffPreviewImagesHtml(response.data.images, propertyId, response.data.extra_fields.staff_removed_images);
+      dismissApprovalBlockerBanner();
+    }
+    queueStaffDashboardRefreshAfterModeration();
+    toast(restore ? "Photo restored." : "Photo removed from this listing. You can restore it under Removed photos.");
+  } catch (error) {
+    toast(`Photo update failed: ${error.message || "request failed"}`);
+  } finally {
+    staffPhotoChangePending = false;
+    document.querySelectorAll("[data-staff-photo-action]").forEach((button) => { button.disabled = false; });
+    setStaffPreviewDecisionBusy(false);
+  }
 }
 
 const MODERATION_IDENTITY_APPROVAL_MESSAGE = "Approved - identity verified: ID photo clear and ID number matches. Listing details confirmed.";
@@ -14539,7 +14570,7 @@ function renderStaffListingPreviewModal(preview = {}) {
           <section class="rounded-xl border border-gray-200 p-4">
             <h4 class="font-black text-gray-900 mb-3">Photos, video and source evidence</h4>
             ${staffPreviewVideosHtml(preview)}
-            ${staffPreviewImagesHtml(preview.images || [])}
+            <div id="staff-preview-photo-gallery">${staffPreviewImagesHtml(preview.images || [], preview.id, preview.extra_fields?.staff_removed_images || [])}</div>
             <div class="mt-3 rounded-xl bg-gray-50 border border-gray-200 p-3 text-xs text-gray-700">
               <div><strong>Platform/source:</strong> ${adminEscape(source.platform || "not recorded")}</div>
               <div><strong>Source name:</strong> ${adminEscape(source.source_name || "not recorded")}</div>
@@ -14951,6 +14982,7 @@ function queueStaffDashboardRefreshAfterModeration({ refreshPublicSummary = fals
 }
 
 async function staffApprovePreviewListing(propertyId, options = {}) {
+  if (staffPhotoChangePending) return;
   const propertyIdForRequest = String(propertyId || adminActiveReview?.id || "").trim();
   const humanApprovalOverride = options?.humanApprovalOverride === true || options?.integrityOverride === true;
   try {

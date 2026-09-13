@@ -2,6 +2,7 @@ const express = require('express');
 
 const db = require('../config/database');
 const logger = require('../config/logger');
+const { changeStaffPropertyImage } = require('../services/staffPropertyMediaService');
 const { requireStaffAccess } = require('../middleware/auth');
 const { cleanText, isValidEmail, isValidPhone } = require('../middleware/validation');
 const { parsePagination, toPagination } = require('../utils/pagination');
@@ -3769,6 +3770,32 @@ router.get('/properties/:id/id-document', async (req, res, next) => {
     return next(error);
   }
 });
+
+async function staffChangePropertyImage(req, res, next) {
+  try {
+    if (!toUuidOrNull(req.params.id) || !toUuidOrNull(req.params.imageId)) {
+      return res.status(400).json({ ok: false, error: 'Invalid listing or photo id' });
+    }
+    const data = await changeStaffPropertyImage({
+      propertyId: req.params.id,
+      imageId: req.params.imageId,
+      actorId: actorId(req),
+      restore: req.method === 'POST'
+    });
+    clearStaffFastDashboardCache();
+    require('./properties').clearPublicPropertiesCache(data.action);
+    invalidatePublicInventoryMetricsCache(data.action);
+    logStaffActivityInBackground(req, data.action, { targetType: 'property', targetId: req.params.id });
+    res.set('Cache-Control', 'no-store');
+    return res.json({ ok: true, data });
+  } catch (error) {
+    if (error.status) return res.status(error.status).json({ ok: false, error: error.message });
+    return next(error);
+  }
+}
+
+router.delete('/properties/:id/images/:imageId', staffChangePropertyImage);
+router.post('/properties/:id/images/:imageId/restore', staffChangePropertyImage);
 
 router.patch('/properties/:id/review', async (req, res, next) => {
   try {

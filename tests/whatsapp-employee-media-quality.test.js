@@ -81,10 +81,10 @@ assert.equal(metadataIssue({ primary_slot_key: 'primary', extra_fields: {} }), '
   });
   assert.equal(unrelated.issue, true, 'unrelated or product imagery must also be held for review');
 
-  assert(propertiesSource.includes("approval_blocker: 'employee_media_quality'"), 'employee image quality must be a hard approval blocker');
-  assert(propertiesSource.includes('human_approval_override_available: false'), 'the screenshot publication guard must not be bypassable');
+  assert(propertiesSource.includes("code: 'employee_media_quality'"), 'employee image quality must use the audited human approval policy');
+  assert(propertiesSource.includes('human_approval_override_available: humanApprovalAccess.human_session'), 'only authenticated human reviewers may override the media gate');
   assert(propertiesSource.includes("mediaValidationStatus.startsWith('blocked_')"), 'all blocked WhatsApp media states must prevent approval');
-  assert(propertiesSource.includes("['whatsapp_employee_intake', 'whatsapp_forward_review'].includes"), 'legacy WhatsApp forwards must use the same non-bypassable media approval gate');
+  assert(propertiesSource.includes("['whatsapp_employee_intake', 'whatsapp_forward_review'].includes"), 'legacy WhatsApp forwards must use the same human-reviewed media approval gate');
   assert(propertiesSource.includes("'original_whatsapp_video', 'validated_property_image'"), 'missing original videos must be named explicitly at the approval boundary');
   assert(propertiesSource.includes("NOT IN ('source_evidence_original', 'quarantined_source_evidence')"), 'source evidence must not count as usable public media');
   assert(staffRouteSource.includes("'media_validation_status', p.extra_fields->>'media_validation_status'"), 'moderators must receive the media validation state');

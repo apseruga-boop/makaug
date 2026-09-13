@@ -4974,7 +4974,8 @@ async function attachEmployeeReviewMedia({ propertyId, storedMedia, phone, inbou
   const imageOffset = Number(existingImages.rows[0]?.count || 0);
   const existingPrimaryImageUrl = normalizeInput(existingImages.rows[0]?.primary_image_url || '');
   const existingHashes = new Set(Array.isArray(property.extra_fields?.media_sha256) ? property.extra_fields.media_sha256 : []);
-  const uniqueMedia = storedMedia.filter((item) => (
+  const removedImageUrls = new Set(property.extra_fields?.staff_removed_image_urls || []);
+  const uniqueMedia = storedMedia.filter((item) => !removedImageUrls.has(item.url)).filter((item) => (
     !item.sha256
     || !existingHashes.has(item.sha256)
     || (imageOffset === 0 && item.kind === 'image' && item.publicEligible !== false)
@@ -4992,13 +4993,14 @@ async function attachEmployeeReviewMedia({ propertyId, storedMedia, phone, inbou
         `UPDATE properties
             SET extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $2::jsonb,
                 updated_at = NOW()
-          WHERE id = $1 AND status = 'pending'`,
+          WHERE id = $1 AND status = 'pending'
+            AND (extra_fields->>'staff_media_edited_at') IS NOT DISTINCT FROM $3::text`,
         [propertyId, JSON.stringify({
           public_image_count: imageOffset,
           primary_image_url: existingPrimaryImageUrl || property.extra_fields?.primary_image_url || null,
           media_validation_status: 'passed_automated_image_gate',
           media_quality_blockers: retainedVideoBlockers
-        })]
+        }), property.extra_fields?.staff_media_edited_at || null]
       );
     }
     return {
@@ -5042,8 +5044,11 @@ async function attachEmployeeReviewMedia({ propertyId, storedMedia, phone, inbou
   const client = await db.getClient();
   try {
     await client.query('BEGIN');
-    const locked = await client.query("SELECT id FROM properties WHERE id = $1 AND status = 'pending' FOR UPDATE", [propertyId]);
+    const locked = await client.query("SELECT id, extra_fields FROM properties WHERE id = $1 AND status = 'pending' FOR UPDATE", [propertyId]);
     if (!locked.rows.length) throw new Error('The current property changed status while media was uploading');
+    if (locked.rows[0].extra_fields?.staff_media_edited_at !== property.extra_fields?.staff_media_edited_at) {
+      throw new Error('Staff changed the gallery while media was uploading; retry with the current gallery');
+    }
     for (let index = 0; index < images.length; index += 1) {
       const sortOrder = imageOffset + index;
       const isVideoKeyFrame = /video-(?:key-frame|still|message-preview|preview)/i.test(String(images[index].name || ''));
