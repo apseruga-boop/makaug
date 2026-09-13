@@ -283,11 +283,15 @@ async function queueWhatsappWebBridgeMessage({
   return result.rows[0] || null;
 }
 
-async function claimWhatsappWebBridgeMessages({ clientId, limit = 10, recipient = '' } = {}) {
+async function claimWhatsappWebBridgeMessages({ clientId, limit = 10, recipient = '', allowedSources = [] } = {}) {
   const safeLimit = Math.min(25, Math.max(1, Number(limit) || 10));
   const claimWindow = getBridgeClaimWindowSeconds();
   const normalizedClientId = String(clientId || '').trim() || 'web_bridge';
   const recipientDigits = String(recipient || '').replace(/\D/g, '');
+  const normalizedAllowedSources = (Array.isArray(allowedSources) ? allowedSources : String(allowedSources || '').split(','))
+    .map((value) => String(value || '').trim().toLowerCase())
+    .filter((value, index, values) => value && /^[a-z0-9_:-]{1,80}$/.test(value) && values.indexOf(value) === index)
+    .slice(0, 8);
 
   const result = await db.query(
     `WITH claimable AS (
@@ -298,6 +302,10 @@ async function claimWhatsappWebBridgeMessages({ clientId, limit = 10, recipient 
         AND q.next_attempt_at <= NOW()
         AND COALESCE(q.metadata->>'delivery_mode', '') = 'web_bridge'
         AND ($4::text = '' OR regexp_replace(COALESCE(q.user_phone, ''), '\\D', '', 'g') = $4::text)
+        AND (
+          COALESCE(array_length($5::text[], 1), 0) = 0
+          OR LOWER(COALESCE(q.metadata->>'source', 'system')) = ANY($5::text[])
+        )
       ORDER BY q.next_attempt_at ASC, q.created_at ASC
       LIMIT $1
       FOR UPDATE SKIP LOCKED
@@ -315,7 +323,7 @@ async function claimWhatsappWebBridgeMessages({ clientId, limit = 10, recipient 
     FROM claimable
     WHERE q.id = claimable.id
     RETURNING q.*`,
-    [safeLimit, normalizedClientId, String(claimWindow), recipientDigits]
+    [safeLimit, normalizedClientId, String(claimWindow), recipientDigits, normalizedAllowedSources]
   );
 
   return result.rows;

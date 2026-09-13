@@ -74,6 +74,12 @@ services:
         value: auto
       - key: WHATSAPP_WEB_COPILOT_PAIRING_PHONE
         value: "256780863394"
+      - key: WHATSAPP_WEB_COPILOT_REQUIRE_OPERATOR_PAIRING_REFRESH
+        value: "true"
+      - key: WHATSAPP_WEB_COPILOT_PAIRING_REFRESH_NONCE
+        sync: false
+      - key: WHATSAPP_WEB_COPILOT_PAIRING_COOLDOWN_MS
+        value: "86400000"
       - key: WHATSAPP_WEB_COPILOT_POLL_MS
         value: "750"
       - key: WHATSAPP_WEB_COPILOT_RECENT_SWEEP_MS
@@ -82,6 +88,14 @@ services:
         value: "900"
       - key: WHATSAPP_WEB_COPILOT_OUTBOX_POLL_MS
         value: "1000"
+      - key: WHATSAPP_WEB_COPILOT_OUTBOX_ALLOWED_SOURCES
+        value: whatsapp_runtime,whatsapp_missed_call
+      - key: WHATSAPP_WEB_COPILOT_OUTBOX_CLAIM_LIMIT
+        value: "1"
+      - key: WHATSAPP_WEB_COPILOT_OUTBOX_SENDS_PER_LOOP
+        value: "1"
+      - key: WHATSAPP_WEB_COPILOT_TRUST_SEND_ON_COMPOSER_CLEAR
+        value: "false"
       - key: WHATSAPP_WEB_COPILOT_MAX_SESSION_MS
         value: "14400000"
       - key: WHATSAPP_WEB_COPILOT_HEARTBEAT_MS
