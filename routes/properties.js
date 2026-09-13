@@ -4850,8 +4850,8 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
       const mediaValidationStatus = cleanText(mediaQuality.media_validation_status);
       const videoRecoveryRequired = mediaQuality.video_recovery_required === true;
       if (mediaValidationStatus.startsWith('blocked_') || videoRecoveryRequired || usableImageCount < 1) {
-        return res.status(400).json({
-          ok: false,
+        if (!handleApprovalBlocker({
+          code: 'employee_media_quality',
           error: videoRecoveryRequired
             ? 'The original WhatsApp property video is required before approval'
             : 'A clear property image is required before approval',
@@ -4864,16 +4864,15 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
               'WhatsApp chat screenshots and rendered message fallbacks are retained as source evidence only.',
               'Attach at least one validated property photo or a clear video-derived key image before approving.'
             ],
-          missing_fields: videoRecoveryRequired
+          missingFields: videoRecoveryRequired
             ? ['original_whatsapp_video', 'validated_property_image']
             : ['validated_property_image'],
-          approval_blocker: 'employee_media_quality',
-          approval_blocked: true,
-          human_approval_override_available: false,
-          media_validation_status: mediaValidationStatus || 'blocked_no_usable_property_image',
-          video_recovery_required: videoRecoveryRequired,
-          usable_property_image_count: usableImageCount
-        });
+          response: {
+            media_validation_status: mediaValidationStatus || 'blocked_no_usable_property_image',
+            video_recovery_required: videoRecoveryRequired,
+            usable_property_image_count: usableImageCount
+          }
+        })) return;
       }
     }
     if (nextStatus === 'approved') {
@@ -5633,6 +5632,7 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
 });
 
 module.exports = router;
+module.exports.clearPublicPropertiesCache = clearPublicPropertiesCache;
 module.exports._test = {
   addCanonicalLocationSearchFilter,
   approximatePublicPagination,

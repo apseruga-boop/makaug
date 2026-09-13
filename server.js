@@ -207,6 +207,7 @@ app.get('/api/version', (_req, res) => {
       'whatsapp-property-card-v2',
       'human-integrity-override-20260811',
       'human-approval-overlord-20260811',
+      'staff-photo-removal-human-media-override-20260913',
       'king-timestamp-iso-normalization-20260811',
       ...(!IS_SOUTH_AFRICA ? ['makaug-homepage-seo-stale-while-revalidate-20260824'] : []),
       ...(!IS_SOUTH_AFRICA ? ['makaug-always-on-whatsapp-runtime-20260814'] : []),

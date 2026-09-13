@@ -706,7 +706,7 @@ const originalGetClient = db.getClient;
   db.getClient = async () => ({
     query: async (sql, params = []) => {
       if (/^(?:BEGIN|COMMIT|ROLLBACK)$/i.test(String(sql).trim())) return { rows: [] };
-      if (/SELECT id FROM properties/i.test(sql) && /FOR UPDATE/i.test(sql)) return { rows: [{ id: params[0] }] };
+      if (/SELECT id(?:, extra_fields)? FROM properties/i.test(sql) && /FOR UPDATE/i.test(sql)) return { rows: [{ id: params[0] }] };
       if (/INSERT INTO property_images/i.test(sql)) {
         attachedReviewImages.push({ propertyId: params[0], url: params[1] });
         return { rows: [] };
