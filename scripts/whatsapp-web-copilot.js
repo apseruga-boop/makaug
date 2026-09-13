@@ -135,6 +135,14 @@ const PROFILE_DIR = path.resolve(
   process.cwd(),
   String(process.env.WHATSAPP_WEB_COPILOT_PROFILE_DIR || '.whatsapp-web-copilot-profile')
 );
+const HOSTED_RUNTIME = String(process.env.WHATSAPP_WEB_COPILOT_HOSTED || '').trim().toLowerCase() === 'true'
+  || PROFILE_DIR.startsWith('/var/data')
+  || [
+    process.env.RENDER_SERVICE_ID,
+    process.env.RENDER_SERVICE_NAME,
+    process.env.RENDER_INSTANCE_ID,
+    process.env.RENDER_EXTERNAL_HOSTNAME
+  ].some(Boolean);
 const PAIRING_REFRESH_NONCE = String(process.env.WHATSAPP_WEB_COPILOT_PAIRING_REFRESH_NONCE || '').trim();
 const PAIRING_REFRESH_STATE_FILE = path.join(PROFILE_DIR, '.makaug-pairing-refresh-nonce');
 const configuredPairingCooldownMs = Number(
@@ -186,23 +194,21 @@ const MEMORY_CHECK_MS = Math.min(
 const HEADLESS_BROWSER = ['1', 'true', 'yes', 'on'].includes(
   String(process.env.WHATSAPP_WEB_COPILOT_HEADLESS || '').trim().toLowerCase()
 );
-const HOSTED_RUNTIME = String(process.env.WHATSAPP_WEB_COPILOT_HOSTED || '').trim().toLowerCase() === 'true'
-  || PROFILE_DIR.startsWith('/var/data')
-  || [
-    process.env.RENDER_SERVICE_ID,
-    process.env.RENDER_SERVICE_NAME,
-    process.env.RENDER_INSTANCE_ID,
-    process.env.RENDER_EXTERNAL_HOSTNAME
-  ].some(Boolean);
 const LOGIN_SCREENSHOT_ENABLED = !['0', 'false', 'no', 'off'].includes(
   String(process.env.WHATSAPP_WEB_COPILOT_LOGIN_SCREENSHOT || 'true').trim().toLowerCase()
 );
 const LOGIN_METHOD = String(process.env.WHATSAPP_WEB_COPILOT_LOGIN_METHOD || 'auto').trim().toLowerCase();
+const REQUIRE_OPERATOR_PAIRING_REFRESH = !['0', 'false', 'no', 'off'].includes(
+  String(
+    process.env.WHATSAPP_WEB_COPILOT_REQUIRE_OPERATOR_PAIRING_REFRESH
+      || (HOSTED_RUNTIME ? 'true' : 'false')
+  ).trim().toLowerCase()
+);
 const { createWhatsappPairingRecovery } = require('../services/whatsappPairingRecovery');
 const configuredPairingRetryMs = Number(process.env.WHATSAPP_WEB_COPILOT_PAIRING_RETRY_MS || (10 * 60 * 1000));
 const phonePairingRecovery = createWhatsappPairingRecovery({
   retryMs: configuredPairingRetryMs,
-  requireOperatorRefresh: !!PAIRING_REFRESH_NONCE
+  requireOperatorRefresh: REQUIRE_OPERATOR_PAIRING_REFRESH
 });
 const PAIRING_PHONE_NUMBER = String(
   process.env.WHATSAPP_WEB_COPILOT_PAIRING_PHONE
@@ -229,8 +235,20 @@ const RECENT_CHAT_ROW_CACHE_MS = Math.min(
   Math.max(5000, Number.isFinite(configuredRecentRowCacheMs) ? configuredRecentRowCacheMs : 300000)
 );
 const RECENT_CHAT_ROW_CACHE_FILE = path.join(PROFILE_DIR, '.makaug-recent-chat-rows.json');
-const OUTBOX_CLAIM_LIMIT = Math.min(25, Math.max(1, Number(process.env.WHATSAPP_WEB_COPILOT_OUTBOX_CLAIM_LIMIT || 25)));
-const OUTBOX_SENDS_PER_LOOP = Math.min(8, Math.max(1, Number(process.env.WHATSAPP_WEB_COPILOT_OUTBOX_SENDS_PER_LOOP || 5)));
+const OUTBOX_ALLOWED_SOURCES = String(
+  process.env.WHATSAPP_WEB_COPILOT_OUTBOX_ALLOWED_SOURCES
+    || (HOSTED_RUNTIME ? 'whatsapp_runtime,whatsapp_missed_call' : '')
+)
+  .split(',')
+  .map((value) => value.trim().toLowerCase())
+  .filter((value, index, values) => value && /^[a-z0-9_:-]{1,80}$/.test(value) && values.indexOf(value) === index)
+  .slice(0, 8);
+const OUTBOX_CLAIM_LIMIT = Math.min(25, Math.max(1, Number(
+  process.env.WHATSAPP_WEB_COPILOT_OUTBOX_CLAIM_LIMIT || (HOSTED_RUNTIME ? 1 : 25)
+)));
+const OUTBOX_SENDS_PER_LOOP = Math.min(8, Math.max(1, Number(
+  process.env.WHATSAPP_WEB_COPILOT_OUTBOX_SENDS_PER_LOOP || (HOSTED_RUNTIME ? 1 : 5)
+)));
 const API_RETRY_ATTEMPTS = Math.min(8, Math.max(3, Number(process.env.WHATSAPP_WEB_COPILOT_API_RETRY_ATTEMPTS || 5)));
 const configuredSendConfirmMs = Number(process.env.WHATSAPP_WEB_COPILOT_SEND_CONFIRM_MS || 250);
 const SEND_CONFIRM_MS = Math.min(2000, Math.max(250, Number.isFinite(configuredSendConfirmMs) ? configuredSendConfirmMs : 250));
@@ -254,9 +272,7 @@ const SEND_RETRY_CONFIRM_MS = Math.min(
   Math.max(300, Number.isFinite(configuredSendRetryConfirmMs) ? configuredSendRetryConfirmMs : 750)
 );
 const TRUST_SEND_ON_COMPOSER_CLEAR = HOSTED_RUNTIME && !['0', 'false', 'no', 'off'].includes(
-  HEADLESS_BROWSER
-    ? String(process.env.WHATSAPP_WEB_COPILOT_TRUST_SEND_ON_COMPOSER_CLEAR || 'true').trim().toLowerCase()
-    : String(process.env.WHATSAPP_WEB_COPILOT_TRUST_SEND_ON_COMPOSER_CLEAR || 'false').trim().toLowerCase()
+  String(process.env.WHATSAPP_WEB_COPILOT_TRUST_SEND_ON_COMPOSER_CLEAR || 'false').trim().toLowerCase()
 );
 const configuredRecentlySentReplyTtlMs = Number(process.env.WHATSAPP_WEB_COPILOT_RECENTLY_SENT_REPLY_TTL_MS || 15000);
 const RECENTLY_SENT_REPLY_TTL_MS = Math.min(
@@ -6024,7 +6040,10 @@ async function processOutboxUnlocked(page, { recipient = '', maxSends = OUTBOX_S
   const recipientQuery = recipient
     ? `&recipient=${encodeURIComponent(normalizeChatKey(recipient))}`
     : '';
-  const response = await apiRequest(`/api/whatsapp/web-bridge/outbox?client_id=${encodeURIComponent(CLIENT_ID)}&limit=${encodeURIComponent(sendLimit)}${recipientQuery}`);
+  const allowedSourcesQuery = OUTBOX_ALLOWED_SOURCES.length
+    ? `&allowed_sources=${encodeURIComponent(OUTBOX_ALLOWED_SOURCES.join(','))}`
+    : '';
+  const response = await apiRequest(`/api/whatsapp/web-bridge/outbox?client_id=${encodeURIComponent(CLIENT_ID)}&limit=${encodeURIComponent(sendLimit)}${recipientQuery}${allowedSourcesQuery}`);
   const items = Array.isArray(response.data) ? response.data : [];
   const activeRecipient = normalizeChatKey(recipient || activeInboundRecipientHint || '');
   const orderedItems = items.sort((a, b) => {
@@ -6344,7 +6363,7 @@ async function main() {
   log('WhatsApp Web copilot started.');
   log(`Base URL: ${BASE_URL}`);
   log(`Client ID: ${CLIENT_ID}`);
-  log(`Poll interval: ${POLL_MS}ms; outbox poll: ${OUTBOX_POLL_MS}ms; fast lane sweep: ${FAST_LANE_SWEEP_MS}ms; recent chat sweep: ${RECENT_CHAT_SWEEP_MS}ms; send confirm: ${SEND_CONFIRM_MS}ms; trusted clear grace: ${TRUSTED_COMPOSER_CLEAR_GRACE_MS}ms; max browser session: ${Math.round(MAX_SESSION_MS / 60000)}m; memory recycle: ${Math.round(MEMORY_RECYCLE_BYTES / (1024 * 1024))}MB; fast lane rows: ${RECENT_CHAT_FAST_LANE_LIMIT}; sweep open cap: ${RECENT_CHAT_SWEEP_OPEN_LIMIT}; row cache: ${RECENT_CHAT_ROW_CACHE_MS}ms; API retry attempts: ${API_RETRY_ATTEMPTS}`);
+  log(`Poll interval: ${POLL_MS}ms; outbox poll: ${OUTBOX_POLL_MS}ms; fast lane sweep: ${FAST_LANE_SWEEP_MS}ms; recent chat sweep: ${RECENT_CHAT_SWEEP_MS}ms; send confirm: ${SEND_CONFIRM_MS}ms; trusted clear grace: ${TRUSTED_COMPOSER_CLEAR_GRACE_MS}ms; max browser session: ${Math.round(MAX_SESSION_MS / 60000)}m; memory recycle: ${Math.round(MEMORY_RECYCLE_BYTES / (1024 * 1024))}MB; fast lane rows: ${RECENT_CHAT_FAST_LANE_LIMIT}; sweep open cap: ${RECENT_CHAT_SWEEP_OPEN_LIMIT}; row cache: ${RECENT_CHAT_ROW_CACHE_MS}ms; outbox claim cap: ${OUTBOX_CLAIM_LIMIT}; sends per loop: ${OUTBOX_SENDS_PER_LOOP}; allowed outbox sources: ${OUTBOX_ALLOWED_SOURCES.join(',') || 'all'}; operator pairing refresh required: ${REQUIRE_OPERATOR_PAIRING_REFRESH}; API retry attempts: ${API_RETRY_ATTEMPTS}`);
   if (connectedOverCdp) {
     log(`Connected over CDP: ${CDP_URL}`);
   } else {

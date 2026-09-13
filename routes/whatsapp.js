@@ -13581,7 +13581,12 @@ router.get('/web-bridge/outbox', asyncRoute(async (req, res) => {
   const messages = await claimWhatsappWebBridgeMessages({
     clientId,
     limit: req.query.limit || 10,
-    recipient: req.query.recipient || ''
+    recipient: req.query.recipient || '',
+    allowedSources: String(req.query.allowed_sources || '')
+      .split(',')
+      .map((value) => value.trim().toLowerCase())
+      .filter((value, index, values) => value && /^[a-z0-9_:-]{1,80}$/.test(value) && values.indexOf(value) === index)
+      .slice(0, 8)
   });
 
   return res.json({

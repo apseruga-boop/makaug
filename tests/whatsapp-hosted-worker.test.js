@@ -77,7 +77,14 @@ assert(agentScript.includes('pairingCodeVisible') && agentScript.includes("stabl
 assert(!agentScript.includes('submitted WhatsApp phone pairing with Playwright'), 'Logs must not claim a phone pairing submission when only a code is visible');
 assert(agentScript.includes('WHATSAPP_WEB_COPILOT_PAIRING_REFRESH_NONCE') && agentScript.includes('.makaug-pairing-refresh-nonce'), 'Operators must be able to request exactly one fresh pairing code across worker restarts');
 assert(agentScript.includes('forceRefresh: forcePairingRefreshNow') && agentScript.includes('markPairingRefreshNonceConsumed()'), 'A pairing refresh nonce must force one resubmission and then persist its consumed state');
-assert(agentScript.includes('requireOperatorRefresh: !!PAIRING_REFRESH_NONCE') && pairingRecovery.includes("state: 'operator_refresh_required'"), 'A consumed operator nonce must disable automatic phone-number resubmission');
+assert(agentScript.includes('requireOperatorRefresh: REQUIRE_OPERATOR_PAIRING_REFRESH') && pairingRecovery.includes("state: 'operator_refresh_required'"), 'Hosted workers must disable automatic phone-number resubmission unless an operator requests one attempt');
+assert(agentScript.includes("HOSTED_RUNTIME ? 'true' : 'false'") && renderYaml.includes('WHATSAPP_WEB_COPILOT_REQUIRE_OPERATOR_PAIRING_REFRESH'), 'Render pairing must fail closed to one operator-requested attempt');
+assert(renderYaml.includes('WHATSAPP_WEB_COPILOT_PAIRING_COOLDOWN_MS') && renderYaml.includes('value: "86400000"'), 'Render pairing must persist a 24-hour cooldown after a provider warning');
+assert(agentScript.includes('OUTBOX_ALLOWED_SOURCES') && agentScript.includes('allowed_sources='), 'Hosted workers must request only explicitly allowed reply sources');
+assert(renderYaml.includes('value: whatsapp_runtime,whatsapp_missed_call'), 'A fresh hosted account must send only replies tied to inbound WhatsApp events');
+assert(renderYaml.includes('WHATSAPP_WEB_COPILOT_OUTBOX_CLAIM_LIMIT') && renderYaml.includes('WHATSAPP_WEB_COPILOT_OUTBOX_SENDS_PER_LOOP'), 'A fresh hosted account must cap the outbox to one send per loop');
+assert(renderYaml.includes('WHATSAPP_WEB_COPILOT_TRUST_SEND_ON_COMPOSER_CLEAR') && renderYaml.includes('value: "false"'), 'Render must require a visible outgoing bubble before confirming delivery');
+assert(whatsappRoute.includes('allowedSources: String(req.query.allowed_sources') && read('services/whatsappWebBridgeService.js').includes("metadata->>'source'"), 'The server must filter the claimed queue before the worker can see unrelated outreach rows');
 assert(agentScript.includes('phonePairingPrompt') && agentScript.includes('enter code on phone'), 'Readiness detection must treat phone-code screens as login states');
 assert(agentScript.includes('phone_form_not_visible_after_click'), 'Phone pairing must not claim submission if the phone form never appears');
 assert(agentScript.includes("text.includes('code on your phone')"), 'Phone pairing detection must require real pairing-code copy, not QR-screen text');
