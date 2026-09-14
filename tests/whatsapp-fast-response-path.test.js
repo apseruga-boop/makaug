@@ -145,9 +145,28 @@ async function run() {
   assert(
     whatsappWebCopilotSource.includes('WHATSAPP_WEB_COPILOT_MEMORY_RECYCLE_MB || 1800')
       && whatsappWebCopilotSource.includes('function readContainerMemoryBytes()')
-      && whatsappWebCopilotSource.includes("phase: 'memory_pressure_recycle'")
-      && whatsappWebCopilotSource.includes('planned browser recycle at'),
-    'WhatsApp Web sender must recycle Chromium gracefully before the 2 GB worker is killed'
+      && whatsappWebCopilotSource.includes('async function recycleWhatsappPageInPlace(')
+      && whatsappWebCopilotSource.includes("phase: 'memory_pressure_page_recycle'")
+      && whatsappWebCopilotSource.includes('session_preserved: true')
+      && whatsappWebCopilotSource.includes('WHATSAPP_WEB_COPILOT_MEMORY_RECYCLE_COOLDOWN_MS'),
+    'WhatsApp Web sender must release page memory without closing the authenticated persistent browser'
+  );
+  const plannedRecycleStart = whatsappWebCopilotSource.indexOf('if (now - sessionStartedAt >= MAX_SESSION_MS)');
+  const memoryRecycleStart = whatsappWebCopilotSource.indexOf('if (now - lastMemoryCheck >= MEMORY_CHECK_MS)', plannedRecycleStart);
+  const bridgeStateStart = whatsappWebCopilotSource.indexOf('const bridgeState = readyState.ready', memoryRecycleStart);
+  const plannedRecycleBlock = whatsappWebCopilotSource.slice(plannedRecycleStart, memoryRecycleStart);
+  const memoryRecycleBlock = whatsappWebCopilotSource.slice(memoryRecycleStart, bridgeStateStart);
+  assert(
+    plannedRecycleStart >= 0
+      && memoryRecycleStart > plannedRecycleStart
+      && bridgeStateStart > memoryRecycleStart
+      && plannedRecycleBlock.includes("page = await recycleWhatsappPageInPlace(context, page, 'scheduled')")
+      && memoryRecycleBlock.includes("page = await recycleWhatsappPageInPlace(context, page, 'memory pressure')")
+      && !plannedRecycleBlock.includes('context.close()')
+      && !plannedRecycleBlock.includes('process.exit(')
+      && !memoryRecycleBlock.includes('context.close()')
+      && !memoryRecycleBlock.includes('process.exit('),
+    'Routine WhatsApp maintenance must never close the persistent browser context or terminate the linked session'
   );
   assert(
     whatsappWebCopilotSource.includes('if (now - lastOutboxPoll >= OUTBOX_POLL_MS)')
