@@ -191,6 +191,18 @@ const MEMORY_CHECK_MS = Math.min(
   60000,
   Math.max(5000, Number.isFinite(configuredMemoryCheckMs) ? configuredMemoryCheckMs : 15000)
 );
+const configuredMemoryRecycleCooldownMs = Number(
+  process.env.WHATSAPP_WEB_COPILOT_MEMORY_RECYCLE_COOLDOWN_MS || 30 * 60 * 1000
+);
+const MEMORY_RECYCLE_COOLDOWN_MS = Math.min(
+  2 * 60 * 60 * 1000,
+  Math.max(
+    5 * 60 * 1000,
+    Number.isFinite(configuredMemoryRecycleCooldownMs)
+      ? configuredMemoryRecycleCooldownMs
+      : 30 * 60 * 1000
+  )
+);
 const HEADLESS_BROWSER = ['1', 'true', 'yes', 'on'].includes(
   String(process.env.WHATSAPP_WEB_COPILOT_HEADLESS || '').trim().toLowerCase()
 );
@@ -6304,8 +6316,26 @@ async function recoverWhatsappPage(context, previousPage) {
   return page;
 }
 
+async function recycleWhatsappPageInPlace(context, previousPage, reason) {
+  const replacementPage = await context.newPage();
+  try {
+    if (previousPage && !previousPage.isClosed()) {
+      await previousPage.close({ runBeforeUnload: false });
+    }
+    await ensureWhatsappTab(replacementPage);
+    await replacementPage.waitForTimeout(1500);
+    log(`recycled the WhatsApp page in place (${reason}); the authenticated persistent browser context stayed open.`);
+    return replacementPage;
+  } catch (error) {
+    if (!replacementPage.isClosed()) {
+      await replacementPage.close({ runBeforeUnload: false }).catch(() => null);
+    }
+    throw error;
+  }
+}
+
 async function main() {
-  const sessionStartedAt = Date.now();
+  let sessionStartedAt = Date.now();
   let browser = null;
   let context = null;
   let connectedOverCdp = false;
@@ -6376,6 +6406,7 @@ async function main() {
   let lastRecentSweep = 0;
   let lastFastLaneSweep = 0;
   let lastMemoryCheck = 0;
+  let lastMemoryRecycleAt = 0;
   let lastOutboxPoll = 0;
   let lastTabReselect = 0;
   let forcePairingRefresh = isPairingRefreshNoncePending();
@@ -6406,33 +6437,52 @@ async function main() {
       }
       const now = Date.now();
       if (now - sessionStartedAt >= MAX_SESSION_MS) {
-        log(`planned browser recycle after ${Math.round((now - sessionStartedAt) / 60000)} minutes to release Chromium memory safely.`);
+        log(`planned in-place page recycle after ${Math.round((now - sessionStartedAt) / 60000)} minutes to release WhatsApp page memory without closing the authenticated browser.`);
+        persistRecentChatRowCache();
         await sendHeartbeat({
-          status: 'restarting',
+          status: readyState.ready ? 'online' : 'starting',
           current_url: page.url(),
-          metadata: { phase: 'planned_memory_recycle' }
+          metadata: {
+            phase: 'planned_page_recycle',
+            session_preserved: true
+          }
         });
-        if (!connectedOverCdp && context) await context.close().catch(() => null);
-        process.exit(0);
+        page = await recycleWhatsappPageInPlace(context, page, 'scheduled');
+        sessionStartedAt = Date.now();
+        lastMemoryRecycleAt = sessionStartedAt;
+        lastMemoryCheck = sessionStartedAt;
+        lastBridgeState = '';
+        readyHistoryNormalized = false;
+        continue;
       }
       if (now - lastMemoryCheck >= MEMORY_CHECK_MS) {
         lastMemoryCheck = now;
         const memoryBytes = readContainerMemoryBytes();
-        if (Number.isFinite(memoryBytes) && memoryBytes >= MEMORY_RECYCLE_BYTES) {
+        if (
+          Number.isFinite(memoryBytes)
+          && memoryBytes >= MEMORY_RECYCLE_BYTES
+          && now - lastMemoryRecycleAt >= MEMORY_RECYCLE_COOLDOWN_MS
+        ) {
           const memoryMb = Math.round(memoryBytes / (1024 * 1024));
-          log(`planned browser recycle at ${memoryMb}MB to prevent a Chromium out-of-memory stall.`);
+          log(`planned in-place page recycle at ${memoryMb}MB to prevent a Chromium out-of-memory stall without closing the authenticated browser.`);
           persistRecentChatRowCache();
           await sendHeartbeat({
-            status: 'restarting',
+            status: readyState.ready ? 'online' : 'starting',
             current_url: page.url(),
             metadata: {
-              phase: 'memory_pressure_recycle',
+              phase: 'memory_pressure_page_recycle',
               memory_mb: memoryMb,
-              memory_recycle_mb: Math.round(MEMORY_RECYCLE_BYTES / (1024 * 1024))
+              memory_recycle_mb: Math.round(MEMORY_RECYCLE_BYTES / (1024 * 1024)),
+              session_preserved: true
             }
           });
-          if (!connectedOverCdp && context) await context.close().catch(() => null);
-          process.exit(0);
+          page = await recycleWhatsappPageInPlace(context, page, 'memory pressure');
+          sessionStartedAt = Date.now();
+          lastMemoryRecycleAt = sessionStartedAt;
+          lastMemoryCheck = sessionStartedAt;
+          lastBridgeState = '';
+          readyHistoryNormalized = false;
+          continue;
         }
       }
       const bridgeState = readyState.ready
