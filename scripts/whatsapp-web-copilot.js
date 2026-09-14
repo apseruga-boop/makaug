@@ -261,6 +261,20 @@ const OUTBOX_CLAIM_LIMIT = Math.min(25, Math.max(1, Number(
 const OUTBOX_SENDS_PER_LOOP = Math.min(8, Math.max(1, Number(
   process.env.WHATSAPP_WEB_COPILOT_OUTBOX_SENDS_PER_LOOP || (HOSTED_RUNTIME ? 1 : 5)
 )));
+const configuredPostLoginWarmupMs = Number(
+  process.env.WHATSAPP_WEB_COPILOT_POST_LOGIN_WARMUP_MS || (HOSTED_RUNTIME ? 120_000 : 0)
+);
+const POST_LOGIN_WARMUP_MS = Math.min(
+  10 * 60_000,
+  Math.max(0, Number.isFinite(configuredPostLoginWarmupMs) ? configuredPostLoginWarmupMs : 120_000)
+);
+const configuredOutboxSendMinIntervalMs = Number(
+  process.env.WHATSAPP_WEB_COPILOT_OUTBOX_SEND_MIN_INTERVAL_MS || (HOSTED_RUNTIME ? 12_000 : 0)
+);
+const OUTBOX_SEND_MIN_INTERVAL_MS = Math.min(
+  60_000,
+  Math.max(0, Number.isFinite(configuredOutboxSendMinIntervalMs) ? configuredOutboxSendMinIntervalMs : 12_000)
+);
 const API_RETRY_ATTEMPTS = Math.min(8, Math.max(3, Number(process.env.WHATSAPP_WEB_COPILOT_API_RETRY_ATTEMPTS || 5)));
 const configuredSendConfirmMs = Number(process.env.WHATSAPP_WEB_COPILOT_SEND_CONFIRM_MS || 250);
 const SEND_CONFIRM_MS = Math.min(2000, Math.max(250, Number.isFinite(configuredSendConfirmMs) ? configuredSendConfirmMs : 250));
@@ -414,6 +428,7 @@ const recentChatRowKeys = new Map();
 let recentChatRowCacheWriteTimer = null;
 let activeInboundRecipientHint = '';
 let outboxProcessing = false;
+let lastSuccessfulBrowserSendAt = 0;
 let forcedEmployeeMediaReconciliationAttempted = false;
 const COMPOSER_SELECTORS = [
   'footer [data-testid="conversation-compose-box-input"][contenteditable="true"]',
@@ -6045,6 +6060,12 @@ async function processOutbox(page, options = {}) {
 }
 
 async function processOutboxUnlocked(page, { recipient = '', maxSends = OUTBOX_SENDS_PER_LOOP } = {}) {
+  if (
+    OUTBOX_SEND_MIN_INTERVAL_MS > 0
+    && Date.now() - lastSuccessfulBrowserSendAt < OUTBOX_SEND_MIN_INTERVAL_MS
+  ) {
+    return 0;
+  }
   const sendLimit = Math.min(
     OUTBOX_CLAIM_LIMIT,
     Math.max(1, Number(maxSends || OUTBOX_SENDS_PER_LOOP))
@@ -6106,6 +6127,7 @@ async function processOutboxUnlocked(page, { recipient = '', maxSends = OUTBOX_S
         await typeAndSendReply(page, item.text);
       }
       rememberRecentlySentReply(item);
+      lastSuccessfulBrowserSendAt = Date.now();
       const browserSendMs = Date.now() - browserSendStartedAt;
       const queuedAtMs = Date.parse(String(item.created_at || ''));
       const queueAgeMs = Number.isFinite(queuedAtMs) ? Math.max(0, Date.now() - queuedAtMs) : null;
@@ -6393,7 +6415,7 @@ async function main() {
   log('WhatsApp Web copilot started.');
   log(`Base URL: ${BASE_URL}`);
   log(`Client ID: ${CLIENT_ID}`);
-  log(`Poll interval: ${POLL_MS}ms; outbox poll: ${OUTBOX_POLL_MS}ms; fast lane sweep: ${FAST_LANE_SWEEP_MS}ms; recent chat sweep: ${RECENT_CHAT_SWEEP_MS}ms; send confirm: ${SEND_CONFIRM_MS}ms; trusted clear grace: ${TRUSTED_COMPOSER_CLEAR_GRACE_MS}ms; max browser session: ${Math.round(MAX_SESSION_MS / 60000)}m; memory recycle: ${Math.round(MEMORY_RECYCLE_BYTES / (1024 * 1024))}MB; fast lane rows: ${RECENT_CHAT_FAST_LANE_LIMIT}; sweep open cap: ${RECENT_CHAT_SWEEP_OPEN_LIMIT}; row cache: ${RECENT_CHAT_ROW_CACHE_MS}ms; outbox claim cap: ${OUTBOX_CLAIM_LIMIT}; sends per loop: ${OUTBOX_SENDS_PER_LOOP}; allowed outbox sources: ${OUTBOX_ALLOWED_SOURCES.join(',') || 'all'}; operator pairing refresh required: ${REQUIRE_OPERATOR_PAIRING_REFRESH}; API retry attempts: ${API_RETRY_ATTEMPTS}`);
+  log(`Poll interval: ${POLL_MS}ms; outbox poll: ${OUTBOX_POLL_MS}ms; fast lane sweep: ${FAST_LANE_SWEEP_MS}ms; recent chat sweep: ${RECENT_CHAT_SWEEP_MS}ms; send confirm: ${SEND_CONFIRM_MS}ms; trusted clear grace: ${TRUSTED_COMPOSER_CLEAR_GRACE_MS}ms; max browser session: ${Math.round(MAX_SESSION_MS / 60000)}m; memory recycle: ${Math.round(MEMORY_RECYCLE_BYTES / (1024 * 1024))}MB; post-login warmup: ${Math.round(POST_LOGIN_WARMUP_MS / 1000)}s; minimum send interval: ${Math.round(OUTBOX_SEND_MIN_INTERVAL_MS / 1000)}s; fast lane rows: ${RECENT_CHAT_FAST_LANE_LIMIT}; sweep open cap: ${RECENT_CHAT_SWEEP_OPEN_LIMIT}; row cache: ${RECENT_CHAT_ROW_CACHE_MS}ms; outbox claim cap: ${OUTBOX_CLAIM_LIMIT}; sends per loop: ${OUTBOX_SENDS_PER_LOOP}; allowed outbox sources: ${OUTBOX_ALLOWED_SOURCES.join(',') || 'all'}; operator pairing refresh required: ${REQUIRE_OPERATOR_PAIRING_REFRESH}; API retry attempts: ${API_RETRY_ATTEMPTS}`);
   if (connectedOverCdp) {
     log(`Connected over CDP: ${CDP_URL}`);
   } else {
@@ -6410,6 +6432,8 @@ async function main() {
   let lastOutboxPoll = 0;
   let lastTabReselect = 0;
   let forcePairingRefresh = isPairingRefreshNoncePending();
+  let observedLoginPrompt = false;
+  let postLoginWarmupUntil = 0;
   let consecutiveLoopErrors = 0;
   let configuredEmployeeRecoverySettled = EMPLOYEE_BATCH_RECOVERY_PHONES.length === 0;
   let configuredEmployeeRecoveryAttempts = 0;
@@ -6422,6 +6446,10 @@ async function main() {
   while (true) {
     try {
       let readyState = await detectWhatsappReady(page);
+      if (readyState.waitingForLogin) {
+        observedLoginPrompt = true;
+        postLoginWarmupUntil = 0;
+      }
       if (readyState.pairingRateLimited) pairingRateLimitStore.mark();
       if (!readyState.ready && !readyState.pairingRateLimited && pairingRateLimitStore.isBlocked()) {
         readyState = {
@@ -6584,6 +6612,48 @@ async function main() {
         }
         await sleep(readyState.waitingForLogin ? LOGIN_POLL_MS : Math.max(750, POLL_MS));
         continue;
+      }
+
+      if (observedLoginPrompt && !postLoginWarmupUntil && POST_LOGIN_WARMUP_MS > 0) {
+        postLoginWarmupUntil = Date.now() + POST_LOGIN_WARMUP_MS;
+        log(`fresh WhatsApp link detected; holding all inbox scans and browser sends for ${Math.round(POST_LOGIN_WARMUP_MS / 1000)} seconds while the linked-device session stabilizes.`);
+        await sendHeartbeat({
+          status: 'starting',
+          current_url: page.url(),
+          unread_count: 0,
+          metadata: {
+            ready_state: readyState,
+            phase: 'post_login_warmup',
+            warmup_until: new Date(postLoginWarmupUntil).toISOString(),
+            note: 'WhatsApp linked successfully; browser activity is intentionally paused during the post-login safety window.'
+          }
+        });
+        lastHeartbeat = Date.now();
+      }
+      if (postLoginWarmupUntil > Date.now()) {
+        const warmupNow = Date.now();
+        if (warmupNow - lastHeartbeat >= HEARTBEAT_MS) {
+          await sendHeartbeat({
+            status: 'starting',
+            current_url: page.url(),
+            unread_count: 0,
+            metadata: {
+              ready_state: readyState,
+              phase: 'post_login_warmup',
+              warmup_until: new Date(postLoginWarmupUntil).toISOString(),
+              note: 'WhatsApp linked successfully; browser activity is intentionally paused during the post-login safety window.'
+            }
+          });
+          lastHeartbeat = warmupNow;
+        }
+        await sleep(Math.max(750, POLL_MS));
+        continue;
+      }
+      if (postLoginWarmupUntil) {
+        log('post-login safety warmup completed; resuming bounded inbound scans and throttled browser sends.');
+        observedLoginPrompt = false;
+        postLoginWarmupUntil = 0;
+        lastOutboxPoll = Date.now();
       }
 
       phonePairingRecovery.reset();

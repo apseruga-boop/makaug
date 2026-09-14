@@ -83,6 +83,8 @@ assert(renderYaml.includes('WHATSAPP_WEB_COPILOT_PAIRING_COOLDOWN_MS') && render
 assert(agentScript.includes('OUTBOX_ALLOWED_SOURCES') && agentScript.includes('allowed_sources='), 'Hosted workers must request only explicitly allowed reply sources');
 assert(renderYaml.includes('value: whatsapp_runtime,whatsapp_missed_call'), 'A fresh hosted account must send only replies tied to inbound WhatsApp events');
 assert(renderYaml.includes('WHATSAPP_WEB_COPILOT_OUTBOX_CLAIM_LIMIT') && renderYaml.includes('WHATSAPP_WEB_COPILOT_OUTBOX_SENDS_PER_LOOP'), 'A fresh hosted account must cap the outbox to one send per loop');
+assert(agentScript.includes('WHATSAPP_WEB_COPILOT_POST_LOGIN_WARMUP_MS') && agentScript.includes("phase: 'post_login_warmup'"), 'A freshly linked hosted session must stabilize before any inbox scan or browser send');
+assert(agentScript.includes('WHATSAPP_WEB_COPILOT_OUTBOX_SEND_MIN_INTERVAL_MS') && agentScript.includes('lastSuccessfulBrowserSendAt'), 'Hosted browser sends must retain a minimum interval instead of draining replies in a burst');
 assert(renderYaml.includes('WHATSAPP_WEB_COPILOT_TRUST_SEND_ON_COMPOSER_CLEAR') && renderYaml.includes('value: "false"'), 'Render must require a visible outgoing bubble before confirming delivery');
 assert(whatsappRoute.includes('allowedSources: String(req.query.allowed_sources') && read('services/whatsappWebBridgeService.js').includes("metadata->>'source'"), 'The server must filter the claimed queue before the worker can see unrelated outreach rows');
 assert(agentScript.includes('phonePairingPrompt') && agentScript.includes('enter code on phone'), 'Readiness detection must treat phone-code screens as login states');
