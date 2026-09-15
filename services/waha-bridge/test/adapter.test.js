@@ -15,7 +15,7 @@ const BRIDGE_TOKEN = 'test-bridge-token';
 const WAHA_KEY = 'test-waha-key';
 const HMAC_KEY = 'test-hmac-key';
 
-const received = { inbound: [], heartbeats: [], acks: [], sends: [] };
+const received = { inbound: [], heartbeats: [], acks: [], sends: [], lidLookups: [] };
 let outbox = [];
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -72,6 +72,14 @@ const wahaSrv = http.createServer(async (req, res) => {
     return res.end(b);
   }
   if (req.headers['x-api-key'] !== WAHA_KEY) return reply(res, 401, { ok: false });
+  const lid = url.pathname.match(/^\/api\/default\/lids\/(.+)$/);
+  if (lid) {
+    const decoded = decodeURIComponent(lid[1]);
+    received.lidLookups.push(decoded);
+    // Only this LID is known to the mapping table.
+    if (decoded === '99999999999999@lid') return reply(res, 200, { lid: decoded, pn: '256701234567@c.us' });
+    return reply(res, 200, { lid: decoded, pn: null });
+  }
   if (url.pathname.startsWith('/api/sessions/')) return reply(res, 200, { name: 'default', status: 'WORKING' });
   if (url.pathname.startsWith('/api/send')) {
     received.sends.push({ endpoint: url.pathname, body: JSON.parse((await body(req)).toString()) });
@@ -184,6 +192,38 @@ async function post(url, obj, headers = {}) {
     const tampered = med.media_url.replace(/s=[0-9a-f]+/, 's=00000000000000000000000000000000');
     assert.strictEqual((await fetch(tampered)).status, 403, 'tampered signature rejected');
     console.log('✓ tampered media links are rejected');
+
+    // 6b. LID addressing: real number must come from SenderAlt, not the LID digits.
+    // This is the bug that silently broke replies: a LID's digits are not a phone number.
+    const lidEvt = {
+      id: 'evt_5', event: 'message', session: 'default',
+      payload: {
+        id: 'false_95365487423704@lid_ABC', from: '95365487423704@lid', fromMe: false,
+        body: 'Hello', timestamp: 1789460200,
+        _data: { Info: { Chat: '95365487423704@lid', Sender: '95365487423704@lid', SenderAlt: '447757773202@s.whatsapp.net', PushName: 'Arthur', AddressingMode: 'lid' } },
+      },
+    };
+    raw = Buffer.from(JSON.stringify(lidEvt));
+    await fetch(`${adapterUrl}/waha/webhook`, { method: 'POST', headers: { 'x-webhook-hmac': hmac(raw) }, body: raw });
+    await sleep(500);
+    const lidInb = received.inbound[received.inbound.length - 1];
+    assert.strictEqual(lidInb.phone, '447757773202', 'LID resolved to the real phone via SenderAlt');
+    assert.notStrictEqual(lidInb.phone, '95365487423704', 'LID digits are NOT used as a phone number');
+    assert.strictEqual(lidInb.metadata.lid, '95365487423704@lid', 'original LID retained in metadata');
+    console.log('✓ LID addressing resolves to the real phone number (SenderAlt)');
+
+    // 6c. LID with no SenderAlt falls back to WAHA's mapping table.
+    const lidEvt2 = {
+      id: 'evt_6', event: 'message', session: 'default',
+      payload: { id: 'x2', from: '99999999999999@lid', fromMe: false, body: 'Land in Gayaza?', timestamp: 1789460300, _data: { Info: { Chat: '99999999999999@lid' } } },
+    };
+    raw = Buffer.from(JSON.stringify(lidEvt2));
+    await fetch(`${adapterUrl}/waha/webhook`, { method: 'POST', headers: { 'x-webhook-hmac': hmac(raw) }, body: raw });
+    await sleep(700);
+    const lidInb2 = received.inbound[received.inbound.length - 1];
+    assert.strictEqual(lidInb2.phone, '256701234567', 'LID resolved via /lids lookup when SenderAlt absent');
+    assert.ok(received.lidLookups.includes('99999999999999@lid'), 'the lids endpoint was actually consulted');
+    console.log('✓ LID without SenderAlt falls back to WAHA\'s mapping table');
 
     // 7. outbound text
     outbox = [{ id: 'ob1', recipient: '256700111222', text: 'We have 3 in Ntinda. Want photos?', media_url: '', media_type: 'text' }];
