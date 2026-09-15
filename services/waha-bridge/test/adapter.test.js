@@ -137,6 +137,16 @@ async function post(url, obj, headers = {}) {
     assert.strictEqual(health.waha_status, 'WORKING', 'reads WAHA session status');
     console.log('✓ health endpoint reports WAHA session status');
 
+    // 1b. health must say whether the makaug link actually works, not just WAHA
+    assert.strictEqual(health.makaug_link.token_configured, true, 'real token detected as configured');
+    assert.strictEqual(health.dry_run, false, 'dry run off under test');
+    await sleep(600); // let the first heartbeat land
+    const health2 = await fetch(`${adapterUrl}/health`).then((r) => r.json());
+    assert.strictEqual(health2.makaug_link.ok, true, 'makaug link reported healthy');
+    assert.strictEqual(health2.ready_to_reply, true, 'ready_to_reply true when everything is wired');
+    assert.deepStrictEqual(health2.blockers, [], 'no blockers when fully configured');
+    console.log('✓ health proves the makaug link, not just the WAHA session');
+
     // 2. inbound text
     const textEvt = {
       id: 'evt_1', event: 'message', session: 'default',

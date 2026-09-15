@@ -135,6 +135,53 @@ async function waha(path, { method = 'GET', body, timeoutMs = 45000 } = {}) {
   }
 }
 
+/**
+ * LID -> phone number.
+ *
+ * WhatsApp increasingly addresses contacts by an opaque LID
+ * (`95365487423704@lid`) rather than a phone number. The digits in a LID are
+ * NOT a phone number — treating them as one routes replies to a contact that
+ * does not exist. Two reliable sources, in order of cost:
+ *   1. `_data.Info.SenderAlt` — already in the payload, no round trip.
+ *   2. `GET /api/{session}/lids/{lid}` -> { pn } — WAHA's mapping table.
+ */
+const lidCache = new Map();
+
+async function resolveLidToPhone(lid) {
+  const key = String(lid || '');
+  if (!key.endsWith('@lid')) return '';
+  if (lidCache.has(key)) return lidCache.get(key);
+  try {
+    const res = await waha(`/api/${encodeURIComponent(cfg.wahaSession)}/lids/${encodeURIComponent(key)}`, { timeoutMs: 10000 });
+    const pn = toPhone(res?.pn || '');
+    if (pn) lidCache.set(key, pn);
+    return pn;
+  } catch (err) {
+    log('lid lookup failed for', key, err.message);
+    return '';
+  }
+}
+
+/** Real phone (digits) for an inbound message, or a group id unchanged. */
+async function senderAddress(p) {
+  const from = String(p?.from || '');
+  if (from.endsWith('@g.us')) return from; // groups keep their id
+
+  // 1. SenderAlt carries the real JID when addressing is LID-based.
+  const alt = toPhone(p?._data?.Info?.SenderAlt || '');
+  if (alt) return alt;
+
+  // 2. Fall back to WAHA's LID mapping table.
+  if (from.endsWith('@lid')) {
+    const mapped = await resolveLidToPhone(from);
+    if (mapped) return mapped;
+    log('WARN unresolved LID, using raw id:', from);
+    return from; // keep the @lid form rather than inventing a fake number
+  }
+
+  return toPhone(from);
+}
+
 async function wahaSessionStatus() {
   try {
     const s = await waha(`/api/sessions/${encodeURIComponent(cfg.wahaSession)}`);
@@ -146,6 +193,14 @@ async function wahaSessionStatus() {
 }
 
 // ---------------------------------------------------------- makaug calls ---
+
+/**
+ * Link health to makaug. `status: WORKING` on the WAHA side says nothing about
+ * whether this service can actually talk to makaug — a wrong bridge token fails
+ * silently inside the heartbeat. These three values make that visible on
+ * /health instead of only in the log stream.
+ */
+const link = { lastOkAt: 0, lastErrAt: 0, lastError: null, lastStatus: null };
 
 async function makaug(path, { method = 'GET', body, timeoutMs = 30000 } = {}) {
   const ac = new AbortController();
@@ -164,15 +219,38 @@ async function makaug(path, { method = 'GET', body, timeoutMs = 30000 } = {}) {
     const text = await res.text();
     let parsed = null;
     try { parsed = text ? JSON.parse(text) : null; } catch { parsed = text; }
+    link.lastStatus = res.status;
     if (!res.ok) {
       const err = new Error(`makaug ${method} ${path} -> ${res.status}: ${String(text).slice(0, 300)}`);
       err.statusCode = res.status;
+      link.lastErrAt = Date.now();
+      link.lastError = err.message.slice(0, 200);
       throw err;
     }
+    link.lastOkAt = Date.now();
+    link.lastError = null;
     return parsed;
+  } catch (err) {
+    if (!err.statusCode) {
+      link.lastErrAt = Date.now();
+      link.lastError = String(err.message || err).slice(0, 200);
+    }
+    throw err;
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * True when the bridge token has been given a real value. Compares against the
+ * placeholder shipped in the deploy template; never exposes the value itself.
+ */
+function bridgeTokenConfigured() {
+  const t = cfg.bridgeToken;
+  if (!t) return false;
+  if (/^PLACEHOLDER/i.test(t)) return false;
+  if (/^(changeme|replace_me|todo|xxx+)$/i.test(t)) return false;
+  return true;
 }
 
 // ------------------------------------------------------------ media proxy --
@@ -271,7 +349,7 @@ async function handleWahaEvent(evt) {
     return { handled: false, kind: 'broadcast' };
   }
 
-  const phone = from.includes('@g.us') ? from : toPhone(from);
+  const phone = await senderAddress(p);
   if (!phone) return { handled: false, kind: 'no_sender' };
 
   const wahaMedia = p.hasMedia && p.media?.url ? p.media.url : '';
@@ -300,6 +378,9 @@ async function handleWahaEvent(evt) {
       waha_session: evt.session || cfg.wahaSession,
       waha_event_id: evt.id || null,
       chat_id: from,
+      lid: from.endsWith('@lid') ? from : null,
+      addressing_mode: p._data?.Info?.AddressingMode || null,
+      push_name: p._data?.Info?.PushName || null,
       mime: p.media?.mimetype || null,
       filename: p.media?.filename || null,
     },
@@ -452,6 +533,14 @@ const server = http.createServer(async (req, res) => {
   try {
     if (req.method === 'GET' && (url.pathname === '/health' || url.pathname === '/')) {
       const stale = lastInboundAt ? Date.now() - lastInboundAt : null;
+      const tokenOk = bridgeTokenConfigured();
+      const linkOk = link.lastOkAt > 0 && link.lastOkAt >= link.lastErrAt;
+      const blockers = [];
+      if (cfg.dryRun) blockers.push('DRY_RUN is true — inbound messages are logged, never delivered to makaug');
+      if (!tokenOk) blockers.push('WHATSAPP_WEB_BRIDGE_TOKEN is unset or still the placeholder');
+      if (!linkOk && link.lastError) blockers.push(`makaug link failing: ${link.lastError}`);
+      if (!cfg.publicUrl) blockers.push('ADAPTER_PUBLIC_URL unset — inbound media will be dropped');
+
       return json(res, 200, {
         ok: true,
         service: 'makaug-waha-bridge',
@@ -460,6 +549,16 @@ const server = http.createServer(async (req, res) => {
         stats: { sent: sentCount, failed: failedCount, inbound: inboundCount },
         last_inbound_ms_ago: stale,
         dry_run: cfg.dryRun,
+        // Does this service actually reach makaug? WAHA being WORKING says nothing about that.
+        makaug_link: {
+          ok: linkOk,
+          token_configured: tokenOk,
+          last_http_status: link.lastStatus,
+          last_ok_ms_ago: link.lastOkAt ? Date.now() - link.lastOkAt : null,
+          last_error: link.lastError,
+        },
+        ready_to_reply: !cfg.dryRun && tokenOk && linkOk && sessionStatusCache === 'WORKING',
+        blockers,
       });
     }
 
@@ -503,13 +602,32 @@ server.listen(cfg.port, '0.0.0.0', () => {
 // -------------------------------------------------------------- schedulers --
 
 let outboxBusy = false;
+// A misconfigured token would otherwise log an error every poll, burying every
+// other line in the log. Back off and log sparsely instead.
+let pollFailures = 0;
+let lastPollErrorLoggedAt = 0;
+let skipPollsUntil = 0;
+
 setInterval(async () => {
-  if (outboxBusy) return;
+  if (outboxBusy || Date.now() < skipPollsUntil) return;
   outboxBusy = true;
   try {
     await drainOutbox();
+    if (pollFailures) log(`outbox polling recovered after ${pollFailures} failure(s)`);
+    pollFailures = 0;
   } catch (err) {
-    log('outbox poll error:', err.message);
+    pollFailures += 1;
+    const now = Date.now();
+    // After a few consecutive failures, poll every 30s and log once a minute.
+    if (pollFailures >= 3) {
+      skipPollsUntil = now + 30000;
+      if (now - lastPollErrorLoggedAt >= 60000) {
+        lastPollErrorLoggedAt = now;
+        log(`outbox poll failing (${pollFailures} consecutive, backing off 30s):`, err.message);
+      }
+    } else {
+      log('outbox poll error:', err.message);
+    }
   } finally {
     outboxBusy = false;
   }
