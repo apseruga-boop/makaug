@@ -139,7 +139,7 @@ async function post(url, obj, headers = {}) {
 
     // 1b. health must say whether the makaug link actually works, not just WAHA
     assert.strictEqual(health.makaug_link.token_configured, true, 'real token detected as configured');
-    assert.strictEqual(health.dry_run, false, 'dry run off under test');
+    assert.ok(!('dry_run' in health), 'DRY_RUN is gone — the service always delivers');
     await sleep(600); // let the first heartbeat land
     const health2 = await fetch(`${adapterUrl}/health`).then((r) => r.json());
     assert.strictEqual(health2.makaug_link.ok, true, 'makaug link reported healthy');

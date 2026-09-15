@@ -54,7 +54,26 @@ an HMAC signature on every request.
 | `SEND_MIN_INTERVAL_MS` | | `3000` | Anti-ban pacing; floor is 1000. |
 | `SEND_JITTER_MS` | | `1500` | Randomises the gap; fixed intervals look automated. |
 | `HEARTBEAT_MS` | | `30000` | |
-| `DRY_RUN` | | `false` | Logs instead of sending. Useful for a first smoke test. |
+
+`DRY_RUN` no longer exists. It used to make the service accept messages and
+drop them while still reporting healthy — the one failure mode you cannot see
+from outside. If the service is up, it delivers. A leftover `DRY_RUN` variable
+is ignored (with a warning on boot). For a no-network dry run, use `npm test`.
+
+### Is it actually working?
+
+`GET /health` answers that in one field:
+
+```json
+{ "ready_to_reply": true, "blockers": [],
+  "makaug_link": { "ok": true, "token_configured": true, "last_http_status": 200 } }
+```
+
+`waha_status: WORKING` only means WhatsApp is linked. `makaug_link.ok` is the
+one that proves this service can actually reach makaug — a wrong
+`WHATSAPP_WEB_BRIDGE_TOKEN` fails silently inside the heartbeat and looks
+identical to a healthy bridge. `blockers` spells out anything missing in plain
+English.
 
 ## Deploy (Render)
 
