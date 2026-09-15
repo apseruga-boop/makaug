@@ -279,6 +279,58 @@ async function post(url, obj, headers = {}) {
     assert.strictEqual(await vidRes.text(), 'FAKEMP4BYTES', 'real bytes still stream through');
     console.log('✓ media proxy serves the declared MIME, not WAHA application/mp4');
 
+    // 5d-ii. Agents forward listing videos with the details burned into the
+    //        picture and no caption. A vision model cannot read a video, so the
+    //        embedded first-frame thumbnail is the only way to recover that
+    //        text. GOWS has spelled the field differently across versions, so
+    //        every known shape must be picked up.
+    const frame = Buffer.alloc(900, 7).toString('base64');
+    const shapes = [
+      ['JPEGThumbnail string', { Message: { videoMessage: { JPEGThumbnail: frame } } }],
+      ['lowercase jpegThumbnail', { Message: { videoMessage: { jpegThumbnail: frame } } }],
+      ['byte array', { Message: { videoMessage: { JPEGThumbnail: [...Buffer.alloc(900, 7)] } } }],
+      ['serialised Buffer', { Message: { videoMessage: { JPEGThumbnail: { type: 'Buffer', data: [...Buffer.alloc(900, 7)] } } } }],
+    ];
+    for (const [label, data] of shapes) {
+      const ev = {
+        id: `evt_thumb_${label.replace(/\W+/g, '')}`, event: 'message', session: 'default',
+        payload: {
+          id: `mid_thumb_${label.replace(/\W+/g, '')}`, from: '256700333444@c.us', fromMe: false,
+          body: '', timestamp: 1789460200, hasMedia: true,
+          media: { url: `http://127.0.0.1:${wahaPort}/api/files/clip.mp4`, mimetype: 'video/mp4', filename: 'clip.mp4', error: null },
+          _data: data,
+        },
+      };
+      const r = Buffer.from(JSON.stringify(ev));
+      await fetch(`${adapterUrl}/waha/webhook`, { method: 'POST', headers: { 'x-webhook-hmac': hmac(r) }, body: r });
+      await sleep(300);
+      const got = received.inbound[received.inbound.length - 1];
+      assert.ok(
+        String(got.metadata.video_poster_data_url || '').startsWith('data:image/jpeg;base64,'),
+        `poster frame recovered from ${label}`,
+      );
+      assert.strictEqual(got.metadata.has_caption, false, 'uncaptioned video is flagged as such');
+    }
+    console.log('✓ video poster frame is recovered for captionless listing videos');
+
+    // A tiny or absent thumbnail must not be passed off as a readable frame.
+    const noThumb = {
+      id: 'evt_nothumb', event: 'message', session: 'default',
+      payload: {
+        id: 'mid_nothumb', from: '256700333444@c.us', fromMe: false, body: 'has a caption', timestamp: 1789460260,
+        hasMedia: true,
+        media: { url: `http://127.0.0.1:${wahaPort}/api/files/clip.mp4`, mimetype: 'video/mp4', filename: 'clip.mp4', error: null },
+        _data: { Message: { videoMessage: { JPEGThumbnail: 'AAA=' } } },
+      },
+    };
+    const ntRaw = Buffer.from(JSON.stringify(noThumb));
+    await fetch(`${adapterUrl}/waha/webhook`, { method: 'POST', headers: { 'x-webhook-hmac': hmac(ntRaw) }, body: ntRaw });
+    await sleep(300);
+    const nt = received.inbound[received.inbound.length - 1];
+    assert.ok(!nt.metadata.video_poster_data_url, 'a stub thumbnail is not offered as a frame');
+    assert.strictEqual(nt.metadata.has_caption, true, 'captioned video is flagged as captioned');
+    console.log('✓ unusable thumbnails are not passed off as readable frames');
+
     // 5e. the MIME is signed with the path, so it cannot be swapped
     const swapped = vid.media_url.replace(/([?&]m=)[^&]+/, `$1${Buffer.from('text/plain').toString('base64url')}`);
     assert.strictEqual((await fetch(swapped)).status, 403, 'tampered MIME is rejected');

@@ -402,6 +402,46 @@ function hmacValid(rawBody, headerValue) {
   return timingSafeEqualStr(expected, String(headerValue || '').trim());
 }
 
+/**
+ * A still frame for a video message.
+ *
+ * Agents forward listing videos with the details burned into the picture and no
+ * WhatsApp caption, so the only description that exists is inside the frame.
+ * Vision models cannot read a video, but WhatsApp embeds a JPEG thumbnail of
+ * the first frame in every video message — the overlay text is in it. GOWS
+ * surfaces the raw whatsmeow message under `_data`, where the field spelling
+ * has varied between versions, so probe the known shapes rather than assume.
+ */
+const THUMBNAIL_PATHS = [
+  (p) => p?._data?.Message?.videoMessage?.JPEGThumbnail,
+  (p) => p?._data?.Message?.videoMessage?.jpegThumbnail,
+  (p) => p?._data?.message?.videoMessage?.jpegThumbnail,
+  (p) => p?._data?.Message?.imageMessage?.JPEGThumbnail,
+  (p) => p?._data?.Message?.imageMessage?.jpegThumbnail,
+  (p) => p?._data?.Info?.JPEGThumbnail,
+  (p) => p?.media?.thumbnail,
+  (p) => p?.thumbnail,
+];
+
+/** base64 JPEG of the first frame as a data URL, or '' when unavailable. */
+function videoPosterDataUrl(payload) {
+  for (const read of THUMBNAIL_PATHS) {
+    let raw;
+    try { raw = read(payload); } catch { continue; }
+    if (!raw) continue;
+    let b64 = '';
+    if (typeof raw === 'string') b64 = raw;
+    else if (Array.isArray(raw)) b64 = Buffer.from(raw).toString('base64');
+    else if (raw?.type === 'Buffer' && Array.isArray(raw.data)) b64 = Buffer.from(raw.data).toString('base64');
+    if (!b64) continue;
+    b64 = b64.replace(/^data:[^,]+,/, '');
+    // A frame worth reading is never a handful of bytes.
+    if (b64.length < 512) continue;
+    return `data:image/jpeg;base64,${b64}`;
+  }
+  return '';
+}
+
 function mediaTypeOf(payload, correctedMime = '') {
   // Use the corrected MIME so a container mislabelled as application/mp4 is
   // still classified as a video rather than a document.
@@ -457,6 +497,16 @@ async function handleWahaEvent(evt) {
     log('WARN media has no mimetype; makaug will reject the upload. id=', p.id);
   }
 
+  const poster = mediaType === 'video' ? videoPosterDataUrl(p) : '';
+  if (mediaType === 'video') {
+    const captioned = Boolean(String(p.body || '').trim());
+    log(
+      'video poster frame',
+      poster ? `found (${Math.round(poster.length / 1024)}KB)` : 'NOT AVAILABLE',
+      captioned ? '(has caption)' : '(no caption — poster is the only description)',
+    );
+  }
+
   if (wahaMedia && !mediaUrl) {
     log('WARN media present but no proxy url (ADAPTER_PUBLIC_URL unset?) id=', p.id);
   }
@@ -484,6 +534,10 @@ async function handleWahaEvent(evt) {
       push_name: p._data?.Info?.PushName || null,
       mime: mediaMime || null,
       filename: p.media?.filename || null,
+      // First frame of a video, so makaug can read details burned into the
+      // picture when the agent forwarded it with no caption.
+      ...(poster ? { video_poster_data_url: poster } : {}),
+      has_caption: Boolean(String(p.body || '').trim()),
       // How makaug learns the real MIME type. `media_type` above is a coarse
       // kind ('video'), and makaug's intake falls back to
       // `application/octet-stream` without this — which is not on its upload
