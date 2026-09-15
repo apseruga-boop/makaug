@@ -350,6 +350,51 @@ async function handleMediaProxy(req, res, url) {
 
 // ------------------------------------------------------- inbound (webhook) --
 
+/**
+ * Exactly-once delivery.
+ *
+ * WAHA delivers the same event more than once — a global webhook and a session
+ * webhook both firing, or a retry. Observed in production at 2-9ms apart.
+ *
+ * Processing a message twice does not just duplicate a reply. The second copy
+ * arrives after the first has already advanced the conversation, so makaug
+ * answers a question the user has moved past ("Reply with one of the agent
+ * numbers shown" straight after it accepted that very number), or finds the
+ * flow already closed and restarts the customer menu. To a person it looks
+ * like the bot is talking over them.
+ *
+ * The id is recorded synchronously, before any await, so two deliveries racing
+ * in the same tick cannot both pass.
+ */
+const SEEN_TTL_MS = 10 * 60 * 1000;
+const SEEN_MAX = 5000;
+const seenMessages = new Map();
+let duplicateCount = 0;
+
+function isDuplicateMessage(payload) {
+  const id = String(payload?.id || '')
+    || `${payload?.from || ''}|${payload?.timestamp || ''}|${crypto.createHash('sha1').update(String(payload?.body || '')).digest('hex').slice(0, 16)}`;
+  const now = Date.now();
+
+  if (seenMessages.size >= SEEN_MAX) {
+    for (const [k, exp] of seenMessages) {
+      if (exp <= now) seenMessages.delete(k);
+    }
+    // Still full of live entries: drop the oldest insertions (Map keeps order).
+    while (seenMessages.size >= SEEN_MAX) {
+      seenMessages.delete(seenMessages.keys().next().value);
+    }
+  }
+
+  const expiry = seenMessages.get(id);
+  if (expiry && expiry > now) {
+    duplicateCount += 1;
+    return true;
+  }
+  seenMessages.set(id, now + SEEN_TTL_MS);
+  return false;
+}
+
 /** WAHA signs the raw body with HMAC-SHA512 when WHATSAPP_HOOK_HMAC_KEY is set. */
 function hmacValid(rawBody, headerValue) {
   if (!cfg.hookHmacKey) return true; // not configured: accept
@@ -390,6 +435,12 @@ async function handleWahaEvent(evt) {
   // Ignore status broadcasts and newsletters; groups are allowed through.
   if (from.endsWith('@broadcast') || from.endsWith('@newsletter')) {
     return { handled: false, kind: 'broadcast' };
+  }
+
+  // Before any await, so a racing duplicate cannot slip past.
+  if (isDuplicateMessage(p)) {
+    log('duplicate delivery ignored id=', p.id);
+    return { handled: false, kind: 'duplicate' };
   }
 
   const phone = await senderAddress(p);
@@ -650,7 +701,7 @@ const server = http.createServer(async (req, res) => {
         waha_status: sessionStatusCache,
         bridge_status: effectiveStatus(sessionStatusCache),
         consecutive_send_failures: consecutiveSendFailures,
-        stats: { sent: sentCount, failed: failedCount, inbound: inboundCount },
+        stats: { sent: sentCount, failed: failedCount, inbound: inboundCount, duplicates_ignored: duplicateCount },
         last_inbound_ms_ago: stale,
         // Does this service actually reach makaug? WAHA being WORKING says nothing about that.
         makaug_link: {

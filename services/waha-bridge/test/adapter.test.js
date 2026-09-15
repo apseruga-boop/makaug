@@ -185,6 +185,31 @@ async function post(url, obj, headers = {}) {
     assert.strictEqual(received.inbound.length, 1, 'spoofed webhook not forwarded');
     console.log('✓ unsigned/forged webhooks are rejected');
 
+    // 4b. WAHA delivers the same event twice (a global webhook and a session
+    //     webhook both firing). Forwarding both makes makaug answer a question
+    //     the user has already moved past, or drop out of the flow and restart
+    //     the menu — it reads as the bot talking over the customer. Fired
+    //     concurrently here, the way it happens in production.
+    const dupEvt = {
+      id: 'evt_dup', event: 'message', session: 'default',
+      payload: { id: 'true_256700111222@c.us_DUP', from: '256700111222@c.us', fromMe: false, body: '1', timestamp: 1789460050, notifyName: 'Sarah' },
+    };
+    const dupRaw = Buffer.from(JSON.stringify(dupEvt));
+    const before = received.inbound.length;
+    await Promise.all([
+      fetch(`${adapterUrl}/waha/webhook`, { method: 'POST', headers: { 'x-webhook-hmac': hmac(dupRaw) }, body: dupRaw }),
+      fetch(`${adapterUrl}/waha/webhook`, { method: 'POST', headers: { 'x-webhook-hmac': hmac(dupRaw) }, body: dupRaw }),
+    ]);
+    await sleep(400);
+    assert.strictEqual(received.inbound.length, before + 1, 'duplicate delivery forwarded only once');
+    // and a re-delivery arriving later is still suppressed
+    await fetch(`${adapterUrl}/waha/webhook`, { method: 'POST', headers: { 'x-webhook-hmac': hmac(dupRaw) }, body: dupRaw });
+    await sleep(300);
+    assert.strictEqual(received.inbound.length, before + 1, 'later re-delivery also suppressed');
+    const dupHealth = await fetch(`${adapterUrl}/health`).then((r) => r.json());
+    assert.ok(dupHealth.stats.duplicates_ignored >= 2, 'duplicates are counted, not silently dropped');
+    console.log('✓ duplicate WAHA deliveries are processed exactly once');
+
     // 5. inbound media -> proxied URL that actually serves bytes
     const mediaEvt = {
       id: 'evt_4', event: 'message', session: 'default',
@@ -196,8 +221,8 @@ async function post(url, obj, headers = {}) {
     raw = Buffer.from(JSON.stringify(mediaEvt));
     await fetch(`${adapterUrl}/waha/webhook`, { method: 'POST', headers: { 'x-webhook-hmac': hmac(raw) }, body: raw });
     await sleep(400);
-    assert.strictEqual(received.inbound.length, 2, 'media message forwarded');
-    const med = received.inbound[1];
+    const med = received.inbound[received.inbound.length - 1];
+    assert.strictEqual(med.message_id, 'mid_media', 'media message forwarded');
     assert.strictEqual(med.media_type, 'image', 'image mime mapped to image');
     assert.ok(med.media_url.startsWith(`${adapterUrl}/media?p=`), 'media url is proxied, not raw WAHA');
     assert.ok(!med.media_url.includes(WAHA_KEY), 'api key never leaks into the url');
