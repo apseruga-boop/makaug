@@ -15,6 +15,23 @@ const BRIDGE_TOKEN = 'test-bridge-token';
 const WAHA_KEY = 'test-waha-key';
 const HMAC_KEY = 'test-hmac-key';
 
+// A real, decodable 640x360 clip, built once with the same ffmpeg the adapter
+// uses. Frame extraction is the feature under test, so mocking it would prove
+// nothing — WhatsApp's own embedded thumbnail measured 41x72 in production,
+// which is exactly why this path exists.
+const REAL_MP4 = (() => {
+  const { execFileSync } = require('child_process');
+  const os = require('os');
+  const fs = require('fs');
+  const ff = require('ffmpeg-static');
+  const out = path.join(os.tmpdir(), `adapter-test-${process.pid}.mp4`);
+  execFileSync(ff, ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i',
+    'testsrc=size=640x360:rate=10:duration=3', '-pix_fmt', 'yuv420p', out], { stdio: 'ignore' });
+  const buf = fs.readFileSync(out);
+  fs.unlinkSync(out);
+  return buf;
+})();
+
 const received = { inbound: [], heartbeats: [], acks: [], sends: [], lidLookups: [] };
 let outbox = [];
 
@@ -69,6 +86,13 @@ const wahaSrv = http.createServer(async (req, res) => {
     if (req.headers['x-api-key'] !== WAHA_KEY) return reply(res, 401, { ok: false });
     // Real WAHA serves .mp4 as `application/mp4`, which makaug's uploader
     // rejects. Reproduced here so the proxy is forced to correct it.
+    // A genuinely decodable clip, so frame extraction is exercised for real
+    // rather than mocked — the whole point is whether ffmpeg gets a frame out.
+    // Checked before the generic .mp4 case, which it would otherwise match.
+    if (url.pathname.endsWith('.real.mp4')) {
+      res.writeHead(200, { 'Content-Type': 'application/mp4', 'Content-Length': REAL_MP4.length });
+      return res.end(REAL_MP4);
+    }
     if (url.pathname.endsWith('.mp4')) {
       const v = Buffer.from('FAKEMP4BYTES');
       res.writeHead(200, { 'Content-Type': 'application/mp4', 'Content-Length': v.length });
@@ -342,6 +366,51 @@ async function post(url, obj, headers = {}) {
     assert.strictEqual(tiny.metadata.video_poster_readable, false, '100x100 is flagged unreadable');
     console.log('✓ a thumbnail too coarse to read text is flagged, not sent to vision');
 
+    // 5d-iii. The real feature: when the embedded thumbnail is useless and
+    //         there is no caption, a full frame is decoded from the video so
+    //         the burned-in details can actually be read.
+    const decodeEvt = {
+      id: 'evt_decode', event: 'message', session: 'default',
+      payload: {
+        id: 'mid_decode', from: '256700333444@c.us', fromMe: false, body: '', timestamp: 1789460300,
+        hasMedia: true,
+        media: { url: `http://127.0.0.1:${wahaPort}/api/files/listing.real.mp4`, mimetype: 'video/mp4', filename: 'listing.mp4', error: null },
+        _data: { Message: { videoMessage: { JPEGThumbnail: jpegOf(41, 72).toString('base64') } } },
+      },
+    };
+    const decRaw = Buffer.from(JSON.stringify(decodeEvt));
+    await fetch(`${adapterUrl}/waha/webhook`, { method: 'POST', headers: { 'x-webhook-hmac': hmac(decRaw) }, body: decRaw });
+    await sleep(6000);
+    const dec = received.inbound[received.inbound.length - 1];
+    assert.strictEqual(dec.message_id, 'mid_decode', 'decoded-video message forwarded');
+    assert.strictEqual(dec.metadata.video_poster_source, 'decoded_video_frame', 'frame came from the video, not the thumbnail');
+    assert.strictEqual(dec.metadata.video_poster_width, 640, 'full frame width');
+    assert.strictEqual(dec.metadata.video_poster_height, 360, 'full frame height');
+    assert.strictEqual(dec.metadata.video_poster_readable, true, 'decoded frame is readable');
+    assert.ok(dec.metadata.video_poster_data_url.length > 5000, 'a real frame, not a stub');
+    console.log('✓ a readable frame is decoded from the video when the thumbnail is useless');
+
+    // A captioned video must not pay for a decode — the agent already said
+    // what the property is, so there is nothing to read off the picture.
+    const captionedEvt = {
+      id: 'evt_nodecode', event: 'message', session: 'default',
+      payload: {
+        id: 'mid_nodecode', from: '256700333444@c.us', fromMe: false,
+        body: 'Selling Kira 4 bedrooms 450m negotiable', timestamp: 1789460330,
+        hasMedia: true,
+        media: { url: `http://127.0.0.1:${wahaPort}/api/files/listing.real.mp4`, mimetype: 'video/mp4', filename: 'listing.mp4', error: null },
+        _data: { Message: { videoMessage: { JPEGThumbnail: jpegOf(41, 72).toString('base64') } } },
+      },
+    };
+    const capRaw = Buffer.from(JSON.stringify(captionedEvt));
+    await fetch(`${adapterUrl}/waha/webhook`, { method: 'POST', headers: { 'x-webhook-hmac': hmac(capRaw) }, body: capRaw });
+    await sleep(800);
+    const cap = received.inbound[received.inbound.length - 1];
+    assert.strictEqual(cap.message_id, 'mid_nodecode', 'captioned video forwarded');
+    assert.strictEqual(cap.metadata.has_caption, true, 'caption detected');
+    assert.notStrictEqual(cap.metadata.video_poster_source, 'decoded_video_frame', 'no decode when a caption exists');
+    console.log('✓ a captioned video skips the decode entirely');
+
     // A tiny or absent thumbnail must not be passed off as a readable frame.
     const noThumb = {
       id: 'evt_nothumb', event: 'message', session: 'default',
@@ -447,8 +516,15 @@ async function post(url, obj, headers = {}) {
     assert.strictEqual(degradedHealth.bridge_status, 'degraded', 'a run of send failures overrides WORKING');
     assert.strictEqual(degradedHealth.ready_to_reply, false, 'not ready while sends are failing');
     assert.ok(degradedHealth.blockers.some((b) => /consecutive send failures/.test(b)), 'blocker explains why');
-    const degradedHb = received.heartbeats[received.heartbeats.length - 1];
-    assert.strictEqual(degradedHb.status, 'degraded', 'admin inbox is told degraded, not online');
+    // Wait for the next heartbeat rather than reading whichever one happens to
+    // be last — the interval is independent of when the sends failed.
+    let degradedHb = null;
+    for (let i = 0; i < 16 && !degradedHb; i += 1) {
+      const hb = received.heartbeats[received.heartbeats.length - 1];
+      if (hb && hb.status === 'degraded') degradedHb = hb;
+      else await sleep(500);
+    }
+    assert.ok(degradedHb, 'admin inbox is told degraded, not online');
     assert.ok(degradedHb.last_error, 'heartbeat carries the reason');
     console.log('✓ a run of failed sends reports degraded despite WAHA saying WORKING');
 

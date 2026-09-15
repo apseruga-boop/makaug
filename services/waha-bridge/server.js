@@ -17,7 +17,12 @@
 
 const http = require('http');
 const crypto = require('crypto');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const { execFile } = require('child_process');
 const { URL } = require('url');
+const ffmpegPath = require('ffmpeg-static');
 
 // ---------------------------------------------------------------- config ---
 
@@ -483,6 +488,111 @@ function videoPosterDataUrl(payload) {
   return null;
 }
 
+/**
+ * A readable still decoded from the video itself.
+ *
+ * WhatsApp's embedded thumbnail measured 41x72 on real traffic — the burned-in
+ * caption is about two pixels tall there, so no amount of model quality
+ * recovers it. The only frame worth reading is one decoded from the video, so
+ * the bytes are pulled from WAHA and ffmpeg is asked for a single frame.
+ *
+ * Deliberately bounded: this runs inside a webhook on a 512MB instance, so the
+ * download is capped, ffmpeg is given a deadline, and every failure falls back
+ * to "no frame" rather than holding up the message. Duplicate deliveries are
+ * already suppressed upstream, so a WAHA retry during a slow decode is safe.
+ */
+const FRAME_MAX_VIDEO_BYTES = clampInt(process.env.FRAME_MAX_VIDEO_BYTES, 80 * 1024 * 1024, 1024 * 1024, 400 * 1024 * 1024);
+const FRAME_TIMEOUT_MS = clampInt(process.env.FRAME_TIMEOUT_MS, 20000, 3000, 60000);
+const FRAME_SEEK_SECONDS = String(process.env.FRAME_SEEK_SECONDS || '1');
+
+function runFfmpeg(args, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    execFile(
+      ffmpegPath,
+      args,
+      { timeout: timeoutMs, maxBuffer: 48 * 1024 * 1024, encoding: 'buffer', killSignal: 'SIGKILL' },
+      (err, stdout) => {
+        if (err && (!stdout || !stdout.length)) return reject(err);
+        resolve(stdout);
+      },
+    );
+  });
+}
+
+async function decodeVideoFrame(wahaMediaUrl) {
+  if (!ffmpegPath) { log('WARN ffmpeg binary unavailable; cannot decode a video frame'); return null; }
+
+  let pathPart = '';
+  try { pathPart = new URL(wahaMediaUrl).pathname; } catch { pathPart = String(wahaMediaUrl || ''); }
+  if (!pathPart.startsWith('/api/files/')) return null;
+
+  const tmp = path.join(os.tmpdir(), `frame-${crypto.randomUUID()}.mp4`);
+  const started = Date.now();
+  try {
+    const res = await fetch(`${cfg.wahaUrl}${pathPart}`, { headers: { 'X-Api-Key': cfg.wahaApiKey } });
+    if (!res.ok) { log('frame: video fetch failed', res.status); return null; }
+
+    const declared = Number(res.headers.get('content-length') || 0);
+    if (declared && declared > FRAME_MAX_VIDEO_BYTES) {
+      log(`frame: video too large to decode (${Math.round(declared / 1048576)}MB)`);
+      return null;
+    }
+
+    const bytes = Buffer.from(await res.arrayBuffer());
+    if (!bytes.length || bytes.length > FRAME_MAX_VIDEO_BYTES) {
+      log(`frame: video too large to decode (${Math.round(bytes.length / 1048576)}MB)`);
+      return null;
+    }
+    await fs.promises.writeFile(tmp, bytes);
+
+    const spent = Date.now() - started;
+    const budget = Math.max(3000, FRAME_TIMEOUT_MS - spent);
+    let jpeg;
+    try {
+      // Seek a second in: the very first frame is often a fade or a black lead-in.
+      jpeg = await runFfmpeg(
+        ['-nostdin', '-loglevel', 'error', '-ss', FRAME_SEEK_SECONDS, '-i', tmp,
+          '-frames:v', '1', '-vf', "scale='min(1280,iw)':-2", '-q:v', '3', '-f', 'mjpeg', 'pipe:1'],
+        budget,
+      );
+    } catch {
+      jpeg = null;
+    }
+    if (!jpeg || jpeg.length < 512) {
+      // Shorter than the seek point — take the opening frame instead.
+      try {
+        jpeg = await runFfmpeg(
+          ['-nostdin', '-loglevel', 'error', '-i', tmp,
+            '-frames:v', '1', '-vf', "scale='min(1280,iw)':-2", '-q:v', '3', '-f', 'mjpeg', 'pipe:1'],
+          Math.max(3000, FRAME_TIMEOUT_MS - (Date.now() - started)),
+        );
+      } catch (err) {
+        log('frame: ffmpeg failed', String(err.message || err).slice(0, 160));
+        return null;
+      }
+    }
+    if (!jpeg || jpeg.length < 512 || jpeg[0] !== 0xff || jpeg[1] !== 0xd8) {
+      log('frame: ffmpeg produced no usable image');
+      return null;
+    }
+
+    const dim = jpegDimensions(jpeg);
+    return {
+      dataUrl: `data:image/jpeg;base64,${jpeg.toString('base64')}`,
+      width: dim?.width || 0,
+      height: dim?.height || 0,
+      bytes: jpeg.length,
+      readable: Boolean(dim) && Math.max(dim.width, dim.height) >= POSTER_MIN_EDGE,
+      source: 'decoded_video_frame',
+    };
+  } catch (err) {
+    log('frame: decode error', String(err.message || err).slice(0, 160));
+    return null;
+  } finally {
+    fs.promises.unlink(tmp).catch(() => {});
+  }
+}
+
 function mediaTypeOf(payload, correctedMime = '') {
   // Use the corrected MIME so a container mislabelled as application/mp4 is
   // still classified as a video rather than a document.
@@ -538,13 +648,23 @@ async function handleWahaEvent(evt) {
     log('WARN media has no mimetype; makaug will reject the upload. id=', p.id);
   }
 
-  const poster = mediaType === 'video' ? videoPosterDataUrl(p) : null;
+  const captioned = Boolean(String(p.body || '').trim());
+  let poster = mediaType === 'video' ? videoPosterDataUrl(p) : null;
+
+  // Only decode when a frame is actually needed and the embedded thumbnail
+  // cannot do the job: an agent who wrote a caption has already told us what
+  // the property is, so there is nothing to read off the picture.
+  if (mediaType === 'video' && !captioned && !poster?.readable) {
+    const decoded = await decodeVideoFrame(wahaMedia);
+    if (decoded?.readable) poster = decoded;
+    else if (decoded && !poster) poster = decoded;
+  }
+
   if (mediaType === 'video') {
-    const captioned = Boolean(String(p.body || '').trim());
     log(
       'video poster frame',
       poster
-        ? `${poster.width}x${poster.height} ${Math.round(poster.bytes / 1024)}KB ${poster.readable ? 'READABLE' : 'TOO SMALL TO READ TEXT'}`
+        ? `${poster.width}x${poster.height} ${Math.round(poster.bytes / 1024)}KB ${poster.readable ? 'READABLE' : 'TOO SMALL TO READ TEXT'} via ${poster.source || 'embedded_thumbnail'}`
         : 'NOT AVAILABLE',
       captioned ? '(has caption)' : '(no caption — poster is the only description)',
     );
@@ -587,6 +707,7 @@ async function handleWahaEvent(evt) {
           // False means the frame exists but is too coarse for its text to be
           // read. makaug should not spend a vision call on it.
           video_poster_readable: poster.readable,
+          video_poster_source: poster.source || 'embedded_thumbnail',
         }
         : {}),
       has_caption: Boolean(String(p.body || '').trim()),
