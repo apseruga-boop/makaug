@@ -198,6 +198,36 @@ async function post(url, obj, headers = {}) {
     assert.strictEqual(bytes, 'FAKEJPEGBYTES', 'proxied media url returns the real bytes');
     console.log('✓ inbound media: proxied URL works and the API key never leaks');
 
+    // 5b. The real MIME type must reach makaug. makaug reads it from
+    //     metadata.media_previews[].mime_type; `media_type` is only a coarse
+    //     kind ('image'/'video'), and without a real MIME its intake falls back
+    //     to application/octet-stream, which its uploader rejects — the media is
+    //     dropped and the property never reaches staff review.
+    assert.ok(Array.isArray(med.metadata.media_previews), 'media_previews present');
+    assert.strictEqual(med.metadata.media_previews[0].mime_type, 'image/jpeg', 'real MIME reaches makaug');
+    assert.strictEqual(med.metadata.media_previews[0].url, med.media_url, 'preview points at the proxied url');
+    assert.ok(Array.isArray(med.metadata.image_previews), 'images also land in image_previews');
+    console.log('✓ inbound media carries a real MIME type makaug will accept');
+
+    // 5c. Same for video — the case that was silently failing in production.
+    const videoEvt = {
+      id: 'evt_4b', event: 'message', session: 'default',
+      payload: {
+        id: 'mid_video', from: '256700333444@c.us', fromMe: false,
+        body: '100 by 100 commercial plot, Kira, UGX 200 million', timestamp: 1789460150,
+        hasMedia: true,
+        media: { url: `http://127.0.0.1:${wahaPort}/api/files/clip.mp4`, mimetype: 'video/mp4; codecs=avc1', filename: 'clip.mp4', error: null },
+      },
+    };
+    raw = Buffer.from(JSON.stringify(videoEvt));
+    await fetch(`${adapterUrl}/waha/webhook`, { method: 'POST', headers: { 'x-webhook-hmac': hmac(raw) }, body: raw });
+    await sleep(400);
+    const vid = received.inbound[received.inbound.length - 1];
+    assert.strictEqual(vid.media_type, 'video', 'video kind mapped');
+    assert.strictEqual(vid.metadata.media_previews[0].mime_type, 'video/mp4', 'codecs parameter stripped from MIME');
+    assert.ok(!vid.metadata.image_previews, 'video does not go in image_previews');
+    console.log('✓ inbound video carries video/mp4, not application/octet-stream');
+
     // 6. tampered media signature rejected
     const tampered = med.media_url.replace(/s=[0-9a-f]+/, 's=00000000000000000000000000000000');
     assert.strictEqual((await fetch(tampered)).status, 403, 'tampered signature rejected');

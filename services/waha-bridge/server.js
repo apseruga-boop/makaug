@@ -363,6 +363,11 @@ async function handleWahaEvent(evt) {
   const wahaMedia = p.hasMedia && p.media?.url ? p.media.url : '';
   const mediaUrl = wahaMedia ? proxiedMediaUrl(wahaMedia) : '';
   const mediaType = wahaMedia ? mediaTypeOf(p) : 'text';
+  const mediaMime = wahaMedia ? String(p.media?.mimetype || '').split(';')[0].trim().toLowerCase() : '';
+
+  if (wahaMedia && !mediaMime) {
+    log('WARN media has no mimetype; makaug will reject the upload. id=', p.id);
+  }
 
   if (wahaMedia && !mediaUrl) {
     log('WARN media present but no proxy url (ADAPTER_PUBLIC_URL unset?) id=', p.id);
@@ -389,8 +394,33 @@ async function handleWahaEvent(evt) {
       lid: from.endsWith('@lid') ? from : null,
       addressing_mode: p._data?.Info?.AddressingMode || null,
       push_name: p._data?.Info?.PushName || null,
-      mime: p.media?.mimetype || null,
+      mime: mediaMime || null,
       filename: p.media?.filename || null,
+      // How makaug learns the real MIME type. `media_type` above is a coarse
+      // kind ('video'), and makaug's intake falls back to
+      // `application/octet-stream` without this — which is not on its upload
+      // allow-list, so the media is rejected with "could not store that media
+      // permanently" and the property never reaches staff review.
+      ...(mediaUrl && mediaMime
+        ? {
+          media_previews: [{
+            url: mediaUrl,
+            mime_type: mediaMime,
+            filename: p.media?.filename || null,
+            bytes: Number(p.media?.filesize || p._data?.Info?.Size || 0) || 0,
+          }],
+          ...(mediaType === 'image'
+            ? {
+              image_previews: [{
+                url: mediaUrl,
+                mime_type: mediaMime,
+                filename: p.media?.filename || null,
+                bytes: Number(p.media?.filesize || p._data?.Info?.Size || 0) || 0,
+              }],
+            }
+            : {}),
+        }
+        : {}),
     },
   };
 
