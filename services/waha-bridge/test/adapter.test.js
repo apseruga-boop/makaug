@@ -266,6 +266,25 @@ async function post(url, obj, headers = {}) {
     assert.strictEqual(hb.metadata.transport, 'waha_gows', 'heartbeat identifies the transport');
     console.log('✓ heartbeat reports online + transport to makaug');
 
+    // 10b. a run of failed sends must show as degraded, even though WAHA still
+    //      reports WORKING. A green status while nothing sends is the lie that
+    //      makes this class of outage invisible.
+    outbox = [
+      { id: 'ob4', recipient: '', text: 'nowhere', media_type: 'text' },
+      { id: 'ob5', recipient: '', text: 'nowhere', media_type: 'text' },
+    ];
+    await sleep(4000);
+    const degradedHealth = await fetch(`${adapterUrl}/health`).then((r) => r.json());
+    assert.strictEqual(degradedHealth.waha_status, 'WORKING', 'WAHA still claims WORKING');
+    assert.ok(degradedHealth.consecutive_send_failures >= 3, 'failure run tracked');
+    assert.strictEqual(degradedHealth.bridge_status, 'degraded', 'a run of send failures overrides WORKING');
+    assert.strictEqual(degradedHealth.ready_to_reply, false, 'not ready while sends are failing');
+    assert.ok(degradedHealth.blockers.some((b) => /consecutive send failures/.test(b)), 'blocker explains why');
+    const degradedHb = received.heartbeats[received.heartbeats.length - 1];
+    assert.strictEqual(degradedHb.status, 'degraded', 'admin inbox is told degraded, not online');
+    assert.ok(degradedHb.last_error, 'heartbeat carries the reason');
+    console.log('✓ a run of failed sends reports degraded despite WAHA saying WORKING');
+
     // 11. send pacing (anti-ban)
     console.log('✓ send pacing enforced (>=1s configured gap between sends)');
 

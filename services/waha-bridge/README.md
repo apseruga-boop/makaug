@@ -100,8 +100,9 @@ and no real WhatsApp involved.
   into one submission has to happen in makaug, not here.
 - `session.status: WORKING` is **not** proof the session is healthy — there are
   open WAHA issues where sends fail or webhooks stop while the status stays
-  green. Treat a long gap in `last_inbound_ms_ago` plus rising `failed` as the
-  real signal.
+  green. The bridge no longer relays that claim unchallenged: three consecutive
+  send failures override it, so `/health` reports `bridge_status: degraded` and
+  the admin inbox heartbeat says `degraded` with the reason attached.
 - This is an unofficial transport and remains against WhatsApp's terms. It can
   get the number banned. Inbound-reply-only, which is what makaug does, is the
   single biggest protective factor.

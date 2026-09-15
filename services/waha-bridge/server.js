@@ -406,6 +406,10 @@ async function handleWahaEvent(evt) {
 let lastSendAt = 0;
 let sentCount = 0;
 let failedCount = 0;
+// Run of consecutive send failures. WAHA can report a session as WORKING while
+// every send fails, so this — not the session status — is the honest signal.
+let consecutiveSendFailures = 0;
+let lastSendError = null;
 
 function nextSendDelay() {
   const since = Date.now() - lastSendAt;
@@ -459,12 +463,15 @@ async function drainOutbox() {
           body: { client_id: cfg.clientId, bridge_message_id: sent?.id || sent?._data?.id?._serialized || null },
         });
         sentCount += 1;
+        consecutiveSendFailures = 0;
         log('sent ->', msg.recipient, msg.media_url ? '(media)' : '(text)');
       }
       done += 1;
     } catch (err) {
       failedCount += 1;
-      log('send FAILED', msg.id, err.message);
+      consecutiveSendFailures += 1;
+      lastSendError = String(err.message).slice(0, 200);
+      log('send FAILED', msg.id, err.message, `(run of ${consecutiveSendFailures})`);
       try {
         await makaug(`/api/whatsapp/web-bridge/outbox/${encodeURIComponent(msg.id)}/failed`, {
           method: 'POST',
@@ -492,10 +499,35 @@ function bridgeStatusFor(wahaStatus) {
   return 'starting';
 }
 
+/**
+ * What the admin inbox should actually show.
+ *
+ * WAHA reporting WORKING is not proof the bridge is doing its job — there are
+ * open upstream issues where sends fail or webhooks stop while the session
+ * status stays green. A run of failed sends is the honest signal, so it
+ * overrides WAHA's word and the inbox shows `degraded` instead of a green lie.
+ */
+const DEGRADE_AFTER_FAILURES = 3;
+
+function effectiveStatus(wahaStatus) {
+  const base = bridgeStatusFor(wahaStatus);
+  if (base !== 'online') return base;
+  if (consecutiveSendFailures >= DEGRADE_AFTER_FAILURES) return 'degraded';
+  return 'online';
+}
+
+function degradeReason() {
+  if (consecutiveSendFailures >= DEGRADE_AFTER_FAILURES) {
+    return `${consecutiveSendFailures} consecutive send failures; last: ${lastSendError || 'unknown'}`;
+  }
+  return null;
+}
+
 async function heartbeat() {
   const wahaStatus = await wahaSessionStatus();
   sessionStatusCache = wahaStatus;
-  const status = bridgeStatusFor(wahaStatus);
+  const status = effectiveStatus(wahaStatus);
+  const reason = degradeReason();
   try {
     await makaug('/api/whatsapp/web-bridge/heartbeat', {
       method: 'POST',
@@ -505,11 +537,13 @@ async function heartbeat() {
         status,
         browser_name: 'WAHA GOWS (whatsmeow)',
         current_url: cfg.wahaUrl,
+        last_error: reason,
         stats: { sent: sentCount, failed: failedCount, inbound: inboundCount },
         metadata: {
           transport: 'waha_gows',
           waha_status: wahaStatus,
           waha_session: cfg.wahaSession,
+          consecutive_send_failures: consecutiveSendFailures,
           last_inbound_at: lastInboundAt ? new Date(lastInboundAt).toISOString() : null,
           last_send_at: lastSendAt ? new Date(lastSendAt).toISOString() : null,
           note: 'WAHA GOWS transport (no browser).',
@@ -540,12 +574,15 @@ const server = http.createServer(async (req, res) => {
       if (!tokenOk) blockers.push('WHATSAPP_WEB_BRIDGE_TOKEN is unset or still the placeholder');
       if (!linkOk && link.lastError) blockers.push(`makaug link failing: ${link.lastError}`);
       if (!cfg.publicUrl) blockers.push('ADAPTER_PUBLIC_URL unset — inbound media will be dropped');
+      const degraded = degradeReason();
+      if (degraded) blockers.push(degraded);
 
       return json(res, 200, {
         ok: true,
         service: 'makaug-waha-bridge',
         waha_status: sessionStatusCache,
-        bridge_status: bridgeStatusFor(sessionStatusCache),
+        bridge_status: effectiveStatus(sessionStatusCache),
+        consecutive_send_failures: consecutiveSendFailures,
         stats: { sent: sentCount, failed: failedCount, inbound: inboundCount },
         last_inbound_ms_ago: stale,
         // Does this service actually reach makaug? WAHA being WORKING says nothing about that.
@@ -556,7 +593,7 @@ const server = http.createServer(async (req, res) => {
           last_ok_ms_ago: link.lastOkAt ? Date.now() - link.lastOkAt : null,
           last_error: link.lastError,
         },
-        ready_to_reply: tokenOk && linkOk && sessionStatusCache === 'WORKING',
+        ready_to_reply: tokenOk && linkOk && sessionStatusCache === 'WORKING' && !degraded,
         blockers,
       });
     }
