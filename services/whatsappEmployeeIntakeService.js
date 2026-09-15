@@ -98,6 +98,39 @@ function isEmployeeIntakeComplete(value = '') {
   return /^(?:complete|completed|done|clomplete|complte|compelete)(?:\s+(?:complete|completed|done|clomplete|complte|compelete))?$/i.test(cleanText(value));
 }
 
+/**
+ * Walking away from an unfinished batch.
+ *
+ * COMPLETE only closes a batch that is actually finishable. When it refuses —
+ * a property still missing its media, say — there was previously no way out at
+ * all, and anything typed instead got stored as that property's caption. An
+ * employee who wrote "Close the batch" ended up creating a property called
+ * "Close the batch". This is the exit.
+ */
+function isEmployeeIntakeCancel(value = '') {
+  const clean = cleanText(value).toLowerCase().replace(/[.!]+$/, '');
+  return /^(?:cancel|cancel (?:the )?batch|close (?:the )?batch|end (?:the )?batch|stop|stop (?:the )?batch|exit|quit|abort|leave|nevermind|never mind|start over|restart)$/i.test(clean);
+}
+
+/**
+ * Does this text look like it is describing a property at all?
+ *
+ * Any message at the media step that was not COMPLETE used to be saved as the
+ * pending caption, so ordinary conversation — "close the batch", "hello",
+ * "thanks" — silently became a phantom property with no media, which then
+ * blocked the batch from ever completing. A caption has to carry at least one
+ * property signal: a keyword, a number of rooms, a price, or a size.
+ */
+function looksLikePropertyCaption(value = '') {
+  const clean = cleanText(value);
+  if (!clean) return false;
+  if (/\b(?:property|house|home|mansion|bungalow|villa|townhouse|apartments?|flats?|condo|rentals?|units?|land|plots?|acres?|decimals?|commercial|shops?|offices?|warehouses?|hostels?|bedrooms?|bathrooms?|selling|for sale|for rent|to let|rent|sale)\b/i.test(clean)) return true;
+  if (/\b\d+\s*(?:bed|bedroom|br|bath|bathroom)\b/i.test(clean)) return true;
+  // A price: 600m, 450k, UGX 200,000,000, $600k
+  if (/(?:ugx|usd|shs|\$|£|€)\s*[\d,.]+|\b[\d,.]+\s*(?:m|k|bn|million|billion)\b/i.test(clean)) return true;
+  return false;
+}
+
 function employeeIntakePhoneAllowed(phone, {
   ownerAuthorized = false,
   allowlist = process.env.WHATSAPP_EMPLOYEE_INTAKE_NUMBERS || ''
@@ -185,9 +218,9 @@ function employeeAgentExistingPrompt() {
 function employeeMediaPrompt(subjectName = '', batchMode = 'multiple') {
   const subject = cleanText(subjectName) || 'this person';
   if (batchMode === 'single') {
-    return `✅ ${subject} is ready for *one property*. Send its first photo, video or document with the property type, exact location and price in the caption. Send any additional media without a new property caption and it will stay attached to that property.\n\nWhen the property is finished, type *COMPLETE*. It will stay in staff review until a moderator approves it.`;
+    return `✅ ${subject} is ready for *one property*. Send its first photo, video or document with the property type, exact location and price in the caption. Send any additional media without a new property caption and it will stay attached to that property.\n\nWhen the property is finished, type *COMPLETE*. It will stay in staff review until a moderator approves it.\n\nTo stop without finishing, type *CANCEL*.`;
   }
-  return `✅ ${subject} is ready for *multiple properties*. Start each property by sending its first photo, video or document with the property type, exact location and price in the caption. Additional media without a new full property caption stays attached to the current property. A new full property caption starts the next property.\n\nYou can send property 1, 2, 3 and continue through the whole batch. Only when every property is finished, type *COMPLETE*. Everything will stay in staff review until a moderator approves it.`;
+  return `✅ ${subject} is ready for *multiple properties*. Start each property by sending its first photo, video or document with the property type, exact location and price in the caption. Additional media without a new full property caption stays attached to the current property. A new full property caption starts the next property.\n\nYou can send property 1, 2, 3 and continue through the whole batch. Only when every property is finished, type *COMPLETE*. Everything will stay in staff review until a moderator approves it.\n\nTo stop without finishing, type *CANCEL*.`;
 }
 
 module.exports = {
@@ -200,6 +233,8 @@ module.exports = {
   employeeMediaPrompt,
   employeePropertyCountPrompt,
   employeeRolePrompt,
+  looksLikePropertyCaption,
+  isEmployeeIntakeCancel,
   isEmployeeIntakeComplete,
   isEmployeeIntakeStep,
   isEmployeeIntakeTrigger,
