@@ -284,12 +284,18 @@ async function post(url, obj, headers = {}) {
     //        embedded first-frame thumbnail is the only way to recover that
     //        text. GOWS has spelled the field differently across versions, so
     //        every known shape must be picked up.
-    const frame = Buffer.alloc(900, 7).toString('base64');
+    // A JPEG whose SOF marker declares a real size, so the readability gate is
+    // exercised rather than bypassed.
+    const jpegOf = (w, h, pad = 900) => Buffer.concat([
+      Buffer.from([0xff, 0xd8, 0xff, 0xc0, 0x00, 0x11, 0x08, (h >> 8) & 0xff, h & 0xff, (w >> 8) & 0xff, w & 0xff]),
+      Buffer.alloc(pad, 7),
+    ]);
+    const frame = jpegOf(640, 480).toString('base64');
     const shapes = [
       ['JPEGThumbnail string', { Message: { videoMessage: { JPEGThumbnail: frame } } }],
       ['lowercase jpegThumbnail', { Message: { videoMessage: { jpegThumbnail: frame } } }],
-      ['byte array', { Message: { videoMessage: { JPEGThumbnail: [...Buffer.alloc(900, 7)] } } }],
-      ['serialised Buffer', { Message: { videoMessage: { JPEGThumbnail: { type: 'Buffer', data: [...Buffer.alloc(900, 7)] } } } }],
+      ['byte array', { Message: { videoMessage: { JPEGThumbnail: [...jpegOf(640, 480)] } } }],
+      ['serialised Buffer', { Message: { videoMessage: { JPEGThumbnail: { type: 'Buffer', data: [...jpegOf(640, 480)] } } } }],
     ];
     for (const [label, data] of shapes) {
       const ev = {
@@ -310,8 +316,31 @@ async function post(url, obj, headers = {}) {
         `poster frame recovered from ${label}`,
       );
       assert.strictEqual(got.metadata.has_caption, false, 'uncaptioned video is flagged as such');
+      assert.strictEqual(got.metadata.video_poster_width, 640, `width read from ${label}`);
+      assert.strictEqual(got.metadata.video_poster_height, 480, `height read from ${label}`);
+      assert.strictEqual(got.metadata.video_poster_readable, true, `640x480 is readable (${label})`);
     }
     console.log('✓ video poster frame is recovered for captionless listing videos');
+
+    // A thumbnail around 100px is what WhatsApp usually embeds, and five lines
+    // of overlay text are a few pixels tall at that size. It must be reported
+    // as unreadable so makaug does not spend a vision call inventing an answer.
+    const tinyEvt = {
+      id: 'evt_tinythumb', event: 'message', session: 'default',
+      payload: {
+        id: 'mid_tinythumb', from: '256700333444@c.us', fromMe: false, body: '', timestamp: 1789460230,
+        hasMedia: true,
+        media: { url: `http://127.0.0.1:${wahaPort}/api/files/clip.mp4`, mimetype: 'video/mp4', filename: 'clip.mp4', error: null },
+        _data: { Message: { videoMessage: { JPEGThumbnail: jpegOf(100, 100).toString('base64') } } },
+      },
+    };
+    const tinyRaw = Buffer.from(JSON.stringify(tinyEvt));
+    await fetch(`${adapterUrl}/waha/webhook`, { method: 'POST', headers: { 'x-webhook-hmac': hmac(tinyRaw) }, body: tinyRaw });
+    await sleep(300);
+    const tiny = received.inbound[received.inbound.length - 1];
+    assert.strictEqual(tiny.metadata.video_poster_width, 100, 'tiny thumbnail measured');
+    assert.strictEqual(tiny.metadata.video_poster_readable, false, '100x100 is flagged unreadable');
+    console.log('✓ a thumbnail too coarse to read text is flagged, not sent to vision');
 
     // A tiny or absent thumbnail must not be passed off as a readable frame.
     const noThumb = {

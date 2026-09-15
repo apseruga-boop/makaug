@@ -424,6 +424,39 @@ const THUMBNAIL_PATHS = [
 ];
 
 /** base64 JPEG of the first frame as a data URL, or '' when unavailable. */
+/**
+ * Pixel size of a JPEG, read from its SOF marker. No dependency, and it is the
+ * only honest way to say whether burned-in caption text stands any chance of
+ * being readable: byte size says nothing, because a heavily compressed large
+ * frame and a crisp tiny one can weigh the same.
+ */
+function jpegDimensions(buf) {
+  if (!Buffer.isBuffer(buf) || buf.length < 4 || buf[0] !== 0xff || buf[1] !== 0xd8) return null;
+  let i = 2;
+  while (i < buf.length - 9) {
+    if (buf[i] !== 0xff) { i += 1; continue; }
+    const marker = buf[i + 1];
+    // SOF0..SOF15, excluding the non-frame markers DHT(c4) DAC(c8) DNL(cc)
+    if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+      return { height: buf.readUInt16BE(i + 5), width: buf.readUInt16BE(i + 7) };
+    }
+    if (marker === 0xd8 || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) { i += 2; continue; }
+    const len = buf.readUInt16BE(i + 2);
+    if (len < 2) return null;
+    i += 2 + len;
+  }
+  return null;
+}
+
+/**
+ * Smallest frame worth sending to a vision model. WhatsApp's embedded
+ * thumbnail is often around 100px on its longest edge, where five lines of
+ * overlay text are a few pixels tall and unreadable. Sending one anyway buys a
+ * confidently wrong answer and a wasted call, so below this the frame is
+ * reported as unusable instead.
+ */
+const POSTER_MIN_EDGE = 240;
+
 function videoPosterDataUrl(payload) {
   for (const read of THUMBNAIL_PATHS) {
     let raw;
@@ -437,9 +470,17 @@ function videoPosterDataUrl(payload) {
     b64 = b64.replace(/^data:[^,]+,/, '');
     // A frame worth reading is never a handful of bytes.
     if (b64.length < 512) continue;
-    return `data:image/jpeg;base64,${b64}`;
+    const bytes = Buffer.from(b64, 'base64');
+    const dim = jpegDimensions(bytes);
+    return {
+      dataUrl: `data:image/jpeg;base64,${b64}`,
+      width: dim?.width || 0,
+      height: dim?.height || 0,
+      bytes: bytes.length,
+      readable: Boolean(dim) && Math.max(dim.width, dim.height) >= POSTER_MIN_EDGE,
+    };
   }
-  return '';
+  return null;
 }
 
 function mediaTypeOf(payload, correctedMime = '') {
@@ -497,12 +538,14 @@ async function handleWahaEvent(evt) {
     log('WARN media has no mimetype; makaug will reject the upload. id=', p.id);
   }
 
-  const poster = mediaType === 'video' ? videoPosterDataUrl(p) : '';
+  const poster = mediaType === 'video' ? videoPosterDataUrl(p) : null;
   if (mediaType === 'video') {
     const captioned = Boolean(String(p.body || '').trim());
     log(
       'video poster frame',
-      poster ? `found (${Math.round(poster.length / 1024)}KB)` : 'NOT AVAILABLE',
+      poster
+        ? `${poster.width}x${poster.height} ${Math.round(poster.bytes / 1024)}KB ${poster.readable ? 'READABLE' : 'TOO SMALL TO READ TEXT'}`
+        : 'NOT AVAILABLE',
       captioned ? '(has caption)' : '(no caption — poster is the only description)',
     );
   }
@@ -536,7 +579,16 @@ async function handleWahaEvent(evt) {
       filename: p.media?.filename || null,
       // First frame of a video, so makaug can read details burned into the
       // picture when the agent forwarded it with no caption.
-      ...(poster ? { video_poster_data_url: poster } : {}),
+      ...(poster
+        ? {
+          video_poster_data_url: poster.dataUrl,
+          video_poster_width: poster.width,
+          video_poster_height: poster.height,
+          // False means the frame exists but is too coarse for its text to be
+          // read. makaug should not spend a vision call on it.
+          video_poster_readable: poster.readable,
+        }
+        : {}),
       has_caption: Boolean(String(p.body || '').trim()),
       // How makaug learns the real MIME type. `media_type` above is a coarse
       // kind ('video'), and makaug's intake falls back to
