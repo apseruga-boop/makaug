@@ -1,0 +1,15 @@
+{
+  "name": "makaug-waha-bridge",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Adapter between WAHA (GOWS/whatsmeow) and the makaug WhatsApp web-bridge API",
+  "main": "server.js",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test/adapter.test.js"
+  }
+}

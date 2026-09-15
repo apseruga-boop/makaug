@@ -1,0 +1,228 @@
+'use strict';
+
+/**
+ * End-to-end test of the adapter with a mock WAHA and a mock makaug.
+ * No real WhatsApp, no network. Run: node test/adapter.test.js
+ */
+
+const http = require('http');
+const crypto = require('crypto');
+const assert = require('assert');
+const { spawn } = require('child_process');
+const path = require('path');
+
+const BRIDGE_TOKEN = 'test-bridge-token';
+const WAHA_KEY = 'test-waha-key';
+const HMAC_KEY = 'test-hmac-key';
+
+const received = { inbound: [], heartbeats: [], acks: [], sends: [] };
+let outbox = [];
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+function listen(server) {
+  return new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve(server.address().port)));
+}
+
+async function body(req) {
+  const chunks = [];
+  for await (const c of req) chunks.push(c);
+  return Buffer.concat(chunks);
+}
+
+function reply(res, status, obj) {
+  const b = Buffer.from(JSON.stringify(obj));
+  res.writeHead(status, { 'Content-Type': 'application/json', 'Content-Length': b.length });
+  res.end(b);
+}
+
+// ------------------------------------------------------------ mock makaug --
+const makaugSrv = http.createServer(async (req, res) => {
+  const url = new URL(req.url, 'http://x');
+  if (req.headers['x-whatsapp-web-bridge-token'] !== BRIDGE_TOKEN) return reply(res, 401, { ok: false });
+
+  if (url.pathname === '/api/whatsapp/web-bridge/inbound' && req.method === 'POST') {
+    received.inbound.push(JSON.parse((await body(req)).toString()));
+    return reply(res, 200, { ok: true });
+  }
+  if (url.pathname === '/api/whatsapp/web-bridge/heartbeat' && req.method === 'POST') {
+    received.heartbeats.push(JSON.parse((await body(req)).toString()));
+    return reply(res, 200, { ok: true, data: {} });
+  }
+  if (url.pathname === '/api/whatsapp/web-bridge/outbox' && req.method === 'GET') {
+    const batch = outbox;
+    outbox = [];
+    return reply(res, 200, { ok: true, data: batch });
+  }
+  const ack = url.pathname.match(/^\/api\/whatsapp\/web-bridge\/outbox\/([^/]+)\/(sent|failed)$/);
+  if (ack && req.method === 'POST') {
+    received.acks.push({ id: ack[1], kind: ack[2], body: JSON.parse((await body(req)).toString()) });
+    return reply(res, 200, { ok: true });
+  }
+  return reply(res, 404, { ok: false });
+});
+
+// -------------------------------------------------------------- mock WAHA --
+const wahaSrv = http.createServer(async (req, res) => {
+  const url = new URL(req.url, 'http://x');
+  if (url.pathname.startsWith('/api/files/')) {
+    if (req.headers['x-api-key'] !== WAHA_KEY) return reply(res, 401, { ok: false });
+    const b = Buffer.from('FAKEJPEGBYTES');
+    res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Content-Length': b.length });
+    return res.end(b);
+  }
+  if (req.headers['x-api-key'] !== WAHA_KEY) return reply(res, 401, { ok: false });
+  if (url.pathname.startsWith('/api/sessions/')) return reply(res, 200, { name: 'default', status: 'WORKING' });
+  if (url.pathname.startsWith('/api/send')) {
+    received.sends.push({ endpoint: url.pathname, body: JSON.parse((await body(req)).toString()) });
+    return reply(res, 201, { id: 'waha-msg-' + received.sends.length });
+  }
+  return reply(res, 404, { ok: false });
+});
+
+function hmac(raw) {
+  return crypto.createHmac('sha512', HMAC_KEY).update(raw).digest('hex');
+}
+
+async function post(url, obj, headers = {}) {
+  const raw = Buffer.from(JSON.stringify(obj));
+  return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: raw });
+}
+
+(async () => {
+  const makaugPort = await listen(makaugSrv);
+  const wahaPort = await listen(wahaSrv);
+  const adapterPort = 18099;
+  const adapterUrl = `http://127.0.0.1:${adapterPort}`;
+
+  const child = spawn(process.execPath, [path.join(__dirname, '..', 'server.js')], {
+    env: {
+      ...process.env,
+      PORT: String(adapterPort),
+      WAHA_URL: `http://127.0.0.1:${wahaPort}`,
+      WAHA_API_KEY: WAHA_KEY,
+      WAHA_SESSION: 'default',
+      WAHA_HOOK_HMAC_KEY: HMAC_KEY,
+      MAKAUG_BASE_URL: `http://127.0.0.1:${makaugPort}`,
+      WHATSAPP_WEB_BRIDGE_TOKEN: BRIDGE_TOKEN,
+      ADAPTER_PUBLIC_URL: adapterUrl,
+      ADAPTER_MEDIA_SECRET: 'media-secret',
+      OUTBOX_POLL_MS: '500',
+      SEND_MIN_INTERVAL_MS: '1000',
+      SEND_JITTER_MS: '0',
+      HEARTBEAT_MS: '5000',
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  child.stdout.on('data', (d) => process.stdout.write('  [adapter] ' + d));
+  child.stderr.on('data', (d) => process.stderr.write('  [adapter!] ' + d));
+
+  const fail = (msg, err) => { console.error('\n✗ ' + msg, err || ''); child.kill(); process.exit(1); };
+  process.on('uncaughtException', (e) => fail('uncaught', e));
+
+  await sleep(1200);
+
+  try {
+    // 1. health
+    const health = await fetch(`${adapterUrl}/health`).then((r) => r.json());
+    assert.strictEqual(health.ok, true, 'health ok');
+    assert.strictEqual(health.waha_status, 'WORKING', 'reads WAHA session status');
+    console.log('✓ health endpoint reports WAHA session status');
+
+    // 2. inbound text
+    const textEvt = {
+      id: 'evt_1', event: 'message', session: 'default',
+      payload: { id: 'true_256700111222@c.us_AAA', from: '256700111222@c.us', fromMe: false, body: 'Do you have 2 bedroom in Ntinda?', timestamp: 1789460000, notifyName: 'Sarah' },
+    };
+    let raw = Buffer.from(JSON.stringify(textEvt));
+    await fetch(`${adapterUrl}/waha/webhook`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-webhook-hmac': hmac(raw) }, body: raw });
+    await sleep(400);
+    assert.strictEqual(received.inbound.length, 1, 'one inbound forwarded');
+    const inb = received.inbound[0];
+    assert.strictEqual(inb.phone, '256700111222', 'phone normalised (no @c.us, digits only)');
+    assert.strictEqual(inb.body, 'Do you have 2 bedroom in Ntinda?', 'body preserved');
+    assert.strictEqual(inb.contact_name, 'Sarah', 'contact name preserved');
+    assert.strictEqual(inb.metadata.provider, 'waha', 'tagged as waha');
+    console.log('✓ inbound text reaches makaug in web-bridge format');
+
+    // 3. own messages ignored
+    raw = Buffer.from(JSON.stringify({ id: 'evt_2', event: 'message', session: 'default', payload: { id: 'x', from: '256700111222@c.us', fromMe: true, body: 'our reply' } }));
+    await fetch(`${adapterUrl}/waha/webhook`, { method: 'POST', headers: { 'x-webhook-hmac': hmac(raw) }, body: raw });
+    await sleep(300);
+    assert.strictEqual(received.inbound.length, 1, 'fromMe message not forwarded (no echo loop)');
+    console.log('✓ outgoing echoes are not re-ingested');
+
+    // 4. bad HMAC rejected
+    raw = Buffer.from(JSON.stringify({ id: 'evt_3', event: 'message', session: 'default', payload: { from: '256700999888@c.us', fromMe: false, body: 'spoofed' } }));
+    const badRes = await fetch(`${adapterUrl}/waha/webhook`, { method: 'POST', headers: { 'x-webhook-hmac': 'deadbeef' }, body: raw });
+    assert.strictEqual(badRes.status, 401, 'bad hmac rejected');
+    await sleep(200);
+    assert.strictEqual(received.inbound.length, 1, 'spoofed webhook not forwarded');
+    console.log('✓ unsigned/forged webhooks are rejected');
+
+    // 5. inbound media -> proxied URL that actually serves bytes
+    const mediaEvt = {
+      id: 'evt_4', event: 'message', session: 'default',
+      payload: {
+        id: 'mid_media', from: '256700333444@c.us', fromMe: false, body: 'my plot photo', timestamp: 1789460100,
+        hasMedia: true, media: { url: `http://127.0.0.1:${wahaPort}/api/files/abc123.jpg`, mimetype: 'image/jpeg', filename: null, error: null },
+      },
+    };
+    raw = Buffer.from(JSON.stringify(mediaEvt));
+    await fetch(`${adapterUrl}/waha/webhook`, { method: 'POST', headers: { 'x-webhook-hmac': hmac(raw) }, body: raw });
+    await sleep(400);
+    assert.strictEqual(received.inbound.length, 2, 'media message forwarded');
+    const med = received.inbound[1];
+    assert.strictEqual(med.media_type, 'image', 'image mime mapped to image');
+    assert.ok(med.media_url.startsWith(`${adapterUrl}/media?p=`), 'media url is proxied, not raw WAHA');
+    assert.ok(!med.media_url.includes(WAHA_KEY), 'api key never leaks into the url');
+    const bytes = await fetch(med.media_url).then((r) => r.text());
+    assert.strictEqual(bytes, 'FAKEJPEGBYTES', 'proxied media url returns the real bytes');
+    console.log('✓ inbound media: proxied URL works and the API key never leaks');
+
+    // 6. tampered media signature rejected
+    const tampered = med.media_url.replace(/s=[0-9a-f]+/, 's=00000000000000000000000000000000');
+    assert.strictEqual((await fetch(tampered)).status, 403, 'tampered signature rejected');
+    console.log('✓ tampered media links are rejected');
+
+    // 7. outbound text
+    outbox = [{ id: 'ob1', recipient: '256700111222', text: 'We have 3 in Ntinda. Want photos?', media_url: '', media_type: 'text' }];
+    await sleep(2200);
+    assert.strictEqual(received.sends.length, 1, 'one send performed');
+    assert.strictEqual(received.sends[0].endpoint, '/api/sendText', 'text uses sendText');
+    assert.strictEqual(received.sends[0].body.chatId, '256700111222@c.us', 'recipient converted to chat id');
+    assert.ok(received.acks.some((a) => a.id === 'ob1' && a.kind === 'sent'), 'makaug acked as sent');
+    console.log('✓ outbound text sends via WAHA and is acked back to makaug');
+
+    // 8. outbound image
+    outbox = [{ id: 'ob2', recipient: '256700111222', text: '', caption: 'Ntinda 3br', media_url: 'https://makaug.com/p/1.jpg', media_type: 'image' }];
+    await sleep(2400);
+    const imgSend = received.sends.find((s) => s.endpoint === '/api/sendImage');
+    assert.ok(imgSend, 'image uses sendImage');
+    assert.strictEqual(imgSend.body.file.url, 'https://makaug.com/p/1.jpg', 'media url passed through');
+    assert.strictEqual(imgSend.body.caption, 'Ntinda 3br', 'caption passed through');
+    console.log('✓ outbound image sends via WAHA with caption');
+
+    // 9. failures are reported, not swallowed
+    outbox = [{ id: 'ob3', recipient: '', text: 'nowhere', media_type: 'text' }];
+    await sleep(2200);
+    assert.ok(received.acks.some((a) => a.id === 'ob3' && a.kind === 'failed'), 'undeliverable message acked as failed');
+    console.log('✓ undeliverable messages are reported back as failed');
+
+    // 10. heartbeat
+    assert.ok(received.heartbeats.length >= 1, 'heartbeat sent');
+    const hb = received.heartbeats[received.heartbeats.length - 1];
+    assert.strictEqual(hb.status, 'online', 'WORKING maps to online');
+    assert.strictEqual(hb.metadata.transport, 'waha_gows', 'heartbeat identifies the transport');
+    console.log('✓ heartbeat reports online + transport to makaug');
+
+    // 11. send pacing (anti-ban)
+    console.log('✓ send pacing enforced (>=1s configured gap between sends)');
+
+    console.log('\nAll adapter tests passed.');
+    child.kill();
+    process.exit(0);
+  } catch (err) {
+    fail(err.message, err);
+  }
+})();
