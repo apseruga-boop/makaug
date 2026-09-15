@@ -5573,6 +5573,38 @@ async function handleEmployeeWhatsappIntake({
   if (currentStep === 'employee_property_count') {
     const batchMode = parsePropertyBatchMode(cleanBody);
     if (!batchMode) {
+      // Agents forward a listing video the moment they think of it, often before
+      // answering this question. The media used to be discarded here and the
+      // prompt simply repeated, so the agent had to find and resend the file
+      // with no idea why. Hold it against the session instead; the
+      // employee_property_media step already picks up pending media and
+      // attaches it to the first property.
+      if (candidates.length) {
+        try {
+          const heldMedia = await storeEmployeeMedia(candidates, {
+            privateMedia: false,
+            phone,
+            inboundMessageId,
+            provider: runtime.provider
+          });
+          rememberEmployeePendingMedia(data, heldMedia, inboundMessageId);
+          if (cleanBody) data.pending_property_caption = cleanBody;
+          await replaceEmployeeSession(phone, currentStep, data);
+          const heldCount = employeePendingStoredMedia(data).length;
+          return {
+            handled: true,
+            nextStep: currentStep,
+            message: `Got that media — ${heldCount} ${heldCount === 1 ? 'file is' : 'files are'} held for the first property, so you do not need to send ${heldCount === 1 ? 'it' : 'them'} again.\n\n${employeePropertyCountPrompt()}`
+          };
+        } catch (error) {
+          logger.error('WhatsApp employee early property-media hold failed:', error);
+          return {
+            handled: true,
+            nextStep: currentStep,
+            message: `I could not store that media, so please send it again after answering.\n\n${employeePropertyCountPrompt()}`
+          };
+        }
+      }
       return { handled: true, nextStep: currentStep, message: employeePropertyCountPrompt() };
     }
     data.property_batch_mode = batchMode;
