@@ -268,7 +268,27 @@ function bridgeTokenConfigured() {
  * hold that key, so we hand it a signed URL on this service and stream the
  * bytes through.
  */
-function proxiedMediaUrl(wahaMediaUrl) {
+/**
+ * WhatsApp's own declared MIME, corrected for containers that are commonly
+ * mislabelled. WAHA's static file server answers an .mp4 with
+ * `Content-Type: application/mp4`, and makaug re-checks the content-type of
+ * what it downloads against an allow-list that holds `video/mp4` — so a video
+ * that passed every earlier check was rejected at the download step.
+ */
+const MIME_CORRECTIONS = new Map([
+  ['application/mp4', 'video/mp4'],
+  ['application/x-mpegurl', 'video/mp4'],
+  ['audio/mp4', 'audio/mp4'],
+  ['application/pdf', 'application/pdf'],
+]);
+
+function normalizeMime(raw) {
+  const mime = String(raw || '').split(';')[0].trim().toLowerCase();
+  if (!mime) return '';
+  return MIME_CORRECTIONS.get(mime) || mime;
+}
+
+function proxiedMediaUrl(wahaMediaUrl, mime = '') {
   if (!wahaMediaUrl) return '';
   let pathPart = '';
   try {
@@ -279,13 +299,26 @@ function proxiedMediaUrl(wahaMediaUrl) {
   if (!pathPart.startsWith('/api/files/')) return '';
   if (!cfg.publicUrl) return '';
   const p = Buffer.from(pathPart, 'utf8').toString('base64url');
-  return `${cfg.publicUrl}/media?p=${p}&s=${sign(p)}`;
+  // Carry the declared MIME in the signed URL so the bytes are served as the
+  // type we told makaug to expect, instead of whatever WAHA's file server
+  // guesses. Signed together with the path so neither can be swapped.
+  const m = mime ? Buffer.from(mime, 'utf8').toString('base64url') : '';
+  const sig = sign(m ? `${p}.${m}` : p);
+  return `${cfg.publicUrl}/media?p=${p}${m ? `&m=${m}` : ''}&s=${sig}`;
 }
 
 async function handleMediaProxy(req, res, url) {
   const p = url.searchParams.get('p') || '';
+  const m = url.searchParams.get('m') || '';
   const s = url.searchParams.get('s') || '';
-  if (!p || !timingSafeEqualStr(s, sign(p))) return json(res, 403, { ok: false, error: 'bad_signature' });
+  if (!p || !timingSafeEqualStr(s, sign(m ? `${p}.${m}` : p))) {
+    return json(res, 403, { ok: false, error: 'bad_signature' });
+  }
+
+  let declaredMime = '';
+  if (m) {
+    try { declaredMime = normalizeMime(Buffer.from(m, 'base64url').toString('utf8')); } catch { declaredMime = ''; }
+  }
 
   let pathPart;
   try {
@@ -302,7 +335,7 @@ async function handleMediaProxy(req, res, url) {
     return json(res, upstream.status || 502, { ok: false, error: 'media_unavailable' });
   }
   res.writeHead(200, {
-    'Content-Type': upstream.headers.get('content-type') || 'application/octet-stream',
+    'Content-Type': declaredMime || normalizeMime(upstream.headers.get('content-type')) || 'application/octet-stream',
     ...(upstream.headers.get('content-length') ? { 'Content-Length': upstream.headers.get('content-length') } : {}),
     'Cache-Control': 'private, max-age=900',
   });
@@ -324,8 +357,10 @@ function hmacValid(rawBody, headerValue) {
   return timingSafeEqualStr(expected, String(headerValue || '').trim());
 }
 
-function mediaTypeOf(payload) {
-  const mime = String(payload?.media?.mimetype || '').toLowerCase();
+function mediaTypeOf(payload, correctedMime = '') {
+  // Use the corrected MIME so a container mislabelled as application/mp4 is
+  // still classified as a video rather than a document.
+  const mime = correctedMime || normalizeMime(payload?.media?.mimetype);
   if (mime.startsWith('image/')) return 'image';
   if (mime.startsWith('video/')) return 'video';
   if (mime.startsWith('audio/')) return 'audio';
@@ -361,9 +396,11 @@ async function handleWahaEvent(evt) {
   if (!phone) return { handled: false, kind: 'no_sender' };
 
   const wahaMedia = p.hasMedia && p.media?.url ? p.media.url : '';
-  const mediaUrl = wahaMedia ? proxiedMediaUrl(wahaMedia) : '';
-  const mediaType = wahaMedia ? mediaTypeOf(p) : 'text';
-  const mediaMime = wahaMedia ? String(p.media?.mimetype || '').split(';')[0].trim().toLowerCase() : '';
+  const mediaMime = wahaMedia ? normalizeMime(p.media?.mimetype) : '';
+  // The URL carries the same MIME we declare below, so the type makaug is told
+  // to expect and the type it actually downloads cannot drift apart.
+  const mediaUrl = wahaMedia ? proxiedMediaUrl(wahaMedia, mediaMime) : '';
+  const mediaType = wahaMedia ? mediaTypeOf(p, mediaMime) : 'text';
 
   if (wahaMedia && !mediaMime) {
     log('WARN media has no mimetype; makaug will reject the upload. id=', p.id);

@@ -67,6 +67,13 @@ const wahaSrv = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   if (url.pathname.startsWith('/api/files/')) {
     if (req.headers['x-api-key'] !== WAHA_KEY) return reply(res, 401, { ok: false });
+    // Real WAHA serves .mp4 as `application/mp4`, which makaug's uploader
+    // rejects. Reproduced here so the proxy is forced to correct it.
+    if (url.pathname.endsWith('.mp4')) {
+      const v = Buffer.from('FAKEMP4BYTES');
+      res.writeHead(200, { 'Content-Type': 'application/mp4', 'Content-Length': v.length });
+      return res.end(v);
+    }
     const b = Buffer.from('FAKEJPEGBYTES');
     res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Content-Length': b.length });
     return res.end(b);
@@ -227,6 +234,30 @@ async function post(url, obj, headers = {}) {
     assert.strictEqual(vid.metadata.media_previews[0].mime_type, 'video/mp4', 'codecs parameter stripped from MIME');
     assert.ok(!vid.metadata.image_previews, 'video does not go in image_previews');
     console.log('✓ inbound video carries video/mp4, not application/octet-stream');
+
+    // 5d. makaug re-checks the Content-Type of what it downloads. WAHA serves
+    //     .mp4 as `application/mp4`, which is not on makaug's allow-list — the
+    //     exact production failure ("Unsupported downloaded media type:
+    //     application/mp4"). The proxy must serve the declared type instead.
+    const vidRes = await fetch(vid.media_url);
+    assert.strictEqual(vidRes.status, 200, 'video proxy serves the bytes');
+    assert.strictEqual(
+      (vidRes.headers.get('content-type') || '').split(';')[0],
+      'video/mp4',
+      'proxy corrects application/mp4 to video/mp4 on download',
+    );
+    assert.strictEqual(
+      vid.metadata.media_previews[0].mime_type,
+      (vidRes.headers.get('content-type') || '').split(';')[0],
+      'declared type and downloaded type match — they cannot drift',
+    );
+    assert.strictEqual(await vidRes.text(), 'FAKEMP4BYTES', 'real bytes still stream through');
+    console.log('✓ media proxy serves the declared MIME, not WAHA application/mp4');
+
+    // 5e. the MIME is signed with the path, so it cannot be swapped
+    const swapped = vid.media_url.replace(/([?&]m=)[^&]+/, `$1${Buffer.from('text/plain').toString('base64url')}`);
+    assert.strictEqual((await fetch(swapped)).status, 403, 'tampered MIME is rejected');
+    console.log('✓ a tampered content-type in the media link is rejected');
 
     // 6. tampered media signature rejected
     const tampered = med.media_url.replace(/s=[0-9a-f]+/, 's=00000000000000000000000000000000');
