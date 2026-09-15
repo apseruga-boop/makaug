@@ -44,8 +44,16 @@ const cfg = {
   sendJitterMs: clampInt(process.env.SEND_JITTER_MS, 1500, 0, 60000),
 
   heartbeatMs: clampInt(process.env.HEARTBEAT_MS, 30000, 5000, 300000),
-  dryRun: /^(1|true|yes)$/i.test(String(process.env.DRY_RUN || '')),
 };
+
+// DRY_RUN used to make this service accept messages and silently drop them
+// while still reporting healthy. That is exactly the failure mode that is
+// impossible to debug from the outside, so the flag is gone: if the service is
+// up, it delivers. A leftover DRY_RUN env var is ignored. Use `npm test` for a
+// no-network dry run.
+if (process.env.DRY_RUN) {
+  console.warn('NOTE: DRY_RUN is set but no longer supported — it is ignored. Remove it from the environment.');
+}
 
 function clampInt(raw, dflt, min, max) {
   const n = Number(raw);
@@ -386,11 +394,6 @@ async function handleWahaEvent(evt) {
     },
   };
 
-  if (cfg.dryRun) {
-    log('DRY_RUN inbound', JSON.stringify(body).slice(0, 400));
-    return { handled: true, kind: 'message', dryRun: true };
-  }
-
   const result = await makaug('/api/whatsapp/web-bridge/inbound', { method: 'POST', body });
   lastInboundAt = Date.now();
   inboundCount += 1;
@@ -448,9 +451,7 @@ async function drainOutbox() {
     const wait = nextSendDelay();
     if (wait > 0) await sleep(wait);
     try {
-      if (cfg.dryRun) {
-        log('DRY_RUN outbound', msg.id, msg.recipient, (msg.text || '').slice(0, 60));
-      } else {
+      {
         const sent = await sendViaWaha(msg);
         lastSendAt = Date.now();
         await makaug(`/api/whatsapp/web-bridge/outbox/${encodeURIComponent(msg.id)}/sent`, {
@@ -536,7 +537,6 @@ const server = http.createServer(async (req, res) => {
       const tokenOk = bridgeTokenConfigured();
       const linkOk = link.lastOkAt > 0 && link.lastOkAt >= link.lastErrAt;
       const blockers = [];
-      if (cfg.dryRun) blockers.push('DRY_RUN is true — inbound messages are logged, never delivered to makaug');
       if (!tokenOk) blockers.push('WHATSAPP_WEB_BRIDGE_TOKEN is unset or still the placeholder');
       if (!linkOk && link.lastError) blockers.push(`makaug link failing: ${link.lastError}`);
       if (!cfg.publicUrl) blockers.push('ADAPTER_PUBLIC_URL unset — inbound media will be dropped');
@@ -548,7 +548,6 @@ const server = http.createServer(async (req, res) => {
         bridge_status: bridgeStatusFor(sessionStatusCache),
         stats: { sent: sentCount, failed: failedCount, inbound: inboundCount },
         last_inbound_ms_ago: stale,
-        dry_run: cfg.dryRun,
         // Does this service actually reach makaug? WAHA being WORKING says nothing about that.
         makaug_link: {
           ok: linkOk,
@@ -557,7 +556,7 @@ const server = http.createServer(async (req, res) => {
           last_ok_ms_ago: link.lastOkAt ? Date.now() - link.lastOkAt : null,
           last_error: link.lastError,
         },
-        ready_to_reply: !cfg.dryRun && tokenOk && linkOk && sessionStatusCache === 'WORKING',
+        ready_to_reply: tokenOk && linkOk && sessionStatusCache === 'WORKING',
         blockers,
       });
     }
@@ -595,7 +594,7 @@ const server = http.createServer(async (req, res) => {
 server.listen(cfg.port, '0.0.0.0', () => {
   log(`listening on :${cfg.port}`);
   log(`waha=${cfg.wahaUrl} session=${cfg.wahaSession} makaug=${cfg.makaugUrl} client=${cfg.clientId}`);
-  log(`outbox poll=${cfg.outboxPollMs}ms send-interval>=${cfg.sendMinIntervalMs}ms (+<=${cfg.sendJitterMs}ms jitter) dryRun=${cfg.dryRun}`);
+  log(`outbox poll=${cfg.outboxPollMs}ms send-interval>=${cfg.sendMinIntervalMs}ms (+<=${cfg.sendJitterMs}ms jitter)`);
   if (!cfg.publicUrl) log('WARN ADAPTER_PUBLIC_URL is not set - inbound media will be dropped.');
 });
 
