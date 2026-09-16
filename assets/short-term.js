@@ -1611,6 +1611,10 @@
     if (link.target === '_blank') return;
     var href = link.getAttribute('href') || '';
     if (href.indexOf('/short-term') !== 0) return;
+    // This page's block only ships on short-term routes. Without it there is
+    // nothing to render into, and cancelling the navigation would strand the
+    // visitor on the page they were already on.
+    if (!root()) return;
     e.preventDefault();
     go(href);
   });

@@ -1189,6 +1189,29 @@ test('nothing the client renders can delete the Ask AI box', () => {
   );
 });
 
+test('a nav click is never swallowed on a page this section is not on', () => {
+  // THE BUG THIS EXISTS FOR: the document click handler matches
+  // a[href^="/short-term"], which is the nav item on every page of the site.
+  // The sanitizer ships only the current route's page block, so on the
+  // homepage there is no #page-short-term to render into - but the handler had
+  // already called preventDefault. The click changed the address bar and
+  // nothing else. Clicking again gave a different result depending on what the
+  // bundle had done in between, which is how "two different pages" was
+  // reported.
+  const handlerAt = clientSource.indexOf("document.addEventListener('click'");
+  assert.ok(handlerAt > -1, 'the internal-link handler is gone');
+  const handler = clientSource.slice(handlerAt, handlerAt + 900);
+
+  const rootCheckAt = handler.indexOf('if (!root()) return;');
+  const preventAt = handler.indexOf('e.preventDefault();');
+  assert.ok(rootCheckAt > -1, 'the handler must check the page block exists');
+  assert.ok(preventAt > -1, 'the handler no longer prevents default');
+  assert.ok(
+    rootCheckAt < preventAt,
+    'the page-block check must come BEFORE preventDefault - otherwise the click is cancelled and nothing renders'
+  );
+});
+
 test('the section paints without waiting for the main bundle', () => {
   // THE BUG THIS EXISTS FOR, measured on the live site: arriving at
   // /short-term showed the Ask AI box alone for seconds, then the rest
