@@ -34,6 +34,16 @@ const COUNTRY_CODE = 'UG';
 // would loop over destinations needs to respect this.
 const MAX_HOTELS_PER_REQUEST = 100;
 
+// Images come back as bare paths; this is the host they hang off.
+const PHOTO_BASE = 'https://photos.hotelbeds.com/giata/bigger/';
+
+// Only the fields that are actually used. Asking for everything drags back
+// rooms, facilities and wildcards for every hotel, which is a lot of payload
+// on a metered plan for data that is never rendered.
+const CONTENT_FIELDS = [
+  'code', 'name', 'city', 'coordinates', 'categoryCode', 'images', 'web', 'address'
+].join(',');
+
 function credentials(env = process.env) {
   const key = String(env.HOTELBEDS_API_KEY || '').trim();
   const secret = String(env.HOTELBEDS_SECRET || '').trim();
@@ -104,10 +114,44 @@ function partnerSupplyEnabled(env = process.env) {
 // documentation - the remaining fields get filled in against an actual
 // sandbox response rather than from memory.
 // ---------------------------------------------------------------------------
+// "KAMPALA" is how the API sends a city. Shouting it on a card is not.
+function titleCase(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/(^|[\s\-'])([a-z])/g, (whole, lead, letter) => lead + letter.toUpperCase());
+}
+
+// categoryCode is "5EST", "4EST", "3LL" and so on. The leading digit is the
+// only part worth showing, and anything without one is simply unrated.
+function starRating(categoryCode) {
+  const match = /^(\d)/.exec(String(categoryCode || '').trim());
+  return match ? Number(match[1]) : null;
+}
+
+// Pick the picture a person would recognise the place by. GEN is the general
+// exterior view; visualOrder is their own ranking, lowest first.
+function primaryImage(images) {
+  if (!Array.isArray(images) || !images.length) return null;
+  const ranked = images.slice().sort((a, b) => {
+    const aGen = a && a.imageTypeCode === 'GEN' ? 0 : 1;
+    const bGen = b && b.imageTypeCode === 'GEN' ? 0 : 1;
+    if (aGen !== bGen) return aGen - bGen;
+    return Number(a && a.visualOrder || 1e9) - Number(b && b.visualOrder || 1e9);
+  });
+  const path = String(ranked[0] && ranked[0].path || '').trim();
+  return path ? PHOTO_BASE + path : null;
+}
+
 function toListingCard(hotel = {}) {
   const name = String(hotel.name && hotel.name.content ? hotel.name.content : hotel.name || '').trim();
   const lat = Number(hotel.coordinates && hotel.coordinates.latitude);
   const lng = Number(hotel.coordinates && hotel.coordinates.longitude);
+
+  // The hotel's own website. It is the only honest thing to send a visitor to:
+  // makaug does not book, and there is no makaug page for a partner row, so a
+  // card with nowhere to go is just decoration.
+  const web = String(hotel.web || '').trim();
 
   return {
     // Namespaced so a partner row can never collide with a host listing id,
@@ -117,12 +161,19 @@ function toListingCard(hotel = {}) {
     is_private_listing: false,
 
     title: name,
-    district: String(hotel.destinationName && hotel.destinationName.content
-      ? hotel.destinationName.content
-      : hotel.destinationName || '').trim(),
-    area: String(hotel.zoneName || '').trim(),
+    // city.content is what the API returns. destinationName and zoneName do
+    // not exist on this response - it sends destinationCode and zoneCode,
+    // which need a second lookup, which is why every row was blank before.
+    district: titleCase(hotel.city && hotel.city.content),
+    // Deliberately null. The address field is a PO box on most of these
+    // records, and a PO box is not an area - showing one would be worse than
+    // showing nothing.
+    area: null,
     latitude: Number.isFinite(lat) ? lat : null,
     longitude: Number.isFinite(lng) ? lng : null,
+
+    primary_image: primaryImage(hotel.images),
+    star_rating: starRating(hotel.categoryCode),
 
     // A partner row has no host to ring. The section must not pretend it does.
     host_phone: null,
@@ -135,13 +186,19 @@ function toListingCard(hotel = {}) {
     // Never a makaug detail page: there is nothing of ours to show, and a
     // makaug URL would imply we stand behind the stay.
     url: null,
+    external_url: /^https?:\/\//i.test(web) ? web : null,
     external_only: true
   };
 }
 
 module.exports = {
+  CONTENT_FIELDS,
   COUNTRY_CODE,
   MAX_HOTELS_PER_REQUEST,
+  PHOTO_BASE,
+  primaryImage,
+  starRating,
+  titleCase,
   baseUrl,
   credentials,
   isConfigured,

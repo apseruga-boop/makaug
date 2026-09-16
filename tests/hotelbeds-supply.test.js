@@ -95,12 +95,22 @@ test('the test environment is the default', () => {
 });
 
 test('a partner row never claims to be a host listing', () => {
+  // This sample is copied from a real sandbox response for Uganda, not from
+  // the documentation. The first version of this test used destinationName
+  // and zoneName, which this API does not return - so it agreed with the bug
+  // and every row rendered with a blank location.
   const card = svc.toListingCard({
-    code: 12345,
+    code: 172359,
     name: { content: 'Kampala Serena Hotel' },
-    destinationName: { content: 'Kampala' },
-    zoneName: 'Nakasero',
-    coordinates: { latitude: 0.3213, longitude: 32.5811 }
+    city: { content: 'KAMPALA' },
+    address: { content: 'P.O. Box 7814', street: 'P.O. Box 7814' },
+    categoryCode: '5EST',
+    coordinates: { latitude: 0.31861, longitude: 32.58639 },
+    web: 'https://www.serenahotels.com/kampala',
+    images: [
+      { imageTypeCode: 'HAB', path: '17/172359/172359a_hb_w_001.jpg', visualOrder: 40 },
+      { imageTypeCode: 'GEN', path: '17/172359/172359a_hb_f_002.jpg', visualOrder: 822 }
+    ]
   });
 
   assert.equal(card.is_private_listing, false, 'it must not present as a private host');
@@ -109,17 +119,74 @@ test('a partner row never claims to be a host listing', () => {
   assert.equal(card.source, 'hotelbeds', 'the origin must be traceable');
   assert.ok(card.reference.startsWith('hb-'), 'ids must be namespaced against host listings');
 
+  assert.equal(card.title, 'Kampala Serena Hotel');
+  assert.equal(card.latitude, 0.31861);
+
+  // "KAMPALA" is how it arrives. Shouting it on a card is not acceptable.
+  assert.equal(card.district, 'Kampala', 'the city must be normalised, not echoed in caps');
+
+  // The address on these records is a PO box. A PO box is not an area, and
+  // showing one is worse than showing nothing.
+  assert.equal(card.area, null, 'a PO box must never be presented as an area');
+
+  assert.equal(card.star_rating, 5, '5EST is a five star hotel');
+
+  // GEN is the general exterior view - the picture someone recognises the
+  // place by - and it must win even though its visualOrder is worse.
+  assert.equal(card.primary_image, svc.PHOTO_BASE + '17/172359/172359a_hb_f_002.jpg',
+    'the general view must be preferred over a room shot');
+
   // No makaug detail page: a makaug URL implies makaug stands behind the stay.
   assert.equal(card.url, null);
   assert.equal(card.external_only, true);
+  // But the card still needs somewhere honest to send a visitor.
+  assert.equal(card.external_url, 'https://www.serenahotels.com/kampala');
 
   // Price comes from the rate APIs, not content. Null is "on request", and it
   // must never default to 0, which would render as free.
   assert.equal(card.price_per_night, null);
+});
 
-  assert.equal(card.title, 'Kampala Serena Hotel');
-  assert.equal(card.district, 'Kampala');
-  assert.equal(card.latitude, 0.3213);
+test('the mapping degrades rather than inventing', () => {
+  // Not every record carries every field, and a half-filled card must not
+  // produce "undefined" or a broken image on the page.
+  const bare = svc.toListingCard({ code: 1, name: { content: 'Small Guest House' } });
+  assert.equal(bare.title, 'Small Guest House');
+  assert.equal(bare.district, '', 'a missing city must be empty, never "undefined"');
+  assert.equal(bare.primary_image, null, 'no images must mean no image, not a broken path');
+  assert.equal(bare.star_rating, null, 'unrated must be null, not 0');
+  assert.equal(bare.external_url, null);
+  assert.equal(bare.latitude, null);
+
+  // A non-https website must not be passed through into an href.
+  assert.equal(svc.toListingCard({ web: 'javascript:alert(1)' }).external_url, null,
+    'only http(s) may reach an href');
+  assert.equal(svc.toListingCard({ web: 'serenahotels.com' }).external_url, null,
+    'a scheme-less string is not a safe link');
+
+  // Codes without a leading digit are simply unrated.
+  assert.equal(svc.starRating('LL'), null);
+  assert.equal(svc.starRating('3EST'), 3);
+
+  assert.equal(svc.titleCase('FORT PORTAL'), 'Fort Portal');
+  assert.equal(svc.titleCase("JINJA"), 'Jinja');
+});
+
+// Only the fields that are used are requested. On a metered evaluation plan,
+// asking for everything drags back rooms, facilities and wildcards for every
+// hotel - a lot of payload for data that is never rendered.
+test('the content request asks only for what is rendered', () => {
+  const fields = svc.CONTENT_FIELDS.split(',');
+  ['code', 'name', 'city', 'coordinates', 'images'].forEach((needed) => {
+    assert.ok(fields.includes(needed), `${needed} is used but not requested`);
+  });
+  ['rooms', 'facilities', 'wildcards', 'boardCodes', 'segmentCodes'].forEach((unused) => {
+    assert.ok(!fields.includes(unused), `${unused} is requested but never used`);
+  });
+  // And never the fields that do not exist on this response.
+  ['destinationName', 'zoneName'].forEach((wrong) => {
+    assert.ok(!fields.includes(wrong), `${wrong} is not returned by this API`);
+  });
 });
 
 test('this service cannot make a booking', () => {

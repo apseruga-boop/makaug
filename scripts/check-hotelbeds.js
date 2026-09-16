@@ -18,6 +18,7 @@ const {
   isConfigured,
   requestHeaders,
   toListingCard,
+  CONTENT_FIELDS,
   COUNTRY_CODE
 } = require('../services/hotelbedsSupplyService');
 
@@ -42,7 +43,7 @@ async function main() {
   const base = baseUrl();
   const url = base
     + '/hotel-content-api/1.0/hotels'
-    + '?fields=code,name,coordinates,destinationName,zoneName'
+    + '?fields=' + CONTENT_FIELDS
     + '&countryCode=' + COUNTRY_CODE
     + '&from=1&to=5&language=ENG';
 
@@ -105,11 +106,14 @@ async function main() {
 
   // The fields that decide whether a row is usable on a map and in a card.
   const mapped = hotels.map(toListingCard);
-  const withCoords = mapped.filter((c) => c.latitude != null).length;
-  const withName = mapped.filter((c) => c.title).length;
+  const count = (predicate) => mapped.filter(predicate).length;
   console.log('\nfield coverage in this sample:');
-  console.log('  name:        ' + withName + '/' + mapped.length);
-  console.log('  coordinates: ' + withCoords + '/' + mapped.length);
+  console.log('  name:        ' + count((c) => c.title) + '/' + mapped.length);
+  console.log('  coordinates: ' + count((c) => c.latitude != null) + '/' + mapped.length);
+  console.log('  district:    ' + count((c) => c.district) + '/' + mapped.length);
+  console.log('  photo:       ' + count((c) => c.primary_image) + '/' + mapped.length);
+  console.log('  own website: ' + count((c) => c.external_url) + '/' + mapped.length);
+  console.log('  stars:       ' + count((c) => c.star_rating != null) + '/' + mapped.length);
 }
 
 main().catch((error) => {
