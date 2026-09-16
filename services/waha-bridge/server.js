@@ -505,6 +505,29 @@ const FRAME_MAX_VIDEO_BYTES = clampInt(process.env.FRAME_MAX_VIDEO_BYTES, 80 * 1
 const FRAME_TIMEOUT_MS = clampInt(process.env.FRAME_TIMEOUT_MS, 20000, 3000, 60000);
 const FRAME_SEEK_SECONDS = String(process.env.FRAME_SEEK_SECONDS || '1');
 
+/**
+ * Does the bundled ffmpeg actually run on this machine?
+ *
+ * The npm package ships a prebuilt binary, which can be missing, the wrong
+ * architecture, or not executable on a given host. Without this the first sign
+ * of trouble would be a listing video quietly failing to yield a frame, so the
+ * check runs at boot and the answer sits on /health.
+ */
+let ffmpegVersion = 'unchecked';
+
+async function checkFfmpeg() {
+  if (!ffmpegPath) { ffmpegVersion = 'unavailable: no binary path'; return; }
+  try {
+    const out = await runFfmpeg(['-version'], 10000);
+    const first = String(out).split('\n')[0] || '';
+    ffmpegVersion = (first.match(/ffmpeg version (\S+)/) || [, first.slice(0, 40)])[1];
+    log('ffmpeg ready:', ffmpegVersion);
+  } catch (err) {
+    ffmpegVersion = `unavailable: ${String(err.message || err).slice(0, 80)}`;
+    log('WARN ffmpeg cannot run here — captionless listing videos will not yield a frame:', ffmpegVersion);
+  }
+}
+
 function runFfmpeg(args, timeoutMs) {
   return new Promise((resolve, reject) => {
     execFile(
@@ -938,6 +961,7 @@ const server = http.createServer(async (req, res) => {
           last_ok_ms_ago: link.lastOkAt ? Date.now() - link.lastOkAt : null,
           last_error: link.lastError,
         },
+        ffmpeg: ffmpegVersion,
         ready_to_reply: tokenOk && linkOk && sessionStatusCache === 'WORKING' && !degraded,
         blockers,
       });
@@ -977,6 +1001,7 @@ server.listen(cfg.port, '0.0.0.0', () => {
   log(`listening on :${cfg.port}`);
   log(`waha=${cfg.wahaUrl} session=${cfg.wahaSession} makaug=${cfg.makaugUrl} client=${cfg.clientId}`);
   log(`outbox poll=${cfg.outboxPollMs}ms send-interval>=${cfg.sendMinIntervalMs}ms (+<=${cfg.sendJitterMs}ms jitter)`);
+  checkFfmpeg().catch(() => {});
   if (!cfg.publicUrl) log('WARN ADAPTER_PUBLIC_URL is not set - inbound media will be dropped.');
 });
 
