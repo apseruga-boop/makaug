@@ -546,6 +546,7 @@
     view.innerHTML = searchViewHtml();
     startCountdown();
     wireShortTermLocationFields();
+    refreshAskAiCopy();
 
     var form = document.getElementById('st-search-form');
     if (form) form.addEventListener('submit', function (e) { e.preventDefault(); runSearch(); });
@@ -1579,14 +1580,27 @@
   function ensureScaffold(r) {
     if (!r || r.querySelector('.st-view-search')) return;
     r.innerHTML = scaffoldHtml();
-    // The bundle owns the Ask AI copy - title, subtitle, scope chip, rotating
-    // placeholder, and all of it per language. Freshly injected markup has the
-    // English defaults above until it runs again.
-    try {
-      if (typeof window.updateHomeAskAiLanguageCopy === 'function') {
-        window.updateHomeAskAiLanguageCopy();
-      }
-    } catch (_error) {}
+    refreshAskAiCopy();
+  }
+
+  // The bundle owns the Ask AI copy - title, subtitle, scope chip, rotating
+  // placeholder, and all of it per language. Freshly injected markup carries
+  // the English defaults until it runs again.
+  //
+  // It is applied more than once on purpose: the chip is derived from the page
+  // the bundle thinks is current, and on the first transition into the section
+  // it has not caught up, so the chip reads "Searching all properties" until
+  // it does.
+  function refreshAskAiCopy() {
+    [0, 60, 250, 700].forEach(function (delay) {
+      window.setTimeout(function () {
+        try {
+          if (typeof window.updateHomeAskAiLanguageCopy === 'function') {
+            window.updateHomeAskAiLanguageCopy();
+          }
+        } catch (_error) {}
+      }, delay);
+    });
   }
 
   function setView(name) {
