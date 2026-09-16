@@ -6,6 +6,7 @@ const rateLimit = require('express-rate-limit');
 const db = require('../config/database');
 const logger = require('../config/logger');
 const {
+  fetchRates,
   fetchUgandaHotels,
   shouldOfferPartnerSupply
 } = require('../services/hotelbedsSupplyService');
@@ -179,6 +180,38 @@ router.get('/search', async (req, res) => {
     if (shouldOfferPartnerSupply(result.listings)) {
       const partners = await fetchUgandaHotels({ limit: result.limit });
       if (partners.length) {
+        // Prices are per stay, not per hotel, so they are only fetched when the
+        // visitor gave dates. Without dates there is nothing true to put on the
+        // card: a made-up sample stay would answer a question nobody asked, and
+        // it would spend a metered call doing it. fetchRates returns {} rather
+        // than calling out at all in that case.
+        const query = req.query || {};
+        const rates = await fetchRates({
+          hotelCodes: partners.map((row) => String(row.reference || '').replace(/^hb-/, '')),
+          checkIn: query.check_in,
+          checkOut: query.check_out,
+          adults: query.guests
+        });
+
+        partners.forEach((row) => {
+          const rate = rates[row.reference];
+          if (!rate || !rate.per_night) return;
+          // Already converted to UGX by the service. Formatted here so the
+          // client never has to know what currency a partner quoted in.
+          row.price_per_night = rate.per_night;
+          row.price_display = formatUgx(rate.per_night);
+          row.price_total_display = formatUgx(rate.total);
+          row.price_nights = rate.nights;
+          // Kept on the row so a wrong price is arguable from the response
+          // alone: what was quoted, in what currency, at what rate.
+          row.price_basis = {
+            source_currency: rate.source_currency,
+            source_total: rate.source_total,
+            fx_rate: rate.fx_rate,
+            markup_percent: rate.markup_percent
+          };
+        });
+
         result.partner_listings = partners;
         result.partner_source = 'hotelbeds';
       }

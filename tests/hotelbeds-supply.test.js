@@ -241,6 +241,115 @@ test('a stay total is never shown as a nightly rate', () => {
   assert.equal(svc.nightsBetween('', ''), 0);
 });
 
+// A stub that records what it was asked for, so a test can assert both the
+// answer and whether the call happened at all.
+function stubFetch(body, calls) {
+  return async (url, init) => {
+    calls.push({ url: String(url), init: init || {} });
+    return { ok: true, json: async () => body };
+  };
+}
+
+const PRICED = Object.assign({}, ON, { EUR_TO_UGX_RATE: '4000' });
+
+test('a dateless search costs nothing and quotes nothing', async () => {
+  // Hotelbeds prices a STAY, not a hotel. Without dates there is no true
+  // number to put on a card, and inventing a sample stay would answer a
+  // question the visitor never asked - while spending a metered call to do it.
+  const calls = [];
+  const real = global.fetch;
+  global.fetch = stubFetch({}, calls);
+  try {
+    assert.deepEqual(await svc.fetchRates({ hotelCodes: [349511], checkIn: '', checkOut: '', env: PRICED }), {});
+    assert.deepEqual(await svc.fetchRates({ hotelCodes: [349511], checkIn: '2027-06-19', checkOut: '', env: PRICED }), {});
+    assert.deepEqual(await svc.fetchRates({ hotelCodes: [], checkIn: '2027-06-19', checkOut: '2027-06-22', env: PRICED }), {});
+    // And it must stay dark when the credentials are absent, dates or not.
+    assert.deepEqual(await svc.fetchRates({ hotelCodes: [349511], checkIn: '2027-06-19', checkOut: '2027-06-22', env: {} }), {});
+    assert.equal(calls.length, 0, 'a dateless search must not reach the network');
+  } finally {
+    global.fetch = real;
+  }
+});
+
+test('a stay total becomes a per-night price, in shillings', async () => {
+  // The real figure this was built against: Kampala Serena quoted EUR 464.04
+  // for three nights. Shown as a nightly rate unconverted and undivided it
+  // would have read as 464 - or, divided but unconverted, as 155. Both are
+  // numbers a guest would act on.
+  const calls = [];
+  const real = global.fetch;
+  global.fetch = stubFetch({
+    hotels: { hotels: [{ code: 349511, minRate: '464.04', currency: 'EUR' }] }
+  }, calls);
+  try {
+    const rates = await svc.fetchRates({
+      hotelCodes: [349511],
+      checkIn: '2027-06-19',
+      checkOut: '2027-06-22',
+      env: PRICED
+    });
+    const rate = rates['hb-349511'];
+    assert.ok(rate, 'no rate came back');
+    assert.equal(rate.currency, 'UGX', 'the section prices in shillings');
+    assert.equal(rate.nights, 3);
+    assert.equal(rate.per_night, 618720, '464.04 over three nights at 4000');
+    assert.equal(rate.total, 1856160);
+
+    // The audit trail. Without it a wrong price is unarguable.
+    assert.equal(rate.source_currency, 'EUR');
+    assert.equal(rate.source_total, 464.04);
+    assert.equal(rate.fx_rate, 4000);
+    assert.equal(rate.markup_percent, 0);
+
+    assert.equal(calls.length, 1, 'one call for the whole batch, not one per hotel');
+    assert.equal(calls[0].init.method, 'POST', 'availability is a POST');
+  } finally {
+    global.fetch = real;
+  }
+});
+
+test('a currency with no rate here produces no price, not a wrong one', async () => {
+  // This is the ZAR-21 trap in another shape. If an unconvertible currency
+  // fell through to some default multiplier the card would carry a confident
+  // number that is wrong by orders of magnitude. It must carry none.
+  const calls = [];
+  const real = global.fetch;
+  global.fetch = stubFetch({
+    hotels: { hotels: [{ code: 1, minRate: 100, currency: 'USD' }] }
+  }, calls);
+  try {
+    const rates = await svc.fetchRates({
+      hotelCodes: [1],
+      checkIn: '2027-06-19',
+      checkOut: '2027-06-22',
+      env: PRICED
+    });
+    assert.deepEqual(rates, {}, 'an unconvertible quote must yield no price at all');
+  } finally {
+    global.fetch = real;
+  }
+});
+
+test('a price already in shillings is not multiplied again', async () => {
+  const calls = [];
+  const real = global.fetch;
+  global.fetch = stubFetch({
+    hotels: { hotels: [{ code: 2, minRate: 900000, currency: 'UGX' }] }
+  }, calls);
+  try {
+    const rates = await svc.fetchRates({
+      hotelCodes: [2],
+      checkIn: '2027-06-19',
+      checkOut: '2027-06-22',
+      env: PRICED
+    });
+    assert.equal(rates['hb-2'].per_night, 300000, 'a UGX quote converts by one, not by the FX rate');
+    assert.equal(rates['hb-2'].fx_rate, null, 'there is no exchange to record');
+  } finally {
+    global.fetch = real;
+  }
+});
+
 test('this service cannot make a booking', () => {
   // makaug's stated position, on every short term page, is that it does not
   // take bookings and does not handle money. Adding a booking call here is a

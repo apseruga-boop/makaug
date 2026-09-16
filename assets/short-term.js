@@ -80,7 +80,7 @@
     "emptyFilters": "Pe tye gin mo marwate ki magi. Tem yaro nino onyo kabedo.",
     "emptyNone": "Pe tye kabedo me nino manok ma kityeko kete. Ka itye ki kabedo i Uganda ma ipangisa i nino acel acel, kete i makaug.",
     "guests": "Welo",
-    "heroSub": "Apartments, cottages ki guest houses ma itwero gamo i nino acel acel. Listing acel acel tye ki namba me cim pa won kabedo, wek itii kwede atir.",
+    "heroSub": "Apartments, cottages ki guest houses ma itwero gamo i nino acel acel. Listing pa won kabedo tye ki namba me cim mere, wek itii kwede atir.",
     "heroTitle": "Yeny kabedo me nino manok i Uganda",
     "hideMap": "Kan map",
     "hrs": "cawa",
@@ -110,6 +110,7 @@
     "partnerBadge": "Hotel",
     "partnerHeading": "Hotel i Uganda",
     "partnerNote": "Pe tye wegi ot ma rwatte, ci magi obedo hotel ki bot lawote me wot. makaug pe keto, pe neno dok pe booko magi — link cito bot hotel.",
+    "partnerPriceAsk": "Wel tye i kakube pa hotel",
     "partnerVisit": "Kabedo pa hotel kikome",
     "perNight": "i nino acel",
     "search": "Yeny",
@@ -147,7 +148,7 @@
     "emptyFilters": "ከእነዚህ ማጣሪያዎች ጋር የሚያይ የለም። ቀኑን ወይም አካባቢውን ያስፋሉ።",
     "emptyNone": "ዘንዱ የታተመ የአጭር ጊዜ ማረፊያ የለም። በዩጋንዳ በአንድ ሌሊት የሚያከሯዩት ቤት ካለዎት፣ በmakaug ይመዘግቡ።",
     "guests": "እንግዶች",
-    "heroSub": "በይት እያንዳንዱ መክረየት የሚይዙ አፕርታሞች፣ ጎጀውች እና እንግዳ ማረፊያዎች። የእያንዳንዱ ምዝገባ የአስተናጋጅውን ስልክ ይዘል፣ ስለዚህ በቀጥታ ይነጋገሩ።",
+    "heroSub": "በይት እያንዳንዱ መክረየት የሚይዙ አፕርታሞች፣ ጎጀውች እና እንግዳ ማረፊያዎች። የአስተናጋጅ ምዝገባ ሁሉ ስልኩን ይዘል፣ ስለዚህ በቀጥታ ይነጋገሩ።",
     "heroTitle": "በዩጋንዳ የአጭር ጊዜ ማረፊያ ይፍልጉ",
     "hideMap": "ካርታ ደብቅ",
     "hrs": "ሰዓት",
@@ -177,6 +178,7 @@
     "partnerBadge": "ሆቴል",
     "partnerHeading": "በዩጋንዳ ያሉ ሆቴሎች",
     "partnerNote": "እስካሁን የሚዛመድ አስተናጋጅ የለም። እነዚህ ከጉዞ አጋር የመጡ ሆቴሎች ናቸው። makaug አይዘረዝራቸውም፣ አይመረምራቸውም፣ አያስይዛቸውም — አገናኙ ወደ ሆቴሉ ይወስዳል።",
+    "partnerPriceAsk": "ዋጋው በሆቴሉ ድረ-ገጽ ላይ",
     "partnerVisit": "የሆቴሉ ድረ-ገጽ",
     "perNight": "በአንድ ሌሊት",
     "search": "ፍልግ",
@@ -214,7 +216,7 @@
     "emptyFilters": "لا يوجد ما يطابق هذه الفلاتر بعد. جرّب توسيع التواريخ أو المنطقة.",
     "emptyNone": "لم يُنشر أي مكان للإقامة القصيرة بعد. إذا كان لديك مكان في أوغندا تؤجّره بالليلة، أضفه على makaug.",
     "guests": "الضيوف",
-    "heroSub": "شقق وبيوت ريفية وبيوت ضيافة يمكنك حجزها بالليلة، وكل إعلان يحمل رقم هاتف المضيف نفسه لتتعامل معه مباشرة.",
+    "heroSub": "شقق وبيوت ريفية وبيوت ضيافة يمكنك حجزها بالليلة، وكل إعلان من مضيف يحمل رقم هاتفه لتتعامل معه مباشرة.",
     "heroTitle": "ابحث عن إقامة قصيرة في أوغندا",
     "hideMap": "إخفاء الخريطة",
     "hrs": "ساعة",
@@ -244,6 +246,7 @@
     "partnerBadge": "فندق",
     "partnerHeading": "فنادق في أوغندا",
     "partnerNote": "لا يوجد مضيفون مطابقون بعد، لذلك هذه فنادق من شريك سفر. makaug لا تدرجها ولا تعاينها ولا تحجزها — الرابط يؤدي إلى الفندق.",
+    "partnerPriceAsk": "السعر على موقع الفندق",
     "partnerVisit": "موقع الفندق",
     "perNight": "لليلة",
     "search": "بحث",
@@ -281,7 +284,7 @@
     "emptyFilters": "Nothing matches those filters yet. Try widening the dates or the area.",
     "emptyNone": "No short stays are published yet. If you have a place in Uganda that you rent by the night, list it on makaug.",
     "guests": "Guests",
-    "heroSub": "Apartments, cottages and guest houses you can take by the night. Every listing carries the host's own phone number, so you deal with them directly.",
+    "heroSub": "Apartments, cottages and guest houses you can take by the night. Every listing from a host carries their own phone number, so you deal with them directly.",
     "heroTitle": "Find a short stay in Uganda",
     "hideMap": "Hide map",
     "hrs": "hrs",
@@ -311,6 +314,7 @@
     "partnerBadge": "Hotel",
     "partnerHeading": "Hotels in Uganda",
     "partnerNote": "No hosts match yet, so these are hotels from a travel partner. makaug does not list, inspect or book these — the link goes to the hotel.",
+    "partnerPriceAsk": "Price on the hotel's site",
     "partnerVisit": "Hotel's own site",
     "perNight": "per night",
     "search": "Search",
@@ -348,7 +352,7 @@
     "emptyFilters": "Tewali kituukagana na filters zino. Gezaako okugaziya ennaku oba ekitundu.",
     "emptyNone": "Tewannabaawo bifo bya kusula bifulumiziddwa. Bw'oba olina ekifo mu Uganda ky'opangisa buli kiro, kiteeke ku makaug.",
     "guests": "Abagenyi",
-    "heroSub": "Apartments, cottages ne guest houses z'oyinza okupangisa buli kiro. Buli listing erina namba ya ssimu ya nnyini kifo, okolagane naye butereevu.",
+    "heroSub": "Apartments, cottages ne guest houses z'oyinza okupangisa buli kiro. Buli listing ya nnyini kifo erina namba ya ssimu ye, okolagane naye butereevu.",
     "heroTitle": "Noonya we onoosula mu Uganda",
     "hideMap": "Kweka maapu",
     "hrs": "essaawa",
@@ -378,6 +382,7 @@
     "partnerBadge": "Wooteeri",
     "partnerHeading": "Wooteeri mu Uganda",
     "partnerNote": "Tewali bannyini bifo batuukagana, n'olwekyo bino wooteeri okuva ku partner. makaug tegiteeka, tekebera era tebooka bino — link egenda ku wooteeri.",
+    "partnerPriceAsk": "Ebbeeyi eri ku mukutu gwa hotel",
     "partnerVisit": "Omukutu gwa wooteeri",
     "perNight": "buli kiro",
     "search": "Noonya",
@@ -415,7 +420,7 @@
     "emptyFilters": "Tihariho ekirikuhikaana n'ebi. Gyezaho kwongyera ebiro nari ekicweka.",
     "emptyNone": "Tihariho byanya by'okuraara ebitairwe. Ku oine ekyanya omu Uganda eki orikupangisa buri kiro, kite aha makaug.",
     "guests": "Abashuhuki",
-    "heroSub": "Apartments, cottages na guest houses ez'orikubaasa kutwara buri kiro. Buri listing eine namba ya esimu ya nyineeka, orikukora nawe butunguuka.",
+    "heroSub": "Apartments, cottages na guest houses ez'orikubaasa kutwara buri kiro. Buri listing ya nyineeka eine namba ya esimu ye, orikukora nawe butunguuka.",
     "heroTitle": "Sherura ekyanya ky'okuraara omu Uganda",
     "hideMap": "Shereka mapu",
     "hrs": "eshaaha",
@@ -445,6 +450,7 @@
     "partnerBadge": "Hotel",
     "partnerHeading": "Hotel omu Uganda",
     "partnerNote": "Tihariho banyineeka abarikuhikaana, n'ahabw'ekyo ebi n'ehotel kuruga aha munywani w'orugyendo. makaug tekizita, tekizyebera kandi tekizibooka — link neza aha hotel.",
+    "partnerPriceAsk": "Omuhendo guri aha mukutu gwa hotel",
     "partnerVisit": "Orubaju rwa hotel",
     "perNight": "aha kiro",
     "search": "Sherura",
@@ -482,7 +488,7 @@
     "emptyFilters": "Tihariho ekirikuhikaana n'ebi. Gyezaho kwongyera ebiro nari ekicweka.",
     "emptyNone": "Tihariho hantu h'okuraara hataairwe. Ku oine ahantu omu Uganda ho orikupangisa buri kiro, hate aha makaug.",
     "guests": "Abagyenyi",
-    "heroSub": "Apartments, cottages na guest houses ezi orikubaasa kutwara buri kiro. Buri listing eine namba ya esimu ya nyineeka, okore nawe butunguuka.",
+    "heroSub": "Apartments, cottages na guest houses ezi orikubaasa kutwara buri kiro. Buri listing ya nyineeka eine namba ya esimu ye, okore nawe butunguuka.",
     "heroTitle": "Sherura ahantu h'okuraara omu Uganda",
     "hideMap": "Shereka mapu",
     "hrs": "eshaaha",
@@ -512,6 +518,7 @@
     "partnerBadge": "Hotel",
     "partnerHeading": "Hotel omu Uganda",
     "partnerNote": "Tihariho banyineeka abarikuhikaana, n'ahabw'ekyo ebi n'ehotel kuruga aha munywani w'orugyendo. makaug tekizita, tekizyebera kandi tekizibooka — link neza aha hotel.",
+    "partnerPriceAsk": "Omuhendo guri aha mukutu gwa hotel",
     "partnerVisit": "Orubaju rwa hotel",
     "perNight": "aha kiro",
     "search": "Sherura",
@@ -549,7 +556,7 @@
     "emptyFilters": "Tewali kituukagana n'ebyo. Gezaako okugaziya ennaku oba ekitundu.",
     "emptyNone": "Tewannabaawo bifo bya kusula bifulumiziddwa. Bw'oba olina ekifo mu Uganda ky'opangisa buli kiro, kiteeke ku makaug.",
     "guests": "Abagenyi",
-    "heroSub": "Apartments, cottages ni guest houses ez'osobola okutwala buli kiro. Buli listing erina namba y'essimu ya nnyini kifo, okolagane naye butereevu.",
+    "heroSub": "Apartments, cottages ni guest houses ez'osobola okutwala buli kiro. Buli listing ya nnyini kifo erina namba y'essimu ye, okolagane naye butereevu.",
     "heroTitle": "Noonya aw'okusula mu Uganda",
     "hideMap": "Kweka maapu",
     "hrs": "essaawa",
@@ -579,6 +586,7 @@
     "partnerBadge": "Wooteeri",
     "partnerHeading": "Wooteeri mu Uganda",
     "partnerNote": "Tewali banyini bifo batuukagana, n'olwekyo bino wooteeri okuva ku partner. makaug tekiteeka, tekikebera era tekibooka bino — link egenda ku wooteeri.",
+    "partnerPriceAsk": "Ebbeeyi eri ku mukutu gwa hotel",
     "partnerVisit": "Omukutu gwa wooteeri",
     "perNight": "buli kiro",
     "search": "Noonya",
@@ -616,7 +624,7 @@
     "emptyFilters": "Hakuna kinacholingana na vichujio hivi. Jaribu kupanua tarehe au eneo.",
     "emptyNone": "Hakuna malazi ya muda yaliyochapishwa bado. Kama una mahali Uganda unapopangisha kwa usiku, liweke kwenye makaug.",
     "guests": "Wageni",
-    "heroSub": "Apartments, cottages na guest houses unazoweza kuchukua kwa usiku. Kila tangazo lina namba ya simu ya mwenyeji, hivyo unashughulika naye moja kwa moja.",
+    "heroSub": "Apartments, cottages na guest houses unazoweza kuchukua kwa usiku. Kila tangazo la mwenyeji lina namba yake ya simu, hivyo unashughulika naye moja kwa moja.",
     "heroTitle": "Tafuta malazi ya muda Uganda",
     "hideMap": "Ficha ramani",
     "hrs": "saa",
@@ -646,6 +654,7 @@
     "partnerBadge": "Hoteli",
     "partnerHeading": "Hoteli nchini Uganda",
     "partnerNote": "Hakuna wenyeji wanaolingana bado, hivyo hizi ni hoteli kutoka kwa mshirika wa safari. makaug haiziorodheshi, haizikagui wala haizibuki — kiungo kinakwenda kwa hoteli.",
+    "partnerPriceAsk": "Bei iko kwenye tovuti ya hoteli",
     "partnerVisit": "Tovuti ya hoteli",
     "perNight": "kwa usiku",
     "search": "Tafuta",
@@ -990,6 +999,14 @@
         + ' <i class="fas fa-arrow-up-right-from-square"></i></a>'
       : '';
 
+    // A rate only exists when the visitor gave dates. When there is none the
+    // card says where to find one rather than going blank, because a blank
+    // where a price should be reads as free.
+    var price = row.price_display
+      ? '<p class="st-partner-price"><b>' + esc(row.price_display) + '</b> '
+        + esc(t('perNight')) + '</p>'
+      : '<p class="st-partner-price st-partner-price--ask">' + esc(t('partnerPriceAsk')) + '</p>';
+
     return '<article class="st-card st-partner-card">'
       + '<div class="st-card-media">' + media
       + '<span class="st-badge st-badge-partner">' + esc(t('partnerBadge')) + '</span>'
@@ -998,6 +1015,7 @@
       + '<h3 class="st-card-title">' + esc(row.title) + '</h3>'
       + (where ? '<p class="st-card-where">' + esc(where) + '</p>' : '')
       + stars
+      + price
       + link
       + '</div></article>';
   }

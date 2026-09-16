@@ -1189,6 +1189,53 @@ test('nothing the client renders can delete the Ask AI box', () => {
   );
 });
 
+test('a partner price is for the stay the visitor asked about', () => {
+  // The route must hand the visitor's own dates to the rates call. A default
+  // window would put a price on the card for a stay nobody searched for, which
+  // looks like a quote and is not one.
+  const at = routeSource.indexOf('shouldOfferPartnerSupply(result.listings)');
+  assert.ok(at > -1, 'the partner fallback is missing');
+  const block = routeSource.slice(at, at + 2000);
+
+  assert.ok(/checkIn:\s*query\.check_in/.test(block), 'the visitor\'s check-in is not passed through');
+  assert.ok(/checkOut:\s*query\.check_out/.test(block), 'the visitor\'s check-out is not passed through');
+  assert.ok(
+    !/Date\.now\(\)|\d{4}-\d{2}-\d{2}/.test(block),
+    'a default or hard-coded stay has crept into the rates call'
+  );
+  assert.ok(/price_display/.test(block), 'nothing formats the price for the card');
+});
+
+test('a partner card with no price says so rather than going blank', () => {
+  // A gap where a price belongs reads as free. It has to say where to find one.
+  const at = clientSource.indexOf('function partnerCardHtml(');
+  assert.ok(at > -1, 'partnerCardHtml is missing');
+  const block = clientSource.slice(at, clientSource.indexOf('function partnerBlockHtml('));
+
+  assert.ok(/row\.price_display/.test(block), 'the card ignores the price the route sends');
+  assert.ok(/partnerPriceAsk/.test(block), 'a card with no rate has nothing to say');
+  assert.ok(block.indexOf('price') < block.indexOf('+ link'), 'the price belongs above the outbound link');
+});
+
+test('the hero does not promise a phone number a hotel row cannot carry', () => {
+  // It read "Every listing carries the host's own phone number". True of every
+  // host listing; false the moment a partner hotel appears underneath it, and
+  // partner hotels appear precisely when a search found nothing else. Scoped
+  // before the flag went on, not after someone noticed.
+  const at = clientSource.indexOf('var ST_I18N =');
+  const open = clientSource.indexOf('{', at);
+  const close = clientSource.indexOf('\n};', open);
+  const table = JSON.parse(clientSource.slice(open, close + 2));
+
+  assert.ok(
+    /from a host/.test(table.en.heroSub),
+    'the English hero still makes the promise for every listing'
+  );
+  Object.keys(table).forEach((code) => {
+    assert.ok(table[code].partnerPriceAsk, `${code} cannot say where to find a price`);
+  });
+});
+
 test('the section reads in every language the site offers', () => {
   // Only the nav item switched; the whole section stayed English whichever
   // language you picked. Reported twice before it was taken seriously.
