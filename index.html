@@ -10152,7 +10152,7 @@
         if (window.__makaugShortTermRequested) return;
         window.__makaugShortTermRequested = true;
         var s = document.createElement("script");
-        s.src = "/assets/short-term.js?v=20260916-short-term-v11";
+        s.src = "/assets/short-term.js?v=20260916-short-term-v12";
         document.body.appendChild(s);
       }
       window.__makaugLoadShortTerm = loadShortTermNow;
@@ -10172,6 +10172,19 @@
             // Already requested in parallel above; this is only the safety net
             // for the case where the runtime config arrived after that ran.
             loadShortTermNow();
+
+            // The bundle has just finished, which is when it may have replaced
+            // the short-term page block with its own copy. Tell the section to
+            // look again rather than leaving it rendered into a detached node.
+            [0, 150, 500, 1200].forEach(function (delay) {
+              window.setTimeout(function () {
+                try {
+                  if (window.makaugShortTerm && window.makaugShortTerm.rehydrate) {
+                    window.makaugShortTerm.rehydrate();
+                  }
+                } catch (_error) {}
+              }, delay);
+            });
 
             // The review desks only exist in the DOM on the staff and admin
             // dashboards; publicHtmlSanitizer strips those containers out of

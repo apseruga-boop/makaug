@@ -1646,8 +1646,22 @@
       r.__stObserved = true;
       try {
         if (window.MutationObserver) {
+          // Class changes on the block: it being shown or hidden.
           new window.MutationObserver(hydrateIfVisible)
             .observe(r, { attributes: true, attributeFilter: ['class'] });
+
+          // And its parent, because the main bundle swaps this whole block for
+          // a fresh one from its own template. An observer on the block itself
+          // cannot survive the block being replaced - it just sits on the
+          // detached node while the visitor looks at an empty new one.
+          var parent = r.parentNode;
+          if (parent && !parent.__stChildObserved) {
+            parent.__stChildObserved = true;
+            new window.MutationObserver(function () {
+              var current = root();
+              if (current && !current.__stObserved) ensureObserver();
+            }).observe(parent, { childList: true });
+          }
         }
       } catch (_error) {}
     }
@@ -1693,5 +1707,7 @@
   }
 
 
-  window.makaugShortTerm = { route: route, search: runSearch };
+  // rehydrate() is called by the loader once the main bundle has finished,
+  // which is when it has had its chance to replace the page block.
+  window.makaugShortTerm = { route: route, search: runSearch, rehydrate: ensureObserver };
 })();

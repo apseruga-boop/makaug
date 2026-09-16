@@ -1189,6 +1189,36 @@ test('nothing the client renders can delete the Ask AI box', () => {
   );
 });
 
+test('rendering survives the bundle replacing the page block', () => {
+  // THE BUG THIS EXISTS FOR, from live evidence: #page-short-term present and
+  // active, Ask AI shell there, rendered search view absent, and
+  // element.__stObserved FALSE on an element this file had already attached
+  // to. An expando that is gone means the element is gone - the main bundle
+  // swaps the block for a fresh copy of its own template after this file has
+  // rendered into the original. The observer was left on the detached node,
+  // so the visitor saw template markup until they clicked a second time.
+  //
+  // Watching the element cannot survive the element being replaced.
+  assert.ok(
+    /observe\(parent, \{ childList: true \}\)/.test(clientSource),
+    'the parent must be observed so a replaced page block is noticed'
+  );
+  assert.ok(
+    /var current = root\(\);\s*\n\s*if \(current && !current\.__stObserved\) ensureObserver\(\);/
+      .test(clientSource),
+    'a replacement must re-attach and re-render, not just re-attach'
+  );
+
+  // And the loader tells it explicitly once the bundle is done, which is when
+  // the swap happens.
+  assert.ok(clientSource.includes('rehydrate: ensureObserver'), 'rehydrate is not exposed');
+  const indexSource = read('index.html');
+  assert.ok(
+    /window\.makaugShortTerm\.rehydrate\(\)/.test(indexSource),
+    'the bundle onload must ask the section to re-check itself'
+  );
+});
+
 test('the section renders when the bundle materialises its page block', () => {
   // THE BUG THIS EXISTS FOR, confirmed by leaving a sentinel on window before
   // clicking the nav and finding it still there afterwards: clicking "Short
