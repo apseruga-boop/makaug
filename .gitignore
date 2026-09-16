@@ -8,3 +8,7 @@ dist/
 private-local/
 qa-output/
 .whatsapp-web-copilot-profile/
+
+# Files Claude delivers into the chat are mirrored here by the desktop app.
+# They are working notes, not part of the product.
+Claude outputs/
