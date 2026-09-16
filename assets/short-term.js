@@ -1599,8 +1599,32 @@
             window.updateHomeAskAiLanguageCopy();
           }
         } catch (_error) {}
+        pinShortTermScope();
       }, delay);
     });
+  }
+
+  // updateHomeAskAiLanguageCopy rebuilds the shell from the scope the bundle
+  // derives from its own current page, and on the first transition that is
+  // still the page the visitor came from - so it overwrites data-ai-scope and
+  // the chip says "Searching all properties". Pinning it back afterwards, with
+  // the bundle's own text function so the wording stays right in every
+  // language rather than being hard-coded to English here.
+  function pinShortTermScope() {
+    try {
+      var shell = document.getElementById('short-term-ai-shell');
+      if (!shell) return;
+      ['[data-ai-search-shell]', '[data-ai-search-form]'].forEach(function (sel) {
+        var el = shell.querySelector(sel);
+        if (el) el.setAttribute('data-ai-scope', 'short-term');
+      });
+      var chip = shell.querySelector('[data-ai-scope-hint]');
+      if (chip && typeof window.aiAssistantScopeHintText === 'function') {
+        chip.textContent = window.aiAssistantScopeHintText('short_term');
+      }
+      var intent = shell.querySelector('[data-ai-intent]');
+      if (intent) intent.value = 'search_short_term';
+    } catch (_error) {}
   }
 
   function setView(name) {

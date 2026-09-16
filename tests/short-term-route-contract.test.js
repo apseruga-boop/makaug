@@ -1189,6 +1189,27 @@ test('nothing the client renders can delete the Ask AI box', () => {
   );
 });
 
+test('the Ask AI box always says it is searching short stays', () => {
+  // The bundle rebuilds this shell from the scope it derives from its own
+  // current page, which on the first transition is still the page the visitor
+  // came from - so the chip read "Searching all properties" on click one and
+  // only corrected itself on click two.
+  assert.ok(clientSource.includes('function pinShortTermScope()'), 'pinShortTermScope is missing');
+  assert.ok(
+    /updateHomeAskAiLanguageCopy\(\);[\s\S]{0,120}pinShortTermScope\(\);/.test(clientSource),
+    'the scope must be pinned AFTER the bundle has rewritten the shell'
+  );
+  // It must not hard-code English - this box is read in nine languages.
+  assert.ok(
+    /window\.aiAssistantScopeHintText\('short_term'\)/.test(clientSource),
+    'the chip text must come from the bundle\'s localised helper, not a literal'
+  );
+  assert.ok(
+    !/textContent = ['\"]Searching Short Term['\"]/.test(clientSource),
+    'the chip must never be hard-coded to the English string'
+  );
+});
+
 test('the section can build its own markup', () => {
   // THE BUG THIS EXISTS FOR: once the re-attach was fixed, __stObserved was
   // true on the live element and STILL nothing rendered - not even the Ask AI
