@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const db = require('../config/database');
 const logger = require('../config/logger');
 const { publicLivePropertyStatusSql } = require('../utils/publicInventoryStatus');
+const { shortTermEnabled } = require('../utils/shortTermFeatureFlags');
 
 const PUBLIC_INVENTORY_METRICS_MARKER = 'properties-list-count-fast-20260718';
 const PUBLIC_INVENTORY_METRICS_CACHE_TTL_MS = Math.max(
@@ -98,7 +99,10 @@ function normalizePublicOpportunitySummary(row = {}) {
   const commercial = Number(row.commercial || 0) || 0;
   const land = Number(row.land || 0) || 0;
   const other = Number(row.other || 0) || 0;
-  const total = Number(row.total || 0) || (sale + rent + student + commercial + land + other);
+  // Short term stays live in st_listing, not properties, so they are never in
+  // `row`. They are folded into the site-wide figure below, and only there.
+  const shortTerm = Number(row.short_term || 0) || 0;
+  const total = Number(row.total || 0) || (sale + rent + student + commercial + land + other + shortTerm);
   return {
     total,
     sale,
@@ -107,13 +111,15 @@ function normalizePublicOpportunitySummary(row = {}) {
     commercial,
     land,
     other,
+    short_term: shortTerm,
     by_type: {
       sale,
       rent,
       student,
       commercial,
       land,
-      other
+      other,
+      short_term: shortTerm
     }
   };
 }
@@ -182,6 +188,37 @@ async function timedQuery(sql, values = [], timeoutMs = PUBLIC_INVENTORY_METRICS
   }
 }
 
+/**
+ * Adds live short term stays to the SITE-WIDE property total.
+ *
+ * Only the unfiltered, site-wide call is adjusted. A caller counting, say,
+ * rentals in Kampala passes its own `where`, and adding every short stay in
+ * Uganda to that would be wrong, so those counts are left exactly as they are.
+ *
+ * Fails soft in every direction: the feature flag, a missing st_listing table
+ * and any query error all resolve to "add nothing". The existing count can
+ * never break because of short term.
+ */
+async function addShortTermToSiteWideSummary(summary, callerWhere = '') {
+  if (callerWhere && String(callerWhere).trim()) return summary;
+  if (!shortTermEnabled()) return summary;
+  try {
+    const { loadShortTermPublicCount } = require('./shortTermService');
+    const shortTerm = await loadShortTermPublicCount(db);
+    if (!Number.isFinite(shortTerm) || shortTerm <= 0) return summary;
+    summary.short_term = shortTerm;
+    summary.by_type.short_term = shortTerm;
+    summary.total = Number(summary.total || 0) + shortTerm;
+  } catch (error) {
+    logger.warn('Site-wide total is continuing without short term stays', {
+      marker: PUBLIC_INVENTORY_METRICS_MARKER,
+      code: error?.code,
+      message: error?.message
+    });
+  }
+  return summary;
+}
+
 async function loadPublicOpportunitySummary({ where = '', values = [], timeoutMs = PUBLIC_INVENTORY_METRICS_TIMEOUT_MS } = {}) {
   const normalizedWhere = where && String(where).trim() ? where : `WHERE ${publicVisibleInventoryWhere('p')}`;
   const key = publicInventoryCacheKey(normalizedWhere, values);
@@ -214,6 +251,7 @@ async function loadPublicOpportunitySummary({ where = '', values = [], timeoutMs
   try {
     const result = await timedQuery(sql, values, timeoutMs);
     const summary = normalizePublicOpportunitySummary(result.rows[0] || {});
+    await addShortTermToSiteWideSummary(summary, where);
     setCachedPublicInventoryMetrics(key, summary);
     return {
       summary,
@@ -246,6 +284,7 @@ async function loadPublicOpportunitySummary({ where = '', values = [], timeoutMs
 
 module.exports = {
   PUBLIC_INVENTORY_METRICS_MARKER,
+  addShortTermToSiteWideSummary,
   invalidatePublicInventoryMetricsCache,
   loadPublicOpportunitySummary,
   normalizePublicOpportunitySummary,

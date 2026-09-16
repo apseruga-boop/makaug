@@ -421,6 +421,7 @@
   <link rel="preload" as="image" href="https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=1200&q=60" fetchpriority="high">
   <link rel="stylesheet" href="/assets/tailwind.css">
   <link rel="stylesheet" href="/assets/off-plan.css?v=20260910-off-plan-v4">
+  <link rel="stylesheet" href="/assets/short-term.css?v=20260916-short-term-v1">
   <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
   <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"></noscript>
   <link rel="preload" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
@@ -3021,6 +3022,7 @@
       <div id="desktop-primary-nav" class="hidden xl:flex items-center gap-0.5">
         <a id="nav-sale" href="/for-sale" onclick="showPage('sale')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">For Sale</a>
         <a id="nav-rent" href="/to-rent" onclick="showPage('rent')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">To Rent</a>
+        <a id="nav-short-term" data-short-term-entry href="/short-term" onclick="showPage('short-term')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-bold text-green-800 bg-green-50 hover:bg-green-100 hover:text-green-900 cursor-pointer">Short Term</a>
         <a id="nav-students" href="/student-accommodation" onclick="showPage('students')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Students</a>
         <a id="nav-commercial" href="/commercial" onclick="showPage('commercial')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Commercial</a>
         <a id="nav-land" href="/land" onclick="showPage('land')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Land</a>
@@ -3047,6 +3049,7 @@
     <div id="mobile-menu" class="lg:hidden border-t border-gray-100 flex-col gap-1 px-4 py-3 bg-white">
       <a id="mnav-sale" href="/for-sale" onclick="showPage('sale');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">For Sale</a>
       <a id="mnav-rent" href="/to-rent" onclick="showPage('rent');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">To Rent</a>
+      <a id="mnav-short-term" data-short-term-entry href="/short-term" onclick="showPage('short-term');closeMobile()" class="px-3 py-2 rounded-lg font-bold text-green-800 bg-green-50 hover:bg-green-100">Short Term</a>
       <a id="mnav-students" href="/student-accommodation" onclick="showPage('students');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Students</a>
       <a id="mnav-commercial" href="/commercial" onclick="showPage('commercial');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Commercial</a>
       <a id="mnav-land" href="/land" onclick="showPage('land');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Land</a>
@@ -4204,6 +4207,14 @@
         </form>
       </div>
     </div>
+  </div>
+
+  <div id="page-short-term" class="page" data-short-term-marker="short-term-discovery-v1">
+    <section class="st-view st-view-search is-active">
+      <div id="short-term-ssr" class="st-wrap" style="padding-top:20px"></div>
+    </section>
+    <section class="st-view st-view-detail"></section>
+    <section class="st-view st-view-list"></section>
   </div>
 
   <div id="page-marketplace" class="page bg-[#f8faf9] overflow-x-clip" data-marketplace-marker="marketplace-p2-20260719 marketplace-regjourney-20260719 marketplace-scaleup-20260719 marketplace-relevance-gate-20260719 marketplace-polish-20260719 marketplace-final-tweaks-20260719">
@@ -10084,6 +10095,11 @@
           var offPlanScript = document.createElement("script");
           offPlanScript.src = "/assets/off-plan.js?v=20260910-off-plan-v15";
           document.body.appendChild(offPlanScript);
+          if (window.__makaugShortTerm && window.__makaugShortTerm.enabled === true) {
+            var shortTermScript = document.createElement("script");
+            shortTermScript.src = "/assets/short-term.js?v=20260916-short-term-v1";
+            document.body.appendChild(shortTermScript);
+          }
         };
         document.body.appendChild(script);
       }
