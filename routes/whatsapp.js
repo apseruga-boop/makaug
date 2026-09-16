@@ -3345,6 +3345,57 @@ function employeeMediaExtension(mimeType = '') {
   return extensions[String(mimeType || '').toLowerCase()] || 'bin';
 }
 
+/**
+ * Pixel size of a downloaded image, read from its own header.
+ *
+ * Needed because a photo that arrives as a URL carries no width or height, and
+ * the decision on whether to trust an unvalidated photo turns on whether it is
+ * big enough to be a real one.
+ */
+function imagePixelSize(bytes, mimeType = '') {
+  const none = { width: 0, height: 0 };
+  if (!Buffer.isBuffer(bytes) || bytes.length < 24) return none;
+  const mime = String(mimeType || '').toLowerCase();
+
+  // PNG: IHDR is always the first chunk.
+  if (bytes[0] === 0x89 && bytes.toString('ascii', 1, 4) === 'PNG') {
+    return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
+  }
+  // JPEG: walk the markers to the start-of-frame.
+  if (bytes[0] === 0xff && bytes[1] === 0xd8) {
+    let i = 2;
+    while (i < bytes.length - 9) {
+      if (bytes[i] !== 0xff) { i += 1; continue; }
+      const marker = bytes[i + 1];
+      if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+        return { height: bytes.readUInt16BE(i + 5), width: bytes.readUInt16BE(i + 7) };
+      }
+      if (marker === 0xd8 || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) { i += 2; continue; }
+      const len = bytes.readUInt16BE(i + 2);
+      if (len < 2) return none;
+      i += 2 + len;
+    }
+    return none;
+  }
+  // WebP (VP8X/VP8 /VP8L) — canvas size lives at a fixed offset per variant.
+  if (bytes.toString('ascii', 0, 4) === 'RIFF' && bytes.toString('ascii', 8, 12) === 'WEBP') {
+    const chunk = bytes.toString('ascii', 12, 16);
+    if (chunk === 'VP8X' && bytes.length >= 30) {
+      return {
+        width: 1 + bytes.readUIntLE(24, 3),
+        height: 1 + bytes.readUIntLE(27, 3)
+      };
+    }
+    if (chunk === 'VP8 ' && bytes.length >= 30) {
+      return { width: bytes.readUInt16LE(26) & 0x3fff, height: bytes.readUInt16LE(28) & 0x3fff };
+    }
+  }
+  if (mime.includes('gif') && bytes.toString('ascii', 0, 3) === 'GIF') {
+    return { width: bytes.readUInt16LE(6), height: bytes.readUInt16LE(8) };
+  }
+  return none;
+}
+
 function employeeVideoBytesPlayable(bytes, mimeType = '') {
   if (!Buffer.isBuffer(bytes) || bytes.length < 12) return false;
   if (String(mimeType || '').toLowerCase().includes('webm')) {
@@ -3561,6 +3612,40 @@ async function storeEmployeeMediaCandidate(candidate, {
       const validationDataUrl = `data:${responseMime};base64,${bytes.toString('base64')}`;
       mediaValidation = await validateEmployeeImageCandidate(candidate, validationDataUrl);
       publicEligible = mediaValidation?.accepted === true;
+
+      // When the vision check cannot answer — timeout, provider error, no key —
+      // the verdict is 'unavailable' and nothing has actually judged the photo.
+      // Discarding it then means a real property photo never becomes a
+      // property_images row, so the property reads as having "no usable
+      // property photo" and the whole batch refuses to complete.
+      //
+      // The data-URL path above has always rescued that case for media carrying
+      // original WhatsApp pixels. This path is the same situation: the bytes
+      // were downloaded from WhatsApp's own servers, so the provenance is at
+      // least as good. Accept it pending review — a moderator sees every
+      // property before it goes live, and that is the right place for a
+      // judgement the classifier could not make.
+      //
+      // A genuine rejection is untouched: if vision ran and said this is not a
+      // property photo, it stays evidence-only.
+      const downloadedSize = imagePixelSize(bytes, responseMime);
+      const usefulDimensions = downloadedSize.width >= 240 && downloadedSize.height >= 180;
+      if (!publicEligible && mediaValidation?.verdict === 'unavailable' && usefulDimensions) {
+        publicEligible = true;
+        mediaValidation = {
+          ...mediaValidation,
+          accepted: true,
+          verdict: 'accepted_pending_review_original_whatsapp_media',
+          matches_expected_slot: true,
+          reason: 'vision_unavailable_original_whatsapp_media_pending_review'
+        };
+        logger.warn('Employee intake photo accepted pending review because vision validation was unavailable', {
+          width: downloadedSize.width,
+          height: downloadedSize.height,
+          validation_reason: normalizeInput(mediaValidation.reason).slice(0, 80)
+        });
+      }
+
       if (employeeMediaValidationIsIdentityDocument(mediaValidation)) {
         throw new Error('Private identity media rejected from property storage');
       }
