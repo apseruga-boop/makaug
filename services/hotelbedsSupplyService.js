@@ -231,13 +231,108 @@ async function fetchUgandaHotels({ limit = 24, env = process.env, now = Date.now
   }
 }
 
+// Zero unless someone sets it on purpose. See the note at the top of this
+// block: a markup on a rate makaug does not collect is a price no one charges.
+function markupPercent(env = process.env) {
+  const raw = Number(String(env.HOTELBEDS_MARKUP_PERCENT || '').trim());
+  if (!isFinite(raw) || raw < 0) return 0;
+  // A markup above 25% is far more likely to be a typo (200 for 2.00) than an
+  // intention, and it would be charged to a guest.
+  return Math.min(raw, 25);
+}
+
+function applyMarkup(net, env = process.env) {
+  const amount = Number(net);
+  if (!isFinite(amount) || amount <= 0) return null;
+  const percent = markupPercent(env);
+  return Math.round(amount * (1 + percent / 100));
+}
+
+// Availability for specific hotels over a specific stay. This is a POST, and
+// it is the only call here that costs a quota hit per search rather than per
+// six hours, so it is only made for the handful of hotels actually on screen.
+async function fetchRates({
+  hotelCodes = [],
+  checkIn,
+  checkOut,
+  adults = 2,
+  rooms = 1,
+  env = process.env
+} = {}) {
+  const codes = (Array.isArray(hotelCodes) ? hotelCodes : [])
+    .map((code) => Number(code))
+    .filter((code) => Number.isFinite(code) && code > 0)
+    .slice(0, 50);
+
+  if (!codes.length || !checkIn || !checkOut || !isConfigured(env)) return {};
+
+  const headers = requestHeaders(env);
+  if (!headers) return {};
+
+  try {
+    const response = await fetch(baseUrl(env) + '/hotel-api/1.0/hotels', {
+      method: 'POST',
+      headers: Object.assign({ 'Content-Type': 'application/json' }, headers),
+      body: JSON.stringify({
+        stay: { checkIn: String(checkIn), checkOut: String(checkOut) },
+        occupancies: [{
+          rooms: Math.max(1, Number(rooms) || 1),
+          adults: Math.max(1, Number(adults) || 2),
+          children: 0
+        }],
+        hotels: { hotel: codes }
+      })
+    });
+
+    if (!response.ok) return {};
+    const body = await response.json();
+    const hotels = (body && body.hotels && Array.isArray(body.hotels.hotels))
+      ? body.hotels.hotels
+      : [];
+
+    const out = {};
+    hotels.forEach((hotel) => {
+      // minRate is the cheapest room for the stay. It is a TOTAL for the whole
+      // stay, not a nightly figure, so a per-night number has to be derived -
+      // showing a three-night total as a nightly rate would treble the price.
+      const total = Number(hotel && hotel.minRate);
+      if (!isFinite(total) || total <= 0) return;
+      const nights = nightsBetween(checkIn, checkOut);
+      if (!nights) return;
+      out['hb-' + hotel.code] = {
+        currency: String(hotel.currency || '').trim() || null,
+        per_night: applyMarkup(total / nights, env),
+        total: applyMarkup(total, env),
+        nights: nights,
+        // Recorded so it is always possible to tell what was shown and why.
+        markup_percent: markupPercent(env)
+      };
+    });
+    return out;
+  } catch (_error) {
+    // No prices is a worse card, not a broken page.
+    return {};
+  }
+}
+
+function nightsBetween(checkIn, checkOut) {
+  const from = Date.parse(String(checkIn) + 'T00:00:00Z');
+  const to = Date.parse(String(checkOut) + 'T00:00:00Z');
+  if (!isFinite(from) || !isFinite(to) || to <= from) return 0;
+  return Math.round((to - from) / 86400000);
+}
+
 function __resetCacheForTests() {
   cache = { at: 0, rows: [] };
 }
 
 module.exports = {
   __resetCacheForTests,
+  applyMarkup,
+  fetchRates,
   fetchUgandaHotels,
+  markupPercent,
+  nightsBetween,
   CONTENT_FIELDS,
   COUNTRY_CODE,
   MAX_HOTELS_PER_REQUEST,

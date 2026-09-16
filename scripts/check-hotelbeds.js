@@ -19,7 +19,9 @@ const {
   requestHeaders,
   toListingCard,
   CONTENT_FIELDS,
-  COUNTRY_CODE
+  COUNTRY_CODE,
+  fetchRates,
+  markupPercent
 } = require('../services/hotelbedsSupplyService');
 
 function scrub(text) {
@@ -114,6 +116,43 @@ async function main() {
   console.log('  photo:       ' + count((c) => c.primary_image) + '/' + mapped.length);
   console.log('  own website: ' + count((c) => c.external_url) + '/' + mapped.length);
   console.log('  stars:       ' + count((c) => c.star_rating != null) + '/' + mapped.length);
+
+  // ---------------------------------------------------------------------
+  // Rates. The Content API has none; this is the Booking API availability
+  // call, and it is the one that decides whether a partner card can carry a
+  // price at all.
+  // ---------------------------------------------------------------------
+  const checkIn = isoDaysFromNow(30);
+  const checkOut = isoDaysFromNow(33);
+  console.log('\nrates for ' + checkIn + ' to ' + checkOut + ', 2 adults:');
+  console.log('markup configured: ' + markupPercent() + '%'
+    + (markupPercent() === 0 ? '  (none - showing the rate as quoted)' : ''));
+
+  const rates = await fetchRates({
+    hotelCodes: hotels.map((h) => h.code),
+    checkIn,
+    checkOut
+  });
+
+  const keys = Object.keys(rates);
+  if (!keys.length) {
+    console.log('  none returned.');
+    console.log('  On the evaluation plan the generic key carries no pricing or');
+    console.log('  commission rules, so this is expected until the account is');
+    console.log('  certified. It is a commercial step, not a code problem.');
+    return;
+  }
+  keys.forEach((key) => {
+    const rate = rates[key];
+    const card = mapped.find((c) => c.reference === key);
+    console.log('  ' + (card ? card.title : key)
+      + ': ' + rate.currency + ' ' + rate.per_night + '/night'
+      + '  (' + rate.nights + ' nights, total ' + rate.total + ')');
+  });
+}
+
+function isoDaysFromNow(days) {
+  return new Date(Date.now() + days * 86400000).toISOString().slice(0, 10);
 }
 
 main().catch((error) => {
