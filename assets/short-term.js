@@ -1543,6 +1543,52 @@
 
   // ---------------------------------------------------------------- routing
 
+
+  // Everything this section needs in order to render. index.html ships the
+  // same markup for the server-rendered view; this is here because the main
+  // bundle can replace the whole page block with an empty one, and depending
+  // on markup another script owns is how the section ended up blank.
+  function scaffoldHtml() {
+    return ''
+      + '<div id="short-term-ai-shell" class="st-wrap" style="padding-top:18px">'
+      + '<div class="ask-ai-search-shell" data-ai-search-shell data-ai-scope="short-term">'
+      + '<div class="flex items-center justify-between gap-3 flex-wrap">'
+      + '<div class="min-w-0">'
+      + '<h2 data-ai-title class="ask-ai-search-title">Describe what you want</h2>'
+      + '<p data-ai-subtitle class="ask-ai-search-subtitle">Search in any language — makaug AI finds real listings.</p>'
+      + '</div>'
+      + '<p data-ai-scope-hint class="ask-ai-scope-chip">Searching Short Term</p>'
+      + '</div>'
+      + '<form data-ai-search-form data-ai-scope="short-term" onsubmit="submitAskAiSearchPrompt(event)" class="mt-3">'
+      + '<input data-ai-intent type="hidden" value="search_short_term">'
+      + '<label data-ai-label class="sr-only">Ask makaug AI</label>'
+      + '<div class="ask-ai-search-row">'
+      + '<span class="ask-ai-search-icon" aria-hidden="true">✨</span>'
+      + '<input data-ai-message autocomplete="off" class="ask-ai-search-input" aria-label="Ask makaug AI" placeholder="Try: short stay in Kampala">'
+      + '<button data-ai-submit type="submit" class="ask-ai-search-submit">✨ Ask AI</button>'
+      + '</div>'
+      + '</form>'
+      + '<div data-ai-response class="mt-4 hidden rounded-2xl border border-blue-100 bg-white p-4 text-gray-900"></div>'
+      + '</div>'
+      + '</div>'
+      + '<section class="st-view st-view-search is-active"><div id="short-term-ssr" class="st-wrap" style="padding-top:12px"></div></section>'
+      + '<section class="st-view st-view-detail"></section>'
+      + '<section class="st-view st-view-list"></section>';
+  }
+
+  function ensureScaffold(r) {
+    if (!r || r.querySelector('.st-view-search')) return;
+    r.innerHTML = scaffoldHtml();
+    // The bundle owns the Ask AI copy - title, subtitle, scope chip, rotating
+    // placeholder, and all of it per language. Freshly injected markup has the
+    // English defaults above until it runs again.
+    try {
+      if (typeof window.updateHomeAskAiLanguageCopy === 'function') {
+        window.updateHomeAskAiLanguageCopy();
+      }
+    } catch (_error) {}
+  }
+
   function setView(name) {
     var r = root();
     if (!r) return;
@@ -1588,6 +1634,8 @@
       });
       r.classList.add('active');
     }
+
+    ensureScaffold(r);
 
     if (path === '/short-term/list-your-place') {
       setView('list');

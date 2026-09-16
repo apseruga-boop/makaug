@@ -1189,6 +1189,42 @@ test('nothing the client renders can delete the Ask AI box', () => {
   );
 });
 
+test('the section can build its own markup', () => {
+  // THE BUG THIS EXISTS FOR: once the re-attach was fixed, __stObserved was
+  // true on the live element and STILL nothing rendered - not even the Ask AI
+  // shell. The block the bundle swaps in is not a copy of index.html's markup,
+  // it is a bare <div id="page-short-term" class="page">. mountSearch looked
+  // for .st-view-search, did not find it, and returned. Every time.
+  //
+  // Depending on markup another script owns was the mistake.
+  assert.ok(clientSource.includes('function scaffoldHtml()'), 'scaffoldHtml is missing');
+  assert.ok(clientSource.includes('function ensureScaffold('), 'ensureScaffold is missing');
+
+  // It must build every view the renderers write into, plus the Ask AI shell.
+  ['st-view st-view-search', 'st-view st-view-detail', 'st-view st-view-list',
+   'short-term-ai-shell', 'data-ai-scope="short-term"'].forEach((needle) => {
+    assert.ok(scaffoldSource().includes(needle), `scaffold is missing ${needle}`);
+  });
+
+  function scaffoldSource() {
+    const at = clientSource.indexOf('function scaffoldHtml()');
+    return clientSource.slice(at, clientSource.indexOf('function ensureScaffold(', at));
+  }
+
+  // And it must run before anything renders into those views.
+  const scaffoldCallAt = clientSource.indexOf('ensureScaffold(r);');
+  const setViewCallAt = clientSource.indexOf("setView('list');");
+  assert.ok(scaffoldCallAt > -1, 'ensureScaffold is never called from route()');
+  assert.ok(scaffoldCallAt < setViewCallAt, 'the scaffold must exist before a view is selected');
+
+  // Injected Ask AI markup carries English defaults; the bundle owns the
+  // per-language copy, so it has to be told to run again.
+  assert.ok(
+    /updateHomeAskAiLanguageCopy\(\)/.test(clientSource),
+    'freshly built Ask AI markup must be re-localised, or it is stuck in English'
+  );
+});
+
 test('rendering survives the bundle replacing the page block', () => {
   // THE BUG THIS EXISTS FOR, from live evidence: #page-short-term present and
   // active, Ask AI shell there, rendered search view absent, and
