@@ -457,16 +457,28 @@
   isolation: isolate;
   background: #06301a;
   color: #fff;
+  /* Display-banner proportions rather than a strip, so the artwork has room
+     to be seen and the unit reads as an ad. */
+  min-height: 250px;
+  display: flex;
+  align-items: center;
 }
 #page-short-term .st-cd-art {
   position: absolute; inset: 0;
   width: 100%; height: 100%;
   z-index: 0;
-  opacity: .92;
+  opacity: 1;
 }
 #page-short-term .st-cd::after {
   content: ""; position: absolute; inset: 0; z-index: 1;
-  background: linear-gradient(100deg, rgba(4,32,18,.95) 0%, rgba(6,48,26,.82) 46%, rgba(6,48,26,.25) 100%);
+  /* Dark enough on the left to keep the headline readable, clear on the
+     right so the stadium is actually visible instead of implied. */
+  background: linear-gradient(100deg,
+    rgba(4,32,18,.94) 0%,
+    rgba(5,40,22,.86) 34%,
+    rgba(6,48,26,.42) 62%,
+    rgba(6,48,26,.06) 88%,
+    rgba(6,48,26,0) 100%);
 }
 #page-short-term .st-cd-inner {
   position: relative; z-index: 2;
@@ -479,6 +491,11 @@
 }
 @media (max-width: 1040px) {
   #page-short-term .st-cd-inner { grid-template-columns: 1fr; gap: 14px; }
+  /* Stacked, the copy needs the whole width dark behind it. */
+  #page-short-term .st-cd::after {
+    background: linear-gradient(170deg, rgba(4,32,18,.94) 0%, rgba(5,40,22,.80) 55%, rgba(6,48,26,.34) 100%);
+  }
+  #page-short-term .st-cd { min-height: 0; }
 }
 
 #page-short-term .st-cd-flag {
