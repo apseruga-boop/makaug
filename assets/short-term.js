@@ -26,6 +26,7 @@
     listings: [],
     total: 0,
     map: null,
+    partners: [],
     infoWindow: null,
     markers: [],
     mapOn: false,
@@ -106,6 +107,10 @@
     "maxNight": "Wel madit i nino acel",
     "min": "dakika",
     "newListing": "Manyen",
+    "partnerBadge": "Hotel",
+    "partnerHeading": "Hotel i Uganda",
+    "partnerNote": "Pe tye wegi ot ma rwatte, ci magi obedo hotel ki bot lawote me wot. makaug pe keto, pe neno dok pe booko magi — link cito bot hotel.",
+    "partnerVisit": "Kabedo pa hotel kikome",
     "perNight": "i nino acel",
     "search": "Yeny",
     "sec": "cekon",
@@ -169,6 +174,10 @@
     "maxNight": "በአንድ ሌሊት በከፍተኛ",
     "min": "ደቂቃ",
     "newListing": "አዲስ",
+    "partnerBadge": "ሆቴል",
+    "partnerHeading": "በዩጋንዳ ያሉ ሆቴሎች",
+    "partnerNote": "እስካሁን የሚዛመድ አስተናጋጅ የለም። እነዚህ ከጉዞ አጋር የመጡ ሆቴሎች ናቸው። makaug አይዘረዝራቸውም፣ አይመረምራቸውም፣ አያስይዛቸውም — አገናኙ ወደ ሆቴሉ ይወስዳል።",
+    "partnerVisit": "የሆቴሉ ድረ-ገጽ",
     "perNight": "በአንድ ሌሊት",
     "search": "ፍልግ",
     "sec": "ሰከንድ",
@@ -232,6 +241,10 @@
     "maxNight": "أقصى سعر لليلة",
     "min": "دقيقة",
     "newListing": "جديد",
+    "partnerBadge": "فندق",
+    "partnerHeading": "فنادق في أوغندا",
+    "partnerNote": "لا يوجد مضيفون مطابقون بعد، لذلك هذه فنادق من شريك سفر. makaug لا تدرجها ولا تعاينها ولا تحجزها — الرابط يؤدي إلى الفندق.",
+    "partnerVisit": "موقع الفندق",
     "perNight": "لليلة",
     "search": "بحث",
     "sec": "ثانية",
@@ -295,6 +308,10 @@
     "maxNight": "Max per night",
     "min": "min",
     "newListing": "New listing",
+    "partnerBadge": "Hotel",
+    "partnerHeading": "Hotels in Uganda",
+    "partnerNote": "No hosts match yet, so these are hotels from a travel partner. makaug does not list, inspect or book these — the link goes to the hotel.",
+    "partnerVisit": "Hotel's own site",
     "perNight": "per night",
     "search": "Search",
     "sec": "sec",
@@ -358,6 +375,10 @@
     "maxNight": "Ssente ku kiro",
     "min": "eddakiika",
     "newListing": "Empya",
+    "partnerBadge": "Wooteeri",
+    "partnerHeading": "Wooteeri mu Uganda",
+    "partnerNote": "Tewali bannyini bifo batuukagana, n'olwekyo bino wooteeri okuva ku partner. makaug tegiteeka, tekebera era tebooka bino — link egenda ku wooteeri.",
+    "partnerVisit": "Omukutu gwa wooteeri",
     "perNight": "buli kiro",
     "search": "Noonya",
     "sec": "obutikitiki",
@@ -421,6 +442,10 @@
     "maxNight": "Esente aha kiro",
     "min": "edakiika",
     "newListing": "Ensya",
+    "partnerBadge": "Hotel",
+    "partnerHeading": "Hotel omu Uganda",
+    "partnerNote": "Tihariho banyineeka abarikuhikaana, n'ahabw'ekyo ebi n'ehotel kuruga aha munywani w'orugyendo. makaug tekizita, tekizyebera kandi tekizibooka — link neza aha hotel.",
+    "partnerVisit": "Orubaju rwa hotel",
     "perNight": "aha kiro",
     "search": "Sherura",
     "sec": "obucweka",
@@ -484,6 +509,10 @@
     "maxNight": "Esente aha kiro",
     "min": "edakiika",
     "newListing": "Ensya",
+    "partnerBadge": "Hotel",
+    "partnerHeading": "Hotel omu Uganda",
+    "partnerNote": "Tihariho banyineeka abarikuhikaana, n'ahabw'ekyo ebi n'ehotel kuruga aha munywani w'orugyendo. makaug tekizita, tekizyebera kandi tekizibooka — link neza aha hotel.",
+    "partnerVisit": "Orubaju rwa hotel",
     "perNight": "aha kiro",
     "search": "Sherura",
     "sec": "obucweka",
@@ -547,6 +576,10 @@
     "maxNight": "Ssente ku kiro",
     "min": "eddakiika",
     "newListing": "Empya",
+    "partnerBadge": "Wooteeri",
+    "partnerHeading": "Wooteeri mu Uganda",
+    "partnerNote": "Tewali banyini bifo batuukagana, n'olwekyo bino wooteeri okuva ku partner. makaug tekiteeka, tekikebera era tekibooka bino — link egenda ku wooteeri.",
+    "partnerVisit": "Omukutu gwa wooteeri",
     "perNight": "buli kiro",
     "search": "Noonya",
     "sec": "obutikitiki",
@@ -610,6 +643,10 @@
     "maxNight": "Kiwango kwa usiku",
     "min": "dakika",
     "newListing": "Mpya",
+    "partnerBadge": "Hoteli",
+    "partnerHeading": "Hoteli nchini Uganda",
+    "partnerNote": "Hakuna wenyeji wanaolingana bado, hivyo hizi ni hoteli kutoka kwa mshirika wa safari. makaug haiziorodheshi, haizikagui wala haizibuki — kiungo kinakwenda kwa hoteli.",
+    "partnerVisit": "Tovuti ya hoteli",
     "perNight": "kwa usiku",
     "search": "Tafuta",
     "sec": "sekunde",
@@ -934,6 +971,46 @@
       + '</div>';
   }
 
+  // Partner hotels, shown only when a search found no hosts. They are drawn
+  // differently from host cards on purpose: no host badge, no phone number, an
+  // explicit label saying where they came from, and an outbound link to the
+  // hotel's own site rather than a makaug page. A visitor should never be in
+  // doubt about which of these makaug stands behind.
+  function partnerCardHtml(row) {
+    var where = [row.area, row.district].filter(Boolean).join(', ');
+    var stars = row.star_rating
+      ? '<span class="st-partner-stars">' + new Array(row.star_rating + 1).join('\★') + '</span>'
+      : '';
+    var media = row.primary_image
+      ? '<img src="' + esc(row.primary_image) + '" alt="" loading="lazy">'
+      : '<div class="st-noimg"><i class="fas fa-hotel"></i></div>';
+    var link = row.external_url
+      ? '<a class="st-partner-link" href="' + esc(row.external_url) + '"'
+        + ' target="_blank" rel="noopener noreferrer nofollow">' + esc(t('partnerVisit'))
+        + ' <i class="fas fa-arrow-up-right-from-square"></i></a>'
+      : '';
+
+    return '<article class="st-card st-partner-card">'
+      + '<div class="st-card-media">' + media
+      + '<span class="st-badge st-badge-partner">' + esc(t('partnerBadge')) + '</span>'
+      + '</div>'
+      + '<div class="st-card-body">'
+      + '<h3 class="st-card-title">' + esc(row.title) + '</h3>'
+      + (where ? '<p class="st-card-where">' + esc(where) + '</p>' : '')
+      + stars
+      + link
+      + '</div></article>';
+  }
+
+  function partnerBlockHtml() {
+    if (!state.partners || !state.partners.length) return '';
+    return '<section class="st-partner-block">'
+      + '<h2 class="st-partner-heading">' + esc(t('partnerHeading')) + '</h2>'
+      + '<p class="st-partner-note">' + esc(t('partnerNote')) + '</p>'
+      + '<div class="st-grid">' + state.partners.map(partnerCardHtml).join('') + '</div>'
+      + '</section>';
+  }
+
   function cardHtml(listing) {
     var score = listing.review_count > 0 && listing.review_average != null
       ? '<p class="st-card-score"><i class="fas fa-star"></i> ' + listing.review_average.toFixed(1)
@@ -986,6 +1063,10 @@
     return api('/search' + (search ? '?' + search : '')).then(function (payload) {
       state.listings = payload.listings || [];
       state.total = payload.total || 0;
+      // Kept apart from state.listings on purpose. A partner row has no host
+      // and no phone number; letting it into the host list is how the section
+      // would start quietly breaking its own promise.
+      state.partners = payload.partner_listings || [];
       renderResults();
       if (state.mapOn) paintMap();
     }).catch(function (error) {
@@ -1008,7 +1089,8 @@
       target.innerHTML = '<div class="st-empty"><i class="fas fa-magnifying-glass"></i>'
         + esc(t('emptyFilters')) + '<br><br>'
         + '<a class="st-btn st-btn-primary" href="/short-term/list-your-place" data-st-link>'
-        + esc(t('listOwn')) + '</a></div>';
+        + esc(t('listOwn')) + '</a></div>'
+        + partnerBlockHtml();
       return;
     }
     target.innerHTML = '<div class="st-grid">' + state.listings.map(cardHtml).join('') + '</div>';

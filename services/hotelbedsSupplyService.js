@@ -191,7 +191,53 @@ function toListingCard(hotel = {}) {
   };
 }
 
+// The content barely changes and the evaluation plan is metered, so this is
+// cached in memory rather than fetched per search. A cold instance pays for
+// one request; everything after that is free until the TTL expires.
+const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+let cache = { at: 0, rows: [] };
+
+async function fetchUgandaHotels({ limit = 24, env = process.env, now = Date.now() } = {}) {
+  if (!isConfigured(env)) return [];
+
+  if (cache.rows.length && (now - cache.at) < CACHE_TTL_MS) {
+    return cache.rows.slice(0, limit);
+  }
+
+  const headers = requestHeaders(env);
+  if (!headers) return [];
+
+  const url = baseUrl(env)
+    + '/hotel-content-api/1.0/hotels'
+    + '?fields=' + CONTENT_FIELDS
+    + '&countryCode=' + COUNTRY_CODE
+    + '&from=1&to=' + MAX_HOTELS_PER_REQUEST
+    + '&language=ENG';
+
+  try {
+    const response = await fetch(url, { headers });
+    if (!response.ok) return cache.rows.slice(0, limit);
+    const body = await response.json();
+    const hotels = Array.isArray(body && body.hotels) ? body.hotels : [];
+    // A row with no name or no position is no use on a card or a map.
+    const rows = hotels
+      .map(toListingCard)
+      .filter((row) => row.title && row.latitude != null);
+    if (rows.length) cache = { at: now, rows };
+    return rows.slice(0, limit);
+  } catch (_error) {
+    // Partner supply is a nicety. It must never take the search down with it.
+    return cache.rows.slice(0, limit);
+  }
+}
+
+function __resetCacheForTests() {
+  cache = { at: 0, rows: [] };
+}
+
 module.exports = {
+  __resetCacheForTests,
+  fetchUgandaHotels,
   CONTENT_FIELDS,
   COUNTRY_CODE,
   MAX_HOTELS_PER_REQUEST,

@@ -642,3 +642,36 @@
 /* Google Maps draws its own controls; it needs a plain, sized box. */
 #page-short-term #st-map { background: #eee7e1; }
 #page-short-term #st-map img { max-width: none; }
+
+
+/* ---------- partner hotels (fallback only, never beside host results) ---------- */
+
+#page-short-term .st-partner-block {
+  margin: 26px 0 8px;
+  padding: 20px;
+  border: 1px dashed var(--st-line);
+  border-radius: 16px;
+  background: #fdfaf7;
+}
+#page-short-term .st-partner-heading {
+  margin: 0 0 4px; font-size: 1.05rem; font-weight: 900;
+}
+#page-short-term .st-partner-note {
+  margin: 0 0 16px; font-size: .85rem; color: var(--st-muted); max-width: 70ch;
+}
+
+/* Muted against a host card, which is the point: these are not the product. */
+#page-short-term .st-partner-card { background: #fff; opacity: .97; }
+#page-short-term .st-partner-card .st-card-media { position: relative; }
+#page-short-term .st-badge-partner {
+  background: #4a1c06; color: #f6e2d5; font-weight: 800;
+}
+#page-short-term .st-partner-stars {
+  display: block; color: var(--st-amber); font-size: .8rem; letter-spacing: .12em;
+}
+#page-short-term .st-partner-link {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-top: 8px; font-size: .84rem; font-weight: 800;
+  color: var(--st-accent); text-decoration: none;
+}
+#page-short-term .st-partner-link:hover { text-decoration: underline; }

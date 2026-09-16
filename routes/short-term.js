@@ -5,6 +5,11 @@ const rateLimit = require('express-rate-limit');
 
 const db = require('../config/database');
 const logger = require('../config/logger');
+const {
+  fetchUgandaHotels,
+  shouldOfferPartnerSupply
+} = require('../services/hotelbedsSupplyService');
+
 const { requireAdminApiKey, requireStaffAccess } = require('../middleware/auth');
 const {
   shortTermEnabled,
@@ -165,6 +170,20 @@ router.get('/meta', (_req, res) => {
 router.get('/search', async (req, res) => {
   try {
     const result = await searchShortTermListings(db, req.query || {});
+
+    // Partner hotels fill an empty result and nothing else. They are returned
+    // under their own key, never merged into `listings` - a merged row could
+    // be counted as a host listing or read by something that assumes every
+    // row carries a host's phone number, and this section's whole promise is
+    // that they do.
+    if (shouldOfferPartnerSupply(result.listings)) {
+      const partners = await fetchUgandaHotels({ limit: result.limit });
+      if (partners.length) {
+        result.partner_listings = partners;
+        result.partner_source = 'hotelbeds';
+      }
+    }
+
     res.set('Cache-Control', 'public, max-age=60');
     res.set('X-makaug-Short-Term-Results', String(result.listings.length));
     return res.json({ ok: true, ...result });
