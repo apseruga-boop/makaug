@@ -110,6 +110,11 @@
         ? '<span class="st-desk-ok"><i class="fas fa-file-signature"></i> Right to let declared</span>'
         : '<span class="st-desk-warn"><i class="fas fa-file-signature"></i> No right-to-let declaration</span>')
       + (row.king_facts_confirmed ? '<span class="st-desk-ok"><i class="fas fa-crown"></i> King confirmed</span>' : '')
+      + (row.listed_via === 'staff_assisted'
+        ? '<span class="st-desk-warn"><i class="fas fa-user-pen"></i> Entered by '
+          + esc(row.entered_by_staff_name || 'staff') + '</span>'
+        : '')
+      + (row.referral_code ? '<span class="st-desk-ok"><i class="fas fa-tag"></i> ' + esc(row.referral_code) + '</span>' : '')
       + '</p></div>'
       + '<button type="button" class="st-btn" data-st-desk-open="' + esc(id) + '" data-st-desk-which="' + which + '">'
       + (state.open[id] ? 'Close' : 'Review') + '</button>'
@@ -186,6 +191,13 @@
       + '<h5>Where it is</h5>'
       + '<p class="st-desk-meta"><b>' + esc(l.stage_label || l.moderation_stage) + '</b></p>'
       + '<p class="st-desk-meta">Photos: ' + esc(l.photo_count) + ' &middot; Fee: ' + esc(l.listing_fee_status) + '</p>'
+      + (l.listed_via === 'staff_assisted'
+        ? '<p class="st-desk-warn" style="display:block;margin:6px 0"><i class="fas fa-user-pen"></i> '
+          + 'Entered by ' + esc(l.entered_by_staff_name || 'a colleague') + ', not by the host. '
+          + 'The first gate was not an independent pair of eyes.</p>'
+        : '')
+      + (l.referral_code ? '<p class="st-desk-meta">Brought in by: ' + esc(l.referral_code) + '</p>' : '')
+      + (l.acquisition_notes ? '<p class="st-desk-meta"><i>' + esc(l.acquisition_notes) + '</i></p>' : '')
       + (l.staff_reviewed_by ? '<p class="st-desk-meta">Screened by ' + esc(l.staff_reviewed_by) + '</p>' : '')
       + (l.king_reviewed_by ? '<p class="st-desk-meta">King: ' + esc(l.king_reviewed_by) + '</p>' : '')
       + '<h5 style="margin-top:12px">History</h5>'
@@ -246,6 +258,195 @@
     }).catch(function (error) { showError(id, error); });
   }
 
+
+  // ---------------------------------------------------------------- staff intake
+  //
+  // For sitting with a host and entering the place for them. That is how this
+  // section gets its first hundred listings - not by hoping landlords fill in
+  // a four step form on a phone for a site they have not heard of.
+  //
+  // Everything entered here goes through the SAME two gates. The listing is
+  // flagged staff_assisted so the King can see at the final gate that a
+  // colleague typed it rather than a host, and because King review is
+  // admin-only a moderator cannot enter a listing and then wave it through
+  // themselves.
+
+  function intakeField(id, label, opts) {
+    var o = opts || {};
+    var input = o.type === 'textarea'
+      ? '<textarea class="st-input" id="' + id + '" style="min-height:' + (o.height || 70) + 'px"'
+        + (o.placeholder ? ' placeholder="' + esc(o.placeholder) + '"' : '') + '></textarea>'
+      : o.type === 'select'
+        ? '<select class="st-input" id="' + id + '">'
+          + (o.options || []).map(function (opt) {
+            return '<option value="' + esc(opt[0]) + '">' + esc(opt[1]) + '</option>';
+          }).join('') + '</select>'
+        : '<input class="st-input" id="' + id + '" type="' + (o.type || 'text') + '"'
+          + (o.value != null ? ' value="' + esc(o.value) + '"' : '')
+          + (o.min != null ? ' min="' + esc(o.min) + '"' : '')
+          + (o.step ? ' step="' + esc(o.step) + '"' : '')
+          + (o.placeholder ? ' placeholder="' + esc(o.placeholder) + '"' : '') + '>';
+    return '<div' + (o.full ? ' style="grid-column:1/-1"' : '') + '>'
+      + '<label class="st-label" for="' + id + '">' + esc(label) + '</label>' + input
+      + (o.help ? '<p class="st-help">' + esc(o.help) + '</p>' : '')
+      + '</div>';
+  }
+
+  function intakeFormHtml(meta) {
+    var amenities = (meta && meta.amenities) || [];
+    var payments = (meta && meta.payment_methods) || {};
+    return '<div class="st-desk-intake">'
+      + '<h4>Add a place for a host</h4>'
+      + '<p class="st-desk-meta">Fill this in with the host in front of you, then take the photos on your phone. '
+      + 'It goes into the same queue and still needs King approval before anyone sees it.</p>'
+
+      + '<div class="st-form-grid" style="margin-top:12px">'
+      + intakeField('i-title', 'Title', { full: true, placeholder: 'Quiet 2-bed apartment in Naguru' })
+      + intakeField('i-district', 'District', { placeholder: 'Kampala' })
+      + intakeField('i-area', 'Area', { placeholder: 'Naguru' })
+      + intakeField('i-place', 'Type of place', { type: 'select', options: [
+        ['entire_place', 'Entire place'], ['private_room', 'Private room'], ['shared_room', 'Shared room']
+      ] })
+      + intakeField('i-ptype', 'Property type', { placeholder: 'Apartment, cottage, guest house' })
+      + intakeField('i-guests', 'Sleeps', { type: 'number', min: 1, value: 2 })
+      + intakeField('i-bedrooms', 'Bedrooms', { type: 'number', min: 0, value: 1 })
+      + intakeField('i-beds', 'Beds', { type: 'number', min: 1, value: 1 })
+      + intakeField('i-bathrooms', 'Bathrooms', { type: 'number', min: 0, value: 1 })
+      + intakeField('i-desc', 'Describe it', { full: true, type: 'textarea', height: 90,
+        placeholder: 'What is it actually like? What is nearby? What should a guest know before arriving?' })
+      + '</div>'
+
+      + '<h5 style="margin-top:14px">Price</h5>'
+      + '<div class="st-form-grid">'
+      + intakeField('i-nightly', 'Per night (UGX)', { type: 'number', min: 1000, step: 1000, placeholder: '200000' })
+      + intakeField('i-clean', 'Cleaning fee (UGX)', { type: 'number', min: 0, step: 1000, value: 0 })
+      + intakeField('i-min', 'Minimum nights', { type: 'number', min: 1, value: 1 })
+      + intakeField('i-pay', 'How the host wants paying', { type: 'select', options:
+        [['', 'Choose one']].concat(Object.keys(payments).map(function (k) { return [k, payments[k]]; })) })
+      + '</div>'
+
+      + '<h5 style="margin-top:14px">The host</h5>'
+      + '<div class="st-form-grid">'
+      + intakeField('i-hname', 'Name guests ask for', {})
+      + intakeField('i-hphone', 'Phone', { placeholder: '0780 863 394' })
+      + intakeField('i-hwa', 'WhatsApp (if different)', {})
+      + intakeField('i-htype', 'They are the', { type: 'select', options: [
+        ['owner', 'Owner'], ['manager', 'Manager'], ['agent', 'Agent']
+      ] })
+      + '</div>'
+
+      + '<h5 style="margin-top:14px">Amenities</h5>'
+      + '<div class="st-amenity-pick">'
+      + amenities.map(function (a) {
+        return '<label><input type="checkbox" value="' + esc(a.slug) + '" data-i-amenity> ' + esc(a.label) + '</label>';
+      }).join('')
+      + '</div>'
+
+      + '<div class="st-form-grid" style="margin-top:14px">'
+      + intakeField('i-rules', 'House rules', { full: true, type: 'textarea',
+        placeholder: 'No parties. No smoking indoors. Gate locked at midnight.' })
+      + intakeField('i-ref', 'Who brought this host in', { placeholder: 'your name or code',
+        help: 'Lets us count where supply is actually coming from.' })
+      + intakeField('i-notes', 'Notes for the team', { placeholder: 'Where you met, what to follow up' })
+      + '</div>'
+
+      + '<div class="st-desk-confirm" style="margin-top:14px;display:block">'
+      + '<p style="margin:0 0 8px"><b>You are recording what the host told you, not vouching for it yourself.</b></p>'
+      + '<label class="st-desk-check"><input type="checkbox" id="i-right"> '
+      + '<span>The host confirmed to me that they have the right to let this place out for short stays.</span></label>'
+      + '<label class="st-desk-check"><input type="checkbox" id="i-terms"> '
+      + '<span>I read the host the makaug listing terms and the fee, and they accepted.</span></label>'
+      + '<label class="st-desk-check"><input type="checkbox" id="i-tax"> '
+      + '<span>The host understands they are responsible for their own tax and any local hotel tax.</span></label>'
+      + '</div>'
+
+      + '<div data-st-intake-feedback></div>'
+      + '<div class="st-desk-buttons" style="margin-top:12px">'
+      + '<button type="button" class="st-btn st-btn-primary" id="st-intake-save"><i class="fas fa-plus"></i> Save and add photos</button>'
+      + '<button type="button" class="st-btn" id="st-intake-cancel">Cancel</button>'
+      + '</div>'
+      + '</div>';
+  }
+
+  function intakeValue(id) {
+    var el = document.getElementById(id);
+    return el ? el.value : '';
+  }
+
+  function intakeChecked(id) {
+    var el = document.getElementById(id);
+    return !!(el && el.checked);
+  }
+
+  function submitIntake() {
+    var feedback = document.querySelector('[data-st-intake-feedback]');
+    var btn = document.getElementById('st-intake-save');
+    if (btn) btn.disabled = true;
+
+    return api('/staff/listings', {
+      method: 'POST',
+      body: {
+        title: intakeValue('i-title'),
+        description: intakeValue('i-desc'),
+        district: intakeValue('i-district'),
+        area: intakeValue('i-area'),
+        place_type: intakeValue('i-place'),
+        property_type: intakeValue('i-ptype'),
+        max_guests: intakeValue('i-guests'),
+        bedrooms: intakeValue('i-bedrooms'),
+        beds: intakeValue('i-beds'),
+        bathrooms: intakeValue('i-bathrooms'),
+        base_nightly_ugx: intakeValue('i-nightly'),
+        cleaning_fee_ugx: intakeValue('i-clean'),
+        min_nights: intakeValue('i-min'),
+        preferred_payment_method: intakeValue('i-pay'),
+        host_name: intakeValue('i-hname'),
+        host_phone: intakeValue('i-hphone'),
+        host_whatsapp: intakeValue('i-hwa'),
+        host_type: intakeValue('i-htype'),
+        house_rules: intakeValue('i-rules'),
+        referral_code: intakeValue('i-ref'),
+        acquisition_notes: intakeValue('i-notes'),
+        amenities: Array.prototype.slice.call(document.querySelectorAll('[data-i-amenity]:checked'))
+          .map(function (el) { return el.value; }),
+        right_to_let_declared: intakeChecked('i-right'),
+        terms_accepted: intakeChecked('i-terms'),
+        local_hotel_tax_ack: intakeChecked('i-tax')
+      }
+    }).then(function (out) {
+      var host = document.getElementById('staff-short-term-intake');
+      if (host) {
+        host.innerHTML = '<div class="st-desk-intake"><div class="st-ok">'
+          + '<b>Saved as ' + esc(out.listing.reference) + '.</b> It is in the queue at the submitted stage.'
+          + '<p class="st-help" style="margin-top:6px">' + esc(out.next_step || '') + '</p>'
+          + '<p class="st-help"><b>Add the photos now, while you are still with the host.</b> '
+          + 'The King cannot approve a listing with no photos, so it will sit in the queue until they are on.</p>'
+          + '</div></div>';
+      }
+      return loadDesk('staff', 'submitted');
+    }).catch(function (error) {
+      if (btn) btn.disabled = false;
+      if (feedback) {
+        var lines = (error.details && error.details.length) ? error.details : [error.message];
+        feedback.innerHTML = '<ul class="st-errors">'
+          + lines.map(function (d) { return '<li>' + esc(d) + '</li>'; }).join('') + '</ul>';
+        feedback.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    });
+  }
+
+  function openIntake() {
+    var host = document.getElementById('staff-short-term-intake');
+    if (!host) return;
+    if (host.innerHTML.trim()) { host.innerHTML = ''; return; }
+    host.innerHTML = '<p class="st-desk-empty">Loading the form…</p>';
+    api('/meta').then(function (meta) {
+      host.innerHTML = intakeFormHtml(meta);
+    }).catch(function () {
+      host.innerHTML = intakeFormHtml(null);
+    });
+  }
+
   document.addEventListener('click', function (e) {
     if (!e.target.closest) return;
 
@@ -267,10 +468,17 @@
     var kingBtn = e.target.closest('[data-st-king]');
     if (kingBtn) {
       runAction(kingBtn.getAttribute('data-st-id'), 'king', kingBtn.getAttribute('data-st-king'));
+      return;
+    }
+    if (e.target.closest('#st-intake-save')) { submitIntake(); return; }
+    if (e.target.closest('#st-intake-cancel')) {
+      var host = document.getElementById('staff-short-term-intake');
+      if (host) host.innerHTML = '';
     }
   });
 
   window.makaugShortTermDesk = {
+    intake: openIntake,
     load: loadDesk,
     reload: function (which) { return loadDesk(which || 'staff', state.stage); }
   };

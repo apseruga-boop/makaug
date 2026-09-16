@@ -424,3 +424,23 @@
 .st-desk-history li { font-size: .78rem; border-left: 2px solid var(--st-line); padding: 4px 0 6px 10px; margin-bottom: 4px; }
 .st-desk-history span { display: block; color: var(--st-muted); font-size: .7rem; }
 .st-desk-history em { display: block; color: var(--st-ink); font-style: normal; margin-top: 2px; }
+
+/* ---------- staff intake form ---------- */
+
+.st-scope .st-desk-intake {
+  border: 1px solid var(--st-line); border-radius: 14px; padding: 16px;
+  background: #fbfdfc; margin-bottom: 14px;
+}
+.st-scope .st-desk-intake h4 { font-size: 1rem; font-weight: 900; margin: 0 0 4px; color: var(--st-ink); }
+.st-scope .st-desk-intake h5 {
+  font-size: .74rem; font-weight: 900; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--st-muted); margin: 0 0 8px;
+}
+.st-scope .st-form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px,1fr)); gap: 10px; }
+.st-scope .st-help { font-size: .76rem; color: var(--st-muted); margin: 4px 0 0; }
+.st-scope .st-amenity-pick { display: grid; grid-template-columns: repeat(auto-fit, minmax(175px,1fr)); gap: 3px 12px; }
+.st-scope .st-amenity-pick label { display: flex; gap: 8px; align-items: center; font-size: .84rem; padding: 2px 0; cursor: pointer; }
+.st-scope .st-ok {
+  background: var(--st-green-soft); border: 1px solid #bbe0c8;
+  border-radius: 10px; padding: 12px 14px; font-size: .88rem;
+}

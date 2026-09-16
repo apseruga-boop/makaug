@@ -22,6 +22,11 @@ const DEFAULT_SEARCH_LIMIT = 24;
 
 const PUBLIC_STATUSES = ['approved'];
 
+// How a listing reached makaug. 'staff_assisted' matters to the review
+// pipeline: when a colleague typed the listing in, the first gate was not an
+// independent pair of eyes, so the King should know before approving.
+const LISTED_VIA = ['website', 'staff_assisted', 'whatsapp', 'import', 'partner'];
+
 // Uganda-specific amenities matter more than the global Airbnb list here:
 // backup power, a water tank and a borehole are the questions guests actually
 // ask in Kampala.
@@ -134,6 +139,19 @@ function normaliseAmenitySlug(value) {
     .replace(/[^a-z0-9_]+/g, '_')
     .replace(/_{2,}/g, '_')
     .replace(/^_|_$/g, '')
+    .slice(0, 40);
+}
+
+// A referral code identifies whoever brought a host in. Kept to a plain,
+// short, lowercase token so it survives being typed into WhatsApp, read off a
+// business card, or shouted across a room.
+function normaliseReferralCode(value) {
+  return String(value ?? '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/-{2,}/g, '-')
+    .replace(/^[-_]|[-_]$/g, '')
     .slice(0, 40);
 }
 
@@ -790,6 +808,7 @@ function validateListingSubmission(payload = {}) {
       local_hotel_tax_ack: payload.local_hotel_tax_ack === true || String(payload.local_hotel_tax_ack) === 'true',
       preferred_payment_method: payment || null,
       payout_note: cleanText(payload.payout_note, 300) || null,
+      referral_code: normaliseReferralCode(payload.referral_code) || null,
       amenities,
       availability: windows
     }
@@ -827,7 +846,8 @@ async function createShortTermListing(db, payload = {}, context = {}) {
          right_to_let_declared, right_to_let_reference, local_hotel_tax_ack,
          terms_accepted_at, terms_accepted_ip,
          status, moderation_stage, listing_fee_ugx, listing_fee_status, listing_term_months,
-         preferred_payment_method, payout_note, source
+         preferred_payment_method, payout_note, source,
+         listed_via, entered_by_staff_id, entered_by_staff_name, referral_code, acquisition_notes
        ) VALUES (
          $1,$2,$3,$4,$5,$6,$7,$8,$9,
          $10,$11,$12,$13,$14,$15,
@@ -839,9 +859,10 @@ async function createShortTermListing(db, payload = {}, context = {}) {
          $34,$35,$36,
          NOW(),$37,
          'pending','submitted',$38,'unpaid',$39,
-         $40,$41,'direct'
+         $40,$41,'direct',
+         $42,$43,$44,$45,$46
        )
-       RETURNING id, reference, slug, status, moderation_stage`,
+       RETURNING id, reference, slug, status, moderation_stage, listed_via`,
       [
         reference, slug, value.title, value.description, value.district, value.area,
         value.address, value.latitude, value.longitude,
@@ -855,7 +876,15 @@ async function createShortTermListing(db, payload = {}, context = {}) {
         value.right_to_let_declared, value.right_to_let_reference, value.local_hotel_tax_ack,
         context.ip || null,
         LISTING_FEE_UGX, LISTING_TERM_MONTHS,
-        value.preferred_payment_method, value.payout_note
+        value.preferred_payment_method, value.payout_note,
+        // Provenance. Staff-assisted listings are flagged here so the King
+        // review sheet can show that a colleague typed this in rather than a
+        // host filling it themselves.
+        LISTED_VIA.includes(context.listedVia) ? context.listedVia : 'website',
+        context.enteredByStaffId || null,
+        context.enteredByStaffName || null,
+        value.referral_code || normaliseReferralCode(context.referralCode) || null,
+        cleanMultiline(context.acquisitionNotes, 2000) || null
       ]
     );
 
@@ -905,6 +934,7 @@ async function createShortTermListing(db, payload = {}, context = {}) {
       slug: inserted.rows[0].slug,
       status: inserted.rows[0].status,
       moderation_stage: inserted.rows[0].moderation_stage,
+      listed_via: inserted.rows[0].listed_via,
       listing_fee_ugx: LISTING_FEE_UGX,
       listing_fee_display: formatUgx(LISTING_FEE_UGX),
       listing_term_months: LISTING_TERM_MONTHS
@@ -1084,6 +1114,7 @@ async function reportShortTermListing(db, listingId, payload = {}) {
 
 module.exports = {
   AMENITY_CATALOGUE,
+  LISTED_VIA,
   AMENITY_SLUGS,
   CANCELLATION_POLICIES,
   DEFAULT_SEARCH_LIMIT,
@@ -1105,6 +1136,7 @@ module.exports = {
   loadShortTermPublicCount,
   nightsBetween,
   normaliseAmenitySlug,
+  normaliseReferralCode,
   normalisePhone,
   normalizeShortTermListing,
   parseDate,

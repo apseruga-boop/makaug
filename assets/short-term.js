@@ -885,6 +885,8 @@
       + '<span>I accept the makaug listing terms above.</span></label>'
 
       + '<div id="st-list-feedback"></div>'
+      + '<p class="st-help" style="margin-top:8px"><i class="fas fa-floppy-disk"></i> '
+      + '<span id="st-draft-note">This form saves itself on this device as you type.</span></p>'
       + '<p class="st-help" style="margin-top:12px"><i class="fas fa-camera"></i> '
       + 'Photos come next, once the listing is saved. Have a few ready — the outside, the beds, the bathroom and the kitchen.</p>'
       + '<div style="margin-top:14px"><button class="st-btn" type="button" data-next="3">Back</button> '
@@ -892,6 +894,120 @@
       + '</div>'
       + '</form>'
       + '</div>';
+  }
+
+
+  // ---------------------------------------------------------------- draft rescue
+  //
+  // A host filling this in is on a phone, on Kampala mobile data, and the
+  // connection WILL drop. Losing ten minutes of typing is how you lose a
+  // listing and never get a second attempt. So the wizard writes itself to
+  // localStorage as they go and offers it back when they return.
+  //
+  // Every access is wrapped: private mode, blocked site data and quota errors
+  // all have to degrade to "no draft", never to a broken form.
+
+  var DRAFT_KEY = 'makaug.short-term.draft.v1';
+  var DRAFT_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
+  var draftTimer = null;
+
+  var DRAFT_FIELDS = [
+    'f-title', 'f-place', 'f-ptype', 'f-district', 'f-area', 'f-guests',
+    'f-bedrooms', 'f-beds', 'f-bathrooms', 'f-desc',
+    'f-nightly', 'f-clean', 'f-deposit', 'f-min', 'f-week', 'f-month', 'f-cin', 'f-cout',
+    'f-rules', 'f-terms', 'f-cancel',
+    'f-hname', 'f-hphone', 'f-hwa', 'f-hemail', 'f-htype', 'f-pay', 'f-titleref'
+  ];
+
+  function readDraft() {
+    try {
+      var raw = window.localStorage.getItem(DRAFT_KEY);
+      if (!raw) return null;
+      var parsed = JSON.parse(raw);
+      if (!parsed || !parsed.savedAt) return null;
+      if (Date.now() - parsed.savedAt > DRAFT_MAX_AGE_MS) {
+        clearDraft();
+        return null;
+      }
+      return parsed;
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  function writeDraft() {
+    try {
+      var fields = {};
+      DRAFT_FIELDS.forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el && String(el.value || '').trim()) fields[id] = el.value;
+      });
+      var amenities = $$('[data-amenity]:checked').map(function (el) { return el.value; });
+      var hasSomething = Object.keys(fields).length || amenities.length
+        || state.windows.some(function (w) { return w.starts_on || w.ends_on; });
+      if (!hasSomething) return;
+
+      window.localStorage.setItem(DRAFT_KEY, JSON.stringify({
+        savedAt: Date.now(),
+        step: state.wizardStep,
+        fields: fields,
+        amenities: amenities,
+        windows: state.windows
+      }));
+      var note = document.getElementById('st-draft-note');
+      if (note) note.textContent = 'Saved on this device';
+    } catch (_error) {
+      // Storage unavailable. The form still works; there is just no rescue.
+    }
+  }
+
+  function queueDraftSave() {
+    if (draftTimer) clearTimeout(draftTimer);
+    draftTimer = setTimeout(writeDraft, 600);
+  }
+
+  function clearDraft() {
+    try { window.localStorage.removeItem(DRAFT_KEY); } catch (_error) {}
+  }
+
+  function applyDraft(draft) {
+    if (!draft) return;
+    Object.keys(draft.fields || {}).forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.value = draft.fields[id];
+    });
+    (draft.amenities || []).forEach(function (slug) {
+      var box = document.querySelector('[data-amenity][value="' + slug + '"]');
+      if (box) box.checked = true;
+    });
+    if (Array.isArray(draft.windows) && draft.windows.length) {
+      state.windows = draft.windows;
+      renderWindows();
+    }
+  }
+
+  function draftBannerHtml(draft) {
+    if (!draft) return '';
+    var when = new Date(draft.savedAt);
+    var title = (draft.fields && draft.fields['f-title']) ? draft.fields['f-title'] : 'an unfinished listing';
+    return '<div class="st-ok" style="margin-bottom:14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">'
+      + '<span style="flex:1;min-width:200px"><b>You left off part way through.</b> '
+      + esc(title) + ', saved ' + esc(when.toLocaleString('en-GB')) + ' on this device.</span>'
+      + '<button class="st-btn st-btn-primary" type="button" id="st-draft-restore">Pick up where I left off</button>'
+      + '<button class="st-btn" type="button" id="st-draft-discard">Start fresh</button>'
+      + '</div>';
+  }
+
+  // The share link carries ?ref=<whoever brought this host in>. It is kept for
+  // the length of the visit so it survives the wizard, and submitted with the
+  // listing so supply work can be counted rather than guessed at.
+  function referralCode() {
+    var fromUrl = (qs().ref || '').trim();
+    if (fromUrl) {
+      try { window.sessionStorage.setItem('makaug.short-term.ref', fromUrl); } catch (_error) {}
+      return fromUrl;
+    }
+    try { return window.sessionStorage.getItem('makaug.short-term.ref') || ''; } catch (_error) { return ''; }
   }
 
   // ---------------------------------------------------------------- photos
@@ -1129,8 +1245,34 @@
     if (!view) return;
 
     var render = function () {
+      var draft = readDraft();
       view.innerHTML = listViewHtml();
       renderWindows();
+
+      if (draft) {
+        var steps = view.querySelector('.st-steps');
+        if (steps) steps.insertAdjacentHTML('beforebegin', draftBannerHtml(draft));
+        var restore = document.getElementById('st-draft-restore');
+        var discard = document.getElementById('st-draft-discard');
+        if (restore) {
+          restore.addEventListener('click', function () {
+            applyDraft(draft);
+            var banner = restore.closest('.st-ok');
+            if (banner) banner.remove();
+          });
+        }
+        if (discard) {
+          discard.addEventListener('click', function () {
+            clearDraft();
+            var banner = discard.closest('.st-ok');
+            if (banner) banner.remove();
+          });
+        }
+      }
+
+      // Autosave. Debounced, so typing a description is not 400 writes.
+      view.addEventListener('input', queueDraftSave);
+      view.addEventListener('change', queueDraftSave);
 
       view.addEventListener('click', function (e) {
         var next = e.target.closest('[data-next]');
@@ -1208,10 +1350,13 @@
               right_to_let_declared: checked('f-right'),
               local_hotel_tax_ack: checked('f-tax'),
               terms_accepted: checked('f-terms-ok'),
+              referral_code: referralCode(),
               amenities: $$('[data-amenity]:checked').map(function (el) { return el.value; }),
               availability: state.windows.filter(function (w) { return w.starts_on && w.ends_on; })
             }
           }).then(function (out) {
+            // Saved on the server, so the local rescue copy has done its job.
+            clearDraft();
             state.listingId = out.listing.id;
             state.uploadToken = out.upload_token || null;
             if (state.meta && state.meta.photos) {

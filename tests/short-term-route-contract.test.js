@@ -19,6 +19,8 @@ const root = path.join(__dirname, '..');
 const read = (...parts) => fs.readFileSync(path.join(root, ...parts), 'utf8');
 
 const migration = read('db', 'migrations', '132_short_term_foundation.sql');
+const migration133 = read('db', 'migrations', '133_short_term_host_acquisition.sql');
+const deskSource = read('assets', 'short-term-admin.js');
 const indexHtml = read('index.html');
 const serverSource = read('server.js');
 const clientSource = read('assets', 'short-term.js');
@@ -233,8 +235,12 @@ test('migration 132 is idempotent', () => {
 
 test('the migration filename sorts after 131', () => {
   const dir = fs.readdirSync(path.join(root, 'db', 'migrations')).filter((f) => f.endsWith('.sql')).sort();
-  const last = dir[dir.length - 1];
-  assert.strictEqual(last, '132_short_term_foundation.sql', `last migration is ${last}`);
+  assert.ok(dir.includes('132_short_term_foundation.sql'), '132 is missing');
+  assert.ok(dir.includes('133_short_term_host_acquisition.sql'), '133 is missing');
+  assert.ok(
+    dir.indexOf('133_short_term_host_acquisition.sql') > dir.indexOf('132_short_term_foundation.sql'),
+    '133 must sort after 132'
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -1021,6 +1027,130 @@ test('a moderator cannot smuggle the King confirmation through the checklist', (
   assert.strictEqual(smuggled.king_facts_confirmed, true, 'the normaliser itself passes the value through');
   // ...which is exactly why applyStaffDecision overwrites it from the stored
   // row instead of trusting the request body.
+});
+
+// ---------------------------------------------------------------------------
+// 12. Host acquisition
+//
+// Supply is the bottleneck, not code. These cover the tools for getting real
+// Ugandan hosts listed, and the honesty requirements that come with a
+// colleague entering a listing on someone else's behalf.
+// ---------------------------------------------------------------------------
+
+test('migration 133 only touches st_listing, and only adds', () => {
+  const body = migration133.replace(/--[^\n]*/g, '');
+
+  // It is an ALTER, which 132 was not - so be precise about what it alters.
+  const alters = body.match(/ALTER TABLE\s+(\w+)/gi) || [];
+  assert.strictEqual(alters.length, 1, `expected one ALTER, found ${alters.length}`);
+  assert.ok(/ALTER TABLE\s+st_listing/i.test(body), 'the only ALTER must be on st_listing');
+
+  for (const table of ['properties', 'users', 'agents', 'property_images']) {
+    assert.ok(!new RegExp(`\\b${table}\\b`, 'i').test(body), `133 must not mention ${table}`);
+  }
+
+  assert.ok(!/DROP\s+(?:TABLE|COLUMN)/i.test(body), '133 must not drop anything');
+  assert.ok(!/\bTRUNCATE\b|\bDELETE\s+FROM\b/i.test(body), '133 must not remove rows');
+  assert.ok(!/\bUPDATE\s+\w+\s+SET\b/i.test(body), '133 must not rewrite rows');
+
+  // Every column additive and idempotent.
+  const adds = body.match(/ADD COLUMN IF NOT EXISTS/gi) || [];
+  const bareAdds = body.match(/ADD COLUMN(?! IF NOT EXISTS)/gi) || [];
+  assert.ok(adds.length >= 5, `expected the provenance columns, found ${adds.length}`);
+  assert.strictEqual(bareAdds.length, 0, 'every ADD COLUMN needs IF NOT EXISTS');
+});
+
+test('a referral code survives however it is typed', () => {
+  assert.strictEqual(service.normaliseReferralCode('Kunta'), 'kunta');
+  assert.strictEqual(service.normaliseReferralCode('  KAMPALA TEAM  '), 'kampala-team');
+  assert.strictEqual(service.normaliseReferralCode('entebbe_2027'), 'entebbe_2027');
+  assert.strictEqual(service.normaliseReferralCode('a//b??c'), 'a-b-c');
+  assert.strictEqual(service.normaliseReferralCode('---'), '');
+  assert.strictEqual(service.normaliseReferralCode(null), '');
+  assert.ok(service.normaliseReferralCode('x'.repeat(200)).length <= 40);
+});
+
+test('staff intake is behind staff auth and flagged as staff-entered', () => {
+  assert.ok(
+    /router\.post\('\/staff\/listings', requireStaffAccess/.test(routeSource),
+    'the intake endpoint must require staff access'
+  );
+  const block = routeSource.slice(
+    routeSource.indexOf("router.post('/staff/listings', requireStaffAccess"),
+    routeSource.indexOf("router.post('/staff/listings/validate'")
+  );
+  assert.ok(block.includes("listedVia: 'staff_assisted'"), 'staff intake must be flagged');
+  assert.ok(block.includes('enteredByStaffId'), 'it must record who typed it');
+  assert.ok(service.LISTED_VIA.includes('staff_assisted'));
+
+  // A moderator entering a listing must not be able to approve their own work.
+  // King review is admin-only, which is what stops that.
+  assert.ok(
+    /router\.post\('\/staff\/listings\/:id\/king-decision', requireAdminApiKey/.test(routeSource),
+    'King review must stay admin-only, or staff intake becomes self-approval'
+  );
+});
+
+test('the King is told when a colleague typed the listing rather than the host', () => {
+  assert.ok(routeSource.includes('listed_via: row.listed_via'), 'provenance missing from the review sheet');
+  assert.ok(routeSource.includes('entered_by_staff_name: row.entered_by_staff_name'));
+  assert.ok(
+    /listed_via === 'staff_assisted'[\s\S]{0,400}not by the host/.test(deskSource),
+    'the review sheet must say plainly that staff entered it'
+  );
+  assert.ok(
+    /first gate was not an independent pair of eyes/i.test(deskSource),
+    'the King should be told why that matters'
+  );
+});
+
+test('the staff intake form records what the host said, not what staff vouch for', () => {
+  assert.ok(
+    /recording what the host told you, not vouching for it yourself/i.test(deskSource),
+    'the intake form must not let staff declare the right to let as their own'
+  );
+  assert.ok(/The host confirmed to me/i.test(deskSource), 'the declaration must be reported speech');
+  assert.ok(/I read the host the makaug listing terms/i.test(deskSource));
+});
+
+test('every draft storage access is wrapped so a blocked browser cannot break the form', () => {
+  const draftBlock = clientSource.slice(
+    clientSource.indexOf('var DRAFT_KEY'),
+    clientSource.indexOf('// ---------------------------------------------------------------- photos')
+  );
+  assert.ok(draftBlock.length > 500, 'draft rescue block not found');
+
+  // Count storage touches and catch blocks in the same region.
+  const touches = (draftBlock.match(/localStorage\.(getItem|setItem|removeItem)/g) || []).length;
+  const catches = (draftBlock.match(/catch \(_?error\)/g) || []).length;
+  assert.ok(touches >= 3, `expected the read, write and clear, found ${touches}`);
+  assert.ok(catches >= 3, `every storage access needs its own catch, found ${catches}`);
+
+  // Private browsing and blocked site data must degrade to "no draft".
+  assert.ok(/catch \(_?error\) \{\s*return null;/.test(draftBlock), 'a failed read must return null');
+});
+
+test('a saved listing clears the local draft, and a failed one keeps it', () => {
+  assert.ok(
+    /\/\/ Saved on the server, so the local rescue copy has done its job\.\s*\n\s*clearDraft\(\);/.test(clientSource),
+    'a successful submit must clear the draft'
+  );
+  const submitBlock = clientSource.slice(clientSource.indexOf("api('/listings', {"));
+  const catchIndex = submitBlock.indexOf('.catch(function (error)');
+  const clearIndex = submitBlock.indexOf('clearDraft()');
+  assert.ok(clearIndex > -1 && clearIndex < catchIndex,
+    'the draft must only be cleared on success, never in the error path');
+});
+
+test('the share link referral code is carried through to the listing', () => {
+  assert.ok(clientSource.includes('function referralCode()'), 'referral capture missing');
+  assert.ok(clientSource.includes("qs().ref"), 'the code must come off the share link');
+  assert.ok(clientSource.includes('referral_code: referralCode()'), 'it must be submitted with the listing');
+  assert.ok(
+    /sessionStorage[\s\S]{0,200}catch/.test(clientSource),
+    'session storage access must be wrapped too'
+  );
+  assert.ok(routeSource.includes('referralCode: req.body?.referral_code'), 'the route must accept it');
 });
 
 // ---------------------------------------------------------------------------

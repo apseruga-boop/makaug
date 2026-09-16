@@ -29,7 +29,8 @@ const {
   recordShortTermLead,
   reportShortTermListing,
   searchShortTermListings,
-  submitShortTermReview
+  submitShortTermReview,
+  validateListingSubmission
 } = require('../services/shortTermService');
 const {
   MAX_IMAGES_PER_LISTING,
@@ -358,7 +359,9 @@ router.post('/listings', intakeLimiter, async (req, res) => {
     }
     const created = await createShortTermListing(db, req.body || {}, {
       ip: req.ip,
-      hostUserId: req.userAuth?.id || null
+      hostUserId: req.userAuth?.id || null,
+      listedVia: 'website',
+      referralCode: req.body?.referral_code || req.query?.ref || null
     });
     // Hosts list without an account on purpose - an account requirement is
     // what stops most Ugandan landlords listing at all. This signed, expiring
@@ -384,6 +387,69 @@ router.post('/listings', intakeLimiter, async (req, res) => {
   } catch (error) {
     return fail(res, error, 'Listing could not be saved');
   }
+});
+
+// ---------------------------------------------------------------------------
+// Staff-assisted intake.
+//
+// Most Ugandan hosts will not fill in a four step form on a phone, on mobile
+// data, for a site they have not heard of. So whoever is building supply sits
+// with the host, enters it for them and takes the photos on their own phone.
+// That is how this section actually gets its first hundred places.
+//
+// The listing is flagged staff_assisted and records who typed it. It then goes
+// through EXACTLY the same two gates as anything else - and because King
+// review is admin-only, a moderator cannot enter a listing and then wave their
+// own work through.
+// ---------------------------------------------------------------------------
+
+router.post('/staff/listings', requireStaffAccess, async (req, res) => {
+  try {
+    const created = await createShortTermListing(db, req.body || {}, {
+      ip: req.ip,
+      listedVia: 'staff_assisted',
+      enteredByStaffId: req.staffAuth?.userId || null,
+      enteredByStaffName: [req.userAuth?.first_name, req.userAuth?.last_name]
+        .filter(Boolean).join(' ').trim() || req.staffAuth?.userId || null,
+      referralCode: req.body?.referral_code || null,
+      acquisitionNotes: req.body?.acquisition_notes || null
+    });
+
+    let uploadToken = null;
+    try {
+      uploadToken = createUploadToken(created.id);
+    } catch (error) {
+      logger.warn('Short term upload token could not be issued for staff intake', {
+        marker: SHORT_TERM_MARKER,
+        message: error?.message
+      });
+    }
+
+    logger.info('Short term listing entered by staff on a host behalf', {
+      marker: SHORT_TERM_MARKER,
+      listingId: created.id,
+      reference: created.reference,
+      by: req.staffAuth?.userId
+    });
+
+    return res.status(201).json({
+      ok: true,
+      marker: SHORT_TERM_MARKER,
+      listing: created,
+      upload_token: uploadToken,
+      photos_ready: photoUploadReady(),
+      next_step: 'Saved and in the review queue. Add the photos now while you are still with the host.'
+    });
+  } catch (error) {
+    return fail(res, error, 'Listing could not be saved');
+  }
+});
+
+// Lets the intake form show the same validation the server enforces, before
+// a colleague sitting in someone's living room loses the lot to a 400.
+router.post('/staff/listings/validate', requireStaffAccess, (req, res) => {
+  const result = validateListingSubmission(req.body || {});
+  return res.json({ ok: true, valid: result.ok, errors: result.errors, marker: SHORT_TERM_MARKER });
 });
 
 // ---------------------------------------------------------------------------
@@ -449,6 +515,7 @@ router.get('/staff/queue', requireStaffAccess, async (req, res) => {
               l.listing_fee_status, l.preferred_payment_method,
               l.staff_reviewed_by, l.staff_reviewed_at,
               l.king_reviewed_by, l.king_reviewed_at,
+              l.listed_via, l.entered_by_staff_name, l.referral_code,
               l.listed_at, l.expires_at, l.created_at,
               COALESCE(m.photo_count, 0)::int AS photo_count
        FROM st_listing l
@@ -606,7 +673,14 @@ router.get('/staff/listings/:id/review', requireStaffAccess, async (req, res) =>
         staff_reviewed_at: row.staff_reviewed_at,
         king_reviewed_by: row.king_reviewed_by,
         king_reviewed_at: row.king_reviewed_at,
-        listing_fee_status: row.listing_fee_status
+        listing_fee_status: row.listing_fee_status,
+        // The King should know whether a host filled this in or a colleague
+        // typed it. A staff-assisted listing has not had an independent first
+        // pair of eyes on it.
+        listed_via: row.listed_via,
+        entered_by_staff_name: row.entered_by_staff_name,
+        referral_code: row.referral_code,
+        acquisition_notes: row.acquisition_notes
       },
       checks: REVIEW_CHECKS,
       checklist: combined,

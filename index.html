@@ -7088,9 +7088,11 @@
               <p class="mt-1 text-sm text-gray-500">Screen a host&rsquo;s short stay: check the photos are of that property, ring the number, confirm the area and the price. When it is clean, send it to King review. <b>A moderator cannot publish a short stay</b> &mdash; the King makes the final call.</p>
             </div>
             <div class="flex gap-2">
+              <button type="button" onclick="window.makaugShortTermDesk &amp;&amp; window.makaugShortTermDesk.intake()" class="rounded-xl border border-emerald-200 text-emerald-800 px-4 py-2 text-sm font-black"><i class="fas fa-plus mr-1"></i>Add a place for a host</button>
               <button type="button" onclick="window.makaugShortTermDesk &amp;&amp; window.makaugShortTermDesk.load('staff','submitted')" class="rounded-xl bg-emerald-700 text-white px-4 py-2 text-sm font-black"><i class="fas fa-rotate-right mr-1"></i>Open queue</button>
             </div>
           </div>
+          <div id="staff-short-term-intake" class="mt-5"></div>
           <div id="staff-short-term-queue" class="mt-5"><p class="text-sm text-gray-500">Open this desk to load the short term review queue.</p></div>
         </section>
 
