@@ -990,8 +990,16 @@
     var stars = row.star_rating
       ? '<span class="st-partner-stars">' + new Array(row.star_rating + 1).join('\★') + '</span>'
       : '';
-    var media = row.primary_image
-      ? '<img src="' + esc(row.primary_image) + '" alt="" loading="lazy">'
+    // A queue rather than a single URL: when the first photo is missing the
+    // card steps to the next, and to the placeholder when it runs out. A
+    // broken image is worse than no image, and on the only card carrying a
+    // price it is worse still.
+    var shots = (row.image_candidates && row.image_candidates.length)
+      ? row.image_candidates
+      : (row.primary_image ? [row.primary_image] : []);
+    var media = shots.length
+      ? '<img src="' + esc(shots[0]) + '" alt="" loading="lazy"'
+        + ' data-st-shots="' + esc(shots.slice(1).join(' ')) + '">'
       : '<div class="st-noimg"><i class="fas fa-hotel"></i></div>';
     var link = row.external_url
       ? '<a class="st-partner-link" href="' + esc(row.external_url) + '"'
@@ -1104,11 +1112,17 @@
     var target = document.getElementById('st-results');
     if (!target) return;
     if (!state.listings.length) {
-      target.innerHTML = '<div class="st-empty"><i class="fas fa-magnifying-glass"></i>'
-        + esc(t('emptyFilters')) + '<br><br>'
+      // When partner hotels are showing, their own heading already says no
+      // hosts matched. Saying it again above them reads as two separate
+      // failures instead of one situation with an explanation, which is how
+      // the live page looked: "Nothing matches those filters yet", and then
+      // twenty-four hotels.
+      var partners = partnerBlockHtml();
+      var cta = '<div class="st-empty">'
+        + (partners ? '' : '<i class="fas fa-magnifying-glass"></i>' + esc(t('emptyFilters')) + '<br><br>')
         + '<a class="st-btn st-btn-primary" href="/short-term/list-your-place" data-st-link>'
-        + esc(t('listOwn')) + '</a></div>'
-        + partnerBlockHtml();
+        + esc(t('listOwn')) + '</a></div>';
+      target.innerHTML = partners ? partners + cta : cta;
       return;
     }
     target.innerHTML = '<div class="st-grid">' + state.listings.map(cardHtml).join('') + '</div>';
@@ -2455,6 +2469,29 @@
 
   // Attach to the page block the moment it exists, however late that is.
   // Returns true once it is watching, so the callers below can stop asking.
+  // Image errors do not bubble, so this listens in the capture phase. One
+  // listener for the whole section rather than an inline handler per card.
+  function ensureImageFallback() {
+    var r = root();
+    if (!r || r.__stShotsBound) return;
+    r.__stShotsBound = true;
+    r.addEventListener('error', function (event) {
+      var img = event.target;
+      if (!img || img.tagName !== 'IMG' || !img.hasAttribute('data-st-shots')) return;
+      var rest = (img.getAttribute('data-st-shots') || '').split(' ').filter(Boolean);
+      if (rest.length) {
+        img.setAttribute('data-st-shots', rest.slice(1).join(' '));
+        img.src = rest[0];
+        return;
+      }
+      // Out of photos. A hotel icon beats a broken one.
+      img.removeAttribute('data-st-shots');
+      var holder = img.parentNode;
+      if (holder) holder.innerHTML = '<div class="st-noimg"><i class="fas fa-hotel"></i></div>'
+        + holder.innerHTML.replace(/<img[^>]*>/, '');
+    }, true);
+  }
+
   function ensureObserver() {
     var r = root();
     if (!r) return false;
@@ -2481,6 +2518,7 @@
         }
       } catch (_error) {}
     }
+    ensureImageFallback();
     hydrateIfVisible();
     return true;
   }

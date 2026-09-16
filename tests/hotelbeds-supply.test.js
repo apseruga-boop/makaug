@@ -350,6 +350,84 @@ test('a price already in shillings is not multiplied again', async () => {
   }
 });
 
+test('a caller cannot write into the cache through the rows it gets', async () => {
+  // THIS SHIPPED, AND THE SUITE WAS GREEN THROUGHOUT. The search route sets
+  // price_display on the rows it is about to send; fetchUgandaHotels returned
+  // cache.rows.slice(), which shares the row OBJECTS with the cache. So the
+  // first dated search stamped its prices into the cache and every later
+  // search served them back - including one with no dates, which is the exact
+  // thing the dateless guard exists to prevent, defeated from behind.
+  //
+  // Found by asking the live API for a dateless search and counting three
+  // priced rows in the answer. Not by any test here, which is the point of
+  // writing this one.
+  const calls = [];
+  const real = global.fetch;
+  global.fetch = stubFetch({
+    hotels: [
+      {
+        code: 1,
+        name: { content: 'Test Hotel' },
+        coordinates: { latitude: 0.3, longitude: 32.5 },
+        images: [
+          { path: 'a/1/dead.jpg?20241208?20250622', imageTypeCode: 'GEN', visualOrder: 1 },
+          { path: 'a/1/second.jpg', imageTypeCode: 'GEN', visualOrder: 2 },
+          { path: 'a/1/third.jpg', imageTypeCode: 'ROO', visualOrder: 3 },
+          { path: 'a/1/fourth.jpg', imageTypeCode: 'ROO', visualOrder: 4 }
+        ]
+      }
+    ]
+  }, calls);
+  try {
+    svc.__resetCacheForTests();
+    const first = await svc.fetchUgandaHotels({ env: ON });
+    assert.equal(first.length, 1, 'the stub should have produced one row');
+
+    first[0].price_display = 'UGX 999,999';
+    first[0].image_candidates.push('https://example.invalid/injected.jpg');
+
+    const second = await svc.fetchUgandaHotels({ env: ON });
+    assert.equal(calls.length, 1, 'the second call should have been served from cache');
+    assert.equal(second[0].price_display, undefined, 'a price leaked into the cache');
+    assert.ok(
+      second[0].image_candidates.indexOf('https://example.invalid/injected.jpg') === -1,
+      'the candidate list is shared by reference'
+    );
+    assert.notEqual(first[0], second[0], 'the same object is being handed to every caller');
+  } finally {
+    global.fetch = real;
+  }
+});
+
+test('a card carries more than one photo to try', async () => {
+  // Kampala Serena's top-ranked photo 404s at Hotelbeds - and it was the one
+  // card with a price on it, so the priced card was the broken one. The
+  // response carries several images; the card gets a queue.
+  const shots = svc.imageCandidates({
+    hotels: [
+      {
+        code: 1,
+        name: { content: 'Test Hotel' },
+        coordinates: { latitude: 0.3, longitude: 32.5 },
+        images: [
+          { path: 'a/1/dead.jpg?20241208?20250622', imageTypeCode: 'GEN', visualOrder: 1 },
+          { path: 'a/1/second.jpg', imageTypeCode: 'GEN', visualOrder: 2 },
+          { path: 'a/1/third.jpg', imageTypeCode: 'ROO', visualOrder: 3 },
+          { path: 'a/1/fourth.jpg', imageTypeCode: 'ROO', visualOrder: 4 }
+        ]
+      }
+    ]
+  }.hotels[0].images);
+  assert.equal(shots.length, 3, 'three is enough to try and few enough to send');
+  assert.ok(shots.every((u) => u.indexOf('https://') === 0), 'candidates must be usable URLs');
+  // GEN images first, then visual order - the same ranking as before.
+  assert.ok(/dead\.jpg$/.test(shots[0]));
+  assert.ok(/second\.jpg$/.test(shots[1]));
+  // The doubled cache-busting suffix is dropped; it resolves no better than
+  // the bare path and the bare path is what every other row uses.
+  assert.equal(shots[0].indexOf('?'), -1, 'a query string survived');
+});
+
 test('this service cannot make a booking', () => {
   // makaug's stated position, on every short term page, is that it does not
   // take bookings and does not handle money. Adding a booking call here is a

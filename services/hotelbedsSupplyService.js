@@ -131,16 +131,37 @@ function starRating(categoryCode) {
 
 // Pick the picture a person would recognise the place by. GEN is the general
 // exterior view; visualOrder is their own ranking, lowest first.
+// Hotelbeds' top-ranked photo is sometimes simply not there - Kampala Serena's
+// 404s, and it was the one card with a price on it. The response carries
+// several, so the card is given a short queue to work through rather than one
+// URL and a broken image if it fails.
+function imageCandidates(images, take = 3) {
+  return rankedImages(images)
+    .map((image) => String(image && image.path || '').trim())
+    // Some paths arrive with a cache-busting suffix appended twice
+    // ("...jpg?20241208232302?20250622054542"). Neither form resolves any
+    // better than the bare path, and the bare path is the one the rest of
+    // them use.
+    .map((path) => path.split('?')[0])
+    .filter(Boolean)
+    .map((path) => PHOTO_BASE + path)
+    .slice(0, take);
+}
+
 function primaryImage(images) {
-  if (!Array.isArray(images) || !images.length) return null;
+  const list = imageCandidates(images, 1);
+  return list.length ? list[0] : null;
+}
+
+function rankedImages(images) {
+  if (!Array.isArray(images) || !images.length) return [];
   const ranked = images.slice().sort((a, b) => {
     const aGen = a && a.imageTypeCode === 'GEN' ? 0 : 1;
     const bGen = b && b.imageTypeCode === 'GEN' ? 0 : 1;
     if (aGen !== bGen) return aGen - bGen;
     return Number(a && a.visualOrder || 1e9) - Number(b && b.visualOrder || 1e9);
   });
-  const path = String(ranked[0] && ranked[0].path || '').trim();
-  return path ? PHOTO_BASE + path : null;
+  return ranked;
 }
 
 function toListingCard(hotel = {}) {
@@ -173,6 +194,7 @@ function toListingCard(hotel = {}) {
     longitude: Number.isFinite(lng) ? lng : null,
 
     primary_image: primaryImage(hotel.images),
+    image_candidates: imageCandidates(hotel.images),
     star_rating: starRating(hotel.categoryCode),
 
     // A partner row has no host to ring. The section must not pretend it does.
@@ -197,11 +219,25 @@ function toListingCard(hotel = {}) {
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 let cache = { at: 0, rows: [] };
 
+// Callers get their own copies, always. cache.rows.slice() shares the row
+// objects, and the search route writes prices onto the rows it is about to
+// send - so a single dated search would stamp its prices into the cache and
+// every later search, dateless ones included, would serve them back. A price
+// for a stay nobody asked about is precisely what the dateless guard exists to
+// prevent; this is that guard being defeated from behind.
+function handOut(rows, limit) {
+  return rows.slice(0, limit).map((row) => {
+    const copy = Object.assign({}, row);
+    if (Array.isArray(row.image_candidates)) copy.image_candidates = row.image_candidates.slice();
+    return copy;
+  });
+}
+
 async function fetchUgandaHotels({ limit = 24, env = process.env, now = Date.now() } = {}) {
   if (!isConfigured(env)) return [];
 
   if (cache.rows.length && (now - cache.at) < CACHE_TTL_MS) {
-    return cache.rows.slice(0, limit);
+    return handOut(cache.rows, limit);
   }
 
   const headers = requestHeaders(env);
@@ -216,7 +252,7 @@ async function fetchUgandaHotels({ limit = 24, env = process.env, now = Date.now
 
   try {
     const response = await fetch(url, { headers });
-    if (!response.ok) return cache.rows.slice(0, limit);
+    if (!response.ok) return handOut(cache.rows, limit);
     const body = await response.json();
     const hotels = Array.isArray(body && body.hotels) ? body.hotels : [];
     // A row with no name or no position is no use on a card or a map.
@@ -224,10 +260,10 @@ async function fetchUgandaHotels({ limit = 24, env = process.env, now = Date.now
       .map(toListingCard)
       .filter((row) => row.title && row.latitude != null);
     if (rows.length) cache = { at: now, rows };
-    return rows.slice(0, limit);
+    return handOut(rows, limit);
   } catch (_error) {
     // Partner supply is a nicety. It must never take the search down with it.
-    return cache.rows.slice(0, limit);
+    return handOut(cache.rows, limit);
   }
 }
 
@@ -381,6 +417,7 @@ function __resetCacheForTests() {
 
 module.exports = {
   __resetCacheForTests,
+  imageCandidates,
   __setFxForTests,
   applyMarkup,
   eurToUgxRate,

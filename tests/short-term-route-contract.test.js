@@ -1189,6 +1189,35 @@ test('nothing the client renders can delete the Ask AI box', () => {
   );
 });
 
+test('the page does not report two separate failures for one situation', () => {
+  // Live it read: "0 short stays", "Nothing matches those filters yet. Try
+  // widening the dates or the area.", and then twenty-four hotels under a
+  // heading that already says no hosts matched. One explanation, not two.
+  const at = clientSource.indexOf('function renderResults()');
+  assert.ok(at > -1, 'renderResults is missing');
+  const block = clientSource.slice(at, at + 1800);
+
+  assert.ok(/var partners = partnerBlockHtml\(\)/.test(block), 'the empty state ignores the partner block');
+  assert.ok(
+    /partners \? '' : [\s\S]{0,120}emptyFilters/.test(block),
+    'the "nothing matches" line still shows above the hotels'
+  );
+  // The way out must survive either way.
+  assert.ok(/listOwn/.test(block), 'the list-your-place call to action was lost');
+});
+
+test('a broken photo does not become a broken card', () => {
+  const at = clientSource.indexOf('function partnerCardHtml(');
+  const block = clientSource.slice(at, clientSource.indexOf('function partnerBlockHtml('));
+  assert.ok(/data-st-shots/.test(block), 'the card has only one photo to try');
+  // error does not bubble, so a listener on the parent has to capture.
+  assert.ok(
+    /addEventListener\('error'[\s\S]{0,1500}\}, true\)/.test(clientSource),
+    'the fallback listener is not in the capture phase, so it will never fire'
+  );
+  assert.ok(/st-noimg/.test(clientSource), 'there is no placeholder to fall back to');
+});
+
 test('a partner price is for the stay the visitor asked about', () => {
   // The route must hand the visitor's own dates to the rates call. A default
   // window would put a price on the card for a stay nobody searched for, which
