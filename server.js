@@ -36,6 +36,7 @@ const studentRoutes = require('./routes/student');
 const fieldAgentRoutes = require('./routes/field-agent');
 const staffRoutes = require('./routes/staff');
 const harvestRoutes = require('./routes/harvest');
+const shortTermRoutes = require('./routes/short-term');
 const {
   adminRouter: offPlanAdminRoutes,
   publicRouter: offPlanRoutes,
@@ -59,6 +60,19 @@ const {
   applyHarvestPublicSubmissionVisibility,
   harvestAutomationEnabled
 } = require('./utils/harvestFeatureFlags');
+const {
+  applyShortTermVisibility,
+  injectShortTermRuntimeConfig,
+  shortTermEnabled
+} = require('./utils/shortTermFeatureFlags');
+const {
+  getShortTermListing,
+  searchShortTermListings
+} = require('./services/shortTermService');
+const {
+  renderShortTermSeoHtml,
+  vacationRentalStructuredData
+} = require('./services/shortTermSeoRenderService');
 const { DISTRICTS: MARKETPLACE_DISTRICTS, MARKETPLACE_CATEGORIES } = require('./services/marketplaceService');
 const { loadPublicOpportunitySummary } = require('./services/publicInventoryMetricsService');
 const { injectAboutCommercialProducts } = require('./services/aboutCommercialProductsService');
@@ -297,6 +311,7 @@ app.use('/api/field-agent', fieldAgentRoutes);
 app.use('/api/staff', staffRoutes);
 app.use('/api/staff/off-plan', offPlanStaffRoutes);
 app.use('/api/harvest', harvestRoutes);
+app.use('/api/short-term', shortTermRoutes);
 
 app.get('/marketplace-sitemap.xml', (_req, res) => {
   if (ACTIVE_TENANT.publicFeatures?.marketplace === false) return res.status(404).type('text/plain').send('Not found');
@@ -1072,6 +1087,7 @@ function renderPublicHtml(pathname) {
     rendered = applyCountryHtml(rendered, ACTIVE_COUNTRY_CODE, { homepage: normalizedBasePath === '/' });
   }
   rendered = applyHarvestPublicSubmissionVisibility(rendered);
+  rendered = injectShortTermRuntimeConfig(applyShortTermVisibility(rendered));
   if (isProduction) {
     publicHtmlCache.set(key, rendered);
     while (publicHtmlCache.size > PUBLIC_HTML_CACHE_MAX_ENTRIES) {
@@ -1436,6 +1452,121 @@ app.get(['/', '/index.html'], async (req, res, next) => {
       structuredData: renderedSeo.structuredData
     });
     res.set('X-makaug-Homepage-SSR', String(listings.length));
+    return sendTextResponse(req, res, html, { cacheControl: PUBLIC_HTML_CACHE_CONTROL });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Short Term stays.
+//
+// Server-rendered so the section is crawlable and works without JavaScript.
+// With SHORT_TERM_ENABLED off these handlers call next() and the request falls
+// through to the ordinary single page app exactly as it does today.
+// ---------------------------------------------------------------------------
+
+const SHORT_TERM_PAGE_TITLE = 'Short Term Stays in Uganda | Nightly Rentals | makaug.com';
+const SHORT_TERM_PAGE_DESCRIPTION = 'Find short stays across Uganda by the night. Apartments, cottages and guest houses in Kampala, Entebbe, Jinja and beyond, with the host’s own contact details on every listing.';
+
+app.get('/short-term', async (req, res, next) => {
+  if (!shortTermEnabled()) return next();
+  try {
+    res.set('X-makaug-Public-Sanitized', '1');
+    let listings = [];
+    let total = 0;
+    try {
+      const result = await searchShortTermListings(db, { ...(req.query || {}), limit: 24 });
+      listings = result.listings;
+      total = result.total;
+    } catch (error) {
+      logger.warn('Short term page is continuing without server-rendered cards', {
+        path: req.path,
+        message: error.message
+      });
+    }
+
+    let html = renderPublicHtml(req.originalUrl || req.url || req.path);
+    const rendered = renderShortTermSeoHtml(html, {
+      listings,
+      baseUrl: absolutePublicUrl('/')
+    });
+    html = patchPublicPageSeoMeta(rendered.html, {
+      title: SHORT_TERM_PAGE_TITLE,
+      description: SHORT_TERM_PAGE_DESCRIPTION,
+      canonical: absolutePublicUrl('/short-term'),
+      image: absolutePublicUrl('/assets/house-ads-v3/rent.webp'),
+      count: total,
+      structuredData: rendered.structuredData
+    });
+
+    res.set('X-makaug-Short-Term-SSR', String(listings.length));
+    res.set('X-makaug-Short-Term-Total', String(total));
+    return sendTextResponse(req, res, html, { cacheControl: PUBLIC_HTML_CACHE_CONTROL });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+app.get('/short-term/list-your-place', (req, res, next) => {
+  if (!shortTermEnabled()) return next();
+  try {
+    res.set('X-makaug-Public-Sanitized', '1');
+    let html = renderPublicHtml(req.originalUrl || req.url || req.path);
+    html = patchPublicPageSeoMeta(html, {
+      title: 'List Your Short Stay on makaug | UGX 50,000 for 3 Months',
+      description: 'Put your Uganda short stay in front of guests for a flat UGX 50,000 for three months. No commission on any booking. Guests contact you directly.',
+      canonical: absolutePublicUrl('/short-term/list-your-place'),
+      image: absolutePublicUrl('/assets/house-ads-v3/rent.webp')
+    });
+    res.set('X-makaug-Short-Term-Page', 'list-your-place');
+    return sendTextResponse(req, res, html, { cacheControl: PUBLIC_HTML_CACHE_CONTROL });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+app.get('/short-term/:slug', async (req, res, next) => {
+  if (!shortTermEnabled()) return next();
+  try {
+    res.set('X-makaug-Public-Sanitized', '1');
+    let listing = null;
+    try {
+      listing = await getShortTermListing(db, req.params.slug);
+    } catch (error) {
+      logger.warn('Short term listing page is continuing without server-rendered detail', {
+        slug: req.params.slug,
+        message: error.message
+      });
+    }
+
+    let html = renderPublicHtml(req.originalUrl || req.url || req.path);
+
+    if (!listing) {
+      html = patchPublicPageSeoMeta(html, {
+        title: SHORT_TERM_PAGE_TITLE,
+        description: SHORT_TERM_PAGE_DESCRIPTION,
+        canonical: absolutePublicUrl('/short-term')
+      });
+      html = patchMetaTag(html, 'robots', 'noindex,follow');
+        res.set('X-Robots-Tag', 'noindex, follow');
+      res.set('X-makaug-Short-Term-Listing', 'missing');
+      return sendTextResponse(req, res, html, { cacheControl: 'no-store' });
+    }
+
+    const rendered = renderShortTermSeoHtml(html, {
+      listings: [listing],
+      baseUrl: absolutePublicUrl('/')
+    });
+    html = patchPublicPageSeoMeta(rendered.html, {
+      title: `${listing.title} | Short Stay in ${listing.area}, Uganda | makaug.com`,
+      description: `${listing.place_type_label} in ${listing.area}, ${listing.district}. Sleeps ${listing.max_guests}. From ${listing.nightly_display} per night. Contact the host directly on makaug.`,
+      canonical: absolutePublicUrl(`/short-term/${listing.slug}`),
+      image: absolutePublicUrl(listing.primary_image || '/assets/house-ads-v3/rent.webp'),
+      structuredData: vacationRentalStructuredData(listing, absolutePublicUrl('/'))
+    });
+
+    res.set('X-makaug-Short-Term-Listing', String(listing.reference || listing.id));
     return sendTextResponse(req, res, html, { cacheControl: PUBLIC_HTML_CACHE_CONTROL });
   } catch (error) {
     return next(error);
