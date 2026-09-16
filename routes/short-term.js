@@ -5,7 +5,7 @@ const rateLimit = require('express-rate-limit');
 
 const db = require('../config/database');
 const logger = require('../config/logger');
-const { requireStaffAccess } = require('../middleware/auth');
+const { requireAdminApiKey, requireStaffAccess } = require('../middleware/auth');
 const {
   shortTermEnabled,
   shortTermIntakeEnabled,
@@ -41,6 +41,18 @@ const {
   listListingPhotos,
   photoUploadReady
 } = require('../services/shortTermMediaService');
+const {
+  KING_ACTIONS,
+  REVIEW_CHECKS,
+  STAFF_ACTIONS,
+  STAGES,
+  applyKingDecision,
+  applyStaffDecision,
+  buildAutomatedChecklist,
+  loadModerationHistory,
+  missingChecks,
+  normalizeChecklist
+} = require('../services/shortTermModerationService');
 
 const router = express.Router();
 
@@ -115,6 +127,14 @@ router.get('/meta', (_req, res) => {
     payment_methods: PAYMENT_METHODS,
     intake_open: shortTermIntakeEnabled(),
     reviews_open: shortTermReviewsEnabled(),
+    review: {
+      // Two gates. A moderator screens, the King publishes. Neither can do
+      // the other's job.
+      stages: STAGES,
+      staff_actions: Object.keys(STAFF_ACTIONS),
+      king_actions: Object.keys(KING_ACTIONS),
+      checks: REVIEW_CHECKS
+    },
     photos: {
       ready: photoUploadReady(),
       max_per_listing: MAX_IMAGES_PER_LISTING,
@@ -419,72 +439,183 @@ router.get('/listings/:id/photos', async (req, res) => {
 
 router.get('/staff/queue', requireStaffAccess, async (req, res) => {
   try {
-    const status = ['pending', 'approved', 'rejected', 'suspended', 'draft', 'expired']
-      .includes(String(req.query.status || '').trim())
-      ? String(req.query.status).trim()
-      : 'pending';
+    const requested = String(req.query.stage || req.query.status || '').trim();
+    const stage = Object.keys(STAGES).includes(requested) ? requested : 'submitted';
     const result = await db.query(
       `SELECT l.id, l.reference, l.slug, l.title, l.district, l.area, l.status,
+              l.moderation_stage, l.king_facts_confirmed,
               l.base_nightly_ugx, l.host_name, l.host_phone, l.host_type,
               l.right_to_let_declared, l.right_to_let_reference,
               l.listing_fee_status, l.preferred_payment_method,
-              l.listed_at, l.expires_at, l.created_at
+              l.staff_reviewed_by, l.staff_reviewed_at,
+              l.king_reviewed_by, l.king_reviewed_at,
+              l.listed_at, l.expires_at, l.created_at,
+              COALESCE(m.photo_count, 0)::int AS photo_count
        FROM st_listing l
-       WHERE l.status = $1
+       LEFT JOIN LATERAL (
+         SELECT COUNT(*)::int AS photo_count FROM st_listing_media WHERE listing_id = l.id
+       ) m ON TRUE
+       WHERE l.moderation_stage = $1
        ORDER BY l.created_at DESC
        LIMIT 200`,
-      [status]
+      [stage]
     );
+
+    // So the queue screen can show both gates at once.
+    const counts = await db.query(
+      `SELECT moderation_stage, COUNT(*)::int AS total
+       FROM st_listing GROUP BY moderation_stage`
+    );
+
     res.set('Cache-Control', 'no-store');
-    return res.json({ ok: true, marker: SHORT_TERM_MARKER, status, listings: result.rows });
+    return res.json({
+      ok: true,
+      marker: SHORT_TERM_MARKER,
+      stage,
+      stage_label: STAGES[stage],
+      listings: result.rows,
+      counts: counts.rows.reduce((acc, row) => {
+        acc[row.moderation_stage] = row.total;
+        return acc;
+      }, {})
+    });
   } catch (error) {
     return fail(res, error, 'Short term queue is unavailable');
   }
 });
+
+// ---------------------------------------------------------------------------
+// GATE ONE: the staff moderator.
+//
+// A moderator screens the listing and hands it on. There is no decision here
+// that publishes anything - the furthest this endpoint can move a listing is
+// into king_review.
+// ---------------------------------------------------------------------------
 
 router.post('/staff/listings/:id/decision', requireStaffAccess, async (req, res) => {
   try {
     if (!isUuid(req.params.id)) {
       return res.status(400).json({ ok: false, error: 'Unknown listing' });
     }
-    const decision = String(req.body?.decision || '').trim();
-    if (!['approve', 'reject', 'suspend'].includes(decision)) {
-      return res.status(400).json({ ok: false, error: 'Decision must be approve, reject or suspend' });
-    }
-    const reason = String(req.body?.reason || '').trim().slice(0, 500) || null;
-
-    if (decision === 'approve') {
-      const result = await db.query(
-        `UPDATE st_listing
-         SET status = 'approved',
-             reviewed_at = NOW(),
-             rejection_reason = NULL,
-             listed_at = COALESCE(listed_at, NOW()),
-             expires_at = COALESCE(expires_at, NOW() + (listing_term_months || ' months')::interval)
-         WHERE id = $1::uuid
-         RETURNING id, status, listed_at, expires_at`,
-        [req.params.id]
-      );
-      if (!result.rows.length) return res.status(404).json({ ok: false, error: 'Listing not found' });
-      logger.info('Short term listing approved', {
-        marker: SHORT_TERM_MARKER,
-        listingId: req.params.id,
-        by: req.staffAuth?.userId
+    const action = String(req.body?.action || req.body?.decision || '').trim();
+    if (!Object.keys(STAFF_ACTIONS).includes(action)) {
+      return res.status(400).json({
+        ok: false,
+        error: `A moderator can only: ${Object.keys(STAFF_ACTIONS).join(', ')}. Publishing is the King's call.`
       });
-      return res.json({ ok: true, listing: result.rows[0] });
     }
-
-    const result = await db.query(
-      `UPDATE st_listing
-       SET status = $2, reviewed_at = NOW(), rejection_reason = $3
-       WHERE id = $1::uuid
-       RETURNING id, status, rejection_reason`,
-      [req.params.id, decision === 'reject' ? 'rejected' : 'suspended', reason]
-    );
-    if (!result.rows.length) return res.status(404).json({ ok: false, error: 'Listing not found' });
-    return res.json({ ok: true, listing: result.rows[0] });
+    const listing = await applyStaffDecision(db, req.params.id, {
+      action,
+      checklist: req.body?.checklist,
+      reason: String(req.body?.reason || '').trim().slice(0, 500) || null,
+      notes: String(req.body?.notes || '').trim().slice(0, 2000) || null,
+      actor: { userId: req.staffAuth?.userId, role: req.staffAuth?.role }
+    });
+    return res.json({
+      ok: true,
+      marker: SHORT_TERM_MARKER,
+      listing,
+      note: action === 'pass_to_king'
+        ? 'Sent for King review. It stays off the public site until the King approves it.'
+        : undefined
+    });
   } catch (error) {
     return fail(res, error, 'Decision could not be saved');
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GATE TWO: King review.
+//
+// Admin or super admin only. This is the only endpoint in the codebase that
+// can set king_facts_confirmed, and the public query will not show a listing
+// without it.
+// ---------------------------------------------------------------------------
+
+router.post('/staff/listings/:id/king-decision', requireAdminApiKey, async (req, res) => {
+  try {
+    if (!isUuid(req.params.id)) {
+      return res.status(400).json({ ok: false, error: 'Unknown listing' });
+    }
+    const action = String(req.body?.action || req.body?.decision || '').trim();
+    if (!Object.keys(KING_ACTIONS).includes(action)) {
+      return res.status(400).json({
+        ok: false,
+        error: `King review can only: ${Object.keys(KING_ACTIONS).join(', ')}.`
+      });
+    }
+    const listing = await applyKingDecision(db, req.params.id, {
+      action,
+      checklist: req.body?.checklist,
+      overrides: req.body?.overrides,
+      factsConfirmed: req.body?.facts_confirmed === true || req.body?.facts_confirmed === 'true',
+      reason: String(req.body?.reason || '').trim().slice(0, 500) || null,
+      notes: String(req.body?.notes || '').trim().slice(0, 2000) || null,
+      actor: {
+        userId: req.adminAuth?.userId || req.adminAuth?.type || 'king',
+        role: req.adminAuth?.role || 'king'
+      }
+    });
+    return res.json({ ok: true, marker: SHORT_TERM_MARKER, listing });
+  } catch (error) {
+    return fail(res, error, 'Decision could not be saved');
+  }
+});
+
+// What is still outstanding on a listing, plus who has touched it.
+router.get('/staff/listings/:id/review', requireStaffAccess, async (req, res) => {
+  try {
+    if (!isUuid(req.params.id)) {
+      return res.status(400).json({ ok: false, error: 'Unknown listing' });
+    }
+    const result = await db.query(
+      `SELECT l.*, COALESCE(m.photo_count, 0)::int AS photo_count
+       FROM st_listing l
+       LEFT JOIN LATERAL (
+         SELECT COUNT(*)::int AS photo_count FROM st_listing_media WHERE listing_id = l.id
+       ) m ON TRUE
+       WHERE l.id = $1::uuid LIMIT 1`,
+      [req.params.id]
+    );
+    if (!result.rows.length) return res.status(404).json({ ok: false, error: 'Listing not found' });
+    const row = result.rows[0];
+
+    const automated = buildAutomatedChecklist(row, { photoCount: row.photo_count });
+    const saved = normalizeChecklist(row.moderation_checklist);
+    const combined = normalizeChecklist({ ...automated, ...saved });
+
+    res.set('Cache-Control', 'no-store');
+    return res.json({
+      ok: true,
+      marker: SHORT_TERM_MARKER,
+      listing: {
+        id: String(row.id),
+        reference: row.reference,
+        title: row.title,
+        district: row.district,
+        area: row.area,
+        host_name: row.host_name,
+        host_phone: row.host_phone,
+        base_nightly_ugx: Number(row.base_nightly_ugx || 0),
+        photo_count: row.photo_count,
+        status: row.status,
+        moderation_stage: row.moderation_stage,
+        stage_label: STAGES[row.moderation_stage] || row.moderation_stage,
+        king_facts_confirmed: row.king_facts_confirmed === true,
+        staff_reviewed_by: row.staff_reviewed_by,
+        staff_reviewed_at: row.staff_reviewed_at,
+        king_reviewed_by: row.king_reviewed_by,
+        king_reviewed_at: row.king_reviewed_at,
+        listing_fee_status: row.listing_fee_status
+      },
+      checks: REVIEW_CHECKS,
+      checklist: combined,
+      automated,
+      outstanding: missingChecks(combined),
+      history: await loadModerationHistory(db, req.params.id)
+    });
+  } catch (error) {
+    return fail(res, error, 'Review details are unavailable');
   }
 });
 

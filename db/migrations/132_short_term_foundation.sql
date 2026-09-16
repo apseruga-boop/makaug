@@ -88,6 +88,30 @@ CREATE TABLE IF NOT EXISTS st_listing (
   rejection_reason TEXT,
   reviewed_at TIMESTAMPTZ,
 
+  -- TWO-GATE REVIEW, mirroring the properties pipeline in 018.
+  --
+  -- Nothing reaches the public site on one person's say-so. A submitted
+  -- listing is screened by a staff moderator, and only then goes to King
+  -- review for the final call. Staff CANNOT approve: the furthest a
+  -- moderator can move a listing is into king_review.
+  --
+  -- king_facts_confirmed is the load-bearing column. The public query
+  -- requires it to be TRUE, so a listing whose `status` is set to 'approved'
+  -- by hand, by a bad migration or by a mistake still does not appear
+  -- anywhere until the King has actually signed it off.
+  moderation_stage TEXT NOT NULL DEFAULT 'submitted'
+    CHECK (moderation_stage IN (
+      'draft','submitted','staff_review','king_review',
+      'changes_requested','approved','rejected','suspended'
+    )),
+  moderation_checklist JSONB NOT NULL DEFAULT '{}'::jsonb,
+  moderation_notes TEXT,
+  staff_reviewed_by TEXT,
+  staff_reviewed_at TIMESTAMPTZ,
+  king_reviewed_by TEXT,
+  king_reviewed_at TIMESTAMPTZ,
+  king_facts_confirmed BOOLEAN NOT NULL DEFAULT FALSE,
+
   -- Flat listing fee. UGX 50,000 buys a 3 month run.
   listing_fee_ugx BIGINT NOT NULL DEFAULT 50000,
   listing_fee_status TEXT NOT NULL DEFAULT 'unpaid'
@@ -121,7 +145,9 @@ CREATE INDEX IF NOT EXISTS idx_st_listing_area ON st_listing (LOWER(area));
 CREATE INDEX IF NOT EXISTS idx_st_listing_nightly ON st_listing (base_nightly_ugx);
 CREATE INDEX IF NOT EXISTS idx_st_listing_expires ON st_listing (expires_at);
 CREATE INDEX IF NOT EXISTS idx_st_listing_live
-  ON st_listing (status, expires_at, base_nightly_ugx);
+  ON st_listing (status, moderation_stage, king_facts_confirmed, expires_at, base_nightly_ugx);
+CREATE INDEX IF NOT EXISTS idx_st_listing_moderation_stage
+  ON st_listing (moderation_stage, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_st_listing_host_user ON st_listing (host_user_id);
 CREATE INDEX IF NOT EXISTS idx_st_listing_geo ON st_listing (latitude, longitude);
 
@@ -297,6 +323,33 @@ CREATE TABLE IF NOT EXISTS st_report (
 
 CREATE INDEX IF NOT EXISTS idx_st_report_listing ON st_report (listing_id);
 CREATE INDEX IF NOT EXISTS idx_st_report_status ON st_report (status);
+
+-- ---------------------------------------------------------------------------
+-- 9b. Moderation audit trail
+--
+-- Same shape as property_moderation_events in 018. Every stage change is
+-- recorded with who did it and what the checklist looked like at the time, so
+-- an approval can always be traced back to a person.
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS st_listing_moderation_event (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  listing_id UUID NOT NULL REFERENCES st_listing(id) ON DELETE CASCADE,
+  actor_id TEXT,
+  actor_role TEXT,
+  action TEXT NOT NULL,
+  stage_from TEXT,
+  stage_to TEXT,
+  checklist JSONB NOT NULL DEFAULT '{}'::jsonb,
+  reason TEXT,
+  notes TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_st_listing_moderation_event_listing
+  ON st_listing_moderation_event (listing_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_st_listing_moderation_event_actor
+  ON st_listing_moderation_event (actor_id, created_at DESC);
 
 -- ---------------------------------------------------------------------------
 -- 10. updated_at triggers, reusing set_updated_at() from 001_init.sql

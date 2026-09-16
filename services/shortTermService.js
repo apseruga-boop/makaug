@@ -400,8 +400,23 @@ function normalizeShortTermListing(row = {}, options = {}) {
 // Queries
 // ---------------------------------------------------------------------------
 
+// THE PUBLICATION GATE.
+//
+// Three conditions, and all three have to hold before a short stay is visible
+// to anybody:
+//
+//   status               the listing itself is approved
+//   moderation_stage     it came through the review pipeline
+//   king_facts_confirmed the King signed off the facts
+//
+// The last one is the point. Approval is not something one person, one stray
+// UPDATE or one bug can grant. If king_facts_confirmed is FALSE the listing
+// does not appear in search, on the map, on its own page, in the sitemap or
+// in the site-wide property count, whatever else has been set.
 const LIVE_LISTING_SQL = `
   l.status = ANY($LIVE_STATUSES$)
+  AND l.moderation_stage = 'approved'
+  AND l.king_facts_confirmed = TRUE
   AND (l.expires_at IS NULL OR l.expires_at > NOW())
 `.replace('$LIVE_STATUSES$', `'{${PUBLIC_STATUSES.join(',')}}'::text[]`);
 
@@ -787,7 +802,7 @@ async function createShortTermListing(db, payload = {}, context = {}) {
          house_rules, terms_text, cancellation_policy,
          right_to_let_declared, right_to_let_reference, local_hotel_tax_ack,
          terms_accepted_at, terms_accepted_ip,
-         status, listing_fee_ugx, listing_fee_status, listing_term_months,
+         status, moderation_stage, listing_fee_ugx, listing_fee_status, listing_term_months,
          preferred_payment_method, payout_note, source
        ) VALUES (
          $1,$2,$3,$4,$5,$6,$7,$8,$9,
@@ -799,10 +814,10 @@ async function createShortTermListing(db, payload = {}, context = {}) {
          $31,$32,$33,
          $34,$35,$36,
          NOW(),$37,
-         'pending',$38,'unpaid',$39,
+         'pending','submitted',$38,'unpaid',$39,
          $40,$41,'direct'
        )
-       RETURNING id, reference, slug, status`,
+       RETURNING id, reference, slug, status, moderation_stage`,
       [
         reference, slug, value.title, value.description, value.district, value.area,
         value.address, value.latitude, value.longitude,
@@ -865,6 +880,7 @@ async function createShortTermListing(db, payload = {}, context = {}) {
       reference: inserted.rows[0].reference,
       slug: inserted.rows[0].slug,
       status: inserted.rows[0].status,
+      moderation_stage: inserted.rows[0].moderation_stage,
       listing_fee_ugx: LISTING_FEE_UGX,
       listing_fee_display: formatUgx(LISTING_FEE_UGX),
       listing_term_months: LISTING_TERM_MONTHS

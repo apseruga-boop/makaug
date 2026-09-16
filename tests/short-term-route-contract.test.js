@@ -29,6 +29,8 @@ const flags = require('../utils/shortTermFeatureFlags');
 const service = require('../services/shortTermService');
 const render = require('../services/shortTermSeoRenderService');
 const media = require('../services/shortTermMediaService');
+const moderation = require('../services/shortTermModerationService');
+const moderationSource = read('services', 'shortTermModerationService.js');
 const mediaSource = read('services', 'shortTermMediaService.js');
 const { PUBLIC_FORBIDDEN_STRINGS } = require('../services/publicHtmlSanitizer');
 
@@ -529,12 +531,23 @@ test('nothing in the public client calls a staff endpoint', () => {
   assert.ok(!clientSource.includes('ADMIN_API_KEY'), 'no admin key may appear in public JavaScript');
 });
 
-test('staff routes are behind requireStaffAccess', () => {
+test('every staff route is behind a real guard, and King review behind the stronger one', () => {
   const staffRoutes = routeSource.match(/router\.(?:get|post)\('\/staff[^']*',\s*([A-Za-z]+)/g) || [];
-  assert.ok(staffRoutes.length >= 4, `expected staff routes, found ${staffRoutes.length}`);
+  assert.ok(staffRoutes.length >= 6, `expected staff routes, found ${staffRoutes.length}`);
+
+  // requireAdminApiKey is a stricter gate than requireStaffAccess, not a
+  // weaker one: it demands admin or super admin rather than any moderator.
   for (const line of staffRoutes) {
-    assert.ok(line.includes('requireStaffAccess'), `unprotected staff route: ${line}`);
+    assert.ok(
+      line.includes('requireStaffAccess') || line.includes('requireAdminApiKey'),
+      `unprotected staff route: ${line}`
+    );
   }
+
+  const kingRoute = staffRoutes.find((line) => line.includes('king-decision'));
+  assert.ok(kingRoute, 'the King review route is missing');
+  assert.ok(kingRoute.includes('requireAdminApiKey'),
+    'King review must be admin-only, not open to every moderator');
 });
 
 // ---------------------------------------------------------------------------
@@ -718,6 +731,231 @@ test('photo upload fails closed rather than storing an untouched photo', () => {
     'a missing image processor must refuse the upload, not fall through to storing raw bytes');
   assert.ok(mediaSource.includes('if (!cloudMediaStorageConfigured())'),
     'uploads must refuse when object storage is not configured');
+});
+
+// ---------------------------------------------------------------------------
+// 11. The two review gates
+//
+// Arthur's rule: a short stay goes through staff moderation AND King review
+// before it is public. These tests exist so nobody can quietly collapse that
+// back into one step.
+// ---------------------------------------------------------------------------
+
+test('a staff moderator has no route to an approved listing', () => {
+  assert.strictEqual(moderation.staffCanReachApproved(), false,
+    'STAFF_ACTIONS must not contain any transition to approved');
+
+  const staffTargets = Object.values(moderation.STAFF_ACTIONS).map((a) => a.to);
+  assert.ok(!staffTargets.includes('approved'), `staff can reach: ${staffTargets.join(', ')}`);
+  assert.ok(staffTargets.includes('king_review'), 'staff must be able to hand a listing to the King');
+
+  // And a second guard in the code, in case the table is ever edited badly.
+  assert.ok(
+    /if \(rule\.to === 'approved'[\s\S]{0,120}throw moderationError\([\s\S]{0,120}cannot approve/.test(moderationSource),
+    'applyStaffDecision must refuse an approving transition even if the table allows one'
+  );
+});
+
+test('only King review can approve', () => {
+  const kingTargets = Object.values(moderation.KING_ACTIONS).map((a) => a.to);
+  assert.ok(kingTargets.includes('approved'), 'the King must be able to approve');
+  assert.deepStrictEqual(
+    moderation.KING_ACTIONS.approve.from, ['king_review'],
+    'the King can only approve something that reached King review'
+  );
+});
+
+test('approval is refused without the King confirming the facts', () => {
+  const everythingTicked = {};
+  moderation.REVIEW_CHECK_KEYS.forEach((key) => { everythingTicked[key] = true; });
+
+  const withoutKing = moderation.canApprove(everythingTicked);
+  assert.strictEqual(withoutKing.ok, false, 'every box ticked is still not approval');
+  assert.strictEqual(withoutKing.reason, 'king_confirmation_missing');
+
+  everythingTicked[moderation.KING_CONFIRMATION_KEY] = true;
+  assert.strictEqual(moderation.canApprove(everythingTicked).ok, true);
+});
+
+test('approval is refused while checks are outstanding', () => {
+  const partial = { [moderation.KING_CONFIRMATION_KEY]: true, required_listing_fields: true };
+  const verdict = moderation.canApprove(partial);
+  assert.strictEqual(verdict.ok, false);
+  assert.strictEqual(verdict.reason, 'checks_outstanding');
+  assert.ok(verdict.missing.length > 0);
+  assert.ok(verdict.missing.some((c) => c.key === 'photos_match_property'));
+});
+
+test('an overrideable check can be waived with a reason, a hard one cannot', () => {
+  const base = {};
+  moderation.REVIEW_CHECK_KEYS.forEach((key) => { base[key] = true; });
+  base[moderation.KING_CONFIRMATION_KEY] = true;
+
+  // Waive an overrideable check.
+  const waived = { ...base, duplicate_checked: false, overrides: { duplicate_checked: 'Checked by hand, different building' } };
+  assert.strictEqual(moderation.canApprove(waived).ok, true, 'an overrideable check may be waived with a reason');
+
+  // The same trick on a hard check must not work.
+  const cheated = { ...base, photos_match_property: false, overrides: { photos_match_property: 'trust me' } };
+  const verdict = moderation.canApprove(cheated);
+  assert.strictEqual(verdict.ok, false, 'a non-overrideable check cannot be waived');
+  assert.ok(verdict.missing.some((c) => c.key === 'photos_match_property'));
+});
+
+test('the automated pass only ticks what a machine can honestly know', () => {
+  const checklist = moderation.buildAutomatedChecklist({
+    title: 'Quiet two bedroom apartment in Naguru',
+    description: 'A bright, quiet two bedroom flat with secure parking and backup power, ten minutes from town.',
+    district: 'Kampala',
+    area: 'Naguru',
+    right_to_let_declared: true,
+    base_nightly_ugx: 200000,
+    house_rules: 'No parties.',
+    listing_fee_status: 'paid'
+  }, { photoCount: 4 });
+
+  assert.strictEqual(checklist.required_listing_fields, true);
+  assert.strictEqual(checklist.photos_present, true);
+  assert.strictEqual(checklist.pricing_checked, true);
+
+  // Judgement calls stay with a person.
+  assert.strictEqual(checklist.photos_match_property, false, 'code cannot know whose house is in a photo');
+  assert.strictEqual(checklist.location_verified, false, 'code cannot verify a map pin on its own');
+  assert.strictEqual(checklist.contact_details_verified, false, 'someone has to ring the number');
+  assert.strictEqual(checklist[moderation.KING_CONFIRMATION_KEY], false,
+    'the automated pass must never tick the King confirmation');
+});
+
+test('the public query demands both gates, not just a status column', () => {
+  const src = read('services', 'shortTermService.js');
+  const gate = src.slice(src.indexOf('const LIVE_LISTING_SQL'), src.indexOf('function buildSearchFilters'));
+  assert.ok(gate.includes("l.moderation_stage = 'approved'"), 'the public query must require the approved stage');
+  assert.ok(gate.includes('l.king_facts_confirmed = TRUE'), 'the public query must require the King confirmation');
+  assert.ok(gate.includes('l.status = ANY'), 'the status check must still be there');
+
+  // One constant, three read paths. Search picks it up as the first entry in
+  // the filter array; the listing page and the site-wide count interpolate it.
+  // A listing cannot leak through whichever one somebody forgot.
+  const searchFilters = src.slice(src.indexOf('function buildSearchFilters'), src.indexOf('function orderByFor'));
+  assert.ok(searchFilters.includes('const where = [LIVE_LISTING_SQL]'),
+    'search must start from the publication gate');
+
+  const detail = src.slice(src.indexOf('async function getShortTermListing'), src.indexOf('async function listPublishedReviews'));
+  assert.ok(detail.includes('${LIVE_LISTING_SQL}'), 'the listing page must use the publication gate');
+
+  const count = src.slice(src.indexOf('async function loadShortTermPublicCount'));
+  assert.ok(count.includes('${LIVE_LISTING_SQL}'), 'the site-wide count must use the publication gate');
+
+  // And nothing may quietly query st_listing without it.
+  const rawSelects = (src.match(/FROM st_listing l\b/g) || []).length;
+  assert.ok(rawSelects >= 3, `expected the gated reads, found ${rawSelects}`);
+});
+
+test('a new listing enters the pipeline rather than sitting in limbo', () => {
+  const src = read('services', 'shortTermService.js');
+  assert.ok(src.includes("'pending','submitted'"), 'a submitted listing must start at the submitted stage');
+  assert.ok(src.includes('status, moderation_stage, listing_fee_ugx'),
+    'moderation_stage must be set on insert, not left to a default nobody reads');
+});
+
+test('the migration carries the moderation columns and an audit trail', () => {
+  for (const column of [
+    'moderation_stage', 'moderation_checklist', 'king_facts_confirmed',
+    'staff_reviewed_by', 'staff_reviewed_at', 'king_reviewed_by', 'king_reviewed_at'
+  ]) {
+    assert.ok(migration.includes(column), `migration is missing ${column}`);
+  }
+  assert.ok(migration.includes('CREATE TABLE IF NOT EXISTS st_listing_moderation_event'),
+    'every stage change must be recorded somewhere');
+  assert.ok(migration.includes("king_facts_confirmed BOOLEAN NOT NULL DEFAULT FALSE"),
+    'the King confirmation must default to false, never true');
+  assert.ok(/CHECK \(moderation_stage IN \([\s\S]*?'king_review'/.test(migration),
+    'king_review must be a real stage in the database, not a convention');
+});
+
+test('the two review endpoints are behind two different gates', () => {
+  assert.ok(
+    /router\.post\('\/staff\/listings\/:id\/decision', requireStaffAccess/.test(routeSource),
+    'the moderator endpoint must require staff access'
+  );
+  assert.ok(
+    /router\.post\('\/staff\/listings\/:id\/king-decision', requireAdminApiKey/.test(routeSource),
+    'King review must require admin or super admin, not merely staff'
+  );
+  assert.ok(!/king-decision', requireStaffAccess/.test(routeSource),
+    'a moderator must not be able to call the King endpoint');
+});
+
+test('exactly one place in the codebase writes king_facts_confirmed', () => {
+  const serviceSource = read('services', 'shortTermService.js');
+
+  // A write is the column appearing inside an UPDATE ... SET. The gate in
+  // shortTermService.js mentions the column too, but as a comparison in a
+  // WHERE clause, which is the opposite of a write.
+  const writes = (moderationSource.match(/king_facts_confirmed\s*=\s*\(/g) || []).length;
+  assert.strictEqual(writes, 1, `expected one write, found ${writes}`);
+  assert.ok(moderationSource.includes("king_facts_confirmed = ($2 = 'approved')"),
+    'the confirmation must be derived from the stage, so it cannot be set on its own');
+
+  // The column is only ever read elsewhere.
+  assert.ok(serviceSource.includes('l.king_facts_confirmed = TRUE'), 'the gate must read it');
+  assert.ok(!/UPDATE[\s\S]{0,400}SET[\s\S]{0,400}king_facts_confirmed/.test(serviceSource),
+    'shortTermService must never write the King confirmation');
+  assert.ok(!/UPDATE[\s\S]{0,400}SET[\s\S]{0,400}king_facts_confirmed/.test(routeSource),
+    'no route may write the King confirmation directly, only via applyKingDecision');
+
+  // And that single write lives in the King path, not the staff path.
+  const staffBlock = moderationSource.slice(
+    moderationSource.indexOf('async function applyStaffDecision'),
+    moderationSource.indexOf('async function applyKingDecision')
+  );
+  assert.ok(!/king_facts_confirmed\s*=\s*\(/.test(staffBlock),
+    'the staff path must not write the King confirmation');
+});
+
+test('the King cannot publish a listing with no photos', () => {
+  assert.ok(
+    /photo_count[\s\S]{0,80}=== 0[\s\S]{0,200}throw moderationError/.test(moderationSource),
+    'approving a listing with zero photos must be refused'
+  );
+});
+
+test('every stage change is written to the audit trail', () => {
+  assert.ok(moderationSource.includes('async function recordEvent'), 'no event recorder');
+  const staffBlock = moderationSource.slice(
+    moderationSource.indexOf('async function applyStaffDecision'),
+    moderationSource.indexOf('async function applyKingDecision')
+  );
+  const kingBlock = moderationSource.slice(moderationSource.indexOf('async function applyKingDecision'));
+  assert.ok(staffBlock.includes('await recordEvent('), 'staff decisions must be logged');
+  assert.ok(kingBlock.includes('await recordEvent('), 'King decisions must be logged');
+  assert.ok(staffBlock.includes("actorRole: actor?.role || 'moderator'"), 'log who did it');
+  assert.ok(kingBlock.includes("actorRole: actor?.role || 'king'"), 'log who did it');
+});
+
+test('a moderator cannot smuggle the King confirmation through the checklist', () => {
+  const staffBlock = moderationSource.slice(
+    moderationSource.indexOf('async function applyStaffDecision'),
+    moderationSource.indexOf('async function applyKingDecision')
+  );
+  assert.ok(
+    staffBlock.includes('// Only the King stage may set this, whatever a moderator submits.'),
+    'the staff path must explicitly preserve the existing King confirmation'
+  );
+  assert.ok(
+    /\[KING_CONFIRMATION_KEY\]: normalizeChecklist\(listing\.moderation_checklist\)\[KING_CONFIRMATION_KEY\] === true/
+      .test(staffBlock),
+    'a moderator posting king_facts_confirmed:true must be ignored'
+  );
+
+  // And prove it at runtime rather than only by reading the source.
+  const smuggled = moderation.normalizeChecklist({
+    ...Object.fromEntries(moderation.REVIEW_CHECK_KEYS.map((k) => [k, true])),
+    king_facts_confirmed: true
+  });
+  assert.strictEqual(smuggled.king_facts_confirmed, true, 'the normaliser itself passes the value through');
+  // ...which is exactly why applyStaffDecision overwrites it from the stored
+  // row instead of trusting the request body.
 });
 
 // ---------------------------------------------------------------------------
