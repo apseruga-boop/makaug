@@ -30,7 +30,14 @@
     mapOn: false,
     rating: 0,
     wizardStep: 1,
-    windows: [{ starts_on: '', ends_on: '' }]
+    windows: [{ starts_on: '', ends_on: '' }],
+    // Set once the listing exists. Photos are attached after submission, not
+    // before: that is the only point at which there is a listing to attach
+    // them to, and it means a host on a bad connection has already saved the
+    // hard part before they start uploading megabytes.
+    listingId: null,
+    uploadToken: null,
+    photos: []
   };
 
   // ---------------------------------------------------------------- helpers
@@ -878,11 +885,231 @@
       + '<span>I accept the makaug listing terms above.</span></label>'
 
       + '<div id="st-list-feedback"></div>'
+      + '<p class="st-help" style="margin-top:12px"><i class="fas fa-camera"></i> '
+      + 'Photos come next, once the listing is saved. Have a few ready — the outside, the beds, the bathroom and the kitchen.</p>'
       + '<div style="margin-top:14px"><button class="st-btn" type="button" data-next="3">Back</button> '
       + '<button class="st-btn st-btn-primary" type="submit">Submit my place</button></div>'
       + '</div>'
       + '</form>'
       + '</div>';
+  }
+
+  // ---------------------------------------------------------------- photos
+
+  // Phone cameras produce 4MB+ files. Sending one over Kampala mobile data is
+  // slow enough that hosts give up, so the image is drawn into a canvas at a
+  // sane size before it ever leaves the device. The server resizes and strips
+  // metadata again on arrival - this is about the host's data bundle, not
+  // about trusting the browser.
+  var CLIENT_MAX_EDGE = 1600;
+  var CLIENT_QUALITY = 0.82;
+
+  function shrinkImageFile(file) {
+    return new Promise(function (resolve, reject) {
+      if (!/^image\//i.test(file.type || '')) {
+        reject(new Error(file.name + ' is not an image.'));
+        return;
+      }
+      var reader = new FileReader();
+      reader.onerror = function () { reject(new Error('Could not read ' + file.name)); };
+      reader.onload = function () {
+        var img = new Image();
+        img.onerror = function () { reject(new Error(file.name + ' could not be opened as an image.')); };
+        img.onload = function () {
+          try {
+            var scale = Math.min(1, CLIENT_MAX_EDGE / Math.max(img.width, img.height));
+            var w = Math.max(1, Math.round(img.width * scale));
+            var h = Math.max(1, Math.round(img.height * scale));
+            var canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+            resolve({
+              name: file.name,
+              data_url: canvas.toDataURL('image/jpeg', CLIENT_QUALITY),
+              status: 'ready'
+            });
+          } catch (error) {
+            // A canvas can be tainted or the file can be a format the browser
+            // will not decode. Fall back to the original bytes and let the
+            // server judge it.
+            resolve({ name: file.name, data_url: reader.result, status: 'ready' });
+          }
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function renderPhotoTray() {
+    var tray = document.getElementById('st-photo-tray');
+    if (!tray) return;
+    if (!state.photos.length) {
+      tray.innerHTML = '<p class="st-help">No photos yet. Guests skip listings with no photo, so add at least three.</p>';
+      return;
+    }
+    tray.innerHTML = '<div class="st-photo-grid">' + state.photos.map(function (photo, i) {
+      var badge = photo.status === 'done'
+        ? '<span class="st-photo-state is-done"><i class="fas fa-check"></i></span>'
+        : photo.status === 'uploading'
+          ? '<span class="st-photo-state is-busy"><i class="fas fa-spinner fa-spin"></i></span>'
+          : photo.status === 'error'
+            ? '<span class="st-photo-state is-error" title="' + esc(photo.error || 'Failed') + '"><i class="fas fa-triangle-exclamation"></i></span>'
+            : '<span class="st-photo-state"><i class="fas fa-clock"></i></span>';
+      var remove = photo.status === 'done' ? ''
+        : '<button type="button" class="st-photo-remove" data-photo-remove="' + i + '" aria-label="Remove photo"><i class="fas fa-xmark"></i></button>';
+      return '<figure class="st-photo' + (i === 0 ? ' is-cover' : '') + '">'
+        + '<img src="' + esc(photo.data_url) + '" alt="">'
+        + badge + remove
+        + (i === 0 ? '<figcaption>Cover photo</figcaption>' : '')
+        + '</figure>';
+    }).join('') + '</div>';
+  }
+
+  function addPhotoFiles(files) {
+    var meta = (state.meta && state.meta.photos) || {};
+    var max = Number(meta.max_per_listing || 12);
+    var room = Math.max(0, max - state.photos.length);
+    var chosen = Array.prototype.slice.call(files || []).slice(0, room);
+    var feedback = document.getElementById('st-photo-feedback');
+
+    if (!room) {
+      if (feedback) feedback.innerHTML = '<ul class="st-errors"><li>That is the maximum of ' + max + ' photos.</li></ul>';
+      return Promise.resolve();
+    }
+    if (feedback) feedback.innerHTML = '';
+
+    return Promise.all(chosen.map(function (file) {
+      return shrinkImageFile(file).catch(function (error) {
+        return { name: file.name, error: error.message, status: 'error', data_url: '' };
+      });
+    })).then(function (prepared) {
+      prepared.filter(function (p) { return p.data_url; }).forEach(function (p) { state.photos.push(p); });
+      var failed = prepared.filter(function (p) { return !p.data_url; });
+      if (failed.length && feedback) {
+        feedback.innerHTML = '<ul class="st-errors">'
+          + failed.map(function (p) { return '<li>' + esc(p.error) + '</li>'; }).join('') + '</ul>';
+      }
+      renderPhotoTray();
+    });
+  }
+
+  // One request per photo. The host watches them land instead of staring at a
+  // single request that either all works or all fails, and a connection that
+  // drops halfway leaves the photos that did upload in place.
+  function uploadPendingPhotos() {
+    var pending = state.photos.filter(function (p) { return p.status === 'ready' || p.status === 'error'; });
+    if (!pending.length || !state.listingId) return Promise.resolve();
+
+    var progress = document.getElementById('st-photo-progress');
+    var done = 0;
+
+    function step(index) {
+      if (index >= pending.length) return Promise.resolve();
+      var photo = pending[index];
+      photo.status = 'uploading';
+      photo.error = null;
+      renderPhotoTray();
+
+      return api('/listings/' + encodeURIComponent(state.listingId) + '/photos', {
+        method: 'POST',
+        body: { data_url: photo.data_url, upload_token: state.uploadToken }
+      }).then(function (out) {
+        photo.status = 'done';
+        photo.url = out.photo.url;
+        done += 1;
+      }).catch(function (error) {
+        photo.status = 'error';
+        photo.error = (error.details && error.details[0]) || error.message;
+      }).then(function () {
+        renderPhotoTray();
+        if (progress) {
+          progress.textContent = done + ' of ' + pending.length + ' uploaded';
+        }
+        return step(index + 1);
+      });
+    }
+
+    if (progress) progress.textContent = 'Uploading…';
+    return step(0).then(function () {
+      var failed = state.photos.filter(function (p) { return p.status === 'error'; });
+      if (progress) {
+        progress.textContent = failed.length
+          ? done + ' uploaded, ' + failed.length + ' failed. Tap Upload to retry the rest.'
+          : done + ' photo' + (done === 1 ? '' : 's') + ' uploaded.';
+      }
+    });
+  }
+
+  function photoStageHtml(listing) {
+    var meta = (state.meta && state.meta.photos) || {};
+    var ready = meta.ready !== false;
+    return '<div class="st-wrap" style="padding:30px 16px 48px">'
+      + '<div class="st-ok" style="margin-bottom:18px">'
+      + '<h2 style="margin:0 0 6px;font-size:1.2rem;font-weight:900">Your place is in.</h2>'
+      + '<p style="margin:0">Reference <b>' + esc(listing.reference) + '</b>. It is with our team for review.</p>'
+      + '</div>'
+
+      + (ready
+        ? '<div class="st-panel">'
+          + '<h2>Now add photos</h2>'
+          + '<p class="st-help" style="margin-bottom:12px">This is the part that decides whether anyone contacts you. '
+          + 'The first photo becomes the cover. Up to ' + esc(meta.max_per_listing || 12) + ' photos.</p>'
+          + '<label class="st-photo-drop" for="st-photo-input">'
+          + '<i class="fas fa-camera"></i><span>Choose photos from this device</span>'
+          + '<input id="st-photo-input" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden>'
+          + '</label>'
+          + '<div id="st-photo-tray" style="margin-top:14px"></div>'
+          + '<div id="st-photo-feedback"></div>'
+          + '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:14px">'
+          + '<button class="st-btn st-btn-primary" type="button" id="st-photo-upload"><i class="fas fa-cloud-arrow-up"></i> Upload photos</button>'
+          + '<span class="st-help" id="st-photo-progress"></span>'
+          + '</div>'
+          + '<p class="st-help" style="margin-top:12px"><i class="fas fa-shield-halved"></i> '
+          + esc(meta.note || 'Photos are resized and re-encoded on upload, which removes the location data a phone stores inside them.')
+          + '</p>'
+          + '</div>'
+        : '<div class="st-panel"><h2>Photos</h2>'
+          + '<p class="st-help">Photo uploads are temporarily unavailable on this server. Your listing is saved '
+          + 'and our team will be in touch about adding pictures.</p></div>')
+
+      + '<div class="st-panel">'
+      + '<h2>What happens next</h2>'
+      + '<p>Our team checks the listing. Once it is approved you pay the flat listing fee and it goes live for three months.</p>'
+      + '<p class="st-help">makaug takes no commission on any stay. Guests will contact you directly on the number you gave us.</p>'
+      + '</div>'
+      + '<p><a class="st-btn st-btn-primary" href="/short-term" data-st-link>See other short stays</a></p>'
+      + '</div>';
+  }
+
+  function bindPhotoStage() {
+    renderPhotoTray();
+
+    var input = document.getElementById('st-photo-input');
+    if (input) {
+      input.addEventListener('change', function () {
+        addPhotoFiles(input.files).then(function () { input.value = ''; });
+      });
+    }
+
+    var uploadBtn = document.getElementById('st-photo-upload');
+    if (uploadBtn) {
+      uploadBtn.addEventListener('click', function () {
+        uploadBtn.disabled = true;
+        uploadPendingPhotos().then(function () { uploadBtn.disabled = false; });
+      });
+    }
+
+    var tray = document.getElementById('st-photo-tray');
+    if (tray) {
+      tray.addEventListener('click', function (e) {
+        var remove = e.target.closest('[data-photo-remove]');
+        if (!remove) return;
+        state.photos.splice(Number(remove.getAttribute('data-photo-remove')), 1);
+        renderPhotoTray();
+      });
+    }
   }
 
   function renderWindows() {
@@ -985,12 +1212,13 @@
               availability: state.windows.filter(function (w) { return w.starts_on && w.ends_on; })
             }
           }).then(function (out) {
-            view.innerHTML = '<div class="st-wrap" style="padding:40px 16px">'
-              + '<div class="st-ok"><h2 style="margin:0 0 8px;font-size:1.2rem;font-weight:900">Your place is in.</h2>'
-              + '<p>Reference <b>' + esc(out.listing.reference) + '</b>. It is with our team for review.</p>'
-              + '<p>' + esc(out.next_step) + '</p>'
-              + '<p style="margin-top:12px"><a class="st-btn st-btn-primary" href="/short-term" data-st-link>See other short stays</a></p>'
-              + '</div></div>';
+            state.listingId = out.listing.id;
+            state.uploadToken = out.upload_token || null;
+            if (state.meta && state.meta.photos) {
+              state.meta.photos.ready = out.photos_ready !== false && state.meta.photos.ready !== false;
+            }
+            view.innerHTML = photoStageHtml(out.listing);
+            bindPhotoStage();
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }).catch(function (error) {
             if (feedback) {

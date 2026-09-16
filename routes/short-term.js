@@ -31,6 +31,16 @@ const {
   searchShortTermListings,
   submitShortTermReview
 } = require('../services/shortTermService');
+const {
+  MAX_IMAGES_PER_LISTING,
+  MAX_UPLOAD_BYTES,
+  MAX_EDGE_PX,
+  ALLOWED_MIME_TYPES,
+  attachListingPhoto,
+  createUploadToken,
+  listListingPhotos,
+  photoUploadReady
+} = require('../services/shortTermMediaService');
 
 const router = express.Router();
 
@@ -105,6 +115,17 @@ router.get('/meta', (_req, res) => {
     payment_methods: PAYMENT_METHODS,
     intake_open: shortTermIntakeEnabled(),
     reviews_open: shortTermReviewsEnabled(),
+    photos: {
+      ready: photoUploadReady(),
+      max_per_listing: MAX_IMAGES_PER_LISTING,
+      max_bytes: MAX_UPLOAD_BYTES,
+      max_edge_px: MAX_EDGE_PX,
+      accepted: ALLOWED_MIME_TYPES,
+      // Said out loud because hosts photograph their own front door: the
+      // location baked into a phone photo is removed before anything is
+      // published.
+      note: 'Photos are resized and re-encoded on upload, which removes the location data a phone stores inside them.'
+    },
     fee: {
       amount_ugx: LISTING_FEE_UGX,
       display: formatUgx(LISTING_FEE_UGX),
@@ -319,14 +340,76 @@ router.post('/listings', intakeLimiter, async (req, res) => {
       ip: req.ip,
       hostUserId: req.userAuth?.id || null
     });
+    // Hosts list without an account on purpose - an account requirement is
+    // what stops most Ugandan landlords listing at all. This signed, expiring
+    // token is what lets them attach photos to the listing they just made,
+    // without the listing id alone being enough for anyone else to.
+    let uploadToken = null;
+    try {
+      uploadToken = createUploadToken(created.id);
+    } catch (error) {
+      logger.warn('Short term upload token could not be issued', {
+        marker: SHORT_TERM_MARKER,
+        message: error?.message
+      });
+    }
     return res.status(201).json({
       ok: true,
       marker: SHORT_TERM_MARKER,
       listing: created,
+      upload_token: uploadToken,
+      photos_ready: photoUploadReady(),
       next_step: `Your place is with our team for review. The listing fee is ${formatUgx(LISTING_FEE_UGX)} for ${LISTING_TERM_MONTHS} months, payable once the listing is approved. makaug takes no commission on any stay.`
     });
   } catch (error) {
     return fail(res, error, 'Listing could not be saved');
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Listing photos
+//
+// One photo per request. A host on Kampala mobile data sees each photo land
+// rather than staring at one large request that either all works or all fails.
+// ---------------------------------------------------------------------------
+
+const photoLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, error: 'Too many photo uploads from this connection. Try again later.' }
+});
+
+router.post('/listings/:id/photos', photoLimiter, async (req, res) => {
+  try {
+    if (!shortTermIntakeEnabled()) {
+      return res.status(503).json({ ok: false, error: 'Short term listing submissions are not open yet' });
+    }
+    if (!isUuid(req.params.id)) {
+      return res.status(400).json({ ok: false, error: 'Unknown listing' });
+    }
+    const photo = await attachListingPhoto(db, req.params.id, {
+      dataUrl: req.body?.data_url,
+      caption: req.body?.caption,
+      token: req.body?.upload_token
+    });
+    return res.status(201).json({ ok: true, marker: SHORT_TERM_MARKER, photo });
+  } catch (error) {
+    return fail(res, error, 'Photo could not be saved');
+  }
+});
+
+router.get('/listings/:id/photos', async (req, res) => {
+  try {
+    if (!isUuid(req.params.id)) {
+      return res.status(400).json({ ok: false, error: 'Unknown listing' });
+    }
+    const photos = await listListingPhotos(db, req.params.id);
+    res.set('Cache-Control', 'public, max-age=60');
+    return res.json({ ok: true, photos, marker: SHORT_TERM_MARKER });
+  } catch (error) {
+    return fail(res, error, 'Photos are unavailable');
   }
 });
 

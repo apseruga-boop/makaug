@@ -28,6 +28,8 @@ const routeSource = read('routes', 'short-term.js');
 const flags = require('../utils/shortTermFeatureFlags');
 const service = require('../services/shortTermService');
 const render = require('../services/shortTermSeoRenderService');
+const media = require('../services/shortTermMediaService');
+const mediaSource = read('services', 'shortTermMediaService.js');
 const { PUBLIC_FORBIDDEN_STRINGS } = require('../services/publicHtmlSanitizer');
 
 const results = [];
@@ -37,6 +39,22 @@ function test(name, fn) {
     results.push({ name, ok: true });
   } catch (error) {
     results.push({ name, ok: false, error });
+  }
+}
+
+const asyncTests = [];
+function testAsync(name, fn) {
+  asyncTests.push({ name, fn });
+}
+
+async function runAsyncTests() {
+  for (const { name, fn } of asyncTests) {
+    try {
+      await fn();
+      results.push({ name, ok: true });
+    } catch (error) {
+      results.push({ name, ok: false, error });
+    }
   }
 }
 
@@ -545,16 +563,179 @@ test('the short term count cannot take the existing count down', () => {
 });
 
 // ---------------------------------------------------------------------------
+// 10. Photo upload
+// ---------------------------------------------------------------------------
+
+const LISTING_A = '22222222-2222-4222-8222-222222222222';
+const LISTING_B = '33333333-3333-4333-8333-333333333333';
+
+function withSecret(fn, secret = 'short-term-test-secret') {
+  const previous = process.env.JWT_SECRET;
+  process.env.JWT_SECRET = secret;
+  try {
+    return fn();
+  } finally {
+    if (previous === undefined) delete process.env.JWT_SECRET;
+    else process.env.JWT_SECRET = previous;
+  }
+}
+
+test('an upload token only works for the listing it was issued for', () => {
+  withSecret(() => {
+    const token = media.createUploadToken(LISTING_A);
+    assert.strictEqual(media.verifyUploadToken(LISTING_A, token), true);
+    assert.throws(() => media.verifyUploadToken(LISTING_B, token), /not valid for this listing/i);
+  });
+});
+
+test('a forged, malformed or expired upload token is rejected', () => {
+  withSecret(() => {
+    const token = media.createUploadToken(LISTING_A);
+    const [expiry] = token.split('.');
+
+    assert.throws(() => media.verifyUploadToken(LISTING_A, `${expiry}.forgedsignature`), /not valid/i);
+    assert.throws(() => media.verifyUploadToken(LISTING_A, 'nonsense'), /not valid/i);
+    assert.throws(() => media.verifyUploadToken(LISTING_A, ''), /not valid/i);
+    assert.throws(() => media.verifyUploadToken(LISTING_A, `${Date.now() - 1000}.x`), /expired/i);
+  });
+});
+
+test('a token signed with a different secret is rejected', () => {
+  const token = withSecret(() => media.createUploadToken(LISTING_A), 'secret-one');
+  withSecret(() => {
+    assert.throws(() => media.verifyUploadToken(LISTING_A, token), /not valid/i);
+  }, 'secret-two');
+});
+
+test('uploads fail closed when no signing key is configured', () => {
+  const previous = process.env.JWT_SECRET;
+  delete process.env.JWT_SECRET;
+  try {
+    assert.throws(() => media.createUploadToken(LISTING_A), /signing key is not configured/i);
+  } finally {
+    if (previous !== undefined) process.env.JWT_SECRET = previous;
+  }
+});
+
+test('photos go to a new prefix and never near existing media', () => {
+  assert.strictEqual(media.MEDIA_KEY_PREFIX, 'short-term');
+  assert.ok(mediaSource.includes('`${MEDIA_KEY_PREFIX}/${listingId}`'),
+    'every object key must be namespaced under short-term/<listing id>');
+});
+
+test('only real image types are accepted, and only up to the size cap', () => {
+  assert.deepStrictEqual(media.ALLOWED_MIME_TYPES, ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
+  assert.throws(() => media.parseImageDataUrl('data:application/pdf;base64,AAAA'), /JPEG, PNG or WebP/i);
+  assert.throws(() => media.parseImageDataUrl('not a data url'), /could not be read/i);
+  assert.throws(() => media.parseImageDataUrl('data:image/png;base64,'), /could not be read|empty/i);
+
+  const oversized = 'data:image/jpeg;base64,' + 'A'.repeat(Math.ceil((media.MAX_UPLOAD_BYTES + 1024) * 4 / 3));
+  assert.throws(() => media.parseImageDataUrl(oversized), /too big/i);
+});
+
+test('the client shrinks photos before sending them', () => {
+  assert.ok(/CLIENT_MAX_EDGE\s*=\s*1600/.test(clientSource), 'client-side downscale is missing');
+  assert.ok(clientSource.includes("canvas.toDataURL('image/jpeg'"), 'client must re-encode before upload');
+  assert.ok(/one request per photo|One request per photo/i.test(clientSource),
+    'photos must upload one at a time so a dropped connection keeps what landed');
+});
+
+test('the photo endpoints exist and sit behind the intake flag', () => {
+  assert.ok(routeSource.includes("router.post('/listings/:id/photos'"), 'upload endpoint missing');
+  assert.ok(routeSource.includes("router.get('/listings/:id/photos'"), 'listing endpoint missing');
+  const block = routeSource.slice(routeSource.indexOf("router.post('/listings/:id/photos'"));
+  assert.ok(block.indexOf('shortTermIntakeEnabled()') < block.indexOf('attachListingPhoto'),
+    'the upload endpoint must check the intake flag before doing any work');
+  assert.ok(routeSource.includes('photoLimiter'), 'photo uploads must be rate limited');
+});
+
+test('the listing submission hands back an upload token and the photo config', () => {
+  assert.ok(routeSource.includes('upload_token: uploadToken'), 'submission must return the token');
+  assert.ok(routeSource.includes('photos_ready: photoUploadReady()'), 'submission must say whether uploads work');
+  assert.ok(routeSource.includes('max_per_listing: MAX_IMAGES_PER_LISTING'), '/meta must publish the photo limits');
+});
+
+// --- these actually process an image, so they are async ---
+
+testAsync('re-encoding strips the GPS coordinates a phone writes into a photo', async () => {
+  let sharp;
+  try {
+    sharp = require('sharp');
+  } catch (_) {
+    // sharp missing is itself covered by the fail-closed test below.
+    return;
+  }
+
+  // A photo tagged with a location, exactly as a phone would produce.
+  const tagged = await sharp({
+    create: { width: 240, height: 180, channels: 3, background: { r: 40, g: 120, b: 70 } }
+  })
+    .jpeg()
+    .withMetadata({
+      exif: {
+        IFD0: { Copyright: 'makaug test', Make: 'TestPhone' },
+        GPS: { GPSLatitudeRef: 'N', GPSLongitudeRef: 'E' }
+      }
+    })
+    .toBuffer();
+
+  const before = await sharp(tagged).metadata();
+  assert.ok(before.exif, 'the fixture should start with EXIF, otherwise this test proves nothing');
+
+  const cleaned = await media.normaliseImage(tagged);
+  const after = await sharp(cleaned.bytes).metadata();
+
+  assert.ok(!after.exif, 'EXIF survived re-encoding, so a host location could be published');
+  assert.strictEqual(cleaned.mimeType, 'image/jpeg');
+});
+
+testAsync('oversized photos are scaled down to the long-edge cap', async () => {
+  let sharp;
+  try {
+    sharp = require('sharp');
+  } catch (_) {
+    return;
+  }
+  const big = await sharp({
+    create: { width: 4000, height: 3000, channels: 3, background: { r: 200, g: 200, b: 200 } }
+  }).jpeg().toBuffer();
+
+  const out = await media.normaliseImage(big);
+  assert.strictEqual(out.width, media.MAX_EDGE_PX);
+  assert.ok(out.height <= media.MAX_EDGE_PX);
+  assert.ok(out.bytes.length < big.length, 'the processed image should be smaller than the original');
+});
+
+testAsync('a file that is not really an image is refused', async () => {
+  await assert.rejects(
+    () => media.normaliseImage(Buffer.from('this is plainly not an image')),
+    /not an image we can read/i
+  );
+});
+
+test('photo upload fails closed rather than storing an untouched photo', () => {
+  assert.ok(/if \(!sharp\) \{[\s\S]*?throw mediaError/.test(mediaSource),
+    'a missing image processor must refuse the upload, not fall through to storing raw bytes');
+  assert.ok(mediaSource.includes('if (!cloudMediaStorageConfigured())'),
+    'uploads must refuse when object storage is not configured');
+});
+
+// ---------------------------------------------------------------------------
 // Report
 // ---------------------------------------------------------------------------
 
-const failed = results.filter((r) => !r.ok);
-for (const result of results) {
-  console.log(`${result.ok ? 'ok  ' : 'FAIL'} - ${result.name}`);
-  if (!result.ok) console.log(`       ${result.error.message}`);
-}
-console.log(`\n${results.length - failed.length}/${results.length} short term contract tests passed`);
+runAsyncTests().then(() => {
+  const failed = results.filter((r) => !r.ok);
+  for (const result of results) {
+    console.log(`${result.ok ? 'ok  ' : 'FAIL'} - ${result.name}`);
+    if (!result.ok) console.log(`       ${result.error.message}`);
+  }
+  console.log(`\n${results.length - failed.length}/${results.length} short term contract tests passed`);
 
-if (failed.length) {
+  if (failed.length) {
+    process.exitCode = 1;
+  }
+}).catch((error) => {
+  console.error('short term contract test harness failed', error);
   process.exitCode = 1;
-}
+});
