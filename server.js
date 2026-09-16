@@ -67,6 +67,7 @@ const {
 } = require('./utils/shortTermFeatureFlags');
 const {
   getShortTermListing,
+  listShortTermSitemapEntries,
   searchShortTermListings
 } = require('./services/shortTermService');
 const {
@@ -369,6 +370,30 @@ app.get('/sitemap.xml', async (_req, res, next) => {
       });
     } catch (error) {
       logger.warn('Off-plan sitemap entries are unavailable until the feature migration is applied', { message: error.message });
+    }
+
+    // Short Term stays. Every listing page carries VacationRental structured
+    // data, and Google distributes vacation rentals from that markup for
+    // free - but only for pages it knows about. Without these entries the
+    // structured data sits on pages no crawler has been told exist.
+    if (shortTermEnabled()) {
+      urls.push({ loc: `${baseUrl}/short-term`, changefreq: 'daily', priority: '0.8' });
+      urls.push({ loc: `${baseUrl}/short-term/list-your-place`, changefreq: 'weekly', priority: '0.6' });
+      try {
+        const shortTermEntries = await listShortTermSitemapEntries(db);
+        shortTermEntries.forEach((entry) => {
+          urls.push({
+            loc: `${baseUrl}${entry.path}`,
+            lastmod: entry.lastmod,
+            changefreq: 'daily',
+            priority: '0.7'
+          });
+        });
+      } catch (error) {
+        logger.warn('Short term sitemap entries are unavailable; the rest of the sitemap is unaffected', {
+          message: error.message
+        });
+      }
     }
     const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map((entry) => [
       '  <url>',

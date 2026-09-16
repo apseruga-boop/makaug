@@ -608,6 +608,30 @@ async function getShortTermListing(db, slugOrId) {
   return normalizeShortTermListing(result.rows[0]);
 }
 
+/**
+ * Slugs and timestamps for the XML sitemap. Same publication gate as the
+ * public pages, so nothing unapproved is ever advertised to a crawler.
+ */
+async function listShortTermSitemapEntries(db, { limit = 2000 } = {}) {
+  if (!shortTermEnabled()) return [];
+  const result = await db.query(
+    `SELECT l.slug,
+            GREATEST(COALESCE(l.updated_at, l.created_at), COALESCE(l.listed_at, l.created_at)) AS lastmod
+     FROM st_listing l
+     WHERE ${LIVE_LISTING_SQL}
+     ORDER BY lastmod DESC
+     LIMIT $1`,
+    [Math.min(50000, Math.max(1, Number(limit) || 2000))]
+  );
+  return result.rows
+    .filter((row) => row.slug)
+    .map((row) => ({
+      slug: row.slug,
+      path: `/short-term/${row.slug}`,
+      lastmod: row.lastmod ? new Date(row.lastmod).toISOString() : null
+    }));
+}
+
 async function listPublishedReviews(db, listingId, limit = 30) {
   const result = await db.query(
     `SELECT id, reviewer_name, rating, comment, stayed_on, published_at, created_at
@@ -1077,6 +1101,7 @@ module.exports = {
   isStayAvailable,
   isValidUgandaPhone,
   listPublishedReviews,
+  listShortTermSitemapEntries,
   loadShortTermPublicCount,
   nightsBetween,
   normaliseAmenitySlug,
