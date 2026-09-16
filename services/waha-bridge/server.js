@@ -372,32 +372,63 @@ async function handleMediaProxy(req, res, url) {
  * in the same tick cannot both pass.
  */
 const SEEN_TTL_MS = 10 * 60 * 1000;
+// A claim is only a lease. If the work dies without settling, the lease lapses
+// and WAHA's retry is allowed through rather than being mistaken for a copy.
+const INFLIGHT_LEASE_MS = 2 * 60 * 1000;
 const SEEN_MAX = 5000;
 const seenMessages = new Map();
 let duplicateCount = 0;
+let lostCount = 0;
 
-function isDuplicateMessage(payload) {
-  const id = String(payload?.id || '')
+function messageKey(payload) {
+  return String(payload?.id || '')
     || `${payload?.from || ''}|${payload?.timestamp || ''}|${crypto.createHash('sha1').update(String(payload?.body || '')).digest('hex').slice(0, 16)}`;
+}
+
+/**
+ * Claim a message, or report it as already taken.
+ *
+ * The first version of this marked an id as seen and never looked back, which
+ * turned double-delivery into silent loss: if forwarding then failed for any
+ * reason, the id was already burned, so WAHA's retry was dismissed as a
+ * duplicate and the message was gone for good. A forwarded album of eight
+ * photos arrived in a burst and only two reached makaug.
+ *
+ * So a claim is provisional. It is confirmed only once the message has actually
+ * reached makaug, and released if it did not.
+ */
+function claimMessage(payload) {
+  const id = messageKey(payload);
   const now = Date.now();
 
   if (seenMessages.size >= SEEN_MAX) {
-    for (const [k, exp] of seenMessages) {
-      if (exp <= now) seenMessages.delete(k);
+    for (const [k, entry] of seenMessages) {
+      if (entry.expiry <= now) seenMessages.delete(k);
     }
-    // Still full of live entries: drop the oldest insertions (Map keeps order).
     while (seenMessages.size >= SEEN_MAX) {
       seenMessages.delete(seenMessages.keys().next().value);
     }
   }
 
-  const expiry = seenMessages.get(id);
-  if (expiry && expiry > now) {
+  const entry = seenMessages.get(id);
+  if (entry && entry.expiry > now) {
     duplicateCount += 1;
-    return true;
+    return { claimed: false, id, state: entry.state };
   }
-  seenMessages.set(id, now + SEEN_TTL_MS);
-  return false;
+  seenMessages.set(id, { state: 'inflight', expiry: now + INFLIGHT_LEASE_MS });
+  return { claimed: true, id, state: 'inflight' };
+}
+
+/** Delivered: hold the id long enough to shrug off WAHA's second copy. */
+function confirmMessage(id) {
+  seenMessages.set(id, { state: 'done', expiry: Date.now() + SEEN_TTL_MS });
+}
+
+/** Not delivered: let a retry have another go rather than losing the message. */
+function releaseMessage(id, reason) {
+  seenMessages.delete(id);
+  lostCount += 1;
+  log('WARN message NOT delivered, claim released for retry id=', id, '-', reason);
 }
 
 /** WAHA signs the raw body with HMAC-SHA512 when WHATSAPP_HOOK_HMAC_KEY is set. */
@@ -651,14 +682,30 @@ async function handleWahaEvent(evt) {
     return { handled: false, kind: 'broadcast' };
   }
 
-  // Before any await, so a racing duplicate cannot slip past.
-  if (isDuplicateMessage(p)) {
+  // Claimed before any await, so a racing second copy cannot slip past. The
+  // claim is provisional and is settled at the end, one way or the other.
+  const claim = claimMessage(p);
+  if (!claim.claimed) {
     log('duplicate delivery ignored id=', p.id);
     return { handled: false, kind: 'duplicate' };
   }
 
+  try {
+    return await forwardInbound(p, evt, claim.id);
+  } catch (err) {
+    releaseMessage(claim.id, String(err.message || err).slice(0, 160));
+    throw err;
+  }
+}
+
+/** Everything from here on can fail; the caller settles the claim. */
+async function forwardInbound(p, evt, claimId) {
+  const from = String(p.from || '');
   const phone = await senderAddress(p);
-  if (!phone) return { handled: false, kind: 'no_sender' };
+  if (!phone) {
+    releaseMessage(claimId, 'no resolvable sender');
+    return { handled: false, kind: 'no_sender' };
+  }
 
   const wahaMedia = p.hasMedia && p.media?.url ? p.media.url : '';
   const mediaMime = wahaMedia ? normalizeMime(p.media?.mimetype) : '';
@@ -763,6 +810,7 @@ async function handleWahaEvent(evt) {
   };
 
   const result = await makaug('/api/whatsapp/web-bridge/inbound', { method: 'POST', body });
+  confirmMessage(claimId);
   lastInboundAt = Date.now();
   inboundCount += 1;
   log('inbound ->', phone, mediaType, 'ok=', !!result?.ok, result?.ignored ? '(ignored)' : '');
@@ -942,6 +990,7 @@ const server = http.createServer(async (req, res) => {
       if (!tokenOk) blockers.push('WHATSAPP_WEB_BRIDGE_TOKEN is unset or still the placeholder');
       if (!linkOk && link.lastError) blockers.push(`makaug link failing: ${link.lastError}`);
       if (!cfg.publicUrl) blockers.push('ADAPTER_PUBLIC_URL unset — inbound media will be dropped');
+      if (lostCount) blockers.push(`${lostCount} inbound message(s) failed to reach makaug and were released for retry — check the log for WARN message NOT delivered`);
       const degraded = degradeReason();
       if (degraded) blockers.push(degraded);
 
@@ -951,7 +1000,7 @@ const server = http.createServer(async (req, res) => {
         waha_status: sessionStatusCache,
         bridge_status: effectiveStatus(sessionStatusCache),
         consecutive_send_failures: consecutiveSendFailures,
-        stats: { sent: sentCount, failed: failedCount, inbound: inboundCount, duplicates_ignored: duplicateCount },
+        stats: { sent: sentCount, failed: failedCount, inbound: inboundCount, duplicates_ignored: duplicateCount, undelivered_released: lostCount },
         last_inbound_ms_ago: stale,
         // Does this service actually reach makaug? WAHA being WORKING says nothing about that.
         makaug_link: {

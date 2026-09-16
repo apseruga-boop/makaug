@@ -34,6 +34,7 @@ const REAL_MP4 = (() => {
 
 const received = { inbound: [], heartbeats: [], acks: [], sends: [], lidLookups: [] };
 let outbox = [];
+const failInboundOnce = new Set();
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -59,7 +60,14 @@ const makaugSrv = http.createServer(async (req, res) => {
   if (req.headers['x-whatsapp-web-bridge-token'] !== BRIDGE_TOKEN) return reply(res, 401, { ok: false });
 
   if (url.pathname === '/api/whatsapp/web-bridge/inbound' && req.method === 'POST') {
-    received.inbound.push(JSON.parse((await body(req)).toString()));
+    const payload = JSON.parse((await body(req)).toString());
+    // Lets a test make the first delivery of a message fail, the way a real
+    // outage does, and check the retry is accepted rather than dismissed.
+    if (failInboundOnce.has(payload.message_id)) {
+      failInboundOnce.delete(payload.message_id);
+      return reply(res, 503, { ok: false, error: 'simulated outage' });
+    }
+    received.inbound.push(payload);
     return reply(res, 200, { ok: true });
   }
   if (url.pathname === '/api/whatsapp/web-bridge/heartbeat' && req.method === 'POST') {
@@ -233,6 +241,37 @@ async function post(url, obj, headers = {}) {
     const dupHealth = await fetch(`${adapterUrl}/health`).then((r) => r.json());
     assert.ok(dupHealth.stats.duplicates_ignored >= 2, 'duplicates are counted, not silently dropped');
     console.log('✓ duplicate WAHA deliveries are processed exactly once');
+
+    // 4c. A delivery that FAILS must not burn the message id. The first version
+    //     of the duplicate guard marked an id as seen up front, so a failed
+    //     forward could never be retried — WAHA's retry was dismissed as a copy
+    //     and the message was lost for good. A forwarded album of eight photos
+    //     reached the bridge and only two reached makaug because of this.
+    const retryEvt = {
+      id: 'evt_retry', event: 'message', session: 'default',
+      payload: { id: 'true_256700111222@c.us_RETRY', from: '256700111222@c.us', fromMe: false, body: 'album photo', timestamp: 1789460060, notifyName: 'Sarah' },
+    };
+    failInboundOnce.add('true_256700111222@c.us_RETRY');
+    const rRaw = Buffer.from(JSON.stringify(retryEvt));
+    const beforeRetry = received.inbound.length;
+    await fetch(`${adapterUrl}/waha/webhook`, { method: 'POST', headers: { 'x-webhook-hmac': hmac(rRaw) }, body: rRaw });
+    await sleep(500);
+    assert.strictEqual(received.inbound.length, beforeRetry, 'first attempt failed, as arranged');
+    const lostHealth = await fetch(`${adapterUrl}/health`).then((r) => r.json());
+    assert.ok(lostHealth.stats.undelivered_released >= 1, 'an undelivered message is counted, not hidden');
+    assert.ok(lostHealth.blockers.some((b) => /failed to reach makaug/.test(b)), 'and surfaced as a blocker');
+
+    // WAHA retries; this time it must get through.
+    await fetch(`${adapterUrl}/waha/webhook`, { method: 'POST', headers: { 'x-webhook-hmac': hmac(rRaw) }, body: rRaw });
+    await sleep(500);
+    assert.strictEqual(received.inbound.length, beforeRetry + 1, 'retry after a failure is accepted, not dropped');
+    assert.strictEqual(received.inbound[received.inbound.length - 1].body, 'album photo', 'the right message arrived');
+
+    // And once delivered, a further copy is still suppressed.
+    await fetch(`${adapterUrl}/waha/webhook`, { method: 'POST', headers: { 'x-webhook-hmac': hmac(rRaw) }, body: rRaw });
+    await sleep(400);
+    assert.strictEqual(received.inbound.length, beforeRetry + 1, 'still exactly once after success');
+    console.log('\u2713 a failed delivery is retried, not silently lost');
 
     // 5. inbound media -> proxied URL that actually serves bytes
     const mediaEvt = {
