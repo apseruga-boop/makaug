@@ -81,6 +81,8 @@ const {
   employeeMediaPrompt,
   employeePropertyCountPrompt,
   employeeRolePrompt,
+  looksLikePropertyCaption,
+  isEmployeeIntakeCancel,
   isEmployeeIntakeComplete,
   isEmployeeIntakeStep,
   isEmployeeIntakeTrigger,
@@ -5435,6 +5437,23 @@ async function handleEmployeeWhatsappIntake({
       employee_intake_recovered_at: new Date().toISOString()
     } : {})
   };
+  // An exit that works from any step. COMPLETE only closes a batch that is
+  // actually finishable, so when it refused there was no way out at all, and
+  // whatever was typed instead got stored as a property caption — "Close the
+  // batch" became a property called "Close the batch". Anything already sent to
+  // staff review stays there; only the unfinished work in hand is dropped.
+  if (isEmployeeIntakeCancel(cleanBody)) {
+    const confirmedInReview = Array.isArray(data.property_ids) ? data.property_ids.length : 0;
+    await replaceEmployeeSession(phone, 'main_menu', {});
+    return {
+      handled: true,
+      nextStep: 'main_menu',
+      message: confirmedInReview
+        ? `Batch closed. ${confirmedInReview} ${confirmedInReview === 1 ? 'property stays' : 'properties stay'} in staff review, pending moderator approval. Anything unfinished has been dropped and nothing is live.\n\nStart again any time with *Agent 007*.`
+        : 'Batch closed. Nothing was sent to staff review and nothing is live.\n\nStart again any time with *Agent 007*.'
+    };
+  }
+
   if (currentStep === 'employee_intake_role') {
     const role = parseEmployeeRole(cleanBody);
     if (!role) return { handled: true, nextStep: currentStep, message: employeeRolePrompt() };
@@ -5573,6 +5592,38 @@ async function handleEmployeeWhatsappIntake({
   if (currentStep === 'employee_property_count') {
     const batchMode = parsePropertyBatchMode(cleanBody);
     if (!batchMode) {
+      // Agents forward a listing video the moment they think of it, often before
+      // answering this question. The media used to be discarded here and the
+      // prompt simply repeated, so the agent had to find and resend the file
+      // with no idea why. Hold it against the session instead; the
+      // employee_property_media step already picks up pending media and
+      // attaches it to the first property.
+      if (candidates.length) {
+        try {
+          const heldMedia = await storeEmployeeMedia(candidates, {
+            privateMedia: false,
+            phone,
+            inboundMessageId,
+            provider: runtime.provider
+          });
+          rememberEmployeePendingMedia(data, heldMedia, inboundMessageId);
+          if (cleanBody) data.pending_property_caption = cleanBody;
+          await replaceEmployeeSession(phone, currentStep, data);
+          const heldCount = employeePendingStoredMedia(data).length;
+          return {
+            handled: true,
+            nextStep: currentStep,
+            message: `Got that media — ${heldCount} ${heldCount === 1 ? 'file is' : 'files are'} held for the first property, so you do not need to send ${heldCount === 1 ? 'it' : 'them'} again.\n\n${employeePropertyCountPrompt()}`
+          };
+        } catch (error) {
+          logger.error('WhatsApp employee early property-media hold failed:', error);
+          return {
+            handled: true,
+            nextStep: currentStep,
+            message: `I could not store that media, so please send it again after answering.\n\n${employeePropertyCountPrompt()}`
+          };
+        }
+      }
       return { handled: true, nextStep: currentStep, message: employeePropertyCountPrompt() };
     }
     data.property_batch_mode = batchMode;
@@ -5851,6 +5902,19 @@ async function handleEmployeeWhatsappIntake({
           }
           return { handled: true, nextStep: currentStep, message: 'The media is stored, but I could not create the staff-review record. Nothing went live. Please contact a staff moderator before resending.' };
         }
+      }
+
+      // With no media waiting, a message carrying no property signal at all is
+      // conversation, not a caption. Storing it created phantom properties with
+      // no media, which then blocked COMPLETE for the whole batch. When media
+      // IS waiting the agent has been asked for a corrected caption, so a bare
+      // "Kololo" is a legitimate refinement and still counts.
+      if (!pendingStoredMedia.length && !looksLikePropertyCaption(cleanBody)) {
+        return {
+          handled: true,
+          nextStep: currentStep,
+          message: 'I did not save that, because it does not describe a property and I did not want to create an empty one.\n\nSend a property caption with the type, exact location and price — for example "Selling 5 bedroom house in Kololo @600m UGX" — or send the media first.\n\nType *COMPLETE* when the batch is finished, or *CANCEL* to close it and walk away.'
+        };
       }
 
       data.pending_property_caption = cleanBody;
