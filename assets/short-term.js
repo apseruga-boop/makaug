@@ -1637,12 +1637,45 @@
     setTimeout(function () { hydrating = false; }, 0);
   }
 
-  try {
-    if (window.MutationObserver && root()) {
-      new window.MutationObserver(hydrateIfVisible)
-        .observe(root(), { attributes: true, attributeFilter: ['class'] });
+  // Attach to the page block the moment it exists, however late that is.
+  // Returns true once it is watching, so the callers below can stop asking.
+  function ensureObserver() {
+    var r = root();
+    if (!r) return false;
+    if (!r.__stObserved) {
+      r.__stObserved = true;
+      try {
+        if (window.MutationObserver) {
+          new window.MutationObserver(hydrateIfVisible)
+            .observe(r, { attributes: true, attributeFilter: ['class'] });
+        }
+      } catch (_error) {}
     }
-  } catch (_error) {}
+    hydrateIfVisible();
+    return true;
+  }
+
+  // The bundle builds the block in response to the nav click, so look again
+  // just after one. Capture phase, so this runs before the link handler below
+  // whatever else is bound to the page.
+  document.addEventListener('click', function (e) {
+    var link = e.target && e.target.closest
+      ? e.target.closest('a[data-short-term-entry], a[href^="/short-term"]')
+      : null;
+    if (!link) return;
+    [0, 80, 250, 600].forEach(function (delay) {
+      window.setTimeout(ensureObserver, delay);
+    });
+  }, true);
+
+  if (!ensureObserver()) {
+    // Covers any other route into the section - a back button, a deep link the
+    // bundle resolves itself. Bounded: the click hook above is the real path.
+    var observerTries = 0;
+    var observerPoll = window.setInterval(function () {
+      if (ensureObserver() || ++observerTries > 40) window.clearInterval(observerPoll);
+    }, 250);
+  }
 
   function boot() {
     if (!root()) return;

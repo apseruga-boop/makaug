@@ -1189,6 +1189,44 @@ test('nothing the client renders can delete the Ask AI box', () => {
   );
 });
 
+test('the section renders when the bundle materialises its page block', () => {
+  // THE BUG THIS EXISTS FOR, confirmed by leaving a sentinel on window before
+  // clicking the nav and finding it still there afterwards: clicking "Short
+  // Term" from the homepage does not navigate. The main bundle inserts
+  // #page-short-term into the DOM itself.
+  //
+  // The sanitizer ships only the current route's page block, so on the
+  // homepage root() is null when this file loads - and the MutationObserver
+  // was being attached TO that missing element, so it was never attached at
+  // all. The bundle then built the block and nothing told this file. First
+  // click: Ask AI box alone. Second click: root() now exists, the link handler
+  // takes over, the real page appears. One click, two outcomes.
+  assert.ok(clientSource.includes('function ensureObserver()'), 'ensureObserver is missing');
+
+  // It must not be a one-shot attempt at load.
+  const bootAt = clientSource.indexOf('function boot()');
+  const ensureAt = clientSource.indexOf('function ensureObserver()');
+  assert.ok(ensureAt > -1 && ensureAt < bootAt, 'ensureObserver must be defined before boot');
+
+  // Driven by the click, because that is when the bundle builds the block.
+  assert.ok(
+    /addEventListener\('click', function \(e\) \{[\s\S]{0,420}setTimeout\(ensureObserver/
+      .test(clientSource),
+    'a short-term nav click must re-check for the page block'
+  );
+  assert.ok(
+    /setTimeout\(ensureObserver[\s\S]{0,120}\}, true\);/.test(clientSource),
+    'that listener must be on the capture phase so it runs before the link handler'
+  );
+
+  // And it must stop asking once it is watching, rather than polling forever.
+  assert.ok(
+    /if \(ensureObserver\(\) \|\| \+\+observerTries > \d+\) window\.clearInterval/
+      .test(clientSource),
+    'the fallback poll must be bounded and stop once attached'
+  );
+});
+
 test('a nav click is never swallowed on a page this section is not on', () => {
   // THE BUG THIS EXISTS FOR: the document click handler matches
   // a[href^="/short-term"], which is the nav item on every page of the site.
