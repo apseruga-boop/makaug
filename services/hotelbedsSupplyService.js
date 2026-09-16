@@ -231,6 +231,43 @@ async function fetchUgandaHotels({ limit = 24, env = process.env, now = Date.now
   }
 }
 
+// Live rates drift, so a hard-coded number goes quietly wrong. An explicitly
+// configured EUR_TO_UGX_RATE always wins - that is the lever for pinning a
+// rate deliberately - otherwise a free, keyless source is consulted once every
+// twelve hours. If neither yields a usable number, callers get 0 and show no
+// price at all.
+const FX_TTL_MS = 12 * 60 * 60 * 1000;
+const FX_SOURCE = 'https://open.er-api.com/v6/latest/EUR';
+let fxCache = { at: 0, rate: 0 };
+
+async function eurToUgxRate(env = process.env, now = Date.now()) {
+  const configured = Number(String(env.EUR_TO_UGX_RATE || '').trim());
+  if (Number.isFinite(configured) && configured > 0) return configured;
+
+  if (fxCache.rate && (now - fxCache.at) < FX_TTL_MS) return fxCache.rate;
+
+  try {
+    const response = await fetch(FX_SOURCE, { headers: { Accept: 'application/json' } });
+    if (!response.ok) return fxCache.rate || 0;
+    const body = await response.json();
+    const rate = Number(body && body.rates && body.rates.UGX);
+    // A plausibility floor. If the source ever returns something odd, a silent
+    // wrong price is worse than no price - EUR:UGX has not been under 1000 in
+    // living memory and is not about to be.
+    if (Number.isFinite(rate) && rate > 1000) {
+      fxCache = { at: now, rate };
+      return rate;
+    }
+    return fxCache.rate || 0;
+  } catch (_error) {
+    return fxCache.rate || 0;
+  }
+}
+
+function __setFxForTests(rate, at) {
+  fxCache = { at: at == null ? Date.now() : at, rate: rate };
+}
+
 // Zero unless someone sets it on purpose. See the note at the top of this
 // block: a markup on a rate makaug does not collect is a price no one charges.
 function markupPercent(env = process.env) {
@@ -290,21 +327,37 @@ async function fetchRates({
       ? body.hotels.hotels
       : [];
 
+    const nights = nightsBetween(checkIn, checkOut);
+    if (!nights) return {};
+
+    // One FX lookup for the whole batch, not one per hotel.
+    const ugxRate = await eurToUgxRate(env);
+
     const out = {};
     hotels.forEach((hotel) => {
-      // minRate is the cheapest room for the stay. It is a TOTAL for the whole
-      // stay, not a nightly figure, so a per-night number has to be derived -
-      // showing a three-night total as a nightly rate would treble the price.
+      // minRate is the cheapest room for the STAY, not a nightly figure.
+      // Showing a three-night total as a nightly rate would treble the price.
       const total = Number(hotel && hotel.minRate);
       if (!isFinite(total) || total <= 0) return;
-      const nights = nightsBetween(checkIn, checkOut);
-      if (!nights) return;
+
+      const sourceCurrency = String(hotel.currency || 'EUR').trim().toUpperCase();
+      // Only EUR is convertible here. Anything else gets no price rather than
+      // a number produced by the wrong multiplier.
+      const factor = sourceCurrency === 'UGX'
+        ? 1
+        : (sourceCurrency === 'EUR' ? ugxRate : 0);
+      if (!factor) return;
+
       out['hb-' + hotel.code] = {
-        currency: String(hotel.currency || '').trim() || null,
-        per_night: applyMarkup(total / nights, env),
-        total: applyMarkup(total, env),
+        currency: 'UGX',
+        per_night: applyMarkup((total / nights) * factor, env),
+        total: applyMarkup(total * factor, env),
         nights: nights,
-        // Recorded so it is always possible to tell what was shown and why.
+        // Kept so it is always possible to see what was quoted, at what rate,
+        // and what was added - without which a wrong price is unarguable.
+        source_currency: sourceCurrency,
+        source_total: Math.round(total * 100) / 100,
+        fx_rate: sourceCurrency === 'EUR' ? Math.round(ugxRate) : null,
         markup_percent: markupPercent(env)
       };
     });
@@ -328,7 +381,9 @@ function __resetCacheForTests() {
 
 module.exports = {
   __resetCacheForTests,
+  __setFxForTests,
   applyMarkup,
+  eurToUgxRate,
   fetchRates,
   fetchUgandaHotels,
   markupPercent,

@@ -189,6 +189,58 @@ test('the content request asks only for what is rendered', () => {
   });
 });
 
+test('a missing exchange rate means no price, never a guessed one', async () => {
+  // THE TRAP THIS EXISTS FOR: utils/propertyPriceCurrency.js only knows UGX
+  // and USD on a Uganda site. Asking it for EUR falls through to the ZAR
+  // defaults and returns 21, so EUR 155 would have rendered as UGX 3,255
+  // instead of roughly 640,000 - wrong by a factor of two hundred, silently.
+  //
+  // A card with no price is a worse card. A card with a wrong price is a lie
+  // about what a room costs.
+  svc.__setFxForTests(0, 0);
+  const rate = await svc.eurToUgxRate({ EUR_TO_UGX_RATE: '0' }, Date.now());
+  assert.ok(rate === 0 || rate > 1000, 'a rate is either unusable or plausible, never small');
+});
+
+test('a pinned rate always beats the live one', async () => {
+  svc.__setFxForTests(9999, Date.now());
+  assert.equal(await svc.eurToUgxRate({ EUR_TO_UGX_RATE: '4200' }), 4200,
+    'EUR_TO_UGX_RATE is the lever for pinning a rate deliberately');
+  // Junk in the variable must not be trusted either.
+  assert.equal(await svc.eurToUgxRate({ EUR_TO_UGX_RATE: 'abc' }), 9999);
+  assert.equal(await svc.eurToUgxRate({ EUR_TO_UGX_RATE: '-5' }), 9999);
+});
+
+test('the markup is off unless it is switched on deliberately', () => {
+  // Hotelbeds quotes NET rates to a merchant who collects the guest's money.
+  // makaug does not: it links out to the hotel. A markup here is added to a
+  // number makaug never collects, on a stay it never books, and the guest
+  // sees the real price the moment they click through.
+  assert.equal(svc.markupPercent({}), 0, 'the default must be zero');
+  assert.equal(svc.markupPercent({ HOTELBEDS_MARKUP_PERCENT: '2' }), 2);
+  assert.equal(svc.applyMarkup(300000, {}), 300000, 'no markup means the rate as quoted');
+  assert.equal(svc.applyMarkup(300000, { HOTELBEDS_MARKUP_PERCENT: '2' }), 306000);
+
+  // 200 is far likelier to be 2.00 mistyped than an intention, and it would
+  // be charged to a guest.
+  assert.equal(svc.markupPercent({ HOTELBEDS_MARKUP_PERCENT: '200' }), 25, 'capped');
+  assert.equal(svc.markupPercent({ HOTELBEDS_MARKUP_PERCENT: '-3' }), 0, 'never negative');
+
+  assert.equal(svc.applyMarkup(0, {}), null, 'a zero rate is no rate, not free');
+  assert.equal(svc.applyMarkup('nonsense', {}), null);
+});
+
+test('a stay total is never shown as a nightly rate', () => {
+  // minRate is the cheapest room for the WHOLE stay. Treating it as nightly
+  // would treble the price on a three night search.
+  assert.equal(svc.nightsBetween('2027-06-19', '2027-06-22'), 3);
+  assert.equal(svc.nightsBetween('2027-06-19', '2027-06-20'), 1);
+  // A check-out on or before check-in is not a stay.
+  assert.equal(svc.nightsBetween('2027-06-19', '2027-06-19'), 0);
+  assert.equal(svc.nightsBetween('2027-06-22', '2027-06-19'), 0);
+  assert.equal(svc.nightsBetween('', ''), 0);
+});
+
 test('this service cannot make a booking', () => {
   // makaug's stated position, on every short term page, is that it does not
   // take bookings and does not handle money. Adding a booking call here is a

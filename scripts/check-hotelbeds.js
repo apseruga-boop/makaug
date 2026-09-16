@@ -21,7 +21,8 @@ const {
   CONTENT_FIELDS,
   COUNTRY_CODE,
   fetchRates,
-  markupPercent
+  markupPercent,
+  eurToUgxRate
 } = require('../services/hotelbedsSupplyService');
 
 function scrub(text) {
@@ -128,6 +129,14 @@ async function main() {
   console.log('markup configured: ' + markupPercent() + '%'
     + (markupPercent() === 0 ? '  (none - showing the rate as quoted)' : ''));
 
+  const fx = await eurToUgxRate();
+  console.log('EUR to UGX: ' + (fx ? Math.round(fx) : 'UNAVAILABLE')
+    + (process.env.EUR_TO_UGX_RATE ? '  (pinned via EUR_TO_UGX_RATE)' : '  (live)'));
+  if (!fx) {
+    console.log('  Without a rate, partner cards show no price at all - which is');
+    console.log('  deliberate. Set EUR_TO_UGX_RATE to pin one.');
+  }
+
   const rates = await fetchRates({
     hotelCodes: hotels.map((h) => h.code),
     checkIn,
@@ -146,8 +155,11 @@ async function main() {
     const rate = rates[key];
     const card = mapped.find((c) => c.reference === key);
     console.log('  ' + (card ? card.title : key)
-      + ': ' + rate.currency + ' ' + rate.per_night + '/night'
-      + '  (' + rate.nights + ' nights, total ' + rate.total + ')');
+      + ': UGX ' + Number(rate.per_night).toLocaleString('en-UG') + '/night'
+      + '  (' + rate.nights + ' nights, total UGX '
+      + Number(rate.total).toLocaleString('en-UG') + ')'
+      + '  [quoted ' + rate.source_currency + ' ' + rate.source_total
+      + (rate.markup_percent ? ', +' + rate.markup_percent + '%' : '') + ']');
   });
 }
 
