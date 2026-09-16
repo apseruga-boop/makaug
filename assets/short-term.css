@@ -444,3 +444,105 @@
   background: var(--st-green-soft); border: 1px solid #bbe0c8;
   border-radius: 10px; padding: 12px 14px; font-size: .88rem;
 }
+
+/* ---------- AFCON 2027 countdown banner ----------
+   All artwork here is original: the stadium is drawn in SVG, and the accent
+   stripe is Uganda's own flag. No CAF or AFCON branding, no stadium or player
+   photography. Naming the tournament is a fact; wearing its badge is not ours
+   to do. */
+
+#page-short-term .st-cd {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  background: #06301a;
+  color: #fff;
+}
+#page-short-term .st-cd-art {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  z-index: 0;
+  opacity: .92;
+}
+#page-short-term .st-cd::after {
+  content: ""; position: absolute; inset: 0; z-index: 1;
+  background: linear-gradient(100deg, rgba(4,32,18,.95) 0%, rgba(6,48,26,.82) 46%, rgba(6,48,26,.25) 100%);
+}
+#page-short-term .st-cd-inner {
+  position: relative; z-index: 2;
+  max-width: 1320px; margin: 0 auto;
+  padding: 22px 16px 24px;
+  display: grid;
+  grid-template-columns: minmax(0,1.3fr) auto auto;
+  align-items: center;
+  gap: 18px 26px;
+}
+@media (max-width: 1040px) {
+  #page-short-term .st-cd-inner { grid-template-columns: 1fr; gap: 14px; }
+}
+
+#page-short-term .st-cd-flag {
+  position: absolute; left: 0; top: 0; bottom: 0; width: 5px;
+  display: flex; flex-direction: column;
+}
+#page-short-term .st-cd-flag i { flex: 1; }
+#page-short-term .st-cd-flag i:nth-child(1) { background: #111; }
+#page-short-term .st-cd-flag i:nth-child(2) { background: #fcdc04; }
+#page-short-term .st-cd-flag i:nth-child(3) { background: #d90000; }
+
+#page-short-term .st-cd-kicker {
+  margin: 0 0 4px;
+  font-size: .72rem; font-weight: 900; letter-spacing: .18em;
+  text-transform: uppercase; color: #fcdc04;
+}
+#page-short-term .st-cd-title {
+  margin: 0 0 6px;
+  font-size: clamp(1.15rem, 2.4vw, 1.7rem);
+  font-weight: 900; line-height: 1.15; letter-spacing: -.01em;
+}
+#page-short-term .st-cd-sub {
+  margin: 0; font-size: .88rem; line-height: 1.5;
+  color: #cfe8d9; max-width: 46ch;
+}
+
+#page-short-term .st-cd-units { display: flex; gap: 8px; }
+#page-short-term .st-cd-unit {
+  min-width: 62px; padding: 8px 10px;
+  border-radius: 12px; text-align: center;
+  background: rgba(0,0,0,.34);
+  border: 1px solid rgba(252,220,4,.28);
+  backdrop-filter: blur(2px);
+}
+#page-short-term .st-cd-unit b {
+  display: block; font-size: 1.55rem; font-weight: 900; line-height: 1;
+  font-variant-numeric: tabular-nums; letter-spacing: -.02em;
+}
+#page-short-term .st-cd-unit span {
+  display: block; margin-top: 3px;
+  font-size: .6rem; text-transform: uppercase; letter-spacing: .1em;
+  color: #cfe8d9;
+}
+#page-short-term .st-cd-unit.is-live { min-width: 104px; border-color: #fcdc04; }
+#page-short-term .st-cd-unit.is-live b { color: #fcdc04; }
+#page-short-term .st-cd-date {
+  margin: 8px 0 0; font-size: .72rem; letter-spacing: .04em;
+  color: #cfe8d9; text-align: center;
+}
+
+#page-short-term .st-cd-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+#page-short-term .st-cd-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 10px 16px; border-radius: 12px;
+  font-size: .86rem; font-weight: 800; text-decoration: none;
+  border: 1px solid rgba(255,255,255,.34); color: #fff;
+  white-space: nowrap;
+}
+#page-short-term .st-cd-btn:hover { background: rgba(255,255,255,.1); }
+#page-short-term .st-cd-btn-primary {
+  background: #fcdc04; border-color: #fcdc04; color: #10311d;
+}
+#page-short-term .st-cd-btn-primary:hover { background: #ffe740; color: #10311d; }
+
+@media (prefers-reduced-motion: reduce) {
+  #page-short-term .st-cd-art { opacity: .8; }
+}

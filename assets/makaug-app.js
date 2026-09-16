@@ -1226,6 +1226,7 @@ const I18N_UI = {
     advertiseProperty: "List Property",
     navSale: "For Sale",
     navRent: "To Rent",
+    navShortTerm: "Short Term",
     navStudents: "Students",
     navCommercial: "Commercial",
     navLand: "Land",
@@ -1392,6 +1393,7 @@ const I18N_UI = {
     advertiseProperty: "Teka ekintu kyo",
     navSale: "Ebitundibwa",
     navRent: "Ebipangisibwa",
+    navShortTerm: "Okusula Akaseera", // REVIEW: Luganda, confirm with a native speaker
     navStudents: "Abayizi",
     navCommercial: "Byobusuubuzi",
     navLand: "Ettaka",
@@ -1520,6 +1522,7 @@ const I18N_UI = {
     advertiseProperty: "Orodhesha Mali",
     navSale: "Ya Kuuza",
     navRent: "Ya Kupanga",
+    navShortTerm: "Malazi ya Muda",
     navStudents: "Wanafunzi",
     navCommercial: "Biashara",
     navLand: "Ardhi",
@@ -1643,6 +1646,7 @@ const I18N_UI = {
   ac: {
     navSale: "Tuco",
     navRent: "Gero",
+    navShortTerm: "Buto Manok", // REVIEW: Acholi, confirm with a native speaker
     navStudents: "Jo-Yot",
     navCommercial: "Cwercwiny",
     navLand: "Lobo",
@@ -1675,6 +1679,7 @@ const I18N_UI = {
   ny: {
     navSale: "Kutunda",
     navRent: "Kupangisa",
+    navShortTerm: "Okuraara Kukye", // REVIEW: Runyankole, confirm with a native speaker
     navStudents: "Abanyeshomesa",
     navCommercial: "By'obusuubuzi",
     navLand: "Eitaka",
@@ -1707,6 +1712,7 @@ const I18N_UI = {
   rn: {
     navSale: "Kugurisha",
     navRent: "Kupangisha",
+    navShortTerm: "Okuraara Kukye", // REVIEW: Rukiga, confirm with a native speaker
     navStudents: "Abanyeshuri",
     navCommercial: "By'ubucuruzi",
     navLand: "Itaka",
@@ -1739,6 +1745,7 @@ const I18N_UI = {
   sm: {
     navSale: "Kutunda",
     navRent: "Kukodesa",
+    navShortTerm: "Okusula Akaseera", // REVIEW: Lusoga, confirm with a native speaker
     navStudents: "Abaisomesa",
     navCommercial: "Bya busubuzi",
     navLand: "Itaka",
@@ -2235,6 +2242,7 @@ I18N_UI.am = Object.assign({}, I18N_UI.en, {
   advertiseProperty: "ንብረት ዘርዝር",
   navSale: "ለሽያጭ",
   navRent: "ለኪራይ",
+  navShortTerm: "የአጭር ጊዜ",
   navStudents: "ተማሪዎች",
   navCommercial: "ንግድ",
   navLand: "መሬት",
@@ -2360,6 +2368,7 @@ I18N_UI.ar = Object.assign({}, I18N_UI.en, {
   advertiseProperty: "أدرج عقاراً",
   navSale: "للبيع",
   navRent: "للإيجار",
+  navShortTerm: "إقامة قصيرة",
   navStudents: "الطلاب",
   navCommercial: "تجاري",
   navLand: "أرض",
@@ -8289,6 +8298,7 @@ function applyLanguageUI() {
   setTextById("lang-spotlight-label", tr("langLabel"));
   setTextById("nav-sale", tr("navSale"));
   setTextById("nav-rent", tr("navRent"));
+  setTextById("nav-short-term", tr("navShortTerm"));
   setTextById("nav-students", tr("navStudents"));
   setTextById("nav-commercial", tr("navCommercial"));
   setTextById("nav-land", tr("navLand"));
@@ -8301,6 +8311,7 @@ function applyLanguageUI() {
   setTextById("nav-about", translateListingLabel("About Us"));
   setTextById("mnav-sale", tr("navSale"));
   setTextById("mnav-rent", tr("navRent"));
+  setTextById("mnav-short-term", tr("navShortTerm"));
   setTextById("mnav-students", tr("navStudents"));
   setTextById("mnav-commercial", tr("navCommercial"));
   setTextById("mnav-land", tr("navLand"));

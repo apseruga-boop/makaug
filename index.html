@@ -421,7 +421,7 @@
   <link rel="preload" as="image" href="https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=1200&q=60" fetchpriority="high">
   <link rel="stylesheet" href="/assets/tailwind.css">
   <link rel="stylesheet" href="/assets/off-plan.css?v=20260910-off-plan-v4">
-  <link rel="stylesheet" href="/assets/short-term.css?v=20260916-short-term-v1">
+  <link rel="stylesheet" href="/assets/short-term.css?v=20260916-short-term-v3">
   <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
   <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"></noscript>
   <link rel="preload" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
@@ -2937,9 +2937,20 @@
     .marketplace-ai-search:focus-within { border-color: #1d6ff2; box-shadow: 0 0 0 3px rgba(29, 111, 242, .13); }
     .marketplace-skeleton { background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%); background-size: 200% 100%; animation: marketplace-shimmer 1.2s infinite; }
     @keyframes marketplace-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
-    @media (min-width: 1024px) and (max-width: 1320px) {
-      nav .nav-item { padding-left: .42rem !important; padding-right: .42rem !important; font-size: .74rem !important; }
-      #nav-list-btn { padding-left: .7rem !important; padding-right: .7rem !important; }
+    /* The desktop nav carries 13 items and the List Property button. Give the
+       links a shrinking budget rather than letting the button ride over them. */
+    #desktop-primary-nav { flex: 1 1 auto; min-width: 0; overflow: visible; }
+    #desktop-primary-nav .nav-item { flex: 0 1 auto; }
+    nav .nav-item { transition: padding .12s ease, font-size .12s ease; }
+
+    @media (min-width: 1280px) and (max-width: 1560px) {
+      nav .nav-item { padding-left: .34rem !important; padding-right: .34rem !important; font-size: .78rem !important; }
+      #nav-list-btn { padding-left: .8rem !important; padding-right: .8rem !important; font-size: .8rem !important; }
+    }
+    @media (min-width: 1024px) and (max-width: 1279px) {
+      nav .nav-item { padding-left: .26rem !important; padding-right: .26rem !important; font-size: .7rem !important; }
+      #nav-list-btn { padding-left: .6rem !important; padding-right: .6rem !important; font-size: .74rem !important; }
+      nav .brand-subtitle-slot, #brand-subtitle { display: none !important; }
     }
   </style>
   <link rel="sitemap" type="application/xml" title="makaug property sitemap" href="/sitemap.xml">
@@ -3022,7 +3033,7 @@
       <div id="desktop-primary-nav" class="hidden xl:flex items-center gap-0.5">
         <a id="nav-sale" href="/for-sale" onclick="showPage('sale')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">For Sale</a>
         <a id="nav-rent" href="/to-rent" onclick="showPage('rent')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">To Rent</a>
-        <a id="nav-short-term" data-short-term-entry href="/short-term" onclick="showPage('short-term')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-bold text-green-800 bg-green-50 hover:bg-green-100 hover:text-green-900 cursor-pointer">Short Term</a>
+        <a id="nav-short-term" data-short-term-entry href="/short-term" onclick="window.__makaugLoadShortTerm&&window.__makaugLoadShortTerm();showPage('short-term')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Short Term</a>
         <a id="nav-students" href="/student-accommodation" onclick="showPage('students')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Students</a>
         <a id="nav-commercial" href="/commercial" onclick="showPage('commercial')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Commercial</a>
         <a id="nav-land" href="/land" onclick="showPage('land')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Land</a>
@@ -3049,7 +3060,7 @@
     <div id="mobile-menu" class="lg:hidden border-t border-gray-100 flex-col gap-1 px-4 py-3 bg-white">
       <a id="mnav-sale" href="/for-sale" onclick="showPage('sale');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">For Sale</a>
       <a id="mnav-rent" href="/to-rent" onclick="showPage('rent');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">To Rent</a>
-      <a id="mnav-short-term" data-short-term-entry href="/short-term" onclick="showPage('short-term');closeMobile()" class="px-3 py-2 rounded-lg font-bold text-green-800 bg-green-50 hover:bg-green-100">Short Term</a>
+      <a id="mnav-short-term" data-short-term-entry href="/short-term" onclick="window.__makaugLoadShortTerm&&window.__makaugLoadShortTerm();showPage('short-term');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Short Term</a>
       <a id="mnav-students" href="/student-accommodation" onclick="showPage('students');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Students</a>
       <a id="mnav-commercial" href="/commercial" onclick="showPage('commercial');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Commercial</a>
       <a id="mnav-land" href="/land" onclick="showPage('land');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Land</a>
@@ -4211,7 +4222,28 @@
 
   <div id="page-short-term" class="page" data-short-term-marker="short-term-discovery-v1">
     <section class="st-view st-view-search is-active">
-      <div id="short-term-ssr" class="st-wrap" style="padding-top:20px"></div>
+      <div id="short-term-ai-shell" class="st-wrap" style="padding-top:18px">
+        <div class="ask-ai-search-shell" data-ai-search-shell data-ai-scope="short-term">
+          <div class="flex items-center justify-between gap-3 flex-wrap">
+            <div class="min-w-0">
+              <h2 data-ai-title class="ask-ai-search-title">Describe what you want</h2>
+              <p data-ai-subtitle class="ask-ai-search-subtitle">Search in any language &mdash; makaug AI finds real listings.</p>
+            </div>
+            <p data-ai-scope-hint class="ask-ai-scope-chip">Searching Short Term</p>
+          </div>
+          <form data-ai-search-form data-ai-scope="short-term" onsubmit="submitAskAiSearchPrompt(event)" class="mt-3">
+            <input data-ai-intent type="hidden" value="search_short_term">
+            <label data-ai-label class="sr-only">Ask makaug AI</label>
+            <div class="ask-ai-search-row">
+              <span class="ask-ai-search-icon" aria-hidden="true">&#10024;</span>
+              <input data-ai-message autocomplete="off" class="ask-ai-search-input" aria-label="Ask makaug AI" placeholder="Try: 2-bed in Kololo for 3 nights under 300,000">
+              <button data-ai-submit type="submit" class="ask-ai-search-submit">&#10024; Ask AI</button>
+            </div>
+          </form>
+          <div data-ai-response class="mt-4 hidden rounded-2xl border border-blue-100 bg-white p-4 text-gray-900"></div>
+        </div>
+      </div>
+      <div id="short-term-ssr" class="st-wrap" style="padding-top:12px"></div>
     </section>
     <section class="st-view st-view-detail"></section>
     <section class="st-view st-view-list"></section>
@@ -10123,9 +10155,18 @@
           offPlanScript.src = "/assets/off-plan.js?v=20260910-off-plan-v15";
           document.body.appendChild(offPlanScript);
           if (window.__makaugShortTerm && window.__makaugShortTerm.enabled === true) {
-            var shortTermScript = document.createElement("script");
-            shortTermScript.src = "/assets/short-term.js?v=20260916-short-term-v2";
-            document.body.appendChild(shortTermScript);
+            // Load the section's code only where it is used. Every kilobyte a
+            // visitor does not need is one they pay for on mobile data.
+            window.__makaugLoadShortTerm = function () {
+              if (window.__makaugShortTermRequested) return;
+              window.__makaugShortTermRequested = true;
+              var s = document.createElement("script");
+              s.src = "/assets/short-term.js?v=20260916-short-term-v3";
+              document.body.appendChild(s);
+            };
+            if (/^\/short-term(\/|$)/.test(window.location.pathname)) {
+              window.__makaugLoadShortTerm();
+            }
 
             // The review desks only exist in the DOM on the staff and admin
             // dashboards; publicHtmlSanitizer strips those containers out of
@@ -10133,7 +10174,7 @@
             if (document.getElementById("staff-short-term-queue")
               || document.getElementById("admin-short-term-king-queue")) {
               var shortTermDeskScript = document.createElement("script");
-              shortTermDeskScript.src = "/assets/short-term-admin.js?v=20260916-short-term-v2";
+              shortTermDeskScript.src = "/assets/short-term-admin.js?v=20260916-short-term-v3";
               document.body.appendChild(shortTermDeskScript);
             }
           }

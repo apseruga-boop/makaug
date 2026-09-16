@@ -241,13 +241,9 @@
   function searchViewHtml() {
     var q = qs();
     return ''
+      + countdownHtml((window.__makaugShortTerm || {}).countdownLabel)
       + '<section class="st-hero">'
       + '<div class="st-wrap">'
-      + '<div class="st-countdown" id="st-countdown">'
-      + '<span class="st-countdown-label" id="st-countdown-label">AFCON 2027</span>'
-      + '<div class="st-countdown-units" id="st-countdown-units"></div>'
-      + '<span style="font-size:.84rem;opacity:.9">Rooms in Kampala, Entebbe and Jinja go early. List now or book early.</span>'
-      + '</div>'
       + '<h1>Short stays across Uganda, by the night</h1>'
       + '<p class="st-hero-sub">Apartments, cottages and guest houses from hosts in Kampala, Entebbe, Jinja and beyond. Every listing carries the host’s own phone number, so you deal with them directly.</p>'
       + '<form class="st-search" id="st-search-form">'
@@ -261,7 +257,7 @@
       + '</div></section>'
 
       + '<div class="st-wrap">'
-      + '<div class="st-toolbar">'
+      + '<div class="st-toolbar" id="st-results-top">'
       + '<div class="st-count" id="st-count">Loading short stays…<small>Short stays are counted in the makaug property total.</small></div>'
       + '<div class="st-toolbar-actions">'
       + '<select class="st-btn" id="st-sort" aria-label="Sort results">'
@@ -363,28 +359,110 @@
     target.innerHTML = '<div class="st-grid">' + state.listings.map(cardHtml).join('') + '</div>';
   }
 
+  // An original stadium under floodlights, drawn rather than borrowed.
+  function stadiumSvg() {
+    return '<svg class="st-cd-art" viewBox="0 0 640 220" preserveAspectRatio="xMidYMax slice" aria-hidden="true" focusable="false">'
+      + '<defs>'
+      + '<linearGradient id="stSky" x1="0" y1="0" x2="0" y2="1">'
+      + '<stop offset="0%" stop-color="#062d18"/><stop offset="55%" stop-color="#0b4526"/><stop offset="100%" stop-color="#10603a"/>'
+      + '</linearGradient>'
+      + '<linearGradient id="stBeam" x1="0" y1="0" x2="0" y2="1">'
+      + '<stop offset="0%" stop-color="#fde68a" stop-opacity=".55"/><stop offset="100%" stop-color="#fde68a" stop-opacity="0"/>'
+      + '</linearGradient>'
+      + '<radialGradient id="stPitch" cx="50%" cy="50%" r="60%">'
+      + '<stop offset="0%" stop-color="#2f9e5f"/><stop offset="100%" stop-color="#14663a"/>'
+      + '</radialGradient>'
+      + '</defs>'
+      + '<rect width="640" height="220" fill="url(#stSky)"/>'
+      // floodlight beams
+      + '<g>'
+      + '<polygon points="70,34 40,200 210,200" fill="url(#stBeam)"/>'
+      + '<polygon points="250,26 205,200 380,200" fill="url(#stBeam)"/>'
+      + '<polygon points="400,26 330,200 505,200" fill="url(#stBeam)"/>'
+      + '<polygon points="575,34 470,200 620,200" fill="url(#stBeam)"/>'
+      + '</g>'
+      // floodlight towers
+      + '<g fill="#0a3c21">'
+      + '<rect x="66" y="34" width="8" height="120"/><rect x="52" y="22" width="36" height="16" rx="3"/>'
+      + '<rect x="246" y="26" width="8" height="120"/><rect x="232" y="14" width="36" height="16" rx="3"/>'
+      + '<rect x="396" y="26" width="8" height="120"/><rect x="382" y="14" width="36" height="16" rx="3"/>'
+      + '<rect x="571" y="34" width="8" height="120"/><rect x="557" y="22" width="36" height="16" rx="3"/>'
+      + '</g>'
+      + '<g fill="#fde68a">'
+      + '<circle cx="60" cy="30" r="2.6"/><circle cx="70" cy="30" r="2.6"/><circle cx="80" cy="30" r="2.6"/>'
+      + '<circle cx="240" cy="22" r="2.6"/><circle cx="250" cy="22" r="2.6"/><circle cx="260" cy="22" r="2.6"/>'
+      + '<circle cx="390" cy="22" r="2.6"/><circle cx="400" cy="22" r="2.6"/><circle cx="410" cy="22" r="2.6"/>'
+      + '<circle cx="565" cy="30" r="2.6"/><circle cx="575" cy="30" r="2.6"/><circle cx="585" cy="30" r="2.6"/>'
+      + '</g>'
+      // stand, then terraces suggested with stripes
+      + '<path d="M0 150 Q320 96 640 150 L640 220 L0 220 Z" fill="#0a3c21"/>'
+      + '<g opacity=".5">'
+      + '<path d="M0 162 Q320 110 640 162" stroke="#155e35" stroke-width="5" fill="none"/>'
+      + '<path d="M0 174 Q320 124 640 174" stroke="#12572f" stroke-width="5" fill="none"/>'
+      + '</g>'
+      // pitch
+      + '<ellipse cx="320" cy="212" rx="250" ry="52" fill="url(#stPitch)"/>'
+      + '<ellipse cx="320" cy="212" rx="250" ry="52" fill="none" stroke="#dff3e6" stroke-opacity=".45" stroke-width="1.5"/>'
+      + '<circle cx="320" cy="212" r="30" fill="none" stroke="#dff3e6" stroke-opacity=".45" stroke-width="1.5"/>'
+      + '<line x1="320" y1="160" x2="320" y2="220" stroke="#dff3e6" stroke-opacity=".45" stroke-width="1.5"/>'
+      + '</svg>';
+  }
+
+  function countdownUnitsHtml(diff) {
+    var days = Math.floor(diff / 86400000);
+    var hours = Math.floor((diff % 86400000) / 3600000);
+    var mins = Math.floor((diff % 3600000) / 60000);
+    var secs = Math.floor((diff % 60000) / 1000);
+    return [[days, 'days'], [hours, 'hrs'], [mins, 'min'], [secs, 'sec']].map(function (pair) {
+      return '<div class="st-cd-unit"><b>' + String(pair[0]).padStart(2, '0') + '</b><span>' + pair[1] + '</span></div>';
+    }).join('');
+  }
+
+  function countdownHtml(label) {
+    return '<section class="st-cd" id="st-countdown" aria-live="polite">'
+      + stadiumSvg()
+      + '<div class="st-cd-inner">'
+      + '<div class="st-cd-flag" aria-hidden="true"><i></i><i></i><i></i></div>'
+      + '<div class="st-cd-lead">'
+      + '<p class="st-cd-kicker">' + esc(label || 'AFCON 2027') + '</p>'
+      + '<h2 class="st-cd-title">Uganda hosts. Rooms go early.</h2>'
+      + '<p class="st-cd-sub">Kampala, Entebbe and Jinja fill up long before kick-off. '
+      + 'List your place now, or find one while there is still choice.</p>'
+      + '</div>'
+      + '<div class="st-cd-clock"><div class="st-cd-units" id="st-countdown-units"></div>'
+      + '<p class="st-cd-date" id="st-countdown-date"></p></div>'
+      + '<div class="st-cd-actions">'
+      + '<a class="st-cd-btn st-cd-btn-primary" href="/short-term/list-your-place" data-st-link>List your place</a>'
+      + '<a class="st-cd-btn" href="#st-results-top">Find a stay</a>'
+      + '</div>'
+      + '</div></section>';
+  }
+
   function startCountdown() {
     var config = window.__makaugShortTerm || {};
-    if (!config.countdown) return;
     var shell = document.getElementById('st-countdown');
     var units = document.getElementById('st-countdown-units');
-    var label = document.getElementById('st-countdown-label');
+    var dateEl = document.getElementById('st-countdown-date');
     if (!shell || !units) return;
+
+    if (!config.countdown) { shell.remove(); return; }
     var target = new Date(config.countdown).getTime();
-    if (!isFinite(target)) return;
-    if (label && config.countdownLabel) label.textContent = config.countdownLabel;
+    if (!isFinite(target)) { shell.remove(); return; }
+
+    if (dateEl) {
+      dateEl.textContent = 'Kick-off ' + new Date(target).toLocaleDateString('en-GB', {
+        day: 'numeric', month: 'long', year: 'numeric'
+      });
+    }
 
     function tick() {
       var diff = target - Date.now();
-      if (diff <= 0) { shell.classList.remove('is-live'); return; }
-      var days = Math.floor(diff / 86400000);
-      var hours = Math.floor((diff % 86400000) / 3600000);
-      var mins = Math.floor((diff % 3600000) / 60000);
-      var secs = Math.floor((diff % 60000) / 1000);
-      units.innerHTML = [[days, 'days'], [hours, 'hrs'], [mins, 'min'], [secs, 'sec']].map(function (pair) {
-        return '<div class="st-countdown-unit"><b>' + pair[0] + '</b><span>' + pair[1] + '</span></div>';
-      }).join('');
-      shell.classList.add('is-live');
+      if (diff <= 0) {
+        units.innerHTML = '<div class="st-cd-unit is-live"><b>LIVE</b><span>now</span></div>';
+        if (state.countdownTimer) clearInterval(state.countdownTimer);
+        return;
+      }
+      units.innerHTML = countdownUnitsHtml(diff);
     }
     tick();
     if (state.countdownTimer) clearInterval(state.countdownTimer);
