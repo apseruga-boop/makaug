@@ -1189,6 +1189,137 @@ test('nothing the client renders can delete the Ask AI box', () => {
   );
 });
 
+test('the section reads in every language the site offers', () => {
+  // Only the nav item switched; the whole section stayed English whichever
+  // language you picked. Reported twice before it was taken seriously.
+  const at = clientSource.indexOf('var ST_I18N =');
+  assert.ok(at > -1, 'the translation table is missing');
+  const open = clientSource.indexOf('{', at);
+  const close = clientSource.indexOf('\n};', open);
+  assert.ok(close > open, 'could not find the end of the translation table');
+  const table = JSON.parse(clientSource.slice(open, close + 2));
+
+  const langs = ['en', 'lg', 'sw', 'ac', 'ny', 'rn', 'sm', 'am', 'ar'];
+  langs.forEach((code) => {
+    assert.ok(table[code], `no ${code} table`);
+  });
+  assert.strictEqual(Object.keys(table).length, langs.length, 'unexpected language count');
+
+  // Every language carries every key, or a switch silently falls back to English.
+  const keys = Object.keys(table.en);
+  assert.ok(keys.length >= 25, 'the table covers too little of the section');
+  langs.forEach((code) => {
+    keys.forEach((key) => {
+      assert.ok(table[code][key], `${code} is missing ${key}`);
+    });
+    // And the non-English tables must not simply be the English strings.
+    if (code === 'en') return;
+    const copied = keys.filter((key) => key !== 'wherePh' && table[code][key] === table.en[key]);
+    assert.ok(copied.length <= 2, `${code} is largely untranslated: ${copied.join(', ')}`);
+  });
+
+  // A language switch has to repaint; the table alone changes nothing.
+  assert.ok(
+    /attributeFilter: \['lang'\]/.test(clientSource),
+    'nothing watches for the language changing, so the section would stay in the old one'
+  );
+});
+
+test('the section is laid out like every other one', () => {
+  // The Ask AI box was on top, above the page's own content. Everywhere else
+  // on the site the content comes first and Ask AI sits below it.
+  const at = clientSource.indexOf('function searchViewHtml()');
+  const body = clientSource.slice(at, clientSource.indexOf('function cardHtml', at));
+
+  const hero = body.indexOf("'<section class=\"st-hero\">'");
+  const banner = body.indexOf('adBannerHtml()');
+  const ai = body.indexOf('st-ai-slot');
+  const results = body.indexOf('id="st-results"');
+
+  assert.ok(hero > -1 && banner > -1 && ai > -1 && results > -1, 'the search view lost a section');
+  assert.ok(hero < banner, 'the hero must come before the banner');
+  assert.ok(banner < ai, 'the banner must come before the Ask AI box');
+  assert.ok(ai < results, 'Ask AI must come before the results');
+
+  // The Ask AI shell is moved, not rebuilt - the bundle wires that markup.
+  assert.ok(
+    /slot\.appendChild\(shell\)/.test(clientSource),
+    'the Ask AI shell must be moved into its slot, not re-created'
+  );
+});
+
+test('the map does not use OpenStreetMap tiles', () => {
+  // OSM was returning 403 for every tile - "App is not following the tile
+  // usage policy of OpenStreetMap's volunteer-run servers" - so the map showed
+  // a grid of error images. Their tiles are a volunteer service and a
+  // commercial marketplace pulling from them is what that policy forbids.
+  assert.ok(
+    !/tile\.openstreetmap\.org/.test(clientSource),
+    'short-term must not pull OpenStreetMap tiles'
+  );
+  assert.ok(!/unpkg\.com\/leaflet/.test(clientSource), 'Leaflet is still being loaded');
+  assert.ok(clientSource.includes('function loadGoogleMaps'), 'no Google Maps loader');
+  assert.ok(
+    /window\.ensureGoogleMapsApi/.test(clientSource),
+    'it must reuse the bundle loader rather than injecting a second Maps script'
+  );
+  // The bundle may not be in yet, since this file loads in parallel with it.
+  assert.ok(
+    /tries > 40/.test(clientSource),
+    'the Maps loader must wait for the bundle rather than give up immediately'
+  );
+});
+
+test('the banner uses the site house-ad format and its own artwork', () => {
+  assert.ok(clientSource.includes('function adBannerHtml'), 'adBannerHtml is missing');
+  ['mk-house-band', 'mk-house-band__scrim', 'mk-house-band__copy', 'mk-house-band__tag']
+    .forEach((cls) => {
+      assert.ok(clientSource.includes(cls), `the banner is not using ${cls}`);
+    });
+  assert.ok(
+    clientSource.includes('/assets/img/hoima-stadium.jpg'),
+    'the banner should carry the licensed stadium photograph'
+  );
+  assert.ok(fs.existsSync(path.join(root, 'assets', 'img', 'hoima-stadium.jpg')),
+    'the stadium image is not in the repo');
+
+  // The shared band is built for daylight stock with a white scrim and dark
+  // text. Over a night photograph that is unreadable, so this needs its own.
+  const css = read('assets', 'short-term.css');
+  assert.ok(css.includes('.mk-house-band--st'), 'no dark variant for the night photo');
+  assert.ok(
+    /mk-house-band--st \.mk-house-band__headline[\s\S]{0,120}color: #fff/.test(css),
+    'the headline must be light over the dark photograph'
+  );
+});
+
+test('Short Term has its own colour scheme', () => {
+  // Every other section has one; this was borrowing the site green and read as
+  // an extension of To Rent.
+  const css = read('assets', 'short-term.css');
+  // Scoped to the public section. .st-scope is the staff and King review
+  // desks, which live inside the dashboards and stay on the site green - they
+  // are an admin surface, not part of this section's identity.
+  const scopeAt = css.indexOf('#page-short-term {');
+  assert.ok(scopeAt > -1, 'the section scope block is gone');
+  const scope = css.slice(scopeAt, css.indexOf('}', scopeAt));
+
+  assert.ok(/--st-accent:\s*#[0-9a-f]{6}/i.test(scope), 'no accent colour defined');
+  assert.ok(
+    !/--st-green:\s*#15803d/.test(scope),
+    'the section is still hard-coded to the site green'
+  );
+  assert.ok(
+    /--st-green:\s*var\(--st-accent\)/.test(scope),
+    'existing rules must follow the accent rather than being left behind'
+  );
+  // And the hero must not still be painted green over the top of it.
+  assert.ok(
+    !/\.st-hero \{[\s\S]{0,160}#14532d/.test(css),
+    'the hero is still using the green gradient'
+  );
+});
+
 test('the Ask AI box always says it is searching short stays', () => {
   // The bundle rebuilds this shell from the scope it derives from its own
   // current page, which on the first transition is still the page the visitor

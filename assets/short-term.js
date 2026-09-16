@@ -26,6 +26,7 @@
     listings: [],
     total: 0,
     map: null,
+    infoWindow: null,
     markers: [],
     mapOn: false,
     rating: 0,
@@ -43,6 +44,369 @@
   // ---------------------------------------------------------------- helpers
 
   function root() { return document.getElementById(ROOT_ID); }
+
+  // -------------------------------------------------------------- language
+  // The section reads in all nine languages the site offers, not just its nav
+  // item. The bundle keeps the current language in a top-level `currentLang`
+  // (reachable by name from another classic script, never off window) and also
+  // writes it to <html lang>, which is the more reliable of the two.
+  //
+  // CONFIDENCE: en, sw, am and ar are solid. lg, ac, ny, rn and sm are best
+  // effort in the loanword style this site already uses, and want a native
+  // speaker before anyone leans on them.
+  var ST_I18N = {
+  "ac": {
+    "adCtaFind": "Yeny kabedo",
+    "adHeadline": "Uganda tye ka gamo welo. Ot rwatte oyot.",
+    "adSub": "Kampala, Entebbe ki Jinja pong con ma peya tuko ocake.",
+    "checkIn": "Donyo iye",
+    "checkOut": "Kato woko",
+    "countNote": "Kabedo me nino manok kikwano i wel ducu me makaug.",
+    "days": "nino",
+    "emptyFilters": "Pe tye gin mo marwate ki magi. Tem yaro nino onyo kabedo.",
+    "emptyNone": "Pe tye kabedo me nino manok ma kityeko kete. Ka itye ki kabedo i Uganda ma ipangisa i nino acel acel, kete i makaug.",
+    "guests": "Welo",
+    "heroSub": "Apartments, cottages ki guest houses ma itwero gamo i nino acel acel. Listing acel acel tye ki namba me cim pa won kabedo, wek itii kwede atir.",
+    "heroTitle": "Yeny kabedo me nino manok i Uganda",
+    "hideMap": "Kan map",
+    "hrs": "cawa",
+    "kickOff": "Tuko cake",
+    "listOwn": "Ket kabedo mamegi",
+    "listPlace": "Ket kabedo mamegi",
+    "loading": "Tye ka yeny…",
+    "mapFail": "Map pe otwero cako. Lok ma piny nyuto kabedo ducu.",
+    "maxNight": "Wel madit i nino acel",
+    "min": "dakika",
+    "newListing": "Manyen",
+    "perNight": "i nino acel",
+    "search": "Yeny",
+    "sec": "cekon",
+    "showMap": "Nyut map",
+    "sortHigh": "Wel: malo wa piny",
+    "sortLow": "Wel: piny wa malo",
+    "sortNewest": "Manyen mukwongo",
+    "sortRated": "Ma gimito loyo",
+    "stays": "kabedo me nino manok",
+    "where": "Kany",
+    "wherePh": "Kampala, Entebbe, Jinja…"
+  },
+  "am": {
+    "adCtaFind": "ማረፊያ ይፍልጉ",
+    "adHeadline": "ዩጋንዳ ታስተናግዳለች። ክፍሎች በፍጥነት ይዮዛሉ።",
+    "adSub": "ካምፓላ፣ እንቴቤ እና ጁንጃ ጨዋታው ከመጀመሩ በፊት ይሞላሉ።",
+    "checkIn": "መግባቨያ",
+    "checkOut": "መውኘያ",
+    "countNote": "የአጭር ጊዜ ማረፊያዎች በmakaug አጠቃላይ ንብረት ውስጥ ይቀጠራሉ።",
+    "days": "ቀናት",
+    "emptyFilters": "ከእነዚህ ማጣሪያዎች ጋር የሚያይ የለም። ቀኑን ወይም አካባቢውን ያስፋሉ።",
+    "emptyNone": "ዘንዱ የታተመ የአጭር ጊዜ ማረፊያ የለም። በዩጋንዳ በአንድ ሌሊት የሚያከሯዩት ቤት ካለዎት፣ በmakaug ይመዘግቡ።",
+    "guests": "እንግዶች",
+    "heroSub": "በይት እያንዳንዱ መክረየት የሚይዙ አፕርታሞች፣ ጎጀውች እና እንግዳ ማረፊያዎች። የእያንዳንዱ ምዝገባ የአስተናጋጅውን ስልክ ይዘል፣ ስለዚህ በቀጥታ ይነጋገሩ።",
+    "heroTitle": "በዩጋንዳ የአጭር ጊዜ ማረፊያ ይፍልጉ",
+    "hideMap": "ካርታ ደብቅ",
+    "hrs": "ሰዓት",
+    "kickOff": "ጨዋታው ይጀምራል",
+    "listOwn": "ቤትዎን ይመይበቡ",
+    "listPlace": "ቤትዎን ይመይበቡ",
+    "loading": "እየጠነተነ ነው…",
+    "mapFail": "ካርታው ሊጫን አልቻለም። ከታች ያለው ዝርዝር ሁሉንም ቤት ያሳያል።",
+    "maxNight": "በአንድ ሌሊት በከፍተኛ",
+    "min": "ደቂቃ",
+    "newListing": "አዲስ",
+    "perNight": "በአንድ ሌሊት",
+    "search": "ፍልግ",
+    "sec": "ሰከንድ",
+    "showMap": "ካርታ አሳይ",
+    "sortHigh": "ዋጋ፡ ክፍተኛ ወደ ዝትተኛ",
+    "sortLow": "ዋጋ፡ ክዝትተኛ ወደ ክፍተኛ",
+    "sortNewest": "አዲስ ቀድሞ",
+    "sortRated": "በተሻል የተገመገሙ",
+    "stays": "የአጭር ጊዜ ማረፊያዎች",
+    "where": "በደት",
+    "wherePh": "Kampala, Entebbe, Jinja…"
+  },
+  "ar": {
+    "adCtaFind": "ابحث عن إقامة",
+    "adHeadline": "أوغندا تستضيف. الغرف تنفد مبكراً.",
+    "adSub": "كمبالا وإنتيبي وجينجا تمتلئ قبل انطلاق البطولة بوقت طويل.",
+    "checkIn": "تاريخ الوصول",
+    "checkOut": "تاريخ المغادرة",
+    "countNote": "تُحتسب الإقامات القصيرة ضمن إجمالي عقارات makaug.",
+    "days": "يوم",
+    "emptyFilters": "لا يوجد ما يطابق هذه الفلاتر بعد. جرّب توسيع التواريخ أو المنطقة.",
+    "emptyNone": "لم يُنشر أي مكان للإقامة القصيرة بعد. إذا كان لديك مكان في أوغندا تؤجّره بالليلة، أضفه على makaug.",
+    "guests": "الضيوف",
+    "heroSub": "شقق وبيوت ريفية وبيوت ضيافة يمكنك حجزها بالليلة، وكل إعلان يحمل رقم هاتف المضيف نفسه لتتعامل معه مباشرة.",
+    "heroTitle": "ابحث عن إقامة قصيرة في أوغندا",
+    "hideMap": "إخفاء الخريطة",
+    "hrs": "ساعة",
+    "kickOff": "انطلاق البطولة",
+    "listOwn": "أضف مكانك",
+    "listPlace": "أضف مكانك",
+    "loading": "جارٍ التحميل…",
+    "mapFail": "تعذّر تحميل الخريطة. القائمة أدناه تعرض كل الأماكن.",
+    "maxNight": "أقصى سعر لليلة",
+    "min": "دقيقة",
+    "newListing": "جديد",
+    "perNight": "لليلة",
+    "search": "بحث",
+    "sec": "ثانية",
+    "showMap": "إظهار الخريطة",
+    "sortHigh": "السعر: من الأعلى للأقل",
+    "sortLow": "السعر: من الأقل للأعلى",
+    "sortNewest": "الأحدث أولاً",
+    "sortRated": "الأفضل تقييماً",
+    "stays": "إقامات قصيرة",
+    "where": "أين",
+    "wherePh": "Kampala, Entebbe, Jinja…"
+  },
+  "en": {
+    "adCtaFind": "Find a stay",
+    "adHeadline": "Uganda hosts. Rooms go early.",
+    "adSub": "Kampala, Entebbe and Jinja fill up long before kick-off.",
+    "checkIn": "Check in",
+    "checkOut": "Check out",
+    "countNote": "Short stays are counted in the makaug property total.",
+    "days": "days",
+    "emptyFilters": "Nothing matches those filters yet. Try widening the dates or the area.",
+    "emptyNone": "No short stays are published yet. If you have a place in Uganda that you rent by the night, list it on makaug.",
+    "guests": "Guests",
+    "heroSub": "Apartments, cottages and guest houses you can take by the night. Every listing carries the host's own phone number, so you deal with them directly.",
+    "heroTitle": "Find a short stay in Uganda",
+    "hideMap": "Hide map",
+    "hrs": "hrs",
+    "kickOff": "Kick-off",
+    "listOwn": "List your own place",
+    "listPlace": "List your place",
+    "loading": "Loading short stays…",
+    "mapFail": "The map could not load. The list below shows every place.",
+    "maxNight": "Max per night",
+    "min": "min",
+    "newListing": "New listing",
+    "perNight": "per night",
+    "search": "Search",
+    "sec": "sec",
+    "showMap": "Show map",
+    "sortHigh": "Price: high to low",
+    "sortLow": "Price: low to high",
+    "sortNewest": "Newest first",
+    "sortRated": "Best reviewed",
+    "stays": "short stays",
+    "where": "Where",
+    "wherePh": "Kampala, Entebbe, Jinja…"
+  },
+  "lg": {
+    "adCtaFind": "Noonya we onoosula",
+    "adHeadline": "Uganda y'eyakuŋŋaanyiza. Ebifo biggwaawo mangu.",
+    "adSub": "Kampala, Entebbe ne Jinja zijjula nga tekinnatuuka.",
+    "checkIn": "Lw'oyingira",
+    "checkOut": "Lw'ofuluma",
+    "countNote": "Ebifo eby'okusula bibalirwa mu muwendo gwa makaug ogw'ebintu byonna.",
+    "days": "ennaku",
+    "emptyFilters": "Tewali kituukagana na filters zino. Gezaako okugaziya ennaku oba ekitundu.",
+    "emptyNone": "Tewannabaawo bifo bya kusula bifulumiziddwa. Bw'oba olina ekifo mu Uganda ky'opangisa buli kiro, kiteeke ku makaug.",
+    "guests": "Abagenyi",
+    "heroSub": "Apartments, cottages ne guest houses z'oyinza okupangisa buli kiro. Buli listing erina namba ya ssimu ya nnyini kifo, okolagane naye butereevu.",
+    "heroTitle": "Noonya we onoosula mu Uganda",
+    "hideMap": "Kweka maapu",
+    "hrs": "essaawa",
+    "kickOff": "Omuzannyo gutandika",
+    "listOwn": "Teeka ekifo kyo",
+    "listPlace": "Teeka ekifo kyo",
+    "loading": "Tunoonya…",
+    "mapFail": "Maapu tezikoze. Olukalala wansi lulaga ebifo byonna.",
+    "maxNight": "Ssente ku kiro",
+    "min": "eddakiika",
+    "newListing": "Empya",
+    "perNight": "buli kiro",
+    "search": "Noonya",
+    "sec": "obutikitiki",
+    "showMap": "Laga maapu",
+    "sortHigh": "Ssente: okuva waggulu",
+    "sortLow": "Ssente: okuva wansi",
+    "sortNewest": "Empya sooka",
+    "sortRated": "Ezisiimibwa ennyo",
+    "stays": "ebifo eby'okusula",
+    "where": "Wa",
+    "wherePh": "Kampala, Entebbe, Jinja…"
+  },
+  "ny": {
+    "adCtaFind": "Sherura ekyanya",
+    "adHeadline": "Uganda niyo erikwakiira. Ebyanya nibihwaho juba.",
+    "adSub": "Kampala, Entebbe na Jinja nibijura obutakaba omuzaano gutandika.",
+    "checkIn": "Okutaaha",
+    "checkOut": "Okuruga",
+    "countNote": "Ebyanya by'okuraara nibibariirwa omu muhendo gwa makaug gwona.",
+    "days": "ebiro",
+    "emptyFilters": "Tihariho ekirikuhikaana n'ebi. Gyezaho kwongyera ebiro nari ekicweka.",
+    "emptyNone": "Tihariho byanya by'okuraara ebitairwe. Ku oine ekyanya omu Uganda eki orikupangisa buri kiro, kite aha makaug.",
+    "guests": "Abashuhuki",
+    "heroSub": "Apartments, cottages na guest houses ez'orikubaasa kutwara buri kiro. Buri listing eine namba ya esimu ya nyineeka, orikukora nawe butunguuka.",
+    "heroTitle": "Sherura ekyanya ky'okuraara omu Uganda",
+    "hideMap": "Shereka mapu",
+    "hrs": "eshaaha",
+    "kickOff": "Omuzaano nigutandika",
+    "listOwn": "Ta ekyanya kyawe",
+    "listPlace": "Ta ekyanya kyawe",
+    "loading": "Nitusherura…",
+    "mapFail": "Mapu tiyabaasa kwija. Orutindo rw'ahansi nirworeka ebyanya byona.",
+    "maxNight": "Esente aha kiro",
+    "min": "edakiika",
+    "newListing": "Ensya",
+    "perNight": "aha kiro",
+    "search": "Sherura",
+    "sec": "obucweka",
+    "showMap": "Yoreka mapu",
+    "sortHigh": "Esente: haiguru kuza ahansi",
+    "sortLow": "Esente: ahansi kuza haiguru",
+    "sortNewest": "Ensya z'okubanza",
+    "sortRated": "Ezirikukundwa munonga",
+    "stays": "ebyanya by'okuraara",
+    "where": "Nkahi",
+    "wherePh": "Kampala, Entebbe, Jinja…"
+  },
+  "rn": {
+    "adCtaFind": "Sherura ahantu",
+    "adHeadline": "Uganda niyo erikwakiira. Ahantu nihahwaho juba.",
+    "adSub": "Kampala, Entebbe na Jinja nibijura obutakaba omuzaano gutandika.",
+    "checkIn": "Okutaaha",
+    "checkOut": "Okuruga",
+    "countNote": "Ahantu h'okuraara nihabariirwa omu muhendo gwa makaug gwona.",
+    "days": "ebiro",
+    "emptyFilters": "Tihariho ekirikuhikaana n'ebi. Gyezaho kwongyera ebiro nari ekicweka.",
+    "emptyNone": "Tihariho hantu h'okuraara hataairwe. Ku oine ahantu omu Uganda ho orikupangisa buri kiro, hate aha makaug.",
+    "guests": "Abagyenyi",
+    "heroSub": "Apartments, cottages na guest houses ezi orikubaasa kutwara buri kiro. Buri listing eine namba ya esimu ya nyineeka, okore nawe butunguuka.",
+    "heroTitle": "Sherura ahantu h'okuraara omu Uganda",
+    "hideMap": "Shereka mapu",
+    "hrs": "eshaaha",
+    "kickOff": "Omuzaano nigutandika",
+    "listOwn": "Ta ahantu hawe",
+    "listPlace": "Ta ahantu hawe",
+    "loading": "Nitusherura…",
+    "mapFail": "Mapu tiyabaasa kwija. Orutindo rw'ahansi nirworeka ahantu hoona.",
+    "maxNight": "Esente aha kiro",
+    "min": "edakiika",
+    "newListing": "Ensya",
+    "perNight": "aha kiro",
+    "search": "Sherura",
+    "sec": "obucweka",
+    "showMap": "Yoreka mapu",
+    "sortHigh": "Esente: haiguru kuza ahansi",
+    "sortLow": "Esente: ahansi kuza haiguru",
+    "sortNewest": "Ensya z'okubanza",
+    "sortRated": "Ezirikukundwa munonga",
+    "stays": "ahantu h'okuraara",
+    "where": "Nkahi",
+    "wherePh": "Kampala, Entebbe, Jinja…"
+  },
+  "sm": {
+    "adCtaFind": "Noonya ekifo",
+    "adHeadline": "Uganda y'eyakuŋŋaanyiza. Ebifo biggwaawo mangu.",
+    "adSub": "Kampala, Entebbe ni Jinja zijjula nga tekinnatuuka.",
+    "checkIn": "Lw'oyingira",
+    "checkOut": "Lw'ofuluma",
+    "countNote": "Ebifo eby'okusula bibalirwa mu muwendo gwa makaug ogw'ebintu byonna.",
+    "days": "ennaku",
+    "emptyFilters": "Tewali kituukagana n'ebyo. Gezaako okugaziya ennaku oba ekitundu.",
+    "emptyNone": "Tewannabaawo bifo bya kusula bifulumiziddwa. Bw'oba olina ekifo mu Uganda ky'opangisa buli kiro, kiteeke ku makaug.",
+    "guests": "Abagenyi",
+    "heroSub": "Apartments, cottages ni guest houses ez'osobola okutwala buli kiro. Buli listing erina namba y'essimu ya nnyini kifo, okolagane naye butereevu.",
+    "heroTitle": "Noonya aw'okusula mu Uganda",
+    "hideMap": "Kweka maapu",
+    "hrs": "essaawa",
+    "kickOff": "Omuzannyo gutandika",
+    "listOwn": "Teeka ekifo kyo",
+    "listPlace": "Teeka ekifo kyo",
+    "loading": "Tunoonya…",
+    "mapFail": "Maapu tezikoze. Olukalala wansi lulaga ebifo byonna.",
+    "maxNight": "Ssente ku kiro",
+    "min": "eddakiika",
+    "newListing": "Empya",
+    "perNight": "buli kiro",
+    "search": "Noonya",
+    "sec": "obutikitiki",
+    "showMap": "Laga maapu",
+    "sortHigh": "Ssente: okuva waigulu",
+    "sortLow": "Ssente: okuva wansi",
+    "sortNewest": "Empya zisoke",
+    "sortRated": "Ezisiimibwa eno",
+    "stays": "ebifo eby'okusula",
+    "where": "Hai",
+    "wherePh": "Kampala, Entebbe, Jinja…"
+  },
+  "sw": {
+    "adCtaFind": "Tafuta malazi",
+    "adHeadline": "Uganda inakaribisha. Vyumba vinaisha mapema.",
+    "adSub": "Kampala, Entebbe na Jinja hujaa muda mrefu kabla ya mechi.",
+    "checkIn": "Kuingia",
+    "checkOut": "Kutoka",
+    "countNote": "Malazi ya muda yanahesabiwa katika jumla ya mali za makaug.",
+    "days": "siku",
+    "emptyFilters": "Hakuna kinacholingana na vichujio hivi. Jaribu kupanua tarehe au eneo.",
+    "emptyNone": "Hakuna malazi ya muda yaliyochapishwa bado. Kama una mahali Uganda unapopangisha kwa usiku, liweke kwenye makaug.",
+    "guests": "Wageni",
+    "heroSub": "Apartments, cottages na guest houses unazoweza kuchukua kwa usiku. Kila tangazo lina namba ya simu ya mwenyeji, hivyo unashughulika naye moja kwa moja.",
+    "heroTitle": "Tafuta malazi ya muda Uganda",
+    "hideMap": "Ficha ramani",
+    "hrs": "saa",
+    "kickOff": "Mchezo unaanza",
+    "listOwn": "Weka mahali pako",
+    "listPlace": "Weka mahali pako",
+    "loading": "Inapakia malazi…",
+    "mapFail": "Ramani haikupakia. Orodha hapa chini inaonyesha kila mahali.",
+    "maxNight": "Kiwango kwa usiku",
+    "min": "dakika",
+    "newListing": "Mpya",
+    "perNight": "kwa usiku",
+    "search": "Tafuta",
+    "sec": "sekunde",
+    "showMap": "Onyesha ramani",
+    "sortHigh": "Bei: juu kwenda chini",
+    "sortLow": "Bei: chini kwenda juu",
+    "sortNewest": "Mpya kwanza",
+    "sortRated": "Zilizopendwa zaidi",
+    "stays": "malazi ya muda",
+    "where": "Wapi",
+    "wherePh": "Kampala, Entebbe, Jinja…"
+  }
+};
+
+  function stLang() {
+    var code = '';
+    try { code = document.documentElement.getAttribute('lang') || ''; } catch (_error) {}
+    if (!code) {
+      try { code = (typeof currentLang !== 'undefined' && currentLang) || ''; } catch (_error) {}
+    }
+    code = String(code || 'en').toLowerCase().split('-')[0];
+    return ST_I18N[code] ? code : 'en';
+  }
+
+  function t(key) {
+    var table = ST_I18N[stLang()] || ST_I18N.en;
+    var value = table[key];
+    if (value === undefined) value = ST_I18N.en[key];
+    return value === undefined ? '' : value;
+  }
+
+  // Re-render when the language changes. <html lang> is set by setLang() on
+  // every switch, so watching it needs no hook into the bundle.
+  try {
+    if (window.MutationObserver) {
+      var lastLang = stLang();
+      new window.MutationObserver(function () {
+        var now = stLang();
+        if (now === lastLang) return;
+        lastLang = now;
+        var r = root();
+        if (!r || !r.classList.contains('active')) return;
+        // Repaint whichever view is on screen, keeping the visitor where they are.
+        try { route(); } catch (_error) {}
+      }).observe(document.documentElement, { attributes: true, attributeFilter: ['lang'] });
+    }
+  } catch (_error) {}
+
+
   function $(sel) { var r = root(); return r ? r.querySelector(sel) : null; }
   function $$(sel) { var r = root(); return r ? Array.prototype.slice.call(r.querySelectorAll(sel)) : []; }
 
@@ -111,88 +475,120 @@
     return d.toISOString().slice(0, 10);
   }
 
-  // ---------------------------------------------------------------- leaflet
-
-  function loadLeaflet() {
-    if (window.L) return Promise.resolve(true);
+  // ------------------------------------------------------------ google maps
+  // This used OpenStreetMap tiles and they were being refused outright - 403,
+  // "App is not following the tile usage policy of OpenStreetMap's
+  // volunteer-run servers" - so every tile came back as an error image. Their
+  // tile servers are a volunteer service and a commercial marketplace pulling
+  // from them is what that policy exists to stop.
+  //
+  // Google Maps is already configured on this site (window.MAKAUG_CONFIG) and
+  // the bundle already has a loader, so this waits for that rather than
+  // injecting a second Maps script that would race it.
+  function loadGoogleMaps(attempt) {
+    if (window.google && window.google.maps) return Promise.resolve(true);
+    if (typeof window.ensureGoogleMapsApi === 'function') {
+      return window.ensureGoogleMapsApi().then(function (ok) {
+        return !!(ok && window.google && window.google.maps);
+      });
+    }
+    // The bundle may not be in yet; this file loads in parallel with it.
+    var tries = (attempt || 0) + 1;
+    if (tries > 40) return Promise.resolve(false);
     return new Promise(function (resolve) {
-      if (!document.querySelector('link[data-makaug-leaflet-css="true"]')) {
-        var link = document.createElement('link');
-        link.rel = 'stylesheet';
-        link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-        link.setAttribute('data-makaug-leaflet-css', 'true');
-        document.head.appendChild(link);
-      }
-      var existing = document.getElementById('makaug-leaflet-script');
-      if (existing) {
-        existing.addEventListener('load', function () { resolve(!!window.L); }, { once: true });
-        existing.addEventListener('error', function () { resolve(false); }, { once: true });
-        if (window.L) resolve(true);
-        return;
-      }
-      var script = document.createElement('script');
-      script.id = 'makaug-leaflet-script';
-      script.async = true;
-      script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-      script.onload = function () { resolve(!!window.L); };
-      script.onerror = function () { resolve(false); };
-      document.head.appendChild(script);
+      window.setTimeout(function () { resolve(loadGoogleMaps(tries)); }, 250);
     });
+  }
+
+  function priceLabel(listing) {
+    var n = Number(listing.price_per_night || 0);
+    if (!isFinite(n) || n <= 0) return '';
+    if (n >= 1000000) return Math.round(n / 100000) / 10 + 'M';
+    if (n >= 1000) return Math.round(n / 1000) + 'K';
+    return String(n);
   }
 
   function paintMap() {
     var host = document.getElementById('st-map');
     if (!host) return;
-    loadLeaflet().then(function (ok) {
-      if (!ok || !window.L) {
-        host.innerHTML = '<div class="st-empty"><i class="fas fa-map"></i>The map could not load. The list below shows every place.</div>';
+    loadGoogleMaps().then(function (ok) {
+      if (!ok) {
+        host.innerHTML = '<div class="st-empty"><i class="fas fa-map"></i>' + esc(t('mapFail')) + '</div>';
         return;
       }
-      var pins = state.listings.filter(function (l) {
-        return typeof l.latitude === 'number' && typeof l.longitude === 'number';
-      });
+      var g = window.google.maps;
 
       if (!state.map) {
-        state.map = window.L.map(host, { scrollWheelZoom: false })
-          .setView([0.3476, 32.5825], 11); // Kampala
-        window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          maxZoom: 18,
-          attribution: '&copy; OpenStreetMap contributors'
-        }).addTo(state.map);
+        state.map = new g.Map(host, {
+          center: { lat: 0.3476, lng: 32.5825 },
+          zoom: 11,
+          mapTypeControl: false,
+          streetViewControl: false,
+          fullscreenControl: false,
+          scrollwheel: false,
+          gestureHandling: 'cooperative'
+        });
+        state.infoWindow = new g.InfoWindow();
       }
 
-      state.markers.forEach(function (m) { state.map.removeLayer(m); });
+      (state.markers || []).forEach(function (m) { m.setMap(null); });
       state.markers = [];
 
-      if (!pins.length) {
-        state.map.setView([0.3476, 32.5825], 10);
-        setTimeout(function () { state.map.invalidateSize(); }, 60);
+      var placed = (state.listings || []).filter(function (l) {
+        return l && isFinite(Number(l.latitude)) && isFinite(Number(l.longitude));
+      });
+
+      if (!placed.length) {
+        // Nothing to pin yet, so show the country rather than an empty grey square.
+        state.map.setCenter({ lat: 1.3733, lng: 32.2903 });
+        state.map.setZoom(7);
         return;
       }
 
-      var bounds = [];
-      pins.forEach(function (listing) {
+      var bounds = new g.LatLngBounds();
+      placed.forEach(function (listing) {
+        var position = { lat: Number(listing.latitude), lng: Number(listing.longitude) };
         // The price IS the pin. That is the thing people scan a map for.
-        var icon = window.L.divIcon({
-          className: '',
-          html: '<div class="st-pin">' + esc(ugx(listing.nightly_ugx).replace('UGX ', 'USh ')) + '</div>',
-          iconSize: [0, 0]
+        var marker = new g.Marker({
+          position: position,
+          map: state.map,
+          title: listing.title || '',
+          label: priceLabel(listing)
+            ? { text: priceLabel(listing), fontSize: '11px', fontWeight: '700', color: '#ffffff' }
+            : undefined,
+          icon: {
+            path: 'M -22 -11 H 22 A 8 8 0 0 1 22 11 H -22 A 8 8 0 0 1 -22 -11 Z',
+            fillColor: '#8a3a12',
+            fillOpacity: 1,
+            strokeColor: '#ffffff',
+            strokeWeight: 1.5,
+            scale: 1,
+            labelOrigin: new g.Point(0, 0)
+          }
         });
-        var marker = window.L.marker([listing.latitude, listing.longitude], { icon: icon }).addTo(state.map);
-        marker.bindPopup(
-          '<a class="st-pop-title" href="' + esc(listing.url) + '" data-st-link>' + esc(listing.title) + '</a>'
-          + '<div>' + esc(listing.area) + '</div>'
-          + '<div><b>' + esc(listing.nightly_display) + '</b> per night</div>'
-        );
+        marker.addListener('click', function () {
+          state.infoWindow.setContent(
+            '<div style="font-family:inherit;max-width:220px">'
+            + '<strong>' + esc(listing.title || '') + '</strong><br>'
+            + esc([listing.area, listing.district].filter(Boolean).join(', '))
+            + (priceLabel(listing) ? '<br>UGX ' + esc(String(listing.price_per_night)) + ' ' + esc(t('perNight')) : '')
+            + '<br><a href="' + esc(listing.url || '#') + '" data-st-link>' + esc(t('search')) + '</a>'
+            + '</div>'
+          );
+          state.infoWindow.open({ anchor: marker, map: state.map });
+        });
         state.markers.push(marker);
-        bounds.push([listing.latitude, listing.longitude]);
+        bounds.extend(position);
       });
-      state.map.fitBounds(bounds, { padding: [34, 34], maxZoom: 14 });
-      setTimeout(function () { state.map.invalidateSize(); }, 60);
+
+      if (placed.length === 1) {
+        state.map.setCenter(bounds.getCenter());
+        state.map.setZoom(14);
+      } else {
+        state.map.fitBounds(bounds, 40);
+      }
     });
   }
-
-  // ---------------------------------------------------------------- shared blocks
 
   function disclaimerBlock() {
     return ''
@@ -241,33 +637,45 @@
   function searchViewHtml() {
     var q = qs();
     return ''
-      + countdownHtml((window.__makaugShortTerm || {}).countdownLabel)
+      // The section's own content comes first, as it does on every other page.
       + '<section class="st-hero">'
       + '<div class="st-wrap">'
-      + '<h1>Short stays across Uganda, by the night</h1>'
-      + '<p class="st-hero-sub">Apartments, cottages and guest houses from hosts in Kampala, Entebbe, Jinja and beyond. Every listing carries the host’s own phone number, so you deal with them directly.</p>'
+      + '<h1>' + esc(t('heroTitle')) + '</h1>'
+      + '<p class="st-hero-sub">' + esc(t('heroSub')) + '</p>'
       + '<form class="st-search" id="st-search-form">'
-      + '<div class="st-field"><label for="st-q">Where</label><input class="st-input" id="st-q" name="q" placeholder="Kampala, Entebbe, Jinja..." value="' + esc(q.q || '') + '"></div>'
-      + '<div class="st-field"><label for="st-in">Check in</label><input class="st-input" id="st-in" name="check_in" type="date" value="' + esc(q.check_in || '') + '"></div>'
-      + '<div class="st-field"><label for="st-out">Check out</label><input class="st-input" id="st-out" name="check_out" type="date" value="' + esc(q.check_out || '') + '"></div>'
-      + '<div class="st-field"><label for="st-guests">Guests</label><input class="st-input" id="st-guests" name="guests" type="number" min="1" max="30" value="' + esc(q.guests || '') + '" placeholder="2"></div>'
-      + '<div class="st-field"><label for="st-max">Max per night</label><input class="st-input" id="st-max" name="max_price" type="number" min="0" step="10000" value="' + esc(q.max_price || '') + '" placeholder="UGX"></div>'
-      + '<button class="st-search-go" type="submit"><i class="fas fa-search"></i> Search</button>'
+      + '<div class="st-field"><label for="st-q">' + esc(t('where')) + '</label>'
+      + '<input class="st-input" id="st-q" name="q" placeholder="' + esc(t('wherePh')) + '" value="' + esc(q.q || '') + '"></div>'
+      + '<div class="st-field"><label for="st-in">' + esc(t('checkIn')) + '</label>'
+      + '<input class="st-input" id="st-in" name="check_in" type="date" value="' + esc(q.check_in || '') + '"></div>'
+      + '<div class="st-field"><label for="st-out">' + esc(t('checkOut')) + '</label>'
+      + '<input class="st-input" id="st-out" name="check_out" type="date" value="' + esc(q.check_out || '') + '"></div>'
+      + '<div class="st-field"><label for="st-guests">' + esc(t('guests')) + '</label>'
+      + '<input class="st-input" id="st-guests" name="guests" type="number" min="1" max="30" value="' + esc(q.guests || '') + '" placeholder="2"></div>'
+      + '<div class="st-field"><label for="st-max">' + esc(t('maxNight')) + '</label>'
+      + '<input class="st-input" id="st-max" name="max_price" type="number" min="0" step="10000" value="' + esc(q.max_price || '') + '" placeholder="UGX"></div>'
+      + '<button class="st-search-go" type="submit"><i class="fas fa-search"></i> ' + esc(t('search')) + '</button>'
       + '</form>'
       + '</div></section>'
 
+      // Then the banner, in the site's own ad format.
+      + adBannerHtml()
+
+      // Then Ask AI. mountSearch moves the real shell in here.
+      + '<div id="st-ai-slot"></div>'
+
       + '<div class="st-wrap">'
       + '<div class="st-toolbar" id="st-results-top">'
-      + '<div class="st-count" id="st-count">Loading short stays…<small>Short stays are counted in the makaug property total.</small></div>'
+      + '<div class="st-count" id="st-count">' + esc(t('loading'))
+      + '<small>' + esc(t('countNote')) + '</small></div>'
       + '<div class="st-toolbar-actions">'
-      + '<select class="st-btn" id="st-sort" aria-label="Sort results">'
-      + '<option value="">Newest first</option>'
-      + '<option value="price_asc">Price: low to high</option>'
-      + '<option value="price_desc">Price: high to low</option>'
-      + '<option value="rating">Best reviewed</option>'
+      + '<select class="st-btn" id="st-sort" aria-label="' + esc(t('sortNewest')) + '">'
+      + '<option value="">' + esc(t('sortNewest')) + '</option>'
+      + '<option value="price_asc">' + esc(t('sortLow')) + '</option>'
+      + '<option value="price_desc">' + esc(t('sortHigh')) + '</option>'
+      + '<option value="rating">' + esc(t('sortRated')) + '</option>'
       + '</select>'
-      + '<button class="st-btn" id="st-map-toggle" type="button"><i class="fas fa-map-location-dot"></i> Show map</button>'
-      + '<a class="st-btn st-btn-primary" href="/short-term/list-your-place" data-st-link><i class="fas fa-plus"></i> List your place</a>'
+      + '<button class="st-btn" id="st-map-toggle" type="button"><i class="fas fa-map-location-dot"></i> ' + esc(t('showMap')) + '</button>'
+      + '<a class="st-btn st-btn-primary" href="/short-term/list-your-place" data-st-link><i class="fas fa-plus"></i> ' + esc(t('listPlace')) + '</a>'
       + '</div></div>'
 
       + '<div class="st-split" id="st-split">'
@@ -347,67 +755,19 @@
   function renderResults() {
     var count = document.getElementById('st-count');
     if (count) {
-      count.innerHTML = '<span>' + state.total + ' short stay' + (state.total === 1 ? '' : 's')
-        + '</span><small>Short stays are counted in the makaug property total.</small>';
+      count.innerHTML = '<span>' + state.total + ' ' + esc(t('stays'))
+        + '</span><small>' + esc(t('countNote')) + '</small>';
     }
     var target = document.getElementById('st-results');
     if (!target) return;
     if (!state.listings.length) {
       target.innerHTML = '<div class="st-empty"><i class="fas fa-magnifying-glass"></i>'
-        + 'Nothing matches those filters yet. Try widening the dates or the area.<br><br>'
-        + '<a class="st-btn st-btn-primary" href="/short-term/list-your-place" data-st-link>List your own place</a></div>';
+        + esc(t('emptyFilters')) + '<br><br>'
+        + '<a class="st-btn st-btn-primary" href="/short-term/list-your-place" data-st-link>'
+        + esc(t('listOwn')) + '</a></div>';
       return;
     }
     target.innerHTML = '<div class="st-grid">' + state.listings.map(cardHtml).join('') + '</div>';
-  }
-
-  // An original stadium under floodlights, drawn rather than borrowed.
-  function stadiumSvg() {
-    return '<svg class="st-cd-art" viewBox="0 0 640 220" preserveAspectRatio="xMidYMax slice" aria-hidden="true" focusable="false">'
-      + '<defs>'
-      + '<linearGradient id="stSky" x1="0" y1="0" x2="0" y2="1">'
-      + '<stop offset="0%" stop-color="#062d18"/><stop offset="55%" stop-color="#0b4526"/><stop offset="100%" stop-color="#10603a"/>'
-      + '</linearGradient>'
-      + '<linearGradient id="stBeam" x1="0" y1="0" x2="0" y2="1">'
-      + '<stop offset="0%" stop-color="#fde68a" stop-opacity=".55"/><stop offset="100%" stop-color="#fde68a" stop-opacity="0"/>'
-      + '</linearGradient>'
-      + '<radialGradient id="stPitch" cx="50%" cy="50%" r="60%">'
-      + '<stop offset="0%" stop-color="#2f9e5f"/><stop offset="100%" stop-color="#14663a"/>'
-      + '</radialGradient>'
-      + '</defs>'
-      + '<rect width="640" height="220" fill="url(#stSky)"/>'
-      // floodlight beams
-      + '<g>'
-      + '<polygon points="70,34 40,200 210,200" fill="url(#stBeam)"/>'
-      + '<polygon points="250,26 205,200 380,200" fill="url(#stBeam)"/>'
-      + '<polygon points="400,26 330,200 505,200" fill="url(#stBeam)"/>'
-      + '<polygon points="575,34 470,200 620,200" fill="url(#stBeam)"/>'
-      + '</g>'
-      // floodlight towers
-      + '<g fill="#0a3c21">'
-      + '<rect x="66" y="34" width="8" height="120"/><rect x="52" y="22" width="36" height="16" rx="3"/>'
-      + '<rect x="246" y="26" width="8" height="120"/><rect x="232" y="14" width="36" height="16" rx="3"/>'
-      + '<rect x="396" y="26" width="8" height="120"/><rect x="382" y="14" width="36" height="16" rx="3"/>'
-      + '<rect x="571" y="34" width="8" height="120"/><rect x="557" y="22" width="36" height="16" rx="3"/>'
-      + '</g>'
-      + '<g fill="#fde68a">'
-      + '<circle cx="60" cy="30" r="2.6"/><circle cx="70" cy="30" r="2.6"/><circle cx="80" cy="30" r="2.6"/>'
-      + '<circle cx="240" cy="22" r="2.6"/><circle cx="250" cy="22" r="2.6"/><circle cx="260" cy="22" r="2.6"/>'
-      + '<circle cx="390" cy="22" r="2.6"/><circle cx="400" cy="22" r="2.6"/><circle cx="410" cy="22" r="2.6"/>'
-      + '<circle cx="565" cy="30" r="2.6"/><circle cx="575" cy="30" r="2.6"/><circle cx="585" cy="30" r="2.6"/>'
-      + '</g>'
-      // stand, then terraces suggested with stripes
-      + '<path d="M0 150 Q320 96 640 150 L640 220 L0 220 Z" fill="#0a3c21"/>'
-      + '<g opacity=".5">'
-      + '<path d="M0 162 Q320 110 640 162" stroke="#155e35" stroke-width="5" fill="none"/>'
-      + '<path d="M0 174 Q320 124 640 174" stroke="#12572f" stroke-width="5" fill="none"/>'
-      + '</g>'
-      // pitch
-      + '<ellipse cx="320" cy="212" rx="250" ry="52" fill="url(#stPitch)"/>'
-      + '<ellipse cx="320" cy="212" rx="250" ry="52" fill="none" stroke="#dff3e6" stroke-opacity=".45" stroke-width="1.5"/>'
-      + '<circle cx="320" cy="212" r="30" fill="none" stroke="#dff3e6" stroke-opacity=".45" stroke-width="1.5"/>'
-      + '<line x1="320" y1="160" x2="320" y2="220" stroke="#dff3e6" stroke-opacity=".45" stroke-width="1.5"/>'
-      + '</svg>';
   }
 
   function countdownUnitsHtml(diff) {
@@ -416,28 +776,37 @@
     var mins = Math.floor((diff % 3600000) / 60000);
     var secs = Math.floor((diff % 60000) / 1000);
     return [[days, 'days'], [hours, 'hrs'], [mins, 'min'], [secs, 'sec']].map(function (pair) {
-      return '<div class="st-cd-unit"><b>' + String(pair[0]).padStart(2, '0') + '</b><span>' + pair[1] + '</span></div>';
+      return '<div class="st-cd-unit"><b>' + String(pair[0]).padStart(2, '0') + '</b>'
+        + '<span>' + esc(t(pair[1])) + '</span></div>';
     }).join('');
   }
 
-  function countdownHtml(label) {
-    return '<section class="st-cd" id="st-countdown" aria-live="polite">'
-      + stadiumSvg()
-      + '<div class="st-cd-inner">'
-      + '<div class="st-cd-flag" aria-hidden="true"><i></i><i></i><i></i></div>'
-      + '<div class="st-cd-lead">'
-      + '<p class="st-cd-kicker">' + esc(label || 'AFCON 2027') + '</p>'
-      + '<h2 class="st-cd-title">Uganda hosts. Rooms go early.</h2>'
-      + '<p class="st-cd-sub">Kampala, Entebbe and Jinja fill up long before kick-off. '
-      + 'List your place now, or find one while there is still choice.</p>'
+  function adBannerHtml() {
+    var config = window.__makaugShortTerm || {};
+    if (!config.countdown) return '';
+    var label = String(config.countdownLabel || 'AFCON 2027');
+    // Same markup as the site's house ad placements, so it reads as one of
+    // them. --st is a dark scrim: the stadium photograph is a night shot and
+    // the default white scrim would leave the copy unreadable.
+    return '<div class="mk-house-band-wrap max-w-7xl mx-auto st-ad-wrap">'
+      + '<section class="mk-house-band mk-house-band--st" id="st-countdown" data-copy-side="left" aria-label="' + esc(label) + '">'
+      + '<picture>'
+      + '<img class="mk-house-band__image" src="/assets/img/hoima-stadium.jpg" alt="" '
+      + 'style="object-position:center 42%" loading="lazy" decoding="async">'
+      + '</picture>'
+      + '<div class="mk-house-band__scrim" aria-hidden="true"></div>'
+      + '<div class="mk-house-band__copy">'
+      + '<h2 class="mk-house-band__headline">' + esc(t('adHeadline')) + '</h2>'
+      + '<p class="st-ad-sub">' + esc(t('adSub')) + '</p>'
+      + '<div class="st-cd-units" id="st-countdown-units"></div>'
+      + '<p class="st-cd-date" id="st-countdown-date"></p>'
+      + '<div class="st-ad-actions">'
+      + '<a class="st-cd-btn st-cd-btn-primary" href="/short-term/list-your-place" data-st-link>' + esc(t('listPlace')) + '</a>'
+      + '<a class="st-cd-btn" href="#st-results-top">' + esc(t('adCtaFind')) + '</a>'
       + '</div>'
-      + '<div class="st-cd-clock"><div class="st-cd-units" id="st-countdown-units"></div>'
-      + '<p class="st-cd-date" id="st-countdown-date"></p></div>'
-      + '<div class="st-cd-actions">'
-      + '<a class="st-cd-btn st-cd-btn-primary" href="/short-term/list-your-place" data-st-link>List your place</a>'
-      + '<a class="st-cd-btn" href="#st-results-top">Find a stay</a>'
       + '</div>'
-      + '</div></section>';
+      + '<span class="mk-house-band__tag">' + esc(label) + '</span>'
+      + '</section></div>';
   }
 
   function startCountdown() {
@@ -452,9 +821,14 @@
     if (!isFinite(target)) { shell.remove(); return; }
 
     if (dateEl) {
-      dateEl.textContent = 'Kick-off ' + new Date(target).toLocaleDateString('en-GB', {
-        day: 'numeric', month: 'long', year: 'numeric'
-      });
+      var locale = stLang() === 'en' ? 'en-GB' : stLang();
+      var when;
+      try {
+        when = new Date(target).toLocaleDateString(locale, { day: 'numeric', month: 'long', year: 'numeric' });
+      } catch (_error) {
+        when = new Date(target).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+      }
+      dateEl.textContent = t('kickOff') + ' ' + when;
     }
 
     function tick() {
@@ -544,6 +918,13 @@
     var view = r.querySelector('.st-view-search');
     if (!view) return;
     view.innerHTML = searchViewHtml();
+
+    // The Ask AI box is MOVED, never rebuilt: the main bundle wires that
+    // markup, and re-creating it would leave a dead box behind.
+    var slot = document.getElementById('st-ai-slot');
+    var shell = document.getElementById('short-term-ai-shell');
+    if (slot && shell && shell.parentNode !== slot) slot.appendChild(shell);
+
     startCountdown();
     wireShortTermLocationFields();
     refreshAskAiCopy();
@@ -563,8 +944,8 @@
         if (split) split.classList.toggle('is-map', state.mapOn);
         toggle.classList.toggle('is-on', state.mapOn);
         toggle.innerHTML = state.mapOn
-          ? '<i class="fas fa-list"></i> Hide map'
-          : '<i class="fas fa-map-location-dot"></i> Show map';
+          ? '<i class="fas fa-list"></i> ' + esc(t('hideMap'))
+          : '<i class="fas fa-map-location-dot"></i> ' + esc(t('showMap'));
         if (state.mapOn) paintMap();
       });
     }
