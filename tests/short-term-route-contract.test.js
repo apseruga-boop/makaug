@@ -1189,47 +1189,49 @@ test('nothing the client renders can delete the Ask AI box', () => {
   );
 });
 
-test('the section never shows its un-hydrated shell', () => {
-  // THE BUG THIS EXISTS FOR: short-term.js was lazy-loaded on the nav click.
-  // showPage() reveals the page the instant it is clicked, so until the script
-  // landed the visitor saw the bare shell that ships in index.html - the Ask
-  // AI box and nothing else - and had to click a second time to get the real
-  // page. Whichever won the race decided what you saw, so the same click gave
-  // different results. Reported from the live site, not caught here, because
-  // nothing in this file asserted anything about WHEN the script loads.
+test('the section paints without waiting for the main bundle', () => {
+  // THE BUG THIS EXISTS FOR, measured on the live site: arriving at
+  // /short-term showed the Ask AI box alone for seconds, then the rest
+  // appeared. short-term.js was requested inside makaug-app.js's onload, so
+  // nothing here could paint until 571KB had downloaded and 3MB had parsed.
+  // Clicking the nav again once that had finished looked like a different
+  // page - which is exactly how it was reported.
+  //
+  // An earlier version of this test asserted the script was not lazy-loaded.
+  // It passed while the section was still queued behind the bundle, because
+  // "not lazy" and "not blocked" are different claims.
   const indexSource = read('index.html');
 
-  // 1. The script loads with the app, not on the click that needs it.
-  const loaderAt = indexSource.indexOf('window.__makaugLoadShortTerm = function');
-  assert.ok(loaderAt > -1, 'the short-term loader is gone');
-  const afterLoader = indexSource.slice(loaderAt, loaderAt + 900);
+  const requestAt = indexSource.indexOf('loadShortTermNow();');
+  const appOnloadAt = indexSource.indexOf('script.onload = function ()');
+  assert.ok(requestAt > -1, 'the short-term loader is never called');
+  assert.ok(appOnloadAt > -1, 'the main bundle loader changed shape');
   assert.ok(
-    /window\.__makaugLoadShortTerm\(\);/.test(afterLoader),
-    'the loader must be called, not merely defined'
-  );
-  assert.ok(
-    !/if \(\/\^\\\/short-term[\s\S]{0,120}window\.__makaugLoadShortTerm\(\)/.test(afterLoader),
-    'the load must not be gated on the visitor already being on a short-term URL'
+    requestAt < appOnloadAt,
+    'short-term.js must be requested before the bundle onload, not from inside it'
   );
 
-  // 2. A visible page renders even if the address bar has not caught up.
+  // It must also not be gated on the visitor already being on a short-term URL.
+  const loaderBlock = indexSource.slice(
+    indexSource.indexOf('function loadShortTermNow()'),
+    appOnloadAt
+  );
   assert.ok(
-    /if \(!r\.classList\.contains\('active'\)\) return;[\s\S]{0,80}path = '\/short-term';/
-      .test(clientSource),
-    'route() must render an already-visible page rather than bailing on the URL'
+    !/\/\^\\\/short-term/.test(loaderBlock),
+    'the load must not be gated on the current pathname'
   );
 
-  // 3. However the page becomes visible, it hydrates.
-  assert.ok(clientSource.includes('function hydrateIfVisible()'), 'hydration guard missing');
+  // Loading first means the bundle's helpers may be missing when fields are
+  // wired, so the typeahead has to wait for them rather than give up.
   assert.ok(
-    /MutationObserver\(hydrateIfVisible\)[\s\S]{0,160}attributeFilter: \['class'\]/
-      .test(clientSource),
-    'the page class must be observed so any reveal triggers a render'
+    /wireLocationTypeahead\(input, tries\)/.test(clientSource),
+    'wireLocationTypeahead must retry while the bundle is still loading'
   );
-  // And that observer must not be able to drive itself in a loop.
+
+  // And rendering must not assume showPage exists yet.
   assert.ok(
-    /if \(hydrating\) return;[\s\S]{0,400}hydrating = false;/.test(clientSource),
-    'hydrateIfVisible must guard against re-entry - route() touches the watched class'
+    /if \(typeof window\.showPage === 'function'\)[\s\S]{0,900}\} else \{/.test(clientSource),
+    'route() must be able to activate the page itself before the bundle arrives'
   );
 });
 

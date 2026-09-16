@@ -474,10 +474,19 @@
 
   // Suggestions come from the same canonical location endpoint and the same
   // panel the homepage search uses, so they look and behave identically.
-  function wireLocationTypeahead(input) {
+  function wireLocationTypeahead(input, attempt) {
     if (!input || input.dataset.stTypeahead === '1') return;
-    if (typeof window.renderTypeahead !== 'function') return;
-    if (typeof window.heroCanonicalSuggestionItems !== 'function') return;
+    // This file now loads in parallel with the main bundle, so its typeahead
+    // helpers may not exist yet. Wait for them rather than leaving the field
+    // bare for the rest of the visit.
+    if (typeof window.renderTypeahead !== 'function'
+      || typeof window.heroCanonicalSuggestionItems !== 'function') {
+      var tries = (attempt || 0) + 1;
+      if (tries <= 40) {
+        window.setTimeout(function () { wireLocationTypeahead(input, tries); }, 250);
+      }
+      return;
+    }
     input.dataset.stTypeahead = '1';
     input.setAttribute('autocomplete', 'off');
 
