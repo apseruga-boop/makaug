@@ -471,11 +471,70 @@
     state.countdownTimer = setInterval(tick, 1000);
   }
 
+
+  // Suggestions come from the same canonical location endpoint and the same
+  // panel the homepage search uses, so they look and behave identically.
+  function wireLocationTypeahead(input) {
+    if (!input || input.dataset.stTypeahead === '1') return;
+    if (typeof window.renderTypeahead !== 'function') return;
+    if (typeof window.heroCanonicalSuggestionItems !== 'function') return;
+    input.dataset.stTypeahead = '1';
+    input.setAttribute('autocomplete', 'off');
+
+    var timer = null;
+    var seq = 0;
+
+    function close() {
+      try { if (typeof window.closeTypeahead === 'function') window.closeTypeahead(); } catch (_error) {}
+    }
+
+    function ask() {
+      var q = (input.value || '').trim();
+      window.clearTimeout(timer);
+      // One letter matches most of Uganda; two is where it starts being useful.
+      if (q.length < 2) { close(); return; }
+      timer = window.setTimeout(function () {
+        var mine = ++seq;
+        fetch('/api/properties/locations/suggest?q=' + encodeURIComponent(q) + '&limit=8', {
+          headers: { Accept: 'application/json' }
+        })
+          .then(function (response) { return response.ok ? response.json() : null; })
+          .then(function (body) {
+            // A slow reply for an older keystroke must not overwrite a newer one.
+            if (!body || mine !== seq) return;
+            var items = window.heroCanonicalSuggestionItems(body) || [];
+            if (!items.length) { close(); return; }
+            window.renderTypeahead(input, items, function () {}, { preRanked: true });
+          })
+          .catch(function () { close(); });
+      }, 180);
+    }
+
+    input.addEventListener('input', ask);
+    input.addEventListener('focus', ask);
+    input.addEventListener('blur', function () { window.setTimeout(close, 150); });
+    input.addEventListener('keydown', function (event) {
+      if (typeof window.handleTypeaheadKeydown !== 'function') return;
+      // typeaheadState is a top-level const in the bundle, so it is reachable
+      // by name from another classic script but never off window.
+      var items = [];
+      try { items = (typeof typeaheadState !== 'undefined' && typeaheadState.items) || []; } catch (_error) {}
+      window.handleTypeaheadKeydown(event, function () { return items; }, function () {});
+    });
+  }
+
+  function wireShortTermLocationFields() {
+    ['st-q', 'f-district', 'f-area'].forEach(function (id) {
+      wireLocationTypeahead(document.getElementById(id));
+    });
+  }
+
   function mountSearch() {
     var r = root();
     if (!r) return;
     r.querySelector('.st-view-search').innerHTML = searchViewHtml();
     startCountdown();
+    wireShortTermLocationFields();
 
     var form = document.getElementById('st-search-form');
     if (form) form.addEventListener('submit', function (e) { e.preventDefault(); runSearch(); });
@@ -1337,6 +1396,7 @@
       var draft = readDraft();
       view.innerHTML = listViewHtml();
       renderWindows();
+      wireShortTermLocationFields();
 
       if (draft) {
         var steps = view.querySelector('.st-steps');

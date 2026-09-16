@@ -35625,6 +35625,11 @@ const AI_ASSISTANT_EXAMPLE_PROMPTS_I18N = Object.freeze({
       { label: "shop to rent in Kampala", prompt: "shop to rent in Kampala", intent: "search_commercial" },
       { label: "warehouse in Ntinda", prompt: "warehouse in Ntinda", intent: "search_commercial" }
     ],
+    short_term: [
+      { label: "short stay in Kampala", prompt: "short stay in Kampala", intent: "search_short_term" },
+      { label: "guest house in Entebbe", prompt: "guest house in Entebbe", intent: "search_short_term" },
+      { label: "furnished place in Kololo", prompt: "furnished apartment in Kololo by the night", intent: "search_short_term" }
+    ],
     student: [
       { label: "hostel near Makerere", prompt: "student hostel near Makerere", intent: "search_student" },
       { label: "single room near Kyambogo", prompt: "single room near Kyambogo", intent: "search_student" },
@@ -35658,6 +35663,11 @@ const AI_ASSISTANT_EXAMPLE_PROMPTS_I18N = Object.freeze({
       { label: "office e Nakasero", prompt: "office space in Nakasero", intent: "search_commercial" },
       { label: "duuka okupangisa e Kampala", prompt: "shop to rent in Kampala", intent: "search_commercial" },
       { label: "warehouse e Ntinda", prompt: "warehouse in Ntinda", intent: "search_commercial" }
+    ],
+    short_term: [
+      { label: "short stay e Kampala", prompt: "short stay in Kampala", intent: "search_short_term" },
+      { label: "guest house e Entebbe", prompt: "guest house in Entebbe", intent: "search_short_term" },
+      { label: "apartment e Kololo", prompt: "furnished apartment in Kololo by the night", intent: "search_short_term" }
     ],
     student: [
       { label: "hostel okumpi ne Makerere", prompt: "student hostel near Makerere", intent: "search_student" },
@@ -35693,6 +35703,11 @@ const AI_ASSISTANT_EXAMPLE_PROMPTS_I18N = Object.freeze({
       { label: "duka la kupanga Kampala", prompt: "shop to rent in Kampala", intent: "search_commercial" },
       { label: "ghala Ntinda", prompt: "warehouse in Ntinda", intent: "search_commercial" }
     ],
+    short_term: [
+      { label: "malazi ya muda Kampala", prompt: "short stay in Kampala", intent: "search_short_term" },
+      { label: "guest house Entebbe", prompt: "guest house in Entebbe", intent: "search_short_term" },
+      { label: "apartment Kololo", prompt: "furnished apartment in Kololo by the night", intent: "search_short_term" }
+    ],
     student: [
       { label: "hosteli karibu Makerere", prompt: "student hostel near Makerere", intent: "search_student" },
       { label: "chumba kimoja karibu Kyambogo", prompt: "single room near Kyambogo", intent: "search_student" },
@@ -35726,6 +35741,11 @@ const AI_ASSISTANT_EXAMPLE_PROMPTS_I18N = Object.freeze({
       { label: "office i Nakasero", prompt: "office space in Nakasero", intent: "search_commercial" },
       { label: "shop me rent i Kampala", prompt: "shop to rent in Kampala", intent: "search_commercial" },
       { label: "warehouse i Ntinda", prompt: "warehouse in Ntinda", intent: "search_commercial" }
+    ],
+    short_term: [
+      { label: "short stay i Kampala", prompt: "short stay in Kampala", intent: "search_short_term" },
+      { label: "guest house i Entebbe", prompt: "guest house in Entebbe", intent: "search_short_term" },
+      { label: "apartment i Kololo", prompt: "furnished apartment in Kololo by the night", intent: "search_short_term" }
     ],
     student: [
       { label: "hostel cok ki Makerere", prompt: "student hostel near Makerere", intent: "search_student" },
@@ -35761,6 +35781,11 @@ const AI_ASSISTANT_EXAMPLE_PROMPTS_I18N = Object.freeze({
       { label: "duuka ry'okupangisa Kampala", prompt: "shop to rent in Kampala", intent: "search_commercial" },
       { label: "warehouse Ntinda", prompt: "warehouse in Ntinda", intent: "search_commercial" }
     ],
+    short_term: [
+      { label: "short stay Kampala", prompt: "short stay in Kampala", intent: "search_short_term" },
+      { label: "guest house Entebbe", prompt: "guest house in Entebbe", intent: "search_short_term" },
+      { label: "apartment Kololo", prompt: "furnished apartment in Kololo by the night", intent: "search_short_term" }
+    ],
     student: [
       { label: "hostel haihi na Makerere", prompt: "student hostel near Makerere", intent: "search_student" },
       { label: "room emwe haihi na Kyambogo", prompt: "single room near Kyambogo", intent: "search_student" },
@@ -35794,6 +35819,11 @@ const AI_ASSISTANT_EXAMPLE_PROMPTS_I18N = Object.freeze({
       { label: "office Nakasero", prompt: "office space in Nakasero", intent: "search_commercial" },
       { label: "duuka ry'okupangisa Kampala", prompt: "shop to rent in Kampala", intent: "search_commercial" },
       { label: "warehouse Ntinda", prompt: "warehouse in Ntinda", intent: "search_commercial" }
+    ],
+    short_term: [
+      { label: "short stay Kampala", prompt: "short stay in Kampala", intent: "search_short_term" },
+      { label: "guest house Entebbe", prompt: "guest house in Entebbe", intent: "search_short_term" },
+      { label: "apartment Kololo", prompt: "furnished apartment in Kololo by the night", intent: "search_short_term" }
     ],
     student: [
       { label: "hostel haihi na Makerere", prompt: "student hostel near Makerere", intent: "search_student" },
@@ -35829,6 +35859,11 @@ const AI_ASSISTANT_EXAMPLE_PROMPTS_I18N = Object.freeze({
       { label: "duuka okupangisa e Kampala", prompt: "shop to rent in Kampala", intent: "search_commercial" },
       { label: "warehouse e Ntinda", prompt: "warehouse in Ntinda", intent: "search_commercial" }
     ],
+    short_term: [
+      { label: "short stay e Kampala", prompt: "short stay in Kampala", intent: "search_short_term" },
+      { label: "guest house e Entebbe", prompt: "guest house in Entebbe", intent: "search_short_term" },
+      { label: "apartment e Kololo", prompt: "furnished apartment in Kololo by the night", intent: "search_short_term" }
+    ],
     student: [
       { label: "hostel okumpi ne Makerere", prompt: "student hostel near Makerere", intent: "search_student" },
       { label: "single room okumpi ne Kyambogo", prompt: "single room near Kyambogo", intent: "search_student" },
@@ -35863,6 +35898,11 @@ const AI_ASSISTANT_EXAMPLE_PROMPTS_I18N = Object.freeze({
       { label: "ሱቅ ለኪራይ በKampala", prompt: "shop to rent in Kampala", intent: "search_commercial" },
       { label: "መጋዘን በNtinda", prompt: "warehouse in Ntinda", intent: "search_commercial" }
     ],
+    short_term: [
+      { label: "የአጭር ጊዜ ማረፊያ በKampala", prompt: "short stay in Kampala", intent: "search_short_term" },
+      { label: "እንግዳ ማረፊያ በEntebbe", prompt: "guest house in Entebbe", intent: "search_short_term" },
+      { label: "አፕርታማ በKololo", prompt: "furnished apartment in Kololo by the night", intent: "search_short_term" }
+    ],
     student: [
       { label: "ሆስቴል በMakerere አጠገብ", prompt: "student hostel near Makerere", intent: "search_student" },
       { label: "ነጠላ ክፍል በKyambogo አጠገብ", prompt: "single room near Kyambogo", intent: "search_student" },
@@ -35896,6 +35936,11 @@ const AI_ASSISTANT_EXAMPLE_PROMPTS_I18N = Object.freeze({
       { label: "مكتب في Nakasero", prompt: "office space in Nakasero", intent: "search_commercial" },
       { label: "محل للإيجار في Kampala", prompt: "shop to rent in Kampala", intent: "search_commercial" },
       { label: "مستودع في Ntinda", prompt: "warehouse in Ntinda", intent: "search_commercial" }
+    ],
+    short_term: [
+      { label: "إقامة قصيرة في Kampala", prompt: "short stay in Kampala", intent: "search_short_term" },
+      { label: "بيت ضيافة في Entebbe", prompt: "guest house in Entebbe", intent: "search_short_term" },
+      { label: "شقة في Kololo", prompt: "furnished apartment in Kololo by the night", intent: "search_short_term" }
     ],
     student: [
       { label: "سكن طلاب قرب Makerere", prompt: "student hostel near Makerere", intent: "search_student" },
@@ -35948,7 +35993,8 @@ const AI_ASSISTANT_SEARCH_SCOPES = Object.freeze({
   rent: { intent: "search_rent", labelKey: "rent" },
   land: { intent: "search_land", labelKey: "land" },
   commercial: { intent: "search_commercial", labelKey: "commercial" },
-  student: { intent: "search_student", labelKey: "student" }
+  student: { intent: "search_student", labelKey: "student" },
+  short_term: { intent: "search_short_term", labelKey: "short_term" }
 });
 
 const AI_ASSISTANT_SCOPE_HINT_I18N = Object.freeze({
@@ -35959,6 +36005,7 @@ const AI_ASSISTANT_SCOPE_HINT_I18N = Object.freeze({
     rent: "Searching To Rent",
     land: "Searching Land",
     commercial: "Searching Commercial",
+    short_term: "Searching Short Term",
     student: "Searching Student accommodation"
   },
   lg: {
@@ -35967,6 +36014,7 @@ const AI_ASSISTANT_SCOPE_HINT_I18N = Object.freeze({
     rent: "Enoonya ez'okupangisa",
     land: "Enoonya ettaka",
     commercial: "Enoonya commercial",
+    short_term: "Enoonya Short Term",
     student: "Enoonya student accommodation"
   },
   sw: {
@@ -35975,6 +36023,7 @@ const AI_ASSISTANT_SCOPE_HINT_I18N = Object.freeze({
     rent: "Inatafuta za kupanga",
     land: "Inatafuta ardhi",
     commercial: "Inatafuta biashara",
+    short_term: "Inatafuta malazi ya muda",
     student: "Inatafuta malazi ya wanafunzi"
   },
   ac: {
@@ -35983,6 +36032,7 @@ const AI_ASSISTANT_SCOPE_HINT_I18N = Object.freeze({
     rent: "Tye ka yeny me rent",
     land: "Tye ka yeny ngom",
     commercial: "Tye ka yeny commercial",
+    short_term: "Tye ka yeny Short Term",
     student: "Tye ka yeny student accommodation"
   },
   ny: {
@@ -35991,6 +36041,7 @@ const AI_ASSISTANT_SCOPE_HINT_I18N = Object.freeze({
     rent: "Erikusherura ez'okupangisa",
     land: "Erikusherura eitaka",
     commercial: "Erikusherura commercial",
+    short_term: "Erikusherura Short Term",
     student: "Erikusherura student accommodation"
   },
   rn: {
@@ -35999,6 +36050,7 @@ const AI_ASSISTANT_SCOPE_HINT_I18N = Object.freeze({
     rent: "Erikusherura ez'okupangisa",
     land: "Erikusherura eitaka",
     commercial: "Erikusherura commercial",
+    short_term: "Erikusherura Short Term",
     student: "Erikusherura student accommodation"
   },
   sm: {
@@ -36007,6 +36059,7 @@ const AI_ASSISTANT_SCOPE_HINT_I18N = Object.freeze({
     rent: "Enoonya ez'okupangisa",
     land: "Enoonya ettaka",
     commercial: "Enoonya commercial",
+    short_term: "Enoonya Short Term",
     student: "Enoonya student accommodation"
   },
   am: {
@@ -36015,6 +36068,7 @@ const AI_ASSISTANT_SCOPE_HINT_I18N = Object.freeze({
     rent: "ለኪራይ ይፈልጋል",
     land: "መሬት ይፈልጋል",
     commercial: "ንግድ ቦታ ይፈልጋል",
+    short_term: "የአጭር ጊዜ ማረፊያ ይፈልጋል",
     student: "የተማሪ መኖሪያ ይፈልጋል"
   },
   ar: {
@@ -36023,6 +36077,7 @@ const AI_ASSISTANT_SCOPE_HINT_I18N = Object.freeze({
     rent: "يبحث في عقارات الإيجار",
     land: "يبحث في الأراضي",
     commercial: "يبحث في التجاري",
+    short_term: "يبحث في الإقامة القصيرة",
     student: "يبحث في سكن الطلاب"
   }
 });
@@ -36031,6 +36086,7 @@ function normalizeAiAssistantScope(scope = "all") {
   const clean = String(scope || "all").trim().toLowerCase();
   if (clean === "off-plan" || clean === "new-development" || clean === "new-developments") return "off_plan";
   if (clean === "students" || clean === "student-accommodation") return "student";
+  if (clean === "short-term" || clean === "short-stay" || clean === "shortterm") return "short_term";
   if (clean === "to-rent" || clean === "rental" || clean === "rentals") return "rent";
   if (clean === "for-sale" || clean === "sales") return "sale";
   return AI_ASSISTANT_SEARCH_SCOPES[clean] ? clean : "all";
@@ -36044,6 +36100,7 @@ function aiAssistantScopeForPage(page = currentPage || "home") {
   if (clean === "land") return "land";
   if (clean === "commercial") return "commercial";
   if (clean === "students" || clean === "student" || clean === "student-accommodation") return "student";
+  if (clean === "short-term" || clean === "short_term") return "short_term";
   return "all";
 }
 
