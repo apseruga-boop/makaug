@@ -325,7 +325,9 @@
     }
 
     var search = params.toString();
-    if (window.history && window.history.replaceState) {
+    // Only the search view owns the address bar. Rewriting it from a listing
+    // page or the host wizard is how a deep link loses its path.
+    if (window.history && window.history.replaceState && currentPath() === '/short-term') {
       window.history.replaceState({}, '', '/short-term' + (search ? '?' + search : ''));
     }
 
@@ -1076,15 +1078,24 @@
       + '</div>';
   }
 
-  // The share link carries ?ref=<whoever brought this host in>. It is kept for
-  // the length of the visit so it survives the wizard, and submitted with the
-  // listing so supply work can be counted rather than guessed at.
-  function referralCode() {
-    var fromUrl = (qs().ref || '').trim();
-    if (fromUrl) {
-      try { window.sessionStorage.setItem('makaug.short-term.ref', fromUrl); } catch (_error) {}
-      return fromUrl;
+  // The share link carries ?ref=<whoever brought this host in>.
+  //
+  // This MUST run before any router touches the address bar. The main bundle's
+  // showPage rewrites the URL to a page's canonical route, so by the time the
+  // wizard submits, ?ref= is long gone. Captured once at boot, read from
+  // storage from then on.
+  function captureReferralCode() {
+    try {
+      var fromUrl = (new URLSearchParams(window.location.search || '').get('ref') || '').trim();
+      if (fromUrl) window.sessionStorage.setItem('makaug.short-term.ref', fromUrl.slice(0, 40));
+    } catch (_error) {
+      // Session storage blocked. The listing still submits, just without a
+      // referral code attached.
     }
+  }
+  captureReferralCode();
+
+  function referralCode() {
     try { return window.sessionStorage.getItem('makaug.short-term.ref') || ''; } catch (_error) { return ''; }
   }
 
@@ -1478,7 +1489,17 @@
     if (path !== '/short-term' && path.indexOf('/short-term/') !== 0) return;
 
     if (typeof window.showPage === 'function') {
+      // showPage rewrites the address bar to this page's canonical route, which
+      // throws away /list-your-place, a listing slug and any query string. Put
+      // the real one back immediately so refresh, share and back all work.
+      var intended = (window.location.pathname || '') + (window.location.search || '');
       try { window.showPage('short-term', { scroll: false }); } catch (_e) {}
+      try {
+        if (window.history && window.history.replaceState
+          && (window.location.pathname + window.location.search) !== intended) {
+          window.history.replaceState({}, '', intended);
+        }
+      } catch (_e) {}
     } else {
       document.querySelectorAll('.page.active').forEach(function (p) {
         if (p !== r) p.classList.remove('active');

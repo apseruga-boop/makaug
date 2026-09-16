@@ -1142,15 +1142,49 @@ test('a saved listing clears the local draft, and a failed one keeps it', () => 
     'the draft must only be cleared on success, never in the error path');
 });
 
-test('the share link referral code is carried through to the listing', () => {
-  assert.ok(clientSource.includes('function referralCode()'), 'referral capture missing');
-  assert.ok(clientSource.includes("qs().ref"), 'the code must come off the share link');
-  assert.ok(clientSource.includes('referral_code: referralCode()'), 'it must be submitted with the listing');
+test('the referral code is captured before any router can eat the URL', () => {
+  // THE BUG THIS EXISTS FOR: route() calls the main bundle's showPage, and
+  // showPage rewrites the address bar to the page's canonical route. Opening
+  // /short-term/list-your-place?ref=kunta became /short-term before anything
+  // read the query string, so every referral was silently lost. Found by
+  // walking the flow on the live site, not by any of these tests, which is
+  // why this one is written against the ordering rather than the wording.
+  assert.ok(clientSource.includes('function captureReferralCode()'), 'boot-time capture missing');
+
+  const captureAt = clientSource.indexOf('captureReferralCode();');
+  const routeDefAt = clientSource.indexOf('function route()');
+  assert.ok(captureAt > -1, 'captureReferralCode is never called');
+  assert.ok(captureAt < routeDefAt,
+    'the capture must run at script load, before routing exists to rewrite the URL');
+
+  // And it reads the real query string rather than anything already rewritten.
   assert.ok(
-    /sessionStorage[\s\S]{0,200}catch/.test(clientSource),
-    'session storage access must be wrapped too'
+    /captureReferralCode\(\)[\s\S]{0,400}window\.location\.search/.test(clientSource),
+    'the capture must read window.location.search directly'
   );
+  assert.ok(clientSource.includes('referral_code: referralCode()'), 'it must be submitted with the listing');
   assert.ok(routeSource.includes('referralCode: req.body?.referral_code'), 'the route must accept it');
+
+  // Storage can be blocked; that must cost the referral code, not the form.
+  const captureBlock = clientSource.slice(captureAt - 900, captureAt + 400);
+  assert.ok(/catch \(_?error\)/.test(captureBlock), 'session storage access must be wrapped');
+});
+
+test('only the search view rewrites the address bar', () => {
+  // The same bug from the other side: runSearch replaceStates to /short-term,
+  // which threw away /list-your-place and any listing slug when it fired from
+  // the wrong view.
+  assert.ok(
+    /replaceState[\s\S]{0,120}currentPath\(\) === '\/short-term'/.test(clientSource)
+    || /currentPath\(\) === '\/short-term'[\s\S]{0,160}replaceState/.test(clientSource),
+    'runSearch must only rewrite the URL while on the search view'
+  );
+
+  // And route() puts back whatever showPage threw away.
+  assert.ok(
+    /var intended = \(window\.location\.pathname[\s\S]{0,600}replaceState\(\{\}, '', intended\)/.test(clientSource),
+    'route must restore the real path after showPage rewrites it'
+  );
 });
 
 // ---------------------------------------------------------------------------
