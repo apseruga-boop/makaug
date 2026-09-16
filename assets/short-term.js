@@ -532,7 +532,9 @@
   function mountSearch() {
     var r = root();
     if (!r) return;
-    r.querySelector('.st-view-search').innerHTML = searchViewHtml();
+    var view = r.querySelector('.st-view-search');
+    if (!view) return;
+    view.innerHTML = searchViewHtml();
     startCountdown();
     wireShortTermLocationFields();
 
@@ -1540,6 +1542,11 @@
       var el = r.querySelector('.st-view-' + key);
       if (el) el.classList.toggle('is-active', key === name);
     });
+    // The Ask AI box lives outside the views so that re-rendering the search
+    // view cannot delete it. It belongs to searching, so it is hidden while a
+    // host is filling in the wizard or a guest is reading one listing.
+    var ai = document.getElementById('short-term-ai-shell');
+    if (ai) ai.hidden = (name !== 'search');
   }
 
   function route() {

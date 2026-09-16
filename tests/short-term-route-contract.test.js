@@ -1142,6 +1142,53 @@ test('a saved listing clears the local draft, and a failed one keeps it', () => 
     'the draft must only be cleared on success, never in the error path');
 });
 
+test('nothing the client renders can delete the Ask AI box', () => {
+  // THE BUG THIS EXISTS FOR: the Ask AI block was authored inside
+  // <section class="st-view st-view-search">, and mountSearch() replaces that
+  // section's innerHTML wholesale. So the section had two genuinely different
+  // appearances - the Ask AI box alone before the JS ran, everything else and
+  // no Ask AI box after - and which one you saw was down to timing. Reported
+  // as "click it, get one thing; click again, get something different".
+  //
+  // The previous test in this file checked WHEN the script loads, which
+  // narrowed the window and hid the real problem. This one checks that the two
+  // renders cannot contradict each other at all.
+  const indexSource = read('index.html');
+
+  const pageAt = indexSource.indexOf('id="page-short-term"');
+  assert.ok(pageAt > -1, 'the short-term page block is gone');
+  const pageBlock = indexSource.slice(pageAt, indexSource.indexOf('id="page-marketplace"'));
+
+  const aiAt = pageBlock.indexOf('id="short-term-ai-shell"');
+  const searchViewAt = pageBlock.indexOf('class="st-view st-view-search');
+  assert.ok(aiAt > -1, 'the Ask AI shell is missing from the short-term page');
+  assert.ok(searchViewAt > -1, 'the search view is missing');
+  assert.ok(
+    aiAt < searchViewAt,
+    'the Ask AI shell must sit OUTSIDE the search view - mountSearch replaces that view\'s innerHTML and would delete it'
+  );
+
+  // And every innerHTML write in the client must stay inside a view, so this
+  // cannot be reintroduced by moving the markup back.
+  const writes = clientSource.match(/\.st-view-(search|detail|list)'\)[\s\S]{0,60}innerHTML/g) || [];
+  assert.ok(writes.length > 0, 'expected the views to be rendered by innerHTML');
+
+  // setView owns whether it is on screen; it belongs to searching only.
+  assert.ok(
+    /getElementById\('short-term-ai-shell'\)[\s\S]{0,120}hidden = \(name !== 'search'\)/
+      .test(clientSource),
+    'setView must show the Ask AI box on the search view and hide it elsewhere'
+  );
+
+  // The view element is not guaranteed to exist - the sanitizer strips this
+  // page's block on every other route - so the render must not assume it.
+  assert.ok(
+    /var view = r\.querySelector\('\.st-view-search'\);\s*\n\s*if \(!view\) return;/
+      .test(clientSource),
+    'mountSearch must bail rather than throw when its view is not on the page'
+  );
+});
+
 test('the section never shows its un-hydrated shell', () => {
   // THE BUG THIS EXISTS FOR: short-term.js was lazy-loaded on the nav click.
   // showPage() reveals the page the instant it is clicked, so until the script
