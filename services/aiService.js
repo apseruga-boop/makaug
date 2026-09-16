@@ -1305,6 +1305,135 @@ async function classifyWhatsappListingPhoto({ imageDataUrl = '', expectedSlot = 
   }
 }
 
+/**
+ * Read a property caption that an agent burned into a video or photo.
+ *
+ * Agents forward listing clips with the details written over the picture and no
+ * WhatsApp caption, so the only description that exists is inside the frame.
+ *
+ * The rule that matters: transcribe, never infer. A model shown a nice house
+ * will happily guess "4 bedrooms in Kololo, UGX 600m" from the picture alone,
+ * and a guessed price on a real listing is far worse than no listing. Anything
+ * not legible as text comes back null, and no_text_found is a correct answer.
+ */
+async function readListingCaptionFromFrame({ imageDataUrl = '', providerScope = '' } = {}) {
+  const unavailable = (reason) => ({
+    found: false,
+    caption: '',
+    listing_type: null,
+    area: null,
+    district: null,
+    price_text: null,
+    bedrooms: null,
+    confidence: 0,
+    reason
+  });
+
+  const rawImage = String(imageDataUrl || '').trim();
+  if (!/^data:image\/(?:jpeg|jpg|png|webp);base64,/i.test(rawImage)) return unavailable('frame_missing');
+
+  const approxBytes = Math.floor((rawImage.length * 3) / 4);
+  if (approxBytes > 3_000_000) return unavailable('frame_too_large');
+
+  const client = getClient(providerScope);
+  if (!client) return unavailable('vision_provider_unavailable');
+
+  const model = getTaskModel('whatsapp_frame_caption', process.env.OPENAI_WHATSAPP_FRAME_MODEL || 'gpt-4.1-mini', providerScope);
+  try {
+    const completion = await createChatCompletionResilient(client, {
+      model,
+      temperature: 0,
+      messages: [
+        {
+          role: 'system',
+          content: [
+            'You transcribe text that a Uganda property agent has overlaid onto a listing image.',
+            'Return JSON only: has_text_overlay (boolean), raw_text (string, exactly as written),',
+            'listing_type (sale|rent|land|commercial|student|null), area (string|null), district (string|null),',
+            'price_text (string|null, exactly as written e.g. "@450m negotiable"), bedrooms (integer|null),',
+            'confidence (0..1).',
+            'CRITICAL: transcribe only what is legibly written as text on the image.',
+            'Never infer a price, location, or room count from what the building looks like.',
+            'If a field is not written on the image, it is null. If there is no text overlay at all,',
+            'set has_text_overlay false and leave every field null. Reporting no text is correct and expected.',
+            'Ignore watermarks, phone numbers, logos, timestamps and social handles.'
+          ].join(' ')
+        },
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'Transcribe any property details written on this image. Do not guess anything that is not written.' },
+            { type: 'image_url', image_url: { url: rawImage, detail: 'high' } }
+          ]
+        }
+      ]
+    }, { preferJson: true });
+
+    const parsed = safeJsonParse(completion?.choices?.[0]?.message?.content || '{}', {});
+    const confidence = clamp(parsed.confidence || 0, 0, 1);
+    const hasOverlay = parsed.has_text_overlay === true;
+    const rawText = cleanText(parsed.raw_text, 400);
+
+    if (!hasOverlay || !rawText) {
+      const miss = { ...unavailable('no_text_found'), model };
+      await logAiModelEvent({
+        eventType: 'whatsapp_frame_caption_read',
+        source: 'whatsapp',
+        inputPayload: { image_bytes_approx: approxBytes },
+        outputPayload: miss,
+        modelName: model,
+        qualityScore: confidence
+      });
+      return miss;
+    }
+
+    const listingType = ['sale', 'rent', 'land', 'commercial', 'student']
+      .includes(cleanText(parsed.listing_type, 20).toLowerCase())
+      ? cleanText(parsed.listing_type, 20).toLowerCase()
+      : null;
+    const bedrooms = Number.isFinite(Number(parsed.bedrooms)) && Number(parsed.bedrooms) > 0
+      ? Math.min(50, Math.trunc(Number(parsed.bedrooms)))
+      : null;
+
+    const result = {
+      found: true,
+      // The transcription itself is the caption. makaug's existing caption
+      // parser then extracts facts exactly as it does for a typed caption, so
+      // there is one code path deciding what a property is, not two.
+      caption: rawText,
+      listing_type: listingType,
+      area: cleanText(parsed.area, 80) || null,
+      district: cleanText(parsed.district, 80) || null,
+      price_text: cleanText(parsed.price_text, 60) || null,
+      bedrooms,
+      confidence,
+      reason: 'text_found',
+      model
+    };
+
+    await logAiModelEvent({
+      eventType: 'whatsapp_frame_caption_read',
+      source: 'whatsapp',
+      inputPayload: { image_bytes_approx: approxBytes },
+      outputPayload: result,
+      modelName: model,
+      qualityScore: confidence
+    });
+    return result;
+  } catch (error) {
+    logger.warn('WhatsApp frame caption read failed:', error.message);
+    await logAiModelEvent({
+      eventType: 'whatsapp_frame_caption_read_error',
+      source: 'whatsapp',
+      inputPayload: { image_bytes_approx: approxBytes },
+      outputPayload: { found: false },
+      modelName: model,
+      errorMessage: error.message
+    });
+    return { ...unavailable('frame_read_failed'), model };
+  }
+}
+
 async function transcribeAudioFromUrl(mediaUrl, mediaType = 'audio/ogg', options = {}) {
   if (!mediaUrl) return null;
   if (String(mediaUrl).startsWith('data:')) {
@@ -1957,6 +2086,7 @@ module.exports = {
   transcribeAudioFromUrl,
   transcribeAudioFromDataUrl,
   classifyWhatsappListingPhoto,
+  readListingCaptionFromFrame,
   generateCampaignCopy,
   generateListingIntelligence,
   translateFreeText,
