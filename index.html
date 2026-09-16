@@ -10155,18 +10155,20 @@
           offPlanScript.src = "/assets/off-plan.js?v=20260910-off-plan-v15";
           document.body.appendChild(offPlanScript);
           if (window.__makaugShortTerm && window.__makaugShortTerm.enabled === true) {
-            // Load the section's code only where it is used. Every kilobyte a
-            // visitor does not need is one they pay for on mobile data.
+            // This used to load only when a visitor opened the section, to
+            // save them the download. It cost far more than it saved: the nav
+            // click reveals the page at once, so until the script landed the
+            // visitor was looking at the bare shell in the HTML and had to
+            // click a second time to get the real page. 21KB gzipped against
+            // a 570KB bundle is not worth a page that renders wrong.
             window.__makaugLoadShortTerm = function () {
               if (window.__makaugShortTermRequested) return;
               window.__makaugShortTermRequested = true;
               var s = document.createElement("script");
-              s.src = "/assets/short-term.js?v=20260916-short-term-v4";
+              s.src = "/assets/short-term.js?v=20260916-short-term-v5";
               document.body.appendChild(s);
             };
-            if (/^\/short-term(\/|$)/.test(window.location.pathname)) {
-              window.__makaugLoadShortTerm();
-            }
+            window.__makaugLoadShortTerm();
 
             // The review desks only exist in the DOM on the staff and admin
             // dashboards; publicHtmlSanitizer strips those containers out of

@@ -1486,7 +1486,13 @@
     var r = root();
     if (!r) return;
     var path = currentPath();
-    if (path !== '/short-term' && path.indexOf('/short-term/') !== 0) return;
+    // The main bundle reveals this page the instant the nav is clicked, which
+    // can happen before the address bar says /short-term. If the page is on
+    // screen it renders - a visible page must never be left showing the shell.
+    if (path !== '/short-term' && path.indexOf('/short-term/') !== 0) {
+      if (!r.classList.contains('active')) return;
+      path = '/short-term';
+    }
 
     if (typeof window.showPage === 'function') {
       // showPage rewrites the address bar to this page's canonical route, which
@@ -1535,10 +1541,36 @@
 
   window.addEventListener('popstate', route);
 
+  // showPage() can reveal this page from the desktop nav, the mobile menu, a
+  // back button or any route the main bundle owns, and none of them tell this
+  // file. So watch the page's own class: however it becomes visible, it
+  // renders. This is what stops the shell ever being left on screen.
+  var hydrating = false;
+  function hydrateIfVisible() {
+    if (hydrating) return;
+    var r = root();
+    if (!r || !r.classList.contains('active')) return;
+    hydrating = true;
+    try { route(); } catch (_error) {}
+    // Re-arm on the next tick. route() calls showPage, which touches the same
+    // class this observer watches, and without the flag that loops.
+    setTimeout(function () { hydrating = false; }, 0);
+  }
+
+  try {
+    if (window.MutationObserver && root()) {
+      new window.MutationObserver(hydrateIfVisible)
+        .observe(root(), { attributes: true, attributeFilter: ['class'] });
+    }
+  } catch (_error) {}
+
   function boot() {
     if (!root()) return;
     api('/meta').then(function (meta) { state.meta = meta; }).catch(function () {});
     route();
+    // Covers the case where the page was already revealed before this file
+    // finished loading.
+    hydrateIfVisible();
   }
 
   if (document.readyState === 'loading') {

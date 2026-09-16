@@ -1142,6 +1142,50 @@ test('a saved listing clears the local draft, and a failed one keeps it', () => 
     'the draft must only be cleared on success, never in the error path');
 });
 
+test('the section never shows its un-hydrated shell', () => {
+  // THE BUG THIS EXISTS FOR: short-term.js was lazy-loaded on the nav click.
+  // showPage() reveals the page the instant it is clicked, so until the script
+  // landed the visitor saw the bare shell that ships in index.html - the Ask
+  // AI box and nothing else - and had to click a second time to get the real
+  // page. Whichever won the race decided what you saw, so the same click gave
+  // different results. Reported from the live site, not caught here, because
+  // nothing in this file asserted anything about WHEN the script loads.
+  const indexSource = read('index.html');
+
+  // 1. The script loads with the app, not on the click that needs it.
+  const loaderAt = indexSource.indexOf('window.__makaugLoadShortTerm = function');
+  assert.ok(loaderAt > -1, 'the short-term loader is gone');
+  const afterLoader = indexSource.slice(loaderAt, loaderAt + 900);
+  assert.ok(
+    /window\.__makaugLoadShortTerm\(\);/.test(afterLoader),
+    'the loader must be called, not merely defined'
+  );
+  assert.ok(
+    !/if \(\/\^\\\/short-term[\s\S]{0,120}window\.__makaugLoadShortTerm\(\)/.test(afterLoader),
+    'the load must not be gated on the visitor already being on a short-term URL'
+  );
+
+  // 2. A visible page renders even if the address bar has not caught up.
+  assert.ok(
+    /if \(!r\.classList\.contains\('active'\)\) return;[\s\S]{0,80}path = '\/short-term';/
+      .test(clientSource),
+    'route() must render an already-visible page rather than bailing on the URL'
+  );
+
+  // 3. However the page becomes visible, it hydrates.
+  assert.ok(clientSource.includes('function hydrateIfVisible()'), 'hydration guard missing');
+  assert.ok(
+    /MutationObserver\(hydrateIfVisible\)[\s\S]{0,160}attributeFilter: \['class'\]/
+      .test(clientSource),
+    'the page class must be observed so any reveal triggers a render'
+  );
+  // And that observer must not be able to drive itself in a loop.
+  assert.ok(
+    /if \(hydrating\) return;[\s\S]{0,400}hydrating = false;/.test(clientSource),
+    'hydrateIfVisible must guard against re-entry - route() touches the watched class'
+  );
+});
+
 test('the referral code is captured before any router can eat the URL', () => {
   // THE BUG THIS EXISTS FOR: route() calls the main bundle's showPage, and
   // showPage rewrites the address bar to the page's canonical route. Opening
