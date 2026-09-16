@@ -1225,6 +1225,44 @@ test('the section reads in every language the site offers', () => {
   );
 });
 
+test('changing the language rebuilds the view', () => {
+  // The table alone changed nothing: route() only mounts the search view when
+  // the form is not already there, which is correct for navigation and wrong
+  // for a language switch, where rebuilding it is the entire point. Found by
+  // switching language on the live page and watching the English stay put.
+  assert.ok(clientSource.includes('function repaintCurrentView()'), 'repaintCurrentView is missing');
+  assert.ok(
+    /attributeFilter: \['lang'\][\s\S]{0,400}repaintCurrentView\(\)/.test(clientSource)
+    || /repaintCurrentView\(\)[\s\S]{0,400}attributeFilter: \['lang'\]/.test(clientSource),
+    'the language watcher must repaint, not merely re-route'
+  );
+  // It must rebuild whichever view is showing, not always the search one.
+  const at = clientSource.indexOf('function repaintCurrentView()');
+  const body = clientSource.slice(at, at + 700);
+  ['mountList()', 'mountDetail(', 'mountSearch()'].forEach((fn) => {
+    assert.ok(body.includes(fn), `repaintCurrentView does not handle ${fn}`);
+  });
+});
+
+test('re-rendering the search view cannot delete the Ask AI box', () => {
+  // The Ask AI shell is moved INTO the search view now, and mountSearch
+  // replaces that view's innerHTML - so the second render would have deleted
+  // it. Exactly the bug that produced the two-different-pages report, waiting
+  // to happen again the moment anything re-rendered.
+  const at = clientSource.indexOf('function mountSearch()');
+  const body = clientSource.slice(at, clientSource.indexOf('var form = document', at));
+
+  const park = body.indexOf('r.appendChild(shell)');
+  const wipe = body.indexOf('view.innerHTML = searchViewHtml()');
+  const restore = body.indexOf('slot.appendChild(shell)');
+
+  assert.ok(park > -1, 'the Ask AI shell is never parked before the wipe');
+  assert.ok(wipe > -1, 'mountSearch no longer renders the view');
+  assert.ok(restore > -1, 'the Ask AI shell is never put back');
+  assert.ok(park < wipe, 'it must be parked BEFORE innerHTML is replaced, or it is destroyed');
+  assert.ok(wipe < restore, 'it must be put back after the new markup exists');
+});
+
 test('the section is laid out like every other one', () => {
   // The Ask AI box was on top, above the page's own content. Everywhere else
   // on the site the content comes first and Ask AI sits below it.

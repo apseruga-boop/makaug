@@ -398,10 +398,7 @@
         var now = stLang();
         if (now === lastLang) return;
         lastLang = now;
-        var r = root();
-        if (!r || !r.classList.contains('active')) return;
-        // Repaint whichever view is on screen, keeping the visitor where they are.
-        try { route(); } catch (_error) {}
+        try { repaintCurrentView(); } catch (_error) {}
       }).observe(document.documentElement, { attributes: true, attributeFilter: ['lang'] });
     }
   } catch (_error) {}
@@ -917,13 +914,18 @@
     if (!r) return;
     var view = r.querySelector('.st-view-search');
     if (!view) return;
+    // The Ask AI box is MOVED, never rebuilt: the main bundle wires that
+    // markup, and re-creating it would leave a dead box behind. It now lives
+    // inside this view, so it has to be parked somewhere safe before the wipe
+    // or this render would delete it - the same way the section ended up
+    // showing two different pages before.
+    var shell = document.getElementById('short-term-ai-shell');
+    if (shell && shell.parentNode !== r) r.appendChild(shell);
+
     view.innerHTML = searchViewHtml();
 
-    // The Ask AI box is MOVED, never rebuilt: the main bundle wires that
-    // markup, and re-creating it would leave a dead box behind.
     var slot = document.getElementById('st-ai-slot');
-    var shell = document.getElementById('short-term-ai-shell');
-    if (slot && shell && shell.parentNode !== slot) slot.appendChild(shell);
+    if (slot && shell) slot.appendChild(shell);
 
     startCountdown();
     wireShortTermLocationFields();
@@ -2156,6 +2158,23 @@
     var observerPoll = window.setInterval(function () {
       if (ensureObserver() || ++observerTries > 40) window.clearInterval(observerPoll);
     }, 250);
+  }
+
+  // A language change has to rebuild the view, not just re-route to it.
+  // route() deliberately leaves an existing search form alone, which is right
+  // for navigation and wrong here.
+  function repaintCurrentView() {
+    var r = root();
+    if (!r || !r.classList.contains('active')) return;
+    var path = currentPath();
+    if (path === '/short-term/list-your-place') { mountList(); return; }
+    if (path !== '/short-term' && path.indexOf('/short-term/') === 0) {
+      mountDetail(path.slice('/short-term/'.length));
+      return;
+    }
+    mountSearch();
+    renderResults();
+    if (state.mapOn) paintMap();
   }
 
   function boot() {
