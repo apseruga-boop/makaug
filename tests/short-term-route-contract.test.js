@@ -106,13 +106,78 @@ test('the client script refuses to boot without the server config', () => {
   );
 });
 
-test('the countdown does not render without a configured date', () => {
-  assert.strictEqual(flags.shortTermCountdownTarget({}), null);
-  assert.strictEqual(flags.shortTermCountdownTarget({ SHORT_TERM_COUNTDOWN_TARGET: 'not a date' }), null);
+test('the countdown targets AFCON 2027 kick-off, and config still wins', () => {
+  // CAF confirmed 19 June to 17 July 2027 for the Pamoja tournament across
+  // Kenya, Tanzania and Uganda. Kick-off 16:00 East Africa Time = 13:00 UTC.
+  assert.strictEqual(flags.AFCON_2027_KICKOFF, '2027-06-19T13:00:00.000Z');
+  assert.strictEqual(flags.shortTermCountdownTarget({}), '2027-06-19T13:00:00.000Z');
+
+  const target = new Date(flags.AFCON_2027_KICKOFF);
+  assert.strictEqual(target.getUTCFullYear(), 2027);
+  assert.strictEqual(target.getUTCMonth(), 5, 'June is month 5');
+  assert.strictEqual(target.getUTCDate(), 19);
+
+  // A schedule change is a config edit, not a deploy.
   assert.strictEqual(
-    flags.shortTermCountdownTarget({ SHORT_TERM_COUNTDOWN_TARGET: '2027-01-15T00:00:00Z' }),
-    '2027-01-15T00:00:00.000Z'
+    flags.shortTermCountdownTarget({ SHORT_TERM_COUNTDOWN_TARGET: '2027-07-01T12:00:00Z' }),
+    '2027-07-01T12:00:00.000Z'
   );
+
+  // And a typo hides the banner rather than counting down to nonsense.
+  assert.strictEqual(flags.shortTermCountdownTarget({ SHORT_TERM_COUNTDOWN_TARGET: 'not a date' }), null);
+});
+
+test('the review desks ship as their own asset, not to every visitor', () => {
+  const deskSource = read('assets', 'short-term-admin.js');
+
+  // The public bundle must carry none of it.
+  assert.ok(!clientSource.includes('makaugShortTermDesk'), 'desk code leaked into the public asset');
+  assert.ok(!clientSource.includes('/staff/queue'), 'the public asset must not reference the staff queue');
+
+  // The desk asset is what talks to the staff endpoints.
+  assert.ok(deskSource.includes('/staff/queue'), 'the desk must load the queue');
+  assert.ok(deskSource.includes('king-decision'), 'the desk must reach King review');
+
+  // And it only loads where the desks exist, which is only the dashboards.
+  assert.ok(
+    /getElementById\("staff-short-term-queue"\)[\s\S]{0,400}short-term-admin\.js/.test(indexHtml),
+    'the desk asset must be loaded conditionally on the queue elements existing'
+  );
+  // Never an unconditional load.
+  const loaderBlock = indexHtml.slice(indexHtml.indexOf('shortTermDeskScript'), indexHtml.indexOf('shortTermDeskScript') + 400);
+  assert.ok(loaderBlock.includes('short-term-admin.js'), 'the desk asset load is missing');
+});
+
+test('the desk markup is stripped from every public response', () => {
+  const { sanitizePublicHtml } = require('../services/publicHtmlSanitizer');
+
+  for (const pathname of ['/', '/short-term', '/for-sale', '/about']) {
+    const out = sanitizePublicHtml(indexHtml, { pathname });
+
+    // None of the desk UI may reach a guest.
+    for (const fragment of [
+      'staff-short-term-control',
+      'admin-short-term-king-control',
+      'Short Term review desk',
+      'King review',
+      'Approve and publish',
+      'Send to King review'
+    ]) {
+      assert.ok(!out.includes(fragment), `"${fragment}" leaked on ${pathname}`);
+    }
+
+    // The one permitted mention is the loader's own guard: a getElementById
+    // call naming the queue element. It is a feature detection, not markup,
+    // and it is what keeps the desk asset off a guest's connection.
+    const mentions = (out.match(/staff-short-term-queue/g) || []).length;
+    assert.strictEqual(mentions, 1, `expected only the loader guard on ${pathname}, found ${mentions}`);
+    assert.ok(
+      /getElementById\("staff-short-term-queue"\)/.test(out),
+      `the only mention on ${pathname} must be the loader guard`
+    );
+    assert.ok(!/<(?:section|div)[^>]*id="staff-short-term-queue"/.test(out),
+      `the queue container itself leaked on ${pathname}`);
+  }
 });
 
 test('every /api/short-term route sits behind the flag guard', () => {

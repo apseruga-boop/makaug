@@ -348,3 +348,79 @@
 
 #page-short-term .st-crumb { font-size: .8rem; color: var(--st-muted); padding: 14px 0 0; }
 #page-short-term .st-crumb a { color: var(--st-green); text-decoration: none; font-weight: 700; }
+
+/* ---------- review desks (staff + King dashboards) ----------
+   These live inside #page-staff-dashboard and #page-admin-dashboard, not
+   inside #page-short-term, so they carry their own .st-scope. */
+
+.st-scope {
+  --st-green: #15803d;
+  --st-amber: #f59e0b;
+  --st-ink: #16241d;
+  --st-muted: #5b6b63;
+  --st-line: #dfe8e3;
+  --st-green-soft: #f0f7f2;
+}
+.st-scope .st-btn {
+  border: 1px solid var(--st-line); background: #fff; color: var(--st-ink);
+  border-radius: 10px; padding: 8px 14px; font-weight: 700; font-size: .85rem; cursor: pointer;
+}
+.st-scope .st-btn:hover { border-color: var(--st-green); color: var(--st-green); }
+.st-scope .st-btn-primary { background: var(--st-green); border-color: var(--st-green); color: #fff; }
+.st-scope .st-btn-primary:hover { background: #166534; color: #fff; }
+.st-scope .st-input {
+  width: 100%; border: 1px solid var(--st-line); border-radius: 10px; padding: 9px 11px;
+  font-size: .9rem; font-family: inherit; color: var(--st-ink); background: #fff;
+}
+.st-scope .st-label {
+  display: block; font-size: .72rem; font-weight: 800; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--st-muted); margin-bottom: 4px;
+}
+.st-scope .st-errors {
+  background: #fef2f2; border: 1px solid #fecaca; border-radius: 10px;
+  padding: 10px 14px; margin: 10px 0; list-style: none;
+}
+.st-scope .st-errors li { font-size: .84rem; color: #991b1b; }
+
+.st-desk-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+.st-desk-chip {
+  border: 1px solid var(--st-line); background: #fff; color: var(--st-muted);
+  border-radius: 999px; padding: 5px 12px; font-size: .76rem; font-weight: 700; cursor: pointer;
+}
+.st-desk-chip b { color: var(--st-ink); margin-left: 3px; }
+.st-desk-chip.is-on { background: var(--st-green); border-color: var(--st-green); color: #fff; }
+.st-desk-chip.is-on b { color: #fff; }
+
+.st-desk-row { border: 1px solid var(--st-line); border-radius: 14px; padding: 14px; margin-bottom: 10px; background: #fff; }
+.st-desk-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
+.st-desk-ref { font-size: .68rem; font-weight: 900; letter-spacing: .08em; color: var(--st-muted); margin: 0; }
+.st-desk-row h4 { margin: 2px 0 4px; font-size: 1rem; font-weight: 800; color: var(--st-ink); }
+.st-desk-meta { font-size: .8rem; color: var(--st-muted); margin: 0 0 4px; }
+.st-desk-flags { display: flex; gap: 8px; flex-wrap: wrap; margin: 6px 0 0; }
+.st-desk-ok, .st-desk-warn { font-size: .72rem; font-weight: 700; border-radius: 999px; padding: 3px 9px; }
+.st-desk-ok { background: var(--st-green-soft); color: #15603f; }
+.st-desk-warn { background: #fffbeb; color: #92400e; }
+.st-desk-empty { font-size: .86rem; color: var(--st-muted); padding: 14px 0; }
+
+.st-desk-body { margin-top: 14px; border-top: 1px solid var(--st-line); padding-top: 14px; }
+.st-desk-sheet { display: grid; grid-template-columns: minmax(0,2fr) minmax(0,1fr); gap: 20px; }
+@media (max-width: 860px) { .st-desk-sheet { grid-template-columns: 1fr; } }
+.st-desk-sheet h5 { font-size: .74rem; font-weight: 900; text-transform: uppercase; letter-spacing: .06em; color: var(--st-muted); margin: 0 0 8px; }
+
+.st-desk-checks { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px,1fr)); gap: 4px 14px; }
+.st-desk-check { display: flex; gap: 8px; align-items: flex-start; font-size: .84rem; padding: 3px 0; cursor: pointer; }
+.st-desk-check input { margin-top: 3px; flex: none; }
+.st-desk-check em { color: var(--st-muted); font-style: normal; font-size: .74rem; }
+
+.st-desk-actions { margin-top: 14px; }
+.st-desk-buttons { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.st-desk-confirm {
+  display: flex; gap: 9px; align-items: flex-start; font-size: .86rem;
+  background: #fffbeb; border: 1px solid #fcd34d; border-radius: 10px; padding: 10px 12px;
+}
+.st-desk-note { font-size: .78rem; color: var(--st-muted); margin: 10px 0 0; }
+
+.st-desk-history { list-style: none; padding: 0; margin: 0; }
+.st-desk-history li { font-size: .78rem; border-left: 2px solid var(--st-line); padding: 4px 0 6px 10px; margin-bottom: 4px; }
+.st-desk-history span { display: block; color: var(--st-muted); font-size: .7rem; }
+.st-desk-history em { display: block; color: var(--st-ink); font-style: normal; margin-top: 2px; }

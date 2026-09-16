@@ -1724,7 +1724,10 @@ function sendPublicIndex(req, res, next) {
       }));
     }
     try {
-      const html = readIndexHtml();
+      // The review desks live on the staff and admin dashboards, which are
+      // protected routes and therefore skip renderPublicHtml. They still need
+      // the runtime config, or short-term.js will not boot there.
+      const html = injectShortTermRuntimeConfig(readIndexHtml());
       res.set('Cache-Control', 'no-store');
       return sendTextResponse(req, res, html, {
         cacheControl: 'no-store'

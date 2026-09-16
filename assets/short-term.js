@@ -1303,5 +1303,6 @@
     boot();
   }
 
+
   window.makaugShortTerm = { route: route, search: runSearch };
 })();

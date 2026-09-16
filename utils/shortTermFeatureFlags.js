@@ -55,12 +55,18 @@ function applyShortTermVisibility(html, env = process.env) {
   );
 }
 
-// The countdown target is configuration, never a date baked into the code.
-// If SHORT_TERM_COUNTDOWN_TARGET is unset the banner simply does not render,
-// which is the right behaviour: better no countdown than a wrong one.
+// AFCON 2027 kicks off on 19 June 2027 - CAF confirmed 19 June to 17 July for
+// the Pamoja tournament across Kenya, Tanzania and Uganda. Kick-off is 16:00
+// East Africa Time, which is 13:00 UTC.
+//
+// SHORT_TERM_COUNTDOWN_TARGET overrides this, so if CAF moves the date it is a
+// config change rather than a deploy. Setting the variable to an unparseable
+// value hides the banner rather than showing something wrong.
+const AFCON_2027_KICKOFF = '2027-06-19T13:00:00.000Z';
+
 function shortTermCountdownTarget(env = process.env) {
   const raw = String(env.SHORT_TERM_COUNTDOWN_TARGET || '').trim();
-  if (!raw) return null;
+  if (!raw) return AFCON_2027_KICKOFF;
   const parsed = new Date(raw);
   return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
 }
@@ -84,6 +90,7 @@ function injectShortTermRuntimeConfig(html, env = process.env) {
 }
 
 module.exports = {
+  AFCON_2027_KICKOFF,
   SHORT_TERM_NODE_ATTRIBUTE,
   applyShortTermVisibility,
   envFlagEnabled,
