@@ -6,10 +6,16 @@ const rateLimit = require('express-rate-limit');
 const db = require('../config/database');
 const logger = require('../config/logger');
 const {
-  fetchRates,
+  fetchRates: hotelbedsRates,
   fetchUgandaHotels,
-  shouldOfferPartnerSupply
+  shouldOfferPartnerSupply: hotelbedsShouldOffer
 } = require('../services/hotelbedsSupplyService');
+const {
+  enrichWithContact: liteapiContacts,
+  fetchRates: liteapiRates,
+  fetchUgandaProperties,
+  shouldOfferPartnerSupply: liteapiShouldOffer
+} = require('../services/liteapiSupplyService');
 
 const { requireAdminApiKey, requireStaffAccess } = require('../middleware/auth');
 const {
@@ -177,7 +183,48 @@ router.get('/search', async (req, res) => {
     // be counted as a host listing or read by something that assumes every
     // row carries a host's phone number, and this section's whole promise is
     // that they do.
-    if (shouldOfferPartnerSupply(result.listings)) {
+    // LiteAPI first. Hotelbeds only if LiteAPI is switched off or comes back
+    // empty, so the old behaviour is one environment variable away rather than
+    // deleted - but it is the fallback now, not the source.
+    if (liteapiShouldOffer(result.listings)) {
+      const partners = await fetchUgandaProperties({ limit: result.limit });
+      if (partners.length) {
+        const query = req.query || {};
+
+        // The phone number lives on the single-property endpoint, so this is
+        // one call per row - made only for the rows actually being sent, and
+        // cached for a day. It is worth it: a partner row with a phone number
+        // keeps the promise the rest of the section makes.
+        await liteapiContacts(partners);
+
+        const rates = await liteapiRates({
+          hotelIds: partners.map((row) => String(row.reference || '').replace(/^la-/, '')),
+          checkIn: query.check_in,
+          checkOut: query.check_out,
+          adults: query.guests
+        });
+
+        partners.forEach((row) => {
+          const rate = rates[row.reference];
+          if (!rate || !rate.per_night) return;
+          row.price_per_night = rate.per_night;
+          row.price_display = formatUgx(rate.per_night);
+          row.price_total_display = formatUgx(rate.total);
+          row.price_nights = rate.nights;
+          row.price_basis = {
+            source_currency: rate.source_currency,
+            source_total: rate.source_total,
+            fx_rate: rate.fx_rate,
+            markup_percent: rate.markup_percent
+          };
+        });
+
+        result.partner_listings = partners;
+        result.partner_source = 'liteapi';
+      }
+    }
+
+    if (!result.partner_listings && hotelbedsShouldOffer(result.listings)) {
       const partners = await fetchUgandaHotels({ limit: result.limit });
       if (partners.length) {
         // Prices are per stay, not per hotel, so they are only fetched when the
@@ -186,7 +233,7 @@ router.get('/search', async (req, res) => {
         // it would spend a metered call doing it. fetchRates returns {} rather
         // than calling out at all in that case.
         const query = req.query || {};
-        const rates = await fetchRates({
+        const rates = await hotelbedsRates({
           hotelCodes: partners.map((row) => String(row.reference || '').replace(/^hb-/, '')),
           checkIn: query.check_in,
           checkOut: query.check_out,

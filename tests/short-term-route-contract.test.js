@@ -1222,9 +1222,25 @@ test('a partner price is for the stay the visitor asked about', () => {
   // The route must hand the visitor's own dates to the rates call. A default
   // window would put a price on the card for a stay nobody searched for, which
   // looks like a quote and is not one.
-  const at = routeSource.indexOf('shouldOfferPartnerSupply(result.listings)');
+  const at = routeSource.indexOf('liteapiShouldOffer(result.listings)');
   assert.ok(at > -1, 'the partner fallback is missing');
-  const block = routeSource.slice(at, at + 2000);
+  // Both suppliers, because both must obey the rule.
+  const block = routeSource.slice(at, at + 4000);
+
+  // LiteAPI leads and Hotelbeds backs it up, not the other way round.
+  assert.ok(
+    routeSource.indexOf('liteapiShouldOffer(result.listings)')
+      < routeSource.indexOf('hotelbedsShouldOffer(result.listings)'),
+    'Hotelbeds is being consulted before LiteAPI'
+  );
+  // And Hotelbeds only runs when LiteAPI produced nothing, rather than both
+  // filling the page and the second quietly overwriting the first.
+  assert.ok(
+    /!result\.partner_listings && hotelbedsShouldOffer/.test(routeSource),
+    'the Hotelbeds fallback is not gated on LiteAPI having come back empty'
+  );
+  // The phone number is the reason a partner row can behave like a host row.
+  assert.ok(/liteapiContacts\(partners\)/.test(block), 'partner rows are not being given their phone number');
 
   assert.ok(/checkIn:\s*query\.check_in/.test(block), 'the visitor\'s check-in is not passed through');
   assert.ok(/checkOut:\s*query\.check_out/.test(block), 'the visitor\'s check-out is not passed through');
