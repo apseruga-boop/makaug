@@ -111,6 +111,7 @@
     "partnerHeading": "Hotel i Uganda",
     "partnerNote": "Pe tye wegi ot ma rwatte, ci magi obedo hotel ki bot lawote me wot. makaug pe keto, pe neno dok pe booko magi — link cito bot hotel.",
     "partnerPriceAsk": "Wel tye i kakube pa hotel",
+    "partnerReviews": "ngec",
     "partnerVisit": "Kabedo pa hotel kikome",
     "perNight": "i nino acel",
     "search": "Yeny",
@@ -179,6 +180,7 @@
     "partnerHeading": "በዩጋንዳ ያሉ ሆቴሎች",
     "partnerNote": "እስካሁን የሚዛመድ አስተናጋጅ የለም። እነዚህ ከጉዞ አጋር የመጡ ሆቴሎች ናቸው። makaug አይዘረዝራቸውም፣ አይመረምራቸውም፣ አያስይዛቸውም — አገናኙ ወደ ሆቴሉ ይወስዳል።",
     "partnerPriceAsk": "ዋጋው በሆቴሉ ድረ-ገጽ ላይ",
+    "partnerReviews": "ግምገማዎች",
     "partnerVisit": "የሆቴሉ ድረ-ገጽ",
     "perNight": "በአንድ ሌሊት",
     "search": "ፍልግ",
@@ -247,6 +249,7 @@
     "partnerHeading": "فنادق في أوغندا",
     "partnerNote": "لا يوجد مضيفون مطابقون بعد، لذلك هذه فنادق من شريك سفر. makaug لا تدرجها ولا تعاينها ولا تحجزها — الرابط يؤدي إلى الفندق.",
     "partnerPriceAsk": "السعر على موقع الفندق",
+    "partnerReviews": "تقييم",
     "partnerVisit": "موقع الفندق",
     "perNight": "لليلة",
     "search": "بحث",
@@ -315,6 +318,7 @@
     "partnerHeading": "Hotels in Uganda",
     "partnerNote": "No hosts match yet, so these are hotels from a travel partner. makaug does not list, inspect or book these — the link goes to the hotel.",
     "partnerPriceAsk": "Price on the hotel's site",
+    "partnerReviews": "reviews",
     "partnerVisit": "Hotel's own site",
     "perNight": "per night",
     "search": "Search",
@@ -383,6 +387,7 @@
     "partnerHeading": "Wooteeri mu Uganda",
     "partnerNote": "Tewali bannyini bifo batuukagana, n'olwekyo bino wooteeri okuva ku partner. makaug tegiteeka, tekebera era tebooka bino — link egenda ku wooteeri.",
     "partnerPriceAsk": "Ebbeeyi eri ku mukutu gwa hotel",
+    "partnerReviews": "endowooza",
     "partnerVisit": "Omukutu gwa wooteeri",
     "perNight": "buli kiro",
     "search": "Noonya",
@@ -451,6 +456,7 @@
     "partnerHeading": "Hotel omu Uganda",
     "partnerNote": "Tihariho banyineeka abarikuhikaana, n'ahabw'ekyo ebi n'ehotel kuruga aha munywani w'orugyendo. makaug tekizita, tekizyebera kandi tekizibooka — link neza aha hotel.",
     "partnerPriceAsk": "Omuhendo guri aha mukutu gwa hotel",
+    "partnerReviews": "ebiteekateeko",
     "partnerVisit": "Orubaju rwa hotel",
     "perNight": "aha kiro",
     "search": "Sherura",
@@ -519,6 +525,7 @@
     "partnerHeading": "Hotel omu Uganda",
     "partnerNote": "Tihariho banyineeka abarikuhikaana, n'ahabw'ekyo ebi n'ehotel kuruga aha munywani w'orugyendo. makaug tekizita, tekizyebera kandi tekizibooka — link neza aha hotel.",
     "partnerPriceAsk": "Omuhendo guri aha mukutu gwa hotel",
+    "partnerReviews": "ebiteekateeko",
     "partnerVisit": "Orubaju rwa hotel",
     "perNight": "aha kiro",
     "search": "Sherura",
@@ -587,6 +594,7 @@
     "partnerHeading": "Wooteeri mu Uganda",
     "partnerNote": "Tewali banyini bifo batuukagana, n'olwekyo bino wooteeri okuva ku partner. makaug tekiteeka, tekikebera era tekibooka bino — link egenda ku wooteeri.",
     "partnerPriceAsk": "Ebbeeyi eri ku mukutu gwa hotel",
+    "partnerReviews": "endowooza",
     "partnerVisit": "Omukutu gwa wooteeri",
     "perNight": "buli kiro",
     "search": "Noonya",
@@ -655,6 +663,7 @@
     "partnerHeading": "Hoteli nchini Uganda",
     "partnerNote": "Hakuna wenyeji wanaolingana bado, hivyo hizi ni hoteli kutoka kwa mshirika wa safari. makaug haiziorodheshi, haizikagui wala haizibuki — kiungo kinakwenda kwa hoteli.",
     "partnerPriceAsk": "Bei iko kwenye tovuti ya hoteli",
+    "partnerReviews": "maoni",
     "partnerVisit": "Tovuti ya hoteli",
     "perNight": "kwa usiku",
     "search": "Tafuta",
@@ -1001,10 +1010,25 @@
       ? '<img src="' + esc(shots[0]) + '" alt="" loading="lazy"'
         + ' data-st-shots="' + esc(shots.slice(1).join(' ')) + '">'
       : '<div class="st-noimg"><i class="fas fa-hotel"></i></div>';
-    var link = row.external_url
-      ? '<a class="st-partner-link" href="' + esc(row.external_url) + '"'
-        + ' target="_blank" rel="noopener noreferrer nofollow">' + esc(t('partnerVisit'))
-        + ' <i class="fas fa-arrow-up-right-from-square"></i></a>'
+    // The phone number is the point. A LiteAPI row carries the property's own
+    // line, so the card ends the same way a host card does - with a way to
+    // ring them - rather than with a link to a website that may not exist.
+    var tel = String(row.host_phone || '').trim();
+    var link = tel
+      ? '<a class="st-partner-call" href="tel:' + esc(tel.replace(/[^+0-9]/g, ''))
+        + '" data-st-contact="partner-phone"><i class="fas fa-phone"></i> ' + esc(tel) + '</a>'
+      : (row.external_url
+        ? '<a class="st-partner-link" href="' + esc(row.external_url) + '"'
+          + ' target="_blank" rel="noopener noreferrer nofollow">' + esc(t('partnerVisit'))
+          + ' <i class="fas fa-arrow-up-right-from-square"></i></a>'
+        : '');
+
+    // A guest score out of ten, with the number of reviews behind it, is worth
+    // more to someone choosing a room than a star rating from a tourism board.
+    // Only shown with its review count: a 9.4 from three people is not a 9.4.
+    var score = (row.review_score && row.review_count)
+      ? '<p class="st-partner-score"><b>' + esc(row.review_score.toFixed(1)) + '</b>'
+        + '<span>' + esc(String(row.review_count)) + ' ' + esc(t('partnerReviews')) + '</span></p>'
       : '';
 
     // A rate only exists when the visitor gave dates. When there is none the
@@ -1023,6 +1047,7 @@
       + '<h3 class="st-card-title">' + esc(row.title) + '</h3>'
       + (where ? '<p class="st-card-where">' + esc(where) + '</p>' : '')
       + stars
+      + score
       + price
       + link
       + '</div></article>';

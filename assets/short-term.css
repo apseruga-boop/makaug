@@ -684,3 +684,24 @@
 #page-short-term .st-partner-price--ask {
   font-size: .84rem; color: var(--st-muted); font-style: italic;
 }
+
+/* A partner row now carries the property's own number, so it ends the way a
+   host card does - with a way to ring them. */
+#page-short-term .st-partner-call {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-top: 10px; padding: 7px 12px; border-radius: 999px;
+  background: var(--st-accent); color: #fff;
+  font-size: .84rem; font-weight: 800; text-decoration: none;
+}
+#page-short-term .st-partner-call:hover { filter: brightness(1.08); }
+
+#page-short-term .st-partner-score {
+  display: flex; align-items: center; gap: 8px; margin: 6px 0 0;
+}
+#page-short-term .st-partner-score b {
+  background: #123a2a; color: #fff; border-radius: 6px;
+  padding: 2px 7px; font-size: .82rem; font-weight: 900;
+}
+#page-short-term .st-partner-score span {
+  font-size: .78rem; color: var(--st-muted);
+}

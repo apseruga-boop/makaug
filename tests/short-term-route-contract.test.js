@@ -1206,6 +1206,33 @@ test('the page does not report two separate failures for one situation', () => {
   assert.ok(/listOwn/.test(block), 'the list-your-place call to action was lost');
 });
 
+test('a partner card offers the number when it has one', () => {
+  // This is the whole model, and until LiteAPI replaced Hotelbeds the partner
+  // rows were the one place it did not hold: show the place, show the number,
+  // step out of the way. Hotelbeds rows carried no phone, so they had to link
+  // to a hotel website that existed on three in five of them.
+  const at = clientSource.indexOf('function partnerCardHtml(');
+  assert.ok(at > -1, 'partnerCardHtml is missing');
+  const block = clientSource.slice(at, clientSource.indexOf('function partnerBlockHtml('));
+
+  assert.ok(/row\.host_phone/.test(block), 'the card ignores the phone number the route sends');
+  assert.ok(/href="tel:/.test(block), 'the number is not dialable');
+  // Strip everything a dialler would choke on, but keep the leading plus:
+  // "+256 31 3800800" and "256-41-7219800" both arrive from the API.
+  assert.ok(/replace\(\/\[\^\+0-9\]\/g/.test(block), 'the tel: href is not being cleaned');
+
+  // The website link stays as the fallback for any row that has one and no
+  // phone, rather than being ripped out.
+  assert.ok(/external_url/.test(block), 'the website fallback was removed');
+
+  // A score is only worth showing with the count behind it. A 9.4 from three
+  // people is not a 9.4.
+  assert.ok(
+    /review_score && row\.review_count/.test(block),
+    'a review score can render without the number of reviews behind it'
+  );
+});
+
 test('a broken photo does not become a broken card', () => {
   const at = clientSource.indexOf('function partnerCardHtml(');
   const block = clientSource.slice(at, clientSource.indexOf('function partnerBlockHtml('));
