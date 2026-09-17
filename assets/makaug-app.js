@@ -30797,6 +30797,133 @@ function propertyVideoUrls(property = {}) {
   return [...new Set(raw.map((value) => String(value || "").trim()).filter((value) => /^https?:\/\//i.test(value)))];
 }
 
+// Stock house-and-keys photo makaug drops in when a listing has no photo of its own.
+const MAKAUG_GENERIC_LISTING_PHOTO_ID = "photo-1560518883-ce09059eeffa";
+
+function isGenericListingPhoto(value) {
+  return String(value || "").includes(MAKAUG_GENERIC_LISTING_PHOTO_ID);
+}
+
+// First photo that actually belongs to the property (the stock placeholder does not count).
+function firstRealListingPhotoUrl(property = {}) {
+  const images = Array.isArray(property?.images) ? property.images : [];
+  const candidates = images.map((item) => item?.url || item?.img || item?.src || item);
+  candidates.push(property?.primary_image_url, property?.img);
+  return candidates
+    .map((value) => String(value || "").trim())
+    .find((value) => value && !isGenericListingPhoto(value)) || "";
+}
+
+function getYouTubeThumbnailUrl(url) {
+  const embedUrl = getYouTubeEmbedUrl(url);
+  if (!embedUrl) return "";
+  const id = String(embedUrl.split("/embed/")[1] || "").split("?")[0];
+  return id ? `https://i.ytimg.com/vi/${id}/hqdefault.jpg` : "";
+}
+
+// Ask the browser for the opening frame only, so a card costs metadata rather than a whole video.
+function videoFirstFrameSrc(url) {
+  const safeUrl = String(url || "").trim();
+  if (!safeUrl) return "";
+  return safeUrl.includes("#") ? safeUrl : `${safeUrl}#t=0.1`;
+}
+
+function propertyPosterVideo(property = {}) {
+  const urls = propertyVideoUrls(property);
+  if (!urls.length) return null;
+  const mp4 = urls.find((url) => /\.mp4(?:[?#].*)?$/i.test(url));
+  if (mp4) return { url: mp4, kind: "mp4", poster: "", count: urls.length };
+  const youtube = urls
+    .map((url) => ({ url, poster: getYouTubeThumbnailUrl(url) }))
+    .find((item) => item.poster);
+  if (youtube) return { url: youtube.url, kind: "youtube", poster: youtube.poster, count: urls.length };
+  return null;
+}
+
+// Listings that arrived with a video tour but no photo of their own. These show the video's
+// own first frame instead of the generic stock photo, so the card shows the real property.
+function propertyVideoFirstMedia(property = {}) {
+  if (!property || isFoundOnlineListing(property)) return null;
+  if (firstRealListingPhotoUrl(property)) return null;
+  return propertyPosterVideo(property);
+}
+
+function videoFirstTileHtml(media, options = {}) {
+  if (!media) return "";
+  const label = options.alt || translateListingLabel("Video tour");
+  const mediaClass = options.className || "w-full h-full object-cover";
+  const frameHtml = media.kind === "youtube"
+    ? `<img src="${adminAttr(media.poster)}" alt="${adminAttr(label)}" class="${mediaClass}" loading="lazy">`
+    : `<video class="${mediaClass}" preload="none" muted playsinline disablepictureinpicture tabindex="-1" aria-label="${adminAttr(label)}" data-video-first-frame="${adminAttr(videoFirstFrameSrc(media.url))}"></video>`;
+  return `
+    ${frameHtml}
+    <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+      <span class="w-12 h-12 rounded-full bg-black/55 text-white flex items-center justify-center shadow-lg">
+        <i class="fas fa-play text-base ml-0.5"></i>
+      </span>
+    </div>
+    <div class="absolute bottom-2 left-2 pointer-events-none bg-black/60 text-white text-[11px] font-semibold px-2 py-1 rounded-full inline-flex items-center gap-1">
+      <i class="fas fa-video"></i>${translateListingLabel("Video tour")}
+    </div>
+  `;
+}
+
+// Card video covers stay empty until they scroll into view, then fetch only enough of the
+// file to paint the opening frame. Off-screen cards cost the visitor no data at all.
+let videoFirstFrameObserver = null;
+
+function hydrateVideoFirstFrame(video) {
+  if (!video || video.dataset.videoFirstFrameLoaded === "1") return;
+  const src = video.getAttribute("data-video-first-frame") || "";
+  if (!src) return;
+  video.dataset.videoFirstFrameLoaded = "1";
+  video.preload = "metadata";
+  video.src = src;
+  try { video.load(); } catch (error) {}
+}
+
+function scanVideoFirstFrames() {
+  const pending = document.querySelectorAll('video[data-video-first-frame]:not([data-video-first-frame-loaded="1"])');
+  if (!pending.length) return;
+  if (typeof IntersectionObserver !== "function") {
+    pending.forEach(hydrateVideoFirstFrame);
+    return;
+  }
+  if (!videoFirstFrameObserver) {
+    videoFirstFrameObserver = new IntersectionObserver((entries, observer) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        hydrateVideoFirstFrame(entry.target);
+        observer.unobserve(entry.target);
+      });
+    }, { rootMargin: "200px 0px" });
+  }
+  pending.forEach((video) => videoFirstFrameObserver.observe(video));
+}
+
+function startVideoFirstFrameWatcher() {
+  scanVideoFirstFrames();
+  if (typeof MutationObserver !== "function" || window.__videoFirstFrameWatcher) return;
+  let queued = false;
+  window.__videoFirstFrameWatcher = new MutationObserver(() => {
+    if (queued) return;
+    queued = true;
+    window.requestAnimationFrame(() => {
+      queued = false;
+      scanVideoFirstFrames();
+    });
+  });
+  window.__videoFirstFrameWatcher.observe(document.body, { childList: true, subtree: true });
+}
+
+if (typeof document !== "undefined") {
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", startVideoFirstFrameWatcher);
+  } else {
+    startVideoFirstFrameWatcher();
+  }
+}
+
 function renderLpVideoPreview() {
   const wrap = document.getElementById("lp-video-preview");
   if (!wrap) return;
@@ -42065,6 +42192,7 @@ function studentCardFooterText(p = {}) {
   const availability = propertyAvailabilityText(p);
   const distanceMiles = p.distance_miles ?? p.distanceMiles;
   const nearDistance = distanceMiles != null && Number.isFinite(Number(distanceMiles)) ? `${Number(distanceMiles).toFixed(1)} mi away` : "";
+  const cardVideoFirstMedia = propertyVideoFirstMedia(p);
   const photoSrc = publicImageSrc(p.img, "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=900&q=80");
   const displayTitle = getLocalizedPropertyTitle(p);
   const detailPath = getPropertyDetailPath(p);
@@ -42083,8 +42211,10 @@ function studentCardFooterText(p = {}) {
   return `
     <div class="group relative bg-white rounded-xl border border-gray-100 overflow-hidden property-card cursor-pointer" onclick="openPropertyCardDetail(event, ${idArg})">
       ${propertyDescriptionHoverHtml(p)}
-      <div class="h-48 relative overflow-hidden">
-        <img src="${adminAttr(photoSrc)}" alt="${adminAttr(displayTitle)}" class="w-full h-full object-cover">
+      <div class="h-48 relative overflow-hidden bg-gray-100">
+        ${cardVideoFirstMedia
+          ? videoFirstTileHtml(cardVideoFirstMedia, { alt: displayTitle })
+          : `<img src="${adminAttr(photoSrc)}" alt="${adminAttr(displayTitle)}" class="w-full h-full object-cover">`}
         <div class="absolute top-2 left-2 flex flex-col gap-1.5">
           ${badgeRow}
         </div>
@@ -45164,6 +45294,8 @@ function mapRemotePropertyForUi(p, options = {}) {
   const id = String(p?.id || "");
   const thirdPartyDiscovery = isFoundOnlineListing(p);
   const publicImageItems = thirdPartyDiscovery ? [] : imageItems;
+  // No photo of its own but a video tour is stored: the video's first frame is the cover.
+  const videoFirstMedia = thirdPartyDiscovery ? null : propertyVideoFirstMedia({ ...p, images: publicImageItems });
   const normalizedListingType = normalizeType(p?.listing_type || p?.type);
   const publicListingType = normalizedListingType || getHeroPropertyOpportunityBucket(p);
   const defaultSubtype = {
@@ -45204,7 +45336,7 @@ function mapRemotePropertyForUi(p, options = {}) {
     baths: p?.bathrooms,
     price: Number(p?.price || 0),
     period: p?.price_period || p?.period || "",
-    img: thirdPartyDiscovery ? "" : (p?.primary_image_url || p?.img || publicImageItems[0]?.url || "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=900&q=80"),
+    img: thirdPartyDiscovery ? "" : (firstRealListingPhotoUrl({ ...p, images: publicImageItems }) || (videoFirstMedia ? "" : "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=900&q=80")),
     desc: p?.description || p?.desc || "",
     area: canonicalDisplay.area,
     district: canonicalDisplay.district,
@@ -53998,13 +54130,15 @@ async function openDetail(id, options = {}) {
 	      const landTitleLabel = normalizedType === "land" ? landTitleAvailabilityLabel(getLandTitleAvailabilityValue(p) || "unknown") : "";
 	      const ownerDisplayName = p.contact_display_name || p.lister_display_name || p.lister_name || translateListingLabel("Private Owner");
   const thirdPartyDetail = isFoundOnlineListing(p);
-  const detailPhotos = thirdPartyDetail ? [] : getPropertyGalleryPhotos(p);
-  const primaryPhoto = thirdPartyDetail ? null : (detailPhotos.find((item) => item.is_main) || detailPhotos[0] || { url: p.img, slot: "", room_label: "", location_label: [p.area, p.district].filter(Boolean).join(", ") });
-  detailGalleryPhotos = thirdPartyDetail ? [] : (detailPhotos.length ? detailPhotos : [primaryPhoto]);
+  const detailVideoFirstMedia = thirdPartyDetail ? null : propertyVideoFirstMedia(p);
+  const hidePhotoGallery = thirdPartyDetail || !!detailVideoFirstMedia;
+  const detailPhotos = hidePhotoGallery ? [] : getPropertyGalleryPhotos(p);
+  const primaryPhoto = hidePhotoGallery ? null : (detailPhotos.find((item) => item.is_main) || detailPhotos[0] || { url: p.img, slot: "", room_label: "", location_label: [p.area, p.district].filter(Boolean).join(", ") });
+  detailGalleryPhotos = hidePhotoGallery ? [] : (detailPhotos.length ? detailPhotos : [primaryPhoto]);
   detailGalleryPhotoIndex = Math.max(0, detailGalleryPhotos.findIndex((item) => item?.is_main));
   if (detailGalleryPhotoIndex < 0) detailGalleryPhotoIndex = 0;
-  const selectedPhoto = thirdPartyDetail ? null : (detailGalleryPhotos[detailGalleryPhotoIndex] || primaryPhoto);
-  const selectedPhotoSrc = thirdPartyDetail ? "" : publicImageSrc(selectedPhoto?.url || p.img, "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=900&q=80");
+  const selectedPhoto = hidePhotoGallery ? null : (detailGalleryPhotos[detailGalleryPhotoIndex] || primaryPhoto);
+  const selectedPhotoSrc = hidePhotoGallery ? "" : publicImageSrc(selectedPhoto?.url || p.img, "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=900&q=80");
   const detailIdArg = propertyIdArg(p.id);
   const detailLocation = getPropertyLocationDisplay(p);
   const ownerPhone = p.lister_phone || p.contact_phone || p.phone || "";
@@ -54032,7 +54166,11 @@ async function openDetail(id, options = {}) {
   const contactMessageArg = adminAttr(JSON.stringify(contactMessage));
   const ownerPhoneArg = adminAttr(JSON.stringify(ownerPhone || ""));
   const brokerWhatsAppArg = adminAttr(JSON.stringify(brokerWhatsapp || ""));
-  const detailVideoUrls = propertyVideoUrls(p);
+  const allDetailVideoUrls = propertyVideoUrls(p);
+  // The hero already plays the first video on a video-first listing, so don't repeat it below.
+  const detailVideoUrls = detailVideoFirstMedia
+    ? allDetailVideoUrls.filter((url) => url !== detailVideoFirstMedia.url)
+    : allDetailVideoUrls;
   const detailVideoGalleryHtml = detailVideoUrls.length && !thirdPartyDetail
     ? `<div class="mt-4">
         <div class="mb-3 flex items-center justify-between gap-3">
@@ -54041,7 +54179,7 @@ async function openDetail(id, options = {}) {
         </div>
         <div class="grid md:grid-cols-2 gap-4">
           ${detailVideoUrls.map((url, index) => renderVideoEmbedCard(url, {
-            title: /tiktok\.com/i.test(url) ? translateListingLabel("TikTok video") : `${translateListingLabel("Video tour")} ${index + 1}`,
+            title: /tiktok\.com/i.test(url) ? translateListingLabel("TikTok video") : `${translateListingLabel("Video tour")} ${index + 1 + (detailVideoFirstMedia ? 1 : 0)}`,
             sub: translateListingLabel("Watch the walkthrough before you enquire.")
           })).join("")}
         </div>
@@ -54111,6 +54249,17 @@ async function openDetail(id, options = {}) {
           ${thirdPartyDetail ? `
             <div class="p-4 pb-0">
               ${foundOnlineSourceVisualHtml(p, { detail: true })}
+            </div>
+          ` : detailVideoFirstMedia ? `
+            <div class="property-gallery-hero relative overflow-hidden bg-black">
+              ${detailVideoFirstMedia.kind === "youtube"
+                ? `<iframe src="${adminAttr(getYouTubeEmbedUrl(detailVideoFirstMedia.url))}" title="${adminAttr(displayTitle)}" class="w-full h-full" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>`
+                : `<video id="detail-gallery-hero-video" controls preload="metadata" playsinline class="w-full h-full object-contain bg-black" aria-label="${adminAttr(displayTitle)}"><source src="${adminAttr(videoFirstFrameSrc(detailVideoFirstMedia.url))}" type="video/mp4"></video>`}
+            </div>
+            <div class="px-5 pt-4">
+              <div class="rounded-xl border border-sky-100 bg-sky-50 px-3 py-2 text-xs text-sky-900 font-semibold inline-flex items-center gap-2">
+                <i class="fas fa-video"></i>${translateListingLabel("This listing was shared as a video walkthrough. Play it above to see the property.")}
+              </div>
             </div>
           ` : `
 	              <button type="button" onclick="openDetailGalleryLightbox(detailGalleryPhotoIndex)" class="block w-full property-gallery-hero relative overflow-hidden group">
