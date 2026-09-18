@@ -3818,6 +3818,68 @@ router.patch('/properties/:id/review', async (req, res, next) => {
   }
 });
 
+// Send an approved listing back to the review queue.
+//
+// Until now the only ways out of "approved" were reject and delete, so a listing that simply
+// needed another look — a duplicate, a wrong price — could not be put back in front of a
+// moderator. It comes off the public site and lands in the review queue, where it can be
+// approved again or rejected through the normal path. Nothing is destroyed.
+router.post('/properties/:id/return-to-review', async (req, res, next) => {
+  try {
+    const reason = cleanText(req.body?.reason || req.body?.notes);
+    const existing = await db.query(
+      `SELECT id, status, title FROM properties WHERE id = $1 LIMIT 1`,
+      [req.params.id]
+    );
+    if (!existing.rows.length) {
+      return res.status(404).json({ ok: false, error: 'Property not found' });
+    }
+    const row = existing.rows[0];
+    const currentStatus = String(row.status || '').toLowerCase();
+    if (STAFF_REMOVED_STATUSES.includes(currentStatus)) {
+      return res.status(409).json({
+        ok: false,
+        error: `This listing is ${currentStatus} and cannot be returned to review.`
+      });
+    }
+    if (PENDING_REVIEW_STATUSES.includes(currentStatus)) {
+      return res.json({ ok: true, data: { id: row.id, status: currentStatus, already_in_review: true } });
+    }
+
+    const updated = await db.query(
+      `UPDATE properties
+          SET status = 'pending',
+              moderation_stage = 'in_review',
+              moderation_reason = COALESCE($2::text, moderation_reason),
+              reviewed_by = COALESCE($3::uuid, reviewed_by),
+              updated_at = NOW()
+        WHERE id = $1
+        RETURNING id::text AS id, title, status, moderation_stage`,
+      [req.params.id, reason || null, actorId(req)]
+    );
+
+    await db.query(
+      `INSERT INTO property_moderation_events (
+         property_id, actor_id, action, status_from, status_to, reason
+       ) VALUES ($1,$2,$3,$4,$5,$6)`,
+      [req.params.id, actorId(req), 'staff_returned_to_review', row.status || null, 'pending', reason || null]
+    ).catch(() => {});
+
+    clearStaffFastDashboardCache();
+    invalidatePublicInventoryMetricsCache('staff_return_to_review');
+    logStaffActivityInBackground(req, 'staff_return_to_review', {
+      targetType: 'property',
+      targetId: req.params.id,
+      metadata: { from_status: row.status || null, reason: reason || null }
+    });
+
+    return res.json({ ok: true, data: updated.rows[0] });
+  } catch (error) {
+    logger.error('Staff return to review failed', { message: error.message });
+    return next(error);
+  }
+});
+
 router.post('/source-intake/exact-social/import', async (req, res, next) => {
   try {
     res.set('Cache-Control', 'no-store');

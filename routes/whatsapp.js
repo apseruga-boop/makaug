@@ -4260,6 +4260,10 @@ function parseEmployeeBedroomDraft(caption = '') {
   return parseBedroomDraft(clean) || {};
 }
 
+// Same floor parseListingPriceDraft applies: below this a "price" is a room count, a plot
+// size or a phone fragment, not money.
+const EMPLOYEE_INTAKE_MIN_PRICE = 10000;
+
 function employeePropertyFacts(caption = '', sessionData = {}) {
   const cleanCaption = normalizeInput(caption);
   const naturalDraft = buildNaturalListingDetailDraft(cleanCaption, {}) || {};
@@ -4269,11 +4273,22 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
     /\b(\d[\d,.]*(?:\.\d+)?)\s*(?:us\s+)?dollars?\b/gi,
     'USD $1'
   );
+  // listingPriceSourceFragment happily returns the first number after a cue word, so
+  // "Selling 5 bedroom house in Kololo @600m UGX" yields "5" — the bedroom count — and the
+  // listing went live at UGX 5. parseListingPriceDraft already applies the sanity floor and
+  // understands the m/k/bn suffixes, so only trust the fragment when it clears that floor.
   const priceSource = listingPriceSourceFragment(priceScanCaption);
-  const priceMetadata = priceSource
-    ? propertyPriceMetadata(priceSource)
-    : propertyPriceMetadata(parseListingPriceDraft(priceScanCaption));
-  const price = Number(priceMetadata.price) || parseListingPriceDraft(priceScanCaption);
+  const priceSourceMetadata = priceSource ? propertyPriceMetadata(priceSource) : null;
+  const priceSourceUsable = Boolean(
+    priceSourceMetadata
+    && priceSourceMetadata.supported
+    && Number(priceSourceMetadata.price) >= EMPLOYEE_INTAKE_MIN_PRICE
+  );
+  const draftPrice = parseListingPriceDraft(priceScanCaption);
+  const priceMetadata = priceSourceUsable
+    ? priceSourceMetadata
+    : propertyPriceMetadata(draftPrice);
+  const price = Number(priceMetadata.price) || draftPrice;
   if (!listingType && /\bapartments?\b/i.test(cleanCaption) && Number(price) >= 10000 && Number(price) <= 20000000 && !/\b(?:sale|selling|buy|purchase)\b/i.test(cleanCaption)) {
     listingType = 'rent';
   }
@@ -4426,8 +4441,20 @@ function promoteEmployeeQueuedSubmission(data = {}) {
   return next;
 }
 
+// WhatsApp stamps "Forwarded" onto a forwarded message. That word is not part of the
+// property, so it must not change the caption's identity: leaving it in gave a forwarded
+// copy a different hash from the direct send, which slipped it past the duplicate guard
+// in findExistingEmployeeReviewProperty and put the same property on the site twice.
+function stripForwardMarkers(caption = '') {
+  return String(caption || '')
+    .split(/\r?\n/)
+    .filter((line) => !/^\s*(?:forwarded(?:\s+many\s+times)?|forwarded\s+message)\s*$/i.test(line))
+    .join('\n')
+    .replace(/^\s*(?:forwarded(?:\s+many\s+times)?|forwarded\s+message)\s*[:\-–—]?\s*/i, '');
+}
+
 function employeeCaptionHash(caption = '') {
-  const normalized = normalizeInput(caption).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const normalized = normalizeInput(stripForwardMarkers(caption)).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
   return normalized ? crypto.createHash('sha256').update(normalized).digest('hex') : '';
 }
 
