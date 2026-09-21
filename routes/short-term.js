@@ -16,6 +16,7 @@ const {
   fetchUgandaProperties,
   shouldOfferPartnerSupply: liteapiShouldOffer
 } = require('../services/liteapiSupplyService');
+const { bookingLinkFor } = require('../services/bookingAffiliateService');
 
 const { requireAdminApiKey, requireStaffAccess } = require('../middleware/auth');
 const {
@@ -263,6 +264,12 @@ router.get('/search', async (req, res) => {
         result.partner_source = 'hotelbeds';
       }
     }
+
+    // Booking.com through CJ Affiliate. A single outbound search link, not rows:
+    // nothing from Booking.com is merged into listings or partner_listings, and
+    // it is null (so the page shows nothing) until BOOKING_AFFILIATE_ENABLED,
+    // CJ_PUBLISHER_PID and BOOKING_CJ_AD_ID are all set.
+    result.booking_link = bookingLinkFor(req.query || {});
 
     res.set('Cache-Control', 'public, max-age=60');
     res.set('X-makaug-Short-Term-Results', String(result.listings.length));
