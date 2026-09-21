@@ -27,6 +27,7 @@
     total: 0,
     map: null,
     partners: [],
+    booking: null,
     infoWindow: null,
     markers: [],
     mapOn: false,
@@ -113,6 +114,8 @@
     "partnerPriceAsk": "Wel tye i kakube pa hotel",
     "partnerReviews": "ngec",
     "partnerVisit": "Kabedo pa hotel kikome",
+    "bookingCta": "Yeny kabedo i Booking.com",
+    "bookingNote": "Hotel ki ot mukene i Uganda ducu i Booking.com. Booking itimo ki Booking.com, pe ki makaug.",
     "perNight": "i nino acel",
     "search": "Yeny",
     "sec": "cekon",
@@ -182,6 +185,8 @@
     "partnerPriceAsk": "ዋጋው በሆቴሉ ድረ-ገጽ ላይ",
     "partnerReviews": "ግምገማዎች",
     "partnerVisit": "የሆቴሉ ድረ-ገጽ",
+    "bookingCta": "በBooking.com ላይ ማረፊያ ይፈልጉ",
+    "bookingNote": "በመላው ኡጋንዳ ተጨማሪ ሆቴሎችና አፓርታማዎች በBooking.com ላይ። ቦታ የሚይዙት ከBooking.com ጋር ነው እንጂ ከmakaug ጋር አይደለም።",
     "perNight": "በአንድ ሌሊት",
     "search": "ፍልግ",
     "sec": "ሰከንድ",
@@ -251,6 +256,8 @@
     "partnerPriceAsk": "السعر على موقع الفندق",
     "partnerReviews": "تقييم",
     "partnerVisit": "موقع الفندق",
+    "bookingCta": "ابحث عن إقامة على Booking.com",
+    "bookingNote": "مزيد من الفنادق والشقق في أنحاء أوغندا على Booking.com. الحجز يتم مع Booking.com وليس مع makaug.",
     "perNight": "لليلة",
     "search": "بحث",
     "sec": "ثانية",
@@ -320,6 +327,8 @@
     "partnerPriceAsk": "Price on the hotel's site",
     "partnerReviews": "reviews",
     "partnerVisit": "Hotel's own site",
+    "bookingCta": "Search stays on Booking.com",
+    "bookingNote": "More hotels and apartments across Uganda on Booking.com. You book with Booking.com, not with makaug.",
     "perNight": "per night",
     "search": "Search",
     "sec": "sec",
@@ -389,6 +398,8 @@
     "partnerPriceAsk": "Ebbeeyi eri ku mukutu gwa hotel",
     "partnerReviews": "endowooza",
     "partnerVisit": "Omukutu gwa wooteeri",
+    "bookingCta": "Noonya ebifo ku Booking.com",
+    "bookingNote": "Wooteeri n'ennyumba endala mu Uganda yonna ku Booking.com. Okukwata ekifo okikola ne Booking.com, si ne makaug.",
     "perNight": "buli kiro",
     "search": "Noonya",
     "sec": "obutikitiki",
@@ -458,6 +469,8 @@
     "partnerPriceAsk": "Omuhendo guri aha mukutu gwa hotel",
     "partnerReviews": "ebiteekateeko",
     "partnerVisit": "Orubaju rwa hotel",
+    "bookingCta": "Shaka ahu kuraara aha Booking.com",
+    "bookingNote": "Hoteeri n'amaju agandi omuri Uganda yoona aha Booking.com. Okukwata omwanya nokukora na Booking.com, tikiri na makaug.",
     "perNight": "aha kiro",
     "search": "Sherura",
     "sec": "obucweka",
@@ -527,6 +540,8 @@
     "partnerPriceAsk": "Omuhendo guri aha mukutu gwa hotel",
     "partnerReviews": "ebiteekateeko",
     "partnerVisit": "Orubaju rwa hotel",
+    "bookingCta": "Serra aha kuraara aha Booking.com",
+    "bookingNote": "Hoteeri n'amaju agandi omu Uganda yoona aha Booking.com. Okukwata ekiikaro nokukora na Booking.com, tikiri na makaug.",
     "perNight": "aha kiro",
     "search": "Sherura",
     "sec": "obucweka",
@@ -596,6 +611,8 @@
     "partnerPriceAsk": "Ebbeeyi eri ku mukutu gwa hotel",
     "partnerReviews": "endowooza",
     "partnerVisit": "Omukutu gwa wooteeri",
+    "bookingCta": "Noonia ebifo ku Booking.com",
+    "bookingNote": "Wooteeri n'enyumba endala mu Uganda yonna ku Booking.com. Okukwaata ekifo okikola na Booking.com, si na makaug.",
     "perNight": "buli kiro",
     "search": "Noonya",
     "sec": "obutikitiki",
@@ -665,6 +682,8 @@
     "partnerPriceAsk": "Bei iko kwenye tovuti ya hoteli",
     "partnerReviews": "maoni",
     "partnerVisit": "Tovuti ya hoteli",
+    "bookingCta": "Tafuta malazi kwenye Booking.com",
+    "bookingNote": "Hoteli na nyumba zaidi kote Uganda kwenye Booking.com. Unafanya booking na Booking.com, si na makaug.",
     "perNight": "kwa usiku",
     "search": "Tafuta",
     "sec": "sekunde",
@@ -1062,6 +1081,20 @@
       + '</section>';
   }
 
+  // Booking.com through CJ Affiliate. A single, plainly labelled way out to the
+  // same search on Booking.com. The booking is made there: makaug still takes no
+  // booking and holds no money, and says so next to the button.
+  function bookingBlockHtml() {
+    var link = state.booking;
+    if (!link || !link.url || !/^https:\/\//.test(link.url)) return '';
+    return '<aside class="st-booking-block">'
+      + '<p class="st-booking-note">' + esc(t('bookingNote')) + '</p>'
+      + '<a class="st-booking-cta" href="' + esc(link.url) + '"'
+      + ' target="_blank" rel="sponsored noopener noreferrer" data-st-contact="booking-com">'
+      + esc(t('bookingCta')) + ' <i class="fas fa-arrow-up-right-from-square"></i></a>'
+      + '</aside>';
+  }
+
   function cardHtml(listing) {
     var score = listing.review_count > 0 && listing.review_average != null
       ? '<p class="st-card-score"><i class="fas fa-star"></i> ' + listing.review_average.toFixed(1)
@@ -1118,6 +1151,9 @@
       // and no phone number; letting it into the host list is how the section
       // would start quietly breaking its own promise.
       state.partners = payload.partner_listings || [];
+      // Booking.com (CJ affiliate). One outbound search link, or null when the
+      // partnership is switched off - in which case nothing is drawn.
+      state.booking = payload.booking_link || null;
       renderResults();
       if (state.mapOn) paintMap();
     }).catch(function (error) {
@@ -1147,10 +1183,10 @@
         + (partners ? '' : '<i class="fas fa-magnifying-glass"></i>' + esc(t('emptyFilters')) + '<br><br>')
         + '<a class="st-btn st-btn-primary" href="/short-term/list-your-place" data-st-link>'
         + esc(t('listOwn')) + '</a></div>';
-      target.innerHTML = partners ? partners + cta : cta;
+      target.innerHTML = (partners ? partners + cta : cta) + bookingBlockHtml();
       return;
     }
-    target.innerHTML = '<div class="st-grid">' + state.listings.map(cardHtml).join('') + '</div>';
+    target.innerHTML = '<div class="st-grid">' + state.listings.map(cardHtml).join('') + '</div>' + bookingBlockHtml();
   }
 
   function countdownUnitsHtml(diff) {
