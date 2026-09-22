@@ -8752,11 +8752,20 @@ function trafficAttributionParams() {
   return current || { traffic_source: "direct", traffic_medium: "none", traffic_campaign: "" };
 }
 
+function analyticsVisitorTimezone() {
+  try {
+    return String(Intl.DateTimeFormat().resolvedOptions().timeZone || "").slice(0, 64);
+  } catch (_) {
+    return "";
+  }
+}
+
 function analyticsEventParams(params = {}) {
   return {
     page_path: currentAnalyticsPagePath(),
     page_location: window.location.href,
     page_title: document.title || "makaug.com",
+    visitor_timezone: analyticsVisitorTimezone(),
     ...trafficAttributionParams(),
     ...params
   };
@@ -11876,6 +11885,365 @@ function setBrokerDashboardActiveTab(targetHash = "#broker-overview-panel") {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Weekly performance report — broker dashboard panel
+// ---------------------------------------------------------------------------
+
+const AGENT_REPORT_METRICS = [
+  ["views", "Listing views"],
+  ["visitors", "Unique visitors"],
+  ["enquiries", "Message enquiries"],
+  ["whatsapp_clicks", "WhatsApp clicks"],
+  ["saves", "Saves"]
+];
+
+function agentReportNumber(value) {
+  const n = Number(value);
+  return (Number.isFinite(n) ? Math.round(n) : 0).toLocaleString("en-GB");
+}
+
+function agentReportChange(current, previous) {
+  const c = Number(current) || 0;
+  const p = Number(previous) || 0;
+  if (!p) return null;
+  return Math.round(((c - p) / p) * 100);
+}
+
+function agentReportWeekLabel(weekStart, weekEnd) {
+  try {
+    const a = new Date(`${weekStart}T00:00:00Z`);
+    const b = new Date(`${weekEnd}T00:00:00Z`);
+    const opts = { day: "numeric", month: "short", timeZone: "UTC" };
+    return `${a.toLocaleDateString("en-GB", opts)} – ${b.toLocaleDateString("en-GB", { ...opts, year: "numeric" })}`;
+  } catch (_) {
+    return `${weekStart || ""} – ${weekEnd || ""}`;
+  }
+}
+
+function agentReportSafeUrl(url) {
+  const value = String(url || "");
+  return /^https:\/\//.test(value) ? value : "";
+}
+
+function renderAgentReportBody(report = {}) {
+  const m = report.metrics || {};
+  const p = report.previous_metrics || {};
+  const tiles = AGENT_REPORT_METRICS.map(([key, label]) => {
+    const pct = agentReportChange(m[key], p[key]);
+    const delta = pct === null
+      ? `<div class="text-xs text-gray-400 mt-1">No prior week</div>`
+      : `<div class="text-xs font-bold mt-1 ${pct > 0 ? "text-green-700" : pct < 0 ? "text-red-600" : "text-gray-500"}">${pct > 0 ? "▲ +" : pct < 0 ? "▼ " : ""}${pct}% vs last week</div>`;
+    return `<div class="rounded-xl border border-gray-200 p-4"><div class="text-xs text-gray-500">${label}</div><div class="text-2xl font-black text-gray-900 mt-1">${agentReportNumber(m[key])}</div>${delta}</div>`;
+  }).join("");
+  const countries = Array.isArray(report.top_countries) ? report.top_countries : [];
+  const maxVisitors = Math.max(1, ...countries.map((c) => Number(c.visitors) || 0));
+  const totalVisitors = countries.reduce((sum, c) => sum + (Number(c.visitors) || 0), 0);
+  const trackingSince = report.country_tracking_since ? new Date(report.country_tracking_since) : null;
+  const countryNote = trackingSince && report.week_start && trackingSince > new Date(`${report.week_start}T00:00:00+03:00`)
+    ? `<p class="mt-2 text-xs text-gray-500">Visitor countries are tracked from ${trackingSince.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}, so this week is partial.</p>`
+    : "";
+  const countryHtml = countries.length
+    ? countries.map((c, i) => `<div class="grid grid-cols-[20px_1fr_auto] gap-2 items-center text-sm"><span class="text-xs text-gray-400">${i + 1}</span><span class="font-semibold text-gray-800">${adminEscape(c.name)}</span><span class="font-bold text-gray-900">${agentReportNumber(c.visitors)}${totalVisitors ? ` <span class="text-xs font-normal text-gray-500">${Math.round((Number(c.visitors) || 0) / totalVisitors * 100)}%</span>` : ""}</span><div class="col-start-2 col-end-4 h-1.5 rounded bg-gray-100 overflow-hidden"><div class="h-full rounded bg-green-600" style="width:${((Number(c.visitors) || 0) / maxVisitors * 100).toFixed(1)}%"></div></div></div>`).join("")
+    : `<p class="text-sm text-gray-500">No visitor countries recorded for this week yet.</p>`;
+  const listings = Array.isArray(report.top_listings) ? report.top_listings : [];
+  const listingHtml = listings.length
+    ? listings.map((l, i) => {
+      const url = agentReportSafeUrl(l.url);
+      return `<div class="flex items-start justify-between gap-3 border-b border-gray-100 py-2 last:border-0"><div class="min-w-0"><div class="font-semibold text-gray-900">${i + 1}. ${adminEscape(l.title)}</div><div class="text-xs text-gray-500">${adminEscape(l.area || "")}${l.area ? " · " : ""}${agentReportNumber(l.views)} views · ${agentReportNumber(l.enquiries)} enquiries</div></div>${url ? `<a href="${adminAttr(url)}" target="_blank" rel="noopener" class="shrink-0 rounded-lg border border-green-200 px-3 py-1 text-xs font-bold text-green-700 hover:bg-green-50">View property</a>` : ""}</div>`;
+    }).join("")
+    : `<p class="text-sm text-gray-500">None of your listings were opened this week.</p>`;
+  const list = (items) => (Array.isArray(items) && items.length ? `<ul class="list-disc pl-5 space-y-1 text-sm text-gray-800">${items.map((s) => `<li>${adminEscape(s)}</li>`).join("")}</ul>` : `<p class="text-sm text-gray-500">Nothing yet.</p>`);
+  return `
+    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-5 mb-5">${tiles}</div>
+    <div class="grid gap-5 lg:grid-cols-2 mb-5">
+      <div><h3 class="font-black text-gray-900 mb-2">Top countries viewing your listings</h3><div class="space-y-2">${countryHtml}</div>${countryNote}</div>
+      <div><h3 class="font-black text-gray-900 mb-2">Your best-performing properties</h3>${listingHtml}</div>
+    </div>
+    <div class="grid gap-5 lg:grid-cols-2">
+      <div><h3 class="font-black text-gray-900 mb-2">Insights</h3>${list(report.insights)}</div>
+      <div class="rounded-xl bg-green-50 border border-green-100 p-4"><h3 class="font-black text-gray-900 mb-2">Recommended next steps</h3>${list(report.next_steps)}</div>
+    </div>`;
+}
+
+async function renderBrokerWeeklyReportPanel({ linked = true, weekStart = "" } = {}) {
+  const panel = document.getElementById("broker-report-panel");
+  if (!panel) return;
+  if (!linked || !authState?.token || authState?.user?.is_demo) {
+    panel.innerHTML = `<h2 class="text-xl font-bold text-gray-900">Weekly performance report</h2><p class="text-sm text-gray-600 mt-1">Your weekly report appears here once your broker profile is linked and approved.</p>`;
+    return;
+  }
+  panel.innerHTML = `<h2 class="text-xl font-bold text-gray-900">Weekly performance report</h2><p class="text-sm text-gray-500 mt-1">Loading your numbers…</p>`;
+  try {
+    const res = await apiRequest(`/api/agents/me/weekly-report${weekStart ? `?week_start=${encodeURIComponent(weekStart)}` : ""}`);
+    const data = res?.data || {};
+    const report = data.report || {};
+    const weeks = Array.isArray(data.weeks) ? data.weeks : [];
+    const options = [...weeks];
+    if (report.week_start && !options.some((w) => w.week_start === report.week_start)) options.unshift({ week_start: report.week_start, week_end: report.week_end, status: report.status });
+    const agentNumber = data.agent_number || report.agent?.makaug_agent_number || "";
+    const sourceNote = report.source === "live"
+      ? "Live numbers, updated as people browse your listings."
+      : "Reviewed by the makaug team.";
+    panel.innerHTML = `
+      <div class="flex flex-wrap items-start justify-between gap-3 border-b border-gray-100 pb-4 mb-4">
+        <div>
+          <div class="text-xs font-bold uppercase tracking-wide text-green-700">Weekly performance report</div>
+          <h2 class="text-2xl font-black text-gray-900 mt-1">${adminEscape(report.agent?.full_name || authState.user.first_name || "Your listings")}</h2>
+          <div class="text-sm text-gray-600">${agentNumber ? `Agent ID <b>${adminEscape(agentNumber)}</b> · ` : ""}${adminEscape(agentReportWeekLabel(report.week_start, report.week_end))} · ${agentReportNumber(report.metrics?.active_listings)} live listings</div>
+          <div class="text-xs text-gray-500 mt-1">${sourceNote}</div>
+        </div>
+        ${options.length > 1 ? `<label class="text-xs font-bold text-gray-600">Week<select id="broker-report-week" class="mt-1 block rounded-lg border border-gray-300 px-3 py-2 text-sm">${options.map((w) => `<option value="${adminAttr(w.week_start)}" ${w.week_start === report.week_start ? "selected" : ""}>${adminEscape(agentReportWeekLabel(w.week_start, w.week_end))}</option>`).join("")}</select></label>` : ""}
+      </div>
+      ${renderAgentReportBody(report)}`;
+    document.getElementById("broker-report-week")?.addEventListener("change", (event) => {
+      renderBrokerWeeklyReportPanel({ linked: true, weekStart: event.target.value });
+    });
+  } catch (error) {
+    panel.innerHTML = `<h2 class="text-xl font-bold text-gray-900">Weekly performance report</h2><p class="text-sm text-red-700 mt-1">${adminEscape(error?.message || "Couldn't load your report. Refresh to try again.")}</p>`;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Weekly performance report — admin desk (generate, edit, preview, send)
+// ---------------------------------------------------------------------------
+
+let adminAgentReportAgents = {};
+let adminAgentReportCurrent = null;
+let adminAgentReportSearchTimer = null;
+
+function adminAgentReportLastMonday() {
+  const kampala = new Date(Date.now() + 3 * 60 * 60 * 1000);
+  const dow = (kampala.getUTCDay() + 6) % 7;
+  kampala.setUTCDate(kampala.getUTCDate() - dow - 7);
+  return kampala.toISOString().slice(0, 10);
+}
+
+function adminAgentReportAgentLabel(agent = {}) {
+  return [agent.full_name || "Agent", agent.company_name, agent.makaug_agent_number].filter(Boolean).join(" · ");
+}
+
+async function adminAgentReportSearchAgents(query = "") {
+  try {
+    const res = await apiRequest(`/api/admin/agent-reports/agents?q=${encodeURIComponent(query)}&limit=30`, { headers: adminAuthHeaders() });
+    const rows = Array.isArray(res?.data) ? res.data : [];
+    const list = document.getElementById("admin-agent-report-options");
+    rows.forEach((agent) => { adminAgentReportAgents[adminAgentReportAgentLabel(agent)] = agent; });
+    if (list) list.innerHTML = rows.map((agent) => `<option value="${adminAttr(adminAgentReportAgentLabel(agent))}">${agentReportNumber(agent.active_listings)} live listings</option>`).join("");
+  } catch (error) {
+    console.warn("Agent search failed", error?.message || error);
+  }
+}
+
+function initAdminAgentReportsTab() {
+  const week = document.getElementById("admin-agent-report-week");
+  if (week && !week.value) week.value = adminAgentReportLastMonday();
+  const search = document.getElementById("admin-agent-report-search");
+  if (search && search.dataset.wired !== "true") {
+    search.dataset.wired = "true";
+    search.addEventListener("input", () => {
+      clearTimeout(adminAgentReportSearchTimer);
+      adminAgentReportSearchTimer = setTimeout(() => adminAgentReportSearchAgents(search.value.trim()), 250);
+    });
+    week?.addEventListener("change", () => loadAdminAgentReports());
+    adminAgentReportSearchAgents("");
+  }
+  loadAdminAgentReports();
+}
+
+async function loadAdminAgentReports() {
+  const listEl = document.getElementById("admin-agent-report-list");
+  if (!listEl) return;
+  if (!canUseLiveAdminApi()) {
+    listEl.textContent = "Sign in as admin to load reports.";
+    return;
+  }
+  const week = document.getElementById("admin-agent-report-week")?.value || "";
+  listEl.textContent = "Loading…";
+  try {
+    const res = await apiRequest(`/api/admin/agent-reports?week_start=${encodeURIComponent(week)}`, { headers: adminAuthHeaders() });
+    const rows = Array.isArray(res?.data) ? res.data : [];
+    const statusCls = { draft: "bg-amber-100 text-amber-800", approved: "bg-blue-100 text-blue-800", sent: "bg-green-100 text-green-800" };
+    listEl.innerHTML = rows.length
+      ? rows.map((r) => `<button type="button" onclick="openAdminAgentReport(${adminListingIdArg(r.id)})" class="w-full text-left rounded-xl border ${adminAgentReportCurrent?.id === r.id ? "border-gray-900" : "border-gray-200"} px-3 py-2 hover:bg-gray-50"><div class="flex items-center justify-between gap-2"><b class="text-gray-900">${adminEscape(r.agent?.full_name || "Agent")}</b><span class="rounded-full px-2 py-0.5 text-[11px] font-bold ${statusCls[r.status] || ""}">${adminEscape(r.status)}</span></div><div class="text-xs text-gray-500">${adminEscape(r.agent?.makaug_agent_number || "")} · ${agentReportNumber(r.metrics?.views)} views</div></button>`).join("")
+      : `<p class="text-sm text-gray-500">No reports for this week yet. Pick an agent and generate one.</p>`;
+  } catch (error) {
+    listEl.textContent = error?.message || "Couldn't load reports.";
+  }
+}
+
+async function generateAdminAgentReport() {
+  const raw = document.getElementById("admin-agent-report-search")?.value.trim() || "";
+  const week = document.getElementById("admin-agent-report-week")?.value || "";
+  const agent = adminAgentReportAgents[raw];
+  const body = { week_start: week };
+  if (agent) body.agent_id = agent.id;
+  else if (/^MKA-/i.test(raw)) body.agent_number = raw;
+  else {
+    toast("Pick an agent from the list, or type their agent ID (MKA-AG-…).");
+    return;
+  }
+  try {
+    const res = await apiRequest("/api/admin/agent-reports/generate", { method: "POST", headers: adminAuthHeaders(), body });
+    adminAgentReportCurrent = res?.data?.report || null;
+    renderAdminAgentReportEditor(res?.data?.whatsapp_text || "");
+    loadAdminAgentReports();
+    toast("Report generated.");
+  } catch (error) {
+    toast(error?.message || "Couldn't generate the report.");
+  }
+}
+
+async function openAdminAgentReport(id) {
+  try {
+    const res = await apiRequest(`/api/admin/agent-reports/${encodeURIComponent(id)}`, { headers: adminAuthHeaders() });
+    adminAgentReportCurrent = res?.data?.report || null;
+    renderAdminAgentReportEditor(res?.data?.whatsapp_text || "");
+    loadAdminAgentReports();
+  } catch (error) {
+    toast(error?.message || "Couldn't open the report.");
+  }
+}
+
+function adminAgentReportInput(id, value, type = "text", placeholder = "") {
+  return `<input id="${id}" type="${type}" ${type === "number" ? 'min="0"' : ""} value="${adminAttr(value ?? "")}" placeholder="${adminAttr(placeholder)}" class="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm">`;
+}
+
+function renderAdminAgentReportEditor(whatsappText = "") {
+  const el = document.getElementById("admin-agent-report-editor");
+  const r = adminAgentReportCurrent;
+  if (!el || !r) return;
+  const m = r.metrics || {};
+  const p = r.previous_metrics || {};
+  const countries = (r.top_countries || []).concat([{ name: "", visitors: "" }]);
+  const listings = (r.top_listings || []).concat([{ title: "", area: "", url: "", views: "", enquiries: "" }]);
+  let previewTo = "";
+  try { previewTo = window.localStorage.getItem("makaug_agent_report_preview_to") || ""; } catch (_) {}
+  el.innerHTML = `
+    <div class="flex flex-wrap items-start justify-between gap-3 border-b border-gray-100 pb-3 mb-4">
+      <div>
+        <div class="text-xs font-bold uppercase tracking-wide text-gray-500">${adminEscape(r.status)} · ${adminEscape(agentReportWeekLabel(r.week_start, r.week_end))}</div>
+        <h3 class="text-xl font-black text-gray-900">${adminEscape(r.agent?.full_name || "Agent")}</h3>
+        <div class="text-xs text-gray-500">Agent ID ${adminEscape(r.agent?.makaug_agent_number || "not set")} · WhatsApp ${adminEscape(r.agent?.whatsapp || r.agent?.phone || "not set")}${r.sent_at ? ` · Sent ${adminEscape(new Date(r.sent_at).toLocaleString("en-GB"))}` : ""}</div>
+      </div>
+      <button type="button" onclick="refreshAdminAgentReportNumbers()" class="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-bold">Refresh numbers</button>
+    </div>
+    <div class="grid gap-2 md:grid-cols-3 mb-4">
+      ${AGENT_REPORT_METRICS.map(([key, label]) => `<label class="text-xs text-gray-600">${label} — this week${adminAgentReportInput(`ar-m-${key}`, m[key] ?? 0, "number")}</label><label class="text-xs text-gray-600">${label} — last week${adminAgentReportInput(`ar-p-${key}`, p[key] ?? 0, "number")}</label><div class="hidden md:block"></div>`).join("")}
+      <label class="text-xs text-gray-600">Live listings${adminAgentReportInput("ar-m-active_listings", m.active_listings ?? 0, "number")}</label>
+    </div>
+    <h4 class="font-black text-gray-900 mb-2">Top countries</h4>
+    <div class="space-y-2 mb-4">${countries.map((c, i) => `<div class="grid grid-cols-[1fr_120px] gap-2">${adminAgentReportInput(`ar-c-name-${i}`, c.name, "text", "Country")}${adminAgentReportInput(`ar-c-vis-${i}`, c.visitors, "number", "Visitors")}<input type="hidden" id="ar-c-code-${i}" value="${adminAttr(c.code || "")}"></div>`).join("")}</div>
+    <h4 class="font-black text-gray-900 mb-2">Best-performing properties</h4>
+    <div class="space-y-2 mb-4">${listings.map((l, i) => `<div class="grid gap-2 md:grid-cols-[1.4fr_1fr_1.4fr_80px_80px]">${adminAgentReportInput(`ar-l-title-${i}`, l.title, "text", "Title")}${adminAgentReportInput(`ar-l-area-${i}`, l.area, "text", "Area")}${adminAgentReportInput(`ar-l-url-${i}`, l.url, "url", "https://makaug.com/property/…")}${adminAgentReportInput(`ar-l-views-${i}`, l.views, "number", "Views")}${adminAgentReportInput(`ar-l-enq-${i}`, l.enquiries, "number", "Enq.")}<input type="hidden" id="ar-l-id-${i}" value="${adminAttr(l.id || "")}"></div>`).join("")}</div>
+    <div class="grid gap-3 md:grid-cols-2 mb-4">
+      <label class="text-xs font-bold text-gray-600">Insights — one per line<textarea id="ar-insights" rows="6" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm">${adminEscape((r.insights || []).join("\n"))}</textarea></label>
+      <label class="text-xs font-bold text-gray-600">Recommended next steps — one per line<textarea id="ar-next" rows="6" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm">${adminEscape((r.next_steps || []).join("\n"))}</textarea></label>
+    </div>
+    <div class="flex flex-wrap gap-2 mb-5">
+      <button type="button" onclick="saveAdminAgentReport()" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-bold">Save draft</button>
+      <button type="button" onclick="saveAdminAgentReport('approved')" class="rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white">Save &amp; approve</button>
+    </div>
+    <div class="rounded-xl border border-gray-200 bg-gray-50 p-4">
+      <div class="flex flex-wrap items-end gap-2 mb-3">
+        <label class="text-xs font-bold text-gray-600">Preview to my WhatsApp<input id="ar-preview-to" value="${adminAttr(previewTo)}" placeholder="e.g. 447700900000" class="mt-1 block rounded-lg border border-gray-300 px-2 py-1.5 text-sm"></label>
+        <button type="button" onclick="sendAdminAgentReport(true)" class="rounded-lg border border-green-700 px-3 py-2 text-sm font-bold text-green-800">Send preview</button>
+        <button type="button" onclick="sendAdminAgentReport(false)" class="rounded-lg bg-green-700 px-3 py-2 text-sm font-bold text-white">Send to agent</button>
+      </div>
+      <pre class="whitespace-pre-wrap text-xs text-gray-800 max-h-96 overflow-auto">${adminEscape(whatsappText)}</pre>
+    </div>`;
+}
+
+function collectAdminAgentReportEdits() {
+  const val = (id) => document.getElementById(id)?.value ?? "";
+  const num = (id) => Number(val(id)) || 0;
+  const metrics = { active_listings: num("ar-m-active_listings") };
+  const previous = {};
+  AGENT_REPORT_METRICS.forEach(([key]) => { metrics[key] = num(`ar-m-${key}`); previous[key] = num(`ar-p-${key}`); });
+  const countries = [];
+  for (let i = 0; document.getElementById(`ar-c-name-${i}`); i += 1) {
+    const name = val(`ar-c-name-${i}`).trim();
+    if (name) countries.push({ name, code: val(`ar-c-code-${i}`), visitors: num(`ar-c-vis-${i}`) });
+  }
+  const listings = [];
+  for (let i = 0; document.getElementById(`ar-l-title-${i}`); i += 1) {
+    const title = val(`ar-l-title-${i}`).trim();
+    if (title) listings.push({ id: val(`ar-l-id-${i}`), title, area: val(`ar-l-area-${i}`).trim(), url: val(`ar-l-url-${i}`).trim(), views: num(`ar-l-views-${i}`), enquiries: num(`ar-l-enq-${i}`) });
+  }
+  const lines = (id) => val(id).split("\n").map((s) => s.trim()).filter(Boolean);
+  return {
+    metrics,
+    previous_metrics: previous,
+    top_countries: countries.sort((a, b) => b.visitors - a.visitors),
+    top_listings: listings,
+    insights: lines("ar-insights"),
+    next_steps: lines("ar-next")
+  };
+}
+
+async function saveAdminAgentReport(status = "") {
+  if (!adminAgentReportCurrent) return null;
+  const body = collectAdminAgentReportEdits();
+  if (status) body.status = status;
+  try {
+    const res = await apiRequest(`/api/admin/agent-reports/${encodeURIComponent(adminAgentReportCurrent.id)}`, { method: "PATCH", headers: adminAuthHeaders(), body });
+    adminAgentReportCurrent = res?.data?.report || adminAgentReportCurrent;
+    renderAdminAgentReportEditor(res?.data?.whatsapp_text || "");
+    loadAdminAgentReports();
+    toast(status === "approved" ? "Saved and approved." : "Saved.");
+    return adminAgentReportCurrent;
+  } catch (error) {
+    toast(error?.message || "Couldn't save the report.");
+    return null;
+  }
+}
+
+async function refreshAdminAgentReportNumbers() {
+  if (!adminAgentReportCurrent) return;
+  if (adminAgentReportCurrent.status !== "draft" && !window.confirm("This report is already approved. Refresh its numbers from live data?")) return;
+  try {
+    const res = await apiRequest("/api/admin/agent-reports/generate", {
+      method: "POST",
+      headers: adminAuthHeaders(),
+      body: { agent_id: adminAgentReportCurrent.agent?.id, week_start: adminAgentReportCurrent.week_start, refresh_numbers: true }
+    });
+    adminAgentReportCurrent = res?.data?.report || adminAgentReportCurrent;
+    renderAdminAgentReportEditor(res?.data?.whatsapp_text || "");
+    toast("Numbers refreshed.");
+  } catch (error) {
+    toast(error?.message || "Couldn't refresh numbers.");
+  }
+}
+
+async function sendAdminAgentReport(preview = false) {
+  if (!adminAgentReportCurrent) return;
+  const saved = await saveAdminAgentReport();
+  if (!saved) return;
+  const body = {};
+  if (preview) {
+    const to = (document.getElementById("ar-preview-to")?.value || "").replace(/\D+/g, "");
+    if (to.length < 9) {
+      toast("Enter your WhatsApp number with country code.");
+      return;
+    }
+    try { window.localStorage.setItem("makaug_agent_report_preview_to", to); } catch (_) {}
+    body.preview_to = to;
+  } else {
+    if (saved.status === "draft") {
+      toast("Approve the report before sending it to the agent.");
+      return;
+    }
+    if (!window.confirm(`Send this report to ${saved.agent?.full_name || "the agent"} on WhatsApp?`)) return;
+  }
+  try {
+    const res = await apiRequest(`/api/admin/agent-reports/${encodeURIComponent(saved.id)}/send`, { method: "POST", headers: adminAuthHeaders(), body });
+    adminAgentReportCurrent = res?.data?.report || adminAgentReportCurrent;
+    toast(preview ? `Preview sent to ${res?.data?.to}.` : "Report sent to the agent.");
+    openAdminAgentReport(saved.id);
+  } catch (error) {
+    toast(error?.message || "Couldn't send the report.");
+  }
+}
+
 function wireBrokerDashboardTabs() {
   const tabs = document.getElementById("broker-dashboard-tabs");
   if (!tabs || tabs.dataset.wired === "true") {
@@ -12198,6 +12566,7 @@ async function renderAgentDashboard() {
     renderBrokerProfilePreview(fallbackBroker, [], {});
     renderBrokerWhatsAppCard(fallbackBroker, {});
     renderBrokerLeadPanel(fallbackBroker, [], {});
+    renderBrokerWeeklyReportPanel({ linked: false });
     renderBrokerBoostPanel();
     renderBrokerQuickstartPanel();
     renderBrokerResourceGrid();
@@ -12227,7 +12596,12 @@ async function renderAgentDashboard() {
     statusEl.textContent = `${regLabel} broker • ${broker.company || "Independent broker"}`;
   }
   if (summaryEl) summaryEl.textContent = broker.bio || "Add your broker bio, areas covered, specialisations, and profile photo so clients understand who they are contacting.";
-  if (badgesEl) badgesEl.innerHTML = renderBrokerDashboardBadges(broker, stats);
+  if (badgesEl) {
+    const agentNumber = payload?.agent?.makaug_agent_number || broker.makaug_agent_number || "";
+    badgesEl.innerHTML = renderBrokerDashboardBadges(broker, stats)
+      + (agentNumber ? ` <span class="inline-flex items-center rounded-full bg-gray-900 px-2.5 py-1 text-xs font-bold text-white">Agent ID ${adminEscape(agentNumber)}</span>` : "");
+  }
+  renderBrokerWeeklyReportPanel({ linked: true });
   if (avatarEl) {
     const photo = broker.photo || broker.profile_photo_url || "";
     avatarEl.innerHTML = photo
@@ -16588,7 +16962,7 @@ function adminVerificationBadge(status) {
 }
 
 function setAdminWorkflowTab(tab = "review") {
-  const allowed = ["review", "student-sweep", "youtube-sweep", "actioned", "live", "accounts", "staff", "field-agents", "ads", "whatsapp", "notifications", "listings"];
+  const allowed = ["review", "student-sweep", "youtube-sweep", "actioned", "live", "accounts", "staff", "field-agents", "ads", "whatsapp", "agent-reports", "notifications", "listings"];
   const previousTab = activeAdminWorkflowTab;
   activeAdminWorkflowTab = allowed.includes(String(tab)) ? String(tab) : "review";
   document.querySelectorAll("[data-admin-tab-panel]").forEach((panel) => {
@@ -16603,6 +16977,7 @@ function setAdminWorkflowTab(tab = "review") {
   });
   if (activeAdminWorkflowTab !== "review") closeAdminReviewPanel();
   if (previousTab !== activeAdminWorkflowTab) adminScheduleDashboardRefreshForTab();
+  if (activeAdminWorkflowTab === "agent-reports" && previousTab !== "agent-reports") initAdminAgentReportsTab();
 }
 
 async function fetchAdminPaginatedRows(path, headers, options = {}) {

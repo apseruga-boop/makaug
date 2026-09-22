@@ -3,6 +3,7 @@ const express = require('express');
 const db = require('../config/database');
 const { cleanText } = require('../middleware/validation');
 const { isConfigured, sendGA4Event } = require('../services/ga4Service');
+const { resolveVisitorCountry } = require('../services/visitorCountryService');
 
 const router = express.Router();
 
@@ -52,6 +53,8 @@ router.post('/event', async (req, res, next) => {
       return res.status(400).json({ ok: false, error: 'event_name is required' });
     }
 
+    const countryCode = resolveVisitorCountry(req, params) || null;
+
     const saved = await db.query(
       `INSERT INTO analytics_events (
         event_name,
@@ -59,10 +62,11 @@ router.post('/event', async (req, res, next) => {
         user_phone,
         page_path,
         source,
-        payload
-      ) VALUES ($1,$2,$3,$4,$5,$6)
+        payload,
+        country_code
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7)
       RETURNING id, created_at`,
-      [eventName, clientId, userPhone || null, pagePath || null, source, JSON.stringify(params)]
+      [eventName, clientId, userPhone || null, pagePath || null, source, JSON.stringify(params), countryCode]
     );
 
     const ga4Result = await sendGA4Event({

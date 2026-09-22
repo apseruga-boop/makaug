@@ -6779,6 +6779,7 @@
           <a href="#broker-overview-panel" class="whitespace-nowrap rounded-xl bg-green-700 text-white px-4 py-2 text-sm font-bold">Overview</a>
           <a href="#broker-listings-panel" class="whitespace-nowrap rounded-xl bg-gray-50 text-gray-700 px-4 py-2 text-sm font-bold hover:bg-green-50">Listings</a>
           <a href="#broker-leads-panel" class="whitespace-nowrap rounded-xl bg-gray-50 text-gray-700 px-4 py-2 text-sm font-bold hover:bg-green-50">Leads</a>
+          <a href="#broker-report-panel" class="whitespace-nowrap rounded-xl bg-gray-50 text-gray-700 px-4 py-2 text-sm font-bold hover:bg-green-50">Weekly report</a>
           <a href="#broker-profile-share-panel" class="whitespace-nowrap rounded-xl bg-gray-50 text-gray-700 px-4 py-2 text-sm font-bold hover:bg-green-50">Profile and card</a>
           <a href="#broker-boost-panel" class="whitespace-nowrap rounded-xl bg-gray-50 text-gray-700 px-4 py-2 text-sm font-bold hover:bg-green-50">Boost</a>
           <a href="#broker-learning-panel" class="whitespace-nowrap rounded-xl bg-gray-50 text-gray-700 px-4 py-2 text-sm font-bold hover:bg-green-50">How-to</a>
@@ -6824,6 +6825,8 @@
         </div>
 
         <div id="broker-leads-panel" class="bg-white border border-gray-200 rounded-2xl p-5"></div>
+
+        <div id="broker-report-panel" class="bg-white border border-gray-200 rounded-2xl p-5" aria-live="polite"></div>
 
         <div id="broker-profile-share-panel" class="grid lg:grid-cols-[1.1fr_0.9fr] gap-4">
           <div id="agent-profile-card-preview" class="bg-white border border-gray-200 rounded-2xl p-5"></div>
@@ -8025,6 +8028,7 @@
             <button type="button" data-admin-tab-button="field-agents" onclick="setAdminWorkflowTab('field-agents')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Field Agent Control Centre</button>
             <button type="button" data-admin-tab-button="ads" onclick="setAdminWorkflowTab('ads')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Advertising Desk</button>
             <button type="button" data-admin-tab-button="whatsapp" onclick="setAdminWorkflowTab('whatsapp')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">WhatsApp Inbox</button>
+            <button type="button" data-admin-tab-button="agent-reports" onclick="setAdminWorkflowTab('agent-reports')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Agent Reports</button>
             <button type="button" data-admin-tab-button="notifications" onclick="setAdminWorkflowTab('notifications')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Leads & Notifications</button>
             <button type="button" data-admin-tab-button="listings" onclick="setAdminWorkflowTab('listings')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">All Listings</button>
           </div>
@@ -8751,6 +8755,32 @@
           </div>
           <div class="bg-white border border-gray-200 rounded-2xl p-4">
             <div id="admin-whatsapp-detail" class="text-sm text-gray-500">Select a conversation to open the full thread, reply with AI help, and control the workflow.</div>
+          </div>
+        </div>
+
+        <div id="admin-agent-reports-control" data-admin-tab-panel="agent-reports" class="admin-tab-panel hidden bg-white border border-gray-200 rounded-2xl p-5">
+          <div class="flex flex-wrap items-start justify-between gap-3 mb-4">
+            <div>
+              <h2 class="text-xl font-black text-gray-900">Agent weekly reports</h2>
+              <p class="text-sm text-gray-600">Generate each agent's weekly numbers, edit the insights, preview on your own WhatsApp, then approve and send.</p>
+            </div>
+          </div>
+          <div class="grid gap-3 md:grid-cols-[1fr_180px_auto] items-end mb-4">
+            <label class="text-xs font-bold text-gray-600">Agent (name, phone or agent ID)
+              <input id="admin-agent-report-search" list="admin-agent-report-options" class="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm" placeholder="e.g. Francis or MKA-AG-…" autocomplete="off">
+              <datalist id="admin-agent-report-options"></datalist>
+            </label>
+            <label class="text-xs font-bold text-gray-600">Week starting (Monday)
+              <input id="admin-agent-report-week" type="date" class="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm">
+            </label>
+            <button type="button" onclick="generateAdminAgentReport()" class="min-h-[40px] rounded-xl bg-gray-900 px-4 text-sm font-bold text-white">Generate report</button>
+          </div>
+          <div class="grid gap-5 xl:grid-cols-[300px_1fr]">
+            <div>
+              <div class="flex items-center justify-between mb-2"><div class="text-xs font-bold uppercase tracking-wide text-gray-500">This week's reports</div><button type="button" onclick="loadAdminAgentReports()" class="text-xs font-bold text-green-700">Refresh</button></div>
+              <div id="admin-agent-report-list" class="space-y-2 text-sm text-gray-600">Open this tab to load reports.</div>
+            </div>
+            <div id="admin-agent-report-editor" class="min-w-0 text-sm text-gray-600">Pick a report or generate one.</div>
           </div>
         </div>
 

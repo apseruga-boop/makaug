@@ -11,6 +11,7 @@ const {
 } = require('../services/publicAgentEligibilityService');
 const { normalizeEmail, normalizeUgPhone } = require('../utils/adminOtpOverride');
 const { parsePagination, toPagination } = require('../utils/pagination');
+const { getAgentFacingReport, listAgentReportWeeks } = require('../services/agentWeeklyReportService');
 
 const router = express.Router();
 const KNOWN_AGENT_SOCIAL_LINKS = [
@@ -297,6 +298,24 @@ async function fetchBrokerListings({ agent, user }) {
   );
   return result.rows;
 }
+
+router.get('/me/weekly-report', async (req, res, next) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user) return res.status(401).json({ ok: false, error: 'Sign in required' });
+    if (user.role !== 'agent_broker') return res.status(403).json({ ok: false, error: 'Broker account required' });
+    const agent = await fetchBrokerAgentForUser(user);
+    if (!agent) return res.status(404).json({ ok: false, error: 'No broker profile is linked to this account yet' });
+    const weekStart = cleanText(req.query.week_start || '');
+    const [report, weeks] = await Promise.all([
+      getAgentFacingReport(agent, weekStart),
+      listAgentReportWeeks(agent.id)
+    ]);
+    return res.json({ ok: true, data: { report, weeks, agent_number: agent.makaug_agent_number || null } });
+  } catch (error) {
+    return next(error);
+  }
+});
 
 router.get('/me', async (req, res, next) => {
   try {

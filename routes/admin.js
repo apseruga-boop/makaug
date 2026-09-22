@@ -220,6 +220,8 @@ const {
   uploadBufferToS3: uploadBackupBufferToS3
 } = require('../services/s3ObjectStorageService');
 
+const agentWeeklyReports = require('../services/agentWeeklyReportService');
+
 const router = express.Router();
 
 router.use(requireAdminApiKey);
@@ -12693,6 +12695,122 @@ router.post('/whatsapp-message-logs/:id/retry', async (req, res, next) => {
     return res.json({ ok: true, data: result });
   } catch (error) {
     return res.status(error.status || 500).json({ ok: false, error: error.message || 'WhatsApp retry failed' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Agent weekly performance reports: generate, edit, preview, send via WhatsApp
+// ---------------------------------------------------------------------------
+
+function agentReportWhatsappSource() {
+  return String(process.env.AGENT_REPORT_WHATSAPP_SOURCE || 'agent_weekly_report').trim().toLowerCase() || 'agent_weekly_report';
+}
+
+async function deliverAgentReportWhatsapp({ to, text, actor, reportId, preview }) {
+  const mode = getWhatsappDeliveryMode();
+  const source = agentReportWhatsappSource();
+  const metadata = { agent_weekly_report_id: reportId, preview: Boolean(preview) };
+  if (mode === 'web_bridge') {
+    const queued = await queueWhatsappWebBridgeMessage({ recipient: to, text, source, actorId: actor, metadata });
+    return { sent: false, queued: true, provider: 'whatsapp_web_bridge', id: queued?.id || null };
+  }
+  const delivery = await sendWhatsAppText({ to, body: text });
+  if (!delivery.sent && isWhatsappWebBridgeEnabled()) {
+    const queued = await queueWhatsappWebBridgeMessage({
+      recipient: to, text, source, actorId: actor, metadata: { ...metadata, fallback_from: delivery.provider || 'provider' }
+    });
+    return { sent: false, queued: true, provider: 'whatsapp_web_bridge', id: queued?.id || null };
+  }
+  return delivery;
+}
+
+router.get('/agent-reports/agents', async (req, res, next) => {
+  try {
+    const rows = await agentWeeklyReports.searchAgents(cleanText(req.query.q || ''), req.query.limit);
+    return res.json({ ok: true, data: rows });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/agent-reports', async (req, res, next) => {
+  try {
+    const week = agentWeeklyReports.resolveReportWeek(cleanText(req.query.week_start || ''));
+    const rows = await agentWeeklyReports.listReports({ weekStart: week.weekStart, status: cleanText(req.query.status || '') });
+    return res.json({ ok: true, data: rows, meta: { week_start: week.weekStart, week_end: week.weekEnd } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/agent-reports/:id', async (req, res, next) => {
+  try {
+    const report = await agentWeeklyReports.getReportById(req.params.id);
+    if (!report) return res.status(404).json({ ok: false, error: 'Report not found' });
+    return res.json({ ok: true, data: { report, whatsapp_text: agentWeeklyReports.buildWhatsAppReportMessage(report) } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/agent-reports/generate', async (req, res, next) => {
+  try {
+    const body = req.body || {};
+    const agent = await agentWeeklyReports.findAgent({
+      agentId: cleanText(body.agent_id || ''),
+      agentNumber: cleanText(body.agent_number || '')
+    });
+    if (!agent) return res.status(404).json({ ok: false, error: 'Agent not found — use the agent ID (MKA-AG-…) or pick from the list' });
+    const report = await agentWeeklyReports.generateReport({
+      agentId: agent.id,
+      weekStart: cleanText(body.week_start || ''),
+      actor: adminActorId(req),
+      refreshNumbers: body.refresh_numbers === true
+    });
+    return res.status(201).json({ ok: true, data: { report, whatsapp_text: agentWeeklyReports.buildWhatsAppReportMessage(report) } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.patch('/agent-reports/:id', async (req, res, next) => {
+  try {
+    const body = req.body || {};
+    const report = await agentWeeklyReports.updateReport(req.params.id, {
+      metrics: body.metrics && typeof body.metrics === 'object' ? body.metrics : undefined,
+      previous_metrics: body.previous_metrics && typeof body.previous_metrics === 'object' ? body.previous_metrics : undefined,
+      top_listings: Array.isArray(body.top_listings) ? body.top_listings : undefined,
+      top_countries: Array.isArray(body.top_countries) ? body.top_countries : undefined,
+      insights: Array.isArray(body.insights) ? body.insights : undefined,
+      next_steps: Array.isArray(body.next_steps) ? body.next_steps : undefined,
+      status: cleanText(body.status || '') || undefined
+    }, adminActorId(req));
+    return res.json({ ok: true, data: { report, whatsapp_text: agentWeeklyReports.buildWhatsAppReportMessage(report) } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/agent-reports/:id/send', async (req, res, next) => {
+  try {
+    const report = await agentWeeklyReports.getReportById(req.params.id);
+    if (!report) return res.status(404).json({ ok: false, error: 'Report not found' });
+    const previewTo = String(req.body?.preview_to || '').replace(/\D+/g, '');
+    const preview = Boolean(previewTo);
+    if (!preview && report.status !== 'approved' && report.status !== 'sent') {
+      return res.status(409).json({ ok: false, error: 'Approve the report before sending it to the agent' });
+    }
+    const to = preview ? previewTo : String(report.agent?.whatsapp || report.agent?.phone || '').replace(/\D+/g, '');
+    if (!to || to.length < 9) return res.status(400).json({ ok: false, error: 'No WhatsApp number to send to' });
+    const text = agentWeeklyReports.buildWhatsAppReportMessage(report);
+    const delivery = await deliverAgentReportWhatsapp({ to, text, actor: adminActorId(req), reportId: report.id, preview });
+    if (!delivery.sent && !delivery.queued) {
+      return res.status(502).json({ ok: false, error: 'WhatsApp delivery is not available right now', data: { delivery } });
+    }
+    const updated = await agentWeeklyReports.recordReportSent(report.id, { to, preview });
+    return res.json({ ok: true, data: { report: updated, delivery, to, preview } });
+  } catch (error) {
+    return next(error);
   }
 });
 
