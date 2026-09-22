@@ -85,6 +85,9 @@ async function processPendingCampaignQueue({ limit = 100, maxAttempts = 4, campa
      WHERE status IN ('pending','retry')
        AND channel = 'whatsapp'
        AND next_attempt_at <= NOW()
+       -- Bot replies queued for the WhatsApp bridge belong to the bridge. If
+       -- this sender also picked them up, the customer would get them twice.
+       AND COALESCE(metadata->>'delivery_mode', '') <> 'web_bridge'
        AND ($2::uuid IS NULL OR campaign_id = $2)
      ORDER BY created_at ASC
      LIMIT $1`,
