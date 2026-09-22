@@ -24,12 +24,63 @@ pool.on('error', (err) => {
   logger.error('Unexpected PostgreSQL client error:', err);
 });
 
+/**
+ * Broken emoji must never break a write.
+ *
+ * Most emoji are two UTF-16 code units. Cutting text with `.slice(0, n)` can
+ * split one in half, and JSON.stringify then writes the orphan half as an
+ * escape such as "\ud83c". PostgreSQL rejects that in json/jsonb with
+ * "invalid input syntax for type json", so the whole statement fails.
+ *
+ * That is what made the WhatsApp bot repeat a property card eight times on
+ * 21 Sep 2026: the card was delivered, recording it as sent failed on a
+ * 240-character preview cut through an emoji, and the send was retried.
+ *
+ * So every string parameter is repaired here, once, for every query: a lone
+ * surrogate becomes U+FFFD (the replacement character). Well-formed text is
+ * returned untouched, and the check is skipped for strings that cannot contain
+ * the problem.
+ */
+const LONE_HIGH_ESCAPE = /\\u[dD][89abAB][0-9a-fA-F]{2}(?!\\u[dD][c-fC-F][0-9a-fA-F]{2})/g;
+
+function repairLoneSurrogates(value) {
+  if (typeof value !== 'string' || !value) return value;
+  let out = value;
+  if (typeof out.isWellFormed === 'function' && !out.isWellFormed()) out = out.toWellFormed();
+  if (out.includes('\\u') && /\\u[dD][89a-fA-F]/.test(out)) {
+    out = out.replace(LONE_HIGH_ESCAPE, '\\ufffd');
+    // A low half is only an orphan when no high half sits right before it.
+    out = out.replace(/(\\u[dD][89abAB][0-9a-fA-F]{2})?(\\u[dD][c-fC-F][0-9a-fA-F]{2})/g,
+      (match, high, low) => (high ? match : '\\ufffd'));
+  }
+  return out;
+}
+
+function repairParams(params) {
+  if (!Array.isArray(params)) return params;
+  let changed = false;
+  const next = params.map((param) => {
+    const fixed = repairLoneSurrogates(param);
+    if (fixed !== param) changed = true;
+    return fixed;
+  });
+  return changed ? next : params;
+}
+
 async function query(text, params) {
-  return pool.query(text, params);
+  return pool.query(text, repairParams(params));
 }
 
 async function getClient() {
-  return pool.connect();
+  const client = await pool.connect();
+  if (!client.__makaugParamRepair) {
+    const originalQuery = client.query.bind(client);
+    client.query = (text, params, ...rest) => (
+      Array.isArray(params) ? originalQuery(text, repairParams(params), ...rest) : originalQuery(text, params, ...rest)
+    );
+    client.__makaugParamRepair = true;
+  }
+  return client;
 }
 
 async function healthcheck() {
