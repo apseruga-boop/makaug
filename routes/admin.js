@@ -221,6 +221,7 @@ const {
 } = require('../services/s3ObjectStorageService');
 
 const agentWeeklyReports = require('../services/agentWeeklyReportService');
+const agentReportCards = require('../services/agentReportCardService');
 
 const router = express.Router();
 
@@ -12710,12 +12711,29 @@ function agentReportWhatsappSource() {
   return String(process.env.AGENT_REPORT_WHATSAPP_SOURCE || 'whatsapp_runtime').trim().toLowerCase() || 'whatsapp_runtime';
 }
 
-async function deliverAgentReportWhatsapp({ to, text, actor, reportId, preview }) {
+function agentReportPayload(report) {
+  return {
+    report,
+    whatsapp_text: agentWeeklyReports.buildWhatsAppReportMessage(report),
+    whatsapp_caption: agentWeeklyReports.buildWhatsAppCardCaption(report),
+    card_url: agentReportCards.reportCardUrl(report, agentWeeklyReports.siteUrl())
+  };
+}
+
+async function deliverAgentReportWhatsapp({ to, text, actor, reportId, preview, cardUrl = '', caption = '' }) {
   const mode = getWhatsappDeliveryMode();
   const source = agentReportWhatsappSource();
   const metadata = { message_kind: 'agent_weekly_report', agent_weekly_report_id: reportId, preview: Boolean(preview) };
   if (mode === 'web_bridge' || isWhatsappWebBridgeEnabled()) {
-    const queued = await queueWhatsappWebBridgeMessage({ recipient: to, text, source, actorId: actor, metadata });
+    const queued = await queueWhatsappWebBridgeMessage({
+      recipient: to,
+      text: cardUrl && caption ? caption : text,
+      mediaUrl: cardUrl,
+      mediaType: cardUrl ? 'image' : 'text',
+      source,
+      actorId: actor,
+      metadata: { ...metadata, card: Boolean(cardUrl) }
+    });
     return { sent: false, queued: true, provider: 'whatsapp_web_bridge', id: queued?.id || null };
   }
   const delivery = await sendWhatsAppText({ to, body: text });
@@ -12751,7 +12769,7 @@ router.get('/agent-reports/:id', async (req, res, next) => {
   try {
     const report = await agentWeeklyReports.getReportById(req.params.id);
     if (!report) return res.status(404).json({ ok: false, error: 'Report not found' });
-    return res.json({ ok: true, data: { report, whatsapp_text: agentWeeklyReports.buildWhatsAppReportMessage(report) } });
+    return res.json({ ok: true, data: agentReportPayload(report) });
   } catch (error) {
     return next(error);
   }
@@ -12771,7 +12789,7 @@ router.post('/agent-reports/generate', async (req, res, next) => {
       actor: adminActorId(req),
       refreshNumbers: body.refresh_numbers === true
     });
-    return res.status(201).json({ ok: true, data: { report, whatsapp_text: agentWeeklyReports.buildWhatsAppReportMessage(report) } });
+    return res.status(201).json({ ok: true, data: agentReportPayload(report) });
   } catch (error) {
     return next(error);
   }
@@ -12789,7 +12807,7 @@ router.patch('/agent-reports/:id', async (req, res, next) => {
       next_steps: Array.isArray(body.next_steps) ? body.next_steps : undefined,
       status: cleanText(body.status || '') || undefined
     }, adminActorId(req));
-    return res.json({ ok: true, data: { report, whatsapp_text: agentWeeklyReports.buildWhatsAppReportMessage(report) } });
+    return res.json({ ok: true, data: agentReportPayload(report) });
   } catch (error) {
     return next(error);
   }
@@ -12806,8 +12824,16 @@ router.post('/agent-reports/:id/send', async (req, res, next) => {
     }
     const to = preview ? previewTo : String(report.agent?.whatsapp || report.agent?.phone || '').replace(/\D+/g, '');
     if (!to || to.length < 9) return res.status(400).json({ ok: false, error: 'No WhatsApp number to send to' });
-    const text = agentWeeklyReports.buildWhatsAppReportMessage(report);
-    const delivery = await deliverAgentReportWhatsapp({ to, text, actor: adminActorId(req), reportId: report.id, preview });
+    const payload = agentReportPayload(report);
+    const delivery = await deliverAgentReportWhatsapp({
+      to,
+      text: payload.whatsapp_text,
+      caption: payload.whatsapp_caption,
+      cardUrl: payload.card_url,
+      actor: adminActorId(req),
+      reportId: report.id,
+      preview
+    });
     if (!delivery.sent && !delivery.queued) {
       return res.status(502).json({ ok: false, error: 'WhatsApp delivery is not available right now', data: { delivery } });
     }

@@ -11981,6 +11981,7 @@ async function renderBrokerWeeklyReportPanel({ linked = true, weekStart = "" } =
     const options = [...weeks];
     if (report.week_start && !options.some((w) => w.week_start === report.week_start)) options.unshift({ week_start: report.week_start, week_end: report.week_end, status: report.status });
     const agentNumber = data.agent_number || report.agent?.makaug_agent_number || "";
+    const cardUrl = agentReportSafeUrl(data.card_url);
     const sourceNote = report.source === "live"
       ? "Live numbers, updated as people browse your listings."
       : "Reviewed by the makaug team.";
@@ -11994,6 +11995,7 @@ async function renderBrokerWeeklyReportPanel({ linked = true, weekStart = "" } =
         </div>
         ${options.length > 1 ? `<label class="text-xs font-bold text-gray-600">Week<select id="broker-report-week" class="mt-1 block rounded-lg border border-gray-300 px-3 py-2 text-sm">${options.map((w) => `<option value="${adminAttr(w.week_start)}" ${w.week_start === report.week_start ? "selected" : ""}>${adminEscape(agentReportWeekLabel(w.week_start, w.week_end))}</option>`).join("")}</select></label>` : ""}
       </div>
+      ${cardUrl ? `<div class="mb-5 grid gap-4 md:grid-cols-[280px_1fr] items-start"><img src="${adminAttr(cardUrl)}" alt="Your weekly report card" class="w-full rounded-2xl border border-gray-200 shadow-sm"><div class="text-sm text-gray-600"><p class="font-bold text-gray-900">Your report card</p><p class="mt-1">This is the card makaug sent you on WhatsApp. Share it with clients or your team to show how your listings are performing.</p><a href="${adminAttr(cardUrl)}" target="_blank" rel="noopener" class="mt-3 inline-flex rounded-lg bg-green-700 px-4 py-2 text-sm font-bold text-white">Open card</a></div></div>` : ""}
       ${renderAgentReportBody(report)}`;
     document.getElementById("broker-report-week")?.addEventListener("change", (event) => {
       renderBrokerWeeklyReportPanel({ linked: true, weekStart: event.target.value });
@@ -12085,7 +12087,7 @@ async function generateAdminAgentReport() {
   try {
     const res = await apiRequest("/api/admin/agent-reports/generate", { method: "POST", headers: adminAuthHeaders(), body });
     adminAgentReportCurrent = res?.data?.report || null;
-    renderAdminAgentReportEditor(res?.data?.whatsapp_text || "");
+    renderAdminAgentReportEditor(res?.data || {});
     loadAdminAgentReports();
     toast("Report generated.");
   } catch (error) {
@@ -12097,7 +12099,7 @@ async function openAdminAgentReport(id) {
   try {
     const res = await apiRequest(`/api/admin/agent-reports/${encodeURIComponent(id)}`, { headers: adminAuthHeaders() });
     adminAgentReportCurrent = res?.data?.report || null;
-    renderAdminAgentReportEditor(res?.data?.whatsapp_text || "");
+    renderAdminAgentReportEditor(res?.data || {});
     loadAdminAgentReports();
   } catch (error) {
     toast(error?.message || "Couldn't open the report.");
@@ -12108,7 +12110,9 @@ function adminAgentReportInput(id, value, type = "text", placeholder = "") {
   return `<input id="${id}" type="${type}" ${type === "number" ? 'min="0"' : ""} value="${adminAttr(value ?? "")}" placeholder="${adminAttr(placeholder)}" class="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm">`;
 }
 
-function renderAdminAgentReportEditor(whatsappText = "") {
+function renderAdminAgentReportEditor(data = {}) {
+  const whatsappText = data.whatsapp_caption || data.whatsapp_text || "";
+  const cardUrl = agentReportSafeUrl(data.card_url);
   const el = document.getElementById("admin-agent-report-editor");
   const r = adminAgentReportCurrent;
   if (!el || !r) return;
@@ -12149,7 +12153,10 @@ function renderAdminAgentReportEditor(whatsappText = "") {
         <button type="button" onclick="sendAdminAgentReport(true)" class="rounded-lg border border-green-700 px-3 py-2 text-sm font-bold text-green-800">Send preview</button>
         <button type="button" onclick="sendAdminAgentReport(false)" class="rounded-lg bg-green-700 px-3 py-2 text-sm font-bold text-white">Send to agent</button>
       </div>
-      <pre class="whitespace-pre-wrap text-xs text-gray-800 max-h-96 overflow-auto">${adminEscape(whatsappText)}</pre>
+      <div class="grid gap-4 lg:grid-cols-[320px_1fr]">
+        ${cardUrl ? `<a href="${adminAttr(cardUrl)}" target="_blank" rel="noopener" class="block"><img src="${adminAttr(cardUrl)}" alt="Report card the agent receives" class="w-full rounded-xl border border-gray-200 shadow-sm"></a>` : `<div class="rounded-xl border border-dashed border-gray-300 p-4 text-xs text-gray-500">Card preview appears after saving.</div>`}
+        <div><div class="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">Caption under the card</div><pre class="whitespace-pre-wrap text-xs text-gray-800 max-h-96 overflow-auto">${adminEscape(whatsappText)}</pre></div>
+      </div>
     </div>`;
 }
 
@@ -12187,7 +12194,7 @@ async function saveAdminAgentReport(status = "") {
   try {
     const res = await apiRequest(`/api/admin/agent-reports/${encodeURIComponent(adminAgentReportCurrent.id)}`, { method: "PATCH", headers: adminAuthHeaders(), body });
     adminAgentReportCurrent = res?.data?.report || adminAgentReportCurrent;
-    renderAdminAgentReportEditor(res?.data?.whatsapp_text || "");
+    renderAdminAgentReportEditor(res?.data || {});
     loadAdminAgentReports();
     toast(status === "approved" ? "Saved and approved." : "Saved.");
     return adminAgentReportCurrent;
@@ -12207,7 +12214,7 @@ async function refreshAdminAgentReportNumbers() {
       body: { agent_id: adminAgentReportCurrent.agent?.id, week_start: adminAgentReportCurrent.week_start, refresh_numbers: true }
     });
     adminAgentReportCurrent = res?.data?.report || adminAgentReportCurrent;
-    renderAdminAgentReportEditor(res?.data?.whatsapp_text || "");
+    renderAdminAgentReportEditor(res?.data || {});
     toast("Numbers refreshed.");
   } catch (error) {
     toast(error?.message || "Couldn't refresh numbers.");

@@ -575,6 +575,32 @@ function buildWhatsAppReportMessage(report) {
   return lines.join('\n');
 }
 
+// Short caption that rides under the report card image on WhatsApp.
+function buildWhatsAppCardCaption(report) {
+  const r = report || {};
+  const a = r.agent || {};
+  const firstName = String(a.full_name || '').trim().split(/\s+/)[0] || 'there';
+  const lines = [];
+  lines.push(`*Hi ${firstName}, your makaug weekly report is here* (${formatWeekRange(r.week_start, r.week_end)})`);
+  if (a.makaug_agent_number) lines.push(`Agent ID: *${a.makaug_agent_number}*`);
+  const listings = (Array.isArray(r.top_listings) ? r.top_listings : []).filter((l) => l.url).slice(0, 3);
+  if (listings.length) {
+    lines.push('');
+    lines.push('*Your best-performing properties*');
+    listings.forEach((l, i) => lines.push(`${i + 1}. ${l.title}\n${l.url}`));
+  }
+  const steps = (Array.isArray(r.next_steps) ? r.next_steps : []).slice(0, 2);
+  if (steps.length) {
+    lines.push('');
+    lines.push('*This week, try:*');
+    steps.forEach((s) => lines.push(`• ${s}`));
+  }
+  lines.push('');
+  lines.push('*Open your full interactive report* (log in to your makaug broker account):');
+  lines.push(brokerReportUrl());
+  return lines.join('\n');
+}
+
 async function recordReportSent(id, { to, preview }) {
   if (preview) {
     await db.query(
@@ -621,6 +647,7 @@ module.exports = {
   REPORT_STATUSES,
   brokerReportUrl,
   buildInsights,
+  buildWhatsAppCardCaption,
   buildWhatsAppReportMessage,
   cleanCountries,
   cleanListings,
@@ -638,6 +665,7 @@ module.exports = {
   propertyUrl,
   recordReportSent,
   resolveReportWeek,
+  siteUrl,
   searchAgents,
   updateReport
 };

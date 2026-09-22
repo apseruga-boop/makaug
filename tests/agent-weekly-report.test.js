@@ -146,3 +146,43 @@ test('report is wired into the product: migration, analytics capture, dashboards
   assert.match(admin, /Approve the report before sending it to the agent/);
   assert.match(admin, /AGENT_REPORT_WHATSAPP_SOURCE \|\| 'whatsapp_runtime'/, 'reports must use a source the WAHA bridge claims by default');
 });
+
+test('report card renders a PNG with the agent ID and escapes names', async () => {
+  const cards = require('../services/agentReportCardService');
+  const svg = cards.buildReportCardSvg({ ...sampleReport, agent: { ...sampleReport.agent, full_name: 'Francis <Okello>' } });
+  assert.match(svg, /Agent ID MKA-AG-1234567/);
+  assert.match(svg, /Francis &lt;Okello&gt;/);
+  assert.match(svg, /Top countries/);
+  const png = await cards.renderReportCardPng(sampleReport);
+  assert.equal(png.subarray(1, 4).toString(), 'PNG');
+});
+
+test('report card links are signed and a bad token is refused', async () => {
+  const previous = process.env.JWT_SECRET;
+  process.env.JWT_SECRET = 'test-secret';
+  try {
+    const cards = require('../services/agentReportCardService');
+    const report = { id: '11111111-2222-3333-4444-555555555555', updated_at: '2026-09-22T10:00:00Z' };
+    const url = cards.reportCardUrl(report, 'https://makaug.com');
+    const u = new URL(url);
+    assert.equal(u.pathname, '/api/agents/report-card/11111111-2222-3333-4444-555555555555.png');
+    assert.ok(cards.verifyCardToken(report.id, u.searchParams.get('v'), u.searchParams.get('t')));
+    assert.ok(!cards.verifyCardToken(report.id, u.searchParams.get('v'), 'x'.repeat(32)));
+    const app = express();
+    app.use('/api/agents', require('../routes/agents'));
+    const res = await request(app).get(`/api/agents/report-card/${report.id}.png?v=1&t=${'0'.repeat(32)}`);
+    assert.equal(res.status, 404);
+  } finally {
+    if (previous === undefined) delete process.env.JWT_SECRET; else process.env.JWT_SECRET = previous;
+  }
+});
+
+test('card caption carries property links and the logged-in report link', () => {
+  const caption = reports.buildWhatsAppCardCaption(sampleReport);
+  assert.match(caption, /Hi Francis, your makaug weekly report is here/);
+  assert.match(caption, /Agent ID: \*MKA-AG-1234567\*/);
+  assert.match(caption, /https:\/\/makaug\.com\/property\/11111111-1111-1111-1111-111111111111/);
+  assert.match(caption, /broker-dashboard#broker-report-panel/);
+  const admin = fs.readFileSync('routes/admin.js', 'utf8');
+  assert.match(admin, /mediaType: cardUrl \? 'image' : 'text'/);
+});

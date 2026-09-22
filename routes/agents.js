@@ -11,7 +11,8 @@ const {
 } = require('../services/publicAgentEligibilityService');
 const { normalizeEmail, normalizeUgPhone } = require('../utils/adminOtpOverride');
 const { parsePagination, toPagination } = require('../utils/pagination');
-const { getAgentFacingReport, listAgentReportWeeks } = require('../services/agentWeeklyReportService');
+const { getAgentFacingReport, getReportById, listAgentReportWeeks, siteUrl } = require('../services/agentWeeklyReportService');
+const { renderReportCardPng, reportCardUrl, verifyCardToken } = require('../services/agentReportCardService');
 
 const router = express.Router();
 const KNOWN_AGENT_SOCIAL_LINKS = [
@@ -299,6 +300,26 @@ async function fetchBrokerListings({ agent, user }) {
   return result.rows;
 }
 
+// Public (signed) PNG of a weekly report card, fetched by WhatsApp when the
+// report is sent. The HMAC token in the URL is the only way in.
+router.get('/report-card/:id.png', async (req, res, next) => {
+  try {
+    const id = cleanText(req.params.id);
+    if (!/^[0-9a-f-]{36}$/i.test(id) || !verifyCardToken(id, cleanText(req.query.v || ''), cleanText(req.query.t || ''))) {
+      return res.status(404).json({ ok: false, error: 'Not found' });
+    }
+    const report = await getReportById(id);
+    if (!report) return res.status(404).json({ ok: false, error: 'Not found' });
+    const png = await renderReportCardPng(report);
+    res.set('Content-Type', 'image/png');
+    res.set('Cache-Control', 'private, max-age=300');
+    res.set('X-Robots-Tag', 'noindex');
+    return res.send(png);
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.get('/me/weekly-report', async (req, res, next) => {
   try {
     const user = await getAuthenticatedUser(req);
@@ -311,7 +332,8 @@ router.get('/me/weekly-report', async (req, res, next) => {
       getAgentFacingReport(agent, weekStart),
       listAgentReportWeeks(agent.id)
     ]);
-    return res.json({ ok: true, data: { report, weeks, agent_number: agent.makaug_agent_number || null } });
+    const cardUrl = report?.id && ['approved', 'sent'].includes(report.status) ? reportCardUrl(report, siteUrl()) : '';
+    return res.json({ ok: true, data: { report, weeks, agent_number: agent.makaug_agent_number || null, card_url: cardUrl || null } });
   } catch (error) {
     return next(error);
   }
