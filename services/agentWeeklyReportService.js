@@ -533,7 +533,9 @@ function buildWhatsAppReportMessage(report) {
   lines.push('*makaug.com — Your Weekly Performance Report*');
   lines.push(`Hi ${firstName}, here is how your listings did this week.`);
   lines.push('');
-  lines.push(`Agent: *${a.full_name || 'makaug agent'}*${a.company_name ? ` · ${a.company_name}` : ''}`);
+  const company = String(a.company_name || '').trim();
+  const showCompany = company && company.toLowerCase() !== String(a.full_name || '').trim().toLowerCase();
+  lines.push(`Agent: *${a.full_name || 'makaug agent'}*${showCompany ? ` · ${company}` : ''}`);
   if (a.makaug_agent_number) lines.push(`Agent ID: *${a.makaug_agent_number}*`);
   lines.push(`Week: ${formatWeekRange(r.week_start, r.week_end)}`);
   lines.push(`Live listings: ${n(m.active_listings)}`);
@@ -551,7 +553,9 @@ function buildWhatsAppReportMessage(report) {
     lines.push('');
     lines.push('*Your best-performing properties*');
     listings.slice(0, 5).forEach((l, i) => {
-      lines.push(`${i + 1}. ${l.title}${l.area ? `, ${l.area}` : ''} — ${n(l.views)} views, ${n(l.enquiries)} enquir${toInt(l.enquiries) === 1 ? 'y' : 'ies'}`);
+      const areaHead = String(l.area || '').split(',')[0].trim().toLowerCase();
+      const showArea = l.area && !(areaHead && String(l.title || '').toLowerCase().includes(areaHead));
+      lines.push(`${i + 1}. ${l.title}${showArea ? `, ${l.area}` : ''} — ${n(l.views)} views, ${n(l.enquiries)} enquir${toInt(l.enquiries) === 1 ? 'y' : 'ies'}`);
       if (l.url) lines.push(`   ${l.url}`);
     });
   }

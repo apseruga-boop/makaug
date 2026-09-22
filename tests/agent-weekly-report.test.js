@@ -47,6 +47,9 @@ test('WhatsApp message carries agent ID, property links and the logged-in report
   assert.match(text, /log in to your makaug broker account/);
   assert.match(text, /United Kingdom — 20 visitors/);
   assert.match(text, /Listing views: \*120\* \(\+20%\)/);
+  const dup = reports.buildWhatsAppReportMessage({ ...sampleReport, agent: { ...sampleReport.agent, company_name: 'Francis Okello' }, top_listings: [{ title: 'Land for sale in Kira', area: 'Kira, Wakiso', url: 'https://makaug.com/property/x', views: 4, enquiries: 0 }] });
+  assert.match(dup, /Agent: \*Francis Okello\*\n/);
+  assert.match(dup, /1\. Land for sale in Kira — 4 views/);
 });
 
 test('insights call out foreign visitors and a dominant listing', () => {
