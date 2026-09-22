@@ -8202,6 +8202,120 @@ async function logWhatsappMessage({
   );
 }
 
+// ---------------------------------------------------------------------------
+// Agent 007 batch summary: one message after a burst of forwarded properties.
+// ---------------------------------------------------------------------------
+const EMPLOYEE_BATCH_SUMMARY_QUIET_MS = Math.max(
+  10000,
+  Number(process.env.WHATSAPP_EMPLOYEE_BATCH_SUMMARY_QUIET_MS || 30000)
+);
+const employeeBatchBursts = new Map(); // phone -> { token, since, timer }
+
+function scheduleEmployeeBatchSummary(phone) {
+  const key = String(phone || '');
+  if (!key) return;
+  const existing = employeeBatchBursts.get(key);
+  if (existing?.timer) clearTimeout(existing.timer);
+  const burst = {
+    token: crypto.randomUUID(),
+    since: existing?.since || new Date(Date.now() - 5000),
+    timer: null
+  };
+  burst.timer = setTimeout(() => {
+    const current = employeeBatchBursts.get(key);
+    if (!current || current.token !== burst.token) return;
+    employeeBatchBursts.delete(key);
+    sendEmployeeBatchSummary(key, current.since).catch((error) => {
+      logger.warn('Agent 007 batch summary failed:', error.message || String(error));
+    });
+  }, EMPLOYEE_BATCH_SUMMARY_QUIET_MS);
+  if (typeof burst.timer.unref === 'function') burst.timer.unref();
+  employeeBatchBursts.set(key, burst);
+}
+
+function shortEmployeeLabel(text = '', max = 55) {
+  const clean = normalizeInput(stripForwardMarkers(text)).replace(/\s+/g, ' ').trim();
+  const chars = Array.from(clean);
+  return chars.length > max ? `${chars.slice(0, max).join('').trim()}…` : clean;
+}
+
+async function buildEmployeeBatchSummary(phone, since) {
+  const sessionResult = await db.query(
+    'SELECT current_step, session_data FROM whatsapp_sessions WHERE phone = $1',
+    [phone]
+  );
+  const session = sessionResult.rows[0];
+  // Finished, cancelled or moved on: COMPLETE sends its own summary.
+  if (!session || session.current_step !== 'employee_property_media') return '';
+  const data = session.session_data && typeof session.session_data === 'object' ? session.session_data : {};
+
+  const propertyIds = (Array.isArray(data.property_ids) ? data.property_ids : []).map(String);
+  const saved = propertyIds.length
+    ? (await db.query(
+      `SELECT id::text AS id, title
+         FROM properties
+        WHERE id::text = ANY($1::text[])
+          AND created_at >= $2
+        ORDER BY created_at ASC`,
+      [propertyIds, since]
+    )).rows
+    : [];
+
+  const notSaved = [];
+  const pendingMedia = employeePendingStoredMedia(data);
+  const pendingCaption = normalizeInput(data.pending_property_caption || '');
+  if (pendingMedia.length || pendingCaption) {
+    const missing = pendingCaption ? employeePropertyMissing(employeePropertyFacts(pendingCaption, data)) : [];
+    notSaved.push({
+      label: pendingCaption ? shortEmployeeLabel(pendingCaption) : 'Media sent without a caption',
+      needs: !pendingMedia.length
+        ? 'its photo or video (the caption arrived on its own)'
+        : !pendingCaption
+          ? 'a caption with type, exact location and price'
+          : (missing.length ? missing.join(', ') : 'nothing more — reply *OK* and I will save it')
+    });
+  }
+  for (const entry of employeePendingSubmissionQueue(data)) {
+    const missing = entry.caption ? employeePropertyMissing(employeePropertyFacts(entry.caption, data)) : [];
+    notSaved.push({
+      label: entry.caption ? shortEmployeeLabel(entry.caption) : 'Media sent without a caption',
+      needs: missing.length ? missing.join(', ') : 'a caption with type, exact location and price'
+    });
+  }
+
+  if (!saved.length && !notSaved.length) return '';
+  const total = saved.length + notSaved.length;
+  const lines = [];
+  lines.push(notSaved.length
+    ? `📋 *Saved ${saved.length} of ${total}* — everything except ${notSaved.length === 1 ? 'the one below' : `the ${notSaved.length} below`}.`
+    : `📋 *All ${saved.length} saved* for staff review.`);
+  if (saved.length) {
+    lines.push('', '✅ *Saved for staff review:*');
+    saved.forEach((row, index) => lines.push(`${index + 1}. ${shortEmployeeLabel(row.title || 'Property', 50)}`));
+  }
+  if (notSaved.length) {
+    lines.push('', `⚠️ *Not saved yet:*`);
+    notSaved.forEach((item) => lines.push(`• "${item.label}"\n   needs: ${item.needs}`));
+    lines.push('', notSaved.length === 1
+      ? 'Reply with just the missing detail (for example "Kira, Wakiso") and I will add it. You do not need to resend the media.'
+      : 'Reply with the missing detail for the first one listed and I will add it, then the next. You do not need to resend the media.');
+  }
+  lines.push('', 'Nothing is live until a moderator approves it. Type *COMPLETE* when the whole batch is done.');
+  return lines.join('\n');
+}
+
+async function sendEmployeeBatchSummary(phone, since) {
+  const text = await buildEmployeeBatchSummary(phone, since);
+  if (!text) return null;
+  return queueWhatsappWebBridgeAutoReply({
+    phone,
+    message: text,
+    nextStep: 'employee_property_media',
+    source: 'whatsapp_runtime',
+    actorId: 'employee_batch_summary'
+  });
+}
+
 async function queueWhatsappWebBridgeAutoReply({
   phone,
   message,
@@ -12613,6 +12727,20 @@ async function processInboundRuntimeUnlocked({
     };
   });
   if (employeeIntake.handled) {
+    // A forwarded batch arrives as a burst. Answering each incomplete property on
+    // its own, mid-burst, left the agent guessing which property a reply was about
+    // and whether the rest had saved. Instead, hold those notices and send ONE
+    // summary once the burst has gone quiet: what saved, and what still needs what.
+    const batchSummaryApplies = provider === 'web_bridge'
+      && !employeeIntake.batchComplete
+      && (employeeIntake.nextStep || sessionStep) === 'employee_property_media'
+      && (sessionForMessage.session_data?.property_batch_mode || 'multiple') === 'multiple';
+    if (batchSummaryApplies) {
+      scheduleEmployeeBatchSummary(phone);
+      if (String(employeeIntake.message || '').startsWith('⚠️ Not saved yet')) {
+        employeeIntake.message = '';
+      }
+    }
     await logIntent({
       userPhone: phone,
       waMessageId: inboundMessageId,
@@ -13984,6 +14112,8 @@ router.delete('/reset/:phone', async (req, res) => {
 
 module.exports = router;
 module.exports.__test = {
+  buildEmployeeBatchSummary,
+  scheduleEmployeeBatchSummary,
   ACTIVE_COUNTRY_CODE,
   ACTIVE_CURRENCY,
   addWhatsappCanonicalLocationFilter,
