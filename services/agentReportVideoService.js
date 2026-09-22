@@ -1,6 +1,6 @@
 'use strict';
 
-// Animated "your week on makaug" recap video (720×720 MP4, ~13 s) for an
+// Animated "your week on makaug" recap video (720×720 MP4, ~20 s) for an
 // agent's weekly report. Frames are drawn as SVG, rasterised with sharp and
 // piped into ffmpeg. Style: cream ground, outlined chat bubbles with offset
 // shadows, confetti, stats that count up, a country scene and a closing card.
@@ -11,8 +11,7 @@ const path = require('path');
 const { spawn } = require('child_process');
 
 const SIZE = 720;
-const FPS = 24;
-const DURATION = 13;
+const FPS = 15;
 const FONT = "'Noto Sans', 'DejaVu Sans', Arial, sans-serif";
 const CACHE_DIR = path.join(os.tmpdir(), 'makaug-report-videos');
 const inflight = new Map();
@@ -143,8 +142,9 @@ function confetti(t, seedShift = 0) {
     [70, 610, 16, K.purple, 'sparkle'], [360, 60, 10, K.teal, 'blob'], [680, 360, 12, K.purple, 'blob']
   ];
   return items.map(([x, y, r, c, kind], i) => {
-    const rot = (t * 40 + i * 50 + seedShift) % 360;
-    const bob = Math.sin(t * 2 + i) * 6;
+    const q = Math.floor(t * 3) / 3; // step motion so neighbouring frames repeat
+    const rot = (q * 40 + i * 50 + seedShift) % 360;
+    const bob = Math.sin(q * 2 + i) * 6;
     const s = pop(t, 0.1 + i * 0.08);
     return kind === 'sparkle' ? sparkle(x, y + bob, r, c, rot, s) : blob(x, y + bob, r * 0.8, c, rot, s);
   }).join('');
@@ -183,102 +183,175 @@ function changeTag(p) {
 
 const AVATAR_COLORS = [K.orange, K.purple, K.teal, K.yellow, K.green];
 
-function buildScenes(report) {
+const SHORT_NAMES = { 'United Arab Emirates': 'UAE', 'United States': 'USA', 'United Kingdom': 'UK', 'Saudi Arabia': 'Saudi Arabia' };
+const SOURCE_NAMES = { direct: 'Direct / typed in', google: 'Google', facebook: 'Facebook', instagram: 'Instagram', whatsapp: 'WhatsApp', tiktok: 'TikTok', x: 'X (Twitter)', twitter: 'X (Twitter)', youtube: 'YouTube', linkedin: 'LinkedIn', bing: 'Bing', referral: 'Other websites', chatgpt: 'ChatGPT' };
+
+function sourceName(value) {
+  const key = String(value || 'direct').toLowerCase().replace(/^www\./, '').replace(/\.(com|co\.ug|org|net)$/, '');
+  return SOURCE_NAMES[key] || clip(String(value || 'Direct'), 18);
+}
+
+// Timeline of scenes; each draws with local time `lt` (0..dur) and global `t`.
+function buildTimeline(report) {
   const a = report.agent || {};
   const m = report.metrics || {};
   const p = report.previous_metrics || {};
+  const x = report.extras || {};
   const enquiries = (Number(m.enquiries) || 0) + (Number(m.whatsapp_clicks) || 0);
   const prevEnq = (Number(p.enquiries) || 0) + (Number(p.whatsapp_clicks) || 0);
   const firstName = String(a.full_name || '').trim().split(/\s+/)[0] || 'Agent';
-  const initials = String(a.full_name || 'M A').trim().split(/\s+/).map((s) => s[0]).join('').slice(0, 2).toUpperCase();
-  const countries = (Array.isArray(report.top_countries) ? report.top_countries : []).slice(0, 4);
-  const totalC = countries.reduce((s, c) => s + (Number(c.visitors) || 0), 0) || 1;
-  const top = (Array.isArray(report.top_listings) ? report.top_listings : [])[0] || null;
+  const initials = String(a.full_name || 'M A').trim().split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
+  let countries = (Array.isArray(report.top_countries) ? report.top_countries : []).slice(0, 4);
+  let countryLabel = 'Where your visitors are';
+  if (!countries.length && Array.isArray(x.countries_so_far) && x.countries_so_far.length) {
+    countries = x.countries_so_far.slice(0, 4);
+    countryLabel = 'Visitors so far this week';
+  }
+  const totalC = countries.reduce((sum, c) => sum + (Number(c.visitors) || 0), 0) || 1;
+  const sources = (Array.isArray(x.traffic_sources) ? x.traffic_sources : []).slice(0, 4);
+  const totalS = sources.reduce((sum, c) => sum + (Number(c.visitors) || 0), 0) || 1;
+  const listings = (Array.isArray(report.top_listings) ? report.top_listings : []).slice(0, 3);
   const weekText = (() => {
     try {
       const o = { day: 'numeric', month: 'short', timeZone: 'UTC' };
       return `${new Date(`${report.week_start}T00:00:00Z`).toLocaleDateString('en-GB', o)} – ${new Date(`${report.week_end}T00:00:00Z`).toLocaleDateString('en-GB', o)}`;
     } catch (_) { return ''; }
   })();
+  const out = (lt, dur) => (dur - lt < 0.25 ? dur - 0.25 : Infinity);
 
-  return (t) => {
-    const parts = [];
-    // Scene 1: title card (0 – 2.2 s)
-    if (t < 2.4) {
-      parts.push(patternBg(t, 'WEEKLY'));
-      parts.push(confetti(t));
-      const s = pop(t, 0.2, 2.1, 0.45);
-      parts.push(bubble(360, 330, [{ text: 'Your week on', size: 34, weight: 600 }, { text: 'makaug.com', size: 60, weight: 900, fill: K.orange }], { scale: s, pad: 34 }));
-      parts.push(bubble(360, 470, [{ text: weekText, size: 26, weight: 700 }], { scale: pop(t, 0.6, 2.1), fill: K.yellow, tail: 'right' }));
-      return parts.join('');
-    }
-    parts.push(`<rect width="${SIZE}" height="${SIZE}" fill="${K.cream}"/>`);
-    parts.push(confetti(t, 90));
+  const scenes = [];
+  scenes.push({ dur: 2.3, title: true, draw: (lt, t, dur) => [
+    patternBg(t, 'WEEKLY'), confetti(t),
+    bubble(360, 320, [{ text: 'Your week on', size: 34, weight: 600 }, { text: 'makaug.com', size: 60, weight: 900, fill: K.orange }], { scale: pop(lt, 0.15, out(lt, dur), 0.45), pad: 34 }),
+    bubble(360, 470, [{ text: weekText, size: 26, weight: 700 }], { scale: pop(lt, 0.55, out(lt, dur)), fill: K.yellow, tail: 'right' })
+  ] });
 
-    // Scene 2: who (2.4 – 4.6 s)
-    if (t < 4.8) {
-      parts.push(avatar(160, 250, 58, initials, K.orange, pop(t, 2.5, 4.6)));
-      parts.push(bubble(410, 230, [{ text: `Hi ${clip(firstName, 14)}!`, size: 50, weight: 900 }], { scale: pop(t, 2.7, 4.6) }));
-      if (a.makaug_agent_number) {
-        parts.push(bubble(400, 380, [{ text: 'Agent ID', size: 22, weight: 600, fill: K.muted }, { text: a.makaug_agent_number, size: 36, weight: 900, fill: K.orange }], { scale: pop(t, 3.0, 4.6), tail: 'right' }));
-      }
-      parts.push(bubble(300, 520, [{ text: `${num(m.active_listings)} live listings`, size: 34, weight: 800 }], { scale: pop(t, 3.3, 4.6), fill: K.peach }));
-      return parts.join('');
-    }
+  scenes.push({ dur: 2.6, draw: (lt, t, dur) => {
+    const e = out(lt, dur);
+    const r = [
+      avatar(150, 200, 58, initials, K.orange, pop(lt, 0.05, e)),
+      bubble(410, 185, [{ text: `Hi ${clip(firstName, 14)}!`, size: 50, weight: 900 }], { scale: pop(lt, 0.25, e) })
+    ];
+    if (a.makaug_agent_number) r.push(bubble(400, 330, [{ text: 'Agent ID', size: 22, weight: 600, fill: K.muted }, { text: a.makaug_agent_number, size: 36, weight: 900, fill: K.orange }], { scale: pop(lt, 0.55, e), tail: 'right' }));
+    r.push(bubble(270, 470, [{ text: `${num(m.active_listings)} live listings`, size: 34, weight: 800 }], { scale: pop(lt, 0.85, e), fill: K.peach }));
+    if (Number(x.new_listings) > 0) r.push(bubble(460, 590, [{ text: `+${num(x.new_listings)} added this week`, size: 28, weight: 800, fill: K.green }], { scale: pop(lt, 1.1, e), tail: 'right' }));
+    return r;
+  } });
 
-    // Scene 3: stats that count up (4.8 – 8.0 s)
-    if (t < 8.2) {
-      const stats = [
-        { y: 150, x: 330, label: 'listing views', value: m.views, change: changeTag(pct(m.views, p.views)), start: 4.9, tail: 'left', av: ['V', K.purple, 90] },
-        { y: 310, x: 390, label: 'people visited', value: m.visitors, change: changeTag(pct(m.visitors, p.visitors)), start: 5.5, tail: 'right', av: ['P', K.teal, 640] },
-        { y: 470, x: 330, label: enquiries === 1 ? 'enquiry' : 'enquiries', value: enquiries, change: changeTag(pct(enquiries, prevEnq)), start: 6.1, tail: 'left', av: ['E', K.orange, 90] },
-        { y: 615, x: 400, label: m.saves === 1 ? 'save' : 'saves', value: m.saves, change: null, start: 6.7, tail: 'right', av: ['S', K.yellow, 650] }
-      ];
-      stats.forEach((st) => {
-        const s = pop(t, st.start, 8.0);
-        const lines = [{ text: `${countUp(st.value, t, st.start).toLocaleString('en-GB')} ${st.label}`, size: 40, weight: 900 }];
-        if (st.change) lines.push({ text: st.change.text, size: 22, weight: 700, fill: st.change.fill });
-        parts.push(avatar(st.av[2], st.y, 34, st.av[0], st.av[1], s));
-        parts.push(bubble(st.x, st.y, lines, { scale: s, tail: st.tail, minW: 300 }));
+  const statScene = (items) => ({ dur: 0.9 + items.length * 0.55 + 1.0, draw: (lt, t, dur) => {
+    const e = out(lt, dur);
+    const r = [];
+    items.forEach((st, i) => {
+      const y = 130 + i * (470 / Math.max(1, items.length - 1 || 1));
+      const left = i % 2 === 0;
+      const start = 0.1 + i * 0.55;
+      const sc = pop(lt, start, e);
+      const valueText = st.raw ? st.raw : `${countUp(st.value, lt, start).toLocaleString('en-GB')}${st.suffix || ''}`;
+      const lines = [{ text: `${valueText} ${st.label}`, size: 36, weight: 900 }];
+      if (st.change) lines.push({ text: st.change.text, size: 22, weight: 700, fill: st.change.fill });
+      r.push(avatar(left ? 80 : 640, y, 32, st.icon, st.color, sc));
+      r.push(bubble(left ? 340 : 380, y, lines, { scale: sc, tail: left ? 'left' : 'right', minW: 320 }));
+    });
+    return r;
+  } });
+
+  scenes.push(statScene([
+    { label: 'listing views', value: m.views, change: changeTag(pct(m.views, p.views)), icon: 'V', color: K.purple },
+    { label: 'people visited', value: m.visitors, change: changeTag(pct(m.visitors, p.visitors)), icon: 'P', color: K.teal },
+    { label: enquiries === 1 ? 'enquiry' : 'enquiries', value: enquiries, change: changeTag(pct(enquiries, prevEnq)), icon: 'E', color: K.orange },
+    { label: Number(m.whatsapp_clicks) === 1 ? 'WhatsApp tap' : 'WhatsApp taps', value: m.whatsapp_clicks, change: changeTag(pct(m.whatsapp_clicks, p.whatsapp_clicks)), icon: 'W', color: K.green }
+  ]));
+
+  const second = [{ label: m.saves === 1 ? 'save' : 'saves', value: m.saves, change: changeTag(pct(m.saves, p.saves)), icon: 'S', color: K.yellow }];
+  if (x.rank && x.rank.position) second.push({ raw: `#${num(x.rank.position)} of ${num(x.rank.total)}`, label: 'agents by views', icon: '#', color: K.purple });
+  if (m.visitors) second.push({ raw: `${(Math.round((enquiries / Math.max(1, m.visitors)) * 1000) / 10).toLocaleString('en-GB')}%`, label: 'of visitors got in touch', icon: '%', color: K.teal });
+  if (x.views_per_listing) second.push({ raw: `${x.views_per_listing}`, label: 'views per listing', icon: 'L', color: K.orange });
+  scenes.push(statScene(second));
+
+  scenes.push({ dur: 1.0 + Math.max(1, countries.length) * 0.4 + 1.1, draw: (lt, t, dur) => {
+    const e = out(lt, dur);
+    const r = [globe(360, 390, 230, 0.9 * clamp01(lt / 0.4)), bubble(360, 90, [{ text: countryLabel, size: 34, weight: 900 }], { scale: pop(lt, 0.05, e), fill: K.peach })];
+    if (countries.length) {
+      const spots = [[340, 225, 'left', 95], [390, 355, 'right', 640], [330, 485, 'left', 90], [400, 615, 'right', 645]];
+      countries.forEach((c, i) => {
+        const [cx, cy, tail, ax] = spots[i];
+        const sc = pop(lt, 0.4 + i * 0.4, e);
+        const share = Math.round(((Number(c.visitors) || 0) / totalC) * 100);
+        r.push(avatar(ax, cy, 32, String(c.code || c.name || '?').slice(0, 2).toUpperCase(), AVATAR_COLORS[i % AVATAR_COLORS.length], sc));
+        r.push(bubble(cx, cy, [{ text: clip(SHORT_NAMES[c.name] || c.name, 16), size: 34, weight: 900 }, { text: `${num(c.visitors)} visitor${Number(c.visitors) === 1 ? '' : 's'} · ${share}%`, size: 22, weight: 700, fill: K.muted }], { scale: sc, tail, minW: 280 }));
       });
-      return parts.join('');
+    } else {
+      r.push(bubble(360, 380, [{ text: 'Visitor countries', size: 36, weight: 900 }, { text: 'show from next week’s report', size: 28, weight: 700, fill: K.muted }], { scale: pop(lt, 0.4, e) }));
     }
+    return r;
+  } });
 
-    // Scene 4: countries (8.2 – 10.6 s)
-    if (t < 10.8) {
-      parts.push(globe(360, 380, 230, 0.9 * clamp01((t - 8.2) / 0.4)));
-      parts.push(bubble(360, 90, [{ text: 'Where your visitors are', size: 34, weight: 900 }], { scale: pop(t, 8.25, 10.6), fill: K.peach }));
-      if (countries.length) {
-        const spots = [[330, 230, 'left', 110], [400, 360, 'right', 640], [320, 490, 'left', 100], [410, 620, 'right', 650]];
-        const SHORT = { 'United Arab Emirates': 'UAE', 'United Kingdom': 'United Kingdom', 'United States': 'USA', 'DR Congo': 'DR Congo' };
-        countries.forEach((c, i) => {
-          const [x, y, tail, ax] = spots[i];
-          c = { ...c, name: SHORT[c.name] || c.name };
-          const s = pop(t, 8.6 + i * 0.35, 10.6);
-          const share = Math.round(((Number(c.visitors) || 0) / totalC) * 100);
-          parts.push(avatar(ax, y, 32, (c.code || c.name || '?').slice(0, 2).toUpperCase(), AVATAR_COLORS[i % AVATAR_COLORS.length], s));
-          parts.push(bubble(x, y, [{ text: clip(c.name, 18), size: 34, weight: 900 }, { text: `${num(c.visitors)} visitors · ${share}%`, size: 22, weight: 700, fill: K.muted }], { scale: s, tail, minW: 280 }));
-        });
-      } else {
-        parts.push(bubble(360, 360, [{ text: 'Visitor countries', size: 36, weight: 900 }, { text: 'start in next week’s report', size: 28, weight: 700, fill: K.muted }], { scale: pop(t, 8.6, 10.6) }));
-      }
-      return parts.join('');
-    }
+  if (sources.length) {
+    scenes.push({ dur: 1.0 + sources.length * 0.4 + 1.0, draw: (lt, t, dur) => {
+      const e = out(lt, dur);
+      const r = [bubble(360, 90, [{ text: 'How people found you', size: 34, weight: 900 }], { scale: pop(lt, 0.05, e), fill: K.peach })];
+      sources.forEach((src, i) => {
+        const cy = 220 + i * 130;
+        const sc = pop(lt, 0.4 + i * 0.4, e);
+        const share = Math.round(((Number(src.visitors) || 0) / totalS) * 100);
+        const barW = Math.max(20, (share / 100) * 420);
+        r.push(bubble(i % 2 ? 390 : 330, cy, [{ text: `${sourceName(src.source)} · ${share}%`, size: 32, weight: 900 }], { scale: sc, tail: i % 2 ? 'right' : 'left', minW: 380 }));
+        if (sc > 0.9) r.push(`<rect x="150" y="${cy + 52}" width="420" height="12" rx="6" fill="#F3DDC9"/><rect x="150" y="${cy + 52}" width="${(barW * clamp01((lt - 0.4 - i * 0.4) / 0.6)).toFixed(1)}" height="12" rx="6" fill="${K.orange}"/>`);
+      });
+      return r;
+    } });
+  }
 
-    // Scene 5: top property (10.8 – 11.9 s)
-    if (t < 12.0 && top) {
-      parts.push(bubble(360, 200, [{ text: 'Your top property', size: 32, weight: 800, fill: K.muted }], { scale: pop(t, 10.85, 11.9), fill: K.peach }));
-      parts.push(bubble(360, 360, [{ text: clip(top.title, 26), size: 38, weight: 900 }, { text: `${num(top.views)} views · ${num(top.enquiries)} enquiries`, size: 26, weight: 700, fill: K.orange }], { scale: pop(t, 11.0, 11.9), pad: 30 }));
-      return parts.join('');
-    }
+  if (x.busiest_day || x.peak_hour) {
+    scenes.push({ dur: 2.4, draw: (lt, t, dur) => {
+      const e = out(lt, dur);
+      const r = [bubble(360, 110, [{ text: 'When buyers are looking', size: 34, weight: 900 }], { scale: pop(lt, 0.05, e), fill: K.peach })];
+      if (x.busiest_day) r.push(avatar(110, 290, 40, 'D', K.purple, pop(lt, 0.4, e)), bubble(390, 290, [{ text: `Busiest day: ${x.busiest_day.day}`, size: 34, weight: 900 }, { text: `${num(x.busiest_day.views)} views`, size: 24, weight: 700, fill: K.muted }], { scale: pop(lt, 0.4, e), minW: 360 }));
+      if (x.peak_hour) r.push(avatar(610, 470, 40, 'T', K.teal, pop(lt, 0.8, e)), bubble(330, 470, [{ text: `Peak time: ${x.peak_hour.label}`, size: 34, weight: 900 }, { text: 'reply fast around then', size: 24, weight: 700, fill: K.muted }], { scale: pop(lt, 0.8, e), tail: 'right', minW: 360 }));
+      return r;
+    } });
+  }
 
-    // Scene 6: close
-    const s = pop(t, top ? 12.0 : 10.8, Infinity, 0.45);
-    parts.push(`<circle cx="360" cy="330" r="${(150 * s).toFixed(1)}" fill="${K.orange}" stroke="${K.line}" stroke-width="4"/>`);
-    parts.push(`<g transform="translate(360 330) scale(${s.toFixed(3)}) translate(-360 -330)">${textEl(360, 350, 'makaug', { size: 54, weight: 900, fill: K.white, anchor: 'middle' })}</g>`);
-    parts.push(bubble(360, 560, [{ text: 'Full report: tap the link below', size: 30, weight: 800 }], { scale: pop(t, (top ? 12.0 : 10.8) + 0.25) }));
-    return parts.join('');
+  if (listings.length) {
+    scenes.push({ dur: 1.0 + listings.length * 0.45 + 1.2, draw: (lt, t, dur) => {
+      const e = out(lt, dur);
+      const r = [bubble(360, 100, [{ text: 'Your best properties', size: 34, weight: 900 }], { scale: pop(lt, 0.05, e), fill: K.peach })];
+      listings.forEach((l, i) => {
+        const cy = 240 + i * 150;
+        const sc = pop(lt, 0.4 + i * 0.45, e);
+        r.push(avatar(i % 2 ? 640 : 80, cy, 30, String(i + 1), AVATAR_COLORS[(i + 1) % AVATAR_COLORS.length], sc));
+        r.push(bubble(i % 2 ? 380 : 340, cy, [{ text: clip(l.title, 24), size: 32, weight: 900 }, { text: `${num(l.views)} views · ${num(l.enquiries)} enquiries`, size: 22, weight: 700, fill: K.orange }], { scale: sc, tail: i % 2 ? 'right' : 'left', minW: 380 }));
+      });
+      return r;
+    } });
+  }
+
+  scenes.push({ dur: 2.0, draw: (lt) => {
+    const sc = pop(lt, 0.05, Infinity, 0.45);
+    return [
+      `<circle cx="360" cy="320" r="${(150 * sc).toFixed(1)}" fill="${K.orange}" stroke="${K.line}" stroke-width="4"/>`,
+      `<g transform="translate(360 320) scale(${sc.toFixed(3)}) translate(-360 -320)">${textEl(360, 340, 'makaug', { size: 54, weight: 900, fill: K.white, anchor: 'middle' })}</g>`,
+      bubble(360, 560, [{ text: 'Full report: tap the link below', size: 30, weight: 800 }], { scale: pop(lt, 0.3) })
+    ];
+  } });
+
+  let at = 0;
+  scenes.forEach((sc) => { sc.start = at; at += sc.dur; });
+  return { scenes, duration: at };
+}
+
+function buildScenes(report) {
+  const { scenes } = buildTimeline(report);
+  return (t) => {
+    const sc = scenes.find((s) => t < s.start + s.dur) || scenes[scenes.length - 1];
+    const lt = t - sc.start;
+    const parts = sc.title ? [] : [`<rect width="${SIZE}" height="${SIZE}" fill="${K.cream}"/>`, confetti(t, 90)];
+    return parts.concat(sc.draw(lt, t, sc.dur)).join('');
   };
+}
+
+function videoDuration(report) {
+  return buildTimeline(report).duration;
 }
 
 function frameSvg(scene, t) {
@@ -317,13 +390,20 @@ async function encodeVideo(report, outFile) {
   });
   done.catch(() => {});
   const scene = buildScenes(report);
-  const frames = Math.round(DURATION * FPS);
+  const frames = Math.round(videoDuration(report) * FPS);
+  let lastSvg = '';
+  let lastRaw = null;
+  const started = Date.now();
+  console.log(`[agent-report] video render start report=${report.id} frames=${frames}`);
   const deadline = Date.now() + RENDER_TIMEOUT_MS;
   try {
     for (let i = 0; i < frames; i += 1) {
       if (failed) throw failed;
       if (Date.now() > deadline) throw new Error('Video render took too long');
-      const raw = await sharp(Buffer.from(frameSvg(scene, i / FPS))).ensureAlpha().raw().toBuffer();
+      const svg = frameSvg(scene, i / FPS);
+      const raw = svg === lastSvg && lastRaw ? lastRaw : await sharp(Buffer.from(svg)).ensureAlpha().raw().toBuffer();
+      lastSvg = svg;
+      lastRaw = raw;
       if (failed) throw failed;
       if (!ff.stdin.write(raw)) {
         // Never wait on a pipe whose reader has died: race drain against exit.
@@ -333,6 +413,7 @@ async function encodeVideo(report, outFile) {
     ff.stdin.end();
     await Promise.race([done, new Promise((_, reject) => setTimeout(() => reject(new Error('ffmpeg did not finish')), 30000))]);
     fs.renameSync(tmp, outFile);
+    console.log(`[agent-report] video render done report=${report.id} ms=${Date.now() - started}`);
   } catch (error) {
     try { ff.kill('SIGKILL'); } catch (_) {}
     try { fs.unlinkSync(tmp); } catch (_) {}
@@ -361,7 +442,7 @@ function reportVideoUrl(report, baseUrl) {
 }
 
 module.exports = {
-  DURATION,
+  videoDuration,
   buildScenes,
   ensureReportVideo,
   frameSvg,

@@ -192,13 +192,18 @@ test('recap video scenes show the agent ID, counting stats and countries, and en
   const scene = video.buildScenes(sampleReport);
   assert.match(video.frameSvg(scene, 1.2), /makaug\.com/);
   assert.match(video.frameSvg(scene, 4.0), /MKA-AG-1234567/);
-  assert.match(video.frameSvg(scene, 7.9), /120 listing views/);
-  assert.match(video.frameSvg(scene, 10.0), /United Kingdom/);
-  assert.match(video.frameSvg(scene, 12.8), /tap the link below/);
+  const rich = { ...sampleReport, extras: { traffic_sources: [{ source: 'google', visitors: 30 }, { source: 'direct', visitors: 10 }], busiest_day: { day: 'Saturday', views: 40 }, peak_hour: { label: '6pm–8pm', views: 20 }, rank: { position: 12, total: 340 }, new_listings: 2 } };
+  const richScene = video.buildScenes(rich);
+  const total = video.videoDuration(rich);
+  assert.ok(total > 18, `video should carry more scenes, got ${total}s`);
+  const all = Array.from({ length: Math.ceil(total * 4) }, (_, i) => video.frameSvg(richScene, i / 4)).join('');
+  for (const needle of ['120 listing views', 'UK', 'Google', 'Busiest day: Saturday', 'Peak time: 6pm–8pm', '#12 of 340', '+2 added this week', 'WhatsApp taps', 'tap the link below']) {
+    assert.ok(all.includes(needle), `missing ${needle}`);
+  }
   const bridge = fs.readFileSync('services/whatsappWebBridgeService.js', 'utf8');
   assert.match(bridge, /\['image', 'video'\]\.includes\(requestedMediaType\)/);
   if (video.isVideoRenderingAvailable()) {
-    const file = await video.ensureReportVideo({ ...sampleReport, id: '99999999-2222-3333-4444-555555555555' }, 'test');
+    const file = await video.ensureReportVideo({ ...rich, id: '99999999-2222-3333-4444-555555555555' }, 'test');
     assert.ok(fs.statSync(file).size > 50000);
   }
 });
@@ -213,4 +218,16 @@ test('a broken ffmpeg fails fast instead of hanging the send', async () => {
   } finally {
     delete process.env.AGENT_REPORT_FFMPEG_PATH;
   }
+});
+
+test('hour bands read naturally and the card shows highlights and countries so far', () => {
+  assert.equal(reports.hourLabel(18), '6pm–8pm');
+  assert.equal(reports.hourLabel(0), '12am–2am');
+  const cards = require('../services/agentReportCardService');
+  const svg = cards.buildReportCardSvg({ ...sampleReport, top_countries: [], extras: { rank: { position: 3, total: 90 }, busiest_day: { day: 'Friday', views: 9 }, countries_so_far: [{ code: 'GB', name: 'United Kingdom', visitors: 2 }] } });
+  assert.match(svg, /#3 of 90/);
+  assert.match(svg, /Busiest day/);
+  assert.match(svg, /so far this week/);
+  const migration = fs.readFileSync('db/migrations/135_agent_weekly_report_extras.sql', 'utf8');
+  assert.match(migration, /ADD COLUMN IF NOT EXISTS extras/);
 });

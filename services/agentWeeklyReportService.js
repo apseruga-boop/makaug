@@ -261,6 +261,84 @@ async function computeTopCountries(agentId, startsAt, endsBefore, limit = 6) {
   return cleanCountries(result.rows.map((row) => ({ code: row.code, name: countryName(row.code), visitors: row.visitors })));
 }
 
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+function hourLabel(hour) {
+  const h = Number(hour);
+  const fmt = (v) => { const x = ((v % 24) + 24) % 24; const suffix = x < 12 ? 'am' : 'pm'; const n = x % 12 === 0 ? 12 : x % 12; return `${n}${suffix}`; };
+  return `${fmt(h)}–${fmt(h + 2)}`;
+}
+
+// More context for the report: how people found the agent, when they look,
+// how the agent ranks, what was added, and countries so far this week.
+async function computeExtras(agentId, startsAt, endsBefore, metrics = {}) {
+  const safe = (promise, fallback) => promise.catch(() => fallback);
+  const [sources, days, hours, rank, added, soFar] = await Promise.all([
+    safe(db.query(
+      `SELECT LOWER(COALESCE(NULLIF(e.payload->>'traffic_source', ''), 'direct')) AS source, COUNT(DISTINCT e.client_id)::int AS visitors
+       FROM analytics_events e
+       WHERE e.event_name = 'property_open' AND e.created_at >= $2 AND e.created_at < $3
+         AND e.payload->>'property_id' IN (SELECT id::text FROM (${OWNED_PROPERTIES_SQL}) owned)
+       GROUP BY 1 ORDER BY 2 DESC LIMIT 5`,
+      [agentId, startsAt, endsBefore]
+    ), { rows: [] }),
+    safe(db.query(
+      `SELECT EXTRACT(DOW FROM e.created_at AT TIME ZONE 'Africa/Kampala')::int AS dow, COUNT(*)::int AS views
+       FROM analytics_events e
+       WHERE e.event_name = 'property_open' AND e.created_at >= $2 AND e.created_at < $3
+         AND e.payload->>'property_id' IN (SELECT id::text FROM (${OWNED_PROPERTIES_SQL}) owned)
+       GROUP BY 1 ORDER BY 2 DESC LIMIT 1`,
+      [agentId, startsAt, endsBefore]
+    ), { rows: [] }),
+    safe(db.query(
+      `SELECT (FLOOR(EXTRACT(HOUR FROM e.created_at AT TIME ZONE 'Africa/Kampala') / 2) * 2)::int AS band, COUNT(*)::int AS views
+       FROM analytics_events e
+       WHERE e.event_name = 'property_open' AND e.created_at >= $2 AND e.created_at < $3
+         AND e.payload->>'property_id' IN (SELECT id::text FROM (${OWNED_PROPERTIES_SQL}) owned)
+       GROUP BY 1 ORDER BY 2 DESC LIMIT 1`,
+      [agentId, startsAt, endsBefore]
+    ), { rows: [] }),
+    safe(db.query(
+      `WITH per_agent AS (
+         SELECT COALESCE(p.agent_id::text, p.extra_fields->>'broker_agent_id') AS agent, COUNT(*)::int AS views
+         FROM analytics_events e
+         JOIN properties p ON p.id::text = e.payload->>'property_id'
+         WHERE e.event_name = 'property_open' AND e.created_at >= $2 AND e.created_at < $3
+           AND COALESCE(p.agent_id::text, p.extra_fields->>'broker_agent_id') IS NOT NULL
+         GROUP BY 1
+       )
+       SELECT (SELECT COUNT(*)::int FROM per_agent) AS total,
+              (SELECT COUNT(*)::int + 1 FROM per_agent WHERE views > COALESCE((SELECT views FROM per_agent WHERE agent = $1::text), 0)) AS position,
+              EXISTS (SELECT 1 FROM per_agent WHERE agent = $1::text) AS ranked`,
+      [agentId, startsAt, endsBefore]
+    ), { rows: [] }),
+    safe(db.query(
+      `SELECT COUNT(*)::int AS added FROM properties p
+       WHERE (p.agent_id = $1 OR COALESCE(p.extra_fields, '{}'::jsonb)->>'broker_agent_id' = $1::text)
+         AND p.created_at >= $2 AND p.created_at < $3`,
+      [agentId, startsAt, endsBefore]
+    ), { rows: [] }),
+    safe(db.query(
+      `SELECT e.country_code AS code, COUNT(DISTINCT e.client_id)::int AS visitors
+       FROM analytics_events e
+       WHERE e.event_name = 'property_open' AND e.created_at >= date_trunc('week', NOW() AT TIME ZONE 'Africa/Kampala') AT TIME ZONE 'Africa/Kampala'
+         AND e.country_code IS NOT NULL
+         AND e.payload->>'property_id' IN (SELECT id::text FROM (${OWNED_PROPERTIES_SQL}) owned)
+       GROUP BY 1 ORDER BY 2 DESC LIMIT 6`,
+      [agentId]
+    ), { rows: [] })
+  ]);
+  const extras = {};
+  if (sources.rows.length) extras.traffic_sources = sources.rows.map((r) => ({ source: r.source, visitors: toInt(r.visitors) }));
+  if (days.rows[0]) extras.busiest_day = { day: DAY_NAMES[days.rows[0].dow] || '', views: toInt(days.rows[0].views) };
+  if (hours.rows[0]) extras.peak_hour = { label: hourLabel(hours.rows[0].band), views: toInt(hours.rows[0].views) };
+  if (rank.rows[0] && rank.rows[0].ranked && rank.rows[0].total > 1) extras.rank = { position: toInt(rank.rows[0].position), total: toInt(rank.rows[0].total) };
+  extras.new_listings = toInt(added.rows[0]?.added);
+  if (metrics.active_listings && metrics.views) extras.views_per_listing = Math.round((metrics.views / metrics.active_listings) * 10) / 10;
+  if (soFar.rows.length) extras.countries_so_far = cleanCountries(soFar.rows.map((r) => ({ code: r.code, name: countryName(r.code), visitors: r.visitors })));
+  return extras;
+}
+
 async function countryTrackingSince() {
   const result = await db.query(
     `SELECT MIN(created_at) AS since FROM analytics_events WHERE country_code IS NOT NULL`
@@ -380,8 +458,14 @@ async function computeAgentWeeklyReport({ agentId, weekStart } = {}) {
     countActiveListings(agent.id),
     countryTrackingSince()
   ]);
+  const extras = await computeExtras(agent.id, week.startsAt, week.endsBefore, { ...metrics, active_listings: activeListings });
   const { insights, nextSteps } = buildInsights({ metrics, previous, topListings, topCountries, activeListings });
+  if (extras.rank) insights.push(`You ranked #${extras.rank.position} of ${extras.rank.total} agents on makaug by listing views.`);
+  if (extras.busiest_day && extras.peak_hour) insights.push(`Busiest day was ${extras.busiest_day.day}; most views came ${extras.peak_hour.label} (Kampala time).`);
+  const topSource = (extras.traffic_sources || [])[0];
+  if (topSource) insights.push(`Most visitors found your listings via ${topSource.source === 'direct' ? 'direct visits' : topSource.source}.`);
   return {
+    extras,
     agent,
     week_start: week.weekStart,
     week_end: week.weekEnd,
@@ -418,6 +502,7 @@ function formatReportRow(row, agent = null) {
     insights: row.insights || [],
     next_steps: row.next_steps || [],
     country_tracking_since: row.country_tracking_since || null,
+    extras: row.extras || {},
     status: row.status,
     edited_by: row.edited_by || null,
     sent_at: row.sent_at || null,
@@ -465,8 +550,8 @@ async function generateReport({ agentId, weekStart, actor = 'admin', refreshNumb
   const result = await db.query(
     `INSERT INTO agent_weekly_reports (
        agent_id, week_start, week_end, metrics, previous_metrics, top_listings, top_countries,
-       insights, next_steps, country_tracking_since, status, edited_by
-     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'draft',$11)
+       insights, next_steps, country_tracking_since, status, edited_by, extras
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'draft',$11,$13)
      ON CONFLICT (agent_id, week_start) DO UPDATE SET
        metrics = EXCLUDED.metrics,
        previous_metrics = EXCLUDED.previous_metrics,
@@ -475,6 +560,7 @@ async function generateReport({ agentId, weekStart, actor = 'admin', refreshNumb
        insights = CASE WHEN $12 THEN agent_weekly_reports.insights ELSE EXCLUDED.insights END,
        next_steps = CASE WHEN $12 THEN agent_weekly_reports.next_steps ELSE EXCLUDED.next_steps END,
        country_tracking_since = EXCLUDED.country_tracking_since,
+       extras = EXCLUDED.extras,
        updated_at = NOW()
      RETURNING id`,
     [
@@ -482,7 +568,8 @@ async function generateReport({ agentId, weekStart, actor = 'admin', refreshNumb
       JSON.stringify(computed.metrics), JSON.stringify(computed.previous_metrics),
       JSON.stringify(computed.top_listings), JSON.stringify(computed.top_countries),
       JSON.stringify(computed.insights), JSON.stringify(computed.next_steps),
-      computed.country_tracking_since, keepText ? existing.edited_by : 'auto', Boolean(keepText)
+      computed.country_tracking_since, keepText ? existing.edited_by : 'auto', Boolean(keepText),
+      JSON.stringify(computed.extras || {})
     ]
   );
   return getReportById(result.rows[0].id);
@@ -583,6 +670,14 @@ function buildWhatsAppCardCaption(report) {
   const lines = [];
   lines.push(`*Hi ${firstName}, your makaug weekly report is here* (${formatWeekRange(r.week_start, r.week_end)})`);
   if (a.makaug_agent_number) lines.push(`Agent ID: *${a.makaug_agent_number}*`);
+  const m = r.metrics || {};
+  const x = r.extras || {};
+  lines.push(`${toInt(m.views).toLocaleString('en-GB')} views · ${toInt(m.visitors).toLocaleString('en-GB')} visitors · ${(toInt(m.enquiries) + toInt(m.whatsapp_clicks)).toLocaleString('en-GB')} enquiries`);
+  const highlights = [];
+  if (x.rank && x.rank.position) highlights.push(`Rank #${x.rank.position} of ${x.rank.total}`);
+  if (x.busiest_day) highlights.push(`Busiest day ${x.busiest_day.day}`);
+  if (x.peak_hour) highlights.push(`Peak ${x.peak_hour.label}`);
+  if (highlights.length) lines.push(highlights.join(' · '));
   const listings = (Array.isArray(r.top_listings) ? r.top_listings : []).filter((l) => l.url).slice(0, 3);
   if (listings.length) {
     lines.push('');
@@ -653,6 +748,8 @@ module.exports = {
   cleanListings,
   cleanTextList,
   computeAgentWeeklyReport,
+  computeExtras,
+  hourLabel,
   ensureAgentNumber,
   findAgent,
   formatWeekRange,

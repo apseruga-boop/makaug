@@ -132,12 +132,37 @@ function buildReportCardSvg(report = {}) {
     const row = Math.floor(i / 2);
     parts.push(kpiTile(pad + col * (tw + gap), y + row * (th + gap), tw, th, label, value, pct));
   });
-  y += th * 2 + gap + 60;
+  y += th * 2 + gap + 24;
 
-  // Top countries
-  parts.push(text(pad, y, 'Top countries', { size: 34, weight: 800 }));
+  // Highlights strip: rank, busiest day, peak time, top source
+  const x = report.extras || {};
+  const chips = [];
+  if (x.rank && x.rank.position) chips.push(['Rank', `#${num(x.rank.position)} of ${num(x.rank.total)}`]);
+  if (x.busiest_day) chips.push(['Busiest day', x.busiest_day.day]);
+  if (x.peak_hour) chips.push(['Peak time', x.peak_hour.label]);
+  if (x.traffic_sources && x.traffic_sources[0]) chips.push(['Top source', clip(x.traffic_sources[0].source === 'direct' ? 'Direct' : x.traffic_sources[0].source, 12)]);
+  if (chips.length) {
+    const cw = (inner - gap * (chips.length - 1)) / chips.length;
+    chips.forEach(([label, value], i) => {
+      const cx = pad + i * (cw + gap);
+      parts.push(`<rect x="${cx}" y="${y}" width="${cw}" height="110" rx="18" fill="${C.accentSoft}"/>`);
+      parts.push(text(cx + 20, y + 40, label, { size: 22, fill: C.muted }));
+      parts.push(text(cx + 20, y + 84, value, { size: chips.length > 3 ? 26 : 30, weight: 800 }));
+    });
+    y += 110 + 60;
+  } else {
+    y += 36;
+  }
+
+  // Top countries (falls back to this week so far while tracking is new)
+  let countries = (Array.isArray(report.top_countries) ? report.top_countries : []).slice(0, 3);
+  let countryTitle = 'Top countries';
+  if (!countries.length && Array.isArray(x.countries_so_far) && x.countries_so_far.length) {
+    countries = x.countries_so_far.slice(0, 3);
+    countryTitle = 'Top countries (so far this week)';
+  }
+  parts.push(text(pad, y, countryTitle, { size: 34, weight: 800 }));
   y += 22;
-  const countries = (Array.isArray(report.top_countries) ? report.top_countries : []).slice(0, 3);
   if (countries.length) {
     const total = countries.reduce((s, c) => s + (Number(c.visitors) || 0), 0) || 1;
     const max = Math.max(1, ...countries.map((c) => Number(c.visitors) || 0));

@@ -12827,33 +12827,39 @@ router.post('/agent-reports/:id/send', async (req, res, next) => {
     const to = preview ? previewTo : String(report.agent?.whatsapp || report.agent?.phone || '').replace(/\D+/g, '');
     if (!to || to.length < 9) return res.status(400).json({ ok: false, error: 'No WhatsApp number to send to' });
     const payload = agentReportPayload(report);
-    let videoUrl = '';
-    let videoError = payload.video_url ? null : 'video rendering is not available on this server';
-    if (payload.video_url) {
-      // Render before queueing so WhatsApp can fetch the finished file at once.
-      try {
-        await agentReportVideos.ensureReportVideo(report, agentReportCards.cardVersion(report));
-        videoUrl = payload.video_url;
-      } catch (error) {
-        videoError = error.message;
-        console.warn('[agent-report] video render failed, sending the card image instead:', error.message);
-      }
-    }
-    const delivery = await deliverAgentReportWhatsapp({
-      videoUrl,
+    const actor = adminActorId(req);
+    const send = (videoUrl) => deliverAgentReportWhatsapp({
       to,
       text: payload.whatsapp_text,
       caption: payload.whatsapp_caption,
       cardUrl: payload.card_url,
-      actor: adminActorId(req),
+      videoUrl,
+      actor,
       reportId: report.id,
       preview
     });
-    if (!delivery.sent && !delivery.queued) {
-      return res.status(502).json({ ok: false, error: 'WhatsApp delivery is not available right now', data: { delivery } });
+    let delivery;
+    let format = 'card';
+    if (payload.video_url) {
+      format = 'video';
+      // Render in the background so the request returns at once; the message
+      // is queued when the video is ready, or as the card image if it fails.
+      agentReportVideos.ensureReportVideo(report, agentReportCards.cardVersion(report))
+        .then(() => send(payload.video_url))
+        .catch((error) => {
+          console.warn('[agent-report] video render failed, sending the card image instead:', error.message);
+          return send('');
+        })
+        .catch((error) => console.warn('[agent-report] WhatsApp queue failed:', error.message));
+      delivery = { sent: false, queued: false, rendering: true, provider: 'whatsapp_web_bridge' };
+    } else {
+      delivery = await send('');
+      if (!delivery.sent && !delivery.queued) {
+        return res.status(502).json({ ok: false, error: 'WhatsApp delivery is not available right now', data: { delivery } });
+      }
     }
     const updated = await agentWeeklyReports.recordReportSent(report.id, { to, preview });
-    return res.json({ ok: true, data: { report: updated, delivery, to, preview, format: videoUrl ? 'video' : 'card', video_error: videoError } });
+    return res.json({ ok: true, data: { report: updated, delivery, to, preview, format } });
   } catch (error) {
     return next(error);
   }
