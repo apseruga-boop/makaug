@@ -271,8 +271,14 @@ function hourLabel(hour) {
 
 // More context for the report: how people found the agent, when they look,
 // how the agent ranks, what was added, and countries so far this week.
+
 async function computeExtras(agentId, startsAt, endsBefore, metrics = {}) {
-  const safe = (promise, fallback) => promise.catch(() => fallback);
+  // Extras are nice-to-have: a slow or failing query is skipped, never allowed
+  // to hold up the report.
+  const safe = (promise, fallback) => Promise.race([
+    promise.catch(() => fallback),
+    new Promise((resolve) => setTimeout(() => resolve(fallback), Number(process.env.AGENT_REPORT_EXTRAS_TIMEOUT_MS || 6000)))
+  ]);
   const [sources, days, hours, rank, added, soFar] = await Promise.all([
     safe(db.query(
       `SELECT LOWER(COALESCE(NULLIF(e.payload->>'traffic_source', ''), 'direct')) AS source, COUNT(DISTINCT e.client_id)::int AS visitors
@@ -299,12 +305,17 @@ async function computeExtras(agentId, startsAt, endsBefore, metrics = {}) {
       [agentId, startsAt, endsBefore]
     ), { rows: [] }),
     safe(db.query(
-      `WITH per_agent AS (
-         SELECT COALESCE(p.agent_id::text, p.extra_fields->>'broker_agent_id') AS agent, COUNT(*)::int AS views
+      `WITH per_property AS (
+         SELECT e.payload->>'property_id' AS pid, COUNT(*)::int AS views
          FROM analytics_events e
-         JOIN properties p ON p.id::text = e.payload->>'property_id'
          WHERE e.event_name = 'property_open' AND e.created_at >= $2 AND e.created_at < $3
-           AND COALESCE(p.agent_id::text, p.extra_fields->>'broker_agent_id') IS NOT NULL
+         GROUP BY 1
+       ),
+       per_agent AS (
+         SELECT COALESCE(p.agent_id::text, p.extra_fields->>'broker_agent_id') AS agent, SUM(pp.views)::int AS views
+         FROM per_property pp
+         JOIN properties p ON p.id::text = pp.pid
+         WHERE COALESCE(p.agent_id::text, p.extra_fields->>'broker_agent_id') IS NOT NULL
          GROUP BY 1
        )
        SELECT (SELECT COUNT(*)::int FROM per_agent) AS total,

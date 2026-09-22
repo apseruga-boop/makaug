@@ -231,3 +231,20 @@ test('hour bands read naturally and the card shows highlights and countries so f
   const migration = fs.readFileSync('db/migrations/135_agent_weekly_report_extras.sql', 'utf8');
   assert.match(migration, /ADD COLUMN IF NOT EXISTS extras/);
 });
+
+test('slow extras queries are skipped instead of holding up the report', async () => {
+  const db = require('../config/database');
+  const original = db.query;
+  process.env.AGENT_REPORT_EXTRAS_TIMEOUT_MS = '50';
+  db.query = () => new Promise(() => {});
+  try {
+    const started = Date.now();
+    const extras = await reports.computeExtras('a1', '2026-09-14T00:00:00+03:00', '2026-09-21T00:00:00+03:00', { views: 10, active_listings: 5 });
+    assert.ok(Date.now() - started < 2000);
+    assert.equal(extras.new_listings, 0);
+    assert.equal(extras.views_per_listing, 2);
+  } finally {
+    db.query = original;
+    delete process.env.AGENT_REPORT_EXTRAS_TIMEOUT_MS;
+  }
+});
