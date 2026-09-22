@@ -13812,6 +13812,12 @@ router.post('/web-bridge/outbox/:id/sent', asyncRoute(async (req, res) => {
   const replyMediaUrl = String(updated.payload?.media_url || '').trim();
   const source = String(updated.metadata?.source || '').trim().toLowerCase();
 
+  // The message is on the customer's phone and the queue row now says so.
+  // Everything below is bookkeeping. If it throws, this request must still
+  // answer ok: a 500 here tells the bridge the send failed, the bridge reports
+  // it as failed, the row is requeued, and the customer gets the same message
+  // again. On 21 Sep 2026 that sent one property card eight times.
+  try {
   await logWhatsappMessage({
     userPhone: updated.user_phone,
     waMessageId: req.body.bridge_message_id || null,
@@ -13837,9 +13843,16 @@ router.post('/web-bridge/outbox/:id/sent', asyncRoute(async (req, res) => {
     metadata: {
       source: source || 'web_bridge',
       bridge_client_id: req.body.client_id || null,
-      last_reply_preview: replyText.slice(0, 240)
+      // Array.from splits by character, so an emoji is never cut in half.
+      last_reply_preview: Array.from(replyText).slice(0, 240).join('')
     }
   });
+  } catch (error) {
+    logger.warn('WhatsApp bridge message delivered; post-send bookkeeping failed (not retried):', {
+      queue_id: req.params.id,
+      error: error.message || String(error)
+    });
+  }
 
   return res.json({ ok: true, data: updated });
 }));
