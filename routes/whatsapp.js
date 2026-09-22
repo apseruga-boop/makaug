@@ -4330,6 +4330,24 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
       if (landmarkFallback?.status === 'matched') locationResolution = landmarkFallback;
     }
   }
+  // "Seguku Katale": Seguku is one place (Wakiso), but Katale exists in two other
+  // districts, so the whole caption resolved as ambiguous and the property was held
+  // back for "exact area and district" even though the agent had given it. When
+  // exactly one of the named places is unambiguous, that one is the location.
+  if (locationResolution?.status === 'ambiguous' && Array.isArray(locationResolution.candidates)) {
+    const byName = new Map();
+    for (const candidate of locationResolution.candidates) {
+      const name = normalizeInput(candidate?.name || candidate?.area).toLowerCase();
+      if (!name) continue;
+      byName.set(name, [...(byName.get(name) || []), candidate]);
+    }
+    const uniqueNames = [...byName.entries()].filter(([, list]) => list.length === 1);
+    if (uniqueNames.length === 1) {
+      const [uniqueName] = uniqueNames[0];
+      const uniqueResolution = resolveWhatsappLocation(uniqueName, { allowText: true });
+      if (uniqueResolution?.status === 'matched') locationResolution = uniqueResolution;
+    }
+  }
   if ((!locationResolution || locationResolution.status !== 'matched') && sessionData.customer_details?.location) {
     locationResolution = resolveWhatsappLocation(`${cleanCaption} ${sessionData.customer_details.location}`, { allowText: true });
   }
@@ -4339,6 +4357,23 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
     && Number(locationResolution?.confidence || 0) >= 1;
   const locationPatch = exactLocation ? canonicalWhatsappLocationPatch(locationResolution) : {};
   return { cleanCaption, naturalDraft, hints, listingType, price, priceMetadata, bedroomDraft, locationPatch };
+}
+
+// Replies to a burst of forwarded properties arrive after several captions have
+// gone by, so "send a corrected caption" on its own does not say WHICH property.
+function employeeCaptionLabel(caption = '') {
+  const clean = normalizeInput(stripForwardMarkers(caption)).replace(/\s+/g, ' ').trim();
+  if (!clean) return 'this property';
+  const chars = Array.from(clean);
+  return `"${chars.length > 70 ? `${chars.slice(0, 70).join('').trim()}…` : clean}"`;
+}
+
+function employeeIncompletePropertyMessage(caption = '', missing = [], data = {}) {
+  const saved = Array.isArray(data.property_ids) ? data.property_ids.length : 0;
+  const savedLine = saved
+    ? `\n\n${saved} ${saved === 1 ? 'property from this batch is' : 'properties from this batch are'} already saved for staff review; this one does not hold them up.`
+    : '\n\nThe other properties you send are saved as normal; this one does not hold them up.';
+  return `⚠️ Not saved yet: ${employeeCaptionLabel(caption)}\nStill needs: ${missing.length ? missing.join(', ') : 'property type, exact location and price'}.\n\nReply with just the missing detail (for example "Kira, Wakiso") and I will add it to this property. You do not need to resend the media.${savedLine}`;
 }
 
 function employeePropertyMissing(facts = {}) {
@@ -5888,10 +5923,24 @@ async function handleEmployeeWhatsappIntake({
         return { handled: true, nextStep: currentStep, message: 'No usable media bytes reached makaug. Please resend the photo, video or document.' };
       }
       const existingBatchProperties = Array.isArray(data.property_ids) ? data.property_ids.length : 0;
-      const textOnlyFacts = employeePropertyFacts(cleanBody, data);
-      const textOnlyMissing = employeePropertyMissing(textOnlyFacts);
       const pendingStoredMedia = employeePendingStoredMedia(data);
       const pendingCaption = normalizeInput(data.pending_property_caption || '');
+      let textCaption = cleanBody;
+      let textOnlyFacts = employeePropertyFacts(cleanBody, data);
+      let textOnlyMissing = employeePropertyMissing(textOnlyFacts);
+      // A short reply such as "Kira, Wakiso" or "UGX 300m" is a correction to the
+      // property that is waiting, not a caption of its own. Judging it alone threw
+      // away everything the original caption already said and asked for it again.
+      if (pendingStoredMedia.length && pendingCaption && textOnlyMissing.length) {
+        const mergedCaption = `${pendingCaption}\n${cleanBody}`;
+        const mergedFacts = employeePropertyFacts(mergedCaption, data);
+        const mergedMissing = employeePropertyMissing(mergedFacts);
+        if (mergedMissing.length <= textOnlyMissing.length) {
+          textCaption = mergedCaption;
+          textOnlyFacts = mergedFacts;
+          textOnlyMissing = mergedMissing;
+        }
+      }
       if (
         (data.property_batch_mode || 'multiple') === 'single'
         && existingBatchProperties >= 1
@@ -5905,7 +5954,7 @@ async function handleEmployeeWhatsappIntake({
       }
 
       if (pendingStoredMedia.length && textOnlyMissing.length === 0) {
-        if (pendingCaption && !employeeCaptionLikelySameProperty(pendingCaption, cleanBody, data)) {
+        if (pendingCaption && !employeeCaptionLikelySameProperty(pendingCaption, textCaption, data)) {
           const pendingMissing = employeePropertyMissing(employeePropertyFacts(pendingCaption, data));
           return {
             handled: true,
@@ -5915,13 +5964,13 @@ async function handleEmployeeWhatsappIntake({
         }
         const propertyInboundMessageId = normalizeInput(data.pending_property_media_message_id) || inboundMessageId;
         const existingProperty = await findEmployeeDuplicateProperty({
-          caption: cleanBody,
+          caption: textCaption,
           facts: textOnlyFacts,
           sessionData: data
         });
         const propertyAttemptRecorded = recordEmployeePropertyAttempt(data, {
           inboundMessageId: propertyInboundMessageId,
-          caption: cleanBody
+          caption: textCaption
         });
         if (existingProperty && data.employee_intake_recovery_skip_existing_matches === true) {
           const propertyIds = Array.isArray(data.property_ids) ? data.property_ids.map(String) : [];
@@ -5983,7 +6032,7 @@ async function handleEmployeeWhatsappIntake({
           const propertyId = await createEmployeeReviewProperty({
             phone,
             inboundMessageId: propertyInboundMessageId,
-            caption: cleanBody,
+            caption: textCaption,
             facts: textOnlyFacts,
             storedMedia: pendingStoredMedia,
             sessionData: data
@@ -6029,13 +6078,13 @@ async function handleEmployeeWhatsappIntake({
         };
       }
 
-      data.pending_property_caption = cleanBody;
+      data.pending_property_caption = textCaption;
       await replaceEmployeeSession(phone, currentStep, data);
       return {
         handled: true,
         nextStep: currentStep,
         message: pendingStoredMedia.length
-          ? `The media is stored safely, but the property still needs: ${textOnlyMissing.join(', ')}. Send one corrected caption; you do not need to resend the media.`
+          ? employeeIncompletePropertyMessage(textCaption, textOnlyMissing, data)
           : 'Caption saved. Now send the first property media; it will be stored with that property.'
       };
     }
@@ -6084,7 +6133,7 @@ async function handleEmployeeWhatsappIntake({
       return {
         handled: true,
         nextStep: currentStep,
-        message: `I stored this media safely, but it is not in staff review yet. Send one corrected caption with: ${missing.length ? missing.join(', ') : 'property type, exact location and price'}. You do not need to resend the media.`
+        message: employeeIncompletePropertyMessage(caption, missing, data)
       };
     }
     if (!shouldStartProperty && startsIncompleteNewProperty) {
@@ -6114,8 +6163,8 @@ async function handleEmployeeWhatsappIntake({
         handled: true,
         nextStep: currentStep,
         message: pendingStoredMediaBeforeMessage.length && pendingCaptionBeforeMessage
-          ? 'I stored this as a separate queued property because the previous property is still incomplete. Finish the previous caption first; nothing was merged and nothing is live.'
-          : `I stored this media safely, but its new-property caption is incomplete. Send one corrected caption with: ${missing.join(', ')}. You do not need to resend the media.`
+          ? `${employeeIncompletePropertyMessage(caption, missing, data)}\n\n(Queued behind ${employeeCaptionLabel(pendingCaptionBeforeMessage)}, which also still needs a detail. Fix that one first.)`
+          : employeeIncompletePropertyMessage(caption, missing, data)
       };
     }
 
