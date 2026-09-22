@@ -835,7 +835,8 @@ function nextSendDelay() {
 
 async function sendViaWaha(msg) {
   const chatId = toChatId(msg.recipient);
-  if (!chatId) throw new Error(`unroutable recipient: ${msg.recipient}`);
+  // Thrown before WAHA is contacted, so nothing can have been delivered.
+  if (!chatId) throw Object.assign(new Error(`unroutable recipient: ${msg.recipient}`), { notSent: true });
 
   const text = String(msg.text || '').trim();
   const caption = String(msg.caption || text || '').trim();
@@ -852,8 +853,85 @@ async function sendViaWaha(msg) {
     return waha('/api/sendFile', { method: 'POST', body: common });
   }
 
-  if (!text) throw new Error('empty message body');
+  if (!text) throw Object.assign(new Error('empty message body'), { notSent: true });
   return waha('/api/sendText', { method: 'POST', body: { session: cfg.wahaSession, chatId, text } });
+}
+
+/**
+ * One message, one delivery.
+ *
+ * On 21 Sep 2026 a customer got the same property card eight times. WAHA
+ * delivered it every time; what failed was the follow-up call telling makaug
+ * it had been sent (makaug answered 500). This loop treated that as a failed
+ * send, reported it as failed, makaug requeued it a second later, and the card
+ * went out again — until makaug's eight-attempt ceiling stopped it.
+ *
+ * The rules now:
+ *   1. Once WAHA has accepted a message, it is delivered. Nothing after that
+ *      point can cause a resend. A failed "sent" ack is retried as an ack,
+ *      never as a send.
+ *   2. A queue id this process has delivered is never delivered again, even if
+ *      makaug hands it back (lost ack, lapsed claim).
+ *   3. When a send fails in a way that might still have reached the phone (a
+ *      timeout, a dropped connection, a WAHA 5xx), makaug is told not to retry.
+ *      Only a clear rejection (WAHA 4xx: nothing was sent) may be retried.
+ *   4. The same text is never sent to the same person twice within
+ *      DUPLICATE_BODY_WINDOW_MS, whatever the queue says.
+ */
+const DELIVERED_TTL_MS = 6 * 60 * 60 * 1000;
+const DUPLICATE_BODY_WINDOW_MS = clampInt(process.env.DUPLICATE_BODY_WINDOW_MS, 2 * 60 * 1000, 0, 30 * 60 * 1000);
+const deliveredQueueIds = new Map(); // queue id -> { at, bridgeMessageId }
+const recentBodies = new Map(); // `${chatId}|${hash}` -> sentAt
+let resendsPrevented = 0;
+let ackRetriesExhausted = 0;
+
+function pruneDeliveryMemory(now = Date.now()) {
+  if (deliveredQueueIds.size > 5000) {
+    for (const [k, v] of deliveredQueueIds) if (now - v.at > DELIVERED_TTL_MS) deliveredQueueIds.delete(k);
+  }
+  if (recentBodies.size > 5000) {
+    for (const [k, at] of recentBodies) if (now - at > DUPLICATE_BODY_WINDOW_MS) recentBodies.delete(k);
+  }
+}
+
+function bodyKey(msg) {
+  const chatId = toChatId(msg.recipient);
+  const content = [
+    String(msg.text || '').replace(/\s+/g, ' ').trim(),
+    String(msg.media_url || '').trim(),
+  ].join('|');
+  return `${chatId}|${crypto.createHash('sha1').update(content).digest('hex')}`;
+}
+
+/** Could this failure have happened after WhatsApp already had the message? */
+function sendOutcomeUnknown(err) {
+  if (err?.notSent) return false;
+  const code = Number(err?.statusCode || 0);
+  if (!code) return true; // timeout, abort, connection reset: the phone may have it
+  return code >= 500;
+}
+
+/** Tell makaug a message went out. Retries the ack only; never the send. */
+async function ackSent(msg, bridgeMessageId, extra = {}) {
+  const delays = [0, 1000, 3000, 8000];
+  let lastErr = null;
+  for (const delay of delays) {
+    if (delay) await sleep(delay);
+    try {
+      await makaug(`/api/whatsapp/web-bridge/outbox/${encodeURIComponent(msg.id)}/sent`, {
+        method: 'POST',
+        body: { client_id: cfg.clientId, bridge_message_id: bridgeMessageId || null, ...extra },
+      });
+      return true;
+    } catch (err) {
+      lastErr = err;
+      // A 404 means makaug no longer has the row; there is nothing to ack.
+      if (err.statusCode === 404) return false;
+    }
+  }
+  ackRetriesExhausted += 1;
+  log('WARN delivered but could not record it with makaug; will NOT resend. id=', msg.id, lastErr?.message);
+  return false;
 }
 
 async function drainOutbox() {
@@ -868,35 +946,69 @@ async function drainOutbox() {
 
   let done = 0;
   for (const msg of messages) {
+    const now = Date.now();
+    pruneDeliveryMemory(now);
+
+    // Rule 2: already delivered by us. Record it again, send nothing.
+    const already = deliveredQueueIds.get(String(msg.id));
+    if (already) {
+      resendsPrevented += 1;
+      log('resend prevented: queue id already delivered', msg.id);
+      await ackSent(msg, already.bridgeMessageId, { duplicate_suppressed: true });
+      done += 1;
+      continue;
+    }
+
+    // Rule 4: identical content to the same person moments ago.
+    const key = bodyKey(msg);
+    const lastSame = recentBodies.get(key);
+    if (DUPLICATE_BODY_WINDOW_MS && lastSame && now - lastSame < DUPLICATE_BODY_WINDOW_MS) {
+      resendsPrevented += 1;
+      log('resend prevented: same message to', msg.recipient, `${Math.round((now - lastSame) / 1000)}s ago`, msg.id);
+      await ackSent(msg, null, { duplicate_suppressed: true });
+      done += 1;
+      continue;
+    }
+
     const wait = nextSendDelay();
     if (wait > 0) await sleep(wait);
+
+    let sent;
     try {
-      {
-        const sent = await sendViaWaha(msg);
-        lastSendAt = Date.now();
-        await makaug(`/api/whatsapp/web-bridge/outbox/${encodeURIComponent(msg.id)}/sent`, {
-          method: 'POST',
-          body: { client_id: cfg.clientId, bridge_message_id: sent?.id || sent?._data?.id?._serialized || null },
-        });
-        sentCount += 1;
-        consecutiveSendFailures = 0;
-        log('sent ->', msg.recipient, msg.media_url ? '(media)' : '(text)');
-      }
-      done += 1;
+      sent = await sendViaWaha(msg);
     } catch (err) {
       failedCount += 1;
       consecutiveSendFailures += 1;
       lastSendError = String(err.message).slice(0, 200);
-      log('send FAILED', msg.id, err.message, `(run of ${consecutiveSendFailures})`);
+      const unknown = sendOutcomeUnknown(err);
+      log('send FAILED', msg.id, err.message, `(run of ${consecutiveSendFailures})`, unknown ? '[may have been delivered: no retry]' : '[rejected: retry allowed]');
+      if (unknown) recentBodies.set(key, Date.now());
       try {
         await makaug(`/api/whatsapp/web-bridge/outbox/${encodeURIComponent(msg.id)}/failed`, {
           method: 'POST',
-          body: { client_id: cfg.clientId, error: String(err.message).slice(0, 500) },
+          body: {
+            client_id: cfg.clientId,
+            error: String(err.message).slice(0, 500),
+            // Rule 3: makaug's existing "ambiguous send" contract.
+            ...(unknown ? { ambiguous_browser_send: true, do_not_retry: true } : {}),
+          },
         });
       } catch (ackErr) {
         log('could not ack failure', msg.id, ackErr.message);
       }
+      continue;
     }
+
+    // Rule 1: from here on the customer has the message.
+    lastSendAt = Date.now();
+    sentCount += 1;
+    consecutiveSendFailures = 0;
+    const bridgeMessageId = sent?.id || sent?._data?.id?._serialized || null;
+    deliveredQueueIds.set(String(msg.id), { at: lastSendAt, bridgeMessageId });
+    recentBodies.set(key, lastSendAt);
+    log('sent ->', msg.recipient, msg.media_url ? '(media)' : '(text)');
+    await ackSent(msg, bridgeMessageId);
+    done += 1;
   }
   return done;
 }
@@ -1000,7 +1112,7 @@ const server = http.createServer(async (req, res) => {
         waha_status: sessionStatusCache,
         bridge_status: effectiveStatus(sessionStatusCache),
         consecutive_send_failures: consecutiveSendFailures,
-        stats: { sent: sentCount, failed: failedCount, inbound: inboundCount, duplicates_ignored: duplicateCount, undelivered_released: lostCount },
+        stats: { sent: sentCount, failed: failedCount, inbound: inboundCount, duplicates_ignored: duplicateCount, undelivered_released: lostCount, resends_prevented: resendsPrevented, sent_but_unrecorded: ackRetriesExhausted },
         last_inbound_ms_ago: stale,
         // Does this service actually reach makaug? WAHA being WORKING says nothing about that.
         makaug_link: {
