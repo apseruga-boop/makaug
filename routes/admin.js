@@ -12828,12 +12828,14 @@ router.post('/agent-reports/:id/send', async (req, res, next) => {
     if (!to || to.length < 9) return res.status(400).json({ ok: false, error: 'No WhatsApp number to send to' });
     const payload = agentReportPayload(report);
     let videoUrl = '';
+    let videoError = payload.video_url ? null : 'video rendering is not available on this server';
     if (payload.video_url) {
       // Render before queueing so WhatsApp can fetch the finished file at once.
       try {
         await agentReportVideos.ensureReportVideo(report, agentReportCards.cardVersion(report));
         videoUrl = payload.video_url;
       } catch (error) {
+        videoError = error.message;
         console.warn('[agent-report] video render failed, sending the card image instead:', error.message);
       }
     }
@@ -12851,7 +12853,7 @@ router.post('/agent-reports/:id/send', async (req, res, next) => {
       return res.status(502).json({ ok: false, error: 'WhatsApp delivery is not available right now', data: { delivery } });
     }
     const updated = await agentWeeklyReports.recordReportSent(report.id, { to, preview });
-    return res.json({ ok: true, data: { report: updated, delivery, to, preview } });
+    return res.json({ ok: true, data: { report: updated, delivery, to, preview, format: videoUrl ? 'video' : 'card', video_error: videoError } });
   } catch (error) {
     return next(error);
   }

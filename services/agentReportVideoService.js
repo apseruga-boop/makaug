@@ -16,6 +16,7 @@ const DURATION = 13;
 const FONT = "'Noto Sans', 'DejaVu Sans', Arial, sans-serif";
 const CACHE_DIR = path.join(os.tmpdir(), 'makaug-report-videos');
 const inflight = new Map();
+const RENDER_TIMEOUT_MS = Number(process.env.AGENT_REPORT_VIDEO_TIMEOUT_MS || 150000);
 
 const K = {
   cream: '#FBF6EE',
@@ -33,6 +34,7 @@ const K = {
 };
 
 function ffmpegPath() {
+  if (process.env.AGENT_REPORT_FFMPEG_PATH) return process.env.AGENT_REPORT_FFMPEG_PATH;
   try {
     const p = require('ffmpeg-static');
     return p && fs.existsSync(p) ? p : '';
@@ -301,20 +303,35 @@ async function encodeVideo(report, outFile) {
     tmp
   ], { stdio: ['pipe', 'ignore', 'pipe'] });
   let stderr = '';
+  let failed = null;
   ff.stderr.on('data', (d) => { stderr += d.toString(); });
+  ff.stdin.on('error', (error) => { failed = failed || error; });
   const done = new Promise((resolve, reject) => {
-    ff.on('error', reject);
-    ff.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`ffmpeg exited ${code}: ${stderr.slice(0, 300)}`))));
+    ff.on('error', (error) => { failed = failed || error; reject(error); });
+    ff.on('close', (code) => {
+      if (code === 0) return resolve();
+      const error = new Error(`ffmpeg exited ${code}: ${stderr.slice(0, 300)}`);
+      failed = failed || error;
+      return reject(error);
+    });
   });
+  done.catch(() => {});
   const scene = buildScenes(report);
   const frames = Math.round(DURATION * FPS);
+  const deadline = Date.now() + RENDER_TIMEOUT_MS;
   try {
     for (let i = 0; i < frames; i += 1) {
+      if (failed) throw failed;
+      if (Date.now() > deadline) throw new Error('Video render took too long');
       const raw = await sharp(Buffer.from(frameSvg(scene, i / FPS))).ensureAlpha().raw().toBuffer();
-      if (!ff.stdin.write(raw)) await new Promise((r) => ff.stdin.once('drain', r));
+      if (failed) throw failed;
+      if (!ff.stdin.write(raw)) {
+        // Never wait on a pipe whose reader has died: race drain against exit.
+        await Promise.race([new Promise((r) => ff.stdin.once('drain', r)), done]);
+      }
     }
     ff.stdin.end();
-    await done;
+    await Promise.race([done, new Promise((_, reject) => setTimeout(() => reject(new Error('ffmpeg did not finish')), 30000))]);
     fs.renameSync(tmp, outFile);
   } catch (error) {
     try { ff.kill('SIGKILL'); } catch (_) {}

@@ -202,3 +202,15 @@ test('recap video scenes show the agent ID, counting stats and countries, and en
     assert.ok(fs.statSync(file).size > 50000);
   }
 });
+
+test('a broken ffmpeg fails fast instead of hanging the send', async () => {
+  const video = require('../services/agentReportVideoService');
+  process.env.AGENT_REPORT_FFMPEG_PATH = '/bin/false';
+  const started = Date.now();
+  try {
+    await assert.rejects(video.ensureReportVideo({ ...sampleReport, id: '88888888-2222-3333-4444-555555555555' }, 'broken'));
+    assert.ok(Date.now() - started < 30000);
+  } finally {
+    delete process.env.AGENT_REPORT_FFMPEG_PATH;
+  }
+});
