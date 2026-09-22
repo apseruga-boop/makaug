@@ -60,6 +60,11 @@ function getBridgeClaimWindowSeconds() {
   );
 }
 
+// How many times one queued message may be handed to a bridge, in total.
+function getBridgeMaxClaims() {
+  return Math.min(8, Math.max(1, Number(process.env.WHATSAPP_WEB_BRIDGE_MAX_CLAIMS || 3)));
+}
+
 async function upsertWhatsappWebBridgeClient({
   clientId,
   operatorName = null,
@@ -306,6 +311,11 @@ async function claimWhatsappWebBridgeMessages({ clientId, limit = 10, recipient 
           COALESCE(array_length($5::text[], 1), 0) = 0
           OR LOWER(COALESCE(q.metadata->>'source', 'system')) = ANY($5::text[])
         )
+        -- Hard ceiling on hand-outs. A claim that is never answered (bridge
+        -- crashed mid-send, ack lost) lapses and the row is handed out again,
+        -- and a claim does not count as an attempt. Without this ceiling that
+        -- cycle has no end, and every lap may deliver the message again.
+        AND COALESCE(NULLIF(q.metadata->>'claim_count', '')::int, 0) < $6::int
       ORDER BY q.next_attempt_at ASC, q.created_at ASC
       LIMIT $1
       FOR UPDATE SKIP LOCKED
@@ -317,13 +327,14 @@ async function claimWhatsappWebBridgeMessages({ clientId, limit = 10, recipient 
       metadata = COALESCE(q.metadata, '{}'::jsonb)
         || jsonb_build_object(
           'claimed_by', $2::text,
-          'claimed_at', NOW()::text
+          'claimed_at', NOW()::text,
+          'claim_count', COALESCE(NULLIF(q.metadata->>'claim_count', '')::int, 0) + 1
         ),
       updated_at = NOW()
     FROM claimable
     WHERE q.id = claimable.id
     RETURNING q.*`,
-    [safeLimit, normalizedClientId, String(claimWindow), recipientDigits, normalizedAllowedSources]
+    [safeLimit, normalizedClientId, String(claimWindow), recipientDigits, normalizedAllowedSources, getBridgeMaxClaims()]
   );
 
   return result.rows;
@@ -360,6 +371,10 @@ async function markWhatsappWebBridgeMessageFailed(id, errorMessage = 'bridge_sen
        metadata = COALESCE(metadata, '{}'::jsonb) || $4::jsonb,
        updated_at = NOW()
      WHERE id = $1
+       -- A message already marked sent has reached the customer. A late or
+       -- confused failure report must never put it back in the queue, or it
+       -- is delivered again.
+       AND status <> 'sent'
      RETURNING *`,
     [id, String(errorMessage || 'bridge_send_failed'), String(retryDelay), JSON.stringify(metadata), suppressRetry]
   );
