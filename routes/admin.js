@@ -222,6 +222,7 @@ const {
 
 const agentWeeklyReports = require('../services/agentWeeklyReportService');
 const agentReportCards = require('../services/agentReportCardService');
+const agentReportVideos = require('../services/agentReportVideoService');
 
 const router = express.Router();
 
@@ -12716,23 +12717,24 @@ function agentReportPayload(report) {
     report,
     whatsapp_text: agentWeeklyReports.buildWhatsAppReportMessage(report),
     whatsapp_caption: agentWeeklyReports.buildWhatsAppCardCaption(report),
-    card_url: agentReportCards.reportCardUrl(report, agentWeeklyReports.siteUrl())
+    card_url: agentReportCards.reportCardUrl(report, agentWeeklyReports.siteUrl()),
+    video_url: agentReportVideos.isVideoRenderingAvailable() ? agentReportVideos.reportVideoUrl(report, agentWeeklyReports.siteUrl()) : ''
   };
 }
 
-async function deliverAgentReportWhatsapp({ to, text, actor, reportId, preview, cardUrl = '', caption = '' }) {
+async function deliverAgentReportWhatsapp({ to, text, actor, reportId, preview, cardUrl = '', videoUrl = '', caption = '' }) {
   const mode = getWhatsappDeliveryMode();
   const source = agentReportWhatsappSource();
   const metadata = { message_kind: 'agent_weekly_report', agent_weekly_report_id: reportId, preview: Boolean(preview) };
   if (mode === 'web_bridge' || isWhatsappWebBridgeEnabled()) {
     const queued = await queueWhatsappWebBridgeMessage({
       recipient: to,
-      text: cardUrl && caption ? caption : text,
-      mediaUrl: cardUrl,
-      mediaType: cardUrl ? 'image' : 'text',
+      text: (videoUrl || cardUrl) && caption ? caption : text,
+      mediaUrl: videoUrl || cardUrl,
+      mediaType: videoUrl ? 'video' : cardUrl ? 'image' : 'text',
       source,
       actorId: actor,
-      metadata: { ...metadata, card: Boolean(cardUrl) }
+      metadata: { ...metadata, card: Boolean(cardUrl), video: Boolean(videoUrl) }
     });
     return { sent: false, queued: true, provider: 'whatsapp_web_bridge', id: queued?.id || null };
   }
@@ -12825,7 +12827,18 @@ router.post('/agent-reports/:id/send', async (req, res, next) => {
     const to = preview ? previewTo : String(report.agent?.whatsapp || report.agent?.phone || '').replace(/\D+/g, '');
     if (!to || to.length < 9) return res.status(400).json({ ok: false, error: 'No WhatsApp number to send to' });
     const payload = agentReportPayload(report);
+    let videoUrl = '';
+    if (payload.video_url) {
+      // Render before queueing so WhatsApp can fetch the finished file at once.
+      try {
+        await agentReportVideos.ensureReportVideo(report, agentReportCards.cardVersion(report));
+        videoUrl = payload.video_url;
+      } catch (error) {
+        console.warn('[agent-report] video render failed, sending the card image instead:', error.message);
+      }
+    }
     const delivery = await deliverAgentReportWhatsapp({
+      videoUrl,
       to,
       text: payload.whatsapp_text,
       caption: payload.whatsapp_caption,

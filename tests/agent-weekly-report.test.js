@@ -184,5 +184,21 @@ test('card caption carries property links and the logged-in report link', () => 
   assert.match(caption, /https:\/\/makaug\.com\/property\/11111111-1111-1111-1111-111111111111/);
   assert.match(caption, /broker-dashboard#broker-report-panel/);
   const admin = fs.readFileSync('routes/admin.js', 'utf8');
-  assert.match(admin, /mediaType: cardUrl \? 'image' : 'text'/);
+  assert.match(admin, /mediaType: videoUrl \? 'video' : cardUrl \? 'image' : 'text'/);
+});
+
+test('recap video scenes show the agent ID, counting stats and countries, and encode to MP4', async () => {
+  const video = require('../services/agentReportVideoService');
+  const scene = video.buildScenes(sampleReport);
+  assert.match(video.frameSvg(scene, 1.2), /makaug\.com/);
+  assert.match(video.frameSvg(scene, 4.0), /MKA-AG-1234567/);
+  assert.match(video.frameSvg(scene, 7.9), /120 listing views/);
+  assert.match(video.frameSvg(scene, 10.0), /United Kingdom/);
+  assert.match(video.frameSvg(scene, 12.8), /tap the link below/);
+  const bridge = fs.readFileSync('services/whatsappWebBridgeService.js', 'utf8');
+  assert.match(bridge, /\['image', 'video'\]\.includes\(requestedMediaType\)/);
+  if (video.isVideoRenderingAvailable()) {
+    const file = await video.ensureReportVideo({ ...sampleReport, id: '99999999-2222-3333-4444-555555555555' }, 'test');
+    assert.ok(fs.statSync(file).size > 50000);
+  }
 });

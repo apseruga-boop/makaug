@@ -225,6 +225,7 @@ function reportCardUrl(report, baseUrl) {
 
 module.exports = {
   buildReportCardSvg,
+  ensureFontconfig,
   cardToken,
   cardVersion,
   renderReportCardPng,

@@ -13,6 +13,7 @@ const { normalizeEmail, normalizeUgPhone } = require('../utils/adminOtpOverride'
 const { parsePagination, toPagination } = require('../utils/pagination');
 const { getAgentFacingReport, getReportById, listAgentReportWeeks, siteUrl } = require('../services/agentWeeklyReportService');
 const { renderReportCardPng, reportCardUrl, verifyCardToken } = require('../services/agentReportCardService');
+const { ensureReportVideo, reportVideoUrl, isVideoRenderingAvailable } = require('../services/agentReportVideoService');
 
 const router = express.Router();
 const KNOWN_AGENT_SOCIAL_LINKS = [
@@ -320,6 +321,25 @@ router.get('/report-card/:id.png', async (req, res, next) => {
   }
 });
 
+// Public (signed) MP4 recap of a weekly report, fetched by WhatsApp on send.
+router.get('/report-video/:id.mp4', async (req, res, next) => {
+  try {
+    const id = cleanText(req.params.id);
+    const version = cleanText(req.query.v || '');
+    if (!/^[0-9a-f-]{36}$/i.test(id) || !verifyCardToken(`${id}:video`, version, cleanText(req.query.t || ''))) {
+      return res.status(404).json({ ok: false, error: 'Not found' });
+    }
+    const report = await getReportById(id);
+    if (!report) return res.status(404).json({ ok: false, error: 'Not found' });
+    const file = await ensureReportVideo(report, version);
+    res.set('Cache-Control', 'private, max-age=300');
+    res.set('X-Robots-Tag', 'noindex');
+    return res.sendFile(file, { headers: { 'Content-Type': 'video/mp4' } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.get('/me/weekly-report', async (req, res, next) => {
   try {
     const user = await getAuthenticatedUser(req);
@@ -333,7 +353,8 @@ router.get('/me/weekly-report', async (req, res, next) => {
       listAgentReportWeeks(agent.id)
     ]);
     const cardUrl = report?.id && ['approved', 'sent'].includes(report.status) ? reportCardUrl(report, siteUrl()) : '';
-    return res.json({ ok: true, data: { report, weeks, agent_number: agent.makaug_agent_number || null, card_url: cardUrl || null } });
+    const videoUrl = cardUrl && isVideoRenderingAvailable() ? reportVideoUrl(report, siteUrl()) : '';
+    return res.json({ ok: true, data: { report, weeks, agent_number: agent.makaug_agent_number || null, card_url: cardUrl || null, video_url: videoUrl || null } });
   } catch (error) {
     return next(error);
   }

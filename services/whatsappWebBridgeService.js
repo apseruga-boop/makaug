@@ -178,8 +178,9 @@ async function queueWhatsappWebBridgeMessage({
       return '';
     }
   })();
-  const normalizedMediaType = normalizedMediaUrl && String(mediaType || '').trim().toLowerCase() === 'image'
-    ? 'image'
+  const requestedMediaType = String(mediaType || '').trim().toLowerCase();
+  const normalizedMediaType = normalizedMediaUrl && ['image', 'video'].includes(requestedMediaType)
+    ? requestedMediaType
     : 'text';
 
   const payload = {

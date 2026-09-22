@@ -11982,6 +11982,7 @@ async function renderBrokerWeeklyReportPanel({ linked = true, weekStart = "" } =
     if (report.week_start && !options.some((w) => w.week_start === report.week_start)) options.unshift({ week_start: report.week_start, week_end: report.week_end, status: report.status });
     const agentNumber = data.agent_number || report.agent?.makaug_agent_number || "";
     const cardUrl = agentReportSafeUrl(data.card_url);
+    const videoUrl = agentReportSafeUrl(data.video_url);
     const sourceNote = report.source === "live"
       ? "Live numbers, updated as people browse your listings."
       : "Reviewed by the makaug team.";
@@ -11995,7 +11996,7 @@ async function renderBrokerWeeklyReportPanel({ linked = true, weekStart = "" } =
         </div>
         ${options.length > 1 ? `<label class="text-xs font-bold text-gray-600">Week<select id="broker-report-week" class="mt-1 block rounded-lg border border-gray-300 px-3 py-2 text-sm">${options.map((w) => `<option value="${adminAttr(w.week_start)}" ${w.week_start === report.week_start ? "selected" : ""}>${adminEscape(agentReportWeekLabel(w.week_start, w.week_end))}</option>`).join("")}</select></label>` : ""}
       </div>
-      ${cardUrl ? `<div class="mb-5 grid gap-4 md:grid-cols-[280px_1fr] items-start"><img src="${adminAttr(cardUrl)}" alt="Your weekly report card" class="w-full rounded-2xl border border-gray-200 shadow-sm"><div class="text-sm text-gray-600"><p class="font-bold text-gray-900">Your report card</p><p class="mt-1">This is the card makaug sent you on WhatsApp. Share it with clients or your team to show how your listings are performing.</p><a href="${adminAttr(cardUrl)}" target="_blank" rel="noopener" class="mt-3 inline-flex rounded-lg bg-green-700 px-4 py-2 text-sm font-bold text-white">Open card</a></div></div>` : ""}
+      ${cardUrl ? `<div class="mb-5 grid gap-4 md:grid-cols-[280px_1fr] items-start">${videoUrl ? `<video src="${adminAttr(videoUrl)}" controls playsinline preload="none" poster="${adminAttr(cardUrl)}" class="w-full rounded-2xl border border-gray-200 shadow-sm"></video>` : `<img src="${adminAttr(cardUrl)}" alt="Your weekly report card" class="w-full rounded-2xl border border-gray-200 shadow-sm">`}<div class="text-sm text-gray-600"><p class="font-bold text-gray-900">Your week in review</p><p class="mt-1">This is the recap makaug sent you on WhatsApp. Share it with clients or your team to show how your listings are performing.</p><a href="${adminAttr(cardUrl)}" target="_blank" rel="noopener" class="mt-3 inline-flex rounded-lg bg-green-700 px-4 py-2 text-sm font-bold text-white">Open card</a></div></div>` : ""}
       ${renderAgentReportBody(report)}`;
     document.getElementById("broker-report-week")?.addEventListener("change", (event) => {
       renderBrokerWeeklyReportPanel({ linked: true, weekStart: event.target.value });
@@ -12113,6 +12114,7 @@ function adminAgentReportInput(id, value, type = "text", placeholder = "") {
 function renderAdminAgentReportEditor(data = {}) {
   const whatsappText = data.whatsapp_caption || data.whatsapp_text || "";
   const cardUrl = agentReportSafeUrl(data.card_url);
+  const videoUrl = agentReportSafeUrl(data.video_url);
   const el = document.getElementById("admin-agent-report-editor");
   const r = adminAgentReportCurrent;
   if (!el || !r) return;
@@ -12154,8 +12156,8 @@ function renderAdminAgentReportEditor(data = {}) {
         <button type="button" onclick="sendAdminAgentReport(false)" class="rounded-lg bg-green-700 px-3 py-2 text-sm font-bold text-white">Send to agent</button>
       </div>
       <div class="grid gap-4 lg:grid-cols-[320px_1fr]">
-        ${cardUrl ? `<a href="${adminAttr(cardUrl)}" target="_blank" rel="noopener" class="block"><img src="${adminAttr(cardUrl)}" alt="Report card the agent receives" class="w-full rounded-xl border border-gray-200 shadow-sm"></a>` : `<div class="rounded-xl border border-dashed border-gray-300 p-4 text-xs text-gray-500">Card preview appears after saving.</div>`}
-        <div><div class="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">Caption under the card</div><pre class="whitespace-pre-wrap text-xs text-gray-800 max-h-96 overflow-auto">${adminEscape(whatsappText)}</pre></div>
+        ${videoUrl ? `<video src="${adminAttr(videoUrl)}" controls playsinline preload="none" poster="${adminAttr(cardUrl)}" class="w-full rounded-xl border border-gray-200 shadow-sm"></video>` : cardUrl ? `<a href="${adminAttr(cardUrl)}" target="_blank" rel="noopener" class="block"><img src="${adminAttr(cardUrl)}" alt="Report card the agent receives" class="w-full rounded-xl border border-gray-200 shadow-sm"></a>` : `<div class="rounded-xl border border-dashed border-gray-300 p-4 text-xs text-gray-500">Preview appears after saving.</div>`}
+        <div><div class="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">Caption under the ${videoUrl ? "recap video" : "card"}</div><pre class="whitespace-pre-wrap text-xs text-gray-800 max-h-96 overflow-auto">${adminEscape(whatsappText)}</pre></div>
       </div>
     </div>`;
 }
