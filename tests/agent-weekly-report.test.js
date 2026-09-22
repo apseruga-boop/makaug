@@ -65,6 +65,17 @@ test('insights call out foreign visitors and a dominant listing', () => {
   assert.ok(nextSteps.some((line) => /Add more photos to "A"/.test(line)));
 });
 
+test('listings without photos get a next step', () => {
+  const { nextSteps } = reports.buildInsights({
+    metrics: { views: 30, visitors: 25 }, previous: { views: 28, visitors: 10 },
+    topListings: [{ title: 'Plot in Kira', views: 4, enquiries: 0, image_count: 0 }, { title: 'House', views: 3, enquiries: 0, image_count: 4 }],
+    topCountries: [], activeListings: 5
+  });
+  assert.ok(nextSteps.some((line) => /Add photos to "Plot in Kira"/.test(line)));
+  assert.equal(typeof reports.ensureAgentNumber, 'function');
+  assert.equal(typeof require('../services/authFlowService').generateMakaugAgentNumber, 'function');
+});
+
 test('an agent with no activity gets a clear next step', () => {
   const { insights, nextSteps } = reports.buildInsights({ metrics: {}, previous: {}, topListings: [], topCountries: [], activeListings: 0 });
   assert.match(insights[0], /No one opened/);

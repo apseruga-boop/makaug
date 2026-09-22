@@ -2,6 +2,7 @@
 
 const db = require('../config/database');
 const { countryName } = require('./visitorCountryService');
+const { generateMakaugAgentNumber } = require('./authFlowService');
 
 const REPORT_TIMEZONE_OFFSET = '+03:00'; // Africa/Kampala, no DST
 const REPORT_STATUSES = ['draft', 'approved', 'sent'];
@@ -302,6 +303,11 @@ function buildInsights({ metrics = {}, previous = {}, topListings = [], topCount
     insights.push(`${m.views.toLocaleString('en-GB')} views from ${m.visitors.toLocaleString('en-GB')} people this week.`);
   }
 
+  const visitorChange = percentChange(m.visitors, p.visitors);
+  if (visitorChange !== null && Math.abs(visitorChange) >= 15) {
+    insights.push(`${m.visitors.toLocaleString('en-GB')} different people looked at your listings — ${visitorChange >= 0 ? 'up' : 'down'} ${Math.abs(visitorChange)}% on last week.`);
+  }
+
   const enquiryChange = percentChange(totalEnquiries, prevEnquiries);
   if (totalEnquiries) {
     const rate = m.visitors ? Math.round((totalEnquiries / m.visitors) * 1000) / 10 : 0;
@@ -331,7 +337,11 @@ function buildInsights({ metrics = {}, previous = {}, topListings = [], topCount
     }
   }
 
-  const fewPhotos = topListings.find((l) => l.views >= 10 && l.image_count < 5);
+  const noPhotos = topListings.filter((l) => !l.image_count);
+  if (noPhotos.length) {
+    nextSteps.push(`Add photos to ${noPhotos.length === 1 ? `"${noPhotos[0].title}"` : `${noPhotos.length} of your top ${topListings.length} listings`} — ${noPhotos.length === 1 ? 'it has' : 'they have'} none, and listings with photos get far more enquiries.`);
+  }
+  const fewPhotos = topListings.find((l) => l.views >= 10 && l.image_count > 0 && l.image_count < 5);
   if (fewPhotos) nextSteps.push(`Add more photos to "${fewPhotos.title}" — it has ${fewPhotos.image_count} and is getting views.`);
 
   const noEnquiry = topListings.find((l) => l.views >= 20 && !l.enquiries);
@@ -341,8 +351,21 @@ function buildInsights({ metrics = {}, previous = {}, topListings = [], topCount
   return { insights: insights.slice(0, 6), nextSteps: nextSteps.slice(0, 5) };
 }
 
+// Every agent who gets a report gets a makaug agent ID. Older and imported
+// agents were created before IDs existed, so issue one the first time.
+async function ensureAgentNumber(agent) {
+  if (!agent || agent.makaug_agent_number) return agent;
+  const number = await generateMakaugAgentNumber(db);
+  const result = await db.query(
+    `UPDATE agents SET makaug_agent_number = COALESCE(NULLIF(makaug_agent_number, ''), $2), updated_at = NOW()
+     WHERE id = $1 RETURNING makaug_agent_number`,
+    [agent.id, number]
+  );
+  return { ...agent, makaug_agent_number: result.rows[0]?.makaug_agent_number || number };
+}
+
 async function computeAgentWeeklyReport({ agentId, weekStart } = {}) {
-  const agent = await fetchAgentById(agentId);
+  const agent = await ensureAgentNumber(await fetchAgentById(agentId));
   if (!agent) {
     const error = new Error('Agent not found');
     error.status = 404;
@@ -599,6 +622,7 @@ module.exports = {
   cleanListings,
   cleanTextList,
   computeAgentWeeklyReport,
+  ensureAgentNumber,
   findAgent,
   formatWeekRange,
   generateReport,

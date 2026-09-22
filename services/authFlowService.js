@@ -433,6 +433,7 @@ function categoryFromGoal(value = '') {
 
 module.exports = {
   buildOtpSuccessPayload,
+  generateMakaugAgentNumber,
   dashboardForUser,
   ensurePostVerificationRecords,
   normalizeSignupAudience,
