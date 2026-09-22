@@ -12702,15 +12702,19 @@ router.post('/whatsapp-message-logs/:id/retry', async (req, res, next) => {
 // Agent weekly performance reports: generate, edit, preview, send via WhatsApp
 // ---------------------------------------------------------------------------
 
+// Reports go out from the makaug WhatsApp number through the WAHA bridge. The
+// bridge only claims whitelisted sources (OUTBOX_ALLOWED_SOURCES, default
+// "whatsapp_runtime,whatsapp_missed_call"), so reports ride the runtime source
+// unless AGENT_REPORT_WHATSAPP_SOURCE names one the bridge has been told to allow.
 function agentReportWhatsappSource() {
-  return String(process.env.AGENT_REPORT_WHATSAPP_SOURCE || 'agent_weekly_report').trim().toLowerCase() || 'agent_weekly_report';
+  return String(process.env.AGENT_REPORT_WHATSAPP_SOURCE || 'whatsapp_runtime').trim().toLowerCase() || 'whatsapp_runtime';
 }
 
 async function deliverAgentReportWhatsapp({ to, text, actor, reportId, preview }) {
   const mode = getWhatsappDeliveryMode();
   const source = agentReportWhatsappSource();
-  const metadata = { agent_weekly_report_id: reportId, preview: Boolean(preview) };
-  if (mode === 'web_bridge') {
+  const metadata = { message_kind: 'agent_weekly_report', agent_weekly_report_id: reportId, preview: Boolean(preview) };
+  if (mode === 'web_bridge' || isWhatsappWebBridgeEnabled()) {
     const queued = await queueWhatsappWebBridgeMessage({ recipient: to, text, source, actorId: actor, metadata });
     return { sent: false, queued: true, provider: 'whatsapp_web_bridge', id: queued?.id || null };
   }

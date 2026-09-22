@@ -130,4 +130,5 @@ test('report is wired into the product: migration, analytics capture, dashboards
   const admin = fs.readFileSync('routes/admin.js', 'utf8');
   assert.match(admin, /router\.post\('\/agent-reports\/:id\/send'/);
   assert.match(admin, /Approve the report before sending it to the agent/);
+  assert.match(admin, /AGENT_REPORT_WHATSAPP_SOURCE \|\| 'whatsapp_runtime'/, 'reports must use a source the WAHA bridge claims by default');
 });
