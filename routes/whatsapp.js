@@ -4264,15 +4264,32 @@ function parseEmployeeBedroomDraft(caption = '') {
 // size or a phone fragment, not money.
 const EMPLOYEE_INTAKE_MIN_PRICE = 10000;
 
+/**
+ * Put the currency in front of the number, whatever the agent typed.
+ *
+ * The price parser only understands "USD 2000" / "UGX 300 million". An agent
+ * writing "Price:2000$ USD per month" — the normal way to write it here — had
+ * the property held back for a missing price it had actually given. Every
+ * common spelling is rewritten to the one form the parser reads.
+ */
+function normalizeCaptionPriceNotation(caption = '') {
+  return String(caption || '')
+    // $2,000 · US$ 2000 · USD2000
+    .replace(/(?:us\s*)?\$\s*(\d[\d,.]*)/gi, 'USD $1')
+    .replace(/\busd\s*(\d[\d,.]*)/gi, 'USD $1')
+    // 2000$ · 2000 USD · 2000 us dollars · 2,000 dollars
+    .replace(/(\d[\d,.]*)\s*(?:\$|us\s*\$|usd|u\.s\.d\.|(?:us\s+)?dollars?)(?![a-z])/gi, 'USD $1')
+    // 300m UGX · 1,200,000/= · 500,000 shs · shs 500,000
+    .replace(/(\d[\d,.]*\s*(?:m|k|bn|mn|million|billion)?)\s*(?:ugx|ush|shs?|shillings?|\/=)(?![a-z])/gi, 'UGX $1')
+    .replace(/\b(?:ugx|ush|shs|shillings?)\s*(\d[\d,.]*)/gi, 'UGX $1');
+}
+
 function employeePropertyFacts(caption = '', sessionData = {}) {
   const cleanCaption = normalizeInput(caption);
   const naturalDraft = buildNaturalListingDetailDraft(cleanCaption, {}) || {};
   const hints = extractSellerListingDraftHints(cleanCaption, {});
   let listingType = ownerForwardListingType(cleanCaption, { ...hints, ...naturalDraft });
-  const priceScanCaption = cleanCaption.replace(
-    /\b(\d[\d,.]*(?:\.\d+)?)\s*(?:us\s+)?dollars?\b/gi,
-    'USD $1'
-  );
+  const priceScanCaption = normalizeCaptionPriceNotation(cleanCaption);
   // listingPriceSourceFragment happily returns the first number after a cue word, so
   // "Selling 5 bedroom house in Kololo @600m UGX" yields "5" — the bedroom count — and the
   // listing went live at UGX 5. parseListingPriceDraft already applies the sanity floor and
@@ -14112,6 +14129,7 @@ router.delete('/reset/:phone', async (req, res) => {
 
 module.exports = router;
 module.exports.__test = {
+  normalizeCaptionPriceNotation,
   buildEmployeeBatchSummary,
   scheduleEmployeeBatchSummary,
   ACTIVE_COUNTRY_CODE,
