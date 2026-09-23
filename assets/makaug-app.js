@@ -14856,6 +14856,12 @@ function moderationIdentitySectionHtml(review = {}, prefix = "staff-preview", sc
   const idNumber = moderationIdentityNumber(review);
   const documentName = moderationIdentityDocumentName(review);
   const ref = review.inquiry_reference || review.reference || review.id || "-";
+  // The WhatsApp intake lets a lister send the ID later rather than lose the
+  // listing. When that happens the property still comes to review, so the debt
+  // has to be visible here — it is the only place anyone will act on it.
+  const identityOutstanding = review.extra_fields?.identity_followup_required === true
+    && !documentName;
+  const identityPromisedAt = formatListingDate(review.extra_fields?.identity_promised_at) || "";
   return `
     <section class="rounded-xl border ${required ? "border-emerald-200 bg-emerald-50" : "border-gray-200 bg-white"} p-4" data-moderation-identity-panel="true" data-identity-prefix="${adminAttr(prefix)}" data-identity-scope="${adminAttr(scope)}">
       <div class="flex items-start justify-between gap-3 flex-wrap">
@@ -14874,6 +14880,12 @@ function moderationIdentitySectionHtml(review = {}, prefix = "staff-preview", sc
         <div class="sm:col-span-2"><span class="text-gray-500">ID number:</span> <span id="${adminAttr(prefix)}-id-number" class="font-mono font-black text-gray-950">${adminEscape(idNumber || "Not supplied")}</span></div>
         <div class="sm:col-span-2"><span class="text-gray-500">ID photo:</span> ${adminEscape(documentName || "Not supplied")}</div>
       </div>
+      ${identityOutstanding ? `
+        <div class="mt-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs font-black text-amber-900">
+          🪪 ID not supplied yet — the lister asked to send it later${identityPromisedAt ? ` (${adminEscape(identityPromisedAt)})` : ""}.
+          <span class="block font-semibold mt-1">Chase the ID and verify it before approving. The listing details can be reviewed and corrected now.</span>
+        </div>
+      ` : ""}
       <div id="${adminAttr(prefix)}-id-document-viewer" class="mt-3 rounded-xl border border-dashed border-emerald-200 bg-white p-3 text-xs text-gray-600">Secure ID photo not loaded yet.</div>
       ${required ? `
         <label class="mt-3 flex items-start gap-2 rounded-xl bg-white border border-emerald-100 p-3 text-xs font-black text-emerald-950">
