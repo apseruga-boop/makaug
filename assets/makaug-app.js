@@ -22740,6 +22740,70 @@ async function adminCreateDirectAgentListing(event) {
   }
 }
 
+/**
+ * Why an agent profile is not on the website yet.
+ *
+ * A profile only appears once it is approved, carries the direct-authorisation
+ * marker that the "Approve public profile" step writes, and has the inventory
+ * the public directory asks for. Staff had no way to see which of those was
+ * missing: an agent onboarded over WhatsApp could sit approved and invisible
+ * with nothing anywhere explaining it. This mirrors the server rules in
+ * services/publicAgentEligibilityService.js.
+ */
+function agentPublicProfileState(agent = {}) {
+  const status = String(agent.status || "").toLowerCase();
+  const directAuthorised = agent.direct_agent_authorised === true;
+  const idReviewed = agent.private_id_profile_reviewed === true;
+  const hasIdDocument = Boolean(agent.identity_document_url);
+  const liveListings = Number(agent.live_listings || 0) || 0;
+  const blockers = [];
+
+  if (status !== "approved") blockers.push("approval (currently " + (status || "pending") + ")");
+  if (!agent.user_id && !directAuthorised) {
+    blockers.push(hasIdDocument
+      ? "the “Approve public profile” step"
+      : "a stored ID photo, then “Approve public profile”");
+  }
+  if (directAuthorised) {
+    if (!(idReviewed && hasIdDocument) && liveListings < 1) blockers.push("1 live listing");
+  } else if (liveListings < 2) {
+    blockers.push(`${2 - liveListings} more live listing${2 - liveListings === 1 ? "" : "s"}`);
+  }
+  return { live: blockers.length === 0, blockers };
+}
+
+async function adminUploadAgentProfilePhoto(agentId) {
+  if (!canUseLiveAdminApi()) {
+    toast("Sign in as admin or set ADMIN_API_KEY first to add an agent logo.");
+    return;
+  }
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = "image/png,image/jpeg,image/webp";
+  input.onchange = async () => {
+    const file = input.files && input.files[0];
+    if (!file) return;
+    if (file.size > 4 * 1024 * 1024) {
+      toast("That logo is over 4MB. Please send a smaller image.");
+      return;
+    }
+    try {
+      const dataUrl = await marketplaceFileDataUrl(file);
+      await apiRequest(`/api/admin/agents/${encodeURIComponent(agentId)}/profile-photo`, {
+        method: "PATCH",
+        headers: adminAuthHeaders(),
+        body: { profile_photo_url: dataUrl }
+      });
+      await refreshBrokersFromApi({ silent: true });
+      await renderAdminDashboard();
+      toast("Logo saved to the agent profile.");
+    } catch (e) {
+      toast(`Logo upload failed: ${e.message || "error"}`);
+    }
+  };
+  input.click();
+}
+
 function renderAdminBrokerRows(agents) {
   const wrap = document.getElementById("admin-broker-accounts-table");
   if (!wrap) return;
@@ -22772,6 +22836,7 @@ function renderAdminBrokerRows(agents) {
       : "missing";
     const channelLabel = agent.agent_application_channel ? String(agent.agent_application_channel).replace(/_/g, " ") : "web";
     const approveLabel = status === "approved" ? "Move to Pending" : "Approve & send access";
+    const publicProfileState = agentPublicProfileState(agent);
     return `
       <div class="border border-gray-200 rounded-xl p-4 bg-white">
         <div class="flex items-start justify-between gap-3 flex-wrap">
@@ -22787,6 +22852,9 @@ function renderAdminBrokerRows(agents) {
             <span class="text-[11px] font-semibold px-2 py-1 rounded ${registration.cls}">${registration.label}</span>
           </div>
         </div>
+        ${publicProfileState.live
+          ? `<div class="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-2 text-xs font-black text-emerald-900">🌍 Public profile is live on makaug.com${agent.profile_photo_url ? "" : " — no logo yet"}</div>`
+          : `<div class="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-2 text-xs font-black text-amber-900">🌍 Not on the website yet — still needs ${adminEscape(publicProfileState.blockers.join(", then "))}.</div>`}
         ${agent.verification_reason ? `<div class="mt-3 rounded-lg border border-amber-100 bg-amber-50 p-2 text-xs text-amber-900"><strong>Broker reason:</strong> ${adminEscape(agent.verification_reason)}</div>` : ""}
         <div class="grid sm:grid-cols-4 gap-2 mt-3 text-xs">
           <div class="rounded-lg bg-gray-50 border border-gray-200 p-2"><div class="text-gray-500">Live Listings</div><div class="font-black text-gray-900">${adminEscape(agent.live_listings || 0)}</div></div>
@@ -22800,6 +22868,7 @@ function renderAdminBrokerRows(agents) {
           ${whatsappUrl ? `<a href="${adminAttr(whatsappUrl)}" target="_blank" rel="noopener noreferrer" class="bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Contact Broker</a>` : ""}
           ${agent.email ? `<a href="mailto:${adminAttr(agent.email)}?subject=${encodeURIComponent("makaug broker follow-up")}" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Email</a>` : ""}
           ${canUseLiveAdminApi() && idDocumentUploaded && !agent.private_id_profile_reviewed ? `<button onclick="adminApproveAgentPublicProfile(${idArg})" class="bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Approve public profile</button>` : ""}
+          ${canUseLiveAdminApi() ? `<button onclick="adminUploadAgentProfilePhoto(${idArg})" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">${agent.profile_photo_url ? "Replace logo" : "Add logo"}</button>` : ""}
           ${canUseLiveAdminApi() ? `<button onclick="adminSetAgentStatus(${idArg}, '${status === "approved" ? "pending" : "approved"}')" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">${approveLabel}</button>` : ""}
         </div>
       </div>`;
