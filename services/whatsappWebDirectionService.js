@@ -28,7 +28,9 @@ function isLikelyMakaugOutboundPreview(value = '') {
     || /^Send the agent(?:'|’)?s exact name\b/i.test(text)
     || /^How many properties are you sending\?/i.test(text)
     || /\bis ready for (?:one|multiple) propert(?:y|ies)\b/i.test(text)
-    || /^Caption saved\. Now send (?:the )?first property media\b/i.test(text)
+    || /^Caption saved(?: for .*)?\. Now send (?:the )?first property media\b/i.test(text)
+    || /^⚠️\s*Not saved yet:/i.test(text)
+    || /^📋\s*\*?(?:Saved \d+ of \d+|All \d+ saved)/i.test(text)
     || /^✅\s*(?:Batch checked|\*?\d+ properties sent for staff review)/i.test(text);
 }
 
