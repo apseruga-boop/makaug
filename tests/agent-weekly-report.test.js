@@ -238,7 +238,7 @@ test('slow extras queries are skipped instead of holding up the report', async (
   db.query = () => new Promise(() => {});
   try {
     const started = Date.now();
-    const extras = await reports.computeExtras('a1', '2026-09-14T00:00:00+03:00', '2026-09-21T00:00:00+03:00', { views: 10, active_listings: 5 });
+    const extras = await reports.computeExtras('a1', ['p1'], '2026-09-14T00:00:00+03:00', '2026-09-21T00:00:00+03:00', { views: 10, active_listings: 5 });
     assert.ok(Date.now() - started < 2000);
     assert.equal(extras.new_listings, 0);
     assert.equal(extras.views_per_listing, 2);
@@ -258,4 +258,13 @@ test('the WhatsApp report stands alone for agents who never open the portal', ()
   assert.equal(reports.sourceLabel('facebook'), 'Facebook');
   const admin = fs.readFileSync('routes/admin.js', 'utf8');
   assert.match(admin, /part: 'full_report'/, 'the full report must follow the card as its own message');
+});
+
+test('report queries look up the agent’s properties by id array, with indexes to match', () => {
+  const service = fs.readFileSync('services/agentWeeklyReportService.js', 'utf8');
+  assert.match(service, /e\.payload->>'property_id' = ANY\(\$1::text\[\]\)/);
+  assert.ok(!/payload->>'property_id' IN \(SELECT/.test(service), 'no per-query subquery scans');
+  const migration = fs.readFileSync('db/migrations/136_agent_report_analytics_indexes.sql', 'utf8');
+  assert.match(migration, /idx_analytics_property_open_created/);
+  assert.match(migration, /idx_property_inquiries_property_created/);
 });

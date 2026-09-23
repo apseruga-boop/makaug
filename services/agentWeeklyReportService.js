@@ -181,29 +181,38 @@ const OWNED_PROPERTIES_SQL = `
   SELECT p.id FROM properties p
   WHERE p.agent_id = $1 OR COALESCE(p.extra_fields, '{}'::jsonb)->>'broker_agent_id' = $1::text`;
 
-async function computePeriodMetrics(agentId, startsAt, endsBefore) {
+// The agent's property ids, fetched once and passed to every window query:
+// `= ANY($ids)` lets Postgres use the property_open index per id instead of
+// scanning a week of events.
+async function fetchOwnedPropertyIds(agentId) {
+  const result = await db.query(`${OWNED_PROPERTIES_SQL}`, [agentId]);
+  return result.rows.map((row) => String(row.id));
+}
+
+async function computePeriodMetrics(ids, startsAt, endsBefore) {
+  if (!ids.length) return cleanMetrics({});
   const [views, enquiries, saves] = await Promise.all([
     db.query(
       `SELECT COUNT(*)::int AS views, COUNT(DISTINCT e.client_id)::int AS visitors
        FROM analytics_events e
        WHERE e.event_name = 'property_open'
          AND e.created_at >= $2 AND e.created_at < $3
-         AND e.payload->>'property_id' IN (SELECT id::text FROM (${OWNED_PROPERTIES_SQL}) owned)`,
-      [agentId, startsAt, endsBefore]
+         AND e.payload->>'property_id' = ANY($1::text[])`,
+      [ids, startsAt, endsBefore]
     ),
     db.query(
       `SELECT COUNT(*) FILTER (WHERE pi.channel <> 'whatsapp')::int AS enquiries,
               COUNT(*) FILTER (WHERE pi.channel = 'whatsapp')::int AS whatsapp_clicks
        FROM property_inquiries pi
        WHERE pi.created_at >= $2 AND pi.created_at < $3
-         AND pi.property_id IN (${OWNED_PROPERTIES_SQL})`,
-      [agentId, startsAt, endsBefore]
+         AND pi.property_id = ANY($1::uuid[])`,
+      [ids, startsAt, endsBefore]
     ),
     db.query(
       `SELECT COUNT(*)::int AS saves FROM saved_properties sp
        WHERE sp.created_at >= $2 AND sp.created_at < $3
-         AND sp.property_id IN (${OWNED_PROPERTIES_SQL})`,
-      [agentId, startsAt, endsBefore]
+         AND sp.property_id = ANY($1::uuid[])`,
+      [ids, startsAt, endsBefore]
     ).catch(() => ({ rows: [{ saves: 0 }] }))
   ]);
   return cleanMetrics({
@@ -215,24 +224,25 @@ async function computePeriodMetrics(agentId, startsAt, endsBefore) {
   });
 }
 
-async function computeTopListings(agentId, startsAt, endsBefore, limit = 5) {
+async function computeTopListings(ids, startsAt, endsBefore, limit = 5) {
+  if (!ids.length) return [];
   const result = await db.query(
     `WITH owned AS (
        SELECT p.id, p.title, p.area, p.district, p.status
        FROM properties p
-       WHERE p.agent_id = $1 OR COALESCE(p.extra_fields, '{}'::jsonb)->>'broker_agent_id' = $1::text
+       WHERE p.id = ANY($1::uuid[])
      ),
      v AS (
        SELECT e.payload->>'property_id' AS pid, COUNT(*)::int AS views, COUNT(DISTINCT e.client_id)::int AS visitors
        FROM analytics_events e
        WHERE e.event_name = 'property_open' AND e.created_at >= $2 AND e.created_at < $3
-         AND e.payload->>'property_id' IN (SELECT id::text FROM owned)
+         AND e.payload->>'property_id' = ANY($1::text[])
        GROUP BY 1
      ),
      q AS (
        SELECT pi.property_id, COUNT(*)::int AS enquiries
        FROM property_inquiries pi
-       WHERE pi.created_at >= $2 AND pi.created_at < $3 AND pi.property_id IN (SELECT id FROM owned)
+       WHERE pi.created_at >= $2 AND pi.created_at < $3 AND pi.property_id = ANY($1::uuid[])
        GROUP BY 1
      )
      SELECT o.id, o.title, o.area, o.district, o.status,
@@ -244,7 +254,7 @@ async function computeTopListings(agentId, startsAt, endsBefore, limit = 5) {
      WHERE COALESCE(v.views, 0) > 0 OR COALESCE(q.enquiries, 0) > 0
      ORDER BY COALESCE(v.views, 0) DESC, COALESCE(q.enquiries, 0) DESC
      LIMIT $4`,
-    [agentId, startsAt, endsBefore, limit]
+    [ids, startsAt, endsBefore, limit]
   );
   return cleanListings(result.rows.map((row) => ({
     id: row.id,
@@ -258,17 +268,18 @@ async function computeTopListings(agentId, startsAt, endsBefore, limit = 5) {
   })));
 }
 
-async function computeTopCountries(agentId, startsAt, endsBefore, limit = 6) {
+async function computeTopCountries(ids, startsAt, endsBefore, limit = 6) {
+  if (!ids.length) return [];
   const result = await db.query(
     `SELECT e.country_code AS code, COUNT(DISTINCT e.client_id)::int AS visitors
      FROM analytics_events e
      WHERE e.event_name = 'property_open' AND e.created_at >= $2 AND e.created_at < $3
        AND e.country_code IS NOT NULL
-       AND e.payload->>'property_id' IN (SELECT id::text FROM (${OWNED_PROPERTIES_SQL}) owned)
+       AND e.payload->>'property_id' = ANY($1::text[])
      GROUP BY 1
      ORDER BY 2 DESC
      LIMIT $4`,
-    [agentId, startsAt, endsBefore, limit]
+    [ids, startsAt, endsBefore, limit]
   );
   return cleanCountries(result.rows.map((row) => ({ code: row.code, name: countryName(row.code), visitors: row.visitors })));
 }
@@ -284,7 +295,7 @@ function hourLabel(hour) {
 // More context for the report: how people found the agent, when they look,
 // how the agent ranks, what was added, and countries so far this week.
 
-async function computeExtras(agentId, startsAt, endsBefore, metrics = {}) {
+async function computeExtras(agentId, ids, startsAt, endsBefore, metrics = {}) {
   // Extras are nice-to-have: a slow or failing query is skipped, never allowed
   // to hold up the report.
   const safe = (promise, fallback) => Promise.race([
@@ -296,25 +307,25 @@ async function computeExtras(agentId, startsAt, endsBefore, metrics = {}) {
       `SELECT LOWER(COALESCE(NULLIF(e.payload->>'traffic_source', ''), 'direct')) AS source, COUNT(DISTINCT e.client_id)::int AS visitors
        FROM analytics_events e
        WHERE e.event_name = 'property_open' AND e.created_at >= $2 AND e.created_at < $3
-         AND e.payload->>'property_id' IN (SELECT id::text FROM (${OWNED_PROPERTIES_SQL}) owned)
+         AND e.payload->>'property_id' = ANY($1::text[])
        GROUP BY 1 ORDER BY 2 DESC LIMIT 5`,
-      [agentId, startsAt, endsBefore]
+      [ids, startsAt, endsBefore]
     ), { rows: [] }),
     safe(db.query(
       `SELECT EXTRACT(DOW FROM e.created_at AT TIME ZONE 'Africa/Kampala')::int AS dow, COUNT(*)::int AS views
        FROM analytics_events e
        WHERE e.event_name = 'property_open' AND e.created_at >= $2 AND e.created_at < $3
-         AND e.payload->>'property_id' IN (SELECT id::text FROM (${OWNED_PROPERTIES_SQL}) owned)
+         AND e.payload->>'property_id' = ANY($1::text[])
        GROUP BY 1 ORDER BY 2 DESC LIMIT 1`,
-      [agentId, startsAt, endsBefore]
+      [ids, startsAt, endsBefore]
     ), { rows: [] }),
     safe(db.query(
       `SELECT (FLOOR(EXTRACT(HOUR FROM e.created_at AT TIME ZONE 'Africa/Kampala') / 2) * 2)::int AS band, COUNT(*)::int AS views
        FROM analytics_events e
        WHERE e.event_name = 'property_open' AND e.created_at >= $2 AND e.created_at < $3
-         AND e.payload->>'property_id' IN (SELECT id::text FROM (${OWNED_PROPERTIES_SQL}) owned)
+         AND e.payload->>'property_id' = ANY($1::text[])
        GROUP BY 1 ORDER BY 2 DESC LIMIT 1`,
-      [agentId, startsAt, endsBefore]
+      [ids, startsAt, endsBefore]
     ), { rows: [] }),
     safe(db.query(
       `WITH per_property AS (
@@ -337,18 +348,17 @@ async function computeExtras(agentId, startsAt, endsBefore, metrics = {}) {
     ), { rows: [] }),
     safe(db.query(
       `SELECT COUNT(*)::int AS added FROM properties p
-       WHERE (p.agent_id = $1 OR COALESCE(p.extra_fields, '{}'::jsonb)->>'broker_agent_id' = $1::text)
-         AND p.created_at >= $2 AND p.created_at < $3`,
-      [agentId, startsAt, endsBefore]
+       WHERE p.id = ANY($1::uuid[]) AND p.created_at >= $2 AND p.created_at < $3`,
+      [ids, startsAt, endsBefore]
     ), { rows: [] }),
     safe(db.query(
       `SELECT e.country_code AS code, COUNT(DISTINCT e.client_id)::int AS visitors
        FROM analytics_events e
        WHERE e.event_name = 'property_open' AND e.created_at >= date_trunc('week', NOW() AT TIME ZONE 'Africa/Kampala') AT TIME ZONE 'Africa/Kampala'
          AND e.country_code IS NOT NULL
-         AND e.payload->>'property_id' IN (SELECT id::text FROM (${OWNED_PROPERTIES_SQL}) owned)
+         AND e.payload->>'property_id' = ANY($1::text[])
        GROUP BY 1 ORDER BY 2 DESC LIMIT 6`,
-      [agentId]
+      [ids]
     ), { rows: [] })
   ]);
   const extras = {};
@@ -473,15 +483,16 @@ async function computeAgentWeeklyReport({ agentId, weekStart } = {}) {
     throw error;
   }
   const week = resolveReportWeek(weekStart);
+  const ownedIds = await fetchOwnedPropertyIds(agent.id);
   const [metrics, previous, topListings, topCountries, activeListings, trackingSince] = await Promise.all([
-    computePeriodMetrics(agent.id, week.startsAt, week.endsBefore),
-    computePeriodMetrics(agent.id, week.previousStartsAt, week.startsAt),
-    computeTopListings(agent.id, week.startsAt, week.endsBefore),
-    computeTopCountries(agent.id, week.startsAt, week.endsBefore),
+    computePeriodMetrics(ownedIds, week.startsAt, week.endsBefore),
+    computePeriodMetrics(ownedIds, week.previousStartsAt, week.startsAt),
+    computeTopListings(ownedIds, week.startsAt, week.endsBefore),
+    computeTopCountries(ownedIds, week.startsAt, week.endsBefore),
     countActiveListings(agent.id),
     countryTrackingSince()
   ]);
-  const extras = await computeExtras(agent.id, week.startsAt, week.endsBefore, { ...metrics, active_listings: activeListings });
+  const extras = await computeExtras(agent.id, ownedIds, week.startsAt, week.endsBefore, { ...metrics, active_listings: activeListings });
   const { insights, nextSteps } = buildInsights({ metrics, previous, topListings, topCountries, activeListings });
   if (extras.rank) insights.push(`You ranked #${extras.rank.position} of ${extras.rank.total} agents on makaug by listing views.`);
   if (extras.busiest_day && extras.peak_hour) insights.push(`Busiest day was ${extras.busiest_day.day}; most views came ${extras.peak_hour.label} (Kampala time).`);
