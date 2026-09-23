@@ -8,6 +8,7 @@ const EMPLOYEE_INTAKE_STEPS = Object.freeze([
   'employee_new_agent_details',
   'employee_customer_details',
   'employee_identity_photo',
+  'employee_intake_confirm',
   'employee_property_count',
   'employee_property_media'
 ]);
@@ -174,6 +175,48 @@ function parsePropertyBatchMode(value = '') {
   });
 }
 
+/**
+ * Agents at a brand-new platform often will not hand over an ID on the spot.
+ * Refusing to go further loses the listings; the honest answer is to let them
+ * say LATER, record it, and make staff chase the ID before approval.
+ */
+function parseIdentityLaterRequest(value = '') {
+  const text = cleanText(value).toLowerCase().replace(/[.!]+$/, '');
+  if (!text) return false;
+  return /^(?:later|share later|send later|send it later|id later|no id|not now|skip|skip id|skip for now|will send later|i will send later|we will send later|he will send later|she will send later|they will send later|no id for now)$/.test(text);
+}
+
+function parseIntakeConfirmation(value = '') {
+  return choice(value, {
+    yes: ['1', 'yes', 'y', 'correct', 'confirm', 'confirmed', 'ok', 'okay', 'proceed', 'continue'],
+    no: ['2', 'no', 'n', 'wrong', 'incorrect', 'change', 'edit', 'fix']
+  });
+}
+
+/** The check an employee sees before any property is sent. */
+function employeeIntakeConfirmPrompt({
+  role = 'agent',
+  fullName = '',
+  phone = '',
+  company = '',
+  district = '',
+  identityReceived = false,
+  profileLine = ''
+} = {}) {
+  const lines = [
+    '📋 *Please confirm before we start*',
+    '',
+    `👤 Name: ${cleanText(fullName) || '—'}`,
+    `📞 Phone: ${cleanText(phone) || '—'}`
+  ];
+  if (role === 'agent' && cleanText(company)) lines.push(`🏢 Company: ${cleanText(company)}`);
+  if (cleanText(district)) lines.push(`${role === 'agent' ? '📍 Primary district' : '📍 Property location'}: ${cleanText(district)}`);
+  lines.push(`🪪 ID: ${identityReceived ? 'received and stored privately' : '*not supplied yet* — staff will chase it before approval'}`);
+  if (cleanText(profileLine)) lines.push(`📂 ${cleanText(profileLine)}`);
+  lines.push('', 'Is this correct?', '', '1 — Yes, continue', '2 — No, let me send the details again');
+  return lines.join('\n');
+}
+
 function employeePropertyCountPrompt() {
   return 'How many properties are you sending in this batch?\n\n1 — One property\n2 — Multiple properties';
 }
@@ -230,8 +273,11 @@ module.exports = {
   cleanEmployeePropertyCaption,
   employeeAgentExistingPrompt,
   employeeIntakePhoneAllowed,
+  employeeIntakeConfirmPrompt,
   employeeMediaPrompt,
   employeePropertyCountPrompt,
+  parseIdentityLaterRequest,
+  parseIntakeConfirmation,
   employeeRolePrompt,
   looksLikePropertyCaption,
   isEmployeeIntakeCancel,
